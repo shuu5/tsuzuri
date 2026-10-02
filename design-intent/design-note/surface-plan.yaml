@@ -458,6 +458,10 @@ sections:
       - {id: c-ruling-reread, doc: surface-wave26b}
       - {id: c-deliver-retry, doc: surface-wave26b}
       - {id: c-sse-eintr, doc: surface-wave26b}
+      - {id: g-help-sweep, doc: surface-wave26b}
+      - {id: g-accept-fix, doc: surface-wave26b}
+      - {id: g-dead-sweep-a, doc: surface-wave26b}
+      - {id: g-dead-sweep-b, doc: surface-wave26b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

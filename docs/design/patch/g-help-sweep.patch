@@ -1,0 +1,1157 @@
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+index 0f109b6c9f1a3371d23240e7e8e19e6ab8819a9a..1ceec961b70bcf0316abdd4553e663aed0f9910f 100644
+--- a/crates/tsuzuri-surface/src/askwin.rs
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -127,15 +127,13 @@ pub fn remaining(state: Phase, ids: &[String], answered: &BTreeSet<String>) -> O
+     }
+ }
+ 
+-/// 数の字（分からなければ UNKNOWN_COUNT）。
+-fn count_text(n: Option<usize>) -> String {
++/// 数の字（分からなければ UNKNOWN_COUNT・窓の題の横の残りの数とほかの project の質問の数）。
++pub fn count_text(n: Option<usize>) -> String {
+     n.map_or_else(|| UNKNOWN_COUNT.to_string(), |n| n.to_string())
+ }
+ 
+-/// 窓の題の字（見本の「答えを待つ質問 <残り>」・残りが分からなければ「?」）。
+-pub fn title(left: Option<usize>) -> String {
+-    format!("{} {}", label("ask_open"), count_text(left))
+-}
++/// 窓の題の語の鍵（題の見出しは語の字だけで、残りの数は見出しの外の `.num` に出す・行 g-help-sweep）。
++pub const TITLE_KEY: &str = "ask_open";
+ 
+ /// 下の段のほかの project の質問の段の題（語とほかの project の問いの数・分からなければ「?」）。
+ pub fn others_title(n: Option<usize>) -> String {
+@@ -164,8 +162,8 @@ mod dom {
+     use tsuzuri_contract::ledger::BeadId;
+ 
+     use super::{
+-        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, others_count,
+-        others_title, own_ids, phase, remaining, title, unread,
++        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, TITLE_KEY, count_text, current, dot_class,
++        later, others_count, others_title, own_ids, phase, remaining, unread,
+     };
+     use crate::project::{Body, ask, askpage, batch, body_view, policy};
+     use crate::topbar::Win;
+@@ -302,7 +300,7 @@ mod dom {
+                 .collect_view()
+         };
+         view! {
+-            {move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}
++            <span class="num">{move || count_text(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}</span>
+             <span class="qdots">{dots}</span>
+         }
+         .into_any()
+@@ -373,7 +371,8 @@ mod dom {
+         let walk = steps(ctx, w);
+         Frame {
+             width: frame_of(Win::Ask).0,
+-            title: head(w),
++            key: TITLE_KEY,
++            side: Some(head(w)),
+             body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),
+         }
+     }
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index e1ef5cd7f5df8b053d3e0ced84ce819fe3e5f116..88a82a59ac5928a14e988e4d58edbba43b396cf2 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -72,7 +72,7 @@ pub const CARDS_UNKNOWN: &str = "server が台帳を読めず、答えを待つ
+ pub const OTHER_UNKNOWN: &str = "台帳が読めず、答えを待つ質問が分からない";
+ 
+ /// 測れて 0 件のときの 1 行。
+-pub const EMPTY: &str = "答えを待つ question は無い";
++pub const EMPTY: &str = "答えを待つ質問は無い";
+ 
+ /// 概要が両方無いときの 1 行。
+ pub const NO_SUMMARY: &str = "要約なし";
+diff --git a/crates/tsuzuri-surface/src/project/legend.rs b/crates/tsuzuri-surface/src/project/legend.rs
+index ba185b74b7942548894d4792a6c849d6af5eda28..3fafe6ff067fcb1414e456699fdc133bb455b368 100644
+--- a/crates/tsuzuri-surface/src/project/legend.rs
++++ b/crates/tsuzuri-surface/src/project/legend.rs
+@@ -1,4 +1,5 @@
+-//! block「記号の見方」（見本の `#legend`）: 状態の記号 5 値の凡例と、一覧の項に付く bd の状態の印の凡例。
++//! block「記号の見方」（見本の `#legend`）: 状態の記号 5 値の凡例と、一覧の項に付く bd の状態の印の凡例と、
++//! 画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile の語と「?」の注釈・行 g-help-sweep）。
+ 
+ use super::STATES;
+ use crate::frame::Block;
+@@ -39,6 +40,14 @@ pub fn marks() -> Vec<Mark> {
+     BD_STATUSES.iter().map(|s| mark(s)).collect()
+ }
+ 
++/// 画面の見方の段の見出しの語の鍵。
++pub const HOW_KEY: &str = "how";
++
++/// 画面の見方の語の鍵（並べる順・注釈が部品と開き方を説明する）。
++pub const HOW: [&str; 6] = [
++    "how_one", "how_bar", "how_win", "how_pop", "how_lay", "how_tile",
++];
++
+ #[cfg(target_arch = "wasm32")]
+ pub fn view() -> leptos::prelude::AnyView {
+     use leptos::prelude::*;
+@@ -52,6 +61,7 @@ pub fn inner() -> leptos::prelude::AnyView {
+     use leptos::prelude::*;
+ 
+     use crate::vocab::label;
++    use crate::widgets::help::hs;
+ 
+     let states = states()
+         .into_iter()
+@@ -64,6 +74,7 @@ pub fn inner() -> leptos::prelude::AnyView {
+     view! {
+         <div class="legend5">{states}</div>
+         <div class="lgline">{marks}</div>
++        <div class="lghow">{hs(HOW_KEY)}{HOW.map(hs).into_iter().collect_view()}</div>
+     }
+     .into_any()
+ }
+diff --git a/crates/tsuzuri-surface/src/widgets/coach.rs b/crates/tsuzuri-surface/src/widgets/coach.rs
+index 5bacfd3e6a0f0f6329814e1f68a806f30d72a8d1..0a64a027cf9059f30769ffe59ecafa311a0a8677 100644
+--- a/crates/tsuzuri-surface/src/widgets/coach.rs
++++ b/crates/tsuzuri-surface/src/widgets/coach.rs
+@@ -1,9 +1,12 @@
+-//! 最初の案内（coach mark・見本 mock v3 の ui.js の COACH・startCoach・drawCoach・closeCoach と同じ形・行 g-coach）:
+-//! 初心者の mode の home の頁で最初の 3 手（次の一手・orchestrator の状態・pipeline の札）を輪で囲み、短い字の箱を出す。
++//! 最初の案内（coach mark・行 g-coach・的と字と置き場は行 g-help-sweep で 1 枚の画面の部品に合わせた）:
++//! 初心者の mode の home の頁で、帯の次の一手・帯の印・段の tile・札・⚙ を順に輪で囲み、短い字の帯を出す。
+ //! 済み印は browser の保存に残し（持ち主の裁定 t3-hub.52.16・store の口）、query の `coach=1` で出し直す。
+-//! 見本との違い: 本番の block は電文を読んだ後に描くので、どれかの段の要素が出るまで 5 秒まで待ってから出す
+-//! （待ち切っても出なければ何も出さず済み印も書かない）。箱の横の収めは箱の幅を stylesheet の広い方の 240px で見込む。
+-//! 始めの決め・段の飛ばし・button の字・輪と箱の置き場は host でも組み立てて試し、DOM を撃つ所は wasm の target のときだけ組み立てる。
++//! 本番の部品は電文を読んだ後に描くので、どれかの段の要素が出るまで 5 秒まで待ってから出す
++//! （待ち切っても出なければ何も出さず済み印も書かない）。的は selector の片ごとの最初の要素のうち見える最初の要素で、
++//! 見えない段（幅で隠れる tile など）は飛ばす。
++//! 字の帯は帯の下に固定し、頁の上の余白をその高さだけ広げる（stylesheet の `body:has(.coach)`）ので、札や行に重ならない。
++//! 窓の幅が替わるか頁が scroll すると、今の段から輪を置き直す（今の段が見えなければ次の見える段・無ければ頭から）。
++//! 始めの決め・段の飛ばし・置き直し・button の字・輪の置き場は host でも組み立てて試し、DOM を撃つ所は wasm の target のときだけ組み立てる。
+ 
+ use crate::frame::{self, Mode};
+ 
+@@ -24,19 +27,27 @@ pub struct Step {
+     pub text: &'static str,
+ }
+ 
+-/// 3 段（見本の COACH の字のまま・2 段目の selector は本番の orchestrator の block の id）。
+-pub const STEPS: [Step; 3] = [
++/// 5 段（帯の次の一手・帯の印・段の tile・札・⚙）。tile は幅 600 以下だけ、ほかは全部の幅で見える。
++pub const STEPS: [Step; 5] = [
+     Step {
+-        sel: "#next .nxbig",
+-        text: "まずここ。押すと進む。",
++        sel: "#bar .pill",
++        text: "まずここ。次の一手を押すと進む。",
+     },
+     Step {
+-        sel: "#orch .big",
+-        text: "orchestrator の状態は記号で。砂時計は利用枠の限度で停止中。",
++        sel: "#bar .chip",
++        text: "帯の印を押すと、その窓が開く。",
+     },
+     Step {
+-        sel: ".kcard",
+-        text: "札に指を置くと中身、押すと詳しい頁へ。",
++        sel: ".ptile",
++        text: "段の tile を押すと、その段の札が下に開く。",
++    },
++    Step {
++        sel: ".board .kcard, .ptlist .kcard",
++        text: "札や一覧の行を押すと、吹き出しが開く。",
++    },
++    Step {
++        sel: "#bar .gearb",
++        text: "⚙ の記号の見方に、画面の見方がある。",
+     },
+ ];
+ 
+@@ -56,9 +67,6 @@ pub const LABEL: &str = "手引き";
+ pub const WAIT_MS: u64 = 200;
+ pub const TRIES: u32 = 25;
+ 
+-/// 箱の幅の見込み（stylesheet の `.coach` の広い方の幅・ピクセル）。
+-pub const BOX_W: f64 = 240.0;
+-
+ /// 頁を開いたときに始めるか: 初心者で、済み印が無いか query の `coach=1` のときだけ（見本の startCoach）。
+ pub fn starts(mode: Mode, saved: Option<&str>, search: &str) -> bool {
+     mode == Mode::Beginner
+@@ -75,6 +83,11 @@ pub fn first_found(from: usize, found: impl Fn(&str) -> bool) -> Option<usize> {
+         .map(|(i, _)| i)
+ }
+ 
++/// 置き直しの段: 今の段から先で要素の見える最初の段、無ければ頭から（窓の幅が替わった時・どこにも無ければ None）。
++pub fn again(step: usize, found: impl Fn(&str) -> bool) -> Option<usize> {
++    first_found(step, &found).or_else(|| first_found(0, &found))
++}
++
+ /// 進む button の字（最後の段は分かった・ほかは次へ）。
+ pub fn next_text(step: usize) -> &'static str {
+     if step + 1 == STEPS.len() { GOT } else { NEXT }
+@@ -94,22 +107,24 @@ pub struct Rect {
+     pub height: f64,
+ }
+ 
+-/// 輪の置き場: 要素の枠（窓の中の座標）を scroll で頁の座標にして 4px 外へ広げる。
+-pub fn ring(el: Rect, scroll_x: f64, scroll_y: f64) -> Rect {
++/// 輪の置き場（窓に固定した座標）: 要素の枠（窓の中の座標）を 4px 外へ広げる。
++pub fn ring(el: Rect) -> Rect {
+     Rect {
+-        left: el.left + scroll_x - 4.0,
+-        top: el.top + scroll_y - 4.0,
++        left: el.left - 4.0,
++        top: el.top - 4.0,
+         width: el.width + 8.0,
+         height: el.height + 8.0,
+     }
+ }
+ 
+-/// 箱の左上: 要素の下 12px で、横は 8px の余白で窓に収める（左と上の組）。
+-pub fn box_at(el: Rect, scroll_x: f64, scroll_y: f64, view_width: f64) -> (f64, f64) {
+-    let left = (el.left + scroll_x)
+-        .max(8.0)
+-        .min(scroll_x + view_width - BOX_W - 8.0);
+-    (left, el.top + el.height + scroll_y + 12.0)
++/// 段の selector の組の各片（`,` で分けた順・DOM は片ごとに最初の要素を見て、見える最初の要素を的にする）。
++pub fn parts(sel: &str) -> impl Iterator<Item = &str> {
++    sel.split(',').map(str::trim).filter(|p| !p.is_empty())
++}
++
++/// 要素が見えるか（枠の幅と高さが 0 より大きい・display が none の要素と祖先が隠す要素は枠が 0）。
++pub fn visible(el: Rect) -> bool {
++    el.width > 0.0 && el.height > 0.0
+ }
+ 
+ #[cfg(target_arch = "wasm32")]
+@@ -121,10 +136,12 @@ mod dom {
+ 
+     use leptos::ev;
+     use leptos::prelude::*;
++    use web_sys::wasm_bindgen::JsCast;
++    use web_sys::wasm_bindgen::closure::Closure;
+ 
+     use super::{
+-        COACH_KEY, DONE, LABEL, Rect, SKIP, STEPS, TRIES, WAIT_MS, box_at, dots, first_found,
+-        next_text, ring, starts,
++        COACH_KEY, DONE, LABEL, Rect, SKIP, STEPS, TRIES, WAIT_MS, again, dots, first_found,
++        next_text, parts, ring, starts, visible,
+     };
+     use crate::frame::Mode;
+     use crate::store;
+@@ -132,43 +149,46 @@ mod dom {
+ 
+     const WAIT: Duration = Duration::from_millis(WAIT_MS);
+ 
+-    /// 出している段と、輪と箱の置き場。
++    /// 出している段と輪の置き場。
+     #[derive(Debug, Clone, Copy, PartialEq)]
+     struct Shown {
+         step: usize,
+         ring: Rect,
+-        at: (f64, f64),
+-    }
+-
+-    /// selector の要素が在るか。
+-    fn found(sel: &str) -> bool {
+-        document().query_selector(sel).ok().flatten().is_some()
+     }
+ 
+-    /// 段の要素の枠から輪と箱の置き場を決める（要素が無ければ None）。
+-    fn place(step: usize) -> Option<Shown> {
+-        let el = document().query_selector(STEPS.get(step)?.sel).ok().flatten()?;
++    fn rect_of(el: &web_sys::Element) -> Rect {
+         let r = el.get_bounding_client_rect();
+-        let win = window();
+-        let sx = win.scroll_x().unwrap_or(0.0);
+-        let sy = win.scroll_y().unwrap_or(0.0);
+-        let vw = document()
+-            .document_element()
+-            .map_or(0.0, |d| f64::from(d.client_width()));
+-        let rect = Rect {
++        Rect {
+             left: r.left(),
+             top: r.top(),
+             width: r.width(),
+             height: r.height(),
+-        };
++        }
++    }
++
++    /// selector の片ごとの最初の要素のうち見える最初の要素の枠（無ければ None）。
++    fn seen(sel: &str) -> Option<Rect> {
++        parts(sel)
++            .filter_map(|p| document().query_selector(p).ok().flatten())
++            .map(|el| rect_of(&el))
++            .find(|r| visible(*r))
++    }
++
++    /// selector の要素が見えているか。
++    fn found(sel: &str) -> bool {
++        seen(sel).is_some()
++    }
++
++    /// 段の要素の枠から輪の置き場を決める（見える要素が無ければ None）。
++    fn place(step: usize) -> Option<Shown> {
++        let el = seen(STEPS.get(step)?.sel)?;
+         Some(Shown {
+             step,
+-            ring: ring(rect, sx, sy),
+-            at: box_at(rect, sx, sy, vw),
++            ring: ring(el),
+         })
+     }
+ 
+-    /// 段 `from` から先で要素の在る最初の段を置く（無ければ None）。
++    /// 段 `from` から先で要素の見える最初の段を置く（無ければ None）。
+     fn show_from(from: usize) -> Option<Shown> {
+         first_found(from, found).and_then(place)
+     }
+@@ -182,7 +202,36 @@ mod dom {
+         }
+     }
+ 
+-    /// 案内の輪と箱（home の頁に 1 つ・初心者の mode で出す・Esc は閉じるだけ）。
++    /// 出している案内の輪を今の段から置き直す（窓の幅が替わった時と頁か面が scroll した時・置けなければ閉じる）。
++    fn replace(shown: RwSignal<Option<Shown>>) {
++        if let Some(s) = shown.get_untracked() {
++            shown.set(again(s.step, found).and_then(place));
++        }
++    }
++
++    /// 幅を替えた後と scroll の後に輪を置き直す（字の帯を出すと頁の余白が替わるので、段を出した直後にも 1 度置き直す）。
++    /// scroll は面の中の scroll も拾う（捕らえの段で受ける）。返すのは幅の替わりの受け手（層の片付けで外す）。
++    fn follow(shown: RwSignal<Option<Shown>>) -> WindowListenerHandle {
++        let scrolled =
++            Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| replace(shown));
++        let _ = document().add_event_listener_with_callback_and_bool(
++            "scroll",
++            scrolled.as_ref().unchecked_ref(),
++            true,
++        );
++        // 頁の一生の間ずっと持つ（層は home の頁に 1 つ）。
++        scrolled.forget();
++        Effect::new(move |prev: Option<Option<usize>>| {
++            let step = shown.with(|s| s.map(|s| s.step));
++            if step.is_some() && prev != Some(step) {
++                request_animation_frame(move || replace(shown));
++            }
++            step
++        });
++        window_event_listener(ev::resize, move |_| replace(shown))
++    }
++
++    /// 案内の輪と字の帯（home の頁に 1 つ・初心者の mode で出す・Esc は閉じるだけ）。
+     #[component]
+     pub fn CoachLayer() -> impl IntoView {
+         let Some(c) = use_context::<HelpCtx>() else {
+@@ -239,12 +288,16 @@ mod dom {
+                 close();
+             }
+         });
+-        on_cleanup(move || esc.remove());
++        let resize = follow(shown);
++        on_cleanup(move || {
++            esc.remove();
++            resize.remove();
++        });
+         let body = move || shown.get().map(|s| coach_view(s, skip, next));
+         body.into_any()
+     }
+ 
+-    /// 案内の輪と箱の中身（段の字・段の点・閉じると次の button）。
++    /// 案内の輪と字の帯の中身（段の字・段の点・閉じると次の button）。
+     fn coach_view(
+         s: Shown,
+         skip: impl Fn(ev::MouseEvent) + Copy + 'static,
+@@ -259,11 +312,10 @@ mod dom {
+             "left:{}px;top:{}px;width:{}px;height:{}px",
+             s.ring.left, s.ring.top, s.ring.width, s.ring.height
+         );
+-        let box_at = format!("left:{}px;top:{}px", s.at.0, s.at.1);
+         view! {
+             <div class="coach-ring" style=ring_at></div>
+-            <div class="coach" role="dialog" aria-label=LABEL style=box_at>
+-                <div>{text}</div>
++            <div class="coach" role="dialog" aria-label=LABEL>
++                <div class="ct">{text}</div>
+                 <div class="ft">
+                     <span class="dots">{marks}</span>
+                     <button type="button" on:click=skip>{SKIP}</button>
+diff --git a/crates/tsuzuri-surface/src/widgets/fig.rs b/crates/tsuzuri-surface/src/widgets/fig.rs
+index 1669ca0f0fe62ef3a13190d481cb98da005e005d..56e8b921d28aa3764adf2f49d06dbf93dfe1f0fd 100644
+--- a/crates/tsuzuri-surface/src/widgets/fig.rs
++++ b/crates/tsuzuri-surface/src/widgets/fig.rs
+@@ -3,8 +3,10 @@
+ 
+ use crate::vocab::label;
+ 
+-/// 図の名（見本の FIGS の鍵の順）。
+-pub const NAMES: [&str; 7] = ["back", "move", "next", "reserve", "promo", "tick", "hover"];
++/// 図の名（見本の FIGS の鍵の順・末の one と lay は 1 枚の画面と幅の 3 段の図・行 g-help-sweep）。
++pub const NAMES: [&str; 9] = [
++    "back", "move", "next", "reserve", "promo", "tick", "hover", "one", "lay",
++];
+ 
+ /// 図の幅と箱の高さ。
+ const WIDTH: i32 = 320;
+@@ -170,6 +172,41 @@ const HOVER: Fig = Fig {
+     cap: "",
+ };
+ 
++/// 箱の字を語彙の鍵から引く箱（見出しの語と同じ字）。
++const fn tb(x: i32, y: i32, w: i32, key: &'static str, class: &'static str) -> FigBox {
++    FigBox {
++        t: Txt::Term(key),
++        ..b(x, y, w, "", class)
++    }
++}
++
++/// 1 枚の画面（帯の印を押すと窓・札と行を押すと吹き出し）。
++const ONE: Fig = Fig {
++    h: 94,
++    boxes: &[
++        b(4, 8, 96, "帯の印を押す", ""),
++        tb(124, 8, 80, "how_win", "ok"),
++        b(228, 8, 88, "× か Esc", "end"),
++        b(4, 56, 96, "札か行を押す", ""),
++        tb(124, 56, 80, "how_pop", "ok"),
++        b(228, 56, 88, "個別の頁へ", ""),
++    ],
++    edges: &[e(0, 1), e(1, 2), e(3, 4), dash(4, 5)],
++    cap: "",
++};
++
++/// 幅の 3 段（規則の行 R-35）。
++const LAY: Fig = Fig {
++    h: 58,
++    boxes: &[
++        b(2, 8, 100, "1200 以上 横並び", "ok"),
++        b(110, 8, 100, "601〜1199 縦積み", "ok"),
++        b(218, 8, 100, "600 以下 tile", "ok"),
++    ],
++    edges: &[e(0, 1), e(1, 2)],
++    cap: "← 広い · 窓の幅 · 狭い →",
++};
++
+ fn fig(name: &str) -> Option<&'static Fig> {
+     Some(match name {
+         "back" => &BACK,
+@@ -179,6 +216,8 @@ fn fig(name: &str) -> Option<&'static Fig> {
+         "promo" => &PROMO,
+         "tick" => &TICK,
+         "hover" => &HOVER,
++        "one" => &ONE,
++        "lay" => &LAY,
+         _ => return None,
+     })
+ }
+diff --git a/crates/tsuzuri-surface/src/widgets/help.rs b/crates/tsuzuri-surface/src/widgets/help.rs
+index 59a943c740b31e65b12cff59911d492f0317f169..9621b001f6c1e85c8c6b07c3e02d56d6ab951394 100644
+--- a/crates/tsuzuri-surface/src/widgets/help.rs
++++ b/crates/tsuzuri-surface/src/widgets/help.rs
+@@ -257,7 +257,7 @@ pub fn sym_html(sym: &str) -> Option<String> {
+ }
+ 
+ #[cfg(target_arch = "wasm32")]
+-pub use dom::{HelpCtx, TipLayer, expert_tip, h1, h2, hs, qmark, term};
++pub use dom::{HelpCtx, TipLayer, expert_tip, h1, h2, h3, hs, qmark, term};
+ 
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
+@@ -429,6 +429,11 @@ mod dom {
+         view! { <h2 class="hd" data-v=key>{label_with_q(key)}</h2> }.into_any()
+     }
+ 
++    /// 窓の題（語の鍵の見出しと「?」・行 g-help-sweep）。
++    pub fn h3(key: &'static str) -> AnyView {
++        view! { <h3 data-v=key>{label_with_q(key)}</h3> }.into_any()
++    }
++
+     /// 見出しの形をした短い札（列の名・数の名）。
+     pub fn hs(key: &'static str) -> AnyView {
+         view! { <span class="hd" data-v=key>{label_with_q(key)}</span> }.into_any()
+diff --git a/crates/tsuzuri-surface/src/widgets/modal.rs b/crates/tsuzuri-surface/src/widgets/modal.rs
+index d7dc5bc8c590e8f9a474bf4feddd679cb6692436..31367c1fdc1547d3b080a94f9e40b9eed3376a48 100644
+--- a/crates/tsuzuri-surface/src/widgets/modal.rs
++++ b/crates/tsuzuri-surface/src/widgets/modal.rs
+@@ -3,6 +3,7 @@
+ //! 窓の中の口から別の窓を開くと前の窓を積んで残し、頭に前の窓へ戻る口（‹ 戻る）を出す。
+ //! 幅 600 px 以下（規則の行 R-35 のスマホの形）の窓は全画面（stylesheet の media の規則）。
+ //! 閉じる判定（`closes`）と窓の積み（`Stack`）と幅の字は純粋な関数にして host で試し、層の DOM（`layer`）は wasm の target だけ。
++//! 窓の題は語の鍵を持つ見出し（`data-v` と「?」の注釈・行 g-help-sweep）で、題の横の数と点は見出しの外に置く。
+ //! 吹き出し（行 g-pop）も同じ閉じる判定を使う。窓の中身は窓を足す行が描き、層を頁に置くのは 1 枚の画面への切り替えの行。
+ 
+ /// 窓と吹き出しに届いた押し（× の button・外の click・中の click・鍵）。
+@@ -106,11 +107,13 @@ mod dom {
+ 
+     use super::{BACK_KEY, BACK_MARK, CLASSES, CLOSE_KEY, Hit, SCRIM, Stack, closes, width_style};
+     use crate::vocab::label;
++    use crate::widgets::help::h3;
+ 
+-    /// 窓の 1 枚の中身（幅 px・題・本文）。
++    /// 窓の 1 枚の中身（幅 px・題の語の鍵・題の横に置く物・本文）。
+     pub struct Frame {
+         pub width: u32,
+-        pub title: AnyView,
++        pub key: &'static str,
++        pub side: Option<AnyView>,
+         pub body: AnyView,
+     }
+ 
+@@ -209,7 +212,8 @@ mod dom {
+                     <div class=boxed role="dialog" aria-modal="true" style=width_style(f.width)>
+                         <div class=head>
+                             {back}
+-                            <h3>{f.title}</h3>
++                            {h3(f.key)}
++                            {f.side}
+                             <button type="button" class=x aria-label=label(CLOSE_KEY) on:click=move |_| hit(ctx, Hit::X)>"×"</button>
+                         </div>
+                         <div class=main>{f.body}</div>
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index db4045860524c0f99cdf9775fb0d637d7d406ceb..7e1fe5054ff9bcac7c1201b56089a7f399492435 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -154,7 +154,8 @@ mod dom {
+         };
+         Frame {
+             width,
+-            title: label(key).into_any(),
++            key,
++            side: None,
+             body,
+         }
+     }
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 2d9b8386fa9613fa9529c1f6512125b48f55a869..61b41416d84d1d92d8f9ef1826294f24413d2fa1 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -312,15 +312,21 @@ button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cur
+ .tip b { color: #ffd58a; font-weight: 600; }
+ :root[data-theme="dark"] .tip { background: #e8ebf1; color: #11141a; }
+ 
+-/* ---------- coach mark（初心者 mode・最初の 3 手） ---------- */
+-.coach { position: absolute; z-index: 60; width: 240px; padding: var(--s2) var(--s3); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--r3); box-shadow: var(--shadow); font-size: var(--fs-1); color: var(--ink); }
+-.coach::before { content: ""; position: absolute; top: -7px; left: 24px; width: 12px; height: 12px; background: inherit; border-left: inherit; border-top: inherit; transform: rotate(45deg); }
+-.coach .ft { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s2); }
+-.coach .ft .dots { flex: 1; display: flex; gap: 4px; }
++/* ---------- 最初の案内（初心者 mode・行 g-help-sweep で帯の下に固定した字の帯にし、頁の上の余白をその高さだけ広げる） ---------- */
++:root { --coach-h: 44px; }
++.coach { position: fixed; top: 52px; left: 0; right: 0; z-index: 25; height: var(--coach-h); display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s3); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); font-size: var(--fs-1); color: var(--ink); }
++.coach .ct { flex: 1 1 auto; min-width: 0; }
++.coach .ft { flex: none; display: flex; align-items: center; gap: var(--s2); }
++.coach .ft .dots { display: flex; gap: 4px; }
+ .coach .ft .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+ .coach .ft .dots i.on { background: var(--accent); }
+ .coach button { min-height: 32px; padding: 0 var(--s2); border: 0; border-radius: var(--r1); background: transparent; color: var(--accent); font-weight: 700; cursor: pointer; font-size: var(--fs-1); }
+-.coach-ring { position: absolute; z-index: 59; border: 2px solid var(--accent); border-radius: var(--r3); pointer-events: none; animation: tz-ring 1.8s ease-out infinite; }
++.coach-ring { position: fixed; z-index: 59; border: 2px solid var(--accent); border-radius: var(--r3); pointer-events: none; animation: tz-ring 1.8s ease-out infinite; }
++body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }
++@media (min-width: 601px) { body:has(.coach) .one { height: calc(100vh - 52px - var(--coach-h)); } }
++@media (max-width: 760px) { .coach { top: 96px; } body:has(#bar):has(.coach) { padding-top: calc(96px + var(--coach-h)); } }
++@media (min-width: 601px) and (max-width: 760px) { body:has(.coach) .one { height: calc(100vh - 96px - var(--coach-h)); } }
++@media (max-width: 600px) { :root { --coach-h: 64px; } }
+ @keyframes tz-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+ 
+ /* ---------- 窓（行 g-win-frame・見本 board-v2 の #scrim と .modal・× と外の click と Esc で閉じる・600 px 以下は全画面〔規則の行 R-35〕） ---------- */
+@@ -426,6 +432,9 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
+ 
+ /* 質問の窓（行 g-ask-win・見本の qModal・題の横の点・全部に答えた・あとで・下の畳んだ段） */
+ .qdots { display: flex; gap: 6px; }
++.mh:has(> .qdots) h3 { flex: none; }
++.mh > .num { flex: none; font-size: 15px; font-weight: 700; }
++.mh > .qdots { flex: 1; }
+ .qdots .qd { width: 11px; height: 11px; padding: 0; border: 2px solid #fdba74; border-radius: 50%; background: var(--panel); cursor: pointer; }
+ .qdots .qd.cur { background: #ea580c; border-color: #ea580c; }
+ .qdots .qd.ok { background: var(--st-run); border-color: var(--st-run); }
+@@ -539,7 +548,6 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+   .gtile { flex-direction: column; align-items: flex-start; gap: var(--s1); padding: var(--s2); }
+   .side { position: static; }
+   .runrow { grid-template-columns: minmax(0, 1fr); }
+-  .coach { width: 220px; }
+   .answer { flex-direction: column; align-items: stretch; }
+ }
+ 
+@@ -1111,6 +1119,9 @@ svg.fig .fb-up rect { stroke: var(--accent); stroke-width: 2; } svg.fig .fb-down
+ .hcard, .tip { max-height: calc(100vh - 16px); overflow-y: auto; }
+ details.more[open] > summary { font-size: 0; } details.more[open] > summary::before { content: '詳しく ▾'; font-size: 11px; }
+ .lgline > .nxm { display: inline-grid; }
++/* 画面の見方（行 g-help-sweep）: 部品の語と「?」の注釈 */
++.lghow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); font-size: 12px; }
++.lghow > .hd:first-child { flex-basis: 100%; font-weight: 700; }
+ .tip b { color: inherit; }
+ /* beads の帯の種類の行（近傍図と地図 (c)） */
+ svg .lane-sep { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }
+diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/bvaskw.rs
+index 8b9c2461e8095a6c807ab131c69ab7543ebd6343..d58d5f64a955d88719457c29dd3f7d46644cd1da 100644
+--- a/crates/tsuzuri-surface/tests/bvaskw.rs
++++ b/crates/tsuzuri-surface/tests/bvaskw.rs
+@@ -14,7 +14,7 @@ use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionList};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::askwin::{
+     ADVANCE_MS, DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, UNKNOWN_COUNT, current, dot_class,
+-    later, left, others_count, others_title, own_ids, phase, remaining, title, unread,
++    count_text, later, left, others_count, others_title, own_ids, phase, remaining, unread,
+ };
+ use tsuzuri_surface::project::{NOT_READ, ask};
+ use tsuzuri_surface::view::Fetched;
+@@ -102,13 +102,13 @@ fn bvaskw_close_when_none_left() {
+     }
+ }
+ 
+-/// 題は「答えを待つ質問 <残り>」で、点は今の問いが cur・答えた問いが ok。1 問ずつ出すのはこの project の問いだけ。
++/// 題の横は残りの数で、点は今の問いが cur・答えた問いが ok。1 問ずつ出すのはこの project の問いだけ。
+ #[test]
+ fn bvaskw_dots_and_title() {
+     let all = ids(&["q.1", "q.2", "q.3"]);
+     let done = set(&["q.1"]);
+     assert_eq!(left(&all, &done), 2);
+-    assert_eq!(title(Some(2)), "答えを待つ質問 2");
++    assert_eq!(count_text(Some(2)), "2");
+     let classes: Vec<&str> = all
+         .iter()
+         .map(|id| dot_class(id, Some("q.2"), &done))
+@@ -258,8 +258,8 @@ fn bvaskw_unread_not_empty() {
+     assert_eq!(remaining(Phase::Walk, &all, &set(&["q.1"])), Some(1));
+     assert_eq!(remaining(Phase::Empty, &[], &set(&[])), Some(0));
+     assert_eq!(UNKNOWN_COUNT, "?");
+-    assert_eq!(title(None), "答えを待つ質問 ?");
+-    assert_eq!(title(Some(0)), "答えを待つ質問 0");
++    assert_eq!(count_text(None), "?");
++    assert_eq!(count_text(Some(0)), "0");
+ }
+ 
+ /// ほかの project の質問の段の数: 問いの一覧が読めないか台帳が読めないほかの project が在れば 0 でなく「?」。
+@@ -313,7 +313,7 @@ fn bvaskw_unread_dom_text() {
+     for needle in [
+         "let reason = Memo::new(move |_| fetched.with(unread));",
+         "phase(reason.get(), i, a)",
+-        "{move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}",
++        "<span class=\"num\">{move || count_text(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}</span>",
+         "Phase::Unmeasured(reason) => body_view(Body::Unmeasured(reason)),",
+         "let others = Memo::new(move |_| fetched.with(others_count));",
+         "let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));",
+diff --git a/crates/tsuzuri-surface/tests/bvhelp.rs b/crates/tsuzuri-surface/tests/bvhelp.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d9c58d315ea389034a94f8bd18ea67131ef61e9a
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvhelp.rs
+@@ -0,0 +1,279 @@
++//! 行 g-help-sweep の歯（接頭辞 bvhelp_）: 窓の題を語の鍵の見出しにし（題の横の数は見出しの外）、質問の窓の空の字を直し、
++//! 最初の案内を 1 枚の画面の部品に合わせ（見える的・帯の下の字の帯・幅と scroll の後の置き直し）、
++//! 記号の見方の窓に画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile）の語と注釈と図を置く。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::askwin::{Phase, TITLE_KEY, count_text, remaining};
++use tsuzuri_surface::project::ask;
++use tsuzuri_surface::project::legend::{HOW, HOW_KEY};
++use tsuzuri_surface::topbar::Win;
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::coach::{Rect, STEPS, again, parts, visible};
++use tsuzuri_surface::widgets::fig;
++use tsuzuri_surface::wins::frame_of;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// wasm の枝（`mod dom {` から後）の字。
++fn dom(rel: &str) -> String {
++    let text = read(rel);
++    let at = text
++        .find("mod dom {")
++        .unwrap_or_else(|| panic!("{rel} に mod dom"));
++    text[at..].to_string()
++}
++
++fn note(key: &str) -> String {
++    vocab()
++        .term(key)
++        .unwrap_or_else(|| panic!("語彙に {key} が無い"))
++        .note
++        .clone()
++}
++
++const WINS: [Win; 7] = [
++    Win::Ask,
++    Win::Stalled,
++    Win::Notices,
++    Win::Seat,
++    Win::Gaps,
++    Win::Legend,
++    Win::Dest,
++];
++
++/// 窓の題は語の鍵の見出し: 層は題を h3 の語の鍵で描き、題の横の物を見出しの外に置く。7 つの窓の鍵は語彙の label と注釈を持つ。
++#[test]
++fn bvhelp_win_titles_keyed() {
++    let modal = dom("src/widgets/modal.rs");
++    for w in [
++        "pub key: &'static str,",
++        "pub side: Option<AnyView>,",
++        "{h3(f.key)}",
++        "{f.side}",
++    ] {
++        assert!(modal.contains(w), "modal.rs の wasm の枝に {w} が無い");
++    }
++    for w in ["<h3>", "f.title", "pub title"] {
++        assert!(!modal.contains(w), "modal.rs の wasm の枝に {w} が在る");
++    }
++    let help = dom("src/widgets/help.rs");
++    assert!(
++        help.contains("view! { <h3 data-v=key>{label_with_q(key)}</h3> }.into_any()"),
++        "help.rs に窓の題の見出しが無い"
++    );
++    let wins = dom("src/wins.rs");
++    assert!(
++        wins.contains("            key,\n            side: None,\n"),
++        "wins.rs の Frame に鍵が無い"
++    );
++    let ask = dom("src/askwin.rs");
++    for w in [
++        "key: TITLE_KEY,",
++        "side: Some(head(w)),",
++        "<span class=\"num\">",
++    ] {
++        assert!(ask.contains(w), "askwin.rs の wasm の枝に {w} が無い");
++    }
++    assert!(
++        !read("src/askwin.rs").contains("pub fn title("),
++        "askwin.rs に題の字の関数が残る"
++    );
++    assert_eq!(frame_of(Win::Ask).1, TITLE_KEY);
++    for w in WINS {
++        let key = frame_of(w).1;
++        assert!(
++            vocab().term(key).is_some(),
++            "窓 {w:?} の鍵 {key} が語彙に無い"
++        );
++        assert!(!note(key).is_empty(), "窓 {w:?} の鍵 {key} の注釈が空");
++    }
++    let css = read("style.css");
++    assert!(
++        css.contains(".mh > .num { flex: none;"),
++        "stylesheet に題の横の数の規則が無い"
++    );
++}
++
++/// 質問の窓の題の横の残りの数は局面の残り（一覧が読めない局面 Unmeasured は「?」・空は 0）で、見出しの外に出す（憲法 P-7）。
++#[test]
++fn bvhelp_ask_count_unknown() {
++    let ask = dom("src/askwin.rs");
++    assert!(
++        ask.contains("<span class=\"num\">{move || count_text(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}</span>"),
++        "題の横の数が局面の残りでない"
++    );
++    let all = ["q.1".to_string()];
++    let none = std::collections::BTreeSet::new();
++    assert_eq!(count_text(remaining(Phase::Unmeasured("r"), &all, &none)), "?");
++    assert_eq!(count_text(remaining(Phase::Empty, &[], &none)), "0");
++    assert_eq!(count_text(remaining(Phase::Walk, &all, &none)), "1");
++}
++
++/// 質問の窓の空の字は日本語だけ（英語の語を混ぜない）。
++#[test]
++fn bvhelp_ask_empty_words() {
++    assert_eq!(ask::EMPTY, "答えを待つ質問は無い");
++    assert!(!ask::EMPTY.chars().any(|c| c.is_ascii_alphabetic()));
++}
++
++/// 案内の 5 段の字・selector の片・見える的・置き直しの段。
++#[test]
++fn bvhelp_coach_steps_and_again() {
++    let texts: Vec<&str> = STEPS.iter().map(|s| s.text).collect();
++    assert_eq!(
++        texts,
++        [
++            "まずここ。次の一手を押すと進む。",
++            "帯の印を押すと、その窓が開く。",
++            "段の tile を押すと、その段の札が下に開く。",
++            "札や一覧の行を押すと、吹き出しが開く。",
++            "⚙ の記号の見方に、画面の見方がある。",
++        ]
++    );
++    let card = STEPS[3].sel;
++    assert_eq!(
++        parts(card).collect::<Vec<_>>(),
++        [".board .kcard", ".ptlist .kcard"]
++    );
++    assert_eq!(parts(" a ,, b ").collect::<Vec<_>>(), ["a", "b"]);
++    let r = |w: f64, h: f64| Rect {
++        left: 10.0,
++        top: 10.0,
++        width: w,
++        height: h,
++    };
++    assert!(visible(r(20.0, 8.0)));
++    assert!(!visible(r(0.0, 8.0)));
++    assert!(!visible(r(20.0, 0.0)));
++    // 幅 600 以下: tile が見え、板の札は隠れる。広い幅: tile が隠れる。
++    let narrow = |s: &str| s != "#bar .gearb";
++    let wide = |s: &str| s != ".ptile";
++    assert_eq!(again(2, narrow), Some(2));
++    assert_eq!(again(2, wide), Some(3));
++    assert_eq!(again(4, narrow), Some(0));
++    assert_eq!(again(1, |s: &str| s == "#bar .pill"), Some(0));
++    assert_eq!(again(0, |_: &str| false), None);
++}
++
++/// 案内は帯の下に固定した字の帯で、頁の上の余白をその高さだけ広げる（札と行に重ならない）・輪も窓に固定。
++#[test]
++fn bvhelp_coach_strip_css() {
++    let css = read("style.css");
++    for w in [
++        ":root { --coach-h: 44px; }",
++        ".coach { position: fixed; top: 52px; left: 0; right: 0; z-index: 25; height: var(--coach-h);",
++        ".coach-ring { position: fixed;",
++        "body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }",
++        "@media (min-width: 601px) { body:has(.coach) .one { height: calc(100vh - 52px - var(--coach-h)); } }",
++        "@media (max-width: 760px) { .coach { top: 96px; } body:has(#bar):has(.coach) { padding-top: calc(96px + var(--coach-h)); } }",
++        "@media (min-width: 601px) and (max-width: 760px) { body:has(.coach) .one { height: calc(100vh - 96px - var(--coach-h)); } }",
++        "@media (max-width: 600px) { :root { --coach-h: 64px; } }",
++    ] {
++        assert!(css.contains(w), "stylesheet に {w} が無い");
++    }
++    for w in [
++        ".coach::before",
++        ".coach { width: 220px; }",
++        ".coach-ring { position: absolute;",
++    ] {
++        assert!(!css.contains(w), "stylesheet に {w} が在る");
++    }
++}
++
++/// 案内の DOM: 見える的を選び、幅の替わりと scroll（捕らえの段）と段を出した直後に今の段から置き直す。
++#[test]
++fn bvhelp_coach_follow_text() {
++    let d = dom("src/widgets/coach.rs");
++    for w in [
++        ".find(|r| visible(*r))",
++        "shown.set(again(s.step, found).and_then(place));",
++        "window_event_listener(ev::resize, move |_| replace(shown))",
++        "add_event_listener_with_callback_and_bool(",
++        "\"scroll\",",
++        "request_animation_frame(move || replace(shown));",
++        "let resize = follow(shown);",
++        "resize.remove();",
++        "<div class=\"ct\">{text}</div>",
++    ] {
++        assert!(d.contains(w), "coach.rs の wasm の枝に {w} が無い");
++    }
++    for w in ["scroll_x", "scroll_y", "box_at", "BOX_W", "style=box_at"] {
++        assert!(
++            !read("src/widgets/coach.rs").contains(w),
++            "coach.rs に {w} が在る"
++        );
++    }
++}
++
++/// 記号の見方の窓の画面の見方: 6 つの部品の語と注釈（図 one と lay）・地図と tab と出所の帯の説明は無い。
++#[test]
++fn bvhelp_how_notes() {
++    assert_eq!(HOW_KEY, "how");
++    assert_eq!(
++        HOW,
++        [
++            "how_one", "how_bar", "how_win", "how_pop", "how_lay", "how_tile"
++        ]
++    );
++    let labels: Vec<String> = HOW.iter().map(|k| label(k)).collect();
++    assert_eq!(
++        labels,
++        [
++            "1 枚の画面",
++            "上の帯",
++            "窓",
++            "吹き出し",
++            "幅の 3 段",
++            "段の tile"
++        ]
++    );
++    assert_eq!(label(HOW_KEY), "画面の見方");
++    for k in HOW.iter().chain([&HOW_KEY]) {
++        assert!(!note(k).is_empty(), "{k} の注釈が空");
++    }
++    assert!(note("how_one").contains("{fig:one}"));
++    assert!(note("how_lay").contains("{fig:lay}"));
++    for k in HOW.iter().chain(["status", "ask_open"].iter()) {
++        let n = note(k);
++        for w in ["地図", "tab", "{band:", "6 つ"] {
++            assert!(!n.contains(w), "{k} の注釈に {w} が在る: {n}");
++        }
++    }
++    let legend = read("src/project/legend.rs");
++    assert!(
++        legend.contains(
++            "<div class=\"lghow\">{hs(HOW_KEY)}{HOW.map(hs).into_iter().collect_view()}</div>"
++        ),
++        "記号の見方の窓に画面の見方の段が無い"
++    );
++    assert!(read("style.css").contains(".lghow { display: flex;"));
++}
++
++/// 図 one（帯の印 → 窓・札か行 → 吹き出し）と図 lay（幅の 3 段）の字。
++#[test]
++fn bvhelp_figs_one_and_lay() {
++    let one = fig::svg("one").expect("図 one");
++    for w in [
++        format!(">{}</text>", label("how_win")),
++        format!(">{}</text>", label("how_pop")),
++        ">帯の印を押す</text>".to_string(),
++        ">札か行を押す</text>".to_string(),
++        ">個別の頁へ</text>".to_string(),
++    ] {
++        assert!(one.contains(&w), "図 one に {w} が無い");
++    }
++    let lay = fig::svg("lay").expect("図 lay");
++    for w in [
++        ">1200 以上 横並び</text>",
++        ">601〜1199 縦積み</text>",
++        ">600 以下 tile</text>",
++        ">← 広い · 窓の幅 · 狭い →</text>",
++    ] {
++        assert!(lay.contains(w), "図 lay に {w} が無い");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
+index 87239ee6793e2ea359a54c762d19413d22885725..ff66d66f4b8fb8bae37086ad69b8b9f6ab20c458 100644
+--- a/crates/tsuzuri-surface/tests/frame.rs
++++ b/crates/tsuzuri-surface/tests/frame.rs
+@@ -505,7 +505,7 @@ fn frame_help_note_splits_lines() {
+ 
+     let s = help::note("status").expect("status の注釈");
+     assert_eq!(s.items.len(), 4);
+-    assert_eq!(s.more.len(), 4);
++    assert_eq!(s.more.len(), 2);
+     assert_eq!(s.more[0].sym, vec![Inline::Sym("st:unknown".to_string())]);
+     let b = help::note("b:beads").expect("b:beads の注釈");
+     assert_eq!(
+diff --git a/crates/tsuzuri-surface/tests/gcoach.rs b/crates/tsuzuri-surface/tests/gcoach.rs
+index 5191385df885104ab7a35d1832323a6c2a7adc56..32cded4495744befbe6933951585b0c831f1d514 100644
+--- a/crates/tsuzuri-surface/tests/gcoach.rs
++++ b/crates/tsuzuri-surface/tests/gcoach.rs
+@@ -1,4 +1,5 @@
+-//! 行 g-coach の歯（接頭辞 gcoach_）: 初心者の mode の home の頁の最初の案内（見本 mock v3 の ui.js の coach mark）。
++//! 行 g-coach の歯（接頭辞 gcoach_）: 初心者の mode の home の頁の最初の案内（見本 mock v3 の ui.js の coach mark・
++//! 的と字と置き場は行 g-help-sweep で 1 枚の画面の部品に合わせた）。
+ //! 済み印は browser の保存に残し（持ち主の裁定 t3-hub.52.16・要件 FR1）、query の coach=1 で出し直す。
+ //! 始めの決め・段の飛ばし・button の字と点・輪と箱の置き場は host の純粋な関数で撃ち、DOM と保存を撃つ所の配線は source の字で見る。
+ #![cfg(test)]
+@@ -6,10 +7,9 @@
+ use std::path::PathBuf;
+ 
+ use tsuzuri_surface::frame::Mode;
+-use tsuzuri_surface::project::{next, seat};
+ use tsuzuri_surface::widgets::coach::{
+-    AGAIN, AGAIN_PARAM, BOX_W, COACH_KEY, DONE, GOT, LABEL, NEXT, Rect, SKIP, STEPS, box_at, dots,
+-    first_found, next_text, ring, starts,
++    AGAIN, AGAIN_PARAM, COACH_KEY, DONE, GOT, LABEL, NEXT, Rect, SKIP, STEPS, dots, first_found,
++    next_text, ring, starts,
+ };
+ 
+ fn read(rel: &str) -> String {
+@@ -24,7 +24,7 @@ fn body<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+     rest.find(end).map_or(rest, |j| &rest[..j])
+ }
+ 
+-/// (1) 鍵と値・3 段の selector と字・button の字は見本の字。
++/// (1) 鍵と値と button の字は見本の字・5 段の selector は 1 枚の画面の部品（行 g-help-sweep）。
+ #[test]
+ fn gcoach_key_steps_and_words() {
+     assert_eq!(COACH_KEY, "tz-coach");
+@@ -32,18 +32,17 @@ fn gcoach_key_steps_and_words() {
+     assert_eq!(AGAIN_PARAM, "coach");
+     assert_eq!(AGAIN, "1");
+     let sels: Vec<&str> = STEPS.iter().map(|s| s.sel).collect();
+-    assert_eq!(sels, ["#next .nxbig", "#orch .big", ".kcard"]);
+-    assert_eq!(next::BLOCK.id, "next");
+-    assert_eq!(seat::BLOCK.id, "orch");
++    assert_eq!(
++        sels,
++        [
++            "#bar .pill",
++            "#bar .chip",
++            ".ptile",
++            ".board .kcard, .ptlist .kcard",
++            "#bar .gearb"
++        ]
++    );
+     let js = read("../../docs/design/mock3/ui.js");
+-    let coach = body(&js, "var COACH = [", "];");
+-    for s in &STEPS {
+-        let text = format!("text: '{}'", s.text);
+-        assert!(coach.contains(&text), "見本の COACH に {text} が無い");
+-    }
+-    for sel in ["sel: '#next .nxbig'", "sel: '.kcard'"] {
+-        assert!(coach.contains(sel), "見本の COACH に {sel} が無い");
+-    }
+     for w in [SKIP, NEXT, GOT, LABEL] {
+         let quoted = format!("'{w}'");
+         assert!(js.contains(&quoted), "見本に {quoted} が無い");
+@@ -70,13 +69,13 @@ fn gcoach_start_rules() {
+ fn gcoach_skip_missing_steps() {
+     let all = |_: &str| true;
+     assert_eq!(first_found(0, all), Some(0));
+-    assert_eq!(first_found(2, all), Some(2));
+-    assert_eq!(first_found(3, all), None);
+-    let cards = |s: &str| s == ".kcard";
+-    assert_eq!(first_found(0, cards), Some(2));
+-    let next_only = |s: &str| s == "#next .nxbig";
+-    assert_eq!(first_found(0, next_only), Some(0));
+-    assert_eq!(first_found(1, next_only), None);
++    assert_eq!(first_found(4, all), Some(4));
++    assert_eq!(first_found(5, all), None);
++    let cards = |s: &str| s == ".board .kcard, .ptlist .kcard";
++    assert_eq!(first_found(0, cards), Some(3));
++    let pill_only = |s: &str| s == "#bar .pill";
++    assert_eq!(first_found(0, pill_only), Some(0));
++    assert_eq!(first_found(1, pill_only), None);
+     assert_eq!(first_found(0, |_: &str| false), None);
+ }
+ 
+@@ -87,15 +86,16 @@ fn gcoach_button_text_and_dots() {
+     assert_eq!(GOT, "分かった");
+     assert_eq!(SKIP, "閉じる");
+     assert_eq!(LABEL, "手引き");
+-    assert_eq!(next_text(0), NEXT);
+-    assert_eq!(next_text(1), NEXT);
+-    assert_eq!(next_text(2), GOT);
+-    assert_eq!(dots(0), [true, false, false]);
+-    assert_eq!(dots(1), [false, true, false]);
+-    assert_eq!(dots(2), [false, false, true]);
++    for step in 0..4 {
++        assert_eq!(next_text(step), NEXT);
++    }
++    assert_eq!(next_text(4), GOT);
++    assert_eq!(dots(0), [true, false, false, false, false]);
++    assert_eq!(dots(2), [false, false, true, false, false]);
++    assert_eq!(dots(4), [false, false, false, false, true]);
+ }
+ 
+-/// (5) 輪は枠の 4px 外（scroll を足す）・箱は要素の下 12px で横は 8px の余白で窓に収める。
++/// (5) 輪は要素の枠の 4px 外（窓に固定した座標・scroll を足さない）。
+ #[test]
+ fn gcoach_ring_and_box_place() {
+     let el = Rect {
+@@ -105,21 +105,14 @@ fn gcoach_ring_and_box_place() {
+         height: 40.0,
+     };
+     assert_eq!(
+-        ring(el, 0.0, 200.0),
++        ring(el),
+         Rect {
+             left: 96.0,
+-            top: 246.0,
++            top: 46.0,
+             width: 308.0,
+             height: 48.0,
+         }
+     );
+-    assert_eq!(BOX_W, 240.0);
+-    assert_eq!(box_at(el, 0.0, 200.0, 1200.0), (100.0, 302.0));
+-    let right = Rect { left: 1100.0, ..el };
+-    assert_eq!(box_at(right, 0.0, 0.0, 1200.0).0, 952.0);
+-    let out = Rect { left: -20.0, ..el };
+-    assert_eq!(box_at(out, 0.0, 0.0, 1200.0).0, 8.0);
+-    assert_eq!(box_at(el, 30.0, 0.0, 1200.0).0, 130.0);
+ }
+ 
+ /// (6) stylesheet は案内の箱と輪と点の規則を持つ。
+diff --git a/crates/tsuzuri-surface/tests/helpfig.rs b/crates/tsuzuri-surface/tests/helpfig.rs
+index 3372f2c31c0e45167ec96174764cb334e68d42b8..d3393a33699f4ba4771ede27ced4f28c06d0f0de 100644
+--- a/crates/tsuzuri-surface/tests/helpfig.rs
++++ b/crates/tsuzuri-surface/tests/helpfig.rs
+@@ -69,7 +69,7 @@ fn hfig_names_and_svg_some() {
+     assert!(read("src/widgets/mod.rs").contains("pub mod fig;"));
+     assert_eq!(
+         NAMES,
+-        ["back", "move", "next", "reserve", "promo", "tick", "hover"]
++        ["back", "move", "next", "reserve", "promo", "tick", "hover", "one", "lay"]
+     );
+     for name in NAMES {
+         assert!(fig::svg(name).is_some(), "{name} が None");
+@@ -90,6 +90,8 @@ fn hfig_svg_head_and_counts() {
+         ("promo", 64, 4, 3, 1),
+         ("tick", 50, 3, 2, 0),
+         ("hover", 56, 3, 2, 0),
++        ("one", 94, 6, 4, 1),
++        ("lay", 58, 3, 2, 0),
+     ];
+     for (name, h, rects, markers, dashes) in table {
+         let s = svg(name);
+@@ -210,6 +212,8 @@ fn hfig_fig_of_note_lines() {
+     let want = [
+         ("acct_back", "back"),
+         ("candidates", "reserve"),
++        ("how_lay", "lay"),
++        ("how_one", "one"),
+         ("lg_hover", "hover"),
+         ("memo_promo", "promo"),
+         ("move_state", "move"),
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index fc80e29ec98131474b7fc76ed2064f2c676b8abf..e22d0a12c1a2d34953b065d7e465ae5cbddcf631 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -563,7 +563,7 @@
+   },
+   "status": {
+    "label": "記号の見方",
+-   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色",
++   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n・ 下の段 = 画面の見方",
+    "internal": "稼働状況 5 値（seat state + AllowanceMeasured + tick）"
+   },
+   "st_run": {
+@@ -614,7 +614,7 @@
+   },
+   "ask_open": {
+    "label": "答えを待つ質問",
+-   "plain": "上から古い順\n・ 1 つずつ答える\n・ まとめても答えられる",
++   "plain": "あなたの答えを待つ質問\n・ 1 問ずつ出る\n・ 送ると次の質問へ\n・ 全部答えると窓が閉じる\n▸\n・ 題の横の数 = 残り\n・ 下の段 = ほかの project と一括の口",
+    "internal": "open の問い（posted_at 昇順）"
+   },
+   "batch": {
+@@ -2111,6 +2111,41 @@
+    "label": "誰の番でもない",
+    "plain": "ほかの部品が手番を持つか\n終わった",
+    "internal": "器の手番 none"
++  },
++  "how": {
++   "label": "画面の見方",
++   "plain": "この画面の部品と開き方\n・ 名の横の ? を押すと説明",
++   "internal": "project の legend の HOW（行 g-help-sweep）"
++  },
++  "how_one": {
++   "label": "1 枚の画面",
++   "plain": "上の帯と 2 つの面を 1 画面に置く\n{fig:one}\n・ 一覧 = 台帳 open の epic の組\n・ pipeline = 5 つの段の列\n・ 頁は scroll しない\n→ 面の中だけが scroll する",
++   "internal": "pages の home の ONE と PANE（行 g-one-screen-a・判断の記録 ADR-27 決定 (5)）"
++  },
++  "how_bar": {
++   "label": "上の帯",
++   "plain": "画面の上に固定した 1 本の帯\n・ 左 = 次の一手とやる事の数\n・ 中 = 席からの知らせ\n・ 右 = 席と口座・抜け・時計・⚙\n→ 印を押すと窓が開く",
++   "internal": "src/topbar.rs（行 g-topbar）"
++  },
++  "how_win": {
++   "label": "窓",
++   "plain": "帯の印から開く小さな画面\n・ × か窓の外か Esc で閉じる\n・ 窓の中から開いた窓は ‹ 戻る で前へ\n・ 幅 600 以下は全画面",
++   "internal": "widgets::modal（行 g-win-frame）"
++  },
++  "how_pop": {
++   "label": "吹き出し",
++   "plain": "札か一覧の行を押すと開く\n・ 題の全体と概要と段ごとの事実\n・ 個別の頁への口\n・ × か外か Esc で閉じる",
++   "internal": "widgets::pop（行 g-pop）"
++  },
++  "how_lay": {
++   "label": "幅の 3 段",
++   "plain": "窓の幅で 2 つの面の並べ方が替わる\n{fig:lay}\n・ 1200 以上 = 横並び\n・ 601〜1199 = 縦積み\n・ 600 以下 = スマホの形",
++   "internal": "規則の行 R-35（行 g-layout）"
++  },
++  "how_tile": {
++   "label": "段の tile",
++   "plain": "スマホの形で板の代わりに出る\n・ 5 つの段の数と色\n・ 押した段の札だけが下に開く\n・ 初めは札の在る一番急ぐ段",
++   "internal": "pipeline の tiles_view と src/tiles.rs（行 g-layout）"
+   }
+  }
+ }
+\ No newline at end of file

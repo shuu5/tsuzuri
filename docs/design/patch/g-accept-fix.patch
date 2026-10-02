@@ -1,0 +1,595 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index 50a42f7f9193ee4e9843c93f9e89d12ed9a75543..c82be314a6cf87b728becfa40fba9735e8fc521b 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -48,6 +48,25 @@ pub struct Node {
+     pub text: String,
+ }
+ 
++/// 節点の札 1 つの指の受け手（札の名と、自分から body の手前の祖先まで段ごとに持つ受け手の種類の字・空白で区切る）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Reach {
++    pub name: String,
++    pub up: Vec<String>,
++}
++
++impl Reach {
++    /// hover の card を出せるか: どれかの段が pointerenter を持つか、1 つの段が mouseover と mouseout を対で持つ
++    /// （委ねの口・指が入ると card を出し、出ると猶予に入る・規則の行 R-20）。片方だけの段は数えない（行 g-accept-fix）。
++    pub fn has_card(&self) -> bool {
++        self.up.iter().any(|level| {
++            let kinds: Vec<&str> = level.split_whitespace().collect();
++            kinds.contains(&"pointerenter")
++                || (kinds.contains(&"mouseover") && kinds.contains(&"mouseout"))
++        })
++    }
++}
++
+ /// 押した切り替え 1 つ（札の字と、押す前と押した後の URL）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Switch {
+@@ -67,8 +86,10 @@ pub struct Facts {
+     pub overflow: Vec<String>,
+     /// 重なる要素の組。
+     pub overlap: Vec<String>,
+-    /// hover の card の受け手の無い要素。
++    /// click の受け手の無い吹き出しの口（札と一覧の行）。
+     pub nocard: Vec<String>,
++    /// 節点の札（節点の頁への link と近傍の図の節点）の指の受け手。
++    pub reach: Vec<Reach>,
+     /// 見出し。
+     pub headings: Vec<Heading>,
+     /// 最初の画面の散文の片。
+@@ -101,6 +122,15 @@ pub fn facts(text: &str) -> Result<Facts, String> {
+         overflow: strings(text, "overflow")?,
+         overlap: strings(text, "overlap")?,
+         nocard: strings(text, "nocard")?,
++        reach: objects(text, "reach", |o| {
++            Some(Reach {
++                name: unquote(member(o, "name")?)?,
++                up: items(member(o, "up")?)?
++                    .into_iter()
++                    .map(unquote)
++                    .collect::<Option<_>>()?,
++            })
++        })?,
+         headings: objects(text, "headings", |o| {
+             Some(Heading {
+                 key: unquote(member(o, "key")?)?,
+@@ -176,7 +206,7 @@ pub fn count(facts: &Facts, vocab: &str) -> [usize; 12] {
+         facts.overflow.len(),
+         facts.overlap.len(),
+         usize::from(facts.hscroll > 0),
+-        facts.nocard.len(),
++        facts.nocard.len() + facts.reach.iter().filter(|r| !r.has_card()).count(),
+         facts
+             .headings
+             .iter()
+diff --git a/crates/tsuzuri-boundary/src/stage/measure.js b/crates/tsuzuri-boundary/src/stage/measure.js
+index 62313c0298ce6aad09d2178551bbce07bb0a6b44..f9e4c3924495f20d62a7253f2d4c3b865bc45cce 100644
+--- a/crates/tsuzuri-boundary/src/stage/measure.js
++++ b/crates/tsuzuri-boundary/src/stage/measure.js
+@@ -50,21 +50,24 @@
+       if (w > 1 && h > 1) overlap.push(name(a) + " × " + name(b));
+     });
+   });
+-  const entered = (e) => {
+-    for (let n = e; n; n = n.parentElement) {
+-      if ((getEventListeners(n).pointerenter || []).length > 0) return true;
++  // 節点の札の指の受け手: 自分から body の手前の祖先まで、段ごとに持つ受け手の種類の字（空白で区切る）。
++  // 委ねの口（近傍の図の SVG の節点・祖先の mouseover と mouseout）も読み、card を出せるかの判じは audit の側（行 g-accept-fix）。
++  const kinds = (e) => {
++    const up = [];
++    for (let n = e; n && n !== document.body; n = n.parentElement) {
++      const l = getEventListeners(n);
++      up.push(["pointerenter", "mouseover", "mouseout"].filter((k) => (l[k] || []).length > 0).join(" "));
+     }
+-    return false;
++    return { name: name(e), up };
+   };
+   // project board の札と一覧の行は hover の card でなく click の吹き出しを出す（要件 FR14・行 g-accept）:
+   // 口は自分に click の受け手が無ければ欠けで、口の中の節点の link は hover を問わない。
+   const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);
+-  const nocard = seen
++  const nocard = nopop.map(name);
++  const reach = seen
+     .filter((e) => (e.matches("a[href]") && e.getAttribute("href").includes("page=node")) || e.matches(".node"))
+     .filter((e) => !e.closest(mouth))
+-    .filter((e) => !entered(e))
+-    .concat(nopop)
+-    .map(name);
++    .map(kinds);
+   const headings = seen.filter((e) => e.matches("h1, h2, h3, h4, h5, h6, .hd, nav a")).map((e) => {
+     const copy = e.cloneNode(true);
+     copy.querySelectorAll(".q").forEach((q) => q.remove());
+@@ -97,6 +100,7 @@
+     overflow,
+     overlap,
+     nocard,
++    reach,
+     headings,
+     first,
+     errors: [],
+diff --git a/crates/tsuzuri-boundary/tests/bvacc.rs b/crates/tsuzuri-boundary/tests/bvacc.rs
+index 7ab15b483d55fc6a527b8c75abf0522c708ea3dc..d027221c5a0615140edabf04d8c2159c451cfb78 100644
+--- a/crates/tsuzuri-boundary/tests/bvacc.rs
++++ b/crates/tsuzuri-boundary/tests/bvacc.rs
+@@ -87,7 +87,7 @@ fn bvacc_probe_reads_pops_and_windows() {
+     for want in [
+         mouth.as_str(),
+         "const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);",
+-        "    .filter((e) => !e.closest(mouth))\n    .filter((e) => !entered(e))\n    .concat(nopop)\n",
++        "    .filter((e) => !e.closest(mouth))\n    .map(kinds);\n",
+         ".mono, [data-t], .q, script, style, \" + mouth;",
+         "const nodes = seen.filter((e) => e.matches(\".nid, .tid, .kid\"))",
+         "const modal = Array.from(document.querySelectorAll(\"[aria-modal=true]\")).find(shown);",
+diff --git a/crates/tsuzuri-boundary/tests/bvafix.rs b/crates/tsuzuri-boundary/tests/bvafix.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da31734fdfb
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvafix.rs
+@@ -0,0 +1,234 @@
++//! 行 g-accept-fix の歯（接頭辞 bvafix_）: 受入の残りの違反 2 つを 0 にする。
++//! hover の欠けの数えを節点の頁の近傍の図の委ねの口（祖先の mouseover と mouseout）にも合わせ、測りの式は節点の札ごとに
++//! 段ごとの受け手の種類を返すだけで、card を出せるかの判じは audit の側が持つ（欠けの在る fixture で数えが落ちることを
++//! browser 無しで撃てる・憲法 P-7）。account board の各 project の表は、広い段の列が収まらない中の幅で列を行の中へ移し、
++//! HOME の口座の表の列の見出しは収まらない分を次の行へ送る。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_boundary::audit::{Facts, RULES, Reach, count, facts};
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn read(rel: &str) -> String {
++    let path = root().join(rel);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++fn fixture(name: &str) -> String {
++    read(&format!("tests/fixtures/surface/accept-12/{name}"))
++}
++
++/// clean.json の reach の欄を `list` の字に替えた事実の字。
++fn with_reach(list: &str) -> String {
++    let clean = fixture("clean.json");
++    assert_eq!(
++        clean.matches("\"reach\": []").count(),
++        1,
++        "clean.json の reach"
++    );
++    clean.replace("\"reach\": []", &format!("\"reach\": {list}"))
++}
++
++/// 段ごとの受け手の種類の字の列から組んだ節点の札 1 つの JSON の字。
++fn entry(name: &str, up: &[&str]) -> String {
++    let up: Vec<String> = up.iter().map(|k| format!("\"{k}\"")).collect();
++    format!("{{\"name\": \"{name}\", \"up\": [{}]}}", up.join(", "))
++}
++
++/// hover の条だけが `n` でほかは 0 の数の列。
++fn hover_only(n: usize) -> [usize; 12] {
++    let at = RULES
++        .iter()
++        .position(|(k, _)| *k == "hover")
++        .expect("条 hover");
++    let mut want = [0; 12];
++    want[at] = n;
++    want
++}
++
++/// (2) 1 つの段が mouseover と mouseout を対で持つか、どれかの段が pointerenter を持つ札だけが card を持ち、
++/// 片方だけの段・2 つの段に分かれた対・受け手の無い札・段の無い札は欠けに数える（欠けの在る fixture で落ちる）。
++#[test]
++fn bvafix_pair_on_one_level() {
++    let vocab = fixture("vocab.json");
++    let held = [
++        entry("g.node", &["", "", "mouseover mouseout"]),
++        entry("a.mono", &["pointerenter", ""]),
++        entry("a.btn", &["", "", "", "pointerenter"]),
++    ];
++    let gaps = [
++        entry("g.node", &["", "", "mouseover"]),
++        entry("g.node", &["", "", "mouseout"]),
++        entry("g.node", &["mouseover", "mouseout"]),
++        entry("a.mono", &["", "", ""]),
++        entry("a.mono", &[]),
++    ];
++    let clean = facts(&with_reach(&format!("[{}]", held.join(", ")))).expect("card の在る札");
++    assert_eq!(clean.reach.len(), 3);
++    assert!(clean.reach.iter().all(Reach::has_card), "{:?}", clean.reach);
++    assert_eq!(count(&clean, &vocab), [0; 12]);
++    for gap in &gaps {
++        let got = facts(&with_reach(&format!("[{}, {gap}]", held.join(", ")))).expect(gap);
++        assert_eq!(count(&got, &vocab), hover_only(1), "{gap}");
++    }
++    let all = facts(&with_reach(&format!("[{}]", gaps.join(", ")))).expect("欠けの札");
++    assert!(all.reach.iter().all(|r| !r.has_card()), "{:?}", all.reach);
++    assert_eq!(count(&all, &vocab), hover_only(gaps.len()));
++    let mouth = facts(&fixture("04-hover.json")).expect("04-hover.json");
++    let both = facts(&with_reach(&format!("[{}]", gaps[0]))).expect("口と札");
++    let mixed = Facts {
++        reach: both.reach,
++        ..mouth
++    };
++    assert_eq!(
++        count(&mixed, &vocab),
++        hover_only(2),
++        "吹き出しの口の欠けと札の欠けを足す"
++    );
++}
++
++/// (3) reach の欄が無い字と、札の名か段の欄が無い字と、段が字でない字は事実として読まない（読めない受け手を
++/// 「欠け無し」にしない）。受入の fixture の 13 の事実の file は reach の欄を空で持つ。
++#[test]
++fn bvafix_missing_key_refused() {
++    let clean = fixture("clean.json");
++    let gone = clean.replace(" \"reach\": [],\n", "");
++    assert_ne!(gone, clean, "clean.json の reach の行");
++    let err = facts(&gone).expect_err("reach の欠け");
++    assert!(err.contains("reach"), "{err}");
++    for bad in [
++        "[{\"name\": \"g.node\", \"up\": [1]}]",
++        "[{\"name\": \"g.node\"}]",
++        "[{\"up\": [\"pointerenter\"]}]",
++        "[\"g.node\"]",
++    ] {
++        let err = facts(&with_reach(bad)).expect_err(bad);
++        assert!(err.contains("reach"), "{bad}: {err}");
++    }
++    let dir = root().join("tests/fixtures/surface/accept-12");
++    let mut names: Vec<String> = fs::read_dir(&dir)
++        .expect("accept-12 の dir")
++        .map(|e| {
++            e.expect("dir の項")
++                .file_name()
++                .to_string_lossy()
++                .into_owned()
++        })
++        .filter(|n| n.ends_with(".json") && n != "vocab.json")
++        .collect();
++    names.sort();
++    assert_eq!(names.len(), 13, "{names:?}");
++    for name in &names {
++        let got = facts(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
++        assert!(got.reach.is_empty(), "{name}");
++    }
++}
++
++/// (4) 測りの式は節点の札（口の外の節点の頁への link と近傍の図の節点）ごとに、自分から body の手前の祖先まで段ごとに
++/// pointerenter と mouseover と mouseout の受け手の種類を返し、nocard は吹き出しの口の欠けだけを持つ。
++/// 面の近傍の図は、節点の箱（g.node）の祖先の図の置き場に mouseover と mouseout を対で付ける。
++#[test]
++fn bvafix_probe_text() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    for want in [
++        "for (let n = e; n && n !== document.body; n = n.parentElement) {",
++        "up.push([\"pointerenter\", \"mouseover\", \"mouseout\"].filter((k) => (l[k] || []).length > 0).join(\" \"));",
++        "return { name: name(e), up };",
++        "  const nocard = nopop.map(name);\n",
++        "  const reach = seen\n    .filter((e) => (e.matches(\"a[href]\") && e.getAttribute(\"href\").includes(\"page=node\")) || e.matches(\".node\"))\n",
++        "    .filter((e) => !e.closest(mouth))\n    .map(kinds);\n",
++        "    nocard,\n    reach,\n",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    assert!(!probe.contains("entered"), "前の pointerenter だけの見方");
++    let around = read("crates/tsuzuri-surface/src/project/nodearound.rs");
++    assert!(
++        around.contains("<div class=\"nb-graph\" node_ref=gz inner_html=picture\n                on:mouseover=over on:mouseout=out"),
++        "近傍の図の委ねの口"
++    );
++    assert!(around.contains("el.closest(\"g.node\")"), "節点の箱");
++}
++
++/// 字の中の `head` で始まる規則の塊（次の `\n}\n` まで）。
++fn block<'a>(css: &'a str, head: &str) -> &'a str {
++    let at = css.find(head).unwrap_or_else(|| panic!("{head} が無い"));
++    let body = &css[at..];
++    &body[..body
++        .find("\n}\n")
++        .unwrap_or_else(|| panic!("{head} の閉じ"))]
++}
++
++/// grid-template-columns の字の列ごとの最小の px（minmax の最小か固い px）の和。
++fn least(columns: &str) -> u32 {
++    columns
++        .split(") ")
++        .flat_map(|part| part.split(' '))
++        .filter_map(|w| {
++            w.trim_start_matches("minmax(")
++                .strip_suffix("px,")
++                .or(w.strip_suffix("px"))
++        })
++        .map(|n| n.parse::<u32>().unwrap_or_else(|e| panic!("{n}: {e}")))
++        .sum()
++}
++
++/// (5) account board の各 project の表: 広い段の列の最小の和は 1140 px で、761〜1239 px の中の幅は台帳・run の数・
++/// orchestrator・口座の列を開いた行の中へ移した 5 列（最小の和に頁の左右の余白 82 px を足して 761 px に収まる）、
++/// 台帳の列と run の数の列と開くの button（横の余白 8 px）は収まらない分を次の行へ送る。
++#[test]
++fn bvafix_ptab_mid_range() {
++    let css = read("crates/tsuzuri-surface/style.css");
++    let wide = ".prow { display: grid; grid-template-columns: ";
++    let at = css.find(wide).expect("広い段の .prow") + wide.len();
++    let columns = css[at..].split(';').next().unwrap_or_default();
++    assert_eq!(least(columns), 1140, "{columns}");
++    let mid = block(&css, "@media (min-width: 761px) and (max-width: 1239px) {");
++    let row = "  .prow { grid-template-columns: ";
++    let at = mid.find(row).expect("中の幅の .prow") + row.len();
++    let columns = mid[at..].split(';').next().unwrap_or_default();
++    assert_eq!(least(columns), 638, "{columns}");
++    assert!(least(columns) + 82 <= 761, "{columns}");
++    for want in [
++        "grid-template-areas: \"pn need wait un open\" \"more more more more more\";",
++        "  .prow.hrow { grid-template-areas: \"pn need wait un open\"; }",
++        "  .prow .c-led, .prow .c-run, .prow .c-orch, .prow .c-acc, .prow .h-ledger_block, .prow .h-runs4, .prow .h-seat, .prow .h-accounts { display: none; }",
++        "  .prow .c-more .m-run, .prow .c-more .m-orch, .prow .c-more .m-acc, .prow .c-more .m-led { display: inline-flex; }",
++    ] {
++        assert_eq!(mid.matches(want).count(), 1, "中の幅の {want}");
++    }
++    for want in [
++        ".prow .c-led .l1 { white-space: nowrap; } .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; gap: 4px; }",
++        ".prow .l1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }",
++        ".prow .c-run .rc4 { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; font-size: 14px; }",
++        ".prow .c-open .btn { font-size: 14px; padding: 0 8px; white-space: normal; }",
++    ] {
++        assert_eq!(css.matches(want).count(), 1, "style.css の {want}");
++    }
++    for gone in [
++        ".prow .c-led .l1, .prow .c-orch",
++        ".prow .c-run .rc4 { flex-wrap: nowrap; }",
++    ] {
++        assert!(!css.contains(gone), "1 行に留める前の規則 {gone}");
++    }
++}
++
++/// (6) account board の HOME の口座の表（class acct-grid）の見出しの行は、見出しの箱（class hd）が折り返して縮み、
++/// 見出しの字（class hd-t）は語の中でも折れる（初心者の「?」の分で 960 の列から溢れた）。
++#[test]
++fn bvafix_grid_head_wraps() {
++    let css = read("crates/tsuzuri-surface/style.css");
++    let want = ".acct-grid > .hrow .hd { flex-wrap: wrap; min-width: 0; } .acct-grid > .hrow .hd-t { overflow-wrap: anywhere; }";
++    assert_eq!(css.matches(want).count(), 1, "style.css の {want}");
++    let grid = ".acct-grid { display: grid; grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr)) 150px 76px; gap: 0; }";
++    assert_eq!(css.matches(grid).count(), 1, "口座の表の列");
++    assert!(
++        css.contains(".hd { display: inline-flex; align-items: center; gap: var(--s2); }"),
++        "見出しの箱の既定"
++    );
++}
+diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
+index 82efca7518079b84afe3a3d24da24ec2987b7e67..c3bddc7b578fffc5f7112cbd8d38b0264e9c457f 100644
+--- a/crates/tsuzuri-boundary/tests/jcount.rs
++++ b/crates/tsuzuri-boundary/tests/jcount.rs
+@@ -210,6 +210,7 @@ fn doc(skip: &str, hscroll: &str) -> String {
+         ("overflow", "[]".to_string()),
+         ("overlap", "[]".to_string()),
+         ("nocard", "[]".to_string()),
++        ("reach", "[]".to_string()),
+         ("headings", "[]".to_string()),
+         ("first", "[]".to_string()),
+         ("errors", "[]".to_string()),
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/jrun.rs
+index 23e885e772da8efee1fb0ca422d3906f3af8afce..54367124db606f8d60f2b95e5841b976cc004ce0 100644
+--- a/crates/tsuzuri-boundary/tests/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/jrun.rs
+@@ -431,6 +431,7 @@ fn returned_object_keys(text: String) {
+             "overflow",
+             "overlap",
+             "nocard",
++            "reach",
+             "headings",
+             "first",
+             "errors",
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 61b41416d84d1d92d8f9ef1826294f24413d2fa1..692dcf72d49b06d305bde362b14f11337c874e74 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -641,6 +641,7 @@ table.mx th .bchip { margin-right: 4px; }
+ .occ.free { border: 1px solid var(--st-run); color: var(--st-run); }
+ .acct-grid > div { padding: var(--s2); border-bottom: 1px solid var(--line); min-width: 0; display: flex; align-items: center; gap: var(--s2); }
+ .acct-grid > .hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line-2); }
++.acct-grid > .hrow .hd { flex-wrap: wrap; min-width: 0; } .acct-grid > .hrow .hd-t { overflow-wrap: anywhere; } /* 列の見出しは収まらない分を次の行へ（行 g-accept-fix） */
+ .acct-grid .aname { font-weight: 750; font: 700 13px ui-monospace, monospace; }
+ .meter { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+ .meter .bar { position: relative; height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+@@ -1160,7 +1161,7 @@ svg .lane-lab.zero { font-weight: 500; fill: var(--ink-3); }
+ .c-more .lk { color: var(--ink-3); font-size: 14px; }
+ .c-more .mi b { font-size: 15px; }
+ .ptab { display: flex; flex-direction: column; font-size: 14px; }
+-.prow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 2fr) 68px minmax(150px, 1fr) minmax(162px, 1.1fr) 128px 128px 84px 100px;
++.prow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 2fr) 68px minmax(150px, 1fr) minmax(162px, 1.1fr) 128px 128px 84px 120px;
+   grid-template-areas: "pn need wait un led run orch acc open" "more more more more more more more more more"; align-items: center; border-bottom: 1px solid var(--line); cursor: pointer; }
+ .prow > div { padding: 6px 8px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+ .prow.hrow { cursor: default; border-bottom: 2px solid var(--line-2); font-size: 14px; color: var(--ink-2); grid-template-areas: "pn need wait un led run orch acc open"; }
+@@ -1183,18 +1184,25 @@ svg .lane-lab.zero { font-weight: 500; fill: var(--ink-3); }
+ .rq.q-wait .dot { background: var(--s-wait); border-radius: 50%; } .rq.q-run .dot { background: var(--s-run); border-radius: 50%; }
+ .rq.q-stop .dot { background: var(--s-stop); border-radius: 2px; } .rq.q-land .dot { background: var(--s-land); clip-path: polygon(0 55%, 35% 100%, 100% 10%, 85% 0, 35% 70%, 15% 40%); width: 11px; height: 11px; }
+ .rq.q-stop:not(.z) .n { color: var(--s-stop); font-weight: 800; }
+-.prow .c-run .rc4 { flex-wrap: nowrap; }
+ .prow .c-need .l2, .prow .c-un2 .l2 { white-space: nowrap; overflow: hidden; } /* 収まらない分は fitLines が … に削る */
+ .prow .c-more .slist { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; } .prow .c-more .slist .mono { font-size: 14px; }
+ .prow .c-pn b { overflow-wrap: normal; font-size: 14px; white-space: nowrap; }
+-.prow .c-led .l1, .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; } .prow .c-orch { gap: 4px; }
++.prow .c-led .l1 { white-space: nowrap; } .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; gap: 4px; } /* 台帳と run の数の列と開くの button は、収まらない分を次の行へ（行 g-accept-fix） */
+ .prow .c-more .m-need, .prow .c-more .m-grp { display: none; }
+ .prow .c-open .sh { display: none; }
+ .prow .c-need .l1 { display: block; } .prow .c-need .l1 > * { vertical-align: middle; margin-right: 4px; }
+-.prow .c-open .btn { font-size: 14px; }
++.prow .c-open .btn { font-size: 14px; padding: 0 8px; white-space: normal; }
+ .prow .c-more .m-run, .prow .c-more .m-orch, .prow .c-more .m-acc, .prow .c-more .m-led { display: none; }
+ .prow .c-more .mi > div { padding: 0; }
+ .pgh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
++/* 中の幅（761〜1239 px・行 g-accept-fix）: 広い段の列の最小の和 1140 px と頁の左右の余白 82 px が収まるのは 1240 px から。
++   台帳・run の数・orchestrator・口座の列は、行を開いた中（c-more）へ移す。 */
++@media (min-width: 761px) and (max-width: 1239px) {
++  .prow { grid-template-columns: minmax(180px, 1fr) minmax(120px, 2fr) 68px minmax(150px, 1fr) 120px; grid-template-areas: "pn need wait un open" "more more more more more"; }
++  .prow.hrow { grid-template-areas: "pn need wait un open"; }
++  .prow .c-led, .prow .c-run, .prow .c-orch, .prow .c-acc, .prow .h-ledger_block, .prow .h-runs4, .prow .h-seat, .prow .h-accounts { display: none; }
++  .prow .c-more .m-run, .prow .c-more .m-orch, .prow .c-more .m-acc, .prow .c-more .m-led { display: inline-flex; }
++}
+ @media (max-width: 760px) {
+   .jrow { grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1.1fr) 52px 34px; grid-template-areas: "j p p p m" "j t r u m" "x x x x x"; min-height: 44px; }
+   .jrow .c-j { grid-area: j; } .jrow .c-p { grid-area: p; padding-bottom: 0; } .jrow .c-task { grid-area: t; } .jrow .c-rate { grid-area: r; } .jrow .c-un { grid-area: u; } .jrow .rowmore { grid-area: m; } .jrow .c-more { grid-area: x; }
+diff --git a/tests/fixtures/surface/accept-12/01-overflow.json b/tests/fixtures/surface/accept-12/01-overflow.json
+index c5c788e08862d62099c6fdc5d91f40ab63ff4e90..b800a80a0fbe06f01fb7a2f07cbe694fb604df34 100644
+--- a/tests/fixtures/surface/accept-12/01-overflow.json
++++ b/tests/fixtures/surface/accept-12/01-overflow.json
+@@ -6,6 +6,7 @@
+  ],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/02-overlap.json b/tests/fixtures/surface/accept-12/02-overlap.json
+index aedbfc1e35853a15603f067c8c0e300df9c5deb7..9ea672b00de248aaf0d03a2e39774bc818190c9a 100644
+--- a/tests/fixtures/surface/accept-12/02-overlap.json
++++ b/tests/fixtures/surface/accept-12/02-overlap.json
+@@ -6,6 +6,7 @@
+   "button.seg と a.chip"
+  ],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/03-hscroll.json b/tests/fixtures/surface/accept-12/03-hscroll.json
+index 0cbc04b5b2c7b821bce638a06c9f12d6432a3d29..b345499522fe45c845e3346fb8ff23d02e1e7258 100644
+--- a/tests/fixtures/surface/accept-12/03-hscroll.json
++++ b/tests/fixtures/surface/accept-12/03-hscroll.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/04-hover.json b/tests/fixtures/surface/accept-12/04-hover.json
+index 9fdfd74506dadb89bafd52cf7dd8ae3eb663e766..58ea248a62e2dcaa6cda6886a0f185ff4f7742c6 100644
+--- a/tests/fixtures/surface/accept-12/04-hover.json
++++ b/tests/fixtures/surface/accept-12/04-hover.json
+@@ -6,6 +6,7 @@
+  "nocard": [
+   "button.kcard"
+  ],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/05-heading.json b/tests/fixtures/surface/accept-12/05-heading.json
+index 35d29bebb258b783af421278c3be0ff012b3f349..3daf6defee957561e26e025d1eaeca35204dc3d4 100644
+--- a/tests/fixtures/surface/accept-12/05-heading.json
++++ b/tests/fixtures/surface/accept-12/05-heading.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/06-prose.json b/tests/fixtures/surface/accept-12/06-prose.json
+index c3aa84d3cbfab438b5c810ce19a97167932bc6f4..909bd8eba65caabb2f663d2379264c9876a425d7 100644
+--- a/tests/fixtures/surface/accept-12/06-prose.json
++++ b/tests/fixtures/surface/accept-12/06-prose.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/07-error.json b/tests/fixtures/surface/accept-12/07-error.json
+index 708b8aa238d4ccb49b27b20ddc693a55658dd135..7ed4c9f2ac06c80c746bd910e6935411f04a35e2 100644
+--- a/tests/fixtures/surface/accept-12/07-error.json
++++ b/tests/fixtures/surface/accept-12/07-error.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/08-budget.json b/tests/fixtures/surface/accept-12/08-budget.json
+index 62347d60e7cd0f185aab9405e939eec3f0727e49..56409787dfaf8364abf88f0bef23d73048d667fa 100644
+--- a/tests/fixtures/surface/accept-12/08-budget.json
++++ b/tests/fixtures/surface/accept-12/08-budget.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/09-nodeid.json b/tests/fixtures/surface/accept-12/09-nodeid.json
+index 49a66375ee3dca993856690bbe23516375b62f3a..27c492a888d9d76abc2b414a01cd74aacb0fe3b7 100644
+--- a/tests/fixtures/surface/accept-12/09-nodeid.json
++++ b/tests/fixtures/surface/accept-12/09-nodeid.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/10-url.json b/tests/fixtures/surface/accept-12/10-url.json
+index 85d975af1023cce8d1dc310262d037081b22bf3f..3d7d20c5894d02c58a17f4971eadf1815a7d648b 100644
+--- a/tests/fixtures/surface/accept-12/10-url.json
++++ b/tests/fixtures/surface/accept-12/10-url.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/11-verbatim.json b/tests/fixtures/surface/accept-12/11-verbatim.json
+index 0ed3621c0f8ed07513267341c130c8dd1bdf7e6c..778da3f234733070b8faf488969c012dace27046 100644
+--- a/tests/fixtures/surface/accept-12/11-verbatim.json
++++ b/tests/fixtures/surface/accept-12/11-verbatim.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/12-library.json b/tests/fixtures/surface/accept-12/12-library.json
+index 9261ceb44cf162ab615d5705cef0467cf088423e..afb615cf853357a7d923151b08cdb5025a648a38 100644
+--- a/tests/fixtures/surface/accept-12/12-library.json
++++ b/tests/fixtures/surface/accept-12/12-library.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/clean.json b/tests/fixtures/surface/accept-12/clean.json
+index cde5a90671b5066ed44edc2b18cc93591b0d50bb..dabb7c10f6645dd77cb744b0bbeee7dfff65ac14 100644
+--- a/tests/fixtures/surface/accept-12/clean.json
++++ b/tests/fixtures/surface/accept-12/clean.json
+@@ -4,6 +4,7 @@
+  "overflow": [],
+  "overlap": [],
+  "nocard": [],
++ "reach": [],
+  "headings": [
+   {
+    "key": "pipeline",

@@ -1,0 +1,2069 @@
+diff --git a/crates/tsuzuri-surface/build.rs b/crates/tsuzuri-surface/build.rs
+index 0a94caeac8af8e347281c978b590cb946b913dfb..de315010fa09aa4bcd5ea89c5d5c57b27809f005 100644
+--- a/crates/tsuzuri-surface/build.rs
++++ b/crates/tsuzuri-surface/build.rs
+@@ -113,7 +113,7 @@ fn generate_pages(dir: &Path, names: &[String]) -> Result<String, String> {
+     writeln!(s, "}}").map_err(w)?;
+     writeln!(s).map_err(w)?;
+     writeln!(s, "impl PageId {{").map_err(w)?;
+-    writeln!(s, "    /// 全部の頁（名の順・nav の順は frame の nav）。").map_err(w)?;
++    writeln!(s, "    /// 全部の頁（名の順）。").map_err(w)?;
+     writeln!(s, "    pub const ALL: [PageId; {}] = [", names.len()).map_err(w)?;
+     for name in names {
+         writeln!(s, "        PageId::{},", variant(name)).map_err(w)?;
+diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs
+index 48a109164819ce4fe7dbf7e07176b8cf002ed6b0..9e281c43fa7be8450025f3b30184c1d335a03f19 100644
+--- a/crates/tsuzuri-surface/src/board.rs
++++ b/crates/tsuzuri-surface/src/board.rs
+@@ -22,15 +22,15 @@ use web_sys::wasm_bindgen::JsCast;
+ 
+ use crate::account::windows::{ACCOUNT_WIN, closed_message};
+ use crate::askwin::AskFocus;
+-use crate::frame::{self, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
++use crate::frame::{self, BackHow, BackStep, Block, Mode, PageId, Press};
+ use crate::fresh::{self, Fresh};
+ use crate::ledgerlist::SelCtx;
+ use crate::net;
+-use crate::project::{self, Module, ledger};
++use crate::project::{self, Module};
+ use crate::seatpill;
+ use crate::store;
+ use crate::topbar::{self, Bar, Win, win_of_href};
+-use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
++use crate::view::{PageSubject, brand, clock, clock_short, doc_title, kept_name};
+ use crate::vocab::label;
+ use crate::widgets::coach::CoachLayer;
+ use crate::widgets::help::{HelpCtx, TipLayer, term};
+@@ -156,15 +156,6 @@ fn App() -> impl IntoView {
+             p.close();
+         }
+     });
+-    // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
+-    let fetched = net::read(ledger::PATH);
+-    let screen = RwSignal::new(Screen::initial());
+-    Effect::new(move |_| {
+-        let f = fetched.get();
+-        screen.update(|s| *s = s.after_read(&f, net::now()));
+-    });
+-    // 台帳の block は画面の状態を context から受ける（行 hs-blocks）。
+-    provide_context(screen);
+     // 頁の題の語に替える字（節点の頁の block が節点の題を置く・行 g-title）。
+     let subject = RwSignal::new(PageSubject::default());
+     provide_context(subject);
+@@ -300,7 +291,7 @@ fn top(
+     let fresh = net::fresh();
+     let updated = move || fresh.with(Fresh::record);
+     let title = move || updated().map(clock);
+-    let key = HEADER[2].key;
++    let key = frame::UPDATED.key;
+     let at = move || match updated() {
+         Some(t) => term(key, clock_short(t, net::now())),
+         None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),
+diff --git a/crates/tsuzuri-surface/src/frame.rs b/crates/tsuzuri-surface/src/frame.rs
+index 3b454eb10dcb9b25aca95572d16651152c1fd599..c2b54ac1de22ed327b99b0f903ca7854145c4fac 100644
+--- a/crates/tsuzuri-surface/src/frame.rs
++++ b/crates/tsuzuri-surface/src/frame.rs
+@@ -1,15 +1,13 @@
+-//! 頁の枠（便 g-frame）: header の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
++//! 頁の枠（便 g-frame）: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
+ //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
+ //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
+-//! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
+-//! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
+-//! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
+-//! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
+-//! header の「戻る」（行 h-wire）: HEADER の前の部品 BACK と、account board の窓へ戻る段の列（`back_steps`）。
++//! 節点の頁（便 g-node）: query の page=node と id で開く。
++//! 帯の「戻る」（行 h-wire）: account board の窓へ戻る段の列（`back_steps`）。
+ //! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
+ //! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
+-//! ここは頁の定義（`PageDef`）から頁の枠・nav・link・snapshot を導く（頁の変種の名を持たない）。
+-//! 頁の切り替え（行 g-nav）: 頁の link の押し（`Press`）が文書を読み直さずに URL を積むかを `switch_url` が決める。
++//! ここは頁の定義（`PageDef`）から頁の枠・link・snapshot を導く（頁の変種の名を持たない）。
++//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める（行 g-nav）。
++//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した（行 g-dead-sweep-b）。
+ 
+ use crate::mapview::encode;
+ pub use crate::pages::PageId;
+@@ -43,21 +41,15 @@ impl PageId {
+ /// 1 つの頁の定義（src/pages の下の file ごとの `PAGE`）。
+ #[derive(Debug, Clone, Copy)]
+ pub struct PageDef {
+-    /// nav の語の鍵（頁の見出し）。
++    /// 頁の見出しの語の鍵（頁の題の語）。
+     pub heading: &'static str,
+     /// 列を包む class。
+     pub class: &'static str,
+-    /// nav の順（1 から・無ければ nav に出さない）。
+-    pub nav: Option<u8>,
+-    /// nav の link に open の問いの数の印を付けるか。
+-    pub badge: bool,
+-    /// nav の印の SVG の字（nav に出さない頁は空）。
+-    pub icon: &'static str,
+     /// 頁の列。
+     pub columns: fn() -> Vec<Column>,
+ }
+ 
+-/// 1 つの頁の枠（頁の id・nav の語の鍵・列を包む class・列）。
++/// 1 つの頁の枠（頁の id・見出しの語の鍵・列を包む class・列）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Page {
+     pub id: PageId,
+@@ -93,27 +85,7 @@ pub fn page(id: PageId) -> Page {
+     }
+ }
+ 
+-/// nav の頁（頁の定義の nav が在る頁を nav の数の順に）。
+-pub fn nav() -> Vec<PageId> {
+-    let mut out: Vec<(u8, PageId)> = PageId::ALL
+-        .into_iter()
+-        .filter_map(|p| p.def().nav.map(|n| (n, p)))
+-        .collect();
+-    out.sort_by_key(|(n, _)| *n);
+-    out.into_iter().map(|(_, p)| p).collect()
+-}
+-
+-/// nav の頁の枠（nav の順）。
+-pub fn pages() -> Vec<Page> {
+-    nav().into_iter().map(page).collect()
+-}
+-
+-/// nav の頁の語の鍵（nav の順・header の nav の部品の中の鍵）。
+-pub fn nav_keys() -> Vec<&'static str> {
+-    nav().into_iter().map(|p| p.def().heading).collect()
+-}
+-
+-/// header の 1 つの部品（役・語の鍵・class・中の語の鍵）。
++/// 帯の下の 1 つの部品（役・語の鍵・class・中の語の鍵）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub struct HeaderPart {
+     pub part: &'static str,
+@@ -122,44 +94,15 @@ pub struct HeaderPart {
+     pub items: &'static [&'static str],
+ }
+ 
+-/// header の部品（題・頁の link・最終更新・mode の切り替え・この順）。
+-/// nav の部品の中の鍵は頁から導く（`nav_keys`・ここは空）。
+-pub const HEADER: [HeaderPart; 4] = [
+-    HeaderPart {
+-        part: "brand",
+-        key: "project",
+-        class: "brand",
+-        items: &[],
+-    },
+-    HeaderPart {
+-        part: "nav",
+-        key: "dashboard",
+-        class: "nav",
+-        items: &[],
+-    },
+-    HeaderPart {
+-        part: "updated",
+-        key: "last_record",
+-        class: "chip num",
+-        items: &[],
+-    },
+-    HeaderPart {
+-        part: "mode",
+-        key: "mode",
+-        class: "seg",
+-        items: &["beginner", "expert"],
+-    },
+-];
+-
+-/// header の「戻る」の部品（HEADER の前に描く・行 h-wire・見本の ui.js の topHTML の `.backwrap` の中の `.upto`）。
+-pub const BACK: HeaderPart = HeaderPart {
+-    part: "back",
+-    key: "acct_back",
+-    class: "upto",
++/// 最終の記録の部品（帯の下の右端の小さな札の時刻の chip・語の鍵は「?」の注釈の鍵）。
++pub const UPDATED: HeaderPart = HeaderPart {
++    part: "updated",
++    key: "last_record",
++    class: "chip num",
+     items: &[],
+ };
+ 
+-/// header の席の pill の部品（HEADER の外・mode の切り替えの前に描く・行 g-seatpill・見本の ui.js の topHTML の `.seatpill`）。
++/// 席の pill の部品（帯の下の右端の小さな札に描く・行 g-seatpill・見本の ui.js の topHTML の `.seatpill`）。
+ /// 中身は seatpill の module が描く。
+ pub const SEAT: HeaderPart = HeaderPart {
+     part: "seat",
+@@ -173,9 +116,6 @@ pub fn seat_shown(page: PageId) -> bool {
+     page != PageId::Home
+ }
+ 
+-/// 「戻る」の部品を包む span の class（見本の `.backwrap`）。
+-pub const BACK_WRAP: &str = "backwrap";
+-
+ /// account board の窓を新しく開くときの URL（同じ index.html の query の board が account）。
+ pub const ACCOUNT_URL: &str = "?board=account";
+ 
+@@ -282,41 +222,6 @@ impl Mode {
+     }
+ }
+ 
+-/// nav の 1 つの link（語の鍵・行き先の頁・class）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub struct NavLink {
+-    pub key: &'static str,
+-    pub page: PageId,
+-    /// 今の頁なら `on`（見本の `.nav a.on`）。
+-    pub class: &'static str,
+-    /// 数の印の class（問いの頁の link だけ `badge`・ほかは空）。
+-    pub badge: &'static str,
+-}
+-
+-/// header の質問の link の数の印の class（見本の `.nav .badge`）。
+-pub const BADGE: &str = "badge";
+-
+-/// nav の link（nav の順・数の印は頁の定義の badge が真の頁だけ）。
+-pub fn nav_links(current: PageId) -> Vec<NavLink> {
+-    nav()
+-        .into_iter()
+-        .map(|p| {
+-            let def = p.def();
+-            NavLink {
+-                key: def.heading,
+-                page: p,
+-                class: if p == current { "on" } else { "" },
+-                badge: if def.badge { BADGE } else { "" },
+-            }
+-        })
+-        .collect()
+-}
+-
+-/// 質問の link の数の印の字（open の問いの数・数が読めないときと 0 のときは出さない）。
+-pub fn badge(open: Option<usize>) -> Option<String> {
+-    open.filter(|n| *n > 0).map(|n| n.to_string())
+-}
+-
+ /// 頁への link（同じ path の query だけ・mode を URL に残す）。
+ pub fn href(page: PageId, mode: Mode) -> String {
+     if page == PageId::Home {
+@@ -354,12 +259,6 @@ pub fn window_features(standalone: bool) -> &'static str {
+     if standalone { POPUP } else { "" }
+ }
+ 
+-/// 頁の link の押しで文書を読み直さずに積む URL（左の button を修飾の鍵なしで押し、今の頁と違う頁へ
+-/// 行くときだけ `href` の字・ほかは None で browser の既定のまま＝新しい窓や tab・保存・同じ頁の読み直し）。
+-pub fn switch_url(now: PageId, to: PageId, mode: Mode, press: Press) -> Option<String> {
+-    (press.plain() && now != to).then(|| href(to, mode))
+-}
+-
+ /// 節点の頁への link（節点の id は `%XX` にする・mode を URL に残す）。
+ pub fn node_href(id: &str, mode: Mode) -> String {
+     format!("?page=node&id={}&mode={}", encode(id), mode.key())
+@@ -398,38 +297,6 @@ pub fn with_param(search: &str, key: &str, value: &str) -> String {
+     format!("?{}", parts.join("&"))
+ }
+ 
+-/// header の値の JSON の字（tests/snapshots/header.json と 1 字も違わないことを歯が見る）。
+-/// nav の部品の中の鍵は頁から導いた `nav_keys`。
+-pub fn header_snapshot() -> String {
+-    let mut out = String::from("{\n  \"header\": [\n");
+-    let keys = nav_keys();
+-    // 「戻る」の部品は HEADER の前、席の pill は mode の切り替えの前。
+-    let header: Vec<String> = [&BACK]
+-        .into_iter()
+-        .chain(HEADER.iter().flat_map(|h| {
+-            let seat = (h.part == "mode").then_some(&SEAT);
+-            seat.into_iter().chain([h])
+-        }))
+-        .map(|h| {
+-            let items = if h.part == "nav" {
+-                keys.as_slice()
+-            } else {
+-                h.items
+-            };
+-            format!(
+-                "    {{\"part\": {}, \"key\": {}, \"class\": {}, \"items\": [{}]}}",
+-                quote(h.part),
+-                quote(h.key),
+-                quote(h.class),
+-                list(items)
+-            )
+-        })
+-        .collect();
+-    out.push_str(&header.join(",\n"));
+-    out.push_str("\n  ]\n}\n");
+-    out
+-}
+-
+ /// 頁 1 つの枠の値の JSON の字（tests/snapshots/pages の下の同じ id の file と 1 字も違わないことを歯が見る）。
+ pub fn page_snapshot(id: PageId) -> String {
+     let mut out = page_json(&page(id));
+@@ -473,11 +340,3 @@ fn page_json(page: &Page) -> String {
+ fn quote(s: &str) -> String {
+     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+ }
+-
+-fn list(items: &[&str]) -> String {
+-    items
+-        .iter()
+-        .map(|s| quote(s))
+-        .collect::<Vec<_>>()
+-        .join(", ")
+-}
+diff --git a/crates/tsuzuri-surface/src/pages/home.rs b/crates/tsuzuri-surface/src/pages/home.rs
+index cdf187cbf3115e9330d42c5f9c5fc2032031235c..499a7f156486cd483ff904bd83c89d2316f7ae6a 100644
+--- a/crates/tsuzuri-surface/src/pages/home.rs
++++ b/crates/tsuzuri-surface/src/pages/home.rs
+@@ -14,9 +14,6 @@ pub const PANE: &str = "pane";
+ pub const PAGE: PageDef = PageDef {
+     heading: "home",
+     class: ONE,
+-    nav: Some(1),
+-    badge: false,
+-    icon: r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#,
+     columns,
+ };
+ 
+diff --git a/crates/tsuzuri-surface/src/pages/mod.rs b/crates/tsuzuri-surface/src/pages/mod.rs
+index 15ced090975444cbaf202a24e258985aa1e05b1d..434eb6129aa8953e43f5ba6d2fdb1b4b318d1f7b 100644
+--- a/crates/tsuzuri-surface/src/pages/mod.rs
++++ b/crates/tsuzuri-surface/src/pages/mod.rs
+@@ -1,5 +1,5 @@
+ //! project board の頁（行 hs-pages・判断の記録 ADR-13）: 1 頁 1 file。各 file は頁の定義（`PAGE`）を持つ。
+ //! 頁の module の宣言と列挙 `PageId` は組み立ての script（build.rs）が dir の file から生成する
+-//! （頁を足すのは file を 1 つ置くだけ・nav の順と数の印と印の字は頁の定義が持つ）。
++//! （頁を足すのは file を 1 つ置くだけ）。
+ 
+ include!(concat!(env!("OUT_DIR"), "/pages.rs"));
+diff --git a/crates/tsuzuri-surface/src/pages/node.rs b/crates/tsuzuri-surface/src/pages/node.rs
+index 77a5fd29e4869abe736d2591f5805f992583ecb2..0ac5de1d2f5582ca95191869ccc1441b0789ed45 100644
+--- a/crates/tsuzuri-surface/src/pages/node.rs
++++ b/crates/tsuzuri-surface/src/pages/node.rs
+@@ -1,5 +1,5 @@
+ //! 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around と、run の時間軸の timeline の 3 つ）。
+-//! query の page=node と id で開き、nav には出さない（印の字も空）。
++//! query の page=node と id で開く。
+ 
+ use crate::frame::{Column, PageDef, STACK};
+ use crate::project::{node, nodearound, timeline};
+@@ -7,9 +7,6 @@ use crate::project::{node, nodearound, timeline};
+ pub const PAGE: PageDef = PageDef {
+     heading: "nb_self",
+     class: STACK,
+-    nav: None,
+-    badge: false,
+-    icon: "",
+     columns,
+ };
+ 
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index 88a82a59ac5928a14e988e4d58edbba43b396cf2..07ba66b790df81d59066058b1598e5ad12a8be22 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -11,9 +11,7 @@
+ //! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
+ //! 電文の鍵 others のほかの project の問いは札つきで投稿の時刻の順に 1 つの一覧へ混ぜ、題は link にせず、つながりの段を
+ //! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す（行 e-multi-ask）。
+-//! 束の block と次の一手と問いの件数（`cards`・`count`・`answerable`）は自分の問いだけを読む。
+-
+-use std::collections::BTreeMap;
++//! 束の block（`cards`・`answerable`）は自分の問いだけを読む。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::Reading;
+@@ -25,8 +23,7 @@ use tsuzuri_contract::wire;
+ use super::{Body, NOT_READ};
+ use crate::frame::Block;
+ use crate::view::{Fetched, clock};
+-use crate::widgets::hover::{self, clip};
+-use crate::widgets::nodecard::card_of;
++use crate::widgets::hover::clip;
+ 
+ pub const BLOCK: Block = Block {
+     id: "ask",
+@@ -231,14 +228,6 @@ pub fn answerable(fetched: &Fetched) -> bool {
+     }
+ }
+ 
+-/// 問いの件数（測れていなければ Unknown・0 件と書かない）。
+-pub fn count(fetched: &Fetched) -> Reading<usize> {
+-    match cards(fetched) {
+-        Ok(cards) => Reading::Known(cards.len()),
+-        Err(_) => Reading::Unknown,
+-    }
+-}
+-
+ /// 本文を全部の問いの一覧に読んだ欄 others（読めない本文・まだ読んでいない・読めないは空の列・行 e-multi-ask）。
+ pub fn others(fetched: &Fetched) -> Vec<ProjectQuestions> {
+     match fetched {
+@@ -256,15 +245,6 @@ pub fn unknown_projects(fetched: &Fetched) -> Vec<String> {
+         .collect()
+ }
+ 
+-/// block の中身の card の数（ほかの project の問いを含む・測れていなければ Unknown・0 件は Known の 0）。
+-pub fn total(fetched: &Fetched) -> Reading<usize> {
+-    match body(fetched) {
+-        Body::Unmeasured(_) => Reading::Unknown,
+-        Body::Empty(_) => Reading::Known(0),
+-        Body::Filled(cards) => Reading::Known(cards.len()),
+-    }
+-}
+-
+ /// block の中身（自分の問いの列に、ほかの project の読めた組の列を電文の順に 1 つずつ投稿の時刻で混ぜ、番号を 1 から付ける）。
+ pub fn body(fetched: &Fetched) -> Body<Vec<Card>> {
+     let own = match cards(fetched) {
+@@ -313,23 +293,6 @@ fn merged(front: Vec<Card>, back: Vec<Card>) -> Vec<Card> {
+     }
+ }
+ 
+-/// 鍵つきの一覧の鍵（番号を 0 にした中身・前の card が答えられて番号が詰まっても変わらない）。
+-pub fn card_key(card: &Card) -> Card {
+-    Card {
+-        number: 0,
+-        ..card.clone()
+-    }
+-}
+-
+-/// block の形（Filled の中身を捨てた値・形が同じなら外枠を組み直さない）。
+-pub fn outline(fetched: &Fetched) -> Body<()> {
+-    match body(fetched) {
+-        Body::Unmeasured(reason) => Body::Unmeasured(reason),
+-        Body::Empty(line) => Body::Empty(line),
+-        Body::Filled(_) => Body::Filled(()),
+-    }
+-}
+-
+ /// card の列（Filled でなければ空の列）。
+ pub fn listed(fetched: &Fetched) -> Vec<Card> {
+     match body(fetched) {
+@@ -338,17 +301,6 @@ pub fn listed(fetched: &Fetched) -> Vec<Card> {
+     }
+ }
+ 
+-/// 問いの id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い問いは持たない）。
+-pub fn node_cards(graph: &Fetched, cards: &[Card]) -> BTreeMap<String, hover::Card> {
+-    let Ok(doc) = super::map::doc(graph) else {
+-        return BTreeMap::new();
+-    };
+-    cards
+-        .iter()
+-        .filter_map(|c| card_of(&doc, c.id.as_str()).map(|n| (c.id.to_string(), n)))
+-        .collect()
+-}
+-
+ /// 電文の 1 本を自分の問いの card の中身にする（札なし・答えを送れる）。
+ pub fn card(number: usize, q: &QuestionCard) -> Card {
+     Card {
+@@ -640,9 +592,13 @@ pub fn unreceived_line(fetched: &Fetched, now: EpochSecs) -> Option<String> {
+     Some(format!("{UNRECEIVED_HEAD} {} 件: {}", ids.len(), listed.join("・")))
+ }
+ 
++/// 頁に置かない block の中身（空・質問の頁は行 g-one-screen-a で消し、問いは質問の窓が 1 問ずつ出す・
++/// 組み立ての script の列挙 Module の view が module ごとに要る）。頁の一覧の DOM は行 g-dead-sweep-b で消した。
+ #[cfg(target_arch = "wasm32")]
+ pub fn view() -> leptos::prelude::AnyView {
+-    dom::view()
++    use leptos::prelude::*;
++
++    ().into_any()
+ }
+ 
+ /// 質問の窓の 1 問（行 g-ask-win・中身は dom の one_view）。
+@@ -661,19 +617,16 @@ mod dom {
+     use leptos::ev;
+     use leptos::prelude::*;
+     use leptos::task::spawn_local;
+-    use tsuzuri_contract::board::Reading;
+     use tsuzuri_contract::ledger::BeadId;
+ 
+     use super::{
+-        BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, OTHER_UNKNOWN, Outcome, PATH, Part, RULING_PATH,
+-        Slot, UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, card_key, focus, key_action, listed,
+-        node_cards, outcome, outline, posted_tip, request_body, send_text, target_number, total,
+-        unknown_projects,
++        CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, UNRECEIVED_PATH,
++        age, anchor, answerable, can_send, card_class, key_action, listed, outcome, posted_tip,
++        request_body, send_text, target_number,
+     };
+     use crate::frame::{Mode, node_href};
+-    use crate::project::map;
++    use crate::project::fold;
+     use crate::project::nodearound::{Embeds, embeds};
+-    use crate::project::{Body, body_view, fold, section, unmeasured};
+     use crate::vocab::label;
+     use crate::widgets::help::{HelpCtx, expert_tip};
+     use crate::widgets::hover::{self, attach_some};
+@@ -722,85 +675,6 @@ mod dom {
+         })
+     }
+ 
+-    /// 名指された card を画面の上端へ寄せる（描いた後の frame で・要素が無ければ何もしない）。
+-    fn scroll_to(number: usize) {
+-        let id = anchor(number);
+-        request_animation_frame(move || {
+-            if let Some(el) = document().get_element_by_id(&id) {
+-                el.scroll_into_view_with_bool(true);
+-            }
+-        });
+-    }
+-
+-    pub fn view() -> AnyView {
+-        let search = window().location().search().unwrap_or_default();
+-        let target = focus(&search);
+-        let fallback = Mode::from_query(&search);
+-        let mode = use_context::<HelpCtx>().map(|c| c.mode);
+-        let scrolled = StoredValue::new(false);
+-        let fetched = crate::net::read(PATH);
+-        let drafts: Drafts = StoredValue::new(Vec::new());
+-        // 読むだけの server なら答えの欄は送る欄の代わりにチャットで答える 1 行を出す。
+-        provide_context(CanAnswer(Memo::new(move |_| fetched.with(answerable))));
+-        // つながりの段の図の読みはこの block が持つ（一覧の読み直しで card を組み直しても作り直さない）。
+-        let places = embeds();
+-        // 形と card の列は値が前と同じなら知らせない（本文が替わっても形が同じなら外枠を組み直さない）。
+-        let shape = Memo::new(move |_| fetched.with(outline));
+-        let cards = Memo::new(move |_| fetched.with(listed));
+-        // 題の節点の card はグラフの口から引く（問いの一覧より後に読めても、後から card が付く）。
+-        let graph = crate::net::read(map::PATH);
+-        let nodes = Memo::new(move |_| cards.with(|v| graph.with(|g| node_cards(g, v))));
+-        // 経過は 1 秒の時計で書き直し、link は mode を替えれば替わる。
+-        let clock = crate::net::ticker();
+-        let tick = move || clock.get();
+-        let current = move || mode.map_or(fallback, |m| m.get());
+-        let extra = move || match fetched.with(total) {
+-            Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
+-            Reading::Unknown => ().into_any(),
+-        };
+-        // 名指しの card を 1 度だけ画面の上端へ寄せる。
+-        let focused = target.clone();
+-        Effect::new(move |_| {
+-            if let Some(id) = focused.as_deref()
+-                && !scrolled.get_value()
+-                && let Some(n) = cards.with(|v| target_number(v, id))
+-            {
+-                scrolled.set_value(true);
+-                scroll_to(n);
+-            }
+-        });
+-        // 台帳が読めないほかの project は、札と 1 行を一覧の下に出す。
+-        let unknown = move || {
+-            fetched
+-                .with(unknown_projects)
+-                .into_iter()
+-                .map(|p| view! { <div class="small muted"><span class="chip">{p}</span>" "{OTHER_UNKNOWN}</div> })
+-                .collect_view()
+-        };
+-        let list = move || match shape.get() {
+-            Body::Unmeasured(reason) => unmeasured(reason),
+-            Body::Empty(line) => body_view(Body::Empty(line)),
+-            Body::Filled(()) => {
+-                let target = target.clone();
+-                // 鍵は番号を除いた中身（変わらない card の DOM は残り、欄の focus と変換の途中の字も残る）。
+-                view! {
+-                    <For each=move || cards.get() key=card_key children=move |c: Card| {
+-                        let d = draft(drafts, &c.id);
+-                        let on = target.as_deref() == Some(c.id.as_str());
+-                        let id = c.id.to_string();
+-                        let key = id.clone();
+-                        let nb = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
+-                        let node = Memo::new(move |_| nodes.with(|m| m.get(&key).cloned()));
+-                        card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })
+-                    }/>
+-                }
+-                .into_any()
+-            }
+-        };
+-        let content = view! { {late_view()}{list}{unknown} }.into_any();
+-        section(BLOCK, extra.into_any(), content)
+-    }
+-
+     /// 質問の窓の 1 問（行 g-ask-win）: `pick` の card を block と同じ card（つながりの図と答えの欄も同じ）で描き、
+     /// 答えを記録した（200）問いの id を `recorded` に渡す。答えの状態は問いの id ごとに窓の一生の間持つ。
+     pub fn one_view(pick: Memo<Option<Card>>, recorded: Callback<BeadId>) -> AnyView {
+diff --git a/crates/tsuzuri-surface/src/view.rs b/crates/tsuzuri-surface/src/view.rs
+index 83cad43db3f073ff8585545a43e7fa688e08b327..34a4f2f2dd10a0710da26ff6c85a77e70ff2786a 100644
+--- a/crates/tsuzuri-surface/src/view.rs
++++ b/crates/tsuzuri-surface/src/view.rs
+@@ -186,57 +186,6 @@ pub fn doc_title(name: Option<&str>, heading: &str, subject: Option<&str>) -> St
+     format!("{} \u{2014} {word}", brand(name))
+ }
+ 
+-/// 1 つの epic とその下の bead（epic の外の bead は `epic` が None の組に入る）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct EpicGroup {
+-    pub epic: Option<LedgerRow>,
+-    pub children: Vec<LedgerRow>,
+-}
+-
+-/// 読めた台帳から組んだ画面の中身（問いの一覧と台帳の一覧）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Board {
+-    pub questions: Vec<LedgerRow>,
+-    pub groups: Vec<EpicGroup>,
+-}
+-
+-/// 画面の状態。台帳が読めなければ `Unknown`（0 件と区別する・要件 NFR2）。
+-#[derive(Debug, Clone, PartialEq)]
+-pub struct Screen {
+-    pub board: Reading<Board>,
+-    /// 最後に読めた時刻（まだ 1 度も読めていなければ None）。
+-    pub updated_at: Option<EpochSecs>,
+-}
+-
+-impl Screen {
+-    /// 起動の直後（まだ読んでいない＝測れていない）。
+-    pub fn initial() -> Self {
+-        Self {
+-            board: Reading::Unknown,
+-            updated_at: None,
+-        }
+-    }
+-
+-    /// 一覧の口を読んだ後の状態。読めなければ測れていないにし、最終更新は前の値を残す。
+-    pub fn after_read(&self, fetched: &Fetched, at: EpochSecs) -> Self {
+-        match read_rows(fetched) {
+-            Reading::Known(rows) => Self {
+-                board: Reading::Known(board(&rows)),
+-                updated_at: Some(at),
+-            },
+-            Reading::Unknown => self.after_lost(),
+-        }
+-    }
+-
+-    /// 変化の知らせが切れた後の状態（届かない間は今の一覧が正しいと言えない）。
+-    pub fn after_lost(&self) -> Self {
+-        Self {
+-            board: Reading::Unknown,
+-            updated_at: self.updated_at,
+-        }
+-    }
+-}
+-
+ /// 口の本文を台帳の行に読む（まだ読んでいない・届かない・電文が読めない・台帳が読めないは Unknown）。
+ pub fn read_rows(fetched: &Fetched) -> Reading<Vec<LedgerRow>> {
+     match fetched {
+@@ -248,99 +197,6 @@ pub fn read_rows(fetched: &Fetched) -> Reading<Vec<LedgerRow>> {
+     }
+ }
+ 
+-/// 台帳の行から画面の中身を組む。
+-pub fn board(rows: &[LedgerRow]) -> Board {
+-    Board {
+-        questions: questions(rows),
+-        groups: ledger_groups(rows),
+-    }
+-}
+-
+-/// 問いの一覧: open の問いを古い順（更新時刻の昇順・同じ時刻は id の順）。
+-/// 種類は地図の節点と同じ読み（`LedgerRow::node_kind`）で決める（行 g-ledger-group-kind）。
+-pub fn questions(rows: &[LedgerRow]) -> Vec<LedgerRow> {
+-    let mut out: Vec<LedgerRow> = rows
+-        .iter()
+-        .filter(|r| r.node_kind() == NodeKind::Question && r.status == "open")
+-        .cloned()
+-        .collect();
+-    out.sort_by(|a, b| {
+-        a.updated_at
+-            .cmp(&b.updated_at)
+-            .then_with(|| id_order(a.id.as_str(), b.id.as_str()))
+-    });
+-    out
+-}
+-
+-/// 台帳の一覧: epic ごとの組（epic の id の順）に、その下の bead を契約・memo の順で並べる。
+-/// 種類は地図の節点と同じ読み（`LedgerRow::node_kind`）で決める（行 g-ledger-group-kind）。
+-/// 親は id の階層（`a.1` の親は `a`）で決め、いちばん近い epic の祖先の下に置く。
+-/// epic の祖先の無い bead は最後の組（epic が None）に入る。問いは問いの一覧が持つので入れない。
+-pub fn ledger_groups(rows: &[LedgerRow]) -> Vec<EpicGroup> {
+-    let mut epics: Vec<&LedgerRow> = rows
+-        .iter()
+-        .filter(|r| r.node_kind() == NodeKind::Epic)
+-        .collect();
+-    epics.sort_by(|a, b| id_order(a.id.as_str(), b.id.as_str()));
+-    let mut groups: Vec<EpicGroup> = epics
+-        .iter()
+-        .map(|e| EpicGroup {
+-            epic: Some((*e).clone()),
+-            children: Vec::new(),
+-        })
+-        .collect();
+-    let mut outside = Vec::new();
+-    for row in rows
+-        .iter()
+-        .filter(|r| !matches!(r.node_kind(), NodeKind::Epic | NodeKind::Question))
+-    {
+-        let home =
+-            ancestors(row.id.as_str()).find_map(|a| epics.iter().position(|e| e.id.as_str() == a));
+-        match home.and_then(|i| groups.get_mut(i)) {
+-            Some(group) => group.children.push(row.clone()),
+-            None => outside.push(row.clone()),
+-        }
+-    }
+-    for group in &mut groups {
+-        sort_children(&mut group.children);
+-    }
+-    if !outside.is_empty() {
+-        sort_children(&mut outside);
+-        groups.push(EpicGroup {
+-            epic: None,
+-            children: outside,
+-        });
+-    }
+-    groups
+-}
+-
+-/// id の祖先（近い順: `a.b.c` なら `a.b`・`a`）。
+-fn ancestors(id: &str) -> impl Iterator<Item = &str> {
+-    std::iter::successors(parent(id), |p| parent(p))
+-}
+-
+-fn parent(id: &str) -> Option<&str> {
+-    id.rsplit_once('.').map(|(p, _)| p)
+-}
+-
+-/// epic の下の順: 契約・memo・その他（種類は `LedgerRow::node_kind`）、同じ種類の中は id の順。
+-fn sort_children(children: &mut [LedgerRow]) {
+-    children.sort_by(|a, b| {
+-        kind_rank(a.node_kind())
+-            .cmp(&kind_rank(b.node_kind()))
+-            .then_with(|| id_order(a.id.as_str(), b.id.as_str()))
+-    });
+-}
+-
+-/// 並べの位（契約は 0・memo は 1・ほかは 2）。組の下には契約と memo しか来ないが、枝の多い NodeKind に備えて残す。
+-fn kind_rank(kind: NodeKind) -> u8 {
+-    match kind {
+-        NodeKind::Task => 0,
+-        NodeKind::Memo => 1,
+-        _ => 2,
+-    }
+-}
+-
+ /// id の順（`.` で区切った段ごとに、数なら数の大小・字なら字の順: `a.2` は `a.10` より前）。
+ pub fn id_order(a: &str, b: &str) -> Ordering {
+     let mut xs = a.split('.');
+diff --git a/crates/tsuzuri-surface/tests/aaround.rs b/crates/tsuzuri-surface/tests/aaround.rs
+index 3d3d712c387611a2937cc3efa4cb370a65fe09f5..8b18018ae450a9c2a773d78c2c3f88e2915c4daa 100644
+--- a/crates/tsuzuri-surface/tests/aaround.rs
++++ b/crates/tsuzuri-surface/tests/aaround.rs
+@@ -142,7 +142,8 @@ fn aaround_src_embeds_in_nodearound() {
+ #[test]
+ fn aaround_src_ask_fold_embeds() {
+     let src = read("src/project/ask.rs");
+-    let head = span(&src, "pub fn view() -> AnyView {", "let list = move ||");
++    // 図の読みは質問の窓の 1 問の DOM が持つ（頁の一覧の DOM は行 g-dead-sweep-b で消した）。
++    let head = span(&src, "pub fn one_view(", "let one = move ||");
+     assert!(head.contains("embeds()"), "{head}");
+     let arm = span(&src, "Part::Around =>", "fn answer_view(");
+     let at = in_order(
+diff --git a/crates/tsuzuri-surface/tests/acctwire.rs b/crates/tsuzuri-surface/tests/acctwire.rs
+index e4e68a3ff693bf629664662cb0142ac48565bed0..9103a065808b930381f466f87aef1c50bc805793 100644
+--- a/crates/tsuzuri-surface/tests/acctwire.rs
++++ b/crates/tsuzuri-surface/tests/acctwire.rs
+@@ -1,13 +1,10 @@
+-//! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (5)〜(7)）。
++//! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (6)(7)・header の (5) は行 g-dead-sweep-b で消した）。
+ #![cfg(test)]
+ 
+ use std::path::{Path, PathBuf};
+ 
+ use tsuzuri_surface::account::windows::ACCOUNT_WIN;
+-use tsuzuri_surface::frame::{
+-    self, ACCOUNT_URL, BACK, BACK_WRAP, BackStep, HEADER, back_steps,
+-};
+-use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::frame::{ACCOUNT_URL, BackStep, back_steps};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -17,35 +14,6 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-/// (5) header は HEADER の 4 つの前に「戻る」を持ち、HEADER は変わらず、snapshot の字は file と 1 字も違わない。
+-#[test]
+-fn acctwire_back_part_before_header() {
+-    assert_eq!(
+-        (BACK.part, BACK.key, BACK.class, BACK.items),
+-        ("back", "acct_back", "upto", &[] as &[&str])
+-    );
+-    assert_eq!(BACK_WRAP, "backwrap");
+-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+-    assert_eq!(parts, ["brand", "nav", "updated", "mode"], "HEADER は変わらない");
+-    assert_eq!(frame::nav_keys(), ["home"]);
+-    let want = read("tests/snapshots/header.json");
+-    let got = frame::header_snapshot();
+-    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
+-    let lines: Vec<&str> = got.lines().collect();
+-    assert_eq!(
+-        lines[2],
+-        "    {\"part\": \"back\", \"key\": \"acct_back\", \"class\": \"upto\", \"items\": []},"
+-    );
+-    assert!(lines[3].contains("\"part\": \"brand\""), "{}", lines[3]);
+-    // 語の鍵と class は語の辞書と stylesheet に在る。
+-    let term = vocab().term(BACK.key).expect("acct_back が語の辞書に在る");
+-    assert!(!term.label.is_empty());
+-    let css = read("style.css");
+-    for class in [".upto", ".backwrap"] {
+-        assert!(css.contains(class), "stylesheet に {class} が無い");
+-    }
+-}
+-
+ /// (6) tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じる。
+ #[test]
+ fn acctwire_back_steps() {
+diff --git a/crates/tsuzuri-surface/tests/askcard.rs b/crates/tsuzuri-surface/tests/askcard.rs
+index 99208455a0b5b10366f77a4382ba05e8786eee30..c117dfcd77ce5dd798e9bb7f6c09dce2c0e037d6 100644
+--- a/crates/tsuzuri-surface/tests/askcard.rs
++++ b/crates/tsuzuri-surface/tests/askcard.rs
+@@ -12,7 +12,6 @@ use tsuzuri_contract::surface::{
+     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
+ };
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame;
+ use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
+ use tsuzuri_surface::view::{Fetched, clock};
+ use tsuzuri_surface::vocab::vocab;
+@@ -47,22 +46,6 @@ fn bead(id: &str) -> BeadId {
+ 
+ 
+ 
+-/// 質問の link の数の印は open の問いの数・読めないと 0 は出さない。
+-#[test]
+-fn askcard_nav_badge() {
+-    assert_eq!(frame::badge(Some(2)), Some("2".to_string()));
+-    assert_eq!(frame::badge(Some(0)), None);
+-    assert_eq!(frame::badge(None), None);
+-    let count = ask::count(&question_list());
+-    assert_eq!(count, Reading::Known(2));
+-    let open = match count {
+-        Reading::Known(n) => Some(n),
+-        Reading::Unknown => None,
+-    };
+-    assert_eq!(frame::badge(open), Some("2".to_string()));
+-    assert_eq!(ask::count(&Fetched::Failed), Reading::Unknown);
+-}
+-
+ /// card の部分の並びは 題・概要・理由・推奨・答えの欄・つながり で、つながりの段だけが畳める段（最初は閉じる）。
+ #[test]
+ fn askcard_layout_order() {
+@@ -395,7 +378,6 @@ fn askcard_empty_is_not_unmeasured() {
+         .expect("電文"),
+     );
+     assert_eq!(ask::body(&empty_cards), Body::Empty(ask::EMPTY));
+-    assert_eq!(ask::count(&empty_cards), Reading::Known(0));
+     let empty_rows = Fetched::Body(
+         wire::encode(&LedgerList {
+             rows: Reading::Known(vec![]),
+@@ -434,7 +416,6 @@ fn unmeasured_reads() {
+             panic!("問いの card が {fetched:?} で測れていないでない");
+         };
+         assert!(!reason.trim().is_empty() && !reason.contains('\n'));
+-        assert_eq!(ask::count(&fetched), Reading::Unknown);
+     }
+     for fetched in [
+         Fetched::NotRead,
+diff --git a/crates/tsuzuri-surface/tests/askfocus.rs b/crates/tsuzuri-surface/tests/askfocus.rs
+index a5ca3f0231f9122b5f990f24cdc66c3940506cc3..9e9ea534960a9e361438433b81f2c6e295c59693 100644
+--- a/crates/tsuzuri-surface/tests/askfocus.rs
++++ b/crates/tsuzuri-surface/tests/askfocus.rs
+@@ -97,10 +97,7 @@ fn afocus_src_links_and_scroll() {
+         "anchor(",
+         "card_class(",
+         "node_href(",
+-        "focus(",
+         "target_number(",
+-        "get_element_by_id(",
+-        "scroll_into_view_with_bool(true)",
+         "<a class=\"t\"",
+     ] {
+         assert!(dom.contains(want), "{module} の mod dom に {want} が無い");
+diff --git a/crates/tsuzuri-surface/tests/board_min.rs b/crates/tsuzuri-surface/tests/board_min.rs
+index 0c010c2a5e578bc4d97adda2132a522848cf2995..1a8f91d10c94344b9ba9c6a845e373c19416ee89 100644
+--- a/crates/tsuzuri-surface/tests/board_min.rs
++++ b/crates/tsuzuri-surface/tests/board_min.rs
+@@ -1,26 +1,14 @@
+-//! 便 g-min の歯: 並べ方（bead 8 本の fixture）・測れていないの判定・状態の印・時刻の字。
+-//! fixture は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で読み、
+-//! 一覧の口と同じ電文（LedgerList）にしてから画面の状態へ渡す。
+-//! 件数は block の module ask が数える（便 g-frame で見出しの字を vocab へ移した・台帳の件数の関数は行 g-list-sweep で外した）。
+-//! 問いの block（ask）は便 g-ask で口 /api/questions の電文を読むので、問いの件数は台帳の画面の状態から数える。
++//! 便 g-min の歯: bead 8 本の fixture・状態の印・時刻の字・id の順。
++//! fixture は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で読む。
++//! 画面の状態（Screen）と問いの一覧と epic の組の並べ方の歯は、読み手が無くなった型と関数とともに行 g-dead-sweep-b で消した。
+ #![cfg(test)]
+ 
+ use std::path::Path;
+ 
+ use tsuzuri_boundary::server::ledger;
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::ask;
+-use tsuzuri_surface::view::{self, Board, Fetched, Screen, clock, id_order, mark};
+-
+-/// 画面の状態の問いの件数（測れていなければ Unknown）。
+-fn questions(screen: &Screen) -> Reading<usize> {
+-    match &screen.board {
+-        Reading::Known(b) => Reading::Known(b.questions.len()),
+-        Reading::Unknown => Reading::Unknown,
+-    }
+-}
++use tsuzuri_contract::ledger::LedgerRow;
++use tsuzuri_surface::view::{clock, id_order, mark};
+ 
+ fn fixture_rows() -> Vec<LedgerRow> {
+     let path =
+@@ -32,104 +20,11 @@ fn fixture_rows() -> Vec<LedgerRow> {
+     items.into_iter().map(|i| i.row).collect()
+ }
+ 
+-fn ids(rows: &[LedgerRow]) -> Vec<&str> {
+-    rows.iter().map(|r| r.id.as_str()).collect()
+-}
+-
+-fn body(rows: Reading<Vec<LedgerRow>>) -> Fetched {
+-    Fetched::Body(wire::encode(&LedgerList { rows }).expect("電文"))
+-}
+-
+ #[test]
+ fn board_min_fixture_has_eight_beads() {
+     assert_eq!(fixture_rows().len(), 8);
+ }
+ 
+-#[test]
+-fn board_min_questions_open_oldest_first() {
+-    let rows = fixture_rows();
+-    // bm.4 は +09:00 の字で bm.5 より後（字の順でなく時刻の順）。閉じた bm.6 は出さない。
+-    assert_eq!(ids(&view::questions(&rows)), vec!["bm.5", "bm.4"]);
+-}
+-
+-#[test]
+-fn board_min_ledger_epic_then_tasks_then_memos() {
+-    let groups = view::ledger_groups(&fixture_rows());
+-    assert_eq!(groups.len(), 1, "{groups:?}");
+-    let group = &groups[0];
+-    assert_eq!(group.epic.as_ref().map(|e| e.id.as_str()), Some("bm"));
+-    // task は id の段の数の順（bm.10 は bm.3 の後）、その後に memo。question は台帳の一覧に入れない。
+-    assert_eq!(ids(&group.children), vec!["bm.1", "bm.3", "bm.10", "bm.2"]);
+-}
+-
+-#[test]
+-fn board_min_ledger_outside_epic_goes_last() {
+-    let mut rows = fixture_rows();
+-    let mut stray = rows[0].clone();
+-    stray.id = "zz.1".to_string().try_into().expect("id");
+-    stray.kind = "task".to_string();
+-    // 写しの label intake:question も外して epic の外の契約の行にする（種類は node_kind の読み）。
+-    stray.labels.clear();
+-    rows.push(stray);
+-    let mut second = rows[2].clone();
+-    second.id = "am".to_string().try_into().expect("id");
+-    rows.push(second);
+-    let groups = view::ledger_groups(&rows);
+-    let heads: Vec<Option<&str>> = groups
+-        .iter()
+-        .map(|g| g.epic.as_ref().map(|e| e.id.as_str()))
+-        .collect();
+-    assert_eq!(heads, vec![Some("am"), Some("bm"), None]);
+-    assert!(groups[0].children.is_empty());
+-    assert_eq!(ids(&groups[2].children), vec!["zz.1"]);
+-}
+-
+-#[test]
+-fn board_min_screen_reads_known_ledger() {
+-    let rows = fixture_rows();
+-    let screen = Screen::initial().after_read(&body(Reading::Known(rows.clone())), 1_790_495_000);
+-    assert_eq!(screen.board, Reading::Known(view::board(&rows)));
+-    assert_eq!(screen.updated_at, Some(1_790_495_000));
+-    assert_eq!(questions(&screen), Reading::Known(2));
+-}
+-
+-#[test]
+-fn board_min_unmeasured_is_not_zero() {
+-    let empty = Screen::initial().after_read(&body(Reading::Known(vec![])), 10);
+-    assert_eq!(
+-        empty.board,
+-        Reading::Known(Board {
+-            questions: vec![],
+-            groups: vec![],
+-        })
+-    );
+-    assert_eq!(questions(&empty), Reading::Known(0));
+-
+-    let known = Screen::initial().after_read(&body(Reading::Known(fixture_rows())), 20);
+-    for fetched in [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        body(Reading::Unknown),
+-        Fetched::Body("not json".to_string()),
+-    ] {
+-        let screen = known.after_read(&fetched, 30);
+-        assert_eq!(screen.board, Reading::Unknown, "{fetched:?}");
+-        assert_eq!(questions(&screen), Reading::Unknown);
+-        // 問いの block も同じ読みを 0 件でなく測れていないと数える。
+-        assert_eq!(ask::count(&fetched), Reading::Unknown);
+-        // 最終更新は最後に読めた時刻のまま（読めなかった時刻に進めない）。
+-        assert_eq!(screen.updated_at, Some(20));
+-    }
+-    let lost = known.after_lost();
+-    assert_eq!(lost.board, Reading::Unknown);
+-    assert_eq!(lost.updated_at, Some(20));
+-
+-    let start = Screen::initial();
+-    assert_eq!(start.board, Reading::Unknown);
+-    assert_eq!(questions(&start), Reading::Unknown);
+-    assert_eq!(start.updated_at, None);
+-}
+-
+ #[test]
+ fn board_min_status_marks() {
+     let marks: Vec<&str> = [
+diff --git a/crates/tsuzuri-surface/tests/bvmpage.rs b/crates/tsuzuri-surface/tests/bvmpage.rs
+index 30b1039ab3b8f339847d7472140cb796cd381f04..140ba67748ba1ea879d9318b9c1325883851cb70 100644
+--- a/crates/tsuzuri-surface/tests/bvmpage.rs
++++ b/crates/tsuzuri-surface/tests/bvmpage.rs
+@@ -40,14 +40,13 @@ fn sources() -> Vec<(PathBuf, String)> {
+         .collect()
+ }
+ 
+-/// (1) 頁は home・node の 2 つで（質問と抜けの検査の頁は行 g-one-screen-a で消した）、nav は home だけ・地図の頁の file と snapshot が無く、
++/// (1) 頁は home・node の 2 つで（質問と抜けの検査の頁は行 g-one-screen-a で消した）・地図の頁の file と snapshot が無く、
+ /// 前の地図の URL は home に落ちる。
+ #[test]
+ fn bvmpage_no_map_page() {
+     let ids: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
+     assert_eq!(ids, ["home", "node"]);
+-    assert_eq!(frame::nav_keys(), ["home"]);
+-    for page in frame::pages() {
++    for page in PageId::ALL.map(frame::page) {
+         assert!(!page.block_ids().contains(&"map"), "{:?}", page.id);
+     }
+     for mode in Mode::ALL {
+@@ -57,7 +56,6 @@ fn bvmpage_no_map_page() {
+     for rel in ["src/pages/map.rs", "tests/snapshots/pages/map.json"] {
+         assert!(!crate_dir().join(rel).exists(), "{rel} が在る");
+     }
+-    assert!(!read("tests/snapshots/header.json").contains("\"map\""));
+ }
+ 
+ /// (2) block の列に地図が無く、グラフの口の読み（PATH・REASON・doc）は kit の下の map に在る。
+diff --git a/crates/tsuzuri-surface/tests/bvshed.rs b/crates/tsuzuri-surface/tests/bvshed.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e2e51d6ed
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvshed.rs
+@@ -0,0 +1,137 @@
++//! 行 g-dead-sweep-b の歯（接頭辞 bvshed_）: 頁の枠の nav と header の部品の並びと頁の切り替え、画面の状態（Screen）の鎖、
++//! 問いの頁の一覧の DOM と DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::frame::{HeaderPart, UPDATED};
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// `text` の中の `decl` から、その後の最初の行頭の閉じ括弧までの字。
++fn item<'a>(text: &'a str, decl: &str) -> &'a str {
++    let at = text
++        .find(decl)
++        .unwrap_or_else(|| panic!("字 {decl} が無い"));
++    let rest = &text[at..];
++    let end = rest.find("\n}").map_or(rest.len(), |i| i + 2);
++    &rest[..end]
++}
++
++/// frame.rs は nav と header の部品の並びと頁の切り替え（nav・pages・nav_keys・HEADER・BACK・BACK_WRAP・NavLink・BADGE・
++/// nav_links・badge・switch_url・header_snapshot・list）を持たず、頁の定義 PageDef の欄は heading・class・columns の 3 つで、
++/// 2 つの頁の定義は nav・badge・icon の欄を書かず、最終の記録の部品 UPDATED を board.rs が引き、header の snapshot の file が無い。
++#[test]
++fn bvshed_header_bits_gone() {
++    let src = read("src/frame.rs");
++    for gone in [
++        "pub fn nav(",
++        "pub fn pages(",
++        "pub fn nav_keys(",
++        "pub const HEADER",
++        "pub const BACK:",
++        "BACK_WRAP",
++        "pub struct NavLink",
++        "pub const BADGE",
++        "pub fn nav_links(",
++        "pub fn badge(",
++        "pub fn switch_url(",
++        "pub fn header_snapshot(",
++        "fn list(",
++    ] {
++        assert!(!src.contains(gone), "frame.rs に {gone} が在る");
++    }
++    let def = item(&src, "pub struct PageDef {");
++    let fields: Vec<&str> = def
++        .lines()
++        .filter_map(|l| l.trim().strip_prefix("pub "))
++        .filter(|l| !l.starts_with("struct "))
++        .filter_map(|l| l.split(':').next())
++        .collect();
++    assert_eq!(fields, ["heading", "class", "columns"]);
++    for rel in ["src/pages/home.rs", "src/pages/node.rs"] {
++        let page = read(rel);
++        for gone in ["nav:", "badge:", "icon:"] {
++            assert!(!page.contains(gone), "{rel} に {gone} が在る");
++        }
++    }
++    assert_eq!(
++        UPDATED,
++        HeaderPart {
++            part: "updated",
++            key: "last_record",
++            class: "chip num",
++            items: &[],
++        }
++    );
++    let board = read("src/board.rs");
++    assert!(board.contains("let key = frame::UPDATED.key;"));
++    assert!(!board.contains("HEADER"));
++    assert!(!crate_dir().join("tests/snapshots/header.json").exists());
++}
++
++/// view.rs は画面の状態の鎖（Screen・Board・EpicGroup・board・questions・ledger_groups と助けの ancestors・parent・
++/// sort_children・kind_rank）を持たず、board.rs は画面の状態を作らず台帳の一覧の口を読まず、歯の file lgrp.rs が無い。
++#[test]
++fn bvshed_screen_chain_gone() {
++    let view = read("src/view.rs");
++    for gone in [
++        "pub struct Screen",
++        "pub struct Board",
++        "pub struct EpicGroup",
++        "pub fn board(",
++        "pub fn questions(",
++        "pub fn ledger_groups(",
++        "fn ancestors(",
++        "fn parent(",
++        "fn sort_children(",
++        "fn kind_rank(",
++    ] {
++        assert!(!view.contains(gone), "view.rs に {gone} が在る");
++    }
++    let board = read("src/board.rs");
++    for gone in ["Screen", "net::read(ledger::PATH)"] {
++        assert!(!board.contains(gone), "board.rs に {gone} が在る");
++    }
++    assert!(
++        !crate_dir().join("tests/lgrp.rs").exists(),
++        "tests/lgrp.rs が在る"
++    );
++}
++
++/// ask.rs は問いの頁の一覧の DOM（mod dom の view と scroll_to）と、それだけが使った関数（count・total・card_key・outline・
++/// node_cards）を持たず、view は空の中身を返し、質問の窓が使う one_view・listed・unknown_projects・OTHER_UNKNOWN と
++/// 届いていない裁定の 1 行の late_view は残る。
++#[test]
++fn bvshed_qlist_dom_gone() {
++    let src = read("src/project/ask.rs");
++    for gone in [
++        "pub fn count(",
++        "pub fn total(",
++        "pub fn card_key(",
++        "pub fn outline(",
++        "pub fn node_cards(",
++        "fn scroll_to(",
++        "    pub fn view() -> AnyView {",
++    ] {
++        assert!(!src.contains(gone), "ask.rs に {gone} が在る");
++    }
++    for kept in [
++        "pub fn one_view(",
++        "pub fn listed(",
++        "pub fn unknown_projects(",
++        "pub const OTHER_UNKNOWN",
++        "pub fn late_view() -> AnyView {",
++    ] {
++        assert!(src.contains(kept), "ask.rs に {kept} が無い");
++    }
++    let view = item(&src, "pub fn view() -> leptos::prelude::AnyView {");
++    assert!(view.contains("().into_any()"), "{view}");
++    assert!(!view.contains("dom::"), "{view}");
++}
+diff --git a/crates/tsuzuri-surface/tests/cadq.rs b/crates/tsuzuri-surface/tests/cadq.rs
+index 0c86dea8de93502f38c657b79e0b7740ca1f06f0..f706b8d97e26202cef6cea61126e7a32a1596b57 100644
+--- a/crates/tsuzuri-surface/tests/cadq.rs
++++ b/crates/tsuzuri-surface/tests/cadq.rs
+@@ -8,9 +8,8 @@ use std::path::PathBuf;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::GraphDoc;
+ use tsuzuri_contract::ledger::{BeadId, LedgerList};
+-use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::{Body, ask, askpage};
++use tsuzuri_surface::project::{Body, askpage};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::widgets::hover::{Card, unmount_hides};
+ use tsuzuri_surface::widgets::nodecard::card_of;
+@@ -44,22 +43,6 @@ fn unread() -> [Fetched; 3] {
+     ]
+ }
+ 
+-/// fixture の問いの一覧の id を `swap` の対で替えた本文。
+-fn questions(swap: &[(&str, &str)]) -> Fetched {
+-    let mut list: QuestionList =
+-        wire::decode(&read("../../tests/fixtures/surface/question-list.json"))
+-            .expect("fixture の問いの一覧が電文として読める");
+-    let Reading::Known(cards) = &mut list.cards else {
+-        panic!("fixture の問いの一覧が Unknown");
+-    };
+-    for c in cards.iter_mut() {
+-        if let Some((_, to)) = swap.iter().find(|(from, _)| c.id.as_str() == *from) {
+-            c.id = bead(to);
+-        }
+-    }
+-    Fetched::Body(wire::encode(&list).expect("電文の字にできる"))
+-}
+-
+ /// fixture の台帳の一覧の id を `swap` の対で替えた本文。
+ fn ledger(swap: &[(&str, &str)]) -> Fetched {
+     let mut list: LedgerList =
+@@ -76,36 +59,6 @@ fn ledger(swap: &[(&str, &str)]) -> Fetched {
+     Fetched::Body(wire::encode(&list).expect("電文の字にできる"))
+ }
+ 
+-/// (1) 問いの card の題の節点の card は、電文に在る問いの id だけを card_of の値で持つ。
+-#[test]
+-fn cadq_title_cards_rules() {
+-    let doc = graph_doc();
+-    let graph = Fetched::Body(graph_text());
+-
+-    let cards = ask::listed(&questions(&[("qa.2", "t3.q10")]));
+-    let ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
+-    assert_eq!(ids, vec!["t3.q10", "qa.10"]);
+-    let before = cards.clone();
+-
+-    let got = ask::node_cards(&graph, &cards);
+-    let keys: Vec<&str> = got.keys().map(String::as_str).collect();
+-    assert_eq!(keys, vec!["t3.q10"]);
+-    let node = card_of(&doc, "t3.q10").expect("t3.q10 の card");
+-    assert_eq!(got["t3.q10"], node);
+-    assert_eq!(node.title, "開いた問い");
+-    assert_eq!(node.kind, "question · beads · open");
+-    assert_eq!(node.value, "t3.q10 要約なし");
+-    assert_eq!(cards, before, "card の列の値は変えない");
+-
+-    let plain = ask::listed(&questions(&[]));
+-    assert_eq!(plain.len(), 2);
+-    assert!(ask::node_cards(&graph, &plain).is_empty());
+-    assert!(ask::node_cards(&graph, &[]).is_empty());
+-    for g in unread() {
+-        assert!(ask::node_cards(&g, &cards).is_empty(), "{g:?}");
+-    }
+-}
+-
+ /// (2) 段の行の節点の card は、行の問いの id と答えた決定の id のうち電文に在るものだけを card_of の値で持つ。
+ #[test]
+ fn cadq_hist_cards_rules() {
+@@ -197,12 +150,8 @@ fn cadq_dom_wiring() {
+     let ask_text = read("src/project/ask.rs");
+     let dom = after(&ask_text, "mod dom {");
+     for want in [
+-        "crate::net::read(map::PATH)",
+-        "node_cards(g, v)",
+-        "nodes.with(|m| m.get(&key).cloned())",
+         "use crate::widgets::hover::{self, attach_some};",
+         "struct Live {",
+-        "card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })",
+     ] {
+         assert!(dom.contains(want), "ask.rs の mod dom に {want} が無い");
+     }
+@@ -462,7 +411,7 @@ fn cadq_names_stay_apart() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 5, "歯の数 {}", names.len());
++    assert!(names.len() >= 4, "歯の数 {}", names.len());
+     for name in names {
+         let rest = name
+             .strip_prefix("cadq_")
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
+index ff66d66f4b8fb8bae37086ad69b8b9f6ab20c458..ffe51c3fafbb85664a9201bb77bf0947d726edd9 100644
+--- a/crates/tsuzuri-surface/tests/frame.rs
++++ b/crates/tsuzuri-surface/tests/frame.rs
+@@ -6,6 +6,7 @@
+ //! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
+ //! 行 h-wire で header の HEADER の前に「戻る」の部品 BACK を足した（snapshot の header の先頭の 1 行）。
+ //! 行 g-node-timeline で節点の頁の around の後に run の時間軸の block timeline を足した。
++//! 行 g-dead-sweep-b で header の snapshot と HEADER と BACK と nav を消した（帯の下の部品は UPDATED と SEAT）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+@@ -17,7 +18,7 @@ use tsuzuri_contract::graph::AroundDoc;
+ use tsuzuri_contract::ledger::LedgerRow;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
++use tsuzuri_surface::frame::{self, Mode, Page, PageId, SEAT, UPDATED};
+ use tsuzuri_surface::project::{
+     self, Body, Module, STATES, ask, gaps, legend, next, node, pipeline, seat, state_class,
+ };
+@@ -71,13 +72,6 @@ fn sources() -> Vec<(PathBuf, String)> {
+         .collect()
+ }
+ 
+-#[test]
+-fn frame_snapshot_matches_file() {
+-    let want = read("tests/snapshots/header.json");
+-    let got = frame::header_snapshot();
+-    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
+-}
+-
+ 
+ #[test]
+ fn frame_home_blocks_in_order_and_map_page() {
+@@ -99,23 +93,12 @@ fn frame_home_blocks_in_order_and_map_page() {
+         frame::page(PageId::Node).block_ids(),
+         vec!["node", "around", "timeline"]
+     );
+-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert_eq!(ids, vec!["home"]);
+     for id in PageId::ALL {
+         assert_eq!(frame::page(id).id, id);
+     }
+     assert_eq!(PageId::Node.id(), "node");
+-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+-    assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
+-    // nav に出る頁は home だけ（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+-    let keys: Vec<&str> = frame::nav_links(PageId::Home)
+-        .iter()
+-        .map(|l| l.key)
+-        .collect();
+-    assert_eq!(keys, frame::nav_keys());
+-    let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
+-    let words: Vec<&str> = words.iter().map(String::as_str).collect();
+-    assert_eq!(words, vec!["ホーム"]);
++    // home の頁の見出しの語（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
++    assert_eq!(vocab().label(frame::page(PageId::Home).heading), "ホーム");
+ }
+ 
+ /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
+@@ -130,7 +113,7 @@ fn frame_headings_come_from_vocab() {
+                 .flat_map(|c| c.blocks.iter().map(|b| b.heading)),
+         );
+     }
+-    for part in [BACK].iter().chain(HEADER.iter()) {
++    for part in [UPDATED, SEAT] {
+         keys.push(part.key);
+         keys.extend(part.items);
+     }
+@@ -234,16 +217,9 @@ fn used_classes() -> BTreeSet<String> {
+             }
+         }
+     }
+-    for part in [BACK].iter().chain(HEADER.iter()) {
++    for part in [UPDATED, SEAT] {
+         add(part.class);
+     }
+-    add(BACK_WRAP);
+-    for page in PageId::ALL {
+-        for link in frame::nav_links(page) {
+-            add(link.class);
+-            add(link.badge);
+-        }
+-    }
+     for slot in ask::LAYOUT {
+         add(slot.class);
+     }
+@@ -451,7 +427,7 @@ fn frame_mode_lives_in_url() {
+     hrefs_keep_mode();
+ }
+ 
+-/// 頁の link は mode と頁を残し、節点の頁の link は nav に出ないことを見る。
++/// 頁の link は mode と頁を残すことを見る。
+ fn hrefs_keep_mode() {
+     for mode in Mode::ALL {
+         for page in PageId::ALL {
+@@ -460,7 +436,7 @@ fn hrefs_keep_mode() {
+             assert_eq!(PageId::from_query(&href), page, "{href}");
+         }
+     }
+-    // 節点の頁は page=node で開き、link は id を `%XX` にして mode を残す（nav には出さない）。
++    // 節点の頁は page=node で開き、link は id を `%XX` にして mode を残す。
+     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
+     assert_eq!(
+         frame::href(PageId::Node, Mode::Expert),
+@@ -470,16 +446,6 @@ fn hrefs_keep_mode() {
+     assert_eq!(link, "?page=node&id=e.2%3A20260927T0000Z-1&mode=beginner");
+     assert_eq!(PageId::from_query(&link), PageId::Node);
+     assert_eq!(Mode::from_query(&link), Mode::Beginner);
+-    assert!(
+-        frame::nav_links(PageId::Node)
+-            .iter()
+-            .all(|l| l.page != PageId::Node)
+-    );
+-    assert!(
+-        frame::nav_links(PageId::Node)
+-            .iter()
+-            .all(|l| l.class.is_empty())
+-    );
+ }
+ 
+ /// 「?」の注釈: 1 行目 = 要点・項 = 記号 + 本文・「▸」の後 = 詳しく（見本の noteParts と同じ）。
+diff --git a/crates/tsuzuri-surface/tests/gpill.rs b/crates/tsuzuri-surface/tests/gpill.rs
+index 0047e0a6112a3d843138a309a7263ab3f80bdb9a..c659f9e458ac96de64dd82fa05e84ae75929c35e 100644
+--- a/crates/tsuzuri-surface/tests/gpill.rs
++++ b/crates/tsuzuri-surface/tests/gpill.rs
+@@ -1,4 +1,4 @@
+-//! 行 g-seatpill の歯（接頭辞 gpill_）: header の席の pill の部品（frame の SEAT と seat_shown と snapshot の行）・
++//! 行 g-seatpill の歯（接頭辞 gpill_）: header の席の pill の部品（frame の SEAT と seat_shown・header の snapshot の行は行 g-dead-sweep-b で消した）・
+ //! pill の状態と応答なしの経過・席の card の字・board と pill の DOM の字の並び・この file の歯の名。
+ //! fixture は tests/fixtures/surface/seat-card.json（読むだけ）。
+ #![cfg(test)]
+@@ -9,7 +9,7 @@ use std::path::PathBuf;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::seat::SeatCard;
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::{self, HEADER, HeaderPart, PageId, SEAT};
++use tsuzuri_surface::frame::{self, HeaderPart, PageId, SEAT};
+ use tsuzuri_surface::project::seat::{self, LIMIT_LINE, MOVE_WAIT, NEXT_TARGET, REASON, hmd};
+ use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::seatpill::{self, ETA_STYLE, Pill, RESUME};
+@@ -103,32 +103,6 @@ fn gpill_part_and_pages() {
+         .collect();
+     shown.sort_unstable();
+     assert_eq!(shown, ["node"]);
+-
+-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
+-    assert_eq!(parts, ["brand", "nav", "updated", "mode"]);
+-}
+-
+-/// (2) header_snapshot は snapshot の file と同じ 10 行で、seat の行は updated と mode の間に 1 つ。
+-#[test]
+-fn gpill_snapshot_line() {
+-    let got = frame::header_snapshot();
+-    assert!(
+-        got == read("tests/snapshots/header.json"),
+-        "header の値が snapshot と違う。今の値:\n{got}"
+-    );
+-    let lines: Vec<&str> = got.lines().collect();
+-    assert_eq!(lines.len(), 10, "{got}");
+-    assert!(lines[5].contains("\"part\": \"updated\""), "{}", lines[5]);
+-    assert_eq!(
+-        lines[6],
+-        "    {\"part\": \"seat\", \"key\": \"seat\", \"class\": \"seatpill\", \"items\": []},"
+-    );
+-    assert!(lines[7].contains("\"part\": \"mode\""), "{}", lines[7]);
+-    let seats = lines
+-        .iter()
+-        .filter(|l| l.contains("\"part\": \"seat\""))
+-        .count();
+-    assert_eq!(seats, 1);
+ }
+ 
+ /// (3) pill の状態は電文の state のまま、経過は応答なしで since が在るときだけ（今と at の大きい方から）。
+@@ -324,7 +298,7 @@ fn gpill_own_names_clean() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert_eq!(names.len(), 6, "{names:?}");
++    assert_eq!(names.len(), 5, "{names:?}");
+     let words = [words_front(), words_middle(), words_back()].concat();
+     names_avoid(names, &words);
+ }
+diff --git a/crates/tsuzuri-surface/tests/hsblock.rs b/crates/tsuzuri-surface/tests/hsblock.rs
+index 5dcb95b5a021c7e2d6252e48a3c0e163ba061318..e1d66ef6c6d1ae0b0a6700035ed453c4c5b09f0b 100644
+--- a/crates/tsuzuri-surface/tests/hsblock.rs
++++ b/crates/tsuzuri-surface/tests/hsblock.rs
+@@ -209,15 +209,9 @@ fn hsblock_dispatch_by_list() {
+         "block_view が枠の id で選ばない"
+     );
+     assert!(body.contains("Module::view"), "block_view が module の view を呼ばない");
++    // App は画面の状態（Screen）を作らない（読み手が無くなり行 g-dead-sweep-b で消した）。
+     let app = fn_body(&board, "App");
+-    assert!(
+-        app.contains("let screen = RwSignal::new(Screen::initial());"),
+-        "App が画面の状態の signal を作らない"
+-    );
+-    assert!(
+-        app.contains("provide_context(screen);"),
+-        "App が画面の状態の signal を context に置かない"
+-    );
++    assert!(!app.contains("Screen"), "App が画面の状態を作る");
+     assert!(
+         board.contains("fn page_view(page: PageId) ->"),
+         "page_view が画面の状態を受ける"
+diff --git a/crates/tsuzuri-surface/tests/hspage.rs b/crates/tsuzuri-surface/tests/hspage.rs
+index 54d13ba674c5733866296f9c052d128182f1c4a0..6bef4b25b7bf83bef196d4207cfb30d82c2b5dc4 100644
+--- a/crates/tsuzuri-surface/tests/hspage.rs
++++ b/crates/tsuzuri-surface/tests/hspage.rs
+@@ -1,6 +1,6 @@
+ //! 行 hs-pages の歯（接頭辞 hspage_・判断の記録 ADR-13）: 頁は src/pages の下に 1 頁 1 file・列挙 PageId は
+-//! 組み立ての script が生成・snapshot は頁ごとの file と header の file・
+-//! nav は頁の定義の数の順・href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い。
++//! 組み立ての script が生成・snapshot は頁ごとの file・
++//! href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い（header の file と nav の歯は行 g-dead-sweep-b で消した）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+@@ -63,48 +63,6 @@ fn hspage_snaps_match_files() {
+     }
+ }
+ 
+-/// (3) header_snapshot は header.json と 1 字も違わない。
+-#[test]
+-fn hspage_header_lines_same() {
+-    let got = frame::header_snapshot();
+-    assert!(
+-        got == read("tests/snapshots/header.json"),
+-        "header の値が snapshot と違う。今の値:\n{got}"
+-    );
+-    assert!(got.ends_with("\n  ]\n}\n"), "{got}");
+-    assert_eq!(got.lines().count(), 10);
+-}
+-
+-/// (4) nav の列は頁の定義の nav が在る頁を数の順に並べたもので、数は重ならず、home を含み、
+-/// node を含まない。
+-#[test]
+-fn hspage_nav_by_number() {
+-    let nav = frame::nav();
+-    let numbers: Vec<u8> = nav
+-        .iter()
+-        .map(|p| p.def().nav.expect("nav の頁は数を持つ"))
+-        .collect();
+-    let mut sorted = numbers.clone();
+-    sorted.sort_unstable();
+-    sorted.dedup();
+-    assert_eq!(numbers, sorted, "数が重ならず昇る");
+-    let with_nav = PageId::ALL.iter().filter(|p| p.def().nav.is_some()).count();
+-    assert_eq!(nav.len(), with_nav, "nav の在る頁の全部");
+-    let ids: Vec<&str> = nav.iter().map(|p| p.id()).collect();
+-    assert_eq!(ids, ["home"]);
+-    assert!(!nav.contains(&PageId::Node));
+-    let pages: Vec<PageId> = frame::pages().iter().map(|p| p.id).collect();
+-    assert_eq!(pages, nav);
+-    let keys: Vec<&str> = nav.iter().map(|p| p.def().heading).collect();
+-    assert_eq!(frame::nav_keys(), keys);
+-    let links: Vec<PageId> = frame::nav_links(PageId::Home).iter().map(|l| l.page).collect();
+-    assert_eq!(links, nav);
+-    for l in frame::nav_links(PageId::Home) {
+-        let badge = if l.page.def().badge { frame::BADGE } else { "" };
+-        assert_eq!(l.badge, badge, "{}", l.key);
+-    }
+-}
+-
+ /// (5) 全部の頁と 2 つの mode で href を from_query に渡すと同じ頁と mode に戻り、home の href は mode だけ・
+ /// 知らない page の字と page の無い字は home。
+ #[test]
+@@ -210,7 +168,7 @@ fn hspage_own_names_clean() {
+                 .expect("test の属性の後の fn")
+         })
+         .collect();
+-    assert!(names.len() >= 7, "歯の数 {}", names.len());
++    assert!(names.len() >= 5, "歯の数 {}", names.len());
+     for name in names {
+         let rest = name
+             .strip_prefix("hspage_")
+diff --git a/crates/tsuzuri-surface/tests/lateface.rs b/crates/tsuzuri-surface/tests/lateface.rs
+index 4819e160fc6c83ac14ef41b84db69cfa4d324d87..1421a2a15421fd5e6f6cf0cf2b9928ad5fb18c75 100644
+--- a/crates/tsuzuri-surface/tests/lateface.rs
++++ b/crates/tsuzuri-surface/tests/lateface.rs
+@@ -126,14 +126,14 @@ fn one_and_two_lines(now: u64) {
+     );
+ }
+ 
+-/// (6) ask.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で消した）。
++/// (6) ask.rs の mod dom は 1 行の口と書き直しを 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で、
++/// 問いの頁の一覧の上の置き場は行 g-dead-sweep-b で消した）。
+ #[test]
+ fn lateface_dom_wiring() {
+     let ask = dom("src/project/ask.rs");
+     for word in [
+         "crate::net::read(UNRECEIVED_PATH)",
+         "super::unreceived_line(f, clock.get())",
+-        "{late_view()}{list}{unknown}",
+     ] {
+         assert_eq!(ask.matches(word).count(), 1, "ask の mod dom の {word}");
+     }
+diff --git a/crates/tsuzuri-surface/tests/lgrp.rs b/crates/tsuzuri-surface/tests/lgrp.rs
+deleted file mode 100644
+index 6b193c3d9468a90f8e9f08e258c96e9b125c5a9e..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/lgrp.rs
++++ /dev/null
+@@ -1,168 +0,0 @@
+-//! 行 g-ledger-group-kind の歯: 問いの一覧と台帳の一覧の組と並べは、欄 kind の字でなく地図の節点と同じ種類の読み
+-//! （LedgerRow の node_kind・issue_type と label intake:question・intake:memo）で決まる。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::view::{self, Fetched, Screen};
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-/// 台帳の 1 行（題は「題」・親は無し）。
+-fn row(id: &str, kind: &str, status: &str, labels: &[&str], at: u64) -> LedgerRow {
+-    LedgerRow {
+-        id: BeadId::new(id).expect("id"),
+-        kind: kind.to_string(),
+-        title: "題".to_string(),
+-        status: status.to_string(),
+-        updated_at: at,
+-        parent: None,
+-        labels: labels.iter().map(|l| l.to_string()).collect(),
+-    }
+-}
+-
+-fn ids(rows: &[LedgerRow]) -> Vec<&str> {
+-    rows.iter().map(|r| r.id.as_str()).collect()
+-}
+-
+-const Q: &str = QUESTION_LABEL;
+-const M: &str = MEMO_LABEL;
+-
+-/// 節の台帳 LQ（5 行）。
+-fn lq() -> Vec<LedgerRow> {
+-    vec![
+-        row("fx-g.1", "task", "open", &[Q], 20),
+-        row("fx-g.2", "task", "open", &[Q], 10),
+-        row("fx-g.3", "task", "closed", &[Q], 5),
+-        row("fx-g.4", "question", "open", &[], 1),
+-        row("fx-g.5", "task", "open", &[M, Q], 2),
+-    ]
+-}
+-
+-/// 節の台帳 LG（13 行・更新時刻はどれも 0）。
+-fn lg() -> Vec<LedgerRow> {
+-    vec![
+-        row("fx-e", "epic", "open", &[], 0),
+-        row("fx-e.1", "task", "open", &[M], 0),
+-        row("fx-e.2", "feature", "open", &[], 0),
+-        row("fx-e.3", "task", "open", &[Q], 0),
+-        row("fx-e.4", "memo", "open", &[], 0),
+-        row("fx-e.5", "task", "closed", &[], 0),
+-        row("fx-e.6", "question", "open", &[], 0),
+-        row("fx-e.10", "bug", "open", &[], 0),
+-        row("fx-m", "epic", "open", &[M], 0),
+-        row("fx-m.1", "task", "open", &[M], 0),
+-        row("fx-z.1", "task", "open", &[Q], 0),
+-        row("fx-z.2", "task", "open", &[M], 0),
+-        row("fx-z.3", "chore", "open", &[], 0),
+-    ]
+-}
+-
+-/// 節の台帳 LS（6 行・更新時刻はどれも 0）。
+-fn ls() -> Vec<LedgerRow> {
+-    vec![
+-        row("fx-s", "epic", "open", &[], 0),
+-        row("fx-s.1", "task", "open", &[], 0),
+-        row("fx-s.2", "task", "open", &[M], 0),
+-        row("fx-s.3", "task", "open", &[Q], 0),
+-        row("fx-s.4", "task", "closed", &[Q], 0),
+-        row("fx-s.5", "task", "closed", &[], 0),
+-    ]
+-}
+-
+-/// (1) 問いの一覧は label intake:question の open の行を古い順（label の無い issue_type question と memo の行は入れない）。
+-#[test]
+-fn lgrp_questions_follow_labels() {
+-    assert_eq!(ids(&view::questions(&lq())), vec!["fx-g.2", "fx-g.1"]);
+-}
+-
+-/// (2) 組の頭は epic・問いは入れない・組の下は契約（feature・bug・chore と label の無い字を含む）・memo の順。
+-#[test]
+-fn lgrp_groups_follow_node_kind() {
+-    let groups = view::ledger_groups(&lg());
+-    let heads: Vec<Option<&str>> = groups
+-        .iter()
+-        .map(|g| g.epic.as_ref().map(|e| e.id.as_str()))
+-        .collect();
+-    assert_eq!(heads, vec![Some("fx-e"), Some("fx-m"), None]);
+-    assert_eq!(
+-        ids(&groups[0].children),
+-        vec!["fx-e.2", "fx-e.4", "fx-e.5", "fx-e.6", "fx-e.10", "fx-e.1"]
+-    );
+-    assert_eq!(ids(&groups[1].children), vec!["fx-m.1"]);
+-    assert_eq!(ids(&groups[2].children), vec!["fx-z.3", "fx-z.2"]);
+-}
+-
+-/// (3) 本物の台帳の形の電文を読んだ画面: 問いの一覧は open の問いだけ（台帳の件数と一覧の中身の関数は行 g-list-sweep で外した）。
+-#[test]
+-fn lgrp_screen_real_ledger() {
+-    let body = wire::encode(&LedgerList {
+-        rows: Reading::Known(ls()),
+-    })
+-    .expect("電文");
+-    let screen = Screen::initial().after_read(&Fetched::Body(body), 100);
+-    let Reading::Known(board) = &screen.board else {
+-        panic!("画面の台帳が読めていない");
+-    };
+-    assert_eq!(ids(&board.questions), vec!["fx-s.3"]);
+-}
+-
+-/// main b5c24c8 の contracts の verify の filter の語 272 を、ほかの語を部分の字として含まない語に畳んだ語。
+-const FILTERS: &[&str] = &[
+-    "aaround_", "accept_", "acchold_", "account_", "acctcore_", "acctdoc_", "accthb_", "accthome_",
+-    "acctled_", "acctlook_", "acctpcore_", "acctproj_", "acctsess_", "acctwin_", "acctwire_",
+-    "aface_", "afocus_", "alean_", "aord_", "aown_", "apop_", "askcard_", "athr_", "batchpanel_",
+-    "bhalf_", "board_min_", "bport_", "brand_", "btuck_", "cadl_", "cadopt_", "cadq_", "cdorm_",
+-    "cfsplit_", "cg9_", "cgdom_", "cmark_", "cnote_", "contract_form_", "cround_", "csled_",
+-    "cspk_", "ctick_", "cupd_", "cupdlist_", "denv_", "dnedge_", "dngrp_", "dnrow_", "dnskip_",
+-    "ecache_", "epolq_", "eretry_", "evkind_", "flight_", "fmark_", "fprem_", "frame_", "fserve_",
+-    "fstop_", "fxpre_", "g3g7_", "gapspage_", "gatt_", "gbnote_", "gcoach_", "gfix_", "gfresh_",
+-    "ghb_", "gjst_", "glabel_", "gnav_", "gpface_", "gpill_", "gpulse_", "graph_", "gsum_",
+-    "gtuck_", "gview_", "gwv_", "hacols_", "harest_", "hasplit_", "hbconf_", "hbmark_", "hbpost_",
+-    "hbproc_", "hbroute_", "hcard_", "hcled_", "hcnx_", "hcproj_", "hcsess_", "hdchip_", "hfig_",
+-    "hnunk_", "hook_", "hruling_", "hsblock_", "hsderive_", "hshist_", "hspage_", "hspk_", "hsym_",
+-    "hthr_", "http_", "hwstore_", "iclose_", "ilink_", "jcount_", "jrun_", "kcli_", "kg9_",
+-    "kindlab_", "klink_", "ksum_", "launch_", "lcard_", "ledgerblock_", "lhome_", "lidle_",
+-    "lkind_", "lresume_", "lsnap_", "lspark_", "lstg_", "lstore_", "mapview_", "mkeys_", "mlink_",
+-    "mstore_", "mtips_", "mtree_", "nact_", "nbatch_", "ncard_", "nextstep_", "nodepage_",
+-    "nstall_", "nsum_", "nsumw_", "ntime_", "nxact_", "nxorg_", "parts_", "pci_", "pclosed_",
+-    "pfold_", "pgsw_", "pgz_", "pipe_", "plimit_", "pmisfit_", "pmore_", "pquest_", "pqueue_",
+-    "project_", "ptitle_", "pubscan_", "punmap_", "pwhole_", "qblock_", "qgate_", "qkey_",
+-    "question_", "rbusy_", "relay_", "rhold_", "runsdoc_", "rvk_", "saxis_", "sclosed_",
+-    "seatblock_", "seatcard_", "server_", "sesplit_", "shb_", "skeleton_", "smore_", "stage_",
+-    "stats_", "stbp_", "stcli_", "steady_", "sttgt_", "sxaxis_", "ticker_", "tipx_", "tkad_",
+-    "tlic_", "topbar_", "topfit_", "tz_", "unow_", "urpanel_", "uword_", "wstrip_",
+-];
+-
+-/// (6) この file の歯の名は 4 つで lgrp_ で始まり、名は filter の語を含まない。
+-#[test]
+-fn lgrp_names_clean() {
+-    assert_eq!(FILTERS.len(), 197);
+-    let src = std::fs::read_to_string(crate_dir().join("tests/lgrp.rs")).expect("tests/lgrp.rs");
+-    let mut names = Vec::new();
+-    let mut lines = src.lines();
+-    while let Some(line) = lines.next() {
+-        if line.trim() != "#[test]" {
+-            continue;
+-        }
+-        let next = lines.next().expect("属性の次の行");
+-        let name = next
+-            .trim()
+-            .strip_prefix("fn ")
+-            .and_then(|s| s.split('(').next())
+-            .unwrap_or_else(|| panic!("属性の次が fn でない: {next}"));
+-        names.push(name.to_string());
+-    }
+-    assert_eq!(names.len(), 4, "{names:?}");
+-    for name in &names {
+-        assert!(name.starts_with("lgrp_"), "{name} が lgrp_ で始まらない");
+-        for word in FILTERS {
+-            assert!(!name.contains(word), "{name} が {word} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/mqface.rs b/crates/tsuzuri-surface/tests/mqface.rs
+index 77381e1175c00c1f704148faf76d46361d4e1204..edbcb2a2914e521ee7ee23dbd7c6919b96fe64d0 100644
+--- a/crates/tsuzuri-surface/tests/mqface.rs
++++ b/crates/tsuzuri-surface/tests/mqface.rs
+@@ -85,9 +85,6 @@ fn mqface_mixes_by_posted_time() {
+             (4, "fx-oth.4", Some("proj-x"), false),
+         ]
+     );
+-    assert_eq!(ask::unknown_projects(&fetched), ["proj-y"]);
+-    assert_eq!(ask::total(&fetched), Reading::Known(4));
+-    assert_eq!(ask::count(&fetched), Reading::Known(2));
+     let own_ids: Vec<String> = ask::cards(&fetched)
+         .expect("自分の問い")
+         .iter()
+@@ -115,12 +112,6 @@ fn mqface_bare_list_unchanged() {
+         .collect();
+     assert!(want.iter().all(|c| c.project.is_none() && c.answerable));
+     assert_eq!(ask::body(&fetched), Body::Filled(want));
+-    assert!(ask::unknown_projects(&fetched).is_empty());
+-    assert_eq!(ask::total(&fetched), ask::count(&fetched));
+-    for fetched in [Fetched::NotRead, Fetched::Failed] {
+-        assert!(ask::unknown_projects(&fetched).is_empty());
+-        assert_eq!(ask::total(&fetched), ask::count(&fetched));
+-    }
+ }
+ 
+ /// (8) ask.rs の mod dom は札・題の字・つながりの段・答えの欄・読めない組の行・数の chip の 8 つの字を持つ。
+@@ -135,8 +126,6 @@ fn mqface_dom_wiring() {
+         "Part::Around if card.project.is_some() => ().into_any(),",
+         "let own_ok = card.answerable;",
+         "let answerable = move || own_ok && can_answer.is_none_or(|m| m.get());",
+-        ".with(unknown_projects)",
+-        "let extra = move || match fetched.with(total) {",
+     ] {
+         assert!(dom.contains(want), "ask.rs の mod dom に {want} が無い");
+     }
+diff --git a/crates/tsuzuri-surface/tests/nodepage.rs b/crates/tsuzuri-surface/tests/nodepage.rs
+index 7d9830cd47b6b8e9a2cd663b58ba33c3476d1808..d0c623b655345c7b995da768bdc27f145806739a 100644
+--- a/crates/tsuzuri-surface/tests/nodepage.rs
++++ b/crates/tsuzuri-surface/tests/nodepage.rs
+@@ -82,7 +82,7 @@ fn doc_of(center: &str, rows: Vec<AroundRow>) -> AroundDoc {
+ }
+ 
+ 
+-/// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
++/// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・頁は home と節点の頁の 2 つ・
+ /// snapshot と同じ。
+ #[test]
+ fn nodepage_frame_and_nav() {
+@@ -108,17 +108,9 @@ fn nodepage_frame_and_nav() {
+     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
+     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
+     assert!(PageId::ALL.contains(&PageId::Node));
+-    // nav の頁の一覧は home だけで節点の頁を含まない（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
+-    assert_eq!(ids, vec!["home"]);
+-    let nav_keys = frame::nav_keys();
+-    assert_eq!(nav_keys, vec!["home"]);
+-    assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");
+-    let keys: Vec<&str> = frame::nav_links(PageId::Node)
+-        .iter()
+-        .map(|l| l.key)
+-        .collect();
+-    assert_eq!(keys, nav_keys);
++    // 頁は home と節点の頁の 2 つ（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した・
++    // nav は行 g-dead-sweep-b で消した）。
++    assert_eq!(PageId::ALL, [PageId::Home, PageId::Node]);
+     node_links();
+ }
+ 
+diff --git a/crates/tsuzuri-surface/tests/parts.rs b/crates/tsuzuri-surface/tests/parts.rs
+index f93570c4f163f977492a0048affd2d702f3387b0..29e1f228852a053a1a17cfa7c6835a9e84b53f62 100644
+--- a/crates/tsuzuri-surface/tests/parts.rs
++++ b/crates/tsuzuri-surface/tests/parts.rs
+@@ -15,7 +15,7 @@ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::{
+     Body, Module, NO_CONTENT, NOT_READ, ask, askpage, map, next, pipeline, seat,
+ };
+-use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
++use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS};
+ use tsuzuri_surface::widgets::hover::{
+     Card, ELLIPSIS, GRACE_MS, OFFSET_X, OFFSET_Y, Point, ROW_CHARS, ROWS, Rect, Size, clip, keeps,
+     place,
+@@ -114,24 +114,17 @@ fn parts_ledger_lists_read_three_values() {
+         Body::Empty(_)
+     ));
+     assert!(matches!(
+-        askpage::body(&Fetched::Body(empty.clone())),
++        askpage::body(&Fetched::Body(empty)),
+         Body::Empty(_)
+     ));
+-    unread_lists(empty);
++    unread_lists();
+ }
+ 
+-/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文と画面。
+-fn unread_lists(empty: String) {
+-    let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
++/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文（画面の状態 Screen は行 g-dead-sweep-b で消した）。
++fn unread_lists() {
+     for fetched in [Fetched::NotRead, Fetched::Failed] {
+         assert!(matches!(ask::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
+         assert!(matches!(askpage::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
+-        for screen in [Screen::initial(), known.clone()] {
+-            let s = screen.after_read(&fetched, 9);
+-            assert_eq!(s.board, Reading::Unknown, "{fetched:?}");
+-            // 最終更新は読めた時刻のまま（読めない読みで進めない）。
+-            assert_eq!(s.updated_at, screen.updated_at);
+-        }
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-surface/tests/popapp.rs b/crates/tsuzuri-surface/tests/popapp.rs
+index 1b8ff5f1c6f0faba68ea2bb12cc4fac26d8ac968..b459e08be9a7e0c5d3e606bb29964bcf2f89c4e1 100644
+--- a/crates/tsuzuri-surface/tests/popapp.rs
++++ b/crates/tsuzuri-surface/tests/popapp.rs
+@@ -6,9 +6,7 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
+-use tsuzuri_surface::frame::{
+-    self, Mode, POPUP, PageId, Press, STANDALONE_QUERY, switch_url, window_features,
+-};
++use tsuzuri_surface::frame::{POPUP, Press, STANDALONE_QUERY, window_features};
+ 
+ fn read(rel: &str) -> String {
+     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+@@ -71,22 +69,6 @@ fn popapp_features_by_standalone() {
+     ] {
+         assert!(!held.plain(), "{held:?}");
+     }
+-    // 頁の切り替えは同じ plain で読む（振る舞いは変わらない）。
+-    let to = switch_url(PageId::Home, PageId::Node, Mode::Beginner, Press::default());
+-    assert_eq!(to, Some(frame::href(PageId::Node, Mode::Beginner)));
+-    assert_eq!(
+-        switch_url(PageId::Home, PageId::Home, Mode::Beginner, Press::default()),
+-        None
+-    );
+-    assert_eq!(
+-        switch_url(
+-            PageId::Home,
+-            PageId::Node,
+-            Mode::Beginner,
+-            press(0, false, false, false, true)
+-        ),
+-        None
+-    );
+ }
+ 
+ /// (2) board の standalone は media query を読み、open_named は features を渡して窓を前に出さない。
+@@ -130,10 +112,8 @@ fn popapp_sites_through_helper() {
+     assert_eq!(read("src/account/windows.rs").matches("open_named(").count(), 1);
+     assert!(!read("src/project/next.rs").contains("open_named("));
+ 
+-    // frame の switch_url は plain を呼び、board の press は 4 つの修飾の鍵と button を読む。
++    // frame の Press は plain を持ち（頁の切り替えの switch_url は行 g-dead-sweep-b で消した）、board の press は 4 つの修飾の鍵と button を読む。
+     let frame_src = read("src/frame.rs");
+-    let switch = body(&frame_src, "pub fn switch_url(");
+-    assert!(switch.contains("press.plain()"), "{switch}");
+     assert!(frame_src.contains("pub fn plain(self) -> bool {"));
+     let board = read("src/board.rs");
+     let press_fn = body(&board, "fn press(e: &ev::MouseEvent) -> Press {");
+diff --git a/crates/tsuzuri-surface/tests/qkey.rs b/crates/tsuzuri-surface/tests/qkey.rs
+index 0fa4ca977074067051d4deba5b4e3b655ba4cc92..93cb61841dbf465e705d666018e6f8bdf50551cb 100644
+--- a/crates/tsuzuri-surface/tests/qkey.rs
++++ b/crates/tsuzuri-surface/tests/qkey.rs
+@@ -48,27 +48,6 @@ fn without_qa2() -> Fetched {
+     altered(|l| known(l).retain(|c| c.id.as_str() != "qa.2"))
+ }
+ 
+-fn qa10_with(edit: impl FnOnce(&mut tsuzuri_contract::question::QuestionCard)) -> Fetched {
+-    altered(|l| {
+-        let card = known(l)
+-            .iter_mut()
+-            .find(|c| c.id.as_str() == "qa.10")
+-            .expect("qa.10");
+-        edit(card);
+-    })
+-}
+-
+-fn filled(fetched: &Fetched) -> Vec<ask::Card> {
+-    match ask::body(fetched) {
+-        Body::Filled(cards) => cards,
+-        other => panic!("Filled でない: {other:?}"),
+-    }
+-}
+-
+-fn find<'a>(cards: &'a [ask::Card], id: &str) -> &'a ask::Card {
+-    cards.iter().find(|c| c.id.as_str() == id).expect("card")
+-}
+-
+ /// 鍵の型は Hash と Eq を持つ（鍵つきの一覧の鍵の fn に渡せる）。
+ fn hashed<K: Hash + Eq>(key: &K) -> u64 {
+     let mut h = DefaultHasher::new();
+@@ -111,45 +90,6 @@ fn between<'a>(src: &'a str, from: &str, to: &str) -> &'a str {
+     &rest[..end]
+ }
+ 
+-/// card の鍵は番号を 0 にした中身で、番号が詰まっても変わらず、中身が替われば替わる。
+-#[test]
+-fn qkey_card_key_rules() {
+-    let all = filled(&fixture());
+-    assert_eq!(all.len(), 2);
+-    for card in &all {
+-        let key = ask::card_key(card);
+-        assert_eq!(key.number, 0);
+-        assert_eq!(
+-            ask::Card {
+-                number: card.number,
+-                ..key.clone()
+-            },
+-            *card
+-        );
+-        assert_eq!(hashed(&key), hashed(&ask::card_key(card)));
+-    }
+-    let qa10 = find(&all, "qa.10");
+-    assert_eq!(qa10.number, 2);
+-
+-    let rest = filled(&without_qa2());
+-    assert_eq!(rest.len(), 1);
+-    let moved = find(&rest, "qa.10");
+-    assert_eq!(moved.number, 1);
+-    assert_eq!(ask::card_key(moved), ask::card_key(qa10));
+-    assert_eq!(hashed(&ask::card_key(moved)), hashed(&ask::card_key(qa10)));
+-    assert_eq!(ask::target_number(&rest, "qa.10"), Some(1));
+-
+-    let digest = filled(&qa10_with(|c| c.digest = "aaaaaaaaaaaaaaaa".to_string()));
+-    assert_ne!(ask::card_key(find(&digest, "qa.10")), ask::card_key(qa10));
+-    let title = filled(&qa10_with(|c| c.title = "別の題".to_string()));
+-    assert_ne!(ask::card_key(find(&title, "qa.10")), ask::card_key(qa10));
+-    // 替えていない card の鍵は替わらない。
+-    assert_eq!(
+-        ask::card_key(find(&title, "qa.2")),
+-        ask::card_key(find(&all, "qa.2"))
+-    );
+-}
+-
+ /// 形は Filled の中身を捨てた値、列は Filled の中身かほかは空の列（ask と batch で同じ）。
+ #[test]
+ fn qkey_outline_and_listed() {
+@@ -163,7 +103,6 @@ fn qkey_outline_and_listed() {
+     ];
+     let reads = six();
+     for (fetched, want) in reads.iter().zip(want.iter()) {
+-        assert_eq!(ask::outline(fetched), *want, "{fetched:?}");
+         assert_eq!(batch::outline(fetched), *want, "{fetched:?}");
+     }
+     let (last, rest) = reads.split_last().expect("6 つ");
+@@ -220,14 +159,10 @@ fn qkey_batch_keys_and_numbers() {
+ /// 2 つの block の DOM は鍵つきの一覧で、番号と経過と link を子の中で読み直す。
+ #[test]
+ fn qkey_dom_text() {
++    // 問いの頁の一覧の DOM（鍵つきの一覧）は行 g-dead-sweep-b で消した（窓は 1 問ずつ listed から引く）。
+     let src = read("src/project/ask.rs");
+     let dom = after(&src, "mod dom {");
+-    for word in ["<For", "card_key", "outline", "listed"] {
+-        assert!(dom.contains(word), "ask の mod dom に {word} が無い");
+-    }
+-    let list = between(dom, "let list = move ||", "section(BLOCK");
+-    assert!(list.contains("<For"), "{list}");
+-    assert!(!list.contains("collect_view()"), "{list}");
++    assert!(dom.contains("listed"), "ask の mod dom に listed が無い");
+     assert!(!dom.contains(".number"), "ask の mod dom に .number");
+     assert!(!dom.contains("now:"), "ask の mod dom に now の引数");
+     assert!(!dom.contains("now :"), "ask の mod dom に now の引数");
+@@ -259,7 +194,7 @@ fn qkey_own_names_clean() {
+         names.push(after[..end].trim().to_string());
+         rest = &after[end..];
+     }
+-    assert_eq!(names.len(), 5, "{names:?}");
++    assert_eq!(names.len(), 4, "{names:?}");
+     names_avoid(names, &[words_front(), words_back()].concat());
+ }
+ 
+diff --git a/crates/tsuzuri-surface/tests/snapshots/header.json b/crates/tsuzuri-surface/tests/snapshots/header.json
+deleted file mode 100644
+index 873d0da6b0559e0c5598a7b705b8ed2092abe39b..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/snapshots/header.json
++++ /dev/null
+@@ -1,10 +0,0 @@
+-{
+-  "header": [
+-    {"part": "back", "key": "acct_back", "class": "upto", "items": []},
+-    {"part": "brand", "key": "project", "class": "brand", "items": []},
+-    {"part": "nav", "key": "dashboard", "class": "nav", "items": ["home"]},
+-    {"part": "updated", "key": "last_record", "class": "chip num", "items": []},
+-    {"part": "seat", "key": "seat", "class": "seatpill", "items": []},
+-    {"part": "mode", "key": "mode", "class": "seg", "items": ["beginner", "expert"]}
+-  ]
+-}
+diff --git a/crates/tsuzuri-surface/tests/topbar.rs b/crates/tsuzuri-surface/tests/topbar.rs
+index 89e8889cc594f9cea1615c3272cd86976ef02901..fe1ef1d46de383499bafd71ccab412ff4174f010 100644
+--- a/crates/tsuzuri-surface/tests/topbar.rs
++++ b/crates/tsuzuri-surface/tests/topbar.rs
+@@ -2,7 +2,7 @@
+ //! header の DOM は wasm の target のときだけ組むので、ここでは字を決める純粋な関数だけを pin する。
+ #![cfg(test)]
+ 
+-use tsuzuri_surface::frame::HEADER;
++use tsuzuri_surface::frame::UPDATED;
+ use tsuzuri_surface::view::clock_short;
+ 
+ #[test]
+@@ -36,7 +36,8 @@ fn topbar_direction_does_not_matter() {
+ 
+ #[test]
+ fn topbar_updated_part_is_a_num_chip_keyed_last_record() {
+-    let part = HEADER.iter().find(|p| p.part == "updated").unwrap();
++    let part = UPDATED;
++    assert_eq!(part.part, "updated");
+     assert_eq!(part.key, "last_record");
+     assert_eq!(part.class, "chip num");
+ }

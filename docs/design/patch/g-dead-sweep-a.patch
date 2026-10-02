@@ -1,0 +1,3066 @@
+diff --git a/crates/tsuzuri-surface/src/project/next.rs b/crates/tsuzuri-surface/src/project/next.rs
+index 7d35b2db5fed4e63a3b5a86c35cdee19ca64dd03..6df713aa16f5dd04c422ab710b769fdc4aa23ee6 100644
+--- a/crates/tsuzuri-surface/src/project/next.rs
++++ b/crates/tsuzuri-surface/src/project/next.rs
+@@ -1,24 +1,17 @@
+-//! block「次の一手」（見本の `#next` と index.html の nextHTML・便 g-next）: 大きく出す 1 つの箱と、残りの種類の一覧。
+-//! 中身は口 /api/next（契約の型の NextStep）から読む。判定は中核の crate が済ませていて、ここは写すだけ
+-//! （大きく出す 1 つは電文の lead・各種の結果は電文の checks）。7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
+-//! 字と並びは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! account board の窓へ飛ぶ link は押した時に窓を探し、href の読めない在る窓だけ既定の遷移を止めて窓を前に出す
+-//! （行 g-next-acct-origin・窓の探し方と判定は frame の `back_how`）。
++//! block「次の一手」（便 g-next）: 口 /api/next（契約の型の NextStep）の読みと、7 種の語の鍵と大きく出す 1 つの箱の字。
++//! 判定は中核の crate が済ませていて、ここは写すだけ（大きく出す 1 つは電文の lead・各種の結果は電文の checks）。
++//! 7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
++//! 頁に block を置かない（1 枚の画面への切り替えの行 g-one-screen-a）。帯の pill（topbar）と account board が
++//! この module の純粋な関数（`step`・`key`・`unjudged`・`big`）を使う。block の DOM と、DOM だけが使った一覧の行・
++//! 次の手の link・窓の探し方は行 g-dead-sweep-a で消した（view は組み立ての script が module ごとに要るので空の中身）。
+ 
+-use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::NextMove;
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+ use tsuzuri_contract::wire;
+ 
+-use super::node::answer_href;
+-use super::{Body, NO_CONTENT, NOT_READ, ask, map, pipeline};
+-use crate::account::windows::ACCOUNT_WIN;
+-use crate::account::{Tab, tab_href};
+-use crate::frame::{BackHow, Block, Mode, back_how};
+-use crate::topbar::{Win, win_href};
++use super::{Body, NO_CONTENT, NOT_READ, pipeline};
++use crate::frame::Block;
+ use crate::view::Fetched;
+-use crate::widgets::hover::{Card, clip};
+-use crate::widgets::nodecard::card_of;
+ 
+ pub const BLOCK: Block = Block {
+     id: "next",
+@@ -50,9 +43,6 @@ pub const KEYS: [(NextMove, &str); 7] = [
+     (NextMove::Nothing, "nx_g"),
+ ];
+ 
+-/// 当たらない種類の字。
+-pub const MISS: &str = "―";
+-
+ /// なし（どれも当たらない）の箱の中身の字。
+ pub const NONE_LINE: &str = "orchestrator が動いている / 待っている";
+ 
+@@ -65,21 +55,6 @@ pub const UNJUDGED_LINE: &str = "まだ判じていない種類があり、す
+ /// 止まっている走行の箱の link の字（block「pipeline」へ頁の中で飛ぶ）。
+ pub const PIPE_LINK: &str = "run を見る ›";
+ 
+-/// 限度と移動の箱の link の字（account board の home の tab へ）。
+-pub const ACCOUNT_LINK: &str = "account board を見る ›";
+-
+-/// 応答なしの箱の link の字（account board の session の tab へ）。
+-pub const SESSION_LINK: &str = "session を見る ›";
+-
+-/// 束の承認の箱の link の字（問いの頁の束の block へ・見本の字）。
+-pub const BATCH_LINK: &str = "まとめて承認 ›";
+-
+-/// 質問の箱の link の字（問いの頁の card へ・見本の字）。
+-pub const ANSWER_LINK: &str = "答える ›";
+-
+-/// 発効待ちの箱の link の字（抜けの検査の頁へ・見本の字）。
+-pub const GAPS_LINK: &str = "orchestrator に任せる（見るだけ） ›";
+-
+ /// 種類の語の鍵（表から引く）。
+ #[expect(clippy::expect_used, reason = "7 種の表は種類の全部を持つ")]
+ pub fn key(kind: NextMove) -> &'static str {
+@@ -89,26 +64,6 @@ pub fn key(kind: NextMove) -> &'static str {
+         .expect("7 種の表は種類の全部を持つ")
+ }
+ 
+-/// 一覧の右の字（当たった件数・当たらない「―」・判じなかった測れていないの記号）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum Mark {
+-    Count(u32),
+-    Miss,
+-    Unmeasured,
+-}
+-
+-/// 一覧の 1 行（見本の `ul.nxlist > li`）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Row {
+-    pub kind: NextMove,
+-    pub key: &'static str,
+-    /// 当たった種類は on・ほかは off。
+-    pub class: &'static str,
+-    pub mark: Mark,
+-    /// 電文の対象の id の字（無ければ None・行 g-next-rows）。
+-    pub target: Option<String>,
+-}
+-
+ /// 頁の中の link。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Link {
+@@ -130,13 +85,6 @@ pub struct Big {
+     pub target: Option<String>,
+ }
+ 
+-/// block の中身（大きく出す 1 つと、残りの種類の一覧）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Next {
+-    pub big: Big,
+-    pub rest: Vec<Row>,
+-}
+-
+ /// 口の本文を電文に読む（まだ読んでいない・読めない・電文が読めないは理由）。
+ /// 電文が読めない本文の理由は、中身の無い block と同じ（便 g-parts の歯が 3 値の理由を pin する）。
+ pub fn step(fetched: &Fetched) -> Result<NextStep, &'static str> {
+@@ -147,7 +95,7 @@ pub fn step(fetched: &Fetched) -> Result<NextStep, &'static str> {
+     }
+ }
+ 
+-/// 中身の有無（測れていない・中身あり）。中身は `content` が組む。
++/// 中身の有無（測れていない・中身あり・ほかの block と同じ 3 値の読みの形）。
+ pub fn body(fetched: &Fetched) -> Body<()> {
+     match step(fetched) {
+         Err(reason) => Body::Unmeasured(reason),
+@@ -155,14 +103,6 @@ pub fn body(fetched: &Fetched) -> Body<()> {
+     }
+ }
+ 
+-/// block の中身（口が読めなければ測れていない）。
+-pub fn content(fetched: &Fetched) -> Body<Next> {
+-    match step(fetched) {
+-        Err(reason) => Body::Unmeasured(reason),
+-        Ok(s) => Body::Filled(next(&s)),
+-    }
+-}
+-
+ /// 種類の結果（電文に無い種類は None）。
+ fn check_of(step: &NextStep, kind: NextMove) -> Option<&NextCheck> {
+     step.checks.iter().find(|c| c.kind == kind)
+@@ -175,52 +115,6 @@ pub fn unjudged(step: &NextStep) -> bool {
+         && check_of(step, NextMove::Nothing).is_some_and(|c| c.result == CheckResult::NotJudged)
+ }
+ 
+-/// 電文を中身に組む（大きく出すのは電文の lead・一覧は 7 種の順から lead を除いた並び）。
+-/// なしを判じなかったなら、大きい箱は測れていないの箱（`UNJUDGED_KEY` と `UNJUDGED_LINE`）。
+-pub fn next(step: &NextStep) -> Next {
+-    let rest = NextMove::ALL
+-        .into_iter()
+-        .filter(|&kind| kind != step.lead)
+-        .map(|kind| row(kind, check_of(step, kind)))
+-        .collect();
+-    let big = if unjudged(step) {
+-        Big {
+-            kind: NextMove::Nothing,
+-            key: UNJUDGED_KEY,
+-            class: "nxbig none",
+-            what_class: "what small muted",
+-            what: UNJUDGED_LINE.to_string(),
+-            link: None,
+-            target: None,
+-        }
+-    } else {
+-        big(step.lead, check_of(step, step.lead))
+-    };
+-    Next { big, rest }
+-}
+-
+-/// 一覧の 1 行（電文に無い種類は判じなかったと同じ）。
+-pub fn row(kind: NextMove, check: Option<&NextCheck>) -> Row {
+-    let mark = match check.map(|c| (c.result, c.count)) {
+-        Some((CheckResult::Hit, n)) => Mark::Count(n),
+-        Some((CheckResult::Miss, _)) => Mark::Miss,
+-        Some((CheckResult::NotJudged, _)) | None => Mark::Unmeasured,
+-    };
+-    Row {
+-        kind,
+-        key: key(kind),
+-        class: if matches!(mark, Mark::Count(_)) {
+-            "on"
+-        } else {
+-            "off"
+-        },
+-        mark,
+-        target: check
+-            .and_then(|c| c.target.as_ref())
+-            .map(ToString::to_string),
+-    }
+-}
+-
+ /// 大きく出す 1 つの箱（止まっている走行は件数と block「pipeline」への link・質問は対象の id と件数・
+ /// なしは none の箱・ほかは件数と、在れば対象の id）。
+ pub fn big(kind: NextMove, check: Option<&NextCheck>) -> Big {
+@@ -253,251 +147,10 @@ pub fn big(kind: NextMove, check: Option<&NextCheck>) -> Big {
+     }
+ }
+ 
+-/// 質問の大きい箱の中身（問いの節点の id・節点の題を 36 字に切った字・節点の card）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct BigTitle {
+-    pub id: String,
+-    pub text: String,
+-    pub card: Card,
+-}
+-
+-/// 質問の大きい箱の題（見本の nx_e の箱: 問いの題の字を節点の頁への link にして節点の card を付ける）。
+-/// 質問のほかの種類・対象が無い・グラフの口が読めない・問いの節点が電文に無いときは None（中身は Big の what の字のまま）。
+-pub fn big_title(big: &Big, graph: &Fetched) -> Option<BigTitle> {
+-    if big.kind != NextMove::Question {
+-        return None;
+-    }
+-    let id = big.target.as_deref()?;
+-    let doc = map::doc(graph).ok()?;
+-    let card = card_of(&doc, id)?;
+-    Some(BigTitle {
+-        id: id.to_string(),
+-        text: clip(&card.title),
+-        card,
+-    })
+-}
+-
+-/// 種類ごとの次の手の頁への link（見本の nextItems の button・止まっている走行は Big の link・なしは無い）。
+-/// 質問は対象の id が在ればその card へ、無ければ質問の窓へ（束の承認も質問の窓・発効待ちは抜けの検査の窓・窓は
+-/// home の頁の URL の query の win で開く・行 g-one-screen-a）。どれも mode を URL に残す。
+-pub fn action(kind: NextMove, target: Option<&str>, mode: Mode) -> Option<Link> {
+-    let (href, text) = match kind {
+-        NextMove::LimitOrMove => (tab_href(Tab::Home, mode), ACCOUNT_LINK),
+-        NextMove::Unresponsive => (tab_href(Tab::Session, mode), SESSION_LINK),
+-        NextMove::BatchApproval => (win_href(Win::Ask, mode), BATCH_LINK),
+-        NextMove::Question => (
+-            target.map_or_else(|| win_href(Win::Ask, mode), |id| answer_href(id, mode)),
+-            ANSWER_LINK,
+-        ),
+-        NextMove::AwaitingEffect => (win_href(Win::Gaps, mode), GAPS_LINK),
+-        NextMove::StalledRun | NextMove::Nothing => return None,
+-    };
+-    Some(Link { href, text })
+-}
+-
+-/// link を開く窓の名（account board へ飛ぶ種類は account board の名前つきの窓・ほかは今の窓）。
+-pub fn window_of(kind: NextMove) -> Option<&'static str> {
+-    match kind {
+-        NextMove::LimitOrMove | NextMove::Unresponsive => Some(ACCOUNT_WIN),
+-        _ => None,
+-    }
+-}
+-
+-/// 名前つきの窓へ飛ぶ link の押しの手（行 g-next-acct-origin）。
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum Jump {
+-    /// 既定の遷移のまま（窓が返らない・空の窓・href の読める窓）。
+-    Follow,
+-    /// 既定の遷移を止めて在る窓を前に出すだけ（href の読めない別の origin の窓・tab は替えない）。
+-    Front,
+-}
+-
+-/// 窓が返ったかと窓の URL（読めなければ None）から押しの手を決める: frame の `back_how` が Front で、
+-/// URL が読めない窓だけ Front・ほかは Follow。
+-pub fn jump(returned: bool, href: Option<&str>) -> Jump {
+-    match (back_how(returned, href), href) {
+-        (BackHow::Front, None) => Jump::Front,
+-        _ => Jump::Follow,
+-    }
+-}
+-
+-/// 一覧の当たった行の次の手の link（裁定 t3-hub.52.30 の案 A・止まっている走行は大きい箱と同じ block「pipeline」への link・
+-/// ほかは `action`）。当たらない行と測れていない行は None。
+-pub fn row_link(row: &Row, mode: Mode) -> Option<Link> {
+-    if !matches!(row.mark, Mark::Count(_)) {
+-        return None;
+-    }
+-    match row.kind {
+-        NextMove::StalledRun => Some(Link {
+-            href: format!("#{}", pipeline::BLOCK.id),
+-            text: PIPE_LINK,
+-        }),
+-        kind => action(kind, row.target.as_deref(), mode),
+-    }
+-}
+-
+-/// 一覧の当たった質問の行の経過の字（見本の nx_e の小さい値・電文の対象の問いを問いの一覧から引くだけで選び直さない）。
+-/// 質問のほかの種類・当たらない・対象が無い・問いの一覧が読めない・一覧に対象の card が無いときは None。
+-pub fn waited(row: &Row, questions: &Fetched, now: EpochSecs) -> Option<String> {
+-    if row.kind != NextMove::Question || !matches!(row.mark, Mark::Count(_)) {
+-        return None;
+-    }
+-    let target = row.target.as_deref()?;
+-    let cards = ask::cards(questions).ok()?;
+-    let card = cards.iter().find(|c| c.id.as_str() == target)?;
+-    Some(format!("◷ {}", ask::age(now, card.posted_at)))
+-}
+-
++/// 頁に置かない block の中身（空・組み立ての script の列挙 Module の view が module ごとに要る）。
+ #[cfg(target_arch = "wasm32")]
+ pub fn view() -> leptos::prelude::AnyView {
+-    dom::view()
+-}
+-
+-/// 次の一手の DOM（wasm の target のときだけ）。
+-#[cfg(target_arch = "wasm32")]
+-mod dom {
+-    use leptos::ev;
+     use leptos::prelude::*;
+ 
+-    use super::{
+-        BLOCK, Big, BigTitle, Jump, MISS, Mark, Next, PATH, Row, action, big_title, content, jump,
+-        row_link, waited, window_of,
+-    };
+-    use crate::frame::{Mode, node_href};
+-    use crate::project::{Body, UNKNOWN, ask, body_view, map, section, state_icon, unmeasured};
+-    use crate::view::Fetched;
+-    use crate::widgets::help::{HelpCtx, hs};
+-    use crate::widgets::hover::attach;
+-
+-    pub fn view() -> AnyView {
+-        let fetched = crate::net::read(PATH);
+-        let graph = crate::net::read(map::PATH);
+-        let questions = crate::net::read(ask::PATH);
+-        // 今の mode（context が無ければ今の URL の query から・link に mode を残す）。
+-        let ctx = use_context::<HelpCtx>();
+-        let url = Mode::from_query(&crate::mapview::current());
+-        let mode = move || ctx.map_or(url, |c| c.mode.get());
+-        let body = move || match fetched.with(content) {
+-            Body::Unmeasured(reason) => unmeasured(reason),
+-            Body::Empty(line) => body_view(Body::Empty(line)),
+-            Body::Filled(next) => {
+-                let title = graph.with(|g| big_title(&next.big, g));
+-                next_view(next, title, questions, mode)
+-            }
+-        };
+-        let content = view! { {ask::late_view()}{body} }.into_any();
+-        section(BLOCK, ().into_any(), content)
+-    }
+-
+-    fn next_view(
+-        next: Next,
+-        title: Option<BigTitle>,
+-        questions: ReadSignal<Fetched>,
+-        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    ) -> AnyView {
+-        let rows = next
+-            .rest
+-            .into_iter()
+-            .map(|row| row_view(row, questions, mode))
+-            .collect_view();
+-        view! {
+-            {big_view(next.big, title, mode)}
+-            <ul class="nxlist">{rows}</ul>
+-        }
+-        .into_any()
+-    }
+-
+-    /// 大きい箱（質問の箱で問いの節点が引ければ、中身は問いの題の字の節点の頁への link と節点の card・ほかは Big の what の字）。
+-    fn big_view(
+-        big: Big,
+-        title: Option<BigTitle>,
+-        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    ) -> AnyView {
+-        let what = match title {
+-            Some(t) => {
+-                let id = t.id.clone();
+-                let href = move || node_href(&id, mode());
+-                view! { <a href=href use:attach=t.card>{t.text}</a> }.into_any()
+-            }
+-            None => big.what.into_any(),
+-        };
+-        let (kind, link, target) = (big.kind, big.link, big.target);
+-        let win = window_of(kind);
+-        // Big の link（止まっている走行）が在ればそれを、無ければ種類の次の手の頁への link（mode で href が変わる）。
+-        let act = move || {
+-            link.clone()
+-                .or_else(|| action(kind, target.as_deref(), mode()))
+-                .map(|l| {
+-                    view! {
+-                        <div class="act">
+-                            <a class="btn primary" href=l.href target=win on:click=move |e| press(e, win)>{l.text}</a>
+-                        </div>
+-                    }
+-                })
+-        };
+-        view! {
+-            <div class=big.class data-nx=big.key>
+-                {hs(big.key)}
+-                <div class=big.what_class>{what}</div>
+-                {act}
+-            </div>
+-        }
+-        .into_any()
+-    }
+-
+-    /// 一覧の 1 行（右の字の後に、当たった質問の行は経過を、当たった行は次の手の link を足す・行 g-next-rows）。
+-    fn row_view(
+-        row: Row,
+-        questions: ReadSignal<Fetched>,
+-        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+-    ) -> AnyView {
+-        let mark = match row.mark {
+-            Mark::Count(n) => view! { <span class="num">{n}</span> }.into_any(),
+-            Mark::Miss => MISS.into_any(),
+-            Mark::Unmeasured => state_icon(UNKNOWN),
+-        };
+-        let win = window_of(row.kind);
+-        // 経過は 1 秒の時計で書き直す。
+-        let clock = crate::net::ticker();
+-        let for_wait = row.clone();
+-        let wait = move || {
+-            questions
+-                .with(|q| waited(&for_wait, q, clock.get()))
+-                .map(|w| view! { " " <span class="num">{w}</span> })
+-        };
+-        // link は mode で href が変わる。
+-        let for_link = row.clone();
+-        let link = move || {
+-            row_link(&for_link, mode()).map(|l| {
+-                view! { " " <a href=l.href target=win on:click=move |e| press(e, win)>{l.text}</a> }
+-            })
+-        };
+-        view! {
+-            <li class=row.class data-nx=row.key>
+-                {hs(row.key)}
+-                <span class="v small">{mark}{wait}{link}</span>
+-            </li>
+-        }
+-        .into_any()
+-    }
+-
+-    /// 次の手の link の押し（行 g-next-acct-origin）。窓の名の無い link と修飾 key の押しは既定のまま。
+-    /// 窓は空の URL で開いて探すので在る窓は動かない。href の読めない在る窓（別の origin）だけ既定の遷移を止めて
+-    /// 前に出し、tab は替えない。
+-    fn press(e: ev::MouseEvent, win: Option<&'static str>) {
+-        let Some(name) = win else {
+-            return;
+-        };
+-        if e.ctrl_key() || e.meta_key() || e.shift_key() {
+-            return;
+-        }
+-        let found = crate::board::open_named("", name).ok().flatten();
+-        let href = found.as_ref().and_then(|w| w.location().href().ok());
+-        if jump(found.is_some(), href.as_deref()) == Jump::Front {
+-            e.prevent_default();
+-            if let Some(w) = &found {
+-                let _ = w.focus();
+-            }
+-        }
+-    }
++    ().into_any()
+ }
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 46e6efc1bd936914d1295bd7fedd70f95c47ceb5..88bb2a1dce89cbf9d8911872e2965ebfa303edde 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -1,4 +1,4 @@
+-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯・hover の card。
++//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯。
+ //! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
+ //! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
+ //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
+@@ -8,10 +8,11 @@
+ //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
+ //! 語は語の辞書の `CI_KEYS` の鍵から引く。
+ //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
+-//! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
++//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める（行 g-tick-adopt）。
+ //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
+ //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
+-//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
++//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards・
++//! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
+ //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
+ //! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
+ 
+@@ -19,19 +20,16 @@ use std::collections::BTreeMap;
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
+-use tsuzuri_contract::graph::{GraphDoc, title36};
++use tsuzuri_contract::graph::title36;
+ use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
+ use tsuzuri_contract::wire;
+ 
+ use super::ledger::OUTSIDE;
+-use super::{Body, NO_CONTENT, NOT_READ, map};
++use super::{Body, NO_CONTENT, NOT_READ};
+ use crate::frame::{self, Block};
+ use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
+-use crate::mapview::graph::cut;
+ use crate::view::{Fetched, id_order, read_rows};
+ use crate::vocab::label;
+-use crate::widgets::hover::Card;
+-use crate::widgets::nodecard::card_of;
+ use crate::widgets::keyline::{LineSrc, line_src};
+ use crate::widgets::pop::{self, Src};
+ 
+@@ -69,9 +67,6 @@ pub const QUERY_KEY: &str = "col";
+ /// 開いた列を畳む button の字（見出しでなく、「+n」と同じく file の定数の字・行 g-pipe-fold）。
+ pub const CLOSE: &str = "畳む";
+ 
+-/// hover の card の出所の行。
+-pub const SOURCE: &str = "fleet/events.jsonl";
+-
+ /// 経過の値が無い札の字。
+ pub const NO_AGE: &str = "―";
+ 
+@@ -196,11 +191,6 @@ pub struct Kcard {
+     /// 段を決めた時刻（電文の値のまま・描く時の経過は `age_at` が今から引く・行 g-tick-adopt）。
+     pub since: Option<EpochSecs>,
+     pub class: &'static str,
+-    pub hover: Card,
+-    /// 節点の card の値の行（見本の cardContent の data-run の枝・回数と段の名と 20 字に切った理由）。
+-    pub run_line: String,
+-    /// 節点の card の詳しく（理由が 20 字を越えれば 34 字以下の行に折った列・越えなければ空）。
+-    pub run_more: Vec<String>,
+     /// 台帳で閉じた（着地せず）の札か（札の表の記号と meta の段の字を替える・行 g-closed-mark）。
+     pub closed: bool,
+     /// Landed の列ほかの札の meta に足す着地の後の CI の読み（`ci_shown` の値・止まった列の札は None で、語は lead に出る）。
+@@ -239,36 +229,6 @@ pub fn with_lines(body: Body<Vec<Column>>, src: &Src<'_>) -> Body<Vec<Column>> {
+ /// 止まった列の札の class。
+ const STOP_CLASS: &str = "kcard why-stop";
+ 
+-/// 値の行に出す理由の字数（見本の cut の 20）。
+-const WHY_CHARS: usize = 20;
+-
+-/// 詳しくの 1 行の字数の上限（見本の chunk の 34）。
+-const MORE_CHARS: usize = 34;
+-
+-/// 字を句切りの字（、。・，）の直後で片に分け、前から n 字以下の行に詰める（n 字を越える片は n 字ずつに切る・見本の chunk）。
+-fn chunk(s: &str, n: usize) -> Vec<String> {
+-    let mut out = Vec::new();
+-    let mut cur: Vec<char> = Vec::new();
+-    for piece in s.split_inclusive(['、', '。', '・', '，', '）']) {
+-        let mut p: Vec<char> = piece.chars().collect();
+-        if cur.len() + p.len() <= n {
+-            cur.extend(p);
+-            continue;
+-        }
+-        if !cur.is_empty() {
+-            out.push(cur.drain(..).collect());
+-        }
+-        while p.len() > n {
+-            out.push(p.drain(..n).collect());
+-        }
+-        cur = p;
+-    }
+-    if !cur.is_empty() {
+-        out.push(cur.into_iter().collect());
+-    }
+-    out
+-}
+-
+ /// 1 つの列（見出しの語の鍵・class・経過の短い順の札の全部）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Column {
+@@ -452,7 +412,7 @@ pub fn stage_word(card: &PipelineCard) -> String {
+ }
+ 
+ /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
+-/// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
++/// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にする。
+ /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
+ /// 欄 ci は止まった列でなければ出す読み（止まった列の札は lead が読みの語なので None）。経過の字と CI の語は今 now で決める。
+ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+@@ -467,33 +427,11 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+         Some(ci) => label(ci_key(ci)),
+         None => card.reason.clone().unwrap_or_else(|| stage.clone()),
+     };
+-    let run_line = format!("↻{} · {stage} · {}", card.runs, cut(&why, WHY_CHARS));
+-    let run_more = if why.chars().count() > WHY_CHARS {
+-        chunk(&why, MORE_CHARS)
+-    } else {
+-        Vec::new()
+-    };
+-    let more = if closed {
+-        chunk(&why, MORE_CHARS)
+-    } else {
+-        Vec::new()
+-    };
+     let lead = if lane.stops() {
+         Lead::Why(why)
+     } else {
+         Lead::Runs(card.runs)
+     };
+-    let hover = Card {
+-        title: title.clone().unwrap_or_else(|| id.clone()),
+-        kind: format!("{RUN_KEY} · {stage}"),
+-        value: format!(
+-            "↻{} · {} · {age}",
+-            card.runs,
+-            card.account.as_deref().unwrap_or(NO_ACCOUNT)
+-        ),
+-        src: SOURCE.to_string(),
+-        more,
+-    };
+     Kcard {
+         id,
+         title,
+@@ -506,9 +444,6 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+         age,
+         since: card.since,
+         class: if lane.stops() { STOP_CLASS } else { "kcard" },
+-        hover,
+-        run_line,
+-        run_more,
+         closed,
+         ci: if lane.stops() { None } else { shown },
+         short: None,
+@@ -516,39 +451,6 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+     }
+ }
+ 
+-/// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、
+-/// 値と出所と詳しくは走行から）。札の id の節点が電文に無ければ札の hover のまま。
+-pub fn node_hover(doc: &GraphDoc, card: &Kcard) -> Card {
+-    match card_of(doc, &card.id) {
+-        Some(node) => Card {
+-            title: node.title,
+-            kind: node.kind,
+-            value: card.run_line.clone(),
+-            src: card.hover.src.clone(),
+-            more: card.run_more.clone(),
+-        },
+-        None => card.hover.clone(),
+-    }
+-}
+-
+-/// 板の全部の札の hover を節点の card に替える（グラフの口が読めない・まだ読んでいない間は受けた値のまま）。
+-pub fn with_nodes(body: Body<Vec<Column>>, graph: &Fetched) -> Body<Vec<Column>> {
+-    let Body::Filled(mut cols) = body else {
+-        return body;
+-    };
+-    if let Ok(doc) = map::doc(graph) {
+-        for card in cols.iter_mut().flat_map(|c| c.cards.iter_mut()) {
+-            card.hover = node_hover(&doc, card);
+-        }
+-    }
+-    Body::Filled(cols)
+-}
+-
+-/// 札を押した先（契約 bead と同じ id の節点の頁・近傍と問いの card と同じ頁へ行く）。
+-pub fn card_href(card: &Kcard, mode: frame::Mode) -> String {
+-    frame::node_href(&card.id, mode)
+-}
+-
+ /// URL の query から開いた列（`col=wait,land` の形・知らない名は読み捨てる・板の順）。
+ pub fn open_columns(search: &str) -> Vec<PipelineColumn> {
+     let names: Vec<&str> = frame::param(search, QUERY_KEY)
+diff --git a/crates/tsuzuri-surface/tests/absface.rs b/crates/tsuzuri-surface/tests/absface.rs
+index 85703715afb73406418dc8fa924e01027cb7f4aa..6b93200782233b771a98d5a8719114a4b300ca77 100644
+--- a/crates/tsuzuri-surface/tests/absface.rs
++++ b/crates/tsuzuri-surface/tests/absface.rs
+@@ -47,7 +47,6 @@ fn abst_card_from_since() {
+     let k = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW);
+     assert_eq!(k.age, "2m");
+     assert_eq!(k.since, Some(NOW - 125));
+-    assert_eq!(k.hover.value, "↻1 · ― · 2m");
+     // 同じ札を 1 時間後に組めば経過の字だけが進む。
+     let later = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW + 3_600);
+     assert_eq!(later.age, "1h");
+diff --git a/crates/tsuzuri-surface/tests/bvcull.rs b/crates/tsuzuri-surface/tests/bvcull.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9b8ec8c3145d5530bca6bb02a0748452da3017fe
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvcull.rs
+@@ -0,0 +1,110 @@
++//! 行 g-dead-sweep-a の歯（接頭辞 bvcull_）: pipeline の札の hover の card の値の組みと、次の一手の block の DOM と
++//! DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// `text` の中の `decl` から、その後の最初の行頭の閉じ括弧までの字。
++fn item<'a>(text: &'a str, decl: &str) -> &'a str {
++    let at = text
++        .find(decl)
++        .unwrap_or_else(|| panic!("字 {decl} が無い"));
++    let rest = &text[at..];
++    let end = rest.find("\n}").map_or(rest.len(), |i| i + 2);
++    &rest[..end]
++}
++
++/// pipeline.rs は札の hover の card の値の組み（欄 hover・run_line・run_more と関数 node_hover・with_nodes・card_href・chunk と
++/// 定数 SOURCE・MORE_CHARS と hover の Card の use）を持たず、札の型 Kcard の欄は 11 でこの順、歯の file cadopt.rs が無い。
++#[test]
++fn bvcull_card_hover_values_gone() {
++    let src = read("src/project/pipeline.rs");
++    for gone in [
++        "pub fn node_hover(",
++        "pub fn with_nodes(",
++        "pub fn card_href(",
++        "fn chunk(",
++        "pub const SOURCE",
++        "const MORE_CHARS",
++        "run_line",
++        "run_more",
++        "use crate::widgets::hover::Card;",
++    ] {
++        assert!(!src.contains(gone), "pipeline.rs に {gone} が在る");
++    }
++    let kcard = item(&src, "pub struct Kcard {");
++    let fields: Vec<&str> = kcard
++        .lines()
++        .filter_map(|l| l.trim().strip_prefix("pub "))
++        .filter(|l| !l.starts_with("struct "))
++        .filter_map(|l| l.split(':').next())
++        .collect();
++    assert_eq!(
++        fields,
++        [
++            "id", "title", "state", "lead", "age", "since", "class", "closed", "ci", "short",
++            "line"
++        ]
++    );
++    assert!(
++        !crate_dir().join("tests/cadopt.rs").exists(),
++        "tests/cadopt.rs が在る"
++    );
++}
++
++/// next.rs は block の DOM（mod dom）と、DOM だけが使った関数と型（content・Next・next・row・Row・Mark・MISS・big_title・BigTitle・
++/// action・window_of・Jump・jump・row_link・waited と link の字の定数 5 つ）を持たず、view は空の中身を返し、帯と account board が
++/// 使う step・key・unjudged・big と、口の path と body は残り、歯の file nextact.rs・nact.rs・nxorg.rs が無い。
++#[test]
++fn bvcull_nx_block_dom_gone() {
++    let src = read("src/project/next.rs");
++    for gone in [
++        "mod dom",
++        "pub fn content(",
++        "pub struct Next ",
++        "pub fn next(",
++        "pub fn row(",
++        "pub struct Row ",
++        "pub enum Mark ",
++        "pub const MISS",
++        "pub struct BigTitle",
++        "pub fn big_title(",
++        "pub fn action(",
++        "pub fn window_of(",
++        "pub enum Jump",
++        "pub fn jump(",
++        "pub fn row_link(",
++        "pub fn waited(",
++        "ACCOUNT_LINK",
++        "SESSION_LINK",
++        "BATCH_LINK",
++        "ANSWER_LINK",
++        "GAPS_LINK",
++    ] {
++        assert!(!src.contains(gone), "next.rs に {gone} が在る");
++    }
++    for kept in [
++        "pub fn step(",
++        "pub fn key(",
++        "pub fn unjudged(",
++        "pub fn big(",
++        "pub fn body(",
++        "pub const PATH: &str = \"/api/next\";",
++    ] {
++        assert!(src.contains(kept), "next.rs に {kept} が無い");
++    }
++    let view = item(&src, "pub fn view() -> leptos::prelude::AnyView {");
++    assert!(view.contains("().into_any()"), "{view}");
++    assert!(!view.contains("dom::"), "{view}");
++    for rel in ["tests/nextact.rs", "tests/nact.rs", "tests/nxorg.rs"] {
++        assert!(!crate_dir().join(rel).exists(), "{rel} が在る");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/bvnav.rs b/crates/tsuzuri-surface/tests/bvnav.rs
+index b0dd58f93be81cec3edf0594ab6f3eaf9e4893e6..8b154a0ce9fc0fe9000fa463b228ed64ce2aefcc 100644
+--- a/crates/tsuzuri-surface/tests/bvnav.rs
++++ b/crates/tsuzuri-surface/tests/bvnav.rs
+@@ -5,12 +5,9 @@
+ 
+ use std::path::PathBuf;
+ 
+-use tsuzuri_contract::board::NextMove;
+ use tsuzuri_surface::frame::{self, Mode, PageId};
+-use tsuzuri_surface::project::next::action;
+-use tsuzuri_surface::project::{ledger, node, pipeline};
++use tsuzuri_surface::project::{ledger, pipeline};
+ use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
+-use tsuzuri_surface::widgets::pop::{NEXT_KEYS, next_href};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -78,31 +75,6 @@ fn bvnav_pages_home_and_node() {
+     );
+ }
+ 
+-/// 次の一手の束の承認と質問（対象の無い時）は質問の窓・対象の在る質問は質問の窓と問いの id・発効待ちは抜けの検査の窓、
+-/// 吹き出しの Questioned の次の手も質問の窓。
+-#[test]
+-fn bvnav_links_open_windows() {
+-    for mode in Mode::ALL {
+-        let href = |kind, target| action(kind, target, mode).map(|l| l.href);
+-        let ask = win_href(Win::Ask, mode);
+-        assert_eq!(href(NextMove::BatchApproval, None), Some(ask.clone()));
+-        assert_eq!(href(NextMove::Question, None), Some(ask.clone()));
+-        assert_eq!(
+-            href(NextMove::Question, Some("e.2:x")),
+-            Some(format!("{ask}&id=e.2%3Ax"))
+-        );
+-        assert_eq!(
+-            node::answer_href("e.2:x", mode),
+-            format!("{ask}&id=e.2%3Ax")
+-        );
+-        assert_eq!(
+-            href(NextMove::AwaitingEffect, None),
+-            Some(win_href(Win::Gaps, mode))
+-        );
+-        assert_eq!(next_href(NEXT_KEYS[0], "t-1", mode), ask);
+-    }
+-}
+-
+ /// App は帯（topbar の view）と窓の層を頁に 1 つずつ置き、URL の win の窓を開き、窓を開くと吹き出しを閉じ、
+ /// tab と頁の切り替えと mode の段を持たない。stylesheet は 2 つの面を帯の下の全部の高さに置く。
+ #[test]
+diff --git a/crates/tsuzuri-surface/tests/cadopt.rs b/crates/tsuzuri-surface/tests/cadopt.rs
+deleted file mode 100644
+index 7c7aef61e02c6d68d35ce907b2f531b7a744c5f6..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/cadopt.rs
++++ /dev/null
+@@ -1,492 +0,0 @@
+-//! 行 g-card-adopt-a の歯: pipeline の札の値の行と詳しく（見本の cardContent の data-run の枝）・札の hover を節点の card に替える値・
+-//! 次の一手の質問の大きい箱の題（問いの節点の card）・DOM の付け方の字。
+-//! card の値は host で組み、DOM は wasm の target のときだけなので、2 つの file の字で付け方を見る。
+-#![cfg(test)]
+-
+-use std::collections::BTreeMap;
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::board::{NextMove, PipelineBoard, PipelineCard, Reading};
+-use tsuzuri_contract::graph::GraphDoc;
+-use tsuzuri_contract::ledger::BeadId;
+-use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::mapview::graph::cut;
+-use tsuzuri_surface::project::Body;
+-use tsuzuri_surface::project::next::{self, Big, big_title};
+-use tsuzuri_surface::project::pipeline::{
+-    self, Column, Kcard, RUN_KEY, SOURCE, columns, kcard, node_hover, with_nodes,
+-};
+-use tsuzuri_surface::view::Fetched;
+-use tsuzuri_surface::widgets::hover::{Card, clip};
+-use tsuzuri_surface::widgets::nodecard::card_of;
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn graph_text() -> String {
+-    read("../../tests/fixtures/surface/graph-doc.json")
+-}
+-
+-fn graph_doc() -> GraphDoc {
+-    wire::decode(&graph_text()).expect("fixture の電文が読める")
+-}
+-
+-fn board_cards() -> Vec<PipelineCard> {
+-    let board: PipelineBoard =
+-        wire::decode(&read("../../tests/fixtures/surface/pipeline-board.json"))
+-            .expect("fixture の板が電文として読める");
+-    let Reading::Known(cards) = board.cards else {
+-        panic!("fixture の札が Unknown");
+-    };
+-    cards
+-}
+-
+-fn next_sets() -> BTreeMap<String, NextStep> {
+-    wire::decode(&read("../../tests/fixtures/surface/next-step.json"))
+-        .expect("fixture の組が電文として読める")
+-}
+-
+-/// fixture の板の id の札。
+-fn board_card(id: &str) -> PipelineCard {
+-    board_cards()
+-        .into_iter()
+-        .find(|c| c.contract.as_str() == id)
+-        .unwrap_or_else(|| panic!("fixture の板に {id} が無い"))
+-}
+-
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("id")
+-}
+-
+-/// 空の台帳の行で組んだ札（描く今は fixture の板の今）。
+-fn kc(card: &PipelineCard) -> Kcard {
+-    kcard(card, &[], NOW)
+-}
+-
+-/// x の 30 字と「、」と y の 10 字（41 字）。
+-fn long1() -> String {
+-    format!("{}、{}", "x".repeat(30), "y".repeat(10))
+-}
+-
+-/// z の 40 字（句切りの字が無い）。
+-fn long2() -> String {
+-    "z".repeat(40)
+-}
+-
+-/// (1) 札の値の行（回数・段の名・20 字に切った理由）と、理由が 20 字を越えるときの詳しくの行。
+-#[test]
+-fn cadopt_run_line_rules() {
+-    for (id, want) in [
+-        ("px.5", "↻2 · Questioned · about:write-set"),
+-        ("px.6", "↻1 · Failed · verify が赤"),
+-        ("px.7", "↻4 · Stopped · Stopped"),
+-        ("px.3", "↻1 · Running · Running"),
+-        ("px.2", "↻2 · Blocked · Blocked"),
+-        ("px.11", "↻1 · Landed · Landed"),
+-    ] {
+-        let k = kc(&board_card(id));
+-        assert_eq!(k.run_line, want, "{id}");
+-        assert!(k.run_more.is_empty(), "{id} の詳しく {:?}", k.run_more);
+-    }
+-
+-    let mut c = board_card("px.6");
+-    c.reason = Some(long1());
+-    let k = kc(&c);
+-    assert_eq!(k.run_line, format!("↻1 · Failed · {}…", "x".repeat(19)));
+-    assert_eq!(k.run_line, format!("↻1 · Failed · {}", cut(&long1(), 20)));
+-    assert_eq!(
+-        k.run_more,
+-        vec![format!("{}、", "x".repeat(30)), "y".repeat(10)]
+-    );
+-
+-    c.reason = Some(long2());
+-    let k = kc(&c);
+-    assert_eq!(k.run_line, format!("↻1 · Failed · {}…", "z".repeat(19)));
+-    assert_eq!(k.run_more, vec!["z".repeat(34), "z".repeat(6)]);
+-
+-    // 20 字ちょうどは切らず、詳しくも空。
+-    c.reason = Some("w".repeat(20));
+-    let k = kc(&c);
+-    assert_eq!(k.run_line, format!("↻1 · Failed · {}", "w".repeat(20)));
+-    assert!(k.run_more.is_empty());
+-
+-    // 句切りの字の後で片に分け、詰められる片は同じ行に詰める。
+-    c.reason = Some(format!(
+-        "{}・{}）{}",
+-        "a".repeat(10),
+-        "b".repeat(10),
+-        "c".repeat(20)
+-    ));
+-    let k = kc(&c);
+-    assert_eq!(
+-        k.run_more,
+-        vec![
+-            format!("{}・{}）", "a".repeat(10), "b".repeat(10)),
+-            "c".repeat(20)
+-        ]
+-    );
+-
+-    let k = kc(&board_card("px.5"));
+-    let rows: Vec<String> = k.hover.rows().into_iter().map(|(_, r)| r).collect();
+-    assert_eq!(
+-        rows,
+-        vec![
+-            "px.5".to_string(),
+-            "run · Questioned".to_string(),
+-            "↻2 · acct-4 · 1h".to_string(),
+-            SOURCE.to_string(),
+-        ]
+-    );
+-}
+-
+-/// (2) 札の id の節点が電文に在れば、題と種類は節点から・値と出所と詳しくは走行から取る。無ければ札の hover。
+-#[test]
+-fn cadopt_node_hover_rules() {
+-    let doc = graph_doc();
+-
+-    let mut c3 = board_card("px.3");
+-    c3.contract = bead("t3-hub.9");
+-    let k3 = kc(&c3);
+-    let h3 = node_hover(&doc, &k3);
+-    assert_eq!(
+-        h3,
+-        Card {
+-            title: "作業中の契約".to_string(),
+-            kind: "task · beads · in_progress".to_string(),
+-            value: "↻1 · Running · Running".to_string(),
+-            src: "fleet/events.jsonl".to_string(),
+-            more: Vec::new(),
+-        }
+-    );
+-
+-    let mut c5 = board_card("px.5");
+-    c5.contract = bead("t3-hub.15");
+-    let k5 = kc(&c5);
+-    let h5 = node_hover(&doc, &k5);
+-    assert_eq!(h5.title, "地図の頁の中身を置く");
+-    assert_eq!(h5.kind, "task · beads · open");
+-    assert_eq!(h5.value, "↻2 · Questioned · about:write-set");
+-    assert_eq!(h5.src, SOURCE);
+-    assert!(h5.more.is_empty());
+-
+-    for (id, h) in [("t3-hub.9", &h3), ("t3-hub.15", &h5)] {
+-        let node = card_of(&doc, id).expect("節点の card");
+-        assert_eq!(h.title, node.title, "{id}");
+-        assert_eq!(h.kind, node.kind, "{id}");
+-    }
+-
+-    // 長い理由の詳しくは走行の詳しく。
+-    let mut long = c3.clone();
+-    long.reason = Some(long1());
+-    let kl = kc(&long);
+-    let hl = node_hover(&doc, &kl);
+-    assert_eq!(hl.more, kl.run_more);
+-    assert_eq!(hl.value, kl.run_line);
+-
+-    for id in ["px.3", "px.5"] {
+-        let k = kc(&board_card(id));
+-        assert_eq!(node_hover(&doc, &k), k.hover, "{id}");
+-    }
+-}
+-
+-/// fixture の板の今（2026-09-27T12:00:00Z・札の since はこの今から経過を引いた時刻）。
+-const NOW: u64 = 1_790_510_400;
+-
+-/// fixture の板の px.3 を t3-hub.9 に・px.5 を t3-hub.15 に替えた札の列。
+-fn swapped_columns() -> Vec<Column> {
+-    let cards: Vec<PipelineCard> = board_cards()
+-        .into_iter()
+-        .map(|mut c| {
+-            match c.contract.as_str() {
+-                "px.3" => c.contract = bead("t3-hub.9"),
+-                "px.5" => c.contract = bead("t3-hub.15"),
+-                _ => {}
+-            }
+-            c
+-        })
+-        .collect();
+-    columns(&cards, &[], NOW)
+-}
+-
+-/// (3) グラフの口が読めれば全部の札の hover を節点の card に替え、読めなければ受けた値のまま。
+-#[test]
+-fn cadopt_columns_take_node_cards() {
+-    let doc = graph_doc();
+-    let cols = swapped_columns();
+-    let Body::Filled(got) = with_nodes(Body::Filled(cols.clone()), &Fetched::Body(graph_text()))
+-    else {
+-        panic!("Filled が Filled で返らない");
+-    };
+-    assert_eq!(got.len(), cols.len());
+-    let mut swapped = 0;
+-    for (g, c) in got.iter().zip(&cols) {
+-        assert_eq!(g.lane, c.lane);
+-        assert_eq!(g.class, c.class);
+-        assert_eq!(g.cards.len(), c.cards.len());
+-        for (gk, ck) in g.cards.iter().zip(&c.cards) {
+-            if ["t3-hub.9", "t3-hub.15"].contains(&ck.id.as_str()) {
+-                swapped += 1;
+-                assert_eq!(gk.hover, node_hover(&doc, ck), "{}", ck.id);
+-                assert_ne!(gk.hover, ck.hover, "{}", ck.id);
+-                let mut back = gk.clone();
+-                back.hover = ck.hover.clone();
+-                assert_eq!(&back, ck, "{} のほかの欄", ck.id);
+-            } else {
+-                assert_eq!(gk, ck, "{}", ck.id);
+-            }
+-        }
+-    }
+-    assert_eq!(swapped, 2);
+-    unread_keeps(cols);
+-}
+-
+-/// グラフの口が読めない・中身の無い値は受けた値のまま。
+-fn unread_keeps(cols: Vec<Column>) {
+-    for graph in [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        Fetched::Body("{}".to_string()),
+-    ] {
+-        assert_eq!(
+-            with_nodes(Body::Filled(cols.clone()), &graph),
+-            Body::Filled(cols.clone()),
+-            "{graph:?}"
+-        );
+-    }
+-    let body = Fetched::Body(graph_text());
+-    assert_eq!(
+-        with_nodes(Body::Unmeasured(pipeline::REASON), &body),
+-        Body::Unmeasured(pipeline::REASON)
+-    );
+-    assert_eq!(
+-        with_nodes(Body::Empty(RUN_KEY), &body),
+-        Body::Empty(RUN_KEY)
+-    );
+-}
+-
+-fn check(kind: NextMove, count: u32, target: &str) -> NextCheck {
+-    NextCheck {
+-        kind,
+-        result: CheckResult::Hit,
+-        count,
+-        target: Some(bead(target)),
+-    }
+-}
+-
+-fn big_of(kind: NextMove, target: &str) -> Big {
+-    next::big(kind, Some(&check(kind, 1, target)))
+-}
+-
+-/// (4) 質問の大きい箱だけが、問いの節点が電文に在るとき題と card を持つ。
+-#[test]
+-fn cadopt_big_title_rules() {
+-    let doc = graph_doc();
+-    let graph = Fetched::Body(graph_text());
+-
+-    let q = big_of(NextMove::Question, "t3.q10");
+-    let t = big_title(&q, &graph).expect("t3.q10 の題");
+-    assert_eq!(t.id, "t3.q10");
+-    assert_eq!(t.text, "開いた問い");
+-    let node = card_of(&doc, "t3.q10").expect("t3.q10 の card");
+-    assert_eq!(t.text, clip(&node.title));
+-    assert_eq!(t.card, node);
+-    assert_eq!(t.card.title, "開いた問い");
+-    assert_eq!(t.card.kind, "question · beads · open");
+-    assert_eq!(q.what, "t3.q10 · 1 件");
+-    assert_eq!(q.target.as_deref(), Some("t3.q10"));
+-
+-    assert!(card_of(&doc, "t3-hub.9").is_some());
+-    for big in [
+-        big_of(NextMove::AwaitingEffect, "t3-hub.9"),
+-        big_of(NextMove::StalledRun, "t3-hub.9"),
+-    ] {
+-        assert_eq!(big_title(&big, &graph), None, "{:?}", big.kind);
+-    }
+-    other_bigs(graph, q);
+-}
+-
+-/// 組の大きい箱は題を持たず、電文が読めなければ質問の大きい箱も題を持たない。
+-fn other_bigs(graph: Fetched, q: Big) {
+-    let sets = next_sets();
+-    for name in ["question", "nothing"] {
+-        let step = sets
+-            .get(name)
+-            .unwrap_or_else(|| panic!("fixture の組 {name}"));
+-        let big = next::next(step).big;
+-        assert_eq!(big_title(&big, &graph), None, "組 {name}");
+-    }
+-    let asked = next::next(&sets["question"]).big;
+-    assert_eq!(asked.kind, NextMove::Question);
+-    assert_eq!(asked.target.as_deref(), Some("nq.4"));
+-
+-    for g in [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        Fetched::Body("{}".to_string()),
+-    ] {
+-        assert_eq!(big_title(&q, &g), None, "{g:?}");
+-    }
+-}
+-
+-/// 字「mod dom {」より後の字。
+-fn dom_part(text: &str) -> &str {
+-    let at = text.find("mod dom {").expect("字 mod dom { が在る");
+-    &text[at..]
+-}
+-
+-/// (5) pipeline の札は節点の card に替えた hover を付け、質問の大きい箱は問いの題の字の節点の頁への link に card を付ける。
+-#[test]
+-fn cadopt_dom_wiring() {
+-    let pipe = read("src/project/pipeline.rs");
+-    let dom = dom_part(&pipe);
+-    // 札は hover の card を外し押すと吹き出しを開く（行 g-pipe-cards）。節点の card の値の組み（with_nodes）は純粋な関数に残る。
+-    for want in ["with_nodes(", "map::PATH", "use:attach="] {
+-        assert!(
+-            !dom.contains(want),
+-            "pipeline.rs の mod dom に {want} が在る"
+-        );
+-    }
+-    assert!(dom.contains("with_lines(content(p, l, now), &src)"));
+-
+-    let next_text = read("src/project/next.rs");
+-    let dom = dom_part(&next_text);
+-    for want in [
+-        "big_title(&next.big, g)",
+-        "map::PATH",
+-        "node_href(",
+-        "<a href=href use:attach=t.card>{t.text}</a>",
+-    ] {
+-        assert!(dom.contains(want), "next.rs の mod dom に {want} が無い");
+-    }
+-}
+-
+-/// 着地済みの行と第 3 波から第 7 波のほかの行の verify の filter の語。
+-const FILTERS: &[&str] = &[
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hbconf_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hook_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hspage_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "nxact_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-    "kcli_",
+-    "hcard_",
+-    "qgate_",
+-    "nsum_",
+-    "ntime_",
+-    "ptitle_",
+-    "ncard_",
+-    "hsym_",
+-    "smore_",
+-    "lcard_",
+-    "aaround_",
+-    "hruling_",
+-    "sxaxis_",
+-    "plimit_",
+-    "bport_",
+-    "fstop_",
+-    "nsumw_",
+-    "fmark_",
+-    "fserve_",
+-    "tipx_",
+-    "hcsess_",
+-    "hcproj_",
+-    "sesplit_",
+-    "mstore_",
+-    "athr_",
+-    "qblock_",
+-];
+-
+-/// (7) この file の歯の名はどれも cadopt_ で始まり、残りの字は filter の語を含まない。
+-#[test]
+-fn cadopt_names_stay_apart() {
+-    assert_eq!(FILTERS.len(), 92);
+-    let text = read("tests/cadopt.rs");
+-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+-    let names: Vec<&str> = lines
+-        .iter()
+-        .enumerate()
+-        .filter(|(_, l)| **l == "#[test]")
+-        .map(|(i, _)| {
+-            lines[i + 1..]
+-                .iter()
+-                .find_map(|l| l.strip_prefix("fn "))
+-                .and_then(|rest| rest.split('(').next())
+-                .expect("test の属性の後の fn")
+-        })
+-        .collect();
+-    assert!(names.len() >= 6, "歯の数 {}", names.len());
+-    for name in names {
+-        let rest = name
+-            .strip_prefix("cadopt_")
+-            .unwrap_or_else(|| panic!("{name} が cadopt_ で始まらない"));
+-        for word in FILTERS {
+-            assert!(!rest.contains(word), "{name} が filter の語 {word} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/kcardlink.rs b/crates/tsuzuri-surface/tests/kcardlink.rs
+index 06bfeef09ad9df95e948972d220cefd1611cfe85..8b5d4e6c693326429dde0d81e37bc04c3ac84cc1 100644
+--- a/crates/tsuzuri-surface/tests/kcardlink.rs
++++ b/crates/tsuzuri-surface/tests/kcardlink.rs
+@@ -1,13 +1,9 @@
+-//! 行 g-link-kcard の歯: 板の札は契約 bead と同じ id の節点の頁への link（hover の card は残す）・歯の名の置き場。
++//! 行 g-link-kcard の歯: 板の札は押すと吹き出しを開く button（hover の card は付けない・行 g-pipe-cards）・歯の名の置き場。
++//! 札の link の先 card_href と、その歯 klink_card_opens_same_id は行 g-dead-sweep-a で消した。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+ 
+-use tsuzuri_contract::board::{PipelineBoard, Reading};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::{self, Mode, PageId};
+-use tsuzuri_surface::project::nodearound::id_of;
+-use tsuzuri_surface::project::pipeline::{card_href, kcard};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -86,28 +82,6 @@ const TAKEN: &[&str] = &[
+     "nbatch_",
+ ];
+ 
+-#[test]
+-fn klink_card_opens_same_id() {
+-    let board: PipelineBoard =
+-        wire::decode(&read("../../tests/fixtures/surface/pipeline-board.json"))
+-            .expect("fixture の板が電文として読める");
+-    let Reading::Known(cards) = board.cards else {
+-        panic!("fixture の札が Unknown");
+-    };
+-    assert!(!cards.is_empty(), "fixture の札が空");
+-    for c in &cards {
+-        let k = kcard(c, &[], 1_790_510_400);
+-        let id = c.contract.to_string();
+-        for mode in Mode::ALL {
+-            let href = card_href(&k, mode);
+-            assert_eq!(href, frame::node_href(&id, mode), "{id} の札の先");
+-            assert_eq!(PageId::from_query(&href), PageId::Node, "{href} の頁");
+-            assert_eq!(id_of(&href).as_deref(), Some(id.as_str()), "{href} の id");
+-            assert_eq!(Mode::from_query(&href), mode, "{href} の mode");
+-        }
+-    }
+-}
+-
+ #[test]
+ fn klink_dom_anchor_keeps_hover() {
+     let src = read("src/project/pipeline.rs");
+@@ -141,7 +115,7 @@ fn klink_names_stay_apart() {
+                 .and_then(|r| r.split('(').next())
+         })
+         .collect();
+-    assert!(names.len() >= 3, "歯の名が 3 つ以上: {names:?}");
++    assert!(names.len() >= 2, "歯の名が 2 つ以上: {names:?}");
+     for name in names {
+         let rest = name
+             .strip_prefix("klink_")
+diff --git a/crates/tsuzuri-surface/tests/lateface.rs b/crates/tsuzuri-surface/tests/lateface.rs
+index 44adbadae17b94cd756a545823c3300b255bf966..4819e160fc6c83ac14ef41b84db69cfa4d324d87 100644
+--- a/crates/tsuzuri-surface/tests/lateface.rs
++++ b/crates/tsuzuri-surface/tests/lateface.rs
+@@ -126,7 +126,7 @@ fn one_and_two_lines(now: u64) {
+     );
+ }
+ 
+-/// (6) ask.rs と next.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ。
++/// (6) ask.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で消した）。
+ #[test]
+ fn lateface_dom_wiring() {
+     let ask = dom("src/project/ask.rs");
+@@ -137,7 +137,4 @@ fn lateface_dom_wiring() {
+     ] {
+         assert_eq!(ask.matches(word).count(), 1, "ask の mod dom の {word}");
+     }
+-    let next = dom("src/project/next.rs");
+-    let word = "{ask::late_view()}{body}";
+-    assert_eq!(next.matches(word).count(), 1, "next の mod dom の {word}");
+ }
+diff --git a/crates/tsuzuri-surface/tests/lstg.rs b/crates/tsuzuri-surface/tests/lstg.rs
+index 81703f8274b2e5f0be5bd2a91b5820273b93f2e8..15bb2cfd08c09afea0711f273b6f6d3bad9a8100 100644
+--- a/crates/tsuzuri-surface/tests/lstg.rs
++++ b/crates/tsuzuri-surface/tests/lstg.rs
+@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
+ 
+ use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+-use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word};
++use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, stage_word};
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -79,7 +79,6 @@ fn lstg_word_rules() {
+     for (c, w) in cards.iter().zip(want) {
+         let word = stage_word(c);
+         assert_eq!(word, w, "{}", c.contract);
+-        assert_eq!(kcard(c, &[], NOW).hover.kind, format!("run · {w}"), "{}", c.contract);
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-surface/tests/nact.rs b/crates/tsuzuri-surface/tests/nact.rs
+deleted file mode 100644
+index 7dc2eb8341c099f918611acce10dca5d44d4cae2..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/nact.rs
++++ /dev/null
+@@ -1,377 +0,0 @@
+-//! 行 g-next-rows の歯: 次の一手の一覧の行の対象の id・当たった行の次の手の link・当たった質問の行の経過・
+-//! DOM が link と経過を組む字・歯の名。
+-#![cfg(test)]
+-
+-use std::collections::BTreeMap;
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::board::{NextMove, Reading};
+-use tsuzuri_contract::ledger::BeadId;
+-use tsuzuri_contract::question::QuestionList;
+-use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::frame::Mode;
+-use tsuzuri_surface::project::next::{
+-    ACCOUNT_LINK, ANSWER_LINK, BATCH_LINK, GAPS_LINK, Link, Mark, Next, PIPE_LINK, Row,
+-    SESSION_LINK, action, content, next, row, row_link, waited,
+-};
+-use tsuzuri_surface::project::{Body, ask};
+-use tsuzuri_surface::view::Fetched;
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-const MODES: [Mode; 2] = [Mode::Beginner, Mode::Expert];
+-
+-/// fixture の 4 組（組の名 → 電文の字）。
+-fn fixture() -> BTreeMap<String, String> {
+-    let sets: BTreeMap<String, NextStep> =
+-        wire::decode(&read("../../tests/fixtures/surface/next-step.json"))
+-            .expect("fixture の組が電文として読める");
+-    sets.into_iter()
+-        .map(|(name, s)| (name, wire::encode(&s).expect("電文")))
+-        .collect()
+-}
+-
+-fn filled(name: &str) -> Next {
+-    let text = fixture()
+-        .remove(name)
+-        .unwrap_or_else(|| panic!("fixture の組 {name}"));
+-    match content(&Fetched::Body(text)) {
+-        Body::Filled(n) => n,
+-        other => panic!("組 {name} が中身を出さない: {other:?}"),
+-    }
+-}
+-
+-fn rest_row<'a>(n: &'a Next, key: &str) -> &'a Row {
+-    n.rest
+-        .iter()
+-        .find(|r| r.key == key)
+-        .unwrap_or_else(|| panic!("一覧に {key} が無い"))
+-}
+-
+-fn check(kind: NextMove, result: CheckResult, count: u32, target: Option<&str>) -> NextCheck {
+-    NextCheck {
+-        kind,
+-        result,
+-        count,
+-        target: target.map(|t| BeadId::new(t).expect("id")),
+-    }
+-}
+-
+-/// lead がなしで、6 種を同じ結果にした電文（なしの check は置かない）。
+-fn six(result: CheckResult) -> NextStep {
+-    NextStep {
+-        checks: vec![
+-            check(NextMove::LimitOrMove, result, 1, None),
+-            check(NextMove::Unresponsive, result, 1, None),
+-            check(NextMove::StalledRun, result, 2, Some("nx.7")),
+-            check(NextMove::BatchApproval, result, 4, None),
+-            check(NextMove::Question, result, 3, Some("nq.4")),
+-            check(NextMove::AwaitingEffect, result, 1, None),
+-        ],
+-        lead: NextMove::Nothing,
+-    }
+-}
+-
+-fn link(href: String, text: &'static str) -> Option<Link> {
+-    Some(Link { href, text })
+-}
+-
+-/// (1) 一覧の行は電文の対象の id を字で持ち、ほかの欄は今のまま。
+-#[test]
+-fn nact_row_carries_target() {
+-    let stalled = filled("stalled");
+-    let e = rest_row(&stalled, "nx_e");
+-    assert_eq!(e.target.as_deref(), Some("nx.2"));
+-    assert_eq!(e.class, "on");
+-    assert_eq!(e.mark, Mark::Count(3));
+-    assert_eq!(e.kind, NextMove::Question);
+-
+-    let nj = filled("not-judged");
+-    assert_eq!(rest_row(&nj, "nx_e").target.as_deref(), Some("nq.1"));
+-    assert_eq!(rest_row(&nj, "nx_c").target, None);
+-
+-    for name in ["question", "nothing"] {
+-        for r in &filled(name).rest {
+-            assert_eq!(r.target, None, "{name} の {}", r.key);
+-        }
+-    }
+-
+-    let none = row(NextMove::Question, None);
+-    assert_eq!(none.target, None);
+-    assert_eq!(none.key, "nx_e");
+-    assert_eq!(none.class, "off");
+-    assert_eq!(none.mark, Mark::Unmeasured);
+-    check_target();
+-}
+-
+-/// check の target の有り無しと行の対象。
+-fn check_target() {
+-    // check が在っても target が無ければ None。
+-    let c = check(NextMove::StalledRun, CheckResult::Hit, 2, None);
+-    assert_eq!(row(NextMove::StalledRun, Some(&c)).target, None);
+-    let c = check(NextMove::StalledRun, CheckResult::Hit, 2, Some("nx.7"));
+-    let r = row(NextMove::StalledRun, Some(&c));
+-    assert_eq!(r.target.as_deref(), Some("nx.7"));
+-    assert_eq!((r.key, r.class, r.mark), ("nx_c", "on", Mark::Count(2)));
+-}
+-
+-/// (2) 当たった行だけが次の手の link を持つ（止まっている走行は block「pipeline」へ・ほかは action）。
+-#[test]
+-fn nact_row_link_rules() {
+-    for mode in MODES {
+-        let m = mode.key();
+-        let hit = next(&six(CheckResult::Hit));
+-        let want = [
+-            link(format!("?board=account&tab=home&mode={m}"), ACCOUNT_LINK),
+-            link(format!("?board=account&tab=session&mode={m}"), SESSION_LINK),
+-            link("#pipe".to_string(), PIPE_LINK),
+-            link(format!("?mode={m}&win=ask"), BATCH_LINK),
+-            link(format!("?mode={m}&win=ask&id=nq.4"), ANSWER_LINK),
+-            link(format!("?mode={m}&win=gaps"), GAPS_LINK),
+-        ];
+-        assert_eq!(hit.rest.len(), 6);
+-        for (r, w) in hit.rest.iter().zip(want) {
+-            let got = row_link(r, mode);
+-            assert_eq!(got, w, "{} {m}", r.key);
+-            if r.kind != NextMove::StalledRun {
+-                assert_eq!(got, action(r.kind, r.target.as_deref(), mode), "{} {m}", r.key);
+-            }
+-        }
+-        for result in [CheckResult::Miss, CheckResult::NotJudged] {
+-            for r in &next(&six(result)).rest {
+-                assert_eq!(row_link(r, mode), None, "{result:?} {} {m}", r.key);
+-            }
+-        }
+-        // lead が質問でなしが当たった電文の一覧のなしの行は None。
+-        let s = NextStep {
+-            checks: vec![
+-                check(NextMove::Question, CheckResult::Hit, 1, Some("nq.4")),
+-                check(NextMove::Nothing, CheckResult::Hit, 1, None),
+-            ],
+-            lead: NextMove::Question,
+-        };
+-        let n = next(&s);
+-        assert_eq!(row_link(rest_row(&n, "nx_g"), mode), None, "{m}");
+-        // fixture の組 stalled の一覧は nx_e の行だけが link を持つ。
+-        let stalled = filled("stalled");
+-        for r in &stalled.rest {
+-            let want = if r.key == "nx_e" {
+-                link(format!("?mode={m}&win=ask&id=nx.2"), ANSWER_LINK)
+-            } else {
+-                None
+-            };
+-            assert_eq!(row_link(r, mode), want, "stalled {} {m}", r.key);
+-        }
+-    }
+-}
+-
+-fn question_row(result: CheckResult, target: Option<&str>) -> Row {
+-    let c = check(NextMove::Question, result, 2, target);
+-    row(NextMove::Question, Some(&c))
+-}
+-
+-/// (3) 当たった質問の行だけが、電文の対象の問いの経過の字を持つ。
+-#[test]
+-fn nact_waited_rules() {
+-    let list = Fetched::Body(read("../../tests/fixtures/surface/question-list.json"));
+-    let q2 = question_row(CheckResult::Hit, Some("qa.2"));
+-    let q10 = question_row(CheckResult::Hit, Some("qa.10"));
+-    let cases: [(&Row, u64, &str, u64); 3] = [
+-        (&q2, 1_790_492_700, "◷ 1h05", 1_790_488_800),
+-        (&q2, 1_790_748_000, "◷ 3d", 1_790_488_800),
+-        (&q10, 1_790_494_440, "◷ 4m", 1_790_494_200),
+-    ];
+-    for (r, now, want, posted) in cases {
+-        let got = waited(r, &list, now);
+-        assert_eq!(got.as_deref(), Some(want), "{:?} {now}", r.target);
+-        assert_eq!(got, Some(format!("◷ {}", ask::age(now, posted))));
+-    }
+-    let now = 1_790_492_700;
+-    for r in [
+-        question_row(CheckResult::Hit, Some("nq.4")),
+-        question_row(CheckResult::Hit, None),
+-        question_row(CheckResult::Miss, Some("qa.2")),
+-        row(
+-            NextMove::StalledRun,
+-            Some(&check(NextMove::StalledRun, CheckResult::Hit, 2, Some("qa.2"))),
+-        ),
+-    ] {
+-        assert_eq!(waited(&r, &list, now), None, "{r:?}");
+-    }
+-    let unknown = wire::encode(&QuestionList {
+-        cards: Reading::Unknown,
+-        answerable: true,
+-    })
+-    .expect("電文");
+-    for fetched in [
+-        Fetched::NotRead,
+-        Fetched::Failed,
+-        Fetched::Body("{}".to_string()),
+-        Fetched::Body(unknown),
+-    ] {
+-        assert_eq!(waited(&q2, &fetched, now), None, "{fetched:?}");
+-    }
+-}
+-
+-/// (4) DOM（mod dom から file の終わり）は問いの一覧の口を読み、row_link と waited で行を組む。
+-#[test]
+-fn nact_dom_wiring() {
+-    let src = read("src/project/next.rs");
+-    let at = src.find("mod dom {").expect("mod dom が在る");
+-    let (head, dom) = src.split_at(at);
+-    for word in ["crate::net::read(ask::PATH)", "row_link(", "waited("] {
+-        assert!(dom.contains(word), "mod dom に {word} が無い");
+-    }
+-    for word in ["pub fn row_link(", "pub fn waited("] {
+-        assert!(head.contains(word), "mod dom より前に {word} が無い");
+-    }
+-}
+-
+-/// 着地済みの行と同じ波の行の verify の filter の語（106 語）。
+-const FILTERS: [&str; 106] = [
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hbconf_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hook_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hspage_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "nxact_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-    "kcli_",
+-    "qgate_",
+-    "nsum_",
+-    "hcard_",
+-    "ntime_",
+-    "ptitle_",
+-    "ncard_",
+-    "hsym_",
+-    "smore_",
+-    "lcard_",
+-    "aaround_",
+-    "hruling_",
+-    "sxaxis_",
+-    "plimit_",
+-    "bport_",
+-    "fstop_",
+-    "nsumw_",
+-    "fmark_",
+-    "fserve_",
+-    "cadopt_",
+-    "tipx_",
+-    "hcsess_",
+-    "hcproj_",
+-    "sesplit_",
+-    "mstore_",
+-    "athr_",
+-    "qblock_",
+-    "wsteady_",
+-    "gsum_",
+-    "nstall_",
+-    "pfold_",
+-    "uword_",
+-    "cround_",
+-    "cgdom_",
+-    "csled_",
+-    "lhome_",
+-    "shb_",
+-    "ghb_",
+-    "aord_",
+-    "mtree_",
+-];
+-
+-/// (6) この file の歯の名は nact_ で始まり、残りの字は着地済みと同じ波の filter の語を含まない。
+-#[test]
+-fn nact_own_names_clean() {
+-    let src = read("tests/nact.rs");
+-    let lines: Vec<&str> = src.lines().map(str::trim).collect();
+-    let mut names = Vec::new();
+-    for (i, line) in lines.iter().enumerate() {
+-        if *line != "#[test]" {
+-            continue;
+-        }
+-        let fn_line = lines[i + 1..]
+-            .iter()
+-            .find(|l| l.starts_with("fn "))
+-            .expect("test の属性の次に fn が在る");
+-        let name = fn_line["fn ".len()..]
+-            .split('(')
+-            .next()
+-            .expect("fn の名")
+-            .to_string();
+-        names.push(name);
+-    }
+-    assert!(names.len() >= 5, "歯の名 {names:?}");
+-    for name in &names {
+-        let rest = name
+-            .strip_prefix("nact_")
+-            .unwrap_or_else(|| panic!("{name} が nact_ で始まらない"));
+-        for f in FILTERS {
+-            assert!(!rest.contains(f), "{name} が filter の語 {f} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/next.rs b/crates/tsuzuri-surface/tests/next.rs
+index 9748ed9a1370c091fdab0632f3663215b276564e..0151f932f18c5272ed26c7bde1b554b70dd755ab 100644
+--- a/crates/tsuzuri-surface/tests/next.rs
++++ b/crates/tsuzuri-surface/tests/next.rs
+@@ -1,5 +1,6 @@
+-//! 便 g-next の歯: fixture の 4 組の大きく出す 1 つ・残りの一覧の順と字・なしの箱・測れていない・
++//! 便 g-next の歯: fixture の 4 組の大きく出す 1 つ・なしの箱・測れていない・
+ //! 7 種と語の鍵の 1 か所の表・電文の lead を写すだけ・着地済みの外形と依存。
++//! 残りの一覧（Row・Mark・content・next）と block の DOM の class の歯は行 g-dead-sweep-a で消した（大きく出す 1 つは big で組む）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+@@ -9,9 +10,7 @@ use tsuzuri_contract::board::NextMove;
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::next::{
+-    self, Big, KEYS, Link, MISS, Mark, NONE_LINE, Next, PIPE_LINK, content, key, step,
+-};
++use tsuzuri_surface::project::next::{self, Big, KEYS, Link, NONE_LINE, PIPE_LINK, big, key, step};
+ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, pipeline};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+@@ -34,14 +33,13 @@ fn fixture() -> BTreeMap<String, String> {
+         .collect()
+ }
+ 
+-fn filled(name: &str) -> Next {
++/// 組の大きく出す 1 つ（電文の lead と、その種類の結果）。
++fn filled(name: &str) -> Big {
+     let text = fixture()
+         .remove(name)
+         .unwrap_or_else(|| panic!("fixture の組 {name}"));
+-    match content(&Fetched::Body(text)) {
+-        Body::Filled(n) => n,
+-        other => panic!("組 {name} が中身を出さない: {other:?}"),
+-    }
++    let s = step(&Fetched::Body(text)).unwrap_or_else(|e| panic!("組 {name} が読めない: {e}"));
++    big(s.lead, s.checks.iter().find(|c| c.kind == s.lead))
+ }
+ 
+ /// (1) fixture の 4 組で、大きく出す 1 つの語の鍵と中身の字（と箱の class・link）が期待と一致する。
+@@ -60,7 +58,7 @@ fn nextstep_big_matches_each_fixture_set() {
+         ("not-judged", "nx_d", "nxbig", "4 件", None),
+     ];
+     for (name, want_key, want_class, want_what, want_link) in cases {
+-        let big = filled(name).big;
++        let big = filled(name);
+         assert_eq!(big.key, want_key, "{name} の語の鍵");
+         assert_eq!(big.class, want_class, "{name} の箱の class");
+         assert_eq!(big.what, want_what, "{name} の中身の字");
+@@ -70,79 +68,14 @@ fn nextstep_big_matches_each_fixture_set() {
+     assert_eq!(format!("#{}", pipeline::BLOCK.id), "#pipe");
+ }
+ 
+-fn rest(name: &str) -> Vec<(&'static str, &'static str, Mark)> {
+-    filled(name)
+-        .rest
+-        .iter()
+-        .map(|r| (r.key, r.class, r.mark))
+-        .collect()
+-}
+-
+-/// (2) 残りの一覧は 7 種の順から大きく出した 1 つを除いた並びで、当たった種類は件数・当たらない種類は「―」・
+-/// 判じなかった種類は測れていないの記号。
+-#[test]
+-fn nextstep_rest_in_declared_order_without_lead() {
+-    use Mark::{Count, Miss, Unmeasured};
+-    assert_eq!(
+-        rest("stalled"),
+-        vec![
+-            ("nx_a", "off", Unmeasured),
+-            ("nx_b", "off", Unmeasured),
+-            ("nx_d", "off", Unmeasured),
+-            ("nx_e", "on", Count(3)),
+-            ("nx_f", "off", Unmeasured),
+-            ("nx_g", "off", Miss),
+-        ]
+-    );
+-    assert_eq!(
+-        rest("question"),
+-        vec![
+-            ("nx_a", "off", Unmeasured),
+-            ("nx_b", "off", Unmeasured),
+-            ("nx_c", "off", Miss),
+-            ("nx_d", "off", Unmeasured),
+-            ("nx_f", "off", Unmeasured),
+-            ("nx_g", "off", Miss),
+-        ]
+-    );
+-    assert_eq!(
+-        rest("not-judged"),
+-        vec![
+-            ("nx_a", "off", Unmeasured),
+-            ("nx_b", "off", Miss),
+-            ("nx_c", "off", Unmeasured),
+-            ("nx_e", "on", Count(5)),
+-            ("nx_f", "off", Unmeasured),
+-            ("nx_g", "off", Miss),
+-        ]
+-    );
+-    // 当たらない字は「―」で、0 とも測れていないとも違う。
+-    assert_eq!(MISS, "―");
+-    assert_ne!(Mark::Count(0), Mark::Miss);
+-    assert_ne!(Mark::Miss, Mark::Unmeasured);
+-    // どの組も一覧は 6 行で、大きく出した 1 つを含まない。
+-    for name in fixture().into_keys() {
+-        let n = filled(&name);
+-        assert_eq!(n.rest.len(), 6, "{name}");
+-        assert!(n.rest.iter().all(|r| r.kind != n.big.kind), "{name}");
+-    }
+-}
+-
+-/// (3) どれも当たらない組は、なし（nx_g）を none の箱で大きく出し、一覧は 6 種が全部「―」。
++/// (3) どれも当たらない組は、なし（nx_g）を none の箱で大きく出す。
+ #[test]
+ fn nextstep_nothing_set_leads_nx_g() {
+-    let n = filled("nothing");
+-    assert_eq!(n.big.kind, NextMove::Nothing);
+-    assert_eq!(n.big.key, "nx_g");
+-    assert_eq!(n.big.class, "nxbig none");
+-    assert_eq!(n.big.what_class, "what small muted");
+-    let keys: Vec<&str> = n.rest.iter().map(|r| r.key).collect();
+-    assert_eq!(keys, vec!["nx_a", "nx_b", "nx_c", "nx_d", "nx_e", "nx_f"]);
+-    assert!(
+-        n.rest
+-            .iter()
+-            .all(|r| r.mark == Mark::Miss && r.class == "off")
+-    );
++    let b = filled("nothing");
++    assert_eq!(b.kind, NextMove::Nothing);
++    assert_eq!(b.key, "nx_g");
++    assert_eq!(b.class, "nxbig none");
++    assert_eq!(b.what_class, "what small muted");
+ }
+ 
+ /// (4) 口が読めない・まだ読んでいない・電文として読めない本文は、0 件でなく測れていないと理由の 1 行。
+@@ -155,7 +88,6 @@ fn nextstep_unreadable_is_unmeasured() {
+         (Fetched::Body("not json".to_string()), NO_CONTENT),
+     ] {
+         assert_eq!(next::body(&fetched), Body::Unmeasured(want), "{fetched:?}");
+-        assert_eq!(content(&fetched), Body::Unmeasured(want), "{fetched:?}");
+         assert_eq!(step(&fetched), Err(want));
+         assert!(!want.trim().is_empty() && !want.contains('\n'));
+     }
+@@ -194,8 +126,7 @@ fn check(kind: NextMove, result: CheckResult, count: u32, target: Option<&str>)
+     }
+ }
+ 
+-/// 面は判じない: 大きく出すのは電文の lead（結果が当たったかを見直さない）・一覧の字は電文の結果のまま・
+-/// 電文に無い種類は判じなかったと同じ。
++/// 面は判じない: 大きく出すのは電文の lead（結果が当たったかを見直さない）。
+ #[test]
+ fn nextstep_copies_lead_without_judging() {
+     let s = NextStep {
+@@ -205,21 +136,9 @@ fn nextstep_copies_lead_without_judging() {
+         ],
+         lead: NextMove::Question,
+     };
+-    let n = next::next(&s);
+-    assert_eq!(n.big.kind, NextMove::Question);
+-    assert_eq!(n.big.what, "0 件");
+-    let marks: Vec<(NextMove, Mark)> = n.rest.iter().map(|r| (r.kind, r.mark)).collect();
+-    assert_eq!(
+-        marks,
+-        vec![
+-            (NextMove::LimitOrMove, Mark::Unmeasured),
+-            (NextMove::Unresponsive, Mark::Unmeasured),
+-            (NextMove::StalledRun, Mark::Count(7)),
+-            (NextMove::BatchApproval, Mark::Unmeasured),
+-            (NextMove::AwaitingEffect, Mark::Unmeasured),
+-            (NextMove::Nothing, Mark::Unmeasured),
+-        ]
+-    );
++    let lead = next::big(s.lead, s.checks.iter().find(|c| c.kind == s.lead));
++    assert_eq!(lead.kind, NextMove::Question);
++    assert_eq!(lead.what, "0 件");
+     // 対象の id が在るほかの種類は id と件数（止まっている走行は件数と link だけ）。
+     let b: Big = next::big(
+         NextMove::LimitOrMove,
+@@ -246,7 +165,7 @@ fn nextstep_copies_lead_without_judging() {
+     assert_eq!(c.what, "2 件");
+ }
+ 
+-/// 語の鍵は語の辞書に、class は stylesheet に在る。
++/// 語の鍵は語の辞書に在る（block の DOM の class の歯は行 g-dead-sweep-a で消した）。
+ #[test]
+ fn nextstep_keys_in_vocab_and_classes_in_stylesheet() {
+     for (_, k) in KEYS {
+@@ -255,35 +174,6 @@ fn nextstep_keys_in_vocab_and_classes_in_stylesheet() {
+     for k in ["next", "st_unknown"] {
+         assert!(vocab().term(k).is_some(), "鍵 {k} が vocab に無い");
+     }
+-    let css = read("style.css");
+-    let has = |name: &str| {
+-        let dot = format!(".{name}");
+-        css.match_indices(&dot).any(|(i, _)| {
+-            css[i + dot.len()..]
+-                .chars()
+-                .next()
+-                .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+-        })
+-    };
+-    let mut used: Vec<String> = Vec::new();
+-    for name in fixture().into_keys() {
+-        let n = filled(&name);
+-        used.extend(n.big.class.split_whitespace().map(str::to_string));
+-        used.extend(n.big.what_class.split_whitespace().map(str::to_string));
+-        for r in &n.rest {
+-            used.push(r.class.to_string());
+-        }
+-    }
+-    used.extend(["nxlist", "act", "btn", "primary", "v", "small", "num"].map(str::to_string));
+-    for c in ["nxbig", "none", "on", "off", "what", "muted"] {
+-        assert!(
+-            used.iter().any(|u| u == c),
+-            "組の中身が class {c} を使わない"
+-        );
+-    }
+-    for c in used {
+-        assert!(has(&c), "stylesheet に class {c} が無い");
+-    }
+ }
+ 
+ /// (6) 着地済みの外形（BLOCK・口の path・body の名と引数と返りの型）と、面の crate の直接依存が増えない。
+diff --git a/crates/tsuzuri-surface/tests/nextact.rs b/crates/tsuzuri-surface/tests/nextact.rs
+deleted file mode 100644
+index 1061f7fc9ec09d274b1a870a0ce87970fd3bff5f..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/nextact.rs
++++ /dev/null
+@@ -1,378 +0,0 @@
+-//! 行 g-next-act の歯: 次の一手の大きい箱の、種類ごとの次の手の頁への link（href と字・mode・開く窓）・
+-//! href の読み直し・Big の対象の id・DOM が link を組む字・link の字と見出しの語・歯の名。
+-#![cfg(test)]
+-
+-use std::collections::BTreeMap;
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::board::NextMove;
+-use tsuzuri_contract::stats::NextStep;
+-use tsuzuri_contract::wire;
+-use tsuzuri_surface::account::windows::ACCOUNT_WIN;
+-use tsuzuri_surface::account::{Tab, selects};
+-use tsuzuri_surface::frame::{Mode, PageId, param};
+-use tsuzuri_surface::mapview::decode;
+-use tsuzuri_surface::project::Body;
+-use tsuzuri_surface::topbar::Win;
+-use tsuzuri_surface::project::next::{
+-    ACCOUNT_LINK, ANSWER_LINK, BATCH_LINK, GAPS_LINK, Link, NONE_LINE, Next, PIPE_LINK,
+-    SESSION_LINK, action, content, window_of,
+-};
+-use tsuzuri_surface::view::Fetched;
+-use tsuzuri_surface::vocab::vocab;
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-const MODES: [Mode; 2] = [Mode::Beginner, Mode::Expert];
+-
+-fn link(href: String, text: &'static str) -> Option<Link> {
+-    Some(Link { href, text })
+-}
+-
+-/// (1) 2 つの mode と 7 種で、次の手の頁への link は節の表の href と字（止まっている走行となしは None）。
+-#[test]
+-fn nxact_links_per_kind() {
+-    for mode in MODES {
+-        let m = mode.key();
+-        let cases: [(NextMove, Option<&str>, Option<Link>); 7] = [
+-            (
+-                NextMove::LimitOrMove,
+-                None,
+-                link(format!("?board=account&tab=home&mode={m}"), ACCOUNT_LINK),
+-            ),
+-            (
+-                NextMove::Unresponsive,
+-                None,
+-                link(format!("?board=account&tab=session&mode={m}"), SESSION_LINK),
+-            ),
+-            (NextMove::StalledRun, Some("nx.7"), None),
+-            (
+-                NextMove::BatchApproval,
+-                None,
+-                link(format!("?mode={m}&win=ask"), BATCH_LINK),
+-            ),
+-            (
+-                NextMove::Question,
+-                Some("nq.4"),
+-                link(format!("?mode={m}&win=ask&id=nq.4"), ANSWER_LINK),
+-            ),
+-            (
+-                NextMove::AwaitingEffect,
+-                None,
+-                link(format!("?mode={m}&win=gaps"), GAPS_LINK),
+-            ),
+-            (NextMove::Nothing, None, None),
+-        ];
+-        for (kind, target, want) in cases {
+-            assert_eq!(action(kind, target, mode), want, "{kind:?} {m}");
+-        }
+-        // 質問は対象の id が無ければ質問の窓・id のコロンは %3A にする（行 g-one-screen-a）。
+-        assert_eq!(
+-            action(NextMove::Question, None, mode),
+-            link(format!("?mode={m}&win=ask"), ANSWER_LINK)
+-        );
+-        assert_eq!(
+-            action(NextMove::Question, Some("e.2:x"), mode),
+-            link(format!("?mode={m}&win=ask&id=e.2%3Ax"), ANSWER_LINK)
+-        );
+-    }
+-    // 開く窓は account board へ飛ぶ 2 種だけ account board の名前つきの窓。
+-    assert_eq!(ACCOUNT_WIN, "tz-account");
+-    for kind in NextMove::ALL {
+-        let want = match kind {
+-            NextMove::LimitOrMove | NextMove::Unresponsive => Some(ACCOUNT_WIN),
+-            _ => None,
+-        };
+-        assert_eq!(window_of(kind), want, "{kind:?}");
+-    }
+-    // 字は節の字。
+-    assert_eq!(ACCOUNT_LINK, "account board を見る ›");
+-    assert_eq!(SESSION_LINK, "session を見る ›");
+-    assert_eq!(BATCH_LINK, "まとめて承認 ›");
+-    assert_eq!(ANSWER_LINK, "答える ›");
+-    assert_eq!(GAPS_LINK, "orchestrator に任せる（見るだけ） ›");
+-}
+-
+-/// (2) href の井桁より前の字を読み直すと、同じ行き先・同じ対象・渡した mode に戻る。
+-#[test]
+-fn nxact_hrefs_read_back() {
+-    enum Dest {
+-        Account(Tab),
+-        Win(Win),
+-    }
+-    for mode in MODES {
+-        let cases: [(NextMove, Option<&str>, Dest, Option<&str>); 7] = [
+-            (NextMove::LimitOrMove, None, Dest::Account(Tab::Home), None),
+-            (
+-                NextMove::Unresponsive,
+-                None,
+-                Dest::Account(Tab::Session),
+-                None,
+-            ),
+-            (NextMove::BatchApproval, None, Dest::Win(Win::Ask), None),
+-            (
+-                NextMove::Question,
+-                Some("nq.4"),
+-                Dest::Win(Win::Ask),
+-                Some("nq.4"),
+-            ),
+-            (
+-                NextMove::Question,
+-                Some("e.2:x"),
+-                Dest::Win(Win::Ask),
+-                Some("e.2:x"),
+-            ),
+-            (NextMove::Question, None, Dest::Win(Win::Ask), None),
+-            (
+-                NextMove::AwaitingEffect,
+-                None,
+-                Dest::Win(Win::Gaps),
+-                None,
+-            ),
+-        ];
+-        for (kind, target, dest, want_id) in cases {
+-            let l = action(kind, target, mode).unwrap_or_else(|| panic!("{kind:?} の link"));
+-            let search = l.href.split('#').next().expect("井桁より前");
+-            match dest {
+-                Dest::Account(tab) => {
+-                    assert!(selects(search), "{search} が account board を選ばない");
+-                    assert_eq!(Tab::from_query(search), tab, "{search}");
+-                }
+-                Dest::Win(win) => {
+-                    assert!(!selects(search), "{search}");
+-                    assert_eq!(PageId::from_query(search), PageId::Home, "{search}");
+-                    assert_eq!(Win::from_query(search), Some(win), "{search}");
+-                }
+-            }
+-            assert_eq!(
+-                param(search, "id").map(decode).as_deref(),
+-                want_id,
+-                "{search} の対象"
+-            );
+-            assert_eq!(Mode::from_query(search), mode, "{search} の mode");
+-        }
+-    }
+-}
+-
+-/// fixture の 4 組（組の名 → 電文の字）。
+-fn fixture() -> BTreeMap<String, String> {
+-    let sets: BTreeMap<String, NextStep> =
+-        wire::decode(&read("../../tests/fixtures/surface/next-step.json"))
+-            .expect("fixture の組が電文として読める");
+-    sets.into_iter()
+-        .map(|(name, s)| (name, wire::encode(&s).expect("電文")))
+-        .collect()
+-}
+-
+-fn filled(name: &str) -> Next {
+-    let text = fixture()
+-        .remove(name)
+-        .unwrap_or_else(|| panic!("fixture の組 {name}"));
+-    match content(&Fetched::Body(text)) {
+-        Body::Filled(n) => n,
+-        other => panic!("組 {name} が中身を出さない: {other:?}"),
+-    }
+-}
+-
+-/// (3) Big は lead の種類の項の対象の id を字で持ち、ほかの欄は今のまま。
+-#[test]
+-fn nxact_big_carries_target() {
+-    let pipe = link("#pipe".to_string(), PIPE_LINK);
+-    let cases = [
+-        (
+-            "stalled",
+-            Some("nx.7"),
+-            NextMove::StalledRun,
+-            "nx_c",
+-            "nxbig",
+-            "what",
+-            "2 件",
+-            pipe,
+-        ),
+-        (
+-            "question",
+-            Some("nq.4"),
+-            NextMove::Question,
+-            "nx_e",
+-            "nxbig",
+-            "what",
+-            "nq.4 · 1 件",
+-            None,
+-        ),
+-        (
+-            "nothing",
+-            None,
+-            NextMove::Nothing,
+-            "nx_g",
+-            "nxbig none",
+-            "what small muted",
+-            NONE_LINE,
+-            None,
+-        ),
+-        (
+-            "not-judged",
+-            None,
+-            NextMove::BatchApproval,
+-            "nx_d",
+-            "nxbig",
+-            "what",
+-            "4 件",
+-            None,
+-        ),
+-    ];
+-    for (name, target, kind, key, class, what_class, what, want_link) in cases {
+-        let big = filled(name).big;
+-        assert_eq!(big.target.as_deref(), target, "{name} の対象");
+-        assert_eq!(big.kind, kind, "{name} の種類");
+-        assert_eq!(big.key, key, "{name} の語の鍵");
+-        assert_eq!(big.class, class, "{name} の箱の class");
+-        assert_eq!(big.what_class, what_class, "{name} の中身の class");
+-        assert_eq!(big.what, what, "{name} の中身の字");
+-        assert_eq!(big.link, want_link, "{name} の link");
+-    }
+-}
+-
+-/// (4) DOM（mod dom から file の終わり）は mode を context か URL から読み、action と window_of で link を組む。
+-#[test]
+-fn nxact_src_uses_action() {
+-    let src = read("src/project/next.rs");
+-    let at = src.find("mod dom {").expect("mod dom が在る");
+-    let dom = &src[at..];
+-    for word in [
+-        "action(",
+-        "window_of(",
+-        "use_context::<HelpCtx>()",
+-        "Mode::from_query(",
+-    ] {
+-        assert!(dom.contains(word), "mod dom に {word} が無い");
+-    }
+-    // action と window_of の定義は mod dom より前（wasm の target に限らない）。
+-    let head = &src[..at];
+-    assert!(head.contains("pub fn action("));
+-    assert!(head.contains("pub fn window_of("));
+-}
+-
+-/// (5) link の字の 5 つは、語の辞書の日本語の見出しの語のどれとも同じ字でない。
+-#[test]
+-fn nxact_texts_not_headings() {
+-    let words: Vec<String> = vocab()
+-        .keys()
+-        .filter_map(|k| vocab().term(k))
+-        .map(|t| t.label.clone())
+-        .filter(|l| !l.is_ascii())
+-        .collect();
+-    assert!(!words.is_empty());
+-    for text in [ACCOUNT_LINK, SESSION_LINK, BATCH_LINK, ANSWER_LINK, GAPS_LINK] {
+-        assert!(
+-            words.iter().all(|w| w != text),
+-            "{text} が見出しの語と同じ"
+-        );
+-    }
+-}
+-
+-/// 着地済みの行と同じ波の行の verify の filter の語（65 語）。
+-const FILTERS: [&str; 65] = [
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hook_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "hbproc_",
+-    "hbconf_",
+-    "hbroute_",
+-    "hbpost_",
+-    "hsblock_",
+-    "hspage_",
+-    "hsderive_",
+-    "mlink_",
+-    "gnav_",
+-    "mkeys_",
+-    "klink_",
+-    "ilink_",
+-    "afocus_",
+-    "urpanel_",
+-    "saxis_",
+-    "ticker_",
+-    "hfig_",
+-    "pmore_",
+-    "lspark_",
+-    "apop_",
+-    "brand_",
+-    "runsdoc_",
+-    "nbatch_",
+-];
+-
+-/// (6) この file の歯の名は nxact_ で始まり、残りの字は着地済みと同じ波の filter の語を含まない。
+-#[test]
+-fn nxact_own_names_clean() {
+-    let src = read("tests/nextact.rs");
+-    let lines: Vec<&str> = src.lines().map(str::trim).collect();
+-    let mut names = Vec::new();
+-    for (i, line) in lines.iter().enumerate() {
+-        if *line != "#[test]" {
+-            continue;
+-        }
+-        let fn_line = lines[i + 1..]
+-            .iter()
+-            .find(|l| l.starts_with("fn "))
+-            .expect("test の属性の次に fn が在る");
+-        let name = fn_line["fn ".len()..]
+-            .split('(')
+-            .next()
+-            .expect("fn の名")
+-            .to_string();
+-        names.push(name);
+-    }
+-    assert!(names.len() >= 6, "歯の名 {names:?}");
+-    for name in &names {
+-        let rest = name
+-            .strip_prefix("nxact_")
+-            .unwrap_or_else(|| panic!("{name} が nxact_ で始まらない"));
+-        for f in FILTERS {
+-            assert!(!rest.contains(f), "{name} が filter の語 {f} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/nstall.rs b/crates/tsuzuri-surface/tests/nstall.rs
+index d85dae5d08a889f82389a55d72843492638f9be5..ac917f22eae3168cb5fe338589accc6045c5c9e4 100644
+--- a/crates/tsuzuri-surface/tests/nstall.rs
++++ b/crates/tsuzuri-surface/tests/nstall.rs
+@@ -1,5 +1,6 @@
+ //! 次の一手の判じなかったなしの箱の歯（行 c-next-stall・接頭辞 nstall_）。
+-//! lead がなしで電文のなしの結果が判じなかったなら、大きい箱は測れていないの箱（`UNJUDGED_KEY`・`UNJUDGED_LINE`）。
++//! lead がなしで電文のなしの結果が判じなかったかを `unjudged` が読む（測れていないの箱の語の鍵 `UNJUDGED_KEY` は帯の pill が、
++//! 字 `UNJUDGED_LINE` は account board が使う・次の一手の block の箱の組み next は行 g-dead-sweep-a で消した）。
+ //! 面は判じない: 電文の結果を写すだけ。fixture: tests/fixtures/surface/next-step.json。
+ #![cfg(test)]
+ 
+@@ -9,9 +10,7 @@ use std::path::PathBuf;
+ use tsuzuri_contract::board::NextMove;
+ use tsuzuri_contract::stats::{CheckResult, NextStep};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::next::{
+-    Big, KEYS, Mark, NONE_LINE, UNJUDGED_KEY, UNJUDGED_LINE, big, next, unjudged,
+-};
++use tsuzuri_surface::project::next::{KEYS, NONE_LINE, UNJUDGED_KEY, UNJUDGED_LINE, big, unjudged};
+ use tsuzuri_surface::vocab::vocab;
+ 
+ fn crate_dir() -> PathBuf {
+@@ -33,16 +32,14 @@ fn set(name: &str) -> NextStep {
+         .unwrap_or_else(|| panic!("fixture の組 {name}"))
+ }
+ 
+-/// (5) なしを判じなかった電文だけが測れていないの箱になり、ほかの箱は big に lead とその結果を渡した値のまま。
++/// (5) なしを判じなかった電文だけが unjudged（なしの結果が電文に無ければ判じなかったと言わない・lead がなしでない組は偽）。
+ #[test]
+ fn nstall_unjudged_box() {
+-    // nothing の組（なしが当たる）は今のなしの箱。
++    // nothing の組（なしが当たる）は判じた。
+     let nothing = set("nothing");
+     assert!(!unjudged(&nothing));
+-    let n = next(&nothing);
+-    assert_eq!((n.big.key, n.big.what.as_str()), ("nx_g", NONE_LINE));
+ 
+-    // 限度と移動となしを判じなかった電文は測れていないの箱。
++    // 限度と移動となしを判じなかった電文は判じなかった。
+     let mut open = nothing.clone();
+     for c in &mut open.checks {
+         if matches!(c.kind, NextMove::LimitOrMove | NextMove::Nothing) {
+@@ -50,31 +47,6 @@ fn nstall_unjudged_box() {
+         }
+     }
+     assert!(unjudged(&open));
+-    let n = next(&open);
+-    assert_eq!(
+-        n.big,
+-        Big {
+-            kind: NextMove::Nothing,
+-            key: UNJUDGED_KEY,
+-            class: "nxbig none",
+-            what_class: "what small muted",
+-            what: UNJUDGED_LINE.to_string(),
+-            link: None,
+-            target: None,
+-        }
+-    );
+-    let rows: Vec<(&str, &str, Mark)> = n.rest.iter().map(|r| (r.key, r.class, r.mark)).collect();
+-    assert_eq!(
+-        rows,
+-        vec![
+-            ("nx_a", "off", Mark::Unmeasured),
+-            ("nx_b", "off", Mark::Miss),
+-            ("nx_c", "off", Mark::Miss),
+-            ("nx_d", "off", Mark::Miss),
+-            ("nx_e", "off", Mark::Miss),
+-            ("nx_f", "off", Mark::Miss),
+-        ]
+-    );
+ 
+     // なしの結果が電文に無ければ判じなかったと言わない。
+     let bare = NextStep {
+@@ -82,14 +54,10 @@ fn nstall_unjudged_box() {
+         lead: NextMove::Nothing,
+     };
+     assert!(!unjudged(&bare));
+-    assert_eq!(next(&bare).big.what, NONE_LINE);
+ 
+-    // lead がなしでない組は今のまま。
++    // lead がなしでない組は判じた。
+     for name in ["stalled", "question", "not-judged"] {
+-        let s = set(name);
+-        assert!(!unjudged(&s), "{name}");
+-        let lead = s.checks.iter().find(|c| c.kind == s.lead);
+-        assert_eq!(next(&s).big, big(s.lead, lead), "{name}");
++        assert!(!unjudged(&set(name)), "{name}");
+     }
+     big_and_label(open);
+ }
+diff --git a/crates/tsuzuri-surface/tests/nxorg.rs b/crates/tsuzuri-surface/tests/nxorg.rs
+deleted file mode 100644
+index c0895d4a5196f8c5e5fdfe1b1401a88106531813..0000000000000000000000000000000000000000
+--- a/crates/tsuzuri-surface/tests/nxorg.rs
++++ /dev/null
+@@ -1,317 +0,0 @@
+-//! 行 g-next-acct-origin の歯（接頭辞 nxorg_）: 次の一手の link の押しの手（next の Jump と jump・窓の名の window_of）・
+-//! next.rs の mod dom の押しの字の並び・この file の歯の名。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::board::NextMove;
+-use tsuzuri_surface::account::windows::ACCOUNT_WIN;
+-use tsuzuri_surface::frame::{BLANK, BackHow, back_how};
+-use tsuzuri_surface::project::next::{Jump, jump, window_of};
+-
+-/// filter の語（contracts の verify の filter の語を、ほかの語を部分の字として含まない語に畳んだ列と pgz_・kindlab_）。
+-const FILTERS: [&str; 164] = [
+-    "aaround_",
+-    "accept_",
+-    "acchold_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "afocus_",
+-    "aord_",
+-    "apop_",
+-    "askcard_",
+-    "athr_",
+-    "batchpanel_",
+-    "bhalf_",
+-    "board_min_",
+-    "bport_",
+-    "brand_",
+-    "btuck_",
+-    "cadl_",
+-    "cadopt_",
+-    "cadq_",
+-    "cdorm_",
+-    "cfsplit_",
+-    "cgdom_",
+-    "cmark_",
+-    "contract_form_",
+-    "cround_",
+-    "csled_",
+-    "cspk_",
+-    "ctick_",
+-    "denv_",
+-    "dnedge_",
+-    "dnrow_",
+-    "dnskip_",
+-    "ecache_",
+-    "epolq_",
+-    "flight_",
+-    "fmark_",
+-    "fprem_",
+-    "frame_",
+-    "fserve_",
+-    "fstop_",
+-    "fxpre_",
+-    "g3g7_",
+-    "gapspage_",
+-    "gbnote_",
+-    "gfix_",
+-    "gfresh_",
+-    "ghb_",
+-    "gjst_",
+-    "glabel_",
+-    "gnav_",
+-    "gpface_",
+-    "gpill_",
+-    "gpulse_",
+-    "graph_",
+-    "gsum_",
+-    "gtuck_",
+-    "gview_",
+-    "hacols_",
+-    "harest_",
+-    "hasplit_",
+-    "hbconf_",
+-    "hbmark_",
+-    "hbpost_",
+-    "hbproc_",
+-    "hbroute_",
+-    "hcard_",
+-    "hcled_",
+-    "hcnx_",
+-    "hcproj_",
+-    "hcsess_",
+-    "hdchip_",
+-    "hfig_",
+-    "hnunk_",
+-    "hook_",
+-    "hruling_",
+-    "hsblock_",
+-    "hsderive_",
+-    "hshist_",
+-    "hspage_",
+-    "hspk_",
+-    "hsym_",
+-    "iclose_",
+-    "ilink_",
+-    "kcli_",
+-    "klink_",
+-    "launch_",
+-    "lcard_",
+-    "ledgerblock_",
+-    "lhome_",
+-    "lidle_",
+-    "lresume_",
+-    "lsnap_",
+-    "lspark_",
+-    "lstore_",
+-    "mapview_",
+-    "mkeys_",
+-    "mlink_",
+-    "mstore_",
+-    "mtree_",
+-    "nact_",
+-    "nbatch_",
+-    "ncard_",
+-    "nextstep_",
+-    "nodepage_",
+-    "nstall_",
+-    "nsum_",
+-    "nsumw_",
+-    "ntime_",
+-    "nxact_",
+-    "parts_",
+-    "pci_",
+-    "pclosed_",
+-    "pfold_",
+-    "pipe_",
+-    "plimit_",
+-    "pmisfit_",
+-    "pmore_",
+-    "pquest_",
+-    "pqueue_",
+-    "project_",
+-    "ptitle_",
+-    "punmap_",
+-    "pwhole_",
+-    "qblock_",
+-    "qgate_",
+-    "qkey_",
+-    "question_",
+-    "relay_",
+-    "rhold_",
+-    "runsdoc_",
+-    "rvk_",
+-    "saxis_",
+-    "sclosed_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "sesplit_",
+-    "shb_",
+-    "skeleton_",
+-    "smore_",
+-    "stage_",
+-    "stats_",
+-    "stcli_",
+-    "steady_",
+-    "sxaxis_",
+-    "ticker_",
+-    "tipx_",
+-    "topbar_",
+-    "tz_",
+-    "urpanel_",
+-    "uword_",
+-    "wstrip_",
+-    "pgz_",
+-    "kindlab_",
+-];
+-
+-fn read(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+-    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-/// 型が Copy と PartialEq と Eq と Debug を持つ（組めることで見る）。
+-fn traits<T: Copy + PartialEq + Eq + std::fmt::Debug>(_: T) {}
+-
+-/// 宣言の字 `decl` から、次の 4 つの空白と閉じ波括弧だけの行までの本文（mod dom の中の fn）。
+-fn body<'a>(dom: &'a str, decl: &str) -> &'a str {
+-    let start = dom
+-        .find(decl)
+-        .unwrap_or_else(|| panic!("mod dom に {decl} が無い"));
+-    let rest = &dom[start..];
+-    let end = rest
+-        .find("\n    }\n")
+-        .unwrap_or_else(|| panic!("{decl} の閉じの行が無い"));
+-    &rest[..end]
+-}
+-
+-/// 字の列が `text` にこの順に在る（無ければどれが無いかで落ちる）。
+-fn in_order(text: &str, words: &[&str], what: &str) {
+-    let mut at = 0;
+-    for w in words {
+-        let i = text[at..]
+-            .find(w)
+-            .unwrap_or_else(|| panic!("{what} に {w} が並びの順に無い: {text}"));
+-        at += i + w.len();
+-    }
+-}
+-
+-/// (1) 押しの手は frame の back_how に URL が読めたかを足すだけ・窓の名は限度と移動と応答なしだけ ACCOUNT_WIN。
+-#[test]
+-fn nxorg_jump_rules() {
+-    traits(Jump::Follow);
+-    let jump_fn: fn(bool, Option<&str>) -> Jump = jump;
+-    let readable = "http://127.0.0.1:8120/?board=account&tab=home";
+-    for (returned, href, how, want) in [
+-        (false, None, BackHow::Blocked, Jump::Follow),
+-        (true, Some(BLANK), BackHow::Opened, Jump::Follow),
+-        (true, Some(readable), BackHow::Front, Jump::Follow),
+-        (true, None, BackHow::Front, Jump::Front),
+-    ] {
+-        assert_eq!(back_how(returned, href), how, "{returned} {href:?}");
+-        assert_eq!(jump_fn(returned, href), want, "{returned} {href:?}");
+-    }
+-    assert_eq!(BLANK, "about:blank");
+-
+-    assert_eq!(ACCOUNT_WIN, "tz-account");
+-    let named: Vec<(NextMove, &str)> = NextMove::ALL
+-        .into_iter()
+-        .filter_map(|k| window_of(k).map(|w| (k, w)))
+-        .collect();
+-    assert_eq!(
+-        named,
+-        [
+-            (NextMove::LimitOrMove, ACCOUNT_WIN),
+-            (NextMove::Unresponsive, ACCOUNT_WIN),
+-        ]
+-    );
+-}
+-
+-/// (2) mod dom の 2 つの link は押しを press に渡し、press は窓を探して href の読めない窓だけ前に出す・
+-/// 判定は mod dom より前の jump（back_how に拠る）で、about:blank の字の写しは無い。
+-#[test]
+-fn nxorg_dom_wiring() {
+-    let text = read("src/project/next.rs");
+-    let (head, dom) = text.split_once("mod dom {").expect("字 mod dom { が在る");
+-    let click = "on:click=move |e| press(e, win)";
+-    assert_eq!(dom.matches(click).count(), 2, "mod dom の {click} の数");
+-
+-    let big = body(dom, "fn big_view(");
+-    let big_a =
+-        format!("<a class=\"btn primary\" href=l.href target=win {click}>{{l.text}}</a>");
+-    assert!(big.contains(&big_a), "big_view に {big_a} が無い: {big}");
+-    let row = body(dom, "fn row_view(");
+-    let row_a = format!("<a href=l.href target=win {click}>{{l.text}}</a>");
+-    assert!(row.contains(&row_a), "row_view に {row_a} が無い: {row}");
+-
+-    let decl = "fn press(e: ev::MouseEvent, win: Option<&'static str>) {";
+-    assert!(!dom.contains("pub fn press("), "press が私的でない");
+-    let press = body(dom, decl);
+-    in_order(
+-        press,
+-        &[
+-            "let Some(name) = win else {",
+-            "if e.ctrl_key() || e.meta_key() || e.shift_key() {",
+-            "return;",
+-            "let found = crate::board::open_named(\"\", name).ok().flatten();",
+-            "let href = found.as_ref().and_then(|w| w.location().href().ok());",
+-            "if jump(found.is_some(), href.as_deref()) == Jump::Front {",
+-            "e.prevent_default();",
+-            "let _ = w.focus();",
+-        ],
+-        "press",
+-    );
+-    for w in ["set_href", "about:blank", "back_how("] {
+-        assert!(!dom.contains(w), "mod dom に {w} が在る");
+-    }
+-    assert!(dom.contains("use leptos::ev;"), "mod dom に use leptos::ev; が無い");
+-
+-    let at = head
+-        .find("pub fn jump(returned: bool, href: Option<&str>) -> Jump {")
+-        .expect("mod dom より前に jump の宣言が在る");
+-    assert!(
+-        head[at..].contains("match (back_how(returned, href), href) {"),
+-        "jump に back_how の match が無い"
+-    );
+-    assert!(!text.contains("about:blank"), "next.rs に about:blank が在る");
+-}
+-
+-/// (3) この file の歯の名はどれも nxorg_ で始まり、残りの字は filter の語を含まない。
+-#[test]
+-fn nxorg_names_stay_apart() {
+-    let text = read("tests/nxorg.rs");
+-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+-    let names: Vec<&str> = lines
+-        .iter()
+-        .enumerate()
+-        .filter(|(_, l)| **l == "#[test]")
+-        .map(|(i, _)| {
+-            lines[i + 1..]
+-                .iter()
+-                .find_map(|l| l.strip_prefix("fn "))
+-                .and_then(|rest| rest.split('(').next())
+-                .expect("test の属性の後の fn")
+-        })
+-        .collect();
+-    assert_eq!(names.len(), 3, "{names:?}");
+-    for name in names {
+-        let rest = name
+-            .strip_prefix("nxorg_")
+-            .unwrap_or_else(|| panic!("{name} が nxorg_ で始まらない"));
+-        for w in FILTERS {
+-            assert!(!rest.contains(w), "{name} が filter の語 {w} を含む");
+-        }
+-    }
+-}
+diff --git a/crates/tsuzuri-surface/tests/pcimark.rs b/crates/tsuzuri-surface/tests/pcimark.rs
+index 4729d95a6821421b9136397062a7754e39fe7d29..3cbec20442426c14a2095aad62995e2ce9a0fcc4 100644
+--- a/crates/tsuzuri-surface/tests/pcimark.rs
++++ b/crates/tsuzuri-surface/tests/pcimark.rs
+@@ -117,16 +117,12 @@ fn pci_kcard_marks() {
+     assert_eq!(wait.ci, Some(Ci::Waiting));
+     assert_eq!(wait.class, "kcard");
+     assert_eq!(wait.lead, Lead::Runs(1));
+-    assert_eq!(wait.run_line, "↻1 · Landed · CI 中");
+-    assert_eq!(wait.hover.kind, "run · Landed");
+     assert_eq!(wait.age, "2m");
+     assert!(!wait.closed);
+-    assert!(wait.run_more.is_empty());
+ 
+     let ok = k(Stage::Landed, None, Some(600), Some(Ci::Success));
+     assert_eq!(ok.state, None);
+     assert_eq!(ok.ci, Some(Ci::Success));
+-    assert_eq!(ok.run_line, "↻1 · Landed · CI 成功");
+     late_and_fail(k);
+ }
+ 
+@@ -135,7 +131,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
+     let late = k(Stage::Landed, None, Some(601), Some(Ci::Success));
+     assert_eq!(late, k(Stage::Landed, None, Some(601), None));
+     assert_eq!(late.ci, None);
+-    assert_eq!(late.run_line, "↻1 · Landed · Landed");
+ 
+     let fail = k(
+         Stage::Failed,
+@@ -147,7 +142,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
+     assert_eq!(fail.ci, None);
+     assert_eq!(fail.class, "kcard why-stop");
+     assert_eq!(fail.lead, Lead::Why("CI 失敗".to_string()));
+-    assert_eq!(fail.run_line, "↻1 · Failed · CI 失敗");
+ 
+     let unmeasured = k(
+         Stage::Stopped,
+@@ -156,7 +150,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
+         Some(Ci::Unmeasurable),
+     );
+     assert_eq!(unmeasured.lead, Lead::Why("CI 測れず".to_string()));
+-    assert_eq!(unmeasured.run_line, "↻1 · Stopped · CI 測れず");
+     assert_eq!(unmeasured.age, "―");
+     stop_reasons(k);
+ }
+@@ -187,14 +180,12 @@ fn stop_reasons(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>)
+         assert_eq!(c.ci, None, "{ci:?}");
+         assert_eq!(c.class, "kcard why-stop", "{ci:?}");
+         assert_eq!(c.lead, Lead::Why(text.to_string()), "{ci:?}");
+-        assert_eq!(c.run_line, format!("↻1 · {stage:?} · {text}"));
+     }
+ 
+     let landed_fail = k(Stage::Landed, None, Some(30), Some(Ci::Failure));
+     assert_eq!(landed_fail.state, None);
+     assert_eq!(landed_fail.ci, Some(Ci::Failure));
+     assert_eq!(landed_fail.lead, Lead::Runs(1));
+-    assert_eq!(landed_fail.run_line, "↻1 · Landed · CI 失敗");
+ }
+ 
+ /// (11) CI を待つ札は日を問わず Landed の列に出る。
+diff --git a/crates/tsuzuri-surface/tests/pclosed.rs b/crates/tsuzuri-surface/tests/pclosed.rs
+index d7d8f8a648db43175ecb05b01be3166046b87682..4982818ef21af0eca421df2a481f3f624d61522a 100644
+--- a/crates/tsuzuri-surface/tests/pclosed.rs
++++ b/crates/tsuzuri-surface/tests/pclosed.rs
+@@ -89,47 +89,24 @@ fn pclosed_closed_card_rule() {
+     assert!(!closed_card(&one(Stage::Running, tagged("x"))));
+ }
+ 
+-/// (8) 閉じた（着地せず）の札は段の字が CLOSED_STAGE で hover の詳しくに理由を折り、ほかの札は今のまま。
++/// (8) 閉じた（着地せず）の札は閉じた印を持ち、回数の lead で状態の記号の値が無く、ほかの札は今のまま
++/// （札の hover の card と値の行は行 g-dead-sweep-a で消した）。
+ #[test]
+ fn pclosed_kcard_hover_and_lines() {
+     let k = kcard(&px30(), &[], NOW);
+-    let more = vec![
+-        format!("{CLOSED_TAG}{}", "a".repeat(27)),
+-        "a".repeat(13),
+-    ];
+-    assert_eq!(k.hover.kind, format!("run · {CLOSED_STAGE}"));
+-    assert_eq!(k.hover.value, "↻2 · acct-1 · 1h");
+-    assert_eq!(k.hover.more, more);
+-    assert_eq!(
+-        k.run_line,
+-        format!("↻2 · {CLOSED_STAGE} · {CLOSED_TAG}{}…", "a".repeat(12))
+-    );
+-    assert_eq!(k.run_more, more);
++    assert!(k.closed);
+     assert_eq!(k.lead, Lead::Runs(2));
+     assert_eq!(k.state, None);
+     assert_eq!(k.class, "kcard");
+     other_cards();
+ }
+ 
+-/// px.31 から px.33 の札の hover と値の行。
++/// px.31 から px.33 の札の閉じた印と lead。
+ fn other_cards() {
+-    let k = kcard(&px31(), &[], NOW);
+-    assert_eq!(k.hover.kind, format!("run · {CLOSED_STAGE}"));
+-    assert_eq!(k.hover.more, vec![format!("{CLOSED_TAG}x")]);
+-    assert_eq!(
+-        k.run_line,
+-        format!("↻1 · {CLOSED_STAGE} · {CLOSED_TAG}x")
+-    );
+-    assert!(k.run_more.is_empty());
+-
+-    let k = kcard(&px32(), &[], NOW);
+-    assert_eq!(k.hover.kind, "run · Landed");
+-    assert!(k.hover.more.is_empty());
+-    assert_eq!(k.run_line, "↻1 · Landed · Landed");
+-
++    assert!(kcard(&px31(), &[], NOW).closed);
++    assert!(!kcard(&px32(), &[], NOW).closed);
+     let k = kcard(&px33(), &[], NOW);
+-    assert_eq!(k.hover.kind, "run · Failed");
+-    assert!(k.hover.more.is_empty());
++    assert!(!k.closed);
+     assert_eq!(k.lead, Lead::Why(format!("{CLOSED_TAG}x")));
+     assert_eq!(k.class, "kcard why-stop");
+ }
+diff --git a/crates/tsuzuri-surface/tests/pipe.rs b/crates/tsuzuri-surface/tests/pipe.rs
+index f56172b690edf0c4685fc40599ccb42f8b55e7f7..e9114883b1da2adaac1a2cdbed1ad98a0e338b92 100644
+--- a/crates/tsuzuri-surface/tests/pipe.rs
++++ b/crates/tsuzuri-surface/tests/pipe.rs
+@@ -1,5 +1,5 @@
+ //! 便 g-pipe の歯: 5 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
+-//! 経過の字の境・hover の card の 4 行・段から列への対応は契約の型の関数・着地済みの外形と依存。
++//! 経過の字の境・段から列への対応は契約の型の関数・着地済みの外形と依存（札の hover の card の 4 行の歯は行 g-dead-sweep-a で消した）。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+@@ -9,13 +9,12 @@ use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Readi
+ use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::pipeline::{
+-    self, Column, LANES, Lead, NO_AGE, RUN_KEY, SHOW, SOURCE, UNKNOWN_REASON, age, cards, columns,
++    self, Column, LANES, Lead, NO_AGE, RUN_KEY, SHOW, UNKNOWN_REASON, age, cards, columns,
+     content, kcard, open_columns, title_of, with_open,
+ };
+ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+-use tsuzuri_surface::widgets::hover::ROW_CHARS;
+ 
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+@@ -321,47 +320,6 @@ fn pipe_age_boundaries() {
+     }
+ }
+ 
+-/// (6) 札の hover の card の 4 行（題・run と段の名・回数と口座と経過・出所）が期待と一致し、1 行は 36 字以下。
+-#[test]
+-fn pipe_hover_card_rows() {
+-    let cols = filled();
+-    let hover = |id: &str| {
+-        cols.iter()
+-            .flat_map(|c| c.cards.iter())
+-            .find(|k| k.id == id)
+-            .unwrap_or_else(|| panic!("札 {id}"))
+-            .hover
+-            .rows()
+-            .map(|(_, t)| t)
+-    };
+-    assert_eq!(
+-        hover("px.5"),
+-        ["題 5", "run · Questioned", "↻2 · acct-4 · 1h", SOURCE].map(str::to_string)
+-    );
+-    assert_eq!(
+-        hover("px.3"),
+-        ["px.3", "run · Running", "↻1 · acct-4 · 2h", SOURCE].map(str::to_string)
+-    );
+-    assert_eq!(
+-        kcard(&px11(), &ledger_rows(), NOW).hover.rows().map(|(_, t)| t),
+-        ["題 11", "run · Landed", "↻1 · ― · ―", SOURCE].map(str::to_string)
+-    );
+-    assert_eq!(
+-        hover("px.2"),
+-        [LONG_CUT, "run · Blocked", "↻2 · ― · 45s", SOURCE].map(str::to_string)
+-    );
+-    assert_eq!(SOURCE, "fleet/events.jsonl");
+-    for card in cols.iter().flat_map(|c| c.cards.iter()) {
+-        for (class, text) in card.hover.rows() {
+-            assert!(
+-                text.chars().count() <= ROW_CHARS,
+-                "{} の {class} が 36 字を超える",
+-                card.id
+-            );
+-        }
+-    }
+-}
+-
+ /// (7) 段から列への対応は契約の型の関数（Stage::column）を呼び、面の code に段の名の対応の表を書かない。
+ #[test]
+ fn pipe_stage_column_from_contract() {
+diff --git a/crates/tsuzuri-surface/tests/popapp.rs b/crates/tsuzuri-surface/tests/popapp.rs
+index 5923fd26f6502b46beecd3f1d1ebe140ed503942..1b8ff5f1c6f0faba68ea2bb12cc4fac26d8ac968 100644
+--- a/crates/tsuzuri-surface/tests/popapp.rs
++++ b/crates/tsuzuri-surface/tests/popapp.rs
+@@ -112,7 +112,7 @@ fn popapp_board_helper() {
+     assert!(text.contains("pub fn plain_click(e: &ev::MouseEvent) -> bool {"));
+ }
+ 
+-/// (3) 名前つきの窓は board の open_named だけが開き、3 か所の開きと押しの受け手がそこを通る。
++/// (3) 名前つきの窓は board の open_named だけが開き、開きと押しの受け手がそこを通る（next.rs の押しの受け手は行 g-dead-sweep-a で消した）。
+ #[test]
+ fn popapp_sites_through_helper() {
+     let mut files = Vec::new();
+@@ -126,9 +126,9 @@ fn popapp_sites_through_helper() {
+         read("src/board.rs").matches("open_with_url_and_target").count(),
+         1
+     );
+-    for rel in ["src/account/windows.rs", "src/project/next.rs"] {
+-        assert_eq!(read(rel).matches("open_named(").count(), 1, "{rel}");
+-    }
++    // 次の一手の block の DOM（next.rs の押しの受け手）は行 g-dead-sweep-a で消した。
++    assert_eq!(read("src/account/windows.rs").matches("open_named(").count(), 1);
++    assert!(!read("src/project/next.rs").contains("open_named("));
+ 
+     // frame の switch_url は plain を呼び、board の press は 4 つの修飾の鍵と button を読む。
+     let frame_src = read("src/frame.rs");
+diff --git a/crates/tsuzuri-surface/tests/tkad.rs b/crates/tsuzuri-surface/tests/tkad.rs
+index 4ba8567d582f03570fa0eff6bc07adb768812760..34f68624ef0b7abff7e127a312ce499eff5ed976 100644
+--- a/crates/tsuzuri-surface/tests/tkad.rs
++++ b/crates/tsuzuri-surface/tests/tkad.rs
+@@ -93,7 +93,7 @@ fn tkad_age_at_rules() {
+     }
+ }
+ 
+-/// (3) 3 つの file の DOM は 1 秒の時計を読み、問いの chip に投稿の時刻の注釈を付ける。
++/// (3) 2 つの file の DOM は 1 秒の時計を読み、問いの chip に投稿の時刻の注釈を付ける（next.rs の DOM は行 g-dead-sweep-a で消した）。
+ #[test]
+ fn tkad_dom_wiring() {
+     let ask = dom("src/project/ask.rs");
+@@ -114,11 +114,6 @@ fn tkad_dom_wiring() {
+     let card = range(&pipe, "fn kcard_view(", "pub fn stage_sym(");
+     assert!(card.contains("age_at(since, clock())"));
+     assert!(!card.contains("card.age"));
+-
+-    let next = dom("src/project/next.rs");
+-    assert!(next.contains("waited(&for_wait, q, clock.get())"));
+-    assert!(next.contains("let clock = crate::net::ticker();"));
+-    assert!(!next.contains("crate::net::now()"));
+ }
+ 
+ /// verify の filter の語（main fb2cc24 の 177 語と同じノートのほかの 2 行の接頭辞）。
