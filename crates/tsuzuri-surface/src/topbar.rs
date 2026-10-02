@@ -6,6 +6,7 @@
 //! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
 //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
+//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない・行 g-win-url）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading};
@@ -82,6 +83,23 @@ pub fn win_of_href(href: &str) -> Option<(Win, Option<String>)> {
     let search = format!("?{query}");
     let win = Win::from_query(&search)?;
     Some((win, crate::project::ask::focus(&search)))
+}
+
+/// 窓を開いた後の頁の URL の query（行 g-win-url）: 窓を開く値 win を外し、home の頁なら問いの id（質問の窓の名指し）も
+/// 外す（節点の頁の id は頁の中心なので残す・ほかの値と順はそのまま・残りが無ければ空の字）。
+pub fn settled_query(search: &str, page: PageId) -> String {
+    let drop =
+        |k: &str| k == WIN_PARAM || (page == PageId::Home && k == crate::project::ask::FOCUS_KEY);
+    let kept: Vec<&str> = search
+        .trim_start_matches('?')
+        .split('&')
+        .filter(|kv| !kv.is_empty() && !drop(kv.split_once('=').map_or(kv, |(k, _)| k)))
+        .collect();
+    if kept.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", kept.join("&"))
+    }
 }
 
 /// 帯の id（見本の `#bar`・頁に 1 つ）。

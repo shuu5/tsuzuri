@@ -4,7 +4,8 @@
 //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
 //! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
 //! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
-//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。
+//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。URL の win で窓を開いた後は history を置き替えて URL から win と
+//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ・行 g-win-url）。
 //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
 //! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
 //! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
@@ -54,6 +55,21 @@ fn search() -> String {
 fn keep_mode_in_url(mode: Mode) {
     store::keep_mode(mode);
     let url = frame::with_param(&search(), "mode", mode.key());
+    if let Ok(history) = window().history() {
+        let _ =
+            history.replace_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&url));
+    }
+}
+
+/// URL の win で窓を開いた後に、頁の URL から窓を開く値を外す（history の置き替え・行 g-win-url）。
+fn settle_url(page: PageId, query: &str) {
+    let loc = window().location();
+    let url = format!(
+        "{}{}{}",
+        loc.pathname().unwrap_or_default(),
+        topbar::settled_query(query, page),
+        loc.hash().unwrap_or_default()
+    );
     if let Ok(history) = window().history() {
         let _ =
             history.replace_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&url));
@@ -126,6 +142,7 @@ fn App() -> impl IntoView {
     if let Some((w, id)) = win_of_href(&query) {
         focus.0.set(id);
         win.open(w, false);
+        settle_url(page, &query);
     }
     // home の頁では、窓を開く link の普通の押しは頁を読み直さずにその窓を開く（窓の中の link は前の窓に戻る口を持つ）。
     if page == PageId::Home {
