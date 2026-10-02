@@ -272,6 +272,11 @@ a.tile:hover { box-shadow: var(--shadow); }
 .kcard .m .why { flex-wrap: wrap; }
 .kcard .m svg { width: 12px; height: 12px; }
 .kcard.why-stop .m .why { color: var(--s-stop); font-weight: 600; }
+button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.kcard .kl { margin-top: 3px; padding-left: 24px; color: var(--ink-2); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.kcard .kl.klwarn { color: var(--st-limit); font-weight: 600; }
+.kcard .kl.klstop { color: var(--s-stop); }
+.kcard .kl.klask { color: var(--st-limit); }
 .fixrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2); margin-top: var(--s2); padding: var(--s2); border: 1px dashed var(--s-stop); border-radius: var(--r2); background: color-mix(in srgb, var(--s-stop) 10%, var(--panel)); }
 .fixrow > header { flex: 0 0 150px; display: flex; align-items: center; min-height: 32px; font-weight: 700; color: var(--ink-2); }
 .fixcards { flex: 1 1 260px; display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; }

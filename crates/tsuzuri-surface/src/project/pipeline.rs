@@ -11,13 +11,15 @@
 //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
 //! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
 //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
+//! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
+//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
 
 use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::{GraphDoc, title36};
-use tsuzuri_contract::ledger::LedgerRow;
+use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
 use tsuzuri_contract::wire;
 
 use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
@@ -27,6 +29,8 @@ use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
+use crate::widgets::keyline::{LineSrc, line_src};
+use crate::widgets::pop::{self, Src};
 
 pub const BLOCK: Block = Block {
     id: "pipe",
@@ -198,7 +202,39 @@ pub struct Kcard {
     pub closed: bool,
     /// Landed の列ほかの札の meta に足す着地の後の CI の読み（`ci_shown` の値・止まった列の札は None で、語は lead に出る）。
     pub ci: Option<Ci>,
+    /// 短い題（bead の事実の short・`with_lines` が置く・置くまでは None・行 g-pipe-cards）。
+    pub short: Option<String>,
+    /// 要の 1 行の材料（`with_lines` が置く・置くまでは None で要の 1 行を出さない）。
+    pub line: Option<LineSrc>,
 }
+
+
+/// 札の短い題（bead の事実の short・事実に無ければ 36 字の題・題も無ければ id）。
+pub fn short_title(facts: &Reading<&[BeadFact]>, card: &Kcard) -> String {
+    let found = match facts {
+        Reading::Known(f) => f.iter().find(|x| x.id.as_str() == card.id),
+        Reading::Unknown => None,
+    };
+    found.map_or_else(
+        || card.title.clone().unwrap_or_else(|| card.id.clone()),
+        |x| x.short.clone(),
+    )
+}
+
+/// 板の全部の札に短い題と要の 1 行の材料を置く（材料の札の電文は材料の札の列から id で引く・中身の無い板は受けた値のまま）。
+pub fn with_lines(body: Body<Vec<Column>>, src: &Src<'_>) -> Body<Vec<Column>> {
+    let Body::Filled(mut cols) = body else {
+        return body;
+    };
+    for card in cols.iter_mut().flat_map(|c| c.cards.iter_mut()) {
+        card.short = Some(short_title(&src.facts, card));
+        card.line = pop::card_of(src.cards, &card.id).map(|c| line_src(c, src));
+    }
+    Body::Filled(cols)
+}
+
+/// 止まった列の札の class。
+const STOP_CLASS: &str = "kcard why-stop";
 
 /// 値の行に出す理由の字数（見本の cut の 20）。
 const WHY_CHARS: usize = 20;
@@ -466,16 +502,14 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
         lead,
         age,
         since: card.since,
-        class: if lane.stops() {
-            "kcard why-stop"
-        } else {
-            "kcard"
-        },
+        class: if lane.stops() { STOP_CLASS } else { "kcard" },
         hover,
         run_line,
         run_more,
         closed,
         ci: if lane.stops() { None } else { shown },
+        short: None,
+        line: None,
     }
 }
 
@@ -644,14 +678,18 @@ mod dom {
 
     use super::{
         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
-        age_at, card_href, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
-        open_columns, with_closed, with_nodes, with_open,
+        age_at, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
+        open_columns, with_closed, with_lines, with_open,
     };
     use crate::frame::Mode;
-    use crate::project::{Body, ledger, map, section, state_icon, unmeasured};
+    use tsuzuri_contract::case::PATH as CASES_PATH;
+
+    use crate::project::{Body, ledger, section, state_icon, unmeasured};
+    use crate::view::read_rows;
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs};
-    use crate::widgets::hover::attach;
+    use crate::widgets::keyline::key_line;
+    use crate::widgets::pop::{BEADS_PATH, PopCtx, Src, Via, known, read_facts, read_parts};
 
     /// 回数の印（見本の IC.redo）。
     const REDO: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
@@ -702,7 +740,8 @@ mod dom {
     pub fn view() -> AnyView {
         let pipe = crate::net::read(PATH);
         let rows = crate::net::read(ledger::PATH);
-        let graph = crate::net::read(map::PATH);
+        let beads = crate::net::read(BEADS_PATH);
+        let cases = crate::net::read(CASES_PATH);
         let open = RwSignal::new(open_columns(&search()));
         let ctx = use_context::<HelpCtx>();
         let mode = move || match ctx {
@@ -714,7 +753,18 @@ mod dom {
         let clock = move || tick.get();
         let body = move || {
             let now = crate::net::now();
-            let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {
+            let facts = beads.with(read_facts);
+            let parts = cases.with(read_parts);
+            let ledger_rows = rows.with(read_rows);
+            let cards = pipe.with(|p| super::cards(p).unwrap_or_default());
+            let src = Src {
+                facts: known(&facts),
+                rows: known(&ledger_rows),
+                cards: &cards,
+                parts: known(&parts),
+                graph: None,
+            };
+            let board = match pipe.with(|p| rows.with(|l| with_lines(content(p, l, now), &src))) {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
@@ -819,10 +869,10 @@ mod dom {
         .into_any()
     }
 
-    /// 1 枚の札（押すと契約 bead と同じ id の節点の頁へ・指を置くと hover の card）。
+    /// 1 枚の札（押すと吹き出しを開き・もう 1 度押すと閉じる・hover の card は付けない・行 g-pipe-cards）。
     fn kcard_view(
         card: &Kcard,
-        mode: Mode,
+        _mode: Mode,
         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
     ) -> AnyView {
         let sym = stage_sym(card.closed, card.state);
@@ -833,9 +883,23 @@ mod dom {
             .ci
             .map(|c| view! { <span style=ci_style(c)>{label(ci_key(c))}</span> });
         let title = card
-            .title
+            .short
             .clone()
+            .or_else(|| card.title.clone())
             .map(|t| view! { <span class="tt" data-t="">{t}</span> });
+        // 要の 1 行は 1 秒の時計で書き直す（材料が無ければ出さない）。
+        let line = card.line.clone().map(|src| {
+            let src = StoredValue::new(src);
+            let now = move || src.with_value(|s| key_line(s, clock()));
+            view! { <div class=move || now().class>{move || now().text}</div> }
+        });
+        let pop = use_context::<PopCtx>();
+        let id = card.id.clone();
+        let press = move |_| {
+            if let Some(p) = pop {
+                p.press(&id, Via::Card);
+            }
+        };
         let lead = match &card.lead {
             Lead::Runs(n) => view! { <span><span inner_html=REDO></span>{*n}</span> }.into_any(),
             Lead::Why(w) => {
@@ -844,7 +908,7 @@ mod dom {
             }
         };
         view! {
-            <a class=card.class href=card_href(card, mode) use:attach=card.hover.clone()>
+            <button type="button" class=card.class data-pop-card=card.id.clone() on:click=press>
                 <div class="t">{sym}{title}</div>
                 <div class="m">
                     <span class="kid">{card.id.clone()}</span>
@@ -853,7 +917,8 @@ mod dom {
                     {ci}
                     <span><span inner_html=CLOCK></span><span class="num">{age}</span></span>
                 </div>
-            </a>
+                {line}
+            </button>
         }
         .into_any()
     }

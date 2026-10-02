@@ -113,14 +113,14 @@ fn klink_dom_anchor_keeps_hover() {
     let src = read("src/project/pipeline.rs");
     let at = src.find("mod dom").expect("pipeline.rs に mod dom が在る");
     let dom = &src[at..];
-    assert!(dom.contains("card_href("), "DOM が card_href を呼ぶ");
+    assert!(dom.contains("p.press(&id, Via::Card)"), "DOM が札の押しで吹き出しを開く");
     assert!(
-        dom.contains("<a class=card.class href="),
-        "札の外側の要素が a で class の次に href"
+        dom.contains("<button type=\"button\" class=card.class data-pop-card="),
+        "札の外側の要素が button で class の次に吹き出しの口の印（行 g-pipe-cards）"
     );
     assert!(
-        dom.contains("use:attach=card.hover.clone()"),
-        "札に hover の card が付く"
+        !dom.contains("use:attach=card.hover.clone()"),
+        "札に hover の card が付かない（行 g-pipe-cards）"
     );
     assert!(
         !src.contains("<div class=card.class"),

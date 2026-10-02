@@ -233,7 +233,7 @@ fn gfix_dom_wiring() {
     let view = range("pub fn view() -> AnyView {", "fn board_view(");
     let mut at = 0;
     for w in [
-        "let board = match pipe.with(|p| rows.with(|l| graph.with(|g| with_nodes(content(p, l, now), g)))) {",
+        "let board = match pipe.with(|p| rows.with(|l| with_lines(content(p, l, now), &src))) {",
         "let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));",
         "view! { {board}{fix} }.into_any()",
     ] {

@@ -345,16 +345,14 @@ fn dom_part(text: &str) -> &str {
 fn cadopt_dom_wiring() {
     let pipe = read("src/project/pipeline.rs");
     let dom = dom_part(&pipe);
-    for want in [
-        "with_nodes(content(p, l, now), g)",
-        "map::PATH",
-        "use:attach=card.hover.clone()",
-    ] {
+    // 札は hover の card を外し押すと吹き出しを開く（行 g-pipe-cards）。節点の card の値の組み（with_nodes）は純粋な関数に残る。
+    for want in ["with_nodes(", "map::PATH", "use:attach="] {
         assert!(
-            dom.contains(want),
-            "pipeline.rs の mod dom に {want} が無い"
+            !dom.contains(want),
+            "pipeline.rs の mod dom に {want} が在る"
         );
     }
+    assert!(dom.contains("with_lines(content(p, l, now), &src)"));
 
     let next_text = read("src/project/next.rs");
     let dom = dom_part(&next_text);

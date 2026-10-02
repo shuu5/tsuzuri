@@ -2011,6 +2011,36 @@
    "label": "同じ設計の行の直しを待つ",
    "plain": "同じ設計から出た行の直しが入るまで待つ",
    "internal": "WaitReason::Sibling"
+  },
+  "kl_wait": {
+   "label": "待ち",
+   "plain": "札の要の 1 行: 相手を待っている\n・ 相手が 1 つなら相手の id",
+   "internal": "pipeline::key_line（行 g-pipe-cards）"
+  },
+  "kl_waits": {
+   "label": "本待ち",
+   "plain": "札の要の 1 行: 待つ相手の数",
+   "internal": "pop::wait_on の数（2 つ以上）"
+  },
+  "kl_queue": {
+   "label": "列に",
+   "plain": "札の要の 1 行: 列に在る長さ\n・ 30 分を越えると ⚠ と注意の色（規則の行 R-37）",
+   "internal": "PipelineCard の since から今まで\nQUEUED_WARN_S = 1800"
+  },
+  "kl_created": {
+   "label": "起票から",
+   "plain": "札の要の 1 行: 起票からの経過",
+   "internal": "BeadFact の created_at から今まで"
+  },
+  "kl_ask": {
+   "label": "run の問い",
+   "plain": "札の要の 1 行: run が問いで止まっている",
+   "internal": "段 Questioned"
+  },
+  "kl_landed": {
+   "label": "着地",
+   "plain": "札の要の 1 行: 着地の時刻と CI の結果",
+   "internal": "段 Landed の since と ci"
   }
  }
 }

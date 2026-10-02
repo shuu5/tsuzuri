@@ -97,8 +97,8 @@ fn cmark_dom_text() {
         "var(--ink-3)",
         "CHECK",
         "var(--s-land)",
-        "<a class=card.class href=",
-        "use:attach=card.hover.clone()",
+        "<button type=\"button\" class=card.class data-pop-card=",
+        "on:click=press",
     ] {
         assert!(view.contains(s), "kcard_view の後に {s} が無い");
     }
