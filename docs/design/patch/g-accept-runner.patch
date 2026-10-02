@@ -483,10 +483,10 @@ index e8e73c685ff2937d246fe14f396763b780697069..e977d280961ea68807e7dcab503405ab
  
 diff --git a/crates/tsuzuri-boundary/tests/bvsettle.rs b/crates/tsuzuri-boundary/tests/bvsettle.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2eeb8fa5e8e
+index 0000000000000000000000000000000000000000..2169d7e902282696d650dbaa0a2f95cede7d68e4
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/bvsettle.rs
-@@ -0,0 +1,559 @@
+@@ -0,0 +1,701 @@
 +//! 行 g-accept-runner の歯（接頭辞 bvsettle_）: 受入の runner の待ちと今の選び。
 +//! runner は頁を開いた後、面が描き、どの block も読みの印（面の kit の NOT_READ の字）を出さなくなるまで上限つきで待ち、
 +//! 上限で残る画面は違反 0 と数えずまだ分からないとする（憲法 P-7）。測りの式は切り替えの在りかに今の選びの印 now を
@@ -514,6 +514,15 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +        .join("../..")
 +        .join(rel);
 +    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// `head` で始まり、その後の最初の `close` の手前で終わる切り（`head` は字の中に 1 つだけ）を、改行と続く字下げを
++/// 除いてつないだ字（JS の鎖を頭から尾まで、関数や腕を頭から閉じまで照らす）。
++fn cut(text: &str, head: &str, close: &str) -> String {
++    assert_eq!(text.matches(head).count(), 1, "{head}");
++    let from = text.find(head).expect("切りの頭");
++    let to = from + text[from..].find(close).expect("切りの閉じ");
++    text[from..to].split('\n').map(str::trim_start).collect()
 +}
 +
 +fn clean() -> String {
@@ -719,17 +728,45 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +    let blind = format!(" expert {BOARD}?page=node&mode=expert {UNSETTLED}");
 +    assert_eq!(report.lines().filter(|l| l.ends_with(&blind)).count(), 4);
 +    assert_eq!(page.navigated().len(), 96 - 4);
++    accept_unknown_rc();
++}
 +
++/// xtask の accept: fn sweep は audit の sweep のまだ分からない画面の数をそのまま返し、fn run の match は 0 の腕の後の
++/// まだ分からない腕で、標準誤りの 1 文（違反の計とまだ分からない画面の数）の他に枝を持たず、違反の数に依らず 2 を返す。
++fn accept_unknown_rc() {
 +    let accept = read("xtask/src/accept.rs");
-+    let arm = &accept[accept
-+        .find("        Ok((total, unknown)) => {\n")
-+        .expect("まだ分からない腕")..];
-+    let arm = &arm[..arm.find("\n        }\n").expect("腕の閉じ")];
-+    assert!(
-+        arm.contains("まだ分からない画面 {unknown}") && arm.ends_with("\n            2"),
-+        "{arm}"
++    let sweep = cut(
++        &accept,
++        "fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {\n",
++        "\n}\n",
 +    );
-+    assert!(accept.contains("        Ok((total, 0)) => {\n"));
++    assert!(
++        sweep
++            .contains("let (report, total, unknown) = audit::sweep(&mut session, board, &vocab)?;")
++            && sweep.ends_with("Ok((total, unknown))")
++            && sweep.matches("unknown").count() == 2,
++        "{sweep}"
++    );
++    let run = cut(
++        &accept,
++        "pub fn run(args: &[String], root: &Path) -> i32 {\n",
++        "\n}\n",
++    );
++    let arms = cut(&run, "match sweep(&flags, root) {", "}Err(e) => {");
++    let (zero, unknown) = arms
++        .strip_prefix("match sweep(&flags, root) {Ok((total, 0)) => {")
++        .and_then(|a| a.split_once("}Ok((total, unknown)) => {"))
++        .expect("0 の腕のすぐ次にまだ分からない腕");
++    let say = unknown
++        .strip_prefix("emit_err(")
++        .and_then(|a| a.strip_suffix(");2"))
++        .expect("まだ分からない腕は 1 文の後に 2");
++    assert!(
++        !zero.contains("Ok((")
++            && !say.contains(';')
++            && say.contains("まだ分からない画面 {unknown}"),
++        "{arms}"
++    );
 +}
 +
 +/// (5) 今の選び（在りかの now が真）は押さず、今でない選びは押して URL を比べる。URL の替わらない今でない選びは、
@@ -786,13 +823,21 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +#[test]
 +fn bvsettle_probe_marks_current() {
 +    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
-+    for want in [
-+        "const current = \"[aria-selected=true], [aria-pressed=true], [aria-current]:not([aria-current=false]), .on\";",
-+        ".map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))",
-+        ".map(({ label, now, r }) => ({ label, now, x: Math.round(",
-+    ] {
-+        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
-+    }
++    assert_eq!(
++        cut(&probe, "  const current = ", ";\n"),
++        "const current = \"[aria-selected=true], [aria-pressed=true], [aria-current]:not([aria-current=false]), .on\""
++    );
++    // 在りかの鎖は頭（seen の切り替え）から尾（窓の中の点）まで、now を e.matches(current) の 1 所だけで決める。
++    assert_eq!(
++        cut(&probe, "  const switch_at = ", ";\n"),
++        concat!(
++            "const switch_at = seen",
++            ".filter((e) => e.matches(\"button.seg, .seg button, [role=tab], [aria-pressed], [data-tab]\"))",
++            ".map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))",
++            ".map(({ label, now, r }) => ({ label, now, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))",
++            ".filter(({ x, y }) => x >= 0 && y >= 0 && x < vw && y < vh)",
++        )
++    );
 +    let pressed = surface_pressed();
 +    assert_eq!(
 +        pressed.join(" "),
@@ -804,12 +849,51 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +    assert!(board.contains("class=class aria-current=current on:click=press data-tab=l.tab.id()"));
 +    let account = read("crates/tsuzuri-surface/src/account/mod.rs");
 +    assert!(account.contains("class: if tab == current { \"on\" } else { \"\" },"));
++    surface_unread_shown();
++}
++
++/// 面の kit: 口をまだ読んでいない block の中身は NOT_READ の理由で、測れていないの 1 行は理由を見える span に出す
++/// （包みの div も span も隠す属性を持たない）。面の index.html は head の後に空の body だけを持つ（描く前に見える字は無い）。
++fn surface_unread_shown() {
 +    let kit = read("crates/tsuzuri-surface/src/kit.rs");
 +    assert!(kit.contains(&format!("pub const NOT_READ: &str = \"{NOT_READ}\";")));
-+    assert!(kit.contains("Fetched::NotRead => NOT_READ,"));
-+    assert!(kit.contains("<span class=\"small muted\">{reason}</span>"));
++    let pending = cut(
++        &kit,
++        "pub fn pending(fetched: &Fetched, unread: &'static str) -> Body<()> {\n",
++        "\n}\n",
++    );
++    assert!(
++        pending.contains("Fetched::NotRead => NOT_READ,"),
++        "{pending}"
++    );
++    let body = cut(
++        &kit,
++        "    pub fn body_view(body: Body<()>) -> AnyView {\n",
++        "\n    }\n",
++    );
++    assert!(
++        body.contains("Body::Unmeasured(reason) => unmeasured(reason),"),
++        "{body}"
++    );
++    assert_eq!(
++        cut(
++            &kit,
++            "    pub fn unmeasured(reason: &'static str) -> AnyView {\n",
++            "\n    }\n"
++        ),
++        concat!(
++            "pub fn unmeasured(reason: &'static str) -> AnyView {view! {<div class=\"empty\">",
++            "{state_icon(UNKNOWN)}<span>{label(state_key(UNKNOWN))}</span>",
++            "<span class=\"small muted\">{reason}</span></div>}.into_any()",
++        )
++    );
 +    let index = read("crates/tsuzuri-surface/index.html");
-+    assert!(index.contains("<body></body>"), "描く前の body は空");
++    let after = &index[index.find("</head>").expect("head の閉じ")..];
++    assert_eq!(
++        after.split_whitespace().collect::<String>(),
++        "</head><body></body></html>",
++        "描く前の body は空"
++    );
 +}
 +
 +/// 面の crate の src の .rs の今の印を照らし、aria-pressed を持つ file と数の字（file:数 を名の順に）を返す。
@@ -857,10 +941,15 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +        (n, n),
 +        "{rel}"
 +    );
-+    assert!(
-+        lets.iter().all(|l| l.ends_with(".to_string();")),
-+        "{rel}: {lets:?}"
-+    );
++    // 閉包の中身は、信号の今の値（get か with の読み）と項の値の比べの真偽の 1 つ（決まった字でない）。
++    let compares = |l: &&str| {
++        l.strip_prefix("let pressed = move || ")
++            .and_then(|c| c.strip_suffix(".to_string();"))
++            .is_some_and(|c| {
++                c.matches(" == ").count() == 1 && (c.contains(".get()") || c.contains(".with("))
++            })
++    };
++    assert!(lets.iter().all(compares), "{rel}: {lets:?}");
 +    let tabs = text.matches("aria-current=").count() + text.matches("data-tab=").count();
 +    assert_eq!(tabs > 0, rel == "account/board.rs", "{rel}");
 +    n
@@ -871,16 +960,7 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +/// 画面の行の末と 外した置き場 計 の行に出る。skipped の項の頭が ledger か pair でなければ Err。
 +#[test]
 +fn bvsettle_skips_named_places() {
-+    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
-+    for want in [
-+        "  const ledger = \"[data-ledger-text]\";\n  const pairs = \".c-more\";\n",
-+        ".map((e) => \"ledger \" + name(e))\n    .concat(seen.filter((e) => e.matches(pairs)).map((e) => \"pair \" + name(e)))\n",
-+        "p.closest(skip) || p.closest(ledger) || p.closest(pairs)) continue;",
-+        "e.matches(\"[data-t]\") && !e.closest(ledger))",
-+        "    reach,\n    skipped,\n",
-+    ] {
-+        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
-+    }
++    probe_skips_named(&read("crates/tsuzuri-boundary/src/stage/measure.js"));
 +    let long = "台帳の字・長い問い・続き".repeat(31);
 +    let plain = clean().replace("\"P-1 は 12:30Z に決めた。\"", &format!("\"{long}\""));
 +    let marked = clean().replace(
@@ -932,6 +1012,39 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +    );
 +}
 +
++/// 測りの式の外しの字: 印の選びの 2 つ・題の外し・返す欄、skipped の鎖は頭（seen の印の要素）から尾まで、散文の walk は
++/// 字の直の親の要素で外しを判じる。
++fn probe_skips_named(probe: &str) {
++    for want in [
++        "  const ledger = \"[data-ledger-text]\";\n  const pairs = \".c-more\";\n",
++        "e.matches(\"[data-t]\") && !e.closest(ledger))",
++        "    reach,\n    skipped,\n",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    assert_eq!(
++        cut(probe, "  const skipped = ", ";\n"),
++        concat!(
++            "const skipped = seen.filter((e) => e.matches(ledger)).map((e) => \"ledger \" + name(e))",
++            ".concat(seen.filter((e) => e.matches(pairs)).map((e) => \"pair \" + name(e)))",
++            ".concat(unseen.map((e) => \"hidden \" + name(e)))",
++        )
++    );
++    assert_eq!(
++        cut(
++            probe,
++            "  for (let t = walk.nextNode(); t; t = walk.nextNode()) {\n",
++            "\n  }\n"
++        ),
++        concat!(
++            "for (let t = walk.nextNode(); t; t = walk.nextNode()) {",
++            "const p = t.parentElement;const piece = words(t.nodeValue);",
++            "if (!piece || !p || !shown(p) || p.closest(skip) || p.closest(ledger) || p.closest(pairs)) continue;",
++            "if (p.getBoundingClientRect().top < vh) first.push(piece);",
++        )
++    );
++}
++
 +/// (9) 測りの式は、箱を持っても描かれない要素（checkVisibility が偽・閉じた details の中・祖先の display none・
 +/// visibility hidden）をどの条の要素の列（seen と散文の片）にも入れず、skipped に hidden の名で返す。hidden の項は
 +/// どの条の数も替えず（見える同じ要素は今までどおり数える）、report の画面の行の末と 外した置き場 計 の行に出る。
@@ -951,6 +1064,7 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +        1,
 +        "要素の列は seen の 1 つ"
 +    );
++    probe_lists_from_seen(&probe);
 +    let vocab = vocab();
 +    let at = |key: &str| RULES.iter().position(|(k, _)| *k == key).expect("条");
 +    let pair = r#""overlap": ["button.btn × span.ttl"]"#;
@@ -987,6 +1101,34 @@ index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2ee
 +        report.ends_with("外した置き場 計 台帳の字 0 語と値の対 0 見えない要素 12\n"),
 +        "{report}"
 +    );
++}
++
++/// 測りの式の条ごとの要素の列（はみ出し・重なりの部品・吹き出しの口・節点の受け手・見出し・題・節点の id・切り替えの
++/// 在りか・外した置き場）はどれも seen から作り、要素を全部拾う querySelectorAll の * は seen と unseen の 2 所だけ。
++fn probe_lists_from_seen(probe: &str) {
++    for list in [
++        "overflow",
++        "parts",
++        "nopop",
++        "reach",
++        "headings",
++        "titles",
++        "nodes",
++        "switch_at",
++        "skipped",
++    ] {
++        let head = format!("  const {list} = ");
++        let chain = cut(probe, &head, ";\n");
++        assert!(
++            chain.starts_with(&format!("const {list} = seen.")),
++            "{chain}"
++        );
++    }
++    assert_eq!(
++        cut(probe, "  const seen = ", ";\n"),
++        "const seen = Array.from(root.querySelectorAll(\"*\")).filter(shown)"
++    );
++    assert_eq!(probe.matches("querySelectorAll(\"*\")").count(), 2);
 +}
 +
 +/// (10) report は違反の在る画面の行の下に、数えた違反ごとに 2 つの空白と条の鍵と空白と要素の名か字の 1 行を持つ
