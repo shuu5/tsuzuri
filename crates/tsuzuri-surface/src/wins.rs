@@ -4,7 +4,7 @@
 //! 知らせ・席と口座・抜けの検査・記号の見方・表示先は、今の block の中身の関数（各 module の inner）を窓の中で描く
 //! （頁の block は替えない・頁から block を外すのは 1 枚の画面への切り替えの行）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
 //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
-//! 質問の窓はこの行では今の質問の block を描く（1 問ずつの形は行 g-ask-win が替える）。
+//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。
 //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
 
 use std::cmp::Reverse;
@@ -100,11 +100,11 @@ mod dom {
     use super::{Stalled, frame_of, stalled};
     use crate::frame::Mode;
     use crate::project::{
-        Body, ask, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
+        Body, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
     };
     use crate::topbar::Win;
     use crate::vocab::label;
-    use crate::widgets::modal::Frame;
+    use crate::widgets::modal::{Frame, WinCtx};
 
     /// 今の URL の表示の型。
     fn mode() -> Mode {
@@ -139,11 +139,11 @@ mod dom {
         list.into_any()
     }
 
-    /// 窓の名から中身を組む（窓の層 widgets::modal::layer の draw に渡す）。
-    pub fn draw(win: Win) -> Frame {
+    /// 窓の名から中身を組む（窓の層 widgets::modal::layer の draw に渡す・`ctx` は質問の窓が全部に答えた後に閉じる口）。
+    pub fn draw(win: Win, ctx: WinCtx<Win>) -> Frame {
         let (width, key) = frame_of(win);
         let body = match win {
-            Win::Ask => ask::view(),
+            Win::Ask => return crate::askwin::frame(ctx),
             Win::Stalled => stalled_view(),
             Win::Notices => notice::inner(),
             Win::Seat => seat::inner(),

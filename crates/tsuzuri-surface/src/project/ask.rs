@@ -645,6 +645,10 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 質問の窓の 1 問（行 g-ask-win・中身は dom の one_view）。
+#[cfg(target_arch = "wasm32")]
+pub use dom::one_view;
+
 /// 届いていない裁定の 1 行（一覧の上と次の一手の箱の上に出す・wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 pub fn late_view() -> leptos::prelude::AnyView {
@@ -795,6 +799,39 @@ mod dom {
         };
         let content = view! { {late_view()}{list}{unknown} }.into_any();
         section(BLOCK, extra.into_any(), content)
+    }
+
+    /// 質問の窓の 1 問（行 g-ask-win）: `pick` の card を block と同じ card（つながりの図と答えの欄も同じ）で描き、
+    /// 答えを記録した（200）問いの id を `recorded` に渡す。答えの状態は問いの id ごとに窓の一生の間持つ。
+    pub fn one_view(pick: Memo<Option<Card>>, recorded: Callback<BeadId>) -> AnyView {
+        let fallback = Mode::from_query(&window().location().search().unwrap_or_default());
+        let mode = use_context::<HelpCtx>().map(|c| c.mode);
+        let current = move || mode.map_or(fallback, |m| m.get());
+        let fetched = crate::net::read(PATH);
+        provide_context(CanAnswer(Memo::new(move |_| fetched.with(answerable))));
+        let cards = Memo::new(move |_| fetched.with(listed));
+        let places = embeds();
+        let drafts: Drafts = StoredValue::new(Vec::new());
+        let clock = crate::net::ticker();
+        let tick = move || clock.get();
+        let one = move || {
+            pick.get().map(|c| {
+                let d = draft(drafts, &c.id);
+                let (id, outcome) = (c.id.clone(), d.outcome.clone());
+                Effect::new(move |_| {
+                    if outcome.with(|o| matches!(o, Some(Outcome::Recorded { .. }))) {
+                        recorded.run(id.clone());
+                    }
+                });
+                let key = c.id.to_string();
+                let live = Live {
+                    nb: Memo::new(move |_| cards.with(|v| target_number(v, &key)).unwrap_or(0)),
+                    node: Memo::new(|_| None),
+                };
+                card_view(c, d, live, false, Shared { tick, mode: current, places })
+            })
+        };
+        one.into_any()
     }
 
     /// 席に届いていない裁定の 1 行（口を読み、1 秒の時計で書き直す・無いときは何も出さない・行 f-undelivered）。

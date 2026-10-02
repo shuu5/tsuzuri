@@ -1776,6 +1776,21 @@
    "label": "席と口座",
    "plain": "席の状態と口座の利用枠\n・ 帯は直近 3 時間の動き\n・ 5h と 7d は使った割合\n→ 押すと席と口座の窓",
    "internal": "GET /api/seat（判断の記録 ADR-27 決定 (3)(4)）"
+  },
+  "ask_done": {
+   "label": "全部答えました ✓",
+   "plain": "答えを待つ質問が無くなった\n→ 少し待つと窓が閉じる",
+   "internal": "askwin の Phase::Done（行 g-ask-win）"
+  },
+  "ask_later": {
+   "label": "あとで",
+   "plain": "この質問を後に回す\n→ 後ろの答えていない質問へ\n・ ほかに無ければ窓を閉じる",
+   "internal": "askwin の later（見本の qlater）"
+  },
+  "ask_others": {
+   "label": "ほかの project の質問",
+   "plain": "ほかの project の答えを待つ質問\n・ ここでは読むだけ\n→ 答えはチャットで",
+   "internal": "GET /api/questions の others"
   }
  }
 }

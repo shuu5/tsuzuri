@@ -7,6 +7,8 @@
 //! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
 
 pub mod account;
+/// 質問の窓（1 問ずつの選び方と局面は host でも組む・窓の DOM は wasm の target だけ・行 g-ask-win）。
+pub mod askwin;
 /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
 pub mod flight;
 pub mod frame;

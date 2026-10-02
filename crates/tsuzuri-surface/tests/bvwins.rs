@@ -195,13 +195,13 @@ fn bvwins_blocks_inner_text() {
     assert!(stage.contains("        let f = Face::new();\n        load(f);\n        body(f)\n"));
 }
 
-/// 窓の DOM（wasm の枝）の配線の字: 窓の名ごとに中身を組む関数（質問はこの行では今の質問の block）。
+/// 窓の DOM（wasm の枝）の配線の字: 窓の名ごとに中身を組む関数（質問は 1 問ずつの窓・行 g-ask-win）。
 #[test]
 fn bvwins_draw_wiring_text() {
     let src = read("src/wins.rs");
     let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
     for needle in [
-        "Win::Ask => ask::view(),",
+        "Win::Ask => return crate::askwin::frame(ctx),",
         "Win::Stalled => stalled_view(),",
         "Win::Notices => notice::inner(),",
         "Win::Seat => seat::inner(),",

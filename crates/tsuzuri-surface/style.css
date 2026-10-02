@@ -386,6 +386,22 @@ details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
 details.fold[open] > summary::before { transform: rotate(45deg); }
 
+/* 質問の窓（行 g-ask-win・見本の qModal・題の横の点・全部に答えた・あとで・下の畳んだ段） */
+.qdots { display: flex; gap: 6px; }
+.qdots .qd { width: 11px; height: 11px; padding: 0; border: 2px solid #fdba74; border-radius: 50%; background: var(--panel); cursor: pointer; }
+.qdots .qd.cur { background: #ea580c; border-color: #ea580c; }
+.qdots .qd.ok { background: var(--st-run); border-color: var(--st-run); }
+.alldone { padding: 50px 0; color: var(--st-run); font-size: 20px; font-weight: 700; text-align: center; }
+.qbtns { display: flex; align-items: center; gap: var(--s2); margin-top: 10px; }
+.qbtns .later { padding: 6px 14px; border: 1px solid var(--line-2); border-radius: var(--r2); background: var(--panel); cursor: pointer; }
+.folds { margin-top: var(--s3); padding-top: 6px; border-top: 1px solid var(--line); }
+@media (max-width: 600px) {
+  .qdots { gap: 0; }
+  .qdots .qd { width: 40px; height: 40px; padding: 13px; border: 0; background-clip: content-box; background-color: #fdba74; }
+  .qdots .qd.cur { background-color: #ea580c; }
+  .qdots .qd.ok { background-color: var(--st-run); }
+}
+
 /* ---------- つながり（図） ---------- */
 .nb-wrap { margin-top: var(--s2); }
 .nb-graph { overflow: hidden; }

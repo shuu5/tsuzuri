@@ -310,6 +310,12 @@ pub fn view() -> leptos::prelude::AnyView {
     dom::view()
 }
 
+/// 質問の窓の下の段の中身（見出しの無い本文・行 g-ask-win）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner() -> leptos::prelude::AnyView {
+    dom::inner()
+}
+
 /// まとめて承認の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -343,6 +349,11 @@ mod dom {
     }
 
     pub fn view() -> AnyView {
+        section(BLOCK, ().into_any(), inner())
+    }
+
+    /// block の本文（見出しの無い中身・質問の窓の下の段も使う）。
+    pub fn inner() -> AnyView {
         let fetched = crate::net::read(ask::PATH);
         let s = State {
             off: RwSignal::new(BTreeSet::new()),
@@ -369,7 +380,7 @@ mod dom {
                 .get()
                 .map(|o| view! { <div class="small" role="status">{o.line()}</div> })
         };
-        section(BLOCK, ().into_any(), view! { {content}{note} }.into_any())
+        view! { {content}{note} }.into_any()
     }
 
     fn filled(rows: Memo<Vec<Row>>, s: State) -> AnyView {
