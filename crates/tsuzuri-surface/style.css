@@ -1289,3 +1289,20 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
 /* 台帳 open の一覧の局面と手番（行 g-unref-lc）: memo と問いの行の平易な字・見出しの未反映の数 */
 .ll-ph { flex: none; font-size: 11px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 .ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
+/* 選びの印（行 g-select・見本 board-v2 の .ech・.card.dim・.card.ring・.gh.esel・.gh.ring・.lrow.ring）: epic の chip と薄い札と輪 */
+.pchips { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; margin-left: var(--s2); }
+.pchips .pchip { display: flex; align-items: center; gap: 5px; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font: inherit; font-size: 12px; white-space: nowrap; background: var(--panel); color: inherit; cursor: pointer; }
+.pchips .pchip b { font-weight: 600; color: var(--ink-3); }
+.pchips .pchip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.pchips .pchip.on b { color: var(--line-2); }
+.kpick { display: block; min-width: 0; transition: opacity .15s; }
+.kpick.dim { opacity: .3; }
+.kpick.ring > .kcard { box-shadow: 0 0 0 2px var(--ink); }
+.kpick.dim.ring { opacity: 1; }
+button.ll-gname { font: inherit; font-weight: 700; font-size: 13px; color: inherit; background: none; border: 0; border-radius: 5px; padding: 1px 4px; cursor: pointer; text-align: left; }
+button.ll-gname:hover { background: var(--panel-2); }
+.ll-gh.esel { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-radius: 6px; }
+.ll-gh.ring { box-shadow: inset 0 0 0 2px var(--ink); border-radius: 6px; }
+.ll-row { cursor: pointer; border-radius: 6px; }
+.ll-row:hover { background: var(--panel-2); }
+.ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }

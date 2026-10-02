@@ -21,6 +21,7 @@ use tsuzuri_contract::project::PATH as PROJECT_PATH;
 use crate::account::windows::{ACCOUNT_WIN, closed_message};
 use crate::frame::{self, BACK, BACK_WRAP, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
 use crate::fresh::{self, Fresh};
+use crate::ledgerlist::SelCtx;
 use crate::net;
 use crate::project::{self, Module, ask, ledger};
 use crate::seatpill;
@@ -143,6 +144,8 @@ fn App() -> impl IntoView {
     });
     provide_context(HoverCtx::default());
     provide_context(PopCtx::default());
+    // 選んだ epic の組（一覧と板が読む・行 g-select）。
+    provide_context(SelCtx::default());
     // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
     let fetched = net::read(ledger::PATH);
     let screen = RwSignal::new(Screen::initial());

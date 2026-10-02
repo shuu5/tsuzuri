@@ -13,6 +13,8 @@
 //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
 //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
 //! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
+//! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
+//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
 
 use std::collections::BTreeMap;
 
@@ -22,8 +24,10 @@ use tsuzuri_contract::graph::{GraphDoc, title36};
 use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
 use tsuzuri_contract::wire;
 
+use super::ledger::OUTSIDE;
 use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
 use crate::frame::{self, Block};
+use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
 use crate::mapview::graph::cut;
 use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
@@ -656,6 +660,70 @@ pub fn misfit_cards(fetched: &Fetched) -> Vec<MisfitCard> {
     }
 }
 
+/// すべての epic の chip の字（押すと選びを解く）。
+pub const ALL_EPICS: &str = "すべて";
+
+/// 見出しの epic の chip の 1 つ（組の鍵・名・板に出ている札の数・すべての chip の鍵は空）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chip {
+    pub key: String,
+    pub name: String,
+    pub n: usize,
+}
+
+/// 板の札の組の鍵（札の bead の id から一覧の組と同じ読み・台帳が読めなければ空の表）。
+pub fn card_keys(
+    cards: &[PipelineCard],
+    rows: &Reading<Vec<LedgerRow>>,
+) -> BTreeMap<String, String> {
+    let Reading::Known(rows) = rows else {
+        return BTreeMap::new();
+    };
+    cards
+        .iter()
+        .map(|c| (c.contract.to_string(), key_of(c.contract.as_str(), rows)))
+        .collect()
+}
+
+/// 見出しの epic の chip（頭はすべての chip で数は板に出ている札の全部、続けて板に出ている札を持つ組を札の多い順〔同じ数は
+/// 鍵の id の順〕に・名は一覧の組の頭と同じ epic の短い題〔epic の外の組は `OUTSIDE`・台帳に無い epic は鍵のまま〕・見本の renderEchips）。
+pub fn chips(
+    cols: &[Column],
+    keys: &BTreeMap<String, String>,
+    rows: &[LedgerRow],
+    facts: &BTreeMap<String, BeadFact>,
+) -> Vec<Chip> {
+    let mut count: BTreeMap<&str, usize> = BTreeMap::new();
+    let all: Vec<&Kcard> = cols.iter().flat_map(|c| c.cards.iter()).collect();
+    for card in &all {
+        let key = keys.get(&card.id).map_or(OUTSIDE_KEY, String::as_str);
+        *count.entry(key).or_default() += 1;
+    }
+    let name = |key: &str| {
+        if key == OUTSIDE_KEY {
+            return OUTSIDE.to_string();
+        }
+        rows.iter()
+            .find(|r| r.id.as_str() == key)
+            .map_or_else(|| key.to_string(), |r| short_of(r, facts))
+    };
+    let mut groups: Vec<Chip> = count
+        .into_iter()
+        .map(|(key, n)| Chip {
+            key: key.to_string(),
+            name: name(key),
+            n,
+        })
+        .collect();
+    groups.sort_by(|a, b| b.n.cmp(&a.n).then_with(|| id_order(&a.key, &b.key)));
+    let head = Chip {
+        key: String::new(),
+        name: ALL_EPICS.to_string(),
+        n: all.len(),
+    };
+    std::iter::once(head).chain(groups).collect()
+}
+
 /// 要修正の札を押した先（bead と同じ id の節点の頁・pipeline の札の `card_href` と同じ先）。
 pub fn misfit_href(card: &MisfitCard, mode: frame::Mode) -> String {
     frame::node_href(&card.id, mode)
@@ -676,12 +744,15 @@ mod dom {
     use tsuzuri_contract::EpochSecs;
     use tsuzuri_contract::board::PipelineColumn;
 
+    use std::collections::BTreeMap;
+
     use super::{
-        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard, PATH,
-        age_at, ci_key, ci_style, columns, content, misfit_cards, misfit_href,
-        open_columns, with_closed, with_lines, with_open,
+        BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard,
+        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, misfit_cards,
+        misfit_href, open_columns, with_closed, with_lines, with_open,
     };
     use crate::frame::Mode;
+    use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
     use tsuzuri_contract::case::PATH as CASES_PATH;
 
     use crate::project::{Body, ledger, section, state_icon, unmeasured};
@@ -690,6 +761,7 @@ mod dom {
     use crate::widgets::help::{HelpCtx, hs};
     use crate::widgets::keyline::key_line;
     use crate::widgets::pop::{BEADS_PATH, PopCtx, Src, Via, known, read_facts, read_parts};
+    use tsuzuri_contract::board::Reading;
 
     /// 回数の印（見本の IC.redo）。
     const REDO: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
@@ -757,6 +829,7 @@ mod dom {
             let parts = cases.with(read_parts);
             let ledger_rows = rows.with(read_rows);
             let cards = pipe.with(|p| super::cards(p).unwrap_or_default());
+            let keys = StoredValue::new(card_keys(&cards, &ledger_rows));
             let src = Src {
                 facts: known(&facts),
                 rows: known(&ledger_rows),
@@ -768,15 +841,75 @@ mod dom {
                 Body::Unmeasured(reason) => unmeasured(reason),
                 Body::Empty(key) => view! {
                     <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
-                    {board_view(columns(&[], &[], now), open, mode, clock)}
+                    {board_view(columns(&[], &[], now), open, mode, clock, keys)}
                 }
                 .into_any(),
-                Body::Filled(cols) => board_view(cols, open, mode, clock),
+                Body::Filled(cols) => board_view(cols, open, mode, clock, keys),
             };
             let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
             view! { {board}{fix} }.into_any()
         };
-        section(BLOCK, ().into_any(), body.into_any())
+        // 見出しの epic の chip（押すと epic を選び・すべての chip か同じ chip で解く・行 g-select）。
+        let sel = use_context::<SelCtx>();
+        let head = move || {
+            let sel = sel?;
+            let Body::Filled(cols) = pipe.with(|p| rows.with(|l| content(p, l, crate::net::now())))
+            else {
+                return None;
+            };
+            // 台帳が読めない間は組が分からないので chip を出さない。
+            let ledger_rows = rows.with(read_rows);
+            let Reading::Known(list) = &ledger_rows else {
+                return None;
+            };
+            let keys = card_keys(
+                &pipe.with(|p| super::cards(p).unwrap_or_default()),
+                &ledger_rows,
+            );
+            let all = beads.with(|b| chips(&cols, &keys, list, &facts(b)));
+            Some(chips_view(all, sel))
+        };
+        section(BLOCK, head.into_any(), body.into_any())
+    }
+
+    /// 見出しの epic の chip の並び（選んでいる組の chip は on・何も選んでいない間はすべての chip が on）。
+    fn chips_view(all: Vec<super::Chip>, sel: SelCtx) -> AnyView {
+        let items = all
+            .into_iter()
+            .map(|c| {
+                let on = {
+                    let key = c.key.clone();
+                    move || {
+                        sel.epic
+                            .with(|e| e.as_deref().map_or(key.is_empty(), |s| s == key))
+                    }
+                };
+                let key = c.key;
+                let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
+                view! {
+                    <button type="button" class="pchip" class:on=on on:click=choose>
+                        {c.name}<b class="num">{c.n}</b>
+                    </button>
+                }
+            })
+            .collect_view();
+        view! { <div class="pchips" role="group">{items}</div> }.into_any()
+    }
+
+    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select）。
+    fn pick_view(
+        card: &Kcard,
+        keys: StoredValue<BTreeMap<String, String>>,
+        inner: AnyView,
+    ) -> AnyView {
+        let sel = use_context::<SelCtx>();
+        let pop = use_context::<PopCtx>();
+        let key = keys.with_value(|k| k.get(&card.id).cloned());
+        let dimmed =
+            move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), key.as_deref())));
+        let id = card.id.clone();
+        let ringed = move || ring(pop.and_then(PopCtx::shown).as_deref(), &id);
+        view! { <div class="kpick" class:dim=dimmed class:ring=ringed>{inner}</div> }.into_any()
     }
 
     /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
@@ -812,10 +945,11 @@ mod dom {
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
+        keys: StoredValue<BTreeMap<String, String>>,
     ) -> AnyView {
         let cols = cols
             .into_iter()
-            .map(|c| column_view(c, open, mode, clock))
+            .map(|c| column_view(c, open, mode, clock, keys))
             .collect_view();
         view! { <div class="board">{cols}</div> }.into_any()
     }
@@ -825,6 +959,7 @@ mod dom {
         open: RwSignal<Vec<PipelineColumn>>,
         mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
         clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
+        keys: StoredValue<BTreeMap<String, String>>,
     ) -> AnyView {
         let column = col.lane.column;
         let is_open = move || open.with(|o| o.contains(&column));
@@ -837,7 +972,7 @@ mod dom {
             shown
                 .shown(is_open())
                 .iter()
-                .map(|c| kcard_view(c, mode(), clock))
+                .map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))
                 .collect_view()
         };
         let more = move || {

@@ -9,6 +9,8 @@
 //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
 //! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
 //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
+//! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
+//! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
 //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
@@ -520,27 +522,86 @@ pub fn unref_head(s: &LedgerStats, cases: &Phases) -> UnrefHead {
     }
 }
 
+/// bead の組の鍵（一覧の組と同じ読み: id の階層のいちばん近い epic の祖先の id・epic の祖先が無ければ `OUTSIDE_KEY`）。
+pub fn key_of(id: &str, rows: &[LedgerRow]) -> String {
+    let epics: Vec<&LedgerRow> = rows
+        .iter()
+        .filter(|r| r.node_kind() == NodeKind::Epic)
+        .collect();
+    home(id, &epics)
+        .map_or(OUTSIDE_KEY, |e| e.id.as_str())
+        .to_string()
+}
+
+/// 押した後の選んだ epic の組の鍵（押した鍵が空か今と同じなら解いて None・ほかは押した鍵・見本の setEpic）。
+pub fn pick(now: Option<&str>, key: &str) -> Option<String> {
+    (!key.is_empty() && now != Some(key)).then(|| key.to_string())
+}
+
+/// 札を薄くするか（epic の組を選んでいて、札の組の鍵が分かりそれと違う・見本の applyMarks の dim）。
+/// 台帳が読めない間は札の組の鍵が分からない（None）ので薄くしない（選んだ組の外と見せない・憲法 P-7.2）。
+pub fn dim(sel: Option<&str>, key: Option<&str>) -> bool {
+    matches!((sel, key), (Some(s), Some(k)) if s != k)
+}
+
+/// 印を付けるか（開いている bead の id か選んだ組の鍵が印の鍵と同じ・札と行の輪は bead の id・組の頭の esel は組の鍵）。
+pub fn ring(shown: Option<&str>, key: &str) -> bool {
+    shown == Some(key)
+}
+
+/// 組の頭に輪の印を付けるか（吹き出しの開いている bead が組の open の行のどれか・見本の applyMarks の gh）。
+pub fn head_ring(g: &Lgroup, shown: Option<&str>) -> bool {
+    shown.is_some_and(|s| g.rows.iter().any(|r| r.id == s))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
+
+#[cfg(target_arch = "wasm32")]
+pub use dom::SelCtx;
 
 /// 一覧の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use leptos::ev;
     use leptos::prelude::*;
 
+    use tsuzuri_contract::board::Reading;
     use tsuzuri_contract::case;
 
     use super::{
         COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
-        content, filtered, filtering, head_counts, kind_tag, kpi, phases, unref_head, with_phases,
+        content, filtered, filtering, head_counts, head_ring, key_of, kind_tag, kpi, phases, pick,
+        ring, unref_head, with_phases,
     };
     use crate::frame::{Mode, node_href};
     use crate::kit::Folds;
     use crate::project::ledger::stats;
     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
+    use crate::view::read_rows;
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
-    use crate::widgets::pop::board_unread;
+    use crate::widgets::pop::{PopCtx, Via, board_unread};
+
+    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
+    /// 選んだ bead は吹き出しの開いている bead（`PopCtx::shown`）で、ここには持たない。
+    #[derive(Clone, Copy)]
+    pub struct SelCtx {
+        pub epic: RwSignal<Option<String>>,
+    }
+
+    impl Default for SelCtx {
+        fn default() -> Self {
+            Self {
+                epic: RwSignal::new(None),
+            }
+        }
+    }
+
+    /// 吹き出しの開いている bead の id（吹き出しの層が無ければ None）。
+    fn shown() -> Option<String> {
+        use_context::<PopCtx>().and_then(PopCtx::shown)
+    }
 
     /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ・板が読めない間は一覧の頭に理由の 1 行）。
     pub fn view() -> AnyView {
@@ -551,6 +612,20 @@ mod dom {
         let folds = RwSignal::new(Folds::default());
         let kind = RwSignal::new(Kind::All);
         let query = RwSignal::new(String::new());
+        // 選んだ epic の組と吹き出しの開いた bead の組は、開き閉じの記録に開くと書く（見本の setEpic と ensureListed）。
+        let sel = use_context::<SelCtx>();
+        Effect::new(move |_| {
+            let epic = sel.and_then(|s| s.epic.get());
+            let bead = shown().and_then(|id| {
+                rows.with_untracked(|l| match read_rows(l) {
+                    Reading::Known(r) => Some(key_of(&id, &r)),
+                    Reading::Unknown => None,
+                })
+            });
+            for key in [epic, bead].into_iter().flatten() {
+                folds.update(|f| f.set(&key, true));
+            }
+        });
         let list = move || {
             let got =
                 rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
@@ -639,6 +714,16 @@ mod dom {
         } else {
             "ll-gh empty"
         };
+        // 選んだ epic の組の頭は esel・吹き出しの開いている bead の組の頭は輪（行 g-select）。
+        let sel = use_context::<SelCtx>();
+        let esel = {
+            let key = g.key.clone();
+            move || sel.is_some_and(|s| s.epic.with(|e| ring(e.as_deref(), &key)))
+        };
+        let ringed = {
+            let g = g.clone();
+            move || head_ring(&g, shown().as_deref())
+        };
         let rows = g.rows.clone();
         let body = move || {
             is_open().then(|| {
@@ -651,7 +736,7 @@ mod dom {
         };
         view! {
             <div class="ll-grp" data-gid=g.key.clone()>
-                <div class=head_class>
+                <div class=head_class class:esel=esel class:ring=ringed>
                     <button class="ll-tog" type="button" aria-label="開閉" on:click=toggle>{mark}</button>
                     {head_view(&g)}
                 </div>
@@ -687,8 +772,18 @@ mod dom {
             .epic
             .clone()
             .map(|id| view! { <span class="ll-gid mono">{id}</span> });
+        // epic の組の名は押すと epic を選ぶ・もう 1 度押すと解く（epic の外の組は選べない・行 g-select）。
+        let name = match (&g.epic, use_context::<SelCtx>()) {
+            (Some(_), Some(sel)) => {
+                let key = g.key.clone();
+                let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
+                view! { <button type="button" class="ll-gname" on:click=choose>{g.name.clone()}</button> }
+                    .into_any()
+            }
+            _ => view! { <span class="ll-gname">{g.name.clone()}</span> }.into_any(),
+        };
         view! {
-            <span class="ll-gname">{g.name.clone()}</span>
+            {name}
             {gid}
             {prog}
             <span class="ll-sdots">{dots}</span>
@@ -709,10 +804,30 @@ mod dom {
             };
             node_href(&id, mode)
         };
+        // 行を押すと吹き出しを開き・もう 1 度押すと閉じ、吹き出しの開いている行は輪（行 g-select）。
+        let pop = use_context::<PopCtx>();
+        let press = {
+            let id = r.id.clone();
+            move |_| {
+                if let Some(p) = pop {
+                    p.press(&id, Via::Row);
+                }
+            }
+        };
+        let ringed = {
+            let id = r.id.clone();
+            move || ring(shown().as_deref(), &id)
+        };
+        // 短い題の link の普通の押しは頁を移らず行の押しに任せる（新しい窓や tab で開く押しは link のまま）。
+        let stay = |e: ev::MouseEvent| {
+            if crate::board::plain_click(&e) {
+                e.prevent_default();
+            }
+        };
         view! {
-            <div class="ll-row" data-id=r.id.clone()>
+            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>
                 <span class=class>{tag}</span>
-                <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
+                <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
                 <span class="ll-rt">{r.right.clone()}</span>
             </div>
