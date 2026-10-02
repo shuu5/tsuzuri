@@ -4,7 +4,7 @@
 //! 作る問いの形（本文の頭の 4 行と metadata の effect）は器の要件 FR81 の (a) に従い server が埋める。
 //! 受付の順:
 //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
-//! 2. 台帳を合流しない読みで読み直す（読めなければ 503）。
+//! 2. 台帳を合流しない読みで読み直す（裁定の受付の `reread` で撃ち直し、どれも読めなければ 503・行 c-ruling-reread）。
 //! 3. 範囲は字 `all` か open の問いの id（どちらでもなければ 400 scope）。
 //! 4. 根の epic を探す（無ければ 503 no-root）。
 //! 5. 根の下に方針の問いを作る（落ちるか作った id が読めなければ 502 ledger-create）。
@@ -24,7 +24,7 @@ use tsuzuri_core::question::{
 };
 
 use super::ledger::{Source, capture, parse_bd};
-use super::ruling::{WRITE_TIMEOUT, Writer, escape, minute, policy_reason};
+use super::ruling::{WRITE_TIMEOUT, Writer, escape, minute, policy_reason, reread};
 
 /// 口の path。
 pub const PATH: &str = "/api/policy";
@@ -79,7 +79,7 @@ pub fn accept(req: &PolicyRequest, ledger: &Source, writer: &Writer, now: EpochS
         return Outcome::Refused(Refusal::EmptyVerbatim);
     }
     // 走っている読みを分け合わず、新しい子 process で読み直す（便 e-coalesce）。
-    let Some(text) = ledger.text_alone() else {
+    let Some(text) = reread(ledger) else {
         return Outcome::LedgerUnknown;
     };
     let (Reading::Known(items), Reading::Known(questions)) =
