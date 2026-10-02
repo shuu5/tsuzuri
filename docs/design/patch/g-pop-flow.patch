@@ -18,10 +18,10 @@ index a8bfe8089fa27680a053eb760b03aacafdc983c3..b198163dcf263f6d0620dfba61129c82
  pub mod pop;
 +pub mod runflow;
 diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
-index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4cacda1706f 100644
+index db8a310a458511cc618c6f4201b137d751e4eeed..ef1bd1f399f69761cd70390a7e8686c28ec530ff 100644
 --- a/crates/tsuzuri-surface/src/widgets/pop.rs
 +++ b/crates/tsuzuri-surface/src/widgets/pop.rs
-@@ -8,6 +8,7 @@
+@@ -9,6 +9,7 @@
  //! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
  //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
  //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
@@ -29,7 +29,7 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
  
  use tsuzuri_contract::EpochSecs;
  use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
-@@ -18,6 +19,7 @@ use tsuzuri_contract::wire;
+@@ -19,6 +20,7 @@ use tsuzuri_contract::wire;
  
  use super::hover::{Point, Rect, Size};
  use super::modal::Hit;
@@ -37,7 +37,7 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
  use crate::frame::{self, Mode, PageId};
  use crate::mapview::band::kind_key;
  use crate::project::{pipeline, timeline};
-@@ -188,6 +190,10 @@ pub enum Val {
+@@ -189,6 +191,10 @@ pub enum Val {
      Epic(Partner),
      /// 待つ相手の一覧（押すと相手の吹き出し）。
      Partners(Vec<Partner>),
@@ -48,7 +48,7 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
      /// まだ分からない。
      Unknown,
  }
-@@ -463,13 +469,16 @@ mod dom {
+@@ -469,13 +475,16 @@ mod dom {
  
      use super::super::hover::{Point, Rect, Size};
      use super::super::modal::{Hit, closes};
@@ -57,16 +57,16 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
 +    };
      use super::{
          BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
-         Val, Via, anchor_selectors, at_text, hit_of, known, next_href, opener_selector, place, pop,
-         read_facts, read_parts, toggle,
+         Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
+         opener_selector, place, pop, read_facts, read_parts, toggle,
      };
      use crate::frame::{Mode, node_href};
--    use crate::project::{ledger, map, pipeline};
-+    use crate::project::{ledger, map, pipeline, timeline};
+-    use crate::project::{ledger, map, pipeline, unmeasured};
++    use crate::project::{ledger, map, pipeline, timeline, unmeasured};
      use crate::view::read_rows;
      use crate::vocab::label;
      use crate::widgets::help::{HelpCtx, hs};
-@@ -597,6 +606,53 @@ mod dom {
+@@ -603,6 +612,53 @@ mod dom {
          .into_any()
      }
  
@@ -120,7 +120,7 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
      fn val_view(ctx: PopCtx, val: Val, now: u64) -> AnyView {
          match val {
              Val::Text(t) => view! { <span>{t}</span> }.into_any(),
-@@ -614,6 +670,8 @@ mod dom {
+@@ -620,6 +676,8 @@ mod dom {
                      .collect_view();
                  view! { <div class=CLASSES[6]>{items}</div> }.into_any()
              }
@@ -129,7 +129,7 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
              Val::Unknown => view! { <span class=CLASSES[8]>{label(UNKNOWN_KEY)}</span> }.into_any(),
          }
      }
-@@ -686,6 +744,13 @@ mod dom {
+@@ -692,6 +750,13 @@ mod dom {
          let pipe = crate::net::read(pipeline::PATH);
          let rows = crate::net::read(ledger::PATH);
          let graph = crate::net::read(map::PATH);
@@ -143,16 +143,16 @@ index 907bfd0d307acf42840a82babde26417289c7e44..0c122721d9123767a772a467c0f8d4ca
          listen(ctx);
          let style = move || ctx.style();
          let content = move || {
-@@ -703,7 +768,8 @@ mod dom {
+@@ -711,7 +776,8 @@ mod dom {
                  parts: known(&parts),
                  graph: doc.as_ref(),
              };
 -            let p = pop(&id, &src);
 +            let lines = runs.with(|(f, _)| read_runs(f));
 +            let p = with_runs(pop(&id, &src), known(&lines));
-             Some(pop_view(ctx, p, mode, crate::net::now()))
-         };
-         let open = move || ctx.open.with(Option::is_some);
+             Some(
+                 view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
+                     .into_any(),
 diff --git a/crates/tsuzuri-surface/src/widgets/runflow.rs b/crates/tsuzuri-surface/src/widgets/runflow.rs
 new file mode 100644
 index 0000000000000000000000000000000000000000..f694c0aaa9a65ac9bb1521e41234b58dc720ca64

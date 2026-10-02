@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b363c0c24 100644
+index 7f187a433bd00996ac2f08c14a22a377f16b3f89..8ac5a1ce68504ef5723c76204857ff4b5beed5d7 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
 @@ -3,7 +3,9 @@
@@ -27,7 +27,7 @@ index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b
  use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
  use crate::project::{Body, LEDGER_UNREAD};
  use crate::view::{Fetched, id_order, read_rows};
-@@ -279,6 +284,87 @@ pub fn content(
+@@ -280,6 +285,87 @@ pub fn content(
      }
  }
  
@@ -115,7 +115,7 @@ index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b
  #[cfg(target_arch = "wasm32")]
  pub use dom::view;
  
-@@ -287,19 +373,24 @@ pub use dom::view;
+@@ -288,7 +374,10 @@ pub use dom::view;
  mod dom {
      use leptos::prelude::*;
  
@@ -127,11 +127,12 @@ index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
      use crate::project::{Body, ledger, pipeline, unmeasured};
-     use crate::vocab::label;
+@@ -296,12 +385,14 @@ mod dom {
      use crate::widgets::help::HelpCtx;
+     use crate::widgets::pop::board_unread;
  
--    /// 一覧（台帳と板と bead の事実の 3 つの口を読む・組の開き閉じは頁の一生の間だけ持つ）。
-+    /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ）。
+-    /// 一覧（台帳と板と bead の事実の 3 つの口を読む・組の開き閉じは頁の一生の間だけ持つ・板が読めない間は頭に理由の 1 行）。
++    /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ・板が読めない間は一覧の頭に理由の 1 行）。
      pub fn view() -> AnyView {
          let rows = crate::net::read(ledger::PATH);
          let pipe = crate::net::read(pipeline::PATH);
@@ -142,7 +143,7 @@ index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b
          let list = move || {
              let got =
                  rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
-@@ -308,22 +399,59 @@ mod dom {
+@@ -310,24 +401,61 @@ mod dom {
                  Body::Empty(line) => {
                      view! { <div class="empty"><span>{line}</span></div> }.into_any()
                  }
@@ -167,8 +168,10 @@ index 3c6467b4c74696453eeccf30d42104fbb70ae518..5023a43e8ab5a4cdb8c49034052f9d8b
 +                }
              }
          };
--        view! { <div class="ll-body">{list}</div> }.into_any()
-+        view! { {head_line(kind, query)}<div class="ll-body">{list}</div> }.into_any()
+         // 板の札が読めない間は、段の数と行の段の字が出ない理由を一覧の頭に出す（札が無いとは見せない）。
+         let unread = move || pipe.with(board_unread).map(unmeasured);
+-        view! { <div class="ll-body">{unread}{list}</div> }.into_any()
++        view! { {head_line(kind, query)}<div class="ll-body">{unread}{list}</div> }.into_any()
 +    }
 +
 +    /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。

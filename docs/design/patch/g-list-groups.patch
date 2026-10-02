@@ -1,9 +1,9 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..3c6467b4c74696453eeccf30d42104fbb70ae518
+index 0000000000000000000000000000000000000000..7f187a433bd00996ac2f08c14a22a377f16b3f89
 --- /dev/null
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -0,0 +1,418 @@
+@@ -0,0 +1,422 @@
 +//! 台帳 open の一覧（判断の記録 ADR-27 の決定 (8)・行 g-list-groups）: epic ごとの組にし、組の頭の 1 行に
 +//! 進みの棒（組の行の閉じた数と全部の数）と、板で動いている札の段ごとの数と、open の行の数を出す。行は 1 行の短い題。
 +//! 既定で開く組は、板で動いている札を持つ組と open の行を持つ組だけで、ほかは畳む（開き閉じは頁の一生の間だけ持つ）。
@@ -263,7 +263,8 @@ index 0000000000000000000000000000000000000000..3c6467b4c74696453eeccf30d42104fb
 +}
 +
 +/// 一覧の中身（台帳が読めなければ測れていない・行の無い台帳は EMPTY・出す組が無ければ NO_OPEN）。
-+/// 板の札と bead の事実が読めない間は、段の数を 0・行の段の字を起票からの経過・短い題を台帳の題にする。
++/// 板の札と bead の事実が読めない間は、段の数を 0・行の段の字を起票からの経過・短い題を台帳の題にする（板が読めない間は
++/// view が一覧の頭に板の読めない理由を測れていないの 1 行で出し、札が無いとは見せない・widgets の pop の `board_unread`）。
 +pub fn content(
 +    ledger: &Fetched,
 +    pipe: &Fetched,
@@ -299,8 +300,9 @@ index 0000000000000000000000000000000000000000..3c6467b4c74696453eeccf30d42104fb
 +    use crate::project::{Body, ledger, pipeline, unmeasured};
 +    use crate::vocab::label;
 +    use crate::widgets::help::HelpCtx;
++    use crate::widgets::pop::board_unread;
 +
-+    /// 一覧（台帳と板と bead の事実の 3 つの口を読む・組の開き閉じは頁の一生の間だけ持つ）。
++    /// 一覧（台帳と板と bead の事実の 3 つの口を読む・組の開き閉じは頁の一生の間だけ持つ・板が読めない間は頭に理由の 1 行）。
 +    pub fn view() -> AnyView {
 +        let rows = crate::net::read(ledger::PATH);
 +        let pipe = crate::net::read(pipeline::PATH);
@@ -321,7 +323,9 @@ index 0000000000000000000000000000000000000000..3c6467b4c74696453eeccf30d42104fb
 +                    .into_any(),
 +            }
 +        };
-+        view! { <div class="ll-body">{list}</div> }.into_any()
++        // 板の札が読めない間は、段の数と行の段の字が出ない理由を一覧の頭に出す（札が無いとは見せない）。
++        let unread = move || pipe.with(board_unread).map(unmeasured);
++        view! { <div class="ll-body">{unread}{list}</div> }.into_any()
 +    }
 +
 +    /// 1 組（頭の 1 行と、開いていれば行）。
@@ -624,10 +628,10 @@ index a21a164c42830bbee3414de06f71dae63a5a5040..38994acfd9cdaf69e54e12157bfe5509
      }
 diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/bvlist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..060eae1ffc2b85955cd658be93c61ae3eec3c6c1
+index 0000000000000000000000000000000000000000..1431c37bc43684d21a78098976f414a842628973
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvlist.rs
-@@ -0,0 +1,424 @@
+@@ -0,0 +1,444 @@
 +//! 行 g-list-groups の歯（接頭辞 bvlist_）: 台帳 open の一覧を epic ごとの組にし、組の頭に進みの数と板で動いている札の
 +//! 列ごとの数を持たせ、既定で開く組を決め、行を 1 行の短い題と右の字にする（判断の記録 ADR-27 の決定 (8)）。
 +//! 台帳の行と札と bead の事実は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-g）。
@@ -651,6 +655,7 @@ index 0000000000000000000000000000000000000000..060eae1ffc2b85955cd658be93c61ae3
 +use tsuzuri_surface::project::{Body, LEDGER_UNREAD};
 +use tsuzuri_surface::view::Fetched;
 +use tsuzuri_surface::vocab::label;
++use tsuzuri_surface::widgets::pop::board_unread;
 +
 +/// 一覧を組む今。
 +const NOW: u64 = 1_790_510_400;
@@ -1050,6 +1055,25 @@ index 0000000000000000000000000000000000000000..060eae1ffc2b85955cd658be93c61ae3
 +            css.contains(&format!(".ll-sd.sd-{lane} ")),
 +            "stylesheet に sd-{lane}"
 +        );
++    }
++}
++
++/// 板の札が読めない間は、一覧の view が頭に板の読めない理由を測れていないの 1 行で出す（組は出すが、段の数と行の段の字が
++/// 無いのは札が無いからでないと見せる）。理由は widgets の pop の board_unread（読めた板は None）。
++#[test]
++fn bvlist_board_unread_line() {
++    assert_eq!(
++        board_unread(&Fetched::Failed),
++        Some(tsuzuri_surface::project::pipeline::REASON)
++    );
++    assert_eq!(board_unread(&pipe_body()), None);
++    let list = read("src/ledgerlist.rs");
++    let ldom = &list[list.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "let unread = move || pipe.with(board_unread).map(unmeasured);",
++        "<div class=\"ll-body\">{unread}{list}</div>",
++    ] {
++        assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
 +    }
 +}
 diff --git a/crates/tsuzuri-surface/tests/cadl.rs b/crates/tsuzuri-surface/tests/cadl.rs

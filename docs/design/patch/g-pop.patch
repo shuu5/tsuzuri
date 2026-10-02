@@ -69,16 +69,17 @@ index adbd7a5ed69dd28a2e4ec9d14fbfb3e303cd4db2..a8bfe8089fa27680a053eb760b03aaca
 +pub mod pop;
 diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..907bfd0d307acf42840a82babde26417289c7e44
+index 0000000000000000000000000000000000000000..db8a310a458511cc618c6f4201b137d751e4eeed
 --- /dev/null
 +++ b/crates/tsuzuri-surface/src/widgets/pop.rs
-@@ -0,0 +1,718 @@
+@@ -0,0 +1,729 @@
 +//! 札と一覧の行の吹き出し（行 g-pop・判断の記録 ADR-27 決定 (7)・見本 board-v2 の popHTML と placePop と openPop と closePop）:
 +//! pipeline の札か台帳 open の一覧の行を押すと、その bead の吹き出しを頁に 1 つ出す（同じ口をもう 1 度押すと閉じる）。
 +//! 吹き出しは × と外の click と取り消しの鍵（Esc）で閉じ、閉じる判定は窓の枠の `modal::closes` を使う（2 つ目を書かない）。
 +//! どの段も題の全体・概要・id・種類・epic・設計の行・起票の時刻と経過・個別の頁への口を出し、段ごとの欄を足す
 +//! （Blocked は待つ相手〔相手の段つき・押すと相手の吹き出し〕と待ちの長さ・Queued は列に入った時刻・Running / Gated は
 +//! run の回と口座・止まりは理由の全文と run の回と口座と次の手・着地は着地の時刻と CI）。読めない欄は「まだ分からない」。
++//! 板の札が読めない間は段ごとの欄を出せないので、吹き出しの末に板の読めない理由を測れていないの 1 行で出す（札が無いとは見せない）。
 +//! 材料は bead の事実の口（`BEADS_PATH`・短い題・概要・起票・blocks の相手）と局面の出力の口（待つ相手の links.on）と、
 +//! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
 +//! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
@@ -294,6 +295,11 @@ index 0000000000000000000000000000000000000000..907bfd0d307acf42840a82babde26417
 +    pub cards: &'a [PipelineCard],
 +    pub parts: Reading<&'a [CasePart]>,
 +    pub graph: Option<&'a GraphDoc>,
++}
++
++/// 板の札の読めない理由（読めれば None・`pipeline::cards` の理由）。
++pub fn board_unread(fetched: &Fetched) -> Option<&'static str> {
++    pipeline::cards(fetched).err()
 +}
 +
 +/// bead の事実の口の本文を読む（読めなければ Unknown）。
@@ -540,11 +546,11 @@ index 0000000000000000000000000000000000000000..907bfd0d307acf42840a82babde26417
 +    use super::super::modal::{Hit, closes};
 +    use super::{
 +        BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
-+        Val, Via, anchor_selectors, at_text, hit_of, known, next_href, opener_selector, place, pop,
-+        read_facts, read_parts, toggle,
++        Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
++        opener_selector, place, pop, read_facts, read_parts, toggle,
 +    };
 +    use crate::frame::{Mode, node_href};
-+    use crate::project::{ledger, map, pipeline};
++    use crate::project::{ledger, map, pipeline, unmeasured};
 +    use crate::view::read_rows;
 +    use crate::vocab::label;
 +    use crate::widgets::help::{HelpCtx, hs};
@@ -768,6 +774,8 @@ index 0000000000000000000000000000000000000000..907bfd0d307acf42840a82babde26417
 +            let mode = help.map_or(Mode::Beginner, |h| h.mode.get());
 +            let facts = beads.with(read_facts);
 +            let parts = cases.with(read_parts);
++            // 板の札が読めない間は、段ごとの欄を出せない理由を吹き出しの末に出す（札が無いとは見せない）。
++            let unread = pipe.with(board_unread);
 +            let cards = pipe.with(|p| pipeline::cards(p).unwrap_or_default());
 +            let rows = rows.with(read_rows);
 +            let doc = graph.with(|g| map::doc(g).ok());
@@ -779,7 +787,10 @@ index 0000000000000000000000000000000000000000..907bfd0d307acf42840a82babde26417
 +                graph: doc.as_ref(),
 +            };
 +            let p = pop(&id, &src);
-+            Some(pop_view(ctx, p, mode, crate::net::now()))
++            Some(
++                view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
++                    .into_any(),
++            )
 +        };
 +        let open = move || ctx.open.with(Option::is_some);
 +        view! {
@@ -829,10 +840,10 @@ index e9dc089d92adf8d0dd8ac5aac7fd78b968c39562..54cefd37b1ffd03ee71545bb04bcde2a
  .items > li { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s2); border-bottom: 1px solid var(--line); }
 diff --git a/crates/tsuzuri-surface/tests/bvpop.rs b/crates/tsuzuri-surface/tests/bvpop.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..9cd77dfb6c792e94d5964369baf9000177abface
+index 0000000000000000000000000000000000000000..057f63f7e1b39c849156c057e419b22dcf80c03c
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvpop.rs
-@@ -0,0 +1,500 @@
+@@ -0,0 +1,524 @@
 +//! 行 g-pop の歯: 札と一覧の行の吹き出し（判断の記録 ADR-27 決定 (7)・見本 board-v2 の popHTML）の共通の欄の順と
 +//! 段ごとの欄・読めない欄のまだ分からない・待つ相手と相手の段・開閉と外の click の判定・置き場と、
 +//! 吹き出しの id と class と下からの板の規則が stylesheet に在ることと、語の鍵と、層の DOM（wasm の枝）の配線の字。
@@ -847,13 +858,15 @@ index 0000000000000000000000000000000000000000..9cd77dfb6c792e94d5964369baf90001
 +use tsuzuri_contract::graph::{BeadAttr, GraphDoc, NodeKind, SkippedEdges};
 +use tsuzuri_contract::ledger::{BeadFact, BeadId, LedgerRow};
 +use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, pipeline};
++use tsuzuri_surface::view::Fetched;
 +use tsuzuri_surface::vocab::{label, vocab};
 +use tsuzuri_surface::widgets::hover::{Point, Rect, Size};
 +use tsuzuri_surface::widgets::modal::{FULL_MAX_PX, Hit, closes};
 +use tsuzuri_surface::widgets::pop::{
 +    BEADS_PATH, CLASSES, CLOSE_KEY, COMMON_KEYS, Fact, ID, NEXT_KEYS, Open, PAGE_KEY, Partner,
-+    SCRIM, STAGE_KEYS, Src, UNKNOWN_KEY, Val, Via, anchor_selectors, hit_of, next_href, place, pop,
-+    toggle,
++    SCRIM, STAGE_KEYS, Src, UNKNOWN_KEY, Val, Via, anchor_selectors, board_unread, hit_of,
++    next_href, place, pop, toggle,
 +};
 +
 +const NOW: EpochSecs = 1_790_000_000;
@@ -1332,6 +1345,28 @@ index 0000000000000000000000000000000000000000..9cd77dfb6c792e94d5964369baf90001
 +    let board = read("src/board.rs");
 +    assert!(board.contains("provide_context(PopCtx::default());"));
 +    assert!(board.contains("<PopLayer/>"));
++}
++
++/// 板の札が読めない（まだ読んでいない・口が読めない・電文が読めない）間は board_unread がその理由を返し、層は吹き出しの末に
++/// 測れていないの 1 行（unmeasured）で出す（札が無い bead と同じ形の、段ごとの欄の無い吹き出しだけを見せない）。読めた板は None。
++#[test]
++fn bvpop_board_unread_marked() {
++    assert_eq!(board_unread(&Fetched::NotRead), Some(NOT_READ));
++    assert_eq!(board_unread(&Fetched::Failed), Some(pipeline::REASON));
++    assert_eq!(
++        board_unread(&Fetched::Body("{".to_string())),
++        Some(NO_CONTENT)
++    );
++    let board = read("../../tests/fixtures/surface/pipeline-board.json");
++    assert_eq!(board_unread(&Fetched::Body(board)), None);
++    let src = read("src/widgets/pop.rs");
++    let dom = &src[src.find("pub fn PopLayer(").expect("層")..];
++    for s in [
++        "let unread = pipe.with(board_unread);",
++        "{unread.map(unmeasured)}",
++    ] {
++        assert!(dom.contains(s), "{s}");
++    }
 +}
 diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
 index fee03723eade7924eb14d5e24b880f770accec51..d7ecc63c5d7c447f757e290f16fae97736bb01da 100644

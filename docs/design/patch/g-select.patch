@@ -20,7 +20,7 @@ index 8903182f8590596d93f4e561ebf98e4233f8de7a..4862dcee9c988f39a3bc091083133c5b
      let fetched = net::read(ledger::PATH);
      let screen = RwSignal::new(Screen::initial());
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f1283ea46 100644
+index d6e1a8296595b3d4349cdb45e11a69f677bd9c7f..b13f6cff77f122f81188d2df7409791c48e63509 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
 @@ -7,6 +7,8 @@
@@ -32,7 +32,7 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
  //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
  
  use std::collections::BTreeMap;
-@@ -445,26 +447,84 @@ pub fn unref_head(s: &LedgerStats) -> (String, String) {
+@@ -446,27 +448,84 @@ pub fn unref_head(s: &LedgerStats) -> (String, String) {
      (text, title)
  }
  
@@ -94,7 +94,8 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
 +    use crate::view::read_rows;
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
-+    use crate::widgets::pop::{PopCtx, Via};
+-    use crate::widgets::pop::board_unread;
++    use crate::widgets::pop::{PopCtx, Via, board_unread};
 +
 +    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
 +    /// 選んだ bead は吹き出しの開いている bead（`PopCtx::shown`）で、ここには持たない。
@@ -116,9 +117,9 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
 +        use_context::<PopCtx>().and_then(PopCtx::shown)
 +    }
  
-     /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ）。
+     /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ・板が読めない間は一覧の頭に理由の 1 行）。
      pub fn view() -> AnyView {
-@@ -475,6 +535,20 @@ mod dom {
+@@ -477,6 +536,20 @@ mod dom {
          let folds = RwSignal::new(Folds::default());
          let kind = RwSignal::new(Kind::All);
          let query = RwSignal::new(String::new());
@@ -139,7 +140,7 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
          let list = move || {
              let got =
                  rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
-@@ -559,6 +633,16 @@ mod dom {
+@@ -563,6 +636,16 @@ mod dom {
          } else {
              "ll-gh empty"
          };
@@ -156,7 +157,7 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
          let rows = g.rows.clone();
          let body = move || {
              is_open().then(|| {
-@@ -571,7 +655,7 @@ mod dom {
+@@ -575,7 +658,7 @@ mod dom {
          };
          view! {
              <div class="ll-grp" data-gid=g.key.clone()>
@@ -165,7 +166,7 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
                      <button class="ll-tog" type="button" aria-label="開閉" on:click=toggle>{mark}</button>
                      {head_view(&g)}
                  </div>
-@@ -602,8 +686,18 @@ mod dom {
+@@ -606,8 +689,18 @@ mod dom {
              .epic
              .clone()
              .map(|id| view! { <span class="ll-gid mono">{id}</span> });
@@ -185,7 +186,7 @@ index b52710fd04c7c8ea04e8be6b035eaaa6212bc998..fd0c2a588b50c0bb92993ee384bc0c3f
              {gid}
              {prog}
              <span class="ll-sdots">{dots}</span>
-@@ -624,10 +718,30 @@ mod dom {
+@@ -628,10 +721,30 @@ mod dom {
              };
              node_href(&id, mode)
          };
