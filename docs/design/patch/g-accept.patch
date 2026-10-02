@@ -145,10 +145,10 @@ index 1bb351d26bd74db4f152d7debd7db585233252a6..62313c0298ce6aad09d2178551bbce07
    }));
 diff --git a/crates/tsuzuri-boundary/tests/bvacc.rs b/crates/tsuzuri-boundary/tests/bvacc.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..7ab15b483d55fc6a527b8c75abf0522c708ea3dc
+index 0000000000000000000000000000000000000000..eba7e381fd00760fc92e956400036a1d45611e99
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/bvacc.rs
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,292 @@
 +//! 行 g-accept の歯（接頭辞 bvacc_）: 受入 12 条の測りを新しい面（頁は home と節点・窓は query の win・札と一覧の行は
 +//! click の吹き出し）に合わせる。幅は規則の行 R-23 の 4 幅、画面は home と 7 つの窓と account board の 3 つの tab、
 +//! 測りの式は吹き出しの口と札の id と開いた窓と面の中の scroll を読み、fixture は新しい面の URL と口の名を持つ。
@@ -222,9 +222,141 @@ index 0000000000000000000000000000000000000000..7ab15b483d55fc6a527b8c75abf0522c
 +    assert!(SCREENS.iter().all(|s| !s.contains("page=")), "{SCREENS:?}");
 +}
 +
++/// measure.js の中の、頭の字 head から閉じの字 end の前までの字。
++fn cut<'a>(probe: &'a str, head: &str, end: &str) -> &'a str {
++    let at = probe
++        .find(head)
++        .unwrap_or_else(|| panic!("measure.js に {head} が無い"));
++    let rest = &probe[at..];
++    &rest[..rest
++        .find(end)
++        .unwrap_or_else(|| panic!("measure.js の {head} の閉じ"))]
++}
++
++/// 欠けと散文と節点の id の使い道: 節点の link の鎖は見える要素の列 seen から作って口の中を外し、欄 nocard の鎖は
++/// 口の欠け nopop を含めて名に写し、散文の walk は skip の中の字を飛ばして first に積み、節点の id は札の id の
++/// 字と包む link の字の組に写し、返す object は測った列をそのままの名で返す。見える要素の列はどれも seen（開いた
++/// 窓が在ればその中）から作り、文書の全体から要素を引くのは窓の箱と読み先の 2 つだけ。
++fn probe_uses(probe: &str) {
++    let link = " = seen\n    .filter((e) => (e.matches(\"a[href]\") && e.getAttribute(\"href\").includes(\"page=node\")) || e.matches(\".node\"))\n    .filter((e) => !e.closest(mouth))\n";
++    assert_eq!(probe.matches(link).count(), 1, "節点の link の鎖の頭");
++    let nocard = cut(probe, "const nocard = ", ";\n");
++    assert!(
++        nocard.contains("nopop") && nocard.ends_with(".map(name)"),
++        "欄 nocard の鎖: {nocard}"
++    );
++    let walk = cut(
++        probe,
++        "document.createTreeWalker(root, NodeFilter.SHOW_TEXT);",
++        "\n  }\n",
++    );
++    let skips: Vec<&str> = walk
++        .lines()
++        .filter(|l| l.ends_with(") continue;"))
++        .collect();
++    assert!(
++        matches!(skips.as_slice(), [l] if l.contains(" || p.closest(skip)")),
++        "散文の walk の飛ばし: {skips:?}"
++    );
++    assert!(
++        walk.contains(" first.push(piece);"),
++        "散文の片を first に積む"
++    );
++    let nodes = "const nodes = seen.filter((e) => e.matches(\".nid, .tid, .kid\")).map((e) => ({\n    id: words(e.textContent),\n    text: words((e.closest(\"a\") || e.parentElement || e).textContent),\n  }));";
++    assert_eq!(probe.matches(nodes).count(), 1, "節点の id の鎖");
++    for head in [
++        "const overflow = seen\n",
++        "const parts = seen.filter(",
++        "const headings = seen.filter(",
++        "const titles = seen.filter(",
++        "const switch_at = seen\n",
++    ] {
++        assert_eq!(probe.matches(head).count(), 1, "seen から作る列 {head}");
++    }
++    assert_eq!(
++        probe.matches("document.querySelectorAll(").count(),
++        2,
++        "文書の全体から引くのは窓の箱と読み先だけ"
++    );
++    let back = cut(probe, "return JSON.stringify({", "\n  });");
++    for key in [
++        "overflow", "overlap", "nocard", "headings", "first", "titles", "nodes",
++    ] {
++        let line = format!("{key},");
++        assert!(back.lines().any(|l| l.trim() == line), "返す欄 {key}");
++    }
++}
++
++/// 窓が開いていても頁の全体のまま読む欄: 返す欄 text は body の見える字（受入 11 条の逐語の印の入力）、横 scroll の
++/// 幅 hscroll は文書の scroll の幅から窓の幅を引いた px、読み先の列 libraries は文書の全体の script と stylesheet と
++/// preload（窓の中だけで集めるのは見える要素の列と散文の片）。
++fn probe_page_wide(probe: &str) {
++    let back = cut(probe, "return JSON.stringify({", "\n  });");
++    for want in [
++        "text: document.body.innerText,",
++        "hscroll: document.documentElement.scrollWidth - vw,",
++        "libraries,",
++    ] {
++        assert!(back.lines().any(|l| l.trim() == want), "返す欄 {want}");
++    }
++    assert_eq!(
++        probe
++            .matches("const libraries = Array.from(document.querySelectorAll(")
++            .count(),
++        1,
++        "読み先は文書の全体から"
++    );
++    assert_eq!(
++        probe
++            .matches("const vw = document.documentElement.clientWidth;")
++            .count(),
++        1,
++        "窓の幅"
++    );
++}
++
++/// 見える箱の切りと使い道: box は overflow が visible でない祖先ごとに矩形をその箱の矩形で切り、見えるかの判じ
++/// （切った矩形 b を作る関数）は b の幅と高さが正かを見て、重なりは 2 つの要素の切った矩形の交わりで見る。
++fn probe_boxes(probe: &str) {
++    let boxf = cut(probe, "const box = (e) => {", "\n  };\n");
++    for want in [
++        "for (let n = e.parentElement; n; n = n.parentElement) {",
++        "const s = getComputedStyle(n);",
++        "if (s.overflowX === \"visible\" && s.overflowY === \"visible\") continue;",
++        "const q = n.getBoundingClientRect();",
++        "[left, top, right, bottom] = [Math.max(left, q.left), Math.max(top, q.top), Math.min(right, q.right), Math.min(bottom, q.bottom)];",
++        "return { left, top, right, bottom };",
++    ] {
++        assert_eq!(boxf.matches(want).count(), 1, "box の {want}");
++    }
++    let at = probe.find("    const b = box(e);").expect("見えるかの判じ");
++    let head = probe[..at].rfind("\n  const ").expect("判じの関数の頭");
++    let judge = cut(&probe[head..], "\n  const ", "\n  };\n");
++    let back: Vec<&str> = judge
++        .lines()
++        .filter(|l| l.trim_start().starts_with("return "))
++        .collect();
++    assert!(
++        matches!(back.as_slice(), [l] if l.contains("b.right > b.left && b.bottom > b.top")),
++        "見えるかは切った矩形で判じる: {back:?}"
++    );
++    let over = cut(probe, "parts.forEach((a, i) => {", "\n  });\n");
++    for want in [
++        "const p = box(a);",
++        "const q = box(b);",
++        "const w = Math.min(p.right, q.right) - Math.max(p.left, q.left);",
++        "const h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);",
++        "if (w > 1 && h > 1) overlap.push(",
++    ] {
++        assert_eq!(over.matches(want).count(), 1, "重なりの {want}");
++    }
++}
++
 +/// (4) 測りの式は、札と一覧の行の吹き出しの口（面の pop の 2 つの属性）に自分の click の受け手が無ければ欠けに数え、
 +/// 口の中の節点の link には hover を問わず、口の中の字を散文に数えず、札の id（class kid）を節点の id に読み、
 +/// 開いた窓（aria-modal）の中だけを測り、面の中を scroll させる箱の外へ出た部分を切った矩形で重なりを見る。
++/// 窓の中だけで集めるのは見える要素の列と散文の片で、返す欄 text と横 scroll の幅と読み先は頁の全体のまま。
++/// 字の在る無しに加え、鎖の頭から尾まで・使う所・返す欄までを照らす（probe_uses・probe_boxes・probe_page_wide）。
 +#[test]
 +fn bvacc_probe_reads_pops_and_windows() {
 +    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
@@ -256,6 +388,9 @@ index 0000000000000000000000000000000000000000..7ab15b483d55fc6a527b8c75abf0522c
 +        probe.contains(", .kid, .mono,"),
 +        "散文に数えない id の class"
 +    );
++    probe_uses(&probe);
++    probe_boxes(&probe);
++    probe_page_wide(&probe);
 +    let modal = read("crates/tsuzuri-surface/src/widgets/modal.rs");
 +    assert!(
 +        modal.contains("role=\"dialog\" aria-modal=\"true\""),
