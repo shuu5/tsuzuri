@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
-index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d6f3e64b6 100644
+index c82be314a6cf87b728becfa40fba9735e8fc521b..de59d545bef683685d9017bea2ae58182ebc3686 100644
 --- a/crates/tsuzuri-boundary/src/audit.rs
 +++ b/crates/tsuzuri-boundary/src/audit.rs
 @@ -6,6 +6,8 @@
@@ -56,7 +56,109 @@ index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d
  fn field<'a>(text: &'a str, key: &str) -> Result<&'a str, String> {
      member(text, key).ok_or_else(|| format!("事実の鍵 {key} が無い"))
  }
-@@ -360,6 +386,23 @@ const NARROW: u32 = 390;
+@@ -230,6 +256,80 @@ pub fn count(facts: &Facts, vocab: &str) -> [usize; 12] {
+     ]
+ }
+ 
++/// 数えた違反の中身（条の鍵と空白と要素の名か字の 1 行を違反ごとに・行の数は count の和と同じ・RULES の順・行 g-accept-runner）。
++/// 撃つ時刻のデータで出る違反を report から追えるようにする（散文は字数だけ、逐語は印の位置だけを書き、字を写さない）。
++pub fn details(facts: &Facts, vocab: &str) -> Vec<String> {
++    RULES
++        .iter()
++        .zip(found(facts, vocab))
++        .flat_map(|((key, _), items)| {
++            items
++                .into_iter()
++                .map(move |i| format!("{key} {}", i.replace('\n', " ")))
++        })
++        .collect()
++}
++
++/// 条ごとに数えた要素の名か字（RULES の順・count が数える物と同じ）。
++fn found(facts: &Facts, vocab: &str) -> [Vec<String>; 12] {
++    let prose: usize = facts.first.iter().map(|p| prose_chars(p)).sum();
++    let hover = facts.nocard.iter().cloned().chain(
++        facts
++            .reach
++            .iter()
++            .filter(|r| !r.has_card())
++            .map(|r| r.name.clone()),
++    );
++    let heading = facts
++        .headings
++        .iter()
++        .filter(|h| label(vocab, &h.key).as_deref() != Some(h.text.as_str()))
++        .map(|h| format!("{} {}", h.key, h.text));
++    let budget = facts
++        .titles
++        .iter()
++        .filter(|t| t.chars().count() > TITLE_MAX)
++        .chain(facts.first.iter().filter(|p| heavy_prose(p)))
++        .cloned();
++    let nodeid = facts
++        .nodes
++        .iter()
++        .filter(|n| !n.text.contains(n.id.as_str()))
++        .map(|n| n.id.clone());
++    [
++        facts.overflow.clone(),
++        facts.overlap.clone(),
++        (facts.hscroll > 0)
++            .then(|| format!("{} px", facts.hscroll))
++            .into_iter()
++            .collect(),
++        hover.collect(),
++        heading.collect(),
++        (prose > PROSE_MAX)
++            .then(|| format!("{prose} 字"))
++            .into_iter()
++            .collect(),
++        facts.errors.clone(),
++        budget.collect(),
++        nodeid.collect(),
++        facts
++            .switches
++            .iter()
++            .filter(|s| s.before == s.after)
++            .map(|s| s.label.clone())
++            .collect(),
++        verbatim_at(&facts.text)
++            .map(|at| format!("位置 {at}"))
++            .collect(),
++        facts
++            .libraries
++            .iter()
++            .filter(|l| foreign(&facts.url, l))
++            .cloned()
++            .collect(),
++    ]
++}
++
+ /// 散文の片が文の予算を越えるか（中黒を 2 つ以上持つか、括弧を入れ子にする）。
+ fn heavy_prose(text: &str) -> bool {
+     if text.matches('・').count() >= 2 {
+@@ -253,6 +353,11 @@ fn heavy_prose(text: &str) -> bool {
+ 
+ /// 持ち主の逐語の記録の印（`user YYYY-MM-DDTHH:`）の数。
+ fn verbatim_marks(text: &str) -> usize {
++    verbatim_at(text).count()
++}
++
++/// 持ち主の逐語の印（字 user と空白と日時の頭）の byte の位置。
++fn verbatim_at(text: &str) -> impl Iterator<Item = usize> + '_ {
+     const SHAPE: &[u8] = b"dddd-dd-ddTdd:";
+     text.match_indices("user ")
+         .filter(|(at, word)| {
+@@ -263,7 +368,7 @@ fn verbatim_marks(text: &str) -> usize {
+                     _ => want == got,
+                 })
+         })
+-        .count()
++        .map(|(at, _)| at)
+ }
+ 
+ /// 読み先が頁と別の origin（scheme と host と port）から来るか。
+@@ -360,6 +465,23 @@ const NARROW: u32 = 390;
  /// 頁へ移った後に待つ間（面の wasm の起動と読みの応答を待つ）。
  const SETTLE_MS: u64 = 1000;
  
@@ -80,7 +182,7 @@ index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d
  /// runner の頁の口（CDP の Session が実装する・歯は偽の頁で撃つ）。
  pub trait Page {
      /// 命令を撃ち、Call の歩の応答の字を返す。
-@@ -416,7 +459,13 @@ pub fn errors(events: &[String]) -> Vec<String> {
+@@ -416,7 +538,13 @@ pub fn errors(events: &[String]) -> Vec<String> {
  
  /// 1 つの画面を 1 つの幅で測る。viewport と console を撃って頁へ移り、測りの式の事実に URL と、
  /// 移ってから測るまでの page error と、測りの返す switch_at の在りかごとに押した切り替え（押すたびに頁へ戻る）を埋める。
@@ -94,7 +196,7 @@ index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d
      let narrow = width <= NARROW;
      page.run(&Command::Viewport {
          width,
-@@ -426,72 +475,152 @@ pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String
+@@ -426,72 +554,156 @@ pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String
      })?;
      page.run(&Command::Console)?;
      let from = page.events().len();
@@ -200,6 +302,10 @@ index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d
 +                }
 +                for (all, n) in self.skipped.iter_mut().zip(skipped) {
 +                    *all += n;
++                }
++                // 違反の中身は画面の行の下に 1 つずつ（2 つの空白で字下げ・撃つ時刻で出る違反を追う）。
++                for item in details(facts, self.vocab) {
++                    let _ = write!(self.report, "\n  {item}");
 +                }
 +            }
 +            None => {
@@ -377,10 +483,10 @@ index e8e73c685ff2937d246fe14f396763b780697069..e977d280961ea68807e7dcab503405ab
  
 diff --git a/crates/tsuzuri-boundary/tests/bvsettle.rs b/crates/tsuzuri-boundary/tests/bvsettle.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..65086858d6388ad1f4fc4119cbdbb9c37a934304
+index 0000000000000000000000000000000000000000..11b00a8ca28e65c7589ef1f1fdc3d2eeb8fa5e8e
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/bvsettle.rs
-@@ -0,0 +1,501 @@
+@@ -0,0 +1,559 @@
 +//! 行 g-accept-runner の歯（接頭辞 bvsettle_）: 受入の runner の待ちと今の選び。
 +//! runner は頁を開いた後、面が描き、どの block も読みの印（面の kit の NOT_READ の字）を出さなくなるまで上限つきで待ち、
 +//! 上限で残る画面は違反 0 と数えずまだ分からないとする（憲法 P-7）。測りの式は切り替えの在りかに今の選びの印 now を
@@ -393,7 +499,7 @@ index 0000000000000000000000000000000000000000..65086858d6388ad1f4fc4119cbdbb9c3
 +
 +use tsuzuri_boundary::audit::{
 +    MODES, NOT_READ, POLL_MS, Page, READ_POLLS, RULES, SCREENS, UNSETTLED, WIDTHS, case, count,
-+    facts, line, skipped_counts, sweep, unread,
++    details, facts, line, skipped_counts, sweep, unread,
 +};
 +use tsuzuri_boundary::stage::cdp::Command;
 +
@@ -881,6 +987,64 @@ index 0000000000000000000000000000000000000000..65086858d6388ad1f4fc4119cbdbb9c3
 +        report.ends_with("外した置き場 計 台帳の字 0 語と値の対 0 見えない要素 12\n"),
 +        "{report}"
 +    );
++}
++
++/// (10) report は違反の在る画面の行の下に、数えた違反ごとに 2 つの空白と条の鍵と空白と要素の名か字の 1 行を持つ
++/// （details・行の数は count の和と同じ・error は字のまま・違反の無い画面は行を足さない）。
++#[test]
++fn bvsettle_report_names_items() {
++    let vocab = vocab();
++    for (i, (key, _)) in RULES.iter().enumerate() {
++        let text = read(&format!(
++            "tests/fixtures/surface/accept-12/{:02}-{key}.json",
++            i + 1
++        ));
++        let got = facts(&text).expect("事実");
++        let (lines, counts) = (details(&got, &vocab), count(&got, &vocab));
++        assert_eq!(
++            lines.len(),
++            counts.iter().sum::<usize>(),
++            "{key}: {lines:?}"
++        );
++        let head = format!("{key} ");
++        assert_eq!(
++            lines.iter().filter(|l| l.starts_with(&head)).count(),
++            counts[i],
++            "{key}"
++        );
++        assert!(counts[i] > 0, "{key}");
++    }
++    assert!(details(&facts(&clean()).expect("clean"), &vocab).is_empty());
++    let reach = clean().replace(
++        r#""reach": []"#,
++        r#""reach": [{"name": "a.on", "up": ["pointerenter"]}, {"name": "a.off", "up": [""]}]"#,
++    );
++    let got = facts(&reach).expect("reach");
++    assert_eq!(details(&got, &vocab), ["hover a.off"]);
++    let text = clean().replace(r#""overflow": []"#, r#""overflow": ["div.saxis", "pre.x"]"#);
++    let mut got = facts(&text).expect("事実");
++    got.errors = vec!["Failed to load resource\nline 2".to_string()];
++    let want = [
++        "overflow div.saxis",
++        "overflow pre.x",
++        "error Failed to load resource line 2",
++    ];
++    assert_eq!(details(&got, &vocab), want);
++    let legend = format!("{BOARD}?win=legend&mode=beginner");
++    let a = legend.clone();
++    let mut page = Fake::new(move |url, _, _| if url == a { text.clone() } else { clean() });
++    let (report, total, _) = sweep(&mut page, BOARD, &vocab).expect("sweep");
++    assert_eq!(total, 8, "{report}");
++    let mut two = [0; 12];
++    two[0] = 2;
++    for width in WIDTHS {
++        let block = format!(
++            "{}\n  overflow div.saxis\n  overflow pre.x\n",
++            line(width, "beginner", &legend, &two)
++        );
++        assert_eq!(report.matches(&block).count(), 1, "{report}");
++    }
++    assert_eq!(report.lines().filter(|l| l.starts_with("  ")).count(), 8);
 +}
 diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
 index c3bddc7b578fffc5f7112cbd8d38b0264e9c457f..2ec016a62b36d23aaaa2102023057fb0e5296f69 100644
