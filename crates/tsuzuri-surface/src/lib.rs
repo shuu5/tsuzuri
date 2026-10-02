@@ -24,6 +24,8 @@ pub mod project;
 pub mod seatpill;
 /// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
 pub mod store;
+/// 幅の 3 段とスマホの段の tile（tile の組みと開く段は host でも組む・DOM は pipeline の block の DOM・行 g-layout）。
+pub mod tiles;
 /// 上の固定の帯（帯の中身の字と並びは host でも組む・DOM は wasm の target だけ・行 g-topbar）。
 pub mod topbar;
 pub mod view;

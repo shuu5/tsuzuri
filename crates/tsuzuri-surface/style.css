@@ -1309,8 +1309,35 @@ button.ll-gname:hover { background: var(--panel-2); }
 /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
 body:has(#bar) { padding-top: 52px; }
 .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
-.one { display: grid; grid-template-columns: max(420px, min(36%, calc(100% - 906px))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
+.one { display: grid; gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
 .one > .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .one > .pane > .panel { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .freshw { position: fixed; right: 12px; bottom: 3px; z-index: 20; display: flex; align-items: center; gap: var(--s1); font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
 @media (max-width: 760px) { body:has(#bar) { padding-top: 96px; } .one { height: calc(100vh - 96px); } }
+/* 幅の 3 段（行 g-layout・規則の行 R-35・見本 board-v2 の main.lay-side・main.lay-stack・600 以下）: 1200 以上は横並び・601〜1199 は縦積み・600 以下はスマホの形 */
+@media (min-width: 1200px) {
+  .one { grid-template-columns: max(420px, min(36%, calc(100% - 906px))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+}
+@media (min-width: 601px) and (max-width: 1199px) {
+  .one { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 45%) minmax(0, 1fr); gap: 6px; padding: 6px 6px 22px; }
+  .one > .pane:has(#pipe) { order: -1; }
+  #pipe .board { grid-template-columns: repeat(5, minmax(112px, 1fr)); overflow-x: auto; }
+}
+@media (max-width: 600px) {
+  .one { display: flex; flex-direction: column; height: auto; gap: 8px; padding: 8px; }
+  .one > .pane:has(#pipe) { order: -1; }
+  .one > .pane > .panel { flex: none; overflow: visible; }
+  #pipe .board { display: none; }
+  #pipe .ptiles { display: block; }
+}
+/* スマホの段の tile（行 g-layout・見本 board-v2 の .mt・.tile・.mlist）: 5 つの段の数と色・開いた段の札の並び */
+.ptiles { display: none; }
+.ptrow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 0 0 8px; }
+.ptile { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; border: 1px solid var(--line); border-top: 4px solid var(--sc, var(--s-wait)); border-radius: 8px; background: var(--panel); color: var(--sc, var(--s-wait)); font: inherit; cursor: pointer; padding: 2px; }
+.ptile.c-block, .ptile.c-queue { --sc: var(--s-wait); } .ptile.c-run { --sc: var(--s-run); } .ptile.c-stop { --sc: var(--s-stop); } .ptile.c-land { --sc: var(--s-land); }
+.ptile .pt1 b { font-size: 17px; color: var(--ink); }
+.ptile small { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ptile.on { background: color-mix(in srgb, var(--sc) 10%, var(--panel)); border-color: var(--sc); box-shadow: 0 0 0 1px var(--sc); }
+.ptwarn { color: var(--st-limit); margin-left: 2px; }
+.ptlist { display: flex; flex-direction: column; gap: 6px; }
+.ptlh { font-size: 12px; font-weight: 700; padding: 2px 2px 0; }

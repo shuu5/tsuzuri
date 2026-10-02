@@ -753,6 +753,7 @@ mod dom {
     };
     use crate::frame::Mode;
     use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
+    use crate::tiles::{open_of, press, tiles};
     use tsuzuri_contract::case::PATH as CASES_PATH;
 
     use crate::project::{Body, ledger, section, state_icon, unmeasured};
@@ -815,6 +816,8 @@ mod dom {
         let beads = crate::net::read(BEADS_PATH);
         let cases = crate::net::read(CASES_PATH);
         let open = RwSignal::new(open_columns(&search()));
+        // スマホの段の tile を押した記録（押すまでは None で、開く段は札の在る一番急ぐ段・行 g-layout）。
+        let picked = RwSignal::new(None);
         let ctx = use_context::<HelpCtx>();
         let mode = move || match ctx {
             Some(c) => c.mode.get(),
@@ -844,7 +847,7 @@ mod dom {
                     {board_view(columns(&[], &[], now), open, mode, clock, keys)}
                 }
                 .into_any(),
-                Body::Filled(cols) => board_view(cols, open, mode, clock, keys),
+                Body::Filled(cols) => with_tiles(cols, open, mode, clock, (keys, picked)),
             };
             let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
             view! { {board}{fix} }.into_any()
@@ -952,6 +955,67 @@ mod dom {
             .map(|c| column_view(c, open, mode, clock, keys))
             .collect_view();
         view! { <div class="board">{cols}</div> }.into_any()
+    }
+
+    /// 板とスマホの段の tile（`marks` は札の組の鍵と tile を押した記録・行 g-layout）。
+    fn with_tiles(
+        cols: Vec<Column>,
+        open: RwSignal<Vec<PipelineColumn>>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
+        marks: (Keys, RwSignal<Option<Option<PipelineColumn>>>),
+    ) -> AnyView {
+        let (keys, picked) = marks;
+        let tiles = tiles_view(cols.clone(), mode, clock, keys, picked);
+        view! { {board_view(cols, open, mode, clock, keys)}{tiles} }.into_any()
+    }
+
+    /// 札の組の鍵の表（札の bead の id から一覧の組の鍵）。
+    type Keys = StoredValue<BTreeMap<String, String>>;
+
+    /// スマホの段の tile と開いた段の札の並び（幅 600 px 以下だけ stylesheet が出す・行 g-layout・見本の mpipe）。
+    fn tiles_view(
+        cols: Vec<Column>,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+        clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
+        keys: StoredValue<BTreeMap<String, String>>,
+        picked: RwSignal<Option<Option<PipelineColumn>>>,
+    ) -> AnyView {
+        let cols = StoredValue::new(cols);
+        let open = move || cols.with_value(|c| open_of(picked.get(), c));
+        let row = move || {
+            let now = open();
+            cols.with_value(|c| tiles(c, now, clock()))
+                .into_iter()
+                .map(|t| {
+                    let column = t.lane.column;
+                    let class = format!("ptile c-{}{}", t.lane.name, if t.open { " on" } else { "" });
+                    let warn = t.warn.then(|| view! { <span class="ptwarn">"⚠"</span> });
+                    view! {
+                        <button type="button" class=class aria-expanded=t.open.to_string() on:click=move |_| picked.set(Some(press(now, column)))>
+                            <span class="pt1"><b class="num">{t.n}</b>{warn}</span>
+                            <small>{label(t.lane.key)}</small>
+                        </button>
+                    }
+                })
+                .collect_view()
+        };
+        let list = move || {
+            let now = open()?;
+            let col = cols.with_value(|c| c.iter().find(|c| c.lane.column == now).cloned())?;
+            let cards = col
+                .cards
+                .iter()
+                .map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))
+                .collect_view();
+            Some(view! {
+                <div class="ptlist">
+                    <div class="ptlh">{hs(col.lane.key)}</div>
+                    {cards}
+                </div>
+            })
+        };
+        view! { <div class="ptiles"><div class="ptrow">{row}</div>{list}</div> }.into_any()
     }
 
     fn column_view(
