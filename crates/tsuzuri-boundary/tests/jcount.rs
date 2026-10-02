@@ -174,7 +174,7 @@ fn jcount_rule_readings() {
 
 /// 読み先の条と節点の id の条の読み。
 fn library_and_nodeid_readings(vocab: String, base: Facts) {
-    assert_eq!(base.url, "http://127.0.0.1:4801/?page=pipeline&mode=beginner");
+    assert_eq!(base.url, "http://127.0.0.1:4801/?mode=beginner");
     for (source, n) in [
         ("//cdn.example.com/lib.js", 1),
         ("https://127.0.0.1:4801/lib.js", 1),

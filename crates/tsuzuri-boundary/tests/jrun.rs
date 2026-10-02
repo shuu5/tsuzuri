@@ -145,7 +145,7 @@ fn arms(text: &str, head: &str) -> Vec<String> {
 
 #[test]
 fn jrun_screens_cover_surface() {
-    assert_eq!(WIDTHS, [1280, 390]);
+    assert_eq!(WIDTHS, [1280, 960, 700, 390]);
     assert_eq!(MODES, ["beginner", "expert"]);
     let src = root().join("crates/tsuzuri-surface/src");
     let mut want = vec!["?".to_string()];
@@ -157,6 +157,11 @@ fn jrun_screens_cover_surface() {
         .collect();
     // home と節点の頁のほかの頁の file は無い（質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
     assert!(pages.is_empty(), "頁の file {pages:?}");
+    // 帯の印が開く窓は home の頁の query の win で開く（行 g-accept）。
+    let topbar = fs::read_to_string(src.join("topbar.rs")).expect("topbar.rs を読む");
+    let wins = arms(&topbar, "pub fn key(self) -> &'static str {");
+    assert_eq!(wins.len(), 7, "{wins:?}");
+    want.extend(wins.iter().map(|w| format!("?win={w}&")));
     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
     assert_eq!(tabs, ["home", "session", "projects"]);
@@ -164,15 +169,15 @@ fn jrun_screens_cover_surface() {
     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
     got.sort();
     got.dedup();
-    assert_eq!(got.len(), 4, "SCREENS に重なりが無い");
+    assert_eq!(got.len(), 11, "SCREENS に重なりが無い");
     want.sort();
     assert_eq!(got, want);
 }
 
 #[test]
 fn jrun_case_order_and_readings() {
-    let url = format!("{BOARD}?page=gaps&mode=beginner");
-    let pressed = format!("{BOARD}?page=gaps&mode=expert");
+    let url = format!("{BOARD}?win=gaps&mode=beginner");
+    let pressed = format!("{BOARD}?win=gaps&mode=expert");
     let spots = r#""switch_at": [{"label": "expert", "x": 10, "y": 20}, {"label": "hold", "x": 30, "y": 40}]"#;
     let text = fixture("clean.json").replace(r#""switch_at": []"#, spots);
     assert!(text.contains("hold"), "switch_at を仕込む");
@@ -312,7 +317,7 @@ fn jrun_sweep_all_cases() {
     let mut page = Fake::new(measured.clone(), |_, _| vec![LOAD.to_string()]);
     let (report, total) = sweep(&mut page, BOARD, &vocab).expect("sweep");
     let mut urls = Vec::new();
-    for width in [1280, 390] {
+    for width in [1280, 960, 700, 390] {
         for mode in ["beginner", "expert"] {
             let mut group: Vec<String> = SCREENS
                 .iter()
@@ -324,7 +329,7 @@ fn jrun_sweep_all_cases() {
             urls.extend(group.into_iter().map(|u| (width, mode, u)));
         }
     }
-    assert_eq!(urls.len(), 20);
+    assert_eq!(urls.len(), 96);
     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
     assert_eq!(page.navigated(), navigated);
     let mut want = vec![head()];
@@ -344,8 +349,8 @@ fn jrun_sweep_all_cases() {
         events
     });
     let (report, total) = sweep(&mut broken, BOARD, &vocab).expect("page error の在る sweep");
-    assert_eq!(total, 4);
-    assert!(report.ends_with("違反 計 4\n"), "{report}");
+    assert_eq!(total, 8);
+    assert!(report.ends_with("違反 計 8\n"), "{report}");
     let node_line = line(
         390,
         "expert",
@@ -365,7 +370,11 @@ fn sweep_without_nodes(vocab: String) {
     let mut empty = Fake::new(move |_| bare.clone(), |_, _| vec![LOAD.to_string()]);
     let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い home");
     assert!(err.contains("節点が無い"), "{err}");
-    assert_eq!(empty.navigated().len(), 4, "節点の頁を開かずに止まる");
+    assert_eq!(
+        empty.navigated().len(),
+        SCREENS.len(),
+        "節点の頁を開かずに止まる"
+    );
 }
 
 #[test]

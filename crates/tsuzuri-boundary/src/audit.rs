@@ -2,7 +2,9 @@
 //! 1 つの画面を 1 つの幅と mode で測った事実の JSON の字を読み、12 条ごとの違反の数と report の行を返す。
 //! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式と runner は後の行 j-runner）。
 //! 判定の字数と閾値と origin の比べと語彙表の引きはこの側で持つ（歯が browser 無しで撃てる）。
-//! 行 j-runner で runner（全画面 × 2 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
+//! 行 j-runner で runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
+//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
+//! （行 g-accept）。
 //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
 
 use std::fmt::Write;
@@ -295,17 +297,25 @@ pub fn line(width: u32, mode: &str, url: &str, counts: &[usize; 12]) -> String {
     words.join(" ")
 }
 
-/// 測る幅（px）。
-pub const WIDTHS: [u32; 2] = [1280, 390];
+/// 測る幅（px・規則の行 R-23 の 4 幅・行 g-accept）。
+pub const WIDTHS: [u32; 4] = [1280, 960, 700, 390];
 
 /// 測る mode（URL の mode= の値）。
 pub const MODES: [&str; 2] = ["beginner", "expert"];
 
 /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
-/// project board の 1 枚の画面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
-/// 行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
-pub const SCREENS: [&str; 4] = [
+/// project board の 1 枚の画面と、その上に帯の印が開く 7 つの窓（query の win・行 g-accept）と account board の
+/// 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は行 m-map-page で、質問の頁と抜けの検査の頁は
+/// 行 g-one-screen-a で消した）。
+pub const SCREENS: [&str; 11] = [
     "?",
+    "?win=ask&",
+    "?win=stalled&",
+    "?win=notices&",
+    "?win=seat&",
+    "?win=gaps&",
+    "?win=legend&",
+    "?win=dest&",
     "?board=account&tab=home&",
     "?board=account&tab=session&",
     "?board=account&tab=projects&",
@@ -420,7 +430,7 @@ fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 4 の画面と、
+/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 11 の画面と、
 /// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
 pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
     let mut report = head();

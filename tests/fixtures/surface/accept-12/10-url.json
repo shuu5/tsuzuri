@@ -1,5 +1,5 @@
 {
- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+ "url": "http://127.0.0.1:4801/?mode=beginner",
  "hscroll": 0,
  "overflow": [],
  "overlap": [],
@@ -15,13 +15,13 @@
   }
  ],
  "first": [
-  "走行の今の段を 4 列で並べる。",
+  "走行の今の段を 5 列で並べる。",
   "帯・札（印）の読み方は凡例を見る。",
   "P-1 は 12:30Z に決めた。"
  ],
  "errors": [],
  "titles": [
-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
+  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
  ],
  "nodes": [
   {
@@ -32,16 +32,16 @@
  "switches": [
   {
    "label": "expert",
-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
+   "before": "http://127.0.0.1:4801/?mode=beginner",
+   "after": "http://127.0.0.1:4801/?mode=expert"
   },
   {
    "label": "open",
-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=beginner"
+   "before": "http://127.0.0.1:4801/?mode=beginner",
+   "after": "http://127.0.0.1:4801/?mode=beginner"
   }
  ],
- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
+ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
  "libraries": [
   "/tsuzuri.js",
   "./style.css",

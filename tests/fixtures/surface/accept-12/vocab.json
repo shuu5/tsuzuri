@@ -3,7 +3,7 @@
  "english": {
   "pipeline": {
    "label": "pipeline dashboard",
-   "note": "run の今の段を 4 列で並べた表示"
+   "note": "run の今の段を 5 列で並べた表示"
   }
  },
  "rephrase": {
