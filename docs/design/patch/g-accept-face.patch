@@ -614,7 +614,7 @@ index 7e1fe5054ff9bcac7c1201b56089a7f399492435..77278e5c5cddef1ed679e2c0124965bc
          }
          .into_any()
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 156030870350455ce1913239c1bf8516e3d207a2..f45915a05f653d775127182fa87c5dbd7c86f4f5 100644
+index 072eac19f909f55c4bdb05e7d56f16c8640ab9e6..f5623a52668c886795232eb606a571001fe10a1d 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -68,7 +68,7 @@ h3 { font-size: var(--fs-2); }
@@ -660,10 +660,10 @@ index 156030870350455ce1913239c1bf8516e3d207a2..f45915a05f653d775127182fa87c5dbd
    #pipe .board { display: none; }
 diff --git a/crates/tsuzuri-surface/tests/bvfront.rs b/crates/tsuzuri-surface/tests/bvfront.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec313b6fb2
+index 0000000000000000000000000000000000000000..2b3656d3cdfbb87c5144288a08870ddaa27a2d53
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvfront.rs
-@@ -0,0 +1,404 @@
+@@ -0,0 +1,645 @@
 +//! 行 g-accept-face の歯（接頭辞 bvfront_）: 受入の 12 条の面の側の残り（要件 NFR1・FR14・規則の行 R-23）。
 +//! account board の tab の数の印を link の外へ出し、節点の頁の走行の link と止まった run の窓の個別の頁への口に hover の card を付け、帯の下の札を面の中身に
 +//! 重ねず、HOME の次の一手の一覧と各 project の表の要対応の列で面の決まった字を行の数だけ並べない。質問の窓は理由と推奨を
@@ -702,6 +702,83 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +        .find(to)
 +        .unwrap_or_else(|| panic!("{from} の後に {to} が無い"));
 +    &rest[..end]
++}
++
++/// `from` の字から次の `to` の字までの切り（`from` は字の中に 1 つだけ）を、改行と続く字下げを除いてつないだ字
++/// （関数の中の鎖や view の子を頭から尾まで照らす）。
++fn joined(text: &str, from: &str, to: &str) -> String {
++    assert_eq!(text.matches(from).count(), 1, "{from}");
++    between(text, from, to)
++        .split('\n')
++        .map(str::trim_start)
++        .collect()
++}
++
++/// stylesheet の規則の列（注を除く）: 置き場（囲む at-rule の頭を空白でつないだ字・最上位は空）と選びの字と宣言の字。
++fn css_rules(css: &str) -> Vec<(String, String, String)> {
++    let mut text = String::new();
++    let mut rest = css;
++    while let Some(at) = rest.find("/*") {
++        text.push_str(&rest[..at]);
++        let end = rest[at..].find("*/").expect("注の閉じ");
++        rest = &rest[at + end + 2..];
++    }
++    text.push_str(rest);
++    let (mut rules, mut heads, mut from) = (Vec::new(), Vec::new(), 0);
++    while let Some(off) = text[from..].find(['{', '}', ';']) {
++        let at = from + off;
++        let head = text[from..at]
++            .split_whitespace()
++            .collect::<Vec<_>>()
++            .join(" ");
++        from = at + 1;
++        match text.as_bytes()[at] {
++            b'{' if head.starts_with('@') => heads.push(head),
++            b'{' => {
++                let end = at + text[at..].find('}').expect("規則の閉じ");
++                rules.push((heads.join(" "), head, text[at + 1..end].to_string()));
++                from = end + 1;
++            }
++            b'}' => {
++                heads.pop();
++            }
++            _ => {}
++        }
++    }
++    rules
++}
++
++/// 選びに class `class` を持つ規則が宣言する名 `props` の値を、stylesheet の順（cascade の順）に「置き場 { 選び { 名: 値 } }」
++/// の字（最上位の規則は置き場を書かない）で返す。後に名の字が続く `.class` は別の class。
++fn decls(css: &str, class: &str, props: &[&str]) -> Vec<String> {
++    let dot = format!(".{class}");
++    let named = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
++    let mut out = Vec::new();
++    for (at, sel, body) in css_rules(css) {
++        if !sel
++            .match_indices(&dot)
++            .any(|(i, _)| !sel[i + dot.len()..].starts_with(named))
++        {
++            continue;
++        }
++        for (name, value) in body.split(';').filter_map(|d| d.split_once(':')) {
++            if props.contains(&name.trim()) {
++                let rule = format!("{sel} {{ {}: {} }}", name.trim(), value.trim());
++                out.push(if at.is_empty() {
++                    rule
++                } else {
++                    format!("{at} {{ {rule} }}")
++                });
++            }
++        }
++    }
++    out
++}
++
++/// 字 `text` の中の `pos` の位置の波括弧の深さ（関数の本文の切りなら 0 が本文の最上位）。
++fn depth_at(text: &str, pos: usize) -> usize {
++    let head = &text[..pos];
++    head.matches('{').count() - head.matches('}').count()
 +}
 +
 +fn row(id: &str, kind: NodeKind, title: &str, status: Option<&str>) -> AroundRow {
@@ -744,8 +821,27 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +        ),
 +        "数の印が link の閉じの直後の隣に無い"
 +    );
++    // link の開きの tag の行の後は、印の span と語の字の span と link の閉じと数の印だけ（view の閉じまで）。
++    let view = between(
++        &board,
++        "<a href=move || tab_href(l.tab",
++        "\n                        }\n",
++    );
++    let kids: String = view.lines().skip(1).map(str::trim).collect();
++    assert_eq!(
++        kids,
++        "<span inner_html=tab_icon(l.tab)></span><span class=\"lbl hd-t\">{label(l.key)}</span></a>{mark}"
++    );
 +    let css = read("style.css");
 +    assert!(css.contains(".nav .badge { flex: none; align-self: center; min-width: 20px;"));
++    // 印の規則は最上位（どの幅でも効く）に 1 つで、flex と縦の置き場を上書きする規則は無い。
++    assert_eq!(
++        decls(&css, "badge", &["flex", "align-self"]),
++        [
++            ".nav .badge { flex: none }",
++            ".nav .badge { align-self: center }"
++        ]
++    );
 +}
 +
 +/// 走行の link の card は近傍の行の同じ id の節点と状態の card で、無ければ走行の id だけの節点（種類は走行・状態なし）の card。
@@ -788,6 +884,11 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +    let timeline = read("src/project/timeline.rs");
 +    assert!(timeline.contains("<a class=\"nth num\" href=href use:attach=card>"));
 +    assert!(timeline.contains("let card = run_card(&around, &r.run);"));
++    // 近傍の行は読めた近傍の頁の行の全部（読めていなければ空）。
++    assert_eq!(
++        joined(&timeline, "let around = near.with(", ";\n"),
++        "let around = near.with(|(f, s)| match state(f, *s) {PageState::Doc(doc) => doc.rows,_ => Vec::new(),})"
++    );
 +}
 +
 +/// 帯の下の札は高さ 19 px で下から 2 px に置き、1 枚の画面の下の余白（広い段と 601〜1199 の段の小さい方）に収まる。
@@ -831,6 +932,39 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +    assert!(narrow.contains(
 +        "  .freshw { position: static; width: fit-content; height: auto; margin: 6px 8px 0 auto; }"
 +    ));
++    fresh_rules_placed(&css);
++}
++
++/// 札の規則の置き場と cascade の順: 固定の基の規則と chip と warn の 17 px と class one の要素を持たない頁の規則は最上位、
++/// 600 以下の流れの中の規則は基の規則より後の 600 の塊の中。1 枚の画面の下の余白は広い段が最上位・601〜1199 と 600 以下が
++/// それぞれの塊の中。
++fn fresh_rules_placed(css: &str) {
++    assert_eq!(
++        decls(css, "freshw", &["position"]),
++        [
++            ".freshw { position: fixed }",
++            "body:not(:has(.one)) .freshw { position: static }",
++            "@media (max-width: 600px) { .freshw { position: static } }",
++        ]
++    );
++    assert_eq!(
++        decls(css, "freshw", &["height"]),
++        [
++            ".freshw { height: 19px }",
++            ".freshw > .chip, .freshw > .warn { height: 17px }",
++            "body:not(:has(.one)) .freshw { height: auto }",
++            "@media (max-width: 600px) { .freshw { height: auto } }",
++        ]
++    );
++    assert_eq!(
++        decls(css, "one", &["padding"]),
++        [
++            ".page:has(> .one) { padding: 0 }",
++            ".one { padding: 10px 12px 24px }",
++            "@media (min-width: 601px) and (max-width: 1199px) { .one { padding: 6px 6px 22px } }",
++            "@media (max-width: 600px) { .one { padding: 8px } }",
++        ]
++    );
 +}
 +
 +/// 行の 1 行の字 row_line は、なしの箱の字と測れていないの箱の字を空にし、ほかの 1 行はそのまま。各 project の表の要対応の列の
@@ -852,6 +986,14 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +    assert_eq!(need_l2(&need(None)), "");
 +    assert_eq!(need_l2(&need(Some(own))), own);
 +    let projects = read("src/account/projects.rs");
++    // 2 段目の字は need_l2 の戻りそのもので、使い道は幅への収めと span の 2 所だけ。
++    assert_eq!(
++        projects
++            .matches("let l2_text = need_l2(&row.need);")
++            .count(),
++        1
++    );
++    assert_eq!(projects.matches("l2_text").count(), 3);
 +    assert!(projects.contains("let l2 = fit_node(l2_text.clone());"));
 +    assert!(projects.contains("<span class=\"l2\" node_ref=l2>{l2_text}</span>"));
 +    assert!(!projects.contains("{row.need.line.clone().unwrap_or_default()}"));
@@ -916,6 +1058,7 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +        )
 +    );
 +    assert!(ask.contains("let more = LAYOUT.iter().filter(folded).map(part).collect_view();"));
++    ask_fold_order(&ask);
 +    assert!(
 +        ask.contains("let (open, toggle) = fold(format!(\"ask:more:{}\", card.id), || false);")
 +    );
@@ -939,12 +1082,40 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +    assert!(win.contains("<span class=\"ttl\" data-ledger-text=\"\">{t}</span>"));
 +}
 +
++/// 質問の窓の card の描く順: 頭と概要（畳む部分の前）・「続き」の開き閉じ（畳む部分）・答え（畳む部分の後で、畳む部分を
++/// 除く）の順で article の子に置く。
++fn ask_fold_order(ask: &str) {
++    assert_eq!(
++        joined(ask, "let folded = |slot: &&Slot|", ";\n"),
++        "let folded = |slot: &&Slot| MORE.contains(&slot.part)"
++    );
++    assert_eq!(
++        joined(ask, "let lead = LAYOUT", ";\n"),
++        "let lead = LAYOUT.iter().take_while(|s| !folded(s)).map(part).collect_view()"
++    );
++    assert_eq!(
++        joined(ask, "let tail = LAYOUT", ";\n"),
++        "let tail = LAYOUT.iter().skip_while(|s| !folded(s)).filter(|s| !folded(s)).map(part).collect_view()"
++    );
++    let article = between(ask, "<article class=card_class(target)", "</article>");
++    let kids: String = article.lines().skip(1).map(str::trim).collect();
++    assert_eq!(
++        kids,
++        "{lead}<details class=\"fold\" prop:open=open on:toggle=toggle><summary>{label(MORE_KEY)}</summary>{more}</details>{tail}"
++    );
++}
++
 +/// 台帳の一覧の群の見出しは 600 以下の段で折り返し、群の名は全体を title に置く。
 +#[test]
 +fn bvfront_group_head_wraps() {
 +    let css = read("style.css");
 +    let narrow = between(&css, "@media (max-width: 600px) {\n  .one {", "\n}");
 +    assert!(narrow.contains("  .ll-gh { flex-wrap: wrap; row-gap: 2px; }"));
++    // 折り返しを決める規則はその 1 つだけ（基の規則や後の規則が折り返しを上書きしない）。
++    assert_eq!(
++        decls(&css, "ll-gh", &["flex-wrap"]),
++        ["@media (max-width: 600px) { .ll-gh { flex-wrap: wrap } }"]
++    );
 +    let list = read("src/ledgerlist.rs");
 +    assert!(list.contains(
 +        "<button type=\"button\" class=\"ll-gname\" title=g.name.clone() on:click=choose>"
@@ -1007,6 +1178,26 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +            "    set_timeout(move || link_unopened(at), Duration::from_secs(READ_HOLD_S));"
 +        )
 +    );
++    connect_timer_placed(connect);
++}
++
++/// connect の時刻と timer は本文の最上位（枝や閉包の中でない）で、timer は接続を作れない枝の後に張る（作れた時も撃つ）。
++fn connect_timer_placed(connect: &str) {
++    let timer = "set_timeout(move || link_unopened(at),";
++    assert_eq!(connect.matches("link_unopened").count(), 1);
++    let at = |s: &str| {
++        connect
++            .find(s)
++            .unwrap_or_else(|| panic!("connect に {s} が無い"))
++    };
++    for s in [
++        "let at = now();",
++        "let Ok(source) = EventSource::new(EVENTS_PATH) else {",
++        timer,
++    ] {
++        assert_eq!(depth_at(connect, at(s)), 1, "{s}");
++    }
++    assert!(at("let at = now();") < at("let Ok(source)") && at("};\n    let on_open") < at(timer));
 +}
 +
 +/// 偽の接続が READ_HOLD_S 秒の前に開けば、今と同じに読む（timer は何もしない・古さに何も置かない）。後で開けば理由を消す。
@@ -1031,6 +1222,23 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +    let connect = between(&net, "fn connect() {", "\n}\n");
 +    assert!(connect.contains("let on_open = Closure::<dyn FnMut()>::new(go_live);"));
 +    assert!(between(&net, "fn link_back() {", "\n}\n").contains("change(Fresh::back);"));
++    // 2 つの閉包は接続の開いたの event に登録し（onopen と open の受け手）、頁の一生の間持つ（forget）。
++    for want in [
++        "let on_back = Closure::<dyn FnMut()>::new(link_back);",
++        "source.set_onopen(Some(on_open.as_ref().unchecked_ref()));",
++        ".add_event_listener_with_callback(\"open\", on_back.as_ref().unchecked_ref())",
++        "on_open.forget();",
++        "on_back.forget();",
++    ] {
++        assert_eq!(connect.matches(want).count(), 1, "connect の {want}");
++    }
++    assert_eq!(
++        (
++            connect.matches("on_open").count(),
++            connect.matches("on_back").count()
++        ),
++        (3, 3)
++    );
 +}
 +
 +/// 稼働の記録の目盛の段（class saxis）の字は目盛の位置の中央に置き、最初の字は目盛から右へ、最後の字は目盛から左へ
@@ -1059,6 +1267,20 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +        .filter(|l| l.starts_with(".saxis "))
 +        .collect::<Vec<_>>();
 +    assert!(saxis.iter().all(|l| !l.contains("overflow")), "{saxis:?}");
++    // 3 つの規則は最上位（どの幅でも効く）にこの順で、class saxis を選びに持つどの規則（塊の中も・祖先の class を
++    // 頭に持つ選びも）も overflow を持たない。
++    assert_eq!(
++        decls(&css, "saxis", &["transform"]),
++        [
++            ".saxis span { transform: translateX(-50%) }",
++            ".saxis span:first-child { transform: translateX(0) }",
++            ".saxis span:last-child { transform: translateX(-100%) }",
++        ]
++    );
++    assert_eq!(
++        decls(&css, "saxis", &["overflow", "overflow-x", "overflow-y"]),
++        Vec::<String>::new()
++    );
 +    let seat = read("src/project_dom/seat.rs");
 +    assert!(seat.contains("<div class=\"saxis\" aria-hidden=\"true\">{axis}</div>"));
 +    assert!(seat.contains("view! { <span style=style>{t.label}</span> }"));
@@ -1067,13 +1289,32 @@ index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec
 +        "<div class=SAXIS aria-hidden=\"true\">\n                {move || {\n                    axis_labels(at, span.get())"
 +    ));
 +    assert!(sess.contains(".map(|(style, label)| view! { <span style=style>{label}</span> })"));
++    axis_children(&seat, &sess);
++}
++
++/// 目盛の段の子を組む閉包は、目盛の字の span の view を 1 つだけ持ち、その列をそのまま返す（ほかの要素を足さない）。
++fn axis_children(seat: &str, sess: &str) {
++    let ticks = joined(seat, "    let axis = move || {\n", "\n    };\n");
++    assert!(
++        ticks.matches("view!").count() == 1
++            && ticks.ends_with("view! { <span style=style>{t.label}</span> }}).collect_view()"),
++        "{ticks}"
++    );
++    let labels = joined(sess, "<div class=SAXIS aria-hidden=\"true\">", "</div>");
++    assert!(
++        labels.matches("view!").count() == 1
++            && labels.ends_with(
++                ".map(|(style, label)| view! { <span style=style>{label}</span> }).collect_view()}}"
++            ),
++        "{labels}"
++    );
 +}
 diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/bvqhist.rs
-index ece5f666a84a65baddcec1c1d0731c486b98cab6..c70e25fd7a59ab4a9300af806c601eed44929d5b 100644
+index bf9d21232ba737cb8b4e6c7df5bb4f0a31f356c3..a06da1046ccf9ef963ab38b63396036de2aa6465 100644
 --- a/crates/tsuzuri-surface/tests/bvqhist.rs
 +++ b/crates/tsuzuri-surface/tests/bvqhist.rs
-@@ -221,7 +221,7 @@ fn bvqhist_window_fold_wiring_text() {
-     let li = &view[view.find("fn hist_li(").expect("行の DOM")..];
+@@ -268,7 +268,7 @@ fn bvqhist_window_fold_wiring_text() {
+     let li = fn_of(&page, "fn hist_li(", "\n}\n");
      let order = [
          "<time>{clock_short(at, now)}</time>",
 -        "<span class=\"ttl\" title=item.title.clone()>{short}</span>",

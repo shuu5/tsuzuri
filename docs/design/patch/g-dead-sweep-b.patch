@@ -1044,10 +1044,10 @@ index 30b1039ab3b8f339847d7472140cb796cd381f04..140ba67748ba1ea879d9318b9c132588
  /// (2) block の列に地図が無く、グラフの口の読み（PATH・REASON・doc）は kit の下の map に在る。
 diff --git a/crates/tsuzuri-surface/tests/bvshed.rs b/crates/tsuzuri-surface/tests/bvshed.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e2e51d6ed
+index 0000000000000000000000000000000000000000..e14f6d3f71cecf1fc3949b9f6ad95ca5d6f6606f
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvshed.rs
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,186 @@
 +//! 行 g-dead-sweep-b の歯（接頭辞 bvshed_）: 頁の枠の nav と header の部品の並びと頁の切り替え、画面の状態（Screen）の鎖、
 +//! 問いの頁の一覧の DOM と DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
 +#![cfg(test)]
@@ -1074,37 +1074,63 @@ index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e
 +    &rest[..end]
 +}
 +
++/// 構造体の本文の欄の名の列: 注と属性の行を除き、`::` でない 1 つのコロンの前の名を拾う（`pub(crate)` などの可視の字や、
++/// 1 行に並べた欄や、コロンの前の空白を問わない）。
++fn fields(def: &str) -> Vec<&str> {
++    let mut out = Vec::new();
++    for line in def.lines().skip(1).map(str::trim) {
++        if line.starts_with("//") || line.starts_with("#[") {
++            continue;
++        }
++        let b = line.as_bytes();
++        for (i, _) in line.match_indices(':') {
++            let near = |j: Option<usize>| j.and_then(|j| b.get(j)) == Some(&b':');
++            if near(i.checked_sub(1)) || near(Some(i + 1)) {
++                continue;
++            }
++            let head = line[..i].trim_end();
++            let start = head
++                .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
++                .map_or(0, |j| j + 1);
++            out.push(&head[start..]);
++        }
++    }
++    out
++}
++
++/// 名に使える字（英数字と _）の続きが `word` ちょうどである所の数（束縛の使い道を数える）。
++fn uses(text: &str, word: &str) -> usize {
++    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
++        .filter(|w| *w == word)
++        .count()
++}
++
 +/// frame.rs は nav と header の部品の並びと頁の切り替え（nav・pages・nav_keys・HEADER・BACK・BACK_WRAP・NavLink・BADGE・
-+/// nav_links・badge・switch_url・header_snapshot・list）を持たず、頁の定義 PageDef の欄は heading・class・columns の 3 つで、
-+/// 2 つの頁の定義は nav・badge・icon の欄を書かず、最終の記録の部品 UPDATED を board.rs が引き、header の snapshot の file が無い。
++/// nav_links・badge・switch_url・header_snapshot・list）を可視の字によらず宣言せず、頁の定義 PageDef の欄は（可視の字によらず
++/// 数えて）heading・class・columns の 3 つで、2 つの頁の定義は nav・badge・icon の欄を書かず、最終の記録の部品 UPDATED を
++/// board.rs が引いてその鍵を帯の時刻の chip の語に渡し、header の snapshot の file が無い。
 +#[test]
 +fn bvshed_header_bits_gone() {
 +    let src = read("src/frame.rs");
 +    for gone in [
-+        "pub fn nav(",
-+        "pub fn pages(",
-+        "pub fn nav_keys(",
-+        "pub const HEADER",
-+        "pub const BACK:",
++        "fn nav(",
++        "fn pages(",
++        "fn nav_keys(",
++        "const HEADER:",
++        "const BACK:",
 +        "BACK_WRAP",
-+        "pub struct NavLink",
-+        "pub const BADGE",
-+        "pub fn nav_links(",
-+        "pub fn badge(",
-+        "pub fn switch_url(",
-+        "pub fn header_snapshot(",
++        "struct NavLink",
++        "const BADGE:",
++        "fn nav_links(",
++        "fn badge(",
++        "fn switch_url(",
++        "fn header_snapshot(",
 +        "fn list(",
 +    ] {
 +        assert!(!src.contains(gone), "frame.rs に {gone} が在る");
 +    }
 +    let def = item(&src, "pub struct PageDef {");
-+    let fields: Vec<&str> = def
-+        .lines()
-+        .filter_map(|l| l.trim().strip_prefix("pub "))
-+        .filter(|l| !l.starts_with("struct "))
-+        .filter_map(|l| l.split(':').next())
-+        .collect();
-+    assert_eq!(fields, ["heading", "class", "columns"]);
++    assert_eq!(fields(def), ["heading", "class", "columns"], "{def}");
 +    for rel in ["src/pages/home.rs", "src/pages/node.rs"] {
 +        let page = read(rel);
 +        for gone in ["nav:", "badge:", "icon:"] {
@@ -1121,23 +1147,37 @@ index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e
 +        }
 +    );
 +    let board = read("src/board.rs");
-+    assert!(board.contains("let key = frame::UPDATED.key;"));
++    let chip = item(&board, "    let key = frame::UPDATED.key;");
++    assert!(
++        chip.contains("        Some(t) => term(key, clock_short(t, net::now())),"),
++        "{chip}"
++    );
++    assert_eq!(
++        uses(chip, "key"),
++        3,
++        "鍵の束縛 key は帯の時刻の chip の語の 1 所だけに渡す"
++    );
++    assert!(
++        chip.contains("<span class=\"chip num\" title=title>{at}</span>"),
++        "{chip}"
++    );
 +    assert!(!board.contains("HEADER"));
 +    assert!(!crate_dir().join("tests/snapshots/header.json").exists());
 +}
 +
 +/// view.rs は画面の状態の鎖（Screen・Board・EpicGroup・board・questions・ledger_groups と助けの ancestors・parent・
-+/// sort_children・kind_rank）を持たず、board.rs は画面の状態を作らず台帳の一覧の口を読まず、歯の file lgrp.rs が無い。
++/// sort_children・kind_rank）を可視の字によらず宣言せず、board.rs は画面の状態を作らず台帳の一覧の口（ledger の PATH）を
++/// 読まず、歯の file lgrp.rs が無い。
 +#[test]
 +fn bvshed_screen_chain_gone() {
 +    let view = read("src/view.rs");
 +    for gone in [
-+        "pub struct Screen",
-+        "pub struct Board",
-+        "pub struct EpicGroup",
-+        "pub fn board(",
-+        "pub fn questions(",
-+        "pub fn ledger_groups(",
++        "struct Screen",
++        "struct Board",
++        "struct EpicGroup",
++        "fn board(",
++        "fn questions(",
++        "fn ledger_groups(",
 +        "fn ancestors(",
 +        "fn parent(",
 +        "fn sort_children(",
@@ -1146,7 +1186,7 @@ index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e
 +        assert!(!view.contains(gone), "view.rs に {gone} が在る");
 +    }
 +    let board = read("src/board.rs");
-+    for gone in ["Screen", "net::read(ledger::PATH)"] {
++    for gone in ["Screen", "net::read(ledger::PATH)", "ledger::PATH"] {
 +        assert!(!board.contains(gone), "board.rs に {gone} が在る");
 +    }
 +    assert!(
@@ -1156,22 +1196,25 @@ index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e
 +}
 +
 +/// ask.rs は問いの頁の一覧の DOM（mod dom の view と scroll_to）と、それだけが使った関数（count・total・card_key・outline・
-+/// node_cards）を持たず、view は空の中身を返し、質問の窓が使う one_view・listed・unknown_projects・OTHER_UNKNOWN と
++/// node_cards）を可視の字によらず宣言せず（mod dom の中には view の宣言が無い）、block の view の本文は use と注の行のほかは
++/// 空の中身を返す式 ().into_any() だけで字 dom を持たず、質問の窓が使う one_view・listed・unknown_projects・OTHER_UNKNOWN と
 +/// 届いていない裁定の 1 行の late_view は残る。
 +#[test]
 +fn bvshed_qlist_dom_gone() {
 +    let src = read("src/project/ask.rs");
 +    for gone in [
-+        "pub fn count(",
-+        "pub fn total(",
-+        "pub fn card_key(",
-+        "pub fn outline(",
-+        "pub fn node_cards(",
++        "fn count(",
++        "fn total(",
++        "fn card_key(",
++        "fn outline(",
++        "fn node_cards(",
 +        "fn scroll_to(",
 +        "    pub fn view() -> AnyView {",
 +    ] {
 +        assert!(!src.contains(gone), "ask.rs に {gone} が在る");
 +    }
++    let dom = item(&src, "\nmod dom {");
++    assert!(!dom.contains("fn view("), "mod dom の中の view の宣言");
 +    for kept in [
 +        "pub fn one_view(",
 +        "pub fn listed(",
@@ -1182,8 +1225,14 @@ index 0000000000000000000000000000000000000000..fd0a94459c3396c9a28d2f1fae016f8e
 +        assert!(src.contains(kept), "ask.rs に {kept} が無い");
 +    }
 +    let view = item(&src, "pub fn view() -> leptos::prelude::AnyView {");
-+    assert!(view.contains("().into_any()"), "{view}");
-+    assert!(!view.contains("dom::"), "{view}");
++    let body: Vec<&str> = view
++        .lines()
++        .skip(1)
++        .map(str::trim)
++        .filter(|l| !l.is_empty() && *l != "}" && !l.starts_with("use ") && !l.starts_with("//"))
++        .collect();
++    assert_eq!(body, ["().into_any()"], "{view}");
++    assert!(!view.contains("dom"), "{view}");
 +}
 diff --git a/crates/tsuzuri-surface/tests/cadq.rs b/crates/tsuzuri-surface/tests/cadq.rs
 index 0c86dea8de93502f38c657b79e0b7740ca1f06f0..f706b8d97e26202cef6cea61126e7a32a1596b57 100644
@@ -1283,7 +1332,7 @@ index 0c86dea8de93502f38c657b79e0b7740ca1f06f0..f706b8d97e26202cef6cea61126e7a32
          let rest = name
              .strip_prefix("cadq_")
 diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
-index ff66d66f4b8fb8bae37086ad69b8b9f6ab20c458..ffe51c3fafbb85664a9201bb77bf0947d726edd9 100644
+index 29d289c91a4cadcac631bc6742c857c6bf5f79f7..ebb541635eb7c6f0ce719f77271201813e372145 100644
 --- a/crates/tsuzuri-surface/tests/frame.rs
 +++ b/crates/tsuzuri-surface/tests/frame.rs
 @@ -6,6 +6,7 @@
