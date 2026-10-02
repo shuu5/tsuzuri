@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.25 版（2026-10-02）: 判断の記録 ADR-29（持ち主の裁定 t3-hub.75.1〔裁定 id = t3-hub.75.1:20261002T2238Z-1〕と t3-hub.75.2〔裁定 id = t3-hub.75.2:20261002T2258Z-1〕）を写した（要件 FR19 を、席の文脈から分けた自由な調べと検証の場・話す窓と問う窓・席の環境を継ぐ起動と囲い・作業場への所見・席の背景の見張り・添え物の保存の選び・board の帯と吹き出しの相談の口の字に改め、FR5 の吹き出しに相談の口を足し、受入 AC16 を改めて AC19 を足し、制約 CON6 に問う窓の model の選び手を足し、scope の字を改め、規則の行 R-38 を結んだ）。
 # 第 0.24 版（2026-10-02）: 判断の記録 ADR-27 決定 (7)（札と一覧の行は hover でなく click で吹き出しを開く）に合わせ、要件 NFR1 の shall と verify と FR14 の verify の受入の測りを、hover の card に加えて click の吹き出しの口も数える字に広げた（行 g-accept の測りの式・規則の行 R-23 の value も同じ字）。
 # 第 0.23 版（2026-10-02）: 要件 FR10 の shall の頭の文に、板の札の段と理由と列に入った時刻を器の局面の出力の部品から読むこと（ノート surface-wave26a の行 c-case-columns と c-ledger-lc で着地した形・読めない間は台帳の依存と event log の段の割り）を足した。規則の行 R-37 の note の列に入った時刻の出所も同じ形に直した。
 # 第 0.22 版（2026-10-01）: 判断の記録 ADR-27（持ち主の裁定 t3-hub.52.160.1〔裁定 id = t3-hub.52.160.1:20261001T1423Z-1〕）を写した（project board の tab と地図と口座の履歴と台帳の「詳しく」をなくし、上の固定の帯と押すと開く窓と札の click の吹き出しと、Blocked と Queued を分けた 5 列の pipeline と epic ごとの一覧を窓の幅の 3 段で並べ、短い題を台帳の metadata に置く形にした。scope と要件 FR5・FR6・FR10・FR11・FR12・FR13・FR14・FR16・NFR1 と受入 AC9 を改め、受入 AC18 を足した。値は規則の行 R-35〜R-37 と R-20 と R-23）。
@@ -12,12 +13,13 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.24
+  version: v0.25
   status: draft
   generated: 2026-09-28
   approval:
     - {role: 承認, who: 持ち主, when: 2026-09-29, stamp: "要件 NFR4 の値 案 D（t3-hub.52.134・裁定 id = t3-hub.52.134:20260929T2152Z-1・束 batch:20260929T2152Z-1・notes に逐語・判断の記録 ADR-23 は t3-hub.52.133）", verbatim: "全部推奨で良い", version: v0.18}
     - {role: 承認, who: 持ち主, when: 2026-10-01, stamp: "project board の作り直し（t3-hub.52.160.1（裁定 id = t3-hub.52.160.1:20261001T1423Z-1・席とのチャット・notes に逐語・判断の記録 ADR-27・論点 Q1〜Q7 の推奨の全部）", verbatim: "これでよい すべて推奨で良いので進めて", version: v0.22}
+    - {role: 承認, who: 持ち主, when: 2026-10-02, stamp: "相談の窓の作り直し（t3-hub.75.1（裁定 id = t3-hub.75.1:20261002T2238Z-1・席とのチャット・notes に逐語）と t3-hub.75.2（裁定 id = t3-hub.75.2:20261002T2258Z-1・package の形は乙）・判断の記録 ADR-29）", verbatim: "4.これは微妙だ。相談といっても例えば新しい技術のスクラッチ実験とかデータの検証のためにプログラムを組むとかはできるべきだ。それがそのプロジェクトを汚さない形であるようにしてほしい。調査レポートなども作れるべきで、ただしそれを直接プロジェクト内に保存するのではなく、orchestratorに渡して保存するかどうか選ばせる形だ 5.常にweb調査もできるべき。上記の通りスクラッチ昨日は残さないと上質な調査は不可能だ それ以外は推奨で良い あと、consultは以前は一つの議題についての相談に特化していた気がするが、そのようにむやみに限定するのではなく、もっとorchestratorのコンテキストを汚さないために分離しているだけの自由な調査検証の場として作って。一つ話終わったからすぐに閉じるわけではない。途中でclearして別の話題について検証して結果をorchestratorに渡す、みたいな運用もあり得るし、なんならconsult窓が複数もあり得る／乙でよいだろう", version: v0.25}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -35,7 +37,7 @@ scope:
     - 表示面（席が端末の Chrome を起こして操作する）
     - tz の口（folio の口の吸収・graph・init・doctor）
     - 指し示し（持ち主が画像と囲みと一言を席へ渡す）
-    - 相談の窓 consult（model を選べる別の窓・型付きの所見）
+    - 相談の窓 consult（席の文脈から分けた自由な調べと検証の場・作業場と囲い・型付きの所見）
   not_build:
     - 承認欄の自動記入と「決まったこと」の板（v1.1）
     - 時間軸の眺め（14 日の着地・便の回数）（v2）
@@ -128,14 +130,14 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 帯は出所の正本の名で 7 つ（constitution・rules・ADR・SRS・design-note・beads・pipeline）とし beads の帯は種類の 7 行に分ける。形は 2 種（四角 = file に書かれた行・丸 = 台帳と走行）、色は帯、縁は状態だけで、個別の頁の図と節点の札と記号の見方に使う。地図の頁は持たず、1 つの bead のつながりは、札と一覧の行の吹き出しの口から開く個別の頁で見せる。個別の頁の近傍は根拠の側と影響の側を各 2 段、節点に pointer を置くと両側を光らせ hub から先は広げず光る節点は 20 まで、段数と畳みは URL に残す。pipeline の札と台帳 open の一覧の行は click で吹き出しを開き、× と外の click と取り消しの鍵（Esc）で閉じ、hover では開かない。吹き出しは題の全体・概要・id・種類・epic・設計の行・起票の時刻と経過・個別の頁への口と、段ごとの事実（Blocked は待つ相手と待つ理由・Queued は列に入った時刻とまだ起きない理由・Running / Gated は段の流れ・止まりは理由の全文と走行の歴と次の手・着地は commit と CI の結果）を出し、窓の幅が規則の行 R-35 のスマホの段では下からの板（sheet）にする。
+    shall: 帯は出所の正本の名で 7 つ（constitution・rules・ADR・SRS・design-note・beads・pipeline）とし beads の帯は種類の 7 行に分ける。形は 2 種（四角 = file に書かれた行・丸 = 台帳と走行）、色は帯、縁は状態だけで、個別の頁の図と節点の札と記号の見方に使う。地図の頁は持たず、1 つの bead のつながりは、札と一覧の行の吹き出しの口から開く個別の頁で見せる。個別の頁の近傍は根拠の側と影響の側を各 2 段、節点に pointer を置くと両側を光らせ hub から先は広げず光る節点は 20 まで、段数と畳みは URL に残す。pipeline の札と台帳 open の一覧の行は click で吹き出しを開き、× と外の click と取り消しの鍵（Esc）で閉じ、hover では開かない。吹き出しは題の全体・概要・id・種類・epic・設計の行・起票の時刻と経過・個別の頁への口・相談の口（その bead を添えて相談の窓を開く頼み・要件 FR19）と、段ごとの事実（Blocked は待つ相手と待つ理由・Queued は列に入った時刻とまだ起きない理由・Running / Gated は段の流れ・止まりは理由の全文と走行の歴と次の手・着地は commit と CI の結果）を出し、窓の幅が規則の行 R-35 のスマホの段では下からの板（sheet）にする。
     plain: 図の帯は元の文書の名前で分け、形は「文書の行 = 四角・台帳と走行 = 丸」の 2 つだけです。地図の頁はなくし、1 つの項目のつながりは、札を押して出る吹き出しから開く個別の頁で見ます。吹き出しは押すと開き、× か外を押すか取り消しの鍵（Esc）で閉じます。スマホでは下から出ます。
     basis: [P-2, N-5]
     verify: {method: test, how: 節点の形と帯の class を snapshot で pin し、hub の fixture で光る節点が 20 以下で hub が展開されないことを見て、札の click で吹き出しが開き × と外の click と取り消しの鍵（Esc）で閉じ hover では開かないことを browser の runner で撃つ, ac: [AC4, AC9, AC18]}
     goals: [GOAL2]
     figures: []
     rules: [R-20, R-35]
-    adrs: [ADR-7, ADR-27]
+    adrs: [ADR-7, ADR-27, ADR-29]
     note: 地図の 6 面とグラフの箱の畳み（見える箱 40 まで・持ち主の裁定 t3-hub.52.32 と t3-hub.52.53）は、判断の記録 ADR-27 決定 (2) で地図と一緒に消した。帯と形と色と縁と近傍の段数と光らせ方は、個別の頁の図（近傍）と節点の札と記号の見方が使い続ける（ADR-27 決定 (1) の (ア)）。
   - id: FR6
     title: 問いの card と答え
@@ -305,17 +307,19 @@ requirements:
     figures: []
     adrs: [ADR-9]
   - id: FR19
-    title: 相談の窓 consult と型付きの所見
+    title: 相談の窓 consult（席の文脈から分けた自由な調べと検証の場）と型付きの所見
     pattern: event
     strength: must
-    when: 相談の窓が所見を出したとき
-    shall: 所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値）を検め、欠けていれば受けない。受けた所見は置き場に書き、orchestrator へは所見の id を指す固定の 1 行だけを器の口で送る。orchestrator は所見ごとに処分を宣言し、処分の無い所見は未反映の一覧に載る。相談の窓は repo と台帳を直に書かない。
-    plain: 相談の結論は決まった形の file に書き、元の窓へは「結論が届いた」の 1 行だけを送ります。元の窓は結論を採るか採らないかを必ず記録します。
-    basis: [P-7, P-12, P-16, P-19, N-2]
-    verify: {method: test, how: 欄の欠けた所見が断られ、揃った所見で置き場の file と台帳の 1 行と器の口の argv が出ることを見る, ac: [AC16]}
+    when: 持ち主か席が相談の窓を開き、窓が所見を出したとき
+    shall: 相談の窓は、持ち主が席の窓の skill（/tsuzuri:consult）か board の上の帯と吹き出しの相談の口から頼み、席が skill で起こす。形は持ち主が直に話す窓（席の tmux の session の別の窓）と、席が背景で起こす非対話の問う窓の 2 つで、どちらも 1 つの議題に限らず、話題を替えても所見を渡しても閉じない。起動の口は席の口座の置き場の環境変数を継ぎ、器と tsuzuri の plugin を渡さず、制限の形・許可を聞かない形・道具の閉じた列（web の調べを含む）・外の道具（MCP）の断り・読む根の足しと書きの断り・私用の一時の置き場・囲い（有効・囲いの外の撃ち直しの断り・起きない時は起動で止める・資格の file の断り・殻の命令のネットワークは package の配り元だけ）で、窓ごとの作業場（席の drafts の下）を作業の dir にして起こす。所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値・話題・添え物）を検め、欠けていれば受けず、受けた所見を作業場の決まった dir に書く。相談の窓は repo と台帳を書かない。席は相談の見張りを背景に常に置き、見張りは新しい所見と受けの無い相談の頼みで固定の 1 行を出して終わる。席は所見を読む口で読み、台帳に相談の所見と相談の受けの行を置き、所見ごとに処分（採る・一部採る・採らない と理由・添え物ごとの保存する・しない）を宣言する。保存する添え物は席が repo へ写す。処分の無い所見と席に届いていない頼みは board の相談の窓と tz consult の一覧に出す。席が自分で開く問う窓の本数は規則の行 R-38 の上限を越えない。
+    plain: 設計や技術の調べと検証をする別の窓を、席の窓の「/tsuzuri:consult」か board の「相談」で開きます。あなたが直に話す窓と、席が強い model に問う話さない形があり、どちらも話題を替えて使い続けられます。窓ごとの作業場でプログラムを組んで実験でき、web も調べられますが、repo と台帳は書けず、作業場の外へは囲いで書けません。結論は決まった形の file に書いて席に渡し、席が自動で気づいて、採るかどうかと、レポートを repo に保存するかを記録します。
+    basis: [P-7, P-12, P-14, P-16, P-19, N-2, N-7]
+    verify: {method: test, how: 欄の欠けた所見が断られ揃った所見が作業場の決まった dir に書かれることと、見張りの固定の 1 行と、席の読みの口の台帳の 2 行を見て、起動の口の argv と設定を fixture と比べ、囲いの中から作業場の外と repo への書きが断られることを撃つ, ac: [AC16, AC19]}
     goals: [GOAL1, GOAL2]
     figures: []
-    adrs: [ADR-10, ADR-12]
+    rules: [R-38]
+    adrs: [ADR-10, ADR-12, ADR-29]
+    note: 自由な場と作業場と囲いと受け方と保存の選びは判断の記録 ADR-29（持ち主の裁定 t3-hub.75.1 と t3-hub.75.2）。前の字（器の口で 1 行を送る・未反映の一覧に載る）は ADR-29 決定 (1) の (エ)(オ) で替えた。相談の台帳の行は「相談の」で始まる閉じた頭で、memo と根の bead にだけ置く（ADR-29 決定 (4)）。
   - id: FR20
     title: 表示面の対象を広げる（中身が web の native・スマホの emulator・純粋な native）
     pattern: ubiquitous
@@ -401,9 +405,10 @@ acceptance:
   - {id: AC13, title: 偽の ssh と偽の Chrome で起動の引数（専用の profile・app mode・入力の環境）と CDP の命令の列が snapshot と一致し、窓を前に出す命令を撃たず、届かない端末には board の URL を返す, plain: 席があなたの PC の browser を正しい設定で開き、窓を勝手に前に出さず、届かない端末には見る URL を渡す。, verifies: [FR16], red_test: {sentence: 端末の行 2 つ（ssh 可・不可）の fixture で argv と命令の列と、届かない端末で返る URL の行と席の目の落ちる先を見る, fixture: tests/fixtures/stage/terminals.toml}}
   - {id: AC14, title: folio の口ごとに tz の subcommand の終了 code と出力が folio2 の口と一致する, plain: 設計の道具の命令が tz の下で同じ結果を返す。, verifies: [FR17], red_test: {sentence: 同じ fixture を folio と tz に渡して終了 code と出力を比べる, fixture: tests/fixtures/tz/parity/}}
   - {id: AC15, title: 固定の DOM の写しと矩形から要素の列が期待と一致し、上限を超える囲みは切って総数を出し、画像と写しは state dir だけに書かれる, plain: 囲んだ場所に在る部品が正しく選ばれ、画像は席の機械の中だけに置かれる。, verifies: [FR18], red_test: {sentence: 写しの fixture と矩形 3 つで要素の id の列を比べ、repo の中に file が増えないことを見る, fixture: tests/fixtures/point/snapshot-3/}}
-  - {id: AC16, title: 欄の欠けた所見は断られ、揃った所見は置き場の file と台帳の 1 行と器の口の argv を 1 つずつ出し、相談の窓からの repo の編集は断られる, plain: 形の整っていない結論は受け取らず、整った結論だけが元の窓へ知らされる。, verifies: [FR19], red_test: {sentence: 欄を 1 つ欠いた所見と揃った所見の 2 つで断りと書き出しを見る, fixture: tests/fixtures/consult/finding-2/}}
+  - {id: AC16, title: 欄の欠けた所見は断られ、揃った所見は作業場の決まった dir に書かれ、見張りは固定の 1 行を出し、席の読みの口は台帳に相談の所見と受けの行を 1 つずつ書く, plain: 形の整っていない結論は受け取らず、整った結論だけが席に届き、席が受けた印が台帳に残る。, verifies: [FR19], red_test: {sentence: 欄を 1 つ欠いた所見と揃った所見の 2 つで、断りと作業場の file と見張りの 1 行と台帳の 2 行を見る, fixture: tests/fixtures/consult/finding-2/}}
   - {id: AC17, title: 対象の種類ごとの端末の行で選ばれる経路が CDP か画面の配信のどちらかになり、知らない種類は断られる, plain: 見せる仕組みが 2 つだけであることを機械が確かめる。, verifies: [FR20], red_test: {sentence: 対象の種類 4 つと知らない種類 1 つの fixture で経路と断りを見る, fixture: tests/fixtures/stage/targets.toml}}
   - {id: AC18, title: 幅 1280・700・390 の 3 つで 2 つの面が横並び・縦積み・スマホの形になり、1280 と 700 で頁の縦 scroll が 0 で、700 で pipeline の 5 列が面の中の横 scroll で保たれ、札の click で吹き出しが開き × と外の click と取り消しの鍵（Esc）で閉じ、Blocked と Queued が別の列に出て、着地の列は R-36 の時間を越えた札を出さず、Queued の札は R-37 の時間を越えると注意の印を持ち、質問の窓は 2 問を続けて答えると 2 問目へ進み全部の後に閉じる, plain: 窓の幅に合わせて並べ方が変わり、画面を分けても 2 つの面が scroll なしで見え、札は押すと吹き出しが出て、待ちの種類と長さが分かる。, verifies: [FR5, FR6, FR10], red_test: {sentence: 見本の台帳と走行の fixture で 3 つの幅の並べ方と頁の scroll と吹き出しの開き閉じと列と注意の印と質問の窓の進みを browser の runner で撃つ, fixture: tests/fixtures/surface/board-v2/}}
+  - {id: AC19, title: 相談の窓の起動の argv と設定は、席の口座の置き場を継ぎ、plugin の置き場を持たず、制限の形と囲いの設定を持ち、囲いの中から作業場の外と repo へ書けない, plain: 相談の窓は席と同じ口座で開き、作業場の外とプロジェクトを書けない。, verifies: [FR19], red_test: {sentence: 起動の口が組む argv と設定を fixture と比べ、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形で落ちることを見る, fixture: tests/fixtures/consult/launch-argv.yaml}}
 
 not_frozen: 更新の遅れの数値（NFR2）と文の予算の数値（FR14）は面の便の最初の実測で rules 行に書く。判定の閾値（FR13）は見本の値で始め、2 周の実測の後に凍結する。
 
@@ -412,7 +417,7 @@ constraints:
   - {id: CON2, title: folio2 の出口, text: folio の実装が tsuzuri へ移る前に、置き場で床が合格・契約表の導出物が着地して差分 0・器がその導出物を読んで便を通す、の 3 つを記帳する。, basis: [P-1], source: folio2 の判断の記録 21・判断の記録 ADR-4}
   - {id: CON3, title: 面は器の file を書かない, text: 面と server が書くのは台帳（bdw 経由）と器の event だけで、state dir の file と repo の file を書く経路を持たない。, basis: [N-2, P-14], source: 判断の記録 ADR-7 決定 (7)}
   - {id: CON4, title: mock は見本, text: tsuzuri-site の mock は仕様の見本であり本番ではない。本番の面は Rust の wasm（判断の記録 ADR-3）で作る。, basis: [P-6], source: 判断の記録 ADR-7 決定 (13)}
-  - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult は既定が Fable・念入りさ xhigh で、model と念入りさを持ち主が相談ごとに選ぶ。席の model を下げる変更は判断の記録を要する。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10 と ADR-12, adrs: [ADR-10, ADR-12]}
+  - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult は既定が Fable・念入りさ xhigh で、持ち主が開く窓は model と念入りさを持ち主が選び、席が自分で開く問う窓は既定で開く。席の model を下げる変更は判断の記録を要する。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10 と ADR-12 と ADR-29, adrs: [ADR-10, ADR-12, ADR-29]}
   - {id: CON5, title: 見せる先, text: 見せる先の制限は条 N-6 が持つ（ここには写さない）。, basis: [N-6], source: 憲法 N-6}
 
 sources:

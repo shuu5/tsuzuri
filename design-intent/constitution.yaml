@@ -394,7 +394,7 @@ articles:
     rationale:
       - {kind: folio2-ruling, ref: folio2 P16（枝 1〜2）}
     mechanism: {kind: human-review, live: now, note: 要件書の制約 CON6 と、席の起動の設定と、相談の窓の所見の model の欄を照らす。行 D-1 の作法。}
-    relations: {rules: [D-1]}
+    relations: {rules: [D-1, R-38]}
     retreat: {kind: measure, condition: 判断の記録 ADR-12 の撤退条件（発効の後の最初の 10 本のうち、相談の窓の所見を受けて改められたものが 3 本以上）に当たったら、込み入った設計判断は必ず所見を経る形へ改めるかを持ち主に問う。}
   - id: P-17
     title: 数値の表を変えるときは、裁定 id を行に付ける
