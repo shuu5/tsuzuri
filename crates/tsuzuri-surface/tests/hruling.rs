@@ -149,22 +149,23 @@ fn hruling_link_text_forms() {
     }
 }
 
-/// view の字: 行は hist_rows・グラフの口・題の link を持ち item_view を使わず、決定の link は aside の span の中の a。
+/// view の字: 行は decisions（中で hist_rows）・グラフの口・問いの id の link を持ち item_view を使わず、決定の link は aside の b の中の a（行 g-ask-hist）。
 #[test]
 fn hruling_src_row_links() {
     let text = read("src/project/askpage.rs");
     let start = text.find("pub fn view(").expect("view の宣言");
     let v = &text[start..];
-    assert!(v.contains("hist_rows("));
+    assert!(v.contains("decisions(l, g, b)"));
+    assert!(text.contains("hist_rows(&items, graph)"));
     assert!(v.contains("map::PATH"));
-    assert!(v.contains("<a class=\"ttl\""));
+    assert!(v.contains("<a class=\"lk\""));
     assert!(!v.contains("item_view("));
-    let s = v.find("<span class=\"aside\"").expect("aside の span");
+    let s = v.find("<b class=\"aside\"").expect("aside の b");
     let r = v.find("ruling_text(").expect("ruling_text の呼び");
-    assert!(s < r, "ruling_text の呼びが aside の span より前");
-    assert!(!v[s..r].contains("</span>"), "link が aside の span の外");
+    assert!(s < r, "ruling_text の呼びが aside の b より前");
+    assert!(!v[s..r].contains("</b>"), "link が aside の b の外");
     let a = v[..r].rfind("<a ").expect("決定の link の a");
-    assert!(a > s, "決定の link の a が aside の span の外");
+    assert!(a > s, "決定の link の a が aside の b の外");
     assert!(v[a..r].contains("node_href("), "href が node_href でない");
     assert!(!v[a..r].contains("</a>"), "字が a の外");
 }

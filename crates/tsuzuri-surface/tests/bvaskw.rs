@@ -157,7 +157,7 @@ fn bvaskw_batch_policy_below() {
             "{file}"
         );
     }
-    assert!(src.contains("body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),"));
+    assert!(src.contains("body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),"));
 }
 
 /// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。

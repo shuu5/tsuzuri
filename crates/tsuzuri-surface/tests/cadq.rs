@@ -1,4 +1,4 @@
-//! 行 g-card-adopt-b の歯: 問いの頁の問いの card の題・これまでの決定の段の行の題と決定の link に付ける節点の card の値と、
+//! 行 g-card-adopt-b の歯: 問いの頁の問いの card の題・これまでの決定の段の行の問いの id と決定の link に付ける節点の card の値と、
 //! DOM の付け方の字・外した要素の出した card を閉じる後始末の決まりと呼ぶ所の字。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
 #![cfg(test)]
@@ -217,16 +217,16 @@ fn cadq_dom_wiring() {
     let view = after(&page, "pub fn view(");
     for want in [
         "hist_cards(&entries, g)",
-        "hist_li(entry, &cards, mode)",
+        "hist_li(d, &cards, now, mode)",
         "use crate::widgets::hover::attach_some;",
         "use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>",
     ] {
         assert!(view.contains(want), "askpage.rs の view に {want} が無い");
     }
-    let tag = open_tag(view, "<a class=\"ttl\"");
+    let tag = open_tag(view, "<a class=\"lk\"");
     assert!(
         tag.ends_with("href=href use:attach_some=card>"),
-        "段の行の題の a の tag が違う: {tag}"
+        "段の行の問いの id の a の tag が違う: {tag}"
     );
 
     for (name, text) in [("ask.rs", &ask_text), ("askpage.rs", &page)] {

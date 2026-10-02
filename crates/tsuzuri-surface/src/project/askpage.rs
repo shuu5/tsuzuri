@@ -5,9 +5,12 @@
 //! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
 //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 行の題と答えた決定の link には、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-b）。
+//! 段は質問の窓の下の畳みの末に置く（行 g-ask-hist・見本の qModal の「これまでの決定 N ›」）: 行は台帳の更新の時刻の
+//! 新しい順で、時刻・短い題（bead の事実の口）・答えた決定・問いの id を出す（`decisions`・`inner`）。頁には置かない。
 
 use std::collections::BTreeMap;
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, GraphDoc};
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
@@ -15,7 +18,9 @@ use tsuzuri_contract::wire;
 
 use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
 use crate::frame::Block;
+use crate::ledgerlist::{facts, short_of};
 use crate::view::{Fetched, JST, hhmm, id_order};
+use crate::vocab::label;
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
 
@@ -192,35 +197,95 @@ pub fn ruling_text(id: &str) -> String {
     }
 }
 
+/// 質問の窓の畳みの 1 行（行 g-ask-hist・見本の qModal の「これまでの決定」の行）: 台帳の更新の時刻（閉じた時刻）・
+/// 短い題（bead の事実の short・事実が無ければ台帳の題）・問いの項と答えた決定の id。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decision {
+    pub at: EpochSecs,
+    pub short: String,
+    pub entry: HistEntry,
+}
+
+/// 質問の窓の畳みの中身（行 g-ask-hist）: これまでの決定（`rulings`）を台帳の更新の時刻の新しい順（同じなら id の
+/// 自然な順の逆）に並べ、短い題と答えた決定の id（`hist_rows`）を添える。短い題は一覧の行と同じく bead の事実の short
+/// （metadata の short か題から機械で作った字・判断の記録 ADR-27 決定 (9)）で、事実が無ければ台帳の題。
+/// 台帳が読めない時と 0 件の時は `body` と同じ理由と 1 行。bead の事実の口とグラフの口が読めなければ、題は台帳の題で決定の id はどれも None。
+pub fn decisions(ledger: &Fetched, graph: &Fetched, beads: &Fetched) -> Body<Vec<Decision>> {
+    let rows = match rows(ledger) {
+        Ok(rows) => rows,
+        Err(reason) => return Body::Unmeasured(reason),
+    };
+    let mut done = rulings(&rows);
+    if done.is_empty() {
+        return Body::Empty(EMPTY);
+    }
+    done.sort_by(|a, b| {
+        b.updated_at
+            .cmp(&a.updated_at)
+            .then_with(|| id_order(b.id.as_str(), a.id.as_str()))
+    });
+    let facts = facts(beads);
+    let items: Vec<Item> = done.iter().map(item).collect();
+    Body::Filled(
+        hist_rows(&items, graph)
+            .into_iter()
+            .zip(&done)
+            .map(|(entry, row)| Decision {
+                at: row.updated_at,
+                short: short_of(row, &facts),
+                entry,
+            })
+            .collect(),
+    )
+}
+
+/// 畳みの見出しの字（見本の「これまでの決定 N ›」・測れていなければ数を出さない）。
+pub fn fold_title(count: Reading<usize>) -> String {
+    match count {
+        Reading::Known(n) => format!("{} {n} ›", label(BLOCK.heading)),
+        Reading::Unknown => format!("{} ›", label(BLOCK.heading)),
+    }
+}
+
+/// block の中身（質問の窓の下の畳みと同じ DOM・頁には置かない・URL の `?id=` の問いを名指す）。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
+    let search = leptos::prelude::window()
+        .location()
+        .search()
+        .unwrap_or_default();
+    inner(super::ask::focus(&search))
+}
+
+/// 質問の窓の下の畳みの段（行 g-ask-hist・見本の qModal の folds の末の「これまでの決定 N ›」）: 台帳の一覧の口と
+/// グラフの口と bead の事実の口を読み、新しい順の決定を時刻・短い題・答えた決定・問いの id の行に出す。
+/// 名指された問い（`target`）が答え済みの項に在れば、段を開いてその行に背景を置き窓の中へ寄せる（便 g-ask-focus）。
+#[cfg(target_arch = "wasm32")]
+pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
     use crate::frame::Mode;
-    use crate::widgets::help::{HelpCtx, h2};
+    use crate::widgets::help::HelpCtx;
 
     let graph = crate::net::read(super::map::PATH);
-    let search = window().location().search().unwrap_or_default();
+    let beads = crate::net::read(crate::ledgerlist::FACTS_PATH);
+    let fetched = crate::net::read(super::ledger::PATH);
     let mode = {
         let ctx = use_context::<HelpCtx>();
-        let url = Mode::from_query(&search);
+        let url = Mode::from_query(&window().location().search().unwrap_or_default());
         move || ctx.map_or(url, |c| c.mode.get())
     };
-    let target = super::ask::focus(&search);
     let lit = StoredValue::new(false);
-    let fetched = crate::net::read(super::ledger::PATH);
-    let chip = move || match fetched.with(count) {
-        Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
-        Reading::Unknown => ().into_any(),
-    };
+    let title = move || fold_title(fetched.with(count));
     let initial = {
         let target = target.clone();
         move || fetched.with(|f| opens(f, target.as_deref()))
     };
-    let list = move || match fetched.with(body) {
+    let list = move || match fetched.with(|l| graph.with(|g| beads.with(|b| decisions(l, g, b)))) {
         Body::Unmeasured(reason) => super::unmeasured(reason),
         Body::Empty(line) => super::body_view(Body::Empty(line)),
-        Body::Filled(items) => {
+        Body::Filled(ds) => {
+            let items: Vec<Item> = ds.iter().map(|d| d.entry.item.clone()).collect();
             if let Some(id) = target.as_deref()
                 && !lit.get_value()
                 && let Some(i) = focus_index(&items, id)
@@ -234,55 +299,57 @@ pub fn view() -> leptos::prelude::AnyView {
                     }
                 });
             }
-            let rows = graph.with(|g| {
-                let entries = hist_rows(&items, g);
-                let cards = hist_cards(&entries, g);
-                entries
-                    .into_iter()
-                    .map(|entry| hist_li(entry, &cards, mode))
-                    .collect_view()
-            });
+            let entries: Vec<HistEntry> = ds.iter().map(|d| d.entry.clone()).collect();
+            let cards = graph.with(|g| hist_cards(&entries, g));
+            let now = crate::net::now();
+            let rows = ds
+                .into_iter()
+                .map(|d| hist_li(d, &cards, now, mode))
+                .collect_view();
             view! { <ul class="items">{rows}</ul> }.into_any()
         }
     };
     let (open, toggle) = super::fold("ask:hist".to_string(), initial);
     view! {
-        <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
-            <summary>{h2(BLOCK.heading)}{chip}</summary>
+        <details class="fold" id=BLOCK.id prop:open=open on:toggle=toggle>
+            <summary>{title}</summary>
             {list}
         </details>
     }
     .into_any()
 }
 
-/// 段の 1 行（印・題は問いの頁への link・右の小さい字は答えた決定の頁への link、無ければ状態の字）。
+/// 畳みの 1 行（時刻・短い題・答えた決定の頁への link か状態の字・問いの頁への link の id・見本の `.mini li`）。
 #[cfg(target_arch = "wasm32")]
 fn hist_li(
-    entry: HistEntry,
+    d: Decision,
     cards: &BTreeMap<String, Card>,
+    now: EpochSecs,
     mode: impl Fn() -> crate::frame::Mode + Copy + Send + Sync + 'static,
 ) -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
     use crate::frame::node_href;
+    use crate::view::clock_short;
     use crate::widgets::hover::attach_some;
 
+    let Decision { at, short, entry } = d;
     let HistEntry { item, ruling } = entry;
-    let style = if item.alert { super::ALERT_STYLE } else { "" };
     let id = item.id.clone();
     let card = cards.get(&id).cloned();
     let href = move || node_href(&id, mode());
     view! {
         <li>
-            <span class=item.shape.clone() style=style aria-hidden="true"></span>
-            <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
-            <span class="aside">{match ruling {
+            <time>{clock_short(at, now)}</time>
+            <span class="ttl" title=item.title.clone()>{short}</span>
+            <b class="aside">{match ruling {
                 Some(rid) => view! {
                     <a href={let rid = rid.clone(); move || node_href(&rid, mode())} use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>
                 }
                 .into_any(),
                 None => item.aside.clone().into_any(),
-            }}</span>
+            }}</b>
+            <a class="lk" href=href use:attach_some=card><code>{item.id.clone()}</code></a>
         </li>
     }
     .into_any()

@@ -433,6 +433,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
 .qbtns { display: flex; align-items: center; gap: var(--s2); margin-top: 10px; }
 .qbtns .later { padding: 6px 14px; border: 1px solid var(--line-2); border-radius: var(--r2); background: var(--panel); cursor: pointer; }
 .folds { margin-top: var(--s3); padding-top: 6px; border-top: 1px solid var(--line); }
+.folds .items > li > time { flex: none; color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) {
   .qdots { gap: 0; }
   .qdots .qd { width: 40px; height: 40px; padding: 13px; border: 0; background-clip: content-box; background-color: #fdba74; }

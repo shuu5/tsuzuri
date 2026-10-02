@@ -1,7 +1,8 @@
 //! 質問の窓（行 g-ask-win・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
 //! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
 //! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
-//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
+//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示と、
+//! 末にこれまでの決定（project の askpage の inner・行 g-ask-hist）。
 //! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
 //! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
 //! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
@@ -166,14 +167,15 @@ mod dom {
         DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, others_count,
         others_title, own_ids, phase, remaining, title, unread,
     };
-    use crate::project::{Body, ask, batch, body_view, policy};
+    use crate::project::{Body, ask, askpage, batch, body_view, policy};
     use crate::topbar::Win;
     use crate::vocab::label;
     use crate::widgets::modal::{Frame, WinCtx};
     use crate::wins::frame_of;
 
-    /// 窓の下の段（ほかの project の質問は読むだけで、台帳が読めない組は札と 1 行・まとめて承認と全体への指示は block の本文）。
-    fn folds(w: Walk) -> AnyView {
+    /// 窓の下の段（ほかの project の質問は読むだけで、台帳が読めない組は札と 1 行・まとめて承認と全体への指示は block の本文・
+    /// 末にこれまでの決定・`focus` は窓を開いた link の問いの id で、答え済みならこれまでの決定の段を開いてその行を寄せる）。
+    fn folds(w: Walk, focus: Option<String>) -> AnyView {
         let Walk {
             cards,
             others: n,
@@ -211,6 +213,7 @@ mod dom {
                 <details class="fold"><summary>{move || others_title(n.get())}</summary><ul class="items">{rows}{unread_rows}</ul></details>
                 <details class="fold"><summary>{label(batch_key)}</summary>{batch::inner()}</details>
                 <details class="fold"><summary>{label(policy_key)}</summary>{policy::inner()}</details>
+                {askpage::inner(focus)}
             </div>
         }
         .into_any()
@@ -366,11 +369,12 @@ mod dom {
     pub fn frame(ctx: WinCtx<Win>) -> Frame {
         let w = walk();
         close_when_done(ctx, w.state);
+        let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
         let walk = steps(ctx, w);
         Frame {
             width: frame_of(Win::Ask).0,
             title: head(w),
-            body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),
+            body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),
         }
     }
 }
