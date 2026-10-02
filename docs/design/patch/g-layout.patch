@@ -194,7 +194,7 @@ index 0000000000000000000000000000000000000000..c822ca34baf67a925279dfd34d0a04f9
 +        .collect()
 +}
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 4402f7cd437c3999a1da28549ab814bdf6b9ee6b..65cc9b368d62e58bd92f1a37b298bcff1a1069ee 100644
+index cd817e71dd2fc1387956c40f908549366a16bd06..3416dcac2552949cab52f305643d82c78274d602 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -1309,8 +1309,35 @@ button.ll-gname:hover { background: var(--panel-2); }
@@ -236,10 +236,10 @@ index 4402f7cd437c3999a1da28549ab814bdf6b9ee6b..65cc9b368d62e58bd92f1a37b298bcff
 +.ptlh { font-size: 12px; font-weight: 700; padding: 2px 2px 0; }
 diff --git a/crates/tsuzuri-surface/tests/bvlay.rs b/crates/tsuzuri-surface/tests/bvlay.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e258656620a21b
+index 0000000000000000000000000000000000000000..51cd56d237967675c14903a8ec73fd675b90e566
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvlay.rs
-@@ -0,0 +1,256 @@
+@@ -0,0 +1,302 @@
 +//! 行 g-layout の歯（接頭辞 bvlay_）: 幅の 3 段（1200 px 以上は横並び・601〜1199 px は縦積み・600 px 以下はスマホの形・
 +//! 規則の行 R-35）とスマホの段の tile（既定で開くのは札の在る段のうち一番急ぐ段・判断の記録 ADR-27 決定 (5)）。
 +//! 境の値は tiles の定数と stylesheet の media の字と規則の行の字を照らし、tile の組みは host で撃つ（bead の id の接頭辞は fx-l）。
@@ -332,6 +332,7 @@ index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e25865
 +}
 +
 +/// 縦積みの板は 5 列を保ち、狭い時は pipeline の面の中の板だけを横に scroll させる（列の幅の下限 112 px）。
++/// 縦積みの media の中で overflow の字を持つ規則は板の 1 つだけ（面の列や面が横に scroll しない）。
 +#[test]
 +fn bvlay_stack_board_scrolls_x() {
 +    assert_eq!(STACK_COL_MIN_PX, 112);
@@ -345,9 +346,11 @@ index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e25865
 +    );
 +    assert!(stack.contains(&want), "{stack}");
 +    assert!(!stack.contains("overflow-x: hidden"), "{stack}");
++    assert_eq!(stack.matches("overflow").count(), 1, "{stack}");
 +}
 +
 +/// スマホの形は頁を縦に scroll させ（面の高さを決めない）、板を隠して段の tile を出し、pipeline を一覧の上に置く。
++/// tile の既定の隠しは media の塊の外の行頭の 1 つで、tile の display の規則はそれとスマホの形の塊の 2 つだけ。
 +#[test]
 +fn bvlay_phone_tiles_shown() {
 +    let css = read("style.css");
@@ -366,13 +369,17 @@ index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e25865
 +    ] {
 +        assert!(phone.contains(want), "スマホの形の塊に {want} が無い");
 +    }
-+    for rule in [
-+        ".ptiles { display: none; }",
-+        ".ptrow {",
-+        ".ptile {",
-+        ".ptile.on {",
-+        ".ptlist {",
-+    ] {
++    // tile の既定の隠しは media の塊の外（行頭）に置き、どの幅でも板の代わりに出るのはスマホの形だけ。
++    assert!(
++        css.contains("\n.ptiles { display: none; }\n"),
++        "tile の既定の隠し"
++    );
++    assert_eq!(
++        css.matches(".ptiles { display:").count(),
++        2,
++        "tile の display"
++    );
++    for rule in [".ptrow {", ".ptile {", ".ptile.on {", ".ptlist {"] {
 +        assert!(css.contains(rule), "stylesheet に {rule} が無い");
 +    }
 +}
@@ -477,22 +484,61 @@ index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e25865
 +    );
 +}
 +
++/// mod dom の中の `head` で始まる関数の字（次の 4 字下げの閉じ括弧の行まで）。
++fn fn_of<'a>(dom: &'a str, head: &str) -> &'a str {
++    let at = dom
++        .find(head)
++        .unwrap_or_else(|| panic!("pipeline の DOM に {head} が無い"));
++    let rest = &dom[at..];
++    &rest[..rest.find("\n    }\n").expect("関数の閉じ")]
++}
++
 +/// 板の block は tile を押した記録を頁の一生の間持ち、札の在る板の後に段の tile と開いた段の札（板と同じ部品）を描く。
++/// 記録の signal は view の fn の頭（板を読み直すたびに走る body の閉包の前）で 1 度だけ作り、body の閉包と
++/// with_tiles と tiles_view の中では作らない・記録を読むのは開く段の閉包・書くのは tile の押しの 2 所だけ。
++/// 字はそれぞれ置き場の関数の中で照らす（列の札の並びにも同じ字が在るので mod dom の全体では照らさない）。
 +#[test]
 +fn bvlay_dom_wiring_text() {
 +    let src = read("src/project/pipeline.rs");
 +    let dom = &src[src.find("mod dom {").expect("mod dom")..];
-+    for want in [
-+        "let picked = RwSignal::new(None);",
-+        "Body::Filled(cols) => with_tiles(cols, open, mode, clock, (keys, picked)),",
-+        "view! { {board_view(cols, open, mode, clock, keys)}{tiles} }.into_any()",
++    let view = fn_of(dom, "pub fn view() -> AnyView {");
++    let at = view.find("let body = move || {").expect("body の閉包");
++    let (head, rest) = view.split_at(at);
++    let body = &rest[..rest.find("\n        };\n").expect("body の閉包の閉じ")];
++    let with = fn_of(dom, "fn with_tiles(");
++    let tv = fn_of(dom, "fn tiles_view(");
++    let rec = "let picked = RwSignal::new(None);";
++    let filled = "Body::Filled(cols) => with_tiles(cols, open, mode, clock, (keys, picked)),";
++    let after = "view! { {board_view(cols, open, mode, clock, keys)}{tiles} }.into_any()";
++    let tiled: &[&str] = &[
 +        "let open = move || cols.with_value(|c| open_of(picked.get(), c));",
 +        "on:click=move |_| picked.set(Some(press(now, column)))",
++        "let col = cols.with_value(|c| c.iter().find(|c| c.lane.column == now).cloned())?;",
 +        ".map(|c| pick_view(c, keys, kcard_view(c, mode(), clock)))",
 +        "<div class=\"ptiles\"><div class=\"ptrow\">{row}</div>{list}</div>",
++    ];
++    for (name, part, wants) in [
++        ("view の頭（body の閉包の前）", head, &[rec][..]),
++        ("body の閉包", body, &[filled][..]),
++        ("with_tiles", with, &[after][..]),
++        ("tiles_view", tv, tiled),
 +    ] {
-+        assert!(dom.contains(want), "pipeline の DOM に {want} が無い");
++        for want in wants {
++            assert!(part.contains(want), "{name} に {want} が無い");
++        }
 +    }
++    assert_eq!(dom.matches(rec).count(), 1, "記録を作る字は 1 つ");
++    for (name, part) in [
++        ("body の閉包", body),
++        ("with_tiles", with),
++        ("tiles_view", tv),
++    ] {
++        assert!(
++            !part.contains("RwSignal::new("),
++            "{name} の中で signal を作る"
++        );
++    }
++    assert_eq!(dom.matches("picked.").count(), 2, "記録の読み書きは 2 所");
 +    let lib = read("src/lib.rs");
 +    assert!(lib.contains("pub mod tiles;"));
 +}
