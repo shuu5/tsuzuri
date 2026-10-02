@@ -378,10 +378,10 @@ index b3b964ce3cd3d6537d70a4468649f67cd743490d..bbdd96fdef0d4a2f3f43ff7a7057134e
  .fixcards { flex: 1 1 260px; display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
 diff --git a/crates/tsuzuri-surface/tests/bvcols.rs b/crates/tsuzuri-surface/tests/bvcols.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b8363368d35
+index 0000000000000000000000000000000000000000..4a08352b3ad03bec8d7bc21bbd64a8ac8744acd2
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvcols.rs
-@@ -0,0 +1,321 @@
+@@ -0,0 +1,369 @@
 +//! 行 g-pipe-cards の歯: pipeline の細い札（判断の記録 ADR-27 決定 (6)(7)・見本 board-v2 の cardHTML と cardLine）の
 +//! Queued の注意の秒が規則の行 R-37 の値であることと、段ごとの要の 1 行と、短い題とその代わりと、要の 1 行の材料（待つ相手と起票）と、
 +//! 札が押しで吹き出しを開き hover の card を付けない DOM の字。
@@ -397,8 +397,8 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +use tsuzuri_surface::view::clock_short;
 +use tsuzuri_surface::vocab::{label, vocab};
 +use tsuzuri_surface::widgets::keyline::{
-+    KeyLine, LINE_CLASSES, LINE_KEYS, LineSrc, QUEUED_WARN_S, WARN_MARK, key_line, line_src,
-+    queued_warn,
++    KeyLine, LINE_CLASSES, LINE_KEYS, LineSrc, QUEUED_WARN_S, WARN_MARK, WHY_CHARS, key_line,
++    line_src, queued_warn,
 +};
 +use tsuzuri_surface::widgets::pop::Src;
 +
@@ -507,7 +507,48 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +    );
 +}
 +
-+/// 走る段と止まりと着地の要の 1 行（見本の cardLine）と色の class・閉じた（着地せず）の札は段の字と経過。
++/// 歯 `bvcols_key_line_run_stop_land` の続き: 止まりの理由を切る字数 `WHY_CHARS` は札の値の行と同じ 20 で、20 字を越える
++/// 理由は頭の 19 字と切りの印 … にし、ちょうど 20 字は切らない。Questioned は理由が在っても問いの語を出す。run の回は札の電文の
++/// 欄 runs の値（2 でない回でも見る）。
++fn stop_cut_and_runs(made: &LineSrc, t: EpochSecs) {
++    let [_, _, _, _, ask, _] = LINE_KEYS;
++    let [_, _, stop, asked] = LINE_CLASSES;
++    assert_eq!(WHY_CHARS, 20);
++    let mut long = card("a", Stage::Failed, t);
++    long.runs = 3;
++    long.reason = Some("止".repeat(25));
++    assert_eq!(
++        kline(&long, made, NOW),
++        kl(format!("{}… · 10m · run 3", "止".repeat(19)), stop)
++    );
++    long.reason = Some("止".repeat(20));
++    assert_eq!(
++        kline(&long, made, NOW).text,
++        format!("{} · 10m · run 3", "止".repeat(20))
++    );
++    let mut halt = card("a", Stage::Stopped, t);
++    halt.reason = Some("止".repeat(21));
++    assert_eq!(
++        kline(&halt, made, NOW),
++        kl(format!("{}… · 10m · run 2", "止".repeat(19)), stop)
++    );
++    let mut gate = card("a", Stage::Gated, t);
++    gate.runs = 5;
++    assert_eq!(kline(&gate, made, NOW).text, "gate · run 5 · 10m · acct-a");
++    let mut running = card("a", Stage::Running, t);
++    running.runs = 6;
++    assert_eq!(kline(&running, made, NOW).text, "run 6 · 10m · acct-a");
++    let mut asking = card("a", Stage::Questioned, t);
++    asking.runs = 4;
++    asking.reason = Some("止".repeat(25));
++    assert_eq!(
++        kline(&asking, made, NOW),
++        kl(format!("{} · 10m · run 4", label(ask)), asked)
++    );
++}
++
++/// 走る段と止まりと着地の要の 1 行（見本の cardLine）と色の class・閉じた（着地せず）の札は段の字と経過・止まりの理由の切りと
++/// run の回は `stop_cut_and_runs` で見る。
 +#[test]
 +fn bvcols_key_line_run_stop_land() {
 +    let [_, _, _, _, ask, landed] = LINE_KEYS;
@@ -536,6 +577,7 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +        kline(&card("a", Stage::Questioned, t), &made, NOW),
 +        kl(format!("{} · 10m · run 2", label(ask)), asked)
 +    );
++    stop_cut_and_runs(&made, t);
 +    let mut land = card("a", Stage::Landed, t);
 +    land.ci = Some(Ci::Success);
 +    assert_eq!(
@@ -586,7 +628,7 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +    assert_eq!(short_title(&Reading::Known(&facts), &k), "短い題");
 +    let title = short_title(&Reading::Unknown, &k);
 +    assert_eq!(title, k.title.clone().unwrap_or_default());
-+    assert!(title.chars().count() <= 36 && title.starts_with("題題"));
++    assert_eq!(title, "題".repeat(36));
 +    assert_eq!(
 +        short_title(&Reading::Known(&[]), &kcard(&c, &[], NOW)),
 +        "t-1"
@@ -674,7 +716,8 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +}
 +
 +/// 札は button で吹き出しの口の印を持ち押すと吹き出しを開き、hover の card と節点の頁への href を付けない。
-+/// 板の層は bead の事実と局面の出力の口を読んで短い題と要の 1 行の材料を置き、要の 1 行は 1 秒の時計で書き直す。
++/// 板の層は bead の事実と局面の出力の口を読んで短い題と要の 1 行の材料を置き、要の 1 行は 1 秒の時計（net の ticker・
++/// `TICK_MS` は 1000）で書き直す。
 +#[test]
 +fn bvcols_click_not_hover() {
 +    let src = read("src/project/pipeline.rs");
@@ -685,10 +728,15 @@ index 0000000000000000000000000000000000000000..e6b75ea4df76ffe6c34f52d570321b83
 +        "crate::net::read(BEADS_PATH)",
 +        "crate::net::read(CASES_PATH)",
 +        "with_lines(content(p, l, now), &src)",
++        "let tick = crate::net::ticker();",
++        "let clock = move || tick.get();",
 +        "src.with_value(|s| key_line(s, clock()))",
 +    ] {
 +        assert!(dom.contains(s), "{s}");
 +    }
++    let net = read("src/net.rs");
++    assert!(net.contains("pub const TICK_MS: u64 = 1000;"));
++    assert!(net.contains("Duration::from_millis(TICK_MS)"));
 +    for s in ["use:attach", "card_href(card", "<a class=card.class"] {
 +        assert!(!dom.contains(s), "{s} が残る");
 +    }
