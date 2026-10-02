@@ -464,6 +464,8 @@ sections:
       - {id: g-dead-sweep-b, doc: surface-wave26b}
       - {id: g-vocab-sweep, doc: surface-wave26b}
       - {id: c-case-unreadable, doc: surface-wave26b}
+      - {id: g-accept-runner, doc: surface-wave26b}
+      - {id: g-accept-face, doc: surface-wave26b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

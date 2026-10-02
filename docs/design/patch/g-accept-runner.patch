@@ -1,0 +1,1215 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index c82be314a6cf87b728becfa40fba9735e8fc521b..2f4108972fca0555222110eb10c82d5d6f3e64b6 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -6,6 +6,8 @@
+ //! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
+ //! （行 g-accept）。
+ //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
++//! runner は頁を開いた後、面が描き、どの block も読みの印を出さなくなるまで上限つきで待ち、上限で残る画面を
++//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（行 g-accept-runner・憲法 P-7）。
+ 
+ use std::fmt::Write;
+ 
+@@ -90,6 +92,9 @@ pub struct Facts {
+     pub nocard: Vec<String>,
+     /// 節点の札（節点の頁への link と近傍の図の節点）の指の受け手。
+     pub reach: Vec<Reach>,
++    /// 散文と文の予算から外した置き場（台帳の字の印は `ledger <名>`・表の行を開いた中の語と値の対は `pair <名>`）と、
++    /// 箱を持つが描かれないのでどの条にも数えない要素（`hidden <名>`）（行 g-accept-runner）。
++    pub skipped: Vec<String>,
+     /// 見出し。
+     pub headings: Vec<Heading>,
+     /// 最初の画面の散文の片。
+@@ -131,6 +136,9 @@ pub fn facts(text: &str) -> Result<Facts, String> {
+                     .collect::<Option<_>>()?,
+             })
+         })?,
++        skipped: objects(text, "skipped", |o| {
++            unquote(o).filter(|s| SKIP_KINDS.iter().any(|k| s.starts_with(&format!("{k} "))))
++        })?,
+         headings: objects(text, "headings", |o| {
+             Some(Heading {
+                 key: unquote(member(o, "key")?)?,
+@@ -158,6 +166,24 @@ pub fn facts(text: &str) -> Result<Facts, String> {
+     })
+ }
+ 
++/// 外した置き場の種類（台帳の字の印・表の行を開いた中の語と値の対・描かれない要素・report の字は SKIP_WORDS の同じ順）。
++pub const SKIP_KINDS: [&str; 3] = ["ledger", "pair", "hidden"];
++
++/// 外した置き場の種類の report の字。
++pub const SKIP_WORDS: [&str; 3] = ["台帳の字", "語と値の対", "見えない要素"];
++
++/// 外した置き場の数（SKIP_KINDS の順）。
++pub fn skipped_counts(facts: &Facts) -> [usize; 3] {
++    SKIP_KINDS.map(|k| {
++        let head = format!("{k} ");
++        facts
++            .skipped
++            .iter()
++            .filter(|s| s.starts_with(&head))
++            .count()
++    })
++}
++
+ fn field<'a>(text: &'a str, key: &str) -> Result<&'a str, String> {
+     member(text, key).ok_or_else(|| format!("事実の鍵 {key} が無い"))
+ }
+@@ -360,6 +386,23 @@ const NARROW: u32 = 390;
+ /// 頁へ移った後に待つ間（面の wasm の起動と読みの応答を待つ）。
+ const SETTLE_MS: u64 = 1000;
+ 
++/// 面の block が口をまだ読んでいない間に出す理由の字（面の kit の NOT_READ と同じ字・行 g-accept-runner）。
++pub const NOT_READ: &str = "この block の口をまだ読んでいない";
++
++/// 読みの印を見直す間（ms・行 g-accept-runner）。
++pub const POLL_MS: u64 = 300;
++
++/// 読みの印を見る回数の上限（SETTLE_MS の後に 1 回と、POLL_MS ごとに残りの回・間の待ちだけで約 30 秒・行 g-accept-runner）。
++pub const READ_POLLS: usize = 100;
++
++/// 読みの印が上限まで残った画面の字（report の行の末と case の Err・行 g-accept-runner）。
++pub const UNSETTLED: &str = "まだ分からない（面の block の読みの印が待ちの上限の後も残る・server の口の応答を確かめて撃ち直す）";
++
++/// 頁の見える字が、まだ測れない頁の字か（面がまだ描いていない空の字か、どれかの block が読みの印を出す）。
++pub fn unread(text: &str) -> bool {
++    text.trim().is_empty() || text.contains(NOT_READ)
++}
++
+ /// runner の頁の口（CDP の Session が実装する・歯は偽の頁で撃つ）。
+ pub trait Page {
+     /// 命令を撃ち、Call の歩の応答の字を返す。
+@@ -416,7 +459,13 @@ pub fn errors(events: &[String]) -> Vec<String> {
+ 
+ /// 1 つの画面を 1 つの幅で測る。viewport と console を撃って頁へ移り、測りの式の事実に URL と、
+ /// 移ってから測るまでの page error と、測りの返す switch_at の在りかごとに押した切り替え（押すたびに頁へ戻る）を埋める。
++/// 読みの印が待ちの上限の後も残る画面は Err（字は UNSETTLED を含む・行 g-accept-runner）。
+ pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String> {
++    settled(page, url, width)?.ok_or_else(|| format!("{url}: {UNSETTLED}"))
++}
++
++/// case の中身（読みの印が待ちの上限の後も残る画面は None）。今の選び（switch_at の now が真）は押さない。
++fn settled(page: &mut impl Page, url: &str, width: u32) -> Result<Option<Facts>, String> {
+     let narrow = width <= NARROW;
+     page.run(&Command::Viewport {
+         width,
+@@ -426,72 +475,152 @@ pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String
+     })?;
+     page.run(&Command::Console)?;
+     let from = page.events().len();
+-    open(page, url)?;
+-    let text = page.measure()?;
+-    let mut facts = facts(&text).map_err(|e| format!("{url}: {e}"))?;
++    let Some((mut facts, text)) = open(page, url)? else {
++        return Ok(None);
++    };
+     facts.url = url.to_string();
+     facts.errors = errors(page.events().get(from..).unwrap_or_default());
+     let at = objects(&text, "switch_at", |o| {
+         let spot = |key| member(o, key)?.parse::<u32>().ok();
+-        Some((unquote(member(o, "label")?)?, spot("x")?, spot("y")?))
++        let now = match member(o, "now")? {
++            "true" => true,
++            "false" => false,
++            _ => return None,
++        };
++        Some((unquote(member(o, "label")?)?, now, spot("x")?, spot("y")?))
+     })
+     .map_err(|e| format!("{url}: {e}"))?;
+     facts.switches.clear();
+-    for (label, x, y) in at {
++    for (label, _, x, y) in at.into_iter().filter(|(_, now, _, _)| !now) {
+         let before = page.url()?;
+         page.run(&Command::Click { x, y })?;
+         let after = page.url()?;
+-        open(page, url)?;
++        if open(page, url)?.is_none() {
++            return Ok(None);
++        }
+         facts.switches.push(Switch {
+             label,
+             before,
+             after,
+         });
+     }
+-    Ok(facts)
++    Ok(Some(facts))
+ }
+ 
+-/// 頁へ移り、面が描き終わるまで待つ。
+-fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
++/// 頁へ移り、面が描いてどの block も読みの印を出さなくなるまで待ち、その時の事実と測りの字を返す。
++/// SETTLE_MS の後に測り、事実の字 text が unread なら POLL_MS ごとに測り直し、READ_POLLS 回の測りの後も
++/// unread なら None。事実の字が読めなければ待たずに Err。
++fn open(page: &mut impl Page, url: &str) -> Result<Option<(Facts, String)>, String> {
+     page.run(&Command::Navigate {
+         url: url.to_string(),
+     })?;
+     page.run(&Command::Wait { ms: SETTLE_MS })?;
+-    Ok(())
+-}
+-
+-/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 11 の画面と、
+-/// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
+-pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
+-    let mut report = head();
+-    report.push('\n');
+-    let mut total = 0;
+-    let mut measure = |page: &mut _, url: &str, width, mode| -> Result<Facts, String> {
+-        let facts = case(page, url, width)?;
+-        let counts = count(&facts, vocab);
+-        total += counts.iter().sum::<usize>();
+-        report.push_str(&line(width, mode, url, &counts));
+-        report.push('\n');
+-        Ok(facts)
++    for poll in 0..READ_POLLS {
++        if poll > 0 {
++            page.run(&Command::Wait { ms: POLL_MS })?;
++        }
++        let text = page.measure()?;
++        let read = facts(&text).map_err(|e| format!("{url}: {e}"))?;
++        if !unread(&read.text) {
++            return Ok(Some((read, text)));
++        }
++    }
++    Ok(None)
++}
++
++/// sweep の数え（report の字・違反の和・まだ分からない画面の数）。
++struct Tally<'a> {
++    vocab: &'a str,
++    report: String,
++    total: usize,
++    unknown: usize,
++    skipped: [usize; 3],
++}
++
++impl Tally<'_> {
++    /// report に画面の 1 行を足す（測れた画面は line の 12 の数と、外した置き場が在ればその数・測れない画面は幅と
++    /// mode と URL と UNSETTLED）。
++    fn add(&mut self, width: u32, mode: &str, url: &str, facts: Option<&Facts>) {
++        match facts {
++            Some(facts) => {
++                let counts = count(facts, self.vocab);
++                self.total += counts.iter().sum::<usize>();
++                self.report.push_str(&line(width, mode, url, &counts));
++                let skipped = skipped_counts(facts);
++                if skipped.iter().sum::<usize>() > 0 {
++                    self.report.push_str(&skip_words(&skipped));
++                }
++                for (all, n) in self.skipped.iter_mut().zip(skipped) {
++                    *all += n;
++                }
++            }
++            None => {
++                self.unknown += 1;
++                let _ = write!(self.report, "{width} {mode} {url} {UNSETTLED}");
++            }
++        }
++        self.report.push('\n');
++    }
++}
++
++/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和とまだ分からない画面の数を返す。組ごとに SCREENS の
++/// 11 の画面と、その組の home の最初の節点の頁を測る。読みの印が上限まで残る画面は違反に数えず、まだ分からないの
++/// 行にして続ける（home がまだ分からない組は、開く節点も分からないので節点の頁も id の無い URL でまだ分からない）。
++/// report は head の行・画面ごとの行・違反 計 の行・まだ分からない 計 の行。
++pub fn sweep(
++    page: &mut impl Page,
++    board: &str,
++    vocab: &str,
++) -> Result<(String, usize, usize), String> {
++    let mut tally = Tally {
++        vocab,
++        report: head(),
++        total: 0,
++        unknown: 0,
++        skipped: [0; 3],
+     };
++    tally.report.push('\n');
+     for width in WIDTHS {
+         for mode in MODES {
++            // home の最初の節点（外の None は home がまだ分からない・中の None は節点の無い home）。
+             let mut first = None;
+             for screen in SCREENS {
+-                let facts = measure(page, &format!("{board}{screen}mode={mode}"), width, mode)?;
++                let url = format!("{board}{screen}mode={mode}");
++                let facts = settled(page, &url, width)?;
++                tally.add(width, mode, &url, facts.as_ref());
+                 if screen == FIRST_NODE {
+-                    first = facts.nodes.into_iter().next().map(|n| n.id);
++                    first = facts.map(|f| f.nodes.into_iter().next().map(|n| n.id));
+                 }
+             }
++            let Some(first) = first else {
++                tally.add(width, mode, &format!("{board}?page=node&mode={mode}"), None);
++                continue;
++            };
+             let id = first.ok_or_else(|| {
+                 format!("{width} {mode}: home の画面に節点が無い（節点の頁を開けない）")
+             })?;
+             let url = format!("{board}?page=node&id={}&mode={mode}", encode(&id));
+-            measure(page, &url, width, mode)?;
++            let facts = settled(page, &url, width)?;
++            tally.add(width, mode, &url, facts.as_ref());
+         }
+     }
+-    let _ = writeln!(report, "違反 計 {total}");
+-    Ok((report, total))
++    let _ = writeln!(tally.report, "違反 計 {}", tally.total);
++    let _ = writeln!(tally.report, "まだ分からない 計 {}", tally.unknown);
++    let _ = writeln!(
++        tally.report,
++        "外した置き場 計{}",
++        skip_words(&tally.skipped)
++    );
++    Ok((tally.report, tally.total, tally.unknown))
++}
++
++/// 外した置き場の数の字（種類ごとに空白と SKIP_WORDS の字と空白と数・頭に 外し は付けない）。
++fn skip_words(skipped: &[usize; 3]) -> String {
++    SKIP_WORDS
++        .iter()
++        .zip(skipped)
++        .map(|(word, n)| format!(" {word} {n}"))
++        .collect()
+ }
+ 
+ /// query の値の字（英数と - . _ ~ のほかの byte を %XX にする・面の節点の頁への link と同じ）。
+diff --git a/crates/tsuzuri-boundary/src/stage/measure.js b/crates/tsuzuri-boundary/src/stage/measure.js
+index f9e4c3924495f20d62a7253f2d4c3b865bc45cce..fa053912400299ad354fd0a274b3d24415162767 100644
+--- a/crates/tsuzuri-boundary/src/stage/measure.js
++++ b/crates/tsuzuri-boundary/src/stage/measure.js
+@@ -18,16 +18,21 @@
+     }
+     return { left, top, right, bottom };
+   };
+-  const shown = (e) => {
++  const boxed = (e) => {
+     const r = e.getBoundingClientRect();
+     const s = getComputedStyle(e);
+     const b = box(e);
+     return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden" && b.right > b.left && b.bottom > b.top;
+   };
++  // 描かれるか: 箱を持っても、閉じた details の中・祖先の display none・visibility hidden の要素は利用者に見えないので、
++  // どの条にも数えない（外した数は skipped の hidden に返す・行 g-accept-runner）。
++  const drawn = (e) => e.checkVisibility({ visibilityProperty: true });
++  const shown = (e) => boxed(e) && drawn(e);
+   // 開いた窓（aria-modal の箱）が在れば、測るのは窓の中だけ（窓の外は幕の下で押せない・行 g-accept）。
+   const modal = Array.from(document.querySelectorAll("[aria-modal=true]")).find(shown);
+   const root = modal || document.body;
+   const seen = Array.from(root.querySelectorAll("*")).filter(shown);
++  const unseen = Array.from(root.querySelectorAll("*")).filter((e) => boxed(e) && !drawn(e));
+   const name = (e) => {
+     const cls = typeof e.className === "string" ? e.className.trim().split(/\s+/).filter(Boolean) : [];
+     return [e.tagName.toLowerCase() + (e.id ? "#" + e.id : "")].concat(cls).join(".");
+@@ -74,23 +79,35 @@
+     return { key: e.getAttribute("data-v") || "", text: words(copy.textContent) };
+   });
+   const skip = ".legend, .lgline, [role=tab], .tabs, .seg, button, .num, .nid, .tid, .kid, .mono, [data-t], .q, script, style, " + mouth;
++  // 台帳が書いた字の置き場（面の印 data-ledger-text）は散文と文の予算に数えず、表の行を開いた中（class c-more）の
++  // 語と値の対は散文に数えない。外した置き場は skipped に名指して返す（黙って飛ばさない・行 g-accept-runner）。
++  const ledger = "[data-ledger-text]";
++  const pairs = ".c-more";
++  const skipped = seen
++    .filter((e) => e.matches(ledger))
++    .map((e) => "ledger " + name(e))
++    .concat(seen.filter((e) => e.matches(pairs)).map((e) => "pair " + name(e)))
++    .concat(unseen.map((e) => "hidden " + name(e)));
+   const first = [];
+   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+   for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+     const p = t.parentElement;
+     const piece = words(t.nodeValue);
+-    if (!piece || !p || !shown(p) || p.closest(skip)) continue;
++    if (!piece || !p || !shown(p) || p.closest(skip) || p.closest(ledger) || p.closest(pairs)) continue;
+     if (p.getBoundingClientRect().top < vh) first.push(piece);
+   }
+-  const titles = seen.filter((e) => e.matches("[data-t]")).map((e) => words(e.textContent));
++  const titles = seen.filter((e) => e.matches("[data-t]") && !e.closest(ledger)).map((e) => words(e.textContent));
+   const nodes = seen.filter((e) => e.matches(".nid, .tid, .kid")).map((e) => ({
+     id: words(e.textContent),
+     text: words((e.closest("a") || e.parentElement || e).textContent),
+   }));
++  // 今の選びの印（aria-selected と aria-pressed の真・aria-current・今の tab の class on）。今の選びは押しても何も
++  // 替わらないのが正しいので、runner（audit の case）は now の真の切り替えを押さない（行 g-accept-runner）。
++  const current = "[aria-selected=true], [aria-pressed=true], [aria-current]:not([aria-current=false]), .on";
+   const switch_at = seen
+     .filter((e) => e.matches("button.seg, .seg button, [role=tab], [aria-pressed], [data-tab]"))
+-    .map((e) => ({ label: words(e.textContent), r: e.getBoundingClientRect() }))
+-    .map(({ label, r }) => ({ label, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))
++    .map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))
++    .map(({ label, now, r }) => ({ label, now, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))
+     .filter(({ x, y }) => x >= 0 && y >= 0 && x < vw && y < vh);
+   const libraries = Array.from(document.querySelectorAll("script[src], link[rel~=stylesheet][href], link[rel~=preload][href], link[rel~=modulepreload][href]"))
+     .map((e) => e.getAttribute("src") || e.getAttribute("href"));
+@@ -101,6 +118,7 @@
+     overlap,
+     nocard,
+     reach,
++    skipped,
+     headings,
+     first,
+     errors: [],
+diff --git a/crates/tsuzuri-boundary/src/stage/relay.rs b/crates/tsuzuri-boundary/src/stage/relay.rs
+index e8e73c685ff2937d246fe14f396763b780697069..e977d280961ea68807e7dcab503405ab5aea2816 100644
+--- a/crates/tsuzuri-boundary/src/stage/relay.rs
++++ b/crates/tsuzuri-boundary/src/stage/relay.rs
+@@ -38,7 +38,9 @@ pub const ATTACH: &str = "Target.attachToTarget";
+ /// 頁の target の見直しの間隔。
+ const POLL: Duration = Duration::from_millis(50);
+ 
+-/// 席の目の Chrome の引数（headless・専用の profile・pipe の口・初めの問いを出さない・最初の頁）。
++/// 席の目の Chrome の引数（headless・専用の profile・pipe の口・初めの問いを出さない・最初の頁・戻りの cache を止める）。
++/// 戻りの cache（back-forward cache）は離れた頁を知らせの接続ごと持ち続け、1 つの頁で移り続けると host ごとの
++/// 接続の上限を埋めて次の頁の読みを待たせるので止める（行 g-accept-runner）。
+ pub fn eyes_argv(profile: &Path, url: &str) -> Vec<String> {
+     vec![
+         "--headless=new".to_string(),
+@@ -47,6 +49,7 @@ pub fn eyes_argv(profile: &Path, url: &str) -> Vec<String> {
+         "--no-first-run".to_string(),
+         "--no-default-browser-check".to_string(),
+         url.to_string(),
++        "--disable-features=BackForwardCache".to_string(),
+     ]
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/bvsettle.rs b/crates/tsuzuri-boundary/tests/bvsettle.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..65086858d6388ad1f4fc4119cbdbb9c37a934304
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvsettle.rs
+@@ -0,0 +1,501 @@
++//! 行 g-accept-runner の歯（接頭辞 bvsettle_）: 受入の runner の待ちと今の選び。
++//! runner は頁を開いた後、面が描き、どの block も読みの印（面の kit の NOT_READ の字）を出さなくなるまで上限つきで待ち、
++//! 上限で残る画面は違反 0 と数えずまだ分からないとする（憲法 P-7）。測りの式は切り替えの在りかに今の選びの印 now を
++//! 付け、runner は今の選びを押さず、今でない選びは今までどおり押して URL を比べる。
++//! 頁の口は歯の中の偽の頁（撃った命令と測りと URL の読みを順に記録する）で撃ち、本物の Chrome を起こさない。
++#![cfg(test)]
++
++use std::fs;
++use std::path::Path;
++
++use tsuzuri_boundary::audit::{
++    MODES, NOT_READ, POLL_MS, Page, READ_POLLS, RULES, SCREENS, UNSETTLED, WIDTHS, case, count,
++    facts, line, skipped_counts, sweep, unread,
++};
++use tsuzuri_boundary::stage::cdp::Command;
++
++/// 撃った URL の board（clean.json の読み先と同じ origin）。
++const BOARD: &str = "http://127.0.0.1:4801/";
++
++/// clean.json の頁の見える字の欄。
++const BODY: &str = r#""text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。","#;
++
++fn read(rel: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../..")
++        .join(rel);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++fn clean() -> String {
++    read("tests/fixtures/surface/accept-12/clean.json")
++}
++
++fn vocab() -> String {
++    read("tests/fixtures/surface/accept-12/vocab.json")
++}
++
++/// clean.json の見える字の欄を `body` の字に替えた事実の字。
++fn with_body(body: &str) -> String {
++    let text = clean();
++    assert_eq!(text.matches(BODY).count(), 1, "clean.json の見える字の欄");
++    text.replace(BODY, &format!(r#""text": "{body}","#))
++}
++
++/// どれかの block が読みの印を出す頁の事実の字。
++fn pending() -> String {
++    with_body(&format!("pipeline dashboard\\n測れていない {NOT_READ}"))
++}
++
++/// clean.json の切り替えの在りかを `spots` の字に替えた事実の字。
++fn with_spots(spots: &str) -> String {
++    clean().replace(r#""switch_at": []"#, &format!(r#""switch_at": [{spots}]"#))
++}
++
++/// 偽の頁（Navigate で今の URL を替え、Click は在りかの行き先へ URL を替える）。測りの字は
++/// 今の URL と、何度目に移った頁かと、移ってから何度目の測りかで決まる。
++struct Fake {
++    log: Vec<String>,
++    current: String,
++    navigations: usize,
++    polls: usize,
++    moves: Vec<(u32, u32, String)>,
++    measured: Measured,
++}
++
++/// 測りの字を返す口（今の URL・何度目に移った頁か・移ってから何度目の測りか）。
++type Measured = Box<dyn Fn(&str, usize, usize) -> String>;
++
++impl Fake {
++    fn new(measured: impl Fn(&str, usize, usize) -> String + 'static) -> Fake {
++        let (log, current, moves) = (Vec::new(), String::new(), Vec::new());
++        let measured = Box::new(measured);
++        Fake {
++            log,
++            current,
++            navigations: 0,
++            polls: 0,
++            moves,
++            measured,
++        }
++    }
++
++    /// 撃った Navigate の URL（順に）。
++    fn navigated(&self) -> Vec<&str> {
++        self.log
++            .iter()
++            .filter_map(|l| l.strip_prefix("Navigate "))
++            .collect()
++    }
++
++    /// 記録の中の `entry` の数。
++    fn times(&self, entry: &str) -> usize {
++        self.log.iter().filter(|l| *l == entry).count()
++    }
++}
++
++impl Page for Fake {
++    fn run(&mut self, command: &Command) -> Result<Vec<String>, String> {
++        match command {
++            Command::Navigate { url } => {
++                self.log.push(format!("Navigate {url}"));
++                self.current.clone_from(url);
++                (self.navigations, self.polls) = (self.navigations + 1, 0);
++                return Ok(Vec::new());
++            }
++            Command::Click { x, y } => {
++                if let Some((_, _, to)) = self.moves.iter().find(|(a, b, _)| (a, b) == (x, y)) {
++                    self.current.clone_from(to);
++                }
++            }
++            _ => {}
++        }
++        self.log.push(format!("{command:?}"));
++        Ok(Vec::new())
++    }
++
++    fn measure(&mut self) -> Result<String, String> {
++        self.log.push("measure".to_string());
++        self.polls += 1;
++        Ok((self.measured)(&self.current, self.navigations, self.polls))
++    }
++
++    fn url(&mut self) -> Result<String, String> {
++        self.log.push("url".to_string());
++        Ok(self.current.clone())
++    }
++
++    fn events(&self) -> &[String] {
++        &[]
++    }
++}
++
++fn wait(ms: u64) -> String {
++    format!("{:?}", Command::Wait { ms })
++}
++
++/// URL `target` の頁だけ読みの印が残り、ほかは読めた頁。
++fn stuck_at(target: String) -> Fake {
++    Fake::new(move |url, _, _| if url == target { pending() } else { clean() })
++}
++
++/// (2) 読みの印の判じと待ちの間: 見える字が空か読みの印を含めば unread。頁を開いて 1000 ms 待って測り、
++/// unread の間は 300 ms ごとに測り直し、印の消えた測りの事実で数える（印の消える偽の頁は上限の前に測りに進む）。
++#[test]
++fn bvsettle_waits_until_read() {
++    assert_eq!((POLL_MS, READ_POLLS), (300, 100));
++    assert!(unread("") && unread(" \n ") && unread(&format!("pipeline\n{NOT_READ}\n")));
++    assert!(!unread("pipeline dashboard") && !unread("この block の口を読んだ"));
++    let url = format!("{BOARD}?win=gaps&mode=beginner");
++    for first in [pending(), with_body(""), with_body(" ")] {
++        let mut page = Fake::new(move |_, _, poll| if poll <= 3 { first.clone() } else { clean() });
++        let facts = case(&mut page, &url, 1280).expect("印の消える頁");
++        let mut want = vec![format!("Navigate {url}"), wait(1000), "measure".to_string()];
++        for _ in 0..3 {
++            want.extend([wait(POLL_MS), "measure".to_string()]);
++        }
++        assert_eq!(page.log.get(2..), Some(want.as_slice()));
++        assert!(!unread(&facts.text) && facts.text.starts_with("pipeline"));
++        assert_eq!(count(&facts, &vocab()), [0; 12]);
++    }
++    let mut ready = Fake::new(|_, _, _| clean());
++    case(&mut ready, &url, 390).expect("読めた頁");
++    assert_eq!(
++        (ready.times("measure"), ready.times(&wait(POLL_MS))),
++        (1, 0)
++    );
++}
++
++/// (3) 印が上限まで残る頁: 測りは READ_POLLS 回で止まり（間の待ちは 1 つ少ない）、case は URL と UNSETTLED を含む Err。
++/// 切り替えを押して戻った頁で印が上限まで残るのも Err。
++#[test]
++fn bvsettle_limit_is_unknown() {
++    let url = format!("{BOARD}?win=stalled&mode=beginner");
++    assert!(UNSETTLED.starts_with("まだ分からない"), "{UNSETTLED}");
++    for stuck in [pending(), with_body("")] {
++        let mut page = Fake::new(move |_, _, _| stuck.clone());
++        let err = case(&mut page, &url, 700).expect_err("印の残る頁");
++        assert!(err.contains(&url) && err.contains(UNSETTLED), "{err}");
++        assert_eq!(page.times("measure"), READ_POLLS);
++        assert_eq!(page.times(&wait(POLL_MS)), READ_POLLS - 1);
++        assert_eq!(page.times(&wait(1000)), 1);
++    }
++    let spots = with_spots(r#"{"label": "expert", "now": false, "x": 5, "y": 6}"#);
++    let mut back = Fake::new(move |_, nav, _| if nav == 1 { spots.clone() } else { pending() });
++    let err = case(&mut back, &url, 700).expect_err("戻った頁で印が残る");
++    assert!(err.contains(UNSETTLED), "{err}");
++    assert_eq!(back.navigated(), [url.as_str(), url.as_str()]);
++    assert_eq!(back.times("measure"), 1 + READ_POLLS);
++}
++
++/// (4) sweep は印が上限まで残る画面を違反に数えず、幅と mode と URL と UNSETTLED の行にして続け、まだ分からない 計 に
++/// 数える。home が残る組は節点の頁を開かず、id の無い節点の頁の URL をまだ分からないの行にする。xtask の accept は
++/// まだ分からない画面が在れば違反の数に依らず rc 2。
++#[test]
++fn bvsettle_sweep_counts_unknown() {
++    let stalled = format!("{BOARD}?win=stalled&mode=beginner");
++    let mut page = stuck_at(stalled.clone());
++    let (report, total, unknown) = sweep(&mut page, BOARD, &vocab()).expect("sweep");
++    assert_eq!((total, unknown), (0, 4));
++    for width in WIDTHS {
++        let gone = format!("{width} beginner {stalled} {UNSETTLED}");
++        assert_eq!(
++            report.lines().filter(|l| **l == gone).count(),
++            1,
++            "{report}"
++        );
++        let zero = line(width, "beginner", &stalled, &[0; 12]);
++        assert!(!report.lines().any(|l| l == zero), "{report}");
++    }
++    assert!(
++        report.contains("\n違反 計 0\nまだ分からない 計 4\n"),
++        "{report}"
++    );
++    assert_eq!(report.lines().count(), 1 + 96 + 3);
++
++    assert_eq!(SCREENS[0], "?");
++    let mut page = stuck_at(format!("{BOARD}?mode=expert"));
++    let (report, total, unknown) = sweep(&mut page, BOARD, &vocab()).expect("sweep");
++    assert_eq!((total, unknown), (0, 8));
++    let nodes: Vec<&str> = page
++        .navigated()
++        .into_iter()
++        .filter(|u| u.contains("page=node"))
++        .collect();
++    assert_eq!(nodes.len(), WIDTHS.len() * MODES.len() - 4);
++    assert!(
++        nodes.iter().all(|u| u.ends_with("&mode=beginner")),
++        "{nodes:?}"
++    );
++    let blind = format!(" expert {BOARD}?page=node&mode=expert {UNSETTLED}");
++    assert_eq!(report.lines().filter(|l| l.ends_with(&blind)).count(), 4);
++    assert_eq!(page.navigated().len(), 96 - 4);
++
++    let accept = read("xtask/src/accept.rs");
++    let arm = &accept[accept
++        .find("        Ok((total, unknown)) => {\n")
++        .expect("まだ分からない腕")..];
++    let arm = &arm[..arm.find("\n        }\n").expect("腕の閉じ")];
++    assert!(
++        arm.contains("まだ分からない画面 {unknown}") && arm.ends_with("\n            2"),
++        "{arm}"
++    );
++    assert!(accept.contains("        Ok((total, 0)) => {\n"));
++}
++
++/// (5) 今の選び（在りかの now が真）は押さず、今でない選びは押して URL を比べる。URL の替わらない今でない選びは、
++/// 今の選びと同じく条 10 の違反に数える。now の欠けと真偽でない値は Err（字は switch_at と URL を含む）。
++#[test]
++fn bvsettle_current_not_pressed() {
++    let url = format!("{BOARD}?board=account&tab=session&mode=beginner");
++    let moved = format!("{BOARD}?board=account&tab=home&mode=beginner");
++    let url_rule = RULES.iter().position(|(k, _)| *k == "url").expect("条 url");
++    let mut counts = Vec::new();
++    for now in ["true", "false"] {
++        let text = with_spots(&format!(
++            r#"{{"label": "session", "now": {now}, "x": 1, "y": 1}}, {{"label": "7d", "now": false, "x": 2, "y": 2}}, {{"label": "home", "now": false, "x": 3, "y": 3}}"#
++        ));
++        let mut page = Fake::new(move |_, _, _| text.clone());
++        page.moves.push((3, 3, moved.clone()));
++        let facts = case(&mut page, &url, 960).expect("case");
++        let pressed: Vec<&str> = facts.switches.iter().map(|s| s.label.as_str()).collect();
++        let clicked = page.times(&format!("{:?}", Command::Click { x: 1, y: 1 }));
++        let want: (&[&str], usize) = if now == "true" {
++            (&["7d", "home"], 0)
++        } else {
++            (&["session", "7d", "home"], 1)
++        };
++        assert_eq!((pressed.as_slice(), clicked), want, "now {now}");
++        let still = facts.switches.iter().find(|s| s.label == "7d").expect("7d");
++        assert_eq!(
++            [still.before.as_str(), still.after.as_str()],
++            [url.as_str(); 2]
++        );
++        counts.push(count(&facts, &vocab())[url_rule]);
++    }
++    assert_eq!(counts, [1, 2]);
++    for odd in [
++        r#"{"label": "a", "x": 1, "y": 1}"#,
++        r#"{"label": "a", "now": "true", "x": 1, "y": 1}"#,
++        r#"{"label": "a", "now": 1, "x": 1, "y": 1}"#,
++        r#"{"label": "a", "now": null, "x": 1, "y": 1}"#,
++    ] {
++        let text = with_spots(odd);
++        let mut page = Fake::new(move |_, _, _| text.clone());
++        let err = case(&mut page, &url, 960).expect_err("now の形の違い");
++        assert!(
++            err.contains("switch_at") && err.contains(&url),
++            "{odd}: {err}"
++        );
++    }
++}
++
++/// (6) 測りの式は切り替えの在りかに今の選びの印 now を返し、印は aria-selected と aria-pressed の真・aria-current
++/// （false でない）・class on。面の src の今の印はこの一覧の中だけ（aria-pressed は 6 file の 7 か所で、値は比べの真偽の
++/// 字・aria-current と class on は account board の tab の link だけ・aria-selected と role tab は無い）で、面の
++/// 読みの印の字は audit の NOT_READ と同じ字を見える span に出し、面の body は描く前に空。
++#[test]
++fn bvsettle_probe_marks_current() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    for want in [
++        "const current = \"[aria-selected=true], [aria-pressed=true], [aria-current]:not([aria-current=false]), .on\";",
++        ".map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))",
++        ".map(({ label, now, r }) => ({ label, now, x: Math.round(",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    let pressed = surface_pressed();
++    assert_eq!(
++        pressed.join(" "),
++        "account/board.rs:1 account/ledger.rs:1 account/projects.rs:1 account/session.rs:2 \
++         project/nodearound.rs:1 project_dom/seat.rs:1"
++    );
++    let board = read("crates/tsuzuri-surface/src/account/board.rs");
++    assert!(board.contains("let current = move || (tab.get() == l.tab).then_some(\"page\");"));
++    assert!(board.contains("class=class aria-current=current on:click=press data-tab=l.tab.id()"));
++    let account = read("crates/tsuzuri-surface/src/account/mod.rs");
++    assert!(account.contains("class: if tab == current { \"on\" } else { \"\" },"));
++    let kit = read("crates/tsuzuri-surface/src/kit.rs");
++    assert!(kit.contains(&format!("pub const NOT_READ: &str = \"{NOT_READ}\";")));
++    assert!(kit.contains("Fetched::NotRead => NOT_READ,"));
++    assert!(kit.contains("<span class=\"small muted\">{reason}</span>"));
++    let index = read("crates/tsuzuri-surface/index.html");
++    assert!(index.contains("<body></body>"), "描く前の body は空");
++}
++
++/// 面の crate の src の .rs の今の印を照らし、aria-pressed を持つ file と数の字（file:数 を名の順に）を返す。
++fn surface_pressed() -> Vec<String> {
++    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tsuzuri-surface/src");
++    let (mut dirs, mut pressed) = (vec![src.clone()], Vec::new());
++    while let Some(dir) = dirs.pop() {
++        for path in fs::read_dir(&dir)
++            .expect("src の dir")
++            .map(|e| e.expect("dir の項").path())
++        {
++            if path.is_dir() {
++                dirs.push(path);
++            } else if path.extension().is_some_and(|x| x == "rs") {
++                let rel = path
++                    .strip_prefix(&src)
++                    .expect("src の下")
++                    .to_string_lossy()
++                    .into_owned();
++                let n = file_marks(&rel, &fs::read_to_string(&path).expect("src を読む"));
++                if n > 0 {
++                    pressed.push(format!("{rel}:{n}"));
++                }
++            }
++        }
++    }
++    pressed.sort();
++    pressed
++}
++
++/// 1 つの file の今の印（aria-selected と role tab は無い・aria-pressed はどれも値の pressed を .to_string() で
++/// 終わる閉包で組む・aria-current と data-tab は account/board.rs だけ）を照らし、aria-pressed の数を返す。
++fn file_marks(rel: &str, text: &str) -> usize {
++    for marker in ["aria-selected", "role=\"tab\"", "role=tab"] {
++        assert!(!text.contains(marker), "{rel} に {marker}");
++    }
++    let n = text.matches("aria-pressed=").count();
++    let lets: Vec<&str> = text
++        .lines()
++        .map(str::trim)
++        .filter(|l| l.starts_with("let pressed = move || "))
++        .collect();
++    assert_eq!(
++        (text.matches("aria-pressed=pressed ").count(), lets.len()),
++        (n, n),
++        "{rel}"
++    );
++    assert!(
++        lets.iter().all(|l| l.ends_with(".to_string();")),
++        "{rel}: {lets:?}"
++    );
++    let tabs = text.matches("aria-current=").count() + text.matches("data-tab=").count();
++    assert_eq!(tabs > 0, rel == "account/board.rs", "{rel}");
++    n
++}
++
++/// (8) 測りの式は台帳の字の印（data-ledger-text）の下の字を散文と文の予算に、表の行を開いた中（class c-more）の字を
++/// 散文に数えず、外した置き場を skipped に名指す。印の無い同じ字は今までどおり数え、外した置き場の数は report の
++/// 画面の行の末と 外した置き場 計 の行に出る。skipped の項の頭が ledger か pair でなければ Err。
++#[test]
++fn bvsettle_skips_named_places() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    for want in [
++        "  const ledger = \"[data-ledger-text]\";\n  const pairs = \".c-more\";\n",
++        ".map((e) => \"ledger \" + name(e))\n    .concat(seen.filter((e) => e.matches(pairs)).map((e) => \"pair \" + name(e)))\n",
++        "p.closest(skip) || p.closest(ledger) || p.closest(pairs)) continue;",
++        "e.matches(\"[data-t]\") && !e.closest(ledger))",
++        "    reach,\n    skipped,\n",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    let long = "台帳の字・長い問い・続き".repeat(31);
++    let plain = clean().replace("\"P-1 は 12:30Z に決めた。\"", &format!("\"{long}\""));
++    let marked = clean().replace(
++        r#""skipped": []"#,
++        r#""skipped": ["ledger div.qb", "pair div.c-more", "pair div.c-more"]"#,
++    );
++    let vocab = vocab();
++    let got = facts(&plain).expect("印の無い字");
++    let at = |key: &str| RULES.iter().position(|(k, _)| *k == key).expect("条");
++    let counts = count(&got, &vocab);
++    assert_eq!((counts[at("prose")], counts[at("budget")]), (1, 1));
++    let got = facts(&marked).expect("印の在る字");
++    assert_eq!(
++        (count(&got, &vocab), skipped_counts(&got)),
++        ([0; 12], [1, 2, 0])
++    );
++    for odd in [r#"["other x"]"#, r#"["ledger"]"#, "[1]"] {
++        let text = clean().replace(r#""skipped": []"#, &format!(r#""skipped": {odd}"#));
++        let err = facts(&text).expect_err("skipped の形の違い");
++        assert!(err.contains("skipped"), "{odd}: {err}");
++    }
++    let stalled = format!("{BOARD}?win=stalled&mode=beginner");
++    let ask = format!("{BOARD}?win=ask&mode=beginner");
++    let (a, b) = (stalled.clone(), ask.clone());
++    let mut page = Fake::new(move |url, _, _| match url {
++        u if u == a => marked.clone(),
++        u if u == b => plain.clone(),
++        _ => clean(),
++    });
++    let (report, total, _) = sweep(&mut page, BOARD, &vocab).expect("sweep");
++    assert_eq!(total, 8);
++    for width in WIDTHS {
++        let skip = format!(
++            "{} 台帳の字 1 語と値の対 2 見えない要素 0",
++            line(width, "beginner", &stalled, &[0; 12])
++        );
++        assert_eq!(report.lines().filter(|l| *l == skip).count(), 1, "{report}");
++        let mut two = [0; 12];
++        (two[at("prose")], two[at("budget")]) = (1, 1);
++        assert!(
++            report
++                .lines()
++                .any(|l| l == line(width, "beginner", &ask, &two))
++        );
++    }
++    assert!(
++        report.ends_with("外した置き場 計 台帳の字 4 語と値の対 8 見えない要素 0\n"),
++        "{report}"
++    );
++}
++
++/// (9) 測りの式は、箱を持っても描かれない要素（checkVisibility が偽・閉じた details の中・祖先の display none・
++/// visibility hidden）をどの条の要素の列（seen と散文の片）にも入れず、skipped に hidden の名で返す。hidden の項は
++/// どの条の数も替えず（見える同じ要素は今までどおり数える）、report の画面の行の末と 外した置き場 計 の行に出る。
++#[test]
++fn bvsettle_skips_unseen_elements() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    for want in [
++        "  const drawn = (e) => e.checkVisibility({ visibilityProperty: true });\n  const shown = (e) => boxed(e) && drawn(e);\n",
++        "  const unseen = Array.from(root.querySelectorAll(\"*\")).filter((e) => boxed(e) && !drawn(e));\n",
++        "    .concat(unseen.map((e) => \"hidden \" + name(e)));\n",
++        "if (!piece || !p || !shown(p) ||",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    assert_eq!(
++        probe.matches("filter(shown)").count(),
++        1,
++        "要素の列は seen の 1 つ"
++    );
++    let vocab = vocab();
++    let at = |key: &str| RULES.iter().position(|(k, _)| *k == key).expect("条");
++    let pair = r#""overlap": ["button.btn × span.ttl"]"#;
++    let hidden = r#""skipped": ["hidden button.btn", "hidden span.ttl", "hidden a.lk"]"#;
++    let seen = clean().replace(r#""overlap": []"#, pair);
++    let both = seen.replace(r#""skipped": []"#, hidden);
++    let only = clean().replace(r#""skipped": []"#, hidden);
++    let mut one = [0; 12];
++    one[at("overlap")] = 1;
++    for (text, counts, skipped) in [
++        (&seen, one, [0, 0, 0]),
++        (&both, one, [0, 0, 3]),
++        (&only, [0; 12], [0, 0, 3]),
++    ] {
++        let got = facts(text).expect("事実");
++        assert_eq!(
++            (count(&got, &vocab), skipped_counts(&got)),
++            (counts, skipped)
++        );
++    }
++    let ask = format!("{BOARD}?win=ask&mode=beginner");
++    let a = ask.clone();
++    let mut page = Fake::new(move |url, _, _| if url == a { only.clone() } else { clean() });
++    let (report, total, _) = sweep(&mut page, BOARD, &vocab).expect("sweep");
++    assert_eq!(total, 0, "{report}");
++    for width in WIDTHS {
++        let want = format!(
++            "{} 台帳の字 0 語と値の対 0 見えない要素 3",
++            line(width, "beginner", &ask, &[0; 12])
++        );
++        assert_eq!(report.lines().filter(|l| *l == want).count(), 1, "{report}");
++    }
++    assert!(
++        report.ends_with("外した置き場 計 台帳の字 0 語と値の対 0 見えない要素 12\n"),
++        "{report}"
++    );
++}
+diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
+index c3bddc7b578fffc5f7112cbd8d38b0264e9c457f..2ec016a62b36d23aaaa2102023057fb0e5296f69 100644
+--- a/crates/tsuzuri-boundary/tests/jcount.rs
++++ b/crates/tsuzuri-boundary/tests/jcount.rs
+@@ -211,6 +211,7 @@ fn doc(skip: &str, hscroll: &str) -> String {
+         ("overlap", "[]".to_string()),
+         ("nocard", "[]".to_string()),
+         ("reach", "[]".to_string()),
++        ("skipped", "[]".to_string()),
+         ("headings", "[]".to_string()),
+         ("first", "[]".to_string()),
+         ("errors", "[]".to_string()),
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/jrun.rs
+index 54367124db606f8d60f2b95e5841b976cc004ce0..ddb366a4cfa8afca49a5da936f26f8d58bd105fb 100644
+--- a/crates/tsuzuri-boundary/tests/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/jrun.rs
+@@ -178,7 +178,7 @@ fn jrun_screens_cover_surface() {
+ fn jrun_case_order_and_readings() {
+     let url = format!("{BOARD}?win=gaps&mode=beginner");
+     let pressed = format!("{BOARD}?win=gaps&mode=expert");
+-    let spots = r#""switch_at": [{"label": "expert", "x": 10, "y": 20}, {"label": "hold", "x": 30, "y": 40}]"#;
++    let spots = r#""switch_at": [{"label": "expert", "now": false, "x": 10, "y": 20}, {"label": "hold", "now": false, "x": 30, "y": 40}]"#;
+     let text = fixture("clean.json").replace(r#""switch_at": []"#, spots);
+     assert!(text.contains("hold"), "switch_at を仕込む");
+     let mut page = Fake::new(
+@@ -218,11 +218,13 @@ fn jrun_case_order_and_readings() {
+         "url".to_string(),
+         navigate.clone(),
+         wait.clone(),
++        "measure".to_string(),
+         "url".to_string(),
+         format!("{:?}", Command::Click { x: 30, y: 40 }),
+         "url".to_string(),
+         navigate,
+         wait,
++        "measure".to_string(),
+     ]
+     .to_vec();
+     assert_eq!(page.log, want);
+@@ -300,6 +302,10 @@ fn jrun_errors_from_events() {
+     assert!(errors(&[LOAD.to_string(), entry("warning", "w")]).is_empty());
+ }
+ 
++/// 違反もまだ分からない画面も外した置き場も無い sweep の report の末の 3 行。
++const TAIL: &str =
++    "違反 計 0\nまだ分からない 計 0\n外した置き場 計 台帳の字 0 語と値の対 0 見えない要素 0";
++
+ #[test]
+ fn jrun_sweep_all_cases() {
+     const ID: &str = "t3-hub.5_2~#é";
+@@ -315,7 +321,7 @@ fn jrun_sweep_all_cases() {
+         }
+     };
+     let mut page = Fake::new(measured.clone(), |_, _| vec![LOAD.to_string()]);
+-    let (report, total) = sweep(&mut page, BOARD, &vocab).expect("sweep");
++    let (report, total, unknown) = sweep(&mut page, BOARD, &vocab).expect("sweep");
+     let mut urls = Vec::new();
+     for width in [1280, 960, 700, 390] {
+         for mode in ["beginner", "expert"] {
+@@ -337,9 +343,9 @@ fn jrun_sweep_all_cases() {
+         urls.iter()
+             .map(|(width, mode, url)| line(*width, mode, url, &[0; 12])),
+     );
+-    want.push("違反 計 0".to_string());
++    want.push(TAIL.to_string());
+     assert_eq!(report, format!("{}\n", want.join("\n")));
+-    assert_eq!(total, 0);
++    assert_eq!((total, unknown), (0, 0));
+ 
+     let mut broken = Fake::new(measured, |url, _| {
+         let mut events = vec![LOAD.to_string()];
+@@ -348,9 +354,12 @@ fn jrun_sweep_all_cases() {
+         }
+         events
+     });
+-    let (report, total) = sweep(&mut broken, BOARD, &vocab).expect("page error の在る sweep");
+-    assert_eq!(total, 8);
+-    assert!(report.ends_with("違反 計 8\n"), "{report}");
++    let (report, total, unknown) = sweep(&mut broken, BOARD, &vocab).expect("page error");
++    assert_eq!((total, unknown), (8, 0));
++    assert!(
++        report.contains("\n違反 計 8\nまだ分からない 計 0\n"),
++        "{report}"
++    );
+     let node_line = line(
+         390,
+         "expert",
+@@ -432,6 +441,7 @@ fn returned_object_keys(text: String) {
+             "overlap",
+             "nocard",
+             "reach",
++            "skipped",
+             "headings",
+             "first",
+             "errors",
+diff --git a/crates/tsuzuri-boundary/tests/strelay.rs b/crates/tsuzuri-boundary/tests/strelay.rs
+index a319ff1676316ed45d75b691870c490059cf1564..b3c3406f6556b810b0a71a02bda94b4ca51d742a 100644
+--- a/crates/tsuzuri-boundary/tests/strelay.rs
++++ b/crates/tsuzuri-boundary/tests/strelay.rs
+@@ -661,12 +661,13 @@ fn relay_eyes_argv_snapshot() {
+         "--no-first-run",
+         "--no-default-browser-check",
+         URL,
++        "--disable-features=BackForwardCache",
+     ];
+     assert_eq!(relay::eyes_argv(profile, URL), want);
+     let mut spawn = vec!["-c", PIPE_SCRIPT, "/fake/bin/eyes"];
+     spawn.extend(want);
+     let spawn: Vec<OsString> = spawn.into_iter().map(OsString::from).collect();
+-    assert_eq!(spawn.len(), 9);
++    assert_eq!(spawn.len(), 10);
+     assert_eq!(
+         relay::spawn_argv(OsStr::new("/fake/bin/eyes"), profile, URL),
+         spawn
+diff --git a/tests/fixtures/surface/accept-12/01-overflow.json b/tests/fixtures/surface/accept-12/01-overflow.json
+index b800a80a0fbe06f01fb7a2f07cbe694fb604df34..6882248c9bc5e1878addaba43eb2295d333f141a 100644
+--- a/tests/fixtures/surface/accept-12/01-overflow.json
++++ b/tests/fixtures/surface/accept-12/01-overflow.json
+@@ -7,6 +7,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/02-overlap.json b/tests/fixtures/surface/accept-12/02-overlap.json
+index 9ea672b00de248aaf0d03a2e39774bc818190c9a..0a328a1c63d0937525c0c593481eabcfcc3763b3 100644
+--- a/tests/fixtures/surface/accept-12/02-overlap.json
++++ b/tests/fixtures/surface/accept-12/02-overlap.json
+@@ -7,6 +7,7 @@
+  ],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/03-hscroll.json b/tests/fixtures/surface/accept-12/03-hscroll.json
+index b345499522fe45c845e3346fb8ff23d02e1e7258..f6101494ad1416fa1be1cf5520923d40b6a1f045 100644
+--- a/tests/fixtures/surface/accept-12/03-hscroll.json
++++ b/tests/fixtures/surface/accept-12/03-hscroll.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/04-hover.json b/tests/fixtures/surface/accept-12/04-hover.json
+index 58ea248a62e2dcaa6cda6886a0f185ff4f7742c6..3b66fe4ebbdd17b0900f6d94dc9ddda7d59b3c2a 100644
+--- a/tests/fixtures/surface/accept-12/04-hover.json
++++ b/tests/fixtures/surface/accept-12/04-hover.json
+@@ -7,6 +7,7 @@
+   "button.kcard"
+  ],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/05-heading.json b/tests/fixtures/surface/accept-12/05-heading.json
+index 3daf6defee957561e26e025d1eaeca35204dc3d4..a47d79e0d3f0f9e1804b7f0699fc0dabcf69bc84 100644
+--- a/tests/fixtures/surface/accept-12/05-heading.json
++++ b/tests/fixtures/surface/accept-12/05-heading.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/06-prose.json b/tests/fixtures/surface/accept-12/06-prose.json
+index 909bd8eba65caabb2f663d2379264c9876a425d7..1b4b8b7a38201887ad05e7d7fd4bf032b829e124 100644
+--- a/tests/fixtures/surface/accept-12/06-prose.json
++++ b/tests/fixtures/surface/accept-12/06-prose.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/07-error.json b/tests/fixtures/surface/accept-12/07-error.json
+index 7ed4c9f2ac06c80c746bd910e6935411f04a35e2..6b6f4483903da4886c5317370b555a11fbf1f8d4 100644
+--- a/tests/fixtures/surface/accept-12/07-error.json
++++ b/tests/fixtures/surface/accept-12/07-error.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/08-budget.json b/tests/fixtures/surface/accept-12/08-budget.json
+index 56409787dfaf8364abf88f0bef23d73048d667fa..d18c5b0af27a4136182aede947377cebfe924bc5 100644
+--- a/tests/fixtures/surface/accept-12/08-budget.json
++++ b/tests/fixtures/surface/accept-12/08-budget.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/09-nodeid.json b/tests/fixtures/surface/accept-12/09-nodeid.json
+index 27c492a888d9d76abc2b414a01cd74aacb0fe3b7..4bfbc1d25ab3c654f36f71d9729f181a1d2ceddc 100644
+--- a/tests/fixtures/surface/accept-12/09-nodeid.json
++++ b/tests/fixtures/surface/accept-12/09-nodeid.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/10-url.json b/tests/fixtures/surface/accept-12/10-url.json
+index 3d7d20c5894d02c58a17f4971eadf1815a7d648b..d57641460c9354b144103ccef393901e185bf343 100644
+--- a/tests/fixtures/surface/accept-12/10-url.json
++++ b/tests/fixtures/surface/accept-12/10-url.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/11-verbatim.json b/tests/fixtures/surface/accept-12/11-verbatim.json
+index 778da3f234733070b8faf488969c012dace27046..9b6c6951242667d695c1be252ec0ffd3d3a13d01 100644
+--- a/tests/fixtures/surface/accept-12/11-verbatim.json
++++ b/tests/fixtures/surface/accept-12/11-verbatim.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/12-library.json b/tests/fixtures/surface/accept-12/12-library.json
+index afb615cf853357a7d923151b08cdb5025a648a38..19b95215352aab0ec228d2d89480d08a0ef5fa4a 100644
+--- a/tests/fixtures/surface/accept-12/12-library.json
++++ b/tests/fixtures/surface/accept-12/12-library.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/tests/fixtures/surface/accept-12/clean.json b/tests/fixtures/surface/accept-12/clean.json
+index dabb7c10f6645dd77cb744b0bbeee7dfff65ac14..f48b836cfc073ff57e3829de22a464217a1ae1a3 100644
+--- a/tests/fixtures/surface/accept-12/clean.json
++++ b/tests/fixtures/surface/accept-12/clean.json
+@@ -5,6 +5,7 @@
+  "overlap": [],
+  "nocard": [],
+  "reach": [],
++ "skipped": [],
+  "headings": [
+   {
+    "key": "pipeline",
+diff --git a/xtask/src/accept.rs b/xtask/src/accept.rs
+index d6ec80943b9dbee1affed309fb344bd48360739c..86bd26dfde7a302be34a1755292ae18c881ff328 100644
+--- a/xtask/src/accept.rs
++++ b/xtask/src/accept.rs
+@@ -2,7 +2,8 @@
+ //! 席の目の headless の Chrome（境界の crate の relay の Eyes・行 i-4）で全画面 × 2 幅 × 2 mode を測り
+ //! （境界の crate の audit の sweep）、report を書いて違反の計を標準誤りに出す。
+ //! server は起こさない（board の URL を旗で受ける・現物の server は席が tz surface serve で起こす）。
+-//! rc は違反が在れば 1・無ければ 0・撃てなければ 2。
++//! rc は違反が在れば 1・無ければ 0・撃てなければ 2。まだ分からない画面（読みの印が待ちの上限の後も残る）が
++//! 在れば、違反の数に依らず report を書いて 2（行 g-accept-runner）。
+ 
+ use std::env;
+ use std::ffi::OsString;
+@@ -68,13 +69,20 @@ pub fn run(args: &[String], root: &Path) -> i32 {
+         }
+     };
+     match sweep(&flags, root) {
+-        Ok(total) => {
++        Ok((total, 0)) => {
+             emit_err(&format!(
+                 "xtask accept: 違反 計 {total}（report は {}）",
+                 flags.out.display()
+             ));
+             i32::from(total > 0)
+         }
++        Ok((total, unknown)) => {
++            emit_err(&format!(
++                "xtask accept: 違反 計 {total}・まだ分からない画面 {unknown}（report は {}）",
++                flags.out.display()
++            ));
++            2
++        }
+         Err(e) => {
+             emit_err(&format!("xtask accept: {e}"));
+             2
+@@ -82,19 +90,20 @@ pub fn run(args: &[String], root: &Path) -> i32 {
+     }
+ }
+ 
+-/// 語彙表を読み、tz の口と同じ口座の dir の下で席の目の Chrome を起こして sweep を撃ち、report を書く。
+-fn sweep(flags: &Flags, root: &Path) -> Result<usize, String> {
++/// 語彙表を読み、tz の口と同じ口座の dir の下で席の目の Chrome を起こして sweep を撃ち、report を書く
++/// （違反の和とまだ分からない画面の数を返す）。
++fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {
+     let vocab = fs::read_to_string(root.join(VOCAB))
+         .map_err(|e| format!("語彙表 {VOCAB} を読めない: {e}"))?;
+     let board = flags.url.split('?').next().unwrap_or(&flags.url);
+     let base = tunnel::user_dir(&env::temp_dir())?;
+     let (_eyes, mut session) = Eyes::open(&flags.chrome, &base, board, TIMEOUT)?;
+-    let (report, total) = audit::sweep(&mut session, board, &vocab)?;
++    let (report, total, unknown) = audit::sweep(&mut session, board, &vocab)?;
+     let _ = session.close();
+     if let Some(dir) = flags.out.parent().filter(|d| !d.as_os_str().is_empty()) {
+         fs::create_dir_all(dir).map_err(|e| format!("{} を作れない: {e}", dir.display()))?;
+     }
+     fs::write(&flags.out, report)
+         .map_err(|e| format!("report {} を書けない: {e}", flags.out.display()))?;
+-    Ok(total)
++    Ok((total, unknown))
+ }

@@ -1,0 +1,1130 @@
+diff --git a/crates/tsuzuri-surface/src/account/board.rs b/crates/tsuzuri-surface/src/account/board.rs
+index aae6aa3d84add2fb1be2da5a429d0e37bf598def..b40dfe47a7897fc6a8cc954e61d25df0e5c6e926 100644
+--- a/crates/tsuzuri-surface/src/account/board.rs
++++ b/crates/tsuzuri-surface/src/account/board.rs
+@@ -137,12 +137,13 @@ fn top(
+                         let current = move || (tab.get() == l.tab).then_some("page");
+                         // 押しは頁を読み直さず履歴に積む（新しい窓や tab で開く押しは browser の既定のまま・見本の setTab）。
+                         let press = move |e: ev::MouseEvent| tab_press(&e, query, l.tab);
++                        // 数の印は link の外の隣の span（見出しの字は語の字だけ・窓の題の `.num` と同じ形・行 g-accept-face）。
+                         view! {
+                             <a href=move || tab_href(l.tab, mode.get()) class=class aria-current=current on:click=press data-tab=l.tab.id() data-v=l.key data-term=l.key>
+                                 <span inner_html=tab_icon(l.tab)></span>
+                                 <span class="lbl hd-t">{label(l.key)}</span>
+-                                {mark}
+                             </a>
++                            {mark}
+                         }
+                     })
+                     .collect_view();
+diff --git a/crates/tsuzuri-surface/src/account/home.rs b/crates/tsuzuri-surface/src/account/home.rs
+index 7f649d51514a3580ec8975eb053b965e6c00c0a4..5e0c978865d938f37ca16b72f1f9b2e45dd25892 100644
+--- a/crates/tsuzuri-surface/src/account/home.rs
++++ b/crates/tsuzuri-surface/src/account/home.rs
+@@ -925,6 +925,7 @@ mod dom {
+     use crate::account::windows::{NOT_YET_KEY, button_text, open, open_url};
+     use crate::account::{PATH, doc};
+     use crate::frame::{Block, Mode};
++    use crate::project::next::row_line;
+     use crate::project::seat::WindowRow;
+     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
+     use crate::vocab::label;
+@@ -1006,7 +1007,7 @@ mod dom {
+         view! {
+             <div class=r.class tabindex="0" use:attach=card>
+                 <span class="nxp"><span data-t="">{r.project}</span><span class="small muted" data-t="">{r.group}</span></span>
+-                <span class="nxtop">{lead}<span class="nxl">{r.line}</span></span>
++                <span class="nxtop">{lead}<span class="nxl">{row_line(&r.line).to_string()}</span></span>
+                 <span class="nxms">{marks}</span>
+                 <span class="go">{go}</span>
+             </div>
+diff --git a/crates/tsuzuri-surface/src/account/projects.rs b/crates/tsuzuri-surface/src/account/projects.rs
+index 5ab52ce613e9d22e83a30400e8aaa11c83b1451f..b48b61ee976b65f0b78579aecd96cbc2159ab395 100644
+--- a/crates/tsuzuri-surface/src/account/projects.rs
++++ b/crates/tsuzuri-surface/src/account/projects.rs
+@@ -25,7 +25,7 @@ use crate::project::ledger::{
+     JUDGES, Judge, Net, SPARK_H, SPARK_W, Unref, age, judge, kind_label, kind_name, net, spark,
+     spark_svg,
+ };
+-use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
++use crate::project::next::{UNJUDGED_LINE, big, key as next_key, row_line, unjudged};
+ use crate::project::seat::{NG, OK, Sign, state_value, top};
+ use crate::project::{UNKNOWN, state_key};
+ use crate::view::Fetched;
+@@ -208,6 +208,15 @@ pub fn need(project: &ProjectRow) -> Need {
+     }
+ }
+ 
++/// 表の要対応の列の 2 段目の字（1 行を row_line に通す・1 行の無い欄は空・行 g-accept-face）。
++pub fn need_l2(need: &Need) -> String {
++    need.line
++        .as_deref()
++        .map(row_line)
++        .unwrap_or_default()
++        .to_string()
++}
++
+ /// 重さ（見本の SEV: 限度と移動・応答なし・止まっている走行は hi、束の承認・質問・発効待ちは mid、なしと測れていないは lo）。
+ pub fn sev(lead: Option<NextMove>) -> &'static str {
+     match lead {
+@@ -859,7 +868,7 @@ mod dom {
+         Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_WAIT, COLUMNS, Group,
+         GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB,
+         ProjLine, RC4, Run, TKM, Table, UnrefKinds, UnrefSum, batch_text, content, count_text,
+-        fit_cut, group_word, hbm_class, psort_of, unref_class, wait_class, with_psort,
++        fit_cut, group_word, hbm_class, need_l2, psort_of, unref_class, wait_class, with_psort,
+     };
+     use crate::account::PATH;
+     use crate::account::windows;
+@@ -1068,7 +1077,8 @@ mod dom {
+         };
+         let need_icon = row.need.lead.is_none().then(|| state_icon(UNKNOWN));
+         let more = more_view(&row);
+-        let l2 = fit_node(row.need.line.clone().unwrap_or_default());
++        let l2_text = need_l2(&row.need);
++        let l2 = fit_node(l2_text.clone());
+         // 記録の無い行は mode の初めの値（見本の isOpen）。
+         let name = row.name.clone();
+         let is_open = open_state(name.clone(), opened, expert);
+@@ -1100,7 +1110,7 @@ mod dom {
+                 </div>
+                 <div class=C_NEED tabindex="0" use:attach=row.cards.need.clone()>
+                     <span class="l1">{need_icon}<b>{need_word}</b></span>
+-                    <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
++                    <span class="l2" node_ref=l2>{l2_text}</span>
+                 </div>
+                 <div class=C_WAIT>
+                     <span class="l1"><b class=wait_class(row.wait)>{count_text(row.wait)}</b></span>
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+index 1ceec961b70bcf0316abdd4553e663aed0f9910f..26331533e486f1e135c6b4f6b66e6c2ee0ccfbc9 100644
+--- a/crates/tsuzuri-surface/src/askwin.rs
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -195,7 +195,7 @@ mod dom {
+         let rows = move || {
+             others()
+                 .into_iter()
+-                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl">{t}</span><code>{id}</code></li> })
++                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl" data-ledger-text="">{t}</span><code>{id}</code></li> })
+                 .collect_view()
+         };
+         // 台帳が読めないほかの project は、札と 1 行を読めた問いの後に出す（字は前の質問の block と同じ）。
+diff --git a/crates/tsuzuri-surface/src/fresh.rs b/crates/tsuzuri-surface/src/fresh.rs
+index 66eccca647f379610cd89d5b828c0b271f986ace..10d9e9b1a1ec07130a758ea2a5567eba9ca55093 100644
+--- a/crates/tsuzuri-surface/src/fresh.rs
++++ b/crates/tsuzuri-surface/src/fresh.rs
+@@ -3,6 +3,8 @@
+ //! server が 測れていない の電文にし、つながりの切れは net が全部の口を「読めない」にする）。
+ //! 古さは server が読みの落ちた応答に載せる頭（最後に読めた時からの秒）と、面の時計の経過で数える。
+ //! 1 つでも口が読みの途中なら最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す（行 g-pulse）。
++//! 頁を開いてから READ_HOLD_S 秒の間に知らせのつながりが一度も開かなければ（待たされたまま誤りも来ない）、頁を開いた時刻を
++//! 古さの起点に置き、印の card の種類に理由（語の鍵 `UNOPENED_KEY`）を出す（net が全部の口を「読めない」にする・行 g-accept-face）。
+ //! 決め方は host でも組んで試し、印と脈の DOM（`mark`・`pulse`）は wasm の target のときだけ組む。
+ 
+ use std::collections::BTreeMap;
+@@ -10,6 +12,7 @@ use std::collections::BTreeMap;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::ledger::{READ_AGE_HEADER, READ_HOLD_S, READ_WARN_S};
+ 
++use crate::vocab::label;
+ use crate::widgets::hover::Card;
+ 
+ /// 台帳の読みが落ちている間に読み直しを撃つ間（ミリ秒・見張りが戻りを知らせない場合の拾い）。
+@@ -24,6 +27,9 @@ pub const HELD_WORD: &str = "台帳の読み";
+ /// 古さの起点が知らせのつながりの切れのときの種類の語。
+ pub const LOST_WORD: &str = "知らせのつながり";
+ 
++/// 古さの起点がつながりの開かないのときの種類の語の鍵（行 g-accept-face）。
++pub const UNOPENED_KEY: &str = "link_unopened";
++
+ /// つながりの切れの出所（変化の知らせの口）。
+ pub const LOST_SRC: &str = "SSE";
+ 
+@@ -48,6 +54,10 @@ pub struct Fresh {
+     held: BTreeMap<String, EpochSecs>,
+     /// つながりが切れた時刻。
+     lost: Option<EpochSecs>,
++    /// つながりが一度でも開いたか。
++    opened: bool,
++    /// つながりが開かないまま READ_HOLD_S 秒を越えた頁の、頁を開いた時刻（開いたで消す）。
++    stuck: Option<EpochSecs>,
+ }
+ 
+ impl Fresh {
+@@ -69,9 +79,15 @@ impl Fresh {
+         self.held.values().min().copied().or(self.seen)
+     }
+ 
+-    /// 中身の古さ（読みの落ちとつながりの切れの古い方から今まで・どちらも無ければ None）。
++    /// 中身の古さ（読みの落ちとつながりの切れと開かないの古い方から今まで・どれも無ければ None）。
+     pub fn age(&self, now: EpochSecs) -> Option<u64> {
+-        let since = self.held.values().copied().chain(self.lost).min()?;
++        let since = self
++            .held
++            .values()
++            .copied()
++            .chain(self.lost)
++            .chain(self.stuck)
++            .min()?;
+         Some(now.saturating_sub(since))
+     }
+ 
+@@ -94,9 +110,21 @@ impl Fresh {
+         true
+     }
+ 
+-    /// つながりが開いた。
++    /// つながりが開いた（切れた時刻と開かないの時刻を消す）。
+     pub fn back(&mut self) {
+         self.lost = None;
++        self.opened = true;
++        self.stuck = None;
++    }
++
++    /// 頁を開いた時刻 `since` から時刻 `now` まで、つながりが一度も開かずに READ_HOLD_S 秒が過ぎたか（真なら頁を開いた
++    /// 時刻を古さの起点に置く・一度でも開いた後と READ_HOLD_S 秒の前は偽で何も置かない）。
++    pub fn unopened(&mut self, since: EpochSecs, now: EpochSecs) -> bool {
++        if self.opened || now.saturating_sub(since) < READ_HOLD_S {
++            return false;
++        }
++        self.stuck = Some(since);
++        true
+     }
+ 
+     /// つながりが切れた時刻。
+@@ -115,6 +143,7 @@ impl Fresh {
+             return None;
+         }
+         let age = self.age(now)?;
++        let unopened = self.stuck.map(|_| label(UNOPENED_KEY));
+         let mut kinds = Vec::new();
+         let mut srcs = Vec::new();
+         if self.held() {
+@@ -123,6 +152,11 @@ impl Fresh {
+         }
+         if self.lost.is_some() {
+             kinds.push(LOST_WORD);
++        }
++        if let Some(word) = &unopened {
++            kinds.push(word.as_str());
++        }
++        if self.lost.is_some() || self.stuck.is_some() {
+             srcs.push(LOST_SRC);
+         }
+         Some(Card {
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index d06aff83b77e421d4527b9c2f1902087e0a34e1f..af1de766baec1c21681a167c6fc0bdb89950af4e 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -782,10 +782,11 @@ mod dom {
+             (Some(_), Some(sel)) => {
+                 let key = g.key.clone();
+                 let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
+-                view! { <button type="button" class="ll-gname" on:click=choose>{g.name.clone()}</button> }
++                view! { <button type="button" class="ll-gname" title=g.name.clone() on:click=choose>{g.name.clone()}</button> }
+                     .into_any()
+             }
+-            _ => view! { <span class="ll-gname">{g.name.clone()}</span> }.into_any(),
++            _ => view! { <span class="ll-gname" title=g.name.clone()>{g.name.clone()}</span> }
++                .into_any(),
+         };
+         view! {
+             {name}
+diff --git a/crates/tsuzuri-surface/src/net.rs b/crates/tsuzuri-surface/src/net.rs
+index 8a74cda1266cdc629700f8dc823a81ec8577c336..a05d835844f825790a278abe6ecc3b1964d61905 100644
+--- a/crates/tsuzuri-surface/src/net.rs
++++ b/crates/tsuzuri-surface/src/net.rs
+@@ -9,6 +9,8 @@
+ //! 知らせが切れても最後に読めた中身を READ_HOLD_S 秒まで出し続け、越えたら登録された口を全部「読めない」にする
+ //! （要件 NFR2・決め方を通さない・行 g-fresh）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
+ //! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
++//! 頁を開いてから READ_HOLD_S 秒の間に知らせの接続が一度も開かなければ（待たされたまま誤りも来ない）、同じく全部を
++//! 「読めない」にし、理由は Fresh の印の card に出す（最初の読みが開きを待つ形は残す・行 g-accept-face）。
+ //! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む（行 g-pulse）。
+ //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
+ //! 読みの重い口（表示先・行 i-stage-own）は `get` で 1 回だけ読む（登録せず知らせでも読み直さない）。
+@@ -144,6 +146,14 @@ fn link_lost() {
+     );
+ }
+ 
++/// 頁を開いた時刻 `at` から READ_HOLD_S 秒の後も知らせの接続が一度も開いていなければ、登録された口を全部「読めない」に
++/// する（待たされたまま誤りも来ない接続・理由は古さの card に出す・行 g-accept-face）。
++fn link_unopened(at: EpochSecs) {
++    if change(|f| f.unopened(at, now())) {
++        lose_all();
++    }
++}
++
+ /// 知らせのつながりが開いた（切れた時刻を消す）。
+ fn link_back() {
+     change(Fresh::back);
+@@ -461,10 +471,12 @@ pub fn read(path: &'static str) -> ReadSignal<Fetched> {
+ /// 接続は頁の一生の間ずっと持つ（切れても EventSource が繋ぎ直し、開いたで読み直す）。
+ /// 開くのを待つのは上限まで（越えたら開くのを待たずに 1 巡読み、後で開いたときにもう 1 巡読む）。
+ /// 上限の timer は切れた時刻を消さない（開く前に切れた接続の時刻を残す）。
++/// 頁を開いてから READ_HOLD_S 秒の後も一度も開いていなければ全部「読めない」にする（行 g-accept-face）。
+ fn connect() {
+     if CONNECTED.replace(true) {
+         return;
+     }
++    let at = now();
+     let Ok(source) = EventSource::new(EVENTS_PATH) else {
+         lose_all();
+         go_live();
+@@ -503,4 +515,5 @@ fn connect() {
+         },
+         Duration::from_millis(OPEN_WAIT_MS),
+     );
++    set_timeout(move || link_unopened(at), Duration::from_secs(READ_HOLD_S));
+ }
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index 07ba66b790df81d59066058b1598e5ad12a8be22..8c3a1e7cadb5889cbd1497dcd0525ca661e531e7 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -53,7 +53,7 @@ pub const UNRECEIVED_HEAD: &str = "席に届いていない";
+ pub const UNRECEIVED_UNKNOWN: &str = "席に届いたかが読めない（届いていない裁定の口が読めない）";
+ 
+ /// この file の畳める段の開き閉じの鍵の形（`{}` は問いの id・行 hs-derived）。
+-pub const FOLDS: &[&str] = &["ask:around:{}"];
++pub const FOLDS: &[&str] = &["ask:around:{}", "ask:more:{}"];
+ 
+ /// 口が読めないときの理由。
+ pub const REASON: &str =
+@@ -130,6 +130,12 @@ pub struct Slot {
+     pub open: Option<bool>,
+ }
+ 
++/// 窓の card で「続き」の開き閉じに畳む部分（最初は閉じる・最初に出すのは頭と概要と答えとつながり・行 g-accept-face）。
++pub const MORE: [Part; 2] = [Part::Reason, Part::Recommend];
++
++/// 「続き」の開き閉じの語の鍵。
++pub const MORE_KEY: &str = "q_more";
++
+ /// card の部分の並び（DOM はこの表を順にたどって組み立てる）。
+ pub const LAYOUT: [Slot; 6] = [
+     Slot {
+@@ -620,9 +626,9 @@ mod dom {
+     use tsuzuri_contract::ledger::BeadId;
+ 
+     use super::{
+-        CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, UNRECEIVED_PATH,
+-        age, anchor, answerable, can_send, card_class, key_action, listed, outcome, posted_tip,
+-        request_body, send_text, target_number,
++        CHAT_KEY, Card, KeyAction, LAYOUT, MORE, MORE_KEY, Outcome, PATH, Part, RULING_PATH, Slot,
++        UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, key_action, listed,
++        outcome, posted_tip, request_body, send_text, target_number,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::project::fold;
+@@ -731,12 +737,28 @@ mod dom {
+         T: Fn() -> u64 + Copy + Send + Sync + 'static,
+         M: Fn() -> Mode + Copy + Send + Sync + 'static,
+     {
+-        let parts = LAYOUT
++        // 理由と推奨は概要の後の「続き」の開き閉じに畳む（台帳の字の長い段を最初の画面に並べない・行 g-accept-face）。
++        let part = |slot: &Slot| part_view(*slot, &card, &d, live, shared);
++        let folded = |slot: &&Slot| MORE.contains(&slot.part);
++        let lead = LAYOUT
++            .iter()
++            .take_while(|s| !folded(s))
++            .map(part)
++            .collect_view();
++        let more = LAYOUT.iter().filter(folded).map(part).collect_view();
++        let tail = LAYOUT
+             .iter()
+-            .map(|slot| part_view(*slot, &card, &d, live, shared))
++            .skip_while(|s| !folded(s))
++            .filter(|s| !folded(s))
++            .map(part)
+             .collect_view();
++        let (open, toggle) = fold(format!("ask:more:{}", card.id), || false);
+         view! {
+-            <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>{parts}</article>
++            <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>
++                {lead}
++                <details class="fold" prop:open=open on:toggle=toggle><summary>{label(MORE_KEY)}</summary>{more}</details>
++                {tail}
++            </article>
+         }
+         .into_any()
+     }
+@@ -774,10 +796,10 @@ mod dom {
+                 let link = move || {
+                     let (id, title) = (id.clone(), title.clone());
+                     if other {
+-                        return view! { <span data-t="">{title}</span> }.into_any();
++                        return view! { <span data-t="" data-ledger-text="" title=title.clone()>{hover::clip(&title)}</span> }.into_any();
+                     }
+                     view! {
+-                        <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="">{title}</span></a>
++                        <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="" data-ledger-text="" title=title.clone()>{hover::clip(&title)}</span></a>
+                     }
+                     .into_any()
+                 };
+@@ -798,7 +820,7 @@ mod dom {
+                 view! {
+                     <div class=slot.class>
+                         <b data-term=key tabindex="0">{label(key)}</b>
+-                        <span data-t="">{card.reason.clone()}</span>
++                        <span data-t="" data-ledger-text="">{card.reason.clone()}</span>
+                     </div>
+                 }
+                 .into_any()
+@@ -808,7 +830,7 @@ mod dom {
+                 view! {
+                     <div class=slot.class data-term=key>
+                         <span inner_html=CHECK></span>
+-                        <div><b>{label(key)}</b>" "<span data-t="">{card.recommend.clone()}</span></div>
++                        <div><b>{label(key)}</b>" "<span data-t="" data-ledger-text="">{card.recommend.clone()}</span></div>
+                     </div>
+                 }
+                 .into_any()
+@@ -830,7 +852,7 @@ mod dom {
+                 view! {
+                     <div class=l.class data-term=l.key>
+                         <span inner_html=icon></span>
+-                        <span data-t="">{l.text.clone()}</span>
++                        <span data-t="" data-ledger-text="">{l.text.clone()}</span>
+                     </div>
+                 }
+             })
+diff --git a/crates/tsuzuri-surface/src/project/askpage.rs b/crates/tsuzuri-surface/src/project/askpage.rs
+index 48389909455419077d2e715e524478e91f362c8e..e2063ce0a82ce577a09aa4d399a43791008ed29a 100644
+--- a/crates/tsuzuri-surface/src/project/askpage.rs
++++ b/crates/tsuzuri-surface/src/project/askpage.rs
+@@ -341,7 +341,7 @@ fn hist_li(
+     view! {
+         <li>
+             <time>{clock_short(at, now)}</time>
+-            <span class="ttl" title=item.title.clone()>{short}</span>
++            <span class="ttl" title=item.title.clone() data-t="" data-ledger-text="">{crate::widgets::hover::clip(&short)}</span>
+             <b class="aside">{match ruling {
+                 Some(rid) => view! {
+                     <a href={let rid = rid.clone(); move || node_href(&rid, mode())} use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>
+diff --git a/crates/tsuzuri-surface/src/project/next.rs b/crates/tsuzuri-surface/src/project/next.rs
+index 6df713aa16f5dd04c422ab710b769fdc4aa23ee6..8c3f15c50e4f9a394b6aac6c6013c563e4cc8d3d 100644
+--- a/crates/tsuzuri-surface/src/project/next.rs
++++ b/crates/tsuzuri-surface/src/project/next.rs
+@@ -52,6 +52,16 @@ pub const UNJUDGED_KEY: &str = "st_unknown";
+ /// なしを判じなかったときの大きい箱の中身の字。
+ pub const UNJUDGED_LINE: &str = "まだ判じていない種類があり、することが無いとは言えない";
+ 
++/// account board の表と一覧の行に出す 1 行の字（なしの箱の字と測れていないの箱の字は空にして行の hover の card に任せる・
++/// 行の数だけ同じ面の字が並んで最初の画面の散文を増やさない・行 g-accept-face）。
++pub fn row_line(line: &str) -> &str {
++    if line == NONE_LINE || line == UNJUDGED_LINE {
++        ""
++    } else {
++        line
++    }
++}
++
+ /// 止まっている走行の箱の link の字（block「pipeline」へ頁の中で飛ぶ）。
+ pub const PIPE_LINK: &str = "run を見る ›";
+ 
+diff --git a/crates/tsuzuri-surface/src/project/timeline.rs b/crates/tsuzuri-surface/src/project/timeline.rs
+index de40f3b62a7dfc796e1f63d6bbc9c7aa3b4bd509..ea83ddb6b76cf9d30592f9f16cf9b5d7007a88c1 100644
+--- a/crates/tsuzuri-surface/src/project/timeline.rs
++++ b/crates/tsuzuri-surface/src/project/timeline.rs
+@@ -1,10 +1,10 @@
+ //! block「run の時間軸」（見本の bead.html の時間軸の panel・便 g-node-timeline・要件 FR10）: 節点の頁の 3 つ目の block。
+ //! 契約・epic の節点はその bead の走行を 1 行ずつ、走行の節点はその 1 行を、走行の読みの口（契約の型の runs の PATH）から出す。
+ //! 近傍の読み（nodearound の module の source）の中心の行から読む bead を決め、段の chip は続く同じ段を 1 つにまとめる。
+-//! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値は純粋な関数にして host で試す。
++//! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値・走行の link の card は純粋な関数にして host で試す。
+ 
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::graph::{AroundRow, NodeKind};
++use tsuzuri_contract::graph::{AroundRow, GraphNode, NodeKind};
+ use tsuzuri_contract::runs::{self, RunLine, RunStep, RunsDoc};
+ use tsuzuri_contract::wire;
+ 
+@@ -15,6 +15,8 @@ use crate::account::home::{EXPERT_CHARS, wrap_words};
+ use crate::frame::Block;
+ use crate::mapview::encode;
+ use crate::view::Fetched;
++use crate::widgets::hover::Card;
++use crate::widgets::nodecard::card_for;
+ 
+ pub const BLOCK: Block = Block {
+     id: "timeline",
+@@ -227,6 +229,28 @@ pub fn body(fetched: &Fetched, only: Option<&str>) -> Body<Vec<RunRow>> {
+     }
+ }
+ 
++/// 走行の行の link の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
++/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
++pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
++    match rows.iter().find(|r| r.node.id == run) {
++        Some(r) => card_for(&r.node, r.status.as_deref()),
++        None => card_for(
++            &GraphNode {
++                id: run.to_string(),
++                kind: NodeKind::Run,
++                file: None,
++                digest: None,
++                title: String::new(),
++                line: None,
++                plain: None,
++                eng: None,
++                updated: None,
++            },
++            None,
++        ),
++    }
++}
++
+ #[cfg(target_arch = "wasm32")]
+ pub use dom::view;
+ 
+@@ -235,11 +259,12 @@ pub use dom::view;
+ mod dom {
+     use leptos::prelude::*;
+ 
+-    use super::{BLOCK, RunRow, Want, body, kept_want};
++    use super::{BLOCK, RunRow, Want, body, kept_want, run_card};
+     use crate::frame::{Mode, node_href};
+-    use crate::project::nodearound::{mode_of, source, state};
++    use crate::project::nodearound::{PageState, mode_of, source, state};
+     use crate::project::{Body, body_view, section, unmeasured};
+     use crate::widgets::help::{shows_internal, term};
++    use crate::widgets::hover::{Card, attach};
+ 
+     /// やり直しの印（見本の IC.redo・14 px）。
+     const REDO_ICON: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
+@@ -271,9 +296,17 @@ mod dom {
+                 Body::Empty(line) => section(BLOCK, ().into_any(), body_view(Body::Empty(line))),
+                 Body::Filled(rows) => {
+                     let count = view! { <span class="chip num">{rows.len()}</span> }.into_any();
++                    // 走行の link の card は近傍の行から引く（読めていなければ走行の id だけの節点）。
++                    let around = near.with(|(f, s)| match state(f, *s) {
++                        PageState::Doc(doc) => doc.rows,
++                        _ => Vec::new(),
++                    });
+                     let list = rows
+                         .into_iter()
+-                        .map(|r| row_view(r, mode))
++                        .map(|r| {
++                            let card = run_card(&around, &r.run);
++                            row_view(r, card, mode)
++                        })
+                         .collect_view();
+                     section(BLOCK, count, view! { <div class="runs">{list}</div> }.into_any())
+                 }
+@@ -282,8 +315,12 @@ mod dom {
+         view! { {content} }.into_any()
+     }
+ 
+-    /// 走行の 1 行（走行の節点の頁への link・段の chip を矢印でつなぐ・経験者には口座と費用と審査の行）。
+-    fn row_view(r: RunRow, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
++    /// 走行の 1 行（走行の節点の頁への link と hover の card・段の chip を矢印でつなぐ・経験者には口座と費用と審査の行）。
++    fn row_view(
++        r: RunRow,
++        card: Card,
++        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
++    ) -> AnyView {
+         let id = r.run.clone();
+         let href = move || node_href(&id, mode());
+         let stages = r
+@@ -311,7 +348,7 @@ mod dom {
+         };
+         view! {
+             <div class="runrow">
+-                <a class="nth num" href=href><span inner_html=REDO_ICON></span>" "{r.nth}</a>
++                <a class="nth num" href=href use:attach=card><span inner_html=REDO_ICON></span>" "{r.nth}</a>
+                 <div>
+                     <div class="stages">{stages}</div>
+                     {expert_rows}
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index 7e1fe5054ff9bcac7c1201b56089a7f399492435..77278e5c5cddef1ed679e2c0124965bc3eacc368 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -12,12 +12,15 @@ use std::cmp::Reverse;
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
++use tsuzuri_contract::graph::{GraphNode, NodeKind};
+ 
+ use crate::frame::{Mode, node_href};
+ use crate::project::Body;
+ use crate::project::pipeline::{self, age_at, stage_word};
+ use crate::topbar::{SEAT_KEY, STALL_KEY, Win};
+ use crate::view::{Fetched, id_order, read_rows};
++use crate::widgets::hover::Card;
++use crate::widgets::nodecard::card_for;
+ 
+ /// 窓の幅（px・見本の各窓の w）と題の語の鍵。
+ pub fn frame_of(win: Win) -> (u32, &'static str) {
+@@ -91,6 +94,25 @@ pub fn stalled(pipe: &Fetched, ledger: &Fetched, now: EpochSecs, mode: Mode) ->
+     )
+ }
+ 
++/// 止まった run の札の個別の頁への口の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
++/// 節点は札の契約の bead（題は台帳の題の全体・無ければ空）で、状態は段の字。
++pub fn stalled_card(s: &Stalled) -> Card {
++    card_for(
++        &GraphNode {
++            id: s.id.clone(),
++            kind: NodeKind::Task,
++            file: None,
++            digest: None,
++            title: s.title.clone().unwrap_or_default(),
++            line: None,
++            plain: None,
++            eng: None,
++            updated: None,
++        },
++        Some(&s.stage),
++    )
++}
++
+ #[cfg(target_arch = "wasm32")]
+ pub use dom::draw;
+ 
+@@ -98,13 +120,14 @@ pub use dom::draw;
+ mod dom {
+     use leptos::prelude::*;
+ 
+-    use super::{Stalled, frame_of, stalled};
++    use super::{Stalled, frame_of, stalled, stalled_card};
+     use crate::frame::Mode;
+     use crate::project::{
+         Body, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
+     };
+     use crate::topbar::Win;
+     use crate::vocab::label;
++    use crate::widgets::hover::attach;
+     use crate::widgets::modal::{Frame, WinCtx};
+ 
+     /// 今の URL の表示の型。
+@@ -113,6 +136,7 @@ mod dom {
+     }
+ 
+     fn card_view(c: Stalled) -> AnyView {
++        let card = stalled_card(&c);
+         let head = c.title.clone().unwrap_or_else(|| c.id.clone());
+         let reason = c
+             .reason
+@@ -121,7 +145,7 @@ mod dom {
+             <div class="stc">
+                 <div class="stc-h"><b>{head}</b><code>{c.id}</code><span class="sc">{format!("{} · {}", c.stage, c.age)}</span></div>
+                 {reason}
+-                <div class="stc-b"><a class="sm" href=c.href>{label("open_node")}" ›"</a></div>
++                <div class="stc-b"><a class="sm" href=c.href use:attach=card>{label("open_node")}" ›"</a></div>
+             </div>
+         }
+         .into_any()
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 156030870350455ce1913239c1bf8516e3d207a2..f45915a05f653d775127182fa87c5dbd7c86f4f5 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -68,7 +68,7 @@ h3 { font-size: var(--fs-2); }
+ .nav a:hover { background: var(--panel-2); }
+ .nav a.on { background: var(--panel-2); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+ .nav svg { width: 18px; height: 18px; }
+-.nav .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--s-stop); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
++.nav .badge { flex: none; align-self: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--s-stop); color: #fff; font-size: 12px; line-height: 20px; text-align: center; } /* tab の link の外の隣（行 g-accept-face） */
+ .top .grow { flex: 1; }
+ .seatpill { display: inline-flex; align-items: center; gap: var(--s2); height: var(--hit); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 999px; background: var(--panel); cursor: default; }
+ .seatpill .who { font-size: var(--fs-1); color: var(--ink-2); }
+@@ -719,6 +719,9 @@ body.mode-beginner .qsum .ln.eng { display: none; }
+ .spanbar .seg button { height: 28px; padding: 0 var(--s2); }
+ .saxis { position: relative; height: 14px; font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+ .saxis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
++/* 端の目盛の字は段の中へ寄せる（最初は目盛から右へ・最後は目盛から左へ・段の外へはみ出さない・行 g-accept-face） */
++.saxis span:first-child { transform: translateX(0); }
++.saxis span:last-child { transform: translateX(-100%); }
+ .c-hh { flex-direction: column; align-items: stretch !important; gap: 2px !important; }
+ .c-hh .saxis { width: 100%; }
+ .saxis-m { display: none; }
+@@ -1104,7 +1107,11 @@ body:has(#bar) { padding-top: 52px; }
+ .one { display: grid; gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
+ .one > .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+ .one > .pane > .panel { flex: 1 1 auto; min-height: 0; overflow: auto; }
+-.freshw { position: fixed; right: 12px; bottom: 3px; z-index: 20; display: flex; align-items: center; gap: var(--s1); font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
++.freshw { position: fixed; right: 12px; bottom: 2px; z-index: 20; display: flex; align-items: center; gap: var(--s1); height: 19px; font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
++/* 帯の下の札の置き場（行 g-accept-face）: 1 枚の画面では下の余白（22 px と 24 px）に収まる高さ 19 px（見本の .badge）で、面の中身に重ならない。
++   1 枚の画面でない頁（節点の頁）と 600 以下の段は、流れの中の帯の下の右端に置く（固定の札が頁の中身の上に乗らない） */
++.freshw > .chip, .freshw > .warn { height: 17px; }
++body:not(:has(.one)) .freshw { position: static; width: fit-content; height: auto; margin: 6px 12px 0 auto; }
+ @media (max-width: 760px) { body:has(#bar) { padding-top: 96px; } .one { height: calc(100vh - 96px); } }
+ /* 幅の 3 段（行 g-layout・規則の行 R-35・見本 board-v2 の main.lay-side・main.lay-stack・600 以下）: 1200 以上は横並び・601〜1199 は縦積み・600 以下はスマホの形 */
+ @media (min-width: 1200px) {
+@@ -1117,6 +1124,8 @@ body:has(#bar) { padding-top: 52px; }
+ }
+ @media (max-width: 600px) {
+   .one { display: flex; flex-direction: column; height: auto; gap: 8px; padding: 8px; }
++  .freshw { position: static; width: fit-content; height: auto; margin: 6px 8px 0 auto; }
++  .ll-gh { flex-wrap: wrap; row-gap: 2px; }
+   .one > .pane:has(#pipe) { order: -1; }
+   .one > .pane > .panel { flex: none; overflow: visible; }
+   #pipe .board { display: none; }
+diff --git a/crates/tsuzuri-surface/tests/bvfront.rs b/crates/tsuzuri-surface/tests/bvfront.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..96527e74d2dc03049f5e66f04e76dbec313b6fb2
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvfront.rs
+@@ -0,0 +1,404 @@
++//! 行 g-accept-face の歯（接頭辞 bvfront_）: 受入の 12 条の面の側の残り（要件 NFR1・FR14・規則の行 R-23）。
++//! account board の tab の数の印を link の外へ出し、節点の頁の走行の link と止まった run の窓の個別の頁への口に hover の card を付け、帯の下の札を面の中身に
++//! 重ねず、HOME の次の一手の一覧と各 project の表の要対応の列で面の決まった字を行の数だけ並べない。質問の窓は理由と推奨を
++//! 「続き」に畳み、台帳の字の置き場に印 data-ledger-text を付け、台帳の一覧の群の見出しは 600 以下で折り返す。知らせの接続が
++//! 頁を開いてから READ_HOLD_S 秒の間に開かなければ、口を全部「読めない」にして理由を印の card に出す（憲法 P-7.2）。稼働の記録の目盛の
++//! 段の端の字は段の中へ寄せる。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::graph::{AroundRow, GraphNode, NodeKind};
++use tsuzuri_contract::ledger::READ_HOLD_S;
++use tsuzuri_surface::account::projects::{Need, need_l2};
++use tsuzuri_surface::fresh::{Fresh, LOST_SRC, UNOPENED_KEY, WARN_WORD};
++use tsuzuri_surface::project::ask::{LAYOUT, MORE, MORE_KEY, Part};
++use tsuzuri_surface::project::next::{NONE_LINE, UNJUDGED_LINE, row_line};
++use tsuzuri_surface::project::timeline::run_card;
++use tsuzuri_surface::vocab::label;
++use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_STATE, card_for};
++use tsuzuri_surface::wins::{Stalled, stalled_card};
++
++fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// `from` の字から次の `to` の字までの切り（`to` を含まない）。
++fn between<'a>(text: &'a str, from: &str, to: &str) -> &'a str {
++    let at = text.find(from).unwrap_or_else(|| panic!("{from} が無い"));
++    let rest = &text[at..];
++    let end = rest
++        .find(to)
++        .unwrap_or_else(|| panic!("{from} の後に {to} が無い"));
++    &rest[..end]
++}
++
++fn row(id: &str, kind: NodeKind, title: &str, status: Option<&str>) -> AroundRow {
++    AroundRow {
++        node: GraphNode {
++            id: id.to_string(),
++            kind,
++            file: None,
++            digest: None,
++            title: title.to_string(),
++            line: None,
++            plain: Some("走行の概要".to_string()),
++            eng: None,
++            updated: None,
++        },
++        status: status.map(str::to_string),
++        col: 1,
++        via: None,
++        edge_type: None,
++        degree: 1,
++    }
++}
++
++/// tab の link の中は印と語の字だけで、数の印（mark）は link の閉じの直後の隣に置き、印の規則は隣の span を縦の中央に置く。
++#[test]
++fn bvfront_tab_badge_outside_link() {
++    let board = read("src/account/board.rs");
++    let link = between(&board, "<a href=move || tab_href(l.tab", "</a>");
++    assert!(link.contains("<span inner_html=tab_icon(l.tab)></span>"));
++    assert!(link.contains("<span class=\"lbl hd-t\">{label(l.key)}</span>"));
++    assert!(!link.contains("{mark}"), "数の印が tab の link の中に在る");
++    assert_eq!(
++        link.matches('{').count(),
++        1,
++        "tab の link の中に印と語のほかの字が在る"
++    );
++    assert!(
++        board.contains(
++            "{label(l.key)}</span>\n                            </a>\n                            {mark}\n"
++        ),
++        "数の印が link の閉じの直後の隣に無い"
++    );
++    let css = read("style.css");
++    assert!(css.contains(".nav .badge { flex: none; align-self: center; min-width: 20px;"));
++}
++
++/// 走行の link の card は近傍の行の同じ id の節点と状態の card で、無ければ走行の id だけの節点（種類は走行・状態なし）の card。
++/// id の頭が同じほかの行は引かない。時間軸の行の link は card を付ける。
++#[test]
++fn bvfront_run_link_card() {
++    let run = "t3-hub.1/r1";
++    let near = vec![
++        row("t3-hub.1/r10", NodeKind::Run, "ほかの走行", Some("Failed")),
++        row(run, NodeKind::Run, "走行の題", Some("Landed")),
++    ];
++    assert_eq!(
++        run_card(&near, run),
++        card_for(&near[1].node, Some("Landed"))
++    );
++    let card = run_card(&near, run);
++    assert_eq!(card.title, "走行の題");
++    assert!(card.kind.ends_with(" · Landed"), "{}", card.kind);
++    let lone = run_card(&near[..1], run);
++    assert_eq!(lone.title, run);
++    assert!(
++        lone.kind.ends_with(&format!(" · {NO_STATE}")),
++        "{}",
++        lone.kind
++    );
++    assert_eq!(lone.value, format!("{run} {NO_GIST}"));
++    let bare = GraphNode {
++        id: run.to_string(),
++        kind: NodeKind::Run,
++        file: None,
++        digest: None,
++        title: String::new(),
++        line: None,
++        plain: None,
++        eng: None,
++        updated: None,
++    };
++    assert_eq!(lone, card_for(&bare, None));
++    assert_eq!(run_card(&[], run), lone);
++    let timeline = read("src/project/timeline.rs");
++    assert!(timeline.contains("<a class=\"nth num\" href=href use:attach=card>"));
++    assert!(timeline.contains("let card = run_card(&around, &r.run);"));
++}
++
++/// 帯の下の札は高さ 19 px で下から 2 px に置き、1 枚の画面の下の余白（広い段と 601〜1199 の段の小さい方）に収まる。
++/// 1 枚の画面でない頁と 600 以下の段は流れの中に置く。
++#[test]
++fn bvfront_fresh_tag_place() {
++    let css = read("style.css");
++    let fresh = between(&css, ".freshw { position: fixed;", "}");
++    let px = |rule: &str, key: &str| -> u32 {
++        let at = rule.find(key).unwrap_or_else(|| panic!("{key} が無い"));
++        let rest = &rule[at + key.len()..];
++        rest[..rest
++            .find("px")
++            .unwrap_or_else(|| panic!("{key} の px が無い"))]
++            .trim()
++            .parse()
++            .unwrap_or_else(|e| panic!("{key} の数: {e}"))
++    };
++    let (bottom, height) = (px(fresh, "bottom:"), px(fresh, "height:"));
++    assert_eq!((bottom, height), (2, 19));
++    let wide = between(&css, ".one { display: grid;", "}");
++    let mid = between(&css, ".one { grid-template-columns: minmax(0, 1fr);", "}");
++    for one in [wide, mid] {
++        let last: u32 = one
++            .split("padding:")
++            .nth(1)
++            .and_then(|p| p.split(';').next())
++            .and_then(|p| p.split_whitespace().last())
++            .and_then(|p| p.trim_end_matches("px").parse().ok())
++            .unwrap_or_else(|| panic!("下の余白が読めない: {one}"));
++        assert!(
++            bottom + height <= last,
++            "札 {bottom}+{height} px が下の余白 {last} px を越える"
++        );
++    }
++    assert!(css.contains(".freshw > .chip, .freshw > .warn { height: 17px; }"));
++    assert!(css.contains(
++        "body:not(:has(.one)) .freshw { position: static; width: fit-content; height: auto; margin: 6px 12px 0 auto; }"
++    ));
++    let narrow = between(&css, "@media (max-width: 600px) {\n  .one {", "\n}");
++    assert!(narrow.contains(
++        "  .freshw { position: static; width: fit-content; height: auto; margin: 6px 8px 0 auto; }"
++    ));
++}
++
++/// 行の 1 行の字 row_line は、なしの箱の字と測れていないの箱の字を空にし、ほかの 1 行はそのまま。各 project の表の要対応の列の
++/// 2 段目（need_l2）は 1 行を row_line に通し、1 行の無い欄は空。HOME の次の一手の一覧の行と表の 2 段目の span はこの字を出す。
++#[test]
++fn bvfront_need_fixed_line_hidden() {
++    let need = |line: Option<&str>| Need {
++        lead: None,
++        key: "st_unknown",
++        sev: "lo",
++        line: line.map(str::to_string),
++    };
++    let own = "proj-a の session が限度で止まった";
++    assert_eq!(row_line(NONE_LINE), "");
++    assert_eq!(row_line(UNJUDGED_LINE), "");
++    assert_eq!(row_line(own), own);
++    assert_eq!(need_l2(&need(Some(NONE_LINE))), "");
++    assert_eq!(need_l2(&need(Some(UNJUDGED_LINE))), "");
++    assert_eq!(need_l2(&need(None)), "");
++    assert_eq!(need_l2(&need(Some(own))), own);
++    let projects = read("src/account/projects.rs");
++    assert!(projects.contains("let l2 = fit_node(l2_text.clone());"));
++    assert!(projects.contains("<span class=\"l2\" node_ref=l2>{l2_text}</span>"));
++    assert!(!projects.contains("{row.need.line.clone().unwrap_or_default()}"));
++    let home = read("src/account/home.rs");
++    assert!(home.contains("<span class=\"nxl\">{row_line(&r.line).to_string()}</span>"));
++    assert!(!home.contains("<span class=\"nxl\">{r.line}</span>"));
++}
++
++/// 止まった run の窓の個別の頁への口の card は、札の契約の bead の節点（種類は契約・題は台帳の題・無ければ空）と段の字の状態の
++/// card_for の card。窓の札の link は card を付ける。
++#[test]
++fn bvfront_stalled_link_card() {
++    let mut s = Stalled {
++        id: "t3-hub.9".to_string(),
++        title: Some("止まった契約の題".to_string()),
++        stage: "Failed".to_string(),
++        age: "3 分".to_string(),
++        reason: None,
++        href: "?page=node&id=t3-hub.9".to_string(),
++    };
++    let node = |title: &str| GraphNode {
++        id: "t3-hub.9".to_string(),
++        kind: NodeKind::Task,
++        file: None,
++        digest: None,
++        title: title.to_string(),
++        line: None,
++        plain: None,
++        eng: None,
++        updated: None,
++    };
++    let card = stalled_card(&s);
++    assert_eq!(card, card_for(&node("止まった契約の題"), Some("Failed")));
++    assert_eq!(card.title, "止まった契約の題");
++    assert!(card.kind.ends_with(" · Failed"), "{}", card.kind);
++    s.title = None;
++    let bare = stalled_card(&s);
++    assert_eq!(bare, card_for(&node(""), Some("Failed")));
++    assert_eq!(bare.title, "t3-hub.9");
++    let wins = read("src/wins.rs");
++    assert!(wins.contains("let card = stalled_card(&c);"));
++    assert!(wins.contains("<a class=\"sm\" href=c.href use:attach=card>"));
++}
++
++/// 質問の窓の card は頭と概要の後に「続き」（語の鍵 q_more・字は 続き）の開き閉じを置き、理由と推奨をその中に畳む。
++/// 台帳の字の置き場（題・概要の行・理由・推奨・これまでの決定の短い題・ほかの project の問いの題）は印 data-ledger-text を持ち、
++/// 題とこれまでの決定の短い題は 36 字に切って全体を title に置く。
++#[test]
++fn bvfront_ask_fold_and_marks() {
++    assert_eq!(MORE, [Part::Reason, Part::Recommend]);
++    assert_eq!((MORE_KEY, label(MORE_KEY).as_str()), ("q_more", "続き"));
++    let order: Vec<Part> = LAYOUT.iter().map(|s| s.part).collect();
++    let at = |p: Part| order.iter().position(|q| *q == p).unwrap_or(usize::MAX);
++    assert!(
++        at(Part::Summary) + 1 == at(Part::Reason) && at(Part::Reason) + 1 == at(Part::Recommend)
++    );
++    assert!(at(Part::Recommend) < at(Part::Answer));
++    let ask = read("src/project/ask.rs");
++    assert!(
++        ask.contains(
++            "<details class=\"fold\" prop:open=open on:toggle=toggle><summary>{label(MORE_KEY)}</summary>{more}</details>"
++        )
++    );
++    assert!(ask.contains("let more = LAYOUT.iter().filter(folded).map(part).collect_view();"));
++    assert!(
++        ask.contains("let (open, toggle) = fold(format!(\"ask:more:{}\", card.id), || false);")
++    );
++    assert_eq!(ask.matches("data-ledger-text=\"\"").count(), 5);
++    assert_eq!(
++        ask.matches("<span data-t=\"\" data-ledger-text=\"\" title=title.clone()>{hover::clip(&title)}</span>").count(),
++        2
++    );
++    for want in [
++        "<span data-t=\"\" data-ledger-text=\"\">{card.reason.clone()}</span>",
++        "<span data-t=\"\" data-ledger-text=\"\">{card.recommend.clone()}</span>",
++        "<span data-t=\"\" data-ledger-text=\"\">{l.text.clone()}</span>",
++    ] {
++        assert!(ask.contains(want), "ask.rs に {want} が無い");
++    }
++    let hist = read("src/project/askpage.rs");
++    assert!(hist.contains(
++        "<span class=\"ttl\" title=item.title.clone() data-t=\"\" data-ledger-text=\"\">{crate::widgets::hover::clip(&short)}</span>"
++    ));
++    let win = read("src/askwin.rs");
++    assert!(win.contains("<span class=\"ttl\" data-ledger-text=\"\">{t}</span>"));
++}
++
++/// 台帳の一覧の群の見出しは 600 以下の段で折り返し、群の名は全体を title に置く。
++#[test]
++fn bvfront_group_head_wraps() {
++    let css = read("style.css");
++    let narrow = between(&css, "@media (max-width: 600px) {\n  .one {", "\n}");
++    assert!(narrow.contains("  .ll-gh { flex-wrap: wrap; row-gap: 2px; }"));
++    let list = read("src/ledgerlist.rs");
++    assert!(list.contains(
++        "<button type=\"button\" class=\"ll-gname\" title=g.name.clone() on:click=choose>"
++    ));
++    assert!(list.contains("<span class=\"ll-gname\" title=g.name.clone()>{g.name.clone()}</span>"));
++}
++
++/// 頁を開いた時刻（偽の接続の時計の起点）。
++const PAGE_AT: EpochSecs = 1000;
++
++/// 偽の知らせの接続: 頁を開き、`open` の時刻に開いたの event を受け（None なら来ない）、頁を開いてから READ_HOLD_S 秒の
++/// timer を撃つ（net の `connect` と `link_back` と `link_unopened` の順）。戻りは timer が全部「読めない」にしたかと古さ。
++fn fake_link(open: Option<EpochSecs>) -> (bool, Fresh) {
++    let mut fresh = Fresh::default();
++    let fire = PAGE_AT + READ_HOLD_S;
++    if open.is_some_and(|at| at < fire) {
++        fresh.back();
++    }
++    let lost = fresh.unopened(PAGE_AT, fire);
++    if open.is_some_and(|at| at >= fire) {
++        fresh.back();
++    }
++    (lost, fresh)
++}
++
++/// 知らせの接続が開かないまま READ_HOLD_S 秒が過ぎる偽の接続では、timer が口を全部「読めない」にし、読み込み不良の印の
++/// card の種類に理由（語の鍵 link_unopened・字は 知らせの接続が開かない）を出す。READ_HOLD_S 秒の前は待つ。
++/// net は頁を開いた時刻から READ_HOLD_S 秒の timer を張り、開いていなければ全部「読めない」にする。
++#[test]
++fn bvfront_unopened_link_fails() {
++    assert_eq!(
++        (UNOPENED_KEY, label(UNOPENED_KEY).as_str()),
++        ("link_unopened", "知らせの接続が開かない")
++    );
++    let fire = PAGE_AT + READ_HOLD_S;
++    let mut wait = Fresh::default();
++    assert!(!wait.unopened(PAGE_AT, fire - 1));
++    assert_eq!(wait, Fresh::default());
++
++    let (lost, mut stuck) = fake_link(None);
++    assert!(lost);
++    assert!(stuck.warn(fire));
++    assert_eq!(stuck.age(fire), Some(READ_HOLD_S));
++    let card = stuck.card(fire).expect("開かない接続の card");
++    assert_eq!(card.title, WARN_WORD);
++    assert_eq!(card.kind, "知らせの接続が開かない");
++    assert_eq!(card.src, LOST_SRC);
++    stuck.lose(fire + 1);
++    let both = stuck.card(fire + 2).expect("切れも在る card");
++    assert_eq!(both.kind, "知らせのつながり・知らせの接続が開かない");
++    assert_eq!(both.src, LOST_SRC);
++
++    let net = read("src/net.rs");
++    let unopened = between(&net, "fn link_unopened(at: EpochSecs) {", "\n}\n");
++    assert!(unopened.contains("if change(|f| f.unopened(at, now())) {\n        lose_all();"));
++    let connect = between(&net, "fn connect() {", "\n}\n");
++    assert!(connect.contains("        return;\n    }\n    let at = now();\n"));
++    assert!(
++        connect.contains(
++            "    set_timeout(move || link_unopened(at), Duration::from_secs(READ_HOLD_S));"
++        )
++    );
++}
++
++/// 偽の接続が READ_HOLD_S 秒の前に開けば、今と同じに読む（timer は何もしない・古さに何も置かない）。後で開けば理由を消す。
++/// net は開いたの event で最初の読みを許し（go_live）、古さに開いたを置く（link_back）。
++#[test]
++fn bvfront_opened_link_reads() {
++    let fire = PAGE_AT + READ_HOLD_S;
++    let mut opened = Fresh::default();
++    opened.back();
++    for at in [PAGE_AT, PAGE_AT + 1, fire - 1] {
++        let (lost, f) = fake_link(Some(at));
++        assert!(!lost, "{at} に開いた");
++        assert_eq!(f, opened);
++        assert_eq!(f.card(fire + 100), None);
++    }
++    let (late, back) = fake_link(Some(fire + 3));
++    assert!(late);
++    assert_eq!(back.card(fire + 4), None);
++    assert_eq!(back.age(fire + 4), None);
++
++    let net = read("src/net.rs");
++    let connect = between(&net, "fn connect() {", "\n}\n");
++    assert!(connect.contains("let on_open = Closure::<dyn FnMut()>::new(go_live);"));
++    assert!(between(&net, "fn link_back() {", "\n}\n").contains("change(Fresh::back);"));
++}
++
++/// 稼働の記録の目盛の段（class saxis）の字は目盛の位置の中央に置き、最初の字は目盛から右へ、最後の字は目盛から左へ
++/// 寄せて段の外へはみ出さない（字を隠さない）。段の子は目盛の字の span だけ（account の session と project の席の block）。
++#[test]
++fn bvfront_axis_ends_inside() {
++    let css = read("style.css");
++    let rules = [
++        ".saxis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }\n",
++        ".saxis span:first-child { transform: translateX(0); }\n",
++        ".saxis span:last-child { transform: translateX(-100%); }\n",
++    ];
++    let at: Vec<usize> = rules
++        .iter()
++        .map(|r| {
++            css.find(r)
++                .unwrap_or_else(|| panic!("stylesheet に {r} が無い"))
++        })
++        .collect();
++    assert!(at[0] < at[1] && at[1] < at[2], "{at:?}");
++    for r in rules {
++        assert_eq!(css.matches(r).count(), 1, "{r}");
++    }
++    let saxis = css
++        .lines()
++        .filter(|l| l.starts_with(".saxis "))
++        .collect::<Vec<_>>();
++    assert!(saxis.iter().all(|l| !l.contains("overflow")), "{saxis:?}");
++    let seat = read("src/project_dom/seat.rs");
++    assert!(seat.contains("<div class=\"saxis\" aria-hidden=\"true\">{axis}</div>"));
++    assert!(seat.contains("view! { <span style=style>{t.label}</span> }"));
++    let sess = read("src/account/session.rs");
++    assert!(sess.contains(
++        "<div class=SAXIS aria-hidden=\"true\">\n                {move || {\n                    axis_labels(at, span.get())"
++    ));
++    assert!(sess.contains(".map(|(style, label)| view! { <span style=style>{label}</span> })"));
++}
+diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/bvqhist.rs
+index ece5f666a84a65baddcec1c1d0731c486b98cab6..c70e25fd7a59ab4a9300af806c601eed44929d5b 100644
+--- a/crates/tsuzuri-surface/tests/bvqhist.rs
++++ b/crates/tsuzuri-surface/tests/bvqhist.rs
+@@ -221,7 +221,7 @@ fn bvqhist_window_fold_wiring_text() {
+     let li = &view[view.find("fn hist_li(").expect("行の DOM")..];
+     let order = [
+         "<time>{clock_short(at, now)}</time>",
+-        "<span class=\"ttl\" title=item.title.clone()>{short}</span>",
++        "<span class=\"ttl\" title=item.title.clone() data-t=\"\" data-ledger-text=\"\">{crate::widgets::hover::clip(&short)}</span>",
+         "<b class=\"aside\">",
+         "{ruling_text(&rid)}",
+         "<a class=\"lk\" href=href use:attach_some=card><code>{item.id.clone()}</code></a>",
+diff --git a/crates/tsuzuri-surface/tests/bvwins.rs b/crates/tsuzuri-surface/tests/bvwins.rs
+index 9c87d45c504e9990fddd6832998ec6bad3413259..4519cd34fa7f3f0e88dfbc40bc6ba7f501898af4 100644
+--- a/crates/tsuzuri-surface/tests/bvwins.rs
++++ b/crates/tsuzuri-surface/tests/bvwins.rs
+@@ -210,7 +210,7 @@ fn bvwins_draw_wiring_text() {
+         "Win::Dest => stage::inner(),",
+         "crate::net::read(pipeline::PATH)",
+         "crate::net::read(ledger::PATH)",
+-        "<a class=\"sm\" href=c.href>",
++        "<a class=\"sm\" href=c.href use:attach=card>",
+     ] {
+         assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
+     }
+diff --git a/crates/tsuzuri-surface/tests/hsderive.rs b/crates/tsuzuri-surface/tests/hsderive.rs
+index 3a6eefb15ad4b3c0a0a939b396a3b444c9bd5e8c..926999623e1dac94eb79a8a6f4baaa5ff00bcf3d 100644
+--- a/crates/tsuzuri-surface/tests/hsderive.rs
++++ b/crates/tsuzuri-surface/tests/hsderive.rs
+@@ -47,7 +47,7 @@ fn hsderive_consts_match_note() {
+         (
+             "ask",
+             &["/api/questions", "/api/ruling", "/api/unreceived"],
+-            &["ask:around:{}"],
++            &["ask:around:{}", "ask:more:{}"],
+         ),
+         ("askpage", &[], &["ask:hist"]),
+         ("batch", &["/api/batch"], &[]),
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 3fc49bfdfee3efae27d1db293fb60b7d6d002056..32be9bedb3c2ae66474fcbd8d1c9ba1bbe14c5ae 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1364,6 +1364,16 @@
+    "plain": "project の窓を開く\n↑ 開いていれば前面へ",
+    "internal": "window.open('', 'tz-<project>')"
+   },
++  "q_more": {
++   "label": "続き",
++   "plain": "問いの理由と推奨を開く\n・ 最初は閉じている\n・ 押すと開く",
++   "internal": "details（ask の card の Reason と Recommend・行 g-accept-face）"
++  },
++  "link_unopened": {
++   "label": "知らせの接続が開かない",
++   "plain": "知らせの接続が待たされたまま開かない\n・ 頁を開いて 60 秒で口を全部 測れていない にする\n・ 開けば読み直す",
++   "internal": "EventSource /api/surface/events の open が来ない（READ_HOLD_S 秒・行 g-accept-face）"
++  },
+   "p_more": {
+    "label": "詳しく",
+    "plain": "行を押すと縦に開く\n・ sparkline と lead\n・ stale\n・ session と口座の履歴",
