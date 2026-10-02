@@ -10,6 +10,8 @@
 //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
 //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
 //! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
+//! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
+//! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -87,6 +89,37 @@ pub const NEXT_KEYS: [&str; 2] = ["pnext_ask", "pnext_runs"];
 
 /// 設計の pointer の行の頭の字（中核のグラフの BeadAttr の pointers の行の頭）。
 pub const POINTER_HEAD: &str = "design = ";
+
+/// 器の列の待ちの理由の語（器の pipe/dispatch.rs の WAIT_REASONS の 12 語・宣言の順・行 g-pop-why）。
+pub const REASONS: [&str; 12] = [
+    "dependency",
+    "overlap",
+    "admission",
+    "host-busy",
+    "hold",
+    "launched",
+    "settled",
+    "no-design-pointer",
+    "unreflected-ruling",
+    "floor",
+    "reserved",
+    "sibling",
+];
+
+/// 理由の語の辞書の鍵の頭（鍵は頭に理由の語を続けた字）。
+pub const REASON_HEAD: &str = "qr:";
+
+/// 起きない理由・待つ理由・相手の便の欄の語の鍵。
+pub const WHY_KEYS: [&str; 3] = ["pf_why", "pf_wait_why", "pf_wait_runs"];
+
+/// 承認待ちの相手（持ち主）と待つ理由（持ち主の承認）の語の鍵。
+pub const APPROVAL_KEYS: [&str; 2] = ["pw_owner", "pw_approval"];
+
+/// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
+pub const QUEUED_PHASE: &str = "contract-queued";
+
+/// 局面の出力の契約の段を最新の便の部品が持つ局面の語（札の段が Blocked なら便は承認待ちの run-blocked）。
+pub const RUNNING_PHASE: &str = "contract-running";
 
 /// 吹き出しを開いた口（見本の S.pop.via）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -461,6 +494,96 @@ pub fn pop(id: &str, src: &Src<'_>) -> Pop {
     }
 }
 
+/// 理由の語の辞書の鍵（語の `:` の後の詳細は外す・`REASONS` に無い語は None）。
+pub fn reason_key(word: &str) -> Option<String> {
+    let w = word.split(':').next().unwrap_or(word);
+    REASONS.contains(&w).then(|| format!("{REASON_HEAD}{w}"))
+}
+
+/// 理由の欄の値（平易な字・理由が無いか表に無い語はまだ分からない）。
+pub fn reason_val(word: Option<&str>) -> Val {
+    word.and_then(reason_key)
+        .map_or(Val::Unknown, |k| Val::Text(label(&k)))
+}
+
+/// 札の待ちの種類。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wait {
+    /// 列の待ち（理由の語・契約の部品の links.runs）。
+    Queue(Option<String>, Vec<String>),
+    /// 便の承認待ち（器の run-blocked・相手は持ち主）。
+    Approval,
+}
+
+/// 札の待ち: 局面の出力の契約の部品が `QUEUED_PHASE` なら部品の理由と links.runs、`RUNNING_PHASE` で段が Blocked なら承認待ち、
+/// 部品が無いか読めなければ札の理由（読めない間は中核が理由を置かないのでまだ分からない）。
+pub fn wait_of(src: &Src<'_>, card: &PipelineCard) -> Wait {
+    let part = match src.parts {
+        Reading::Known(parts) => contract_part(parts, card.contract.as_str()),
+        Reading::Unknown => None,
+    };
+    match part {
+        Some(p) if p.phase == QUEUED_PHASE => Wait::Queue(p.reason.clone(), p.links.runs.clone()),
+        Some(p) if p.phase == RUNNING_PHASE && card.stage == Stage::Blocked => Wait::Approval,
+        _ => Wait::Queue(card.reason.clone(), Vec::new()),
+    }
+}
+
+/// 欄の値を替える（鍵の欄が無ければ何もしない）。
+fn set_val(facts: &mut [Fact], key: &str, val: Val) {
+    if let Some(f) = facts.iter_mut().find(|f| f.key == key) {
+        f.val = val;
+    }
+}
+
+/// 欄を鍵の後ろに差す（鍵の欄が無ければ末に足す）。
+fn put_after(facts: &mut Vec<Fact>, after: &str, fact: Fact) {
+    let at = facts
+        .iter()
+        .position(|f| f.key == after)
+        .map_or(facts.len(), |i| i + 1);
+    facts.insert(at, fact);
+}
+
+/// 吹き出しに待ちの欄を足す: Queued は列に入った時刻の後に起きない理由。Blocked は待つ相手の後に待つ理由と、
+/// links.runs が在れば相手の便（重なりの相手の run）。承認待ちは待つ相手を持ち主にし、待つ理由を持ち主の承認にする。
+/// ほかの段と札の無い bead は替えない。
+pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
+    let Some(card) = card_of(src.cards, &p.id) else {
+        return p;
+    };
+    let [why, wait_why, wait_runs] = WHY_KEYS;
+    match (card.stage, wait_of(src, card)) {
+        (Stage::Queued, Wait::Queue(reason, _)) => {
+            let val = reason_val(reason.as_deref());
+            put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
+        }
+        (Stage::Blocked, Wait::Queue(reason, runs)) => {
+            let val = reason_val(reason.as_deref());
+            put_after(&mut p.facts, STAGE_KEYS[0], Fact { key: wait_why, val });
+            if !runs.is_empty() {
+                let val = Val::Code(runs.join(", "));
+                put_after(
+                    &mut p.facts,
+                    wait_why,
+                    Fact {
+                        key: wait_runs,
+                        val,
+                    },
+                );
+            }
+        }
+        (Stage::Blocked, Wait::Approval) => {
+            let [owner, approval] = APPROVAL_KEYS;
+            set_val(&mut p.facts, STAGE_KEYS[0], Val::Text(label(owner)));
+            let val = Val::Text(label(approval));
+            put_after(&mut p.facts, STAGE_KEYS[0], Fact { key: wait_why, val });
+        }
+        _ => {}
+    }
+    p
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::{PopCtx, PopLayer};
 
@@ -481,7 +604,7 @@ mod dom {
     use super::{
         BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
         Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
-        opener_selector, place, pop, read_facts, read_parts, toggle,
+        opener_selector, place, pop, read_facts, read_parts, toggle, with_why,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::{ledger, map, pipeline, timeline, unmeasured};
@@ -778,6 +901,7 @@ mod dom {
             };
             let lines = runs.with(|(f, _)| read_runs(f));
             let p = with_runs(pop(&id, &src), known(&lines));
+            let p = with_why(p, &src);
             Some(
                 view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
                     .into_any(),

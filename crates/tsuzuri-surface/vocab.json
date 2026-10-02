@@ -1926,6 +1926,91 @@
    "label": "結び",
    "plain": "その run の判定\n・ gate の判定\n・ 無ければ審査の判定",
    "internal": "verdict.json と review.json の verdict"
+  },
+  "pf_why": {
+   "label": "起きない理由",
+   "plain": "列に在るのに run が起きない理由\n・ 器の列の待ちの語を平易な字に",
+   "internal": "局面の出力の contract-queued の reason\n器の pipe/dispatch.rs の WAIT_REASONS の 12 語"
+  },
+  "pf_wait_why": {
+   "label": "待つ理由",
+   "plain": "何を待っているか\n・ 前の便・重なり・予約・承認",
+   "internal": "contract-queued の reason（dependency・overlap・reserved）\nrun-blocked は持ち主の承認"
+  },
+  "pf_wait_runs": {
+   "label": "相手の便",
+   "plain": "同じ file を書いている便",
+   "internal": "局面の出力の links.runs"
+  },
+  "pw_owner": {
+   "label": "持ち主",
+   "plain": "承認するのは持ち主",
+   "internal": "器の run-blocked（手番 user）"
+  },
+  "pw_approval": {
+   "label": "持ち主の承認を待つ",
+   "plain": "run が承認を待って止まっている\n→ 持ち主が承認すると進む",
+   "internal": "器の RunStage Blocked（ApprovalRequested）"
+  },
+  "qr:dependency": {
+   "label": "前の便の着地を待つ",
+   "plain": "依存の相手がまだ閉じていない\n→ 相手が閉じると起きる",
+   "internal": "WaitReason::Dependency（links.on は閉じていない相手）"
+  },
+  "qr:overlap": {
+   "label": "同じ file を書く便を待つ",
+   "plain": "走っている便と書く file が重なる\n→ その便が終わると起きる",
+   "internal": "WaitReason::Overlap（links.runs と links.on）"
+  },
+  "qr:admission": {
+   "label": "受付が断った",
+   "plain": "器の受付が通さなかった\n・ 余地や memory の不足など",
+   "internal": "WaitReason::Admission（局面は contract-refused）"
+  },
+  "qr:host-busy": {
+   "label": "host が混んでいる",
+   "plain": "器の健康の遮断器が待つを返した\n→ 空くと起きる",
+   "internal": "WaitReason::HostBusy"
+  },
+  "qr:hold": {
+   "label": "止めの印が付いている",
+   "plain": "介入の hold で止めている\n→ 印を外すと起きる",
+   "internal": "WaitReason::Hold"
+  },
+  "qr:launched": {
+   "label": "起こした便の受付を待つ",
+   "plain": "列が起こした便がまだ受付に届いていない",
+   "internal": "WaitReason::Launched"
+  },
+  "qr:settled": {
+   "label": "同じ契約の便が終わった",
+   "plain": "同じ契約の字で便が終端に着いた\n→ 契約を直すと列に戻る",
+   "internal": "WaitReason::Settled（手番は最新の便）"
+  },
+  "qr:no-design-pointer": {
+   "label": "設計の行の印が無い",
+   "plain": "acceptance に設計の行の印が無い\n→ 席が印を付けると起きる",
+   "internal": "WaitReason::NoDesignPointer"
+  },
+  "qr:unreflected-ruling": {
+   "label": "決定の反映を待つ",
+   "plain": "まだ設計に反映していない決定を引く\n→ 反映すると起きる",
+   "internal": "WaitReason::UnreflectedRuling"
+  },
+  "qr:floor": {
+   "label": "床の検査が落ちている",
+   "plain": "床の検査が不合格の間は起きない\n→ 床が直ると起きる",
+   "internal": "WaitReason::Floor"
+  },
+  "qr:reserved": {
+   "label": "落ちた便の予約を待つ",
+   "plain": "落ちた便が書く file を予約している\n→ その直しが入ると起きる",
+   "internal": "WaitReason::Reserved（links.on は予約した bead）"
+  },
+  "qr:sibling": {
+   "label": "同じ設計の行の直しを待つ",
+   "plain": "同じ設計から出た行の直しが入るまで待つ",
+   "internal": "WaitReason::Sibling"
   }
  }
 }
