@@ -224,24 +224,22 @@ fn fn_body<'a>(text: &'a str, decl: &str) -> &'a str {
     &rest[..end]
 }
 
-/// (4) kit の一覧の 1 項が card を受けて題の a に hover の attach_some で付け、台帳の block と抜けの検査の頁が card を渡す。
+/// (4) kit の一覧の 1 項が card を受けて題の a に hover の attach_some で付け、抜けの検査の頁が card を渡す。
+/// 台帳の block は epic の進みの行に card を渡し、一覧の段は module ledgerlist の view を描く（行 g-list-groups）。
 #[test]
 fn cadl_dom_wiring() {
     let ledger_text = read("src/project/ledger.rs");
     let dom = after(&ledger_text, "mod dom {");
     for want in [
         "let graph = crate::net::read(map::PATH);",
-        "tier_view(*tier, parts, &m, screen, Reads { unref, graph })",
+        "tier_view(*tier, parts, &m, Reads { unref, graph })",
         "Memo::new(move |_| graph.with(|g| epic_cards(&epics, g)))",
         "epic_view(e, c.get(&e.id).cloned())",
         "use crate::widgets::hover::attach_some;",
-        "let cards = graph.with(|g| group_cards(&groups, g));",
-        "Some(epic) => item_view(epic, None, cards.get(&epic.id).cloned()),",
-        ".map(|c| item_view(c, None, cards.get(&c.id).cloned()))",
     ] {
         assert!(dom.contains(want), "ledger.rs の mod dom に {want} が無い");
     }
-    assert_eq!(dom.matches("list_view(screen, graph)").count(), 2);
+    assert_eq!(dom.matches("crate::ledgerlist::view()").count(), 2);
     let epic = fn_body(dom, "fn epic_view(");
     assert!(epic.contains("card: Option<Card>"), "{epic}");
     assert!(epic.contains("<a href=href use:attach_some=card>"), "{epic}");

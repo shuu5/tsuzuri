@@ -176,7 +176,7 @@ fn lhome_empty_and_count() {
     );
 }
 
-/// (5) 畳みと配置の表は今のまま・一覧の段は body の値を描き、見出しの件数は count を描く。
+/// (5) 畳みと配置の表は今のまま・一覧の段は module ledgerlist の view を描き（行 g-list-groups）、見出しの件数は count を描く。
 #[test]
 fn lhome_list_draws_body() {
     assert_eq!(FOLDS, &["ledger:unref"]);
@@ -187,19 +187,7 @@ fn lhome_list_draws_body() {
     let src = read("src/project/ledger.rs");
     let at = src.find("mod dom {").expect("mod dom の字");
     let dom = &src[at..];
-    let start = dom.find("fn list_view(").expect("list_view の字");
-    let rest = &dom[start..];
-    let end = rest.find("\n    }\n").expect("list_view の終わり");
-    let list_view = &rest[..end];
-    assert!(
-        list_view.contains("screen.with(|s| staged_body(s, &stages(p, crate::net::now())))"),
-        "{list_view}"
-    );
-    assert!(
-        list_view.contains("map(|g| group_view(g, &cards))"),
-        "{list_view}"
-    );
-    assert!(dom.contains("Tier::List => list_view(screen, graph)"));
+    assert!(dom.contains("Tier::List => crate::ledgerlist::view(),"));
     assert!(dom.contains("screen.with(count)"));
 }
 

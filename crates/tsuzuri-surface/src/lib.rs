@@ -15,6 +15,8 @@ pub mod frame;
 /// 中身の古さと読み込み不良の印（決め方は host でも組む・印の DOM は wasm の target だけ・行 g-fresh）。
 pub mod fresh;
 pub mod kit;
+/// 台帳 open の一覧（epic ごとの組・組の中身は host でも組む・DOM は wasm の target だけ・行 g-list-groups）。
+pub mod ledgerlist;
 pub mod mapview;
 pub mod pages;
 pub mod project;

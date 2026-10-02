@@ -291,20 +291,9 @@ fn places(files: &[(String, String)], needle: &str) -> BTreeMap<String, usize> {
         .collect()
 }
 
-/// (4) 一覧は板の口の読みから段を組み、項は札と同じ段の記号を出す。
+/// (4) 項は札と同じ段の記号を出す（台帳の一覧の DOM は行 g-list-groups で module ledgerlist へ移った）。
 #[test]
 fn lstg_dom_wiring() {
-    let ledger = read("src/project/ledger.rs");
-    let list_view = dom_fn(&ledger, "fn list_view(");
-    assert!(
-        list_view.contains("let pipe = crate::net::read(pipeline::PATH);"),
-        "{list_view}"
-    );
-    assert!(
-        list_view.contains("staged_body(s, &stages(p, crate::net::now()))"),
-        "{list_view}"
-    );
-
     let kit = read("src/kit.rs");
     let item_view = dom_fn(&kit, "pub fn item_view(");
     assert!(
@@ -334,7 +323,6 @@ fn lstg_dom_wiring() {
             "project/pipeline.rs",
         ),
         ("pub fn stages(", "project/pipeline.rs"),
-        ("&stages(p, crate::net::now())", "project/ledger.rs"),
         (
             "staged_item(r, stages.get(r.id.as_str()))",
             "project/ledger.rs",

@@ -3,9 +3,9 @@
 //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、ここは写すだけ
 //! （数え直しと判定の分岐を持たない）。段の並びと段ごとの項は配置の表（`LAYOUT`）の値で持ち、DOM は表を上から順にたどる。
 //! 未反映の一覧は口 /api/unreflected（本文は契約の型の UnreflectedList）から読み、電文の行の順と数をそのまま写す（行 g-unref-panel）。
-//! 一覧は epic の下に task・memo の順で、閉じた bead は出さない（全件は地図の方・行 g-ledger-home）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
-//! 一覧の下の項は、板に札が在る bead なら板と同じ読み（block pipeline の `stages`）の段の記号と字を出す（行 c-ledger-stage）。
-//! epic の進みの行の題と一覧の項の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
+//! 一覧の段は module ledgerlist の epic ごとの組を描く（行 g-list-groups）。一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+//! 前の一覧の組の純粋な関数（`body`・`staged_body`・`group_cards`・閉じた bead を出さない・行 g-ledger-home と c-ledger-stage）は
+//! 件数と歯のために残し、DOM は描かない。epic の進みの行の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
 //! memo と未反映の年齢は、電文の作った時刻から block を組む時の今までの日数（`days_since`・行 c-abs-time）。
 //! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
@@ -902,21 +902,17 @@ pub fn view() -> leptos::prelude::AnyView {
 /// 台帳の block の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
-    use std::collections::BTreeMap;
-
     use leptos::prelude::*;
 
     use tsuzuri_contract::board::Reading;
 
     use super::{
-        BLOCK, BURN_CAPTION, Card, EpicBar, Group, Judge, LAYOUT, METRICS_PATH, Metrics, NONE,
-        Net, OUTSIDE, Part, Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, burn_svg, content,
-        count, epic_cards, group_cards, more_line, name_label, spark_svg, staged_body, unref_chip,
-        unref_list,
+        BLOCK, BURN_CAPTION, Card, EpicBar, Judge, LAYOUT, METRICS_PATH, Metrics, NONE, Net, Part,
+        Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, burn_svg, content, count, epic_cards,
+        more_line, name_label, spark_svg, unref_chip, unref_list,
     };
     use crate::frame::{self, Mode};
-    use crate::project::pipeline::{self, stages};
-    use crate::project::{Body, UNKNOWN, fold, item_view, map, section, state_icon, unmeasured};
+    use crate::project::{Body, UNKNOWN, fold, map, section, state_icon, unmeasured};
     use crate::view::{Fetched, Screen};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs};
@@ -942,7 +938,7 @@ mod dom {
         let body = move || match got() {
             Body::Filled(m) => LAYOUT
                 .iter()
-                .map(|(tier, parts)| tier_view(*tier, parts, &m, screen, Reads { unref, graph }))
+                .map(|(tier, parts)| tier_view(*tier, parts, &m, Reads { unref, graph }))
                 .collect_view()
                 .into_any(),
             Body::Unmeasured(reason) | Body::Empty(reason) => LAYOUT
@@ -962,7 +958,7 @@ mod dom {
                             .collect_view();
                         view! { <div class="l4">{boxes}</div>{unmeasured(reason)} }.into_any()
                     }
-                    Tier::List => list_view(screen, graph),
+                    Tier::List => crate::ledgerlist::view(),
                     Tier::Main | Tier::Burn | Tier::Memo | Tier::Unref => {
                         ().into_any()
                     }
@@ -974,13 +970,7 @@ mod dom {
     }
 
     /// 1 つの段（表の項を順に）。
-    fn tier_view(
-        tier: Tier,
-        parts: &[Part],
-        m: &Metrics,
-        screen: RwSignal<Screen>,
-        reads: Reads,
-    ) -> AnyView {
+    fn tier_view(tier: Tier, parts: &[Part], m: &Metrics, reads: Reads) -> AnyView {
         let Reads { unref, graph } = reads;
         match tier {
             Tier::Top => {
@@ -1010,7 +1000,7 @@ mod dom {
                 .into_any(),
             Tier::List => parts
                 .iter()
-                .map(|_| list_view(screen, graph))
+                .map(|_| crate::ledgerlist::view())
                 .collect_view()
                 .into_any(),
         }
@@ -1205,46 +1195,6 @@ mod dom {
                 <span class="bar" role="img" aria-label=ratio.clone()><i style=format!("width:{}%", e.pct)></i></span>
                 <span class="meta num">{ratio}</span>
             </div>
-        }
-        .into_any()
-    }
-
-    /// 台帳の一覧（便 g-frame の中身・項の節点の card はグラフの読みから引く）。
-    /// 項の段は block pipeline と同じ口の読みから組む（板の口を先に読み、その中で台帳の画面を読む）。
-    fn list_view(screen: RwSignal<Screen>, graph: ReadSignal<Fetched>) -> AnyView {
-        let pipe = crate::net::read(pipeline::PATH);
-        let list = move || match pipe.with(|p| screen.with(|s| staged_body(s, &stages(p, crate::net::now())))) {
-            Body::Unmeasured(reason) => unmeasured(reason),
-            Body::Empty(line) => view! { <div class="empty"><span>{line}</span></div> }.into_any(),
-            Body::Filled(groups) => {
-                let cards = graph.with(|g| group_cards(&groups, g));
-                let rows = groups.iter().map(|g| group_view(g, &cards)).collect_view();
-                view! { <ul class="items">{rows}</ul> }.into_any()
-            }
-        };
-        view! { <div>{list}</div> }.into_any()
-    }
-
-    /// 1 組（epic の項と、その下の項を入れ子の一覧に）。
-    fn group_view(group: &Group, cards: &BTreeMap<String, Card>) -> AnyView {
-        let head = match &group.head {
-            Some(epic) => item_view(epic, None, cards.get(&epic.id).cloned()),
-            None => view! {
-                <li>
-                    <span class="shape band-beads" aria-hidden="true"></span>
-                    <span class="ttl muted">{OUTSIDE}</span>
-                </li>
-            }
-            .into_any(),
-        };
-        let children = group
-            .children
-            .iter()
-            .map(|c| item_view(c, None, cards.get(&c.id).cloned()))
-            .collect_view();
-        view! {
-            {head}
-            <li class="nest"><ul class="items">{children}</ul></li>
         }
         .into_any()
     }

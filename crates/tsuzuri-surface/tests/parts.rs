@@ -182,6 +182,9 @@ fn parts_paths_distinct_in_block_modules() {
         "{} の字が kit の map の module に 1 度だけでない",
         map::PATH
     );
+    // bead の事実の口の字は台帳 open の一覧の module に 1 度だけ（行 g-list-groups）。
+    let at = found.remove("/api/beads").unwrap_or_default();
+    assert_eq!(at, vec![crate_dir().join("src/ledgerlist.rs")], "/api/beads の字");
     let rest: Vec<&String> = found.keys().collect();
     assert_eq!(rest, vec!["/api/surface/events"], "block の外の口の字");
 }

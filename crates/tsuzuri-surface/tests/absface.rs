@@ -120,17 +120,18 @@ fn abst_ages_from_created() {
     assert_eq!(ages, vec!["5h", "0h", "―"]);
 }
 
-/// (6) 面の 2 つの file は 1 秒の時計と今を渡し、経過と年齢の秒の欄の字を持たない。
+/// (6) 面の 2 つの file は 1 秒の時計と今を渡し、経過と年齢の秒の欄の字を持たない（台帳の一覧の段の今は行 g-list-groups から module ledgerlist が渡す）。
 #[test]
 fn abst_face_wiring() {
     let pipeline = read("src/project/pipeline.rs");
     let ledger = read("src/project/ledger.rs");
+    let list = read("src/ledgerlist.rs");
     for (text, needle) in [
         (&pipeline, "let clock = move || tick.get();"),
         (&pipeline, "age_at(since, clock())"),
         (&ledger, "content(f, s, crate::net::now())"),
         (&ledger, "unref_list(&unref.get(), crate::net::now())"),
-        (&ledger, "stages(p, crate::net::now())"),
+        (&list, "content(l, p, b, crate::net::now())"),
     ] {
         assert_eq!(text.matches(needle).count(), 1, "字 {needle} の数");
     }
