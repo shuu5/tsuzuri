@@ -1881,6 +1881,51 @@
    "label": "run の記録",
    "plain": "止まった run の段と審査を見る\n→ 個別の頁の run の時間軸",
    "internal": "frame::node_href の #timeline"
+  },
+  "pf_flow": {
+   "label": "段の流れ",
+   "plain": "最後の run の段の流れ\n・ 審査 → 実装 → gate\n・ 段ごとの長さ\n・ 走っている段は 〜",
+   "internal": "/api/runs?bead= の RunLine の steps\n段の語は器の case-lifecycle.md §2.1 の 11 値"
+  },
+  "pf_hist": {
+   "label": "run の歴",
+   "plain": "run ごとの結果\n・ 何回目か\n・ 終わった段\n・ 結び（PASS / FAIL など）",
+   "internal": "RunLine の gate と review の verdict\n無ければ段の審査の結び"
+  },
+  "pf_commit": {
+   "label": "commit",
+   "plain": "main に着地した commit",
+   "internal": "RunDone の detail の sha: の札（頭 12 字）"
+  },
+  "fl_review": {
+   "label": "審査",
+   "plain": "契約の審査\n・ 受付から審査の結びまで",
+   "internal": "RunStage の Intake から次の段"
+  },
+  "fl_impl": {
+   "label": "実装",
+   "plain": "実装役が書いている\n・ 起動から実装の終わりまで",
+   "internal": "RunStage の Spawned から次の段"
+  },
+  "fl_gate": {
+   "label": "gate",
+   "plain": "gate の検査\n・ 実装の終わりから判定まで",
+   "internal": "RunStage の Implemented から次の段"
+  },
+  "ph_run": {
+   "label": "回",
+   "plain": "何回目の run か",
+   "internal": "RunLine の並びの順（1 から）"
+  },
+  "ph_end": {
+   "label": "終わりの段",
+   "plain": "その run の最後の段",
+   "internal": "RunLine の steps の最後の stage"
+  },
+  "ph_verdict": {
+   "label": "結び",
+   "plain": "その run の判定\n・ gate の判定\n・ 無ければ審査の判定",
+   "internal": "verdict.json と review.json の verdict"
   }
  }
 }

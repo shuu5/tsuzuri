@@ -367,6 +367,14 @@ a.tile:hover { box-shadow: var(--shadow); }
 .plk:hover { background: var(--panel-2); }
 .plk small, .pun { color: var(--ink-3); }
 .pf { display: flex; gap: 12px; padding: 6px 12px 10px; border-top: 1px solid var(--line); font-size: var(--fs-1); }
+.ptl { display: flex; gap: 2px; height: 8px; margin: 3px 0; }
+.ptl span { border-radius: 2px; background: color-mix(in srgb, var(--s-run) 45%, transparent); }
+.ptl span.plive { background: var(--s-run); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 3px, transparent 3px 6px); }
+.ptlt { font-size: 11.5px; }
+.phist { width: 100%; border-collapse: collapse; font-size: 11px; }
+.phist th, .phist td { padding: 1px 5px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.phist th { background: var(--panel-2); color: var(--ink-3); font-weight: 500; }
+.phist .pfail { color: var(--s-stop); font-weight: 600; }
 @media (max-width: 600px) {
   #popscrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(15,23,42,.35); }
   #pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; z-index: 41; width: 100%; max-height: 70vh; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 30px rgba(15,23,42,.25); visibility: visible !important; }

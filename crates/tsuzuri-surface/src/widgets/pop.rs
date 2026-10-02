@@ -9,6 +9,7 @@
 //! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
 //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
 //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
+//! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -19,6 +20,7 @@ use tsuzuri_contract::wire;
 
 use super::hover::{Point, Rect, Size};
 use super::modal::Hit;
+use super::runflow::{Hist, Seg};
 use crate::frame::{self, Mode, PageId};
 use crate::mapview::band::kind_key;
 use crate::project::{pipeline, timeline};
@@ -189,6 +191,10 @@ pub enum Val {
     Epic(Partner),
     /// 待つ相手の一覧（押すと相手の吹き出し）。
     Partners(Vec<Partner>),
+    /// 段の流れ（流れの段と表に無い段の語・行 g-pop-flow）。
+    Flow(Vec<Seg>, Vec<String>),
+    /// run の歴（行 g-pop-flow）。
+    Hist(Vec<Hist>),
     /// まだ分からない。
     Unknown,
 }
@@ -469,13 +475,16 @@ mod dom {
 
     use super::super::hover::{Point, Rect, Size};
     use super::super::modal::{Hit, closes};
+    use super::super::runflow::{
+        Hist, Seg, flow_text, read_runs, seg_secs, unknown_text, with_runs,
+    };
     use super::{
         BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
         Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
         opener_selector, place, pop, read_facts, read_parts, toggle,
     };
     use crate::frame::{Mode, node_href};
-    use crate::project::{ledger, map, pipeline, unmeasured};
+    use crate::project::{ledger, map, pipeline, timeline, unmeasured};
     use crate::view::read_rows;
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs};
@@ -603,6 +612,53 @@ mod dom {
         .into_any()
     }
 
+    /// 段の流れ（長さの比の帯と字と表に無い段の語・帯の幅は 120 秒を下限にする）。
+    fn flow_view(segs: Vec<Seg>, unknown: Vec<String>, now: u64) -> AnyView {
+        let bars = segs
+            .iter()
+            .map(|s| {
+                let w = seg_secs(s, now).unwrap_or(0).max(120);
+                let class = if s.open { "plive" } else { "" };
+                view! { <span class=class style=format!("flex:{w}")></span> }
+            })
+            .collect_view();
+        let words = unknown.iter().map(|w| unknown_text(w)).collect::<Vec<_>>();
+        let words =
+            (!words.is_empty()).then(|| view! { <div class=CLASSES[8]>{words.join(" · ")}</div> });
+        view! {
+            <div class="ptl">{bars}</div>
+            <div class="ptlt">{flow_text(&segs, now)}</div>
+            {words}
+        }
+        .into_any()
+    }
+
+    /// run の歴の表（回・終わりの段・結び・FAIL を含む結びは止まりの色）。
+    fn hist_view(rows: Vec<Hist>) -> AnyView {
+        let rows = rows
+            .into_iter()
+            .map(|h| {
+                let end = h.end.unwrap_or_else(|| label(UNKNOWN_KEY));
+                let fail = h.verdict.as_deref().is_some_and(|v| v.contains("FAIL"));
+                let verdict = h.verdict.unwrap_or_else(|| pipeline::NO_AGE.to_string());
+                view! {
+                    <tr>
+                        <td>{h.n}</td>
+                        <td>{end}</td>
+                        <td class=if fail { "pfail" } else { "" }>{verdict}</td>
+                    </tr>
+                }
+            })
+            .collect_view();
+        view! {
+            <table class="phist">
+                <tr><th>{label("ph_run")}</th><th>{label("ph_end")}</th><th>{label("ph_verdict")}</th></tr>
+                {rows}
+            </table>
+        }
+        .into_any()
+    }
+
     fn val_view(ctx: PopCtx, val: Val, now: u64) -> AnyView {
         match val {
             Val::Text(t) => view! { <span>{t}</span> }.into_any(),
@@ -620,6 +676,8 @@ mod dom {
                     .collect_view();
                 view! { <div class=CLASSES[6]>{items}</div> }.into_any()
             }
+            Val::Flow(segs, unknown) => flow_view(segs, unknown, now),
+            Val::Hist(rows) => hist_view(rows),
             Val::Unknown => view! { <span class=CLASSES[8]>{label(UNKNOWN_KEY)}</span> }.into_any(),
         }
     }
@@ -692,6 +750,13 @@ mod dom {
         let pipe = crate::net::read(pipeline::PATH);
         let rows = crate::net::read(ledger::PATH);
         let graph = crate::net::read(map::PATH);
+        // 走行の読みの口は吹き出しを開いた時に読む（閉じていれば空の path で読まない・行 g-pop-flow）。
+        let runs_path = Signal::derive(move || {
+            ctx.shown()
+                .map(|id| timeline::path(&id))
+                .unwrap_or_default()
+        });
+        let runs = crate::net::read_path(runs_path);
         listen(ctx);
         let style = move || ctx.style();
         let content = move || {
@@ -711,7 +776,8 @@ mod dom {
                 parts: known(&parts),
                 graph: doc.as_ref(),
             };
-            let p = pop(&id, &src);
+            let lines = runs.with(|(f, _)| read_runs(f));
+            let p = with_runs(pop(&id, &src), known(&lines));
             Some(
                 view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
                     .into_any(),
