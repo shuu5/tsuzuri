@@ -1,49 +1,22 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index f7fa4412f097e62107862cb290cc2f2c33d35dbb..30620068d01f1c54142c9d65782d43a0c53bd86f 100644
+index 50856771b6b5f700b4c72f0e30743c7669c3f61a..d06aff83b77e421d4527b9c2f1902087e0a34e1f 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -5,6 +5,8 @@
- //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
+@@ -6,6 +6,7 @@
  //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
- //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
-+//! 14 日の図は台帳の block の burndown（棒 = 閉じた数 / 日・線 = open の task）で、block の前の burndown の段の card を付ける
-+//! （block の指標の段を外して見出しへ縮めた・行 g-ledger-trim）。
+ //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
+ //! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
++//! 14 日の burndown の図には、block の前の burndown の段の card を付ける（block の指標の段を外して見出しへ縮めた・行 g-ledger-trim）。
  //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
- //! （語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」・行 g-unref-lc）。
- //! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
-@@ -22,8 +24,8 @@ use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
- use tsuzuri_contract::wire;
- 
- use crate::project::ledger::{
--    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
--    kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, spark, spark_svg, stats,
-+    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, OUTSIDE, TURN_KEY, UNKNOWN_WORD_KEY, Unref, burn_svg,
-+    burndown, kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, stats,
- };
- use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
- use crate::project::{Body, LEDGER_UNREAD};
-@@ -372,12 +374,12 @@ pub fn kpi_text(s: &LedgerStats) -> String {
-     )
- }
- 
--/// 見出しの小さな数と 14 日の図の svg（図は台帳の block の sparkline・指標の口が読めなければ KPI_UNKNOWN と図なし）。
-+/// 見出しの小さな数と 14 日の図の svg（図は台帳の block の burndown・指標の口が読めなければ KPI_UNKNOWN と図なし）。
- pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
-     match stats(fetched) {
-         Ok(s) => (
-             kpi_text(&s),
--            Some(spark_svg(&spark(&s.days, SPARK_W, SPARK_H))),
-+            Some(burn_svg(&burndown(&s.days, BURN_W, BURN_H))),
-         ),
-         Err(_) => (KPI_UNKNOWN.to_string(), None),
-     }
-@@ -509,11 +511,12 @@ mod dom {
+ //! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
+ //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
+@@ -576,11 +577,12 @@ mod dom {
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
 -    use crate::project::ledger::stats;
 +    use crate::project::ledger::{burn_card, stats};
-     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
+     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
      use crate::view::read_rows;
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
@@ -51,8 +24,8 @@ index f7fa4412f097e62107862cb290cc2f2c33d35dbb..30620068d01f1c54142c9d65782d43a0
      use crate::widgets::pop::{PopCtx, Via, board_unread};
  
      /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
-@@ -593,7 +596,10 @@ mod dom {
-         let metrics = crate::net::read(ledger::METRICS_PATH);
+@@ -661,7 +663,10 @@ mod dom {
+         let cases = crate::net::read(case::PATH);
          let kpis = move || {
              let (text, svg) = metrics.with(kpi);
 -            let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
@@ -60,11 +33,11 @@ index f7fa4412f097e62107862cb290cc2f2c33d35dbb..30620068d01f1c54142c9d65782d43a0
 +            let fig = svg.map(|s| {
 +                view! { <span class="ll-spark" tabindex="0" use:attach_some=card inner_html=s></span> }
 +            });
-             let unref =
-                 metrics
-                     .with(|m| stats(m).ok().map(|s| unref_head(&s)))
+             let unref = metrics
+                 .with(|m| stats(m).ok())
+                 .map(|s| cases.with(|c| unref_head(&s, &phases(c))))
 diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
-index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058b2f8b84d 100644
+index 548a74f48bf772e7aff3e44107e8883f7fa906be..a4de9e716eb71210595269f0c667783339558d15 100644
 --- a/crates/tsuzuri-surface/src/project/ledger.rs
 +++ b/crates/tsuzuri-surface/src/project/ledger.rs
 @@ -1,14 +1,15 @@
@@ -432,7 +405,46 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
  /// burndown の数の出所（台帳の読み）。
  pub const BURN_SRC: &str = "bd list --all の task";
  
-@@ -937,198 +678,58 @@ pub fn unref_chip(count: u32) -> &'static str {
+@@ -835,6 +576,10 @@ pub const UNREF_REASON: &str =
+ pub const UNREF_UNKNOWN: &str =
+     "未反映は器（scribe2）の局面の出力から読むが、その出力がまだ無いので、未反映の一覧はまだ分からない";
+ 
++/// 口は読めたが 3 種の全部が分からず、局面の出力の file は在るのに版が読めない（電文 CaseDoc の unreadable が真）ときの理由。
++pub const UNREF_UNREADABLE: &str =
++    "未反映は器（scribe2）の局面の出力から読むが、その出力の版が読めないので、未反映の一覧は読めない";
++
+ /// 測れて 0 件のときの 1 行。
+ pub const UNREF_EMPTY: &str = "未反映のものは無い";
+ 
+@@ -923,6 +668,27 @@ pub fn unref_list(fetched: &Fetched, now: EpochSecs) -> Body<UnrefList> {
+     })
+ }
+ 
++/// 窓の未反映の一覧に局面の出力の読めない版の周を重ねる（要件 FR13）: 3 種とも分からない一覧（UNREF_UNKNOWN）は、
++/// 局面の出力が読めない版なら理由を UNREF_UNREADABLE にし、出力がまだ無い周と分ける。ほかの周は一覧のまま。
++pub fn unref_shown(list: Body<UnrefList>, cases: &crate::ledgerlist::Phases) -> Body<UnrefList> {
++    match (list, cases) {
++        (Body::Unmeasured(UNREF_UNKNOWN), crate::ledgerlist::Phases::Unreadable) => {
++            Body::Unmeasured(UNREF_UNREADABLE)
++        }
++        (list, _) => list,
++    }
++}
++
++/// 未反映の一覧の口の古さの印の 1 行（電文の stale が空でなければ「古い」と印の種類・口が読めないか印が無ければ None）。
++pub fn unref_stale(fetched: &Fetched) -> Option<String> {
++    let Fetched::Body(text) = fetched else {
++        return None;
++    };
++    let list = wire::decode::<UnreflectedList>(text).ok()?;
++    let old = label(crate::ledgerlist::STALE_KEY);
++    (!list.stale.is_empty()).then(|| format!("{old}（{}）", list.stale.join("・")))
++}
++
+ /// 上限を超えた残りの数の 1 行。
+ pub fn more_line(n: usize) -> String {
+     format!("ほか {n} 件")
+@@ -937,216 +703,89 @@ pub fn unref_chip(count: u32) -> &'static str {
      }
  }
  
@@ -456,17 +468,19 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
      use leptos::prelude::*;
  
 -    use tsuzuri_contract::board::Reading;
--
++    use tsuzuri_contract::case;
+ 
      use super::{
 -        BLOCK, BURN_CAPTION, Card, EpicBar, Judge, LAYOUT, METRICS_PATH, Metrics, NONE, Net, Part,
 -        Tier, UNREF_OPEN, UNREF_PATH, UnrefList, UnrefRow, burn_svg, content, count, epic_cards,
 -        more_line, name_label, spark_svg, unref_chip, unref_list,
 +        BLOCK, Judge, METRICS_PATH, UNREF_OPEN, UNREF_PATH, Unref, UnrefList, UnrefRow, judge,
-+        more_line, name_label, stats, unref_chip, unref_list,
++        more_line, name_label, stats, unref_chip, unref_list, unref_shown, unref_stale,
      };
      use crate::frame::{self, Mode};
 -    use crate::project::{Body, UNKNOWN, fold, map, section, state_icon, unmeasured};
 -    use crate::view::{Fetched, Screen};
++    use crate::ledgerlist::phases;
 +    use crate::project::{Body, UNKNOWN, fold, section, state_icon, unmeasured};
      use crate::vocab::label;
      use crate::widgets::help::{HelpCtx, hs};
@@ -622,9 +636,11 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
 -                            .collect_view()
 +    /// 未反映の段（帯の抜けの検査の窓の下・見出しに数と分からない種類の chip・中に未反映の一覧・記録の鍵 ledger:unref）。
 +    /// 数は指標の口の電文の数で、1 種か 2 種が分からなければ数に測れていないの印を添え、指標の口が読めない間は chip を出さない。
++    /// 一覧は局面の出力の 4 つの周（まだ無い・読めない版・古い・読めた）を分けて出す（要件 FR13）。
 +    pub fn unref_panel() -> AnyView {
 +        let metrics = crate::net::read(METRICS_PATH);
 +        let unref = crate::net::read(UNREF_PATH);
++        let cases = crate::net::read(case::PATH);
 +        let chips = move || {
 +            metrics.with(|f| stats(f).ok().map(|s| Unref::of(&s))).map(|u| {
 +                let partial = u.partial().then(|| state_icon(UNKNOWN));
@@ -664,7 +680,28 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
          let ctx = use_context::<HelpCtx>();
          let mode = move || match ctx {
              Some(c) => c.mode.get(),
-@@ -1142,11 +743,7 @@ mod dom {
+             None => Mode::from_query(&window().location().search().unwrap_or_default()),
+         };
+-        let list = move || match unref_list(&unref.get(), crate::net::now()) {
+-            Body::Unmeasured(reason) => unmeasured(reason),
+-            Body::Empty(line) => view! { <div class="small muted">{line}</div> }.into_any(),
+-            Body::Filled(l) => unref_rows(&l, mode()),
++        let list = move || {
++            let shown = unref_shown(
++                unref_list(&unref.get(), crate::net::now()),
++                &cases.with(phases),
++            );
++            match shown {
++                Body::Unmeasured(reason) => unmeasured(reason),
++                Body::Empty(line) => view! { <div class="small muted">{line}</div> }.into_any(),
++                Body::Filled(l) => unref_rows(&l, mode()),
++            }
++        };
++        let old = move || {
++            unref
++                .with(unref_stale)
++                .map(|t| view! { <div class="small muted">{t}</div> })
+         };
          let (open, toggle) = fold("ledger:unref".to_string(), || UNREF_OPEN);
          view! {
              <details class="fold lep" id="unref" prop:open=open on:toggle=toggle>
@@ -674,10 +711,11 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
 -                    <span class="lchips">{kinds}</span>
 -                </summary>
 +                <summary>{hs("unref")}{chips}</summary>
++                {old}
                  {list}
              </details>
          }
-@@ -1199,18 +796,6 @@ mod dom {
+@@ -1199,18 +838,6 @@ mod dom {
          .into_any()
      }
  
@@ -696,7 +734,7 @@ index 548a74f48bf772e7aff3e44107e8883f7fa906be..49cf998b943554c1c6cf06d7bea22058
      /// 判定の 1 語（見本の judgeHTML）。
      fn judge_view(j: Judge) -> AnyView {
          view! {
-@@ -1221,27 +806,4 @@ mod dom {
+@@ -1221,27 +848,4 @@ mod dom {
          }
          .into_any()
      }
@@ -785,7 +823,7 @@ index 2e03ad368df5e85e1e0bc0805758fa3e12975ff1..db4045860524c0f99cdf9775fb0d637d
              Win::Dest => stage::inner(),
          };
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 31cb65363118d2c893d46f5f2235ef2be32038c3..ec2af7d7598a9e645cb9fde9770853eac3cd4352 100644
+index 65cc9b368d62e58bd92f1a37b298bcff1a1069ee..cd2a6c11c2cdbaaa157f2267d265514f7c7b71a3 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -972,7 +972,7 @@ dialog.hbdlg .cmd { font: 12px/1.5 ui-monospace, monospace; background: var(--pa
@@ -797,6 +835,14 @@ index 31cb65363118d2c893d46f5f2235ef2be32038c3..ec2af7d7598a9e645cb9fde9770853ea
  #ledger .lburn .lb-closed { fill: var(--st-run); opacity: .55; }
  #ledger .lburn .lb-open { stroke: var(--band-beads); stroke-width: 2; vector-effect: non-scaling-stroke; }
  #ledger .lcap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ink-3); }
+@@ -1280,7 +1280,6 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+ .ll-l2 { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+ .ll-kchip { font-size: 11.5px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 1px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+ .ll-spark { flex: none; display: flex; margin-left: auto; }
+-#ledger .ll-spark .lburn { width: 120px; height: 24px; }
+ .ll-seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex: none; }
+ .ll-seg button { padding: 1px 10px; font-size: 12px; border: 0; border-left: 1px solid var(--line); background: none; cursor: pointer; }
+ .ll-seg button:first-child { border-left: 0; }
 diff --git a/crates/tsuzuri-surface/tests/absface.rs b/crates/tsuzuri-surface/tests/absface.rs
 index 38994acfd9cdaf69e54e12157bfe550920294666..85703715afb73406418dc8fa924e01027cb7f4aa 100644
 --- a/crates/tsuzuri-surface/tests/absface.rs
@@ -870,44 +916,11 @@ index 38994acfd9cdaf69e54e12157bfe550920294666..85703715afb73406418dc8fa924e0102
          (&ledger, "unref_list(&unref.get(), crate::net::now())"),
          (&list, "content(l, p, b, crate::net::now())"),
      ] {
-diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/bvkpi.rs
-index ef3c1ce6f2d3a6e4931e9a74d3a4bcf230e679e5..dece1c189c27fbb613fb7f58187ef9db42e82882 100644
---- a/crates/tsuzuri-surface/tests/bvkpi.rs
-+++ b/crates/tsuzuri-surface/tests/bvkpi.rs
-@@ -15,7 +15,7 @@ use tsuzuri_surface::ledgerlist::{
-     KINDS, KPI_UNKNOWN, Kind, Lgroup, NO_MATCH, SEARCH_HINT, filtered, filtering, groups, kpi,
-     kpi_text, row_matches,
- };
--use tsuzuri_surface::project::ledger::{SPARK_H, SPARK_W, spark, spark_svg};
-+use tsuzuri_surface::project::ledger::{BURN_H, BURN_W, burn_svg, burndown};
- use tsuzuri_surface::view::Fetched;
- 
- const NOW: u64 = 1_790_510_400;
-@@ -151,8 +151,8 @@ fn bvkpi_filtered_keeps_matching_groups() {
-     assert_eq!(NO_MATCH, "合う行なし");
- }
- 
--/// (5) 見出しの小さな数は open の便・memo・問いの数と純減 24h（負は −）の字で、14 日の図は台帳の block の sparkline の
--/// svg。指標の口が読めない・まだ分からない・電文が読めない時は KPI_UNKNOWN で図は無い。
-+/// (5) 見出しの小さな数は open の便・memo・問いの数と純減 24h（負は −）の字で、14 日の図は台帳の block の burndown の
-+/// svg（行 g-ledger-trim で sparkline から替えた）。指標の口が読めない・まだ分からない・電文が読めない時は KPI_UNKNOWN で図は無い。
- #[test]
- fn bvkpi_kpi_line_and_spark() {
-     let s = filled();
-@@ -160,7 +160,7 @@ fn bvkpi_kpi_line_and_spark() {
-     let body = Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("enc"));
-     let (text, svg) = kpi(&body);
-     assert_eq!(text, kpi_text(&s));
--    assert_eq!(svg, Some(spark_svg(&spark(&s.days, SPARK_W, SPARK_H))));
-+    assert_eq!(svg, Some(burn_svg(&burndown(&s.days, BURN_W, BURN_H))));
-     let unknown = Fetched::Body(wire::encode(&Reading::<LedgerStats>::Unknown).expect("enc"));
-     for bad in [
-         Fetched::NotRead,
 diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/bvlist.rs
-index c9dd40b1b74a8d584daf226d162944a75341c023..6a037b9fcec9eb4cefee78e29405cfdc469a1f13 100644
+index 0b85ccfd279f0d973116f80bc51c97756459bda0..f1dea0c2fa5b50ca05d174ff36bb9347786c00c7 100644
 --- a/crates/tsuzuri-surface/tests/bvlist.rs
 +++ b/crates/tsuzuri-surface/tests/bvlist.rs
-@@ -377,13 +377,13 @@ fn bvlist_content_reads_three_paths() {
+@@ -427,13 +427,13 @@ fn bvlist_content_reads_three_paths() {
      assert_eq!(FACTS_PATH, "/api/beads");
  }
  
@@ -967,10 +980,10 @@ index 6e0373de455c1113da4d95edd6beff6dc30827a1..29cfe84834f11febe198b969c92a5a61
      assert!(!fold_key_ok("ledger:more"));
 diff --git a/crates/tsuzuri-surface/tests/bvtrim.rs b/crates/tsuzuri-surface/tests/bvtrim.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62d33a65e2
+index 0000000000000000000000000000000000000000..7c7dedf2838f8c2be65321a86a128d86bf394455
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvtrim.rs
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,215 @@
 +//! 行 g-ledger-trim の歯（接頭辞 bvtrim_・判断の記録 ADR-27 決定 (8)・要件 FR13）: 台帳の block は見出しの横の判定の
 +//! 1 語と台帳 open の一覧だけを描き、前の指標の段（上段の 4 数・主な指標・burndown・memo の段）を持たない。一覧の見出しの
 +//! 14 日の図は burndown の svg で burndown の card を付け、未反映の段は帯の抜けの検査の窓の下へ移す。読み直しの表は
@@ -982,11 +995,14 @@ index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62
 +use std::path::PathBuf;
 +
 +use tsuzuri_contract::board::Reading;
-+use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
++use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind, UnreflectedList};
 +use tsuzuri_contract::surface::ChangeKind;
 +use tsuzuri_contract::{case, wire};
-+use tsuzuri_surface::ledgerlist::{FACTS_PATH, KPI_UNKNOWN, kpi};
-+use tsuzuri_surface::project::ledger::{self, BURN_H, BURN_W, Unref, burn_svg, burndown};
++use tsuzuri_surface::ledgerlist::{FACTS_PATH, Phases, kpi, kpi_unknown};
++use tsuzuri_surface::project::Body;
++use tsuzuri_surface::project::ledger::{
++    self, BURN_H, BURN_W, Unref, burn_svg, burndown, unref_list, unref_shown, unref_stale,
++};
 +use tsuzuri_surface::view::{Fetched, RELOAD_KINDS, path_kinds, reloads};
 +
 +fn read(rel: &str) -> String {
@@ -1016,6 +1032,7 @@ index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62
 +    let src = read("src/project/ledger.rs");
 +    let dom = dom_of("src/project/ledger.rs");
 +    for want in [
++        "let fetched = crate::net::read(METRICS_PATH);\n        let extra",
 +        "let extra = move || fetched.with(|f| stats(f).ok().map(|s| judge_view(judge(s.judge))));",
 +        "section(BLOCK, extra.into_any(), crate::ledgerlist::view())",
 +    ] {
@@ -1057,7 +1074,7 @@ index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62
 +    assert_eq!(svg.matches("<rect class=\"lb-closed\"").count(), 14);
 +    assert!(svg.contains("<polyline class=\"lb-open\""), "{svg}");
 +    assert!(!svg.contains("lspark"), "{svg}");
-+    assert_eq!(kpi(&Fetched::Failed), (KPI_UNKNOWN.to_string(), None));
++    assert_eq!(kpi(&Fetched::Failed), (kpi_unknown(), None));
 +
 +    let dom = dom_of("src/ledgerlist.rs");
 +    let want = "<span class=\"ll-spark\" tabindex=\"0\" use:attach_some=card inner_html=s></span>";
@@ -1074,6 +1091,7 @@ index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62
 +        1
 +    );
 +    assert!(!css.contains("#ledger .lburn { display: block; width: 100%; height: 72px; }"));
++    assert_eq!(css.matches(".lburn {").count(), 1, "図の大きさの規則が 1 行でない");
 +}
 +
 +/// (4) 未反映の段の数は指標の電文の数そのままで、分からない種類は名の列。抜けの検査の窓は抜けの検査の中身の後に
@@ -1099,13 +1117,58 @@ index 0000000000000000000000000000000000000000..21450ef3432630e8512f1d249b60ae62
 +        "pub fn unref_panel() -> AnyView {",
 +        "metrics.with(|f| stats(f).ok().map(|s| Unref::of(&s)))",
 +        "let partial = u.partial().then(|| state_icon(UNKNOWN));",
-+        "<span class=unref_chip(u.count)>{u.text()}</span>",
++        "<span class=unref_chip(u.count)>{u.text()}</span>\n                    {partial}\n                    <span class=\"lchips\">{kinds}</span>",
++        "<summary>{hs(\"unref\")}{chips}</summary>",
++        "let metrics = crate::net::read(METRICS_PATH);\n        let unref = crate::net::read(UNREF_PATH);",
 +        "let (open, toggle) = fold(\"ledger:unref\".to_string(), || UNREF_OPEN);",
 +    ] {
 +        assert_eq!(dom.matches(want).count(), 1, "{want}");
 +    }
 +    assert_eq!(ledger::FOLDS, ["ledger:unref"]);
 +    assert_eq!(ledger::PATHS, [ledger::PATH, ledger::METRICS_PATH, ledger::UNREF_PATH]);
++    unref_case_states();
++}
++
++/// (4) の局面の出力の 4 つの周（要件 FR13）: 3 種とも分からない一覧は、出力がまだ無い周は UNREF_UNKNOWN、読めない版の
++/// 周は UNREF_UNREADABLE で字が違い、読めた一覧はどちらの周でもそのまま、古さの印の在る一覧は「古い」と印の種類の 1 行を持つ。
++fn unref_case_states() {
++    let unknown = UnreflectedList {
++        memos: Reading::Unknown,
++        rulings: Reading::Unknown,
++        utterances: Reading::Unknown,
++        stale: Vec::new(),
++    };
++    let body = Fetched::Body(wire::encode(&unknown).expect("電文"));
++    let none = unref_shown(unref_list(&body, 0), &Phases::Unknown);
++    assert_eq!(none, Body::Unmeasured(ledger::UNREF_UNKNOWN));
++    let bad = unref_shown(unref_list(&body, 0), &Phases::Unreadable);
++    assert_eq!(bad, Body::Unmeasured(ledger::UNREF_UNREADABLE));
++    assert_ne!(none, bad);
++    assert_eq!(unref_stale(&body), None);
++    let old = UnreflectedList {
++        memos: Reading::Known(Vec::new()),
++        rulings: Reading::Known(Vec::new()),
++        utterances: Reading::Known(Vec::new()),
++        stale: vec!["lifecycle-old".to_string(), "input-moved".to_string()],
++    };
++    let body = Fetched::Body(wire::encode(&old).expect("電文"));
++    let empty = Body::Empty(ledger::UNREF_EMPTY);
++    assert_eq!(unref_shown(unref_list(&body, 0), &Phases::Unreadable), empty);
++    assert_eq!(unref_shown(unref_list(&body, 0), &Phases::Unknown), empty);
++    assert_eq!(
++        unref_stale(&body).as_deref(),
++        Some("古い（lifecycle-old・input-moved）")
++    );
++    assert_eq!(unref_stale(&Fetched::Failed), None);
++    let dom = dom_of("src/project/ledger.rs");
++    for want in [
++        "let cases = crate::net::read(case::PATH);",
++        "let shown = unref_shown(\n                unref_list(&unref.get(), crate::net::now()),\n                &cases.with(phases),\n            );",
++        ".with(unref_stale)\n                .map(|t| view! { <div class=\"small muted\">{t}</div> })",
++        "{old}\n                {list}",
++    ] {
++        assert_eq!(dom.matches(want).count(), 1, "{want}");
++    }
 +}
 +
 +/// (5) 読み直しの表は 15 行で、bead の事実の口は台帳だけ、器の局面の出力の口は台帳と event log の合図で読み直す

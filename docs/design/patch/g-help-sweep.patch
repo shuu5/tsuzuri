@@ -522,7 +522,7 @@ index db4045860524c0f99cdf9775fb0d637d7d406ceb..7e1fe5054ff9bcac7c1201b56089a7f3
          }
      }
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 2d9b8386fa9613fa9529c1f6512125b48f55a869..61b41416d84d1d92d8f9ef1826294f24413d2fa1 100644
+index befe4719c4e83121f53d5d3423655aa5781cbbe6..30f67c87d77761a3c8d8b804b09ddbbe08aac300 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -312,15 +312,21 @@ button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cur
@@ -632,10 +632,10 @@ index 8b9c2461e8095a6c807ab131c69ab7543ebd6343..d58d5f64a955d88719457c29dd3f7d46
          "let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));",
 diff --git a/crates/tsuzuri-surface/tests/bvhelp.rs b/crates/tsuzuri-surface/tests/bvhelp.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..d9c58d315ea389034a94f8bd18ea67131ef61e9a
+index 0000000000000000000000000000000000000000..26d9f509ce803bbe6cd1e8872ec821c637349d62
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvhelp.rs
-@@ -0,0 +1,279 @@
+@@ -0,0 +1,306 @@
 +//! 行 g-help-sweep の歯（接頭辞 bvhelp_）: 窓の題を語の鍵の見出しにし（題の横の数は見出しの外）、質問の窓の空の字を直し、
 +//! 最初の案内を 1 枚の画面の部品に合わせ（見える的・帯の下の字の帯・幅と scroll の後の置き直し）、
 +//! 記号の見方の窓に画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile）の語と注釈と図を置く。
@@ -848,7 +848,26 @@ index 0000000000000000000000000000000000000000..d9c58d315ea389034a94f8bd18ea6713
 +    }
 +}
 +
-+/// 記号の見方の窓の画面の見方: 6 つの部品の語と注釈（図 one と lay）・地図と tab と出所の帯の説明は無い。
++/// 出所の帯の記号は画面の見方の 6 つの語の注釈に無く、記号の見方の注釈は形と色の 3 行を 1 行ずつ持つ（要件 FR5）。
++fn band_only_in_status() {
++    for k in HOW {
++        assert!(
++            !note(k).contains("{band:"),
++            "{k} の注釈に出所の帯の記号が在る"
++        );
++    }
++    let status = note("status");
++    for line in [
++        "\n{band:constitution} 四角 = file に書かれた行\n",
++        "\n{band:beads} 丸 = 台帳と器の動くもの\n",
++        "\n・ 色 = 出所の帯ごとに 1 色\n",
++    ] {
++        assert!(status.contains(line), "記号の見方の注釈に {line} が無い");
++    }
++}
++
++/// 記号の見方の窓の画面の見方: 6 つの部品の語と注釈（図 one と lay）・地図と tab の説明は無く、出所の帯の記号は画面の見方の
++/// 語に無い。記号の見方の注釈は形と色の 3 行を持つ（要件 FR5・判断の記録 ADR-27 決定 (1)(ア)）。
 +#[test]
 +fn bvhelp_how_notes() {
 +    assert_eq!(HOW_KEY, "how");
@@ -878,10 +897,11 @@ index 0000000000000000000000000000000000000000..d9c58d315ea389034a94f8bd18ea6713
 +    assert!(note("how_lay").contains("{fig:lay}"));
 +    for k in HOW.iter().chain(["status", "ask_open"].iter()) {
 +        let n = note(k);
-+        for w in ["地図", "tab", "{band:", "6 つ"] {
++        for w in ["地図", "tab", "6 つ"] {
 +            assert!(!n.contains(w), "{k} の注釈に {w} が在る: {n}");
 +        }
 +    }
++    band_only_in_status();
 +    let legend = read("src/project/legend.rs");
 +    assert!(
 +        legend.contains(
@@ -914,9 +934,16 @@ index 0000000000000000000000000000000000000000..d9c58d315ea389034a94f8bd18ea6713
 +    ] {
 +        assert!(lay.contains(w), "図 lay に {w} が無い");
 +    }
++    let src = read("src/widgets/fig.rs");
++    for w in [
++        "tb(124, 8, 80, \"how_win\", \"ok\"),",
++        "tb(124, 56, 80, \"how_pop\", \"ok\"),",
++    ] {
++        assert_eq!(src.matches(w).count(), 1, "図 one の箱 {w}");
++    }
 +}
 diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/frame.rs
-index 87239ee6793e2ea359a54c762d19413d22885725..ff66d66f4b8fb8bae37086ad69b8b9f6ab20c458 100644
+index 87239ee6793e2ea359a54c762d19413d22885725..29d289c91a4cadcac631bc6742c857c6bf5f79f7 100644
 --- a/crates/tsuzuri-surface/tests/frame.rs
 +++ b/crates/tsuzuri-surface/tests/frame.rs
 @@ -505,7 +505,7 @@ fn frame_help_note_splits_lines() {
@@ -924,7 +951,7 @@ index 87239ee6793e2ea359a54c762d19413d22885725..ff66d66f4b8fb8bae37086ad69b8b9f6
      let s = help::note("status").expect("status の注釈");
      assert_eq!(s.items.len(), 4);
 -    assert_eq!(s.more.len(), 4);
-+    assert_eq!(s.more.len(), 2);
++    assert_eq!(s.more.len(), 5);
      assert_eq!(s.more[0].sym, vec![Inline::Sym("st:unknown".to_string())]);
      let b = help::note("b:beads").expect("b:beads の注釈");
      assert_eq!(
@@ -1091,7 +1118,7 @@ index 3372f2c31c0e45167ec96174764cb334e68d42b8..d3393a33699f4ba4771ede27ced4f28c
          ("memo_promo", "promo"),
          ("move_state", "move"),
 diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
-index fc80e29ec98131474b7fc76ed2064f2c676b8abf..e22d0a12c1a2d34953b065d7e465ae5cbddcf631 100644
+index a6424e9178e5914ecd2116db2f3a104327c5d81f..bb63ab711546190154e42cab6494d5f695a4728b 100644
 --- a/crates/tsuzuri-surface/vocab.json
 +++ b/crates/tsuzuri-surface/vocab.json
 @@ -563,7 +563,7 @@
@@ -1099,7 +1126,7 @@ index fc80e29ec98131474b7fc76ed2064f2c676b8abf..e22d0a12c1a2d34953b065d7e465ae5c
    "status": {
     "label": "記号の見方",
 -   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色",
-+   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n・ 下の段 = 画面の見方",
++   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色\n・ 下の段 = 画面の見方",
     "internal": "稼働状況 5 値（seat state + AllowanceMeasured + tick）"
    },
    "st_run": {
@@ -1112,10 +1139,10 @@ index fc80e29ec98131474b7fc76ed2064f2c676b8abf..e22d0a12c1a2d34953b065d7e465ae5c
     "internal": "open の問い（posted_at 昇順）"
    },
    "batch": {
-@@ -2111,6 +2111,41 @@
-    "label": "誰の番でもない",
-    "plain": "ほかの部品が手番を持つか\n終わった",
-    "internal": "器の手番 none"
+@@ -2121,6 +2121,41 @@
+    "label": "古い",
+    "plain": "器の局面の出力に古さの印が在る\n・ 印の種類は title に並べる",
+    "internal": "電文 CaseDoc の stale が空でない（行 g-unref-lc）"
 +  },
 +  "how": {
 +   "label": "画面の見方",

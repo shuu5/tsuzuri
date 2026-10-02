@@ -54,7 +54,7 @@ index 1b0e29003e96cb2526cdd3d5756738b7e58a7d19..0f109b6c9f1a3371d23240e7e8e19e6a
      }
  }
 diff --git a/crates/tsuzuri-surface/src/project/askpage.rs b/crates/tsuzuri-surface/src/project/askpage.rs
-index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0860ba794 100644
+index 4cdf686707936b93db3821e700e4a729974082a8..48389909455419077d2e715e524478e91f362c8e 100644
 --- a/crates/tsuzuri-surface/src/project/askpage.rs
 +++ b/crates/tsuzuri-surface/src/project/askpage.rs
 @@ -5,9 +5,12 @@
@@ -80,12 +80,12 @@ index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0
  use crate::widgets::hover::Card;
  use crate::widgets::nodecard::card_of;
  
-@@ -192,35 +197,98 @@ pub fn ruling_text(id: &str) -> String {
+@@ -192,35 +197,95 @@ pub fn ruling_text(id: &str) -> String {
      }
  }
  
 +/// 質問の窓の畳みの 1 行（行 g-ask-hist・見本の qModal の「これまでの決定」の行）: 台帳の更新の時刻（閉じた時刻）・
-+/// 短い題（bead の事実の metadata の short・無ければ台帳の題）・問いの項と答えた決定の id。
++/// 短い題（bead の事実の short・事実が無ければ台帳の題）・問いの項と答えた決定の id。
 +#[derive(Debug, Clone, PartialEq, Eq)]
 +pub struct Decision {
 +    pub at: EpochSecs,
@@ -94,9 +94,9 @@ index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0
 +}
 +
 +/// 質問の窓の畳みの中身（行 g-ask-hist）: これまでの決定（`rulings`）を台帳の更新の時刻の新しい順（同じなら id の
-+/// 自然な順の逆）に並べ、短い題と答えた決定の id（`hist_rows`）を添える。短い題は metadata の short を持つ事実だけから
-+/// 引く（題から機械で作った字は問いの題の頭の語だけになるので使わず台帳の題）。台帳が読めない時と 0 件の時は `body` と
-+/// 同じ理由と 1 行。bead の事実の口とグラフの口が読めなければ、題は台帳の題で決定の id はどれも None。
++/// 自然な順の逆）に並べ、短い題と答えた決定の id（`hist_rows`）を添える。短い題は一覧の行と同じく bead の事実の short
++/// （metadata の short か題から機械で作った字・判断の記録 ADR-27 決定 (9)）で、事実が無ければ台帳の題。
++/// 台帳が読めない時と 0 件の時は `body` と同じ理由と 1 行。bead の事実の口とグラフの口が読めなければ、題は台帳の題で決定の id はどれも None。
 +pub fn decisions(ledger: &Fetched, graph: &Fetched, beads: &Fetched) -> Body<Vec<Decision>> {
 +    let rows = match rows(ledger) {
 +        Ok(rows) => rows,
@@ -111,10 +111,7 @@ index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0
 +            .cmp(&a.updated_at)
 +            .then_with(|| id_order(b.id.as_str(), a.id.as_str()))
 +    });
-+    let facts: BTreeMap<_, _> = facts(beads)
-+        .into_iter()
-+        .filter(|(_, f)| f.short_set)
-+        .collect();
++    let facts = facts(beads);
 +    let items: Vec<Item> = done.iter().map(item).collect();
 +    Body::Filled(
 +        hist_rows(&items, graph)
@@ -190,7 +187,7 @@ index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0
              if let Some(id) = target.as_deref()
                  && !lit.get_value()
                  && let Some(i) = focus_index(&items, id)
-@@ -234,55 +302,57 @@ pub fn view() -> leptos::prelude::AnyView {
+@@ -234,55 +299,57 @@ pub fn view() -> leptos::prelude::AnyView {
                      }
                  });
              }
@@ -266,7 +263,7 @@ index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0
      }
      .into_any()
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index ec2af7d7598a9e645cb9fde9770853eac3cd4352..2d9b8386fa9613fa9529c1f6512125b48f55a869 100644
+index cd2a6c11c2cdbaaa157f2267d265514f7c7b71a3..befe4719c4e83121f53d5d3423655aa5781cbbe6 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -433,6 +433,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
@@ -292,10 +289,10 @@ index a7eba710b6b28adb27ca08d684dbf22e2a743ed5..8b9c2461e8095a6c807ab131c69ab754
  /// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。
 diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/bvqhist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d8be878b5
+index 0000000000000000000000000000000000000000..ece5f666a84a65baddcec1c1d0731c486b98cab6
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvqhist.rs
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,245 @@
 +//! 行 g-ask-hist の歯（接頭辞 bvqhist_・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal の folds の末）: 質問の窓の下の
 +//! 畳みの末に「これまでの決定 N ›」を置き、答え済みの問いを台帳の更新の時刻の新しい順に、時刻・短い題・答えた決定・
 +//! 問いの id の行で出す。中身は今のこれまでの決定の段の関数（rulings・hist_rows・ruling_text）を使い、2 つ目を書かない。
@@ -368,7 +365,7 @@ index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d
 +    }
 +}
 +
-+/// q.10 と q.2 だけが metadata の短い題を持ち、q.3 は題から機械で作った字の bead の事実。
++/// q.10 と q.2 は metadata の短い題を持ち、q.3 は題から機械で作った字の bead の事実。
 +fn beads() -> Fetched {
 +    Fetched::Body(
 +        wire::encode(&BeadFacts {
@@ -405,8 +402,8 @@ index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d
 +}
 +
 +/// 新しい順（台帳の更新の時刻の大きい順・同じなら id の自然な順の逆）で、open の問い・方針の問い・task は出さず、
-+/// 時刻は台帳の updated_at、短い題は bead の事実の metadata の short（機械で作った字と無い時は台帳の題）、答えた決定は
-+/// answers の辺の from。
++/// 時刻は台帳の updated_at、短い題は bead の事実の short（metadata の short か題から機械で作った字・事実が無い時は
++/// 台帳の題）、答えた決定は answers の辺の from。
 +#[test]
 +fn bvqhist_newest_first() {
 +    let ds = filled(decisions(&mixed(), &graph(), &beads()));
@@ -425,12 +422,38 @@ index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d
 +        got,
 +        [
 +            ("q.10", 500, "十の短い題", Some("q.10:20261001T1300Z-1")),
-+            ("q.3", 300, "題 q.3", None),
++            ("q.3", 300, "問い", None),
 +            ("q.2", 300, "二の短い題", None),
 +        ]
 +    );
 +    assert_eq!(ds[0].entry.item.title, "題 q.10");
 +    assert_eq!(askpage::count(&mixed()), Reading::Known(3));
++    // 事実の無い問いは台帳の題。
++    let only = Fetched::Body(
++        wire::encode(&BeadFacts {
++            rows: Reading::Known(vec![fact("q.10", "十の短い題")]),
++        })
++        .expect("電文"),
++    );
++    let shorts: Vec<String> = filled(decisions(&mixed(), &graph(), &only))
++        .into_iter()
++        .map(|d| d.short)
++        .collect();
++    assert_eq!(shorts, ["十の短い題", "題 q.3", "題 q.2"]);
++    tie_by_natural_id();
++}
++
++/// (4) の縁: 同じ時刻の問いは id の自然な順の逆（q.10 が q.9 の前・字の順の逆なら q.9 が前）。
++fn tie_by_natural_id() {
++    let tie = ledger(vec![
++        row("q.9", "task", "closed", 700, &[QUESTION_LABEL]),
++        row("q.10", "task", "closed", 700, &[QUESTION_LABEL]),
++    ]);
++    let ids: Vec<String> = filled(decisions(&tie, &graph(), &beads()))
++        .into_iter()
++        .map(|d| d.entry.item.id)
++        .collect();
++    assert_eq!(ids, ["q.10", "q.9"]);
 +}
 +
 +/// 台帳が読めない時と 0 件の時は block の中身と同じ理由と 1 行、事実とグラフの口が読めなければ台帳の題で決定は無い。
@@ -481,6 +504,8 @@ index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d
 +        "crate::net::read(crate::ledgerlist::FACTS_PATH)",
 +        "decisions(l, g, b)",
 +        "fold_title(fetched.with(count))",
++        "<summary>{title}</summary>",
++        "let now = crate::net::now();",
 +        "<details class=\"fold\" id=BLOCK.id prop:open=open on:toggle=toggle>",
 +    ] {
 +        assert!(

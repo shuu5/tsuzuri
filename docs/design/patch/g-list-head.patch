@@ -240,10 +240,10 @@ index 490b650166fd1c35c8b5de935b000f22f48c4dd9..1d3ebe80f808ae9757746ea6dff4a16b
 +.ll-q { flex: 1 1 auto; min-width: 80px; max-width: 300px; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; height: 24px; }
 diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/bvkpi.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..77e2f237d6daa0e9fd40396502d6bda183863124
+index 0000000000000000000000000000000000000000..d185aa205bc62e1f3b6c573073a772dd6659146d
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvkpi.rs
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,228 @@
 +//! 行 g-list-head の歯（接頭辞 bvkpi_）: 台帳 open の一覧の見出しの種類の切り替えと探す欄の絞りと、指標の小さな数と
 +//! 14 日の burndown の図（判断の記録 ADR-27 の決定 (8)・要件 FR13）。台帳の行と札は歯の中で組む（bead の id の接頭辞は fx-k）。
 +//! 指標は面の歯の fixture tests/fixtures/surface/ledger-stats.json の組 filled を読む。
@@ -368,6 +368,8 @@ index 0000000000000000000000000000000000000000..77e2f237d6daa0e9fd40396502d6bda1
 +    assert_eq!(hit(Kind::All, " BLOCKED "), ["fx-k1.2"]);
 +    assert_eq!(hit(Kind::All, "width"), ["fx-k2.1"]);
 +    assert_eq!(hit(Kind::All, "FX-X1"), ["fx-x1"]);
++    // 前後の空白（字の中に無い空白と tab）を除いて探す。
++    assert_eq!(hit(Kind::All, "  FX-X1\t"), ["fx-x1"]);
 +    assert_eq!(hit(Kind::Memo, "便"), Vec::<&str>::new());
 +    // 短い題（事実の short）と題の全体の両方を探す: 短い題だけの字と題の全体だけの字のどちらでも合う。
 +    assert_eq!(hit(Kind::Task, "札の幅"), ["fx-k1.1"]);
@@ -394,8 +396,21 @@ index 0000000000000000000000000000000000000000..77e2f237d6daa0e9fd40396502d6bda1
 +    let task = filtered(gs.clone(), Kind::Task, "");
 +    let keys: Vec<&str> = task.iter().map(|g| g.key.as_str()).collect();
 +    assert_eq!(keys, ["fx-k1", "-"]);
-+    assert!(filtered(gs, Kind::All, "どこにも無い字").is_empty());
++    assert!(filtered(gs.clone(), Kind::All, "どこにも無い字").is_empty());
 +    assert_eq!(NO_MATCH, "合う行なし");
++    // 縁: 閉じた行を持つ組と open の行の無い組。絞りが効かなければ組のまま（行の無い組も残す）、効けば閉じた数は替えない。
++    let mut edge = gs;
++    let at = edge.iter().position(|g| g.key == "fx-k1").expect("k1");
++    edge[at].closed = 2;
++    let bare = Lgroup {
++        key: "fx-k9".to_string(),
++        rows: Vec::new(),
++        ..edge[at].clone()
++    };
++    edge.push(bare);
++    assert_eq!(filtered(edge.clone(), Kind::All, " "), edge);
++    let memo = filtered(edge, Kind::Memo, "");
++    assert_eq!((memo.len(), memo[0].closed), (1, 2));
 +}
 +
 +/// (5) 見出しの小さな数は open の便・memo・問いの数と純減 24h（負は −）の字で、14 日の図は台帳の block の burndown の

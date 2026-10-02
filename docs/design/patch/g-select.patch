@@ -20,20 +20,20 @@ index 8903182f8590596d93f4e561ebf98e4233f8de7a..4862dcee9c988f39a3bc091083133c5b
      let fetched = net::read(ledger::PATH);
      let screen = RwSignal::new(Screen::initial());
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c33d35dbb 100644
+index 89a0fc939bf6007ef5a885a79377e28ca9a13888..50856771b6b5f700b4c72f0e30743c7669c3f61a 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -7,6 +7,8 @@
- //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
+@@ -9,6 +9,8 @@
  //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
- //! （語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」・行 g-unref-lc）。
+ //! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
+ //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
 +//! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
 +//! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
  //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
  
  use std::collections::BTreeMap;
-@@ -454,27 +456,85 @@ pub fn unref_head(s: &LedgerStats) -> (String, String) {
-     (text, title)
+@@ -520,27 +522,86 @@ pub fn unref_head(s: &LedgerStats, cases: &Phases) -> UnrefHead {
+     }
  }
  
 +/// bead の組の鍵（一覧の組と同じ読み: id の階層のいちばん近い epic の祖先の id・epic の祖先が無ければ `OUTSIDE_KEY`）。
@@ -52,9 +52,10 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
 +    (!key.is_empty() && now != Some(key)).then(|| key.to_string())
 +}
 +
-+/// 札を薄くするか（epic の組を選んでいて、札の組の鍵がそれと違う・見本の applyMarks の dim）。
-+pub fn dim(sel: Option<&str>, key: &str) -> bool {
-+    sel.is_some_and(|s| s != key)
++/// 札を薄くするか（epic の組を選んでいて、札の組の鍵が分かりそれと違う・見本の applyMarks の dim）。
++/// 台帳が読めない間は札の組の鍵が分からない（None）ので薄くしない（選んだ組の外と見せない・憲法 P-7.2）。
++pub fn dim(sel: Option<&str>, key: Option<&str>) -> bool {
++    matches!((sel, key), (Some(s), Some(k)) if s != k)
 +}
 +
 +/// 印を付けるか（開いている bead の id か選んだ組の鍵が印の鍵と同じ・札と行の輪は bead の id・組の頭の esel は組の鍵）。
@@ -84,14 +85,14 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
  
      use super::{
          COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
--        content, filtered, filtering, head_counts, kind_tag, kpi, unref_head, with_phases,
-+        content, filtered, filtering, head_counts, head_ring, key_of, kind_tag, kpi, pick, ring,
-+        unref_head, with_phases,
+-        content, filtered, filtering, head_counts, kind_tag, kpi, phases, unref_head, with_phases,
++        content, filtered, filtering, head_counts, head_ring, key_of, kind_tag, kpi, phases, pick,
++        ring, unref_head, with_phases,
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
      use crate::project::ledger::stats;
-     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
+     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
 +    use crate::view::read_rows;
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
@@ -120,7 +121,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
  
      /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ・板が読めない間は一覧の頭に理由の 1 行）。
      pub fn view() -> AnyView {
-@@ -485,6 +545,20 @@ mod dom {
+@@ -551,6 +612,20 @@ mod dom {
          let folds = RwSignal::new(Folds::default());
          let kind = RwSignal::new(Kind::All);
          let query = RwSignal::new(String::new());
@@ -141,7 +142,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
          let list = move || {
              let got =
                  rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
-@@ -571,6 +645,16 @@ mod dom {
+@@ -639,6 +714,16 @@ mod dom {
          } else {
              "ll-gh empty"
          };
@@ -158,7 +159,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
          let rows = g.rows.clone();
          let body = move || {
              is_open().then(|| {
-@@ -583,7 +667,7 @@ mod dom {
+@@ -651,7 +736,7 @@ mod dom {
          };
          view! {
              <div class="ll-grp" data-gid=g.key.clone()>
@@ -167,7 +168,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
                      <button class="ll-tog" type="button" aria-label="開閉" on:click=toggle>{mark}</button>
                      {head_view(&g)}
                  </div>
-@@ -619,8 +703,18 @@ mod dom {
+@@ -687,8 +772,18 @@ mod dom {
              .epic
              .clone()
              .map(|id| view! { <span class="ll-gid mono">{id}</span> });
@@ -187,7 +188,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
              {gid}
              {prog}
              <span class="ll-sdots">{dots}</span>
-@@ -641,10 +735,30 @@ mod dom {
+@@ -709,10 +804,30 @@ mod dom {
              };
              node_href(&id, mode)
          };
@@ -221,7 +222,7 @@ index e14ec79b6be23443570c43764b2226bc5c6d076b..f7fa4412f097e62107862cb290cc2f2c
                  <span class="ll-rt">{r.right.clone()}</span>
              </div>
 diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
-index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a032aa90d 100644
+index 2ea791101f20c7e952e508d6aa881301853a79b7..14c0e4bff902539a9d19d334bbb3f650d97dac70 100644
 --- a/crates/tsuzuri-surface/src/project/pipeline.rs
 +++ b/crates/tsuzuri-surface/src/project/pipeline.rs
 @@ -13,6 +13,8 @@
@@ -350,7 +351,7 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a
              let src = Src {
                  facts: known(&facts),
                  rows: known(&ledger_rows),
-@@ -768,15 +841,74 @@ mod dom {
+@@ -768,15 +841,75 @@ mod dom {
                  Body::Unmeasured(reason) => unmeasured(reason),
                  Body::Empty(key) => view! {
                      <div class="empty"><span>{label(key)}</span><b class="num">"0"</b></div>
@@ -420,15 +421,16 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a
 +    ) -> AnyView {
 +        let sel = use_context::<SelCtx>();
 +        let pop = use_context::<PopCtx>();
-+        let key = keys.with_value(|k| k.get(&card.id).cloned().unwrap_or_default());
-+        let dimmed = move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), &key)));
++        let key = keys.with_value(|k| k.get(&card.id).cloned());
++        let dimmed =
++            move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), key.as_deref())));
 +        let id = card.id.clone();
 +        let ringed = move || ring(pop.and_then(PopCtx::shown).as_deref(), &id);
 +        view! { <div class="kpick" class:dim=dimmed class:ring=ringed>{inner}</div> }.into_any()
      }
  
      /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
-@@ -812,10 +944,11 @@ mod dom {
+@@ -812,10 +945,11 @@ mod dom {
          open: RwSignal<Vec<PipelineColumn>>,
          mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
          clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
@@ -441,7 +443,7 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a
              .collect_view();
          view! { <div class="board">{cols}</div> }.into_any()
      }
-@@ -825,6 +958,7 @@ mod dom {
+@@ -825,6 +959,7 @@ mod dom {
          open: RwSignal<Vec<PipelineColumn>>,
          mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
          clock: impl Fn() -> EpochSecs + Copy + Send + Sync + 'static,
@@ -449,7 +451,7 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a
      ) -> AnyView {
          let column = col.lane.column;
          let is_open = move || open.with(|o| o.contains(&column));
-@@ -837,7 +971,7 @@ mod dom {
+@@ -837,7 +972,7 @@ mod dom {
              shown
                  .shown(is_open())
                  .iter()
@@ -459,10 +461,10 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..be62dcc639b47c88a3ed449c2e34ad7a
          };
          let more = move || {
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 95b029fef2cea3095a7ac9e3e0367abd5fef5ca9..ef56f222d4788129c62bc1e02866057595af6dfe 100644
+index 1471d4340bc1349fb5ad7497b40b4d61f90bf6bd..24c024a43603a20dd98961fb8fc19c8d5d7b92d9 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
-@@ -1288,3 +1288,20 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+@@ -1289,3 +1289,20 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
  /* 台帳 open の一覧の局面と手番（行 g-unref-lc）: memo と問いの行の平易な字・見出しの未反映の数 */
  .ll-ph { flex: none; font-size: 11px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
  .ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
@@ -485,10 +487,10 @@ index 95b029fef2cea3095a7ac9e3e0367abd5fef5ca9..ef56f222d4788129c62bc1e028660575
 +.ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }
 diff --git a/crates/tsuzuri-surface/tests/bvsel.rs b/crates/tsuzuri-surface/tests/bvsel.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f0008291465324905
+index 0000000000000000000000000000000000000000..1c704c9cc89e81b40290cf914048f4e626e17fd7
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvsel.rs
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,293 @@
 +//! 行 g-select の歯（接頭辞 bvsel_）: 一覧の組の頭の名と板の見出しの epic の chip で epic を選ぶと、選んだ組でない札を薄くし、
 +//! 札か一覧の行を押して吹き出しを開くと、その札と行と組の頭に輪の印を付ける（判断の記録 ADR-27 の決定 (8)・見本 board-v2 の
 +//! setEpic と applyMarks と renderEchips）。台帳の行と札と bead の事実は歯の中で組む（bead の id の接頭辞は fx-s）。
@@ -503,7 +505,7 @@ index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f00082914
 +    Lgroup, OUTSIDE_KEY, dim, groups, head_ring, key_of, pick, ring,
 +};
 +use tsuzuri_surface::project::ledger::OUTSIDE;
-+use tsuzuri_surface::project::pipeline::{ALL_EPICS, Chip, card_keys, chips, columns};
++use tsuzuri_surface::project::pipeline::{ALL_EPICS, Chip, Column, card_keys, chips, columns};
 +
 +/// 板と一覧を組む今。
 +const NOW: u64 = 1_790_510_400;
@@ -620,11 +622,13 @@ index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f00082914
 +/// 札は epic を選んでいて組の鍵が違う時だけ薄く、輪は開いている bead の id と同じ時だけ・組の頭の輪は開いている bead が組の open の行。
 +#[test]
 +fn bvsel_dim_and_ring() {
-+    assert!(!dim(None, "fx-s1"));
-+    assert!(!dim(Some("fx-s1"), "fx-s1"));
-+    assert!(dim(Some("fx-s1"), "fx-s2"));
-+    assert!(dim(Some("fx-s1"), OUTSIDE_KEY));
-+    assert!(dim(Some("fx-s1"), ""));
++    assert!(!dim(None, Some("fx-s1")));
++    assert!(!dim(Some("fx-s1"), Some("fx-s1")));
++    assert!(dim(Some("fx-s1"), Some("fx-s2")));
++    assert!(dim(Some("fx-s1"), Some(OUTSIDE_KEY)));
++    // 台帳が読めず組の鍵が分からない札は薄くしない。
++    assert!(!dim(Some("fx-s1"), None));
++    assert!(!dim(None, None));
 +    assert!(!ring(None, "fx-s1.1"));
 +    assert!(ring(Some("fx-s1.1"), "fx-s1.1"));
 +    assert!(!ring(Some("fx-s1.1"), "fx-s1.2"));
@@ -691,6 +695,41 @@ index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f00082914
 +            .iter()
 +            .any(|c| c.key == "fx-s1" && c.name == "fx-s1")
 +    );
++    chips_tie_by_id(&cols, &rows);
++}
++
++/// (7) の縁: 同じ数の組は鍵の id の自然な順（fx-t.9 が fx-t.10 の前・字の順なら逆）で、組の無い札は epic の外。
++fn chips_tie_by_id(cols: &[Column], rows: &[LedgerRow]) {
++    let ids: Vec<String> = cols
++        .iter()
++        .flat_map(|c| c.cards.iter().map(|k| k.id.clone()))
++        .collect();
++    assert_eq!(ids.len(), 5);
++    let tie: BTreeMap<String, String> = ids
++        .iter()
++        .take(4)
++        .enumerate()
++        .map(|(i, id)| {
++            (
++                id.clone(),
++                if i % 2 == 0 { "fx-t.10" } else { "fx-t.9" }.to_string(),
++            )
++        })
++        .collect();
++    let order: Vec<(String, usize)> = chips(cols, &tie, rows, &facts())
++        .into_iter()
++        .map(|c| (c.key, c.n))
++        .collect();
++    let want = |k: &str, n: usize| (k.to_string(), n);
++    assert_eq!(
++        order,
++        [
++            want("", 5),
++            want("fx-t.9", 2),
++            want("fx-t.10", 2),
++            want(OUTSIDE_KEY, 1)
++        ]
++    );
 +}
 +
 +/// 一覧の行は吹き出しの口の印を持ち押すと吹き出しを開き、組の頭の名は epic を選び、選んだ組と開いた bead の組を開く。
@@ -708,6 +747,8 @@ index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f00082914
 +        "<div class=head_class class:esel=esel class:ring=ringed>",
 +        "folds.update(|f| f.set(&key, true));",
 +        "move || head_ring(&g, shown().as_deref())",
++        "for key in [epic, bead].into_iter().flatten() {",
++        "e.prevent_default();",
 +    ] {
 +        assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
 +    }
@@ -720,7 +761,8 @@ index 0000000000000000000000000000000000000000..b2adbdcfd9243e6b2c47837f00082914
 +        "sel.epic.update(|e| *e = pick(e.as_deref(), &key))",
 +        "pick_view(c, keys, kcard_view(c, mode(), clock))",
 +        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed>{inner}</div>",
-+        "s.epic.with(|e| dim(e.as_deref(), &key))",
++        "let key = keys.with_value(|k| k.get(&card.id).cloned());",
++        "s.epic.with(|e| dim(e.as_deref(), key.as_deref()))",
 +    ] {
 +        assert!(pdom.contains(want), "pipeline の DOM に {want} が無い");
 +    }

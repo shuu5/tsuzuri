@@ -12,7 +12,7 @@ index 928d605d7852c839c53410f82a357ff479690a88..d3fcb643ecf0f02205a60504befe55df
  pub mod topbar;
  pub mod view;
 diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
-index be62dcc639b47c88a3ed449c2e34ad7a032aa90d..11e72eac904ffe0c46939aac88d120924e5931f5 100644
+index 14c0e4bff902539a9d19d334bbb3f650d97dac70..dc04d9fe31eb6b0980226157bc0f418ada750c7e 100644
 --- a/crates/tsuzuri-surface/src/project/pipeline.rs
 +++ b/crates/tsuzuri-surface/src/project/pipeline.rs
 @@ -753,6 +753,7 @@ mod dom {
@@ -41,7 +41,7 @@ index be62dcc639b47c88a3ed449c2e34ad7a032aa90d..11e72eac904ffe0c46939aac88d12092
              };
              let fix = pipe.with(|p| misfit_view(misfit_cards(p), mode()));
              view! { {board}{fix} }.into_any()
-@@ -953,6 +956,67 @@ mod dom {
+@@ -954,6 +957,67 @@ mod dom {
          view! { <div class="board">{cols}</div> }.into_any()
      }
  
@@ -194,10 +194,10 @@ index 0000000000000000000000000000000000000000..c822ca34baf67a925279dfd34d0a04f9
 +        .collect()
 +}
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index c8a84ff613996c6ca79d8ba93ec218183c6b0b45..31cb65363118d2c893d46f5f2235ef2be32038c3 100644
+index 4402f7cd437c3999a1da28549ab814bdf6b9ee6b..65cc9b368d62e58bd92f1a37b298bcff1a1069ee 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
-@@ -1308,8 +1308,35 @@ button.ll-gname:hover { background: var(--panel-2); }
+@@ -1309,8 +1309,35 @@ button.ll-gname:hover { background: var(--panel-2); }
  /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
  body:has(#bar) { padding-top: 52px; }
  .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
@@ -236,10 +236,10 @@ index c8a84ff613996c6ca79d8ba93ec218183c6b0b45..31cb65363118d2c893d46f5f2235ef2b
 +.ptlh { font-size: 12px; font-weight: 700; padding: 2px 2px 0; }
 diff --git a/crates/tsuzuri-surface/tests/bvlay.rs b/crates/tsuzuri-surface/tests/bvlay.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..30ef150a799bff93a77a0e53ac8fbdca53902c24
+index 0000000000000000000000000000000000000000..c021b15fc3b67b3becdc49eb78e258656620a21b
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvlay.rs
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,256 @@
 +//! 行 g-layout の歯（接頭辞 bvlay_）: 幅の 3 段（1200 px 以上は横並び・601〜1199 px は縦積み・600 px 以下はスマホの形・
 +//! 規則の行 R-35）とスマホの段の tile（既定で開くのは札の在る段のうち一番急ぐ段・判断の記録 ADR-27 決定 (5)）。
 +//! 境の値は tiles の定数と stylesheet の media の字と規則の行の字を照らし、tile の組みは host で撃つ（bead の id の接頭辞は fx-l）。
@@ -462,6 +462,19 @@ index 0000000000000000000000000000000000000000..30ef150a799bff93a77a0e53ac8fbdca
 +    assert!(ts[1].warn);
 +    let edge = [card("fx-l.7", Stage::Queued, NOW - QUEUED_WARN_S)];
 +    assert!(!tiles(&columns(&edge, &[], NOW), None, NOW)[1].warn);
++    // 注意は Queued の tile だけ（30 分を越えた Blocked の札では付けない）・数は列の札の全部（閉じた列が出す 3 枚を越えても）。
++    let many = [
++        card("fx-l.8", Stage::Blocked, NOW - QUEUED_WARN_S - 1),
++        card("fx-l.9", Stage::Queued, NOW - 10),
++        card("fx-l.10", Stage::Queued, NOW - 20),
++        card("fx-l.11", Stage::Queued, NOW - 30),
++        card("fx-l.12", Stage::Queued, NOW - 40),
++    ];
++    let ts = tiles(&columns(&many, &[], NOW), None, NOW);
++    assert_eq!(
++        (ts[0].n, ts[0].warn, ts[1].n, ts[1].warn),
++        (1, false, 4, false)
++    );
 +}
 +
 +/// 板の block は tile を押した記録を頁の一生の間持ち、札の在る板の後に段の tile と開いた段の札（板と同じ部品）を描く。

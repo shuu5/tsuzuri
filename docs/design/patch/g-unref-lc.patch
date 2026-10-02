@@ -1,13 +1,14 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc5c6d076b 100644
+index 87a7ee73a79cd09abcec11526c75c7ebde52df24..89a0fc939bf6007ef5a885a79377e28ca9a13888 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -5,19 +5,23 @@
- //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
+@@ -6,19 +6,24 @@
  //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
- //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
+ //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
+ //! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
 +//! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
-+//! （語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」・行 g-unref-lc）。
++//! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
++//! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
  //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
  
  use std::collections::BTreeMap;
@@ -22,13 +23,13 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
  use tsuzuri_contract::wire;
  
  use crate::project::ledger::{
--    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, net, spark, spark_svg, stats,
-+    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
-+    kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, spark, spark_svg, stats,
+-    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, OUTSIDE, burn_svg, burndown, net, stats,
++    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, NONE, OUTSIDE, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
++    burn_svg, burndown, kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, stats,
  };
  use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
  use crate::project::{Body, LEDGER_UNREAD};
-@@ -65,6 +69,8 @@ pub struct Lrow {
+@@ -66,6 +71,8 @@ pub struct Lrow {
      pub right: String,
      /// 並べの位（`row_rank`）。
      pub rank: u8,
@@ -37,7 +38,7 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
  }
  
  /// 一覧の 1 組（epic の組・epic の外の組は `epic` が None）。
-@@ -164,6 +170,7 @@ fn lrow(
+@@ -165,6 +172,7 @@ fn lrow(
              stage_word,
          ),
          rank: row_rank(row.node_kind(), card),
@@ -45,44 +46,80 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
      }
  }
  
-@@ -374,6 +381,79 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
+@@ -380,6 +388,138 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
      }
  }
  
-+/// 局面の出力の口の本文の memo と問いの部品を id の表（局面の語と手番の語）にする（読めない・まだ読んでいない・
-+/// 出力が無いは None）。
-+pub fn phases(fetched: &Fetched) -> Option<BTreeMap<String, (String, String)>> {
++/// 読めない版の局面の出力の周に出す字の鍵（読めない・電文の unreadable が真・要件 FR13）。
++pub const UNREADABLE_KEY: &str = "case_unreadable";
++
++/// 古さの印の在る局面の出力に添える字の鍵（古い・電文の stale が空でない・要件 FR13）。
++pub const STALE_KEY: &str = "case_stale";
++
++/// 局面の出力の口の本文の読み（要件 FR13 の周: 出力がまだ無い・読めない版・読めた〔古さの印の種類つき〕）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Phases {
++    /// まだ読んでいない・口が読めない・電文が読めない・出力がまだ無い（「まだ分からない」）。
++    Unknown,
++    /// 出力の file は在るのに読めない版（電文の unreadable が真・「読めない」・行 c-case-unreadable）。
++    Unreadable,
++    /// memo と問いの部品の id の表（局面の語と手番の語）と古さの印の種類（空でなければ出力は古い）。
++    Known(BTreeMap<String, (String, String)>, Vec<String>),
++}
++
++/// 局面の出力の口の本文を読む（memo と問いの部品を id の表にし、古さの印の種類を添える）。
++pub fn phases(fetched: &Fetched) -> Phases {
 +    let Fetched::Body(text) = fetched else {
-+        return None;
++        return Phases::Unknown;
 +    };
 +    match wire::decode::<CaseDoc>(text) {
 +        Ok(CaseDoc {
 +            parts: Reading::Known(parts),
++            stale,
 +            ..
-+        }) => Some(
++        }) => Phases::Known(
 +            parts
 +                .into_iter()
 +                .filter(|p| matches!(p.part.as_str(), "memo" | "question"))
 +                .map(|p| (p.id, (p.phase, p.turn)))
 +                .collect(),
++            stale,
 +        ),
-+        _ => None,
++        Ok(CaseDoc {
++            unreadable: true, ..
++        }) => Phases::Unreadable,
++        _ => Phases::Unknown,
 +    }
 +}
 +
-+/// memo と問いの行に局面と手番の平易な字を置く（表に id が無い・表が読めない行は「まだ分からない」・ほかの行は None のまま）。
++/// 古さの印の在る出力の字の末に添える字（印が無ければ空・在れば空白と「古い」）。
++fn old_mark(stale: &[String]) -> String {
++    if stale.is_empty() {
++        String::new()
++    } else {
++        format!(" {}", label(STALE_KEY))
++    }
++}
++
++/// memo と問いの行に局面と手番の平易な字を置く（読めない版は「読めない」・表に id が無い行と出力がまだ無い間は
++/// 「まだ分からない」・古さの印が在れば局面の字に「古い」を添える・ほかの行は None のまま）。
 +pub fn with_phases(groups: Vec<Lgroup>, cases: &Fetched) -> Vec<Lgroup> {
-+    let table = phases(cases);
++    let read = phases(cases);
 +    groups
 +        .into_iter()
 +        .map(|mut g| {
 +            for r in &mut g.rows {
 +                if matches!(r.kind, NodeKind::Memo | NodeKind::Question) {
-+                    let found = table.as_ref().and_then(|t| t.get(&r.id));
-+                    r.phase = Some(found.map_or_else(
-+                        || label(UNKNOWN_WORD_KEY),
-+                        |(phase, turn)| phase_text(phase, turn),
-+                    ));
++                    r.phase = Some(match &read {
++                        Phases::Known(table, stale) => table.get(&r.id).map_or_else(
++                            || label(UNKNOWN_WORD_KEY),
++                            |(phase, turn)| {
++                                format!("{}{}", phase_text(phase, turn), old_mark(stale))
++                            },
++                        ),
++                        Phases::Unreadable => label(UNREADABLE_KEY),
++                        Phases::Unknown => label(UNKNOWN_WORD_KEY),
++                    });
 +                }
 +            }
 +            g
@@ -90,9 +127,18 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
 +        .collect()
 +}
 +
-+/// 見出しの未反映の数の字と title の字（数は台帳の block の未反映の数の字に手番の席の字を添える・title は種類ごとの
-+/// 数と局面の平易な字・数の分からない種類は「まだ分からない」）。
-+pub fn unref_head(s: &LedgerStats) -> (String, String) {
++/// 見出しの未反映の数（字・title・測れていないの印を添えるか）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct UnrefHead {
++    pub text: String,
++    pub title: String,
++    pub partial: bool,
++}
++
++/// 見出しの未反映の数（数は台帳の block の未反映の数に手番の席の字を添え、1〜2 種が分からなければ測れていないの印、
++/// 3 種とも分からなければ「まだ分からない」、読めない版の出力の周は「読めない」、古さの印が在れば「古い」を添える・
++/// title は種類ごとの数と局面の平易な字・数の分からない種類は「まだ分からない」・古さの印の種類を末に並べる）。
++pub fn unref_head(s: &LedgerStats, cases: &Phases) -> UnrefHead {
 +    let unref = Unref {
 +        count: s.unreflected,
 +        unknown: s
@@ -101,10 +147,19 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
 +            .map(|k| kind_name(*k))
 +            .collect(),
 +    };
++    let stale: &[String] = match cases {
++        Phases::Known(_, stale) => stale,
++        _ => &[],
++    };
++    let count = match (cases, unref.text()) {
++        (Phases::Unreadable, _) => label(UNREADABLE_KEY),
++        (_, n) if n == NONE => label(KPI_UNKNOWN_KEY),
++        (_, n) => n,
++    };
 +    let text = format!(
-+        "{} {} · {}",
++        "{} {count}{} · {}",
 +        label("l_unref"),
-+        unref.text(),
++        old_mark(stale),
 +        plain_word(TURN_KEY, "seat")
 +    );
 +    let title = UnreflectedKind::ALL
@@ -117,15 +172,20 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
 +                .map_or_else(|| label(UNKNOWN_WORD_KEY), |c| c.count.to_string());
 +            format!("{} {n}（{}）", kind_label(*k), kind_phase_text(*k))
 +        })
++        .chain((!stale.is_empty()).then(|| format!("{}（{}）", label(STALE_KEY), stale.join("・"))))
 +        .collect::<Vec<_>>()
 +        .join(" / ");
-+    (text, title)
++    UnrefHead {
++        text,
++        title,
++        partial: unref.partial() && !matches!(cases, Phases::Unreadable),
++    }
 +}
 +
  #[cfg(target_arch = "wasm32")]
  pub use dom::view;
  
-@@ -382,12 +462,15 @@ pub use dom::view;
+@@ -388,13 +528,16 @@ pub use dom::view;
  mod dom {
      use leptos::prelude::*;
  
@@ -134,15 +194,17 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
      use super::{
          COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
 -        content, filtered, filtering, head_counts, kind_tag, kpi,
-+        content, filtered, filtering, head_counts, kind_tag, kpi, unref_head, with_phases,
++        content, filtered, filtering, head_counts, kind_tag, kpi, phases, unref_head, with_phases,
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
+-    use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
 +    use crate::project::ledger::stats;
-     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
++    use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
-@@ -398,6 +481,7 @@ mod dom {
+     use crate::widgets::pop::board_unread;
+@@ -404,6 +547,7 @@ mod dom {
          let rows = crate::net::read(ledger::PATH);
          let pipe = crate::net::read(pipeline::PATH);
          let beads = crate::net::read(FACTS_PATH);
@@ -150,7 +212,7 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
          let folds = RwSignal::new(Folds::default());
          let kind = RwSignal::new(Kind::All);
          let query = RwSignal::new(String::new());
-@@ -412,7 +496,7 @@ mod dom {
+@@ -418,7 +562,7 @@ mod dom {
                  Body::Filled(groups) => {
                      let (k, q) = (kind.get(), query.get());
                      let active = filtering(k, &q);
@@ -159,22 +221,27 @@ index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc
                      if shown.is_empty() {
                          view! { <div class="ll-gnone">{NO_MATCH}</div> }.into_any()
                      } else {
-@@ -436,7 +520,13 @@ mod dom {
+@@ -439,10 +583,18 @@ mod dom {
+     /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。
+     fn head_line(kind: RwSignal<Kind>, query: RwSignal<String>) -> AnyView {
+         let metrics = crate::net::read(ledger::METRICS_PATH);
++        let cases = crate::net::read(case::PATH);
          let kpis = move || {
              let (text, svg) = metrics.with(kpi);
              let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
 -            view! { <span class="ll-kchip num">{text}</span>{fig} }
-+            let unref =
-+                metrics
-+                    .with(|m| stats(m).ok().map(|s| unref_head(&s)))
-+                    .map(|(t, title)| {
-+                        view! { <span class="ll-unref num" title=title>{t}</span> }
-+                    });
++            let unref = metrics
++                .with(|m| stats(m).ok())
++                .map(|s| cases.with(|c| unref_head(&s, &phases(c))))
++                .map(|h| {
++                    let mark = h.partial.then(|| state_icon(UNKNOWN));
++                    view! { <span class="ll-unref num" title=h.title>{h.text}{mark}</span> }
++                });
 +            view! { <span class="ll-kchip num">{text}</span>{unref}{fig} }
          };
          let seg = KINDS
              .into_iter()
-@@ -555,6 +645,7 @@ mod dom {
+@@ -561,6 +713,7 @@ mod dom {
              <div class="ll-row" data-id=r.id.clone()>
                  <span class=class>{tag}</span>
                  <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
@@ -256,10 +323,10 @@ index 0087605f90afa911ce07b1dfcb1a7614985fbea3..548a74f48bf772e7aff3e44107e8883f
  #[derive(Debug, Clone, PartialEq, Eq)]
  pub struct Unref {
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 2988aee48cdea51a832ff5fbcc954dbc816d7be8..95b029fef2cea3095a7ac9e3e0367abd5fef5ca9 100644
+index 1d3ebe80f808ae9757746ea6dff4a16bb17fbe18..1471d4340bc1349fb5ad7497b40b4d61f90bf6bd 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
-@@ -1285,3 +1285,6 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+@@ -1286,3 +1286,6 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
  .ll-seg button:first-child { border-left: 0; }
  .ll-seg button.on { background: var(--ink); color: var(--bg); }
  .ll-q { flex: 1 1 auto; min-width: 80px; max-width: 300px; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; height: 24px; }
@@ -267,10 +334,10 @@ index 2988aee48cdea51a832ff5fbcc954dbc816d7be8..95b029fef2cea3095a7ac9e3e0367abd
 +.ll-ph { flex: none; font-size: 11px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 +.ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
 diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/bvkpi.rs
-index 49b6f61901680717fb5a0fcb6a4d321cadc3c554..ef3c1ce6f2d3a6e4931e9a74d3a4bcf230e679e5 100644
+index d185aa205bc62e1f3b6c573073a772dd6659146d..379bf0d4a863270521ef45e602a8589e18574780 100644
 --- a/crates/tsuzuri-surface/tests/bvkpi.rs
 +++ b/crates/tsuzuri-surface/tests/bvkpi.rs
-@@ -185,7 +185,7 @@ fn bvkpi_dom_wiring_text() {
+@@ -207,7 +207,7 @@ fn bvkpi_dom_wiring_text() {
          "on:click=move |_| kind.set(k)",
          "on:input=move |ev| query.set(event_target_value(&ev))",
          "let active = filtering(k, &q);",
@@ -281,12 +348,13 @@ index 49b6f61901680717fb5a0fcb6a4d321cadc3c554..ef3c1ce6f2d3a6e4931e9a74d3a4bcf2
          "{head_line(kind, query)}",
 diff --git a/crates/tsuzuri-surface/tests/bvuphase.rs b/crates/tsuzuri-surface/tests/bvuphase.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd2140049f8d416d
+index 0000000000000000000000000000000000000000..0ab2de5f350224108197e9b40dc1e8e2af8a7194
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvuphase.rs
-@@ -0,0 +1,252 @@
+@@ -0,0 +1,335 @@
 +//! 行 g-unref-lc の歯（接頭辞 bvuphase_）: 台帳 open の一覧の memo と問いの行と見出しの未反映の数に、器の局面の出力の
-+//! 局面と手番を平易な字で添える（語は台帳の block の辞書の関数・知らない語と読めない間は「まだ分からない」）。
++//! 局面と手番を平易な字で添える（語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・
++//! 読めない版の出力は「読めない」・古さの印の在る出力は「古い」・要件 FR13）。
 +//! 局面の出力と台帳の行は歯の中で組む（bead の id の接頭辞は fx-u）。指標は fixture tests/fixtures/surface/ledger-stats.json。
 +#![cfg(test)]
 +
@@ -298,7 +366,9 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 +use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind};
 +use tsuzuri_contract::wire;
-+use tsuzuri_surface::ledgerlist::{groups, phases, unref_head, with_phases};
++use tsuzuri_surface::ledgerlist::{
++    Lgroup, Phases, STALE_KEY, UNREADABLE_KEY, groups, phases, unref_head, with_phases,
++};
 +use tsuzuri_surface::project::ledger::{
 +    PHASE_KEY, TURN_KEY, UNREF_PHASES, kind_phase_text, phase_text, plain_word,
 +};
@@ -336,13 +406,27 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +    }
 +}
 +
-+fn cases(parts: Reading<Vec<CasePart>>) -> Fetched {
++fn case_doc(parts: Reading<Vec<CasePart>>, stale: &[&str], unreadable: bool) -> Fetched {
 +    let doc = CaseDoc {
 +        generated_at: Some(NOW),
-+        stale: Vec::new(),
++        stale: stale.iter().map(|s| (*s).to_string()).collect(),
 +        parts,
++        unreadable,
 +    };
 +    Fetched::Body(wire::encode(&doc).expect("enc"))
++}
++
++fn cases(parts: Reading<Vec<CasePart>>) -> Fetched {
++    case_doc(parts, &[], false)
++}
++
++/// memo の行 fx-u1.2 の局面の字。
++fn memo_phase(gs: &[Lgroup], cases: &Fetched) -> Option<String> {
++    with_phases(gs.to_vec(), cases)[0]
++        .rows
++        .iter()
++        .find(|r| r.id == "fx-u1.2")
++        .and_then(|r| r.phase.clone())
 +}
 +
 +/// (2) 局面と手番の平易な字は語の辞書の鍵 lc: と turn: の見出しで、辞書に無い語は「まだ分からない」。
@@ -427,8 +511,9 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +    );
 +}
 +
-+/// (4) 行の局面: memo と問いの行は局面の出力の memo と question の部品の局面と手番の字・部品が無い行と出力が読めない
-+/// 間は「まだ分からない」・便と epic の行は字を持たない・memo と question でない部品の同じ id は使わない。
++/// (4) 行の局面: memo と問いの行は局面の出力の memo と question の部品の局面と手番の字・部品が無い行と出力がまだ無い
++/// 間は「まだ分からない」・読めない版の出力の間は「読めない」・古さの印が在れば局面の字に「古い」を添える・便と epic の
++/// 行は字を持たない・memo と question でない部品の同じ id は使わない。
 +#[test]
 +fn bvuphase_rows_get_phase() {
 +    let rows = vec![
@@ -468,17 +553,16 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +        Fetched::Failed,
 +        Fetched::Body("{".into()),
 +        cases(Reading::Unknown),
++        case_doc(Reading::Unknown, &["lifecycle-old"], false),
 +    ] {
-+        assert_eq!(phases(&bad), None);
-+        let marked = with_phases(gs.clone(), &bad);
-+        let memo = marked[0]
-+            .rows
-+            .iter()
-+            .find(|r| r.id == "fx-u1.2")
-+            .expect("memo");
-+        assert_eq!(memo.phase.as_deref(), Some("まだ分からない"));
++        assert_eq!(phases(&bad), Phases::Unknown);
++        assert_eq!(memo_phase(&gs, &bad).as_deref(), Some("まだ分からない"));
 +    }
-+    let table = phases(&doc).expect("表");
++    unreadable_and_stale(&gs);
++    let Phases::Known(table, stale) = phases(&doc) else {
++        panic!("読めた出力の表");
++    };
++    assert!(stale.is_empty());
 +    assert_eq!(table.len(), 2);
 +    assert_eq!(
 +        table.get("fx-u1.3"),
@@ -486,8 +570,48 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +    );
 +}
 +
-+/// (5) 見出しの未反映の数は未反映の見出しの語と数（3 種とも分からなければ ―）と手番の席の字で、title は種類ごとの
-+/// 見出しと数（分からない種類は「まだ分からない」）と局面の平易な字。
++/// (4) の読めない版と古さの印の周: 読めない版（unreadable 真）は「読めない」で出力が無い周（unreadable 偽）と字が違い、
++/// 古さの印が在れば局面の字に「古い」を添え、部品の無い行は「まだ分からない」のまま。
++fn unreadable_and_stale(gs: &[Lgroup]) {
++    // 読めない版（unreadable 真）は出力が無い周（unreadable 偽）と字が違う。
++    let unreadable = case_doc(Reading::Unknown, &[], true);
++    assert_eq!(phases(&unreadable), Phases::Unreadable);
++    assert_eq!(UNREADABLE_KEY, "case_unreadable");
++    assert_eq!(memo_phase(gs, &unreadable).as_deref(), Some("読めない"));
++    assert_ne!(
++        memo_phase(gs, &unreadable),
++        memo_phase(gs, &cases(Reading::Unknown))
++    );
++    // 古さの印が在れば局面の字に「古い」を添え、部品の無い行は「まだ分からない」のまま。
++    let parts = vec![part("memo", "fx-u1.2", "memo-actionable", "seat")];
++    let old = case_doc(
++        Reading::Known(parts.clone()),
++        &["lifecycle-old", "input-moved"],
++        false,
++    );
++    assert_eq!(STALE_KEY, "case_stale");
++    assert_eq!(
++        memo_phase(gs, &old).as_deref(),
++        Some("処置の待ち · 席の番 古い")
++    );
++    let q = &with_phases(gs.to_vec(), &old)[0].rows[0];
++    assert_eq!(
++        (q.id.as_str(), q.phase.as_deref()),
++        ("fx-u1.3", Some("まだ分からない"))
++    );
++    assert_eq!(
++        memo_phase(gs, &cases(Reading::Known(parts))).as_deref(),
++        Some("処置の待ち · 席の番")
++    );
++    let Phases::Known(_, stale) = phases(&old) else {
++        panic!("古い出力の表");
++    };
++    assert_eq!(stale, ["lifecycle-old", "input-moved"]);
++}
++
++/// (5) 見出しの未反映の数は未反映の見出しの語と数と手番の席の字で、1〜2 種が分からなければ測れていないの印を添え、
++/// 3 種とも分からなければ数は「まだ分からない」、読めない版の出力の周は「読めない」、古さの印が在れば「古い」を添える。
++/// title は種類ごとの見出しと数（分からない種類は「まだ分からない」）と局面の平易な字で、古さの印の種類を末に並べる。
 +#[test]
 +fn bvuphase_unref_head() {
 +    let mut sets: BTreeMap<String, LedgerStats> =
@@ -505,16 +629,41 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +        },
 +    ];
 +    s.unreflected_unknown = vec![UnreflectedKind::Utterance];
-+    let (text, title) = unref_head(&s);
-+    assert_eq!(text, "未反映 4 · 席の番");
++    let read = phases(&cases(Reading::Known(Vec::new())));
++    let head = unref_head(&s, &read);
++    assert_eq!(head.text, "未反映 4 · 席の番");
++    assert!(head.partial);
++    let title = "memo 3（処置の待ち・形の崩れ · 席の番） / 裁定 1（反映待ち · 席の番） / 発話 まだ分からない（未仕分け · 席の番）";
++    assert_eq!(head.title, title);
++    // 2 種が分からなくても印を添え、全部が分かれば添えない。
++    s.unreflected_unknown = vec![UnreflectedKind::Ruling, UnreflectedKind::Utterance];
++    assert!(unref_head(&s, &read).partial);
++    s.unreflected_unknown = Vec::new();
++    assert!(!unref_head(&s, &read).partial);
++    // 古さの印が在れば数に「古い」を添え、title の末に印の種類を並べる。
++    s.unreflected_unknown = vec![UnreflectedKind::Utterance];
++    let old = phases(&case_doc(
++        Reading::Known(Vec::new()),
++        &["lifecycle-old", "input-moved"],
++        false,
++    ));
++    let head = unref_head(&s, &old);
++    assert_eq!(head.text, "未反映 4 古い · 席の番");
 +    assert_eq!(
-+        title,
-+        "memo 3（処置の待ち・形の崩れ · 席の番） / 裁定 1（反映待ち · 席の番） / 発話 まだ分からない（未仕分け · 席の番）"
++        head.title,
++        format!("{title} / 古い（lifecycle-old・input-moved）")
 +    );
++    // 3 種とも分からなければ数はまだ分からないで印は無く、読めない版の出力の周は「読めない」。
 +    s.unreflected = 0;
 +    s.unreflected_kinds = Vec::new();
 +    s.unreflected_unknown = UnreflectedKind::ALL.to_vec();
-+    assert_eq!(unref_head(&s).0, "未反映 ― · 席の番");
++    let none = unref_head(&s, &phases(&cases(Reading::Unknown)));
++    assert_eq!(none.text, "未反映 まだ分からない · 席の番");
++    assert!(!none.partial);
++    let unreadable = unref_head(&s, &phases(&case_doc(Reading::Unknown, &[], true)));
++    assert_eq!(unreadable.text, "未反映 読めない · 席の番");
++    assert!(!unreadable.partial);
++    assert_ne!(unreadable.text, none.text);
 +}
 +
 +/// (6) DOM の字: 一覧は局面の出力の口を契約の定数で読んで行に字を置き、行と見出しに出す。class は stylesheet に在る。
@@ -525,8 +674,9 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +    for want in [
 +        "let cases = crate::net::read(case::PATH);",
 +        "cases.with(|c| with_phases(groups, c))",
-+        "stats(m).ok().map(|s| unref_head(&s))",
-+        "<span class=\"ll-unref num\" title=title>{t}</span>",
++        "cases.with(|c| unref_head(&s, &phases(c)))",
++        "let mark = h.partial.then(|| state_icon(UNKNOWN));",
++        "<span class=\"ll-unref num\" title=h.title>{h.text}{mark}</span>",
 +        "<span class=\"ll-ph\">{p}</span>",
 +    ] {
 +        assert!(dom.contains(want), "ledgerlist の DOM に {want} が無い");
@@ -538,10 +688,10 @@ index 0000000000000000000000000000000000000000..c8142de0a25a84f5dad7679fdd214004
 +    }
 +}
 diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
-index 9ac7416659da92e14b836ef9e1b7fe2f69961ee3..fc80e29ec98131474b7fc76ed2064f2c676b8abf 100644
+index 9ac7416659da92e14b836ef9e1b7fe2f69961ee3..a6424e9178e5914ecd2116db2f3a104327c5d81f 100644
 --- a/crates/tsuzuri-surface/vocab.json
 +++ b/crates/tsuzuri-surface/vocab.json
-@@ -2041,6 +2041,76 @@
+@@ -2041,6 +2041,86 @@
     "label": "着地",
     "plain": "札の要の 1 行: 着地の時刻と CI の結果",
     "internal": "段 Landed の since と ci"
@@ -615,6 +765,16 @@ index 9ac7416659da92e14b836ef9e1b7fe2f69961ee3..fc80e29ec98131474b7fc76ed2064f2c
 +   "label": "誰の番でもない",
 +   "plain": "ほかの部品が手番を持つか\n終わった",
 +   "internal": "器の手番 none"
++  },
++  "case_unreadable": {
++   "label": "読めない",
++   "plain": "器の局面の出力の file は在るが版が読めない\n✗ まだ無いとは違う",
++   "internal": "電文 CaseDoc の unreadable が真（行 c-case-unreadable・g-unref-lc）"
++  },
++  "case_stale": {
++   "label": "古い",
++   "plain": "器の局面の出力に古さの印が在る\n・ 印の種類は title に並べる",
++   "internal": "電文 CaseDoc の stale が空でない（行 g-unref-lc）"
    }
   }
  }
