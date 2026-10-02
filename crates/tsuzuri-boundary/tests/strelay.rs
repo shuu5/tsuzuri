@@ -661,12 +661,13 @@ fn relay_eyes_argv_snapshot() {
         "--no-first-run",
         "--no-default-browser-check",
         URL,
+        "--disable-features=BackForwardCache",
     ];
     assert_eq!(relay::eyes_argv(profile, URL), want);
     let mut spawn = vec!["-c", PIPE_SCRIPT, "/fake/bin/eyes"];
     spawn.extend(want);
     let spawn: Vec<OsString> = spawn.into_iter().map(OsString::from).collect();
-    assert_eq!(spawn.len(), 9);
+    assert_eq!(spawn.len(), 10);
     assert_eq!(
         relay::spawn_argv(OsStr::new("/fake/bin/eyes"), profile, URL),
         spawn

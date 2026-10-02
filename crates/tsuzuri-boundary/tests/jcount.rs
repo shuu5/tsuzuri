@@ -211,6 +211,7 @@ fn doc(skip: &str, hscroll: &str) -> String {
         ("overlap", "[]".to_string()),
         ("nocard", "[]".to_string()),
         ("reach", "[]".to_string()),
+        ("skipped", "[]".to_string()),
         ("headings", "[]".to_string()),
         ("first", "[]".to_string()),
         ("errors", "[]".to_string()),

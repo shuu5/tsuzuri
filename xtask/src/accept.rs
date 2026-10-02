@@ -2,7 +2,8 @@
 //! 席の目の headless の Chrome（境界の crate の relay の Eyes・行 i-4）で全画面 × 2 幅 × 2 mode を測り
 //! （境界の crate の audit の sweep）、report を書いて違反の計を標準誤りに出す。
 //! server は起こさない（board の URL を旗で受ける・現物の server は席が tz surface serve で起こす）。
-//! rc は違反が在れば 1・無ければ 0・撃てなければ 2。
+//! rc は違反が在れば 1・無ければ 0・撃てなければ 2。まだ分からない画面（読みの印が待ちの上限の後も残る）が
+//! 在れば、違反の数に依らず report を書いて 2（行 g-accept-runner）。
 
 use std::env;
 use std::ffi::OsString;
@@ -68,12 +69,19 @@ pub fn run(args: &[String], root: &Path) -> i32 {
         }
     };
     match sweep(&flags, root) {
-        Ok(total) => {
+        Ok((total, 0)) => {
             emit_err(&format!(
                 "xtask accept: 違反 計 {total}（report は {}）",
                 flags.out.display()
             ));
             i32::from(total > 0)
+        }
+        Ok((total, unknown)) => {
+            emit_err(&format!(
+                "xtask accept: 違反 計 {total}・まだ分からない画面 {unknown}（report は {}）",
+                flags.out.display()
+            ));
+            2
         }
         Err(e) => {
             emit_err(&format!("xtask accept: {e}"));
@@ -82,19 +90,20 @@ pub fn run(args: &[String], root: &Path) -> i32 {
     }
 }
 
-/// 語彙表を読み、tz の口と同じ口座の dir の下で席の目の Chrome を起こして sweep を撃ち、report を書く。
-fn sweep(flags: &Flags, root: &Path) -> Result<usize, String> {
+/// 語彙表を読み、tz の口と同じ口座の dir の下で席の目の Chrome を起こして sweep を撃ち、report を書く
+/// （違反の和とまだ分からない画面の数を返す）。
+fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {
     let vocab = fs::read_to_string(root.join(VOCAB))
         .map_err(|e| format!("語彙表 {VOCAB} を読めない: {e}"))?;
     let board = flags.url.split('?').next().unwrap_or(&flags.url);
     let base = tunnel::user_dir(&env::temp_dir())?;
     let (_eyes, mut session) = Eyes::open(&flags.chrome, &base, board, TIMEOUT)?;
-    let (report, total) = audit::sweep(&mut session, board, &vocab)?;
+    let (report, total, unknown) = audit::sweep(&mut session, board, &vocab)?;
     let _ = session.close();
     if let Some(dir) = flags.out.parent().filter(|d| !d.as_os_str().is_empty()) {
         fs::create_dir_all(dir).map_err(|e| format!("{} を作れない: {e}", dir.display()))?;
     }
     fs::write(&flags.out, report)
         .map_err(|e| format!("report {} を書けない: {e}", flags.out.display()))?;
-    Ok(total)
+    Ok((total, unknown))
 }

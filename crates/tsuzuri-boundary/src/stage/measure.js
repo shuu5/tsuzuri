@@ -18,16 +18,21 @@
     }
     return { left, top, right, bottom };
   };
-  const shown = (e) => {
+  const boxed = (e) => {
     const r = e.getBoundingClientRect();
     const s = getComputedStyle(e);
     const b = box(e);
     return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden" && b.right > b.left && b.bottom > b.top;
   };
+  // 描かれるか: 箱を持っても、閉じた details の中・祖先の display none・visibility hidden の要素は利用者に見えないので、
+  // どの条にも数えない（外した数は skipped の hidden に返す・行 g-accept-runner）。
+  const drawn = (e) => e.checkVisibility({ visibilityProperty: true });
+  const shown = (e) => boxed(e) && drawn(e);
   // 開いた窓（aria-modal の箱）が在れば、測るのは窓の中だけ（窓の外は幕の下で押せない・行 g-accept）。
   const modal = Array.from(document.querySelectorAll("[aria-modal=true]")).find(shown);
   const root = modal || document.body;
   const seen = Array.from(root.querySelectorAll("*")).filter(shown);
+  const unseen = Array.from(root.querySelectorAll("*")).filter((e) => boxed(e) && !drawn(e));
   const name = (e) => {
     const cls = typeof e.className === "string" ? e.className.trim().split(/\s+/).filter(Boolean) : [];
     return [e.tagName.toLowerCase() + (e.id ? "#" + e.id : "")].concat(cls).join(".");
@@ -74,23 +79,35 @@
     return { key: e.getAttribute("data-v") || "", text: words(copy.textContent) };
   });
   const skip = ".legend, .lgline, [role=tab], .tabs, .seg, button, .num, .nid, .tid, .kid, .mono, [data-t], .q, script, style, " + mouth;
+  // 台帳が書いた字の置き場（面の印 data-ledger-text）は散文と文の予算に数えず、表の行を開いた中（class c-more）の
+  // 語と値の対は散文に数えない。外した置き場は skipped に名指して返す（黙って飛ばさない・行 g-accept-runner）。
+  const ledger = "[data-ledger-text]";
+  const pairs = ".c-more";
+  const skipped = seen
+    .filter((e) => e.matches(ledger))
+    .map((e) => "ledger " + name(e))
+    .concat(seen.filter((e) => e.matches(pairs)).map((e) => "pair " + name(e)))
+    .concat(unseen.map((e) => "hidden " + name(e)));
   const first = [];
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let t = walk.nextNode(); t; t = walk.nextNode()) {
     const p = t.parentElement;
     const piece = words(t.nodeValue);
-    if (!piece || !p || !shown(p) || p.closest(skip)) continue;
+    if (!piece || !p || !shown(p) || p.closest(skip) || p.closest(ledger) || p.closest(pairs)) continue;
     if (p.getBoundingClientRect().top < vh) first.push(piece);
   }
-  const titles = seen.filter((e) => e.matches("[data-t]")).map((e) => words(e.textContent));
+  const titles = seen.filter((e) => e.matches("[data-t]") && !e.closest(ledger)).map((e) => words(e.textContent));
   const nodes = seen.filter((e) => e.matches(".nid, .tid, .kid")).map((e) => ({
     id: words(e.textContent),
     text: words((e.closest("a") || e.parentElement || e).textContent),
   }));
+  // 今の選びの印（aria-selected と aria-pressed の真・aria-current・今の tab の class on）。今の選びは押しても何も
+  // 替わらないのが正しいので、runner（audit の case）は now の真の切り替えを押さない（行 g-accept-runner）。
+  const current = "[aria-selected=true], [aria-pressed=true], [aria-current]:not([aria-current=false]), .on";
   const switch_at = seen
     .filter((e) => e.matches("button.seg, .seg button, [role=tab], [aria-pressed], [data-tab]"))
-    .map((e) => ({ label: words(e.textContent), r: e.getBoundingClientRect() }))
-    .map(({ label, r }) => ({ label, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))
+    .map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))
+    .map(({ label, now, r }) => ({ label, now, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))
     .filter(({ x, y }) => x >= 0 && y >= 0 && x < vw && y < vh);
   const libraries = Array.from(document.querySelectorAll("script[src], link[rel~=stylesheet][href], link[rel~=preload][href], link[rel~=modulepreload][href]"))
     .map((e) => e.getAttribute("src") || e.getAttribute("href"));
@@ -101,6 +118,7 @@
     overlap,
     nocard,
     reach,
+    skipped,
     headings,
     first,
     errors: [],

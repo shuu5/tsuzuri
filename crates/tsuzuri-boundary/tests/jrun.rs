@@ -178,7 +178,7 @@ fn jrun_screens_cover_surface() {
 fn jrun_case_order_and_readings() {
     let url = format!("{BOARD}?win=gaps&mode=beginner");
     let pressed = format!("{BOARD}?win=gaps&mode=expert");
-    let spots = r#""switch_at": [{"label": "expert", "x": 10, "y": 20}, {"label": "hold", "x": 30, "y": 40}]"#;
+    let spots = r#""switch_at": [{"label": "expert", "now": false, "x": 10, "y": 20}, {"label": "hold", "now": false, "x": 30, "y": 40}]"#;
     let text = fixture("clean.json").replace(r#""switch_at": []"#, spots);
     assert!(text.contains("hold"), "switch_at を仕込む");
     let mut page = Fake::new(
@@ -218,11 +218,13 @@ fn jrun_case_order_and_readings() {
         "url".to_string(),
         navigate.clone(),
         wait.clone(),
+        "measure".to_string(),
         "url".to_string(),
         format!("{:?}", Command::Click { x: 30, y: 40 }),
         "url".to_string(),
         navigate,
         wait,
+        "measure".to_string(),
     ]
     .to_vec();
     assert_eq!(page.log, want);
@@ -300,6 +302,10 @@ fn jrun_errors_from_events() {
     assert!(errors(&[LOAD.to_string(), entry("warning", "w")]).is_empty());
 }
 
+/// 違反もまだ分からない画面も外した置き場も無い sweep の report の末の 3 行。
+const TAIL: &str =
+    "違反 計 0\nまだ分からない 計 0\n外した置き場 計 台帳の字 0 語と値の対 0 見えない要素 0";
+
 #[test]
 fn jrun_sweep_all_cases() {
     const ID: &str = "t3-hub.5_2~#é";
@@ -315,7 +321,7 @@ fn jrun_sweep_all_cases() {
         }
     };
     let mut page = Fake::new(measured.clone(), |_, _| vec![LOAD.to_string()]);
-    let (report, total) = sweep(&mut page, BOARD, &vocab).expect("sweep");
+    let (report, total, unknown) = sweep(&mut page, BOARD, &vocab).expect("sweep");
     let mut urls = Vec::new();
     for width in [1280, 960, 700, 390] {
         for mode in ["beginner", "expert"] {
@@ -337,9 +343,9 @@ fn jrun_sweep_all_cases() {
         urls.iter()
             .map(|(width, mode, url)| line(*width, mode, url, &[0; 12])),
     );
-    want.push("違反 計 0".to_string());
+    want.push(TAIL.to_string());
     assert_eq!(report, format!("{}\n", want.join("\n")));
-    assert_eq!(total, 0);
+    assert_eq!((total, unknown), (0, 0));
 
     let mut broken = Fake::new(measured, |url, _| {
         let mut events = vec![LOAD.to_string()];
@@ -348,9 +354,12 @@ fn jrun_sweep_all_cases() {
         }
         events
     });
-    let (report, total) = sweep(&mut broken, BOARD, &vocab).expect("page error の在る sweep");
-    assert_eq!(total, 8);
-    assert!(report.ends_with("違反 計 8\n"), "{report}");
+    let (report, total, unknown) = sweep(&mut broken, BOARD, &vocab).expect("page error");
+    assert_eq!((total, unknown), (8, 0));
+    assert!(
+        report.contains("\n違反 計 8\nまだ分からない 計 0\n"),
+        "{report}"
+    );
     let node_line = line(
         390,
         "expert",
@@ -432,6 +441,7 @@ fn returned_object_keys(text: String) {
             "overlap",
             "nocard",
             "reach",
+            "skipped",
             "headings",
             "first",
             "errors",

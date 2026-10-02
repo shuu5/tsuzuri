@@ -6,6 +6,8 @@
 //! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
 //! （行 g-accept）。
 //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
+//! runner は頁を開いた後、面が描き、どの block も読みの印を出さなくなるまで上限つきで待ち、上限で残る画面を
+//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（行 g-accept-runner・憲法 P-7）。
 
 use std::fmt::Write;
 
@@ -90,6 +92,9 @@ pub struct Facts {
     pub nocard: Vec<String>,
     /// 節点の札（節点の頁への link と近傍の図の節点）の指の受け手。
     pub reach: Vec<Reach>,
+    /// 散文と文の予算から外した置き場（台帳の字の印は `ledger <名>`・表の行を開いた中の語と値の対は `pair <名>`）と、
+    /// 箱を持つが描かれないのでどの条にも数えない要素（`hidden <名>`）（行 g-accept-runner）。
+    pub skipped: Vec<String>,
     /// 見出し。
     pub headings: Vec<Heading>,
     /// 最初の画面の散文の片。
@@ -131,6 +136,9 @@ pub fn facts(text: &str) -> Result<Facts, String> {
                     .collect::<Option<_>>()?,
             })
         })?,
+        skipped: objects(text, "skipped", |o| {
+            unquote(o).filter(|s| SKIP_KINDS.iter().any(|k| s.starts_with(&format!("{k} "))))
+        })?,
         headings: objects(text, "headings", |o| {
             Some(Heading {
                 key: unquote(member(o, "key")?)?,
@@ -155,6 +163,24 @@ pub fn facts(text: &str) -> Result<Facts, String> {
         })?,
         text: string(text, "text")?,
         libraries: strings(text, "libraries")?,
+    })
+}
+
+/// 外した置き場の種類（台帳の字の印・表の行を開いた中の語と値の対・描かれない要素・report の字は SKIP_WORDS の同じ順）。
+pub const SKIP_KINDS: [&str; 3] = ["ledger", "pair", "hidden"];
+
+/// 外した置き場の種類の report の字。
+pub const SKIP_WORDS: [&str; 3] = ["台帳の字", "語と値の対", "見えない要素"];
+
+/// 外した置き場の数（SKIP_KINDS の順）。
+pub fn skipped_counts(facts: &Facts) -> [usize; 3] {
+    SKIP_KINDS.map(|k| {
+        let head = format!("{k} ");
+        facts
+            .skipped
+            .iter()
+            .filter(|s| s.starts_with(&head))
+            .count()
     })
 }
 
@@ -230,6 +256,80 @@ pub fn count(facts: &Facts, vocab: &str) -> [usize; 12] {
     ]
 }
 
+/// 数えた違反の中身（条の鍵と空白と要素の名か字の 1 行を違反ごとに・行の数は count の和と同じ・RULES の順・行 g-accept-runner）。
+/// 撃つ時刻のデータで出る違反を report から追えるようにする（散文は字数だけ、逐語は印の位置だけを書き、字を写さない）。
+pub fn details(facts: &Facts, vocab: &str) -> Vec<String> {
+    RULES
+        .iter()
+        .zip(found(facts, vocab))
+        .flat_map(|((key, _), items)| {
+            items
+                .into_iter()
+                .map(move |i| format!("{key} {}", i.replace('\n', " ")))
+        })
+        .collect()
+}
+
+/// 条ごとに数えた要素の名か字（RULES の順・count が数える物と同じ）。
+fn found(facts: &Facts, vocab: &str) -> [Vec<String>; 12] {
+    let prose: usize = facts.first.iter().map(|p| prose_chars(p)).sum();
+    let hover = facts.nocard.iter().cloned().chain(
+        facts
+            .reach
+            .iter()
+            .filter(|r| !r.has_card())
+            .map(|r| r.name.clone()),
+    );
+    let heading = facts
+        .headings
+        .iter()
+        .filter(|h| label(vocab, &h.key).as_deref() != Some(h.text.as_str()))
+        .map(|h| format!("{} {}", h.key, h.text));
+    let budget = facts
+        .titles
+        .iter()
+        .filter(|t| t.chars().count() > TITLE_MAX)
+        .chain(facts.first.iter().filter(|p| heavy_prose(p)))
+        .cloned();
+    let nodeid = facts
+        .nodes
+        .iter()
+        .filter(|n| !n.text.contains(n.id.as_str()))
+        .map(|n| n.id.clone());
+    [
+        facts.overflow.clone(),
+        facts.overlap.clone(),
+        (facts.hscroll > 0)
+            .then(|| format!("{} px", facts.hscroll))
+            .into_iter()
+            .collect(),
+        hover.collect(),
+        heading.collect(),
+        (prose > PROSE_MAX)
+            .then(|| format!("{prose} 字"))
+            .into_iter()
+            .collect(),
+        facts.errors.clone(),
+        budget.collect(),
+        nodeid.collect(),
+        facts
+            .switches
+            .iter()
+            .filter(|s| s.before == s.after)
+            .map(|s| s.label.clone())
+            .collect(),
+        verbatim_at(&facts.text)
+            .map(|at| format!("位置 {at}"))
+            .collect(),
+        facts
+            .libraries
+            .iter()
+            .filter(|l| foreign(&facts.url, l))
+            .cloned()
+            .collect(),
+    ]
+}
+
 /// 散文の片が文の予算を越えるか（中黒を 2 つ以上持つか、括弧を入れ子にする）。
 fn heavy_prose(text: &str) -> bool {
     if text.matches('・').count() >= 2 {
@@ -253,6 +353,11 @@ fn heavy_prose(text: &str) -> bool {
 
 /// 持ち主の逐語の記録の印（`user YYYY-MM-DDTHH:`）の数。
 fn verbatim_marks(text: &str) -> usize {
+    verbatim_at(text).count()
+}
+
+/// 持ち主の逐語の印（字 user と空白と日時の頭）の byte の位置。
+fn verbatim_at(text: &str) -> impl Iterator<Item = usize> + '_ {
     const SHAPE: &[u8] = b"dddd-dd-ddTdd:";
     text.match_indices("user ")
         .filter(|(at, word)| {
@@ -263,7 +368,7 @@ fn verbatim_marks(text: &str) -> usize {
                     _ => want == got,
                 })
         })
-        .count()
+        .map(|(at, _)| at)
 }
 
 /// 読み先が頁と別の origin（scheme と host と port）から来るか。
@@ -360,6 +465,23 @@ const NARROW: u32 = 390;
 /// 頁へ移った後に待つ間（面の wasm の起動と読みの応答を待つ）。
 const SETTLE_MS: u64 = 1000;
 
+/// 面の block が口をまだ読んでいない間に出す理由の字（面の kit の NOT_READ と同じ字・行 g-accept-runner）。
+pub const NOT_READ: &str = "この block の口をまだ読んでいない";
+
+/// 読みの印を見直す間（ms・行 g-accept-runner）。
+pub const POLL_MS: u64 = 300;
+
+/// 読みの印を見る回数の上限（SETTLE_MS の後に 1 回と、POLL_MS ごとに残りの回・間の待ちだけで約 30 秒・行 g-accept-runner）。
+pub const READ_POLLS: usize = 100;
+
+/// 読みの印が上限まで残った画面の字（report の行の末と case の Err・行 g-accept-runner）。
+pub const UNSETTLED: &str = "まだ分からない（面の block の読みの印が待ちの上限の後も残る・server の口の応答を確かめて撃ち直す）";
+
+/// 頁の見える字が、まだ測れない頁の字か（面がまだ描いていない空の字か、どれかの block が読みの印を出す）。
+pub fn unread(text: &str) -> bool {
+    text.trim().is_empty() || text.contains(NOT_READ)
+}
+
 /// runner の頁の口（CDP の Session が実装する・歯は偽の頁で撃つ）。
 pub trait Page {
     /// 命令を撃ち、Call の歩の応答の字を返す。
@@ -416,7 +538,13 @@ pub fn errors(events: &[String]) -> Vec<String> {
 
 /// 1 つの画面を 1 つの幅で測る。viewport と console を撃って頁へ移り、測りの式の事実に URL と、
 /// 移ってから測るまでの page error と、測りの返す switch_at の在りかごとに押した切り替え（押すたびに頁へ戻る）を埋める。
+/// 読みの印が待ちの上限の後も残る画面は Err（字は UNSETTLED を含む・行 g-accept-runner）。
 pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String> {
+    settled(page, url, width)?.ok_or_else(|| format!("{url}: {UNSETTLED}"))
+}
+
+/// case の中身（読みの印が待ちの上限の後も残る画面は None）。今の選び（switch_at の now が真）は押さない。
+fn settled(page: &mut impl Page, url: &str, width: u32) -> Result<Option<Facts>, String> {
     let narrow = width <= NARROW;
     page.run(&Command::Viewport {
         width,
@@ -426,72 +554,156 @@ pub fn case(page: &mut impl Page, url: &str, width: u32) -> Result<Facts, String
     })?;
     page.run(&Command::Console)?;
     let from = page.events().len();
-    open(page, url)?;
-    let text = page.measure()?;
-    let mut facts = facts(&text).map_err(|e| format!("{url}: {e}"))?;
+    let Some((mut facts, text)) = open(page, url)? else {
+        return Ok(None);
+    };
     facts.url = url.to_string();
     facts.errors = errors(page.events().get(from..).unwrap_or_default());
     let at = objects(&text, "switch_at", |o| {
         let spot = |key| member(o, key)?.parse::<u32>().ok();
-        Some((unquote(member(o, "label")?)?, spot("x")?, spot("y")?))
+        let now = match member(o, "now")? {
+            "true" => true,
+            "false" => false,
+            _ => return None,
+        };
+        Some((unquote(member(o, "label")?)?, now, spot("x")?, spot("y")?))
     })
     .map_err(|e| format!("{url}: {e}"))?;
     facts.switches.clear();
-    for (label, x, y) in at {
+    for (label, _, x, y) in at.into_iter().filter(|(_, now, _, _)| !now) {
         let before = page.url()?;
         page.run(&Command::Click { x, y })?;
         let after = page.url()?;
-        open(page, url)?;
+        if open(page, url)?.is_none() {
+            return Ok(None);
+        }
         facts.switches.push(Switch {
             label,
             before,
             after,
         });
     }
-    Ok(facts)
+    Ok(Some(facts))
 }
 
-/// 頁へ移り、面が描き終わるまで待つ。
-fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
+/// 頁へ移り、面が描いてどの block も読みの印を出さなくなるまで待ち、その時の事実と測りの字を返す。
+/// SETTLE_MS の後に測り、事実の字 text が unread なら POLL_MS ごとに測り直し、READ_POLLS 回の測りの後も
+/// unread なら None。事実の字が読めなければ待たずに Err。
+fn open(page: &mut impl Page, url: &str) -> Result<Option<(Facts, String)>, String> {
     page.run(&Command::Navigate {
         url: url.to_string(),
     })?;
     page.run(&Command::Wait { ms: SETTLE_MS })?;
-    Ok(())
+    for poll in 0..READ_POLLS {
+        if poll > 0 {
+            page.run(&Command::Wait { ms: POLL_MS })?;
+        }
+        let text = page.measure()?;
+        let read = facts(&text).map_err(|e| format!("{url}: {e}"))?;
+        if !unread(&read.text) {
+            return Ok(Some((read, text)));
+        }
+    }
+    Ok(None)
 }
 
-/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 11 の画面と、
-/// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
-pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
-    let mut report = head();
-    report.push('\n');
-    let mut total = 0;
-    let mut measure = |page: &mut _, url: &str, width, mode| -> Result<Facts, String> {
-        let facts = case(page, url, width)?;
-        let counts = count(&facts, vocab);
-        total += counts.iter().sum::<usize>();
-        report.push_str(&line(width, mode, url, &counts));
-        report.push('\n');
-        Ok(facts)
-    };
-    for width in WIDTHS {
-        for mode in MODES {
-            let mut first = None;
-            for screen in SCREENS {
-                let facts = measure(page, &format!("{board}{screen}mode={mode}"), width, mode)?;
-                if screen == FIRST_NODE {
-                    first = facts.nodes.into_iter().next().map(|n| n.id);
+/// sweep の数え（report の字・違反の和・まだ分からない画面の数）。
+struct Tally<'a> {
+    vocab: &'a str,
+    report: String,
+    total: usize,
+    unknown: usize,
+    skipped: [usize; 3],
+}
+
+impl Tally<'_> {
+    /// report に画面の 1 行を足す（測れた画面は line の 12 の数と、外した置き場が在ればその数・測れない画面は幅と
+    /// mode と URL と UNSETTLED）。
+    fn add(&mut self, width: u32, mode: &str, url: &str, facts: Option<&Facts>) {
+        match facts {
+            Some(facts) => {
+                let counts = count(facts, self.vocab);
+                self.total += counts.iter().sum::<usize>();
+                self.report.push_str(&line(width, mode, url, &counts));
+                let skipped = skipped_counts(facts);
+                if skipped.iter().sum::<usize>() > 0 {
+                    self.report.push_str(&skip_words(&skipped));
+                }
+                for (all, n) in self.skipped.iter_mut().zip(skipped) {
+                    *all += n;
+                }
+                // 違反の中身は画面の行の下に 1 つずつ（2 つの空白で字下げ・撃つ時刻で出る違反を追う）。
+                for item in details(facts, self.vocab) {
+                    let _ = write!(self.report, "\n  {item}");
                 }
             }
+            None => {
+                self.unknown += 1;
+                let _ = write!(self.report, "{width} {mode} {url} {UNSETTLED}");
+            }
+        }
+        self.report.push('\n');
+    }
+}
+
+/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和とまだ分からない画面の数を返す。組ごとに SCREENS の
+/// 11 の画面と、その組の home の最初の節点の頁を測る。読みの印が上限まで残る画面は違反に数えず、まだ分からないの
+/// 行にして続ける（home がまだ分からない組は、開く節点も分からないので節点の頁も id の無い URL でまだ分からない）。
+/// report は head の行・画面ごとの行・違反 計 の行・まだ分からない 計 の行。
+pub fn sweep(
+    page: &mut impl Page,
+    board: &str,
+    vocab: &str,
+) -> Result<(String, usize, usize), String> {
+    let mut tally = Tally {
+        vocab,
+        report: head(),
+        total: 0,
+        unknown: 0,
+        skipped: [0; 3],
+    };
+    tally.report.push('\n');
+    for width in WIDTHS {
+        for mode in MODES {
+            // home の最初の節点（外の None は home がまだ分からない・中の None は節点の無い home）。
+            let mut first = None;
+            for screen in SCREENS {
+                let url = format!("{board}{screen}mode={mode}");
+                let facts = settled(page, &url, width)?;
+                tally.add(width, mode, &url, facts.as_ref());
+                if screen == FIRST_NODE {
+                    first = facts.map(|f| f.nodes.into_iter().next().map(|n| n.id));
+                }
+            }
+            let Some(first) = first else {
+                tally.add(width, mode, &format!("{board}?page=node&mode={mode}"), None);
+                continue;
+            };
             let id = first.ok_or_else(|| {
                 format!("{width} {mode}: home の画面に節点が無い（節点の頁を開けない）")
             })?;
             let url = format!("{board}?page=node&id={}&mode={mode}", encode(&id));
-            measure(page, &url, width, mode)?;
+            let facts = settled(page, &url, width)?;
+            tally.add(width, mode, &url, facts.as_ref());
         }
     }
-    let _ = writeln!(report, "違反 計 {total}");
-    Ok((report, total))
+    let _ = writeln!(tally.report, "違反 計 {}", tally.total);
+    let _ = writeln!(tally.report, "まだ分からない 計 {}", tally.unknown);
+    let _ = writeln!(
+        tally.report,
+        "外した置き場 計{}",
+        skip_words(&tally.skipped)
+    );
+    Ok((tally.report, tally.total, tally.unknown))
+}
+
+/// 外した置き場の数の字（種類ごとに空白と SKIP_WORDS の字と空白と数・頭に 外し は付けない）。
+fn skip_words(skipped: &[usize; 3]) -> String {
+    SKIP_WORDS
+        .iter()
+        .zip(skipped)
+        .map(|(word, n)| format!(" {word} {n}"))
+        .collect()
 }
 
 /// query の値の字（英数と - . _ ~ のほかの byte を %XX にする・面の節点の頁への link と同じ）。

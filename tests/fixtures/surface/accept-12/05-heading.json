@@ -5,6 +5,7 @@
  "overlap": [],
  "nocard": [],
  "reach": [],
+ "skipped": [],
  "headings": [
   {
    "key": "pipeline",

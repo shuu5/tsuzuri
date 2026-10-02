@@ -38,7 +38,9 @@ pub const ATTACH: &str = "Target.attachToTarget";
 /// 頁の target の見直しの間隔。
 const POLL: Duration = Duration::from_millis(50);
 
-/// 席の目の Chrome の引数（headless・専用の profile・pipe の口・初めの問いを出さない・最初の頁）。
+/// 席の目の Chrome の引数（headless・専用の profile・pipe の口・初めの問いを出さない・最初の頁・戻りの cache を止める）。
+/// 戻りの cache（back-forward cache）は離れた頁を知らせの接続ごと持ち続け、1 つの頁で移り続けると host ごとの
+/// 接続の上限を埋めて次の頁の読みを待たせるので止める（行 g-accept-runner）。
 pub fn eyes_argv(profile: &Path, url: &str) -> Vec<String> {
     vec![
         "--headless=new".to_string(),
@@ -47,6 +49,7 @@ pub fn eyes_argv(profile: &Path, url: &str) -> Vec<String> {
         "--no-first-run".to_string(),
         "--no-default-browser-check".to_string(),
         url.to_string(),
+        "--disable-features=BackForwardCache".to_string(),
     ]
 }
 
