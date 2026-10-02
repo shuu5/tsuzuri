@@ -1,0 +1,210 @@
+diff --git a/crates/tsuzuri-contract/src/case.rs b/crates/tsuzuri-contract/src/case.rs
+index 3a402a4b96eb03e1525e366a67b044eb6e72c26b..882a304c56be23f8968916c949ca93cbe21a9cfc 100644
+--- a/crates/tsuzuri-contract/src/case.rs
++++ b/crates/tsuzuri-contract/src/case.rs
+@@ -18,6 +18,11 @@ pub struct CaseDoc {
+     /// 古さの印の種類の字（古さの印の file の順・印が無ければ空・空でなければ出力は古い）。
+     pub stale: Vec<String>,
+     pub parts: Reading<Vec<CasePart>>,
++    /// 出力の file は在るのに読めない版の周か（真なら parts は Unknown で、面は「まだ分からない」でなく「読めない」と出す）。
++    /// 出力が JSON でない・版が 1 でない・部品の列が無い時と、出力が在って古さの印の file が読めない時に真。
++    /// 出力が無い周は偽（「まだ分からない」）。false は電文に字を置かず、鍵の無い前の電文は false に読む（行 c-case-unreadable）。
++    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
++    pub unreadable: bool,
+ }
+ 
+ /// 部品 1 つ（id は種類ごとの形の字のまま・bead id とは限らない）。
+diff --git a/crates/tsuzuri-contract/tests/cform_case.rs b/crates/tsuzuri-contract/tests/cform_case.rs
+index ab6ac0c845b663b0ba499741f00a8cb4e7252a6b..a000d94e967b72f4f2ad27d2f9780cadfaf43058 100644
+--- a/crates/tsuzuri-contract/tests/cform_case.rs
++++ b/crates/tsuzuri-contract/tests/cform_case.rs
+@@ -9,6 +9,7 @@ mod common;
+ use common::{AT, Form, form};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart, PATH};
++use tsuzuri_contract::wire;
+ 
+ /// 依存で待つ契約と、知らない局面の語を持つ便の部品。
+ fn parts() -> Vec<CasePart> {
+@@ -49,12 +50,21 @@ fn forms() -> Vec<Box<dyn Form>> {
+                     generated_at: Some(AT),
+                     stale: vec!["ledger-gate".into()],
+                     parts: Reading::Known(parts()),
++                    unreadable: false,
+                 },
+-                // 出力か古さの印が読めない。
++                // 出力が無い（まだ分からない）。
+                 CaseDoc {
+                     generated_at: None,
+                     stale: vec![],
+                     parts: Reading::Unknown,
++                    unreadable: false,
++                },
++                // 出力は在るが読めない版（読めない）。
++                CaseDoc {
++                    generated_at: None,
++                    stale: vec![],
++                    parts: Reading::Unknown,
++                    unreadable: true,
+                 },
+             ],
+         ),
+@@ -82,6 +92,23 @@ fn bvcform_roundtrip_all() {
+     common::roundtrip_all(&forms());
+ }
+ 
++/// 欄 unreadable は false なら電文に字を置かず、鍵の無い前の電文は false に読む（行 c-case-unreadable）。
++#[test]
++fn bvcform_unreadable_defaults_false() {
++    let old = r#"{"generated_at":null,"stale":[],"parts":"unknown"}"#;
++    let doc: CaseDoc = wire::decode(old).expect("鍵の無い前の電文");
++    assert!(!doc.unreadable, "鍵の無い電文は読めた周");
++    assert_eq!(doc.parts, Reading::Unknown);
++    let text = wire::encode(&doc).expect("電文");
++    assert_eq!(text, old, "false は字を置かない");
++    let broken = CaseDoc {
++        unreadable: true,
++        ..doc
++    };
++    let text = wire::encode(&broken).expect("電文");
++    assert!(text.ends_with(r#","unreadable":true}"#), "{text}");
++}
++
+ #[test]
+ fn bvcform_path_is_api_cases() {
+     assert_eq!(PATH, "/api/cases");
+diff --git a/crates/tsuzuri-contract/tests/snapshots/case.json b/crates/tsuzuri-contract/tests/snapshots/case.json
+index 4c2ef7f3bd8325357e8864777ba35967900b94ad..ad48952c74ecbd774d21673c6d6c07551cdbe82d 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/case.json
++++ b/crates/tsuzuri-contract/tests/snapshots/case.json
+@@ -42,6 +42,12 @@
+       "generated_at": null,
+       "stale": [],
+       "parts": "unknown"
++    },
++    {
++      "generated_at": null,
++      "stale": [],
++      "parts": "unknown",
++      "unreadable": true
+     }
+   ],
+   "case::CasePart": [
+diff --git a/crates/tsuzuri-core/src/case.rs b/crates/tsuzuri-core/src/case.rs
+index 844bf782ce5c87f2a14d8d267d818212786d9b30..1807ed8df464c655ba2a92b27126d83a124b7298 100644
+--- a/crates/tsuzuri-core/src/case.rs
++++ b/crates/tsuzuri-core/src/case.rs
+@@ -3,6 +3,8 @@
+ //! 読めない時と古い時は器の読み手（器の fleet/lifecycle_read.rs の read を比べる入力の組を空にして呼んだ形）に合わせる:
+ //! 古さの印の file が在って読めない（JSON でない・版が 1 でない・印の列の形が違う・同じ種類の印が 2 つ在る）か、出力が無いか
+ //! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
++//! 出力の字が在るのに部品が「まだ分からない」になった周は電文の unreadable を真にする（面は「読めない」と出す）。
++//! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま（行 c-case-unreadable）。
+ //! 欄が欠けるか型が違う部品は落とす。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
+ //! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
+ 
+@@ -17,11 +19,13 @@ const VERSION: u64 = 1;
+ 
+ /// 出力の字と古さの印の字から電文を組む。`json` は出力の file の字（無いか読めなければ空の字）、
+ /// `stale` は古さの印の file の字（file が無ければ None・在って読めなければ空の字）。
++/// 部品が「まだ分からない」の電文は、出力の字が空でなければ unreadable が真。
+ pub fn cases_of(json: &str, stale: Option<&str>) -> CaseDoc {
+     let unknown = CaseDoc {
+         generated_at: None,
+         stale: Vec::new(),
+         parts: Reading::Unknown,
++        unreadable: !json.is_empty(),
+     };
+     let marks = match stale.map(stale_kinds) {
+         None => Vec::new(),
+@@ -41,6 +45,7 @@ pub fn cases_of(json: &str, stale: Option<&str>) -> CaseDoc {
+             .and_then(epoch_secs),
+         stale: marks,
+         parts: Reading::Known(parts.iter().filter_map(part_of).collect()),
++        unreadable: false,
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-core/tests/bvcase.rs b/crates/tsuzuri-core/tests/bvcase.rs
+index eeefabc641c8c0bd07da1eb358a058b4d68eff74..3706b43e6ba8f0b69d9aad50bc6c25dfd3ae77fc 100644
+--- a/crates/tsuzuri-core/tests/bvcase.rs
++++ b/crates/tsuzuri-core/tests/bvcase.rs
+@@ -132,6 +132,7 @@ fn bvcase_unreadable_is_unknown() {
+         generated_at: None,
+         stale: vec![],
+         parts: Reading::Unknown,
++        unreadable: false,
+     };
+     for (out, stale, why) in [
+         ("", None, "出力が無い"),
+@@ -158,7 +159,69 @@ fn bvcase_unreadable_is_unknown() {
+             "同じ種類の印が 2 つ",
+         ),
+     ] {
+-        assert_eq!(cases_of(out, stale), unknown, "{why}");
++        // 欄 unreadable は歯 bvcase_unreadable_flag_on_present_output と ..._off_when_absent_or_read が見る。
++        let doc = cases_of(out, stale);
++        assert_eq!(
++            CaseDoc {
++                unreadable: false,
++                ..doc
++            },
++            unknown,
++            "{why}"
++        );
++    }
++}
++
++/// 出力の字が在るのに読めない周は欄 unreadable が真で部品は Unknown（行 c-case-unreadable）。
++#[test]
++fn bvcase_unreadable_flag_on_present_output() {
++    let json = fixture("lifecycle.json");
++    for (out, stale, why) in [
++        ("not json", None, "出力が JSON でない"),
++        (r#"{"version":2,"parts":[]}"#, None, "出力の版が 1 でない"),
++        (r#"{"version":1}"#, None, "部品の列が無い"),
++        (r#"{"version":1,"parts":{}}"#, None, "部品が列でない"),
++        (json.as_str(), Some(""), "古さの印の file を読めない"),
++        (json.as_str(), Some("not json"), "古さの印が JSON でない"),
++        (
++            json.as_str(),
++            Some(r#"{"version":2,"marks":[]}"#),
++            "古さの印の版が 1 でない",
++        ),
++        (
++            json.as_str(),
++            Some(r#"{"version":1,"marks":[{"kind":"merge-gate"},{"kind":"merge-gate"}]}"#),
++            "同じ種類の印が 2 つ",
++        ),
++    ] {
++        let doc = cases_of(out, stale);
++        assert!(doc.unreadable, "{why}");
++        assert_eq!(doc.parts, Reading::Unknown, "{why}");
++    }
++}
++
++/// 出力の字が空の周（古さの印が読めなくても）と読めた周は欄 unreadable が偽（行 c-case-unreadable）。
++#[test]
++fn bvcase_unreadable_flag_off_when_absent_or_read() {
++    for (stale, why) in [
++        (None, "出力が無い"),
++        (Some("not json"), "出力が無く古さの印が JSON でない"),
++        (Some(""), "出力が無く古さの印の file を読めない"),
++    ] {
++        let doc = cases_of("", stale);
++        assert!(!doc.unreadable, "{why}");
++        assert_eq!(doc.parts, Reading::Unknown, "{why}");
++    }
++    let json = fixture("lifecycle.json");
++    let marks = fixture("lifecycle.stale");
++    for (stale, why) in [
++        (None, "読めた"),
++        (Some(r#"{"version":1,"marks":[]}"#), "読めた・印は 0 件"),
++        (Some(marks.as_str()), "古いが読めた"),
++    ] {
++        let doc = cases_of(&json, stale);
++        assert!(!doc.unreadable, "{why}");
++        assert_eq!(known(&doc).len(), 9, "{why}");
+     }
+ }
+ 
