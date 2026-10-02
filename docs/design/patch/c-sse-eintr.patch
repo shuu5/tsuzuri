@@ -1,0 +1,206 @@
+diff --git a/crates/tsuzuri-boundary/tests/lidle.rs b/crates/tsuzuri-boundary/tests/lidle.rs
+index 19a09030e8a7bc37041ee58673ac9834dfc3b32f..0a5e8dbf48a13d8efe50c17c30d12c2e250b5c6a 100644
+--- a/crates/tsuzuri-boundary/tests/lidle.rs
++++ b/crates/tsuzuri-boundary/tests/lidle.rs
+@@ -4,7 +4,7 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
++use std::io::{ErrorKind, Read, Write};
+ use std::net::TcpStream;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+@@ -332,7 +332,12 @@ fn run_and_count(root: PathBuf, issues: PathBuf, config: Config) {
+     s.set_read_timeout(Some(Duration::from_secs(2)))
+         .expect("timeout");
+     let mut head = [0u8; 256];
+-    let got = s.read(&mut head).expect("頭を読む");
++    let got = loop {
++        match s.read(&mut head) {
++            Err(e) if e.kind() == ErrorKind::Interrupted => {}
++            got => break got.expect("頭を読む"),
++        }
++    };
+     assert!(got > 0, "頭の字が無い");
+     thread::sleep(Duration::from_millis(1500));
+     assert_eq!(calls(&root), 3, "受け手が付いた周の読み");
+diff --git a/crates/tsuzuri-boundary/tests/lstore.rs b/crates/tsuzuri-boundary/tests/lstore.rs
+index fc8fca1d51dbac45daa5a691828a362215daf854..67d6b8a6470082dd232df19b8e573deda2da4857 100644
+--- a/crates/tsuzuri-boundary/tests/lstore.rs
++++ b/crates/tsuzuri-boundary/tests/lstore.rs
+@@ -414,6 +414,7 @@ fn read_until(s: &mut TcpStream, buf: &mut String, until: Instant, stop: impl Fn
+         match s.read(&mut chunk) {
+             Ok(0) => return,
+             Ok(n) => buf.push_str(std::str::from_utf8(&chunk[..n]).expect("SSE の字")),
++            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => return,
+             Err(e) => panic!("SSE を読む: {e}"),
+         }
+diff --git a/crates/tsuzuri-boundary/tests/mqask.rs b/crates/tsuzuri-boundary/tests/mqask.rs
+index bdeccf629c5ad9526b4449556e8b943cb9b95268..277fba09912cd4d29017a907d2063d0076e5acfd 100644
+--- a/crates/tsuzuri-boundary/tests/mqask.rs
++++ b/crates/tsuzuri-boundary/tests/mqask.rs
+@@ -238,6 +238,7 @@ fn mqask_other_change_reaches_events() {
+             match s.read(&mut buf) {
+                 Ok(0) => return got.contains(want),
+                 Ok(n) => got.push_str(&String::from_utf8_lossy(&buf[..n])),
++                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                 Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+                 Err(e) => panic!("知らせを読めない: {e}"),
+             }
+diff --git a/crates/tsuzuri-boundary/tests/pmisroute.rs b/crates/tsuzuri-boundary/tests/pmisroute.rs
+index ea55adb1e684d20d8ee3fd61fde28ff588197f3c..2385f113f11836bd26addd8b5e1d3f99c533110e 100644
+--- a/crates/tsuzuri-boundary/tests/pmisroute.rs
++++ b/crates/tsuzuri-boundary/tests/pmisroute.rs
+@@ -4,10 +4,11 @@
+ //! 偽の bd は撃たれるたびに記録の file bd に 1 行を足して作業場の ledger.json の字を出し、偽の器は受けた argv を
+ //! 記録の file argv に 1 行ずつ足し、argv の頭が doctor なら作業場の sleep の字の秒だけ待ってから out-doctor の字を出す
+ //! （ほかと file の無い出力は rc 1）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
++//! 知らせの接続の読みは助けの `reread` で撃ち、Interrupted だけを同じ締め切りの中で撃ち直す（行 c-sse-eintr）。
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
++use std::io::{self, ErrorKind, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+@@ -242,6 +243,18 @@ fn until(what: &str, mut ok: impl FnMut() -> bool) {
+     }
+ }
+ 
++/// 読みを 1 回撃ち、Interrupted なら `deadline` の前に限って撃ち直す（ほかの誤りと時間切れはそのまま返す）。
++/// read の timeout を付けた socket の読みは、process が止められて再開した周に signal の手が無くても
++/// Interrupted を返しうる（`Read::read` は撃ち直さない）。
++fn reread(r: &mut impl Read, buf: &mut [u8], deadline: Instant) -> io::Result<usize> {
++    loop {
++        match r.read(buf) {
++            Err(e) if e.kind() == ErrorKind::Interrupted && Instant::now() < deadline => {}
++            got => return got,
++        }
++    }
++}
++
+ /// GET を 1 つ撃ち、（状態の code・本文）を返す。
+ fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+@@ -580,7 +593,7 @@ fn pmisfit_sse_arms_and_tells() {
+         let mut buf = [0u8; 4096];
+         while !seen.contains(want) {
+             assert!(Instant::now() < deadline, "{what} を待ちきれない: {seen}");
+-            let n = s.read(&mut buf).expect("接続を読む");
++            let n = reread(&mut s, &mut buf, deadline).expect("接続を読む");
+             assert!(n > 0, "接続が閉じた: {seen}");
+             seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+         }
+@@ -651,3 +664,61 @@ fn pmisfit_watch_kicks_form_while_listening() {
+     board_until(addr, "戻った一覧", |m| *m == want());
+     drop(s);
+ }
++
++/// 撃たれるたびに頭の 1 つを返す偽の読み手（尽きたら 0 byte・撃たれた数を数える）。
++struct Steps {
++    steps: Vec<Result<&'static [u8], ErrorKind>>,
++    reads: usize,
++}
++
++impl Steps {
++    fn new(steps: Vec<Result<&'static [u8], ErrorKind>>) -> Steps {
++        Steps { steps, reads: 0 }
++    }
++}
++
++impl Read for Steps {
++    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
++        self.reads += 1;
++        if self.steps.is_empty() {
++            return Ok(0);
++        }
++        match self.steps.remove(0) {
++            Ok(bytes) => {
++                buf[..bytes.len()].copy_from_slice(bytes);
++                Ok(bytes.len())
++            }
++            Err(kind) => Err(kind.into()),
++        }
++    }
++}
++
++/// 行 c-sse-eintr: 最初の 1 回だけ Interrupted を返す読み手は、助けの読みが撃ち直して字を読む。
++#[test]
++fn pmisfit_reread_after_interrupt() {
++    let mut r = Steps::new(vec![Err(ErrorKind::Interrupted), Ok(b"retry: 1000\n\n")]);
++    let mut buf = [0u8; 64];
++    let n = reread(&mut r, &mut buf, Instant::now() + WAIT).expect("撃ち直して読む");
++    assert_eq!(&buf[..n], b"retry: 1000\n\n");
++    assert_eq!(r.reads, 2);
++}
++
++/// 行 c-sse-eintr: Interrupted でない誤り（時間切れを含む）と締め切りの後の Interrupted は、撃ち直さずに返す。
++#[test]
++fn pmisfit_reread_other_errors_fall() {
++    let mut buf = [0u8; 64];
++    for kind in [
++        ErrorKind::WouldBlock,
++        ErrorKind::TimedOut,
++        ErrorKind::ConnectionReset,
++    ] {
++        let mut r = Steps::new(vec![Err(kind), Ok(b"x")]);
++        let e = reread(&mut r, &mut buf, Instant::now() + WAIT).expect_err("落ちる");
++        assert_eq!(e.kind(), kind);
++        assert_eq!(r.reads, 1, "{kind:?} を撃ち直す");
++    }
++    let mut r = Steps::new(vec![Err(ErrorKind::Interrupted), Ok(b"x")]);
++    let e = reread(&mut r, &mut buf, Instant::now()).expect_err("締め切りの後は落ちる");
++    assert_eq!(e.kind(), ErrorKind::Interrupted);
++    assert_eq!(r.reads, 1, "締め切りの後に撃ち直す");
++}
+diff --git a/crates/tsuzuri-boundary/tests/qsig.rs b/crates/tsuzuri-boundary/tests/qsig.rs
+index e9c409778eecf2fdc4e53d26a2fa67f775f771e6..0d039d1bc319e14c4868f39f7fe1dabc26b079aa 100644
+--- a/crates/tsuzuri-boundary/tests/qsig.rs
++++ b/crates/tsuzuri-boundary/tests/qsig.rs
+@@ -119,6 +119,7 @@ fn receiver(code: u16) -> (u16, JoinHandle<String>) {
+             match s.read(&mut buf) {
+                 Ok(0) => break,
+                 Ok(n) => raw.extend_from_slice(&buf[..n]),
++                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                 Err(e) => panic!("要求を読む: {e}"),
+             }
+         }
+diff --git a/crates/tsuzuri-boundary/tests/server_min.rs b/crates/tsuzuri-boundary/tests/server_min.rs
+index b5c66f4102878af3dca6506858d76bdd763a3fc8..e5bb62de35d8cadeb7919fb70f95ebc56d375f8c 100644
+--- a/crates/tsuzuri-boundary/tests/server_min.rs
++++ b/crates/tsuzuri-boundary/tests/server_min.rs
+@@ -382,6 +382,7 @@ fn read_until(s: &mut TcpStream, buf: &mut String, until: Instant, stop: impl Fn
+         match s.read(&mut chunk) {
+             Ok(0) => return,
+             Ok(n) => buf.push_str(std::str::from_utf8(&chunk[..n]).expect("SSE の字")),
++            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => return,
+             Err(e) => panic!("SSE を読む: {e}"),
+         }
+diff --git a/crates/tsuzuri-boundary/tests/server_read.rs b/crates/tsuzuri-boundary/tests/server_read.rs
+index 53e147f6aa4e1b5322d984c0db3dbaa2414e8c64..c9a3d0f462060a55d7190b0d408cb73b0dad41d5 100644
+--- a/crates/tsuzuri-boundary/tests/server_read.rs
++++ b/crates/tsuzuri-boundary/tests/server_read.rs
+@@ -554,6 +554,7 @@ fn read_until(s: &mut TcpStream, buf: &mut String, until: Instant, stop: impl Fn
+         match s.read(&mut chunk) {
+             Ok(0) => return,
+             Ok(n) => buf.push_str(std::str::from_utf8(&chunk[..n]).expect("SSE の字")),
++            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => return,
+             Err(e) => panic!("SSE を読む: {e}"),
+         }
+diff --git a/crates/tsuzuri-boundary/tests/server_src.rs b/crates/tsuzuri-boundary/tests/server_src.rs
+index 6a562580d1d65d8651518ffaa26cffbb1d41f132..33b40143cd0f25bdd91a0399b3e078bf3516c4af 100644
+--- a/crates/tsuzuri-boundary/tests/server_src.rs
++++ b/crates/tsuzuri-boundary/tests/server_src.rs
+@@ -336,6 +336,7 @@ fn read_until(s: &mut TcpStream, buf: &mut String, until: Instant, stop: impl Fn
+         match s.read(&mut chunk) {
+             Ok(0) => return,
+             Ok(n) => buf.push_str(std::str::from_utf8(&chunk[..n]).expect("SSE の字")),
++            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => return,
+             Err(e) => panic!("SSE を読む: {e}"),
+         }

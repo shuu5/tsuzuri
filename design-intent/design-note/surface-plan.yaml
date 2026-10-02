@@ -457,6 +457,7 @@ sections:
       - {id: g-accept, doc: surface-wave26b}
       - {id: c-ruling-reread, doc: surface-wave26b}
       - {id: c-deliver-retry, doc: surface-wave26b}
+      - {id: c-sse-eintr, doc: surface-wave26b}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

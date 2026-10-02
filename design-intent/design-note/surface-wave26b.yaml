@@ -3,13 +3,13 @@
 meta:
   id: surface-wave26b
   title: 第 26 波 b — project board の作り直し（判断の記録 ADR-27）の第 2 段。上の固定の帯と窓と吹き出しと epic ごとの一覧と幅の 3 段で、1 枚の画面に組み直す
-  version: v0.8
+  version: v0.9
   status: effective
   generated: 2026-10-01
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-01, ruling: t3-hub.52.160.1（裁定 id = t3-hub.52.160.1:20261001T1423Z-1・席とのチャット・notes に逐語）, verbatim: これでよい すべて推奨で良いので進めて, surface: R-8}
-  note: ノート surface-wave26a（第 1 段の 15 行の全部が着地・廃止）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-02）は行 g-win-frame・g-topbar・g-win-parts・g-ask-win・g-pop・g-pop-flow・g-pop-why・g-pipe-cards・g-list-groups・g-list-head・g-unref-lc を足した。 第 0.3 版（2026-10-02）は行 g-select・g-one-screen-a・g-one-screen-b・g-layout・g-ledger-trim・g-list-sweep を足した。 第 0.4 版（2026-10-02）は行 g-ask-hist・g-win-url・c-cases-watch・g-accept を足した。 第 0.5 版（2026-10-02）は行 g-ask-win の title と done と節と差の file を、問いの一覧や台帳が読めない時に問いが無いと見せない形に直し（便 t3-hub.52.179 の審査 FAIL・憲法 P-7）、積みの木の当て直しで差の字が替わった行 g-ask-hist・g-one-screen-b の差の file と節の字を直した。 第 0.6 版（2026-10-02）は行 g-pop・g-list-groups に、板が読めない時に札が無いと見せない 1 行と歯を足し（憲法 P-7）、その当て直しで差の字が替わった行 g-pop-flow・g-pop-why・g-list-head・g-select・g-one-screen-b・g-ledger-trim・g-ask-hist の差の file と在りかの字を直した。 第 0.7 版（2026-10-02）は行 c-ruling-reread・c-deliver-retry を足した。 第 0.8 版（2026-10-02）は行 g-list-groups の組の頭の段の数を、板が読めない間に描かず ? にし（憲法 P-7）、その当て直しで差の字が替わった行 g-list-head・g-unref-lc・g-select・g-ledger-trim の差の file と在りかの字を直した。
+  note: ノート surface-wave26a（第 1 段の 15 行の全部が着地・廃止）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-02）は行 g-win-frame・g-topbar・g-win-parts・g-ask-win・g-pop・g-pop-flow・g-pop-why・g-pipe-cards・g-list-groups・g-list-head・g-unref-lc を足した。 第 0.3 版（2026-10-02）は行 g-select・g-one-screen-a・g-one-screen-b・g-layout・g-ledger-trim・g-list-sweep を足した。 第 0.4 版（2026-10-02）は行 g-ask-hist・g-win-url・c-cases-watch・g-accept を足した。 第 0.5 版（2026-10-02）は行 g-ask-win の title と done と節と差の file を、問いの一覧や台帳が読めない時に問いが無いと見せない形に直し（便 t3-hub.52.179 の審査 FAIL・憲法 P-7）、積みの木の当て直しで差の字が替わった行 g-ask-hist・g-one-screen-b の差の file と節の字を直した。 第 0.6 版（2026-10-02）は行 g-pop・g-list-groups に、板が読めない時に札が無いと見せない 1 行と歯を足し（憲法 P-7）、その当て直しで差の字が替わった行 g-pop-flow・g-pop-why・g-list-head・g-select・g-one-screen-b・g-ledger-trim・g-ask-hist の差の file と在りかの字を直した。 第 0.7 版（2026-10-02）は行 c-ruling-reread・c-deliver-retry を足した。 第 0.8 版（2026-10-02）は行 g-list-groups の組の頭の段の数を、板が読めない間に描かず ? にし（憲法 P-7）、その当て直しで差の字が替わった行 g-list-head・g-unref-lc・g-select・g-ledger-trim の差の file と在りかの字を直した。 第 0.9 版（2026-10-02）は行 c-sse-eintr を足した。
 
 sections:
   - n: 1
@@ -252,6 +252,16 @@ sections:
         verify: ["git apply --reverse --check docs/design/patch/c-deliver-retry.patch", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments", "cargo nextest run -p tsuzuri-boundary --test bvdsweep --no-tests=fail bvdsweep_", "cargo nextest run -p tsuzuri-boundary --test dretry --no-tests=fail dretry_", "cargo nextest run -p tsuzuri-boundary --test fserve --no-tests=fail fserve_", "cargo nextest run -p tsuzuri-boundary --test server_ask --no-tests=fail server_ask_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo nextest run -p tsuzuri-boundary --test areread --no-tests=fail areread_", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail rvk_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test aown --no-tests=fail aown_", "cargo nextest run -p tsuzuri-boundary --test server_read --no-tests=fail server_read_", "cargo nextest run -p tsuzuri-boundary --test server_min --no-tests=fail server_min_", "cargo nextest run -p tsuzuri-boundary --test tzent --no-tests=fail tzent_", "cargo run -q -p xtask -- check"]
         size: M
         done: (1) git apply --reverse --check docs/design/patch/c-deliver-retry.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments が rc 0 (3) 字 SWEEP_FOUND は 起動の周に印の無い裁定を撃ち直す、字 SWEEP_UNREAD は 起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う）で、id_minute は fx-w.1 と batch の id の分の字 20261002T0100Z を返し、コロンの無い id・- の無い id・分の字が 14 字でない id・数が数字でない id には None を返す（歯 bvdsweep_words） (4) sweep は今の分の印の無い裁定 2 つと印の在る裁定 1 つと 2 時間前の分の印の無い裁定 1 つの台帳で 2 を返し、偽の器を台帳の順に 2 回、器の配達の口の argv（seat と deliver と --state-dir と state dir と --target と席と --ruling と裁定の id）で撃ち、偽の bdw に経路が配達の口の印を 1 回ずつ書き、印の在る裁定と 2 時間前の裁定の id は撃たない（歯 bvdsweep_fires_unmarked_in_order） (5) sweep は印の無い裁定が 2 時間前の分のものだけの台帳と読めない台帳で 0 を返し、偽の器も偽の bdw も撃たない（歯 bvdsweep_quiet_when_nothing） (6) sweep_at_start は読むだけの server と --seat の無い server と --state-dir の無い server の Config で偽を返して偽の器を撃たず、両方が在る読むだけでない server の Config で真を返し、別の thread が今の分の最初の印の無い裁定で偽の器を撃つ（歯 bvdsweep_start_gates） (7) tz surface serve は --seat と --state-dir を渡すと、起動の後に今の分の最初の印の無い裁定で偽の器を撃つ（歯 bvdsweep_serve_sweeps_at_start） (8) 着地済みの歯 dretry・fserve・server_ask・eretry・areread・rvk・server_batch・aown・server_read・server_min・tzent が全部緑
+        depends: []
+
+      - id: c-sse-eintr
+        title: 知らせの接続の歯 pmisfit_sse_arms_and_tells の読みを、Interrupted だけ同じ締め切りの中で撃ち直す助けの関数 reread に替え、tests の下の同じ形の読み 7 か所にも Interrupted の撃ち直しの腕を足す（便 t3-hub.52.180 の main-red の揺れの直し・憲法 P-7・試作の差の file docs/design/patch/c-sse-eintr.patch を当てる）
+        req: ["FR10", "NFR2"]
+        section: "26"
+        write-set: ["crates/tsuzuri-boundary/tests/pmisroute.rs", "crates/tsuzuri-boundary/tests/lidle.rs", "crates/tsuzuri-boundary/tests/mqask.rs", "crates/tsuzuri-boundary/tests/qsig.rs", "crates/tsuzuri-boundary/tests/server_read.rs", "crates/tsuzuri-boundary/tests/server_src.rs", "crates/tsuzuri-boundary/tests/lstore.rs", "crates/tsuzuri-boundary/tests/server_min.rs", "=crates/tsuzuri-core/tests/pmisfit.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-sse-eintr.patch", "cargo nextest run -p tsuzuri-boundary --test pmisroute --no-tests=fail pmisfit_", "cargo nextest run -p tsuzuri-core --test pmisfit --no-tests=fail pmisfit_", "cargo nextest run -p tsuzuri-boundary --test lidle --no-tests=fail lidle_", "cargo nextest run -p tsuzuri-boundary --test mqask --no-tests=fail mqask_", "cargo nextest run -p tsuzuri-boundary --test qsig --no-tests=fail qsig_", "cargo nextest run -p tsuzuri-boundary --test server_read --no-tests=fail server_read_", "cargo nextest run -p tsuzuri-boundary --test server_src --no-tests=fail server_src_", "cargo nextest run -p tsuzuri-boundary --test lstore --no-tests=fail lstore_", "cargo nextest run -p tsuzuri-boundary --test server_min --no-tests=fail server_min_", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/c-sse-eintr.patch が rc 0 で、差の file の hunk が全部木に在る（verify の 1 行目） (2) 最初の 1 回だけ Interrupted を返し 2 回目に字を返す偽の読み手に、tests/pmisroute.rs の助けの関数 reread が撃ち直してその字を読み、読み手は 2 回撃たれる（歯 pmisfit_reread_after_interrupt） (3) 締め切りの前に WouldBlock・TimedOut・ConnectionReset を返す偽の読み手には、reread は撃ち直さずに同じ種の誤りを返して読み手は 1 回だけ撃たれ、締め切りを過ぎた後の Interrupted も撃ち直さずに Interrupted を返して読み手は 1 回だけ撃たれる（歯 pmisfit_reread_other_errors_fall） (4) 着地済みの pmisroute の pmisfit_ の歯（pmisfit_sse_arms_and_tells を含む）は通り、中核の pmisfit_own_names_clean は tests/pmisroute.rs の test の属性の付いた fn の名がどれも pmisfit_ で始まり、名から pmisfit_ を除いた字がその file の filter の語のどれも含まないことを見て通る（verify の 2 行目と 3 行目） (5) 撃ち直しの腕を足した lidle_・mqask_・qsig_・server_read_・server_src_・lstore_・server_min_ の歯は全部通る（verify の 4〜10 行目） (6) 境界の crate の clippy（--all-targets --no-deps・-D warnings）が rc 0（verify の 11 行目）
         depends: []
 
   - n: 3
@@ -744,5 +754,25 @@ sections:
       流す時と順。depends は空。同じノートの行 c-ruling-reread とは書く file が重ならない（あちらは policy.rs と routes/policy.rs）。鎖の行 c-cases-watch が書く src/server/mod.rs と cases.rs は書かない。
 
       範囲の外。答えごとの撃ち直しの間と上限（PACE）は変えない。30 分の上限の後の撃ち直しは足さない（器が断り続けるのは席が idle のまま入力欄に字が在るか pane が無い形で、撃ち続けても届かず、席が turn に入れば終わりの停止の hook が拾う）。server の log を起こし直しで切り詰める起動の script は repo の外の席の道具で、この行では書かない。器の側の見張り（memo t3-hub.72 の候補 c と memo t3-hub.70）は持ち主が時期を決める。
+
+  - n: 26
+    type: prose
+    title: 行 c-sse-eintr — 知らせの接続の歯の読みの Interrupted の撃ち直し（揺れの直し）
+    body: |
+      在りか。差の file docs/design/patch/c-sse-eintr.patch は main 8253da1e（t3-hub.52.180 の在りかの commit）に試作を載せて切った（8 file・206 行）。書く file は tests の下の 8 本だけで、src は書かない。中核の tests/pmisfit.rs は書かず、歯 pmisfit_own_names_clean が tests/pmisroute.rs の歯の名を読むので置き場だけの = で持つ。
+
+      なぜ。便 t3-hub.52.180 の着地の主実測（xtask の check・全件の nextest）で、行と関わりの無い歯 pmisfit_sse_arms_and_tells だけが 583 行の読みの expect で Os code 4・Interrupted に落ち、便は main-red になった（同じ木の gate の 2 回の check は通った揺れ）。read の timeout（SO_RCVTIMEO）を付けた socket の読みは、process が止められて再開した周（SIGSTOP と SIGCONT）などに signal の手が無くても EINTR を返しうる（man 7 signal）。std の Read の read は Interrupted を撃ち直さない（read_to_end・read_exact・read_line は撃ち直す）。起草の試作で見立てを確かめた。歯の binary を撃つ間に自分の撃った process だけへ SIGSTOP と SIGCONT を繰り返し送ると、素の read の木は 10 回とも Interrupted で落ち、直した木は 10 回とも通った。
+
+      形。(a) tests/pmisroute.rs に私的な助けの関数 reread（読み手と buf と締め切りの Instant を受け、io::Result の usize を返す）を足す。読みを 1 回撃ち、Interrupted で締め切りの前なら撃ち直し、ほかの誤り（時間切れの WouldBlock と TimedOut を含む）と締め切りの後の Interrupted はそのまま返す。誤りを全部捨てて回る形にしない（憲法 P-7）。(b) 歯 pmisfit_sse_arms_and_tells の読みの閉包は、s.read を reread に替え、閉包の締め切りを渡す（expect の字は今のまま）。(c) 偽の読み手 struct Steps（撃たれるたびに頭の 1 つを返し、撃たれた数を数える）と、歯 pmisfit_reread_after_interrupt と pmisfit_reread_other_errors_fall を file の末に足す。歯の名は pmisfit_ で始める（中核の pmisfit_own_names_clean が見る）。頭の doc に 1 行を足し、use の行に io と ErrorKind を足す。(d) ほかの 7 本は、読みの match に腕 Err(e) if e.kind() == ErrorKind::Interrupted => {} を 1 行足すだけ（lstore・server_read・server_src・server_min は Ok(n) の腕の次、mqask は Ok(n) の腕の次、qsig は panic の腕の前）。lidle は 1 回の読みの expect を loop と match に包み、Interrupted なら撃ち直し、ほかは今の expect の字で落とす（use の行に ErrorKind を足す）。締め切りを持つ loop の中の腕は、loop が残りの時間を見て止まるので同じ締め切りの中で撃ち直す。lidle と qsig は 1 回ごとの読みの上限（2 秒と 5 秒）だけを持ち、撃ち直しはその上限を新しく張る。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 つ目の項は verify の 1 行目、2 つ目と 3 つ目の項は 2 行目（pmisroute の pmisfit_ は新しい 2 本を含む 8 本）、4 つ目の項は 2 行目と 3 行目、5 つ目の項は 4〜10 行目、6 つ目の項は 11 行目で測る。新しい filter の語は足さない（新しい歯は pmisfit_ の行で撃たれる・助けの歯に別の接頭辞を付けると pmisfit_own_names_clean が落ち、pmisfit_ を頭に持つ別の語は今の語 pmisfit_ と部分の字で重なる）。
+
+      構造の連鎖。歯の file の字を読む歯を grep で見た。中核の pmisfit_own_names_clean は pmisroute.rs の歯の名を読み、新しい 2 つの名から pmisfit_ を除いた字 reread_after_interrupt と reread_other_errors_fall はその file の filter の語 139 のどれも含まない。lidle_own_names_clean と lstore_own_names_clean は自分の file の歯の名だけを読み（歯の fn は足さない）、hbconf の歯は server_src・server_read・server_min の fn config の本文だけを、wsteady の歯は server_read の歯 server_read_board_changed_within_5s の本文と fs::rename の字だけを読む（腕を足すのは読みの助けの fn で、どれにも当たらない）。
+
+      試作と噛み。写しの main 8253da1e で、書いた 8 本の歯 53 本と中核の pmisfit_ 6 本が通り、境界の crate の clippy（--all-targets --no-deps・-D warnings）が rc 0。xtask の check は notes に書く。噛み（変異を 1 つずつ当てて pmisroute の pmisfit_ を撃った）は 4 つ。撃ち直しを外すと pmisfit_reread_after_interrupt が落ち、誤りを全部撃ち直すと pmisfit_reread_other_errors_fall が落ち、締め切りを見ないと同じ歯が落ちる。呼ぶ所を素の read に戻す変異は歯を落とさない（揺れは決まって起きない）ので、差の file の当たり（verify の 1 行目）で見る。
+
+      範囲の外。src の下の同じ形の読み（stage の ws.rs の握手の応答の読みと tunnel.rs の Chrome の HTTP の口の頭の読み）は直さない（別の行にするかは席が決める）。server の要求の読み（http.rs）は Interrupted を撃ち直し済み。tests の下の stcli と stlaunch の偽の Chrome の頭の読み（UnixStream・誤りを頭の切れとして記録して閉じる）と、誤りを捨てて回る esig・ntcsrv・server_seat・server_acctwire・evkind は書かない。
 
 figures: []
