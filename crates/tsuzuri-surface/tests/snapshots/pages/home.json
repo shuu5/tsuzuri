@@ -1,23 +1,18 @@
     {
       "id": "home",
       "heading": "home",
-      "class": "home",
+      "class": "one",
       "columns": [
         {
-          "class": "stack",
+          "class": "pane",
           "blocks": [
-            {"id": "notice", "heading": "notice", "class": "panel"},
-            {"id": "next", "heading": "next", "class": "panel"},
-            {"id": "pipe", "heading": "pipeline", "class": "panel"},
-            {"id": "ledger", "heading": "ledger_block", "class": "panel"},
-            {"id": "legend", "heading": "status", "class": "panel"}
+            {"id": "ledger", "heading": "ledger_block", "class": "panel"}
           ]
         },
         {
-          "class": "stack",
+          "class": "pane",
           "blocks": [
-            {"id": "orch", "heading": "orch_acct", "class": "panel seatcard"},
-            {"id": "stage", "heading": "stage_target", "class": "panel fold mvp"}
+            {"id": "pipe", "heading": "pipeline", "class": "panel"}
           ]
         }
       ]

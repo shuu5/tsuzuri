@@ -23,9 +23,10 @@ use tsuzuri_contract::wire;
 use super::hover::{Point, Rect, Size};
 use super::modal::Hit;
 use super::runflow::{Hist, Seg};
-use crate::frame::{self, Mode, PageId};
+use crate::frame::{self, Mode};
 use crate::mapview::band::kind_key;
 use crate::project::{pipeline, timeline};
+use crate::topbar::{Win, win_href};
 use crate::view::{Fetched, clock_short};
 use crate::vocab::label;
 
@@ -393,10 +394,10 @@ pub fn next_key(stage: Stage) -> Option<&'static str> {
     }
 }
 
-/// 次の手の先（問いの頁か、個別の頁の run の時間軸の block）。
+/// 次の手の先（質問の窓を開いた home の頁か、個別の頁の run の時間軸の block）。
 pub fn next_href(key: &str, id: &str, mode: Mode) -> String {
     if key == NEXT_KEYS[0] {
-        frame::href(PageId::Ask, mode)
+        win_href(Win::Ask, mode)
     } else {
         format!("{}#{}", frame::node_href(id, mode), timeline::BLOCK.id)
     }

@@ -1,13 +1,19 @@
-//! home の頁: 席からの知らせ・次の一手・pipeline・台帳・凡例 ｜ orchestrator と口座（2 列の grid・見本の `.home`）。
-//! 席からの知らせは見本に無い block で、持ち主が最初に見る左の列の頭に置く（行 i-11）。
-//! 表示先の block も見本に無く、右の列の orchestrator の下に置く（行 i-stage-own）。
+//! home の頁（1 枚の画面・行 g-one-screen-a・判断の記録 ADR-27 決定 (5)）: 台帳 open の一覧 ｜ pipeline の 2 つの面。
+//! 席からの知らせ・次の一手・凡例・orchestrator と口座・表示先の block は頁に置かず、帯の印が開く窓（wins の draw）が
+//! 同じ中身の関数で描く。面の並べ方（幅の 3 段）は stylesheet が決める。
 
-use crate::frame::{Column, PageDef, STACK};
-use crate::project::{ledger, legend, next, notice, pipeline, seat, stage};
+use crate::frame::{Column, PageDef};
+use crate::project::{ledger, pipeline};
+
+/// 頁の class（帯の下の全部の高さを 2 つの面に使う）。
+pub const ONE: &str = "one";
+
+/// 面の列の class。
+pub const PANE: &str = "pane";
 
 pub const PAGE: PageDef = PageDef {
     heading: "home",
-    class: "home",
+    class: ONE,
     nav: Some(1),
     badge: false,
     icon: r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#,
@@ -17,18 +23,12 @@ pub const PAGE: PageDef = PageDef {
 fn columns() -> Vec<Column> {
     vec![
         Column {
-            class: STACK,
-            blocks: vec![
-                notice::BLOCK,
-                next::BLOCK,
-                pipeline::BLOCK,
-                ledger::BLOCK,
-                legend::BLOCK,
-            ],
+            class: PANE,
+            blocks: vec![ledger::BLOCK],
         },
         Column {
-            class: STACK,
-            blocks: vec![seat::BLOCK, stage::BLOCK],
+            class: PANE,
+            blocks: vec![pipeline::BLOCK],
         },
     ]
 }

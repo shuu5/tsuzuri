@@ -138,14 +138,10 @@ fn brand_top_reads_name_and_sets_title() {
     ] {
         assert!(text.contains(word), "board.rs に {word} が無い");
     }
-    let open = r#"<span class="name">"#;
-    let at = text.find(open).expect("class の値が name の span が無い");
-    let rest = &text[at..];
-    let end = rest.find("</span>").expect("span の閉じの tag が無い");
+    // 題の字は帯の project の名に渡す（行 g-one-screen-a・帯の pname が描く）。
     assert!(
-        rest[..end].contains("brand("),
-        "題の span の中身に brand( が無い: {}",
-        &rest[..end]
+        text.contains("name: Signal::derive(move || name.with(|n| brand(n.as_deref()).to_string())),"),
+        "帯の名に brand( が無い"
     );
     assert!(!text.contains("{BRAND}"), "board.rs に {{BRAND}} が残る");
 }

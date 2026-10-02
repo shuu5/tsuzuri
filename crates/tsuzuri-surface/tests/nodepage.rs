@@ -81,11 +81,6 @@ fn doc_of(center: &str, rows: Vec<AroundRow>) -> AroundDoc {
     }
 }
 
-/// 語の列 `want` が `all` の中にこの順で含まれる。
-fn in_order(all: &[&str], want: &[&str]) -> bool {
-    let mut rest = all.iter();
-    want.iter().all(|w| rest.any(|a| a == w))
-}
 
 /// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
 /// snapshot と同じ。
@@ -113,15 +108,11 @@ fn nodepage_frame_and_nav() {
     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
     assert!(PageId::ALL.contains(&PageId::Node));
-    // nav の頁の一覧と header の link は 3 つをこの順に含み、節点の頁を含まない（地図の頁は行 m-map-page で消した）。
+    // nav の頁の一覧は home だけで節点の頁を含まない（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
-    assert!(!ids.contains(&"node"), "{ids:?}");
+    assert_eq!(ids, vec!["home"]);
     let nav_keys = frame::nav_keys();
-    assert!(
-        in_order(&nav_keys, &["home", "questions", "gaps"]),
-        "{nav_keys:?}"
-    );
+    assert_eq!(nav_keys, vec!["home"]);
     assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");
     let keys: Vec<&str> = frame::nav_links(PageId::Node)
         .iter()
@@ -488,7 +479,7 @@ fn open_head() {
     assert_eq!(h.shape, "shape band-beads big");
     assert_eq!(
         node::answer_href("e.2", Mode::Expert),
-        "?page=ask&id=e.2&mode=expert"
+        "?mode=expert&win=ask&id=e.2"
     );
     other_heads();
 }

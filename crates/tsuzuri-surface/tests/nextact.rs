@@ -13,6 +13,7 @@ use tsuzuri_surface::account::{Tab, selects};
 use tsuzuri_surface::frame::{Mode, PageId, param};
 use tsuzuri_surface::mapview::decode;
 use tsuzuri_surface::project::Body;
+use tsuzuri_surface::topbar::Win;
 use tsuzuri_surface::project::next::{
     ACCOUNT_LINK, ANSWER_LINK, BATCH_LINK, GAPS_LINK, Link, NONE_LINE, Next, PIPE_LINK,
     SESSION_LINK, action, content, window_of,
@@ -54,31 +55,31 @@ fn nxact_links_per_kind() {
             (
                 NextMove::BatchApproval,
                 None,
-                link(format!("?page=ask&mode={m}#batch"), BATCH_LINK),
+                link(format!("?mode={m}&win=ask"), BATCH_LINK),
             ),
             (
                 NextMove::Question,
                 Some("nq.4"),
-                link(format!("?page=ask&id=nq.4&mode={m}"), ANSWER_LINK),
+                link(format!("?mode={m}&win=ask&id=nq.4"), ANSWER_LINK),
             ),
             (
                 NextMove::AwaitingEffect,
                 None,
-                link(format!("?page=gaps&mode={m}"), GAPS_LINK),
+                link(format!("?mode={m}&win=gaps"), GAPS_LINK),
             ),
             (NextMove::Nothing, None, None),
         ];
         for (kind, target, want) in cases {
             assert_eq!(action(kind, target, mode), want, "{kind:?} {m}");
         }
-        // 質問は対象の id が無ければ問いの頁・id のコロンは %3A にする。
+        // 質問は対象の id が無ければ質問の窓・id のコロンは %3A にする（行 g-one-screen-a）。
         assert_eq!(
             action(NextMove::Question, None, mode),
-            link(format!("?page=ask&mode={m}"), ANSWER_LINK)
+            link(format!("?mode={m}&win=ask"), ANSWER_LINK)
         );
         assert_eq!(
             action(NextMove::Question, Some("e.2:x"), mode),
-            link(format!("?page=ask&id=e.2%3Ax&mode={m}"), ANSWER_LINK)
+            link(format!("?mode={m}&win=ask&id=e.2%3Ax"), ANSWER_LINK)
         );
     }
     // 開く窓は account board へ飛ぶ 2 種だけ account board の名前つきの窓。
@@ -103,7 +104,7 @@ fn nxact_links_per_kind() {
 fn nxact_hrefs_read_back() {
     enum Dest {
         Account(Tab),
-        Page(PageId),
+        Win(Win),
     }
     for mode in MODES {
         let cases: [(NextMove, Option<&str>, Dest, Option<&str>); 7] = [
@@ -114,24 +115,24 @@ fn nxact_hrefs_read_back() {
                 Dest::Account(Tab::Session),
                 None,
             ),
-            (NextMove::BatchApproval, None, Dest::Page(PageId::Ask), None),
+            (NextMove::BatchApproval, None, Dest::Win(Win::Ask), None),
             (
                 NextMove::Question,
                 Some("nq.4"),
-                Dest::Page(PageId::Ask),
+                Dest::Win(Win::Ask),
                 Some("nq.4"),
             ),
             (
                 NextMove::Question,
                 Some("e.2:x"),
-                Dest::Page(PageId::Ask),
+                Dest::Win(Win::Ask),
                 Some("e.2:x"),
             ),
-            (NextMove::Question, None, Dest::Page(PageId::Ask), None),
+            (NextMove::Question, None, Dest::Win(Win::Ask), None),
             (
                 NextMove::AwaitingEffect,
                 None,
-                Dest::Page(PageId::Gaps),
+                Dest::Win(Win::Gaps),
                 None,
             ),
         ];
@@ -143,9 +144,10 @@ fn nxact_hrefs_read_back() {
                     assert!(selects(search), "{search} が account board を選ばない");
                     assert_eq!(Tab::from_query(search), tab, "{search}");
                 }
-                Dest::Page(page) => {
+                Dest::Win(win) => {
                     assert!(!selects(search), "{search}");
-                    assert_eq!(PageId::from_query(search), page, "{search}");
+                    assert_eq!(PageId::from_query(search), PageId::Home, "{search}");
+                    assert_eq!(Win::from_query(search), Some(win), "{search}");
                 }
             }
             assert_eq!(

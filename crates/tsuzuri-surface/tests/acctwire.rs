@@ -27,7 +27,7 @@ fn acctwire_back_part_before_header() {
     assert_eq!(BACK_WRAP, "backwrap");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, ["brand", "nav", "updated", "mode"], "HEADER は変わらない");
-    assert_eq!(frame::nav_keys(), ["home", "questions", "gaps"]);
+    assert_eq!(frame::nav_keys(), ["home"]);
     let want = read("tests/snapshots/header.json");
     let got = frame::header_snapshot();
     assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
@@ -67,8 +67,8 @@ fn acctwire_back_steps() {
         "open_named(\"\", ACCOUNT_WIN)",
         "BackStep::CloseSelf",
         "me.close()",
-        "class=BACK_WRAP",
-        "class=BACK.class",
+        "back: Callback::new(move |()| back_to_board(note))",
+        "{topbar::view(bar)}",
     ] {
         assert!(board.contains(word), "board.rs に {word} が無い");
     }

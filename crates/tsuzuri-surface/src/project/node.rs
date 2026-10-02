@@ -15,6 +15,7 @@ use crate::frame::{Block, Mode};
 use crate::mapview::band::{Band, band_of, kind_key};
 use crate::mapview::{encode, is_open};
 use crate::project::nodearound::PageState;
+use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
 use crate::widgets::nodecard::full_src;
 
@@ -129,9 +130,10 @@ fn sum_box(key: &'static str, text: &Option<String>) -> SumBox {
     }
 }
 
-/// 質問の頁への link（問いの id を `%XX` にして残す・mode を URL に残す）。
+/// 質問の窓への link（home の頁を質問の窓を開いて読み直す・問いの id を `%XX` にして残す・mode を URL に残す・
+/// 行 g-one-screen-a）。
 pub fn answer_href(id: &str, mode: Mode) -> String {
-    format!("?page=ask&id={}&mode={}", encode(id), mode.key())
+    format!("{}&id={}", win_href(Win::Ask, mode), encode(id))
 }
 
 /// 頁の題の語に替える字（行 g-title）: 電文なら中心の行の題（空白だけ・中心の行が無ければ None）、

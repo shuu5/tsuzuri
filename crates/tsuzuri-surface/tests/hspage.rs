@@ -29,13 +29,8 @@ fn dir_names(rel: &str, ext: &str, skip: &str) -> Vec<String> {
     names
 }
 
-/// 着地済みの 4 つの頁（変種と id・地図の頁は行 m-map-page で消した）。
-const LANDED: [(PageId, &str); 4] = [
-    (PageId::Home, "home"),
-    (PageId::Ask, "ask"),
-    (PageId::Gaps, "gaps"),
-    (PageId::Node, "node"),
-];
+/// 着地済みの 2 つの頁（変種と id・地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+const LANDED: [(PageId, &str); 2] = [(PageId::Home, "home"), (PageId::Node, "node")];
 
 /// (1) 生成した PageId の ALL の id の列は src/pages の下の mod.rs でない .rs の file の名（名の順）と同じ・
 /// 着地済みの 4 つが全部在り、変種の名は Home・Ask・Gaps・Node のまま。
@@ -80,7 +75,7 @@ fn hspage_header_lines_same() {
     assert_eq!(got.lines().count(), 10);
 }
 
-/// (4) nav の列は頁の定義の nav が在る頁を数の順に並べたもので、数は重ならず、home・ask・map・gaps をこの順に含み、
+/// (4) nav の列は頁の定義の nav が在る頁を数の順に並べたもので、数は重ならず、home を含み、
 /// node を含まない。
 #[test]
 fn hspage_nav_by_number() {
@@ -96,10 +91,7 @@ fn hspage_nav_by_number() {
     let with_nav = PageId::ALL.iter().filter(|p| p.def().nav.is_some()).count();
     assert_eq!(nav.len(), with_nav, "nav の在る頁の全部");
     let ids: Vec<&str> = nav.iter().map(|p| p.id()).collect();
-    let mut rest = ids.iter();
-    for want in ["home", "ask", "gaps"] {
-        assert!(rest.any(|id| *id == want), "{want} が順に無い: {ids:?}");
-    }
+    assert_eq!(ids, ["home"]);
     assert!(!nav.contains(&PageId::Node));
     let pages: Vec<PageId> = frame::pages().iter().map(|p| p.id).collect();
     assert_eq!(pages, nav);
@@ -125,7 +117,7 @@ fn hspage_href_round_trip() {
         }
         assert_eq!(frame::href(PageId::Home, mode), format!("?mode={}", mode.key()));
     }
-    assert_eq!(frame::href(PageId::Ask, Mode::Expert), "?page=ask&mode=expert");
+    assert_eq!(frame::href(PageId::Node, Mode::Expert), "?page=node&mode=expert");
     assert_eq!(PageId::from_query("?page=bogus&mode=expert"), PageId::Home);
     assert_eq!(PageId::from_query("?mode=expert"), PageId::Home);
     assert_eq!(PageId::from_query(""), PageId::Home);

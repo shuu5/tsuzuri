@@ -4,13 +4,15 @@
 //! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
 //! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は行 g-win-parts と行 g-ask-win が描く。
 //! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
-//! DOM は wasm の target のときだけ組む。帯を頁に置くのは 1 枚の画面への切り替えの行（今の header は替えない）。
+//! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
+//! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::graph::{InvariantCheck, Verdict};
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 
+use crate::frame::{self, Mode, PageId};
 use crate::project::seat::{Span, bar_class, drawn, rects, short, state_value, strip_svg};
 use crate::project::{Body, UNKNOWN, next, notice, state_key};
 use crate::view::{Fetched, hhmm};
@@ -26,6 +28,50 @@ pub enum Win {
     Gaps,
     Legend,
     Dest,
+}
+
+impl Win {
+    /// 全部の窓（宣言の順）。
+    pub const ALL: [Win; 7] = [
+        Win::Ask,
+        Win::Stalled,
+        Win::Notices,
+        Win::Seat,
+        Win::Gaps,
+        Win::Legend,
+        Win::Dest,
+    ];
+
+    /// URL の query の win の値の名。
+    pub fn key(self) -> &'static str {
+        match self {
+            Win::Ask => "ask",
+            Win::Stalled => "stalled",
+            Win::Notices => "notices",
+            Win::Seat => "seat",
+            Win::Gaps => "gaps",
+            Win::Legend => "legend",
+            Win::Dest => "dest",
+        }
+    }
+
+    /// URL の query の win の値の窓（無い値と知らない値は None）。
+    pub fn from_query(search: &str) -> Option<Win> {
+        let want = frame::param(search, WIN_PARAM)?;
+        Win::ALL.into_iter().find(|w| w.key() == want)
+    }
+}
+
+/// 窓を開く URL の query の名（home の頁を開いた時にその窓を開く・行 g-one-screen-a）。
+pub const WIN_PARAM: &str = "win";
+
+/// 窓を開いた home の頁の URL（mode を残す・消した質問の頁と抜けの検査の頁への link の替わり）。
+pub fn win_href(win: Win, mode: Mode) -> String {
+    format!(
+        "{}&{WIN_PARAM}={}",
+        frame::href(PageId::Home, mode),
+        win.key()
+    )
 }
 
 /// 帯の id（見本の `#bar`・頁に 1 つ）。

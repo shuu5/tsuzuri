@@ -116,7 +116,7 @@ fn gbnote_board_text() {
     let top = function(&board, "top", "");
     for w in [
         "back_to_board(note)",
-        "</header>{move || note.get().map(back_note)}",
+        "{topbar::view(bar)}\n        {move || note.get().map(back_note)}",
     ] {
         assert!(top.contains(w), "top に {w} が無い: {top}");
     }

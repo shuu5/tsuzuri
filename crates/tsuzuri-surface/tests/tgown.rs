@@ -31,7 +31,8 @@ fn tgown_block_placed_and_folded() {
         .iter()
         .map(|c| c.blocks.iter().map(|b| b.id).collect())
         .collect();
-    assert_eq!(columns[1], vec!["orch", "stage"]);
+    // orchestrator と表示先の block は頁に置かず、帯の席と口座の窓と ⚙ の表示先の窓が描く（行 g-one-screen-a）。
+    assert_eq!(columns[1], vec!["pipe"]);
     assert_eq!(stage::BLOCK.id, "stage");
     assert_eq!(stage::BLOCK.heading, "stage_target");
     assert_eq!(stage::BLOCK.class, "panel fold mvp");

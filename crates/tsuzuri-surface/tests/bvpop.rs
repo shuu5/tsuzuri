@@ -290,7 +290,7 @@ fn bvpop_queued_since() {
     assert_eq!(src(&cards), (vec![STAGE_KEYS[2]], Val::Unknown));
 }
 
-/// 止まりは理由の全文（切らない）と run の回と口座と次の手（Questioned は問いの頁・Failed と Stopped は run の時間軸）。
+/// 止まりは理由の全文（切らない）と run の回と口座と次の手（Questioned は質問の窓・Failed と Stopped は run の時間軸）。
 #[test]
 fn bvpop_stop_reason_full() {
     let long = "verdict:FAIL kind:contract-fit 実装が節の字と合わない所が 3 つ在り、gate が落とした（長い理由の全文）";
@@ -321,7 +321,7 @@ fn bvpop_stop_reason_full() {
     }
     assert_eq!(
         next_href(NEXT_KEYS[0], "t-8", Mode::Beginner),
-        "?page=ask&mode=beginner"
+        "?mode=beginner&win=ask"
     );
     assert_eq!(
         next_href(NEXT_KEYS[1], "t-8", Mode::Expert),

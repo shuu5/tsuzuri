@@ -149,15 +149,14 @@ fn jrun_screens_cover_surface() {
     assert_eq!(MODES, ["beginner", "expert"]);
     let src = root().join("crates/tsuzuri-surface/src");
     let mut want = vec!["?".to_string()];
-    let mut pages: Vec<String> = fs::read_dir(src.join("pages"))
+    let pages: Vec<String> = fs::read_dir(src.join("pages"))
         .expect("面の頁の dir を読む")
         .map(|e| e.expect("dir の項").file_name().to_string_lossy().into_owned())
         .filter_map(|n| n.strip_suffix(".rs").map(str::to_string))
         .filter(|n| !["mod", "home", "node"].contains(&n.as_str()))
         .collect();
-    pages.sort();
-    assert!(!pages.is_empty(), "頁の file");
-    want.extend(pages.iter().map(|p| format!("?page={p}&")));
+    // home と節点の頁のほかの頁の file は無い（質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+    assert!(pages.is_empty(), "頁の file {pages:?}");
     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
     assert_eq!(tabs, ["home", "session", "projects"]);
@@ -165,7 +164,7 @@ fn jrun_screens_cover_surface() {
     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
     got.sort();
     got.dedup();
-    assert_eq!(got.len(), 6, "SCREENS に重なりが無い");
+    assert_eq!(got.len(), 4, "SCREENS に重なりが無い");
     want.sort();
     assert_eq!(got, want);
 }
@@ -325,7 +324,7 @@ fn jrun_sweep_all_cases() {
             urls.extend(group.into_iter().map(|u| (width, mode, u)));
         }
     }
-    assert_eq!(urls.len(), 28);
+    assert_eq!(urls.len(), 20);
     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
     assert_eq!(page.navigated(), navigated);
     let mut want = vec![head()];
@@ -366,7 +365,7 @@ fn sweep_without_nodes(vocab: String) {
     let mut empty = Fake::new(move |_| bare.clone(), |_, _| vec![LOAD.to_string()]);
     let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い home");
     assert!(err.contains("節点が無い"), "{err}");
-    assert_eq!(empty.navigated().len(), 6, "節点の頁を開かずに止まる");
+    assert_eq!(empty.navigated().len(), 4, "節点の頁を開かずに止まる");
 }
 
 #[test]

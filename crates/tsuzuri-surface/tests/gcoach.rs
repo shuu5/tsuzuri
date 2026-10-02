@@ -141,7 +141,7 @@ fn gcoach_wasm_wiring() {
     let board = read("src/board.rs");
     let app = body(&board, "fn App()", "\n}\n");
     assert!(
-        app.contains("{move || (page.get() == PageId::Home).then(|| view! { <CoachLayer/> })}"),
+        app.contains("{(page == PageId::Home).then(|| view! { <CoachLayer/> })}"),
         "fn App に home の頁だけの案内の層が無い: {app}"
     );
 

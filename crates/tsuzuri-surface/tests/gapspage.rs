@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{InvariantCheck, Verdict};
-use tsuzuri_surface::frame::{self, Mode, PageId};
 use tsuzuri_surface::project::{Body, NOT_READ, gaps, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
@@ -41,57 +40,8 @@ fn check(id: &str, verdict: Verdict, ids: &[&str]) -> InvariantCheck {
     }
 }
 
-/// 語の列 `want` が `all` の中にこの順で含まれる。
-fn in_order(all: &[&str], want: &[&str]) -> bool {
-    let mut rest = all.iter();
-    want.iter().all(|w| rest.any(|a| a == w))
-}
 
-/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、抜けの検査の頁の block は gaps の 1 つ、
-/// header の link は home・questions・gaps をこの順に含む。
-#[test]
-fn gapspage_page_frame_and_nav() {
-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
-    let all: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
-    for id in ["home", "ask", "gaps"] {
-        assert!(all.contains(&id), "{all:?}");
-    }
-    let page = frame::page(PageId::Gaps);
-    assert_eq!(page.id, PageId::Gaps);
-    assert_eq!(page.heading, "gaps");
-    assert_eq!(page.block_ids(), vec!["gaps"]);
-    assert_eq!(gaps::BLOCK.id, "gaps");
-    assert_eq!(gaps::BLOCK.heading, "gaps");
-    assert_eq!(PageId::from_query("?page=gaps&mode=expert"), PageId::Gaps);
-    assert_eq!(
-        frame::href(PageId::Gaps, Mode::Beginner),
-        "?page=gaps&mode=beginner"
-    );
-    nav_and_snapshot();
-}
 
-/// header の link の順と抜けの検査の頁の印と語、頁の snapshot を見る。
-fn nav_and_snapshot() {
-    let nav_keys = frame::nav_keys();
-    assert!(
-        in_order(&nav_keys, &["home", "questions", "gaps"]),
-        "{nav_keys:?}"
-    );
-    let links = frame::nav_links(PageId::Gaps);
-    let keys: Vec<&str> = links.iter().map(|l| l.key).collect();
-    assert!(in_order(&keys, &["home", "questions", "gaps"]), "{keys:?}");
-    let on: Vec<&str> = links
-        .iter()
-        .filter(|l| l.class == "on")
-        .map(|l| l.key)
-        .collect();
-    assert_eq!(on, vec!["gaps"]);
-    assert_eq!(vocab().label("gaps"), "抜けの検査");
-    let snapshot = read("tests/snapshots/pages/gaps.json");
-    assert!(snapshot.contains("{\"id\": \"gaps\", \"heading\": \"gaps\", \"class\": \"panel\"}"));
-    assert_eq!(frame::page_snapshot(PageId::Gaps), snapshot, "snapshot の file と違う");
-}
 
 /// 数の札は 3 枚（違反・まだ分からない・合格の順）・数は fixture の判定の数・記号の字と class と語の鍵。
 #[test]

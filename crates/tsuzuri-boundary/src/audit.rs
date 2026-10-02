@@ -302,12 +302,10 @@ pub const WIDTHS: [u32; 2] = [1280, 390];
 pub const MODES: [&str; 2] = ["beginner", "expert"];
 
 /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
-/// project board の頁と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
-/// 行 m-map-page で消した）。
-pub const SCREENS: [&str; 6] = [
+/// project board の 1 枚の画面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
+/// 行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+pub const SCREENS: [&str; 4] = [
     "?",
-    "?page=ask&",
-    "?page=gaps&",
     "?board=account&tab=home&",
     "?board=account&tab=session&",
     "?board=account&tab=projects&",
@@ -422,7 +420,7 @@ fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 6 の画面と、
+/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 4 の画面と、
 /// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
 pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
     let mut report = head();

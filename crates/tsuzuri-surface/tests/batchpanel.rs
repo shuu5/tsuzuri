@@ -16,7 +16,6 @@ use tsuzuri_contract::surface::{
     PolicyResponse, Refusal, RefusalResponse, RulingId,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, PageId};
 use tsuzuri_surface::project::ask::{self, KeyAction};
 use tsuzuri_surface::project::{Body, NOT_READ, batch, policy};
 use tsuzuri_surface::view::Fetched;
@@ -80,54 +79,7 @@ fn list_of(cards: Vec<QuestionCard>) -> Fetched {
     )
 }
 
-/// 列の class と、block の id・見出しの語の鍵・class の組。
-type ColumnShape = (&'static str, Vec<(&'static str, &'static str, &'static str)>);
 
-/// (1) 問いの頁は 2 列: 左の列は ask と hist・右の列は side stack で batch と policy・snapshot の file と 1 字も違わない。
-#[test]
-fn batchpanel_page_frame_two_columns() {
-    let page = frame::page(PageId::Ask);
-    assert_eq!(page.id, PageId::Ask);
-    let columns: Vec<ColumnShape> = page
-        .columns
-        .iter()
-        .map(|c| {
-            (
-                c.class,
-                c.blocks
-                    .iter()
-                    .map(|b| (b.id, b.heading, b.class))
-                    .collect(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        columns,
-        vec![
-            (
-                "stack",
-                vec![
-                    ("ask", "ask_open", "panel"),
-                    ("hist", "rulings", "fold panel")
-                ]
-            ),
-            (
-                "side stack",
-                vec![("batch", "batch", "panel"), ("policy", "policy", "panel")]
-            ),
-        ]
-    );
-    assert_eq!(frame::SIDE, "side stack");
-    assert_eq!(batch::BLOCK, page.columns[1].blocks[0]);
-    assert_eq!(policy::BLOCK, page.columns[1].blocks[1]);
-    assert_eq!(
-        frame::page_snapshot(PageId::Ask),
-        read("tests/snapshots/pages/ask.json"),
-        "snapshot の file と違う"
-    );
-    assert_eq!(vocab().label("batch"), "まとめて承認");
-    assert_eq!(vocab().label("policy"), "全体への指示");
-}
 
 /// (2) 行は一覧の順の 1 から始まる番号と 36 字に切った題・A-1 の印を持つ 1 本目は選べず、2 本目は選べて初めは選ばれている。
 #[test]

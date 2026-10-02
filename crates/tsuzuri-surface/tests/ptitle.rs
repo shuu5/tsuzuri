@@ -175,8 +175,6 @@ fn ptitle_joins_name_and_word() {
 fn ptitle_every_page_has_word() {
     let words = [
         ("home", "ホーム"),
-        ("ask", "質問"),
-        ("gaps", "抜けの検査"),
         ("node", "この節点"),
     ];
     for page in PageId::ALL {

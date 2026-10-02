@@ -72,8 +72,8 @@ fn popapp_features_by_standalone() {
         assert!(!held.plain(), "{held:?}");
     }
     // 頁の切り替えは同じ plain で読む（振る舞いは変わらない）。
-    let to = switch_url(PageId::Home, PageId::Ask, Mode::Beginner, Press::default());
-    assert_eq!(to, Some(frame::href(PageId::Ask, Mode::Beginner)));
+    let to = switch_url(PageId::Home, PageId::Node, Mode::Beginner, Press::default());
+    assert_eq!(to, Some(frame::href(PageId::Node, Mode::Beginner)));
     assert_eq!(
         switch_url(PageId::Home, PageId::Home, Mode::Beginner, Press::default()),
         None
@@ -81,7 +81,7 @@ fn popapp_features_by_standalone() {
     assert_eq!(
         switch_url(
             PageId::Home,
-            PageId::Ask,
+            PageId::Node,
             Mode::Beginner,
             press(0, false, false, false, true)
         ),

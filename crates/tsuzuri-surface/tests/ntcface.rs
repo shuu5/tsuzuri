@@ -175,10 +175,11 @@ fn ntc_all_block() {
 /// (7) 置き場と語と口の path と変化の種類。
 #[test]
 fn ntc_blocks_placed() {
+    // 知らせの block は頁に置かず、帯の知らせの窓が中身の関数を描く（行 g-one-screen-a）。
     let home = frame::page(PageId::Home);
-    let first = home.columns[0].blocks[0];
+    assert!(!home.block_ids().contains(&"notice"));
+    let first = notice::BLOCK;
     assert_eq!((first.id, first.heading, first.class), ("notice", "notice", "panel"));
-    assert_eq!(first, notice::BLOCK);
     let acct = account::page(Tab::Home);
     assert_eq!(acct.rows[0].blocks, [notices::BLOCK]);
     let b = notices::BLOCK;

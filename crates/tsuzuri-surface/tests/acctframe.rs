@@ -86,8 +86,8 @@ fn acctframe_entry_selects_board_account_only() {
     // 偽のときの project board の頁と mode の決め方は変わらない。
     for (q, page) in [
         ("", PageId::Home),
-        ("?page=ask", PageId::Ask),
-        ("?board=project&page=gaps", PageId::Gaps),
+        ("?page=ask", PageId::Home),
+        ("?board=project&page=gaps", PageId::Home),
         ("?page=node&id=FR1", PageId::Node),
     ] {
         assert!(!account::selects(q), "{q}");

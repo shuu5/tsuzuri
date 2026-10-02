@@ -12,7 +12,7 @@ use tsuzuri_contract::surface::{
     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, BADGE, PageId};
+use tsuzuri_surface::frame;
 use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
 use tsuzuri_surface::view::{Fetched, clock};
 use tsuzuri_surface::vocab::vocab;
@@ -44,60 +44,8 @@ fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("bead の id")
 }
 
-/// 語の列 `want` が `all` の中にこの順で含まれる。
-fn in_order<S: AsRef<str>>(all: &[S], want: &[&str]) -> bool {
-    let mut rest = all.iter();
-    want.iter().all(|w| rest.any(|a| a.as_ref() == *w))
-}
 
-/// 頁の順は home・ask・gaps（nav の中の含まれ方と順）、問いの頁の左の列の block は ask と hist（右の列は便 g-batch）、
-/// header の link は ホーム・質問・抜けの検査。
-#[test]
-fn askcard_page_frame_and_nav() {
-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
-    let page = frame::page(PageId::Ask);
-    assert_eq!(page.columns.len(), 2);
-    let left: Vec<&str> = page.columns[0].blocks.iter().map(|b| b.id).collect();
-    assert_eq!(left, vec!["ask", "hist"]);
-    assert_eq!(page.heading, "questions");
-    assert_eq!(PageId::from_query("?page=ask&mode=expert"), PageId::Ask);
-    assert_eq!(
-        frame::href(PageId::Ask, frame::Mode::Beginner),
-        "?page=ask&mode=beginner"
-    );
-    header_links();
-}
 
-/// header の link の語の順と数の印・snapshot・on の class。
-fn header_links() {
-    let links = frame::nav_links(PageId::Ask);
-    let words: Vec<String> = links.iter().map(|l| vocab().label(l.key)).collect();
-    assert!(
-        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
-        "{words:?}"
-    );
-    // 数の印は問いの頁の link だけ（home・gaps の link は空）。
-    for l in &links {
-        let want = if l.page == PageId::Ask { BADGE } else { "" };
-        if matches!(l.key, "home" | "questions" | "gaps") {
-            assert_eq!(l.badge, want, "{}", l.key);
-        }
-    }
-    assert!(links.iter().any(|l| l.page == PageId::Ask && l.badge == BADGE));
-    assert_eq!(BADGE, "badge");
-    assert_eq!(
-        frame::page_snapshot(PageId::Ask),
-        read("tests/snapshots/pages/ask.json"),
-        "snapshot の file と違う"
-    );
-    let on: Vec<&str> = links
-        .iter()
-        .filter(|l| l.class == "on")
-        .map(|l| l.key)
-        .collect();
-    assert_eq!(on, vec!["questions"]);
-}
 
 /// 質問の link の数の印は open の問いの数・読めないと 0 は出さない。
 #[test]

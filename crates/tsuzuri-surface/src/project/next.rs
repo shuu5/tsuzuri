@@ -11,10 +11,11 @@ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_contract::wire;
 
 use super::node::answer_href;
-use super::{Body, NO_CONTENT, NOT_READ, ask, batch, map, pipeline};
+use super::{Body, NO_CONTENT, NOT_READ, ask, map, pipeline};
 use crate::account::windows::ACCOUNT_WIN;
 use crate::account::{Tab, tab_href};
-use crate::frame::{BackHow, Block, Mode, PageId, back_how, href};
+use crate::frame::{BackHow, Block, Mode, back_how};
+use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
 use crate::widgets::hover::{Card, clip};
 use crate::widgets::nodecard::card_of;
@@ -277,20 +278,18 @@ pub fn big_title(big: &Big, graph: &Fetched) -> Option<BigTitle> {
 }
 
 /// 種類ごとの次の手の頁への link（見本の nextItems の button・止まっている走行は Big の link・なしは無い）。
-/// 質問は対象の id が在ればその card へ、無ければ問いの頁へ。どれも mode を URL に残す。
+/// 質問は対象の id が在ればその card へ、無ければ質問の窓へ（束の承認も質問の窓・発効待ちは抜けの検査の窓・窓は
+/// home の頁の URL の query の win で開く・行 g-one-screen-a）。どれも mode を URL に残す。
 pub fn action(kind: NextMove, target: Option<&str>, mode: Mode) -> Option<Link> {
     let (href, text) = match kind {
         NextMove::LimitOrMove => (tab_href(Tab::Home, mode), ACCOUNT_LINK),
         NextMove::Unresponsive => (tab_href(Tab::Session, mode), SESSION_LINK),
-        NextMove::BatchApproval => (
-            format!("{}#{}", href(PageId::Ask, mode), batch::BLOCK.id),
-            BATCH_LINK,
-        ),
+        NextMove::BatchApproval => (win_href(Win::Ask, mode), BATCH_LINK),
         NextMove::Question => (
-            target.map_or_else(|| href(PageId::Ask, mode), |id| answer_href(id, mode)),
+            target.map_or_else(|| win_href(Win::Ask, mode), |id| answer_href(id, mode)),
             ANSWER_LINK,
         ),
-        NextMove::AwaitingEffect => (href(PageId::Gaps, mode), GAPS_LINK),
+        NextMove::AwaitingEffect => (win_href(Win::Gaps, mode), GAPS_LINK),
         NextMove::StalledRun | NextMove::Nothing => return None,
     };
     Some(Link { href, text })

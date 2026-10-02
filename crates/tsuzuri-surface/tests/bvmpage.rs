@@ -40,13 +40,13 @@ fn sources() -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-/// (1) 頁は ask・gaps・home・node の 4 つで、nav は home・questions・gaps の 3 つ・地図の頁の file と snapshot が無く、
+/// (1) 頁は home・node の 2 つで（質問と抜けの検査の頁は行 g-one-screen-a で消した）、nav は home だけ・地図の頁の file と snapshot が無く、
 /// 前の地図の URL は home に落ちる。
 #[test]
 fn bvmpage_no_map_page() {
     let ids: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
-    assert_eq!(ids, ["ask", "gaps", "home", "node"]);
-    assert_eq!(frame::nav_keys(), ["home", "questions", "gaps"]);
+    assert_eq!(ids, ["home", "node"]);
+    assert_eq!(frame::nav_keys(), ["home"]);
     for page in frame::pages() {
         assert!(!page.block_ids().contains(&"map"), "{:?}", page.id);
     }

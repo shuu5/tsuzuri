@@ -86,15 +86,11 @@ fn frame_snapshot_matches_file() {
     assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
 }
 
-/// 語の列 `want` が `all` の中にこの順で含まれる。
-fn in_order(all: &[&str], want: &[&str]) -> bool {
-    let mut rest = all.iter();
-    want.iter().all(|w| rest.any(|a| a == w))
-}
 
 #[test]
 fn frame_home_blocks_in_order_and_map_page() {
-    // home は見本の列の頭に席からの知らせを足した形: 左の列が notice・next・pipe・ledger・legend、右の列が orch と stage（行 i-11・行 i-stage-own）。
+    // home は 1 枚の画面の 2 つの面: 左の列が台帳 open の一覧の ledger、右の列が pipe（行 g-one-screen-a・知らせと次の一手と凡例と
+    // orchestrator と表示先は帯の印が開く窓）。
     let columns: Vec<Vec<&str>> = frame::page(PageId::Home)
         .columns
         .iter()
@@ -103,38 +99,23 @@ fn frame_home_blocks_in_order_and_map_page() {
     assert_eq!(
         columns,
         vec![
-            vec!["notice", "next", "pipe", "ledger", "legend"],
-            vec!["orch", "stage"]
+            vec!["ledger"],
+            vec!["pipe"]
         ]
     );
-    // 問いの頁は 2 列: 左の列が ask・hist、右の列（side stack）が batch・policy。
-    let ask_columns: Vec<(&str, Vec<&str>)> = frame::page(PageId::Ask)
-        .columns
-        .iter()
-        .map(|c| (c.class, c.blocks.iter().map(|b| b.id).collect()))
-        .collect();
-    assert_eq!(
-        ask_columns,
-        vec![
-            ("stack", vec!["ask", "hist"]),
-            ("side stack", vec!["batch", "policy"])
-        ]
-    );
-    assert_eq!(frame::page(PageId::Gaps).block_ids(), vec!["gaps"]);
     assert_eq!(
         frame::page(PageId::Node).block_ids(),
         vec!["node", "around", "timeline"]
     );
     let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert!(in_order(&ids, &["home", "ask", "gaps"]), "{ids:?}");
-    assert!(!ids.contains(&"node"), "{ids:?}");
+    assert_eq!(ids, vec!["home"]);
     for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);
     }
     assert_eq!(PageId::Node.id(), "node");
     let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
     assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
-    // header の頁の link は ホーム・質問・抜けの検査 の順（nav の部品の中の鍵と同じ・地図の頁は行 m-map-page で消した）。
+    // nav に出る頁は home だけ（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
     let keys: Vec<&str> = frame::nav_links(PageId::Home)
         .iter()
         .map(|l| l.key)
@@ -142,10 +123,7 @@ fn frame_home_blocks_in_order_and_map_page() {
     assert_eq!(keys, frame::nav_keys());
     let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    assert!(
-        in_order(&words, &["ホーム", "質問", "抜けの検査"]),
-        "{words:?}"
-    );
+    assert_eq!(words, vec!["ホーム"]);
 }
 
 /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
@@ -429,6 +407,11 @@ fn frame_item_shape_follows_status() {
     assert!(!by("bm").alert);
 }
 
+/// 頁に置かない block（行 g-one-screen-a）。
+const OFF_PAGE: [&str; 10] = [
+    "ask", "batch", "gaps", "hist", "legend", "next", "notice", "orch", "policy", "stage",
+];
+
 /// block と地図の頁と抜けの検査の頁と節点の頁の 2 つと問いの頁の右の列の 2 つは project の下の module に 1 つずつ・
 /// 枠の module は中身を持たない（行 hs-blocks: module の列は生成した Module の ALL から導く）。
 #[test]
@@ -455,10 +438,13 @@ fn frame_one_module_per_block() {
         );
     }
     let mut all: Vec<&str> = all_pages().iter().flat_map(|p| p.block_ids()).collect();
+    // 頁に置かない block は帯の印が開く窓（wins の draw と askwin）が中身の関数を描く物と、帯の材料の next と、
+    // 今どこにも描かない hist（行 g-one-screen-a）。
+    all.extend(OFF_PAGE);
     let mut declared: Vec<&str> = Module::ALL.iter().map(|m| m.block().id).collect();
     all.sort_unstable();
     declared.sort_unstable();
-    assert_eq!(all, declared, "枠の block と module の block が 1 対 1");
+    assert_eq!(all, declared, "枠の block と頁の外の block と module の block が 1 対 1");
     let frame_src = read("src/frame.rs");
     for word in ["view!", "Screen", "Reading", "Body", "leptos"] {
         assert!(
@@ -476,8 +462,8 @@ fn frame_mode_lives_in_url() {
     assert_eq!(Mode::from_query("?page=map&mode=expert"), Mode::Expert);
     assert_eq!(Mode::from_query("?mode=bogus"), Mode::Beginner);
     assert_eq!(PageId::from_query("?page=map&mode=expert"), PageId::Home);
-    assert_eq!(PageId::from_query("?page=ask"), PageId::Ask);
-    assert_eq!(PageId::from_query("?page=gaps"), PageId::Gaps);
+    assert_eq!(PageId::from_query("?page=ask"), PageId::Home);
+    assert_eq!(PageId::from_query("?page=gaps"), PageId::Home);
     assert_eq!(PageId::from_query("?page=bogus"), PageId::Home);
     assert_eq!(PageId::from_query("?mode=expert"), PageId::Home);
     assert_eq!(frame::with_param("", "mode", "expert"), "?mode=expert");
@@ -521,14 +507,6 @@ fn hrefs_keep_mode() {
             .iter()
             .all(|l| l.class.is_empty())
     );
-
-    let links = frame::nav_links(PageId::Gaps);
-    let on: Vec<&str> = links
-        .iter()
-        .filter(|l| l.class == "on")
-        .map(|l| l.key)
-        .collect();
-    assert_eq!(on, vec!["gaps"]);
 }
 
 /// 「?」の注釈: 1 行目 = 要点・項 = 記号 + 本文・「▸」の後 = 詳しく（見本の noteParts と同じ）。

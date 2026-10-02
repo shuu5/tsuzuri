@@ -132,9 +132,9 @@ fn nact_row_link_rules() {
             link(format!("?board=account&tab=home&mode={m}"), ACCOUNT_LINK),
             link(format!("?board=account&tab=session&mode={m}"), SESSION_LINK),
             link("#pipe".to_string(), PIPE_LINK),
-            link(format!("?page=ask&mode={m}#batch"), BATCH_LINK),
-            link(format!("?page=ask&id=nq.4&mode={m}"), ANSWER_LINK),
-            link(format!("?page=gaps&mode={m}"), GAPS_LINK),
+            link(format!("?mode={m}&win=ask"), BATCH_LINK),
+            link(format!("?mode={m}&win=ask&id=nq.4"), ANSWER_LINK),
+            link(format!("?mode={m}&win=gaps"), GAPS_LINK),
         ];
         assert_eq!(hit.rest.len(), 6);
         for (r, w) in hit.rest.iter().zip(want) {
@@ -163,7 +163,7 @@ fn nact_row_link_rules() {
         let stalled = filled("stalled");
         for r in &stalled.rest {
             let want = if r.key == "nx_e" {
-                link(format!("?page=ask&id=nx.2&mode={m}"), ANSWER_LINK)
+                link(format!("?mode={m}&win=ask&id=nx.2"), ANSWER_LINK)
             } else {
                 None
             };
