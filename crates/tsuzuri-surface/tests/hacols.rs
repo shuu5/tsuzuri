@@ -14,8 +14,7 @@ use tsuzuri_surface::account::projects::{
     NONE_MARK, PSort, count_text, table, unref_class, unref_count, unref_of, wait_class, wait_of,
 };
 use tsuzuri_surface::frame::Mode;
-use tsuzuri_surface::project::ledger::{Unref, panel};
-use tsuzuri_surface::view::Screen;
+use tsuzuri_surface::project::ledger::Unref;
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -84,7 +83,7 @@ fn run_cards(doc: AccountDoc) {
     }
 }
 
-/// (2) 未反映は project board の指標の段の panel の欄 unref と同じ組み方（部分の和と読めない種類）・台帳が Unknown は None。
+/// (2) 未反映は project board の未反映の段の Unref::of と同じ組み方（部分の和と読めない種類）・台帳が Unknown は None。
 #[test]
 fn hacols_unref_partial() {
     let doc = fixture();
@@ -97,13 +96,12 @@ fn hacols_unref_partial() {
             unknown: vec!["ruling", "utterance"],
         }
     );
-    let screen = Screen::initial();
-    assert_eq!(u, panel(&s, &screen, doc.at).unref);
+    assert_eq!(u, Unref::of(&s));
 
     let mut full = s.clone();
     full.unreflected = 5;
     full.unreflected_unknown = Vec::new();
-    assert_eq!(unref_count(&full), panel(&full, &screen, doc.at).unref);
+    assert_eq!(unref_count(&full), Unref::of(&full));
     assert_eq!(unref_count(&full).count, 5);
     assert!(unref_count(&full).unknown.is_empty());
 
@@ -114,7 +112,7 @@ fn hacols_unref_partial() {
         UnreflectedKind::Ruling,
         UnreflectedKind::Utterance,
     ];
-    assert_eq!(unref_count(&none), panel(&none, &screen, doc.at).unref);
+    assert_eq!(unref_count(&none), Unref::of(&none));
     assert_eq!(unref_count(&none).unknown, vec!["memo", "ruling", "utterance"]);
 
     assert_eq!(unref_of(&doc.projects[0]), Some(u.clone()));

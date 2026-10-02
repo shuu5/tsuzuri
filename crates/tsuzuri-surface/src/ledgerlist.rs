@@ -6,6 +6,7 @@
 //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
 //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
 //! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
+//! 14 日の burndown の図には、block の前の burndown の段の card を付ける（block の指標の段を外して見出しへ縮めた・行 g-ledger-trim）。
 //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
 //! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
 //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
@@ -576,11 +577,12 @@ mod dom {
     };
     use crate::frame::{Mode, node_href};
     use crate::kit::Folds;
-    use crate::project::ledger::stats;
+    use crate::project::ledger::{burn_card, stats};
     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
     use crate::view::read_rows;
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
+    use crate::widgets::hover::attach_some;
     use crate::widgets::pop::{PopCtx, Via, board_unread};
 
     /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
@@ -661,7 +663,10 @@ mod dom {
         let cases = crate::net::read(case::PATH);
         let kpis = move || {
             let (text, svg) = metrics.with(kpi);
-            let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
+            let card = metrics.with(|m| stats(m).ok().map(|s| burn_card(&s)));
+            let fig = svg.map(|s| {
+                view! { <span class="ll-spark" tabindex="0" use:attach_some=card inner_html=s></span> }
+            });
             let unref = metrics
                 .with(|m| stats(m).ok())
                 .map(|s| cases.with(|c| unref_head(&s, &phases(c))))

@@ -972,7 +972,7 @@ dialog.hbdlg .cmd { font: 12px/1.5 ui-monospace, monospace; background: var(--pa
 #ledger .l4 .big { font: 750 var(--fs-4)/1.1 system-ui; font-variant-numeric: tabular-nums; }
 #ledger .l4 .nets { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 11px; }
 #ledger .lmid { margin-top: var(--s3); }
-#ledger .lburn { display: block; width: 100%; height: 72px; }
+#ledger .lburn { display: block; width: 120px; height: 24px; }
 #ledger .lburn .lb-closed { fill: var(--st-run); opacity: .55; }
 #ledger .lburn .lb-open { stroke: var(--band-beads); stroke-width: 2; vector-effect: non-scaling-stroke; }
 #ledger .lcap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ink-3); }
@@ -1280,7 +1280,6 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
 .ll-l2 { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ll-kchip { font-size: 11.5px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 1px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ll-spark { flex: none; display: flex; margin-left: auto; }
-#ledger .ll-spark .lburn { width: 120px; height: 24px; }
 .ll-seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex: none; }
 .ll-seg button { padding: 1px 10px; font-size: 12px; border: 0; border-left: 1px solid var(--line); background: none; cursor: pointer; }
 .ll-seg button:first-child { border-left: 0; }

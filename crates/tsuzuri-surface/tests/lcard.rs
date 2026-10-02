@@ -1,18 +1,13 @@
 //! 行 g-ledger-card の歯: burndown の図の hover の card（題・純減と closed/日・open の始めと終わり・出所と時点・
-//! 1 日おきの詳しく）・Metrics が card を運ぶこと・DOM の字（lmid の card と epic の題の link）・語の鍵・歯の名。
+//! 1 日おきの詳しく）・DOM の字（一覧の見出しの図の card・行 g-ledger-trim で台帳の block の lmid から移した）・語の鍵・歯の名。
 #![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use tsuzuri_boundary::server::ledger as server_ledger;
-use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::stats::LedgerStats;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::Body;
-use tsuzuri_surface::project::ledger::{BURN_SRC, Metrics, burn_card, content, panel};
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::project::ledger::{BURN_SRC, burn_card};
 use tsuzuri_surface::vocab::{label, vocab};
 use tsuzuri_surface::widgets::hover::{Card, ROW_CHARS};
 
@@ -40,27 +35,6 @@ fn real() -> (String, LedgerStats) {
         wire::decode(&text).expect("写しは鍵 known の下に指標を持つ");
     let inner = raw.remove("known").expect("鍵 known");
     (text, inner)
-}
-
-/// 口の本文の形（指標を known の鍵で包んだ字）。
-fn wrap(s: &LedgerStats) -> Fetched {
-    Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("電文"))
-}
-
-fn ledger_rows() -> Vec<LedgerRow> {
-    let text = read("../../tests/fixtures/ledger/board-8.jsonl");
-    let Reading::Known(items) = server_ledger::parse(&text) else {
-        panic!("fixture が server の読みで Unknown");
-    };
-    items.into_iter().map(|i| i.row).collect()
-}
-
-fn known_screen() -> Screen {
-    let body = wire::encode(&LedgerList {
-        rows: Reading::Known(ledger_rows()),
-    })
-    .expect("電文");
-    Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
 fn card(title: &str, kind: &str, value: &str, src: &str, more: &[&str]) -> Card {
@@ -201,50 +175,19 @@ fn net_drop_arrows(base: LedgerStats, full: Card) {
     );
 }
 
-/// (4) content と panel が組む Metrics の burn_card は同じ指標の burn_card（画面の状態が初めでも一覧を読んだ後でも）。
-#[test]
-fn lcard_metrics_carry_card() {
-    let (text, inner) = real();
-    let cases = [
-        (wrap(&set("filled")), set("filled")),
-        (wrap(&set("empty")), set("empty")),
-        (Fetched::Body(text), inner),
-    ];
-    for screen in [Screen::initial(), known_screen()] {
-        for (fetched, s) in &cases {
-            let m: Metrics = match content(fetched, &screen, s.at) {
-                Body::Filled(m) => m,
-                other => panic!("中身を出さない: {other:?}"),
-            };
-            assert_eq!(m.burn_card, burn_card(s));
-            assert_eq!(panel(s, &screen, s.at).burn_card, burn_card(s));
-        }
-    }
-}
-
-/// (5) DOM の字: lmid の tag に card と tabindex・epic の題は節点の頁への a の要素・board.rs の card の層。
+/// (5) DOM の字: 一覧の見出しの図の tag に card と tabindex・card は指標の電文の burn_card・board.rs の card の層。
 #[test]
 fn lcard_dom_wiring() {
-    let src = read("src/project/ledger.rs");
+    let src = read("src/ledgerlist.rs");
     let dom = &src[src.find("mod dom {").expect("mod dom")..];
-    let at = dom.find("<div class=\"lmid\"").expect("lmid の tag");
+    let at = dom.find("<span class=\"ll-spark\"").expect("図の tag");
     let tag = &dom[at..at + dom[at..].find('>').expect("tag の終わり")];
-    assert!(tag.contains("use:attach="), "{tag}");
+    assert!(tag.contains("use:attach_some=card"), "{tag}");
     assert!(tag.contains("tabindex=\"0\""), "{tag}");
-    assert!(dom.contains("burn_card"));
-    assert!(dom.contains("hover::attach"));
-
-    let start = dom.find("fn epic_view(").expect("epic_view");
-    let len = dom[start..].find("\n    }\n").expect("epic_view の終わり");
-    let body = &dom[start..start + len];
-    for word in ["<a", "href=", "node_href(", "</a>", "class=\"nid\"", "data-t"] {
-        assert!(body.contains(word), "epic_view に {word}");
-    }
-    let pos = |w: &str| body.find(w).unwrap_or_else(|| panic!("{w}"));
-    assert!(pos("<a") < pos("class=\"nid\""));
-    assert!(pos("class=\"nid\"") < pos("data-t"));
-    assert!(pos("data-t") < pos("</a>"));
-    assert!(!body.contains("<span>"), "外側の span が残る");
+    assert!(dom.contains("stats(m).ok().map(|s| burn_card(&s))"));
+    assert!(dom.contains("hover::attach_some"));
+    let ledger = read("src/project/ledger.rs");
+    assert!(!ledger.contains("class=\"lmid\""), "台帳の block に lmid が残る");
 
     let board = read("src/board.rs");
     assert!(board.contains("provide_context(HoverCtx::default())"));
@@ -359,7 +302,7 @@ fn lcard_own_names_clean() {
             .unwrap_or_else(|| panic!("test の属性の次が fn でない: {next}"));
         names.push(name.to_string());
     }
-    assert_eq!(names.len(), 6, "{names:?}");
+    assert_eq!(names.len(), 5, "{names:?}");
     for name in &names {
         let rest = name
             .strip_prefix("lcard_")

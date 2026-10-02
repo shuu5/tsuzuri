@@ -1,5 +1,5 @@
-//! 便 g-ledger の歯: 上段の 4 数と純減の字・判定の 5 値の表・burndown の座標・未反映の数と分からない種類・
-//! 年齢の字・配置の表・測れていないと台帳の一覧・着地済みの外形と依存。
+//! 便 g-ledger の歯: 純減の字・判定の 5 値の表・burndown の座標・未反映の種類の名・年齢の字・
+//! 測れていないと台帳の一覧・着地済みの外形と依存（指標の段の上段と配置の表は行 g-ledger-trim で外した）。
 #![cfg(test)]
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,9 +11,8 @@ use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{
-    self, BURN_H, BURN_W, JUDGES, LAYOUT, METRICS, Metrics, NONE, Part, Tier, UNREF_KINDS, age,
-    burn_svg, burndown, content, fixed1, judge, kind_name, layout, net, points, spark, spark_svg,
-    stats,
+    self, BURN_H, BURN_W, JUDGES, NONE, UNREF_KINDS, age, burn_svg, burndown, fixed1, judge,
+    kind_name, net, points, spark, spark_svg, stats,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::{Fetched, Screen};
@@ -64,43 +63,8 @@ fn known_screen() -> Screen {
     Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
-/// 指標の段を組む今（fixture の組の時点）。
-const NOW: u64 = 1_791_676_800;
-
-fn filled(name: &str, screen: &Screen) -> Metrics {
-    match content(&body_of(name), screen, NOW) {
-        Body::Filled(m) => m,
-        other => panic!("組 {name} が中身を出さない: {other:?}"),
-    }
-}
-
-/// (1) 上段の 4 数（open の task・open の memo・未反映・純減 24h）と、純減の矢印と数の字。
-#[test]
-fn ledgerblock_top_four_and_net_text() {
-    let names: Vec<String> = fixture().into_keys().collect();
-    assert_eq!(names, vec!["empty", "filled"]);
-    let m = filled("filled", &known_screen());
-    let top: Vec<Option<String>> = [Part::Task, Part::Memo, Part::Unref, Part::Net24]
-        .into_iter()
-        .map(|p| m.text(p))
-        .collect();
-    let want: Vec<Option<String>> = ["5", "3", "3", "−2"]
-        .into_iter()
-        .map(|s| Some(s.to_string()))
-        .collect();
-    assert_eq!(top, want);
-    assert_eq!(m.net24.arrow, "↓");
-    assert_eq!(m.net24.class, "net net-down");
-    let e = filled("empty", &Screen::initial());
-    assert_eq!(e.text(Part::Task), Some("0".to_string()));
-    assert_eq!(e.text(Part::Net24), Some("0".to_string()));
-    assert_eq!(e.net24.arrow, "→");
-
-    net_rows_and_rate(m, e);
-}
-
-/// 純減の値ごとの矢印と字と class・主な指標の行の字と小数 1 桁の丸め。
-fn net_rows_and_rate(m: Metrics, e: Metrics) {
+/// 純減の値ごとの矢印と字と class・小数 1 桁の丸め。
+fn net_rows_and_rate() {
     for (value, arrow, text, class) in [
         (-3, "↓", "−3", "net net-down"),
         (2, "↑", "+2", "net net-up"),
@@ -115,11 +79,6 @@ fn net_rows_and_rate(m: Metrics, e: Metrics) {
             "値 {value}"
         );
     }
-    // 主な指標の行: closed/日（小数 1 桁）と純減 7d。
-    assert_eq!(m.text(Part::Rate), Some("1.7".to_string()));
-    assert_eq!(m.text(Part::Net7), Some("−4".to_string()));
-    assert_eq!(m.net7.arrow, "↓");
-    assert_eq!(e.text(Part::Rate), Some("0.0".to_string()));
     assert_eq!(fixed1(2.25), "2.3");
     assert_eq!(fixed1(0.04), "0.0");
 }
@@ -143,17 +102,19 @@ fn ledgerblock_judge_table_five_values() {
         assert_eq!(JUDGES.iter().filter(|j| j.judge == v).count(), 1, "{v:?}");
         assert_eq!(judge(v).judge, v);
     }
-    assert_eq!(filled("filled", &Screen::initial()).judge.key, "j_ok");
-    assert_eq!(filled("empty", &Screen::initial()).judge.key, "j_none");
+    let read = |name: &str| stats(&body_of(name)).map(|s| judge(s.judge).key);
+    assert_eq!(read("filled"), Ok("j_ok"));
+    assert_eq!(read("empty"), Ok("j_none"));
     // 電文の判定を差し替えれば写しも変わる（面は数から判じ直さない）。
     for v in LedgerJudge::ALL {
         let mut s = set("filled");
         s.judge = v;
-        let f = wrap(&s);
-        let Body::Filled(m) = content(&f, &Screen::initial(), NOW) else {
-            panic!("中身が無い");
-        };
-        assert_eq!(m.judge, judge(v));
+        let got = stats(&wrap(&s)).map(|s| judge(s.judge));
+        assert_eq!(got, Ok(judge(v)));
+    }
+    // 判定の語の鍵は語の辞書に在る。
+    for key in JUDGES.iter().map(|j| j.key) {
+        assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
     }
 }
 
@@ -233,30 +194,9 @@ fn empty_days_and_spark(s: LedgerStats) {
     assert!(svg.contains(r#"<polyline class="ls-closed""#));
 }
 
-/// (4) 未反映は電文の数をそのまま出し、分からない種類は名を出す（0 と書かない）・台帳の一覧から数え直さない。
+/// (4) 未反映の種類の名の表は 3 つの全部で、名は電文の種類の字と同じ。
 #[test]
 fn ledgerblock_unreflected_copies_wire() {
-    let screen = known_screen();
-    let m = filled("filled", &screen);
-    assert_eq!(m.unref.count, 3);
-    assert_eq!(m.unref.unknown, vec!["ruling", "utterance"]);
-    assert_eq!(m.text(Part::UnrefCount), Some("3".to_string()));
-    // 台帳の一覧が在っても無くても同じ（面の側で数え直さない）。
-    assert_eq!(filled("filled", &Screen::initial()).unref, m.unref);
-    assert_eq!(filled("filled", &screen.after_lost()).unref, m.unref);
-    let mut s = set("filled");
-    s.unreflected = 41;
-    s.unreflected_unknown = vec![];
-    let f = wrap(&s);
-    let Body::Filled(m2) = content(&f, &screen, NOW) else {
-        panic!("中身が無い");
-    };
-    assert_eq!(m2.unref.count, 41);
-    assert!(m2.unref.unknown.is_empty());
-
-    let e = filled("empty", &screen);
-    assert_eq!(e.unref.count, 0);
-    assert_eq!(e.unref.unknown, vec!["memo", "ruling", "utterance"]);
     assert_eq!(
         UNREF_KINDS.map(|(k, _)| k),
         UnreflectedKind::ALL,
@@ -283,114 +223,7 @@ fn ledgerblock_age_four_forms() {
     assert_eq!(age(Some(10.0)), "10d");
     assert_eq!(age(Some(12.3)), "12d");
     assert_eq!(age(Some(45.6)), "46d");
-    memo_age_and_lead();
-}
-
-/// 指標の memo の年齢と lead の字・memo の段の残りの 3 数。
-fn memo_age_and_lead() {
-    let m = filled("filled", &Screen::initial());
-    assert_eq!(m.text(Part::MemoAge), Some("3.4d".to_string()));
-    assert_eq!(m.text(Part::Lead), Some("12h".to_string()));
-    let e = filled("empty", &Screen::initial());
-    assert_eq!(e.text(Part::MemoAge), Some("―".to_string()));
-    assert_eq!(e.text(Part::Lead), Some("―".to_string()));
-    // memo の段の残りの 3 数。
-    let memo: Vec<Option<String>> = [Part::MemoOpen, Part::MemoWait, Part::MemoPromo7]
-        .into_iter()
-        .map(|p| m.text(p))
-        .collect();
-    assert_eq!(
-        memo,
-        vec![Some("3".into()), Some("1".into()), Some("2".into())]
-    );
-}
-
-/// (6) 配置の表の段の並びと段ごとの項。作業中の数と最古の task はどの段にも無い。
-#[test]
-fn ledgerblock_layout_table() {
-    let got: Vec<(&str, Vec<&str>)> = layout()
-        .iter()
-        .map(|(t, parts)| (t.name(), parts.iter().map(|p| p.key()).collect()))
-        .collect();
-    let want: Vec<(&str, Vec<&str>)> = vec![
-        ("top", vec!["l_task", "l_memo", "l_unref", "l_net24"]),
-        ("main", vec!["l_rate", "l_net7"]),
-        ("burn", vec!["l_burn"]),
-        ("memo", vec!["m_open", "m_wait", "m_promo7", "m_age"]),
-        ("unref", vec!["unref"]),
-        ("list", vec!["ledger_block"]),
-    ];
-    assert_eq!(got, want);
-    assert_eq!(layout(), LAYOUT);
-    assert_eq!(LAYOUT[0].0, Tier::Top);
-    assert_eq!(
-        LAYOUT[0].1.iter().map(|p| p.key()).collect::<Vec<_>>(),
-        METRICS
-    );
-    tiers_and_keys();
-}
-
-/// 項の段・項は 1 度ずつで作業中の数と最古の task は無い・語の鍵は語の辞書に在る。
-fn tiers_and_keys() {
-    let tier_of = |part: Part| {
-        LAYOUT
-            .iter()
-            .filter(|(_, ps)| ps.contains(&part))
-            .map(|(t, _)| *t)
-            .collect::<Vec<_>>()
-    };
-    for p in [Part::Rate, Part::Net7] {
-        assert_eq!(tier_of(p), vec![Tier::Main], "{p:?}");
-    }
-    // 項は 1 度ずつ・作業中の数と最古の task の項は無い。
-    let keys: Vec<&str> = LAYOUT
-        .iter()
-        .flat_map(|(_, ps)| ps.iter().map(|p| p.key()))
-        .collect();
-    let unique: BTreeSet<&str> = keys.iter().copied().collect();
-    assert_eq!(unique.len(), keys.len());
-    for k in &keys {
-        for bad in ["wip", "in_progress", "progress", "oldest", "old"] {
-            assert!(!k.contains(bad), "項 {k} は作業中か最古の task");
-        }
-    }
-    // 項の語の鍵と、段の DOM が使う語の鍵は語の辞書に在る。
-    let extra = ["memo_promo", "st_unknown"];
-    for key in keys
-        .iter()
-        .copied()
-        .chain(JUDGES.iter().map(|j| j.key))
-        .chain(extra)
-    {
-        assert!(vocab().term(key).is_some(), "鍵 {key} が vocab に無い");
-    }
-    epics_and_more_counts();
-}
-
-/// epic の進みと、問い・epic・ready・blocked・stale の数。
-fn epics_and_more_counts() {
-    // epic の進み: 題は台帳の一覧から id で引き、引けなければ id だけ。
-    let m = filled("filled", &known_screen());
-    let eps: Vec<(&str, Option<&str>, u32, u32, u32)> = m
-        .epics
-        .iter()
-        .map(|e| (e.id.as_str(), e.title.as_deref(), e.closed, e.total, e.pct))
-        .collect();
-    assert_eq!(
-        eps,
-        vec![
-            ("bm", Some("最小の画面の見本の根"), 1, 4, 25),
-            ("zz.9", None, 2, 3, 67)
-        ]
-    );
-    let bare = filled("filled", &Screen::initial());
-    assert!(bare.epics.iter().all(|e| e.title.is_none()));
-    // open の問いの数と open の epic の数。
-    assert_eq!(m.text(Part::Question), Some("2".to_string()));
-    assert_eq!(m.text(Part::Epic), Some("2".to_string()));
-    assert_eq!(m.text(Part::Ready), Some("3".to_string()));
-    assert_eq!(m.text(Part::Blocked), Some("1".to_string()));
-    assert_eq!(m.text(Part::Stale), Some("1".to_string()));
+    net_rows_and_rate();
 }
 
 /// stylesheet の class の名（selector の `.名`）。
@@ -413,7 +246,7 @@ fn stylesheet_classes() -> BTreeSet<String> {
     out
 }
 
-/// 関数が組む class（判定・純減・上段の箱）は stylesheet に在る。
+/// 関数が組む class（判定・純減・burndown と sparkline の図）は stylesheet に在る。
 #[test]
 fn ledgerblock_classes_in_stylesheet() {
     let css = stylesheet_classes();
@@ -423,23 +256,12 @@ fn ledgerblock_classes_in_stylesheet() {
         used.extend(net(v).class.split_whitespace());
     }
     used.extend([
-        "l4",
-        "l4un",
-        "on",
-        "l4net",
-        "lmid",
-        "lcap",
         "lburn",
         "lb-closed",
         "lb-open",
         "lspark",
         "ls-created",
         "ls-closed",
-        "mpro",
-        "lep",
-        "lchips",
-        "ep",
-        "bar",
     ]);
     let missing: Vec<&&str> = used.iter().filter(|c| !css.contains(**c)).collect();
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
@@ -459,17 +281,9 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
             ledger::METRICS_UNKNOWN,
         ),
     ] {
-        match content(&fetched, &screen, NOW) {
-            Body::Unmeasured(reason) => {
-                assert_eq!(reason, want, "{fetched:?}");
-                assert!(!reason.trim().is_empty() && !reason.contains('\n'));
-            }
-            other => panic!("{fetched:?} が測れていないでない: {other:?}"),
-        }
-        assert_eq!(ledger::metrics(&fetched), Body::Unmeasured(want));
-        assert_eq!(stats(&fetched), Err(want));
+        assert_eq!(stats(&fetched), Err(want), "{fetched:?}");
+        assert!(!want.trim().is_empty() && !want.contains('\n'));
     }
-    assert_eq!(ledger::metrics(&body_of("filled")), Body::Filled(()));
     assert_eq!(stats(&body_of("filled")), Ok(set("filled")));
 
     list_unchanged(screen);
@@ -491,7 +305,7 @@ fn list_unchanged(screen: Screen) {
     assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
 }
 
-/// (9) 実物の口の本文の写し（Reading で包んだ指標）は中身を出し、上段の open の task の数は写しの known の下の数。
+/// (9) 実物の口の本文の写し（Reading で包んだ指標）は読めて、open の task の数は写しの known の下の数。
 #[test]
 fn ledgerblock_real_metrics_body() {
     let text = read("../../tests/fixtures/surface/metrics-body.json");
@@ -502,13 +316,7 @@ fn ledgerblock_real_metrics_body() {
     let inner = raw.remove("known").expect("鍵 known");
     assert_eq!(inner.open.task, 2);
     let fetched = Fetched::Body(text);
-    let m = match content(&fetched, &known_screen(), NOW) {
-        Body::Filled(m) => m,
-        other => panic!("実物の本文が中身を出さない: {other:?}"),
-    };
-    assert_eq!(m.text(Part::Task), Some(inner.open.task.to_string()));
-    assert_eq!(m.open, inner.open);
-    assert_eq!(ledger::metrics(&fetched), Body::Filled(()));
+    assert_eq!(stats(&fetched).map(|s| s.open.task), Ok(inner.open.task));
     assert_eq!(stats(&fetched), Ok(inner));
 }
 
@@ -522,11 +330,6 @@ fn ledgerblock_unknown_body_reason() {
         "\"unknown\""
     );
     let reason = ledger::METRICS_UNKNOWN;
-    assert_eq!(
-        content(&unknown, &Screen::initial(), NOW),
-        Body::Unmeasured(reason)
-    );
-    assert_eq!(ledger::metrics(&unknown), Body::Unmeasured(reason));
     assert_eq!(stats(&unknown), Err(reason));
     assert!(!reason.trim().is_empty() && !reason.contains('\n'));
     for other in [ledger::METRICS_REASON, NO_CONTENT, NOT_READ] {
@@ -545,7 +348,7 @@ fn ledgerblock_unknown_body_reason() {
     }
 }
 
-/// (8) 着地済みの外形（BLOCK・口の path・metrics・一覧の body と count）と、足す外の依存は 0 本。
+/// (8) 着地済みの外形（BLOCK・口の path・一覧の body と count）と、足す外の依存は 0 本。
 #[test]
 fn ledgerblock_landed_shape_and_no_new_deps() {
     assert_eq!(ledger::BLOCK.id, "ledger");
@@ -553,11 +356,6 @@ fn ledgerblock_landed_shape_and_no_new_deps() {
     assert_eq!(ledger::BLOCK.class, "panel");
     assert_eq!(ledger::PATH, "/api/ledger");
     assert_eq!(ledger::METRICS_PATH, "/api/metrics");
-    let metrics: fn(&Fetched) -> Body<()> = ledger::metrics;
-    assert!(matches!(
-        metrics(&Fetched::Body("{}".to_string())),
-        Body::Unmeasured(_)
-    ));
     let _count: fn(&Screen) -> Reading<usize> = ledger::count;
     let _body: fn(&Screen) -> Body<Vec<ledger::Group>> = ledger::body;
 

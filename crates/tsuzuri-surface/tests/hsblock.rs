@@ -228,12 +228,9 @@ fn hsblock_dispatch_by_list() {
         "台帳の view が引数を持つ"
     );
     let view = fn_body(&led, "view");
-    assert!(view.contains("use_context::<RwSignal<Screen>>()"), "台帳の view が context で受けない");
-    assert!(
-        view.contains("RwSignal::new(Screen::initial())"),
-        "台帳の view に context が無いときの signal が無い"
-    );
-    assert!(view.contains("dom::view(screen)"), "台帳の view が dom の view に渡さない");
+    // 台帳の block は画面の状態を読まなくなった（指標の段と件数の chip は行 g-ledger-trim で外した）。
+    assert!(view.contains("dom::view()"), "台帳の view が dom の view を呼ばない");
+    assert!(!view.contains("use_context::<RwSignal<Screen>>()"), "台帳の view が画面の状態を受ける");
     // lib.rs の wasm の target のときだけの board の 2 行は崩さない。
     assert!(read("src/lib.rs").contains("#[cfg(target_arch = \"wasm32\")]\npub mod board;"));
 }

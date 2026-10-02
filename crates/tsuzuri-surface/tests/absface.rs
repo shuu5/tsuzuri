@@ -3,19 +3,18 @@
 //! 1 秒の時計と今の渡し方は src の file の字で見る。
 #![cfg(test)]
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use tsuzuri_contract::board::{Ci, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::stats::{LedgerStats, UnreflectedList, UnreflectedRow};
+use tsuzuri_contract::stats::{UnreflectedList, UnreflectedRow};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::Body;
-use tsuzuri_surface::project::ledger::{days_since, panel, unref_list};
+use tsuzuri_surface::project::ledger::{days_since, unref_list};
 use tsuzuri_surface::project::pipeline::{
     CI_MARK_S, LAND_WINDOW_S, NO_AGE, age_at, ci_shown, kcard, landed_recent,
 };
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::view::Fetched;
 
 /// 描く今（2026-09-27T12:00:00Z・日本時間の 21:00）。
 const NOW: u64 = 1_790_510_400;
@@ -71,14 +70,6 @@ fn ci_and_landed() {
     assert!(!landed(None, NOW));
 }
 
-/// 指標の fixture の組 filled。
-fn filled() -> LedgerStats {
-    let mut sets: BTreeMap<String, LedgerStats> =
-        wire::decode(&read("../../tests/fixtures/surface/ledger-stats.json"))
-            .expect("fixture の組が電文として読める");
-    sets.remove("filled").expect("fixture の組 filled")
-}
-
 fn row(id: &str, created: Option<u64>) -> UnreflectedRow {
     UnreflectedRow {
         id: id.to_string(),
@@ -87,20 +78,13 @@ fn row(id: &str, created: Option<u64>) -> UnreflectedRow {
     }
 }
 
-/// (5) 年齢は作った時刻から今までの日数（今より後は 0）で、memo は created_p50 から・未反映は created から数える。
+/// (5) 年齢は作った時刻から今までの日数（今より後は 0）で、未反映は created から数える（memo の段は行 g-ledger-trim で外した）。
 #[test]
 fn abst_ages_from_created() {
     assert_eq!(days_since(NOW - 86_400, NOW), 1.0);
     assert_eq!(days_since(NOW - 820_800, NOW), 9.5);
     assert_eq!(days_since(NOW + 60, NOW), 0.0);
     assert_eq!(days_since(NOW, NOW), 0.0);
-
-    let screen = Screen::initial();
-    let mut s = filled();
-    s.memo.created_p50 = Some(NOW - 820_800);
-    assert_eq!(panel(&s, &screen, NOW).memo.age, "9.5d");
-    s.memo.created_p50 = None;
-    assert_eq!(panel(&s, &screen, NOW).memo.age, "―");
 
     let list = UnreflectedList {
         memos: Reading::Known(vec![
@@ -129,7 +113,6 @@ fn abst_face_wiring() {
     for (text, needle) in [
         (&pipeline, "let clock = move || tick.get();"),
         (&pipeline, "age_at(since, clock())"),
-        (&ledger, "content(f, s, crate::net::now())"),
         (&ledger, "unref_list(&unref.get(), crate::net::now())"),
         (&list, "content(l, p, b, crate::net::now())"),
     ] {

@@ -9,7 +9,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{
-    self, CLOSED, EMPTY, FOLDS, Group, LAYOUT, NO_OPEN, Part, Tier, listed,
+    self, CLOSED, EMPTY, FOLDS, Group, NO_OPEN, listed,
 };
 use tsuzuri_surface::project::{Body, LEDGER_UNREAD, item};
 use tsuzuri_surface::view::{Fetched, Screen};
@@ -176,19 +176,17 @@ fn lhome_empty_and_count() {
     );
 }
 
-/// (5) 畳みと配置の表は今のまま・一覧の段は module ledgerlist の view を描き（行 g-list-groups）、見出しの件数は count を描く。
+/// (5) 畳みは今のまま・block の中身は module ledgerlist の view を描き（行 g-list-groups）、見出しの件数の chip は無い
+/// （配置の表と件数の chip は行 g-ledger-trim で外した）。
 #[test]
 fn lhome_list_draws_body() {
     assert_eq!(FOLDS, &["ledger:unref"]);
-    let (tier, parts) = LAYOUT[LAYOUT.len() - 1];
-    assert_eq!(tier, Tier::List);
-    assert_eq!(parts, &[Part::List]);
 
     let src = read("src/project/ledger.rs");
     let at = src.find("mod dom {").expect("mod dom の字");
     let dom = &src[at..];
-    assert!(dom.contains("Tier::List => crate::ledgerlist::view(),"));
-    assert!(dom.contains("screen.with(count)"));
+    assert!(dom.contains("section(BLOCK, extra.into_any(), crate::ledgerlist::view())"));
+    assert!(!dom.contains("screen.with(count)"));
 }
 
 /// 着地済みの行と第 3 波から第 8 波の行の verify の filter の語。

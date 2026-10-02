@@ -142,7 +142,6 @@ fn frame_headings_come_from_vocab() {
         keys.push(part.key);
         keys.extend(part.items);
     }
-    keys.extend(ledger::METRICS);
     keys.extend(legend::states().iter().map(|e| e.key));
     keys.extend(STATES.iter().map(|(_, k)| *k));
     keys.extend(["p_more", "not_yet"]);
@@ -317,7 +316,7 @@ fn frame_classes_are_in_stylesheet() {
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 }
 
-/// data の口がまだ無い 3 つと ledger の指標の段は測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
+/// data の口がまだ無い 3 つは測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
 #[test]
 fn frame_blocks_without_data_are_unmeasured() {
     for fetched in [
@@ -329,7 +328,6 @@ fn frame_blocks_without_data_are_unmeasured() {
             (next::BLOCK.id, next::body(&fetched)),
             (pipeline::BLOCK.id, pipeline::body(&fetched)),
             (seat::BLOCK.id, seat::body(&fetched)),
-            ("ledger の指標", ledger::metrics(&fetched)),
         ] {
             match body {
                 Body::Unmeasured(reason) => {

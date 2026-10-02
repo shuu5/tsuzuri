@@ -205,7 +205,7 @@ fn bvwins_draw_wiring_text() {
         "Win::Stalled => stalled_view(),",
         "Win::Notices => notice::inner(),",
         "Win::Seat => seat::inner(),",
-        "Win::Gaps => gaps::inner(),",
+        "Win::Gaps => view! { {gaps::inner()}{ledger::unref_panel()} }.into_any(),",
         "Win::Legend => legend::inner(),",
         "Win::Dest => stage::inner(),",
         "crate::net::read(pipeline::PATH)",

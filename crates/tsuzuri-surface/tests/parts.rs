@@ -64,19 +64,18 @@ fn three() -> [Fetched; 3] {
     all
 }
 
-/// 中身の関数がまだ無い 4 つ（block の id・中身の関数・口が読めないときの理由）。
+/// 中身の関数がまだ無い 3 つ（block の id・中身の関数・口が読めないときの理由・台帳の指標の段は行 g-ledger-trim で外した）。
 type Pending = (&'static str, fn(&Fetched) -> Body<()>, &'static str);
 
-fn pending_blocks() -> [Pending; 4] {
+fn pending_blocks() -> [Pending; 3] {
     [
         (next::BLOCK.id, next::body, next::REASON),
         (pipeline::BLOCK.id, pipeline::body, pipeline::REASON),
         (seat::BLOCK.id, seat::body, seat::REASON),
-        ("ledger の指標", ledger::metrics, ledger::METRICS_REASON),
     ]
 }
 
-/// 4 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
+/// 3 つの block は 3 値のどれを受けても 0 件でなく測れていないと空でない理由の 1 行を返す。
 #[test]
 fn parts_pending_blocks_unmeasured_for_all_three() {
     for (id, body, unread) in pending_blocks() {

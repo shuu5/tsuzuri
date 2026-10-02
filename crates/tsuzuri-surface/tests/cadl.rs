@@ -1,19 +1,15 @@
-//! 行 g-card-adopt-c の歯: 台帳の block の epic の進みの行と一覧の項・抜けの検査の頁の名指しの項に付ける節点の card の値と、
+//! 行 g-card-adopt-c の歯: 台帳の block の一覧の項・抜けの検査の頁の名指しの項に付ける節点の card の値と、
 //! DOM の付け方の字（kit の一覧の 1 項が card を受け、呼ぶ所が card を渡す）。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
 #![cfg(test)]
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{BeadAttr, GraphDoc, GraphNode, InvariantCheck, NodeKind};
-use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::stats::LedgerStats;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{self, Group};
 use tsuzuri_surface::project::{Body, Item, gaps, node_item};
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::nodecard::card_of;
 
 fn crate_dir() -> PathBuf {
@@ -39,63 +35,6 @@ fn unread() -> [Fetched; 3] {
         Fetched::Failed,
         Fetched::Body("{}".to_string()),
     ]
-}
-
-/// fixture の指標の組 filled の epic の id を `swap` の対で替えた指標。
-fn stats(swap: &[(&str, &str)]) -> LedgerStats {
-    let mut sets: BTreeMap<String, LedgerStats> =
-        wire::decode(&read("../../tests/fixtures/surface/ledger-stats.json"))
-            .expect("fixture の組が電文として読める");
-    let mut s = sets.remove("filled").expect("fixture の組 filled");
-    for e in s.epics.iter_mut() {
-        if let Some((_, to)) = swap.iter().find(|(from, _)| e.epic.as_str() == *from) {
-            e.epic = BeadId::new(*to).expect("id");
-        }
-    }
-    s
-}
-
-/// 指標の段を組む今（fixture の組の時点）。
-const NOW: u64 = 1_791_676_800;
-
-/// 指標を口の本文の形（Reading の Known で包んだ字）にする。
-fn wrap(s: &LedgerStats) -> Fetched {
-    Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("電文"))
-}
-
-/// (1) epic の進みの行の節点の card は、電文に在る epic の id だけを card_of の値で持つ。
-#[test]
-fn cadl_epic_cards_rules() {
-    let doc = graph_doc();
-    let graph = Fetched::Body(graph_text());
-    let screen = Screen::initial();
-
-    let s = stats(&[("bm", "t3")]);
-    let Body::Filled(m) = ledger::content(&wrap(&s), &screen, NOW) else {
-        panic!("替えた指標の中身が Filled でない");
-    };
-    let ids: Vec<&str> = m.epics.iter().map(|e| e.id.as_str()).collect();
-    assert_eq!(ids, vec!["t3", "zz.9"]);
-    assert_eq!(m, ledger::panel(&s, &screen, NOW), "Metrics と EpicBar は変えない");
-
-    let got = ledger::epic_cards(&m.epics, &graph);
-    let keys: Vec<&str> = got.keys().map(String::as_str).collect();
-    assert_eq!(keys, vec!["t3"]);
-    let node = card_of(&doc, "t3").expect("t3 の card");
-    assert_eq!(got["t3"], node);
-    assert_eq!(node.title, "tsuzuri の面");
-    assert_eq!(node.kind, "epic · beads · open");
-    assert_eq!(node.value, "t3 要約なし");
-
-    let Body::Filled(plain) = ledger::content(&wrap(&stats(&[])), &screen, NOW) else {
-        panic!("fixture の指標の中身が Filled でない");
-    };
-    assert_eq!(plain.epics.len(), 2);
-    assert!(ledger::epic_cards(&plain.epics, &graph).is_empty());
-    assert!(ledger::epic_cards(&[], &graph).is_empty());
-    for g in unread() {
-        assert!(ledger::epic_cards(&m.epics, &g).is_empty(), "{g:?}");
-    }
 }
 
 /// (2) 一覧の組の項の節点の card は、epic の項と下の項の id のうち電文に在るものだけを card_of の値で持つ。
@@ -225,24 +164,15 @@ fn fn_body<'a>(text: &'a str, decl: &str) -> &'a str {
 }
 
 /// (4) kit の一覧の 1 項が card を受けて題の a に hover の attach_some で付け、抜けの検査の頁が card を渡す。
-/// 台帳の block は epic の進みの行に card を渡し、一覧の段は module ledgerlist の view を描く（行 g-list-groups）。
+/// 台帳の block の中身は module ledgerlist の view を 1 度だけ描く（行 g-list-groups・epic の進みの行は行 g-ledger-trim で外した）。
 #[test]
 fn cadl_dom_wiring() {
     let ledger_text = read("src/project/ledger.rs");
     let dom = after(&ledger_text, "mod dom {");
-    for want in [
-        "let graph = crate::net::read(map::PATH);",
-        "tier_view(*tier, parts, &m, Reads { unref, graph })",
-        "Memo::new(move |_| graph.with(|g| epic_cards(&epics, g)))",
-        "epic_view(e, c.get(&e.id).cloned())",
-        "use crate::widgets::hover::attach_some;",
-    ] {
-        assert!(dom.contains(want), "ledger.rs の mod dom に {want} が無い");
+    assert_eq!(dom.matches("crate::ledgerlist::view()").count(), 1);
+    for gone in ["fn epic_view(", "epic_cards(", "tier_view("] {
+        assert!(!dom.contains(gone), "ledger.rs の mod dom に {gone} が在る");
     }
-    assert_eq!(dom.matches("crate::ledgerlist::view()").count(), 2);
-    let epic = fn_body(dom, "fn epic_view(");
-    assert!(epic.contains("card: Option<Card>"), "{epic}");
-    assert!(epic.contains("<a href=href use:attach_some=card>"), "{epic}");
 
     let kit = read("src/kit.rs");
     let kdom = after(&kit, "mod dom {");
@@ -454,7 +384,7 @@ fn cadl_names_stay_apart() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 5, "歯の数 {}", names.len());
+    assert!(names.len() >= 4, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("cadl_")

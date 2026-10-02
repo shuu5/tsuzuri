@@ -14,9 +14,9 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::account::projects::unref_break;
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::ledger::{
-    UNREF_KIND_KEY, kind_label, kind_name, name_label, panel, unref_list,
+    UNREF_KIND_KEY, Unref, kind_label, kind_name, name_label, unref_list,
 };
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::view::Fetched;
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -102,17 +102,14 @@ fn filled(list: &UnreflectedList) -> tsuzuri_surface::project::ledger::UnrefList
     }
 }
 
-/// (2) account board の unref_break と project board の指標の段・未反映の一覧が同じ見出しの語を出す。
+/// (2) account board の unref_break と project board の未反映の段（Unref::of の chip と一覧）が同じ見出しの語を出す。
 #[test]
 fn kindlab_boards_same_words() {
-    let screen = Screen::initial();
-
     let s = stats("filled");
     let acct = unref_break(&s);
     assert_eq!(acct.known, vec![("memo".to_string(), 3)]);
     assert_eq!(acct.unknown, vec!["裁定", "発話"]);
-    let proj: Vec<String> = panel(&s, &screen, NOW)
-        .unref
+    let proj: Vec<String> = Unref::of(&s)
         .unknown
         .iter()
         .map(|k| name_label(k))
@@ -122,8 +119,7 @@ fn kindlab_boards_same_words() {
     let e = stats("empty");
     let acct = unref_break(&e);
     assert_eq!(acct.unknown, vec!["memo", "裁定", "発話"]);
-    let proj: Vec<String> = panel(&e, &screen, NOW)
-        .unref
+    let proj: Vec<String> = Unref::of(&e)
         .unknown
         .iter()
         .map(|k| name_label(k))
@@ -181,13 +177,13 @@ fn fn_body<'a>(text: &'a str, decl: &str) -> &'a str {
     &rest[..end]
 }
 
-/// (3) project board の DOM の 3 か所（指標の段の chip・一覧の読めない種類の行・一覧の種類の欄）は name_label の見出しを出す。
+/// (3) project board の DOM の 3 か所（未反映の段の chip・一覧の読めない種類の行・一覧の種類の欄）は name_label の見出しを出す。
 #[test]
 fn kindlab_ledger_dom_words() {
     let text = read("src/project/ledger.rs");
     let dom = after(&text, "mod dom {");
 
-    let chip = fn_body(dom, "fn unref_view(");
+    let chip = fn_body(dom, "fn unref_panel(");
     let want = "<span class=\"chip num\">{name_label(k)}\" \"{state_icon(UNKNOWN)}</span>";
     assert!(chip.contains(want), "{chip}");
 

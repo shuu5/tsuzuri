@@ -11,7 +11,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::home::EXPERT_CHARS;
-use tsuzuri_surface::project::ledger::{self, Part, layout};
+use tsuzuri_surface::project::ledger;
 use tsuzuri_surface::project::seat::{self, MOVING, Seat, Span};
 use tsuzuri_surface::project::{fold_key_ok, fold_keys};
 
@@ -108,27 +108,9 @@ fn bvmore_seat_strip_band_kept() {
     }
 }
 
-/// (3) 台帳の指標の段は上段・主な指標・burndown・memo・未反映の数・一覧の 6 段で、詳しくの段と鍵 ledger:more が無い。
-/// 詳しくの段の項（ready から epic の数までの 8 項）はどの段にも置かない。
+/// (3) 台帳の module に詳しくの段と鍵 ledger:more が無い（指標の段と配置の表は行 g-ledger-trim で外した）。
 #[test]
 fn bvmore_ledger_no_more_tier() {
-    let tiers: Vec<&str> = layout().iter().map(|(t, _)| t.name()).collect();
-    assert_eq!(tiers, ["top", "main", "burn", "memo", "unref", "list"]);
-    for p in [
-        Part::Ready,
-        Part::Blocked,
-        Part::Lead,
-        Part::Stale,
-        Part::Spark,
-        Part::Epics,
-        Part::Question,
-        Part::Epic,
-    ] {
-        assert!(
-            layout().iter().all(|(_, ps)| !ps.contains(&p)),
-            "{p:?} が配置の表に在る"
-        );
-    }
     assert_eq!(ledger::FOLDS, ["ledger:unref"]);
     assert!(!fold_keys().contains(&"ledger:more"));
     assert!(!fold_key_ok("ledger:more"));

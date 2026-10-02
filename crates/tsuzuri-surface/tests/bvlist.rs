@@ -427,13 +427,13 @@ fn bvlist_content_reads_three_paths() {
     assert_eq!(FACTS_PATH, "/api/beads");
 }
 
-/// (7) DOM の字: 台帳の block の一覧の段は 2 つの枝とも ledgerlist の view を描き、前の一覧の DOM の関数は無い。
+/// (7) DOM の字: 台帳の block の中身は ledgerlist の view を 1 度だけ描き（行 g-ledger-trim で段の枝を外した）、前の一覧の DOM の関数は無い。
 /// 一覧の view は台帳・板・事実の 3 つの口を読み、組の開き閉じを Folds の signal で持つ。class は stylesheet に在る。
 #[test]
 fn bvlist_dom_wiring_text() {
     let ledger = read("src/project/ledger.rs");
     let dom = &ledger[ledger.find("mod dom {").expect("mod dom")..];
-    assert_eq!(dom.matches("crate::ledgerlist::view()").count(), 2);
+    assert_eq!(dom.matches("crate::ledgerlist::view()").count(), 1);
     for gone in [
         "fn list_view(",
         "fn group_view(",
