@@ -48,6 +48,25 @@ pub struct Node {
     pub text: String,
 }
 
+/// 節点の札 1 つの指の受け手（札の名と、自分から body の手前の祖先まで段ごとに持つ受け手の種類の字・空白で区切る）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reach {
+    pub name: String,
+    pub up: Vec<String>,
+}
+
+impl Reach {
+    /// hover の card を出せるか: どれかの段が pointerenter を持つか、1 つの段が mouseover と mouseout を対で持つ
+    /// （委ねの口・指が入ると card を出し、出ると猶予に入る・規則の行 R-20）。片方だけの段は数えない（行 g-accept-fix）。
+    pub fn has_card(&self) -> bool {
+        self.up.iter().any(|level| {
+            let kinds: Vec<&str> = level.split_whitespace().collect();
+            kinds.contains(&"pointerenter")
+                || (kinds.contains(&"mouseover") && kinds.contains(&"mouseout"))
+        })
+    }
+}
+
 /// 押した切り替え 1 つ（札の字と、押す前と押した後の URL）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Switch {
@@ -67,8 +86,10 @@ pub struct Facts {
     pub overflow: Vec<String>,
     /// 重なる要素の組。
     pub overlap: Vec<String>,
-    /// hover の card の受け手の無い要素。
+    /// click の受け手の無い吹き出しの口（札と一覧の行）。
     pub nocard: Vec<String>,
+    /// 節点の札（節点の頁への link と近傍の図の節点）の指の受け手。
+    pub reach: Vec<Reach>,
     /// 見出し。
     pub headings: Vec<Heading>,
     /// 最初の画面の散文の片。
@@ -101,6 +122,15 @@ pub fn facts(text: &str) -> Result<Facts, String> {
         overflow: strings(text, "overflow")?,
         overlap: strings(text, "overlap")?,
         nocard: strings(text, "nocard")?,
+        reach: objects(text, "reach", |o| {
+            Some(Reach {
+                name: unquote(member(o, "name")?)?,
+                up: items(member(o, "up")?)?
+                    .into_iter()
+                    .map(unquote)
+                    .collect::<Option<_>>()?,
+            })
+        })?,
         headings: objects(text, "headings", |o| {
             Some(Heading {
                 key: unquote(member(o, "key")?)?,
@@ -176,7 +206,7 @@ pub fn count(facts: &Facts, vocab: &str) -> [usize; 12] {
         facts.overflow.len(),
         facts.overlap.len(),
         usize::from(facts.hscroll > 0),
-        facts.nocard.len(),
+        facts.nocard.len() + facts.reach.iter().filter(|r| !r.has_card()).count(),
         facts
             .headings
             .iter()

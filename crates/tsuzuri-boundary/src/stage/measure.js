@@ -50,21 +50,24 @@
       if (w > 1 && h > 1) overlap.push(name(a) + " × " + name(b));
     });
   });
-  const entered = (e) => {
-    for (let n = e; n; n = n.parentElement) {
-      if ((getEventListeners(n).pointerenter || []).length > 0) return true;
+  // 節点の札の指の受け手: 自分から body の手前の祖先まで、段ごとに持つ受け手の種類の字（空白で区切る）。
+  // 委ねの口（近傍の図の SVG の節点・祖先の mouseover と mouseout）も読み、card を出せるかの判じは audit の側（行 g-accept-fix）。
+  const kinds = (e) => {
+    const up = [];
+    for (let n = e; n && n !== document.body; n = n.parentElement) {
+      const l = getEventListeners(n);
+      up.push(["pointerenter", "mouseover", "mouseout"].filter((k) => (l[k] || []).length > 0).join(" "));
     }
-    return false;
+    return { name: name(e), up };
   };
   // project board の札と一覧の行は hover の card でなく click の吹き出しを出す（要件 FR14・行 g-accept）:
   // 口は自分に click の受け手が無ければ欠けで、口の中の節点の link は hover を問わない。
   const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);
-  const nocard = seen
+  const nocard = nopop.map(name);
+  const reach = seen
     .filter((e) => (e.matches("a[href]") && e.getAttribute("href").includes("page=node")) || e.matches(".node"))
     .filter((e) => !e.closest(mouth))
-    .filter((e) => !entered(e))
-    .concat(nopop)
-    .map(name);
+    .map(kinds);
   const headings = seen.filter((e) => e.matches("h1, h2, h3, h4, h5, h6, .hd, nav a")).map((e) => {
     const copy = e.cloneNode(true);
     copy.querySelectorAll(".q").forEach((q) => q.remove());
@@ -97,6 +100,7 @@
     overflow,
     overlap,
     nocard,
+    reach,
     headings,
     first,
     errors: [],

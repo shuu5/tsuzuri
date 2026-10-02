@@ -641,6 +641,7 @@ table.mx th .bchip { margin-right: 4px; }
 .occ.free { border: 1px solid var(--st-run); color: var(--st-run); }
 .acct-grid > div { padding: var(--s2); border-bottom: 1px solid var(--line); min-width: 0; display: flex; align-items: center; gap: var(--s2); }
 .acct-grid > .hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line-2); }
+.acct-grid > .hrow .hd { flex-wrap: wrap; min-width: 0; } .acct-grid > .hrow .hd-t { overflow-wrap: anywhere; } /* 列の見出しは収まらない分を次の行へ（行 g-accept-fix） */
 .acct-grid .aname { font-weight: 750; font: 700 13px ui-monospace, monospace; }
 .meter { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .meter .bar { position: relative; height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
@@ -1160,7 +1161,7 @@ svg .lane-lab.zero { font-weight: 500; fill: var(--ink-3); }
 .c-more .lk { color: var(--ink-3); font-size: 14px; }
 .c-more .mi b { font-size: 15px; }
 .ptab { display: flex; flex-direction: column; font-size: 14px; }
-.prow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 2fr) 68px minmax(150px, 1fr) minmax(162px, 1.1fr) 128px 128px 84px 100px;
+.prow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 2fr) 68px minmax(150px, 1fr) minmax(162px, 1.1fr) 128px 128px 84px 120px;
   grid-template-areas: "pn need wait un led run orch acc open" "more more more more more more more more more"; align-items: center; border-bottom: 1px solid var(--line); cursor: pointer; }
 .prow > div { padding: 6px 8px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .prow.hrow { cursor: default; border-bottom: 2px solid var(--line-2); font-size: 14px; color: var(--ink-2); grid-template-areas: "pn need wait un led run orch acc open"; }
@@ -1183,18 +1184,25 @@ svg .lane-lab.zero { font-weight: 500; fill: var(--ink-3); }
 .rq.q-wait .dot { background: var(--s-wait); border-radius: 50%; } .rq.q-run .dot { background: var(--s-run); border-radius: 50%; }
 .rq.q-stop .dot { background: var(--s-stop); border-radius: 2px; } .rq.q-land .dot { background: var(--s-land); clip-path: polygon(0 55%, 35% 100%, 100% 10%, 85% 0, 35% 70%, 15% 40%); width: 11px; height: 11px; }
 .rq.q-stop:not(.z) .n { color: var(--s-stop); font-weight: 800; }
-.prow .c-run .rc4 { flex-wrap: nowrap; }
 .prow .c-need .l2, .prow .c-un2 .l2 { white-space: nowrap; overflow: hidden; } /* 収まらない分は fitLines が … に削る */
 .prow .c-more .slist { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; } .prow .c-more .slist .mono { font-size: 14px; }
 .prow .c-pn b { overflow-wrap: normal; font-size: 14px; white-space: nowrap; }
-.prow .c-led .l1, .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; } .prow .c-orch { gap: 4px; }
+.prow .c-led .l1 { white-space: nowrap; } .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; gap: 4px; } /* 台帳と run の数の列と開くの button は、収まらない分を次の行へ（行 g-accept-fix） */
 .prow .c-more .m-need, .prow .c-more .m-grp { display: none; }
 .prow .c-open .sh { display: none; }
 .prow .c-need .l1 { display: block; } .prow .c-need .l1 > * { vertical-align: middle; margin-right: 4px; }
-.prow .c-open .btn { font-size: 14px; }
+.prow .c-open .btn { font-size: 14px; padding: 0 8px; white-space: normal; }
 .prow .c-more .m-run, .prow .c-more .m-orch, .prow .c-more .m-acc, .prow .c-more .m-led { display: none; }
 .prow .c-more .mi > div { padding: 0; }
 .pgh { display: flex; align-items: center; gap: 10px; padding: 10px 8px 6px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+/* 中の幅（761〜1239 px・行 g-accept-fix）: 広い段の列の最小の和 1140 px と頁の左右の余白 82 px が収まるのは 1240 px から。
+   台帳・run の数・orchestrator・口座の列は、行を開いた中（c-more）へ移す。 */
+@media (min-width: 761px) and (max-width: 1239px) {
+  .prow { grid-template-columns: minmax(180px, 1fr) minmax(120px, 2fr) 68px minmax(150px, 1fr) 120px; grid-template-areas: "pn need wait un open" "more more more more more"; }
+  .prow.hrow { grid-template-areas: "pn need wait un open"; }
+  .prow .c-led, .prow .c-run, .prow .c-orch, .prow .c-acc, .prow .h-ledger_block, .prow .h-runs4, .prow .h-seat, .prow .h-accounts { display: none; }
+  .prow .c-more .m-run, .prow .c-more .m-orch, .prow .c-more .m-acc, .prow .c-more .m-led { display: inline-flex; }
+}
 @media (max-width: 760px) {
   .jrow { grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1.1fr) 52px 34px; grid-template-areas: "j p p p m" "j t r u m" "x x x x x"; min-height: 44px; }
   .jrow .c-j { grid-area: j; } .jrow .c-p { grid-area: p; padding-bottom: 0; } .jrow .c-task { grid-area: t; } .jrow .c-rate { grid-area: r; } .jrow .c-un { grid-area: u; } .jrow .rowmore { grid-area: m; } .jrow .c-more { grid-area: x; }

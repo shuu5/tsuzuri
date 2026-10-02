@@ -219,7 +219,7 @@ fn bvacc_probe_reads_pops_and_windows() {
     for want in [
         mouth.as_str(),
         "const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);",
-        "    .filter((e) => !e.closest(mouth))\n    .filter((e) => !entered(e))\n    .concat(nopop)\n",
+        "    .filter((e) => !e.closest(mouth))\n    .map(kinds);\n",
         ".mono, [data-t], .q, script, style, \" + mouth;",
         "const nodes = seen.filter((e) => e.matches(\".nid, .tid, .kid\"))",
         "const modal = Array.from(document.querySelectorAll(\"[aria-modal=true]\")).find(shown);",
