@@ -643,10 +643,10 @@ index a21a164c42830bbee3414de06f71dae63a5a5040..38994acfd9cdaf69e54e12157bfe5509
      }
 diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/bvlist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a75341c023
+index 0000000000000000000000000000000000000000..0b85ccfd279f0d973116f80bc51c97756459bda0
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvlist.rs
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,531 @@
 +//! 行 g-list-groups の歯（接頭辞 bvlist_）: 台帳 open の一覧を epic ごとの組にし、組の頭に進みの数と板で動いている札の
 +//! 列ごとの数を持たせ、既定で開く組を決め、行を 1 行の短い題と右の字にする（判断の記録 ADR-27 の決定 (8)）。
 +//! 台帳の行と札と bead の事実は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-g）。
@@ -822,6 +822,35 @@ index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a7
 +        .cloned()
 +        .collect();
 +    assert!(!keys(&groups(&closed_out, &cards(), &facts_map(), NOW)).contains(&OUTSIDE_KEY));
++    order_case();
++}
++
++/// 並べの 3 つの位と同じ位の順（歯 bvlist_groups_by_epic_outside_last が呼ぶ）: 札の多い組が先（id の順と逆）・札の数が
++/// 同じ組は epic の id の順（台帳の並びが逆でも）・open の行だけの組（閉じた epic でも出す）は札の在る組の後で、行も札も
++/// 無い組の前。
++fn order_case() {
++    let order = vec![
++        row("fx-g9", "epic", "open", &[]),
++        row("fx-g9.1", "task", "open", &[]),
++        row("fx-g9.2", "task", "open", &[]),
++        row("fx-g8", "epic", "closed", &[]),
++        row("fx-g8.1", "task", "open", &[]),
++        row("fx-g7", "epic", "open", &[]),
++        row("fx-g7.1", "task", "open", &[]),
++        row("fx-g6", "epic", "open", &[]),
++        row("fx-g6.1", "task", "open", &[]),
++        row("fx-g2", "epic", "open", &[]),
++    ];
++    let order_cards = [
++        card("fx-g9.1", Stage::Running),
++        card("fx-g9.2", Stage::Queued),
++        card("fx-g7.1", Stage::Running),
++        card("fx-g6.1", Stage::Blocked),
++    ];
++    assert_eq!(
++        keys(&groups(&order, &order_cards, &BTreeMap::new(), NOW)),
++        ["fx-g9", "fx-g6", "fx-g7", "fx-g8", "fx-g2"]
++    );
 +}
 +
 +/// (3) 既定で開く組は板で動いている札を持つ組か open の行を持つ組だけ（open の epic で行も札も無い組は畳む・
@@ -864,6 +893,13 @@ index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a7
 +        NOW,
 +    );
 +    assert_eq!((g[0].live(), g[0].open_default()), (1, true));
++    // open の行だけの組（札は無い）も開く。
++    let kids_only = vec![
++        row("fx-g7", "epic", "open", &[]),
++        row("fx-g7.1", "task", "open", &[]),
++    ];
++    let g = groups(&kids_only, &[], &BTreeMap::new(), NOW);
++    assert_eq!((g[0].live(), g[0].open_default()), (0, true));
 +}
 +
 +/// (4) 組の頭: 閉じた数と全部の数は組の行（閉じた行も memo と問いも数え、入れ子の epic の行は数えない）・百分率・
@@ -933,6 +969,7 @@ index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a7
 +    assert_eq!(by("fx-g1.3").right, "Gated");
 +    let ranks: Vec<u8> = g1.rows.iter().map(|r| r.rank).collect();
 +    assert_eq!(ranks, [0, 1, 2, 5, 7]);
++    row_order_case();
 +    let c = |s| card("fx-g1.1", s);
 +    let order: Vec<u8> = [
 +        Stage::Stopped,
@@ -949,6 +986,19 @@ index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a7
 +    let tags: Vec<&str> = KIND_TAGS.iter().map(|(_, t, _)| *t).collect();
 +    assert_eq!(tags, ["便", "memo", "問い", "epic"]);
 +    assert_eq!(kind_tag(NodeKind::Question), ("問い", "ll-kt k-question"));
++}
++
++/// 同じ位の行は id の順（歯 bvlist_row_short_title_and_right が呼ぶ・台帳の並びが逆でも・札の無い便の 3 つが同じ位）。
++fn row_order_case() {
++    let mut rev = rows();
++    rev.reverse();
++    let gs = groups(&rev, &[], &facts_map(), NOW);
++    let ids: Vec<&str> = group(&gs, "fx-g1")
++        .rows
++        .iter()
++        .map(|r| r.id.as_str())
++        .collect();
++    assert_eq!(ids, ["fx-g1.5", "fx-g1.1", "fx-g1.3", "fx-g1.6", "fx-g1.4"]);
 +}
 +
 +/// 台帳の一覧の口の本文。
@@ -1116,6 +1166,8 @@ index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a7
 +        !drawn.is_empty() && drawn.iter().all(|n| *n > 0),
 +        "{drawn:?}"
 +    );
++    // 読めた板で札の無い組は空の点（? を出さない）。
++    assert_eq!(head_counts(group(&gs, "fx-g3"), false), Some(Vec::new()));
 +    let list = read("src/ledgerlist.rs");
 +    let ldom = &list[list.find("mod dom {").expect("mod dom")..];
 +    for want in [
