@@ -9,6 +9,7 @@ mod common;
 use common::{AT, Form, form};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart, PATH};
+use tsuzuri_contract::wire;
 
 /// 依存で待つ契約と、知らない局面の語を持つ便の部品。
 fn parts() -> Vec<CasePart> {
@@ -49,12 +50,21 @@ fn forms() -> Vec<Box<dyn Form>> {
                     generated_at: Some(AT),
                     stale: vec!["ledger-gate".into()],
                     parts: Reading::Known(parts()),
+                    unreadable: false,
                 },
-                // 出力か古さの印が読めない。
+                // 出力が無い（まだ分からない）。
                 CaseDoc {
                     generated_at: None,
                     stale: vec![],
                     parts: Reading::Unknown,
+                    unreadable: false,
+                },
+                // 出力は在るが読めない版（読めない）。
+                CaseDoc {
+                    generated_at: None,
+                    stale: vec![],
+                    parts: Reading::Unknown,
+                    unreadable: true,
                 },
             ],
         ),
@@ -80,6 +90,23 @@ fn bvcform_snapshot_matches() {
 #[test]
 fn bvcform_roundtrip_all() {
     common::roundtrip_all(&forms());
+}
+
+/// 欄 unreadable は false なら電文に字を置かず、鍵の無い前の電文は false に読む（行 c-case-unreadable）。
+#[test]
+fn bvcform_unreadable_defaults_false() {
+    let old = r#"{"generated_at":null,"stale":[],"parts":"unknown"}"#;
+    let doc: CaseDoc = wire::decode(old).expect("鍵の無い前の電文");
+    assert!(!doc.unreadable, "鍵の無い電文は読めた周");
+    assert_eq!(doc.parts, Reading::Unknown);
+    let text = wire::encode(&doc).expect("電文");
+    assert_eq!(text, old, "false は字を置かない");
+    let broken = CaseDoc {
+        unreadable: true,
+        ..doc
+    };
+    let text = wire::encode(&broken).expect("電文");
+    assert!(text.ends_with(r#","unreadable":true}"#), "{text}");
 }
 
 #[test]

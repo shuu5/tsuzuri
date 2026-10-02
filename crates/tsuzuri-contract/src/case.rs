@@ -18,6 +18,11 @@ pub struct CaseDoc {
     /// 古さの印の種類の字（古さの印の file の順・印が無ければ空・空でなければ出力は古い）。
     pub stale: Vec<String>,
     pub parts: Reading<Vec<CasePart>>,
+    /// 出力の file は在るのに読めない版の周か（真なら parts は Unknown で、面は「まだ分からない」でなく「読めない」と出す）。
+    /// 出力が JSON でない・版が 1 でない・部品の列が無い時と、出力が在って古さの印の file が読めない時に真。
+    /// 出力が無い周は偽（「まだ分からない」）。false は電文に字を置かず、鍵の無い前の電文は false に読む（行 c-case-unreadable）。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unreadable: bool,
 }
 
 /// 部品 1 つ（id は種類ごとの形の字のまま・bead id とは限らない）。

@@ -132,6 +132,7 @@ fn bvcase_unreadable_is_unknown() {
         generated_at: None,
         stale: vec![],
         parts: Reading::Unknown,
+        unreadable: false,
     };
     for (out, stale, why) in [
         ("", None, "出力が無い"),
@@ -158,7 +159,69 @@ fn bvcase_unreadable_is_unknown() {
             "同じ種類の印が 2 つ",
         ),
     ] {
-        assert_eq!(cases_of(out, stale), unknown, "{why}");
+        // 欄 unreadable は歯 bvcase_unreadable_flag_on_present_output と ..._off_when_absent_or_read が見る。
+        let doc = cases_of(out, stale);
+        assert_eq!(
+            CaseDoc {
+                unreadable: false,
+                ..doc
+            },
+            unknown,
+            "{why}"
+        );
+    }
+}
+
+/// 出力の字が在るのに読めない周は欄 unreadable が真で部品は Unknown（行 c-case-unreadable）。
+#[test]
+fn bvcase_unreadable_flag_on_present_output() {
+    let json = fixture("lifecycle.json");
+    for (out, stale, why) in [
+        ("not json", None, "出力が JSON でない"),
+        (r#"{"version":2,"parts":[]}"#, None, "出力の版が 1 でない"),
+        (r#"{"version":1}"#, None, "部品の列が無い"),
+        (r#"{"version":1,"parts":{}}"#, None, "部品が列でない"),
+        (json.as_str(), Some(""), "古さの印の file を読めない"),
+        (json.as_str(), Some("not json"), "古さの印が JSON でない"),
+        (
+            json.as_str(),
+            Some(r#"{"version":2,"marks":[]}"#),
+            "古さの印の版が 1 でない",
+        ),
+        (
+            json.as_str(),
+            Some(r#"{"version":1,"marks":[{"kind":"merge-gate"},{"kind":"merge-gate"}]}"#),
+            "同じ種類の印が 2 つ",
+        ),
+    ] {
+        let doc = cases_of(out, stale);
+        assert!(doc.unreadable, "{why}");
+        assert_eq!(doc.parts, Reading::Unknown, "{why}");
+    }
+}
+
+/// 出力の字が空の周（古さの印が読めなくても）と読めた周は欄 unreadable が偽（行 c-case-unreadable）。
+#[test]
+fn bvcase_unreadable_flag_off_when_absent_or_read() {
+    for (stale, why) in [
+        (None, "出力が無い"),
+        (Some("not json"), "出力が無く古さの印が JSON でない"),
+        (Some(""), "出力が無く古さの印の file を読めない"),
+    ] {
+        let doc = cases_of("", stale);
+        assert!(!doc.unreadable, "{why}");
+        assert_eq!(doc.parts, Reading::Unknown, "{why}");
+    }
+    let json = fixture("lifecycle.json");
+    let marks = fixture("lifecycle.stale");
+    for (stale, why) in [
+        (None, "読めた"),
+        (Some(r#"{"version":1,"marks":[]}"#), "読めた・印は 0 件"),
+        (Some(marks.as_str()), "古いが読めた"),
+    ] {
+        let doc = cases_of(&json, stale);
+        assert!(!doc.unreadable, "{why}");
+        assert_eq!(known(&doc).len(), 9, "{why}");
     }
 }
 

@@ -3,6 +3,8 @@
 //! 読めない時と古い時は器の読み手（器の fleet/lifecycle_read.rs の read を比べる入力の組を空にして呼んだ形）に合わせる:
 //! 古さの印の file が在って読めない（JSON でない・版が 1 でない・印の列の形が違う・同じ種類の印が 2 つ在る）か、出力が無いか
 //! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
+//! 出力の字が在るのに部品が「まだ分からない」になった周は電文の unreadable を真にする（面は「読めない」と出す）。
+//! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま（行 c-case-unreadable）。
 //! 欄が欠けるか型が違う部品は落とす。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
 //! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
 
@@ -17,11 +19,13 @@ const VERSION: u64 = 1;
 
 /// 出力の字と古さの印の字から電文を組む。`json` は出力の file の字（無いか読めなければ空の字）、
 /// `stale` は古さの印の file の字（file が無ければ None・在って読めなければ空の字）。
+/// 部品が「まだ分からない」の電文は、出力の字が空でなければ unreadable が真。
 pub fn cases_of(json: &str, stale: Option<&str>) -> CaseDoc {
     let unknown = CaseDoc {
         generated_at: None,
         stale: Vec::new(),
         parts: Reading::Unknown,
+        unreadable: !json.is_empty(),
     };
     let marks = match stale.map(stale_kinds) {
         None => Vec::new(),
@@ -41,6 +45,7 @@ pub fn cases_of(json: &str, stale: Option<&str>) -> CaseDoc {
             .and_then(epoch_secs),
         stale: marks,
         parts: Reading::Known(parts.iter().filter_map(part_of).collect()),
+        unreadable: false,
     }
 }
 

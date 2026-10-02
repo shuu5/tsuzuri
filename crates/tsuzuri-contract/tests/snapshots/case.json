@@ -42,6 +42,12 @@
       "generated_at": null,
       "stale": [],
       "parts": "unknown"
+    },
+    {
+      "generated_at": null,
+      "stale": [],
+      "parts": "unknown",
+      "unreadable": true
     }
   ],
   "case::CasePart": [
