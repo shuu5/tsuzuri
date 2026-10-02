@@ -142,7 +142,8 @@ fn aaround_src_embeds_in_nodearound() {
 #[test]
 fn aaround_src_ask_fold_embeds() {
     let src = read("src/project/ask.rs");
-    let head = span(&src, "pub fn view() -> AnyView {", "let list = move ||");
+    // 図の読みは質問の窓の 1 問の DOM が持つ（頁の一覧の DOM は行 g-dead-sweep-b で消した）。
+    let head = span(&src, "pub fn one_view(", "let one = move ||");
     assert!(head.contains("embeds()"), "{head}");
     let arm = span(&src, "Part::Around =>", "fn answer_view(");
     let at = in_order(

@@ -65,7 +65,7 @@ fn mixed() -> Fetched {
 }
 
 /// (6) body は番号 1 から 4 に qa.2・fx-oth.2・qa.10・fx-oth.4 の順で札と answerable を置き、unknown_projects は proj-y、
-/// total は Known の 4、count は Known の 2、cards の id は qa.2・qa.10、batch::body は 2 行。
+/// cards の id は qa.2・qa.10、batch::body は 2 行（total と count は行 g-dead-sweep-b で消した）。
 #[test]
 fn mqface_mixes_by_posted_time() {
     let fetched = mixed();
@@ -86,8 +86,6 @@ fn mqface_mixes_by_posted_time() {
         ]
     );
     assert_eq!(ask::unknown_projects(&fetched), ["proj-y"]);
-    assert_eq!(ask::total(&fetched), Reading::Known(4));
-    assert_eq!(ask::count(&fetched), Reading::Known(2));
     let own_ids: Vec<String> = ask::cards(&fetched)
         .expect("自分の問い")
         .iter()
@@ -101,7 +99,7 @@ fn mqface_mixes_by_posted_time() {
 }
 
 /// (7) 鍵 others の無い見本の body は fn card で組んだ札なし・answerable 真の card の列と一致し、unknown_projects は空で、
-/// total は count と一致する。
+/// まだ読んでいない時と読み損ねた時も空（total と count は行 g-dead-sweep-b で消した）。
 #[test]
 fn mqface_bare_list_unchanged() {
     let fetched = Fetched::Body(bare_text());
@@ -116,14 +114,13 @@ fn mqface_bare_list_unchanged() {
     assert!(want.iter().all(|c| c.project.is_none() && c.answerable));
     assert_eq!(ask::body(&fetched), Body::Filled(want));
     assert!(ask::unknown_projects(&fetched).is_empty());
-    assert_eq!(ask::total(&fetched), ask::count(&fetched));
     for fetched in [Fetched::NotRead, Fetched::Failed] {
         assert!(ask::unknown_projects(&fetched).is_empty());
-        assert_eq!(ask::total(&fetched), ask::count(&fetched));
     }
 }
 
-/// (8) ask.rs の mod dom は札・題の字・つながりの段・答えの欄・読めない組の行・数の chip の 8 つの字を持つ。
+/// (8) ask.rs の mod dom は札・題の字・つながりの段・答えの欄の 6 つの字を持つ（読めない組の行と数の chip は
+/// 行 g-dead-sweep-b で問いの頁の一覧の DOM とともに消した）。
 #[test]
 fn mqface_dom_wiring() {
     let text = read("src/project/ask.rs");
@@ -135,8 +132,6 @@ fn mqface_dom_wiring() {
         "Part::Around if card.project.is_some() => ().into_any(),",
         "let own_ok = card.answerable;",
         "let answerable = move || own_ok && can_answer.is_none_or(|m| m.get());",
-        ".with(unknown_projects)",
-        "let extra = move || match fetched.with(total) {",
     ] {
         assert!(dom.contains(want), "ask.rs の mod dom に {want} が無い");
     }

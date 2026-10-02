@@ -1,6 +1,6 @@
 //! 行 hs-pages の歯（接頭辞 hspage_・判断の記録 ADR-13）: 頁は src/pages の下に 1 頁 1 file・列挙 PageId は
-//! 組み立ての script が生成・snapshot は頁ごとの file と header の file・
-//! nav は頁の定義の数の順・href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い。
+//! 組み立ての script が生成・snapshot は頁ごとの file・
+//! href と from_query の往復・frame.rs と board.rs に頁の変種の名が無い（header の file と nav の歯は行 g-dead-sweep-b で消した）。
 #![cfg(test)]
 
 use std::collections::BTreeSet;
@@ -60,48 +60,6 @@ fn hspage_snaps_match_files() {
         let got = frame::page_snapshot(page);
         let want = read(&format!("tests/snapshots/pages/{}.json", page.id()));
         assert!(got == want, "{} の頁の値が snapshot と違う。今の値:\n{got}", page.id());
-    }
-}
-
-/// (3) header_snapshot は header.json と 1 字も違わない。
-#[test]
-fn hspage_header_lines_same() {
-    let got = frame::header_snapshot();
-    assert!(
-        got == read("tests/snapshots/header.json"),
-        "header の値が snapshot と違う。今の値:\n{got}"
-    );
-    assert!(got.ends_with("\n  ]\n}\n"), "{got}");
-    assert_eq!(got.lines().count(), 10);
-}
-
-/// (4) nav の列は頁の定義の nav が在る頁を数の順に並べたもので、数は重ならず、home を含み、
-/// node を含まない。
-#[test]
-fn hspage_nav_by_number() {
-    let nav = frame::nav();
-    let numbers: Vec<u8> = nav
-        .iter()
-        .map(|p| p.def().nav.expect("nav の頁は数を持つ"))
-        .collect();
-    let mut sorted = numbers.clone();
-    sorted.sort_unstable();
-    sorted.dedup();
-    assert_eq!(numbers, sorted, "数が重ならず昇る");
-    let with_nav = PageId::ALL.iter().filter(|p| p.def().nav.is_some()).count();
-    assert_eq!(nav.len(), with_nav, "nav の在る頁の全部");
-    let ids: Vec<&str> = nav.iter().map(|p| p.id()).collect();
-    assert_eq!(ids, ["home"]);
-    assert!(!nav.contains(&PageId::Node));
-    let pages: Vec<PageId> = frame::pages().iter().map(|p| p.id).collect();
-    assert_eq!(pages, nav);
-    let keys: Vec<&str> = nav.iter().map(|p| p.def().heading).collect();
-    assert_eq!(frame::nav_keys(), keys);
-    let links: Vec<PageId> = frame::nav_links(PageId::Home).iter().map(|l| l.page).collect();
-    assert_eq!(links, nav);
-    for l in frame::nav_links(PageId::Home) {
-        let badge = if l.page.def().badge { frame::BADGE } else { "" };
-        assert_eq!(l.badge, badge, "{}", l.key);
     }
 }
 
@@ -210,7 +168,7 @@ fn hspage_own_names_clean() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 7, "歯の数 {}", names.len());
+    assert!(names.len() >= 5, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("hspage_")

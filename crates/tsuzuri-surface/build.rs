@@ -113,7 +113,7 @@ fn generate_pages(dir: &Path, names: &[String]) -> Result<String, String> {
     writeln!(s, "}}").map_err(w)?;
     writeln!(s).map_err(w)?;
     writeln!(s, "impl PageId {{").map_err(w)?;
-    writeln!(s, "    /// 全部の頁（名の順・nav の順は frame の nav）。").map_err(w)?;
+    writeln!(s, "    /// 全部の頁（名の順）。").map_err(w)?;
     writeln!(s, "    pub const ALL: [PageId; {}] = [", names.len()).map_err(w)?;
     for name in names {
         writeln!(s, "        PageId::{},", variant(name)).map_err(w)?;

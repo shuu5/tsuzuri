@@ -1,5 +1,5 @@
-//! 行 g-keyed の歯: 問いの card とまとめて承認の行の鍵（番号を除いた中身）・block の形と列の読み・
-//! 行の番号の読み直し・2 つの block の DOM の鍵つきの一覧の字の並び。
+//! 行 g-keyed の歯: まとめて承認の行の鍵（番号を除いた中身）・block の形と列の読み・行の番号の読み直し・
+//! まとめて承認の block の DOM の鍵つきの一覧の字の並び（問いの card の鍵と問いの頁の一覧の DOM は行 g-dead-sweep-b で消した）。
 #![cfg(test)]
 
 use std::collections::hash_map::DefaultHasher;
@@ -48,27 +48,6 @@ fn without_qa2() -> Fetched {
     altered(|l| known(l).retain(|c| c.id.as_str() != "qa.2"))
 }
 
-fn qa10_with(edit: impl FnOnce(&mut tsuzuri_contract::question::QuestionCard)) -> Fetched {
-    altered(|l| {
-        let card = known(l)
-            .iter_mut()
-            .find(|c| c.id.as_str() == "qa.10")
-            .expect("qa.10");
-        edit(card);
-    })
-}
-
-fn filled(fetched: &Fetched) -> Vec<ask::Card> {
-    match ask::body(fetched) {
-        Body::Filled(cards) => cards,
-        other => panic!("Filled でない: {other:?}"),
-    }
-}
-
-fn find<'a>(cards: &'a [ask::Card], id: &str) -> &'a ask::Card {
-    cards.iter().find(|c| c.id.as_str() == id).expect("card")
-}
-
 /// 鍵の型は Hash と Eq を持つ（鍵つきの一覧の鍵の fn に渡せる）。
 fn hashed<K: Hash + Eq>(key: &K) -> u64 {
     let mut h = DefaultHasher::new();
@@ -111,46 +90,8 @@ fn between<'a>(src: &'a str, from: &str, to: &str) -> &'a str {
     &rest[..end]
 }
 
-/// card の鍵は番号を 0 にした中身で、番号が詰まっても変わらず、中身が替われば替わる。
-#[test]
-fn qkey_card_key_rules() {
-    let all = filled(&fixture());
-    assert_eq!(all.len(), 2);
-    for card in &all {
-        let key = ask::card_key(card);
-        assert_eq!(key.number, 0);
-        assert_eq!(
-            ask::Card {
-                number: card.number,
-                ..key.clone()
-            },
-            *card
-        );
-        assert_eq!(hashed(&key), hashed(&ask::card_key(card)));
-    }
-    let qa10 = find(&all, "qa.10");
-    assert_eq!(qa10.number, 2);
-
-    let rest = filled(&without_qa2());
-    assert_eq!(rest.len(), 1);
-    let moved = find(&rest, "qa.10");
-    assert_eq!(moved.number, 1);
-    assert_eq!(ask::card_key(moved), ask::card_key(qa10));
-    assert_eq!(hashed(&ask::card_key(moved)), hashed(&ask::card_key(qa10)));
-    assert_eq!(ask::target_number(&rest, "qa.10"), Some(1));
-
-    let digest = filled(&qa10_with(|c| c.digest = "aaaaaaaaaaaaaaaa".to_string()));
-    assert_ne!(ask::card_key(find(&digest, "qa.10")), ask::card_key(qa10));
-    let title = filled(&qa10_with(|c| c.title = "別の題".to_string()));
-    assert_ne!(ask::card_key(find(&title, "qa.10")), ask::card_key(qa10));
-    // 替えていない card の鍵は替わらない。
-    assert_eq!(
-        ask::card_key(find(&title, "qa.2")),
-        ask::card_key(find(&all, "qa.2"))
-    );
-}
-
-/// 形は Filled の中身を捨てた値、列は Filled の中身かほかは空の列（ask と batch で同じ）。
+/// batch の形は Filled の中身を捨てた値、列は Filled の中身かほかは空の列（列は ask と batch で同じ・ask の形は行
+/// g-dead-sweep-b で消した）。
 #[test]
 fn qkey_outline_and_listed() {
     let want: [Body<()>; 6] = [
@@ -163,7 +104,6 @@ fn qkey_outline_and_listed() {
     ];
     let reads = six();
     for (fetched, want) in reads.iter().zip(want.iter()) {
-        assert_eq!(ask::outline(fetched), *want, "{fetched:?}");
         assert_eq!(batch::outline(fetched), *want, "{fetched:?}");
     }
     let (last, rest) = reads.split_last().expect("6 つ");
@@ -217,17 +157,14 @@ fn qkey_batch_keys_and_numbers() {
     );
 }
 
-/// 2 つの block の DOM は鍵つきの一覧で、番号と経過と link を子の中で読み直す。
+/// まとめて承認の block の DOM は鍵つきの一覧で番号と経過と link を子の中で読み直し、問いの block の mod dom は listed を
+/// 引いて番号と now の引数を持たない。
 #[test]
 fn qkey_dom_text() {
+    // 問いの頁の一覧の DOM（鍵つきの一覧）は行 g-dead-sweep-b で消した（窓は 1 問ずつ listed から引く）。
     let src = read("src/project/ask.rs");
     let dom = after(&src, "mod dom {");
-    for word in ["<For", "card_key", "outline", "listed"] {
-        assert!(dom.contains(word), "ask の mod dom に {word} が無い");
-    }
-    let list = between(dom, "let list = move ||", "section(BLOCK");
-    assert!(list.contains("<For"), "{list}");
-    assert!(!list.contains("collect_view()"), "{list}");
+    assert!(dom.contains("listed"), "ask の mod dom に listed が無い");
     assert!(!dom.contains(".number"), "ask の mod dom に .number");
     assert!(!dom.contains("now:"), "ask の mod dom に now の引数");
     assert!(!dom.contains("now :"), "ask の mod dom に now の引数");
@@ -259,7 +196,7 @@ fn qkey_own_names_clean() {
         names.push(after[..end].trim().to_string());
         rest = &after[end..];
     }
-    assert_eq!(names.len(), 5, "{names:?}");
+    assert_eq!(names.len(), 4, "{names:?}");
     names_avoid(names, &[words_front(), words_back()].concat());
 }
 

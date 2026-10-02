@@ -1,15 +1,13 @@
-//! 頁の枠（便 g-frame）: header の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
+//! 頁の枠（便 g-frame）: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
 //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
 //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
-//! 問いの頁（便 g-ask）: 頁の順は home・ask・map、header の質問の link に open の問いの数の印を付ける。
-//! 抜けの検査の頁（便 g-gaps）: 頁の順は home・ask・map・gaps（見本の header と同じ 4 つ）。
-//! 節点の頁（便 g-node）: query の page=node と id で開き、nav には出さない（nav の順と頁の一覧は 4 つのまま）。
-//! 問いの頁の右の列（便 g-batch）: class side stack の列に batch と policy の 2 つの block。
-//! header の「戻る」（行 h-wire）: HEADER の前の部品 BACK と、account board の窓へ戻る段の列（`back_steps`）。
+//! 節点の頁（便 g-node）: query の page=node と id で開く。
+//! 帯の「戻る」（行 h-wire）: account board の窓へ戻る段の列（`back_steps`）。
 //! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
 //! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
-//! ここは頁の定義（`PageDef`）から頁の枠・nav・link・snapshot を導く（頁の変種の名を持たない）。
-//! 頁の切り替え（行 g-nav）: 頁の link の押し（`Press`）が文書を読み直さずに URL を積むかを `switch_url` が決める。
+//! ここは頁の定義（`PageDef`）から頁の枠・link・snapshot を導く（頁の変種の名を持たない）。
+//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める（行 g-nav）。
+//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した（行 g-dead-sweep-b）。
 
 use crate::mapview::encode;
 pub use crate::pages::PageId;
@@ -43,21 +41,15 @@ impl PageId {
 /// 1 つの頁の定義（src/pages の下の file ごとの `PAGE`）。
 #[derive(Debug, Clone, Copy)]
 pub struct PageDef {
-    /// nav の語の鍵（頁の見出し）。
+    /// 頁の見出しの語の鍵（頁の題の語）。
     pub heading: &'static str,
     /// 列を包む class。
     pub class: &'static str,
-    /// nav の順（1 から・無ければ nav に出さない）。
-    pub nav: Option<u8>,
-    /// nav の link に open の問いの数の印を付けるか。
-    pub badge: bool,
-    /// nav の印の SVG の字（nav に出さない頁は空）。
-    pub icon: &'static str,
     /// 頁の列。
     pub columns: fn() -> Vec<Column>,
 }
 
-/// 1 つの頁の枠（頁の id・nav の語の鍵・列を包む class・列）。
+/// 1 つの頁の枠（頁の id・見出しの語の鍵・列を包む class・列）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Page {
     pub id: PageId,
@@ -93,27 +85,7 @@ pub fn page(id: PageId) -> Page {
     }
 }
 
-/// nav の頁（頁の定義の nav が在る頁を nav の数の順に）。
-pub fn nav() -> Vec<PageId> {
-    let mut out: Vec<(u8, PageId)> = PageId::ALL
-        .into_iter()
-        .filter_map(|p| p.def().nav.map(|n| (n, p)))
-        .collect();
-    out.sort_by_key(|(n, _)| *n);
-    out.into_iter().map(|(_, p)| p).collect()
-}
-
-/// nav の頁の枠（nav の順）。
-pub fn pages() -> Vec<Page> {
-    nav().into_iter().map(page).collect()
-}
-
-/// nav の頁の語の鍵（nav の順・header の nav の部品の中の鍵）。
-pub fn nav_keys() -> Vec<&'static str> {
-    nav().into_iter().map(|p| p.def().heading).collect()
-}
-
-/// header の 1 つの部品（役・語の鍵・class・中の語の鍵）。
+/// 帯の下の 1 つの部品（役・語の鍵・class・中の語の鍵）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeaderPart {
     pub part: &'static str,
@@ -122,44 +94,15 @@ pub struct HeaderPart {
     pub items: &'static [&'static str],
 }
 
-/// header の部品（題・頁の link・最終更新・mode の切り替え・この順）。
-/// nav の部品の中の鍵は頁から導く（`nav_keys`・ここは空）。
-pub const HEADER: [HeaderPart; 4] = [
-    HeaderPart {
-        part: "brand",
-        key: "project",
-        class: "brand",
-        items: &[],
-    },
-    HeaderPart {
-        part: "nav",
-        key: "dashboard",
-        class: "nav",
-        items: &[],
-    },
-    HeaderPart {
-        part: "updated",
-        key: "last_record",
-        class: "chip num",
-        items: &[],
-    },
-    HeaderPart {
-        part: "mode",
-        key: "mode",
-        class: "seg",
-        items: &["beginner", "expert"],
-    },
-];
-
-/// header の「戻る」の部品（HEADER の前に描く・行 h-wire・見本の ui.js の topHTML の `.backwrap` の中の `.upto`）。
-pub const BACK: HeaderPart = HeaderPart {
-    part: "back",
-    key: "acct_back",
-    class: "upto",
+/// 最終の記録の部品（帯の下の右端の小さな札の時刻の chip・語の鍵は「?」の注釈の鍵）。
+pub const UPDATED: HeaderPart = HeaderPart {
+    part: "updated",
+    key: "last_record",
+    class: "chip num",
     items: &[],
 };
 
-/// header の席の pill の部品（HEADER の外・mode の切り替えの前に描く・行 g-seatpill・見本の ui.js の topHTML の `.seatpill`）。
+/// 席の pill の部品（帯の下の右端の小さな札に描く・行 g-seatpill・見本の ui.js の topHTML の `.seatpill`）。
 /// 中身は seatpill の module が描く。
 pub const SEAT: HeaderPart = HeaderPart {
     part: "seat",
@@ -172,9 +115,6 @@ pub const SEAT: HeaderPart = HeaderPart {
 pub fn seat_shown(page: PageId) -> bool {
     page != PageId::Home
 }
-
-/// 「戻る」の部品を包む span の class（見本の `.backwrap`）。
-pub const BACK_WRAP: &str = "backwrap";
 
 /// account board の窓を新しく開くときの URL（同じ index.html の query の board が account）。
 pub const ACCOUNT_URL: &str = "?board=account";
@@ -282,41 +222,6 @@ impl Mode {
     }
 }
 
-/// nav の 1 つの link（語の鍵・行き先の頁・class）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NavLink {
-    pub key: &'static str,
-    pub page: PageId,
-    /// 今の頁なら `on`（見本の `.nav a.on`）。
-    pub class: &'static str,
-    /// 数の印の class（問いの頁の link だけ `badge`・ほかは空）。
-    pub badge: &'static str,
-}
-
-/// header の質問の link の数の印の class（見本の `.nav .badge`）。
-pub const BADGE: &str = "badge";
-
-/// nav の link（nav の順・数の印は頁の定義の badge が真の頁だけ）。
-pub fn nav_links(current: PageId) -> Vec<NavLink> {
-    nav()
-        .into_iter()
-        .map(|p| {
-            let def = p.def();
-            NavLink {
-                key: def.heading,
-                page: p,
-                class: if p == current { "on" } else { "" },
-                badge: if def.badge { BADGE } else { "" },
-            }
-        })
-        .collect()
-}
-
-/// 質問の link の数の印の字（open の問いの数・数が読めないときと 0 のときは出さない）。
-pub fn badge(open: Option<usize>) -> Option<String> {
-    open.filter(|n| *n > 0).map(|n| n.to_string())
-}
-
 /// 頁への link（同じ path の query だけ・mode を URL に残す）。
 pub fn href(page: PageId, mode: Mode) -> String {
     if page == PageId::Home {
@@ -352,12 +257,6 @@ pub const POPUP: &str = "popup";
 /// 名前つきの窓を開く時の features: app の窓の中なら `POPUP`・ほかは空の字。
 pub fn window_features(standalone: bool) -> &'static str {
     if standalone { POPUP } else { "" }
-}
-
-/// 頁の link の押しで文書を読み直さずに積む URL（左の button を修飾の鍵なしで押し、今の頁と違う頁へ
-/// 行くときだけ `href` の字・ほかは None で browser の既定のまま＝新しい窓や tab・保存・同じ頁の読み直し）。
-pub fn switch_url(now: PageId, to: PageId, mode: Mode, press: Press) -> Option<String> {
-    (press.plain() && now != to).then(|| href(to, mode))
 }
 
 /// 節点の頁への link（節点の id は `%XX` にする・mode を URL に残す）。
@@ -396,38 +295,6 @@ pub fn with_param(search: &str, key: &str, value: &str) -> String {
         parts.push(format!("{key}={value}"));
     }
     format!("?{}", parts.join("&"))
-}
-
-/// header の値の JSON の字（tests/snapshots/header.json と 1 字も違わないことを歯が見る）。
-/// nav の部品の中の鍵は頁から導いた `nav_keys`。
-pub fn header_snapshot() -> String {
-    let mut out = String::from("{\n  \"header\": [\n");
-    let keys = nav_keys();
-    // 「戻る」の部品は HEADER の前、席の pill は mode の切り替えの前。
-    let header: Vec<String> = [&BACK]
-        .into_iter()
-        .chain(HEADER.iter().flat_map(|h| {
-            let seat = (h.part == "mode").then_some(&SEAT);
-            seat.into_iter().chain([h])
-        }))
-        .map(|h| {
-            let items = if h.part == "nav" {
-                keys.as_slice()
-            } else {
-                h.items
-            };
-            format!(
-                "    {{\"part\": {}, \"key\": {}, \"class\": {}, \"items\": [{}]}}",
-                quote(h.part),
-                quote(h.key),
-                quote(h.class),
-                list(items)
-            )
-        })
-        .collect();
-    out.push_str(&header.join(",\n"));
-    out.push_str("\n  ]\n}\n");
-    out
 }
 
 /// 頁 1 つの枠の値の JSON の字（tests/snapshots/pages の下の同じ id の file と 1 字も違わないことを歯が見る）。
@@ -472,12 +339,4 @@ fn page_json(page: &Page) -> String {
 
 fn quote(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
-fn list(items: &[&str]) -> String {
-    items
-        .iter()
-        .map(|s| quote(s))
-        .collect::<Vec<_>>()
-        .join(", ")
 }

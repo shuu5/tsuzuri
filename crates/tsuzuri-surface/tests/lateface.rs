@@ -126,14 +126,14 @@ fn one_and_two_lines(now: u64) {
     );
 }
 
-/// (6) ask.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で消した）。
+/// (6) ask.rs の mod dom は 1 行の口と書き直しを 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で、
+/// 問いの頁の一覧の上の置き場は行 g-dead-sweep-b で消した）。
 #[test]
 fn lateface_dom_wiring() {
     let ask = dom("src/project/ask.rs");
     for word in [
         "crate::net::read(UNRECEIVED_PATH)",
         "super::unreceived_line(f, clock.get())",
-        "{late_view()}{list}{unknown}",
     ] {
         assert_eq!(ask.matches(word).count(), 1, "ask の mod dom の {word}");
     }

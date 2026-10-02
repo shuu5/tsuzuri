@@ -22,15 +22,15 @@ use web_sys::wasm_bindgen::JsCast;
 
 use crate::account::windows::{ACCOUNT_WIN, closed_message};
 use crate::askwin::AskFocus;
-use crate::frame::{self, BackHow, BackStep, Block, HEADER, Mode, PageId, Press};
+use crate::frame::{self, BackHow, BackStep, Block, Mode, PageId, Press};
 use crate::fresh::{self, Fresh};
 use crate::ledgerlist::SelCtx;
 use crate::net;
-use crate::project::{self, Module, ledger};
+use crate::project::{self, Module};
 use crate::seatpill;
 use crate::store;
 use crate::topbar::{self, Bar, Win, win_of_href};
-use crate::view::{PageSubject, Screen, brand, clock, clock_short, doc_title, kept_name};
+use crate::view::{PageSubject, brand, clock, clock_short, doc_title, kept_name};
 use crate::vocab::label;
 use crate::widgets::coach::CoachLayer;
 use crate::widgets::help::{HelpCtx, TipLayer, term};
@@ -156,15 +156,6 @@ fn App() -> impl IntoView {
             p.close();
         }
     });
-    // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
-    let fetched = net::read(ledger::PATH);
-    let screen = RwSignal::new(Screen::initial());
-    Effect::new(move |_| {
-        let f = fetched.get();
-        screen.update(|s| *s = s.after_read(&f, net::now()));
-    });
-    // 台帳の block は画面の状態を context から受ける（行 hs-blocks）。
-    provide_context(screen);
     // 頁の題の語に替える字（節点の頁の block が節点の題を置く・行 g-title）。
     let subject = RwSignal::new(PageSubject::default());
     provide_context(subject);
@@ -300,7 +291,7 @@ fn top(
     let fresh = net::fresh();
     let updated = move || fresh.with(Fresh::record);
     let title = move || updated().map(clock);
-    let key = HEADER[2].key;
+    let key = frame::UPDATED.key;
     let at = move || match updated() {
         Some(t) => term(key, clock_short(t, net::now())),
         None => view! { {project::state_icon(project::UNKNOWN)}{label("not_yet")} }.into_any(),

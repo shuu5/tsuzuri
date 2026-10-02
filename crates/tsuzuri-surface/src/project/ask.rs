@@ -11,9 +11,7 @@
 //! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
 //! 電文の鍵 others のほかの project の問いは札つきで投稿の時刻の順に 1 つの一覧へ混ぜ、題は link にせず、つながりの段を
 //! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す（行 e-multi-ask）。
-//! 束の block と次の一手と問いの件数（`cards`・`count`・`answerable`）は自分の問いだけを読む。
-
-use std::collections::BTreeMap;
+//! 束の block（`cards`・`answerable`）は自分の問いだけを読む。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
@@ -25,8 +23,7 @@ use tsuzuri_contract::wire;
 use super::{Body, NOT_READ};
 use crate::frame::Block;
 use crate::view::{Fetched, clock};
-use crate::widgets::hover::{self, clip};
-use crate::widgets::nodecard::card_of;
+use crate::widgets::hover::clip;
 
 pub const BLOCK: Block = Block {
     id: "ask",
@@ -231,14 +228,6 @@ pub fn answerable(fetched: &Fetched) -> bool {
     }
 }
 
-/// 問いの件数（測れていなければ Unknown・0 件と書かない）。
-pub fn count(fetched: &Fetched) -> Reading<usize> {
-    match cards(fetched) {
-        Ok(cards) => Reading::Known(cards.len()),
-        Err(_) => Reading::Unknown,
-    }
-}
-
 /// 本文を全部の問いの一覧に読んだ欄 others（読めない本文・まだ読んでいない・読めないは空の列・行 e-multi-ask）。
 pub fn others(fetched: &Fetched) -> Vec<ProjectQuestions> {
     match fetched {
@@ -254,15 +243,6 @@ pub fn unknown_projects(fetched: &Fetched) -> Vec<String> {
         .filter(|p| p.cards == Reading::Unknown)
         .map(|p| p.project)
         .collect()
-}
-
-/// block の中身の card の数（ほかの project の問いを含む・測れていなければ Unknown・0 件は Known の 0）。
-pub fn total(fetched: &Fetched) -> Reading<usize> {
-    match body(fetched) {
-        Body::Unmeasured(_) => Reading::Unknown,
-        Body::Empty(_) => Reading::Known(0),
-        Body::Filled(cards) => Reading::Known(cards.len()),
-    }
 }
 
 /// block の中身（自分の問いの列に、ほかの project の読めた組の列を電文の順に 1 つずつ投稿の時刻で混ぜ、番号を 1 から付ける）。
@@ -313,40 +293,12 @@ fn merged(front: Vec<Card>, back: Vec<Card>) -> Vec<Card> {
     }
 }
 
-/// 鍵つきの一覧の鍵（番号を 0 にした中身・前の card が答えられて番号が詰まっても変わらない）。
-pub fn card_key(card: &Card) -> Card {
-    Card {
-        number: 0,
-        ..card.clone()
-    }
-}
-
-/// block の形（Filled の中身を捨てた値・形が同じなら外枠を組み直さない）。
-pub fn outline(fetched: &Fetched) -> Body<()> {
-    match body(fetched) {
-        Body::Unmeasured(reason) => Body::Unmeasured(reason),
-        Body::Empty(line) => Body::Empty(line),
-        Body::Filled(_) => Body::Filled(()),
-    }
-}
-
 /// card の列（Filled でなければ空の列）。
 pub fn listed(fetched: &Fetched) -> Vec<Card> {
     match body(fetched) {
         Body::Filled(cards) => cards,
         _ => Vec::new(),
     }
-}
-
-/// 問いの id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い問いは持たない）。
-pub fn node_cards(graph: &Fetched, cards: &[Card]) -> BTreeMap<String, hover::Card> {
-    let Ok(doc) = super::map::doc(graph) else {
-        return BTreeMap::new();
-    };
-    cards
-        .iter()
-        .filter_map(|c| card_of(&doc, c.id.as_str()).map(|n| (c.id.to_string(), n)))
-        .collect()
 }
 
 /// 電文の 1 本を自分の問いの card の中身にする（札なし・答えを送れる）。
@@ -640,9 +592,13 @@ pub fn unreceived_line(fetched: &Fetched, now: EpochSecs) -> Option<String> {
     Some(format!("{UNRECEIVED_HEAD} {} 件: {}", ids.len(), listed.join("・")))
 }
 
+/// 頁に置かない block の中身（空・質問の頁は行 g-one-screen-a で消し、問いは質問の窓が 1 問ずつ出す・
+/// 組み立ての script の列挙 Module の view が module ごとに要る）。頁の一覧の DOM は行 g-dead-sweep-b で消した。
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
-    dom::view()
+    use leptos::prelude::*;
+
+    ().into_any()
 }
 
 /// 質問の窓の 1 問（行 g-ask-win・中身は dom の one_view）。
@@ -661,19 +617,16 @@ mod dom {
     use leptos::ev;
     use leptos::prelude::*;
     use leptos::task::spawn_local;
-    use tsuzuri_contract::board::Reading;
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        BLOCK, CHAT_KEY, Card, KeyAction, LAYOUT, OTHER_UNKNOWN, Outcome, PATH, Part, RULING_PATH,
-        Slot, UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, card_key, focus, key_action, listed,
-        node_cards, outcome, outline, posted_tip, request_body, send_text, target_number, total,
-        unknown_projects,
+        CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, UNRECEIVED_PATH,
+        age, anchor, answerable, can_send, card_class, key_action, listed, outcome, posted_tip,
+        request_body, send_text, target_number,
     };
     use crate::frame::{Mode, node_href};
-    use crate::project::map;
+    use crate::project::fold;
     use crate::project::nodearound::{Embeds, embeds};
-    use crate::project::{Body, body_view, fold, section, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, expert_tip};
     use crate::widgets::hover::{self, attach_some};
@@ -720,85 +673,6 @@ mod dom {
             drafts.update_value(|v| v.push((id.clone(), d.clone())));
             d
         })
-    }
-
-    /// 名指された card を画面の上端へ寄せる（描いた後の frame で・要素が無ければ何もしない）。
-    fn scroll_to(number: usize) {
-        let id = anchor(number);
-        request_animation_frame(move || {
-            if let Some(el) = document().get_element_by_id(&id) {
-                el.scroll_into_view_with_bool(true);
-            }
-        });
-    }
-
-    pub fn view() -> AnyView {
-        let search = window().location().search().unwrap_or_default();
-        let target = focus(&search);
-        let fallback = Mode::from_query(&search);
-        let mode = use_context::<HelpCtx>().map(|c| c.mode);
-        let scrolled = StoredValue::new(false);
-        let fetched = crate::net::read(PATH);
-        let drafts: Drafts = StoredValue::new(Vec::new());
-        // 読むだけの server なら答えの欄は送る欄の代わりにチャットで答える 1 行を出す。
-        provide_context(CanAnswer(Memo::new(move |_| fetched.with(answerable))));
-        // つながりの段の図の読みはこの block が持つ（一覧の読み直しで card を組み直しても作り直さない）。
-        let places = embeds();
-        // 形と card の列は値が前と同じなら知らせない（本文が替わっても形が同じなら外枠を組み直さない）。
-        let shape = Memo::new(move |_| fetched.with(outline));
-        let cards = Memo::new(move |_| fetched.with(listed));
-        // 題の節点の card はグラフの口から引く（問いの一覧より後に読めても、後から card が付く）。
-        let graph = crate::net::read(map::PATH);
-        let nodes = Memo::new(move |_| cards.with(|v| graph.with(|g| node_cards(g, v))));
-        // 経過は 1 秒の時計で書き直し、link は mode を替えれば替わる。
-        let clock = crate::net::ticker();
-        let tick = move || clock.get();
-        let current = move || mode.map_or(fallback, |m| m.get());
-        let extra = move || match fetched.with(total) {
-            Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
-            Reading::Unknown => ().into_any(),
-        };
-        // 名指しの card を 1 度だけ画面の上端へ寄せる。
-        let focused = target.clone();
-        Effect::new(move |_| {
-            if let Some(id) = focused.as_deref()
-                && !scrolled.get_value()
-                && let Some(n) = cards.with(|v| target_number(v, id))
-            {
-                scrolled.set_value(true);
-                scroll_to(n);
-            }
-        });
-        // 台帳が読めないほかの project は、札と 1 行を一覧の下に出す。
-        let unknown = move || {
-            fetched
-                .with(unknown_projects)
-                .into_iter()
-                .map(|p| view! { <div class="small muted"><span class="chip">{p}</span>" "{OTHER_UNKNOWN}</div> })
-                .collect_view()
-        };
-        let list = move || match shape.get() {
-            Body::Unmeasured(reason) => unmeasured(reason),
-            Body::Empty(line) => body_view(Body::Empty(line)),
-            Body::Filled(()) => {
-                let target = target.clone();
-                // 鍵は番号を除いた中身（変わらない card の DOM は残り、欄の focus と変換の途中の字も残る）。
-                view! {
-                    <For each=move || cards.get() key=card_key children=move |c: Card| {
-                        let d = draft(drafts, &c.id);
-                        let on = target.as_deref() == Some(c.id.as_str());
-                        let id = c.id.to_string();
-                        let key = id.clone();
-                        let nb = Memo::new(move |_| cards.with(|v| target_number(v, &id)).unwrap_or(0));
-                        let node = Memo::new(move |_| nodes.with(|m| m.get(&key).cloned()));
-                        card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })
-                    }/>
-                }
-                .into_any()
-            }
-        };
-        let content = view! { {late_view()}{list}{unknown} }.into_any();
-        section(BLOCK, extra.into_any(), content)
     }
 
     /// 質問の窓の 1 問（行 g-ask-win）: `pick` の card を block と同じ card（つながりの図と答えの欄も同じ）で描き、

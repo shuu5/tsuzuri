@@ -82,7 +82,7 @@ fn doc_of(center: &str, rows: Vec<AroundRow>) -> AroundDoc {
 }
 
 
-/// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・nav は 4 つをこの順に含み節点の頁を含まない・
+/// (1) 節点の頁の枠（block は node と around と、便 g-node-timeline が足した timeline）・page=node で開く・頁は home と節点の頁の 2 つ・
 /// snapshot と同じ。
 #[test]
 fn nodepage_frame_and_nav() {
@@ -108,17 +108,9 @@ fn nodepage_frame_and_nav() {
     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
     assert_eq!(PageId::from_query("?page=node"), PageId::Node);
     assert!(PageId::ALL.contains(&PageId::Node));
-    // nav の頁の一覧は home だけで節点の頁を含まない（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home"]);
-    let nav_keys = frame::nav_keys();
-    assert_eq!(nav_keys, vec!["home"]);
-    assert!(!nav_keys.contains(&"nb_self"), "{nav_keys:?}");
-    let keys: Vec<&str> = frame::nav_links(PageId::Node)
-        .iter()
-        .map(|l| l.key)
-        .collect();
-    assert_eq!(keys, nav_keys);
+    // 頁は home と節点の頁の 2 つ（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した・
+    // nav は行 g-dead-sweep-b で消した）。
+    assert_eq!(PageId::ALL, [PageId::Home, PageId::Node]);
     node_links();
 }
 

@@ -6,9 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tsuzuri_surface::frame::{
-    self, Mode, POPUP, PageId, Press, STANDALONE_QUERY, switch_url, window_features,
-};
+use tsuzuri_surface::frame::{POPUP, Press, STANDALONE_QUERY, window_features};
 
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
@@ -71,22 +69,6 @@ fn popapp_features_by_standalone() {
     ] {
         assert!(!held.plain(), "{held:?}");
     }
-    // 頁の切り替えは同じ plain で読む（振る舞いは変わらない）。
-    let to = switch_url(PageId::Home, PageId::Node, Mode::Beginner, Press::default());
-    assert_eq!(to, Some(frame::href(PageId::Node, Mode::Beginner)));
-    assert_eq!(
-        switch_url(PageId::Home, PageId::Home, Mode::Beginner, Press::default()),
-        None
-    );
-    assert_eq!(
-        switch_url(
-            PageId::Home,
-            PageId::Node,
-            Mode::Beginner,
-            press(0, false, false, false, true)
-        ),
-        None
-    );
 }
 
 /// (2) board の standalone は media query を読み、open_named は features を渡して窓を前に出さない。
@@ -130,10 +112,8 @@ fn popapp_sites_through_helper() {
     assert_eq!(read("src/account/windows.rs").matches("open_named(").count(), 1);
     assert!(!read("src/project/next.rs").contains("open_named("));
 
-    // frame の switch_url は plain を呼び、board の press は 4 つの修飾の鍵と button を読む。
+    // frame の Press は plain を持ち（頁の切り替えの switch_url は行 g-dead-sweep-b で消した）、board の press は 4 つの修飾の鍵と button を読む。
     let frame_src = read("src/frame.rs");
-    let switch = body(&frame_src, "pub fn switch_url(");
-    assert!(switch.contains("press.plain()"), "{switch}");
     assert!(frame_src.contains("pub fn plain(self) -> bool {"));
     let board = read("src/board.rs");
     let press_fn = body(&board, "fn press(e: &ev::MouseEvent) -> Press {");

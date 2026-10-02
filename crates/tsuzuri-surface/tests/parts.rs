@@ -15,7 +15,7 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::project::{
     Body, Module, NO_CONTENT, NOT_READ, ask, askpage, map, next, pipeline, seat,
 };
-use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
+use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS};
 use tsuzuri_surface::widgets::hover::{
     Card, ELLIPSIS, GRACE_MS, OFFSET_X, OFFSET_Y, Point, ROW_CHARS, ROWS, Rect, Size, clip, keeps,
     place,
@@ -114,24 +114,17 @@ fn parts_ledger_lists_read_three_values() {
         Body::Empty(_)
     ));
     assert!(matches!(
-        askpage::body(&Fetched::Body(empty.clone())),
+        askpage::body(&Fetched::Body(empty)),
         Body::Empty(_)
     ));
-    unread_lists(empty);
+    unread_lists();
 }
 
-/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文と画面。
-fn unread_lists(empty: String) {
-    let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
+/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文（画面の状態 Screen は行 g-dead-sweep-b で消した）。
+fn unread_lists() {
     for fetched in [Fetched::NotRead, Fetched::Failed] {
         assert!(matches!(ask::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
         assert!(matches!(askpage::body(&fetched), Body::Unmeasured(r) if !r.is_empty()));
-        for screen in [Screen::initial(), known.clone()] {
-            let s = screen.after_read(&fetched, 9);
-            assert_eq!(s.board, Reading::Unknown, "{fetched:?}");
-            // 最終更新は読めた時刻のまま（読めない読みで進めない）。
-            assert_eq!(s.updated_at, screen.updated_at);
-        }
     }
 }
 

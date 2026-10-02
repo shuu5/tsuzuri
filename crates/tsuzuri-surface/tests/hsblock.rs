@@ -209,15 +209,9 @@ fn hsblock_dispatch_by_list() {
         "block_view が枠の id で選ばない"
     );
     assert!(body.contains("Module::view"), "block_view が module の view を呼ばない");
+    // App は画面の状態（Screen）を作らない（読み手が無くなり行 g-dead-sweep-b で消した）。
     let app = fn_body(&board, "App");
-    assert!(
-        app.contains("let screen = RwSignal::new(Screen::initial());"),
-        "App が画面の状態の signal を作らない"
-    );
-    assert!(
-        app.contains("provide_context(screen);"),
-        "App が画面の状態の signal を context に置かない"
-    );
+    assert!(!app.contains("Screen"), "App が画面の状態を作る");
     assert!(
         board.contains("fn page_view(page: PageId) ->"),
         "page_view が画面の状態を受ける"

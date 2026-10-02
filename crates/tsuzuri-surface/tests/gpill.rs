@@ -1,4 +1,4 @@
-//! 行 g-seatpill の歯（接頭辞 gpill_）: header の席の pill の部品（frame の SEAT と seat_shown と snapshot の行）・
+//! 行 g-seatpill の歯（接頭辞 gpill_）: header の席の pill の部品（frame の SEAT と seat_shown・header の snapshot の行は行 g-dead-sweep-b で消した）・
 //! pill の状態と応答なしの経過・席の card の字・board と pill の DOM の字の並び・この file の歯の名。
 //! fixture は tests/fixtures/surface/seat-card.json（読むだけ）。
 #![cfg(test)]
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, HEADER, HeaderPart, PageId, SEAT};
+use tsuzuri_surface::frame::{self, HeaderPart, PageId, SEAT};
 use tsuzuri_surface::project::seat::{self, LIMIT_LINE, MOVE_WAIT, NEXT_TARGET, REASON, hmd};
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
 use tsuzuri_surface::seatpill::{self, ETA_STYLE, Pill, RESUME};
@@ -103,32 +103,6 @@ fn gpill_part_and_pages() {
         .collect();
     shown.sort_unstable();
     assert_eq!(shown, ["node"]);
-
-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
-    assert_eq!(parts, ["brand", "nav", "updated", "mode"]);
-}
-
-/// (2) header_snapshot は snapshot の file と同じ 10 行で、seat の行は updated と mode の間に 1 つ。
-#[test]
-fn gpill_snapshot_line() {
-    let got = frame::header_snapshot();
-    assert!(
-        got == read("tests/snapshots/header.json"),
-        "header の値が snapshot と違う。今の値:\n{got}"
-    );
-    let lines: Vec<&str> = got.lines().collect();
-    assert_eq!(lines.len(), 10, "{got}");
-    assert!(lines[5].contains("\"part\": \"updated\""), "{}", lines[5]);
-    assert_eq!(
-        lines[6],
-        "    {\"part\": \"seat\", \"key\": \"seat\", \"class\": \"seatpill\", \"items\": []},"
-    );
-    assert!(lines[7].contains("\"part\": \"mode\""), "{}", lines[7]);
-    let seats = lines
-        .iter()
-        .filter(|l| l.contains("\"part\": \"seat\""))
-        .count();
-    assert_eq!(seats, 1);
 }
 
 /// (3) pill の状態は電文の state のまま、経過は応答なしで since が在るときだけ（今と at の大きい方から）。
@@ -324,7 +298,7 @@ fn gpill_own_names_clean() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert_eq!(names.len(), 6, "{names:?}");
+    assert_eq!(names.len(), 5, "{names:?}");
     let words = [words_front(), words_middle(), words_back()].concat();
     names_avoid(names, &words);
 }

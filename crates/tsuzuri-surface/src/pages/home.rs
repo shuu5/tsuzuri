@@ -14,9 +14,6 @@ pub const PANE: &str = "pane";
 pub const PAGE: PageDef = PageDef {
     heading: "home",
     class: ONE,
-    nav: Some(1),
-    badge: false,
-    icon: r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>"#,
     columns,
 };
 

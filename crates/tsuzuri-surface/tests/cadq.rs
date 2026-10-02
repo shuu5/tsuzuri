@@ -8,9 +8,8 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::GraphDoc;
 use tsuzuri_contract::ledger::{BeadId, LedgerList};
-use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::{Body, ask, askpage};
+use tsuzuri_surface::project::{Body, askpage};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::hover::{Card, unmount_hides};
 use tsuzuri_surface::widgets::nodecard::card_of;
@@ -44,22 +43,6 @@ fn unread() -> [Fetched; 3] {
     ]
 }
 
-/// fixture の問いの一覧の id を `swap` の対で替えた本文。
-fn questions(swap: &[(&str, &str)]) -> Fetched {
-    let mut list: QuestionList =
-        wire::decode(&read("../../tests/fixtures/surface/question-list.json"))
-            .expect("fixture の問いの一覧が電文として読める");
-    let Reading::Known(cards) = &mut list.cards else {
-        panic!("fixture の問いの一覧が Unknown");
-    };
-    for c in cards.iter_mut() {
-        if let Some((_, to)) = swap.iter().find(|(from, _)| c.id.as_str() == *from) {
-            c.id = bead(to);
-        }
-    }
-    Fetched::Body(wire::encode(&list).expect("電文の字にできる"))
-}
-
 /// fixture の台帳の一覧の id を `swap` の対で替えた本文。
 fn ledger(swap: &[(&str, &str)]) -> Fetched {
     let mut list: LedgerList =
@@ -74,36 +57,6 @@ fn ledger(swap: &[(&str, &str)]) -> Fetched {
         }
     }
     Fetched::Body(wire::encode(&list).expect("電文の字にできる"))
-}
-
-/// (1) 問いの card の題の節点の card は、電文に在る問いの id だけを card_of の値で持つ。
-#[test]
-fn cadq_title_cards_rules() {
-    let doc = graph_doc();
-    let graph = Fetched::Body(graph_text());
-
-    let cards = ask::listed(&questions(&[("qa.2", "t3.q10")]));
-    let ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(ids, vec!["t3.q10", "qa.10"]);
-    let before = cards.clone();
-
-    let got = ask::node_cards(&graph, &cards);
-    let keys: Vec<&str> = got.keys().map(String::as_str).collect();
-    assert_eq!(keys, vec!["t3.q10"]);
-    let node = card_of(&doc, "t3.q10").expect("t3.q10 の card");
-    assert_eq!(got["t3.q10"], node);
-    assert_eq!(node.title, "開いた問い");
-    assert_eq!(node.kind, "question · beads · open");
-    assert_eq!(node.value, "t3.q10 要約なし");
-    assert_eq!(cards, before, "card の列の値は変えない");
-
-    let plain = ask::listed(&questions(&[]));
-    assert_eq!(plain.len(), 2);
-    assert!(ask::node_cards(&graph, &plain).is_empty());
-    assert!(ask::node_cards(&graph, &[]).is_empty());
-    for g in unread() {
-        assert!(ask::node_cards(&g, &cards).is_empty(), "{g:?}");
-    }
 }
 
 /// (2) 段の行の節点の card は、行の問いの id と答えた決定の id のうち電文に在るものだけを card_of の値で持つ。
@@ -197,12 +150,8 @@ fn cadq_dom_wiring() {
     let ask_text = read("src/project/ask.rs");
     let dom = after(&ask_text, "mod dom {");
     for want in [
-        "crate::net::read(map::PATH)",
-        "node_cards(g, v)",
-        "nodes.with(|m| m.get(&key).cloned())",
         "use crate::widgets::hover::{self, attach_some};",
         "struct Live {",
-        "card_view(c, d, Live { nb, node }, on, Shared { tick, mode: current, places })",
     ] {
         assert!(dom.contains(want), "ask.rs の mod dom に {want} が無い");
     }
@@ -462,7 +411,7 @@ fn cadq_names_stay_apart() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 5, "歯の数 {}", names.len());
+    assert!(names.len() >= 4, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("cadq_")

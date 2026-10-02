@@ -12,7 +12,6 @@ use tsuzuri_contract::surface::{
     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
 };
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame;
 use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
 use tsuzuri_surface::view::{Fetched, clock};
 use tsuzuri_surface::vocab::vocab;
@@ -46,22 +45,6 @@ fn bead(id: &str) -> BeadId {
 
 
 
-
-/// 質問の link の数の印は open の問いの数・読めないと 0 は出さない。
-#[test]
-fn askcard_nav_badge() {
-    assert_eq!(frame::badge(Some(2)), Some("2".to_string()));
-    assert_eq!(frame::badge(Some(0)), None);
-    assert_eq!(frame::badge(None), None);
-    let count = ask::count(&question_list());
-    assert_eq!(count, Reading::Known(2));
-    let open = match count {
-        Reading::Known(n) => Some(n),
-        Reading::Unknown => None,
-    };
-    assert_eq!(frame::badge(open), Some("2".to_string()));
-    assert_eq!(ask::count(&Fetched::Failed), Reading::Unknown);
-}
 
 /// card の部分の並びは 題・概要・理由・推奨・答えの欄・つながり で、つながりの段だけが畳める段（最初は閉じる）。
 #[test]
@@ -395,7 +378,6 @@ fn askcard_empty_is_not_unmeasured() {
         .expect("電文"),
     );
     assert_eq!(ask::body(&empty_cards), Body::Empty(ask::EMPTY));
-    assert_eq!(ask::count(&empty_cards), Reading::Known(0));
     let empty_rows = Fetched::Body(
         wire::encode(&LedgerList {
             rows: Reading::Known(vec![]),
@@ -434,7 +416,6 @@ fn unmeasured_reads() {
             panic!("問いの card が {fetched:?} で測れていないでない");
         };
         assert!(!reason.trim().is_empty() && !reason.contains('\n'));
-        assert_eq!(ask::count(&fetched), Reading::Unknown);
     }
     for fetched in [
         Fetched::NotRead,

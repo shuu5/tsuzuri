@@ -2,7 +2,7 @@
 //! header の DOM は wasm の target のときだけ組むので、ここでは字を決める純粋な関数だけを pin する。
 #![cfg(test)]
 
-use tsuzuri_surface::frame::HEADER;
+use tsuzuri_surface::frame::UPDATED;
 use tsuzuri_surface::view::clock_short;
 
 #[test]
@@ -36,7 +36,8 @@ fn topbar_direction_does_not_matter() {
 
 #[test]
 fn topbar_updated_part_is_a_num_chip_keyed_last_record() {
-    let part = HEADER.iter().find(|p| p.part == "updated").unwrap();
+    let part = UPDATED;
+    assert_eq!(part.part, "updated");
     assert_eq!(part.key, "last_record");
     assert_eq!(part.class, "chip num");
 }

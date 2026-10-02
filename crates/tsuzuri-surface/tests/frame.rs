@@ -6,6 +6,7 @@
 //! 便 g-batch で問いの頁を 2 列にし（右の列は side stack で batch と policy）、module は 13 になった。
 //! 行 h-wire で header の HEADER の前に「戻る」の部品 BACK を足した（snapshot の header の先頭の 1 行）。
 //! 行 g-node-timeline で節点の頁の around の後に run の時間軸の block timeline を足した。
+//! 行 g-dead-sweep-b で header の snapshot と HEADER と BACK と nav を消した（帯の下の部品は UPDATED と SEAT）。
 #![cfg(test)]
 
 use std::collections::BTreeSet;
@@ -17,7 +18,7 @@ use tsuzuri_contract::graph::AroundDoc;
 use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
+use tsuzuri_surface::frame::{self, Mode, Page, PageId, SEAT, UPDATED};
 use tsuzuri_surface::project::{
     self, Body, Module, STATES, ask, gaps, legend, next, node, pipeline, seat, state_class,
 };
@@ -71,13 +72,6 @@ fn sources() -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-#[test]
-fn frame_snapshot_matches_file() {
-    let want = read("tests/snapshots/header.json");
-    let got = frame::header_snapshot();
-    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
-}
-
 
 #[test]
 fn frame_home_blocks_in_order_and_map_page() {
@@ -99,23 +93,12 @@ fn frame_home_blocks_in_order_and_map_page() {
         frame::page(PageId::Node).block_ids(),
         vec!["node", "around", "timeline"]
     );
-    let ids: Vec<&str> = frame::pages().iter().map(|p| p.id.id()).collect();
-    assert_eq!(ids, vec!["home"]);
     for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);
     }
     assert_eq!(PageId::Node.id(), "node");
-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
-    assert_eq!(parts, vec!["brand", "nav", "updated", "mode"]);
-    // nav に出る頁は home だけ（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
-    let keys: Vec<&str> = frame::nav_links(PageId::Home)
-        .iter()
-        .map(|l| l.key)
-        .collect();
-    assert_eq!(keys, frame::nav_keys());
-    let words: Vec<String> = keys.iter().map(|k| vocab().label(k)).collect();
-    let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    assert_eq!(words, vec!["ホーム"]);
+    // home の頁の見出しの語（地図の頁は行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+    assert_eq!(vocab().label(frame::page(PageId::Home).heading), "ホーム");
 }
 
 /// 見出しの語の鍵（枠・header・nav・指標・凡例・注釈の部品）は全部 vocab の file に在る。
@@ -130,7 +113,7 @@ fn frame_headings_come_from_vocab() {
                 .flat_map(|c| c.blocks.iter().map(|b| b.heading)),
         );
     }
-    for part in [BACK].iter().chain(HEADER.iter()) {
+    for part in [UPDATED, SEAT] {
         keys.push(part.key);
         keys.extend(part.items);
     }
@@ -234,15 +217,8 @@ fn used_classes() -> BTreeSet<String> {
             }
         }
     }
-    for part in [BACK].iter().chain(HEADER.iter()) {
+    for part in [UPDATED, SEAT] {
         add(part.class);
-    }
-    add(BACK_WRAP);
-    for page in PageId::ALL {
-        for link in frame::nav_links(page) {
-            add(link.class);
-            add(link.badge);
-        }
     }
     for slot in ask::LAYOUT {
         add(slot.class);
@@ -451,7 +427,7 @@ fn frame_mode_lives_in_url() {
     hrefs_keep_mode();
 }
 
-/// 頁の link は mode と頁を残し、節点の頁の link は nav に出ないことを見る。
+/// 頁の link は mode と頁を残すことを見る。
 fn hrefs_keep_mode() {
     for mode in Mode::ALL {
         for page in PageId::ALL {
@@ -460,7 +436,7 @@ fn hrefs_keep_mode() {
             assert_eq!(PageId::from_query(&href), page, "{href}");
         }
     }
-    // 節点の頁は page=node で開き、link は id を `%XX` にして mode を残す（nav には出さない）。
+    // 節点の頁は page=node で開き、link は id を `%XX` にして mode を残す。
     assert_eq!(PageId::from_query("?page=node&id=FR1"), PageId::Node);
     assert_eq!(
         frame::href(PageId::Node, Mode::Expert),
@@ -470,16 +446,6 @@ fn hrefs_keep_mode() {
     assert_eq!(link, "?page=node&id=e.2%3A20260927T0000Z-1&mode=beginner");
     assert_eq!(PageId::from_query(&link), PageId::Node);
     assert_eq!(Mode::from_query(&link), Mode::Beginner);
-    assert!(
-        frame::nav_links(PageId::Node)
-            .iter()
-            .all(|l| l.page != PageId::Node)
-    );
-    assert!(
-        frame::nav_links(PageId::Node)
-            .iter()
-            .all(|l| l.class.is_empty())
-    );
 }
 
 /// 「?」の注釈: 1 行目 = 要点・項 = 記号 + 本文・「▸」の後 = 詳しく（見本の noteParts と同じ）。

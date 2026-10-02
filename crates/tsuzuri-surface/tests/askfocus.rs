@@ -97,10 +97,7 @@ fn afocus_src_links_and_scroll() {
         "anchor(",
         "card_class(",
         "node_href(",
-        "focus(",
         "target_number(",
-        "get_element_by_id(",
-        "scroll_into_view_with_bool(true)",
         "<a class=\"t\"",
     ] {
         assert!(dom.contains(want), "{module} の mod dom に {want} が無い");

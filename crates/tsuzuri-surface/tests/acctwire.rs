@@ -1,13 +1,10 @@
-//! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (5)〜(7)）。
+//! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (6)(7)・header の (5) は行 g-dead-sweep-b で消した）。
 #![cfg(test)]
 
 use std::path::{Path, PathBuf};
 
 use tsuzuri_surface::account::windows::ACCOUNT_WIN;
-use tsuzuri_surface::frame::{
-    self, ACCOUNT_URL, BACK, BACK_WRAP, BackStep, HEADER, back_steps,
-};
-use tsuzuri_surface::vocab::vocab;
+use tsuzuri_surface::frame::{ACCOUNT_URL, BackStep, back_steps};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -15,35 +12,6 @@ fn crate_dir() -> PathBuf {
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// (5) header は HEADER の 4 つの前に「戻る」を持ち、HEADER は変わらず、snapshot の字は file と 1 字も違わない。
-#[test]
-fn acctwire_back_part_before_header() {
-    assert_eq!(
-        (BACK.part, BACK.key, BACK.class, BACK.items),
-        ("back", "acct_back", "upto", &[] as &[&str])
-    );
-    assert_eq!(BACK_WRAP, "backwrap");
-    let parts: Vec<&str> = HEADER.iter().map(|h| h.part).collect();
-    assert_eq!(parts, ["brand", "nav", "updated", "mode"], "HEADER は変わらない");
-    assert_eq!(frame::nav_keys(), ["home"]);
-    let want = read("tests/snapshots/header.json");
-    let got = frame::header_snapshot();
-    assert!(got == want, "header の値が snapshot と違う。今の値:\n{got}");
-    let lines: Vec<&str> = got.lines().collect();
-    assert_eq!(
-        lines[2],
-        "    {\"part\": \"back\", \"key\": \"acct_back\", \"class\": \"upto\", \"items\": []},"
-    );
-    assert!(lines[3].contains("\"part\": \"brand\""), "{}", lines[3]);
-    // 語の鍵と class は語の辞書と stylesheet に在る。
-    let term = vocab().term(BACK.key).expect("acct_back が語の辞書に在る");
-    assert!(!term.label.is_empty());
-    let css = read("style.css");
-    for class in [".upto", ".backwrap"] {
-        assert!(css.contains(class), "stylesheet に {class} が無い");
-    }
 }
 
 /// (6) tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じる。

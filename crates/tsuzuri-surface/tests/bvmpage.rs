@@ -40,14 +40,13 @@ fn sources() -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-/// (1) 頁は home・node の 2 つで（質問と抜けの検査の頁は行 g-one-screen-a で消した）、nav は home だけ・地図の頁の file と snapshot が無く、
+/// (1) 頁は home・node の 2 つで（質問と抜けの検査の頁は行 g-one-screen-a で消した）・地図の頁の file と snapshot が無く、
 /// 前の地図の URL は home に落ちる。
 #[test]
 fn bvmpage_no_map_page() {
     let ids: Vec<&str> = PageId::ALL.iter().map(|p| p.id()).collect();
     assert_eq!(ids, ["home", "node"]);
-    assert_eq!(frame::nav_keys(), ["home"]);
-    for page in frame::pages() {
+    for page in PageId::ALL.map(frame::page) {
         assert!(!page.block_ids().contains(&"map"), "{:?}", page.id);
     }
     for mode in Mode::ALL {
@@ -57,7 +56,6 @@ fn bvmpage_no_map_page() {
     for rel in ["src/pages/map.rs", "tests/snapshots/pages/map.json"] {
         assert!(!crate_dir().join(rel).exists(), "{rel} が在る");
     }
-    assert!(!read("tests/snapshots/header.json").contains("\"map\""));
 }
 
 /// (2) block の列に地図が無く、グラフの口の読み（PATH・REASON・doc）は kit の下の map に在る。
