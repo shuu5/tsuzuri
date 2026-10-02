@@ -3,7 +3,10 @@
 //! 既定で開く組は、板で動いている札を持つ組と open の行を持つ組だけで、ほかは畳む（開き閉じは頁の一生の間だけ持つ）。
 //! 行は口 /api/ledger の台帳の行、段の数と行の段の字は口 /api/pipeline の札、短い題と起票の時刻は口 /api/beads の
 //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
-//! 組と頭の数と既定の開きと並べは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
+//! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
+//! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
+//! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
 
@@ -11,9 +14,12 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, LedgerRow};
+use tsuzuri_contract::stats::LedgerStats;
 use tsuzuri_contract::wire;
 
-use crate::project::ledger::{CLOSED, EMPTY, NO_OPEN, OUTSIDE};
+use crate::project::ledger::{
+    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, OUTSIDE, burn_svg, burndown, net, stats,
+};
 use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
 use crate::project::{Body, LEDGER_UNREAD};
 use crate::view::{Fetched, id_order, read_rows};
@@ -288,6 +294,92 @@ pub fn content(
     }
 }
 
+/// 種類の切り替えの値（見本の kseg）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    All,
+    Task,
+    Memo,
+    Question,
+}
+
+/// 種類の切り替えの表（値・button の字・合う行の種類・すべては None）。
+pub const KINDS: [(Kind, &str, Option<NodeKind>); 4] = [
+    (Kind::All, "すべて", None),
+    (Kind::Task, "便", Some(NodeKind::Task)),
+    (Kind::Memo, "memo", Some(NodeKind::Memo)),
+    (Kind::Question, "問い", Some(NodeKind::Question)),
+];
+
+/// 探す欄の置き字（短い題・題の全体・id を探す）。
+pub const SEARCH_HINT: &str = "題・id で探す";
+
+/// 絞りに合う行が 1 つも無いときの 1 行。
+pub const NO_MATCH: &str = "合う行なし";
+
+/// 指標の口が読めないときの見出しの小さな数の語の鍵（吹き出しの読めない欄と同じ「まだ分からない」・憲法 P-7）。
+pub const KPI_UNKNOWN_KEY: &str = crate::widgets::pop::UNKNOWN_KEY;
+
+/// 絞りが効いているか（種類がすべてでないか、探す字が空白だけでない）。
+pub fn filtering(kind: Kind, q: &str) -> bool {
+    kind != Kind::All || !q.trim().is_empty()
+}
+
+/// 行が絞りに合うか（種類が表の種類と同じで、探す字〔前後の空白を除いた小文字〕が短い題・題の全体・id の
+/// 小文字のどれかに含まれる・すべてと空の探す字はどの行にも合う）。
+pub fn row_matches(row: &Lrow, kind: Kind, q: &str) -> bool {
+    let want = KINDS
+        .iter()
+        .find(|(k, _, _)| *k == kind)
+        .and_then(|(_, _, n)| *n);
+    let q = q.trim().to_lowercase();
+    want.is_none_or(|n| n == row.kind)
+        && [&row.short, &row.title, &row.id]
+            .iter()
+            .any(|t| t.to_lowercase().contains(&q))
+}
+
+/// 絞った組（絞りが効いていなければ組のまま・効いていれば合う行だけを残し、合う行の無い組は出さない・頭の数は替えない）。
+pub fn filtered(groups: Vec<Lgroup>, kind: Kind, q: &str) -> Vec<Lgroup> {
+    if !filtering(kind, q) {
+        return groups;
+    }
+    groups
+        .into_iter()
+        .filter_map(|mut g| {
+            g.rows.retain(|r| row_matches(r, kind, q));
+            (!g.rows.is_empty()).then_some(g)
+        })
+        .collect()
+}
+
+/// 見出しの指標の小さな数の字（open の便・memo・問いの数と純減 24h・見本の kchip）。
+pub fn kpi_text(s: &LedgerStats) -> String {
+    format!(
+        "便 {} · memo {} · 問い {} · 純減 24h {}",
+        s.open.task,
+        s.open.memo,
+        s.open.question,
+        net(s.net_drop_24h).text
+    )
+}
+
+/// 指標の口が読めないときの見出しの小さな数の字（指標と語 KPI_UNKNOWN_KEY の見出しの語）。
+pub fn kpi_unknown() -> String {
+    format!("指標 {}", label(KPI_UNKNOWN_KEY))
+}
+
+/// 見出しの小さな数と 14 日の図の svg（図は台帳の block の burndown・指標の口が読めなければ kpi_unknown の字と図なし）。
+pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
+    match stats(fetched) {
+        Ok(s) => (
+            kpi_text(&s),
+            Some(burn_svg(&burndown(&s.days, BURN_W, BURN_H))),
+        ),
+        Err(_) => (kpi_unknown(), None),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
@@ -297,7 +389,8 @@ mod dom {
     use leptos::prelude::*;
 
     use super::{
-        COUNTS_UNKNOWN, FACTS_PATH, Lgroup, Lrow, NO_KIDS, content, head_counts, kind_tag,
+        COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
+        content, filtered, filtering, head_counts, kind_tag, kpi,
     };
     use crate::frame::{Mode, node_href};
     use crate::kit::Folds;
@@ -306,12 +399,14 @@ mod dom {
     use crate::widgets::help::HelpCtx;
     use crate::widgets::pop::board_unread;
 
-    /// 一覧（台帳と板と bead の事実の 3 つの口を読む・組の開き閉じは頁の一生の間だけ持つ・板が読めない間は頭に理由の 1 行）。
+    /// 一覧（見出しと組・台帳と板と bead の事実の 3 つの口を読む・組の開き閉じと絞りは頁の一生の間だけ持つ・板が読めない間は一覧の頭に理由の 1 行）。
     pub fn view() -> AnyView {
         let rows = crate::net::read(ledger::PATH);
         let pipe = crate::net::read(pipeline::PATH);
         let beads = crate::net::read(FACTS_PATH);
         let folds = RwSignal::new(Folds::default());
+        let kind = RwSignal::new(Kind::All);
+        let query = RwSignal::new(String::new());
         let list = move || {
             let got =
                 rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
@@ -320,24 +415,61 @@ mod dom {
                 Body::Empty(line) => {
                     view! { <div class="empty"><span>{line}</span></div> }.into_any()
                 }
-                Body::Filled(groups) => groups
-                    .into_iter()
-                    .map(|g| group_view(g, folds))
-                    .collect_view()
-                    .into_any(),
+                Body::Filled(groups) => {
+                    let (k, q) = (kind.get(), query.get());
+                    let active = filtering(k, &q);
+                    let shown = filtered(groups, k, &q);
+                    if shown.is_empty() {
+                        view! { <div class="ll-gnone">{NO_MATCH}</div> }.into_any()
+                    } else {
+                        shown
+                            .into_iter()
+                            .map(|g| group_view(g, folds, active))
+                            .collect_view()
+                            .into_any()
+                    }
+                }
             }
         };
         // 板の札が読めない間は、段の数と行の段の字が出ない理由を一覧の頭に出す（札が無いとは見せない）。
         let unread = move || pipe.with(board_unread).map(unmeasured);
-        view! { <div class="ll-body">{unread}{list}</div> }.into_any()
+        view! { {head_line(kind, query)}<div class="ll-body">{unread}{list}</div> }.into_any()
     }
 
-    /// 1 組（頭の 1 行と、開いていれば行）。
-    fn group_view(g: Lgroup, folds: RwSignal<Folds>) -> AnyView {
+    /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。
+    fn head_line(kind: RwSignal<Kind>, query: RwSignal<String>) -> AnyView {
+        let metrics = crate::net::read(ledger::METRICS_PATH);
+        let kpis = move || {
+            let (text, svg) = metrics.with(kpi);
+            let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
+            view! { <span class="ll-kchip num">{text}</span>{fig} }
+        };
+        let seg = KINDS
+            .into_iter()
+            .map(|(k, text, _)| {
+                let class = move || if kind.get() == k { "on" } else { "" };
+                view! { <button type="button" class=class on:click=move |_| kind.set(k)>{text}</button> }
+            })
+            .collect_view();
+        view! {
+            <div class="ll-head">
+                <div class="ll-l1">{kpis}</div>
+                <div class="ll-l2">
+                    <div class="ll-seg" role="group">{seg}</div>
+                    <input class="ll-q" type="search" autocomplete="off" placeholder=SEARCH_HINT
+                        prop:value=move || query.get() on:input=move |ev| query.set(event_target_value(&ev))/>
+                </div>
+            </div>
+        }
+        .into_any()
+    }
+
+    /// 1 組（頭の 1 行と、開いていれば行・絞りが効いている間は開く）。
+    fn group_view(g: Lgroup, folds: RwSignal<Folds>, active: bool) -> AnyView {
         let initial = g.open_default();
         let is_open = {
             let key = g.key.clone();
-            move || folds.with(|f| f.open(&key, initial))
+            move || active || folds.with(|f| f.open(&key, initial))
         };
         let toggle = {
             let (key, is_open) = (g.key.clone(), is_open.clone());
