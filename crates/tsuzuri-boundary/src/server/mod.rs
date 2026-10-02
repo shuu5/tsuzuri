@@ -26,6 +26,8 @@
 //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
 //! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
 //! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
+//! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
+//! （`Cases::watch`・行 c-cases-watch）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
 //! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
@@ -225,7 +227,8 @@ impl Server {
         let acct_marks = Arc::new(Mutex::new(Vec::new()));
         let held_marks = Arc::clone(&acct_marks);
         let notify_dir = config.notify.clone();
-        let hub = Server::start_hub(&sources, seat_marks, held_marks, notify_dir);
+        let cases = Cases::new(config.state_dir.as_deref());
+        let hub = Server::start_hub(&sources, &cases, seat_marks, held_marks, notify_dir);
         if let Some(form) = &form {
             form.notify(&hub);
         }
@@ -235,7 +238,7 @@ impl Server {
             listener,
             shared: Arc::new(Shared {
                 sources,
-                cases: Cases::new(config.state_dir.as_deref()),
+                cases,
                 files,
                 hub,
                 writer,
@@ -301,9 +304,11 @@ impl Server {
         })
     }
 
-    /// 台帳の周期の読みと板の印（走行・設計・席・account・知らせ）の見張りを始める。
+    /// 台帳の周期の読みと板の印（走行・設計・席・account・知らせ）の見張りと、局面の出力の中身の見張り
+    /// （`Cases::watch`・行 c-cases-watch）を始める。
     fn start_hub(
         sources: &Sources,
+        cases: &Cases,
         seat_marks: Vec<PathBuf>,
         held_marks: Arc<Mutex<Vec<PathBuf>>>,
         notify_dir: Option<PathBuf>,
@@ -312,7 +317,7 @@ impl Server {
         let kinded = |kind: ChangeKind, files: Vec<PathBuf>| -> Vec<(ChangeKind, PathBuf)> {
             files.into_iter().map(|f| (kind, f)).collect()
         };
-        Hub::start(sources.ledger.clone(), move || {
+        let hub = Hub::start(sources.ledger.clone(), move || {
             let mut marks = kinded(ChangeKind::Runs, runs.marks());
             marks.extend(kinded(ChangeKind::Design, design.marks()));
             marks.extend(kinded(ChangeKind::Seat, seat_marks.clone()));
@@ -321,7 +326,9 @@ impl Server {
             let notices = notify_dir.as_deref().map(notify::files).and_then(Result::ok);
             marks.extend(kinded(ChangeKind::Notice, notices.unwrap_or_default()));
             marks
-        })
+        });
+        cases.watch(&hub, events::POLL);
+        hub
     }
 
     /// 裁定の書きの持ち物（席の target と state dir の両方が在るときだけ配達の先を持つ）。

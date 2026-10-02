@@ -141,6 +141,8 @@ pub enum ChangeKind {
     Seat,
     /// 器の event log。
     Runs,
+    /// 器の局面の出力（fleet/lifecycle.json と lifecycle.stale・面が読む中身が動いた時だけ・行 c-cases-watch）。
+    Cases,
     /// 設計文書の dir の下の file。
     Design,
     /// 台帳（と台帳の形の行）。
@@ -153,9 +155,10 @@ pub enum ChangeKind {
 
 impl ChangeKind {
     /// 全部の種類（この順）。
-    pub const ALL: [ChangeKind; 6] = [
+    pub const ALL: [ChangeKind; 7] = [
         ChangeKind::Seat,
         ChangeKind::Runs,
+        ChangeKind::Cases,
         ChangeKind::Design,
         ChangeKind::Ledger,
         ChangeKind::Account,

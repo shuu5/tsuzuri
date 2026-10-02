@@ -1,7 +1,7 @@
 //! 行 g-ledger-trim の歯（接頭辞 bvtrim_・判断の記録 ADR-27 決定 (8)・要件 FR13）: 台帳の block は見出しの横の判定の
 //! 1 語と台帳 open の一覧だけを描き、前の指標の段（上段の 4 数・主な指標・burndown・memo の段）を持たない。一覧の見出しの
 //! 14 日の図は burndown の svg で burndown の card を付け、未反映の段は帯の抜けの検査の窓の下へ移す。読み直しの表は
-//! bead の事実の口を台帳の合図で、器の局面の出力の口を台帳と event log の合図で読み直す。
+//! bead の事実の口を台帳の合図で、器の局面の出力の口を局面の出力の種類の合図で読み直す（後の行 c-cases-watch で替えた）。
 //! DOM は host で撃てないので、src の字と xtask の surface-build で組めることで見る。
 #![cfg(test)]
 
@@ -286,16 +286,16 @@ fn unref_case_states() {
     }
 }
 
-/// (5) 読み直しの表は 15 行で、bead の事実の口は台帳だけ、器の局面の出力の口は台帳と event log の合図で読み直す
-/// （表に無い口の全部の種類でない）。席と設計と account と知らせの合図ではどちらも読み直さない。
+/// (5) 読み直しの表は 15 行で、bead の事実の口は台帳だけ、器の局面の出力の口は局面の出力の種類の合図だけで読み直す
+/// （表に無い口の全部の種類でない・行 c-cases-watch）。席と設計と account と知らせの合図ではどちらも読み直さない。
 #[test]
 fn bvtrim_reload_beads_and_cases() {
     assert_eq!(RELOAD_KINDS.len(), 15);
     assert_eq!(FACTS_PATH, "/api/beads");
     assert_eq!(case::PATH, "/api/cases");
     assert_eq!(path_kinds(FACTS_PATH), [ChangeKind::Ledger]);
-    assert_eq!(path_kinds(case::PATH), [ChangeKind::Ledger, ChangeKind::Runs]);
-    assert!(reloads(case::PATH, &[ChangeKind::Runs]));
+    assert_eq!(path_kinds(case::PATH), [ChangeKind::Cases]);
+    assert!(reloads(case::PATH, &[ChangeKind::Cases]));
     assert!(!reloads(FACTS_PATH, &[ChangeKind::Runs]));
     for kind in [
         ChangeKind::Seat,

@@ -29,9 +29,10 @@ pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT]
 /// 台帳の形の行（台帳の種類）、グラフと近傍は設計の索引と台帳と event log、account は account board の印と
 /// 自分の repo の台帳を読む。project の名の口は起動の repo から決まるので種類を持たない（合図では読み直さない）。
 /// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。
-/// bead の事実の口は台帳の一覧の口と同じ台帳の読みから組むので台帳だけ。器の局面の出力の口は state dir の
-/// fleet/lifecycle.json を読み、その file はどの種類の印の見張りにも無いので、同じ出力を読む pipeline の口と同じく
-/// 台帳と event log の合図で読み直す（行 g-ledger-trim）。
+/// bead の事実の口は台帳の一覧の口と同じ台帳の読みから組むので台帳だけ（行 g-ledger-trim）。器の局面の出力
+/// （state dir の fleet/lifecycle.json と lifecycle.stale）は局面の出力の種類の合図が持つ（中身が動いた時だけ・
+/// 行 c-cases-watch）: 局面の出力の口はその種類だけ、それを台帳と一緒に読む指標と未反映の口は台帳とその種類、
+/// pipeline の口は台帳と event log とその種類で読み直す。
 pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
     (seat::PATH, &[ChangeKind::Seat]),
     (
@@ -39,12 +40,18 @@ pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
         &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Seat],
     ),
     (ledger::PATH, &[ChangeKind::Ledger]),
-    (ledger::METRICS_PATH, &[ChangeKind::Ledger]),
-    (ledger::UNREF_PATH, &[ChangeKind::Ledger]),
+    (
+        ledger::METRICS_PATH,
+        &[ChangeKind::Ledger, ChangeKind::Cases],
+    ),
+    (ledger::UNREF_PATH, &[ChangeKind::Ledger, ChangeKind::Cases]),
     (FACTS_PATH, &[ChangeKind::Ledger]),
-    (case::PATH, &[ChangeKind::Ledger, ChangeKind::Runs]),
+    (case::PATH, &[ChangeKind::Cases]),
     (ask::PATH, &[ChangeKind::Ledger]),
-    (pipeline::PATH, &[ChangeKind::Ledger, ChangeKind::Runs]),
+    (
+        pipeline::PATH,
+        &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Cases],
+    ),
     (
         map::PATH,
         &[ChangeKind::Ledger, ChangeKind::Runs, ChangeKind::Design],

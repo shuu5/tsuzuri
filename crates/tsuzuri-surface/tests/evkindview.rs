@@ -12,7 +12,7 @@ use tsuzuri_surface::ledgerlist::FACTS_PATH;
 use tsuzuri_surface::project::{ask, ledger, map, next, nodearound, pipeline, seat};
 use tsuzuri_surface::view::{changed_kinds, path_kinds, reloads};
 
-use ChangeKind::{Account, Design, Ledger, Runs, Seat};
+use ChangeKind::{Account, Cases, Design, Ledger, Runs, Seat};
 
 fn read(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
@@ -34,7 +34,7 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
 }
 
 /// 面が読む口の 15 の path（query を付けて読む口は読む形の query を付けた字・グラフの眺めの口は行 m-map-graph で外した・
-/// bead の事実と器の局面の出力の口は行 g-ledger-trim で足した）。
+/// bead の事実と器の局面の出力の口は行 g-ledger-trim で足した・局面の出力を読む 4 つの口の種類は行 c-cases-watch で替えた）。
 fn paths() -> [String; 15] {
     [
         seat::PATH.to_string(),
@@ -61,13 +61,13 @@ fn evkind_path_kinds_table() {
         &[Seat],
         &[Ledger, Runs, Seat],
         &[Ledger],
+        &[Ledger, Cases],
+        &[Ledger, Cases],
+        &[Ledger],
+        &[Cases],
         &[Ledger],
         &[Ledger],
-        &[Ledger],
-        &[Ledger, Runs],
-        &[Ledger],
-        &[Ledger],
-        &[Ledger, Runs],
+        &[Ledger, Runs, Cases],
         &[Ledger, Runs, Design],
         &[Ledger, Runs, Design],
         &[Runs],
@@ -101,7 +101,10 @@ fn evkind_seat_reloads_two() {
         .map(String::as_str)
         .collect();
     let runs_path = format!("{}?bead=fx-a.1", runs::PATH);
-    assert_eq!(miss, [seat::PATH, runs_path.as_str(), project::PATH]);
+    assert_eq!(
+        miss,
+        [seat::PATH, case::PATH, runs_path.as_str(), project::PATH]
+    );
 }
 
 #[test]
