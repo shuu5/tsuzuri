@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.24 版（2026-10-02）: 判断の記録 ADR-27 決定 (7)（札と一覧の行は hover でなく click で吹き出しを開く）に合わせ、要件 NFR1 の shall と verify と FR14 の verify の受入の測りを、hover の card に加えて click の吹き出しの口も数える字に広げた（行 g-accept の測りの式・規則の行 R-23 の value も同じ字）。
 # 第 0.23 版（2026-10-02）: 要件 FR10 の shall の頭の文に、板の札の段と理由と列に入った時刻を器の局面の出力の部品から読むこと（ノート surface-wave26a の行 c-case-columns と c-ledger-lc で着地した形・読めない間は台帳の依存と event log の段の割り）を足した。規則の行 R-37 の note の列に入った時刻の出所も同じ形に直した。
 # 第 0.22 版（2026-10-01）: 判断の記録 ADR-27（持ち主の裁定 t3-hub.52.160.1〔裁定 id = t3-hub.52.160.1:20261001T1423Z-1〕）を写した（project board の tab と地図と口座の履歴と台帳の「詳しく」をなくし、上の固定の帯と押すと開く窓と札の click の吹き出しと、Blocked と Queued を分けた 5 列の pipeline と epic ごとの一覧を窓の幅の 3 段で並べ、短い題を台帳の metadata に置く形にした。scope と要件 FR5・FR6・FR10・FR11・FR12・FR13・FR14・FR16・NFR1 と受入 AC9 を改め、受入 AC18 を足した。値は規則の行 R-35〜R-37 と R-20 と R-23）。
 # 第 0.21 版（2026-10-01）: 判断の記録 ADR-26 の撤退の条件 (1)（持ち主の裁定 t3-hub.52.156〔裁定 id = t3-hub.52.156:20260930T1120Z-1〕の案 A の字）で器の doctor の出力の持ち回しの上限を 30 秒に戻したことを、要件 FR12 と NFR4 の note に写した（行 m-doctor-30・要件の字と値と adrs は変えない）。
@@ -11,7 +12,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.23
+  version: v0.24
   status: draft
   generated: 2026-09-28
   approval:
@@ -250,7 +251,7 @@ requirements:
     shall: 英語の技術語は英語のまま出し「?」で注釈する。「?」は 1 行目 40 字と箇条書き 4 項（1 項 20 字）と「詳しく」、hover の card は 4 行（1 行 36 字）と「詳しく」、経験者向けの 1 行は 60 字。hover の card を出すのは頁を持つ節点の札（project board の pipeline の札と台帳 open の一覧の行を除く）・記号だけの要素の 2 種だけで、pointer の右に出し、要素を出て 150 ミリ秒の猶予の間に card の方向へ動いたときだけ残す。project board の pipeline の札と一覧の行は、hover の card でなく click で開く吹き出し（要件 FR5）を出す。
     plain: 説明は短く、記号と図で表します。説明の長さと hover の出し方には決まりがあり、機械で数えます。
     basis: [P-2]
-    verify: {method: test, how: 全画面の「?」と card を描いて字数と行数を数え、hover の置き場を browser の runner で撃つ, ac: [AC9]}
+    verify: {method: test, how: 全画面の「?」と card を描いて字数と行数を数え、hover の置き場と、pipeline の札と一覧の行の click の吹き出しの口を browser の runner で撃つ, ac: [AC9]}
     goals: [GOAL1]
     figures: []
     rules: [R-19, R-20]
@@ -334,10 +335,10 @@ nonfunctional:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 面は 1280・960・700・390 の 4 つの幅で、はみ出し 0・重なり 0・横 scroll 0・hover の欠け 0・見出しは語彙表の語だけ・最初の画面の散文は 300 字以下・page error 0・文の予算の違反 0・全節点に id・切り替えは URL に残る・持ち主の逐語の混入 0・外部の配信元からの library 0 を満たし、測定の script が数える。横 scroll 0 は頁の横 scroll で数え、縦積みの段で pipeline の面の中だけを横に scroll させる分は数えない。
+    shall: 面は 1280・960・700・390 の 4 つの幅で、はみ出し 0・重なり 0・横 scroll 0・hover の card と click の吹き出しの欠け 0・見出しは語彙表の語だけ・最初の画面の散文は 300 字以下・page error 0・文の予算の違反 0・全節点に id・切り替えは URL に残る・持ち主の逐語の混入 0・外部の配信元からの library 0 を満たし、測定の script が数える。横 scroll 0 は頁の横 scroll で数え、縦積みの段で pipeline の面の中だけを横に scroll させる分は数えない。
     plain: 画面の崩れや長すぎる説明は、機械が数えて 0 であることを確かめます。
     basis: [P-2, N-6]
-    verify: {method: test, how: browser の runner で全画面 × 4 幅 × 2 mode を描いて 12 条を数える, ac: [AC9]}
+    verify: {method: test, how: browser の runner で全画面（project board の 1 枚の画面と帯の印が開く窓と節点の頁と account board の 3 つの tab）× 4 幅 × 2 mode を描いて 12 条を数える, ac: [AC9]}
     goals: [GOAL1]
     figures: []
     rules: [R-23]

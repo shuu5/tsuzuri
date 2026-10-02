@@ -1,0 +1,984 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index da41f99d04404ca11a575913bddaad1c8995ef69..50a42f7f9193ee4e9843c93f9e89d12ed9a75543 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -2,7 +2,9 @@
+ //! 1 つの画面を 1 つの幅と mode で測った事実の JSON の字を読み、12 条ごとの違反の数と report の行を返す。
+ //! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式と runner は後の行 j-runner）。
+ //! 判定の字数と閾値と origin の比べと語彙表の引きはこの側で持つ（歯が browser 無しで撃てる）。
+-//! 行 j-runner で runner（全画面 × 2 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
++//! 行 j-runner で runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
++//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
++//! （行 g-accept）。
+ //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
+ 
+ use std::fmt::Write;
+@@ -295,17 +297,25 @@ pub fn line(width: u32, mode: &str, url: &str, counts: &[usize; 12]) -> String {
+     words.join(" ")
+ }
+ 
+-/// 測る幅（px）。
+-pub const WIDTHS: [u32; 2] = [1280, 390];
++/// 測る幅（px・規則の行 R-23 の 4 幅・行 g-accept）。
++pub const WIDTHS: [u32; 4] = [1280, 960, 700, 390];
+ 
+ /// 測る mode（URL の mode= の値）。
+ pub const MODES: [&str; 2] = ["beginner", "expert"];
+ 
+ /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
+-/// project board の 1 枚の画面と account board の 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は
+-/// 行 m-map-page で、質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+-pub const SCREENS: [&str; 4] = [
++/// project board の 1 枚の画面と、その上に帯の印が開く 7 つの窓（query の win・行 g-accept）と account board の
++/// 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は行 m-map-page で、質問の頁と抜けの検査の頁は
++/// 行 g-one-screen-a で消した）。
++pub const SCREENS: [&str; 11] = [
+     "?",
++    "?win=ask&",
++    "?win=stalled&",
++    "?win=notices&",
++    "?win=seat&",
++    "?win=gaps&",
++    "?win=legend&",
++    "?win=dest&",
+     "?board=account&tab=home&",
+     "?board=account&tab=session&",
+     "?board=account&tab=projects&",
+@@ -420,7 +430,7 @@ fn open(page: &mut impl Page, url: &str) -> Result<(), String> {
+     Ok(())
+ }
+ 
+-/// 全画面を 2 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 4 の画面と、
++/// 全画面を 4 幅 × 2 mode で測り、report の字と違反の和を返す。組ごとに SCREENS の 11 の画面と、
+ /// その組の home の最初の節点の頁を測る。report は head の行・画面ごとの line・違反 計 の行。
+ pub fn sweep(page: &mut impl Page, board: &str, vocab: &str) -> Result<(String, usize), String> {
+     let mut report = head();
+diff --git a/crates/tsuzuri-boundary/src/stage/measure.js b/crates/tsuzuri-boundary/src/stage/measure.js
+index 1bb351d26bd74db4f152d7debd7db585233252a6..62313c0298ce6aad09d2178551bbce07bb0a6b44 100644
+--- a/crates/tsuzuri-boundary/src/stage/measure.js
++++ b/crates/tsuzuri-boundary/src/stage/measure.js
+@@ -5,27 +5,46 @@
+ (() => {
+   const vw = document.documentElement.clientWidth;
+   const vh = window.innerHeight;
++  // 見える箱: 中だけを scroll させる祖先（overflow が visible でない箱）の外へ出た部分を切った矩形
++  // （縦積みの段の pipeline の面とスマホの段の tile・行 g-accept）。
++  const box = (e) => {
++    const r = e.getBoundingClientRect();
++    let [left, top, right, bottom] = [r.left, r.top, r.right, r.bottom];
++    for (let n = e.parentElement; n; n = n.parentElement) {
++      const s = getComputedStyle(n);
++      if (s.overflowX === "visible" && s.overflowY === "visible") continue;
++      const q = n.getBoundingClientRect();
++      [left, top, right, bottom] = [Math.max(left, q.left), Math.max(top, q.top), Math.min(right, q.right), Math.min(bottom, q.bottom)];
++    }
++    return { left, top, right, bottom };
++  };
+   const shown = (e) => {
+     const r = e.getBoundingClientRect();
+     const s = getComputedStyle(e);
+-    return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
++    const b = box(e);
++    return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden" && b.right > b.left && b.bottom > b.top;
+   };
+-  const seen = Array.from(document.body.querySelectorAll("*")).filter(shown);
++  // 開いた窓（aria-modal の箱）が在れば、測るのは窓の中だけ（窓の外は幕の下で押せない・行 g-accept）。
++  const modal = Array.from(document.querySelectorAll("[aria-modal=true]")).find(shown);
++  const root = modal || document.body;
++  const seen = Array.from(root.querySelectorAll("*")).filter(shown);
+   const name = (e) => {
+     const cls = typeof e.className === "string" ? e.className.trim().split(/\s+/).filter(Boolean) : [];
+     return [e.tagName.toLowerCase() + (e.id ? "#" + e.id : "")].concat(cls).join(".");
+   };
+   const words = (t) => (t || "").replace(/\s+/g, " ").trim();
++  // project board の札と一覧の行の口（click で吹き出しを開く・中の字は札と行の値で散文でない・行 g-accept）。
++  const mouth = "[data-pop-card], [data-pop-row]";
+   const overflow = seen
+     .filter((e) => getComputedStyle(e).overflowX === "visible" && e.scrollWidth - e.clientWidth > 1)
+     .map(name);
+   const parts = seen.filter((e) => e.matches("a, button, .chip, h1, h2, h3, h4, h5, h6, .hd, [data-t]"));
+   const overlap = [];
+   parts.forEach((a, i) => {
+-    const p = a.getBoundingClientRect();
++    const p = box(a);
+     parts.slice(i + 1).forEach((b) => {
+       if (a.contains(b) || b.contains(a)) return;
+-      const q = b.getBoundingClientRect();
++      const q = box(b);
+       const w = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+       const h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+       if (w > 1 && h > 1) overlap.push(name(a) + " × " + name(b));
+@@ -37,18 +56,23 @@
+     }
+     return false;
+   };
++  // project board の札と一覧の行は hover の card でなく click の吹き出しを出す（要件 FR14・行 g-accept）:
++  // 口は自分に click の受け手が無ければ欠けで、口の中の節点の link は hover を問わない。
++  const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);
+   const nocard = seen
+     .filter((e) => (e.matches("a[href]") && e.getAttribute("href").includes("page=node")) || e.matches(".node"))
++    .filter((e) => !e.closest(mouth))
+     .filter((e) => !entered(e))
++    .concat(nopop)
+     .map(name);
+   const headings = seen.filter((e) => e.matches("h1, h2, h3, h4, h5, h6, .hd, nav a")).map((e) => {
+     const copy = e.cloneNode(true);
+     copy.querySelectorAll(".q").forEach((q) => q.remove());
+     return { key: e.getAttribute("data-v") || "", text: words(copy.textContent) };
+   });
+-  const skip = ".legend, .lgline, [role=tab], .tabs, .seg, button, .num, .nid, .tid, .mono, [data-t], .q, script, style";
++  const skip = ".legend, .lgline, [role=tab], .tabs, .seg, button, .num, .nid, .tid, .kid, .mono, [data-t], .q, script, style, " + mouth;
+   const first = [];
+-  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
++  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+   for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+     const p = t.parentElement;
+     const piece = words(t.nodeValue);
+@@ -56,7 +80,7 @@
+     if (p.getBoundingClientRect().top < vh) first.push(piece);
+   }
+   const titles = seen.filter((e) => e.matches("[data-t]")).map((e) => words(e.textContent));
+-  const nodes = seen.filter((e) => e.matches(".nid, .tid")).map((e) => ({
++  const nodes = seen.filter((e) => e.matches(".nid, .tid, .kid")).map((e) => ({
+     id: words(e.textContent),
+     text: words((e.closest("a") || e.parentElement || e).textContent),
+   }));
+diff --git a/crates/tsuzuri-boundary/tests/bvacc.rs b/crates/tsuzuri-boundary/tests/bvacc.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7ab15b483d55fc6a527b8c75abf0522c708ea3dc
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvacc.rs
+@@ -0,0 +1,157 @@
++//! 行 g-accept の歯（接頭辞 bvacc_）: 受入 12 条の測りを新しい面（頁は home と節点・窓は query の win・札と一覧の行は
++//! click の吹き出し）に合わせる。幅は規則の行 R-23 の 4 幅、画面は home と 7 つの窓と account board の 3 つの tab、
++//! 測りの式は吹き出しの口と札の id と開いた窓と面の中の scroll を読み、fixture は新しい面の URL と口の名を持つ。
++//! 測りの式は browser でしか撃てないので字で見る（本物の面での撃ちは席が runner で撃つ）。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_boundary::audit::{SCREENS, WIDTHS, facts};
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn read(rel: &str) -> String {
++    let path = root().join(rel);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// 字の中の `pub const <name>: &str = "…";` の値。
++fn constant(text: &str, name: &str) -> String {
++    let head = format!("pub const {name}: &str = \"");
++    let at = text.find(&head).unwrap_or_else(|| panic!("{name} が無い")) + head.len();
++    text[at..].split('"').next().unwrap_or_default().to_string()
++}
++
++/// (2) 測る幅は規則の行 R-23 の 4 幅（1280・960・700・390 の順）で、行の値の字も同じ並び。
++#[test]
++fn bvacc_widths_are_rule_r23() {
++    assert_eq!(WIDTHS, [1280, 960, 700, 390]);
++    let rules = read("design-intent/rules.yaml");
++    let row = rules
++        .lines()
++        .find(|l| l.contains("id: R-23,"))
++        .expect("規則の行 R-23 が在る");
++    let words: Vec<String> = WIDTHS.iter().map(u32::to_string).collect();
++    let want = format!("{} の幅で", words.join("・"));
++    assert!(row.contains(&want), "R-23 に {want} が無い: {row}");
++}
++
++/// (3) 画面は home・帯の印が開く 7 つの窓（窓の宣言の順・query の名は topbar の WIN_PARAM）・account board の
++/// 3 つの tab の順で、home は最初（節点の頁に開く最初の節点を採る画面）。
++#[test]
++fn bvacc_screens_open_windows() {
++    let topbar = read("crates/tsuzuri-surface/src/topbar.rs");
++    assert_eq!(constant(&topbar, "WIN_PARAM"), "win");
++    let body = &topbar[topbar
++        .find("pub fn key(self) -> &'static str {")
++        .expect("Win::key")..];
++    let body = &body[..body.find("\n    }\n").expect("key の閉じ")];
++    let keys: Vec<&str> = body
++        .lines()
++        .filter_map(|l| l.split_once("=> \"").map(|(_, r)| r))
++        .filter_map(|r| r.split('"').next())
++        .collect();
++    assert_eq!(
++        keys,
++        [
++            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest"
++        ]
++    );
++    let mut want = vec!["?".to_string()];
++    want.extend(keys.iter().map(|k| format!("?win={k}&")));
++    want.extend(
++        ["home", "session", "projects"]
++            .iter()
++            .map(|t| format!("?board=account&tab={t}&")),
++    );
++    assert_eq!(SCREENS.to_vec(), want);
++    assert!(SCREENS.iter().all(|s| !s.contains("page=")), "{SCREENS:?}");
++}
++
++/// (4) 測りの式は、札と一覧の行の吹き出しの口（面の pop の 2 つの属性）に自分の click の受け手が無ければ欠けに数え、
++/// 口の中の節点の link には hover を問わず、口の中の字を散文に数えず、札の id（class kid）を節点の id に読み、
++/// 開いた窓（aria-modal）の中だけを測り、面の中を scroll させる箱の外へ出た部分を切った矩形で重なりを見る。
++#[test]
++fn bvacc_probe_reads_pops_and_windows() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    let pop = read("crates/tsuzuri-surface/src/widgets/pop.rs");
++    let mouth = format!(
++        "const mouth = \"[{}], [{}]\";",
++        constant(&pop, "CARD_ATTR"),
++        constant(&pop, "ROW_ATTR")
++    );
++    assert_eq!(mouth, "const mouth = \"[data-pop-card], [data-pop-row]\";");
++    for want in [
++        mouth.as_str(),
++        "const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);",
++        "    .filter((e) => !e.closest(mouth))\n    .filter((e) => !entered(e))\n    .concat(nopop)\n",
++        ".mono, [data-t], .q, script, style, \" + mouth;",
++        "const nodes = seen.filter((e) => e.matches(\".nid, .tid, .kid\"))",
++        "const modal = Array.from(document.querySelectorAll(\"[aria-modal=true]\")).find(shown);",
++        "  const root = modal || document.body;",
++        "const seen = Array.from(root.querySelectorAll(\"*\")).filter(shown);",
++        "document.createTreeWalker(root, NodeFilter.SHOW_TEXT);",
++        "if (s.overflowX === \"visible\" && s.overflowY === \"visible\") continue;",
++        "    const b = box(e);",
++        "    const p = box(a);",
++        "      const q = box(b);",
++    ] {
++        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++    }
++    assert!(
++        probe.contains(", .kid, .mono,"),
++        "散文に数えない id の class"
++    );
++    let modal = read("crates/tsuzuri-surface/src/widgets/modal.rs");
++    assert!(
++        modal.contains("role=\"dialog\" aria-modal=\"true\""),
++        "窓の箱の印"
++    );
++    let pipeline = read("crates/tsuzuri-surface/src/project/pipeline.rs");
++    assert!(
++        pipeline.contains("<span class=\"kid\">"),
++        "札の id の class"
++    );
++}
++
++/// (5) 受入の fixture は新しい面の home の URL（頁の query を持たず mode だけ）と 5 列の板の字を持ち、04 の欠けは
++/// 札の口の名（button.kcard）で、題は 36 字。
++#[test]
++fn bvacc_fixtures_new_surface() {
++    let dir = root().join("tests/fixtures/surface/accept-12");
++    let mut names: Vec<String> = fs::read_dir(&dir)
++        .expect("accept-12 の dir")
++        .map(|e| {
++            e.expect("dir の項")
++                .file_name()
++                .to_string_lossy()
++                .into_owned()
++        })
++        .filter(|n| n.ends_with(".json") && n != "vocab.json")
++        .collect();
++    names.sort();
++    assert_eq!(names.len(), 13, "{names:?}");
++    for name in &names {
++        let text = fs::read_to_string(dir.join(name)).expect("fixture を読む");
++        assert!(!text.contains("page="), "{name} が頁の query を持つ");
++        assert!(!text.contains("4 列"), "{name} が 4 列の字を持つ");
++        let got = facts(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
++        assert_eq!(got.url, "http://127.0.0.1:4801/?mode=beginner", "{name}");
++        assert!(got.first.iter().any(|p| p.contains("5 列")), "{name}");
++        assert_eq!(got.titles[0].chars().count(), 36, "{name}");
++        for s in &got.switches {
++            assert!(s.before.ends_with("/?mode=beginner"), "{name}: {s:?}");
++        }
++        let want: &[&str] = if name == "04-hover.json" {
++            &["button.kcard"]
++        } else {
++            &[]
++        };
++        assert_eq!(got.nocard, want, "{name}");
++    }
++    let pipeline = read("crates/tsuzuri-surface/src/project/pipeline.rs");
++    assert!(pipeline.contains("\"kcard\""), "札の class kcard");
++}
+diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
+index abec37bfda8432fdafc9b8068b09b49ec2a68a74..82efca7518079b84afe3a3d24da24ec2987b7e67 100644
+--- a/crates/tsuzuri-boundary/tests/jcount.rs
++++ b/crates/tsuzuri-boundary/tests/jcount.rs
+@@ -174,7 +174,7 @@ fn jcount_rule_readings() {
+ 
+ /// 読み先の条と節点の id の条の読み。
+ fn library_and_nodeid_readings(vocab: String, base: Facts) {
+-    assert_eq!(base.url, "http://127.0.0.1:4801/?page=pipeline&mode=beginner");
++    assert_eq!(base.url, "http://127.0.0.1:4801/?mode=beginner");
+     for (source, n) in [
+         ("//cdn.example.com/lib.js", 1),
+         ("https://127.0.0.1:4801/lib.js", 1),
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/jrun.rs
+index a5131f200df4cd19974057dc3af36de7a3e35359..23e885e772da8efee1fb0ca422d3906f3af8afce 100644
+--- a/crates/tsuzuri-boundary/tests/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/jrun.rs
+@@ -145,7 +145,7 @@ fn arms(text: &str, head: &str) -> Vec<String> {
+ 
+ #[test]
+ fn jrun_screens_cover_surface() {
+-    assert_eq!(WIDTHS, [1280, 390]);
++    assert_eq!(WIDTHS, [1280, 960, 700, 390]);
+     assert_eq!(MODES, ["beginner", "expert"]);
+     let src = root().join("crates/tsuzuri-surface/src");
+     let mut want = vec!["?".to_string()];
+@@ -157,6 +157,11 @@ fn jrun_screens_cover_surface() {
+         .collect();
+     // home と節点の頁のほかの頁の file は無い（質問の頁と抜けの検査の頁は行 g-one-screen-a で消した）。
+     assert!(pages.is_empty(), "頁の file {pages:?}");
++    // 帯の印が開く窓は home の頁の query の win で開く（行 g-accept）。
++    let topbar = fs::read_to_string(src.join("topbar.rs")).expect("topbar.rs を読む");
++    let wins = arms(&topbar, "pub fn key(self) -> &'static str {");
++    assert_eq!(wins.len(), 7, "{wins:?}");
++    want.extend(wins.iter().map(|w| format!("?win={w}&")));
+     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
+     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
+     assert_eq!(tabs, ["home", "session", "projects"]);
+@@ -164,15 +169,15 @@ fn jrun_screens_cover_surface() {
+     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
+     got.sort();
+     got.dedup();
+-    assert_eq!(got.len(), 4, "SCREENS に重なりが無い");
++    assert_eq!(got.len(), 11, "SCREENS に重なりが無い");
+     want.sort();
+     assert_eq!(got, want);
+ }
+ 
+ #[test]
+ fn jrun_case_order_and_readings() {
+-    let url = format!("{BOARD}?page=gaps&mode=beginner");
+-    let pressed = format!("{BOARD}?page=gaps&mode=expert");
++    let url = format!("{BOARD}?win=gaps&mode=beginner");
++    let pressed = format!("{BOARD}?win=gaps&mode=expert");
+     let spots = r#""switch_at": [{"label": "expert", "x": 10, "y": 20}, {"label": "hold", "x": 30, "y": 40}]"#;
+     let text = fixture("clean.json").replace(r#""switch_at": []"#, spots);
+     assert!(text.contains("hold"), "switch_at を仕込む");
+@@ -312,7 +317,7 @@ fn jrun_sweep_all_cases() {
+     let mut page = Fake::new(measured.clone(), |_, _| vec![LOAD.to_string()]);
+     let (report, total) = sweep(&mut page, BOARD, &vocab).expect("sweep");
+     let mut urls = Vec::new();
+-    for width in [1280, 390] {
++    for width in [1280, 960, 700, 390] {
+         for mode in ["beginner", "expert"] {
+             let mut group: Vec<String> = SCREENS
+                 .iter()
+@@ -324,7 +329,7 @@ fn jrun_sweep_all_cases() {
+             urls.extend(group.into_iter().map(|u| (width, mode, u)));
+         }
+     }
+-    assert_eq!(urls.len(), 20);
++    assert_eq!(urls.len(), 96);
+     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
+     assert_eq!(page.navigated(), navigated);
+     let mut want = vec![head()];
+@@ -344,8 +349,8 @@ fn jrun_sweep_all_cases() {
+         events
+     });
+     let (report, total) = sweep(&mut broken, BOARD, &vocab).expect("page error の在る sweep");
+-    assert_eq!(total, 4);
+-    assert!(report.ends_with("違反 計 4\n"), "{report}");
++    assert_eq!(total, 8);
++    assert!(report.ends_with("違反 計 8\n"), "{report}");
+     let node_line = line(
+         390,
+         "expert",
+@@ -365,7 +370,11 @@ fn sweep_without_nodes(vocab: String) {
+     let mut empty = Fake::new(move |_| bare.clone(), |_, _| vec![LOAD.to_string()]);
+     let err = sweep(&mut empty, BOARD, &vocab).expect_err("節点の無い home");
+     assert!(err.contains("節点が無い"), "{err}");
+-    assert_eq!(empty.navigated().len(), 4, "節点の頁を開かずに止まる");
++    assert_eq!(
++        empty.navigated().len(),
++        SCREENS.len(),
++        "節点の頁を開かずに止まる"
++    );
+ }
+ 
+ #[test]
+diff --git a/tests/fixtures/surface/accept-12/01-overflow.json b/tests/fixtures/surface/accept-12/01-overflow.json
+index b1170d0b0c57c49e0b90934519a1c4f6b015d909..c5c788e08862d62099c6fdc5d91f40ab63ff4e90 100644
+--- a/tests/fixtures/surface/accept-12/01-overflow.json
++++ b/tests/fixtures/surface/accept-12/01-overflow.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [
+   "td.c-wait（中身 1 px 越え）"
+@@ -17,13 +17,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -34,11 +34,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/02-overlap.json b/tests/fixtures/surface/accept-12/02-overlap.json
+index 07e73429c1002a5aad491ba73edd697b5e54e67f..aedbfc1e35853a15603f067c8c0e300df9c5deb7 100644
+--- a/tests/fixtures/surface/accept-12/02-overlap.json
++++ b/tests/fixtures/surface/accept-12/02-overlap.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [
+@@ -17,13 +17,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -34,11 +34,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/03-hscroll.json b/tests/fixtures/surface/accept-12/03-hscroll.json
+index 5f00ed634fadb9edc87c026d5cd7b777694585dd..0cbc04b5b2c7b821bce638a06c9f12d6432a3d29 100644
+--- a/tests/fixtures/surface/accept-12/03-hscroll.json
++++ b/tests/fixtures/surface/accept-12/03-hscroll.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 1,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -32,11 +32,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/04-hover.json b/tests/fixtures/surface/accept-12/04-hover.json
+index 7df758ba805e75e402cb005eeb20de55e45194fc..9fdfd74506dadb89bafd52cf7dd8ae3eb663e766 100644
+--- a/tests/fixtures/surface/accept-12/04-hover.json
++++ b/tests/fixtures/surface/accept-12/04-hover.json
+@@ -1,10 +1,10 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+  "nocard": [
+-  "a[href=?page=node&id=t3-hub.52]"
++  "button.kcard"
+  ],
+  "headings": [
+   {
+@@ -17,13 +17,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -34,11 +34,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/05-heading.json b/tests/fixtures/surface/accept-12/05-heading.json
+index b088381fc442d7b73a19d02708cc0732b8aace2c..35d29bebb258b783af421278c3be0ff012b3f349 100644
+--- a/tests/fixtures/surface/accept-12/05-heading.json
++++ b/tests/fixtures/surface/accept-12/05-heading.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -19,13 +19,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -36,11 +36,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/06-prose.json b/tests/fixtures/surface/accept-12/06-prose.json
+index c0ea1e0348452a7a69d8bfd1f329914670be0eec..c3aa84d3cbfab438b5c810ce19a97167932bc6f4 100644
+--- a/tests/fixtures/surface/accept-12/06-prose.json
++++ b/tests/fixtures/surface/accept-12/06-prose.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,14 +15,14 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。",
+   "この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。この面は走行の今の段を四つの列に並べて見せる。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -33,11 +33,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/07-error.json b/tests/fixtures/surface/accept-12/07-error.json
+index 12785edb1c3ad7ddeccdb99a3d9948fa34fe20cb..708b8aa238d4ccb49b27b20ddc693a55658dd135 100644
+--- a/tests/fixtures/surface/accept-12/07-error.json
++++ b/tests/fixtures/surface/accept-12/07-error.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,7 +15,7 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+@@ -23,7 +23,7 @@
+   "Uncaught TypeError: Cannot read properties of undefined"
+  ],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -34,11 +34,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/08-budget.json b/tests/fixtures/surface/accept-12/08-budget.json
+index be0662632d0297c03e003dbaa68530d375c59cdb..62347d60e7cd0f185aab9405e939eec3f0727e49 100644
+--- a/tests/fixtures/surface/accept-12/08-budget.json
++++ b/tests/fixtures/surface/accept-12/08-budget.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,14 +15,14 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports",
+-  "面の受入 12 条を 1280 と 390 の幅で数える report 表"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports",
++  "面の受入 12 条を 4 幅 × 2 mode で数える report 表"
+  ],
+  "nodes": [
+   {
+@@ -33,11 +33,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/09-nodeid.json b/tests/fixtures/surface/accept-12/09-nodeid.json
+index 191c4a2f76c7a536e76e9149601b3f0c2f0c5acf..49a66375ee3dca993856690bbe23516375b62f3a 100644
+--- a/tests/fixtures/surface/accept-12/09-nodeid.json
++++ b/tests/fixtures/surface/accept-12/09-nodeid.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -36,11 +36,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/10-url.json b/tests/fixtures/surface/accept-12/10-url.json
+index 6622503b54241d18aabc8dd3998eb10708c61c3f..85d975af1023cce8d1dc310262d037081b22bf3f 100644
+--- a/tests/fixtures/surface/accept-12/10-url.json
++++ b/tests/fixtures/surface/accept-12/10-url.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -32,16 +32,16 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   },
+   {
+    "label": "open",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=beginner"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=beginner"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/11-verbatim.json b/tests/fixtures/surface/accept-12/11-verbatim.json
+index 305f5807289e245d8115ded14ccaa0aeffca611b..0ed3621c0f8ed07513267341c130c8dd1bdf7e6c 100644
+--- a/tests/fixtures/surface/accept-12/11-verbatim.json
++++ b/tests/fixtures/surface/accept-12/11-verbatim.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -32,11 +32,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。\n裁定 id = user 2026-09-26T07:51Z",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。\n裁定 id = user 2026-09-26T07:51Z",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/12-library.json b/tests/fixtures/surface/accept-12/12-library.json
+index 7c26f51fd7ef85c465aad2b75e7a7c31e936f595..9261ceb44cf162ab615d5705cef0467cf088423e 100644
+--- a/tests/fixtures/surface/accept-12/12-library.json
++++ b/tests/fixtures/surface/accept-12/12-library.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -32,11 +32,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/clean.json b/tests/fixtures/surface/accept-12/clean.json
+index c8d58b0dc82e5f7ec8c4a3e3e56c67a3e6383451..cde5a90671b5066ed44edc2b18cc93591b0d50bb 100644
+--- a/tests/fixtures/surface/accept-12/clean.json
++++ b/tests/fixtures/surface/accept-12/clean.json
+@@ -1,5 +1,5 @@
+ {
+- "url": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
++ "url": "http://127.0.0.1:4801/?mode=beginner",
+  "hscroll": 0,
+  "overflow": [],
+  "overlap": [],
+@@ -15,13 +15,13 @@
+   }
+  ],
+  "first": [
+-  "走行の今の段を 4 列で並べる。",
++  "走行の今の段を 5 列で並べる。",
+   "帯・札（印）の読み方は凡例を見る。",
+   "P-1 は 12:30Z に決めた。"
+  ],
+  "errors": [],
+  "titles": [
+-  "面の受入 12 条を 1280 と 390 の幅で数える reports"
++  "面の受入 12 条を 4 幅 × 2 mode で数える reports"
+  ],
+  "nodes": [
+   {
+@@ -32,11 +32,11 @@
+  "switches": [
+   {
+    "label": "expert",
+-   "before": "http://127.0.0.1:4801/?page=pipeline&mode=beginner",
+-   "after": "http://127.0.0.1:4801/?page=pipeline&mode=expert"
++   "before": "http://127.0.0.1:4801/?mode=beginner",
++   "after": "http://127.0.0.1:4801/?mode=expert"
+   }
+  ],
+- "text": "pipeline dashboard\nすき間\n走行の今の段を 4 列で並べる。\n次の一手は user が決める（12:30Z）。",
++ "text": "pipeline dashboard\nすき間\n走行の今の段を 5 列で並べる。\n次の一手は user が決める（12:30Z）。",
+  "libraries": [
+   "/tsuzuri.js",
+   "./style.css",
+diff --git a/tests/fixtures/surface/accept-12/vocab.json b/tests/fixtures/surface/accept-12/vocab.json
+index 70b959b0e2adf269ceb8bf5aa3e03cb9cad14927..873cb3f0e9c5a6c3eb8c015536cba128d4d3ecfd 100644
+--- a/tests/fixtures/surface/accept-12/vocab.json
++++ b/tests/fixtures/surface/accept-12/vocab.json
+@@ -3,7 +3,7 @@
+  "english": {
+   "pipeline": {
+    "label": "pipeline dashboard",
+-   "note": "run の今の段を 4 列で並べた表示"
++   "note": "run の今の段を 5 列で並べた表示"
+   }
+  },
+  "rephrase": {

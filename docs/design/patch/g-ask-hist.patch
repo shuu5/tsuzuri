@@ -1,0 +1,580 @@
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+index 1d786937847c8eb060b4511b0a3de40a9036c3c4..1404473fdad0a7fe4b23da9050e1e75b2012c1a2 100644
+--- a/crates/tsuzuri-surface/src/askwin.rs
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -1,7 +1,8 @@
+ //! 質問の窓（行 g-ask-win・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
+ //! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
+ //! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
+-//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
++//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示と、
++//! 末にこれまでの決定（project の askpage の inner・行 g-ask-hist）。
+ //! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
+ //! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
+ 
+@@ -114,14 +115,15 @@ mod dom {
+         DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left, own_ids,
+         phase, title,
+     };
+-    use crate::project::{Body, ask, batch, body_view, policy};
++    use crate::project::{Body, ask, askpage, batch, body_view, policy};
+     use crate::topbar::Win;
+     use crate::vocab::label;
+     use crate::widgets::modal::{Frame, WinCtx};
+     use crate::wins::frame_of;
+ 
+-    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文）。
+-    fn folds(cards: Memo<Vec<ask::Card>>) -> AnyView {
++    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文・末にこれまでの決定・
++    /// `focus` は窓を開いた link の問いの id で、答え済みならこれまでの決定の段を開いてその行を寄せる）。
++    fn folds(cards: Memo<Vec<ask::Card>>, focus: Option<String>) -> AnyView {
+         let [others_key, batch_key, policy_key] = FOLDS;
+         let others = move || {
+             cards.with(|v| {
+@@ -146,6 +148,7 @@ mod dom {
+                 <details class="fold"><summary>{move || format!("{} {}", label(others_key), count())}</summary><ul class="items">{rows}</ul></details>
+                 <details class="fold"><summary>{label(batch_key)}</summary>{batch::inner()}</details>
+                 <details class="fold"><summary>{label(policy_key)}</summary>{policy::inner()}</details>
++                {askpage::inner(focus)}
+             </div>
+         }
+         .into_any()
+@@ -290,11 +293,12 @@ mod dom {
+     pub fn frame(ctx: WinCtx<Win>) -> Frame {
+         let w = walk();
+         close_when_done(ctx, w.state);
++        let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
+         let (walk, cards) = (steps(ctx, w), w.cards);
+         Frame {
+             width: frame_of(Win::Ask).0,
+             title: head(w),
+-            body: view! { {walk}{folds(cards)} }.into_any(),
++            body: view! { {walk}{folds(cards, focus)} }.into_any(),
+         }
+     }
+ }
+diff --git a/crates/tsuzuri-surface/src/project/askpage.rs b/crates/tsuzuri-surface/src/project/askpage.rs
+index 4cdf686707936b93db3821e700e4a729974082a8..84eecbd0abdce9c1d5baa32d94fba0c0860ba794 100644
+--- a/crates/tsuzuri-surface/src/project/askpage.rs
++++ b/crates/tsuzuri-surface/src/project/askpage.rs
+@@ -5,9 +5,12 @@
+ //! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
+ //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ //! 行の題と答えた決定の link には、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-b）。
++//! 段は質問の窓の下の畳みの末に置く（行 g-ask-hist・見本の qModal の「これまでの決定 N ›」）: 行は台帳の更新の時刻の
++//! 新しい順で、時刻・短い題（bead の事実の口）・答えた決定・問いの id を出す（`decisions`・`inner`）。頁には置かない。
+ 
+ use std::collections::BTreeMap;
+ 
++use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::{EdgeType, GraphDoc};
+ use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+@@ -15,7 +18,9 @@ use tsuzuri_contract::wire;
+ 
+ use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
+ use crate::frame::Block;
++use crate::ledgerlist::{facts, short_of};
+ use crate::view::{Fetched, JST, hhmm, id_order};
++use crate::vocab::label;
+ use crate::widgets::hover::Card;
+ use crate::widgets::nodecard::card_of;
+ 
+@@ -192,35 +197,98 @@ pub fn ruling_text(id: &str) -> String {
+     }
+ }
+ 
++/// 質問の窓の畳みの 1 行（行 g-ask-hist・見本の qModal の「これまでの決定」の行）: 台帳の更新の時刻（閉じた時刻）・
++/// 短い題（bead の事実の metadata の short・無ければ台帳の題）・問いの項と答えた決定の id。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Decision {
++    pub at: EpochSecs,
++    pub short: String,
++    pub entry: HistEntry,
++}
++
++/// 質問の窓の畳みの中身（行 g-ask-hist）: これまでの決定（`rulings`）を台帳の更新の時刻の新しい順（同じなら id の
++/// 自然な順の逆）に並べ、短い題と答えた決定の id（`hist_rows`）を添える。短い題は metadata の short を持つ事実だけから
++/// 引く（題から機械で作った字は問いの題の頭の語だけになるので使わず台帳の題）。台帳が読めない時と 0 件の時は `body` と
++/// 同じ理由と 1 行。bead の事実の口とグラフの口が読めなければ、題は台帳の題で決定の id はどれも None。
++pub fn decisions(ledger: &Fetched, graph: &Fetched, beads: &Fetched) -> Body<Vec<Decision>> {
++    let rows = match rows(ledger) {
++        Ok(rows) => rows,
++        Err(reason) => return Body::Unmeasured(reason),
++    };
++    let mut done = rulings(&rows);
++    if done.is_empty() {
++        return Body::Empty(EMPTY);
++    }
++    done.sort_by(|a, b| {
++        b.updated_at
++            .cmp(&a.updated_at)
++            .then_with(|| id_order(b.id.as_str(), a.id.as_str()))
++    });
++    let facts: BTreeMap<_, _> = facts(beads)
++        .into_iter()
++        .filter(|(_, f)| f.short_set)
++        .collect();
++    let items: Vec<Item> = done.iter().map(item).collect();
++    Body::Filled(
++        hist_rows(&items, graph)
++            .into_iter()
++            .zip(&done)
++            .map(|(entry, row)| Decision {
++                at: row.updated_at,
++                short: short_of(row, &facts),
++                entry,
++            })
++            .collect(),
++    )
++}
++
++/// 畳みの見出しの字（見本の「これまでの決定 N ›」・測れていなければ数を出さない）。
++pub fn fold_title(count: Reading<usize>) -> String {
++    match count {
++        Reading::Known(n) => format!("{} {n} ›", label(BLOCK.heading)),
++        Reading::Unknown => format!("{} ›", label(BLOCK.heading)),
++    }
++}
++
++/// block の中身（質問の窓の下の畳みと同じ DOM・頁には置かない・URL の `?id=` の問いを名指す）。
+ #[cfg(target_arch = "wasm32")]
+ pub fn view() -> leptos::prelude::AnyView {
++    let search = leptos::prelude::window()
++        .location()
++        .search()
++        .unwrap_or_default();
++    inner(super::ask::focus(&search))
++}
++
++/// 質問の窓の下の畳みの段（行 g-ask-hist・見本の qModal の folds の末の「これまでの決定 N ›」）: 台帳の一覧の口と
++/// グラフの口と bead の事実の口を読み、新しい順の決定を時刻・短い題・答えた決定・問いの id の行に出す。
++/// 名指された問い（`target`）が答え済みの項に在れば、段を開いてその行に背景を置き窓の中へ寄せる（便 g-ask-focus）。
++#[cfg(target_arch = "wasm32")]
++pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {
+     use leptos::prelude::*;
+ 
+     use crate::frame::Mode;
+-    use crate::widgets::help::{HelpCtx, h2};
++    use crate::widgets::help::HelpCtx;
+ 
+     let graph = crate::net::read(super::map::PATH);
+-    let search = window().location().search().unwrap_or_default();
++    let beads = crate::net::read(crate::ledgerlist::FACTS_PATH);
++    let fetched = crate::net::read(super::ledger::PATH);
+     let mode = {
+         let ctx = use_context::<HelpCtx>();
+-        let url = Mode::from_query(&search);
++        let url = Mode::from_query(&window().location().search().unwrap_or_default());
+         move || ctx.map_or(url, |c| c.mode.get())
+     };
+-    let target = super::ask::focus(&search);
+     let lit = StoredValue::new(false);
+-    let fetched = crate::net::read(super::ledger::PATH);
+-    let chip = move || match fetched.with(count) {
+-        Reading::Known(n) => view! { <span class="chip num">{n}</span> }.into_any(),
+-        Reading::Unknown => ().into_any(),
+-    };
++    let title = move || fold_title(fetched.with(count));
+     let initial = {
+         let target = target.clone();
+         move || fetched.with(|f| opens(f, target.as_deref()))
+     };
+-    let list = move || match fetched.with(body) {
++    let list = move || match fetched.with(|l| graph.with(|g| beads.with(|b| decisions(l, g, b)))) {
+         Body::Unmeasured(reason) => super::unmeasured(reason),
+         Body::Empty(line) => super::body_view(Body::Empty(line)),
+-        Body::Filled(items) => {
++        Body::Filled(ds) => {
++            let items: Vec<Item> = ds.iter().map(|d| d.entry.item.clone()).collect();
+             if let Some(id) = target.as_deref()
+                 && !lit.get_value()
+                 && let Some(i) = focus_index(&items, id)
+@@ -234,55 +302,57 @@ pub fn view() -> leptos::prelude::AnyView {
+                     }
+                 });
+             }
+-            let rows = graph.with(|g| {
+-                let entries = hist_rows(&items, g);
+-                let cards = hist_cards(&entries, g);
+-                entries
+-                    .into_iter()
+-                    .map(|entry| hist_li(entry, &cards, mode))
+-                    .collect_view()
+-            });
++            let entries: Vec<HistEntry> = ds.iter().map(|d| d.entry.clone()).collect();
++            let cards = graph.with(|g| hist_cards(&entries, g));
++            let now = crate::net::now();
++            let rows = ds
++                .into_iter()
++                .map(|d| hist_li(d, &cards, now, mode))
++                .collect_view();
+             view! { <ul class="items">{rows}</ul> }.into_any()
+         }
+     };
+     let (open, toggle) = super::fold("ask:hist".to_string(), initial);
+     view! {
+-        <details class=BLOCK.class id=BLOCK.id prop:open=open on:toggle=toggle>
+-            <summary>{h2(BLOCK.heading)}{chip}</summary>
++        <details class="fold" id=BLOCK.id prop:open=open on:toggle=toggle>
++            <summary>{title}</summary>
+             {list}
+         </details>
+     }
+     .into_any()
+ }
+ 
+-/// 段の 1 行（印・題は問いの頁への link・右の小さい字は答えた決定の頁への link、無ければ状態の字）。
++/// 畳みの 1 行（時刻・短い題・答えた決定の頁への link か状態の字・問いの頁への link の id・見本の `.mini li`）。
+ #[cfg(target_arch = "wasm32")]
+ fn hist_li(
+-    entry: HistEntry,
++    d: Decision,
+     cards: &BTreeMap<String, Card>,
++    now: EpochSecs,
+     mode: impl Fn() -> crate::frame::Mode + Copy + Send + Sync + 'static,
+ ) -> leptos::prelude::AnyView {
+     use leptos::prelude::*;
+ 
+     use crate::frame::node_href;
++    use crate::view::clock_short;
+     use crate::widgets::hover::attach_some;
+ 
++    let Decision { at, short, entry } = d;
+     let HistEntry { item, ruling } = entry;
+-    let style = if item.alert { super::ALERT_STYLE } else { "" };
+     let id = item.id.clone();
+     let card = cards.get(&id).cloned();
+     let href = move || node_href(&id, mode());
+     view! {
+         <li>
+-            <span class=item.shape.clone() style=style aria-hidden="true"></span>
+-            <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
+-            <span class="aside">{match ruling {
++            <time>{clock_short(at, now)}</time>
++            <span class="ttl" title=item.title.clone()>{short}</span>
++            <b class="aside">{match ruling {
+                 Some(rid) => view! {
+                     <a href={let rid = rid.clone(); move || node_href(&rid, mode())} use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>
+                 }
+                 .into_any(),
+                 None => item.aside.clone().into_any(),
+-            }}</span>
++            }}</b>
++            <a class="lk" href=href use:attach_some=card><code>{item.id.clone()}</code></a>
+         </li>
+     }
+     .into_any()
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index ec2af7d7598a9e645cb9fde9770853eac3cd4352..2d9b8386fa9613fa9529c1f6512125b48f55a869 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -433,6 +433,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
+ .qbtns { display: flex; align-items: center; gap: var(--s2); margin-top: 10px; }
+ .qbtns .later { padding: 6px 14px; border: 1px solid var(--line-2); border-radius: var(--r2); background: var(--panel); cursor: pointer; }
+ .folds { margin-top: var(--s3); padding-top: 6px; border-top: 1px solid var(--line); }
++.folds .items > li > time { flex: none; color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+ @media (max-width: 600px) {
+   .qdots { gap: 0; }
+   .qdots .qd { width: 40px; height: 40px; padding: 13px; border: 0; background-clip: content-box; background-color: #fdba74; }
+diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/bvaskw.rs
+index 1dd45dd798ad59e4e92c34db9b71700b5ffc525a..426e5925e43e2bff84b9306ba6b01f99433424ac 100644
+--- a/crates/tsuzuri-surface/tests/bvaskw.rs
++++ b/crates/tsuzuri-surface/tests/bvaskw.rs
+@@ -156,7 +156,7 @@ fn bvaskw_batch_policy_below() {
+             "{file}"
+         );
+     }
+-    assert!(src.contains("body: view! { {walk}{folds(cards)} }.into_any(),"));
++    assert!(src.contains("body: view! { {walk}{folds(cards, focus)} }.into_any(),"));
+ }
+ 
+ /// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。
+diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/bvqhist.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..29f7a49525524321cdac6cc2b5966b1d8be878b5
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvqhist.rs
+@@ -0,0 +1,217 @@
++//! 行 g-ask-hist の歯（接頭辞 bvqhist_・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal の folds の末）: 質問の窓の下の
++//! 畳みの末に「これまでの決定 N ›」を置き、答え済みの問いを台帳の更新の時刻の新しい順に、時刻・短い題・答えた決定・
++//! 問いの id の行で出す。中身は今のこれまでの決定の段の関数（rulings・hist_rows・ruling_text）を使い、2 つ目を書かない。
++//! DOM は host で撃てないので、src の字と xtask の surface-build で組めることで見る。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::graph::{EdgeType, GraphDoc, GraphEdge};
++use tsuzuri_contract::ledger::{
++    BeadFact, BeadFacts, BeadId, LedgerList, LedgerRow, POLICY_SCOPE_LABEL, QUESTION_LABEL,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::project::askpage::{self, Decision, decisions, fold_title};
++use tsuzuri_surface::project::{Body, LEDGER_UNREAD, NOT_READ};
++use tsuzuri_surface::view::Fetched;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn id(s: &str) -> BeadId {
++    BeadId::new(s).expect("bead の id")
++}
++
++fn row(name: &str, kind: &str, status: &str, at: u64, labels: &[&str]) -> LedgerRow {
++    LedgerRow {
++        id: id(name),
++        kind: kind.to_string(),
++        title: format!("題 {name}"),
++        status: status.to_string(),
++        updated_at: at,
++        parent: None,
++        labels: labels.iter().map(|l| (*l).to_string()).collect(),
++    }
++}
++
++fn ledger(rows: Vec<LedgerRow>) -> Fetched {
++    Fetched::Body(
++        wire::encode(&LedgerList {
++            rows: Reading::Known(rows),
++        })
++        .expect("電文"),
++    )
++}
++
++/// 答え済みの問い 3（q.2 と q.3 は同じ時刻）・open の問い・方針の問い・閉じた task。
++fn mixed() -> Fetched {
++    let policy = format!("{POLICY_SCOPE_LABEL}all");
++    ledger(vec![
++        row("q.2", "task", "closed", 300, &[QUESTION_LABEL]),
++        row("q.10", "task", "closed", 500, &[QUESTION_LABEL]),
++        row("q.3", "task", "closed", 300, &[QUESTION_LABEL]),
++        row("q.4", "task", "open", 900, &[QUESTION_LABEL]),
++        row("q.5", "task", "closed", 950, &[QUESTION_LABEL, &policy]),
++        row("t.1", "task", "closed", 990, &[]),
++    ])
++}
++
++fn fact(name: &str, short: &str) -> BeadFact {
++    BeadFact {
++        id: id(name),
++        created_at: None,
++        short: short.to_string(),
++        short_set: true,
++        summary: String::new(),
++        blocks: Vec::new(),
++    }
++}
++
++/// q.10 と q.2 だけが metadata の短い題を持ち、q.3 は題から機械で作った字の bead の事実。
++fn beads() -> Fetched {
++    Fetched::Body(
++        wire::encode(&BeadFacts {
++            rows: Reading::Known(vec![
++                fact("q.10", "十の短い題"),
++                fact("q.2", "二の短い題"),
++                BeadFact {
++                    short_set: false,
++                    ..fact("q.3", "問い")
++                },
++            ]),
++        })
++        .expect("電文"),
++    )
++}
++
++/// graph-doc.json に q.10 へ答えた決定の辺を 1 本足した電文。
++fn graph() -> Fetched {
++    let mut doc: GraphDoc =
++        wire::decode(&read("../../tests/fixtures/surface/graph-doc.json")).expect("fixture の電文");
++    doc.edges.push(GraphEdge {
++        from: "q.10:20261001T1300Z-1".to_string(),
++        to: "q.10".to_string(),
++        edge_type: EdgeType::Answers,
++    });
++    Fetched::Body(wire::encode(&doc).expect("電文"))
++}
++
++fn filled(b: Body<Vec<Decision>>) -> Vec<Decision> {
++    match b {
++        Body::Filled(ds) => ds,
++        other => panic!("これまでの決定が中身にならない: {other:?}"),
++    }
++}
++
++/// 新しい順（台帳の更新の時刻の大きい順・同じなら id の自然な順の逆）で、open の問い・方針の問い・task は出さず、
++/// 時刻は台帳の updated_at、短い題は bead の事実の metadata の short（機械で作った字と無い時は台帳の題）、答えた決定は
++/// answers の辺の from。
++#[test]
++fn bvqhist_newest_first() {
++    let ds = filled(decisions(&mixed(), &graph(), &beads()));
++    let got: Vec<(&str, u64, &str, Option<&str>)> = ds
++        .iter()
++        .map(|d| {
++            (
++                d.entry.item.id.as_str(),
++                d.at,
++                d.short.as_str(),
++                d.entry.ruling.as_deref(),
++            )
++        })
++        .collect();
++    assert_eq!(
++        got,
++        [
++            ("q.10", 500, "十の短い題", Some("q.10:20261001T1300Z-1")),
++            ("q.3", 300, "題 q.3", None),
++            ("q.2", 300, "二の短い題", None),
++        ]
++    );
++    assert_eq!(ds[0].entry.item.title, "題 q.10");
++    assert_eq!(askpage::count(&mixed()), Reading::Known(3));
++}
++
++/// 台帳が読めない時と 0 件の時は block の中身と同じ理由と 1 行、事実とグラフの口が読めなければ台帳の題で決定は無い。
++/// 畳みの見出しは 語 これまでの決定 と件数と ›（測れていなければ件数を出さない）。
++#[test]
++fn bvqhist_reads_and_title() {
++    let none = Fetched::NotRead;
++    assert_eq!(
++        decisions(&none, &graph(), &beads()),
++        Body::Unmeasured(NOT_READ)
++    );
++    assert_eq!(
++        decisions(&Fetched::Failed, &graph(), &beads()),
++        Body::Unmeasured(LEDGER_UNREAD)
++    );
++    let open_only = ledger(vec![row("q.4", "task", "open", 900, &[QUESTION_LABEL])]);
++    assert_eq!(
++        decisions(&open_only, &graph(), &beads()),
++        Body::Empty(askpage::EMPTY)
++    );
++    let ds = filled(decisions(&mixed(), &none, &none));
++    assert!(ds.iter().all(|d| d.entry.ruling.is_none()));
++    assert_eq!(ds[0].short, "題 q.10");
++    assert_eq!(fold_title(Reading::Known(3)), "これまでの決定 3 ›");
++    assert_eq!(fold_title(Reading::Unknown), "これまでの決定 ›");
++}
++
++/// 質問の窓は下の畳みの末（全体への指示の段の後）に askpage の inner を窓を開いた link の問いの id で描き、
++/// inner は 3 つの口を読み、行を時刻・短い題・答えた決定・問いの id の順に出し、block の view も inner を描く。
++#[test]
++fn bvqhist_window_fold_wiring_text() {
++    let win = read("src/askwin.rs");
++    let folds = &win[win.find("fn folds(").expect("folds")..];
++    let p = folds.find("{policy::inner()}").expect("全体への指示の段");
++    let h = folds
++        .find("{askpage::inner(focus)}")
++        .expect("これまでの決定の段");
++    let end = folds.find("</div>").expect("下の段の終わり");
++    assert!(p < h && h < end, "これまでの決定の段が下の段の末に無い");
++    assert!(
++        win.contains("let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());")
++    );
++    let page = read("src/project/askpage.rs");
++    assert!(page.contains("pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {"));
++    let view = &page[page.find("pub fn view(").expect("view")..];
++    for needle in [
++        "inner(super::ask::focus(&search))",
++        "crate::net::read(crate::ledgerlist::FACTS_PATH)",
++        "decisions(l, g, b)",
++        "fold_title(fetched.with(count))",
++        "<details class=\"fold\" id=BLOCK.id prop:open=open on:toggle=toggle>",
++    ] {
++        assert!(
++            view.contains(needle),
++            "askpage.rs の view と inner に {needle} が無い"
++        );
++    }
++    let li = &view[view.find("fn hist_li(").expect("行の DOM")..];
++    let order = [
++        "<time>{clock_short(at, now)}</time>",
++        "<span class=\"ttl\" title=item.title.clone()>{short}</span>",
++        "<b class=\"aside\">",
++        "{ruling_text(&rid)}",
++        "<a class=\"lk\" href=href use:attach_some=card><code>{item.id.clone()}</code></a>",
++    ]
++    .map(|n| {
++        li.find(n)
++            .unwrap_or_else(|| panic!("行の DOM に {n} が無い"))
++    });
++    assert!(order.is_sorted(), "行の並びが違う: {order:?}");
++}
++
++/// 行の時刻の規則は stylesheet の質問の窓の塊に在り、縮まず小さい字。
++#[test]
++fn bvqhist_time_rule() {
++    let css = read("style.css");
++    let block = css.find("/* 質問の窓（行 g-ask-win").expect("質問の窓の塊");
++    let next = block + 1 + css[block + 1..].find("/* ").expect("次の塊");
++    let rule = ".folds .items > li > time { flex: none; color: var(--ink-3); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }";
++    let at = css.find(rule).expect("時刻の規則");
++    assert!(block < at && at < next, "時刻の規則が質問の窓の塊の外");
++}
+diff --git a/crates/tsuzuri-surface/tests/cadq.rs b/crates/tsuzuri-surface/tests/cadq.rs
+index 354ed154b1fb3caf976041d81a9cb65a80e9d9c1..0c86dea8de93502f38c657b79e0b7740ca1f06f0 100644
+--- a/crates/tsuzuri-surface/tests/cadq.rs
++++ b/crates/tsuzuri-surface/tests/cadq.rs
+@@ -1,4 +1,4 @@
+-//! 行 g-card-adopt-b の歯: 問いの頁の問いの card の題・これまでの決定の段の行の題と決定の link に付ける節点の card の値と、
++//! 行 g-card-adopt-b の歯: 問いの頁の問いの card の題・これまでの決定の段の行の問いの id と決定の link に付ける節点の card の値と、
+ //! DOM の付け方の字・外した要素の出した card を閉じる後始末の決まりと呼ぶ所の字。
+ //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+ #![cfg(test)]
+@@ -217,16 +217,16 @@ fn cadq_dom_wiring() {
+     let view = after(&page, "pub fn view(");
+     for want in [
+         "hist_cards(&entries, g)",
+-        "hist_li(entry, &cards, mode)",
++        "hist_li(d, &cards, now, mode)",
+         "use crate::widgets::hover::attach_some;",
+         "use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>",
+     ] {
+         assert!(view.contains(want), "askpage.rs の view に {want} が無い");
+     }
+-    let tag = open_tag(view, "<a class=\"ttl\"");
++    let tag = open_tag(view, "<a class=\"lk\"");
+     assert!(
+         tag.ends_with("href=href use:attach_some=card>"),
+-        "段の行の題の a の tag が違う: {tag}"
++        "段の行の問いの id の a の tag が違う: {tag}"
+     );
+ 
+     for (name, text) in [("ask.rs", &ask_text), ("askpage.rs", &page)] {
+diff --git a/crates/tsuzuri-surface/tests/hruling.rs b/crates/tsuzuri-surface/tests/hruling.rs
+index 5e4e6cb02825fbd08e45dc27bd72b9092a76cd40..898ff6dd8426cf68e5c982743132c2b20b42f1b8 100644
+--- a/crates/tsuzuri-surface/tests/hruling.rs
++++ b/crates/tsuzuri-surface/tests/hruling.rs
+@@ -149,22 +149,23 @@ fn hruling_link_text_forms() {
+     }
+ }
+ 
+-/// view の字: 行は hist_rows・グラフの口・題の link を持ち item_view を使わず、決定の link は aside の span の中の a。
++/// view の字: 行は decisions（中で hist_rows）・グラフの口・問いの id の link を持ち item_view を使わず、決定の link は aside の b の中の a（行 g-ask-hist）。
+ #[test]
+ fn hruling_src_row_links() {
+     let text = read("src/project/askpage.rs");
+     let start = text.find("pub fn view(").expect("view の宣言");
+     let v = &text[start..];
+-    assert!(v.contains("hist_rows("));
++    assert!(v.contains("decisions(l, g, b)"));
++    assert!(text.contains("hist_rows(&items, graph)"));
+     assert!(v.contains("map::PATH"));
+-    assert!(v.contains("<a class=\"ttl\""));
++    assert!(v.contains("<a class=\"lk\""));
+     assert!(!v.contains("item_view("));
+-    let s = v.find("<span class=\"aside\"").expect("aside の span");
++    let s = v.find("<b class=\"aside\"").expect("aside の b");
+     let r = v.find("ruling_text(").expect("ruling_text の呼び");
+-    assert!(s < r, "ruling_text の呼びが aside の span より前");
+-    assert!(!v[s..r].contains("</span>"), "link が aside の span の外");
++    assert!(s < r, "ruling_text の呼びが aside の b より前");
++    assert!(!v[s..r].contains("</b>"), "link が aside の b の外");
+     let a = v[..r].rfind("<a ").expect("決定の link の a");
+-    assert!(a > s, "決定の link の a が aside の span の外");
++    assert!(a > s, "決定の link の a が aside の b の外");
+     assert!(v[a..r].contains("node_href("), "href が node_href でない");
+     assert!(!v[a..r].contains("</a>"), "字が a の外");
+ }

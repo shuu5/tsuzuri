@@ -1,0 +1,152 @@
+diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs
+index 711ae4a3d25a9f1b8be3639d370359eded6a48c1..48a109164819ce4fe7dbf7e07176b8cf002ed6b0 100644
+--- a/crates/tsuzuri-surface/src/board.rs
++++ b/crates/tsuzuri-surface/src/board.rs
+@@ -4,7 +4,8 @@
+ //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
+ //! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
+ //! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
+-//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。
++//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。URL の win で窓を開いた後は history を置き替えて URL から win と
++//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ・行 g-win-url）。
+ //! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
+ //! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+ //! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
+@@ -60,6 +61,21 @@ fn keep_mode_in_url(mode: Mode) {
+     }
+ }
+ 
++/// URL の win で窓を開いた後に、頁の URL から窓を開く値を外す（history の置き替え・行 g-win-url）。
++fn settle_url(page: PageId, query: &str) {
++    let loc = window().location();
++    let url = format!(
++        "{}{}{}",
++        loc.pathname().unwrap_or_default(),
++        topbar::settled_query(query, page),
++        loc.hash().unwrap_or_default()
++    );
++    if let Ok(history) = window().history() {
++        let _ =
++            history.replace_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&url));
++    }
++}
++
+ /// 頁の link の押し（mouse の button と修飾の鍵）。
+ fn press(e: &ev::MouseEvent) -> Press {
+     Press {
+@@ -126,6 +142,7 @@ fn App() -> impl IntoView {
+     if let Some((w, id)) = win_of_href(&query) {
+         focus.0.set(id);
+         win.open(w, false);
++        settle_url(page, &query);
+     }
+     // home の頁では、窓を開く link の普通の押しは頁を読み直さずにその窓を開く（窓の中の link は前の窓に戻る口を持つ）。
+     if page == PageId::Home {
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+index 534d2fbfce58c879aa17aac1c72014f7a4dc2df5..7bb5810f8efc8aa3c64a51cb0a19c22de3ef20c1 100644
+--- a/crates/tsuzuri-surface/src/topbar.rs
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -6,6 +6,7 @@
+ //! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
+ //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
+ //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
++//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない・行 g-win-url）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{NextMove, Reading};
+@@ -84,6 +85,23 @@ pub fn win_of_href(href: &str) -> Option<(Win, Option<String>)> {
+     Some((win, crate::project::ask::focus(&search)))
+ }
+ 
++/// 窓を開いた後の頁の URL の query（行 g-win-url）: 窓を開く値 win を外し、home の頁なら問いの id（質問の窓の名指し）も
++/// 外す（節点の頁の id は頁の中心なので残す・ほかの値と順はそのまま・残りが無ければ空の字）。
++pub fn settled_query(search: &str, page: PageId) -> String {
++    let drop =
++        |k: &str| k == WIN_PARAM || (page == PageId::Home && k == crate::project::ask::FOCUS_KEY);
++    let kept: Vec<&str> = search
++        .trim_start_matches('?')
++        .split('&')
++        .filter(|kv| !kv.is_empty() && !drop(kv.split_once('=').map_or(kv, |(k, _)| k)))
++        .collect();
++    if kept.is_empty() {
++        String::new()
++    } else {
++        format!("?{}", kept.join("&"))
++    }
++}
++
+ /// 帯の id（見本の `#bar`・頁に 1 つ）。
+ pub const BAR: &str = "bar";
+ 
+diff --git a/crates/tsuzuri-surface/tests/bvwurl.rs b/crates/tsuzuri-surface/tests/bvwurl.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..016dc12ebc507f367449943f6b93facc4801e8e3
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/bvwurl.rs
+@@ -0,0 +1,66 @@
++//! 行 g-win-url の歯（接頭辞 bvwurl_・判断の記録 ADR-27 決定 (4)）: 窓を開く URL（query の win と問いの id）で頁を開いて
++//! 窓を開いた後、頁の URL を history の置き替えで win と問いの id の無い URL にする（読み直しても同じ窓は開かない）。
++//! 窓の開け閉めは history を足さない（戻るは前の頁へ）。DOM は host で撃てないので、src の字で見る。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::frame::{Mode, PageId};
++use tsuzuri_surface::topbar::{Win, settled_query, win_href, win_of_href};
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// home の頁では win と問いの id を外し、ほかの値と順は残し、残りが無ければ空の字。外した後の URL は窓を開かない。
++/// 節点の頁の id は頁の中心なので残す。
++#[test]
++fn bvwurl_drops_win_and_id() {
++    let opened = format!("{}&id=t3-hub.5", win_href(Win::Ask, Mode::Expert));
++    assert_eq!(opened, "?mode=expert&win=ask&id=t3-hub.5");
++    let settled = settled_query(&opened, PageId::Home);
++    assert_eq!(settled, "?mode=expert");
++    assert_eq!(win_of_href(&settled), None);
++    assert_eq!(settled_query("?win=gaps", PageId::Home), "");
++    assert_eq!(
++        settled_query("?id=q.1&mode=beginner&win=seat&x=1", PageId::Home),
++        "?mode=beginner&x=1"
++    );
++    assert_eq!(settled_query("?mode=expert", PageId::Home), "?mode=expert");
++    assert_eq!(
++        settled_query("?page=node&id=t3-hub.5&win=ask&mode=beginner", PageId::Node),
++        "?page=node&id=t3-hub.5&mode=beginner"
++    );
++}
++
++/// App は URL の win で窓を開いた直後に settle_url を呼び、settle_url は今の path と外した query と井桁の後を
++/// history の置き替えに渡す。頁の中の link で窓を開く口（open_link）は URL を替えず、board.rs は history を足さない。
++#[test]
++fn bvwurl_board_settles_after_open_text() {
++    let src = read("src/board.rs");
++    let app = &src[src.find("fn App()").expect("App")..];
++    let open = app.find("win.open(w, false);").expect("URL の win で開く");
++    let settle = app
++        .find("settle_url(page, &query);")
++        .expect("URL の置き替えの呼び");
++    let after = open + "win.open(w, false);".len();
++    assert!(
++        after <= settle && app[after..settle].trim().is_empty(),
++        "置き替えが窓を開いた直後に無い"
++    );
++    let body = &src[src.find("fn settle_url(").expect("settle_url")..];
++    let body = &body[..body.find("\n}\n").expect("settle_url の終わり")];
++    for needle in [
++        "loc.pathname().unwrap_or_default(),",
++        "topbar::settled_query(query, page),",
++        "loc.hash().unwrap_or_default()",
++        "history.replace_state_with_url(",
++    ] {
++        assert!(body.contains(needle), "settle_url に {needle} が無い");
++    }
++    let link = &src[src.find("fn open_link(").expect("open_link")..];
++    let link = &link[..link.find("\n}\n").expect("open_link の終わり")];
++    assert!(!link.contains("settle_url(") && !link.contains("history"));
++    assert!(!src.contains("push_state"), "board.rs が history を足す");
++}
