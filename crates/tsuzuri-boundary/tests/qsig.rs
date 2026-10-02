@@ -119,6 +119,7 @@ fn receiver(code: u16) -> (u16, JoinHandle<String>) {
             match s.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => raw.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
                 Err(e) => panic!("要求を読む: {e}"),
             }
         }

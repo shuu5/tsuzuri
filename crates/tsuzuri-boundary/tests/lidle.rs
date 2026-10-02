@@ -4,7 +4,7 @@
 #![cfg(test)]
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -332,7 +332,12 @@ fn run_and_count(root: PathBuf, issues: PathBuf, config: Config) {
     s.set_read_timeout(Some(Duration::from_secs(2)))
         .expect("timeout");
     let mut head = [0u8; 256];
-    let got = s.read(&mut head).expect("頭を読む");
+    let got = loop {
+        match s.read(&mut head) {
+            Err(e) if e.kind() == ErrorKind::Interrupted => {}
+            got => break got.expect("頭を読む"),
+        }
+    };
     assert!(got > 0, "頭の字が無い");
     thread::sleep(Duration::from_millis(1500));
     assert_eq!(calls(&root), 3, "受け手が付いた周の読み");

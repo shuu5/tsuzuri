@@ -238,6 +238,7 @@ fn mqask_other_change_reaches_events() {
             match s.read(&mut buf) {
                 Ok(0) => return got.contains(want),
                 Ok(n) => got.push_str(&String::from_utf8_lossy(&buf[..n])),
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
                 Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
                 Err(e) => panic!("知らせを読めない: {e}"),
             }

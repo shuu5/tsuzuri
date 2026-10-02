@@ -4,10 +4,11 @@
 //! 偽の bd は撃たれるたびに記録の file bd に 1 行を足して作業場の ledger.json の字を出し、偽の器は受けた argv を
 //! 記録の file argv に 1 行ずつ足し、argv の頭が doctor なら作業場の sleep の字の秒だけ待ってから out-doctor の字を出す
 //! （ほかと file の無い出力は rc 1）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
+//! 知らせの接続の読みは助けの `reread` で撃ち、Interrupted だけを同じ締め切りの中で撃ち直す（行 c-sse-eintr）。
 #![cfg(test)]
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -239,6 +240,18 @@ fn until(what: &str, mut ok: impl FnMut() -> bool) {
     while !ok() {
         assert!(Instant::now() < deadline, "{what} を待ちきれない");
         thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// 読みを 1 回撃ち、Interrupted なら `deadline` の前に限って撃ち直す（ほかの誤りと時間切れはそのまま返す）。
+/// read の timeout を付けた socket の読みは、process が止められて再開した周に signal の手が無くても
+/// Interrupted を返しうる（`Read::read` は撃ち直さない）。
+fn reread(r: &mut impl Read, buf: &mut [u8], deadline: Instant) -> io::Result<usize> {
+    loop {
+        match r.read(buf) {
+            Err(e) if e.kind() == ErrorKind::Interrupted && Instant::now() < deadline => {}
+            got => return got,
+        }
     }
 }
 
@@ -580,7 +593,7 @@ fn pmisfit_sse_arms_and_tells() {
         let mut buf = [0u8; 4096];
         while !seen.contains(want) {
             assert!(Instant::now() < deadline, "{what} を待ちきれない: {seen}");
-            let n = s.read(&mut buf).expect("接続を読む");
+            let n = reread(&mut s, &mut buf, deadline).expect("接続を読む");
             assert!(n > 0, "接続が閉じた: {seen}");
             seen.push_str(&String::from_utf8_lossy(&buf[..n]));
         }
@@ -650,4 +663,62 @@ fn pmisfit_watch_kicks_form_while_listening() {
     place.shift_mark();
     board_until(addr, "戻った一覧", |m| *m == want());
     drop(s);
+}
+
+/// 撃たれるたびに頭の 1 つを返す偽の読み手（尽きたら 0 byte・撃たれた数を数える）。
+struct Steps {
+    steps: Vec<Result<&'static [u8], ErrorKind>>,
+    reads: usize,
+}
+
+impl Steps {
+    fn new(steps: Vec<Result<&'static [u8], ErrorKind>>) -> Steps {
+        Steps { steps, reads: 0 }
+    }
+}
+
+impl Read for Steps {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reads += 1;
+        if self.steps.is_empty() {
+            return Ok(0);
+        }
+        match self.steps.remove(0) {
+            Ok(bytes) => {
+                buf[..bytes.len()].copy_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            Err(kind) => Err(kind.into()),
+        }
+    }
+}
+
+/// 行 c-sse-eintr: 最初の 1 回だけ Interrupted を返す読み手は、助けの読みが撃ち直して字を読む。
+#[test]
+fn pmisfit_reread_after_interrupt() {
+    let mut r = Steps::new(vec![Err(ErrorKind::Interrupted), Ok(b"retry: 1000\n\n")]);
+    let mut buf = [0u8; 64];
+    let n = reread(&mut r, &mut buf, Instant::now() + WAIT).expect("撃ち直して読む");
+    assert_eq!(&buf[..n], b"retry: 1000\n\n");
+    assert_eq!(r.reads, 2);
+}
+
+/// 行 c-sse-eintr: Interrupted でない誤り（時間切れを含む）と締め切りの後の Interrupted は、撃ち直さずに返す。
+#[test]
+fn pmisfit_reread_other_errors_fall() {
+    let mut buf = [0u8; 64];
+    for kind in [
+        ErrorKind::WouldBlock,
+        ErrorKind::TimedOut,
+        ErrorKind::ConnectionReset,
+    ] {
+        let mut r = Steps::new(vec![Err(kind), Ok(b"x")]);
+        let e = reread(&mut r, &mut buf, Instant::now() + WAIT).expect_err("落ちる");
+        assert_eq!(e.kind(), kind);
+        assert_eq!(r.reads, 1, "{kind:?} を撃ち直す");
+    }
+    let mut r = Steps::new(vec![Err(ErrorKind::Interrupted), Ok(b"x")]);
+    let e = reread(&mut r, &mut buf, Instant::now()).expect_err("締め切りの後は落ちる");
+    assert_eq!(e.kind(), ErrorKind::Interrupted);
+    assert_eq!(r.reads, 1, "締め切りの後に撃ち直す");
 }

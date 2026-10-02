@@ -414,6 +414,7 @@ fn read_until(s: &mut TcpStream, buf: &mut String, until: Instant, stop: impl Fn
         match s.read(&mut chunk) {
             Ok(0) => return,
             Ok(n) => buf.push_str(std::str::from_utf8(&chunk[..n]).expect("SSE の字")),
+            Err(e) if e.kind() == ErrorKind::Interrupted => {}
             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => return,
             Err(e) => panic!("SSE を読む: {e}"),
         }
