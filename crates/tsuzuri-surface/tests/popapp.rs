@@ -112,7 +112,7 @@ fn popapp_board_helper() {
     assert!(text.contains("pub fn plain_click(e: &ev::MouseEvent) -> bool {"));
 }
 
-/// (3) 名前つきの窓は board の open_named だけが開き、3 か所の開きと押しの受け手がそこを通る。
+/// (3) 名前つきの窓は board の open_named だけが開き、開きと押しの受け手がそこを通る（next.rs の押しの受け手は行 g-dead-sweep-a で消した）。
 #[test]
 fn popapp_sites_through_helper() {
     let mut files = Vec::new();
@@ -126,9 +126,9 @@ fn popapp_sites_through_helper() {
         read("src/board.rs").matches("open_with_url_and_target").count(),
         1
     );
-    for rel in ["src/account/windows.rs", "src/project/next.rs"] {
-        assert_eq!(read(rel).matches("open_named(").count(), 1, "{rel}");
-    }
+    // 次の一手の block の DOM（next.rs の押しの受け手）は行 g-dead-sweep-a で消した。
+    assert_eq!(read("src/account/windows.rs").matches("open_named(").count(), 1);
+    assert!(!read("src/project/next.rs").contains("open_named("));
 
     // frame の switch_url は plain を呼び、board の press は 4 つの修飾の鍵と button を読む。
     let frame_src = read("src/frame.rs");

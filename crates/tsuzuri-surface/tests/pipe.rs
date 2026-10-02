@@ -1,5 +1,5 @@
 //! 便 g-pipe の歯: 5 列の順と列の中の並び・「+n」と開いた列の query・札の題の引き方・0 件と測れていない・
-//! 経過の字の境・hover の card の 4 行・段から列への対応は契約の型の関数・着地済みの外形と依存。
+//! 経過の字の境・段から列への対応は契約の型の関数・着地済みの外形と依存（札の hover の card の 4 行の歯は行 g-dead-sweep-a で消した）。
 #![cfg(test)]
 
 use std::path::PathBuf;
@@ -9,13 +9,12 @@ use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Readi
 use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::pipeline::{
-    self, Column, LANES, Lead, NO_AGE, RUN_KEY, SHOW, SOURCE, UNKNOWN_REASON, age, cards, columns,
+    self, Column, LANES, Lead, NO_AGE, RUN_KEY, SHOW, UNKNOWN_REASON, age, cards, columns,
     content, kcard, open_columns, title_of, with_open,
 };
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-use tsuzuri_surface::widgets::hover::ROW_CHARS;
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -318,47 +317,6 @@ fn pipe_age_boundaries() {
     ];
     for (secs, want) in cases {
         assert_eq!(age(secs), want, "{secs} 秒");
-    }
-}
-
-/// (6) 札の hover の card の 4 行（題・run と段の名・回数と口座と経過・出所）が期待と一致し、1 行は 36 字以下。
-#[test]
-fn pipe_hover_card_rows() {
-    let cols = filled();
-    let hover = |id: &str| {
-        cols.iter()
-            .flat_map(|c| c.cards.iter())
-            .find(|k| k.id == id)
-            .unwrap_or_else(|| panic!("札 {id}"))
-            .hover
-            .rows()
-            .map(|(_, t)| t)
-    };
-    assert_eq!(
-        hover("px.5"),
-        ["題 5", "run · Questioned", "↻2 · acct-4 · 1h", SOURCE].map(str::to_string)
-    );
-    assert_eq!(
-        hover("px.3"),
-        ["px.3", "run · Running", "↻1 · acct-4 · 2h", SOURCE].map(str::to_string)
-    );
-    assert_eq!(
-        kcard(&px11(), &ledger_rows(), NOW).hover.rows().map(|(_, t)| t),
-        ["題 11", "run · Landed", "↻1 · ― · ―", SOURCE].map(str::to_string)
-    );
-    assert_eq!(
-        hover("px.2"),
-        [LONG_CUT, "run · Blocked", "↻2 · ― · 45s", SOURCE].map(str::to_string)
-    );
-    assert_eq!(SOURCE, "fleet/events.jsonl");
-    for card in cols.iter().flat_map(|c| c.cards.iter()) {
-        for (class, text) in card.hover.rows() {
-            assert!(
-                text.chars().count() <= ROW_CHARS,
-                "{} の {class} が 36 字を超える",
-                card.id
-            );
-        }
     }
 }
 

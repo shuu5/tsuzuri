@@ -1,4 +1,4 @@
-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯・hover の card。
+//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯。
 //! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
 //! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
@@ -8,10 +8,11 @@
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
 //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
-//! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
+//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める（行 g-tick-adopt）。
 //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
 //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
-//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards）。
+//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards・
+//! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
 //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
 //! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
 
@@ -19,19 +20,16 @@ use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{Ci, Misfit, PipelineBoard, PipelineCard, PipelineColumn, Reading};
-use tsuzuri_contract::graph::{GraphDoc, title36};
+use tsuzuri_contract::graph::title36;
 use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
 use tsuzuri_contract::wire;
 
 use super::ledger::OUTSIDE;
-use super::{Body, NO_CONTENT, NOT_READ, map};
+use super::{Body, NO_CONTENT, NOT_READ};
 use crate::frame::{self, Block};
 use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
-use crate::mapview::graph::cut;
 use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
-use crate::widgets::hover::Card;
-use crate::widgets::nodecard::card_of;
 use crate::widgets::keyline::{LineSrc, line_src};
 use crate::widgets::pop::{self, Src};
 
@@ -68,9 +66,6 @@ pub const QUERY_KEY: &str = "col";
 
 /// 開いた列を畳む button の字（見出しでなく、「+n」と同じく file の定数の字・行 g-pipe-fold）。
 pub const CLOSE: &str = "畳む";
-
-/// hover の card の出所の行。
-pub const SOURCE: &str = "fleet/events.jsonl";
 
 /// 経過の値が無い札の字。
 pub const NO_AGE: &str = "―";
@@ -196,11 +191,6 @@ pub struct Kcard {
     /// 段を決めた時刻（電文の値のまま・描く時の経過は `age_at` が今から引く・行 g-tick-adopt）。
     pub since: Option<EpochSecs>,
     pub class: &'static str,
-    pub hover: Card,
-    /// 節点の card の値の行（見本の cardContent の data-run の枝・回数と段の名と 20 字に切った理由）。
-    pub run_line: String,
-    /// 節点の card の詳しく（理由が 20 字を越えれば 34 字以下の行に折った列・越えなければ空）。
-    pub run_more: Vec<String>,
     /// 台帳で閉じた（着地せず）の札か（札の表の記号と meta の段の字を替える・行 g-closed-mark）。
     pub closed: bool,
     /// Landed の列ほかの札の meta に足す着地の後の CI の読み（`ci_shown` の値・止まった列の札は None で、語は lead に出る）。
@@ -238,36 +228,6 @@ pub fn with_lines(body: Body<Vec<Column>>, src: &Src<'_>) -> Body<Vec<Column>> {
 
 /// 止まった列の札の class。
 const STOP_CLASS: &str = "kcard why-stop";
-
-/// 値の行に出す理由の字数（見本の cut の 20）。
-const WHY_CHARS: usize = 20;
-
-/// 詳しくの 1 行の字数の上限（見本の chunk の 34）。
-const MORE_CHARS: usize = 34;
-
-/// 字を句切りの字（、。・，）の直後で片に分け、前から n 字以下の行に詰める（n 字を越える片は n 字ずつに切る・見本の chunk）。
-fn chunk(s: &str, n: usize) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut cur: Vec<char> = Vec::new();
-    for piece in s.split_inclusive(['、', '。', '・', '，', '）']) {
-        let mut p: Vec<char> = piece.chars().collect();
-        if cur.len() + p.len() <= n {
-            cur.extend(p);
-            continue;
-        }
-        if !cur.is_empty() {
-            out.push(cur.drain(..).collect());
-        }
-        while p.len() > n {
-            out.push(p.drain(..n).collect());
-        }
-        cur = p;
-    }
-    if !cur.is_empty() {
-        out.push(cur.into_iter().collect());
-    }
-    out
-}
 
 /// 1 つの列（見出しの語の鍵・class・経過の短い順の札の全部）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -452,7 +412,7 @@ pub fn stage_word(card: &PipelineCard) -> String {
 }
 
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
-/// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にし、hover の詳しくに閉じた理由を折って出す。
+/// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にする。
 /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
 /// 欄 ci は止まった列でなければ出す読み（止まった列の札は lead が読みの語なので None）。経過の字と CI の語は今 now で決める。
 pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
@@ -467,32 +427,10 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
         Some(ci) => label(ci_key(ci)),
         None => card.reason.clone().unwrap_or_else(|| stage.clone()),
     };
-    let run_line = format!("↻{} · {stage} · {}", card.runs, cut(&why, WHY_CHARS));
-    let run_more = if why.chars().count() > WHY_CHARS {
-        chunk(&why, MORE_CHARS)
-    } else {
-        Vec::new()
-    };
-    let more = if closed {
-        chunk(&why, MORE_CHARS)
-    } else {
-        Vec::new()
-    };
     let lead = if lane.stops() {
         Lead::Why(why)
     } else {
         Lead::Runs(card.runs)
-    };
-    let hover = Card {
-        title: title.clone().unwrap_or_else(|| id.clone()),
-        kind: format!("{RUN_KEY} · {stage}"),
-        value: format!(
-            "↻{} · {} · {age}",
-            card.runs,
-            card.account.as_deref().unwrap_or(NO_ACCOUNT)
-        ),
-        src: SOURCE.to_string(),
-        more,
     };
     Kcard {
         id,
@@ -506,47 +444,11 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
         age,
         since: card.since,
         class: if lane.stops() { STOP_CLASS } else { "kcard" },
-        hover,
-        run_line,
-        run_more,
         closed,
         ci: if lane.stops() { None } else { shown },
         short: None,
         line: None,
     }
-}
-
-/// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、
-/// 値と出所と詳しくは走行から）。札の id の節点が電文に無ければ札の hover のまま。
-pub fn node_hover(doc: &GraphDoc, card: &Kcard) -> Card {
-    match card_of(doc, &card.id) {
-        Some(node) => Card {
-            title: node.title,
-            kind: node.kind,
-            value: card.run_line.clone(),
-            src: card.hover.src.clone(),
-            more: card.run_more.clone(),
-        },
-        None => card.hover.clone(),
-    }
-}
-
-/// 板の全部の札の hover を節点の card に替える（グラフの口が読めない・まだ読んでいない間は受けた値のまま）。
-pub fn with_nodes(body: Body<Vec<Column>>, graph: &Fetched) -> Body<Vec<Column>> {
-    let Body::Filled(mut cols) = body else {
-        return body;
-    };
-    if let Ok(doc) = map::doc(graph) {
-        for card in cols.iter_mut().flat_map(|c| c.cards.iter_mut()) {
-            card.hover = node_hover(&doc, card);
-        }
-    }
-    Body::Filled(cols)
-}
-
-/// 札を押した先（契約 bead と同じ id の節点の頁・近傍と問いの card と同じ頁へ行く）。
-pub fn card_href(card: &Kcard, mode: frame::Mode) -> String {
-    frame::node_href(&card.id, mode)
 }
 
 /// URL の query から開いた列（`col=wait,land` の形・知らない名は読み捨てる・板の順）。

@@ -1,5 +1,6 @@
 //! 次の一手の判じなかったなしの箱の歯（行 c-next-stall・接頭辞 nstall_）。
-//! lead がなしで電文のなしの結果が判じなかったなら、大きい箱は測れていないの箱（`UNJUDGED_KEY`・`UNJUDGED_LINE`）。
+//! lead がなしで電文のなしの結果が判じなかったかを `unjudged` が読む（測れていないの箱の語の鍵 `UNJUDGED_KEY` は帯の pill が、
+//! 字 `UNJUDGED_LINE` は account board が使う・次の一手の block の箱の組み next は行 g-dead-sweep-a で消した）。
 //! 面は判じない: 電文の結果を写すだけ。fixture: tests/fixtures/surface/next-step.json。
 #![cfg(test)]
 
@@ -9,9 +10,7 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::next::{
-    Big, KEYS, Mark, NONE_LINE, UNJUDGED_KEY, UNJUDGED_LINE, big, next, unjudged,
-};
+use tsuzuri_surface::project::next::{KEYS, NONE_LINE, UNJUDGED_KEY, UNJUDGED_LINE, big, unjudged};
 use tsuzuri_surface::vocab::vocab;
 
 fn crate_dir() -> PathBuf {
@@ -33,16 +32,14 @@ fn set(name: &str) -> NextStep {
         .unwrap_or_else(|| panic!("fixture の組 {name}"))
 }
 
-/// (5) なしを判じなかった電文だけが測れていないの箱になり、ほかの箱は big に lead とその結果を渡した値のまま。
+/// (5) なしを判じなかった電文だけが unjudged（なしの結果が電文に無ければ判じなかったと言わない・lead がなしでない組は偽）。
 #[test]
 fn nstall_unjudged_box() {
-    // nothing の組（なしが当たる）は今のなしの箱。
+    // nothing の組（なしが当たる）は判じた。
     let nothing = set("nothing");
     assert!(!unjudged(&nothing));
-    let n = next(&nothing);
-    assert_eq!((n.big.key, n.big.what.as_str()), ("nx_g", NONE_LINE));
 
-    // 限度と移動となしを判じなかった電文は測れていないの箱。
+    // 限度と移動となしを判じなかった電文は判じなかった。
     let mut open = nothing.clone();
     for c in &mut open.checks {
         if matches!(c.kind, NextMove::LimitOrMove | NextMove::Nothing) {
@@ -50,31 +47,6 @@ fn nstall_unjudged_box() {
         }
     }
     assert!(unjudged(&open));
-    let n = next(&open);
-    assert_eq!(
-        n.big,
-        Big {
-            kind: NextMove::Nothing,
-            key: UNJUDGED_KEY,
-            class: "nxbig none",
-            what_class: "what small muted",
-            what: UNJUDGED_LINE.to_string(),
-            link: None,
-            target: None,
-        }
-    );
-    let rows: Vec<(&str, &str, Mark)> = n.rest.iter().map(|r| (r.key, r.class, r.mark)).collect();
-    assert_eq!(
-        rows,
-        vec![
-            ("nx_a", "off", Mark::Unmeasured),
-            ("nx_b", "off", Mark::Miss),
-            ("nx_c", "off", Mark::Miss),
-            ("nx_d", "off", Mark::Miss),
-            ("nx_e", "off", Mark::Miss),
-            ("nx_f", "off", Mark::Miss),
-        ]
-    );
 
     // なしの結果が電文に無ければ判じなかったと言わない。
     let bare = NextStep {
@@ -82,14 +54,10 @@ fn nstall_unjudged_box() {
         lead: NextMove::Nothing,
     };
     assert!(!unjudged(&bare));
-    assert_eq!(next(&bare).big.what, NONE_LINE);
 
-    // lead がなしでない組は今のまま。
+    // lead がなしでない組は判じた。
     for name in ["stalled", "question", "not-judged"] {
-        let s = set(name);
-        assert!(!unjudged(&s), "{name}");
-        let lead = s.checks.iter().find(|c| c.kind == s.lead);
-        assert_eq!(next(&s).big, big(s.lead, lead), "{name}");
+        assert!(!unjudged(&set(name)), "{name}");
     }
     big_and_label(open);
 }

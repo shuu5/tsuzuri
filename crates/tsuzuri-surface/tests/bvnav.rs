@@ -5,12 +5,9 @@
 
 use std::path::PathBuf;
 
-use tsuzuri_contract::board::NextMove;
 use tsuzuri_surface::frame::{self, Mode, PageId};
-use tsuzuri_surface::project::next::action;
-use tsuzuri_surface::project::{ledger, node, pipeline};
+use tsuzuri_surface::project::{ledger, pipeline};
 use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
-use tsuzuri_surface::widgets::pop::{NEXT_KEYS, next_href};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -76,31 +73,6 @@ fn bvnav_pages_home_and_node() {
             ("pane", vec![pipeline::BLOCK.id])
         ]
     );
-}
-
-/// 次の一手の束の承認と質問（対象の無い時）は質問の窓・対象の在る質問は質問の窓と問いの id・発効待ちは抜けの検査の窓、
-/// 吹き出しの Questioned の次の手も質問の窓。
-#[test]
-fn bvnav_links_open_windows() {
-    for mode in Mode::ALL {
-        let href = |kind, target| action(kind, target, mode).map(|l| l.href);
-        let ask = win_href(Win::Ask, mode);
-        assert_eq!(href(NextMove::BatchApproval, None), Some(ask.clone()));
-        assert_eq!(href(NextMove::Question, None), Some(ask.clone()));
-        assert_eq!(
-            href(NextMove::Question, Some("e.2:x")),
-            Some(format!("{ask}&id=e.2%3Ax"))
-        );
-        assert_eq!(
-            node::answer_href("e.2:x", mode),
-            format!("{ask}&id=e.2%3Ax")
-        );
-        assert_eq!(
-            href(NextMove::AwaitingEffect, None),
-            Some(win_href(Win::Gaps, mode))
-        );
-        assert_eq!(next_href(NEXT_KEYS[0], "t-1", mode), ask);
-    }
 }
 
 /// App は帯（topbar の view）と窓の層を頁に 1 つずつ置き、URL の win の窓を開き、窓を開くと吹き出しを閉じ、

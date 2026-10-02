@@ -47,7 +47,6 @@ fn abst_card_from_since() {
     let k = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW);
     assert_eq!(k.age, "2m");
     assert_eq!(k.since, Some(NOW - 125));
-    assert_eq!(k.hover.value, "↻1 · ― · 2m");
     // 同じ札を 1 時間後に組めば経過の字だけが進む。
     let later = kcard(&card(Stage::Running, Some(NOW - 125), None), &[], NOW + 3_600);
     assert_eq!(later.age, "1h");

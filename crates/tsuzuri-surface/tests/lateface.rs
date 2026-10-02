@@ -126,7 +126,7 @@ fn one_and_two_lines(now: u64) {
     );
 }
 
-/// (6) ask.rs と next.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ。
+/// (6) ask.rs の mod dom は 1 行の口・書き直し・置き場を 1 度ずつ持つ（next.rs の置き場は行 g-dead-sweep-a で消した）。
 #[test]
 fn lateface_dom_wiring() {
     let ask = dom("src/project/ask.rs");
@@ -137,7 +137,4 @@ fn lateface_dom_wiring() {
     ] {
         assert_eq!(ask.matches(word).count(), 1, "ask の mod dom の {word}");
     }
-    let next = dom("src/project/next.rs");
-    let word = "{ask::late_view()}{body}";
-    assert_eq!(next.matches(word).count(), 1, "next の mod dom の {word}");
 }

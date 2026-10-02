@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word};
+use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, stage_word};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -79,7 +79,6 @@ fn lstg_word_rules() {
     for (c, w) in cards.iter().zip(want) {
         let word = stage_word(c);
         assert_eq!(word, w, "{}", c.contract);
-        assert_eq!(kcard(c, &[], NOW).hover.kind, format!("run · {w}"), "{}", c.contract);
     }
 }
 

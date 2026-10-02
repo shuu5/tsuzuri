@@ -93,7 +93,7 @@ fn tkad_age_at_rules() {
     }
 }
 
-/// (3) 3 つの file の DOM は 1 秒の時計を読み、問いの chip に投稿の時刻の注釈を付ける。
+/// (3) 2 つの file の DOM は 1 秒の時計を読み、問いの chip に投稿の時刻の注釈を付ける（next.rs の DOM は行 g-dead-sweep-a で消した）。
 #[test]
 fn tkad_dom_wiring() {
     let ask = dom("src/project/ask.rs");
@@ -114,11 +114,6 @@ fn tkad_dom_wiring() {
     let card = range(&pipe, "fn kcard_view(", "pub fn stage_sym(");
     assert!(card.contains("age_at(since, clock())"));
     assert!(!card.contains("card.age"));
-
-    let next = dom("src/project/next.rs");
-    assert!(next.contains("waited(&for_wait, q, clock.get())"));
-    assert!(next.contains("let clock = crate::net::ticker();"));
-    assert!(!next.contains("crate::net::now()"));
 }
 
 /// verify の filter の語（main fb2cc24 の 177 語と同じノートのほかの 2 行の接頭辞）。

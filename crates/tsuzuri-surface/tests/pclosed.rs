@@ -89,47 +89,24 @@ fn pclosed_closed_card_rule() {
     assert!(!closed_card(&one(Stage::Running, tagged("x"))));
 }
 
-/// (8) 閉じた（着地せず）の札は段の字が CLOSED_STAGE で hover の詳しくに理由を折り、ほかの札は今のまま。
+/// (8) 閉じた（着地せず）の札は閉じた印を持ち、回数の lead で状態の記号の値が無く、ほかの札は今のまま
+/// （札の hover の card と値の行は行 g-dead-sweep-a で消した）。
 #[test]
 fn pclosed_kcard_hover_and_lines() {
     let k = kcard(&px30(), &[], NOW);
-    let more = vec![
-        format!("{CLOSED_TAG}{}", "a".repeat(27)),
-        "a".repeat(13),
-    ];
-    assert_eq!(k.hover.kind, format!("run · {CLOSED_STAGE}"));
-    assert_eq!(k.hover.value, "↻2 · acct-1 · 1h");
-    assert_eq!(k.hover.more, more);
-    assert_eq!(
-        k.run_line,
-        format!("↻2 · {CLOSED_STAGE} · {CLOSED_TAG}{}…", "a".repeat(12))
-    );
-    assert_eq!(k.run_more, more);
+    assert!(k.closed);
     assert_eq!(k.lead, Lead::Runs(2));
     assert_eq!(k.state, None);
     assert_eq!(k.class, "kcard");
     other_cards();
 }
 
-/// px.31 から px.33 の札の hover と値の行。
+/// px.31 から px.33 の札の閉じた印と lead。
 fn other_cards() {
-    let k = kcard(&px31(), &[], NOW);
-    assert_eq!(k.hover.kind, format!("run · {CLOSED_STAGE}"));
-    assert_eq!(k.hover.more, vec![format!("{CLOSED_TAG}x")]);
-    assert_eq!(
-        k.run_line,
-        format!("↻1 · {CLOSED_STAGE} · {CLOSED_TAG}x")
-    );
-    assert!(k.run_more.is_empty());
-
-    let k = kcard(&px32(), &[], NOW);
-    assert_eq!(k.hover.kind, "run · Landed");
-    assert!(k.hover.more.is_empty());
-    assert_eq!(k.run_line, "↻1 · Landed · Landed");
-
+    assert!(kcard(&px31(), &[], NOW).closed);
+    assert!(!kcard(&px32(), &[], NOW).closed);
     let k = kcard(&px33(), &[], NOW);
-    assert_eq!(k.hover.kind, "run · Failed");
-    assert!(k.hover.more.is_empty());
+    assert!(!k.closed);
     assert_eq!(k.lead, Lead::Why(format!("{CLOSED_TAG}x")));
     assert_eq!(k.class, "kcard why-stop");
 }

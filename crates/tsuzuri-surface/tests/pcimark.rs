@@ -117,16 +117,12 @@ fn pci_kcard_marks() {
     assert_eq!(wait.ci, Some(Ci::Waiting));
     assert_eq!(wait.class, "kcard");
     assert_eq!(wait.lead, Lead::Runs(1));
-    assert_eq!(wait.run_line, "↻1 · Landed · CI 中");
-    assert_eq!(wait.hover.kind, "run · Landed");
     assert_eq!(wait.age, "2m");
     assert!(!wait.closed);
-    assert!(wait.run_more.is_empty());
 
     let ok = k(Stage::Landed, None, Some(600), Some(Ci::Success));
     assert_eq!(ok.state, None);
     assert_eq!(ok.ci, Some(Ci::Success));
-    assert_eq!(ok.run_line, "↻1 · Landed · CI 成功");
     late_and_fail(k);
 }
 
@@ -135,7 +131,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
     let late = k(Stage::Landed, None, Some(601), Some(Ci::Success));
     assert_eq!(late, k(Stage::Landed, None, Some(601), None));
     assert_eq!(late.ci, None);
-    assert_eq!(late.run_line, "↻1 · Landed · Landed");
 
     let fail = k(
         Stage::Failed,
@@ -147,7 +142,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
     assert_eq!(fail.ci, None);
     assert_eq!(fail.class, "kcard why-stop");
     assert_eq!(fail.lead, Lead::Why("CI 失敗".to_string()));
-    assert_eq!(fail.run_line, "↻1 · Failed · CI 失敗");
 
     let unmeasured = k(
         Stage::Stopped,
@@ -156,7 +150,6 @@ fn late_and_fail(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>
         Some(Ci::Unmeasurable),
     );
     assert_eq!(unmeasured.lead, Lead::Why("CI 測れず".to_string()));
-    assert_eq!(unmeasured.run_line, "↻1 · Stopped · CI 測れず");
     assert_eq!(unmeasured.age, "―");
     stop_reasons(k);
 }
@@ -187,14 +180,12 @@ fn stop_reasons(k: impl Fn(Stage, Option<&'static str>, Option<u64>, Option<Ci>)
         assert_eq!(c.ci, None, "{ci:?}");
         assert_eq!(c.class, "kcard why-stop", "{ci:?}");
         assert_eq!(c.lead, Lead::Why(text.to_string()), "{ci:?}");
-        assert_eq!(c.run_line, format!("↻1 · {stage:?} · {text}"));
     }
 
     let landed_fail = k(Stage::Landed, None, Some(30), Some(Ci::Failure));
     assert_eq!(landed_fail.state, None);
     assert_eq!(landed_fail.ci, Some(Ci::Failure));
     assert_eq!(landed_fail.lead, Lead::Runs(1));
-    assert_eq!(landed_fail.run_line, "↻1 · Landed · CI 失敗");
 }
 
 /// (11) CI を待つ札は日を問わず Landed の列に出る。

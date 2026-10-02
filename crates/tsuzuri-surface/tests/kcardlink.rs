@@ -1,13 +1,9 @@
-//! 行 g-link-kcard の歯: 板の札は契約 bead と同じ id の節点の頁への link（hover の card は残す）・歯の名の置き場。
+//! 行 g-link-kcard の歯: 板の札は押すと吹き出しを開く button（hover の card は付けない・行 g-pipe-cards）・歯の名の置き場。
+//! 札の link の先 card_href と、その歯 klink_card_opens_same_id は行 g-dead-sweep-a で消した。
 #![cfg(test)]
 
 use std::path::PathBuf;
 
-use tsuzuri_contract::board::{PipelineBoard, Reading};
-use tsuzuri_contract::wire;
-use tsuzuri_surface::frame::{self, Mode, PageId};
-use tsuzuri_surface::project::nodearound::id_of;
-use tsuzuri_surface::project::pipeline::{card_href, kcard};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -87,28 +83,6 @@ const TAKEN: &[&str] = &[
 ];
 
 #[test]
-fn klink_card_opens_same_id() {
-    let board: PipelineBoard =
-        wire::decode(&read("../../tests/fixtures/surface/pipeline-board.json"))
-            .expect("fixture の板が電文として読める");
-    let Reading::Known(cards) = board.cards else {
-        panic!("fixture の札が Unknown");
-    };
-    assert!(!cards.is_empty(), "fixture の札が空");
-    for c in &cards {
-        let k = kcard(c, &[], 1_790_510_400);
-        let id = c.contract.to_string();
-        for mode in Mode::ALL {
-            let href = card_href(&k, mode);
-            assert_eq!(href, frame::node_href(&id, mode), "{id} の札の先");
-            assert_eq!(PageId::from_query(&href), PageId::Node, "{href} の頁");
-            assert_eq!(id_of(&href).as_deref(), Some(id.as_str()), "{href} の id");
-            assert_eq!(Mode::from_query(&href), mode, "{href} の mode");
-        }
-    }
-}
-
-#[test]
 fn klink_dom_anchor_keeps_hover() {
     let src = read("src/project/pipeline.rs");
     let at = src.find("mod dom").expect("pipeline.rs に mod dom が在る");
@@ -141,7 +115,7 @@ fn klink_names_stay_apart() {
                 .and_then(|r| r.split('(').next())
         })
         .collect();
-    assert!(names.len() >= 3, "歯の名が 3 つ以上: {names:?}");
+    assert!(names.len() >= 2, "歯の名が 2 つ以上: {names:?}");
     for name in names {
         let rest = name
             .strip_prefix("klink_")
