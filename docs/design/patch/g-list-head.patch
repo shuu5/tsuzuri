@@ -1,19 +1,20 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90a7304c7a 100644
+index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..87a7ee73a79cd09abcec11526c75c7ebde52df24 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -3,7 +3,9 @@
+@@ -3,7 +3,10 @@
  //! 既定で開く組は、板で動いている札を持つ組と open の行を持つ組だけで、ほかは畳む（開き閉じは頁の一生の間だけ持つ）。
  //! 行は口 /api/ledger の台帳の行、段の数と行の段の字は口 /api/pipeline の札、短い題と起票の時刻は口 /api/beads の
  //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
 -//! 組と頭の数と既定の開きと並べは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 +//! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
-+//! 小さな数（open の便・memo・問いと純減 24h）と 14 日の図を出す（行 g-list-head）。絞りが効いている間は合う行の在る組だけを開いて出す。
++//! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
++//! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
 +//! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
  
  use std::collections::BTreeMap;
  
-@@ -11,9 +13,12 @@ use tsuzuri_contract::EpochSecs;
+@@ -11,9 +14,12 @@ use tsuzuri_contract::EpochSecs;
  use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
  use tsuzuri_contract::graph::NodeKind;
  use tsuzuri_contract::ledger::{BeadFact, BeadFacts, LedgerRow};
@@ -22,12 +23,12 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
  
 -use crate::project::ledger::{CLOSED, EMPTY, NO_OPEN, OUTSIDE};
 +use crate::project::ledger::{
-+    CLOSED, EMPTY, NO_OPEN, OUTSIDE, SPARK_H, SPARK_W, net, spark, spark_svg, stats,
++    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, OUTSIDE, burn_svg, burndown, net, stats,
 +};
  use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
  use crate::project::{Body, LEDGER_UNREAD};
  use crate::view::{Fetched, id_order, read_rows};
-@@ -288,6 +293,87 @@ pub fn content(
+@@ -288,6 +294,92 @@ pub fn content(
      }
  }
  
@@ -54,8 +55,8 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
 +/// 絞りに合う行が 1 つも無いときの 1 行。
 +pub const NO_MATCH: &str = "合う行なし";
 +
-+/// 指標の口が読めないときの見出しの小さな数の字。
-+pub const KPI_UNKNOWN: &str = "指標 ―";
++/// 指標の口が読めないときの見出しの小さな数の語の鍵（吹き出しの読めない欄と同じ「まだ分からない」・憲法 P-7）。
++pub const KPI_UNKNOWN_KEY: &str = crate::widgets::pop::UNKNOWN_KEY;
 +
 +/// 絞りが効いているか（種類がすべてでないか、探す字が空白だけでない）。
 +pub fn filtering(kind: Kind, q: &str) -> bool {
@@ -101,21 +102,26 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
 +    )
 +}
 +
-+/// 見出しの小さな数と 14 日の図の svg（図は台帳の block の sparkline・指標の口が読めなければ KPI_UNKNOWN と図なし）。
++/// 指標の口が読めないときの見出しの小さな数の字（指標と語 KPI_UNKNOWN_KEY の見出しの語）。
++pub fn kpi_unknown() -> String {
++    format!("指標 {}", label(KPI_UNKNOWN_KEY))
++}
++
++/// 見出しの小さな数と 14 日の図の svg（図は台帳の block の burndown・指標の口が読めなければ kpi_unknown の字と図なし）。
 +pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
 +    match stats(fetched) {
 +        Ok(s) => (
 +            kpi_text(&s),
-+            Some(spark_svg(&spark(&s.days, SPARK_W, SPARK_H))),
++            Some(burn_svg(&burndown(&s.days, BURN_W, BURN_H))),
 +        ),
-+        Err(_) => (KPI_UNKNOWN.to_string(), None),
++        Err(_) => (kpi_unknown(), None),
 +    }
 +}
 +
  #[cfg(target_arch = "wasm32")]
  pub use dom::view;
  
-@@ -297,7 +383,8 @@ mod dom {
+@@ -297,7 +389,8 @@ mod dom {
      use leptos::prelude::*;
  
      use super::{
@@ -125,7 +131,7 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
-@@ -306,12 +393,14 @@ mod dom {
+@@ -306,12 +399,14 @@ mod dom {
      use crate::widgets::help::HelpCtx;
      use crate::widgets::pop::board_unread;
  
@@ -141,7 +147,7 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
          let list = move || {
              let got =
                  rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
-@@ -320,24 +409,61 @@ mod dom {
+@@ -320,24 +415,61 @@ mod dom {
                  Body::Empty(line) => {
                      view! { <div class="empty"><span>{line}</span></div> }.into_any()
                  }
@@ -213,19 +219,20 @@ index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90
          let toggle = {
              let (key, is_open) = (g.key.clone(), is_open.clone());
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 490b650166fd1c35c8b5de935b000f22f48c4dd9..2988aee48cdea51a832ff5fbcc954dbc816d7be8 100644
+index 490b650166fd1c35c8b5de935b000f22f48c4dd9..1d3ebe80f808ae9757746ea6dff4a16bb17fbe18 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
-@@ -1274,3 +1274,14 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
+@@ -1274,3 +1274,15 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
  .ll-kt.k-epic { color: #1e3a8a; border-color: #c7d2fe; background: #eef2ff; }
  .ll-ls { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; color: inherit; }
  .ll-rt { flex: none; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
-+/* 台帳 open の一覧の見出し（行 g-list-head・見本 board-v2 の .lhead・.kchip・.seg・#lq・#spark）: 指標の小さな数と 14 日の図・種類の切り替え・探す欄 */
++/* 台帳 open の一覧の見出し（行 g-list-head・見本 board-v2 の .lhead・.kchip・.seg・#lq・#spark）: 指標の小さな数と 14 日の burndown の図・種類の切り替え・探す欄 */
 +.ll-head { padding: 8px 12px 7px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 +.ll-l1 { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 +.ll-l2 { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 +.ll-kchip { font-size: 11.5px; color: var(--ink-2); background: var(--panel-2); border-radius: 999px; padding: 1px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 +.ll-spark { flex: none; display: flex; margin-left: auto; }
++#ledger .ll-spark .lburn { width: 120px; height: 24px; }
 +.ll-seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex: none; }
 +.ll-seg button { padding: 1px 10px; font-size: 12px; border: 0; border-left: 1px solid var(--line); background: none; cursor: pointer; }
 +.ll-seg button:first-child { border-left: 0; }
@@ -233,12 +240,12 @@ index 490b650166fd1c35c8b5de935b000f22f48c4dd9..2988aee48cdea51a832ff5fbcc954dbc
 +.ll-q { flex: 1 1 auto; min-width: 80px; max-width: 300px; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; height: 24px; }
 diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/bvkpi.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..49b6f61901680717fb5a0fcb6a4d321cadc3c554
+index 0000000000000000000000000000000000000000..77e2f237d6daa0e9fd40396502d6bda183863124
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvkpi.rs
-@@ -0,0 +1,206 @@
+@@ -0,0 +1,213 @@
 +//! 行 g-list-head の歯（接頭辞 bvkpi_）: 台帳 open の一覧の見出しの種類の切り替えと探す欄の絞りと、指標の小さな数と
-+//! 14 日の図（判断の記録 ADR-27 の決定 (8)）。台帳の行と札は歯の中で組む（bead の id の接頭辞は fx-k）。
++//! 14 日の burndown の図（判断の記録 ADR-27 の決定 (8)・要件 FR13）。台帳の行と札は歯の中で組む（bead の id の接頭辞は fx-k）。
 +//! 指標は面の歯の fixture tests/fixtures/surface/ledger-stats.json の組 filled を読む。
 +#![cfg(test)]
 +
@@ -251,11 +258,12 @@ index 0000000000000000000000000000000000000000..49b6f61901680717fb5a0fcb6a4d321c
 +use tsuzuri_contract::stats::LedgerStats;
 +use tsuzuri_contract::wire;
 +use tsuzuri_surface::ledgerlist::{
-+    KINDS, KPI_UNKNOWN, Kind, Lgroup, NO_MATCH, SEARCH_HINT, filtered, filtering, groups, kpi,
-+    kpi_text, row_matches,
++    KINDS, KPI_UNKNOWN_KEY, Kind, Lgroup, NO_MATCH, SEARCH_HINT, filtered, filtering, groups, kpi,
++    kpi_text, kpi_unknown, row_matches,
 +};
-+use tsuzuri_surface::project::ledger::{SPARK_H, SPARK_W, spark, spark_svg};
++use tsuzuri_surface::project::ledger::{BURN_H, BURN_W, burn_svg, burndown};
 +use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::label;
 +
 +const NOW: u64 = 1_790_510_400;
 +
@@ -390,16 +398,20 @@ index 0000000000000000000000000000000000000000..49b6f61901680717fb5a0fcb6a4d321c
 +    assert_eq!(NO_MATCH, "合う行なし");
 +}
 +
-+/// (5) 見出しの小さな数は open の便・memo・問いの数と純減 24h（負は −）の字で、14 日の図は台帳の block の sparkline の
-+/// svg。指標の口が読めない・まだ分からない・電文が読めない時は KPI_UNKNOWN で図は無い。
++/// (5) 見出しの小さな数は open の便・memo・問いの数と純減 24h（負は −）の字で、14 日の図は台帳の block の burndown の
++/// svg で sparkline でない。指標の口が読めない・まだ分からない・電文が読めない時は kpi_unknown の字（指標と語の鍵
++/// KPI_UNKNOWN_KEY の「まだ分からない」）で図は無い。
 +#[test]
-+fn bvkpi_kpi_line_and_spark() {
++fn bvkpi_kpi_line_and_burn() {
 +    let s = filled();
 +    assert_eq!(kpi_text(&s), "便 5 · memo 3 · 問い 2 · 純減 24h −2");
 +    let body = Fetched::Body(wire::encode(&Reading::Known(s.clone())).expect("enc"));
 +    let (text, svg) = kpi(&body);
 +    assert_eq!(text, kpi_text(&s));
-+    assert_eq!(svg, Some(spark_svg(&spark(&s.days, SPARK_W, SPARK_H))));
++    assert_eq!(svg, Some(burn_svg(&burndown(&s.days, BURN_W, BURN_H))));
++    let svg = svg.unwrap_or_default();
++    assert!(svg.starts_with("<svg class=\"lburn\""), "{svg}");
++    assert!(!svg.contains("lspark"), "{svg}");
 +    let unknown = Fetched::Body(wire::encode(&Reading::<LedgerStats>::Unknown).expect("enc"));
 +    for bad in [
 +        Fetched::NotRead,
@@ -407,9 +419,11 @@ index 0000000000000000000000000000000000000000..49b6f61901680717fb5a0fcb6a4d321c
 +        unknown,
 +        Fetched::Body("{".into()),
 +    ] {
-+        assert_eq!(kpi(&bad), (KPI_UNKNOWN.to_string(), None));
++        assert_eq!(kpi(&bad), (kpi_unknown(), None));
 +    }
-+    assert_eq!(KPI_UNKNOWN, "指標 ―");
++    assert_eq!(KPI_UNKNOWN_KEY, "pop_unknown");
++    assert_eq!(label(KPI_UNKNOWN_KEY), "まだ分からない");
++    assert_eq!(kpi_unknown(), "指標 まだ分からない");
 +}
 +
 +/// (6) DOM の字: 見出しは指標の口を読み、種類の button と探す欄を signal に結ぶ。一覧は絞った組を描き、絞りが効いて
