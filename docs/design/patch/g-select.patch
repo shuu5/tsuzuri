@@ -461,7 +461,7 @@ index 2ea791101f20c7e952e508d6aa881301853a79b7..14c0e4bff902539a9d19d334bbb3f650
          };
          let more = move || {
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 1471d4340bc1349fb5ad7497b40b4d61f90bf6bd..24c024a43603a20dd98961fb8fc19c8d5d7b92d9 100644
+index 1471d4340bc1349fb5ad7497b40b4d61f90bf6bd..b2624281b349bf5bf3a096888c88493944467c14 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -1289,3 +1289,20 @@ g.node.hv-on > rect.hit { stroke: var(--accent); stroke-width: 2.5px; }
@@ -470,10 +470,10 @@ index 1471d4340bc1349fb5ad7497b40b4d61f90bf6bd..24c024a43603a20dd98961fb8fc19c8d
  .ll-unref { flex: none; font-size: 11.5px; color: var(--st-limit); white-space: nowrap; }
 +/* 選びの印（行 g-select・見本 board-v2 の .ech・.card.dim・.card.ring・.gh.esel・.gh.ring・.lrow.ring）: epic の chip と薄い札と輪 */
 +.pchips { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; margin-left: var(--s2); }
-+.pchip { display: flex; align-items: center; gap: 5px; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font: inherit; font-size: 12px; white-space: nowrap; background: var(--panel); color: inherit; cursor: pointer; }
-+.pchip b { font-weight: 600; color: var(--ink-3); }
-+.pchip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
-+.pchip.on b { color: var(--line-2); }
++.pchips .pchip { display: flex; align-items: center; gap: 5px; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font: inherit; font-size: 12px; white-space: nowrap; background: var(--panel); color: inherit; cursor: pointer; }
++.pchips .pchip b { font-weight: 600; color: var(--ink-3); }
++.pchips .pchip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
++.pchips .pchip.on b { color: var(--line-2); }
 +.kpick { display: block; min-width: 0; transition: opacity .15s; }
 +.kpick.dim { opacity: .3; }
 +.kpick.ring > .kcard { box-shadow: 0 0 0 2px var(--ink); }
@@ -487,10 +487,10 @@ index 1471d4340bc1349fb5ad7497b40b4d61f90bf6bd..24c024a43603a20dd98961fb8fc19c8d
 +.ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }
 diff --git a/crates/tsuzuri-surface/tests/bvsel.rs b/crates/tsuzuri-surface/tests/bvsel.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..1c704c9cc89e81b40290cf914048f4e626e17fd7
+index 0000000000000000000000000000000000000000..373d47948aeb070320640021b90c7c70c44b8ee5
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvsel.rs
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,316 @@
 +//! 行 g-select の歯（接頭辞 bvsel_）: 一覧の組の頭の名と板の見出しの epic の chip で epic を選ぶと、選んだ組でない札を薄くし、
 +//! 札か一覧の行を押して吹き出しを開くと、その札と行と組の頭に輪の印を付ける（判断の記録 ADR-27 の決定 (8)・見本 board-v2 の
 +//! setEpic と applyMarks と renderEchips）。台帳の行と札と bead の事実は歯の中で組む（bead の id の接頭辞は fx-s）。
@@ -734,6 +734,7 @@ index 0000000000000000000000000000000000000000..1c704c9cc89e81b40290cf914048f4e6
 +
 +/// 一覧の行は吹き出しの口の印を持ち押すと吹き出しを開き、組の頭の名は epic を選び、選んだ組と開いた bead の組を開く。
 +/// 板は見出しに epic の chip を置き、札を選びの包みに入れる。App は選びの状態を context に置き、class は stylesheet に在る。
++/// 選びの chip の規則は入れ物 .pchips の下に絞り、既存の .pchip（account board の project の chip と seat の pill）を替えない。
 +#[test]
 +fn bvsel_dom_wiring_text() {
 +    let list = read("src/ledgerlist.rs");
@@ -771,8 +772,10 @@ index 0000000000000000000000000000000000000000..1c704c9cc89e81b40290cf914048f4e6
 +    let css = read("style.css");
 +    for rule in [
 +        ".pchips {",
-+        ".pchip {",
-+        ".pchip.on {",
++        ".pchips .pchip {",
++        ".pchips .pchip b {",
++        ".pchips .pchip.on {",
++        ".pchips .pchip.on b {",
 +        ".kpick.dim { opacity: .3; }",
 +        ".kpick.ring > .kcard {",
 +        ".kpick.dim.ring { opacity: 1; }",
@@ -783,4 +786,24 @@ index 0000000000000000000000000000000000000000..1c704c9cc89e81b40290cf914048f4e6
 +    ] {
 +        assert!(css.contains(rule), "stylesheet に {rule} が無い");
 +    }
++    chip_rules_scoped(&css);
++}
++
++/// 選びの chip の規則は入れ物 .pchips の下だけに在り、絞りの無い .pchip の規則は既存の 2 つの字のまま。
++fn chip_rules_scoped(css: &str) {
++    for bare in [".pchip.on", ".pchip b"] {
++        assert!(
++            !css.lines().any(|l| l.starts_with(bare)),
++            "stylesheet に絞りの無い {bare} の規則が在る"
++        );
++    }
++    let bases: Vec<&str> = css.lines().filter(|l| l.starts_with(".pchip {")).collect();
++    assert_eq!(
++        bases,
++        [
++            ".pchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 var(--s2); border-radius: 999px; border: 1px solid var(--line); font-size: 12px; font-weight: 600; }",
++            ".pchip { max-width: 100%; }",
++        ],
++        "絞りの無い .pchip の規則は既存の 2 つだけ"
++    );
 +}
