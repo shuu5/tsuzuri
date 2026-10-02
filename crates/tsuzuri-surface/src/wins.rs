@@ -154,7 +154,8 @@ mod dom {
         };
         Frame {
             width,
-            title: label(key).into_any(),
+            key,
+            side: None,
             body,
         }
     }

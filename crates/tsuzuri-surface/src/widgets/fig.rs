@@ -3,8 +3,10 @@
 
 use crate::vocab::label;
 
-/// 図の名（見本の FIGS の鍵の順）。
-pub const NAMES: [&str; 7] = ["back", "move", "next", "reserve", "promo", "tick", "hover"];
+/// 図の名（見本の FIGS の鍵の順・末の one と lay は 1 枚の画面と幅の 3 段の図・行 g-help-sweep）。
+pub const NAMES: [&str; 9] = [
+    "back", "move", "next", "reserve", "promo", "tick", "hover", "one", "lay",
+];
 
 /// 図の幅と箱の高さ。
 const WIDTH: i32 = 320;
@@ -170,6 +172,41 @@ const HOVER: Fig = Fig {
     cap: "",
 };
 
+/// 箱の字を語彙の鍵から引く箱（見出しの語と同じ字）。
+const fn tb(x: i32, y: i32, w: i32, key: &'static str, class: &'static str) -> FigBox {
+    FigBox {
+        t: Txt::Term(key),
+        ..b(x, y, w, "", class)
+    }
+}
+
+/// 1 枚の画面（帯の印を押すと窓・札と行を押すと吹き出し）。
+const ONE: Fig = Fig {
+    h: 94,
+    boxes: &[
+        b(4, 8, 96, "帯の印を押す", ""),
+        tb(124, 8, 80, "how_win", "ok"),
+        b(228, 8, 88, "× か Esc", "end"),
+        b(4, 56, 96, "札か行を押す", ""),
+        tb(124, 56, 80, "how_pop", "ok"),
+        b(228, 56, 88, "個別の頁へ", ""),
+    ],
+    edges: &[e(0, 1), e(1, 2), e(3, 4), dash(4, 5)],
+    cap: "",
+};
+
+/// 幅の 3 段（規則の行 R-35）。
+const LAY: Fig = Fig {
+    h: 58,
+    boxes: &[
+        b(2, 8, 100, "1200 以上 横並び", "ok"),
+        b(110, 8, 100, "601〜1199 縦積み", "ok"),
+        b(218, 8, 100, "600 以下 tile", "ok"),
+    ],
+    edges: &[e(0, 1), e(1, 2)],
+    cap: "← 広い · 窓の幅 · 狭い →",
+};
+
 fn fig(name: &str) -> Option<&'static Fig> {
     Some(match name {
         "back" => &BACK,
@@ -179,6 +216,8 @@ fn fig(name: &str) -> Option<&'static Fig> {
         "promo" => &PROMO,
         "tick" => &TICK,
         "hover" => &HOVER,
+        "one" => &ONE,
+        "lay" => &LAY,
         _ => return None,
     })
 }

@@ -1,4 +1,5 @@
-//! block「記号の見方」（見本の `#legend`）: 状態の記号 5 値の凡例と、一覧の項に付く bd の状態の印の凡例。
+//! block「記号の見方」（見本の `#legend`）: 状態の記号 5 値の凡例と、一覧の項に付く bd の状態の印の凡例と、
+//! 画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile の語と「?」の注釈・行 g-help-sweep）。
 
 use super::STATES;
 use crate::frame::Block;
@@ -39,6 +40,14 @@ pub fn marks() -> Vec<Mark> {
     BD_STATUSES.iter().map(|s| mark(s)).collect()
 }
 
+/// 画面の見方の段の見出しの語の鍵。
+pub const HOW_KEY: &str = "how";
+
+/// 画面の見方の語の鍵（並べる順・注釈が部品と開き方を説明する）。
+pub const HOW: [&str; 6] = [
+    "how_one", "how_bar", "how_win", "how_pop", "how_lay", "how_tile",
+];
+
 #[cfg(target_arch = "wasm32")]
 pub fn view() -> leptos::prelude::AnyView {
     use leptos::prelude::*;
@@ -52,6 +61,7 @@ pub fn inner() -> leptos::prelude::AnyView {
     use leptos::prelude::*;
 
     use crate::vocab::label;
+    use crate::widgets::help::hs;
 
     let states = states()
         .into_iter()
@@ -64,6 +74,7 @@ pub fn inner() -> leptos::prelude::AnyView {
     view! {
         <div class="legend5">{states}</div>
         <div class="lgline">{marks}</div>
+        <div class="lghow">{hs(HOW_KEY)}{HOW.map(hs).into_iter().collect_view()}</div>
     }
     .into_any()
 }

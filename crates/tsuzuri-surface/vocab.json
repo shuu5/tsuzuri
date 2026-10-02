@@ -563,7 +563,7 @@
   },
   "status": {
    "label": "記号の見方",
-   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色",
+   "plain": "状態は 5 つの記号 = 色 + 形 + 動き\n{st:run} 動いている\n{st:wait} 待っている\n{st:limit} 限度で止まっている\n{st:silent} 応答なし\n▸\n{st:unknown} 測れていない\n{band:constitution} 四角 = file に書かれた行\n{band:beads} 丸 = 台帳と器の動くもの\n・ 色 = 出所の帯ごとに 1 色\n・ 下の段 = 画面の見方",
    "internal": "稼働状況 5 値（seat state + AllowanceMeasured + tick）"
   },
   "st_run": {
@@ -614,7 +614,7 @@
   },
   "ask_open": {
    "label": "答えを待つ質問",
-   "plain": "上から古い順\n・ 1 つずつ答える\n・ まとめても答えられる",
+   "plain": "あなたの答えを待つ質問\n・ 1 問ずつ出る\n・ 送ると次の質問へ\n・ 全部答えると窓が閉じる\n▸\n・ 題の横の数 = 残り\n・ 下の段 = ほかの project と一括の口",
    "internal": "open の問い（posted_at 昇順）"
   },
   "batch": {
@@ -2121,6 +2121,41 @@
    "label": "古い",
    "plain": "器の局面の出力に古さの印が在る\n・ 印の種類は title に並べる",
    "internal": "電文 CaseDoc の stale が空でない（行 g-unref-lc）"
+  },
+  "how": {
+   "label": "画面の見方",
+   "plain": "この画面の部品と開き方\n・ 名の横の ? を押すと説明",
+   "internal": "project の legend の HOW（行 g-help-sweep）"
+  },
+  "how_one": {
+   "label": "1 枚の画面",
+   "plain": "上の帯と 2 つの面を 1 画面に置く\n{fig:one}\n・ 一覧 = 台帳 open の epic の組\n・ pipeline = 5 つの段の列\n・ 頁は scroll しない\n→ 面の中だけが scroll する",
+   "internal": "pages の home の ONE と PANE（行 g-one-screen-a・判断の記録 ADR-27 決定 (5)）"
+  },
+  "how_bar": {
+   "label": "上の帯",
+   "plain": "画面の上に固定した 1 本の帯\n・ 左 = 次の一手とやる事の数\n・ 中 = 席からの知らせ\n・ 右 = 席と口座・抜け・時計・⚙\n→ 印を押すと窓が開く",
+   "internal": "src/topbar.rs（行 g-topbar）"
+  },
+  "how_win": {
+   "label": "窓",
+   "plain": "帯の印から開く小さな画面\n・ × か窓の外か Esc で閉じる\n・ 窓の中から開いた窓は ‹ 戻る で前へ\n・ 幅 600 以下は全画面",
+   "internal": "widgets::modal（行 g-win-frame）"
+  },
+  "how_pop": {
+   "label": "吹き出し",
+   "plain": "札か一覧の行を押すと開く\n・ 題の全体と概要と段ごとの事実\n・ 個別の頁への口\n・ × か外か Esc で閉じる",
+   "internal": "widgets::pop（行 g-pop）"
+  },
+  "how_lay": {
+   "label": "幅の 3 段",
+   "plain": "窓の幅で 2 つの面の並べ方が替わる\n{fig:lay}\n・ 1200 以上 = 横並び\n・ 601〜1199 = 縦積み\n・ 600 以下 = スマホの形",
+   "internal": "規則の行 R-35（行 g-layout）"
+  },
+  "how_tile": {
+   "label": "段の tile",
+   "plain": "スマホの形で板の代わりに出る\n・ 5 つの段の数と色\n・ 押した段の札だけが下に開く\n・ 初めは札の在る一番急ぐ段",
+   "internal": "pipeline の tiles_view と src/tiles.rs（行 g-layout）"
   }
  }
 }

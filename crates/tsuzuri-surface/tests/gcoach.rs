@@ -1,4 +1,5 @@
-//! 行 g-coach の歯（接頭辞 gcoach_）: 初心者の mode の home の頁の最初の案内（見本 mock v3 の ui.js の coach mark）。
+//! 行 g-coach の歯（接頭辞 gcoach_）: 初心者の mode の home の頁の最初の案内（見本 mock v3 の ui.js の coach mark・
+//! 的と字と置き場は行 g-help-sweep で 1 枚の画面の部品に合わせた）。
 //! 済み印は browser の保存に残し（持ち主の裁定 t3-hub.52.16・要件 FR1）、query の coach=1 で出し直す。
 //! 始めの決め・段の飛ばし・button の字と点・輪と箱の置き場は host の純粋な関数で撃ち、DOM と保存を撃つ所の配線は source の字で見る。
 #![cfg(test)]
@@ -6,10 +7,9 @@
 use std::path::PathBuf;
 
 use tsuzuri_surface::frame::Mode;
-use tsuzuri_surface::project::{next, seat};
 use tsuzuri_surface::widgets::coach::{
-    AGAIN, AGAIN_PARAM, BOX_W, COACH_KEY, DONE, GOT, LABEL, NEXT, Rect, SKIP, STEPS, box_at, dots,
-    first_found, next_text, ring, starts,
+    AGAIN, AGAIN_PARAM, COACH_KEY, DONE, GOT, LABEL, NEXT, Rect, SKIP, STEPS, dots, first_found,
+    next_text, ring, starts,
 };
 
 fn read(rel: &str) -> String {
@@ -24,7 +24,7 @@ fn body<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
     rest.find(end).map_or(rest, |j| &rest[..j])
 }
 
-/// (1) 鍵と値・3 段の selector と字・button の字は見本の字。
+/// (1) 鍵と値と button の字は見本の字・5 段の selector は 1 枚の画面の部品（行 g-help-sweep）。
 #[test]
 fn gcoach_key_steps_and_words() {
     assert_eq!(COACH_KEY, "tz-coach");
@@ -32,18 +32,17 @@ fn gcoach_key_steps_and_words() {
     assert_eq!(AGAIN_PARAM, "coach");
     assert_eq!(AGAIN, "1");
     let sels: Vec<&str> = STEPS.iter().map(|s| s.sel).collect();
-    assert_eq!(sels, ["#next .nxbig", "#orch .big", ".kcard"]);
-    assert_eq!(next::BLOCK.id, "next");
-    assert_eq!(seat::BLOCK.id, "orch");
+    assert_eq!(
+        sels,
+        [
+            "#bar .pill",
+            "#bar .chip",
+            ".ptile",
+            ".board .kcard, .ptlist .kcard",
+            "#bar .gearb"
+        ]
+    );
     let js = read("../../docs/design/mock3/ui.js");
-    let coach = body(&js, "var COACH = [", "];");
-    for s in &STEPS {
-        let text = format!("text: '{}'", s.text);
-        assert!(coach.contains(&text), "見本の COACH に {text} が無い");
-    }
-    for sel in ["sel: '#next .nxbig'", "sel: '.kcard'"] {
-        assert!(coach.contains(sel), "見本の COACH に {sel} が無い");
-    }
     for w in [SKIP, NEXT, GOT, LABEL] {
         let quoted = format!("'{w}'");
         assert!(js.contains(&quoted), "見本に {quoted} が無い");
@@ -70,13 +69,13 @@ fn gcoach_start_rules() {
 fn gcoach_skip_missing_steps() {
     let all = |_: &str| true;
     assert_eq!(first_found(0, all), Some(0));
-    assert_eq!(first_found(2, all), Some(2));
-    assert_eq!(first_found(3, all), None);
-    let cards = |s: &str| s == ".kcard";
-    assert_eq!(first_found(0, cards), Some(2));
-    let next_only = |s: &str| s == "#next .nxbig";
-    assert_eq!(first_found(0, next_only), Some(0));
-    assert_eq!(first_found(1, next_only), None);
+    assert_eq!(first_found(4, all), Some(4));
+    assert_eq!(first_found(5, all), None);
+    let cards = |s: &str| s == ".board .kcard, .ptlist .kcard";
+    assert_eq!(first_found(0, cards), Some(3));
+    let pill_only = |s: &str| s == "#bar .pill";
+    assert_eq!(first_found(0, pill_only), Some(0));
+    assert_eq!(first_found(1, pill_only), None);
     assert_eq!(first_found(0, |_: &str| false), None);
 }
 
@@ -87,15 +86,16 @@ fn gcoach_button_text_and_dots() {
     assert_eq!(GOT, "分かった");
     assert_eq!(SKIP, "閉じる");
     assert_eq!(LABEL, "手引き");
-    assert_eq!(next_text(0), NEXT);
-    assert_eq!(next_text(1), NEXT);
-    assert_eq!(next_text(2), GOT);
-    assert_eq!(dots(0), [true, false, false]);
-    assert_eq!(dots(1), [false, true, false]);
-    assert_eq!(dots(2), [false, false, true]);
+    for step in 0..4 {
+        assert_eq!(next_text(step), NEXT);
+    }
+    assert_eq!(next_text(4), GOT);
+    assert_eq!(dots(0), [true, false, false, false, false]);
+    assert_eq!(dots(2), [false, false, true, false, false]);
+    assert_eq!(dots(4), [false, false, false, false, true]);
 }
 
-/// (5) 輪は枠の 4px 外（scroll を足す）・箱は要素の下 12px で横は 8px の余白で窓に収める。
+/// (5) 輪は要素の枠の 4px 外（窓に固定した座標・scroll を足さない）。
 #[test]
 fn gcoach_ring_and_box_place() {
     let el = Rect {
@@ -105,21 +105,14 @@ fn gcoach_ring_and_box_place() {
         height: 40.0,
     };
     assert_eq!(
-        ring(el, 0.0, 200.0),
+        ring(el),
         Rect {
             left: 96.0,
-            top: 246.0,
+            top: 46.0,
             width: 308.0,
             height: 48.0,
         }
     );
-    assert_eq!(BOX_W, 240.0);
-    assert_eq!(box_at(el, 0.0, 200.0, 1200.0), (100.0, 302.0));
-    let right = Rect { left: 1100.0, ..el };
-    assert_eq!(box_at(right, 0.0, 0.0, 1200.0).0, 952.0);
-    let out = Rect { left: -20.0, ..el };
-    assert_eq!(box_at(out, 0.0, 0.0, 1200.0).0, 8.0);
-    assert_eq!(box_at(el, 30.0, 0.0, 1200.0).0, 130.0);
 }
 
 /// (6) stylesheet は案内の箱と輪と点の規則を持つ。

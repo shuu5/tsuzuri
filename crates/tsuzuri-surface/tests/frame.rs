@@ -505,7 +505,7 @@ fn frame_help_note_splits_lines() {
 
     let s = help::note("status").expect("status の注釈");
     assert_eq!(s.items.len(), 4);
-    assert_eq!(s.more.len(), 4);
+    assert_eq!(s.more.len(), 5);
     assert_eq!(s.more[0].sym, vec![Inline::Sym("st:unknown".to_string())]);
     let b = help::note("b:beads").expect("b:beads の注釈");
     assert_eq!(

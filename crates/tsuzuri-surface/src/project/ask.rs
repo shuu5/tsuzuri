@@ -72,7 +72,7 @@ pub const CARDS_UNKNOWN: &str = "server が台帳を読めず、答えを待つ�
 pub const OTHER_UNKNOWN: &str = "台帳が読めず、答えを待つ質問が分からない";
 
 /// 測れて 0 件のときの 1 行。
-pub const EMPTY: &str = "答えを待つ question は無い";
+pub const EMPTY: &str = "答えを待つ質問は無い";
 
 /// 概要が両方無いときの 1 行。
 pub const NO_SUMMARY: &str = "要約なし";

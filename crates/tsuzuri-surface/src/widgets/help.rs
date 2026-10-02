@@ -257,7 +257,7 @@ pub fn sym_html(sym: &str) -> Option<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::{HelpCtx, TipLayer, expert_tip, h1, h2, hs, qmark, term};
+pub use dom::{HelpCtx, TipLayer, expert_tip, h1, h2, h3, hs, qmark, term};
 
 #[cfg(target_arch = "wasm32")]
 mod dom {
@@ -427,6 +427,11 @@ mod dom {
 
     pub fn h2(key: &'static str) -> AnyView {
         view! { <h2 class="hd" data-v=key>{label_with_q(key)}</h2> }.into_any()
+    }
+
+    /// 窓の題（語の鍵の見出しと「?」・行 g-help-sweep）。
+    pub fn h3(key: &'static str) -> AnyView {
+        view! { <h3 data-v=key>{label_with_q(key)}</h3> }.into_any()
     }
 
     /// 見出しの形をした短い札（列の名・数の名）。

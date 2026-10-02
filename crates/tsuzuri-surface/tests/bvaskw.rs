@@ -14,7 +14,7 @@ use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionList};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::askwin::{
     ADVANCE_MS, DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, UNKNOWN_COUNT, current, dot_class,
-    later, left, others_count, others_title, own_ids, phase, remaining, title, unread,
+    count_text, later, left, others_count, others_title, own_ids, phase, remaining, unread,
 };
 use tsuzuri_surface::project::{NOT_READ, ask};
 use tsuzuri_surface::view::Fetched;
@@ -102,13 +102,13 @@ fn bvaskw_close_when_none_left() {
     }
 }
 
-/// 題は「答えを待つ質問 <残り>」で、点は今の問いが cur・答えた問いが ok。1 問ずつ出すのはこの project の問いだけ。
+/// 題の横は残りの数で、点は今の問いが cur・答えた問いが ok。1 問ずつ出すのはこの project の問いだけ。
 #[test]
 fn bvaskw_dots_and_title() {
     let all = ids(&["q.1", "q.2", "q.3"]);
     let done = set(&["q.1"]);
     assert_eq!(left(&all, &done), 2);
-    assert_eq!(title(Some(2)), "答えを待つ質問 2");
+    assert_eq!(count_text(Some(2)), "2");
     let classes: Vec<&str> = all
         .iter()
         .map(|id| dot_class(id, Some("q.2"), &done))
@@ -258,8 +258,8 @@ fn bvaskw_unread_not_empty() {
     assert_eq!(remaining(Phase::Walk, &all, &set(&["q.1"])), Some(1));
     assert_eq!(remaining(Phase::Empty, &[], &set(&[])), Some(0));
     assert_eq!(UNKNOWN_COUNT, "?");
-    assert_eq!(title(None), "答えを待つ質問 ?");
-    assert_eq!(title(Some(0)), "答えを待つ質問 0");
+    assert_eq!(count_text(None), "?");
+    assert_eq!(count_text(Some(0)), "0");
 }
 
 /// ほかの project の質問の段の数: 問いの一覧が読めないか台帳が読めないほかの project が在れば 0 でなく「?」。
@@ -313,7 +313,7 @@ fn bvaskw_unread_dom_text() {
     for needle in [
         "let reason = Memo::new(move |_| fetched.with(unread));",
         "phase(reason.get(), i, a)",
-        "{move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}",
+        "<span class=\"num\">{move || count_text(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}</span>",
         "Phase::Unmeasured(reason) => body_view(Body::Unmeasured(reason)),",
         "let others = Memo::new(move |_| fetched.with(others_count));",
         "let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));",

@@ -69,7 +69,7 @@ fn hfig_names_and_svg_some() {
     assert!(read("src/widgets/mod.rs").contains("pub mod fig;"));
     assert_eq!(
         NAMES,
-        ["back", "move", "next", "reserve", "promo", "tick", "hover"]
+        ["back", "move", "next", "reserve", "promo", "tick", "hover", "one", "lay"]
     );
     for name in NAMES {
         assert!(fig::svg(name).is_some(), "{name} が None");
@@ -90,6 +90,8 @@ fn hfig_svg_head_and_counts() {
         ("promo", 64, 4, 3, 1),
         ("tick", 50, 3, 2, 0),
         ("hover", 56, 3, 2, 0),
+        ("one", 94, 6, 4, 1),
+        ("lay", 58, 3, 2, 0),
     ];
     for (name, h, rects, markers, dashes) in table {
         let s = svg(name);
@@ -210,6 +212,8 @@ fn hfig_fig_of_note_lines() {
     let want = [
         ("acct_back", "back"),
         ("candidates", "reserve"),
+        ("how_lay", "lay"),
+        ("how_one", "one"),
         ("lg_hover", "hover"),
         ("memo_promo", "promo"),
         ("move_state", "move"),

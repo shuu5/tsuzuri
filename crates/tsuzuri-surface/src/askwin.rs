@@ -127,15 +127,13 @@ pub fn remaining(state: Phase, ids: &[String], answered: &BTreeSet<String>) -> O
     }
 }
 
-/// 数の字（分からなければ UNKNOWN_COUNT）。
-fn count_text(n: Option<usize>) -> String {
+/// 数の字（分からなければ UNKNOWN_COUNT・窓の題の横の残りの数とほかの project の質問の数）。
+pub fn count_text(n: Option<usize>) -> String {
     n.map_or_else(|| UNKNOWN_COUNT.to_string(), |n| n.to_string())
 }
 
-/// 窓の題の字（見本の「答えを待つ質問 <残り>」・残りが分からなければ「?」）。
-pub fn title(left: Option<usize>) -> String {
-    format!("{} {}", label("ask_open"), count_text(left))
-}
+/// 窓の題の語の鍵（題の見出しは語の字だけで、残りの数は見出しの外の `.num` に出す・行 g-help-sweep）。
+pub const TITLE_KEY: &str = "ask_open";
 
 /// 下の段のほかの project の質問の段の題（語とほかの project の問いの数・分からなければ「?」）。
 pub fn others_title(n: Option<usize>) -> String {
@@ -164,8 +162,8 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, others_count,
-        others_title, own_ids, phase, remaining, title, unread,
+        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, TITLE_KEY, count_text, current, dot_class,
+        later, others_count, others_title, own_ids, phase, remaining, unread,
     };
     use crate::project::{Body, ask, askpage, batch, body_view, policy};
     use crate::topbar::Win;
@@ -302,7 +300,7 @@ mod dom {
                 .collect_view()
         };
         view! {
-            {move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}
+            <span class="num">{move || count_text(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}</span>
             <span class="qdots">{dots}</span>
         }
         .into_any()
@@ -373,7 +371,8 @@ mod dom {
         let walk = steps(ctx, w);
         Frame {
             width: frame_of(Win::Ask).0,
-            title: head(w),
+            key: TITLE_KEY,
+            side: Some(head(w)),
             body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),
         }
     }
