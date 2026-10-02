@@ -111,10 +111,10 @@ index 62313c0298ce6aad09d2178551bbce07bb0a6b44..f9e4c3924495f20d62a7253f2d4c3b86
      first,
      errors: [],
 diff --git a/crates/tsuzuri-boundary/tests/bvacc.rs b/crates/tsuzuri-boundary/tests/bvacc.rs
-index 7ab15b483d55fc6a527b8c75abf0522c708ea3dc..d027221c5a0615140edabf04d8c2159c451cfb78 100644
+index eba7e381fd00760fc92e956400036a1d45611e99..91e4831dcd5a2c4b59e47e96fb860c5a899f952d 100644
 --- a/crates/tsuzuri-boundary/tests/bvacc.rs
 +++ b/crates/tsuzuri-boundary/tests/bvacc.rs
-@@ -87,7 +87,7 @@ fn bvacc_probe_reads_pops_and_windows() {
+@@ -219,7 +219,7 @@ fn bvacc_probe_reads_pops_and_windows() {
      for want in [
          mouth.as_str(),
          "const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0);",
@@ -125,10 +125,10 @@ index 7ab15b483d55fc6a527b8c75abf0522c708ea3dc..d027221c5a0615140edabf04d8c2159c
          "const modal = Array.from(document.querySelectorAll(\"[aria-modal=true]\")).find(shown);",
 diff --git a/crates/tsuzuri-boundary/tests/bvafix.rs b/crates/tsuzuri-boundary/tests/bvafix.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da31734fdfb
+index 0000000000000000000000000000000000000000..09655115b8449ad88ca6814149122bb57653ab5e
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/bvafix.rs
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,493 @@
 +//! 行 g-accept-fix の歯（接頭辞 bvafix_）: 受入の残りの違反 2 つを 0 にする。
 +//! hover の欠けの数えを節点の頁の近傍の図の委ねの口（祖先の mouseover と mouseout）にも合わせ、測りの式は節点の札ごとに
 +//! 段ごとの受け手の種類を返すだけで、card を出せるかの判じは audit の側が持つ（欠けの在る fixture で数えが落ちることを
@@ -260,30 +260,122 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +    }
 +}
 +
-+/// (4) 測りの式は節点の札（口の外の節点の頁への link と近傍の図の節点）ごとに、自分から body の手前の祖先まで段ごとに
-+/// pointerenter と mouseover と mouseout の受け手の種類を返し、nocard は吹き出しの口の欠けだけを持つ。
-+/// 面の近傍の図は、節点の箱（g.node）の祖先の図の置き場に mouseover と mouseout を対で付ける。
-+#[test]
-+fn bvafix_probe_text() {
-+    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++/// 字 `head` で始まる所から次の閉じの字 `close` の手前までの本文（JS の束縛や Rust の関数を 1 つ切る・`head` は 1 つだけ）。
++fn item<'a>(text: &'a str, head: &str, close: &str) -> &'a str {
++    assert_eq!(text.matches(head).count(), 1, "{head}");
++    let body = &text[pos(text, head)..];
++    &body[..pos(body, close)]
++}
++
++/// 字 `want` の位置（無ければ落ちる）。
++fn pos(text: &str, want: &str) -> usize {
++    text.find(want).unwrap_or_else(|| panic!("{want} が無い"))
++}
++
++/// 空白の続きを 1 つの空白に縮めた字（改行と字下げの違いを問わずに式の続きを比べる）。
++fn flat(text: &str) -> String {
++    text.split_whitespace().collect::<Vec<_>>().join(" ")
++}
++
++/// 名に使える字（英数字と _）の続きが `word` ちょうどである所の数（束縛の使い道を数える）。
++fn uses(text: &str, word: &str) -> usize {
++    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
++        .filter(|w| *w == word)
++        .count()
++}
++
++/// 関数 kinds: 祖先へ上る for の中でその段の要素 n の受け手を読み（束縛 l は読みと段の字の 2 所）、段の列 up は for の前に
++/// 作って for の中で積み、for の後に名と一緒に返す（up は 3 所）。
++fn kinds_walk(probe: &str) {
++    let kinds = item(probe, "  const kinds = (e) => {\n", "\n  };\n");
++    let walk = "    for (let n = e; n && n !== document.body; n = n.parentElement) {\n";
++    let step = item(kinds, walk, "\n    }\n");
++    assert!(
++        pos(kinds, "    const up = [];\n") < pos(kinds, walk),
++        "段の列 up は for の前"
++    );
 +    for want in [
-+        "for (let n = e; n && n !== document.body; n = n.parentElement) {",
++        "const l = getEventListeners(n);",
 +        "up.push([\"pointerenter\", \"mouseover\", \"mouseout\"].filter((k) => (l[k] || []).length > 0).join(\" \"));",
-+        "return { name: name(e), up };",
-+        "  const nocard = nopop.map(name);\n",
-+        "  const reach = seen\n    .filter((e) => (e.matches(\"a[href]\") && e.getAttribute(\"href\").includes(\"page=node\")) || e.matches(\".node\"))\n",
-+        "    .filter((e) => !e.closest(mouth))\n    .map(kinds);\n",
-+        "    nocard,\n    reach,\n",
 +    ] {
-+        assert_eq!(probe.matches(want).count(), 1, "measure.js の {want}");
++        assert_eq!(step.matches(want).count(), 1, "for の中の {want}");
 +    }
-+    assert!(!probe.contains("entered"), "前の pointerenter だけの見方");
++    assert!(
++        pos(step, "const l =") < pos(step, "up.push("),
++        "段の受け手を読んでから積む"
++    );
++    assert_eq!(
++        kinds.matches("getEventListeners(").count(),
++        1,
++        "kinds の受け手の読みは for の中の 1 つ"
++    );
++    assert_eq!(uses(step, "l"), 2, "受け手の束縛 l は読みと段の字の 2 所");
++    assert_eq!(uses(kinds, "up"), 3, "段の列 up は作る・積む・返すの 3 所");
++    let after = &kinds[pos(kinds, walk) + step.len()..];
++    assert_eq!(
++        after.matches("return { name: name(e), up };").count(),
++        1,
++        "for の後に名と段の列を返す"
++    );
++}
++
++/// 面の近傍の図: 図の置き場に mouseover と mouseout を対で付け、節点の箱を関数 node_key の g.node で引き、over は的の
++/// 節点の card を出し、out は card を離れる。
++fn around_hooks() {
 +    let around = read("crates/tsuzuri-surface/src/project/nodearound.rs");
 +    assert!(
 +        around.contains("<div class=\"nb-graph\" node_ref=gz inner_html=picture\n                on:mouseover=over on:mouseout=out"),
 +        "近傍の図の委ねの口"
 +    );
-+    assert!(around.contains("el.closest(\"g.node\")"), "節点の箱");
++    let key = item(&around, "    fn node_key(", "\n    }\n");
++    assert!(key.contains("el.closest(\"g.node\")"), "節点の箱");
++    let over = item(
++        &around,
++        "        let over = move |ev: ev::MouseEvent| {\n",
++        "\n        };\n",
++    );
++    assert!(
++        over.contains("node_key(ev.target())") && over.contains("hc.show(&ev, card);"),
++        "{over}"
++    );
++    let out = item(
++        &around,
++        "        let out = move |ev: ev::MouseEvent| {\n",
++        "\n        };\n",
++    );
++    assert!(out.contains("hc.leave(&ev);"), "{out}");
++}
++
++/// (4) 測りの式は節点の札（口の外の節点の頁への link と近傍の図の節点）ごとに、自分から body の手前の祖先まで段ごとに
++/// pointerenter と mouseover と mouseout の受け手の種類を返し、nocard は吹き出しの口の欠けだけを持つ。
++/// 段ごとの読みは関数 kinds の祖先へ上る for の中でその段の要素 n の受け手を読み、事実の欄 reach は見える要素の列 seen から
++/// 2 つの filter と kinds の map を続けた 1 つの鎖で作る（鎖の頭から尾までを続きの字で比べる）。
++/// 面の近傍の図は、節点の箱（g.node）の祖先の図の置き場に mouseover と mouseout を対で付け、card の出し消しは節点の箱で引く。
++#[test]
++fn bvafix_probe_text() {
++    let probe = read("crates/tsuzuri-boundary/src/stage/measure.js");
++    kinds_walk(&probe);
++    for (head, want) in [
++        (
++            "  const nopop = ",
++            "const nopop = seen.filter((e) => e.matches(mouth)).filter((e) => (getEventListeners(e).click || []).length === 0)",
++        ),
++        ("  const nocard = ", "const nocard = nopop.map(name)"),
++        (
++            "  const reach = ",
++            "const reach = seen .filter((e) => (e.matches(\"a[href]\") && e.getAttribute(\"href\").includes(\"page=node\")) || e.matches(\".node\")) .filter((e) => !e.closest(mouth)) .map(kinds)",
++        ),
++    ] {
++        assert_eq!(flat(item(&probe, head, ";\n")), want, "{head} の鎖");
++    }
++    let back = item(&probe, "  return JSON.stringify({\n", "\n  });\n");
++    assert_eq!(
++        back.matches("    nocard,\n    reach,\n").count(),
++        1,
++        "返す欄 reach は nocard の次"
++    );
++    assert!(!probe.contains("entered"), "前の pointerenter だけの見方");
++    around_hooks();
 +}
 +
 +/// 字の中の `head` で始まる規則の塊（次の `\n}\n` まで）。
@@ -293,6 +385,110 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +    &body[..body
 +        .find("\n}\n")
 +        .unwrap_or_else(|| panic!("{head} の閉じ"))]
++}
++
++/// 幅 760 px 以下の塊の頭（761 px 以上では効かない）。
++const NARROW: &str = "@media (max-width: 760px)";
++
++/// 中の幅の塊の頭。
++const MID: &str = "@media (min-width: 761px) and (max-width: 1239px)";
++
++/// stylesheet の規則 1 つ: 囲む塊の頭（最上位は空の字）・選びの列（, で割った字）・宣言の列（名と値）・`{` の位置。
++struct Rule {
++    within: String,
++    sel: Vec<String>,
++    decls: Vec<(String, String)>,
++    at: usize,
++}
++
++/// 宣言の字（名と値の列）を名と値の対に割る。
++fn decls(body: &str) -> Vec<(String, String)> {
++    body.split(';')
++        .filter_map(|d| d.split_once(':'))
++        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
++        .collect()
++}
++
++/// 注を空白に替えた stylesheet を波括弧の深さで規則に割る（@ で始まる頭は塊・それ以外は中に波括弧を持たない規則）。
++fn rules(css: &str) -> Vec<Rule> {
++    let mut text = css.to_owned();
++    while let Some(a) = text.find("/*") {
++        let b = text[a..].find("*/").map_or(text.len(), |b| a + b + 2);
++        text.replace_range(a..b, &" ".repeat(b - a));
++    }
++    let (mut out, mut heads, mut start) = (Vec::new(), Vec::<String>::new(), 0);
++    while let Some(off) = text[start..].find(['{', '}', ';']) {
++        let at = start + off;
++        let head = text[start..at].trim().to_owned();
++        start = at + 1;
++        match &text[at..=at] {
++            "{" if head.starts_with('@') => heads.push(head),
++            "{" => {
++                let end = at + pos(&text[at..], "}");
++                out.push(Rule {
++                    within: heads.last().cloned().unwrap_or_default(),
++                    sel: head.split(',').map(|s| s.trim().to_owned()).collect(),
++                    decls: decls(&text[at + 1..end]),
++                    at,
++                });
++                start = end + 1;
++            }
++            "}" => {
++                heads.pop();
++            }
++            _ => {}
++        }
++    }
++    out
++}
++
++/// 最上位の規則 `sel { body }` が 1 つだけ在り、その後に在って幅 761 px 以上で効く規則（最上位と、幅 760 px 以下の塊の外の塊）の
++/// うち選びの列に同じ `sel` を持つ規則は、その宣言の名をどれも宣言しない（同じ詳しさの後の規則に上書きされない）。
++fn wins(all: &[Rule], sel: &str, body: &str) {
++    let want = decls(body);
++    let mine: Vec<&Rule> = all
++        .iter()
++        .filter(|r| r.sel == [sel] && r.decls == want)
++        .collect();
++    assert_eq!(mine.len(), 1, "{sel} {{ {body} }}");
++    assert_eq!(mine[0].within, "", "{sel} は media の塊の外（最上位）");
++    let later = all
++        .iter()
++        .filter(|r| r.at > mine[0].at && r.within != NARROW && r.sel.iter().any(|s| s == sel));
++    for r in later {
++        assert!(
++            !r.decls
++                .iter()
++                .any(|(k, _)| want.iter().any(|(w, _)| w == k)),
++            "{sel} の宣言を後の規則（塊 {} の中・{:?}）が上書き",
++            r.within,
++            r.decls
++        );
++    }
++}
++
++/// 塊 `head` の中の規則は、選びの字を 1 つでも同じくして同じ名の宣言を持つ最上位の規則のどれよりも後に在る（cascade で勝つ）。
++fn after_top(all: &[Rule], head: &str) {
++    let inner: Vec<&Rule> = all.iter().filter(|r| r.within == head).collect();
++    assert!(!inner.is_empty(), "{head} の規則");
++    for r in &inner {
++        let same = all
++            .iter()
++            .filter(|t| t.within.is_empty() && t.sel.iter().any(|s| r.sel.contains(s)))
++            .filter(|t| {
++                t.decls
++                    .iter()
++                    .any(|(k, _)| r.decls.iter().any(|(w, _)| w == k))
++            });
++        for top in same {
++            assert!(
++                top.at < r.at,
++                "{head} の {:?} より後に最上位の {:?}",
++                r.sel,
++                top.sel
++            );
++        }
++    }
 +}
 +
 +/// grid-template-columns の字の列ごとの最小の px（minmax の最小か固い px）の和。
@@ -309,16 +505,61 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +        .sum()
 +}
 +
++/// 台帳の列の 1 行目（語の中で折らない）・行の 1 行目の要素の送り・run の数・開くの button の規則は最上位に在って後の規則や
++/// 中の幅の塊に上書きされず、幅 761 px 以上で効く規則に台帳の列の 1 行目と run の数を 1 行に留める規則は無い。
++fn held(all: &[Rule]) {
++    for (sel, body) in [
++        (".prow .c-led .l1", "white-space: nowrap;"),
++        (
++            ".prow .l1",
++            "display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;",
++        ),
++        (
++            ".prow .c-run .rc4",
++            "display: inline-flex; flex-wrap: wrap; gap: 4px 8px; font-size: 14px;",
++        ),
++        (
++            ".prow .c-open .btn",
++            "font-size: 14px; padding: 0 8px; white-space: normal;",
++        ),
++    ] {
++        wins(all, sel, body);
++    }
++    let nowrap = ("flex-wrap".to_owned(), "nowrap".to_owned());
++    for r in all.iter().filter(|r| r.within != NARROW) {
++        let keeps = r
++            .sel
++            .iter()
++            .any(|s| s.starts_with(".prow") && (s.ends_with(".rc4") || s.ends_with(".c-led .l1")));
++        assert!(
++            !(keeps && r.decls.contains(&nowrap)),
++            "1 行に留める規則 {:?}",
++            r.sel
++        );
++    }
++}
++
 +/// (5) account board の各 project の表: 広い段の列の最小の和は 1140 px で、761〜1239 px の中の幅は台帳・run の数・
 +/// orchestrator・口座の列を開いた行の中へ移した 5 列（最小の和に頁の左右の余白 82 px を足して 761 px に収まる）、
 +/// 台帳の列と run の数の列と開くの button（横の余白 8 px）は収まらない分を次の行へ送る。
++/// 中の幅の塊の規則は、同じ選びで同じ性質を宣言する最上位の規則（広い段の .prow ほか）より後に在り、台帳の列の 1 行目・
++/// run の数・開くの button の規則は最上位に在って後の規則や中の幅の塊に上書きされない。
 +#[test]
 +fn bvafix_ptab_mid_range() {
 +    let css = read("crates/tsuzuri-surface/style.css");
++    let all = rules(&css);
 +    let wide = ".prow { display: grid; grid-template-columns: ";
 +    let at = css.find(wide).expect("広い段の .prow") + wide.len();
 +    let columns = css[at..].split(';').next().unwrap_or_default();
 +    assert_eq!(least(columns), 1140, "{columns}");
++    let first = all
++        .iter()
++        .find(|r| r.sel == [".prow"])
++        .expect("広い段の .prow");
++    assert_eq!(
++        first.within, "",
++        "広い段の .prow は media の塊の外（最上位）"
++    );
 +    let mid = block(&css, "@media (min-width: 761px) and (max-width: 1239px) {");
 +    let row = "  .prow { grid-template-columns: ";
 +    let at = mid.find(row).expect("中の幅の .prow") + row.len();
@@ -333,6 +574,7 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +    ] {
 +        assert_eq!(mid.matches(want).count(), 1, "中の幅の {want}");
 +    }
++    after_top(&all, MID);
 +    for want in [
 +        ".prow .c-led .l1 { white-space: nowrap; } .prow .c-orch { flex-wrap: nowrap; white-space: nowrap; gap: 4px; }",
 +        ".prow .l1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }",
@@ -341,6 +583,7 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +    ] {
 +        assert_eq!(css.matches(want).count(), 1, "style.css の {want}");
 +    }
++    held(&all);
 +    for gone in [
 +        ".prow .c-led .l1, .prow .c-orch",
 +        ".prow .c-run .rc4 { flex-wrap: nowrap; }",
@@ -351,9 +594,11 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +
 +/// (6) account board の HOME の口座の表（class acct-grid）の見出しの行は、見出しの箱（class hd）が折り返して縮み、
 +/// 見出しの字（class hd-t）は語の中でも折れる（初心者の「?」の分で 960 の列から溢れた）。
++/// 見出しの 2 つの規則と表の列と見出しの箱の既定は最上位に在り、後の規則や幅 761 px 以上で効く塊に上書きされない。
 +#[test]
 +fn bvafix_grid_head_wraps() {
 +    let css = read("crates/tsuzuri-surface/style.css");
++    let all = rules(&css);
 +    let want = ".acct-grid > .hrow .hd { flex-wrap: wrap; min-width: 0; } .acct-grid > .hrow .hd-t { overflow-wrap: anywhere; }";
 +    assert_eq!(css.matches(want).count(), 1, "style.css の {want}");
 +    let grid = ".acct-grid { display: grid; grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr)) 150px 76px; gap: 0; }";
@@ -362,6 +607,20 @@ index 0000000000000000000000000000000000000000..56b10bad26a9ef8002047866ff990da3
 +        css.contains(".hd { display: inline-flex; align-items: center; gap: var(--s2); }"),
 +        "見出しの箱の既定"
 +    );
++    for (sel, body) in [
++        (".acct-grid > .hrow .hd", "flex-wrap: wrap; min-width: 0;"),
++        (".acct-grid > .hrow .hd-t", "overflow-wrap: anywhere;"),
++        (
++            ".acct-grid",
++            "display: grid; grid-template-columns: 80px 156px repeat(3, minmax(0, 1fr)) 150px 76px; gap: 0;",
++        ),
++        (
++            ".hd",
++            "display: inline-flex; align-items: center; gap: var(--s2);",
++        ),
++    ] {
++        wins(&all, sel, body);
++    }
 +}
 diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/jcount.rs
 index 82efca7518079b84afe3a3d24da24ec2987b7e67..c3bddc7b578fffc5f7112cbd8d38b0264e9c457f 100644
@@ -388,7 +647,7 @@ index 23e885e772da8efee1fb0ca422d3906f3af8afce..54367124db606f8d60f2b95e5841b976
              "first",
              "errors",
 diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
-index 61b41416d84d1d92d8f9ef1826294f24413d2fa1..692dcf72d49b06d305bde362b14f11337c874e74 100644
+index 441ac4e0adda3078279af6814f43149d9c0dc2a5..7b1ebcedd1d7cab51811bf393e31443aea02aa9d 100644
 --- a/crates/tsuzuri-surface/style.css
 +++ b/crates/tsuzuri-surface/style.css
 @@ -641,6 +641,7 @@ table.mx th .bchip { margin-right: 4px; }
