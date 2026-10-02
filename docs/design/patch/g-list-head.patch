@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index 7f187a433bd00996ac2f08c14a22a377f16b3f89..8ac5a1ce68504ef5723c76204857ff4b5beed5d7 100644
+index 8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a..b6b4534fb610d8be14504a90cfc3ad90a7304c7a 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
 @@ -3,7 +3,9 @@
@@ -27,7 +27,7 @@ index 7f187a433bd00996ac2f08c14a22a377f16b3f89..8ac5a1ce68504ef5723c76204857ff4b
  use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
  use crate::project::{Body, LEDGER_UNREAD};
  use crate::view::{Fetched, id_order, read_rows};
-@@ -280,6 +285,87 @@ pub fn content(
+@@ -288,6 +293,87 @@ pub fn content(
      }
  }
  
@@ -115,19 +115,17 @@ index 7f187a433bd00996ac2f08c14a22a377f16b3f89..8ac5a1ce68504ef5723c76204857ff4b
  #[cfg(target_arch = "wasm32")]
  pub use dom::view;
  
-@@ -288,7 +374,10 @@ pub use dom::view;
- mod dom {
+@@ -297,7 +383,8 @@ mod dom {
      use leptos::prelude::*;
  
--    use super::{FACTS_PATH, Lgroup, Lrow, NO_KIDS, content, kind_tag};
-+    use super::{
-+        FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT, content, filtered,
-+        filtering, kind_tag, kpi,
-+    };
+     use super::{
+-        COUNTS_UNKNOWN, FACTS_PATH, Lgroup, Lrow, NO_KIDS, content, head_counts, kind_tag,
++        COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
++        content, filtered, filtering, head_counts, kind_tag, kpi,
+     };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
-     use crate::project::{Body, ledger, pipeline, unmeasured};
-@@ -296,12 +385,14 @@ mod dom {
+@@ -306,12 +393,14 @@ mod dom {
      use crate::widgets::help::HelpCtx;
      use crate::widgets::pop::board_unread;
  
@@ -143,7 +141,7 @@ index 7f187a433bd00996ac2f08c14a22a377f16b3f89..8ac5a1ce68504ef5723c76204857ff4b
          let list = move || {
              let got =
                  rows.with(|l| pipe.with(|p| beads.with(|b| content(l, p, b, crate::net::now()))));
-@@ -310,24 +401,61 @@ mod dom {
+@@ -320,24 +409,61 @@ mod dom {
                  Body::Empty(line) => {
                      view! { <div class="empty"><span>{line}</span></div> }.into_any()
                  }

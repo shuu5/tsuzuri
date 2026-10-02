@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index b13f6cff77f122f81188d2df7409791c48e63509..de7b160d61155ce451bb39a5dcd19fb508e2912b 100644
+index f7fa4412f097e62107862cb290cc2f2c33d35dbb..30620068d01f1c54142c9d65782d43a0c53bd86f 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
 @@ -5,6 +5,8 @@
@@ -22,7 +22,7 @@ index b13f6cff77f122f81188d2df7409791c48e63509..de7b160d61155ce451bb39a5dcd19fb5
  };
  use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
  use crate::project::{Body, LEDGER_UNREAD};
-@@ -364,12 +366,12 @@ pub fn kpi_text(s: &LedgerStats) -> String {
+@@ -372,12 +374,12 @@ pub fn kpi_text(s: &LedgerStats) -> String {
      )
  }
  
@@ -37,13 +37,13 @@ index b13f6cff77f122f81188d2df7409791c48e63509..de7b160d61155ce451bb39a5dcd19fb5
          ),
          Err(_) => (KPI_UNKNOWN.to_string(), None),
      }
-@@ -500,11 +502,12 @@ mod dom {
+@@ -509,11 +511,12 @@ mod dom {
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
 -    use crate::project::ledger::stats;
 +    use crate::project::ledger::{burn_card, stats};
-     use crate::project::{Body, ledger, pipeline, unmeasured};
+     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
      use crate::view::read_rows;
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
@@ -51,7 +51,7 @@ index b13f6cff77f122f81188d2df7409791c48e63509..de7b160d61155ce451bb39a5dcd19fb5
      use crate::widgets::pop::{PopCtx, Via, board_unread};
  
      /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
-@@ -584,7 +587,10 @@ mod dom {
+@@ -593,7 +596,10 @@ mod dom {
          let metrics = crate::net::read(ledger::METRICS_PATH);
          let kpis = move || {
              let (text, svg) = metrics.with(kpi);
@@ -904,7 +904,7 @@ index ef3c1ce6f2d3a6e4931e9a74d3a4bcf230e679e5..dece1c189c27fbb613fb7f58187ef9db
      for bad in [
          Fetched::NotRead,
 diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/bvlist.rs
-index 1431c37bc43684d21a78098976f414a842628973..762ed46cd8856bff2cdb00581860cc3119bd4622 100644
+index c9dd40b1b74a8d584daf226d162944a75341c023..6a037b9fcec9eb4cefee78e29405cfdc469a1f13 100644
 --- a/crates/tsuzuri-surface/tests/bvlist.rs
 +++ b/crates/tsuzuri-surface/tests/bvlist.rs
 @@ -377,13 +377,13 @@ fn bvlist_content_reads_three_paths() {

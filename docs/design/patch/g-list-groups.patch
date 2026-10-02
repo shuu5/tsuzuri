@@ -1,9 +1,9 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..7f187a433bd00996ac2f08c14a22a377f16b3f89
+index 0000000000000000000000000000000000000000..8c2e4bffd0e60f61c89ced227fc6d7999f7a2b9a
 --- /dev/null
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
-@@ -0,0 +1,422 @@
+@@ -0,0 +1,437 @@
 +//! 台帳 open の一覧（判断の記録 ADR-27 の決定 (8)・行 g-list-groups）: epic ごとの組にし、組の頭の 1 行に
 +//! 進みの棒（組の行の閉じた数と全部の数）と、板で動いている札の段ごとの数と、open の行の数を出す。行は 1 行の短い題。
 +//! 既定で開く組は、板で動いている札を持つ組と open の行を持つ組だけで、ほかは畳む（開き閉じは頁の一生の間だけ持つ）。
@@ -262,6 +262,14 @@ index 0000000000000000000000000000000000000000..7f187a433bd00996ac2f08c14a22a377
 +    out
 +}
 +
++/// 板が読めない間に組の頭の段の数の代わりに出す字（数を描かない・0 と見せない）。
++pub const COUNTS_UNKNOWN: &str = "?";
++
++/// 組の頭に描く段の数（板が読めない間は None で数を描かず `COUNTS_UNKNOWN` の 1 つにする・読めれば 0 でない列だけ）。
++pub fn head_counts(g: &Lgroup, unread: bool) -> Option<Vec<(Lane, usize)>> {
++    (!unread).then(|| g.counts.iter().filter(|(_, n)| *n > 0).copied().collect())
++}
++
 +/// 一覧の中身（台帳が読めなければ測れていない・行の無い台帳は EMPTY・出す組が無ければ NO_OPEN）。
 +/// 板の札と bead の事実が読めない間は、段の数を 0・行の段の字を起票からの経過・短い題を台帳の題にする（板が読めない間は
 +/// view が一覧の頭に板の読めない理由を測れていないの 1 行で出し、札が無いとは見せない・widgets の pop の `board_unread`）。
@@ -294,10 +302,12 @@ index 0000000000000000000000000000000000000000..7f187a433bd00996ac2f08c14a22a377
 +mod dom {
 +    use leptos::prelude::*;
 +
-+    use super::{FACTS_PATH, Lgroup, Lrow, NO_KIDS, content, kind_tag};
++    use super::{
++        COUNTS_UNKNOWN, FACTS_PATH, Lgroup, Lrow, NO_KIDS, content, head_counts, kind_tag,
++    };
 +    use crate::frame::{Mode, node_href};
 +    use crate::kit::Folds;
-+    use crate::project::{Body, ledger, pipeline, unmeasured};
++    use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
 +    use crate::vocab::label;
 +    use crate::widgets::help::HelpCtx;
 +    use crate::widgets::pop::board_unread;
@@ -382,14 +392,19 @@ index 0000000000000000000000000000000000000000..7f187a433bd00996ac2f08c14a22a377
 +                <span class="ll-pn num">{ratio}</span>
 +            }
 +        });
-+        let dots = g
-+            .counts
-+            .iter()
-+            .filter(|(_, n)| *n > 0)
-+            .map(|(lane, n)| {
-+                view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{*n}</b> }
-+            })
-+            .collect_view();
++        // 板が読めない間は段の数を描かず「?」の 1 つにする（0 の札と見せない・list が板を読み直すと組み直す）。
++        let unread = crate::net::read(pipeline::PATH).with_untracked(|p| board_unread(p).is_some());
++        let dots = match head_counts(g, unread) {
++            Some(counts) => counts
++                .into_iter()
++                .map(|(lane, n)| {
++                    view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{n}</b> }
++                })
++                .collect_view()
++                .into_any(),
++            None => view! { <b class="ll-sd" title=label(state_key(UNKNOWN))>{COUNTS_UNKNOWN}</b> }
++                .into_any(),
++        };
 +        let gid = g
 +            .epic
 +            .clone()
@@ -628,10 +643,10 @@ index a21a164c42830bbee3414de06f71dae63a5a5040..38994acfd9cdaf69e54e12157bfe5509
      }
 diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/bvlist.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..1431c37bc43684d21a78098976f414a842628973
+index 0000000000000000000000000000000000000000..c9dd40b1b74a8d584daf226d162944a75341c023
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvlist.rs
-@@ -0,0 +1,444 @@
+@@ -0,0 +1,479 @@
 +//! 行 g-list-groups の歯（接頭辞 bvlist_）: 台帳 open の一覧を epic ごとの組にし、組の頭に進みの数と板で動いている札の
 +//! 列ごとの数を持たせ、既定で開く組を決め、行を 1 行の短い題と右の字にする（判断の記録 ADR-27 の決定 (8)）。
 +//! 台帳の行と札と bead の事実は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-g）。
@@ -647,8 +662,8 @@ index 0000000000000000000000000000000000000000..1431c37bc43684d21a78098976f414a8
 +};
 +use tsuzuri_contract::wire;
 +use tsuzuri_surface::ledgerlist::{
-+    CREATED_KEY, FACTS_PATH, KIND_TAGS, Lgroup, OUTSIDE_KEY, content, facts, groups, home,
-+    kind_tag, row_rank,
++    COUNTS_UNKNOWN, CREATED_KEY, FACTS_PATH, KIND_TAGS, Lgroup, OUTSIDE_KEY, content, facts,
++    groups, head_counts, home, kind_tag, row_rank,
 +};
 +use tsuzuri_surface::project::ledger::{EMPTY, NO_OPEN, OUTSIDE};
 +use tsuzuri_surface::project::pipeline::{age_at, stage_word};
@@ -1072,6 +1087,41 @@ index 0000000000000000000000000000000000000000..1431c37bc43684d21a78098976f414a8
 +    for want in [
 +        "let unread = move || pipe.with(board_unread).map(unmeasured);",
 +        "<div class=\"ll-body\">{unread}{list}</div>",
++    ] {
++        assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
++    }
++}
++
++/// 板が読めない間は組の頭に段の数を描かない（head_counts が None で COUNTS_UNKNOWN の 1 つ・0 の字を出さない）。
++/// 読めた板では 0 でない列の数だけを描く。
++#[test]
++fn bvlist_head_counts_unknown() {
++    assert_eq!(COUNTS_UNKNOWN, "?");
++    let ledger = ledger_body(rows());
++    let unread = board_unread(&Fetched::Failed).is_some();
++    let Body::Filled(gs) = content(&ledger, &Fetched::Failed, &beads_body(), NOW) else {
++        panic!("組");
++    };
++    assert!(gs.iter().all(|g| head_counts(g, unread).is_none()));
++    let Body::Filled(gs) = content(&ledger, &pipe_body(), &beads_body(), NOW) else {
++        panic!("組");
++    };
++    let drawn: Vec<usize> = gs
++        .iter()
++        .filter_map(|g| head_counts(g, false))
++        .flatten()
++        .map(|(_, n)| n)
++        .collect();
++    assert!(
++        !drawn.is_empty() && drawn.iter().all(|n| *n > 0),
++        "{drawn:?}"
++    );
++    let list = read("src/ledgerlist.rs");
++    let ldom = &list[list.find("mod dom {").expect("mod dom")..];
++    for want in [
++        "let unread = crate::net::read(pipeline::PATH).with_untracked(|p| board_unread(p).is_some());",
++        "let dots = match head_counts(g, unread) {",
++        "{COUNTS_UNKNOWN}</b>",
 +    ] {
 +        assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
 +    }

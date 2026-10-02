@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
-index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6212bc998 100644
+index b6b4534fb610d8be14504a90cfc3ad90a7304c7a..e14ec79b6be23443570c43764b2226bc5c6d076b 100644
 --- a/crates/tsuzuri-surface/src/ledgerlist.rs
 +++ b/crates/tsuzuri-surface/src/ledgerlist.rs
 @@ -5,19 +5,23 @@
@@ -45,7 +45,7 @@ index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6
      }
  }
  
-@@ -365,6 +372,79 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
+@@ -374,6 +381,79 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
      }
  }
  
@@ -125,24 +125,24 @@ index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6
  #[cfg(target_arch = "wasm32")]
  pub use dom::view;
  
-@@ -373,12 +453,15 @@ pub use dom::view;
+@@ -382,12 +462,15 @@ pub use dom::view;
  mod dom {
      use leptos::prelude::*;
  
 +    use tsuzuri_contract::case;
 +
      use super::{
-         FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT, content, filtered,
--        filtering, kind_tag, kpi,
-+        filtering, kind_tag, kpi, unref_head, with_phases,
+         COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
+-        content, filtered, filtering, head_counts, kind_tag, kpi,
++        content, filtered, filtering, head_counts, kind_tag, kpi, unref_head, with_phases,
      };
      use crate::frame::{Mode, node_href};
      use crate::kit::Folds;
 +    use crate::project::ledger::stats;
-     use crate::project::{Body, ledger, pipeline, unmeasured};
+     use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
      use crate::vocab::label;
      use crate::widgets::help::HelpCtx;
-@@ -388,6 +471,7 @@ mod dom {
+@@ -398,6 +481,7 @@ mod dom {
          let rows = crate::net::read(ledger::PATH);
          let pipe = crate::net::read(pipeline::PATH);
          let beads = crate::net::read(FACTS_PATH);
@@ -150,7 +150,7 @@ index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6
          let folds = RwSignal::new(Folds::default());
          let kind = RwSignal::new(Kind::All);
          let query = RwSignal::new(String::new());
-@@ -402,7 +486,7 @@ mod dom {
+@@ -412,7 +496,7 @@ mod dom {
                  Body::Filled(groups) => {
                      let (k, q) = (kind.get(), query.get());
                      let active = filtering(k, &q);
@@ -159,7 +159,7 @@ index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6
                      if shown.is_empty() {
                          view! { <div class="ll-gnone">{NO_MATCH}</div> }.into_any()
                      } else {
-@@ -424,7 +508,13 @@ mod dom {
+@@ -436,7 +520,13 @@ mod dom {
          let kpis = move || {
              let (text, svg) = metrics.with(kpi);
              let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
@@ -174,7 +174,7 @@ index 5023a43e8ab5a4cdb8c49034052f9d8b363c0c24..b52710fd04c7c8ea04e8be6b035eaaa6
          };
          let seg = KINDS
              .into_iter()
-@@ -538,6 +628,7 @@ mod dom {
+@@ -555,6 +645,7 @@ mod dom {
              <div class="ll-row" data-id=r.id.clone()>
                  <span class=class>{tag}</span>
                  <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
