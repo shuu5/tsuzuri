@@ -1,0 +1,729 @@
+//! 札と一覧の行の吹き出し（行 g-pop・判断の記録 ADR-27 決定 (7)・見本 board-v2 の popHTML と placePop と openPop と closePop）:
+//! pipeline の札か台帳 open の一覧の行を押すと、その bead の吹き出しを頁に 1 つ出す（同じ口をもう 1 度押すと閉じる）。
+//! 吹き出しは × と外の click と取り消しの鍵（Esc）で閉じ、閉じる判定は窓の枠の `modal::closes` を使う（2 つ目を書かない）。
+//! どの段も題の全体・概要・id・種類・epic・設計の行・起票の時刻と経過・個別の頁への口を出し、段ごとの欄を足す
+//! （Blocked は待つ相手〔相手の段つき・押すと相手の吹き出し〕と待ちの長さ・Queued は列に入った時刻・Running / Gated は
+//! run の回と口座・止まりは理由の全文と run の回と口座と次の手・着地は着地の時刻と CI）。読めない欄は「まだ分からない」。
+//! 板の札が読めない間は段ごとの欄を出せないので、吹き出しの末に板の読めない理由を測れていないの 1 行で出す（札が無いとは見せない）。
+//! 材料は bead の事実の口（`BEADS_PATH`・短い題・概要・起票・blocks の相手）と局面の出力の口（待つ相手の links.on）と、
+//! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
+//! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
+//! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
+
+use tsuzuri_contract::EpochSecs;
+use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+use tsuzuri_contract::case::{CaseDoc, CasePart};
+use tsuzuri_contract::graph::{GraphDoc, NodeKind};
+use tsuzuri_contract::ledger::{BeadFact, BeadFacts, FACTS_PATH, LedgerRow};
+use tsuzuri_contract::wire;
+
+use super::hover::{Point, Rect, Size};
+use super::modal::Hit;
+use crate::frame::{self, Mode, PageId};
+use crate::mapview::band::kind_key;
+use crate::project::{pipeline, timeline};
+use crate::view::{Fetched, clock_short};
+use crate::vocab::label;
+
+/// bead の事実の口の path（契約の型の字・行 c-bead-route）。
+pub const BEADS_PATH: &str = FACTS_PATH;
+
+/// 吹き出しの箱の id（見本の `#pop`・頁に 1 つ）。
+pub const ID: &str = "pop";
+
+/// 幅 600 px 以下の幕の id（見本の `#popScrim`・stylesheet の media の規則でだけ見える）。
+pub const SCRIM: &str = "popscrim";
+
+/// 吹き出しの頭・本文・題の全体・概要・欄の表・足・相手の一覧・口・まだ分からないの class
+/// （見本の `.ph`・`.pb`・`.pt`・`.psum`・`.facts`・`.pf`・`.bl`・`.lk`・`.faint`）。
+pub const CLASSES: [&str; 9] = ["ph", "pb", "pt", "psum", "facts", "pf", "pbl", "plk", "pun"];
+
+/// 札と行の口の印の属性（押した口の bead の id を値に持つ・外の click の判定と吹き出しの置き場が引く）。
+pub const CARD_ATTR: &str = "data-pop-card";
+
+/// 一覧の行の口の印の属性。
+pub const ROW_ATTR: &str = "data-pop-row";
+
+/// 口の矩形と吹き出しの間（px・見本の placePop の 8）。
+pub const GAP_PX: f64 = 8.0;
+
+/// 口の下へ回したときの間（px・見本の 6）。
+pub const BELOW_PX: f64 = 6.0;
+
+/// 吹き出しの上端の下限（px・上の帯の下・見本の 60）。
+pub const TOP_MIN_PX: f64 = 60.0;
+
+/// 口が見つからないときの上端（px・見本の 80）。
+pub const NO_ANCHOR_TOP_PX: f64 = 80.0;
+
+/// × の button の語の鍵（aria-label）。
+pub const CLOSE_KEY: &str = "pop_close";
+
+/// 個別の頁への口の語の鍵。
+pub const PAGE_KEY: &str = "pop_page";
+
+/// 読めない欄の語の鍵（まだ分からない）。
+pub const UNKNOWN_KEY: &str = "pop_unknown";
+
+/// 共通の欄の語の鍵（出す順・id・種類・epic・設計の行・起票）。
+pub const COMMON_KEYS: [&str; 5] = ["pf_id", "pf_kind", "pf_epic", "pf_row", "pf_created"];
+
+/// 段ごとの欄の語の鍵（待つ相手・待ちの長さ・列に入った・run の回・口座・理由・着地・CI）。
+pub const STAGE_KEYS: [&str; 8] = [
+    "pf_wait_on",
+    "pf_waited",
+    "pf_queued",
+    "pf_runs",
+    "pf_account",
+    "pf_reason",
+    "pf_landed",
+    "pf_ci",
+];
+
+/// 止まりの次の手の語の鍵（問いに答える・run の記録）。
+pub const NEXT_KEYS: [&str; 2] = ["pnext_ask", "pnext_runs"];
+
+/// 設計の pointer の行の頭の字（中核のグラフの BeadAttr の pointers の行の頭）。
+pub const POINTER_HEAD: &str = "design = ";
+
+/// 吹き出しを開いた口（見本の S.pop.via）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Via {
+    /// pipeline の札。
+    Card,
+    /// 台帳 open の一覧の行。
+    Row,
+}
+
+impl Via {
+    /// 口の印の属性。
+    pub fn attr(self) -> &'static str {
+        match self {
+            Via::Card => CARD_ATTR,
+            Via::Row => ROW_ATTR,
+        }
+    }
+}
+
+/// 開いている吹き出し（bead の id と開いた口）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Open {
+    pub id: String,
+    pub via: Via,
+}
+
+/// 口を押した後の吹き出し（同じ bead を同じ口で押すと閉じ・ほかは押した bead を開く・見本の act.card と act.row）。
+pub fn toggle(now: Option<&Open>, next: Open) -> Option<Open> {
+    (now != Some(&next)).then_some(next)
+}
+
+/// 頁の click の押し（吹き出しの中は中の click・口の上は口が自分で開け閉めするので None・ほかは外の click）。
+pub fn hit_of(in_pop: bool, on_opener: bool) -> Option<Hit<'static>> {
+    if in_pop {
+        Some(Hit::Inside)
+    } else if on_opener {
+        None
+    } else {
+        Some(Hit::Outside)
+    }
+}
+
+/// 口の要素を探す selector（押した口の種類を先に・無ければほかの種類・見本の anchorEl）。
+pub fn anchor_selectors(open: &Open) -> [String; 2] {
+    let other = match open.via {
+        Via::Card => Via::Row,
+        Via::Row => Via::Card,
+    };
+    [open.via, other].map(|v| format!("[{}=\"{}\"]", v.attr(), open.id))
+}
+
+/// 口の要素のどれかを探す selector（外の click の判定）。
+pub fn opener_selector() -> String {
+    format!("[{CARD_ATTR}],[{ROW_ATTR}]")
+}
+
+/// 吹き出しの左上（見本の placePop）: 口の右に置き、窓の右端を越えれば左、それでも左端を越えれば口の下へ回し、
+/// 窓の下端を越えれば上へ寄せる（上端は `TOP_MIN_PX` より上へ出さない）。口が見つからなければ窓の真ん中の上。
+pub fn place(anchor: Option<Rect>, pop: Size, window: Size) -> Point {
+    let Some(r) = anchor else {
+        return Point {
+            x: ((window.width - pop.width) / 2.0).max(GAP_PX),
+            y: NO_ANCHOR_TOP_PX,
+        };
+    };
+    let mut x = r.left + r.width + GAP_PX;
+    let mut y = r.top;
+    if x + pop.width > window.width - GAP_PX {
+        x = r.left - GAP_PX - pop.width;
+    }
+    if x < GAP_PX {
+        x = (window.width - pop.width - GAP_PX).min(r.left).max(GAP_PX);
+        y = r.top + r.height + BELOW_PX;
+    }
+    if y + pop.height > window.height - GAP_PX {
+        y = (window.height - GAP_PX - pop.height).max(TOP_MIN_PX);
+    }
+    Point { x, y }
+}
+
+/// 待つ相手の 1 つ（id・短い題・相手の札の段〔札が無ければ None〕）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Partner {
+    pub id: String,
+    pub short: String,
+    pub stage: Option<Stage>,
+}
+
+/// 欄の値。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Val {
+    /// 字のまま。
+    Text(String),
+    /// 等幅の字（id・設計の行）。
+    Code(String),
+    /// 時刻（日本時間の字と今からの経過を出す）。
+    At(EpochSecs),
+    /// 種類の語の鍵と札の段。
+    Kind(&'static str, Option<Stage>),
+    /// epic（id と短い題・押すと epic の吹き出し）。
+    Epic(Partner),
+    /// 待つ相手の一覧（押すと相手の吹き出し）。
+    Partners(Vec<Partner>),
+    /// まだ分からない。
+    Unknown,
+}
+
+/// 欄の 1 行（語の鍵と値）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fact {
+    pub key: &'static str,
+    pub val: Val,
+}
+
+/// 吹き出しの中身（頭の短い題・題の全体・概要・札の段・欄・止まりの次の手の語の鍵）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pop {
+    pub id: String,
+    pub short: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub stage: Option<Stage>,
+    pub facts: Vec<Fact>,
+    pub next: Option<&'static str>,
+}
+
+/// 吹き出しの材料（口ごとの読み・読めない口の欄はまだ分からない）。
+#[derive(Debug, Clone)]
+pub struct Src<'a> {
+    pub facts: Reading<&'a [BeadFact]>,
+    pub rows: Reading<&'a [LedgerRow]>,
+    pub cards: &'a [PipelineCard],
+    pub parts: Reading<&'a [CasePart]>,
+    pub graph: Option<&'a GraphDoc>,
+}
+
+/// 板の札の読めない理由（読めれば None・`pipeline::cards` の理由）。
+pub fn board_unread(fetched: &Fetched) -> Option<&'static str> {
+    pipeline::cards(fetched).err()
+}
+
+/// bead の事実の口の本文を読む（読めなければ Unknown）。
+pub fn read_facts(fetched: &Fetched) -> Reading<Vec<BeadFact>> {
+    match fetched {
+        Fetched::Body(text) => wire::decode::<BeadFacts>(text).map_or(Reading::Unknown, |f| f.rows),
+        Fetched::NotRead | Fetched::Failed => Reading::Unknown,
+    }
+}
+
+/// 局面の出力の口の本文を部品の列に読む（読めなければ Unknown）。
+pub fn read_parts(fetched: &Fetched) -> Reading<Vec<CasePart>> {
+    match fetched {
+        Fetched::Body(text) => wire::decode::<CaseDoc>(text).map_or(Reading::Unknown, |d| d.parts),
+        Fetched::NotRead | Fetched::Failed => Reading::Unknown,
+    }
+}
+
+/// 読みの中身を借りる。
+pub fn known<T>(r: &Reading<Vec<T>>) -> Reading<&[T]> {
+    match r {
+        Reading::Known(v) => Reading::Known(v.as_slice()),
+        Reading::Unknown => Reading::Unknown,
+    }
+}
+
+fn fact_of<'a>(src: &Src<'a>, id: &str) -> Reading<Option<&'a BeadFact>> {
+    match src.facts {
+        Reading::Known(f) => Reading::Known(f.iter().find(|x| x.id.as_str() == id)),
+        Reading::Unknown => Reading::Unknown,
+    }
+}
+
+fn row_of<'a>(src: &Src<'a>, id: &str) -> Option<&'a LedgerRow> {
+    match src.rows {
+        Reading::Known(rows) => rows.iter().find(|r| r.id.as_str() == id),
+        Reading::Unknown => None,
+    }
+}
+
+/// bead の札（板に無ければ None）。
+pub fn card_of<'a>(cards: &'a [PipelineCard], id: &str) -> Option<&'a PipelineCard> {
+    cards.iter().find(|c| c.contract.as_str() == id)
+}
+
+/// 短い題（事実の short・事実が無ければ id）。
+pub fn short_of(src: &Src<'_>, id: &str) -> String {
+    match fact_of(src, id) {
+        Reading::Known(Some(f)) => f.short.clone(),
+        _ => id.to_string(),
+    }
+}
+
+/// 相手の 1 つ（短い題と札の段）。
+pub fn partner(src: &Src<'_>, id: &str) -> Partner {
+    Partner {
+        id: id.to_string(),
+        short: short_of(src, id),
+        stage: card_of(src.cards, id).map(|c| c.stage),
+    }
+}
+
+/// 契約の部品（局面の出力の種類 contract で id が bead の id）。
+pub fn contract_part<'a>(parts: &'a [CasePart], id: &str) -> Option<&'a CasePart> {
+    parts.iter().find(|p| p.part == "contract" && p.id == id)
+}
+
+/// 待つ相手の id: 局面の出力の契約の部品が在ればその links.on、無ければ bead の事実の blocks のうち台帳で閉じていない相手。
+/// 両方とも読めなければ None。
+pub fn wait_on(src: &Src<'_>, id: &str) -> Option<Vec<String>> {
+    if let Reading::Known(parts) = src.parts
+        && let Some(p) = contract_part(parts, id)
+    {
+        return Some(p.links.on.clone());
+    }
+    let Reading::Known(Some(f)) = fact_of(src, id) else {
+        return None;
+    };
+    let open = |b: &str| row_of(src, b).is_none_or(|r| r.status != "closed");
+    Some(
+        f.blocks
+            .iter()
+            .map(|b| b.to_string())
+            .filter(|b| open(b))
+            .collect(),
+    )
+}
+
+/// 親をたどって最初の epic（自分は数えない・台帳が読めなければ None）。
+pub fn epic_of(src: &Src<'_>, id: &str) -> Option<String> {
+    let mut at = row_of(src, id)?.parent.clone();
+    for _ in 0..16 {
+        let row = row_of(src, at.as_ref()?.as_str())?;
+        if row.node_kind() == NodeKind::Epic {
+            return Some(row.id.to_string());
+        }
+        at.clone_from(&row.parent);
+    }
+    None
+}
+
+/// 設計の行（グラフの bead の pointers の最初の行から頭の `POINTER_HEAD` を外した字）。
+pub fn row_pointer(doc: &GraphDoc, id: &str) -> Option<String> {
+    let p = doc.beads.get(id)?.pointers.first()?;
+    Some(p.strip_prefix(POINTER_HEAD).unwrap_or(p).trim().to_string())
+}
+
+/// 時刻の字（日本時間の短い字と今からの経過）。
+pub fn at_text(at: EpochSecs, now: EpochSecs) -> String {
+    format!(
+        "{}（{}）",
+        clock_short(at, now),
+        pipeline::age(now.saturating_sub(at))
+    )
+}
+
+fn or_unknown<T>(v: Option<T>, f: impl FnOnce(T) -> Val) -> Val {
+    v.map_or(Val::Unknown, f)
+}
+
+/// 止まりの次の手（Questioned は問いに答える・Failed と Stopped は run の記録・ほかの段は無い）。
+pub fn next_key(stage: Stage) -> Option<&'static str> {
+    match stage {
+        Stage::Questioned => Some(NEXT_KEYS[0]),
+        Stage::Failed | Stage::Stopped => Some(NEXT_KEYS[1]),
+        _ => None,
+    }
+}
+
+/// 次の手の先（問いの頁か、個別の頁の run の時間軸の block）。
+pub fn next_href(key: &str, id: &str, mode: Mode) -> String {
+    if key == NEXT_KEYS[0] {
+        frame::href(PageId::Ask, mode)
+    } else {
+        format!("{}#{}", frame::node_href(id, mode), timeline::BLOCK.id)
+    }
+}
+
+/// 段ごとの欄（札が無い bead は無い）。
+pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
+    let f = |key, val| Fact { key, val };
+    let account = || or_unknown(card.account.clone(), Val::Text);
+    let since = || or_unknown(card.since, Val::At);
+    match card.stage {
+        Stage::Blocked => {
+            let on = wait_on(src, card.contract.as_str());
+            let list = match on {
+                Some(ids) if !ids.is_empty() => {
+                    Val::Partners(ids.iter().map(|x| partner(src, x)).collect())
+                }
+                _ => Val::Unknown,
+            };
+            vec![f(STAGE_KEYS[0], list), f(STAGE_KEYS[1], since())]
+        }
+        Stage::Queued => vec![f(STAGE_KEYS[2], since())],
+        Stage::Running | Stage::Gated => vec![
+            f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
+            f(STAGE_KEYS[4], account()),
+        ],
+        Stage::Questioned | Stage::Failed | Stage::Stopped => vec![
+            f(STAGE_KEYS[5], or_unknown(card.reason.clone(), Val::Text)),
+            f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
+            f(STAGE_KEYS[4], account()),
+        ],
+        Stage::Landed => vec![
+            f(STAGE_KEYS[6], since()),
+            f(
+                STAGE_KEYS[7],
+                or_unknown(card.ci, |c| Val::Text(label(pipeline::ci_key(c)))),
+            ),
+        ],
+    }
+}
+
+/// 吹き出しの中身（共通の欄を `COMMON_KEYS` の順に・札が在れば段ごとの欄を足す）。
+/// epic の欄は親をたどって epic が在るときだけ（台帳が読めなければまだ分からない）、設計の行は pointer が在るときだけ
+/// （グラフが読めなければまだ分からない）。
+pub fn pop(id: &str, src: &Src<'_>) -> Pop {
+    let fact = fact_of(src, id);
+    let row = row_of(src, id);
+    let card = card_of(src.cards, id);
+    let stage = card.map(|c| c.stage);
+    let mut facts = vec![Fact {
+        key: COMMON_KEYS[0],
+        val: Val::Code(id.to_string()),
+    }];
+    let kind = or_unknown(row, |r| Val::Kind(kind_key(r.node_kind()), stage));
+    facts.push(Fact {
+        key: COMMON_KEYS[1],
+        val: kind,
+    });
+    let epic = match src.rows {
+        Reading::Known(_) => epic_of(src, id).map(|e| Val::Epic(partner(src, &e))),
+        Reading::Unknown => Some(Val::Unknown),
+    };
+    let pointer = match src.graph {
+        Some(doc) => row_pointer(doc, id).map(Val::Code),
+        None => Some(Val::Unknown),
+    };
+    for (key, val) in [(COMMON_KEYS[2], epic), (COMMON_KEYS[3], pointer)] {
+        if let Some(val) = val {
+            facts.push(Fact { key, val });
+        }
+    }
+    let created = match fact {
+        Reading::Known(Some(f)) => f.created_at,
+        _ => None,
+    };
+    facts.push(Fact {
+        key: COMMON_KEYS[4],
+        val: or_unknown(created, Val::At),
+    });
+    if let Some(c) = card {
+        facts.extend(stage_facts(src, c));
+    }
+    let (short, summary) = match fact {
+        Reading::Known(Some(f)) => (f.short.clone(), Some(f.summary.clone())),
+        _ => (id.to_string(), None),
+    };
+    Pop {
+        id: id.to_string(),
+        short,
+        title: row.map(|r| r.title.clone()),
+        summary,
+        stage,
+        facts,
+        next: stage.and_then(next_key),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub use dom::{PopCtx, PopLayer};
+
+#[cfg(target_arch = "wasm32")]
+mod dom {
+    use leptos::ev;
+    use leptos::html::Div;
+    use leptos::prelude::*;
+    use tsuzuri_contract::board::Stage;
+    use tsuzuri_contract::case::PATH as CASES_PATH;
+    use web_sys::wasm_bindgen::JsCast;
+
+    use super::super::hover::{Point, Rect, Size};
+    use super::super::modal::{Hit, closes};
+    use super::{
+        BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
+        Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
+        opener_selector, place, pop, read_facts, read_parts, toggle,
+    };
+    use crate::frame::{Mode, node_href};
+    use crate::project::{ledger, map, pipeline, unmeasured};
+    use crate::view::read_rows;
+    use crate::vocab::label;
+    use crate::widgets::help::{HelpCtx, hs};
+
+    /// 吹き出しの状態（App が context に置く・頁に 1 つ・札と行の口が `press` を呼ぶ）。
+    #[derive(Clone, Copy)]
+    pub struct PopCtx {
+        open: RwSignal<Option<Open>>,
+        /// 置いた左上（測って置くまでは None）。
+        at: RwSignal<Option<Point>>,
+        node: NodeRef<Div>,
+    }
+
+    impl Default for PopCtx {
+        fn default() -> Self {
+            Self {
+                open: RwSignal::new(None),
+                at: RwSignal::new(None),
+                node: NodeRef::new(),
+            }
+        }
+    }
+
+    fn window_size() -> Size {
+        let w = window();
+        let px = |v: Result<web_sys::wasm_bindgen::JsValue, _>| {
+            v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
+        };
+        Size {
+            width: px(w.inner_width()),
+            height: px(w.inner_height()),
+        }
+    }
+
+    fn rect(el: &web_sys::Element) -> Rect {
+        let r = el.get_bounding_client_rect();
+        Rect {
+            left: r.left(),
+            top: r.top(),
+            width: r.width(),
+            height: r.height(),
+        }
+    }
+
+    impl PopCtx {
+        /// 口を押した（同じ口の 2 度目は閉じる）。
+        pub fn press(self, id: &str, via: Via) {
+            let next = Open {
+                id: id.to_string(),
+                via,
+            };
+            let now = self.open.with_untracked(|o| toggle(o.as_ref(), next));
+            self.at.set(None);
+            self.open.set(now);
+            request_animation_frame(move || self.settle());
+        }
+
+        /// 吹き出しを閉じる。
+        pub fn close(self) {
+            self.open.set(None);
+            self.at.set(None);
+        }
+
+        /// 開いている bead の id（追う）。
+        pub fn shown(self) -> Option<String> {
+            self.open.with(|o| o.as_ref().map(|o| o.id.clone()))
+        }
+
+        /// 描いた吹き出しの大きさと口の矩形から置き場を決める。
+        fn settle(self) {
+            let Some(open) = self.open.get_untracked() else {
+                return;
+            };
+            let Some(el) = self.node.get_untracked() else {
+                return;
+            };
+            let me = rect(&el);
+            let anchor = anchor_selectors(&open)
+                .iter()
+                .find_map(|s| document().query_selector(s).ok().flatten())
+                .map(|a| rect(&a));
+            let size = Size {
+                width: me.width,
+                height: me.height,
+            };
+            self.at.set(Some(place(anchor, size, window_size())));
+        }
+
+        /// 置き場の style（置くまでは窓の左上で見えない）。
+        fn style(self) -> String {
+            let p = self.at.get().unwrap_or(Point { x: 0.0, y: 0.0 });
+            let shown = if self.at.with(Option::is_some) {
+                ""
+            } else {
+                ";visibility:hidden"
+            };
+            format!("left:{}px;top:{}px{shown}", p.x, p.y)
+        }
+
+        fn hit(self, h: Hit<'_>) {
+            if closes(h) {
+                self.close();
+            }
+        }
+    }
+
+    /// 頁の click の押し（吹き出しの中か・口の上か）。
+    fn page_hit(e: &ev::MouseEvent) -> Option<Hit<'static>> {
+        let el = e.target()?.dyn_into::<web_sys::Element>().ok()?;
+        let near = |s: &str| el.closest(s).ok().flatten().is_some();
+        hit_of(near(&format!("#{ID}")), near(&opener_selector()))
+    }
+
+    fn partner_view(ctx: PopCtx, p: Partner) -> AnyView {
+        let sym = p
+            .stage
+            .map(|s| pipeline::stage_sym(false, pipeline::lane(s.column()).state));
+        let stage = p.stage.map(|s| view! { <small>{format!("{s:?}")}</small> });
+        let id = p.id.clone();
+        view! {
+            <button type="button" class=CLASSES[7] on:click=move |_| ctx.press(&id, Via::Card)>
+                {sym}<span>{p.short}</span><code>{p.id.clone()}</code>{stage}
+            </button>
+        }
+        .into_any()
+    }
+
+    fn val_view(ctx: PopCtx, val: Val, now: u64) -> AnyView {
+        match val {
+            Val::Text(t) => view! { <span>{t}</span> }.into_any(),
+            Val::Code(t) => view! { <code>{t}</code> }.into_any(),
+            Val::At(at) => view! { <span>{at_text(at, now)}</span> }.into_any(),
+            Val::Kind(key, stage) => {
+                let stage: Option<Stage> = stage;
+                view! { <span>{label(key)}{stage.map(|s| format!(" · {s:?}"))}</span> }.into_any()
+            }
+            Val::Epic(p) => partner_view(ctx, p),
+            Val::Partners(list) => {
+                let items = list
+                    .into_iter()
+                    .map(|p| partner_view(ctx, p))
+                    .collect_view();
+                view! { <div class=CLASSES[6]>{items}</div> }.into_any()
+            }
+            Val::Unknown => view! { <span class=CLASSES[8]>{label(UNKNOWN_KEY)}</span> }.into_any(),
+        }
+    }
+
+    fn pop_view(ctx: PopCtx, p: Pop, mode: Mode, now: u64) -> AnyView {
+        let [head, main, title, sum, table, foot, _, link, _] = CLASSES;
+        let sym = p
+            .stage
+            .map(|s| pipeline::stage_sym(false, pipeline::lane(s.column()).state));
+        let rows = p
+            .facts
+            .into_iter()
+            .map(|f| view! { <tr><th>{hs(f.key)}</th><td>{val_view(ctx, f.val, now)}</td></tr> })
+            .collect_view();
+        let next = p.next.map(|key| {
+            view! { <a class=link href=next_href(key, &p.id, mode)>{format!("{} ›", label(key))}</a> }
+        });
+        let unknown = || label(UNKNOWN_KEY);
+        view! {
+            <div class=head>
+                {sym}<b>{p.short}</b>
+                <button type="button" class="x" aria-label=label(CLOSE_KEY) on:click=move |_| ctx.hit(Hit::X)>"×"</button>
+            </div>
+            <div class=main>
+                <div class=title>{p.title.unwrap_or_else(unknown)}</div>
+                <div class=sum>{p.summary.unwrap_or_else(unknown)}</div>
+                <table class=table>{rows}</table>
+                {next}
+            </div>
+            <div class=foot>
+                <a class=link href=node_href(&p.id, mode)>{format!("{} ›", label(PAGE_KEY))}</a>
+            </div>
+        }
+        .into_any()
+    }
+
+    /// 頁の取り消しの鍵と click を聞き、吹き出しが開いていれば窓の枠の閉じる判定に渡す（層の一生の間）。
+    fn listen(ctx: PopCtx) {
+        let keys = window_event_listener(ev::keydown, move |e| {
+            if ctx.open.with_untracked(Option::is_some) {
+                let key = e.key();
+                ctx.hit(Hit::Key {
+                    key: &key,
+                    composing: e.is_composing(),
+                });
+            }
+        });
+        let clicks = window_event_listener(ev::click, move |e| {
+            if ctx.open.with_untracked(Option::is_some)
+                && let Some(h) = page_hit(&e)
+            {
+                ctx.hit(h);
+            }
+        });
+        on_cleanup(move || {
+            keys.remove();
+            clicks.remove();
+        });
+    }
+
+    /// 吹き出しの層（body に 1 つ・開いた bead の吹き出しを描く・× と外の click と取り消しの鍵で閉じる）。
+    #[component]
+    pub fn PopLayer() -> impl IntoView {
+        let Some(ctx) = use_context::<PopCtx>() else {
+            return ().into_any();
+        };
+        let help = use_context::<HelpCtx>();
+        let beads = crate::net::read(BEADS_PATH);
+        let cases = crate::net::read(CASES_PATH);
+        let pipe = crate::net::read(pipeline::PATH);
+        let rows = crate::net::read(ledger::PATH);
+        let graph = crate::net::read(map::PATH);
+        listen(ctx);
+        let style = move || ctx.style();
+        let content = move || {
+            let id = ctx.shown()?;
+            let mode = help.map_or(Mode::Beginner, |h| h.mode.get());
+            let facts = beads.with(read_facts);
+            let parts = cases.with(read_parts);
+            // 板の札が読めない間は、段ごとの欄を出せない理由を吹き出しの末に出す（札が無いとは見せない）。
+            let unread = pipe.with(board_unread);
+            let cards = pipe.with(|p| pipeline::cards(p).unwrap_or_default());
+            let rows = rows.with(read_rows);
+            let doc = graph.with(|g| map::doc(g).ok());
+            let src = Src {
+                facts: known(&facts),
+                rows: known(&rows),
+                cards: &cards,
+                parts: known(&parts),
+                graph: doc.as_ref(),
+            };
+            let p = pop(&id, &src);
+            Some(
+                view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
+                    .into_any(),
+            )
+        };
+        let open = move || ctx.open.with(Option::is_some);
+        view! {
+            <Show when=open>
+                <div id=SCRIM></div>
+                <div id=ID node_ref=ctx.node role="dialog" style=style>{content}</div>
+            </Show>
+        }
+        .into_any()
+    }
+}

@@ -141,6 +141,9 @@ pub struct LedgerList {
     pub rows: Reading<Vec<LedgerRow>>,
 }
 
+/// bead の事実の一覧の口の path（routes/beads.rs と同じ字・面の吹き出しが読む・行 g-pop）。
+pub const FACTS_PATH: &str = "/api/beads";
+
 /// bead の事実の一覧（口 GET /api/beads の出力・行 c-bead-facts）。台帳が読めなければ行は `Unknown`（0 件と区別する）。
 /// 面は台帳の一覧の行と id で結ぶ（一覧の行の型 `LedgerRow` は替えない）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -348,6 +348,31 @@ a.tile:hover { box-shadow: var(--shadow); }
 /* 席と口座の窓の稼働の記録は 24 時間の幅だけ（判断の記録 ADR-27 決定 (1)・幅の button は出さない） */
 .mb .spanbar { display: none; }
 
+/* ---------- 吹き出し（行 g-pop・見本 board-v2 の #pop と #popScrim・× と外の click と Esc で閉じる・600 px 以下は下からの板〔規則の行 R-35〕） ---------- */
+#pop { position: fixed; z-index: 40; width: min(380px, calc(100vw - 16px)); max-height: calc(100vh - 68px); overflow: auto; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 12px 34px rgba(15,23,42,.2); }
+#popscrim { display: none; }
+.ph { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; gap: 6px; padding: 10px 10px 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.ph b { flex: 1; min-width: 0; font-size: 14px; line-height: 1.35; }
+.ph .x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); font-size: 17px; line-height: 22px; text-align: center; cursor: pointer; }
+.ph .x:hover { background: var(--panel-2); color: var(--ink); }
+.pb { padding: 8px 12px 4px; }
+.pt { margin-bottom: 6px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.psum { color: var(--ink-3); font-size: var(--fs-1); line-height: 1.55; overflow-wrap: anywhere; }
+.facts { width: 100%; margin: 6px 0; border-collapse: collapse; font-size: var(--fs-1); }
+.facts th { width: 1%; padding: 4px 10px 4px 0; border-top: 1px solid var(--line); color: var(--ink-3); font-weight: 500; text-align: left; white-space: nowrap; vertical-align: top; }
+.facts td { padding: 4px 0; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.facts tr:first-child th, .facts tr:first-child td { border-top: 0; }
+.pbl { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.plk { display: inline-flex; align-items: center; gap: 5px; padding: 0 2px; border: 0; border-radius: 5px; background: none; color: var(--accent); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.plk:hover { background: var(--panel-2); }
+.plk small, .pun { color: var(--ink-3); }
+.pf { display: flex; gap: 12px; padding: 6px 12px 10px; border-top: 1px solid var(--line); font-size: var(--fs-1); }
+@media (max-width: 600px) {
+  #popscrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(15,23,42,.35); }
+  #pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; z-index: 41; width: 100%; max-height: 70vh; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 30px rgba(15,23,42,.25); visibility: visible !important; }
+  .ph .x { width: 40px; height: 40px; line-height: 38px; }
+}
+
 /* ---------- 一覧の型（印 + 題・1 種） ---------- */
 .items { list-style: none; margin: 0; padding: 0; }
 .items > li { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s2); border-bottom: 1px solid var(--line); }

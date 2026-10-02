@@ -1791,6 +1791,96 @@
    "label": "ほかの project の質問",
    "plain": "ほかの project の答えを待つ質問\n・ ここでは読むだけ\n→ 答えはチャットで",
    "internal": "GET /api/questions の others"
+  },
+  "pop_close": {
+   "label": "吹き出しを閉じる",
+   "plain": "吹き出しを閉じる\n・ × を押す\n・ 吹き出しの外を押す\n・ Esc の鍵\n・ 同じ札をもう 1 度押す",
+   "internal": "widgets::pop の PopCtx（行 g-pop）\n閉じる判定は widgets::modal の closes"
+  },
+  "pop_page": {
+   "label": "個別の頁を開く",
+   "plain": "この bead のつながりの頁\n・ 近傍の図\n・ run の時間軸",
+   "internal": "frame::node_href（?page=node）"
+  },
+  "pop_unknown": {
+   "label": "まだ分からない",
+   "plain": "記録が読めず値が分からない\n✗ 無いとは違う",
+   "internal": "口が読めない・欄が無い（行 g-pop）"
+  },
+  "pf_id": {
+   "label": "id",
+   "plain": "台帳の bead の番号",
+   "internal": "BeadFact の id"
+  },
+  "pf_kind": {
+   "label": "種類",
+   "plain": "便・epic・memo・問いのどれか\n・ 札が在れば今の段も出す",
+   "internal": "LedgerRow の node_kind と札の stage"
+  },
+  "pf_epic": {
+   "label": "epic",
+   "plain": "この bead が入るまとめ\n・ 親をたどった最初の epic\n・ 押すと epic の吹き出し",
+   "internal": "LedgerRow の parent をたどる"
+  },
+  "pf_row": {
+   "label": "設計の行",
+   "plain": "この便が作る設計の行\n・ 契約表の file と行の名",
+   "internal": "グラフの BeadAttr の pointers（design = の行）"
+  },
+  "pf_created": {
+   "label": "起票",
+   "plain": "bead を起こした時刻と経過",
+   "internal": "BeadFact の created_at（bd の created_at）"
+  },
+  "pf_wait_on": {
+   "label": "待っている相手",
+   "plain": "この便が待っている相手\n・ 相手の段つき\n・ 押すと相手の吹き出し",
+   "internal": "局面の出力の links.on\n読めなければ台帳の blocks のうち閉じていない相手"
+  },
+  "pf_waited": {
+   "label": "待ちの長さ",
+   "plain": "待ちに入った時刻と経過",
+   "internal": "PipelineCard の since"
+  },
+  "pf_queued": {
+   "label": "列に入った",
+   "plain": "列に入った時刻と経過",
+   "internal": "PipelineCard の since（局面の出力の since）"
+  },
+  "pf_runs": {
+   "label": "run の回",
+   "plain": "何回目の run か",
+   "internal": "PipelineCard の runs"
+  },
+  "pf_account": {
+   "label": "口座",
+   "plain": "run を回している口座",
+   "internal": "PipelineCard の account"
+  },
+  "pf_reason": {
+   "label": "理由",
+   "plain": "止まった理由の全文",
+   "internal": "PipelineCard の reason"
+  },
+  "pf_landed": {
+   "label": "着地",
+   "plain": "main に着地した時刻と経過",
+   "internal": "PipelineCard の since（段 Landed）"
+  },
+  "pf_ci": {
+   "label": "CI",
+   "plain": "着地の後の CI の結果",
+   "internal": "PipelineCard の ci"
+  },
+  "pnext_ask": {
+   "label": "問いに答える",
+   "plain": "run が問いで止まった\n→ 質問の頁で答える",
+   "internal": "frame::href(PageId::Ask)"
+  },
+  "pnext_runs": {
+   "label": "run の記録",
+   "plain": "止まった run の段と審査を見る\n→ 個別の頁の run の時間軸",
+   "internal": "frame::node_href の #timeline"
   }
  }
 }

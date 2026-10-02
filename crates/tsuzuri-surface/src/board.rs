@@ -1,6 +1,6 @@
 //! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: header と頁の枠を frame の値のとおりに並べる。
 //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
-//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。
+//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
 //! 質問の link の数の印は問いの一覧の口（ask の module の口）の件数を出す（便 g-ask）。
 //! 節点の頁（便 g-node）は query の page=node で開き、block は node と around の 2 つ（nav には出さない）。
 //! 問いの頁の右の列（便 g-batch）は batch と policy の 2 つの block。
@@ -30,6 +30,7 @@ use crate::vocab::label;
 use crate::widgets::coach::CoachLayer;
 use crate::widgets::help::{HelpCtx, TipLayer, qmark, term};
 use crate::widgets::hover::{CardLayer, HoverCtx};
+use crate::widgets::pop::{PopCtx, PopLayer};
 
 /// 題の印（見本の IC.logo）。
 const LOGO: &str = r##"<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>"##;
@@ -141,6 +142,7 @@ fn App() -> impl IntoView {
         }
     });
     provide_context(HoverCtx::default());
+    provide_context(PopCtx::default());
     // 台帳の一覧の口を読み、読みの結果が変わるたびに画面の状態を進める（最終更新は net の古さの最後に読めた時刻）。
     let fetched = net::read(ledger::PATH);
     let screen = RwSignal::new(Screen::initial());
@@ -169,6 +171,7 @@ fn App() -> impl IntoView {
         <main class="page">{move || page_view(page.get())}</main>
         <TipLayer/>
         <CardLayer/>
+        <PopLayer/>
         {move || (page.get() == PageId::Home).then(|| view! { <CoachLayer/> })}
     }
 }
