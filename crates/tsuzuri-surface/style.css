@@ -68,7 +68,7 @@ h3 { font-size: var(--fs-2); }
 .nav a:hover { background: var(--panel-2); }
 .nav a.on { background: var(--panel-2); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
 .nav svg { width: 18px; height: 18px; }
-.nav .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--s-stop); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+.nav .badge { flex: none; align-self: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--s-stop); color: #fff; font-size: 12px; line-height: 20px; text-align: center; } /* tab の link の外の隣（行 g-accept-face） */
 .top .grow { flex: 1; }
 .seatpill { display: inline-flex; align-items: center; gap: var(--s2); height: var(--hit); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 999px; background: var(--panel); cursor: default; }
 .seatpill .who { font-size: var(--fs-1); color: var(--ink-2); }
@@ -719,6 +719,9 @@ body.mode-beginner .qsum .ln.eng { display: none; }
 .spanbar .seg button { height: 28px; padding: 0 var(--s2); }
 .saxis { position: relative; height: 14px; font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .saxis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+/* 端の目盛の字は段の中へ寄せる（最初は目盛から右へ・最後は目盛から左へ・段の外へはみ出さない・行 g-accept-face） */
+.saxis span:first-child { transform: translateX(0); }
+.saxis span:last-child { transform: translateX(-100%); }
 .c-hh { flex-direction: column; align-items: stretch !important; gap: 2px !important; }
 .c-hh .saxis { width: 100%; }
 .saxis-m { display: none; }
@@ -1104,7 +1107,11 @@ body:has(#bar) { padding-top: 52px; }
 .one { display: grid; gap: 10px; height: calc(100vh - 52px); padding: 10px 12px 24px; }
 .one > .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .one > .pane > .panel { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.freshw { position: fixed; right: 12px; bottom: 3px; z-index: 20; display: flex; align-items: center; gap: var(--s1); font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+.freshw { position: fixed; right: 12px; bottom: 2px; z-index: 20; display: flex; align-items: center; gap: var(--s1); height: 19px; font-size: 11px; color: var(--ink-3); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+/* 帯の下の札の置き場（行 g-accept-face）: 1 枚の画面では下の余白（22 px と 24 px）に収まる高さ 19 px（見本の .badge）で、面の中身に重ならない。
+   1 枚の画面でない頁（節点の頁）と 600 以下の段は、流れの中の帯の下の右端に置く（固定の札が頁の中身の上に乗らない） */
+.freshw > .chip, .freshw > .warn { height: 17px; }
+body:not(:has(.one)) .freshw { position: static; width: fit-content; height: auto; margin: 6px 12px 0 auto; }
 @media (max-width: 760px) { body:has(#bar) { padding-top: 96px; } .one { height: calc(100vh - 96px); } }
 /* 幅の 3 段（行 g-layout・規則の行 R-35・見本 board-v2 の main.lay-side・main.lay-stack・600 以下）: 1200 以上は横並び・601〜1199 は縦積み・600 以下はスマホの形 */
 @media (min-width: 1200px) {
@@ -1117,6 +1124,8 @@ body:has(#bar) { padding-top: 52px; }
 }
 @media (max-width: 600px) {
   .one { display: flex; flex-direction: column; height: auto; gap: 8px; padding: 8px; }
+  .freshw { position: static; width: fit-content; height: auto; margin: 6px 8px 0 auto; }
+  .ll-gh { flex-wrap: wrap; row-gap: 2px; }
   .one > .pane:has(#pipe) { order: -1; }
   .one > .pane > .panel { flex: none; overflow: visible; }
   #pipe .board { display: none; }

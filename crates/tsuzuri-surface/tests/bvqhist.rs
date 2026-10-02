@@ -268,7 +268,7 @@ fn bvqhist_window_fold_wiring_text() {
     let li = fn_of(&page, "fn hist_li(", "\n}\n");
     let order = [
         "<time>{clock_short(at, now)}</time>",
-        "<span class=\"ttl\" title=item.title.clone()>{short}</span>",
+        "<span class=\"ttl\" title=item.title.clone() data-t=\"\" data-ledger-text=\"\">{crate::widgets::hover::clip(&short)}</span>",
         "<b class=\"aside\">",
         "{ruling_text(&rid)}",
         "<a class=\"lk\" href=href use:attach_some=card><code>{item.id.clone()}</code></a>",

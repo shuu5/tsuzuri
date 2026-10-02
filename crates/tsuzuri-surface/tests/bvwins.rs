@@ -210,7 +210,7 @@ fn bvwins_draw_wiring_text() {
         "Win::Dest => stage::inner(),",
         "crate::net::read(pipeline::PATH)",
         "crate::net::read(ledger::PATH)",
-        "<a class=\"sm\" href=c.href>",
+        "<a class=\"sm\" href=c.href use:attach=card>",
     ] {
         assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
     }

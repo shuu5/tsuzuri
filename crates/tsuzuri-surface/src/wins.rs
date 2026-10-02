@@ -12,12 +12,15 @@ use std::cmp::Reverse;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
+use tsuzuri_contract::graph::{GraphNode, NodeKind};
 
 use crate::frame::{Mode, node_href};
 use crate::project::Body;
 use crate::project::pipeline::{self, age_at, stage_word};
 use crate::topbar::{SEAT_KEY, STALL_KEY, Win};
 use crate::view::{Fetched, id_order, read_rows};
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_for;
 
 /// 窓の幅（px・見本の各窓の w）と題の語の鍵。
 pub fn frame_of(win: Win) -> (u32, &'static str) {
@@ -91,6 +94,25 @@ pub fn stalled(pipe: &Fetched, ledger: &Fetched, now: EpochSecs, mode: Mode) -> 
     )
 }
 
+/// 止まった run の札の個別の頁への口の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
+/// 節点は札の契約の bead（題は台帳の題の全体・無ければ空）で、状態は段の字。
+pub fn stalled_card(s: &Stalled) -> Card {
+    card_for(
+        &GraphNode {
+            id: s.id.clone(),
+            kind: NodeKind::Task,
+            file: None,
+            digest: None,
+            title: s.title.clone().unwrap_or_default(),
+            line: None,
+            plain: None,
+            eng: None,
+            updated: None,
+        },
+        Some(&s.stage),
+    )
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::draw;
 
@@ -98,13 +120,14 @@ pub use dom::draw;
 mod dom {
     use leptos::prelude::*;
 
-    use super::{Stalled, frame_of, stalled};
+    use super::{Stalled, frame_of, stalled, stalled_card};
     use crate::frame::Mode;
     use crate::project::{
         Body, body_view, gaps, ledger, legend, notice, pipeline, seat, stage, unmeasured,
     };
     use crate::topbar::Win;
     use crate::vocab::label;
+    use crate::widgets::hover::attach;
     use crate::widgets::modal::{Frame, WinCtx};
 
     /// 今の URL の表示の型。
@@ -113,6 +136,7 @@ mod dom {
     }
 
     fn card_view(c: Stalled) -> AnyView {
+        let card = stalled_card(&c);
         let head = c.title.clone().unwrap_or_else(|| c.id.clone());
         let reason = c
             .reason
@@ -121,7 +145,7 @@ mod dom {
             <div class="stc">
                 <div class="stc-h"><b>{head}</b><code>{c.id}</code><span class="sc">{format!("{} · {}", c.stage, c.age)}</span></div>
                 {reason}
-                <div class="stc-b"><a class="sm" href=c.href>{label("open_node")}" ›"</a></div>
+                <div class="stc-b"><a class="sm" href=c.href use:attach=card>{label("open_node")}" ›"</a></div>
             </div>
         }
         .into_any()

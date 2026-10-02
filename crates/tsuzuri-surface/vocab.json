@@ -1364,6 +1364,16 @@
    "plain": "project の窓を開く\n↑ 開いていれば前面へ",
    "internal": "window.open('', 'tz-<project>')"
   },
+  "q_more": {
+   "label": "続き",
+   "plain": "問いの理由と推奨を開く\n・ 最初は閉じている\n・ 押すと開く",
+   "internal": "details（ask の card の Reason と Recommend・行 g-accept-face）"
+  },
+  "link_unopened": {
+   "label": "知らせの接続が開かない",
+   "plain": "知らせの接続が待たされたまま開かない\n・ 頁を開いて 60 秒で口を全部 測れていない にする\n・ 開けば読み直す",
+   "internal": "EventSource /api/surface/events の open が来ない（READ_HOLD_S 秒・行 g-accept-face）"
+  },
   "p_more": {
    "label": "詳しく",
    "plain": "行を押すと縦に開く\n・ sparkline と lead\n・ stale\n・ session と口座の履歴",

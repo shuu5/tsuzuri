@@ -782,10 +782,11 @@ mod dom {
             (Some(_), Some(sel)) => {
                 let key = g.key.clone();
                 let choose = move |_| sel.epic.update(|e| *e = pick(e.as_deref(), &key));
-                view! { <button type="button" class="ll-gname" on:click=choose>{g.name.clone()}</button> }
+                view! { <button type="button" class="ll-gname" title=g.name.clone() on:click=choose>{g.name.clone()}</button> }
                     .into_any()
             }
-            _ => view! { <span class="ll-gname">{g.name.clone()}</span> }.into_any(),
+            _ => view! { <span class="ll-gname" title=g.name.clone()>{g.name.clone()}</span> }
+                .into_any(),
         };
         view! {
             {name}

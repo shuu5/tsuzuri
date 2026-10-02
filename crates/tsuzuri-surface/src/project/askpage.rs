@@ -341,7 +341,7 @@ fn hist_li(
     view! {
         <li>
             <time>{clock_short(at, now)}</time>
-            <span class="ttl" title=item.title.clone()>{short}</span>
+            <span class="ttl" title=item.title.clone() data-t="" data-ledger-text="">{crate::widgets::hover::clip(&short)}</span>
             <b class="aside">{match ruling {
                 Some(rid) => view! {
                     <a href={let rid = rid.clone(); move || node_href(&rid, mode())} use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>

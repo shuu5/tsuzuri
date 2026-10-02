@@ -137,12 +137,13 @@ fn top(
                         let current = move || (tab.get() == l.tab).then_some("page");
                         // 押しは頁を読み直さず履歴に積む（新しい窓や tab で開く押しは browser の既定のまま・見本の setTab）。
                         let press = move |e: ev::MouseEvent| tab_press(&e, query, l.tab);
+                        // 数の印は link の外の隣の span（見出しの字は語の字だけ・窓の題の `.num` と同じ形・行 g-accept-face）。
                         view! {
                             <a href=move || tab_href(l.tab, mode.get()) class=class aria-current=current on:click=press data-tab=l.tab.id() data-v=l.key data-term=l.key>
                                 <span inner_html=tab_icon(l.tab)></span>
                                 <span class="lbl hd-t">{label(l.key)}</span>
-                                {mark}
                             </a>
+                            {mark}
                         }
                     })
                     .collect_view();

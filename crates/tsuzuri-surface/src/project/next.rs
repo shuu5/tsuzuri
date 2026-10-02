@@ -52,6 +52,16 @@ pub const UNJUDGED_KEY: &str = "st_unknown";
 /// なしを判じなかったときの大きい箱の中身の字。
 pub const UNJUDGED_LINE: &str = "まだ判じていない種類があり、することが無いとは言えない";
 
+/// account board の表と一覧の行に出す 1 行の字（なしの箱の字と測れていないの箱の字は空にして行の hover の card に任せる・
+/// 行の数だけ同じ面の字が並んで最初の画面の散文を増やさない・行 g-accept-face）。
+pub fn row_line(line: &str) -> &str {
+    if line == NONE_LINE || line == UNJUDGED_LINE {
+        ""
+    } else {
+        line
+    }
+}
+
 /// 止まっている走行の箱の link の字（block「pipeline」へ頁の中で飛ぶ）。
 pub const PIPE_LINK: &str = "run を見る ›";
 

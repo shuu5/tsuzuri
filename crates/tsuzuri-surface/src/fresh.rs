@@ -3,6 +3,8 @@
 //! server が 測れていない の電文にし、つながりの切れは net が全部の口を「読めない」にする）。
 //! 古さは server が読みの落ちた応答に載せる頭（最後に読めた時からの秒）と、面の時計の経過で数える。
 //! 1 つでも口が読みの途中なら最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す（行 g-pulse）。
+//! 頁を開いてから READ_HOLD_S 秒の間に知らせのつながりが一度も開かなければ（待たされたまま誤りも来ない）、頁を開いた時刻を
+//! 古さの起点に置き、印の card の種類に理由（語の鍵 `UNOPENED_KEY`）を出す（net が全部の口を「読めない」にする・行 g-accept-face）。
 //! 決め方は host でも組んで試し、印と脈の DOM（`mark`・`pulse`）は wasm の target のときだけ組む。
 
 use std::collections::BTreeMap;
@@ -10,6 +12,7 @@ use std::collections::BTreeMap;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::ledger::{READ_AGE_HEADER, READ_HOLD_S, READ_WARN_S};
 
+use crate::vocab::label;
 use crate::widgets::hover::Card;
 
 /// 台帳の読みが落ちている間に読み直しを撃つ間（ミリ秒・見張りが戻りを知らせない場合の拾い）。
@@ -23,6 +26,9 @@ pub const HELD_WORD: &str = "台帳の読み";
 
 /// 古さの起点が知らせのつながりの切れのときの種類の語。
 pub const LOST_WORD: &str = "知らせのつながり";
+
+/// 古さの起点がつながりの開かないのときの種類の語の鍵（行 g-accept-face）。
+pub const UNOPENED_KEY: &str = "link_unopened";
 
 /// つながりの切れの出所（変化の知らせの口）。
 pub const LOST_SRC: &str = "SSE";
@@ -48,6 +54,10 @@ pub struct Fresh {
     held: BTreeMap<String, EpochSecs>,
     /// つながりが切れた時刻。
     lost: Option<EpochSecs>,
+    /// つながりが一度でも開いたか。
+    opened: bool,
+    /// つながりが開かないまま READ_HOLD_S 秒を越えた頁の、頁を開いた時刻（開いたで消す）。
+    stuck: Option<EpochSecs>,
 }
 
 impl Fresh {
@@ -69,9 +79,15 @@ impl Fresh {
         self.held.values().min().copied().or(self.seen)
     }
 
-    /// 中身の古さ（読みの落ちとつながりの切れの古い方から今まで・どちらも無ければ None）。
+    /// 中身の古さ（読みの落ちとつながりの切れと開かないの古い方から今まで・どれも無ければ None）。
     pub fn age(&self, now: EpochSecs) -> Option<u64> {
-        let since = self.held.values().copied().chain(self.lost).min()?;
+        let since = self
+            .held
+            .values()
+            .copied()
+            .chain(self.lost)
+            .chain(self.stuck)
+            .min()?;
         Some(now.saturating_sub(since))
     }
 
@@ -94,9 +110,21 @@ impl Fresh {
         true
     }
 
-    /// つながりが開いた。
+    /// つながりが開いた（切れた時刻と開かないの時刻を消す）。
     pub fn back(&mut self) {
         self.lost = None;
+        self.opened = true;
+        self.stuck = None;
+    }
+
+    /// 頁を開いた時刻 `since` から時刻 `now` まで、つながりが一度も開かずに READ_HOLD_S 秒が過ぎたか（真なら頁を開いた
+    /// 時刻を古さの起点に置く・一度でも開いた後と READ_HOLD_S 秒の前は偽で何も置かない）。
+    pub fn unopened(&mut self, since: EpochSecs, now: EpochSecs) -> bool {
+        if self.opened || now.saturating_sub(since) < READ_HOLD_S {
+            return false;
+        }
+        self.stuck = Some(since);
+        true
     }
 
     /// つながりが切れた時刻。
@@ -115,6 +143,7 @@ impl Fresh {
             return None;
         }
         let age = self.age(now)?;
+        let unopened = self.stuck.map(|_| label(UNOPENED_KEY));
         let mut kinds = Vec::new();
         let mut srcs = Vec::new();
         if self.held() {
@@ -123,6 +152,11 @@ impl Fresh {
         }
         if self.lost.is_some() {
             kinds.push(LOST_WORD);
+        }
+        if let Some(word) = &unopened {
+            kinds.push(word.as_str());
+        }
+        if self.lost.is_some() || self.stuck.is_some() {
             srcs.push(LOST_SRC);
         }
         Some(Card {

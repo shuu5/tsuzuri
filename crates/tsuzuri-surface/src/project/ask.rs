@@ -53,7 +53,7 @@ pub const UNRECEIVED_HEAD: &str = "席に届いていない";
 pub const UNRECEIVED_UNKNOWN: &str = "席に届いたかが読めない（届いていない裁定の口が読めない）";
 
 /// この file の畳める段の開き閉じの鍵の形（`{}` は問いの id・行 hs-derived）。
-pub const FOLDS: &[&str] = &["ask:around:{}"];
+pub const FOLDS: &[&str] = &["ask:around:{}", "ask:more:{}"];
 
 /// 口が読めないときの理由。
 pub const REASON: &str =
@@ -129,6 +129,12 @@ pub struct Slot {
     pub key: Option<&'static str>,
     pub open: Option<bool>,
 }
+
+/// 窓の card で「続き」の開き閉じに畳む部分（最初は閉じる・最初に出すのは頭と概要と答えとつながり・行 g-accept-face）。
+pub const MORE: [Part; 2] = [Part::Reason, Part::Recommend];
+
+/// 「続き」の開き閉じの語の鍵。
+pub const MORE_KEY: &str = "q_more";
 
 /// card の部分の並び（DOM はこの表を順にたどって組み立てる）。
 pub const LAYOUT: [Slot; 6] = [
@@ -620,9 +626,9 @@ mod dom {
     use tsuzuri_contract::ledger::BeadId;
 
     use super::{
-        CHAT_KEY, Card, KeyAction, LAYOUT, Outcome, PATH, Part, RULING_PATH, Slot, UNRECEIVED_PATH,
-        age, anchor, answerable, can_send, card_class, key_action, listed, outcome, posted_tip,
-        request_body, send_text, target_number,
+        CHAT_KEY, Card, KeyAction, LAYOUT, MORE, MORE_KEY, Outcome, PATH, Part, RULING_PATH, Slot,
+        UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, key_action, listed,
+        outcome, posted_tip, request_body, send_text, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::fold;
@@ -731,12 +737,28 @@ mod dom {
         T: Fn() -> u64 + Copy + Send + Sync + 'static,
         M: Fn() -> Mode + Copy + Send + Sync + 'static,
     {
-        let parts = LAYOUT
+        // 理由と推奨は概要の後の「続き」の開き閉じに畳む（台帳の字の長い段を最初の画面に並べない・行 g-accept-face）。
+        let part = |slot: &Slot| part_view(*slot, &card, &d, live, shared);
+        let folded = |slot: &&Slot| MORE.contains(&slot.part);
+        let lead = LAYOUT
             .iter()
-            .map(|slot| part_view(*slot, &card, &d, live, shared))
+            .take_while(|s| !folded(s))
+            .map(part)
             .collect_view();
+        let more = LAYOUT.iter().filter(folded).map(part).collect_view();
+        let tail = LAYOUT
+            .iter()
+            .skip_while(|s| !folded(s))
+            .filter(|s| !folded(s))
+            .map(part)
+            .collect_view();
+        let (open, toggle) = fold(format!("ask:more:{}", card.id), || false);
         view! {
-            <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>{parts}</article>
+            <article class=card_class(target) id=move || anchor(live.nb.get()) data-q=card.id.to_string()>
+                {lead}
+                <details class="fold" prop:open=open on:toggle=toggle><summary>{label(MORE_KEY)}</summary>{more}</details>
+                {tail}
+            </article>
         }
         .into_any()
     }
@@ -774,10 +796,10 @@ mod dom {
                 let link = move || {
                     let (id, title) = (id.clone(), title.clone());
                     if other {
-                        return view! { <span data-t="">{title}</span> }.into_any();
+                        return view! { <span data-t="" data-ledger-text="" title=title.clone()>{hover::clip(&title)}</span> }.into_any();
                     }
                     view! {
-                        <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="">{title}</span></a>
+                        <a class="t" href=move || node_href(&id, mode()) use:attach_some=live.node.get()><span data-t="" data-ledger-text="" title=title.clone()>{hover::clip(&title)}</span></a>
                     }
                     .into_any()
                 };
@@ -798,7 +820,7 @@ mod dom {
                 view! {
                     <div class=slot.class>
                         <b data-term=key tabindex="0">{label(key)}</b>
-                        <span data-t="">{card.reason.clone()}</span>
+                        <span data-t="" data-ledger-text="">{card.reason.clone()}</span>
                     </div>
                 }
                 .into_any()
@@ -808,7 +830,7 @@ mod dom {
                 view! {
                     <div class=slot.class data-term=key>
                         <span inner_html=CHECK></span>
-                        <div><b>{label(key)}</b>" "<span data-t="">{card.recommend.clone()}</span></div>
+                        <div><b>{label(key)}</b>" "<span data-t="" data-ledger-text="">{card.recommend.clone()}</span></div>
                     </div>
                 }
                 .into_any()
@@ -830,7 +852,7 @@ mod dom {
                 view! {
                     <div class=l.class data-term=l.key>
                         <span inner_html=icon></span>
-                        <span data-t="">{l.text.clone()}</span>
+                        <span data-t="" data-ledger-text="">{l.text.clone()}</span>
                     </div>
                 }
             })

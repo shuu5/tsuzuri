@@ -925,6 +925,7 @@ mod dom {
     use crate::account::windows::{NOT_YET_KEY, button_text, open, open_url};
     use crate::account::{PATH, doc};
     use crate::frame::{Block, Mode};
+    use crate::project::next::row_line;
     use crate::project::seat::WindowRow;
     use crate::project::{Body, UNKNOWN, body_view, section, state_icon, unmeasured};
     use crate::vocab::label;
@@ -1006,7 +1007,7 @@ mod dom {
         view! {
             <div class=r.class tabindex="0" use:attach=card>
                 <span class="nxp"><span data-t="">{r.project}</span><span class="small muted" data-t="">{r.group}</span></span>
-                <span class="nxtop">{lead}<span class="nxl">{r.line}</span></span>
+                <span class="nxtop">{lead}<span class="nxl">{row_line(&r.line).to_string()}</span></span>
                 <span class="nxms">{marks}</span>
                 <span class="go">{go}</span>
             </div>

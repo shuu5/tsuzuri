@@ -195,7 +195,7 @@ mod dom {
         let rows = move || {
             others()
                 .into_iter()
-                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl">{t}</span><code>{id}</code></li> })
+                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl" data-ledger-text="">{t}</span><code>{id}</code></li> })
                 .collect_view()
         };
         // 台帳が読めないほかの project は、札と 1 行を読めた問いの後に出す（字は前の質問の block と同じ）。

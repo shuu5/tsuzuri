@@ -47,7 +47,7 @@ fn hsderive_consts_match_note() {
         (
             "ask",
             &["/api/questions", "/api/ruling", "/api/unreceived"],
-            &["ask:around:{}"],
+            &["ask:around:{}", "ask:more:{}"],
         ),
         ("askpage", &[], &["ask:hist"]),
         ("batch", &["/api/batch"], &[]),

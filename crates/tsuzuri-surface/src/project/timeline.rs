@@ -1,10 +1,10 @@
 //! block「run の時間軸」（見本の bead.html の時間軸の panel・便 g-node-timeline・要件 FR10）: 節点の頁の 3 つ目の block。
 //! 契約・epic の節点はその bead の走行を 1 行ずつ、走行の節点はその 1 行を、走行の読みの口（契約の型の runs の PATH）から出す。
 //! 近傍の読み（nodearound の module の source）の中心の行から読む bead を決め、段の chip は続く同じ段を 1 つにまとめる。
-//! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値は純粋な関数にして host で試す。
+//! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値・走行の link の card は純粋な関数にして host で試す。
 
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::graph::{AroundRow, NodeKind};
+use tsuzuri_contract::graph::{AroundRow, GraphNode, NodeKind};
 use tsuzuri_contract::runs::{self, RunLine, RunStep, RunsDoc};
 use tsuzuri_contract::wire;
 
@@ -15,6 +15,8 @@ use crate::account::home::{EXPERT_CHARS, wrap_words};
 use crate::frame::Block;
 use crate::mapview::encode;
 use crate::view::Fetched;
+use crate::widgets::hover::Card;
+use crate::widgets::nodecard::card_for;
 
 pub const BLOCK: Block = Block {
     id: "timeline",
@@ -227,6 +229,28 @@ pub fn body(fetched: &Fetched, only: Option<&str>) -> Body<Vec<RunRow>> {
     }
 }
 
+/// 走行の行の link の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
+/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
+pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
+    match rows.iter().find(|r| r.node.id == run) {
+        Some(r) => card_for(&r.node, r.status.as_deref()),
+        None => card_for(
+            &GraphNode {
+                id: run.to_string(),
+                kind: NodeKind::Run,
+                file: None,
+                digest: None,
+                title: String::new(),
+                line: None,
+                plain: None,
+                eng: None,
+                updated: None,
+            },
+            None,
+        ),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
@@ -235,11 +259,12 @@ pub use dom::view;
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, RunRow, Want, body, kept_want};
+    use super::{BLOCK, RunRow, Want, body, kept_want, run_card};
     use crate::frame::{Mode, node_href};
-    use crate::project::nodearound::{mode_of, source, state};
+    use crate::project::nodearound::{PageState, mode_of, source, state};
     use crate::project::{Body, body_view, section, unmeasured};
     use crate::widgets::help::{shows_internal, term};
+    use crate::widgets::hover::{Card, attach};
 
     /// やり直しの印（見本の IC.redo・14 px）。
     const REDO_ICON: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>"#;
@@ -271,9 +296,17 @@ mod dom {
                 Body::Empty(line) => section(BLOCK, ().into_any(), body_view(Body::Empty(line))),
                 Body::Filled(rows) => {
                     let count = view! { <span class="chip num">{rows.len()}</span> }.into_any();
+                    // 走行の link の card は近傍の行から引く（読めていなければ走行の id だけの節点）。
+                    let around = near.with(|(f, s)| match state(f, *s) {
+                        PageState::Doc(doc) => doc.rows,
+                        _ => Vec::new(),
+                    });
                     let list = rows
                         .into_iter()
-                        .map(|r| row_view(r, mode))
+                        .map(|r| {
+                            let card = run_card(&around, &r.run);
+                            row_view(r, card, mode)
+                        })
                         .collect_view();
                     section(BLOCK, count, view! { <div class="runs">{list}</div> }.into_any())
                 }
@@ -282,8 +315,12 @@ mod dom {
         view! { {content} }.into_any()
     }
 
-    /// 走行の 1 行（走行の節点の頁への link・段の chip を矢印でつなぐ・経験者には口座と費用と審査の行）。
-    fn row_view(r: RunRow, mode: impl Fn() -> Mode + Copy + Send + Sync + 'static) -> AnyView {
+    /// 走行の 1 行（走行の節点の頁への link と hover の card・段の chip を矢印でつなぐ・経験者には口座と費用と審査の行）。
+    fn row_view(
+        r: RunRow,
+        card: Card,
+        mode: impl Fn() -> Mode + Copy + Send + Sync + 'static,
+    ) -> AnyView {
         let id = r.run.clone();
         let href = move || node_href(&id, mode());
         let stages = r
@@ -311,7 +348,7 @@ mod dom {
         };
         view! {
             <div class="runrow">
-                <a class="nth num" href=href><span inner_html=REDO_ICON></span>" "{r.nth}</a>
+                <a class="nth num" href=href use:attach=card><span inner_html=REDO_ICON></span>" "{r.nth}</a>
                 <div>
                     <div class="stages">{stages}</div>
                     {expert_rows}

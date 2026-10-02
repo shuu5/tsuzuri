@@ -25,7 +25,7 @@ use crate::project::ledger::{
     JUDGES, Judge, Net, SPARK_H, SPARK_W, Unref, age, judge, kind_label, kind_name, net, spark,
     spark_svg,
 };
-use crate::project::next::{UNJUDGED_LINE, big, key as next_key, unjudged};
+use crate::project::next::{UNJUDGED_LINE, big, key as next_key, row_line, unjudged};
 use crate::project::seat::{NG, OK, Sign, state_value, top};
 use crate::project::{UNKNOWN, state_key};
 use crate::view::Fetched;
@@ -206,6 +206,15 @@ pub fn need(project: &ProjectRow) -> Need {
             line: None,
         },
     }
+}
+
+/// 表の要対応の列の 2 段目の字（1 行を row_line に通す・1 行の無い欄は空・行 g-accept-face）。
+pub fn need_l2(need: &Need) -> String {
+    need.line
+        .as_deref()
+        .map(row_line)
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// 重さ（見本の SEV: 限度と移動・応答なし・止まっている走行は hi、束の承認・質問・発効待ちは mid、なしと測れていないは lo）。
@@ -859,7 +868,7 @@ mod dom {
         Acc, BLOCK, C_ACC, C_LED, C_NEED, C_OPEN, C_ORCH, C_PN, C_RUN, C_WAIT, COLUMNS, Group,
         GroupHead, HROW, Led, NO_TOGGLE, NONE_MARK, NOT_YET_CLASS, Open, Orch, PGH, PSort, PTAB,
         ProjLine, RC4, Run, TKM, Table, UnrefKinds, UnrefSum, batch_text, content, count_text,
-        fit_cut, group_word, hbm_class, psort_of, unref_class, wait_class, with_psort,
+        fit_cut, group_word, hbm_class, need_l2, psort_of, unref_class, wait_class, with_psort,
     };
     use crate::account::PATH;
     use crate::account::windows;
@@ -1068,7 +1077,8 @@ mod dom {
         };
         let need_icon = row.need.lead.is_none().then(|| state_icon(UNKNOWN));
         let more = more_view(&row);
-        let l2 = fit_node(row.need.line.clone().unwrap_or_default());
+        let l2_text = need_l2(&row.need);
+        let l2 = fit_node(l2_text.clone());
         // 記録の無い行は mode の初めの値（見本の isOpen）。
         let name = row.name.clone();
         let is_open = open_state(name.clone(), opened, expert);
@@ -1100,7 +1110,7 @@ mod dom {
                 </div>
                 <div class=C_NEED tabindex="0" use:attach=row.cards.need.clone()>
                     <span class="l1">{need_icon}<b>{need_word}</b></span>
-                    <span class="l2" node_ref=l2>{row.need.line.clone().unwrap_or_default()}</span>
+                    <span class="l2" node_ref=l2>{l2_text}</span>
                 </div>
                 <div class=C_WAIT>
                     <span class="l1"><b class=wait_class(row.wait)>{count_text(row.wait)}</b></span>

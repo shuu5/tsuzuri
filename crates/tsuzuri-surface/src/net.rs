@@ -9,6 +9,8 @@
 //! 知らせが切れても最後に読めた中身を READ_HOLD_S 秒まで出し続け、越えたら登録された口を全部「読めない」にする
 //! （要件 NFR2・決め方を通さない・行 g-fresh）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
 //! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
+//! 頁を開いてから READ_HOLD_S 秒の間に知らせの接続が一度も開かなければ（待たされたまま誤りも来ない）、同じく全部を
+//! 「読めない」にし、理由は Fresh の印の card に出す（最初の読みが開きを待つ形は残す・行 g-accept-face）。
 //! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む（行 g-pulse）。
 //! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
 //! 読みの重い口（表示先・行 i-stage-own）は `get` で 1 回だけ読む（登録せず知らせでも読み直さない）。
@@ -142,6 +144,14 @@ fn link_lost() {
         },
         Duration::from_secs(READ_HOLD_S),
     );
+}
+
+/// 頁を開いた時刻 `at` から READ_HOLD_S 秒の後も知らせの接続が一度も開いていなければ、登録された口を全部「読めない」に
+/// する（待たされたまま誤りも来ない接続・理由は古さの card に出す・行 g-accept-face）。
+fn link_unopened(at: EpochSecs) {
+    if change(|f| f.unopened(at, now())) {
+        lose_all();
+    }
 }
 
 /// 知らせのつながりが開いた（切れた時刻を消す）。
@@ -461,10 +471,12 @@ pub fn read(path: &'static str) -> ReadSignal<Fetched> {
 /// 接続は頁の一生の間ずっと持つ（切れても EventSource が繋ぎ直し、開いたで読み直す）。
 /// 開くのを待つのは上限まで（越えたら開くのを待たずに 1 巡読み、後で開いたときにもう 1 巡読む）。
 /// 上限の timer は切れた時刻を消さない（開く前に切れた接続の時刻を残す）。
+/// 頁を開いてから READ_HOLD_S 秒の後も一度も開いていなければ全部「読めない」にする（行 g-accept-face）。
 fn connect() {
     if CONNECTED.replace(true) {
         return;
     }
+    let at = now();
     let Ok(source) = EventSource::new(EVENTS_PATH) else {
         lose_all();
         go_live();
@@ -503,4 +515,5 @@ fn connect() {
         },
         Duration::from_millis(OPEN_WAIT_MS),
     );
+    set_timeout(move || link_unopened(at), Duration::from_secs(READ_HOLD_S));
 }
