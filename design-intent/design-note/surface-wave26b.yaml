@@ -3,13 +3,13 @@
 meta:
   id: surface-wave26b
   title: 第 26 波 b — project board の作り直し（判断の記録 ADR-27）の第 2 段。上の固定の帯と窓と吹き出しと epic ごとの一覧と幅の 3 段で、1 枚の画面に組み直す
-  version: v0.6
+  version: v0.7
   status: effective
   generated: 2026-10-01
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-01, ruling: t3-hub.52.160.1（裁定 id = t3-hub.52.160.1:20261001T1423Z-1・席とのチャット・notes に逐語）, verbatim: これでよい すべて推奨で良いので進めて, surface: R-8}
-  note: ノート surface-wave26a（第 1 段の 15 行の全部が着地・廃止）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-02）は行 g-win-frame・g-topbar・g-win-parts・g-ask-win・g-pop・g-pop-flow・g-pop-why・g-pipe-cards・g-list-groups・g-list-head・g-unref-lc を足した。 第 0.3 版（2026-10-02）は行 g-select・g-one-screen-a・g-one-screen-b・g-layout・g-ledger-trim・g-list-sweep を足した。 第 0.4 版（2026-10-02）は行 g-ask-hist・g-win-url・c-cases-watch・g-accept を足した。 第 0.5 版（2026-10-02）は行 g-ask-win の title と done と節と差の file を、問いの一覧や台帳が読めない時に問いが無いと見せない形に直し（便 t3-hub.52.179 の審査 FAIL・憲法 P-7）、積みの木の当て直しで差の字が替わった行 g-ask-hist・g-one-screen-b の差の file と節の字を直した。 第 0.6 版（2026-10-02）は行 g-pop・g-list-groups に、板が読めない時に札が無いと見せない 1 行と歯を足し（憲法 P-7）、その当て直しで差の字が替わった行 g-pop-flow・g-pop-why・g-list-head・g-select・g-one-screen-b・g-ledger-trim・g-ask-hist の差の file と在りかの字を直した。
+  note: ノート surface-wave26a（第 1 段の 15 行の全部が着地・廃止）の続き。承認は判断の記録 ADR-27 の持ち主の裁定（t3-hub.52.160.1:20261001T1423Z-1）。第 0.1 版（2026-10-01）は目的と空の契約表だけを置いた（行は起草の後に足す）。 第 0.2 版（2026-10-02）は行 g-win-frame・g-topbar・g-win-parts・g-ask-win・g-pop・g-pop-flow・g-pop-why・g-pipe-cards・g-list-groups・g-list-head・g-unref-lc を足した。 第 0.3 版（2026-10-02）は行 g-select・g-one-screen-a・g-one-screen-b・g-layout・g-ledger-trim・g-list-sweep を足した。 第 0.4 版（2026-10-02）は行 g-ask-hist・g-win-url・c-cases-watch・g-accept を足した。 第 0.5 版（2026-10-02）は行 g-ask-win の title と done と節と差の file を、問いの一覧や台帳が読めない時に問いが無いと見せない形に直し（便 t3-hub.52.179 の審査 FAIL・憲法 P-7）、積みの木の当て直しで差の字が替わった行 g-ask-hist・g-one-screen-b の差の file と節の字を直した。 第 0.6 版（2026-10-02）は行 g-pop・g-list-groups に、板が読めない時に札が無いと見せない 1 行と歯を足し（憲法 P-7）、その当て直しで差の字が替わった行 g-pop-flow・g-pop-why・g-list-head・g-select・g-one-screen-b・g-ledger-trim・g-ask-hist の差の file と在りかの字を直した。 第 0.7 版（2026-10-02）は行 c-ruling-reread・c-deliver-retry を足した。
 
 sections:
   - n: 1
@@ -233,6 +233,26 @@ sections:
         size: M
         done: (1) git apply --reverse --check docs/design/patch/g-accept.patch が rc 0（差の file の hunk が全部木に在る） (2) 測る幅 WIDTHS は 1280・960・700・390 の 4 つで、規則の行 R-23 の値の字は同じ並びの 1280・960・700・390 の幅でを持つ（歯 bvacc_widths_are_rule_r23） (3) 測る画面 SCREENS は home の ?・帯の印が開く 7 つの窓（topbar の Win の key の順の ?win=ask& から ?win=dest& まで・query の名は WIN_PARAM の win）・account board の 3 つの tab の 11 で、どの画面も page= の query を持たない（歯 bvacc_screens_open_windows） (4) jrun の歯は WIDTHS を 4 幅と断言し、SCREENS が面の頁の file と account の tab と topbar の窓の key から組んだ 11 の画面と同じであることを見て、sweep は 4 幅と 2 mode の組ごとに 11 の画面と最初の節点の頁を開き（96 の URL）、節点の頁の page error は 8 件と数える（歯 jrun_screens_cover_surface・jrun_sweep_all_cases） (5) 測りの式は、札と一覧の行の吹き出しの口（面の pop の CARD_ATTR と ROW_ATTR の 2 つの属性）に自分の click の受け手が無ければ欠けに数え、口の中の節点の link には hover を問わず、口の中と札の id の class kid の字を散文に数えず、class kid を節点の id に読み、開いた窓（aria-modal が true の箱）が在ればその中だけを測り、中だけを scroll させる祖先の箱の外へ出た部分を切った矩形で見える要素と重なりを決める（歯 bvacc_probe_reads_pops_and_windows） (6) 受入の fixture の 13 の事実の file は URL が http://127.0.0.1:4801/?mode=beginner で page= の字と 4 列の字を持たず、最初の画面の片に 5 列の字を持ち、題は 36 字で、切り替えの押す前の URL は ?mode=beginner で終わり、04 の欠けだけが札の口の名 button.kcard を 1 つ持つ（歯 bvacc_fixtures_new_surface） (7) 書き替えた着地済みの歯の file 2 本（jrun・jcount）の歯が全部緑
         depends: [c-cases-watch]
+
+      - id: c-ruling-reread
+        title: 方針の口は書きの前の台帳の読みを裁定の口と同じ撃ち直しにし、断る時は何を断ったかの 1 行を server の log に書く（memo t3-hub.72 の候補 b の残り・憲法 P-7.3・試作の差の file docs/design/patch/c-ruling-reread.patch を当てる）
+        req: ["FR8", "FR9"]
+        section: "24"
+        write-set: ["crates/tsuzuri-boundary/src/server/policy.rs", "crates/tsuzuri-boundary/src/server/routes/policy.rs", "+crates/tsuzuri-boundary/tests/bvrread.rs", "=crates/tsuzuri-boundary/tests/epolq.rs", "=crates/tsuzuri-boundary/tests/aown.rs", "=crates/tsuzuri-boundary/tests/hbpost.rs", "=crates/tsuzuri-boundary/tests/rsid.rs", "=crates/tsuzuri-boundary/tests/server_batch.rs", "=crates/tsuzuri-boundary/tests/areread.rs", "=crates/tsuzuri-boundary/tests/eretry.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-ruling-reread.patch", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments", "cargo nextest run -p tsuzuri-boundary --test bvrread --no-tests=fail bvrread_", "cargo nextest run -p tsuzuri-boundary --test epolq --no-tests=fail epolq_", "cargo nextest run -p tsuzuri-boundary --test aown --no-tests=fail aown_", "cargo nextest run -p tsuzuri-boundary --test hbpost --no-tests=fail hbpost_", "cargo nextest run -p tsuzuri-boundary --test rsid --no-tests=fail rsid_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test areread --no-tests=fail areread_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/c-ruling-reread.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments が rc 0 (3) 方針の受付 policy の accept は、最初の 2 回は rc 1 で落ちて 3 回目に読める偽の bd で、偽の bd を 3 回撃って範囲の断り BadScope まで進み、落ち続ける偽の bd では偽の bd を READ_TRIES 回撃って LedgerUnknown を返し、どちらも偽の bdw を撃たない（歯 bvrread_policy_rereads_before_refusing） (4) 落ち続ける偽の bd の tz に撃った口 POST /api/policy は 503 と本文 ledger-unknown を返し、標準エラーに、UNREAD の字の後に回ごとの落ちた訳を ・ で 3 つ並べた読みの落ちの 1 行と、REFUSED_LOG の字の後に /api/policy と 503 と ledger-unknown と問いの id の無い ・問い を並べた断りの 1 行を 1 行ずつ書き、偽の bdw を撃たない（歯 bvrread_policy_refusal_logged） (5) 着地済みの歯 epolq・aown・hbpost・rsid・server_batch・areread・eretry が全部緑
+        depends: []
+
+      - id: c-deliver-retry
+        title: server の起動の周に、撃ち直しの上限の内に記帳した台帳の印の無い裁定を、答えごとの撃ち直しと同じ形で 1 つずつ器の配達の口へ撃ち直す（起こし直しで消えた撃ち直しを拾う・読むだけの server では撃たない・memo t3-hub.72 の候補 a の残り・試作の差の file docs/design/patch/c-deliver-retry.patch を当てる）
+        req: ["FR9"]
+        section: "25"
+        write-set: ["crates/tsuzuri-boundary/src/server/ruling.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/tests/bvdsweep.rs", "=crates/tsuzuri-boundary/tests/dretry.rs", "=crates/tsuzuri-boundary/tests/fserve.rs", "=crates/tsuzuri-boundary/tests/server_ask.rs", "=crates/tsuzuri-boundary/tests/eretry.rs", "=crates/tsuzuri-boundary/tests/areread.rs", "=crates/tsuzuri-boundary/tests/rvk.rs", "=crates/tsuzuri-boundary/tests/server_batch.rs", "=crates/tsuzuri-boundary/tests/aown.rs", "=crates/tsuzuri-boundary/tests/server_read.rs", "=crates/tsuzuri-boundary/tests/server_min.rs", "=crates/tsuzuri-boundary/tests/tzent.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-deliver-retry.patch", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments", "cargo nextest run -p tsuzuri-boundary --test bvdsweep --no-tests=fail bvdsweep_", "cargo nextest run -p tsuzuri-boundary --test dretry --no-tests=fail dretry_", "cargo nextest run -p tsuzuri-boundary --test fserve --no-tests=fail fserve_", "cargo nextest run -p tsuzuri-boundary --test server_ask --no-tests=fail server_ask_", "cargo nextest run -p tsuzuri-boundary --test eretry --no-tests=fail eretry_", "cargo nextest run -p tsuzuri-boundary --test areread --no-tests=fail areread_", "cargo nextest run -p tsuzuri-boundary --test rvk --no-tests=fail rvk_", "cargo nextest run -p tsuzuri-boundary --test server_batch --no-tests=fail server_batch_", "cargo nextest run -p tsuzuri-boundary --test aown --no-tests=fail aown_", "cargo nextest run -p tsuzuri-boundary --test server_read --no-tests=fail server_read_", "cargo nextest run -p tsuzuri-boundary --test server_min --no-tests=fail server_min_", "cargo nextest run -p tsuzuri-boundary --test tzent --no-tests=fail tzent_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/c-deliver-retry.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings -D clippy::too_many_lines -D clippy::cognitive_complexity -D clippy::too_many_arguments が rc 0 (3) 字 SWEEP_FOUND は 起動の周に印の無い裁定を撃ち直す、字 SWEEP_UNREAD は 起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う）で、id_minute は fx-w.1 と batch の id の分の字 20261002T0100Z を返し、コロンの無い id・- の無い id・分の字が 14 字でない id・数が数字でない id には None を返す（歯 bvdsweep_words） (4) sweep は今の分の印の無い裁定 2 つと印の在る裁定 1 つと 2 時間前の分の印の無い裁定 1 つの台帳で 2 を返し、偽の器を台帳の順に 2 回、器の配達の口の argv（seat と deliver と --state-dir と state dir と --target と席と --ruling と裁定の id）で撃ち、偽の bdw に経路が配達の口の印を 1 回ずつ書き、印の在る裁定と 2 時間前の裁定の id は撃たない（歯 bvdsweep_fires_unmarked_in_order） (5) sweep は印の無い裁定が 2 時間前の分のものだけの台帳と読めない台帳で 0 を返し、偽の器も偽の bdw も撃たない（歯 bvdsweep_quiet_when_nothing） (6) sweep_at_start は読むだけの server と --seat の無い server と --state-dir の無い server の Config で偽を返して偽の器を撃たず、両方が在る読むだけでない server の Config で真を返し、別の thread が今の分の最初の印の無い裁定で偽の器を撃つ（歯 bvdsweep_start_gates） (7) tz surface serve は --seat と --state-dir を渡すと、起動の後に今の分の最初の印の無い裁定で偽の器を撃つ（歯 bvdsweep_serve_sweeps_at_start） (8) 着地済みの歯 dretry・fserve・server_ask・eretry・areread・rvk・server_batch・aown・server_read・server_min・tzent が全部緑
+        depends: []
 
   - n: 3
     type: prose
@@ -681,5 +701,48 @@ sections:
       流す時と順。depends は c-cases-watch（同じ鎖の前の行・書く file は重ならない）。席は着地の後に runner で受入 AC18 の 3 幅を撃つ（行は要らない）。
 
       範囲の外。面の側の直し（窓の題の見出しの語の鍵・節点の頁の近傍の図の hover・最初の案内の重なり・account board の 960 の幅の溢れ）は、この行の測りで見えた面の違反で、notes に名指して後の行に渡す。要件 NFR1 と R-23 の字の hover の欠けを吹き出しの欠けへ改める字は notes の案。切り替えの選び方（seg と aria-pressed と role tab と data-tab）は替えない。
+
+  - n: 24
+    type: prose
+    title: 行 c-ruling-reread — 方針の口の断る前の読み直しと断りの log
+    body: |
+      在りか。起点は main 2ed91cab（写し drafts/w70b）。差の file docs/design/patch/c-ruling-reread.patch は、その上の試作の commit ad5ebfc8（branch w70b-r1）との git diff --no-color --full-index を、この行の書く 3 file に絞って切った（3 file・13,333 byte）。main 2ed91cab の木で git apply --check が rc 0、ad5ebfc8 の木で git apply --reverse --check が rc 0。
+
+      なぜ。memo t3-hub.72 の候補 b（答えの口は、台帳の読みが一時に落ちた時に、断る前に読み直す）の残り。裁定と取り消しと束の受付は、ノート surface-wave23a の行 e-answer-reread（2026-09-29 着地）で、見張りの読みを見ずに書きの前に台帳を直に読み直す形になった（ruling.rs の reread・1 回の上限 READ_TIMEOUT 20 秒・READ_TRIES 3 回・間 RETRY_STEP 1 秒・どれも落ちれば unread_line の 1 行を書いて 503）。方針の受付（policy.rs の accept）だけが、直の読みを text_alone（上限 BD_TIMEOUT 5 秒）で 1 回だけ撃ち、撃ち直さず、落ちた訳も書かずに 503 を返す。口の file routes/policy.rs は、200 でない応答の refusal_line も書かない（ほかの 3 つの答えの口は書く）。憲法 P-7.3（断る時は何を断ったかと次の 1 手）に合わせ、方針の口の断りも server の log に何を断ったかを残す（次の 1 手の字は面の LEDGER_BUSY が持つ）。
+
+      形。policy.rs の accept の読みを text_alone から ruling.rs の reread に替え、use に reread を足し、頭の doc の受付の順の 2 の字を直す。routes/policy.rs は accept の結果を変数に受けて応答を組み、200 でなければ refusal_line（path は policy の PATH・問いの id の列は空）の 1 行を標準エラーに書いてから返す（use に emit_err と refusal_line を足し、doc に 1 行を足す）。503 の本文 ledger-unknown と面の字 LEDGER_BUSY は変えない。新しい値は足さない（読み直しの回と間と上限は着地済みの code の型付きの定数のまま・規則の表の行は要らない）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目、(2) は 2 行目。done (3) と (4) は 3 行目（歯の file tests/bvrread.rs・filter bvrread_）の歯 bvrread_policy_rereads_before_refusing と bvrread_policy_refusal_logged。done (5) は 4〜10 行目（着地済みの歯の file ごとに 1 行）。最後の 1 行 xtask の check は done の項を持たない。
+
+      構造の連鎖。policy.rs は ruling.rs から reread を新しく引き、routes/policy.rs は ruling.rs から refusal_line を新しく引く（ruling.rs は書かない）。歯の偽の bd は撃たれた回を数え、作業場の bd.fails の数の回までは標準エラーに database is locked の 1 行を書いて rc 1 で終わり、その後は fixture tests/fixtures/ledger/bd-list-8.json の写しを出す。偽の bdw は回を数えて rc 1。口の歯は tz の binary を --seat も --state-dir も無しで 127.0.0.1 の空き port に起こし、範囲 all の方針を POST して標準エラーを読む。読みの落ちの 1 行は unread_line の字（落ちた訳 rc が 0 でない と database is locked を ・ で 3 つ並べた字）、断りの 1 行は REFUSED_LOG と /api/policy 503 ledger-unknown と ・問い と空白。
+
+      試作と噛み。試作は main 2ed91cab の写しで書き、書く file は write-set の 3 file で閉じる。境の crate の全部の歯を cargo nextest run -p tsuzuri-boundary で撃ち、clippy と xtask の check と xtask の歯も撃った（結果は係の notes）。噛みは 4 つ（方針の読みを text_alone に戻す・1 回だけの読みにする・口の断りの log を書かない・log の path を裁定の口の字にする）で、どれも歯 bvrread_ のどれかが落ちる。
+
+      流す時と順。depends は空。同じノートの行 c-deliver-retry とは書く file が重ならない（あちらは ruling.rs と main.rs）。鎖の行 c-cases-watch が書く src/server/mod.rs と cases.rs は書かない。
+
+      範囲の外。台帳の 1 本の引きの口（GET /api/ledger/<id>・routes/item.rs）は書かない。この口は答えの口でなく見張りの読みを返す読みの口で、見張りの最後の読みが落ちた後に口が bd を撃たないことは着地済みの行 e-snap の決め（歯 server_coalesce_shared_failure_then_new_read が口の 503 と bd の 0 回を断言する）。面の決定の頁が 1 本の引きの 503 を取り消しの欄の無しとして見せる形（node.rs の shows_revoke）は面の行の範囲。台帳の読みを速くすること・見張りの読みの上限 BD_TIMEOUT は変えない。器の側の見張り（memo t3-hub.72 の候補 c）は持ち主が時期を決める。
+  - n: 25
+    type: prose
+    title: 行 c-deliver-retry — 起動の周の掃き
+    body: |
+      在りか。起点は main 2ed91cab（写し drafts/w70b）。差の file docs/design/patch/c-deliver-retry.patch は、main 2ed91cab と試作の commit bef37c36（branch w70b-r2・親は行 c-ruling-reread の試作 ad5ebfc8 で、この行の 3 file はその commit で触らない）の git diff --no-color --full-index を、この行の書く 3 file に絞って切った（3 file・22,693 byte）。main 2ed91cab の木で git apply --check が rc 0、bef37c36 の木で git apply --reverse --check が rc 0。
+
+      なぜ。memo t3-hub.72 の候補 a（印の無い答えの配達を、間を空けて撃ち直す・器の断りの字を log に残す）の残り。ノート surface-wave23a の行 e-deliver-retry（2026-09-29 着地）で、答えごとの別の thread の redeliver が、器が受けない間 DELIVER_STEP 15 秒を空けて上限 DELIVER_SPAN 30 分まで撃ち直し、器の断りの字を NOT_TAKEN の行に残す形になった。残る穴は、その thread が process の中にだけ在り、server の起こし直しで消えること。席が idle の間は停止の hook も撃たれないので、起こし直しの前に答えて器に断られた裁定は、次に誰かが席を起こすまで届かない。
+
+      形。ruling.rs に字 SWEEP_FOUND（起動の周に印の無い裁定を撃ち直す）と SWEEP_UNREAD（起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う））と、pub fn ｀sweep｀・｀id_minute｀・｀sweep_at_start｀ を足す。｀id_minute｀ は裁定の id の最後のコロンと最後の - の間の 14 字（UTC の年月日 T 時分 Z の形・数は空でない数字）を返し、形が違えば None（字の順は時刻の順と同じ）。｀sweep｀ は配達の先と書きの持ち物と Source と pace と今の epoch 秒を受け、台帳を text_within の READ_TIMEOUT で 1 度読み、中核の undelivered（印の無い裁定・台帳の順）のうち、｀id_minute｀ が今から pace の上限を引いた時刻の minute の字より前でないものだけを 1 つずつ荷（id はその裁定の id・問いと裁定の組は 1 つ）にし、前の荷の redeliver が終えてから次の荷の redeliver を pace で撃って、撃った荷の数を返す。上限より前の裁定は、答えごとの撃ち直しも上限で止めていたので撃たない。撃つ裁定が在れば撃つ前に SWEEP_FOUND の 1 行（裁定の id を , で並べた字と席）を書く。読みが落ちるか字が読めなければ SWEEP_UNREAD の 1 行（落ちた訳）を書いて撃たない。｀sweep_at_start｀ は Config を受け、読むだけの server と、--seat か --state-dir の無い server では始めずに偽を返す。ほかは server の裁定の書きと同じ引数（--seat・--state-dir・--scribe2・--repo・--bdw）から配達の先と書きの持ち物を作り、--bd の合流しない Source で、別の thread の ｀sweep｀ を PACE と今の時刻で始めて真を返す（待たない）。thread の閉じは block の形で、着地済みの歯 dretry_spawns_use_pace が数える redeliver の spawn の字と PACE の後の 2 つの閉じ括弧の字の数は変わらない。src/main.rs の serve は口の住所の行を書いた後、server の run の前に ｀sweep_at_start｀ を 1 度撃ち、頭の doc に 1 行を足す。新しい値は足さない（PACE と READ_TIMEOUT は着地済みの code の型付きの定数・規則の表の行は要らない）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目、(2) は 2 行目。done (3)〜(7) は 3 行目（歯の file tests/bvdsweep.rs・filter bvdsweep_）の歯 bvdsweep_words・bvdsweep_fires_unmarked_in_order・bvdsweep_quiet_when_nothing・bvdsweep_start_gates・bvdsweep_serve_sweeps_at_start。done (8) は 4〜14 行目（着地済みの歯の file ごとに 1 行）。最後の 1 行 xtask の check は done の項を持たない。
+
+      構造の連鎖。ruling.rs は中核の delivery から undelivered を、server の module から Config を新しく引く。撃ち直しの周は見張りの周に置かない。見張りは受け手（知らせの接続）が 0 人の間は台帳を読まず、受け手が居ても store の印が動かなければ 600 秒ごとにしか読まない。見張りの周で器を撃つと、器の 1 回の撃ち（上限 DELIVER_TIMEOUT）が見張りの読みも止める。起動の周だけにし、周期の掃きにしないのは、周期にすると答えごとの thread が撃ち直している裁定を同じ時に 2 度撃つため。それを避ける撃ち直し中の表は Shared（src/server/mod.rs）に置くことになり、mod.rs は鎖の行 c-cases-watch が書く。器の seat deliver は撃つ回を絞らない（器の ADR-0077）。断る周は 1 key も送らない。送ったが確かめられない周（unconfirmed）を撃ち直すと、指し示しの 1 行が 2 度届くことがある（行 e-deliver-retry と同じ・入力欄に字が残れば次の周は input-busy で断られる）。着地済みの歯 fserve と server_ask の fixture の印の無い裁定（2026-09-24 の分）は上限より前なので、起動の掃きは撃たず、偽の器の回の数えは変わらない。歯の偽の bd は作業場の out.json（歯の file が今の分と 2 時間前の分で組む 4 本の台帳）を出し、無ければ rc 1。偽の bdw と偽の器は回ごとの argv を記録して rc 0。歯の撃ち直しの組は間 50 ms と上限 2000 ms。tz の binary の歯は 30 秒を上限に偽の器の 1 回目を待って止める。
+
+      試作と噛み。試作は main 2ed91cab の写しで書き、書く file は write-set の 3 file で閉じる。境の crate の全部の歯を cargo nextest run -p tsuzuri-boundary で撃ち、clippy と xtask の check と xtask の歯も撃った（結果は係の notes）。噛みは 8 つ（読むだけの server の門を外す・serve から ｀sweep_at_start｀ を外す・印の在る裁定も撃つ・上限の窓を外す・全部を 1 つの荷にする・台帳の逆の順に撃つ・SWEEP_FOUND の字を替える・｀id_minute｀ が形を見ない）で、どれも歯 bvdsweep_ のどれかが落ちる。
+
+      流す時と順。depends は空。同じノートの行 c-ruling-reread とは書く file が重ならない（あちらは policy.rs と routes/policy.rs）。鎖の行 c-cases-watch が書く src/server/mod.rs と cases.rs は書かない。
+
+      範囲の外。答えごとの撃ち直しの間と上限（PACE）は変えない。30 分の上限の後の撃ち直しは足さない（器が断り続けるのは席が idle のまま入力欄に字が在るか pane が無い形で、撃ち続けても届かず、席が turn に入れば終わりの停止の hook が拾う）。server の log を起こし直しで切り詰める起動の script は repo の外の席の道具で、この行では書かない。器の側の見張り（memo t3-hub.72 の候補 c と memo t3-hub.70）は持ち主が時期を決める。
 
 figures: []

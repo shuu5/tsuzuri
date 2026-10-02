@@ -1,0 +1,527 @@
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index 523e6c4408a4a550c907d7d2396a9729b9026187..4e75c9a282331f02dad798aaaeb2d49b5249e142 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -6,6 +6,7 @@
+ //! （省けば server 自身の binary・行 k-tz-self）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
+ //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
+ //! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
++//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める（行 c-deliver-retry）。
+ //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
+ //! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
+ //! board を読むだけで起こす・行 e-ask-own-only）。
+@@ -29,7 +30,7 @@ use std::path::PathBuf;
+ use std::process::ExitCode;
+ 
+ use tsuzuri_boundary::out::emit_err;
+-use tsuzuri_boundary::server::{Config, Server};
++use tsuzuri_boundary::server::{Config, Server, ruling};
+ use tsuzuri_boundary::stage::notify;
+ use tsuzuri_core::account::project_name;
+ 
+@@ -213,5 +214,7 @@ fn serve(rest: &[&str]) -> u8 {
+         Ok(addr) => emit_err(&format!("tz surface serve: http://{addr}/")),
+         Err(e) => emit_err(&format!("tz surface serve: 口の住所が読めない: {e}")),
+     }
++    // 起こし直しで消えた答えごとの撃ち直しを、起動の周に台帳の印の無い裁定から拾い直す（待たない・行 c-deliver-retry）。
++    ruling::sweep_at_start(&config);
+     server.run()
+ }
+diff --git a/crates/tsuzuri-boundary/src/server/ruling.rs b/crates/tsuzuri-boundary/src/server/ruling.rs
+index ae573c1f4192c3b2b8168391369f204ddb455575..a7c2daf274ade0c6b94a86a638a42fd9ddaadf7e 100644
+--- a/crates/tsuzuri-boundary/src/server/ruling.rs
++++ b/crates/tsuzuri-boundary/src/server/ruling.rs
+@@ -14,6 +14,11 @@
+ //!    （周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を撃ち、rc 0 なら印を置く。
+ //!    受けなければ `DELIVER_STEP` を空けて `DELIVER_SPAN` まで撃ち直す・結果で応答は変えない）。
+ //!
++//! 答えごとの撃ち直しの thread は process の中にだけ在り、server の起こし直しで消える。起動の入口（tz surface serve）は
++//! 口を開いた後に `sweep_at_start` で起動の掃き（`sweep`）を別の thread で 1 度だけ始め、`PACE` の上限の内に記帳した
++//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない・
++//! 行 c-deliver-retry）。
++//!
+ //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
+ //! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
+ //! 台帳の読みも書きも配達も撃たない（行 e-ask-own-only）。
+@@ -33,9 +38,10 @@ use tsuzuri_contract::surface::{
+     QUESTION_FIELD, REVOKES, Refusal, RevokeRequest, RevokeResponse, RulingId, RulingRequest,
+     RulingResponse, VERBATIM, pending_reopen, revocable,
+ };
+-use tsuzuri_core::delivery::{Pending, Route, mark_line, marked};
++use tsuzuri_core::delivery::{Pending, Route, mark_line, marked, undelivered};
+ use tsuzuri_core::question::open_questions;
+ 
++use super::Config;
+ use super::events;
+ use super::ledger::{Source, capture, parse_bd};
+ use super::proc::run;
+@@ -111,6 +117,13 @@ pub const PACE: Pace = Pace {
+ /// 配達の撃ち直しを上限で止めたときの log の字。
+ pub const GAVE_UP: &str = "配達の撃ち直しを上限で止めた（印を置かず、席の停止の hook が拾う）";
+ 
++/// 起動の掃きが印の無い裁定を見つけたときの log の字（行 c-deliver-retry）。
++pub const SWEEP_FOUND: &str = "起動の周に印の無い裁定を撃ち直す";
++
++/// 起動の掃きの台帳の読みが落ちたときの log の字（何も撃たない）。
++pub const SWEEP_UNREAD: &str =
++    "起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う）";
++
+ /// 配達の先（器の CLI・state dir・席の target）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Delivery {
+@@ -448,6 +461,93 @@ pub fn redeliver(d: &Delivery, writer: &Writer, ledger: &Source, parcel: &Parcel
+     }
+ }
+ 
++/// 起動の掃き（行 c-deliver-retry）。台帳を合流しない読みで上限 `READ_TIMEOUT` の 1 度だけ読み、印の無い裁定
++/// （中核の `undelivered`・台帳の順）のうち、id の分の字（`id_minute`）が `now` から `pace.span` を引いた時刻の分の字より
++/// 前でないものを 1 つずつ荷（id はその裁定の id・問いと裁定の組は 1 つ）にして、前の荷の `redeliver` が終えてから
++/// 次の荷の `redeliver` を `pace` で撃つ（それより前の裁定と分の字の読めない裁定は、答えごとの撃ち直しも上限で止めていたので
++/// 撃たず、席の停止の hook が拾う）。撃つ裁定が在れば撃つ前に `SWEEP_FOUND` の 1 行（裁定の id を , で並べた字と席）を書く。
++/// 読みが落ちるか字が読めなければ `SWEEP_UNREAD` の 1 行（落ちた訳）を書いて何も撃たない。撃った荷の数を返す。
++pub fn sweep(d: &Delivery, writer: &Writer, ledger: &Source, pace: Pace, now: EpochSecs) -> usize {
++    let found = match ledger.text_within(READ_TIMEOUT).map(|t| undelivered(&t)) {
++        Ok(Reading::Known(found)) => found,
++        Ok(Reading::Unknown) => {
++            emit_err(&format!(
++                "tz surface serve: {SWEEP_UNREAD}: 台帳の字が読めない"
++            ));
++            return 0;
++        }
++        Err(word) => {
++            emit_err(&format!("tz surface serve: {SWEEP_UNREAD}: {word}"));
++            return 0;
++        }
++    };
++    let since = minute(now.saturating_sub(pace.span.as_secs()));
++    let found: Vec<Pending> = found
++        .into_iter()
++        .filter(|p| id_minute(&p.ruling).is_some_and(|m| m >= since.as_str()))
++        .collect();
++    if found.is_empty() {
++        return 0;
++    }
++    let ids: Vec<&str> = found.iter().map(|p| p.ruling.as_str()).collect();
++    emit_err(&format!(
++        "tz surface serve: {SWEEP_FOUND}: {}・席 {}",
++        ids.join(","),
++        d.target
++    ));
++    for p in &found {
++        let parcel = Parcel {
++            id: p.ruling.clone(),
++            pending: vec![p.clone()],
++        };
++        redeliver(d, writer, ledger, &parcel, pace);
++    }
++    found.len()
++}
++
++/// 裁定の id の分の字（`<頭>:<UTC の年月日 T 時分 Z>-<数>` の最後のコロンと最後の - の間の 14 字・形が違えば None）。
++/// 字の順は時刻の順と同じ。
++pub fn id_minute(id: &RulingId) -> Option<&str> {
++    let (_, tail) = id.as_str().rsplit_once(':')?;
++    let (at, n) = tail.rsplit_once('-')?;
++    let shaped = at.len() == 14
++        && at.bytes().enumerate().all(|(i, c)| match i {
++            8 => c == b'T',
++            13 => c == b'Z',
++            _ => c.is_ascii_digit(),
++        })
++        && !n.is_empty()
++        && n.bytes().all(|c| c.is_ascii_digit());
++    shaped.then_some(at)
++}
++
++/// 起動の掃きを別の thread で始める（待たない）。読むだけの server（`Config::read_only`）と、席の target か state dir の
++/// 無い server では始めず false。配達の先と書きの持ち物は server の裁定の書きと同じ引数（--seat・--state-dir・--scribe2・
++/// --repo・--bdw）から作り、台帳は --bd の合流しない読みで読む（行 c-deliver-retry）。
++pub fn sweep_at_start(config: &Config) -> bool {
++    if config.read_only {
++        return false;
++    }
++    let (Some(target), Some(state_dir)) = (&config.seat, &config.state_dir) else {
++        return false;
++    };
++    let d = Delivery {
++        program: config.scribe2.clone(),
++        state_dir: state_dir.clone(),
++        target: target.clone(),
++    };
++    let writer = Writer {
++        repo: config.repo.clone(),
++        bdw: config.bdw.clone(),
++        delivery: Some(d.clone()),
++    };
++    let ledger = Source::new(&config.repo, &config.bd);
++    std::thread::spawn(move || {
++        sweep(&d, &writer, &ledger, PACE, events::now());
++    });
++    true
++}
++
+ /// 次の id（数は 1 から始め、notes に同じ id の定型行が在れば 1 つずつ増やす）。
+ pub fn next_id(
+     question: &BeadId,
+diff --git a/crates/tsuzuri-boundary/tests/bvdsweep.rs b/crates/tsuzuri-boundary/tests/bvdsweep.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f2413737e05e36f37ec4342f3061341a9e5e628
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/bvdsweep.rs
+@@ -0,0 +1,356 @@
++//! 起動の掃きの歯（接頭辞 bvdsweep_・設計ノート surface-wave26b 行 c-deliver-retry・要件 FR9）。
++//! 偽の bd は作業場の out.json を標準出力へ出す script（out.json が無ければ標準エラーに 1 行を書いて rc 1）、
++//! 偽の bdw と偽の器は撃たれた回ごとの argv を記録して rc 0 で終わる script。
++//! 台帳（`Ids::ledger`）は問い 4 本で、今の分に記帳した fx-w.1 と fx-w.3 の裁定は印が無く、fx-w.2 の裁定は印が在り、
++//! 2 時間前の分に記帳した fx-w.4 の裁定は印が無い。
++//! `sweep` と `sweep_at_start` を直に呼び、起動の入口は tz の binary を撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Stdio};
++use std::thread;
++use std::time::{Duration, Instant};
++
++use tsuzuri_boundary::server::ledger::Source;
++use tsuzuri_boundary::server::ruling::{
++    Delivery, Pace, SWEEP_FOUND, SWEEP_UNREAD, Writer, id_minute, minute, sweep, sweep_at_start,
++};
++use tsuzuri_boundary::server::{Config, events};
++use tsuzuri_contract::surface::RulingId;
++
++/// 器の配達の口の target。
++const TARGET: &str = "tsuzuri:0.1";
++
++/// 古い裁定の分（今から 2 時間前）。
++const OLD_SECS: u64 = 7200;
++
++/// 歯の撃ち直しの組。
++const FAST: Pace = Pace {
++    step: Duration::from_millis(50),
++    span: Duration::from_millis(2000),
++};
++
++/// 台帳の 4 つの裁定の id（今の分の印の無い 2 つ・今の分の印の在る 1 つ・2 時間前の分の印の無い 1 つ）。
++struct Ids {
++    first: String,
++    second: String,
++    marked: String,
++    old: String,
++}
++
++impl Ids {
++    fn now() -> Ids {
++        let now = events::now();
++        let (at, old) = (minute(now), minute(now - OLD_SECS));
++        Ids {
++            first: format!("fx-w.1:{at}-1"),
++            second: format!("fx-w.3:{at}-1"),
++            marked: format!("fx-w.2:{at}-1"),
++            old: format!("fx-w.4:{old}-1"),
++        }
++    }
++
++    /// 偽の bd が出す台帳（`marks` の裁定と fx-w.2 の裁定には経路が停止の印の行を足す）。
++    fn ledger(&self, marks: &[&str]) -> String {
++        let beads: Vec<String> = [
++            ("fx-w.1", &self.first),
++            ("fx-w.2", &self.marked),
++            ("fx-w.3", &self.second),
++            ("fx-w.4", &self.old),
++        ]
++        .iter()
++        .map(|(q, r)| {
++            let mut notes = format!("裁定 id = {r}・問い = {q}・逐語 = はい");
++            if *r == &self.marked || marks.contains(&r.as_str()) {
++                notes.push_str(&format!("\\n配達 = {r}・経路 = 停止・時刻 = 20261002T0101Z"));
++            }
++            format!(
++                "{{\"id\":\"{q}\",\"status\":\"closed\",\"labels\":[\"intake:question\"],\"notes\":\"{notes}\"}}"
++            )
++        })
++        .collect();
++        format!("[{}]", beads.join(",\n"))
++    }
++}
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
++fn record(log: &Path, name: &str) -> String {
++    let log = log.display();
++    format!(
++        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
++         echo \"$n\" > '{log}/{name}.count'\n\
++         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
++    )
++}
++
++/// 歯ごとの作業場（repo・面の file の置き場・state dir・記録の置き場・偽の program）。
++struct Place {
++    root: PathBuf,
++    log: PathBuf,
++}
++
++impl Place {
++    /// `ledger` が Some なら偽の bd はその字を出し、None なら落ちる。
++    fn new(tooth: &str, ledger: Option<&str>) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("bvdsweep")
++            .join(tooth);
++        let _ = fs::remove_dir_all(&root);
++        let log = root.join("log");
++        for dir in [
++            root.join("repo/.beads"),
++            root.join("files"),
++            root.join("state"),
++            log.clone(),
++        ] {
++            fs::create_dir_all(dir).expect("作業場の dir");
++        }
++        fs::write(root.join("files/index.html"), "tz").expect("index.html");
++        if let Some(ledger) = ledger {
++            fs::write(root.join("out.json"), ledger).expect("偽の bd の出力");
++        }
++        let out = root.join("out.json");
++        script(
++            &root.join("bd"),
++            &format!(
++                "[ -f '{o}' ] || {{ echo 'database is locked' >&2; exit 1; }}\nexec cat '{o}'",
++                o = out.display()
++            ),
++        );
++        script(
++            &root.join("bdw"),
++            &format!("{}\nexit 0", record(&log, "bdw")),
++        );
++        script(
++            &root.join("scribe2"),
++            &format!("{}\nexit 0", record(&log, "scribe2")),
++        );
++        Place { root, log }
++    }
++
++    fn delivery(&self) -> Delivery {
++        Delivery {
++            program: self.root.join("scribe2").into(),
++            state_dir: self.root.join("state"),
++            target: TARGET.to_string(),
++        }
++    }
++
++    fn writer(&self) -> Writer {
++        Writer {
++            repo: self.root.join("repo"),
++            bdw: self.root.join("bdw").into(),
++            delivery: Some(self.delivery()),
++        }
++    }
++
++    fn source(&self) -> Source {
++        Source::new(self.root.join("repo"), self.root.join("bd"))
++    }
++
++    /// 起動の引数と同じ形の Config（`seat` と `state` で --seat と --state-dir を選ぶ）。
++    fn config(&self, seat: bool, state: bool, read_only: bool) -> Config {
++        Config {
++            bd: self.root.join("bd").into(),
++            bdw: self.root.join("bdw").into(),
++            scribe2: self.root.join("scribe2").into(),
++            seat: seat.then(|| TARGET.to_string()),
++            state_dir: state.then(|| self.root.join("state")),
++            read_only,
++            ..Config::new(
++                self.root.join("repo"),
++                "127.0.0.1:0".parse().expect("bind 先"),
++                self.root.join("files"),
++            )
++        }
++    }
++
++    /// 偽の program が撃たれた回の数。
++    fn count(&self, name: &str) -> u32 {
++        fs::read_to_string(self.log.join(format!("{name}.count")))
++            .map_or(0, |c| c.trim().parse().expect("回の数"))
++    }
++
++    /// 偽の program の `n` 回目の argv（1 つ 1 行）。
++    fn args(&self, name: &str, n: u32) -> Vec<String> {
++        fs::read_to_string(self.log.join(format!("{name}.{n}.args")))
++            .expect("argv の記録")
++            .lines()
++            .map(str::to_string)
++            .collect()
++    }
++
++    /// 偽の program が撃たれた全部の回の argv。
++    fn all_args(&self, name: &str) -> Vec<String> {
++        (1..=self.count(name))
++            .flat_map(|n| self.args(name, n))
++            .collect()
++    }
++
++    /// 偽の器が `n` 回撃たれるまで 30 秒を上限に待つ（越えれば偽）。
++    fn wait_scribe2(&self, n: u32) -> bool {
++        let start = Instant::now();
++        while start.elapsed() < Duration::from_secs(30) {
++            if self.count("scribe2") >= n {
++                return true;
++            }
++            thread::sleep(Duration::from_millis(50));
++        }
++        false
++    }
++
++    /// 歯の組で `sweep` を撃つ。
++    fn sweep(&self) -> usize {
++        sweep(
++            &self.delivery(),
++            &self.writer(),
++            &self.source(),
++            FAST,
++            events::now(),
++        )
++    }
++}
++
++/// 器の配達の口の argv（`--ruling` の値まで）。
++fn deliver_args(place: &Place, ruling: &str) -> Vec<String> {
++    [
++        "seat",
++        "deliver",
++        "--state-dir",
++        &place.root.join("state").display().to_string(),
++        "--target",
++        TARGET,
++        "--ruling",
++        ruling,
++    ]
++    .map(str::to_string)
++    .to_vec()
++}
++
++/// (3) 起動の掃きの log の 2 つの字と、裁定の id の分の字の読み。
++#[test]
++fn bvdsweep_words() {
++    assert_eq!(SWEEP_FOUND, "起動の周に印の無い裁定を撃ち直す");
++    assert_eq!(
++        SWEEP_UNREAD,
++        "起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う）"
++    );
++    let id = |s: &str| RulingId::new(s).expect("id");
++    assert_eq!(
++        id_minute(&id("fx-w.1:20261002T0100Z-1")),
++        Some("20261002T0100Z")
++    );
++    assert_eq!(
++        id_minute(&id("batch:20261002T0100Z-12")),
++        Some("20261002T0100Z")
++    );
++    for bad in [
++        "fx-w.1",
++        "fx-w.1:20261002T0100Z",
++        "fx-w.1:2026100T0100Z-1",
++        "fx-w.1:20261002T0100Z-x",
++    ] {
++        assert_eq!(id_minute(&id(bad)), None, "{bad}");
++    }
++}
++
++/// (4) 今の分の印の無い 2 つの裁定を台帳の順に 1 つずつ器の配達の口で撃ち、受けた周ごとに印を 1 つ書き、
++/// 印の在る裁定と、上限より前の分の印の無い裁定は撃たない。
++#[test]
++fn bvdsweep_fires_unmarked_in_order() {
++    let ids = Ids::now();
++    let place = Place::new("unmarked", Some(&ids.ledger(&[])));
++    assert_eq!(place.sweep(), 2, "撃った荷の数");
++    assert_eq!(place.count("scribe2"), 2, "偽の器は 2 回");
++    assert_eq!(place.args("scribe2", 1), deliver_args(&place, &ids.first));
++    assert_eq!(place.args("scribe2", 2), deliver_args(&place, &ids.second));
++    assert_eq!(place.count("bdw"), 2, "印の書きは 2 回");
++    for (n, ruling) in [(1, &ids.first), (2, &ids.second)] {
++        let mark = format!("配達 = {ruling}・経路 = 配達の口・時刻 = ");
++        assert!(
++            place.args("bdw", n).iter().any(|a| a.contains(&mark)),
++            "{n} 回目の印: {:?}",
++            place.args("bdw", n)
++        );
++    }
++    let all = place.all_args("scribe2");
++    for skipped in [&ids.marked, &ids.old] {
++        assert!(!all.contains(skipped), "{skipped} を撃つ");
++    }
++}
++
++/// (5) 印の無い裁定が上限より前の分のものだけの台帳と、読めない台帳では、器も bdw も撃たず 0 を返す。
++#[test]
++fn bvdsweep_quiet_when_nothing() {
++    let ids = Ids::now();
++    let place = Place::new("old-only", Some(&ids.ledger(&[&ids.first, &ids.second])));
++    assert_eq!(place.sweep(), 0);
++    assert_eq!((place.count("scribe2"), place.count("bdw")), (0, 0));
++
++    let place = Place::new("down", None);
++    assert_eq!(place.sweep(), 0);
++    assert_eq!((place.count("scribe2"), place.count("bdw")), (0, 0));
++}
++
++/// (6) sweep_at_start は読むだけの server・--seat の無い server・--state-dir の無い server では始めず偽を返し、
++/// 両方が在る読むだけでない server では真を返して別の thread で今の分の最初の印の無い裁定を撃つ。
++#[test]
++fn bvdsweep_start_gates() {
++    let ids = Ids::now();
++    let place = Place::new("gates", Some(&ids.ledger(&[])));
++    assert!(!sweep_at_start(&place.config(true, true, true)), "読むだけ");
++    assert!(
++        !sweep_at_start(&place.config(false, true, false)),
++        "--seat が無い"
++    );
++    assert!(
++        !sweep_at_start(&place.config(true, false, false)),
++        "--state-dir が無い"
++    );
++    thread::sleep(Duration::from_millis(500));
++    assert_eq!(place.count("scribe2"), 0, "始めない server は撃たない");
++
++    assert!(sweep_at_start(&place.config(true, true, false)));
++    assert!(place.wait_scribe2(1), "始めた掃きが器を撃つ");
++    assert_eq!(place.args("scribe2", 1), deliver_args(&place, &ids.first));
++}
++
++/// (7) tz surface serve は --seat と --state-dir が在れば、起動の後に今の分の最初の印の無い裁定を器の配達の口で撃つ。
++#[test]
++fn bvdsweep_serve_sweeps_at_start() {
++    let ids = Ids::now();
++    let place = Place::new("serve", Some(&ids.ledger(&[])));
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["surface", "serve", "--bind", "127.0.0.1:0", "--repo"])
++        .arg(place.root.join("repo"))
++        .arg("--files")
++        .arg(place.root.join("files"))
++        .arg(format!("--bd={}", place.root.join("bd").display()))
++        .arg(format!("--bdw={}", place.root.join("bdw").display()))
++        .args(["--seat", TARGET])
++        .arg(format!(
++            "--state-dir={}",
++            place.root.join("state").display()
++        ))
++        .arg(format!(
++            "--scribe2={}",
++            place.root.join("scribe2").display()
++        ))
++        .stdin(Stdio::null())
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .spawn()
++        .expect("tz を撃つ");
++    let fired = place.wait_scribe2(1);
++    let _ = child.kill();
++    let _ = child.wait();
++    assert!(fired, "起動の後に器を撃たない");
++    assert_eq!(place.args("scribe2", 1), deliver_args(&place, &ids.first));
++}
