@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
-index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a9036c3c4 100644
+index f0336071fba282e63ed0b7cb13a636cb9c69f81a..1b0e29003e96cb2526cdd3d5756738b7e58a7d19 100644
 --- a/crates/tsuzuri-surface/src/askwin.rs
 +++ b/crates/tsuzuri-surface/src/askwin.rs
 @@ -2,7 +2,7 @@
@@ -8,10 +8,10 @@ index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a
  //! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
 -//! 今の質問の頁は替えない（頁を外すのは 1 枚の画面への切り替えの行）。
 +//! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
- //! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
- 
- use std::collections::BTreeSet;
-@@ -100,7 +100,7 @@ pub fn dot_class(id: &str, cur: Option<&str>, answered: &BTreeSet<String>) -> &'
+ //! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
+ //! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
+ //! block と同じく出す（憲法 P-7.1・P-7.2）。
+@@ -152,7 +152,7 @@ pub fn dot_class(id: &str, cur: Option<&str>, answered: &BTreeSet<String>) -> &'
  }
  
  #[cfg(target_arch = "wasm32")]
@@ -20,9 +20,9 @@ index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a
  
  #[cfg(target_arch = "wasm32")]
  mod dom {
-@@ -166,7 +166,9 @@ mod dom {
-         let fetched = crate::net::read(ask::PATH);
-         let cards = Memo::new(move |_| fetched.with(ask::listed));
+@@ -237,7 +237,9 @@ mod dom {
+         let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));
+         let reason = Memo::new(move |_| fetched.with(unread));
          let ids = Memo::new(move |_| cards.with(|v| own_ids(v)));
 -        let picked = RwSignal::new(None::<String>);
 +        // 窓を開いた link が問いの id を持てば、その問いから出す（行 g-one-screen-b）。
@@ -31,7 +31,7 @@ index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a
          let answered = RwSignal::new(BTreeSet::<String>::new());
          let cur = Memo::new(move |_| {
              ids.with(|i| {
-@@ -280,6 +282,10 @@ mod dom {
+@@ -356,6 +358,10 @@ mod dom {
          walk.into_any()
      }
  
@@ -39,7 +39,7 @@ index f8a4b5e4a1121d53071b7597e1ebb393acb0f82b..1d786937847c8eb060b4511b0a3de40a
 +    #[derive(Clone, Copy)]
 +    pub struct AskFocus(pub RwSignal<Option<String>>);
 +
-     /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み）。
+     /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み・本文の頭は席に届いていない裁定の 1 行）。
      pub fn frame(ctx: WinCtx<Win>) -> Frame {
          let w = walk();
 diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs

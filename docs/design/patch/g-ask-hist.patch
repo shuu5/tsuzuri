@@ -1,5 +1,5 @@
 diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
-index 1d786937847c8eb060b4511b0a3de40a9036c3c4..1404473fdad0a7fe4b23da9050e1e75b2012c1a2 100644
+index 1b0e29003e96cb2526cdd3d5756738b7e58a7d19..0f109b6c9f1a3371d23240e7e8e19e6ab8819a9a 100644
 --- a/crates/tsuzuri-surface/src/askwin.rs
 +++ b/crates/tsuzuri-surface/src/askwin.rs
 @@ -1,7 +1,8 @@
@@ -10,11 +10,11 @@ index 1d786937847c8eb060b4511b0a3de40a9036c3c4..1404473fdad0a7fe4b23da9050e1e75b
 +//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示と、
 +//! 末にこれまでの決定（project の askpage の inner・行 g-ask-hist）。
  //! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
- //! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
- 
-@@ -114,14 +115,15 @@ mod dom {
-         DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left, own_ids,
-         phase, title,
+ //! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
+ //! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
+@@ -166,14 +167,15 @@ mod dom {
+         DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, others_count,
+         others_title, own_ids, phase, remaining, title, unread,
      };
 -    use crate::project::{Body, ask, batch, body_view, policy};
 +    use crate::project::{Body, ask, askpage, batch, body_view, policy};
@@ -23,33 +23,33 @@ index 1d786937847c8eb060b4511b0a3de40a9036c3c4..1404473fdad0a7fe4b23da9050e1e75b
      use crate::widgets::modal::{Frame, WinCtx};
      use crate::wins::frame_of;
  
--    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文）。
--    fn folds(cards: Memo<Vec<ask::Card>>) -> AnyView {
-+    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文・末にこれまでの決定・
-+    /// `focus` は窓を開いた link の問いの id で、答え済みならこれまでの決定の段を開いてその行を寄せる）。
-+    fn folds(cards: Memo<Vec<ask::Card>>, focus: Option<String>) -> AnyView {
-         let [others_key, batch_key, policy_key] = FOLDS;
-         let others = move || {
-             cards.with(|v| {
-@@ -146,6 +148,7 @@ mod dom {
-                 <details class="fold"><summary>{move || format!("{} {}", label(others_key), count())}</summary><ul class="items">{rows}</ul></details>
+-    /// 窓の下の段（ほかの project の質問は読むだけで、台帳が読めない組は札と 1 行・まとめて承認と全体への指示は block の本文）。
+-    fn folds(w: Walk) -> AnyView {
++    /// 窓の下の段（ほかの project の質問は読むだけで、台帳が読めない組は札と 1 行・まとめて承認と全体への指示は block の本文・
++    /// 末にこれまでの決定・`focus` は窓を開いた link の問いの id で、答え済みならこれまでの決定の段を開いてその行を寄せる）。
++    fn folds(w: Walk, focus: Option<String>) -> AnyView {
+         let Walk {
+             cards,
+             others: n,
+@@ -211,6 +213,7 @@ mod dom {
+                 <details class="fold"><summary>{move || others_title(n.get())}</summary><ul class="items">{rows}{unread_rows}</ul></details>
                  <details class="fold"><summary>{label(batch_key)}</summary>{batch::inner()}</details>
                  <details class="fold"><summary>{label(policy_key)}</summary>{policy::inner()}</details>
 +                {askpage::inner(focus)}
              </div>
          }
          .into_any()
-@@ -290,11 +293,12 @@ mod dom {
+@@ -366,11 +369,12 @@ mod dom {
      pub fn frame(ctx: WinCtx<Win>) -> Frame {
          let w = walk();
          close_when_done(ctx, w.state);
 +        let focus = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
-         let (walk, cards) = (steps(ctx, w), w.cards);
+         let walk = steps(ctx, w);
          Frame {
              width: frame_of(Win::Ask).0,
              title: head(w),
--            body: view! { {walk}{folds(cards)} }.into_any(),
-+            body: view! { {walk}{folds(cards, focus)} }.into_any(),
+-            body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),
++            body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),
          }
      }
  }
@@ -278,15 +278,15 @@ index ec2af7d7598a9e645cb9fde9770853eac3cd4352..2d9b8386fa9613fa9529c1f6512125b4
    .qdots { gap: 0; }
    .qdots .qd { width: 40px; height: 40px; padding: 13px; border: 0; background-clip: content-box; background-color: #fdba74; }
 diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/bvaskw.rs
-index 1dd45dd798ad59e4e92c34db9b71700b5ffc525a..426e5925e43e2bff84b9306ba6b01f99433424ac 100644
+index a7eba710b6b28adb27ca08d684dbf22e2a743ed5..8b9c2461e8095a6c807ab131c69ab7543ebd6343 100644
 --- a/crates/tsuzuri-surface/tests/bvaskw.rs
 +++ b/crates/tsuzuri-surface/tests/bvaskw.rs
-@@ -156,7 +156,7 @@ fn bvaskw_batch_policy_below() {
+@@ -157,7 +157,7 @@ fn bvaskw_batch_policy_below() {
              "{file}"
          );
      }
--    assert!(src.contains("body: view! { {walk}{folds(cards)} }.into_any(),"));
-+    assert!(src.contains("body: view! { {walk}{folds(cards, focus)} }.into_any(),"));
+-    assert!(src.contains("body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),"));
++    assert!(src.contains("body: view! { {ask::late_view()}{walk}{folds(w, focus)} }.into_any(),"));
  }
  
  /// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。

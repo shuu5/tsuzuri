@@ -1,19 +1,24 @@
 diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393acb0f82b
+index 0000000000000000000000000000000000000000..f0336071fba282e63ed0b7cb13a636cb9c69f81a
 --- /dev/null
 +++ b/crates/tsuzuri-surface/src/askwin.rs
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,370 @@
 +//! 質問の窓（行 g-ask-win・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
 +//! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
 +//! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
 +//! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示。
 +//! 今の質問の頁は替えない（頁を外すのは 1 枚の画面への切り替えの行）。
++//! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
++//! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
++//! block と同じく出す（憲法 P-7.1・P-7.2）。
 +//! 問いの選び方と局面と点の class は純粋な関数にして host で試し、窓の DOM（`frame`）は wasm の target のときだけ組む。
 +
 +use std::collections::BTreeSet;
 +
-+use crate::project::ask::Card;
++use crate::project::Body;
++use crate::project::ask::{self, Card};
++use crate::view::Fetched;
 +use crate::vocab::label;
 +
 +/// 送って記録されてから次の問いへ移るまでの待ち（ms・「記録した」の 1 行を見せる・見本の qsend の 650）。
@@ -31,9 +36,14 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +/// 窓の下の段（畳んだ段）の語の鍵の順: ほかの project の質問・まとめて承認・全体への指示。
 +pub const FOLDS: [&str; 3] = ["ask_others", "batch", "policy"];
 +
-+/// 窓の局面（この project の問いが無い・1 問ずつ答えている・全部に答えた）。
++/// 数が分からない時の字（題の残りの数とほかの project の質問の数・帯のやる事の数と同じ）。
++pub const UNKNOWN_COUNT: &str = "?";
++
++/// 窓の局面（問いの一覧が読めない・この project の問いが無い・1 問ずつ答えている・全部に答えた）。
 +#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 +pub enum Phase {
++    /// 問いの一覧が読めない（理由の 1 行・問いが無いとは見せない）。
++    Unmeasured(&'static str),
 +    Empty,
 +    Walk,
 +    Done,
@@ -48,9 +58,33 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +        .collect()
 +}
 +
-+/// 局面: 答えていない問いが在れば 1 問ずつ、無くて窓で答えた問いが在れば全部答えた、どちらも無ければ問いが無い。
-+pub fn phase(ids: &[String], answered: &BTreeSet<String>) -> Phase {
-+    if ids.iter().any(|id| !answered.contains(id)) {
++/// 問いの一覧が読めない時の理由（ask の body が Unmeasured の時だけ・測れて 0 件と中身ありは None）。
++pub fn unread(fetched: &Fetched) -> Option<&'static str> {
++    match ask::body(fetched) {
++        Body::Unmeasured(reason) => Some(reason),
++        Body::Empty(_) | Body::Filled(_) => None,
++    }
++}
++
++/// ほかの project の問いの数（問いの一覧が読めないか、台帳が読めないほかの project が在れば None・0 と書かない）。
++pub fn others_count(fetched: &Fetched) -> Option<usize> {
++    if unread(fetched).is_some() || !ask::unknown_projects(fetched).is_empty() {
++        return None;
++    }
++    Some(
++        ask::listed(fetched)
++            .iter()
++            .filter(|c| c.project.is_some())
++            .count(),
++    )
++}
++
++/// 局面: 一覧が読めなければ読めない（窓で答えた問いが在っても）、答えていない問いが在れば 1 問ずつ、無くて窓で答えた問いが
++/// 在れば全部答えた、どちらも無ければ問いが無い。
++pub fn phase(unread: Option<&'static str>, ids: &[String], answered: &BTreeSet<String>) -> Phase {
++    if let Some(reason) = unread {
++        Phase::Unmeasured(reason)
++    } else if ids.iter().any(|id| !answered.contains(id)) {
 +        Phase::Walk
 +    } else if answered.is_empty() {
 +        Phase::Empty
@@ -90,9 +124,27 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +    ids.iter().filter(|id| !answered.contains(*id)).count()
 +}
 +
-+/// 窓の題の字（見本の「答えを待つ質問 <残り>」）。
-+pub fn title(left: usize) -> String {
-+    format!("{} {left}", label("ask_open"))
++/// 題の残りの数（一覧が読めない局面は None・ほかは答えていない問いの数）。
++pub fn remaining(state: Phase, ids: &[String], answered: &BTreeSet<String>) -> Option<usize> {
++    match state {
++        Phase::Unmeasured(_) => None,
++        Phase::Empty | Phase::Walk | Phase::Done => Some(left(ids, answered)),
++    }
++}
++
++/// 数の字（分からなければ UNKNOWN_COUNT）。
++fn count_text(n: Option<usize>) -> String {
++    n.map_or_else(|| UNKNOWN_COUNT.to_string(), |n| n.to_string())
++}
++
++/// 窓の題の字（見本の「答えを待つ質問 <残り>」・残りが分からなければ「?」）。
++pub fn title(left: Option<usize>) -> String {
++    format!("{} {}", label("ask_open"), count_text(left))
++}
++
++/// 下の段のほかの project の質問の段の題（語とほかの project の問いの数・分からなければ「?」）。
++pub fn others_title(n: Option<usize>) -> String {
++    format!("{} {}", label(FOLDS[0]), count_text(n))
 +}
 +
 +/// 題の横の点の class（今の問いは cur・答えた問いは ok・見本の `.qd`）。
@@ -117,8 +169,8 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +    use tsuzuri_contract::ledger::BeadId;
 +
 +    use super::{
-+        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left, own_ids,
-+        phase, title,
++        DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, others_count,
++        others_title, own_ids, phase, remaining, title, unread,
 +    };
 +    use crate::project::{Body, ask, batch, body_view, policy};
 +    use crate::topbar::Win;
@@ -126,9 +178,15 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +    use crate::widgets::modal::{Frame, WinCtx};
 +    use crate::wins::frame_of;
 +
-+    /// 窓の下の段（ほかの project の質問は読むだけ・まとめて承認と全体への指示は block の本文）。
-+    fn folds(cards: Memo<Vec<ask::Card>>) -> AnyView {
-+        let [others_key, batch_key, policy_key] = FOLDS;
++    /// 窓の下の段（ほかの project の質問は読むだけで、台帳が読めない組は札と 1 行・まとめて承認と全体への指示は block の本文）。
++    fn folds(w: Walk) -> AnyView {
++        let Walk {
++            cards,
++            others: n,
++            unknown,
++            ..
++        } = w;
++        let [_, batch_key, policy_key] = FOLDS;
 +        let others = move || {
 +            cards.with(|v| {
 +                v.iter()
@@ -140,16 +198,23 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +                    .collect::<Vec<_>>()
 +            })
 +        };
-+        let count = move || others().len();
 +        let rows = move || {
 +            others()
 +                .into_iter()
 +                .map(|(p, t, id)| view! { <li><span class="chip">{p}</span><span class="ttl">{t}</span><code>{id}</code></li> })
 +                .collect_view()
 +        };
++        // 台帳が読めないほかの project は、札と 1 行を読めた問いの後に出す（字は前の質問の block と同じ）。
++        let unread_rows = move || {
++            unknown
++                .get()
++                .into_iter()
++                .map(|p| view! { <li class="small muted"><span class="chip">{p}</span>" "{ask::OTHER_UNKNOWN}</li> })
++                .collect_view()
++        };
 +        view! {
 +            <div class="folds">
-+                <details class="fold"><summary>{move || format!("{} {}", label(others_key), count())}</summary><ul class="items">{rows}</ul></details>
++                <details class="fold"><summary>{move || others_title(n.get())}</summary><ul class="items">{rows}{unread_rows}</ul></details>
 +                <details class="fold"><summary>{label(batch_key)}</summary>{batch::inner()}</details>
 +                <details class="fold"><summary>{label(policy_key)}</summary>{policy::inner()}</details>
 +            </div>
@@ -157,10 +222,13 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +        .into_any()
 +    }
 +
-+    /// 窓の状態（問いの一覧・1 問ずつ出す問い・選んだ問い・窓で答えた問い・今の問い・局面）。
++    /// 窓の状態（問いの一覧・ほかの project の問いの数と台帳が読めない組・1 問ずつ出す問い・選んだ問い・窓で答えた問い・
++    /// 今の問い・局面）。
 +    #[derive(Clone, Copy)]
 +    struct Walk {
 +        cards: Memo<Vec<ask::Card>>,
++        others: Memo<Option<usize>>,
++        unknown: Memo<Vec<String>>,
 +        ids: Memo<Vec<String>>,
 +        picked: RwSignal<Option<String>>,
 +        answered: RwSignal<BTreeSet<String>>,
@@ -171,6 +239,9 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +    fn walk() -> Walk {
 +        let fetched = crate::net::read(ask::PATH);
 +        let cards = Memo::new(move |_| fetched.with(ask::listed));
++        let others = Memo::new(move |_| fetched.with(others_count));
++        let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));
++        let reason = Memo::new(move |_| fetched.with(unread));
 +        let ids = Memo::new(move |_| cards.with(|v| own_ids(v)));
 +        let picked = RwSignal::new(None::<String>);
 +        let answered = RwSignal::new(BTreeSet::<String>::new());
@@ -179,9 +250,11 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +                picked.with(|p| answered.with(|a| current(i, p.as_deref(), a).map(str::to_string)))
 +            })
 +        });
-+        let state = Memo::new(move |_| ids.with(|i| answered.with(|a| phase(i, a))));
++        let state = Memo::new(move |_| ids.with(|i| answered.with(|a| phase(reason.get(), i, a))));
 +        Walk {
 +            cards,
++            others,
++            unknown,
 +            ids,
 +            picked,
 +            answered,
@@ -213,6 +286,7 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +            picked,
 +            answered,
 +            cur,
++            state,
 +            ..
 +        } = w;
 +        let dots = move || {
@@ -229,7 +303,7 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +                .collect_view()
 +        };
 +        view! {
-+            {move || title(ids.with(|i| answered.with(|a| left(i, a))))}
++            {move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}
 +            <span class="qdots">{dots}</span>
 +        }
 +        .into_any()
@@ -244,6 +318,7 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +            answered,
 +            cur,
 +            state,
++            ..
 +        } = w;
 +        let card = Memo::new(move |_| {
 +            cur.with(|c| {
@@ -274,6 +349,7 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +        };
 +        let walk = move || {
 +            match state.get() {
++            Phase::Unmeasured(reason) => body_view(Body::Unmeasured(reason)),
 +            Phase::Empty => body_view(Body::Empty(ask::EMPTY)),
 +            Phase::Done => view! { <div class="alldone">{label(DONE_KEY)}</div> }.into_any(),
 +            Phase::Walk => view! {
@@ -286,15 +362,15 @@ index 0000000000000000000000000000000000000000..f8a4b5e4a1121d53071b7597e1ebb393
 +        walk.into_any()
 +    }
 +
-+    /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み）。
++    /// 質問の窓（帯の窓の層が開く・`ctx` は全部に答えた後に閉じるための窓の積み・本文の頭は席に届いていない裁定の 1 行）。
 +    pub fn frame(ctx: WinCtx<Win>) -> Frame {
 +        let w = walk();
 +        close_when_done(ctx, w.state);
-+        let (walk, cards) = (steps(ctx, w), w.cards);
++        let walk = steps(ctx, w);
 +        Frame {
 +            width: frame_of(Win::Ask).0,
 +            title: head(w),
-+            body: view! { {walk}{folds(cards)} }.into_any(),
++            body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),
 +        }
 +    }
 +}
@@ -513,13 +589,14 @@ index ee3e243d54e4bb74a52807c1e986d5a18c9a68cb..e9dc089d92adf8d0dd8ac5aac7fd78b9
  .nb-graph { overflow: hidden; }
 diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/bvaskw.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b5ffc525a
+index 0000000000000000000000000000000000000000..a7eba710b6b28adb27ca08d684dbf22e2a743ed5
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/bvaskw.rs
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,327 @@
 +//! 行 g-ask-win の歯: 質問の窓（判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）の 1 問ずつの選び方と、
 +//! 送った後の次の問いと「あとで」、全部に答えた時の局面と閉じる待ち、題と点の class、下の段の並びと block の本文の分け、
-+//! 語の鍵と stylesheet の規則、窓の DOM（wasm の枝）の配線の字。
++//! 語の鍵と stylesheet の規則、窓の DOM（wasm の枝）の配線の字、問いの一覧や台帳が読めない時に問いが無いと見せないこと
++//! （憲法 P-7.1・P-7.2）。
 +//! fixture は tests/fixtures/surface/question-list.json（読むだけ）。
 +#![cfg(test)]
 +
@@ -531,10 +608,10 @@ index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b
 +use tsuzuri_contract::question::{AllQuestions, ProjectQuestions, QuestionList};
 +use tsuzuri_contract::wire;
 +use tsuzuri_surface::askwin::{
-+    ADVANCE_MS, DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, current, dot_class, later, left,
-+    own_ids, phase, title,
++    ADVANCE_MS, DONE_KEY, DONE_MS, FOLDS, LATER_KEY, Phase, UNKNOWN_COUNT, current, dot_class,
++    later, left, others_count, others_title, own_ids, phase, remaining, title, unread,
 +};
-+use tsuzuri_surface::project::ask;
++use tsuzuri_surface::project::{NOT_READ, ask};
 +use tsuzuri_surface::view::Fetched;
 +use tsuzuri_surface::vocab::vocab;
 +
@@ -603,11 +680,11 @@ index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b
 +fn bvaskw_close_when_none_left() {
 +    assert_eq!(DONE_MS, 1200);
 +    let all = ids(&["q.1", "q.2"]);
-+    assert_eq!(phase(&all, &set(&[])), Phase::Walk);
-+    assert_eq!(phase(&all, &set(&["q.1"])), Phase::Walk);
-+    assert_eq!(phase(&all, &set(&["q.1", "q.2"])), Phase::Done);
-+    assert_eq!(phase(&[], &set(&["q.1"])), Phase::Done);
-+    assert_eq!(phase(&[], &set(&[])), Phase::Empty);
++    assert_eq!(phase(None, &all, &set(&[])), Phase::Walk);
++    assert_eq!(phase(None, &all, &set(&["q.1"])), Phase::Walk);
++    assert_eq!(phase(None, &all, &set(&["q.1", "q.2"])), Phase::Done);
++    assert_eq!(phase(None, &[], &set(&["q.1"])), Phase::Done);
++    assert_eq!(phase(None, &[], &set(&[])), Phase::Empty);
 +    let src = read("src/askwin.rs");
 +    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
 +    for needle in [
@@ -626,7 +703,7 @@ index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b
 +    let all = ids(&["q.1", "q.2", "q.3"]);
 +    let done = set(&["q.1"]);
 +    assert_eq!(left(&all, &done), 2);
-+    assert_eq!(title(2), "答えを待つ質問 2");
++    assert_eq!(title(Some(2)), "答えを待つ質問 2");
 +    let classes: Vec<&str> = all
 +        .iter()
 +        .map(|id| dot_class(id, Some("q.2"), &done))
@@ -675,7 +752,7 @@ index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b
 +            "{file}"
 +        );
 +    }
-+    assert!(src.contains("body: view! { {walk}{folds(cards)} }.into_any(),"));
++    assert!(src.contains("body: view! { {ask::late_view()}{walk}{folds(w)} }.into_any(),"));
 +}
 +
 +/// 語の鍵の語と、質問の窓の規則が stylesheet の質問の塊（つながりの塊の前）に在ること。
@@ -734,6 +811,114 @@ index 0000000000000000000000000000000000000000..1dd45dd798ad59e4e92c34db9b71700b
 +        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
 +    }
 +    assert!(read("src/lib.rs").contains("\npub mod askwin;\n"));
++}
++
++fn own_list() -> QuestionList {
++    wire::decode(&read("../../tests/fixtures/surface/question-list.json")).expect("問いの一覧")
++}
++
++fn with_others(own: QuestionList, others: Vec<ProjectQuestions>) -> Fetched {
++    Fetched::Body(wire::encode(&AllQuestions { own, others }).expect("電文"))
++}
++
++/// 問いの一覧が読めない（まだ読んでいない・口が読めない・server が台帳を読めない・電文が読めない）時は、局面を問いが無い
++/// （Empty）にも全部答えた（Done）にもせず理由を持つ Unmeasured にし、題の残りの数は 0 でなく「?」にする。
++#[test]
++fn bvaskw_unread_not_empty() {
++    let unknown = QuestionList {
++        cards: Reading::Unknown,
++        answerable: true,
++    };
++    let cases = [
++        (Fetched::NotRead, NOT_READ),
++        (Fetched::Failed, ask::REASON),
++        (with_others(unknown, Vec::new()), ask::CARDS_UNKNOWN),
++        (Fetched::Body("{".to_string()), ask::UNREADABLE),
++    ];
++    for (fetched, reason) in &cases {
++        assert_eq!(unread(fetched), Some(*reason));
++    }
++    let empty = QuestionList {
++        cards: Reading::Known(Vec::new()),
++        answerable: true,
++    };
++    assert_eq!(unread(&with_others(empty, Vec::new())), None);
++    assert_eq!(unread(&with_others(own_list(), Vec::new())), None);
++    let all = ids(&["q.1", "q.2"]);
++    let r = ask::REASON;
++    assert_eq!(phase(Some(r), &[], &set(&[])), Phase::Unmeasured(r));
++    assert_eq!(phase(Some(r), &[], &set(&["q.1"])), Phase::Unmeasured(r));
++    assert_eq!(phase(Some(r), &all, &set(&[])), Phase::Unmeasured(r));
++    assert_eq!(remaining(Phase::Unmeasured(r), &all, &set(&[])), None);
++    assert_eq!(remaining(Phase::Walk, &all, &set(&["q.1"])), Some(1));
++    assert_eq!(remaining(Phase::Empty, &[], &set(&[])), Some(0));
++    assert_eq!(UNKNOWN_COUNT, "?");
++    assert_eq!(title(None), "答えを待つ質問 ?");
++    assert_eq!(title(Some(0)), "答えを待つ質問 0");
++}
++
++/// ほかの project の質問の段の数: 問いの一覧が読めないか台帳が読めないほかの project が在れば 0 でなく「?」。
++#[test]
++fn bvaskw_others_unknown_shown() {
++    let Reading::Known(cards) = own_list().cards else {
++        panic!("fixture の問い");
++    };
++    let mut other = cards[0].clone();
++    other.id = BeadId::new("ox.1").expect("id");
++    let known = |p: &str| ProjectQuestions {
++        project: p.to_string(),
++        answerable: false,
++        cards: Reading::Known(vec![other.clone()]),
++    };
++    let lost = ProjectQuestions {
++        project: "lost".to_string(),
++        answerable: false,
++        cards: Reading::Unknown,
++    };
++    assert_eq!(others_count(&with_others(own_list(), Vec::new())), Some(0));
++    assert_eq!(
++        others_count(&with_others(own_list(), vec![known("other")])),
++        Some(1)
++    );
++    let mixed = with_others(own_list(), vec![known("other"), lost.clone()]);
++    assert_eq!(others_count(&mixed), None);
++    assert_eq!(ask::unknown_projects(&mixed), ["lost"]);
++    assert_eq!(others_count(&with_others(own_list(), vec![lost])), None);
++    let unknown = QuestionList {
++        cards: Reading::Unknown,
++        answerable: true,
++    };
++    assert_eq!(
++        others_count(&with_others(unknown, vec![known("other")])),
++        None
++    );
++    assert_eq!(others_count(&Fetched::Failed), None);
++    assert_eq!(others_title(None), "ほかの project の質問 ?");
++    assert_eq!(others_title(Some(1)), "ほかの project の質問 1");
++}
++
++/// 読めない時の窓の DOM（wasm の枝）の字: 局面は問いの一覧の読めない理由から決め、Unmeasured は前の質問の block と同じ
++/// 測れていないの形（body_view の Unmeasured）で理由を出し、題の残りの数は remaining で読む。ほかの project の質問の段は
++/// 数を others_count で読み、台帳が読めない組は前の質問の block と同じ札と 1 行（ask の OTHER_UNKNOWN）を出す。窓の本文の
++/// 頭は席に届いていない裁定の 1 行（ask の late_view・届いたかが読めない時の 1 行も持つ）。
++#[test]
++fn bvaskw_unread_dom_text() {
++    let src = read("src/askwin.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for needle in [
++        "let reason = Memo::new(move |_| fetched.with(unread));",
++        "phase(reason.get(), i, a)",
++        "{move || title(ids.with(|i| answered.with(|a| remaining(state.get(), i, a))))}",
++        "Phase::Unmeasured(reason) => body_view(Body::Unmeasured(reason)),",
++        "let others = Memo::new(move |_| fetched.with(others_count));",
++        "let unknown = Memo::new(move |_| fetched.with(ask::unknown_projects));",
++        "<summary>{move || others_title(n.get())}</summary>",
++        "<li class=\"small muted\"><span class=\"chip\">{p}</span>\" \"{ask::OTHER_UNKNOWN}</li>",
++        "<ul class=\"items\">{rows}{unread_rows}</ul></details>",
++        "body: view! { {ask::late_view()}{walk}",
++    ] {
++        assert!(dom.contains(needle), "wasm の枝に {needle} が無い");
++    }
 +}
 diff --git a/crates/tsuzuri-surface/tests/bvwins.rs b/crates/tsuzuri-surface/tests/bvwins.rs
 index e07150a203c51fad0e5181076d8789440f65051d..859ccecf06b4d01988daf145d4a9878e292c1e1f 100644
