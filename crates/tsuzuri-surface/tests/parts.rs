@@ -13,7 +13,7 @@ use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::BOARD_CHANGED_EVENT;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::{
-    Body, Module, NO_CONTENT, NOT_READ, ask, askpage, ledger, map, next, pipeline, seat,
+    Body, Module, NO_CONTENT, NOT_READ, ask, askpage, map, next, pipeline, seat,
 };
 use tsuzuri_surface::view::{Fetched, RELOAD_EVENTS, Screen};
 use tsuzuri_surface::widgets::hover::{
@@ -120,7 +120,7 @@ fn parts_ledger_lists_read_three_values() {
     unread_lists(empty);
 }
 
-/// 読めないとまだ読んでいない読みでの 3 つの一覧の本文と画面。
+/// 読めないとまだ読んでいない読みでの 2 つの一覧の本文と画面。
 fn unread_lists(empty: String) {
     let known = Screen::initial().after_read(&Fetched::Body(empty), 5);
     for fetched in [Fetched::NotRead, Fetched::Failed] {
@@ -129,7 +129,6 @@ fn unread_lists(empty: String) {
         for screen in [Screen::initial(), known.clone()] {
             let s = screen.after_read(&fetched, 9);
             assert_eq!(s.board, Reading::Unknown, "{fetched:?}");
-            assert!(matches!(ledger::body(&s), Body::Unmeasured(r) if !r.is_empty()));
             // 最終更新は読めた時刻のまま（読めない読みで進めない）。
             assert_eq!(s.updated_at, screen.updated_at);
         }

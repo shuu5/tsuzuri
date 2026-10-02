@@ -1,4 +1,5 @@
-//! 行 g-card-adopt-c の歯: 台帳の block の一覧の項・抜けの検査の頁の名指しの項に付ける節点の card の値と、
+//! 行 g-card-adopt-c の歯: 抜けの検査の頁の名指しの項に付ける節点の card の値と（台帳の一覧の組の card の関数は
+//! 行 g-list-sweep で歯ごと外した）、
 //! DOM の付け方の字（kit の一覧の 1 項が card を受け、呼ぶ所が card を渡す）。
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
 #![cfg(test)]
@@ -7,8 +8,7 @@ use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{BeadAttr, GraphDoc, GraphNode, InvariantCheck, NodeKind};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::ledger::{self, Group};
-use tsuzuri_surface::project::{Body, Item, gaps, node_item};
+use tsuzuri_surface::project::{Body, gaps, node_item};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::nodecard::card_of;
 
@@ -18,67 +18,6 @@ fn crate_dir() -> PathBuf {
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn graph_text() -> String {
-    read("../../tests/fixtures/surface/graph-doc.json")
-}
-
-fn graph_doc() -> GraphDoc {
-    wire::decode(&graph_text()).expect("fixture の電文が読める")
-}
-
-/// 電文にならない読み（まだ読んでいない・読めない・字 {} の本文）。
-fn unread() -> [Fetched; 3] {
-    [
-        Fetched::NotRead,
-        Fetched::Failed,
-        Fetched::Body("{}".to_string()),
-    ]
-}
-
-/// (2) 一覧の組の項の節点の card は、epic の項と下の項の id のうち電文に在るものだけを card_of の値で持つ。
-#[test]
-fn cadl_group_cards_rules() {
-    let doc = graph_doc();
-    let graph = Fetched::Body(graph_text());
-    let item = |id: &str| node_item(&doc, id).unwrap_or_else(|| panic!("{id} の項"));
-    let stray = Item {
-        shape: "shape band-beads".to_string(),
-        alert: false,
-        id: "zz.9".to_string(),
-        title: "電文に無い項".to_string(),
-        aside: String::new(),
-        stage: None,
-    };
-    let groups = vec![
-        Group {
-            head: Some(item("t3")),
-            children: vec![item("t3.q10"), stray.clone()],
-        },
-        Group {
-            head: None,
-            children: vec![item("t3.q2")],
-        },
-    ];
-
-    let got = ledger::group_cards(&groups, &graph);
-    let keys: Vec<&str> = got.keys().map(String::as_str).collect();
-    assert_eq!(keys, vec!["t3", "t3.q10", "t3.q2"]);
-    for id in keys {
-        assert_eq!(Some(&got[id]), card_of(&doc, id).as_ref(), "{id}");
-    }
-    assert_eq!(got["t3.q2"].title, "閉じた問い");
-
-    let lone = vec![Group {
-        head: None,
-        children: vec![stray],
-    }];
-    assert!(ledger::group_cards(&lone, &graph).is_empty());
-    assert!(ledger::group_cards(&[], &graph).is_empty());
-    for g in unread() {
-        assert!(ledger::group_cards(&groups, &g).is_empty(), "{g:?}");
-    }
 }
 
 /// fixture の判定の電文の g-2 の名指しを fx-g.9 と fx-g.15 に替え、`node` なら節点 fx-g.9 を足した本文。
@@ -384,7 +323,7 @@ fn cadl_names_stay_apart() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert!(names.len() >= 4, "歯の数 {}", names.len());
+    assert!(names.len() >= 3, "歯の数 {}", names.len());
     for name in names {
         let rest = name
             .strip_prefix("cadl_")

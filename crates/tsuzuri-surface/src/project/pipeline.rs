@@ -7,7 +7,6 @@
 //! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
-//! 台帳の一覧の項に出す段は札と同じ読みから `stages` 1 つで組む（行 c-ledger-stage のつなぎ）。
 //! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
 //! `age_at` から書き直し、CI の語と直近の着地と hover の card の値の行は block を組む時の今で決める（行 g-tick-adopt）。
 //! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
@@ -25,7 +24,7 @@ use tsuzuri_contract::ledger::{BeadFact, LedgerRow};
 use tsuzuri_contract::wire;
 
 use super::ledger::OUTSIDE;
-use super::{Body, NO_CONTENT, NOT_READ, Staged, map};
+use super::{Body, NO_CONTENT, NOT_READ, map};
 use crate::frame::{self, Block};
 use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
 use crate::mapview::graph::cut;
@@ -515,31 +514,6 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
         short: None,
         line: None,
     }
-}
-
-/// 台帳の一覧の項に出す板の段（札の bead の id の字の鍵・記号と閉じたかは札の読みの `kcard` の値・字は `stage_word` に
-/// 札の meta の CI の語を ` · ` で足した字）。口が読めない・札がまだ分からない・電文が読めない間は空。
-/// 器の局面の出力を読む後の行 c-ledger-lc はこの 1 つを替える。CI の語は今 now で決める。
-pub fn stages(fetched: &Fetched, now: EpochSecs) -> BTreeMap<String, Staged> {
-    let Ok(cards) = cards(fetched) else {
-        return BTreeMap::new();
-    };
-    cards
-        .iter()
-        .map(|c| {
-            let k = kcard(c, &[], now);
-            let word = match k.ci {
-                Some(ci) => format!("{} · {}", stage_word(c), label(ci_key(ci))),
-                None => stage_word(c),
-            };
-            let staged = Staged {
-                state: k.state,
-                closed: k.closed,
-                word,
-            };
-            (k.id, staged)
-        })
-        .collect()
 }
 
 /// 節点の card を札に付ける値（見本の cardContent の data-run の枝: 題と種類と帯と状態は節点から、

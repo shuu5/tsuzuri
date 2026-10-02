@@ -1,17 +1,14 @@
-//! 行 c-ledger-stage の歯: 台帳の一覧の下の項に、pipeline の板の札と同じ読み（`stages`）の段の記号と字を出す。
-//! 札と台帳の行は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-l）。
+//! 行 c-ledger-stage の歯: pipeline の板の札の段の字（`stage_word`）と、札の段の記号を描く所の字。
+//! 台帳の一覧の項に出す段（`stages` と段つきの項）は行 g-list-sweep で歯ごと外した。
+//! 札は歯の中で組む（fixture の file は使わない・bead の id の接頭辞は fx-l）。
 #![cfg(test)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use tsuzuri_contract::board::{Ci, PipelineBoard, PipelineCard, Reading, Stage};
-use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL};
-use tsuzuri_contract::wire;
-use tsuzuri_surface::project::ledger::{Group, body, staged_body};
-use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word, stages};
-use tsuzuri_surface::project::{Body, Item, Staged, item, staged_item};
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
+use tsuzuri_contract::ledger::BeadId;
+use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, kcard, stage_word};
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -63,58 +60,6 @@ fn ls() -> Vec<PipelineCard> {
     ]
 }
 
-fn board_text(cards: Reading<Vec<PipelineCard>>) -> String {
-    wire::encode(&PipelineBoard {
-        cards,
-        misfits: Reading::Unknown,
-    })
-    .expect("板の電文")
-}
-
-fn staged(state: Option<&'static str>, closed: bool, word: &str) -> Staged {
-    Staged {
-        state,
-        closed,
-        word: word.to_string(),
-    }
-}
-
-/// 台帳の 1 行（題は「題」・時刻は 0・親と labels は無し）。
-fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
-    LedgerRow {
-        id: BeadId::new(id).expect("id"),
-        kind: kind.to_string(),
-        title: "題".to_string(),
-        status: status.to_string(),
-        updated_at: 0,
-        parent: None,
-        labels: vec![],
-    }
-}
-
-/// 節の台帳 LR（6 行・zz.3 は issue_type task と label intake:memo の open の行）。
-fn lr() -> Vec<LedgerRow> {
-    vec![
-        row("fx-l", "epic", "open"),
-        row("fx-l.1", "task", "open"),
-        row("fx-l.4", "task", "in_progress"),
-        row("fx-l.7", "task", "closed"),
-        row("fx-l.9", "task", "open"),
-        LedgerRow {
-            labels: vec![MEMO_LABEL.to_string()],
-            ..row("zz.3", "task", "open")
-        },
-    ]
-}
-
-fn screen_of(rows: Vec<LedgerRow>) -> Screen {
-    let text = wire::encode(&LedgerList {
-        rows: Reading::Known(rows),
-    })
-    .expect("電文");
-    Screen::initial().after_read(&Fetched::Body(text), 100)
-}
-
 /// (1) 札の段の字は閉じた札なら CLOSED_STAGE・ほかは段の名で、札の hover の kind と同じ字。
 #[test]
 fn lstg_word_rules() {
@@ -136,110 +81,6 @@ fn lstg_word_rules() {
         assert_eq!(word, w, "{}", c.contract);
         assert_eq!(kcard(c, &[], NOW).hover.kind, format!("run · {w}"), "{}", c.contract);
     }
-}
-
-/// (2) 板の電文から組んだ段は札ごとに札の読みの記号と閉じたかと、段の字に CI の語を足した字。
-#[test]
-fn lstg_stages_from_board() {
-    let cards = ls();
-    let got = stages(&Fetched::Body(board_text(Reading::Known(cards.clone()))), NOW);
-    let want: BTreeMap<String, Staged> = [
-        ("fx-l.1", staged(Some("run"), false, "Running")),
-        ("fx-l.2", staged(Some("wait"), false, "Queued")),
-        ("fx-l.3", staged(Some("wait"), false, "Failed")),
-        ("fx-l.4", staged(Some("run"), false, "Landed · CI 中")),
-        ("fx-l.5", staged(None, false, "Landed · CI 成功")),
-        ("fx-l.6", staged(None, false, "Landed")),
-        ("fx-l.7", staged(None, true, "閉じた（着地せず）")),
-        ("fx-l.8", staged(Some("wait"), false, "Failed")),
-    ]
-    .into_iter()
-    .map(|(id, s)| (id.to_string(), s))
-    .collect();
-    assert_eq!(got, want);
-    for c in &cards {
-        let k = kcard(c, &[], NOW);
-        let s = &got[c.contract.as_str()];
-        assert_eq!(s.state, k.state, "{}", c.contract);
-        assert_eq!(s.closed, k.closed, "{}", c.contract);
-    }
-
-    for fetched in [
-        Fetched::NotRead,
-        Fetched::Failed,
-        Fetched::Body("{}".to_string()),
-        Fetched::Body(board_text(Reading::Unknown)),
-        Fetched::Body(board_text(Reading::Known(vec![]))),
-    ] {
-        assert!(stages(&fetched, NOW).is_empty(), "{fetched:?}");
-    }
-}
-
-/// (3) 段の在る項は右の字を段の字と種類にし、無い項と epic の頭は bd の状態の語のまま。
-#[test]
-fn lstg_list_items() {
-    let rows = lr();
-    let by = |id: &str| rows.iter().find(|r| r.id.as_str() == id).expect("LR の行");
-    let run = staged(Some("run"), false, "Running");
-
-    let one = staged_item(by("fx-l.1"), Some(&run));
-    assert_eq!(
-        one,
-        Item {
-            shape: "shape band-beads".to_string(),
-            alert: false,
-            id: "fx-l.1".to_string(),
-            title: "題".to_string(),
-            aside: "Running · task".to_string(),
-            stage: Some(run.clone()),
-        }
-    );
-    let nine = staged_item(by("fx-l.9"), None);
-    assert_eq!(nine, item(by("fx-l.9")));
-    assert_eq!(nine.aside, "○ 未着手 · task");
-    assert_eq!(nine.stage, None);
-
-    let board = stages(&Fetched::Body(board_text(Reading::Known(ls()))), NOW);
-    let mut with_epic = board.clone();
-    with_epic.insert("fx-l".to_string(), run.clone());
-    let screen = screen_of(rows.clone());
-    assert_eq!(
-        staged_body(&screen, &with_epic),
-        Body::Filled(vec![
-            Group {
-                head: Some(item(by("fx-l"))),
-                children: vec![
-                    staged_item(by("fx-l.1"), board.get("fx-l.1")),
-                    staged_item(by("fx-l.4"), board.get("fx-l.4")),
-                    item(by("fx-l.9")),
-                ],
-            },
-            Group {
-                head: None,
-                children: vec![item(by("zz.3"))],
-            },
-        ])
-    );
-
-    let Body::Filled(groups) = staged_body(&screen, &board) else {
-        panic!("一覧が Filled でない");
-    };
-    let asides: Vec<&str> = groups
-        .iter()
-        .flat_map(|g| g.head.iter().chain(g.children.iter()))
-        .map(|i| i.aside.as_str())
-        .collect();
-    assert_eq!(
-        asides,
-        [
-            "○ 未着手 · epic",
-            "Running · task",
-            "Landed · CI 中 · task",
-            "○ 未着手 · task",
-            "? まだ分からない · memo",
-        ]
-    );
-    assert_eq!(body(&screen), staged_body(&screen, &BTreeMap::new()));
 }
 
 /// 字 `mod dom {` より後の `start` から、次の 4 つの空白と閉じ波括弧だけの行までの字。
@@ -291,20 +132,9 @@ fn places(files: &[(String, String)], needle: &str) -> BTreeMap<String, usize> {
         .collect()
 }
 
-/// (4) 項は札と同じ段の記号を出す（台帳の一覧の DOM は行 g-list-groups で module ledgerlist へ移った）。
+/// (4) 札の段の記号は pipeline の stage_sym の 1 か所で描く（一覧の項の段の記号は行 g-list-sweep で外した）。
 #[test]
 fn lstg_dom_wiring() {
-    let kit = read("src/kit.rs");
-    let item_view = dom_fn(&kit, "pub fn item_view(");
-    assert!(
-        item_view.contains("stage_sym(s.closed, s.state)"),
-        "{item_view}"
-    );
-    assert!(
-        item_view.contains(r#"<span class="aside">{sym}{item.aside.clone()}</span>"#),
-        "{item_view}"
-    );
-
     let pipeline = read("src/project/pipeline.rs");
     let kcard_view = dom_fn(&pipeline, "fn kcard_view(");
     assert!(
@@ -315,21 +145,12 @@ fn lstg_dom_wiring() {
     assert_eq!(pipeline.matches("inner_html=CROSS").count(), 1);
     assert_eq!(pipeline.matches("inner_html=CHECK").count(), 1);
 
-    let files = sources();
-    let only = |rel: &str| BTreeMap::from([(rel.to_string(), 1)]);
-    for (needle, rel) in [
-        (
-            "pub fn stage_sym(closed: bool, state: Option<&'static str>) -> AnyView {",
-            "project/pipeline.rs",
-        ),
-        ("pub fn stages(", "project/pipeline.rs"),
-        (
-            "staged_item(r, stages.get(r.id.as_str()))",
-            "project/ledger.rs",
-        ),
-    ] {
-        assert_eq!(places(&files, needle), only(rel), "{needle}");
-    }
+    let needle = "pub fn stage_sym(closed: bool, state: Option<&'static str>) -> AnyView {";
+    assert_eq!(
+        places(&sources(), needle),
+        BTreeMap::from([("project/pipeline.rs".to_string(), 1)]),
+        "{needle}"
+    );
 }
 
 /// verify の filter の語（main の 164 語に畳んだ語と後の行 g-gz の接頭辞・165 語）。
@@ -501,7 +322,7 @@ const FILTERS: [&str; 165] = [
     "pgz_",
 ];
 
-/// (6) この file の歯の名は 5 つで、どれも lstg_ で始まり、先頭の lstg_ を除いた字は filter の語を含まない。
+/// (6) この file の歯の名は 3 つで、どれも lstg_ で始まり、先頭の lstg_ を除いた字は filter の語を含まない。
 #[test]
 fn lstg_names_stay_apart() {
     let text = read("tests/lstg.rs");
@@ -518,7 +339,7 @@ fn lstg_names_stay_apart() {
                 .expect("test の属性の後の fn")
         })
         .collect();
-    assert_eq!(names.len(), 5, "{names:?}");
+    assert_eq!(names.len(), 3, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("lstg_")

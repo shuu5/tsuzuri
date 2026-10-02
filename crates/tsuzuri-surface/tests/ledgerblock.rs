@@ -1,21 +1,20 @@
 //! 便 g-ledger の歯: 純減の字・判定の 5 値の表・burndown の座標・未反映の種類の名・年齢の字・
-//! 測れていないと台帳の一覧・着地済みの外形と依存（指標の段の上段と配置の表は行 g-ledger-trim で外した）。
+//! 測れていない・着地済みの外形と依存（指標の段の上段と配置の表は行 g-ledger-trim で外し、前の一覧の件数と中身の歯は
+//! 行 g-list-sweep で外した）。
 #![cfg(test)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::{LedgerJudge, Reading};
-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{
     self, BURN_H, BURN_W, JUDGES, NONE, UNREF_KINDS, age, burn_svg, burndown, fixed1, judge,
     kind_name, net, points, spark, spark_svg, stats,
 };
-use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
+use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
 fn crate_dir() -> PathBuf {
@@ -45,22 +44,6 @@ fn wrap(s: &LedgerStats) -> Fetched {
 
 fn body_of(name: &str) -> Fetched {
     wrap(&set(name))
-}
-
-fn ledger_rows() -> Vec<LedgerRow> {
-    let text = read("../../tests/fixtures/ledger/board-8.jsonl");
-    let Reading::Known(items) = server_ledger::parse(&text) else {
-        panic!("fixture が server の読みで Unknown");
-    };
-    items.into_iter().map(|i| i.row).collect()
-}
-
-fn known_screen() -> Screen {
-    let body = wire::encode(&LedgerList {
-        rows: Reading::Known(ledger_rows()),
-    })
-    .expect("電文");
-    Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
 /// 純減の値ごとの矢印と字と class・小数 1 桁の丸め。
@@ -267,10 +250,9 @@ fn ledgerblock_classes_in_stylesheet() {
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 }
 
-/// (7) 口が読めない・まだ読んでいない・電文が読めないは測れていない（0 でなく理由の 1 行）・台帳の一覧は今と同じ。
+/// (7) 口が読めない・まだ読んでいない・電文が読めないは測れていない（0 でなく理由の 1 行）。
 #[test]
 fn ledgerblock_unmeasured_and_list_unchanged() {
-    let screen = known_screen();
     for (fetched, want) in [
         (Fetched::NotRead, NOT_READ),
         (Fetched::Failed, ledger::METRICS_REASON),
@@ -285,24 +267,6 @@ fn ledgerblock_unmeasured_and_list_unchanged() {
         assert!(!want.trim().is_empty() && !want.contains('\n'));
     }
     assert_eq!(stats(&body_of("filled")), Ok(set("filled")));
-
-    list_unchanged(screen);
-}
-
-/// 台帳の一覧は今と同じ・口を失えば数と一覧は測れていない。
-fn list_unchanged(screen: Screen) {
-    assert_eq!(ledger::count(&screen), Reading::Known(5));
-    let Body::Filled(groups) = ledger::body(&screen) else {
-        panic!("台帳の一覧が中身を出さない");
-    };
-    assert_eq!(groups.len(), 1);
-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
-    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
-    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
-    let lost = screen.after_lost();
-    assert_eq!(ledger::count(&lost), Reading::Unknown);
-    assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
 }
 
 /// (9) 実物の口の本文の写し（Reading で包んだ指標）は読めて、open の task の数は写しの known の下の数。
@@ -348,7 +312,7 @@ fn ledgerblock_unknown_body_reason() {
     }
 }
 
-/// (8) 着地済みの外形（BLOCK・口の path・一覧の body と count）と、足す外の依存は 0 本。
+/// (8) 着地済みの外形（BLOCK・口の path）と、足す外の依存は 0 本。
 #[test]
 fn ledgerblock_landed_shape_and_no_new_deps() {
     assert_eq!(ledger::BLOCK.id, "ledger");
@@ -356,8 +320,6 @@ fn ledgerblock_landed_shape_and_no_new_deps() {
     assert_eq!(ledger::BLOCK.class, "panel");
     assert_eq!(ledger::PATH, "/api/ledger");
     assert_eq!(ledger::METRICS_PATH, "/api/metrics");
-    let _count: fn(&Screen) -> Reading<usize> = ledger::count;
-    let _body: fn(&Screen) -> Body<Vec<ledger::Group>> = ledger::body;
 
     let manifest = read("Cargo.toml");
     let mut names = Vec::new();

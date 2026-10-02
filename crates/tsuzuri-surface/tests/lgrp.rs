@@ -7,8 +7,6 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::Body;
-use tsuzuri_surface::project::ledger;
 use tsuzuri_surface::view::{self, Fetched, Screen};
 
 fn crate_dir() -> PathBuf {
@@ -100,7 +98,7 @@ fn lgrp_groups_follow_node_kind() {
     assert_eq!(ids(&groups[2].children), vec!["fx-z.3", "fx-z.2"]);
 }
 
-/// (3) 本物の台帳の形の電文を読んだ画面: 問いの一覧は open の問いだけ・件数と一覧の中身は問いを数えない。
+/// (3) 本物の台帳の形の電文を読んだ画面: 問いの一覧は open の問いだけ（台帳の件数と一覧の中身の関数は行 g-list-sweep で外した）。
 #[test]
 fn lgrp_screen_real_ledger() {
     let body = wire::encode(&LedgerList {
@@ -112,14 +110,6 @@ fn lgrp_screen_real_ledger() {
         panic!("画面の台帳が読めていない");
     };
     assert_eq!(ids(&board.questions), vec!["fx-s.3"]);
-    assert_eq!(ledger::count(&screen), Reading::Known(4));
-    let Body::Filled(groups) = ledger::body(&screen) else {
-        panic!("台帳の一覧が中身を出さない");
-    };
-    assert_eq!(groups.len(), 1);
-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("fx-s"));
-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(kids, vec!["fx-s.1", "fx-s.2"]);
 }
 
 /// main b5c24c8 の contracts の verify の filter の語 272 を、ほかの語を部分の字として含まない語に畳んだ語。

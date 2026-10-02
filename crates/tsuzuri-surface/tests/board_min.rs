@@ -1,7 +1,7 @@
 //! 便 g-min の歯: 並べ方（bead 8 本の fixture）・測れていないの判定・状態の印・時刻の字。
 //! fixture は server と同じ台帳の読み（tsuzuri_boundary::server::ledger::parse）で読み、
 //! 一覧の口と同じ電文（LedgerList）にしてから画面の状態へ渡す。
-//! 件数は block の module（ask・ledger）が数える（便 g-frame で見出しの字を vocab へ移した）。
+//! 件数は block の module ask が数える（便 g-frame で見出しの字を vocab へ移した・台帳の件数の関数は行 g-list-sweep で外した）。
 //! 問いの block（ask）は便 g-ask で口 /api/questions の電文を読むので、問いの件数は台帳の画面の状態から数える。
 #![cfg(test)]
 
@@ -11,7 +11,7 @@ use tsuzuri_boundary::server::ledger;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::{self, ask};
+use tsuzuri_surface::project::ask;
 use tsuzuri_surface::view::{self, Board, Fetched, Screen, clock, id_order, mark};
 
 /// 画面の状態の問いの件数（測れていなければ Unknown）。
@@ -91,7 +91,6 @@ fn board_min_screen_reads_known_ledger() {
     assert_eq!(screen.board, Reading::Known(view::board(&rows)));
     assert_eq!(screen.updated_at, Some(1_790_495_000));
     assert_eq!(questions(&screen), Reading::Known(2));
-    assert_eq!(project::ledger::count(&screen), Reading::Known(5));
 }
 
 #[test]
@@ -118,7 +117,6 @@ fn board_min_unmeasured_is_not_zero() {
         assert_eq!(questions(&screen), Reading::Unknown);
         // 問いの block も同じ読みを 0 件でなく測れていないと数える。
         assert_eq!(ask::count(&fetched), Reading::Unknown);
-        assert_eq!(project::ledger::count(&screen), Reading::Unknown);
         // 最終更新は最後に読めた時刻のまま（読めなかった時刻に進めない）。
         assert_eq!(screen.updated_at, Some(20));
     }

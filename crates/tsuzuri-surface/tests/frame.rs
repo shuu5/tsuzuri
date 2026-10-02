@@ -14,14 +14,14 @@ use std::path::{Path, PathBuf};
 use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::AroundDoc;
-use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::{self, BACK, BACK_WRAP, HEADER, Mode, Page, PageId};
 use tsuzuri_surface::project::{
-    self, Body, Module, STATES, ask, gaps, ledger, legend, next, node, pipeline, seat, state_class,
+    self, Body, Module, STATES, ask, gaps, legend, next, node, pipeline, seat, state_class,
 };
-use tsuzuri_surface::view::{Fetched, Screen};
+use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::help::{self, Inline, Line};
 use tsuzuri_surface::widgets::hover::{Card, card_class};
@@ -45,14 +45,6 @@ fn fixture_rows() -> Vec<LedgerRow> {
 /// 枠の頁の全部（生成した PageId の ALL の頁・行 hs-pages）。
 fn all_pages() -> Vec<Page> {
     PageId::ALL.into_iter().map(frame::page).collect()
-}
-
-fn known_screen() -> Screen {
-    let body = wire::encode(&LedgerList {
-        rows: Reading::Known(fixture_rows()),
-    })
-    .expect("電文");
-    Screen::initial().after_read(&Fetched::Body(body), 100)
 }
 
 /// src の下の .rs の file の全部（path の順）。
@@ -316,7 +308,7 @@ fn frame_classes_are_in_stylesheet() {
     assert!(missing.is_empty(), "stylesheet に無い class: {missing:?}");
 }
 
-/// data の口がまだ無い 3 つは測れていない（理由の 1 行つき）・一覧と凡例は中身を出す。
+/// data の口がまだ無い 3 つは測れていない（理由の 1 行つき）・問いの一覧と凡例は中身を出す。
 #[test]
 fn frame_blocks_without_data_are_unmeasured() {
     for fetched in [
@@ -338,7 +330,6 @@ fn frame_blocks_without_data_are_unmeasured() {
         }
     }
 
-    let screen = known_screen();
     let cards = Fetched::Body(read("../../tests/fixtures/surface/question-list.json"));
     let Body::Filled(questions) = ask::body(&cards) else {
         panic!("問いの一覧が中身を出さない");
@@ -348,30 +339,15 @@ fn frame_blocks_without_data_are_unmeasured() {
         .map(|q| (q.number, q.id.as_str()))
         .collect();
     assert_eq!(ids, vec![(1, "qa.2"), (2, "qa.10")]);
-    let Body::Filled(groups) = ledger::body(&screen) else {
-        panic!("台帳の一覧が中身を出さない");
-    };
-    assert_eq!(groups.len(), 1);
-    assert_eq!(groups[0].head.as_ref().map(|h| h.id.as_str()), Some("bm"));
-    let kids: Vec<&str> = groups[0].children.iter().map(|c| c.id.as_str()).collect();
-    // 閉じた bm.3 は一覧に出さない（行 g-ledger-home）。
-    assert_eq!(kids, vec!["bm.1", "bm.10", "bm.2"]);
     assert_eq!(legend::states().len(), 5);
     assert_eq!(legend::marks().len(), 5);
-    lost_and_empty(screen);
+    lost_and_empty();
 }
 
 /// 読めない一覧は測れていない・0 件の一覧は 0 件を見る。
-fn lost_and_empty(screen: Screen) {
+fn lost_and_empty() {
     // 読めない一覧は 0 件でなく測れていない・0 件は 0 件。
-    let lost = screen.after_lost();
     assert!(matches!(ask::body(&Fetched::Failed), Body::Unmeasured(r) if !r.is_empty()));
-    assert!(matches!(ledger::body(&lost), Body::Unmeasured(r) if !r.is_empty()));
-    let empty_body = wire::encode(&LedgerList {
-        rows: Reading::Known(vec![]),
-    })
-    .expect("電文");
-    let empty = Screen::initial().after_read(&Fetched::Body(empty_body), 1);
     let no_cards = wire::encode(&QuestionList {
         cards: Reading::Known(vec![]),
         answerable: true,
@@ -381,7 +357,6 @@ fn lost_and_empty(screen: Screen) {
         ask::body(&Fetched::Body(no_cards)),
         Body::Empty(_)
     ));
-    assert!(matches!(ledger::body(&empty), Body::Empty(_)));
 }
 
 /// 印は閉じていれば塗り、open の問いは赤（見本の nodeShape と同じ）。

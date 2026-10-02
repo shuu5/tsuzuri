@@ -6,30 +6,24 @@
 //! ここは写すだけ（数え直しと判定の分岐を持たない）。一覧の見出しの図（burndown の座標と svg と card）と純減の字も
 //! この file の関数で、sparkline と判定の表は account board も引く。
 //! 一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
-//! 前の一覧の組の純粋な関数（`body`・`staged_body`・`group_cards`・閉じた bead を出さない・行 g-ledger-home と c-ledger-stage）は
-//! 件数と歯のために残し、DOM は描かない。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
 //! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
 //! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
-use std::collections::BTreeMap;
-
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{LedgerJudge, Reading};
-use tsuzuri_contract::ledger::LedgerRow;
 use tsuzuri_contract::stats::{
     DayCount, LedgerStats, UnreflectedKind, UnreflectedList, UnreflectedRow,
 };
 use tsuzuri_contract::wire;
 
 use super::seat::hm;
-use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, Staged, item, staged_item};
+use super::{Body, NO_CONTENT, NOT_READ};
 use crate::frame::Block;
-use crate::view::{Fetched, Screen, clock};
+use crate::view::{Fetched, clock};
 use crate::vocab::{label, vocab};
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::card_of;
 
 pub const BLOCK: Block = Block {
     id: "ledger",
@@ -68,11 +62,6 @@ pub const CLOSED: &str = "closed";
 /// 台帳に行は在るが、閉じていない行が 1 つも無いときの 1 行（EMPTY と分ける）。
 pub const NO_OPEN: &str = "閉じていない bead は無い";
 
-/// 一覧に出す行か（状態が CLOSED の行は出さない・全件は地図の方で見る）。
-pub fn listed(row: &LedgerRow) -> bool {
-    row.status != CLOSED
-}
-
 /// epic の外の組の見出しの字（epic の項の代わり）。
 pub const OUTSIDE: &str = "epic の外";
 
@@ -89,13 +78,6 @@ pub const BURN_H: f64 = 72.0;
 /// sparkline の幅と高さ（見本の spark14 の既定）。
 pub const SPARK_W: f64 = 120.0;
 pub const SPARK_H: f64 = 24.0;
-
-/// 一覧の 1 組（epic の項・その下の項）。epic の外の組は `head` が None。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group {
-    pub head: Option<Item>,
-    pub children: Vec<Item>,
-}
 
 /// 判定の 1 語の写し（記号・class・語の鍵）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -427,25 +409,6 @@ pub fn spark_svg(spark: &Spark) -> String {
     )
 }
 
-/// 一覧の組の項の節点の card（組ごとに epic の項と下の項・電文に在る id だけ・行 g-card-adopt-c）。
-pub fn group_cards(groups: &[Group], graph: &Fetched) -> BTreeMap<String, Card> {
-    cards_of(
-        groups
-            .iter()
-            .flat_map(|g| g.head.iter().chain(&g.children).map(|i| i.id.as_str())),
-        graph,
-    )
-}
-
-/// id の列のうち電文の節点に在るものの card（id の字の鍵）。
-fn cards_of<'a>(ids: impl Iterator<Item = &'a str>, graph: &Fetched) -> BTreeMap<String, Card> {
-    let Ok(doc) = super::map::doc(graph) else {
-        return BTreeMap::new();
-    };
-    ids.filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
-        .collect()
-}
-
 /// 指標の口の本文を電文に読む（本文は読めた指標か「まだ分からない」・まだ読んでいない・読めない・
 /// 台帳が読めない・電文が読めないは理由）。
 pub fn stats(fetched: &Fetched) -> Result<LedgerStats, &'static str> {
@@ -505,60 +468,6 @@ pub fn burn_card(s: &LedgerStats) -> Card {
         value,
         src: format!("{BURN_SRC} · 時点 {}", hm(s.at)),
         more,
-    }
-}
-
-/// 台帳の件数（epic も数える・測れていなければ Unknown）。
-pub fn count(screen: &Screen) -> Reading<usize> {
-    match &screen.board {
-        Reading::Known(b) => Reading::Known(
-            b.groups
-                .iter()
-                .map(|g| g.children.len() + usize::from(g.epic.is_some()))
-                .sum(),
-        ),
-        Reading::Unknown => Reading::Unknown,
-    }
-}
-
-/// 一覧の中身（閉じた行は出さない・閉じた epic の頭は、閉じていない下の項が在るときだけ残す・行 g-ledger-home）。
-/// 板の段は持たない（`staged_body` に空の段を渡した値）。
-pub fn body(screen: &Screen) -> Body<Vec<Group>> {
-    staged_body(screen, &BTreeMap::new())
-}
-
-/// 板の段つきの一覧の中身（`body` と同じ組で、下の項は bead の id の段が在れば段の字と記号を出す・epic の頭は段を出さない）。
-pub fn staged_body(screen: &Screen, stages: &BTreeMap<String, Staged>) -> Body<Vec<Group>> {
-    match &screen.board {
-        Reading::Unknown => Body::Unmeasured(LEDGER_UNREAD),
-        Reading::Known(b) if b.groups.is_empty() => Body::Empty(EMPTY),
-        Reading::Known(b) => {
-            let groups: Vec<Group> = b
-                .groups
-                .iter()
-                .filter_map(|g| {
-                    let children: Vec<Item> = g
-                        .children
-                        .iter()
-                        .filter(|r| listed(r))
-                        .map(|r| staged_item(r, stages.get(r.id.as_str())))
-                        .collect();
-                    let keep = match &g.epic {
-                        Some(epic) => listed(epic) || !children.is_empty(),
-                        None => !children.is_empty(),
-                    };
-                    keep.then(|| Group {
-                        head: g.epic.as_ref().map(item),
-                        children,
-                    })
-                })
-                .collect();
-            if groups.is_empty() {
-                Body::Empty(NO_OPEN)
-            } else {
-                Body::Filled(groups)
-            }
-        }
     }
 }
 

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL, bead_kind};
-use tsuzuri_surface::project::{Staged, item, kind_word, staged_item};
+use tsuzuri_surface::project::{item, kind_word};
 use tsuzuri_surface::view::{MEMO_OPEN_KEY, mark, row_mark};
 use tsuzuri_surface::vocab::vocab;
 
@@ -68,7 +68,7 @@ fn lkind_row_mark() {
     }
 }
 
-/// (4) 項の右の字と赤と種類の語は地図の節点と同じ読み（段の在る項は段の字と種類の語）。
+/// (4) 項の右の字と赤と種類の語は地図の節点と同じ読み（段の在る項は行 g-list-sweep で外した）。
 #[test]
 fn lkind_items() {
     let question = row("fx-k.1", "task", "open", &[QUESTION_LABEL]);
@@ -91,15 +91,6 @@ fn lkind_items() {
     assert!(item(&question).alert);
     assert!(!item(&memo).alert);
     assert!(!item(&closed_q).alert);
-
-    let run = Staged {
-        state: Some("run"),
-        closed: false,
-        word: "Running".to_string(),
-    };
-    let staged = staged_item(&memo, Some(&run));
-    assert_eq!(staged.aside, "Running · memo");
-    assert_eq!(staged.stage, Some(run));
 }
 
 /// verify の filter の語（main の 264 語を畳んだ 190 語と同じノートのもう 1 つの行の接頭辞・191 語）。

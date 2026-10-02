@@ -58,21 +58,8 @@ pub struct Item {
     pub alert: bool,
     pub id: String,
     pub title: String,
-    /// 状態の印と語と種類（`○ 未着手 · task`・`◷ 答え待ち · question`）か、板の段の字と種類（`Running · task`）。
+    /// 状態の印と語と種類（`○ 未着手 · task`・`◷ 答え待ち · question`）。
     pub aside: String,
-    /// 板の段（在れば右の字の前に段の記号を出す）。
-    pub stage: Option<Staged>,
-}
-
-/// 一覧の項に出す板の段（行 c-ledger-stage）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Staged {
-    /// 札の状態の記号の値（None は取り込みの印）。
-    pub state: Option<&'static str>,
-    /// 台帳で閉じた（着地せず）の札か。
-    pub closed: bool,
-    /// 札の段の字と札の meta の CI の語。
-    pub word: String,
 }
 
 /// 印の色の上書き（open の問い）。
@@ -94,20 +81,6 @@ pub fn item(row: &LedgerRow) -> Item {
         id: row.id.to_string(),
         title: row.title.clone(),
         aside: format!("{} {} · {}", mark.glyph, mark.word, kind_word(row)),
-        stage: None,
-    }
-}
-
-/// 台帳の行を板の段つきの 1 項にする（段が在れば右の字を段の字と種類にし、段の写しを置く・無ければ `item` のまま）。
-pub fn staged_item(row: &LedgerRow, stage: Option<&Staged>) -> Item {
-    let base = item(row);
-    match stage {
-        Some(s) => Item {
-            aside: format!("{} · {}", s.word, kind_word(row)),
-            stage: Some(s.clone()),
-            ..base
-        },
-        None => base,
     }
 }
 
@@ -121,7 +94,6 @@ pub fn node_item(doc: &GraphDoc, id: &str) -> Option<Item> {
         id: node.id.clone(),
         title: node.title.clone(),
         aside: String::new(),
-        stage: None,
     })
 }
 
@@ -207,7 +179,6 @@ mod dom {
 
     use super::{ALERT_STYLE, Body, Folds, Item, UNKNOWN, state_class, state_key};
     use crate::frame::{Block, Mode, node_href};
-    use crate::project::pipeline::stage_sym;
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, h2};
     use crate::widgets::hover::{Card, attach_some};
@@ -307,15 +278,11 @@ mod dom {
         let mode = mode_of();
         let id = item.id.clone();
         let href = move || node_href(&id, mode());
-        let sym = item
-            .stage
-            .as_ref()
-            .map(|s| view! { {stage_sym(s.closed, s.state)}" " });
         view! {
             <li>
                 {lead}
                 <a class="ttl" href=href use:attach_some=card><span class="nid">{item.id.clone()}</span>" "<span data-t="">{item.title.clone()}</span></a>
-                <span class="aside">{sym}{item.aside.clone()}</span>
+                <span class="aside">{item.aside.clone()}</span>
             </li>
         }
         .into_any()
