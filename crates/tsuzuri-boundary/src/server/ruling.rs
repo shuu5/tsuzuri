@@ -14,6 +14,11 @@
 //!    （周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を撃ち、rc 0 なら印を置く。
 //!    受けなければ `DELIVER_STEP` を空けて `DELIVER_SPAN` まで撃ち直す・結果で応答は変えない）。
 //!
+//! 答えごとの撃ち直しの thread は process の中にだけ在り、server の起こし直しで消える。起動の入口（tz surface serve）は
+//! 口を開いた後に `sweep_at_start` で起動の掃き（`sweep`）を別の thread で 1 度だけ始め、`PACE` の上限の内に記帳した
+//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない・
+//! 行 c-deliver-retry）。
+//!
 //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
 //! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
 //! 台帳の読みも書きも配達も撃たない（行 e-ask-own-only）。
@@ -33,9 +38,10 @@ use tsuzuri_contract::surface::{
     QUESTION_FIELD, REVOKES, Refusal, RevokeRequest, RevokeResponse, RulingId, RulingRequest,
     RulingResponse, VERBATIM, pending_reopen, revocable,
 };
-use tsuzuri_core::delivery::{Pending, Route, mark_line, marked};
+use tsuzuri_core::delivery::{Pending, Route, mark_line, marked, undelivered};
 use tsuzuri_core::question::open_questions;
 
+use super::Config;
 use super::events;
 use super::ledger::{Source, capture, parse_bd};
 use super::proc::run;
@@ -110,6 +116,13 @@ pub const PACE: Pace = Pace {
 
 /// 配達の撃ち直しを上限で止めたときの log の字。
 pub const GAVE_UP: &str = "配達の撃ち直しを上限で止めた（印を置かず、席の停止の hook が拾う）";
+
+/// 起動の掃きが印の無い裁定を見つけたときの log の字（行 c-deliver-retry）。
+pub const SWEEP_FOUND: &str = "起動の周に印の無い裁定を撃ち直す";
+
+/// 起動の掃きの台帳の読みが落ちたときの log の字（何も撃たない）。
+pub const SWEEP_UNREAD: &str =
+    "起動の周の台帳の読みが落ちた（撃ち直さず、印の無い裁定は席の停止の hook が拾う）";
 
 /// 配達の先（器の CLI・state dir・席の target）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,6 +459,93 @@ pub fn redeliver(d: &Delivery, writer: &Writer, ledger: &Source, parcel: &Parcel
         }
         std::thread::sleep(pace.step);
     }
+}
+
+/// 起動の掃き（行 c-deliver-retry）。台帳を合流しない読みで上限 `READ_TIMEOUT` の 1 度だけ読み、印の無い裁定
+/// （中核の `undelivered`・台帳の順）のうち、id の分の字（`id_minute`）が `now` から `pace.span` を引いた時刻の分の字より
+/// 前でないものを 1 つずつ荷（id はその裁定の id・問いと裁定の組は 1 つ）にして、前の荷の `redeliver` が終えてから
+/// 次の荷の `redeliver` を `pace` で撃つ（それより前の裁定と分の字の読めない裁定は、答えごとの撃ち直しも上限で止めていたので
+/// 撃たず、席の停止の hook が拾う）。撃つ裁定が在れば撃つ前に `SWEEP_FOUND` の 1 行（裁定の id を , で並べた字と席）を書く。
+/// 読みが落ちるか字が読めなければ `SWEEP_UNREAD` の 1 行（落ちた訳）を書いて何も撃たない。撃った荷の数を返す。
+pub fn sweep(d: &Delivery, writer: &Writer, ledger: &Source, pace: Pace, now: EpochSecs) -> usize {
+    let found = match ledger.text_within(READ_TIMEOUT).map(|t| undelivered(&t)) {
+        Ok(Reading::Known(found)) => found,
+        Ok(Reading::Unknown) => {
+            emit_err(&format!(
+                "tz surface serve: {SWEEP_UNREAD}: 台帳の字が読めない"
+            ));
+            return 0;
+        }
+        Err(word) => {
+            emit_err(&format!("tz surface serve: {SWEEP_UNREAD}: {word}"));
+            return 0;
+        }
+    };
+    let since = minute(now.saturating_sub(pace.span.as_secs()));
+    let found: Vec<Pending> = found
+        .into_iter()
+        .filter(|p| id_minute(&p.ruling).is_some_and(|m| m >= since.as_str()))
+        .collect();
+    if found.is_empty() {
+        return 0;
+    }
+    let ids: Vec<&str> = found.iter().map(|p| p.ruling.as_str()).collect();
+    emit_err(&format!(
+        "tz surface serve: {SWEEP_FOUND}: {}・席 {}",
+        ids.join(","),
+        d.target
+    ));
+    for p in &found {
+        let parcel = Parcel {
+            id: p.ruling.clone(),
+            pending: vec![p.clone()],
+        };
+        redeliver(d, writer, ledger, &parcel, pace);
+    }
+    found.len()
+}
+
+/// 裁定の id の分の字（`<頭>:<UTC の年月日 T 時分 Z>-<数>` の最後のコロンと最後の - の間の 14 字・形が違えば None）。
+/// 字の順は時刻の順と同じ。
+pub fn id_minute(id: &RulingId) -> Option<&str> {
+    let (_, tail) = id.as_str().rsplit_once(':')?;
+    let (at, n) = tail.rsplit_once('-')?;
+    let shaped = at.len() == 14
+        && at.bytes().enumerate().all(|(i, c)| match i {
+            8 => c == b'T',
+            13 => c == b'Z',
+            _ => c.is_ascii_digit(),
+        })
+        && !n.is_empty()
+        && n.bytes().all(|c| c.is_ascii_digit());
+    shaped.then_some(at)
+}
+
+/// 起動の掃きを別の thread で始める（待たない）。読むだけの server（`Config::read_only`）と、席の target か state dir の
+/// 無い server では始めず false。配達の先と書きの持ち物は server の裁定の書きと同じ引数（--seat・--state-dir・--scribe2・
+/// --repo・--bdw）から作り、台帳は --bd の合流しない読みで読む（行 c-deliver-retry）。
+pub fn sweep_at_start(config: &Config) -> bool {
+    if config.read_only {
+        return false;
+    }
+    let (Some(target), Some(state_dir)) = (&config.seat, &config.state_dir) else {
+        return false;
+    };
+    let d = Delivery {
+        program: config.scribe2.clone(),
+        state_dir: state_dir.clone(),
+        target: target.clone(),
+    };
+    let writer = Writer {
+        repo: config.repo.clone(),
+        bdw: config.bdw.clone(),
+        delivery: Some(d.clone()),
+    };
+    let ledger = Source::new(&config.repo, &config.bd);
+    std::thread::spawn(move || {
+        sweep(&d, &writer, &ledger, PACE, events::now());
+    });
+    true
 }
 
 /// 次の id（数は 1 から始め、notes に同じ id の定型行が在れば 1 つずつ増やす）。

@@ -6,6 +6,7 @@
 //! （省けば server 自身の binary・行 k-tz-self）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
 //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
 //! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
+//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める（行 c-deliver-retry）。
 //! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
 //! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
 //! board を読むだけで起こす・行 e-ask-own-only）。
@@ -29,7 +30,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use tsuzuri_boundary::out::emit_err;
-use tsuzuri_boundary::server::{Config, Server};
+use tsuzuri_boundary::server::{Config, Server, ruling};
 use tsuzuri_boundary::stage::notify;
 use tsuzuri_core::account::project_name;
 
@@ -213,5 +214,7 @@ fn serve(rest: &[&str]) -> u8 {
         Ok(addr) => emit_err(&format!("tz surface serve: http://{addr}/")),
         Err(e) => emit_err(&format!("tz surface serve: 口の住所が読めない: {e}")),
     }
+    // 起こし直しで消えた答えごとの撃ち直しを、起動の周に台帳の印の無い裁定から拾い直す（待たない・行 c-deliver-retry）。
+    ruling::sweep_at_start(&config);
     server.run()
 }
