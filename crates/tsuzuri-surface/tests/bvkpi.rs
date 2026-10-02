@@ -207,7 +207,7 @@ fn bvkpi_dom_wiring_text() {
         "on:click=move |_| kind.set(k)",
         "on:input=move |ev| query.set(event_target_value(&ev))",
         "let active = filtering(k, &q);",
-        "let shown = filtered(groups, k, &q);",
+        "let shown = filtered(cases.with(|c| with_phases(groups, c)), k, &q);",
         "group_view(g, folds, active)",
         "move || active || folds.with(|f| f.open(&key, initial))",
         "{head_line(kind, query)}",

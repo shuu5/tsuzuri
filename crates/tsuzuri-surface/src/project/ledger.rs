@@ -7,6 +7,7 @@
 //! 前の一覧の組の純粋な関数（`body`・`staged_body`・`group_cards`・閉じた bead を出さない・行 g-ledger-home と c-ledger-stage）は
 //! 件数と歯のために残し、DOM は描かない。epic の進みの行の題に、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-c）。
 //! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
+//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
 //! memo と未反映の年齢は、電文の作った時刻から block を組む時の今までの日数（`days_since`・行 c-abs-time）。
 //! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
@@ -25,7 +26,7 @@ use super::seat::hm;
 use super::{Body, Item, LEDGER_UNREAD, NO_CONTENT, NOT_READ, Staged, item, staged_item};
 use crate::frame::Block;
 use crate::view::{Fetched, Screen, clock};
-use crate::vocab::label;
+use crate::vocab::{label, vocab};
 use crate::widgets::hover::Card;
 use crate::widgets::nodecard::card_of;
 
@@ -342,6 +343,51 @@ pub fn kind_label(kind: UnreflectedKind) -> String {
 /// 未反映の種類の名（kind_name の字）の見出し（語の辞書の label）。
 pub fn name_label(name: &str) -> String {
     label(&format!("{UNREF_KIND_KEY}{name}"))
+}
+
+/// 器の局面の語の語の鍵の接頭（鍵は接頭と局面の語・行 g-unref-lc）。
+pub const PHASE_KEY: &str = "lc:";
+
+/// 器の手番の語の語の鍵の接頭（鍵は接頭と手番の語）。
+pub const TURN_KEY: &str = "turn:";
+
+/// 語の辞書に無い局面と手番の語に出す字の鍵（まだ分からない）。
+pub const UNKNOWN_WORD_KEY: &str = "gap_unknown";
+
+/// 局面か手番の語の平易な字（接頭と語の鍵が語の辞書に在ればその見出し・無ければ「まだ分からない」）。
+pub fn plain_word(prefix: &str, word: &str) -> String {
+    match vocab().term(&format!("{prefix}{word}")) {
+        Some(term) => term.label.clone(),
+        None => label(UNKNOWN_WORD_KEY),
+    }
+}
+
+/// 局面と手番の平易な字（局面の字・中黒の区切り・手番の字）。
+pub fn phase_text(phase: &str, turn: &str) -> String {
+    format!(
+        "{} · {}",
+        plain_word(PHASE_KEY, phase),
+        plain_word(TURN_KEY, turn)
+    )
+}
+
+/// 未反映の種類ごとの器の局面の語（行 c-unref-lc の 3 つ・手番はどれも席）。
+pub const UNREF_PHASES: [(UnreflectedKind, &[&str]); 3] = [
+    (UnreflectedKind::Memo, &["memo-actionable", "misfit"]),
+    (UnreflectedKind::Ruling, &["ruling-unreflected"]),
+    (UnreflectedKind::Utterance, &["utterance-open"]),
+];
+
+/// 未反映の種類の局面の平易な字（局面の字を・でつなぎ、手番の席の字を添える）。
+#[expect(clippy::expect_used, reason = "局面の表は 3 つの全部を持つ")]
+pub fn kind_phase_text(kind: UnreflectedKind) -> String {
+    let phases = UNREF_PHASES
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, p)| *p)
+        .expect("局面の表は 3 つの全部を持つ");
+    let words: Vec<String> = phases.iter().map(|p| plain_word(PHASE_KEY, p)).collect();
+    format!("{} · {}", words.join("・"), plain_word(TURN_KEY, "seat"))
 }
 
 /// 未反映の数（電文の数そのまま）と、分からない種類の名（測れていないの記号を添えて出す）。

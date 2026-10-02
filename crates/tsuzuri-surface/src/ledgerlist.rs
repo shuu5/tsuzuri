@@ -6,19 +6,24 @@
 //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
 //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
 //! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
+//! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
+//! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
+//! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
 //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
+use tsuzuri_contract::case::CaseDoc;
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, LedgerRow};
-use tsuzuri_contract::stats::LedgerStats;
+use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
 use tsuzuri_contract::wire;
 
 use crate::project::ledger::{
-    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, OUTSIDE, burn_svg, burndown, net, stats,
+    BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, NONE, OUTSIDE, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
+    burn_svg, burndown, kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, stats,
 };
 use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
 use crate::project::{Body, LEDGER_UNREAD};
@@ -66,6 +71,8 @@ pub struct Lrow {
     pub right: String,
     /// 並べの位（`row_rank`）。
     pub rank: u8,
+    /// 局面と手番の平易な字（memo と問いの行だけ・`with_phases` が置く・行 g-unref-lc）。
+    pub phase: Option<String>,
 }
 
 /// 一覧の 1 組（epic の組・epic の外の組は `epic` が None）。
@@ -165,6 +172,7 @@ fn lrow(
             stage_word,
         ),
         rank: row_rank(row.node_kind(), card),
+        phase: None,
     }
 }
 
@@ -380,6 +388,138 @@ pub fn kpi(fetched: &Fetched) -> (String, Option<String>) {
     }
 }
 
+/// 読めない版の局面の出力の周に出す字の鍵（読めない・電文の unreadable が真・要件 FR13）。
+pub const UNREADABLE_KEY: &str = "case_unreadable";
+
+/// 古さの印の在る局面の出力に添える字の鍵（古い・電文の stale が空でない・要件 FR13）。
+pub const STALE_KEY: &str = "case_stale";
+
+/// 局面の出力の口の本文の読み（要件 FR13 の周: 出力がまだ無い・読めない版・読めた〔古さの印の種類つき〕）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Phases {
+    /// まだ読んでいない・口が読めない・電文が読めない・出力がまだ無い（「まだ分からない」）。
+    Unknown,
+    /// 出力の file は在るのに読めない版（電文の unreadable が真・「読めない」・行 c-case-unreadable）。
+    Unreadable,
+    /// memo と問いの部品の id の表（局面の語と手番の語）と古さの印の種類（空でなければ出力は古い）。
+    Known(BTreeMap<String, (String, String)>, Vec<String>),
+}
+
+/// 局面の出力の口の本文を読む（memo と問いの部品を id の表にし、古さの印の種類を添える）。
+pub fn phases(fetched: &Fetched) -> Phases {
+    let Fetched::Body(text) = fetched else {
+        return Phases::Unknown;
+    };
+    match wire::decode::<CaseDoc>(text) {
+        Ok(CaseDoc {
+            parts: Reading::Known(parts),
+            stale,
+            ..
+        }) => Phases::Known(
+            parts
+                .into_iter()
+                .filter(|p| matches!(p.part.as_str(), "memo" | "question"))
+                .map(|p| (p.id, (p.phase, p.turn)))
+                .collect(),
+            stale,
+        ),
+        Ok(CaseDoc {
+            unreadable: true, ..
+        }) => Phases::Unreadable,
+        _ => Phases::Unknown,
+    }
+}
+
+/// 古さの印の在る出力の字の末に添える字（印が無ければ空・在れば空白と「古い」）。
+fn old_mark(stale: &[String]) -> String {
+    if stale.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", label(STALE_KEY))
+    }
+}
+
+/// memo と問いの行に局面と手番の平易な字を置く（読めない版は「読めない」・表に id が無い行と出力がまだ無い間は
+/// 「まだ分からない」・古さの印が在れば局面の字に「古い」を添える・ほかの行は None のまま）。
+pub fn with_phases(groups: Vec<Lgroup>, cases: &Fetched) -> Vec<Lgroup> {
+    let read = phases(cases);
+    groups
+        .into_iter()
+        .map(|mut g| {
+            for r in &mut g.rows {
+                if matches!(r.kind, NodeKind::Memo | NodeKind::Question) {
+                    r.phase = Some(match &read {
+                        Phases::Known(table, stale) => table.get(&r.id).map_or_else(
+                            || label(UNKNOWN_WORD_KEY),
+                            |(phase, turn)| {
+                                format!("{}{}", phase_text(phase, turn), old_mark(stale))
+                            },
+                        ),
+                        Phases::Unreadable => label(UNREADABLE_KEY),
+                        Phases::Unknown => label(UNKNOWN_WORD_KEY),
+                    });
+                }
+            }
+            g
+        })
+        .collect()
+}
+
+/// 見出しの未反映の数（字・title・測れていないの印を添えるか）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnrefHead {
+    pub text: String,
+    pub title: String,
+    pub partial: bool,
+}
+
+/// 見出しの未反映の数（数は台帳の block の未反映の数に手番の席の字を添え、1〜2 種が分からなければ測れていないの印、
+/// 3 種とも分からなければ「まだ分からない」、読めない版の出力の周は「読めない」、古さの印が在れば「古い」を添える・
+/// title は種類ごとの数と局面の平易な字・数の分からない種類は「まだ分からない」・古さの印の種類を末に並べる）。
+pub fn unref_head(s: &LedgerStats, cases: &Phases) -> UnrefHead {
+    let unref = Unref {
+        count: s.unreflected,
+        unknown: s
+            .unreflected_unknown
+            .iter()
+            .map(|k| kind_name(*k))
+            .collect(),
+    };
+    let stale: &[String] = match cases {
+        Phases::Known(_, stale) => stale,
+        _ => &[],
+    };
+    let count = match (cases, unref.text()) {
+        (Phases::Unreadable, _) => label(UNREADABLE_KEY),
+        (_, n) if n == NONE => label(KPI_UNKNOWN_KEY),
+        (_, n) => n,
+    };
+    let text = format!(
+        "{} {count}{} · {}",
+        label("l_unref"),
+        old_mark(stale),
+        plain_word(TURN_KEY, "seat")
+    );
+    let title = UnreflectedKind::ALL
+        .iter()
+        .map(|k| {
+            let n = s
+                .unreflected_kinds
+                .iter()
+                .find(|c| c.kind == *k)
+                .map_or_else(|| label(UNKNOWN_WORD_KEY), |c| c.count.to_string());
+            format!("{} {n}（{}）", kind_label(*k), kind_phase_text(*k))
+        })
+        .chain((!stale.is_empty()).then(|| format!("{}（{}）", label(STALE_KEY), stale.join("・"))))
+        .collect::<Vec<_>>()
+        .join(" / ");
+    UnrefHead {
+        text,
+        title,
+        partial: unref.partial() && !matches!(cases, Phases::Unreadable),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use dom::view;
 
@@ -388,13 +528,16 @@ pub use dom::view;
 mod dom {
     use leptos::prelude::*;
 
+    use tsuzuri_contract::case;
+
     use super::{
         COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
-        content, filtered, filtering, head_counts, kind_tag, kpi,
+        content, filtered, filtering, head_counts, kind_tag, kpi, phases, unref_head, with_phases,
     };
     use crate::frame::{Mode, node_href};
     use crate::kit::Folds;
-    use crate::project::{Body, UNKNOWN, ledger, pipeline, state_key, unmeasured};
+    use crate::project::ledger::stats;
+    use crate::project::{Body, UNKNOWN, ledger, pipeline, state_icon, state_key, unmeasured};
     use crate::vocab::label;
     use crate::widgets::help::HelpCtx;
     use crate::widgets::pop::board_unread;
@@ -404,6 +547,7 @@ mod dom {
         let rows = crate::net::read(ledger::PATH);
         let pipe = crate::net::read(pipeline::PATH);
         let beads = crate::net::read(FACTS_PATH);
+        let cases = crate::net::read(case::PATH);
         let folds = RwSignal::new(Folds::default());
         let kind = RwSignal::new(Kind::All);
         let query = RwSignal::new(String::new());
@@ -418,7 +562,7 @@ mod dom {
                 Body::Filled(groups) => {
                     let (k, q) = (kind.get(), query.get());
                     let active = filtering(k, &q);
-                    let shown = filtered(groups, k, &q);
+                    let shown = filtered(cases.with(|c| with_phases(groups, c)), k, &q);
                     if shown.is_empty() {
                         view! { <div class="ll-gnone">{NO_MATCH}</div> }.into_any()
                     } else {
@@ -439,10 +583,18 @@ mod dom {
     /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。
     fn head_line(kind: RwSignal<Kind>, query: RwSignal<String>) -> AnyView {
         let metrics = crate::net::read(ledger::METRICS_PATH);
+        let cases = crate::net::read(case::PATH);
         let kpis = move || {
             let (text, svg) = metrics.with(kpi);
             let fig = svg.map(|s| view! { <span class="ll-spark" inner_html=s></span> });
-            view! { <span class="ll-kchip num">{text}</span>{fig} }
+            let unref = metrics
+                .with(|m| stats(m).ok())
+                .map(|s| cases.with(|c| unref_head(&s, &phases(c))))
+                .map(|h| {
+                    let mark = h.partial.then(|| state_icon(UNKNOWN));
+                    view! { <span class="ll-unref num" title=h.title>{h.text}{mark}</span> }
+                });
+            view! { <span class="ll-kchip num">{text}</span>{unref}{fig} }
         };
         let seg = KINDS
             .into_iter()
@@ -561,6 +713,7 @@ mod dom {
             <div class="ll-row" data-id=r.id.clone()>
                 <span class=class>{tag}</span>
                 <a class="ll-ls" href=href title=r.title.clone()>{r.short.clone()}</a>
+                {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
                 <span class="ll-rt">{r.right.clone()}</span>
             </div>
         }

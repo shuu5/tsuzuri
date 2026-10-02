@@ -2041,6 +2041,86 @@
    "label": "着地",
    "plain": "札の要の 1 行: 着地の時刻と CI の結果",
    "internal": "段 Landed の since と ci"
+  },
+  "lc:memo-promoting": {
+   "label": "昇格の途中",
+   "plain": "契約の行か便が開いている memo\n・ または器の自動の close を待つ",
+   "internal": "器の局面 memo-promoting"
+  },
+  "lc:memo-asking": {
+   "label": "問いの答え待ち",
+   "plain": "子の問いが開いている memo",
+   "internal": "器の局面 memo-asking"
+  },
+  "lc:memo-actionable": {
+   "label": "処置の待ち",
+   "plain": "席が昇格か close を決める memo",
+   "internal": "器の局面 memo-actionable"
+  },
+  "lc:memo-waiting": {
+   "label": "引き金待ち",
+   "plain": "器が毎周に引き金を判じる memo\n・ 誰の手も待たない",
+   "internal": "器の局面 memo-waiting"
+  },
+  "lc:question-open": {
+   "label": "答えの待ち",
+   "plain": "あなたの答えを待つ問い",
+   "internal": "器の局面 question-open"
+  },
+  "lc:ruling-unreflected": {
+   "label": "反映待ち",
+   "plain": "閉じた問いの裁定が\ndesign-intent にまだ写っていない",
+   "internal": "器の局面 ruling-unreflected"
+  },
+  "lc:utterance-open": {
+   "label": "未仕分け",
+   "plain": "席がまだ仕分けていない発話",
+   "internal": "器の局面 utterance-open"
+  },
+  "lc:misfit": {
+   "label": "形の崩れ",
+   "plain": "器が局面を決められない部品\n・ 印や参照の形が崩れている",
+   "internal": "器の局面 misfit"
+  },
+  "turn:user": {
+   "label": "あなたの番",
+   "plain": "あなたの答えか承認を待つ",
+   "internal": "器の手番 user"
+  },
+  "turn:seat": {
+   "label": "席の番",
+   "plain": "席の処置を待つ",
+   "internal": "器の手番 seat"
+  },
+  "turn:vessel": {
+   "label": "器の番",
+   "plain": "器（scribe2）が進める",
+   "internal": "器の手番 vessel"
+  },
+  "turn:runner": {
+   "label": "実装の番",
+   "plain": "便の実装役が進める",
+   "internal": "器の手番 runner"
+  },
+  "turn:ci": {
+   "label": "CI の番",
+   "plain": "CI の結果を待つ",
+   "internal": "器の手番 ci"
+  },
+  "turn:none": {
+   "label": "誰の番でもない",
+   "plain": "ほかの部品が手番を持つか\n終わった",
+   "internal": "器の手番 none"
+  },
+  "case_unreadable": {
+   "label": "読めない",
+   "plain": "器の局面の出力の file は在るが版が読めない\n✗ まだ無いとは違う",
+   "internal": "電文 CaseDoc の unreadable が真（行 c-case-unreadable・g-unref-lc）"
+  },
+  "case_stale": {
+   "label": "古い",
+   "plain": "器の局面の出力に古さの印が在る\n・ 印の種類は title に並べる",
+   "internal": "電文 CaseDoc の stale が空でない（行 g-unref-lc）"
   }
  }
 }
