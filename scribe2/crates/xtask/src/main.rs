@@ -1,0 +1,541 @@
+//! workspace 保守の内製 task runner（`cargo xtask <subcommand>`）。
+//!
+//! 依存は std だけ。憲法 C4 の歯（行数 / 比 / manifest parity / lints）を
+//! [`check`] が測り、[`genmanifest`] が plugin manifest を NAME から生成し、
+//! [`flipcheck`] が TDD の flip（新しい test が古い実装で赤い）を後から確かめる。
+//! rc は `main` が返す [`ExitCode`] で表し、helper から `process::exit` は呼ばない。
+
+mod check;
+mod check_facts;
+mod check_sizes;
+mod claude_md;
+mod decisions_index;
+mod deps_delta;
+mod enum_slices;
+mod env_reads;
+mod flipcheck;
+mod genmanifest;
+mod ledger_plan;
+mod limits;
+mod mutantsdiff;
+mod non_rust_exec;
+mod paths_clean;
+mod polarity;
+mod private_clean;
+mod prose_gate;
+mod provenance;
+mod rules_diff;
+mod rules_parity;
+mod rules_wired;
+mod seat_brief;
+mod spawn_points;
+mod toml_lite;
+mod workspace;
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+/// 使い方の 1 行。
+const USAGE: &str = "usage: cargo xtask <check|gen-manifest|gen-claude-md> [ROOT] | cargo xtask <flip-check|mutants-diff|rules-diff|deps-delta> --base <ref> | cargo xtask ledger-plan --epic <epic id> [--skip <contract id>...] [ROOT] | cargo xtask main-provenance [--rev <rev>]";
+
+/// stdout 出力層。stdout へ書くのはこの関数だけである。
+#[expect(
+    clippy::print_stdout,
+    reason = "CLI の stdout 出力をこの 1 関数に閉じるための例外"
+)]
+fn emit(line: &str) {
+    println!("{line}");
+}
+
+/// stderr 出力層。stderr へ書くのはこの関数だけである。
+#[expect(
+    clippy::print_stderr,
+    reason = "CLI の stderr 出力をこの 1 関数に閉じるための例外"
+)]
+fn emit_err(line: &str) {
+    eprintln!("{line}");
+}
+
+/// `ROOT` 引数を解決する。省略時**のみ** cwd を root とする（■D1）。
+fn resolve_root(arg: Option<&str>) -> Result<PathBuf, String> {
+    match arg {
+        Some(path) => Ok(PathBuf::from(path)),
+        None => std::env::current_dir().map_err(|err| format!("cwd を解決できない: {err}")),
+    }
+}
+
+/// `check` subcommand。違反 0 ならサマリ 1 行、1 件以上なら違反行を並べて rc 1。
+fn run_check(root_arg: Option<&str>) -> Result<ExitCode, String> {
+    let root = resolve_root(root_arg)?;
+    let violations = check::check(&root);
+    if violations.is_empty() {
+        emit(&check::summary(&root));
+        return Ok(ExitCode::SUCCESS);
+    }
+    for violation in &violations {
+        emit(violation);
+    }
+    Ok(ExitCode::FAILURE)
+}
+
+/// `gen-manifest` subcommand。
+fn run_gen_manifest(root_arg: Option<&str>) -> Result<ExitCode, String> {
+    let root = resolve_root(root_arg)?;
+    emit(&genmanifest::generate(&root)?);
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `gen-claude-md` subcommand。生成 file へ憲法の規範文を、`CLAUDE.md` へ done の定義を書く。
+fn run_gen_claude_md(root_arg: Option<&str>) -> Result<ExitCode, String> {
+    let root = resolve_root(root_arg)?;
+    emit(&claude_md::generate(&root)?);
+    Ok(ExitCode::SUCCESS)
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let root_arg = args.get(1).map(String::as_str);
+    let tail = args.get(1..).unwrap_or_default();
+    let outcome = match args.first().map(String::as_str) {
+        Some("check") => run_check(root_arg),
+        Some("gen-manifest") => run_gen_manifest(root_arg),
+        Some("gen-claude-md") => run_gen_claude_md(root_arg),
+        // 契約表の未着地の行から bd create --graph の plan を出す（設計 ledger-form.md §3 の 5・台帳は読まない）。
+        Some("ledger-plan") => ledger_plan::run(tail),
+        // flip-check だけは rc 2（引数不正）を持つので `Err` → rc 1 経路へ流さない。
+        Some("flip-check") => return flipcheck::run(tail),
+        // mutants-diff も rc 2（測れなかった）を持つので `Err` → rc 1 経路へ流さない。
+        Some("mutants-diff") => return mutantsdiff::run(tail),
+        // rules-diff も rc 2（測れなかった）を持つ（設計 rules-manifest.md §4.3・C5 の差分の門）。
+        Some("rules-diff") => return rules_diff::run(tail),
+        // deps-delta も rc 2（deny の面が測れなかった）を持つ（設計 rules-manifest.md §4・C13 の増分の門）。
+        Some("deps-delta") => return deps_delta::run(tail),
+        // main-provenance も rc 2（測れなかった）を持つ（設計 pipeline.md §7 約束 3・push(main) の入口の出所）。
+        Some("main-provenance") => return provenance::run(tail),
+        _ => Err(USAGE.to_owned()),
+    };
+    match outcome {
+        Ok(code) => code,
+        Err(reason) => {
+            emit_err(&reason);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `mutants-diff` の歯。**本体は `mutantsdiff.rs`** だが、歯はここ（base に在る file）へ置く。
+///
+/// 新規 module の中に置くと、その file ごと base に無いので **flip-check が構造的に測れない**
+/// （`not-flippable`・新規 module は base に `mod` 宣言ごと存在せず compile されない）。
+/// 契約の write-set が `{main,mutantsdiff}.rs（+ tests）` と両方を挙げているのはこのためである。
+///
+/// **cargo-mutants 本体はここから起動しない**（CI に 10 分の実行を持ち込まない）。測るのは
+/// 「1 行の形」と「rc の極性」で、材料は `outcomes.json` の fixture 3 種である。
+#[cfg(test)]
+mod tests {
+    use crate::mutantsdiff::{
+        baseline_tail, deny_line_enabled, diagnosed, measured, parse_outcomes, verdict, without_outcomes,
+        Counts, Pace, BASELINE_TAIL_LINES,
+    };
+    use std::path::Path;
+    use std::process::ExitCode;
+
+    /// cargo-mutants が実際に書く形（生存 0 の周・入れ子に同名 key を持つ）。
+    const MISSED_NONE: &str = r#"{
+      "outcomes": [
+        {"scenario": "Baseline", "summary": "Success", "missed": 99, "total_mutants": 99, "caught": 99, "timeout": 99, "unviable": 99},
+        {"scenario": {"Mutant": {"function": {"function_name": "missed"}}}, "summary": "CaughtMutant"}
+      ],
+      "total_mutants": 23, "missed": 0, "caught": 23, "timeout": 0, "unviable": 0, "success": 1
+    }"#;
+
+    /// 生存が 2 件在る周（検出線の主役）。
+    const MISSED_TWO: &str = r#"{
+      "outcomes": [{"scenario": "Baseline", "summary": "Success"}],
+      "total_mutants": 18, "missed": 2, "caught": 12, "timeout": 1, "unviable": 3, "success": 1
+    }"#;
+
+    /// 途中で切れた JSON（測れていない）。
+    const BROKEN: &str = r#"{"outcomes": [{"scenario": "Baseline""#;
+
+    #[test]
+    fn mutants_diff_line_reports_every_count_from_outcomes() {
+        let counts = parse_outcomes(MISSED_TWO).expect("fixture は読める");
+        assert_eq!(
+            counts,
+            Counts { total: 18, caught: 12, missed: 2, unviable: 3, timeout: 1 },
+            "5 つの数を outcomes.json から読む（範囲は行を組むときに呼び手が渡す）"
+        );
+        // **1 行の形**まで測る（読み取れても書式が崩れれば報告の額面が読めない）。
+        let line = counts.line(&scope_of(PROBE_SCOPE), &[]);
+        assert_eq!(
+            line,
+            "mutants-diff: total=18 caught=12 missed=2 unviable=3 timeout=1 scope=probe-pkg-7f3 teeth=- outside=-",
+            "1 行の形は固定"
+        );
+        // ★**不成立は撃墜と別**（rc 101 を撃墜に数えないのと同じ極性）。1 行に別々に出る。
+        assert!(line.contains("unviable=3"), "測れなかった分が額面に出る");
+    }
+
+    /// 行を組む側に置く**実在しない** package 名（`s2-07l.82`）。実在の名を置くと、値が固定
+    /// 文字列に化けても歯が通る（fixture の字面と入力の衝突）。
+    const PROBE_SCOPE: &str = "probe-pkg-7f3";
+
+    /// mutant の test の timeout 秒（行 y・§33）。どの歯も値そのものは測らない（式は
+    /// `mutantsdiff.rs` の `mutants_diff_fail_fast_` の歯が pin する）ので 1 つの値で足りる。
+    const PROBE_TIMEOUT_S: u64 = 37;
+
+    /// [`crate::mutantsdiff::measure_args`] を 5 つの値で呼ぶ（timeout は [`PROBE_TIMEOUT_S`]・`--teeth` 無し）。
+    fn measure_args(
+        diff: &Path,
+        out: &Path,
+        scope: &str,
+        jobs: u64,
+        threads: u64,
+    ) -> (Vec<String>, crate::mutantsdiff::Scope) {
+        crate::mutantsdiff::measure_args(diff, out, scope, Pace { jobs, threads, timeout_s: PROBE_TIMEOUT_S }, None)
+    }
+
+    /// 名前から [`crate::mutantsdiff::Scope`] を得る唯一の道＝`-p` へ渡す引数を組むこと。
+    fn scope_of(name: &str) -> crate::mutantsdiff::Scope {
+        measure_args(Path::new("in.diff"), Path::new("out"), name, 1, 1).1
+    }
+
+    /// 変異の行は**何を測ったか**を末尾の `scope=` で名乗り、その値は呼び手が渡した名前
+    /// そのものである（`s2-07l.82`・行は出所から切り離されて流通するので限界は行に載せる）。
+    ///
+    /// 2 つの違う名前で撃つ——行を組む側が値を literal に差し替えると片方が必ず落ちる。
+    /// **`-p` へ渡す名前も同じ値**であることを [`measure_args`] で見る（行の `scope=` と実際に
+    /// 測った package が別々の読みで食い違わない・lens-82 MEDIUM-1）。
+    #[test]
+    fn mutants_diff_line_names_the_scope_it_was_given() {
+        let other = "probe-pkg-9c1";
+        let first = parse_outcomes(MISSED_TWO).expect("fixture は読める").line(&scope_of(PROBE_SCOPE), &[]);
+        let second = parse_outcomes(MISSED_TWO).expect("fixture は読める").line(&scope_of(other), &[]);
+        assert!(
+            first.ends_with(&format!(" scope={PROBE_SCOPE} teeth=- outside=-")),
+            "渡した名前を scope= に出す（その後ろは teeth= と outside= だけ・§34 / §39）: {first}"
+        );
+        assert!(second.ends_with(&format!(" scope={other} teeth=- outside=-")), "別の名前も同じ形で出す: {second}");
+        assert_ne!(first, second, "scope だけが違う 2 行は違う行になる");
+        // 既存 5 token の名前・順序は据え置き（scope はその後ろ・teeth・outside は末尾）。
+        let tags: Vec<&str> = first.split(' ').skip(1).filter_map(|t| t.split_once('=').map(|(k, _)| k)).collect();
+        assert_eq!(tags, ["total", "caught", "missed", "unviable", "timeout", "scope", "teeth", "outside"], "{first}");
+        // 「測る対象が無い」周の行も範囲を名乗る（unmeasured の経路は行を出さないので対象外）。
+        let none = without_outcomes(true).expect("rc 0 なら測る対象が無いだけ").line(&scope_of(other), &[]);
+        assert!(none.ends_with(&format!(" scope={other} teeth=- outside=-")), "{none}");
+        // `-p` の直後に来るのは渡した名前そのもの（literal でも core の NAME でもない）。
+        // `--in-diff` と `-o` も対のまま在る（落とすと測った結果を読まずに total=0 へ化ける）。
+        for scope in [PROBE_SCOPE, other] {
+            let (args, _) = measure_args(Path::new("probe.diff"), Path::new("probe-out"), scope, 3, 4);
+            let value_after = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str);
+            assert_eq!(value_after("-p"), Some(scope), "{args:?}");
+            assert_eq!(args.iter().filter(|a| *a == "-p").count(), 1, "package は 1 つだけ: {args:?}");
+            assert_eq!(value_after("--in-diff"), Some("probe.diff"), "{args:?}");
+            assert_eq!(value_after("-o"), Some("probe-out"), "{args:?}");
+            // **並列度も対のまま渡す**（設計 gate-cost.md §3.3）。落とすと器が受付で取った枠を
+            // 使わずに 1 本ずつ測り続け、費用は下がらないのに枠だけ押さえる形になる。
+            assert_eq!(value_after("--jobs"), Some("3"), "{args:?}");
+        }
+    }
+
+    /// 並列度は**器から来る値**であって、道具が持つ既定ではない（設計 gate-cost.md §3.3）。
+    ///
+    /// `--jobs` を渡さない周・読めない字面・0 は **1**（従来と同じ費用）へ落とす。速い側の
+    /// 既定を持つと、器を通さずに撃った周が host の memory を勝手に食う。
+    #[test]
+    fn mutants_diff_takes_the_jobs_from_the_caller_and_floors_at_one() {
+        let args = |line: &str| -> Vec<String> { line.split(' ').map(str::to_owned).collect() };
+        let jobs_in = |line: &str| {
+            let (built, _) = measure_args(
+                Path::new("d"),
+                Path::new("o"),
+                "p",
+                crate::mutantsdiff::jobs_of(&args(line)),
+                1,
+            );
+            built
+                .iter()
+                .position(|a| a == "--jobs")
+                .and_then(|i| built.get(i + 1))
+                .cloned()
+                .unwrap_or_default()
+        };
+        assert_eq!(jobs_in("--base main --jobs 4"), "4", "渡された値をそのまま渡す");
+        assert_eq!(jobs_in("--base main"), "1", "--jobs 無しは 1");
+        assert_eq!(jobs_in("--base main --jobs x"), "1", "数でない字面は 1");
+        assert_eq!(jobs_in("--base main --jobs 0"), "1", "0 の並列度では走らせない");
+        assert_eq!(jobs_in("--base main --jobs"), "1", "値の無い --jobs は 1");
+    }
+
+    /// 各 job の `cargo test` は既定で全 core に広がる（libtest の test-threads = core 数）ので、
+    /// `--jobs 4` の gate 1 本が 4 × 16 並列になる（設計 gate-cost.md §22・行 m・2026-09-16 の
+    /// load 57 / 16 core）。末尾に `-- --test-threads <t>` を足し、`t` は**器の受付が決めた値**
+    /// （`--threads`・設計 gate-cost.md §31 約束 7・行 w）をそのまま渡す。
+    ///
+    /// 末尾 4 語は `-- -- --test-threads <t>`（1 つ目の `--` で cargo-mutants から cargo test へ、
+    /// 2 つ目で cargo test から test binary へ・mutant の test は fail-fast＝`--no-fail-fast` は
+    /// 無い・行 y）。`--jobs` の値・`-p` / `--in-diff` / `-o` の対と順序はそのまま（`--jobs` を
+    /// `t` で上書きする誤配線との弁別）。
+    ///
+    /// `--teeth` を受けた周（設計 gate-cost.md §34・行 z）は nextest が引数を逐語で受けるので、末尾は
+    /// `--test-threads <t>` の 2 語で、その前は filter の式（2 つ目の `--` は無い）。**2 形を対で**見る。
+    #[test]
+    fn mutants_diff_threads_flag_tail_is_two_dashes_then_the_received_value() {
+        let teeth = ["probe_tooth_".to_owned()];
+        let pace = Pace { jobs: 4, threads: 6, timeout_s: PROBE_TIMEOUT_S };
+        let (named, _) =
+            crate::mutantsdiff::measure_args(Path::new("probe.diff"), Path::new("probe-out"), PROBE_SCOPE, pace, Some(&teeth));
+        assert_eq!(&named[named.len() - 3..], ["kind(lib) | kind(bin) | test(/^(probe_tooth_)/)", "--test-threads", "6"], "--teeth 在りは式の後ろに末尾 2 語: {named:?}");
+        assert_eq!(named.iter().filter(|a| *a == "--").count(), 1, "--teeth 在りの -- は 1 つ: {named:?}");
+        let (args, bound) = measure_args(Path::new("probe.diff"), Path::new("probe-out"), PROBE_SCOPE, 4, 6);
+        assert_eq!(&args[args.len() - 4..], ["--", "--", "--test-threads", "6"], "末尾 4 語: {args:?}");
+        assert_eq!(args.iter().filter(|a| *a == "--").count(), 2, "-- は 2 つ: {args:?}");
+        let value_after = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str);
+        assert_eq!(value_after("--jobs"), Some("4"), "--jobs は器から来た値のまま: {args:?}");
+        assert_eq!(value_after("-p"), Some(PROBE_SCOPE), "{args:?}");
+        assert_eq!(args.iter().filter(|a| *a == "-p").count(), 1, "package は 1 つだけ: {args:?}");
+        assert_eq!(value_after("--in-diff"), Some("probe.diff"), "{args:?}");
+        assert_eq!(value_after("-o"), Some("probe-out"), "{args:?}");
+        assert_eq!(bound.name(), PROBE_SCOPE, "-p へ渡した名前が Scope");
+        // 1 つ目の `--` の前に cargo-mutants 自身の引数が全部在り、順序も不変。
+        let dashes = args.iter().position(|a| a == "--").expect("-- が在る");
+        let mut last = 0;
+        for flag in ["--in-diff", "-p", "--no-shuffle", "--copy-vcs", "-o", "--jobs"] {
+            let at = args.iter().position(|a| a == flag).expect("cargo-mutants の引数が在る");
+            assert!(at < dashes, "{flag} は -- の前: {args:?}");
+            assert!(at > last, "{flag} の順序は不変: {args:?}");
+            last = at;
+        }
+    }
+
+    /// `t` は **受けた値そのもの**（`--jobs` の字面を echo する誤配線と、cores から導く配線の両方を撃つ）。
+    /// `--jobs` の値は `t` を変えても動かず、`t` は `--jobs` を変えても動かない（対は独立）。
+    #[test]
+    fn mutants_diff_threads_flag_is_passed_through_independently_of_jobs() {
+        let tail_of = |jobs: u64, threads: u64| {
+            let (args, _) = measure_args(Path::new("probe.diff"), Path::new("probe-out"), PROBE_SCOPE, jobs, threads);
+            let jobs = args.iter().position(|a| a == "--jobs").and_then(|i| args.get(i + 1)).cloned();
+            (args.last().cloned().unwrap_or_default(), jobs.unwrap_or_default())
+        };
+        assert_eq!(tail_of(4, 2), ("2".to_owned(), "4".to_owned()), "受けた 2 をそのまま");
+        assert_eq!(tail_of(4, 1), ("1".to_owned(), "4".to_owned()), "縮退の 1 もそのまま");
+        assert_eq!(tail_of(1, 16), ("16".to_owned(), "1".to_owned()), "jobs 1 でも t は受けた値（cores / 1 にしない）");
+        assert_eq!(tail_of(3, 5), ("5".to_owned(), "3".to_owned()), "対は独立");
+    }
+
+    /// `--threads` の既定は **1**（`--jobs` と同じ向き・設計 gate-cost.md §31 約束 7）: 渡さない周・数でない字面・
+    /// 0・値の無い flag は 1 へ落とし、cores から導かない（この歯の host の core 数に依らず 1）。
+    #[test]
+    fn mutants_diff_threads_flag_defaults_to_one_when_absent_or_not_a_number() {
+        let args = |line: &str| -> Vec<String> { line.split(' ').map(str::to_owned).collect() };
+        let threads_in = |line: &str| {
+            let (built, _) = measure_args(
+                Path::new("d"),
+                Path::new("o"),
+                "p",
+                crate::mutantsdiff::jobs_of(&args(line)),
+                crate::mutantsdiff::threads_of(&args(line)),
+            );
+            built.last().cloned().unwrap_or_default()
+        };
+        assert_eq!(threads_in("--base main --jobs 4 --threads 3"), "3", "渡された値をそのまま渡す");
+        assert_eq!(threads_in("--base main --jobs 4"), "1", "--threads 無しは 1（cores / jobs にしない）");
+        assert_eq!(threads_in("--base main --threads x"), "1", "数でない字面は 1");
+        assert_eq!(threads_in("--base main --threads 0"), "1", "0 の thread では走らせない");
+        assert_eq!(threads_in("--base main --threads"), "1", "値の無い --threads は 1");
+        assert_eq!(threads_in("--base main --threads --jobs 2"), "1", "次の flag を値に読まない");
+    }
+
+    #[test]
+    fn mutants_diff_reads_only_top_level_counts() {
+        // 入れ子に `"missed"` の字面が在っても数えない（file 全体を grep する形との弁別）。
+        // ★fixture の入れ子は **key として** 5 つとも `99` を持つ（値の中の字面ではない）。
+        // 深さ条件を消した実装はこの 99 を拾うので **1 行が丸ごと変わる**（lens 2026-09-11:
+        // 値に字面を置いただけの fixture では深さ条件を消しても緑＝空虚な歯だった）。
+        let counts = parse_outcomes(MISSED_NONE).expect("fixture は読める");
+        assert_eq!(
+            counts.line(&scope_of(PROBE_SCOPE), &[]),
+            "mutants-diff: total=23 caught=23 missed=0 unviable=0 timeout=0 scope=probe-pkg-7f3 teeth=- outside=-",
+            "入れ子の同名 key を 1 つも拾わない"
+        );
+    }
+
+    #[test]
+    fn mutants_diff_requires_every_count_to_be_written() {
+        // `missed` が書かれていない outcomes.json を 0 と読むと、「測って 0」と「書かれて
+        // いない」が同じ緑になる（lens 2026-09-11 MEDIUM）。
+        let partial = r#"{"total_mutants": 3, "caught": 3, "timeout": 0, "unviable": 0}"#;
+        assert!(parse_outcomes(partial).is_err(), "5 つ揃わない周は Err");
+    }
+
+    #[test]
+    fn mutants_diff_does_not_trust_counts_when_the_tool_failed() {
+        // ★baseline（変異を当てない木）の test が落ちた周も cargo-mutants は outcomes.json を
+        // 書く（`total_mutants=0`）。rc を捨てると、その 1 行は「測る対象が無い」周と **1 bit も
+        // 違わない緑**になる＝suite が壊れているときほど門が緑（lens 2026-09-11 H1）。
+        assert!(
+            measured(Counts::default(), false).is_err(),
+            "非 0 で終えて生存も時間切れも無い周は測定として受けない"
+        );
+        // 非 0 の理由が件数から**説明できる**周（生存が在る）は測定として受ける。
+        let survivors = Counts { total: 18, caught: 12, missed: 6, unviable: 0, timeout: 0 };
+        assert!(measured(survivors, false).is_ok(), "生存が在る非 0 は正常な測定");
+        assert!(measured(Counts::default(), true).is_ok(), "rc 0 は測定として受ける");
+    }
+
+    /// rc 2 の周の診断（`s2-07l.332`）: `baseline.log` の末尾は**末尾 N 行だけ・順序不変**で、
+    /// 空 file は「空」だと名乗る（空文字で写すと「末尾が無い」と「写していない」が同じ字面）。
+    #[test]
+    fn mutants_diff_baseline_tail_keeps_the_last_lines_and_names_an_empty_log() {
+        // 30 行の fixture。行の字面は入力にしか無い形（`probe-line-NN`）にして、末尾の**どの**行が
+        // 残ったかを番号で読む。
+        let log: String = (1..=30).map(|n| format!("probe-line-{n:02}\n")).collect();
+        let tail = baseline_tail(&log, BASELINE_TAIL_LINES);
+        let kept: Vec<&str> = tail.lines().collect();
+        assert_eq!(kept.len(), 20, "末尾 20 行だけ: {tail}");
+        assert_eq!(kept.first().copied(), Some("probe-line-11"), "先頭 10 行は落ちる: {tail}");
+        assert_eq!(kept.last().copied(), Some("probe-line-30"), "最終行は残る: {tail}");
+        // 順序不変（逆順で写すと `850 passed / 1 failed` の要約行が名前の前に来て読めない）。
+        let expected: Vec<String> = (11..=30).map(|n| format!("probe-line-{n:02}")).collect();
+        assert_eq!(kept, expected, "順序はそのまま");
+        assert!(!tail.contains("probe-line-10"), "21 行目より前は写さない: {tail}");
+        // 行数が閾値未満なら全行（切り詰めない）。
+        assert_eq!(baseline_tail("a\nb\n", BASELINE_TAIL_LINES), "a\nb", "短い log は丸ごと");
+        // 空 file は「空」と名乗る（空文字ではない）。
+        assert_eq!(baseline_tail("", BASELINE_TAIL_LINES), "baseline.log は空");
+        assert_eq!(baseline_tail("\n \n", BASELINE_TAIL_LINES), "baseline.log は空", "空白だけも空");
+    }
+
+    /// 「測れなかった」（`Err`・rc 2）周**だけ**に `baseline.log` の末尾が付く（`s2-07l.332`・
+    /// 設計 pipeline.md §5.3 の診断・憲法 C10）。測れた周（`Ok`）の緑に診断を残さない。
+    #[test]
+    fn mutants_diff_unmeasured_reason_carries_the_baseline_tail_only_when_the_tool_failed() {
+        // 字面は入力にしか無い形（実在の歯の名ではない）。
+        let tail = || "probe-tail-3e9: 850 passed / 1 failed\nprobe-tail-3e9: pipe::probe_test".to_owned();
+        // rc 非 0・生存も時間切れも無い＝baseline が落ちた疑い（`measured` の Err）。
+        let failed = diagnosed(measured(Counts::default(), false), tail);
+        let body = failed.expect_err("道具が落ちた周は Err のまま（rc 2 の極性は変えない）");
+        // 理由行 → 見出し → 末尾、の順（理由行が先頭に残る＝既存の 1 行が読める）。
+        assert!(
+            body.starts_with("cargo mutants が非 0 で終えたが"),
+            "理由行は先頭に据え置き: {body}"
+        );
+        let heading_at = body.find("\nmutants-diff: baseline.log の末尾:\n").expect("見出しが在る");
+        let tail_at = body.find("probe-tail-3e9: 850 passed").expect("末尾が在る");
+        assert!(heading_at < tail_at, "見出しの後に末尾: {body}");
+        assert!(body.ends_with("probe-tail-3e9: pipe::probe_test"), "末尾は最後まで写す: {body}");
+        // outcomes.json 不在で非 0 の周（`without_outcomes` の Err）も同じ形で付く。
+        let missing = diagnosed(without_outcomes(false), tail).expect_err("非 0 は Err");
+        assert!(missing.contains("mutants-diff: baseline.log の末尾:"), "{missing}");
+        // **負例**: 測れた周（rc 0・生存が在る非 0）には見出しも末尾も付かない＝`tail` は呼ばれない。
+        let never = || -> String { panic!("測れた周に baseline.log を読まない") };
+        let ok = diagnosed(measured(Counts::default(), true), never).expect("rc 0 は測定");
+        assert_eq!(ok, Counts::default(), "Ok の中身は不変");
+        let survivors = Counts { total: 18, caught: 12, missed: 6, unviable: 0, timeout: 0 };
+        let ok = diagnosed(measured(survivors, false), never).expect("生存が在る非 0 は測定");
+        assert_eq!(ok.missed, 6, "Ok の中身は不変");
+        let none = diagnosed(without_outcomes(true), never).expect("rc 0 は測る対象が無いだけ");
+        assert_eq!(none.line(&scope_of(PROBE_SCOPE), &[]), Counts::default().line(&scope_of(PROBE_SCOPE), &[]));
+        assert!(!none.line(&scope_of(PROBE_SCOPE), &[]).contains("baseline.log"), "緑の行に診断は載らない");
+    }
+
+    #[test]
+    fn mutants_diff_entry_point_refuses_without_base() {
+        // 配線（subcommand の入口）にも歯を 1 本置く。`--base` 無しは rc 2（使い方の誤り）。
+        assert_eq!(crate::mutantsdiff::run(&[]), ExitCode::from(2), "--base 無しは rc 2");
+        assert!(crate::USAGE.contains("mutants-diff"), "usage が subcommand を名指す");
+    }
+
+    /// `rules-diff`（設計 rules-manifest.md §4.3）の配線の歯。本体と判定の歯は `rules_diff.rs` に
+    /// 在るが、入口の 1 本は base に在るこの file へ置く（新規 module の歯だけに頼らない）。
+    #[test]
+    fn rules_diff_entry_point_refuses_without_base() {
+        assert_eq!(crate::rules_diff::run(&[]), ExitCode::from(2), "--base 無しは rc 2");
+        assert!(crate::USAGE.contains("rules-diff"), "usage が subcommand を名指す");
+    }
+
+    /// `deps-delta`（設計 rules-manifest.md §4・憲法 C13 の増分の門）の配線の歯。本体と判定の歯は
+    /// `deps_delta.rs` に在るが、入口の 1 本は base に在るこの file へ置く（新規 module の歯だけに頼らない）。
+    #[test]
+    fn deps_delta_entry_point_refuses_without_base() {
+        assert_eq!(crate::deps_delta::run(&[]), ExitCode::from(2), "--base 無しは rc 2");
+        assert!(crate::USAGE.contains("deps-delta"), "usage が subcommand を名指す");
+    }
+
+    /// `ledger-plan`（設計 ledger-form.md §3 の 5・行 b）の配線の歯。本体と判定の歯は `ledger_plan.rs` に
+    /// 在るが、入口の 1 本は base に在るこの file へ置く（新規 module の歯だけに頼らない）。
+    #[test]
+    fn ledger_plan_entry_point_refuses_without_epic() {
+        assert!(crate::ledger_plan::run(&[]).is_err(), "--epic 無しは Err（rc 1・plan を出さない）");
+        assert!(crate::USAGE.contains("ledger-plan"), "usage が subcommand を名指す");
+    }
+
+    #[test]
+    fn mutants_diff_rejects_broken_outcomes_json() {
+        // **壊れた JSON を 0 に化けさせない**。0 を返すと「母集団 0 の緑」が「歯は非空虚」と読まれる。
+        let failed = parse_outcomes(BROKEN);
+        assert!(failed.is_err(), "壊れた JSON は Err（0 ではない）: {failed:?}");
+    }
+
+    #[test]
+    fn mutants_diff_records_missed_while_the_line_is_disabled() {
+        let counts = parse_outcomes(MISSED_TWO).expect("fixture は読める");
+        // enabled=false（現行の manifest）: 生存が在っても **rc 0**＝検出線であって門ではない。
+        assert_eq!(verdict(&counts, false), ExitCode::SUCCESS, "検出線は門にしない");
+        // enabled=true（C5 の user 裁定が出た後）: 同じ 1 行のまま rc 1 へ倒れる。
+        assert_eq!(verdict(&counts, true), ExitCode::FAILURE, "裁定後は門になる");
+        // 生存 0 の周は enabled の値に関わらず rc 0。
+        let clean = parse_outcomes(MISSED_NONE).expect("fixture は読める");
+        assert_eq!(verdict(&clean, true), ExitCode::SUCCESS, "生存 0 は門でも通る");
+    }
+
+    #[test]
+    fn mutants_diff_reports_zero_when_there_is_nothing_to_measure() {
+        // diff に変異が 1 つも無い周（core を触らない便）: cargo-mutants は **rc 0** で終え
+        // 出力 dir を作らない。これは「**測る対象が無い**」であって「測れなかった」ではない。
+        let counts = without_outcomes(true).expect("道具が rc 0 なら測る対象が無いだけ");
+        assert_eq!(
+            counts.line(&scope_of(PROBE_SCOPE), &[]),
+            "mutants-diff: total=0 caught=0 missed=0 unviable=0 timeout=0 scope=probe-pkg-7f3 teeth=- outside=-",
+            "母集団を額面に出す（0 件の緑と読み違えないため）"
+        );
+        // **門でも通る**——測る対象が無い周を赤にすると、docs-only 便が恒久 FAIL になる。
+        assert_eq!(verdict(&counts, true), ExitCode::SUCCESS, "測る対象が無い周は赤にしない");
+    }
+
+    #[test]
+    fn mutants_diff_is_unmeasured_when_the_tool_fails() {
+        // 道具が非 0 で終わった周は「**測れなかった**」＝rc 2 の側に残す（0 に化けさせない）。
+        let failed = without_outcomes(false);
+        assert!(failed.is_err(), "道具の異常終了は Err（total=0 の緑にしない）: {failed:?}");
+    }
+
+    #[test]
+    fn mutants_diff_takes_the_deny_polarity_from_the_manifest_row() {
+        // **値は manifest に 1 つ**（憲法 C1）。道具の側に既定を持たない。
+        let disabled = "[[rule]]\nid = \"R-C12-1\"\nenabled = false\n\n[[rule]]\nid = \"R-C13-1\"\nenabled = true\n";
+        assert_eq!(deny_line_enabled(disabled), Some(false), "R-C12-1 の値を読む（隣の行に釣られない）");
+        let enabled = "[[rule]]\nid = \"R-C12-1\"\nenabled = true\n";
+        assert_eq!(deny_line_enabled(enabled), Some(true), "enabled=true は門");
+        // 行が無い周は**門にしない**側へ倒す（無い規則を勝手に発効させない）。
+        assert_eq!(
+            deny_line_enabled("[[rule]]\nid = \"R-C4-1\"\nenabled = true\n"),
+            Some(false),
+            "行が無ければ門にしない"
+        );
+    }
+
+    /// 行は在るのに `enabled` を読めない周は **`false` に化けない**（`s2-07l.80`）。
+    ///
+    /// `enabled` は manifest の必須 key（裁定 id `user 2026-09-11T23:59Z`）なので、これは
+    /// manifest が壊れている周である。`false` を返すと「不発効だと書かれている」周と同じ
+    /// 緑になり、極性を決める行が壊れているほど門が緩む。呼び手は `None` を rc 2 で止める。
+    #[test]
+    fn mutants_diff_cannot_read_the_polarity_when_the_row_has_no_enabled() {
+        let missing = "[[rule]]\nid = \"R-C12-1\"\nkind = \"MutationSurvivalLine\"\nruling = \"r\"\n";
+        assert_eq!(deny_line_enabled(missing), None, "enabled が無い行は「読めない」");
+        let typed = "[[rule]]\nid = \"R-C12-1\"\nenabled = \"true\"\n";
+        assert_eq!(deny_line_enabled(typed), None, "bool でない値も「読めない」");
+    }
+}

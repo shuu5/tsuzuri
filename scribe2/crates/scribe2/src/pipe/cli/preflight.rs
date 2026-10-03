@@ -1,0 +1,217 @@
+//! `pipe preflight` — 受付と同じ判定を run を作らず撃ち、契約の実態突合を planner が edit time に測る口（契約表の行 u・
+//! 設計 contract-source.md §21・SRS FR48・C16「逸脱は edit time に止める」）。
+//!
+//! 引数は `intake` と同じ（`--design <doc>#<id> --bead B --repo R [--state-dir S]`）。判定は受付の [`super::intake::judge`] の
+//! **同じ 1 本**（C2・2 本目を作らない）で、断りを最初の 1 件で止めず**全部**（判定関数 1 本につき高々 1 件）並べる。
+//! run dir・写し・event は一切書かず、宣言の写しは読むだけ・置き場は交差の読みにだけ使う。
+//!
+//! stdout は **1 行 1 事実**: `design=<doc>#<id> section=<n>` / `done-teeth=<present|absent>`（行が欄 done-teeth を持つか）/ `write-set=<declared|derived> files=<n>` /
+//! `teeth=<filter>:<本数>@<file,…>`（verify の nextest 行ごと）/ `headroom=<file>:<余地>/<file の見込み>`（余地の小さい順・
+//! 見込みは行の growth に在ればその値・無ければ size の見積・設計 contract-source.md §46）/
+//! `overlap=<live run>:<file,…>`（突き合わせた live な run ごと・交差 0 は `-`・置き場が無ければ `overlap=unmeasured`）/
+//! `entrance=green-on-base:<本数>/<行数>[ unmeasurable:<本数>]`（宣言が `detect` / `deny` を名乗る周だけ・契約の検証行を base
+//! の木で撃った結果・木は置き場の直下の一時の worktree で撃ち終えたら畳む・設計 pipeline.md §56）/
+//! `widen=<項目>@<doc>#<行 id>:<file,…>`（自分の行の § の本文が語として名指す型形の項目をほかの行が touches に持ち、その行の write-set が
+//! 自分の write-set の .rs の候補を覆わない組・項目の辞書順・読めない周は `widen=unmeasured:<理由>` の 1 行・rc と判定は変えない）/
+//! `index=unavailable:<語>`（索引を作れない周〔状態が failed〕で touches に型の項目を持つ行だけ・字面の閉包に縮退して通す・rc と判定は
+//! 変えない）/
+//! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]）/ 末尾に
+//! `preflight: <ok|refused n=<件数>|broken>`。rc = 0（断り 0）/ 1（断り ≥ 1）/ 2（読めない = `RC_BROKEN` の周）。
+//! `--state-dir` が無く git 設定からも解けない周は `overlap=unmeasured` を出し、rc は他の断りで決める（測れないを 0 に
+//! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
+
+use super::base_run::BaseRun;
+use super::intake::{ceiling_of, early, generated, judge, read_args, Denial, Judged, Material, Materials};
+use super::{flag, refused, state_dir_of};
+use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+use crate::pipe::refuse::covered;
+use crate::pipe::review::section_text;
+use crate::pipe::spawn::table_rows;
+use crate::pipe::{show_head, table};
+use crate::rules::manifest::Manifest;
+use crate::seat::ledger::DEFAULT_BD;
+use std::path::Path;
+
+/// 末尾の判定行の書き出し。
+const TAIL: &str = "preflight:";
+
+/// 閉包の広がりの予想の行の書き出し。
+const WIDEN: &str = "widen=";
+
+/// 置き場が無く交差を測れなかった周の行。
+const UNMEASURED: &str = "overlap=unmeasured";
+
+/// 空の file の列の字面（交差 0・歯の file 0）。
+const NONE: &str = "-";
+
+/// `pipe preflight`: judge だけを撃ち、事実と断りを stdout に並べる。
+pub(super) fn preflight(args: &[String], manifest: &Manifest) -> Outcome {
+    let (pointer, bead, repo) = match read_args(args) {
+        Ok(found) => found,
+        Err(denial) => return denial.outcome,
+    };
+    // 受付と同じ順（§56 形 2）: HEAD の sha を材料の読みの前に読む。読めない repo は judge が `not-a-repo` で断る。
+    let sha = super::head_of(&repo).unwrap_or_default();
+    let ceiling = match ceiling_of(manifest) {
+        Ok(found) => found,
+        Err(denial) => return denial.outcome,
+    };
+    // 受付と**同じ 1 本**で base の行から契約を組む（C2）。材料を読めない・行を引けない・表の検査に落ちる
+    // 周は判定の対象が揃わないので、受付と同じ断りをそのまま返して末尾に判定行を積む（0 件と混ぜない）。
+    // **repo の材料の読みは 1 回**（設計 dispatcher.md §5）。生成も判定も同じ 1 つを借りる。材料の読みの
+    // 断り（tracked を読めない・宣言が上限に外れる）は、`s2-07l.366` の前は [`generated`] の中で立って
+    // いた＝**末尾の判定行は同じ 1 本で積む**（C2・積み忘れると「対象が揃わなかった周」だけ末尾を失う）。
+    // 台帳の client は受付と同じ（`--bd` を明示した周はその名・無ければ既定の名・読むのは引用を持つ契約が出たときだけ）。
+    let bd = match flag(args, "--bd") {
+        Ok(found) => found.unwrap_or(DEFAULT_BD),
+        Err(reason) => return refused(reason),
+    };
+    // 置き場は交差と重複 run の 2 検査と base の木の置き場と索引の状態の読みにだけ要る。解けない周は断りでなく `overlap=unmeasured`
+    // （base の木を撃つ名乗りの周は全行が測れない）で、索引の状態は載せない（状態なし＝字面の閉包だけ）。
+    let state_dir = state_dir_of(args).ok();
+    let materials = match Materials::read(&repo, &ceiling.borrow(), bd) {
+        Ok(found) => match state_dir.as_deref() {
+            Some(dir) => found.indexed(dir, &repo, &sha),
+            None => found,
+        },
+        Err(denial) => return tailed(denial),
+    };
+    let (contract, teeth) = match generated(&repo, &pointer, &materials) {
+        Ok((found, body)) => (found, !crate::pipe::contract::done_teeth_in(&body).is_empty()),
+        Err(denial) => return tailed(denial),
+    };
+    let index = materials.index_tail(&contract.touches);
+    let early = early(&repo, manifest, &contract, state_dir.as_deref(), &sha);
+    let material = Material {
+        repo: &repo,
+        manifest,
+        contract: &contract,
+        state_dir: state_dir.as_deref(),
+        bead: &bead,
+        materials: &materials,
+        early: Some(&early),
+    };
+    let entrance = early.base.as_ref().map(BaseRun::fact);
+    let judged = judge(&material);
+    let widen = widen_lines(&repo, &sha, &pointer, &contract.write_set);
+    render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth))
+}
+
+/// `widen=<項目>@<doc>#<行 id>:<file,…>`（設計 reverse-index.md の閉包の広がりの予想）: 自分の行の § の本文が語として名指す型形の項目を
+/// touches に持つほかの行で、write-set が自分の write-set の .rs の候補〔接頭辞が無いか `+`・`+` は剥がす〕を覆わない組。HEAD の木の
+/// 契約表を読めない周は `widen=unmeasured:<理由>` の 1 行（理由は「ほかの行の touches」節と同じ字）。
+fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, own: &[String]) -> Vec<String> {
+    let unmeasured = |reason: String| vec![format!("{WIDEN}unmeasured:{reason}")];
+    let rows = match table_rows(repo, sha) {
+        Ok(found) => found,
+        Err(reason) => return unmeasured(reason),
+    };
+    let body = show_head(repo, &pointer.path)
+        .and_then(|text| table::find_row(&pointer.path, &text, &pointer.id).ok().map(|row| section_text(&text, &row.section)));
+    let Some(body) = body else {
+        return unmeasured(format!("{} の節を base から読めない", pointer.path));
+    };
+    let candidates: Vec<&str> = own.iter().filter_map(|item| rs_candidate(item)).collect();
+    let mut found: Vec<(&str, String)> = Vec::new();
+    let own_pointer = format!("{}#{}", pointer.path, pointer.id);
+    for (row, touches, write_set) in rows.iter().filter(|(row, _, write_set)| *row != own_pointer && !write_set.is_empty()) {
+        let missing: Vec<&str> = candidates.iter().copied().filter(|file| !covered(write_set, file)).collect();
+        if missing.is_empty() {
+            continue;
+        }
+        for item in touches.iter().filter(|item| names_type(item, &body)) {
+            let line = format!("{WIDEN}{item}@{row}:{}", missing.join(","));
+            if !found.iter().any(|(_, seen)| *seen == line) {
+                found.push((item.as_str(), line));
+            }
+        }
+    }
+    found.sort_by(|left, right| left.0.cmp(right.0));
+    found.into_iter().map(|(_, line)| line).collect()
+}
+
+/// write-set の項目が .rs の候補か（接頭辞が無いか `+`・`+` は剥がす・dir と .rs でない file は候補でない）。
+fn rs_candidate(item: &str) -> Option<&str> {
+    let file = item.strip_prefix('+').unwrap_or(item);
+    (file.ends_with(".rs") && !file.starts_with(['-', '~', '=', '+'])).then_some(file)
+}
+
+/// touches の項目が型形（末尾の段が大文字始まり）で、その末尾の段が `body` に語の境界で在るか。
+fn names_type(item: &str, body: &str) -> bool {
+    let name = item.rsplit("::").next().unwrap_or_default();
+    if !name.starts_with(char::is_uppercase) {
+        return false;
+    }
+    let is_word = |found: Option<char>| found.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+    body.match_indices(name).any(|(at, _)| {
+        let before = body.get(..at).and_then(|head| head.chars().next_back());
+        let after = body.get(at + name.len()..).and_then(|tail| tail.chars().next());
+        !is_word(before) && !is_word(after)
+    })
+}
+
+/// 判定の対象が揃わなかった周の断りに**末尾の判定行**を積む（judge を撃てないので事実の行は無い）。
+///
+/// 末尾は **rc に従う**（読めない = broken・撃てない = 断り 1 件）。行の欠陥は「読めない」ではない。
+fn tailed(denial: Denial) -> Outcome {
+    let mut outcome = denial.outcome;
+    let tail = if outcome.rc == RC_BROKEN { format!("{TAIL} broken") } else { format!("{TAIL} refused n=1") };
+    outcome.out.push(tail);
+    outcome
+}
+
+/// judge の結果を 1 行 1 事実に描く。`measured` は置き場が在った（交差を撃った）か。`facts` は base の木で撃った周の欄 `entrance` と、
+/// 索引を作れない周の尾 `index=unavailable:<語>`（設計 reverse-index.md §7 (b)）。`tail` は閉包の広がりの行と、行が欄 `done-teeth` を持つか
+/// （`done-teeth=present|absent`・`design=` の行の次・設計 contract-source.md §66 行 bx）。
+fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String>), tail: (Vec<String>, bool)) -> Outcome {
+    let (entrance, index) = facts;
+    let (widen, teeth) = tail;
+    let mut out: Vec<String> = Vec::new();
+    if let Some((design, section)) = &judged.design {
+        out.push(format!("design={design} section={section}"));
+        out.push(format!("done-teeth={}", if teeth { "present" } else { "absent" }));
+    }
+    if let Some((kind, files)) = judged.write_set {
+        out.push(format!("write-set={} files={files}", kind.as_str()));
+    }
+    for (filter, files) in &judged.teeth {
+        out.push(format!("teeth={filter}:{}@{}", files.len(), listed(files)));
+    }
+    if let Some(found) = &judged.headroom {
+        out.extend(found.rooms.iter().map(|(file, room)| format!("headroom={file}:{room}/{}", found.estimate(file))));
+    }
+    if !measured {
+        out.push(UNMEASURED.to_owned());
+    }
+    if let Some(found) = &judged.overlap {
+        out.extend(found.runs.iter().map(|(run, files)| format!("overlap={run}:{}", listed(files))));
+    }
+    out.extend(entrance);
+    out.extend(index);
+    out.extend(widen);
+    out.extend(judged.denials.iter().map(refuse_line));
+    let broken = judged.denials.iter().any(|denial| denial.outcome.rc == RC_BROKEN);
+    let (rc, tail) = match (judged.denials.len(), broken) {
+        (0, _) => (RC_OK, "ok".to_owned()),
+        (_, true) => (RC_BROKEN, "broken".to_owned()),
+        (count, false) => (RC_REFUSED, format!("refused n={count}")),
+    };
+    out.push(format!("{TAIL} {tail}"));
+    Outcome { out, err: Vec::new(), rc }
+}
+
+/// `refuse=<名>:<理由>` の 1 行（stderr の行の `pipe: ` を剥がし、理由の後ろに並ぶ行〔交差の全組・余地の残り〕は
+/// ` / ` で同じ行に続ける＝1 断り 1 行）。
+fn refuse_line(denial: &Denial) -> String {
+    let reasons: Vec<&str> = denial.outcome.err.iter().map(|line| line.strip_prefix("pipe: ").unwrap_or(line)).collect();
+    format!("refuse={}:{}", denial.name, reasons.join(" / "))
+}
+
+/// file の列を 1 つの語に（空は [`NONE`]）。
+fn listed(files: &[String]) -> String {
+    if files.is_empty() {
+        NONE.to_owned()
+    } else {
+        files.join(",")
+    }
+}

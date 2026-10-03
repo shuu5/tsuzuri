@@ -1,0 +1,547 @@
+# 設計: rules manifest — 規則の種類は閉じた enum・値は tracked な TOML 1 file
+
+- 要件: [FR17](../../design-intent/spec/srs.html#FR17) rules manifest / [FR18](../../design-intent/spec/srs.html#FR18) rules の検査 / [AC6](../../design-intent/spec/srs.html#AC6) / [NFR3](../../design-intent/spec/srs.html#NFR3) 依存 0 本 / [NFR4](../../design-intent/spec/srs.html#NFR4) fail-closed。制約: CON2（PUBLIC）/ CON3（歯は Rust だけ）
+- 憲法: [C1](../../design-intent/spec/constitution.html#c1) 規則はデータ / [C5](../../design-intent/spec/constitution.html#c5) 規則変更 = manifest diff + 裁定 id / [C12](../../design-intent/spec/constitution.html#c12) 外形 snapshot / [C14](../../design-intent/spec/constitution.html#c14) 規律の 2 面 / [§3](../../design-intent/spec/constitution.html#s3-rules-rows) rules 行の初期値
+- 決定: [ADR-0004](../../design-intent/decisions/ADR-0004-mvp-persistence-and-cross-version-formats.html) §2.3（TOML subset・std だけの scanner・binary への埋め込み）
+- この設計から出る契約: `s2-chg`（rules manifest）。後続の契約は末尾「後続」に列挙する。
+
+## 1. 何を解くか
+
+規則の**種類**を Rust の閉じた型で持ち、規則の**値**（閾値・有効 / 無効・裁定 id・裁定時刻）を repo 内の TOML 1 file に置く。機械が実行時に読む規則はこの file だけである（C1）。**行はすべて user の裁定 id を持つ**（C5・裁定 id の無い行は loader が拒む）。AI が提案した数値は、user の裁定を得てから行にする。憲法 §3 の表は「manifest が存在しない間の唯一の存在箇所」と自らを定義しているので、本設計で manifest が生まれた時点から §3 の各行は manifest の写しになる。写しと正本の drift は C14.2 が CI の歯で止めると定めているが、その歯は本設計の射程外（後続）である。
+
+やさしく言うと: 「何を守るか」の一覧は Rust の enum に、「いくつまでか」の数字は TOML に書く。数字を書く行には必ず user がいつ決めたかを添える。
+
+## 2. crate の形（本設計で決める・4 設計 doc に共通）
+
+- `crates/<NAME>/` は **lib target + bin target** にする。lib は `src/lib.rs`（`pub mod rules;` 等の module 列挙）、bin は薄い `src/main.rs`（引数の dispatch と出力層 `emit` / `emit_err` だけ）。統合 test は lib の `pub` API と `env!("CARGO_BIN_EXE_<NAME>")` の binary の両方を叩く。
+- lib target の名前は `[lib] name` で **NAME の字面を含まない別名**（例: `vessel`）にする。理由: `cargo xtask check` の `name-literal` は `crates/*/src` の `.rs` に NAME の字面が `name.rs` 以外に無いことを測るので、`main.rs` が `use <NAME>::…` と書くと落ちる。`manifest-name` は `[package] name` だけを見るので `[lib] name` は自由（実測: xtask `check.rs` の `core_package_field("name")`）。
+- `name.rs` は lib へ移す（NAME の字面を持つ `.rs` は引き続き 1 本）。
+- 出力層: stdout は `emit`、stderr は `emit_err`（`#[expect(clippy::print_stderr, reason = …)]`・xtask と同形）。**`emit_err` は本 leg で core crate に新設する**（現状は xtask にしか無い）。
+- 統合 test は `crates/<NAME>/tests/e2e/main.rs` の **1 target**（`mod rules; mod fleet; …` の module 形）。憲法 R-C13-2「統合 test file 3 以下」は cargo の integration test **target** の数で数える（`tests/<dir>/main.rs` は 1 target・実測: `cargo metadata` の targets は bin 1 + test 1・解釈の記録は ADR-0007）。tmp dir は std だけの helper を `tests/e2e/main.rs` に 1 本置く（`tempfile` は A3 ゆえ足さない・xtask `check.rs` の `make_tmp_dir` と同形）。
+- 外形（CLI の usage / 1 行出力の形）は insta snapshot 1 本で固定する（C12.5・既存の `doctor_external_form` と同形）。
+
+## 3. 型（`rules` module）
+
+- `pub enum RuleKind` — **閉じた列挙・`#[non_exhaustive]` 禁止**。variant を足したら網羅 `match` が compile error になる形を保つ（C1 / C11）。variant は §4.1 の行と 1:1。
+- `pub const ALL: &[RuleKind]` — parity test の母集団。
+- `pub enum RuleValue { Int(u64), Str(String), Policy(String), List(Vec<String>) }`。`Int` = 閾値（単位は kind の doc コメント）。`Str` = 識別子（対話面の identity）。`Policy` = 散文で書かれた選定規則や検出線の定義（機械は `enabled` だけを読む。本文は憲法 §3 の写し）。`List` = 文字列の列（allowlist・共通 verify のような**順序のある複数値**・ADR-0009）。**空の配列は受けない**——「規則が無い」を空で表せると、書き間違いの `value = []` が空の allowlist を効かせる。要素の空文字も受けない（何もしない口を規則の顔で並べない）。配列を**切る**実装（`elements` / `quoted_once`）は `rules::manifest` の 1 組で、`pipe` の契約 file もこれを呼ぶ（同じ入力を別々に切って、区切り忘れの扱いが片側だけ直る事故を防ぐ）。ただし切った後の**方針**——空を拒むか・要素の空文字を拒むか・違反を全件集めるか最初の 1 件で止めるか——は呼び手ごとに違い、manifest 側は `list`、契約 file 側は`value_of` が持つ（**方針の層は 1 本ではない**・畳むなら別便）。
+- `pub trait Rule { fn kind(&self) -> RuleKind; fn validate(&self) -> Result<(), RuleError>; }` を `RuleRow` に実装。kind ごとの値型の対応は **`match kind { … }` 1 箇所・wildcard `_` 無し**。
+- `pub struct RuleRow { id, kind, value, enabled, ruling: String, ruled_at: String, line: u64 }`。
+- `RuleError` は `Display` で **1 件 1 行・`line=<N>` を含む**。
+- **閉じた enum と const slice の突合**（`s2-07l.177`）: xtask の enum-slices は集合の一致に加えて**順序**（同じ添字で同じ名）も測り、順序違いを添字付きで名指す。極性を持つ境界（`crates/*/src` の `const <NAME>: Polarity` の宣言 site・名は `POLARITY` に限らず〔現物は別名 5 件〕、`impl <Type> {` の中の関連 const は crate::<mod>::<Type>::<NAME> の path で数える）は `Guard` の網羅 match が参照する path の集合と両方向で突合し、guard でない境界は `polarity.rs` の閉じた const slice（`NOT_A_GUARD`・型は `&[Polarity]`・要素は site の path）に載せる（doc コメントで除外しない）。site も arm も 0 の木は 0 で通す（enum-slices の母集団 0 と同じ）。
+- **生成区間の 2 面**（`s2-07l.173`・憲法の区間は ADR-0046 で生成 file `docs/constitution.md` へ移り、`CLAUDE.md` に残るのはその file を名指す pointer 行だけである）: `CLAUDE.md` の「done の定義」も `.github/workflows/ci.yml` の `run: cargo …` 行（job の宣言順・`${{ … }}` の穴は引用符ごと `<base>`）から xtask が生成する区間（`<!-- done:begin -->` … `<!-- done:end -->`）にし、tracked との差分を xtask check の `claude-md-done` が落とす（違う行を両側の字面で名指す）。正本を CI の側に置くのは、CI の定義が job の条件と cache の行を持ち逆向きの生成にならないからである。生成区間の外の規範行（散文の門と同じ印・pointer 無し）は検出線 `claude-md-prose=<該当行>/<区間外の非空行>` が件数を出す（rc は変えない・deny 化は C12.4 の型で裁定を経る）。
+
+## 4. manifest（`rules/manifest.toml`・tracked・repo root 直下）
+
+TOML subset（先頭に `schema = 1`・`[[rule]]` の array-of-tables・値は string / integer / bool と**文字列の配列**〔1 行で閉じる〕・未知 key は拒否）。loader は std だけで書く（ADR-0004 §2.3・NFR3）。
+
+```toml
+schema = 1
+
+[[rule]]
+id = "R-C4-1"
+kind = "CoreLines"
+value = 20000
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+```
+
+| key | 型 | 必須 | 意味 |
+|---|---|---|---|
+| `id` | string | 必須・一意 | 行 id。§3 の行は `R-<条>-<番号>`、compound 行は `R-<条>-<番号>.<key>`（§3 の行 id が**接頭辞**として一致）、MVP の運用値は `<領域>.<名>` |
+| `kind` | string | 必須 | `RuleKind` の variant 名（字面一致） |
+| `value` | integer / string / 文字列の配列 | 必須 | kind が定める型。`Policy` は string、`List` は 1 行で閉じる string array（空・空要素は loud） |
+| `enabled` | bool | **必須** | false = 値は写すが機械は効かせない（停止・v3 送り）。省略は拒む（裁定 `user 2026-09-11T23:59Z`）＝書き忘れた行を true で埋めると、発効が既定に化ける |
+| `ruling` | string | **必須** | 裁定 id。憲法 §3 と同じく裁定文書の論点番号、または裁定の UTC ts |
+| `ruled_at` | string | **必須** | 裁定の日付（UTC・分秒が資料に無ければ日まで） |
+
+**書かない key**: user 逐語（PUBLIC・CON2）。**置かない行**: 値が未定の行・実装が無い seam の行（rtk / graphify のモード・C10.3「未 wire の設定」）・AI が置いただけで裁定の無い行。
+
+**行の読み手と 2 面の突合**（`cargo xtask check` の検出線・deny 化は rules 行と裁定 id で行う）: enabled な行のうち `crates/*/src` に const の値として現れ使われる読み手が無い行は `rules-wired` が名指す（`s2-07l.160`・fact は `rules-wired=<読み手の無い本数>/<enabled の本数> ids=<列>`・宣言側の 4 file〔`rules/mod.rs` / `rules/manifest.rs` / `genmanifest.rs` / `rules_diff.rs`〕・test 区間・`enabled = false` の行は母集団外・rc は変えない）。憲法 §3 の `<tr id="r-…">` の id 集合と manifest の `R-…` 行の接頭辞集合は `rules-parity` が双方向に突合し、片側だけの id を名指す（`s2-07l.164`・運用行は母集団外・HTML の読み手は `claude_md.rs` を共有する）。畳み方（.164 run 1 審査 FAIL 2026-09-16「契約の畳み方と §4.1 の行が食い違う」の解として本文に置く）: manifest の id は **§3 の行 id の形 `R-<条>-<番号>`（`^R-C\d+(\.\d+)?-\d+`）に一致する接頭辞**だけを畳む（compound 行 `R-C4-4.fn-lines` → `R-C4-4`）。その形を持たない `R-…` 行（現物: `R-C4.line-width`・§3 に対応する行 id が無い）は**自身の id のまま manifest-only に数える**（`R-C4` に畳まない・0 に潰さない）。現物の期待値 = `doc-only=0 ids=-` / `manifest-only=1 ids=R-C4.line-width`（両方とも検出線の記録で rc は変えない・`R-C4.line-width` の id の形を §3 の行に揃えるかは憲法 §3 の行の追加＝user 裁定・別便）。`R-C13-1.per-pr` / `R-C13-1` の読み手は `xtask deps-delta`（`--base` との直接依存の差分・超えれば PR の入口で落ちる）で、依存を足した便の `check-delta-ms` は検出線として判定行に残る（`s2-07l.161`）。`deps-delta` の判定行は 1 形 `deps-delta: base=<sha> added=<n> limit=<R-C13-1.per-pr> total=<n> budget=<R-C13-1> ids=<列|-> check-delta-ms=<ms|skipped|-> check-limit-ms=<R-C13-1.check-delta-ms>`（直接依存は (section, crate 名) の対・節の分類は check の `deps-empty` と同じ 5 形・base に無い `Cargo.toml` は空集合）。rc は **deny の面だけ**で決まる: `added` が per-pr を超える、または `total` が budget を超えれば rc 1、そうでなければ rc 0。`check-delta-ms` は C13.5 の検出線で、`added` = 0 の便は `skipped`、測れなかった便（cargo を spawn できない・base か HEAD の `cargo check` が rc 非 0）は **`-`** で判定行に残し stderr の診断 1 行を添えるだけで rc に触れない（測れなかった compile 秒で PR を止めない・`-` は数値でないので測定に化けない = C10）。rc 2 は §4.3 と同じく**突合の鍵が壊れた周だけ**（`--base` 不在・base の sha が解けない・HEAD の `Cargo.toml` が読めない）で、判定行を出さず `deps-delta: unmeasurable reason=<base-unreadable|head-unreadable>` を stderr へ出す。 閉包の面: `Limits` の読み手は無い行を拒むので、check の歯の fixture（`check_tests.rs` の `rules_manifest`）が実 repo と同じ閾値の行を持つ＝行を足す便は fixture に同じ 2 行を足す。CI の run 行を足す便は CLAUDE.md の done 区間（`gen-claude-md` の生成物・`claude-md-done` の drift 歯）を同じ PR で再生成する（手編集しない）。PUBLIC 面の門 `private-clean` の needle は **4 形**（email / users-path / ledger-id-v1 / state-dir-path・閉じた enum の variant 1 つずつ・§11・`s2-07l.174`）。
+
+**core の大きさの 2 measure**（[core-boundary.md](./core-boundary.md) §2 / §5・ADR-0033・`s2-07l.198` 行 a）: `core-lines`（R-C4-1）の母集団は core crate の `src` の**本体**＝各 file の最初の行頭 `#[cfg(test)]` より前で、名が tests.rs か _tests.rs で終わる file（`#[path]` で外出しした歯の file）は丸ごと test 区間＝本体 0 行（R-C4-3 の src 側と同じ切り方・名の弁別は xtask の 1 本の述語で flip-check と rules-wired と env-reads も同じものを呼ぶ・in-file の歯は R-C4-3 だけが数える＝二重計上の解消・値と幅の正規化は不変・§16）。契約表の上限の余地（[contract-source.md](./contract-source.md) §3）の core の合計も同じ切り方で数える（行頭 `#[cfg(test)]` の印で切り、名が tests.rs か _tests.rs で終わる file は本体 0 行＝gate の core-lines と同じ合計・§18 行 o・file の余地は全体のまま・印と名の弁別の式は core と xtask の 2 か所で、同じ fixture の歯が一致を守る）。`core-spawn=<件数>/<file 数>` は core の `src` の**本体**（core-lines と同じ切り方）で `Command::new` を含む行を数え、1 以上を deny する（rules 行を持たない 0 固定の shape 検査・歯の区間の起動は数えない・[core-boundary.md](./core-boundary.md) §9 行 i・ADR-0062）。境界 crate の側は `boundary-spawn=<件数>/<file 数>`（同じ切り方・持つ file が 2 本以上で deny・rules 行を持たない）と `boundary-lines=<本体の行数>/<R-C4-5>`（超えれば deny）で、境界 crate の dir が無い木はどちらも出さない。
+
+### 4.1 初期行（§3 の写し + MVP の運用値・全行に裁定 id）
+
+| id | kind | value | enabled | 裁定（ruling / ruled_at）・design-intent 側の出所 |
+|---|---|---|---|---|
+| `R-C4-1` | CoreLines | 90000 | true | user 裁定 2026-10-03T05:09Z（A2・行の審査の cap-headroom と日次の検出と書き込みの検出線の見込みの余地・§23 行 t）・前値 82000 = user 裁定 2026-10-01T04:49Z（A2・契約 27 本と上限の許可の見込みの余地・§21 行 r）・前々値 74000 = user 裁定 2026-09-30T05:26Z（A2・束 E の見込みの余地・§20 行 q）・3 つ前の値 66000 = user 裁定 2026-09-29T00:59Z（A2・束 A・D・E の実装の余地・§19 行 p）・4 つ前の値 60000 = user 裁定 2026-09-15T11:2xZ（A2・**一時的**な緩和・s2-07l notes）・定期 refactor は .198（その前 40000 = user 裁定 2026-09-14〔A2・s2-07l notes〕・初期値 20000 = 論点 2 / 2026-09-07・憲法 §3）・**母集団は core crate の src の本体だけ**（in-file の歯〔`#[cfg(test)]` 区間〕は数えない＝R-C4-3 が数える側・user 裁定 2026-09-15・ADR-0033・[core-boundary.md](./core-boundary.md) §2） |
+| `R-C4-2` | ModuleLines | 1500 | true | 同上 |
+| `R-C4-3` | TestSrcRatioPct | 100 | true | 同上（比 1.0 = 100%） |
+| `R-C4-4.fn-lines` | FnLines | 60 | true | 同上 |
+| `R-C4-4.complexity` | FnComplexity | 15 | true | 同上 |
+| `R-C4-4.args` | FnArgs | 5 | true | 同上 |
+| `R-C4.line-width` | LineWidth | 120 | true | user 裁定 2026-09-14（s2-07l notes・逐語「推奨で良い」）・**行の数え方の正規化**: 1 行の文字数が値を超える行は ceil(文字数 ÷ 値) 行に数える（値以下の行は 1 行）。R-C4-1 / R-C4-2 / R-C4-3 の行数（xtask check の core-lines / file-lines / test-src-ratio）と契約表の上限の余地（[contract-source.md](./contract-source.md) §3）が同じ式で数える＝1 行に詰め込んでも上限は逃げない。式は core と xtask の 2 か所（互いに依存しない）に在り、同じ fixture の歯が一致を守る。契約 = 台帳 `s2-07l.254` |
+| `R-C4-5` | BoundaryLines | 316 | true | user 2026-09-15T10:07Z / 2026-09-15（[core-boundary.md](./core-boundary.md) §3 / §9 行 i・ADR-0033・ADR-0062・契約 = 台帳 `s2-07l.600`）。**境界 crate の src の本体の総行数の上限**（行）: core-lines と同じ切り方と幅（R-C4.line-width）で数え、`cargo xtask check` の `boundary-lines` が超えた周を deny する。値は行 i の便の base で測った本体 263 行の 1.2 倍の切り上げ。core の外へ判定を押し出して core-lines から逃げる形を塞ぐ fence。読み手は xtask の `limits.rs`（`Limits` を literal で組む歯を動かさないため field でなく同じ読み手が返す 2 つ目の値・行の欠けは check を止める）。憲法 §3 の cell は folio-architect の別の周（rules-parity は検出線） |
+| `pipe.size_s_lines` / `pipe.size_m_lines` / `pipe.size_l_lines` | PipeSizeSLines / PipeSizeMLines / PipeSizeLLines | 100 / 300 / 800 | true | user 裁定 2026-09-14（s2-07l notes・逐語「推奨でよいのだが…」）・契約表の行の `size`（S / M / L）↔ 1 file あたりの増分の見積（行）。契約表の上限の余地（contract-source.md §3）が読む。契約 = 台帳 `s2-07l.249` |
+| `review.same_kind_stop` | ReviewSameKindStop | 2 | true | user 2026-09-16T05:53Z / 2026-09-16（[contract-source.md §23](./contract-source.md)・契約 = 台帳 `s2-07l.396`）。同型の審査 FAIL で run N+1 を止める回数（本）: 受付（`pipe intake` / `pipe preflight`）は同じ bead の便を新しい順に読み、同じ理由の型（§22 の `FindingKind`・`unparsed` は数えず連鎖も切らない）の FAIL が PASS で途切れるまでこの本数続き、契約 file と節の本文がともに不変の周を `same-kind-repeated` で断る（焼き直しは書き直す）。読み手は受付の 1 か所（`pipe/cli/intake.rs`）で、行の無い manifest は受付を 1 byte も動かさない（rc 2・`pipe.land_wait_s` と同じ極性）。宣言順の末尾 |
+| `pipe.max_live` | PipeMaxLive | 16 | true | user 2026-09-16T11:14Z / 2026-09-16（[gate-cost.md §24](./gate-cost.md)・ADR-0035・契約 = 台帳 `s2-07l.398`）。host で同時に走る便（live な便）の本数の最大値（本）: 受付（`pipe intake` / `pipe preflight`）は便を作る前に交差と同じ live の判定で置き場の live な便を数え、本数 ≥ 値の周を `max-live`（`live=` と `cap=` の 1 行・rc 1）で断る。live を読めない便が在る周は `write-set-unreadable`（rc 2）。走行中の便には効かず、`pipe resume` と追随の起こし直しは数えない。読み手は受付の 1 か所（`pipe/cli/intake.rs`）で、行の無い manifest は受付を動かさない（rc 2・`review.same_kind_stop` と同じ極性）。一時的な引き下げは値の改訂（裁定 id 付きの PR）でだけ行う |
+| `flip.docs_only_faces` / `flip.marks_per_pr` | FlipDocsOnlyFaces / FlipMarksPerPr | `["docs/", "design-intent/", ".beads/", "README.md", "CLAUDE.md"]` / 16 | true | user 2026-09-22T06:48Z / 2026-09-22（[pipeline.md §7](./pipeline.md)・契約 = 台帳 `s2-07l.170`）。入口の flip check（`cargo xtask flip-check`）の免除経路の上限（List 1 本・Int 1 本）: `.rs` の差が無い便は動いた path が全部この面（`/` で終わる要素は接頭辞・他は完全一致）の中のときだけ `docs-only=N` で通り、面の外を含めば `no-test-diff`。便が足した札（`retroactive` / `moved`）の本数がこの値を超えれば `too-many-marks`。読み手は xtask の `limits.rs` の `FlipLimits` 1 本（`Limits` の 12 本とは別の型＝check / deps-delta の読み手と歯の fixture は動かない）で、行を読めない manifest は flip-check を `infra-error` で止める。宣言順の末尾 |
+| `host.runnable_per_core` / `host.blocked_per_core` | HostRunnablePerCore / HostBlockedPerCore | 4 / 1 | true | user 2026-09-20T15:23Z / 2026-09-20（[gate-cost.md §32](./gate-cost.md)・契約 = 台帳 `s2-07l.504` の行 x）。器の健康の遮断器の **core あたりの倍率**（Int 2 本）: 閾値 = 値 × 実測の core 数で、走行可能（`/proc/loadavg` の 4 番目の欄の分子）か待ち（`/proc/stat` の `procs_blocked`）がこれを超えた周は verify の行を撃つ前に空くまで待つ（上限は `gate.slot_wait_s`・超えた周は撃たずに INCONCLUSIVE）。絶対値でなく倍率なのは core 数の違う host で同じ意味にするため。読み手は `pipe/cli/step.rs` の `limits_of` 1 つ（`gate.slot_wait_s` と同じ形・行の無い manifest は gate / land が rc 2 で止まる） |
+| `detection.daily_min_s` | DetectionDailyMinS | 86400 | true | user 2026-10-03T01:49Z / 2026-10-03（[gate-cost.md §50](./gate-cost.md)・[ADR-0111](../../design-intent/decisions/ADR-0111-the-detection-line-runs-once-a-day-from-the-detection-origin.html)・契約 = 台帳 `s2-07l.736.34`）。検出線を起こす間隔の下限（秒・Int）: land の終端は検出の起点の fired からこの秒が過ぎた周だけ着地後の検出の口を起こし、内の周は起こさず `detection:deferred` を記す。口は前に測り終えた着地から今の着地までの便をまとめて 1 回撃つ。読み手は land の終端と口の 1 本（`pipe/land/detection/origin.rs`・`int_row` を通す）で、行を読めない manifest（無い・不発効・整数でない）は着地ごとに起こす今の形のまま。`pipe.land_wait_s` の直後 |
+| `R-C7-1` | DialogueSurface | `"user-direct"` | true | ADR-0003 / 2026-09-09・憲法 §3 |
+| `R-C8-1` | MaturityCondition | Policy（§3 の文） | **false** | 論点 9・ADR-0003 / 2026-09-09（停止・履歴） |
+| `R-C9-1` | AccountSelection | Policy（§3 の文） | **false** | 論点 8・U5 / 2026-09-07（口座は v3） |
+| `R-C12-1` | MutationSurvivalLine | Policy（§3 の文） | **false** | 論点 7 / 2026-09-07（検出線は未配線） |
+| `R-C13-1` | DepBudget | 12 | true | 論点 3・4 / 2026-09-07 |
+| `R-C13-1.per-pr` | DepPerPr | 1 | true | 同上 |
+| `R-C13-1.check-delta-ms` | CheckDeltaMs | 300 | true | 同上 |
+| `R-C13-2` | CompileShape | Policy（**§3 の逐語**・target 数で数える解釈は §2 に置き manifest には書かない） | true | 同上 |
+| `R-C13-3` | CompileSeconds | Policy（§3 の文） | **false** | 同上（検出線は未配線） |
+| `gate.lens_count` | GateLensCount | 1 | true | grill U3 / 2026-09-07・SRS scope「lens 1 本」 |
+| `gate.token_cap` | GateTokenCap | 150000 | true | user 2026-09-15T23:31Z（s2-07l.209 の着地後に一時の上げを戻す = s2-07l.376 = 行 i / 2026-09-20・上げは s2-07l.375 = 行 h・前例 s2-07l.265 / .267・元の値 150000 = grill U3 / 2026-09-07）・SRS NFR1（目標値 150000） |
+| `R-C6-1` | RunTokenCeiling | 25000000 | true | user 2026-09-23T07:16Z / 2026-09-23（[gate-cost.md §43](./gate-cost.md)・契約 = 台帳 `s2-07l.172`・契約表の行 aj）。便ごとの token 消費の**検出線**（token）: `pipe show --run` が便の消費の event の 4 値（in / out / cache_read / cache_create）の和がこの値以上の便にだけ `cost-ceiling: over` の 1 行を出し、行を読めない周は `cost-ceiling: unmeasured` を出す。読み手は `pipe/cli/show.rs` の 1 か所で、受付・spawn・gate・land・driver は読まない（断らない・停止は別の裁定） |
+| `hook.budget_ms` | HookBudgetMs | 2000 | true | SRS NFR5 の user 承認 / 2026-09-09・要件カタログ R-K22 |
+| `pipe.stop_grace_ms` | StopGraceMs | 2000 | true | user 2026-09-09T09:08Z / 2026-09-09 |
+| `fleet.lock_retry_ms` | LockRetryMs | 5000 | true | user 2026-09-09T09:08Z / 2026-09-09 |
+| `fleet.lock_stale_ms` | LockStaleMs | 30000 | true | user 2026-09-09T09:08Z / 2026-09-09 |
+| `fleet.usage_fresh_s` | UsageFreshS | 300 | true | user 2026-09-16T11:14Z / 2026-09-16（[account-autonomy.md §13](./account-autonomy.md)・契約 = 台帳 `s2-07l.407`）。選定の前計測の鮮度（秒）: `fleet select` は最新の回が全部実測でその ts が `now − 値` より新しい口座を測り直さず、測り直した口座が読みに届かなかった（`http_status` / `timeout`）周は最新の実測を保つ（stderr に `kept` の 1 行）。読み手は `fleet/usage.rs` の `fresh_of` 1 つ（`fleet.usage_timeout_s` と同じ形・無い manifest は同じ極性で断る）。`fleet usage` の口はこの行を読まず全口座を測る |
+| `hook.timeout_s` | HookTimeoutS | 10 | true | user 2026-09-09T09:08Z / 2026-09-09（hooks.json の timeout・xtask がここから写す） |
+| `runner.allowed_commands` | RunnerAllowedCommands | `["cargo", "git", "bats"]` | true | user 裁定 2026-09-14（uns の vessel 宣言のため・bash / sh は足さない・`s2-07l.271`。初期値 `["cargo", "git"]` は user 裁定 2026-09-10・ADR-0009 §2.1）。**意味は上限**（[ADR-0010 §2.2](../../design-intent/decisions/ADR-0010-vessel-declaration-holds-allowlist-and-common-verify.html#s2-2-manifest-ceiling)）＝各 repo の vessel 宣言 `allowed-commands` はこの部分集合でなければ intake が拒む |
+| `runner.denied_commands` | RunnerDeniedCommands | `["cargo mutants", "cargo publish", "git push --force", "git push -f", "git reset --hard", "git branch -D", "git clean -f", "git stash drop", "git stash clear"]` | true | user 裁定 2026-09-14（台帳 `s2-07l.168` notes・[ADR-0025 §2.1](../../design-intent/decisions/ADR-0025-denied-command-rows-and-bash-command-guard.html#s2-1-denied-row)）。**上限側の禁止**＝`runner.allowed_commands` と対で読み、vessel 宣言は緩められない。hook の command guard（[vessel-hook.md §5](./vessel-hook.md)）と intake の unfit（[pipeline.md §5.1](./pipeline.md)）が同じ 1 関数で語列（先頭語一致 + 残りの語の包含・順序不問）を当てる。manifest への追加は契約 `s2-07l.168` の便（行・variant・件数の歯・外形 snapshot を 1 PR で） |
+| `repo.non_rust_exec_allow` | RepoNonRustExecAllow | `["scripts/bdw", "design-intent/assets/mermaid.min.js"]` | true | user 裁定 2026-09-10（`s2-07l` notes 10:4xZ (2)・[ADR-0009 §2.5](../../design-intent/decisions/ADR-0009-vessel-grants-runner-permissions-and-mutation-proof.html)）。**tracked な非 Rust 実行物の例外**＝`cargo xtask check` の measure `non-rust-exec` が、閉じた分類器（先頭 2 byte `#!` / index の mode 100755 / 拡張子 sh bash zsh py bats pl rb js ts mjs）に当たる path のうち**この列に完全一致で載るものだけ**を通す（載らない 1 件で rc≠0・母集団 0 は「測れなかった」で rc≠0）。**分類器を緩めず例外を 1 面へ集める**のが趣旨で、`js` を分類器から外すと次の asset が黙って通る。同じ便で足した `ci-shell-lines` は `.github/workflows/*.yml` の `run:` 行（block scalar の継続行を含む）を数える**検出線**で、deny しない |
+| ~~`gate.common_verify`~~ | ~~GateCommonVerify~~ | — | — | **除去済み**（`s2-07l.57`・ADR-0010 §2.2・裁定 id = ADR-0010）＝共通 verify の値は対象 repo の vessel 宣言 `common-verify` が持ち、gate と land は**便の写し** `vessel.toml` から読む。行・variant・`ALL` の 3 点を 1 PR で除いた |
+
+variant の母集団は `rules::ALL`（`crates/scribe2/src/rules/mod.rs`）・行の一覧は tracked の現物 `rules/manifest.toml` が正本（この表は写しで、件数はここに書かない＝2 面の drift は `cargo xtask check` の `rules-wired` / `rules-parity` が判定行に出す・§4）・§3 の行 id は manifest の行 id の接頭辞（畳み方は §4）。
+
+### 4.2 拒否 5 形（FR18・AC6・すべて `line=<N>` 付き・全件を集めて返す）
+
+1. 未知 `kind`
+2. `id` 重複
+3. `ruling` か `ruled_at` の無い行（C5・全行）
+4. `value` の型が kind の対応と不一致
+5. 必須 key（`id` / `kind` / `value` / `enabled` / `ruling` / `ruled_at`）の欠落、未知 key、`schema` 不在または 1 以外
+
+**最初の違反で止めない**（silent drop 禁止・NFR4）。
+
+### 4.3 差分の門（C5 の「変える」側・`xtask rules-diff`・監査 2026-09-12 塊 4 = `s2-07l.162`）
+
+§4.2 の拒否 5 形は行の**静的な形**（key の在不在・型）だけを見る。値を変えて裁定 id を据え置く便（`value` を動かし `ruling` を古いまま出す）は loader も CI も通り、AI が単独で規則の値を動かせる。C5 は「行を足す / 変える」という **diff の事実**に裁定を結びつける条なので、その面は base との比較でしか測れない。
+
+- 口: `cargo xtask rules-diff --base <sha>`（flip-check / mutants-diff と同じ `--base`・PR job で撃つ＝push(main) には base が無い）。base 側の manifest は `git show <base>:rules/manifest.toml` で読み、HEAD 側は tracked の現物を読む。両方を xtask の scanner（`toml_lite`・section と key = value の字面だけを読む・§4.2 の判定は持たない）で行に分ける。§4.2 の 5 形は loader の門（core・埋め込みと `--rules` の両経路）が別に守るので本門の射程外だが、**`id` の重複だけは突合の鍵を壊す**ので、base か HEAD に重複が在れば突合の前に rc 2 で止める。
+- 判定（行 id で突合・列挙順は HEAD の行順）: (i) base と HEAD の両方に在り `value` か `enabled` が違う行は、`ruling` の字面が base の同じ行と同じなら **違反**、字面が変わっていても base の**別の行**の `ruling` と同じなら **違反**（隣の行の裁定を貼る形・(ii) と同じ相乗り）。`ruled_at` だけの打ち直しは変化に数えない（裁定の証拠は id の側）。(ii) HEAD にだけ在る行（新設）は、`ruling` の字面が base の**別の行**の `ruling` と同じなら **違反**（過去の裁定への相乗り）。同じ便で新設した複数の行が 1 つの裁定を共有する形は違反にしない（1 裁定で複数の値を決めた周の通常形・§4.1 の S / M / L）。(iii) base にだけ在る行（除去）は本門の対象外（除去は kind の variant と 1 PR で行い、§4.1 の除去済み行の型で残す）。(iv) `id` / `value` / `enabled` / `ruling` 以外の key の差は見ない。
+- 出力と極性: 判定行 1 本 `rules-diff: base=<sha> rows=<HEAD の行数> changed=<(i)+(ii) の母集団> violations=<件数>` の後に違反 1 件 1 行（`rules/manifest.toml:<line> <id> <(i)|(ii)> ruling=<字面>`）。違反 0 で rc 0・1 件以上で rc 1・base の manifest を読めない / scanner が行に分けられない / `id` 重複の周は rc 2（**測れないを緑に化けさせない**・mutants-diff の rc 2 と同じ慣例）。数値の閾値を持たない（母集団と件数を出すだけ）。
+- 射程外: 裁定 id の**様式**（user ts 形か ADR id か）と、裁定 id が指す裁定が**実在するか**は本門で見ない（裁定の正本は design-intent の側・C14）。値を戻す便（`value` を base の値へ戻す）も (i) の通常形として裁定 id を要る側に倒す。`--base` は PR の base の tip であって merge-base ではない（flip-check と共有の既知の限界）。行を除いて別 id で立て直す形は (iii) の除去 + (ii) の新設として (ii) の相乗り検査だけが効く。
+
+憲法 §3 rules 表の閾値セルは manifest の**写し**であり（値の正本は manifest 側）、両者の一致は xtask の歯 `constitution_thresholds_match_rules_manifest` が守る（R-C4-1 / R-C4-2 / R-C4-3 と R-C4-4 の 3 値＝計 6 個を順序込みで突合・**閾値の数値を変える手編集は RED**・行の重複や死骸で隠す形も RED・改訂形の `<del>` は落として `<ins>` 側を読む＝整合した改訂は緑で `<ins>` だけ変えた周は RED）。**測っていない面**は 3 つある: 条の向き（`以下` → `以上`）・桁区切りの位置（`20,000` → `2,0000`＝`,` を落として読むため値は同じ）・§3 に**新しい数値行を足した**周（歯が見るのは `r-c4-1`〜`r-c4-4` の 4 行に固定）。数値を持たない prose 行（R-C6-1 以降・R-C13-*）も突合できず射程外である。
+
+## 5. 実行時に読む manifest の場所
+
+- tracked な `rules/manifest.toml` を **build 時に binary へ埋め込む**（`include_str!`）。C1「機械が読む規則はこの manifest 1 file だけ」を、別 repo（toy repo の worktree）で走る `pipe gate` でも path に依存せず満たす。binary は自分を build した manifest の版と一体になる（単一 static binary・ADR-0001 と同じ向き）。
+- `--rules <path>` で file から読む override を全 subcommand に持つ（test が tmp の manifest で `gate.token_cap = 1` 等を撃つため）。override は埋め込みと同じ loader・同じ拒否 5 形。
+- host 固有の宣言値（口座 label・席の plugin dir・起動引数）は manifest の **host の面** `<state_dir>/host.toml` が持ち、同じ loader が読む（rules 行は置けない・[account-lifecycle.md](./account-lifecycle.md) §2・ADR-0026 §2.1）。
+
+## 6. CLI
+
+- `<NAME> rules validate [--rules PATH]`: rc 0 = `rules: ok rows=<N> kinds=<K>` の 1 行 / rc 1 = error 1 件 1 行（stderr）。
+- `<NAME> rules get <id> [--rules PATH]`: 値を 1 行（`Policy` は本文）。無ければ `rules: no such id` + rc 1。`enabled = false` の行は `rules: disabled <id>` + rc 1（不発効の値を機械が黙って使わない）。
+- 出力は `emit` / `emit_err` 経由のみ。`process::exit` 不使用。
+
+## 7. 歯（契約 `s2-chg` の検証・`tests/e2e/rules.rs` module・`rules_` 接頭辞・fixture は文字列 literal）
+
+歯は `crates/<NAME>/tests/e2e/rules.rs` module に `rules_` 接頭辞で置く（個々の名前はここに書かない。名前の列は現物が SSOT＝`cargo nextest list -p <NAME>`・ADR-0013 §2.1・`s2-07l.78`）。外形（usage と 1 行出力）は insta snapshot 1 本で pin する。
+
+何を測るか: 良い fixture を受理する／未知の kind・重複 id・裁定の無い行・値の型違いを拒む／欠陥 3 箇所を行番号付きの error 3 行で全件報告する／`ALL` の各 kind が 1 行 fixture で parse + validate を通る（kind parity）／埋め込み manifest を実 loader で読み error 0 ∧ 全 kind ≥1 行／CLI の get が値を返し、不発効の行を断り、`--rules` の tmp manifest の値が埋め込みより優先される。
+
+さらに「黙って入力を捨てる」形を塞ぐ（lens の指摘を再現してから足した）: schema の欠落（拒否 5 形の 5 番目）／行の中の重複 key（`enabled = true` の次に `false` を書くと不発効の行が有効なまま読まれていた）／schema の重複（後勝ちで版が黙って差し替わる）／空の id／PATH の無い `--rules`（埋め込みへ無言 fallback して rc 0 を返していた）。
+
+xtask 側の drift 歯（最小形）: `crates/xtask/src/limits.rs` の `#[cfg(test)]` に、xtask 自身の `toml_lite` で manifest を読み `R-C4-1` / `R-C4-2` を const と突合する歯を置く（TOML scanner は MVP では core と xtask の 2 実装を許し、core 側が育ったら xtask がそれを使う）。
+
+## 8. 却下案
+
+- `limits.rs` の数値を本設計で manifest へ移す — xtask との交差と射程拡大。写しの一致を歯で守る形にして移設は後続。
+- manifest を JSON にする — 手書きの行に裁定 id を書く file は TOML の方が読める・既存 scanner と同形。
+- `#[non_exhaustive]` — 網羅 match を壊す（C1 / C11）。
+- SQLite / 外部 crate — NFR3。
+- `origin = "ai"` の行（裁定 id 無し）を許す — C5 に反する（lens 指摘で却下）。AI 提案の数値は user 裁定を先に取る。
+- 実行時に cwd 相対の `rules/manifest.toml` を読む — 別 repo で走る gate が manifest を見失う（lens 指摘で却下）。
+- `quote` key — PUBLIC repo に user 逐語を置けない（CON2）。
+
+## 9. 後続
+
+- C14.2 の drift 歯: 憲法 §3 の表と manifest の行を接頭辞で group 化して突合し CI で RED（§3 の HTML を機械で読む面が要る）。
+- C1.2 の生成 doc: enum の doc コメント + manifest から人向け doc を生成し、手書き規範文 0 行を CI が数える。
+- xtask `check` が閾値を manifest から読む（`limits.rs` の const を消す）。R-C4-3 の母集団は現状 `crates/*/src` だけで `tests/` を数えない（統合 test は比の外）。母集団を広げる判断は裁定材料として残す。
+- property test（C12.7）は `proptest` が A3 に当たるため、依存の裁定を通す周まで後続。
+
+## 10. xtask の check_tests.rs の分割（契約表の行 f・`s2-07l.370`）
+
+- 何が起きているか: `crates/xtask/src/check_tests.rs`（`check.rs` の `#[path]` mod・約 1320 行）は xtask 系の便 4 本（.161 / .164 / .170 / .177）が同時に write-set に持つ hub で、R-C4-2 の余地が 176 行しか無く size M の便を受付が断る（.161 の受付拒否 2026-09-15）。.363（`pipe/closure.rs` → `pipe/closure/derive.rs`）と同型の純移動で余地を作る。
+- 形: 歯を 2 つの子 module へそのまま移す（名・本文・assert・順序を変えない）: (a) check_nonrust_tests.rs = non_rust_exec_ と ci_shell_lines_ の歯 (b) check_prose_tests.rs = prose_gate_ と claude_md_ の歯と専用 fixture。宣言は check_tests.rs の末尾に `flipcheck_tests.rs` と同じ `#[path]` の形。共有 helper（make_tmp_dir / write_at / check_fixture / summary_fixture / assert_single 等）は親に残し、子は `use super::…` で読む（可視性を pub(super) に上げる以外は触らない・複製しない）。
+- 札: `// flip-check: moved s2-07l.370` を 3 file の test 区間に 1 行ずつ（親は mod tests の中・子は file 先頭の module doc の直後）。既存の `.257` の札は持ち越し。純移動の機械証明は [pipeline.md](./pipeline.md) §5.3。
+- 触らない: `check.rs` の本体・xtask の他 file・歯の中身。
+
+## 11. private-clean の needle の追加（契約表の行 g・`s2-07l.174`）
+
+- 何が起きているか: `crates/xtask/src/private_clean.rs` の needle は Email / UsersPath の 2 形だけで、PUBLIC 面へ出てはいけない v1 台帳 id 形（`sc-` + 英数 5 字）と state dir の絶対 path 形（home 直下から state dir へ至る接頭・字面は `concat!` で分けて private_clean.rs に置く）を機械が止めない（監査 2026-09-12 塊 20・NFR6）。tracked で当たるのは `SPIKE-tooling-report.md`（3 行）と `design-intent/research/SPIKE-folio-report.html`（1 行）＝needle を入れると赤になる 2 file は同じ便で掃除する（user 裁定 2026-09-15 18:2xZ）。
+- 形: 閉じた enum に variant 2 つ（as_str = ledger-id-v1 / state-dir-path）。字面は `concat!` で分けて自分を撃たない。state dir は絶対形だけ（相対形 `.local/state/` は ADR-0004 が持つ＝当てない）。掃除は id を「v1 の台帳の便」の語に置き換える（文の意味は残す・research html に生成元 file は無い＝掃除の後に folio build の drift 検査が無差分であれば足りる）。要件は暫定で FR52（CI が tracked file を検査し違反を file と行で名指して非 0 で止める形）を当てる: PUBLIC 面の門を名指す要件は SRS の制約 CON2 だけで契約の req に取れないため、次版の SRS 改訂周で「PUBLIC 面の門」の FR を足して差し替える。
+- 却下: 免除 list（散文・N2）／相対形も当てる（frozen の ADR-0004 が赤になる）。digest 方式と token の newtype は別便。
+
+## 12. rules_wired の字下げ #[cfg(test)] を test 区間の印に数えない（契約表の行 j・`s2-07l.350`）
+
+- 何が起きているか: admin の 1 行当て A/B（2026-09-15 14:3xZ・`.160` run 2）で撃墜 10 / 生存 1（母集団 11）。生存 = `crates/xtask/src/rules_wired.rs` の `line.starts_with(TEST_MOD_MARK)` → `contains` への変異で、字下げした `    #[cfg(test)]`（行頭でない）を test 区間の印に誤って数える（no-op でないことは実測済み: 元 rc 0・変異 rc 100）。
+- 形: `rules_wired.rs` の in-file の歯に「字下げした `#[cfg(test)]`（行頭でない）は test 区間の印に数えない」fixture を 1 本足す（実装は変えない・module doc の「行頭の印」を pin する）。`// flip-check: retroactive s2-07l.350` の札を付ける。
+- 触らない: `rules_wired.rs` の実装本体。
+- 依存: `.160` Landed 後。Landed 後に admin が同じ変異（`starts_with` → `contains`）を A/B して撃墜 1/1 を notes に写す（歯にしない）。
+
+## 13. session 用の閾値の行の値を 95 に上げる（契約表の行 k・`s2-07l.447`）
+
+- 何が起きているか（planner 席 2026-09-17・verified）: rules 行 `R-C9-1`（kind `AccountSelection`・Int・85）の 1 値が、数える窓の全部（5 時間・7 日・モデル別 7 日）に同じく効く。7 日窓とモデル別窓は全量が大きく、85 で席を退避させ候補から外すと席が使える口座が足りない。窓別の閾値は [seat-autonomy.md](./seat-autonomy.md) の窓別の閾値の便（`s2-07l.434`）が持つが、型と読み手を変える複数便でまだ着地しない。user 裁定 2026-09-17T07:30Z（逐語は台帳 `s2-07l.434`）の要旨: 窓別の口が入るまでの特例として、値を今すぐ 95 に上げる（全窓 95 を受け入れる・5 時間窓を 85 に戻すのは窓別の便の着地）。
+- 形: `rules/manifest.toml` の `R-C9-1` の行の `value` を 95 に・`ruling` を上の裁定 id に・`ruled_at` をその日付に書き換える（行の id・kind・`enabled` は不変・行は増やさない・C5）。読み手（`fleet/cli.rs` の `threshold_of`・席の側の `int_rule_of`）と選定の純関数は 1 字も変えない。値と裁定 id を pin する歯（`tests/e2e/rules.rs` の埋め込み manifest の歯）と、`rules get R-C9-1` の 1 行を含む外形 snapshot を新しい値に直す。**席の e2e は埋め込み manifest の値に依る**（実測: 席の tick は閾値を埋め込み manifest の `R-C9-1` から読み、歯が `--rules` で渡す fixture はこの行を持たない）＝閾値の両側を撃つ歯（`tests/e2e/seat/account.rs` の実測値 85〜94 を置く歯と合図の字面の「閾値 85%」・作り直しの歯の file〔削除済み〕 の予備の口座 90・`tests/e2e/seat.rs` の helper）を新しい値の両側（94 / 95 以上）へ同じ便で直す。`tests/e2e/fleet.rs` の選定の歯は fixture が行を持つので依らない見込み（便が base で実測する）。
+- 触らない: 行の id と kind・他の行・読み手と選定の code・退避の合図の字面・便用の選定（閾値を読まない）・`seat.context_cap_pct`。
+- 歯（`rules_embedded_manifest_declares_account_selection_threshold` を直す＝値 95 と新しい裁定 id を assert・base は 85 で RED／`rules_external_form` の snapshot）。閾値の上側を 90 で置く歯は 管理 tick の歯の file〔削除済み〕 にも 1 本在る（合図の back-off が口座の軸にも掛かる歯）＝同じ便で直す。flip-check は変えた test file を 1 本ずつ単独で base に重ねて RED を求めるので、値替えだけでは base（85）でも挙動が変わらない file（作り直しの歯の file〔削除済み〕・管理 tick の歯の file〔削除済み〕）と `tests/e2e/seat/account.rs` には、85 と 95 を弁別する歯（実測値 90・歯の名は seat_threshold_95_ で始める）を 1 本ずつ足す: 予備の口座が 90 の周は候補になり立て直しが走る／登録 row の口座が 90 の席に口座を起点とする退避の合図が出ない（base 85 ではどちらも逆の結果で RED）。足す歯は tmux を立てるので、nextest の tmux の test-group の登録（`.config/nextest.toml`・xtask check の nextest-tmux-group が drift を落とす）も同じ便で足す。
+- 却下: repo の外の rules の写しを `--rules` で席の tick に読ませる（規則の値が manifest の外に住む・C1 / C5・宣言を別の置き場の値で上書きする型）／host の面（`host.toml`）に閾値の上書きを足す（host 固有の値ではない・N3）。
+
+## 14. `gate.token_cap` を 150000 に戻す（契約表の行 i・`s2-07l.376`）
+
+- 何が起きているか（実測 2026-09-20）: `rules/manifest.toml` の行 `gate.token_cap`（kind `GateTokenCap`・Int）の値が 400000 のままである。これは行 h（`s2-07l.375`）が 169 KB の diff 1 本（`s2-07l.209`）を審査に通すために入れた一時の上げで、行の `ruling` の字面が自分で戻しの便を名指している。`s2-07l.209` は着地して閉じている＝上げの理由は消えた。上げと戻しは同じ承認（user 2026-09-15T23:31Z・逐語は台帳 `s2-07l.375`）が対で持つ。戻す先の 150000 は SRS NFR1 の目標値で、上げ前の値と同じである。
+- 約束（この 3 つだけ）:
+  1. `rules/manifest.toml` の行 `gate.token_cap` の `value` を 150000 に・`ruling` を戻しの字面（同じ承認の時刻で始まり、戻しであることと `s2-07l.376` を名指す）に・`ruled_at` を戻した日付に書き換える。行の id・kind・`enabled` は不変で、行は増やさない（C5）。
+  2. 値を pin している既存の歯 2 本を 150000 に直す。実測: `crates/scribe2-boundary/tests/e2e/rules.rs` の `rules_cli_rules_flag_overrides_embedded`（`rules get gate.token_cap` の出力が埋め込みの値である）と `rules_row_readers_return_the_value_or_one_of_three_reasons`（整数の行の読み手が埋め込みの値を返す）の 2 か所だけが 400000 を持つ（repo 全体で値 400000 を持つ file は、この歯の file・manifest・本 doc の 3 つ＝write-set と同じ）。外形 snapshot はこの行の値を写していない。
+  3. 戻しの行を名指す歯を 1 本足す（名は `rules_token_cap_revert_` で始める）: 埋め込み manifest の `gate.token_cap` が値 150000・kind `GateTokenCap`・発効・`ruling` が承認の時刻で始まり `s2-07l.376` を含む、を assert する。base は値 400000 と上げの字面なので RED（**機能不在**でなく値の不一致の RED）。
+- §4.1 の表の `gate.token_cap` の行の値と裁定の字面を、約束 1 と同じ内容に写す（本 doc が write-set に在る理由はこれだけ）。
+- 触らない: `src` の全部（上限を読む側 `pipe/gate.rs` は行の値を読むだけで、値を code に持たない）・他の行・行 h の契約表の行（着地済みの履歴）。
+- flip-check の入口: 変える test file は `tests/e2e/rules.rs` の 1 本で、3 本の歯のどれも base（値 400000）で RED になる。
+
+## 15. xtask の check_tests.rs の 2 回目の分割（契約表の行 l・純移動・§10 と同型）
+
+- 出所: `crates/xtask/src/check_tests.rs` は幅 120 で正規化した行数が **1229**（上限 R-C4-2 = 1500）＝**余地 271** で、`pipe.size_m_lines` の見積 **300** に 29 行足りない＝`crates/xtask/src/check_tests.rs` を write-set に持つ size M の便は受付が `cap-headroom` で断る。§10（`s2-07l.370`）の分割で 600 行以上に戻った余地が、その後の便が歯を足して 271 まで縮んだ。**2026-09-20 の実測では止まっている便は 0 本**（`crates/xtask/src/check_tests.rs` を write-set に持つ行は 8 本＝[core-boundary.md](./core-boundary.md) 行 a と [gate-cost.md](./gate-cost.md) 行 b と本 doc の行 a〜f で、そのうち M は [gate-cost.md](./gate-cost.md) 行 b の 1 本だけ・その便 `s2-07l.360` は着地済み）。本行は**次の M が受付で止まる前に**余地を戻す先回りで、§10 と同型の純移動である。
+- 現物（planner が grep と正規化行数で実測・main 3926753）: `crates/xtask/src/check_tests.rs` は `crates/xtask/src/check.rs` が `#[path = "check_tests.rs"]` で取り込む子 module（module path は `check::tests`）で、`#[test]` の歯は **30 本**。接頭辞の内訳は `check_fails_` 6・`enum_slices_` 5・`nextest_tmux_group_` 4・`rules_parity_` 4・`paths_clean_` 2・単発 9（母集団は同 file の `#[test]` 全数 30）。§10 が既に 2 つの子（`crates/xtask/src/check_nonrust_tests.rs` と `crates/xtask/src/check_prose_tests.rs`）を末尾の `#[path]` 宣言 2 つで取り込んでいる。`enum_slices_` の 5 本は `crates/xtask/src/enum_slices.rs` の歯で、専用の fixture helper `write_enum_slice`（406 行）を呼ぶのは 5 本だけ＝共有 helper（`check_fixture` / `write_at` / `make_tmp_dir` / `summary_fixture` 等）と独立している。移す区間は 400–617 行の **222 行**（幅 120 で正規化した値）。
+- filter の当たりの実測（`-p xtask` の scope・fn 名の substring・母集団は `crates/xtask/src` の `#[test]` 全数）: `enum_slices_` は `crates/xtask/src/check_tests.rs` の 5 本だけに当たる（他 file 0）。`rules_parity_` 4 本と `nextest_tmux_group_` 4 本も同 file だけに当たるので、親に残る歯の検証行に使える。
+- 約束（この行が作るもの・番号は done と 1:1）:
+  1. `write_enum_slice` と `enum_slices_` の歯 5 本（合計 222 行）を、行 l の write-set の `+` の file へ名・本文・assert・順序を変えずに移す。
+  2. 宣言は §10 の 2 つと同じ `#[path]` の形で `crates/xtask/src/check_tests.rs` の末尾に 1 つ足す＝module path は 1 段深くなるが**歯の fn 名は 1 つも変わらない**（`enum_slices_` の filter が base と同じ 5 本に当たる）。
+  3. 共有 helper は親に残し、子は `use super::…` で読む（可視性を `pub(super)` に上げる以外は触らない・複製しない）。
+  4. 歯の総数は 30 のまま（親 25 本 + 子 5 本）で、親に残る `rules_parity_` 4 本と `nextest_tmux_group_` 4 本は緑のまま。
+  5. 札 `// flip-check: moved <行 l の bead>` を親の末尾（`s2-07l.370` の既存の札の隣）と `+` の file の module doc の直後に対で置く。`s2-07l.257` と `s2-07l.370` の既存の札は持ち越す（純移動の機械証明は [pipeline.md](./pipeline.md) §5.3）。
+  6. 割った後の正規化行数は親が **約 1007**（余地 **約 493**）・`+` の file が **約 235**＝余地 493 は size M（300）の便を受けられる。
+- write-set の書き方（planner が `pipe preflight` で 3 通り実測・2026-09-20）: 受付は歯の区間を「`tests/` 配下は全体・`crates/<c>/src/` の file は**行頭の `#[cfg(test)]` から末尾**（無ければ空）」で切るので、`crates/xtask/src/check_tests.rs` は行頭の `#[cfg(test)]` を持たない（`#[path]` で取り込まれる test 専用 file）＝受付からは歯の file に見えない。そこから 3 つが決まる。(1) 親に縮む面の `-` を付けると歯の置き場の候補から外れて `teeth-place-unresolved` で断られるので、**親は素の path で書く**（size S の見積 100 は余地 271 に収まるので `cap-headroom` にも当たらない）。**`-` は削除の宣言ではなく縮む面の宣言**だが、本行では受付の導出が先に効くので使わない。(2) `tests` 欄で `crates/xtask/src/check_tests.rs` を名指しても `tests-not-a-teeth-file` で断られるので、`tests` 欄は置かない。(3) write-set に行頭の `#[cfg(test)]` を持つ `.rs` が 1 本も無いと、新しい接頭辞の filter の置き場が解けず断られる。ゆえに write-set は `crates/xtask/src/check.rs`（歯の木の `#[cfg(test)]` の門と `#[path = "check_tests.rs"]` の宣言を持つ・余地 1307）を持つ。**本行は `crates/xtask/src/check.rs` を 1 字も変えない**（第 3 の子の `#[path]` 宣言は §10 の 2 つと同じく `crates/xtask/src/check_tests.rs` の末尾に置く＝module path が `check::tests::<子>` に揃う）。
+- 触らない: `crates/xtask/src/check.rs`（write-set に持つが 1 字も変えない・上の (3)）・`crates/xtask/src/enum_slices.rs`・§10 が作った 2 つの子・xtask の他 file・歯の中身。
+- 却下: `check_fails_` の 6 本を移す（filter が `crates/xtask/src/check_nonrust_tests.rs` と flipcheck の歯 2 file にも当たり、検証行が write-set を 3 file 広げる）／親の共有 helper を子へ複製する（純移動でなくなり機械証明が残差を出す）／余地 271 のまま据え置く（次の M が受付で止まる）。
+
+## 16. src / test の切れ目に「名で test file」を足す（契約表の行 m・`s2-07l.461`）
+
+- 出所: memo `s2-07l.461`（planner 実測 2026-09-17）と棚卸し 2026-09-22。`crates/xtask/src/workspace.rs` の `split_test_src` は file の最初の行頭 `#[cfg(test)]` の位置だけで割り、file の名を見ない。
+- 何が起きているか（main 4f70b12・verified）: `#[path]` で src 配下へ外出しした歯の file は行頭 `#[cfg(test)]` を 1 つも持たないので**全行が src 側**に数えられる。該当は 11 本（母集団 = `crates/*/src` の `.rs` 145 本）で、幅 120 で正規化した行数の合計は 4854。R-C4-3 の実測は **16660 / 54247 = 30.71%**、名で弁別すると **21514 / 49393 = 43.56%** で、上限 100% にはどちらも当たらない（**閾値を動かさない＝A2 の裁定は要らない**）。R-C4-1（core-lines）は **41278 → 40408**（−870・上限 60000・core 側の該当は `crates/scribe2/src/fleet/select_tests.rs` の 1 本だけ）。3 つの読み手のうち flip-check（`crates/xtask/src/flipcheck.rs` の `is_test_file`）と rules-wired（`crates/xtask/src/rules_wired.rs` の `TEST_FILE_TAIL`）は名で弁別し、`workspace.rs` だけが弁別を持たない。
+- 形（done と 1:1）:
+  1. `workspace.rs` に「file 名が tests.rs か _tests.rs で終わる」述語を 1 本置き、`split_test_src` が真の file を**丸ごと test 区間**（src 側 0）と数える。
+  2. `flipcheck.rs` の `is_test_file` の src 配下の枝と `rules_wired.rs` の `TEST_FILE_TAIL` の判定を、その 1 本の述語の呼び出しへ寄せる（_tests.rs の判定の字面が xtask の src 区間で 1 か所＝述語の中だけになる・歯の fixture 名は数えない・C2）。flip-check の `crates/*/tests/` の枝と rules-wired の `DECLARING` の枝は 1 字も変えない。
+  3. `crates/xtask/src/env_reads.rs` の母集団も同じ述語で切る（core の非 test 区間の定義を 1 つにする）。該当 file の env の読みは 0 件なので判定行の値は動かない。
+  4. §4 の切り方の 2 文（「R-C4-3 の src 側と同じ切り方」の文と母集団の文）を新しい形に写す（本 doc が write-set に在る理由はこれだけ）。**file 名の tail（tests.rs / _tests.rs）は backtick で書かない**——§4 は契約表の多くの行が section に持つので、backtick の語は名指しの実在の検査（[contract-source.md](./contract-source.md) §25）に掛かり、現物の契約表の歯 `contract_closure_ext_real_table_has_zero_findings` が name-unresolved で赤になる（run 073504Z の gate FAIL・verified）。
+- 触らない: `rules/manifest.toml` の R-C4 の 4 行（値・kind・enabled・裁定 id）／憲法 §3 の閾値セル／`weighted_lines` の式と幅の正規化／core-spawn と file-lines と name-literal の母集団（file 全体で数える＝切れ目に依らない）／判定行の token の名と順序（`SUMMARY_PIN` は値を伏せるので値の変化では動かない）／core 側の `src_region`（`crates/scribe2/src/pipe/closure.rs`・受付の core の余地の見積）は印だけで切るまま＝gate（40408）より厳しい側（41278）に残るが上限 60000 に対して余地は 18722 で実害が無い（後続）。
+- 却下: 閾値 100% を動かす（C5 の裁定が要る形にしない）／`#[path]` の宣言側を読んで解く（xtask に Rust の parser を足す＝C13）／`workspace.rs` だけ直して他の 2 か所の字面を残す（同じ規則が 3 か所に住み続ける＝C2）。
+- 歯（行 m が持つ・置き場は `workspace.rs` と `crates/xtask/src/check_sizes.rs` の in-file の歯・接頭辞 `sizes_` は既存なので**名の全体**で書く）:
+  - `sizes_split_counts_named_test_files_as_whole_test`: 行頭 `#[cfg(test)]` を持たない同じ本文を、名が _tests.rs の file と tests.rs の file と素の .rs の file の 3 つで持ち、前 2 つが (test, src) = (全体, 0)・3 つ目が (0, 全体) になる（base は 3 つとも (0, 全体)＝RED）。
+  - `sizes_ratio_counts_named_test_files_on_the_test_side`: 本体 1 本と名で test の 1 本を持つ toy workspace で、test-src-ratio の分子が 0 でなくなり core-lines が名で test の file を数えない（base は分子 0・core-lines が両方を数える＝RED）。
+- 後続: core 側の `src_region` を同じ述語へ寄せる（crate を跨ぐので別の行・受付の見積が gate と一致する）。
+
+## 17. 決定の索引と語彙の突合を xtask check の検出線 1 本にする（契約表の行 n・`s2-07l.165`・棚卸しの (b)）
+
+- 出所: 監査 2026-09-12 塊 7 の memo `s2-07l.165`（憲法 C8.3 / C14.2 / N4）。決定（ADR）を足した便が索引と語彙を更新し忘れても、着地の時点で落とす面が 1 つも無い。memo は 3 面（(a) 条文が動いた便の ADR 要求・(b) 索引と語彙の突合・(c) 要件面の生成物と source の id 一致）を挙げるが、(a) と (c) は `--base` か生成器を要る。本行は (b) だけを採る——base の木 1 つで自足し、外部の道具も `--base` の経路も要らない。
+- 何が起きているか（現物の母集団・main 3b258a3・verified）: `cargo xtask check` の measure の列は `crates/xtask/src/check.rs` の `inspect`（:62-92・vec の 5 本・extend の 2 本・push の 22 本）に在り、`design-intent/` を読む measure は 2 本だけである——`crates/xtask/src/claude_md.rs` の `measure`（憲法 HTML から CLAUDE.md の生成区間を測る）と `crates/xtask/src/rules_parity.rs` の `measure`（憲法 §3 の行 id と `rules/manifest.toml` の R-* 行を双方向に突合する検出線・`s2-07l.164`）。歯の fixture と doc comment の言及は数えない。決定の索引と語彙を読む measure は 0 本である。現物の 3 面はいま一致している: `design-intent/decisions/` 直下の決定 file は 53 本、`design-intent/decisions/README.html` の索引の link は distinct 53 本で両方向の差は 0 本、`design-intent/vocabulary.yaml` が名指す決定 id は distinct 50 個で未解決は 0 個。**0 は「測れていない」であって「守られている」ではない**——いま 0 なのを機械が数えたことは一度も無い。
+- 形（`rules_parity` と同じ検出線 1 本・rc を変えない）:
+  1. **measure を 1 本足す**: 判定を組む純関数を**行 n の write-set の `+` の file** に置き、`crates/xtask/src/check.rs` の `inspect` の列に push を 1 行、`crates/xtask/src/main.rs` の module の列に 1 行足す。tag は 1 つで、fact は「file 側だけ / 索引側だけ」の対と、片側だけの file 名の 2 列と、語彙の未解決の列と、母集団の 3 つ組を同じ行に持つ（`rules_parity` の fact の形をそのまま踏む）。
+  2. **file 集合の面**: 決定 dir 直下の `ADR-` で始まる `.html` を file 系から読み、`design-intent/decisions/README.html` の `a` 要素の `href` のうち決定 file を指すものを索引とする。両方向の差（file にしか無い / 索引にしか無い）を file 名で名指す。HTML の読み手は `crates/xtask/src/claude_md.rs` の tag 読み 4 本（`attr` / `read_tag` / `skip_ignorable` / `skip_raw`・`rules_parity` が同じ 4 本を借りている）を呼ぶ（2 本目の HTML parser を作らない・C2）。
+  3. **語彙の面**: `design-intent/vocabulary.yaml` の本文に現れる決定 id（`ADR-` + 4 桁）を distinct に集め、決定 file の id 集合に解けないものを名指す。語彙は yaml として parse しない（id の字面だけが要る＝2 本目の yaml 読み手を作らない）。
+  4. **極性は検出線**（違反を立てず rc を変えない）。deny 化（両方向 0 と未解決 0 を要求する）は rules 行 + 裁定 id を要るので別便にする（C5・`rules_parity` が同じ順で通った前例）。**値は user 裁定・推奨 = いまの 3 面が 0 のまま 2 週間動かないことを検出線で確かめてから deny へ上げる**。
+  5. **測れないを 0 に化けさせない**（NFR4）: 決定 dir を持たない木は `n/a` の 1 語（0 と別の字面）、索引 file か語彙 file を読めない周は `?` + 違反 1 件。片側だけの列が 0 本の周は `-` を置く（空文字にしない）。
+  6. **判定行の形の pin を 1 つ増やす**: `crates/xtask/src/check_tests.rs` の `SUMMARY_PIN` に新しい token を足し、`ids=` の副 field を持つ token の頭の列（`IDS_OWNERS`）に本 tag の 3 つの列の頭を足す。
+- 触らない: 既存の measure の fact と極性・`rules_parity` の fact の形と歯 4 本・`crates/xtask/src/claude_md.rs` の tag 読みの本文・`crates/xtask/src/limits.rs`（閾値を足さない）・CI の job・`.vessel.toml` の共通 verify の行・`design-intent/` の中身（1 字も書き換えない）。
+- 却下: memo の (a)（条文が動いた便に ADR を要求する）を同じ便に畳む——`--base` の経路が要り flip-check と材料を共有するので M に収まらず、「ADR が在る」の判定が条文の解釈に触れる（A2 の面）。／memo の (c)（要件面の生成物と source の id 一致）——source 側の yaml を読む 2 本目の読み手が要り、生成器は外部の道具である。／外部の道具を CI に積む（`s2-07l.63` が不採用にした形・道具は PATH に無く共通 verify の許す command にも無い）。／索引の JSON-LD の側も測る——JSON の読み手が 1 本増える。生成器の領分として本行は link の列だけを測る。／違反（rc 1）にする——裁定が要る面を裁定なしで立てることになる（C5）。
+- 歯（接頭辞 `decisions_index_`・`crates/` 全体の fn 名の substring に 0 件＝衝突なし）: 置き場は `crates/xtask/src/check_tests.rs`（既存の measure の歯と同じ file）。(a) tmp の木に決定 file 3 本・索引の link 2 本・語彙の参照 1 個を置いて、file 側だけ 1 本・索引側だけ 0 本・語彙の未解決 0 個・母集団 3/2/1 を fact の全文で測る。(b) 実在しない file を指す link を 1 本足すと索引側だけが 1 本になり、実在しない決定 id を語彙に 1 個足すと語彙の未解決が 1 個になる（片側ずつ動かす＝1 つの欄が 2 つを兼ねない）。(c) 決定 dir の無い木は `n/a` の 1 語で違反 0・索引 file を読めない木は `?` + 違反 1 件（0 と融合しない）。(d) `SUMMARY_PIN` に本 tag の token が在り、現物の repo で撃った判定行がその形に一致する（既存の `rules_parity_token_is_in_summary_pin` と同じ形）。
+
+## 18. 受付の core の余地を gate の core-lines と同じ切り方にする — 名で test の file の本体を 0 行と数える（契約表の行 o・§16 の後続）
+
+- 出所: 便 `s2-07l.736.4`（contract-source の行 bi）の事前審査が `cap-headroom`（core の余地 330 行に見込み 331 行）で断った周（2026-09-28・orchestrator の実測）。
+- 何が起きているか（main 91b51b6・verified）: `cargo xtask check` の core-lines は 57107（上限 R-C4-1 = 60000・余地 2893）なのに、受付の core の合計は 59670（余地 330）。差の 2563 行は、名が tests.rs か _tests.rs で終わる file（`#[path]` で外出しした歯の file）の本体で、xtask は §16 の述語で 0 行と数え、受付の `FileLines::of`（`crates/scribe2/src/pipe/declaration/write_set.rs`）は行頭 `#[cfg(test)]` の印だけで切るので全行を本体に数える。受付は gate より 2563 行厳しく、gate が通す契約を断る（§4 の 1 文は「gate より厳しい側」と書いて寄せを後続に置いていた）。
+- 形（done と 1:1）:
+  1. `FileLines::of` は、path の file 名が tests.rs か _tests.rs で終わる周だけ本体を 0 行と数える（全体の行数は変えない＝R-C4-2 の file の余地は file 全体のまま）。名の述語は core の側に 1 本（crate は互いに依存しないので xtask の述語と式は 2 か所・同じ fixture の歯が一致を守る＝既存の `pipe_intake_core_headroom_src_side_matches_the_xtask_split_fixture` と同じ守り方）。
+  2. 受付の core の合計は xtask の core-lines と同じ値になる（main 91b51b6 で 57107）。
+  3. `src_region` とその他の読み手（審査の材料の宣言の列・外の材料の要約）は変えない。
+  4. §4 の「名の弁別は持たない＝gate より厳しい側」の 1 文を、同じ切り方になった形に写す（本 doc が write-set に在る理由はこれだけ・file 名の tail は backtick で書かない）。
+- 触らない: `rules/manifest.toml` の R-C4 の行（値・kind・enabled・裁定 id）／xtask の述語と core-lines の式／`weighted_lines` の式と幅／file の余地（R-C4-2）の母集団（file 全体）／受付の断りの字面。
+- 却下: R-C4-1 の値を上げる（A2 の裁定が要り、受付と gate の食い違いは残る）／core の crate を割って余地を作る（食い違いが原因で、core-lines はまだ 2893 行の余地を持つ）／受付を xtask の述語に依存させる（crate の依存の向きを変える・C13）。
+- 歯（行 o が持つ・置き場は write_set.rs の in-file の歯・接頭辞 `intake_core_room_named_tests_`）:
+  - `intake_core_room_named_tests_count_zero_src_like_the_xtask_split`: 行頭 `#[cfg(test)]` を持たない同じ本文を、名が _tests.rs の file と tests.rs の file と素の .rs の file（名に tests を含むが tail が違う file を 1 つ・例 contests.rs）で持ち、前 2 つが (全体, 本体) = (全体, 0)・後の 2 つが (全体, 全体)（base は 4 つとも本体 = 全体＝RED）。
+  - `intake_core_room_named_tests_do_not_eat_the_core_headroom`: 本体 1000 の素の file と、本体の印を持たない 400 行の _tests.rs の file を持つ base で、上限 1450 の core の余地は 450（base は 50＝S の新規 1 本〔100〕を断る＝RED）。
+- base で RED の理由: 2 本とも base の `FileLines::of` と既存の余地の関数だけを呼ぶ（compile は通る）。base は名を見ないので本体を全行に数え、assert が落ちる（機能不在）。
+
+## 19. R-C4-1 を 66000 に上げる（契約表の行 p）
+
+- 何が起きているか（main c9423568・verified）: `cargo xtask check` の core-lines は 57618（上限 R-C4-1 = 60000・余地 2382）。SRS v0.29 の束 A・D・E の実装の計画（契約の行 37 本）は core の本体を約 5,500 行増やす見込みで、2 波目のあたりで受付の core の余地（§18 以後は gate の core-lines と同じ合計）が断り始め、束 E まで届かない。消せる行は約 200 行しかない。user 裁定 2026-09-29T00:59Z（A2・閾値の変更・逐語は器の裁定の event に残る）で上限を 66000 に上げる（1 割増し・37 本の後に約 3,000 行の余地）。贅肉の削りは、移行の前後のリファクタリングの memo の側が持つ。
+- 約束（この 3 つだけ）:
+  1. `rules/manifest.toml` の行 `R-C4-1` の `value` を 66000 に・`ruling` を `user 2026-09-29T00:59Z` に・`ruled_at` を `2026-09-29` に書き換える。行の id・kind・`enabled` は不変で、行は増やさない（C5）。
+  2. 値を pin している既存の歯 1 本を 66000 に直す。実測: repo 全体で `R-C4-1` の値 60000 を持つのは、`crates/scribe2-boundary/tests/e2e/rules.rs` の `rules_cli_get_returns_value`（`rules get R-C4-1` の出力が埋め込みの値である・assert の文言の裁定 id も同じ便で新しい id に直す）と manifest と本 doc だけである。`60_000` の形の literal は repo に 2 か所在るが、どちらも lock の古さの ms（`crates/scribe2-boundary/tests/e2e/fleet.rs` と `crates/scribe2/src/pipe/cli/intake.rs`）で R-C4-1 の値ではない。外形 snapshot はこの行の値を写していない。xtask の閾値の読み手と歯（`crates/xtask/src/limits.rs#limits_match_rules_manifest`・`crates/xtask/src/check_tests.rs#rules_manifest`・`crates/xtask/src/check_tests.rs#real_limits`）は、現物の manifest を読んで値を得て、値の literal を持たない（fixture の閾値の行も現物の値から組む）。だから値を上げても期待は動かず、1 字も変えない。行 p はこの 2 file を write-set に `=`（置き場だけ・中身は変えない）で置き、審査の材料に本文を渡す。
+  3. 上げた行を名指す歯を 1 本足す（名は `rules_core_lines_66000_` で始める）: 埋め込み manifest の `R-C4-1` が値 66000・kind `CoreLines`・発効・`ruling` が `user 2026-09-29T00:59Z` で始まり・`ruled_at` が `2026-09-29` で、整数の行の読み手が 66000 を返す、を assert する。base は値 60000 と前の裁定なので RED（**機能不在**でなく値の不一致の RED）。
+- §4.1 の表の `R-C4-1` の行の値と裁定を約束 1 と同じ内容に写し、前の値 60000 の裁定を履歴として残す（本 doc が write-set に在る理由はこれだけ）。
+- 触らない: `src` の全部（上限を読む側の xtask の core-lines と受付の core の余地は行の値を読むだけで、値を code に持たない）・憲法 §3 の閾値セル（初期値を持つ。xtask の憲法と manifest の突合の歯は、ruling が初期の裁定でない行の値の違いを通す）・他の行・§4 の切り方・過去の § が書いたその時点の実測値。
+- 着地の後: 受付と席は埋め込み manifest を読むので、PATH の binary を入れ替えるまで受付の core の余地は 60000 で測る（運用の手順・本行の done の外）。
+- 却下: 63000 に刻んで束 E の前に測り直す（聞く回数が 1 回増える）／上げずに先にリファクタリングで削る（削れる量が読めず、束 E の着地が遅れる）。
+- flip-check の入口: 変える test file は `tests/e2e/rules.rs` の 1 本で、直す歯と足す歯のどちらも base（値 60000）で RED になる。
+
+## 20. R-C4-1 を 74000 に上げる（契約表の行 q）
+
+- 何が起きているか（main faf41b76・verified）: `cargo xtask check` の core-lines は 63213（上限 R-C4-1 = 66000・余地 2787）。SRS 0.32 の束 E の行（W2・W3 と入れ子の source の根の行が起票済み・W4・W5 は設計中）の growth の見込みの和は約 7,800 行で、W3 の途中で受付の core の余地が断り始める。user 裁定 2026-09-30T05:26Z（A2・閾値の変更・逐語は器の裁定の event に残る）で上限を 74000 に上げる（束 E の見込みの後に約 3,000 行の余地）。
+- 約束（この 3 つだけ）:
+  1. `rules/manifest.toml` の行 `R-C4-1` の `value` を 74000 に・`ruling` を `user 2026-09-30T05:26Z` に・`ruled_at` を `2026-09-30` に書き換える。行の id・kind・`enabled` は不変で、行は増やさない（C5）。
+  2. 値を pin している既存の歯 2 本を直す。実測: repo 全体で値 66000 を持つのは、`crates/scribe2-boundary/tests/e2e/rules.rs` の `rules_cli_get_returns_value`（`rules get R-C4-1` の出力・assert の文言の裁定 id）と `rules_core_lines_66000_raised_by_ruling`（§19 の行 p が足した歯）と manifest と本 doc だけである。前者は値と文言の裁定 id を新しい値と id に直す。後者は名が前の値を持つので、同じ形の `rules_core_lines_74000_raised_by_ruling` に置き換える（値 74000・kind `CoreLines`・発効・`ruling` が `user 2026-09-30T05:26Z` で始まり・`ruled_at` が `2026-09-30`・整数の読み手が 74000 を返す）。xtask の閾値の読み手と歯（`crates/xtask/src/limits.rs#limits_match_rules_manifest`・`crates/xtask/src/check_tests.rs#rules_manifest`・`crates/xtask/src/check_tests.rs#real_limits`）は現物の manifest から値を読むので 1 字も変えない（§19 と同じ・行 q は `=` で置く）。
+  3. §4.1 の表の `R-C4-1` の行の値と裁定を約束 1 と同じ内容に写し、前の値 66000 の裁定（user 2026-09-29T00:59Z・§19 行 p）を履歴として残す。
+- 触らない: `src` の全部・憲法 §3 の閾値セル（初期値を持つ・§19 と同じ）・他の行・§4 の切り方・過去の § が書いたその時点の実測値・§19 の行 p（着地済み。verify の `rules_core_lines_66000_` は置き換えの後に該当 0 本になるが、着地済みの行は撃ち直さない）。
+- 着地の後: 受付と席は埋め込み manifest を読むので、PATH の binary を入れ替えるまで受付の core の余地は 66000 で測る（運用の手順・本行の done の外）。隣の project の規則がこの行を値の正本に名指すので、着地を知らせる。
+- 却下: 72000（束 E の見込みだけを覆い、他の便の余地が約 1,000 行しか残らない）／上げずに先に削る（削れる量が読めず、束 E の着地が遅れる）。
+- flip-check の入口: 変える test file は `tests/e2e/rules.rs` の 1 本で、直す歯と置き換えた歯のどちらも base（値 66000）で RED になる。
+
+## 21. R-C4-1 を 82000 に上げる（契約表の行 r）
+
+- 何が起きているか（main 71610086・verified）: `cargo xtask check` の core-lines は 73496（上限 R-C4-1 = 74000・余地 504）。起票済みで設計の pointer を持つ契約 27 本の core の growth の見込みの和は約 4,450 行で、上限の許可の契約表の行 a〜e（[limit-permit.md](./limit-permit.md) の行）の見込みの和は約 1,320 行。次の数本の受付が core の余地で断り始める。user 裁定 2026-10-01T04:49Z（A2・閾値の変更・逐語は器の裁定の event に残る・台帳の問い s2-07l.745・裁定 id s2-07l.745:20261001T0449Z-1）で上限を 82000 に上げる（見込みの後に約 2,200 行の余地）。
+- 約束（この 3 つだけ）:
+  1. `rules/manifest.toml` の行 `R-C4-1` の `value` を 82000 に・`ruling` を `user 2026-10-01T04:49Z` に・`ruled_at` を `2026-10-01` に書き換える。行の id・kind・`enabled` は不変で、行は増やさない（C5）。
+  2. 値を pin している既存の歯 2 本を直す。実測: repo 全体で値 74000 を持つのは、`crates/scribe2-boundary/tests/e2e/rules.rs` の `rules_cli_get_returns_value`（`rules get R-C4-1` の出力・assert の文言の裁定 id）と `rules_core_lines_74000_raised_by_ruling`（§20 の行 q が足した歯）と manifest と本 doc だけである。前者は値と文言の裁定 id を新しい値と id に直す。後者は名が前の値を持つので、同じ形の `rules_core_lines_82000_raised_by_ruling` に置き換える（値 82000・kind `CoreLines`・発効・`ruling` が `user 2026-10-01T04:49Z` で始まり・`ruled_at` が `2026-10-01`・整数の読み手が 82000 を返す）。xtask の閾値の読み手と歯は現物の manifest から値を読むので 1 字も変えない（§19・§20 と同じ・行 r は `=` で置く）。
+  3. §4.1 の表の `R-C4-1` の行の値と裁定を約束 1 と同じ内容に写し、前の値 74000 の裁定（user 2026-09-30T05:26Z・§20 行 q）を履歴として残す。
+- 触らない: `src` の全部・憲法 §3 の閾値セル（初期値を持つ・§19 と同じ）・他の行・§4 の切り方・過去の § が書いたその時点の実測値・§20 の行 q（着地済み。verify の `rules_core_lines_74000_` は置き換えの後に該当 0 本になるが、着地済みの行は撃ち直さない）。
+- 着地の後: 受付と席は埋め込み manifest を読むので、PATH の binary を入れ替えるまで受付の core の余地は 74000 で測る（運用の手順・本行の done の外）。隣の project の規則がこの行を値の正本に名指すので、着地を知らせる。
+- 却下: 75500（上限の許可の行 a〜e の見込みだけを覆い、起票済みのほかの契約の見込み約 4,450 行が入らない）／上げずに先に削る（削れる量が読めず、起票済みの契約の着地が遅れる）。
+- flip-check の入口: 変える test file は `tests/e2e/rules.rs` の 1 本で、直す歯と置き換えた歯のどちらも base（値 74000）で RED になる。
+
+## 22. lens.max_turns を 100 に上げる（契約表の行 s）
+
+- 何が起きているか（main c910d002・verified）:
+  - rules 行 `lens.max_turns` は値 30 で、[pipeline.md](./pipeline.md) §67 の行 bi が入れた。§67 の限界は「値 30 は読んだ lens の実測（2〜10 turn）からの余裕で、重い便で足りるかは着地の後に turns で見る」と書く。
+  - PATH の binary を入れ替えて上限が効き始めた後、契約の審査 4 本のうち 3 本が上限で INCONCLUSIVE（unparsed）に止まった。行の予約（31 turn）・ledger-form の行 o（31 turn）・上限の許可の行 a（31 turn を 2 回）。
+  - 直近の便 80 本の契約の審査で、1 turn を越えた 19 本の turn は 7〜81 で、31 以上が 11 本（58%）だった。gate の lens は 51 本で最大 18。
+  - user 裁定 2026-10-01T08:09Z（rules 行の値・逐語は器の裁定の event に残る・台帳の問い s2-07l.750・裁定 id s2-07l.750:20261001T0809Z-1）で、上限を 100 に上げる（実測の最大 81 に余裕を足した値）。
+- 約束（この 3 つだけ）:
+  1. `rules/manifest.toml` の行 `lens.max_turns` の `value` を 100 に・`ruling` を `user 2026-10-01T08:09Z` に・`ruled_at` を `2026-10-01` に書き換える。行の id・kind・`enabled`・位置は不変で、行は増やさない（C5）。
+  2. 値を pin している既存の歯 3 本を直す。実測（main 5820525d）: repo の test で値 30 を埋め込みの値として持つのは、次の 3 つだけである。
+     - rules の歯の file の `lens_turns_embedded_manifest_declares_the_row_with_its_ruling`（値・整数の読み手の値・裁定 id・裁定日・doc comment の値）
+     - headless の歯の file の定数（埋め込みの値の写し・裁定 id の doc comment）と、それを読む `lens_turns_passes_the_row_value_in_every_stage` の assert の文言
+     - headless の lens の子の歯の file（headless/lens.rs）の `headless_lens_version_prints_one_line_without_contract_or_worktree_and_never_calls_claude` の assert の字面 turns=30。この歯の rules は headless の歯の file の helper（rules_with_rows）が作り、helper は turn の行を上の定数の値で足す。だから定数を 100 にすると、この歯が落ちる。字面の 30 をやめ、定数（`LENS_MAX_TURNS`・子の module から見える）から組む比べに直す。次に値を変える便は、この file を触らずに済む。
+     新しい値と裁定に直す。headless の lens の歯の `turns_row(30)` は不発効の行の fixture で、埋め込みの値を写していないので触らない。
+  3. 歯の名は変えない。1 本目と 2 本目は、直した後に base（値 30）で値の比べが RED になる。3 本目は base でも緑のままである（turn の行の値は歯の側の定数から来る）。そこで headless/lens.rs の歯の区間に、この便の bead id で `// flip-check: retroactive` の札を足す。変異の証明: 版の行が turn の値を rules の行から読まずに固定の 30 を出すと、3 本目は RED になる。
+- 触らない: `src` の全部・§67 の散文が書いたその時点の値 30（履歴）・ほかの rules 行・上限で終わった周の読み（§67 の形 4）。
+- 着地の後: lens は埋め込みの manifest を読むので、PATH の binary を入れ替えるまで上限は 30 のまま（運用の手順・本行の done の外）。上限で止まった行（ledger-form の行 o・上限の許可の行 a）は、入れ替えの後に撃ち直す。
+- 却下:
+  - 段ごとに上限の行を分ける（契約の審査と gate で別の値）: 行と kind が 1 つずつ増え、§67 の「lens の turn の上限は 1 つ」の決めを覆す。gate の lens の実測は最大 18 で、100 でも費用は token の上限（`gate.token_cap`）が別に縛る。
+  - 60（実測の p50 に近い値）: 31 以上の 11 本のうち 4 本（64・77・81 ほか）が残る。
+- flip-check の入口: 変える test file は rules の歯の file・headless の歯の file・headless/lens.rs の 3 本である。前の 2 本は直した歯が base（値 30）で RED になり、headless/lens.rs は retroactive の札で通す。
+
+## 23. R-C4-1 を 90000 に上げる（契約表の行 t）
+
+- 何が起きているか（main dc5d3bd0・verified）: 行の審査の確定の機械の検査 cap-headroom は、core の余地を 475 行と測った（上限 R-C4-1 = 82000）。[write-budget.md](./write-budget.md) の行 a の見込み 497 行が入らず、行の審査が FAIL になった。走行中の日次の検出（[gate-cost.md](./gate-cost.md) の行 au・見込み 469 行）が着地すると、余地はほぼ 0 になる。書き込みの検出線の 3 行の見込みは計約 850 行で、待ちの行（[contract-source.md](./contract-source.md) の行 bx の 46 行など）も core の余地を使う。user 裁定 2026-10-03T05:09Z（A2・閾値の変更・逐語は器の裁定の event に残る・台帳の問い s2-07l.752・裁定 id s2-07l.752:20261003T0509Z-1）で上限を 90000 に上げる（前回の §21 と同じ +8000）。
+- 約束（番号は done と 1:1）:
+  1. `rules/manifest.toml` の行 `R-C4-1` の `value` を 90000 に・`ruling` を `user 2026-10-03T05:09Z` に・`ruled_at` を `2026-10-03` に書き換える。行の id・kind・`enabled` は不変で、行は増やさない（C5）。上げた行を名指す歯 `rules_core_lines_82000_raised_by_ruling`（§21 の行 r が足した歯・名が前の値を持つ）を、同じ形の `rules_core_lines_90000_raised_by_ruling` に置き換える（値 90000・kind `CoreLines`・発効・`ruling` が `user 2026-10-03T05:09Z` で始まり・`ruled_at` が `2026-10-03`・整数の読み手が 90000 を返す）。
+  2. `rules get R-C4-1` の出力を pin する既存の歯 `rules_cli_get_returns_value` の値と、assert の文言の裁定 id を新しい値と id に直す。実測: repo 全体で値 82000 を持つのは、`crates/scribe2-boundary/tests/e2e/rules.rs` のこの 2 本と manifest と本 doc だけである。
+- 設計の線（歯を持たない・審査が読む）: §4.1 の表の `R-C4-1` の行の値と裁定を約束 1 と同じ内容に写し、前の値 82000 の裁定（user 2026-10-01T04:49Z・§21 行 r）を履歴として残す。xtask の閾値の読み手と歯は現物の manifest から値を読むので 1 字も変えない（§19〜§21 と同じ・write-set には `=` で置く）。
+- 触らない: `src` の全部・憲法 §3 の閾値セル（初期値を持つ・§19 と同じ）・他の行・§4 の切り方・過去の § が書いたその時点の実測値・§21 の行 r（着地済み。verify の `rules_core_lines_82000_` は置き換えの後に該当 0 本になるが、着地済みの行は撃ち直さない）。
+- 着地の後: 受付と席は埋め込み manifest を読むので、PATH の binary を入れ替えるまで受付の core の余地は 82000 で測る（運用の手順・本行の done の外）。隣の project の規則がこの行を値の正本に名指すので、着地を知らせる。
+- 却下: 83500（書き込みの検出線の 3 行と走行中の行だけを覆い、待ちの行と次の設計の分が入らない）／上げずに先に削る（削れる量が読めず、書き込みの検出線と待ちの行が受付で止まる）。
+- flip-check の入口: 変える test file は `tests/e2e/rules.rs` の 1 本で、直す歯と置き換えた歯のどちらも base（値 82000）で RED になる。
+
+<!-- contracts:begin -->
+schema = 1
+
+[[contract]]
+id = "a"
+title = "読み手の無い enabled な rules 行を xtask check の検出線 rules-wired が名指す"
+req = ["FR17"]
+section = "4"
+write-set = ["crates/xtask/src/rules_wired.rs", "crates/xtask/src/check.rs", "crates/xtask/src/main.rs", "crates/xtask/src/check_tests.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail rules_wired_"]
+size = "S"
+done = "xtask check の判定行に rules-wired の fact（unwired の本数と id）が出て rc は変わらない"
+
+[[contract]]
+id = "b"
+title = "憲法 §3 の行 id と manifest の R-* 行を双方向に突合する検出線 rules-parity・設計 doc の手書きの件数の撤去"
+req = ["FR17", "FR18"]
+section = "4"
+write-set = ["crates/xtask/src/rules_parity.rs", "crates/xtask/src/check.rs", "crates/xtask/src/main.rs", "crates/xtask/src/claude_md.rs", "crates/xtask/src/check_tests.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail rules_parity_"]
+size = "S"
+done = "判定行に doc-only / manifest-only の id が出て、設計 doc から手書きの variant の件数が消える"
+depends = ["a"]
+
+[[contract]]
+id = "c"
+title = "1 便あたりの依存の増分を R-C13-1.per-pr と突合する xtask deps-delta・依存を足した便の check-delta-ms を検出線に記録"
+req = ["FR7", "FR17", "NFR3"]
+section = "4"
+write-set = ["crates/xtask/src/deps_delta.rs", "crates/xtask/src/main.rs", "crates/xtask/src/limits.rs", "crates/xtask/src/check_facts.rs", "crates/xtask/src/check_tests.rs", ".github/workflows/ci.yml", "CLAUDE.md", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail deps_delta_"]
+size = "S"
+done = "per-pr を超えて依存を足す PR が CI の入口で落ち、足した便の check-delta-ms が判定行に残る"
+depends = ["a"]
+
+[[contract]]
+id = "d"
+title = "CLAUDE.md の done の定義を ci.yml から生成する区間にし、生成区間の外の規範行を検出線 claude-md-prose で数える"
+req = ["FR17"]
+section = "3"
+write-set = ["crates/xtask/src/claude_md.rs", "crates/xtask/src/check.rs", "crates/xtask/src/prose_gate.rs", "crates/xtask/src/genmanifest.rs", "crates/xtask/src/check_tests.rs", "CLAUDE.md", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail claude_md_done_ claude_md_prose_"]
+size = "S"
+done = "done の定義が ci.yml から生成され drift が xtask check で落ち、区間外の規範行の件数が判定行に出る"
+depends = ["a"]
+
+[[contract]]
+id = "e"
+title = "enum-slices を順序一致に強め、極性の宣言 site と Guard の網羅を両方向で突合する（免除は NOT_A_GUARD の closed slice）"
+req = ["FR17"]
+section = "3"
+touches = ["crate::polarity::Guard"]
+write-set = ["crates/xtask/src/enum_slices.rs", "crates/xtask/src/polarity.rs", "crates/xtask/src/check.rs", "crates/xtask/src/check_tests.rs", "crates/scribe2/src/polarity.rs", "crates/scribe2/src/fleet/mod.rs", "crates/scribe2/src/fleet/json_tree.rs", "crates/scribe2-boundary/tests/e2e/polarity.rs", "crates/scribe2-boundary/tests/e2e/snapshots/e2e__polarity__polarity_external_form.snap", "docs/design/polarity.md", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail enum_slices_order_", "cargo nextest run -p xtask --no-tests=fail polarity_sites_"]
+size = "S"
+done = "順序違いの slice が添字付きで落ち、Guard に無い極性 site と site の無い Guard が両方向で名指され、免除は closed slice 1 本"
+depends = ["a"]
+
+[[contract]]
+id = "f"
+title = "xtask の check_tests.rs（1319 行・xtask 便の hub）を子 module 2 つ（nonrust / prose）に割る — 純移動・札 moved"
+req = ["FR17"]
+section = "10"
+write-set = ["-crates/xtask/src/check_tests.rs", "+crates/xtask/src/check_nonrust_tests.rs", "+crates/xtask/src/check_prose_tests.rs"]
+verify = ["cargo nextest run -p xtask --no-tests=fail check::tests::nonrust:: check::tests::prose::"]
+size = "S"
+done = "check_tests.rs の余地が 600 行以上に戻り、歯が 2 つの子 module に移って本数と中身が不変"
+
+[[contract]]
+id = "g"
+title = "private-clean の needle に v1 台帳 id 形と state dir の絶対 path 形を足し、該当する tracked 2 file を掃除する — needle は閉じた enum の variant 1 つずつ"
+req = ["FR52"]
+section = "11"
+write-set = ["crates/xtask/src/private_clean.rs", "SPIKE-tooling-report.md", "design-intent/research/SPIKE-folio-report.html", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail private_clean_ledger_ private_clean_state_dir_ private_clean_relative_state_dir_"]
+size = "S"
+done = "2 形の needle が在り、tracked に該当 0 で cargo xtask check が緑（ADR-0004 の相対形の言及は当てない）"
+
+[[contract]]
+id = "h"
+title = "gate.token_cap を 150000 → 400000 に一時的に上げる — 純移動でない 169 KB の diff（.209）を lens に通す・裁定 id 付き・戻しは行 i"
+req = ["FR9"]
+section = "4"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_token_cap_"]
+size = "S"
+done = "manifest の行の値と裁定 id が新しく、埋め込み値の pin が 400000 で緑、§4.1 の表が同じ値と裁定を写し、src は不変"
+
+[[contract]]
+id = "i"
+title = "gate.token_cap を 400000 → 150000 に戻す — .209 Landed 後・行 h の対・裁定 id は行 h と同じ承認"
+req = ["FR9"]
+section = "14"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p scribe2 --test e2e --no-tests=fail rules_cli_rules_flag_overrides_embedded", "cargo nextest run -p scribe2 --test e2e --no-tests=fail rules_row_readers_return_the_value_or_one_of_three_reasons", "cargo nextest run -p scribe2 --test e2e --no-tests=fail rules_token_cap_revert_"]
+size = "S"
+done = "§14 の約束 1〜3 のとおり: 埋め込み manifest の gate.token_cap が値 150000 と戻しの裁定の字面（s2-07l.376 を名指す）を持ち、値を pin する既存の歯 2 本と戻しの行を名指す歯 1 本が緑で、§4.1 の表が同じ値と裁定を写し、src は不変"
+
+[[contract]]
+id = "j"
+title = "rules_wired の in-file の歯に「字下げした #[cfg(test)] は test 区間の印に数えない」fixture を足す — 実装は不変・retroactive 札"
+req = ["FR17"]
+section = "12"
+write-set = ["crates/xtask/src/rules_wired.rs"]
+verify = ["cargo nextest run -p xtask --no-tests=fail rules_wired_indented_"]
+size = "S"
+done = "変異 starts_with → contains が赤になる歯が在る"
+
+[[contract]]
+id = "k"
+title = "session 用の閾値の行 R-C9-1 の値を 95 に上げる — 値と裁定 id と ruled_at だけを書き換え、値を pin する歯と rules の外形 snapshot を直す（特例・裁定 user 2026-09-17T07:30Z・窓別は s2-07l.434）"
+req = ["FR36", "FR38"]
+section = "13"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap", "crates/scribe2-boundary/tests/e2e/seat.rs", "crates/scribe2-boundary/tests/e2e/seat/account.rs", "crates/scribe2-boundary/tests/e2e/fleet.rs", ".config/nextest.toml"]
+verify = ["cargo nextest run -p scribe2 --test e2e --no-tests=fail rules_embedded_manifest_declares_account_selection_threshold", "cargo nextest run -p scribe2 --test e2e --no-tests=fail rules_external_form", "cargo nextest run -p scribe2 --test e2e --no-tests=fail seat_account_relaunch_", "cargo nextest run -p scribe2 --test e2e --no-tests=fail seat_account_tick_", "cargo nextest run -p scribe2 --test e2e --no-tests=fail seat_threshold_95_"]
+size = "M"
+done = "埋め込み manifest の R-C9-1 が値 95 と裁定 id user 2026-09-17T07:30Z を持ち、rules get R-C9-1 の外形が 95 を出し、読み手と選定の code は不変"
+
+[[contract]]
+id = "l"
+title = "xtask の check_tests.rs（1229 行・余地 271）から enum_slices の歯 5 本と専用 fixture を子 module へ割る — 純移動・#[path] で歯の fn 名は不変・札 moved"
+req = ["FR17"]
+section = "15"
+write-set = ["crates/xtask/src/check.rs", "crates/xtask/src/check_tests.rs", "+crates/xtask/src/check_enum_slices_tests.rs"]
+verify = ["cargo nextest run -p xtask --no-tests=fail enum_slices_", "cargo nextest run -p xtask --no-tests=fail rules_parity_ nextest_tmux_group_"]
+size = "S"
+done = "(1) write_enum_slice と enum_slices_ の歯 5 本が + の file に名・本文・assert・順序のまま在り (2) 宣言が §10 の 2 つと同じ #[path] の形で親の末尾に 1 つ増え enum_slices_ の filter が base と同じ 5 本に当たり (3) 共有 helper は親に残って子が use super:: で読み（可視性を pub(super) に上げる以外は触らず複製もしない） (4) 歯の総数が 30 のまま（親 25 + 子 5）で親に残る rules_parity_ 4 本と nextest_tmux_group_ 4 本が緑のまま (5) 札 flip-check: moved が親の末尾と + の file の module doc の直後に対で在り s2-07l.257 と s2-07l.370 の札が持ち越され (6) crates/xtask/src/check.rs が 1 字も変わらず (7) file-lines で check_tests.rs の余地が base の 271 から 300 以上へ増える"
+[[contract]]
+id = "m"
+title = "src / test の切れ目に「名が tests.rs か _tests.rs で終わる file は丸ごと test」を足し、flip-check と rules-wired の同じ字面をその 1 本の述語へ寄せる（閾値は動かさない）"
+req = ["FR17"]
+section = "16"
+write-set = ["crates/xtask/src/workspace.rs", "crates/xtask/src/check_sizes.rs", "crates/xtask/src/flipcheck.rs", "crates/xtask/src/rules_wired.rs", "crates/xtask/src/env_reads.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail sizes_split_counts_named_test_files_as_whole_test", "cargo nextest run -p xtask --no-tests=fail sizes_ratio_counts_named_test_files_on_the_test_side"]
+size = "S"
+done = "(1) 名が tests.rs か _tests.rs で終わる file の src 側が 0 行になり test-src-ratio の判定行が 43% 台（上限 100% で違反 0）・core-lines が 40408（上限 60000）で出る (2) flip-check の is_test_file の src 配下の枝と rules-wired の TEST_FILE_TAIL の判定が同じ 1 本の述語を呼び、_tests.rs の判定の字面が xtask の src 区間（歯の fixture 名を除く）で述語の中の 1 か所だけになり、flip-check の tests/ の枝と rules-wired の DECLARING の枝の挙動が base と同じ (3) env-reads の判定行の違反と母集団が base と同じ値で出る (4) §4 の切り方の 2 文が新しい形を写し（file 名の tail は backtick 無しで書く・現物の契約表の歯 contract_closure_ext_real_table_has_zero_findings が緑のまま）、rules/manifest.toml と憲法 §3 の閾値セルが 1 字も変わらない"
+
+[[contract]]
+id = "n"
+title = "決定の索引（決定 dir の file 集合 ↔ README の link の列）と語彙が名指す決定 id の解決を xtask check の検出線 1 本で双方向に測る — rc は変えず、片側だけの id の列と母集団の 3 つ組を判定行に出す"
+req = ["FR17", "NFR4"]
+section = "17"
+write-set = ["crates/xtask/src/check.rs", "crates/xtask/src/main.rs", "+crates/xtask/src/decisions_index.rs", "crates/xtask/src/check_tests.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p xtask --no-tests=fail decisions_index_"]
+size = "M"
+done = "(1) xtask check の measure の列に push が 1 行増え、判定行に新しい tag の fact が 1 つ増える (2) 決定 dir 直下の ADR- で始まる .html の集合と README の a 要素の href の列を両方向に突合し、片側にしか無い file 名を出現順の列で名乗る（HTML の読み手は既存の tag 読み 4 本を呼び、2 本目の parser を作らない） (3) 語彙 file の本文の決定 id を distinct に集め、決定 file の集合に解けない id を列で名乗る (4) 極性は検出線で、両方向の差が 1 本以上でも違反を立てず cargo xtask check の rc が変わらない (5) 決定 dir の無い木は n/a の 1 語・索引か語彙を読めない周は ? + 違反 1 件・片側 0 本の列は - (6) SUMMARY_PIN に本 tag の token が在り ids= を持つ token の頭の列に 3 つの頭が加わり、現物の repo の判定行がその形に一致する"
+
+[[contract]]
+id = "o"
+title = "受付の core の余地が名で test の file（tests.rs か _tests.rs で終わる file）の本体を 0 行と数え、gate の core-lines と同じ合計になる — 閾値は動かさない（§16 の後続）"
+req = ["FR68", "FR17"]
+section = "18"
+write-set = ["crates/scribe2/src/pipe/declaration/write_set.rs", "docs/design/rules-manifest.md"]
+verify = ["cargo nextest run -p scribe2 --lib --no-tests=fail intake_core_room_named_tests_", "cargo nextest run -p scribe2 --lib --no-tests=fail pipe_intake_core_headroom_"]
+size = "S"
+growth = ["crates/scribe2/src/pipe/declaration/write_set.rs:40"]
+done = "(1) FileLines::of が、path の file 名が tests.rs か _tests.rs で終わる周だけ本体を 0 行と数え、全体の行数は変えない（名の述語は core の側に 1 本・名に tests を含むが tail の違う file は素の file のまま） (2) 受付の core の合計が xtask check の core-lines と同じ切り方になる（名で test の file の本体を数えない） (3) src_region と審査の材料の読み手と file の余地（R-C4-2）の母集団は変えず、既存の pipe_intake_core_headroom_ の歯は期待を変えずに緑 (4) rules-manifest.md §4 の「名の弁別は持たない＝gate より厳しい側」の 1 文を同じ切り方になった形に写す（file 名の tail は backtick で書かない） 歯: intake_core_room_named_tests_count_zero_src_like_the_xtask_split（_tests.rs と tests.rs は本体 0・contests.rs と素の file は本体 = 全体）・intake_core_room_named_tests_do_not_eat_the_core_headroom（本体 1000 と印の無い 400 行の _tests.rs の base で上限 1450 の余地が 450・base は 50 で S の新規 1 本を断る）"
+[[contract]]
+id = "p"
+title = "R-C4-1（core の本体の上限）を 60000 → 66000 に上げる — 値と裁定 id と ruled_at だけを書き換え、値を pin する歯を直し、上げた行を名指す歯を足す（裁定 user 2026-09-29T00:59Z・A2）"
+req = ["FR17"]
+section = "19"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md", "=crates/xtask/src/limits.rs", "=crates/xtask/src/check_tests.rs"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_cli_get_returns_value", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_core_lines_66000_"]
+size = "S"
+done = "§19 の約束 1〜3 のとおり: 埋め込み manifest の R-C4-1 が値 66000 と裁定 id user 2026-09-29T00:59Z と ruled_at 2026-09-29 を持ち、rules get R-C4-1 が 66000 を出す歯と上げた行を名指す歯（rules_core_lines_66000_ で始まる）が緑で、§4.1 の表が同じ値と裁定を写して前の値 60000 の裁定を履歴に残し、src と憲法 §3 の閾値セルは不変で、xtask の閾値の読み手と歯（limits_match_rules_manifest・rules_manifest・real_limits）は現物の manifest から値を読むので 1 字も変えずに緑"
+
+[[contract]]
+id = "q"
+title = "R-C4-1（core の本体の上限）を 66000 → 74000 に上げる — 値と裁定 id と ruled_at だけを書き換え、値を pin する歯を直し、上げた行を名指す歯を新しい値の名に置き換える（裁定 user 2026-09-30T05:26Z・A2）"
+req = ["FR17"]
+section = "20"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md", "=crates/xtask/src/limits.rs", "=crates/xtask/src/check_tests.rs"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_cli_get_returns_value", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_core_lines_74000_"]
+size = "S"
+done = "§20 の約束 1〜3 のとおり: 埋め込み manifest の R-C4-1 が値 74000 と裁定 id user 2026-09-30T05:26Z と ruled_at 2026-09-30 を持ち、rules get R-C4-1 が 74000 を出す歯と上げた行を名指す歯（rules_core_lines_74000_ で始まる・前の値の名の歯は置き換えて残さない）が緑で、§4.1 の表が同じ値と裁定を写して前の値 66000 の裁定を履歴に残し、src と憲法 §3 の閾値セルは不変で、xtask の閾値の読み手と歯（limits_match_rules_manifest・rules_manifest・real_limits）は現物の manifest から値を読むので 1 字も変えずに緑"
+
+[[contract]]
+id = "r"
+title = "R-C4-1（core の本体の上限）を 74000 → 82000 に上げる — 値と裁定 id と ruled_at だけを書き換え、値を pin する歯を直し、上げた行を名指す歯を新しい値の名に置き換える（裁定 user 2026-10-01T04:49Z・A2）"
+req = ["FR17"]
+section = "21"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md", "=crates/xtask/src/limits.rs", "=crates/xtask/src/check_tests.rs"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_cli_get_returns_value", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_core_lines_82000_"]
+size = "S"
+done = "§21 の約束 1〜3 のとおり: 埋め込み manifest の R-C4-1 が値 82000 と裁定 id user 2026-10-01T04:49Z と ruled_at 2026-10-01 を持ち、rules get R-C4-1 が 82000 を出す歯と上げた行を名指す歯（rules_core_lines_82000_ で始まる・前の値の名の歯は置き換えて残さない）が緑で、§4.1 の表が同じ値と裁定を写して前の値 74000 の裁定を履歴に残し、src と憲法 §3 の閾値セルは不変で、xtask の閾値の読み手と歯（limits_match_rules_manifest・rules_manifest・real_limits）は現物の manifest から値を読むので 1 字も変えずに緑"
+
+[[contract]]
+id = "s"
+title = "lens.max_turns（lens の turn の上限）を 30 → 100 に上げる — 値と裁定 id と ruled_at だけを書き換え、埋め込みの値を pin する歯 3 本を新しい値と裁定に直す（裁定 user 2026-10-01T08:09Z）"
+req = ["FR5", "FR9"]
+section = "22"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules/embedded.rs", "crates/scribe2-boundary/tests/e2e/headless.rs", "crates/scribe2-boundary/tests/e2e/headless/lens.rs"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail lens_turns_embedded_manifest_declares_the_row_with_its_ruling", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail lens_turns_passes_the_row_value_in_every_stage", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail headless_lens_version_prints_one_line_without_contract_or_worktree_and_never_calls_claude"]
+size = "S"
+done = "(1) 埋め込み manifest の lens.max_turns は値 100・裁定 id user 2026-10-01T08:09Z・裁定日 2026-10-01 で、kind LensMaxTurns・発効・位置と行の数は変わらない〔直す既存の歯 lens_turns_embedded_manifest_declares_the_row_with_its_ruling の値・整数の読み手の値・裁定 id・裁定日の pin〕 (2) --rules を渡さない lens は、段に依らず argv に --max-turns 100 の対をちょうど 1 つ持つ〔直す既存の歯 lens_turns_passes_the_row_value_in_every_stage の埋め込みの値の定数〕 (3) --print-version の版の行は turns=100 を持ち、歯 headless_lens_version_prints_one_line_without_contract_or_worktree_and_never_calls_claude は turns の字面を 30 と書かず headless の歯の file の定数 LENS_MAX_TURNS から組んで比べる〔直す既存の歯・headless/lens.rs の歯の区間に札 // flip-check: retroactive s2-07l.751〕 base は値 30 なので (1)(2) の値の比べが RED で、(3) は base でも緑なので札で通す（変異の証明: 版の行が turn の値を固定の 30 で出すと (3) が RED）"
+[[contract]]
+id = "t"
+title = "R-C4-1（core の本体の上限）を 82000 → 90000 に上げる — 値と裁定 id と ruled_at だけを書き換え、値を pin する歯を直し、上げた行を名指す歯を新しい値の名に置き換える（裁定 user 2026-10-03T05:09Z・A2）"
+req = ["FR17"]
+section = "23"
+write-set = ["rules/manifest.toml", "crates/scribe2-boundary/tests/e2e/rules.rs", "docs/design/rules-manifest.md", "=crates/xtask/src/limits.rs", "=crates/xtask/src/check_tests.rs"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_cli_get_returns_value", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_core_lines_90000_"]
+size = "S"
+done = "(1) 埋め込み manifest の R-C4-1 が値 90000 と kind CoreLines と発効と裁定 id user 2026-10-03T05:09Z と ruled_at 2026-10-03 を持ち、整数の読み手が 90000 を返し、上げた行を名指す歯は rules_core_lines_90000_ で始まる名に置き換わって前の値の名の歯は残らない〔rules_core_lines_90000_raised_by_ruling〕 (2) rules get R-C4-1 が 90000 の 1 行を出し、assert の文言の裁定 id が user 2026-10-03T05:09Z〔直す既存の歯 rules_cli_get_returns_value〕 歯は base（値 82000）でどちらも RED（機能不在: base の manifest は 82000 と前の裁定を持つ）"
+done-teeth = ["1:rules_core_lines_90000_raised_by_ruling", "2:rules_cli_get_returns_value"]
+<!-- contracts:end -->

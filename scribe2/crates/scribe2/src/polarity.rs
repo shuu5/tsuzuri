@@ -1,0 +1,369 @@
+//! 全 guard の極性を型で持ち、一覧を外形として描く（設計 docs/design/polarity.md・ADR-0014・
+//! 憲法 C11.2 / C16.2 / C12.5 / C2・SRS FR20 / FR26 / AC3）。
+//!
+//! guard は「行為（編集・起動・merge・書込・session の作り直し）を止めうる判定を返す境界」で、
+//! 2 軸の極性を持つ: **いつ止めるか**（[`Timing`]）と**測れない周にどちらへ倒れるか**
+//! （[`OnFailure`]）。値は**境界が持つ**（C11.2「境界ごとの enum が極性型を運ぶ」）——各 guard の
+//! module が自分の判定 enum の隣に `pub const POLARITY: Polarity` を置き、ここはそれを**集める
+//! だけ**で値を持たない（2 面化しない）。
+//!
+//! [`Guard`] は閉じた enum で、全 variant の const slice [`ALL`]・網羅 match・判別子順 pin の
+//! 4 つ組（ADR-0013 §2.2）で持つ。境界を足す便は variant を足し、`ALL` に並べ、境界に
+//! `POLARITY` を置く（入れ忘れは網羅 match と `enum-slices` の measure が落とす）。
+//!
+//! 一覧の生成物は `<NAME> polarity` の全出力を pin した tracked snapshot（C11.2「build 時に
+//! 生成」の充足形・ADR-0014 §2.2）で、C16.2 の門は `cargo xtask check` がその snapshot の
+//! 集計行を読む（§2.3）。**FailOpen の境界は隠さない**——cap guard は「測れない周は deny
+//! しない」（FR26）と設計で決めた FailOpen で、一覧はそれをそのまま出す。
+
+/// いつ止めるか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Timing {
+    /// 行為の時点で止める（C16「edit time」）。
+    InLoop,
+    /// 行為の後に測って落とす。
+    PostHoc,
+}
+
+impl Timing {
+    /// 一覧の行に出す語。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InLoop => "in-loop",
+            Self::PostHoc => "post-hoc",
+        }
+    }
+}
+
+/// 測れない・読めない周にどちらへ倒れるか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnFailure {
+    /// 止める側へ倒す。
+    FailClosed,
+    /// 通す側へ倒し、記録を残す。
+    FailOpen,
+}
+
+impl OnFailure {
+    /// 一覧の行に出す語。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::FailClosed => "fail-closed",
+            Self::FailOpen => "fail-open",
+        }
+    }
+}
+
+/// 2 軸の対。境界が定数として持つ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Polarity {
+    /// いつ止めるか。
+    pub timing: Timing,
+    /// 測れない周の倒れ方。
+    pub on_failure: OnFailure,
+}
+
+/// 行為を止めうる判定を返す境界の全数。**宣言順は行為の流れ**（hook〔選択式の問いの門から起票の門・anchor の門・merge の門まで〕→ host の見張り → 席の登録 → 権能の執行 → 走っている便の行 → 契約表 → intake → 審査 → spawn〔予算・承認〕→
+/// runner → gate〔器の健康の遮断器・機械検証・純移動・lens〕→ land〔main 実測・anchor 同期・worktree の clean・追随の起こし直し〕→ store → 注入 → cycle → 退避 → 消費）で、順序に意味は無いが C2 の形（[`ALL`] と判別子順 pin）に合わせる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Guard {
+    /// 選択式の問いの道具を `pre-tool-use` の全部の門の前で止める（[`crate::hook::choice_question`]・設計 vessel-hook.md §20）。
+    ChoiceQuestion,
+    /// 裁定面の答えの口 `seat ruling answer` を席の道具の呼び出しから撃たせない（[`crate::hook::answer_mouth`]・設計 dialogue-surface.md §11）。
+    AnswerMouth,
+    /// `pre-tool-use` の write-set guard（[`crate::hook::guard`]）。
+    WriteSet,
+    /// 内蔵 guard の承認の問いへの一律 deny（[`crate::hook::permission`]）。
+    Permission,
+    /// Bash の command guard＝rules 行 `runner.denied_commands` の語列に当たる command を実行の時点で止める
+    /// （[`crate::hook::command`]・ADR-0025 §2.2）。
+    Command,
+    /// 起票の門＝memo の create に 4 節の本文を、契約の create に label `intake:memo` の不在を要求する
+    /// （[`crate::hook::ledger_guard`]・設計 ledger-form.md §3 の 9）。
+    Ledger,
+    /// anchor の門＝揃えなかった anchor で index を載せる git の 7 語と、着地列の窓が閉じている間の main の anchor の commit と
+    /// `gh pr merge` を実行の時点で止める（[`crate::hook::anchor_guard`]・設計 vessel-hook.md §14）。
+    AnchorGuard,
+    /// merge の門＝`gh pr merge` が本文に発端の trailer か器の便の trailer を渡さなければ実行の前に止める
+    /// （[`crate::hook::merge_gate`]・設計 vessel-hook.md §21・FR92）。
+    MergeGate,
+    /// host の破壊防止の見張り＝口座の設定から呼ばれる subcommand `host-guard` が閉じた 5 種類の破壊を行為の時点で止める
+    /// （[`crate::hook::host_guard`]・設計 vessel-hook.md §11・ADR-0056）。
+    HostGuard,
+    /// 席の登録の受付＝打刻の無い session からの登録を断る（[`crate::seat::role`]）。
+    Register,
+    /// 席の権能の執行＝役割の行に無い権能付き subcommand と path 種別の編集を止める（[`crate::hook::role_guard`]）。
+    Role,
+    /// 席の道具の呼び出しの 3 形（hook の subcommand の直撃・置き場の event log への書き・pipe gate / land / resume への `--rules`）を
+    /// 権能の guard の後ろ・走っている便の行の門の前で断る（[`crate::hook::bypass_guard`]・設計 limit-permit.md §17・FR112）。
+    BypassDeny,
+    /// 席の Bash の `git worktree add` と `git clone` の行き先を、席の起草の置き場の直下と anchor の `.worktrees/` の直下に限り、
+    /// 外と解けない行き先を実行の前に断る（[`crate::hook::drafts_guard`]・設計 vessel-hook.md §25・ADR-0096）。
+    DraftsGuard,
+    /// 走っている便の契約の行の字を編集と commit の時点で止める門（[`crate::hook::live_row`]・設計 vessel-hook.md §15）。
+    LiveRow,
+    /// 契約表の検査＝閉包 ⊄ write-set・区間 / req / section / verify / depends の欠陥（[`crate::pipe::table`]・本便は CI の post-hoc）。
+    ContractTable,
+    /// intake の断り＝vessel 宣言の verify 行の不適合（[`crate::pipe::declaration`]）。
+    Intake,
+    /// intake の排他＝live な便と write-set が交差する契約を受け付けない（[`crate::pipe::refuse`]）。
+    IntakeRefuse,
+    /// 契約の審査の段＝lens の verdict が PASS でない便（と判定を読めない便）を spawn しない
+    /// （[`crate::pipe::review::ReviewCheck`]・FR49・設計 contract-source.md §8）。
+    Review,
+    /// spawn の予算＝実測を経ずに起動できない口（[`crate::pipe::Budget`]）。
+    Budget,
+    /// A1 の承認関門＝3 クラスを名乗る契約を承認 event 無しに起動しない（[`crate::pipe::approve`]）。
+    Approval,
+    /// runner の上限 record による便の中断（[`crate::headless::runner::Decision`]・FailOpen）。
+    RunnerStop,
+    /// runner の包みが最終行の質問 record で便を `Questioned` へ倒す判定（[`crate::headless::runner::Ending`]・FailOpen）。
+    RunnerQuestion,
+    /// 器の健康の遮断器＝host が混んだまま待ちの上限を超えた周に verify の行を撃たない（[`crate::pipe::health::Health`]・
+    /// 測れない周は撃つ側へ倒す FailOpen・設計 gate-cost.md §32）。
+    GateHealth,
+    /// gate の機械検証の段（[`crate::pipe::gate::Check`]）。
+    GateCheck,
+    /// gate の純移動の機械証明＝lens へ diff でなく要約を渡す判定（[`crate::pipe::move_proof::LensInput`]・FailOpen）。
+    MoveProof,
+    /// gate の lens 1 本の判定（[`crate::pipe::gate::Verdict`]）。
+    GateLens,
+    /// land の main 実測（`pipe::land::MainCheck`）。
+    LandMain,
+    /// land の後に anchor を新 main へ揃えるかの見立て（`pipe::land::AnchorPlan`）。
+    LandAnchor,
+    /// 便の worktree が clean か＝rebase（`.119`）と retire の move の前提（[`crate::pipe::land::WorktreeCheck`]）。
+    LandWorktree,
+    /// 追随が衝突した便を起こし直す回数の上限（[`crate::pipe::follow::FollowCheck`]）。
+    FollowRetry,
+    /// event log の書込 lock（[`crate::fleet::store`]）。
+    StoreLock,
+    /// tmux pane への注入の断り＝入力欄が非空なら 1 key も送らない（[`crate::seat::inject`]）。
+    Inject,
+    /// runner の起動行の受付＝既に `--account-dir` を持つ行に器の口座を足さずに断る
+    /// （[`crate::pipe::spawn::LineRefusal`]・設計 account-autonomy.md §16）。
+    SpawnLine,
+    /// land の終端＝push の失敗と CI が success でない周（と測れない周）に**台帳を close しない**
+    /// （[`crate::pipe::land::Terminal`]・設計 contract-source.md §5）。
+    LandTerminal,
+    /// turn の終わりの止め＝未告の未仕分けの発話を持つ session の `Stop` を 1 度だけ止める（[`crate::hook::turn_end`]・
+    /// 設計 dialogue-surface.md §12・読めない周は止めずに記帳して通す FailOpen）。
+    TurnEndBlock,
+}
+
+/// [`Guard`] の全 variant（宣言順）。
+pub const ALL: &[Guard] = &[
+    Guard::ChoiceQuestion,
+    Guard::AnswerMouth,
+    Guard::WriteSet,
+    Guard::Permission,
+    Guard::Command,
+    Guard::Ledger,
+    Guard::AnchorGuard,
+    Guard::MergeGate,
+    Guard::HostGuard,
+    Guard::Register,
+    Guard::Role,
+    Guard::BypassDeny,
+    Guard::DraftsGuard,
+    Guard::LiveRow,
+    Guard::ContractTable,
+    Guard::Intake,
+    Guard::IntakeRefuse,
+    Guard::Review,
+    Guard::Budget,
+    Guard::Approval,
+    Guard::RunnerStop,
+    Guard::RunnerQuestion,
+    Guard::GateHealth,
+    Guard::GateCheck,
+    Guard::MoveProof,
+    Guard::GateLens,
+    Guard::LandMain,
+    Guard::LandAnchor,
+    Guard::LandWorktree,
+    Guard::FollowRetry,
+    Guard::StoreLock,
+    Guard::Inject,
+    Guard::SpawnLine,
+    Guard::LandTerminal,
+    Guard::TurnEndBlock,
+];
+
+/// `Polarity` を持つが **guard ではない**境界（設計 docs/design/polarity.md §3・`s2-07l.177`）。
+///
+/// 極性の宣言 site は `crates/*/src` の `const <NAME>: Polarity` の全数で、[`Guard::polarity`] の
+/// 網羅 match が参照する path とは一致しない——計測や読取りの境界も「測れない周にどちらへ倒れるか」
+/// を型で持つからである。その差は **doc コメントでなくこの閉じた slice** が持つ（散文は規則では
+/// ない・N2）: `xtask polarity-sites` が site の全数と match の参照 path を両方向で突き合わせ、
+/// ここに無い site と、ここに在るのに宣言 site の無い要素を名指す。
+///
+/// 要素は site の const を crate 相対 path で参照した**値**である（[`Guard::polarity`] の arm と
+/// 同じ参照の形）。型は `&[Polarity]` で `Polarity` は struct なので、`enum-slices` の対には
+/// 数えない（`variants_of` が `struct` 宣言を見て対象外にする）。
+pub const NOT_A_GUARD: &[Polarity] = &[
+    crate::fleet::json_tree::POLARITY,
+    crate::fleet::UnmeasuredReason::POLARITY,
+    crate::fleet::select::NoCandidateReason::POLARITY,
+    crate::fleet::usage::UsageError::POLARITY,
+    crate::seat::ledger::POLARITY,
+    crate::seat::recent::POLARITY,
+    crate::hook::precompact::WRITE_POLARITY,
+    crate::hook::precompact::READ_POLARITY,
+    crate::ledger::POLARITY,
+];
+
+impl Guard {
+    /// 境界が持つ極性を返す**だけ**（一覧の側に値を書かない）。
+    pub fn polarity(self) -> Polarity {
+        match self {
+            Self::ChoiceQuestion => crate::hook::choice_question::POLARITY,
+            Self::AnswerMouth => crate::hook::answer_mouth::POLARITY,
+            Self::WriteSet => crate::hook::guard::POLARITY,
+            Self::Permission => crate::hook::permission::POLARITY,
+            Self::Command => crate::hook::command::POLARITY,
+            Self::Ledger => crate::hook::ledger_guard::POLARITY,
+            Self::AnchorGuard => crate::hook::anchor_guard::POLARITY,
+            Self::MergeGate => crate::hook::merge_gate::POLARITY,
+            Self::HostGuard => crate::hook::host_guard::POLARITY,
+            Self::Register => crate::seat::role::POLARITY,
+            Self::Role => crate::hook::role_guard::POLARITY,
+            Self::BypassDeny => crate::hook::bypass_guard::POLARITY,
+            Self::DraftsGuard => crate::hook::drafts_guard::POLARITY,
+            Self::LiveRow => crate::hook::live_row::POLARITY,
+            Self::ContractTable => crate::pipe::table::POLARITY,
+            Self::Intake => crate::pipe::declaration::POLARITY,
+            Self::IntakeRefuse => crate::pipe::refuse::POLARITY,
+            Self::Review => crate::pipe::review::POLARITY,
+            Self::Budget => crate::pipe::BUDGET_POLARITY,
+            Self::Approval => crate::pipe::approve::POLARITY,
+            Self::RunnerStop => crate::headless::runner::POLARITY,
+            Self::RunnerQuestion => crate::headless::runner::QUESTION_POLARITY,
+            Self::GateHealth => crate::pipe::health::POLARITY,
+            Self::GateCheck => crate::pipe::gate::POLARITY,
+            Self::MoveProof => crate::pipe::move_proof::POLARITY,
+            Self::GateLens => crate::pipe::gate::LENS_POLARITY,
+            Self::LandMain => crate::pipe::land::POLARITY,
+            Self::LandAnchor => crate::pipe::land::ANCHOR_POLARITY,
+            Self::LandWorktree => crate::pipe::land::WORKTREE_POLARITY,
+            Self::FollowRetry => crate::pipe::follow::POLARITY,
+            Self::StoreLock => crate::fleet::store::POLARITY,
+            Self::Inject => crate::seat::inject::POLARITY,
+            Self::SpawnLine => crate::pipe::spawn::POLARITY,
+            Self::LandTerminal => crate::pipe::land::TERMINAL_POLARITY,
+            Self::TurnEndBlock => crate::hook::turn_end::POLARITY,
+        }
+    }
+
+    /// 境界の pointer（`module::Type`・crate 相対）。
+    pub fn boundary(self) -> &'static str {
+        match self {
+            Self::ChoiceQuestion => "hook::choice_question::ChoiceQuestionDecision",
+            Self::AnswerMouth => "hook::answer_mouth::AnswerMouthDecision",
+            Self::WriteSet => "hook::guard::Decision",
+            Self::Permission => "hook::permission::PermissionDecision",
+            Self::Command => "hook::command::CommandDecision",
+            Self::Ledger => "hook::ledger_guard::LedgerDecision",
+            Self::AnchorGuard => "hook::anchor_guard::AnchorDecision",
+            Self::MergeGate => "hook::merge_gate::MergeDecision",
+            Self::HostGuard => "hook::host_guard::HostGuardDecision",
+            Self::Register => "seat::role::RegisterRefusal",
+            Self::Role => "hook::role_guard::RoleDecision",
+            Self::BypassDeny => "hook::bypass_guard::BypassDecision",
+            Self::DraftsGuard => "hook::drafts_guard::DraftsDecision",
+            Self::LiveRow => "hook::live_row::LiveRowDecision",
+            Self::ContractTable => "pipe::table::TableError",
+            Self::Intake => "pipe::declaration::Unfit",
+            Self::IntakeRefuse => "pipe::refuse::Refuse",
+            Self::Review => "pipe::review::ReviewCheck",
+            Self::Budget => "pipe::Budget",
+            Self::Approval => "pipe::approve::Approval",
+            Self::RunnerStop => "headless::runner::Decision",
+            Self::RunnerQuestion => "headless::runner::Ending",
+            Self::GateHealth => "pipe::health::Health",
+            Self::GateCheck => "pipe::gate::Check",
+            Self::MoveProof => "pipe::move_proof::LensInput",
+            Self::GateLens => "pipe::gate::Verdict",
+            Self::LandMain => "pipe::land::MainCheck",
+            Self::LandAnchor => "pipe::land::AnchorPlan",
+            Self::LandWorktree => "pipe::land::WorktreeCheck",
+            Self::FollowRetry => "pipe::follow::FollowCheck",
+            Self::StoreLock => "fleet::store::StoreError",
+            Self::Inject => "seat::inject::Delivery",
+            Self::SpawnLine => "pipe::spawn::LineRefusal",
+            Self::LandTerminal => "pipe::land::Terminal",
+            Self::TurnEndBlock => "hook::turn_end::TurnEndDecision",
+        }
+    }
+
+    /// 一覧の行に出す名前（kebab）。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ChoiceQuestion => "choice-question-deny",
+            Self::AnswerMouth => "answer-mouth-deny",
+            Self::WriteSet => "write-set-guard",
+            Self::Permission => "permission-deny",
+            Self::Command => "command-guard",
+            Self::Ledger => "ledger-guard",
+            Self::AnchorGuard => "anchor-guard",
+            Self::MergeGate => "merge-gate",
+            Self::HostGuard => "host-guard",
+            Self::Register => "register-refusal",
+            Self::Role => "role-guard",
+            Self::BypassDeny => "bypass-deny",
+            Self::DraftsGuard => "drafts-guard",
+            Self::LiveRow => "live-row-guard",
+            Self::ContractTable => "contract-table",
+            Self::Intake => "intake-unfit",
+            Self::IntakeRefuse => "intake-refuse",
+            Self::Review => "review-gate",
+            Self::Budget => "spawn-budget",
+            Self::Approval => "approval-gate",
+            Self::RunnerStop => "runner-stop",
+            Self::RunnerQuestion => "runner-question",
+            Self::GateHealth => "gate-health",
+            Self::GateCheck => "gate-check",
+            Self::MoveProof => "gate-move-proof",
+            Self::GateLens => "gate-lens",
+            Self::LandMain => "land-main-check",
+            Self::LandAnchor => "land-anchor-sync",
+            Self::LandWorktree => "land-worktree-clean",
+            Self::FollowRetry => "follow-retry",
+            Self::StoreLock => "store-lock",
+            Self::Inject => "inject-refusal",
+            Self::SpawnLine => "spawn-line",
+            Self::LandTerminal => "land-terminal",
+            Self::TurnEndBlock => "turn-end-block",
+        }
+    }
+
+    /// 一覧の 1 行（設計 §4 の形・token の名前と順序は設計が正）。
+    pub fn line(self) -> String {
+        let polarity = self.polarity();
+        format!(
+            "guard={} timing={} on-failure={} boundary={}",
+            self.as_str(),
+            polarity.timing.as_str(),
+            polarity.on_failure.as_str(),
+            self.boundary()
+        )
+    }
+}
+
+/// 集計行（`polarity: guards=<N> in-loop=<K> post-hoc=<M> fail-open=<F>`・N = K + M）。
+pub fn summary() -> String {
+    let in_loop = ALL.iter().filter(|g| g.polarity().timing == Timing::InLoop).count();
+    let post_hoc = ALL.iter().filter(|g| g.polarity().timing == Timing::PostHoc).count();
+    let fail_open = ALL.iter().filter(|g| g.polarity().on_failure == OnFailure::FailOpen).count();
+    format!(
+        "polarity: guards={} in-loop={in_loop} post-hoc={post_hoc} fail-open={fail_open}",
+        ALL.len()
+    )
+}
+
+/// `<NAME> polarity` の全出力（1 guard 1 行 + 集計 1 行）。引数も stdin も env も読まない。
+pub fn render() -> Vec<String> {
+    let mut lines: Vec<String> = ALL.iter().map(|g| g.line()).collect();
+    lines.push(summary());
+    lines
+}

@@ -1,0 +1,691 @@
+//! `pipe` subcommand の面（設計 §5）。
+//!
+//! **env も HOME も読まない**（憲法 C2.2）。置き場は `--state-dir` か、repo に紐づいた
+//! git 設定（`vessel init` が書いたもの）から解く。規則の値は `--rules` か埋め込みの
+//! manifest から読み、数値をこの file に焼かない（C1 / C5）。
+//!
+//! 前提違反は **rc 1 + stderr 1 行で何もしない**（event も追記しない・設計 §4）。
+//! 契約 file が読めない周は「対象そのものが壊れている」ので rc 2 で、理由を全件出す。
+//!
+//! 本 file は入口（[`dispatch`] / [`contracts`] / [`usage`]）と材料の型（[`Resolved`] / [`Extra`]）と `mod` 宣言、
+//! および再輸出の shim だけを持つ（`pipe/cli/` は subcommand と helper の責務ごとに 1 file・設計 §5）。引数と規則の
+//! 行の helper は [`args`]、便の状態の helper は [`state`]、表示は [`show`]、再開は [`resume`]（`s2-07l.349` の
+//! 純移動）。受付は [`intake`]、段の手は [`step`]、起動と連鎖は [`run`]（`s2-07l.295` の純移動）、受付と同じ判定を
+//! run を作らず撃つ口は [`preflight`]（契約表の行 u・contract-source.md §21）、名乗った消費側の契約の検証行を受付で base の
+//! 木でも撃つ口は [`base_run`]（契約表の行 ay・pipeline.md §56）。外から呼ぶ path
+//! は本 file の再輸出で不変（子 module は helper を `super::` で引き、兄弟 module を `super::approve` /
+//! `super::gate` / `super::land` の path で呼ぶので、その名は本 file の `use` が親として持つ）。
+
+mod args;
+mod base_run;
+mod intake;
+mod permit;
+mod preflight;
+mod resume;
+mod run;
+mod show;
+mod state;
+mod step;
+
+pub(super) use args::{broken, flag, int_row, present, refused, repo_of, state_dir_of};
+// 列（`pipe::dispatch`）は受付の判定を**記帳せずに**撃つ（設計 dispatcher.md §3・C2 の 1 実装）。
+// 可視性を上げるだけで本文は不変——2 本目の判定を作らないための再輸出である。
+pub(in crate::pipe) use intake::{crossings, generated, judge, Denial, Material, Materials};
+pub(super) use run::turn_of;
+// 着地列の窓の判定（`fleet::wait` の `Completion::LandWindow` の観測と `pipe land-window` の 1 行が同じ 1 本を読む・
+// 設計 pipeline.md §19）。列の module は `pipe` の外へ見えないので、窓の口だけをここから見せる。
+pub(crate) use super::queue::window_now;
+pub(super) use state::{live, resolve, stage_of};
+// 走っている便の行の門（`hook::live_row`・設計 vessel-hook.md §15 形 2）が live な便の列を読む口（生死の判定は `live` 1 本）。
+pub(crate) use state::{live_runs, LiveRun, Tag};
+use args::{allowed_of, list_row, manifest_of, need, repo_flag, REPO_FLAG};
+use resume::{resume, review_then_launch};
+use show::show;
+use state::by_run;
+
+use super::approve;
+use super::contract::Contract;
+use super::dispatch as queue;
+use super::contract::CLASS_ROW;
+use super::declaration::{Ceiling, CEILING_ROW, DENIED_ROW};
+use super::gate;
+use super::land;
+use super::notify;
+use super::regate::REASON_FLAG;
+use super::stop::stop;
+use super::{head_of, repo_of_run, repo_path};
+use crate::cli_outcome::{Outcome, RC_OK, RC_REFUSED};
+use crate::fleet::lifecycle_read;
+use crate::fleet::store::LockPolicy;
+use crate::fleet::{Mark, Stage};
+use crate::rules::manifest::Manifest;
+use crate::seat::ledger::DEFAULT_BD;
+use crate::name::NAME;
+use intake::intake;
+use preflight::preflight;
+use run::{run_all, start};
+use std::path::PathBuf;
+use step::{answer_run, approve_run, gate_run, land_run, retire_run};
+
+/// `pipe` の subcommand（閉じた語・宣言順は [`subcommand`] の腕の順・設計 contract-source.md §17 の形 (vii)）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PipeCommand {
+    /// `pipe intake`。
+    Intake,
+    /// `pipe preflight`。
+    Preflight,
+    /// `pipe spawn`。
+    Spawn,
+    /// `pipe approve`。
+    Approve,
+    /// `pipe answer`。
+    Answer,
+    /// `pipe gate`。
+    Gate,
+    /// `pipe land`。
+    Land,
+    /// `pipe retire`。
+    Retire,
+    /// `pipe run`。
+    Run,
+    /// `pipe show`。
+    Show,
+    /// `pipe resume`。
+    Resume,
+    /// `pipe stop`。
+    Stop,
+    /// `pipe dispatch`。
+    Dispatch,
+    /// `pipe land-window`。
+    LandWindow,
+    /// `pipe report`。
+    Report,
+    /// `pipe regate`。
+    Regate,
+    /// `pipe follow`。
+    Follow,
+    /// `pipe anchor-sync`。
+    AnchorSync,
+    /// `pipe review`。
+    Review,
+    /// `pipe index`。
+    Index,
+    /// `pipe permit`。
+    Permit,
+}
+
+/// [`PipeCommand`] の全部（宣言順）。
+pub const PIPE_COMMANDS: &[PipeCommand] = &[
+    PipeCommand::Intake,
+    PipeCommand::Preflight,
+    PipeCommand::Spawn,
+    PipeCommand::Approve,
+    PipeCommand::Answer,
+    PipeCommand::Gate,
+    PipeCommand::Land,
+    PipeCommand::Retire,
+    PipeCommand::Run,
+    PipeCommand::Show,
+    PipeCommand::Resume,
+    PipeCommand::Stop,
+    PipeCommand::Dispatch,
+    PipeCommand::LandWindow,
+    PipeCommand::Report,
+    PipeCommand::Regate,
+    PipeCommand::Follow,
+    PipeCommand::AnchorSync,
+    PipeCommand::Review,
+    PipeCommand::Index,
+    PipeCommand::Permit,
+];
+
+impl PipeCommand {
+    /// 引数の字面。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Intake => "intake",
+            Self::Preflight => "preflight",
+            Self::Spawn => "spawn",
+            Self::Approve => "approve",
+            Self::Answer => "answer",
+            Self::Gate => "gate",
+            Self::Land => "land",
+            Self::Retire => "retire",
+            Self::Run => "run",
+            Self::Show => "show",
+            Self::Resume => "resume",
+            Self::Stop => "stop",
+            Self::Dispatch => "dispatch",
+            Self::LandWindow => "land-window",
+            Self::Report => "report",
+            Self::Regate => "regate",
+            Self::Follow => "follow",
+            Self::AnchorSync => "anchor-sync",
+            Self::Review => "review",
+            Self::Index => "index",
+            Self::Permit => "permit",
+        }
+    }
+
+    /// 字面から読む（既知の subcommand でなければ `None`）。
+    pub fn parse(token: &str) -> Option<Self> {
+        PIPE_COMMANDS.iter().copied().find(|command| command.as_str() == token)
+    }
+}
+
+/// `pipe` の使い方。
+pub fn usage() -> String {
+    format!(
+        "usage: {NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [{REASON_FLAG} WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]\nusage: {NAME} pipe land-window [--state-dir D] --repo R [{WINDOW_WAIT_FLAG} N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）\nusage: {NAME} pipe regate --run ID {REASON_FLAG} WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）\nusage: {NAME} pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）\nusage: {NAME} pipe anchor-sync --repo R [--state-dir D] [--rules PATH]（着地が揃えなかった anchor の index と作業の木のうち着地前の中身のままの path だけを main の先端へ戻して印を外す・利用者の編集は触らない）\nusage: {NAME} pipe review --ref SHA --repo R --state-dir S --lens CMD [--rules PATH]（設計の PR の head の commit で変わった契約表の行ごとに機械の検査と lens を撃ち、行ごとの記録と ref の記録を置き場に書いて [ROW-REVIEW] の行を返す・pass は rc 0・fail と pending と stale は rc 1・組めない周は rc 2）\nusage: {NAME} pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH]（ref〔既定は HEAD〕の commit の code の索引を、宣言の 2 key の command で組んで置き場へ置き、[INDEX] の 1 行を返す・built と cached は rc 0・failed は rc 1・宣言の不備と組めない周は rc 2・宣言の無い repo は undeclared で rc 0）\nusage: {NAME} pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）\nusage: {NAME} pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）"
+    )
+}
+
+/// `pipe land-window` の待ちの上限（秒・無ければ 0＝1 周だけ観測する）。
+const WINDOW_WAIT_FLAG: &str = "--wait-s";
+
+/// `pipe land-window`: 着地列の窓（設計 pipeline.md §19）を唯一の wait で待ち、読み直した窓の 1 行を返す
+/// （開いていれば rc 0 の `clear`・閉じていれば rc 1 の `busy`）。**merge は撃たない**（撃つ側がこの口を前置する）。
+fn land_window(args: &[String]) -> Outcome {
+    let (state_dir, repo) = match (state_dir_of(args), repo_of(args)) {
+        (Ok(state_dir), Ok(repo)) => (state_dir, repo),
+        (Err(reason), _) | (_, Err(reason)) => return refused(reason),
+    };
+    let wait_s = match flag(args, WINDOW_WAIT_FLAG).map(|found| found.map(str::parse::<u64>)) {
+        Ok(None) => 0,
+        Ok(Some(Ok(secs))) => secs,
+        Ok(Some(Err(_))) => return refused(format!("{WINDOW_WAIT_FLAG} が秒の整数でない")),
+        Err(reason) => return refused(reason),
+    };
+    let completion = crate::fleet::Completion::LandWindow { state_dir: state_dir.clone(), repo: repo.clone() };
+    // 待ちの成否でなく**読み直した窓**で答える（解けた直後に閉じた周を clear と言わない・`queue::after_wake` と同じ再評価）。
+    let _ = crate::fleet::wait(completion, std::time::Duration::from_secs(wait_s));
+    let window = window_now(&state_dir, &repo);
+    match window.is_open() {
+        true => Outcome::ok_line(window.line()),
+        false => Outcome { out: vec![window.line()], err: Vec::new(), rc: RC_REFUSED },
+    }
+}
+
+/// **作らない口**の字面（設計 contract-source.md §4「人の関与 0」・AC22・C16）。審査の段を人が飛ばす flag は
+/// 無い——黙って読み飛ばすと「効いている」ように見える launcher が残るので、usage で断る（lens の `--cap` と同型）。
+const REFUSED_FLAGS: [&str; 1] = ["--no-review"];
+
+/// `pipe` に続く引数を捌く。
+pub fn dispatch(args: &[String]) -> Outcome {
+    if let Some(found) = args.iter().find(|arg| REFUSED_FLAGS.contains(&arg.as_str())) {
+        return Outcome::failed(RC_REFUSED, vec![format!("pipe: 未知の引数 {found}（審査の段を飛ばす口は無い）"), usage()]);
+    }
+    let verb = args.first().and_then(|found| PipeCommand::parse(found));
+    // **閉包の検査は subcommand を選んだ直後の 1 回**（設計 pipeline.md §14 約束 5）: 未知の flag と `--help` を
+    // manifest も state も読まずに断る＝`pipe land --help` が着地を走らせない（2026-09-15 の回帰）。
+    if let Some(command) = verb {
+        let allowed = allowed_of(command, args.get(1).map(String::as_str) == Some("show"));
+        if let Err(error) = crate::cli_args::parse(args.get(1..).unwrap_or_default(), allowed) {
+            return crate::cli_args::refusal("pipe", &error, usage());
+        }
+    }
+    let manifest = match manifest_of(args) {
+        Ok(found) => found,
+        // 上限の許可の口だけは読めない manifest を rc 2 で名乗る（ほかの subcommand の rc 1 は変えない・設計 limit-permit.md §19 約束 1）。
+        Err(reason) if verb == Some(PipeCommand::Permit) => return permit::manifest_unreadable(args, &reason),
+        Err(reason) => return refused(reason),
+    };
+    let policy = match LockPolicy::from_rules(&manifest) {
+        Ok(found) => found,
+        Err(err) => return broken(err.to_string()),
+    };
+    // **自分が段を進めた便**は subcommand しか知らない（run は便を作り、resume は入口の段を読む）ので、
+    // 判定の材料を typed に受け取る（stdout の字面から run id を読み戻さない・C3.3）。
+    let mut driven: Option<Driven> = None;
+    let mut outcome = subcommand(args, &manifest, policy, verb, &mut driven);
+    // **`--drive` を持つ周だけ自分の便を次の driver に渡す**（設計 dispatcher.md §5）。flag の無い周は
+    // 今までどおり 1 段だけ進めて抜ける＝段を手で 1 つずつ進める既存の歯は 1 本も動かない。
+    // 自分が段を進めた便の **id は flag の有無に依らず**列に渡す（設計 dispatcher.md §15）: 列の PASS の
+    // `Gated` の枝がその便を候補から外す＝flag の無い resume が Gated（PASS）で抜けた直後の自分の 1 周が、
+    // 札の外れた自分の便を拾って「1 段だけ」を破らない。`driving` の意味（渡す便）は変えない。
+    let drove = driven.as_ref().map(|found| found.run.clone());
+    let driving = driven.filter(|_| present(args, queue::DRIVE));
+    // **終端の記帳の後・lock の外で列を 1 周撃つ**（設計 dispatcher.md §5）。観測の面は増やさない（§6）ので
+    // flag の無い周には行を足さず、**効果（起こした便の `RunCreated`）だけ**が残る。1 周が失敗しても終端の
+    // rc は変えない——起こせなかった便は次の契機で拾う。
+    // **回答・承認の記帳が成った周も同じ 1 周を撃つ**（設計 dispatcher.md §13）: 関門が開いた便を次の契機まで
+    // 待たせない。stdout には 1 行も足さない（`driving` は無い）・道具を渡さない呼び方は列が `no-runner` で
+    // 止まる＝記帳だけで終わる。
+    let terminal = verb.is_some_and(|found| TERMINALS.contains(&found));
+    let contact = terminal || (verb.is_some_and(|found| GATES.contains(&found)) && outcome.rc == RC_OK);
+    // **段の記帳の後・列の 1 周の前に live でない便の木と席の起草の木を掃く**（設計 dispatcher.md §30 形 3・§33 形 4・`--repo` の無い周も撃つ）。
+    if let (true, Ok(Some(state_dir))) = (terminal, flag(args, "--state-dir")) {
+        outcome.err.extend(super::sweep::sweep(std::path::Path::new(state_dir), policy, &manifest));
+    }
+    if contact {
+        if let Some(queue) = queue_of(args, &manifest, driving.as_ref(), drove.as_deref()) {
+            let turn = queue::fire(&queue.borrow());
+            outcome.err.extend(round_err(&turn));
+            // **終端の周だけ席の pane へ知らせる**（設計 dispatcher.md §19）: 落ちた便の 1 行と、列が idle の 1 行。
+            // 送れたかは stdout の `notify=` の行で残し、rc は変えない（通知は副作用）。列の行より前に置く
+            // （自走の周の最後の行は列の 1 行のまま）。同じ字面を stderr にも写す（列が起こした運転手の周も launch.log に残る・§29 形 4）。
+            if terminal {
+                let run = drove.as_deref().or_else(|| flag(args, "--run").ok().flatten());
+                let told = notices(&queue, run, &turn);
+                outcome.err.extend(told.iter().cloned());
+                outcome.out.extend(told);
+            }
+            // 軸を評価した周だけ `vessel=` の 1 行（設計 consumer-sync.md §15 形 3・列の行より前＝最後の行は列の行のまま）。
+            outcome.out.extend(queue::vessel_line(&turn));
+            // 自走を頼んだ周は、渡したか・渡さなかった理由を 1 行で残す（C10・黙って止まらない）。
+            if driving.is_some() {
+                outcome.out.push(queue::line(&turn));
+            }
+        }
+    }
+    outcome
+}
+
+/// 終端の周に席の pane へ送る行を送り、`notify=` の行の列を返す（送る行が無い周は空・設計 dispatcher.md §19）。
+///
+/// 置き場を読めない周は宛先も段も測れないので 1 行も送らない（`no-seat` に読み替えない・C10）。
+fn notices(queue: &Queue<'_>, run: Option<&str>, turn: &queue::Turn) -> Vec<String> {
+    let Ok(events) = crate::fleet::store::read_all(&queue.state_dir) else {
+        return Vec::new();
+    };
+    let state = crate::fleet::replay(&events);
+    // 同じ bead の便の連続の非 PASS の数（便の現在地は局面の出力の書き手と同じ読み・数えるのは `phase::streak` だけ・設計 §45）。
+    let streak_of = |bead: &str| crate::fleet::phase::streak(&crate::fleet::lifecycle_mark::bead_runs(&queue.state_dir, &events, &state, bead));
+    // 送るかと語は局面の出力の便の部品から読む（比べる印は event log・case-lifecycle §15 の表・設計 §43 行 ar）。
+    // 終端の語は event log の印で・memo の要約は台帳の印で古さを測るので、1 回の読みで両方と比べる（行 au）。
+    let output = lifecycle_read::read(&queue.state_dir, &queue.repo, &[lifecycle_read::Input::Events, lifecycle_read::Input::Ledger]);
+    let mut payloads = Vec::new();
+    if let Some(found) = run.and_then(|id| state.runs.get(id)) {
+        if let Some(word) = word_of(&output, &found.id) {
+            let line = notify::Terminal { bead: &found.bead, run: &found.id, stage: found.stage.as_str(), word: &word, streak: streak_of(&found.bead) };
+            payloads.push(notify::terminal_line(&line));
+        }
+    }
+    // 並列の実測は同じ周の `Turn` と運転手の置き場で 1 回だけ撃つ（設計 dispatcher.md §26 形 4）。
+    let facts = queue::facts::facts(&queue.state_dir, Some(turn), crate::seat::state::now_secs());
+    // 未処置の終端: `Settled` の候補ごとにその bead の最新の便（run id の昇順の最後）を同じ読みで判じる（設計 §29 形 1・§43 行 ar）。
+    let settled: Vec<&crate::fleet::Run> = turn
+        .candidates
+        .iter()
+        .filter(|found| matches!(found.reason, Some(queue::WaitReason::Settled { .. })))
+        .filter_map(|found| state.runs.values().rfind(|run| run.bead == found.bead))
+        .collect();
+    let words: Vec<Option<String>> = settled.iter().map(|last| word_of(&output, &last.id)).collect();
+    let pending: Vec<notify::Terminal<'_>> = settled
+        .iter()
+        .zip(&words)
+        .filter_map(|(last, word)| {
+            Some(notify::Terminal { bead: &last.bead, run: &last.id, stage: last.stage.as_str(), word: word.as_deref()?, streak: streak_of(&last.bead) })
+        })
+        .collect();
+    // 出力が無いか読めない周は、`Settled` の候補が 1 本以上の周だけ ` pending=unreadable`（0 本の周は key を出さない）。
+    let unread = !matches!(output, lifecycle_read::Lifecycle::Read(_)) && !settled.is_empty();
+    let memos = memos_of(&output, &queue.state_dir);
+    payloads.extend(notify::idle_line(turn, &facts, (!unread).then_some(pending.as_slice()), &memos));
+    // 直しの束の集合が前に送った集合と違う周だけ 1 行（設計 dispatcher.md §27 形 2・同じ宛先と送達の 1 関数）。
+    payloads.extend(queue::bundle::changed(&queue.state_dir).map(|found| notify::precheck_line(&found)));
+    // 送達の記録と消費の証拠は運転手の置き場で測る（設計 dispatcher.md §21 形 1・解決は flag の 1 回だけ）。
+    let place = crate::seat::StateDir {
+        path: std::path::absolute(&queue.state_dir).unwrap_or_else(|_| queue.state_dir.clone()),
+        source: crate::seat::Provenance::Flag,
+    };
+    payloads
+        .iter()
+        .map(|payload| notify::send(&state, &place, &queue.repo, queue.manifest, payload))
+        .collect()
+}
+
+/// 便 `run` の終端の知らせに添える 1 語（`None` なら送らない・設計 dispatcher.md §43 行 ar）。
+///
+/// 局面の出力の便の部品（case-lifecycle §2.1）から読む: 手番が seat なら理由の語（理由が無ければ `-`）で、古い周は `:stale` を添える。
+/// seat でない部品は古い周だけ語 `stale`（古い手番で黙らない・fail-open）。部品の無い便は送らない。出力の file が在って読めない周は
+/// `unreadable`、file が無い周は送らない（局面を一度も書いていない置き場の静かな終端に行を足さない）。
+fn word_of(output: &lifecycle_read::Lifecycle, run: &str) -> Option<String> {
+    let found = match output {
+        lifecycle_read::Lifecycle::Read(found) => found,
+        lifecycle_read::Lifecycle::Unreadable => return Some("unreadable".to_owned()),
+        lifecycle_read::Lifecycle::Absent => return None,
+    };
+    let part = found.parts.iter().find(|part| part.part == crate::case::Kind::Run && part.id == run)?;
+    let word = part.reason.as_deref().unwrap_or("-");
+    match (part.turn == crate::case::Turn::Seat, stale_by(found, lifecycle_read::Input::Ledger)) {
+        (true, false) => Some(word.to_owned()),
+        (true, true) => Some(format!("{word}:stale")),
+        (false, true) => Some("stale".to_owned()),
+        (false, false) => None,
+    }
+}
+
+/// 出力が古いか（古さの印と、`skip` 以外の入力の今の印が違う理由・比べる印は呼び手ごとに違う・case-lifecycle §15 の表）。
+fn stale_by(found: &lifecycle_read::Found, skip: lifecycle_read::Input) -> bool {
+    found.stale.iter().any(|reason| *reason != lifecycle_read::Reason::Differs(skip))
+}
+
+/// idle の行の memo の要約（設計 dispatcher.md §43 行 au・比べる印は台帳）。
+///
+/// 出力が無いか読めない周は ` memos=unreadable`。読めた周は ` memos=<開いた数>:<memo-actionable の数>[:stale][ next=<memo id>:<語>]` で、
+/// 開いた数が 0 で古くない周は key を出さない。`next` は memo-actionable のうち since の古い順（since の無い部品は後・同じなら id の字の順）の先頭 1 本、
+/// 語はその理由の語（理由が verdict の memo は行 ao の読みの最新の判定の語・置き場か file が無ければ `-`・読めなければ `unreadable`）。
+fn memos_of(output: &lifecycle_read::Lifecycle, state_dir: &std::path::Path) -> notify::Memos {
+    let lifecycle_read::Lifecycle::Read(found) = output else {
+        return notify::Memos { line: " memos=unreadable".to_owned(), actionable: false };
+    };
+    let memos = || found.parts.iter().filter(|part| part.part == crate::case::Kind::Memo);
+    let open = memos().filter(|part| !part.closed).count();
+    let waiting: Vec<&crate::case::Part> = memos().filter(|part| part.phase == crate::case::Phase::MemoActionable).collect();
+    let stale = stale_by(found, lifecycle_read::Input::Events);
+    let next = waiting.iter().min_by_key(|part| {
+        let since = part.since.as_deref().and_then(crate::fleet::epoch_of);
+        (since.is_none(), since, part.id.as_str())
+    });
+    fn word<'p>(state_dir: &std::path::Path, part: &'p crate::case::Part) -> &'p str {
+        match part.reason.as_deref() {
+            Some(crate::ledger::phase::REASON_VERDICT) => match queue::memo::judgement(state_dir, &part.id) {
+                queue::memo::Judgement::Absent => "-",
+                queue::memo::Judgement::Unreadable => "unreadable",
+                queue::memo::Judgement::Judged(verdict) => verdict.word.as_str(),
+            },
+            Some(other) => other,
+            None => "-",
+        }
+    }
+    let line = if open == 0 && !stale {
+        String::new()
+    } else {
+        let tail = if stale { ":stale" } else { "" };
+        let next = next.map_or_else(String::new, |part| format!(" next={}:{}", part.id, word(state_dir, part)));
+        format!(" memos={open}:{}{tail}{next}", waiting.len())
+    };
+    notify::Memos { line, actionable: !waiting.is_empty() }
+}
+
+/// **自分が駆動した便**（`pipe run` / `pipe resume` が名乗る・設計 §5「渡す周と渡さない周」）。
+///
+/// `--drive` を読むのは [`dispatch`] の 1 か所である——subcommand の側で読むと、flag の意味
+/// （自走するか）が 2 か所で決まる。ここが名乗るのは**事実**（どの便の、入口の段は何だったか）だけ。
+pub(super) struct Driven {
+    /// 便 id。
+    pub(super) run: String,
+    /// 入口で読んだ段（便を作る `pipe run` は `None`）。
+    pub(super) entry: Option<Stage>,
+}
+
+/// **便が live で無くなりうる subcommand**（設計 dispatcher.md §5「便の終端」）。
+///
+/// 終端を作ったかを見分けずに撃つ——終端が無かった周は交差も受付も動いておらず、列は同じ答えを返す
+/// （起こせる便が増えないだけ）。見分ける述語を足すと、終端の検出と列の判定を 2 か所が別々に決めることになる。
+const TERMINALS: [PipeCommand; 5] = [PipeCommand::Run, PipeCommand::Resume, PipeCommand::Land, PipeCommand::Stop, PipeCommand::Retire];
+
+/// **関門を開ける subcommand**（設計 dispatcher.md §13「契機に回答と承認の記帳の直後を足す」）。
+///
+/// 記帳が成った周（rc 0）だけ 1 周を撃つ——断られた周（段違い・空の逐語・無い run）は何も書いておらず、
+/// 関門は動いていない。便が live で無くなりうる [`TERMINALS`] とは別の列で、終端を作らない。
+const GATES: [PipeCommand; 2] = [PipeCommand::Answer, PipeCommand::Approve];
+
+/// 列の 1 周の材料を引数から解く（解けない面が 1 つでも在れば `None`＝1 周を撃たない）。
+///
+/// **repo も置き場も引数で名指されていなければ撃たない**（cwd へ落ちない）。列は「この置き場の便」と
+/// 「この repo の契約」を突き合わせる口なので、片方を cwd から推すと**別の repo の契約を別の置き場へ
+/// 起こす**（2026-09-19 の実測: toy の置き場の終端が cwd の repo の bead を起こした）。列を起こす側の
+/// 判定は fail-closed に倒す（NFR4）。
+fn queue_of<'a>(
+    args: &'a [String],
+    manifest: &'a Manifest,
+    driven: Option<&'a Driven>,
+    drove: Option<&'a str>,
+) -> Option<Queue<'a>> {
+    // repo の読み手は [`repo_flag`] の 1 本（絶対 path に直す・設計 dispatcher.md §12）。
+    let (Some(state_dir), Some(repo)) = (flag(args, "--state-dir").ok()?, repo_flag(args).ok()?) else {
+        return None;
+    };
+    let state_dir = PathBuf::from(state_dir);
+    Some(Queue {
+        state_dir,
+        repo,
+        manifest,
+        bd: flag(args, "--bd").ok()?,
+        rules: flag(args, "--rules").ok()?,
+        lens: flag(args, "--lens").ok()?,
+        curl: flag(args, "--curl").ok()?,
+        runner: flag(args, "--runner").ok()?,
+        driven,
+        drove,
+    })
+}
+
+/// 解いた材料（[`queue::Input`] は借りだけを持つので、その借り元をここで持つ）。
+struct Queue<'a> {
+    /// 置き場。
+    state_dir: PathBuf,
+    /// 対象 repo（anchor）。
+    repo: PathBuf,
+    /// 規則の値。
+    manifest: &'a Manifest,
+    /// 台帳 client（引数で名指されていなければ `None`＝列は既定を読み、起こす便には渡さない）。
+    bd: Option<&'a str>,
+    /// 規則の写しの path（起こす便へそのまま渡す）。
+    rules: Option<&'a str>,
+    /// 審査の lens の口（同上）。
+    lens: Option<&'a str>,
+    /// 口座残量の計測の口（同上）。
+    curl: Option<&'a str>,
+    /// 実装役の口（同上・無ければ列は 1 本も起こさない）。
+    runner: Option<&'a str>,
+    /// 自走を頼んだ呼び手の便（`--drive` の周だけ `Some`）。
+    driven: Option<&'a Driven>,
+    /// 呼び手が自分で段を進めた便の id（flag の有無に依らず・列の PASS の `Gated` の枝がこの便を外す・設計 §15）。
+    drove: Option<&'a str>,
+}
+
+impl Queue<'_> {
+    /// 借りの形（列の 1 周が読む）。
+    fn borrow(&self) -> queue::Input<'_> {
+        queue::Input {
+            state_dir: &self.state_dir,
+            repo: &self.repo,
+            manifest: self.manifest,
+            bd: self.bd.unwrap_or(DEFAULT_BD),
+            bd_flag: self.bd,
+            rules: self.rules,
+            lens: self.lens,
+            curl: self.curl,
+            runner: self.runner,
+            driving: self.driven.map(|found| queue::Driving { run: &found.run, entry: found.entry }),
+            driven: self.drove,
+        }
+    }
+}
+
+/// subcommand 1 つを撃つ（列の 1 周は呼び手が足す）。
+fn subcommand(
+    args: &[String],
+    manifest: &Manifest,
+    policy: LockPolicy,
+    verb: Option<PipeCommand>,
+    driven: &mut Option<Driven>,
+) -> Outcome {
+    match verb {
+        Some(PipeCommand::Intake) => intake(args, manifest, policy),
+        Some(PipeCommand::Preflight) => preflight(args, manifest),
+        Some(PipeCommand::Spawn) => start(args, policy),
+        Some(PipeCommand::Approve) => by_run(args, |id| approve_run(args, id, policy)),
+        Some(PipeCommand::Answer) => by_run(args, |id| answer_run(args, id, policy)),
+        Some(PipeCommand::Gate) => by_run(args, |id| gate_run(args, id, manifest, policy)),
+        Some(PipeCommand::Land) => by_run(args, |id| land_run(args, id, manifest, policy)),
+        Some(PipeCommand::Retire) => by_run(args, |id| retire_run(args, id, manifest, policy)),
+        Some(PipeCommand::Run) => run_all(args, manifest, policy, driven),
+        Some(PipeCommand::Show) => show(args),
+        Some(PipeCommand::Resume) => resume(args, manifest, policy, driven),
+        Some(PipeCommand::Stop) => stop(args, manifest, policy),
+        Some(PipeCommand::Dispatch) => queued(args, manifest, policy),
+        Some(PipeCommand::LandWindow) => land_window(args),
+        Some(PipeCommand::Report) => match state_dir_of(args) {
+            Err(reason) => refused(reason),
+            Ok(state_dir) => super::report::report(&state_dir),
+        },
+        // 裁定の逐語を持つ 1 段戻し（設計 pipeline.md §49）。worktree も判定も触らず、記帳 1 件だけ。
+        Some(PipeCommand::Regate) => by_run(args, |id| match (state_dir_of(args), need(args, REASON_FLAG)) {
+            (Ok(state_dir), Ok(reason)) => super::regate::regate(&state_dir, id, reason, policy),
+            (Err(reason), _) | (_, Err(reason)) => refused(reason),
+        }),
+        // 木だけを main の先端へ載せ替えて段を実装へ戻す（設計 pipeline.md §52）。gate も runner も起こさない。
+        Some(PipeCommand::Follow) => by_run(args, |id| match state_dir_of(args) {
+            Ok(state_dir) => super::follow_step::follow(&state_dir, id, policy),
+            Err(reason) => refused(reason),
+        }),
+        // 着地が揃えなかった anchor の古い中身だけを main の先端へ戻して印を外す（設計 pipeline.md §57 形 5）。
+        Some(PipeCommand::AnchorSync) => match repo_of(args) {
+            Ok(repo) => land::anchor_sync(&repo),
+            Err(reason) => refused(reason),
+        },
+        // 設計の PR の head の commit の変わった行ごとに審査して記録を書く（設計 row-review.md §3・merge の前の門が読む）。
+        Some(PipeCommand::Review) => super::review_ref::review(args, manifest, policy),
+        // 外の道具で code の索引を組んで置き場へ置く（設計 reverse-index.md §4 形 9・撃つのは組み立ての 1 本）。
+        // 逆引きの表は同じ索引を組み立ての 1 本で得て項目ごとに出す（設計 reverse-index.md §6 形 1）。
+        Some(PipeCommand::Index) if args.get(1).map(String::as_str) == Some("show") => super::review::index::show(args, manifest, policy),
+        Some(PipeCommand::Index) => super::dispatch::index_build::build(args, manifest, policy),
+        // 上限の許可の記帳と取り消し（設計 limit-permit.md §19・列は撃たない＝`GATES` にも `TERMINALS` にも足さない）。
+        Some(PipeCommand::Permit) => permit::permit(args, manifest, policy),
+        None => Outcome::failed(RC_REFUSED, vec![usage()]),
+    }
+}
+
+/// 列を 1 周撃ち、その結果の 1 行を outcome に足す（**rc は変えない**・設計 dispatcher.md §5）。
+///
+/// 材料（置き場・repo）を解けない周は 1 周を撃たず、`dispatch=unmeasured reason=args` を足す
+/// （**測れないを「起こす便 0」に読み替えない**・C10）。
+fn with_turn(args: &[String], manifest: &Manifest, mut outcome: Outcome) -> Outcome {
+    let (out, err) = turn_lines(args, manifest);
+    outcome.out.extend(out);
+    outcome.err.extend(err);
+    outcome
+}
+
+/// 局面の出力の全部の書き直し（契機 (a)）の返りのうち `Written`・`Unchanged`・`Coalesced` の外の語を `lifecycle=<語>` の 1 行に、memo の審査の渡しが
+/// 規則の行を読めず撃たなかった周の語を `triage=<語>` の 1 行にして stderr へ（呼び手の rc と stdout の字は変えない・設計 case-lifecycle.md §12 約束 8・
+/// dispatcher.md §42 約束 5）。
+fn round_err(turn: &queue::Turn) -> Vec<String> {
+    let lifecycle = turn.lifecycle.map(|word| format!("lifecycle={word}"));
+    lifecycle.into_iter().chain(turn.triage.map(|word| format!("triage={word}"))).collect()
+}
+
+/// 列の 1 周の行（引数から材料を解いて [`queue::fire`] を撃つ＝**起こす側**）と stderr の行。stdout の最後の行は列の 1 行で、終端の周の軸を
+/// 評価した周だけその前に `vessel=` の 1 行が立つ（設計 consumer-sync.md §15 形 3）。
+fn turn_lines(args: &[String], manifest: &Manifest) -> (Vec<String>, Vec<String>) {
+    match queue_of(args, manifest, None, None) {
+        Some(queue) => {
+            let turn = queue::fire(&queue.borrow());
+            let out = queue::vessel_line(&turn).into_iter().chain(std::iter::once(queue::line(&turn))).collect();
+            (out, round_err(&turn))
+        }
+        None => (vec![format!("dispatch=unmeasured reason={ARGS_UNMEASURED}")], Vec::new()),
+    }
+}
+
+/// 引数から列の材料を解けなかった周の理由（台帳の読めなさ〔`ledger`〕と別の値である）。
+const ARGS_UNMEASURED: &str = "args";
+
+/// `pipe dispatch <ls|first|hold|release>`: 審査を通った契約の列の観測と介入の印（設計 dispatcher.md §4・§6）。
+///
+/// **権能なしの口**である（誰が撃っても同じ 1 周・起動の権能は列の判定であって席の権能ではない・
+/// ADR-0045 §2 (1)）。列の 1 周そのものは [`queue::turn`] の 1 本で、本 file は引数を解くだけである。
+fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let state_dir = match state_dir_of(args) {
+        Ok(found) => found,
+        Err(reason) => return refused(reason),
+    };
+    match args.get(1).map(String::as_str) {
+        // **観測は起こさない**（設計 §6）: `ls` は [`queue::observe`]（列の 1 周の読みと memo の行）を撃ち、[`queue::fire`] は撃たない。
+        // 依存待ちの候補の事前審査の行は結果の file を読むだけ（設計 dispatcher.md §27 形 7・撃たない）。
+        Some("ls") => match queue_of(args, manifest, None, None) {
+            Some(queue) => queue::observe(&queue.borrow()),
+            None => refused("列の材料（置き場・repo・台帳 client）を解けない".to_owned()),
+        },
+        // 裏の審査の process（設計 dispatcher.md §41・処理は `queue::memo_lens`）。
+        Some("memo-lens") => match queue_of(args, manifest, None, None) {
+            Some(queue) => queue::memo_lens::run(&queue.borrow(), args, policy),
+            None => refused("列の材料（置き場・repo）を解けない".to_owned()),
+        },
+        Some(name) if !name.starts_with("--") => match (Mark::parse(name), args.get(2)) {
+            // **印の直後にも 1 周撃つ**（設計 §5）: `hold` は起こす側を増やさないので撃たない。
+            (Some(mark), Some(bead)) if !bead.starts_with("--") => {
+                let marked = queue::mark(&state_dir, bead, mark, policy);
+                if mark == Mark::Hold || marked.rc != RC_OK {
+                    return marked;
+                }
+                with_turn(args, manifest, marked)
+            }
+            _ => Outcome::failed(RC_REFUSED, vec![queue::usage()]),
+        },
+        // **手動の 1 周**（権能なしの口・設計 §5）: subcommand の無い周（flag だけ・引数なし）は列を 1 周撃つ。
+        _ => {
+            let (out, err) = turn_lines(args, manifest);
+            Outcome { out, err, rc: RC_OK }
+        }
+    }
+}
+
+/// `contracts` の使い方（設計 contract-source.md §2「表の検査」）。
+pub fn contracts_usage() -> String {
+    format!("usage: {NAME} contracts <check --repo R [--rules PATH] [{BASE_FLAG} SHA] [{VERBOSE_FLAG}]|schema>")
+}
+
+/// `contracts check` の値つき旗: base の commit（変わった行に歯の欄を求める周の物差し・設計 contract-source.md §66 形 3）。
+const BASE_FLAG: &str = "--base";
+
+/// `contracts check` の値なし旗: Declared 行の歯の置き場の検出線に当たった行を 1 行ずつ出す（設計 contract-source.md §45）。
+const VERBOSE_FLAG: &str = "--verbose";
+
+/// `<NAME> contracts <check|schema>`: 契約表の全行の検査（上限は `--rules` か埋め込みの `runner.allowed_commands` と
+/// 対の `runner.denied_commands`）と欄の生成物の描画（tracked な `contracts/schema.toml` の出所・設計 contract-source.md §2）。
+pub fn contracts(args: &[String]) -> Outcome {
+    let checked = || -> Result<Outcome, String> {
+        // repo の読み手は pipe と同じ [`repo_flag`] の 1 本（`need` と同じ字面で必須を断る）。
+        let repo = repo_flag(args)?.ok_or(format!("{REPO_FLAG} が要る"))?;
+        let manifest = manifest_of(args)?;
+        let (commands, denied) = (list_row(&manifest, CEILING_ROW)?, list_row(&manifest, DENIED_ROW)?);
+        // クラスの語列表（設計 contract-source.md §48 の 5）: 行が無い・不発効・列でない周は行 id を名指して断る（空で通さない）。
+        let classes = list_row(&manifest, CLASS_ROW)?;
+        let ceiling = Ceiling { row: CEILING_ROW, commands: &commands, denied: &denied, classes: &classes };
+        Ok(super::table::check_repo(&repo, &ceiling, present(args, VERBOSE_FLAG), flag(args, BASE_FLAG)?))
+    };
+    match args.first().map(String::as_str) {
+        Some("schema") if args.len() == 1 => Outcome::ok(super::table::render_schema()),
+        Some("check") => checked().unwrap_or_else(|reason| Outcome::failed_line(RC_REFUSED, format!("contracts: {reason}"))),
+        _ => Outcome::failed_line(RC_REFUSED, contracts_usage()),
+    }
+}
+
+/// 段を通すのに要る材料（すべて永続面から解いたもの）。
+pub(super) struct Resolved {
+    /// 置き場。
+    pub(super) state_dir: PathBuf,
+    /// 対象 repo。
+    repo: PathBuf,
+    /// 読み込み済みの契約。
+    contract: Contract,
+    /// 契約の bead id。
+    bead: String,
+    /// replay が見た現在の段（`allowed` のいずれか）。**段を動かさない口が使う**
+    /// ——retire は畳んだ事実をこの段のまま残す（`s2-07l.128`）。
+    stage: Stage,
+    /// 承認 event が在るか（replay の導出値）。
+    approved: bool,
+}
+
+/// 段の一致だけでは決まらない周の**追加の弁別**（`s2-07l.128`）。
+///
+/// 同じ段の中で扱いが分かれる面が 2 つ在る——`Gated` は `verdict.json` の 3 値で、`Failed` は
+/// 終端の理由で分かれる。どちらも**段の検査の一部**ゆえ [`resolve`] の中（＝契約より前）に置く。
+pub(super) enum Extra {
+    /// 段の一致だけで足りる。
+    Nothing,
+    /// `Gated` を**測り直し**として通してよいか（verdict が INCONCLUSIVE の周だけ）。
+    Regate,
+    /// **畳んで**よいか（`Failed` は detail が `rebase-empty` / `rebase-conflict` の周だけ・
+    /// `Gated` は verdict が FAIL の周だけ）。
+    Retire,
+    /// **起こして**よいか（`Reviewed` は `review.json` の verdict が PASS の周だけ・FR49・[`super::review::ReviewCheck`]）。
+    /// 他の段（`Blocked` / `Questioned` / `Implemented` からの起こし直し）は段の一致だけで足りる。
+    Spawn,
+}

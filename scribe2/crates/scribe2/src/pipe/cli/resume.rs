@@ -1,0 +1,323 @@
+//! `pipe resume`（設計 §5「subcommand の置き場」・`s2-07l.349` で `cli.rs` から純移動・本文は不変）。
+//!
+//! 現在の段から続きの段だけを通す（[`resume`]）。起こし直し（[`relaunch`]）と審査つきの起動
+//! （[`review_then_launch`]・`pipe run` と共有・外から呼ぶ path は `cli` の再輸出で不変）、追随の続きの弁別
+//! （[`follow_pending`]）もここに置く。
+
+use super::intake::{regenerated, run_repo, unloadable};
+use super::run::{chain, launch};
+use super::step::{gate_run, land_run, review_run};
+use super::{broken, need, refused, stage_of, state_dir_of};
+use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+use crate::fleet::store::{self, LockPolicy, StoreError};
+use crate::fleet::{self, Completion, EventKind, Stage, State, Timeout};
+use crate::pipe::approve::RC_BLOCKED;
+use crate::pipe::contract::Contract;
+use crate::pipe::follow;
+use crate::pipe::gate::{Verdict, RC_INCONCLUSIVE};
+use crate::pipe::land::verdict_of;
+use crate::pipe::ratelimit::ride_out_rate_limit;
+use crate::pipe::spawn::{end_gate_mark, EndGateMark, Held};
+use crate::pipe::{contract_path, current, emit, gate_is_open, last_stage_detail, runner_is_idle, Emit};
+use crate::rules::manifest::Manifest;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+/// `resume` が入口で解く材料（便 id・置き場・**driver の札**・replay・入口の段）。
+///
+/// 札は `driver` の binding が生きている間だけ握られる（`Drop` で外す）ので、呼び手は最後まで
+/// 束縛したまま持つ。
+struct Entered {
+    /// 便 id。
+    id: String,
+    /// 置き場。
+    state_dir: PathBuf,
+    /// driver の札（`Drop` まで握る）。
+    driver: crate::pipe::Driver,
+    /// replay が見た置き場の状態。
+    state: State,
+    /// 入口で読んだ段。
+    entry: Stage,
+}
+
+/// 入口の材料を解く（1 つでも解けなければ、その周の断りをそのまま返す）。
+fn enter(args: &[String], policy: LockPolicy) -> Result<Entered, Outcome> {
+    let id = need(args, "--run").map_err(refused)?.to_owned();
+    let state_dir = state_dir_of(args).map_err(refused)?;
+    // **driver の札をここで握る**（設計 dispatcher.md §5・`pipe run` と同じ 1 つの型）。握れない周＝
+    // 生きている別の driver が同じ便を駆動している周は、**駆動しない**（同じ便に driver を 2 本立てない・
+    // 契機が重なって起こし直しが 2 本撃たれた周はここで片方が落ちる）。
+    let Some(driver) = crate::pipe::Driver::hold(&state_dir, &id, policy) else {
+        return Err(refused(format!("run {id} は別の driver が駆動している")));
+    };
+    let state = current(&state_dir)
+        .map_err(|errors| Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))?;
+    let entry = stage_of(&state, &id).map_err(refused)?;
+    Ok(Entered { id, state_dir, driver, state, entry })
+}
+
+/// `pipe resume`。現在の段から続きの段だけを通す。
+pub(super) fn resume(
+    args: &[String],
+    manifest: &Manifest,
+    policy: LockPolicy,
+    driven: &mut Option<super::Driven>,
+) -> Outcome {
+    let Entered { id, state_dir, driver: _driver, state, entry } = match enter(args, policy) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    // **入口の段を名乗る**（設計 dispatcher.md §5）: 終端で読み直した段と比べて前進を判じる材料である
+    // （段が動かなかった周を渡すと、同じ段を空撃ちする子が無限に連なる）。`--drive` を読むのは呼び手の 1 か所。
+    *driven = Some(super::Driven { run: id.clone(), entry: Some(entry) });
+    match entry {
+        // `Implemented` の先は 2 つに分かれる（設計 pipeline-conflict.md §3・ADR-0019 §2.6）。
+        // 追随が衝突して段が戻った便（最後の `RunStage` の detail が `rebase-conflict:` か
+        // `rebase-stale-rows:` で始まり、runner が起きていない）は**起こし直しの続き**で、`--runner` を要る。
+        // それ以外の `Implemented` は従来どおり gate。
+        Stage::Implemented => match follow_pending(&state_dir, &id) {
+            false => gate_run(args, &id, manifest, policy),
+            true => relaunch(args, &id, policy, Stage::Implemented),
+        },
+        // Gated の先は判定で分かれる。**INCONCLUSIVE は land を試さない**——測れて
+        // いない便に land の「PASS でない」を返すのは、吸収状態を言い換えただけである。
+        // 次に撃つ段だけを名乗って rc 3 で止まる（**自動では測り直さない**＝道具の
+        // 不足は人が直す）。PASS / FAIL の弁別は land 側が持ち、読む関数は
+        // [`verdict_of`] の 1 本で共有する（判定の読み手は増やさない）。
+        Stage::Gated => match verdict_of(&state_dir, &id) {
+            Some(Verdict::Inconclusive) => Outcome {
+                out: vec![format!("run={id} next=gate")],
+                err: Vec::new(),
+                rc: RC_INCONCLUSIVE,
+            },
+            _ => land_run(args, &id, manifest, policy),
+        },
+        // 審査を通っていない便（`RunCreated` の直後に process が落ちた周）は**先に審査**し、PASS の周だけ
+        // 起こす（FR49・設計 contract-source.md §4「効き方」）。審査の段の event と `review.json` はここで残る。
+        Stage::Intake => match need(args, "--runner") {
+            Err(reason) => refused(reason),
+            Ok(runner) => review_then_launch(args, &id, runner, manifest, policy),
+        },
+        // `Reviewed` から起こせるのは verdict が PASS の周だけ（[`super::Extra::Spawn`] が弁別する）。
+        Stage::Reviewed => relaunch(args, &id, policy, Stage::Reviewed),
+        // Blocked から先へ進めるのは承認 event が在る周だけ。未承認は **rc 3 のまま
+        // 何も書かない**——待っている事実は既に Blocked が記帳しており、resume の
+        // たびに ApprovalRequested を積むと「何回聞いたか」が事実と食い違う。
+        // 関門の判定は列（`pipe::dispatch`）と**同じ述語 1 本**（[`gate_is_open`]・設計 dispatcher.md §13）。
+        Stage::Blocked => match gate_is_open(&state_dir, &state, &id) {
+            false => Outcome::failed_line(
+                RC_BLOCKED,
+                format!("pipe: run {id} は承認待ちである（pipe approve --words \"<user の逐語>\"）"),
+            ),
+            true => relaunch(args, &id, policy, Stage::Blocked),
+        },
+        // Questioned から先へ進めるのは**最新の質問への回答**が在る周だけ（`Blocked` と同型・
+        // FR32）。無ければ rc 3 で何も書かない（待っている事実は Questioned が既に持つ）。
+        Stage::Questioned => match gate_is_open(&state_dir, &state, &id) {
+            false => Outcome::failed_line(
+                RC_BLOCKED,
+                format!("pipe: run {id} は回答待ちである（pipe answer --run {id} --words \"<回答の逐語>\"）"),
+            ),
+            true => refresh_then_relaunch(args, &id, &state, manifest, policy),
+        },
+        // 上限で止まった便は器が別口座を選んで起こし直す（設計 account-autonomy.md §4・FR37）。人の
+        // 操作は要らない（候補なしは reset まで待つ・終端は stop だけ）。
+        Stage::RateLimited => match need(args, "--runner") {
+            Err(reason) => refused(reason),
+            Ok(runner) => ride_out_rate_limit(args, &id, runner, manifest, policy),
+        },
+        // `Spawned` から再開できるのは **runner が死んだ便だけ**（host の再起動・OOM・kill で `SeatStopped` が
+        // 書かれないまま消えた形・設計 account-autonomy.md §4「runner が死んだ便の起こし直し」・C9）。生死は
+        // 唯一の wait で測り、生きている便は断る（runner を 2 本にしない）。API に届かず止まった便（§17）も同じ 1 本。
+        Stage::Spawned => match need(args, "--runner") {
+            Err(reason) => refused(reason),
+            Ok(runner) => revive(args, &id, runner, manifest, policy),
+        },
+        stage => refused(format!("run {id} の段 {} からは再開しない", stage.as_str())),
+    }
+}
+
+/// `Spawned` の便の runner の生死を測り、死んでいれば起こし直す（設計 account-autonomy.md §4・FR37 / AC39）。
+///
+/// 測るのは最後の `SeatSpawned` の pid で、唯一の wait（[`Completion::SeatGone`]・deadline 0）に問う——`Timeout` が
+/// 「生きている」で、typed に断って runner を 2 本にしない（判定行 `run=<id> runner=alive pid=<pid>`・rc 1・event 0 件・
+/// C3.3 / C3.4）。`SeatSpawned` / pid が無い周も断る（測れないを「死んだ」に読み替えない・fail-closed）。死んでいれば
+/// `SeatStopped detail=runner-dead`（pid 付き）を 1 件記帳してから、上限の周と同じ起こし直しの 1 本
+/// （[`ride_out_rate_limit`]: 計測 → 便用の選定 → `spawn_turn`）へ流す。未 commit の file は消さない（N1）。
+fn revive(args: &[String], id: &str, runner: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let state_dir = match state_dir_of(args) {
+        Ok(found) => found,
+        Err(reason) => return refused(reason),
+    };
+    // **終わりの門の間は起こさない**（設計 pipeline.md §66 形 9）: API に届かない周の枝より前に断る。
+    if let EndGateMark::Held(held) = end_gate_mark(&state_dir, id) {
+        return end_gate_held(id, held);
+    }
+    let events = match store::read_all(&state_dir) {
+        Ok(found) => found,
+        Err(errors) => return Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()),
+    };
+    // **API に届かず止まった便は生死を測らない**（設計 account-autonomy.md §17 (3)）: 最後の席の event（`SeatSpawned` /
+    // `SeatStopped` の最後の 1 件）が `SeatStopped detail=runner-unreachable` の周は runner が rc で終わった事実と理由が
+    // 既に typed に在る＝`runner-dead` を二重に記帳せず起こし直しの 1 本へ進む。起こし直した後は最後の席の event が
+    // `SeatSpawned` になるので、次の resume は従来どおり生死を測る（生きている runner の隣に起こさない・FR37）。
+    let last_seat = events
+        .iter()
+        .rev()
+        .find(|event| event.run == id && matches!(event.kind, EventKind::SeatSpawned | EventKind::SeatStopped));
+    if last_seat.is_some_and(|event| {
+        event.kind == EventKind::SeatStopped && event.detail.as_deref() == Some(follow::RUNNER_UNREACHABLE)
+    }) {
+        return ride_out_rate_limit(args, id, runner, manifest, policy);
+    }
+    // 最後の `SeatSpawned` の行から pid と bead を読む（席の event の原本・replay の `Run` は pid を持たない）。
+    let seated = events
+        .iter()
+        .rev()
+        .find(|event| event.run == id && event.kind == EventKind::SeatSpawned)
+        .and_then(|event| Some((u32::try_from(event.pid?).ok()?, event.bead.as_str())));
+    let Some((pid, bead)) = seated else {
+        return refused(format!("run {id} の runner の pid を読めない（Spawned から再開できるのは runner が死んだ便だけ）"));
+    };
+    if fleet::wait(Completion::SeatGone(pid), Duration::ZERO) == Err(Timeout) {
+        return Outcome {
+            out: vec![format!("run={id} runner=alive pid={pid}")],
+            err: vec![format!("pipe: run {id} の runner が起きている（pid {pid}・隣にもう 1 つ起こさない）")],
+            rc: RC_REFUSED,
+        };
+    }
+    let stopped = emit(
+        &state_dir,
+        &Emit {
+            kind: EventKind::SeatStopped,
+            run: id,
+            bead,
+            stage: None,
+            seat: Some(id.to_owned()),
+            pid: Some(u64::from(pid)),
+            detail: Some(follow::RUNNER_DEAD.to_owned()),
+        },
+        policy,
+    );
+    if let Err(err) = stopped {
+        return broken(err.to_string());
+    }
+    ride_out_rate_limit(args, id, runner, manifest, policy)
+}
+
+/// 終わりの門の印の持ち主が生きている周と印を読めない周の断り（門の隣に runner の 2 本目を起こさない・rc 1・event 0 件）。
+fn end_gate_held(id: &str, held: Held) -> Outcome {
+    let (line, reason) = match held {
+        Held::Alive(pid) => (
+            format!("run={id} end-gate=alive pid={pid}"),
+            format!("pipe: run {id} は終わりの門を撃っている（pid {pid}・門の隣に runner を起こさない）"),
+        ),
+        Held::Unreadable => (
+            format!("run={id} end-gate=unreadable"),
+            format!("pipe: run {id} の終わりの門の印を読めない（読めない印は断る）"),
+        ),
+    };
+    Outcome { out: vec![line], err: vec![reason], rc: RC_REFUSED }
+}
+
+/// `--runner` を読んで、その段の便を起こし直す（`resume` の各段が共有する形・`--runner` 欠けは rc 1）。
+fn relaunch(args: &[String], id: &str, policy: LockPolicy, stage: Stage) -> Outcome {
+    match need(args, "--runner") {
+        Err(reason) => refused(reason),
+        Ok(runner) => launch(args, id, runner, policy, &[stage]),
+    }
+}
+
+/// 写しを取り直した周の `RunStage`（段 `Questioned` のまま）の detail（設計 pipeline-question.md §11）。
+const CONTRACT_REFRESHED: &str = "contract:refreshed";
+
+/// 回答後の再開（設計 pipeline-question.md §11・契約表の行 a）: 起こす前に写しを設計 doc の行から取り直し、
+/// 変わった周だけ写しを書き替えて `RunStage`（段 `Questioned`・detail=[`CONTRACT_REFRESHED`]）を 1 件記帳し、
+/// 判定行に `contract=refreshed` を足す。行が受付を通らない周は rc 1 で断り、写しも event も触らない。
+///
+/// 取り直しは**この分岐だけ**である: 追随の再 spawn は写しの write-set へ設計 doc を追記しており、行から組み直すと
+/// その追記を消す（上限・runner 死の途中再開も同じく写しのまま起こす）。
+fn refresh_then_relaunch(args: &[String], id: &str, state: &State, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let refreshed = match refresh_contract(args, id, state, manifest, policy) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let mut outcome = relaunch(args, id, policy, Stage::Questioned);
+    if refreshed {
+        let token = "contract=refreshed";
+        match outcome.out.first_mut().filter(|line| line.starts_with("run=")) {
+            Some(line) => line.push_str(&format!(" {token}")),
+            None => outcome.out.insert(0, format!("run={id} {token}")),
+        }
+    }
+    outcome
+}
+
+/// 写しを受付と同じ導出で組み直して byte 比較する（同じなら何も書かず `false`・違えば写しを書き替えて記帳し `true`）。
+fn refresh_contract(
+    args: &[String],
+    id: &str,
+    state: &State,
+    manifest: &Manifest,
+    policy: LockPolicy,
+) -> Result<bool, Outcome> {
+    let state_dir = &state_dir_of(args).map_err(refused)?;
+    let repo = run_repo(args, state_dir, id).map_err(refused)?;
+    let path = contract_path(state_dir, id);
+    let held = std::fs::read_to_string(&path).map_err(|err| broken(format!("{} を読めない: {err}", path.display())))?;
+    let contract = Contract::parse(&held).map_err(unloadable)?;
+    let Some(body) = regenerated(&repo, state_dir, id, manifest, &contract.design)? else {
+        return Ok(false);
+    };
+    if body == held {
+        return Ok(false);
+    }
+    std::fs::write(&path, &body).map_err(|err| broken(format!("{} を書けない: {err}", path.display())))?;
+    let bead = state.runs.get(id).map(|run| run.bead.as_str()).unwrap_or_default();
+    emit(
+        state_dir,
+        &Emit {
+            kind: EventKind::RunStage,
+            run: id,
+            bead,
+            stage: Some(Stage::Questioned),
+            seat: None,
+            pid: None,
+            detail: Some(CONTRACT_REFRESHED.to_owned()),
+        },
+        policy,
+    )
+    .map_err(|err| broken(err.to_string()))?;
+    Ok(true)
+}
+
+/// 審査（`Intake` → `Reviewed`）を通してから起こす（`pipe run` と `resume` が共有する 1 本・FR49）。
+///
+/// 審査が PASS でない周はその判定行と rc（FAIL = 1 / INCONCLUSIVE = 3）で止まり、**runner を起こさない**。
+/// PASS の周だけ [`launch`] へ進む（[`super::Extra::Spawn`] が `review.json` を読み直す＝判定の読み手は 1 本）。
+pub(super) fn review_then_launch(
+    args: &[String],
+    id: &str,
+    runner: &str,
+    manifest: &Manifest,
+    policy: LockPolicy,
+) -> Outcome {
+    let mut lines = Vec::new();
+    if let Some(stopped) = chain(&mut lines, review_run(args, id, manifest, policy)) {
+        return stopped;
+    }
+    let spawned = launch(args, id, runner, policy, &[Stage::Reviewed]);
+    chain(&mut lines, spawned).unwrap_or_else(|| Outcome::ok(lines))
+}
+
+/// `Implemented` の便が**起こし直しの続き**か（設計 pipeline-conflict.md §3 の `resume`）。
+///
+/// 条件は 2 つ——最後の `RunStage` の detail が `rebase-conflict:` か `rebase-stale-rows:`（追随で入った契約表の
+/// 行の起こし直し・設計 pipeline.md §34・判定は [`follow::is_conflict`] の 1 本）で始まり、かつ runner が
+/// 起きていない（走っている runner の隣にもう 1 つ起こさない）。どちらかを読めない周は
+/// `false`＝従来どおり gate へ流す（読めなさで runner を起こさない・fail-closed）。
+fn follow_pending(state_dir: &Path, id: &str) -> bool {
+    let conflicted = last_stage_detail(state_dir, id)
+        .is_some_and(|detail| follow::is_conflict(&detail));
+    conflicted && runner_is_idle(state_dir, id) == Some(true)
+}

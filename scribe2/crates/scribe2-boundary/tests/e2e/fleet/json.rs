@@ -1,0 +1,786 @@
+// flip-check: moved s2-07l.680
+//! json と記録の族の歯（接頭辞 `fleet_json_` / `fleet_read_` / `fleet_record_` / `fleet_replay_` / `fleet_export_` / `fleet_case_kind_`・設計 docs/design/carry-prep.md §9 行 h・fleet-event-log.md §12・親 `tests/e2e/fleet.rs` の helper を `use super::*` で使う）。
+
+use super::*;
+
+#[test]
+fn fleet_json_rejects_short_unicode() {
+    // 断りの字面まで見る。`16 進でない` だけだと base の `from_str_radix` の error
+    // （"invalid digit found in string"）にも当たってしまい、guard を外しても通る。
+    for bad in [
+        r#"{"a":"\u+123"}"#,
+        r#"{"a":"\u12"}"#,
+        r#"{"a":"\uZZZZ"}"#,
+    ] {
+        let reason = json_lite::parse_object(bad).expect_err("桁が 16 進でない \\u は拒む");
+        assert!(
+            reason.contains("\\u の桁が 16 進でない"),
+            "理由: {reason}（入力 {bad}）"
+        );
+    }
+    // 入力が尽きる経路（4 桁に届かない）は別の断りになる。
+    let cut = json_lite::parse_object(r#"{"a":"\u12"#).expect_err("桁が足りない \\u は拒む");
+    assert!(cut.contains("\\u の 4 桁が足りない"), "理由: {cut}");
+    let good = json_lite::parse_object(r#"{"a":"\u0041"}"#).expect("正しい 4 桁は通る");
+    let (_, value) = good.first().expect("1 組");
+    assert_eq!(value.as_str(), Some("A"), "U+0041 は A");
+}
+
+#[test]
+fn fleet_json_rejects_unknown_key() {
+    let mut pairs: Vec<(&str, json_lite::Value)> = vec![
+        ("schema", json_lite::Value::Num(SCHEMA)),
+        ("ts", json_lite::Value::Str("2026-09-09T00:00:00Z".to_owned())),
+        ("kind", json_lite::Value::Str("RunCreated".to_owned())),
+        ("run", json_lite::Value::Str("r1".to_owned())),
+        ("bead", json_lite::Value::Str("b1".to_owned())),
+        ("host", json_lite::Value::Str("h".to_owned())),
+        ("actor", json_lite::Value::Str("machine".to_owned())),
+    ];
+    assert!(Event::from_line(&json_lite::write_object(&pairs)).is_ok(), "既知 key だけなら通る");
+    pairs.push(("stgae", json_lite::Value::Str("Gated".to_owned())));
+    let reason = Event::from_line(&json_lite::write_object(&pairs))
+        .expect_err("綴り違いの key を黙って捨てない");
+    assert!(reason.contains("未知の key stgae"), "理由: {reason}");
+}
+
+#[test]
+fn fleet_replay_rebuilds_state_from_events() {
+    let mut created = event(EventKind::RunCreated, "r1", "2026-09-09T00:00:00Z");
+    created.stage = Some(Stage::Intake);
+    let mut moved = event(EventKind::RunStage, "r1", "2026-09-09T00:00:10Z");
+    moved.stage = Some(Stage::Implemented);
+    let state = replay(&[created, moved]);
+    let run = state.runs.get("r1").expect("r1 が在る");
+    assert_eq!(run.stage, Stage::Implemented, "物理順で最後の stage が現在地");
+    assert_eq!(run.updated, "2026-09-09T00:00:10Z", "最後の ts");
+    assert!(!run.approved, "承認 event はまだ無い");
+}
+
+#[test]
+fn fleet_replay_marks_run_approved_on_approval_received() {
+    let asked = event(EventKind::ApprovalRequested, "r1", "2026-09-09T00:00:00Z");
+    let mut got = event(EventKind::ApprovalReceived, "r1", "2026-09-09T00:00:05Z");
+    // 逐語まで揃って初めて承認である（C7.2）。読み手は actor と detail も見る。
+    got.detail = Some("消してよい".to_owned());
+    assert_eq!(got.actor, "human", "承認の受理だけが人由来（FR22）");
+    let state = replay(&[asked, got]);
+    assert!(state.runs.get("r1").expect("r1 が在る").approved, "approved は導出値");
+}
+
+#[test]
+fn fleet_replay_seat_state_is_stopped_after_seat_stopped() {
+    let mut up = event(EventKind::SeatSpawned, "r1", "2026-09-09T00:00:00Z");
+    up.seat = Some("s1".to_owned());
+    up.pid = Some(4242);
+    let mut down = event(EventKind::SeatStopped, "r1", "2026-09-09T00:00:09Z");
+    down.seat = Some("s1".to_owned());
+    let state = replay(&[up, down]);
+    let seat = state.seats.get("s1").expect("s1 が在る");
+    assert_eq!(seat.state, SeatState::Stopped, "畳んだ席は Stopped");
+    assert_eq!(seat.pid, Some(4242), "pid は残る");
+}
+
+#[test]
+fn fleet_read_rejects_malformed_line_with_line_number() {
+    let dir = state_dir();
+    let good = event(EventKind::RunCreated, "r1", "2026-09-09T00:00:00Z").to_line();
+    let third = event(EventKind::RunDone, "r3", "2026-09-09T00:00:20Z").to_line();
+    write_raw(&dir, &[&good, "{ここは JSON でない", &third]);
+    let errors = store::read_all(&dir).expect_err("malformed は Err になる");
+    assert_eq!(errors.len(), 1, "件数: {errors:?}");
+    let first = errors.first().map(ToString::to_string).unwrap_or_default();
+    assert!(first.contains("line=2"), "行番号: {first}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_read_rejects_unknown_schema() {
+    let dir = state_dir();
+    let line = json_lite::write_object(&[
+        ("schema", json_lite::Value::Num(2)),
+        ("ts", json_lite::Value::Str("2026-09-09T00:00:00Z".to_owned())),
+        ("kind", json_lite::Value::Str("RunCreated".to_owned())),
+        ("run", json_lite::Value::Str("r1".to_owned())),
+        ("bead", json_lite::Value::Str("s2-x".to_owned())),
+        ("host", json_lite::Value::Str("h".to_owned())),
+        ("actor", json_lite::Value::Str("machine".to_owned())),
+    ]);
+    write_raw(&dir, &[&line]);
+    let errors = store::read_all(&dir).expect_err("未知 schema は Err になる");
+    let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    assert!(joined.join("\n").contains("schema"), "理由: {joined:?}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_export_first_line_is_schema_header() {
+    let dir = state_dir();
+    let out = run_fleet(&["export", "--state-dir", &dir.display().to_string()]);
+    assert!(out.status.success(), "export の rc: {out:?}");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next().unwrap_or_default();
+    let pairs = json_lite::parse_object(first).expect("header は flat JSON");
+    let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, vec!["schema", "kind", "host", "runs", "seats"], "header の key 並び");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_export_is_read_only() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    for run in ["r1", "r2"] {
+        let out = run_fleet(&["record", "--kind", "RunCreated", "--run", run, "--bead", "s2-x", "--state-dir", &path]);
+        assert!(out.status.success(), "record の rc: {out:?}");
+    }
+    let events = store::events_path(&dir);
+    let before = fs::metadata(&events).expect("event log が在る");
+    let out = run_fleet(&["export", "--state-dir", &path]);
+    let after = fs::metadata(&events).expect("event log が在る");
+    assert!(out.status.success(), "export の rc: {out:?}");
+    let lines = String::from_utf8_lossy(&out.stdout).lines().count();
+    assert_eq!(lines, 3, "header 1 + run 2 + seat 0");
+    assert_eq!(before.len(), after.len(), "size を変えない");
+    assert_eq!(
+        before.modified().ok(),
+        after.modified().ok(),
+        "mtime を変えない"
+    );
+    assert!(!store::lock_path(&dir).exists(), "lock を残さない");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_json_roundtrip_escapes() {
+    let nasty = "quote=\" back=\\ tab=\t nl=\n ctrl=\u{1}";
+    let line = json_lite::write_object(&[("detail", json_lite::Value::Str(nasty.to_owned()))]);
+    let pairs = json_lite::parse_object(&line).expect("読み戻せる");
+    let (_, value) = pairs.first().expect("1 組");
+    assert_eq!(value.as_str(), Some(nasty), "escape を往復して同じ");
+    assert!(!line.contains('\n'), "1 行に収まる: {line:?}");
+}
+
+#[test]
+fn fleet_export_rc2_on_malformed_store() {
+    let dir = state_dir();
+    write_raw(&dir, &["これは JSON ではない"]);
+    let out = run_fleet(&["export", "--state-dir", &dir.display().to_string()]);
+    assert_eq!(out.status.code(), Some(2), "壊れた store は rc 2");
+    assert!(out.stdout.is_empty(), "stdout へは書かない");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("line=1"), "行番号つきで断る: {err}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_record_rejects_unknown_actor() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let out = run_fleet(&[
+        "record", "--kind", "RunCreated", "--run", "r1", "--bead", "b1", "--actor", "bogus",
+        "--state-dir", &path,
+    ]);
+    assert_eq!(out.status.code(), Some(1), "書き側で断る");
+    assert!(out.stdout.is_empty(), "stdout へは書かない");
+    assert!(
+        !store::events_path(&dir).exists(),
+        "読めない行を append-only の log に残さない"
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("machine でも human でもない"), "理由: {err}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_record_rejects_flag_without_value() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let out = run_fleet(&[
+        "record", "--kind", "RunCreated", "--run", "r1", "--bead", "b1", "--detail",
+        "--state-dir", &path,
+    ]);
+    // 値欠けは入口の閉包の検査が typed に断る（rc 2・設計 pipeline.md §14 約束 4）。
+    assert_eq!(out.status.code(), Some(2), "値の無い flag は黙って落とさない");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("--detail に値が無い"), "理由: {err}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_json_rejects_duplicate_key() {
+    let line = "{\"schema\":1,\"schema\":9}";
+    let reason = json_lite::parse_object(line).expect_err("重複 key は拒む");
+    assert!(reason.contains("重複"), "理由: {reason}");
+}
+
+#[test]
+fn fleet_export_reports_runs_and_seats() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let calls: [&[&str]; 3] = [
+        &["record", "--kind", "RunCreated", "--run", "r1", "--bead", "b1", "--stage", "Gated"],
+        &["record", "--kind", "SeatSpawned", "--run", "r1", "--bead", "b1", "--seat", "s1", "--pid", "4242"],
+        &["record", "--kind", "ApprovalReceived", "--run", "r1", "--bead", "b1", "--detail", "消してよい"],
+    ];
+    for call in calls {
+        let mut args = call.to_vec();
+        args.extend_from_slice(&["--state-dir", &path]);
+        assert!(run_fleet(&args).status.success(), "record: {call:?}");
+    }
+    let out = run_fleet(&["export", "--state-dir", &path]);
+    assert!(out.status.success(), "export の rc: {out:?}");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 3, "header + run 1 + seat 1: {lines:?}");
+    let header = json_lite::parse_object(lines.first().copied().unwrap_or_default()).expect("header");
+    let field = |pairs: &[(String, json_lite::Value)], key: &str| {
+        pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+    };
+    assert_eq!(field(&header, "runs"), Some(json_lite::Value::Num(1)), "runs の件数");
+    assert_eq!(field(&header, "seats"), Some(json_lite::Value::Num(1)), "seats の件数");
+    let run = json_lite::parse_object(lines.get(1).copied().unwrap_or_default()).expect("run 行");
+    assert_eq!(field(&run, "stage"), Some(json_lite::Value::Str("Gated".to_owned())), "段");
+    assert_eq!(field(&run, "approved"), Some(json_lite::Value::Bool(true)), "承認は導出値");
+    let seat = json_lite::parse_object(lines.get(2).copied().unwrap_or_default()).expect("seat 行");
+    assert_eq!(field(&seat, "state"), Some(json_lite::Value::Str("Live".to_owned())), "席の状態");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fleet_read_collects_every_malformed_line() {
+    let dir = state_dir();
+    let good = event(EventKind::RunCreated, "r1", "2026-09-09T00:00:00Z").to_line();
+    write_raw(&dir, &["こわれ 1", &good, "こわれ 3"]);
+    let errors = store::read_all(&dir).expect_err("malformed は Err になる");
+    assert_eq!(errors.len(), 2, "最初の 1 件で止めない: {errors:?}");
+    let joined: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    let text = joined.join("\n");
+    assert!(text.contains("line=1") && text.contains("line=3"), "両方の行番号: {text}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// 応答の形を `get` の連鎖で辿れる（3 段の `display_name` と各窓の `utilization` に届く）。
+#[test]
+fn fleet_json_tree_reads_the_usage_shape() {
+    let tree = parse(USAGE_BODY).expect("応答の形を読める");
+    let window = |name: &str| tree.get(name).and_then(|found| found.get("utilization"));
+    assert_eq!(window("five_hour").and_then(Tree::as_pct), Some(97), "5 時間窓");
+    assert_eq!(window("seven_day").and_then(Tree::as_pct), Some(12), "7 日窓は切り捨て");
+    assert_eq!(
+        tree.get("seven_day").and_then(|w| w.get("resets_at")).and_then(Tree::as_str),
+        Some("2026-09-18T00:00:00Z"),
+        "reset の字面"
+    );
+    let limits = tree.get("limits").and_then(Tree::as_array).expect("limits は配列");
+    assert_eq!(limits.len(), 2, "配列の要素数: {limits:?}");
+    let scoped = limits.first().expect("1 件目");
+    assert_eq!(
+        scoped
+            .get("scope")
+            .and_then(|scope| scope.get("model"))
+            .and_then(|model| model.get("display_name"))
+            .and_then(Tree::as_str),
+        Some("Opus 5"),
+        "3 段の入れ子を辿る"
+    );
+    assert_eq!(scoped.get("id"), Some(&Tree::Null), "id は null のまま持つ");
+    assert_eq!(scoped.get("utilization").and_then(Tree::as_pct), Some(125), "1 超も cap しない");
+    assert_eq!(tree.get("ok").and_then(Tree::as_bool), Some(true), "真偽");
+    assert_eq!(tree.get("nope"), None, "無い key は None");
+    assert_eq!(scoped.as_str(), None, "object は文字列ではない");
+    assert_eq!(tree.get("limits").and_then(Tree::as_bool), None, "配列は真偽ではない");
+}
+
+/// `as_pct` は 100 で cap せず切り捨て、負数と `u64` を超える値は `None`。
+///
+/// 巨大な指数（`1e9999999999` 等）は**桁を作る前に** `None` へ落ちる＝指数に比例する仕事を
+/// しない。run 1（commit edd15b7）はここで指数由来の幅の桁埋めを回して abort した。
+#[test]
+fn fleet_json_tree_as_pct_floors_without_cap_and_never_pads_by_exponent() {
+    let started = Instant::now();
+    let cases: [(&str, Option<u64>); 11] = [
+        ("0.97", Some(97)),
+        ("1.0", Some(100)),
+        ("1.25", Some(125)),
+        ("-0.1", None),
+        ("1e9999999999", None),
+        ("1e40", None),
+        ("123e18", None),
+        ("0.1e-9999999999", Some(0)),
+        ("1e18", None),
+        ("9.99e17", None),
+        ("1.8e17", Some(18_000_000_000_000_000_000)),
+    ];
+    for (text, want) in cases {
+        let tree = parse(text).expect("数の字面は読める");
+        assert_eq!(tree.as_pct(), want, "入力 {text}");
+    }
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "None の経路が指数に比例する仕事をしている（{elapsed:?}）"
+    );
+    // u64 の端（`as_pct` の最大 = u64::MAX）の内と外。
+    let inside = parse("184467440737095516.15").expect("端の内側の字面は読める");
+    assert_eq!(inside.as_pct(), Some(u64::MAX), "×100 が u64::MAX ちょうど");
+    let outside = parse("184467440737095516.16").expect("端の外側の字面も読める");
+    assert_eq!(outside.as_pct(), None, "端を 1 越えたら None");
+}
+
+/// 壊れ方ごとに**別の variant** で断る（読めない字面は部分 parse を返さない）。
+#[test]
+fn fleet_json_tree_rejects_each_broken_shape_with_its_own_variant() {
+    let reasons = [
+        broken(r#"{"a":1,"a":2}"#, |found| matches!(found, TreeError::DuplicateKey { .. })),
+        broken(r#"{"a":"x}"#, |found| matches!(found, TreeError::Unterminated { .. })),
+        broken(r#"{"a":"\q"}"#, |found| matches!(found, TreeError::BadEscape { .. })),
+        broken(r#"{"a":1} x"#, |found| matches!(found, TreeError::Trailing { .. })),
+        broken(&nest(MAX_DEPTH.saturating_add(1)), |found| {
+            matches!(found, TreeError::TooDeep { .. })
+        }),
+        broken("1e99999999999999999999", |found| {
+            matches!(found, TreeError::BadNumber { .. })
+        }),
+    ];
+    each_reason_differs(&reasons);
+    assert!(parse(&nest(MAX_DEPTH)).is_ok(), "上限ちょうどは通る");
+    let first = reasons.first().map(ToString::to_string).unwrap_or_default();
+    assert!(first.contains("位置"), "断りは位置を持つ: {first}");
+}
+
+/// escape（`\uXXXX` と surrogate 対）を解き、壊れた対は拒む。
+#[test]
+fn fleet_json_tree_reads_escapes_and_surrogate_pairs() {
+    let text = parse(r#""A😀\n\t\"\\\/あ""#).expect("escape を解ける");
+    assert_eq!(text.as_str(), Some("A\u{1f600}\n\t\"\\/あ"), "解いた中身");
+    let escaped = "\"\\uD83D\\uDE00\\u3042\\u0041\"";
+    let pair = parse(escaped).expect("surrogate 対を解ける");
+    assert_eq!(pair.as_str(), Some("\u{1f600}あA"), "対は 1 文字へ・BMP の \\uXXXX はそのまま");
+    for broken in [r#""\uD83D""#, r#""\uD83Dx""#, r#""\uDE00""#, r#""\u00Z1""#, r#""\u12""#] {
+        let reason = parse(broken).expect_err("壊れた escape は拒む");
+        assert!(
+            matches!(reason, TreeError::BadEscape { .. }),
+            "入力 {broken} の理由: {reason}"
+        );
+    }
+}
+
+/// flat 行の reader は**入れ子を拒み続ける**（広げたのは新しい型の側だけ）。
+#[test]
+fn fleet_json_tree_leaves_the_flat_reader_narrow() {
+    for nested in [r#"{"a":{"b":1}}"#, r#"{"a":[1]}"#, r#"{"a":1.5}"#, r#"{"a":-1}"#] {
+        let reason = json_lite::parse_object(nested).expect_err("flat の reader は受けない");
+        assert!(!reason.is_empty(), "断りの理由が空: {nested}");
+        assert!(parse(nested).is_ok(), "同じ字面を Tree は読める: {nested}");
+    }
+    let flat = r#"{"a":"x","b":1,"c":true,"d":null}"#;
+    assert!(json_lite::parse_object(flat).is_ok(), "1 段の行はこれまで通り読める");
+}
+
+/// 形 2: `SeatRegistered` → `SeatRetired` の並びで row は `registrations` から外れ、`registered_accounts` が空。別の鍵の row は残る。
+/// 退役の行は schema 1 のまま登録と同じ本体で往復し、便も席も作らない（base では kind が無い＝RED）。
+#[test]
+fn fleet_replay_seat_retired_drops_the_row_and_its_account() {
+    let registered = registration_event("s:w");
+    let retired = seat_retired_of(&registered);
+    let line = retired.to_line();
+    assert!(line.contains("\"kind\":\"SeatRetired\"") && line.contains("\"schema\":1"), "{line}");
+    assert!(line.contains("\"actor\":\"human\"") && line.contains("\"detail\":\"moved\""), "{line}");
+    assert!(!line.contains("\"run\":") && !line.contains("\"bead\":"), "便に紐づかない: {line}");
+    assert_eq!(Event::from_line(&line), Ok(retired.clone()), "{line}");
+    let state = replay(&[registered.clone(), retired.clone()]);
+    assert!(state.registrations.is_empty(), "退役した鍵の row は無い: {:?}", state.registrations);
+    assert_eq!(state.registered_accounts(None), BTreeSet::new(), "便用の除外にも載らない");
+    assert_eq!(state.registered_accounts(Some(Path::new("/repo"))), BTreeSet::new(), "anchor の絞りでも空");
+    assert!(state.runs.is_empty() && state.seats.is_empty(), "便も席も作らない: {state:?}");
+    let mut other = registration_event("s:other");
+    other.registration = other.registration.map(|row| Registration { anchor: "/repo/other".to_owned(), account: "a9".to_owned(), ..row });
+    let kept = replay(&[registered, other.clone(), retired]);
+    assert_eq!(kept.registered_accounts(None), BTreeSet::from(["a9".to_owned()]), "退役は同じ鍵（role, anchor）だけを外す");
+    assert_eq!(kept.registrations.values().map(|latest| latest.seq).collect::<Vec<_>>(), vec![1], "別の鍵の row は seq ごと残る");
+}
+
+/// 形 2: `SeatRegistered` → `SeatRetired` → `SeatRegistered` は最後の row が勝つ（物理順・後の登録が復活させる）。退役の前の登録を
+/// 後ろに並べ替えた周は row が在り、退役が最後なら無い。
+#[test]
+fn fleet_replay_seat_retired_then_registered_resolves_the_last_row() {
+    let first = registration_event("s:w");
+    let retired = seat_retired_of(&first);
+    let mut again = registration_event("s:w2");
+    again.registration = again.registration.map(|row| Registration { account: "a2".to_owned(), ..row });
+    let state = replay(&[first.clone(), retired.clone(), again.clone()]);
+    let rows: Vec<(usize, String, String)> = state
+        .registrations
+        .values()
+        .map(|latest| (latest.seq, latest.registration.target.clone(), latest.registration.account.clone()))
+        .collect();
+    assert_eq!(rows, vec![(2, "s:w2".to_owned(), "a2".to_owned())], "最後の登録の row");
+    assert_eq!(state.registered_accounts(None), BTreeSet::from(["a2".to_owned()]));
+    let last = replay(&[first.clone(), again.clone(), retired.clone()]);
+    assert!(last.registrations.is_empty(), "退役が最後なら row は無い: {:?}", last.registrations);
+    let before = replay(&[retired, first]);
+    assert_eq!(before.registrations.len(), 1, "登録より前の退役は後の登録を消さない");
+}
+
+/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（31 種の末尾は上限の許可の
+/// `LimitPermitted`・limit-permit.md §18）で、`fleet record` からは書けない（書き手は `seat retire` だけ・rc 1・log を作らない）。
+#[test]
+fn fleet_replay_seat_retired_kind_is_a_registration_shape_and_record_refuses_it() {
+    use vessel::fleet::Shape;
+    assert_eq!(KINDS.len(), 31, "母集団");
+    assert_eq!(KINDS.get(23), Some(&EventKind::SeatRetired), "宣言順の 24 種目");
+    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "宣言順の末尾");
+    assert_eq!(EventKind::SeatRetired.shape(), Shape::Registration);
+    assert_eq!(EventKind::SeatRetired.default_actor(), "human", "退役は人由来");
+    assert_eq!(EventKind::parse("SeatRetired"), Some(EventKind::SeatRetired), "as_str ↔ parse の往復");
+    assert!(!EventKind::SeatRetired.is_allowance());
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let out = run_fleet(&["record", "--kind", "SeatRetired", "--run", "r1", "--bead", "b1", "--state-dir", &path]);
+    assert_eq!(out.status.code(), Some(1), "書き側で断る: {out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("record では書けない"));
+    assert!(!store::events_path(&dir).exists(), "行を残さない");
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// 極性は fail-closed で、**極性一覧の guard には載らない**（計測は行為を止めない・設計 §6）。
+#[test]
+fn fleet_json_tree_polarity_is_fail_closed_outside_the_guard_list() {
+    let polarity: Polarity = json_tree::POLARITY;
+    assert_eq!(polarity.on_failure, OnFailure::FailClosed, "読めない字面は Err へ倒す");
+    assert_eq!(polarity.timing, Timing::InLoop, "読む時点で断る");
+    let listed = vessel::polarity::ALL
+        .iter()
+        .filter(|guard| guard.boundary().contains("json_tree"))
+        .count();
+    assert_eq!(
+        listed, 0,
+        "guard を足していない（母集団 {} 件）",
+        vessel::polarity::ALL.len()
+    );
+}
+
+/// (g) `State::inflight_by_account` は終端でない便のうち `account` を持つものを label ごとに数える（ADR-0027 §2.3）:
+/// SeatSpawned(account=a1) ×2（1 本は Landed 済み）+ SeatSpawned(account 無し) → `{a1: 1}`。Stopped / Failed /
+/// `detail=retired` も数えず、最新の `SeatSpawned` の値が勝つ（起こし直しで口座が変わる）。
+#[test]
+fn fleet_replay_counts_inflight_runs_per_account() {
+    let mut events = vec![
+        run_event(EventKind::SeatSpawned, "r1", Some(Stage::Spawned), Some("a1")),
+        run_event(EventKind::SeatSpawned, "r2", Some(Stage::Spawned), Some("a1")),
+        run_event(EventKind::RunDone, "r2", Some(Stage::Landed), None),
+        run_event(EventKind::SeatSpawned, "r3", Some(Stage::Spawned), None),
+    ];
+    let state = replay(&events);
+    assert_eq!(state.inflight_by_account(), BTreeMap::from([("a1".to_owned(), 1)]), "r2 は Landed・r3 は口座不明");
+    assert_eq!(state.runs.get("r1").and_then(|run| run.account.clone()), Some("a1".to_owned()));
+    assert_eq!(state.runs.get("r2").and_then(|run| run.account.clone()), Some("a1".to_owned()), "終端でも口座は残る");
+    assert_eq!(state.runs.get("r3").and_then(|run| run.account.clone()), None);
+    assert_eq!(state.runs.len(), 3, "口座つきの SeatSpawned は便に紐づく行（幽霊の便を作らない）");
+    // 段が進んでも走行中（Implemented / Gated / RateLimited）・終端（Stopped / Failed）と retired は数えない。
+    events.push(run_event(EventKind::RunStage, "r1", Some(Stage::Gated), None));
+    events.push(run_event(EventKind::SeatSpawned, "r4", Some(Stage::Spawned), Some("a2")));
+    events.push(run_event(EventKind::RunStopped, "r4", Some(Stage::Stopped), None));
+    events.push(run_event(EventKind::SeatSpawned, "r5", Some(Stage::Spawned), Some("a2")));
+    events.push(run_event(EventKind::RunStage, "r5", Some(Stage::Failed), None));
+    events.push(run_event(EventKind::SeatSpawned, "r6", Some(Stage::RateLimited), Some("a2")));
+    events.push(run_event(EventKind::SeatSpawned, "r7", Some(Stage::Spawned), Some("a3")));
+    events.push(Event { detail: Some("retired".to_owned()), ..run_event(EventKind::RunStage, "r7", None, None) });
+    let state = replay(&events);
+    assert_eq!(
+        state.inflight_by_account(),
+        BTreeMap::from([("a1".to_owned(), 1), ("a2".to_owned(), 1)]),
+        "Gated の r1・RateLimited の r6 は走行中・Stopped / Failed / retired は数えない"
+    );
+    // 起こし直しで口座が変わる: 最新の SeatSpawned の値。
+    events.push(run_event(EventKind::SeatSpawned, "r1", Some(Stage::Spawned), Some("a3")));
+    let state = replay(&events);
+    assert_eq!(state.inflight_by_account(), BTreeMap::from([("a2".to_owned(), 1), ("a3".to_owned(), 1)]), "r1 は a3 へ");
+    assert_eq!(replay(&[]).inflight_by_account(), BTreeMap::new(), "便 0 は空");
+}
+
+/// (f) `fleet record --kind SeatSpawned --account x` は行に `"account":"x"` を書き、読み返した便が口座を持つ。
+/// `--kind RunStage --account x` は rc 1（他の kind の `account` は malformed のまま・書かない）。`--account` の
+/// 値欠けは入口の閉包の断りで rc 2（設計 pipeline.md §14 約束 4）。field の無い SeatSpawned はこれまでどおり書けて `account`
+/// 無しで読める（schema 1 のまま）。
+#[test]
+fn fleet_record_seat_spawned_carries_account() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let spawned = run_fleet(&[
+        "record", "--kind", "SeatSpawned", "--run", "r1", "--bead", "s2-x", "--seat", "s1", "--account", "x",
+        "--state-dir", &path,
+    ]);
+    assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "{spawned:?}");
+    let log = fs::read_to_string(store::events_path(&dir)).expect("event log が在る");
+    assert_eq!(log.lines().count(), 1);
+    assert!(log.contains(r#""account":"x""#), "{log}");
+    assert!(log.contains(r#""run":"r1""#) && log.contains(r#""bead":"s2-x""#), "便に紐づく行のまま: {log}");
+    for (bad, rc) in [
+        (&["record", "--kind", "RunStage", "--run", "r1", "--bead", "s2-x", "--stage", "Gated", "--account", "x", "--state-dir", &path][..], RC_REFUSED),
+        (&["record", "--kind", "RunCreated", "--run", "r2", "--bead", "s2-x", "--account", "x", "--state-dir", &path][..], RC_REFUSED),
+        (&["record", "--kind", "SeatStopped", "--run", "r1", "--bead", "s2-x", "--account", "x", "--state-dir", &path][..], RC_REFUSED),
+        (&["record", "--kind", "SeatSpawned", "--run", "r1", "--bead", "s2-x", "--account", "--state-dir", &path][..], RC_BROKEN),
+    ] {
+        let refused = run_fleet(bad);
+        assert_eq!(refused.status.code(), Some(i32::from(rc)), "{bad:?}: {refused:?}");
+        assert!(refused.stdout.is_empty(), "{bad:?}: 書かない");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(stderr.contains("--account"), "{bad:?}: 理由は flag を名指す: {stderr}");
+    }
+    let plain = run_fleet(&["record", "--kind", "SeatSpawned", "--run", "r2", "--bead", "s2-x", "--state-dir", &path]);
+    assert_eq!(plain.status.code(), Some(i32::from(RC_OK)), "{plain:?}");
+    let events = store::read_all(&dir).expect("全行を読める");
+    assert_eq!(events.len(), 2, "断った周は書いていない");
+    assert_eq!(events.first().and_then(|found| found.account.clone()), Some("x".to_owned()));
+    assert_eq!(events.get(1).and_then(|found| found.account.clone()), None, "field の無い行は None");
+    assert_eq!(replay(&events).inflight_by_account(), BTreeMap::from([("x".to_owned(), 1)]));
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// 案件の一生の 5 kind の名（設計 fleet-event-log.md §12・宣言順・base でも compile できるよう字面で持つ）。
+const CASE_KIND_NAMES: [&str; 5] = ["UtteranceReceived", "UtteranceSorted", "TurnEndUnjudged", "IntakeRefused", "LifecycleCutover"];
+
+/// §12 の見本 7 行（秒より下の桁の ts を含む・key の並びは表のとおり）。
+const CASE_KIND_LINES: [&str; 7] = [
+    r#"{"schema":1,"ts":"2026-09-29T01:02:03.004Z","kind":"UtteranceReceived","channel":"chat","session":"s-1","host":"h","actor":"human","detail":"進めて"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:02:04Z","kind":"UtteranceReceived","channel":"gui","host":"h","actor":"human","detail":"A で"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:03:00Z","kind":"UtteranceSorted","utterance":"2026-09-29T01:02:03.004Z","sorting":"request","bead":"s2-m1","host":"h","actor":"machine"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:03:01Z","kind":"UtteranceSorted","utterance":"2026-09-29T01:02:04Z","sorting":"chat","host":"h","actor":"machine"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:04:00Z","kind":"TurnEndUnjudged","session":"s-1","reason":"log-unreadable","host":"h","actor":"machine"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:05:00Z","kind":"IntakeRefused","bead":"s2-c1","refuse":"cap-headroom","host":"h","actor":"machine"}"#,
+    r#"{"schema":1,"ts":"2026-09-29T01:06:00Z","kind":"LifecycleCutover","version":"0.1.0","main":"0123456789abcdef0123456789abcdef01234567","host":"h","actor":"machine"}"#,
+];
+
+/// 見本 7 行を読む（読めない行は理由つきで落とす）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn case_kind_events() -> Vec<Event> {
+    let read: Result<Vec<Event>, String> = CASE_KIND_LINES.iter().map(|line| Event::from_line(line)).collect();
+    read.expect("見本の 7 行が読める")
+}
+
+/// §12 歯 1: 見本 7 行はどれも読めて、書き直すと同じ字面に戻る。5 つの名は `EventKind::parse` で引ける。7 行を `append` で書くと
+/// `read_all` が 7 件を同じ値で返す（log の往復）。base は 5 kind が「未知の kind」で読めず RED。
+#[test]
+fn fleet_case_kind_lines_round_trip_through_the_log() {
+    for name in CASE_KIND_NAMES {
+        assert_eq!(EventKind::parse(name).map(EventKind::as_str), Some(name), "{name} を引ける");
+    }
+    let events = case_kind_events();
+    for (event, line) in events.iter().zip(CASE_KIND_LINES) {
+        assert_eq!(event.to_line(), line, "読んで書き直すと同じ字面");
+    }
+    let dir = state_dir();
+    let policy = LockPolicy::embedded().expect("rules 行を引ける");
+    for event in &events {
+        store::append(&dir, event, policy).expect("追記できる");
+    }
+    let read = store::read_all(&dir).expect("全行を読める");
+    assert_eq!(read.len(), 7, "7 件");
+    assert_eq!(read, events, "log の往復で同じ値");
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// §12 歯 2: 必須の欠け・閉じた値の外・空の値・経路と session の食い違い・仕分けと bead の食い違い・他の kind の key は、key を
+/// 名指す Err になる。末尾 2 つ（`RunStage` の channel・`RulingReceived` の version）は base でも緑の非空虚の対。
+#[test]
+fn fleet_case_kind_rows_name_the_bad_key() {
+    let head = r#"{"schema":1,"ts":"2026-09-29T01:00:00Z","#;
+    let tail = r#""host":"h","actor":"machine"}"#;
+    let cases = [
+        (r#""kind":"UtteranceReceived","session":"s-1","detail":"x","#, "channel"),
+        (r#""kind":"UtteranceReceived","channel":"voice","session":"s-1","detail":"x","#, "channel"),
+        (r#""kind":"UtteranceReceived","channel":"chat","detail":"x","#, "session"),
+        (r#""kind":"UtteranceReceived","channel":"gui","session":"s-1","detail":"x","#, "session"),
+        (r#""kind":"UtteranceReceived","run":"r1","channel":"gui","detail":"x","#, "run"),
+        (r#""kind":"UtteranceSorted","utterance":"t","sorting":"request","#, "bead"),
+        (r#""kind":"UtteranceSorted","utterance":"t","sorting":"chat","bead":"s2-m1","#, "bead"),
+        (r#""kind":"UtteranceSorted","utterance":"t","sorting":"maybe","#, "sorting"),
+        (r#""kind":"UtteranceSorted","sorting":"chat","#, "utterance"),
+        (r#""kind":"TurnEndUnjudged","session":"s-1","#, "reason"),
+        (r#""kind":"TurnEndUnjudged","reason":"log-unreadable","seat":"s1","#, "seat"),
+        (r#""kind":"IntakeRefused","bead":"s2-c1","refuse":"","#, "refuse"),
+        (r#""kind":"LifecycleCutover","main":"0123abcd","#, "version"),
+        (r#""kind":"LifecycleCutover","version":"0.1.0","main":"XYZ","#, "main"),
+        (r#""kind":"RunStage","run":"r1","bead":"b1","channel":"chat","#, "channel"),
+        (r#""kind":"RulingReceived","version":"0.1.0","detail":"x","#, "version"),
+    ];
+    for (body, key) in cases {
+        let line = format!("{head}{body}{tail}");
+        let reason = Event::from_line(&line).expect_err("malformed で読む");
+        assert!(reason.contains(key), "理由は {key} を名指す: {reason}（{line}）");
+        assert!(!reason.starts_with("kind "), "kind は既知: {reason}（{line}）");
+    }
+}
+
+/// §12 歯 3: Run の形でない `KINDS` の全部と 5 つの名を `fleet record` で撃つと、どれも rc 1 で「record では書けない」と断り、
+/// log を作らない。base は 5 つの名が「未知」で、`DispatchMark` と群の移動の 3 kind が rc 0 で通るので RED。
+#[test]
+fn fleet_case_kind_record_refuses_every_non_run_shape() {
+    use vessel::fleet::Shape;
+    let others = KINDS.iter().filter(|kind| kind.shape() != Shape::Run).map(|kind| kind.as_str());
+    let names: BTreeSet<&str> = others.chain(CASE_KIND_NAMES).collect();
+    assert!(names.contains("DispatchMark") && names.contains("GroupMoved"), "母集団: {names:?}");
+    for name in names {
+        let dir = state_dir();
+        let path = dir.display().to_string();
+        let out = run_fleet(&["record", "--kind", name, "--run", "r1", "--bead", "b1", "--state-dir", &path]);
+        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{name}: {out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("record では書けない"), "{name}: {out:?}");
+        assert!(!store::events_path(&dir).exists(), "{name}: 行を残さない");
+        fs::remove_dir_all(&dir).ok();
+    }
+}
+
+/// §12 歯 4: `RunCreated` 1 行と見本 7 行の log で、replay の便は 1・席 0・登録 row 0・退役 0、`fleet export` の 1 行目は runs 1・
+/// seats 0。
+#[test]
+fn fleet_case_kind_replay_makes_no_run_or_seat() {
+    let mut events = vec![event(EventKind::RunCreated, "r1", "2026-09-29T01:00:00Z")];
+    events.extend(case_kind_events());
+    let state = replay(&events);
+    assert_eq!(state.runs.len(), 1, "便は RunCreated の 1 つ");
+    assert!(state.seats.is_empty() && state.registrations.is_empty() && state.retired.is_empty(), "{state:?}");
+    let dir = state_dir();
+    let policy = LockPolicy::embedded().expect("rules 行を引ける");
+    for found in &events {
+        store::append(&dir, found, policy).expect("追記できる");
+    }
+    let out = run_fleet(&["export", "--state-dir", &dir.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{out:?}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let first = stdout.lines().next().unwrap_or_default();
+    assert!(first.contains(r#""runs":1"#) && first.contains(r#""seats":0"#), "{first}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// §12 歯 5: UtteranceReceived（actor human）1 行と逐語つきの `ApprovalReceived` 1 行で、`human_events` は 1・
+/// `human_events_other_than_approval` は 0（発話は人由来に数えない・FR22）。
+#[test]
+fn fleet_case_kind_utterance_is_not_counted_as_human() {
+    let utterance = case_kind_events().into_iter().next().expect("見本の 1 行目");
+    assert_eq!(utterance.actor, "human", "発話の actor は human");
+    let approval = Event { detail: Some("進めてよい".to_owned()), ..event(EventKind::ApprovalReceived, "r1", "2026-09-29T01:07:00Z") };
+    let counted = vessel::pipe::report::count(&[utterance, approval]);
+    assert_eq!((counted.human_events, counted.human_events_other_than_approval), (1, 0), "{counted:?}");
+    assert_eq!(counted.rulings, 0, "裁定の数えは変わらない");
+}
+
+/// §12 歯 6: `KINDS` は 31 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）で末尾は
+/// `LimitPermitted`（limit-permit.md §18）。既定の actor は 1 つ目だけ human（`MemoJudged` は machine）。5 つも `MemoJudged` も
+/// `Shape` が Run でなく、互いに同じ値。base は 30 種で RED。
+#[test]
+fn fleet_case_kind_kinds_are_appended_in_order() {
+    use vessel::fleet::Shape;
+    assert_eq!(KINDS.len(), 31, "母集団");
+    let tail: Vec<EventKind> = KINDS.iter().copied().skip(24).take(5).collect();
+    assert_eq!(tail.iter().map(|kind| kind.as_str()).collect::<Vec<_>>(), CASE_KIND_NAMES, "25 番目から 5 つの字面");
+    let actors: Vec<&str> = tail.iter().map(|kind| kind.default_actor()).collect();
+    assert_eq!(actors, ["human", "machine", "machine", "machine", "machine"], "既定の actor");
+    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::MemoJudged), "base の末尾の kind は末尾の 1 つ前");
+    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "宣言順の末尾");
+    assert_eq!(EventKind::MemoJudged.default_actor(), "machine", "memo の判定は機械由来");
+    let shapes: BTreeSet<String> = tail.iter().chain([&EventKind::MemoJudged]).map(|kind| format!("{:?}", kind.shape())).collect();
+    assert_eq!(shapes.len(), 1, "5 つと MemoJudged は 1 つの形を共有する: {shapes:?}");
+    assert!(tail.iter().all(|kind| kind.shape() != Shape::Run), "Run の形でない");
+}
+
+/// 上限の許可の記帳の見本 2 行（許可と取り消し・limit-permit.md §18 約束 4・並びは schema・ts・kind・bead・host・actor・detail）。
+const PERMIT_LINES: [&str; 2] = [
+    r#"{"schema":1,"ts":"2026-10-02T01:00:00Z","kind":"LimitPermitted","bead":"s2-m1","host":"h","actor":"machine","detail":"rule=gate.token_cap value=250000 until=2026-10-03T01:00:00Z ruling=q-1"}"#,
+    r#"{"schema":1,"ts":"2026-10-02T02:00:00Z","kind":"LimitPermitted","bead":"s2-m1","host":"h","actor":"machine","detail":"rule=gate.token_cap revoked"}"#,
+];
+
+/// 許可の行の組み立て（`bead` と `detail` を差し替え・`extra` は足す key の 1 組）。
+fn permit_line(bead: Option<&str>, detail: Option<&str>, extra: &str) -> String {
+    let bead = bead.map(|text| format!(r#""bead":"{text}","#)).unwrap_or_default();
+    let detail = detail.map(|text| format!(r#","detail":"{text}""#)).unwrap_or_default();
+    format!(r#"{{"schema":1,"ts":"2026-10-02T01:00:00Z","kind":"LimitPermitted",{extra}{bead}"host":"h","actor":"machine"{detail}}}"#)
+}
+
+/// (d) `KINDS` の末尾は `LimitPermitted` でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
+/// この kind だけで `SHAPES` の末尾も `Permit`・口座残量の kind でない。
+#[test]
+fn fleet_limit_permitted_kind_and_shape_are_appended_last() {
+    use vessel::fleet::{Shape, SHAPES};
+    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "KINDS の末尾");
+    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
+    assert_eq!(EventKind::LimitPermitted.as_str(), "LimitPermitted");
+    assert_eq!(EventKind::parse("LimitPermitted"), Some(EventKind::LimitPermitted), "as_str ↔ parse の往復");
+    assert_eq!(EventKind::LimitPermitted.default_actor(), "machine", "許可は機械の導出");
+    assert_eq!(EventKind::LimitPermitted.shape(), Shape::Permit);
+    let owners: Vec<&EventKind> = KINDS.iter().filter(|kind| kind.shape() == Shape::Permit).collect();
+    assert_eq!(owners, [&EventKind::LimitPermitted], "形 Permit を持つのはこの kind だけ（母集団 {} 種）", KINDS.len());
+    assert_eq!(SHAPES.last(), Some(&Shape::Permit), "SHAPES の末尾");
+    assert!(!EventKind::LimitPermitted.is_allowance(), "口座残量の kind ではない");
+}
+
+/// (e) 許可と取り消しの見本の 2 行は読めて（kind・bead・actor・detail・run は空・stage は無い）書き戻すと同じ行で、2 行の replay は便 0・席 0。
+#[test]
+fn fleet_limit_permitted_sample_lines_round_trip_and_make_no_run_or_seat() {
+    let mut events = Vec::new();
+    for (line, detail) in PERMIT_LINES.iter().zip(["rule=gate.token_cap value=250000 until=2026-10-03T01:00:00Z ruling=q-1", "rule=gate.token_cap revoked"]) {
+        let read = Event::from_line(line).expect("見本の行が読める");
+        assert_eq!(read.kind, EventKind::LimitPermitted, "kind");
+        assert_eq!((read.bead.as_str(), read.actor.as_str()), ("s2-m1", "machine"), "bead と actor");
+        assert_eq!(read.detail.as_deref(), Some(detail), "detail");
+        assert!(read.run.is_empty() && read.stage.is_none() && read.seat.is_none() && read.pid.is_none(), "run・stage・seat・pid は持たない");
+        assert_eq!(read.to_line(), *line, "書き戻すと同じ行");
+        events.push(read);
+    }
+    let state = replay(&events);
+    assert_eq!((state.runs.len(), state.seats.len()), (0, 0), "replay は便も席も作らない");
+}
+
+/// (f) bead の欠けと空・detail の欠け・`run`・`stage`・`seat`・`pid`・`account`・`rule`・`mark` を足した行は、欠けた key か足した key を
+/// 名指して読めず、形の外の detail 7 つは `detail` を名指して読めない。
+#[test]
+fn fleet_limit_permitted_rows_name_the_bad_key() {
+    let good = "rule=gate.token_cap revoked";
+    let cases = [
+        (permit_line(None, Some(good), ""), "bead"),
+        (permit_line(Some(""), Some(good), ""), "bead"),
+        (permit_line(Some("s2-m1"), None, ""), "detail"),
+        (permit_line(Some("s2-m1"), Some(good), r#""run":"r1","#), "run"),
+        (permit_line(Some("s2-m1"), Some(good), r#""stage":"Spawned","#), "stage"),
+        (permit_line(Some("s2-m1"), Some(good), r#""seat":"s1","#), "seat"),
+        (permit_line(Some("s2-m1"), Some(good), r#""pid":1,"#), "pid"),
+        (permit_line(Some("s2-m1"), Some(good), r#""account":"a1","#), "account"),
+        (permit_line(Some("s2-m1"), Some(good), r#""rule":"x","#), "rule"),
+        (permit_line(Some("s2-m1"), Some(good), r#""mark":"hold","#), "mark"),
+    ];
+    for (line, key) in cases {
+        let reason = Event::from_line(&line).expect_err("malformed で読む");
+        assert!(reason.contains(key), "理由は {key} を名指す: {reason}（{line}）");
+    }
+    for bad in [
+        "value=1 rule=gate.token_cap until=2026-10-03T01:00:00Z ruling=q-1",
+        "rule=gate.token_cap value=1 until=2026-10-03T01:00:00Z",
+        "rule=gate.token_cap value=1 until=2026-10-03T01:00:00Z ruling=q-1 extra",
+        "rule=gate.token_cap value=many until=2026-10-03T01:00:00Z ruling=q-1",
+        "rule=gate.token_cap value= until=2026-10-03T01:00:00Z ruling=q-1",
+        "rule=gate.token_cap value=1 until=2026-10-03T01:00Z ruling=q-1",
+        "rule=gate.token_cap revokd",
+    ] {
+        let line = permit_line(Some("s2-m1"), Some(bad), "");
+        let reason = Event::from_line(&line).expect_err("形の外の detail は読めない");
+        assert!(reason.contains("detail"), "理由は detail を名指す: {reason}（{bad}）");
+    }
+    Event::from_line(&permit_line(Some("s2-m1"), Some(good), "")).expect("非空虚の対: 形の中の行は読める");
+}
+
+/// (g) `fleet record --kind LimitPermitted` は rc 1 で「record では書けない」と断り、log を作らない（席が許可の event を字で書く経路を作らない）。
+#[test]
+fn fleet_limit_permitted_record_refuses_the_kind() {
+    let dir = state_dir();
+    let path = dir.display().to_string();
+    let out = run_fleet(&["record", "--kind", "LimitPermitted", "--run", "r1", "--bead", "b1", "--state-dir", &path]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "書き側で断る: {out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("record では書けない"), "{out:?}");
+    assert!(!store::events_path(&dir).exists(), "行を残さない");
+    fs::remove_dir_all(&dir).ok();
+}

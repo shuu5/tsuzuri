@@ -1,0 +1,1576 @@
+// flip-check: moved s2-07l.349
+//! 便を止める歯: `pipe_stop_`（`--all` / `--run` / process group 宛て）。
+//!
+//! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は `lifecycle.rs` から移しただけ・
+//! `s2-07l.349`）。
+
+use super::*;
+
+#[test]
+fn pipe_stop_all_rc0_when_nothing_to_stop() {
+    let (repo, state) = repo_with_state();
+    for _ in 0..2 {
+        let out = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "対象なしは rc 0（冪等）");
+        assert!(stdout_of(&out).contains("seats=0 stopped=0"), "{}", stdout_of(&out));
+    }
+    clean(&[&repo, &state]);
+}
+
+#[test]
+fn pipe_stop_all_terminates_live_runner() {
+    let (repo, state) = repo_with_state();
+    // **孫**として起こす。test process の子のままだと kill 後に zombie が残り、
+    // `/proc/<pid>` が在るせいで「まだ生きている」と読めてしまう（実運用の席は
+    // 別 process が起こすので init に引き取られる）。
+    let spawned = Command::new("sh")
+        .arg("-c")
+        .arg("sleep 60 >/dev/null 2>&1 & echo $!")
+        .output()
+        .expect("fake runner を起こせる");
+    let pid: u32 = String::from_utf8_lossy(&spawned.stdout)
+        .trim()
+        .parse()
+        .expect("pid を読める");
+    assert!(
+        Path::new(&format!("/proc/{pid}")).exists(),
+        "fake runner が動いている"
+    );
+    // 生きた席を event log に置く（spawn は runner の終了まで待つので、席が Live な
+    // 周を作るには log 側から組む）。
+    let record = bin_cmd()
+        .args([
+            "fleet", "record", "--kind", "SeatSpawned", "--run", "r1", "--bead", "s2-2e5",
+            "--seat", "r1", "--pid", &pid.to_string(), "--state-dir",
+        ])
+        .arg(&state)
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(record.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&record));
+
+    let out = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "全部止まれば rc 0: {}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("seats=1 stopped=1"), "{}", stdout_of(&out));
+    assert!(
+        !Path::new(&format!("/proc/{pid}")).exists(),
+        "runner の process は消えている"
+    );
+    // 2 回目は対象が無く rc 0（冪等）。
+    let again = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+    assert_eq!(again.status.code(), Some(i32::from(RC_OK)), "冪等");
+    clean(&[&repo, &state]);
+}
+
+#[test]
+fn pipe_stop_returns_rc2_on_malformed_store() {
+    let (repo, state) = repo_with_state();
+    let events = state.join("fleet").join("events.jsonl");
+    fs::create_dir_all(state.join("fleet")).expect("dir を作れる");
+    fs::write(&events, "こわれ\n").expect("壊れた行を書ける");
+    let out = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+    assert_eq!(
+        out.status.code(),
+        Some(i32::from(RC_BROKEN)),
+        "state が読めない周は rc 2（rc 語彙の 3 値目）"
+    );
+    assert!(out.stdout.is_empty(), "rc 2 でも stdout は 0 byte");
+    clean(&[&repo, &state]);
+}
+
+#[test]
+fn pipe_stop_counts_seat_without_pid() {
+    let (repo, state) = repo_with_state();
+    // pid の無い Live 席（`fleet record` の --pid は任意）。
+    let record = bin_cmd()
+        .args(["fleet", "record", "--kind", "SeatSpawned", "--run", "r9", "--bead", "b",
+               "--seat", "s9", "--state-dir"])
+        .arg(&state)
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(record.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&record));
+    let out = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+    assert!(
+        stdout_of(&out).contains("seats=1"),
+        "pid の無い Live 席も母集団に数える: {}",
+        stdout_of(&out)
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(i32::from(RC_REFUSED)),
+        "止められない席が残るので rc 1（「対象なし rc 0」に化けない）"
+    );
+    clean(&[&repo, &state]);
+}
+
+/// PATH の先頭に置く偽 `kill`（引数を 1 起動 1 行で写し rc 1 を返す・返すのは PATH の値と記録 file）。
+///
+/// **pid 1 のような adversarial な pid は必ずこの下で撃つ**。変異検査は変異を当てた binary で
+/// e2e を回すので、guard を壊す変異の周に実の `kill -TERM -- -1`（user の全 process）が走る
+/// （2026-09-13 に開発 session が 2 度落ちた）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn kill_stub(state: &Path) -> (String, PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let bin_dir = state.join("kill-bin");
+    let record = state.join("kill-args");
+    fs::create_dir_all(&bin_dir).expect("stub の dir を作れる");
+    let shim = bin_dir.join("kill");
+    let script = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexit 1\n", record.display());
+    fs::write(&shim, script).expect("stub を書ける");
+    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).expect("stub に実行権を付ける");
+    let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+    (path, record)
+}
+
+#[test]
+fn pipe_stop_keeps_unstoppable_seat_live() {
+    let (repo, state) = repo_with_state();
+    // pid 1 は殺せない。止めていない席を終端にしない（偽の全クリアを作らない）。
+    // **実の kill は撃たない**（偽 kill の下で、group 宛てに化けないことも測る）。
+    let (path, calls) = kill_stub(&state);
+    let record = bin_cmd()
+        .args(["fleet", "record", "--kind", "SeatSpawned", "--run", "r8", "--bead", "b",
+               "--seat", "s8", "--pid", "1", "--state-dir"])
+        .arg(&state)
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(record.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&record));
+    for round in 1..=2 {
+        let out = run_pipe_with_path(&path, &["stop", "--all", "--state-dir", &state.display().to_string()]);
+        assert_eq!(
+            out.status.code(),
+            Some(i32::from(RC_REFUSED)),
+            "{round} 回目も rc 1（止めていないのに rc 0 を返さない）: {}",
+            stdout_of(&out)
+        );
+        assert!(stdout_of(&out).contains("seats=1"), "{round} 回目: {}", stdout_of(&out));
+    }
+    let seen = fs::read_to_string(&calls).unwrap_or_default();
+    let lines: Vec<&str> = seen.lines().collect();
+    assert!(!lines.is_empty(), "偽 kill が撃たれている（母集団 > 0）: {seen:?}");
+    assert!(!lines.iter().any(|line| line.contains("-- -")), "group 宛て（-- -1）を 1 件も撃たない: {seen:?}");
+    assert!(lines.contains(&"-TERM -- 1"), "単一 pid 宛ての TERM: {seen:?}");
+    assert!(lines.contains(&"-KILL -- 1"), "単一 pid 宛ての KILL: {seen:?}");
+    clean(&[&repo, &state]);
+}
+
+// ───── 席を process group 宛てに止める（`s2-07l.180`・設計 §5.6・接頭辞 `pipe_stop_group_`） ─────
+//
+// **自分が起こした子 process 以外の pid に実 signal を送らない**。adversarial な pid（1 / 0 / 無い pid）は
+// [`kill_stub`] の下でだけ撃つ。
+
+/// 偽 runner の PATH（`systemd-run` の**無い** host＝包めない経路でも同じ group になる）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn group_path(state: &Path) -> String {
+    let bin_dir = state.join("group-bin");
+    fs::create_dir_all(&bin_dir).expect("dir を作れる");
+    for name in ["sh", "git", "sleep", "setsid"] {
+        let found = Command::new("sh")
+            .args(["-c", &format!("command -v {name}")])
+            .output()
+            .expect("command -v を撃てる");
+        let real = String::from_utf8_lossy(&found.stdout).trim().to_owned();
+        assert!(!real.is_empty(), "{name} を引ける");
+        std::os::unix::fs::symlink(&real, bin_dir.join(name)).ok();
+    }
+    bin_dir.display().to_string()
+}
+
+/// 孫まで持つ偽 runner で `pipe spawn` を**背景で**起こし、席が Live になり孫の pid が書かれるまで待つ。
+///
+/// `body` は runner の script（孫の pid を `pid_file` へ書いてから前景で待つ形）。`path` は spawn の PATH
+/// （[`group_path`] か、包める周に固定する [`confined_path`]）。返すのは（便 id・spawn の process・孫の pid）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn spawn_live_seat(
+    repo: &Path,
+    state: &Path,
+    body: &str,
+    pid_file: &Path,
+    path: &str,
+) -> (String, std::process::Child, u32) {
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+
+    let contract = write_contract(repo, &[], &[]);
+    let id = intake(repo, state, &contract);
+    let script = state.join("group-runner.sh");
+    fs::write(&script, body).expect("runner の script を書ける");
+    let runner = format!("sh {}", script.display());
+    let mut child = bin_cmd()
+        .args(["pipe", "spawn", "--run", &id, "--repo", &repo.display().to_string(),
+               "--state-dir", &state.display().to_string(), "--runner", &runner])
+        .env("PATH", path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("binary を起動できる");
+    let begun = Instant::now();
+    loop {
+        let pid = fs::read_to_string(pid_file).ok().and_then(|text| text.trim().parse::<u32>().ok());
+        let seated = kind_count(state, &id, EventKind::SeatSpawned) == 1;
+        if let (Some(found), true) = (pid, seated) {
+            return (id, child, found);
+        }
+        assert!(child.try_wait().ok().flatten().is_none(), "spawn が席を立てる前に終わった");
+        assert!(begun.elapsed() < Duration::from_secs(60), "席が Live にならない");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// 前提: `pid` が席の group から抜けているか（`SeatSpawned` の pid＝leader の pgid と異なるか）。
+///
+/// 読めない周（席も pid も見えない）は抜けていない側へ倒す＝前提を作れなかったと読む。
+fn left_the_seat_group(state: &Path, id: &str, pid: u32) -> Result<(), String> {
+    let leader = events(state)
+        .iter()
+        .find(|found| found.run == id && found.kind == EventKind::SeatSpawned)
+        .and_then(|found| found.pid)
+        .and_then(|found| u32::try_from(found).ok())
+        .and_then(proc_pgid);
+    let own = proc_pgid(pid);
+    match (leader, own) {
+        (Some(group), Some(found)) if group != found => Ok(()),
+        _ => Err(format!("leader の pgid {leader:?} / {pid} の pgid {own:?}")),
+    }
+}
+
+/// group から抜けた子を持つ偽 runner の script。**子が抜けたのを確かめてから** pid を書く。
+///
+/// `$!` は fork 直後に出るので、そのまま書くと子が `setsid()` を呼ぶ前の pid を渡しうる（遅い箱で
+/// stop の TERM が子にも届き、止め切れる周に化けた＝`s2-07l.186`）。`/proc/$!/stat` の pgid
+/// （5 番目の field）が自分の pgid と異なるまで回数の上限つきで待ち、抜けないまま上限に達したら
+/// pid を書かずに rc 3 で終える。PATH は [`group_path`] の 4 つだけなので sh の builtin で書く。
+// flip-check: retroactive s2-07l.186
+fn escaped_runner(pid_file: &Path) -> String {
+    format!(
+        "setsid sleep 300 &\n\
+         child=$!\n\
+         read -r line < /proc/$$/stat\n\
+         set -- $line\n\
+         own=$5\n\
+         tries=0\n\
+         while :; do\n\
+         \x20 read -r line < /proc/$child/stat || exit 3\n\
+         \x20 set -- $line\n\
+         \x20 [ \"$5\" != \"$own\" ] && break\n\
+         \x20 tries=$((tries + 1))\n\
+         \x20 [ \"$tries\" -lt 200000 ] || exit 3\n\
+         done\n\
+         echo $child > '{}'\n\
+         wait\n",
+        pid_file.display()
+    )
+}
+
+/// (1) `pipe stop --run` は席の **process group ごと**止める——wrapper だけが死んで孫が残る形を塞ぐ。
+///
+/// spawn の process は先に外す（test の子）。外さないと runner の終了を見届けた spawn が自分の
+/// `SeatStopped` を書き、stop の記帳と数が混ざる。
+#[test]
+fn pipe_stop_group_run_kills_the_grandchild() {
+    let (repo, state) = repo_with_state();
+    let pid_file = state.join("grandchild.pid");
+    let body = format!("sleep 300 </dev/null >/dev/null 2>&1 &\necho $! > '{}'\nwait\n", pid_file.display());
+    let (id, mut spawner, grandchild) = spawn_live_seat(&repo, &state, &body, &pid_file, &group_path(&state));
+    spawner.kill().ok();
+    spawner.wait().ok();
+    assert!(proc_alive(grandchild), "孫が動いている（前提）");
+
+    let out = run_pipe(&["stop", "--run", &id, "--state-dir", &state.display().to_string()]);
+    let survived = proc_alive(grandchild);
+    reap_own(grandchild);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "席ごと止まる: {}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("seats=1 stopped=1"), "{}", stdout_of(&out));
+    assert!(!survived, "孫 {grandchild} も消えている（group 宛て）");
+    assert_eq!(kind_count(&state, &id, EventKind::SeatStopped), 1, "SeatStopped は 1 件");
+    assert_eq!(kind_count(&state, &id, EventKind::RunStopped), 1, "RunStopped は 1 件");
+    let shown = run_pipe(&["show", "--run", &id, "--state-dir", &state.display().to_string()]);
+    assert!(stdout_of(&shown).contains("stage=Stopped"), "終端: {}", stdout_of(&shown));
+    clean(&[&repo, &state]);
+}
+
+/// (2) group から抜けた子（`setsid`）が runner の stdout を握ったままの周: spawn は stdout の EOF を
+/// 待って runner を回収できず、group は zombie の leader で残る＝**止め切れない**。
+/// rc 1・`RunStopped` も `SeatStopped` も書かない（run は live のまま）。
+///
+/// stop を撃つ**前に**子が group から抜けたことを assert する（崩れていれば止め切れる周に化ける
+/// ＝偽の緑にしない・`s2-07l.186`）。
+#[test]
+fn pipe_stop_group_unstoppable_seat_keeps_the_run_live() {
+    let (repo, state) = repo_with_state();
+    let pid_file = state.join("escaped.pid");
+    let body = escaped_runner(&pid_file);
+    let (id, mut spawner, escaped) = spawn_live_seat(&repo, &state, &body, &pid_file, &group_path(&state));
+    let premise = left_the_seat_group(&state, &id, escaped);
+    if premise.is_err() {
+        reap_own(escaped);
+        spawner.wait().ok();
+    }
+    assert!(premise.is_ok(), "止め切れない状態を作れなかった: {premise:?}");
+
+    let out = run_pipe(&["stop", "--run", &id, "--state-dir", &state.display().to_string()]);
+    let run_stopped = kind_count(&state, &id, EventKind::RunStopped);
+    let seat_stopped = kind_count(&state, &id, EventKind::SeatStopped);
+    let shown = run_pipe(&["show", "--run", &id, "--state-dir", &state.display().to_string()]);
+    // 片付け（抜けた孫を自分で止める → spawn が EOF を見て終わる）。
+    reap_own(escaped);
+    spawner.wait().ok();
+
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "止め切れない周は rc 1: {}", stdout_of(&out));
+    assert!(stdout_of(&out).contains("seats=1 stopped=0"), "{}", stdout_of(&out));
+    assert!(stderr_of(&out).contains("止められない席"), "{}", stderr_of(&out));
+    assert_eq!(run_stopped, 0, "RunStopped を書かない");
+    assert_eq!(seat_stopped, 0, "SeatStopped を書かない");
+    assert!(stdout_of(&shown).contains("stage=Spawned"), "run は非終端のまま: {}", stdout_of(&shown));
+    clean(&[&repo, &state]);
+}
+
+/// (2′) 前提 assert の RED の向き: **`setsid` の前に** pid を書く旧 script（遅い箱の再現として子の
+/// `setsid` を 30 秒遅らせる）では、書かれた pid はまだ席の group に居る＝前提 assert が落ちる側。
+/// この形のまま stop を撃つと子ごと止まり rc 0 に化ける（CI で見た偽の形）ので、片付けは group
+/// 宛ての stop そのものに任せる（新しい signal の口を足さない）。
+#[test]
+fn pipe_stop_group_premature_pid_fails_the_premise() {
+    let (repo, state) = repo_with_state();
+    let pid_file = state.join("premature.pid");
+    let body = format!("(sleep 30; exec setsid sleep 300) &\necho $! > '{}'\nwait\n", pid_file.display());
+    let (id, mut spawner, premature) = spawn_live_seat(&repo, &state, &body, &pid_file, &group_path(&state));
+    let premise = left_the_seat_group(&state, &id, premature);
+
+    let out = run_pipe(&["stop", "--run", &id, "--state-dir", &state.display().to_string()]);
+    spawner.wait().ok();
+    let survived = proc_alive(premature);
+
+    assert!(premise.is_err(), "setsid 前の pid は group に居る＝前提 assert が落ちる: {premise:?}");
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "子ごと止まる（偽の形）: {}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("seats=1 stopped=1"), "{}", stdout_of(&out));
+    assert!(!survived, "{premature} も group ごと消えている");
+    clean(&[&repo, &state]);
+}
+
+/// (3) 旧 record の互換: group leader でない pid の席は**単一 pid** の経路で止まる（rc 0）。
+#[test]
+fn pipe_stop_group_legacy_seat_falls_back_to_the_single_pid() {
+    let (repo, state) = repo_with_state();
+    // **孫**として起こす（test process の子のままだと zombie が /proc に残る）。
+    let spawned = Command::new("sh")
+        .arg("-c")
+        .arg("sleep 60 >/dev/null 2>&1 & echo $!")
+        .output()
+        .expect("fake runner を起こせる");
+    let pid: u32 = String::from_utf8_lossy(&spawned.stdout).trim().parse().expect("pid を読める");
+    assert!(proc_alive(pid), "fake runner が動いている");
+    assert_ne!(proc_pgid(pid), Some(pid), "前提: group leader でない（旧 record の席）");
+    let record = bin_cmd()
+        .args(["fleet", "record", "--kind", "SeatSpawned", "--run", "r7", "--bead", "b",
+               "--seat", "s7", "--pid", &pid.to_string(), "--state-dir"])
+        .arg(&state)
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(record.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&record));
+    let out = run_pipe(&["stop", "--all", "--state-dir", &state.display().to_string()]);
+    let survived = proc_alive(pid);
+    reap_own(pid);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "互換の経路で止まる: {}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("seats=1 stopped=1"), "{}", stdout_of(&out));
+    assert!(!survived, "runner の process は消えている");
+    assert_eq!(kind_count(&state, "r7", EventKind::SeatStopped), 1, "SeatStopped は 1 件");
+    clean(&[&repo, &state]);
+}
+
+// ───── stop 起因の終端を oom-kill に誤分類しない（`s2-07l.340`・設計 pipeline.md §23・接頭辞 `pipe_spawn_terminal_reason_`） ─────
+
+/// 偽 `systemd-run` の argv を写す記録 dir 名（**1 起動 1 file**）。
+const CONFINED_RECORDS: &str = "confined-scope-args";
+
+/// **包める周に固定する** PATH: 偽 `systemd-run`（本体は `crate::write_systemd_run_stub` の 1 つの生成関数
+/// から出る・設計 gate-cost.md §30 約束 3）を [`group_path`] の前に積む。
+///
+/// [`group_path`] だけだと包めない host になり、「oom-kill が 0 件」が**包めないことで空虚に充足する**。
+/// 包みの終端行は実 scope の中でしか出ない（偽の包みの中では `/proc/self/cgroup` が一致しない）＝kernel の証拠が
+/// 無い周を作る。
+// flip-check: retroactive s2-07l.504
+fn confined_path(state: &Path) -> String {
+    let bin_dir = state.join("confined-bin");
+    crate::write_systemd_run_stub(&bin_dir, &state.join(CONFINED_RECORDS));
+    format!("{}:{}", bin_dir.display(), group_path(state))
+}
+
+/// 記録 dir の中で、名に `needle` を含み本文が `--scope` を持つ記録が 1 件以上在るか。
+///
+/// 母集団は記録 dir の全件である（1 file への追記を `contains` で読む形は、撃っていない起動の引数で
+/// 充足する）。dir が無い周＝1 起動も通っていない周は偽である。
+fn confined_scope_seen(state: &Path, needle: &str) -> bool {
+    let dir = state.join(CONFINED_RECORDS);
+    fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().contains(needle))
+        .filter_map(|entry| fs::read_to_string(entry.path()).ok())
+        .any(|body| body.lines().any(|line| line == "--scope"))
+}
+
+/// runner の起動が偽 `systemd-run` を通った（包めた）か。
+fn runner_was_confined(state: &Path) -> bool {
+    confined_scope_seen(state, "-runner-")
+}
+
+/// `fleet record` を 1 回撃つ（rc 0 を assert・stop.rs の既存の 4 か所と同じ形）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn record_event(state: &Path, args: &[&str]) {
+    let out = bin_cmd()
+        .args(["fleet", "record"])
+        .args(args)
+        .arg("--state-dir")
+        .arg(state)
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{args:?}: {}", stderr_of(&out));
+}
+
+/// 便の `RunStage` のうち detail が `detail` の行の段（物理順）。
+fn stages_with(state: &Path, id: &str, detail: &str) -> Vec<Option<Stage>> {
+    stages(state, id)
+        .into_iter()
+        .filter(|(_, found)| found.as_deref() == Some(detail))
+        .map(|(stage, _)| stage)
+        .collect()
+}
+
+/// (a) **包める周**で走る runner の便を `pipe stop --run` で止めると、spawn の終端検出は段を書かない:
+/// `detail=oom-kill` の `RunStage` は 0 件・印 `(Spawned, stopping)` が `RunStopped` より前に 1 件・`RunStopped` 1 件・
+/// show は `stage=Stopped`。base は包めた周の rc < 0 だけで `Failed detail=oom-kill` を書く（実測 2026-09-15 の再現）。
+#[test]
+fn pipe_spawn_terminal_reason_stop_is_not_oom() {
+    let (repo, state) = repo_with_state();
+    let pid_file = state.join("confined.pid");
+    let body = format!("sleep 300 </dev/null >/dev/null 2>&1 &\necho $! > '{}'\nwait\n", pid_file.display());
+    let (id, mut spawner, grandchild) = spawn_live_seat(&repo, &state, &body, &pid_file, &confined_path(&state));
+    let out = run_pipe(&["stop", "--run", &id, "--state-dir", &state.display().to_string()]);
+    let survived = proc_alive(grandchild);
+    reap_own(grandchild);
+    // spawn の終端検出（runner の消滅を見た経路）まで見届けてから測る。
+    spawner.wait().ok();
+
+    assert!(runner_was_confined(&state), "前提: runner は包めた周で起きた（空虚な充足にしない）");
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "席ごと止まる: {}", stderr_of(&out));
+    assert!(!survived, "孫 {grandchild} も消えている");
+    let seen = trail(&state, &id);
+    assert!(stages_with(&state, &id, "oom-kill").is_empty(), "stop の kill を oom-kill に化けさせない: {seen:?}");
+    assert_eq!(stage_count(&state, &id, Stage::Failed), 0, "Failed を 1 件も書かない: {seen:?}");
+    let mark = seen
+        .iter()
+        .position(|(kind, stage, detail)| {
+            *kind == EventKind::RunStage && *stage == Some(Stage::Spawned) && detail.as_deref() == Some("stopping")
+        });
+    let stopped = seen.iter().position(|(kind, _, _)| *kind == EventKind::RunStopped);
+    assert!(matches!((mark, stopped), (Some(at), Some(end)) if at < end), "印は RunStopped より前: {seen:?}");
+    assert_eq!(stages_with(&state, &id, "stopping").len(), 1, "印は 1 件: {seen:?}");
+    assert_eq!(kind_count(&state, &id, EventKind::RunStopped), 1, "RunStopped は 1 件");
+    let shown = run_pipe(&["show", "--run", &id, "--state-dir", &state.display().to_string()]);
+    assert!(stdout_of(&shown).contains("stage=Stopped"), "終端: {}", stdout_of(&shown));
+    clean(&[&repo, &state]);
+}
+
+/// (e) 止められない席（偽 kill の下の pid 1）を持つ便を `pipe stop --run` で撃つ: rc 1・`RunStopped` 0 件・**生の**
+/// 最後の `RunStage` が印（段は `Spawned` のまま）。止め切れない 2 回目も印を増やさない。席が消えた後
+/// （`SeatStopped` を record）の stop は signal を送らず、`RunStopped` を 1 件書く。base は印を書かない。
+#[test]
+fn pipe_spawn_terminal_reason_mark_survives_an_unstoppable_stop() {
+    let (repo, state) = repo_with_state();
+    let (path, _calls) = kill_stub(&state);
+    record_event(&state, &["--kind", "RunStage", "--run", "r5", "--bead", "b", "--stage", "Spawned", "--detail", "base:abc"]);
+    record_event(&state, &["--kind", "SeatSpawned", "--run", "r5", "--bead", "b", "--seat", "s5", "--pid", "1"]);
+    let dir = state.display().to_string();
+    for round in 1..=2 {
+        let out = run_pipe_with_path(&path, &["stop", "--run", "r5", "--state-dir", &dir]);
+        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{round} 回目は止め切れない: {}", stdout_of(&out));
+        assert_eq!(kind_count(&state, "r5", EventKind::RunStopped), 0, "{round} 回目: RunStopped を書かない");
+        assert_eq!(
+            stages(&state, "r5").last(),
+            Some(&(Some(Stage::Spawned), Some("stopping".to_owned()))),
+            "{round} 回目: 生の最後の RunStage は印・段は変わらない"
+        );
+        assert_eq!(stages_with(&state, "r5", "stopping").len(), 1, "{round} 回目: 印は 1 件のまま");
+        let shown = run_pipe(&["show", "--run", "r5", "--state-dir", &dir]);
+        assert!(stdout_of(&shown).contains("stage=Spawned"), "{round} 回目: live のまま: {}", stdout_of(&shown));
+    }
+    record_event(&state, &["--kind", "SeatStopped", "--run", "r5", "--bead", "b", "--seat", "s5", "--pid", "1"]);
+    let last = run_pipe_with_path(&path, &["stop", "--run", "r5", "--state-dir", &dir]);
+    assert_eq!(last.status.code(), Some(i32::from(RC_OK)), "席が消えた後は止め切れる: {}", stderr_of(&last));
+    assert_eq!(kind_count(&state, "r5", EventKind::RunStopped), 1, "RunStopped を 1 件書く");
+    let shown = run_pipe(&["show", "--run", "r5", "--state-dir", &dir]);
+    assert!(stdout_of(&shown).contains("stage=Stopped"), "終端: {}", stdout_of(&shown));
+    clean(&[&repo, &state]);
+}
+
+/// (f) 衝突を記帳した `Implemented` の便（`rebase-conflict:<base>..<main>`）に live 席を置いて `pipe stop --run` を撃つ:
+/// (i) log に印（`RunStage stage=Implemented detail=stopping`）が 1 件在り（base は書かない＝RED）、(ii) 席が消えた後も
+/// resume はその便を**起こし直しの続き**と読む（`--runner` を要る＝印が衝突の記帳を隠さない）。印を読み飛ばさない
+/// 口では resume が gate へ流れ、`--runner が要る` を名乗らない。
+#[test]
+fn pipe_spawn_terminal_reason_mark_keeps_the_conflict_readable() {
+    let (repo, state) = repo_with_state();
+    let (path, _calls) = kill_stub(&state);
+    let conflict = "rebase-conflict:1111111..2222222";
+    record_event(&state, &["--kind", "RunStage", "--run", "r6", "--bead", "b", "--stage", "Implemented", "--detail", conflict]);
+    record_event(&state, &["--kind", "SeatSpawned", "--run", "r6", "--bead", "b", "--seat", "s6", "--pid", "1"]);
+    let dir = state.display().to_string();
+    let out = run_pipe_with_path(&path, &["stop", "--run", "r6", "--state-dir", &dir]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "止め切れない（偽 kill）: {}", stdout_of(&out));
+    assert_eq!(stages_with(&state, "r6", "stopping"), vec![Some(Stage::Implemented)], "(i) 印の行が 1 件: {:?}", stages(&state, "r6"));
+    record_event(&state, &["--kind", "SeatStopped", "--run", "r6", "--bead", "b", "--seat", "s6", "--pid", "1"]);
+    let resumed = run_pipe(&["resume", "--run", "r6", "--state-dir", &dir]);
+    assert_eq!(resumed.status.code(), Some(i32::from(RC_REFUSED)), "(ii) 起こし直しの続きは --runner を要る: {}", stderr_of(&resumed));
+    assert!(stderr_of(&resumed).contains("--runner が要る"), "(ii) 衝突の記帳を読む: {}", stderr_of(&resumed));
+    clean(&[&repo, &state]);
+}
+
+// ───── stop --run が段を問わず便を終端にする（`s2-07l.437`・設計 pipeline.md §39・接頭辞 `pipe_stop_driver_`） ─────
+//
+// 偽の運転手は `setsid` で立てた process group（leader の pid を札に書く）。**自分が立てた group 以外へ実 signal を
+// 送らない**（片付けの [`reap_group`] は leader が自分の group を持つ周だけ撃つ）。
+
+/// 偽の運転手を孫として立て、leader の pid を返す（test の子のままだと止めた後に zombie が残る）。
+///
+/// `body` は `setsid` の後ろに置く command（`sleep 300` など）。leader が自分の group を持つことを前提として
+/// assert する（崩れていれば group 宛ての停止を測れない）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn driver_group(body: &str) -> u32 {
+    let spawned = Command::new("sh")
+        .arg("-c")
+        .arg(format!("setsid {body} </dev/null >/dev/null 2>&1 & echo $!"))
+        .output()
+        .expect("偽の運転手を起こせる");
+    let pid: u32 = String::from_utf8_lossy(&spawned.stdout).trim().parse().expect("pid を読める");
+    let begun = std::time::Instant::now();
+    while proc_pgid(pid) != Some(pid) && begun.elapsed() < std::time::Duration::from_secs(10) {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(proc_pgid(pid), Some(pid), "前提: 偽の運転手は自分の group の leader");
+    pid
+}
+
+/// 自分が立てた偽の運転手の group を片付ける（leader が自分の group を持つ周だけ・pid ≤ 1 は撃たない）。
+fn reap_group(pid: u32) {
+    if pid > 1 && proc_pgid(pid) == Some(pid) {
+        Command::new("kill").args(["-KILL", "--", &format!("-{pid}")]).output().ok();
+    }
+}
+
+/// 札（`<state>/pipe/<run>/driver`・pid の 10 進 1 行）を置く。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn put_driver_ticket(state: &Path, run: &str, pid: u32) -> PathBuf {
+    let dir = state.join("pipe").join(run);
+    fs::create_dir_all(&dir).expect("run dir を作れる");
+    let ticket = dir.join("driver");
+    fs::write(&ticket, format!("{pid}\n")).expect("札を書ける");
+    ticket
+}
+
+/// 走行中の便（`Implemented`・席なし）を置く。
+fn live_run(state: &Path, run: &str) {
+    record_event(state, &["--kind", "RunStage", "--run", run, "--bead", "b", "--stage", "Implemented", "--detail", "x"]);
+}
+
+/// 便の `seat=driver` の記録（`SeatStopped`）の (pid, detail) の列。
+fn driver_records(state: &Path, run: &str) -> Vec<(Option<u64>, Option<String>)> {
+    events(state)
+        .into_iter()
+        .filter(|found| found.run == run && found.kind == EventKind::SeatStopped && found.seat.as_deref() == Some("driver"))
+        .map(|found| (found.pid, found.detail))
+        .collect()
+}
+
+/// (a′) 記帳の門の race: verify を `sleep` にした gate を子 process で走らせ、走行中に `pipe stop --run` を撃つと、
+/// gate は `Gated` の記帳で断られ rc 2・event log の最後は `RunStopped` のまま（札の無い gate は止められず門だけが
+/// 効く形）。base は `Gated` を上書きで書く。
+#[test]
+fn pipe_stop_driver_gate_is_refused_after_the_stop() {
+    let (repo, state) = repo_with_state();
+    fs::write(
+        repo.join("verify-slow.sh"),
+        "touch \"$(git rev-parse --git-common-dir)/slow-began\"\nsleep 3\nexit 0\n",
+    )
+    .expect("遅い verify を書ける");
+    let design = write_contract(&repo, &["verify"], &[r#"verify = ["sh verify-slow.sh"]"#]);
+    let id = implemented(&repo, &state, &design);
+    let lens = fake_lens(&state.join("lens-ran"), &lens_verdict("PASS"));
+    let mut gate = pipe_cmd(&[
+        "gate", "--run", &id, "--repo", &repo.display().to_string(),
+        "--state-dir", &state.display().to_string(), "--lens", &lens,
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .expect("gate を背景で起こせる");
+    let began = repo.join(".git").join("slow-began");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !began.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let running = began.exists() && gate.try_wait().ok().flatten().is_none();
+    let stopped = run_pipe(&["stop", "--run", &id, "--state-dir", &state.display().to_string()]);
+    let finished = gate.wait_with_output().expect("gate の終了を待てる");
+    assert!(running, "前提: stop は gate の verify の走行中に撃たれた");
+    assert_eq!(stopped.status.code(), Some(i32::from(RC_OK)), "stop --run: {}", stderr_of(&stopped));
+    assert_eq!(
+        finished.status.code(),
+        Some(i32::from(RC_BROKEN)),
+        "gate は Gated の記帳で断られる: {}",
+        String::from_utf8_lossy(&finished.stderr)
+    );
+    assert_eq!(stage_count(&state, &id, Stage::Gated), 0, "Gated は書かれない: {:?}", trail(&state, &id));
+    let last = events(&state).last().map(|found| (found.run.clone(), found.kind));
+    assert_eq!(last, Some((id.clone(), EventKind::RunStopped)), "log の最後は RunStopped のまま");
+    assert!(show_line(&repo, &state, &id).contains("stage=Stopped"), "便は Stopped で終端");
+    clean(&[&repo, &state]);
+}
+
+/// (b) `pipe stop --run` は札の pid の **group** を止め、`seat=driver` の記録（detail `stopped-by-stop`）を 1 行残してから
+/// `RunStopped` を書く（順序は 記録 → `RunStopped`）。base は運転手を生きたまま残し記録 0。
+#[test]
+fn pipe_stop_driver_run_stops_the_ticket_group() {
+    let (repo, state) = repo_with_state();
+    live_run(&state, "r1");
+    let driver = driver_group("sleep 300");
+    put_driver_ticket(&state, "r1", driver);
+    let out = run_pipe(&["stop", "--run", "r1", "--state-dir", &state.display().to_string()]);
+    let survived = proc_alive(driver);
+    reap_group(driver);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "運転手ごと止まる: {}", stderr_of(&out));
+    assert!(!survived, "運転手 {driver} は消えている");
+    assert_eq!(
+        driver_records(&state, "r1"),
+        vec![(Some(u64::from(driver)), Some("stopped-by-stop".to_owned()))],
+        "seat=driver の記録が 1 行"
+    );
+    let kinds: Vec<EventKind> = trail(&state, "r1").into_iter().map(|(kind, _, _)| kind).collect();
+    assert_eq!(kinds, vec![EventKind::RunStage, EventKind::SeatStopped, EventKind::RunStopped], "記録の後に RunStopped");
+    clean(&[&repo, &state]);
+}
+
+/// (c) 札の pid が stop を撃つ process **自身**（`pipe run` の中から stop を撃つ形）の周は止めずに `RunStopped` を書く。
+/// fixture は `sh` が `$$` を札に書いてから同じ shell で `exec` して stop を撃つ（札の pid == stop の pid）。自分を止める
+/// 実装では stop が signal で死に、rc を持たない。
+#[test]
+fn pipe_stop_driver_self_ticket_is_not_stopped() {
+    let (repo, state) = repo_with_state();
+    live_run(&state, "r2");
+    let ticket = put_driver_ticket(&state, "r2", 1);
+    let out = Command::new("sh")
+        .current_dir(std::env::temp_dir())
+        .env("PATH", crate::toolbox_path(&state))
+        .args([
+            "-c",
+            "printf '%s\\n' \"$$\" > \"$1\"; exec \"$2\" pipe stop --run r2 --state-dir \"$3\"",
+            "sh",
+        ])
+        .arg(&ticket)
+        .arg(bin())
+        .arg(&state)
+        .output()
+        .expect("stop を撃てる");
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "自分自身は止めない: {}", stderr_of(&out));
+    assert!(driver_records(&state, "r2").is_empty(), "seat=driver の記録は書かない");
+    assert_eq!(kind_count(&state, "r2", EventKind::RunStopped), 1, "RunStopped を 1 件書く");
+    clean(&[&repo, &state]);
+}
+
+/// (d) 札が無い・死んでいる周は席の停止と `RunStopped` だけ（従来と同じ event 列・記録 0）。
+#[test]
+fn pipe_stop_driver_absent_or_dead_ticket_keeps_the_old_events() {
+    let (repo, state) = repo_with_state();
+    let mut gone = Command::new("true").spawn().expect("true を起こせる");
+    let dead = gone.id();
+    gone.wait().expect("true を待てる");
+    live_run(&state, "none");
+    live_run(&state, "dead");
+    put_driver_ticket(&state, "dead", dead);
+    for run in ["none", "dead"] {
+        let out = run_pipe(&["stop", "--run", run, "--state-dir", &state.display().to_string()]);
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{run}: {}", stderr_of(&out));
+        assert_eq!(stdout_of(&out).trim(), format!("stop: run={run} seats=0 stopped=0 scopes=-"), "{run}: 既存の token は従来どおり（道具箱の一覧は測れない）");
+        let kinds: Vec<EventKind> = trail(&state, run).into_iter().map(|(kind, _, _)| kind).collect();
+        assert_eq!(kinds, vec![EventKind::RunStage, EventKind::RunStopped], "{run}: 従来と同じ event 列");
+    }
+    clean(&[&repo, &state]);
+}
+
+/// (e) TERM を無視する偽の運転手（`trap '' TERM` の sh）は猶予の後の KILL で止まり rc 0（席の既存の歯と同型）。
+#[test]
+fn pipe_stop_driver_term_ignoring_driver_is_killed_after_the_grace() {
+    let (repo, state) = repo_with_state();
+    live_run(&state, "r3");
+    let driver = driver_group("sh -c \"trap '' TERM; sleep 300; :\"");
+    put_driver_ticket(&state, "r3", driver);
+    let out = run_pipe(&["stop", "--run", "r3", "--state-dir", &state.display().to_string()]);
+    let survived = proc_alive(driver);
+    reap_group(driver);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "KILL で止まる: {}", stderr_of(&out));
+    assert!(!survived, "運転手 {driver} は消えている");
+    assert_eq!(driver_records(&state, "r3").len(), 1, "seat=driver の記録が 1 行");
+    assert_eq!(kind_count(&state, "r3", EventKind::RunStopped), 1, "RunStopped を 1 件書く");
+    clean(&[&repo, &state]);
+}
+
+// ───── 全部止めを live な便の本数で絞る（`s2-07l.459`・設計 pipeline.md §51・接頭辞 `pipe_stop_scope_`） ─────
+
+/// 止め得る偽 runner を**孫**として起こし、その pid の Live 席を `run` に置く（test の子のままだと zombie が残る）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn sleeping_seat(state: &Path, run: &str, seat: &str) -> u32 {
+    let spawned = Command::new("sh")
+        .arg("-c")
+        .arg("sleep 60 >/dev/null 2>&1 & echo $!")
+        .output()
+        .expect("fake runner を起こせる");
+    let pid: u32 = String::from_utf8_lossy(&spawned.stdout).trim().parse().expect("pid を読める");
+    assert!(proc_alive(pid), "fake runner が動いている");
+    record_event(state, &["--kind", "SeatSpawned", "--run", run, "--bead", "b", "--seat", seat, "--pid", &pid.to_string()]);
+    pid
+}
+
+/// stdout の `stop:` 行の欄 `key=` の値（無ければ `None`）。
+fn stop_field(out: &std::process::Output, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    stdout_of(out)
+        .split_whitespace()
+        .find_map(|token| token.strip_prefix(&prefix).map(str::to_owned))
+}
+
+/// `RunStopped` の便の列（物理順＝記帳順）。
+fn run_stopped_order(state: &Path) -> Vec<String> {
+    events(state)
+        .into_iter()
+        .filter(|found| found.kind == EventKind::RunStopped)
+        .map(|found| found.run)
+        .collect()
+}
+
+/// (d) 便 2 本を止めた周の rc 0 の 1 行は席数と止めた席数に加えて、2 本の便 id を記帳順で持つ（止め切れなかった
+/// 側の欄は空なので出ない）。1 本の席が止まらない周（pid の無い Live 席）は、その便が止め切れなかった側の欄にだけ
+/// 出て、止めた側の欄には出ない。base は `--reason` が使い方の誤りで断られる。
+#[test]
+fn pipe_stop_scope_line_names_the_stopped_runs_in_record_order() {
+    let (repo, state) = repo_with_state();
+    let dir = state.display().to_string();
+    let first = sleeping_seat(&state, "r-beta", "s-1");
+    let second = sleeping_seat(&state, "r-alpha", "s-2");
+    let out = run_pipe(&["stop", "--all", "--reason", "両便を畳む-ψ", "--state-dir", &dir]);
+    let survived = [first, second].map(proc_alive);
+    reap_own(first);
+    reap_own(second);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "逐語つきで通る: {}", stderr_of(&out));
+    assert!(stdout_of(&out).contains("seats=2 stopped=2"), "{}", stdout_of(&out));
+    assert_eq!(survived, [false, false], "両便の runner は消えている");
+    let order = run_stopped_order(&state);
+    assert_eq!(order.len(), 2, "便 2 本の終端: {order:?}");
+    assert_eq!(stop_field(&out, "ended"), Some(order.join(",")), "記帳順の 2 本: {}", stdout_of(&out));
+    assert_eq!(stop_field(&out, "unstopped"), None, "空の欄は出ない: {}", stdout_of(&out));
+
+    let stoppable = sleeping_seat(&state, "r-gamma", "s-3");
+    record_event(&state, &["--kind", "SeatSpawned", "--run", "r-delta", "--bead", "b", "--seat", "s-4"]);
+    let partial = run_pipe(&["stop", "--all", "--reason", "片方だけ-ψ", "--state-dir", &dir]);
+    let alive = proc_alive(stoppable);
+    reap_own(stoppable);
+    assert_eq!(partial.status.code(), Some(i32::from(RC_REFUSED)), "止め切れない席が残る: {}", stdout_of(&partial));
+    assert!(stdout_of(&partial).contains("seats=2 stopped=1"), "{}", stdout_of(&partial));
+    assert!(!alive, "止め得る runner は消えている");
+    assert_eq!(stop_field(&partial, "ended").as_deref(), Some("r-gamma"), "止めた側の欄: {}", stdout_of(&partial));
+    assert_eq!(stop_field(&partial, "unstopped").as_deref(), Some("r-delta"), "止め切れなかった側の欄: {}", stdout_of(&partial));
+    assert_eq!(kind_count(&state, "r-delta", EventKind::RunStopped), 0, "止め切れなかった便は終端にしない");
+    clean(&[&repo, &state]);
+}
+
+/// (e) 便が 0 本と 1 本 live な置き場に `--all` だけを撃つ 2 形（母集団 2 形）: どちらも従来どおり rc 0 で通り、0 本の
+/// 周は対象なしの字面のまま、1 本の周はその便を止める（逐語なしの終端の記帳は detail を持たない）。
+#[test]
+fn pipe_stop_scope_passes_without_reason_at_one_run_or_fewer() {
+    let (repo, state) = repo_with_state();
+    let dir = state.display().to_string();
+    let none = run_pipe(&["stop", "--all", "--state-dir", &dir]);
+    assert_eq!(none.status.code(), Some(i32::from(RC_OK)), "0 本: {}", stderr_of(&none));
+    assert_eq!(stdout_of(&none).trim(), "stop: seats=0 stopped=0 scopes=-", "0 本は対象なしの字面のまま");
+
+    let first = sleeping_seat(&state, "r-one", "s-a");
+    let second = sleeping_seat(&state, "r-one", "s-b");
+    let one = run_pipe(&["stop", "--all", "--state-dir", &dir]);
+    let survived = [first, second].map(proc_alive);
+    reap_own(first);
+    reap_own(second);
+    assert_eq!(one.status.code(), Some(i32::from(RC_OK)), "1 本（席 2）は逐語なしで通る: {}", stderr_of(&one));
+    assert_eq!(stdout_of(&one).trim(), "stop: seats=2 stopped=2 ended=r-one scopes=-", "1 本の便を止める");
+    assert_eq!(survived, [false, false], "runner は消えている");
+    let details: Vec<Option<String>> =
+        events(&state).into_iter().filter(|found| found.kind == EventKind::RunStopped).map(|found| found.detail).collect();
+    assert_eq!(details, vec![None], "逐語なしの終端は detail を持たない");
+    clean(&[&repo, &state]);
+}
+
+/// (b′)(c′) `--run` の周: 逐語と同時に渡すと rc 1 で何も書かず、逐語なしで止めた便の終端の記帳は detail を持たない。
+#[test]
+fn pipe_stop_scope_run_keeps_the_run_stopped_without_detail() {
+    let (repo, state) = repo_with_state();
+    let dir = state.display().to_string();
+    live_run(&state, "r-run");
+    let before = events(&state).len();
+    let both = run_pipe(&["stop", "--run", "r-run", "--reason", "x-ψ", "--state-dir", &dir]);
+    assert_eq!(both.status.code(), Some(i32::from(RC_REFUSED)), "--run と --reason は断る: {}", stdout_of(&both));
+    assert_eq!(events(&state).len(), before, "断る周は何も書かない");
+
+    let out = run_pipe(&["stop", "--run", "r-run", "--state-dir", &dir]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+    let details: Vec<Option<String>> = events(&state)
+        .into_iter()
+        .filter(|found| found.run == "r-run" && found.kind == EventKind::RunStopped)
+        .map(|found| found.detail)
+        .collect();
+    assert_eq!(details, vec![None], "--run の終端は detail を持たない");
+    clean(&[&repo, &state]);
+}
+
+/// (b) の e2e 形: 便が 2 本 live な置き場に `--all` だけを撃つと rc 1 で断られ、席も events も動かず、断りの 1 行が
+/// 便の本数を名指す。
+#[test]
+fn pipe_stop_scope_refuses_bare_all_at_two_runs() {
+    let (repo, state) = repo_with_state();
+    let dir = state.display().to_string();
+    let first = sleeping_seat(&state, "r-x", "s-x");
+    let second = sleeping_seat(&state, "r-y", "s-y");
+    let before = events(&state).len();
+    let out = run_pipe(&["stop", "--all", "--state-dir", &dir]);
+    let alive = [first, second].map(proc_alive);
+    reap_own(first);
+    reap_own(second);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "--all だけは断る: {}", stdout_of(&out));
+    assert!(out.stdout.is_empty(), "断る周は stdout を出さない");
+    assert!(stderr_of(&out).contains("便が 2 本"), "便の本数を名指す: {}", stderr_of(&out));
+    assert_eq!(alive, [true, true], "席は生きたまま");
+    assert_eq!(events(&state).len(), before, "events は増えない");
+    clean(&[&repo, &state]);
+}
+
+// ───── 審査の理由の閉じた型・器が作る INCONCLUSIVE の「scope の中で死んだ」形（`s2-07l.395`・設計 contract-source.md §22） ─────
+
+/// 審査の lens の起動が偽 `systemd-run` を通った（包めた）か（[`runner_was_confined`] の審査の側）。
+fn lens_was_confined(state: &Path) -> bool {
+    confined_scope_seen(state, "-review-")
+}
+
+/// 歯 (2) の 5 形のうち「scope の中で死んだ」: **包める周**（[`confined_path`]）で審査の lens が自分を signal で殺すと、
+/// 器は INCONCLUSIVE（`scope の中で死んだ`）を作り、理由の型は 7 語目 `unparsed`・`at` は無い・detail は
+/// `verdict:INCONCLUSIVE kind:unparsed`・rc 3。包めたことを argv の写しで測る（包めない host では別の理由に落ちて
+/// 空虚に充足する）。
+#[test]
+fn pipe_review_kind_lens_killed_in_scope_is_unparsed() {
+    let (repo, state) = repo_with_state();
+    let contract = write_contract(&repo, &[], &[]);
+    let out = run_pipe_with_path(&confined_path(&state), &[
+        "intake", "--design", &contract, "--bead", "s2-scope",
+        "--repo", &repo.display().to_string(), "--state-dir", &state.display().to_string(),
+        "--rules", &ceiling_rules(&state), "--lens", "kill -9 $$",
+    ]);
+    assert!(lens_was_confined(&state), "前提: lens は包めた周で起きた（空虚な充足にしない）");
+    assert_eq!(out.status.code(), Some(i32::from(RC_INCONCLUSIVE)), "箱の中の死は INCONCLUSIVE: {}", stderr_of(&out));
+    let id = run_id_of(&out);
+    let pairs = intake::review_pairs(&state, &id);
+    assert_eq!(value_of(&pairs, "verdict"), "INCONCLUSIVE", "{pairs:?}");
+    assert!(value_of(&pairs, "evidence").contains("scope の中で死んだ"), "理由は箱の中の死: {pairs:?}");
+    assert_eq!(value_of(&pairs, "kind"), "unparsed", "lens の JSON が無い周は 7 語目: {pairs:?}");
+    assert!(!pairs.iter().any(|(key, _)| key == "at"), "at は無い: {pairs:?}");
+    assert_eq!(intake::reviewed_detail(&state, &id), "verdict:INCONCLUSIVE kind:unparsed");
+    clean(&[&repo, &state]);
+}
+
+// ───── 便の worktree の build と依存の置き場の掃除（`s2-07l.735`・設計 dispatcher.md §30・接頭辞 `pipe_sweep_`） ─────
+
+/// file を 1 本置く（親の dir ごと作る）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn put_file(path: &Path, body: &str) {
+    fs::create_dir_all(path.parent().expect("親の dir を解ける")).expect("親の dir を作れる");
+    fs::write(path, body).expect("file を書ける");
+}
+
+/// 便の repo の記録を置き場へ書き、`tree` に anchor の HEAD の worktree を切る（木の path を返す）。
+fn sweep_tree(repo: &Path, state: &Path, run: &str, tree: &Path) -> PathBuf {
+    put_file(&state.join("pipe").join(run).join("repo"), &format!("{}\n", repo.display()));
+    git(repo, &["worktree", "add", "-q", "--detach", &tree.display().to_string(), "HEAD"]);
+    tree.to_path_buf()
+}
+
+/// stderr の `sweep:` の行（無ければ空）。
+fn sweep_line(out: &std::process::Output) -> String {
+    stderr_of(out).lines().find(|line| line.starts_with("sweep:")).unwrap_or_default().to_owned()
+}
+
+/// (a) `Stopped` の便の元の場所の木から、追跡されていない `target/` と `node_modules/` が `pipe stop` の終端（`--repo` の
+/// 無い周）の後に消え、追跡されている file を持つ `target` の名の dir・列に無い未追跡の dir・無視の規則に当たる列に無い
+/// file は残る。stderr は `sweep: removed=2 runs=1` の行を持ち、終端の後も live のままの便の木の `target/` は残る。
+#[test]
+fn pipe_sweep_stopped_run_loses_untracked_build_dirs_and_live_run_keeps_its_target() {
+    let (repo, state) = repo_with_state();
+    put_file(&repo.join("docs").join("target").join("keep.md"), "tracked\n");
+    git(&repo, &["add", "docs/target/keep.md"]);
+    git(&repo, &["commit", "-q", "-m", "tracked target"]);
+    live_run(&state, "r-sweep");
+    live_run(&state, "r-live");
+    let tree = sweep_tree(&repo, &state, "r-sweep", &vessel::pipe::worktree_path(&repo, "r-sweep"));
+    let other = sweep_tree(&repo, &state, "r-live", &vessel::pipe::worktree_path(&repo, "r-live"));
+    for rel in ["target/debug/app.o", "node_modules/pkg/index.js", "docs/target/build.o", "out/bundle.txt", "local.env"] {
+        put_file(&tree.join(rel), "x\n");
+    }
+    put_file(&tree.join(".gitignore"), "local.env\nout/\n");
+    put_file(&other.join("target").join("debug").join("app.o"), "x\n");
+
+    let out = run_pipe(&["stop", "--run", "r-sweep", "--state-dir", &state.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    assert!(!tree.join("target").exists(), "未追跡の target/ は消える");
+    assert!(!tree.join("node_modules").exists(), "未追跡の node_modules/ は消える");
+    for kept in ["docs/target/keep.md", "docs/target/build.o", "out/bundle.txt", "local.env", "src/lib.rs"] {
+        assert!(tree.join(kept).is_file(), "{kept} は残る");
+    }
+    assert!(other.join("target").join("debug").join("app.o").is_file(), "live のままの便の target/ は残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=2 runs=1 failed=0", "stderr: {}", stderr_of(&out));
+    assert!(!stdout_of(&out).contains("sweep:"), "stdout には出さない: {}", stdout_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// (b) `Landed` の便の退役先の木の `target/` は、下に入れ子の `.git` を持っていても消える（別の便の終端の周）。
+#[test]
+fn pipe_sweep_landed_run_retired_target_with_nested_git_is_removed() {
+    let (repo, state) = repo_with_state();
+    live_run(&state, "r-end");
+    record_event(&state, &["--kind", "RunStage", "--run", "r-done", "--bead", "b", "--stage", "Landed", "--detail", "x"]);
+    let retired = vessel::pipe::worktrees_dir(&repo).join("retired").join("r-done");
+    let tree = sweep_tree(&repo, &state, "r-done", &retired);
+    put_file(&tree.join("target").join("debug").join("app.o"), "x\n");
+    git(&tree, &["init", "-q", &tree.join("target").join("nested").display().to_string()]);
+    assert!(tree.join("target").join("nested").join(".git").is_dir(), "前提: 入れ子の .git が在る");
+
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+    assert!(!tree.join("target").exists(), "退役先の target/ は消える");
+    assert!(tree.join("src").join("lib.rs").is_file(), "追跡されている file は残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=1 failed=0", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+// ───── 席の起草の置き場の中間生成物の掃除（`s2-07l.736.25`・設計 dispatcher.md §33・接頭辞 `pipe_sweep_drafts_`） ─────
+
+/// 起草の木の mtime を今から `hours` 時間前へ戻す（子から先・dir も File として開いて同じ呼び出し）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn rewind(path: &Path, hours: u64) {
+    if fs::symlink_metadata(path).expect("entry を読める").is_dir() {
+        for entry in fs::read_dir(path).expect("dir を読める") {
+            rewind(&entry.expect("entry を読める").path(), hours);
+        }
+    }
+    age_one(path, hours);
+}
+
+/// 1 entry だけの mtime を今から `hours` 時間前へ戻す（下へは降りない）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn age_one(path: &Path, hours: u64) {
+    let past = std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600);
+    fs::File::open(path).expect("開ける").set_modified(past).expect("mtime を戻せる");
+}
+
+/// 終端に撃つ live な便 `r-end` を置く（置き場の pipe の dir に記録を置く＝掃除は pipe の dir の無い置き場を撃たない・木は切らない）。
+fn drafts_run(repo: &Path, state: &Path) {
+    live_run(state, "r-end");
+    put_file(&state.join("pipe").join("r-end").join("repo"), &format!("{}\n", repo.display()));
+}
+
+/// 席 `seat` の起草の置き場に、toy repo から `git worktree add --detach` で木 `name` を切る（木の path を返す）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn draft_tree(repo: &Path, state: &Path, seat: &str, name: &str) -> PathBuf {
+    let tree = state.join("seat").join(seat).join("drafts").join(name);
+    fs::create_dir_all(tree.parent().expect("親を解ける")).expect("起草の置き場を作れる");
+    git(repo, &["worktree", "add", "-q", "--detach", &tree.display().to_string(), "HEAD"]);
+    tree
+}
+
+/// 行 `seat.drafts_stale_h` を持たない tmp manifest（`ceiling_rules` の本文に stop が読む `pipe.stop_grace_ms` の行を足した写し）に
+/// `extra` を足して書く。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn drafts_rules(state: &Path, extra: &str) -> String {
+    let base = fs::read_to_string(ceiling_rules(state)).expect("受付の写しを読める");
+    let grace = embedded_int("pipe.stop_grace_ms");
+    let stop = format!(
+        "[[rule]]\nid = \"pipe.stop_grace_ms\"\nkind = \"StopGraceMs\"\nvalue = {grace}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n"
+    );
+    let path = state.join("rules-drafts.toml");
+    fs::write(&path, format!("{base}\n{stop}\n{extra}")).expect("写しを書ける");
+    path.display().to_string()
+}
+
+/// (a) 席 2 つの起草の置き場: 1 つ目の木の 7 時間前の `target/` と 2 つ目の木の 7 時間前の `.venv/` だけが消え、書いたばかりの
+/// `node_modules/`・追跡 file を持つ 7 時間前の `docs/target/`・列に無い 7 時間前の `out/`・`.git` を持たない写しの 7 時間前の
+/// `target/`・木の追跡 file と `.git` は残る。
+#[test]
+fn pipe_sweep_drafts_old_build_dirs_of_two_seats_are_removed_and_the_rest_stays() {
+    let (repo, state) = repo_with_state();
+    put_file(&repo.join("docs").join("target").join("keep.md"), "tracked\n");
+    git(&repo, &["add", "docs/target/keep.md"]);
+    git(&repo, &["commit", "-q", "-m", "tracked target"]);
+    drafts_run(&repo, &state);
+    let first = draft_tree(&repo, &state, "s1", "t1");
+    let second = draft_tree(&repo, &state, "s2", "t2");
+    let copy = state.join("seat").join("s1").join("drafts").join("copy");
+    for path in [
+        first.join("target").join("debug").join("app.o"),
+        first.join("out").join("bundle.txt"),
+        second.join(".venv").join("lib").join("x.py"),
+        copy.join("target").join("debug").join("app.o"),
+    ] {
+        put_file(&path, "x\n");
+    }
+    put_file(&first.join("node_modules").join("pkg").join("index.js"), "x\n");
+    for old in [first.join("target"), first.join("out"), first.join("docs").join("target"), second.join(".venv"), copy.join("target")] {
+        rewind(&old, 7);
+    }
+
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    assert!(!first.join("target").exists(), "1 つ目の木の古い target/ は消える");
+    assert!(!second.join(".venv").exists(), "2 つ目の木の古い .venv/ は消える");
+    for kept in [
+        first.join("node_modules").join("pkg").join("index.js"),
+        first.join("docs").join("target").join("keep.md"),
+        first.join("out").join("bundle.txt"),
+        copy.join("target").join("debug").join("app.o"),
+        first.join("src").join("lib.rs"),
+        second.join("src").join("lib.rs"),
+        first.join(".git"),
+        second.join(".git"),
+    ] {
+        assert!(kept.exists(), "{} は残る", kept.display());
+    }
+    assert_eq!(sweep_line(&out), "sweep: removed=2 runs=0 failed=0 drafts=2 nogit=1", "stderr: {}", stderr_of(&out));
+    assert!(!stdout_of(&out).contains("sweep:"), "stdout には出さない: {}", stdout_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// (b) 深い所に書いたばかりの file を持つ 7 時間前の `target/` と、深い所に書いたばかりの空の dir を持つ 7 時間前の
+/// `.mypy_cache/` は残り、7 時間前の `__pycache__/` だけが消える。
+#[test]
+fn pipe_sweep_drafts_a_fresh_write_deep_inside_keeps_the_old_dir() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_file(&tree.join("target").join("debug").join("old.o"), "x\n");
+    put_file(&tree.join(".mypy_cache").join("a").join("b").join("x.json"), "x\n");
+    put_file(&tree.join("__pycache__").join("m.pyc"), "x\n");
+    for old in [tree.join("target"), tree.join(".mypy_cache"), tree.join("__pycache__")] {
+        rewind(&old, 7);
+    }
+    put_file(&tree.join("target").join("debug").join("deps").join("fresh.o"), "x\n");
+    age_one(&tree.join("target").join("debug"), 7);
+    let parent = tree.join(".mypy_cache").join("a").join("b");
+    fs::create_dir(parent.join("fresh")).expect("書いたばかりの空の dir を作れる");
+    age_one(&parent, 7);
+
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    assert!(tree.join("target").join("debug").join("deps").join("fresh.o").is_file(), "深い所の書いたばかりの file を持つ target/ は残る");
+    assert!(parent.join("fresh").is_dir(), "深い所の書いたばかりの空の dir を持つ .mypy_cache/ は残る");
+    assert!(!tree.join("__pycache__").exists(), "全部古い __pycache__/ だけが消える");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=0 failed=0 drafts=1 nogit=0", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// (c) 行 `seat.drafts_stale_h` を持たない tmp manifest の周は、7 時間前の `target/` を残し、行を読めない語 `no-rule` を残す。
+#[test]
+fn pipe_sweep_drafts_a_missing_rule_row_sweeps_nothing_and_says_no_rule() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_file(&tree.join("target").join("debug").join("app.o"), "x\n");
+    rewind(&tree.join("target"), 7);
+
+    let rules = drafts_rules(&state, "");
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string(), "--rules", &rules]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    assert!(tree.join("target").join("debug").join("app.o").is_file(), "行を読めない周は既定値へ倒さず消さない");
+    assert_eq!(sweep_line(&out), "sweep: removed=0 runs=0 failed=0 drafts=no-rule nogit=0", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// (d) 値 0 の行を足した tmp manifest の周は、書いたばかりの `target/` を消す。`target/` の中の symlink は辿らず、木の外の dir の
+/// 1 日先の mtime の file は書きの線にも消しにも数えず、木の外の file は残る。
+#[test]
+fn pipe_sweep_drafts_zero_hours_removes_a_fresh_dir_without_following_symlinks() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    let outside = state.join("outside");
+    put_file(&outside.join("far.txt"), "x\n");
+    let future = std::time::SystemTime::now() + std::time::Duration::from_secs(86_400);
+    fs::File::open(outside.join("far.txt")).expect("開ける").set_modified(future).expect("mtime を進められる");
+    put_file(&tree.join("target").join("debug").join("app.o"), "x\n");
+    std::os::unix::fs::symlink(&outside, tree.join("target").join("link")).expect("symlink を置ける");
+
+    let extra = "[[rule]]\nid = \"seat.drafts_stale_h\"\nkind = \"SeatDraftsStaleH\"\nvalue = 0\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
+    let rules = drafts_rules(&state, extra);
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string(), "--rules", &rules]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    assert!(!tree.join("target").exists(), "値 0 は線 = 今: 書いたばかりの target/ も消える");
+    assert!(outside.join("far.txt").is_file(), "木の外の file は残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=0 failed=0 drafts=1 nogit=0", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+// ───── 席の起草の置き場の build の置き場の量の上限（`s2-07l.736.30`・設計 dispatcher.md §39・接頭辞 `pipe_sweep_drafts_cap_`） ─────
+
+/// 量の線の歯の rules 行（id・kind・値）: 時間の行 6（時間）・上限の行 1（MiB）・窓の行 1800（秒）。
+const CAP_ROWS: [(&str, &str, u64); 3] = [
+    ("seat.drafts_stale_h", "SeatDraftsStaleH", 6),
+    ("seat.drafts_cap_mb", "SeatDraftsCapMb", 1),
+    ("seat.drafts_busy_s", "SeatDraftsBusyS", 1800),
+];
+
+/// [`CAP_ROWS`] のうち id が `skip` の行を除いた行を足した tmp manifest（`None` は 3 行とも足す）。
+fn cap_rules(state: &Path, skip: Option<&str>) -> String {
+    let extra: String = CAP_ROWS
+        .iter()
+        .filter(|(id, _, _)| Some(*id) != skip)
+        .map(|(id, kind, value)| {
+            format!("[[rule]]\nid = \"{id}\"\nkind = \"{kind}\"\nvalue = {value}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n\n")
+        })
+        .collect();
+    drafts_rules(state, &extra)
+}
+
+/// `kib` KiB の file を 1 本置く（字 x の繰り返し）。
+fn put_sized(path: &Path, kib: usize) {
+    put_file(path, &"x".repeat(kib * 1024));
+}
+
+/// 今から `hours` 時間前。
+fn ago_h(hours: u64) -> std::time::SystemTime {
+    std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600)
+}
+
+/// 木の全 entry の mtime を同じ時刻 `past` へ置く（子から先・dir も File として開いて同じ呼び出し）。symlink は辿らず、
+/// `touch -h` で symlink そのものの時刻を置く。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn rewind_to(path: &Path, past: std::time::SystemTime) {
+    let kind = fs::symlink_metadata(path).expect("entry を読める").file_type();
+    if kind.is_symlink() {
+        let secs = past.duration_since(std::time::UNIX_EPOCH).expect("epoch より後").as_secs();
+        let status = Command::new("touch").args(["-h", "-d", &format!("@{secs}")]).arg(path).status().expect("touch を起動できる");
+        assert!(status.success(), "symlink の時刻を置ける");
+        return;
+    }
+    if kind.is_dir() {
+        for entry in fs::read_dir(path).expect("dir を読める") {
+            rewind_to(&entry.expect("entry を読める").path(), past);
+        }
+    }
+    fs::File::open(path).expect("開ける").set_modified(past).expect("mtime を戻せる");
+}
+
+/// dir の mode を置く（読めない dir・消せない dir を作る歯が使い、歯の終わりに 0o755 へ戻す）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn chmod(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).expect("mode を置ける");
+}
+
+/// 終端（live な便 `r-end` の `pipe stop`）を `rules` の写しで撃つ（rc は変わらない）。
+fn cap_stop(state: &Path, rules: &str) -> std::process::Output {
+    let out = run_pipe(&["stop", "--run", "r-end", "--state-dir", &state.display().to_string(), "--rules", rules]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc は変わらない: {}", stderr_of(&out));
+    out
+}
+
+/// `doctor --state-dir S` の出力の行。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn doctor_lines_of(state: &Path) -> Vec<String> {
+    let out = bin_cmd().args(["doctor", "--state-dir"]).arg(state).output().expect("binary を起動できる");
+    stdout_of(&out).lines().map(str::to_owned).collect()
+}
+
+/// `doctor --state-dir S` の `drafts-cap=` の行（無ければ空）。
+fn cap_line(state: &Path) -> String {
+    doctor_lines_of(state).into_iter().filter(|line| line.starts_with("drafts-cap=")).collect::<Vec<_>>().join("\n")
+}
+
+/// (a) 古い順・同じ時刻は名の順・上限以下で止まる: 3 時間前の `target/` と、同じ 2 時間前の時刻の `.venv/` と `node_modules/`
+/// （各 768 KiB）は、上限 1 MiB で `target/` と `.venv/` が消え、`node_modules/`・追跡 file・`.git` は残る。
+#[test]
+fn pipe_sweep_drafts_cap_sheds_oldest_first_then_by_name_and_stops_under_the_cap() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    for name in ["target", ".venv", "node_modules"] {
+        put_sized(&tree.join(name).join("blob"), 768);
+    }
+    rewind_to(&tree.join("target"), ago_h(3));
+    let two = ago_h(2);
+    rewind_to(&tree.join(".venv"), two);
+    rewind_to(&tree.join("node_modules"), two);
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(!tree.join("target").exists(), "最も古い target/ は消える");
+    assert!(!tree.join(".venv").exists(), "同じ時刻は名の順で .venv/ が先に消える");
+    for kept in [tree.join("node_modules").join("blob"), tree.join("src").join("lib.rs"), tree.join(".git")] {
+        assert!(kept.exists(), "{} は残る（上限以下で止まる）", kept.display());
+    }
+    assert_eq!(sweep_line(&out), "sweep: removed=2 runs=0 failed=0 drafts=1 nogit=0 cap=2 over=0", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (b) 組み立て中の窓と越えたまま: 3 時間前の `target/`（768 KiB）と書いたばかりの `node_modules/`（2560 KiB）は、`target/`
+/// だけが消え、越えたままを行と doctor が名指す。
+#[test]
+fn pipe_sweep_drafts_cap_keeps_a_fresh_dir_inside_the_window_and_says_over() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join("node_modules").join("blob"), 2560);
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(!tree.join("target").exists(), "窓の外の target/ は消える");
+    assert!(tree.join("node_modules").join("blob").is_file(), "書いたばかりの node_modules/ は窓の内で残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=0 failed=0 drafts=1 nogit=0 cap=1 over=2", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=over used=3 cap=1 over=2 busy=1 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (c) 消す物が無くても越えれば行を出す: 書いたばかりの `node_modules/`（2560 KiB）だけの置き場は残り、行が `cap=0 over=2`。
+#[test]
+fn pipe_sweep_drafts_cap_says_over_even_when_nothing_can_be_shed() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("node_modules").join("blob"), 2560);
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(tree.join("node_modules").join("blob").is_file(), "窓の内の node_modules/ は残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=0 runs=0 failed=0 drafts=0 nogit=0 cap=0 over=2", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// 3 時間前の `target/`（768 KiB）と、下に mode 000 の dir を持つ書いたばかりの `node_modules/`（2560 KiB）の置き場を作る
+/// （`(d)` `(e)` の共通・`node_modules/` の中の dir は mode 000 のまま返す）。
+fn unreadable_fresh_place(repo: &Path, state: &Path) -> PathBuf {
+    drafts_run(repo, state);
+    let tree = draft_tree(repo, state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join("node_modules").join("blob"), 2560);
+    put_file(&tree.join("node_modules").join("locked").join("x"), "x\n");
+    chmod(&tree.join("node_modules").join("locked"), 0o000);
+    tree
+}
+
+/// (d) 窓の行を持たない写しは量の線を撃たず（読めない dir を測らない）、両方残り、sweep: の行が無く、記録は `no-rule`。
+#[test]
+fn pipe_sweep_drafts_cap_without_the_busy_row_measures_nothing_and_records_no_rule() {
+    let (repo, state) = repo_with_state();
+    let tree = unreadable_fresh_place(&repo, &state);
+    let out = cap_stop(&state, &cap_rules(&state, Some("seat.drafts_busy_s")));
+    chmod(&tree.join("node_modules").join("locked"), 0o755);
+    assert!(tree.join("target").join("blob").is_file() && tree.join("node_modules").join("blob").is_file(), "両方残る");
+    assert_eq!(sweep_line(&out), "", "sweep: の行は無い: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=no-rule", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (e) 上限の行を持たない写しは (d) と同じ置き場で両方残り、sweep: の行が無く、記録は `no-rule`。
+#[test]
+fn pipe_sweep_drafts_cap_without_the_cap_row_measures_nothing_and_records_no_rule() {
+    let (repo, state) = repo_with_state();
+    let tree = unreadable_fresh_place(&repo, &state);
+    let out = cap_stop(&state, &cap_rules(&state, Some("seat.drafts_cap_mb")));
+    chmod(&tree.join("node_modules").join("locked"), 0o755);
+    assert!(tree.join("target").join("blob").is_file() && tree.join("node_modules").join("blob").is_file(), "両方残る");
+    assert_eq!(sweep_line(&out), "", "sweep: の行は無い: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=no-rule", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (f) 時間の行を持たない写しは書きの線を経ず量だけでも消さず、行は `drafts=no-rule`・記録は `no-rule`。
+#[test]
+fn pipe_sweep_drafts_cap_without_the_stale_row_sheds_nothing_and_records_no_rule() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join(".venv").join("blob"), 768);
+    put_file(&tree.join(".venv").join("locked").join("x"), "x\n");
+    rewind_to(&tree.join(".venv"), ago_h(2));
+    chmod(&tree.join(".venv").join("locked"), 0o000);
+
+    let out = cap_stop(&state, &cap_rules(&state, Some("seat.drafts_stale_h")));
+    chmod(&tree.join(".venv").join("locked"), 0o755);
+    assert!(tree.join("target").join("blob").is_file() && tree.join(".venv").join("blob").is_file(), "両方残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=0 runs=0 failed=0 drafts=no-rule nogit=0", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=no-rule", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (g) 書きの線で失敗した木は量の線から外れる: 席 s1 の木 t0（`.git` が在らぬ gitdir を指す file・3 時間前の 4096 KiB の
+/// `target/`）は残り、木 t1 の `target/` だけが消える。
+#[test]
+fn pipe_sweep_drafts_cap_leaves_a_tree_the_write_line_failed_on_out_of_the_total() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let broken = state.join("seat").join("s1").join("drafts").join("t0");
+    put_file(&broken.join(".git"), "gitdir: /nonexistent/gitdir\n");
+    put_sized(&broken.join("target").join("blob"), 4096);
+    rewind_to(&broken.join("target"), ago_h(3));
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join(".venv").join("blob"), 768);
+    rewind_to(&tree.join(".venv"), ago_h(2));
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(broken.join("target").join("blob").is_file(), "失敗した木の target/ は量の線でも消えない");
+    assert!(!tree.join("target").exists() && tree.join(".venv").join("blob").is_file(), "t1 は古い target/ だけが消える");
+    let want = "sweep: removed=1 runs=0 failed=1:s1/t0 drafts=1 nogit=0 cap=1 over=0";
+    assert_eq!(sweep_line(&out), want, "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=1", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (h) 候補の中の読めない dir: 古くした後に mode 000 にした `debug/` を持つ 1 時間前の `target/` と 2 時間前の `.venv/` と
+/// 3 時間前の `node_modules/` は、木ごと量の線から外れて全部残り、合計は 0 と読まれない。
+#[test]
+fn pipe_sweep_drafts_cap_leaves_a_tree_with_an_unreadable_candidate_out_of_the_total() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("debug").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(1));
+    chmod(&tree.join("target").join("debug"), 0o000);
+    for (name, hours) in [(".venv", 2), ("node_modules", 3)] {
+        put_sized(&tree.join(name).join("blob"), 768);
+        rewind_to(&tree.join(name), ago_h(hours));
+    }
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    chmod(&tree.join("target").join("debug"), 0o755);
+    for name in ["target/debug", ".venv", "node_modules"] {
+        assert!(tree.join(name).join("blob").is_file(), "{name} は残る");
+    }
+    assert_eq!(sweep_line(&out), "sweep: removed=0 runs=0 failed=1:s1/t1 drafts=0 nogit=0", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=0 cap=1 over=0 busy=0 unmeasured=1", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (i) 候補にならない物は残る: live な便の木の 4 時間前の `target/`・追跡 file を持つ 4 時間前の `docs/target/`・名が列に無い
+/// 4 時間前の `scratch/`・`.git` を持たない写しの 4 時間前の `target/` は合計に数えず、起草の木の 1 時間前の `.venv/` だけが候補。
+#[test]
+fn pipe_sweep_drafts_cap_counts_only_the_write_lines_kept_dirs_of_draft_trees() {
+    let (repo, state) = repo_with_state();
+    put_file(&repo.join("docs").join("target").join("keep.md"), "tracked\n");
+    git(&repo, &["add", "docs/target/keep.md"]);
+    git(&repo, &["commit", "-q", "-m", "tracked target"]);
+    drafts_run(&repo, &state);
+    live_run(&state, "r-live");
+    let live_tree = sweep_tree(&repo, &state, "r-live", &vessel::pipe::worktree_path(&repo, "r-live"));
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    let copy = state.join("seat").join("s1").join("drafts").join("copy");
+    for (path, hours) in [
+        (live_tree.join("target"), 4),
+        (tree.join("docs").join("target"), 4),
+        (tree.join("scratch"), 4),
+        (copy.join("target"), 4),
+        (tree.join(".venv"), 1),
+    ] {
+        put_sized(&path.join("blob"), 768);
+        rewind_to(&path, ago_h(hours));
+    }
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    for kept in [live_tree.join("target"), tree.join("docs").join("target"), tree.join("scratch"), copy.join("target"), tree.join(".venv")] {
+        assert!(kept.join("blob").is_file(), "{} は残る", kept.display());
+    }
+    assert_eq!(sweep_line(&out), "", "sweep: の行は無い: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (j) lock を取れない周: 生きた持ち主の `sweep.lock` の周は量の線も記録も撃たず `sweep: skipped=lock`、lock を外した 2 つ目の
+/// live な便の終端で 3 時間前の `target/` が消える。
+#[test]
+fn pipe_sweep_drafts_cap_does_not_fire_or_record_when_the_lock_is_held() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    live_run(&state, "r-two");
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join(".venv").join("blob"), 768);
+    rewind_to(&tree.join(".venv"), ago_h(2));
+    let lock = state.join("pipe").join("sweep.lock");
+    put_file(&lock, &format!("{}\n", std::process::id()));
+    let rules = cap_rules(&state, None);
+
+    let held = cap_stop(&state, &rules);
+    assert!(tree.join("target").join("blob").is_file() && tree.join(".venv").join("blob").is_file(), "lock の周は両方残る");
+    assert_eq!(sweep_line(&held), "sweep: skipped=lock", "stderr: {}", stderr_of(&held));
+    assert_eq!(cap_line(&state), "", "記録も書かない");
+    fs::remove_file(&lock).unwrap_or_else(|err| panic!("lock を外せる: {err}"));
+    let out = run_pipe(&["stop", "--run", "r-two", "--state-dir", &state.display().to_string(), "--rules", &rules]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+    assert!(!tree.join("target").exists(), "lock を外した周は target/ が消える");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=0 failed=0 drafts=1 nogit=0 cap=1 over=0", "stderr: {}", stderr_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// (k) 記録の書きと読み: `.git` を持たない写しだけの置き場の周の後、doctor の行は `ok used=0 …`。形の合わない字は
+/// `drafts-cap=unreadable`。床の検査の今の判定の file に形の合わない字を置いた周は、`drafts-cap=` の行が `floor=unreadable` の後ろ。
+#[test]
+fn pipe_sweep_drafts_cap_record_is_written_read_and_ordered_after_the_floor_line() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    put_sized(&state.join("seat").join("s1").join("drafts").join("copy").join("target").join("blob"), 768);
+
+    cap_stop(&state, &cap_rules(&state, None));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=0 cap=1 over=0 busy=0 unmeasured=0", "木が 0 本の周");
+    fs::write(state.join("seat").join("drafts-cap"), "garbage\n").unwrap_or_else(|err| panic!("記録を上書きできる: {err}"));
+    assert_eq!(cap_line(&state), "drafts-cap=unreadable", "形の合わない記録");
+    put_file(&state.join("pipe").join("floor").join("current"), "not json\n");
+    let lines = doctor_lines_of(&state);
+    let at = |prefix: &str| lines.iter().position(|line| line.starts_with(prefix));
+    assert!(at("floor=unreadable").is_some() && at("drafts-cap=") > at("floor=unreadable"), "床の検査の行の後ろ: {lines:?}");
+    clean(&[&repo, &state]);
+}
+
+/// (l) symlink を辿らない: 1 時間前の `node_modules/`（512 KiB）の中の、木の外の 4096 KiB の file を持つ dir を指す symlink は
+/// 合計に数えず、残り、木の外の file も残る。
+#[test]
+fn pipe_sweep_drafts_cap_does_not_follow_a_symlink_out_of_the_tree() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    let outside = state.join("outside");
+    put_sized(&outside.join("far.bin"), 4096);
+    put_sized(&tree.join("node_modules").join("blob"), 512);
+    std::os::unix::fs::symlink(&outside, tree.join("node_modules").join("link")).unwrap_or_else(|err| panic!("symlink を置ける: {err}"));
+    rewind_to(&tree.join("node_modules"), ago_h(1));
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(tree.join("node_modules").join("blob").is_file() && outside.join("far.bin").is_file(), "node_modules/ も木の外の file も残る");
+    assert_eq!(sweep_line(&out), "", "sweep: の行は無い: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (n) 見かけの大きさで測らない: 1 時間前の `target/` の 512 KiB の file と、`set_len` で見かけだけ 8192 KiB にした byte を書かない
+/// 穴の file は、使用量の 1 MiB に収まり残る。
+#[test]
+fn pipe_sweep_drafts_cap_measures_disk_blocks_not_the_apparent_size() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 512);
+    let hole = fs::File::create(tree.join("target").join("hole")).expect("穴の file を作れる");
+    hole.set_len(8192 * 1024).expect("見かけの長さを伸ばせる");
+    drop(hole);
+    rewind_to(&tree.join("target"), ago_h(1));
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(tree.join("target").join("blob").is_file(), "target/ は残る");
+    assert_eq!(sweep_line(&out), "", "sweep: の行は無い: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (o) 新しさは下の entry の最新: 3 時間前の `target/`（768 KiB）と、中の 2560 KiB の file を書いた後に dir 自身の mtime だけを
+/// 4 時間前へ戻した `node_modules/` は、`target/` だけが消える（`node_modules/` は下の最新が今で窓の内）。
+#[test]
+fn pipe_sweep_drafts_cap_newness_is_the_newest_entry_not_the_dir_itself() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    put_sized(&tree.join("node_modules").join("blob"), 2560);
+    age_one(&tree.join("node_modules"), 4);
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    assert!(!tree.join("target").exists(), "dir 自身が新しい target/ が消える");
+    assert!(tree.join("node_modules").join("blob").is_file(), "下の entry が新しい node_modules/ は残る");
+    assert_eq!(sweep_line(&out), "sweep: removed=1 runs=0 failed=0 drafts=1 nogit=0 cap=1 over=2", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=over used=3 cap=1 over=2 busy=1 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}
+
+/// (p) 消せない候補: 下の `debug/` を古くした後に mode 555 にした 3 時間前の `target/` は残り、失敗に数えて合計から引かず次へ
+/// 進み、2 時間前の `.venv/` と 1 時間前の `node_modules/` が消える。
+#[test]
+fn pipe_sweep_drafts_cap_counts_an_unremovable_candidate_as_failed_and_goes_on() {
+    let (repo, state) = repo_with_state();
+    drafts_run(&repo, &state);
+    let tree = draft_tree(&repo, &state, "s1", "t1");
+    put_sized(&tree.join("target").join("debug").join("blob"), 768);
+    rewind_to(&tree.join("target"), ago_h(3));
+    chmod(&tree.join("target").join("debug"), 0o555);
+    for (name, hours) in [(".venv", 2), ("node_modules", 1)] {
+        put_sized(&tree.join(name).join("blob"), 768);
+        rewind_to(&tree.join(name), ago_h(hours));
+    }
+
+    let out = cap_stop(&state, &cap_rules(&state, None));
+    chmod(&tree.join("target").join("debug"), 0o755);
+    assert!(tree.join("target").join("debug").join("blob").is_file(), "消せない target/ は残る");
+    assert!(!tree.join(".venv").exists() && !tree.join("node_modules").exists(), "次の候補へ進み .venv/ と node_modules/ が消える");
+    assert_eq!(sweep_line(&out), "sweep: removed=2 runs=0 failed=1:s1/t1 drafts=1 nogit=0 cap=2 over=0", "stderr: {}", stderr_of(&out));
+    assert_eq!(cap_line(&state), "drafts-cap=ok used=1 cap=1 over=0 busy=0 unmeasured=0", "doctor");
+    clean(&[&repo, &state]);
+}

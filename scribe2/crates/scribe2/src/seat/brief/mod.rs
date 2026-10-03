@@ -1,0 +1,362 @@
+//! 席の指示文（設計 docs/design/seat-roles.md §5・ADR-0022 §2.4・SRS FR42）: 役割ごとの tracked な雛形 1 枚
+//! （`orchestrator.txt`・`include_str!` で埋め込む・`headless/runner.txt` と同じ形）の穴を登録 row と rules 行の値と
+//! 台帳の現在値で埋めるだけの生成（[`render`]・行の追加も削除もしない）。読み手は SessionStart の hook（`hook/mod.rs`）。
+//!
+//! 行は 12 行（ADR-0045 §2 (3)・12 行目は ADR-0096）: 席の同一性 3 行・憲法の効く部分 5 行（順位 / A1 / A4.2 / A2 と A3 /
+//! N1〜N3・C 条文は CI の門と guard が執行するので注入しない・ADR-0046）・役割の特性 4 行（末尾が起草の置き場）。
+//!
+//! 雛形の行は「穴」か「出所 pointer を持つ行」だけである（憲法 C1.2・規範文の定義 = pointer を持たない行・typed）。
+//! pointer の形は [`PointerKind`]（行末の `→ 器の SSOT:` の後ろを [`pointer::references`] が切り
+//! [`pointer::classify`] が 1 本残らず分類する・字面の語彙で判定しない・ADR-0090）。行の分類（[`classify_line`]）は in-file の歯が読み、
+//! xtask の drift 検査（C14.2・AC17）は同じ規律を雛形 file に対して測る。**env を読まない**（C2.2）: 穴の値は
+//! 登録 row と rules 行 `role.<役割>` から来る。
+
+pub mod pointer;
+
+use super::role::{Capability, Role};
+use crate::fleet::Registration;
+use crate::headless::fill;
+use crate::rules::manifest::Manifest;
+use crate::rules::RuleValue;
+use pointer::PointerKind;
+
+/// orchestrator の雛形（tracked・絶対 path も口座名も含まない）。
+const ORCHESTRATOR: &str = include_str!("orchestrator.txt");
+
+/// 雛形の穴（**閉じた列**・宣言順・設計 §5）。列に無い `{…}` は雛形の違反である。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hole {
+    /// rules 行 `role.<役割>` の値の列。
+    Capabilities,
+    /// 登録 row の target（`session:window`）。
+    Target,
+    /// 登録 row の anchor（repo root）。
+    Anchor,
+    /// 役割の名。
+    Role,
+    /// 台帳の現在値（`bd --readonly list` の数え・読めない周は呼び側の `unknown`）。
+    Ledger,
+    /// 席の起草の置き場の絶対 path（`<state_dir>/seat/<潰した target>/drafts`・hook が解く・器は dir を作らない・ADR-0096）。
+    Drafts,
+}
+
+/// [`Hole`] の全 variant（宣言順）。
+pub const HOLES: &[Hole] = &[Hole::Capabilities, Hole::Target, Hole::Anchor, Hole::Role, Hole::Ledger, Hole::Drafts];
+
+impl Hole {
+    /// 雛形の中の字面。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Capabilities => "{capabilities}",
+            Self::Target => "{target}",
+            Self::Anchor => "{anchor}",
+            Self::Role => "{role}",
+            Self::Ledger => "{ledger}",
+            Self::Drafts => "{drafts}",
+        }
+    }
+}
+
+/// 権能の名の列の区切り（生成文の `{capabilities}` の中）。
+const CAPABILITY_SEPARATOR: &str = "・";
+
+/// 役割の雛形（役割ごとに 1 枚・variant を足すときは雛形も足す）。
+pub fn template(role: Role) -> &'static str {
+    match role {
+        Role::Orchestrator => ORCHESTRATOR,
+    }
+}
+
+/// 雛形の 1 行の分類（**融合しない**・設計 §5「規範文 = pointer を持たない行」）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LineKind {
+    /// 空行（空白だけ）。
+    Blank,
+    /// 定義済みの穴だけの行（穴を抜くと空白だけ）。
+    Holes,
+    /// 出所 pointer を持つ行（最も強い kind）。
+    Pointed(PointerKind),
+    /// 定義に無い穴を持つ行（字面）。
+    UnknownHole(String),
+    /// 穴でも pointer 行でもない＝参照を 1 本も持たない規範文（違反）。
+    Bare,
+    /// 印の後ろに分類できない参照を 1 本でも持つ行（最初の 1 本の字・違反・ADR-0090）。
+    Unclassified(String),
+}
+
+/// 行の中の `{…}` の字面（出現順・閉じの無い `{` は数えない）。
+pub fn braces(line: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut rest = line;
+    while let Some(open) = rest.find('{') {
+        let Some(tail) = rest.get(open..) else {
+            break;
+        };
+        let Some(close) = tail.find('}') else {
+            break;
+        };
+        found.extend(tail.get(..=close));
+        rest = tail.get(close.saturating_add(1)..).unwrap_or_default();
+    }
+    found
+}
+
+/// 行を分類する（pure）。未知の穴は pointer の有無より先に見る（穴の列は閉じている）。印の後ろの参照は 1 本残らず
+/// 分類し、1 本でも分類できなければ [`LineKind::Unclassified`] にする（黙って飛ばさない・ADR-0090）。台帳 prefix は渡さない
+/// （雛形は台帳の id を pointer にしない＝憲法・ADR・設計 doc・rules 行の形だけ）。
+pub fn classify_line(line: &str) -> LineKind {
+    if line.trim().is_empty() {
+        return LineKind::Blank;
+    }
+    let known: Vec<&str> = HOLES.iter().map(|hole| hole.as_str()).collect();
+    if let Some(unknown) = braces(line).into_iter().find(|found| !known.contains(found)) {
+        return LineKind::UnknownHole(unknown.to_owned());
+    }
+    let without_holes = known.iter().fold(line.to_owned(), |text, hole| text.replace(hole, ""));
+    if without_holes.trim().is_empty() {
+        return LineKind::Holes;
+    }
+    let references = pointer::references(line);
+    if let Some(unclassified) = references.iter().find(|reference| pointer::classify(reference, &[]).is_none()) {
+        return LineKind::Unclassified(unclassified.clone());
+    }
+    references
+        .iter()
+        .filter_map(|reference| pointer::classify(reference, &[]))
+        .min()
+        .map_or(LineKind::Bare, LineKind::Pointed)
+}
+
+/// 雛形の違反行（1 始まりの行番号と分類・空 = 通る）。
+pub fn violations(template: &str) -> Vec<(usize, LineKind)> {
+    template
+        .lines()
+        .enumerate()
+        .filter_map(|(at, line)| match classify_line(line) {
+            LineKind::Blank | LineKind::Holes | LineKind::Pointed(_) => None,
+            found @ (LineKind::UnknownHole(_) | LineKind::Bare | LineKind::Unclassified(_)) => Some((at.saturating_add(1), found)),
+        })
+        .collect()
+}
+
+/// 役割の rules 行 `role.<役割>` が持つ権能（行が無い・不発効・値が列でない周は `None`＝注入しない側）。
+/// guard（`hook/role_guard.rs`）と同じ行を読む（ADR-0022 §2.2「読み手 4 つ・行は 1 つ」）。
+pub fn capabilities_of(manifest: &Manifest, role: Role) -> Option<Vec<Capability>> {
+    let row = manifest.get(&crate::hook::role_guard::row_id(role)).filter(|row| row.enabled)?;
+    let RuleValue::List(names) = &row.value else {
+        return None;
+    };
+    Some(names.iter().filter_map(|name| Capability::parse(name)).collect())
+}
+
+/// 生成文を組む（pure・穴を埋めるだけ・行の追加も削除もしない）。
+///
+/// 穴は **1 走査**で埋める（[`fill`]・runner / lens と同じ）: 重ねて replace すると、先に埋めた target や anchor の中の
+/// `{role}` が次の走査で展開される。`role` は雛形の選択と `{role}` の値で、`registration` からは target と anchor だけを読む。
+/// `ledger` は台帳の現在値の字面で、読めなかった周の字面（`unknown`）も呼び側が決める（測れなかったを数に化けさせない・C10）。
+/// `drafts` は席の起草の置き場の絶対 path の字面で、呼び側の hook が解く（ADR-0096）。
+pub fn render(role: Role, registration: &Registration, capabilities: &[Capability], ledger: &str, drafts: &str) -> String {
+    let names: Vec<&str> = capabilities.iter().map(|cap| cap.as_str()).collect();
+    let listed = names.join(CAPABILITY_SEPARATOR);
+    fill(
+        template(role),
+        &[
+            (Hole::Capabilities.as_str(), &listed),
+            (Hole::Target.as_str(), &registration.target),
+            (Hole::Anchor.as_str(), &registration.anchor),
+            (Hole::Role.as_str(), role.as_str()),
+            (Hole::Ledger.as_str(), ledger),
+            (Hole::Drafts.as_str(), drafts),
+        ],
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{braces, capabilities_of, classify_line, render, template, violations, Hole, LineKind, HOLES};
+    use crate::fleet::Registration;
+    use crate::order::is_declaration_order;
+    use crate::rules::manifest::Manifest;
+    use crate::seat::role::{Capability, Role, ALL, CAPABILITIES};
+    use super::pointer::{self, Anchor, PointerKind, Resolution};
+    use std::path::PathBuf;
+
+    /// 歯の登録 row（穴の値は固定）。
+    fn registration(role: Role) -> Registration {
+        Registration {
+            role,
+            anchor: "/srv/anchor".to_owned(),
+            target: "fixture:seat".to_owned(),
+            sid: Some("sid".to_owned()),
+            account: "a1".to_owned(),
+            launch: "claude\n".to_owned(),
+            model: None,
+        }
+    }
+
+    /// `HOLES` は宣言順・字面は `{…}` の形で重複なし。
+    #[test]
+    fn seat_brief_holes_are_declared_in_order_with_distinct_braced_names() {
+        assert!(is_declaration_order(HOLES, |hole| hole as usize), "HOLES は宣言順");
+        assert_eq!(HOLES.len(), 6, "設計 §5 の穴は 6 つ（台帳の現在値と起草の置き場を含む・ADR-0045 §2 (3)・ADR-0096）");
+        for hole in HOLES.iter().copied() {
+            let text = hole.as_str();
+            assert!(text.starts_with('{') && text.ends_with('}'), "{text}");
+            assert_eq!(HOLES.iter().filter(|other| other.as_str() == text).count(), 1, "字面 {text} が重複する");
+            assert_eq!(braces(text), vec![text], "穴 1 つの行から穴 1 つを読む");
+        }
+        assert_eq!(braces("a {x} b {y"), vec!["{x}"], "閉じの無い `{{` は数えない");
+    }
+
+    /// 行の分類は 6 値で融合しない: 空行 / 穴だけ / pointer 行（最も強い kind）/ 未知の穴 / 規範文 / 分類できない参照。
+    #[test]
+    fn seat_brief_classify_line_separates_holes_pointers_and_bare_prose() {
+        assert_eq!(classify_line("   "), LineKind::Blank);
+        assert_eq!(classify_line("{capabilities}"), LineKind::Holes);
+        assert_eq!(classify_line("{role} {target} {anchor}"), LineKind::Holes, "穴が複数でも穴だけ");
+        assert_eq!(classify_line("x → 器の SSOT: ADR-0022 §2.4"), LineKind::Pointed(PointerKind::Adr));
+        assert_eq!(
+            classify_line("x → 器の SSOT: ADR-0022 §2.4 / 憲法 C1.2"),
+            LineKind::Pointed(PointerKind::Constitution),
+            "最も強い kind（宣言順で最小）"
+        );
+        assert_eq!(classify_line("{role} の権能 → 器の SSOT: rules 行 role.orchestrator"), LineKind::Pointed(PointerKind::Manifest));
+        assert_eq!(classify_line("{unknown} → 器の SSOT: N2"), LineKind::UnknownHole("{unknown}".to_owned()), "未知の穴は pointer より先");
+        assert_eq!(classify_line("席は lock を確保する"), LineKind::Bare, "pointer 無し");
+        assert_eq!(
+            classify_line("席は lock を確保する → 器の SSOT: user 裁定 2026-09-14"),
+            LineKind::Unclassified("user 裁定 2026-09-14".to_owned()),
+            "分類できない参照だけ"
+        );
+        assert_eq!(classify_line("C1 を読む"), LineKind::Bare, "区切りの無い字面は pointer にしない");
+        assert_eq!(classify_line("x → 器の SSOT: s2-07l.248"), LineKind::Unclassified("s2-07l.248".to_owned()), "台帳の id は雛形の pointer にしない");
+        assert_eq!(violations("a → 器の SSOT: N2\n\nb\n{bad}\n"), vec![(3, LineKind::Bare), (4, LineKind::UnknownHole("{bad}".to_owned()))]);
+    }
+
+    /// 印は `→ 器の SSOT:` で、旧い印 `→ SSOT:` だけの行は参照 0 本＝pointer を持たない行（ADR-0090 形 1）。
+    #[test]
+    fn seat_brief_vessel_ssot_marks_vessel_documents_and_the_bare_mark_is_no_pointer() {
+        assert_eq!(classify_line("x → 器の SSOT: 憲法 N3"), LineKind::Pointed(PointerKind::Constitution));
+        assert_eq!(classify_line("x → SSOT: 憲法 N3"), LineKind::Bare, "旧い印は pointer にしない");
+        assert_eq!(pointer::references("x → 器の SSOT: 憲法 N3"), vec!["憲法 N3".to_owned()]);
+        assert_eq!(pointer::references("x → SSOT: 憲法 N3"), Vec::<String>::new());
+    }
+
+    /// 分類できない参照が先頭・中・末尾のどこに在っても行は Unclassified（最初の 1 本の字）で、全部分類できる行だけが
+    /// Pointed のまま。`violations()` は Unclassified の行を行番号つきで返す（ADR-0090 形 2）。
+    #[test]
+    fn seat_brief_vessel_ssot_rejects_a_line_with_any_unclassified_reference() {
+        let unclassified = |text: &str| LineKind::Unclassified(text.to_owned());
+        assert_eq!(classify_line("x → 器の SSOT: 憲法 N-7 / ADR-0044"), unclassified("憲法 N-7"), "先頭");
+        assert_eq!(classify_line("x → 器の SSOT: ADR-0044 / rules 行 Role.X / 憲法 N3"), unclassified("rules 行 Role.X"), "中");
+        assert_eq!(classify_line("x → 器の SSOT: ADR-0044 / 器の憲法 N3"), unclassified("器の憲法 N3"), "末尾");
+        assert_eq!(classify_line("x → 器の SSOT: ADR-0044 / 憲法 N3"), LineKind::Pointed(PointerKind::Constitution), "全部分類できる");
+        let template = "a → 器の SSOT: ADR-0044 / 憲法 N3\nb → 器の SSOT: ADR-0044 / 器の憲法 N3\n";
+        assert_eq!(violations(template), vec![(2, unclassified("器の憲法 N3"))]);
+    }
+
+    /// 現物の雛形 2 枚は違反 0（穴か pointer 行だけ）で、pointer はすべて repo の現物に実在する（憲法 / ADR / 設計 doc /
+    /// rules 行）。役割の名と `{capabilities}` の穴を必ず持つ（生成文に権能の名がすべて現れる前提）。
+    #[test]
+    fn seat_brief_templates_hold_only_holes_and_resolvable_pointers() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+        let anchor = Anchor::with_prefixes(&root, Vec::new());
+        for role in ALL.iter().copied() {
+            let text = template(role);
+            assert_eq!(violations(text), Vec::new(), "{}: 穴か pointer 行だけ", role.as_str());
+            assert!(text.lines().count() >= 5, "{}: 設計 §5 の項目を持つ", role.as_str());
+            assert!(text.ends_with('\n') && !text.contains('\r'), "{}: LF 終端", role.as_str());
+            assert!(text.contains(Hole::Capabilities.as_str()), "{}: 権能の穴", role.as_str());
+            assert!(text.contains(&crate::hook::role_guard::row_id(role)), "{}: 自分の rules 行 id を名指す", role.as_str());
+            for line in text.lines().filter(|line| !line.trim().is_empty()) {
+                for reference in pointer::references(line) {
+                    let Some(kind) = pointer::classify(&reference, &[]) else {
+                        panic!("{}: 分類できない参照 {reference}", role.as_str());
+                    };
+                    assert_eq!(anchor.resolve(kind, &reference), Resolution::Resolved, "{}: {reference}", role.as_str());
+                }
+            }
+        }
+    }
+
+    /// `render` は穴を埋めるだけ（行数は雛形と同じ・穴の字面が 0 個残る・値は 1 走査で埋める）。
+    #[test]
+    fn seat_brief_render_fills_holes_in_one_pass_without_adding_lines() {
+        const LEDGER: &str = "open=7 in_progress=1 blocked=2";
+        const DRAFTS: &str = "/srv/state/seat/fixture_seat/drafts";
+        let role = Role::Orchestrator;
+        let caps = [Capability::Answer, Capability::EditTests];
+        let text = render(role, &registration(role), &caps, LEDGER, DRAFTS);
+        assert_eq!(text.lines().count(), template(role).lines().count(), "行の追加も削除もしない");
+        assert!(HOLES.iter().all(|hole| !text.contains(hole.as_str())), "穴が残らない: {text}");
+        assert!(text.contains("役割 = orchestrator・target = fixture:seat・anchor = /srv/anchor"), "穴の値: {text}");
+        assert!(text.contains("権能 = answer・edit-tests（"), "権能の名の列: {text}");
+        assert!(text.contains(&format!("台帳の現在値 = {LEDGER} ")), "台帳の現在値: {text}");
+        assert!(text.contains(&format!("{DRAFTS} の直下（")), "起草の置き場: {text}");
+        // 値の中の穴の字面は展開しない（1 走査）。
+        let mut braced = registration(role);
+        braced.target = "sess:{role}".to_owned();
+        let text = render(role, &braced, &caps, LEDGER, DRAFTS);
+        assert!(
+            text.contains("役割 = orchestrator・target = sess:{role}・anchor = /srv/anchor"),
+            "target の中の穴は展開しない: {text}"
+        );
+        let all = render(role, &registration(role), CAPABILITIES, LEDGER, DRAFTS);
+        assert!(CAPABILITIES.iter().all(|cap| all.contains(cap.as_str())), "権能の名がすべて現れる: {all}");
+    }
+
+    /// 起草の置き場の穴（ADR-0096・設計 seat-roles.md §31）: `HOLES` は 6 つで末尾が `{drafts}`・`render` は値の中の穴の字を
+    /// 展開せず 1 走査で埋め・雛形は 12 行で 12 行目だけがその穴を 1 回持ち rules 行 `seat.drafts_stale_h` を名指す。
+    #[test]
+    fn seat_brief_drafts_hole_is_last_and_only_the_twelfth_line_carries_it() {
+        assert_eq!(HOLES.len(), 6, "穴は 6 つ");
+        assert_eq!(HOLES.last().map(|hole| hole.as_str()), Some("{drafts}"), "末尾は起草の置き場の穴");
+        let role = Role::Orchestrator;
+        let text = template(role);
+        assert_eq!(text.lines().count(), 12, "雛形は 12 行");
+        let holed: Vec<usize> = text
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| line.contains(Hole::Drafts.as_str()))
+            .map(|(at, _)| at.saturating_add(1))
+            .collect();
+        assert_eq!(holed, vec![12], "12 行目だけが穴を持つ");
+        assert_eq!(text.matches(Hole::Drafts.as_str()).count(), 1, "穴は 1 回");
+        assert!(text.lines().nth(11).is_some_and(|line| line.contains("seat.drafts_stale_h")), "12 行目は rules 行を名指す");
+        let braced = render(role, &registration(role), &[Capability::Answer], "unknown", "/d/{role}/drafts");
+        assert!(braced.contains("/d/{role}/drafts の直下（"),"値の中の {{role}} は展開しない: {braced}");
+        assert_eq!(braced.lines().count(), 12, "行の追加も削除もしない");
+    }
+
+    /// 権能は rules 行 `role.<役割>` から読む: 行が無い・不発効・列でない周は `None`。
+    #[test]
+    fn seat_brief_capabilities_come_from_the_role_row() {
+        let parse = |text: &str| match Manifest::parse(text) {
+            Ok(found) => found,
+            Err(errors) => panic!("fixture の manifest を読める: {errors:?}"),
+        };
+        let row = |id: &str, value: &str, enabled: bool| {
+            format!("schema = 1\n\n[[rule]]\nid = \"{id}\"\nkind = \"RoleCapabilities\"\nvalue = {value}\nenabled = {enabled}\nruling = \"r\"\nruled_at = \"d\"\n")
+        };
+        let orchestrator = "role.orchestrator";
+        assert_eq!(
+            capabilities_of(&parse(&row(orchestrator, "[\"answer\", \"go\"]", true)), Role::Orchestrator),
+            Some(vec![Capability::Answer, Capability::Go]),
+            "行の並びのまま"
+        );
+        assert_eq!(capabilities_of(&parse(&row(orchestrator, "[\"answer\"]", false)), Role::Orchestrator), None, "不発効");
+        assert_eq!(
+            capabilities_of(&parse(&row("role.other", "[\"answer\"]", true)), Role::Orchestrator),
+            None,
+            "役割の行が無い"
+        );
+        assert_eq!(capabilities_of(&parse("schema = 1\n"), Role::Orchestrator), None, "空の manifest");
+        let embedded = match Manifest::embedded() {
+            Ok(found) => found,
+            Err(errors) => panic!("埋め込み manifest を読める: {errors:?}"),
+        };
+        for role in ALL.iter().copied() {
+            assert!(capabilities_of(&embedded, role).is_some_and(|caps| !caps.is_empty()), "{}: 埋め込みに行が在る", role.as_str());
+        }
+    }
+}

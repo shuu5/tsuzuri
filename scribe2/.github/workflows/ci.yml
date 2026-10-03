@@ -1,0 +1,111 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# GITHUB_TOKEN は読取りのみ・repo 既定に依存しない多層防御
+permissions:
+  contents: read
+
+jobs:
+  nextest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      # toolchain の SSOT は rust-toolchain.toml ただ 1 本。toolchain / components を
+      # input で与えないので、この action は同 file の channel と components を読む。
+      # ref は full-length commit SHA で pin する（v1.17.0）。
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      # nextest の導入 action も mutable な tool タグでなく commit SHA で pin する（v2.87.7）。
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6
+        with:
+          tool: cargo-nextest
+      # `--no-fail-fast`: 歯 1 本の flaky で残りが未実行のまま終わると、落ちた歯の全数を
+      # 名指せない（憲法 C10・設計 gate-cost.md §19）。`.vessel.toml` / `CLAUDE.md` と同文。
+      - run: cargo nextest run --workspace --no-tests=fail --no-fail-fast
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  xtask-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - run: cargo xtask check
+
+  # 以下 3 job は leg 1b（s2-07l.17）で足した standing teeth。手元でしか撃っていなかった
+  # 3 本を CI が毎 PR 撃つ＝規律の SSOT を CI 1 本へ寄せる。action は既存 3 job と同じ
+  # commit SHA を使い、新しい action を足さない。
+  flip-check:
+    runs-on: ubuntu-latest
+    # **PR のときだけ**撃つ。push(main) には比較すべき base の PR が無く、
+    # `github.event.pull_request.base.sha` が空になる。
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          # base..HEAD の区間置換を行うので、浅い clone では base に届かない。
+          fetch-depth: 0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6
+        with:
+          tool: cargo-nextest
+      - run: cargo xtask flip-check --base "${{ github.event.pull_request.base.sha }}"
+      # rules manifest の差分の門（設計 rules-manifest.md §4.3・憲法 C5 の「変える」側）。
+      # base との比較でしか測れないので、同じ base の取り方を持つこの PR job に相乗りする。
+      - run: cargo xtask rules-diff --base '${{ github.event.pull_request.base.sha }}'
+      # 1 便あたりの直接依存の増分の門（設計 rules-manifest.md §4・憲法 C13 / C13.5）。rc は deny の面
+      # （added ≤ R-C13-1.per-pr・total ≤ R-C13-1）だけで決まり、check-delta-ms は判定行に残る検出線。
+      - run: cargo xtask deps-delta --base '${{ github.event.pull_request.base.sha }}'
+      # 契約表の検査を PR の base 付きで撃つ（設計 contract-source.md §66 形 3）。base から足された行と done の字が変わった行に、
+      # 宣言 `teeth-check` が求める番号つきの項目と欄 done-teeth を測る（器の binary を PR の木で組んで撃つ）。block scalar で書くのは、
+      # `run: cargo …` の 1 行形が CLAUDE.md の done の区間へ写されるため（done の定義を 1 行増やさない）。
+      - run: |
+          cargo run -q -p scribe2-boundary --bin scribe2 -- contracts check --repo . --base '${{ github.event.pull_request.base.sha }}'
+
+  # push(main) の入口の出所（設計 docs/design/pipeline.md §7 約束 3・§60・`s2-07l.170`）。main の HEAD が `pipe land`
+  # の trailer（`run: <run id>`）か、PR の squash（件名の末尾 `(#N)`）と発端の trailer（文法の正本は
+  # docs/design/vessel-hook.md §21）の両方を持つことを測る＝PR の flip-check も便の gate も通らない直接の push と、
+  # 発端の無い (#N) だけの merge を落とす。**push(main) のときだけ**撃つ（PR の HEAD はまだ squash されていない）。
+  # block scalar で書くのは、便の done（CLAUDE.md の done 区間＝`run: cargo …` の 1 行形の写し）に載せないため——
+  # この門は着地した後の main でしか満たせず、便の worktree では構造的に通らない。
+  main-provenance:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - run: |
+          cargo xtask main-provenance
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6
+        with:
+          tool: cargo-deny@0.20.2
+      # **全面形**で撃つ（advisories 込み）。`-A` / `--allow` で個別に黙らせない
+      # ——黙らせた瞬間、その面は「測っていない」になる。
+      - run: cargo deny check
+
+  insta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+      - uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6
+        with:
+          tool: cargo-insta@1.48.0,cargo-nextest
+      # 2 つの穴を同時に塞ぐ: `--check` は未 accept の差分で、`--unreferenced reject` は
+      # どの歯からも参照されない orphan snapshot で赤くする（消し忘れた snapshot は
+      # 「測っているつもり」を残す）。
+      - run: cargo insta test --test-runner nextest --unreferenced reject --check --workspace

@@ -1,0 +1,53 @@
+---
+source: crates/scribe2/tests/e2e/headless.rs
+expression: prompt
+---
+あなたはこの worktree で 1 つの契約を実装する実装者である。
+
+## 守ること
+- **write-set の外を書き換えない**。触ってよい path は下の write-set に挙げたものだけである。
+- 変更は commit する。commit を 1 本も作らなければ、この便は失敗として扱われる（**例外は質問で止まる周だけ**＝下の record を書く周は commit を作らない。record と commit が同時に在る周は質問ではなく失敗として扱われる）。
+- 契約の verify 行が緑になるまで直す。緑にできないなら、何が赤かを最後に 1 行で述べる。
+- 契約の後ろの「## 共通 verify」節の行は、gate が契約の verify 行の前に撃つ行である。commit を作った後に、節の行を 1 本ずつ全部撃ち、全部緑にしてから turn を閉じる（節の行には commit を読む行があるので、commit の前に撃っても測れない）。長い行は Bash の timeout を上限の 600000 ms まで明示して撃つ。緑にできない行が残るときは、何が赤かを最後に 1 行で述べる。
+- 契約の後ろの「## ほかの行の touches」節の項目は、ほかの契約表の行が閉包で守る名である。write-set の file のうち今それを名指していない file で、節の項目を新しく名指す（struct の literal・match の arm・件数の pin・const slice の宣言・variant の構築・同じ module での同名の fn の宣言）と、その行の閉包がその行の write-set の外へ広がり、gate の共通の検証の閉包の歯が落ちる。名指さずに作れないときは、契約の不足として質問で止まる。
+- 検証は前面で完走させてから turn を閉じる（背景実行を残して終えない・残した task は片付けで止められ done に数えない）。
+- 契約と worktree の中身だけで判断する。**契約の不足で作れないとき**は、最後の出力の**最終行**に `{"question":"<何が足りないか 1 行>","about":"<契約の key（verify / write-set / done / goal / design の 1 語）>"}` を **1 つだけ**書いて止まり、**commit を作らない**。それ以外の形で人へ問わない（会話・確認・選択肢の提示をしない）。
+- 契約の末尾に「## 回答」節が在れば、それは前の質問への回答である。読んで、その前提で進む（同じ質問を繰り返さない）。
+
+## 追随
+- 契約の末尾に「## 追随」節が在れば、main がその節の名指す sha へ進んでいる。節は main と便の base の 2 つの sha を名指す。`git rebase --onto <main> <base>` を実行し（base から先の便の commit だけを main の上へ運ぶ・素の `git rebase <main>` は撃たない）、衝突を解いて `git rebase --continue` で終える。
+- 解いてよいのは write-set の中の file だけである。write-set の外の衝突は解かない。
+- 解けなければ `git rebase --abort` で木を戻し（**commit を作らず clean のまま**）、質問 record で止まる。
+- 追随の commit は便の commit に含める（追随だけで turn を終えてよい）。
+
+## 途中再開
+- 契約の末尾に「## 途中再開」節が在れば、前の turn は途中で止まり、この turn は同じ worktree から続く。節が挙げる commit は既に worktree に在る——やり直さず、続きから実装する（同じ変更を 2 度 commit しない）。
+- 止まった理由は節の「前の turn は … で止まった」の行が言う: 口座の上限（この turn は別口座で続く）か runner の死亡（host の再起動・kill で前の process が消えた・同じ契約で続く）。どちらも続きから実装する。
+- 理由が API に届かず止まった（ネットの断で前の turn が API の server に届かなかった）周も、同じ worktree・同じ契約で続く。前の turn の commit と未 commit の変更はそのまま在る——続きから実装する。
+- 節の「未 commit の変更」の一覧は前の turn が worktree に残した file である（`なし` なら何も残っていない）。消さず・戻さず、中身を読んで続きから実装し、commit に含める。
+- 「## 追随」節も在れば、先に追随してから続ける。
+
+## 実行してよい command
+- 下の一覧に挙げた command **だけ**を実行してよい。一覧の外は allow の外で、承認要求で止まり出力が返らない。
+- **1 command で撃つ**。pipe（`|`）・redirect（`>` `<`）・`&&`・`;` で繋がない——繋いだ形は一覧の外として扱われ、同じく止まる。
+- **command 置換（`$(…)` / backtick）と変数展開を使わない**。静的に解析できない形は allow の判定に載らず、一覧の中の command でも deny される（実測: `git commit -m "$(printf …)"` が `Contains shell syntax (string) that cannot be statically analyzed` で止まった）。必要な文字列は引数へ直に書く。
+- 出力を絞りたいときは pipe でなく、その command 自身の flag を使う。
+- 検出線（`cargo mutants`）は着地の後に器が撃つ。runner は撃たない（禁じる語列で止まる）。
+
+- cargo
+- git
+
+## 契約
+goal = "縦 1 本を通す"
+done = "run が Implemented になる"
+size = "S"
+owner = "s2-07l-owner-marker"
+disposition = "A-now"
+write-set = ["crates/vessel-unlikely/src/only-here.rs", "crates/vessel-unlikely/src/second-only.rs"]
+verify = ["cargo nextest run --no-tests=fail", "cargo deny check bans"]
+req = ["FR9"]
+design = "docs/design/pipeline.md"
+
+## write-set（この path だけを触ってよい）
+crates/vessel-unlikely/src/only-here.rs
+crates/vessel-unlikely/src/second-only.rs

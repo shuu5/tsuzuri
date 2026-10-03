@@ -1,0 +1,326 @@
+# host-init — 新しい repo を器に載せる口を 1 発にする（`init` / `host init`・doctor の欠落の名指し・引数の無い席の起動）
+
+台帳 `s2-07l.609`（持ち主の裁定 2026-09-24T13:02Z / 13:04Z・逐語は台帳）。[ADR-0063](../../design-intent/decisions/ADR-0063-a-new-repo-joins-the-vessel-with-one-command-inheriting-the-host-face-from-a-template-state-dir.html)。
+
+## 1. 何を解くか
+
+やさしく言うと: 今は新しい repo を器に載せるのに人が 7 手（置き場の dir・口座の配線・host の面の写し・git の設定・marker・宣言・tmux と席の長い起動）を打ち、1 つ抜けると席は黙って動かない。裁定は「`init` これで終わり」の簡便さと「人が打つ command は最小限」と「人間向けの説明」の 3 点。本設計は人が打つのを **`host init`（host に 1 回）→ `init`（repo ごとに 1 回）→ 困ったら `doctor`** の 3 語に閉じ、残りは器が行う。
+
+- 出所（verified・2026-09-24）: scribe3 の立ち上げは手作業 7 手で、`vessel init` と `.vessel.toml` が抜けた。抜けた状態では plugin の SessionStart hook が「仕えない repo」として 0 byte で黙り、席に指示文が入らず、`seat launch` は `launch-unconfirmed` で保留になる（memo `s2-07l.604` の実地試験でも同じ）。消費側 2 つの移行も散文の runbook（repo の外）を人が辿った（memo `s2-07l.491` の notes・15 段）。doctor はこの欠落を名指さない。
+- 要件: [FR58](../../design-intent/spec/srs.html#FR58)（口座の登録は設定 dir を state dir の下に作り credential は読まず書かない）・[FR59](../../design-intent/spec/srs.html#FR59)（席の起動は役割を必須に受け、群の置き場は群の今の口座で起きる）・[FR61](../../design-intent/spec/srs.html#FR61)（doctor は導入先ごとに実測を名指す）・[FR73](../../design-intent/spec/srs.html#FR73)（doctor の行は実測を並べ判定せず rc を変えない・行 d の `init=` の行の要件）。
+
+## 2. 現物（verified・main 0b6af26）
+
+- `vessel init --state-dir D [ROOT]`（`crates/scribe2/src/hook/vessel.rs` の `init`）は git の local 設定 `<NAME>.stateDir` → marker `.vessel`（`name=` / `version=` の 2 行）の順に書き、別名乗りの marker・設定を書けない周は 1 byte も書かず断る。env も HOME も読まない。
+- host の面 `<state_dir>/host.toml`（`crates/scribe2/src/rules/manifest.rs` の `HostManifest`）が受けるのは `[[account]]`（`label`）・`[[plugin]]`（`dir`）・`[[launch-arg]]`（`value`）・`[[vessel]]`（`repo`・最大 1 行）・`[[account-group]]`（`name` / `anchors` / `accounts`）の 5 表。面が無い周は 0 宣言で止めない。`[[rule]]` は受けない。
+- 口座の dir `<state_dir>/accounts/<label>` は `account add`（`crates/scribe2/src/account/mod.rs`・FR58）が実 dir として作り、席の前提の設定だけを書く。器は credential の在り処を持たない。host では複数の置き場が同じ口座を使うので、置き場の `accounts/<label>` は既存の設定 dir への symlink になっている（host の運用・器は知らない）。
+- `seat launch` は `--state-dir S --role R --target S:W` を必須に受け（`crates/scribe2/src/seat/cli.rs` の `launch_flags`）、tmux の session は在る前提（`crates/scribe2/src/seat/cycle/launch.rs` の `prepare` が `has-session` で確かめ、無ければ `session-missing` で断る）。window は無ければ作る（`create_window`）。短い形の既定（`short_defaults`）は呼び手の pane の session と役割の字面から target を組む。
+- doctor（`crates/scribe2-boundary/src/main.rs` の `render_doctor_with`）は席の登録 row・口座・導入先・配線の行を連ねるが、marker・宣言・host の面の欠落を名指す行は無い。
+- SessionStart hook（`crates/scribe2/src/hook/mod.rs` の `anchor_of` → `vessel::served`）は marker が `ByMe` でない repo で 0 byte（設計 vessel-hook.md §2 のとおり）。
+- 宣言 `.vessel.toml`（`crates/scribe2/src/pipe/declaration.rs`）の必須 key は `schema` / `allowed-commands` / `common-verify`、任意は `requirements` / `entrance-flip` 等。cargo の行を持つ宣言は入口の flip の行か `entrance-flip = "unmeasured"` の名乗りを要る。
+- 子 process は core が `Invocation`（`crates/scribe2/src/invocation.rs`・ADR-0062）で記述し境界 crate が撃つ（core-spawn は deny）。
+
+形（判定の順・番号は契約表の行と 1:1・§3〜§7）:
+
+## 3. `host init <TEMPLATE>`（行 a・host に 1 回）
+
+- 入力: 既存の置き場（state dir）1 つ。`<TEMPLATE>/host.toml` が読めない（`Unreadable`）周と dir が無い周は断る（`Absent` は受ける＝0 宣言の雛形）。
+- 効果: git の **global** 設定 `<NAME>.template` に絶対 path を書く（host 単位の唯一の pointer・`vessel init` の local 設定と同じ道具・env と HOME を読まない）。既に同じ値なら書かず `unchanged`。
+- 出力 1 行: `host: init template=<path> <written|unchanged>`。
+- doctor は `host-template=<path|absent|unreadable>` の 1 行を出す（骨格の 2 行の直後・置き場を渡さない周も出る＝`init` の前に確かめられる）。
+- doctor の行数と行の位置を pin する既存の歯（`crates/scribe2-boundary/tests/e2e/seat/register.rs`・`crates/scribe2-boundary/tests/e2e/seat.rs`・`crates/scribe2-boundary/tests/e2e/seat/account.rs`）は `host-template=` の 1 行分（行 d では `init=` の 1 行分も）だけ本数と位置を進める（同じ便で更新・行 a / 行 d の write-set）。
+- doctor の外形は insta の snapshot 3 本（`crates/scribe2-boundary/src/snapshots/scribe2__tests__doctor_external_form.snap`・`scribe2__tests__ledger_form_doctor_external_form.snap`・`scribe2__tests__ledger_lint_doctor_external_form.snap`）が pin する。骨格の直後に 1 行を足すので、行 a はその 3 本を write-set に持ち、新しい形へ更新する（write-set の外の .snap を触らない）。行 d の `init=` も同じ 3 本を更新する。
+- 要件との対応: 雛形の pointer そのものは SRS の語彙に無い。FR58（1 command の導入）を成す手段として本設計が決め（ADR-0063 §2）、doctor の 1 行は FR61（doctor の 1 項目）の項目の 1 つとして足す。
+
+## 4. `init [ROOT]`（行 b・repo ごとに 1 回・段の順は固定・各段は冪等）
+
+`ROOT` の既定は cwd。git の repo でない・`host-template` が無い周は 1 段目の前に断る（何も書かない）。各段は「既に在れば skip」で、2 度撃っても壊れない。出力は段ごとに 1 行（`init: <段> <ok|skip|failed:<理由>>`）で、最後に `next=` を 1 つ（全段 ok / skip なら `next=doctor`）。
+
+1. **置き場**: 新しい state dir = `<TEMPLATE の親>/<TEMPLATE の dir 名>-<ROOT の dir 名>`（host の既存の名付けの規則を器の 1 関数にする・repo 名は path の最後の要素）。在れば skip。
+2. **host の面の継承**: `<TEMPLATE>/host.toml` の `[[plugin]]` `[[launch-arg]]` `[[account]]` `[[vessel]]` `[[tick]]`（seat-heartbeat.md §5・雛形に在れば）の行をそのまま写す（`[[account-group]]` は写さない＝群は 3.2 の `--group` だけが足す・A1「使う」の裁定は command の引数で人が持つ）。新しい `host.toml` は既存の loader で検査してから rename で置く（`account add` の `stage_host` と同じ形）。在れば skip（既存の面は 1 字も変えない）。
+3. **口座の配線**: 雛形の `accounts/<label>`（`[[account]]` の label ごと）が symlink ならその先へ、実 dir ならその dir へ、新しい置き場の `accounts/<label>` を symlink で結ぶ（credential は読まず写さない・FR58 の柵の内側）。雛形に dir が無い label は `failed:no-source` で名指し、続きの段は止めない。在れば skip。
+4. **marker と設定**: `vessel init --state-dir <新しい置き場> ROOT` と同じ 1 本（local 設定 → marker）。既に `ByMe` なら skip、`ByOther` なら failed（何も書かない）。
+5. **宣言の雛形**: `ROOT/.vessel.toml` が無ければ書く。`ROOT/Cargo.toml` が在る周は cargo の形（`allowed-commands = ["cargo", "git"]`・`common-verify` に nextest と clippy の 2 行・`entrance-flip = "unmeasured"`）、無い周は git の形（`allowed-commands = ["git"]`・`common-verify = ["git diff --quiet"]`・`entrance-flip = "unmeasured"`）。`requirements` は書かない（既定を使う）。値は上限（rules 行 `runner.allowed_commands`）の内側。在れば skip。
+6. **群**（`--group <名>` の周だけ）: 雛形の `[[account-group]]` に `<名>` が無ければ failed。在れば、その群を宣言している **雛形と同じ親の下の全置き場の `host.toml`** の `anchors` に ROOT を足し（既に在れば skip）、新しい置き場の `host.toml` にも同じ行を写す。書く前に各面を loader で検査し、1 つでも落ちれば 1 面も書かない（全部か皆無か）。
+7. **commit**: `.vessel` と `.vessel.toml` のうち本便が書いた file だけを `git add` して 1 commit（message は「chore(<NAME>): vessel marker and declaration」・書いた file が 0 なら skip・index に他の変更が在っても触らない＝`git add <file>` と `git commit -- <file>`）。
+8. **tmux と席**: 行 c（§5）。
+
+出力の字面（行 b で決めた形・`s2-07l.613`）:
+
+- 段の名は宣言順に `state-dir` / `host-face` / `accounts` / `marker` / `declaration` / `group` / `commit` の 7 語。`--group` の無い周の `group` は `skip`。
+- `failed:` の理由は 1 語か `<語>:<名>`: `no-source:<label,…>`（3 段目・結ぶ先の無い label が 1 つでも在ればこの段は 1 本も結ばない）・`by-other:<名>`（4 段目）・`no-group:<名>`（6 段目・雛形に無い群）・`invalid:<置き場の dir 名>`（6 段目・loader の検査に落ちた面）・`unreadable:<置き場の dir 名>`（6 段目・同じ親の下に読めない面が在る＝群を宣言するかを測れない周も 0 面）・`not-dir` / `write` / `git` / `template-unreadable`。
+- `next=` は全段 ok / skip なら `next=doctor`、failed の段が在れば最初のその段を `next=fix:<段>` で名指し rc 1（段の行は stdout のまま）。前提の断り（非 repo・pointer が無い / 読めない）は段の行を出さず stderr の 1 行で rc 1。
+
+## 5. tmux の session と引数の無い席の起動（行 c）
+
+- `init` の 8 段目 **`session`**: tmux の session `<ROOT の dir 名>`（socket は既定）が在れば skip、無ければ `new-session -d -s <名> -n orchestrator -c ROOT` で作って ok。tmux を撃てない周（has-session / new-session の Invocation を起動できない・new-session が rc≠0）は `failed:tmux`。
+- `init` の 9 段目 **`seat`**: 置き場の登録 row を、起動の `prepare`（`crates/scribe2/src/seat/cycle/launch.rs`）が row を書く前に読むのと同じ読み手（event log の読み → replay → 登録 row の列・既存の pub の関数だけを呼ぶ＝fleet と seat/role の file は触らない・行 c の write-set の外）で読み、role = orchestrator ∧ anchor = ROOT の row が 1 件でも在れば skip（row の live / dead は見ない・それは doctor の役）。この述語は `crates/scribe2/src/init.rs` に 1 本置き、§6 の doctor の `registration` の項目（行 d）も同じ 1 本を呼ぶ。無ければ下の `seat launch` の既定形（引数無し・cwd = ROOT・自分自身の binary を境界 crate が Invocation の program に渡す）を 1 回撃ち、rc 0 なら ok、断られた周は `failed:seat:<断りの語>`（子の断りの語をそのまま写す: `session-missing` / `defaults-unresolved` / `no-account` / `launch-unconfirmed` 等・`init` は語を作らない）。8 段目が failed の周も 9 段目は撃つ（§4「その段だけ書かず続きの段へ進む」のまま＝子が `session-missing` で断り `failed:seat:session-missing` になる）。
+- 9 段目の子の program（verified・main 42062de）: 境界 crate は `argv[0]`（呼ばれ方そのもの・`current_exe` は読まない C2.2）を `program` として渡し、`launch_seat` は `Invocation::new(program).current_dir(root)` で撃つ。`/` を含む相対 path（`./target/debug/scribe2 init ../other` の形）は root で解決されて別の binary を探すか `failed:seat:spawn` に倒れる（.614 run 8 の lens の finding・contract-fit）。行 c の done (6): 相対 path の周だけ init の cwd で絶対 path に解いてから子に渡す（`/` を含まない名前は PATH のまま・`current_exe` は読まない）。
+- 出力の形（§4 で決めた 1 段 1 行をそのまま使う・ここに再掲）: 各段は `init: <段> <ok|skip|failed:<理由>>` の 1 行、段の名は宣言順に `state-dir` / `host-face` / `accounts` / `marker` / `declaration` / `group` / `commit` / `session` / `seat` の 9 語（7 語の後ろに 2 語が続く・`init_repo_` の歯が pin する段の列も 7 語から 9 語へ広げる）。最後の 1 行は `next=`: failed の段が無ければ `next=doctor`、在れば最初の failed の段を `next=fix:<段>`（`fix:session` / `fix:seat`）で名指し rc 1。2 度目は 9 段が全部 skip で `next=doctor`。前提の断り（非 repo・pointer 無し）は段の行を出さず stderr 1 行で rc 1（§4 のまま）。
+- **`seat launch` の既定**（引数の無い形）: `--state-dir` は cwd の repo の local 設定（`vessel` の読み）、`--role` は `orchestrator`、`--target` は `<repo の dir 名>:<役割名>`（役割名は閉じた enum `Role` の名から導く。役割は今 orchestrator の 1 値〔FR40〕なので既定の target は `<repo の dir 名>:orchestrator` で、`--role orchestrator` を明示した周も同じ。役割の別値は cli が typed に断るので「別の役割名の target」は測れない＝`:orchestrator` 固定にする変異は観測できる挙動が同じで生存に数えない〔.614 run 11 の裁定〕・短い形の既定 `#S:<役割名>` と同じ形）、`--account` は置き場が群に属せば群の今の口座（FR59 のまま）、属さなければ選定（FR36）。明示の引数は既定に勝つ（`--target` を明示すれば役割名に依らない）。既定を解けない周は今の `defaults-unresolved` の断り（`missing=` に載せる）。長い形の判定・断りの字面は 1 字も変えない。
+- **短い形との切り分け**（verified・main 0ef69dd）: `seat <label> [--orchestrator] [-c|-r ID] …` の短い形は `crates/scribe2/src/seat/cli.rs` の `short_of` → `short_defaults`（登録 row の target と model の再利用・row が無い周は typed に断る・役割の flag は 1 つ・既定の target `#S:<役割名>`）が解き、歯は `seat_launch_short_form_` 接頭辞（reuses_the_registered_row_target_and_model / refuses_typed_without_a_row / requires_exactly_one_role_flag / continues… / resumes… / keeps_known_verbs）。行 c はこの経路と歯に**触らない**。行 c が足すのは長い形 `seat launch` の引数無し・`--role` だけの周の既定の解決（`launch_of` → `launch_defaults`・両方在る周は従来の `launch_place`）で、target の既定 `<repo の dir 名>:<役割名>` は短い形の `#S:<役割名>` と同じ形を長い形にも与えるだけ（短い形の判定は 1 字も変わらない）。
+- **done と歯の対応**（行 c の done の項 → 測る歯）: (1) → `seat_launch_default_`（既定の 3 値・`--role orchestrator` だけの周の target・`--target` 明示の勝ち・`defaults-unresolved` の `missing=`・長い形の断りの不変）。(2) → `init_seat_` の偽 tmux の socket で `has-session` が無い周の `new-session` 1 回・在る周の skip・偽 tmux が撃てない（socket 無し）周の `failed:tmux`。(3) → `init_seat_` の登録 row が在る周の skip・子が断った周の `failed:seat:<語>`・8 段目が `failed:tmux` の周でも 9 段目の行が出る。(4) → `init_repo_` の段の列 9 語・`next=fix:<段>` と rc 1・2 度目の 9 段 skip と `next=doctor`（行 c の verify に `init_repo_` の行を持つ・base では 7 語の pin で GREEN・便が 9 語へ広げた歯が HEAD で GREEN）。(5) → 子の起動は全部 Invocation（歯は撃ち方の外形＝偽 tmux / 偽 claude の記録）。(6) → `init_seat_` の相対 path の program で撃った周に子の記録が同じ binary の絶対 path を持つ。
+
+## 6. doctor の欠落の名指し（行 d）
+
+- doctor に `init=` の 1 行を足す（`host-template=` の直後・`--state-dir S` を渡した周だけ・FR73 の「実測を並べ判定せず rc を変えない」のまま）。形は `init=<ok|missing:<項目,…>|unmeasured:no-repo> next=<init|host-init|seat-launch|->`（key=値の 2 語・値に空白を含めない）。
+- ROOT の取り方: `--repo R` が在ればそれ、無ければ cwd（`init [ROOT]` の既定と同じ）。ROOT が git の repo でない周は `init=unmeasured:no-repo next=-`（推測で埋めない・C10）。
+- 項目は `init` の段の順（= 埋める順）に 6 つ。欠けたものだけを `,` で並べ、欠落 0 は `init=ok next=-`:
+  1. `host-face`: `<S>/host.toml` が `Absent` か `Unreadable`。
+  2. `accounts`: 面の `[[account]]` の label のうち `<S>/accounts/<label>` が無い（dir でも dir への symlink でもない）ものが 1 つでも在る。面が無い周は宣言が無いので欠落に数えない。
+  3. `marker`: `ROOT/.vessel` が `ByMe` でない（無い・`ByOther`）。
+  4. `declaration`: `ROOT/.vessel.toml` が HEAD に無い。
+  5. `session`: tmux の session `<ROOT の dir 名>`（§5 の既定の名・socket は `--tmux-socket` が在ればそれ、無ければ既定）が無い。tmux を撃てない周も欠落に数える（席は起きられない）。
+  6. `registration`: 置き場の event log の replay に、役割 orchestrator・anchor = ROOT の登録 row が無い（§5 の 9 段目と同じ 1 述語）。
+- `next=` は最初の欠落を埋める 1 手（対応は固定・候補の一覧を出さない）:
+
+  | 状態 | `next=` |
+  |---|---|
+  | 欠落 0 | `-` |
+  | 欠落が在り `host-template=` が `absent` / `unreadable` | `host-init`（`init` は雛形の pointer が無いと 1 段目の前に断る） |
+  | 最初の欠落が `host-face` / `accounts` / `marker` / `declaration` / `session` | `init`（各段は冪等＝在る段は skip し欠けた段だけ書く） |
+  | 最初の欠落が `registration` | `seat-launch`（§5 の既定形を人が打つ） |
+
+- doctor への渡し方は今の flag のまま（`--state-dir S [--repo R] [--tmux-socket PATH]`・flag を足さない）。`--repo` は台帳 lint の行も出す（今のまま・1 回読む）。
+- 「黙って 0 byte」は残す（hook の極性は vessel-hook.md §2 のまま）。名指すのは doctor の役。既存の doctor の行の字面と順は 1 字も変えず、行数を pin する歯と insta の snapshot 3 本は `init=` の 1 行分だけ進める（§3・行 d の write-set）。
+
+## 7. 口座 × anchor の trust を器が起動の前に書く — 席の起動の 1 本が、選んだ口座の設定 dir の `.claude.json` に `projects[<anchor>].hasTrustDialogAccepted = true` を書いてから起動行を注入する（契約表の行 e・[ADR-0065](../../design-intent/decisions/ADR-0065-the-vessel-writes-the-trust-flag-before-launching-a-seat.html)・`s2-07l.609` / `s2-07l.604`）
+
+やさしく言うと: 席が別の口座へ移るとき、その口座がその repo を一度も「信じる」と答えていないと、Claude Code は起動直後に trust の dialog（既定は No, exit）を出して席が立たない。群の自動の移動（account-lifecycle.md §20〜§22・seat-heartbeat.md §4）はここで人の手を待つ（2026-09-25 の本番の移動でも持ち主が手で承認した）。器は起動の直前に、その口座の設定 file の該当の印を true に置いてから起動行を送る。印を置けない周も起動は止めない（言葉で残す）。
+
+- 出所: memo `s2-07l.604` の実地試験（穴 (a)）・台帳 `s2-07l.609` の notes の裁定（user 2026-09-24T22:56Z「推奨で良い」= 依存を足さず、既存の入れ子 JSON の読み手に書き手を足す形。2026-09-24T13:38Z の serde_json の受諾は前提の誤りで取り下げ）・2026-09-25T01:00Z の s3:design の移動（tick の `launched=launch-unconfirmed`・持ち主の手で trust を承認・台帳 `s2-07l.617` の notes）。
+- 現物（verified・main 80270bd）:
+  - 読み手: `crates/scribe2/src/fleet/json_tree.rs` の `parse` / `Tree`（RFC 8259 の 6 形・数は 10 進の字面のまま・重複 key を拒む）と `render`（木を JSON に戻す）。`crates/scribe2/src/account/mod.rs` の `read_tree` / `flag_at` が doctor の `trust=<accepted|missing|unreadable>` の行で `projects[<anchor>].hasTrustDialogAccepted` を読む（読むだけ・`probe_account`）。
+  - 無いもの: 木の path に真偽を置く 1 関数と、置いた木を同じ file へ書き戻す 1 関数（行 e の着地で前者は `json_tree.rs` の `set_bool`、後者は `account/mod.rs` の `accept_trust`〔言葉は閉じた列 `TrustWrite`〕として足した）。
+  - 席の起動の 1 本は `crates/scribe2/src/seat/cycle/launch.rs` の `launch`（model → 役割の既定 → 口座の選定 `pick_account` → 起動行の導出 → `prepare` が登録 row を書く → `boot` が注入）。呼び手は 3 つ: `crates/scribe2/src/seat/cli.rs`（長い形・短い形）・`crates/scribe2/src/pipe/dispatch/group.rs` の `relaunch`（群の起こし直し）・`crates/scribe2/src/seat/tick.rs`（tick の移動の周・seat-heartbeat.md §4）。席の立て直しの経路は ADR-0045 §2 (2) で消えており（`crates/scribe2/src/seat/cycle/relaunch.rs` が持つのは `boot` と初回の選定 `choose` だけ）、席の起こし直しは全部この 1 本を通る。`launch` は `prepare` の後で 2 つに分かれる: 呼び手の pane が target と同じ周（`replace_own`・約束 7）は `boot` を通らず自分の process を起動行へ exec で置き換えて返らない（stdout の 1 行も `Launched` も無い・記録は `record_launch` が exec の前に inject.jsonl へ 1 行）・それ以外は `boot` が注入する。結果は `Launched`（`Done(label, settled)` / `None` / `Refused` / `Failed`）。
+  - 口座の dir は `<state_dir>/accounts/<label>`（実 dir か symlink・[account-autonomy.md](./account-autonomy.md) §5）。
+- 形（1 つずつ歯が測る・行 e の done と 1:1）:
+  1. **書く場所と順**: `launch` は `prepare` が通った後・置き換え（`replace_with`）と `boot` の分岐の**前**に 1 回だけ、選んだ口座の dir の `.claude.json` について `projects[<anchor の絶対 path>].hasTrustDialogAccepted` を `true` に置く（置き換えの周も注入の周も同じ 1 回を通る）。呼び手 3 つは変えない（1 本の内側なので群の起こし直しも tick の移動も同じ 1 回を通る）。
+  2. **書き方**: file を同じ読み手で読み → 木の path に真偽を置く（途中の object が無ければ作る・兄弟の key と並びと値と数の字面は変えない・書式は読み手の `render` の形＝2 空白の入れ子で、末尾の改行は元の file に在れば保つ）→ `render` の本文を同じ dir の一時 file に書き → 一時 file を同じ読み手で読み直して印が `true` であることを確かめ → `rename` で置き換える。file が無い周は `projects` だけを持つ最小の木を同じ手で作る。既に `true` の周は 1 byte も書かない（mtime も動かない）。
+  3. **言葉（閉じた列）**: `written`（置いた）／`created`（file を作って置いた）／`accepted`（既に true・書かない）／`unreadable`（file は在るが JSON でない・途中が object でない・末端が真偽でない＝書かない）／`unwritable`（一時 file の書き・読み直しの不一致・rename のどれかが失敗＝置き換えない）。
+  4. **起動は止めない**: どの言葉でも起動行は送る（trust は起動の前提でなく穴埋め・`Refused` にしない）。言葉は起動の記録（`record_launch` が inject.jsonl に書く行の `what`）の末尾に `trust=<語>` として残す（置き換えの周も注入の周も同じ）。注入の周はさらに `Launched::Done` の 3 つ目の値として返し、`seat launch` の stdout の 1 行の末尾に `trust=<語>` を添え、tick は `launched=` の後ろに `trust=<語>` を足す。dispatch の起こし直しと tick の移動は言葉を判定に使わない。
+  5. **doctor は変えない**（`trust=` の行は読むだけ・書いた後の周は `accepted` と読める＝それが確認）。`init`（§4）と `account add` も書かない（書くのは起動の 1 本だけ・書く相手が「今起こす口座 × 今の anchor」に閉じる）。
+  6. **lock は持たない**: 同じ設定 dir を使って走る Claude Code とは lock を共有しない（読み → 一時 file → rename の間に Claude Code が同じ file を書いた周はどちらかが負ける）。印が消えた周は doctor の `trust=missing` が名指し、次の起動が置き直す（人の手で置いた他の key を器が消す方向には負けない: 器の書きは読んだ木 + 印 1 つ・C3.3 の柵の内側）。
+- 触らない: `.credentials.json` と `settings.json`（書かない・ADR-0017 の fence のまま）・pane の字面で dialog に答える形（C3.3・§21 の却下のまま）・`Tree` の形と `parse` の判定・`prepare` と登録 row・`Launched` の他の variant。
+- 却下: serde_json を境界 crate に足す（NFR3 = 実行時の直接依存 0 本・読み手も書き手も既に在る・C17.2）／`.claude.json` を丸ごと書き直す（Claude Code が持つ他の key と並びを壊す・読み直しで測れない）／dialog を pane の字面で読んで Enter を送る（C3.3・§21 の却下）／`init` の段で全口座 × anchor を先に trust する（信じていない folder を信じた印を全部の口座に置く・書く相手は起こす 1 組に閉じる）／trust を起動の前提にして dialog が出うる周を断る（人の手が要る周を器が増やす）／設定 dir の `.claude.json` を host の面の宣言に写す（Claude Code の私有形式の二重化）。
+- 歯:
+  - `crates/scribe2/src/fleet/json_tree.rs` の in-file の歯（`json_tree_set_` 接頭辞）: 入れ子の path に真偽を置くと途中の object が作られ兄弟の key と並びと数の字面（30 桁）が保たれ `render` → `parse` で同じ木に戻る／既に `true` の周は木が変わらない／途中が object でない周は Err（base では関数が無い ＝ RED）。
+  - `crates/scribe2-boundary/tests/e2e/seat/launch.rs`（`seat_launch_trust_` 接頭辞・偽 tmux と偽 claude の fixture・口座の dir を tmp に作る・fixture の file は実物の `.claude.json` の書式〔2 空白・末尾改行あり〕で作る）: `.claude.json` に他の key と別 anchor の項目が在り当該 anchor が無い周の起動 → 起動行は送られ file は当該 anchor の印だけ増えて他の key・並び・値は `parse` で同じ木・末尾改行も同じ・stdout の末尾 `trust=written`・inject の記録の `what` の末尾も `trust=written`（base では file が変わらない ＝ RED）／同じ窓へ置き換える周（約束 7 の fixture・exec は偽の起動行）→ exec の前に印が置かれ inject の記録の `what` の末尾に `trust=<語>`（base では記録に `trust=` が無い ＝ RED）／既に true → 1 byte も変わらず（mtime 同じ）`trust=accepted`／file が無い → `projects` だけの最小の file が作られ `trust=created`／JSON でない file → 変わらず `trust=unreadable` で起動は送られる／dir が読み取り専用 → 変わらず `trust=unwritable` で起動は送られる。
+  - `crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs`（`pipe_dispatch_group_trust_` 接頭辞・§20 の fixture）: 群の起こし直しの周に移り先の口座の `.claude.json` へ群の anchor の印が置かれてから起動行が送られる（送りの記録の ts が file の書き換えより後・base では file が変わらない ＝ RED）。
+- 後続: README の「新しい repo を器に載せる」（§8）に trust の 1 文（初回の席は器が印を置くので dialog は出ない・出たら doctor の `trust=` を見る）。
+
+## 8. 人間向けの説明
+
+README の先頭に「新しい repo を器に載せる」の節を置く: 打つのは `host init <既存の置き場>`（host に 1 回）・`init`（repo で 1 回）・`doctor`（困ったら）の 3 つ。長さはこの 3 つの説明で足りる分だけ（散文の runbook を人に辿らせない・N2 の趣旨）。行 d の land 後に orchestrator の docs PR で書く（歯は持たない・契約表の行にしない）。
+
+## 9. 極性と失敗の型（[polarity.md](./polarity.md)）
+
+- `host init` / `init` は fail-closed: 断る周は 1 byte も書かない（段の途中の failed は、その段だけ書かず続きの段へ進み、`next=` で名指す）。
+- 群の面の書き換え（§4 の 6）は全部か皆無か（複数の置き場の宣言が食い違う周を作らない）。
+- 子 process は全部 `Invocation` で記述し（git・tmux・自分自身の `seat launch`）、core は撃たない（ADR-0062）。
+
+## 10. 歯（置き場は既存の file・接頭辞ごとに 1 file・base で RED）
+
+- `crates/scribe2-boundary/tests/e2e/main.rs`（`host_init_` / `init_repo_` / `init_seat_` / `doctor_init_` 接頭辞・偽 git は不要＝toy の repo を作る・tmux は偽 socket の fixture）: `host init` が global 設定（`GIT_CONFIG_GLOBAL` を toy の file に向けた env で撃つ）を書き doctor が `host-template=` を出す ／ `init` が 9 段を順に通し、置き場・面・symlink・marker・宣言・commit・session が在り、2 度目は全段 skip ／ `Cargo.toml` の有無で宣言の形が変わる ／ `--group` が雛形と同じ親の下の 2 面の anchors に足し、1 面が壊れていれば 0 面 ／ 8 段目と 9 段目の撃ち方（§5 の done と歯の対応）／ `doctor` が欠落を宣言順に名指し `next=` を 1 つ出す。`init` の歯は PATH の先頭の偽 tmux だけを撃つ（既定の socket の本物の server に触れない）。
+- `crates/scribe2-boundary/tests/e2e/seat/launch.rs`（`seat_launch_default_` 接頭辞）: 引数の無い `seat launch` が cwd の repo の設定と repo 名から target を組んで登録 row を書く ／ 明示の引数が勝つ ／ 解けない周は `defaults-unresolved` の字面が不変。
+
+## 11. 憲法・制約との整合
+
+- C3（描画を読まない）: 読むのは file と git / tmux の rc だけ。
+- C7 / A1: 口座を使う裁定は `--group` を打つ人が持つ（器は勝手に群へ入れない）。
+- N3（host 固有の値で分岐しない）: 置き場の在り処は global 設定の pointer 1 つ・名付けは雛形から導く。env は読まない。
+- FR58: credential を読まず書かない（symlink を結ぶだけ）。
+- ADR-0062: 子 process は `Invocation`。
+
+## 12. 却下案
+
+- env（`SCRIBE2_HOME` 等）や固定 path（XDG）で置き場を知る: env-reads の門と N3 に反する。
+- 雛形を host の根（`<親>/<NAME>-host`）の `host.toml` に置く: host の面は置き場ごとと決めた ADR-0049 / ADR-0026 の外形を変える。
+- credential の dir を copy する: FR58 の柵の外・可逆でない。
+- `init` が対話で聞く: 席から撃てない・1 発でない。
+- `init` が群へ自動で入れる: A1「使う」を器が決める形になる。
+- 人間向けの説明を契約表の行にする: 散文の歯は字面 pin になる。
+
+## 13. 後続
+
+- 移り先の口座の trust は §7 / 行 e（ADR-0065）が持つ（account-lifecycle.md §22 の後続の行き先）。
+- 席の登録 row の退役の kind（`s2-07l.609` の notes (a)）と外部 API の鍵の欄（同 (c)）は本設計の外。
+
+## 14. init が台帳を起こす — `--ledger-prefix` の周に `bd init --prefix P --skip-agents --skip-hooks` と `scripts/bdw` の shim と根の epic を置く（契約表の行 f・§4 の段の追加・`s2-07l.622` / `s2-07l.625`・裁定 2026-09-25T01:29Z / 03:19Z）
+
+やさしく言うと: 新しい repo を器に載せるとき、台帳（beads）は人が手で起こしている。しかも最初の bead は起票の門が「親が無い」で断るので、根の epic を人が素の terminal で置くしかなく、`bd init` は器の規則と食い違う CLAUDE.md / AGENTS.md を作って勝手に commit する（tsuzuri の実測）。init の 1 段に「台帳を起こす」を足し、器の子 process が門の外で根を置き、余計な file を作らない旗で撃つ。
+
+- 出所: 台帳 `s2-07l.622`（根を置けない・裁定 2026-09-25T01:29Z「推奨で進めて」＝候補 2）と `s2-07l.625`（CLAUDE.md / AGENTS.md・裁定 03:19Z・逐語は各 memo の notes）。
+- 現物（verified・main dae3b91）:
+  - `init [ROOT] [--group <名>]` の段は §4 の 7 段 + §5 の 2 段（`session` / `seat`）。段の名と出力の形は §4。flag は `cli_args` の許容列（`--group` の 1 つ）。
+  - 台帳の子 process は dispatcher.md §14（名指された repo の中で撃つ・`bd` は PATH）。起票の門（vessel-hook.md §10）は席の Bash の PreToolUse だけに当たる＝器の子 process の `bd create` は門に当たらない。
+  - `scripts/bdw` は logic の無い shim（canonical の bdw へ exec・無ければ fail-closed）で、本 repo の `scripts/bdw` の 20 行がそのまま雛形。席の `bd create` は shim が無い repo では門の `bd-outside-bdw` で断られる。
+  - `bd init --skip-agents --skip-hooks` は CLAUDE.md / AGENTS.md と hook を作らない（本 repo の `.beads/PRIME.md` の記載・実測）。
+- 形（行 f・1 つずつ歯が測る・done と 1:1）:
+  1. **flag `--ledger-prefix <P>`** を init に足す（許容列に 1 語・値は bead id の接頭辞・無い周は段が `skip`）。
+  2. **段 `ledger`** を `group` の後・`commit` の前に足す（段の名の列は `state-dir` / `host-face` / `accounts` / `marker` / `declaration` / `group` / `ledger` / `commit` / `session` / `seat` の 10 語・出力の形は §4 のまま）。中身はこの順・各項は「既に在れば skip」:
+     - (i) `ROOT/.beads` が無ければ ROOT の中で `bd init --prefix <P> --skip-agents --skip-hooks` を撃つ（`bd` は PATH・stdout / stderr は読まず rc だけ・rc ≠ 0 は `failed:bd-init:<rc>`）。
+     - (ii) `ROOT/scripts/bdw` が無ければ shim を書く（本文は器が定数で持つ＝本 repo の `scripts/bdw` と同じ字面・実行 bit を立てる・書けなければ `failed:write`）。書いた file は `commit` の段の書いた列に足す（`.vessel` / `.vessel.toml` と同じ扱い）。
+     - (iii) 台帳の bead が 0 本なら根の epic を 1 本置く: ROOT の中で `bd create --type epic --title "<ROOT の dir 名> root" --priority 1` を撃つ（`--parent` 無し・器の子 process は門に当たらない・rc ≠ 0 は `failed:bd-create:<rc>`）。0 本かは `bd --readonly list --limit 1` の出力が空かで測る（読めない周は `failed:bd-list:<rc>`）。
+  3. **HEAD に CLAUDE.md / AGENTS.md を増やさない**: (i) の旗で bd が作らない。器は生成された file を消さない・上書きしない（N1・他人の file）。
+  4. **failed の後の段**: `ledger` が failed でも `commit` 以降は撃つ（§4 の規則のまま・`next=fix:ledger`）。
+     - **段の中の失敗**（実装の決め・行 f）: (i)〜(iii) のどれかが failed なら段はそこで止まり、続きの項を撃たない（`bd init` が落ちた周に shim も起票も試さない）。`<rc>` は bd の exit code の数字、bd を起動できない周は `spawn`・signal で終わった周は `signal`。ROOT の dir 名を UTF-8 で取れない周は `failed:unresolvable`。
+  5. **人向けの案内の表は触らない**: `crates/scribe2/src/help.rs` の表は頂点の語 15 個だけを持ち `init` の行は無く、cli-help の突き合わせの歯 9 口の外なので、`init` の usage に `[--ledger-prefix <P>]` が増えても赤にならない（実装役の問い 2026-09-25T23:2xZ で実測）。本便は表に `init` の行を新設しない（人向けの案内に `init` を載せるかは別の便）。
+- 触らない: 起票の門と rules 行 `ledger.denied_writes`（門は緩めない・C14）・§4 の既存 7 段の中身・`bd` の呼び方（PATH）・shim の本文（本 repo の `scripts/bdw` と同じ・drift は歯が測る）。
+- 却下: 門に「bead 0 本の周の最初の create は通す」例外を足す（C14 の例外・vessel-hook.md §10 の却下と衝突）／語を外す当座の手を規則にする（裁定 id が毎回要る・N2）／生成された CLAUDE.md を器が消す（他人の file・N1）／根の epic を `scripts/bdw` 経由で置く（canonical の path が host の値・init の周は書き手が 1 つで直列化が要らない）／`--ledger-prefix` を dir 名から導く（bead id の接頭辞は持ち主が決める字面・A1 の「出す」に近い）。
+- 歯（`crates/scribe2-boundary/tests/e2e/main.rs` の `init_repo_` の隣に `init_ledger_` 接頭辞・toy の repo・PATH に偽 `bd`〔argv を log に写し、`init` は `.beads/` を作り `--skip-agents` が無ければ CLAUDE.md と AGENTS.md も作る・`create` は id を 1 行出す・`list` は `.beads/issues.jsonl` が在って空でなければその 1 行目を出し、無いか空なら何も出さない（fixture が bead の有無を file で作る）〕）: (a) `--ledger-prefix t9` で `init: ledger ok`・偽 bd の log に `init --prefix t9 --skip-agents --skip-hooks` と `create --type epic` が各 1 回・`scripts/bdw` が shim の字面で実行可・tree に CLAUDE.md / AGENTS.md が無い（base では flag が未知で断られる ＝ RED）(b) flag 無し → `init: ledger skip`・偽 bd の呼出 0 (c) `.beads`（bead 1 本の `issues.jsonl` つき）と shim が既に在る → `ledger skip`・偽 bd の呼出は `list` の 1 回だけ（`init` も `create` も 0） (c2) `.beads` は在るが `issues.jsonl` が無い（bead 0 本）→ `init` 0・`create` 1・`ledger ok` (d) 偽 bd の `init` が rc 1 → `failed:bd-init:1`・`next=fix:ledger`・`commit` 以降の行は出る (e) 段の名の列 10 語が宣言順（`init_repo_` の既存の段の列の歯を 10 語に書き換える）。shim の drift は lib の歯（`crates/scribe2/src/init.rs` の中・`init_shim_` 接頭辞）が定数と本 repo の `scripts/bdw` の字面の一致を測る。
+
+## 15. host の面の端末の表 `[[device]]` — 名・ssh の宛先・Chrome の path・OS（必須）と画面の番号・IME の env・専用の profile の dir（任意）を host の面にだけ宣言し、読み手が行番号つきで検査し、doctor の host の行に名の列を足す（契約表の行 g・ADR-0076・FR57・`s2-07l.658`・持ち主の裁定 2026-09-26T15:16Z〔逐語は台帳〕）
+
+やさしく言うと: 表示面を持つ別の project の席は、持ち主の端末の Chrome を ssh 経由で窓だけのモードで起こし、その画面を操作する。そのための端末の値（ssh の宛先・Chrome の場所・画面の番号・日本語入力の env・専用の profile の場所・OS）は host ごとに違うので code に焼けない（憲法 N3）。今は席が手で持っている。host の面（host.toml）に端末の表を 1 つ足し、器の読み手が形を検査し、doctor が宣言の名を名乗る。器は端末の値を使わない（ssh も Chrome も撃たない）。
+
+- 出所: 台帳 `s2-07l.658`（消費側の project の relay・その project の設計判断 2 本と要件 1 本・持ち主の裁定 2026-09-26T15:16Z〔推奨の受諾・逐語は台帳〕）。消費側の実測（2026-09-25）: 同じ profile の既存の process が窓を開くと env が効かない＝専用の profile の dir が要る。
+- 現物（verified・main 43f4a05）:
+  - host の面の読み手は `crates/scribe2/src/rules/manifest.rs` の `collect`（面ごとに section を受ける）で、host の面にだけ置ける表は `[[account-group]]` と `[[tick]]`（tracked の面に置いた表は `host_only` が 1 表 1 件で断る）。表の key は section ごとの閉じた列（`known_keys` / `required_keys`）で、未知の key と未知の section は行番号つきで断る。今の host の面に `[[device]]` を書くと未知の section として面ごと読めない。
+  - `crates/scribe2/src/rules/manifest.rs` は 1481 行（file の上限 1500・rules 行 R-C4-2）。群の名の検査は兄弟 module `crates/scribe2/src/rules/groups.rs`（`super::groups::check_tiers` を `collect` が 1 行で呼ぶ）が先例。
+  - doctor の host の面の行は `crates/scribe2/src/account/mod.rs` の `render_host_manifest`（`host-manifest=<word>` と、`[[tick]]` の在る周だけ末尾の ` tick=declared`）で、呼び手は同 file の `doctor_lines` と `crates/scribe2-boundary/src/main.rs` の外形の一覧（`None` を渡す）の 2 つ。
+  - `init` の 2 段目（§4）は雛形の host の面の本文から `[[account-group]]` の表だけを除いて写す＝他の表は本文のまま写る。
+- 形（行 g・1 つずつ歯が測る・done と 1:1）:
+  1. **表 `[[device]]`**（host の面にだけ・0 行以上）: 必須の欄は `name`（端末の名・host の面で一意・空白を含まない 1 語）・`ssh`（ssh の宛先・空白を含まない 1 語）・`chrome`（端末の上の Chrome の path・空でない）・`os`（閉じた 3 語 `linux` / `macos` / `windows`）。任意の欄は `display`（画面の番号・空でない）・`ime-env`（`KEY=VALUE` の文字列の配列・KEY は英大文字と数字と `_` で先頭は数字でない・最初の `=` で割り VALUE は空でない・同じ KEY の重複は断る）・`profile-dir`（端末の上の専用の profile の dir・空でない）。未知の key・欠けた必須の欄・形に外れる値・`name` の重複は、行番号つきで 1 件ずつ断る（`host.toml:` の接頭辞・rc 1・他の表と同じ形）。tracked の面に置いた表は `[[tick]]` と同じく 1 表 1 件で断る（端末の値は host 固有で PUBLIC repo に載せない・CON2）。
+  2. **読み手は 1 つ**: 行の組み立てと欄の検査と名の重複の検査は、行 g の write-set の `+` の file（`crates/scribe2/src/rules/mod.rs` が子 module として宣言する兄弟）に置く。`crates/scribe2/src/rules/manifest.rs` に足すのは、section の 1 語（見出し・受ける key と必須の key の列はその兄弟の定数を引く）・受ける 2 腕（host の面は組み立ての呼び・tracked の面は `host_only`）・名の重複の検査の呼び 1 行・`Manifest` の欄と合わせ（`joined`）の 1 行・宣言順の列を返す読み手 1 つだけ（file の上限の余地に収める・growth 18・余地は §16 の行 h の純移動が先に作る）。
+  3. **doctor**: 表を 1 行以上持つ host だけ、host の面の行の末尾（` tick=declared` の後ろ）に ` devices=<名>,<名>`（宣言順・欄の値は書かない）を 1 項目足す。表の無い host の行は 1 字も変わらない（既存の外形 snapshot は動かない）。`render_host_manifest` は端末の名の列を受け、呼び手 2 つが渡す（外形の一覧は空の列）。
+  4. **触らない**: 既存の表の形と検査・rules 行（足さない）・`init` の写し（本文のまま写る＝雛形に在れば `[[device]]` も写る）・席の起動と tick・`validate` の宣言の数の 1 行（表を数えない＝`[[tick]]` と同じ）。器は端末の値を読むだけで使わない。
+- 却下: 消費側の repo の `.vessel.toml` に持つ（端末は host 固有で repo の宣言でない・同じ host の他の project と共有できない）／器の外の file（器の宣言が 2 か所になり、形の検査が無い）／doctor に欄の値を全部出す（path は空白を含みうる・ssh の宛先を doctor の出力へ広げない）／器が端末の値で Chrome を起こす口を持つ（消費側の設計の範囲・器は宣言の形だけを守る）。
+- 歯:
+  - `crates/scribe2-boundary/tests/e2e/rules.rs`（`rules_host_device_` 接頭辞・`host_state_dir` の fixture）: (a) 2 行の `[[device]]`（必須の欄だけの行と全部の欄の行）を持つ面は `validate --state-dir` が rc 0 で宣言の数の 1 行は表の無い面と同じ字面・合わせた `Manifest` の読み手が宣言順の 2 行と各欄と見出し行を運ぶ・埋め込みの面は 0 行（base では未知の section で面が読めない ＝ RED）(b) 欠けた必須の欄・未知の key・`os` の 3 語の外・`ime-env` の形の外と KEY の重複・`name` の重複・空白を含む `name` と `ssh` は、行番号つきで 1 件ずつ断る (c) tracked の面（`--rules` の写し）に置いた表は 1 表 1 件で断る。
+  - `crates/scribe2-boundary/tests/e2e/seat/account.rs`（`host_device_doctor_` 接頭辞・host の面を書く fixture）: 表の在る host の doctor の host の面の行の末尾に ` devices=<名>,<名>`（宣言順）／表の無い host の行は 1 字も変わらない（base では面が unreadable ＝ RED）。
+  - lib（行 g の write-set の `+` の file の中・`host_device_` 接頭辞）: 1 行の組み立ての round-trip・`ime-env` の形の境界（先頭の数字・`=` の無い字面・空の KEY・空の VALUE・VALUE の中の `=`）。
+- 実装の決め（行 g・base 67ee2f5）: 欄の値の欠陥（空・空白・`os` の 3 語の外・`ime-env` の要素）はその key の行で、欠けた必須の欄と `name` の重複は見出しの行で名指す。`ime-env` は (KEY, VALUE) の組の列として宣言順で返す。兄弟が組み立てに引くため、manifest.rs の生の行・生の値の型と key の検査の 3 関数（`check_keys` / `text_field` / `list_field`）の可視性を親の module までに広げた（行は増えない）。`collect` は clippy の関数の行数の上限（60）に当たるので、`[[tick]]` の重複の腕を同じ挙動のまま 1 行詰めた。manifest.rs は 1301 → 1318 行。
+- 後続: 消費側が値を読む形（host の面を直に読むか、器に読み出しの口を足すか）は消費側の表示面の便の設計で決める（本行は宣言と検査と doctor だけ）。
+
+## 16. rules/manifest.rs の歯の module を歯の file へ割る — `#[path]` の子 module で module path と歯の名を変えない（契約表の行 h・純移動・行 g の余地を作る）
+
+やさしく言うと: host の面の読み手の本体の file は、書き足すための空きが 4 行しか無く、§15 の行 g を受付が断っている。空きを食っているのは本体ではなく、同じ file の後ろに在る確かめの test の塊なので、その塊だけを名前も中身も変えずに隣の file へそのまま引っ越す。動きは 1 つも変わらない。
+
+- 何が起きているか（実測 2026-09-26・main 43f4a05）: `crates/scribe2/src/rules/manifest.rs` は 1481 行（src 1297 + 行頭の `#[cfg(test)]` から後の歯の module 184・歯 9 本〔接頭辞 rules_host_unit_ 5・host_tick_ 2・class_derive_rules_ 2〕）で、受付の実測で R-C4-2（1500）の余地が 4 行しか無く、行 g（growth 18）を `cap-headroom` で断った。lib の中でこの 3 つの接頭辞を持つ歯は、この module の外に 0 本。
+- 形（[vessel-hook.md](./vessel-hook.md) §13 と同型・向きは「歯だけを外へ」）: 歯の module の**本文**（`// flip-check: retroactive s2-07l.250` の札と説明の comment から最後の歯の閉じ括弧まで・1300〜1480 行）を、行 h の write-set の `+` の file（manifest.rs と同じ dir・名は _tests.rs で終わる形）へ indent を 1 段外して**そのまま**移す。親の歯の区間は `#[cfg(test)]` の単独行と `#[path]` の行と `mod tests;` の 3 行だけになる（module 名は tests のまま・宣言の可視性は private のまま・move_proof の残差の許容形の内）。子は mod の本文そのものなので `use super::{collect, finish, Face, HostManifest, Manifest};` 以下の path は不変。札 `// flip-check: moved <行 h の bead>` は子の file の先頭（module doc の直後・file 全体が歯の区間なので flip-check が数える）に置き、親の宣言の直後にも対で置く。write-set の親の `-` は「増分 0 以下の宣言」で、file の削除ではない（親は src の 1297 行と 3 行の宣言で残る）。
+- 見積: 親 約 1301 行（余地 約 199＝行 g の 18 と後続の余地）・子 約 190 行。
+- 歯: 既存の 9 本（manifest.rs の歯の module 配下）が全部緑で期待を変えない。verify は歯の名の接頭辞 3 語（`rules_host_unit_` / `host_tick_` / `class_derive_rules_`）を 1 行ずつ撃ち、base = head の本数を実装役が `cargo nextest list` で写す。
+- 実測（行 h の実装・base e516dfc）: module path rules::manifest::tests の歯は base 9 本 = head 9 本（接頭辞 rules_host_unit_ 5・host_tick_ 2・class_derive_rules_ 2・名は全部同じ）。親は 1481 → 1301 行（余地 4 → 199）・子は 190 行。
+- 後続: 行 g は歯を行 g の write-set の `+` の file（端末の表の兄弟 module）の中に置くので、本便の子の file を write-set に要らない。行 g は台帳の依存と行の depends で本便の Landed を待つ。本便の子の file の `+` は着地の後の docs PR で剥がす（本便の done に書かない＝行自身の field を書き換える便は着地で起こし直される）。
+- 却下: 行 g の growth を 4 以下に書く（section の 1 語と受ける腕と読み手で 4 行に収まらない＝見積の字面だけ変える嘘）／src の群（群の表の組み立てと検査）を兄弟へ割る（歯が引く名と私有の関数の可視性が動く＝items-differ の危険・歯の module は居座り次の表で再発）／歯を `crates/scribe2-boundary/tests/e2e/` へ移す（私有 item を撃つ歯は e2e から撃てない）。
+
+## 17. 端末の表の行に任意の欄 display-env — KEY=VALUE の列を IME の env と同じ 1 関数で検査し、断りの文は欄の名を名指し、display と同じ行には書けない（契約表の行 i・[ADR-0080](../../design-intent/decisions/ADR-0080-device-rows-carry-display-env.html)・FR57・`s2-07l.726`）
+
+やさしく言うと: §15 の端末の表は画面を「画面の番号」の 1 つの値で書くが、これは X の画面しか表せない。Wayland の画面の端末は、窓を開くのに環境変数 2 つ（画面の名と実行時の dir）の組が要る。端末の表の行に、画面を開くための環境変数の組を書く任意の欄 display-env を足し、日本語入力の設定の欄と同じ検査で受ける。1 つの行の画面の宣言は 1 つの欄だけにし、画面の番号と両方を書いた行は断る（X の画面の DISPLAY も display-env に書ける）。器は今どおり値を使わず、形を守るだけ。
+
+- 出所: 台帳 `s2-07l.726`（隣の project の席との相談・表示面の最初の実物の端末が Wayland）。決定は ADR-0080（ADR-0076 の閉じた 7 つの key を 8 つへ・部分 supersede）。任意の欄 display-env は memo の推奨のまま、両方の欄を持つ行を断る形は memo の当初の推奨（両方を許し消費側が display-env を使う）を分析で改めたもの（どちらも常設の裁定 user 2026-09-28T00:54Z の範囲）。
+- 現物（verified・main 6f6038c）:
+  - `crates/scribe2/src/rules/device.rs`（270 行）の `KEYS`（:14・閉じた 7 つ）を読み手の key の検査（`crates/scribe2/src/rules/manifest.rs` の `check_keys`）が引き、未知の key を行番号つきで断る。
+  - `build`（:106）は `ime-env` を `list_field` で取り、`env_pairs`（:162）が要素ごとに `env_pair`（:178・最初の `=` で割る・KEY の字種・空の VALUE）を当てて、形の外と KEY の重複を `ime-env` の行で 1 件ずつ断る。断りの文は `ime-env の要素 … が KEY=VALUE の形でない（…）` と `ime-env の KEY … が重複する` の 2 つで、欄の名が字面に焼いてある。
+  - 歯は同じ file の歯の区間（`read_face` が host の面の本文を tmp の file に書いて読み手に掛ける・`host_device_` 接頭辞）。
+- 形（番号は done と 1:1）:
+  1. **欄**: `KEYS` の末尾に `display-env` を足す（閉じた 8 つ・必須の列は不変）。値は文字列の配列で、`Device` に KEY と VALUE の組の列の欄と、それを宣言順で返す読み口（`ime_env` と同じ形）を足す。無い行は空の列。
+  2. **検査は 1 関数**: `env_pairs` に欄の名の引数を足し、`ime-env` と `display-env` の両方がそれを呼ぶ。断りの文は欄の名を頭に置く同じ 2 つの形（`<欄> の要素 … が KEY=VALUE の形でない（…）`・`<欄> の KEY … が重複する`）で、その欄の行番号で 1 件ずつ出す（`ime-env` の断りの文は 1 字も変わらない）。
+  3. **両方の欄は断る**: `display` と `display-env` を両方持つ行は、`display-env` の行番号で `display と display-env は同じ行に書けない（DISPLAY は display-env に書く）` の 1 件で断る（どちらを使うかの読み順を散文に残さない・器は値を使わない）。`display-env` を持たない行の `display` は跨版で今どおり。
+  4. **触らない**: 他の欄の形と検査・`display` の欄（跨版で保つ）・表を host の面にだけ置く決まり・doctor の host の行（名の列だけ）・tracked の面の断り・既存の歯（`host_device_one_row_round_trips_every_field` の 7 欄の round-trip は 8 つ目の欄が無い行としてそのまま通る）。
+- 却下: 両方の欄を許し両方在る行は消費側が `display-env` を使う（読み順が散文にしか無い規則になる・N2）／IME の env の欄に画面の変数も書く（欄の意味が外れる）／画面の番号の値の形で X と Wayland を読み分ける（散文にしか無い規則・実行時の dir を表せない・N2）／画面の番号の欄を列に変える（既存の面が型違いで読めなくなる）／汎用の env の欄（IME の env と役目が重なる）。詳細は ADR-0080。
+- 歯（lib・`crates/scribe2/src/rules/device.rs` の歯の区間・接頭辞 `host_device_display_env_`・`crates/` 全体で 0 件＝実測）: (a) `display-env = ["WAYLAND_DISPLAY=wayland-1", "XDG_RUNTIME_DIR=/run/user/1000"]` を持つ行（`display` なし）が読め、`display-env` の読み口が宣言順の 2 組・`display` の読み口は `None` を返し、`display-env` の無い行の読み口は空 (b) `display-env = ["A=1", "9B=2", "A=3"]` の面は、`display-env の要素 "9B=2" が KEY=VALUE の形でない（KEY の先頭が数字である）` と `display-env の KEY A が重複する` を `display-env` の行で 1 件ずつ断る（形の良い要素は数えない） (c) `display = ":0"` と形の良い `display-env` を両方持つ行は `display と display-env は同じ行に書けない（DISPLAY は display-env に書く）` を `display-env` の行で 1 件断り、同じ面から `display` を消すと読める。
+- base で RED の理由: 歯が 0 本（filter の該当 0 本＝nextest の rc 4）。実装の前の読み手は `display-env` を未知の key として断る（機能不在）。
+- 実装の決め（行 i・base 5ec8c4e）: `display-env` の読み口は `display_env` で、`ime_env` と同じ (KEY, VALUE) の組の列の slice を返す。両方の欄の断りは要素の検査の前に積む（両方在り要素も形に外れる行は、両方の欄の 1 件と要素の断りを並べて出す）。`display` が空の行は空の断りと両方の欄の断りの 2 件。歯は (a)〜(c) を 1 本ずつ（(a) は `display-env` の無い行として `display = ":0"` の行を同じ面に置き、`display` の読み口が今どおり返ることも測る）。device.rs は 270 → 330 行。
+
+<!-- contracts:begin -->
+schema = 1
+
+[[contract]]
+id = "a"
+title = "host init — 既存の置き場を雛形として git の global 設定 <NAME>.template に絶対 path で書き（unchanged / written の 1 行）、doctor が host-template= の 1 行を出す（§3）"
+req = ["FR61", "FR58"]
+section = "3"
+write-set = ["crates/scribe2/src/init.rs", "crates/scribe2/src/lib.rs", "crates/scribe2/src/hook/vessel.rs", "crates/scribe2-boundary/src/main.rs", "crates/scribe2-boundary/src/snapshots/scribe2__tests__doctor_external_form.snap", "crates/scribe2-boundary/src/snapshots/scribe2__tests__ledger_form_doctor_external_form.snap", "crates/scribe2-boundary/src/snapshots/scribe2__tests__ledger_lint_doctor_external_form.snap", "crates/scribe2-boundary/tests/e2e/main.rs", "crates/scribe2-boundary/tests/e2e/seat/register.rs", "crates/scribe2-boundary/tests/e2e/seat.rs", "crates/scribe2-boundary/tests/e2e/seat/account.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail host_init_"]
+size = "S"
+done = "(1) host init <TEMPLATE> は TEMPLATE が dir で host.toml が Absent か Present の周だけ git の global 設定 <NAME>.template に絶対 path を書き、同じ値なら書かず unchanged、dir が無い・Unreadable・引数欠けの周は 1 byte も書かず断る (2) 出力は host: init template=<path> <written|unchanged> の 1 行 (3) doctor は骨格の 2 行の直後に host-template=<path|absent|unreadable> の 1 行を置き場を渡さない周にも出す (4) env と HOME を読まず、git の呼び出しは Invocation で記述する (5) doctor の外形の insta snapshot 3 本を新しい形へ更新し write-set の外の .snap は触らない 歯: host_init_ の歯が GIT_CONFIG_GLOBAL を toy の file に向けて written / unchanged / 断り 3 形と doctor の行を測る（base では init の verb が無い ＝ RED）"
+
+[[contract]]
+id = "b"
+title = "init [ROOT] — 雛形から新しい置き場を作り（名は <雛形>-<repo 名>）、host の面の 5 表を写し、口座の dir を symlink で結び、marker と local 設定と宣言の雛形（Cargo.toml の有無で形を選ぶ）を置き、--group の周は同じ親の下の全面の anchors に足し（全部か皆無か）、書いた file だけを 1 commit にする（§4）"
+req = ["FR58", "FR61"]
+section = "4"
+write-set = ["crates/scribe2/src/init.rs", "crates/scribe2/src/hook/vessel.rs", "crates/scribe2/src/rules/manifest.rs", "crates/scribe2/src/account/mod.rs", "crates/scribe2/src/pipe/declaration.rs", "crates/scribe2-boundary/src/main.rs", "crates/scribe2-boundary/tests/e2e/main.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail init_repo_"]
+size = "L"
+growth = ["crates/scribe2/src/hook/vessel.rs:60", "crates/scribe2/src/rules/manifest.rs:40", "crates/scribe2/src/account/mod.rs:60", "crates/scribe2/src/pipe/declaration.rs:20", "crates/scribe2-boundary/src/main.rs:60"]
+depends = ["a"]
+done = "(1) ROOT が git の repo でない・host-template が無い周は 1 段目の前に断り何も書かない (2) 置き場は <雛形の親>/<雛形の dir 名>-<ROOT の dir 名> で在れば skip (3) host の面は雛形の [[plugin]] [[launch-arg]] [[account]] [[vessel]] [[tick]]（在れば）を写し [[account-group]] は写さず、loader で検査してから rename で置き、在れば 1 字も変えない (4) accounts/<label> は雛形の symlink の先か実 dir へ symlink で結び credential を読まず写さず、雛形に無い label は failed:no-source で名指して続きの段を止めない (5) marker と local 設定は vessel init と同じ 1 本で ByMe は skip・ByOther は failed (6) 宣言は Cargo.toml が在れば cargo の形（allowed-commands cargo と git・common-verify に nextest と clippy・entrance-flip unmeasured）、無ければ git の形（allowed-commands git・common-verify git diff --quiet・entrance-flip unmeasured）で、在れば skip (7) --group は雛形に無い群を failed、在れば同じ親の下で群を宣言する全面の anchors に ROOT を足し新しい面にも写し、1 面でも検査に落ちれば 0 面 (8) 本便が書いた .vessel と .vessel.toml だけを git add と git commit -- で 1 commit にし、0 file なら skip (9) 出力は段ごとに init: <段> <ok|skip|failed:<理由>> の 1 行と最後の next= 1 つで、2 度目は全段 skip 歯: init_repo_ の歯が 7 段の生成物と 2 度目の skip と Cargo.toml の有無の 2 形と --group の 2 面と 0 面と失敗の段の名指しを測る（base では init の verb が無い ＝ RED）"
+
+[[contract]]
+id = "c"
+title = "tmux の session と引数の無い席の起動 — init の 8 段目 session が session <repo 名> を new-session -d で作り、9 段目 seat が orchestrator の登録 row が無い周だけ seat launch の既定形を 1 回撃ち、seat launch は引数無しで state dir を local 設定・role を orchestrator・target を <repo 名>:orchestrator・口座を群の今の口座か選定から解く（§5）"
+req = ["FR59", "FR36"]
+section = "5"
+write-set = ["crates/scribe2/src/init.rs", "crates/scribe2/src/seat/cli.rs", "crates/scribe2/src/seat/cycle/launch.rs", "crates/scribe2-boundary/src/main.rs", "crates/scribe2-boundary/tests/e2e/main.rs", "crates/scribe2-boundary/tests/e2e/seat/launch.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail seat_launch_default_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail init_seat_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail init_repo_"]
+size = "M"
+depends = ["b"]
+done = "(1) 引数の無い seat launch は cwd の repo の local 設定から置き場を、orchestrator を役割に、<repo の dir 名>:<役割名>（役割名は閉じた enum Role の名・役割は orchestrator の 1 値なので <repo の dir 名>:orchestrator・--role orchestrator を明示した周も同じ）を target に、群の置き場は群の今の口座を、それ以外は選定を使って登録 row を書き席を起こし、明示の引数は既定に勝ち、解けない周は defaults-unresolved の断りで missing= に載せ、長い形の判定と断りの字面は 1 字も変わらない (2) init の 8 段目 session は session <ROOT の dir 名> が無ければ new-session -d -s <名> -n orchestrator -c ROOT で作って ok、在れば skip、tmux を撃てない周は failed:tmux (3) init の 9 段目 seat は置き場の登録 row を起動の prepare と同じ読み手（既存の pub の関数・fleet と seat/role の file は触らない）で読み、role = orchestrator ∧ anchor = ROOT の row が在れば skip、無ければ (1) の既定形を cwd = ROOT で 1 回撃って rc 0 なら ok、断られた周は子の断りの語をそのまま failed:seat:<語> に写し、8 段目が failed でも撃つ、述語は init.rs に 1 本 (4) 出力は 1 段 1 行 init: <段> <ok|skip|failed:<理由>> で段の列が state-dir / host-face / accounts / marker / declaration / group / commit / session / seat の 9 語、末尾の next= は failed が無ければ doctor、在れば最初の failed の段を fix:<段> で rc 1、2 度目は 9 段が全部 skip で next=doctor（init_repo_ の歯の段の列を 9 語へ広げる） (5) 子 process は全部 Invocation で記述し境界 crate が撃つ (6) 9 段目の子の program は境界 crate が渡す argv[0] のままだが、/ を含む相対 path の周は init の cwd で絶対 path に解いてから撃ち（root へ current_dir した子が別の binary を探さない・current_exe は読まない・.614 run 8 の lens の finding）、init_seat_ の歯が相対の program で撃った周に子が同じ binary を指すことを測る 歯: seat_launch_default_ の歯が既定の 3 値と --role orchestrator だけ明示した周の target が <repo の dir 名>:orchestrator になること（役割の別値は cli が typed に断るので測らず、:orchestrator 固定の変異は挙動同値で生存に数えない）と --target 明示の勝ちと断りの不変を測り、init_seat_ の歯が偽 tmux の socket で new-session の 1 回・在る周の skip・登録 row が在る周の seat の skip・子が断った周の failed:seat:<語> と next=fix:seat・tmux を撃てない周の failed:tmux と 9 段目の行の存在・相対 path の program で子が同じ binary を指すことを測り、init_repo_ の歯が段の列 9 語と 2 度目の 9 段 skip と next=doctor を測る（base では引数無しの seat launch が usage で断る ＝ RED）"
+
+[[contract]]
+id = "d"
+title = "doctor の init= 行 — host-face / accounts / marker / declaration / session / registration の欠落を init の段の順に名指し、next= に最初の欠落を埋める 1 手（init / host-init / seat-launch の 1 語）を固定の対応で置く（§6）"
+req = ["FR73", "FR59"]
+section = "6"
+write-set = ["crates/scribe2/src/init.rs", "crates/scribe2-boundary/src/main.rs", "crates/scribe2-boundary/src/snapshots/scribe2__tests__doctor_external_form.snap", "crates/scribe2-boundary/src/snapshots/scribe2__tests__ledger_form_doctor_external_form.snap", "crates/scribe2-boundary/src/snapshots/scribe2__tests__ledger_lint_doctor_external_form.snap", "crates/scribe2-boundary/tests/e2e/main.rs", "crates/scribe2-boundary/tests/e2e/seat/register.rs", "crates/scribe2-boundary/tests/e2e/seat.rs", "crates/scribe2-boundary/tests/e2e/seat/account.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail doctor_init_"]
+size = "S"
+depends = ["b"]
+done = "(1) --state-dir を渡した doctor は host-template= の直後に init=<ok|missing:<項目,…>|unmeasured:no-repo> next=<init|host-init|seat-launch|-> の 1 行を出し、ROOT は --repo が在ればそれ無ければ cwd、ROOT が git の repo でない周は unmeasured:no-repo next=- (2) 項目は host-face・accounts・marker・declaration・session・registration の init の段の順で欠けたものだけを並べ、欠落 0 は init=ok next=-、面が無い周は accounts を数えず、session は <ROOT の dir 名> の session を --tmux-socket か既定の socket で測り、registration は置き場の replay に役割 orchestrator・anchor = ROOT の登録 row が在るか (3) next= は固定の対応（欠落が在り host-template= が absent / unreadable なら host-init、最初の欠落が host-face・accounts・marker・declaration・session なら init、registration なら seat-launch）の 1 語で候補の一覧を出さず、flag は足さない (4) 他の doctor の行の字面と順と hook の 0 byte の極性は 1 字も変わらず、行数を pin する歯と insta の snapshot 3 本は 1 行分だけ進める 歯: doctor_init_ の歯が 6 項目それぞれ 1 つだけ欠けた toy と欠落 0 の toy と host-template の無い toy と repo でない cwd で行と next= の対応を測る（base では init= の行が無い ＝ RED）"
+
+[[contract]]
+id = "e"
+title = "口座 × anchor の trust を器が起動の前に書く — 席の起動の 1 本が prepare の後・置き換えと boot の分岐の前に選んだ口座の .claude.json の projects[<anchor>].hasTrustDialogAccepted を true に置き（読み手に書き手を足す・一時 file → 読み直し → rename）、言葉 written / created / accepted / unreadable / unwritable を Launched::Done に返して stdout の末尾に添え、起動は止めない（§7・ADR-0065・s2-07l.609）"
+req = ["FR59", "FR38", "NFR3"]
+section = "7"
+write-set = ["crates/scribe2/src/fleet/json_tree.rs", "crates/scribe2/src/account/mod.rs", "crates/scribe2/src/seat/cycle/launch.rs", "crates/scribe2/src/seat/cli.rs", "crates/scribe2/src/pipe/dispatch/group.rs", "crates/scribe2/src/seat/tick.rs", "crates/scribe2-boundary/tests/e2e/seat/launch.rs", "crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs", "docs/design/host-init.md", "docs/design/account-autonomy.md", "+crates/scribe2-boundary/tests/e2e/pipe/dispatch/group.rs"]
+verify = ["cargo nextest run -p scribe2 --no-tests=fail json_tree_set_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail seat_launch_trust_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail pipe_dispatch_group_trust_"]
+size = "M"
+growth = ["crates/scribe2/src/fleet/json_tree.rs:80", "crates/scribe2/src/account/mod.rs:80", "crates/scribe2/src/seat/cycle/launch.rs:40", "crates/scribe2/src/seat/cli.rs:10", "crates/scribe2/src/pipe/dispatch/group.rs:10", "crates/scribe2/src/seat/tick.rs:10"]
+done = "(1) launch は prepare が通った後・置き換え（replace_with）と boot の分岐の前に 1 回だけ、選んだ口座の dir の .claude.json の projects[<anchor の絶対 path>].hasTrustDialogAccepted を true に置き（置き換えの周も注入の周も同じ 1 回）、呼び手 3 つ（cli の長い形と短い形・dispatch の群の起こし直し・tick の移動）は変えない (2) 書き方は同じ読み手で読み → 木の path に真偽を置く（途中の object が無ければ作り兄弟の key と並びと値と数の字面は変えず書式は render の 2 空白の形で末尾の改行は元の file に在れば保つ）→ render の本文を同じ dir の一時 file に書き → 一時 file を読み直して true を確かめ → rename で置き換え、file が無い周は projects だけの最小の木を同じ手で作り、既に true の周は 1 byte も書かない (3) 言葉は閉じた列 written / created / accepted / unreadable / unwritable (4) どの言葉でも起動行は送り Refused にせず、言葉は起動の記録（record_launch の inject.jsonl の行の what）の末尾に trust=<語> として置き換えの周も注入の周も残し、注入の周はさらに Launched::Done の 3 つ目の値で返して seat launch の stdout の 1 行の末尾に trust=<語> を添え、tick は launched= の後ろに trust=<語> を足し、dispatch の起こし直しと tick は言葉を判定に使わない (5) doctor の trust= の行・init・account add・.credentials.json・settings.json・Tree の形と parse・prepare と登録 row は変えない (6) 同じ設定 dir を使う Claude Code と lock は共有せず、印が消えた周は doctor の trust=missing が名指して次の起動が置き直す 歯: json_tree_set_ の歯が入れ子の path への真偽の設置で途中の object の生成・兄弟の key と並びと数の字面の保存・render → parse の同値・既に true なら不変・途中が object でなければ Err を測り、seat_launch_trust_ の歯が他の key と別 anchor の項目を持つ file で当該の印だけ増えて他の key・並び・値は parse で同じ木かつ末尾改行も同じで stdout と inject の記録の what の末尾が trust=written・同じ窓へ置き換える周は exec の前に印が置かれて記録の what の末尾に trust=<語>・既に true で 1 byte も変わらず accepted・file 無しで最小の file と created・JSON でない file で unreadable かつ起動は送られる・読み取り専用 dir で unwritable かつ起動は送られることを測り、pipe_dispatch_group_trust_ の歯が群の起こし直しで移り先の口座の file に群の anchor の印が置かれてから起動行が送られることを測る"
+[[contract]]
+id = "f"
+title = "init が台帳を起こす — --ledger-prefix の周に段 ledger（bd init --prefix P --skip-agents --skip-hooks・scripts/bdw の shim・根の epic）を group の後 commit の前に足す（§14・s2-07l.622 / .625・裁定 2026-09-25T01:29Z / 03:19Z）"
+req = ["FR57", "FR13", "NFR4"]
+section = "14"
+write-set = ["crates/scribe2/src/init.rs", "crates/scribe2-boundary/tests/e2e/main.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2 --lib --no-tests=fail init_shim_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail init_ledger_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail init_repo_"]
+size = "M"
+growth = ["crates/scribe2/src/init.rs:120"]
+depends = ["c"]
+done = "(1) init は flag --ledger-prefix <P> を受け（無い周は段 ledger が skip）、段 ledger を group の後・commit の前に足して段の名の列は state-dir / host-face / accounts / marker / declaration / group / ledger / commit / session / seat の 10 語 (2) ledger は ROOT/.beads が無ければ ROOT の中で bd init --prefix <P> --skip-agents --skip-hooks（PATH の bd・rc だけ読む・rc ≠ 0 は failed:bd-init:<rc>）、ROOT/scripts/bdw が無ければ本 repo の scripts/bdw と同じ字面の shim を実行 bit つきで書いて commit の段の書いた列に足し、台帳の bead が 0 本（bd --readonly list --limit 1 が空）なら ROOT の中で bd create --type epic --title \"<ROOT の dir 名> root\" --priority 1 を撃つ（--parent 無し・rc ≠ 0 は failed:bd-create:<rc>・list が読めなければ failed:bd-list:<rc>） (3) HEAD / tree に CLAUDE.md と AGENTS.md を増やさず、器は生成 file を消さず上書きしない (4) ledger が failed でも commit 以降は撃ち next=fix:ledger (5) 起票の門・rules 行・§4 の既存 7 段・bd の呼び方は不変 (6) help.rs の表と cli_help_ の歯は触らず GREEN のまま（表に init の行は無い） 歯: init_ledger_ の歯が偽 bd（argv を log・init は .beads を作り --skip-agents が無ければ CLAUDE.md / AGENTS.md も作る・create は id・list は .beads/issues.jsonl が在って空でなければ 1 行目を出し無いか空なら何も出さない）で (a) --ledger-prefix t9 → ledger ok・log に init --prefix t9 --skip-agents --skip-hooks と create --type epic が各 1・shim の字面と実行 bit・tree に CLAUDE.md / AGENTS.md 無し（base では flag が未知 ＝ RED）(b) flag 無しで skip・呼出 0 (c) bead 1 本の .beads と shim が在れば skip・呼出は list の 1 回だけ (c2) .beads は在るが bead 0 本なら init 0・create 1・ledger ok (d) init が rc 1 で failed:bd-init:1・next=fix:ledger・commit 以降の行あり (e) 段の列 10 語 を測り、init_repo_ の既存の段の列の歯を 10 語に書き換え、lib の init_shim_ が定数と scripts/bdw の一致を測る"
+[[contract]]
+id = "g"
+title = "host の面の端末の表 [[device]] — name・ssh・chrome・os（必須）と display・ime-env・profile-dir（任意）を host の面にだけ受け、兄弟 module が行番号つきで検査し、doctor の host の行に devices=<名>,<名> を足す（§15・ADR-0076・s2-07l.658・裁定 2026-09-26T15:16Z）"
+req = ["FR57", "NFR4"]
+section = "15"
+write-set = ["crates/scribe2/src/rules/manifest.rs", "crates/scribe2/src/rules/mod.rs", "+crates/scribe2/src/rules/device.rs", "crates/scribe2/src/account/mod.rs", "crates/scribe2-boundary/src/main.rs", "crates/scribe2-boundary/tests/e2e/rules.rs", "crates/scribe2-boundary/tests/e2e/seat/account.rs", "docs/design/host-init.md", "+crates/scribe2-boundary/tests/e2e/rules/host.rs"]
+verify = ["cargo nextest run -p scribe2 --lib --no-tests=fail host_device_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail rules_host_device_", "cargo nextest run -p scribe2-boundary --test e2e --no-tests=fail host_device_doctor_"]
+size = "M"
+growth = ["crates/scribe2/src/rules/manifest.rs:18", "crates/scribe2/src/rules/mod.rs:2", "crates/scribe2/src/account/mod.rs:10", "crates/scribe2-boundary/src/main.rs:2"]
+depends = ["h"]
+done = "(1) host の面の [[device]]（必須 name・ssh・chrome・os／任意 display・ime-env・profile-dir・0 行以上）を読み手が読んで Manifest が宣言順の列で返し、未知の key・欠けた必須の欄・os の 3 語の外・ime-env の KEY=VALUE の形の外と KEY の重複・name の重複・空白を含む name と ssh を行番号つきで 1 件ずつ断り、tracked の面に置いた表は 1 表 1 件で断る (2) 組み立てと検査は兄弟 module に在り、manifest.rs の増分は section の 1 語・受ける 2 腕・重複の検査の呼び・Manifest の欄と合わせ・読み手だけで file の上限を越えない (3) doctor の host の面の行は表を持つ host だけ末尾に devices=<名>,<名>（宣言順・値は書かない）を足し、表の無い host の行と既存の外形 snapshot は動かない (4) rules_host_device_・host_device_doctor_・lib の host_device_ を測る"
+[[contract]]
+id = "h"
+title = "rules/manifest.rs の歯の module（9 本・184 行）を #[path] の子 module の file へ割る — 純移動・歯の module の path と歯の名は不変・親の src と可視性は不変・札 moved・R-C4-2 の余地を行 g に作る（§16）"
+req = ["FR57"]
+section = "16"
+write-set = ["-crates/scribe2/src/rules/manifest.rs", "+crates/scribe2/src/rules/manifest_tests.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2 --lib --no-tests=fail rules_host_unit_", "cargo nextest run -p scribe2 --lib --no-tests=fail host_tick_", "cargo nextest run -p scribe2 --lib --no-tests=fail class_derive_rules_"]
+size = "S"
+done = "歯の module の本文が子の file に在り、親の歯の区間は cfg(test) の単独行と path と mod 宣言の 3 行だけ、module path と歯 9 本の名は不変で base = head、親の src と可視性は不変、札 moved が子の先頭と親の宣言の直後に対で在って flip-check が moved で通り、file-lines で manifest.rs の余地が 150 行以上に増える"
+
+[[contract]]
+id = "i"
+title = "端末の表の行に任意の欄 display-env（KEY=VALUE の列）— KEYS は閉じた 8 つ・ime-env と同じ 1 関数で検査し断りの文は欄の名を名指す・display と両方持つ行は断る（§17・ADR-0080・s2-07l.726）"
+req = ["FR57", "NFR4"]
+section = "17"
+write-set = ["crates/scribe2/src/rules/device.rs", "docs/design/host-init.md"]
+verify = ["cargo nextest run -p scribe2 --lib --no-tests=fail host_device_display_env_", "cargo nextest run -p scribe2 --lib --no-tests=fail host_device_"]
+size = "S"
+growth = ["crates/scribe2/src/rules/device.rs:45"]
+done = "(1) device.rs の KEYS の末尾に display-env（閉じた 8 つ・必須は不変）・Device が KEY と VALUE の組の列を持ち宣言順で返す読み口がある（無い行は空） (2) env_pairs が欄の名を引数に取り ime-env と display-env の両方が呼び、断りの文は <欄> の要素 … が KEY=VALUE の形でない（…）と <欄> の KEY … が重複する の 2 形でその欄の行番号に 1 件ずつ・ime-env の断りの文は不変 (3) display と display-env を両方持つ行は display-env の行番号で「display と display-env は同じ行に書けない（DISPLAY は display-env に書く）」の 1 件で断り、display-env の無い行の display は不変 (4) 他の欄・display・doctor・tracked の面の断り・既存の host_device_ の歯は不変で GREEN 歯: lib の host_device_display_env_ の (a) round-trip と (b) 断りの 2 形と (c) 両方の欄の断り"
+<!-- contracts:end -->

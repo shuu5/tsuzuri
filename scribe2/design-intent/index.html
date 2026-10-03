@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<!-- folio:generated source=folio-build do-not-edit -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="folio-doc-type" content="nav-index">
+<meta name="folio-generated" content="folio-build">
+<meta name="folio-status" content="active">
+<title>design-intent — index</title>
+<link rel="stylesheet" href="../common.css">
+<script type="application/ld+json">
+{
+  "@context": { "dc": "http://purl.org/dc/terms/", "schema": "https://schema.org/", "folio": "https://folio.dev/spec/v1/" },
+  "@id": "./index.html",
+  "@type": "schema:CollectionPage",
+  "dc:title": "design-intent index"
+}
+</script>
+</head>
+<body>
+
+<header class="doc-header">
+  <h1>design-intent — index</h1>
+</header>
+
+<section class="landing-hero">
+<!-- folio:landing-hero -->
+<p class="landing-tagline">scribe v2「次の器」の design-intent 空間です。 <strong>spec/</strong> には版をまたいで守る折れない線 (constitution: Always / Ask-first / Never の 3 tier の条文と rules 行の初期値)、 <strong>decisions/</strong> には技術選定の理由 (ADR-0001: Rust 単一 static binary・却下案つき)、 語彙は <code>vocabulary.yaml</code> に置きます。</p>
+<nav class="reader-cards" aria-label="読者別の入口">
+  <a class="reader-card" href="spec/README.html"><span class="reader-card__act">仕様・要件を調べる →</span><span class="reader-card__desc">spec — design intent (WHAT)</span></a>
+  <a class="reader-card" href="decisions/README.html"><span class="reader-card__act">設計の経緯を追う →</span><span class="reader-card__desc">decisions — Architecture Decision Records (WHY)</span></a>
+  <a class="reader-card" href="research/README.html"><span class="reader-card__act">探索・調査を見る →</span><span class="reader-card__desc">research — exploration</span></a>
+</nav>
+<!-- /folio:landing-hero -->
+</section>
+
+<!-- folio:nav-curated -->
+<!-- /folio:nav-curated -->
+<section id="cluster-spec" class="nav-cluster">
+<h2>spec — design intent (WHAT)</h2>
+<details open>
+<summary>active <span class="nav-count">(3)</span></summary>
+<ul>
+  <li><a href="spec/README.html">spec cluster index</a> <span class="nav-meta">cluster-readme</span></li>
+  <li><a href="spec/constitution.html">scribe2 constitution — 折れない線 (Always 17 / Ask-first 4 / Never 4)</a> <span class="nav-meta">constitution</span></li>
+  <li><a href="spec/requirements-catalog.html">scribe2 要件カタログ — MVP（v2 着手）の要件 144 本 + 開発 session の作法 6 本（要件 doc v0.1.10 の写し・scrub 済み）</a> <span class="nav-meta">spec</span></li>
+</ul>
+</details>
+</section>
+
+<section id="cluster-decisions" class="nav-cluster">
+<h2>decisions — ADR (WHY)</h2>
+<details open>
+<summary>active <span class="nav-count">(1)</span></summary>
+<ul>
+  <li><a href="decisions/README.html">decisions cluster index</a> <span class="nav-meta">cluster-readme</span></li>
+</ul>
+</details>
+<details>
+<summary>accepted <span class="nav-count">(32)</span></summary>
+<ul>
+  <li><a href="decisions/ADR-0001-rust-single-static-binary.html">ADR-0001 — 実装言語と構成 = Rust 単一 static binary (Go / typed Python / TypeScript 却下)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0002-test-lint-toolchain.html">ADR-0002 — test / lint toolchain = cargo nextest・粒度 lint は forbid・構造検査は cargo xtask check</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0003-constitution-v1-abandon-rewrite.html">ADR-0003 — 憲法改訂 = v1 完全放棄に伴う C7 / A1・C8 / A4・N4 の書換え (対話面は 1 つ・design-intent が拘束条件・自己開発は既定で許可・改訂は ADR + delta marker)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0004-mvp-persistence-and-cross-version-formats.html">ADR-0004 — MVP の永続面と跨版 5 面の on-disk 形式 (event log は std の JSONL 1 file・SQLite は v3・env seam を持たない・契約と manifest は TOML subset)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0005-a3-approval-surface-c7.html">ADR-0005 — 憲法改訂 = A3 の承認経路を C7 の対話面へ揃える (ADR-0003 §2.1 の決定の適用漏れの是正)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0006-xtask-check-measure-tags.html">ADR-0006 — cargo xtask check が measure する tag の列挙 (ADR-0002 §2.4 の 10 本を 11 本へ部分 supersede・12 本目の案 ci-decl は不採用)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0007-integration-test-file-counts-targets.html">ADR-0007 — 憲法 R-C13-2「統合 test file 3 以下」は cargo の integration test target の数で数える</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0008-own-repo-pr-is-not-publish.html">ADR-0008 — 自 repo への branch push と PR 作成は憲法 A4.2 の「出す」ではない (A4.3 の可逆)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0009-vessel-grants-runner-permissions-and-mutation-proof.html">ADR-0009 — runner の権限と非空虚性の検証は器が manifest から与える (口座設定の暗黙継承・host 側 script・契約への共通規律の手書きを廃止)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0010-vessel-declaration-holds-allowlist-and-common-verify.html">ADR-0010 — runner の allowlist と gate の共通 verify の値は対象 repo の vessel 宣言が持ち、 manifest は上限を持つ (ADR-0009 §2.1 / §2.4 の値の置き場を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0011-vessel-launches-claude-without-settings.html">ADR-0011 — 器が起こす claude (runner / lens) は口座と対象 repo の settings を 1 つも読まない (--setting-sources 空 + --strict-mcp-config・ADR-0009 §2.1 / ADR-0010 §2.4 の起動 flag を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0012-rate-limit-detection-reads-dedicated-record.html">ADR-0012 — 上限の検出は専用 record (rate_limit_event) の構造化 field で行い、 本文への字面照合を畳む</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0013-machine-holds-enumerations-docs-hold-pointers.html">ADR-0013 — 列挙は機械が持ち文書は pointer だけを持つ (ADR-0006 の measure tag 列挙を supersede)。 C2「宣言順」の充足形は const slice の判別子順 pin</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0014-polarity-list-is-a-snapshot-rendered-by-core.html">ADR-0014 — 極性一覧は core が描く外形 snapshot として生成し、 CI の門 (C16.2) は xtask がその tracked 生成物を読む。 極性の値は境界の型が運ぶ</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0015-seat-state-is-stamped-by-hooks-not-read-from-pane.html">ADR-0015 — 席の busy / idle は hook の打刻で typed に持ち、 pane の字面を判定入力から外す。 target は生成 hooks.json の shell 行が渡す pane id から解く</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0016-default-delivery-structure-and-typed-question-record.html">ADR-0016 — 便の既定の配送構造は planner 1 席 + 管理席 N 席が pipeline を流す形とし、 runner は契約の不足を typed な質問 record で返して止まる (管理席が自分の手で実装するのは pipeline が回せない便だけ)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0017-account-allowance-measured-into-event-log.html">ADR-0017 — 口座残量は器が host の HTTP client を子 process で呼んで読み、 出所付きの実測行として fleet の event log に記録する (manifest の口座列挙は不透明な label・上限 record は検出の合図のまま・選ぶは v3)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0018-working-memory-subcommands-and-pointer-required-directives.html">ADR-0018 — 作業記憶の退避・復元・消費は器の subcommand が機械層を担い、 命令行は照合できる出所 pointer を必須とし、 pointer の無い行は暫定の印を付けて次の cycle に引き継がない (brief の文章は開発 session が組む・前の版の script への依存を切る)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0019-parallel-runs-exclude-overlap-at-intake-and-runner-resolves-conflicts.html">ADR-0019 — 並列の便は intake が write-set の交差で排他し、 land の rebase 衝突は runner を起こし直して解く (人は質問の回答でだけ関わる・admin は中継と操作・手で merge する経路を持たない・ADR-0016 §2.2 の質問判定と再 spawn の契機を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0020-account-autonomy-limit-stop-resume-and-selection.html">ADR-0020 — 口座の上限は便を殺さず別口座で途中再開し、 開発 session は上限の手前で退避して別口座で立て直し、 口座は実測の残量から 1 つの純関数が便用と session 用の 2 規則で選ぶ (R-C9-1 を typed な値で発効・ADR-0012 §2.4 / ADR-0016 §2.1 / §2.5 / ADR-0017 §2.4 / §2.5 を部分 supersede・便を閾値で止めない ADR-0012 §2.3 は不変)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0021-gate-cost-is-measured-and-confined.html">ADR-0021 — gate の費用は測って決める (変異の並列度は rules 行の上限を project 横断・host 単位の受付が実測で下げ、 器の子 process は cgroup で封じ、 木が同じ main 実測は検出線を撃ち直さず、 着地は gate 済みの便を先に通す・ADR-0009 §2.3 / §2.4 と ADR-0010 §2.1 / §2.3 / §2.4 / §2.5 を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0022-seat-roles-are-typed-and-enforced-by-hooks.html">ADR-0022 — 席の役割と権能は閉じた型と rules 行で持ち、 hook が tool 呼出しの境界で執行し、 席の指示文は行から生成して session の開始時に注入する (対話面 R-C7-1 の値を planner の席へ・管理席は anchor ごと 1 席・ADR-0004 §2.6 / ADR-0016 §2.1 を部分 supersede・器の外の散文を規則の置き場にしない)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0023-contract-source-is-the-design-document-table.html">ADR-0023 — 契約の正本は設計 doc の契約表 1 行で、 器が契約 file を生成し、 審査の段を通してから実装役を起こし、 着地の終端まで器が持つ (write-set の閉包は機械が導出・consumer の要件面は宣言 file の任意 key・ADR-0004 §2.2 / §2.3・ADR-0010 §2.1・ADR-0016 §2.1 / §2.3・ADR-0018 §2.1・ADR-0019 §2.1 / §2.3 を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0024-idle-window-reset-time-is-optional-in-allowance-row.html">ADR-0024 — 実測行の reset 時刻は任意とし、 消費の無い窓 (使用率 0・reset 無し) を「測れた 0%・reset 未定」の Measured として記録し、 選定と逼迫度は reset 無しの行を古くない実測として数える (ADR-0017 §2.1 の一文を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0025-denied-command-rows-and-bash-command-guard.html">ADR-0025 — runner の allowlist は先頭語の許可に加えて「禁じる語列」の rules 行を対で持ち、 hook の command guard が Bash の実行時点で止め、 intake は verify 行に同じ判定を掛ける (ADR-0009 §2.1 / ADR-0010 §2.3 を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0026-account-lifecycle-host-manifest-and-seat-launch.html">ADR-0026 — 口座の宣言と host 固有の起動値は host の manifest が持ち、 口座の登録・一覧・退役と席の起動を器の口が担う (ADR-0017 §2.3 / ADR-0020 §2.4 / ADR-0022 §2.1 を部分 supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0027-run-account-order-earliest-reset-and-no-per-account-cap.html">ADR-0027 — 便用の口座は reset が最も近い口座から選び、 同点は走行中の便が少ない口座に倒し、 1 口座あたりの便数で候補を絞らない (ADR-0020 §2.2 の便用の規則を supersede)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0028-consumer-sync-is-measured-and-updated-by-the-vessel.html">ADR-0028 — 導入先の同期は器が測って器が更新する (build 元 commit・読み込み元の記録・install の event・hook 集合の食い違いは席の作り直し) と役割なしの起動行</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0029-statusline-is-rendered-by-the-vessel-and-written-into-account-settings.html">ADR-0029 — statusline は器の口が描き、 口座の設定の statusLine は器が書く (計測の入力の字面は器の中に 1 つ・machine が違っても同じ形)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0030-tick-units-are-written-and-enabled-by-the-vessel.html">ADR-0030 — 管理 tick の unit は器が書いて有効化する (席ごとの service / timer を導出して host へ書く・間隔は rules 行・有効化は 3 クラス非該当)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0031-working-memory-is-held-by-the-vessel-directives-status-and-hooks.html">ADR-0031 — 作業記憶は器が持つ側を広げる (user 直命の表・現在地の DATA・skill と compaction の hook による強制と自動退避・退避物の置き場は state dir)</a> <span class="nav-meta">adr</span></li>
+  <li><a href="decisions/ADR-0032-dialogue-surface-rules-live-in-one-design-doc-and-planner-brief.html">ADR-0032 — 対話面の作法は設計 doc 1 本が持ち、 planner の雛形は pointer 付きの行で運ぶ (信頼度 4 段を上位に読み手本位の 8 則を融合・harness 一般の規律は global CLAUDE.md から器へ)</a> <span class="nav-meta">adr</span></li>
+</ul>
+</details>
+</section>
+
+<section id="cluster-research" class="nav-cluster">
+<h2>research — exploration</h2>
+<details open>
+<summary>active <span class="nav-count">(5)</span></summary>
+<ul>
+  <li><a href="research/README.html">research cluster index</a> <span class="nav-meta">cluster-readme</span></li>
+  <li><a href="research/RESEARCH-delivery-structure.html">RESEARCH-delivery-structure — 便の配送構造: 席並列 / pipeline 並列 / 混成の比較 (2026-09-11 の実測)</a> <span class="nav-meta">research-report</span></li>
+  <li><a href="research/RESEARCH-jev.html">RESEARCH-jev — Jev（typed decision の API）を pipeline の判定に使えるか: 3 問 87 件の実測（2026-09-18 の調査）</a> <span class="nav-meta">research-report</span></li>
+  <li><a href="research/RESEARCH-ponytail.html">RESEARCH-ponytail — ponytail（YAGNI の決定はしご）を scribe2 に写せるか: 散文の skill を 3 つの機械の口に分ける（2026-09-13 の調査）</a> <span class="nav-meta">research-report</span></li>
+  <li><a href="research/SPIKE-folio-report.html">SPIKE-folio-report — folio を v2「次の器」の spec 層にできるか</a> <span class="nav-meta">research-report</span></li>
+</ul>
+</details>
+</section>
+
+<aside class="informative landing-foot">
+  <p class="generated-note">この index は <code>folio build</code> が graph (各 spec の head metadata + @id path-prefix cluster 分類) から自動生成します。 <strong>手編集禁止</strong> — 内容を変えるには各 cluster の spec/ADR を編集して再 build してください。 編集可能な editorial 文は hero (<code>folio:landing-hero</code>) と curated region (<code>folio:nav-curated</code>) に置きます。</p>
+</aside>
+
+</body>
+</html>

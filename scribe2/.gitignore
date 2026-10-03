@@ -1,0 +1,43 @@
+/target/
+**/*.rs.bk
+.DS_Store
+*.local.sh
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+
+# bd 台帳（Dolt が SSOT）の生成物と write 直列化の telemetry（machine-local）
+.beads/issues.jsonl
+.beads/interactions.jsonl
+embeddeddolt/
+/.beads/bdw-timing.log*
+.beads/events.jsonl
+# session 起動 hook が書く heartbeat（machine-local・working tree を汚すと done の定義の git status 空に抵触する）
+.beads/scribe-heartbeat
+# bd の write 系が書く push の telemetry（machine-local・同上）
+.beads/scribe-push-throttle
+.beads/scribe-push.log
+
+# 開発 session の作業記憶（/ready-compaction が退避・/rebrief が消費）
+/.claude-session/
+
+# git worktree（.worktrees/<branch>）は ephemeral・commit しない
+/.worktrees/
+
+# folio の caller-marker（session-local）・prime の生成物・review の playwright 生成物
+.folio/
+inventory.json
+.playwright-mcp/
+
+# Claude Code の project 設定は settings.json だけを tracked にする（folio の project-scope 有効化）
+.claude/*
+!.claude/settings.json
+
+# cargo-mutants の作業 tree（週次 job と mutants-diff が作る・commit しない）。
+# **前回分の rename 先も要る**——cargo-mutants は走るたび mutants.out を mutants.out.old へ
+# 退避するので、片方だけ無視すると 200 file 規模の生成物が索引に入りかける（s2-07l.56）。
+mutants.out/
+mutants.out.old/

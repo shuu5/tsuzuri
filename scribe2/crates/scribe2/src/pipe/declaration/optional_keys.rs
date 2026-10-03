@@ -1,0 +1,1004 @@
+//! 宣言の任意 key の群（key の列 2 つ・key の名と既定・値の読み手・HEAD の宣言から値を外へ渡す口）（設計 pipeline.md §59）。
+//!
+//! 親（`declaration.rs`）の余地のために子 module へ置く（ADR-0047 の path の種別と同じ置き方）。外から呼ぶ path は親の
+//! 再輸出で `crate::pipe::declaration::terminal_facts` などのまま。新しい任意 key は、key の名・読み手・key の列の 1 行ずつ・
+//! 外へ渡す口をこの file へ、`Declared` の欄と `parse` の読みの 1 行を親へ足す。
+
+use super::{crate_roots, path_kinds};
+use super::{declared_at_head, head_declaration, Ceiling, DeclError, Declared, EntranceFlip, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
+use std::path::Path;
+
+/// 宣言が持つ key（この順で報告する）。path の種別の任意 key 3 本（[`path_kinds::KEYS`]・ADR-0047）は
+/// 既存の任意 key と同じ読み口で読む（schema は 1 のまま・key の追加と不在＝既定は版を上げない）。
+pub(super) const DECLARED_KEYS: &[&str] = &[
+    "schema",
+    "allowed-commands",
+    "common-verify",
+    DETECTION_KEY,
+    REQUIREMENTS_KEY,
+    REMOTE_KEY,
+    CI_CMD_KEY,
+    path_kinds::DESIGN_INTENT_KEY,
+    path_kinds::DESIGN_DOC_KEY,
+    path_kinds::TESTS_KEY,
+    ENTRANCE_KEY,
+    QUESTION_ROUTE_KEY,
+    CLOSE_CHECK_KEY,
+    FLOOR_CHECK_KEY,
+    crate_roots::KEY,
+    RULING_CHECK_KEY,
+    RULING_FIXTURES_KEY,
+    TEETH_CHECK_KEY,
+    INDEX_SCIP_KEY,
+    INDEX_ROLES_KEY,
+    ROW_REVIEW_KEY,
+    CONTRACT_TABLES_KEY,
+    CONSTITUTION_KEY,
+];
+
+/// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
+/// 変わった行へ番号つきの項目と欄 done-teeth を求める（無ければ false と同じ）。
+const TEETH_CHECK_KEY: &str = "teeth-check";
+
+/// **索引の SCIP の列**の key（任意・設計 contract-source.md §67・reverse-index.md §4 形 1）。文字列の配列を [`IndexKeys`] に持つ。
+const INDEX_SCIP_KEY: &str = "index-scip";
+
+/// **索引の役割の列**の key（任意・設計 contract-source.md §67・reverse-index.md §4 形 1）。文字列の配列を [`IndexKeys`] に持つ。
+const INDEX_ROLES_KEY: &str = "index-roles";
+
+/// **merge の門の行の審査の判定に掛かるか**の key（任意・設計 row-review.md §4・FR101）。値は真偽だけ（書かない宣言は false と同じ）。
+const ROW_REVIEW_KEY: &str = "row-review";
+
+/// **契約表の置き場**の key（任意・設計 contract-source.md §69 形 1）。repo 相対の項目の配列で、既定の置き場
+/// （`docs/design/` の直下の `.md`）に足す（置き換えない）。末尾 `/` の項目は dir の直下、ほかは 1 file。
+const CONTRACT_TABLES_KEY: &str = "contract-tables";
+
+/// **憲法の file の列**の key（任意・設計 gate-cost.md §48・ADR-0110）。repo 相対の file の path の配列（書いた順）で、既定の
+/// [`DEFAULT_CONSTITUTION`] を**置き換える**（足さない）。
+const CONSTITUTION_KEY: &str = "constitution";
+
+/// 憲法の file の既定 path（宣言 `constitution` が無い周・lens が測る 1 本）。
+pub const DEFAULT_CONSTITUTION: &str = "docs/constitution.md";
+
+/// 歯の検査を撃つか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
+pub(super) fn teeth_check_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, TEETH_CHECK_KEY, errors)
+}
+
+/// 索引の宣言の 2 key（`index-scip`・`index-roles`）の値と書かれていた行（無い key は `None`・設計 reverse-index.md §4 形 1）。
+/// parse は片方だけの宣言も読む（断るのは索引を要する周の [`index_at`] だけ・SRS FR107）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct IndexKeys {
+    /// `index-scip` の行の列と書かれていた行。
+    scip: Option<(Vec<String>, u64)>,
+    /// `index-roles` の行の列と書かれていた行。
+    roles: Option<(Vec<String>, u64)>,
+}
+
+/// 索引の 2 key の文字列の配列を読む（型違いは key と行番号を名指す不備・値は捨てずに持つ）。
+pub(super) fn index_keys_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> IndexKeys {
+    let mut read = |key: &str| {
+        let (_, value, line) = found.iter().find(|(seen, _, _)| seen == key)?;
+        match value {
+            Raw::List(items) => Some((items.clone(), *line)),
+            _ => {
+                errors.push(DeclError::new(*line, format!("{key} は文字列の配列である")));
+                None
+            }
+        }
+    };
+    IndexKeys { scip: read(INDEX_SCIP_KEY), roles: read(INDEX_ROLES_KEY) }
+}
+
+/// 索引の宣言の 2 key の行の列（設計 reverse-index.md §4 形 1・行は空白で割って撃つ command）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexLines {
+    /// `index-scip` の行（1 行ごとに SCIP の file を 1 つ出す・穴は `{tree}` と `{out}`）。
+    pub scip: Vec<String>,
+    /// `index-roles` の行（1 行ごとに構文の役の一致を stdout に出す・穴は `{tree}`）。
+    pub roles: Vec<String>,
+}
+
+/// 穴の欠けた行を key の行番号で名指す不備にする（`index-scip` は `{tree}` と `{out}`・`index-roles` は `{tree}`）。
+fn missing_holes(key: &str, (lines, at): &(Vec<String>, u64), holes: &[&str], errors: &mut Vec<DeclError>) {
+    for (n, row) in lines.iter().enumerate() {
+        for hole in holes.iter().filter(|hole| !row.contains(**hole)) {
+            errors.push(DeclError::new(*at, format!("{key} の {} 行目に {hole} の穴が無い: {row}", n.saturating_add(1))));
+        }
+    }
+}
+
+/// 読めた宣言の索引の 2 key から行の列を取る（2 key が無ければ `Ok(None)`・片方だけと穴の欠けた行は key の名と行番号の不備）。
+fn index_lines(keys: &IndexKeys) -> Result<Option<IndexLines>, Vec<DeclError>> {
+    let mut errors = Vec::new();
+    match (&keys.scip, &keys.roles) {
+        (None, None) => return Ok(None),
+        (Some((_, at)), None) => errors.push(DeclError::new(*at, format!("{INDEX_ROLES_KEY} が無い（索引の宣言は 2 key を揃える）"))),
+        (None, Some((_, at))) => errors.push(DeclError::new(*at, format!("{INDEX_SCIP_KEY} が無い（索引の宣言は 2 key を揃える）"))),
+        (Some(scip), Some(roles)) => {
+            missing_holes(INDEX_SCIP_KEY, scip, &["{tree}", "{out}"], &mut errors);
+            missing_holes(INDEX_ROLES_KEY, roles, &["{tree}"], &mut errors);
+        }
+    }
+    match (&keys.scip, &keys.roles) {
+        (Some((scip, _)), Some((roles, _))) if errors.is_empty() => Ok(Some(IndexLines { scip: scip.clone(), roles: roles.clone() })),
+        _ => Err(errors),
+    }
+}
+
+/// 契約表の置き場の項目と key の行番号（任意・無ければ `None`）。項目は repo 相対（空・空白だけ・絶対 path・home の短縮記号・
+/// `..` の段は key の行番号を名指す不備）。配列でない値は key と行番号を名指す不備。
+pub(super) fn contract_tables_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<(Vec<String>, u64)> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == CONTRACT_TABLES_KEY)?;
+    let Raw::List(items) = value else {
+        errors.push(DeclError::new(*line, format!("{CONTRACT_TABLES_KEY} は repo 相対の path の配列である")));
+        return None;
+    };
+    for item in items.iter().filter(|item| !repo_relative(item)) {
+        let reason = format!("{CONTRACT_TABLES_KEY} の {item:?} は repo 相対の path である（空・絶対 path・home の短縮記号・.. は書けない）");
+        errors.push(DeclError::new(*line, reason));
+    }
+    Some((items.clone(), *line))
+}
+
+/// 憲法の file の列と key の行番号（任意・無ければ `None`）。項目は repo 相対の file で、末尾 `/`・英数字と `.` `_` `/` `-` のほかの字
+/// （頼みの文に差し込むので字を閉じる）・空・絶対 path・home の短縮記号・`..` の段は key の行番号を名指す不備。配列でない値も不備。
+pub(super) fn constitution_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<(Vec<String>, u64)> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == CONSTITUTION_KEY)?;
+    let Raw::List(items) = value else {
+        errors.push(DeclError::new(*line, format!("{CONSTITUTION_KEY} は repo 相対の file の path の配列である")));
+        return None;
+    };
+    let closed = |item: &str| item.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'));
+    for item in items.iter().filter(|item| !repo_relative(item) || item.ends_with('/') || !closed(item)) {
+        let reason = format!("{CONSTITUTION_KEY} の {item:?} は repo 相対の file の path である（空・絶対 path・home の短縮記号・..・末尾 /・英数字と . _ / - のほかの字は書けない）");
+        errors.push(DeclError::new(*line, reason));
+    }
+    Some((items.clone(), *line))
+}
+
+/// 名指した rev の宣言が名乗る憲法の file の列（閉じた 3 値・設計 gate-cost.md §48 形 3）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConstitutionFiles {
+    /// 既定の 1 本（宣言 file がその rev に無い・git を撃てない・key の無い宣言）。
+    Fixed,
+    /// 宣言が名乗った列（key の項目の列と key の行番号）。
+    Declared {
+        /// `constitution` の項目（書いた順）。
+        items: Vec<String>,
+        /// key が書かれていた行。
+        line: u64,
+    },
+    /// 読めない（宣言が在って不備＝key を書いたかも読めない）。既定に倒さない（C10）。
+    Unreadable,
+}
+
+impl ConstitutionFiles {
+    /// 名指した rev の tree の宣言から読む（`git show <rev>:.vessel.toml` を `Declared::parse` に掛ける・作業ツリーは読まない）。
+    pub fn at(repo: &Path, rev: &str) -> Self {
+        let spec = format!("{rev}:{}", super::DECL_FILE);
+        match super::super::git_bytes(repo, &["show", &spec]) {
+            None => Self::Fixed,
+            Some(bytes) => match Declared::parse(&String::from_utf8_lossy(&bytes)) {
+                Err(_) => Self::Unreadable,
+                Ok(declared) => declared.constitution.map_or(Self::Fixed, |(items, line)| Self::Declared { items, line }),
+            },
+        }
+    }
+
+    /// 測る file の列（`Fixed` は [`DEFAULT_CONSTITUTION`] の 1 本・`Declared` は書いた順で 2 度目以降の同じ path を除いた列・`Unreadable` は `None`）。
+    pub fn files(&self) -> Option<Vec<String>> {
+        match self {
+            Self::Fixed => Some(vec![DEFAULT_CONSTITUTION.to_owned()]),
+            Self::Declared { items, .. } => {
+                let mut files: Vec<String> = Vec::new();
+                for item in items {
+                    if !files.contains(item) {
+                        files.push(item.clone());
+                    }
+                }
+                Some(files)
+            }
+            Self::Unreadable => None,
+        }
+    }
+}
+
+/// 名指した rev の宣言が名乗る契約表の置き場（閉じた 3 値・設計 contract-source.md §69 形 4）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TablePlaces {
+    /// 既定の置き場だけ（宣言 file がその rev に無い・git を撃てない・key の無い宣言）。
+    Fixed,
+    /// 既定に項目を足した置き場（key の項目の列と key の行番号）。
+    Declared {
+        /// `contract-tables` の項目（書いた順）。
+        items: Vec<String>,
+        /// key が書かれていた行。
+        line: u64,
+    },
+    /// 読めない（宣言が在って不備）。既定に倒さない（C10）。
+    Unreadable,
+}
+
+impl TablePlaces {
+    /// 名指した rev の tree の宣言から置き場を読む（`git show <rev>:.vessel.toml` を `Declared::parse` に掛ける・作業ツリーは読まない・
+    /// HEAD 以外の rev も読める）。
+    pub fn at(repo: &Path, rev: &str) -> Self {
+        let spec = format!("{rev}:{}", super::DECL_FILE);
+        match super::super::git_bytes(repo, &["show", &spec]) {
+            None => Self::Fixed,
+            Some(bytes) => match Declared::parse(&String::from_utf8_lossy(&bytes)) {
+                Err(_) => Self::Unreadable,
+                Ok(declared) => declared.contract_tables.map_or(Self::Fixed, |(items, line)| Self::Declared { items, line }),
+            },
+        }
+    }
+
+    /// 既定に足す項目（`Fixed` は空の列・`Declared` は項目の列・`Unreadable` は `None`）。
+    pub fn items(&self) -> Option<&[String]> {
+        match self {
+            Self::Fixed => Some(&[]),
+            Self::Declared { items, .. } => Some(items),
+            Self::Unreadable => None,
+        }
+    }
+}
+
+/// 名指した sha の tree の宣言が持つ索引の 2 key（`git show <sha>:.vessel.toml` と同じ読み手・作業ツリーは読まない・
+/// [`floor_check_at`] と同じ形）。宣言が無い・2 key が無い周は `Ok(None)`、宣言が在って読めない周と片方だけ・穴の欠けた周は
+/// `Err`（key の名と行番号を含む）。**索引を要する周だけがこれを撃つ**（vessel 宣言の parse は片方だけでも読む）。
+pub fn index_at(repo: &Path, sha: &str) -> Result<Option<IndexLines>, Vec<DeclError>> {
+    let spec = format!("{sha}:{}", super::DECL_FILE);
+    match super::super::git_bytes(repo, &["show", &spec]) {
+        None => Ok(None),
+        Some(bytes) => Declared::parse(&String::from_utf8_lossy(&bytes)).and_then(|declared| index_lines(&declared.index)),
+    }
+}
+
+/// **裁定 id の引用の実在を確かめるか**の key（任意・設計 dispatcher.md §36・FR83）。値は真偽だけ（既定は持たない＝
+/// 書かない宣言は false）。
+const RULING_CHECK_KEY: &str = "ruling-check";
+
+/// **引用の見本の一覧**の key（任意・設計 dispatcher.md §36）。字面の閉じた一覧で、引用との完全一致だけで外す（型は持たない）。
+/// 空の一覧 `[]` は書ける（親の値の読みが、この key だけ空の配列を受ける）。
+pub(super) const RULING_FIXTURES_KEY: &str = "ruling-fixtures";
+
+/// **床の検査の 1 行**の key（任意・設計 dispatcher.md §34・ADR-0084）。main の先端の sha の木で撃つ（既定は持たない＝書かない宣言は撃たない）。
+const FLOOR_CHECK_KEY: &str = "floor-check";
+
+/// **close の理由の門に加わるか**の key（任意・設計 ledger-form.md §16・ADR-0097）。値は真偽だけ（既定は持たない＝
+/// 書かない宣言は加わらない）。
+const CLOSE_CHECK_KEY: &str = "close-check";
+
+/// **問いの経路の 1 行**の key（任意・設計 vessel-hook.md §20 形 4・ADR-0084）。hook が選択式の問いの道具を断る 1 行の
+/// 後ろに添える（既定は持たない＝書かない宣言は何も添えない）。
+const QUESTION_ROUTE_KEY: &str = "question-route";
+
+/// **push 先の remote の名**の key（任意・設計 contract-source.md §5「land の終端」）。
+///
+/// **既定は持たない**。push は repo の外へ出す行為（憲法 A1 の「出す」）なので、押す先を宣言していない
+/// repo に器が勝手な既定で押すことはしない——宣言の無い repo の便は終端を持たない（`--pr-cmd` 形と同じ）。
+const REMOTE_KEY: &str = "remote";
+
+/// **CI の判定を読む 1 行**の key（任意・設計 contract-source.md §5）。書かない宣言は [`DEFAULT_CI_CMD`] を撃つ。
+const CI_CMD_KEY: &str = "ci-cmd";
+
+/// CI の判定を読む行の既定（forge の CLI・`{sha}` に着地した sha が入る）。`event` は読み手が
+/// `schedule` の run を母集団から外すための欄（設計 pipeline.md §46）。
+pub const DEFAULT_CI_CMD: &str = "gh run list --commit {sha} --json status,conclusion,event";
+
+/// CI の行が必ず持つ穴（**着地した commit を名指さない行は撃てない**・別の commit の判定を読むことになる）。
+pub const CI_SHA_HOLE: &str = "{sha}";
+
+/// **要件面の path** の key（任意・設計 contract-source.md §2「表の検査」）。契約表の `req` の id をこの file で
+/// 測る。書かない宣言は [`DEFAULT_REQUIREMENTS`] を読む（既存の宣言を 1 行も変えさせない）。
+const REQUIREMENTS_KEY: &str = "requirements";
+
+/// 要件面の既定 path（宣言 `requirements` が無い周）。
+pub const DEFAULT_REQUIREMENTS: &str = "design-intent/spec/srs.html";
+
+/// **書かなくてよい** key（無ければ空）。書いた周の空配列は従来どおり不備である（ADR-0010 §2.1）。
+///
+/// 任意にするのは、検出線を持たない consumer（toy repo 等）の宣言を 1 行も変えさせないためである。
+pub(super) const OPTIONAL_KEYS: &[&str] = &[
+    DETECTION_KEY,
+    REQUIREMENTS_KEY,
+    REMOTE_KEY,
+    CI_CMD_KEY,
+    path_kinds::DESIGN_INTENT_KEY,
+    path_kinds::DESIGN_DOC_KEY,
+    path_kinds::TESTS_KEY,
+    ENTRANCE_KEY,
+    QUESTION_ROUTE_KEY,
+    CLOSE_CHECK_KEY,
+    FLOOR_CHECK_KEY,
+    crate_roots::KEY,
+    RULING_CHECK_KEY,
+    RULING_FIXTURES_KEY,
+    TEETH_CHECK_KEY,
+    INDEX_SCIP_KEY,
+    INDEX_ROLES_KEY,
+    ROW_REVIEW_KEY,
+    CONTRACT_TABLES_KEY,
+    CONSTITUTION_KEY,
+];
+
+/// 床の検査の 1 行（任意）。前後の空白を除いて空でない文字列だけを受ける（列・整数・真偽・空・空白だけは key と行番号を名指す不備）。
+pub(super) fn floor_check_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == FLOOR_CHECK_KEY)?;
+    match value {
+        Raw::Text(row) if !row.trim().is_empty() => Some(row.trim().to_owned()),
+        _ => {
+            errors.push(DeclError::new(*line, format!("{FLOOR_CHECK_KEY} は空でない 1 行の文字列である")));
+            None
+        }
+    }
+}
+
+/// 名指した sha の tree の宣言が持つ床の検査の 1 行（`git show <sha>:.vessel.toml` と同じ読み手・作業ツリーは読まない）。
+/// 宣言が無い・key が無い周は `Ok(None)`、宣言が在って読めない周は `Err`（key の行の不備を含む）。
+pub fn floor_check_at(repo: &Path, sha: &str) -> Result<Option<String>, Vec<DeclError>> {
+    let spec = format!("{sha}:{}", super::DECL_FILE);
+    match super::super::git_bytes(repo, &["show", &spec]) {
+        None => Ok(None),
+        Some(bytes) => Declared::parse(&String::from_utf8_lossy(&bytes)).map(|declared| declared.floor_check),
+    }
+}
+
+/// close の理由の門に加わるか（任意）。真偽だけを受ける（文字列・整数・列は key と行番号を名指す不備）。
+pub(super) fn close_check_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, CLOSE_CHECK_KEY, errors)
+}
+
+/// 真偽だけの任意 key（無ければ `None`・型違いは key と行番号を名指す不備）。
+fn bool_key(found: &[(String, Raw, u64)], key: &str, errors: &mut Vec<DeclError>) -> Option<bool> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == key)?;
+    match value {
+        Raw::Bool(joins) => Some(*joins),
+        _ => {
+            errors.push(DeclError::new(*line, format!("{key} は true か false の真偽だけである")));
+            None
+        }
+    }
+}
+
+/// 裁定 id の引用の実在を確かめるか（任意・[`bool_key`] と同じ読み）。
+pub(super) fn ruling_check_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, RULING_CHECK_KEY, errors)
+}
+
+/// 行の審査の key（任意・[`bool_key`] と同じ読み）。
+pub(super) fn row_review_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, ROW_REVIEW_KEY, errors)
+}
+
+/// 名指した rev の tree の宣言の `row-review`（`git show <rev>:.vessel.toml`・作業ツリーは読まない・merge の門が anchor の HEAD と
+/// PR の head の commit に使う）。宣言 file が無い周と key の無い宣言は false、在って読めない周は `Err`（key の行の不備を含む）。
+pub fn row_review_at(repo: &Path, rev: &str) -> Result<bool, Vec<DeclError>> {
+    let spec = format!("{rev}:{}", super::DECL_FILE);
+    match super::super::git_bytes(repo, &["show", &spec]) {
+        None => Ok(false),
+        Some(bytes) => Declared::parse(&String::from_utf8_lossy(&bytes)).map(|declared| declared.row_review == Some(true)),
+    }
+}
+
+/// 引用の見本の一覧（任意）。文字列の一覧だけを受ける（文字列・整数・真偽は key と行番号を名指す不備・要素の型違いは値の読みが積む）。
+pub(super) fn ruling_fixtures_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<Vec<String>> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == RULING_FIXTURES_KEY)?;
+    match value {
+        Raw::List(items) => Some(items.clone()),
+        _ => {
+            errors.push(DeclError::new(*line, format!("{RULING_FIXTURES_KEY} は文字列の一覧である")));
+            None
+        }
+    }
+}
+
+/// 名指した rev の tree の宣言が持つ裁定の引用の 2 key（`ruling-check` と `ruling-fixtures`）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RulingKeys {
+    /// `ruling-check`（無い・宣言 file が無いなら false）。
+    pub check: bool,
+    /// `ruling-fixtures`（無ければ空）。
+    pub fixtures: Vec<String>,
+}
+
+/// rev の tree の宣言から裁定の引用の 2 key を読む（`git show <rev>:.vessel.toml`・作業ツリーは読まない・HEAD 以外の rev も読める）。
+/// 宣言 file が無い（その rev に無い・git を撃てない）周は false と空、在って読めない周は `Err`（key の行の不備を含む）。
+pub fn ruling_keys_at(repo: &Path, rev: &str) -> Result<RulingKeys, Vec<DeclError>> {
+    let spec = format!("{rev}:{}", super::DECL_FILE);
+    match super::super::git_bytes(repo, &["show", &spec]) {
+        None => Ok(RulingKeys::default()),
+        Some(bytes) => Declared::parse(&String::from_utf8_lossy(&bytes)).map(|declared| RulingKeys {
+            check: declared.ruling_check == Some(true),
+            fixtures: declared.ruling_fixtures.unwrap_or_default(),
+        }),
+    }
+}
+
+/// HEAD の宣言の close の理由の門への加わり（閉じた 3 値・設計 ledger-form.md §16）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseCheck {
+    /// 加わる（key が true）。
+    Joins,
+    /// 加わらない（key が false か無い・宣言 file が HEAD に無い・git を撃てない）。
+    Exempt,
+    /// 読めない（宣言が在って不備）。「加わらない」に倒さない（C10）。
+    Unreadable,
+}
+
+/// HEAD の宣言から close の理由の門への加わりを解く（読み手は [`head_declaration`] の 1 本・作業ツリーは読まない）。
+pub fn close_check(repo: &Path) -> CloseCheck {
+    check_of(head_declaration(repo))
+}
+
+/// 名指した sha の tree の宣言から close の理由の門への加わりを解く（`git show <sha>:.vessel.toml` を [`close_check`] と同じ写しに掛ける・
+/// 作業ツリーと HEAD は読まない）。宣言 file が無い sha・git を撃てない周は `Exempt`、宣言が在って不備は `Unreadable`。
+pub fn close_check_at_sha(repo: &Path, sha: &str) -> CloseCheck {
+    let spec = format!("{sha}:{}", super::DECL_FILE);
+    check_of(super::super::git_bytes(repo, &["show", &spec]).map(|bytes| Declared::parse(&String::from_utf8_lossy(&bytes))))
+}
+
+/// 名指した sha の tree の宣言が名指す要件面の repo 相対 path（宣言 `requirements`・宣言が無い sha・不備・key の無い宣言は
+/// [`DEFAULT_REQUIREMENTS`]＝不備は [`close_check_at_sha`] の `Unreadable` が別に名指す）。
+pub fn requirements_at_sha(repo: &Path, sha: &str) -> String {
+    let spec = format!("{sha}:{}", super::DECL_FILE);
+    let declared = super::super::git_bytes(repo, &["show", &spec]).and_then(|bytes| Declared::parse(&String::from_utf8_lossy(&bytes)).ok());
+    declared.and_then(|found| found.requirements).unwrap_or_else(|| DEFAULT_REQUIREMENTS.to_owned())
+}
+
+/// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し。
+fn check_of(read: Option<Result<Declared, Vec<DeclError>>>) -> CloseCheck {
+    match read {
+        None => CloseCheck::Exempt,
+        Some(Err(_)) => CloseCheck::Unreadable,
+        Some(Ok(declared)) if declared.close_check == Some(true) => CloseCheck::Joins,
+        Some(Ok(_)) => CloseCheck::Exempt,
+    }
+}
+
+/// 問いの経路の 1 行（任意）。前後の空白を除いて空でなく、制御文字を持たない文字列だけを受ける（列・整数・空・空白だけ・
+/// 制御文字は key と行番号を名指す不備）。
+pub(super) fn question_route_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == QUESTION_ROUTE_KEY)?;
+    match value {
+        Raw::Text(route) if !route.trim().is_empty() && !route.chars().any(char::is_control) => Some(route.trim().to_owned()),
+        _ => {
+            errors.push(DeclError::new(*line, format!("{QUESTION_ROUTE_KEY} は制御文字を持たない空でない 1 行の文字列である")));
+            None
+        }
+    }
+}
+
+/// HEAD の宣言の問いの経路（閉じた 3 値・設計 vessel-hook.md §20 形 4）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuestionRoute {
+    /// 宣言した値（前後の空白を除いた 1 行）。
+    Declared(String),
+    /// 無い（宣言 file が HEAD に無い・git を撃てない・key が無い）。
+    Absent,
+    /// 読めない（宣言が在って不備）。「無い」に倒さない（C10）。
+    Unreadable,
+}
+
+/// HEAD の宣言から問いの経路を解く（読み手は [`head_declaration`] の 1 本・作業ツリーは読まない）。
+pub fn question_route(repo: &Path) -> QuestionRoute {
+    route_of(head_declaration(repo))
+}
+
+/// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し。
+fn route_of(read: Option<Result<Declared, Vec<DeclError>>>) -> QuestionRoute {
+    match read {
+        None => QuestionRoute::Absent,
+        Some(Err(_)) => QuestionRoute::Unreadable,
+        Some(Ok(declared)) => declared.question_route.map_or(QuestionRoute::Absent, QuestionRoute::Declared),
+    }
+}
+
+/// 要件面の path（任意）。書いた周は repo 相対の path の文字列だけを受ける（repo の外を読まない）。
+pub(super) fn requirements_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == REQUIREMENTS_KEY)?;
+    match value {
+        Raw::Text(path) if repo_relative(path) => Some(path.clone()),
+        _ => {
+            errors.push(DeclError::new(
+                *line,
+                format!("{REQUIREMENTS_KEY} は repo 相対の path の文字列である（空・絶対 path・home の短縮記号・.. は書けない）"),
+            ));
+            None
+        }
+    }
+}
+
+/// push 先の remote の名（任意）。**1 語だけ**を受ける——空白を含む値は `git push <remote> main:main` の
+/// 引数が 2 つに割れ、別の ref を押すことになる。
+pub(super) fn remote_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == REMOTE_KEY)?;
+    match value {
+        Raw::Text(name) if !name.trim().is_empty() && !name.split_whitespace().nth(1).is_some() => {
+            Some(name.trim().to_owned())
+        }
+        _ => {
+            errors.push(DeclError::new(*line, format!("{REMOTE_KEY} は空白を含まない 1 語の remote の名である")));
+            None
+        }
+    }
+}
+
+/// CI の判定を読む 1 行（任意）。**`{sha}` の穴を必ず持つ**——穴の無い行は着地した commit を名指さず、
+/// 別の commit の判定を読んで success と言いうる（測っていないものを測ったことにしない・C10）。
+pub(super) fn ci_cmd_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == CI_CMD_KEY)?;
+    match value {
+        Raw::Text(cmd) if !cmd.trim().is_empty() && cmd.contains(CI_SHA_HOLE) => Some(cmd.trim().to_owned()),
+        _ => {
+            errors.push(DeclError::new(
+                *line,
+                format!("{CI_CMD_KEY} は {CI_SHA_HOLE} の穴を持つ 1 行である（着地した commit を名指さない行は撃てない）"),
+            ));
+            None
+        }
+    }
+}
+
+/// repo 相対の path か（空でない・絶対 path でない・home の短縮記号も `..` の段も持たない）。
+fn repo_relative(path: &str) -> bool {
+    !path.trim().is_empty() && !path.starts_with('/') && !path.contains('~') && !path.split('/').any(|part| part == "..")
+}
+
+/// 契約表の検査（`contracts check`）が読む宣言の事実（設計 contract-source.md §2「表の検査」）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableFacts {
+    /// 上限と突き合わせた allowlist（verify 行の先頭語の基準）。
+    pub allowed: Vec<String>,
+    /// 禁じる語列（rules 行 [`DENIED_ROW`]・verify 行に intake と同じ判定を掛ける基準）。
+    pub denied: Vec<String>,
+    /// 要件面の repo 相対 path（宣言 `requirements`・無ければ [`DEFAULT_REQUIREMENTS`]）。
+    pub requirements: String,
+    /// crate の根の列（固定の根 `crates/` に宣言 `crate-roots` を足した列・設計 contract-source.md §62）。
+    pub crate_roots: Vec<String>,
+    /// 歯の検査を撃つか（宣言 `teeth-check`・無ければ false・設計 contract-source.md §66 形 3）。
+    pub teeth_check: bool,
+}
+
+/// HEAD の宣言を読み、上限と突き合わせて契約表の検査の事実にする（intake と同じ読み口・作業ツリーは読まない）。
+pub fn table_facts(repo: &Path, ceiling: &Ceiling<'_>) -> Result<TableFacts, Vec<DeclError>> {
+    table_facts_named(repo, ceiling).map(|(facts, _)| facts)
+}
+
+/// [`table_facts`] に宣言の名乗り `entrance-flip` を添えた形（契約表の検査の判定行が名乗りの欄を出す・§54 形 5）。
+pub fn table_facts_named(
+    repo: &Path,
+    ceiling: &Ceiling<'_>,
+) -> Result<(TableFacts, Option<EntranceFlip>), Vec<DeclError>> {
+    let sourced = Sourced::read(repo, ceiling)?;
+    let requirements = sourced.declared.requirements.clone().unwrap_or_else(|| DEFAULT_REQUIREMENTS.to_owned());
+    let entrance = sourced.declared.entrance_flip;
+    let crate_roots = crate_roots::with_fixed(&sourced.declared.crate_roots);
+    let teeth_check = sourced.declared.teeth_check == Some(true);
+    let effective = sourced.measure(ceiling, &[])?;
+    let denied = ceiling.denied.to_vec();
+    Ok((TableFacts { allowed: effective.allowed, denied, requirements, crate_roots, teeth_check }, entrance))
+}
+
+/// land の終端が読む宣言の事実（設計 contract-source.md §5・push 先と CI の行）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalFacts {
+    /// push 先の remote の名（宣言 `remote`・**無ければ `None`＝終端を持たない**）。
+    pub remote: Option<String>,
+    /// CI の判定を読む 1 行（宣言 `ci-cmd`・無ければ [`DEFAULT_CI_CMD`]・`{sha}` の穴を持つ）。
+    pub ci_cmd: String,
+}
+
+/// HEAD の宣言から終端の事実を解く（上限は読まない＝終端は allowlist と突き合わせない）。
+///
+/// **宣言が無い周も断る**（`Err`）。終端は「どこへ push し、どの行で CI を読むか」を宣言から受ける口で、
+/// 宣言そのものが無い repo に既定で push するのは「測っていない先へ出す」ことになる（A1 の「出す」・C10）。
+pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
+    let declared = declared_at_head(repo)?;
+    Ok(TerminalFacts {
+        remote: declared.remote,
+        ci_cmd: declared.ci_cmd.unwrap_or_else(|| DEFAULT_CI_CMD.to_owned()),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Declared;
+    use super::{check_of, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
+
+    /// 必須 key だけの宣言の本文（3 行）の後ろに `extra` を足す。
+    fn with(extra: &str) -> String {
+        format!("schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n{extra}")
+    }
+
+    /// key の無い宣言は値なし、1 行の値は前後の空白を除いた値。
+    #[test]
+    fn declaration_question_route_reads_one_trimmed_line_or_nothing() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.question_route), Ok(None));
+        let declared = Declared::parse(&with("question-route = \"  台帳の問いへ \"\n"));
+        assert_eq!(declared.map(|found| found.question_route), Ok(Some("台帳の問いへ".to_owned())));
+    }
+
+    /// 空・空白だけ・tab を含む・列・整数の値は key と行番号（4 行目）を名指す不備。
+    #[test]
+    fn declaration_question_route_refuses_empty_blank_control_and_lists() {
+        for value in ["\"\"", "\"   \"", "\"a\tb\"", "[\"a\"]", "1"] {
+            let errors = Declared::parse(&with(&format!("question-route = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("question-route")), "{value}: {errors:?}");
+        }
+    }
+
+    /// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し。key の無い宣言は「無い」。
+    #[test]
+    fn declaration_question_route_maps_the_head_read_to_three_values() {
+        assert_eq!(route_of(None), QuestionRoute::Absent);
+        assert_eq!(route_of(Some(Err(Vec::new()))), QuestionRoute::Unreadable);
+        assert_eq!(route_of(Some(Declared::parse(&with("")))), QuestionRoute::Absent);
+        let declared = Declared::parse(&with("question-route = \"x\"\n"));
+        assert_eq!(route_of(Some(declared)), QuestionRoute::Declared("x".to_owned()));
+    }
+
+    /// key が true は加わる・false と key の無い宣言は加わらない（欄は真偽のまま）。
+    #[test]
+    fn declaration_close_check_reads_true_false_and_absent() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.close_check), Ok(None));
+        assert_eq!(Declared::parse(&with("close-check = true\n")).map(|found| found.close_check), Ok(Some(true)));
+        assert_eq!(Declared::parse(&with("close-check = false\n")).map(|found| found.close_check), Ok(Some(false)));
+    }
+
+    /// 文字列・整数・列は key と行番号（4 行目）を名指す不備、重複は 5 行目を名指す不備。
+    #[test]
+    fn declaration_close_check_refuses_text_int_list_and_duplicates() {
+        for value in ["\"true\"", "\"\"", "1", "0", "[\"true\"]"] {
+            let errors = Declared::parse(&with(&format!("close-check = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("close-check")), "{value}: {errors:?}");
+        }
+        let errors = Declared::parse(&with("close-check = true\nclose-check = false\n")).expect_err("重複");
+        assert!(errors.iter().any(|error| error.line == 5 && error.reason.contains("close-check")), "{errors:?}");
+    }
+
+    /// row-review は真偽だけ: key の無い宣言と false は false と同じ、真偽でない値は key と行番号（4 行目）を名指す不備。
+    #[test]
+    fn declaration_row_review_reads_a_bool_and_refuses_other_values() {
+        let read = |extra: &str| Declared::parse(&with(extra)).map(|found| found.row_review);
+        assert_eq!((read(""), read("row-review = true\n"), read("row-review = false\n")), (Ok(None), Ok(Some(true)), Ok(Some(false))));
+        for value in ["\"true\"", "1", "[\"true\"]"] {
+            let errors = read(&format!("row-review = {value}\n")).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("row-review")), "{value}: {errors:?}");
+        }
+    }
+
+    /// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し。true だけが加わり、型違いの宣言は読めない。
+    #[test]
+    fn declaration_close_check_maps_the_head_read_to_three_values() {
+        assert_eq!(check_of(None), CloseCheck::Exempt);
+        assert_eq!(check_of(Some(Err(Vec::new()))), CloseCheck::Unreadable);
+        assert_eq!(check_of(Some(Declared::parse(&with("")))), CloseCheck::Exempt);
+        assert_eq!(check_of(Some(Declared::parse(&with("close-check = false\n")))), CloseCheck::Exempt);
+        assert_eq!(check_of(Some(Declared::parse(&with("close-check = true\n")))), CloseCheck::Joins);
+        assert_eq!(check_of(Some(Declared::parse(&with("close-check = \"true\"\n")))), CloseCheck::Unreadable);
+    }
+
+    /// key の無い宣言は値なし、文字列 1 つは前後の空白を除いた値（引数の分割は読み手の外・撃つ側が持つ）。
+    #[test]
+    fn declaration_floor_check_reads_one_trimmed_string_or_nothing() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.floor_check), Ok(None));
+        let declared = Declared::parse(&with("floor-check = \"  cargo check --workspace \"\n"));
+        assert_eq!(declared.map(|found| found.floor_check), Ok(Some("cargo check --workspace".to_owned())));
+    }
+
+    /// 列・整数・真偽・空・空白だけの値は key と行番号（4 行目）を名指す不備、重複は 5 行目を名指す不備。
+    #[test]
+    fn declaration_floor_check_refuses_lists_ints_bools_and_blank_naming_the_key() {
+        for value in ["[\"cargo check\"]", "1", "true", "false", "\"\"", "\"   \""] {
+            let errors = Declared::parse(&with(&format!("floor-check = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("floor-check")), "{value}: {errors:?}");
+        }
+        let errors = Declared::parse(&with("floor-check = \"a\"\nfloor-check = \"b\"\n")).expect_err("重複");
+        assert!(errors.iter().any(|error| error.line == 5 && error.reason.contains("floor-check")), "{errors:?}");
+    }
+
+    /// git を撃てない dir（repo でない）は宣言の無い周と同じ「無い」（sha の tree から読む口・作業ツリーは読まない）。
+    #[test]
+    fn declaration_floor_check_treats_a_dir_without_git_as_absent() {
+        assert_eq!(floor_check_at(std::path::Path::new("/nonexistent-floor-check-dir"), "HEAD"), Ok(None));
+    }
+
+    /// git を撃てない dir（repo でない）は宣言の無い周と同じ「加わらない」。
+    #[test]
+    fn declaration_close_check_treats_a_dir_without_git_as_exempt() {
+        assert_eq!(close_check(std::path::Path::new("/nonexistent-close-check-dir")), CloseCheck::Exempt);
+    }
+
+    /// 本 repo の宣言（`CARGO_MANIFEST_DIR` から 2 つ上）が読めて、close-check が true である（行 l3）。
+    #[test]
+    fn declaration_close_check_own_repo_declares_true_and_reads() {
+        let own = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join(super::super::DECL_FILE);
+        let text = std::fs::read_to_string(&own).unwrap_or_else(|err| panic!("{} を読める: {err}", own.display()));
+        let declared = Declared::parse(&text).unwrap_or_else(|errors| panic!("本 repo の宣言を読める: {errors:?}"));
+        assert_eq!(declared.close_check, Some(true), "本 repo の宣言は close-check = true");
+        assert_eq!(check_of(Some(Ok(declared))), CloseCheck::Joins);
+    }
+
+    /// key が true は確かめる・false と key の無い宣言は確かめない（欄は真偽のまま・close-check とは別の欄）。
+    #[test]
+    fn declaration_ruling_check_reads_true_false_and_absent() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.ruling_check), Ok(None));
+        assert_eq!(Declared::parse(&with("ruling-check = true\n")).map(|found| found.ruling_check), Ok(Some(true)));
+        assert_eq!(Declared::parse(&with("ruling-check = false\n")).map(|found| found.ruling_check), Ok(Some(false)));
+        let apart = Declared::parse(&with("close-check = true\n")).map(|found| (found.close_check, found.ruling_check));
+        assert_eq!(apart, Ok((Some(true), None)), "close-check は ruling-check を立てない");
+    }
+
+    /// 文字列・整数・列は key と行番号（4 行目）を名指す不備、重複は 5 行目を名指す不備。
+    #[test]
+    fn declaration_ruling_check_refuses_text_int_list_and_duplicates() {
+        for value in ["\"true\"", "\"\"", "1", "0", "[\"true\"]"] {
+            let errors = Declared::parse(&with(&format!("ruling-check = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("ruling-check")), "{value}: {errors:?}");
+        }
+        let errors = Declared::parse(&with("ruling-check = true\nruling-check = false\n")).expect_err("重複");
+        assert!(errors.iter().any(|error| error.line == 5 && error.reason.contains("ruling-check")), "{errors:?}");
+    }
+
+    /// 宣言 file を書いて（`None` は消して）1 commit にする。
+    fn commit_declaration(repo: &std::path::Path, declaration: Option<&str>) {
+        let file = repo.join(super::super::DECL_FILE);
+        match declaration {
+            Some(text) => assert!(std::fs::write(&file, text).is_ok(), "宣言を書けた"),
+            None => assert!(std::fs::remove_file(&file).is_ok(), "宣言を消せた"),
+        }
+        assert!(crate::pipe::git_ok(repo, &["add", "-A"]), "add");
+        assert!(crate::pipe::git_ok(repo, &["commit", "-q", "-m", "c"]), "commit");
+    }
+
+    /// HEAD と違う rev の宣言を読む（rev を 1 引数で受ける）: false → true と fixtures → 型違い → file の削除の 4 commit の履歴を、
+    /// 古い rev ほど遡って読む。存在しない rev と宣言の無い repo は false と空・作業ツリーの宣言は読まない。
+    #[test]
+    fn declaration_ruling_check_reads_the_named_rev() {
+        let repo = crate::pipe::fixture::scratch("ruling-keys-rev");
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]] {
+            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
+        }
+        for declaration in [
+            Some(with("ruling-check = false\n")),
+            Some(with("ruling-check = true\nruling-fixtures = [\"batch:a\", \"policy:b\"]\n")),
+            Some(with("ruling-check = \"yes\"\n")),
+        ] {
+            commit_declaration(&repo, declaration.as_deref());
+        }
+        let keys = |check, fixtures: &[&str]| Ok(RulingKeys { check, fixtures: fixtures.iter().map(|item| (*item).to_owned()).collect() });
+        assert_eq!(ruling_keys_at(&repo, "HEAD~2"), keys(false, &[]), "最初の commit は false");
+        assert_eq!(ruling_keys_at(&repo, "HEAD~1"), keys(true, &["batch:a", "policy:b"]), "HEAD と違う rev の値を読む");
+        assert!(ruling_keys_at(&repo, "HEAD").is_err(), "HEAD の型違いは宣言の誤り");
+        assert_eq!(ruling_keys_at(&repo, "HEAD~9"), keys(false, &[]), "存在しない rev は宣言の無い repo と同じ");
+        assert!(std::fs::write(repo.join(super::super::DECL_FILE), with("ruling-check = true\n")).is_ok());
+        assert!(ruling_keys_at(&repo, "HEAD").is_err(), "作業ツリーの宣言は読まない");
+        commit_declaration(&repo, None);
+        assert_eq!(ruling_keys_at(&repo, "HEAD"), keys(false, &[]), "宣言 file の無い tree は false と空");
+        assert_eq!(ruling_keys_at(std::path::Path::new("/nonexistent-ruling-keys-dir"), "HEAD"), keys(false, &[]), "git を撃てない dir");
+    }
+
+    /// sha の tree の宣言の close-check を読む（設計 case-lifecycle.md §12 約束 3）: 1 つ目が false・2 つ目が true の 2 commit で sha ごとに
+    /// `Exempt` と `Joins`、HEAD を 1 つ目へ戻しても 2 つ目の sha の読みは `Joins`（HEAD の宣言を読む実装は `Exempt` になる）。
+    #[test]
+    fn close_check_at_sha_reads_the_named_commit_not_head() {
+        let repo = crate::pipe::fixture::scratch("close-check-at-sha");
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]] {
+            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
+        }
+        let mut shas = Vec::new();
+        for declaration in [with("close-check = false\n"), with("close-check = true\n")] {
+            commit_declaration(&repo, Some(&declaration));
+            let head = crate::pipe::git_bytes(&repo, &["rev-parse", "HEAD"]).map(|bytes| String::from_utf8_lossy(&bytes).trim().to_owned());
+            shas.push(head.unwrap_or_default());
+        }
+        let [first, second] = [shas[0].as_str(), shas[1].as_str()];
+        assert_eq!(close_check_at_sha(&repo, first), CloseCheck::Exempt, "1 つ目は false");
+        assert_eq!(close_check_at_sha(&repo, second), CloseCheck::Joins, "2 つ目は true");
+        assert!(crate::pipe::git_ok(&repo, &["reset", "-q", "--hard", first]), "HEAD を 1 つ目へ戻す");
+        assert_eq!(close_check(&repo), CloseCheck::Exempt, "HEAD の読みは 1 つ目の宣言");
+        assert_eq!(close_check_at_sha(&repo, second), CloseCheck::Joins, "HEAD を戻しても 2 つ目の sha の読みは true");
+        assert!(std::fs::write(repo.join(super::super::DECL_FILE), with("close-check = true\n")).is_ok());
+        assert_eq!(close_check_at_sha(&repo, first), CloseCheck::Exempt, "作業ツリーの宣言は読まない");
+    }
+
+    /// 宣言 file の無い sha は `Exempt`・型の違う宣言の sha は `Unreadable`・存在しない sha と git を撃てない dir は `Exempt`。
+    #[test]
+    fn close_check_at_sha_maps_absent_and_broken_declarations() {
+        let repo = crate::pipe::fixture::scratch("close-check-at-sha-shapes");
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]] {
+            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
+        }
+        assert!(std::fs::write(repo.join("other.txt"), "x").is_ok());
+        assert!(crate::pipe::git_ok(&repo, &["add", "-A"]) && crate::pipe::git_ok(&repo, &["commit", "-q", "-m", "no declaration"]));
+        let head = |repo: &std::path::Path| crate::pipe::git_bytes(repo, &["rev-parse", "HEAD"]).map(|bytes| String::from_utf8_lossy(&bytes).trim().to_owned()).unwrap_or_default();
+        let bare = head(&repo);
+        commit_declaration(&repo, Some(&with("close-check = \"true\"\n")));
+        let broken = head(&repo);
+        commit_declaration(&repo, Some(&with("close-check = true\n")));
+        assert_eq!(close_check_at_sha(&repo, &bare), CloseCheck::Exempt, "宣言 file の無い sha");
+        assert_eq!(close_check_at_sha(&repo, &broken), CloseCheck::Unreadable, "型の違う宣言の sha");
+        assert_eq!(close_check_at_sha(&repo, &"0".repeat(40)), CloseCheck::Exempt, "存在しない sha");
+        assert_eq!(close_check_at_sha(std::path::Path::new("/nonexistent-close-check-sha-dir"), &bare), CloseCheck::Exempt, "git を撃てない dir");
+    }
+
+    /// 一覧は key の無い宣言で無し・文字列の一覧はそのまま（順も保つ）・空の一覧 `[]` は書けて空。
+    #[test]
+    fn declaration_ruling_fixtures_reads_a_list_empty_or_nothing() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.ruling_fixtures), Ok(None));
+        let two = Declared::parse(&with("ruling-fixtures = [\"policy:b\", \"batch:a\"]\n")).map(|found| found.ruling_fixtures);
+        assert_eq!(two, Ok(Some(vec!["policy:b".to_owned(), "batch:a".to_owned()])));
+        assert_eq!(Declared::parse(&with("ruling-fixtures = []\n")).map(|found| found.ruling_fixtures), Ok(Some(Vec::new())), "空の一覧は可");
+        let errors = Declared::parse(&with("close-check = []\n")).expect_err("空の一覧を受けるのはこの key だけ");
+        assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("close-check")), "{errors:?}");
+    }
+
+    /// 一覧でない値（文字列・整数・真偽）と要素が文字列でない一覧は key と行番号（4 行目）を名指す不備、重複は 5 行目を名指す不備。
+    #[test]
+    fn declaration_ruling_fixtures_refuses_non_lists_and_non_strings() {
+        for value in ["\"batch:a\"", "1", "true", "[1]", "[\"a\", 2]", "[true]", "[\"\"]"] {
+            let errors = Declared::parse(&with(&format!("ruling-fixtures = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("ruling-fixtures")), "{value}: {errors:?}");
+        }
+        let errors = Declared::parse(&with("ruling-fixtures = [\"a\"]\nruling-fixtures = [\"b\"]\n")).expect_err("重複");
+        assert!(errors.iter().any(|error| error.line == 5 && error.reason.contains("ruling-fixtures")), "{errors:?}");
+    }
+
+    /// 索引の宣言（vessel 宣言の parse とは別の読み・`with` の 3 行の後ろの 4 行目から書く）を読む。
+    fn read_index(extra: &str) -> Result<Option<IndexLines>, Vec<super::super::DeclError>> {
+        Declared::parse(&with(extra)).and_then(|declared| index_lines(&declared.index))
+    }
+
+    /// (j) 2 key が無ければ無し・2 key は行の列をそのまま（順も保つ）返す。
+    #[test]
+    fn declaration_index_reads_both_keys_as_lines_or_nothing() {
+        assert_eq!(read_index(""), Ok(None), "2 key が無い宣言は無し");
+        let both = read_index("index-scip = [\"a {tree} {out}\", \"b {out} {tree}\"]\nindex-roles = [\"c {tree}\"]\n");
+        let want = IndexLines { scip: vec!["a {tree} {out}".to_owned(), "b {out} {tree}".to_owned()], roles: vec!["c {tree}".to_owned()] };
+        assert_eq!(both, Ok(Some(want)));
+    }
+
+    /// (j) 片方だけの宣言は欠けた key の名と、書かれた key の行番号（4 行目）を名指す不備。
+    #[test]
+    fn declaration_index_names_the_missing_key_of_a_half_declaration() {
+        let scip = read_index("index-scip = [\"a {tree} {out}\"]\n").expect_err("index-scip だけ");
+        assert!(scip.iter().any(|error| error.line == 4 && error.reason.contains("index-roles")), "{scip:?}");
+        let roles = read_index("index-roles = [\"c {tree}\"]\n").expect_err("index-roles だけ");
+        assert!(roles.iter().any(|error| error.line == 4 && error.reason.contains("index-scip")), "{roles:?}");
+    }
+
+    /// (j) 穴の欠けた行（index-scip に {tree} か {out} が無い・index-roles に {tree} が無い）は key の名と行番号を名指す不備。
+    #[test]
+    fn declaration_index_names_the_key_of_a_row_missing_a_hole() {
+        for (scip, roles, key) in [
+            ("a {out}", "c {tree}", "index-scip"),
+            ("a {tree}", "c {tree}", "index-scip"),
+            ("a {tree} {out}", "c", "index-roles"),
+        ] {
+            let errors = read_index(&format!("index-scip = [\"{scip}\"]\nindex-roles = [\"{roles}\"]\n")).expect_err(scip);
+            let line = if key == "index-scip" { 4 } else { 5 };
+            assert!(errors.iter().any(|error| error.line == line && error.reason.contains(key)), "{scip} / {roles}: {errors:?}");
+        }
+    }
+
+    /// (j) 文字列・空の配列・要素が文字列でない配列は key と行番号（4 行目）を名指す不備（vessel 宣言の parse の段で断られる）。
+    #[test]
+    fn declaration_index_refuses_text_empty_and_non_string_lists() {
+        for key in ["index-scip", "index-roles"] {
+            for value in ["\"a {tree} {out}\"", "[]", "[1]", "1", "true"] {
+                let errors = read_index(&format!("{key} = {value}\n")).expect_err(value);
+                assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains(key)), "{key} = {value}: {errors:?}");
+            }
+        }
+    }
+
+    /// (j) 同じ片方だけの宣言と穴の欠けた宣言を、vessel 宣言の parse は断らない（Declared は 2 key の値を持つだけ・SRS FR107）。
+    #[test]
+    fn declaration_index_half_declarations_still_parse_as_vessel_declarations() {
+        for extra in ["index-scip = [\"a {tree} {out}\"]\n", "index-roles = [\"c {tree}\"]\n", "index-scip = [\"a\"]\nindex-roles = [\"c\"]\n"] {
+            assert!(Declared::parse(&with(extra)).is_ok(), "{extra:?} は vessel 宣言として読める");
+        }
+        assert!(Declared::parse(&with("index-scip = [\"a {tree} {out}\"]\n")).map(|declared| declared.index.scip.is_some()) == Ok(true), "値を持つ");
+    }
+
+    /// 宣言の無い dir（git を撃てない）は無し（sha の tree から読む口・作業ツリーは読まない）。
+    #[test]
+    fn declaration_index_treats_a_dir_without_git_as_absent() {
+        assert_eq!(index_at(std::path::Path::new("/nonexistent-index-dir"), "HEAD"), Ok(None));
+    }
+
+    /// (a) contract-tables: key の無い宣言は項目 0、2 項目の key は 2 項目と key の行番号（4 行目）、不備 4 形（空白だけ・絶対 path・
+    /// home の短縮記号・.. の段）は key と行番号を名指す不備、空配列と文字列の値も key と行番号を名指して断る。
+    #[test]
+    fn declaration_table_places_reads_items_and_refuses_the_four_bad_forms() {
+        let read = |extra: &str| Declared::parse(&with(extra)).map(|found| found.contract_tables);
+        assert_eq!(read(""), Ok(None), "key の無い宣言は項目 0");
+        let two = read("contract-tables = [\"contracts/\", \"tables/one.toml\"]\n");
+        assert_eq!(two, Ok(Some((vec!["contracts/".to_owned(), "tables/one.toml".to_owned()], 4))), "2 項目と key の行番号");
+        for value in ["[\"   \"]", "[\"/abs/t.toml\"]", "[\"~t.toml\"]", "[\"a/../t.toml\"]", "[\"\"]", "[]", "\"contracts/\"", "1"] {
+            let errors = read(&format!("contract-tables = {value}\n")).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("contract-tables")), "{value}: {errors:?}");
+        }
+        let errors = read("contract-tables = [\"a/\"]\ncontract-tables = [\"b/\"]\n").expect_err("重複");
+        assert!(errors.iter().any(|error| error.line == 5 && error.reason.contains("contract-tables")), "{errors:?}");
+    }
+
+    /// (b) 名指した rev の宣言を読む: 宣言 file の無い repo と git でない dir は Fixed、key を持つ commit は Declared、key の値を壊した commit は
+    /// Unreadable、1 つ目の commit に key・2 つ目で key を消すと 1 つ目の sha は Declared で HEAD は Fixed。items は Fixed で空・Declared で項目・
+    /// Unreadable で無し。
+    #[test]
+    fn declaration_table_places_reads_the_named_rev_in_three_values() {
+        let repo = crate::pipe::fixture::scratch("table-places-rev");
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]] {
+            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
+        }
+        assert!(std::fs::write(repo.join("other.txt"), "x").is_ok());
+        assert!(crate::pipe::git_ok(&repo, &["add", "-A"]) && crate::pipe::git_ok(&repo, &["commit", "-q", "-m", "no declaration"]));
+        assert_eq!(TablePlaces::at(&repo, "HEAD"), TablePlaces::Fixed, "宣言 file の無い repo");
+        let head = |repo: &std::path::Path| crate::pipe::git_bytes(repo, &["rev-parse", "HEAD"]).map(|bytes| String::from_utf8_lossy(&bytes).trim().to_owned()).unwrap_or_default();
+        commit_declaration(&repo, Some(&with("contract-tables = [\"contracts/\"]\n")));
+        let keyed = head(&repo);
+        let declared = TablePlaces::Declared { items: vec!["contracts/".to_owned()], line: 4 };
+        assert_eq!(TablePlaces::at(&repo, "HEAD"), declared, "key を持つ commit");
+        commit_declaration(&repo, Some(&with("contract-tables = \"contracts/\"\n")));
+        let places = TablePlaces::at(&repo, "HEAD");
+        assert_eq!((places.clone(), places.items()), (TablePlaces::Unreadable, None), "key の値を壊した commit");
+        commit_declaration(&repo, Some(&with("")));
+        let places = TablePlaces::at(&repo, "HEAD");
+        assert_eq!((places.clone(), places.items()), (TablePlaces::Fixed, Some(&[][..])), "key を消した commit");
+        assert_eq!(TablePlaces::at(&repo, &keyed), declared, "HEAD でなく名指した古い sha は Declared");
+        assert_eq!(declared.items(), Some(&["contracts/".to_owned()][..]), "Declared の項目");
+        assert_eq!(TablePlaces::at(std::path::Path::new("/nonexistent-table-places-dir"), "HEAD"), TablePlaces::Fixed, "git を撃てない dir");
+    }
+
+    /// (f) constitution: key の無い宣言は項目 0、2 項目の key は 2 項目と key の行番号（4 行目）、不備 7 形（空・空白だけ・絶対 path・home の短縮記号・
+    /// .. の段・末尾 /・閉じた字の外の字〔空白・{・backtick〕）と文字列の値は key と行番号を名指す不備。
+    #[test]
+    fn declaration_constitution_reads_items_and_refuses_the_seven_bad_forms() {
+        let read = |extra: &str| Declared::parse(&with(extra)).map(|found| found.constitution);
+        assert_eq!(read(""), Ok(None), "key の無い宣言は項目 0");
+        assert_eq!(read("constitution = [\"spec/c.yaml\", \"b-1_2.md\"]\n"), Ok(Some((vec!["spec/c.yaml".to_owned(), "b-1_2.md".to_owned()], 4))));
+        for value in ["[\"\"]", "[\"   \"]", "[\"/abs/c.md\"]", "[\"~c.md\"]", "[\"a/../c.md\"]", "[\"spec/\"]", "[\"a b.md\"]", "[\"a{b}.md\"]", "[\"a`b.md\"]", "\"spec/c.yaml\""] {
+            let errors = read(&format!("constitution = {value}\n")).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("constitution")), "{value}: {errors:?}");
+        }
+    }
+
+    /// (g) 名指した rev の宣言を読む: 宣言 file の無い repo と存在しない path は Fixed（files は DEFAULT_CONSTITUTION の 1 本）、key を持つ commit は
+    /// Declared（b・a・b は b・a）、key の値を壊した commit と key の無いまま別の key を壊した commit は Unreadable（files は無し）、key を消した commit は Fixed。
+    #[test]
+    fn declaration_constitution_files_reads_the_named_rev_in_three_values() {
+        let repo = crate::pipe::fixture::scratch("constitution-files");
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]] {
+            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
+        }
+        assert!(std::fs::write(repo.join("other.txt"), "x").is_ok());
+        assert!(crate::pipe::git_ok(&repo, &["add", "-A"]) && crate::pipe::git_ok(&repo, &["commit", "-q", "-m", "no declaration"]));
+        let default = Some(vec![super::DEFAULT_CONSTITUTION.to_owned()]);
+        assert_eq!((ConstitutionFiles::at(&repo, "HEAD"), ConstitutionFiles::at(&repo, "HEAD").files()), (ConstitutionFiles::Fixed, default.clone()), "宣言 file の無い repo");
+        assert_eq!(ConstitutionFiles::at(std::path::Path::new("/nonexistent-constitution-dir"), "HEAD").files(), default, "存在しない path");
+        commit_declaration(&repo, Some(&with("constitution = [\"b\", \"a\", \"b\"]\n")));
+        let declared = ConstitutionFiles::at(&repo, "HEAD");
+        assert_eq!((&declared, declared.files()), (&ConstitutionFiles::Declared { items: vec!["b".to_owned(), "a".to_owned(), "b".to_owned()], line: 4 }, Some(vec!["b".to_owned(), "a".to_owned()])));
+        for broken in ["constitution = \"b\"\n", "ruling-check = \"yes\"\n"] {
+            commit_declaration(&repo, Some(&with(broken)));
+            assert_eq!((ConstitutionFiles::at(&repo, "HEAD"), ConstitutionFiles::at(&repo, "HEAD").files()), (ConstitutionFiles::Unreadable, None), "{broken}");
+        }
+        commit_declaration(&repo, Some(&with("")));
+        assert_eq!(ConstitutionFiles::at(&repo, "HEAD"), ConstitutionFiles::Fixed, "key を消した commit");
+    }
+
+    /// 真偽を書いた他の key は key ごとの型の不備になり、entrance-flip = true は 3 語の外として key と行番号を名指す。
+    #[test]
+    fn declaration_close_check_bool_in_other_keys_is_a_typed_refusal() {
+        let errors = Declared::parse(&with("entrance-flip = true\n")).expect_err("entrance-flip");
+        assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("entrance-flip")), "{errors:?}");
+        let errors = Declared::parse(&with("remote = true\n")).expect_err("remote");
+        assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("remote")), "{errors:?}");
+        let text = "schema = true\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n";
+        let errors = Declared::parse(text).expect_err("schema");
+        assert!(errors.iter().any(|error| error.line == 1 && error.reason.contains("schema")), "{errors:?}");
+    }
+}

@@ -1,0 +1,353 @@
+//! 台帳の読み（`bd --readonly list --json` の子 process・席の指示文の `{ledger}` が読む）。
+//!
+//! `seat/rebrief.rs` から**挙動不変で移した**もの（`s2-07l.479.2`）: 作業記憶の復元は ADR-0045 §2 (2) で
+//! 消えたが、SessionStart の指示文は台帳の現在値を 1 行で持つ（同 §2 (3)）ので、その読みだけを残す。
+//! 待ち上限は rules 行 [`ID_TIMEOUT`] から読み、**読めない周は `None`**（数え損ねを 0 に化けさせない・C10）。
+//! 子 process の出力（[`read_text`]）は復帰の DATA（`seat/recent.rs`・`s2-07l.489`）と**同じ 1 回**を共用する。
+//! 子 process の **cwd は呼び手が名指す**（`s2-07l.495.9`・設計 dispatcher.md §14）: 台帳 client は cwd から
+//! 台帳を解くので、器が process の cwd を継がせると `--repo` と別の repo の台帳を読む。
+// flip-check: moved s2-07l.479.2
+
+use crate::fleet::json_tree::{self, Tree};
+use crate::invocation::Invocation;
+use crate::polarity::{OnFailure, Polarity, Timing};
+use crate::rules::manifest::Manifest;
+use crate::rules::RuleValue;
+use std::cell::RefCell;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{Child, ExitStatus, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+/// この境界の極性（[`LedgerError`]）: 読めない周は数えを 1 つも返さない（呼び側が `unknown` を書く）。
+/// 行為を止める判定ではないので Guard ではない（極性一覧に載せない・設計 polarity.md §3）。
+pub const POLARITY: Polarity = Polarity {
+    timing: Timing::InLoop,
+    on_failure: OnFailure::FailClosed,
+};
+
+/// 台帳を読めない理由（**境界の enum**・[`POLARITY`]）。読めない周は数えを返さない。
+///
+/// **境界ごとに 1 つの enum が極性を持つ**のは憲法 C11.2 の求めで、`Option` に潰すと [`POLARITY`] の宣言 site
+/// （極性一覧の guard でない側）ごと消える。待ち上限超過は `s2-07l.489` で別の variant になった（復帰の DATA
+/// が `ledger-unreadable` / `ledger-timeout` を分けて出す・設計 seat-roles.md §21）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LedgerError {
+    /// 台帳を読めない（起動できない・rc 非 0・JSON 不能）。
+    Unreadable,
+    /// 待ち上限までに読み切れなかった（子は殺した）。
+    Timeout,
+}
+
+/// 台帳の待ち上限を宣言する rules 行の id（**値は code に焼かない**・憲法 C5）。
+pub const ID_TIMEOUT: &str = "seat.ledger_timeout_s";
+
+/// `--bd` を渡さない周の台帳 client（PATH 解決は子 process の起動側）。
+pub const DEFAULT_BD: &str = "bd";
+
+/// 台帳を読む引数（`--readonly` を必ず付ける）。`--all` は closed を含む一覧。呼出しは 1 回である
+/// （待ち上限 [`ID_TIMEOUT`]）。
+const BD_ARGS: [&str; 6] = ["--readonly", "list", "--all", "--limit", "0", "--json"];
+
+/// 子 process の終了を見に行く刻み。
+const POLL: Duration = Duration::from_millis(10);
+
+/// 待ち上限を**渡された manifest** から読む。不発効・別の形・不在は `None`（呼び側は `no-rule`）。
+pub fn timeout_of(manifest: &Manifest) -> Option<Duration> {
+    let row = manifest.get(ID_TIMEOUT)?;
+    match (row.enabled, &row.value) {
+        (true, RuleValue::Int(found)) => Some(Duration::from_secs(*found)),
+        _ => None,
+    }
+}
+
+/// 台帳の 1 件（**読み手が読む key だけ**）。`s2-07l.479.2` で数え（status）だけに縮み、
+/// `s2-07l.345` で列の読み手（`pipe::dispatch`・設計 dispatcher.md §2）が足した分だけ戻った
+/// ——足すのは**読み手を足す便**である（到達しない構造を将来のために抱えない・C17）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Issue {
+    /// bead id。
+    pub id: String,
+    /// status の字面。
+    pub status: String,
+    /// priority field（無い・非負の整数でなければ `None`・列の順序が読む）。
+    pub priority: Option<u64>,
+    /// label の列（無ければ空・`intake:memo` の弁別が読む）。
+    pub labels: Vec<String>,
+    /// acceptance の本文（無ければ空・設計 pointer の行の出所）。
+    pub acceptance: String,
+    /// 依存の列（`dependencies[]`・2 key の揃う要素だけ・依存が閉じたかの判定が読む）。
+    pub deps: Vec<Dep>,
+    /// 型の字面（`issue_type`・無ければ空・台帳の形の lint が epic と裁定を 4 象限の母集団から外す）。
+    pub kind: String,
+    /// 本文（`description`・無ければ空・memo の 4 節と memo の名指しを台帳の形の lint が読む）。
+    pub description: String,
+    /// notes（無ければ空・本文と同じ読み手）。
+    pub notes: String,
+    /// close の理由（`close_reason`・無ければ空・閉じ済みの契約を pipe retire が読む・設計 contract-source.md §60）。
+    pub close_reason: String,
+    /// 起票の時刻の字（`created_at`・無ければ `None`・局面の関数が since を導く・設計 case-lifecycle.md §6）。
+    pub created_at: Option<String>,
+    /// 閉じた時刻の字（`closed_at`・閉じていない bead は `None`）。
+    pub closed_at: Option<String>,
+    /// 最後に書かれた時刻の字（`updated_at`・無ければ `None`・処置の無い判定の memo が判定の後の書きを測る・設計 case-lifecycle.md §17）。
+    pub updated_at: Option<String>,
+    /// metadata の `effect` の字（無ければ空・閉じた問いの裁定が文書へ写すべきかを未反映の数えが読む）。
+    pub effect: String,
+}
+
+/// 依存の 1 件（`dependencies[]` の `depends_on_id` と `type` だけを読む・**要素は status を持たない**ので
+/// 閉じたかは読み手が同じ一覧（`--all`）の中で引く）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dep {
+    /// 依存先の bead id（`depends_on_id`）。
+    pub on: String,
+    /// 依存の種別の字面（`type`・実測の母集団は `blocks` と `parent-child` の 2 値）。
+    pub kind: String,
+}
+
+/// 台帳の JSON（`bd list --json` の配列）を読む。配列でない・要素に `id` / `status` の文字列が無い → `None`
+/// （**2 key の必須は不変**＝欠けた要素を読み飛ばして「読めた」に化けさせない・C10）。
+pub fn issues_of(text: &str) -> Option<Vec<Issue>> {
+    let tree = json_tree::parse(text).ok()?;
+    tree.as_array()?
+        .iter()
+        .map(|node| {
+            let text_of = |key: &str| node.get(key).and_then(Tree::as_str).map(str::to_owned);
+            let array_of = |key: &str| node.get(key).and_then(Tree::as_array).unwrap_or_default();
+            let priority = match node.get("priority") {
+                Some(Tree::Num(digits)) => digits.parse::<u64>().ok(),
+                _ => None,
+            };
+            Some(Issue {
+                id: text_of("id")?,
+                status: text_of("status")?,
+                priority,
+                labels: array_of("labels").iter().filter_map(Tree::as_str).map(str::to_owned).collect(),
+                acceptance: text_of("acceptance_criteria").unwrap_or_default(),
+                deps: array_of("dependencies").iter().filter_map(dep_of).collect(),
+                kind: text_of("issue_type").unwrap_or_default(),
+                description: text_of("description").unwrap_or_default(),
+                notes: text_of("notes").unwrap_or_default(),
+                close_reason: text_of("close_reason").unwrap_or_default(),
+                created_at: text_of("created_at"),
+                closed_at: text_of("closed_at"),
+                updated_at: text_of("updated_at"),
+                effect: node.get("metadata").and_then(|meta| meta.get("effect")).and_then(Tree::as_str).map(str::to_owned).unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+/// 依存の 1 要素（`depends_on_id` / `type` の文字列が揃わなければ `None`）。key の字面は `bd --readonly list
+/// --all --json` の現物から採った（2026-09-19 の実測: 要素は `issue_id` / `depends_on_id` / `type` /
+/// `created_at` / `created_by` / `metadata` を持ち、**依存先の status は持たない**）。
+fn dep_of(node: &Tree) -> Option<Dep> {
+    let text_of = |key: &str| node.get(key).and_then(Tree::as_str).map(str::to_owned);
+    Some(Dep { on: text_of("depends_on_id")?, kind: text_of("type")? })
+}
+
+/// 台帳の現在値の 1 行（status 3 つの数え・DATA の `[BD_COUNT]` と席の指示文の `{ledger}` が同じ 1 本を読む）。
+fn counts_body(issues: &[Issue]) -> String {
+    let count = |status: &str| issues.iter().filter(|issue| issue.status == status).count();
+    format!("open={} in_progress={} blocked={}", count("open"), count("in_progress"), count("blocked"))
+}
+
+/// 台帳の現在値を 1 行で返す（席の指示文の `{ledger}`・SessionStart の hook が読む）。入力は [`read_text`] の
+/// 出力（**同じ 1 回の出力を復帰の DATA と共用する**・設計 seat-roles.md §21）。
+///
+/// JSON として読めない周は `None` である——呼び側が `unknown` を書く。**数え損ねを 0 に化けさせない**（憲法 C10）。
+pub fn counts_of(text: &str) -> Option<String> {
+    issues_of(text).as_deref().map(counts_body)
+}
+
+/// 台帳を子 process で読み、[`Issue`] の列にする。**列の読み手も同じ 1 本**（設計 dispatcher.md §2・C2）。
+/// `cwd` は子 process の作業 dir（列は `--repo`・設計 §14）。
+pub fn read_ledger(bd: &str, cwd: &Path, timeout: Duration) -> Result<Vec<Issue>, LedgerError> {
+    let text = read_text(bd, cwd, timeout)?;
+    issues_of(&text).ok_or(LedgerError::Unreadable)
+}
+
+/// 1 回の読みを共用する区間の中で読んだ出力（client の名・cwd・結果）。区間の外では `None`。
+type Shared = Vec<(String, PathBuf, Result<String, LedgerError>)>;
+
+thread_local! {
+    /// [`one_read`] の区間（同じ thread の中だけ・区間を出たら捨てる＝長く生きる読み手に古い値を返さない）。
+    static SHARED: RefCell<Option<Shared>> = const { RefCell::new(None) };
+}
+
+/// `body` の間、同じ client と cwd の読みを **1 回の出力**に固定する（doctor の台帳の 2 行が同じ 1 回を分けて
+/// 読む・設計 contract-source.md §6）。区間の中の 2 度目以降の [`read_text`] は子 process を起こさず 1 度目の結果
+/// （読めない周の理由も含む）を返す。入れ子の区間は外側の区間をそのまま使う。
+pub fn one_read<T>(body: impl FnOnce() -> T) -> T {
+    let outer = SHARED.with(|shared| shared.borrow().is_some());
+    if outer {
+        return body();
+    }
+    SHARED.with(|shared| *shared.borrow_mut() = Some(Vec::new()));
+    let found = body();
+    SHARED.with(|shared| *shared.borrow_mut() = None);
+    found
+}
+
+/// 台帳を子 process で読み、stdout の本文（JSON の text）を返す（待ち上限を超えたら殺して `Timeout`・stderr は
+/// 捨てる）。件数の 1 行（[`counts_of`]）と復帰の DATA（`seat::recent`）が**この 1 回の出力**を分けて読む。
+/// [`one_read`] の区間の中では同じ client と cwd の 2 度目を読まない。
+///
+/// `cwd` は子 process の作業 dir で、**呼び手が名指す**（器は process の cwd を推さない・設計 dispatcher.md §14）。
+/// cwd に出来ない周（無い・dir でない・読めない）は `spawn` が落ちて `Unreadable`＝既存の断りがそのまま受ける。
+pub fn read_text(bd: &str, cwd: &Path, timeout: Duration) -> Result<String, LedgerError> {
+    let hit = SHARED.with(|shared| {
+        shared.borrow().as_ref().and_then(|reads| {
+            reads.iter().find(|(name, dir, _)| name == bd && dir == cwd).map(|(_, _, found)| found.clone())
+        })
+    });
+    if let Some(found) = hit {
+        return found;
+    }
+    let found = spawn_read(bd, cwd, timeout);
+    SHARED.with(|shared| {
+        if let Some(reads) = shared.borrow_mut().as_mut() {
+            reads.push((bd.to_owned(), cwd.to_path_buf(), found.clone()));
+        }
+    });
+    found
+}
+
+/// 子 process を 1 回起こして読む（[`read_text`] の本体）。
+fn spawn_read(bd: &str, cwd: &Path, timeout: Duration) -> Result<String, LedgerError> {
+    let mut child = Invocation::new(bd)
+        .args(BD_ARGS)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| LedgerError::Unreadable)?;
+    let deadline = Instant::now().checked_add(timeout);
+    let body = collect_stdout(&mut child, deadline);
+    let status = body.and_then(|bytes| finish(&mut child, deadline).map(|status| (bytes, status)));
+    let (bytes, status) = match status {
+        Ok(found) => found,
+        Err(reason) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(reason);
+        }
+    };
+    if !status.success() {
+        return Err(LedgerError::Unreadable);
+    }
+    String::from_utf8(bytes).map_err(|_| LedgerError::Unreadable)
+}
+
+/// stdout を別 thread で読み切る（pipe の詰まりで待ちが上限を越えない）。上限までに読めなければ `Timeout`・
+/// pipe を読めなければ `Unreadable`。
+fn collect_stdout(child: &mut Child, deadline: Option<Instant>) -> Result<Vec<u8>, LedgerError> {
+    let mut stdout = child.stdout.take().ok_or(LedgerError::Unreadable)?;
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let read = stdout.read_to_end(&mut bytes).map(|_| bytes);
+        let _ = sender.send(read);
+    });
+    let received = match deadline {
+        Some(at) => receiver.recv_timeout(at.saturating_duration_since(Instant::now())).ok(),
+        None => receiver.recv().ok(),
+    };
+    received.ok_or(LedgerError::Timeout)?.map_err(|_| LedgerError::Unreadable)
+}
+
+/// 上限までに終わった子の status。終わらなければ `Timeout`・待てなければ `Unreadable`。
+fn finish(child: &mut Child, deadline: Option<Instant>) -> Result<ExitStatus, LedgerError> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) if deadline.is_none_or(|at| Instant::now() < at) => std::thread::sleep(POLL),
+            Ok(None) => return Err(LedgerError::Timeout),
+            Err(_) => return Err(LedgerError::Unreadable),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{read_text, LedgerError, BD_ARGS};
+    use crate::pipe::fixture::{exited, Call, Stub};
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+
+    /// 台帳の読みの spawn は起動の記述を通る（設計 core-boundary.md §9 行 f）: program は client の名・引数は
+    /// `--readonly list --all --limit 0 --json`・cwd は呼び手が名指した dir。spawn の失敗は `Unreadable`（`Timeout`
+    /// ではない）で、区間の外の 2 度目は撃ち直す。
+    #[test]
+    fn invocation_seat_ledger_stream_spawn_failure_is_typed() {
+        let stub = Stub::install(|call| match call.program.as_str() {
+            "bd-gone" => Err(std::io::Error::other("gone")),
+            _ => exited(0, b"[]"),
+        });
+        let cwd = Path::new("/nonexistent-invocation-seat-ledger");
+        let wait = Duration::from_secs(5);
+        assert_eq!(read_text("bd-gone", cwd, wait), Err(LedgerError::Unreadable), "起動の失敗");
+        assert_eq!(read_text("bd-stub", cwd, wait), Err(LedgerError::Unreadable), "stub は子を起こさない＝spawn の失敗");
+        let bd = |program: &str| Call {
+            program: program.to_owned(),
+            args: BD_ARGS.iter().map(|arg| (*arg).to_owned()).collect(),
+            cwd: Some(PathBuf::from("/nonexistent-invocation-seat-ledger")),
+            envs: Vec::new(),
+        };
+        assert_eq!(stub.calls(), [bd("bd-gone"), bd("bd-stub")], "client の名と引数と cwd");
+    }
+
+    /// `close_reason` を持つ要素はその字面、持たない要素は空（設計 contract-source.md §60 の歯 (c)）。
+    #[test]
+    fn retire_parts_issue_reads_the_close_reason() {
+        let text = r#"[{"id":"s2-a","status":"closed","close_reason":"landed 0123 ci=success"},{"id":"s2-b","status":"open"}]"#;
+        let reasons: Option<Vec<String>> =
+            super::issues_of(text).map(|issues| issues.into_iter().map(|issue| issue.close_reason).collect());
+        assert_eq!(reasons, Some(vec!["landed 0123 ci=success".to_owned(), String::new()]));
+    }
+
+    /// 時刻の 2 欄（`created_at`・`closed_at`）を字のまま読む（開いた bead は `closed_at` を持たない）。
+    #[test]
+    fn issue_times_reads_created_and_closed_at() {
+        let text = r#"[{"id":"s2-a","status":"closed","created_at":"2026-09-29T01:02:03Z","closed_at":"2026-09-30T04:05:06Z"},{"id":"s2-b","status":"open","created_at":"2026-09-30T00:00:00Z"}]"#;
+        let times: Option<Vec<(Option<String>, Option<String>)>> =
+            super::issues_of(text).map(|issues| issues.into_iter().map(|issue| (issue.created_at, issue.closed_at)).collect());
+        assert_eq!(
+            times,
+            Some(vec![
+                (Some("2026-09-29T01:02:03Z".to_owned()), Some("2026-09-30T04:05:06Z".to_owned())),
+                (Some("2026-09-30T00:00:00Z".to_owned()), None),
+            ])
+        );
+    }
+
+    /// 時刻の要素が無い bead は 2 欄とも `None` で、ほかの欄の読みは変わらない。
+    #[test]
+    fn issue_times_absent_elements_are_none_and_other_fields_unchanged() {
+        let text = r#"[{"id":"s2-a","status":"open","priority":1,"labels":["x"],"close_reason":"r"}]"#;
+        let issues = super::issues_of(text).expect("読める");
+        let [issue] = issues.as_slice() else { panic!("1 件") };
+        assert_eq!((issue.created_at.as_deref(), issue.closed_at.as_deref()), (None, None));
+        assert_eq!((issue.id.as_str(), issue.status.as_str(), issue.priority, issue.labels.as_slice(), issue.close_reason.as_str()), ("s2-a", "open", Some(1), ["x".to_owned()].as_slice(), "r"));
+    }
+
+    /// `updated_at` を字のまま読み、要素の無い bead は `None`で、同じ bead の id・status・created_at・closed_at の読みは変わらない。
+    #[test]
+    fn issue_updated_at_reads_the_text_and_leaves_the_other_fields() {
+        let text = r#"[{"id":"s2-a","status":"closed","created_at":"2026-09-29T01:02:03Z","closed_at":"2026-09-30T04:05:06Z","updated_at":"2026-10-01T07:08:09Z"},{"id":"s2-b","status":"open","created_at":"2026-09-30T00:00:00Z"}]"#;
+        let read: Option<Vec<_>> = super::issues_of(text).map(|issues| {
+            issues.into_iter().map(|issue| (issue.id, issue.status, issue.created_at, issue.closed_at, issue.updated_at)).collect()
+        });
+        let some = |text: &str| Some(text.to_owned());
+        assert_eq!(
+            read,
+            Some(vec![
+                ("s2-a".to_owned(), "closed".to_owned(), some("2026-09-29T01:02:03Z"), some("2026-09-30T04:05:06Z"), some("2026-10-01T07:08:09Z")),
+                ("s2-b".to_owned(), "open".to_owned(), some("2026-09-30T00:00:00Z"), None, None),
+            ])
+        );
+    }
+}

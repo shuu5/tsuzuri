@@ -1,0 +1,5 @@
+---
+source: crates/scribe2/tests/e2e/pipe/gate.rs
+expression: form
+---
+

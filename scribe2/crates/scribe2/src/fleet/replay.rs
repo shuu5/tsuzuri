@@ -1,0 +1,434 @@
+//! event の並びから現在地（[`State`]）を導く replay（設計 fleet-event-log.md §4・憲法 C3）。
+//!
+//! 便用の口座の選定（[`select_for_run`]）は待ちの観測と再開が同じ 1 本を呼ぶので、ここに置く
+//! （`s2-07l.260` で挙動不変に分割・外の呼び手の path は `fleet` の再 export で保つ）。
+
+use super::{
+    select, AllowanceKey, AllowanceLatest, Event, EventKind, RegistrationLatest, SeatState, Shape, Stage,
+    ACTOR_HUMAN,
+};
+use crate::rules::manifest::Manifest;
+use crate::seat::role::Role;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
+use std::path::Path;
+
+/// 便の現在地。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Run {
+    /// 便 id。
+    pub id: String,
+    /// 契約の bead id。
+    pub bead: String,
+    /// 物理順で最後に見た段。
+    pub stage: Stage,
+    /// 最後に触れた時刻。
+    pub updated: String,
+    /// 最後に見た自由文。
+    pub detail: Option<String>,
+    /// 承認 event が在るか（導出値・状態 enum ではない）。
+    pub approved: bool,
+    /// 便を起こした口座（最新の `SeatSpawned` の `account`・ADR-0027 §2.3）。field の無い行で起こした便は `None`
+    /// ＝走行中の便数に数えない。
+    pub account: Option<String>,
+}
+
+impl Run {
+    /// 走行中か（終端の段 `Landed` / `Failed` / `Stopped` でなく、畳まれても〔`detail=retired`〕いない・pipeline.md §4）。
+    pub fn is_inflight(&self) -> bool {
+        let terminal = matches!(self.stage, Stage::Landed | Stage::Failed | Stage::Stopped);
+        !terminal && self.detail.as_deref() != Some("retired")
+    }
+}
+
+/// 席の現在地。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Seat {
+    /// 席 id。
+    pub id: String,
+    /// 紐づく便 id。
+    pub run: String,
+    /// runner の pid。
+    pub pid: Option<u64>,
+    /// 生きているか畳んだか。
+    pub state: SeatState,
+    /// 最後に触れた時刻。
+    pub updated: String,
+}
+
+/// replay で得た現在地の全体。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// 便 id → 現在地。
+    pub runs: BTreeMap<String, Run>,
+    /// 席 id → 現在地。
+    pub seats: BTreeMap<String, Seat>,
+    /// 口座 × 窓 × model → 最新の残量の行（設計 fleet-usage.md §4）。
+    pub allowance: BTreeMap<AllowanceKey, AllowanceLatest>,
+    /// (役割, anchor) → 最新の登録（設計 seat-roles.md §2・読み手は [`crate::seat::role`]）。
+    pub registrations: BTreeMap<(Role, String), RegistrationLatest>,
+    /// 退役中の口座 label → その `AccountRetired` の ts（最後の Retired の後に Restored が無い label だけ・
+    /// 設計 account-lifecycle.md §3）。ts は退役先 `.retired/<label>.<ts>` を名指す（dir を走査しない・C3）。
+    pub retired: BTreeMap<String, String>,
+}
+
+impl State {
+    /// `labels`（宣言順）から退役中の label を除いた列（**有効な口座の集合の本体**・[`effective_accounts`] と
+    /// label 列しか持たない呼び手〔tick・便用の選定〕が同じここを通る）。
+    pub fn without_retired<'a>(&self, labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+        labels.into_iter().filter(|label| !self.retired.contains_key(*label)).map(str::to_owned).collect()
+    }
+
+    /// 席の登録 row が持つ口座 label の集合（便用の選定の除外集合・設計 account-autonomy.md §3 / §14）。
+    ///
+    /// **席の生死を問わない**——登録が在る限りその口座は席のものである（便が席の口座を食い潰す穴を
+    /// 塞ぐのが除外の目的で、席が一時的に落ちている周に便がその口座を取ると、立て直しの口座が無い）。
+    ///
+    /// `anchor` は絞り（§14・FR40 の席の識別子は (役割, anchor)）: `None` は置き場の全 row の口座（退役の検査・
+    /// `--anchor` 無しの `fleet select`＝保守側）、`Some(repo)` は `Registration.anchor` が `repo` と **`OsStr` の
+    /// 等値**で一致する row の口座だけ（正規化も component の比較もしない＝登録が書いた値がそのまま鍵）。置き場を
+    /// 共有する他 repo の席の口座は本 repo の便の候補に残る（user 裁定 2026-09-16・A1）。
+    pub fn registered_accounts(&self, anchor: Option<&Path>) -> BTreeSet<String> {
+        self.registrations
+            .values()
+            .filter(|latest| anchor.is_none_or(|repo| OsStr::new(&latest.registration.anchor) == repo.as_os_str()))
+            .map(|latest| latest.registration.account.clone())
+            .collect()
+    }
+
+    /// 便用の除外に数える席の登録 row の口座の集合（[`Self::registered_accounts`] から、anchor が `park`＝区画の anchors に在る row を
+    /// 数えない・設計 account-lifecycle.md §36 形 2）。区画の席は口座を占めない（FR95）ので、その row の口座は便用の候補に残る。
+    /// 群の席の row・区画の外の row は今までどおり数える。`select_for_run` と `fleet select` の 2 つがこの 1 本を呼ぶ
+    /// （退役の検査は [`Self::registered_accounts`] のまま）。`anchor` の絞りは [`Self::registered_accounts`] と同じ。
+    pub fn run_registered_accounts(&self, anchor: Option<&Path>, park: &BTreeSet<String>) -> BTreeSet<String> {
+        self.registrations
+            .values()
+            .filter(|latest| anchor.is_none_or(|repo| OsStr::new(&latest.registration.anchor) == repo.as_os_str()))
+            .filter(|latest| !park.contains(&latest.registration.anchor))
+            .map(|latest| latest.registration.account.clone())
+            .collect()
+    }
+
+    /// 口座 label → 走行中の便数（**導出値**・憲法 C10・ADR-0027 §2.3）。数えるのは [`Run::is_inflight`] な便のうち
+    /// [`Run::account`] を持つものだけ（口座不明の便は 0）。便用の選定の 2 つ目の鍵（設計 account-autonomy.md §3）。
+    pub fn inflight_by_account(&self) -> BTreeMap<String, usize> {
+        let mut found = BTreeMap::new();
+        for label in self.runs.values().filter(|run| run.is_inflight()).filter_map(|run| run.account.as_ref()) {
+            *found.entry(label.clone()).or_insert(0) += 1;
+        }
+        found
+    }
+}
+
+/// 口座 label の credential dir（`<state_dir>/accounts/<label>`・ADR-0017 §2.3）。runner の `--account-dir`
+/// に渡す値で、[`usage`] が読む credential file はこの dir の直下に在る。
+pub fn account_dir(state_dir: &std::path::Path, label: &str) -> std::path::PathBuf {
+    state_dir.join("accounts").join(label)
+}
+
+/// **有効な口座の集合**（設計 account-lifecycle.md §3・宣言順）= 宣言（tracked + host の面の `[[account]]`）− 退役中。
+/// 計測（`fleet usage`）・選定（`fleet select`）・tick の逼迫度・doctor / `account ls` の `retired=` はここを読む
+/// （退役中の口座は測らず選ばない・宣言の行は消さない＝退役は event log の状態・C3）。
+pub fn effective_accounts(manifest: &Manifest, state: &State) -> Vec<String> {
+    state.without_retired(manifest.accounts().iter().map(|account| account.label()))
+}
+
+/// 便用の選定の入力のうち**置き場と時刻以外**（[`select_for_run`] の引数の束・待ちの観測
+/// （[`Completion::AccountFree`]）と選定が同じ入力で除外するための 1 つの型・C3.4）。
+pub struct RunSelect<'a> {
+    /// 便の repo（`pipe run --repo` の値）。席の登録 row の除外はこの repo を anchor に持つ row だけ（設計
+    /// account-autonomy.md §14＝置き場を共有する他 repo の席の口座は候補に残る）。
+    pub repo: &'a Path,
+    /// 宣言した口座 label の列（tracked + host の面）。
+    pub labels: &'a [String],
+    /// 便が使う model（rules 行 `runner.model` の値・字面のまま）。`None` は全 model 窓の最大（保守側）。
+    pub model: Option<&'a str>,
+    /// host の面が宣言した**各群の今の口座**（[`crate::rules::grouped_accounts`]・記録 > 種・host 全体で外す・設計
+    /// account-lifecycle.md §23 形 1）。候補の残りは便用の候補に残る。群を 1 つも宣言しない host では空＝除外は今までどおり。
+    pub grouped: &'a BTreeSet<String>,
+    /// host の面が宣言した park の区画の置き場（[`crate::rules::park_anchors`]・設計 account-lifecycle.md §36）。anchor がここに在る
+    /// 席の登録 row は口座を占めない＝除外に数えない。区画を宣言しない host では空＝除外は今までどおり。
+    pub park: &'a BTreeSet<String>,
+}
+
+/// 便用の規則で口座を 1 つ選ぶ（設計 account-autonomy.md §3 / §4）。**便の再開と待ちの観測が同じ
+/// 1 本を呼ぶ**（[`Completion::AccountFree`] の `is_met` と `pipe resume` の選定が別の入力を組まない）。
+///
+/// `model` は rules 行 `runner.model` の値（runner / lens が `--model` で毎回明示する model・設計 §3・`s2-07l.297`）
+/// ＝便が消費するのはその model のモデル別窓だけなので、他の model の窓が 100 でも候補から外さない。字面のまま
+/// 渡し、型にするのは `select` の中（別名 × 表示名の照合）。除外は [`RunSelect::repo`] を anchor に持つ登録 row の
+/// 口座（[`State::run_registered_accounts`]・設計 §14・区画の row は数えない）に [`RunSelect::grouped`] を重ねたもの。走行中の便数は state から
+/// 導く（[`State::inflight_by_account`]・呼び手は渡さない）。閾値は便用の規則が持たないので**窓の全量**
+/// （[`select::LIMIT_PCT`]）を置く＝session 用の分岐に届かない値であって、R-C9-1 の値ではない。
+pub fn select_for_run(state: &State, pool: &RunSelect<'_>, now: &str) -> select::Selection {
+    let labels = state.without_retired(pool.labels.iter().map(String::as_str));
+    let mut exclude = state.run_registered_accounts(Some(pool.repo), pool.park);
+    exclude.extend(pool.grouped.iter().cloned());
+    select::select(&select::Input {
+        labels: &labels,
+        allowance: &state.allowance,
+        purpose: select::Purpose::Run,
+        model: pool.model,
+        exclude: &exclude,
+        inflight: &state.inflight_by_account(),
+        threshold_pct: select::LIMIT_PCT,
+        now,
+        // 便用は留まる口座を読まない（session 用の規則・`s2-07l.312`）。
+        prefer: None,
+    })
+}
+
+/// event の並びから現在地を導く。物理順で後の event が勝つ。
+pub fn replay(events: &[Event]) -> State {
+    let mut state = State::default();
+    for (seq, event) in events.iter().enumerate() {
+        apply_run(&mut state, event);
+        apply_seat(&mut state, event);
+        apply_allowance(&mut state, event);
+        apply_account(&mut state, event);
+        apply_registration(&mut state, event, seq);
+    }
+    state
+}
+
+/// 1 件の event を登録 row へ反映する（物理順で後の行が勝つ・前の行は log に残る・append のみ）。登録は同じ鍵を置き換え、
+/// 退役は同じ鍵（role, anchor）の row を外す＝後の登録が復活させる（設計 account-lifecycle.md §24 形 2）。
+fn apply_registration(state: &mut State, event: &Event, seq: usize) {
+    let Some(found) = &event.registration else {
+        return;
+    };
+    let key = (found.role, found.anchor.clone());
+    if event.kind == EventKind::SeatRetired {
+        state.registrations.remove(&key);
+    } else {
+        state.registrations.insert(key, RegistrationLatest { seq, registration: found.clone() });
+    }
+}
+
+/// 1 件の event を口座残量へ反映する。
+///
+/// **読めた行を捨てる経路を持たない**——本体が在れば必ずその枠の最新になる（捨てるべき行は
+/// [`Event::from_line`] が読みの段で `Err` にしており、ここへは届かない）。捨てる枝を残すと、
+/// 型不一致の Unmeasured が黙って落ちて**古い実測が「最新」を名乗る**。
+fn apply_allowance(state: &mut State, event: &Event) {
+    let Some(allowance) = &event.allowance else {
+        return;
+    };
+    state.allowance.insert(
+        allowance.key(),
+        AllowanceLatest {
+            ts: event.ts.clone(),
+            allowance: allowance.clone(),
+        },
+    );
+}
+
+/// 1 件の event を退役の集合へ反映する（最後の Retired の後に Restored が無い label だけが残る）。
+fn apply_account(state: &mut State, event: &Event) {
+    let Some(label) = &event.account else {
+        return;
+    };
+    match event.kind {
+        EventKind::AccountRetired => {
+            state.retired.insert(label.clone(), event.ts.clone());
+        }
+        EventKind::AccountRestored => {
+            state.retired.remove(label);
+        }
+        EventKind::RunCreated
+        | EventKind::RunStage
+        | EventKind::RunDone
+        | EventKind::RunStopped
+        | EventKind::SeatSpawned
+        | EventKind::SeatStopped
+        | EventKind::ApprovalRequested
+        | EventKind::ApprovalReceived
+        | EventKind::QuestionRaised
+        | EventKind::QuestionAnswered
+        | EventKind::AllowanceMeasured
+        | EventKind::AllowanceUnmeasured
+        | EventKind::SeatRegistered
+        | EventKind::DispatchMark
+        | EventKind::InstallRecorded
+        | EventKind::RunCost
+        | EventKind::RulingReceived
+        | EventKind::GroupPressureNotified
+        | EventKind::GroupMoved
+        | EventKind::GroupMoveRefused
+        | EventKind::GroupMovePending
+        | EventKind::SeatRetired
+        | EventKind::UtteranceReceived
+        | EventKind::UtteranceSorted
+        | EventKind::TurnEndUnjudged
+        | EventKind::IntakeRefused
+        | EventKind::LifecycleCutover
+        | EventKind::MemoJudged
+        | EventKind::LimitPermitted => {}
+    }
+}
+
+/// 1 件の event を便へ反映する。
+fn apply_run(state: &mut State, event: &Event) {
+    // 口座残量・登録・退役・列の印・install の行は便に紐づかない（`run` を持たない）。消費の行は `run` を持つが段を
+    // 持たない（[`Shape::Cost`]）＝便を作らず `updated` も動かさない（設計 gate-cost.md §26 形 (2)）。ここで通すと id が空の
+    // 幽霊の便が 1 つ生まれ、`show` / `export` の件数が実在しない便を数える。見分けるのは **kind の
+    // [`EventKind::shape`]** である（本体の有無ではない＝退役した役割の登録 row は本体を持たずに読まれる
+    // 〔`Event::from_line`〕ので、本体で見分けると幽霊の便が 1 つ生まれる・`account` の有無でもない＝
+    // 口座つきの `SeatSpawned` は便に紐づく行・ADR-0027 §2.3）。
+    if event.kind.shape() != Shape::Run {
+        return;
+    }
+    let run = state.runs.entry(event.run.clone()).or_insert_with(|| Run {
+        id: event.run.clone(),
+        bead: event.bead.clone(),
+        stage: Stage::Intake,
+        updated: event.ts.clone(),
+        detail: None,
+        approved: false,
+        account: None,
+    });
+    run.bead = event.bead.clone();
+    run.updated = event.ts.clone();
+    if let Some(stage) = event.stage {
+        run.stage = stage;
+    }
+    if event.detail.is_some() {
+        run.detail = event.detail.clone();
+    }
+    // 便を起こした口座は最新の `SeatSpawned` が持つ値（field の無い行で起こし直した周は不明に戻る）。
+    if event.kind == EventKind::SeatSpawned {
+        run.account = event.account.clone();
+    }
+    // **承認は event に残った逐語だけである**（憲法 C7.2）。kind だけで関門を開けると、
+    // `fleet record --kind ApprovalReceived` で積んだ逐語 0 字の機械 event でも開いてしまい、
+    // 書き手側（`pipe approve`）の逐語検査が作法頼みになる。読み手が資格を見る。
+    if event.kind == EventKind::ApprovalReceived
+        && event.actor == ACTOR_HUMAN
+        && event.detail.as_deref().is_some_and(|words| !words.trim().is_empty())
+    {
+        run.approved = true;
+    }
+}
+
+/// 1 件の event を席へ反映する。
+fn apply_seat(state: &mut State, event: &Event) {
+    let Some(id) = event.seat.clone() else {
+        return;
+    };
+    let seat = state.seats.entry(id.clone()).or_insert_with(|| Seat {
+        id,
+        run: event.run.clone(),
+        pid: event.pid,
+        state: SeatState::Live,
+        updated: event.ts.clone(),
+    });
+    seat.run = event.run.clone();
+    seat.updated = event.ts.clone();
+    if event.pid.is_some() {
+        seat.pid = event.pid;
+    }
+    match event.kind {
+        EventKind::SeatSpawned => seat.state = SeatState::Live,
+        EventKind::SeatStopped => seat.state = SeatState::Stopped,
+        EventKind::RunCreated
+        | EventKind::RunStage
+        | EventKind::RunDone
+        | EventKind::RunStopped
+        | EventKind::ApprovalRequested
+        | EventKind::ApprovalReceived
+        | EventKind::QuestionRaised
+        | EventKind::QuestionAnswered
+        | EventKind::AllowanceMeasured
+        | EventKind::AllowanceUnmeasured
+        | EventKind::SeatRegistered
+        | EventKind::AccountRetired
+        | EventKind::AccountRestored
+        | EventKind::DispatchMark
+        | EventKind::InstallRecorded
+        | EventKind::RunCost
+        | EventKind::RulingReceived
+        | EventKind::GroupPressureNotified
+        | EventKind::GroupMoved
+        | EventKind::GroupMoveRefused
+        | EventKind::GroupMovePending
+        | EventKind::SeatRetired
+        | EventKind::UtteranceReceived
+        | EventKind::UtteranceSorted
+        | EventKind::TurnEndUnjudged
+        | EventKind::IntakeRefused
+        | EventKind::LifecycleCutover
+        | EventKind::MemoJudged
+        | EventKind::LimitPermitted => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{select_for_run, RunSelect, State};
+    use crate::fleet::select::Selection;
+    use crate::fleet::{
+        Allowance, AllowanceKey, AllowanceLatest, Measured, Registration, RegistrationLatest, WindowKind,
+    };
+    use crate::seat::role::Role;
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
+    /// 選定の「いま」。
+    const NOW: &str = "2026-09-13T06:00:00Z";
+
+    /// 席の登録 row（置き場 `anchor`・口座 `account`）。鍵は (役割, anchor) なので anchor の違う row は別の席。
+    fn row(anchor: &str, account: &str, seq: usize) -> ((Role, String), RegistrationLatest) {
+        let registration = Registration {
+            role: Role::Orchestrator,
+            anchor: anchor.to_owned(),
+            target: format!("t:{seq}"),
+            sid: None,
+            account: account.to_owned(),
+            launch: String::new(),
+            model: None,
+        };
+        ((Role::Orchestrator, anchor.to_owned()), RegistrationLatest { seq, registration })
+    }
+
+    /// 口座 `label` の 5 時間窓の実測 1 行（使用率 10・reset は `NOW` より後）。
+    fn measured(label: &str) -> (AllowanceKey, AllowanceLatest) {
+        let allowance = Allowance::Measured(Measured {
+            account: label.to_owned(),
+            window: WindowKind::FiveHour,
+            model: None,
+            endpoint: "oauth-usage".to_owned(),
+            used_pct: 10,
+            resets_at: Some("2026-09-13T09:00:00Z".to_owned()),
+        });
+        (allowance.key(), AllowanceLatest { ts: "2026-09-13T05:59:00Z".to_owned(), allowance })
+    }
+
+    /// 区画の置き場（`/lot`）の row（口座 p）と群の置き場（`/group`）の row（口座 g）を持つ state。
+    fn seated() -> State {
+        State {
+            registrations: [row("/lot", "p", 0), row("/group", "g", 1)].into_iter().collect(),
+            allowance: [measured("g"), measured("p")].into_iter().collect(),
+            ..State::default()
+        }
+    }
+
+    /// 便の repo が `repo`・候補が `label` だけ・`grouped` は空で、区画の anchors だけを `park` に渡した選定。
+    fn pick(state: &State, repo: &str, label: &str, park: &BTreeSet<String>) -> Selection {
+        let labels = [label.to_owned()];
+        let grouped = BTreeSet::new();
+        let pool = RunSelect { repo: Path::new(repo), labels: &labels, model: None, grouped: &grouped, park };
+        select_for_run(state, &pool, NOW)
+    }
+
+    /// (h) 区画の anchors に在る置き場の row は便用の除外に数えない: 便の repo が区画の置き場（`/lot`）のとき、区画の anchors が
+    /// {/lot} なら p は候補に残り、空を渡す対では p が外れて候補なし。群の置き場（`/group`）の row の g は区画の anchors に依らず外れる。
+    #[test]
+    fn park_lot_select_for_run_skips_the_lot_seat_rows() {
+        let state = seated();
+        let lot: BTreeSet<String> = ["/lot".to_owned()].into_iter().collect();
+        let none = BTreeSet::new();
+        assert_eq!(pick(&state, "/lot", "p", &lot), Selection::Chosen("p".to_owned()), "区画の row の p は数えない");
+        assert!(matches!(pick(&state, "/lot", "p", &none), Selection::None(_)), "対: 区画の anchors が空なら p は外れる");
+        assert!(matches!(pick(&state, "/group", "g", &lot), Selection::None(_)), "群の置き場の row の g は外れる（回帰）");
+    }
+}

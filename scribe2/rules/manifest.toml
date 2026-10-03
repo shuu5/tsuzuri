@@ -1,0 +1,1067 @@
+# 規則の値の正本（憲法 C1「規則はデータ」）。機械が実行時に読む規則はこの file だけである。
+# 全行に user の裁定 id（ruling）と裁定の日付（ruled_at）が要る（憲法 C5）。裁定の無い行は
+# loader が拒む。user の逐語は書かない（本 repo は PUBLIC・SRS CON2）。
+# enabled も全行に要る（裁定 id 'user 2026-09-11T23:59Z'）。省略を true で埋めると、書き
+# 忘れた行が黙って効く側へ倒れる——発効は書かれた事実であって既定ではない。
+# 行 id は憲法 §3 の行 id を接頭辞として持つ（compound 行は . で枝分かれ）か、MVP の運用値の
+# <領域>.<名> である。種類の一覧は crates 側の RuleKind が持つ。
+
+schema = 1
+
+[[rule]]
+id = "R-C4-1"
+kind = "CoreLines"
+value = 90000
+enabled = true
+ruling = "user 2026-10-03T05:09Z"
+ruled_at = "2026-10-03"
+
+[[rule]]
+id = "R-C4-2"
+kind = "ModuleLines"
+value = 1500
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C4-3"
+kind = "TestSrcRatioPct"
+value = 100
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C4-4.fn-lines"
+kind = "FnLines"
+value = 60
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C4-4.complexity"
+kind = "FnComplexity"
+value = 15
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C4-4.args"
+kind = "FnArgs"
+value = 5
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 2"
+ruled_at = "2026-09-07"
+
+# 行の数え方の正規化（設計 rules-manifest.md §4）。値を超える幅の行は ceil(文字数 ÷ 値) 行に数える。
+# R-C4-1〜3 と契約表の上限の余地が同じ式で数える＝1 行に詰め込んでも上限は逃げない。
+[[rule]]
+id = "R-C4.line-width"
+kind = "LineWidth"
+value = 120
+enabled = true
+ruling = "user 2026-09-14T06:5xZ"
+ruled_at = "2026-09-14"
+
+# 境界 crate の src の本体の総行数の上限（設計 core-boundary.md §3 / §9 行 i・ADR-0062）。core-lines と同じ切り方と幅で数え、
+# 値は行 i の便の base で測った本体の 1.2 倍の切り上げ。core の外へ判定を押し出して core-lines から逃げる形を塞ぐ。
+[[rule]]
+id = "R-C4-5"
+kind = "BoundaryLines"
+value = 316
+enabled = true
+ruling = "user 2026-09-15T10:07Z"
+ruled_at = "2026-09-15"
+
+# 対話面（憲法 C7・ADR-0022 §2.2）。値は Role の名（承認・回答・go の記帳はこの役割の席からだけ・AC15）。
+
+[[rule]]
+id = "R-C7-1"
+kind = "DialogueSurface"
+value = "orchestrator"
+enabled = true
+ruling = "user 2026-09-18T08:3xZ"
+ruled_at = "2026-09-18"
+
+[[rule]]
+id = "R-C8-1"
+kind = "MaturityCondition"
+value = "Verdict 一致率 95% 以上 × 連続 20 便 ／ K 指標 (K1〜K3) 閾値内 × 3 日 ／ 手動介入 0 × 3 日 ／ doctor 全 host 緑"
+enabled = false
+ruling = "RULING-v2-p1-exit-bundle 論点 9・ADR-0003"
+ruled_at = "2026-09-09"
+
+# 口座の選定（設計 account-autonomy.md §3・ADR-0020 §2.2）。値は session 用の閾値（使用率の百分率・
+# 未満の口座だけが候補）。便用の規則は閾値を持たない（当たっていない口座のうち逼迫度が最大）。
+
+[[rule]]
+id = "R-C9-1"
+kind = "AccountSelection"
+value = 95
+enabled = true
+ruling = "user 2026-09-17T07:30Z"
+ruled_at = "2026-09-17"
+
+[[rule]]
+id = "R-C12-1"
+kind = "MutationSurvivalLine"
+value = "週次記録 (deny 化の裁定材料は実測 2 周分)"
+enabled = false
+ruling = "RULING-v2-p1-exit-bundle 論点 7"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C13-1"
+kind = "DepBudget"
+value = 12
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 3・4"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C13-1.per-pr"
+kind = "DepPerPr"
+value = 1
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 3・4"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C13-1.check-delta-ms"
+kind = "CheckDeltaMs"
+value = 300
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 3・4"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C13-2"
+kind = "CompileShape"
+value = "dev profile の debug 情報は line-tables-only・統合 test file 3 以下・runner nextest・proc-macro 展開後比率 25% 以下・critical path 上の 1 crate が総時間の 40% 超なら分割"
+enabled = true
+ruling = "RULING-v2-p1-exit-bundle 論点 3・4"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "R-C13-3"
+kind = "CompileSeconds"
+value = "増分 check p50 10 秒 以下・CI 5 分 以下・link 20% 以下・週次記録・前回比 +20% 悪化で原因 crate を名指しした issue を自動起票"
+enabled = false
+ruling = "RULING-v2-p1-exit-bundle 論点 3・4"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "gate.lens_count"
+kind = "GateLensCount"
+value = 1
+enabled = true
+ruling = "grill U3"
+ruled_at = "2026-09-07"
+
+[[rule]]
+id = "gate.token_cap"
+kind = "GateTokenCap"
+value = 150000
+enabled = true
+ruling = "user 2026-09-15T23:31Z revert of the temporary raise after s2-07l.209 landed (this revert = s2-07l.376; raise = s2-07l.375; precedent = s2-07l.265 / .267; target = SRS NFR1)"
+ruled_at = "2026-09-20"
+
+# 便ごとの token 消費の検出線（設計 gate-cost.md §43・契約表の行 aj）。便の消費の event の 4 値の和がこの値以上の便に
+# pipe show が判定行を 1 行出す。便は断らない（受付・spawn・gate・land・driver はこの行を読まない・停止は別の裁定）。
+[[rule]]
+id = "R-C6-1"
+kind = "RunTokenCeiling"
+value = 25000000
+enabled = true
+ruling = "user 2026-09-23T07:16Z"
+ruled_at = "2026-09-23"
+
+# lens が claude に毎回渡す turn の上限（設計 pipeline.md §67・契約表の行 bi）。行が無い・不発効・値 0 の周は lens が
+# claude を呼ばず rc 2。上限で終わった周は判定を持たない周と読む。
+[[rule]]
+id = "lens.max_turns"
+kind = "LensMaxTurns"
+value = 100
+enabled = true
+ruling = "user 2026-10-01T08:09Z"
+ruled_at = "2026-10-01"
+
+# 上限の許可の対象の行の列（設計 limit-permit.md §18）。許可の読み手を持つ kind の行の id だけを置ける
+# （読み込みが断る）。読み手は許可の口と gate。
+[[rule]]
+id = "pipe.permit_rows"
+kind = "PipePermitRows"
+value = ["gate.token_cap"]
+enabled = true
+ruling = "user 2026-10-01T01:05Z 項 permit-rows"
+ruled_at = "2026-10-01"
+
+# 上限の許可の期限の上限（時間）。
+[[rule]]
+id = "pipe.permit_max_h"
+kind = "PipePermitMaxH"
+value = 24
+enabled = true
+ruling = "user 2026-10-01T01:24Z 項 permit-max-h"
+ruled_at = "2026-10-01"
+
+[[rule]]
+id = "hook.budget_ms"
+kind = "HookBudgetMs"
+value = 2000
+enabled = true
+ruling = "SRS NFR5 の user 承認"
+ruled_at = "2026-09-09"
+
+[[rule]]
+id = "pipe.stop_grace_ms"
+kind = "StopGraceMs"
+value = 2000
+enabled = true
+ruling = "user 2026-09-09T09:08Z"
+ruled_at = "2026-09-09"
+
+[[rule]]
+id = "fleet.lock_retry_ms"
+kind = "LockRetryMs"
+value = 5000
+enabled = true
+ruling = "user 2026-09-09T09:08Z"
+ruled_at = "2026-09-09"
+
+[[rule]]
+id = "fleet.lock_stale_ms"
+kind = "LockStaleMs"
+value = 30000
+enabled = true
+ruling = "user 2026-09-09T09:08Z"
+ruled_at = "2026-09-09"
+
+[[rule]]
+id = "hook.timeout_s"
+kind = "HookTimeoutS"
+value = 10
+enabled = true
+ruling = "user 2026-09-09T09:08Z"
+ruled_at = "2026-09-09"
+
+[[rule]]
+id = "seat.cycle_settle_s"
+kind = "SeatCycleSettleS"
+value = 30
+enabled = true
+ruling = "user 2026-09-12T12:08Z"
+ruled_at = "2026-09-12"
+
+[[rule]]
+id = "seat.cycle_poll_ms"
+kind = "SeatCyclePollMs"
+value = 500
+enabled = true
+ruling = "user 2026-09-12T12:08Z"
+ruled_at = "2026-09-12"
+
+[[rule]]
+id = "fleet.usage_timeout_s"
+kind = "UsageTimeoutS"
+value = 30
+enabled = true
+ruling = "user 2026-09-12T02:01Z"
+ruled_at = "2026-09-12"
+
+# 選定の前計測の鮮度（秒・設計 account-autonomy.md §13・`s2-07l.407`）。`fleet select` の前計測は、最新の回が全部実測で
+# その ts が now − 値 より新しい口座を測り直さない（子 process を起こさず event も書かない）。`fleet usage` の口は
+# この行を読まず全口座を測る。
+
+[[rule]]
+id = "fleet.usage_fresh_s"
+kind = "UsageFreshS"
+value = 300
+enabled = true
+ruling = "user 2026-09-16T11:14Z"
+ruled_at = "2026-09-16"
+
+# 群の逼迫の閾値（使用率の百分率・窓ごとに 1 行・設計 account-lifecycle.md §19 形 1・ADR-0055）。どれかの窓の最新の
+# 実測がこの値以上なら群を逼迫と判じる（dispatch の 1 周と席の hook が同じ読み手で読む）。
+[[rule]]
+id = "fleet.group_pressure_5h_pct"
+kind = "GroupPressure5hPct"
+value = 85
+enabled = true
+ruling = "user 2026-09-19T12:12Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "fleet.group_pressure_7d_pct"
+kind = "GroupPressure7dPct"
+value = 95
+enabled = true
+ruling = "user 2026-09-19T12:12Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "fleet.group_pressure_model_pct"
+kind = "GroupPressureModelPct"
+value = 95
+enabled = true
+ruling = "user 2026-09-19T12:12Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "runner.allowed_commands"
+kind = "RunnerAllowedCommands"
+value = ["cargo", "git", "bats"]
+enabled = true
+ruling = "user 2026-09-14T13:23Z bats in runner ceiling (uns vessel; bash/sh excluded)"
+ruled_at = "2026-09-14"
+
+# 禁じる語列（ADR-0025 §2.1・設計 vessel-hook.md §5「command guard」/ pipeline.md §5.1 (4)）。runner.allowed_commands
+# と対で読む**上限側の禁止**で、vessel 宣言は緩められない（C14）。hook の command guard が Bash の実行時点で止め、
+# intake が verify 行に同じ判定（先頭語一致 + 残りの語の包含・順序不問）を掛ける。git の 7 語列は host_guard.git へ移した
+# （user 裁定 2026-09-19T15:28Z・設計 vessel-hook.md §11 の形 f 4）: command guard と intake は host_guard の語列の 3 行も
+# 読む（∪）ので、この行に残すのは host-guard の種類に載らない cargo の 2 語列だけ。
+
+[[rule]]
+id = "runner.denied_commands"
+kind = "RunnerDeniedCommands"
+value = ["cargo mutants", "cargo publish"]
+enabled = true
+ruling = "user 2026-09-14"
+ruled_at = "2026-09-14"
+
+# クラスの語列表（設計 contract-source.md §48・ADR-0061）。要素は「クラスの名 + 語列」で、契約表の検査（contracts check と
+# 受付）が verify 各行に禁じる語列と同じ照合（先頭語一致 + 残りの語の包含）で要素ごとに当て、当たったクラスが行の classes に
+# 無い行を class-undeclared で断る。consume は要素を持たない（allowlist の cargo / git / bats に追加課金の command が無い）。
+# 要素の先頭語は runner.allowed_commands の値に在り、禁じる語列を含まないこと（loader が断る）。値の変更は裁定 id 付きの
+# user 裁定だけ（C5）。
+
+[[rule]]
+id = "runner.class_commands"
+kind = "RunnerClassCommands"
+value = ["publish git push", "delete git push --delete", "delete git push -d"]
+enabled = true
+ruling = "user 2026-09-24T00:13Z"
+ruled_at = "2026-09-24"
+
+# runner が claude に毎回渡す model（設計 pipeline.md §6 / §61・account-autonomy.md §3・`s2-07l.297`）。値は claude CLI の
+# 別名（`sonnet` …・閉じた表は crates 側の fleet::select::Model）。便用の口座選定はこの model のモデル別 7 日窓だけを
+# 数える（他の model の窓が 100 でも便の候補から外さない）。lens の model は `lens.model` の 1 行で持つ（§61・契約表の行 bd）。
+
+[[rule]]
+id = "runner.model"
+kind = "RunnerModel"
+value = "sonnet"
+enabled = true
+ruling = "user 2026-09-29T07:44Z runner and pre-fired lens on Sonnet, contract review and gate lens on Opus (effort stays high)"
+ruled_at = "2026-09-29"
+
+# runner / lens が claude に毎回渡す effort（設計 pipeline.md §6・`s2-07l.322`）。値は claude CLI の字面
+# （`low` / `medium` / `high` / `xhigh`・閉じた表は crates 側の headless::Effort）。省くと口座の設定 dir の
+# settings.json（`effortLevel`）の値で決まり、同じ便が口座ごとに違う深さで走る（席の model 事故と同じ根因）。
+# model は `runner.model` のまま（この行は effort だけを持つ）。
+
+[[rule]]
+id = "runner.effort"
+kind = "RunnerEffort"
+value = "high"
+enabled = true
+ruling = "user 2026-09-15T03:52Z runner/lens effort pin (high; model stays runner.model)"
+ruled_at = "2026-09-15"
+
+# lens（契約の審査・gate の審査・memo の審査）が claude に毎回渡す model（設計 pipeline.md §61・契約表の行 bd）。
+
+[[rule]]
+id = "lens.model"
+kind = "LensModel"
+value = "opus"
+enabled = true
+ruling = "user 2026-09-29T07:44Z runner and pre-fired lens on Sonnet, contract review and gate lens on Opus (effort stays high)"
+ruled_at = "2026-09-29"
+
+[[rule]]
+id = "repo.non_rust_exec_allow"
+kind = "RepoNonRustExecAllow"
+value = ["scripts/bdw", "design-intent/assets/mermaid.min.js"]
+enabled = true
+ruling = "user 裁定 2026-09-10（s2-07l notes 10:4xZ (2)・ADR-0009 §2.5）"
+ruled_at = "2026-09-10"
+
+[[rule]]
+id = "pipe.follow_retries"
+kind = "FollowRetries"
+value = 2
+enabled = true
+ruling = "user 2026-09-12T03:25Z"
+ruled_at = "2026-09-12"
+
+# 終わりの門（設計 pipeline.md §66 形 10）。runner の終わりに器が共通 verify と契約の検証行を撃ち、赤なら同じ worktree で
+# runner を起こし直す回数の上限。値 0 も門を撃って記録する（起こし直さないだけ）。
+
+[[rule]]
+id = "runner.end_gate_rounds"
+kind = "RunnerEndGateRounds"
+value = 2
+enabled = true
+ruling = "user 2026-09-30T22:13Z 項 end-gate"
+ruled_at = "2026-09-30"
+
+# gate の費用（設計 gate-cost.md §3.1・ADR-0021）。並列度は宣言値であって実効値ではない
+# （C10）——実効値は受付（同 §3.2）が host の空きと突き合わせて導く。
+
+[[rule]]
+id = "gate.mutants_jobs"
+kind = "GateMutantsJobs"
+value = 4
+enabled = true
+ruling = "user 2026-09-12T11:42Z"
+ruled_at = "2026-09-12"
+
+[[rule]]
+id = "gate.job_memory_mb"
+kind = "GateJobMemoryMb"
+value = 3072
+enabled = true
+ruling = "user 2026-09-12T12:08Z"
+ruled_at = "2026-09-12"
+
+[[rule]]
+id = "host.reserve_memory_mb"
+kind = "HostReserveMemoryMb"
+value = 8192
+enabled = true
+ruling = "user 2026-09-12T12:08Z"
+ruled_at = "2026-09-12"
+
+[[rule]]
+id = "gate.slot_wait_s"
+kind = "GateSlotWaitS"
+value = 5400
+enabled = true
+ruling = "user 2026-09-21T09:41Z"
+ruled_at = "2026-09-21"
+
+[[rule]]
+id = "gate.cpu_weight"
+kind = "GateCpuWeight"
+value = 50
+enabled = true
+ruling = "user 2026-09-12T12:08Z"
+ruled_at = "2026-09-12"
+
+# 器の健康の遮断器（設計 gate-cost.md §32・契約表の行 x）。閾値は core あたりの倍率 × 実測の core 数で、
+# 超えた周は行を撃つ前に空くまで待つ（上限は gate.slot_wait_s・超えた周は撃たずに INCONCLUSIVE）。
+
+[[rule]]
+id = "host.runnable_per_core"
+kind = "HostRunnablePerCore"
+value = 4
+enabled = true
+ruling = "user 2026-09-20T15:23Z"
+ruled_at = "2026-09-20"
+
+[[rule]]
+id = "host.blocked_per_core"
+kind = "HostBlockedPerCore"
+value = 1
+enabled = true
+ruling = "user 2026-09-20T15:23Z"
+ruled_at = "2026-09-20"
+
+# tmux を立てる歯（e2e の isolated seat）の同時本数（設計 gate-cost.md §3.1・契約表の行 b）。値の写しは nextest の
+# test-group `tmux` の max-threads（.config/nextest.toml）で、xtask check が写しの一致と配線を突合する（C10.3）。
+
+[[rule]]
+id = "gate.tmux_test_threads"
+kind = "GateTmuxTestThreads"
+value = 1
+enabled = true
+ruling = "user 2026-09-15T21:09Z"
+ruled_at = "2026-09-15"
+
+# 着地の順序（設計 gate-cost.md §6・ADR-0021 §2.5）。上限を超えた周は待たずに進む（縮退・止めない）。
+
+[[rule]]
+id = "pipe.land_wait_s"
+kind = "PipeLandWaitS"
+value = 5400
+enabled = true
+ruling = "user 2026-09-13T02:50Z"
+ruled_at = "2026-09-13"
+
+# 検出線を起こす間隔の下限（秒・設計 gate-cost.md §50・ADR-0111）。land の終端は、前に着地後の検出の口を起こしてから
+# この秒が過ぎた周だけ口を起こし、内の周は起こさず detail に detection:deferred を記す（日次の検出）。口は前に測り終えた
+# 着地から今の着地までに着地した便をまとめて 1 回撃つ。不発効にすると着地ごとに起こす今の形に戻る。
+
+[[rule]]
+id = "detection.daily_min_s"
+kind = "DetectionDailyMinS"
+value = 86400
+enabled = true
+ruling = "user 2026-10-03T01:49Z"
+ruled_at = "2026-10-03"
+
+# 着地の列（merge train・設計 pipeline.md §40・ADR-0039）。先頭を含めて最大この本数を候補の木 1 つに積み、
+# 検査を 1 回撃って列の順に着地する。赤なら列を解いて先頭だけが従来の経路へ進む。値 1 と行の不在は先頭だけ。
+
+[[rule]]
+id = "land.train_max"
+kind = "LandTrainMax"
+value = 4
+enabled = true
+ruling = "user 2026-09-17T03:28Z"
+ruled_at = "2026-09-17"
+
+# host で同時に走る便（live な便）の本数の最大値（設計 gate-cost.md §24・ADR-0035）。受付は便を作る前に live な便を
+# 数え、この値以上の周を max-live で断る。走行中の便には効かない（resume と追随の起こし直しは数えない）。
+
+[[rule]]
+id = "pipe.max_live"
+kind = "PipeMaxLive"
+value = 16
+enabled = true
+ruling = "user 2026-09-16T11:14Z"
+ruled_at = "2026-09-16"
+
+# land の終端の CI の照合（設計 contract-source.md §5）。push の後、この上限まで forge の判定を待つ。
+# 超えた周は unmeasurable で止め、**台帳を close しない**（FailClosed・やり直しは pipe land --terminal-only）。
+
+[[rule]]
+id = "pipe.ci_wait_s"
+kind = "PipeCiWaitS"
+value = 900
+enabled = true
+ruling = "user 2026-09-16T03:31Z"
+ruled_at = "2026-09-16"
+
+# 終端の CI の照合を撃つ間隔（秒・設計 contract-source.md §50）。1 回の照合が forge の API の 1 回なので、
+# 上の上限の内側をこの間隔で撃つ（最初の評価は待たない・上限を越えて眠らない）。0 は唯一の待ちの既定の周期に戻る。
+
+[[rule]]
+id = "pipe.ci_poll_s"
+kind = "PipeCiPollS"
+value = 30
+enabled = true
+ruling = "user 2026-09-27T11:14Z"
+ruled_at = "2026-09-27"
+
+# 席の起草の置き場の写しの中間生成物を器が消す書きの線（時間・設計 dispatcher.md §33・ADR-0096）。置き場の写しの
+# 名が閉じた列に在る dir のうち、自身と下の全 entry の最新の書きがこの時間より前のものだけを終端の周の掃除が消す。
+# 0 は「線 = 今」（書きの有無を問わず掃く）。行を読めない周は起草の木を 1 本も掃かない。
+
+[[rule]]
+id = "seat.drafts_stale_h"
+kind = "SeatDraftsStaleH"
+value = 6
+enabled = true
+ruling = "user 2026-09-29T11:43Z"
+ruled_at = "2026-09-29"
+
+# 席の指示文の台帳の現在値（設計 seat-roles.md §5・ADR-0045 §2 (3)）。台帳の子 process を待つ上限。
+
+[[rule]]
+id = "seat.ledger_timeout_s"
+kind = "LedgerTimeoutS"
+value = 60
+enabled = true
+ruling = "user 2026-09-12T02:01Z"
+ruled_at = "2026-09-12"
+
+# 席の権能（設計 seat-roles.md §3 / §4・ADR-0022 §2.2・ADR-0045 §2 (1)）。役割ごとに 1 行・値は権能の名の列
+# （名の集合は crates 側の Capability が閉じる・列に無い名は loader が拒む）。PreToolUse の guard が Bash（権能付き
+# subcommand）と Edit 系（path 種別）の 2 面でこの行を読んで止める。席は orchestrator の 1 つで、src の編集
+# （edit-code）は行に無く、歯（crates/<crate>/tests/）だけが edit-tests で開く。便の起動と着地と merge（launch /
+# merge）は器の dispatcher の口ゆえ行に並ばない。便 1 本を名指す停止（stop・pipe stop --run <id>）は席が撃てる
+# （ADR-0048 §2・--all と名指しの無い停止は launch のまま）。止まった終端を閉じる名指しの 2 形（settle・pipe land
+# --run <id> --terminal-only と pipe retire --run <id>）も席が撃てる（ADR-0097 §32・窓から外れた形は merge と launch
+# のまま）。
+
+[[rule]]
+id = "role.orchestrator"
+kind = "RoleCapabilities"
+value = ["answer", "approve", "go", "stop", "settle", "edit-contract", "edit-design-intent", "edit-design-doc", "edit-tests", "edit-outside"]
+enabled = true
+ruling = "user 2026-09-29T21:53Z"
+ruled_at = "2026-09-29"
+
+# 役割ごとの既定の model と effort（設計 seat-roles.md §19・`s2-07l.433`）。役割ごとに 2 行（id は
+# seat.model.<役割名> と seat.effort.<役割名>）で、値は claude CLI の字面（閉じた表は crates 側の
+# fleet::select::Model と headless::Effort・表に無い字面は loader が拒む）。id が role. で始まらないのは、
+# role.<役割名> の前置きが権能の行（雛形を 1 枚ずつ要る行）の印だからである。席の起動と立て直しはここから
+# 対を導く（登録 row の model は導出値であって宣言ではない）。裁定は当時の 3 役割に対を与え、対話と設計の
+# 席（= 後継の orchestrator）は fable / high だった。後の裁定（user 2026-09-26T15:41Z・seat-roles.md §28）
+# が orchestrator の対を opus / xhigh に改めた。
+
+[[rule]]
+id = "seat.model.orchestrator"
+kind = "RoleModel"
+value = "opus"
+enabled = true
+ruling = "user 2026-09-26T15:41Z"
+ruled_at = "2026-09-26"
+
+[[rule]]
+id = "seat.effort.orchestrator"
+kind = "RoleEffort"
+value = "xhigh"
+enabled = true
+ruling = "user 2026-09-26T15:41Z"
+ruled_at = "2026-09-26"
+
+# 契約の size ↔ 1 file あたりの増分の見積（行・設計 contract-source.md §3「上限の余地」・rules-manifest.md §4）。
+# 受付（pipe intake）が write-set の各 .rs の余地（R-C4-2 との差）と core の余地（R-C4-1 との差）に当てる。
+# CI の contracts check は撃たない（表は履歴を持つ）。
+
+[[rule]]
+id = "pipe.size_s_lines"
+kind = "PipeSizeSLines"
+value = 100
+enabled = true
+ruling = "user 2026-09-14T06:4xZ"
+ruled_at = "2026-09-14"
+
+[[rule]]
+id = "pipe.size_m_lines"
+kind = "PipeSizeMLines"
+value = 300
+enabled = true
+ruling = "user 2026-09-14T06:4xZ"
+ruled_at = "2026-09-14"
+
+[[rule]]
+id = "pipe.size_l_lines"
+kind = "PipeSizeLLines"
+value = 800
+enabled = true
+ruling = "user 2026-09-14T06:4xZ"
+ruled_at = "2026-09-14"
+
+# 同型の審査 FAIL の停止の回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付（pipe intake / preflight）は同じ
+# bead の便を新しい順に読み、同じ理由の型（crates 側の FindingKind）の FAIL が PASS で途切れるまでこの本数続き、
+# 契約 file と節の本文がともに不変の周を same-kind-repeated で断る（焼き直しは書き直す）。行の無い manifest は
+# 受付を 1 byte も動かさない（rc 2・pipe.land_wait_s と同じ極性）。
+
+[[rule]]
+id = "review.same_kind_stop"
+kind = "ReviewSameKindStop"
+value = 2
+enabled = true
+ruling = "user 2026-09-16T05:53Z"
+ruled_at = "2026-09-16"
+
+# 入口の flip check（cargo xtask flip-check）の免除経路の閉じ方（設計 pipeline.md §7・`s2-07l.170`）。
+# docs_only_faces: .rs の差が無い便を docs-only と読む path の面（/ で終わる要素は接頭辞・他は path の完全一致）。
+# 面の外の file を 1 本でも含む便は no-test-diff で落ちる（plugin/ と rules/ は生成物と規則で docs でない）。
+# marks_per_pr: 1 便が足してよい札（retroactive / moved）の本数の上限。超えた便は too-many-marks で落ちる。
+# 読み手は xtask の flipcheck.rs と limits.rs の FlipLimits の 1 本（core は値を消費しない）。
+
+[[rule]]
+id = "flip.docs_only_faces"
+kind = "FlipDocsOnlyFaces"
+value = ["docs/", "design-intent/", ".beads/", "README.md", "CLAUDE.md"]
+enabled = true
+ruling = "user 2026-09-22T06:48Z"
+ruled_at = "2026-09-22"
+
+[[rule]]
+id = "flip.marks_per_pr"
+kind = "FlipMarksPerPr"
+value = 16
+enabled = true
+ruling = "user 2026-09-22T06:48Z"
+ruled_at = "2026-09-22"
+
+# 起票の門（hook の pre-tool-use・Bash）が断る台帳 write の形（設計 vessel-hook.md §10・`s2-07l.169`）。値は形の 1 語の
+# 閉じた列で、列に載る形だけを断る: notes-replace（--notes の置換）/ memory-subcommand（remember / recall / memories）/
+# create-without-parent（--parent を持たない create）/ bd-outside-bdw（台帳の script を経ない bd の書き込み）/
+# create-bypass（親を運べない起票の口: q / todo add / batch / create-form）/ parent-edge（parent-child の辺を横から張る書き:
+# dep add と link の parent-child・dep add の --file・create の --deps の parent-child:・設計 ledger-form.md §11）。判定は
+# core の hook::ledger_guard の 1 関数が持つ。行が無い・読めない・不発効の周は bd / bdw の command を通さない（fail-closed）。
+
+[[rule]]
+id = "ledger.denied_writes"
+kind = "LedgerDeniedWrites"
+value = ["notes-replace", "memory-subcommand", "create-without-parent", "bd-outside-bdw", "create-bypass", "parent-edge"]
+enabled = true
+ruling = "user 2026-09-27T14:02Z 項 5"
+ruled_at = "2026-09-27"
+
+# 台帳のグラフの直下の open の子（closed でも pinned でもない子）の上限（本・設計 ledger-form.md §10 形 4）。doctor の
+# 台帳のグラフの行（core の ledger::graph）が id で引いて整数だけを読み、越えた親を over に <id>/<子の数> で名指す。0 は
+# over を数えない（-）。行が無い・不発効・整数でない周は台帳のグラフの行を測れない形（reason=no-rule）で出す。
+
+[[rule]]
+id = "ledger.open_children_max"
+kind = "LedgerOpenChildrenMax"
+value = 15
+enabled = true
+ruling = "user 2026-09-27T17:33Z 項 2-3"
+ruled_at = "2026-09-27"
+
+# host の破壊防止の見張り（subcommand host-guard・設計 vessel-hook.md §11・ADR-0056）が読む種類ごとの行。語列の 3 行
+# （git の履歴破壊 / tmux server の破壊 / 台帳の破壊）は runner.denied_commands と同じ照合（先頭語一致 + 残りの語の包含）で、
+# enabled = false は host-guard の口だけを切る（command guard は 3 行を enabled に関わらず読む）。host_guard.git は
+# runner.denied_commands の git の 7 語列の写し（重複を外すのは行 f）。rm の行の値は守る集合の記号（判定は行 c）。
+# host_guard.tmux は前の器の tmux の見張りが global option の位置で止めた 3 形（kill-server / -C / -f）、host_guard.ledger
+# は台帳の bead と dolt の履歴の破壊の 4 語列。見張り自身の設定の編集の種類は行を持たない（切れない唯一の種類）。
+# 行が無い・列でない周は fail-closed。4 行とも同じ裁定（user 裁定 2026-09-20 JST・UTC の分で id を書く）。
+
+[[rule]]
+id = "host_guard.git"
+kind = "HostGuardDeniedCommands"
+value = ["git push --force", "git push -f", "git reset --hard", "git branch -D", "git clean -f", "git stash drop", "git stash clear"]
+enabled = true
+ruling = "user 2026-09-19T15:28Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "host_guard.tmux"
+kind = "HostGuardDeniedCommands"
+value = ["tmux kill-server", "tmux -C", "tmux -f"]
+enabled = true
+ruling = "user 2026-09-19T15:28Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "host_guard.ledger"
+kind = "HostGuardDeniedCommands"
+value = ["bd delete", "dolt reset --hard", "dolt branch -D", "dolt branch -d"]
+enabled = true
+ruling = "user 2026-09-19T15:28Z"
+ruled_at = "2026-09-19"
+
+[[rule]]
+id = "host_guard.rm"
+kind = "HostGuardRmProtected"
+value = ["state-dir", "repo-tracked", "repo-git"]
+enabled = true
+ruling = "user 2026-09-19T15:28Z"
+ruled_at = "2026-09-19"
+
+# host-guard の 6 つ目の種類 publish（設計 vessel-hook.md §16 行 j・ADR-0078・FR80 / AC50・s2-07l.696）の行。値の要素は札つきの
+# `form <記号>` だけ（公開の前に走査する識別子の形・閉じた 4 記号 repo-name / object-id / tracked-path / ledger-id・各 1 回）。
+# 頭の語が `exclude` の要素は置けない（読みが断る）: 無害と裁定した字句の除外は host の面（host.toml）の表 `[[publish-exclusion]]`
+# に字句と裁定 id のまま置く（ADR-0093・字句を tracked な file に書かない＝PUBLIC な repo に書くと公開そのもの）。
+# 行が無い・列でない周は公開の segment（git push と gh の公開の動詞）
+# だけを断る。裁定 3 本: user 2026-09-27T17:39Z（器の仕組みで止める）・22:21Z（GitHub への問いと着地の push の走査）・
+# 23:55Z（repo の名は区切った成分で照合し除外の一覧だけを除く）。
+
+[[rule]]
+id = "host_guard.publish"
+kind = "HostGuardPublish"
+value = ["form repo-name", "form object-id", "form tracked-path", "form ledger-id"]
+enabled = true
+ruling = "user 2026-09-27T23:55Z"
+ruled_at = "2026-09-27"
+
+# publish の配線（設計 vessel-hook.md §22 行 n・ADR-0078・SRS FR80 / NFR5）の上限の 2 行。deadline_ms は publish の segment の周で撃つ
+# git と gh の問いの全体の締め切り（NFR5 の 6 秒・配線の timeout 未満に限る）、read_bytes は出ていく字面と子の出力を読む上限
+# （NFR5 の 8 MB）。越えた周は断る（締め切りは撃ち直す・上限は分けて出す）。読めない周は行が無いのと同じに扱う。
+
+[[rule]]
+id = "host_guard.publish_deadline_ms"
+kind = "HostGuardPublishDeadlineMs"
+value = 6000
+enabled = true
+ruling = "user 2026-09-29T04:37Z"
+ruled_at = "2026-09-29"
+
+[[rule]]
+id = "host_guard.publish_read_bytes"
+kind = "HostGuardPublishReadBytes"
+value = 8388608
+enabled = true
+ruling = "user 2026-09-29T04:37Z"
+ruled_at = "2026-09-29"
+
+# 管理 tick（seat tick・設計 seat-heartbeat.md §2 形 5 / §10 形 5〜7・ADR-0058 §2・ADR-0068）の 3 行。tick_interval_s は
+# timer の周期（秒・unit を書く口が読む）、tick_stale_s は黙りの閾値（settle の基準）・Busy の古さの 2 役（秒）、
+# pointer_ladder_s は合図の梯子の列（秒の文字列・非空・狭義に昇順・段 n の待ちは列の n 番目・列を越えた段は送らない）。
+# 読めない周は tick が no-rule で断る（既定値に倒さない）。3 行とも同じ裁定（梯子の列と周期の裁定）。
+
+[[rule]]
+id = "seat.tick_interval_s"
+kind = "SeatTickIntervalS"
+value = 15
+enabled = true
+ruling = "user 2026-09-25T14:39Z"
+ruled_at = "2026-09-25"
+
+[[rule]]
+id = "seat.tick_stale_s"
+kind = "SeatTickStaleS"
+value = 1800
+enabled = true
+ruling = "user 2026-09-25T14:39Z"
+ruled_at = "2026-09-25"
+
+[[rule]]
+id = "seat.pointer_ladder_s"
+kind = "SeatPointerLadderS"
+value = ["1800", "3600", "10800", "21600", "43200", "86400"]
+enabled = true
+ruling = "user 2026-09-25T14:39Z"
+ruled_at = "2026-09-25"
+
+# 群の移動の退避の猶予の上限（秒・設計 seat-heartbeat.md §13 形 1 / §14 / §18 形 4・ADR-0071 / ADR-0073 / ADR-0079）。起点は
+# 合図の記録の at で、猶予の内側は退避の合図の 1 行だけを送り、合図の turn が終わった（at 以後の Busy と最終行の Stop の Idle）
+# 席には猶予を待たずに /exit を送る。終わりが確かめられない席は猶予を越えてから送る。0 は猶予なし（記録の直後に /exit）。
+# 読めない周は tick が no-rule で断る（既定値に倒さない）。
+
+[[rule]]
+id = "seat.move_grace_s"
+kind = "SeatMoveGraceS"
+value = 300
+enabled = true
+ruling = "user 2026-09-28T01:44Z"
+ruled_at = "2026-09-28"
+
+# 席の起動を包む封じ込めの箱の memory の上限（MiB・設計 account-lifecycle.md §30 形 1・ADR-0072）。席の起動行の頭に
+# systemd-run --scope（MemoryMax=<値>M・OOMPolicy=continue）を付ける。0 は包まない。読めない周も包まず素の行で起こす
+# （起動は止めない＝縮退・語は no-rules）。
+
+[[rule]]
+id = "seat.memory_max_mb"
+kind = "SeatMemoryMaxMb"
+value = 32768
+enabled = true
+ruling = "user 2026-09-26T08:28Z"
+ruled_at = "2026-09-26"
+
+# heartbeat の段の上げ（秒・設計 seat-heartbeat.md §17 形 1〜3）。live が 0 本と測れ、0 本の分数 × 60 がこの値以上の周は、
+# 黙りの門の閾値を seat.tick_stale_s と値の小さい方にし、梯子を段 0 に留め、合図の末尾に alarm=idle を足す。0 は上げない。
+# 任意の行: 読めない周は上げず、合図の末尾に alarm=idle-unset を足す（tick は no-rule で断らない）。
+
+[[rule]]
+id = "seat.idle_alarm_s"
+kind = "SeatIdleAlarmS"
+value = 900
+enabled = true
+ruling = "user 2026-09-27T14:02Z 項 4"
+ruled_at = "2026-09-27"
+
+# 事前審査の確定の束の段の上げ（秒・設計 dispatcher.md §27 形 4・行 y）。最も古い確定の束の初めて見た時刻からこの値以上
+# 経った周は、行 u の段の上げの 1 本で heartbeat の段を上げ、alarm= の列に precheck を足す。0 は上げない。
+# 任意の行: 読めない周は上げず、precheck= を出す周に限り alarm= の列に precheck-unset を足す。
+
+[[rule]]
+id = "seat.precheck_alarm_s"
+kind = "SeatPrecheckAlarmS"
+value = 900
+enabled = true
+ruling = "user 2026-09-27T17:33Z 項 2-1"
+ruled_at = "2026-09-27"
+
+# 床の検査（vessel 宣言の任意 key floor-check・設計 dispatcher.md §34・ADR-0084）を撃つ子を待つ上限（秒）。越えた周は子を止めて
+# timeout と読み、結果を残さず次の周に撃ち直す。読めない周は撃たず unfireable（why=row・既定値に倒さない）。
+
+[[rule]]
+id = "floor.timeout_s"
+kind = "FloorTimeoutS"
+value = 600
+enabled = true
+ruling = "user 2026-09-30T04:25Z"
+ruled_at = "2026-09-30"
+
+# 行の予約の期限（時間・設計 row-review.md §7・FR102）。落ちた契約の終端からこの時間を過ぎた行は write-set の予約を手放す。値 0 は期限なし。
+# 読めない周は期限なしで予約を掛け、reserved の値の末尾に /unset を足す。
+
+[[rule]]
+id = "pipe.reserve_h"
+kind = "PipeReserveH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T22:13Z 項 reserve"
+ruled_at = "2026-09-30"
+
+# 席の起草の置き場の build の置き場の量の上限（MiB = 100 GiB・state dir ごと・設計 dispatcher.md §39・ADR-0101）と、量の線が消さない
+# 組み立て中の窓（秒 = 30 分）。読めない周は量の線を撃たず記録は no-rule（既定値に倒さない）。
+
+[[rule]]
+id = "seat.drafts_cap_mb"
+kind = "SeatDraftsCapMb"
+value = 102400
+enabled = true
+ruling = "user 2026-09-30T07:18Z"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "seat.drafts_busy_s"
+kind = "SeatDraftsBusyS"
+value = 1800
+enabled = true
+ruling = "user 2026-09-30T07:18Z"
+ruled_at = "2026-09-30"
+
+# 局面の出力（設計 case-lifecycle.md §12・ADR-0088）。終わりの局面の閉じた部品を載せる窓（時間）と、手番が seat の局面が滞ったと
+# みなす年齢の閾値（時間・語ごとに 1 行・行の無い seat の語は閾値なしで owned.unset に数える）。読めない周は局面の出力を書かない。
+# 行の裁定 id の字は base の行 floor.timeout_s と同じ裁定の項 lifecycle（新設の行が base の行の裁定を使い回さない）。
+
+[[rule]]
+id = "lifecycle.closed_window_h"
+kind = "LifecycleClosedWindowH"
+value = 72
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.utterance-open"
+kind = "LifecycleAgeH"
+value = 2
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.run-landed-open"
+kind = "LifecycleAgeH"
+value = 2
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.contract-refused"
+kind = "LifecycleAgeH"
+value = 4
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.run-review-failed"
+kind = "LifecycleAgeH"
+value = 4
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.run-gate-failed"
+kind = "LifecycleAgeH"
+value = 4
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.run-stopped"
+kind = "LifecycleAgeH"
+value = 4
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.run-failed"
+kind = "LifecycleAgeH"
+value = 4
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.ruling-unreflected"
+kind = "LifecycleAgeH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.memo-actionable"
+kind = "LifecycleAgeH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.contract-queued"
+kind = "LifecycleAgeH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.row-unbeaded"
+kind = "LifecycleAgeH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.misfit"
+kind = "LifecycleAgeH"
+value = 24
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "lifecycle.age_h.epic-closable"
+kind = "LifecycleAgeH"
+value = 72
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 lifecycle"
+ruled_at = "2026-09-30"
+
+# 管理 tick の全部の書き直しの下限（秒・設計 case-lifecycle.md §19 約束 1）。前の全部の書き直しと tick の撃った記録の新しい方から
+# この秒数以上後の周だけ、台帳か main の印が出力と違う時に全部を書き直す。
+
+[[rule]]
+id = "lifecycle.full_min_s"
+kind = "LifecycleFullMinS"
+value = 300
+enabled = true
+ruling = "user 2026-10-01T15:27Z"
+ruled_at = "2026-10-01"
+
+[[rule]]
+id = "memo.notes_max_bytes"
+kind = "MemoNotesMaxBytes"
+value = 8192
+enabled = true
+ruling = "user 2026-09-30T04:25Z 項 memo"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "memo.triage_interval_h"
+kind = "MemoTriageIntervalH"
+value = 24
+enabled = true
+ruling = "user 2026-09-28T07:27Z"
+ruled_at = "2026-09-28"
+
+[[rule]]
+id = "memo.triage_per_round"
+kind = "MemoTriagePerRound"
+value = 2
+enabled = true
+ruling = "user 2026-09-28T07:27Z"
+ruled_at = "2026-09-28"
+
+[[rule]]
+id = "index.cap_mb"
+kind = "IndexCapMb"
+value = 2048
+enabled = true
+ruling = "user 2026-09-30T22:13Z 項 index-cap"
+ruled_at = "2026-09-30"
+
+[[rule]]
+id = "index.timeout_s"
+kind = "IndexTimeoutS"
+value = 600
+enabled = true
+ruling = "user 2026-09-30T22:13Z 項 index-timeout"
+ruled_at = "2026-09-30"
+
+# 口座の宣言（設計 fleet-usage.md §2・account-lifecycle.md §2・ADR-0026 §2.1）は host の manifest（state dir
+# の host.toml）にだけ置く。この file に口座の表は置かない（文法は残る・足す変更は A1 の対話面で聞く・本 repo
+# は PUBLIC・SRS CON2）。器は credential の置き場を走査せず、宣言だけを真実として読む（C3）。
