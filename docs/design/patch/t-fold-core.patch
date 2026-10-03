@@ -1,3 +1,15 @@
+diff --git a/crates/tsuzuri-boundary/tests/fdlv.rs b/crates/tsuzuri-boundary/tests/fdlv.rs
+index 8e3c6a47b622bc827ac2adb64171c67e04b4884d..1acbe216da3adb161069a06f5bc631eed65e6836 100644
+--- a/crates/tsuzuri-boundary/tests/fdlv.rs
++++ b/crates/tsuzuri-boundary/tests/fdlv.rs
+@@ -1,6 +1,6 @@
+ //! 配達の hook の歯（行 f-deliver・接頭辞 fdlv_）。
+ //! 偽の bd は撃たれた回ごとの引数と cwd を記録の置き場に足してから作業場の out.json を出す script。
+-//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/fdlv.rs が持つ。
++//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/teeth1/fdlv.rs が持つ。
+ #![cfg(test)]
+ 
+ use std::ffi::OsString;
 diff --git a/crates/tsuzuri-boundary/tests/g3g7w.rs b/crates/tsuzuri-boundary/tests/g3g7w.rs
 index 2b55aa532bd5810d3781d40a61d3f047373894fb..e4473248d74617ccae106734fb75384dbbe053d9 100644
 --- a/crates/tsuzuri-boundary/tests/g3g7w.rs
@@ -11,6 +23,149 @@ index 2b55aa532bd5810d3781d40a61d3f047373894fb..e4473248d74617ccae106734fb75384d
      ] {
          let text = fs::read_to_string(&file)
              .unwrap_or_else(|e| panic!("{} を読む: {e}", file.display()));
+diff --git a/crates/tsuzuri-boundary/tests/gextw.rs b/crates/tsuzuri-boundary/tests/gextw.rs
+index 3fa168e2838a5fb570a51fdc25527f12fb58529a..625cbbb6dd4ea2e4a2067117f18c1393b5230a48 100644
+--- a/crates/tsuzuri-boundary/tests/gextw.rs
++++ b/crates/tsuzuri-boundary/tests/gextw.rs
+@@ -3,7 +3,7 @@
+ //! 3 つの置き場（far・cut・gone）と偽の bd（撃たれた cwd の ledger.json を出す・無ければ rc が 0 でない）と
+ //! 偽の設計の道具（引数に --emit-rulings が在れば書き出しの字・--summary が在れば rc 1・ほかは索引の字を返す）を置く。
+ //! 書き出しは fixture の書き出しに、族 s9-far を引く ADR-8 の行（bead の形で s9-far.2）を足した字。
+-//! 歯の名の検査は tsuzuri-core の tests/gext.rs が持つ。
++//! 歯の名の検査は tsuzuri-core の tests/teeth1/gext.rs が持つ。
+ #![cfg(test)]
+ 
+ use std::ffi::OsString;
+diff --git a/crates/tsuzuri-boundary/tests/pmisroute.rs b/crates/tsuzuri-boundary/tests/pmisroute.rs
+index 2385f113f11836bd26addd8b5e1d3f99c533110e..d8275a81213efaca447f84bd0a4ec32fff0c05c6 100644
+--- a/crates/tsuzuri-boundary/tests/pmisroute.rs
++++ b/crates/tsuzuri-boundary/tests/pmisroute.rs
+@@ -1,6 +1,6 @@
+ //! 行 c-pipe-misfit と行 c-misfit-pair の歯（境界）: 台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち
+ //! （`form::Form`）、その字と台帳の形の行を組（`form::Kept`）で持ち、口 /api/pipeline は札を今の台帳の字から、
+-//! 形の崩れの一覧を持った組から写す。知らせの接続も撃ちを許す（歯の名は中核の tests/pmisfit.rs と同じ接頭辞 pmisfit_）。
++//! 形の崩れの一覧を持った組から写す。知らせの接続も撃ちを許す（歯の名は中核の tests/teeth2/pmisfit.rs と同じ接頭辞 pmisfit_）。
+ //! 偽の bd は撃たれるたびに記録の file bd に 1 行を足して作業場の ledger.json の字を出し、偽の器は受けた argv を
+ //! 記録の file argv に 1 行ずつ足し、argv の頭が doctor なら作業場の sleep の字の秒だけ待ってから out-doctor の字を出す
+ //! （ほかと file の無い出力は rc 1）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index 1a6af2d9516298e1c9d1fe830d5db38feba9b40a..2752422e152d749b8c18f0941c2941f9969f458f 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型: server と面と hook が共有する型（設計ノート surface §20・surface-base 便 b）。
+ //! 面の側に電文の写しを書かない。電文の形は JSON で、字の形は `wire` の 2 関数だけが決める。
+-//! 型の外形は群ごとの歯 `tests/cform_*.rs` と snapshot `tests/snapshots/*.json` が pin する（共通の手は `tests/common/mod.rs`）。
++//! 型の外形は群ごとの歯 `tests/cform_*.rs` と snapshot `tests/snapshots/*.json` が pin する（共通の手は `tests/teeth1/common/mod.rs`）。
+ 
+ pub mod account;
+ pub mod board;
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_board.rs b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+index 6ac825d5d5e7a4b1c81c35235a181daf07682252..9aceccbda50a508c91b632c386261fdea084ffd9 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち board の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（board.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_case.rs b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+index 46c932e916a2ed060b9a29cb5f1950647ac118ac..29194350f510fc283fcdf623b4e9b92796fac595 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 bvcform_・設計ノート surface-wave26a 行 c-case-read）のうち case の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（case.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+index a870ac2a91f971401a682db2c7f2a576543643e5..b49d7479413fb40e063a24fb32da05043d0ba00a 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち graph の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（graph.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+index e154bf784b2b4830693703a1764897c3619dc34f..90d9412466fc6687fd16f667a4828a63215dddd0 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち ledger の群（module ledger と question）の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（ledger.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs b/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
+index c2490f4fd79f05d519b3277beaebfd8f60b23e5e..aa59405828ee199ab688ee0500c3254d847125ec 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち seat の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（seat.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs b/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
+index c58e8fc582049aa1a490b1eeaf75e20858d524bb..d4d3cbbb9d61257538a45d6090671bd2bbb008de 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち stats の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（stats.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+index 786b8ec69564cd3b0d422f176de655c59ea75811..281098f67dc4b224771fd726afcf2b1682a8612b 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+@@ -1,6 +1,6 @@
+ //! 契約の型の外形の歯（接頭辞 contract_form_）のうち surface の群の型の見本。
+ //! snapshot は tests/snapshots の群の名の json（surface.json）で、字の比べは標準 library だけで行う。
+-//! 共通の手は tests/common/mod.rs に 1 つだけ在る。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 つだけ在る。
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs b/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
+index 3caf733d3104e490a68ecc294e5ae402a85f0e6c..667da341a755c749125b777ebac89fe615b155dd 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
+@@ -1,7 +1,7 @@
+ //! 群ごとの snapshot と歯の file の見張りの歯（接頭辞 cfsplit_・設計ノート surface-wave16a 行 t-cform-json と t-cform-split）。
+ //! 群の json（tests/snapshots の群の名の json）は群の module の見本だけを持ち、鍵は群どうしで重ならず、群の歯の file（tests/cform_ と群の名の .rs）は自分の群の json だけを比べる。
+ //! 鍵の和は割る前の snapshot の鍵を、群の file の歯の名は割る前の歯の名を含む（床・足す行は一覧を直さず・消すか名を替える行だけが直す）。
+-//! 共通の手は tests/common/mod.rs に 1 度ずつだけ在り、tests の下の file はどれも受付の行数の上限以下。
++//! 共通の手は tests/teeth1/common/mod.rs に 1 度ずつだけ在り、tests の下の file はどれも受付の行数の上限以下。
+ //! 割る前の歯と snapshot の path の字は repo の crates と xtask の code に残らない（この file 自身は数えない）。
+ #![cfg(test)]
+ 
+@@ -87,7 +87,7 @@ const BEFORE_KEYS: [&str; 62] = [
+     "seat::SeatCard",
+ ];
+ 
+-/// 共通の手の定義の字（tests/common/mod.rs に 1 度ずつだけ在り、群の file には無い）。
++/// 共通の手の定義の字（tests/teeth1/common/mod.rs に 1 度ずつだけ在り、群の file には無い）。
+ const HANDS: [&str; 10] = [
+     "const AT:",
+     "fn bead(",
 diff --git a/crates/tsuzuri-core/tests/abss.rs b/crates/tsuzuri-core/tests/teeth1/abss.rs
 similarity index 99%
 rename from crates/tsuzuri-core/tests/abss.rs
@@ -196,20 +351,12 @@ index 08b2808d1f28d953e2e199a08d2096b9d1299bd6..17cd861c2e3ef549a18ef193700b7395
      assert!(names.len() >= 6, "歯の名: {names:?}");
      for name in names {
 diff --git a/crates/tsuzuri-core/tests/fdlt.rs b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
-similarity index 98%
+similarity index 99%
 rename from crates/tsuzuri-core/tests/fdlt.rs
 rename to crates/tsuzuri-core/tests/teeth1/fdlt.rs
-index b8260073cd07ca50e4c0f4f666c9fab0efe8b65b..75c13e9b1cf1e989263be484bde3e6db644dd792 100644
+index b8260073cd07ca50e4c0f4f666c9fab0efe8b65b..04dfa680989153eccbce72150f474f96cce2c7f6 100644
 --- a/crates/tsuzuri-core/tests/fdlt.rs
 +++ b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
-@@ -1,6 +1,6 @@
- //! tool の呼びの組の後の配達の hook の中核の歯（行 f-deliver-tool・接頭辞 fdlt_）。
- //! 台帳は歯の中で組む（問い fx-t.1〜fx-t.8）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
--//! 境界の tests/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
-+//! 境界の tests/teeth1/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
- #![cfg(test)]
- 
- use std::io::{ErrorKind, Write};
 @@ -613,7 +613,7 @@ fn fdlt_command_under_sh() {
      std::fs::remove_dir_all(&work).expect("作業場を消す");
  }
@@ -229,20 +376,12 @@ index b8260073cd07ca50e4c0f4f666c9fab0efe8b65b..75c13e9b1cf1e989263be484bde3e6db
      let mut names = Vec::new();
      for path in [core, boundary] {
 diff --git a/crates/tsuzuri-core/tests/fdlv.rs b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
-similarity index 98%
+similarity index 99%
 rename from crates/tsuzuri-core/tests/fdlv.rs
 rename to crates/tsuzuri-core/tests/teeth1/fdlv.rs
-index 1399a017a512f384d0ff63191d47511aa5f8257f..464ec24344629038f6ff519b29504c038071f447 100644
+index 1399a017a512f384d0ff63191d47511aa5f8257f..d2335b8187fea7a546048f92863024cc77fbe184 100644
 --- a/crates/tsuzuri-core/tests/fdlv.rs
 +++ b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
-@@ -1,6 +1,6 @@
- //! 配達の hook の中核の歯（行 f-deliver・接頭辞 fdlv_）。
- //! 台帳は歯の中で組む（問い fx-d.1〜fx-d.6）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
--//! 境界の tests/fdlv.rs の歯の名もこの file が数える（fdlv_own_names_clean）。
-+//! 境界の tests/teeth1/fdlv.rs の歯の名もこの file が数える（fdlv_own_names_clean）。
- #![cfg(test)]
- 
- use std::io::{ErrorKind, Write};
 @@ -564,7 +564,7 @@ fn fdlv_command_under_sh() {
      std::fs::remove_dir_all(&work).expect("作業場を消す");
  }

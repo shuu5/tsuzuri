@@ -265,20 +265,9 @@ similarity index 100%
 rename from crates/tsuzuri-boundary/tests/fdlt.rs
 rename to crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
 diff --git a/crates/tsuzuri-boundary/tests/fdlv.rs b/crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
-similarity index 99%
+similarity index 100%
 rename from crates/tsuzuri-boundary/tests/fdlv.rs
 rename to crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
-index 8e3c6a47b622bc827ac2adb64171c67e04b4884d..cbaafc838d12253d5fbb66cf2b93bb1e1538346b 100644
---- a/crates/tsuzuri-boundary/tests/fdlv.rs
-+++ b/crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
-@@ -1,6 +1,6 @@
- //! 配達の hook の歯（行 f-deliver・接頭辞 fdlv_）。
- //! 偽の bd は撃たれた回ごとの引数と cwd を記録の置き場に足してから作業場の out.json を出す script。
--//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/fdlv.rs が持つ。
-+//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/teeth2/fdlv.rs が持つ。
- #![cfg(test)]
- 
- use std::ffi::OsString;
 diff --git a/crates/tsuzuri-boundary/tests/fpremhook.rs b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
 similarity index 99%
 rename from crates/tsuzuri-boundary/tests/fpremhook.rs
@@ -1163,9 +1152,17 @@ index 17cd861c2e3ef549a18ef193700b73950be32671..0ac62af4ad249e75fb737111aefd4ca2
      for name in names {
          let rest = name
 diff --git a/crates/tsuzuri-core/tests/teeth1/fdlt.rs b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
-index 75c13e9b1cf1e989263be484bde3e6db644dd792..e23d94a83ad036a81ade634e01b9151e5bf29f95 100644
+index 04dfa680989153eccbce72150f474f96cce2c7f6..592948552143642d637813b81455a9de7c9610e6 100644
 --- a/crates/tsuzuri-core/tests/teeth1/fdlt.rs
 +++ b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+@@ -1,6 +1,6 @@
+ //! tool の呼びの組の後の配達の hook の中核の歯（行 f-deliver-tool・接頭辞 fdlt_）。
+ //! 台帳は歯の中で組む（問い fx-t.1〜fx-t.8）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
+-//! 境界の tests/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
++//! 境界の tests/teeth2/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
+ #![cfg(test)]
+ 
+ use std::io::{ErrorKind, Write};
 @@ -629,7 +629,7 @@ fn test_names(src: &str) -> Vec<String> {
  #[test]
  fn fdlt_own_names_clean() {
@@ -1176,9 +1173,17 @@ index 75c13e9b1cf1e989263be484bde3e6db644dd792..e23d94a83ad036a81ade634e01b9151e
      for path in [core, boundary] {
          let src = std::fs::read_to_string(&path)
 diff --git a/crates/tsuzuri-core/tests/teeth1/fdlv.rs b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
-index 464ec24344629038f6ff519b29504c038071f447..26ec84cf921d552ac5699572d6de4c79c9d3ef4f 100644
+index d2335b8187fea7a546048f92863024cc77fbe184..ebf177f82276439ef904adc54d04c5ed269463da 100644
 --- a/crates/tsuzuri-core/tests/teeth1/fdlv.rs
 +++ b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+@@ -1,6 +1,6 @@
+ //! 配達の hook の中核の歯（行 f-deliver・接頭辞 fdlv_）。
+ //! 台帳は歯の中で組む（問い fx-d.1〜fx-d.6）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
+-//! 境界の tests/fdlv.rs の歯の名もこの file が数える（fdlv_own_names_clean）。
++//! 境界の tests/teeth2/fdlv.rs の歯の名もこの file が数える（fdlv_own_names_clean）。
+ #![cfg(test)]
+ 
+ use std::io::{ErrorKind, Write};
 @@ -580,7 +580,7 @@ fn test_names(src: &str) -> Vec<String> {
  #[test]
  fn fdlv_own_names_clean() {
@@ -1189,9 +1194,18 @@ index 464ec24344629038f6ff519b29504c038071f447..26ec84cf921d552ac5699572d6de4c79
      for path in [core, boundary] {
          let src = std::fs::read_to_string(&path)
 diff --git a/crates/tsuzuri-core/tests/teeth1/gext.rs b/crates/tsuzuri-core/tests/teeth1/gext.rs
-index dbe813d6c1680382e73f998a884fc2d6b5c2e893..838d68f73d29f63217b5e41315690d3c7b295025 100644
+index dbe813d6c1680382e73f998a884fc2d6b5c2e893..79cbbb92c74c631649b066004b6892067e509ea1 100644
 --- a/crates/tsuzuri-core/tests/teeth1/gext.rs
 +++ b/crates/tsuzuri-core/tests/teeth1/gext.rs
+@@ -2,7 +2,7 @@
+ //! 族が自分の台帳に無い行（外の台帳の行）を外の台帳で確かめる g-3（`check::outside_heads` が確かめられない行の
+ //! 節点の数と族を名指す）。fixture は tests/fixtures/graph/unruled/ の 4 つの file（読むだけ）で、族 s9-far と s7-gone と
+ //! s8-near（作った名）を引く書き出しの行と外の台帳の字は歯の中で足す。
+-//! 境界の歯は tsuzuri-boundary の tests/gextw.rs（この file の歯の名と合わせて 6 つ）。
++//! 境界の歯は tsuzuri-boundary の tests/teeth2/gextw.rs（この file の歯の名と合わせて 6 つ）。
+ #![cfg(test)]
+ 
+ use std::fs;
 @@ -482,7 +482,7 @@ fn gext_names_clean() {
      let mut names: Vec<String> = Vec::new();
      for file in [
