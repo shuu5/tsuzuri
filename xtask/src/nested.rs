@@ -2,12 +2,15 @@
 //! 根の直下の dir のうち、Cargo.toml が行 `[workspace]` を持つ dir（入れ子の workspace）を字の順で数えて 1 行で出し（0 も出す）、
 //! 各々の dir で build・歯（根と同じ partition）・clippy・その workspace の `cargo xtask check` を順に撃ち、最初に落ちた段の rc を返す。
 //! 入れ子の組み立ては根の target の下の nested/<dir の名> に書く（根の xtask と入れ子の xtask の binary を同じ dir に置かない）。
+//! 数えた 1 行の後、dir ごとに省くかを判じて 1 行ずつ出し、省いた dir の段は撃たない（行 v-skip・判断の記録 ADR-34・skip の module）。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::{emit_err, step_args};
+
+mod skip;
 
 /// 入れ子の dir ごとの段（順に撃つ）。頭の語が nextest の段にだけ、根と同じ partition の字を足す（step_args）。
 pub const STEPS: &[&[&str]] = &[
@@ -88,7 +91,8 @@ pub fn plan(root: &Path, base: &Path, dirs: &[String], part: Option<&str>) -> Ve
         .collect()
 }
 
-/// 入れ子の workspace の段: 数えた 1 行を出し、段の列を順に撃ち、最初に落ちた段の rc を返す（入れ子が無いか全部通れば 0）。
+/// 入れ子の workspace の段: 数えた 1 行を出し、dir ごとの判じの行を出し、全部を撃つ dir の段の列を順に撃ち、最初に落ちた段の rc を返す
+/// （入れ子が無いか全部を省くか全部通れば 0）。
 /// 入れ子の dir を読めなければ段を撃たずに rc 1 を返す。
 pub fn run(root: &Path, cargo: &str, part: Option<&str>) -> i32 {
     let dirs = match find(root) {
@@ -100,6 +104,11 @@ pub fn run(root: &Path, cargo: &str, part: Option<&str>) -> i32 {
         }
     };
     emit_err(&format!("xtask check: {}", summary(&dirs)));
+    let forced = std::env::var_os(skip::FORCE_ENV).is_some();
+    let (dirs, lines) = skip::select(&dirs, |d| skip::decide(root, d, forced));
+    for line in lines {
+        emit_err(&format!("xtask check: {line}"));
+    }
     let base = target_base(root, std::env::var_os("CARGO_TARGET_DIR"));
     for shot in plan(root, &base, &dirs, part) {
         let line = format!("nested {}: cargo {}", shot.name, shot.args.join(" "));

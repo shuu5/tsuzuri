@@ -20,6 +20,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       TSUZURI_CHECK_PARTITION: count:${{ matrix.shard }}/8
+      # 入れ子の workspace の段は省かずに全部を撃つ（PR の木は origin/main との差で省けてしまうため・行 v-skip・判断の記録 ADR-34）
+      TSUZURI_CHECK_NESTED_ALL: "1"
     steps:
       # action は commit の SHA で pin する（scribe2 の ci.yml と同じ版）
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
