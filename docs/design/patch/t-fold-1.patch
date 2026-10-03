@@ -1,0 +1,207 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 896eeaeb9314230973e32044760a7586a5e1786e..48e1517d95bfd7311c7ba7db70e283dfb03f69b7 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -65,7 +65,7 @@ jobs:
+   # 器 scribe2 の CI にだけ在った門（行 v-ci・判断の記録 ADR-33 の決定 (5) と (14)）。器の build・歯・clippy・器の xtask の check は
+   # job check の入れ子の段が撃ち、入口の赤と main の出所の門（flip-check・rules-diff・deps-delta・main-provenance）は行 v-gates へ回す。
+   # 依存の監査は器の一覧（scribe2/deny.toml）で、器の ci.yml の job deny と同じ字を、job の既定の撃つ dir を scribe2/ にして撃つ
+-  # （字の照らしは xtask/tests/vcij.rs・根の workspace に入れる行 v-join の後は job deny が撃つ）。
++  # （字の照らしは xtask/tests/teeth1/vcij.rs・根の workspace に入れる行 v-join の後は job deny が撃つ）。
+   scribe2-deny:
+     runs-on: ubuntu-latest
+     defaults:
+diff --git a/crates/tsuzuri-boundary/tests/cwans.rs b/crates/tsuzuri-boundary/tests/teeth5/cwans.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwans.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwans.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwcls.rs b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwcls.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwlch.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwopn.rs b/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwopn.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwshw.rs b/crates/tsuzuri-boundary/tests/teeth5/cwshw.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwshw.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwshw.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwwat.rs b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwwat.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+index b7888dcbf5781070bc1306a869c72a269694df55..f1b2517beaae4249d7de4becb81867790c7ce28b 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -2,6 +2,12 @@
+ //! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod cwans;
++mod cwcls;
++mod cwlch;
++mod cwopn;
++mod cwshw;
++mod cwwat;
+ mod strelay;
+ mod stskill;
+ mod stterm;
+diff --git a/crates/tsuzuri-contract/tests/cwty.rs b/crates/tsuzuri-contract/tests/teeth1/cwty.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/cwty.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cwty.rs
+diff --git a/crates/tsuzuri-contract/tests/teeth1/main.rs b/crates/tsuzuri-contract/tests/teeth1/main.rs
+index c5863faddf5a4da0384b64a97d488f922d4fbd37..fb7b5c9f9db46f680b3a7b701aa2a9c7092e37fd 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/main.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/main.rs
+@@ -13,5 +13,6 @@ mod cform_surface;
+ mod cfsplit;
+ mod common;
+ mod ctick;
++mod cwty;
+ mod fxpre;
+ mod lresume;
+diff --git a/crates/tsuzuri-core/tests/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/cwarg.rs
+rename to crates/tsuzuri-core/tests/teeth3/cwarg.rs
+diff --git a/crates/tsuzuri-core/tests/cwfnd.rs b/crates/tsuzuri-core/tests/teeth3/cwfnd.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/cwfnd.rs
+rename to crates/tsuzuri-core/tests/teeth3/cwfnd.rs
+diff --git a/crates/tsuzuri-core/tests/cwlin.rs b/crates/tsuzuri-core/tests/teeth3/cwlin.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/cwlin.rs
+rename to crates/tsuzuri-core/tests/teeth3/cwlin.rs
+diff --git a/crates/tsuzuri-core/tests/cwquo.rs b/crates/tsuzuri-core/tests/teeth3/cwquo.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/cwquo.rs
+rename to crates/tsuzuri-core/tests/teeth3/cwquo.rs
+diff --git a/crates/tsuzuri-core/tests/teeth3/main.rs b/crates/tsuzuri-core/tests/teeth3/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c4aa451885aa396aa90062d58f2f96256769dffc
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/teeth3/main.rs
+@@ -0,0 +1,8 @@
++//! tsuzuri-core の歯の群 teeth3（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod cwarg;
++mod cwfnd;
++mod cwlin;
++mod cwquo;
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index ba3321d19720334f29f2f4ba434784c61f876319..e2807f01be1bb2212b2ac3f426fbfb989561fede 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -14,10 +14,11 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-boundary/tests/teeth2", 27),
+     ("crates/tsuzuri-boundary/tests/teeth3", 16),
+     ("crates/tsuzuri-boundary/tests/teeth4", 14),
+-    ("crates/tsuzuri-boundary/tests/teeth5", 8),
+-    ("crates/tsuzuri-contract/tests/teeth1", 13),
++    ("crates/tsuzuri-boundary/tests/teeth5", 14),
++    ("crates/tsuzuri-contract/tests/teeth1", 14),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),
++    ("crates/tsuzuri-core/tests/teeth3", 4),
+     ("crates/tsuzuri-surface/tests/teeth1", 31),
+     ("crates/tsuzuri-surface/tests/teeth2", 38),
+     ("crates/tsuzuri-surface/tests/teeth3", 30),
+@@ -29,7 +30,7 @@ const GROUPS: &[(&str, usize)] = &[
+     ("folio2/crates/folio/tests/tz3", 17),
+     ("folio2/crates/folio/tests/tz4", 16),
+     ("folio2/crates/folio/tests/tz5", 3),
+-    ("xtask/tests/teeth1", 9),
++    ("xtask/tests/teeth1", 14),
+     // kfold-groups-end
+ ];
+ 
+diff --git a/xtask/tests/teeth1/main.rs b/xtask/tests/teeth1/main.rs
+index a6542ae7572d35db8f6bf9aeee50fa69bec8b645..16d5a8e5627f26c24bd4f6add921eac4ea9d68c0 100644
+--- a/xtask/tests/teeth1/main.rs
++++ b/xtask/tests/teeth1/main.rs
+@@ -11,3 +11,8 @@ mod klintf;
+ mod ntmo;
+ mod retire;
+ mod tlic;
++mod vcij;
++mod vdaily;
++mod vretb;
++mod vskip;
++mod vsplit;
+diff --git a/xtask/tests/vcij.rs b/xtask/tests/teeth1/vcij.rs
+similarity index 99%
+rename from xtask/tests/vcij.rs
+rename to xtask/tests/teeth1/vcij.rs
+index 3d10a6a66b6ecb1e5b539d85ec487fb8e1cae7a8..157f2f1fd8126a4094ac1acef3936d3cf271dca3 100644
+--- a/xtask/tests/vcij.rs
++++ b/xtask/tests/teeth1/vcij.rs
+@@ -4,7 +4,7 @@
+ //! 写した・和で照らす・入れ子の段が撃つ・後の行へ回したのどれか 1 つにだけ振られていることも字で読む。
+ #![cfg(test)]
+ 
+-#[path = "../src/snaprefs.rs"]
++#[path = "../../src/snaprefs.rs"]
+ mod snaprefs;
+ 
+ use std::collections::BTreeSet;
+diff --git a/xtask/tests/vdaily.rs b/xtask/tests/teeth1/vdaily.rs
+similarity index 99%
+rename from xtask/tests/vdaily.rs
+rename to xtask/tests/teeth1/vdaily.rs
+index 1874fc371394d6722614337412e0c7daacad97fa..5753c8eba4785d54ff388efb1c9b33d2d370fca8 100644
+--- a/xtask/tests/vdaily.rs
++++ b/xtask/tests/teeth1/vdaily.rs
+@@ -2,7 +2,7 @@
+ //! 偽の cargo と偽の bdw（shell の script）で撃ち、記録の行と memo の書きを照らし、systemd の雛形と main.rs の呼びを字で読む。
+ #![cfg(test)]
+ 
+-#[path = "../src/daily.rs"]
++#[path = "../../src/daily.rs"]
+ mod daily;
+ 
+ use std::os::unix::fs::PermissionsExt;
+diff --git a/xtask/tests/vretb.rs b/xtask/tests/teeth1/vretb.rs
+similarity index 100%
+rename from xtask/tests/vretb.rs
+rename to xtask/tests/teeth1/vretb.rs
+diff --git a/xtask/tests/vskip.rs b/xtask/tests/teeth1/vskip.rs
+similarity index 99%
+rename from xtask/tests/vskip.rs
+rename to xtask/tests/teeth1/vskip.rs
+index 52a5389ceeede027bdc2fe83b1017036c0d5640d..5fd4ae7b8076e45478655b46835ce0c5f10cb806 100644
+--- a/xtask/tests/vskip.rs
++++ b/xtask/tests/teeth1/vskip.rs
+@@ -2,7 +2,7 @@
+ //! 入力の path の一覧と環境変数の名と行の字を固定し、nested の段の呼びと ci.yml の env を字で読む。
+ #![cfg(test)]
+ 
+-#[path = "../src/nested/skip.rs"]
++#[path = "../../src/nested/skip.rs"]
+ mod skip;
+ 
+ use std::cell::RefCell;
+diff --git a/xtask/tests/vsplit.rs b/xtask/tests/teeth1/vsplit.rs
+similarity index 99%
+rename from xtask/tests/vsplit.rs
+rename to xtask/tests/teeth1/vsplit.rs
+index c4badb2222887a1ccbcd19775c8ae6bad077b864..6b6d8b0004475ee32ea5a51379bd978f40945d01 100644
+--- a/xtask/tests/vsplit.rs
++++ b/xtask/tests/teeth1/vsplit.rs
+@@ -2,7 +2,7 @@
+ //! check と入れ子の段の呼びを字で読む。
+ #![cfg(test)]
+ 
+-#[path = "../src/spread.rs"]
++#[path = "../../src/spread.rs"]
+ mod spread;
+ 
+ use std::path::PathBuf;
