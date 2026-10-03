@@ -1,0 +1,657 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
+index c00d55082ad5ee7947d8d58038de14e271012d12..82a35f745465062afc65d40e9c7fce37212f2547 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
+@@ -854,10 +854,10 @@ fn rules_floor_timeout_row_precedes_the_drafts_cap_rows() {
+     assert_eq!(manifest.rows().iter().filter(|found| found.kind == kind).count(), 1, "kind の行は 1 本");
+     // 後ろの 2 kind・14 行は局面の出力（`lifecycle.closed_window_h` の 1 行と `lifecycle.age_h.<語>` の 13 行・`.738.38.7`）。
+     // 行の予約の期限の 1 kind・1 行（`pipe.reserve_h`・`.736.33.17`）が直後に挟まる。
+-    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）が続く。
+-    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(8).take(4).collect();
++    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
++    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(4).collect();
+     assert_eq!(kinds, [&RuleKind::SeatDraftsBusyS, &RuleKind::SeatDraftsCapMb, &RuleKind::PipeReserveH, &kind], "kind は ALL の末尾の 2 つの前から 4 つ目（母集団 {} 種）", ALL.len());
+-    let rows: Vec<&str> = manifest.rows().iter().rev().skip(20).take(4).map(|found| found.id.as_str()).collect();
++    let rows: Vec<&str> = manifest.rows().iter().rev().skip(21).take(4).map(|found| found.id.as_str()).collect();
+     assert_eq!(rows, ["seat.drafts_busy_s", "seat.drafts_cap_mb", "pipe.reserve_h", id], "行は manifest の末尾の 14 行の前から 4 つ目（母集団 {} 行）", manifest.rows().len());
+     let errors = rejected(&one_row(kind, "\"ten\"")).expect("文字列の値の fixture が受理された");
+     assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");
+@@ -910,15 +910,16 @@ fn rules_drafts_cap_rows_are_the_last_two_kinds_and_rows() {
+         assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");
+     }
+     // 後ろの 2 kind・14 行は局面の出力（`.738.38.7`）。起草の置き場の 2 つはその直前に並ぶ。
+-    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）が続く。
+-    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(8).take(2).rev().collect();
++    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
++    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(2).rev().collect();
+     assert_eq!(tail, [&RuleKind::SeatDraftsCapMb, &RuleKind::SeatDraftsBusyS], "kind は ALL の末尾の 2 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
+-    let rows: Vec<&str> = manifest.rows().iter().rev().skip(20).take(2).rev().map(|found| found.id.as_str()).collect();
++    let rows: Vec<&str> = manifest.rows().iter().rev().skip(21).take(2).rev().map(|found| found.id.as_str()).collect();
+     assert_eq!(rows, ["seat.drafts_cap_mb", "seat.drafts_busy_s"], "行は manifest の末尾の 14 行の前の 2 行・この順（母集団 {} 行）", manifest.rows().len());
+ }
+ 
+ /// 索引の 2 行（設計 reverse-index.md §4 形 7・形 2・行 a2・`s2-07l.736.33.21.2`）が埋め込み manifest に id / kind / 形 Int / 値 2048 と 600 /
+-/// enabled / 裁定 id / 裁定日で 1 本ずつ在り、値は int_row で引け、kind は `ALL` の末尾 2 つ・行は manifest の末尾 2 行でこの順、字面から引け、
++/// enabled / 裁定 id / 裁定日で 1 本ずつ在り、値は int_row で引け、kind は `ALL` の末尾の 1 つの前の 2 つ・行は manifest の末尾の 1 行の前の 2 行で
++/// この順（末尾は並びの上限の kind と行・行 v-lane-cap）、字面から引け、
+ /// 文字列の値の写しは形と合わないで断られる（base では行も kind も無い ＝ RED）。
+ #[test]
+ fn rules_index_rows_are_the_last_two_kinds_and_rows() {
+@@ -943,10 +944,10 @@ fn rules_index_rows_are_the_last_two_kinds_and_rows() {
+     let floor = manifest.get("floor.timeout_s").expect("floor.timeout_s の行が在る");
+     let cap = manifest.get("index.cap_mb").expect("index.cap_mb の行が在る");
+     assert_ne!(floor.ruling, cap.ruling, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
+-    let kinds: Vec<&RuleKind> = ALL.iter().rev().take(2).rev().collect();
+-    assert_eq!(kinds, [&RuleKind::IndexCapMb, &RuleKind::IndexTimeoutS], "kind は ALL の末尾 2 つ・この順（母集団 {} 種）", ALL.len());
+-    let rows: Vec<&str> = manifest.rows().iter().rev().take(2).rev().map(|found| found.id.as_str()).collect();
+-    assert_eq!(rows, ["index.cap_mb", "index.timeout_s"], "行は manifest の末尾 2 行・この順（母集団 {} 行）", manifest.rows().len());
++    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(1).take(2).rev().collect();
++    assert_eq!(kinds, [&RuleKind::IndexCapMb, &RuleKind::IndexTimeoutS], "kind は ALL の末尾の 1 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
++    let rows: Vec<&str> = manifest.rows().iter().rev().skip(1).take(2).rev().map(|found| found.id.as_str()).collect();
++    assert_eq!(rows, ["index.cap_mb", "index.timeout_s"], "行は manifest の末尾の 1 行の前の 2 行・この順（母集団 {} 行）", manifest.rows().len());
+ }
+ 
+ /// 局面の出力の行（設計 case-lifecycle.md §12 約束 10・行 c・`s2-07l.738.38.7`）の裁定の字（base の行 `floor.timeout_s` の裁定 id に項を足した字）。
+@@ -987,10 +988,10 @@ fn rules_lifecycle_rows_carry_the_ruled_values_and_the_lifecycle_ruling() {
+     assert_ne!(floor.ruling, LIFECYCLE_RULING, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
+     assert_eq!(RuleKind::parse("LifecycleClosedWindowH"), Some(RuleKind::LifecycleClosedWindowH), "字面から引ける");
+     assert_eq!(RuleKind::parse("LifecycleAgeH"), Some(RuleKind::LifecycleAgeH), "字面から引ける");
+-    // 後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）が続く。
+-    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(6).take(2).rev().collect();
+-    assert_eq!(kinds, [&RuleKind::LifecycleClosedWindowH, &RuleKind::LifecycleAgeH], "kind は ALL の末尾の 5 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
+-    let rows: Vec<&str> = manifest.rows().iter().rev().skip(6).take(14).rev().map(|found| found.id.as_str()).collect();
++    // 後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
++    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(7).take(2).rev().collect();
++    assert_eq!(kinds, [&RuleKind::LifecycleClosedWindowH, &RuleKind::LifecycleAgeH], "kind は ALL の末尾の 7 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
++    let rows: Vec<&str> = manifest.rows().iter().rev().skip(7).take(14).rev().map(|found| found.id.as_str()).collect();
+     let want: Vec<&str> = expected.iter().map(|(id, _, _)| id.as_str()).collect();
+     assert_eq!(rows, want, "行は manifest の末尾 14 行・この順（母集団 {} 行）", manifest.rows().len());
+     assert_eq!(manifest.rows().iter().filter(|found| found.kind == RuleKind::LifecycleAgeH).count(), 13, "年齢の行は 13 本");
+@@ -1311,7 +1312,7 @@ fn class_derive_embedded_row_carries_the_ruled_three_elements_and_ruling_id() {
+     // `.696` が末尾に公開の見張りの kind を足し、`.738.37.1` が床の検査の待ちの上限の kind を足した（その 2 つ前が RunnerClassCommands）。
+     // 後ろに局面の出力の 2 kind（`.738.38.7`）が続く。
+     // さらに後ろに管理 tick の下限の 1 kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）と索引の 2 kind（`.736.33.21.2`）が続く。
+-    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(8).take(6).collect();
++    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(6).collect();
+     assert_eq!(
+         tail,
+         [&RuleKind::SeatDraftsBusyS, &RuleKind::SeatDraftsCapMb, &RuleKind::PipeReserveH, &RuleKind::FloorTimeoutS, &RuleKind::HostGuardPublish, &RuleKind::RunnerClassCommands],
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+index b6dbea3894590656991326eeaa5ebf3968021205..e22317124289b1e763084329fa9d52768c21e391 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+@@ -510,11 +510,12 @@ fn rules_embedded_manifest_declares_host_guard_kinds_at_the_tail_of_all() {
+             RuleKind::MemoTriagePerRound,
+             RuleKind::IndexCapMb,
+             RuleKind::IndexTimeoutS,
++            RuleKind::PipeLanesCapMb,
+         ],
+-        "LedgerDeniedWrites の後ろに台帳のグラフの上限の kind（`.719`）・宣言順で 2 kind・管理 tick の 3 kind・退避の猶予・席の箱・段の上げ・事前審査の束の段の上げ（`.717`）・クラスの語列表の kind・公開の見張りの kind（`.696`）・床の検査の待ちの上限の kind（`.738.37.1`）・起草の置き場の量の上限と窓の 2 kind（`.736.30`）・局面の出力の窓と年齢の 2 kind（`.738.38.7`）・管理 tick の全部の書き直しの下限の kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）・索引の置き場の量の上限と待ちの上限の 2 kind（`.736.33.21.2`）で ALL が終わる（母集団 {} 種）",
++        "LedgerDeniedWrites の後ろに台帳のグラフの上限の kind（`.719`）・宣言順で 2 kind・管理 tick の 3 kind・退避の猶予・席の箱・段の上げ・事前審査の束の段の上げ（`.717`）・クラスの語列表の kind・公開の見張りの kind（`.696`）・床の検査の待ちの上限の kind（`.738.37.1`）・起草の置き場の量の上限と窓の 2 kind（`.736.30`）・局面の出力の窓と年齢の 2 kind（`.738.38.7`）・管理 tick の全部の書き直しの下限の kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）・索引の置き場の量の上限と待ちの上限の 2 kind（`.736.33.21.2`）・並びの上限の kind（行 v-lane-cap）で ALL が終わる（母集団 {} 種）",
+         ALL.len()
+     );
+-    let tail: Vec<RuleKind> = ALL.iter().rev().skip(8).take(13).rev().copied().collect();
++    let tail: Vec<RuleKind> = ALL.iter().rev().skip(9).take(13).rev().copied().collect();
+     assert_eq!(
+         tail,
+         vec![
+@@ -849,7 +850,7 @@ fn rules_embedded_manifest_is_valid_and_covers_all_kinds() {
+     // **tracked な `rules/manifest.toml` の全行が受理される**（`parse` は 1 件でも違反が
+     // 在れば `Err` を返すので、ここに届いた時点で全行が必須 key を持つ）。母集団を額面に
+     // 出すのは、行が黙って落ちた周を「全部読めた」と読み違えないためである。
+-    assert_eq!(manifest.rows().len(), 109, "埋め込み manifest の行数（母集団・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
++    assert_eq!(manifest.rows().len(), 110, "埋め込み manifest の行数（母集団・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
+     for kind in ALL {
+         let covered = manifest.rows().iter().any(|row| row.kind == *kind);
+         assert!(covered, "{} の行が manifest に無い", kind.as_str());
+@@ -906,7 +907,7 @@ fn rules_embedded_manifest_declares_one_capability_row_per_role() {
+     assert!(ALL.contains(&RuleKind::RoleCapabilities), "ALL に在る（末尾は `.696` の公開の見張り）");
+     assert_eq!(RuleKind::parse("RoleCapabilities"), Some(RuleKind::RoleCapabilities), "kind を字面から引ける");
+     let kinds = ALL.len();
+-    assert_eq!(kinds, 95, "kind の母集団（`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
++    assert_eq!(kinds, 96, "kind の母集団（行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
+ }
+ 
+ /// 禁じる語列の行（`runner.denied_commands`・`RuleKind::RunnerDeniedCommands`・裁定 id `user 2026-09-14`・ADR-0025 §2.1・
+@@ -1164,11 +1165,11 @@ fn rules_memo_rows_are_the_last_three_kinds_and_rows() {
+     let floor = manifest.get("floor.timeout_s").expect("floor.timeout_s の行が在る");
+     let notes = manifest.get("memo.notes_max_bytes").expect("memo.notes_max_bytes の行が在る");
+     assert_ne!(floor.ruling, notes.ruling, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
+-    // 末尾の 2 kind・2 行は索引（`.736.33.21.2`）。memo の 3 つはその直前に並ぶ。
+-    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(2).take(3).rev().collect();
+-    assert_eq!(kinds, [&RuleKind::MemoNotesMaxBytes, &RuleKind::MemoTriageIntervalH, &RuleKind::MemoTriagePerRound], "kind は ALL の末尾の 2 つの前の 3 つ・この順（母集団 {} 種）", ALL.len());
+-    let rows: Vec<&str> = manifest.rows().iter().rev().skip(2).take(3).rev().map(|found| found.id.as_str()).collect();
+-    assert_eq!(rows, ["memo.notes_max_bytes", "memo.triage_interval_h", "memo.triage_per_round"], "行は manifest の末尾の 2 行の前の 3 行・この順（母集団 {} 行）", manifest.rows().len());
++    // 末尾の 1 kind・1 行は並びの上限（行 v-lane-cap）で、その前の 2 kind・2 行は索引（`.736.33.21.2`）。memo の 3 つはその直前に並ぶ。
++    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(3).take(3).rev().collect();
++    assert_eq!(kinds, [&RuleKind::MemoNotesMaxBytes, &RuleKind::MemoTriageIntervalH, &RuleKind::MemoTriagePerRound], "kind は ALL の末尾の 3 つの前の 3 つ・この順（母集団 {} 種）", ALL.len());
++    let rows: Vec<&str> = manifest.rows().iter().rev().skip(3).take(3).rev().map(|found| found.id.as_str()).collect();
++    assert_eq!(rows, ["memo.notes_max_bytes", "memo.triage_interval_h", "memo.triage_per_round"], "行は manifest の末尾の 3 行の前の 3 行・この順（母集団 {} 行）", manifest.rows().len());
+ }
+ 
+ /// 上限の許可の 2 行（設計 limit-permit.md §18 歯 (a)・契約表の行 b）: 埋め込みの manifest が `pipe.permit_rows`（List・
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+index 8965cfa163451ccbce28ce4238486e71dea1b017..95f638fa3423aff830fe245396e49510fa11bc9f 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+@@ -3,8 +3,8 @@ source: crates/scribe2/tests/e2e/rules.rs
+ expression: form
+ ---
+ usage: scribe2 <name|--version|doctor|account|rules|fleet|vessel|hook|host-guard|pipe|runner|lens|seat|polarity|contracts|utterance>
+-rules: ok rows=109 kinds=95
++rules: ok rows=110 kinds=96
+ rules: no such id
+ 95
+-rules: ok rows=109 kinds=95 accounts=2 plugins=2 launch-args=2 host=present
++rules: ok rows=110 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
+ usage: rules <validate|get <id>> [--rules PATH] [--state-dir S]
+diff --git a/scribe2/crates/scribe2/src/pipe/lane.rs b/scribe2/crates/scribe2/src/pipe/lane.rs
+index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb09257663537 100644
+--- a/scribe2/crates/scribe2/src/pipe/lane.rs
++++ b/scribe2/crates/scribe2/src/pipe/lane.rs
+@@ -5,11 +5,14 @@
+ //! 印 `lane/<n>.run` は最後にその木を使った便の id で、その便の path の symlink が在る間は便が並びを持つ（ほかの便に渡さない）。
+ //! 中身の替えは `git checkout -f` と `git clean -ffdx -e /target` で、git は中身の替わる file だけを書くので、cargo は
+ //! 中身の替わった crate だけを組み直す（中身の替わらない file の mtime は前の組みより古いまま残る）。
++//! 並びの木の合計は rules 行 `pipe.lanes_cap_mb` の上限で切る（器の掃除が [`shed`] を撃つ・判断の記録 ADR-35 の決定 (5)）。
+ 
+ use super::land::{retired_path, WorktreeCheck};
++use super::sweep::measure;
+ use super::{branch_name, git_line, git_ok, worktree_path, worktrees_dir};
+ use crate::fleet::store::{self, LockPolicy};
+ use std::path::{Path, PathBuf};
++use std::time::SystemTime;
+ 
+ /// 並びの木を集める dir の名（`worktrees_dir` の直下）。
+ const LANE_DIR: &str = "lane";
+@@ -32,6 +35,15 @@ impl Drop for Held {
+     }
+ }
+ 
++/// 上限の掃除が退かせる候補の並び（番号・大きさ〔byte〕・印の便・印の新しさ・印の便が並びを持つか）。
++struct Idle {
++    n: usize,
++    bytes: u64,
++    run: String,
++    since: SystemTime,
++    held: bool,
++}
++
+ /// 並びの木を集める dir。
+ fn lanes_dir(repo: &Path) -> PathBuf {
+     worktrees_dir(repo).join(LANE_DIR)
+@@ -99,20 +111,12 @@ pub(crate) fn take(repo: &Path, run: &str, base: &str, policy: LockPolicy) -> Re
+ fn claim(repo: &Path, run: &str, policy: LockPolicy) -> Result<(usize, Option<String>), String> {
+     let dir = lanes_dir(repo);
+     std::fs::create_dir_all(&dir).map_err(|err| format!("{} を作れない: {err}", dir.display()))?;
+-    let lock = dir.join(LOCK);
+-    store::acquire_with(&lock, policy, store::Reclaim::DeadOnly).map_err(|_| format!("{} を取れない", lock.display()))?;
+-    let _held = Held(lock);
++    let _held = hold(&dir, policy)?;
+     let link = worktree_path(repo, run);
+     if std::fs::symlink_metadata(&link).is_ok() {
+         return Err(format!("{} は既に在る", link.display()));
+     }
+-    let mut lanes: Vec<usize> = std::fs::read_dir(&dir)
+-        .map_err(|err| format!("{} を読めない: {err}", dir.display()))?
+-        .flatten()
+-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+-        .filter_map(|entry| entry.file_name().to_str().and_then(|name| name.parse().ok()))
+-        .collect();
+-    lanes.sort_unstable();
++    let lanes = numbers(&dir)?;
+     let reuse = lanes.iter().copied().find(|n| !is_held(repo, *n));
+     let n = reuse.unwrap_or_else(|| (0..=lanes.len()).find(|n| !lanes.contains(n)).unwrap_or(lanes.len()));
+     let prev = reuse.map(|n| std::fs::read_to_string(mark_path(repo, n)).unwrap_or_default().trim().to_owned());
+@@ -123,6 +127,25 @@ fn claim(repo: &Path, run: &str, policy: LockPolicy) -> Result<(usize, Option<St
+     Ok((n, prev))
+ }
+ 
++/// 並びの lock を取る（器の store の取り方・`Drop` で外す）。
++fn hold(dir: &Path, policy: LockPolicy) -> Result<Held, String> {
++    let lock = dir.join(LOCK);
++    store::acquire_with(&lock, policy, store::Reclaim::DeadOnly).map_err(|_| format!("{} を取れない", lock.display()))?;
++    Ok(Held(lock))
++}
++
++/// 並びの番号の列（並びの dir の直下の数の名の dir・昇順）。
++fn numbers(dir: &Path) -> Result<Vec<usize>, String> {
++    let mut lanes: Vec<usize> = std::fs::read_dir(dir)
++        .map_err(|err| format!("{} を読めない: {err}", dir.display()))?
++        .flatten()
++        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
++        .filter_map(|entry| entry.file_name().to_str().and_then(|name| name.parse().ok()))
++        .collect();
++    lanes.sort_unstable();
++    Ok(lanes)
++}
++
+ /// 並びの木の中身を base に替える（git は中身の替わる file だけを書く・未追跡と無視の file は target の外を全部消す）。
+ /// clean で HEAD が base の周だけ branch `<NAME>/<run>` を付けて真。
+ fn switch(lane: &Path, run: &str, base: &str) -> bool {
+@@ -159,15 +182,97 @@ pub(crate) fn give_back(repo: &Path, run: &str, lane: &Path) -> Vec<String> {
+     vec![format!("pipe: {from} を {to} へ移せなかった")]
+ }
+ 
++/// 並びの木の大きさの合計が `cap`（byte）を越える間、live な便が持たない並びを印の新しさの古い順（同じ時刻は番号の順）に丸ごと
++/// 退かせる（判断の記録 ADR-35 の決定 (5)）。返すのは退かせた並びの数と、退かせられなかった並びの名（`lane/<n>`）の列。
++///
++/// 大きさは lock の外で測り（便の取りを待たせない）、持ち手は lock の中で読む。大きさを測れない並び（組みの最中に消えた file など）は
++/// 合計に数えず退かせない（0 と読まない・C10）で、退かせる候補なら失敗に数える。印を読めない並びと、live な便か live を測れない便が
++/// 持つ並びは退かせない。
++pub(crate) fn shed(repo: &Path, cap: u64, policy: LockPolicy, live_of: &dyn Fn(&str) -> Option<bool>) -> (usize, Vec<String>) {
++    let dir = lanes_dir(repo);
++    let Ok(lanes) = numbers(&dir) else {
++        return (0, Vec::new());
++    };
++    let sizes: Vec<(usize, Option<u64>)> = lanes.iter().map(|n| (*n, measure(&lane_path(repo, *n)).map(|(bytes, _)| bytes))).collect();
++    let Ok(_held) = hold(&dir, policy) else {
++        return (0, vec![format!("{LANE_DIR}/{LOCK}")]);
++    };
++    let mut total = sizes.iter().filter_map(|(_, bytes)| *bytes).fold(0_u64, u64::saturating_add);
++    let (mut idle, mut failed) = (Vec::new(), Vec::new());
++    for (n, bytes) in sizes {
++        match (bytes, idle_of(repo, n, bytes.unwrap_or(0), live_of)) {
++            (Some(_), Some(found)) => idle.push(found),
++            (None, Some(_)) => failed.push(format!("{LANE_DIR}/{n}")),
++            _ => {}
++        }
++    }
++    idle.sort_by(|left, right| left.since.cmp(&right.since).then(left.n.cmp(&right.n)));
++    let mut shed = 0_usize;
++    for found in idle {
++        if total <= cap {
++            break;
++        }
++        if evict(repo, &found) {
++            total = total.saturating_sub(found.bytes);
++            shed = shed.saturating_add(1);
++        } else {
++            failed.push(format!("{LANE_DIR}/{}", found.n));
++        }
++    }
++    (shed, failed)
++}
++
++/// 並び `n` が退かせる候補か（印が読め、印の便が並びを持たないか、持つ便が live でない周だけ `Some`）。
++fn idle_of(repo: &Path, n: usize, bytes: u64, live_of: &dyn Fn(&str) -> Option<bool>) -> Option<Idle> {
++    let mark = mark_path(repo, n);
++    let since = std::fs::metadata(&mark).and_then(|meta| meta.modified()).ok()?;
++    let run = std::fs::read_to_string(&mark).ok()?.trim().to_owned();
++    let held = is_held(repo, n);
++    (!run.is_empty() && (!held || live_of(&run) == Some(false))).then_some(Idle { n, bytes, run, since, held })
++}
++
++/// 並びを丸ごと退かせる（move だけ・器の憲法 N1）。返された並びは `retired/<印の便>` へ（着地の時に遅らせた退役を済ませる）、
++/// 便が持つ並びは symlink を外して便の元の path へ移し、印を外す。移せない周は symlink を戻して偽。
++fn evict(repo: &Path, found: &Idle) -> bool {
++    let (lane, link) = (lane_path(repo, found.n), worktree_path(repo, &found.run));
++    let dest = if found.held { link.clone() } else { retired_path(repo, &found.run) };
++    if found.held && std::fs::remove_file(&link).is_err() {
++        return false;
++    }
++    let (from, to) = (lane.display().to_string(), dest.display().to_string());
++    let moved = dest.parent().is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
++        && git_ok(repo, &["worktree", "move", &from, &to]);
++    if !moved {
++        if found.held {
++            let _ = std::os::unix::fs::symlink(Path::new(LANE_DIR).join(found.n.to_string()), &link);
++        }
++        return false;
++    }
++    std::fs::remove_file(mark_path(repo, found.n)).is_ok()
++}
++
++/// 退役の後に便の木が在る path（pipe retire の stdout の `retired=`）。退役の前に並びを持っていた便（`held`）が clean な木を並びへ
++/// 返した周は並びの木で、ほかは `retired/<run>`。
++pub(crate) fn resting_place(repo: &Path, run: &str, held: Option<PathBuf>) -> PathBuf {
++    held.filter(|lane| lane.is_dir()).unwrap_or_else(|| retired_path(repo, run))
++}
++
+ #[cfg(test)]
+ mod tests {
+-    use super::super::fixture::scratch;
+-    use super::super::{git_line, git_ok, worktree_path};
+-    use super::{declared, give_back, held_lane, lane_path, mark_path, take};
++    use super::super::fixture::{append_all, event, scratch};
++    use super::super::retire::{retire, Retire};
++    use super::super::sweep::sweep;
++    use super::super::{git_line, git_ok, repo_path, run_dir, worktree_path};
++    use super::{declared, give_back, held_lane, lane_path, mark_path, retired_path, take};
+     use crate::fleet::store::LockPolicy;
++    use crate::fleet::{EventKind, Stage};
++    use crate::rules::manifest::Manifest;
+     use std::path::{Path, PathBuf};
+     use std::time::{Duration, SystemTime};
+ 
++    /// 上限の歯が並びの target に置く file の大きさ（1 MiB）。
++    const BLOB: usize = 1 << 20;
++
+     /// 必須 key だけの宣言の本文の後ろに `extra` を足した `.vessel.toml`・`.gitignore`・2 file を持つ repo（`<root>/repo`）。
+     fn repo_with(name: &str, extra: &str) -> PathBuf {
+         let repo = scratch(name).join("repo");
+@@ -198,6 +303,33 @@ mod tests {
+         std::fs::metadata(path).and_then(|meta| meta.modified()).ok()
+     }
+ 
++    /// 並びの上限の行 1 本だけの rules の写し（値は MiB）。
++    fn cap_rules(mb: u64) -> Manifest {
++        let row = format!("[[rule]]\nid = \"pipe.lanes_cap_mb\"\nkind = \"PipeLanesCapMb\"\nvalue = {mb}\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n");
++        Manifest::parse(&format!("schema = 1\n\n{row}")).expect("上限の行の写し")
++    }
++
++    /// 並び `n` の target に 1 MiB の file を書き、印の新しさを UNIX の紀元から `at` 秒にする（時計に依らない）。
++    fn fill(repo: &Path, n: usize, at: u64) {
++        let lane = lane_path(repo, n);
++        let _ = std::fs::create_dir_all(lane.join("target"));
++        let _ = std::fs::write(lane.join("target/blob"), vec![7_u8; BLOB]);
++        let when = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(at)).unwrap_or(SystemTime::UNIX_EPOCH);
++        let _ = std::fs::File::options().write(true).open(mark_path(repo, n)).and_then(|file| file.set_modified(when));
++    }
++
++    /// repo の隣の置き場（`<root>/state`）に便を段ごとに積み、便の repo を書く（掃除は repo を置き場の便から引く）。
++    fn state_with(repo: &Path, runs: &[(&str, Stage)]) -> PathBuf {
++        let state = repo.parent().unwrap_or(repo).join("state");
++        let _ = std::fs::create_dir_all(&state);
++        for (run, stage) in runs {
++            append_all(&state, &[event(run, EventKind::RunStage, Some(*stage), None, None)]);
++            let _ = std::fs::create_dir_all(run_dir(&state, run));
++            let _ = std::fs::write(repo_path(&state, run), format!("{}\n", repo.display()));
++        }
++        state
++    }
++
+     /// 宣言の key `build-lanes` は値 true の sha だけ真で、false・無い・型違い（字）・宣言の無い sha は偽。
+     #[test]
+     fn vlane_only_declared_repos_take_a_lane() {
+@@ -281,4 +413,97 @@ mod tests {
+         assert_eq!(held_lane(&repo, "r2"), Some(lane.clone()), "並び 0 に新しく切る");
+         assert!(!lane.join("untracked.txt").exists());
+     }
++
++    /// 並びの合計が上限（MiB）を越える周だけ、live な便が持たない並びを印の古い順に退かせて上限以下で止まり、live な便が持つ並びは
++    /// 最も古くても退かせない。掃除の stderr の行は退かせた数を字 `lanes=` で名指す。
++    #[test]
++    fn vlcap_sheds_least_recent_idle_lanes() {
++        let repo = repo_with("cap-order", "build-lanes = true\n");
++        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
++        for run in ["r1", "r2", "r3", "r4"] {
++            let _ = take(&repo, run, &base, policy());
++        }
++        for (run, n) in [("r1", 0), ("r3", 2), ("r4", 3)] {
++            let _ = give_back(&repo, run, &lane_path(&repo, n));
++        }
++        for (n, at) in [(0, 2000), (1, 1000), (2, 3000), (3, 4000)] {
++            fill(&repo, n, at);
++        }
++        let state = state_with(&repo, &[("r1", Stage::Landed), ("r2", Stage::Spawned), ("r3", Stage::Landed), ("r4", Stage::Landed)]);
++        let wide = sweep(&state, policy(), &cap_rules(40960));
++        assert!((0..4).all(|n| lane_path(&repo, n).is_dir()), "上限の内では退かせない: {wide:?}");
++        let line = sweep(&state, policy(), &cap_rules(3)).unwrap_or_default();
++        assert!(!lane_path(&repo, 0).exists() && !lane_path(&repo, 2).exists(), "live でない並びを古い順に 2 つ退かせる: {line}");
++        assert!(lane_path(&repo, 3).is_dir(), "上限以下になったら止まる（最も新しい並びは残る）");
++        assert!(lane_path(&repo, 1).is_dir(), "live な便が持つ並びは最も古くても残る");
++        assert_eq!(held_lane(&repo, "r2"), Some(lane_path(&repo, 1)));
++        assert!(line.contains(" lanes=2"), "{line}");
++    }
++
++    /// 返された並びは `retired/<印の便>` へ、live でない便が持つ並びは symlink を外して便の元の path へ中身ごと移り、どちらも印が消え、
++    /// 移した木の target は次の周の便の木の掃除が消す（追跡の file は残る）。
++    #[test]
++    fn vlcap_moves_lanes_to_where_the_run_would_be() {
++        let repo = repo_with("cap-move", "build-lanes = true\n");
++        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
++        let _ = take(&repo, "r1", &base, policy());
++        let _ = take(&repo, "r2", &base, policy());
++        let _ = give_back(&repo, "r1", &lane_path(&repo, 0));
++        for (n, at) in [(0, 1000), (1, 2000)] {
++            fill(&repo, n, at);
++        }
++        let state = state_with(&repo, &[("r1", Stage::Landed), ("r2", Stage::Failed)]);
++        let _ = sweep(&state, policy(), &cap_rules(0));
++        let (retired, home) = (retired_path(&repo, "r1"), worktree_path(&repo, "r2"));
++        assert!(retired.join("a.txt").is_file() && retired.join("target/blob").is_file(), "返された並びは retired/<印の便> へ移る");
++        assert!(std::fs::symlink_metadata(&home).is_ok_and(|meta| meta.is_dir()), "便が持つ並びは symlink を外して便の元の path へ移る");
++        assert!(home.join("target/blob").is_file(), "中身ごと移る");
++        assert!((0..2).all(|n| !lane_path(&repo, n).exists() && !mark_path(&repo, n).exists()), "並びの木と印は残らない");
++        assert_eq!(held_lane(&repo, "r2"), None);
++        let _ = sweep(&state, policy(), &cap_rules(0));
++        assert!(!retired.join("target").exists() && !home.join("target").exists(), "移した木の target は次の周の掃除が消す");
++        assert!(retired.join("a.txt").is_file() && home.join("a.txt").is_file(), "追跡の file は残る");
++    }
++
++    /// 上限の行を読めない rules の写し（同じ置き場と並びから行 1 本だけを外した形）では並びを 1 つも退かせず、行が在れば退かせる。
++    #[test]
++    fn vlcap_keeps_lanes_without_the_rule() {
++        let repo = repo_with("cap-norule", "build-lanes = true\n");
++        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
++        let _ = take(&repo, "r1", &base, policy());
++        let _ = give_back(&repo, "r1", &lane_path(&repo, 0));
++        fill(&repo, 0, 1000);
++        let state = state_with(&repo, &[("r1", Stage::Landed)]);
++        let bare = Manifest::parse("schema = 1\n").expect("行の無い写し");
++        let _ = sweep(&state, policy(), &bare);
++        assert!(lane_path(&repo, 0).is_dir() && mark_path(&repo, 0).is_file(), "行を読めない周は退かせない");
++        let _ = sweep(&state, policy(), &cap_rules(0));
++        assert!(!lane_path(&repo, 0).exists(), "行が在れば同じ並びを退かせる");
++    }
++
++    /// 並びを持つ便の pipe retire は clean な木を並びへ返し、stdout の字 `retired=` は並びの木の path を名指す（無い `retired/<run>` を
++    /// 名指さない）。
++    #[test]
++    fn vlcap_retire_names_the_lane_tree() {
++        let repo = repo_with("cap-retire", "build-lanes = true\n");
++        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
++        let _ = take(&repo, "r1", &base, policy());
++        let state = state_with(&repo, &[]);
++        let manifest = Manifest::parse("schema = 1\n").expect("空の rules の写し");
++        let entry = Retire {
++            run: "r1",
++            bead: "b",
++            repo: &repo,
++            state_dir: &state,
++            stage: Stage::Failed,
++            policy: policy(),
++            bd: "bd",
++            fold_only: false,
++            manifest: &manifest,
++        };
++        let outcome = retire(&entry);
++        let lane = lane_path(&repo, 0);
++        assert_eq!(outcome.out, vec![format!("run=r1 retired={}", lane.display())], "{:?}", outcome.err);
++        assert!(lane.join("a.txt").is_file() && !retired_path(&repo, "r1").exists(), "木は並びに残る");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/retire.rs b/scribe2/crates/scribe2/src/pipe/retire.rs
+index 5d49c514c98f65d3942dc36c951bce3ec05402b7..c21727d556772cbf69fabe816efa075c8650ec27 100644
+--- a/scribe2/crates/scribe2/src/pipe/retire.rs
++++ b/scribe2/crates/scribe2/src/pipe/retire.rs
+@@ -4,6 +4,7 @@
+ 
+ use super::declaration::terminal_facts;
+ use super::land::{broken, close_reason, refused, retire_worktree, CloseTail, WorktreeCheck, CLOSE_REASON, MAIN_REF};
++use super::lane::{held_lane, resting_place};
+ use super::{branch_name, emit, git_bytes, git_ok, verdict_path, worktree_path, worktrees_dir, Emit};
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+ use crate::fleet::json_lite;
+@@ -153,10 +154,12 @@ fn plain_retire(entry: &Retire<'_>) -> Outcome {
+ 
+ /// worktree を可逆に move して `detail=retired` を 1 件記す（畳むだけの周の本体・move の失敗は rc 2）。
+ fn fold(entry: &Retire<'_>, worktree: &Path) -> Outcome {
++    // 並びを持つ便は clean な木を並びへ返すので、木の在りかは並びの木を名指す（判断の記録 ADR-35）。
++    let held = held_lane(entry.repo, entry.run);
+     if let Some(failure) = move_and_record(entry, worktree) {
+         return failure;
+     }
+-    Outcome::ok_line(format!("run={} retired={}", entry.run, retired_path(entry.repo, entry.run).display()))
++    Outcome::ok_line(format!("run={} retired={}", entry.run, resting_place(entry.repo, entry.run, held).display()))
+ }
+ 
+ /// move して `retired` を記す。失敗は畳めなかった周の Outcome（rc 2）で、成功は `None`。
+@@ -323,14 +326,14 @@ fn fold_after_close(entry: &Retire<'_>, worktree: &Path) -> Outcome {
+     if let Err(reason) = record(entry, EventKind::RunDone, CLOSE_OK) {
+         return broken(reason);
+     }
+-    let dest = retired_path(entry.repo, entry.run);
++    let (dest, held) = (retired_path(entry.repo, entry.run), held_lane(entry.repo, entry.run));
+     if dest.exists() || !retire_worktree(entry.repo, entry.run, worktree).is_empty() {
+         return declined(entry, Refusal::WorktreeUnready);
+     }
+     if let Err(reason) = record(entry, EventKind::RunStage, "retired") {
+         return broken(reason);
+     }
+-    Outcome::ok_line(format!("run={} retired={} close=ok", entry.run, dest.display()))
++    Outcome::ok_line(format!("run={} retired={} close=ok", entry.run, resting_place(entry.repo, entry.run, held).display()))
+ }
+ 
+ /// `verdict.json` の文字列 field を 1 つ読む（**JSON の読み手はこの 1 本**・読めない周は `None`）。
+diff --git a/scribe2/crates/scribe2/src/pipe/sweep.rs b/scribe2/crates/scribe2/src/pipe/sweep.rs
+index 5738e91e57fecfbc3d1d33500cb09ffe7d1a1218..cf81892a68fb5134bda44a4b23979f80f5bb0865 100644
+--- a/scribe2/crates/scribe2/src/pipe/sweep.rs
++++ b/scribe2/crates/scribe2/src/pipe/sweep.rs
+@@ -6,7 +6,7 @@
+ 
+ use super::cli::{int_row, live};
+ use super::retire::retired_path;
+-use super::{current, git_bytes, repo_of_run, worktree_path, DIR};
++use super::{current, git_bytes, lane, repo_of_run, worktree_path, DIR};
+ use crate::fleet::store::{self, LockPolicy};
+ use crate::rules::manifest::Manifest;
+ use crate::seat::{drafts_dir, seats_root, write_drafts_cap, DraftsCap};
+@@ -40,6 +40,9 @@ const ROW_DRAFTS_STALE: &str = "seat.drafts_stale_h";
+ const ROW_DRAFTS_CAP: &str = "seat.drafts_cap_mb";
+ const ROW_DRAFTS_BUSY: &str = "seat.drafts_busy_s";
+ 
++/// 便の木の並びの合計の上限（MiB・repo ごと）の rules 行の id（判断の記録 ADR-35 の決定 (5)）。
++const ROW_LANES_CAP: &str = "pipe.lanes_cap_mb";
++
+ /// 上限の MiB を byte へ引く係数。
+ const MIB: u64 = 1_048_576;
+ 
+@@ -113,17 +116,20 @@ pub(super) fn sweep(state_dir: &Path, policy: LockPolicy, manifest: &Manifest) -
+     let _held = Held(lock);
+     let mut totals = Totals::default();
+     sweep_runs(state_dir, &mut totals);
++    let lanes = sweep_lanes(state_dir, manifest, policy, &mut totals);
+     let drafts = sweep_drafts(state_dir, manifest, &mut totals);
+-    if totals.removed == 0 && totals.failed.is_empty() && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
++    let quiet = totals.removed == 0 && lanes == 0 && totals.failed.is_empty();
++    if quiet && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
+         return None;
+     }
+     let named = if totals.failed.is_empty() { String::new() } else { format!(":{}", totals.failed.join(",")) };
++    let shed = if lanes == 0 { String::new() } else { format!(" lanes={lanes}") };
+     let tail = drafts.map_or_else(String::new, |found| {
+         let swept = if found.no_rule { "no-rule".to_owned() } else { found.swept.to_string() };
+         let cap = if found.shed > 0 || found.over > 0 { format!(" cap={} over={}", found.shed, found.over) } else { String::new() };
+         format!(" drafts={swept} nogit={}{cap}", found.nogit)
+     });
+-    Some(format!("sweep: removed={} runs={} failed={}{named}{tail}", totals.removed, totals.runs, totals.failed.len()))
++    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{tail}", totals.removed, totals.runs, totals.failed.len()))
+ }
+ 
+ /// live でない便の木を掃く（置き場の replay を読めない周は 1 本も撃たない）。
+@@ -139,6 +145,23 @@ fn sweep_runs(state_dir: &Path, totals: &mut Totals) {
+     }
+ }
+ 
++/// 名乗った repo の並びの木の合計を上限で切り、退かせた並びの数を返す（repo は置き場の便から引く・判断の記録 ADR-35 の決定 (5)）。
++/// 行を読めない周と置き場の replay を読めない周は 1 つも退かせない（既定値へ倒さない・測れないを「live でない」に読み替えない・C10）。
++fn sweep_lanes(state_dir: &Path, manifest: &Manifest, policy: LockPolicy, totals: &mut Totals) -> usize {
++    let (Ok(cap_mb), Ok(state)) = (int_row(manifest, ROW_LANES_CAP), current(state_dir)) else {
++        return 0;
++    };
++    let repos: BTreeSet<PathBuf> = state.runs.keys().filter_map(|id| repo_of_run(state_dir, id)).collect();
++    let live_of = |id: &str| state.runs.get(id).and_then(|run| live(state_dir, id, run.stage));
++    let mut shed = 0_usize;
++    for repo in repos {
++        let (moved, failed) = lane::shed(&repo, cap_mb.saturating_mul(MIB), policy, &live_of);
++        shed = shed.saturating_add(moved);
++        failed.iter().for_each(|name| totals.fail(name));
++    }
++    shed
++}
++
+ /// 席の起草の木を掃く（起草の置き場が 1 つも無い周は `None`・書きの線の行は木が 1 本以上在る周だけ `no_rule` に読む・
+ /// §33 形 4・形 5）。書きの線の後に、3 行が読める周だけ量の線を撃ち（§39 形 9）、起草の置き場が在る周は量の記録を書く。
+ fn sweep_drafts(state_dir: &Path, manifest: &Manifest, totals: &mut Totals) -> Option<Drafts> {
+@@ -228,7 +251,7 @@ fn candidates_of(name: &str, tree: &Path, rels: &[PathBuf]) -> Option<Vec<Candid
+ 
+ /// dir 自身と下の全 entry の使用量（lstat の `st_blocks` × 512 の和）と mtime の最新。symlink は辿らずに symlink
+ /// そのものを数える。読めない dir・entry が在れば `None`（0 と読まない・C10）。
+-fn measure(dir: &Path) -> Option<(u64, SystemTime)> {
++pub(super) fn measure(dir: &Path) -> Option<(u64, SystemTime)> {
+     let own = std::fs::symlink_metadata(dir).ok()?;
+     let (mut bytes, mut newest, mut pending) = (own.blocks().saturating_mul(512), own.modified().ok()?, vec![dir.to_path_buf()]);
+     while let Some(current) = pending.pop() {
+diff --git a/scribe2/crates/scribe2/src/rules/mod.rs b/scribe2/crates/scribe2/src/rules/mod.rs
+index a712b4ee3bf086f33d039b4d9ad0a0dfcef407ef..cf1275c8eb80db090eb647bff7b605e00fdbafe5 100644
+--- a/scribe2/crates/scribe2/src/rules/mod.rs
++++ b/scribe2/crates/scribe2/src/rules/mod.rs
+@@ -425,6 +425,9 @@ pub enum RuleKind {
+     /// code の索引の外の道具 1 本を待つ上限（秒・設計 reverse-index.md §4 形 2・形 9）。越えた子は process group ごと止めて failed:timeout と読む。
+     /// 撃ち中の持ち主の終わりを待つ上限も同じ値。読み手は `pipe::dispatch::index_build` の 1 本。
+     IndexTimeoutS,
++    /// 便の木の並びの合計の上限（MiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。並びの木の大きさの合計がこれを越える周に、live な便が
++    /// 持たない並びを印の新しさの古い順に丸ごと退かせる。行を読めない周は退かせない。読み手は `pipe::sweep` の 1 本。
++    PipeLanesCapMb,
+ }
+ 
+ /// [`RuleKind`] の全 variant。parity test の母集団である。
+@@ -524,6 +527,7 @@ pub const ALL: &[RuleKind] = &[
+     RuleKind::MemoTriagePerRound,
+     RuleKind::IndexCapMb,
+     RuleKind::IndexTimeoutS,
++    RuleKind::PipeLanesCapMb,
+ ];
+ 
+ impl RuleKind {
+@@ -589,7 +593,7 @@ impl RuleKind {
+             Self::SeatPrecheckAlarmS => "SeatPrecheckAlarmS", Self::FloorTimeoutS => "FloorTimeoutS", Self::PipeReserveH => "PipeReserveH",
+             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
+             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
+-            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS",
++            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
+         }
+     }
+ 
+@@ -628,7 +632,7 @@ impl RuleKind {
+             | Self::HostBlockedPerCore
+             | Self::PipeLandWaitS | Self::DetectionDailyMinS
+             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
+-            | Self::LedgerTimeoutS
++            | Self::LedgerTimeoutS | Self::PipeLanesCapMb
+             | Self::PipeSizeSLines
+             | Self::PipeSizeMLines
+             | Self::PipeSizeLLines
+@@ -685,7 +689,7 @@ impl RuleKind {
+             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
+             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
+             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
+-            | Self::IndexCapMb | Self::IndexTimeoutS => false,
++            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb => false,
+         }
+     }
+ 
+diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
+index 9c4f137bf164ebd088da9c49504318bc020ce69c..75c32af78898238b1ab88392a6f9f6bf98465fbf 100644
+--- a/scribe2/rules/manifest.toml
++++ b/scribe2/rules/manifest.toml
+@@ -1062,6 +1062,17 @@ enabled = true
+ ruling = "user 2026-09-30T22:13Z 項 index-timeout"
+ ruled_at = "2026-09-30"
+ 
++# 便の木の並びの合計の上限（MiB = 40 GiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。器の掃除が並びの木の大きさを足し、越える間は live な
++# 便が持たない並びを印の新しさの古い順に丸ごと退かせる（move だけ）。読めない周は退かせない（既定値に倒さない）。
++
++[[rule]]
++id = "pipe.lanes_cap_mb"
++kind = "PipeLanesCapMb"
++value = 40960
++enabled = true
++ruling = "user 2026-10-03T22:11Z 問い t3-hub.77.15"
++ruled_at = "2026-10-03"
++
+ # 口座の宣言（設計 fleet-usage.md §2・account-lifecycle.md §2・ADR-0026 §2.1）は host の manifest（state dir
+ # の host.toml）にだけ置く。この file に口座の表は置かない（文法は残る・足す変更は A1 の対話面で聞く・本 repo
+ # は PUBLIC・SRS CON2）。器は credential の置き場を走査せず、宣言だけを真実として読む（C3）。
