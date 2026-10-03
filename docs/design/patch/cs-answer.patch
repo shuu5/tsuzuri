@@ -152,10 +152,10 @@ index 896d97ddce1d26a5cb7c0ba7d2833e66d0160e41..614a4d3faa1279350f1dcdec82d74a0b
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwans.rs b/crates/tsuzuri-boundary/tests/cwans.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..3bd271d81b83108933b6db82db569c691263033f
+index 0000000000000000000000000000000000000000..10889b6f197d809461fbd0b4a94958981c5e4e61
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwans.rs
-@@ -0,0 +1,320 @@
+@@ -0,0 +1,318 @@
 +//! 窓の側の所見の口と守りの hook の歯（接頭辞 cwans_・設計ノート surface-wave27a 行 cs-answer・受入 AC16 の断りと file）。
 +//! 歯ごとの作業場（CARGO_TARGET_TMPDIR の下・窓の控えだけを置く）で、tz consult answer を cwd = 作業場・
 +//! 環境の TZ_CONSULT_ID で撃つ。草稿は fixture tests/fixtures/consult/finding-2/ の complete.json と missing.json。
@@ -232,12 +232,10 @@ index 0000000000000000000000000000000000000000..3bd271d81b83108933b6db82db569c69
 +        .stderr(Stdio::piped())
 +        .spawn()
 +        .unwrap();
-+    child
-+        .stdin
-+        .take()
-+        .unwrap()
-+        .write_all(payload.as_bytes())
-+        .unwrap();
++    // 口は引数で断る時に stdin を読まずに抜けるので、書きの BrokenPipe だけは許す（ほかの誤りは落とす）。
++    if let Err(e) = child.stdin.take().unwrap().write_all(payload.as_bytes()) {
++        assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "{e}");
++    }
 +    child.wait_with_output().unwrap()
 +}
 +
