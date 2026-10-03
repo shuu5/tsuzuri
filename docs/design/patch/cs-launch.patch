@@ -366,10 +366,10 @@ index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwlch.rs b/crates/tsuzuri-boundary/tests/cwlch.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..13d27735812c45ce4d989ee7b279f284bc5c9f0e
+index 0000000000000000000000000000000000000000..da7d1936e3fbfac3cf89644a107dab1aab88f97a
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwlch.rs
-@@ -0,0 +1,521 @@
+@@ -0,0 +1,523 @@
 +//! 窓を起こす口の歯（接頭辞 cwlch_・設計ノート surface-wave27a 行 cs-launch・受入 AC19 の起こし）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 +//! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
@@ -860,6 +860,8 @@ index 0000000000000000000000000000000000000000..13d27735812c45ce4d989ee7b279f284
 +    fx.open(&["--by", "seat"]);
 +    let l = fx.launch(1, Form::Talk, false);
 +    clear_tmp(&l);
++    // 台帳の写しを消す（--dry-run が台帳を読めば bd が落ちて rc 2 になる）。
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
 +    let o = fx.tz(&["consult", "launch", "cw1", "--dry-run"]);
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    let want: Vec<String> = std::iter::once("claude".to_string())

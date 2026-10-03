@@ -1002,10 +1002,10 @@ index 4e75c9a282331f02dad798aaaeb2d49b5249e142..63b6b6ee19b1ae05ea13227be4020d6c
      FAIL
 diff --git a/crates/tsuzuri-boundary/tests/cwopn.rs b/crates/tsuzuri-boundary/tests/cwopn.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd3aa86a6a
+index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9df9a2940e
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwopn.rs
-@@ -0,0 +1,613 @@
+@@ -0,0 +1,650 @@
 +//! 相談の窓の命令の骨と open と bundle の歯（接頭辞 cwopn_・設計ノート surface-wave27a 行 cs-open）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo（鍵 scribe2.statedir と tsuzuri.draftsdir）と
 +//! state dir と起草の置き場と、偽の bd（置き場の ledger.json を出す・無ければ rc 1）と偽の bdw（argv を記録する）を置き、
@@ -1187,6 +1187,60 @@ index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd
 +        .to_string()
 +}
 +
++/// 鍵 tsuzuri.draftsdir が普通の file を指せば rc 2 で字 dir でない（その file に触れない）。
++fn refuses_plain_drafts(fx: &Fx) {
++    let plain = fx.root.join("plain");
++    fs::write(&plain, "").unwrap();
++    fx.key("tsuzuri.draftsdir", &plain);
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 2);
++    assert!(err(&o).contains("dir でない"), "{}", err(&o));
++    assert!(fs::read(&plain).unwrap().is_empty());
++}
++
++/// open の 14 の悪い形（どれも 1 つの欠けだけを持つ）と、その欠けを照らす断りの字。
++fn bad_starters() -> Vec<(Vec<&'static str>, &'static str)> {
++    let said = "--said は --by chat の時だけ";
++    let request = "--request は --by button の時だけ";
++    let by = "--by は seat・chat・button のどれか";
++    vec![
++        (vec!["--by", "chat"], said),
++        (vec!["--by", "chat", "--said", "20261003T1412"], said),
++        (vec!["--by", "seat", "--said", "20261003T1410Z"], said),
++        (vec!["--by", "button"], request),
++        (vec!["--by", "seat", "--request", RQ], request),
++        (
++            vec!["--by", "button", "--request", "rq-1"],
++            "--request が頼みの id の形でない",
++        ),
++        (vec!["--by", "owner"], by),
++        (vec!["--form", "talk"], by),
++        (
++            vec!["--by", "seat", "--form", "chat"],
++            "--form は talk か ask",
++        ),
++        (
++            vec!["--by", "seat", "--via", "完了"],
++            "--via は 見張り・hook・一覧 のどれか",
++        ),
++        (vec!["--by", "seat", "--by", "seat"], "--by が 2 度ある"),
++        (vec!["--by", "seat", "--topic="], "--topic の値が空"),
++        (vec!["--by", "seat", "--name", "x"], "知らない引数 --name"),
++        (vec!["--by", "seat", "extra"], "知らない引数 extra"),
++    ]
++}
++
++/// 悪い形はどれも rc 1 で、標準エラーにその欠けの断りの字を出す（前の検めで rc 1 になる空振りを除く）。
++fn refuses_bad_starters(fx: &Fx) {
++    for (bad, why) in bad_starters() {
++        let mut args = vec!["consult", "open"];
++        args.extend(bad.iter().copied());
++        let o = fx.tz(&args);
++        assert_eq!(rc(&o), 1, "{bad:?} {}", err(&o));
++        assert!(err(&o).contains(why), "{bad:?} {}", err(&o));
++    }
++}
++
 +#[test]
 +fn cwopn_keys_or_rc2() {
 +    let fx = Fx::new("keys", false);
@@ -1201,7 +1255,8 @@ index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd
 +    let o = fx.tz(&["consult", "open", "--by", "seat"]);
 +    assert_eq!(rc(&o), 2);
 +    assert!(err(&o).contains("dir でない"), "{}", err(&o));
-+    assert!(fx.entries().is_empty());
++    assert!(fx.entries().is_empty() && !fx.root.join("nowhere").exists());
++    refuses_plain_drafts(&fx);
 +    fx.key("tsuzuri.draftsdir", &fx.drafts);
 +    fs::remove_file(fx.root.join("ledger.json")).unwrap();
 +    let o = fx.tz(&["consult", "open", "--by", "seat"]);
@@ -1297,33 +1352,14 @@ index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd
 +        .output()
 +        .unwrap();
 +    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("TZ_PLUGIN_VERSION"), "{}", err(&o));
 +    let o = fx.tz(&["--version"]);
 +    assert_eq!(rc(&o), 0);
 +    assert_eq!(
 +        out(&o),
 +        format!("tz {} consult 0.2.0\n", env!("CARGO_PKG_VERSION"))
 +    );
-+    for bad in [
-+        vec!["--by", "chat"],
-+        vec!["--by", "chat", "--said", "20261003T1412"],
-+        vec!["--by", "seat", "--said", "20261003T1410Z"],
-+        vec!["--by", "button"],
-+        vec!["--by", "seat", "--request", RQ],
-+        vec!["--by", "button", "--request", "rq-1"],
-+        vec!["--by", "owner"],
-+        vec!["--form", "talk"],
-+        vec!["--by", "seat", "--form", "chat"],
-+        vec!["--by", "seat", "--via", "完了"],
-+        vec!["--by", "seat", "--by", "seat"],
-+        vec!["--by", "seat", "--topic="],
-+        vec!["--by", "seat", "--name", "x"],
-+        vec!["--by", "seat", "extra"],
-+    ] {
-+        let mut args = vec!["consult", "open"];
-+        args.extend(bad.iter().copied());
-+        let o = fx.tz(&args);
-+        assert_eq!(rc(&o), 1, "{bad:?} {}", err(&o));
-+    }
++    refuses_bad_starters(&fx);
 +    assert!(fx.entries().is_empty());
 +    let o = fx.tz(&[
 +        "consult",
@@ -1410,7 +1446,7 @@ index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd
 +    fs::remove_file(fx.root.join("ledger.json")).unwrap();
 +    assert_eq!(rc(&fx.tz(&["consult", "bundle", "cw1"])), 2);
 +    fx.ledger(LEDGER);
-+    let rcs: Vec<i32> = [vec!["cw9"], vec!["w1"], vec![], vec!["cw1", "cw2"]]
++    let rcs: Vec<i32> = [vec!["cw9"], vec!["w1"], vec![], vec!["cw1", "cw1"]]
 +        .iter()
 +        .map(|a| rc(&fx.tz(&[&["consult", "bundle"][..], a].concat())))
 +        .collect();
@@ -1554,7 +1590,8 @@ index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd
 +        "cw1-2.json",
 +        "cw1-1.json",
 +        "cw3-1.json",
-+        "cw1-1.txt",
++        "cw1-4.txt",
++        "cw1-3",
 +        "cw1-0.json",
 +    ] {
 +        fs::write(ws.join("findings").join(name), "{}").unwrap();

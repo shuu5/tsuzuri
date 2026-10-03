@@ -352,10 +352,10 @@ index 94b0ca4ee760ab91de875b36f4b6e93c333df359..9de667ec1c858b8f0bcb3de55b215429
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwcls.rs b/crates/tsuzuri-boundary/tests/cwcls.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..9261cd6be1cd49243c4fe04472e3788829fa134d
+index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d88500e5b16f8
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwcls.rs
-@@ -0,0 +1,367 @@
+@@ -0,0 +1,377 @@
 +//! 窓の一覧と閉じと退かせの歯（接頭辞 cwcls_・設計ノート surface-wave27a 行 cs-close）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 +//! 受けた argv を記録して窓の名を tmux.name の字で答える偽の tmux を置き（本物の tmux は撃たない）、
@@ -563,6 +563,8 @@ index 0000000000000000000000000000000000000000..9261cd6be1cd49243c4fe04472e37888
 +        "相談の閉じ = cw3・起こし手 = 席・所見 = 1・時刻 = 20261003T1600Z".to_string(),
 +        "相談の処分 = cw3-1・採否 = 採らない・理由 = 古い・保存 = なし・不保存 = work/report.md、work/probe.py・時刻 = 20261003T1601Z".to_string(),
 +        RQ.to_string(),
++        "相談の頼み = rq-20261003T1412Z-2・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z".to_string(),
++        "相談の受け = rq-20261003T1412Z-2・経路 = hook・時刻 = 20261003T1413Z".to_string(),
 +    ]
 +}
 +
@@ -703,6 +705,9 @@ index 0000000000000000000000000000000000000000..9261cd6be1cd49243c4fe04472e37888
 +    let fx = Fx::new("refuse");
 +    fx.window("consult-cw1", 1, Form::Ask, None);
 +    fx.window("retired-consult-cw4", 4, Form::Talk, None);
++    // tmux の窓を持つ話す窓 cw2（2 つの位置の引数の見本の 2 つ目も在る窓にする・閉じた窓の見本にも使う）。
++    fx.window("consult-cw2", 2, Form::Talk, Some((0, Some("@9"))));
++    fs::write(fx.root.join("tmux.name"), "consult-cw2\n").unwrap();
 +    for bad in [
 +        &["close", "cw9", "--by", "seat"][..],
 +        &["close", "cw4", "--by", "seat"],
@@ -713,10 +718,15 @@ index 0000000000000000000000000000000000000000..9261cd6be1cd49243c4fe04472e37888
 +    ] {
 +        assert_eq!(rc(&fx.tz(bad)), 1, "{bad:?}");
 +    }
-+    fx.notes(&["相談の閉じ = cw1・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z"]);
-+    let o = fx.tz(&["close", "cw1", "--by", "seat"]);
-+    assert_eq!(rc(&o), 1);
-+    assert!(err(&o).contains("もう閉じた"), "{}", err(&o));
++    fx.notes(&[
++        "相談の閉じ = cw1・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z",
++        "相談の閉じ = cw2・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z",
++    ]);
++    for id in ["cw1", "cw2"] {
++        let o = fx.tz(&["close", id, "--by", "seat"]);
++        assert_eq!(rc(&o), 1);
++        assert!(err(&o).contains("もう閉じた"), "{id} {}", err(&o));
++    }
 +    assert!(fx.calls("bdw.log").is_empty() && fx.calls("tmux.log").is_empty());
 +    fx.notes(&[]);
 +    let o = fx.tz(&["close", "cw1", "--by", "button"]);

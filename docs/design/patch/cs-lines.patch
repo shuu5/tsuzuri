@@ -1,8 +1,8 @@
 diff --git a/crates/tsuzuri-core/src/consult/lines.rs b/crates/tsuzuri-core/src/consult/lines.rs
-index 04a3be456b5b618df446bfc150f6bade25483820..3cc1c32f66afa3e1b7c15342ade7f4db3b172381 100644
+index 04a3be456b5b618df446bfc150f6bade25483820..33986aac58b23bc488f62da54f9e1a9d66b13a9c 100644
 --- a/crates/tsuzuri-core/src/consult/lines.rs
 +++ b/crates/tsuzuri-core/src/consult/lines.rs
-@@ -1 +1,601 @@
+@@ -1 +1,613 @@
 -//! 台帳の相談の行の字と置き場（中身は設計ノート surface-wave27a の行 cs-lines が置く）。
 +//! 台帳の相談の行の字と置き場（設計ノート surface-wave27a 行 cs-lines・判断の記録 ADR-29 決定 (4)(8)・器の注意 (a)(b)(c)）。
 +//! 行は「相談の」で始まる 6 つの頭（頼み・開き・所見・受け・処分・閉じ）と「 = 」と主の id の後に、
@@ -375,7 +375,8 @@ index 04a3be456b5b618df446bfc150f6bade25483820..3cc1c32f66afa3e1b7c15342ade7f4db
 +    }
 +}
 +
-+/// 行の字を読む（相談の行でないか欄が足りなければ None）。
++/// 行の字を読む（相談の行でないか欄が足りなければ None）。頼みの行は起こし手が持ち主の button の時だけ、
++/// 所見の行は窓が所見の id の窓の時だけ読む（render が書く欄を全部見る）。
 +pub fn read(text: &str) -> Option<Line> {
 +    let mut items = text.trim_end_matches('\r').split(SEP);
 +    let (head, id) = items.next()?.split_once(EQ)?;
@@ -385,19 +386,30 @@ index 04a3be456b5b618df446bfc150f6bade25483820..3cc1c32f66afa3e1b7c15342ade7f4db
 +    let at = get("時刻").filter(|a| minute_ok(a))?.to_string();
 +    let index = HEADS.iter().position(|h| *h == head)?;
 +    match index {
-+        0 => Some(Line::Request {
-+            id: RequestId::parse(id).ok()?,
-+            topic: topic()?,
-+            form: Form::from_word(get("形")?)?,
-+            model: get("model")?.to_string(),
-+            at,
-+        }),
++        0 => {
++            if Starter::from_word(get("起こし手")?)? != Starter::Button {
++                return None;
++            }
++            Some(Line::Request {
++                id: RequestId::parse(id).ok()?,
++                topic: topic()?,
++                form: Form::from_word(get("形")?)?,
++                model: get("model")?.to_string(),
++                at,
++            })
++        }
 +        1 => read_open(id, &get, topic()?, at),
-+        2 => Some(Line::Finding {
-+            id: FindingId::parse(id).ok()?,
-+            topic: topic()?,
-+            at,
-+        }),
++        2 => {
++            let id = FindingId::parse(id).ok()?;
++            if get("窓")? != id.window().to_string() {
++                return None;
++            }
++            Some(Line::Finding {
++                id,
++                topic: topic()?,
++                at,
++            })
++        }
 +        3 => Some(Line::Receipt {
 +            subject: subject(id)?,
 +            via: Via::from_word(get("経路")?)?,
@@ -607,10 +619,10 @@ index 04a3be456b5b618df446bfc150f6bade25483820..3cc1c32f66afa3e1b7c15342ade7f4db
 +}
 diff --git a/crates/tsuzuri-core/tests/cwlin.rs b/crates/tsuzuri-core/tests/cwlin.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..fc503ef48ffa707793bc02dde66aa9cedb9bd246
+index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8fe7ad56e7
 --- /dev/null
 +++ b/crates/tsuzuri-core/tests/cwlin.rs
-@@ -0,0 +1,487 @@
+@@ -0,0 +1,507 @@
 +//! 台帳の相談の行の歯（接頭辞 cwlin_・設計ノート surface-wave27a 行 cs-lines・判断の記録 ADR-29 決定 (4)(8)）。
 +//! 6 つの頭の行の字と読みの往復・自由な字の整え・器の引用の形と定型行の頭の断り・置き場（memo か根だけ）と
 +//! notes の上限の溢れ・未受けの計算・席への固定の 1 行の字を見る。台帳の bead は歯の中で組む。
@@ -737,13 +749,30 @@ index 0000000000000000000000000000000000000000..fc503ef48ffa707793bc02dde66aa9ce
 +    }
 +    let notes = format!("前の行\n{}\n裁定 id = x\n{}\n", all[0].1, all[5].1);
 +    assert_eq!(scan(&notes), vec![all[0].0.clone(), all[5].0.clone()]);
-+    for bad in [
-+        "相談の頼み = rq-1・時刻 = 20261003T1412Z",
-+        "相談の閉じ = cw3・起こし手 = 席・所見 = 2",
-+        "相談の雑談 = cw3・時刻 = 20261003T1412Z",
-+        "",
-+    ] {
-+        assert_eq!(read(bad), None, "{bad}");
++    // 否定の見本は 6 つの見本の行（主の id もほかの欄も正しい）から 1 つだけを替える。
++    // 頭だけを知らない頭に替えた行・閉じの見本から時刻の欄だけを除いた行・空の行は読まない。
++    let mut bad: Vec<String> = all
++        .iter()
++        .map(|(_, want)| want.replacen("相談の", "相談の雑談の", 1))
++        .collect();
++    bad.push(all[5].1.replacen("・時刻 = 20261003T1800Z", "", 1));
++    bad.push(String::new());
++    for text in &bad {
++        assert_eq!(read(text), None, "{text}");
++    }
++    // 欄の足りない行: 6 つの見本の行から欄を 1 つずつ除いた行（頭と主の id と残りの欄は正しいまま）を読まない。
++    let mut short = Vec::new();
++    for (_, want) in &all {
++        let fields: Vec<&str> = want.split('・').collect();
++        for skip in 1..fields.len() {
++            let mut rest = fields.clone();
++            rest.remove(skip);
++            short.push(rest.join("・"));
++        }
++    }
++    assert_eq!(short.len(), 26);
++    for text in &short {
++        assert_eq!(read(text), None, "{text}");
 +    }
 +}
 +
@@ -927,9 +956,10 @@ index 0000000000000000000000000000000000000000..fc503ef48ffa707793bc02dde66aa9ce
 +    }
 +}
 +
-+/// 根・memo・memo の下の問い・問いの下の task・根の下の契約・閉じた古い根。
++/// 根・memo・memo の下の問い・問いの下の task・根の下の契約と、根にならない 3 つ（閉じた epic・親の無い task・
++/// 親の在る epic）。根にならない 3 つは id の自然な順で根より前に置く（根の 3 つの条件の 1 つを外すと根に選ばれる）。
 +fn ledger(memo_notes: usize, root_notes: usize) -> Vec<LedgerItem> {
-+    let mut old = bead("fx-old", "epic", None, &[], 0);
++    let mut old = bead("fx-a0", "epic", None, &[], 0);
 +    old.row.status = "closed".into();
 +    vec![
 +        old,
@@ -944,6 +974,8 @@ index 0000000000000000000000000000000000000000..fc503ef48ffa707793bc02dde66aa9ce
 +        bead("fx-hub.7.1", "task", Some("fx-hub.7"), &[QUESTION_LABEL], 0),
 +        bead("fx-hub.7.1.2", "task", Some("fx-hub.7.1"), &[], 0),
 +        bead("fx-hub.9", "task", Some("fx-hub"), &[], 0),
++        bead("fx-a1", "task", None, &[], 0),
++        bead("fx-a2", "epic", Some("fx-hub"), &[], 0),
 +    ]
 +}
 +

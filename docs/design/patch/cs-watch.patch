@@ -182,10 +182,10 @@ index d6d5bd1f9d27ecc5810ec6a27ce3daadd179ae86..555791525db0ffe8ebe44899819a6de0
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwwat.rs b/crates/tsuzuri-boundary/tests/cwwat.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..3a469ec0f7b1c770943ed314cb66f2df0bd54bf0
+index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea75bbf9884
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwwat.rs
-@@ -0,0 +1,306 @@
+@@ -0,0 +1,314 @@
 +//! 席の背景の見張りの歯（接頭辞 cwwat_・設計ノート surface-wave27a 行 cs-watch・受入 AC16 の見張りの 1 行）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と偽の bd を置き、
 +//! 窓の作業場（窓の控え・process の印・所見）を歯が直に書いて、tz consult watch を短い上限で撃つ。
@@ -372,6 +372,9 @@ index 0000000000000000000000000000000000000000..3a469ec0f7b1c770943ed314cb66f2df
 +    fs::write(retired.join("cw6-1.json"), "{}").unwrap();
 +    let live = fx.window(7, Form::Ask, Some(std::process::id()));
 +    fs::write(live.join("findings/cw7-1.json"), "{}").unwrap();
++    // 所見の無い生きている問う窓と話す窓（止まった・閉じられたとしない）。
++    fx.window(9, Form::Ask, Some(std::process::id()));
++    fx.window(10, Form::Talk, Some(std::process::id()));
 +    let got7 = "相談の受け = cw7-1・経路 = 一覧・時刻 = 20261003T1500Z";
 +    fx.notes(&[RQ_LINE, got7]);
 +    let want = "相談: 頼み rq-20261003T1412Z-1 が届いた（/x/tzw consult open --request rq-20261003T1412Z-1 --by button）";
@@ -489,6 +492,11 @@ index 0000000000000000000000000000000000000000..3a469ec0f7b1c770943ed314cb66f2df
 +    fs::remove_file(fx.root.join("ledger.json")).unwrap();
 +    assert_eq!(rc(&fx.watch("1")), 2);
 +    assert!(!fx.alive().exists(), "台帳が読めなければ印を置かない");
++    // 台帳を読める形に戻し、鍵の欠けだけの見本にする。
++    fx.notes(&[]);
 +    git(&fx.repo, &["config", "--unset", "tsuzuri.draftsdir"]);
-+    assert_eq!(rc(&fx.watch("1")), 2);
++    let o = fx.watch("1");
++    assert_eq!(rc(&o), 2);
++    let e = String::from_utf8(o.stderr.clone()).unwrap();
++    assert!(e.contains("鍵 tsuzuri.draftsdir が無い"), "{e}");
 +}
