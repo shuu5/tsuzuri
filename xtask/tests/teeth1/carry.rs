@@ -1,4 +1,5 @@
 //! 持ち込む code への規則の除外の表 carry-exclusions.toml（行 t-carry-ex・判断の記録 ADR-18 の決定 (5)・ADR-19 の決定 (2)・要件 NFR3）。
+//! 行 v-carry-ex（判断の記録 ADR-33 の決定 (14)）からは、持ち込んだ器 scribe2 の 4 行と器の錠の外の部品の数も見る。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
@@ -13,8 +14,8 @@ const ADRS: [&str; 2] = [
     "design-intent/adr/ADR-19.yaml",
 ];
 const LOCK: &str = "Cargo.lock";
-/// 根の直下の dir のうち、持ち込んだ木の根の閉じた一覧（scribe2 の持ち込みの段が足す）。
-const CARRIED: [&str; 1] = ["folio2"];
+/// 根の直下の dir のうち、持ち込んだ木の根の閉じた一覧。
+const CARRIED: [&str; 2] = ["folio2", "scribe2"];
 
 /// 欄 rule の閉じた一覧。
 const RULES: [&str; 4] = ["R-4", "R-10", "R-2", "N-3"];
@@ -24,6 +25,14 @@ const KEYS: [&str; 5] = ["rule", "path", "scope", "ruling", "removed_by"];
 const RULING: &str = "t3-hub.67.4:20260929T0058Z-1";
 const FOLIO_PATH: &str = "folio2/crates/folio/";
 const SCOPE_R10: &str = "lint で deny にする書き方（unwrap・expect・panic・直接の print ほか）";
+
+/// 器 scribe2 の行（行 v-carry-ex）。N-3 の行の裁定 id は ADR-19 の束の頭の字（裁定 id = t3-hub.67.7:… ほか）で読む。
+const VESSEL_CRATES: &str = "scribe2/crates/";
+const VESSEL_RULES: &str = "scribe2/rules/";
+const RULING_N3: &str = "t3-hub.67.8:20260929T0609Z-1";
+/// 器の錠（repo の根からの相対）と、その外の部品（行 source を持つ塊）の数（判断の記録 ADR-33 の決定 (5)）。
+const VESSEL_LOCK: &str = "scribe2/Cargo.lock";
+const VESSEL_OUTSIDE: usize = 35;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -127,6 +136,26 @@ fn is_removed_by_id(id: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// 裁定 id が判断の記録の字に在るか。字 裁定 id = に続けて在るか、問いの id が全角の丸括弧で囲まれて在り、
+/// 同じ時刻の束の頭の字（裁定 id = と、頭の問いの id と字 : と時刻と、空白と字 ほか）が在る。
+fn ruling_in(adr: &str, ruling: &str) -> bool {
+    const HEAD: &str = "裁定 id = ";
+    if adr.contains(&format!("{HEAD}{ruling}")) {
+        return true;
+    }
+    let Some((question, stamp)) = ruling.split_once(':') else {
+        return false;
+    };
+    adr.contains(&format!("（{question}）"))
+        && adr.match_indices(HEAD).any(|(at, _)| {
+            adr[at + HEAD.len()..]
+                .split_once(' ')
+                .is_some_and(|(id, rest)| {
+                    id.split_once(':').is_some_and(|(_, s)| s == stamp) && rest.starts_with("ほか")
+                })
+        })
+}
+
 /// 表の行の列の、repo の木での確かめ。
 fn judge_rows(rows: &[Row]) -> Result<(), String> {
     let adr = ADRS.map(read).join("\n");
@@ -136,7 +165,7 @@ fn judge_rows(rows: &[Row]) -> Result<(), String> {
             return Err(format!("規則 {} は {RULES:?} のどれでもない", row.rule));
         }
         judge_path(&row.path)?;
-        if !adr.contains(&format!("裁定 id = {}", row.ruling)) {
+        if !ruling_in(&adr, &row.ruling) {
             return Err(format!("裁定 id {} が判断の記録に無い", row.ruling));
         }
         if !is_removed_by_id(&row.removed_by) {
@@ -169,7 +198,20 @@ fn accepts(text: &str) -> Result<(), String> {
 #[test]
 fn cexcl_table_rows() {
     let rows = parse_table(&read(TABLE)).expect("表の読み");
-    assert!(rows.is_empty(), "表の行の列は空: {rows:?}");
+    let got: Vec<[&str; 4]> = rows
+        .iter()
+        .map(|r| [&*r.rule, &*r.path, &*r.ruling, &*r.removed_by])
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ["R-4", VESSEL_CRATES, RULING, "v-size"],
+            ["R-10", VESSEL_CRATES, RULING, "v-lint"],
+            ["R-2", VESSEL_CRATES, RULING, "v-join"],
+            ["N-3", VESSEL_RULES, RULING_N3, "v-flag-drop"],
+        ],
+        "表の行は器の 4 行（この順）"
+    );
     judge_rows(&rows).expect("表の行の列は repo の木の確かめを通る");
 }
 
@@ -232,6 +274,56 @@ fn cexcl_refuses_bad_rows() {
     }
 }
 
+#[test]
+fn cexcl_ruling_batch_form() {
+    let scope = "器の規則の表の旗";
+    let n3 = |ruling| row_text("N-3", VESSEL_RULES, scope, ruling, "v-flag-drop");
+    accepts(&n3(RULING_N3)).expect("束の頭の字で読む N-3 の裁定 id");
+    accepts(&row_text(
+        "R-10",
+        VESSEL_CRATES,
+        SCOPE_R10,
+        RULING,
+        "v-lint",
+    ))
+    .expect("器の crate の R-10");
+    for (label, ruling) in [
+        ("束の時刻の違う裁定 id", "t3-hub.67.8:20260929T0610Z-1"),
+        (
+            "判断の記録が名指さない問いの id",
+            "t3-hub.67.98:20260929T0609Z-1",
+        ),
+    ] {
+        assert!(accepts(&n3(ruling)).is_err(), "{label} を断らない");
+    }
+    let adr = "（q.2）を足す。裁定 id = q.1:S-1 ほか・束 b:S-1";
+    assert!(ruling_in(adr, "q.2:S-1"), "束の頭の字と問いの id");
+    assert!(
+        ruling_in("裁定 id = q.5:T-1（束 b）", "q.5:T-1"),
+        "字 裁定 id = に続けて在る"
+    );
+    for (label, text) in [
+        (
+            "字 ほか の無い束の頭",
+            "（q.2）を足す。裁定 id = q.1:S-1 まで・束 b:S-1",
+        ),
+        (
+            "時刻の違う束の頭",
+            "（q.2）を足す。裁定 id = q.1:S-2 ほか・束 b:S-2",
+        ),
+        (
+            "問いの id の無い記録",
+            "（q.3）を足す。裁定 id = q.1:S-1 ほか・束 b:S-1",
+        ),
+        (
+            "丸括弧で囲まない問いの id",
+            "q.2 を足す。裁定 id = q.1:S-1 ほか・束 b:S-1",
+        ),
+    ] {
+        assert!(!ruling_in(text, "q.2:S-1"), "{label} を通す");
+    }
+}
+
 /// 錠の 1 つの塊（見出し [[package]] から次の見出しまで）。
 struct Package {
     name: String,
@@ -289,7 +381,44 @@ fn cexcl_lock_drops_encoding() {
     deps.sort();
     assert_eq!(deps, ["clap", "yaml-rust2"], "folio の dependencies");
     let rows = parse_table(&read(TABLE)).expect("表の読み");
-    assert!(rows.iter().all(|r| r.rule != "R-2"), "表に R-2 の行が在る");
+    assert!(
+        rows.iter()
+            .all(|r| r.rule != "R-2" || !r.path.starts_with("folio2/")),
+        "表に folio の R-2 の行が在る"
+    );
+}
+
+/// 錠の file の塊（見出し [[package]]）のうち、行 source を持つ塊の数。
+fn outside_packages(text: &str) -> usize {
+    text.split("[[package]]")
+        .skip(1)
+        .filter(|block| block.lines().any(|l| l.starts_with("source = ")))
+        .count()
+}
+
+#[test]
+fn cexcl_vessel_lock_counts_row() {
+    assert_eq!(
+        outside_packages(&read(VESSEL_LOCK)),
+        VESSEL_OUTSIDE,
+        "器の錠の外の部品"
+    );
+    let rows = parse_table(&read(TABLE)).expect("表の読み");
+    let r2: Vec<&Row> = rows
+        .iter()
+        .filter(|r| r.rule == "R-2" && r.path == VESSEL_CRATES)
+        .collect();
+    assert_eq!(r2.len(), 1, "器の R-2 の行");
+    assert!(
+        r2[0]
+            .scope
+            .contains(&format!("外の部品 {VESSEL_OUTSIDE} 本")),
+        "器の R-2 の行の本数の字: {}",
+        r2[0].scope
+    );
+    let two = "[[package]]\nname = \"a\"\n\n[[package]]\nname = \"b\"\nsource = \"registry\"\n";
+    assert_eq!(outside_packages(two), 1, "行 source の在る塊だけ");
+    assert_eq!(outside_packages("# 塊の無い錠\n"), 0);
 }
 
 #[test]
@@ -627,7 +756,7 @@ fn cexcl_own_names_clean() {
             &rest[..rest.find('(').expect("fn の名の後に (")]
         })
         .collect();
-    assert_eq!(names.len(), 5, "{names:?}");
+    assert_eq!(names.len(), 7, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("cexcl_")

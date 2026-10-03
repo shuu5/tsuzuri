@@ -1,5 +1,6 @@
 //! 行 k-lint-base の歯: 規則の行 R-10 の書き方を workspace の lint の表で deny にする機構（条 P-24.1）と、
 //! 規則の行 R-4 の関数の粒度の値を写した clippy.toml と、member の manifest が表を継ぐこと（除外の表の R-10 の行が名指す member は継がず、
+//! 根の workspace に入れる前の持ち込んだ木の下の R-10 の行は行 v-carry-ex が通す、
 //! 行 k-lint-folio が folio の R-10 の行を消して継がせた・行 r4-table が表に R-4 の 3 つの lint を deny で足し、例外の属性を置かない）。
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
@@ -293,14 +294,52 @@ fn klint_r4_number_reads_value() {
     assert_eq!(r4_number(&real, "module"), Some(1500));
 }
 
+/// waits_for_join の見本: 器の crate の dir は通し、1 つの句だけを外した path と members は通さない。
+fn join_samples(members: &[String]) {
+    assert!(
+        waits_for_join("scribe2/crates", members),
+        "器の crate の dir"
+    );
+    for (label, path) in [
+        ("Cargo.toml の無い頭の dir の下", "docs/design"),
+        ("木に無い dir", "scribe2/crates/no-such-dir"),
+    ] {
+        assert!(!waits_for_join(path, members), "{label} を通す");
+    }
+    let joined: Vec<String> = members
+        .iter()
+        .cloned()
+        .chain(["scribe2/crates/scribe2".to_string()])
+        .collect();
+    assert!(
+        !waits_for_join("scribe2/crates", &joined),
+        "members の在る持ち込んだ木の下を通す"
+    );
+}
+
+/// path の頭の dir が自分の行 [workspace] を持つ持ち込んだ木で（根の workspace に入れる前・行 v-carry-ex）、
+/// members のどれもその dir の下に無く、path が木の dir であるか。
+fn waits_for_join(path: &str, members: &[String]) -> bool {
+    let top = path.split('/').next().unwrap_or(path);
+    let manifest =
+        std::fs::read_to_string(repo_root().join(top).join("Cargo.toml")).unwrap_or_default();
+    manifest.lines().any(|l| l.trim() == "[workspace]")
+        && !members.iter().any(|m| m.starts_with(&format!("{top}/")))
+        && repo_root().join(path).is_dir()
+}
+
 #[test]
 fn klint_members_follow_carry_table() {
     let members = members();
     assert_eq!(members.len(), 6, "{members:?}");
     let excluded = excluded_paths("R-10");
     for path in &excluded {
-        assert!(members.contains(path), "{path} が members に無い");
+        assert!(
+            members.contains(path) || waits_for_join(path, &members),
+            "{path} が members に無く、根の workspace に入れる前の持ち込んだ木の下でもない"
+        );
     }
+    join_samples(&members);
     // R-4 の行が member を名指す間は、表に R-4 の lint を置かない（除外の表と食い違う）。
     if excluded_paths("R-4").iter().any(|p| members.contains(p)) {
         for name in ENABLED {
