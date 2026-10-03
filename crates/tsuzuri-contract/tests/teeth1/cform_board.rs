@@ -4,7 +4,7 @@
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 #![cfg(test)]
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeSet;
 
@@ -142,17 +142,17 @@ fn account_forms() -> Vec<Box<dyn Form>> {
 }
 
 #[test]
-fn contract_form_snapshot_matches() {
+fn contract_form_board_snapshot_matches() {
     common::snapshot_matches("board", &forms());
 }
 
 #[test]
-fn contract_form_roundtrip_all_types() {
+fn contract_form_board_roundtrip_all_types() {
     common::roundtrip_all(&forms());
 }
 
 #[test]
-fn contract_form_closed_lists() {
+fn contract_form_board_closed_lists() {
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);
     assert_eq!(distinct(&Stage::ALL), 8);

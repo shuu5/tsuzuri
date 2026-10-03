@@ -205,7 +205,7 @@ const FILTER: [&str; 153] = [
 
 /// 新しい歯の 3 つの file。
 const FILES: [&str; 3] = [
-    "crates/tsuzuri-contract/tests/ctick.rs",
+    "crates/tsuzuri-contract/tests/teeth1/ctick.rs",
     "crates/tsuzuri-core/tests/ctick.rs",
     "crates/tsuzuri-surface/tests/ctickface.rs",
 ];

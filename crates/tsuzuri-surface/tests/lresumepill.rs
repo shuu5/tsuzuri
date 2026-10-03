@@ -379,7 +379,7 @@ fn test_names(text: &str) -> Vec<String> {
 #[test]
 fn lresume_own_names_clean() {
     for (rel, n) in [
-        ("../tsuzuri-contract/tests/lresume.rs", 2),
+        ("../tsuzuri-contract/tests/teeth1/lresume.rs", 2),
         ("../tsuzuri-core/tests/lresume.rs", 4),
         ("tests/lresumepill.rs", 4),
     ] {

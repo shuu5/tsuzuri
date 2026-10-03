@@ -132,6 +132,11 @@ fn tests_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
 }
 
+/// 群の歯の file と共通の手の置き場（判断の記録 ADR-32 の群 teeth1）。
+fn group_dir() -> PathBuf {
+    tests_dir().join("teeth1")
+}
+
 /// 群の json の object。
 fn read(group: &str) -> Map<String, Value> {
     let path = tests_dir().join(format!("snapshots/{group}.json"));
@@ -198,7 +203,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 fn cfsplit_snapshots_by_group() {
     let mut seen = BTreeSet::new();
     for (group, modules) in GROUPS {
-        let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
+        let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
         let call = format!("common::snapshot_matches(\"{group}\", &forms())");
         assert_eq!(
             text.matches(&call).count(),
@@ -249,19 +254,25 @@ fn cfsplit_test_names_floor() {
     let names: Vec<(&str, BTreeSet<String>)> = GROUPS
         .iter()
         .map(|(group, _)| {
-            let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
+            let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
             (*group, test_names(&text))
         })
         .collect();
     for (name, groups) in TEETH {
         for group in groups {
+            // 2 つ以上の群に在る名は群の字を挟む（fn の名は package の中で一意・判断の記録 ADR-32）。
+            let want = if groups.len() > 1 {
+                name.replacen("contract_form_", &format!("contract_form_{group}_"), 1)
+            } else {
+                (*name).to_string()
+            };
             let (_, have) = names
                 .iter()
                 .find(|(g, _)| g == group)
                 .unwrap_or_else(|| panic!("TEETH の群 {group} が GROUPS に無い"));
             assert!(
-                have.contains(name),
-                "cform_{group}.rs に歯 {name} が無い（在る歯: {have:?}）"
+                have.contains(&want),
+                "cform_{group}.rs に歯 {want} が無い（在る歯: {have:?}）"
             );
         }
     }
@@ -270,9 +281,9 @@ fn cfsplit_test_names_floor() {
 #[test]
 fn cfsplit_hands_in_common() {
     for (group, _) in GROUPS {
-        let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
-        let mods = text.lines().filter(|l| l.trim() == "mod common;").count();
-        assert_eq!(mods, 1, "cform_{group}.rs の行 mod common; が {mods} 個");
+        let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
+        let mods = text.lines().filter(|l| l.trim() == "use crate::common;").count();
+        assert_eq!(mods, 1, "cform_{group}.rs の行 use crate::common; が {mods} 個");
         for hand in HANDS {
             assert!(
                 !text.contains(hand),
@@ -280,7 +291,7 @@ fn cfsplit_hands_in_common() {
             );
         }
     }
-    let common = read_text(&tests_dir().join("common/mod.rs"));
+    let common = read_text(&group_dir().join("common/mod.rs"));
     for hand in HANDS {
         assert_eq!(
             common.matches(hand).count(),
@@ -311,7 +322,7 @@ fn cfsplit_no_old_paths() {
         .parent()
         .and_then(Path::parent)
         .expect("workspace の root");
-    let me = tests_dir().join("cfsplit.rs");
+    let me = group_dir().join("cfsplit.rs");
     let mut files = Vec::new();
     for dir in ["crates", "xtask"] {
         files.extend(

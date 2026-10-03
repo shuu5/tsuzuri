@@ -4,7 +4,7 @@
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 #![cfg(test)]
 
-mod common;
+use crate::common;
 
 use common::{AT, Form, bead, distinct, form};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
@@ -200,17 +200,17 @@ fn ledger_stats() -> LedgerStats {
 }
 
 #[test]
-fn contract_form_snapshot_matches() {
+fn contract_form_stats_snapshot_matches() {
     common::snapshot_matches("stats", &forms());
 }
 
 #[test]
-fn contract_form_roundtrip_all_types() {
+fn contract_form_stats_roundtrip_all_types() {
     common::roundtrip_all(&forms());
 }
 
 #[test]
-fn contract_form_closed_lists() {
+fn contract_form_stats_closed_lists() {
     assert_eq!(distinct(&CheckResult::ALL), 3);
     assert_eq!(distinct(&UnreflectedKind::ALL), 3);
 }

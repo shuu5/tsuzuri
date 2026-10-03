@@ -102,8 +102,8 @@ fn fxpre_contract_tests_hold_none() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let all = files(&dir);
     for name in [
-        "cform_surface.rs",
-        "cform_ledger.rs",
+        "teeth1/cform_surface.rs",
+        "teeth1/cform_ledger.rs",
         "snapshots/surface.json",
         "snapshots/ledger.json",
     ] {

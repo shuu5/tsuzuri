@@ -4,7 +4,7 @@
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 #![cfg(test)]
 
-mod common;
+use crate::common;
 
 use common::{AT, Form, form};
 use tsuzuri_contract::board::Reading;

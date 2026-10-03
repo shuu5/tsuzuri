@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 /// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
 const GROUPS: &[(&str, usize)] = &[
     // kfold-groups-begin
+    ("crates/tsuzuri-contract/tests/teeth1", 13),
     ("xtask/tests/teeth1", 9),
     // kfold-groups-end
 ];
@@ -120,4 +121,74 @@ fn kfold_groups_declare_every_module_once() {
     let want: BTreeMap<String, usize> =
         GROUPS.iter().map(|(g, n)| ((*g).to_string(), *n)).collect();
     assert_eq!(seen, want, "群と module の数");
+}
+
+/// 歯の区間（tests/ の file は全部・src の file は行頭の #[cfg(test)] から後）の #[test] の直下の fn の名。
+fn test_fns(text: &str, whole: bool) -> Vec<String> {
+    let region = if whole {
+        text
+    } else {
+        text.find("\n#[cfg(test)]").map_or("", |i| &text[i..])
+    };
+    let mut out = Vec::new();
+    let mut pending = false;
+    for line in region.lines() {
+        let t = line.trim();
+        if t == "#[test]" {
+            pending = true;
+        } else if pending && !(t.is_empty() || t.starts_with("#[") || t.starts_with("//")) {
+            pending = false;
+            if let Some(rest) = t.split_once("fn ").map(|(_, r)| r) {
+                out.push(
+                    rest.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                        .next()
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            }
+        }
+    }
+    out
+}
+
+fn rs_under(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries {
+        let path = entry.expect("dir の項目").path();
+        if path.is_dir() {
+            rs_under(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+}
+
+#[test]
+fn kfold_test_names_unique_in_each_crate() {
+    let root = repo_root();
+    let mut total = 0;
+    for member in members() {
+        let mut names: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (sub, whole) in [("tests", true), ("src", false)] {
+            let mut files = Vec::new();
+            rs_under(&root.join(&member).join(sub), &mut files);
+            for file in files {
+                for name in test_fns(&read(&file), whole) {
+                    names.entry(name).or_default().push(
+                        file.strip_prefix(&root)
+                            .expect("根の下")
+                            .display()
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        let dups: Vec<(&String, &Vec<String>)> =
+            names.iter().filter(|(_, v)| v.len() > 1).collect();
+        assert!(dups.is_empty(), "{member} の中で重なる歯の名: {dups:?}");
+        total += names.len();
+    }
+    assert!(total >= 2_500, "数えた歯の名が {total}");
 }

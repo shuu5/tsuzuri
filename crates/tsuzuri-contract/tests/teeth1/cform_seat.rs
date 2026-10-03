@@ -4,7 +4,7 @@
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 #![cfg(test)]
 
-mod common;
+use crate::common;
 
 use common::{AT, Form, distinct, form};
 use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
@@ -188,17 +188,17 @@ fn seat_card() -> SeatCard {
 }
 
 #[test]
-fn contract_form_snapshot_matches() {
+fn contract_form_seat_snapshot_matches() {
     common::snapshot_matches("seat", &forms());
 }
 
 #[test]
-fn contract_form_roundtrip_all_types() {
+fn contract_form_seat_roundtrip_all_types() {
     common::roundtrip_all(&forms());
 }
 
 #[test]
-fn contract_form_closed_lists() {
+fn contract_form_seat_closed_lists() {
     assert_eq!(distinct(&SeatState::ALL), 5);
     let seat_words: Vec<String> = SeatState::ALL
         .iter()

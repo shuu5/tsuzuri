@@ -4,7 +4,7 @@
 //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
 #![cfg(test)]
 
-mod common;
+use crate::common;
 
 use common::{Form, distinct, form};
 use tsuzuri_contract::graph::{
@@ -377,17 +377,17 @@ fn unread_doc() -> GraphDoc {
 }
 
 #[test]
-fn contract_form_snapshot_matches() {
+fn contract_form_graph_snapshot_matches() {
     common::snapshot_matches("graph", &forms());
 }
 
 #[test]
-fn contract_form_roundtrip_all_types() {
+fn contract_form_graph_roundtrip_all_types() {
     common::roundtrip_all(&forms());
 }
 
 #[test]
-fn contract_form_closed_lists() {
+fn contract_form_graph_closed_lists() {
     assert_eq!(distinct(&NodeKind::ALL), 20);
     assert_eq!(distinct(&EdgeType::ALL), 32);
     assert_eq!(distinct(&GraphSource::ALL), 3);
