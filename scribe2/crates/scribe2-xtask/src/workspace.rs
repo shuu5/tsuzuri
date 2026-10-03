@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// task runner 自身の package 名。core crate はこれ以外の member として発見する。
-const RUNNER_PACKAGE: &str = "xtask";
+const RUNNER_PACKAGE: &str = "scribe2-xtask";
 
 /// core crate の名前定数を宣言する行の前置き。
 const NAME_CONST_PREFIX: &str = "pub const NAME: &str =";

@@ -419,7 +419,7 @@ mod tests {
     fn hook_merge_trailer_sample_cases_match_expected_words() {
         let key = source_key();
         let head = key.trim_end();
-        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/xtask/src/source_trailer_cases.txt"))
+        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/scribe2-xtask/src/source_trailer_cases.txt"))
             .expect("見本を workspace の path で読める");
         let blocks: Vec<Vec<&str>> = text.split("\n===\n").map(|block| block.lines().filter(|line| !line.starts_with('#')).collect()).collect();
         let mut counts = [0_usize; 4];

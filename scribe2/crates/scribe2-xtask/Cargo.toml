@@ -1,5 +1,5 @@
 [package]
-name = "xtask"
+name = "scribe2-xtask"
 version = "0.1.0"
 edition = "2021"
 # 二択の SPDX 式（全文は repo root の LICENSE-MIT / LICENSE-APACHE）。裁定と経緯は
