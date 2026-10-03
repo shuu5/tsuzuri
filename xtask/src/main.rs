@@ -1,13 +1,15 @@
 //! xtask: `cargo run -q -p xtask -- <task>` の形で起動する（alias の file は置かない）。
-//! check は公開の走査（pub-scan）・workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立てを順に撃ち、最初に落ちた段の rc を返す。
+//! check は公開の走査（pub-scan）・workspace の build・歯の全部・clippy（host と面の wasm）・面の組み立て・入れ子の workspace の段を順に撃ち、最初に落ちた段の rc を返す。
 //! surface-build は面の crate の dir で trunk を呼び、dist に index.html と wasm の file を出す（便 g-min）。
 //! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
 //! surface-build は dist が揃えば wasm・js・css の file ごとに隣へ gzip の写し（名に .gz）を書く（行 g-gz・gz の module）。
 //! pub-scan は追跡される file の字と基準の commit より後の commit に tailnet の住所・名と一覧の語を探す（行 t-pub-scan・pubscan の module）。
 //! check の size の段は 1 module の行数・中核の本体の総行数・歯と本体の行数比を規則の行 R-4 の上限と比べる（行 k-size-base・size の module）。
+//! check の最後の段は根の直下の入れ子の workspace を数えて 1 行で出し、各々で build・歯・clippy・その workspace の xtask の check を撃つ（行 v-gate・nested の module）。
 
 mod accept;
 mod gz;
+mod nested;
 mod pubscan;
 mod size;
 
@@ -117,6 +119,7 @@ fn step_args(step: &[&str], partition: Option<&str>) -> Vec<String> {
 /// 走査が落ちれば後の build・歯・clippy・面の組み立てを撃たない。
 /// 走査の後、cargo の段の前に大きさの数え（size）を撃ち、上限を越えれば違反を出して rc 1 を返し、後の段を撃たない。
 /// 変数 PARTITION_ENV が在れば nextest の段だけを分け、読めない字なら段を撃たずに rc 2 を返す。
+/// 面の組み立ての後に入れ子の workspace の段（nested の module）を撃ち、その rc を返す（入れ子の歯も同じ partition で分ける）。
 fn check(root: &Path) -> i32 {
     let raw = std::env::var(PARTITION_ENV);
     let part = match &raw {
@@ -173,8 +176,9 @@ fn check(root: &Path) -> i32 {
     let rc = surface_build(root);
     if rc != 0 {
         emit_err(&format!("xtask check: 落ちた段 surface-build (rc {rc})"));
+        return rc;
     }
-    rc
+    nested::run(root, &cargo, part)
 }
 
 /// 面の crate の dir で `trunk build` を撃ち（設定は Trunk.toml）、dist に index.html と wasm の file が在るかを見て、
