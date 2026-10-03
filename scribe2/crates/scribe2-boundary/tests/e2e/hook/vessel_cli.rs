@@ -207,8 +207,8 @@ fn vessel_update_refusals_stop_before_the_next_stage_and_record_nothing() {
     let cases = [
         ("宣言なし", update_place(false, "", 0, 0), "vessel: vessel-repo-undeclared", upto(0)),
         ("dirty", update_place(true, " M src/lib.rs\\n", 0, 0), "vessel: dirty", upto(1)),
-        ("ff できない", update_place(true, "", 128, 0), "vessel: not-fast-forward", upto(3)),
-        ("install の失敗", update_place(true, "", 0, 101), "vessel: install-failed rc=101", upto(4)),
+        ("ff できない", update_place(true, "", 128, 0), "vessel: not-fast-forward", upto(4)),
+        ("install の失敗", update_place(true, "", 0, 101), "vessel: install-failed rc=101", upto(6)),
     ];
     for (label, place, word, want) in cases {
         let out = run_update(&place);
@@ -218,6 +218,50 @@ fn vessel_update_refusals_stop_before_the_next_stage_and_record_nothing() {
         assert!(!vessel::fleet::store::events_path(&place.state).exists(), "{label}: log を作らない");
         assert_eq!(stderr_text(&out).lines().next(), Some(word), "{label}: 断りの語");
         assert!(out.stdout.is_empty(), "{label}: stdout は空");
+    }
+}
+
+/// 入れ替えの門 (1): host のどこかで器の process（自分の外）が生きている周は、数えの段より後の argv（fetch・merge・器の
+/// 世代・cargo）を 1 本も撃たず、event 0 件・stdout 空・stderr の 1 行目が `vessel: busy`・rc 1。生きた行の無い見本（偽 pgrep
+/// の rc 1）は同じ置き場で数えの後の段へ進む。
+#[test]
+fn vswap_refuses_while_a_vessel_process_lives() {
+    let argv = update_argv();
+    let place = update_place(true, "", 0, 0);
+    let live = format!("4242 {NAME} pipe run --design contracts/x.toml#a --bead b-1\n");
+    fs::write(place.bin.join("live"), live).expect("生きた行を書ける");
+    let out = run_update(&place);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "busy の rc: {}", stderr_text(&out));
+    assert_eq!(stderr_text(&out).lines().next(), Some("vessel: busy"), "断りの語");
+    assert_eq!(place.argv(), argv.get(..2).unwrap_or_default().to_vec(), "数えの段より後は撃たない");
+    assert!(place.installs().is_empty() && out.stdout.is_empty(), "event 0 件・stdout 空");
+    let idle = update_place(true, "", 0, 0);
+    let out = run_update(&idle);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "生きた行の無い周は進む: {}", stderr_text(&out));
+}
+
+/// 入れ替えの門 (2): PATH の器の世代（`--version` の括弧の sha12）と HEAD の差が repo の dir の下で空（`git diff --quiet <sha12>
+/// HEAD -- .` の rc 0）の周は cargo を撃たず、event 0 件・stderr の 1 行目が `vessel: unchanged`・rc 1。差の在る見本（rc 1）と
+/// 世代の括弧が `+dirty` の見本は組む（cargo を撃ち event 1 件）。
+#[test]
+fn vswap_skips_the_build_when_the_tree_is_unchanged() {
+    let place = update_place(true, "", 0, 0);
+    fs::write(place.bin.join("version"), format!("{NAME} 0.1.0 (89abcdef0123)\n")).expect("世代を書ける");
+    fs::write(place.bin.join("diff.rc"), "0").expect("diff の rc を書ける");
+    let out = run_update(&place);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "unchanged の rc: {}", stderr_text(&out));
+    assert_eq!(stderr_text(&out).lines().next(), Some("vessel: unchanged"), "断りの語");
+    let argv = place.argv();
+    assert_eq!(argv.last().map(String::as_str), Some("git -C [repo] diff --quiet 89abcdef0123 HEAD -- ."), "最後は diff");
+    assert!(!argv.iter().any(|line| line.starts_with("cargo ")), "cargo を撃たない: {argv:?}");
+    assert!(place.installs().is_empty(), "event 0 件");
+    for (label, version, rc) in [("差が在る", "89abcdef0123", "1"), ("+dirty", "89abcdef0123+dirty", "0")] {
+        let built = update_place(true, "", 0, 0);
+        fs::write(built.bin.join("version"), format!("{NAME} 0.1.0 ({version})\n")).expect("世代を書ける");
+        fs::write(built.bin.join("diff.rc"), rc).expect("diff の rc を書ける");
+        let out = run_update(&built);
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{label}: 組む: {}", stderr_text(&out));
+        assert_eq!(built.installs().len(), 1, "{label}: event 1 件");
     }
 }
 

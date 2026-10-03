@@ -1849,7 +1849,8 @@ fn pipe_dispatch_intake_run_without_a_live_driver_is_not_live() {
 // ───── 終端の周の軸（consumer-sync.md §15 形 2 / 3・`pipe_dispatch_vessel_` 接頭辞・`s2-07l.408`） ─────
 //
 // 偽 git は `[[vessel]] repo` を名指す呼び出しだけを写して答え（`rev-list` は数・`status` は汚れ・`fetch` は rc）、他は
-// 実 git へ exec する（列そのものの git は現物で動く）。偽 cargo は argv を写して install 先の行を出す。
+// 実 git へ exec する（列そのものの git は現物で動く）。偽 cargo は argv を写して install 先の行を出す。偽 pgrep は argv を写して
+// rc 1（生きた行 0＝host の器の process を数えない）、偽の器は argv を写して括弧の中が unknown の `--version` の行を出す（組む側）。
 
 /// 偽 git が vessel repo の `rev-parse HEAD` に返す 40 桁（先頭 12 桁が `updated:` の sha）。
 const VESSEL_HEAD: &str = "89abcdef0123456789abcdef0123456789abcdef";
@@ -1857,9 +1858,9 @@ const VESSEL_HEAD: &str = "89abcdef0123456789abcdef0123456789abcdef";
 /// 空の 1 周の列の行（`dispatch=` の書式は 1 字も変わらない）。
 const IDLE_LINE: &str = "dispatch=started:0,resumed:0,waiting:0";
 
-/// 軸の置き場（偽 git / cargo の PATH と argv の写し）。
+/// 軸の置き場（偽 git / cargo / pgrep / 器の PATH と argv の写し）。
 struct VesselPlace {
-    /// 偽 git / cargo を先頭に置いた PATH。
+    /// 偽 git / cargo / pgrep / 器を先頭に置いた PATH。
     path: String,
     /// argv の写し。
     log: std::path::PathBuf,
@@ -1875,7 +1876,7 @@ impl VesselPlace {
 }
 
 /// 置き場を作る: `declared` なら host の面に `[[vessel]] repo` を書き、偽 git（`rev-list` は `count`・`status` は `status_out`・
-/// `fetch` は `fetch_rc`）と偽 cargo（rc 0・install 先を stderr へ）を置く。
+/// `fetch` は `fetch_rc`）と偽 cargo（rc 0・install 先を stderr へ）と偽 pgrep（rc 1）と偽の器（`--version` は unknown）を置く。
 #[expect(
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
@@ -1897,10 +1898,16 @@ fn vessel_place(state: &Path, declared: bool, count: u64, status_out: &str, fetc
         &state.join("vessel-bin").join("cargo"),
         &format!("printf '%s\\n' \"cargo $*\" >> '{logged}'\necho '  Installing /opt/e2e-bin/vessel' >&2\n"),
     );
+    script(&state.join("vessel-bin").join("pgrep"), &format!("printf '%s\\n' \"pgrep $*\" >> '{logged}'\nexit 1\n"));
+    let name = vessel::name::NAME;
+    script(
+        &state.join("vessel-bin").join(name),
+        &format!("printf '%s\\n' \"{name} $*\" >> '{logged}'\necho '{name} 0.1.0 (unknown)'\n"),
+    );
     VesselPlace { path, log, vessel }
 }
 
-/// 手動の 1 周（起こす側・道具つき・台帳は空）を偽 git / cargo の PATH で撃つ（`verb` は `dispatch` の後ろの語）。
+/// 手動の 1 周（起こす側・道具つき・台帳は空）を偽 git / cargo / pgrep / 器の PATH で撃つ（`verb` は `dispatch` の後ろの語）。
 fn vessel_turn(repo: &Path, state: &Path, place: &VesselPlace, verb: &[&str]) -> Output {
     let (state_s, repo_s, rules, bd) =
         (state.display().to_string(), repo.display().to_string(), dispatch_rules(state), fake_bd(state, &[]));
@@ -1932,11 +1939,14 @@ fn pipe_dispatch_vessel_behind_on_an_idle_round_fires_update_once() {
     let sha = VESSEL_HEAD.get(..12).unwrap_or_default();
     assert_eq!(stdout_of(&out), format!("vessel=updated:{sha}\n{IDLE_LINE}\n"), "軸の行 + 列の行（{}）", told(&out));
     let mut want = fetch_then_count();
+    let name = vessel::name::NAME;
     want.extend([
-        "git -C [vessel] status --porcelain".to_owned(),
+        "git -C [vessel] status --porcelain --untracked-files=no".to_owned(),
+        format!("pgrep -af {name}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)"),
         "git -C [vessel] fetch origin".to_owned(),
         "git -C [vessel] merge --ff-only origin/main".to_owned(),
-        format!("cargo install --path [vessel]/crates/{} --locked --color never", vessel::name::NAME),
+        format!("{name} --version"),
+        format!("cargo install --path [vessel]/crates/{name}-boundary --locked --color never"),
         "git -C [vessel] rev-parse HEAD".to_owned(),
     ]);
     assert_eq!(place.argv(), want, "fetch 1 回 → 数え → §5 の口 1 回（順序は §5 のまま）");
@@ -1989,7 +1999,7 @@ fn pipe_dispatch_vessel_dirty_checkout_is_refused_with_the_word() {
     let out = vessel_turn(&repo, &state, &place, &[]);
     assert_eq!(stdout_of(&out), format!("vessel=refused:dirty\n{IDLE_LINE}\n"), "断りの語（{}）", told(&out));
     let mut want = fetch_then_count();
-    want.push("git -C [vessel] status --porcelain".to_owned());
+    want.push("git -C [vessel] status --porcelain --untracked-files=no".to_owned());
     assert_eq!(place.argv(), want, "口は status で止まる");
     assert_eq!(installs(&state), 0, "記帳 0 件");
     clean(&[&repo, &state]);

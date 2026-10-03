@@ -457,7 +457,9 @@ fn vessel_external_form() {
 }
 
 // ---- `vessel update`（設計 consumer-sync.md §5・接頭辞 `vessel_update_`）----
-// 偽 `git` と偽 `cargo` を PATH の先頭に置き、撃たれた argv を 1 行ずつ写す。repo は偽 git が読まないので空 dir で足りる。
+// 偽 `git` と偽 `cargo` と偽 `pgrep` と偽の器（`--version`）を PATH の先頭に置き、撃たれた argv を 1 行ずつ写す。repo は偽 git が
+// 読まないので空 dir で足りる。偽 pgrep は bin の dir の file `live` が在ればその中身を出して rc 0（無ければ rc 1）、偽の器は file
+// `version` が在ればその中身を出し（無ければ括弧の中が unknown の行）、偽 git の `diff` は file `diff.rc` の数で終わる（無ければ 1）。
 
 /// 偽 git が `rev-parse HEAD` に返す 40 桁（先頭 12 桁が記録の sha）。
 const UPDATE_HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -504,13 +506,18 @@ fn update_place(declared: bool, status_out: &str, merge_rc: u8, cargo_rc: u8) ->
         fs::write(place.state.join("host.toml"), host).expect("host の面を書ける");
     }
     let log = place.log().display().to_string();
+    let dir = place.bin.display().to_string();
     let git = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"git $*\" >> '{log}'\ncase \"$3\" in\n  status) printf '{status_out}' ;;\n  merge) exit {merge_rc} ;;\n  rev-parse) echo {UPDATE_HEAD} ;;\nesac\nexit 0\n"
+        "#!/bin/sh\nprintf '%s\\n' \"git $*\" >> '{log}'\ncase \"$3\" in\n  status) printf '{status_out}' ;;\n  merge) exit {merge_rc} ;;\n  diff) exit $(cat '{dir}/diff.rc' 2>/dev/null || echo 1) ;;\n  rev-parse) echo {UPDATE_HEAD} ;;\nesac\nexit 0\n"
+    );
+    let pgrep = format!("#!/bin/sh\nprintf '%s\\n' \"pgrep $*\" >> '{log}'\n[ -f '{dir}/live' ] || exit 1\ncat '{dir}/live'\n");
+    let version = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"{NAME} $*\" >> '{log}'\ncat '{dir}/version' 2>/dev/null || echo '{NAME} 0.1.0 (unknown)'\n"
     );
     let cargo = format!(
         "#!/bin/sh\nprintf '%s\\n' \"cargo $*\" >> '{log}'\necho '  Installing {NAME} v0.1.0 (/src/crates/{NAME})' >&2\n[ {cargo_rc} -eq 0 ] || exit {cargo_rc}\necho '  Installing {UPDATE_BIN}' >&2\necho '   Installed package' >&2\n"
     );
-    for (name, body) in [("git", git), ("cargo", cargo)] {
+    for (name, body) in [("git", git), ("cargo", cargo), ("pgrep", pgrep), (NAME, version)] {
         let stub = place.bin.join(name);
         fs::write(&stub, body).expect("偽 binary を書ける");
         fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).expect("偽 binary に実行権を付ける");
@@ -533,13 +540,16 @@ fn run_update(place: &UpdatePlace) -> Output {
         .expect("binary を起動できる")
 }
 
-/// 順序固定の 4 段の argv（`status` → `fetch` → `merge --ff-only` → `cargo install`・sha は install の後に読む）。
+/// 順序固定の段の argv（`status` → 器の process の数え → `fetch` → `merge --ff-only` → PATH の器の世代 → `cargo install`・
+/// sha は install の後に読む・偽の器の世代が unknown の周は `diff` を撃たない）。
 fn update_argv() -> Vec<String> {
     vec![
-        "git -C [repo] status --porcelain".to_owned(),
+        "git -C [repo] status --porcelain --untracked-files=no".to_owned(),
+        format!("pgrep -af {NAME}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)"),
         "git -C [repo] fetch origin".to_owned(),
         "git -C [repo] merge --ff-only origin/main".to_owned(),
-        format!("cargo install --path [repo]/crates/{NAME} --locked --color never"),
+        format!("{NAME} --version"),
+        format!("cargo install --path [repo]/crates/{NAME}-boundary --locked --color never"),
         "git -C [repo] rev-parse HEAD".to_owned(),
     ]
 }

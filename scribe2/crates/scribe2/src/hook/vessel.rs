@@ -347,12 +347,16 @@ pub const DEFAULT_BRANCH: &str = "main";
 pub enum UpdateError {
     /// host の面に `[[vessel]] repo` が無い（宣言を読めない周は読めない理由つき）。
     Undeclared(Vec<String>),
-    /// `status --porcelain` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
+    /// `status --porcelain --untracked-files=no` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
     Dirty,
+    /// host のどの置き場かで器の process（自分の外）が生きているか、`pgrep` で測れない（走る便の下で binary を替えない）。
+    Busy,
     /// `fetch` が落ちた（rc つき・`None` = 起動できない / signal）。
     FetchFailed(Option<i32>),
     /// `merge --ff-only` が落ちた（rebase も reset もしない＝人の手番）。
     NotFastForward,
+    /// PATH の器の世代の木と HEAD の木が repo の dir の下で同じ（組まない）。
+    Unchanged,
     /// `cargo install` が落ちた（rc つき・旧 binary が残る）。
     InstallFailed(Option<i32>),
     /// install は済んだが event を積めない（sha / path が読めない・store が書けない・理由つき）。
@@ -365,8 +369,10 @@ impl UpdateError {
         match self {
             Self::Undeclared(_) => "vessel-repo-undeclared",
             Self::Dirty => "dirty",
+            Self::Busy => "busy",
             Self::FetchFailed(_) => "fetch-failed",
             Self::NotFastForward => "not-fast-forward",
+            Self::Unchanged => "unchanged",
             Self::InstallFailed(_) => "install-failed",
             Self::RecordFailed(_) => "record-failed",
         }
@@ -376,9 +382,13 @@ impl UpdateError {
     pub fn rc(&self) -> u8 {
         match self {
             Self::RecordFailed(_) => RC_BROKEN,
-            Self::Undeclared(_) | Self::Dirty | Self::FetchFailed(_) | Self::NotFastForward | Self::InstallFailed(_) => {
-                RC_REFUSED
-            }
+            Self::Undeclared(_)
+            | Self::Dirty
+            | Self::Busy
+            | Self::FetchFailed(_)
+            | Self::NotFastForward
+            | Self::Unchanged
+            | Self::InstallFailed(_) => RC_REFUSED,
         }
     }
 
@@ -389,7 +399,7 @@ impl UpdateError {
             Self::Undeclared(reasons) => {
                 std::iter::once(format!("vessel: {}", self.as_str())).chain(reasons.iter().cloned()).collect()
             }
-            Self::Dirty | Self::NotFastForward => vec![format!("vessel: {}", self.as_str())],
+            Self::Dirty | Self::Busy | Self::NotFastForward | Self::Unchanged => vec![format!("vessel: {}", self.as_str())],
             Self::FetchFailed(rc) | Self::InstallFailed(rc) => vec![format!("vessel: {} rc={}", self.as_str(), rc_of(rc))],
             Self::RecordFailed(reason) => vec![format!("vessel: {}（{reason}）", self.as_str())],
         }
@@ -420,16 +430,21 @@ fn update_cmd(rest: &[String]) -> Outcome {
 
 /// ff → build → install を順序固定で 1 回行い、成功した周だけ `InstallRecorded` を 1 件積む（設計 consumer-sync.md §5）。
 ///
-/// (1) `status --porcelain` → (2) `fetch <remote>` → `merge --ff-only <remote>/<branch>` → (3) `cargo install --path
-/// <repo>/crates/<NAME> --locked` → (4) event。**どの段で断っても後の段は撃たない**（作業ツリーを変えない・旧 binary が
-/// 残る・event 0）。sha は (3) の後に HEAD から読む（(3) は checkout を動かさない＝install した HEAD）。
+/// (1) `status --porcelain --untracked-files=no` → (1b) 器の process の数え（[`busy`]）→ (2) `fetch <remote>` →
+/// `merge --ff-only <remote>/<branch>` → (2b) PATH の器の世代と HEAD の repo の dir の下の差（[`installed_sha`]・差が無ければ
+/// 組まない）→ (3) `cargo install --path <repo>/crates/<NAME>-boundary --locked`（bin を持つ部品）→ (4) event。**どの段で断っても
+/// 後の段は撃たない**（作業ツリーを変えない・旧 binary が残る・event 0）。sha は (3) の後に HEAD から読む（(3) は checkout を
+/// 動かさない＝install した HEAD）。
 pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fleet::Install, UpdateError> {
     let manifest = crate::rules::read(None, Some(state_dir))
         .map_err(|errors| UpdateError::Undeclared(errors.iter().map(ToString::to_string).collect()))?;
     let repo = manifest.vessel().map(|found| PathBuf::from(found.repo())).ok_or(UpdateError::Undeclared(Vec::new()))?;
-    let status = git_output(&repo, &["status", "--porcelain"]).ok_or(UpdateError::Dirty)?;
+    let status = git_output(&repo, &["status", "--porcelain", "--untracked-files=no"]).ok_or(UpdateError::Dirty)?;
     if !status.status.success() || !status.stdout.is_empty() {
         return Err(UpdateError::Dirty);
+    }
+    if busy() {
+        return Err(UpdateError::Busy);
     }
     let fetched = git_output(&repo, &["fetch", remote]);
     if !fetched.as_ref().is_some_and(|out| out.status.success()) {
@@ -438,10 +453,13 @@ pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fle
     if !git_ok(&repo, &["merge", "--ff-only", &format!("{remote}/{branch}")]) {
         return Err(UpdateError::NotFastForward);
     }
+    if installed_sha().is_some_and(|sha| git_ok(&repo, &["diff", "--quiet", &sha, "HEAD", "--", "."])) {
+        return Err(UpdateError::Unchanged);
+    }
     let installed = Invocation::new("cargo")
         .arg("install")
         .arg("--path")
-        .arg(repo.join("crates").join(NAME))
+        .arg(repo.join("crates").join(format!("{NAME}-boundary")))
         .args(["--locked", "--color", "never"])
         .current_dir(&repo)
         .output();
@@ -459,6 +477,37 @@ pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fle
         .ok_or_else(|| UpdateError::RecordFailed(format!("HEAD {head:?} が sha の形でない")))?;
     record_install(state_dir, &install).map_err(UpdateError::RecordFailed)?;
     Ok(install)
+}
+
+/// 器の process（便の driver・関門・着地・列・起こし・実装役・審査役）の command 行に当たる `pgrep` の拡張正規表現
+/// （名は [`NAME`] から導く・`sh -c` の行も当たる）。
+fn live_pattern() -> String {
+    format!("{NAME}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)")
+}
+
+/// host のどの置き場かで器の process が自分の外に 1 本でも在るか（`pgrep -af` の rc 1 だけが 0 本・起動できない周と
+/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行は数えない。
+fn busy() -> bool {
+    let pattern = live_pattern();
+    let Ok(out) = Invocation::new("pgrep").args(["-af", pattern.as_str()]).output() else {
+        return true;
+    };
+    match out.status.code() {
+        Some(1) => false,
+        Some(0) => {
+            let me = std::process::id().to_string();
+            String::from_utf8_lossy(&out.stdout).lines().any(|line| line.split_whitespace().next() != Some(me.as_str()))
+        }
+        _ => true,
+    }
+}
+
+/// PATH の器の `--version` の 1 行目の括弧の中の sha12（`+dirty`・`unknown`・起動できない周は `None` = 組む側に倒す）。
+fn installed_sha() -> Option<String> {
+    let out = Invocation::new(NAME).arg("--version").output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let inner = text.lines().next()?.rsplit_once('(')?.1.strip_suffix(')')?;
+    (inner.len() == 12 && inner.bytes().all(|byte| byte.is_ascii_hexdigit())).then(|| inner.to_owned())
 }
 
 /// 上流との差を数えられない周の理由（git が返らない・数が読めない・設計 consumer-sync.md §15 形 1）。
@@ -605,6 +654,7 @@ mod tests {
         let _ = std::fs::write(state.join("host.toml"), format!("schema = 1\n\n[[vessel]]\nrepo = \"{repo}\"\n"));
         let stub = Stub::install(|call| match (call.program.as_str(), call.args.get(2).map(String::as_str)) {
             ("git", Some("status" | "fetch" | "merge")) => exited(0, b""),
+            ("pgrep", _) => exited(1, b""),
             ("git", Some("rev-parse")) => exited(0, b" /top \n"),
             ("cargo", _) => exited(101, b""),
             _ => Err(std::io::Error::other("gone")),
@@ -619,17 +669,26 @@ mod tests {
         };
         let cargo = Call {
             program: "cargo".to_owned(),
-            args: ["install", "--path", &format!("{repo}/crates/{NAME}"), "--locked", "--color", "never"]
+            args: ["install", "--path", &format!("{repo}/crates/{NAME}-boundary"), "--locked", "--color", "never"]
                 .iter()
                 .map(|arg| (*arg).to_owned())
                 .collect(),
             cwd: Some(PathBuf::from(repo)),
             envs: Vec::new(),
         };
+        let bare = |program: &str, args: &[&str]| Call {
+            program: program.to_owned(),
+            args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+            cwd: None,
+            envs: Vec::new(),
+        };
+        let pattern = super::live_pattern();
         let expected = [
-            git(&["status", "--porcelain"]),
+            git(&["status", "--porcelain", "--untracked-files=no"]),
+            bare("pgrep", &["-af", pattern.as_str()]),
             git(&["fetch", "up"]),
             git(&["merge", "--ff-only", "up/trunk"]),
+            bare(NAME, &["--version"]),
             cargo,
             git(&["rev-parse", "--show-toplevel"]),
         ];
