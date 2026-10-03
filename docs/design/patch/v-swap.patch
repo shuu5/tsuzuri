@@ -1,0 +1,377 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
+index bb69cf7d4b7ac1f2274b6d5481023ea2bc61b6f5..635f23645c1c173aea445deb996cf3988376d2b4 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
+@@ -457,7 +457,9 @@ fn vessel_external_form() {
+ }
+ 
+ // ---- `vessel update`（設計 consumer-sync.md §5・接頭辞 `vessel_update_`）----
+-// 偽 `git` と偽 `cargo` を PATH の先頭に置き、撃たれた argv を 1 行ずつ写す。repo は偽 git が読まないので空 dir で足りる。
++// 偽 `git` と偽 `cargo` と偽 `pgrep` と偽の器（`--version`）を PATH の先頭に置き、撃たれた argv を 1 行ずつ写す。repo は偽 git が
++// 読まないので空 dir で足りる。偽 pgrep は bin の dir の file `live` が在ればその中身を出して rc 0（無ければ rc 1）、偽の器は file
++// `version` が在ればその中身を出し（無ければ括弧の中が unknown の行）、偽 git の `diff` は file `diff.rc` の数で終わる（無ければ 1）。
+ 
+ /// 偽 git が `rev-parse HEAD` に返す 40 桁（先頭 12 桁が記録の sha）。
+ const UPDATE_HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+@@ -504,13 +506,18 @@ fn update_place(declared: bool, status_out: &str, merge_rc: u8, cargo_rc: u8) ->
+         fs::write(place.state.join("host.toml"), host).expect("host の面を書ける");
+     }
+     let log = place.log().display().to_string();
++    let dir = place.bin.display().to_string();
+     let git = format!(
+-        "#!/bin/sh\nprintf '%s\\n' \"git $*\" >> '{log}'\ncase \"$3\" in\n  status) printf '{status_out}' ;;\n  merge) exit {merge_rc} ;;\n  rev-parse) echo {UPDATE_HEAD} ;;\nesac\nexit 0\n"
++        "#!/bin/sh\nprintf '%s\\n' \"git $*\" >> '{log}'\ncase \"$3\" in\n  status) printf '{status_out}' ;;\n  merge) exit {merge_rc} ;;\n  diff) exit $(cat '{dir}/diff.rc' 2>/dev/null || echo 1) ;;\n  rev-parse) echo {UPDATE_HEAD} ;;\nesac\nexit 0\n"
++    );
++    let pgrep = format!("#!/bin/sh\nprintf '%s\\n' \"pgrep $*\" >> '{log}'\n[ -f '{dir}/live' ] || exit 1\ncat '{dir}/live'\n");
++    let version = format!(
++        "#!/bin/sh\nprintf '%s\\n' \"{NAME} $*\" >> '{log}'\ncat '{dir}/version' 2>/dev/null || echo '{NAME} 0.1.0 (unknown)'\n"
+     );
+     let cargo = format!(
+         "#!/bin/sh\nprintf '%s\\n' \"cargo $*\" >> '{log}'\necho '  Installing {NAME} v0.1.0 (/src/crates/{NAME})' >&2\n[ {cargo_rc} -eq 0 ] || exit {cargo_rc}\necho '  Installing {UPDATE_BIN}' >&2\necho '   Installed package' >&2\n"
+     );
+-    for (name, body) in [("git", git), ("cargo", cargo)] {
++    for (name, body) in [("git", git), ("cargo", cargo), ("pgrep", pgrep), (NAME, version)] {
+         let stub = place.bin.join(name);
+         fs::write(&stub, body).expect("偽 binary を書ける");
+         fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).expect("偽 binary に実行権を付ける");
+@@ -533,13 +540,16 @@ fn run_update(place: &UpdatePlace) -> Output {
+         .expect("binary を起動できる")
+ }
+ 
+-/// 順序固定の 4 段の argv（`status` → `fetch` → `merge --ff-only` → `cargo install`・sha は install の後に読む）。
++/// 順序固定の段の argv（`status` → 器の process の数え → `fetch` → `merge --ff-only` → PATH の器の世代 → `cargo install`・
++/// sha は install の後に読む・偽の器の世代が unknown の周は `diff` を撃たない）。
+ fn update_argv() -> Vec<String> {
+     vec![
+-        "git -C [repo] status --porcelain".to_owned(),
++        "git -C [repo] status --porcelain --untracked-files=no".to_owned(),
++        format!("pgrep -af {NAME}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)"),
+         "git -C [repo] fetch origin".to_owned(),
+         "git -C [repo] merge --ff-only origin/main".to_owned(),
+-        format!("cargo install --path [repo]/crates/{NAME} --locked --color never"),
++        format!("{NAME} --version"),
++        format!("cargo install --path [repo]/crates/{NAME}-boundary --locked --color never"),
+         "git -C [repo] rev-parse HEAD".to_owned(),
+     ]
+ }
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
+index 23f1741072514cbb97d3af528b0be957a6463933..92721d1a08f793233bc3fd0cbc088fcb714d8a14 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
+@@ -207,8 +207,8 @@ fn vessel_update_refusals_stop_before_the_next_stage_and_record_nothing() {
+     let cases = [
+         ("宣言なし", update_place(false, "", 0, 0), "vessel: vessel-repo-undeclared", upto(0)),
+         ("dirty", update_place(true, " M src/lib.rs\\n", 0, 0), "vessel: dirty", upto(1)),
+-        ("ff できない", update_place(true, "", 128, 0), "vessel: not-fast-forward", upto(3)),
+-        ("install の失敗", update_place(true, "", 0, 101), "vessel: install-failed rc=101", upto(4)),
++        ("ff できない", update_place(true, "", 128, 0), "vessel: not-fast-forward", upto(4)),
++        ("install の失敗", update_place(true, "", 0, 101), "vessel: install-failed rc=101", upto(6)),
+     ];
+     for (label, place, word, want) in cases {
+         let out = run_update(&place);
+@@ -221,6 +221,50 @@ fn vessel_update_refusals_stop_before_the_next_stage_and_record_nothing() {
+     }
+ }
+ 
++/// 入れ替えの門 (1): host のどこかで器の process（自分の外）が生きている周は、数えの段より後の argv（fetch・merge・器の
++/// 世代・cargo）を 1 本も撃たず、event 0 件・stdout 空・stderr の 1 行目が `vessel: busy`・rc 1。生きた行の無い見本（偽 pgrep
++/// の rc 1）は同じ置き場で数えの後の段へ進む。
++#[test]
++fn vswap_refuses_while_a_vessel_process_lives() {
++    let argv = update_argv();
++    let place = update_place(true, "", 0, 0);
++    let live = format!("4242 {NAME} pipe run --design contracts/x.toml#a --bead b-1\n");
++    fs::write(place.bin.join("live"), live).expect("生きた行を書ける");
++    let out = run_update(&place);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "busy の rc: {}", stderr_text(&out));
++    assert_eq!(stderr_text(&out).lines().next(), Some("vessel: busy"), "断りの語");
++    assert_eq!(place.argv(), argv.get(..2).unwrap_or_default().to_vec(), "数えの段より後は撃たない");
++    assert!(place.installs().is_empty() && out.stdout.is_empty(), "event 0 件・stdout 空");
++    let idle = update_place(true, "", 0, 0);
++    let out = run_update(&idle);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "生きた行の無い周は進む: {}", stderr_text(&out));
++}
++
++/// 入れ替えの門 (2): PATH の器の世代（`--version` の括弧の sha12）と HEAD の差が repo の dir の下で空（`git diff --quiet <sha12>
++/// HEAD -- .` の rc 0）の周は cargo を撃たず、event 0 件・stderr の 1 行目が `vessel: unchanged`・rc 1。差の在る見本（rc 1）と
++/// 世代の括弧が `+dirty` の見本は組む（cargo を撃ち event 1 件）。
++#[test]
++fn vswap_skips_the_build_when_the_tree_is_unchanged() {
++    let place = update_place(true, "", 0, 0);
++    fs::write(place.bin.join("version"), format!("{NAME} 0.1.0 (89abcdef0123)\n")).expect("世代を書ける");
++    fs::write(place.bin.join("diff.rc"), "0").expect("diff の rc を書ける");
++    let out = run_update(&place);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "unchanged の rc: {}", stderr_text(&out));
++    assert_eq!(stderr_text(&out).lines().next(), Some("vessel: unchanged"), "断りの語");
++    let argv = place.argv();
++    assert_eq!(argv.last().map(String::as_str), Some("git -C [repo] diff --quiet 89abcdef0123 HEAD -- ."), "最後は diff");
++    assert!(!argv.iter().any(|line| line.starts_with("cargo ")), "cargo を撃たない: {argv:?}");
++    assert!(place.installs().is_empty(), "event 0 件");
++    for (label, version, rc) in [("差が在る", "89abcdef0123", "1"), ("+dirty", "89abcdef0123+dirty", "0")] {
++        let built = update_place(true, "", 0, 0);
++        fs::write(built.bin.join("version"), format!("{NAME} 0.1.0 ({version})\n")).expect("世代を書ける");
++        fs::write(built.bin.join("diff.rc"), rc).expect("diff の rc を書ける");
++        let out = run_update(&built);
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{label}: 組む: {}", stderr_text(&out));
++        assert_eq!(built.installs().len(), 1, "{label}: event 1 件");
++    }
++}
++
+ /// 口の閉包: `update` は `--state-dir` を要り、positional を取らない（git も cargo も撃たない）。
+ #[test]
+ fn vessel_update_needs_state_dir_and_takes_no_root() {
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+index 946a6977a4f972168e45560ad3f78dfc9d2e79c8..1129cb17fe1d0219b11d38b5ceb2f709d20ef3a5 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+@@ -1849,7 +1849,8 @@ fn pipe_dispatch_intake_run_without_a_live_driver_is_not_live() {
+ // ───── 終端の周の軸（consumer-sync.md §15 形 2 / 3・`pipe_dispatch_vessel_` 接頭辞・`s2-07l.408`） ─────
+ //
+ // 偽 git は `[[vessel]] repo` を名指す呼び出しだけを写して答え（`rev-list` は数・`status` は汚れ・`fetch` は rc）、他は
+-// 実 git へ exec する（列そのものの git は現物で動く）。偽 cargo は argv を写して install 先の行を出す。
++// 実 git へ exec する（列そのものの git は現物で動く）。偽 cargo は argv を写して install 先の行を出す。偽 pgrep は argv を写して
++// rc 1（生きた行 0＝host の器の process を数えない）、偽の器は argv を写して括弧の中が unknown の `--version` の行を出す（組む側）。
+ 
+ /// 偽 git が vessel repo の `rev-parse HEAD` に返す 40 桁（先頭 12 桁が `updated:` の sha）。
+ const VESSEL_HEAD: &str = "89abcdef0123456789abcdef0123456789abcdef";
+@@ -1857,9 +1858,9 @@ const VESSEL_HEAD: &str = "89abcdef0123456789abcdef0123456789abcdef";
+ /// 空の 1 周の列の行（`dispatch=` の書式は 1 字も変わらない）。
+ const IDLE_LINE: &str = "dispatch=started:0,resumed:0,waiting:0";
+ 
+-/// 軸の置き場（偽 git / cargo の PATH と argv の写し）。
++/// 軸の置き場（偽 git / cargo / pgrep / 器の PATH と argv の写し）。
+ struct VesselPlace {
+-    /// 偽 git / cargo を先頭に置いた PATH。
++    /// 偽 git / cargo / pgrep / 器を先頭に置いた PATH。
+     path: String,
+     /// argv の写し。
+     log: std::path::PathBuf,
+@@ -1875,7 +1876,7 @@ impl VesselPlace {
+ }
+ 
+ /// 置き場を作る: `declared` なら host の面に `[[vessel]] repo` を書き、偽 git（`rev-list` は `count`・`status` は `status_out`・
+-/// `fetch` は `fetch_rc`）と偽 cargo（rc 0・install 先を stderr へ）を置く。
++/// `fetch` は `fetch_rc`）と偽 cargo（rc 0・install 先を stderr へ）と偽 pgrep（rc 1）と偽の器（`--version` は unknown）を置く。
+ #[expect(
+     clippy::expect_used,
+     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+@@ -1897,10 +1898,16 @@ fn vessel_place(state: &Path, declared: bool, count: u64, status_out: &str, fetc
+         &state.join("vessel-bin").join("cargo"),
+         &format!("printf '%s\\n' \"cargo $*\" >> '{logged}'\necho '  Installing /opt/e2e-bin/vessel' >&2\n"),
+     );
++    script(&state.join("vessel-bin").join("pgrep"), &format!("printf '%s\\n' \"pgrep $*\" >> '{logged}'\nexit 1\n"));
++    let name = vessel::name::NAME;
++    script(
++        &state.join("vessel-bin").join(name),
++        &format!("printf '%s\\n' \"{name} $*\" >> '{logged}'\necho '{name} 0.1.0 (unknown)'\n"),
++    );
+     VesselPlace { path, log, vessel }
+ }
+ 
+-/// 手動の 1 周（起こす側・道具つき・台帳は空）を偽 git / cargo の PATH で撃つ（`verb` は `dispatch` の後ろの語）。
++/// 手動の 1 周（起こす側・道具つき・台帳は空）を偽 git / cargo / pgrep / 器の PATH で撃つ（`verb` は `dispatch` の後ろの語）。
+ fn vessel_turn(repo: &Path, state: &Path, place: &VesselPlace, verb: &[&str]) -> Output {
+     let (state_s, repo_s, rules, bd) =
+         (state.display().to_string(), repo.display().to_string(), dispatch_rules(state), fake_bd(state, &[]));
+@@ -1932,11 +1939,14 @@ fn pipe_dispatch_vessel_behind_on_an_idle_round_fires_update_once() {
+     let sha = VESSEL_HEAD.get(..12).unwrap_or_default();
+     assert_eq!(stdout_of(&out), format!("vessel=updated:{sha}\n{IDLE_LINE}\n"), "軸の行 + 列の行（{}）", told(&out));
+     let mut want = fetch_then_count();
++    let name = vessel::name::NAME;
+     want.extend([
+-        "git -C [vessel] status --porcelain".to_owned(),
++        "git -C [vessel] status --porcelain --untracked-files=no".to_owned(),
++        format!("pgrep -af {name}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)"),
+         "git -C [vessel] fetch origin".to_owned(),
+         "git -C [vessel] merge --ff-only origin/main".to_owned(),
+-        format!("cargo install --path [vessel]/crates/{} --locked --color never", vessel::name::NAME),
++        format!("{name} --version"),
++        format!("cargo install --path [vessel]/crates/{name}-boundary --locked --color never"),
+         "git -C [vessel] rev-parse HEAD".to_owned(),
+     ]);
+     assert_eq!(place.argv(), want, "fetch 1 回 → 数え → §5 の口 1 回（順序は §5 のまま）");
+@@ -1989,7 +1999,7 @@ fn pipe_dispatch_vessel_dirty_checkout_is_refused_with_the_word() {
+     let out = vessel_turn(&repo, &state, &place, &[]);
+     assert_eq!(stdout_of(&out), format!("vessel=refused:dirty\n{IDLE_LINE}\n"), "断りの語（{}）", told(&out));
+     let mut want = fetch_then_count();
+-    want.push("git -C [vessel] status --porcelain".to_owned());
++    want.push("git -C [vessel] status --porcelain --untracked-files=no".to_owned());
+     assert_eq!(place.argv(), want, "口は status で止まる");
+     assert_eq!(installs(&state), 0, "記帳 0 件");
+     clean(&[&repo, &state]);
+diff --git a/scribe2/crates/scribe2/src/hook/vessel.rs b/scribe2/crates/scribe2/src/hook/vessel.rs
+index c9883c37924406da9854cad582c266713c193ddd..5dd949adf5fa044be9df040cc4fae4fca7050272 100644
+--- a/scribe2/crates/scribe2/src/hook/vessel.rs
++++ b/scribe2/crates/scribe2/src/hook/vessel.rs
+@@ -347,12 +347,16 @@ pub const DEFAULT_BRANCH: &str = "main";
+ pub enum UpdateError {
+     /// host の面に `[[vessel]] repo` が無い（宣言を読めない周は読めない理由つき）。
+     Undeclared(Vec<String>),
+-    /// `status --porcelain` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
++    /// `status --porcelain --untracked-files=no` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
+     Dirty,
++    /// host のどの置き場かで器の process（自分の外）が生きているか、`pgrep` で測れない（走る便の下で binary を替えない）。
++    Busy,
+     /// `fetch` が落ちた（rc つき・`None` = 起動できない / signal）。
+     FetchFailed(Option<i32>),
+     /// `merge --ff-only` が落ちた（rebase も reset もしない＝人の手番）。
+     NotFastForward,
++    /// PATH の器の世代の木と HEAD の木が repo の dir の下で同じ（組まない）。
++    Unchanged,
+     /// `cargo install` が落ちた（rc つき・旧 binary が残る）。
+     InstallFailed(Option<i32>),
+     /// install は済んだが event を積めない（sha / path が読めない・store が書けない・理由つき）。
+@@ -365,8 +369,10 @@ impl UpdateError {
+         match self {
+             Self::Undeclared(_) => "vessel-repo-undeclared",
+             Self::Dirty => "dirty",
++            Self::Busy => "busy",
+             Self::FetchFailed(_) => "fetch-failed",
+             Self::NotFastForward => "not-fast-forward",
++            Self::Unchanged => "unchanged",
+             Self::InstallFailed(_) => "install-failed",
+             Self::RecordFailed(_) => "record-failed",
+         }
+@@ -376,9 +382,13 @@ impl UpdateError {
+     pub fn rc(&self) -> u8 {
+         match self {
+             Self::RecordFailed(_) => RC_BROKEN,
+-            Self::Undeclared(_) | Self::Dirty | Self::FetchFailed(_) | Self::NotFastForward | Self::InstallFailed(_) => {
+-                RC_REFUSED
+-            }
++            Self::Undeclared(_)
++            | Self::Dirty
++            | Self::Busy
++            | Self::FetchFailed(_)
++            | Self::NotFastForward
++            | Self::Unchanged
++            | Self::InstallFailed(_) => RC_REFUSED,
+         }
+     }
+ 
+@@ -389,7 +399,7 @@ impl UpdateError {
+             Self::Undeclared(reasons) => {
+                 std::iter::once(format!("vessel: {}", self.as_str())).chain(reasons.iter().cloned()).collect()
+             }
+-            Self::Dirty | Self::NotFastForward => vec![format!("vessel: {}", self.as_str())],
++            Self::Dirty | Self::Busy | Self::NotFastForward | Self::Unchanged => vec![format!("vessel: {}", self.as_str())],
+             Self::FetchFailed(rc) | Self::InstallFailed(rc) => vec![format!("vessel: {} rc={}", self.as_str(), rc_of(rc))],
+             Self::RecordFailed(reason) => vec![format!("vessel: {}（{reason}）", self.as_str())],
+         }
+@@ -420,17 +430,22 @@ fn update_cmd(rest: &[String]) -> Outcome {
+ 
+ /// ff → build → install を順序固定で 1 回行い、成功した周だけ `InstallRecorded` を 1 件積む（設計 consumer-sync.md §5）。
+ ///
+-/// (1) `status --porcelain` → (2) `fetch <remote>` → `merge --ff-only <remote>/<branch>` → (3) `cargo install --path
+-/// <repo>/crates/<NAME> --locked` → (4) event。**どの段で断っても後の段は撃たない**（作業ツリーを変えない・旧 binary が
+-/// 残る・event 0）。sha は (3) の後に HEAD から読む（(3) は checkout を動かさない＝install した HEAD）。
++/// (1) `status --porcelain --untracked-files=no` → (1b) 器の process の数え（[`busy`]）→ (2) `fetch <remote>` →
++/// `merge --ff-only <remote>/<branch>` → (2b) PATH の器の世代と HEAD の repo の dir の下の差（[`installed_sha`]・差が無ければ
++/// 組まない）→ (3) `cargo install --path <repo>/crates/<NAME>-boundary --locked`（bin を持つ部品）→ (4) event。**どの段で断っても
++/// 後の段は撃たない**（作業ツリーを変えない・旧 binary が残る・event 0）。sha は (3) の後に HEAD から読む（(3) は checkout を
++/// 動かさない＝install した HEAD）。
+ pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fleet::Install, UpdateError> {
+     let manifest = crate::rules::read(None, Some(state_dir))
+         .map_err(|errors| UpdateError::Undeclared(errors.iter().map(ToString::to_string).collect()))?;
+     let repo = manifest.vessel().map(|found| PathBuf::from(found.repo())).ok_or(UpdateError::Undeclared(Vec::new()))?;
+-    let status = git_output(&repo, &["status", "--porcelain"]).ok_or(UpdateError::Dirty)?;
++    let status = git_output(&repo, &["status", "--porcelain", "--untracked-files=no"]).ok_or(UpdateError::Dirty)?;
+     if !status.status.success() || !status.stdout.is_empty() {
+         return Err(UpdateError::Dirty);
+     }
++    if busy() {
++        return Err(UpdateError::Busy);
++    }
+     let fetched = git_output(&repo, &["fetch", remote]);
+     if !fetched.as_ref().is_some_and(|out| out.status.success()) {
+         return Err(UpdateError::FetchFailed(fetched.and_then(|out| out.status.code())));
+@@ -438,10 +453,13 @@ pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fle
+     if !git_ok(&repo, &["merge", "--ff-only", &format!("{remote}/{branch}")]) {
+         return Err(UpdateError::NotFastForward);
+     }
++    if installed_sha().is_some_and(|sha| git_ok(&repo, &["diff", "--quiet", &sha, "HEAD", "--", "."])) {
++        return Err(UpdateError::Unchanged);
++    }
+     let installed = Invocation::new("cargo")
+         .arg("install")
+         .arg("--path")
+-        .arg(repo.join("crates").join(NAME))
++        .arg(repo.join("crates").join(format!("{NAME}-boundary")))
+         .args(["--locked", "--color", "never"])
+         .current_dir(&repo)
+         .output();
+@@ -461,6 +479,37 @@ pub fn update(state_dir: &Path, remote: &str, branch: &str) -> Result<crate::fle
+     Ok(install)
+ }
+ 
++/// 器の process（便の driver・関門・着地・列・起こし・実装役・審査役）の command 行に当たる `pgrep` の拡張正規表現
++/// （名は [`NAME`] から導く・`sh -c` の行も当たる）。
++fn live_pattern() -> String {
++    format!("{NAME}[^ ]* (pipe (run|resume|gate|land|regate|dispatch|spawn)|runner|lens)( |$)")
++}
++
++/// host のどの置き場かで器の process が自分の外に 1 本でも在るか（`pgrep -af` の rc 1 だけが 0 本・起動できない周と
++/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行は数えない。
++fn busy() -> bool {
++    let pattern = live_pattern();
++    let Ok(out) = Invocation::new("pgrep").args(["-af", pattern.as_str()]).output() else {
++        return true;
++    };
++    match out.status.code() {
++        Some(1) => false,
++        Some(0) => {
++            let me = std::process::id().to_string();
++            String::from_utf8_lossy(&out.stdout).lines().any(|line| line.split_whitespace().next() != Some(me.as_str()))
++        }
++        _ => true,
++    }
++}
++
++/// PATH の器の `--version` の 1 行目の括弧の中の sha12（`+dirty`・`unknown`・起動できない周は `None` = 組む側に倒す）。
++fn installed_sha() -> Option<String> {
++    let out = Invocation::new(NAME).arg("--version").output().ok()?;
++    let text = String::from_utf8_lossy(&out.stdout);
++    let inner = text.lines().next()?.rsplit_once('(')?.1.strip_suffix(')')?;
++    (inner.len() == 12 && inner.bytes().all(|byte| byte.is_ascii_hexdigit())).then(|| inner.to_owned())
++}
++
+ /// 上流との差を数えられない周の理由（git が返らない・数が読めない・設計 consumer-sync.md §15 形 1）。
+ pub const GIT_FAILED: &str = "git-failed";
+ /// 終端の周の fetch が落ちた周の理由（口を撃たない・設計 consumer-sync.md §15 形 2）。
+@@ -605,6 +654,7 @@ mod tests {
+         let _ = std::fs::write(state.join("host.toml"), format!("schema = 1\n\n[[vessel]]\nrepo = \"{repo}\"\n"));
+         let stub = Stub::install(|call| match (call.program.as_str(), call.args.get(2).map(String::as_str)) {
+             ("git", Some("status" | "fetch" | "merge")) => exited(0, b""),
++            ("pgrep", _) => exited(1, b""),
+             ("git", Some("rev-parse")) => exited(0, b" /top \n"),
+             ("cargo", _) => exited(101, b""),
+             _ => Err(std::io::Error::other("gone")),
+@@ -619,17 +669,26 @@ mod tests {
+         };
+         let cargo = Call {
+             program: "cargo".to_owned(),
+-            args: ["install", "--path", &format!("{repo}/crates/{NAME}"), "--locked", "--color", "never"]
++            args: ["install", "--path", &format!("{repo}/crates/{NAME}-boundary"), "--locked", "--color", "never"]
+                 .iter()
+                 .map(|arg| (*arg).to_owned())
+                 .collect(),
+             cwd: Some(PathBuf::from(repo)),
+             envs: Vec::new(),
+         };
++        let bare = |program: &str, args: &[&str]| Call {
++            program: program.to_owned(),
++            args: args.iter().map(|arg| (*arg).to_owned()).collect(),
++            cwd: None,
++            envs: Vec::new(),
++        };
++        let pattern = super::live_pattern();
+         let expected = [
+-            git(&["status", "--porcelain"]),
++            git(&["status", "--porcelain", "--untracked-files=no"]),
++            bare("pgrep", &["-af", pattern.as_str()]),
+             git(&["fetch", "up"]),
+             git(&["merge", "--ff-only", "up/trunk"]),
++            bare(NAME, &["--version"]),
+             cargo,
+             git(&["rev-parse", "--show-toplevel"]),
+         ];
