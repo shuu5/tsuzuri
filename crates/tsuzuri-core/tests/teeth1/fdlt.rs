@@ -1,6 +1,6 @@
 //! tool の呼びの組の後の配達の hook の中核の歯（行 f-deliver-tool・接頭辞 fdlt_）。
 //! 台帳は歯の中で組む（問い fx-t.1〜fx-t.8）。hooks.json は workspace の根の plugin/hooks/hooks.json を読む。
-//! 境界の tests/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
+//! 境界の tests/teeth2/fdlt.rs の歯の名もこの file が数える（fdlt_own_names_clean）。
 #![cfg(test)]
 
 use std::io::{ErrorKind, Write};
@@ -629,7 +629,7 @@ fn test_names(src: &str) -> Vec<String> {
 #[test]
 fn fdlt_own_names_clean() {
     let core = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/fdlt.rs");
-    let boundary = root().join("crates/tsuzuri-boundary/tests/fdlt.rs");
+    let boundary = root().join("crates/tsuzuri-boundary/tests/teeth2/fdlt.rs");
     let mut names = Vec::new();
     for path in [core, boundary] {
         let src = std::fs::read_to_string(&path)

@@ -2,7 +2,7 @@
 //! 族が自分の台帳に無い行（外の台帳の行）を外の台帳で確かめる g-3（`check::outside_heads` が確かめられない行の
 //! 節点の数と族を名指す）。fixture は tests/fixtures/graph/unruled/ の 4 つの file（読むだけ）で、族 s9-far と s7-gone と
 //! s8-near（作った名）を引く書き出しの行と外の台帳の字は歯の中で足す。
-//! 境界の歯は tsuzuri-boundary の tests/gextw.rs（この file の歯の名と合わせて 6 つ）。
+//! 境界の歯は tsuzuri-boundary の tests/teeth2/gextw.rs（この file の歯の名と合わせて 6 つ）。
 #![cfg(test)]
 
 use std::fs;
@@ -482,7 +482,7 @@ fn gext_names_clean() {
     let mut names: Vec<String> = Vec::new();
     for file in [
         dir.join("tests/teeth1/gext.rs"),
-        dir.join("../tsuzuri-boundary/tests/gextw.rs"),
+        dir.join("../tsuzuri-boundary/tests/teeth2/gextw.rs"),
     ] {
         let text = fs::read_to_string(&file)
             .unwrap_or_else(|e| panic!("{} を読む: {e}", file.display()));

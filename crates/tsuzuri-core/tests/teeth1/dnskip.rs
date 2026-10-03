@@ -204,7 +204,7 @@ fn dnskip_own_names_clean() {
     assert_eq!(FILTER_WORDS.len(), 152, "畳んだ 151 語と pgz_");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut names = test_names(&root.join("tests/teeth1/dnskip.rs"));
-    names.extend(test_names(&root.join("../tsuzuri-boundary/tests/dnskipw.rs")));
+    names.extend(test_names(&root.join("../tsuzuri-boundary/tests/teeth1/dnskipw.rs")));
     assert!(names.len() >= 6, "歯の名: {names:?}");
     for name in names {
         let rest = name

@@ -10,6 +10,11 @@ use std::path::{Path, PathBuf};
 /// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
 const GROUPS: &[(&str, usize)] = &[
     // kfold-groups-begin
+    ("crates/tsuzuri-boundary/tests/teeth1", 26),
+    ("crates/tsuzuri-boundary/tests/teeth2", 27),
+    ("crates/tsuzuri-boundary/tests/teeth3", 16),
+    ("crates/tsuzuri-boundary/tests/teeth4", 14),
+    ("crates/tsuzuri-boundary/tests/teeth5", 8),
     ("crates/tsuzuri-contract/tests/teeth1", 13),
     ("crates/tsuzuri-core/tests/teeth1", 29),
     ("crates/tsuzuri-core/tests/teeth2", 25),

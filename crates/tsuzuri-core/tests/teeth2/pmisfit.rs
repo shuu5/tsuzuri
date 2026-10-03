@@ -432,7 +432,7 @@ fn names(path: &PathBuf) -> Vec<String> {
 fn pmisfit_own_names_clean() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let core = names(&dir.join("tests/teeth2/pmisfit.rs"));
-    let boundary = names(&dir.join("../tsuzuri-boundary/tests/pmisroute.rs"));
+    let boundary = names(&dir.join("../tsuzuri-boundary/tests/teeth3/pmisroute.rs"));
     assert!(core.len() >= 6, "中核の歯の数 {}", core.len());
     assert!(boundary.len() >= 4, "境界の歯の数 {}", boundary.len());
     for name in core.iter().chain(&boundary) {
