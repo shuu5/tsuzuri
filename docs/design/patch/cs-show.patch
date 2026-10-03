@@ -378,10 +378,10 @@ index 34fc703d8c783d56aaa1835bc44296af0cddd130..29b7467054b50bcc4173841bf7512033
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwshw.rs b/crates/tsuzuri-boundary/tests/cwshw.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7dce362f30
+index 0000000000000000000000000000000000000000..fb1617c26192b4a991bf214def994e0fc7544504
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwshw.rs
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,471 @@
 +//! 席が所見を読む口と処分の口の歯（接頭辞 cwshw_・設計ノート surface-wave27a 行 cs-show・受入 AC16 の台帳の 2 行）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd（置き場の
 +//! ledger.json を出す）と偽の bdw（argv を記録する）を置き、窓 cw3 の作業場に fixture finding-2 の complete.json を
@@ -596,6 +596,11 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +        .get(..14)
 +        .unwrap()
 +        .to_string();
++    // ほかの所見 cw3-2 の 2 行だけが在る台帳（同じ id の行だけを重なりと見る）。
++    fx.notes(&[
++        "相談の所見 = cw3-2・窓 = cw3・題 = fx-hub.7・時刻 = 20261003T1500Z".to_string(),
++        "相談の受け = cw3-2・経路 = 一覧・時刻 = 20261003T1500Z".to_string(),
++    ]);
 +    let before = ruling::minute(events::now());
 +    let o = fx.tz(&["show", "cw3-1", "--via", "見張り"]);
 +    let after = ruling::minute(events::now());
@@ -680,6 +685,7 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +    fx.settle(&[]);
 +    let into = fx.root.join("into");
 +    let into_s = into.display().to_string();
++    let before = ruling::minute(events::now());
 +    let o = fx.tz(&[
 +        &DISPOSE[..],
 +        &[
@@ -699,8 +705,10 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +    let copied = fs::read_to_string(into.join("docs/consult/kept/cw3-1/work/report.md")).unwrap();
 +    assert_eq!(copied, "調べのレポート\n");
 +    assert!(!into.join("docs/consult/kept/cw3-1/work/probe.py").exists());
++    let after = ruling::minute(events::now());
 +    let w = fx.written();
 +    let at = time_of(&w[0].1);
++    assert!(before <= at && at <= after, "{at}");
 +    let want = format!(
 +        "相談の処分 = cw3-1・採否 = 一部採る・理由 = 前提の 1 つが古い・保存 = work/report.md・不保存 = work/probe.py・時刻 = {at}"
 +    );
@@ -745,6 +753,8 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +#[test]
 +fn cwshw_dispose_refusals() {
 +    let fx = Fx::new("refuse");
++    // ほかの所見 cw3-2 の受けの行だけが在る台帳（cw3-1 の受けの欠けだけの見本）。
++    fx.notes(&["相談の受け = cw3-2・経路 = 一覧・時刻 = 20261003T1500Z".to_string()]);
 +    let unreceived =
 +        fx.tz(&[&DISPOSE[..], &["work/report.md", "--drop", "work/probe.py"]].concat());
 +    assert!(
@@ -756,6 +766,7 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +    fx.settle(&[]);
 +    let base = ["dispose", "cw3-1", "--verdict", "採る", "--reason", "理由"];
 +    let kd = "--keep work/report.md --drop work/probe.py";
++    let file = fx.root.join("ledger.json").display().to_string();
 +    let cases = [
 +        (
 +            "--keep work/report.md".to_string(),
@@ -770,6 +781,7 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +            "重なった添え物 work/report.md",
 +        ),
 +        (format!("{kd} --into /nonexistent-into"), "dir でない"),
++        (format!("{kd} --into {file}"), "dir でない"),
 +        (format!("{kd} --verdict x"), "2 度ある"),
 +        (format!("{kd} --reason y"), "2 度ある"),
 +        (format!("{kd} --x 1"), "知らない引数"),
@@ -783,18 +795,34 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +    refusals_reason_and_kept(&fx);
 +}
 +
++/// 所見を、添え物の全部を不保存にして処分する（採らない・理由 古い）。
++fn drop_all(fx: &Fx, id: &str) -> Output {
++    fx.tz(&[
++        "dispose",
++        id,
++        "--verdict",
++        "採らない",
++        "--reason",
++        "古い",
++        "--drop",
++        "work/report.md",
++        "--drop",
++        "work/probe.py",
++    ])
++}
++
 +#[test]
 +fn cwshw_retire_after_last() {
 +    let fx = Fx::new("retire");
-+    fs::write(
-+        fx.ws.join("findings/cw3-2.json"),
-+        fs::read_to_string(fx.ws.join("findings/cw3-1.json"))
-+            .unwrap()
-+            .replace("cw3-1", "cw3-2"),
-+    )
-+    .unwrap();
-+    assert_eq!(rc(&fx.tz(&["show", "cw3-1", "--via", "見張り"])), 0);
-+    let closed = "相談の閉じ = cw3・起こし手 = 席・所見 = 2・時刻 = 20261003T1800Z".to_string();
++    let first = fs::read_to_string(fx.ws.join("findings/cw3-1.json")).unwrap();
++    for id in ["cw3-2", "cw3-3"] {
++        let path = fx.ws.join(format!("findings/{id}.json"));
++        fs::write(path, first.replace("cw3-1", id)).unwrap();
++    }
++    for id in ["cw3-1", "cw3-3"] {
++        assert_eq!(rc(&fx.tz(&["show", id, "--via", "見張り"])), 0);
++    }
++    let closed = "相談の閉じ = cw3・起こし手 = 席・所見 = 3・時刻 = 20261003T1800Z".to_string();
 +    fx.settle(std::slice::from_ref(&closed));
 +    let args = [
 +        "--keep",
@@ -807,20 +835,16 @@ index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7d
 +    let o = fx.tz(&[&DISPOSE[..], &args[1..], &[into.as_str()]].concat());
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    assert!(fx.ws.is_dir(), "処分の無い所見 cw3-2 が残る間は退かせない");
++    fx.settle(&[]);
++    let o = drop_all(&fx, "cw3-3");
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert!(
++        fx.ws.is_dir(),
++        "id の最後の cw3-3 を処分しても cw3-2 が残る間は退かせない"
++    );
 +    assert_eq!(rc(&fx.tz(&["show", "cw3-2", "--via", "一覧"])), 0);
 +    fx.settle(&[]);
-+    let o = fx.tz(&[
-+        "dispose",
-+        "cw3-2",
-+        "--verdict",
-+        "採らない",
-+        "--reason",
-+        "古い",
-+        "--drop",
-+        "work/report.md",
-+        "--drop",
-+        "work/probe.py",
-+    ]);
++    let o = drop_all(&fx, "cw3-2");
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    let gone = fx.drafts.join("retired-consult-cw3");
 +    assert_eq!(

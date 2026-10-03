@@ -1002,10 +1002,10 @@ index 4e75c9a282331f02dad798aaaeb2d49b5249e142..63b6b6ee19b1ae05ea13227be4020d6c
      FAIL
 diff --git a/crates/tsuzuri-boundary/tests/cwopn.rs b/crates/tsuzuri-boundary/tests/cwopn.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9df9a2940e
+index 0000000000000000000000000000000000000000..6d55b4cee1b835266e1d5ee7bf71e60fea6ddb26
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwopn.rs
-@@ -0,0 +1,650 @@
+@@ -0,0 +1,699 @@
 +//! 相談の窓の命令の骨と open と bundle の歯（接頭辞 cwopn_・設計ノート surface-wave27a 行 cs-open）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo（鍵 scribe2.statedir と tsuzuri.draftsdir）と
 +//! state dir と起草の置き場と、偽の bd（置き場の ledger.json を出す・無ければ rc 1）と偽の bdw（argv を記録する）を置き、
@@ -1413,6 +1413,23 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +    assert!(wants.iter().all(|w| reads.contains(w)), "{reads}");
 +}
 +
++/// 字を選んで要約値の頭の 3 字が 0 になる束（要約値は頭の 0 を残して 16 字）。
++fn assert_padded_digest(fx: &Fx) {
++    let pad = fx.root.join("pad");
++    fs::create_dir_all(&pad).unwrap();
++    let files = [
++        ("brief.md", "手引き\n"),
++        ("question.md", "問い 7248\n"),
++        ("reads.md", "読む物\n"),
++        ("ledger.json", "[]"),
++    ];
++    for (name, text) in files {
++        fs::write(pad.join(name), text).unwrap();
++    }
++    assert_eq!(bundle::digest(&pad), "000ed594a174a89c");
++    assert_eq!(digest_of(&pad), "000ed594a174a89c");
++}
++
 +#[test]
 +fn cwopn_bundle_files_and_digest() {
 +    let fx = Fx::new("bundle", true);
@@ -1426,6 +1443,7 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +        (read("digest"), bundle::digest(&dir)),
 +        (format!("{want}\n"), want.clone())
 +    );
++    assert_padded_digest(&fx);
 +    let o = fx.tz(&["consult", "bundle", "cw1"]);
 +    assert_eq!((rc(&o), out(&o)), (0, format!("束 {want}\n")));
 +    let newer = LEDGER.replace("問いの本文", "替えた本文");
@@ -1494,13 +1512,37 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +        .lines()
 +        .count();
 +    assert_eq!(calls, after, "窓の中の束は bd を撃たない");
-+    let o = fx
-+        .command(&["consult", "bundle", "cw1"])
-+        .current_dir(&fx.drafts)
-+        .env("TZ_CONSULT_ID", "cw1")
-+        .output()
-+        .unwrap();
++    inside_only_own_window(&fx);
++}
++
++/// 窓の中の束は環境の窓の id が束の窓の id で cwd がその窓の作業場の時だけ（作業場でない cwd と
++/// ほかの窓の作業場は断り、環境がほかの窓の id なら席の撃ちで台帳の写しを替える）。
++fn inside_only_own_window(fx: &Fx) {
++    let bundle_at = |cwd: &Path, id: &str| {
++        fx.command(&["consult", "bundle", "cw1"])
++            .current_dir(cwd)
++            .env("TZ_CONSULT_ID", id)
++            .output()
++            .unwrap()
++    };
++    let o = bundle_at(&fx.drafts, "cw1");
 +    assert_eq!(rc(&o), 1, "cwd が作業場でなければ断る");
++    assert!(err(&o).contains("窓 cw1 の作業場が無い"), "{}", err(&o));
++    assert_eq!(rc(&fx.tz(&["consult", "open", "--by", "seat"])), 0);
++    let o = bundle_at(&fx.ws(2), "cw1");
++    assert_eq!(rc(&o), 1, "ほかの窓の作業場は断る");
++    assert!(
++        err(&o).contains("窓の id が cw2 で cw1 でない"),
++        "{}",
++        err(&o)
++    );
++    let o = bundle_at(&fx.repo, "cw2");
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let copy = fs::read_to_string(fx.ws(1).join("bundle/ledger.json")).unwrap();
++    assert!(
++        copy.contains("窓から見えない本文"),
++        "ほかの窓の id は席の撃ち"
++    );
 +}
 +
 +/// 頼みで開いた窓の控えと、偽の bdw が受けた受けの行（1 本だけ）の字。
@@ -1552,12 +1594,13 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +    let o = open(&[RQ, "--via", "hook"]);
 +    assert_eq!(rc(&o), 1);
 +    assert!(err(&o).contains("もう受けた"), "{}", err(&o));
-+    fx.ledger(LEDGER);
++    let other = tail.replace("Z-1・経路", "Z-2・経路");
++    fx.ledger(&LEDGER.replace("時刻 = 20261003T1412Z\"", &other));
 +    let o = open(&[RQ, "--via", "一覧", "--topic", "別の題"]);
-+    assert_eq!(rc(&o), 0);
++    assert_eq!(rc(&o), 0, "ほかの頼みの受けは断りでない {}", err(&o));
 +    assert_eq!(fx.window(2).topic.as_deref(), Some("別の題"));
 +    let writes = fx.writes();
-+    assert_eq!(writes.len(), 2);
++    assert_eq!((writes.len(), writes[1][1].as_str()), (2, "fx-c.1"));
 +    assert!(writes[1][2].contains("・経路 = 一覧・"), "{:?}", writes[1]);
 +    assert_eq!(fx.entries(), ["consult-cw1", "consult-cw2"]);
 +}
@@ -1580,10 +1623,12 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +        fs::create_dir_all(fx.ws(n).join(".consult")).unwrap();
 +    }
 +    fs::create_dir(fx.drafts.join("retired-consult-cw2")).unwrap();
++    fs::create_dir(fx.drafts.join("retired-consult-cw10")).unwrap();
 +    fs::create_dir(fx.drafts.join("consult-cw0")).unwrap();
++    fs::create_dir(fx.drafts.join("cw5")).unwrap();
 +    fs::write(fx.drafts.join("consult-cw4"), "file").unwrap();
 +    let w = |n| WindowId::new(n).unwrap();
-+    let want = [(w(1), false), (w(2), true), (w(3), false)];
++    let want = [(w(1), false), (w(2), true), (w(3), false), (w(10), true)];
 +    assert_eq!(consult::windows(&fx.drafts), want);
 +    let ws = fx.ws(1);
 +    for name in [
@@ -1593,11 +1638,12 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +        "cw1-4.txt",
 +        "cw1-3",
 +        "cw1-0.json",
++        "cw1-10.json",
 +    ] {
 +        fs::write(ws.join("findings").join(name), "{}").unwrap();
 +    }
 +    let f = |k| FindingId::new(w(1), k).unwrap();
-+    assert_eq!(consult::findings(&ws, w(1)), [f(1), f(2)]);
++    assert_eq!(consult::findings(&ws, w(1)), [f(1), f(2), f(10)]);
 +    assert!(consult::findings(&fx.ws(3), w(3)).is_empty());
 +}
 +
@@ -1612,10 +1658,13 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +    put(2, me);
 +    put(1, 0);
 +    fs::write(ws.join(".consult/proc-3.json"), "{\"k\":3}").unwrap();
++    let named = wire::encode(&mark(5, me)).unwrap();
++    fs::write(ws.join(".consult/proc-5.txt"), named).unwrap();
 +    assert_eq!(consult::procs(&ws), [mark(1, 0), mark(2, me)]);
-+    assert!(consult::alive(me) && !consult::alive(0));
++    assert!(consult::alive(me) && consult::alive(1) && !consult::alive(0));
 +    assert!(consult::live(&ws) && !consult::live(&fx.ws(3)));
-+    put(4, 0);
++    put(10, 0);
++    assert_eq!(consult::procs(&ws), [mark(1, 0), mark(2, me), mark(10, 0)]);
 +    assert!(!consult::live(&ws));
 +}
 +
@@ -1625,28 +1674,28 @@ index 0000000000000000000000000000000000000000..cc603758f5d6a02091b9bc755eabbb9d
 +    let args = [
 +        "cw1",
 +        "--keep",
-+        "a",
-+        "--keep=b",
++        "b",
++        "--keep=a",
 +        "--via",
 +        "hook",
 +        "--dry-run",
 +    ];
 +    let parsed = consult::flags(&args, values, switches, many).unwrap();
 +    assert_eq!(parsed.pos, ["cw1"]);
-+    assert_eq!(parsed.all("--keep"), ["a", "b"]);
++    assert_eq!(parsed.all("--keep"), ["b", "a"]);
 +    assert_eq!(parsed.get("--via"), Some("hook"));
 +    assert!(parsed.has("--dry-run") && !parsed.has("--again"));
-+    let bad: [&[&str]; 5] = [
-+        &["--via", "a", "--via", "b"],
-+        &["--dry-run", "--dry-run"],
-+        &["--other", "x"],
-+        &["--via="],
-+        &["--via"],
++    let bad: [(&[&str], &str); 5] = [
++        (&["--via", "a", "--via", "b"], "--via が 2 度ある"),
++        (&["--dry-run", "--dry-run"], "--dry-run が 2 度ある"),
++        (&["--other", "x"], "知らない引数 --other"),
++        (&["--via="], "--via の値が空"),
++        (&["--via"], "--via の値が無い"),
 +    ];
-+    assert!(
-+        bad.iter()
-+            .all(|b| consult::flags(b, values, switches, many).is_err())
-+    );
++    for (b, why) in bad {
++        let e = consult::flags(b, values, switches, many).unwrap_err();
++        assert_eq!(e, (1, why.to_string()), "{b:?}");
++    }
 +}
 +
 +#[test]

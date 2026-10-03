@@ -152,10 +152,10 @@ index 896d97ddce1d26a5cb7c0ba7d2833e66d0160e41..614a4d3faa1279350f1dcdec82d74a0b
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwans.rs b/crates/tsuzuri-boundary/tests/cwans.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..9aeea288ac106644c6a7ad947c9b5d8ca907daa1
+index 0000000000000000000000000000000000000000..3bd271d81b83108933b6db82db569c691263033f
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwans.rs
-@@ -0,0 +1,295 @@
+@@ -0,0 +1,320 @@
 +//! 窓の側の所見の口と守りの hook の歯（接頭辞 cwans_・設計ノート surface-wave27a 行 cs-answer・受入 AC16 の断りと file）。
 +//! 歯ごとの作業場（CARGO_TARGET_TMPDIR の下・窓の控えだけを置く）で、tz consult answer を cwd = 作業場・
 +//! 環境の TZ_CONSULT_ID で撃つ。草稿は fixture tests/fixtures/consult/finding-2/ の complete.json と missing.json。
@@ -328,6 +328,14 @@ index 0000000000000000000000000000000000000000..9aeea288ac106644c6a7ad947c9b5d8c
 +#[test]
 +fn cwans_attachments_under_workspace() {
 +    let ws = workspace("attach");
++    fs::remove_file(ws.join("work/report.md")).unwrap();
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    assert_eq!(rc(&o), 1);
++    assert_eq!(
++        out(&o),
++        "添え物が作業場の下の file でない: work/report.md\n"
++    );
++    fs::write(ws.join("work/report.md"), "レポート\n").unwrap();
 +    fs::remove_file(ws.join("work/probe.py")).unwrap();
 +    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
 +    assert_eq!(rc(&o), 1);
@@ -366,18 +374,47 @@ index 0000000000000000000000000000000000000000..9aeea288ac106644c6a7ad947c9b5d8c
 +        1
 +    );
 +    assert!(names(&ws).is_empty());
-+    fs::write(ws.join("findings/cw3-1.json"), "前の所見\n").unwrap();
++    // 在る番号は 2 と 10（間が空き、字の順の最大と数の順の最大が違う）。次は数の最大の次。
++    fs::write(ws.join("findings/cw3-2.json"), "前の所見\n").unwrap();
++    fs::write(ws.join("findings/cw3-10.json"), "前の所見\n").unwrap();
 +    fs::write(ws.join("findings/cw9-4.json"), "ほかの窓\n").unwrap();
 +    let o = answer(&ws, Some("cw3"), &draft);
-+    assert_eq!(out(&o), "所見 cw3-2 を置いた\n");
-+    let kept = fs::read_to_string(ws.join("findings/cw3-1.json")).unwrap();
-+    assert_eq!(kept, "前の所見\n");
++    assert_eq!(out(&o), "所見 cw3-11 を置いた\n");
++    for kept in ["findings/cw3-2.json", "findings/cw3-10.json"] {
++        assert_eq!(fs::read_to_string(ws.join(kept)).unwrap(), "前の所見\n");
++    }
 +    let o = answer(&ws, Some("cw3"), &draft);
-+    assert_eq!(out(&o), "所見 cw3-3 を置いた\n");
++    assert_eq!(out(&o), "所見 cw3-12 を置いた\n");
 +    assert_eq!(
 +        names(&ws),
-+        ["cw3-1.json", "cw3-2.json", "cw3-3.json", "cw9-4.json"]
++        [
++            "cw3-10.json",
++            "cw3-11.json",
++            "cw3-12.json",
++            "cw3-2.json",
++            "cw9-4.json"
++        ]
 +    );
++}
++
++/// 席の口の 8 つ（字のまま並べる）を、どれも口の名を添えて断り、一続きの命令の中でも断る。
++fn refuses_seat_verbs() {
++    let verbs = [
++        "open", "launch", "watch", "show", "dispose", "list", "close", "guard",
++    ];
++    for verb in verbs {
++        let err = judge(&bash(&format!("/p/tz consult {verb} cw1"))).unwrap_err();
++        assert!(err.contains(&format!("tz consult {verb}")), "{err}");
++    }
++    for bad in [
++        "echo a; tz consult launch cw1",
++        "tz consult close cw1; echo a",
++        "sh -c 'tz consult close cw1'",
++        "x && tzw consult show cw1-1",
++    ] {
++        assert!(judge(&bash(bad)).is_err(), "{bad}");
++    }
++    assert_eq!(SEAT_VERBS, verbs);
 +}
 +
 +#[test]
@@ -402,35 +439,23 @@ index 0000000000000000000000000000000000000000..9aeea288ac106644c6a7ad947c9b5d8c
 +        "/p/tz consult answer drafts/a.json",
 +        "tzw consult bundle cw3 --topic x",
 +        "echo consult",
++        "git show HEAD",
 +    ] {
 +        assert_eq!(judge(&bash(ok)), Ok(()), "{ok}");
 +    }
-+    for tool in ["Task", "mcp__x__y", "NotebookEdit", "bash"] {
++    for tool in ["Task", "mcp__x__y", "NotebookEdit", "bash", "Web"] {
 +        assert!(
 +            judge(&format!("{{\"tool_name\":\"{tool}\"}}")).is_err(),
 +            "{tool}"
 +        );
 +    }
-+    let verbs = [
-+        "open", "launch", "watch", "show", "dispose", "list", "close", "guard",
-+    ];
-+    for verb in verbs {
-+        let err = judge(&bash(&format!("/p/tz consult {verb} cw1"))).unwrap_err();
-+        assert!(err.contains(&format!("tz consult {verb}")), "{err}");
-+    }
-+    for bad in [
-+        "echo a; tz consult launch cw1",
-+        "sh -c 'tz consult close cw1'",
-+        "x && tzw consult show cw1-1",
-+    ] {
-+        assert!(judge(&bash(bad)).is_err(), "{bad}");
-+    }
++    refuses_seat_verbs();
 +    let unsandboxed = "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\",\"dangerouslyDisableSandbox\":true}}";
 +    assert!(judge(unsandboxed).is_err());
++    assert_eq!(judge(&unsandboxed.replace("true", "false")), Ok(()));
 +    for bad in ["", "not json", "[]", "{}", "{\"tool_name\":3}"] {
 +        assert!(judge(bad).is_err(), "{bad}");
 +    }
-+    assert_eq!(SEAT_VERBS, verbs);
 +}
 +
 +#[test]

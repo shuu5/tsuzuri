@@ -182,10 +182,10 @@ index d6d5bd1f9d27ecc5810ec6a27ce3daadd179ae86..555791525db0ffe8ebe44899819a6de0
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwwat.rs b/crates/tsuzuri-boundary/tests/cwwat.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea75bbf9884
+index 0000000000000000000000000000000000000000..f881a6f25e90f6fa62fa4bbda81c30f0916e3f34
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwwat.rs
-@@ -0,0 +1,314 @@
+@@ -0,0 +1,326 @@
 +//! 席の背景の見張りの歯（接頭辞 cwwat_・設計ノート surface-wave27a 行 cs-watch・受入 AC16 の見張りの 1 行）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と偽の bd を置き、
 +//! 窓の作業場（窓の控え・process の印・所見）を歯が直に書いて、tz consult watch を短い上限で撃つ。
@@ -301,16 +301,7 @@ index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea7
 +        };
 +        fs::write(ws.join(".consult/window.json"), wire::encode(&w).unwrap()).unwrap();
 +        if let Some(pid) = pid {
-+            let tmux_window = (form == Form::Talk).then(|| "@7".to_string());
-+            let m = ProcMark {
-+                k: 1,
-+                form,
-+                pid,
-+                at: "20261003T1401Z".into(),
-+                again: false,
-+                tmux_window,
-+            };
-+            fs::write(ws.join(".consult/proc-1.json"), wire::encode(&m).unwrap()).unwrap();
++            proc_mark(&ws, 1, form, pid);
 +        }
 +        ws
 +    }
@@ -318,6 +309,21 @@ index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea7
 +    fn alive(&self) -> PathBuf {
 +        self.drafts.join("consult-watch.alive")
 +    }
++}
++
++/// 作業場に k 番目の process の印を置く（話す窓は tmux の窓 @7 を持つ・2 番目からは起こし直し）。
++fn proc_mark(ws: &Path, k: u32, form: Form, pid: u32) {
++    let tmux_window = (form == Form::Talk).then(|| "@7".to_string());
++    let m = ProcMark {
++        k,
++        form,
++        pid,
++        at: "20261003T1401Z".into(),
++        again: k > 1,
++        tmux_window,
++    };
++    let path = ws.join(format!(".consult/proc-{k}.json"));
++    fs::write(path, wire::encode(&m).unwrap()).unwrap();
 +}
 +
 +fn rc(o: &Output) -> i32 {
@@ -364,7 +370,12 @@ index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea7
 +#[test]
 +fn cwwat_request_stalled_gone_order() {
 +    let fx = Fx::new("order");
-+    fx.window(4, Form::Ask, Some(0));
++    // 前の process は生きていて最後の process だけが無い問う窓 cw4。
++    let ws4 = fx.window(4, Form::Ask, Some(std::process::id()));
++    proc_mark(&ws4, 2, Form::Ask, 0);
++    // 最後の process の無い問う窓で、受けた所見 cw2-1 を持つ cw2（止まったとしない）。
++    let ws2 = fx.window(2, Form::Ask, Some(0));
++    fs::write(ws2.join("findings/cw2-1.json"), "{}").unwrap();
 +    fx.window(5, Form::Talk, Some(0));
 +    fx.window(8, Form::Ask, None);
 +    let retired = fx.drafts.join("retired-consult-cw6/findings");
@@ -376,25 +387,26 @@ index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea7
 +    fx.window(9, Form::Ask, Some(std::process::id()));
 +    fx.window(10, Form::Talk, Some(std::process::id()));
 +    let got7 = "相談の受け = cw7-1・経路 = 一覧・時刻 = 20261003T1500Z";
-+    fx.notes(&[RQ_LINE, got7]);
++    let got2 = "相談の受け = cw2-1・経路 = 一覧・時刻 = 20261003T1500Z";
++    fx.notes(&[RQ_LINE, got2, got7]);
 +    let want = "相談: 頼み rq-20261003T1412Z-1 が届いた（/x/tzw consult open --request rq-20261003T1412Z-1 --by button）";
 +    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
 +    let got_rq = "相談の受け = rq-20261003T1412Z-1・経路 = hook・時刻 = 20261003T1413Z";
-+    fx.notes(&[RQ_LINE, got7, got_rq]);
++    fx.notes(&[RQ_LINE, got2, got7, got_rq]);
 +    let want = "相談: 問う窓 cw4 が所見なしで止まった（/x/tzw consult launch cw4 --again）";
 +    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
 +    let closed4 = "相談の閉じ = cw4・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z";
-+    fx.notes(&[RQ_LINE, got7, got_rq, closed4]);
++    fx.notes(&[RQ_LINE, got2, got7, got_rq, closed4]);
 +    let want = "相談: 話す窓 cw5 が閉じられた（/x/tzw consult close cw5 --by chat）";
 +    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
 +    let closed5 = "相談の閉じ = cw5・起こし手 = 持ち主のチャット・所見 = 0・時刻 = 20261003T1601Z";
-+    fx.notes(&[RQ_LINE, got7, got_rq, closed4, closed5]);
++    fx.notes(&[RQ_LINE, got2, got7, got_rq, closed4, closed5]);
 +    assert_eq!(
 +        out(&fx.watch("1")),
 +        format!("相談: 見張りが上限で終わった{TAIL}\n")
 +    );
 +    fs::write(live.join("findings/cw7-2.json"), "{}").unwrap();
-+    fx.notes(&[got7]);
++    fx.notes(&[got2, got7]);
 +    let o = fx.watch("30");
 +    assert!(
 +        out(&o).starts_with("相談: 窓 cw7 の所見 cw7-2 が届いた"),
@@ -483,7 +495,7 @@ index 0000000000000000000000000000000000000000..170a6b8fae54588cf8acfcd934bf5ea7
 +    for bad in [
 +        &["--max", "0"][..],
 +        &["--max", "x"],
-+        &["extra"],
++        &["extra", "--max", "1"],
 +        &["--max", "1", "--max", "2"],
 +    ] {
 +        let o = fx.command(bad).output().unwrap();

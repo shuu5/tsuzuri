@@ -619,10 +619,10 @@ index 04a3be456b5b618df446bfc150f6bade25483820..33986aac58b23bc488f62da54f9e1a9d
 +}
 diff --git a/crates/tsuzuri-core/tests/cwlin.rs b/crates/tsuzuri-core/tests/cwlin.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8fe7ad56e7
+index 0000000000000000000000000000000000000000..e9ca8c861a01e93d1b87676a823537c68a853982
 --- /dev/null
 +++ b/crates/tsuzuri-core/tests/cwlin.rs
-@@ -0,0 +1,507 @@
+@@ -0,0 +1,587 @@
 +//! 台帳の相談の行の歯（接頭辞 cwlin_・設計ノート surface-wave27a 行 cs-lines・判断の記録 ADR-29 決定 (4)(8)）。
 +//! 6 つの頭の行の字と読みの往復・自由な字の整え・器の引用の形と定型行の頭の断り・置き場（memo か根だけ）と
 +//! notes の上限の溢れ・未受けの計算・席への固定の 1 行の字を見る。台帳の bead は歯の中で組む。
@@ -782,6 +782,16 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +        (open(By::Seat, true, false), "起こし手 = 席・model"),
 +        (
 +            open(
++                By::Chat {
++                    uttered: "20261003T1410Z".into(),
++                },
++                true,
++                false,
++            ),
++            "起こし手 = 持ち主のチャット・発話 = 20261003T1410Z・model",
++        ),
++        (
++            open(
 +                By::Button {
 +                    request: rq("rq-20261003T1412Z-1"),
 +                },
@@ -895,6 +905,10 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +        "a:b",
 +        "t3-hub.75.1",
 +        "x:20261003T1412Z",
++        // 裁定 id の形から分の字か字「-」か数字の 1 つだけを替えた字。
++        "t3-hub.75:20261003X1412Z-1",
++        "t3-hub.75:20261003T1412Z_1",
++        "t3-hub.75:20261003T1412Z-x",
 +    ] {
 +        assert!(!cited(ok), "{ok}");
 +    }
@@ -905,13 +919,25 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +    }
 +}
 +
++/// 行の時刻の欄だけを替える。
++fn set_at(line: &mut Line, minute: &str) {
++    match line {
++        Line::Request { at, .. }
++        | Line::Open { at, .. }
++        | Line::Finding { at, .. }
++        | Line::Receipt { at, .. }
++        | Line::Disposal { at, .. }
++        | Line::Close { at, .. } => *at = minute.into(),
++    }
++}
++
 +#[test]
 +fn cwlin_refuses_bad_fields() {
-+    let mut bad_at = samples()[2].0.clone();
-+    if let Line::Finding { at, .. } = &mut bad_at {
-+        *at = "2026-10-03".into();
++    // 6 つの見本の行の時刻の欄だけを分の形でない字に替える（ほかの欄は正しいまま）。
++    for (mut line, _) in samples() {
++        set_at(&mut line, "2026-10-03");
++        assert_eq!(render(&line), Err(LineError::Minute), "{line:?}");
 +    }
-+    assert_eq!(render(&bad_at), Err(LineError::Minute));
 +    assert_eq!(
 +        render(&open(
 +            By::Chat {
@@ -1015,10 +1041,27 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +    ring[4].row.parent = Some(BeadId::new("fx-hub.7.1.2").expect("親"));
 +    ring[3].row.parent = Some(BeadId::new("fx-hub.7.1.2").expect("親"));
 +    assert_eq!(home_of(&ring, Some("fx-hub.7.1"), text), Ok(home("fx-hub")));
++    // memo の下の memo の下の題は近い方の memo に置く。
++    let mut nested = ledger(0, 0);
++    nested.extend([
++        bead("fx-hub.7.5", "task", Some("fx-hub.7"), &[MEMO_LABEL], 0),
++        bead("fx-hub.7.5.1", "task", Some("fx-hub.7.5"), &[], 0),
++    ]);
++    assert_eq!(
++        home_of(&nested, Some("fx-hub.7.5.1"), text),
++        Ok(home("fx-hub.7.5"))
++    );
++    // 根になれる epic が 2 つなら id の自然な順で最初（台帳の順・字の順・逆の順なら fx-r10）。
++    let roots = [
++        bead("fx-r10", "epic", None, &[], 0),
++        bead("fx-r9", "epic", None, &[], 0),
++    ];
++    assert_eq!(home_of(&roots, None, text), Ok(home("fx-r9")));
 +}
 +
 +#[test]
 +fn cwlin_full_memo_goes_to_root() {
++    assert_eq!(NOTES_MAX, 8192);
 +    let text = "相談の受け = cw3-1・経路 = 見張り・時刻 = 20261003T1530Z";
 +    let room = NOTES_MAX - text.len() - 1;
 +    let fits = ledger(room, 0);
@@ -1041,45 +1084,74 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +    assert_eq!(home_of(&ledger(0, room), None, text), Ok(home("fx-hub")));
 +}
 +
++/// 頼みの行（id は分の字 20261003T1412Z と番 n）。
++fn request_line(n: u32) -> Line {
++    Line::Request {
++        id: rq(&format!("rq-20261003T1412Z-{n}")),
++        topic: None,
++        form: Form::Ask,
++        model: "fable".into(),
++        at: AT.into(),
++    }
++}
++
++/// 受けの行。
++fn receipt_line(subject: Subject) -> Line {
++    Line::Receipt {
++        subject,
++        via: Via::Watch,
++        at: AT.into(),
++    }
++}
++
++/// 所見の行。
++fn finding_line(id: &str) -> Line {
++    Line::Finding {
++        id: fid(id),
++        topic: None,
++        at: AT.into(),
++    }
++}
++
 +#[test]
 +fn cwlin_unreceived_findings_and_requests() {
++    // 台帳は頼み 2・3・10・頼み 3 の受け・頼み 1・頼み 2 の 2 度目・所見 cw1-1 の受け・所見の行 cw1-2 と cw3-1。
 +    let lines = vec![
-+        Line::Request {
-+            id: rq("rq-20261003T1412Z-1"),
-+            topic: None,
-+            form: Form::Ask,
-+            model: "fable".into(),
-+            at: AT.into(),
-+        },
-+        Line::Request {
-+            id: rq("rq-20261003T1412Z-2"),
-+            topic: None,
-+            form: Form::Talk,
-+            model: "opus".into(),
-+            at: AT.into(),
-+        },
-+        Line::Receipt {
-+            subject: Subject::Request(rq("rq-20261003T1412Z-1")),
-+            via: Via::Watch,
-+            at: AT.into(),
-+        },
-+        Line::Receipt {
-+            subject: Subject::Finding(fid("cw1-1")),
-+            via: Via::Hook,
-+            at: AT.into(),
-+        },
-+        Line::Finding {
-+            id: fid("cw1-2"),
-+            topic: None,
-+            at: AT.into(),
-+        },
++        request_line(2),
++        request_line(3),
++        request_line(10),
++        receipt_line(Subject::Request(rq("rq-20261003T1412Z-3"))),
++        request_line(1),
++        request_line(2),
++        receipt_line(Subject::Finding(fid("cw1-1"))),
++        finding_line("cw1-2"),
++        finding_line("cw3-1"),
 +    ];
-+    let got = unreceived(
-+        &lines,
-+        &[fid("cw2-1"), fid("cw1-2"), fid("cw1-1"), fid("cw1-2")],
++    // 作業場の所見は入力の順で cw2-1・cw10-1・cw1-1・cw1-2・cw2-1（2 度目）。
++    let found = [
++        fid("cw2-1"),
++        fid("cw10-1"),
++        fid("cw1-1"),
++        fid("cw1-2"),
++        fid("cw2-1"),
++    ];
++    let got = unreceived(&lines, &found);
++    // 所見は重ねずに id の順（窓の数の順・字の順なら cw10-1 が cw2-1 の前・入力の順とその逆とも違う）。
++    // 受けの行の在る cw1-1 と、台帳に所見の行だけが在って作業場に無い cw3-1 は返さない。
++    assert_eq!(
++        got.findings,
++        vec![fid("cw1-2"), fid("cw2-1"), fid("cw10-1")]
 +    );
-+    assert_eq!(got.findings, vec![fid("cw1-2"), fid("cw2-1")]);
-+    assert_eq!(got.requests, vec![rq("rq-20261003T1412Z-2")]);
++    // 頼みは重ねずに台帳の順で 2・10・1（id の数の順 1・2・10 と、id の字の順と逆の順の 1・10・2 のどれとも違う）。
++    // 受けの行の在る頼み 3 は返さず、2 度在る頼み 2 は最初の行の位置。
++    assert_eq!(
++        got.requests,
++        vec![
++            rq("rq-20261003T1412Z-2"),
++            rq("rq-20261003T1412Z-10"),
++            rq("rq-20261003T1412Z-1")
++        ]
++    );
 +    assert_eq!(unreceived(&[], &[]).findings, vec![]);
 +}
 +
@@ -1128,5 +1200,13 @@ index 0000000000000000000000000000000000000000..8c0817297dcbd588c848d851c12a4e8f
 +    ];
 +    for (event, want) in cases {
 +        assert_eq!(notice(&event, t), want);
++    }
++    // 経路 完了 でない所見の行（hook・一覧）は末に置き直しの命令を持つ。
++    for via in [Via::Hook, Via::List] {
++        let event = Event::Finding {
++            id: fid("cw3-1"),
++            via,
++        };
++        assert!(notice(&event, t).ends_with(tail), "{via:?}");
 +    }
 +}

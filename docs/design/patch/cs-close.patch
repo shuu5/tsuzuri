@@ -129,10 +129,10 @@ index 6aad8c5efab7505bc2e17db7587cc7215e3e26df..075763f11081af126f3677ab4c243ed5
 +    Ok(out)
  }
 diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
-index 94b0ca4ee760ab91de875b36f4b6e93c333df359..9de667ec1c858b8f0bcb3de55b215429de32beb2 100644
+index 94b0ca4ee760ab91de875b36f4b6e93c333df359..d671b3de0e3ea8f45792bd3872e8a0ef0d508085 100644
 --- a/crates/tsuzuri-boundary/src/consult/list.rs
 +++ b/crates/tsuzuri-boundary/src/consult/list.rs
-@@ -1,10 +1,210 @@
+@@ -1,10 +1,212 @@
 -//! tz consult list（窓の一覧・設計ノート surface-wave27a 行 cs-close が中身を置く・行 cs-open は骨だけを置く）。
 +//! tz consult list [--json]（行 cs-close・窓の一覧・判断の記録 ADR-29 決定 (5)(9)(10)・hook の代わりの拾い）。
 +//! 起草の置き場の窓（退いた窓も）ごとに id・形・題・状態・所見の数・未処分の数を、続けて受けの無い頼みと、
@@ -293,16 +293,18 @@ index 94b0ca4ee760ab91de875b36f4b6e93c333df359..9de667ec1c858b8f0bcb3de55b215429
 +/// 一覧の電文（`now` は今の UTC の分の字）。
 +pub fn board(c: &Ctx, lines: &[Line], now: &str) -> ConsultBoard {
 +    let (wins, open) = rows(c, lines);
-+    let waiting = unreceived(lines, &[]).requests;
-+    let requests = lines
-+        .iter()
-+        .filter_map(|l| match l {
-+            Line::Request { id, topic, at, .. } if waiting.contains(id) => Some(RequestRow {
-+                id: id.clone(),
-+                topic: topic.clone(),
-+                at: epoch_of(at).unwrap_or_default(),
-+            }),
-+            _ => None,
++    let requests = unreceived(lines, &[])
++        .requests
++        .into_iter()
++        .filter_map(|want| {
++            lines.iter().find_map(|l| match l {
++                Line::Request { id, topic, at, .. } if *id == want => Some(RequestRow {
++                    id: id.clone(),
++                    topic: topic.clone(),
++                    at: epoch_of(at).unwrap_or_default(),
++                }),
++                _ => None,
++            })
 +        })
 +        .collect();
 +    let alive: Vec<WindowId> = wins
@@ -352,10 +354,10 @@ index 94b0ca4ee760ab91de875b36f4b6e93c333df359..9de667ec1c858b8f0bcb3de55b215429
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwcls.rs b/crates/tsuzuri-boundary/tests/cwcls.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d88500e5b16f8
+index 0000000000000000000000000000000000000000..d8526f1e2e85550851f84e5869673bb73b5d3f63
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwcls.rs
-@@ -0,0 +1,377 @@
+@@ -0,0 +1,409 @@
 +//! 窓の一覧と閉じと退かせの歯（接頭辞 cwcls_・設計ノート surface-wave27a 行 cs-close）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 +//! 受けた argv を記録して窓の名を tmux.name の字で答える偽の tmux を置き（本物の tmux は撃たない）、
@@ -488,15 +490,7 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +        )
 +        .unwrap();
 +        if let Some((pid, tmux)) = proc_ {
-+            let m = ProcMark {
-+                k: 1,
-+                form,
-+                pid,
-+                at: "20261003T1401Z".into(),
-+                again: false,
-+                tmux_window: tmux.map(str::to_string),
-+            };
-+            fs::write(ws.join(".consult/proc-1.json"), wire::encode(&m).unwrap()).unwrap();
++            mark(&ws, 1, form, pid, tmux);
 +        }
 +        ws
 +    }
@@ -529,6 +523,23 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    }
 +}
 +
++/// 作業場に k 番目の process の印を置く（pid と tmux の窓）。
++fn mark(ws: &Path, k: u32, form: Form, pid: u32, tmux: Option<&str>) {
++    let m = ProcMark {
++        k,
++        form,
++        pid,
++        at: "20261003T1401Z".into(),
++        again: false,
++        tmux_window: tmux.map(str::to_string),
++    };
++    fs::write(
++        ws.join(format!(".consult/proc-{k}.json")),
++        wire::encode(&m).unwrap(),
++    )
++    .unwrap();
++}
++
 +fn rc(o: &Output) -> i32 {
 +    o.status.code().unwrap()
 +}
@@ -541,13 +552,13 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    String::from_utf8(o.stderr.clone()).unwrap()
 +}
 +
-+/// 一覧の歯の置き場（cw1 生きている問う窓・cw2 止まった問う窓・cw3 閉じた窓・cw4 退いた窓・cw5 起こしていない窓）。
++/// 一覧の歯の置き場（cw1 生きている問う窓・cw2 止まった問う窓・cw3 process の印が生きている閉じた窓・cw4 閉じの行の在る退いた窓・cw5 起こしていない窓）。
 +fn listed(fx: &Fx, today: &str) -> Vec<String> {
 +    let me = std::process::id();
 +    let ws1 = fx.window("consult-cw1", 1, Form::Ask, Some((me, None)));
 +    fx.finding(&ws1, 1, 1);
 +    fx.window("consult-cw2", 2, Form::Ask, Some((0, None)));
-+    let ws3 = fx.window("consult-cw3", 3, Form::Talk, Some((0, Some("@3"))));
++    let ws3 = fx.window("consult-cw3", 3, Form::Talk, Some((me, Some("@3"))));
 +    fx.finding(&ws3, 3, 1);
 +    fx.window("retired-consult-cw4", 4, Form::Talk, None);
 +    fx.window("consult-cw5", 5, Form::Talk, None);
@@ -557,14 +568,18 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +        )
 +    };
 +    vec![
++        "相談の開き = cw1・形 = 問う・題 = 題なし・起こし手 = 席・model = fable・念入りさ = xhigh・結果 = 開いた・時刻 = 20261002T1400Z".to_string(),
 +        open(1),
 +        open(2),
++        "相談の開き = cw1・形 = 問う・題 = 題なし・起こし手 = 席・model = fable・念入りさ = xhigh・結果 = 落ちた・時刻 = 20261002T1500Z".to_string(),
 +        "相談の受け = cw1-1・経路 = 見張り・時刻 = 20261003T1501Z".to_string(),
 +        "相談の閉じ = cw3・起こし手 = 席・所見 = 1・時刻 = 20261003T1600Z".to_string(),
++        "相談の閉じ = cw4・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z".to_string(),
 +        "相談の処分 = cw3-1・採否 = 採らない・理由 = 古い・保存 = なし・不保存 = work/report.md、work/probe.py・時刻 = 20261003T1601Z".to_string(),
 +        RQ.to_string(),
 +        "相談の頼み = rq-20261003T1412Z-2・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z".to_string(),
 +        "相談の受け = rq-20261003T1412Z-2・経路 = hook・時刻 = 20261003T1413Z".to_string(),
++        RQ.to_string(),
 +    ]
 +}
 +
@@ -587,6 +602,13 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    ];
 +    assert_eq!(out(&o).lines().collect::<Vec<_>>(), want);
 +    assert!(fx.calls("bdw.log").is_empty(), "一覧は台帳を書かない");
++    fx.window("consult-cw10", 10, Form::Talk, None);
++    let text = out(&fx.tz(&["list"]));
++    let ids: Vec<&str> = text
++        .lines()
++        .filter_map(|l| l.strip_prefix("窓 ")?.split('・').next())
++        .collect();
++    assert_eq!(ids, ["cw1", "cw2", "cw3", "cw4", "cw5", "cw10"]);
 +    assert_eq!(rc(&fx.tz(&["list", "x"])), 1);
 +    fs::remove_file(fx.root.join("ledger.json")).unwrap();
 +    assert_eq!(rc(&fx.tz(&["list"])), 2);
@@ -638,13 +660,16 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +#[test]
 +fn cwcls_close_named_window_and_retire() {
 +    let fx = Fx::new("close");
-+    let ws1 = fx.window("consult-cw1", 1, Form::Talk, Some((0, Some("@7"))));
++    let ws1 = fx.window("consult-cw1", 1, Form::Talk, Some((0, Some("@6"))));
++    mark(&ws1, 2, Form::Talk, 0, Some("@7"));
 +    let tmp = private_tmp(&fs::canonicalize(&ws1).unwrap().display().to_string());
 +    let _ = fs::remove_dir_all(&tmp);
 +    fs::create_dir(&tmp).unwrap();
++    fs::write(Path::new(&tmp).join("left"), "x").unwrap();
 +    fs::write(fx.root.join("tmux.name"), "consult-cw1\n").unwrap();
 +    let before = ruling::minute(events::now());
 +    let o = fx.tz(&["close", "cw1", "--by", "chat"]);
++    let after = ruling::minute(events::now());
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    let gone = fx.drafts.join("retired-consult-cw1");
 +    assert_eq!(
@@ -664,7 +689,7 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    let bdw = fx.calls("bdw.log");
 +    let line = bdw[0][2].strip_prefix("--append-notes=").unwrap();
 +    let at = line.rsplit_once("時刻 = ").unwrap().1;
-+    assert!(before.as_str() <= at);
++    assert!(before.as_str() <= at && at <= after.as_str(), "{at}");
 +    assert_eq!((bdw.len(), bdw[0][1].as_str()), (1, "fx-c"));
 +    assert_eq!(
 +        line,
@@ -677,13 +702,17 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    let fx = Fx::new("other");
 +    let ws2 = fx.window("consult-cw2", 2, Form::Talk, Some((0, Some("@8"))));
 +    fx.finding(&ws2, 2, 1);
++    fx.finding(&ws2, 2, 2);
++    fx.notes(&[
++        "相談の処分 = cw2-2・採否 = 採らない・理由 = 古い・保存 = なし・不保存 = work/report.md、work/probe.py・時刻 = 20261003T1601Z",
++    ]);
 +    let tmp = private_tmp(&fs::canonicalize(&ws2).unwrap().display().to_string());
 +    let _ = fs::remove_file(&tmp);
 +    let _ = fs::remove_dir_all(&tmp);
 +    let target = fx.root.join("elsewhere");
 +    fs::create_dir_all(&target).unwrap();
 +    std::os::unix::fs::symlink(&target, &tmp).unwrap();
-+    fs::write(fx.root.join("tmux.name"), "other\n").unwrap();
++    fs::write(fx.root.join("tmux.name"), "consult-cw20\n").unwrap();
 +    let o = fx.tz(&["close", "cw2", "--by", "seat"]);
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    assert_eq!(out(&o), "窓 cw2 を閉じた\n");
@@ -696,7 +725,7 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +    assert!(ws2.is_dir(), "処分の無い所見が在る間は退かせない");
 +    assert!(fs::symlink_metadata(&tmp).unwrap().is_symlink() && target.is_dir());
 +    let bdw = fx.calls("bdw.log");
-+    assert!(bdw[0][2].starts_with("--append-notes=相談の閉じ = cw2・起こし手 = 席・所見 = 1・"));
++    assert!(bdw[0][2].starts_with("--append-notes=相談の閉じ = cw2・起こし手 = 席・所見 = 2・"));
 +    fs::remove_file(&tmp).unwrap();
 +}
 +
@@ -728,8 +757,13 @@ index 0000000000000000000000000000000000000000..012ebb74be6b382d4ab31660730d8850
 +        assert!(err(&o).contains("もう閉じた"), "{id} {}", err(&o));
 +    }
 +    assert!(fx.calls("bdw.log").is_empty() && fx.calls("tmux.log").is_empty());
-+    fx.notes(&[]);
++    fx.notes(&["相談の閉じ = cw2・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z"]);
 +    let o = fx.tz(&["close", "cw1", "--by", "button"]);
 +    assert_eq!(rc(&o), 0, "問う窓は tmux を撃たずに閉じる: {}", err(&o));
 +    assert!(fx.calls("tmux.log").is_empty());
++    let bdw = fx.calls("bdw.log");
++    assert!(
++        bdw[0][2].contains("起こし手 = 持ち主の button・"),
++        "{bdw:?}"
++    );
 +}

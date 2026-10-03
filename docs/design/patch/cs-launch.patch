@@ -1,8 +1,8 @@
 diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
-index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1cca2e957 100644
+index a708ff552da5eef397b6d2d1973012b593417d64..666bed7ccf580db773a0fb86e438ab6ba1fd4150 100644
 --- a/crates/tsuzuri-boundary/src/consult/launch.rs
 +++ b/crates/tsuzuri-boundary/src/consult/launch.rs
-@@ -1,10 +1,354 @@
+@@ -1,10 +1,352 @@
 -//! tz consult launch（窓を起こす口（話す窓は tmux の窓・問う窓は背景の子）・設計ノート surface-wave27a 行 cs-launch が中身を置く・行 cs-open は骨だけを置く）。
 +//! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
 +//! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
@@ -200,6 +200,7 @@ index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1
 +    let uid: u32 = l.uid.parse().map_err(|_| (FAIL, "uid の字".to_string()))?;
 +    private(&private_tmp(&l.workspace), uid)?;
 +    let k = procs(ws).last().map_or(0, |p| p.k) + 1;
++    let before = findings(ws, l.window);
 +    let (pid, tmux_window, child) = match l.form {
 +        Form::Talk => {
 +            let (window, pane) = talk(ws, l, args)?;
@@ -221,10 +222,7 @@ index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1
 +    let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
 +    fs::write(proc_path(ws, k), text + "\n")
 +        .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
-+    Ok(Started {
-+        before: findings(ws, l.window),
-+        child,
-+    })
++    Ok(Started { before, child })
 +}
 +
 +/// 起こした窓（問う窓は子と起こす前の所見）。
@@ -366,10 +364,10 @@ index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1
  }
 diff --git a/crates/tsuzuri-boundary/tests/cwlch.rs b/crates/tsuzuri-boundary/tests/cwlch.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..da7d1936e3fbfac3cf89644a107dab1aab88f97a
+index 0000000000000000000000000000000000000000..d7f9c6af7c2ab6525159333bfa52e2b1d9411c32
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/cwlch.rs
-@@ -0,0 +1,523 @@
+@@ -0,0 +1,534 @@
 +//! 窓を起こす口の歯（接頭辞 cwlch_・設計ノート surface-wave27a 行 cs-launch・受入 AC19 の起こし）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 +//! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
@@ -778,6 +776,8 @@ index 0000000000000000000000000000000000000000..da7d1936e3fbfac3cf89644a107dab1a
 +    let o = fx.tz(&["consult", "launch", "cw2"]);
 +    assert_eq!(rc(&o), 1);
 +    assert!(err(&o).contains("検めの欠け"), "{}", err(&o));
++    // 閉じの行は窓 cw2 のもの（窓 cw1 の次の 2 つの断りは TMUX_PANE と tmux の落ちだけ）。
++    fx.notes("相談の閉じ = cw2・起こし手 = 席・所見 = 0・時刻 = 20261003T1800Z");
 +    let o = fx
 +        .command(&["consult", "launch", "cw1"])
 +        .env_remove("TMUX_PANE")
@@ -808,6 +808,21 @@ index 0000000000000000000000000000000000000000..da7d1936e3fbfac3cf89644a107dab1a
 +    clear_tmp(&fx.launch(2, Form::Talk, false));
 +}
 +
++/// 窓 cw<n> の作業場に process の印 proc-1 を置く（pid だけを替えて生きている印と死んだ印を作る）。
++fn put_mark(fx: &Fx, n: u32, pid: u32) {
++    let dir = fx.drafts.join(format!("consult-cw{n}/.consult"));
++    fs::create_dir_all(&dir).unwrap();
++    let mark = ProcMark {
++        k: 1,
++        form: Form::Ask,
++        pid,
++        at: "20200101T0000Z".into(),
++        again: false,
++        tmux_window: None,
++    };
++    fs::write(dir.join("proc-1.json"), wire::encode(&mark).unwrap()).unwrap();
++}
++
 +#[test]
 +fn cwlch_quota_r38() {
 +    let fx = Fx::new("quota");
@@ -829,29 +844,23 @@ index 0000000000000000000000000000000000000000..da7d1936e3fbfac3cf89644a107dab1a
 +    assert_eq!(rc(&o), 0, "{}", err(&o));
 +    fx.open(&["--by", "chat", "--said", "20261003T1410Z", "--form", "ask"]);
 +    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw2"])), 0);
++    // 今日の 3 本の下でも、席の話す窓は数えずに起こす。
++    fx.open(&["--by", "seat"]);
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw3"])), 0);
 +    fx.notes(&opened(9, "20200101T0000Z"));
-+    fs::create_dir_all(fx.drafts.join("consult-cw9/.consult")).unwrap();
-+    let live = ProcMark {
-+        k: 1,
-+        form: Form::Ask,
-+        pid: std::process::id(),
-+        at: "20200101T0000Z".into(),
-+        again: false,
-+        tmux_window: None,
-+    };
-+    fs::write(
-+        fx.drafts.join("consult-cw9/.consult/proc-1.json"),
-+        wire::encode(&live).unwrap(),
-+    )
-+    .unwrap();
++    // 前の日の席の問う窓 cw9 は、process の印が死んでいれば数えずに起こし、生きていれば断る。
++    put_mark(&fx, 9, u32::MAX);
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 0);
++    put_mark(&fx, 9, std::process::id());
 +    let o = fx.tz(&["consult", "launch", "cw1"]);
 +    assert_eq!(
 +        (rc(&o), err(&o)),
 +        (1, format!("tz consult launch: {REFUSAL}\n"))
 +    );
-+    assert_eq!(fx.written().len(), 2);
++    assert_eq!(fx.written().len(), 4);
 +    clear_tmp(&l);
 +    clear_tmp(&fx.launch(2, Form::Ask, false));
++    clear_tmp(&fx.launch(3, Form::Talk, false));
 +}
 +
 +#[test]
