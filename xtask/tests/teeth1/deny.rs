@@ -210,7 +210,10 @@ fn kdeny_ci_job_runs_full_check() {
     assert_eq!(runs, [&format!("- run: {RUN_LINE}").as_str()], "run の行は 1 つ");
 
     let with_words = ci.lines().filter(|l| l.contains("cargo deny")).count();
-    assert_eq!(with_words, 1, "ci.yml の中で字 cargo deny を持つ行は 1 つ");
+    assert_eq!(
+        with_words, 2,
+        "ci.yml の中で字 cargo deny を持つ行は job deny と器の job scribe2-deny の 2 つ（行 v-ci）"
+    );
 }
 
 fn is_sha(s: &str) -> bool {

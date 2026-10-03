@@ -15,6 +15,7 @@ mod gz;
 mod nested;
 mod pubscan;
 mod size;
+mod snaprefs;
 mod spread;
 
 use std::path::{Path, PathBuf};
@@ -57,6 +58,7 @@ fn main() -> ExitCode {
         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
+        Some("insta-refs") => exit_code(insta_refs(args.get(1..).unwrap_or_default())),
         Some("daily") => exit_code(daily_task(args.get(1..).unwrap_or_default())),
         Some("accept") => exit_code(accept::run(
             args.get(1..).unwrap_or_default(),
@@ -64,13 +66,26 @@ fn main() -> ExitCode {
         )),
         _ => {
             emit_err(&format!(
-                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}\n{}",
+                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan|insta-refs <dir>>\n{}\n{}",
                 accept::USAGE,
                 daily::USAGE
             ));
             ExitCode::from(2)
         }
     }
+}
+
+/// task insta-refs（行 v-ci）: dir の下の役ごとの読んだ写しの path の和を、追跡される scribe2/ の下の写しと照らす。
+fn insta_refs(rest: &[String]) -> i32 {
+    let [dir] = rest else {
+        emit_err("usage: cargo run -q -p xtask -- insta-refs <役ごとの file を置いた dir>");
+        return 2;
+    };
+    let (rc, lines) = snaprefs::run(&workspace_root(), Path::new(dir));
+    for line in lines {
+        emit_err(&format!("xtask insta-refs: {line}"));
+    }
+    rc
 }
 
 /// xtask の出力の手（行 k-lint-print）: 標準エラーへ 1 行を書く（字の後に改行）。xtask が書くのはこの関数だけ。
