@@ -15,3 +15,10 @@ design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/", "docs/consul
 # folio2/crates/ の下の crate を、器の追随の再 gate・着地の後の検出線・受付の上限の余地と歯の導出が crates/ の直下の crate と同じに読む。
 # 器の持ち込みの前に folio2/crates/ だけを足した（持ち主の承認 2026-10-01T06:40Z）。scribe2/crates/ は器の持ち込みの時に足す。
 crate-roots = ["folio2/crates/"]
+# 契約表の置き場（器の任意の key contract-tables・器の判断の記録 ADR-0109・器の行 cb〜cg・器の設計 contract-source.md の 69 節）。
+# 既定の docs/design/ の直下の .md に足す。dir の項目は直下の .md と .toml を全部契約表と読むので、契約表の欄の写しは下の dir
+# contracts/field-schema/ に置く（行 v-field-schema）。持ち主の承認 t3-hub.74.29:20261002T2330Z-1。
+contract-tables = ["contracts/"]
+# 憲法の置き場（器の任意の key constitution・器の判断の記録 ADR-0110・器の行 as）。器の審査役は既定の docs/constitution.md の代わりに
+# この 2 file を読む（案内の docs/constitution.md は残す）。持ち主の承認 t3-hub.74.29:20261002T2330Z-1。
+constitution = ["design-intent/constitution.yaml", "design-intent/rules.yaml"]

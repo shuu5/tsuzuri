@@ -58,7 +58,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let work = td.join("src");
     fs::create_dir_all(work.join("design-note")).unwrap();
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     for name in [
         "constitution.yaml",
         "rules.yaml",
@@ -71,7 +71,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     }
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     copy_dir(&vendor(), &td.join("vendor/archify"));
@@ -809,7 +809,7 @@ fn face_note_unknown_when_a_contract_field_is_not_in_the_derived_file() {
 #[test]
 fn face_note_unknown_when_the_derived_file_is_missing() {
     let (td, work) = fixture_copy("no-external");
-    fs::remove_file(td.join("contracts/schema.toml")).unwrap();
+    fs::remove_file(td.join("contracts/field-schema/schema.toml")).unwrap();
     let out = td.join("note-full.html");
     let run = folio_face("note", Some("full"), &work, &out, "--write");
     let exists = out.exists();

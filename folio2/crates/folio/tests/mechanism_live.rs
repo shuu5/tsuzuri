@@ -94,10 +94,10 @@ impl Work {
     fn floor_base(case: &str, prep: impl FnOnce(&Path)) -> Work {
         let root = Work::root(case);
         copy_tree(&repo_root().join(FLOOR_BASE), &root.join("design-intent"));
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         prep(&root.join("design-intent"));

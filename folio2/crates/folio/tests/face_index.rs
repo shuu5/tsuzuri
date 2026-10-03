@@ -196,7 +196,7 @@ fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
 /// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
 /// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
 /// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
-/// 器の導出 file（contracts/schema.toml）は写さない。
+/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
 fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     let (td, work) = fixture_copy(case);
     for name in ["index.yaml", "intake.yaml"] {

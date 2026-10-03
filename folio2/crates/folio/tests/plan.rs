@@ -90,8 +90,8 @@ impl Work {
         let root = std::env::temp_dir().join(format!("folio-plan-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         copy_tree(&repo().join(FLOOR_BASE), &root.join("design-intent"));
-        fs::create_dir_all(root.join("contracts")).unwrap();
-        fs::copy(repo().join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+        fs::copy(repo().join("contracts/schema.toml"), root.join("contracts/field-schema/schema.toml")).unwrap();
         let w = Work(root);
         fs::write(w.path("design-note/plan.yaml"), plan_note()).unwrap();
         if with_row {
@@ -192,7 +192,7 @@ fn f183_a_new_contract_row_is_one_violation_until_derive_write() {
     assert_eq!(drift.status.code(), Some(1), "{}", text(&drift));
     assert!(text(&drift).contains("DRIFT: design-note/plan.yaml（行の索引の生成区間が契約表からの導出と違う"), "{}", text(&drift));
     // 器の導出 file が無い置き場は書けない（まだ分からない・計画のノートは変えない）
-    let schema = w.0.join("contracts/schema.toml");
+    let schema = w.0.join("contracts/field-schema/schema.toml");
     let keep = fs::read(&schema).unwrap();
     fs::remove_file(&schema).unwrap();
     let before = w.read("design-note/plan.yaml");

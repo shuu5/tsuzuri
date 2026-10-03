@@ -90,8 +90,8 @@ impl Work {
         let root = std::env::temp_dir().join(format!("folio-f200-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         copy_tree(&repo_root().join(FLOOR_BASE), &root.join("design-intent"));
-        fs::create_dir_all(root.join("contracts")).unwrap();
-        fs::copy(repo_root().join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+        fs::copy(repo_root().join("contracts/schema.toml"), root.join("contracts/field-schema/schema.toml")).unwrap();
         let path = root.join("design-intent").join(file);
         let mut text = fs::read_to_string(&path).unwrap();
         for (from, to) in edits {

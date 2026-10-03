@@ -1,5 +1,5 @@
 //! 便 123（docs/design/delivery-123.md §1 (e)・判断の記録 ADR-16 決定 (2)(キ)(オ)）: 器の導出 file の解決先と生成区間の注の歯。
-//! 器の導出 file `contracts/schema.toml` は、置き場を含む版管理の根が在ればその下、無ければ置き場の親の下で解く
+//! 器の導出 file `contracts/field-schema/schema.toml` は、置き場を含む版管理の根が在ればその下、無ければ置き場の親の下で解く
 //! （床の読み手と面の生成器が同じ式を共有する・根の下に無くても親へは倒さない）。凍結 anchor は手書きの設計ノート
 //! tests/fixtures/design-note/derive-anchor.yaml と repo の contracts/schema.toml の写しで、生成器の出力を写さない（P-10.1）。
 //! 土台: 一時 dir の下の置き場（`<一時 dir>/<段>/design-intent`）に実の design-intent の写しと上の設計ノートを置き、
@@ -11,6 +11,10 @@
 //! 5. 置き場そのものが版管理の根なら置き場の下を読み親を読まない（床は照合の違反と読めないの両方・面は書かない）。
 //! 6. 版管理の根は repo の根（folio2 の 1 つ上）で、根の design-intent の親。folio2/design-intent の版管理の根も repo の根。
 //! 7. 5 file の生成区間の注 top_level_note は条 id N-3 を名指さない。
+//! 8. repo の根の器の導出 file は EXTERNAL に在り、契約表の dir contracts/ の直下の .toml は契約の表の見出しだけを持つ
+//!    （器の vessel 宣言の key contract-tables の dir の項目は直下の .toml を全部契約表と読む）。
+//! 9. 前の置き場 contracts/schema.toml にだけ写しの在る根は読めず（床 2）、新しい置き場を名指す（前の置き場へ黙って倒れない）。
+//! 10. repo の根の vessel 宣言は key contract-tables で contracts/ を、key constitution で憲法の 2 file を名乗る（各 1 行・2 file は在る）。
 #![cfg(test)]
 
 use std::fs;
@@ -18,7 +22,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const ANCHOR_NOTE: &str = "tests/fixtures/design-note/derive-anchor.yaml";
-const EXTERNAL: &str = "contracts/schema.toml";
+const EXTERNAL: &str = "contracts/field-schema/schema.toml";
+/// 歯の材料の写し（folio2/ の下・動かさない）。
+const REPO_COPY: &str = "contracts/schema.toml";
 const BROKEN: &str = "schema = 2\n";
 const UNREADABLE: &str = "器の導出 file が読めない";
 const NO_GIT: &str = "版管理（git）が無いか読めない";
@@ -109,15 +115,15 @@ impl Work {
         self.root.join("out/note-derive-anchor.html")
     }
 
-    /// `<at>/contracts/schema.toml` に repo の写しを置く。
+    /// `<at>/contracts/field-schema/schema.toml` に repo の写しを置く。
     fn put_external(&self, at: &Path) {
-        fs::create_dir_all(at.join("contracts")).unwrap();
-        fs::copy(repo_root().join(EXTERNAL), at.join(EXTERNAL)).unwrap();
+        fs::create_dir_all(at.join("contracts/field-schema")).unwrap();
+        fs::copy(repo_root().join(REPO_COPY), at.join(EXTERNAL)).unwrap();
     }
 
-    /// `<at>/contracts/schema.toml` に先頭の字の違う壊れた写しを置く。
+    /// `<at>/contracts/field-schema/schema.toml` に先頭の字の違う壊れた写しを置く。
     fn put_broken(&self, at: &Path) {
-        fs::create_dir_all(at.join("contracts")).unwrap();
+        fs::create_dir_all(at.join("contracts/field-schema")).unwrap();
         fs::write(at.join(EXTERNAL), BROKEN).unwrap();
     }
 
@@ -301,5 +307,67 @@ fn f123_region_top_level_notes_do_not_name_an_article_id() {
         let line = notes[0];
         assert!(line.contains(HEAD), "{name}: 「{HEAD}」が無い: {line}");
         assert!(!line.contains("N-3"), "{name}: 条 id N-3 を名指す: {line}");
+    }
+}
+
+// ── 8. 根の器の導出 file は契約表の dir の直下に無い ──
+
+#[test]
+fn fsch_external_copy_sits_below_the_contract_table_dir() {
+    let root = fs::canonicalize(repo_root().join("..")).unwrap();
+    // 写しの中身（欄の数）は器の版上げで替わるので、形だけを見る（歯の材料の写しと字を比べない）
+    let copy = fs::read_to_string(root.join(EXTERNAL)).unwrap();
+    assert_eq!(copy.lines().nth(1), Some("schema = 1"), "根の写しの 2 行目");
+    assert!(copy.contains("\n[[field]]\n"), "根の写しに [[field]] の表が無い");
+    let mut tables = 0;
+    for entry in fs::read_dir(root.join("contracts")).unwrap() {
+        let path = entry.unwrap().path();
+        if !path.is_file() || path.extension().is_none_or(|e| e != "toml") {
+            continue;
+        }
+        tables += 1;
+        let text = fs::read_to_string(&path).unwrap();
+        let heads: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with('[') && *l != "[[contract]]")
+            .collect();
+        assert!(heads.is_empty(), "{}: 契約の表でない見出し {heads:?}", path.display());
+    }
+    assert!(tables > 0, "contracts/ の直下に .toml が無い");
+}
+
+// ── 9. 前の置き場にだけ写しの在る根は読まない ──
+
+#[test]
+fn fsch_copy_only_at_the_old_place_is_not_read() {
+    let w = Work::new("old-place", &["stage"]);
+    fs::create_dir_all(w.root.join("contracts")).unwrap();
+    fs::copy(repo_root().join(REPO_COPY), w.root.join("contracts/schema.toml")).unwrap();
+    git_commit_all(&w.root);
+    let floor = w.check();
+    assert_rc(&floor, 2, "folio check");
+    assert_has(&floor, UNREADABLE, "folio check");
+    assert_has(&floor, EXTERNAL, "folio check");
+    w.put_external(&w.root);
+    assert_rc(&w.check(), 0, "folio check（新しい置き場にも写し）");
+}
+
+// ── 10. vessel 宣言は契約表の dir と憲法の 2 file を名乗る ──
+
+#[test]
+fn fsch_vessel_declares_the_table_dir_and_the_constitution() {
+    let root = fs::canonicalize(repo_root().join("..")).unwrap();
+    let decl = fs::read_to_string(root.join(".vessel.toml")).unwrap();
+    let lines = |key: &str| -> Vec<&str> {
+        decl.lines().filter(|l| l.split_once(" = ").is_some_and(|(k, _)| k == key)).collect()
+    };
+    assert_eq!(lines("contract-tables"), ["contract-tables = [\"contracts/\"]"], "key contract-tables の行");
+    assert_eq!(
+        lines("constitution"),
+        ["constitution = [\"design-intent/constitution.yaml\", \"design-intent/rules.yaml\"]"],
+        "key constitution の行"
+    );
+    for file in ["design-intent/constitution.yaml", "design-intent/rules.yaml"] {
+        assert!(root.join(file).is_file(), "憲法の file {file} が無い");
     }
 }

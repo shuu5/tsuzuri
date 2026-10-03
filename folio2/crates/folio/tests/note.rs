@@ -79,10 +79,10 @@ impl Work {
             &root.join("design-intent"),
         );
         // 器（scribe2）の導出 file は正本の置き場の親 dir の contracts/ に在る
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         git(&root, &["init", "-q"]);
@@ -101,7 +101,7 @@ impl Work {
     }
 
     fn external(&self) -> PathBuf {
-        self.root.join("contracts/schema.toml")
+        self.root.join("contracts/field-schema/schema.toml")
     }
 
     /// 凍結 fixture の file を設計ノートの置き場（か写しの根の contracts/）へ置く。
@@ -1002,10 +1002,10 @@ fn growth_base(case: &str) -> Work {
         &repo_root().join("tests/fixtures/floor_base/design-intent"),
         &root.join("design-intent"),
     );
-    fs::create_dir_all(root.join("contracts")).unwrap();
+    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        root.join("contracts/schema.toml"),
+        root.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     let w = Work { root };

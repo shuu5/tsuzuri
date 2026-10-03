@@ -75,10 +75,10 @@ impl Work {
         let root = std::env::temp_dir().join(format!("folio-seal-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         copy_tree(&repo_root().join(src), &root.join("design-intent"));
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         git(&root, &["init", "-q"]);

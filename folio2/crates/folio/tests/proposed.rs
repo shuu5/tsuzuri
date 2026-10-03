@@ -71,8 +71,8 @@ impl Work {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2");
         let place = root.join("repo");
         copy_tree(&repo.join(FLOOR_BASE), &place.join("design-intent"));
-        fs::create_dir_all(place.join("contracts")).unwrap();
-        fs::copy(repo.join("contracts/schema.toml"), place.join("contracts/schema.toml")).unwrap();
+        fs::create_dir_all(place.join("contracts/field-schema")).unwrap();
+        fs::copy(repo.join("contracts/schema.toml"), place.join("contracts/field-schema/schema.toml")).unwrap();
         git(&place, &["init", "-q"]);
         git(&place, &["add", "-A"]);
         git(&place, &["commit", "-q", "-m", "fixture"]);

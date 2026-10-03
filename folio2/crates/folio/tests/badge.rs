@@ -233,7 +233,7 @@ fn face_copy(td: &Path) -> PathBuf {
     fs::create_dir_all(work.join("preview")).unwrap();
     fs::create_dir_all(work.join("adr")).unwrap();
     fs::create_dir_all(work.join("design-note")).unwrap();
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     for name in [
         "constitution.yaml",
         "rules.yaml",
@@ -252,7 +252,7 @@ fn face_copy(td: &Path) -> PathBuf {
     }
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     copy_tree(
@@ -297,10 +297,10 @@ fn real_copy(td: &Path, mark: &str) -> PathBuf {
     let dir = td.join("design-intent");
     copy_tree(&design_intent(), &dir);
     put_mark(&dir, mark);
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     copy_tree(

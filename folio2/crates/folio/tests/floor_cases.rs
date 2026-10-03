@@ -233,13 +233,13 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
 /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
 fn copy_external_schema(root: &Path) -> Result<(), String> {
     io(
-        fs::create_dir_all(root.join("contracts")),
-        "contracts/ を作れない",
+        fs::create_dir_all(root.join("contracts/field-schema")),
+        "contracts/field-schema/ を作れない",
     )?;
     io(
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         ),
         "器の導出 file を写せない",
     )?;

@@ -41,7 +41,7 @@ fn copy_tree(src: &Path, dst: &Path) {
     }
 }
 
-/// 一時 dir（`<tmp>/design-intent/design-note/` と `<tmp>/contracts/schema.toml`）。落ちても消す。
+/// 一時 dir（`<tmp>/design-intent/design-note/` と `<tmp>/contracts/field-schema/schema.toml`）。落ちても消す。
 struct Work {
     root: PathBuf,
 }
@@ -69,10 +69,10 @@ impl Work {
     fn empty(case: &str) -> Work {
         let root = std::env::temp_dir().join(format!("folio-derive-{case}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         Work { root }
@@ -314,11 +314,11 @@ fn refuse_all(cases: [(&str, &str, &str, &str); 9]) {
         assert_code(&w.derive("--check"), 2, &[why]);
     }
     let w = Work::anchor("refuse-no-schema");
-    fs::remove_file(w.root.join("contracts/schema.toml")).unwrap();
+    fs::remove_file(w.root.join("contracts/field-schema/schema.toml")).unwrap();
     assert_code(
         &w.derive("--write"),
         2,
-        &["contracts/schema.toml", "読めない"],
+        &["contracts/field-schema/schema.toml", "読めない"],
     );
     assert!(!w.out().exists(), "置き場を作らない");
     // 設計ノートの置き場が symlink なら読まずに 2
@@ -443,7 +443,7 @@ fn f120_conditional_fields_are_copied_as_the_row_has_them() {
     let fixtures = repo_root().join("tests/fixtures/design-note");
     fs::copy(
         fixtures.join("need-conditional-schema.toml"),
-        w.root.join("contracts/schema.toml"),
+        w.root.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     fs::create_dir_all(w.dir().join("design-note")).unwrap();
@@ -564,10 +564,10 @@ fn f192_from_root_resolves_out_from_the_repo_root() {
 fn f192_from_root_without_a_repo_is_the_parent_of_the_place() {
     // 版管理の根が無ければ置き場の親（器の導出 file を探す根と同じ・ADR-16 決定 (2)(キ)）
     let (w, _) = nested("plain", false);
-    fs::create_dir_all(w.root.join("docs/contracts")).unwrap();
+    fs::create_dir_all(w.root.join("docs/contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        w.root.join("docs/contracts/schema.toml"),
+        w.root.join("docs/contracts/field-schema/schema.toml"),
     )
     .unwrap();
     assert_code(

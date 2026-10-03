@@ -761,10 +761,10 @@ fn real_bundle(case: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let td = temp_dir(case);
     let dir = td.join("design-intent");
     copy_tree(&design_intent(), &dir);
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     copy_tree(

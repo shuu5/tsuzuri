@@ -113,7 +113,7 @@ schema:
   contract_table:
     external_schema:
       owner: scribe2
-      path: contracts/schema.toml
+      path: contracts/field-schema/schema.toml
       format: toml
       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
       value_domains: from-file

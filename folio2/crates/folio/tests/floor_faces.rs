@@ -101,10 +101,10 @@ fn place(case: &str) -> (PathBuf, PathBuf) {
     let td = temp_dir(case);
     let dir = td.join("design-intent");
     copy_dir(&repo_root().join("tests/fixtures/floor_base/design-intent"), &dir);
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     proposed_adr(&dir);
@@ -484,10 +484,10 @@ fn f187_the_face_stage_runs_only_on_an_otherwise_silent_floor() {
     let td = temp_dir("no-git");
     let dir = td.join("design-intent");
     copy_dir(&repo_root().join("tests/fixtures/floor_base/design-intent"), &dir);
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     face_gap(&dir);

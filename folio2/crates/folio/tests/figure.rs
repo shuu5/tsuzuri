@@ -529,10 +529,10 @@ fn anchor_drift_makes_the_note_face_unknown() {
         work.join("ceiling.yaml"),
     )
     .unwrap();
-    fs::create_dir_all(td.join("contracts")).unwrap();
+    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        td.join("contracts/schema.toml"),
+        td.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     drift_tool(&td);

@@ -499,7 +499,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 185: 土台の設計ノートの契約表の行 example#a が節点になり（独立の実装に設計ノートの行を足した）、その行と要約の 2 行が動いた値。
 /// 便 196: 土台の設計ノートの欄の決まりの写しに known_values の 1 行が入り（83 byte 増）、残差の 2 行だけが動いた値。
 /// 便 207: 土台の規則の表に数の上限の行 R-23〜R-25（欄 key）が入り、その 3 節点の行と要約の行だけが動いた値。
-const F99_ANCHOR_SHA256: &str = "18107e99dec4dca1664025520e62b57c60d37f7f05fdef250f193453a5bfefe8";
+/// 行 v-field-schema: 土台の設計ノートの欄の決まりの写しの器の導出 file の path が 13 byte 伸び、残差の 2 行だけが動いた値。
+const F99_ANCHOR_SHA256: &str = "42fe42396f3ecea0ba24afa74b860ec57ca83dc1f4042477adf908f5fad8ee7f";
 const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。

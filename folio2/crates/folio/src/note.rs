@@ -1,7 +1,7 @@
 //! `folio check` の設計ノートの正本（`design-note/*.yaml`・ADR-3 決定 (1)・要件書 FR9 / FR10）の形の検査
 //! （便 23・docs/design/delivery-23.md §1）。
 //! 数えるのは 欄の決まり（同じ dir の `schema.yaml`）の schema 節が定める形（文書と meta の欄・節の番号と型・
-//! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `contracts/schema.toml` から読む・
+//! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `EXTERNAL_PATH` から読む・
 //! 欄の一覧も値域も自分の型にも散文にも持たない・FR10）と、参照 id の解決（folio2 が所有する id 空間）である。
 //! 散文の門（FR12・rules 行 R-16）は便 24 で入り、索引（FR14）は 2026-09-22 に着地した（folio graph --print・graph.rs）。導出物（FR11）は便 119 の独立の命令 folio derive（derive.rs）が、ここの読み手 3 つ（load_notes・has_contract_table・load_external）を共有して組む。
 //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、`design-note/schema.yaml` の schema 節はその写し

@@ -119,8 +119,9 @@ pub(crate) const ROWS_BEGIN: &str = "# folio:rows:begin — 生成区間・手�
 pub(crate) const ROWS_END: &str = "# folio:rows:end";
 /// 計画の名札の行の欄 key の値（規則の表の閉じた一覧 `rules::KEYS` の 1 つ・字はここが持ち `rules::PLAN_NOTE` が引く）。
 pub(crate) const PLAN_KEY: &str = "plan-note";
-/// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。
-pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
+/// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。置き場は契約表の dir contracts/ の直下でなく
+/// 下の dir（器の vessel 宣言の key contract-tables の dir の項目は直下の .toml を全部契約表と読み、[[field]] の表を読めない）。
+pub(crate) const EXTERNAL_PATH: &str = "contracts/field-schema/schema.toml";
 pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
 pub(crate) const EXTERNAL_ROWS_KEY: &str = "field";
 pub(crate) const EXTERNAL_ROW_FIELDS: &[&str] = &["name", "need", "shape"];

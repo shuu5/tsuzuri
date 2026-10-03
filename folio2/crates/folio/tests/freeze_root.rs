@@ -96,10 +96,10 @@ impl Work {
         let _ = fs::remove_dir_all(&root);
         copy_tree(&repo_root().join(src), &root.join("design-intent"));
         if contracts {
-            fs::create_dir_all(root.join("contracts")).unwrap();
+            fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
             fs::copy(
                 repo_root().join("contracts/schema.toml"),
-                root.join("contracts/schema.toml"),
+                root.join("contracts/field-schema/schema.toml"),
             )
             .unwrap();
         }
@@ -521,7 +521,7 @@ fn f121_freeze_start_writes_nothing_on_any_finding() {
     let se = text(&out.stderr);
     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
     assert!(violations(&out).is_empty(), "{}", show(&out));
-    assert!(se.contains("contracts/schema.toml") && se.contains("凍結しない"), "{se}");
+    assert!(se.contains("contracts/field-schema/schema.toml") && se.contains("凍結しない"), "{se}");
     assert!(!w.dir().join("anchors").exists());
     drop(w);
 

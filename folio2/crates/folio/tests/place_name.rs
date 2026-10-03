@@ -253,10 +253,10 @@ fn f154_folio2_keeps_its_own_name() {
     let place = w.root.join("start/design-intent");
     copy_tree(&repo_root().join(FLOOR_BASE), &place);
     fs::remove_dir_all(place.join("anchors")).unwrap();
-    fs::create_dir_all(w.root.join("start/contracts")).unwrap();
+    fs::create_dir_all(w.root.join("start/contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        w.root.join("start/contracts/schema.toml"),
+        w.root.join("start/contracts/field-schema/schema.toml"),
     )
     .unwrap();
     let start = w.root.join("start");
@@ -297,10 +297,10 @@ fn f154_every_face_of_an_unnamed_place_shows_no_name() {
     for name in ["folio.css", "folio-ui.js"] {
         fs::copy(fixture.join(name), src.join("preview").join(name)).unwrap();
     }
-    fs::create_dir_all(w.root.join("contracts")).unwrap();
+    fs::create_dir_all(w.root.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        w.root.join("contracts/schema.toml"),
+        w.root.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
     copy_tree(&repo_root().join("vendor/archify"), &w.root.join("vendor/archify"));

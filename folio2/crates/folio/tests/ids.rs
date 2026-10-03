@@ -72,10 +72,10 @@ impl Work {
             &repo_root().join("tests/fixtures/floor_base/design-intent"),
             &root.join("design-intent"),
         );
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         mutate(&root.join("design-intent"));

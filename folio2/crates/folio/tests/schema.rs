@@ -55,8 +55,8 @@ const REGION_SHA256: &str = "daf05362b909ca04b81ff8f480fd23054425e86f845c8c83ba3
 /// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。便 209: 注 supersede_note の 1 行。
 /// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減）。便 185 (b): index_note の契約表の行の字を直した値。便 196: known_values の行と注。
 const NOTE_REGION_LINES: usize = 166;
-const NOTE_REGION_BYTES: usize = 21426;
-const NOTE_REGION_SHA256: &str = "b3c3f8b7da9e6d34cd9a812620c838e720563c80380997580895c8a4599d2d54";
+const NOTE_REGION_BYTES: usize = 21439;
+const NOTE_REGION_SHA256: &str = "ef1da7d14051aef55680d15a60bd9f4a081ac0867774791762e873edb5cc3086";
 
 /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
 /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
@@ -155,10 +155,10 @@ impl Work {
             &repo_root().join("design-intent"),
             &root.join("design-intent"),
         );
-        fs::create_dir_all(root.join("contracts")).unwrap();
+        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
         fs::copy(
             repo_root().join("contracts/schema.toml"),
-            root.join("contracts/schema.toml"),
+            root.join("contracts/field-schema/schema.toml"),
         )
         .unwrap();
         git(&root, &["init", "-q"]);

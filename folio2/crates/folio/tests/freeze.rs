@@ -33,10 +33,10 @@ fn copy_tree(src: &Path, dst: &Path) {
 
 /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
 fn copy_external_schema(root: &Path) {
-    fs::create_dir_all(root.join("contracts")).unwrap();
+    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
     fs::copy(
         repo_root().join("contracts/schema.toml"),
-        root.join("contracts/schema.toml"),
+        root.join("contracts/field-schema/schema.toml"),
     )
     .unwrap();
 }
