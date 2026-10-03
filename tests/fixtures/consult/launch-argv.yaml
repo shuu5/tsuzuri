@@ -1,0 +1,79 @@
+{
+  "note": "受入 AC19 の fixture（JSON の字・JSON は YAML でもある）。置き字: /W 作業場・/R repo・/S state dir・/T 解いた tz・U uid。argv の <settings> は settings の字に替わる。",
+  "talk": {
+    "inputs": {"form": "talk", "window": "cw3", "workspace": "/W", "repo": "/R", "state": "/S", "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": false},
+    "argv": [
+      "--restricted",
+      "--permission-mode", "dontAsk",
+      "--tools", "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch",
+      "--disallowedTools", "mcp__*",
+      "--strict-mcp-config",
+      "--add-dir", "/R",
+      "--add-dir", "/S/fleet",
+      "--add-dir", "/S/pipe",
+      "--settings", "<settings>",
+      "--model", "fable",
+      "--effort", "xhigh",
+      "--name", "consult-cw3",
+      "bundle/brief.md を読み、notes.md と findings/ が在れば続きから始めて"
+    ],
+    "env": [["TZ_CONSULT_ID", "cw3"], ["CLAUDE_CODE_TMPDIR", "/tmp/tzc-07d671"]]
+  },
+  "ask": {
+    "inputs": {"form": "ask", "window": "cw4", "workspace": "/W", "repo": "/R", "state": "/S", "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": true},
+    "argv": [
+      "-p", "bundle/brief.md と bundle/question.md を読んで答え、所見を tz consult answer で出して終われ",
+      "--restricted",
+      "--permission-mode", "dontAsk",
+      "--tools", "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch",
+      "--disallowedTools", "mcp__*",
+      "--strict-mcp-config",
+      "--add-dir", "/R",
+      "--add-dir", "/S/fleet",
+      "--add-dir", "/S/pipe",
+      "--settings", "<settings>",
+      "--model", "fable",
+      "--effort", "xhigh",
+      "--name", "consult-cw4",
+      "--output-format", "json"
+    ],
+    "env": [["TZ_CONSULT_ID", "cw4"], ["CLAUDE_CODE_TMPDIR", "/tmp/tzc-07d671"]]
+  },
+  "talk_env": ["CLAUDE_CONFIG_DIR", "PATH", "TZ_CONSULT_ID", "CLAUDE_CODE_TMPDIR"],
+  "ask_drop": ["TMUX", "TMUX_PANE"],
+  "settings": {
+    "permissions": {
+      "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
+      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)"]
+    },
+    "sandbox": {
+      "enabled": true,
+      "autoAllowBashIfSandboxed": true,
+      "allowUnsandboxedCommands": false,
+      "failIfUnavailable": true,
+      "filesystem": {"denyWrite": ["/R", "/S/fleet", "/S/pipe"]},
+      "credentials": {"files": [
+        {"path": "~/.config/gh", "mode": "deny"},
+        {"path": "~/.ssh", "mode": "deny"},
+        {"path": "~/.git-credentials", "mode": "deny"},
+        {"path": "~/.config/git/credentials", "mode": "deny"},
+        {"path": "~/.cld-env", "mode": "deny"},
+        {"path": "/S/accounts", "mode": "deny"},
+        {"path": "/R/.beads/.env", "mode": "deny"},
+        {"path": "/tmp/claude-U", "mode": "deny"}
+      ]},
+      "network": {"allowedDomains": ["pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "registry.npmjs.org"]}
+    },
+    "env": {
+      "UV_CACHE_DIR": "/W/.venv/uv-cache",
+      "PIP_CACHE_DIR": "/W/.venv/pip-cache",
+      "CARGO_HOME": "/W/target/cargo-home",
+      "npm_config_cache": "/W/node_modules/.npm-cache"
+    },
+    "hooks": {
+      "PreToolUse": [{"matcher": "*", "hooks": [
+        {"type": "command", "command": "timeout 4 /T consult guard || exit 2", "timeout": 10}
+      ]}]
+    }
+  }
+}
