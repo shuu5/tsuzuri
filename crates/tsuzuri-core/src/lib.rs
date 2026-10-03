@@ -6,10 +6,12 @@
 //! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）は行 f-mark が置く。
 //! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）は行 f-gate が置く。
 //! 器の局面の出力の読み（`case`）は行 c-case-read が置く。
+//! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）は、ノート surface-wave27a の行 cs-types から cs-argv が置く。
 //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
 
 pub mod account;
 pub mod case;
+pub mod consult;
 pub mod delivery;
 pub mod gate;
 pub mod graph;
