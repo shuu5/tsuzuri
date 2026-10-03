@@ -1,0 +1,433 @@
+diff --git a/scribe2/.cargo/config.toml b/scribe2/.cargo/config.toml
+index 946adc9afe16e6133cc23b3340c627bac4f87e9a..07e302b8694ace06ac49bc2bd52f896b4b39180a 100644
+--- a/scribe2/.cargo/config.toml
++++ b/scribe2/.cargo/config.toml
+@@ -1,2 +1,2 @@
+ [alias]
+-xtask = "run -q -p xtask --"
++xtask = "run -q -p scribe2-xtask --"
+diff --git a/scribe2/Cargo.lock b/scribe2/Cargo.lock
+index e641ab648b0dbe81df2e6b1d2183490861ad6dfb..387431ad5702a4791fe48753c1fb2837f51e170d 100644
+--- a/scribe2/Cargo.lock
++++ b/scribe2/Cargo.lock
+@@ -225,6 +225,10 @@ dependencies = [
+  "scribe2",
+ ]
+ 
++[[package]]
++name = "scribe2-xtask"
++version = "0.1.0"
++
+ [[package]]
+ name = "similar"
+ version = "2.7.0"
+@@ -297,10 +301,6 @@ version = "0.57.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+ 
+-[[package]]
+-name = "xtask"
+-version = "0.1.0"
+-
+ [[package]]
+ name = "zerocopy"
+ version = "0.8.57"
+diff --git a/scribe2/Cargo.toml b/scribe2/Cargo.toml
+index 731fc4832414d37dea27161368e2c0aaf46aa90e..4a21a3303c1bac96a7a5bd94024d81c5fd7397ef 100644
+--- a/scribe2/Cargo.toml
++++ b/scribe2/Cargo.toml
+@@ -1,6 +1,6 @@
+ [workspace]
+ resolver = "2"
+-members = ["crates/scribe2", "crates/scribe2-boundary", "crates/xtask"]
++members = ["crates/scribe2", "crates/scribe2-boundary", "crates/scribe2-xtask"]
+ 
+ [workspace.lints.rust]
+ unsafe_code = "forbid"
+diff --git a/scribe2/crates/xtask/Cargo.toml b/scribe2/crates/scribe2-xtask/Cargo.toml
+similarity index 93%
+rename from scribe2/crates/xtask/Cargo.toml
+rename to scribe2/crates/scribe2-xtask/Cargo.toml
+index adea141eb46b12360977da00f5ebafeb3e6064f1..7b04db5242503854b5a88ff4f008ef452bf0db9c 100644
+--- a/scribe2/crates/xtask/Cargo.toml
++++ b/scribe2/crates/scribe2-xtask/Cargo.toml
+@@ -1,5 +1,5 @@
+ [package]
+-name = "xtask"
++name = "scribe2-xtask"
+ version = "0.1.0"
+ edition = "2021"
+ # 二択の SPDX 式（全文は repo root の LICENSE-MIT / LICENSE-APACHE）。裁定と経緯は
+diff --git a/scribe2/crates/xtask/src/check.rs b/scribe2/crates/scribe2-xtask/src/check.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check.rs
+rename to scribe2/crates/scribe2-xtask/src/check.rs
+diff --git a/scribe2/crates/xtask/src/check_enum_slices_tests.rs b/scribe2/crates/scribe2-xtask/src/check_enum_slices_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_enum_slices_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/check_enum_slices_tests.rs
+diff --git a/scribe2/crates/xtask/src/check_facts.rs b/scribe2/crates/scribe2-xtask/src/check_facts.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_facts.rs
+rename to scribe2/crates/scribe2-xtask/src/check_facts.rs
+diff --git a/scribe2/crates/xtask/src/check_nonrust_tests.rs b/scribe2/crates/scribe2-xtask/src/check_nonrust_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_nonrust_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/check_nonrust_tests.rs
+diff --git a/scribe2/crates/xtask/src/check_prose_tests.rs b/scribe2/crates/scribe2-xtask/src/check_prose_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_prose_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/check_prose_tests.rs
+diff --git a/scribe2/crates/xtask/src/check_sizes.rs b/scribe2/crates/scribe2-xtask/src/check_sizes.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_sizes.rs
+rename to scribe2/crates/scribe2-xtask/src/check_sizes.rs
+diff --git a/scribe2/crates/xtask/src/check_tests.rs b/scribe2/crates/scribe2-xtask/src/check_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/check_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/check_tests.rs
+diff --git a/scribe2/crates/xtask/src/claude_md.rs b/scribe2/crates/scribe2-xtask/src/claude_md.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/claude_md.rs
+rename to scribe2/crates/scribe2-xtask/src/claude_md.rs
+diff --git a/scribe2/crates/xtask/src/decisions_index.rs b/scribe2/crates/scribe2-xtask/src/decisions_index.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/decisions_index.rs
+rename to scribe2/crates/scribe2-xtask/src/decisions_index.rs
+diff --git a/scribe2/crates/xtask/src/deps_delta.rs b/scribe2/crates/scribe2-xtask/src/deps_delta.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/deps_delta.rs
+rename to scribe2/crates/scribe2-xtask/src/deps_delta.rs
+diff --git a/scribe2/crates/xtask/src/enum_slices.rs b/scribe2/crates/scribe2-xtask/src/enum_slices.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/enum_slices.rs
+rename to scribe2/crates/scribe2-xtask/src/enum_slices.rs
+diff --git a/scribe2/crates/xtask/src/env_reads.rs b/scribe2/crates/scribe2-xtask/src/env_reads.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/env_reads.rs
+rename to scribe2/crates/scribe2-xtask/src/env_reads.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck.rs b/scribe2/crates/scribe2-xtask/src/flipcheck.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck/git.rs b/scribe2/crates/scribe2-xtask/src/flipcheck/git.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck/git.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck/git.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck/nextest.rs b/scribe2/crates/scribe2-xtask/src/flipcheck/nextest.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck/nextest.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck/nextest.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_declaration_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_declaration_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_declaration_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_declaration_tests.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_entrance_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_entrance_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_entrance_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_entrance_tests.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_moved_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_moved_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_moved_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_moved_tests.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_overlay_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_overlay_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_overlay_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_overlay_tests.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_retroactive_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_retroactive_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_retroactive_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_retroactive_tests.rs
+diff --git a/scribe2/crates/xtask/src/flipcheck_tests.rs b/scribe2/crates/scribe2-xtask/src/flipcheck_tests.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/flipcheck_tests.rs
+rename to scribe2/crates/scribe2-xtask/src/flipcheck_tests.rs
+diff --git a/scribe2/crates/xtask/src/genmanifest.rs b/scribe2/crates/scribe2-xtask/src/genmanifest.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/genmanifest.rs
+rename to scribe2/crates/scribe2-xtask/src/genmanifest.rs
+diff --git a/scribe2/crates/xtask/src/ledger_plan.rs b/scribe2/crates/scribe2-xtask/src/ledger_plan.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/ledger_plan.rs
+rename to scribe2/crates/scribe2-xtask/src/ledger_plan.rs
+diff --git a/scribe2/crates/xtask/src/limits.rs b/scribe2/crates/scribe2-xtask/src/limits.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/limits.rs
+rename to scribe2/crates/scribe2-xtask/src/limits.rs
+diff --git a/scribe2/crates/xtask/src/main.rs b/scribe2/crates/scribe2-xtask/src/main.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/main.rs
+rename to scribe2/crates/scribe2-xtask/src/main.rs
+diff --git a/scribe2/crates/xtask/src/mutantsdiff.rs b/scribe2/crates/scribe2-xtask/src/mutantsdiff.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/mutantsdiff.rs
+rename to scribe2/crates/scribe2-xtask/src/mutantsdiff.rs
+diff --git a/scribe2/crates/xtask/src/mutantsdiff/aimed.rs b/scribe2/crates/scribe2-xtask/src/mutantsdiff/aimed.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/mutantsdiff/aimed.rs
+rename to scribe2/crates/scribe2-xtask/src/mutantsdiff/aimed.rs
+diff --git a/scribe2/crates/xtask/src/non_rust_exec.rs b/scribe2/crates/scribe2-xtask/src/non_rust_exec.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/non_rust_exec.rs
+rename to scribe2/crates/scribe2-xtask/src/non_rust_exec.rs
+diff --git a/scribe2/crates/xtask/src/paths_clean.rs b/scribe2/crates/scribe2-xtask/src/paths_clean.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/paths_clean.rs
+rename to scribe2/crates/scribe2-xtask/src/paths_clean.rs
+diff --git a/scribe2/crates/xtask/src/polarity.rs b/scribe2/crates/scribe2-xtask/src/polarity.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/polarity.rs
+rename to scribe2/crates/scribe2-xtask/src/polarity.rs
+diff --git a/scribe2/crates/xtask/src/private_clean.rs b/scribe2/crates/scribe2-xtask/src/private_clean.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/private_clean.rs
+rename to scribe2/crates/scribe2-xtask/src/private_clean.rs
+diff --git a/scribe2/crates/xtask/src/prose_gate.rs b/scribe2/crates/scribe2-xtask/src/prose_gate.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/prose_gate.rs
+rename to scribe2/crates/scribe2-xtask/src/prose_gate.rs
+diff --git a/scribe2/crates/xtask/src/provenance.rs b/scribe2/crates/scribe2-xtask/src/provenance.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/provenance.rs
+rename to scribe2/crates/scribe2-xtask/src/provenance.rs
+diff --git a/scribe2/crates/xtask/src/rules_diff.rs b/scribe2/crates/scribe2-xtask/src/rules_diff.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/rules_diff.rs
+rename to scribe2/crates/scribe2-xtask/src/rules_diff.rs
+diff --git a/scribe2/crates/xtask/src/rules_parity.rs b/scribe2/crates/scribe2-xtask/src/rules_parity.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/rules_parity.rs
+rename to scribe2/crates/scribe2-xtask/src/rules_parity.rs
+diff --git a/scribe2/crates/xtask/src/rules_wired.rs b/scribe2/crates/scribe2-xtask/src/rules_wired.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/rules_wired.rs
+rename to scribe2/crates/scribe2-xtask/src/rules_wired.rs
+diff --git a/scribe2/crates/xtask/src/seat_brief.rs b/scribe2/crates/scribe2-xtask/src/seat_brief.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/seat_brief.rs
+rename to scribe2/crates/scribe2-xtask/src/seat_brief.rs
+diff --git a/scribe2/crates/xtask/src/source_trailer_cases.txt b/scribe2/crates/scribe2-xtask/src/source_trailer_cases.txt
+similarity index 100%
+rename from scribe2/crates/xtask/src/source_trailer_cases.txt
+rename to scribe2/crates/scribe2-xtask/src/source_trailer_cases.txt
+diff --git a/scribe2/crates/xtask/src/spawn_points.rs b/scribe2/crates/scribe2-xtask/src/spawn_points.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/spawn_points.rs
+rename to scribe2/crates/scribe2-xtask/src/spawn_points.rs
+diff --git a/scribe2/crates/xtask/src/toml_lite.rs b/scribe2/crates/scribe2-xtask/src/toml_lite.rs
+similarity index 100%
+rename from scribe2/crates/xtask/src/toml_lite.rs
+rename to scribe2/crates/scribe2-xtask/src/toml_lite.rs
+diff --git a/scribe2/crates/xtask/src/workspace.rs b/scribe2/crates/scribe2-xtask/src/workspace.rs
+similarity index 99%
+rename from scribe2/crates/xtask/src/workspace.rs
+rename to scribe2/crates/scribe2-xtask/src/workspace.rs
+index add3c7023f498f4cca46bca1c2278624d27e8c90..fc606aabfd28417ca0888c1d6d1057820dc6c265 100644
+--- a/scribe2/crates/xtask/src/workspace.rs
++++ b/scribe2/crates/scribe2-xtask/src/workspace.rs
+@@ -9,7 +9,7 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ 
+ /// task runner 自身の package 名。core crate はこれ以外の member として発見する。
+-const RUNNER_PACKAGE: &str = "xtask";
++const RUNNER_PACKAGE: &str = "scribe2-xtask";
+ 
+ /// core crate の名前定数を宣言する行の前置き。
+ const NAME_CONST_PREFIX: &str = "pub const NAME: &str =";
+diff --git a/scribe2/crates/scribe2/src/hook/merge_gate.rs b/scribe2/crates/scribe2/src/hook/merge_gate.rs
+index 9f519761974e224b3ce3b75a01b1c2502863ecd9..3cbdc382676a770ae7d88d98fc0c4ad394545567 100644
+--- a/scribe2/crates/scribe2/src/hook/merge_gate.rs
++++ b/scribe2/crates/scribe2/src/hook/merge_gate.rs
+@@ -419,7 +419,7 @@ mod tests {
+     fn hook_merge_trailer_sample_cases_match_expected_words() {
+         let key = source_key();
+         let head = key.trim_end();
+-        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/xtask/src/source_trailer_cases.txt"))
++        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/scribe2-xtask/src/source_trailer_cases.txt"))
+             .expect("見本を workspace の path で読める");
+         let blocks: Vec<Vec<&str>> = text.split("\n===\n").map(|block| block.lines().filter(|line| !line.starts_with('#')).collect()).collect();
+         let mut counts = [0_usize; 4];
+diff --git a/xtask/tests/vjprep.rs b/xtask/tests/vjprep.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..54b1aab98ed0645b7c4d490ac0ccae15547867ad
+--- /dev/null
++++ b/xtask/tests/vjprep.rs
+@@ -0,0 +1,178 @@
++//! 行 v-join-prep の歯: 器 scribe2 の開発の道具の部品（xtask）の package の名と dir の名を同じ新しい名 scribe2-xtask に揃え、
++//! 器の cargo の設定の別名 xtask を新しい名へ向けたこと（判断の記録 ADR-33 の決定 (11)・根の workspace に入れる前の行）。
++//! 根の部品の名と器の部品の名が重ならないことを見る（根の workspace に入れる時の名の衝突を先に除く）。外の依存を使わず repo の根からの相対の path で読む。
++#![cfg(test)]
++
++use std::collections::BTreeSet;
++use std::path::PathBuf;
++
++/// 揃えた後の器の開発の道具の部品の名（package の名と crates/ の下の dir の名が同じ字）。
++const RUNNER: &str = "scribe2-xtask";
++/// 揃える前の名（器の crates/ の下に dir として残らない）。
++const OLD: &str = "xtask";
++/// 器の cargo の設定の別名 xtask の値（cargo xtask の字の意味を保つ）。
++const ALIAS: &str = "run -q -p scribe2-xtask --";
++
++fn root() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .parent()
++        .expect("xtask の dir の 1 つ上")
++        .to_path_buf()
++}
++
++fn read(rel: &str) -> String {
++    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読めない: {e}"))
++}
++
++/// manifest の行 members = [ から ] までの二重引用符の中の字（順のまま）。
++fn members(manifest: &str) -> Vec<String> {
++    let Some(at) = manifest.find("members = [") else {
++        return Vec::new();
++    };
++    let tail = &manifest[at + "members = [".len()..];
++    let list = &tail[..tail.find(']').unwrap_or(tail.len())];
++    list.split('"')
++        .skip(1)
++        .step_by(2)
++        .map(str::to_string)
++        .collect()
++}
++
++/// manifest の節 [package] の行 name = の二重引用符の中の字。
++fn package_name(manifest: &str) -> Option<String> {
++    let at = manifest.find("[package]")?;
++    manifest[at..]
++        .lines()
++        .skip(1)
++        .take_while(|l| !l.starts_with('['))
++        .find_map(|l| l.strip_prefix("name = \""))
++        .and_then(|v| v.strip_suffix('"'))
++        .map(str::to_string)
++}
++
++/// 錠の [[package]] の塊のうち、行頭が字 source = の行を持たない塊（workspace の部品）の名。
++fn local_names(lock: &str) -> BTreeSet<String> {
++    lock.split("[[package]]")
++        .skip(1)
++        .filter(|b| !b.lines().any(|l| l.starts_with("source = ")))
++        .filter_map(|b| b.lines().find_map(|l| l.strip_prefix("name = \"")))
++        .filter_map(|v| v.strip_suffix('"'))
++        .map(str::to_string)
++        .collect()
++}
++
++/// cargo の設定の節 [alias] の鍵 key の二重引用符の中の字。
++fn alias(config: &str, key: &str) -> Option<String> {
++    let at = config.find("[alias]")?;
++    let head = format!("{key} = \"");
++    config[at..]
++        .lines()
++        .skip(1)
++        .take_while(|l| !l.starts_with('['))
++        .find_map(|l| l.strip_prefix(head.as_str()))
++        .and_then(|v| v.strip_suffix('"'))
++        .map(str::to_string)
++}
++
++/// workspace の members の各 dir の Cargo.toml の package の名。
++fn names_of(base: &str, manifest: &str) -> BTreeSet<String> {
++    members(manifest)
++        .iter()
++        .map(|m| {
++            let rel = if base.is_empty() {
++                format!("{m}/Cargo.toml")
++            } else {
++                format!("{base}/{m}/Cargo.toml")
++            };
++            package_name(&read(&rel)).unwrap_or_else(|| panic!("{rel} に package の名が無い"))
++        })
++        .collect()
++}
++
++#[test]
++fn vjprep_runner_dir_and_name_match() {
++    let vessel = read("scribe2/Cargo.toml");
++    assert_eq!(
++        members(&vessel),
++        [
++            "crates/scribe2",
++            "crates/scribe2-boundary",
++            "crates/scribe2-xtask"
++        ],
++        "器の members は 3 つでこの順"
++    );
++    assert!(
++        !root().join("scribe2/crates").join(OLD).exists(),
++        "器の crates/ の下に dir xtask が残らない"
++    );
++    let manifest = read(&format!("scribe2/crates/{RUNNER}/Cargo.toml"));
++    assert_eq!(
++        package_name(&manifest).as_deref(),
++        Some(RUNNER),
++        "package の名は dir の名と同じ字"
++    );
++    // 否定の見本: 名だけを替えて dir を替えない members の字は、揃えた後の members と違う。
++    let half = "[workspace]\nmembers = [\"crates/scribe2\", \"crates/scribe2-boundary\", \"crates/xtask\"]\n";
++    assert_ne!(
++        members(half),
++        members(&vessel),
++        "dir を替えない members の字は通さない"
++    );
++    // 否定の見本: dir だけを替えて名を替えない manifest の名は RUNNER でない。
++    assert_eq!(
++        package_name("[package]\nname = \"xtask\"\n").as_deref(),
++        Some(OLD)
++    );
++}
++
++#[test]
++fn vjprep_lock_names_disjoint_from_root() {
++    let vessel = names_of("scribe2", &read("scribe2/Cargo.toml"));
++    let rooted = names_of("", &read("Cargo.toml"));
++    assert_eq!(
++        local_names(&read("scribe2/Cargo.lock")),
++        vessel,
++        "器の錠の workspace の部品の名は器の members の名と同じ"
++    );
++    assert!(
++        vessel.contains(RUNNER) && !vessel.contains(OLD),
++        "器の部品の名に scribe2-xtask が在り xtask が無い"
++    );
++    assert!(rooted.contains(OLD), "根の開発の道具の名は xtask のまま");
++    assert_eq!(
++        vessel.intersection(&rooted).count(),
++        0,
++        "根の部品の名と器の部品の名は重ならない"
++    );
++    // 否定の見本: 器の錠の名を 1 つだけ揃える前に戻すと、根の名と重なる。
++    let lock = "[[package]]\nname = \"scribe2\"\n\n[[package]]\nname = \"xtask\"\n\n[[package]]\nname = \"serde\"\nsource = \"registry+x\"\n";
++    let old: BTreeSet<String> = local_names(lock);
++    assert_eq!(
++        old.iter().map(String::as_str).collect::<Vec<_>>(),
++        ["scribe2", "xtask"],
++        "source の在る塊は数えない"
++    );
++    assert_eq!(
++        old.intersection(&rooted).count(),
++        1,
++        "揃える前の名は根の名と 1 つ重なる"
++    );
++}
++
++#[test]
++fn vjprep_alias_points_to_runner() {
++    let config = read("scribe2/.cargo/config.toml");
++    assert_eq!(
++        alias(&config, "xtask").as_deref(),
++        Some(ALIAS),
++        "別名 xtask は新しい名の部品を撃つ"
++    );
++    // 否定の見本: 別名の値の -p の語だけを揃える前に戻した字は通さない。
++    let old = "[alias]\nxtask = \"run -q -p xtask --\"\n";
++    assert_ne!(alias(old, "xtask").as_deref(), Some(ALIAS));
++    // 否定の見本: 節 [alias] の外の同じ字は別名と読まない。
++    assert_eq!(
++        alias("[build]\nxtask = \"run -q -p scribe2-xtask --\"\n", "xtask"),
++        None
++    );
++}
