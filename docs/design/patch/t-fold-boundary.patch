@@ -1,0 +1,1232 @@
+diff --git a/crates/tsuzuri-boundary/tests/aown.rs b/crates/tsuzuri-boundary/tests/teeth1/aown.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/aown.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/aown.rs
+diff --git a/crates/tsuzuri-boundary/tests/areread.rs b/crates/tsuzuri-boundary/tests/teeth1/areread.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/areread.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/areread.rs
+diff --git a/crates/tsuzuri-boundary/tests/athr.rs b/crates/tsuzuri-boundary/tests/teeth1/athr.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/athr.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/athr.rs
+index 722d0b8c3e4c18b44d7a1159e2edf2b7e8d9700c..4c379fe17ee51f0cfb22c02e8574a6930b47018a 100644
+--- a/crates/tsuzuri-boundary/tests/athr.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/athr.rs
+@@ -215,7 +215,7 @@ const WORDS: [&str; 92] = [
+ 
+ #[test]
+ fn athr_own_names_clean() {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/athr.rs");
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/athr.rs");
+     let text = fs::read_to_string(&path).expect("自分の file");
+     let mut lines = text.lines().map(str::trim);
+     let mut names = Vec::new();
+diff --git a/crates/tsuzuri-boundary/tests/bhalf.rs b/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/bhalf.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
+index 38044b58b2a090859c4c7991ba5679043a303a5f..9bf1869fb8b7e9b406b01c704ae613820edd6fa4 100644
+--- a/crates/tsuzuri-boundary/tests/bhalf.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
+@@ -596,7 +596,7 @@ fn deliver_and_writes(
+ /// (9) この file の歯の名はどれも bhalf_ で始まり、並べた filter の語を部分の字として含まない。
+ #[test]
+ fn bhalf_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bhalf.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/bhalf.rs"))
+         .expect("自分の file");
+     let names = test_names(&text);
+     assert_eq!(names.len(), 4, "{names:?}");
+diff --git a/crates/tsuzuri-boundary/tests/bport.rs b/crates/tsuzuri-boundary/tests/teeth1/bport.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/bport.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bport.rs
+index d6bc7087b2c721c8758bbd230906f350f6ad3aac..31399abb1e40b9daedc99bd794b839dd9de569ed 100644
+--- a/crates/tsuzuri-boundary/tests/bport.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bport.rs
+@@ -310,7 +310,7 @@ const FILTER_WORDS: [&str; 80] = [
+ 
+ #[test]
+ fn bport_names_filtered() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bport.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/bport.rs"))
+         .expect("歯の file");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/brand.rs b/crates/tsuzuri-boundary/tests/teeth1/brand.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/brand.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/brand.rs
+index 72cc82b1d0eb5b9c3b2a29c74936c03b800672f9..19f7c85450a2a81f37c27fb8bf0002fed3e19291 100644
+--- a/crates/tsuzuri-boundary/tests/brand.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/brand.rs
+@@ -244,7 +244,7 @@ fn brand_path_written_once_in_contract() {
+ 
+ #[test]
+ fn brand_own_names_clean() {
+-    let text = read(&manifest("tests/brand.rs"));
++    let text = read(&manifest("tests/teeth1/brand.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-boundary/tests/bvacc.rs b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvacc.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvafix.rs b/crates/tsuzuri-boundary/tests/teeth1/bvafix.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvafix.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvafix.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvcroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvcroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvdsweep.rs b/crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvdsweep.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvfroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvfroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvlcw.rs b/crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvlcw.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvqsrv.rs b/crates/tsuzuri-boundary/tests/teeth1/bvqsrv.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvqsrv.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvqsrv.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvrread.rs b/crates/tsuzuri-boundary/tests/teeth1/bvrread.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvrread.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvrread.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvsettle.rs b/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvsettle.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvuroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvuroute.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvuroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvuroute.rs
+diff --git a/crates/tsuzuri-boundary/tests/bvvroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/bvvroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs
+diff --git a/crates/tsuzuri-boundary/tests/cnote.rs b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/cnote.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+index d68e8083b086e8e464956a68645ed588b94f303b..bb089617e8c935142ba8154fd834dda46097d757 100644
+--- a/crates/tsuzuri-boundary/tests/cnote.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+@@ -525,7 +525,7 @@ fn cnote_unread_goes_to_stderr() {
+ 
+ #[test]
+ fn cnote_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cnote.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/cnote.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/cnret.rs b/crates/tsuzuri-boundary/tests/teeth1/cnret.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/cnret.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/cnret.rs
+index 981d316d6079c5af696c0509d6ded2fe51c16207..44557c04c879028cc4dd8077b9b071245d850519 100644
+--- a/crates/tsuzuri-boundary/tests/cnret.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/cnret.rs
+@@ -537,7 +537,7 @@ fn cnret_check_leaves_retired_out() {
+ 
+ #[test]
+ fn cnret_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cnret.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/cnret.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/dnskipw.rs b/crates/tsuzuri-boundary/tests/teeth1/dnskipw.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/dnskipw.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/dnskipw.rs
+diff --git a/crates/tsuzuri-boundary/tests/dretry.rs b/crates/tsuzuri-boundary/tests/teeth1/dretry.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/dretry.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/dretry.rs
+diff --git a/crates/tsuzuri-boundary/tests/dstg.rs b/crates/tsuzuri-boundary/tests/teeth1/dstg.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/dstg.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/dstg.rs
+index 6d605f8febfc1d42752a1a63c5f83b16a2e0b69d..d1739f601bc52468e7f5f70ae0da434899b15e38 100644
+--- a/crates/tsuzuri-boundary/tests/dstg.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/dstg.rs
+@@ -842,8 +842,8 @@ fn entry_and_consts() {
+ 
+ #[test]
+ fn dstg_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/dstg.rs");
+-    let text = fs::read_to_string(&path).expect("tests/dstg.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/dstg.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth1/dstg.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/ecache.rs b/crates/tsuzuri-boundary/tests/teeth1/ecache.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/ecache.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/ecache.rs
+index 192df3e6d3f2e47f242a83d4a83b2ca2da3cfd4b..2ddca0951d7c1cabde93b2a8275b9838162c29d8 100644
+--- a/crates/tsuzuri-boundary/tests/ecache.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/ecache.rs
+@@ -268,7 +268,7 @@ const WORDS: &[&str] = &[
+ 
+ #[test]
+ fn ecache_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ecache.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/ecache.rs"))
+         .expect("ecache.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/eheld.rs b/crates/tsuzuri-boundary/tests/teeth1/eheld.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/eheld.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/eheld.rs
+diff --git a/crates/tsuzuri-boundary/tests/elazy.rs b/crates/tsuzuri-boundary/tests/teeth1/elazy.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/elazy.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/elazy.rs
+diff --git a/crates/tsuzuri-boundary/tests/epolq.rs b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/epolq.rs
+rename to crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+index b88b873a2c9902df640396e068582935ab6632ce..6ddeac6bf7f5c20a65c43a8aec35cee316d991c1 100644
+--- a/crates/tsuzuri-boundary/tests/epolq.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+@@ -1071,7 +1071,7 @@ fn test_names(text: &str) -> Vec<String> {
+ #[test]
+ fn epolq_own_names_clean() {
+     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+-    let mine = fs::read_to_string(dir.join("tests/epolq.rs")).expect("この file");
++    let mine = fs::read_to_string(dir.join("tests/teeth1/epolq.rs")).expect("この file");
+     let hist = fs::read_to_string(dir.join("../tsuzuri-surface/tests/epolqhist.rs"))
+         .expect("面の歯の file");
+     let names: Vec<String> = [mine, hist].iter().flat_map(|t| test_names(t)).collect();
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/main.rs b/crates/tsuzuri-boundary/tests/teeth1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c918548024882241036fab8904ca1dccf052aa20
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth1/main.rs
+@@ -0,0 +1,30 @@
++//! tsuzuri-boundary の歯の群 teeth1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod aown;
++mod areread;
++mod athr;
++mod bhalf;
++mod bport;
++mod brand;
++mod bvacc;
++mod bvafix;
++mod bvcroute;
++mod bvdsweep;
++mod bvfroute;
++mod bvlcw;
++mod bvqsrv;
++mod bvrread;
++mod bvsettle;
++mod bvuroute;
++mod bvvroute;
++mod cnote;
++mod cnret;
++mod dnskipw;
++mod dretry;
++mod dstg;
++mod ecache;
++mod eheld;
++mod elazy;
++mod epolq;
+diff --git a/crates/tsuzuri-boundary/tests/eretry.rs b/crates/tsuzuri-boundary/tests/teeth2/eretry.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/eretry.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/eretry.rs
+diff --git a/crates/tsuzuri-boundary/tests/esig.rs b/crates/tsuzuri-boundary/tests/teeth2/esig.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/esig.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/esig.rs
+diff --git a/crates/tsuzuri-boundary/tests/evkind.rs b/crates/tsuzuri-boundary/tests/teeth2/evkind.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/evkind.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/evkind.rs
+diff --git a/crates/tsuzuri-boundary/tests/fdlt.rs b/crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/fdlt.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
+diff --git a/crates/tsuzuri-boundary/tests/fdlv.rs b/crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/fdlv.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
+index 8e3c6a47b622bc827ac2adb64171c67e04b4884d..cbaafc838d12253d5fbb66cf2b93bb1e1538346b 100644
+--- a/crates/tsuzuri-boundary/tests/fdlv.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fdlv.rs
+@@ -1,6 +1,6 @@
+ //! 配達の hook の歯（行 f-deliver・接頭辞 fdlv_）。
+ //! 偽の bd は撃たれた回ごとの引数と cwd を記録の置き場に足してから作業場の out.json を出す script。
+-//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/fdlv.rs が持つ。
++//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/teeth2/fdlv.rs が持つ。
+ #![cfg(test)]
+ 
+ use std::ffi::OsString;
+diff --git a/crates/tsuzuri-boundary/tests/fpremhook.rs b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/fpremhook.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+index 90ecf653eb204674c413ac9e2ad0acf287b639ec..ad337fb62a82647f413245c8503bf45ae8e143b8 100644
+--- a/crates/tsuzuri-boundary/tests/fpremhook.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+@@ -431,8 +431,8 @@ fn fprem_bin_scope_from_line() {
+ 
+ #[test]
+ fn fprem_bin_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fpremhook.rs");
+-    let src = fs::read_to_string(&path).expect("tests/fpremhook.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/fpremhook.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth2/fpremhook.rs を読む");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/fserve.rs b/crates/tsuzuri-boundary/tests/teeth2/fserve.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/fserve.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fserve.rs
+index 315a55c02dd953ff527c624d3f1059e38bfcec3e..6a28241d86b188e43b0d2f6d6d3ee40fd75f797d 100644
+--- a/crates/tsuzuri-boundary/tests/fserve.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fserve.rs
+@@ -585,7 +585,7 @@ const FILTER: [&str; 92] = [
+ 
+ #[test]
+ fn fserve_own_names_clean() {
+-    let text = fs::read_to_string(manifest().join("tests/fserve.rs")).expect("歯の file");
++    let text = fs::read_to_string(manifest().join("tests/teeth2/fserve.rs")).expect("歯の file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/fstop.rs b/crates/tsuzuri-boundary/tests/teeth2/fstop.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/fstop.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fstop.rs
+index bcb73b55c7f5f722c710635dd2d515e39c5f932e..070f2121a2567dc2566f8708b29f681817303ff2 100644
+--- a/crates/tsuzuri-boundary/tests/fstop.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fstop.rs
+@@ -606,8 +606,8 @@ fn fstop_worktree_stays_quiet() {
+     assert!(caught.is_err(), "閉包が panic しない");
+     assert!(fs::symlink_metadata(&git).is_err(), "panic の後に .git が残る");
+ 
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fstop.rs");
+-    let src = fs::read_to_string(&path).expect("tests/fstop.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/fstop.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth2/fstop.rs を読む");
+     let body = src
+         .split("fn fstop_worktree_stays_quiet()")
+         .nth(1)
+@@ -619,8 +619,8 @@ fn fstop_worktree_stays_quiet() {
+ 
+ #[test]
+ fn fstop_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fstop.rs");
+-    let src = fs::read_to_string(&path).expect("tests/fstop.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/fstop.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth2/fstop.rs を読む");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/fundl.rs b/crates/tsuzuri-boundary/tests/teeth2/fundl.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/fundl.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/fundl.rs
+diff --git a/crates/tsuzuri-boundary/tests/g3g7w.rs b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/g3g7w.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+index e4473248d74617ccae106734fb75384dbbe053d9..755abf8904c6115341d2432d4bedf390d33f9d2e 100644
+--- a/crates/tsuzuri-boundary/tests/g3g7w.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+@@ -513,7 +513,7 @@ fn g3g7_own_names_clean() {
+     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+     let mut names: Vec<String> = Vec::new();
+     for file in [
+-        dir.join("tests/g3g7w.rs"),
++        dir.join("tests/teeth2/g3g7w.rs"),
+         dir.join("../tsuzuri-core/tests/teeth1/g3g7.rs"),
+     ] {
+         let text = fs::read_to_string(&file)
+diff --git a/crates/tsuzuri-boundary/tests/gextw.rs b/crates/tsuzuri-boundary/tests/teeth2/gextw.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/gextw.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/gextw.rs
+diff --git a/crates/tsuzuri-boundary/tests/gmretw.rs b/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/gmretw.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
+index 4d530674162bf6d9b67bd20256cf008c45c02c4d..4747710902ccb6a9818e932cc23361a5213bcd87 100644
+--- a/crates/tsuzuri-boundary/tests/gmretw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
+@@ -370,7 +370,7 @@ const FILTERS: [&str; 222] = [
+ /// (3) この file の歯の名。
+ #[test]
+ fn gmretw_names_clean() {
+-    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/gmretw.rs"))
++    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/gmretw.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/hbconf.rs b/crates/tsuzuri-boundary/tests/teeth2/hbconf.rs
+similarity index 84%
+rename from crates/tsuzuri-boundary/tests/hbconf.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/hbconf.rs
+index f5e73b1dc99a0ae48dd2d5293b7d739516d68700..83f6fd9bc26df67b0fe3c15fab277b41a8cd0bf2 100644
+--- a/crates/tsuzuri-boundary/tests/hbconf.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/hbconf.rs
+@@ -24,6 +24,24 @@ const TEETH: [&str; 9] = [
+     "server_acctwire.rs",
+ ];
+ 
++/// 歯の file（tests/ の直下か群の dir の直下・名で 1 本だけ在る・判断の記録 ADR-32 の段と群）。
++fn tooth_file(file: &str) -> String {
++    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
++    let mut found: Vec<String> = Vec::new();
++    if tests.join(file).is_file() {
++        found.push(format!("tests/{file}"));
++    }
++    for entry in fs::read_dir(&tests).expect("tests/ を読む") {
++        let dir = entry.expect("tests/ の項目").path();
++        if dir.join(file).is_file() {
++            let name = dir.file_name().and_then(|n| n.to_str()).expect("dir の名");
++            found.push(format!("tests/{name}/{file}"));
++        }
++    }
++    assert_eq!(found.len(), 1, "{file} の在りか: {found:?}");
++    read(&found[0])
++}
++
+ fn read(rel: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+@@ -31,7 +49,7 @@ fn read(rel: &str) -> String {
+ 
+ /// `fn config` の開き括弧から、次の 4 つの空白と閉じ括弧だけの行までの本文。
+ fn config_body(file: &str) -> String {
+-    let text = read(&format!("tests/{file}"));
++    let text = tooth_file(file);
+     let start = text
+         .find("fn config(")
+         .unwrap_or_else(|| panic!("{file} に fn config が無い"));
+diff --git a/crates/tsuzuri-boundary/tests/hbpost.rs b/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
+similarity index 98%
+rename from crates/tsuzuri-boundary/tests/hbpost.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
+index 3da4cc622db0a7fc135af031788346549a6a0489..183df457170a12eb393238bdc0858767c32f0bbc 100644
+--- a/crates/tsuzuri-boundary/tests/hbpost.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
+@@ -106,7 +106,7 @@ fn hbpost_mod_rs_drops_post_fns() {
+ 
+ #[test]
+ fn hbpost_teeth_names_stay_apart() {
+-    let text = read("tests/hbpost.rs");
++    let text = read("tests/teeth2/hbpost.rs");
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-boundary/tests/hbproc.rs b/crates/tsuzuri-boundary/tests/teeth2/hbproc.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/hbproc.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/hbproc.rs
+diff --git a/crates/tsuzuri-boundary/tests/hbroute.rs b/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/hbroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
+index 6c6498e6c1f66191fe989f92bff40031bb669c92..164eb9df071ed98c684f33702e5f55df27ed90cf 100644
+--- a/crates/tsuzuri-boundary/tests/hbroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
+@@ -240,7 +240,7 @@ fn hbroute_measure_r2_recorded() {
+ 
+ #[test]
+ fn hbroute_teeth_names_stay_apart() {
+-    let text = read(&manifest("tests/hbroute.rs"));
++    let text = read(&manifest("tests/teeth2/hbroute.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-boundary/tests/iclose.rs b/crates/tsuzuri-boundary/tests/teeth2/iclose.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/iclose.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/iclose.rs
+index 03db501c70b1cd8917df62044ef4ee9490d21fd6..c770b3a80527c2440ac082550a51940bc1d8e535 100644
+--- a/crates/tsuzuri-boundary/tests/iclose.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/iclose.rs
+@@ -238,7 +238,7 @@ const WORDS: &[&str] = &[
+ 
+ #[test]
+ fn iclose_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/iclose.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/iclose.rs"))
+         .expect("iclose.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/jcount.rs b/crates/tsuzuri-boundary/tests/teeth2/jcount.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/jcount.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/jcount.rs
+diff --git a/crates/tsuzuri-boundary/tests/jrun.rs b/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/jrun.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+diff --git a/crates/tsuzuri-boundary/tests/kcli.rs b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/kcli.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+index 5fa6b7f6063e0537da5bef29c98821f105dc9857..5ecc4891f19d1d8aa74d3affc30d0c691fcfb83e 100644
+--- a/crates/tsuzuri-boundary/tests/kcli.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+@@ -482,7 +482,7 @@ fn kcli_usage_errors_are_one() {
+ 
+ #[test]
+ fn kcli_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/kcli.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/kcli.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/kg9.rs b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/kg9.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+index f8aa3ac3dd9d0252f57a77b2fb52de54b2a503c8..ef67e15183c96794592e3c4aac325aac5ab15f6d 100644
+--- a/crates/tsuzuri-boundary/tests/kg9.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+@@ -444,7 +444,7 @@ fn kg9_unread_goes_to_stderr() {
+ 
+ #[test]
+ fn kg9_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/kg9.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/kg9.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/ksum.rs b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/ksum.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+index d023bc58eb1878b9c39a86a417add1fea1da9e29..21e5a6077000526ac3efe4cbc67c18d3afa19c6e 100644
+--- a/crates/tsuzuri-boundary/tests/ksum.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+@@ -418,7 +418,7 @@ fn ksum_unread_goes_to_stderr() {
+ 
+ #[test]
+ fn ksum_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ksum.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/ksum.rs"))
+         .expect("この file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/lidle.rs b/crates/tsuzuri-boundary/tests/teeth2/lidle.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/lidle.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/lidle.rs
+index 0a5e8dbf48a13d8efe50c17c30d12c2e250b5c6a..c9707b425fd37d0b5c2b3fcd0a39855334d811b1 100644
+--- a/crates/tsuzuri-boundary/tests/lidle.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lidle.rs
+@@ -354,7 +354,7 @@ fn run_and_count(root: PathBuf, issues: PathBuf, config: Config) {
+ 
+ #[test]
+ fn lidle_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/lidle.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/lidle.rs"))
+         .expect("自分の file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/lsnap.rs b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/lsnap.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+index fb69e97f182b0b05839b962fa85207587aaf648b..9f161a7032608abfa38c196981139c50e660da82 100644
+--- a/crates/tsuzuri-boundary/tests/lsnap.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+@@ -496,7 +496,7 @@ fn lsnap_routes_wait_for_read() {
+ 
+ #[test]
+ fn lsnap_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/lsnap.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/lsnap.rs"))
+         .expect("自分の file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/lstore.rs b/crates/tsuzuri-boundary/tests/teeth2/lstore.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/lstore.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/lstore.rs
+index 67d6b8a6470082dd232df19b8e573deda2da4857..8c5a95212782e1cbfda5aed4da80f762cc36154d 100644
+--- a/crates/tsuzuri-boundary/tests/lstore.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lstore.rs
+@@ -513,7 +513,7 @@ fn serve_and_watch(root: PathBuf, repo: PathBuf, noms: PathBuf, text: String, co
+ 
+ #[test]
+ fn lstore_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/lstore.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth2/lstore.rs"))
+         .expect("自分の file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/main.rs b/crates/tsuzuri-boundary/tests/teeth2/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ed3e33a9b1a7c26c5d2f532ae3ebd16d50a3d27
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth2/main.rs
+@@ -0,0 +1,31 @@
++//! tsuzuri-boundary の歯の群 teeth2（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod eretry;
++mod esig;
++mod evkind;
++mod fdlt;
++mod fdlv;
++mod fpremhook;
++mod fserve;
++mod fstop;
++mod fundl;
++mod g3g7w;
++mod gextw;
++mod gmretw;
++mod hbconf;
++mod hbpost;
++mod hbproc;
++mod hbroute;
++mod iclose;
++mod jcount;
++mod jrun;
++mod kcli;
++mod kg9;
++mod ksum;
++mod lidle;
++mod lsnap;
++mod lstore;
++mod mbig;
++mod mdoch;
+diff --git a/crates/tsuzuri-boundary/tests/mbig.rs b/crates/tsuzuri-boundary/tests/teeth2/mbig.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/mbig.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/mbig.rs
+diff --git a/crates/tsuzuri-boundary/tests/mdoch.rs b/crates/tsuzuri-boundary/tests/teeth2/mdoch.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/mdoch.rs
+rename to crates/tsuzuri-boundary/tests/teeth2/mdoch.rs
+index a1195de47f3fe0b9d56cd53ae199eb27b04eaa58..b31be12845fb43f03e534e9f9597577f35388dc1 100644
+--- a/crates/tsuzuri-boundary/tests/mdoch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/mdoch.rs
+@@ -112,7 +112,7 @@ fn mdoch_reads_wiring_text() {
+ fn mdoch_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 356, "filter の語の数");
+-    let text = src("tests/mdoch.rs");
++    let text = src("tests/teeth2/mdoch.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/main.rs b/crates/tsuzuri-boundary/tests/teeth3/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..19749c3e138fbde92db52b710c6a9099b787dcba
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth3/main.rs
+@@ -0,0 +1,20 @@
++//! tsuzuri-boundary の歯の群 teeth3（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod mqask;
++mod nsumw;
++mod ntcsrv;
++mod pgz;
++mod pmisroute;
++mod qgate;
++mod qsig;
++mod rhold;
++mod rsid;
++mod runsdoc;
++mod rvk;
++mod server_acct;
++mod server_acctwire;
++mod server_ask;
++mod server_batch;
++mod server_coalesce;
+diff --git a/crates/tsuzuri-boundary/tests/mqask.rs b/crates/tsuzuri-boundary/tests/teeth3/mqask.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/mqask.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/mqask.rs
+diff --git a/crates/tsuzuri-boundary/tests/nsumw.rs b/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/nsumw.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
+index 3a21b4eaa1f5235482fefb8a8505be068a25f48b..e1651990884020499801c322973fbc10974f2f34 100644
+--- a/crates/tsuzuri-boundary/tests/nsumw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
+@@ -433,7 +433,7 @@ fn nsumw_cli_doc_carries_fields() {
+ 
+ #[test]
+ fn nsumw_own_names_clean() {
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/nsumw.rs"))
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth3/nsumw.rs"))
+         .expect("歯の file");
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+diff --git a/crates/tsuzuri-boundary/tests/ntcsrv.rs b/crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/ntcsrv.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs
+diff --git a/crates/tsuzuri-boundary/tests/pgz.rs b/crates/tsuzuri-boundary/tests/teeth3/pgz.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/pgz.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/pgz.rs
+diff --git a/crates/tsuzuri-boundary/tests/pmisroute.rs b/crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/pmisroute.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs
+diff --git a/crates/tsuzuri-boundary/tests/qgate.rs b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/qgate.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+index 6838fb8d090954712207ef3b2c242a5def245071..a5252bcd9e3caba8ee8f643f0873b445bcde0135 100644
+--- a/crates/tsuzuri-boundary/tests/qgate.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+@@ -438,7 +438,7 @@ fn qgate_bin_names_undisposed() {
+     assert!(unwound.is_err());
+     assert!(fs::symlink_metadata(&git).is_err(), "巻き戻しの後に .git が残る");
+     // 守りは .git を書く前に束ねる（組みの途中の panic でも消す）。
+-    let own = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/qgate.rs"))
++    let own = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth3/qgate.rs"))
+         .expect("歯の file");
+     let body = own.split("impl Place {").nth(1).expect("Place の impl");
+     let (bind, write) = (body.find("Tidy(git.clone())"), body.find("fs::write(&git"));
+@@ -575,8 +575,8 @@ fn deny_bad_args(place: Place, cases: Vec<Vec<OsString>>) {
+ 
+ #[test]
+ fn qgate_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/qgate.rs");
+-    let src = fs::read_to_string(&path).expect("tests/qgate.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth3/qgate.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth3/qgate.rs を読む");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/qsig.rs b/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/qsig.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+diff --git a/crates/tsuzuri-boundary/tests/rhold.rs b/crates/tsuzuri-boundary/tests/teeth3/rhold.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/rhold.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/rhold.rs
+index dc0f878c3baea212f87d95bcebd416e734aa9129..90668bae94b8961499b528199986e4c4580ac95d 100644
+--- a/crates/tsuzuri-boundary/tests/rhold.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rhold.rs
+@@ -568,7 +568,7 @@ fn rhold_wiring_text() {
+ 
+ #[test]
+ fn rhold_own_names_clean() {
+-    let text = read(&manifest("tests/rhold.rs"));
++    let text = read(&manifest("tests/teeth3/rhold.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-boundary/tests/rsid.rs b/crates/tsuzuri-boundary/tests/teeth3/rsid.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/rsid.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/rsid.rs
+index 15b9ef40880de3096c2e3678252fc80635d47142..487ae644346d25de7de3918cc8cb3295763087ed 100644
+--- a/crates/tsuzuri-boundary/tests/rsid.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rsid.rs
+@@ -482,7 +482,7 @@ fn rsid_src_text() {
+ fn rsid_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 247, "filter の語の数");
+-    let text = fs::read_to_string(manifest().join("tests/rsid.rs")).expect("tests/rsid.rs を読む");
++    let text = fs::read_to_string(manifest().join("tests/teeth3/rsid.rs")).expect("tests/teeth3/rsid.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/runsdoc.rs b/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/runsdoc.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
+index 98a148f42a6ce812ccf289d616df5f697a320608..5d1e3ba3836aa27d5cb10ef627db5c9945411f68 100644
+--- a/crates/tsuzuri-boundary/tests/runsdoc.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
+@@ -217,7 +217,7 @@ fn runsdoc_route_is_listed() {
+ 
+ #[test]
+ fn runsdoc_own_names_clean() {
+-    let text = read(&manifest("tests/runsdoc.rs"));
++    let text = read(&manifest("tests/teeth3/runsdoc.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-boundary/tests/rvk.rs b/crates/tsuzuri-boundary/tests/teeth3/rvk.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/rvk.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/rvk.rs
+index 43c8d9e9b90235051f9ee7987afc7541bd92e108..2798366a4b1dc0884a7ebcf140eefc37a721b62a 100644
+--- a/crates/tsuzuri-boundary/tests/rvk.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rvk.rs
+@@ -1190,7 +1190,7 @@ const FILTER: [&str; 129] = [
+ 
+ #[test]
+ fn rvk_own_names_clean() {
+-    let text = fs::read_to_string(manifest().join("tests/rvk.rs")).expect("歯の file");
++    let text = fs::read_to_string(manifest().join("tests/teeth3/rvk.rs")).expect("歯の file");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/server_acct.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_acct.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_acctwire.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_acctwire.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_ask.rs b/crates/tsuzuri-boundary/tests/teeth3/server_ask.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_ask.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/server_ask.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_batch.rs b/crates/tsuzuri-boundary/tests/teeth3/server_batch.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_batch.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/server_batch.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_coalesce.rs b/crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_coalesce.rs
+rename to crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/main.rs b/crates/tsuzuri-boundary/tests/teeth4/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8768c1c961d19643a8811022dcfe2141c5df78ee
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth4/main.rs
+@@ -0,0 +1,18 @@
++//! tsuzuri-boundary の歯の群 teeth4（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod server_hb;
++mod server_min;
++mod server_read;
++mod server_reap;
++mod server_seat;
++mod server_src;
++mod server_view;
++mod shb;
++mod stbp;
++mod stcdp;
++mod stcli;
++mod stdenv;
++mod stlaunch;
++mod stnfy;
+diff --git a/crates/tsuzuri-boundary/tests/server_hb.rs b/crates/tsuzuri-boundary/tests/teeth4/server_hb.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_hb.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_hb.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_min.rs b/crates/tsuzuri-boundary/tests/teeth4/server_min.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_min.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_min.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_read.rs b/crates/tsuzuri-boundary/tests/teeth4/server_read.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_read.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_read.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_reap.rs b/crates/tsuzuri-boundary/tests/teeth4/server_reap.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_reap.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_reap.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_seat.rs b/crates/tsuzuri-boundary/tests/teeth4/server_seat.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_seat.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_seat.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_src.rs b/crates/tsuzuri-boundary/tests/teeth4/server_src.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_src.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_src.rs
+diff --git a/crates/tsuzuri-boundary/tests/server_view.rs b/crates/tsuzuri-boundary/tests/teeth4/server_view.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/server_view.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/server_view.rs
+diff --git a/crates/tsuzuri-boundary/tests/shb.rs b/crates/tsuzuri-boundary/tests/teeth4/shb.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/shb.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/shb.rs
+index 4003f5279de1e8b2d2a7d6a2d9eaf10200728a43..fb00c8b46dc073063cbde80580b0be9bbbf914d0 100644
+--- a/crates/tsuzuri-boundary/tests/shb.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/shb.rs
+@@ -812,7 +812,7 @@ fn shb_http_guard_and_reply() {
+ 
+ #[test]
+ fn shb_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/shb.rs");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/shb.rs");
+     let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+diff --git a/crates/tsuzuri-boundary/tests/stbp.rs b/crates/tsuzuri-boundary/tests/teeth4/stbp.rs
+similarity index 98%
+rename from crates/tsuzuri-boundary/tests/stbp.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stbp.rs
+index bb51bca450e68b155b0000ebba0c1d24a3751c6b..1a048550d1fcda7af23a37497f1dc5200b8db01f 100644
+--- a/crates/tsuzuri-boundary/tests/stbp.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stbp.rs
+@@ -224,8 +224,8 @@ fn stbp_wiring() {
+ 
+ #[test]
+ fn stbp_names_apart() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stbp.rs");
+-    let text = fs::read_to_string(&path).expect("tests/stbp.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stbp.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth4/stbp.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stcdp.rs b/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/stcdp.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
+index 1756ebccec12f18458ad1b5435fce47163365104..c9b46d9500f3c3182c598ada57acec9e5ae70027 100644
+--- a/crates/tsuzuri-boundary/tests/stcdp.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
+@@ -1086,8 +1086,8 @@ fn stage_cdp_window_never_raised() {
+ 
+ #[test]
+ fn stage_cdp_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stcdp.rs");
+-    let text = fs::read_to_string(&path).expect("tests/stcdp.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stcdp.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth4/stcdp.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stcli.rs b/crates/tsuzuri-boundary/tests/teeth4/stcli.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/stcli.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stcli.rs
+index 0ec0e87cce0eab8c33b6f5f6cbf78230409e3d60..685336b85cb8d78fc84c164fa596b303cb4d67c7 100644
+--- a/crates/tsuzuri-boundary/tests/stcli.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stcli.rs
+@@ -1790,8 +1790,8 @@ fn stcli_source_guards() {
+ fn stcli_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 126, "filter の語の数");
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stcli.rs");
+-    let text = fs::read_to_string(&path).expect("tests/stcli.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stcli.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth4/stcli.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stdenv.rs b/crates/tsuzuri-boundary/tests/teeth4/stdenv.rs
+similarity index 98%
+rename from crates/tsuzuri-boundary/tests/stdenv.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stdenv.rs
+index 0331147a07f79f7db78a34a5bc1a2059cfa47768..81538651aa717f12fdc303176267ec6285905d34 100644
+--- a/crates/tsuzuri-boundary/tests/stdenv.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stdenv.rs
+@@ -196,8 +196,8 @@ fn denv_pair_forms_refused() {
+ fn denv_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 111, "filter の語の数");
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stdenv.rs");
+-    let src = fs::read_to_string(&path).expect("tests/stdenv.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stdenv.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth4/stdenv.rs を読む");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stlaunch.rs b/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/stlaunch.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
+index 1364bc1d76b691ecddc97c9600cd4271d9e3c3f6..2a9ac9c9c04cec49dfecabb88c8dae44de55cfaf 100644
+--- a/crates/tsuzuri-boundary/tests/stlaunch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
+@@ -1058,8 +1058,8 @@ fn launch_source_guards() {
+ fn launch_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 121, "filter の語の数");
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stlaunch.rs");
+-    let text = fs::read_to_string(&path).expect("tests/stlaunch.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stlaunch.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth4/stlaunch.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stnfy.rs b/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/stnfy.rs
+rename to crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
+index 5c88792ef471d48c5c98a7a5276afd00dd781e03..dd4cb75161deeac820172d01a7ea754492d81c37 100644
+--- a/crates/tsuzuri-boundary/tests/stnfy.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
+@@ -822,8 +822,8 @@ fn stnfy_source_guards() {
+ 
+ #[test]
+ fn stnfy_names_apart() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stnfy.rs");
+-    let text = fs::read_to_string(&path).expect("tests/stnfy.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/stnfy.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth4/stnfy.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7888dcbf5781070bc1306a869c72a269694df55
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -0,0 +1,12 @@
++//! tsuzuri-boundary の歯の群 teeth5（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod strelay;
++mod stskill;
++mod stterm;
++mod sttgt;
++mod tzent;
++mod tzpar;
++mod tzself;
++mod wsteady;
+diff --git a/crates/tsuzuri-boundary/tests/strelay.rs b/crates/tsuzuri-boundary/tests/teeth5/strelay.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/strelay.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/strelay.rs
+index b3c3406f6556b810b0a71a02bda94b4ca51d742a..7b9d05bea02df77035d0c05f3424ac6ff335e9d3 100644
+--- a/crates/tsuzuri-boundary/tests/strelay.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/strelay.rs
+@@ -927,8 +927,8 @@ fn relay_source_guards() {
+ fn relay_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 125, "filter の語の数");
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/strelay.rs");
+-    let text = fs::read_to_string(&path).expect("tests/strelay.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth5/strelay.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth5/strelay.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/stskill.rs b/crates/tsuzuri-boundary/tests/teeth5/stskill.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/stskill.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/stskill.rs
+diff --git a/crates/tsuzuri-boundary/tests/stterm.rs b/crates/tsuzuri-boundary/tests/teeth5/stterm.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/stterm.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/stterm.rs
+index 0ba9f64235ac1d9c8e12bd1f21c1aa976b243f20..7d20cf1f166b3166364cd4a1f12fd31bfd13e4fb 100644
+--- a/crates/tsuzuri-boundary/tests/stterm.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/stterm.rs
+@@ -353,8 +353,8 @@ fn stage_term_pure_reader() {
+ 
+ #[test]
+ fn stage_term_own_names_clean() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stterm.rs");
+-    let src = fs::read_to_string(&path).expect("tests/stterm.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth5/stterm.rs");
++    let src = fs::read_to_string(&path).expect("tests/teeth5/stterm.rs を読む");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/sttgt.rs b/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/sttgt.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
+index 40a96b700c5749963d2b13af8b087eff1afdfa67..1e7230fcdac90497b86a71078df0e1555f81423f 100644
+--- a/crates/tsuzuri-boundary/tests/sttgt.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
+@@ -660,8 +660,8 @@ fn sttgt_source_guards() {
+ 
+ #[test]
+ fn sttgt_names_apart() {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/sttgt.rs");
+-    let text = fs::read_to_string(&path).expect("tests/sttgt.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth5/sttgt.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth5/sttgt.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/tzent.rs b/crates/tsuzuri-boundary/tests/teeth5/tzent.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/tzent.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/tzent.rs
+index b2e4124908301e431722574d017277b10e6442fb..1e208165fb541b4a6ef99ed4d7b00dbea950c00a 100644
+--- a/crates/tsuzuri-boundary/tests/tzent.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzent.rs
+@@ -202,8 +202,8 @@ fn tzent_entry_writes_to_given_writers() {
+ fn tzent_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 325, "filter の語の数");
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/tzent.rs"))
+-        .expect("tests/tzent.rs を読む");
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth5/tzent.rs"))
++        .expect("tests/teeth5/tzent.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/tzpar.rs b/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/tzpar.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
+index 80c81f801b44f6ba0dfa6f17b1f7bf4fd3bbae98..89af905b31fbe5ad1e77db7baba96efe6a09b62c 100644
+--- a/crates/tsuzuri-boundary/tests/tzpar.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
+@@ -261,8 +261,8 @@ fn tzpar_index_views_match() {
+ fn tzpar_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 325, "filter の語の数");
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/tzpar.rs"))
+-        .expect("tests/tzpar.rs を読む");
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth5/tzpar.rs"))
++        .expect("tests/teeth5/tzpar.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/tzself.rs b/crates/tsuzuri-boundary/tests/teeth5/tzself.rs
+similarity index 99%
+rename from crates/tsuzuri-boundary/tests/tzself.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/tzself.rs
+index e28eecfebe1dd16f147d390456be706180568f33..3841513d86f51b22a355fb493cdb46d72a65ff48 100644
+--- a/crates/tsuzuri-boundary/tests/tzself.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzself.rs
+@@ -147,7 +147,7 @@ fn tzself_wiring_text() {
+ fn tzself_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 331, "filter の語の数");
+-    let text = src("tests/tzself.rs");
++    let text = src("tests/teeth5/tzself.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-boundary/tests/wsteady.rs b/crates/tsuzuri-boundary/tests/teeth5/wsteady.rs
+similarity index 97%
+rename from crates/tsuzuri-boundary/tests/wsteady.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/wsteady.rs
+index fb6f5089d77e75cd241d7f3f9f823955c3a926a3..6611da734ffd69dd1929d07972e1bf51418e6a73 100644
+--- a/crates/tsuzuri-boundary/tests/wsteady.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/wsteady.rs
+@@ -131,8 +131,8 @@ const WRITERS: [&str; 4] = ["fs::write(", "File::create(", "OpenOptions", "File:
+ const BODIES: [(&str, &str); 4] = [
+     ("src/server/events.rs", "server_src_watch_marks_trigger_reread"),
+     ("src/server/events.rs", "server_read_watch_board_sends_on_marks"),
+-    ("tests/server_read.rs", "server_read_board_changed_within_5s"),
+-    ("tests/wsteady.rs", "wsteady_absent_listed_path_changes"),
++    ("tests/teeth4/server_read.rs", "server_read_board_changed_within_5s"),
++    ("tests/teeth5/wsteady.rs", "wsteady_absent_listed_path_changes"),
+ ];
+ 
+ /// 見張りの間隔。
+@@ -306,7 +306,7 @@ fn wsteady_marks_change_whole() {
+             }
+         }
+     }
+-    for rel in ["src/server/events.rs", "tests/server_read.rs"] {
++    for rel in ["src/server/events.rs", "tests/teeth4/server_read.rs"] {
+         assert!(
+             read(&manifest(rel)).contains("fs::rename("),
+             "{rel} に移しの fn が無い"
+@@ -316,7 +316,7 @@ fn wsteady_marks_change_whole() {
+ 
+ #[test]
+ fn wsteady_own_names_clean() {
+-    let text = read(&manifest("tests/wsteady.rs"));
++    let text = read(&manifest("tests/teeth5/wsteady.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-core/tests/teeth1/dnskip.rs b/crates/tsuzuri-core/tests/teeth1/dnskip.rs
+index 17cd861c2e3ef549a18ef193700b73950be32671..0ac62af4ad249e75fb737111aefd4ca2fc4ae37b 100644
+--- a/crates/tsuzuri-core/tests/teeth1/dnskip.rs
++++ b/crates/tsuzuri-core/tests/teeth1/dnskip.rs
+@@ -204,7 +204,7 @@ fn dnskip_own_names_clean() {
+     assert_eq!(FILTER_WORDS.len(), 152, "畳んだ 151 語と pgz_");
+     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+     let mut names = test_names(&root.join("tests/teeth1/dnskip.rs"));
+-    names.extend(test_names(&root.join("../tsuzuri-boundary/tests/dnskipw.rs")));
++    names.extend(test_names(&root.join("../tsuzuri-boundary/tests/teeth1/dnskipw.rs")));
+     assert!(names.len() >= 6, "歯の名: {names:?}");
+     for name in names {
+         let rest = name
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlt.rs b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+index 75c13e9b1cf1e989263be484bde3e6db644dd792..e23d94a83ad036a81ade634e01b9151e5bf29f95 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlt.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+@@ -629,7 +629,7 @@ fn test_names(src: &str) -> Vec<String> {
+ #[test]
+ fn fdlt_own_names_clean() {
+     let core = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/fdlt.rs");
+-    let boundary = root().join("crates/tsuzuri-boundary/tests/fdlt.rs");
++    let boundary = root().join("crates/tsuzuri-boundary/tests/teeth2/fdlt.rs");
+     let mut names = Vec::new();
+     for path in [core, boundary] {
+         let src = std::fs::read_to_string(&path)
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlv.rs b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+index 464ec24344629038f6ff519b29504c038071f447..26ec84cf921d552ac5699572d6de4c79c9d3ef4f 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlv.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+@@ -580,7 +580,7 @@ fn test_names(src: &str) -> Vec<String> {
+ #[test]
+ fn fdlv_own_names_clean() {
+     let core = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/fdlv.rs");
+-    let boundary = root().join("crates/tsuzuri-boundary/tests/fdlv.rs");
++    let boundary = root().join("crates/tsuzuri-boundary/tests/teeth2/fdlv.rs");
+     let mut names = Vec::new();
+     for path in [core, boundary] {
+         let src = std::fs::read_to_string(&path)
+diff --git a/crates/tsuzuri-core/tests/teeth1/gext.rs b/crates/tsuzuri-core/tests/teeth1/gext.rs
+index dbe813d6c1680382e73f998a884fc2d6b5c2e893..838d68f73d29f63217b5e41315690d3c7b295025 100644
+--- a/crates/tsuzuri-core/tests/teeth1/gext.rs
++++ b/crates/tsuzuri-core/tests/teeth1/gext.rs
+@@ -482,7 +482,7 @@ fn gext_names_clean() {
+     let mut names: Vec<String> = Vec::new();
+     for file in [
+         dir.join("tests/teeth1/gext.rs"),
+-        dir.join("../tsuzuri-boundary/tests/gextw.rs"),
++        dir.join("../tsuzuri-boundary/tests/teeth2/gextw.rs"),
+     ] {
+         let text = fs::read_to_string(&file)
+             .unwrap_or_else(|e| panic!("{} を読む: {e}", file.display()));
+diff --git a/crates/tsuzuri-core/tests/teeth2/pmisfit.rs b/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
+index b0605833e3d483d499a2af379cb12e0611a7f02f..e66c10c02ff1b4faaf76648c81f9d11934c19881 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
+@@ -432,7 +432,7 @@ fn names(path: &PathBuf) -> Vec<String> {
+ fn pmisfit_own_names_clean() {
+     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+     let core = names(&dir.join("tests/teeth2/pmisfit.rs"));
+-    let boundary = names(&dir.join("../tsuzuri-boundary/tests/pmisroute.rs"));
++    let boundary = names(&dir.join("../tsuzuri-boundary/tests/teeth3/pmisroute.rs"));
+     assert!(core.len() >= 6, "中核の歯の数 {}", core.len());
+     assert!(boundary.len() >= 4, "境界の歯の数 {}", boundary.len());
+     for name in core.iter().chain(&boundary) {
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index 448d3c3466464e23da7be5cd28e4cafae6e3058f..e879309a35052d477841c029d78c9ae2e842b58f 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -10,6 +10,11 @@ use std::path::{Path, PathBuf};
+ /// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
+ const GROUPS: &[(&str, usize)] = &[
+     // kfold-groups-begin
++    ("crates/tsuzuri-boundary/tests/teeth1", 26),
++    ("crates/tsuzuri-boundary/tests/teeth2", 27),
++    ("crates/tsuzuri-boundary/tests/teeth3", 16),
++    ("crates/tsuzuri-boundary/tests/teeth4", 14),
++    ("crates/tsuzuri-boundary/tests/teeth5", 8),
+     ("crates/tsuzuri-contract/tests/teeth1", 13),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),

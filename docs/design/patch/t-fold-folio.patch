@@ -1,0 +1,1235 @@
+diff --git a/crates/tsuzuri-boundary/Cargo.toml b/crates/tsuzuri-boundary/Cargo.toml
+index 6807bcdbd1c40972d20a73c13e7bc736850ea4fd..f646ca54752a73cbc52fabf338b0f771ffe4f4f6 100644
+--- a/crates/tsuzuri-boundary/Cargo.toml
++++ b/crates/tsuzuri-boundary/Cargo.toml
+@@ -24,234 +24,23 @@ workspace = true
+ 
+ # 持ち込んだ folio の歯（行 k-tz-tests）: file は folio2/crates/folio/tests/ に置いたまま、tz の binary を撃つ境界の歯にする
+ # （cargo は歯に同じ package の binary だけを渡す）。YAML の読み手は folio の lib の folio::yaml_rust2 を使う（外の依存を足さない）。
+-[[test]]
+-name = "adr"
+-path = "../../folio2/crates/folio/tests/adr.rs"
+-
+-[[test]]
+-name = "anchor"
+-path = "../../folio2/crates/folio/tests/anchor.rs"
+-
+-[[test]]
+-name = "badge"
+-path = "../../folio2/crates/folio/tests/badge.rs"
+-
+-[[test]]
+-name = "bundle"
+-path = "../../folio2/crates/folio/tests/bundle.rs"
+-
+-[[test]]
+-name = "ceiling"
+-path = "../../folio2/crates/folio/tests/ceiling.rs"
+-
+-[[test]]
+-name = "check"
+-path = "../../folio2/crates/folio/tests/check.rs"
+-
+-[[test]]
+-name = "constitution_range"
+-path = "../../folio2/crates/folio/tests/constitution_range.rs"
+-
+-[[test]]
+-name = "derive"
+-path = "../../folio2/crates/folio/tests/derive.rs"
+-
+-[[test]]
+-name = "emit_rulings"
+-path = "../../folio2/crates/folio/tests/emit_rulings.rs"
+-
+-[[test]]
+-name = "entrance"
+-path = "../../folio2/crates/folio/tests/entrance.rs"
+-
+-[[test]]
+-name = "face"
+-path = "../../folio2/crates/folio/tests/face.rs"
+-
+-[[test]]
+-name = "face_adr"
+-path = "../../folio2/crates/folio/tests/face_adr.rs"
+-
+-[[test]]
+-name = "face_constitution"
+-path = "../../folio2/crates/folio/tests/face_constitution.rs"
+-
+-[[test]]
+-name = "face_index"
+-path = "../../folio2/crates/folio/tests/face_index.rs"
+-
+-[[test]]
+-name = "face_index_sheet"
+-path = "../../folio2/crates/folio/tests/face_index_sheet.rs"
+-
+-[[test]]
+-name = "face_index_shelf"
+-path = "../../folio2/crates/folio/tests/face_index_shelf.rs"
+-
+-[[test]]
+-name = "face_note"
+-path = "../../folio2/crates/folio/tests/face_note.rs"
+-
+-[[test]]
+-name = "face_srs"
+-path = "../../folio2/crates/folio/tests/face_srs.rs"
+-
+-[[test]]
+-name = "face_srs_adrs"
+-path = "../../folio2/crates/folio/tests/face_srs_adrs.rs"
+-
+-[[test]]
+-name = "face_srs_body"
+-path = "../../folio2/crates/folio/tests/face_srs_body.rs"
+-
+-[[test]]
+-name = "face_srs_figure"
+-path = "../../folio2/crates/folio/tests/face_srs_figure.rs"
+-
+-[[test]]
+-name = "figure"
+-path = "../../folio2/crates/folio/tests/figure.rs"
+-
+-[[test]]
+-name = "findings"
+-path = "../../folio2/crates/folio/tests/findings.rs"
+-
+-[[test]]
+-name = "floor_cases"
+-path = "../../folio2/crates/folio/tests/floor_cases.rs"
+-
+-[[test]]
+-name = "floor_faces"
+-path = "../../folio2/crates/folio/tests/floor_faces.rs"
+-
+-[[test]]
+-name = "freeze"
+-path = "../../folio2/crates/folio/tests/freeze.rs"
+-
+-[[test]]
+-name = "freeze_root"
+-path = "../../folio2/crates/folio/tests/freeze_root.rs"
+-
+-[[test]]
+-name = "gate"
+-path = "../../folio2/crates/folio/tests/gate.rs"
+-
+-[[test]]
+-name = "gitcheck"
+-path = "../../folio2/crates/folio/tests/gitcheck.rs"
+-
+-[[test]]
+-name = "graph"
+-path = "../../folio2/crates/folio/tests/graph.rs"
+-
+-[[test]]
+-name = "graph_notes"
+-path = "../../folio2/crates/folio/tests/graph_notes.rs"
+-
+-[[test]]
+-name = "graph_summary"
+-path = "../../folio2/crates/folio/tests/graph_summary.rs"
+-
+-[[test]]
+-name = "hello"
+-path = "../../folio2/crates/folio/tests/hello.rs"
+-
+-[[test]]
+-name = "help"
+-path = "../../folio2/crates/folio/tests/help.rs"
+-
+-[[test]]
+-name = "ids"
+-path = "../../folio2/crates/folio/tests/ids.rs"
+-
+-[[test]]
+-name = "init"
+-path = "../../folio2/crates/folio/tests/init.rs"
+-
+-[[test]]
+-name = "intake"
+-path = "../../folio2/crates/folio/tests/intake.rs"
+-
+-[[test]]
+-name = "link"
+-path = "../../folio2/crates/folio/tests/link.rs"
+-
+-[[test]]
+-name = "mechanism_live"
+-path = "../../folio2/crates/folio/tests/mechanism_live.rs"
+-
+-[[test]]
+-name = "note"
+-path = "../../folio2/crates/folio/tests/note.rs"
+-
+-[[test]]
+-name = "outside_faces"
+-path = "../../folio2/crates/folio/tests/outside_faces.rs"
+-
+-[[test]]
+-name = "parts"
+-path = "../../folio2/crates/folio/tests/parts.rs"
+-
+-[[test]]
+-name = "place_name"
+-path = "../../folio2/crates/folio/tests/place_name.rs"
+-
+-[[test]]
+-name = "plan"
+-path = "../../folio2/crates/folio/tests/plan.rs"
+-
+-[[test]]
+-name = "polarity"
+-path = "../../folio2/crates/folio/tests/polarity.rs"
+-
+-[[test]]
+-name = "proposed"
+-path = "../../folio2/crates/folio/tests/proposed.rs"
+-
+-[[test]]
+-name = "prose"
+-path = "../../folio2/crates/folio/tests/prose.rs"
+-
+-[[test]]
+-name = "refs"
+-path = "../../folio2/crates/folio/tests/refs.rs"
+-
+-[[test]]
+-name = "resolve"
+-path = "../../folio2/crates/folio/tests/resolve.rs"
+-
+-[[test]]
+-name = "ruling"
+-path = "../../folio2/crates/folio/tests/ruling.rs"
+-
+-[[test]]
+-name = "schema"
+-path = "../../folio2/crates/folio/tests/schema.rs"
+-
+-[[test]]
+-name = "schema_docs"
+-path = "../../folio2/crates/folio/tests/schema_docs.rs"
+-
+-[[test]]
+-name = "seal"
+-path = "../../folio2/crates/folio/tests/seal.rs"
+ 
+ [[test]]
+-name = "sheet"
+-path = "../../folio2/crates/folio/tests/sheet.rs"
++name = "tz1"
++path = "../../folio2/crates/folio/tests/tz1/main.rs"
+ 
+ [[test]]
+-name = "site"
+-path = "../../folio2/crates/folio/tests/site.rs"
++name = "tz2"
++path = "../../folio2/crates/folio/tests/tz2/main.rs"
+ 
+ [[test]]
+-name = "stamp"
+-path = "../../folio2/crates/folio/tests/stamp.rs"
++name = "tz3"
++path = "../../folio2/crates/folio/tests/tz3/main.rs"
+ 
+ [[test]]
+-name = "unknown_fields"
+-path = "../../folio2/crates/folio/tests/unknown_fields.rs"
++name = "tz4"
++path = "../../folio2/crates/folio/tests/tz4/main.rs"
+ 
+ [[test]]
+-name = "vocab"
+-path = "../../folio2/crates/folio/tests/vocab.rs"
++name = "tz5"
++path = "../../folio2/crates/folio/tests/tz5/main.rs"
+diff --git a/folio2/crates/folio/Cargo.toml b/folio2/crates/folio/Cargo.toml
+index f6c82e1a5a67de8190e3f8c1069c76d8c4a8cfca..f2cfa9ae6a8f75ee896ce51d05b72803c7f33d26 100644
+--- a/folio2/crates/folio/Cargo.toml
++++ b/folio2/crates/folio/Cargo.toml
+@@ -19,23 +19,7 @@ yaml-rust2 = { version = "0.12", default-features = false }
+ workspace = true
+ 
+ # binary を撃たない歯（行 k-tz-tests）
+-[[test]]
+-name = "constitution_enums"
+-
+-[[test]]
+-name = "deps"
+-
+-[[test]]
+-name = "face_labels"
+-
+-[[test]]
+-name = "face_style"
+-
+-[[test]]
+-name = "fdrop"
+-
+-[[test]]
+-name = "modules"
+ 
+ [[test]]
+-name = "parts_catalog"
++name = "teeth1"
++path = "tests/teeth1/main.rs"
+diff --git a/folio2/crates/folio/tests/constitution_enums.rs b/folio2/crates/folio/tests/teeth1/constitution_enums.rs
+similarity index 98%
+rename from folio2/crates/folio/tests/constitution_enums.rs
+rename to folio2/crates/folio/tests/teeth1/constitution_enums.rs
+index f031e7099e56bfabd88e8230b583926c8cba3d54..bc72a635e65efe7ff9dc1ea25731ec0bb1eca2cb 100644
+--- a/folio2/crates/folio/tests/constitution_enums.rs
++++ b/folio2/crates/folio/tests/teeth1/constitution_enums.rs
+@@ -5,9 +5,7 @@
+ //! 便 128（delivery-128.md §1 (c) 歯 6）: 純粋な関数 `constitution_fields`（憲法の 5 部位の欄の一覧）の Ok と Err の 4 つの形。
+ #![cfg(test)]
+ 
+-#[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
+-#[path = "../build.rs"]
+-mod build;
++use crate::build;
+ 
+ use yaml_rust2::{Yaml, YamlLoader};
+ 
+diff --git a/folio2/crates/folio/tests/deps.rs b/folio2/crates/folio/tests/teeth1/deps.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/deps.rs
+rename to folio2/crates/folio/tests/teeth1/deps.rs
+diff --git a/folio2/crates/folio/tests/face_labels.rs b/folio2/crates/folio/tests/teeth1/face_labels.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_labels.rs
+rename to folio2/crates/folio/tests/teeth1/face_labels.rs
+diff --git a/folio2/crates/folio/tests/face_style.rs b/folio2/crates/folio/tests/teeth1/face_style.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_style.rs
+rename to folio2/crates/folio/tests/teeth1/face_style.rs
+diff --git a/folio2/crates/folio/tests/fdrop.rs b/folio2/crates/folio/tests/teeth1/fdrop.rs
+similarity index 98%
+rename from folio2/crates/folio/tests/fdrop.rs
+rename to folio2/crates/folio/tests/teeth1/fdrop.rs
+index c4a6328710c60d92c8c51f5f59efd45e0870edbc..e1dc6b52f910ea782eda59898954d1e05a05110b 100644
+--- a/folio2/crates/folio/tests/fdrop.rs
++++ b/folio2/crates/folio/tests/teeth1/fdrop.rs
+@@ -128,8 +128,8 @@ fn fdrop_no_serve() {
+ fn fdrop_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 331, "filter の語の数");
+-    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fdrop.rs"))
+-        .expect("tests/fdrop.rs を読む");
++    let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/fdrop.rs"))
++        .expect("tests/teeth1/fdrop.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/folio2/crates/folio/tests/teeth1/main.rs b/folio2/crates/folio/tests/teeth1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f1264885e3a94db4c079e41ececd9836c5eebe5d
+--- /dev/null
++++ b/folio2/crates/folio/tests/teeth1/main.rs
+@@ -0,0 +1,14 @@
++//! folio の歯の群 teeth1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++#[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
++#[path = "../../build.rs"]
++mod build;
++mod constitution_enums;
++mod deps;
++mod face_labels;
++mod face_style;
++mod fdrop;
++mod modules;
++mod parts_catalog;
+diff --git a/folio2/crates/folio/tests/modules.rs b/folio2/crates/folio/tests/teeth1/modules.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/modules.rs
+rename to folio2/crates/folio/tests/teeth1/modules.rs
+diff --git a/folio2/crates/folio/tests/parts_catalog.rs b/folio2/crates/folio/tests/teeth1/parts_catalog.rs
+similarity index 93%
+rename from folio2/crates/folio/tests/parts_catalog.rs
+rename to folio2/crates/folio/tests/teeth1/parts_catalog.rs
+index 93fb209ff0348c213da2318f1cff53abeed82167..f58bd28783a42cfe6f97b9773b50f7357a3d9668 100644
+--- a/folio2/crates/folio/tests/parts_catalog.rs
++++ b/folio2/crates/folio/tests/teeth1/parts_catalog.rs
+@@ -1,11 +1,9 @@
+ //! folio の build.rs の純粋な関数 `parts_catalog`（部品目録の文字列 → 導出した Rust の source か理由の文）の歯（便 52・
+ //! delivery-52.md §1 (d) 3）: 実の部品目録で Ok・変異 3 つがそれぞれ Err。build.rs を path で取り込むので folio の package に
+-//! 置く（行 k-tz-tests が tests/parts.rs から分けた・binary を撃たない）。
++//! 置く（行 k-tz-tests が tests/tz4/parts.rs から分けた・binary を撃たない）。
+ #![cfg(test)]
+ 
+-#[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
+-#[path = "../build.rs"]
+-mod build;
++use crate::build;
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+diff --git a/folio2/crates/folio/tests/adr.rs b/folio2/crates/folio/tests/tz1/adr.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/adr.rs
+rename to folio2/crates/folio/tests/tz1/adr.rs
+index d6d6b7b84a1684056d83f924a066f871804b52d5..c69144fd92dac20f64abff042745bcb9eb296b8b 100644
+--- a/folio2/crates/folio/tests/adr.rs
++++ b/folio2/crates/folio/tests/tz1/adr.rs
+@@ -1,7 +1,7 @@
+ //! `folio check` の判断の記録（adr/）の欄の決まりの歯（便 5・docs/design/delivery-5.md §1）。
+ //! tests/fixtures/adr/ の 3 組（違反 0 の最小の手書き 4 file + adr/schema.yaml + adr/ADR-1.yaml に変異 1 つ）で 不合格 1。
+ //! 各組の違反はちょうど 1 件で、その種類と場所と文言まで見る（別の理由で落ちた組を緑にしない）。
+-//! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/note.rs の Work と同じ形）の ADR-1.yaml に
++//! 図の節（便 33）は design-intent の写し（copy_tree + git init・tests/tz4/note.rs の Work と同じ形）の ADR-1.yaml に
+ //! 図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複）で 不合格 1 を見る。
+ //! 便 170（ADR-30 決定 (2)(3)）: 改訂の欄 revises の歯（便 101）は欄ごと消した。発効した ADR-1 を写しの上で変える歯は、
+ //! 封の違反 1 行を確かめて外した残りを見る。
+diff --git a/folio2/crates/folio/tests/anchor.rs b/folio2/crates/folio/tests/tz1/anchor.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/anchor.rs
+rename to folio2/crates/folio/tests/tz1/anchor.rs
+diff --git a/folio2/crates/folio/tests/badge.rs b/folio2/crates/folio/tests/tz1/badge.rs
+similarity index 98%
+rename from folio2/crates/folio/tests/badge.rs
+rename to folio2/crates/folio/tests/tz1/badge.rs
+index 990e55d9c7ce02ba3e48de3793bccbe51ffd2ee7..ce50317c103cd09ff407dbf74612b03db6fc7048 100644
+--- a/folio2/crates/folio/tests/badge.rs
++++ b/folio2/crates/folio/tests/tz1/badge.rs
+@@ -145,7 +145,7 @@ const PLACEHOLDER_SOURCES: &str = "\nsources: sha256 00\n";
+ /// 印の正本の要約値が今の正本と違うときの名札の添え書き（ADR-18 決定 (6) の逐語）。
+ const UNREAD: &str = "印の後に変わった所はまだ読まれていない";
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（`tests/bundle.rs` と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（`tests/tz1/bundle.rs` と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> String {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+@@ -226,7 +226,7 @@ fn put_mark(dir: &Path, text: &str) {
+     fs::write(dir.join(MARK), text).unwrap();
+ }
+ 
+-/// 面の凍結 fixture の写し（`tests/site.rs` の fixture_copy と同じ集合 + 天井の正本）: 正本 6 file と ceiling.yaml・
++/// 面の凍結 fixture の写し（`tests/tz4/site.rs` の fixture_copy と同じ集合 + 天井の正本）: 正本 6 file と ceiling.yaml・
+ /// adr/ADR-2.yaml・design-note/full.yaml を src/ へ、様式 2 本を src/preview/ へ、器の導出 file と図の道具を親 dir へ。
+ fn face_copy(td: &Path) -> PathBuf {
+     let work = td.join("src");
+@@ -262,7 +262,7 @@ fn face_copy(td: &Path) -> PathBuf {
+     work
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz4/schema.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+@@ -637,7 +637,7 @@ fn frozen_with_sheet(td: PathBuf, work: PathBuf, same: impl Fn(&str, &str)) {
+         &write_face("index", None, &work, &td.join("index.html")),
+         "expected-index-sheet.html",
+     );
+-    // ADR-1 も置くと便 25 の期待（`tests/face_adr.rs` の写しと同じ集合・fixture の ADR-1 は欄が欠けるので入口の面の後）
++    // ADR-1 も置くと便 25 の期待（`tests/tz1/face_adr.rs` の写しと同じ集合・fixture の ADR-1 は欄が欠けるので入口の面の後）
+     fs::copy(
+         fixture().join("adr/ADR-1.yaml"),
+         work.join("adr/ADR-1.yaml"),
+diff --git a/folio2/crates/folio/tests/bundle.rs b/folio2/crates/folio/tests/tz1/bundle.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/bundle.rs
+rename to folio2/crates/folio/tests/tz1/bundle.rs
+index 8dba8b0d358f2f1a6ed02471b74eb0ff3d1cd29d..220d034b04135fcdef3d52db8c9ff2054fe712a2 100644
+--- a/folio2/crates/folio/tests/bundle.rs
++++ b/folio2/crates/folio/tests/tz1/bundle.rs
+@@ -120,7 +120,7 @@ fn tree(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+     out
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/figure.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz2/figure.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+@@ -631,7 +631,7 @@ fn bundle_unknown_when_the_out_parent_is_missing() {
+     assert_unknown(&run, "親 dir が無い", &["親 dir が無い"]);
+ }
+ 
+-/// 最上位の節 `name` の行（列 0 の `name:`）から字下げの続く行までと、直前の注の行を外す（tests/ceiling.rs と同じ形）。
++/// 最上位の節 `name` の行（列 0 の `name:`）から字下げの続く行までと、直前の注の行を外す（tests/tz1/ceiling.rs と同じ形）。
+ fn drop_section(lines: &mut Vec<String>, name: &str) {
+     let Some(start) = lines.iter().position(|l| *l == format!("{name}:")) else {
+         return;
+@@ -713,7 +713,7 @@ fn bundle_unknown_when_a_read_doc_is_not_a_document() {
+ 
+ // ── 5. 実の正本 ──
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz4/schema.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+diff --git a/folio2/crates/folio/tests/ceiling.rs b/folio2/crates/folio/tests/tz1/ceiling.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/ceiling.rs
+rename to folio2/crates/folio/tests/tz1/ceiling.rs
+diff --git a/folio2/crates/folio/tests/check.rs b/folio2/crates/folio/tests/tz1/check.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/check.rs
+rename to folio2/crates/folio/tests/tz1/check.rs
+index d1d0d690df3d4d0318ed0f72d8c93cc392bf8e29..8ca065c97f089f5c8da73f04656a8eee3abae481 100644
+--- a/folio2/crates/folio/tests/check.rs
++++ b/folio2/crates/folio/tests/tz1/check.rs
+@@ -1,7 +1,7 @@
+ //! `folio check` 自身の歯（便 0・docs/design/delivery-0.md §1 / §4）。
+ //! 正本 4 file で合格、tests/fixtures/check/ の 4 組で 不合格 1 / 不合格 1 / 不合格 1 / まだ分からない 2。
+ //! 各組は変異 1 つだけを持つ＝違反はちょうど 1 件で、その種類まで見る（別の理由で落ちた組を緑にしない）。
+-//! 要件書の図の節（便 34・FR15）は design-intent の写し（copy_tree + git init・tests/adr.rs の Work と同じ形）の
++//! 要件書の図の節（便 34・FR15）は design-intent の写し（copy_tree + git init・tests/tz1/adr.rs の Work と同じ形）の
+ //! srs.yaml に図を 1 枚足して合格を見、その図に変異 1 つずつ（型・caption・refs・図の id の重複・未知の欄）で 不合格 1 を見る。
+ //! 憲法の条の値域を持つ欄（便 55・床の穴 f2-648.82）は同じ写しの constitution.yaml の条 P-1 に変異 1 つずつを当てて見る
+ //! （改訂の差分の範囲の外の欄 3 つは違反ちょうど 1 件・範囲の内の欄 2 つは値域の違反を含む・欄が無ければ黙る）。
+diff --git a/folio2/crates/folio/tests/constitution_range.rs b/folio2/crates/folio/tests/tz1/constitution_range.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/constitution_range.rs
+rename to folio2/crates/folio/tests/tz1/constitution_range.rs
+index 811a2d738f43b3c53fce1d1e93fb410f26cc7bc6..51b5dec3d331682156d76dc7ffc1804bb96fe52c 100644
+--- a/folio2/crates/folio/tests/constitution_range.rs
++++ b/folio2/crates/folio/tests/tz1/constitution_range.rs
+@@ -1,6 +1,6 @@
+ //! 便 122（docs/design/delivery-122.md §1 (c)・FR25・ADR-16 決定 (2)(ウ)）: 置き場の憲法の値域の節の各鍵が、道具を組み立てた版の
+ //! 同じ鍵の値の部分集合かを床が数え、条の値を置き場の値域で引くことの歯。
+-//! 土台は design-intent の写し（git の 1 commit・tests/check.rs の Work と同じ形）で、写しの constitution.yaml の字面に変異を当てて
++//! 土台は design-intent の写し（git の 1 commit・tests/tz1/check.rs の Work と同じ形）で、写しの constitution.yaml の字面に変異を当てて
+ //! `folio check` を撃つ。値域の節は憲法の改訂の差分の範囲（schema）に入るので、値域を変える変異では改憲の違反（種別 N-4）がちょうど
+ //! 1 件出る。歯は N-4 がちょうど 1 件であることを確かめてから、それを除いた違反の行と「まだ分からない」の行を全部数える。
+ //! 凍結 anchor（P-10.1）は手書きの tests/fixtures/check/enum-range-anchor.yaml（組み立てた値域 10 鍵）。
+diff --git a/folio2/crates/folio/tests/derive.rs b/folio2/crates/folio/tests/tz1/derive.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/derive.rs
+rename to folio2/crates/folio/tests/tz1/derive.rs
+diff --git a/folio2/crates/folio/tests/emit_rulings.rs b/folio2/crates/folio/tests/tz1/emit_rulings.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/emit_rulings.rs
+rename to folio2/crates/folio/tests/tz1/emit_rulings.rs
+diff --git a/folio2/crates/folio/tests/entrance.rs b/folio2/crates/folio/tests/tz1/entrance.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/entrance.rs
+rename to folio2/crates/folio/tests/tz1/entrance.rs
+diff --git a/folio2/crates/folio/tests/face.rs b/folio2/crates/folio/tests/tz1/face.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face.rs
+rename to folio2/crates/folio/tests/tz1/face.rs
+diff --git a/folio2/crates/folio/tests/face_adr.rs b/folio2/crates/folio/tests/tz1/face_adr.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_adr.rs
+rename to folio2/crates/folio/tests/tz1/face_adr.rs
+diff --git a/folio2/crates/folio/tests/tz1/main.rs b/folio2/crates/folio/tests/tz1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7dbc6be4c91f448f532458699a83ce558e420a4a
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz1/main.rs
+@@ -0,0 +1,16 @@
++//! folio の歯の群 tz1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/tz1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod adr;
++mod anchor;
++mod badge;
++mod bundle;
++mod ceiling;
++mod check;
++mod constitution_range;
++mod derive;
++mod emit_rulings;
++mod entrance;
++mod face;
++mod face_adr;
+diff --git a/folio2/crates/folio/tests/face_constitution.rs b/folio2/crates/folio/tests/tz2/face_constitution.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_constitution.rs
+rename to folio2/crates/folio/tests/tz2/face_constitution.rs
+diff --git a/folio2/crates/folio/tests/face_index.rs b/folio2/crates/folio/tests/tz2/face_index.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_index.rs
+rename to folio2/crates/folio/tests/tz2/face_index.rs
+diff --git a/folio2/crates/folio/tests/face_index_sheet.rs b/folio2/crates/folio/tests/tz2/face_index_sheet.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_index_sheet.rs
+rename to folio2/crates/folio/tests/tz2/face_index_sheet.rs
+diff --git a/folio2/crates/folio/tests/face_index_shelf.rs b/folio2/crates/folio/tests/tz2/face_index_shelf.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_index_shelf.rs
+rename to folio2/crates/folio/tests/tz2/face_index_shelf.rs
+diff --git a/folio2/crates/folio/tests/face_note.rs b/folio2/crates/folio/tests/tz2/face_note.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_note.rs
+rename to folio2/crates/folio/tests/tz2/face_note.rs
+diff --git a/folio2/crates/folio/tests/face_srs.rs b/folio2/crates/folio/tests/tz2/face_srs.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_srs.rs
+rename to folio2/crates/folio/tests/tz2/face_srs.rs
+diff --git a/folio2/crates/folio/tests/face_srs_adrs.rs b/folio2/crates/folio/tests/tz2/face_srs_adrs.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_srs_adrs.rs
+rename to folio2/crates/folio/tests/tz2/face_srs_adrs.rs
+diff --git a/folio2/crates/folio/tests/face_srs_body.rs b/folio2/crates/folio/tests/tz2/face_srs_body.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_srs_body.rs
+rename to folio2/crates/folio/tests/tz2/face_srs_body.rs
+diff --git a/folio2/crates/folio/tests/face_srs_figure.rs b/folio2/crates/folio/tests/tz2/face_srs_figure.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/face_srs_figure.rs
+rename to folio2/crates/folio/tests/tz2/face_srs_figure.rs
+diff --git a/folio2/crates/folio/tests/figure.rs b/folio2/crates/folio/tests/tz2/figure.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/figure.rs
+rename to folio2/crates/folio/tests/tz2/figure.rs
+index 9d77a663e632295350fc60f72c197758add2319f..02b55ffcb8323826bbace78082f707c3bbd96f12 100644
+--- a/folio2/crates/folio/tests/figure.rs
++++ b/folio2/crates/folio/tests/tz2/figure.rs
+@@ -522,7 +522,7 @@ fn anchor_drift_makes_figure_check_unknown() {
+ 
+ #[test]
+ fn anchor_drift_makes_the_note_face_unknown() {
+-    // 設計ノートの面の歯（tests/face_note.rs）と同じ写し: 天井の正本と器の導出 file を足す
++    // 設計ノートの面の歯（tests/tz2/face_note.rs）と同じ写し: 天井の正本と器の導出 file を足す
+     let (td, work) = fixture_copy("anchor-drift-note");
+     fs::copy(
+         face_fixture().join("ceiling.yaml"),
+@@ -822,7 +822,7 @@ fn f82_the_anchor_is_compared_before_the_replacement() {
+ 
+ // ── 12. 焼いた図の道具（便 168・docs/design/delivery-168.md §1 (c)・ADR-27 決定 (1)）──
+ 
+-/// git を呼ぶ（tests/init.rs と同じ形）。環境変数 GIT_* は継承しない。
++/// git を呼ぶ（tests/tz3/init.rs と同じ形）。環境変数 GIT_* は継承しない。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+diff --git a/folio2/crates/folio/tests/tz2/main.rs b/folio2/crates/folio/tests/tz2/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f459233a8a230f7bba9caf5aee71e9c159c889fb
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz2/main.rs
+@@ -0,0 +1,14 @@
++//! folio の歯の群 tz2（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/tz2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod face_constitution;
++mod face_index;
++mod face_index_sheet;
++mod face_index_shelf;
++mod face_note;
++mod face_srs;
++mod face_srs_adrs;
++mod face_srs_body;
++mod face_srs_figure;
++mod figure;
+diff --git a/folio2/crates/folio/tests/findings.rs b/folio2/crates/folio/tests/tz3/findings.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/findings.rs
+rename to folio2/crates/folio/tests/tz3/findings.rs
+index 14fe860a26733045fd8515c1ffce2d47a95f2d23..4bdecd282145b15f5ac414ac562848b922a090f1 100644
+--- a/folio2/crates/folio/tests/findings.rs
++++ b/folio2/crates/folio/tests/tz3/findings.rs
+@@ -59,7 +59,7 @@ fn copy_tree(from: &Path, to: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz4/schema.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+@@ -257,7 +257,7 @@ fn tree(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+     out
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/bundle.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/floor_cases.rs b/folio2/crates/folio/tests/tz3/floor_cases.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/floor_cases.rs
+rename to folio2/crates/folio/tests/tz3/floor_cases.rs
+index b6f018623ce1b6804c3ee2af95d0f4ca78c4438a..4e35263278ce5dbd8eb859e785662bc61709cbda 100644
+--- a/folio2/crates/folio/tests/floor_cases.rs
++++ b/folio2/crates/folio/tests/tz3/floor_cases.rs
+@@ -292,7 +292,7 @@ struct Run {
+ }
+ 
+ /// 便 170（ADR-30 決定 (3)）: 写しの封の一覧を今の発効した判断の記録で組み直す。case は土台の発効した記録を書き換えて
+-/// 改訂の経路を作る＝この fixture は封を測らない（封の歯は tests/seal.rs）。封の一覧の file が無い写し（anchors/ を消した
++/// 改訂の経路を作る＝この fixture は封を測らない（封の歯は tests/tz4/seal.rs）。封の一覧の file が無い写し（anchors/ を消した
+ /// case）は触らない。床が読まない記録（重複キー・読めない）は行にしない。
+ fn reseal(dir: &Path) -> Result<(), String> {
+     let path = dir.join("anchors/adr-seals.yaml");
+diff --git a/folio2/crates/folio/tests/floor_faces.rs b/folio2/crates/folio/tests/tz3/floor_faces.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/floor_faces.rs
+rename to folio2/crates/folio/tests/tz3/floor_faces.rs
+index 126b8a45f2f770c4ba961c1c89dd9e3261260ca7..965c0d58cfb6ed23addade8cefe4c0eb407074ee 100644
+--- a/folio2/crates/folio/tests/floor_faces.rs
++++ b/folio2/crates/folio/tests/tz3/floor_faces.rs
+@@ -34,7 +34,7 @@ fn copy_dir(from: &Path, to: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/init.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz3/init.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+diff --git a/folio2/crates/folio/tests/freeze.rs b/folio2/crates/folio/tests/tz3/freeze.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/freeze.rs
+rename to folio2/crates/folio/tests/tz3/freeze.rs
+diff --git a/folio2/crates/folio/tests/freeze_root.rs b/folio2/crates/folio/tests/tz3/freeze_root.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/freeze_root.rs
+rename to folio2/crates/folio/tests/tz3/freeze_root.rs
+index 7dd91009c7b0317108a9d6360ad99f195c3fb785..04e48196982baac31b50490019dc87756366603c 100644
+--- a/folio2/crates/folio/tests/freeze_root.rs
++++ b/folio2/crates/folio/tests/tz3/freeze_root.rs
+@@ -4,7 +4,7 @@
+ //! (2) 床の凍結の土台の凍結済みの anchors/（constitution-v1.0.yaml の digest の欄と ids-v1.8.yaml の byte 列）、
+ //! (3) tests/fixtures/anchor/root-digest-drift/ の索引の digest の値（定数 DRIFT に写す）。
+ //! 写しは一時 dir に design-intent/ として作り、置き場の親の contracts/ に器の導出 file を写し、git init と 1 commit を行う
+-//! （tests/freeze.rs と同じ作り方・歯の終わりに消す）。版管理の履歴に anchor を残したくない置き場は、commit の前に消す。
++//! （tests/tz3/freeze.rs と同じ作り方・歯の終わりに消す）。版管理の履歴に anchor を残したくない置き場は、commit の前に消す。
+ //! 1. folio2 の床と 1 行の写し／2. 名の書き換えは床で落ちる／3. 別の中身の根は名でも行でも落ちる／
+ //! 4. 始まりの凍結が 2 つを書き、書いた後の床が合格／5. どちらか 1 本在れば断る／
+ //! 6. ほかの検査に違反か「まだ分からない」・表に無い名（--freeze-anchor も）／7. 写しは置き場の名の行だけ（folio schema）／
+@@ -23,7 +23,7 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-/// folio2 の列の根の digest（憲法 第 1.0 版の凍結・tests/anchor.rs の定数と同じ値）。
++/// folio2 の列の根の digest（憲法 第 1.0 版の凍結・tests/tz1/anchor.rs の定数と同じ値）。
+ const ROOT: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
+ /// tests/fixtures/anchor/root-digest-drift/anchors/index.yaml の entries[0].digest（自分自身と一致する別の中身の根）。
+ const DRIFT: &str = "85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe";
+diff --git a/folio2/crates/folio/tests/gate.rs b/folio2/crates/folio/tests/tz3/gate.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/gate.rs
+rename to folio2/crates/folio/tests/tz3/gate.rs
+index 9171a9312690dd44887749eb4ae3322c8a138b4d..f25cbd86ed13f2ce3ce834af1578d9ef1c58d557 100644
+--- a/folio2/crates/folio/tests/gate.rs
++++ b/folio2/crates/folio/tests/tz3/gate.rs
+@@ -79,7 +79,7 @@ fn stdout(out: &Output) -> String {
+     String::from_utf8_lossy(&out.stdout).into_owned()
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/stamp.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/tz5/stamp.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+@@ -269,7 +269,7 @@ fn gate_passes_a_delivery_that_touches_no_design_intent() {
+     let repo = Repo::new("no-design");
+     let run = repo.gate(&[
+         "crates/folio/src/gate.rs",
+-        "+crates/folio/tests/gate.rs",
++        "+crates/folio/tests/tz3/gate.rs",
+         "docs/design/delivery-73.md",
+     ]);
+     repo.done();
+diff --git a/folio2/crates/folio/tests/gitcheck.rs b/folio2/crates/folio/tests/tz3/gitcheck.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/gitcheck.rs
+rename to folio2/crates/folio/tests/tz3/gitcheck.rs
+diff --git a/folio2/crates/folio/tests/graph.rs b/folio2/crates/folio/tests/tz3/graph.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/graph.rs
+rename to folio2/crates/folio/tests/tz3/graph.rs
+index 6fce800636b2b37603f098f9c2a18042274bd54e..91913eb0c622c6f7ef40555698b2315e9715d4ae 100644
+--- a/folio2/crates/folio/tests/graph.rs
++++ b/folio2/crates/folio/tests/tz3/graph.rs
+@@ -90,7 +90,7 @@ fn snapshot(dir: &Path, base: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+     }
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/schema.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz4/schema.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/graph_notes.rs b/folio2/crates/folio/tests/tz3/graph_notes.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/graph_notes.rs
+rename to folio2/crates/folio/tests/tz3/graph_notes.rs
+index 3a208ad964ccbf30079a2e343c4ce7e76a1301e7..c7ecc9262a4ac35bf683b6b4ac49f0c51a28fdb9 100644
+--- a/folio2/crates/folio/tests/graph_notes.rs
++++ b/folio2/crates/folio/tests/tz3/graph_notes.rs
+@@ -1,6 +1,6 @@
+ //! 索引の設計ノートの行（便 185・docs/design/delivery-185.md §1 (c)・判断の記録 ADR-32・要件 FR14 第 1.54 版）の歯。folio は
+ //! 実行 file の crate なので命令を撃つ。期待の字はどれも歯の側の手書き（凍結 anchor・P-10.1）で、要約値は手で書いた本文の
+-//! sha256 を命令 sha256sum で測る（歯は crate の中を読めない・tests/graph.rs と同じ形）。
++//! sha256 を命令 sha256sum で測る（歯は crate の中を読めない・tests/tz3/graph.rs と同じ形）。
+ //! 1. 凍結した土台の契約表の行 example#a が、節点の行・req の辺・--summary の行・--digest の 3 表で手書きの字のとおりに出る。
+ //! 2. 塊の形の行（外の利用者の形）: id は meta の id（file 名でない）と行 id、題は行の section が指す節の題、eng は行の題の全文、
+ //!    line は行 id の行、要約値は req と depends の行を落とした塊。depends は同じノートの行への辺、行の無い depends は数えるだけ。
+diff --git a/folio2/crates/folio/tests/graph_summary.rs b/folio2/crates/folio/tests/tz3/graph_summary.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/graph_summary.rs
+rename to folio2/crates/folio/tests/tz3/graph_summary.rs
+index 175af9fc3753c8e4941a9e4b893afaad0a09eb6b..ee650cc54474bf5240509de1812204431789e54e 100644
+--- a/folio2/crates/folio/tests/graph_summary.rs
++++ b/folio2/crates/folio/tests/tz3/graph_summary.rs
+@@ -123,7 +123,7 @@ fn line_of<'a>(text: &'a str, id: &str) -> &'a str {
+     found[0]
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/graph.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz3/graph.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> String {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/hello.rs b/folio2/crates/folio/tests/tz3/hello.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/hello.rs
+rename to folio2/crates/folio/tests/tz3/hello.rs
+diff --git a/folio2/crates/folio/tests/help.rs b/folio2/crates/folio/tests/tz3/help.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/help.rs
+rename to folio2/crates/folio/tests/tz3/help.rs
+diff --git a/folio2/crates/folio/tests/ids.rs b/folio2/crates/folio/tests/tz3/ids.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/ids.rs
+rename to folio2/crates/folio/tests/tz3/ids.rs
+index 914d855415ce4cc9d98d8fdc4cd6b27b447dbf6d..03fd892f5112af9ec814b0adbba00ff6949f1659 100644
+--- a/folio2/crates/folio/tests/ids.rs
++++ b/folio2/crates/folio/tests/tz3/ids.rs
+@@ -1,6 +1,6 @@
+ //! 要件・判断・受入基準の id の消失と改番の歯（便 88・docs/design/delivery-88.md §1 (e)）。
+ //! 土台は凍結した写し（tests/fixtures/floor_base/design-intent/・要件書 v1.8・id の一覧の anchor ids-v1.8.yaml）を一時 dir に作り、
+-//! 器の導出 file を写しの根に置き、git init と 1 commit を行う（tests/freeze.rs の Work と同じ作り）。
++//! 器の導出 file を写しの根に置き、git init と 1 commit を行う（tests/tz3/freeze.rs の Work と同じ作り）。
+ //! (1) FR の行を消す → 1・P-7／(2) FR の番号だけを替える → 1・P-7.1／(3) FR を足すだけ → 0／(4) ids- の anchor を外す → 2／
+ //! (5) (4) で --freeze-ids → 0・commit して素の床 → 0・二度目は断り／(6) 実の anchor の id 53 本と FR1 の要約値の凍結 literal。
+ #![cfg(test)]
+diff --git a/folio2/crates/folio/tests/init.rs b/folio2/crates/folio/tests/tz3/init.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/init.rs
+rename to folio2/crates/folio/tests/tz3/init.rs
+diff --git a/folio2/crates/folio/tests/intake.rs b/folio2/crates/folio/tests/tz3/intake.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/intake.rs
+rename to folio2/crates/folio/tests/tz3/intake.rs
+diff --git a/folio2/crates/folio/tests/link.rs b/folio2/crates/folio/tests/tz3/link.rs
+similarity index 98%
+rename from folio2/crates/folio/tests/link.rs
+rename to folio2/crates/folio/tests/tz3/link.rs
+index d3b7fdeabb9d9cc470ef6847684600839d41fa7f..a4986df691b83895a40c843d503fa3fb2a8e49e0 100644
+--- a/folio2/crates/folio/tests/link.rs
++++ b/folio2/crates/folio/tests/tz3/link.rs
+@@ -58,7 +58,7 @@ fn assert_single_violation(name: &str, kind: &str, needle: &str) {
+ }
+ 
+ /// 撤退条件の種類は部分集合で数える（便 122・FR25）。床の定数に無い値 drift を持つ値域は違反でなく「まだ分からない」で、
+-/// 合格にならない。部分集合なら黙る側は tests/constitution_range.rs の歯 5 が実の design-intent の写しで見る。
++/// 合格にならない。部分集合なら黙る側は tests/tz1/constitution_range.rs の歯 5 が実の design-intent の写しで見る。
+ #[test]
+ fn link_retreat_kind_drift_is_unknown_and_not_pass() {
+     let name = "retreat-kind-drift";
+diff --git a/folio2/crates/folio/tests/tz3/main.rs b/folio2/crates/folio/tests/tz3/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..fa1e945fe63a152de2e974d8ace0478d9d714f78
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz3/main.rs
+@@ -0,0 +1,21 @@
++//! folio の歯の群 tz3（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/tz3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod findings;
++mod floor_cases;
++mod floor_faces;
++mod freeze;
++mod freeze_root;
++mod gate;
++mod gitcheck;
++mod graph;
++mod graph_notes;
++mod graph_summary;
++mod hello;
++mod help;
++mod ids;
++mod init;
++mod intake;
++mod link;
++mod mechanism_live;
+diff --git a/folio2/crates/folio/tests/mechanism_live.rs b/folio2/crates/folio/tests/tz3/mechanism_live.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/mechanism_live.rs
+rename to folio2/crates/folio/tests/tz3/mechanism_live.rs
+index 8ee77efb8503f3e923e59f7cca42617a5d3120cd..9433c374f5383a90d084ab344ccdbaab5172dc5e 100644
+--- a/folio2/crates/folio/tests/mechanism_live.rs
++++ b/folio2/crates/folio/tests/tz3/mechanism_live.rs
+@@ -1,6 +1,6 @@
+ //! 機構がまだ無い条の 1 行の歯（便 131・docs/design/delivery-131.md §1 (c)・ADR-23 決定 (3)・FR5）。folio は実行 file の crate なので
+ //! 命令を撃つ。写しは一時 dir に design-intent/ として作り、置き場の親の contracts/ に器の導出 file を写し、git init と 1 commit を行う
+-//! （tests/freeze_root.rs と同じ作り方・歯の終わりに消す）。
++//! （tests/tz3/freeze_root.rs と同じ作り方・歯の終わりに消す）。
+ //! 凍結 anchor（P-10.1）は土台の一覧の定数 FLOOR_BASE_LIST（手で書く・folio の code から組まない）。folio2 自身の憲法の一覧の定数
+ //! FOLIO2_LIST は、条の機構の段の欄の変更を審査に引き出すための意図した 2 つ目の写しである（実の正本に依らない歯の向きの例外・ADR-23 決定 (3)）。
+ //! 1. 土台の 14 本の行と要約の直前と種別の絞り／2. 0 本の写しと骨格で行が無い／3. 断りの道で行が無い／4. folio2 自身の 6 本。
+@@ -8,7 +8,7 @@
+ //! 便 156（docs/design/delivery-156.md §1 (c)）: 行 R-17 が無い置き場で数えなかった知らせの 1 行と、名札が置き場の規則の表に在る行だけを
+ //! 名指すこと（f156_ の 2 本）。便 203 で、外の置き場の名札 R-9〜R-11 は行を足しても検査の名、folio2 の置き場は行 id（f156_ の 2 本目）。土台は行 R-17 を持たないので、f131_ の 2 本の標準エラーにも知らせが機構の行の前に出る。
+ //! 便 200（docs/design/delivery-200.md §1 (d)）: 土台と骨格は欄 key が in-loop-min の行も持たないので、下限を数えなかった知らせが
+-//! 行 R-17 の知らせの次に出る（歯は tests/polarity.rs）。
++//! 行 R-17 の知らせの次に出る（歯は tests/tz4/polarity.rs）。
+ //! 便 202（docs/design/delivery-202.md §1 (e)）: 骨格（外の置き場）の知らせは folio2 の条の番号の項が落ちた字（IN_LOOP_OFF_ABROAD）。
+ //! 便 203（docs/design/delivery-203.md §1 (c)）: 骨格では、違反の名札（素の床・編集時の口・folio parts）が folio2 の id を名指さず
+ //! 検査の名になり（置き場が同じ id の条か行を持っても同じ）、まだ分からない の行から folio2 の番号の片が落ちる。同じ中身で名だけ
+diff --git a/folio2/crates/folio/tests/tz4/main.rs b/folio2/crates/folio/tests/tz4/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3b527d5398325a4e901815b920bef3c5761326de
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz4/main.rs
+@@ -0,0 +1,20 @@
++//! folio の歯の群 tz4（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/tz4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod note;
++mod outside_faces;
++mod parts;
++mod place_name;
++mod plan;
++mod polarity;
++mod proposed;
++mod prose;
++mod refs;
++mod resolve;
++mod ruling;
++mod schema;
++mod schema_docs;
++mod seal;
++mod sheet;
++mod site;
+diff --git a/folio2/crates/folio/tests/note.rs b/folio2/crates/folio/tests/tz4/note.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/note.rs
+rename to folio2/crates/folio/tests/tz4/note.rs
+diff --git a/folio2/crates/folio/tests/outside_faces.rs b/folio2/crates/folio/tests/tz4/outside_faces.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/outside_faces.rs
+rename to folio2/crates/folio/tests/tz4/outside_faces.rs
+index a1ac21f95c474b0dcf829995db1c69e622175afa..4a53cbe73eb1382466f5288d82d43a18e496f3e3 100644
+--- a/folio2/crates/folio/tests/outside_faces.rs
++++ b/folio2/crates/folio/tests/tz4/outside_faces.rs
+@@ -39,7 +39,7 @@ fn copy_dir(from: &Path, to: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/init.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz3/init.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+diff --git a/folio2/crates/folio/tests/parts.rs b/folio2/crates/folio/tests/tz4/parts.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/parts.rs
+rename to folio2/crates/folio/tests/tz4/parts.rs
+index 145b260caac5f5a560bce532b8c1abd37086446f..8521f8aec4b8773c59280e62f188b30bac3fc754 100644
+--- a/folio2/crates/folio/tests/parts.rs
++++ b/folio2/crates/folio/tests/tz4/parts.rs
+@@ -2,7 +2,7 @@
+ //! 生成した 3 面（folio build を一時 dir へ・手書きの見本は退役済み 2026-09-18）で合格・目録外の class / 部品 / 面に置けない部品 / 許されない行内の様式で不合格（変異は写しに 1 つずつ）・
+ //! 読めない入力 6 つで終了 2・独立した凍結 fixture（tests/fixtures/floor/）の合格と不合格と --print の byte 一致。
+ //! 便 52（delivery-52.md §1 (d) 3・4）: 実行時の一致 = 部品目録の上限か図の型の名札を変えた写しで --check が「まだ分からない」。
+-//! build.rs を path で取り込む歯（関数 `parts_catalog` を直に呼ぶ）は folio の package の歯 tests/parts_catalog.rs
++//! build.rs を path で取り込む歯（関数 `parts_catalog` を直に呼ぶ）は folio の package の歯 tests/teeth1/parts_catalog.rs
+ //! （行 k-tz-tests・この file は境界の package の歯として tz の binary を撃つ）。
+ #![cfg(test)]
+ 
+diff --git a/folio2/crates/folio/tests/place_name.rs b/folio2/crates/folio/tests/tz4/place_name.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/place_name.rs
+rename to folio2/crates/folio/tests/tz4/place_name.rs
+index 5737ebe9dd916f7a2b9143ba71a24d554b504090..9d1c68b849027d77b63e446013db0547ce5fdafa 100644
+--- a/folio2/crates/folio/tests/place_name.rs
++++ b/folio2/crates/folio/tests/tz4/place_name.rs
+@@ -231,7 +231,7 @@ fn f154_the_skeleton_shows_no_name() {
+ }
+ 
+ /// 歯 3（folio2 自身）:repo の design-intent の組み立ては 0 で面 4 枚が folio2 / f2・写しの支度表は folio2・
+-/// 床の凍結の土台の写しの始まりの凍結の 3 file の頭の注は「# folio2 」（tests/freeze_root.rs の歯 4 と同じ作り方）。
++/// 床の凍結の土台の写しの始まりの凍結の 3 file の頭の注は「# folio2 」（tests/tz3/freeze_root.rs の歯 4 と同じ作り方）。
+ #[test]
+ fn f154_folio2_keeps_its_own_name() {
+     let w = Work::empty("folio2");
+diff --git a/folio2/crates/folio/tests/plan.rs b/folio2/crates/folio/tests/tz4/plan.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/plan.rs
+rename to folio2/crates/folio/tests/tz4/plan.rs
+diff --git a/folio2/crates/folio/tests/polarity.rs b/folio2/crates/folio/tests/tz4/polarity.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/polarity.rs
+rename to folio2/crates/folio/tests/tz4/polarity.rs
+index 65af87e0cc7a01a940678a4725a237e997f637c8..6716e2c808ad722f91b0cc9efaee7ed13f16e94d 100644
+--- a/folio2/crates/folio/tests/polarity.rs
++++ b/folio2/crates/folio/tests/tz4/polarity.rs
+@@ -1,6 +1,6 @@
+ //! 極性一覧の口と編集時の止めの下限の歯（便 200・docs/design/delivery-200.md §1 (e)・判断の記録 ADR-33 決定 (5)・要件書 FR29・AC32）。
+ //! folio は実行 file の crate なので命令を撃つ。写しは床の土台（tests/fixtures/floor_base/design-intent）を一時 dir に design-intent/ として作り、
+-//! 置き場の親の contracts/ に器の導出 file を写し、git init と 1 commit を行う（tests/mechanism_live.rs と同じ作り方・歯の終わりに消す）。
++//! 置き場の親の contracts/ に器の導出 file を写し、git init と 1 commit を行う（tests/tz3/mechanism_live.rs と同じ作り方・歯の終わりに消す）。
+ //! 凍結 anchor（P-10.1）は、土台の正本を歯の側で手で数えた本数と行の字（folio の code から組まない）。
+ //! 1. 土台の極性一覧の行の数と集計の 1 行／2. 下限の行の値を割る写しは素の床が違反 1・足りる写しは合格／
+ //! 3. 下限の行が 2 本の写しは まだ分からない／4. 値の形が違う写しは まだ分からない／5. 下限の行が無い写しは数えなかった 1 行／
+diff --git a/folio2/crates/folio/tests/proposed.rs b/folio2/crates/folio/tests/tz4/proposed.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/proposed.rs
+rename to folio2/crates/folio/tests/tz4/proposed.rs
+diff --git a/folio2/crates/folio/tests/prose.rs b/folio2/crates/folio/tests/tz4/prose.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/prose.rs
+rename to folio2/crates/folio/tests/tz4/prose.rs
+diff --git a/folio2/crates/folio/tests/refs.rs b/folio2/crates/folio/tests/tz4/refs.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/refs.rs
+rename to folio2/crates/folio/tests/tz4/refs.rs
+diff --git a/folio2/crates/folio/tests/resolve.rs b/folio2/crates/folio/tests/tz4/resolve.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/resolve.rs
+rename to folio2/crates/folio/tests/tz4/resolve.rs
+diff --git a/folio2/crates/folio/tests/ruling.rs b/folio2/crates/folio/tests/tz4/ruling.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/ruling.rs
+rename to folio2/crates/folio/tests/tz4/ruling.rs
+index a3f2682476eeb24dfe4e0c3036427c8628bdc455..d7a1343e6a01a10eed03c222042cf3fa8b49b904 100644
+--- a/folio2/crates/folio/tests/ruling.rs
++++ b/folio2/crates/folio/tests/tz4/ruling.rs
+@@ -109,7 +109,7 @@ fn f181_a_rules_row_without_a_ledger_id_is_one_violation() {
+ }
+ 
+ /// 歯 2: 決定の欄の閉じた一覧の各種類（憲法の発効の承認と改訂来歴・閾値と開発規律の行・判断の記録の承認欄・5 正本の
+-/// 承認欄の行の stamp）の 1 つから台帳の id を消すと、その欄の違反がちょうど 1 つ出る。設計ノートは tests/note.rs の f161_。
++/// 承認欄の行の stamp）の 1 つから台帳の id を消すと、その欄の違反がちょうど 1 つ出る。設計ノートは tests/tz4/note.rs の f161_。
+ #[test]
+ fn f181_each_kind_of_decision_field_is_read() {
+     let cases = [
+diff --git a/folio2/crates/folio/tests/schema.rs b/folio2/crates/folio/tests/tz4/schema.rs
+similarity index 98%
+rename from folio2/crates/folio/tests/schema.rs
+rename to folio2/crates/folio/tests/tz4/schema.rs
+index 00c78868a3ffa0abb5bc533b1f8edf0255ea9be8..30ab1db53bf0416865a381d4203fade31fc8b805 100644
+--- a/folio2/crates/folio/tests/schema.rs
++++ b/folio2/crates/folio/tests/tz4/schema.rs
+@@ -5,7 +5,7 @@
+ //! 4. 書き直し: ずれた写しに --write → 0・file 全体が元と byte 一致。もう 1 度 → 0・「変わらない」。
+ //! 5. 旗: --write と --check の両方・どちらも無し → 2。
+ //! 6. file が無い置き場 → 2・「読めない」。
+-//! 7. 床は印を見ない: 印 2 本を消した写しに folio check → 合格（git init 済みの写し・tests/ceiling.rs の Work と同じ作り方）。
++//! 7. 床は印を見ない: 印 2 本を消した写しに folio check → 合格（git init 済みの写し・tests/tz1/ceiling.rs の Work と同じ作り方）。
+ //!
+ //! 便 46（docs/design/delivery-46.md §1 (d)）: 命令は 2 本目の file design-note/schema.yaml も順に見る（合格の標準出力は 2 行）。
+ //! 8. 設計ノートの側の実の正本: --check → 0・2 行目に「design-note/schema.yaml」「15305 byte」・生成区間の要約値が (c) の値。
+@@ -30,7 +30,7 @@
+ //! 便 130（docs/design/delivery-130.md §1 (b)(c)(e)）: 判断の記録の側の注 5 か所と設計ノートの側の注 index_note の古い字を直した
+ //! （1 の定数を 25693 byte、8 の定数を 16806 byte と新しい要約値に）。歯 f130_ の 2 本が古い字の不在と新しい字の在ることを見る。
+ //!
+-//! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/schema_docs.rs へ移した（字は 1 字も変えていない）。
++//! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/tz4/schema_docs.rs へ移した（字は 1 字も変えていない）。
+ #![cfg(test)]
+ use std::fs;
+ use std::io::Write;
+@@ -110,7 +110,7 @@ fn git(cwd: &Path, args: &[&str]) {
+     );
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/bundle.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/schema_docs.rs b/folio2/crates/folio/tests/tz4/schema_docs.rs
+similarity index 97%
+rename from folio2/crates/folio/tests/schema_docs.rs
+rename to folio2/crates/folio/tests/tz4/schema_docs.rs
+index 3ad74a28638a30edd277777826fd6594fdc392a3..c74947ed76bfbcd8382b27bb913ffbfe2febe089 100644
+--- a/folio2/crates/folio/tests/schema_docs.rs
++++ b/folio2/crates/folio/tests/tz4/schema_docs.rs
+@@ -1,6 +1,6 @@
+ //! 命令 folio schema が見る 9 本のうち、欄の決まりの 2 本を除いた 7 本の正本（ceiling.yaml・rules.yaml・index.yaml・srs.yaml・vocabulary.yaml・intake.yaml・graph.yaml）の側の歯。
+-//! 便 89（docs/design/delivery-89.md §1 (b)）で tests/schema.rs から 1 字も変えずに移した（歯の関数名も凍結の定数の値も不変）。
+-//! helper（repo_root から region まで）は tests/schema.rs の写し（歯の file どうしは互いに use できない）。
++//! 便 89（docs/design/delivery-89.md §1 (b)）で tests/tz4/schema.rs から 1 字も変えずに移した（歯の関数名も凍結の定数の値も不変）。
++//! helper（repo_root から region まで）は tests/tz4/schema.rs の写し（歯の file どうしは互いに use できない）。
+ //! 以下は移す前の頭の注釈（便ごとの歯の一覧）。
+ //!
+ //! 便 48（docs/design/delivery-48.md §1 (c)(d)）: 命令は 3 本目の file ceiling.yaml（天井の正本・生成区間は末尾）も順に見る（合格の標準出力は 3 行）。
+@@ -62,7 +62,7 @@
+ //! 便 175（delivery-175.md §1 (b)(c)）: 天井の正本の生成区間から trigger と trigger_note の 17 行が外れ、索引の欄の決まりの注から周の引き金の
+ //! 2 文が外れた（CEILING_REGION_*・F95_GRAPH_* を、前の anchor を行と字で直した写しを sha256sum で測り直した値に）。
+ //! 便 177（delivery-177.md §1 (b)(c)）: 索引の欄の決まりの注 digest_note から印の 1 文が外れた（F95_GRAPH_* を同じ手順で測り直した値に）。
+-//! 便 195（行 gp）: 索引の欄の決まりの生成区間の末尾に ids・mentions と 2 つの注を足した（F95_GRAPH_* を測り直した値に・写しの字の歯は tests/graph.rs）。
++//! 便 195（行 gp）: 索引の欄の決まりの生成区間の末尾に ids・mentions と 2 つの注を足した（F95_GRAPH_* を測り直した値に・写しの字の歯は tests/tz3/graph.rs）。
+ //! 便 197（delivery-197.md §1 (b)(d)）: 相談窓口の生成区間に回答の値の読み方と行き先の固定の値の写し 4 行（F77_REGIONS の intake.yaml を、
+ //! 前の anchor に 4 行を手で足した写しを sha256sum で測り直した 7 行・1644 byte と要約値に）。規則の表の除外の 2 行の字（RULES_REGION_* を 3512 byte と要約値に）。
+ //! 便 196: 要件書の生成区間の末尾に id の一覧の anchor の定数の写し ids_anchor の 7 行と注 1 行（F77_REGIONS の srs.yaml を測り直した値に）。
+@@ -188,7 +188,7 @@ fn git(cwd: &Path, args: &[&str]) {
+     );
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/bundle.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+@@ -1043,21 +1043,21 @@ const F89_MOVED_HEADS: [&str; 8] = [
+ #[test]
+ fn f89_schema_teeth_are_split_and_under_the_cap() {
+     let tests = repo_root().join("crates/folio/tests");
+-    let old = fs::read_to_string(tests.join("schema.rs")).expect("tests/schema.rs を読めない");
++    let old = fs::read_to_string(tests.join("tz4/schema.rs")).expect("tests/tz4/schema.rs を読めない");
+     let new =
+-        fs::read_to_string(tests.join("schema_docs.rs")).expect("tests/schema_docs.rs を読めない");
++        fs::read_to_string(tests.join("tz4/schema_docs.rs")).expect("tests/tz4/schema_docs.rs を読めない");
+     let old_size = f89_measure(&old);
+     let new_size = f89_measure(&new);
+-    assert!(old_size <= 700, "tests/schema.rs が器の式で {old_size} 行（700 以下のはず）");
+-    assert!(new_size <= 1200, "tests/schema_docs.rs が器の式で {new_size} 行（1200 以下のはず）");
++    assert!(old_size <= 700, "tests/tz4/schema.rs が器の式で {old_size} 行（700 以下のはず）");
++    assert!(new_size <= 1200, "tests/tz4/schema_docs.rs が器の式で {new_size} 行（1200 以下のはず）");
+     for head in F89_MOVED_HEADS {
+         assert!(
+             new.lines().any(|line| line.starts_with(head)),
+-            "tests/schema_docs.rs に「{head}」が無い"
++            "tests/tz4/schema_docs.rs に「{head}」が無い"
+         );
+         assert!(
+             !old.lines().any(|line| line.starts_with(head)),
+-            "tests/schema.rs に「{head}」が残っている"
++            "tests/tz4/schema.rs に「{head}」が残っている"
+         );
+     }
+ }
+diff --git a/folio2/crates/folio/tests/seal.rs b/folio2/crates/folio/tests/tz4/seal.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/seal.rs
+rename to folio2/crates/folio/tests/tz4/seal.rs
+index 884bae1eb86564a94a8fa27b25c244fb33c02dcb..807bc750c354cf50b387dfc046bdac3a9c3091d0 100644
+--- a/folio2/crates/folio/tests/seal.rs
++++ b/folio2/crates/folio/tests/tz4/seal.rs
+@@ -139,7 +139,7 @@ impl Drop for Work {
+     }
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/schema.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz4/schema.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> String {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/sheet.rs b/folio2/crates/folio/tests/tz4/sheet.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/sheet.rs
+rename to folio2/crates/folio/tests/tz4/sheet.rs
+index 999dbef133e65e83740539db180bf8e23b20847d..ce5815cef744bbd17f9fc1744374d9ec4566607a 100644
+--- a/folio2/crates/folio/tests/sheet.rs
++++ b/folio2/crates/folio/tests/tz4/sheet.rs
+@@ -320,7 +320,7 @@ fn sheet_needs_exactly_one_of_print_and_write() {
+ 
+ /// 子の役の印。値が親の process の id のときだけ子として走る。
+ const F160_CHILD: &str = "FOLIO_F160_CHILD";
+-const F160_NAME: &str = "f160_another_process_leaves_this_copy_alone";
++const F160_NAME: &str = "sheet::f160_another_process_leaves_this_copy_alone";
+ /// 子が標準エラーに出す path の行の頭。
+ const F160_LINE: &str = "f160-child-path: ";
+ 
+diff --git a/folio2/crates/folio/tests/site.rs b/folio2/crates/folio/tests/tz4/site.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/site.rs
+rename to folio2/crates/folio/tests/tz4/site.rs
+index 14b398cdf9c0a46f4fddd09707e812bcd8da68d1..fe96ce4c1b79c94ed5e5eb54fb242bd02669c49c 100644
+--- a/folio2/crates/folio/tests/site.rs
++++ b/folio2/crates/folio/tests/tz4/site.rs
+@@ -567,7 +567,7 @@ fn site_write_keeps_the_other_files_in_the_out_dir() {
+ 
+ // ── 構造の床（便 56・FR5）──
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/schema.rs と同じ形）。
++/// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz4/schema.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+     for (key, _) in std::env::vars_os() {
+@@ -596,7 +596,7 @@ fn git(cwd: &Path, args: &[&str]) {
+ }
+ 
+ /// 実の設計文書の置き場 design-intent と器の導出 file と図の道具を一時 dir へ写す。`commit` なら git の 1 commit にする
+-/// （床が合格する写し・tests/schema.rs の Work と同じ形）。戻り値 = (一時 dir, 正本の写し)。
++/// （床が合格する写し・tests/tz4/schema.rs の Work と同じ形）。戻り値 = (一時 dir, 正本の写し)。
+ fn real_copy(case: &str, commit: bool) -> (PathBuf, PathBuf) {
+     let td = temp_dir(case);
+     let dir = td.join("design-intent");
+diff --git a/folio2/crates/folio/tests/tz5/main.rs b/folio2/crates/folio/tests/tz5/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..61a7acd02ff6c3a19cf0b9a102e38b838fb23c16
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz5/main.rs
+@@ -0,0 +1,7 @@
++//! folio の歯の群 tz5（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/tz5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod stamp;
++mod unknown_fields;
++mod vocab;
+diff --git a/folio2/crates/folio/tests/stamp.rs b/folio2/crates/folio/tests/tz5/stamp.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/stamp.rs
+rename to folio2/crates/folio/tests/tz5/stamp.rs
+index cb3ee7145e1935cfe4655feb5ab1723c139cb0d6..869f6b3f890b90783269008e0ff4271c30c6d705 100644
+--- a/folio2/crates/folio/tests/stamp.rs
++++ b/folio2/crates/folio/tests/tz5/stamp.rs
+@@ -262,7 +262,7 @@ fn value<'a>(stamp: &'a str, key: &str) -> &'a str {
+         .unwrap_or_else(|| panic!("印に {key} が無い: {stamp}"))
+ }
+ 
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/schema.rs と同じ形）。
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/tz4/schema.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+         .stdin(Stdio::piped())
+diff --git a/folio2/crates/folio/tests/unknown_fields.rs b/folio2/crates/folio/tests/tz5/unknown_fields.rs
+similarity index 99%
+rename from folio2/crates/folio/tests/unknown_fields.rs
+rename to folio2/crates/folio/tests/tz5/unknown_fields.rs
+index 7b447bd4cbf284a43197ad97b817b08415e5361a..077550b3653ee54b2fa09e630c1aea3401e66264 100644
+--- a/folio2/crates/folio/tests/unknown_fields.rs
++++ b/folio2/crates/folio/tests/tz5/unknown_fields.rs
+@@ -3,7 +3,7 @@
+ //! すること、meta・前文・前文の mechanism・条の mechanism が表でない形と mechanism の必須の欄 kind・live の欠けを種別 schema の
+ //! 違反にすることの歯。憲法の 5 部位の一覧は道具を組み立てた憲法の正本から導出したもの、規則の表の行の一覧は床の定数で、
+ //! 置き場の schema 節と生成区間は読まない。
+-//! 土台は design-intent の写し（git の 1 commit・tests/constitution_range.rs の Work と同じ形）で、写しの字面に変異を当てて
++//! 土台は design-intent の写し（git の 1 commit・tests/tz1/constitution_range.rs の Work と同じ形）で、写しの字面に変異を当てて
+ //! `folio check` を撃つ。歯は標準出力の違反の行（`[` で始まる行）を全部数える。変異で足す欄の値は id の形を含まない字にする。
+ #![cfg(test)]
+ 
+diff --git a/folio2/crates/folio/tests/vocab.rs b/folio2/crates/folio/tests/tz5/vocab.rs
+similarity index 100%
+rename from folio2/crates/folio/tests/vocab.rs
+rename to folio2/crates/folio/tests/tz5/vocab.rs
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index fe8c5476bac8127e4adb6457cc93cb1b36135560..ba3321d19720334f29f2f4ba434784c61f876319 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -23,6 +23,12 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-surface/tests/teeth3", 30),
+     ("crates/tsuzuri-surface/tests/teeth4", 31),
+     ("crates/tsuzuri-surface/tests/teeth5", 25),
++    ("folio2/crates/folio/tests/teeth1", 7),
++    ("folio2/crates/folio/tests/tz1", 12),
++    ("folio2/crates/folio/tests/tz2", 10),
++    ("folio2/crates/folio/tests/tz3", 17),
++    ("folio2/crates/folio/tests/tz4", 16),
++    ("folio2/crates/folio/tests/tz5", 3),
+     ("xtask/tests/teeth1", 9),
+     // kfold-groups-end
+ ];

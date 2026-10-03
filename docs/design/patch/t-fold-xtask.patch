@@ -1,0 +1,354 @@
+diff --git a/xtask/tests/carry.rs b/xtask/tests/teeth1/carry.rs
+similarity index 99%
+rename from xtask/tests/carry.rs
+rename to xtask/tests/teeth1/carry.rs
+index 7c4908b9b2e6c143ed55f7a4cd832e584b984aa8..284656e5b797ebbced483fe49d4a7ff4371322b8 100644
+--- a/xtask/tests/carry.rs
++++ b/xtask/tests/teeth1/carry.rs
+@@ -617,7 +617,7 @@ const WORDS: &[&str] = &[
+ #[test]
+ fn cexcl_own_names_clean() {
+     assert_eq!(WORDS.len(), 294);
+-    let text = read("xtask/tests/carry.rs");
++    let text = read("xtask/tests/teeth1/carry.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/xtask/tests/cishard.rs b/xtask/tests/teeth1/cishard.rs
+similarity index 100%
+rename from xtask/tests/cishard.rs
+rename to xtask/tests/teeth1/cishard.rs
+diff --git a/xtask/tests/deny.rs b/xtask/tests/teeth1/deny.rs
+similarity index 99%
+rename from xtask/tests/deny.rs
+rename to xtask/tests/teeth1/deny.rs
+index c48e322b41ea945e87586255de04623bb4d5326f..b4b7017181712af50964c404571f8b65946a8381 100644
+--- a/xtask/tests/deny.rs
++++ b/xtask/tests/teeth1/deny.rs
+@@ -545,7 +545,7 @@ const WORDS: &[&str] = &[
+ #[test]
+ fn kdeny_own_names_clean() {
+     assert_eq!(WORDS.len(), 321);
+-    let text = read("xtask/tests/deny.rs");
++    let text = read("xtask/tests/teeth1/deny.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0f763e1ba43c10c9c7be7add1d582d16b4073644
+--- /dev/null
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -0,0 +1,123 @@
++//! 段の束ね（判断の記録 ADR-32）の歯（接頭辞 kfold_）: 歯の群 tests/<群>/main.rs が群の dir の .rs を全部 1 度だけ mod の行で名指すこと
++//! （名指さない file は組まれず歯が黙って消える）・群と module の数が表 GROUPS のとおりであること
++//! （#[test] の fn の名の一意は行 t-fold-contract が足す・器は歯を fn の名だけで照らす）。表は畳みの行が w/fold2.py と同じ手で書き直す。
++//! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
++#![cfg(test)]
++
++use std::collections::{BTreeMap, BTreeSet};
++use std::path::{Path, PathBuf};
++
++/// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
++const GROUPS: &[(&str, usize)] = &[
++    // kfold-groups-begin
++    ("xtask/tests/teeth1", 9),
++    // kfold-groups-end
++];
++
++fn repo_root() -> PathBuf {
++    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
++    manifest
++        .parent()
++        .map_or_else(|| manifest.join(".."), Path::to_path_buf)
++}
++
++fn read(path: &Path) -> String {
++    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
++}
++
++/// 根の Cargo.toml の members の dir。
++fn members() -> Vec<String> {
++    let text = read(&repo_root().join("Cargo.toml"));
++    let start = text.find("members = [").expect("members の表");
++    let end = start + text[start..].find(']').expect("members の終わり");
++    text[start..end]
++        .split('"')
++        .skip(1)
++        .step_by(2)
++        .map(str::to_string)
++        .collect()
++}
++
++/// member の tests/ の直下の、main.rs を持つ dir（群・path の順）。
++fn groups_of(member: &str) -> Vec<PathBuf> {
++    let tests = repo_root().join(member).join("tests");
++    let Ok(entries) = std::fs::read_dir(&tests) else {
++        return Vec::new();
++    };
++    let mut out: Vec<PathBuf> = entries
++        .map(|e| e.expect("tests の項目").path())
++        .filter(|p| p.join("main.rs").is_file())
++        .collect();
++    out.sort();
++    out
++}
++
++/// 群の dir の module の名（main.rs を除く .rs の stem と、mod.rs を持つ dir の名）。
++fn modules_on_disk(group: &Path) -> BTreeSet<String> {
++    let mut out = BTreeSet::new();
++    for entry in std::fs::read_dir(group).expect("群の dir を読む") {
++        let path = entry.expect("群の項目").path();
++        let name = path
++            .file_name()
++            .and_then(|n| n.to_str())
++            .expect("項目の名")
++            .to_string();
++        if path.is_dir() && path.join("mod.rs").is_file() {
++            out.insert(name);
++        } else if let Some(stem) = name.strip_suffix(".rs").filter(|s| *s != "main") {
++            out.insert(stem.to_string());
++        }
++    }
++    out
++}
++
++/// main.rs の行 `mod <名>;` の名（出てきた順・重なりも数える・#[path] の付いた mod は群の dir の外の file なので除く）。
++fn declared(group: &Path) -> Vec<String> {
++    let text = read(&group.join("main.rs"));
++    let mut out = Vec::new();
++    let mut pathed = false;
++    for line in text.lines().map(str::trim) {
++        if let Some(name) = line.strip_prefix("mod ").and_then(|r| r.strip_suffix(';')) {
++            if !pathed {
++                out.push(name.to_string());
++            }
++            pathed = false;
++        } else if line.starts_with("#[path") {
++            pathed = true;
++        }
++    }
++    out
++}
++
++#[test]
++fn kfold_groups_declare_every_module_once() {
++    let root = repo_root();
++    let mut seen: BTreeMap<String, usize> = BTreeMap::new();
++    for member in members() {
++        for group in groups_of(&member) {
++            let decl = declared(&group);
++            let set: BTreeSet<String> = decl.iter().cloned().collect();
++            assert_eq!(
++                set.len(),
++                decl.len(),
++                "{} の mod の行が重なる",
++                group.display()
++            );
++            assert_eq!(
++                set,
++                modules_on_disk(&group),
++                "{} の mod の行と dir の file",
++                group.display()
++            );
++            let rel = group
++                .strip_prefix(&root)
++                .expect("根の下")
++                .to_string_lossy()
++                .into_owned();
++            seen.insert(rel, set.len());
++        }
++    }
++    let want: BTreeMap<String, usize> =
++        GROUPS.iter().map(|(g, n)| ((*g).to_string(), *n)).collect();
++    assert_eq!(seen, want, "群と module の数");
++}
+diff --git a/xtask/tests/klint.rs b/xtask/tests/teeth1/klint.rs
+similarity index 99%
+rename from xtask/tests/klint.rs
+rename to xtask/tests/teeth1/klint.rs
+index e5c9fc0618541c0af21b9a1e56db8ccdf6d5b49d..76f4a91f369e3c50010eabe0a1d549508aa0a905 100644
+--- a/xtask/tests/klint.rs
++++ b/xtask/tests/teeth1/klint.rs
+@@ -460,7 +460,7 @@ fn klint_print_hands() {
+ #[test]
+ fn klint_r4_no_attr_exceptions() {
+     let root = repo_root();
+-    let own = root.join("xtask/tests/klint.rs");
++    let own = root.join("xtask/tests/teeth1/klint.rs");
+     let mut marks: Vec<String> = MAP
+         .iter()
+         .filter(|m| m.3 == "R-4")
+@@ -493,7 +493,7 @@ fn klint_r4_no_attr_exceptions() {
+ 
+ #[test]
+ fn klint_own_names_clean() {
+-    let text = read("xtask/tests/klint.rs");
++    let text = read("xtask/tests/teeth1/klint.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/xtask/tests/klintf.rs b/xtask/tests/teeth1/klintf.rs
+similarity index 99%
+rename from xtask/tests/klintf.rs
+rename to xtask/tests/teeth1/klintf.rs
+index 39bda912566e5aa67e5fb6af8c70098390ff6969..16b47c5a92b2b2a8145b4e538973ef2b409f68bf 100644
+--- a/xtask/tests/klintf.rs
++++ b/xtask/tests/teeth1/klintf.rs
+@@ -200,8 +200,8 @@ fn klintf_no_allow_attrs() {
+ fn klintf_own_names_clean() {
+     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
+     assert_eq!(words.len(), 357, "filter の語の数");
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/klintf.rs");
+-    let text = fs::read_to_string(&path).expect("tests/klintf.rs を読む");
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/klintf.rs");
++    let text = fs::read_to_string(&path).expect("tests/teeth1/klintf.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/xtask/tests/teeth1/main.rs b/xtask/tests/teeth1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6542ae7572d35db8f6bf9aeee50fa69bec8b645
+--- /dev/null
++++ b/xtask/tests/teeth1/main.rs
+@@ -0,0 +1,13 @@
++//! xtask の歯の群 teeth1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod carry;
++mod cishard;
++mod deny;
++mod kfold;
++mod klint;
++mod klintf;
++mod ntmo;
++mod retire;
++mod tlic;
+diff --git a/xtask/tests/ntmo.rs b/xtask/tests/teeth1/ntmo.rs
+similarity index 100%
+rename from xtask/tests/ntmo.rs
+rename to xtask/tests/teeth1/ntmo.rs
+diff --git a/xtask/tests/retire.rs b/xtask/tests/teeth1/retire.rs
+similarity index 84%
+rename from xtask/tests/retire.rs
+rename to xtask/tests/teeth1/retire.rs
+index 9cf97e1599671b5ddb9dac0bc5dafdfb8e8d39d4..7f449f7c768951fd6f3a8754dfad544022e271e4 100644
+--- a/xtask/tests/retire.rs
++++ b/xtask/tests/teeth1/retire.rs
+@@ -5,7 +5,7 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
++use std::path::{Path, PathBuf};
+ 
+ const FOLIO2: &str = "folio2";
+ const RETIRED: &str = "folio2/retired";
+@@ -204,36 +204,75 @@ fn f2ret_folio_binary_retired() {
+     assert!(lines.contains(&"autotests = false"), "folio の manifest に autotests = false が無い");
+ }
+ 
+-#[test]
+-fn f2ret_folio_tests_named_once() {
+-    let tests_dir = repo_root().join(FOLIO).join("tests");
+-    let mut files: BTreeSet<String> = BTreeSet::new();
+-    for entry in std::fs::read_dir(&tests_dir).expect("folio の tests/ を読む") {
++/// folio の tests/ の歯の単位: 直下の .rs（段）の stem と、main.rs を持つ dir（群・判断の記録 ADR-32）の名。
++fn folio_units(tests_dir: &Path) -> BTreeSet<String> {
++    let mut units = BTreeSet::new();
++    for entry in std::fs::read_dir(tests_dir).expect("folio の tests/ を読む") {
+         let path = entry.expect("tests/ の項目").path();
+-        if let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".rs")) {
+-            files.insert(name.to_string());
++        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
++            continue;
++        };
++        if let Some(stem) = name.strip_suffix(".rs") {
++            units.insert(stem.to_string());
++        } else if path.join("main.rs").is_file() {
++            units.insert(name.to_string());
+         }
+     }
++    units
++}
++
++/// 歯の単位の根の path（tests/ からの字）と、単位の歯の file（群は main.rs を除く .rs）。
++fn unit_root_and_files(tests_dir: &Path, name: &str) -> (String, Vec<PathBuf>) {
++    let single = tests_dir.join(format!("{name}.rs"));
++    if single.is_file() {
++        return (format!("tests/{name}.rs"), vec![single]);
++    }
++    let mut files: Vec<PathBuf> = std::fs::read_dir(tests_dir.join(name))
++        .expect("群の dir を読む")
++        .map(|e| e.expect("群の項目").path())
++        .filter(|p| p.extension().is_some_and(|x| x == "rs") && !p.ends_with("main.rs"))
++        .collect();
++    files.sort();
++    (format!("tests/{name}/main.rs"), files)
++}
++
++#[test]
++fn f2ret_folio_tests_named_once() {
++    let tests_dir = repo_root().join(FOLIO).join("tests");
++    let units = folio_units(&tests_dir);
+     let folio_tables = test_tables(&format!("{FOLIO}/Cargo.toml"));
+-    assert!(folio_tables.iter().all(|(_, path)| path.is_empty()), "folio の表に path が在る");
++    for (name, path) in &folio_tables {
++        let root = unit_root_and_files(&tests_dir, name).0;
++        let plain = path.is_empty() && root == format!("tests/{name}.rs");
++        assert!(plain || *path == root, "folio の {name} の path {path}");
++    }
+     let folio: BTreeSet<String> = folio_tables.into_iter().map(|(name, _)| name).collect();
+     let boundary_tables = test_tables(BOUNDARY_MANIFEST);
+     for (name, path) in &boundary_tables {
+-        assert_eq!(path, &format!("../../{FOLIO}/tests/{name}.rs"), "{name} の path");
++        let root = unit_root_and_files(&tests_dir, name).0;
++        assert_eq!(path, &format!("../../{FOLIO}/{root}"), "{name} の path");
+     }
+     let boundary: BTreeSet<String> = boundary_tables.into_iter().map(|(name, _)| name).collect();
+     assert!(folio.is_disjoint(&boundary), "2 つの manifest が同じ歯を名指す");
+     let named: BTreeSet<String> = folio.union(&boundary).cloned().collect();
+-    assert_eq!(files, named, "tests/ の file と 2 つの manifest の表の名の和");
++    assert_eq!(units, named, "tests/ の歯の単位と 2 つの manifest の表の名の和");
+     let mut with_tz: BTreeSet<String> = BTreeSet::new();
+-    for name in &files {
+-        let text = std::fs::read_to_string(tests_dir.join(format!("{name}.rs"))).expect("歯の file を読む");
+-        assert!(!text.contains("CARGO_BIN_EXE_folio"), "{name} が folio の binary を撃つ");
+-        if text.contains("CARGO_BIN_EXE_tz") {
+-            with_tz.insert(name.clone());
++    let mut without_tz: BTreeSet<String> = BTreeSet::new();
++    for name in &units {
++        let files = unit_root_and_files(&tests_dir, name).1;
++        assert!(!files.is_empty(), "{name} に歯の file が無い");
++        for file in &files {
++            let text = std::fs::read_to_string(file).expect("歯の file を読む");
++            assert!(!text.contains("CARGO_BIN_EXE_folio"), "{} が folio を撃つ", file.display());
++            if text.contains("CARGO_BIN_EXE_tz") {
++                with_tz.insert(name.clone());
++            } else {
++                without_tz.insert(name.clone());
++            }
+         }
+     }
+-    assert_eq!(with_tz, boundary, "tz の binary を撃つ file と境界の manifest の表");
++    assert_eq!(with_tz, boundary, "tz を撃つ file を持つ単位と境界の manifest の表");
++    assert!(without_tz.is_disjoint(&boundary), "境界の単位に tz を撃たない file が在る");
+ }
+ 
+ /// 起草の時の main 58c1da55 の契約表の verify の最後の字（この行の語を除く）。
+@@ -560,8 +599,8 @@ const WORDS: &[&str] = &[
+ #[test]
+ fn f2ret_own_names_clean() {
+     assert_eq!(WORDS.len(), 317);
+-    let text = std::fs::read_to_string(repo_root().join("xtask/tests/retire.rs"))
+-        .expect("xtask/tests/retire.rs を読む");
++    let text = std::fs::read_to_string(repo_root().join("xtask/tests/teeth1/retire.rs"))
++        .expect("xtask/tests/teeth1/retire.rs を読む");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/xtask/tests/tlic.rs b/xtask/tests/teeth1/tlic.rs
+similarity index 100%
+rename from xtask/tests/tlic.rs
+rename to xtask/tests/teeth1/tlic.rs

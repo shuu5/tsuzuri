@@ -1,0 +1,482 @@
+diff --git a/crates/tsuzuri-contract/tests/acctdoc.rs b/crates/tsuzuri-contract/tests/teeth1/acctdoc.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/acctdoc.rs
+rename to crates/tsuzuri-contract/tests/teeth1/acctdoc.rs
+diff --git a/crates/tsuzuri-contract/tests/cform_board.rs b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+similarity index 97%
+rename from crates/tsuzuri-contract/tests/cform_board.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+index d5306b1d4eebafa5e4e52a6a6d42e0e76da257b6..6ac825d5d5e7a4b1c81c35235a181daf07682252 100644
+--- a/crates/tsuzuri-contract/tests/cform_board.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use std::collections::BTreeSet;
+ 
+@@ -142,17 +142,17 @@ fn account_forms() -> Vec<Box<dyn Form>> {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_board_snapshot_matches() {
+     common::snapshot_matches("board", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_board_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+ 
+ #[test]
+-fn contract_form_closed_lists() {
++fn contract_form_board_closed_lists() {
+     assert_eq!(distinct(&NextMove::ALL), 7);
+     assert_eq!(distinct(&LedgerJudge::ALL), 5);
+     assert_eq!(distinct(&Stage::ALL), 8);
+diff --git a/crates/tsuzuri-contract/tests/cform_case.rs b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+similarity index 99%
+rename from crates/tsuzuri-contract/tests/cform_case.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+index a000d94e967b72f4f2ad27d2f9780cadfaf43058..46c932e916a2ed060b9a29cb5f1950647ac118ac 100644
+--- a/crates/tsuzuri-contract/tests/cform_case.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use common::{AT, Form, form};
+ use tsuzuri_contract::board::Reading;
+diff --git a/crates/tsuzuri-contract/tests/cform_graph.rs b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+similarity index 98%
+rename from crates/tsuzuri-contract/tests/cform_graph.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+index f4fddd6c9ae12fb2d87643622bc3dd31bd125b62..a870ac2a91f971401a682db2c7f2a576543643e5 100644
+--- a/crates/tsuzuri-contract/tests/cform_graph.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use common::{Form, distinct, form};
+ use tsuzuri_contract::graph::{
+@@ -377,17 +377,17 @@ fn unread_doc() -> GraphDoc {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_graph_snapshot_matches() {
+     common::snapshot_matches("graph", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_graph_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+ 
+ #[test]
+-fn contract_form_closed_lists() {
++fn contract_form_graph_closed_lists() {
+     assert_eq!(distinct(&NodeKind::ALL), 20);
+     assert_eq!(distinct(&EdgeType::ALL), 32);
+     assert_eq!(distinct(&GraphSource::ALL), 3);
+diff --git a/crates/tsuzuri-contract/tests/cform_ledger.rs b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+similarity index 99%
+rename from crates/tsuzuri-contract/tests/cform_ledger.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+index e334e89331cc4c4bf1f526219976badd06c831fb..e154bf784b2b4830693703a1764897c3619dc34f 100644
+--- a/crates/tsuzuri-contract/tests/cform_ledger.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use std::collections::BTreeSet;
+ 
+@@ -263,12 +263,12 @@ fn own_questions() -> QuestionList {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_ledger_snapshot_matches() {
+     common::snapshot_matches("ledger", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_ledger_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+ 
+diff --git a/crates/tsuzuri-contract/tests/cform_seat.rs b/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
+similarity index 97%
+rename from crates/tsuzuri-contract/tests/cform_seat.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
+index 7214165ac298775927e8753846fdd507517f5850..c2490f4fd79f05d519b3277beaebfd8f60b23e5e 100644
+--- a/crates/tsuzuri-contract/tests/cform_seat.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_seat.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use common::{AT, Form, distinct, form};
+ use tsuzuri_contract::board::{GroupRow, QuotaLeft, Reading};
+@@ -188,17 +188,17 @@ fn seat_card() -> SeatCard {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_seat_snapshot_matches() {
+     common::snapshot_matches("seat", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_seat_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+ 
+ #[test]
+-fn contract_form_closed_lists() {
++fn contract_form_seat_closed_lists() {
+     assert_eq!(distinct(&SeatState::ALL), 5);
+     let seat_words: Vec<String> = SeatState::ALL
+         .iter()
+diff --git a/crates/tsuzuri-contract/tests/cform_stats.rs b/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
+similarity index 97%
+rename from crates/tsuzuri-contract/tests/cform_stats.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
+index 5162c8be0b2955f8053ce259d3b98c9c61e970db..c58e8fc582049aa1a490b1eeaf75e20858d524bb 100644
+--- a/crates/tsuzuri-contract/tests/cform_stats.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_stats.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use common::{AT, Form, bead, distinct, form};
+ use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
+@@ -200,17 +200,17 @@ fn ledger_stats() -> LedgerStats {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_stats_snapshot_matches() {
+     common::snapshot_matches("stats", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_stats_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+ 
+ #[test]
+-fn contract_form_closed_lists() {
++fn contract_form_stats_closed_lists() {
+     assert_eq!(distinct(&CheckResult::ALL), 3);
+     assert_eq!(distinct(&UnreflectedKind::ALL), 3);
+ }
+diff --git a/crates/tsuzuri-contract/tests/cform_surface.rs b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+similarity index 98%
+rename from crates/tsuzuri-contract/tests/cform_surface.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+index c36f6949b1b4cc9205aee6c74db93598e66163f7..786b8ec69564cd3b0d422f176de655c59ea75811 100644
+--- a/crates/tsuzuri-contract/tests/cform_surface.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+@@ -4,7 +4,7 @@
+ //! 字が違えば今の字を CARGO_TARGET_TMPDIR の群の名の json に書いて落ちる（見て正しければ snapshot へ写す）。
+ #![cfg(test)]
+ 
+-mod common;
++use crate::common;
+ 
+ use common::{AT, Form, bead, form, ruling};
+ use tsuzuri_contract::board::{NextMove, Stage};
+@@ -239,11 +239,11 @@ fn policy_forms(refusals: Vec<Refusal>) -> Vec<Box<dyn Form>> {
+ }
+ 
+ #[test]
+-fn contract_form_snapshot_matches() {
++fn contract_form_surface_snapshot_matches() {
+     common::snapshot_matches("surface", &forms());
+ }
+ 
+ #[test]
+-fn contract_form_roundtrip_all_types() {
++fn contract_form_surface_roundtrip_all_types() {
+     common::roundtrip_all(&forms());
+ }
+diff --git a/crates/tsuzuri-contract/tests/cfsplit.rs b/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
+similarity index 90%
+rename from crates/tsuzuri-contract/tests/cfsplit.rs
+rename to crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
+index e2997042942585868452d6c673f55bcb4b1fd5e0..3caf733d3104e490a68ecc294e5ae402a85f0e6c 100644
+--- a/crates/tsuzuri-contract/tests/cfsplit.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cfsplit.rs
+@@ -132,6 +132,11 @@ fn tests_dir() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
+ }
+ 
++/// 群の歯の file と共通の手の置き場（判断の記録 ADR-32 の群 teeth1）。
++fn group_dir() -> PathBuf {
++    tests_dir().join("teeth1")
++}
++
+ /// 群の json の object。
+ fn read(group: &str) -> Map<String, Value> {
+     let path = tests_dir().join(format!("snapshots/{group}.json"));
+@@ -198,7 +203,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
+ fn cfsplit_snapshots_by_group() {
+     let mut seen = BTreeSet::new();
+     for (group, modules) in GROUPS {
+-        let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
++        let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
+         let call = format!("common::snapshot_matches(\"{group}\", &forms())");
+         assert_eq!(
+             text.matches(&call).count(),
+@@ -249,19 +254,25 @@ fn cfsplit_test_names_floor() {
+     let names: Vec<(&str, BTreeSet<String>)> = GROUPS
+         .iter()
+         .map(|(group, _)| {
+-            let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
++            let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
+             (*group, test_names(&text))
+         })
+         .collect();
+     for (name, groups) in TEETH {
+         for group in groups {
++            // 2 つ以上の群に在る名は群の字を挟む（fn の名は package の中で一意・判断の記録 ADR-32）。
++            let want = if groups.len() > 1 {
++                name.replacen("contract_form_", &format!("contract_form_{group}_"), 1)
++            } else {
++                (*name).to_string()
++            };
+             let (_, have) = names
+                 .iter()
+                 .find(|(g, _)| g == group)
+                 .unwrap_or_else(|| panic!("TEETH の群 {group} が GROUPS に無い"));
+             assert!(
+-                have.contains(name),
+-                "cform_{group}.rs に歯 {name} が無い（在る歯: {have:?}）"
++                have.contains(&want),
++                "cform_{group}.rs に歯 {want} が無い（在る歯: {have:?}）"
+             );
+         }
+     }
+@@ -270,9 +281,9 @@ fn cfsplit_test_names_floor() {
+ #[test]
+ fn cfsplit_hands_in_common() {
+     for (group, _) in GROUPS {
+-        let text = read_text(&tests_dir().join(format!("cform_{group}.rs")));
+-        let mods = text.lines().filter(|l| l.trim() == "mod common;").count();
+-        assert_eq!(mods, 1, "cform_{group}.rs の行 mod common; が {mods} 個");
++        let text = read_text(&group_dir().join(format!("cform_{group}.rs")));
++        let mods = text.lines().filter(|l| l.trim() == "use crate::common;").count();
++        assert_eq!(mods, 1, "cform_{group}.rs の行 use crate::common; が {mods} 個");
+         for hand in HANDS {
+             assert!(
+                 !text.contains(hand),
+@@ -280,7 +291,7 @@ fn cfsplit_hands_in_common() {
+             );
+         }
+     }
+-    let common = read_text(&tests_dir().join("common/mod.rs"));
++    let common = read_text(&group_dir().join("common/mod.rs"));
+     for hand in HANDS {
+         assert_eq!(
+             common.matches(hand).count(),
+@@ -311,7 +322,7 @@ fn cfsplit_no_old_paths() {
+         .parent()
+         .and_then(Path::parent)
+         .expect("workspace の root");
+-    let me = tests_dir().join("cfsplit.rs");
++    let me = group_dir().join("cfsplit.rs");
+     let mut files = Vec::new();
+     for dir in ["crates", "xtask"] {
+         files.extend(
+diff --git a/crates/tsuzuri-contract/tests/common/mod.rs b/crates/tsuzuri-contract/tests/teeth1/common/mod.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/common/mod.rs
+rename to crates/tsuzuri-contract/tests/teeth1/common/mod.rs
+diff --git a/crates/tsuzuri-contract/tests/ctick.rs b/crates/tsuzuri-contract/tests/teeth1/ctick.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/ctick.rs
+rename to crates/tsuzuri-contract/tests/teeth1/ctick.rs
+diff --git a/crates/tsuzuri-contract/tests/fxpre.rs b/crates/tsuzuri-contract/tests/teeth1/fxpre.rs
+similarity index 98%
+rename from crates/tsuzuri-contract/tests/fxpre.rs
+rename to crates/tsuzuri-contract/tests/teeth1/fxpre.rs
+index 0bc7a1cb02dba8fa642525d49a9209153a87668c..c3b55c62028811daf2539c493614673d12a6455b 100644
+--- a/crates/tsuzuri-contract/tests/fxpre.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/fxpre.rs
+@@ -102,8 +102,8 @@ fn fxpre_contract_tests_hold_none() {
+     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+     let all = files(&dir);
+     for name in [
+-        "cform_surface.rs",
+-        "cform_ledger.rs",
++        "teeth1/cform_surface.rs",
++        "teeth1/cform_ledger.rs",
+         "snapshots/surface.json",
+         "snapshots/ledger.json",
+     ] {
+diff --git a/crates/tsuzuri-contract/tests/lresume.rs b/crates/tsuzuri-contract/tests/teeth1/lresume.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/lresume.rs
+rename to crates/tsuzuri-contract/tests/teeth1/lresume.rs
+diff --git a/crates/tsuzuri-contract/tests/teeth1/main.rs b/crates/tsuzuri-contract/tests/teeth1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c5863faddf5a4da0384b64a97d488f922d4fbd37
+--- /dev/null
++++ b/crates/tsuzuri-contract/tests/teeth1/main.rs
+@@ -0,0 +1,17 @@
++//! tsuzuri-contract の歯の群 teeth1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod acctdoc;
++mod cform_board;
++mod cform_case;
++mod cform_graph;
++mod cform_ledger;
++mod cform_seat;
++mod cform_stats;
++mod cform_surface;
++mod cfsplit;
++mod common;
++mod ctick;
++mod fxpre;
++mod lresume;
+diff --git a/crates/tsuzuri-core/tests/ctick.rs b/crates/tsuzuri-core/tests/ctick.rs
+index a67ceda1d2f04aef14108e6453e22cee06856532..65d8a0acdbbf38f4005ec14fe8a9f7724ab39859 100644
+--- a/crates/tsuzuri-core/tests/ctick.rs
++++ b/crates/tsuzuri-core/tests/ctick.rs
+@@ -205,7 +205,7 @@ const FILTER: [&str; 153] = [
+ 
+ /// 新しい歯の 3 つの file。
+ const FILES: [&str; 3] = [
+-    "crates/tsuzuri-contract/tests/ctick.rs",
++    "crates/tsuzuri-contract/tests/teeth1/ctick.rs",
+     "crates/tsuzuri-core/tests/ctick.rs",
+     "crates/tsuzuri-surface/tests/ctickface.rs",
+ ];
+diff --git a/crates/tsuzuri-surface/tests/lresumepill.rs b/crates/tsuzuri-surface/tests/lresumepill.rs
+index b6278542cb13f596a0ebe50905a0cad881ae62a6..0cb3a427611b0292575bc7c06100956b4ce7ab77 100644
+--- a/crates/tsuzuri-surface/tests/lresumepill.rs
++++ b/crates/tsuzuri-surface/tests/lresumepill.rs
+@@ -379,7 +379,7 @@ fn test_names(text: &str) -> Vec<String> {
+ #[test]
+ fn lresume_own_names_clean() {
+     for (rel, n) in [
+-        ("../tsuzuri-contract/tests/lresume.rs", 2),
++        ("../tsuzuri-contract/tests/teeth1/lresume.rs", 2),
+         ("../tsuzuri-core/tests/lresume.rs", 4),
+         ("tests/lresumepill.rs", 4),
+     ] {
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index 0f763e1ba43c10c9c7be7add1d582d16b4073644..a055401f62f298bf96b4d47abee3282b86b85fbb 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
+ /// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
+ const GROUPS: &[(&str, usize)] = &[
+     // kfold-groups-begin
++    ("crates/tsuzuri-contract/tests/teeth1", 13),
+     ("xtask/tests/teeth1", 9),
+     // kfold-groups-end
+ ];
+@@ -121,3 +122,73 @@ fn kfold_groups_declare_every_module_once() {
+         GROUPS.iter().map(|(g, n)| ((*g).to_string(), *n)).collect();
+     assert_eq!(seen, want, "群と module の数");
+ }
++
++/// 歯の区間（tests/ の file は全部・src の file は行頭の #[cfg(test)] から後）の #[test] の直下の fn の名。
++fn test_fns(text: &str, whole: bool) -> Vec<String> {
++    let region = if whole {
++        text
++    } else {
++        text.find("\n#[cfg(test)]").map_or("", |i| &text[i..])
++    };
++    let mut out = Vec::new();
++    let mut pending = false;
++    for line in region.lines() {
++        let t = line.trim();
++        if t == "#[test]" {
++            pending = true;
++        } else if pending && !(t.is_empty() || t.starts_with("#[") || t.starts_with("//")) {
++            pending = false;
++            if let Some(rest) = t.split_once("fn ").map(|(_, r)| r) {
++                out.push(
++                    rest.split(|c: char| !(c.is_alphanumeric() || c == '_'))
++                        .next()
++                        .unwrap_or("")
++                        .to_string(),
++                );
++            }
++        }
++    }
++    out
++}
++
++fn rs_under(dir: &Path, out: &mut Vec<PathBuf>) {
++    let Ok(entries) = std::fs::read_dir(dir) else {
++        return;
++    };
++    for entry in entries {
++        let path = entry.expect("dir の項目").path();
++        if path.is_dir() {
++            rs_under(&path, out);
++        } else if path.extension().is_some_and(|e| e == "rs") {
++            out.push(path);
++        }
++    }
++}
++
++#[test]
++fn kfold_test_names_unique_in_each_crate() {
++    let root = repo_root();
++    let mut total = 0;
++    for member in members() {
++        let mut names: BTreeMap<String, Vec<String>> = BTreeMap::new();
++        for (sub, whole) in [("tests", true), ("src", false)] {
++            let mut files = Vec::new();
++            rs_under(&root.join(&member).join(sub), &mut files);
++            for file in files {
++                for name in test_fns(&read(&file), whole) {
++                    names.entry(name).or_default().push(
++                        file.strip_prefix(&root)
++                            .expect("根の下")
++                            .display()
++                            .to_string(),
++                    );
++                }
++            }
++        }
++        let dups: Vec<(&String, &Vec<String>)> =
++            names.iter().filter(|(_, v)| v.len() > 1).collect();
++        assert!(dups.is_empty(), "{member} の中で重なる歯の名: {dups:?}");
++        total += names.len();
++    }
++    assert!(total >= 2_500, "数えた歯の名が {total}");
++}

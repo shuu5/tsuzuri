@@ -1,0 +1,1906 @@
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/epolq.rs b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+index 6ddeac6bf7f5c20a65c43a8aec35cee316d991c1..c66e46bf6726c33063c69279f9a094a440e98e22 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+@@ -1072,7 +1072,7 @@ fn test_names(text: &str) -> Vec<String> {
+ fn epolq_own_names_clean() {
+     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+     let mine = fs::read_to_string(dir.join("tests/teeth1/epolq.rs")).expect("この file");
+-    let hist = fs::read_to_string(dir.join("../tsuzuri-surface/tests/epolqhist.rs"))
++    let hist = fs::read_to_string(dir.join("../tsuzuri-surface/tests/teeth2/epolqhist.rs"))
+         .expect("面の歯の file");
+     let names: Vec<String> = [mine, hist].iter().flat_map(|t| test_names(t)).collect();
+     assert_eq!(names.len(), 13, "{names:?}");
+diff --git a/crates/tsuzuri-core/tests/teeth1/abss.rs b/crates/tsuzuri-core/tests/teeth1/abss.rs
+index 686d9997bf633607ec28b40ac56eba814e02b0fa..deefab159d88857fcb338c1fb0163dca15997260 100644
+--- a/crates/tsuzuri-core/tests/teeth1/abss.rs
++++ b/crates/tsuzuri-core/tests/teeth1/abss.rs
+@@ -313,7 +313,7 @@ fn abss_own_names_clean() {
+     assert_eq!(WORDS.len(), 217);
+     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+     let mut names = test_names(&root.join("tests/teeth1/abss.rs"));
+-    names.extend(test_names(&root.join("../tsuzuri-surface/tests/abssface.rs")));
++    names.extend(test_names(&root.join("../tsuzuri-surface/tests/teeth1/abssface.rs")));
+     assert_eq!(names.len(), 9, "{names:?}");
+     for name in &names {
+         let rest = name
+diff --git a/crates/tsuzuri-core/tests/teeth1/ctick.rs b/crates/tsuzuri-core/tests/teeth1/ctick.rs
+index 3dac47a2494b320bc71d0fd424bc97dc5ff46fc0..f8b7f9204f93531ab2b2c49ad464ecb3cff8181d 100644
+--- a/crates/tsuzuri-core/tests/teeth1/ctick.rs
++++ b/crates/tsuzuri-core/tests/teeth1/ctick.rs
+@@ -207,7 +207,7 @@ const FILTER: [&str; 153] = [
+ const FILES: [&str; 3] = [
+     "crates/tsuzuri-contract/tests/teeth1/ctick.rs",
+     "crates/tsuzuri-core/tests/teeth1/ctick.rs",
+-    "crates/tsuzuri-surface/tests/ctickface.rs",
++    "crates/tsuzuri-surface/tests/teeth2/ctickface.rs",
+ ];
+ 
+ /// (15) 3 つの file の歯の名は 12 本とも ctick_ で始まり、残りの字は filter の語を含まない。
+diff --git a/crates/tsuzuri-core/tests/teeth2/pkac.rs b/crates/tsuzuri-core/tests/teeth2/pkac.rs
+index d44df53ab5f9ae2d4dbdb457868e6f1ab66e136f..ca7f1f8ccca8ba1ec045c0e27bcb9057654b1693 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pkac.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pkac.rs
+@@ -254,7 +254,7 @@ fn pkac_own_names_clean() {
+     let mut names = Vec::new();
+     for path in [
+         "crates/tsuzuri-core/tests/teeth2/pkac.rs",
+-        "crates/tsuzuri-surface/tests/pkacface.rs",
++        "crates/tsuzuri-surface/tests/teeth4/pkacface.rs",
+     ] {
+         let text = read(path);
+         let lines: Vec<&str> = text.lines().collect();
+diff --git a/crates/tsuzuri-surface/tests/aaround.rs b/crates/tsuzuri-surface/tests/teeth1/aaround.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/aaround.rs
+rename to crates/tsuzuri-surface/tests/teeth1/aaround.rs
+index 8b18018ae450a9c2a773d78c2c3f88e2915c4daa..c53792506679eccde021fbe47faedc3f04b06bfd 100644
+--- a/crates/tsuzuri-surface/tests/aaround.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/aaround.rs
+@@ -252,7 +252,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn aaround_own_names_clean() {
+     assert_eq!(FILTERS.len(), 78);
+-    let src = read("tests/aaround.rs");
++    let src = read("tests/teeth1/aaround.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/absface.rs b/crates/tsuzuri-surface/tests/teeth1/absface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/absface.rs
+rename to crates/tsuzuri-surface/tests/teeth1/absface.rs
+diff --git a/crates/tsuzuri-surface/tests/abssface.rs b/crates/tsuzuri-surface/tests/teeth1/abssface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/abssface.rs
+rename to crates/tsuzuri-surface/tests/teeth1/abssface.rs
+diff --git a/crates/tsuzuri-surface/tests/acctframe.rs b/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctframe.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+diff --git a/crates/tsuzuri-surface/tests/accthb.rs b/crates/tsuzuri-surface/tests/teeth1/accthb.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/accthb.rs
+rename to crates/tsuzuri-surface/tests/teeth1/accthb.rs
+diff --git a/crates/tsuzuri-surface/tests/accthome.rs b/crates/tsuzuri-surface/tests/teeth1/accthome.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/accthome.rs
+rename to crates/tsuzuri-surface/tests/teeth1/accthome.rs
+diff --git a/crates/tsuzuri-surface/tests/acctled.rs b/crates/tsuzuri-surface/tests/teeth1/acctled.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctled.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctled.rs
+diff --git a/crates/tsuzuri-surface/tests/acctlook.rs b/crates/tsuzuri-surface/tests/teeth1/acctlook.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctlook.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctlook.rs
+diff --git a/crates/tsuzuri-surface/tests/acctpop.rs b/crates/tsuzuri-surface/tests/teeth1/acctpop.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/acctpop.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctpop.rs
+index b9e4c875e62b745e5f6b5a8a089be71a21479434..6735abee0d0c3b3389756285e070107b72a6452f 100644
+--- a/crates/tsuzuri-surface/tests/acctpop.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctpop.rs
+@@ -96,7 +96,7 @@ const WORDS: [&str; 65] = [
+ 
+ #[test]
+ fn apop_names_keep_own_prefix() {
+-    let text = read("tests/acctpop.rs");
++    let text = read("tests/teeth1/acctpop.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     while let Some(at) = rest.find("#[test]\nfn ") {
+diff --git a/crates/tsuzuri-surface/tests/acctproj.rs b/crates/tsuzuri-surface/tests/teeth1/acctproj.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctproj.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctproj.rs
+diff --git a/crates/tsuzuri-surface/tests/acctsess.rs b/crates/tsuzuri-surface/tests/teeth1/acctsess.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctsess.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctsess.rs
+diff --git a/crates/tsuzuri-surface/tests/acctwin.rs b/crates/tsuzuri-surface/tests/teeth1/acctwin.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctwin.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctwin.rs
+diff --git a/crates/tsuzuri-surface/tests/acctwire.rs b/crates/tsuzuri-surface/tests/teeth1/acctwire.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/acctwire.rs
+rename to crates/tsuzuri-surface/tests/teeth1/acctwire.rs
+diff --git a/crates/tsuzuri-surface/tests/aface.rs b/crates/tsuzuri-surface/tests/teeth1/aface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/aface.rs
+rename to crates/tsuzuri-surface/tests/teeth1/aface.rs
+diff --git a/crates/tsuzuri-surface/tests/aord.rs b/crates/tsuzuri-surface/tests/teeth1/aord.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/aord.rs
+rename to crates/tsuzuri-surface/tests/teeth1/aord.rs
+index 4c4b2f390ba95c76567f4cfe46905de89028b692..64bc20a7ca0b2507a37eebade95ea33a4caec8ca 100644
+--- a/crates/tsuzuri-surface/tests/aord.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/aord.rs
+@@ -326,7 +326,7 @@ const WORDS: [&str; 106] = [
+ 
+ /// この file の #[test] の次の行の fn の名を読み、aord_ の後ろが語を含まないことを見る。
+ fn names_apart() {
+-    let src = read("tests/aord.rs");
++    let src = read("tests/teeth1/aord.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/askcard.rs b/crates/tsuzuri-surface/tests/teeth1/askcard.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/askcard.rs
+rename to crates/tsuzuri-surface/tests/teeth1/askcard.rs
+diff --git a/crates/tsuzuri-surface/tests/askfocus.rs b/crates/tsuzuri-surface/tests/teeth1/askfocus.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/askfocus.rs
+rename to crates/tsuzuri-surface/tests/teeth1/askfocus.rs
+index 9e9ea534960a9e361438433b81f2c6e295c59693..288a9281fb04f474829720cde849cdd6b1655081 100644
+--- a/crates/tsuzuri-surface/tests/askfocus.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/askfocus.rs
+@@ -196,7 +196,7 @@ const FILTERS: [&str; 65] = [
+ /// この file の test の fn の名は afocus_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn afocus_own_names_clean() {
+-    let text = read("tests/askfocus.rs");
++    let text = read("tests/teeth1/askfocus.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/batchpanel.rs b/crates/tsuzuri-surface/tests/teeth1/batchpanel.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/batchpanel.rs
+rename to crates/tsuzuri-surface/tests/teeth1/batchpanel.rs
+diff --git a/crates/tsuzuri-surface/tests/bhalfpanel.rs b/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/bhalfpanel.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
+index a17f90a31eda46f91e74ac0482c6d8fe1d8c4d5a..9c6c3aea35fab0c20001c76811b5514cc6d49e96 100644
+--- a/crates/tsuzuri-surface/tests/bhalfpanel.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
+@@ -311,7 +311,7 @@ fn bhalf_submit_passes_sent() {
+ /// (9) この file の歯の名はどれも bhalf_ で始まり、並べた filter の語を部分の字として含まない。
+ #[test]
+ fn bhalf_view_names_clean() {
+-    let names = test_names(&read("tests/bhalfpanel.rs"));
++    let names = test_names(&read("tests/teeth1/bhalfpanel.rs"));
+     assert_eq!(names.len(), 3, "{names:?}");
+     for name in &names {
+         assert!(name.starts_with("bhalf_"), "{name}");
+diff --git a/crates/tsuzuri-surface/tests/board_min.rs b/crates/tsuzuri-surface/tests/teeth1/board_min.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/board_min.rs
+rename to crates/tsuzuri-surface/tests/teeth1/board_min.rs
+diff --git a/crates/tsuzuri-surface/tests/bport.rs b/crates/tsuzuri-surface/tests/teeth1/bport.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/bport.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bport.rs
+index 47af652ab2eb4dff041d8aaf25af5d423391e786..31f419b577746db5127235692e47028c27a5f8c8 100644
+--- a/crates/tsuzuri-surface/tests/bport.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bport.rs
+@@ -182,7 +182,7 @@ const FILTER_WORDS: [&str; 80] = [
+ 
+ #[test]
+ fn bport_names_filtered() {
+-    let text = read("tests/bport.rs");
++    let text = read("tests/teeth1/bport.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/brand.rs b/crates/tsuzuri-surface/tests/teeth1/brand.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/brand.rs
+rename to crates/tsuzuri-surface/tests/teeth1/brand.rs
+index 6e0fcd343ae1af53b4412934eb0d3f75d96d4385..6d33573c8e225f22747ca2e3522c3d6960e41547 100644
+--- a/crates/tsuzuri-surface/tests/brand.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/brand.rs
+@@ -148,7 +148,7 @@ fn brand_top_reads_name_and_sets_title() {
+ 
+ #[test]
+ fn brand_own_names_clean() {
+-    let text = read(&manifest("tests/brand.rs"));
++    let text = read(&manifest("tests/teeth1/brand.rs"));
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-surface/tests/btuck.rs b/crates/tsuzuri-surface/tests/teeth1/btuck.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/btuck.rs
+rename to crates/tsuzuri-surface/tests/teeth1/btuck.rs
+index 8b13a27dca58adc12cc58173e7a3dd35ef28c0a5..3f2dbcad8b008df55ef45d8d5169759796836d81 100644
+--- a/crates/tsuzuri-surface/tests/btuck.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/btuck.rs
+@@ -323,7 +323,7 @@ const FILTERS: [&str; 116] = [
+ /// (9) この file の歯の名はどれも btuck_ で始まり、残りの字は filter の語を含まない（8 本以上）。
+ #[test]
+ fn btuck_own_names_clean() {
+-    let text = read("tests/btuck.rs");
++    let text = read("tests/teeth1/btuck.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/bvaskw.rs b/crates/tsuzuri-surface/tests/teeth1/bvaskw.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvaskw.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvaskw.rs
+diff --git a/crates/tsuzuri-surface/tests/bvbar.rs b/crates/tsuzuri-surface/tests/teeth1/bvbar.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvbar.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvbar.rs
+diff --git a/crates/tsuzuri-surface/tests/bvcols.rs b/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvcols.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+diff --git a/crates/tsuzuri-surface/tests/bvcull.rs b/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvcull.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+diff --git a/crates/tsuzuri-surface/tests/bvfive.rs b/crates/tsuzuri-surface/tests/teeth1/bvfive.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvfive.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvfive.rs
+diff --git a/crates/tsuzuri-surface/tests/bvfront.rs b/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvfront.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+diff --git a/crates/tsuzuri-surface/tests/bvgdom.rs b/crates/tsuzuri-surface/tests/teeth1/bvgdom.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvgdom.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvgdom.rs
+diff --git a/crates/tsuzuri-surface/tests/bvhelp.rs b/crates/tsuzuri-surface/tests/teeth1/bvhelp.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvhelp.rs
+rename to crates/tsuzuri-surface/tests/teeth1/bvhelp.rs
+diff --git a/crates/tsuzuri-surface/tests/teeth1/main.rs b/crates/tsuzuri-surface/tests/teeth1/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b6fffca29fe02c0689144512e06850a883b1ccc
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth1/main.rs
+@@ -0,0 +1,35 @@
++//! tsuzuri-surface の歯の群 teeth1（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth1/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod aaround;
++mod absface;
++mod abssface;
++mod acctframe;
++mod accthb;
++mod accthome;
++mod acctled;
++mod acctlook;
++mod acctpop;
++mod acctproj;
++mod acctsess;
++mod acctwin;
++mod acctwire;
++mod aface;
++mod aord;
++mod askcard;
++mod askfocus;
++mod batchpanel;
++mod bhalfpanel;
++mod board_min;
++mod bport;
++mod brand;
++mod btuck;
++mod bvaskw;
++mod bvbar;
++mod bvcols;
++mod bvcull;
++mod bvfive;
++mod bvfront;
++mod bvgdom;
++mod bvhelp;
+diff --git a/crates/tsuzuri-surface/tests/bvkpi.rs b/crates/tsuzuri-surface/tests/teeth2/bvkpi.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvkpi.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvkpi.rs
+diff --git a/crates/tsuzuri-surface/tests/bvland.rs b/crates/tsuzuri-surface/tests/teeth2/bvland.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvland.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvland.rs
+diff --git a/crates/tsuzuri-surface/tests/bvlay.rs b/crates/tsuzuri-surface/tests/teeth2/bvlay.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvlay.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvlay.rs
+diff --git a/crates/tsuzuri-surface/tests/bvlex.rs b/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvlex.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+diff --git a/crates/tsuzuri-surface/tests/bvlist.rs b/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvlist.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+diff --git a/crates/tsuzuri-surface/tests/bvmcomp.rs b/crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvmcomp.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs
+diff --git a/crates/tsuzuri-surface/tests/bvmore.rs b/crates/tsuzuri-surface/tests/teeth2/bvmore.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/bvmore.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvmore.rs
+index 29cfe84834f11febe198b969c92a5a61620aedf8..f79e5e889d3a75d5745f3806c808edeb30f5ff47 100644
+--- a/crates/tsuzuri-surface/tests/bvmore.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvmore.rs
+@@ -514,7 +514,7 @@ fn bvmore_own_names_clean() {
+         assert!(!prefix.contains(w), "接頭辞が filter の語 {w} を含む");
+         assert!(!w.contains(prefix), "filter の語 {w} が接頭辞を含む");
+     }
+-    let text = read("tests/bvmore.rs");
++    let text = read("tests/teeth2/bvmore.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/bvmpage.rs b/crates/tsuzuri-surface/tests/teeth2/bvmpage.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvmpage.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvmpage.rs
+diff --git a/crates/tsuzuri-surface/tests/bvmtbl.rs b/crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvmtbl.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs
+diff --git a/crates/tsuzuri-surface/tests/bvnav.rs b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvnav.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+diff --git a/crates/tsuzuri-surface/tests/bvopen.rs b/crates/tsuzuri-surface/tests/teeth2/bvopen.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvopen.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvopen.rs
+diff --git a/crates/tsuzuri-surface/tests/bvpop.rs b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvpop.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+diff --git a/crates/tsuzuri-surface/tests/bvqhist.rs b/crates/tsuzuri-surface/tests/teeth2/bvqhist.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvqhist.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvqhist.rs
+diff --git a/crates/tsuzuri-surface/tests/bvsel.rs b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvsel.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+diff --git a/crates/tsuzuri-surface/tests/bvshed.rs b/crates/tsuzuri-surface/tests/teeth2/bvshed.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvshed.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvshed.rs
+diff --git a/crates/tsuzuri-surface/tests/bvstep.rs b/crates/tsuzuri-surface/tests/teeth2/bvstep.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvstep.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvstep.rs
+diff --git a/crates/tsuzuri-surface/tests/bvsweep.rs b/crates/tsuzuri-surface/tests/teeth2/bvsweep.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvsweep.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvsweep.rs
+diff --git a/crates/tsuzuri-surface/tests/bvtrim.rs b/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvtrim.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+diff --git a/crates/tsuzuri-surface/tests/bvuphase.rs b/crates/tsuzuri-surface/tests/teeth2/bvuphase.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvuphase.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvuphase.rs
+diff --git a/crates/tsuzuri-surface/tests/bvwhy.rs b/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvwhy.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+diff --git a/crates/tsuzuri-surface/tests/bvwin.rs b/crates/tsuzuri-surface/tests/teeth2/bvwin.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvwin.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvwin.rs
+diff --git a/crates/tsuzuri-surface/tests/bvwins.rs b/crates/tsuzuri-surface/tests/teeth2/bvwins.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvwins.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvwins.rs
+diff --git a/crates/tsuzuri-surface/tests/bvwurl.rs b/crates/tsuzuri-surface/tests/teeth2/bvwurl.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/bvwurl.rs
+rename to crates/tsuzuri-surface/tests/teeth2/bvwurl.rs
+diff --git a/crates/tsuzuri-surface/tests/cadl.rs b/crates/tsuzuri-surface/tests/teeth2/cadl.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/cadl.rs
+rename to crates/tsuzuri-surface/tests/teeth2/cadl.rs
+index 94f4c821b60c1384b53b106f6b2f2ffba450a266..bb4b5e95c0e9ac3295d0e52e48e850c80bf3ff9e 100644
+--- a/crates/tsuzuri-surface/tests/cadl.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cadl.rs
+@@ -309,7 +309,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn cadl_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 159);
+-    let text = read("tests/cadl.rs");
++    let text = read("tests/teeth2/cadl.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/cadq.rs b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/cadq.rs
+rename to crates/tsuzuri-surface/tests/teeth2/cadq.rs
+index f706b8d97e26202cef6cea61126e7a32a1596b57..42f374b3f6fa0d88e6be50be2ec764490fc61be1 100644
+--- a/crates/tsuzuri-surface/tests/cadq.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+@@ -397,7 +397,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn cadq_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 159);
+-    let text = read("tests/cadq.rs");
++    let text = read("tests/teeth2/cadq.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/cgdom.rs b/crates/tsuzuri-surface/tests/teeth2/cgdom.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/cgdom.rs
+rename to crates/tsuzuri-surface/tests/teeth2/cgdom.rs
+index fd732c3cfabe32cd146873f6ab57b1c50188a5f4..a20a58745b801f35c264592a01370ba0830ab995 100644
+--- a/crates/tsuzuri-surface/tests/cgdom.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cgdom.rs
+@@ -170,7 +170,7 @@ const FILTERS: [&str; 106] = [
+ /// (4) この file の歯の名はどれも cgdom_ で始まり、名の字の全部は filter の語を含まない。
+ #[test]
+ fn cgdom_names_clean() {
+-    let text = read("tests/cgdom.rs");
++    let text = read("tests/teeth2/cgdom.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/cmark.rs b/crates/tsuzuri-surface/tests/teeth2/cmark.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/cmark.rs
+rename to crates/tsuzuri-surface/tests/teeth2/cmark.rs
+index 5d3c4d6f540a1014359f042daeb2393fab140263..d5f14e19a5c80650190372d30d8e4e3d45b0f39b 100644
+--- a/crates/tsuzuri-surface/tests/cmark.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cmark.rs
+@@ -233,7 +233,7 @@ const FILTERS: &[&str] = &[
+ /// (5) この file の歯の名はどれも cmark_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn cmark_own_names_clean() {
+-    let text = read("tests/cmark.rs");
++    let text = read("tests/teeth2/cmark.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/cround.rs b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/cround.rs
+rename to crates/tsuzuri-surface/tests/teeth2/cround.rs
+index eedb233b9f1c578585bae058124559fdc41b3731..38bf284ec7c81bc4a78fd2341e5a9abb2733977f 100644
+--- a/crates/tsuzuri-surface/tests/cround.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+@@ -406,7 +406,7 @@ const FILTERS: [&str; 106] = [
+ /// (7) この file の歯の名はどれも cround_ で始まり、名の字の全部は filter の語を含まない。
+ #[test]
+ fn cround_names_clean() {
+-    let text = read("tests/cround.rs");
++    let text = read("tests/teeth2/cround.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/ctickface.rs b/crates/tsuzuri-surface/tests/teeth2/ctickface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/ctickface.rs
+rename to crates/tsuzuri-surface/tests/teeth2/ctickface.rs
+diff --git a/crates/tsuzuri-surface/tests/epolqhist.rs b/crates/tsuzuri-surface/tests/teeth2/epolqhist.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/epolqhist.rs
+rename to crates/tsuzuri-surface/tests/teeth2/epolqhist.rs
+diff --git a/crates/tsuzuri-surface/tests/evkindview.rs b/crates/tsuzuri-surface/tests/teeth2/evkindview.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/evkindview.rs
+rename to crates/tsuzuri-surface/tests/teeth2/evkindview.rs
+diff --git a/crates/tsuzuri-surface/tests/flight.rs b/crates/tsuzuri-surface/tests/teeth2/flight.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/flight.rs
+rename to crates/tsuzuri-surface/tests/teeth2/flight.rs
+index ab9e0a3c3dd1f757100708270fc42c61caede70a..822c152341d45445e35f43882bc5aba41f930546 100644
+--- a/crates/tsuzuri-surface/tests/flight.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/flight.rs
+@@ -154,7 +154,7 @@ fn flight_net_wiring_text() {
+ /// (7) この file の歯の名はどれも flight_ で始まり、残りの字は着地済みの行の verify の語を含まない。
+ #[test]
+ fn flight_own_names_clean() {
+-    let text = read("tests/flight.rs");
++    let text = read("tests/teeth2/flight.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/frame.rs
+rename to crates/tsuzuri-surface/tests/teeth2/frame.rs
+diff --git a/crates/tsuzuri-surface/tests/gapspage.rs b/crates/tsuzuri-surface/tests/teeth2/gapspage.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/gapspage.rs
+rename to crates/tsuzuri-surface/tests/teeth2/gapspage.rs
+diff --git a/crates/tsuzuri-surface/tests/gatt.rs b/crates/tsuzuri-surface/tests/teeth2/gatt.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/gatt.rs
+rename to crates/tsuzuri-surface/tests/teeth2/gatt.rs
+index 32eb7789844a1ad8b14c7c7d92922a5a669c2d10..bfce36a33ad55375be1fe650f8ccded6844876d8 100644
+--- a/crates/tsuzuri-surface/tests/gatt.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gatt.rs
+@@ -85,7 +85,7 @@ fn gatt_files_use_shared() {
+ /// (3) この file の test の属性の付いた fn は 3 つで、名はどれも gatt_ で始まる。
+ #[test]
+ fn gatt_own_names() {
+-    let text = read("tests/gatt.rs");
++    let text = read("tests/teeth2/gatt.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/gbnote.rs b/crates/tsuzuri-surface/tests/teeth2/gbnote.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gbnote.rs
+rename to crates/tsuzuri-surface/tests/teeth2/gbnote.rs
+index 50749970f942e04fcdd7d8c7868ebee46923300b..137e3ae105e617e56079dde7cc5ac5c9577cee62 100644
+--- a/crates/tsuzuri-surface/tests/gbnote.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gbnote.rs
+@@ -176,7 +176,7 @@ fn gbnote_list_closed_mark() {
+ /// (5) この file の歯の名はちょうど 4 で、どれも gbnote_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn gbnote_own_names_clean() {
+-    let text = read("tests/gbnote.rs");
++    let text = read("tests/teeth2/gbnote.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gchip.rs b/crates/tsuzuri-surface/tests/teeth2/gchip.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gchip.rs
+rename to crates/tsuzuri-surface/tests/teeth2/gchip.rs
+index 3de53b03b3092e52768ae218d95dd713c3c45f33..7e295d97fff8296d97d8727571c9c92f2fe77274 100644
+--- a/crates/tsuzuri-surface/tests/gchip.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gchip.rs
+@@ -409,7 +409,7 @@ const WORDS: &[&str] = &[
+ #[test]
+ fn gchip_own_names_clean() {
+     assert_eq!(WORDS.len(), 208);
+-    let text = read("tests/gchip.rs");
++    let text = read("tests/teeth2/gchip.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/gcoach.rs b/crates/tsuzuri-surface/tests/teeth2/gcoach.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/gcoach.rs
+rename to crates/tsuzuri-surface/tests/teeth2/gcoach.rs
+diff --git a/crates/tsuzuri-surface/tests/teeth2/main.rs b/crates/tsuzuri-surface/tests/teeth2/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..257580e172a1ea111270ce2664ebd596c091c449
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth2/main.rs
+@@ -0,0 +1,42 @@
++//! tsuzuri-surface の歯の群 teeth2（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod bvkpi;
++mod bvland;
++mod bvlay;
++mod bvlex;
++mod bvlist;
++mod bvmcomp;
++mod bvmore;
++mod bvmpage;
++mod bvmtbl;
++mod bvnav;
++mod bvopen;
++mod bvpop;
++mod bvqhist;
++mod bvsel;
++mod bvshed;
++mod bvstep;
++mod bvsweep;
++mod bvtrim;
++mod bvuphase;
++mod bvwhy;
++mod bvwin;
++mod bvwins;
++mod bvwurl;
++mod cadl;
++mod cadq;
++mod cgdom;
++mod cmark;
++mod cround;
++mod ctickface;
++mod epolqhist;
++mod evkindview;
++mod flight;
++mod frame;
++mod gapspage;
++mod gatt;
++mod gbnote;
++mod gchip;
++mod gcoach;
+diff --git a/crates/tsuzuri-surface/tests/gfix.rs b/crates/tsuzuri-surface/tests/teeth3/gfix.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gfix.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gfix.rs
+index 7ccbb65918a2dec86bb9225e7b48e97ba3020c41..eb35ddbfef3caaadc59e9489871eb1e5dfcfdbf1 100644
+--- a/crates/tsuzuri-surface/tests/gfix.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gfix.rs
+@@ -265,7 +265,7 @@ fn gfix_dom_wiring() {
+ /// (8) この file の歯の名はどれも gfix_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn gfix_own_names_clean() {
+-    let text = read("tests/gfix.rs");
++    let text = read("tests/teeth3/gfix.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gfresh.rs b/crates/tsuzuri-surface/tests/teeth3/gfresh.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gfresh.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gfresh.rs
+index 18087af4263ea0207bb3f4054f8cc2118301e283..3c46b49c98bddc8103a450db2557d681a36f7402 100644
+--- a/crates/tsuzuri-surface/tests/gfresh.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gfresh.rs
+@@ -277,7 +277,7 @@ fn gfresh_boards_text() {
+ /// (10) この file の歯の名はどれも gfresh_ で始まり、残りの字は着地済みの行の verify の語を含まない。
+ #[test]
+ fn gfresh_own_names_clean() {
+-    let text = read("tests/gfresh.rs");
++    let text = read("tests/teeth3/gfresh.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/ghb.rs b/crates/tsuzuri-surface/tests/teeth3/ghb.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ghb.rs
+rename to crates/tsuzuri-surface/tests/teeth3/ghb.rs
+index 452779233dd27c8a4412332d88bd60791b2e3268..6ddf0bfaaf944a4b95c708e45cb994a2b36e3840 100644
+--- a/crates/tsuzuri-surface/tests/ghb.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/ghb.rs
+@@ -217,7 +217,7 @@ const FILTER: [&str; 106] = [
+ /// (7) この file の歯の名は ghb_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn ghb_own_names_clean() {
+-    let me = read("tests/ghb.rs");
++    let me = read("tests/teeth3/ghb.rs");
+     let lines: Vec<&str> = me.lines().collect();
+     let mut n = 0;
+     for (i, l) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/gjst.rs b/crates/tsuzuri-surface/tests/teeth3/gjst.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gjst.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gjst.rs
+index 03a1d17aa33be81c9061c99122ca2e927bc5c14d..52a38171c04adf9d3162e611d20392ef0b67cf80 100644
+--- a/crates/tsuzuri-surface/tests/gjst.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gjst.rs
+@@ -327,7 +327,7 @@ const FILTERS: [&str; 143] = [
+ /// (18) この file の歯の名はちょうど 8 で gjst_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn gjst_own_names_clean() {
+-    let src = read("tests/gjst.rs");
++    let src = read("tests/teeth3/gjst.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/glabel.rs b/crates/tsuzuri-surface/tests/teeth3/glabel.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/glabel.rs
+rename to crates/tsuzuri-surface/tests/teeth3/glabel.rs
+index 669fc2ed504519da40c4b9a30e78a8e0a74a4eb0..cadce5def053e71955602931bc5a355925ef2318 100644
+--- a/crates/tsuzuri-surface/tests/glabel.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/glabel.rs
+@@ -186,7 +186,7 @@ const FILTERS: &[&str] = &[
+ /// (7) この file の歯の名はどれも glabel_ で始まり、残りの字は filter の語を含まない（3 本以上）。
+ #[test]
+ fn glabel_own_names_clean() {
+-    let text = read("tests/glabel.rs");
++    let text = read("tests/teeth3/glabel.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gpface.rs b/crates/tsuzuri-surface/tests/teeth3/gpface.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gpface.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gpface.rs
+index 9a26719a04a48347937b384bc15bed4ad3f3c75b..77e6790d527e49b9e657b6b4332a9299f6255bd1 100644
+--- a/crates/tsuzuri-surface/tests/gpface.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gpface.rs
+@@ -325,7 +325,7 @@ fn gpface_contract_words() {
+ /// (5) この file の歯は 5 本で、名は gpface_ で始まり、filter の語を部分の字として含まない。
+ #[test]
+ fn gpface_own_names_clean() {
+-    let text = read("tests/gpface.rs");
++    let text = read("tests/teeth3/gpface.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gpill.rs b/crates/tsuzuri-surface/tests/teeth3/gpill.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gpill.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gpill.rs
+index c659f9e458ac96de64dd82fa05e84ae75929c35e..c20b75c94602879989478ecfa6f47864be547da8 100644
+--- a/crates/tsuzuri-surface/tests/gpill.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gpill.rs
+@@ -284,7 +284,7 @@ fn gpill_board_text() {
+ /// (6) この file の歯の名はちょうど 6 で、どれも gpill_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn gpill_own_names_clean() {
+-    let text = read("tests/gpill.rs");
++    let text = read("tests/teeth3/gpill.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gpulse.rs b/crates/tsuzuri-surface/tests/teeth3/gpulse.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gpulse.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gpulse.rs
+index 941b95cf31c3273feced5172140cb107ec05dea2..21d995d3f82a1d85084a2beb8067de81e87f0509 100644
+--- a/crates/tsuzuri-surface/tests/gpulse.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gpulse.rs
+@@ -174,7 +174,7 @@ fn gpulse_boards_text() {
+ /// (5) この file の歯の名はちょうど 5 で、どれも gpulse_ で始まり、残りの字は契約表の verify の語を含まない。
+ #[test]
+ fn gpulse_own_names_clean() {
+-    let text = read("tests/gpulse.rs");
++    let text = read("tests/teeth3/gpulse.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/gsum.rs b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gsum.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gsum.rs
+index eccc7d17ff7d011eae2c87f9fbf5edce7efde11d..6209d765d387f052d5f72f5d89c793aee4352866 100644
+--- a/crates/tsuzuri-surface/tests/gsum.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+@@ -419,7 +419,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn gsum_own_names_clean() {
+     assert_eq!(FILTERS.len(), 106);
+-    let text = read("tests/gsum.rs");
++    let text = read("tests/teeth3/gsum.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/gwv.rs b/crates/tsuzuri-surface/tests/teeth3/gwv.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/gwv.rs
+rename to crates/tsuzuri-surface/tests/teeth3/gwv.rs
+index 0f98a03d2fbb988b007b68dee3b6818f6468af97..d2042fc7225fd0ce032ccecac73298de412ffb98 100644
+--- a/crates/tsuzuri-surface/tests/gwv.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gwv.rs
+@@ -235,7 +235,7 @@ const FILTERS: [&str; 179] = [
+ /// (3) この file の歯は 3 つで、名は gwv_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn gwv_names_clean() {
+-    let text = read("tests/gwv.rs");
++    let text = read("tests/teeth3/gwv.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<String> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/hacols.rs b/crates/tsuzuri-surface/tests/teeth3/hacols.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hacols.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hacols.rs
+index c17bc73b141705cee7f7d4f5a644ee8da8ab84ac..f108238bec49cb7b7cc457e74926a5b087b1b443 100644
+--- a/crates/tsuzuri-surface/tests/hacols.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hacols.rs
+@@ -369,7 +369,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn hacols_own_names_clean() {
+     assert_eq!(FILTERS.len(), 126);
+-    let text = read("tests/hacols.rs");
++    let text = read("tests/teeth3/hacols.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/harest.rs b/crates/tsuzuri-surface/tests/teeth3/harest.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/harest.rs
+rename to crates/tsuzuri-surface/tests/teeth3/harest.rs
+index 207c539f2be82c511416ca0f226ca825e4da26b2..83a6cd8ceec3c761e5825d32280aff738a2c345f 100644
+--- a/crates/tsuzuri-surface/tests/harest.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/harest.rs
+@@ -370,7 +370,7 @@ fn harest_dom_words() {
+     ] {
+         assert!(css.contains(w), "style.css に字 {w} が無い");
+     }
+-    let hacols = read("tests/hacols.rs");
++    let hacols = read("tests/teeth3/hacols.rs");
+     assert!(hacols.contains("\"unref_view(row.unref.as_ref(), &row.kinds)\""));
+ }
+ 
+@@ -531,7 +531,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn harest_own_names_clean() {
+     assert_eq!(FILTERS.len(), 149);
+-    let text = read("tests/harest.rs");
++    let text = read("tests/teeth3/harest.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hasplit.rs b/crates/tsuzuri-surface/tests/teeth3/hasplit.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hasplit.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hasplit.rs
+index 0725da8e13365cf4d91e1eedd87ab30d86b62756..b0920e84f76786d5e8d4f8f0443ad51948a78123 100644
+--- a/crates/tsuzuri-surface/tests/hasplit.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hasplit.rs
+@@ -265,7 +265,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn hasplit_own_names_clean() {
+     assert_eq!(FILTERS.len(), 149);
+-    let text = read("tests/hasplit.rs");
++    let text = read("tests/teeth3/hasplit.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hcard.rs b/crates/tsuzuri-surface/tests/teeth3/hcard.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hcard.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hcard.rs
+index b8a6820223d86d674852d77136ef45a9d1d91f7e..1cc7385926cf316e542ef2de1d6b359aa294e7a8 100644
+--- a/crates/tsuzuri-surface/tests/hcard.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hcard.rs
+@@ -426,7 +426,7 @@ const FILTER: [&str; 69] = [
+ /// (11) この file の歯の名は hcard_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn hcard_names_filtered() {
+-    let me = read("tests/hcard.rs");
++    let me = read("tests/teeth3/hcard.rs");
+     let lines: Vec<&str> = me.lines().collect();
+     let mut n = 0;
+     for (i, l) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hcled.rs b/crates/tsuzuri-surface/tests/teeth3/hcled.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hcled.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hcled.rs
+index 67f27c330c0a35fffc3fcbc9781cf179e37c2419..0da59e0e3b2ee4e6fb1e07cf0a91e36daae4fa92 100644
+--- a/crates/tsuzuri-surface/tests/hcled.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hcled.rs
+@@ -148,7 +148,7 @@ fn hcled_names_clean() {
+         "shb_", "skeleton_", "smore_", "stage_", "stats_", "steady_", "sxaxis_", "ticker_",
+         "tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_",
+     ];
+-    let text = read("tests/hcled.rs");
++    let text = read("tests/teeth3/hcled.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hcnx.rs b/crates/tsuzuri-surface/tests/teeth3/hcnx.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hcnx.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hcnx.rs
+index e6be1bdb83c6feba4268ba287b60c2fd3a1f2d1f..a97b2ec4bebf89f1d6642eb032483b57c4015b8a 100644
+--- a/crates/tsuzuri-surface/tests/hcnx.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hcnx.rs
+@@ -266,7 +266,7 @@ fn hcnx_names_clean() {
+         "stage_", "stats_", "steady_", "sxaxis_", "ticker_", "tipx_", "topbar_", "tz_",
+         "urpanel_", "uword_", "wstrip_",
+     ];
+-    let text = read("tests/hcnx.rs");
++    let text = read("tests/teeth3/hcnx.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hcproj.rs b/crates/tsuzuri-surface/tests/teeth3/hcproj.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hcproj.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hcproj.rs
+index 9e45a2a21876bf28d2602a690d175651d441850a..e66be532fba4564e6bf498b50785d5c22450a7b8 100644
+--- a/crates/tsuzuri-surface/tests/hcproj.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hcproj.rs
+@@ -644,7 +644,7 @@ fn hcproj_names_clean() {
+         "fserve_", "nsumw_", "cadopt_", "tipx_", "hcsess_", "sesplit_", "mstore_", "athr_",
+         "qblock_",
+     ];
+-    let text = read("tests/hcproj.rs");
++    let text = read("tests/teeth3/hcproj.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hcsess.rs b/crates/tsuzuri-surface/tests/teeth3/hcsess.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hcsess.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hcsess.rs
+index f913f5d90d2ae81162dbd2cace335247204067f4..921523190193624680fcb5c8d315a18f666b196f 100644
+--- a/crates/tsuzuri-surface/tests/hcsess.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hcsess.rs
+@@ -279,7 +279,7 @@ fn hcsess_names_clean() {
+         "fserve_", "nsumw_", "cadopt_", "tipx_", "hcproj_", "sesplit_", "mstore_", "athr_",
+         "qblock_",
+     ];
+-    let text = read("tests/hcsess.rs");
++    let text = read("tests/teeth3/hcsess.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hdchip.rs b/crates/tsuzuri-surface/tests/teeth3/hdchip.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hdchip.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hdchip.rs
+diff --git a/crates/tsuzuri-surface/tests/helpfig.rs b/crates/tsuzuri-surface/tests/teeth3/helpfig.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/helpfig.rs
+rename to crates/tsuzuri-surface/tests/teeth3/helpfig.rs
+index d3393a33699f4ba4771ede27ced4f28c06d0f0de..7964b334024ade1b5439872e1778d084b26a805b 100644
+--- a/crates/tsuzuri-surface/tests/helpfig.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/helpfig.rs
+@@ -253,7 +253,7 @@ const FILTER: [&str; 65] = [
+ 
+ #[test]
+ fn hfig_test_names() {
+-    let text = read("tests/helpfig.rs");
++    let text = read("tests/teeth3/helpfig.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/hnunk.rs b/crates/tsuzuri-surface/tests/teeth3/hnunk.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hnunk.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hnunk.rs
+index d20df325a57453107cafe157c717d79f5f0fda49..1d66fa425f25476f75565022ef649d4ddddc57e4 100644
+--- a/crates/tsuzuri-surface/tests/hnunk.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hnunk.rs
+@@ -204,7 +204,7 @@ fn hnunk_names_clean() {
+         "stage_", "stats_", "steady_", "sxaxis_", "ticker_",
+     ];
+     const MORE: [&str; 6] = ["tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_"];
+-    let text = read("tests/hnunk.rs");
++    let text = read("tests/teeth3/hnunk.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hruling.rs b/crates/tsuzuri-surface/tests/teeth3/hruling.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hruling.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hruling.rs
+index 898ff6dd8426cf68e5c982743132c2b20b42f1b8..ae4c794b87c6bd2005e80474ea50157aba00cf94 100644
+--- a/crates/tsuzuri-surface/tests/hruling.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hruling.rs
+@@ -270,7 +270,7 @@ fn words_tail() -> &'static [&'static str] {
+ /// 語の数と、この file の歯の名が hruling_ で始まり残りの字が語を含まないこと。
+ fn names_clean(words: &[&str]) {
+     assert_eq!(words.len(), 78);
+-    let text = read("tests/hruling.rs");
++    let text = read("tests/teeth3/hruling.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hsblock.rs b/crates/tsuzuri-surface/tests/teeth3/hsblock.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hsblock.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hsblock.rs
+index e1d66ef6c6d1ae0b0a6700035ed453c4c5b09f0b..310e73672fb773d5fde0b0c05049f022634189d7 100644
+--- a/crates/tsuzuri-surface/tests/hsblock.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hsblock.rs
+@@ -344,7 +344,7 @@ const FILTERS: [&str; 49] = [
+ /// (9) この file の歯の名はどれも hsblock_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn hsblock_own_names_clean() {
+-    let text = read("tests/hsblock.rs");
++    let text = read("tests/teeth3/hsblock.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/hsderive.rs b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/hsderive.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+index 926999623e1dac94eb79a8a6f4baaa5ff00bcf3d..bef94b1e530b19384c9e03ecdf4f972452e9b8a8 100644
+--- a/crates/tsuzuri-surface/tests/hsderive.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+@@ -153,7 +153,7 @@ fn hsderive_drops_old_copy() {
+         !crate_dir().join("tests/snapshots/frame.json").exists(),
+         "tests/snapshots/frame.json が在る"
+     );
+-    assert!(!read("tests/hspage.rs").contains("frame.json"), "hspage.rs が frame.json を読む");
++    assert!(!read("tests/teeth3/hspage.rs").contains("frame.json"), "hspage.rs が frame.json を読む");
+ }
+ 
+ /// 着地済みの行とこの文書の行の verify の filter の語。
+@@ -212,7 +212,7 @@ const FILTERS: [&str; 49] = [
+ /// (7) この file の歯の名はどれも hsderive_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn hsderive_own_names_clean() {
+-    let text = read("tests/hsderive.rs");
++    let text = read("tests/teeth3/hsderive.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/hshist.rs b/crates/tsuzuri-surface/tests/teeth3/hshist.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hshist.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hshist.rs
+index 91c2758c2107d159b94d5a2015c346600ec98ba8..995ee823b54499e7035fa74c2e09ca9a6f123654 100644
+--- a/crates/tsuzuri-surface/tests/hshist.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hshist.rs
+@@ -320,7 +320,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn hshist_own_names_clean() {
+     assert_eq!(FILTERS.len(), 149);
+-    let text = read("tests/hshist.rs");
++    let text = read("tests/teeth3/hshist.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hspage.rs b/crates/tsuzuri-surface/tests/teeth3/hspage.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hspage.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hspage.rs
+index 6bef4b25b7bf83bef196d4207cfb30d82c2b5dc4..0a9fc73b01e9e11381454317b424156d07e663e5 100644
+--- a/crates/tsuzuri-surface/tests/hspage.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hspage.rs
+@@ -154,7 +154,7 @@ const FILTERS: [&str; 49] = [
+ /// (9) この file の歯の名はどれも hspage_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn hspage_own_names_clean() {
+-    let text = read("tests/hspage.rs");
++    let text = read("tests/teeth3/hspage.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/hspk.rs b/crates/tsuzuri-surface/tests/teeth3/hspk.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hspk.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hspk.rs
+diff --git a/crates/tsuzuri-surface/tests/hsym.rs b/crates/tsuzuri-surface/tests/teeth3/hsym.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hsym.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hsym.rs
+index 59de071bdf96c7065a0e041dc09feb280926c7a0..b98ed64fbd8e74b558121e240d86694eb16ede54 100644
+--- a/crates/tsuzuri-surface/tests/hsym.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hsym.rs
+@@ -305,7 +305,7 @@ const FILTER: [&str; 80] = [
+ 
+ #[test]
+ fn hsym_names_stay_apart() {
+-    let text = read("tests/hsym.rs");
++    let text = read("tests/teeth3/hsym.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/hthr.rs b/crates/tsuzuri-surface/tests/teeth3/hthr.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/hthr.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hthr.rs
+index 1a5c9c10dc2d99773b0e944b6b4a9e159c6e761f..9812920b847ebaeb57122bc8487da942efadcb1f 100644
+--- a/crates/tsuzuri-surface/tests/hthr.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hthr.rs
+@@ -298,7 +298,7 @@ fn hthr_dom_wiring() {
+ /// (5) この file の歯は 5 つで、名はどれも hthr_ で始まる。
+ #[test]
+ fn hthr_own_names() {
+-    let me = read("tests/hthr.rs");
++    let me = read("tests/teeth3/hthr.rs");
+     let lines: Vec<&str> = me.lines().map(str::trim).collect();
+     let mut n = 0;
+     for (i, l) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/hwstore.rs b/crates/tsuzuri-surface/tests/teeth3/hwstore.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hwstore.rs
+rename to crates/tsuzuri-surface/tests/teeth3/hwstore.rs
+diff --git a/crates/tsuzuri-surface/tests/teeth3/main.rs b/crates/tsuzuri-surface/tests/teeth3/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..141f42230bb46d209b30eba000a234737c610648
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth3/main.rs
+@@ -0,0 +1,34 @@
++//! tsuzuri-surface の歯の群 teeth3（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod gfix;
++mod gfresh;
++mod ghb;
++mod gjst;
++mod glabel;
++mod gpface;
++mod gpill;
++mod gpulse;
++mod gsum;
++mod gwv;
++mod hacols;
++mod harest;
++mod hasplit;
++mod hcard;
++mod hcled;
++mod hcnx;
++mod hcproj;
++mod hcsess;
++mod hdchip;
++mod helpfig;
++mod hnunk;
++mod hruling;
++mod hsblock;
++mod hsderive;
++mod hshist;
++mod hspage;
++mod hspk;
++mod hsym;
++mod hthr;
++mod hwstore;
+diff --git a/crates/tsuzuri-surface/tests/itemlink.rs b/crates/tsuzuri-surface/tests/teeth4/itemlink.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/itemlink.rs
+rename to crates/tsuzuri-surface/tests/teeth4/itemlink.rs
+index d856fbb7aaf18273b2a04286a19bf75357323309..5fcae68b472a0de23a0ba3129e65c32658142acf 100644
+--- a/crates/tsuzuri-surface/tests/itemlink.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/itemlink.rs
+@@ -242,7 +242,7 @@ const FILTERS: [&str; 65] = [
+ /// (7) この file の歯の名はどれも ilink_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn ilink_own_names_clean() {
+-    let text = read("tests/itemlink.rs");
++    let text = read("tests/teeth4/itemlink.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/kcardlink.rs b/crates/tsuzuri-surface/tests/teeth4/kcardlink.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/kcardlink.rs
+rename to crates/tsuzuri-surface/tests/teeth4/kcardlink.rs
+index 8b5d4e6c693326429dde0d81e37bc04c3ac84cc1..9441c2e43a75929704ed2cb03ee319e8751e13e9 100644
+--- a/crates/tsuzuri-surface/tests/kcardlink.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/kcardlink.rs
+@@ -104,7 +104,7 @@ fn klink_dom_anchor_keeps_hover() {
+ 
+ #[test]
+ fn klink_names_stay_apart() {
+-    let src = read("tests/kcardlink.rs");
++    let src = read("tests/teeth4/kcardlink.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/kindlab.rs b/crates/tsuzuri-surface/tests/teeth4/kindlab.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/kindlab.rs
+rename to crates/tsuzuri-surface/tests/teeth4/kindlab.rs
+index 993e99bea0f31fc0d5c7ba47d2503f436a292e8f..aa26a2fbbec27536cd2de90efa95026e81ed8613 100644
+--- a/crates/tsuzuri-surface/tests/kindlab.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/kindlab.rs
+@@ -371,7 +371,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn kindlab_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 164);
+-    let text = read("tests/kindlab.rs");
++    let text = read("tests/teeth4/kindlab.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/lateface.rs b/crates/tsuzuri-surface/tests/teeth4/lateface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/lateface.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lateface.rs
+diff --git a/crates/tsuzuri-surface/tests/lcard.rs b/crates/tsuzuri-surface/tests/teeth4/lcard.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/lcard.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lcard.rs
+index c3b8af02d433b6ee740311e4b43f9af27725be63..64cef6bdce54b5c321ecf8f911ddd5ed89a15a4f 100644
+--- a/crates/tsuzuri-surface/tests/lcard.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/lcard.rs
+@@ -288,7 +288,7 @@ const FILTERS: [&str; 78] = [
+ /// (8) この file の test の fn の名はどれも lcard_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn lcard_own_names_clean() {
+-    let text = read("tests/lcard.rs");
++    let text = read("tests/teeth4/lcard.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/ledgerblock.rs b/crates/tsuzuri-surface/tests/teeth4/ledgerblock.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/ledgerblock.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ledgerblock.rs
+diff --git a/crates/tsuzuri-surface/tests/ledspark.rs b/crates/tsuzuri-surface/tests/teeth4/ledspark.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ledspark.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ledspark.rs
+index 9c7e995d8636baa1ac8b5369aa1050eb5a2132b2..0a7d6103f3e7ad7ae2d79c787d73af835ebc2eef 100644
+--- a/crates/tsuzuri-surface/tests/ledspark.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/ledspark.rs
+@@ -225,7 +225,7 @@ const FILTERS: [&str; 65] = [
+ /// (8) この file の test の fn の名はどれも lspark_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn lspark_names_avoid_filters() {
+-    let src = read("tests/ledspark.rs");
++    let src = read("tests/teeth4/ledspark.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/lhome.rs b/crates/tsuzuri-surface/tests/teeth4/lhome.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/lhome.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lhome.rs
+index dfa9754a36ff5b1a59a01b985fdc6f07bc3f01ea..2131f0c4746cb506bd7f84dfb8ff6a17758881f0 100644
+--- a/crates/tsuzuri-surface/tests/lhome.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/lhome.rs
+@@ -54,7 +54,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn lhome_own_names_clean() {
+     assert_eq!(FILTERS.len(), 106);
+-    let src = read("tests/lhome.rs");
++    let src = read("tests/teeth4/lhome.rs");
+     let mut names = Vec::new();
+     let mut lines = src.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-surface/tests/lkind.rs b/crates/tsuzuri-surface/tests/teeth4/lkind.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/lkind.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lkind.rs
+index 4318b12cfcfb3494b1972e151921103b72d54a32..c58b50ce10f6f355adb3f3601c2a0c820bb97495 100644
+--- a/crates/tsuzuri-surface/tests/lkind.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/lkind.rs
+@@ -291,7 +291,7 @@ const FILTERS: [&str; 191] = [
+ /// (8) この file の歯の名は 4 つで、どれも lkind_ で始まり、filter の語を含まない。
+ #[test]
+ fn lkind_names_clean() {
+-    let text = read("tests/lkind.rs");
++    let text = read("tests/teeth4/lkind.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/lresumepill.rs b/crates/tsuzuri-surface/tests/teeth4/lresumepill.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/lresumepill.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lresumepill.rs
+index fdbca67eda1a599c6b3db37fb8cd456f733887c2..542962c91b8886aff86e484b41aeb2dd1e5e1a26 100644
+--- a/crates/tsuzuri-surface/tests/lresumepill.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/lresumepill.rs
+@@ -381,7 +381,7 @@ fn lresume_own_names_clean() {
+     for (rel, n) in [
+         ("../tsuzuri-contract/tests/teeth1/lresume.rs", 2),
+         ("../tsuzuri-core/tests/teeth2/lresume.rs", 4),
+-        ("tests/lresumepill.rs", 4),
++        ("tests/teeth4/lresumepill.rs", 4),
+     ] {
+         let names = test_names(&read(rel));
+         assert_eq!(names.len(), n, "{rel}: {names:?}");
+diff --git a/crates/tsuzuri-surface/tests/lstg.rs b/crates/tsuzuri-surface/tests/teeth4/lstg.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/lstg.rs
+rename to crates/tsuzuri-surface/tests/teeth4/lstg.rs
+index 15bb2cfd08c09afea0711f273b6f6d3bad9a8100..a974fc110e267736963da1d8722cc0a406255142 100644
+--- a/crates/tsuzuri-surface/tests/lstg.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/lstg.rs
+@@ -324,7 +324,7 @@ const FILTERS: [&str; 165] = [
+ /// (6) この file の歯の名は 3 つで、どれも lstg_ で始まり、先頭の lstg_ を除いた字は filter の語を含まない。
+ #[test]
+ fn lstg_names_stay_apart() {
+-    let text = read("tests/lstg.rs");
++    let text = read("tests/teeth4/lstg.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/teeth4/main.rs b/crates/tsuzuri-surface/tests/teeth4/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9180dd9b45abf9ab5021f9f0df25e5d7a806da3f
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth4/main.rs
+@@ -0,0 +1,35 @@
++//! tsuzuri-surface の歯の群 teeth4（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod itemlink;
++mod kcardlink;
++mod kindlab;
++mod lateface;
++mod lcard;
++mod ledgerblock;
++mod ledspark;
++mod lhome;
++mod lkind;
++mod lresumepill;
++mod lstg;
++mod mapgraph;
++mod mapview;
++mod mqface;
++mod mstore;
++mod ncard;
++mod next;
++mod nodepage;
++mod nstall;
++mod ntcface;
++mod ntime;
++mod parts;
++mod pcimark;
++mod pclosed;
++mod pfold;
++mod pipe;
++mod pkacface;
++mod pkview;
++mod popapp;
++mod projmore;
++mod ptitle;
+diff --git a/crates/tsuzuri-surface/tests/mapgraph.rs b/crates/tsuzuri-surface/tests/teeth4/mapgraph.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/mapgraph.rs
+rename to crates/tsuzuri-surface/tests/teeth4/mapgraph.rs
+diff --git a/crates/tsuzuri-surface/tests/mapview.rs b/crates/tsuzuri-surface/tests/teeth4/mapview.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/mapview.rs
+rename to crates/tsuzuri-surface/tests/teeth4/mapview.rs
+diff --git a/crates/tsuzuri-surface/tests/mqface.rs b/crates/tsuzuri-surface/tests/teeth4/mqface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/mqface.rs
+rename to crates/tsuzuri-surface/tests/teeth4/mqface.rs
+diff --git a/crates/tsuzuri-surface/tests/mstore.rs b/crates/tsuzuri-surface/tests/teeth4/mstore.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/mstore.rs
+rename to crates/tsuzuri-surface/tests/teeth4/mstore.rs
+index 433b90ae3fad90bf140e8db194625189c0404c84..6420486a44b8a794b658da648bbf96461fd28805 100644
+--- a/crates/tsuzuri-surface/tests/mstore.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/mstore.rs
+@@ -331,7 +331,7 @@ const FILTERS: [&str; 92] = [
+ /// 自分の file の test の名はどれも接頭辞で始まり、残りの字はほかの行の filter の語を含まない。
+ #[test]
+ fn mstore_own_names_clean() {
+-    let text = read("tests/mstore.rs");
++    let text = read("tests/teeth4/mstore.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/ncard.rs b/crates/tsuzuri-surface/tests/teeth4/ncard.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ncard.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ncard.rs
+index 357afddb1d43bf52e154bbe6bcdd4383f2983abc..f3b24175b22023fad7599652ac6a08b9712d6e9f 100644
+--- a/crates/tsuzuri-surface/tests/ncard.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/ncard.rs
+@@ -309,7 +309,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn ncard_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 80);
+-    let text = read("tests/ncard.rs");
++    let text = read("tests/teeth4/ncard.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/next.rs b/crates/tsuzuri-surface/tests/teeth4/next.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/next.rs
+rename to crates/tsuzuri-surface/tests/teeth4/next.rs
+diff --git a/crates/tsuzuri-surface/tests/nodepage.rs b/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/nodepage.rs
+rename to crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+diff --git a/crates/tsuzuri-surface/tests/nstall.rs b/crates/tsuzuri-surface/tests/teeth4/nstall.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/nstall.rs
+rename to crates/tsuzuri-surface/tests/teeth4/nstall.rs
+index ac917f22eae3168cb5fe338589accc6045c5c9e4..167ee3c8415088ca0faa8e4423c50dea9c30da3c 100644
+--- a/crates/tsuzuri-surface/tests/nstall.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/nstall.rs
+@@ -107,7 +107,7 @@ const FILTERS: [&str; 106] = [
+ /// (7) この file の歯の名はどれも nstall_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn nstall_face_names_apart() {
+-    let text = read("tests/nstall.rs");
++    let text = read("tests/teeth4/nstall.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/ntcface.rs b/crates/tsuzuri-surface/tests/teeth4/ntcface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/ntcface.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ntcface.rs
+diff --git a/crates/tsuzuri-surface/tests/ntime.rs b/crates/tsuzuri-surface/tests/teeth4/ntime.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ntime.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ntime.rs
+index cda37460381380cfb220e46e304c8fbdb29355ff..a48a5a737a1acfd94c4f06e37762567f8a3445fa 100644
+--- a/crates/tsuzuri-surface/tests/ntime.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/ntime.rs
+@@ -629,7 +629,7 @@ const FILTERS: [&str; 80] = [
+ /// (11) この file の歯の名はどれも ntime_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn ntime_own_names_clean() {
+-    let text = read("tests/ntime.rs");
++    let text = read("tests/teeth4/ntime.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/parts.rs b/crates/tsuzuri-surface/tests/teeth4/parts.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/parts.rs
+rename to crates/tsuzuri-surface/tests/teeth4/parts.rs
+diff --git a/crates/tsuzuri-surface/tests/pcimark.rs b/crates/tsuzuri-surface/tests/teeth4/pcimark.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/pcimark.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pcimark.rs
+index 3cbec20442426c14a2095aad62995e2ce9a0fcc4..c0eb46b6e597613a7a768c0e589e9c32006830d6 100644
+--- a/crates/tsuzuri-surface/tests/pcimark.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/pcimark.rs
+@@ -420,8 +420,8 @@ const FILTER_WORDS: [&str; 159] = [
+ /// (14) この file の歯の名は 6 つで、どれも pci_ で始まり、名の全体が filter の語を含まない。
+ #[test]
+ fn pci_surface_names_clean() {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/pcimark.rs");
+-    let text = std::fs::read_to_string(&path).expect("tests/pcimark.rs を読む");
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/teeth4/pcimark.rs");
++    let text = std::fs::read_to_string(&path).expect("tests/teeth4/pcimark.rs を読む");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/pclosed.rs b/crates/tsuzuri-surface/tests/teeth4/pclosed.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/pclosed.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pclosed.rs
+index 4982818ef21af0eca421df2a481f3f624d61522a..f219d098fb45847d93b7ab99ffd80a62e00067cc 100644
+--- a/crates/tsuzuri-surface/tests/pclosed.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/pclosed.rs
+@@ -269,7 +269,7 @@ const FILTERS: [&str; 114] = [
+ /// (12) この file の歯の名はどれも pclosed_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn pclosed_own_names_clean() {
+-    let text = read("tests/pclosed.rs");
++    let text = read("tests/teeth4/pclosed.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/pfold.rs b/crates/tsuzuri-surface/tests/teeth4/pfold.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/pfold.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pfold.rs
+index a5e290a605aa02c5996956903d202c9010142239..02b55df2c30674f9a577edea2c9987dc837b33a2 100644
+--- a/crates/tsuzuri-surface/tests/pfold.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/pfold.rs
+@@ -256,7 +256,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn pfold_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 106);
+-    let text = read("tests/pfold.rs");
++    let text = read("tests/teeth4/pfold.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/pipe.rs b/crates/tsuzuri-surface/tests/teeth4/pipe.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/pipe.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pipe.rs
+diff --git a/crates/tsuzuri-surface/tests/pkacface.rs b/crates/tsuzuri-surface/tests/teeth4/pkacface.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/pkacface.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pkacface.rs
+diff --git a/crates/tsuzuri-surface/tests/pkview.rs b/crates/tsuzuri-surface/tests/teeth4/pkview.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/pkview.rs
+rename to crates/tsuzuri-surface/tests/teeth4/pkview.rs
+index 83e7bdf1a30ee60b91028ccdba9634fa4cc5f880..45634a8039a09116bb9f588a61d30d12a82dea00 100644
+--- a/crates/tsuzuri-surface/tests/pkview.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/pkview.rs
+@@ -480,7 +480,7 @@ fn pkview_own_names_clean() {
+         assert!(!prefix.contains(word), "接頭辞が filter の語 {word} を含む");
+         assert!(!word.contains(prefix), "filter の語 {word} が接頭辞を含む");
+     }
+-    let text = read("tests/pkview.rs");
++    let text = read("tests/teeth4/pkview.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/popapp.rs b/crates/tsuzuri-surface/tests/teeth4/popapp.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/popapp.rs
+rename to crates/tsuzuri-surface/tests/teeth4/popapp.rs
+index b459e08be9a7e0c5d3e606bb29964bcf2f89c4e1..1c245e7e7ef0cc78fafb7d63152a522ae9295b83 100644
+--- a/crates/tsuzuri-surface/tests/popapp.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/popapp.rs
+@@ -400,7 +400,7 @@ const FILTERS: [&str; 248] = [
+ /// (5) この file の歯は 5 本で、名はどれも popapp_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn popapp_own_names_clean() {
+-    let text = read("tests/popapp.rs");
++    let text = read("tests/teeth4/popapp.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/projmore.rs b/crates/tsuzuri-surface/tests/teeth4/projmore.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/projmore.rs
+rename to crates/tsuzuri-surface/tests/teeth4/projmore.rs
+index 835d3e97c9ce3ddc9db693ce656163005a20d520..8bf74c9f4aacbf71c332c7757742dd3899cfb4d0 100644
+--- a/crates/tsuzuri-surface/tests/projmore.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/projmore.rs
+@@ -279,7 +279,7 @@ fn pmore_names_prefixed() {
+         "gnav_", "mkeys_", "klink_", "ilink_", "afocus_", "nxact_", "urpanel_", "saxis_",
+         "ticker_", "hfig_", "lspark_", "apop_", "brand_", "runsdoc_", "nbatch_",
+     ];
+-    let text = read("tests/projmore.rs");
++    let text = read("tests/teeth4/projmore.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/ptitle.rs b/crates/tsuzuri-surface/tests/teeth4/ptitle.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ptitle.rs
+rename to crates/tsuzuri-surface/tests/teeth4/ptitle.rs
+index d27f62092bc2ea2273b642e02bdf09a19d2d59b1..5bc9b1acfad66d5bd8cdeaa270fcf2b1871ee55a 100644
+--- a/crates/tsuzuri-surface/tests/ptitle.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/ptitle.rs
+@@ -242,7 +242,7 @@ fn ptitle_wiring_text() {
+ /// (6) 自分の file の test の名はどれも ptitle_ で始まり、filter の語を含まない。
+ #[test]
+ fn ptitle_own_names_clean() {
+-    let text = read("tests/ptitle.rs");
++    let text = read("tests/teeth4/ptitle.rs");
+     let mut names = Vec::new();
+     let mut lines = text.lines();
+     while let Some(line) = lines.next() {
+diff --git a/crates/tsuzuri-surface/tests/teeth5/main.rs b/crates/tsuzuri-surface/tests/teeth5/main.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a2b1f505b290a50a419b8fe87865597c304fa4b
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth5/main.rs
+@@ -0,0 +1,29 @@
++//! tsuzuri-surface の歯の群 teeth5（1 つの test target・nextest の歯の名は <module>::<fn>・判断の記録 ADR-32）。
++//! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
++#![cfg(test)]
++
++mod pwhole;
++mod qblock;
++mod qkey;
++mod rbusy;
++mod rvknode;
++mod seataxis;
++mod seatblock;
++mod sesplit;
++mod sgrace;
++mod steady;
++mod sthr;
++mod sxaxis;
++mod tgall;
++mod tgown;
++mod ticker;
++mod tipx;
++mod tkad;
++mod topbar;
++mod topfit;
++mod udacct;
++mod udash;
++mod unow;
++mod unrefpanel;
++mod uword;
++mod wstrip;
+diff --git a/crates/tsuzuri-surface/tests/pwhole.rs b/crates/tsuzuri-surface/tests/teeth5/pwhole.rs
+similarity index 98%
+rename from crates/tsuzuri-surface/tests/pwhole.rs
+rename to crates/tsuzuri-surface/tests/teeth5/pwhole.rs
+index 05a77e4067176c9a7ef024d7c6f1a7fd6d9f4da9..a2f554d76075f69c26f143dbfb3d6f44915605ab 100644
+--- a/crates/tsuzuri-surface/tests/pwhole.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/pwhole.rs
+@@ -163,7 +163,7 @@ fn pwhole_toggle_gone() {
+         !src.to_lowercase().contains("topic"),
+         "policy.rs に問いの選びの字が在る"
+     );
+-    let teeth = read("tests/batchpanel.rs");
++    let teeth = read("tests/teeth1/batchpanel.rs");
+     for word in ["Scope", "fn batchpanel_policy_scope"] {
+         assert!(!teeth.contains(word), "batchpanel.rs に {word} が在る");
+     }
+@@ -191,7 +191,7 @@ fn pwhole_dom_form_once() {
+ /// (5) この file の歯の名は pwhole_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn pwhole_own_names_clean() {
+-    let text = read("tests/pwhole.rs");
++    let text = read("tests/teeth5/pwhole.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/qblock.rs b/crates/tsuzuri-surface/tests/teeth5/qblock.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/qblock.rs
+rename to crates/tsuzuri-surface/tests/teeth5/qblock.rs
+index bdcdb15cee023b0c5381eb069d2d5453b78fc3da..361c72409ee5e75d315548e43e77865bec6dbae8 100644
+--- a/crates/tsuzuri-surface/tests/qblock.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/qblock.rs
+@@ -218,7 +218,7 @@ fn qblock_own_names_clean() {
+     assert_eq!(FILTERS.len(), 92);
+     let distinct: std::collections::BTreeSet<&&str> = FILTERS.iter().collect();
+     assert_eq!(distinct.len(), 92);
+-    let src = read("tests/qblock.rs");
++    let src = read("tests/teeth5/qblock.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/qkey.rs b/crates/tsuzuri-surface/tests/teeth5/qkey.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/qkey.rs
+rename to crates/tsuzuri-surface/tests/teeth5/qkey.rs
+index 7623fdf9f67c76d2ff1c22c95f22b981c2f793c6..13a1462da4fc3833e9423677bc3bf70f9399f8d6 100644
+--- a/crates/tsuzuri-surface/tests/qkey.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/qkey.rs
+@@ -185,7 +185,7 @@ fn qkey_dom_text() {
+ /// 歯の名はどれも qkey_ で始まり、先の歯の filter の語を含まない。
+ #[test]
+ fn qkey_own_names_clean() {
+-    let text = read("tests/qkey.rs");
++    let text = read("tests/teeth5/qkey.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/rbusy.rs b/crates/tsuzuri-surface/tests/teeth5/rbusy.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/rbusy.rs
+rename to crates/tsuzuri-surface/tests/teeth5/rbusy.rs
+diff --git a/crates/tsuzuri-surface/tests/rvknode.rs b/crates/tsuzuri-surface/tests/teeth5/rvknode.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/rvknode.rs
+rename to crates/tsuzuri-surface/tests/teeth5/rvknode.rs
+index 084f6de7ad4a5e1bb27a517c91f85b51f5686181..8b5e7304714596d76e5d73acc48ac02cde76e709 100644
+--- a/crates/tsuzuri-surface/tests/rvknode.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/rvknode.rs
+@@ -378,7 +378,7 @@ const FILTER: [&str; 129] = [
+ 
+ #[test]
+ fn rvk_own_names_clean() {
+-    let text = read("tests/rvknode.rs");
++    let text = read("tests/teeth5/rvknode.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/seataxis.rs b/crates/tsuzuri-surface/tests/teeth5/seataxis.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/seataxis.rs
+rename to crates/tsuzuri-surface/tests/teeth5/seataxis.rs
+index 7e424aa84850e5a953724b3729491cdb3bb5bb85..81a0e3c132ed0695d02d70aff3dc79f64bb76648 100644
+--- a/crates/tsuzuri-surface/tests/seataxis.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/seataxis.rs
+@@ -296,7 +296,7 @@ const FILTERS: [&str; 65] = [
+ /// (7) この file の歯の名は saxis_ で始まり、残りの字はほかの行の filter の語を含まない。
+ #[test]
+ fn saxis_own_names_clean() {
+-    let src = read("tests/seataxis.rs");
++    let src = read("tests/teeth5/seataxis.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/seatblock.rs b/crates/tsuzuri-surface/tests/teeth5/seatblock.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/seatblock.rs
+rename to crates/tsuzuri-surface/tests/teeth5/seatblock.rs
+diff --git a/crates/tsuzuri-surface/tests/sesplit.rs b/crates/tsuzuri-surface/tests/teeth5/sesplit.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/sesplit.rs
+rename to crates/tsuzuri-surface/tests/teeth5/sesplit.rs
+index 71dd7d4dfe4f3342c048cb7fb6805815e49c5d7e..72100ff3576b3d0d27b1dc5ae4b14101f123ad56 100644
+--- a/crates/tsuzuri-surface/tests/sesplit.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/sesplit.rs
+@@ -232,7 +232,7 @@ const FILTER: [&str; 106] = [
+ /// (9) この file の歯の名は sesplit_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn sesplit_own_names_clean() {
+-    let me = read("tests/sesplit.rs");
++    let me = read("tests/teeth5/sesplit.rs");
+     let lines: Vec<&str> = me.lines().collect();
+     let mut n = 0;
+     for (i, l) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/sgrace.rs b/crates/tsuzuri-surface/tests/teeth5/sgrace.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/sgrace.rs
+rename to crates/tsuzuri-surface/tests/teeth5/sgrace.rs
+index ecb507fa701b41ef50c609de9fef7bc568c98364..8a0c43cd3072792f9e15cf46fb5ab9db6f719d7a 100644
+--- a/crates/tsuzuri-surface/tests/sgrace.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/sgrace.rs
+@@ -474,7 +474,7 @@ const WORDS: &[&str] = &[
+ fn sgrace_own_names_clean() {
+     assert_eq!(WORDS.len(), 210);
+     let mut names = Vec::new();
+-    for rel in ["tests/sgrace.rs", "../tsuzuri-core/tests/teeth2/sgrace.rs"] {
++    for rel in ["tests/teeth5/sgrace.rs", "../tsuzuri-core/tests/teeth2/sgrace.rs"] {
+         let text = read(rel);
+         let lines: Vec<&str> = text.lines().collect();
+         for w in lines.windows(2).filter(|w| w[0].trim() == "#[test]") {
+diff --git a/crates/tsuzuri-surface/tests/steady.rs b/crates/tsuzuri-surface/tests/teeth5/steady.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/steady.rs
+rename to crates/tsuzuri-surface/tests/teeth5/steady.rs
+diff --git a/crates/tsuzuri-surface/tests/sthr.rs b/crates/tsuzuri-surface/tests/teeth5/sthr.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/sthr.rs
+rename to crates/tsuzuri-surface/tests/teeth5/sthr.rs
+index f6342cb43b543357fcb01e8dbbdde8b7f4fa278b..daacaccd904385d9b797241ac51b1f0faa8fff68 100644
+--- a/crates/tsuzuri-surface/tests/sthr.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/sthr.rs
+@@ -375,7 +375,7 @@ const WORDS: &[&str] = &[
+ #[test]
+ fn sthr_own_names_clean() {
+     assert_eq!(WORDS.len(), 212);
+-    let text = read("tests/sthr.rs");
++    let text = read("tests/teeth5/sthr.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/sxaxis.rs b/crates/tsuzuri-surface/tests/teeth5/sxaxis.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/sxaxis.rs
+rename to crates/tsuzuri-surface/tests/teeth5/sxaxis.rs
+index 5ff0881d3ee8b7cc396ca9a7f084220f54ecc8d8..bf024814051eb62a97c8e74db7196d34927d95ce 100644
+--- a/crates/tsuzuri-surface/tests/sxaxis.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/sxaxis.rs
+@@ -237,7 +237,7 @@ const FILTERS: [&str; 78] = [
+ /// (6) この file の歯の名は sxaxis_ で始まり、残りの字はほかの行の filter の語を含まない。
+ #[test]
+ fn sxaxis_own_names_clean() {
+-    let src = read("tests/sxaxis.rs");
++    let src = read("tests/teeth5/sxaxis.rs");
+     let lines: Vec<&str> = src.lines().collect();
+     let names: Vec<&str> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/tgall.rs b/crates/tsuzuri-surface/tests/teeth5/tgall.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/tgall.rs
+rename to crates/tsuzuri-surface/tests/teeth5/tgall.rs
+diff --git a/crates/tsuzuri-surface/tests/tgown.rs b/crates/tsuzuri-surface/tests/teeth5/tgown.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/tgown.rs
+rename to crates/tsuzuri-surface/tests/teeth5/tgown.rs
+diff --git a/crates/tsuzuri-surface/tests/ticker.rs b/crates/tsuzuri-surface/tests/teeth5/ticker.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/ticker.rs
+rename to crates/tsuzuri-surface/tests/teeth5/ticker.rs
+index 006feda5415118dd0f7343ddd37a7f52e21d3f47..2812c0135585bec8a7ccfb0409d840844ef1e15e 100644
+--- a/crates/tsuzuri-surface/tests/ticker.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/ticker.rs
+@@ -191,7 +191,7 @@ fn words_back() -> &'static [&'static str] {
+ 
+ /// 歯の名は 6 つで、どれも ticker_ で始まり、残りの字が filter の語のどれも含まない。
+ fn names_avoid(words: &[&str]) {
+-    let text = read("tests/ticker.rs");
++    let text = read("tests/teeth5/ticker.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<String> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/tipx.rs b/crates/tsuzuri-surface/tests/teeth5/tipx.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/tipx.rs
+rename to crates/tsuzuri-surface/tests/teeth5/tipx.rs
+index 2276662c1fc0ceab435c7f34d8516215ff1de022..f2b9006d23b965a3ec01dd7c4530723cde737722 100644
+--- a/crates/tsuzuri-surface/tests/tipx.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/tipx.rs
+@@ -175,7 +175,7 @@ fn tipx_dom_text() {
+ /// 歯の名はどれも tipx_ で始まり、先の歯の filter の語を含まない。
+ #[test]
+ fn tipx_names_stay_apart() {
+-    let text = read("tests/tipx.rs");
++    let text = read("tests/teeth5/tipx.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/crates/tsuzuri-surface/tests/tkad.rs b/crates/tsuzuri-surface/tests/teeth5/tkad.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/tkad.rs
+rename to crates/tsuzuri-surface/tests/teeth5/tkad.rs
+index 34f68624ef0b7abff7e127a312ce499eff5ed976..10d3175f92505794f5faec740242125ad525cb6c 100644
+--- a/crates/tsuzuri-surface/tests/tkad.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/tkad.rs
+@@ -302,7 +302,7 @@ const FILTERS: [&str; 179] = [
+ /// (4) この file の歯は 4 つで、名は tkad_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn tkad_names_clean() {
+-    let text = read("tests/tkad.rs");
++    let text = read("tests/teeth5/tkad.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<String> = lines
+         .windows(2)
+diff --git a/crates/tsuzuri-surface/tests/topbar.rs b/crates/tsuzuri-surface/tests/teeth5/topbar.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/topbar.rs
+rename to crates/tsuzuri-surface/tests/teeth5/topbar.rs
+diff --git a/crates/tsuzuri-surface/tests/topfit.rs b/crates/tsuzuri-surface/tests/teeth5/topfit.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/topfit.rs
+rename to crates/tsuzuri-surface/tests/teeth5/topfit.rs
+diff --git a/crates/tsuzuri-surface/tests/udacct.rs b/crates/tsuzuri-surface/tests/teeth5/udacct.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/udacct.rs
+rename to crates/tsuzuri-surface/tests/teeth5/udacct.rs
+index 5eeb27a2bb14612780954de6e7174673c121d2ff..17c386d3f046104da1d798c5f0d8f5b29471246d 100644
+--- a/crates/tsuzuri-surface/tests/udacct.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/udacct.rs
+@@ -381,7 +381,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn udacct_names_clean() {
+     assert_eq!(FILTERS.len(), 220);
+-    let text = read("tests/udacct.rs");
++    let text = read("tests/teeth5/udacct.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/udash.rs b/crates/tsuzuri-surface/tests/teeth5/udash.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/udash.rs
+rename to crates/tsuzuri-surface/tests/teeth5/udash.rs
+diff --git a/crates/tsuzuri-surface/tests/unow.rs b/crates/tsuzuri-surface/tests/teeth5/unow.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/unow.rs
+rename to crates/tsuzuri-surface/tests/teeth5/unow.rs
+index a248b4834a8e7ce0cff0f2d1a344ac92b7cea4a2..87a8ea9033b640dcdc2ea1857f2fa5d287aa13c6 100644
+--- a/crates/tsuzuri-surface/tests/unow.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/unow.rs
+@@ -265,7 +265,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn unow_names_clean() {
+     assert_eq!(FILTERS.len(), 191);
+-    let text = read("tests/unow.rs");
++    let text = read("tests/teeth5/unow.rs");
+     let lines: Vec<&str> = text.lines().collect();
+     let mut names = Vec::new();
+     for (i, line) in lines.iter().enumerate() {
+diff --git a/crates/tsuzuri-surface/tests/unrefpanel.rs b/crates/tsuzuri-surface/tests/teeth5/unrefpanel.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/unrefpanel.rs
+rename to crates/tsuzuri-surface/tests/teeth5/unrefpanel.rs
+index 1de3d78a4558d7e006dd3d3c67767c89a8563569..2030f39b4e079e2e7f5f63245172ce921145933b 100644
+--- a/crates/tsuzuri-surface/tests/unrefpanel.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/unrefpanel.rs
+@@ -359,7 +359,7 @@ const FILTERS: [&str; 65] = [
+ /// (9) この file の歯の名はどれも urpanel_ で始まり、残りの字は filter の語を含まない。
+ #[test]
+ fn urpanel_own_names_clean() {
+-    let text = read("tests/unrefpanel.rs");
++    let text = read("tests/teeth5/unrefpanel.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/uword.rs b/crates/tsuzuri-surface/tests/teeth5/uword.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/uword.rs
+rename to crates/tsuzuri-surface/tests/teeth5/uword.rs
+index c455139a62abffddcd600e5d30a81c2775fc61e2..cd57b992bcbc97c4bf9e58e051ee8b810a5213bc 100644
+--- a/crates/tsuzuri-surface/tests/uword.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/uword.rs
+@@ -264,7 +264,7 @@ const FILTERS: &[&str] = &[
+ #[test]
+ fn uword_names_stay_apart() {
+     assert_eq!(FILTERS.len(), 106);
+-    let text = read("tests/uword.rs");
++    let text = read("tests/teeth5/uword.rs");
+     let lines: Vec<&str> = text.lines().map(str::trim).collect();
+     let names: Vec<&str> = lines
+         .iter()
+diff --git a/crates/tsuzuri-surface/tests/wstrip.rs b/crates/tsuzuri-surface/tests/teeth5/wstrip.rs
+similarity index 99%
+rename from crates/tsuzuri-surface/tests/wstrip.rs
+rename to crates/tsuzuri-surface/tests/teeth5/wstrip.rs
+index fd18f5dd0932fdfe6ca65c0191ac12b9beb70d96..df92e2c71c3f129cf085e5495347e9c02ae0ff63 100644
+--- a/crates/tsuzuri-surface/tests/wstrip.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/wstrip.rs
+@@ -92,7 +92,7 @@ fn wstrip_trunk_release_build() {
+ 
+ #[test]
+ fn wstrip_own_names_clean() {
+-    let text = read("tests/wstrip.rs");
++    let text = read("tests/teeth5/wstrip.rs");
+     let mut names = Vec::new();
+     let mut rest = text.as_str();
+     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index e879309a35052d477841c029d78c9ae2e842b58f..fe8c5476bac8127e4adb6457cc93cb1b36135560 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -18,6 +18,11 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-contract/tests/teeth1", 13),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),
++    ("crates/tsuzuri-surface/tests/teeth1", 31),
++    ("crates/tsuzuri-surface/tests/teeth2", 38),
++    ("crates/tsuzuri-surface/tests/teeth3", 30),
++    ("crates/tsuzuri-surface/tests/teeth4", 31),
++    ("crates/tsuzuri-surface/tests/teeth5", 25),
+     ("xtask/tests/teeth1", 9),
+     // kfold-groups-end
+ ];
