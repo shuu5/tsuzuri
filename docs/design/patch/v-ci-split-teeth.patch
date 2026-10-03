@@ -1,0 +1,127 @@
+diff --git a/xtask/tests/vsplit.rs b/xtask/tests/vsplit.rs
+index a6a924b5fdfbf627438a93f9680ab9ab4032d104..c4badb2222887a1ccbcd19775c8ae6bad077b864 100644
+--- a/xtask/tests/vsplit.rs
++++ b/xtask/tests/vsplit.rs
+@@ -161,17 +161,32 @@ fn vsplit_nested_stages_spread() {
+ 
+ #[test]
+ fn vsplit_unknown_key_refused() {
++    // 否定の見本は、正しい見本から測る句の 1 つだけを外した形（鍵だけが表に無い・割りの字の句の 1 つだけが崩れる）。
++    assert_eq!(
++        spread::turn("cargo build --workspace", Some("count:1/8")),
++        Ok(Turn::Run)
++    );
+     let want = Err("段 cargo fmt --check が振り分けの表に無い".to_string());
+     assert_eq!(spread::turn("cargo fmt --check", None), want);
+     assert_eq!(spread::turn("cargo fmt --check", Some("count:1/8")), want);
+     assert_eq!(
+-        spread::turn("surface-build", Some("count:9/8")),
+-        Err("割りの字を読めない: count:9/8".to_string())
+-    );
+-    assert_eq!(
+-        spread::turn("surface-build", Some("8")),
+-        Err("割りの字を読めない: 8".to_string())
++        spread::turn("surface-build", Some("count:7/8")),
++        Ok(Turn::Run)
+     );
++    for part in [
++        "1/8",
++        "count:7-8",
++        "count:x/8",
++        "count:7/y",
++        "count:0/8",
++        "count:9/8",
++    ] {
++        assert_eq!(
++            spread::turn("surface-build", Some(part)),
++            Err(format!("割りの字を読めない: {part}")),
++            "{part}"
++        );
++    }
+ }
+ 
+ #[test]
+@@ -180,37 +195,59 @@ fn vsplit_check_wiring() {
+     assert_eq!(main.lines().filter(|l| *l == "mod spread;").count(), 1);
+     let (_, check) = main.split_once("fn check(").expect("fn check");
+     let (check, _) = check.split_once("\n}\n").expect("fn check の終わり");
+-    let order = [
+-        "for step in CHECK_STEPS {",
+-        "let rc = cargo_step(root, &cargo, step, part);",
+-        "let rc = match turn(spread::SURFACE, part) {",
+-        "surface_build(root)",
+-        "nested::run(root, &cargo, part)",
+-    ];
+-    let at: Vec<usize> = order
+-        .iter()
+-        .map(|s| {
+-            assert_eq!(check.matches(s).count(), 1, "{s}");
+-            check.find(s).expect(s)
+-        })
+-        .collect();
+-    assert!(at.windows(2).all(|w| w[0] < w[1]), "check の字の順: {at:?}");
++    in_order(
++        check,
++        &[
++            "for step in CHECK_STEPS {",
++            "let rc = cargo_step(root, &cargo, step, part);",
++            "let rc = match turn(spread::SURFACE, part) {",
++            "surface_build(root)",
++            "Ok(false) => 0,",
++            "nested::run(root, &cargo, part)",
++        ],
++    );
+     let (_, step) = main.split_once("fn cargo_step(").expect("fn cargo_step");
+     let (step, _) = step.split_once("\n}\n").expect("fn cargo_step の終わり");
+-    let turn_at = step
+-        .find("match turn(&spread::key(\"cargo\", &args), part) {")
+-        .expect("cargo の段の判じ");
+-    let shoot_at = step.find("Command::new(cargo)").expect("cargo を撃つ");
+-    assert!(turn_at < shoot_at, "判じてから撃つ");
++    in_order(
++        step,
++        &[
++            "match turn(&spread::key(\"cargo\", &args), part) {",
++            "Ok(false) => return 0,",
++            "Command::new(cargo)",
++        ],
++    );
+     let (_, turn) = main.split_once("fn turn(").expect("fn turn");
+     let (turn, _) = turn.split_once("\n}\n").expect("fn turn の終わり");
+-    assert!(turn.contains("spread::turn(key, part)"));
+-    assert!(turn.contains("Err(2)"), "表に無い段は rc 2");
++    in_order(
++        turn,
++        &[
++            "match spread::turn(key, part) {",
++            "Ok(spread::Turn::Run) => Ok(true),",
++            "spread::line(key, owner, n)",
++            "Ok(false)",
++            "Err(2)",
++        ],
++    );
+     let nested = read_root("xtask/src/nested.rs");
+     assert!(
+         nested.contains(
+-            "    for shot in plan(root, &base, &dirs, part) {\n        match turn(&spread::key(\"nested\", &shot.args), part) {\n"
++            "    for shot in plan(root, &base, &dirs, part) {\n        match turn(&spread::key(\"nested\", &shot.args), part) {\n            Ok(true) => {}\n            Ok(false) => continue,\n            Err(rc) => return rc,\n        }\n"
+         ),
+-        "入れ子の段は撃つ前に判じる"
++        "入れ子の段は撃つ前に判じ、ほかの役の段は撃たない"
++    );
++}
++
++/// 字の列が text の中にちょうど 1 度ずつ、この順で在る。
++fn in_order(text: &str, order: &[&str]) {
++    let at: Vec<usize> = order
++        .iter()
++        .map(|s| {
++            assert_eq!(text.matches(s).count(), 1, "{s}");
++            text.find(s).expect(s)
++        })
++        .collect();
++    assert!(
++        at.windows(2).all(|w| w[0] < w[1]),
++        "字の順: {order:?} {at:?}"
+     );
+ }

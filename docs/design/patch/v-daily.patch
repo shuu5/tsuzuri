@@ -1,17 +1,46 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index d32bf25e91d75c111308f02619d76d075daf3087..65774ecee23d9d1ac671626ee10e41f124ab22c3 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1962,6 +1962,7 @@ version = "0.1.0"
+ dependencies = [
+  "miniz_oxide",
+  "tsuzuri-boundary",
++ "tsuzuri-contract",
+ ]
+ 
+ [[package]]
+diff --git a/xtask/Cargo.toml b/xtask/Cargo.toml
+index f6259b9ae10d7885ab0492906079ae324e3e0e32..e1a2559e45a17a3374c8b29aeac89647370c58b4 100644
+--- a/xtask/Cargo.toml
++++ b/xtask/Cargo.toml
+@@ -9,6 +9,8 @@ license.workspace = true
+ # 行 g-gz（裁定 t3-hub.52.40:20260928T0156Z-1）: 配布の file の gzip の写しの deflate（枠と CRC-32 は gz の module で書く）。
+ miniz_oxide = "0.8"
+ tsuzuri-boundary = { path = "../crates/tsuzuri-boundary" }
++# 行 v-daily: 日に 1 度の撃ちが memo の状態（bd の show の JSON）を台帳の読みと同じ型 BdLine と wire で読む（外の依存を足さない）。
++tsuzuri-contract = { path = "../crates/tsuzuri-contract" }
+ 
+ [lints]
+ workspace = true
 diff --git a/xtask/src/daily.rs b/xtask/src/daily.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd056bf86e4f
+index 0000000000000000000000000000000000000000..8a1c11005b71d62b9fe130f97b7e8114f4401eb1
 --- /dev/null
 +++ b/xtask/src/daily.rs
-@@ -0,0 +1,329 @@
+@@ -0,0 +1,367 @@
 +//! 日に 1 度の全部の撃ち（行 v-daily・判断の記録 ADR-34 の決定 (6)）。host の利用者の timer が、作業木の外の固定の置き場の写しで
 +//! `cargo run -q -p xtask -- daily` を撃つ。写しの origin の main を fetch して detach で checkout し、入れ子の段に全部を撃たせる
 +//! 環境変数を置いて xtask の check を nice -n 10 で撃ち、記録の file に 1 行足す。落ちた時は席への memo を台帳に起こし
-+//! （落ちが続く間は同じ memo の notes に [再発] の行を足す）、通った時は memo を書かない。host の値（記録の file・出力の file・
++//! （落ちが続く間は同じ memo の notes に [再発] の行を足す・その memo が open か in_progress でないか読めないか notes が満ちる時は、足さずに
++//! 前の memo の id を本文に書いた新しい memo を起こす）、通った時は memo を書かない。host の値（記録の file・出力の file・
 +//! 台帳の作業木・memo の親・bdw の program）は引数で受け、code を分けない（条 N-2）。組みの置き場は撃つ側の CARGO_TARGET_DIR。
 +
 +use std::path::{Path, PathBuf};
 +use std::process::{Command, Output, Stdio};
++
++use tsuzuri_contract::ledger::BdLine;
++use tsuzuri_contract::wire;
 +
 +/// 撃ち方。
 +pub const USAGE: &str = "usage: cargo run -q -p xtask -- daily --log <記録の file> --out <出力の file> --ledger <台帳の作業木> --parent <memo の親の bead> [--bdw <program>]";
@@ -33,6 +62,12 @@ index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd05
 +/// check を撃つ argv の頭（nice の program と引数・その後に cargo の program を置く）と cargo の引数。
 +pub const NICE: (&str, &[&str]) = ("nice", &["-n", "10"]);
 +pub const CHECK: &[&str] = &["run", "-q", "-p", "xtask", "--", "check"];
++
++/// 続く落ちの前に memo の状態を読む bdw の引数の頭（bd の READ の素通し・台帳を書かない・その後に id と --json）。
++pub const SHOW: &[&str] = &["--readonly", "show"];
++
++/// memo の notes の上限 byte（器の rules 行 memo.notes_max_bytes・越えた open な memo を doctor が oversized に数える）。
++pub const NOTES_MAX: usize = 8192;
 +
 +/// 撃つ物の在りか。
 +#[derive(Debug, PartialEq, Eq)]
@@ -222,8 +257,11 @@ index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd05
 +
 +/// 落ちの memo を起こすか、続く落ちなら同じ memo の notes に [再発] の行を足し、記録に置く id（書けなければ failed）。
 +fn tell(d: &Daily, prev: &str, seen: &Seen) -> String {
-+    if let Some(id) = open_memo(prev) {
-+        let note = recur_note(seen);
++    let note = recur_note(seen);
++    let before = open_memo(prev);
++    if let Some(id) = &before
++        && appendable(id, show(d, id).as_deref(), &note)
++    {
 +        let ok = bdw(
 +            d,
 +            &[
@@ -233,16 +271,37 @@ index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd05
 +            ],
 +        )
 +        .is_some();
-+        return if ok { id } else { "failed".to_string() };
++        return if ok { id.clone() } else { "failed".to_string() };
 +    }
 +    let body = d.log.with_extension("memo.md");
-+    if std::fs::write(&body, memo_body(seen, &d.out, &d.log)).is_err() {
++    if std::fs::write(&body, memo_body(seen, &d.out, &d.log, before.as_deref())).is_err() {
 +        return "failed".to_string();
 +    }
 +    bdw(d, &memo_argv(&d.parent, &body, &seen.stamp, &seen.sha))
 +        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
 +        .filter(|id| !id.is_empty() && !id.contains(char::is_whitespace))
 +        .unwrap_or_else(|| "failed".to_string())
++}
++
++/// 記録の memo に [再発] の行を足してよいか。bd の show の字（bdw が落ちれば None）が id の bead 1 本だけで、status が open か in_progress で、
++/// 足した後の notes（区切りの改行 1 byte を含む）が NOTES_MAX 以下の時だけ真（閉じた・台帳に無い・読めない・満ちる時は新しい memo）。
++pub fn appendable(id: &str, shown: Option<&str>, note: &str) -> bool {
++    let Some(Ok(lines)) = shown.map(wire::decode::<Vec<BdLine>>) else {
++        return false;
++    };
++    let [line] = lines.as_slice() else {
++        return false;
++    };
++    line.id.as_str() == id
++        && matches!(line.status.as_str(), "open" | "in_progress")
++        && line.notes.len() + 1 + note.len() <= NOTES_MAX
++}
++
++/// memo の bd の show の字（台帳の作業木で bdw --readonly show <id> --json・落ちれば None）。
++fn show(d: &Daily, id: &str) -> Option<String> {
++    let mut args: Vec<String> = SHOW.iter().map(|a| (*a).to_string()).collect();
++    args.extend([id.to_string(), "--json".to_string()]);
++    bdw(d, &args).map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
 +}
 +
 +/// bdw を台帳の作業木で撃つ（rc 0 の時だけ出力）。
@@ -284,17 +343,21 @@ index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd05
 +    format!("[再発] {stamp} origin/main {sha} の段 {step} が rc {rc}")
 +}
 +
-+/// memo の本文（出所・観測・候補・昇格条件の 4 節・path は file の名だけ）。
-+fn memo_body(seen: &Seen, out: &Path, log: &Path) -> String {
++/// memo の本文（出所・観測・候補・昇格条件の 4 節・path は file の名だけ・足さなかった前の memo が在ればその id）。
++fn memo_body(seen: &Seen, out: &Path, log: &Path, before: Option<&str>) -> String {
 +    let name = |p: &Path| {
 +        p.file_name()
 +            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
 +    };
++    let before = before.map_or_else(String::new, |id| {
++        format!("前の memo {id} は open でも in_progress でもないか、読めないか、notes が上限 {NOTES_MAX} byte を越えるので、足さずにこの memo を起こした。\n")
++    });
 +    format!(
-+        "### 出所\nxtask の daily（判断の記録 ADR-34 の決定 (6)・行 v-daily・host の利用者の timer）。\n\n\
++        "### 出所\nxtask の daily（判断の記録 ADR-34 の決定 (6)・行 v-daily・host の利用者の timer）。\n{}\n\
 +         ### 観測\n{} に origin/main {} の木で、環境変数 {}={} を置いた xtask の check を撃ち、段 {} が rc {} で落ちた（{} 秒）。出力は file {}、記録は file {}（どちらも撃つ写しの置き場の側）。\n\n\
 +         ### 候補\n出力の末で落ちた段と歯を見る。host の道具と設定のずれ（git・tmux・nextest・rustup の版・$CARGO_HOME と祖先の .cargo の設定）か、時刻で落ちる型か、混んだ時だけ揺れる歯かを見分ける。\n\n\
 +         ### 昇格条件\n引き金: 再発 2\n",
++        before,
 +        seen.stamp,
 +        seen.sha,
 +        FORCE.0,
@@ -334,7 +397,7 @@ index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd05
 +    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}Z")
 +}
 diff --git a/xtask/src/main.rs b/xtask/src/main.rs
-index 30c08634e1691262e99e5ac32ef3b648d9f8e71a..4c7d4f03b78662d7e23a8b7ed67854a0dc905eb2 100644
+index 30c08634e1691262e99e5ac32ef3b648d9f8e71a..0f24b845280aeac549b50af507b6e9db741947a3 100644
 --- a/xtask/src/main.rs
 +++ b/xtask/src/main.rs
 @@ -7,8 +7,10 @@
@@ -389,6 +452,26 @@ index 30c08634e1691262e99e5ac32ef3b648d9f8e71a..4c7d4f03b78662d7e23a8b7ed67854a0
  fn exit_code(rc: i32) -> ExitCode {
      ExitCode::from(u8::try_from(rc).unwrap_or(1))
  }
+@@ -488,6 +507,7 @@ mod tests {
+     /// miniz_oxide（行 g-gz・xtask だけ・裁定 t3-hub.52.40:20260928T0156Z-1）・
+     /// clap と yaml-rust2（行 k-join-folio・持ち込んだ folio だけ・判断の記録 ADR-21 の承認）。
+     /// 境界の crate の folio は workspace の member（行 k-tz-entry・folio の lib の入口を tz の口が撃つ）。
++    /// xtask の tsuzuri-contract は行 v-daily（日に 1 度の撃ちが memo の状態を台帳の読みの型 BdLine と wire で読む・外の部品は増えない）。
+     /// 名を足す便はこの一覧を直す。一覧に無い名が manifest に在れば落ちる。
+     const DIRECT_DEPS: [(&str, &[&str]); 6] = [
+         ("crates/tsuzuri-contract", &["serde", "serde_json"]),
+@@ -510,7 +530,10 @@ mod tests {
+             ],
+         ),
+         ("folio2/crates/folio", &["clap", "yaml-rust2"]),
+-        ("xtask", &["miniz_oxide", "tsuzuri-boundary"]),
++        (
++            "xtask",
++            &["miniz_oxide", "tsuzuri-boundary", "tsuzuri-contract"],
++        ),
+     ];
+ 
+     /// 面の crate の直接依存の上限（規則の行 R-25 の値・要件 NFR3）。rules の file の行 R-25 の字と照らす。
 diff --git a/xtask/systemd/tsuzuri-daily.service b/xtask/systemd/tsuzuri-daily.service
 new file mode 100644
 index 0000000000000000000000000000000000000000..d7b1f01738a880960a4f35dcb0bc68b35b4a4839
@@ -431,10 +514,10 @@ index 0000000000000000000000000000000000000000..fc0fddb596ea94423b3039a52471efef
 +WantedBy=timers.target
 diff --git a/xtask/tests/vdaily.rs b/xtask/tests/vdaily.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146b17de143
+index 0000000000000000000000000000000000000000..1874fc371394d6722614337412e0c7daacad97fa
 --- /dev/null
 +++ b/xtask/tests/vdaily.rs
-@@ -0,0 +1,465 @@
+@@ -0,0 +1,573 @@
 +//! 行 v-daily の歯: 日に 1 度の全部の撃ち（xtask の src/daily.rs・判断の記録 ADR-34 の決定 (6)）を、一時の git の repo の fixture と
 +//! 偽の cargo と偽の bdw（shell の script）で撃ち、記録の行と memo の書きを照らし、systemd の雛形と main.rs の呼びを字で読む。
 +#![cfg(test)]
@@ -446,7 +529,7 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +use std::path::{Path, PathBuf};
 +use std::process::Command;
 +
-+use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, Outcome, Seen, USAGE};
++use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, NOTES_MAX, Outcome, SHOW, Seen, USAGE};
 +
 +/// 2026-10-03T09:00Z の epoch 秒。
 +const NOW: u64 = 1_791_018_000;
@@ -533,10 +616,13 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +        script(
 +            &dir.join("bdw"),
 +            &format!(
-+                "#!/bin/sh\nprintf '%s\\n' \"$(pwd -P)\" \"$@\" --- >> {d}/bdw.seen\nif [ \"$1\" = create ]; then echo fx-9; fi\nexit $(cat {d}/bdw.rc)\n"
++                "#!/bin/sh\nprintf '%s\\n' \"$(pwd -P)\" \"$@\" --- >> {d}/bdw.seen\nif [ \"$2\" = show ]; then cat {d}/bdw.show; exit $(cat {d}/bdw.show.rc); fi\nif [ \"$1\" = create ]; then cat {d}/bdw.id; fi\nexit $(cat {d}/bdw.rc)\n"
 +            ),
 +        );
 +        std::fs::write(dir.join("bdw.rc"), "0").expect("bdw.rc");
++        std::fs::write(dir.join("bdw.id"), "fx-9\n").expect("bdw.id");
++        std::fs::write(dir.join("bdw.show"), shown("fx-9", "open", "n")).expect("bdw.show");
++        std::fs::write(dir.join("bdw.show.rc"), "0").expect("bdw.show.rc");
 +        let daily = Daily {
 +            root: place,
 +            log: dir.join("daily.log"),
@@ -571,6 +657,13 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +    fn drop(&mut self) {
 +        let _ = std::fs::remove_dir_all(&self.dir);
 +    }
++}
++
++/// bd の show --json の字（bead 1 本の配列・欄は台帳の読みの型 BdLine が要る物と label）。
++fn shown(id: &str, status: &str, notes: &str) -> String {
++    format!(
++        "[{{\"id\":\"{id}\",\"title\":\"memo\",\"status\":\"{status}\",\"updated_at\":\"2026-10-03T09:00:00Z\",\"notes\":\"{notes}\",\"labels\":[\"intake:memo\"]}}]"
++    )
 +}
 +
 +/// 段 check の撃ちの材料（秒は 5）。
@@ -618,6 +711,8 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +    );
 +    assert_eq!(NICE, ("nice", &["-n", "10"][..]));
 +    assert_eq!(CHECK, ["run", "-q", "-p", "xtask", "--", "check"]);
++    assert_eq!(SHOW, ["--readonly", "show"]);
++    assert_eq!(NOTES_MAX, 8192);
 +    assert_eq!(
 +        USAGE,
 +        "usage: cargo run -q -p xtask -- daily --log <記録の file> --out <出力の file> --ledger <台帳の作業木> --parent <memo の親の bead> [--bdw <program>]"
@@ -679,12 +774,18 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +        daily::parse(&unknown, root, "c"),
 +        Err("知らない引数: --dry".to_string())
 +    );
++    // 値の欠けと空の値の見本は、full から値の 1 つだけを外した形。
++    let mut bare = full.clone();
++    bare.pop();
 +    assert_eq!(
-+        daily::parse(&strings(&["--log"]), root, "c"),
-+        Err("--log の値が無い".to_string())
++        daily::parse(&bare, root, "c"),
++        Err("--parent の値が無い".to_string())
 +    );
++    let empty = strings(&[
++        "--log", "", "--out", "/o", "--ledger", "/g", "--parent", "fx-1",
++    ]);
 +    assert_eq!(
-+        daily::parse(&strings(&["--log", ""]), root, "c"),
++        daily::parse(&empty, root, "c"),
 +        Err("--log の値が無い".to_string())
 +    );
 +}
@@ -758,8 +859,8 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +    assert_eq!(
 +        fx.read("bdw.seen"),
 +        format!(
-+            "{}\nupdate\nfx-9\n--append-notes={note}\n---\n",
-+            ledger.display()
++            "{l}\n--readonly\nshow\nfx-9\n--json\n---\n{l}\nupdate\nfx-9\n--append-notes={note}\n---\n",
++            l = ledger.display()
 +        )
 +    );
 +    std::fs::write(fx.dir.join("bdw.seen"), "").expect("空にする");
@@ -806,7 +907,13 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +        Some("fx-2".to_string())
 +    );
 +    assert_eq!(
-+        daily::open_memo(&format!("{}\n{}\n\n", line(3, "fx-2"), line(0, "-"))),
++        daily::open_memo(&format!("{}\n\n", line(3, "fx-2"))),
++        Some("fx-2".to_string()),
++        "末の空の行は読み飛ばす"
++    );
++    // 否定の見本は、id を返す見本から句の 1 つだけを替えた形（最後の行・rc・memo の字）。
++    assert_eq!(
++        daily::open_memo(&format!("{}\n{}\n", line(3, "fx-2"), line(0, "-"))),
 +        None,
 +        "最後の行が通り"
 +    );
@@ -899,4 +1006,88 @@ index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146
 +    ];
 +    let at: Vec<usize> = order.iter().map(|s| task.find(s).expect(s)).collect();
 +    assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
++}
++
++#[test]
++fn vdaily_appendable_clauses() {
++    let note = "[再発] T origin/main s の段 check が rc 1";
++    let room = NOTES_MAX - 1 - note.len();
++    let fits = "n".repeat(room);
++    for status in ["open", "in_progress"] {
++        assert!(
++            daily::appendable("fx-9", Some(&shown("fx-9", status, "n")), note),
++            "{status}"
++        );
++    }
++    assert!(
++        daily::appendable("fx-9", Some(&shown("fx-9", "open", &fits)), note),
++        "ちょうど上限"
++    );
++    // 否定の見本は、足してよい見本から句の 1 つだけを外した形。
++    let one = shown("fx-9", "open", "n");
++    let cases = [
++        ("読めない", None),
++        ("JSON でない", Some(one.trim_end_matches(']').to_string())),
++        ("0 本", Some("[]".to_string())),
++        (
++            "2 本",
++            Some(format!(
++                "{},{}",
++                one.trim_end_matches(']'),
++                one.trim_start_matches('[')
++            )),
++        ),
++        ("id が違う", Some(shown("fx-8", "open", "n"))),
++        ("閉じた", Some(shown("fx-9", "closed", "n"))),
++        ("先送り", Some(shown("fx-9", "deferred", "n"))),
++        ("満ちる", Some(shown("fx-9", "open", &format!("{fits}n")))),
++    ];
++    for (why, text) in cases {
++        assert!(!daily::appendable("fx-9", text.as_deref(), note), "{why}");
++    }
++}
++
++#[test]
++fn vdaily_closed_memo_starts_new() {
++    let fx = Fx::new("closed");
++    let ledger = fx.daily.ledger.canonicalize().expect("ledger");
++    let show = format!(
++        "{}\n--readonly\nshow\nfx-9\n--json\n---\n",
++        ledger.display()
++    );
++    let last = daily::record(&seen("T", "s", 1), "fx-9");
++    for (why, status, show_rc, new) in [
++        ("閉じた", "closed", "0", "fx-10"),
++        ("読めない", "open", "1", "fx-11"),
++    ] {
++        std::fs::write(fx.dir.join("daily.log"), format!("{last}\n")).expect("記録");
++        std::fs::write(fx.dir.join("bdw.show"), shown("fx-9", status, "n")).expect("show");
++        std::fs::write(fx.dir.join("bdw.show.rc"), show_rc).expect("show.rc");
++        std::fs::write(fx.dir.join("bdw.id"), format!("{new}\n")).expect("id");
++        std::fs::write(fx.dir.join("bdw.seen"), "").expect("空にする");
++        let out = fx.shoot(2);
++        assert!(
++            out.line.ends_with(&format!(" memo={new}")),
++            "{why}: {}",
++            out.line
++        );
++        let seen = fx.read("bdw.seen");
++        assert!(seen.starts_with(&show), "{why}: {seen}");
++        assert!(
++            seen[show.len()..].starts_with(&format!("{}\ncreate\n", ledger.display())),
++            "{why}: {seen}"
++        );
++        assert!(!seen.contains("\nupdate\n"), "{why}");
++        let body = fx.read("daily.memo.md");
++        assert!(
++            body.contains("\n前の memo fx-9 は open でも in_progress でもないか"),
++            "{why}: {body}"
++        );
++    }
++    std::fs::write(fx.dir.join("daily.log"), "").expect("記録を空に");
++    fx.shoot(2);
++    assert!(
++        !fx.read("daily.memo.md").contains("前の memo"),
++        "前の memo が無い時は書かない"
++    );
 +}
