@@ -2,7 +2,7 @@
 //! 入力の path の一覧と環境変数の名と行の字を固定し、nested の段の呼びと ci.yml の env を字で読む。
 #![cfg(test)]
 
-#[path = "../src/nested/skip.rs"]
+#[path = "../../src/nested/skip.rs"]
 mod skip;
 
 use std::cell::RefCell;

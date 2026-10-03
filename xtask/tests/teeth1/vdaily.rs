@@ -2,7 +2,7 @@
 //! 偽の cargo と偽の bdw（shell の script）で撃ち、記録の行と memo の書きを照らし、systemd の雛形と main.rs の呼びを字で読む。
 #![cfg(test)]
 
-#[path = "../src/daily.rs"]
+#[path = "../../src/daily.rs"]
 mod daily;
 
 use std::os::unix::fs::PermissionsExt;

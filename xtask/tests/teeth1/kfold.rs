@@ -14,10 +14,11 @@ const GROUPS: &[(&str, usize)] = &[
     ("crates/tsuzuri-boundary/tests/teeth2", 27),
     ("crates/tsuzuri-boundary/tests/teeth3", 16),
     ("crates/tsuzuri-boundary/tests/teeth4", 14),
-    ("crates/tsuzuri-boundary/tests/teeth5", 8),
-    ("crates/tsuzuri-contract/tests/teeth1", 13),
+    ("crates/tsuzuri-boundary/tests/teeth5", 14),
+    ("crates/tsuzuri-contract/tests/teeth1", 14),
     ("crates/tsuzuri-core/tests/teeth1", 29),
     ("crates/tsuzuri-core/tests/teeth2", 25),
+    ("crates/tsuzuri-core/tests/teeth3", 4),
     ("crates/tsuzuri-surface/tests/teeth1", 31),
     ("crates/tsuzuri-surface/tests/teeth2", 38),
     ("crates/tsuzuri-surface/tests/teeth3", 30),
@@ -29,7 +30,7 @@ const GROUPS: &[(&str, usize)] = &[
     ("folio2/crates/folio/tests/tz3", 17),
     ("folio2/crates/folio/tests/tz4", 16),
     ("folio2/crates/folio/tests/tz5", 3),
-    ("xtask/tests/teeth1", 9),
+    ("xtask/tests/teeth1", 14),
     // kfold-groups-end
 ];
 

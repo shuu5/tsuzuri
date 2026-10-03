@@ -11,3 +11,8 @@ mod klintf;
 mod ntmo;
 mod retire;
 mod tlic;
+mod vcij;
+mod vdaily;
+mod vretb;
+mod vskip;
+mod vsplit;

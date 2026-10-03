@@ -4,7 +4,7 @@
 //! 写した・和で照らす・入れ子の段が撃つ・後の行へ回したのどれか 1 つにだけ振られていることも字で読む。
 #![cfg(test)]
 
-#[path = "../src/snaprefs.rs"]
+#[path = "../../src/snaprefs.rs"]
 mod snaprefs;
 
 use std::collections::BTreeSet;

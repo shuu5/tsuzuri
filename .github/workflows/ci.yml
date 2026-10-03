@@ -65,7 +65,7 @@ jobs:
   # 器 scribe2 の CI にだけ在った門（行 v-ci・判断の記録 ADR-33 の決定 (5) と (14)）。器の build・歯・clippy・器の xtask の check は
   # job check の入れ子の段が撃ち、入口の赤と main の出所の門（flip-check・rules-diff・deps-delta・main-provenance）は行 v-gates へ回す。
   # 依存の監査は器の一覧（scribe2/deny.toml）で、器の ci.yml の job deny と同じ字を、job の既定の撃つ dir を scribe2/ にして撃つ
-  # （字の照らしは xtask/tests/vcij.rs・根の workspace に入れる行 v-join の後は job deny が撃つ）。
+  # （字の照らしは xtask/tests/teeth1/vcij.rs・根の workspace に入れる行 v-join の後は job deny が撃つ）。
   scribe2-deny:
     runs-on: ubuntu-latest
     defaults:

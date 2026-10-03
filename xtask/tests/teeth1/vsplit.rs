@@ -2,7 +2,7 @@
 //! check と入れ子の段の呼びを字で読む。
 #![cfg(test)]
 
-#[path = "../src/spread.rs"]
+#[path = "../../src/spread.rs"]
 mod spread;
 
 use std::path::PathBuf;
