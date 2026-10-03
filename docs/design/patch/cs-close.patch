@@ -1,0 +1,725 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/close.rs b/crates/tsuzuri-boundary/src/consult/close.rs
+index 6aad8c5efab7505bc2e17db7587cc7215e3e26df..075763f11081af126f3677ab4c243ed5f1ef19a4 100644
+--- a/crates/tsuzuri-boundary/src/consult/close.rs
++++ b/crates/tsuzuri-boundary/src/consult/close.rs
+@@ -1,10 +1,118 @@
+-//! tz consult close（窓の閉じと退かせ・設計ノート surface-wave27a 行 cs-close が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult close <窓 id> --by seat|chat|button（行 cs-close・判断の記録 ADR-29 決定 (3)(5)・持ち主が閉じると言った時）。
++//! 話す窓は、最後の process の印の tmux の window id の窓の名が consult-cw<n> であることを確かめてから kill-window を
++//! 撃つ（名が違うか窓が無ければ撃たない＝持ち主が先に閉じた窓と、id を使い回したほかの窓を殺さない）。
++//! 私用の temp を消す（持ち主の uid の dir だけ・symlink は辿らない）。台帳の根に相談の閉じの行（起こし手・所見の数）を
++//! 書き、所見の全部が処分されていれば作業場を退かせる（`dispose::retire`・消さない）。標準出力は「窓 cw<n> を閉じた」と、
++//! 退かせた時は「退いた: <path>」。作業場の無い窓と閉じた窓は断る（rc 1）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::ffi::OsStr;
++use std::fs;
++use std::os::unix::fs::MetadataExt;
++use std::path::Path;
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult close: まだ無い（行 cs-close）");
+-    FAIL
++use tsuzuri_contract::consult::{Starter, WindowId};
++use tsuzuri_core::consult::launch::private_tmp;
++use tsuzuri_core::consult::lines::Line;
++
++use super::dispose::retire;
++use super::launch::TMUX;
++use super::{
++    COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, append, ctx, findings, flags, ledger, lines_of,
++    minute_now, procs, read_window, refuse, workspace,
++};
++use crate::out::{emit, emit_err};
++use crate::server::ledger::capture;
++
++/// tz consult close の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.push("--by");
++    let made = flags(rest, &values, &[], &[]).and_then(|f| {
++        let [id] = f.pos.as_slice() else {
++            return Err((FAIL, "窓の id を 1 つ渡す".to_string()));
++        };
++        let id = WindowId::parse(id).map_err(|_| (FAIL, format!("{id} は窓の id でない")))?;
++        let by = match f.get("--by") {
++            Some("seat") => Starter::Seat,
++            Some("chat") => Starter::Chat,
++            Some("button") => Starter::Button,
++            _ => return Err((FAIL, "--by は seat・chat・button のどれか".to_string())),
++        };
++        let c = ctx(&f)?;
++        close(&c, id, by)
++    });
++    match made {
++        Ok(lines) => {
++            lines.iter().for_each(|l| emit(l));
++            0
++        }
++        Err(e) => refuse("close", e),
++    }
++}
++
++/// 話す窓の tmux の窓を、名を確かめてから閉じる（撃ったら真）。
++pub fn kill_named(ws: &Path, tmux_window: &str, name: &str) -> bool {
++    let tmux = OsStr::new(TMUX);
++    let shown = capture(
++        tmux,
++        ["display-message", "-p", "-t", tmux_window, "#{window_name}"],
++        ws,
++        GIT_TIMEOUT,
++    )
++    .and_then(|o| String::from_utf8(o).ok());
++    if shown.as_deref().map(str::trim) != Some(name) {
++        return false;
++    }
++    capture(tmux, ["kill-window", "-t", tmux_window], ws, GIT_TIMEOUT).is_some()
++}
++
++/// 私用の temp を消す（作業場の持ち主の uid の dir だけ・symlink は辿らない・消したら真）。
++pub fn drop_tmp(ws: &Path) -> bool {
++    let Ok(real) = ws.canonicalize() else {
++        return false;
++    };
++    let tmp = private_tmp(&real.display().to_string());
++    let owner = fs::metadata(&real).map(|m| m.uid()).ok();
++    let mine = fs::symlink_metadata(&tmp).is_ok_and(|m| m.is_dir() && Some(m.uid()) == owner);
++    mine && fs::remove_dir_all(&tmp).is_ok()
++}
++
++/// 閉じる（出す行の列を返す）。
++fn close(c: &Ctx, id: WindowId, by: Starter) -> Result<Vec<String>, Refused> {
++    let ws = workspace(&c.drafts, id);
++    read_window(&ws).ok_or((
++        FAIL,
++        format!("窓 {id} の作業場が無い（退いた窓か知らない窓）"),
++    ))?;
++    let (_, items) = ledger(c)?;
++    let mut lines = lines_of(&items);
++    if lines
++        .iter()
++        .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
++    {
++        return Err((FAIL, format!("窓 {id} はもう閉じた")));
++    }
++    if let Some(w) = procs(&ws).last().and_then(|p| p.tmux_window.clone())
++        && !kill_named(&ws, &w, &id.name())
++    {
++        emit_err(&format!(
++            "tz consult close: tmux の窓 {w} は {} でない（撃たない）",
++            id.name()
++        ));
++    }
++    drop_tmp(&ws);
++    let count = u32::try_from(findings(&ws, id).len()).unwrap_or(u32::MAX);
++    let line = Line::Close {
++        window: id,
++        by,
++        findings: count,
++        at: minute_now(),
++    };
++    append(c, &items, None, &line)?;
++    lines.push(line);
++    let mut out = vec![format!("窓 {id} を閉じた")];
++    if let Some(gone) = retire(c, id, &lines)? {
++        out.push(format!("退いた: {}", gone.display()));
++    }
++    Ok(out)
+ }
+diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
+index 94b0ca4ee760ab91de875b36f4b6e93c333df359..9de667ec1c858b8f0bcb3de55b215429de32beb2 100644
+--- a/crates/tsuzuri-boundary/src/consult/list.rs
++++ b/crates/tsuzuri-boundary/src/consult/list.rs
+@@ -1,10 +1,210 @@
+-//! tz consult list（窓の一覧・設計ノート surface-wave27a 行 cs-close が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult list [--json]（行 cs-close・窓の一覧・判断の記録 ADR-29 決定 (5)(9)(10)・hook の代わりの拾い）。
++//! 起草の置き場の窓（退いた窓も）ごとに id・形・題・状態・所見の数・未処分の数を、続けて受けの無い頼みと、
++//! 席が自分で開いた問う窓の今日の数と今の数（規則の行 R-38）を 1 行ずつ出す。--json は電文 `ConsultBoard`。
++//! 状態は、退いた作業場なら 退いた、閉じの行が在れば 閉じた、最後の process が在れば 生きている、ほかは 止まった。
++//! 一覧の材料は作業場の file と台帳の相談の行だけ（読むだけ・台帳は書かない・席は show --via 一覧 で受ける）。
++//! 時刻は行の分の字を epoch 秒にする（読めない字は None）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::path::Path;
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult list: まだ無い（行 cs-close）");
+-    FAIL
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    ConsultBoard, Finding, FindingRow, RequestRow, SeatQuota, WindowId, WindowRow, WindowState,
++    Word,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::lines::{Line, Subject, unreceived};
++use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, count};
++
++use super::{
++    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, read_window,
++    refuse, retired, windows, workspace,
++};
++use crate::out::emit;
++use crate::server::clock::epoch_secs;
++
++/// tz consult list の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let made = flags(rest, &COMMON, &["--json"], &[]).and_then(|f| {
++        if !f.pos.is_empty() {
++            return Err((FAIL, format!("知らない引数 {}", f.pos.join(" "))));
++        }
++        let c = ctx(&f)?;
++        let (_, items) = ledger(&c)?;
++        let b = board(&c, &lines_of(&items), &minute_now());
++        if f.has("--json") {
++            return wire::encode(&b)
++                .map(|t| vec![t])
++                .map_err(|e| (FAIL, e.to_string()));
++        }
++        Ok(text(&b))
++    });
++    match made {
++        Ok(lines) => {
++            lines.iter().for_each(|l| emit(l));
++            0
++        }
++        Err(e) => refuse("list", e),
++    }
++}
++
++/// UTC の分の字（`20261003T1412Z`）の epoch 秒。
++pub fn epoch_of(minute: &str) -> Option<EpochSecs> {
++    let d = |a: usize, b: usize| minute.get(a..b);
++    let rfc = format!(
++        "{}-{}-{}T{}:{}:00Z",
++        d(0, 4)?,
++        d(4, 6)?,
++        d(6, 8)?,
++        d(9, 11)?,
++        d(11, 13)?
++    );
++    tsuzuri_contract::consult::minute_ok(minute)
++        .then(|| epoch_secs(&rfc))
++        .flatten()
++}
++
++/// 窓の状態。
++pub fn state_of(c: &Ctx, id: WindowId, gone: bool, lines: &[Line]) -> WindowState {
++    if gone {
++        WindowState::Retired
++    } else if lines
++        .iter()
++        .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
++    {
++        WindowState::Closed
++    } else if live(&workspace(&c.drafts, id)) {
++        WindowState::Live
++    } else {
++        WindowState::Stalled
++    }
++}
++
++/// 所見が処分されたか。
++fn disposed(lines: &[Line], id: tsuzuri_contract::consult::FindingId) -> bool {
++    lines
++        .iter()
++        .any(|l| matches!(l, Line::Disposal { id: x, .. } if *x == id))
++}
++
++/// 受けの行の時刻。
++fn received(lines: &[Line], subject: &Subject) -> Option<EpochSecs> {
++    lines.iter().find_map(|l| match l {
++        Line::Receipt { subject: s, at, .. } if s == subject => epoch_of(at),
++        _ => None,
++    })
++}
++
++/// 窓の行と処分の無い所見の行。
++fn rows(c: &Ctx, lines: &[Line]) -> (Vec<WindowRow>, Vec<FindingRow>) {
++    let (mut wins, mut open) = (Vec::new(), Vec::new());
++    for (id, gone) in windows(&c.drafts) {
++        let ws = if gone {
++            retired(&c.drafts, id)
++        } else {
++            workspace(&c.drafts, id)
++        };
++        let Some(w) = read_window(&ws) else { continue };
++        let found = findings(&ws, id);
++        let left: Vec<_> = found
++            .iter()
++            .copied()
++            .filter(|f| !disposed(lines, *f))
++            .collect();
++        let opened = lines.iter().rev().find_map(|l| match l {
++            Line::Open {
++                window,
++                opened: true,
++                at,
++                ..
++            } if *window == id => epoch_of(at),
++            _ => None,
++        });
++        wins.push(WindowRow {
++            id,
++            form: w.form,
++            topic: w.topic.clone(),
++            state: state_of(c, id, gone, lines),
++            opened,
++            findings: u32::try_from(found.len()).unwrap_or(u32::MAX),
++            undisposed: u32::try_from(left.len()).unwrap_or(u32::MAX),
++        });
++        open.extend(left.into_iter().map(|f| finding_row(&ws, f, lines)));
++    }
++    (wins, open)
++}
++
++/// 処分の無い所見の 1 行（所見の file が読めなければ題と届いた時刻は None）。
++fn finding_row(ws: &Path, id: tsuzuri_contract::consult::FindingId, lines: &[Line]) -> FindingRow {
++    let read: Option<Finding> = std::fs::read_to_string(ws.join(format!("findings/{id}.json")))
++        .ok()
++        .and_then(|t| wire::decode(&t).ok());
++    FindingRow {
++        id,
++        topic: read.as_ref().map(|f| f.topic.clone()),
++        arrived: read.as_ref().and_then(|f| epoch_of(&f.date)),
++        received: received(lines, &Subject::Finding(id)),
++    }
++}
++
++/// 一覧の電文（`now` は今の UTC の分の字）。
++pub fn board(c: &Ctx, lines: &[Line], now: &str) -> ConsultBoard {
++    let (wins, open) = rows(c, lines);
++    let waiting = unreceived(lines, &[]).requests;
++    let requests = lines
++        .iter()
++        .filter_map(|l| match l {
++            Line::Request { id, topic, at, .. } if waiting.contains(id) => Some(RequestRow {
++                id: id.clone(),
++                topic: topic.clone(),
++                at: epoch_of(at).unwrap_or_default(),
++            }),
++            _ => None,
++        })
++        .collect();
++    let alive: Vec<WindowId> = wins
++        .iter()
++        .filter(|w| w.state == WindowState::Live)
++        .map(|w| w.id)
++        .collect();
++    ConsultBoard {
++        windows: Reading::Known(wins),
++        findings: Reading::Known(open),
++        requests: Reading::Known(requests),
++        quota: Reading::Known(count(lines, now, &alive)),
++    }
++}
++
++/// 一覧の人の読む行。
++pub fn text(b: &ConsultBoard) -> Vec<String> {
++    let mut out = Vec::new();
++    if let Reading::Known(wins) = &b.windows {
++        for w in wins {
++            out.push(format!(
++                "窓 {}・形 {}・題 {}・状態 {}・所見 {}・未処分 {}",
++                w.id,
++                w.form.word(),
++                w.topic.as_deref().unwrap_or("題なし"),
++                w.state.word(),
++                w.findings,
++                w.undisposed
++            ));
++        }
++    }
++    if let Reading::Known(rqs) = &b.requests {
++        for r in rqs {
++            let topic = r.topic.as_deref().unwrap_or("題なし");
++            out.push(format!("受けの無い頼み {}・題 {topic}", r.id));
++        }
++    }
++    let q = match &b.quota {
++        Reading::Known(q) => *q,
++        Reading::Unknown => SeatQuota::default(),
++    };
++    out.push(format!(
++        "席の問う窓: 今日 {}・今 {}（規則の行 R-38 の上限 同時 {LIVE_MAX}・1 日 {DAY_MAX}）",
++        q.today, q.live
++    ));
++    out
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwcls.rs b/crates/tsuzuri-boundary/tests/cwcls.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9261cd6be1cd49243c4fe04472e3788829fa134d
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwcls.rs
+@@ -0,0 +1,367 @@
++//! 窓の一覧と閉じと退かせの歯（接頭辞 cwcls_・設計ノート surface-wave27a 行 cs-close）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
++//! 受けた argv を記録して窓の名を tmux.name の字で答える偽の tmux を置き（本物の tmux は撃たない）、
++//! 窓の作業場（控え・process の印・所見）を歯が直に書いて tz consult list と close を撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::consult::list::epoch_of;
++use tsuzuri_boundary::server::{events, ruling};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    ConsultBoard, Finding, FindingId, FindingRow, Form, ProcMark, RequestId, RequestRow, SeatQuota,
++    Starter, WindowFile, WindowId, WindowState,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++use tsuzuri_core::consult::launch::private_tmp;
++
++const LEDGER: &str = r#"[{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"}]"#;
++
++const RQ: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++fn w(n: u32) -> WindowId {
++    WindowId::new(n).unwrap()
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    drafts: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwcls")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [&repo, &state, &drafts, &root.join("bin")] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        git(
++            &repo,
++            &["config", "scribe2.statedir", &state.display().to_string()],
++        );
++        git(
++            &repo,
++            &["config", "tsuzuri.draftsdir", &drafts.display().to_string()],
++        );
++        let r = root.display().to_string();
++        let record = |log: &str| {
++            format!(
++                "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{r}/{log}'\necho >> '{r}/{log}'"
++            )
++        };
++        script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(&root.join("bin/bdw"), &record("bdw.log"));
++        let tmux = format!(
++            "{}\ncase \"$1\" in display-message) cat '{r}/tmux.name' ;; esac",
++            record("tmux.log")
++        );
++        script(&root.join("bin/tmux"), &tmux);
++        let fx = Fx { root, repo, drafts };
++        fx.notes(&[]);
++        fx
++    }
++
++    fn notes(&self, lines: &[&str]) {
++        let text = LEDGER.replace("NOTES", &lines.join("\\n"));
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        Command::new(env!("CARGO_BIN_EXE_tz"))
++            .arg("consult")
++            .args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .output()
++            .unwrap()
++    }
++
++    /// 窓の作業場（`dir` は作業場の dir の名・最後の process の印の pid と tmux の窓）。
++    fn window(&self, dir: &str, n: u32, form: Form, proc_: Option<(u32, Option<&str>)>) -> PathBuf {
++        let ws = self.drafts.join(dir);
++        for d in [".consult", "findings"] {
++            fs::create_dir_all(ws.join(d)).unwrap();
++        }
++        let file = WindowFile {
++            id: w(n),
++            form,
++            topic: (n == 1).then(|| "fx-c.2".to_string()),
++            model: "fable".into(),
++            effort: "xhigh".into(),
++            starter: Starter::Seat,
++            uttered: None,
++            request: None,
++            made: "20261003T1400Z".into(),
++        };
++        fs::write(
++            ws.join(".consult/window.json"),
++            wire::encode(&file).unwrap(),
++        )
++        .unwrap();
++        if let Some((pid, tmux)) = proc_ {
++            let m = ProcMark {
++                k: 1,
++                form,
++                pid,
++                at: "20261003T1401Z".into(),
++                again: false,
++                tmux_window: tmux.map(str::to_string),
++            };
++            fs::write(ws.join(".consult/proc-1.json"), wire::encode(&m).unwrap()).unwrap();
++        }
++        ws
++    }
++
++    /// 所見を置く（fixture complete.json の草稿・時刻 20261003T1500Z）。
++    fn finding(&self, ws: &Path, n: u32, k: u32) -> Finding {
++        let text = Path::new(env!("CARGO_MANIFEST_DIR"))
++            .join("../../tests/fixtures/consult/finding-2/complete.json");
++        let draft = check(&fs::read_to_string(text).unwrap()).unwrap();
++        let f = Finding::new(FindingId::new(w(n), k).unwrap(), "20261003T1500Z", draft);
++        fs::write(
++            ws.join(format!("findings/{}.json", f.id)),
++            wire::encode(&f).unwrap(),
++        )
++        .unwrap();
++        f
++    }
++
++    fn calls(&self, log: &str) -> Vec<Vec<String>> {
++        fs::read_to_string(self.root.join(log))
++            .unwrap_or_default()
++            .lines()
++            .map(|l| {
++                l.split('\x1f')
++                    .filter(|a| !a.is_empty())
++                    .map(str::to_string)
++                    .collect()
++            })
++            .collect()
++    }
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++/// 一覧の歯の置き場（cw1 生きている問う窓・cw2 止まった問う窓・cw3 閉じた窓・cw4 退いた窓・cw5 起こしていない窓）。
++fn listed(fx: &Fx, today: &str) -> Vec<String> {
++    let me = std::process::id();
++    let ws1 = fx.window("consult-cw1", 1, Form::Ask, Some((me, None)));
++    fx.finding(&ws1, 1, 1);
++    fx.window("consult-cw2", 2, Form::Ask, Some((0, None)));
++    let ws3 = fx.window("consult-cw3", 3, Form::Talk, Some((0, Some("@3"))));
++    fx.finding(&ws3, 3, 1);
++    fx.window("retired-consult-cw4", 4, Form::Talk, None);
++    fx.window("consult-cw5", 5, Form::Talk, None);
++    let open = |n: u32| {
++        format!(
++            "相談の開き = cw{n}・形 = 問う・題 = 題なし・起こし手 = 席・model = fable・念入りさ = xhigh・結果 = 開いた・時刻 = {today}"
++        )
++    };
++    vec![
++        open(1),
++        open(2),
++        "相談の受け = cw1-1・経路 = 見張り・時刻 = 20261003T1501Z".to_string(),
++        "相談の閉じ = cw3・起こし手 = 席・所見 = 1・時刻 = 20261003T1600Z".to_string(),
++        "相談の処分 = cw3-1・採否 = 採らない・理由 = 古い・保存 = なし・不保存 = work/report.md、work/probe.py・時刻 = 20261003T1601Z".to_string(),
++        RQ.to_string(),
++    ]
++}
++
++#[test]
++fn cwcls_list_states_and_text() {
++    let fx = Fx::new("text");
++    let today = ruling::minute(events::now());
++    let lines = listed(&fx, &today);
++    fx.notes(&lines.iter().map(String::as_str).collect::<Vec<_>>());
++    let o = fx.tz(&["list"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let want = [
++        "窓 cw1・形 問う・題 fx-c.2・状態 生きている・所見 1・未処分 1",
++        "窓 cw2・形 問う・題 題なし・状態 止まった・所見 0・未処分 0",
++        "窓 cw3・形 話す・題 題なし・状態 閉じた・所見 1・未処分 0",
++        "窓 cw4・形 話す・題 題なし・状態 退いた・所見 0・未処分 0",
++        "窓 cw5・形 話す・題 題なし・状態 止まった・所見 0・未処分 0",
++        "受けの無い頼み rq-20261003T1412Z-1・題 題なし",
++        "席の問う窓: 今日 2・今 1（規則の行 R-38 の上限 同時 1・1 日 3）",
++    ];
++    assert_eq!(out(&o).lines().collect::<Vec<_>>(), want);
++    assert!(fx.calls("bdw.log").is_empty(), "一覧は台帳を書かない");
++    assert_eq!(rc(&fx.tz(&["list", "x"])), 1);
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
++    assert_eq!(rc(&fx.tz(&["list"])), 2);
++}
++
++#[test]
++fn cwcls_list_json_board() {
++    let fx = Fx::new("json");
++    let today = ruling::minute(events::now());
++    let lines = listed(&fx, &today);
++    fx.notes(&lines.iter().map(String::as_str).collect::<Vec<_>>());
++    let o = fx.tz(&["list", "--json"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let b: ConsultBoard = wire::decode(out(&o).trim()).unwrap();
++    let Reading::Known(wins) = &b.windows else {
++        panic!("{b:?}")
++    };
++    let states: Vec<(WindowId, WindowState)> = wins.iter().map(|r| (r.id, r.state)).collect();
++    let want = [
++        (w(1), WindowState::Live),
++        (w(2), WindowState::Stalled),
++        (w(3), WindowState::Closed),
++        (w(4), WindowState::Retired),
++        (w(5), WindowState::Stalled),
++    ];
++    assert_eq!(states, want);
++    assert_eq!((wins[0].opened, wins[2].opened), (epoch_of(&today), None));
++    let row = FindingRow {
++        id: FindingId::new(w(1), 1).unwrap(),
++        topic: Some("fx-hub.7".into()),
++        arrived: Some(1_791_039_600),
++        received: Some(1_791_039_660),
++    };
++    assert_eq!(b.findings, Reading::Known(vec![row]));
++    let rq = RequestRow {
++        id: RequestId::parse("rq-20261003T1412Z-1").unwrap(),
++        topic: None,
++        at: 1_791_036_720,
++    };
++    assert_eq!(b.requests, Reading::Known(vec![rq]));
++    assert_eq!(b.quota, Reading::Known(SeatQuota { today: 2, live: 1 }));
++    assert_eq!(epoch_of("20261003T1412Z"), Some(1_791_036_720));
++    assert_eq!(
++        (epoch_of("20261003T1412"), epoch_of("2026-10-03")),
++        (None, None)
++    );
++}
++
++#[test]
++fn cwcls_close_named_window_and_retire() {
++    let fx = Fx::new("close");
++    let ws1 = fx.window("consult-cw1", 1, Form::Talk, Some((0, Some("@7"))));
++    let tmp = private_tmp(&fs::canonicalize(&ws1).unwrap().display().to_string());
++    let _ = fs::remove_dir_all(&tmp);
++    fs::create_dir(&tmp).unwrap();
++    fs::write(fx.root.join("tmux.name"), "consult-cw1\n").unwrap();
++    let before = ruling::minute(events::now());
++    let o = fx.tz(&["close", "cw1", "--by", "chat"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let gone = fx.drafts.join("retired-consult-cw1");
++    assert_eq!(
++        out(&o),
++        format!("窓 cw1 を閉じた\n退いた: {}\n", gone.display())
++    );
++    assert!(gone.join(".consult/window.json").is_file() && !ws1.exists());
++    assert!(!Path::new(&tmp).exists());
++    let tmux = fx.calls("tmux.log");
++    assert_eq!(
++        tmux,
++        [
++            vec!["display-message", "-p", "-t", "@7", "#{window_name}"],
++            vec!["kill-window", "-t", "@7"]
++        ]
++    );
++    let bdw = fx.calls("bdw.log");
++    let line = bdw[0][2].strip_prefix("--append-notes=").unwrap();
++    let at = line.rsplit_once("時刻 = ").unwrap().1;
++    assert!(before.as_str() <= at);
++    assert_eq!((bdw.len(), bdw[0][1].as_str()), (1, "fx-c"));
++    assert_eq!(
++        line,
++        format!("相談の閉じ = cw1・起こし手 = 持ち主のチャット・所見 = 0・時刻 = {at}")
++    );
++}
++
++#[test]
++fn cwcls_close_other_name_and_keep() {
++    let fx = Fx::new("other");
++    let ws2 = fx.window("consult-cw2", 2, Form::Talk, Some((0, Some("@8"))));
++    fx.finding(&ws2, 2, 1);
++    let tmp = private_tmp(&fs::canonicalize(&ws2).unwrap().display().to_string());
++    let _ = fs::remove_file(&tmp);
++    let _ = fs::remove_dir_all(&tmp);
++    let target = fx.root.join("elsewhere");
++    fs::create_dir_all(&target).unwrap();
++    std::os::unix::fs::symlink(&target, &tmp).unwrap();
++    fs::write(fx.root.join("tmux.name"), "other\n").unwrap();
++    let o = fx.tz(&["close", "cw2", "--by", "seat"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert_eq!(out(&o), "窓 cw2 を閉じた\n");
++    assert!(err(&o).contains("@8"), "{}", err(&o));
++    assert_eq!(
++        fx.calls("tmux.log").len(),
++        1,
++        "名が違えば kill-window を撃たない"
++    );
++    assert!(ws2.is_dir(), "処分の無い所見が在る間は退かせない");
++    assert!(fs::symlink_metadata(&tmp).unwrap().is_symlink() && target.is_dir());
++    let bdw = fx.calls("bdw.log");
++    assert!(bdw[0][2].starts_with("--append-notes=相談の閉じ = cw2・起こし手 = 席・所見 = 1・"));
++    fs::remove_file(&tmp).unwrap();
++}
++
++#[test]
++fn cwcls_close_refusals() {
++    let fx = Fx::new("refuse");
++    fx.window("consult-cw1", 1, Form::Ask, None);
++    fx.window("retired-consult-cw4", 4, Form::Talk, None);
++    for bad in [
++        &["close", "cw9", "--by", "seat"][..],
++        &["close", "cw4", "--by", "seat"],
++        &["close", "cw1"],
++        &["close", "cw1", "--by", "owner"],
++        &["close", "cw1", "cw2", "--by", "seat"],
++        &["close", "x", "--by", "seat"],
++    ] {
++        assert_eq!(rc(&fx.tz(bad)), 1, "{bad:?}");
++    }
++    fx.notes(&["相談の閉じ = cw1・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z"]);
++    let o = fx.tz(&["close", "cw1", "--by", "seat"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("もう閉じた"), "{}", err(&o));
++    assert!(fx.calls("bdw.log").is_empty() && fx.calls("tmux.log").is_empty());
++    fx.notes(&[]);
++    let o = fx.tz(&["close", "cw1", "--by", "button"]);
++    assert_eq!(rc(&o), 0, "問う窓は tmux を撃たずに閉じる: {}", err(&o));
++    assert!(fx.calls("tmux.log").is_empty());
++}

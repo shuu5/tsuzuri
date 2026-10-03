@@ -1,0 +1,831 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/dispose.rs b/crates/tsuzuri-boundary/src/consult/dispose.rs
+index 1b2f26e70ca8bd4edf9e7d4098645fcf68e0ab8b..9b3bfb143986ff0b14a5de4695bdbde1daf61496 100644
+--- a/crates/tsuzuri-boundary/src/consult/dispose.rs
++++ b/crates/tsuzuri-boundary/src/consult/dispose.rs
+@@ -1,10 +1,176 @@
+-//! tz consult dispose（所見の処分の口・設計ノート surface-wave27a 行 cs-show が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult dispose <所見 id> --verdict 採る|一部採る|採らない --reason <字> [--keep <path>]… [--drop <path>]… [--into <木の根>]
++//! （行 cs-show・判断の記録 ADR-10 決定 (5) と ADR-29 決定 (1)(オ)・(9)）。所見ごとに採否と理由と、添え物ごとの保存する
++//! （--keep）・しない（--drop）を宣言する。添え物の全部がちょうど 1 度ずつ keep か drop に在ること（欠け・知らない path・
++//! 重なりを断る）。受けの行の無い所見（先に show で受ける）と処分した所見を断る。保存する添え物は写し先の木の根
++//! （--into・省けば repo）の `kept_path`（docs/consult/kept/<所見 id>/<path>）へ写す（在れば上書きせずに断り、
++//! どれも写さない・席が commit する）。台帳の所見の題の置き場に相談の処分の行を書き、標準出力に「処分を記した」と
++//! 写した path（木の根からの相対）の列を出す。窓が閉じていて所見の全部が処分されたら作業場を退かせる（`retire`）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::fs;
++use std::path::{Path, PathBuf};
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult dispose: まだ無い（行 cs-show）");
+-    FAIL
++use tsuzuri_contract::consult::{FindingId, Verdict, WindowId, Word, kept_path};
++use tsuzuri_core::consult::lines::{Line, Subject, render};
++
++use super::show::{read_finding, topic_of};
++use super::{
++    COMMON, Ctx, FAIL, Refused, UNKNOWN, append, ctx, findings, flags, ledger, lines_of,
++    minute_now, refuse, retired, workspace,
++};
++use crate::out::emit;
++
++/// tz consult dispose の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.extend(["--verdict", "--reason", "--into"]);
++    let made = flags(rest, &values, &[], &["--keep", "--drop"]).and_then(|f| {
++        let [id] = f.pos.as_slice() else {
++            return Err((FAIL, "所見の id を 1 つ渡す".to_string()));
++        };
++        let id = FindingId::parse(id).map_err(|_| (FAIL, format!("{id} は所見の id でない")))?;
++        let verdict = f.get("--verdict").and_then(Verdict::from_word).ok_or((
++            FAIL,
++            "--verdict は 採る・一部採る・採らない のどれか".to_string(),
++        ))?;
++        let reason = f
++            .get("--reason")
++            .ok_or((FAIL, "--reason が要る".to_string()))?;
++        let c = ctx(&f)?;
++        let into = f
++            .get("--into")
++            .map_or_else(|| c.repo.clone(), PathBuf::from);
++        let keep: Vec<String> = f.all("--keep").into_iter().map(str::to_string).collect();
++        let drop: Vec<String> = f.all("--drop").into_iter().map(str::to_string).collect();
++        let line = Line::Disposal {
++            id,
++            verdict,
++            reason: reason.to_string(),
++            keep,
++            drop,
++            at: minute_now(),
++        };
++        dispose(&c, &into, line)
++    });
++    match made {
++        Ok(out) => {
++            out.iter().for_each(|l| emit(l));
++            0
++        }
++        Err(e) => refuse("dispose", e),
++    }
++}
++
++/// 添え物の選びの欠け・知らない path・重なり（無ければ空）。
++fn choice_gaps(attached: &[String], keep: &[String], drop: &[String]) -> Vec<String> {
++    let mut gaps: Vec<String> = attached
++        .iter()
++        .filter(|a| keep.contains(a) == drop.contains(a))
++        .map(|a| format!("選びの無いか重なった添え物 {a}"))
++        .collect();
++    gaps.extend(
++        keep.iter()
++            .chain(drop)
++            .filter(|p| !attached.contains(p))
++            .map(|p| format!("所見に無い添え物 {p}")),
++    );
++    gaps
++}
++
++/// 処分する（出す行の列を返す）。
++fn dispose(c: &Ctx, into: &Path, line: Line) -> Result<Vec<String>, Refused> {
++    let Line::Disposal { id, keep, drop, .. } = &line else {
++        return Err((FAIL, "処分の行でない".to_string()));
++    };
++    let (path, f) = read_finding(&c.drafts, *id)?;
++    let ws = path
++        .parent()
++        .and_then(Path::parent)
++        .ok_or((FAIL, "作業場".to_string()))?;
++    let attached: Vec<String> = f.attachments.iter().map(|a| a.path.clone()).collect();
++    let gaps = choice_gaps(&attached, keep, drop);
++    if !gaps.is_empty() {
++        return Err((FAIL, gaps.join("・")));
++    }
++    let (_, items) = ledger(c)?;
++    let mut lines = lines_of(&items);
++    let subject = Subject::Finding(*id);
++    if !lines
++        .iter()
++        .any(|l| matches!(l, Line::Receipt { subject: s, .. } if *s == subject))
++    {
++        return Err((
++            FAIL,
++            format!("所見 {id} はまだ受けていない（先に show で受ける）"),
++        ));
++    }
++    if lines
++        .iter()
++        .any(|l| matches!(l, Line::Disposal { id: x, .. } if x == id))
++    {
++        return Err((FAIL, format!("所見 {id} はもう処分した")));
++    }
++    render(&line).map_err(|e| (FAIL, format!("処分の行を書けない: {e:?}")))?;
++    let copies = copy_kept(ws, into, *id, keep)?;
++    append(c, &items, topic_of(&f).as_deref(), &line)?;
++    lines.push(line.clone());
++    let mut out = vec!["処分を記した".to_string()];
++    out.extend(copies);
++    if let Some(gone) = retire(c, id.window(), &lines)? {
++        out.push(format!("退いた: {}", gone.display()));
++    }
++    Ok(out)
++}
++
++/// 保存する添え物を写し先の木の根へ写す（写し先が 1 つでも在ればどれも写さずに断る・木の根からの相対の path の列）。
++fn copy_kept(
++    ws: &Path,
++    into: &Path,
++    id: FindingId,
++    keep: &[String],
++) -> Result<Vec<String>, Refused> {
++    if !into.is_dir() {
++        return Err((
++            FAIL,
++            format!("写し先の木の根 {} が dir でない", into.display()),
++        ));
++    }
++    let rels: Vec<String> = keep.iter().map(|p| kept_path(id, p)).collect();
++    if let Some(there) = rels.iter().find(|r| into.join(r).exists()) {
++        return Err((FAIL, format!("写し先 {there} がもう在る（上書きしない）")));
++    }
++    for (p, rel) in keep.iter().zip(&rels) {
++        let to = into.join(rel);
++        if let Some(dir) = to.parent() {
++            fs::create_dir_all(dir)
++                .map_err(|e| (UNKNOWN, format!("{rel} の dir を作れない: {e}")))?;
++        }
++        fs::copy(ws.join(p), &to).map_err(|e| (UNKNOWN, format!("{p} を写せない: {e}")))?;
++    }
++    Ok(rels)
++}
++
++/// 窓が閉じていて作業場の所見の全部が処分されていれば、作業場を退いた作業場の名へ rename する（消さない・
++/// 退かせた path を返す・作業場が無いか条件に当たらなければ None）。
++pub fn retire(c: &Ctx, window: WindowId, lines: &[Line]) -> Result<Option<PathBuf>, Refused> {
++    let ws = workspace(&c.drafts, window);
++    if !ws.is_dir() {
++        return Ok(None);
++    }
++    let closed = lines
++        .iter()
++        .any(|l| matches!(l, Line::Close { window: w, .. } if *w == window));
++    let disposed = |id: &FindingId| {
++        lines
++            .iter()
++            .any(|l| matches!(l, Line::Disposal { id: x, .. } if x == id))
++    };
++    if !closed || !findings(&ws, window).iter().all(disposed) {
++        return Ok(None);
++    }
++    let to = retired(&c.drafts, window);
++    if to.exists() {
++        return Err((FAIL, format!("退きの置き場 {} がもう在る", to.display())));
++    }
++    fs::rename(&ws, &to).map_err(|e| (UNKNOWN, format!("作業場を退かせられない: {e}")))?;
++    Ok(Some(to))
+ }
+diff --git a/crates/tsuzuri-boundary/src/consult/show.rs b/crates/tsuzuri-boundary/src/consult/show.rs
+index 34fc703d8c783d56aaa1835bc44296af0cddd130..29b7467054b50bcc4173841bf75120334ae5463b 100644
+--- a/crates/tsuzuri-boundary/src/consult/show.rs
++++ b/crates/tsuzuri-boundary/src/consult/show.rs
+@@ -1,10 +1,178 @@
+-//! tz consult show（席が所見を読む口・設計ノート surface-wave27a 行 cs-show が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult show <所見 id か頼み id> --via 見張り|完了|hook|一覧（行 cs-show・席が読む口・判断の記録 ADR-29 決定 (8)・受入 AC16 の台帳の 2 行）。
++//! 所見は作業場（退いた作業場も）の findings/<所見 id>.json を読み、全部の欄を人の読む形で標準出力に出し、添え物は
++//! 作業場の絶対 path で出す。台帳に相談の所見の行と相談の受けの行（経路の語）が無ければ 1 つずつ書く（同じ id の行が
++//! 在れば書かない＝何度撃っても 2 行だけ）。置き場は所見の題から中核の `home_of` で選ぶ memo か根（題が器の引用の形を
++//! 含むか なし なら題なし）。頼みは台帳の相談の頼みの行を出し、開く命令の字を添える（受けの行は open --request が書く）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::path::{Path, PathBuf};
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult show: まだ無い（行 cs-show）");
+-    FAIL
++use tsuzuri_contract::consult::{Finding, FindingId, RequestId, Via, Word};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::lines::{Line, Subject, WORD_MAX, cited, free};
++
++use super::{
++    COMMON, Ctx, FAIL, Refused, append, ctx, flags, ledger, lines_of, minute_now, refuse, retired,
++    tzw, workspace,
++};
++use crate::out::emit;
++
++/// tz consult show の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.push("--via");
++    let made = flags(rest, &values, &[], &[]).and_then(|f| {
++        let [id] = f.pos.as_slice() else {
++            return Err((FAIL, "所見か頼みの id を 1 つ渡す".to_string()));
++        };
++        let via = f.get("--via").and_then(Via::from_word).ok_or((
++            FAIL,
++            "--via は 見張り・完了・hook・一覧 のどれか".to_string(),
++        ))?;
++        let c = ctx(&f)?;
++        match (FindingId::parse(id), RequestId::parse(id)) {
++            (Ok(found), _) => show_finding(&c, found, via),
++            (_, Ok(rq)) => show_request(&c, &rq),
++            _ => Err((FAIL, format!("{id} は所見の id でも頼みの id でもない"))),
++        }
++    });
++    match made {
++        Ok(()) => 0,
++        Err(e) => refuse("show", e),
++    }
++}
++
++/// 所見の file の path（作業場か退いた作業場の在る方）。
++pub fn finding_path(drafts: &Path, id: FindingId) -> Option<PathBuf> {
++    [workspace(drafts, id.window()), retired(drafts, id.window())]
++        .into_iter()
++        .map(|ws| ws.join("findings").join(format!("{id}.json")))
++        .find(|p| p.is_file())
++}
++
++/// 所見を読む（無いか読めなければ rc 1）。
++pub fn read_finding(drafts: &Path, id: FindingId) -> Result<(PathBuf, Finding), Refused> {
++    let path = finding_path(drafts, id).ok_or((FAIL, format!("所見 {id} の file が無い")))?;
++    let text =
++        std::fs::read_to_string(&path).map_err(|e| (FAIL, format!("所見 {id} が読めない: {e}")))?;
++    let finding = wire::decode(&text).map_err(|e| (FAIL, format!("所見 {id} の形が違う: {e}")))?;
++    Ok((path, finding))
++}
++
++/// 所見の題（行に置く字・なし と空と器の引用の形を含む字は None）。
++pub fn topic_of(f: &Finding) -> Option<String> {
++    let t = f.topic.trim();
++    (!t.is_empty() && t != "なし" && !cited(&free(t, WORD_MAX))).then(|| t.to_string())
++}
++
++/// 所見を人の読む形の行の列にする（添え物は作業場 `ws` の下の絶対 path）。
++pub fn render(f: &Finding, ws: &Path) -> Vec<String> {
++    let or_none = |v: &[String]| {
++        if v.is_empty() {
++            "なし".to_string()
++        } else {
++            v.join(", ")
++        }
++    };
++    let mut out = vec![
++        format!(
++            "所見 {}（窓 {}・題 {}・時刻 {}・model {}）",
++            f.id, f.window, f.topic, f.date, f.model
++        ),
++        format!("結論: {}", f.conclusion),
++        format!("推奨: {}", f.recommendation),
++        "候補:".to_string(),
++    ];
++    for o in &f.options {
++        let mark = if o.verdict == tsuzuri_contract::consult::Adoption::Adopted {
++            "採る"
++        } else {
++            "採らない"
++        };
++        out.push(format!(
++            "- {} {}（{mark}）: {}・理由: {}",
++            o.id, o.name, o.text, o.reason
++        ));
++    }
++    out.push("主張:".to_string());
++    for c in &f.claims {
++        let word = wire::encode(&c.confidence)
++            .unwrap_or_default()
++            .replace('"', "");
++        out.push(format!("- [{word}] {}（{}）", c.text, c.how));
++    }
++    out.push(format!("根拠: {}", or_none(&f.basis)));
++    out.push(format!("持ち主に問う: {}", or_none(&f.ask_owner)));
++    out.push(format!("触る節点: {}", or_none(&f.touches)));
++    out.push(format!("束の要約値: {}", f.bundle_digest));
++    out.push(format!("囲いの断り: {}", or_none(&f.sandbox_denials)));
++    out.push("添え物:".to_string());
++    for a in &f.attachments {
++        let kind = wire::encode(&a.kind).unwrap_or_default().replace('"', "");
++        out.push(format!(
++            "- {kind} {}（{}）",
++            ws.join(&a.path).display(),
++            a.note
++        ));
++    }
++    out
++}
++
++/// 所見を出し、所見の行と受けの行の無い方を書く。
++fn show_finding(c: &Ctx, id: FindingId, via: Via) -> Result<(), Refused> {
++    let (path, f) = read_finding(&c.drafts, id)?;
++    let ws = path.parent().and_then(Path::parent).unwrap_or(&c.drafts);
++    let (_, items) = ledger(c)?;
++    let lines = lines_of(&items);
++    let topic = topic_of(&f);
++    if !lines
++        .iter()
++        .any(|l| matches!(l, Line::Finding { id: x, .. } if *x == id))
++    {
++        let line = Line::Finding {
++            id,
++            topic: topic.clone(),
++            at: f.date.clone(),
++        };
++        append(c, &items, topic.as_deref(), &line)?;
++    }
++    let subject = Subject::Finding(id);
++    if !lines
++        .iter()
++        .any(|l| matches!(l, Line::Receipt { subject: s, .. } if *s == subject))
++    {
++        let line = Line::Receipt {
++            subject,
++            via,
++            at: minute_now(),
++        };
++        append(c, &items, topic.as_deref(), &line)?;
++    }
++    render(&f, ws).iter().for_each(|l| emit(l));
++    Ok(())
++}
++
++/// 頼みの行を出す（台帳に無ければ rc 1）。
++fn show_request(c: &Ctx, rq: &RequestId) -> Result<(), Refused> {
++    let (_, items) = ledger(c)?;
++    let found = lines_of(&items).into_iter().find_map(|l| match l {
++        Line::Request {
++            id,
++            topic,
++            form,
++            model,
++            at,
++        } if id == *rq => Some((topic, form, model, at)),
++        _ => None,
++    });
++    let (topic, form, model, at) = found.ok_or((FAIL, format!("頼み {rq} が台帳に無い")))?;
++    let topic = topic.unwrap_or_else(|| "題なし".to_string());
++    emit(&format!(
++        "頼み {rq}（題 {topic}・形 {}・model {model}・時刻 {at}）",
++        form.word()
++    ));
++    emit(&format!(
++        "開く: {} consult open --request {rq} --by button",
++        tzw()
++    ));
++    Ok(())
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwshw.rs b/crates/tsuzuri-boundary/tests/cwshw.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0027acb5e3cd77957ed010eb8dca1c7dce362f30
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwshw.rs
+@@ -0,0 +1,447 @@
++//! 席が所見を読む口と処分の口の歯（接頭辞 cwshw_・設計ノート surface-wave27a 行 cs-show・受入 AC16 の台帳の 2 行）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd（置き場の
++//! ledger.json を出す）と偽の bdw（argv を記録する）を置き、窓 cw3 の作業場に fixture finding-2 の complete.json を
++//! 所見 cw3-1 として直に置いてから、tz consult show と dispose を撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::server::{events, ruling};
++use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++use tsuzuri_core::consult::lines::{Line, read};
++
++/// 台帳の写し（根の epic・memo・memo の下の問い fx-hub.7・memo の notes は歯が足す）。
++const LEDGER: &str = r#"[
++{"id":"fx-hub","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z"},
++{"id":"fx-hub.5","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-hub","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"},
++{"id":"fx-hub.7","title":"問い","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-hub.5","updated_at":"2026-10-03T00:00:00Z"}
++]"#;
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++/// 歯ごとの置き場（窓 cw3 の作業場と所見 cw3-1 を置いた後）。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    drafts: PathBuf,
++    ws: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwshw")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [
++            &repo,
++            &state,
++            &drafts,
++            &root.join("bin"),
++            &root.join("into"),
++        ] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        git(
++            &repo,
++            &["config", "scribe2.statedir", &state.display().to_string()],
++        );
++        git(
++            &repo,
++            &["config", "tsuzuri.draftsdir", &drafts.display().to_string()],
++        );
++        let r = root.display().to_string();
++        script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(
++            &root.join("bin/bdw"),
++            &format!(
++                "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{r}/bdw.log'\necho >> '{r}/bdw.log'"
++            ),
++        );
++        let ws = drafts.join("consult-cw3");
++        let fx = Fx {
++            root,
++            repo,
++            drafts,
++            ws,
++        };
++        fx.notes(&[]);
++        fx.answer();
++        fx
++    }
++
++    /// 窓 cw3 の作業場を置き、complete.json の草稿に id と時刻 20261003T1500Z を足した所見 cw3-1 を置く。
++    fn answer(&self) {
++        for d in [".consult", "findings", "work"] {
++            fs::create_dir_all(self.ws.join(d)).unwrap();
++        }
++        let w = WindowFile {
++            id: WindowId::new(3).unwrap(),
++            form: Form::Talk,
++            topic: None,
++            model: "fable".into(),
++            effort: "xhigh".into(),
++            starter: Starter::Seat,
++            uttered: None,
++            request: None,
++            made: "20261003T1400Z".into(),
++        };
++        fs::write(
++            self.ws.join(".consult/window.json"),
++            wire::encode(&w).unwrap(),
++        )
++        .unwrap();
++        fs::write(self.ws.join("work/report.md"), "調べのレポート\n").unwrap();
++        fs::write(self.ws.join("work/probe.py"), "print(1)\n").unwrap();
++        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
++            .join("../../tests/fixtures/consult/finding-2/complete.json");
++        let draft = check(&fs::read_to_string(fixture).unwrap()).unwrap();
++        let id = FindingId::new(WindowId::new(3).unwrap(), 1).unwrap();
++        let f = Finding::new(id, "20261003T1500Z", draft);
++        fs::write(
++            self.ws.join("findings/cw3-1.json"),
++            wire::encode(&f).unwrap(),
++        )
++        .unwrap();
++    }
++
++    /// memo の notes を替える（行の列は notes.txt にも置く）。
++    fn notes(&self, lines: &[String]) {
++        let text = LEDGER.replace("NOTES", &lines.join("\\n"));
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++        fs::write(self.root.join("notes.txt"), lines.join("\n")).unwrap();
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        Command::new(env!("CARGO_BIN_EXE_tz"))
++            .arg("consult")
++            .args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env("TZ_WRAPPER", "/x/tzw")
++            .output()
++            .unwrap()
++    }
++
++    /// 偽の bdw が受けた（置き場・行の字）の列。
++    fn written(&self) -> Vec<(String, String)> {
++        fs::read_to_string(self.root.join("bdw.log"))
++            .unwrap_or_default()
++            .lines()
++            .map(|l| {
++                let a: Vec<&str> = l.split('\x1f').collect();
++                assert_eq!(a[0], "update");
++                (
++                    a[1].to_string(),
++                    a[2].strip_prefix("--append-notes=").unwrap().to_string(),
++                )
++            })
++            .collect()
++    }
++
++    /// 書いた行を台帳の写しの memo の notes に足す（席が書いた後の台帳の見立て）。
++    fn settle(&self, extra: &[String]) {
++        let before = fs::read_to_string(self.root.join("notes.txt")).unwrap();
++        let mut lines: Vec<String> = before.lines().map(str::to_string).collect();
++        lines.extend(self.written().into_iter().map(|(_, t)| t));
++        lines.extend(extra.iter().cloned());
++        self.notes(&lines);
++        let _ = fs::remove_file(self.root.join("bdw.log"));
++    }
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++fn time_of(text: &str) -> String {
++    text.rsplit_once("時刻 = ").unwrap().1.to_string()
++}
++
++const DISPOSE: [&str; 7] = [
++    "dispose",
++    "cw3-1",
++    "--verdict",
++    "一部採る",
++    "--reason",
++    "前提の 1 つが古い",
++    "--keep",
++];
++
++#[test]
++fn cwshw_finding_two_lines_once() {
++    let fx = Fx::new("twice");
++    let date = fs::read_to_string(fx.ws.join("findings/cw3-1.json")).unwrap();
++    let date = date
++        .split("\"date\":\"")
++        .nth(1)
++        .unwrap()
++        .get(..14)
++        .unwrap()
++        .to_string();
++    let before = ruling::minute(events::now());
++    let o = fx.tz(&["show", "cw3-1", "--via", "見張り"]);
++    let after = ruling::minute(events::now());
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let w = fx.written();
++    assert_eq!(w.len(), 2, "{w:?}");
++    assert!(w.iter().all(|(home, _)| home == "fx-hub.5"), "{w:?}");
++    assert_eq!(
++        w[0].1,
++        format!("相談の所見 = cw3-1・窓 = cw3・題 = fx-hub.7・時刻 = {date}")
++    );
++    let at = time_of(&w[1].1);
++    assert!(before <= at && at <= after, "{at}");
++    assert_eq!(
++        w[1].1,
++        format!("相談の受け = cw3-1・経路 = 見張り・時刻 = {at}")
++    );
++    assert!(matches!(read(&w[1].1), Some(Line::Receipt { .. })));
++    fx.settle(&[]);
++    let o = fx.tz(&["show", "cw3-1", "--via", "一覧"]);
++    assert_eq!(rc(&o), 0);
++    assert!(fx.written().is_empty(), "2 度目は書かない");
++    fx.notes(&[format!(
++        "相談の所見 = cw3-1・窓 = cw3・題 = fx-hub.7・時刻 = {date}"
++    )]);
++    let o = fx.tz(&["show", "cw3-1", "--via", "hook"]);
++    assert_eq!(rc(&o), 0);
++    let w = fx.written();
++    assert_eq!(w.len(), 1);
++    assert!(
++        w[0].1.starts_with("相談の受け = cw3-1・経路 = hook・"),
++        "{w:?}"
++    );
++}
++
++#[test]
++fn cwshw_show_text_and_request() {
++    let fx = Fx::new("text");
++    let o = fx.tz(&["show", "cw3-1", "--via", "完了"]);
++    let text = out(&o);
++    let ws = fx.ws.display().to_string();
++    for want in [
++        "所見 cw3-1（窓 cw3・題 fx-hub.7・時刻 ".to_string(),
++        "結論: 読む根は repo と器の出力の 2 つに絞る\n".to_string(),
++        "- a 絞る（採る）: repo と fleet と pipe だけを読む根にする・理由: 資格の file が読めない\n".to_string(),
++        "- b 丸ごと（採らない）: ".to_string(),
++        "- [verified] 囲いの中から accounts の file が読める（作業場の probe で撃った）\n".to_string(),
++        "- [inferred] 対話の窓でも同じ設定が効く".to_string(),
++        "根拠: ADR-29, FR19\n持ち主に問う: なし\n触る節点: FR19\n束の要約値: 0123456789abcdef\n囲いの断り: なし\n".to_string(),
++        format!("- report {ws}/work/report.md（調べのレポート）\n- program {ws}/work/probe.py（"),
++    ] {
++        assert!(text.contains(&want), "{want}\n{text}");
++    }
++    let rq = "相談の頼み = rq-20261003T1412Z-1・題 = fx-hub.7・形 = 問う・model = opus・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
++    fx.settle(&[rq.to_string()]);
++    let o = fx.tz(&["show", "rq-20261003T1412Z-1", "--via", "見張り"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let want = "頼み rq-20261003T1412Z-1（題 fx-hub.7・形 問う・model opus・時刻 20261003T1412Z）\n開く: /x/tzw consult open --request rq-20261003T1412Z-1 --by button\n";
++    assert_eq!(out(&o), want);
++    assert!(fx.written().is_empty());
++    for bad in [
++        &["show", "rq-20261003T1412Z-2", "--via", "見張り"][..],
++        &["show", "cw3-9", "--via", "見張り"],
++        &["show", "cw3-1"],
++        &["show", "cw3-1", "--via", "完"],
++        &["show", "x", "--via", "hook"],
++    ] {
++        assert_eq!(rc(&fx.tz(bad)), 1, "{bad:?}");
++    }
++    fs::rename(&fx.ws, fx.drafts.join("retired-consult-cw3")).unwrap();
++    assert_eq!(
++        rc(&fx.tz(&["show", "cw3-1", "--via", "一覧"])),
++        0,
++        "退いた作業場の所見も読む"
++    );
++}
++
++#[test]
++fn cwshw_dispose_keep_drop() {
++    let fx = Fx::new("dispose");
++    assert_eq!(rc(&fx.tz(&["show", "cw3-1", "--via", "見張り"])), 0);
++    fx.settle(&[]);
++    let into = fx.root.join("into");
++    let into_s = into.display().to_string();
++    let o = fx.tz(&[
++        &DISPOSE[..],
++        &[
++            "work/report.md",
++            "--drop",
++            "work/probe.py",
++            "--into",
++            &into_s,
++        ],
++    ]
++    .concat());
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert_eq!(
++        out(&o),
++        "処分を記した\ndocs/consult/kept/cw3-1/work/report.md\n"
++    );
++    let copied = fs::read_to_string(into.join("docs/consult/kept/cw3-1/work/report.md")).unwrap();
++    assert_eq!(copied, "調べのレポート\n");
++    assert!(!into.join("docs/consult/kept/cw3-1/work/probe.py").exists());
++    let w = fx.written();
++    let at = time_of(&w[0].1);
++    let want = format!(
++        "相談の処分 = cw3-1・採否 = 一部採る・理由 = 前提の 1 つが古い・保存 = work/report.md・不保存 = work/probe.py・時刻 = {at}"
++    );
++    assert_eq!(w, [("fx-hub.5".to_string(), want)]);
++    assert!(fx.ws.is_dir(), "閉じていない窓は退かせない");
++    fx.settle(&[]);
++    let again = fx.tz(&[&DISPOSE[..], &["work/report.md", "--drop", "work/probe.py"]].concat());
++    assert_eq!(rc(&again), 1);
++    assert!(err(&again).contains("もう処分した"), "{}", err(&again));
++}
++
++/// 整えて空になる理由と、写し先が在る時の断り（どれも写さず書かない）。
++fn refusals_reason_and_kept(fx: &Fx) {
++    let base = ["dispose", "cw3-1", "--verdict", "採る", "--reason", "理由"];
++    let bad_reason = [
++        "dispose",
++        "cw3-1",
++        "--verdict",
++        "採る",
++        "--reason",
++        " ",
++        "--keep",
++        "work/report.md",
++        "--drop",
++        "work/probe.py",
++    ];
++    assert_eq!(rc(&fx.tz(&bad_reason)), 1);
++    let kept = fx.repo.join("docs/consult/kept/cw3-1/work/report.md");
++    fs::create_dir_all(kept.parent().unwrap()).unwrap();
++    fs::write(&kept, "前の写し\n").unwrap();
++    let o = fx.tz(&[
++        &base[..],
++        &["--keep", "work/report.md", "--drop", "work/probe.py"],
++    ]
++    .concat());
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("もう在る"), "{}", err(&o));
++    assert_eq!(fs::read_to_string(&kept).unwrap(), "前の写し\n");
++    assert!(fx.written().is_empty());
++}
++
++#[test]
++fn cwshw_dispose_refusals() {
++    let fx = Fx::new("refuse");
++    let unreceived =
++        fx.tz(&[&DISPOSE[..], &["work/report.md", "--drop", "work/probe.py"]].concat());
++    assert!(
++        err(&unreceived).contains("まだ受けていない"),
++        "{}",
++        err(&unreceived)
++    );
++    assert_eq!(rc(&fx.tz(&["show", "cw3-1", "--via", "見張り"])), 0);
++    fx.settle(&[]);
++    let base = ["dispose", "cw3-1", "--verdict", "採る", "--reason", "理由"];
++    let kd = "--keep work/report.md --drop work/probe.py";
++    let cases = [
++        (
++            "--keep work/report.md".to_string(),
++            "選びの無いか重なった添え物 work/probe.py",
++        ),
++        (
++            format!("{kd} --drop work/x.md"),
++            "所見に無い添え物 work/x.md",
++        ),
++        (
++            format!("{kd} --drop work/report.md"),
++            "重なった添え物 work/report.md",
++        ),
++        (format!("{kd} --into /nonexistent-into"), "dir でない"),
++        (format!("{kd} --verdict x"), "2 度ある"),
++        (format!("{kd} --reason y"), "2 度ある"),
++        (format!("{kd} --x 1"), "知らない引数"),
++    ];
++    for (extra, want) in cases {
++        let extra: Vec<&str> = extra.split_whitespace().collect();
++        let o = fx.tz(&[&base[..], &extra].concat());
++        assert_eq!(rc(&o), 1, "{extra:?}");
++        assert!(err(&o).contains(want), "{want}: {}", err(&o));
++    }
++    refusals_reason_and_kept(&fx);
++}
++
++#[test]
++fn cwshw_retire_after_last() {
++    let fx = Fx::new("retire");
++    fs::write(
++        fx.ws.join("findings/cw3-2.json"),
++        fs::read_to_string(fx.ws.join("findings/cw3-1.json"))
++            .unwrap()
++            .replace("cw3-1", "cw3-2"),
++    )
++    .unwrap();
++    assert_eq!(rc(&fx.tz(&["show", "cw3-1", "--via", "見張り"])), 0);
++    let closed = "相談の閉じ = cw3・起こし手 = 席・所見 = 2・時刻 = 20261003T1800Z".to_string();
++    fx.settle(std::slice::from_ref(&closed));
++    let args = [
++        "--keep",
++        "work/report.md",
++        "--drop",
++        "work/probe.py",
++        "--into",
++    ];
++    let into = fx.root.join("into").display().to_string();
++    let o = fx.tz(&[&DISPOSE[..], &args[1..], &[into.as_str()]].concat());
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert!(fx.ws.is_dir(), "処分の無い所見 cw3-2 が残る間は退かせない");
++    assert_eq!(rc(&fx.tz(&["show", "cw3-2", "--via", "一覧"])), 0);
++    fx.settle(&[]);
++    let o = fx.tz(&[
++        "dispose",
++        "cw3-2",
++        "--verdict",
++        "採らない",
++        "--reason",
++        "古い",
++        "--drop",
++        "work/report.md",
++        "--drop",
++        "work/probe.py",
++    ]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let gone = fx.drafts.join("retired-consult-cw3");
++    assert_eq!(
++        out(&o),
++        format!("処分を記した\n退いた: {}\n", gone.display())
++    );
++    assert!(!fx.ws.exists() && gone.join("findings/cw3-2.json").is_file());
++}

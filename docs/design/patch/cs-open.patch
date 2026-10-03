@@ -1,0 +1,1665 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/answer.rs b/crates/tsuzuri-boundary/src/consult/answer.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d7e6998bafb3f0621b4fe7301d0782d3f0a17ff2
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/answer.rs
+@@ -0,0 +1,10 @@
++//! tz consult answer（所見の口（窓の側）・設計ノート surface-wave27a 行 cs-answer が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult answer: まだ無い（行 cs-answer）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/bundle.rs b/crates/tsuzuri-boundary/src/consult/bundle.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..78821e001995013cf5fe2a1212b51e1d8dd8dbf7
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/bundle.rs
+@@ -0,0 +1,191 @@
++//! tz consult bundle <窓 id> [--topic <題>] [--question <file>]（行 cs-open・判断の記録 ADR-29 決定 (1)(イ)・束を機械が組む）。
++//! 窓の束 bundle/ に手引き brief.md・問い question.md・読む物の一覧 reads.md・台帳の写し ledger.json・要約値 digest を書き、
++//! 標準出力に「束 <要約値 16 字>」を 1 行出す。席が撃つ時（環境に窓の id が無い時）は台帳を bd で読んで写しを替え、
++//! 窓の中で撃つ時（環境の `TZ_CONSULT_ID` が窓の id で cwd が作業場）は台帳の写しを替えない（囲いの中では bd を撃てない）。
++//! 問いは --question の file の字、無くて題が在り question.md が無ければ題（台帳の bead なら題名と本文も）から書く。
++
++use std::path::Path;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{WindowFile, WindowId};
++use tsuzuri_contract::ledger::{LedgerItem, fnv1a64};
++use tsuzuri_core::consult::launch::{ID_ENV, brief, read_roots};
++
++use super::{
++    COMMON, FAIL, Refused, UNKNOWN, ctx, flags, ledger, read_window, refuse, tz_path, workspace,
++};
++use crate::out::emit;
++use crate::server::ledger::parse_bd;
++
++/// 束の file の名（要約値に入れる順）。
++pub const FILES: [&str; 4] = ["brief.md", "question.md", "reads.md", "ledger.json"];
++
++/// 要約値の file の名。
++pub const DIGEST: &str = "digest";
++
++/// tz consult bundle の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.extend(["--topic", "--question"]);
++    let f = match flags(rest, &values, &[], &[]) {
++        Ok(f) => f,
++        Err(e) => return refuse("bundle", e),
++    };
++    let [id] = f.pos.as_slice() else {
++        return refuse("bundle", (FAIL, "窓の id を 1 つ渡す".to_string()));
++    };
++    let Ok(id) = WindowId::parse(id) else {
++        return refuse("bundle", (FAIL, format!("窓の id {id} の形でない")));
++    };
++    let inside = std::env::var(ID_ENV).ok().as_deref() == Some(id.to_string().as_str());
++    let made = if inside {
++        std::env::current_dir()
++            .map_err(|e| (UNKNOWN, format!("cwd が読めない: {e}")))
++            .and_then(|ws| rebuild(&ws, id, f.get("--topic"), f.get("--question")))
++    } else {
++        ctx(&f).and_then(|c| {
++            let (text, _) = ledger(&c)?;
++            let ws = workspace(&c.drafts, id);
++            let topic = f.get("--topic");
++            write(
++                &ws,
++                id,
++                &Inputs::seat(&c, &text, topic, f.get("--question")),
++            )
++        })
++    };
++    match made {
++        Ok(digest) => {
++            emit(&format!("束 {digest}"));
++            0
++        }
++        Err(e) => refuse("bundle", e),
++    }
++}
++
++/// 束の材料。
++#[derive(Debug, Clone, Default)]
++pub struct Inputs {
++    /// 台帳の写しに置く bd の字（窓の中では None＝写しを替えない）。
++    pub ledger: Option<String>,
++    /// 題（None なら窓の控えの題）。
++    pub topic: Option<String>,
++    /// 問いの file の path。
++    pub question: Option<String>,
++    /// 読む物の一覧の字（窓の中では None＝替えない）。
++    pub reads: Option<String>,
++}
++
++impl Inputs {
++    /// 席が撃つ時の材料（読む根と台帳の字）。
++    pub fn seat(c: &super::Ctx, text: &str, topic: Option<&str>, question: Option<&str>) -> Inputs {
++        let roots = read_roots(
++            &c.repo.display().to_string(),
++            &c.state.display().to_string(),
++        );
++        let mut reads = String::from("# 読む物（読むだけ・作業場の外へは書けない）\n\n");
++        for root in &roots {
++            reads.push_str(&format!("- {root}\n"));
++        }
++        reads.push_str("- bundle/ledger.json（台帳の写し・席が束を組んだ時の bd の字）\n");
++        Inputs {
++            ledger: Some(text.to_string()),
++            topic: topic.map(str::to_string),
++            question: question.map(str::to_string),
++            reads: Some(reads),
++        }
++    }
++}
++
++/// 窓の中の組み直し（台帳の写しと読む物の一覧を替えない）。
++fn rebuild(
++    ws: &Path,
++    id: WindowId,
++    topic: Option<&str>,
++    question: Option<&str>,
++) -> Result<String, Refused> {
++    let inputs = Inputs {
++        topic: topic.map(str::to_string),
++        question: question.map(str::to_string),
++        ..Inputs::default()
++    };
++    write(ws, id, &inputs)
++}
++
++/// 題の bead の題名と本文（台帳の写しに在れば）。
++fn bead_text(items: &[LedgerItem], topic: &str) -> Option<String> {
++    let item = items.iter().find(|i| i.row.id.as_str() == topic)?;
++    Some(format!(
++        "{}\n\n{}\n",
++        item.row.title,
++        item.description.trim_end()
++    ))
++}
++
++/// 題から組む問いの字。
++fn topic_question(bundle: &Path, topic: &str) -> String {
++    let items = std::fs::read_to_string(bundle.join("ledger.json"))
++        .ok()
++        .and_then(|t| match parse_bd(&t) {
++            Reading::Known(items) => Some(items),
++            Reading::Unknown => None,
++        })
++        .unwrap_or_default();
++    let mut text = format!("# 題 {topic}\n\n");
++    if let Some(body) = bead_text(&items, topic) {
++        text.push_str(&body);
++    }
++    text
++}
++
++/// 束の file を書き、要約値を返す（作業場と窓の控えが無いか書けなければ rc 1）。
++pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused> {
++    let window: WindowFile =
++        read_window(ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
++    if window.id != id {
++        return Err((
++            FAIL,
++            format!("作業場の窓の id が {} で {id} でない", window.id),
++        ));
++    }
++    let dir = ws.join("bundle");
++    let put = |name: &str, text: &str| {
++        std::fs::write(dir.join(name), text).map_err(|e| (FAIL, format!("{name} を書けない: {e}")))
++    };
++    put("brief.md", &brief(&tz_path(), id))?;
++    if let Some(text) = &inputs.ledger {
++        put("ledger.json", text)?;
++    }
++    if let Some(text) = &inputs.reads {
++        put("reads.md", text)?;
++    }
++    let topic = inputs.topic.as_deref().or(window.topic.as_deref());
++    match (&inputs.question, topic) {
++        (Some(file), _) => {
++            let text = std::fs::read_to_string(file)
++                .map_err(|e| (FAIL, format!("問いの file {file} が読めない: {e}")))?;
++            put("question.md", &text)?;
++        }
++        (None, Some(t)) if inputs.topic.is_some() || !dir.join("question.md").exists() => {
++            put("question.md", &topic_question(&dir, t))?;
++        }
++        _ => {}
++    }
++    let digest = digest(&dir);
++    put(DIGEST, &format!("{digest}\n"))?;
++    Ok(digest)
++}
++
++/// 束の要約値（`FILES` の在る file の名と字を順に FNV-1a 64 に通した 16 進の 16 字）。
++pub fn digest(dir: &Path) -> String {
++    let mut bytes = Vec::new();
++    for name in FILES {
++        if let Ok(text) = std::fs::read(dir.join(name)) {
++            bytes.extend_from_slice(name.as_bytes());
++            bytes.push(0);
++            bytes.extend_from_slice(&text);
++            bytes.push(0);
++        }
++    }
++    format!("{:016x}", fnv1a64(&bytes))
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/close.rs b/crates/tsuzuri-boundary/src/consult/close.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6aad8c5efab7505bc2e17db7587cc7215e3e26df
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/close.rs
+@@ -0,0 +1,10 @@
++//! tz consult close（窓の閉じと退かせ・設計ノート surface-wave27a 行 cs-close が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult close: まだ無い（行 cs-close）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/dispose.rs b/crates/tsuzuri-boundary/src/consult/dispose.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1b2f26e70ca8bd4edf9e7d4098645fcf68e0ab8b
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/dispose.rs
+@@ -0,0 +1,10 @@
++//! tz consult dispose（所見の処分の口・設計ノート surface-wave27a 行 cs-show が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult dispose: まだ無い（行 cs-show）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/guard.rs b/crates/tsuzuri-boundary/src/consult/guard.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..896d97ddce1d26a5cb7c0ba7d2833e66d0160e41
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/guard.rs
+@@ -0,0 +1,10 @@
++//! tz consult guard（窓の守りの hook の口・設計ノート surface-wave27a 行 cs-answer が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult guard: まだ無い（行 cs-answer）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a708ff552da5eef397b6d2d1973012b593417d64
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -0,0 +1,10 @@
++//! tz consult launch（窓を起こす口（話す窓は tmux の窓・問う窓は背景の子）・設計ノート surface-wave27a 行 cs-launch が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult launch: まだ無い（行 cs-launch）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..94b0ca4ee760ab91de875b36f4b6e93c333df359
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/list.rs
+@@ -0,0 +1,10 @@
++//! tz consult list（窓の一覧・設計ノート surface-wave27a 行 cs-close が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult list: まだ無い（行 cs-close）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6aba8a10859c599885838acd961eface71bae58
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -0,0 +1,374 @@
++//! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
++//! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
++//! show と dispose（行 cs-show）・list と close（行 cs-close）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
++//! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
++//! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
++//! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
++//! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
++//! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
++
++pub mod answer;
++pub mod bundle;
++pub mod close;
++pub mod dispose;
++pub mod guard;
++pub mod launch;
++pub mod list;
++pub mod open;
++pub mod show;
++pub mod watch;
++
++use std::ffi::{OsStr, OsString};
++use std::path::{Path, PathBuf};
++use std::time::Duration;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{FindingId, ProcMark, WindowFile, WindowId};
++use tsuzuri_contract::ledger::{BDW, BeadId, LedgerItem, LedgerWrite};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::lines::{Line, home_of, render, scan};
++
++use crate::acct::{GIT, GIT_ARGS};
++use crate::out::emit_err;
++use crate::server::events::now;
++use crate::server::ledger::{BD, Source, capture, parse_bd};
++use crate::server::ruling::{WRITE_TIMEOUT, minute};
++
++/// 断り（使い方の誤り・欄の欠け・上限・版のずれ）。
++pub const FAIL: u8 = 1;
++
++/// まだ分からない（台帳か置き場が読めない）。
++pub const UNKNOWN: u8 = 2;
++
++/// 起草の置き場を引く git の引数の列の後ろ（前に `-C <repo>` が付く・acct の `GIT_ARGS` と `BOARD_ARGS` と同じ形）。
++pub const DRAFTS_ARGS: [&str; 3] = ["config", "--get", "tsuzuri.draftsdir"];
++
++/// cwd の git の根を引く引数の列。
++pub const TOPLEVEL_ARGS: [&str; 2] = ["rev-parse", "--show-toplevel"];
++
++/// git の撃ちの上限。
++pub const GIT_TIMEOUT: Duration = Duration::from_secs(5);
++
++/// 窓の控えの file（作業場からの相対）。
++pub const WINDOW_FILE: &str = ".consult/window.json";
++
++/// 作業場に用意する dir（控え・束・草稿・所見・実験）。
++pub const DIRS: [&str; 5] = [".consult", "bundle", "drafts", "findings", "work"];
++
++/// 窓の控えの書き場（作業場からの相対）。
++pub const NOTES: &str = "notes.md";
++
++/// 席への 1 行の命令の頭の字を渡す環境変数（plugin の tz の解き方が自分の path を置く・無ければ tz 自身の path）。
++pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
++
++/// 共通の値を取る旗（repo の置き場・台帳の読みと書きの program）。
++pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
++
++pub const USAGE: &str =
++    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard> [引数]";
++
++/// tz consult の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    match rest {
++        ["open", r @ ..] => open::run(r),
++        ["bundle", r @ ..] => bundle::run(r),
++        ["launch", r @ ..] => launch::run(r),
++        ["answer", r @ ..] => answer::run(r),
++        ["watch", r @ ..] => watch::run(r),
++        ["show", r @ ..] => show::run(r),
++        ["dispose", r @ ..] => dispose::run(r),
++        ["list", r @ ..] => list::run(r),
++        ["close", r @ ..] => close::run(r),
++        ["guard", r @ ..] => guard::run(r),
++        _ => {
++            emit_err(&format!("tz consult: 口が無い\n{USAGE}"));
++            FAIL
++        }
++    }
++}
++
++/// 断りの終了 code と理由。
++pub type Refused = (u8, String);
++
++/// 口の名を付けて理由を標準エラーに書き、終了 code を返す。
++pub fn refuse(verb: &str, (rc, why): Refused) -> u8 {
++    emit_err(&format!("tz consult {verb}: {why}"));
++    rc
++}
++
++/// 読んだ引数（位置の引数・旗の値・値を取らない旗）。
++#[derive(Debug, Clone, Default, PartialEq, Eq)]
++pub struct Flags {
++    pub pos: Vec<String>,
++    values: Vec<(String, String)>,
++    switches: Vec<String>,
++}
++
++impl Flags {
++    /// 旗の値（何度でも受ける旗は最初の値）。
++    pub fn get(&self, name: &str) -> Option<&str> {
++        self.values
++            .iter()
++            .find(|(n, _)| n == name)
++            .map(|(_, v)| v.as_str())
++    }
++
++    /// 何度でも受ける旗の値の全部（順のまま）。
++    pub fn all(&self, name: &str) -> Vec<&str> {
++        self.values
++            .iter()
++            .filter(|(n, _)| n == name)
++            .map(|(_, v)| v.as_str())
++            .collect()
++    }
++
++    /// 値を取らない旗が在るか。
++    pub fn has(&self, name: &str) -> bool {
++        self.switches.iter().any(|s| s == name)
++    }
++}
++
++/// `--名 値` か `--名=値` の旗（`values` の名・`many` の名は何度でも）と値を取らない旗（`switches`）と
++/// 位置の引数を読む。知らない旗・空の値・2 度の旗（`many` を除く）を断る（rc 1）。
++pub fn flags(
++    rest: &[&str],
++    values: &[&str],
++    switches: &[&str],
++    many: &[&str],
++) -> Result<Flags, Refused> {
++    let mut f = Flags::default();
++    let mut it = rest.iter();
++    while let Some(arg) = it.next() {
++        if !arg.starts_with("--") {
++            f.pos.push((*arg).to_string());
++            continue;
++        }
++        if switches.contains(arg) {
++            if f.has(arg) {
++                return Err((FAIL, format!("{arg} が 2 度ある")));
++            }
++            f.switches.push((*arg).to_string());
++            continue;
++        }
++        let (name, value) = match arg.split_once('=') {
++            Some((n, v)) => (n, v),
++            None => (*arg, *it.next().ok_or((FAIL, format!("{arg} の値が無い")))?),
++        };
++        if !values.contains(&name) && !many.contains(&name) {
++            return Err((FAIL, format!("知らない引数 {name}")));
++        }
++        if value.is_empty() {
++            return Err((FAIL, format!("{name} の値が空")));
++        }
++        if !many.contains(&name) && f.get(name).is_some() {
++            return Err((FAIL, format!("{name} が 2 度ある")));
++        }
++        f.values.push((name.to_string(), value.to_string()));
++    }
++    Ok(f)
++}
++
++/// 口の置き場（repo・state dir・起草の置き場・台帳の読みと書きの program）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Ctx {
++    pub repo: PathBuf,
++    pub state: PathBuf,
++    pub drafts: PathBuf,
++    pub bd: OsString,
++    pub bdw: OsString,
++}
++
++/// git を撃ち、返した字の前後の空白を除いた字（落ちる・空なら None）。
++fn git(cwd: &Path, args: &[&OsStr]) -> Option<String> {
++    let out = capture(OsStr::new(GIT), args, cwd, GIT_TIMEOUT)?;
++    let text = String::from_utf8(out).ok()?;
++    let text = text.trim();
++    (!text.is_empty()).then(|| text.to_string())
++}
++
++/// repo の git config の鍵の値。
++fn config(repo: &Path, tail: &[&str]) -> Option<String> {
++    let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), repo.as_os_str()];
++    args.extend(tail.iter().map(OsStr::new));
++    git(repo, &args)
++}
++
++/// 置き場を解く（repo は --repo か cwd の git の根・state dir と起草の置き場は repo の git config の鍵・
++/// どれかが引けないか起草の置き場が dir でなければ rc 2）。
++pub fn ctx(f: &Flags) -> Result<Ctx, Refused> {
++    let repo = match f.get("--repo") {
++        Some(r) => PathBuf::from(r),
++        None => {
++            let cwd =
++                std::env::current_dir().map_err(|e| (UNKNOWN, format!("cwd が読めない: {e}")))?;
++            let args: Vec<&OsStr> = TOPLEVEL_ARGS.iter().map(OsStr::new).collect();
++            PathBuf::from(git(&cwd, &args).ok_or((UNKNOWN, "cwd が git の木でない".to_string()))?)
++        }
++    };
++    if !repo.is_dir() {
++        return Err((UNKNOWN, format!("repo {} が dir でない", repo.display())));
++    }
++    let state =
++        config(&repo, &GIT_ARGS).ok_or((UNKNOWN, "鍵 scribe2.statedir が無い".to_string()))?;
++    let drafts =
++        config(&repo, &DRAFTS_ARGS).ok_or((UNKNOWN, "鍵 tsuzuri.draftsdir が無い".to_string()))?;
++    let drafts = PathBuf::from(drafts);
++    if !drafts.is_dir() {
++        return Err((
++            UNKNOWN,
++            format!("起草の置き場 {} が dir でない", drafts.display()),
++        ));
++    }
++    Ok(Ctx {
++        repo,
++        state: PathBuf::from(state),
++        drafts,
++        bd: f.get("--bd").unwrap_or(BD).into(),
++        bdw: f.get("--bdw").unwrap_or(BDW).into(),
++    })
++}
++
++/// 窓の作業場の path。
++pub fn workspace(drafts: &Path, id: WindowId) -> PathBuf {
++    drafts.join(id.name())
++}
++
++/// 退いた作業場の path。
++pub fn retired(drafts: &Path, id: WindowId) -> PathBuf {
++    drafts.join(id.retired_name())
++}
++
++/// 起草の置き場の窓の id と退いたか（作業場と退いた作業場の dir の名から・id の順）。
++pub fn windows(drafts: &Path) -> Vec<(WindowId, bool)> {
++    let mut out: Vec<(WindowId, bool)> = std::fs::read_dir(drafts)
++        .into_iter()
++        .flatten()
++        .flatten()
++        .filter(|e| e.path().is_dir())
++        .filter_map(|e| {
++            let name = e.file_name().into_string().ok()?;
++            let (rest, gone) = match name.strip_prefix("retired-") {
++                Some(rest) => (rest.to_string(), true),
++                None => (name, false),
++            };
++            let id = WindowId::parse(rest.strip_prefix("consult-")?).ok()?;
++            Some((id, gone))
++        })
++        .collect();
++    out.sort();
++    out
++}
++
++/// 作業場の窓の控え（読めなければ None）。
++pub fn read_window(ws: &Path) -> Option<WindowFile> {
++    let text = std::fs::read_to_string(ws.join(WINDOW_FILE)).ok()?;
++    wire::decode(&text).ok()
++}
++
++/// 窓の控えを書く。
++pub fn write_window(ws: &Path, window: &WindowFile) -> Result<(), String> {
++    let text = wire::encode(window).map_err(|e| e.to_string())?;
++    std::fs::write(ws.join(WINDOW_FILE), text + "\n").map_err(|e| e.to_string())
++}
++
++/// 作業場の findings/ の所見の id（名が `<所見 id>.json` で窓の id が `window` の物・id の順）。
++pub fn findings(ws: &Path, window: WindowId) -> Vec<FindingId> {
++    let mut out: Vec<FindingId> = std::fs::read_dir(ws.join("findings"))
++        .into_iter()
++        .flatten()
++        .flatten()
++        .filter_map(|e| {
++            let name = e.file_name().into_string().ok()?;
++            FindingId::parse(name.strip_suffix(".json")?).ok()
++        })
++        .filter(|id| id.window() == window)
++        .collect();
++    out.sort();
++    out
++}
++
++/// 作業場の process の印（`.consult/proc-<k>.json` の読める物・k の順）。
++pub fn procs(ws: &Path) -> Vec<ProcMark> {
++    let mut out: Vec<ProcMark> = std::fs::read_dir(ws.join(".consult"))
++        .into_iter()
++        .flatten()
++        .flatten()
++        .filter(|e| {
++            e.file_name()
++                .to_str()
++                .is_some_and(|n| n.starts_with("proc-") && n.ends_with(".json"))
++        })
++        .filter_map(|e| wire::decode::<ProcMark>(&std::fs::read_to_string(e.path()).ok()?).ok())
++        .collect();
++    out.sort_by_key(|p| p.k);
++    out
++}
++
++/// process の印の file の path。
++pub fn proc_path(ws: &Path, k: u32) -> PathBuf {
++    ws.join(format!(".consult/proc-{k}.json"))
++}
++
++/// pid の process が在るか（`/proc/<pid>` の在る無し）。
++pub fn alive(pid: u32) -> bool {
++    pid > 0 && Path::new("/proc").join(pid.to_string()).exists()
++}
++
++/// 最後の process の印の process が在るか。
++pub fn live(ws: &Path) -> bool {
++    procs(ws).last().is_some_and(|p| alive(p.pid))
++}
++
++/// 今の UTC の分の字。
++pub fn minute_now() -> String {
++    minute(now())
++}
++
++/// 解いた tz の path（tz 自身の binary・読めなければ字 tz）。
++pub fn tz_path() -> String {
++    std::env::current_exe().map_or_else(|_| "tz".to_string(), |p| p.display().to_string())
++}
++
++/// 席への 1 行の命令の頭の字（環境の `WRAPPER_ENV` か、無ければ tz 自身の path）。
++pub fn tzw() -> String {
++    std::env::var(WRAPPER_ENV)
++        .ok()
++        .filter(|v| !v.is_empty())
++        .unwrap_or_else(tz_path)
++}
++
++/// 台帳を bd で読む（bd の字と bead の列・読めなければ rc 2）。
++pub fn ledger(ctx: &Ctx) -> Result<(String, Vec<LedgerItem>), Refused> {
++    let text = Source::new(&ctx.repo, &ctx.bd)
++        .text_alone()
++        .ok_or((UNKNOWN, "台帳が読めない".to_string()))?;
++    match parse_bd(&text) {
++        Reading::Known(items) => Ok((text, items)),
++        Reading::Unknown => Err((UNKNOWN, "台帳の字が読めない".to_string())),
++    }
++}
++
++/// 台帳の notes の相談の行の全部（bead の順・notes の中の順）。
++pub fn lines_of(items: &[LedgerItem]) -> Vec<Line> {
++    items.iter().flat_map(|i| scan(&i.notes)).collect()
++}
++
++/// 相談の行を置き場（題から中核の `home_of` で選ぶ memo か根）の notes に bdw で足し、置いた bead の id を返す
++/// （行の字が書けなければ rc 1・根が無いか書きが落ちれば rc 2）。
++pub fn append(
++    ctx: &Ctx,
++    items: &[LedgerItem],
++    topic: Option<&str>,
++    line: &Line,
++) -> Result<BeadId, Refused> {
++    let text = render(line).map_err(|e| (FAIL, format!("行を書けない: {e:?}")))?;
++    let home =
++        home_of(items, topic, &text).map_err(|e| (UNKNOWN, format!("置き場が無い: {e:?}")))?;
++    let write = LedgerWrite::AppendNotes {
++        id: home.id.clone(),
++        line: home.line(&text),
++    };
++    capture(&ctx.bdw, write.argv(), &ctx.repo, WRITE_TIMEOUT)
++        .ok_or((UNKNOWN, format!("台帳の書きが落ちた: {}", home.id)))?;
++    Ok(home.id)
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/open.rs b/crates/tsuzuri-boundary/src/consult/open.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..03eac1c8012b2355574d74f1063af4eb9026655c
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/open.rs
+@@ -0,0 +1,225 @@
++//! tz consult open（行 cs-open・判断の記録 ADR-29 決定 (3)(4)(5)(11)）: 窓の作業場を用意する。
++//! 引数: [--topic <題>] [--form talk|ask] [--model <名>] [--effort <段>] --by seat|chat|button [--said <分>]
++//! [--request <頼みの id>] [--via 見張り|hook|一覧] [--question <file>] と共通の --repo・--bd・--bdw。
++//! 環境の `TZ_PLUGIN_VERSION` が中核の `PLUGIN_VERSION` と同じでなければ断る（plugin の解き方を通さない撃ちと版のずれ）。
++//! 起こし手が持ち主のチャットなら --said に器が記録した発話の分の字、持ち主の button なら --request に頼みの id が要る。
++//! 頼みの時は台帳の相談の頼みの行の形と model を使い（題は --topic が無ければ頼みの題）、相談の受けの行を経路
++//! （既定 見張り）で頼みの題の置き場に書く（台帳に無い頼みと受けた頼みは断る・受けの行は作業場より先に書く）。
++//! 作業場は起草の置き場の下に `consult-cw<n>` を原子に作り（n は在る窓と退いた窓の最大 + 1）、git init し、
++//! `DIRS` の dir・窓の控え・控えの書き場 notes.md・束を置く。標準出力は「窓 cw<n> を用意した」と作業場の絶対 path の 2 行。
++//! 開きの行は起動の口が書く（行 cs-launch）。
++
++use std::ffi::OsStr;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_contract::consult::{
++    Form, RequestId, Starter, Via, WindowFile, WindowId, Word, minute_ok,
++};
++use tsuzuri_contract::ledger::LedgerItem;
++use tsuzuri_core::consult::launch::{VERSION_ENV, version_ok};
++use tsuzuri_core::consult::lines::{Line, Subject};
++
++use super::bundle::{self, Inputs};
++use super::{
++    COMMON, Ctx, DIRS, FAIL, GIT_TIMEOUT, NOTES, Refused, UNKNOWN, append, ctx, flags, ledger,
++    lines_of, minute_now, refuse, windows, write_window,
++};
++use crate::acct::GIT;
++use crate::out::emit;
++use crate::server::ledger::capture;
++
++/// 既定の model（制約 CON6）。
++pub const MODEL: &str = "fable";
++
++/// 既定の念入りさ（制約 CON6）。
++pub const EFFORT: &str = "xhigh";
++
++/// 作業場の dir を作り損ねた時に次の番号で撃ち直す回の上限。
++const TRIES: u32 = 64;
++
++/// 窓の控えの材料（引数か頼みの行から）。
++struct Want {
++    form: Form,
++    topic: Option<String>,
++    model: String,
++    effort: String,
++    starter: Starter,
++    uttered: Option<String>,
++    request: Option<RequestId>,
++    via: Via,
++}
++
++/// tz consult open の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.extend([
++        "--topic",
++        "--form",
++        "--model",
++        "--effort",
++        "--by",
++        "--said",
++        "--request",
++        "--via",
++        "--question",
++    ]);
++    let made = flags(rest, &values, &[], &[]).and_then(|f| {
++        if !f.pos.is_empty() {
++            return Err((FAIL, format!("知らない引数 {}", f.pos.join(" "))));
++        }
++        if !version_ok(std::env::var(VERSION_ENV).ok().as_deref()) {
++            return Err((
++                FAIL,
++                format!("{VERSION_ENV} が tz の版と違う（plugin の tz の解き方で撃つ）"),
++            ));
++        }
++        let want = want(&f)?;
++        let c = ctx(&f)?;
++        let (text, items) = ledger(&c)?;
++        let want = receive(&c, &items, want)?;
++        let question = f.get("--question");
++        make(&c, &want, &Inputs::seat(&c, &text, None, question))
++    });
++    match made {
++        Ok((id, ws)) => {
++            emit(&format!("窓 {id} を用意した"));
++            emit(&ws.display().to_string());
++            0
++        }
++        Err(e) => refuse("open", e),
++    }
++}
++
++/// 引数から控えの材料を読む（起こし手と添えの組み・形・経路の語を断る）。
++fn want(f: &super::Flags) -> Result<Want, Refused> {
++    let form = match f.get("--form").unwrap_or("talk") {
++        "talk" => Form::Talk,
++        "ask" => Form::Ask,
++        other => return Err((FAIL, format!("--form は talk か ask（{other}）"))),
++    };
++    let starter = match f.get("--by") {
++        Some("seat") => Starter::Seat,
++        Some("chat") => Starter::Chat,
++        Some("button") => Starter::Button,
++        _ => return Err((FAIL, "--by は seat・chat・button のどれか".to_string())),
++    };
++    let uttered = f.get("--said").map(str::to_string);
++    if (starter == Starter::Chat) != uttered.is_some()
++        || uttered.as_deref().is_some_and(|s| !minute_ok(s))
++    {
++        return Err((
++            FAIL,
++            "--said は --by chat の時だけ・発話の UTC の分の字".to_string(),
++        ));
++    }
++    let request = match f.get("--request").map(RequestId::parse) {
++        None => None,
++        Some(Ok(r)) => Some(r),
++        Some(Err(_)) => return Err((FAIL, "--request が頼みの id の形でない".to_string())),
++    };
++    if (starter == Starter::Button) != request.is_some() {
++        return Err((
++            FAIL,
++            "--request は --by button の時だけ（button の時は要る）".to_string(),
++        ));
++    }
++    let via = Via::from_word(f.get("--via").unwrap_or(Via::Watch.word()))
++        .filter(|v| *v != Via::Done)
++        .ok_or((FAIL, "--via は 見張り・hook・一覧 のどれか".to_string()))?;
++    Ok(Want {
++        form,
++        topic: f.get("--topic").map(str::to_string),
++        model: f.get("--model").unwrap_or(MODEL).to_string(),
++        effort: f.get("--effort").unwrap_or(EFFORT).to_string(),
++        starter,
++        uttered,
++        request,
++        via,
++    })
++}
++
++/// 頼みなら台帳の頼みの行を既定にし、相談の受けの行を書く（台帳に無い頼みと受けた頼みは断る）。
++fn receive(c: &Ctx, items: &[LedgerItem], mut want: Want) -> Result<Want, Refused> {
++    let Some(rq) = want.request.clone() else {
++        return Ok(want);
++    };
++    let lines = lines_of(items);
++    let subject = Subject::Request(rq.clone());
++    if lines
++        .iter()
++        .any(|l| matches!(l, Line::Receipt { subject: s, .. } if *s == subject))
++    {
++        return Err((FAIL, format!("頼み {rq} はもう受けた")));
++    }
++    let Some(Line::Request {
++        topic, form, model, ..
++    }) = lines
++        .iter()
++        .find(|l| matches!(l, Line::Request { id, .. } if *id == rq))
++    else {
++        return Err((FAIL, format!("頼み {rq} が台帳に無い")));
++    };
++    want.topic = want.topic.or_else(|| topic.clone());
++    want.form = *form;
++    want.model = model.clone();
++    let line = Line::Receipt {
++        subject,
++        via: want.via,
++        at: minute_now(),
++    };
++    append(c, items, topic.as_deref(), &line)?;
++    Ok(want)
++}
++
++/// 次の窓の番号（在る窓と退いた窓の最大 + 1）。
++fn next(drafts: &Path) -> u32 {
++    windows(drafts)
++        .iter()
++        .map(|(id, _)| id.n())
++        .max()
++        .unwrap_or(0)
++        + 1
++}
++
++/// 作業場の dir を原子に作る（在れば次の番号で撃ち直す）。
++fn create(drafts: &Path) -> Result<(WindowId, PathBuf), Refused> {
++    let mut n = next(drafts);
++    for _ in 0..TRIES {
++        let id = WindowId::new(n).ok_or((FAIL, "窓の番号".to_string()))?;
++        let ws = super::workspace(drafts, id);
++        match std::fs::create_dir(&ws) {
++            Ok(()) => return Ok((id, ws)),
++            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
++            Err(e) => return Err((UNKNOWN, format!("作業場を作れない: {e}"))),
++        }
++    }
++    Err((UNKNOWN, "作業場の番号が尽きた".to_string()))
++}
++
++/// 作業場を作り、git init と dir と控えと束を置く。
++fn make(c: &Ctx, want: &Want, inputs: &Inputs) -> Result<(WindowId, PathBuf), Refused> {
++    let (id, ws) = create(&c.drafts)?;
++    capture(OsStr::new(GIT), ["init", "-q"], &ws, GIT_TIMEOUT)
++        .ok_or((UNKNOWN, "作業場の git init が落ちた".to_string()))?;
++    for dir in DIRS {
++        std::fs::create_dir_all(ws.join(dir))
++            .map_err(|e| (UNKNOWN, format!("{dir} を作れない: {e}")))?;
++    }
++    let window = WindowFile {
++        id,
++        form: want.form,
++        topic: want.topic.clone(),
++        model: want.model.clone(),
++        effort: want.effort.clone(),
++        starter: want.starter,
++        uttered: want.uttered.clone(),
++        request: want.request.clone(),
++        made: minute_now(),
++    };
++    write_window(&ws, &window).map_err(|e| (UNKNOWN, format!("窓の控えを書けない: {e}")))?;
++    std::fs::write(ws.join(NOTES), format!("# 窓 {id} の控え\n"))
++        .map_err(|e| (UNKNOWN, format!("{NOTES} を書けない: {e}")))?;
++    bundle::write(&ws, id, inputs)?;
++    let ws = ws.canonicalize().unwrap_or(ws);
++    Ok((id, ws))
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/show.rs b/crates/tsuzuri-boundary/src/consult/show.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..34fc703d8c783d56aaa1835bc44296af0cddd130
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/show.rs
+@@ -0,0 +1,10 @@
++//! tz consult show（席が所見を読む口・設計ノート surface-wave27a 行 cs-show が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult show: まだ無い（行 cs-show）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/watch.rs b/crates/tsuzuri-boundary/src/consult/watch.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6d5bd1f9d27ecc5810ec6a27ce3daadd179ae86
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/watch.rs
+@@ -0,0 +1,10 @@
++//! tz consult watch（席の背景の見張り・設計ノート surface-wave27a 行 cs-watch が中身を置く・行 cs-open は骨だけを置く）。
++
++use super::FAIL;
++use crate::out::emit_err;
++
++/// 口の中身はまだ無い（rc 1）。
++pub fn run(_rest: &[&str]) -> u8 {
++    emit_err("tz consult watch: まだ無い（行 cs-watch）");
++    FAIL
++}
+diff --git a/crates/tsuzuri-boundary/src/lib.rs b/crates/tsuzuri-boundary/src/lib.rs
+index c63539a3fa4aa136ebe6451c509be954d11fda37..b5eae5b8140599af7e1ae75bda5ceda71fd82957 100644
+--- a/crates/tsuzuri-boundary/src/lib.rs
++++ b/crates/tsuzuri-boundary/src/lib.rs
+@@ -10,11 +10,13 @@
+ //! 行 j-count で受入 12 条の数え（`audit`・測りの事実から条ごとの違反の数と report の行）を置く。
+ //! 行 e-stage-target で表示先の設定と窓を開く頼みの受付（`stagecall`・tz の口を撃つだけ）を置く。
+ //! 行 k-lint-print で出力の手（`out`・標準出力と標準エラーへ書く 2 つの関数）を置く。
++//! 行 cs-open で相談の窓の命令（`consult`・tz consult の口の振り分けと共通の手・判断の記録 ADR-29）を置く。
+ 
+ pub mod acct;
+ pub mod accthb;
+ pub mod audit;
+ pub mod cli;
++pub mod consult;
+ pub mod hook;
+ pub mod out;
+ pub mod server;
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index 4e75c9a282331f02dad798aaaeb2d49b5249e142..63b6b6ee19b1ae05ea13227be4020d6c1aba28fd 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -21,6 +21,8 @@
+ //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
+ //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
+ //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
++//! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
++//! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す（行 cs-open）。
+ //! tz <口の名> [旗]（口の名は check・schema・derive・ceiling・init・parts・face・figure・build・intake・hello の 11・
+ //! folio の同じ名の口と引数・出力・rc が同じ・行 k-tz-entry）。索引の旗（--print・--digest・--summary）を持つ tz graph も
+ //! folio の graph の口へ渡す。
+@@ -29,7 +31,7 @@ use std::net::SocketAddr;
+ use std::path::PathBuf;
+ use std::process::ExitCode;
+ 
+-use tsuzuri_boundary::out::emit_err;
++use tsuzuri_boundary::out::{emit, emit_err};
+ use tsuzuri_boundary::server::{Config, Server, ruling};
+ use tsuzuri_boundary::stage::notify;
+ use tsuzuri_core::account::project_name;
+@@ -66,6 +68,8 @@ fn main() -> ExitCode {
+             tsuzuri_boundary::hook::question_signal::run(rest)
+         }
+         ["stage", rest @ ..] => tsuzuri_boundary::stage::cli::run(rest),
++        ["consult", rest @ ..] => tsuzuri_boundary::consult::run(rest),
++        ["--version"] => version(),
+         [name, rest @ ..] if tsuzuri_boundary::cli::folio::NAMES.contains(name) => {
+             tsuzuri_boundary::cli::folio::run(name, rest)
+         }
+@@ -74,6 +78,16 @@ fn main() -> ExitCode {
+     ExitCode::from(rc)
+ }
+ 
++/// tz の版と相談の窓の plugin の版（行 cs-open）。
++fn version() -> u8 {
++    emit(&format!(
++        "tz {} consult {}",
++        env!("CARGO_PKG_VERSION"),
++        tsuzuri_core::consult::launch::PLUGIN_VERSION
++    ));
++    0
++}
++
+ fn usage(what: &str) -> u8 {
+     emit_err(&format!("tz: {what}\n{USAGE}"));
+     FAIL
+diff --git a/crates/tsuzuri-boundary/tests/cwopn.rs b/crates/tsuzuri-boundary/tests/cwopn.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..97a32736a3a7ded12ebf845506d9d7fd3aa86a6a
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwopn.rs
+@@ -0,0 +1,613 @@
++//! 相談の窓の命令の骨と open と bundle の歯（接頭辞 cwopn_・設計ノート surface-wave27a 行 cs-open）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo（鍵 scribe2.statedir と tsuzuri.draftsdir）と
++//! state dir と起草の置き場と、偽の bd（置き場の ledger.json を出す・無ければ rc 1）と偽の bdw（argv を記録する）を置き、
++//! tz を偽の program の dir を PATH の頭に足して撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::consult::{self, bundle};
++use tsuzuri_boundary::server::{events, ruling};
++use tsuzuri_contract::consult::{
++    FindingId, Form, ProcMark, RequestId, Starter, Via, WindowFile, WindowId,
++};
++use tsuzuri_contract::ledger::fnv1a64;
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::launch::{PLUGIN_VERSION, brief};
++use tsuzuri_core::consult::lines::{Line, Subject, read};
++
++/// 台帳の写し（根の epic・memo・memo の下の問い・頼みの行を持つ memo）。
++const LEDGER: &str = r#"[
++{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z"},
++{"id":"fx-c.1","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-c","updated_at":"2026-10-03T00:00:00Z","notes":"相談の頼み = rq-20261003T1412Z-1・題 = fx-c.2・形 = 問う・model = opus・起こし手 = 持ち主の button・時刻 = 20261003T1412Z"},
++{"id":"fx-c.2","title":"問いの題名","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-c.1","description":"問いの本文","updated_at":"2026-10-03T00:00:00Z"}
++]"#;
++
++const RQ: &str = "rq-20261003T1412Z-1";
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    state: PathBuf,
++    drafts: PathBuf,
++}
++
++impl Fx {
++    /// 鍵を 2 つとも置いた置き場（`keys` が偽なら鍵を置かない）。
++    fn new(name: &str, keys: bool) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwopn")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [
++            &repo,
++            &state.join("fleet"),
++            &state.join("pipe"),
++            &drafts,
++            &root.join("bin"),
++        ] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        let fx = Fx {
++            root,
++            repo,
++            state,
++            drafts,
++        };
++        if keys {
++            fx.key("scribe2.statedir", &fx.state);
++            fx.key("tsuzuri.draftsdir", &fx.drafts);
++        }
++        let (bin, log) = (fx.root.join("bin"), fx.root.join("bdw.log"));
++        script(
++            &bin.join("bd"),
++            &format!(
++                "echo \"$*\" >> '{}'\n[ -f '{}' ] || exit 1\nexec cat '{}'",
++                fx.root.join("bd.log").display(),
++                fx.root.join("ledger.json").display(),
++                fx.root.join("ledger.json").display()
++            ),
++        );
++        script(
++            &bin.join("bdw"),
++            &format!(
++                "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{}'\necho >> '{}'",
++                log.display(),
++                log.display()
++            ),
++        );
++        fx.ledger(LEDGER);
++        fx
++    }
++
++    fn key(&self, name: &str, value: &Path) {
++        git(&self.repo, &["config", name, &value.display().to_string()]);
++    }
++
++    fn ledger(&self, text: &str) {
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++    }
++
++    fn command(&self, args: &[&str]) -> Command {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++        c.args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env("TZ_PLUGIN_VERSION", PLUGIN_VERSION)
++            .env_remove("TZ_CONSULT_ID");
++        c
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        self.command(args).output().unwrap()
++    }
++
++    /// 偽の bdw が受けた argv の列（撃たれた回の順）。
++    fn writes(&self) -> Vec<Vec<String>> {
++        fs::read_to_string(self.root.join("bdw.log"))
++            .unwrap_or_default()
++            .lines()
++            .map(|l| {
++                l.split('\x1f')
++                    .filter(|a| !a.is_empty())
++                    .map(str::to_string)
++                    .collect()
++            })
++            .collect()
++    }
++
++    fn ws(&self, n: u32) -> PathBuf {
++        self.drafts.join(format!("consult-cw{n}"))
++    }
++
++    fn window(&self, n: u32) -> WindowFile {
++        wire::decode(&fs::read_to_string(self.ws(n).join(".consult/window.json")).unwrap()).unwrap()
++    }
++
++    fn entries(&self) -> Vec<String> {
++        let mut names: Vec<String> = fs::read_dir(&self.drafts)
++            .unwrap()
++            .map(|e| e.unwrap().file_name().into_string().unwrap())
++            .collect();
++        names.sort();
++        names
++    }
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn tz_exe() -> String {
++    fs::canonicalize(env!("CARGO_BIN_EXE_tz"))
++        .unwrap()
++        .display()
++        .to_string()
++}
++
++#[test]
++fn cwopn_keys_or_rc2() {
++    let fx = Fx::new("keys", false);
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 2, "{}", err(&o));
++    assert!(err(&o).contains("scribe2.statedir"), "{}", err(&o));
++    fx.key("scribe2.statedir", &fx.state);
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 2);
++    assert!(err(&o).contains("tsuzuri.draftsdir"), "{}", err(&o));
++    fx.key("tsuzuri.draftsdir", &fx.root.join("nowhere"));
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 2);
++    assert!(err(&o).contains("dir でない"), "{}", err(&o));
++    assert!(fx.entries().is_empty());
++    fx.key("tsuzuri.draftsdir", &fx.drafts);
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 2);
++    assert!(err(&o).contains("台帳が読めない"), "{}", err(&o));
++    assert!(fx.entries().is_empty());
++    fx.ledger(LEDGER);
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let o = fx.tz(&["consult", "nothing"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("usage: tz consult"));
++}
++
++/// 用意した作業場の dir と file の形。
++fn assert_tree(ws: &Path) {
++    assert!(ws.join(".git").is_dir());
++    let dirs = [".consult", "bundle", "drafts", "findings", "work"];
++    assert!(dirs.iter().all(|d| ws.join(d).is_dir()));
++    let files = [
++        ".consult/window.json",
++        "notes.md",
++        "bundle/brief.md",
++        "bundle/reads.md",
++        "bundle/ledger.json",
++        "bundle/digest",
++    ];
++    assert!(files.iter().all(|f| ws.join(f).is_file()));
++    assert!(!ws.join("bundle/question.md").exists());
++    let notes = fs::read_to_string(ws.join("notes.md")).unwrap();
++    assert_eq!(notes, "# 窓 cw1 の控え\n");
++}
++
++#[test]
++fn cwopn_ids_and_tree() {
++    let fx = Fx::new("tree", true);
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let ws = fs::canonicalize(fx.ws(1)).unwrap();
++    assert_eq!(out(&o), format!("窓 cw1 を用意した\n{}\n", ws.display()));
++    assert_tree(&ws);
++    let w = fx.window(1);
++    assert_eq!(w.id, WindowId::new(1).unwrap());
++    let got = (
++        w.form, w.topic, w.model, w.effort, w.starter, w.uttered, w.request,
++    );
++    let want = (
++        Form::Talk,
++        None,
++        "fable".into(),
++        "xhigh".into(),
++        Starter::Seat,
++        None,
++        None,
++    );
++    assert_eq!(got, want);
++    let args = ["--form", "ask", "--model", "opus", "--effort", "high"];
++    let o = fx.tz(&[&["consult", "open", "--by", "seat"][..], &args].concat());
++    assert_eq!(out(&o).lines().next(), Some("窓 cw2 を用意した"));
++    let w = fx.window(2);
++    assert_eq!(
++        (w.form, w.model, w.effort),
++        (Form::Ask, "opus".into(), "high".into())
++    );
++    fs::create_dir(fx.drafts.join("retired-consult-cw7")).unwrap();
++    fs::create_dir(fx.drafts.join("consult-x")).unwrap();
++    let o = fx.tz(&["consult", "open", "--by", "seat"]);
++    assert_eq!(out(&o).lines().next(), Some("窓 cw8 を用意した"));
++    let names = [
++        "consult-cw1",
++        "consult-cw2",
++        "consult-cw8",
++        "consult-x",
++        "retired-consult-cw7",
++    ];
++    assert_eq!(fx.entries(), names);
++    assert!(fx.writes().is_empty());
++}
++
++#[test]
++fn cwopn_version_and_starters() {
++    let fx = Fx::new("starters", true);
++    let o = fx
++        .command(&["consult", "open", "--by", "seat"])
++        .env_remove("TZ_PLUGIN_VERSION")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("TZ_PLUGIN_VERSION"), "{}", err(&o));
++    let o = fx
++        .command(&["consult", "open", "--by", "seat"])
++        .env("TZ_PLUGIN_VERSION", "0.1.0")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 1);
++    let o = fx.tz(&["--version"]);
++    assert_eq!(rc(&o), 0);
++    assert_eq!(
++        out(&o),
++        format!("tz {} consult 0.2.0\n", env!("CARGO_PKG_VERSION"))
++    );
++    for bad in [
++        vec!["--by", "chat"],
++        vec!["--by", "chat", "--said", "20261003T1412"],
++        vec!["--by", "seat", "--said", "20261003T1410Z"],
++        vec!["--by", "button"],
++        vec!["--by", "seat", "--request", RQ],
++        vec!["--by", "button", "--request", "rq-1"],
++        vec!["--by", "owner"],
++        vec!["--form", "talk"],
++        vec!["--by", "seat", "--form", "chat"],
++        vec!["--by", "seat", "--via", "完了"],
++        vec!["--by", "seat", "--by", "seat"],
++        vec!["--by", "seat", "--topic="],
++        vec!["--by", "seat", "--name", "x"],
++        vec!["--by", "seat", "extra"],
++    ] {
++        let mut args = vec!["consult", "open"];
++        args.extend(bad.iter().copied());
++        let o = fx.tz(&args);
++        assert_eq!(rc(&o), 1, "{bad:?} {}", err(&o));
++    }
++    assert!(fx.entries().is_empty());
++    let o = fx.tz(&[
++        "consult",
++        "open",
++        "--by",
++        "chat",
++        "--said",
++        "20261003T1410Z",
++        "--topic",
++        "自由な題",
++    ]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let w = fx.window(1);
++    assert_eq!(w.starter, Starter::Chat);
++    assert_eq!(w.uttered.as_deref(), Some("20261003T1410Z"));
++    assert_eq!(w.topic.as_deref(), Some("自由な題"));
++    assert!(fx.writes().is_empty());
++}
++
++/// 束の 4 つの file の名と字を順に FNV-1a 64 に通した要約値。
++fn digest_of(dir: &Path) -> String {
++    let mut bytes = Vec::new();
++    for name in ["brief.md", "question.md", "reads.md", "ledger.json"] {
++        bytes.extend_from_slice(name.as_bytes());
++        bytes.push(0);
++        bytes.extend(fs::read(dir.join(name)).unwrap());
++        bytes.push(0);
++    }
++    format!("{:016x}", fnv1a64(&bytes))
++}
++
++/// 題 fx-c.2 で開いた窓の束の file の字。
++fn assert_bundle(fx: &Fx, dir: &Path) {
++    let read = |f: &str| fs::read_to_string(dir.join(f)).unwrap();
++    assert_eq!(
++        read("brief.md"),
++        brief(&tz_exe(), WindowId::new(1).unwrap())
++    );
++    assert_eq!(
++        read("question.md"),
++        "# 題 fx-c.2\n\n問いの題名\n\n問いの本文\n"
++    );
++    assert_eq!(read("ledger.json"), LEDGER);
++    let reads = read("reads.md");
++    let wants = [
++        format!("- {}\n", fx.repo.display()),
++        format!("- {}/fleet\n", fx.state.display()),
++        format!("- {}/pipe\n", fx.state.display()),
++        "- bundle/ledger.json".to_string(),
++    ];
++    assert!(wants.iter().all(|w| reads.contains(w)), "{reads}");
++}
++
++#[test]
++fn cwopn_bundle_files_and_digest() {
++    let fx = Fx::new("bundle", true);
++    let o = fx.tz(&["consult", "open", "--by", "seat", "--topic", "fx-c.2"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let dir = fx.ws(1).join("bundle");
++    let read = |f: &str| fs::read_to_string(dir.join(f)).unwrap();
++    assert_bundle(&fx, &dir);
++    let want = digest_of(&dir);
++    assert_eq!(
++        (read("digest"), bundle::digest(&dir)),
++        (format!("{want}\n"), want.clone())
++    );
++    let o = fx.tz(&["consult", "bundle", "cw1"]);
++    assert_eq!((rc(&o), out(&o)), (0, format!("束 {want}\n")));
++    let newer = LEDGER.replace("問いの本文", "替えた本文");
++    fx.ledger(&newer);
++    let o = fx.tz(&["consult", "bundle", "cw1"]);
++    assert_eq!((rc(&o), read("ledger.json")), (0, newer));
++    assert_eq!(
++        read("question.md"),
++        "# 題 fx-c.2\n\n問いの題名\n\n問いの本文\n"
++    );
++    let o2 = fx.tz(&["consult", "bundle", "cw1", "--topic", "fx-c.2"]);
++    assert_eq!(
++        read("question.md"),
++        "# 題 fx-c.2\n\n問いの題名\n\n替えた本文\n"
++    );
++    assert_ne!(out(&o), out(&o2));
++    assert_eq!(out(&o2), format!("束 {}\n", digest_of(&dir)));
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
++    assert_eq!(rc(&fx.tz(&["consult", "bundle", "cw1"])), 2);
++    fx.ledger(LEDGER);
++    let rcs: Vec<i32> = [vec!["cw9"], vec!["w1"], vec![], vec!["cw1", "cw2"]]
++        .iter()
++        .map(|a| rc(&fx.tz(&[&["consult", "bundle"][..], a].concat())))
++        .collect();
++    assert_eq!(rcs, [1, 1, 1, 1]);
++}
++
++#[test]
++fn cwopn_bundle_inside_window() {
++    let fx = Fx::new("inside", true);
++    assert_eq!(rc(&fx.tz(&["consult", "open", "--by", "seat"])), 0);
++    let ws = fx.ws(1);
++    let calls = fs::read_to_string(fx.root.join("bd.log"))
++        .unwrap()
++        .lines()
++        .count();
++    fx.ledger(&LEDGER.replace("問いの本文", "窓から見えない本文"));
++    fs::write(ws.join("drafts/q.md"), "窓の問い\n").unwrap();
++    let o = fx
++        .command(&["consult", "bundle", "cw1", "--question", "drafts/q.md"])
++        .current_dir(&ws)
++        .env("TZ_CONSULT_ID", "cw1")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let dir = ws.join("bundle");
++    assert_eq!(fs::read_to_string(dir.join("ledger.json")).unwrap(), LEDGER);
++    assert_eq!(
++        fs::read_to_string(dir.join("question.md")).unwrap(),
++        "窓の問い\n"
++    );
++    assert_eq!(out(&o), format!("束 {}\n", bundle::digest(&dir)));
++    let o = fx
++        .command(&["consult", "bundle", "cw1", "--topic", "fx-c.2"])
++        .current_dir(&ws)
++        .env("TZ_CONSULT_ID", "cw1")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 0);
++    assert_eq!(
++        fs::read_to_string(dir.join("question.md")).unwrap(),
++        "# 題 fx-c.2\n\n問いの題名\n\n問いの本文\n"
++    );
++    let after = fs::read_to_string(fx.root.join("bd.log"))
++        .unwrap()
++        .lines()
++        .count();
++    assert_eq!(calls, after, "窓の中の束は bd を撃たない");
++    let o = fx
++        .command(&["consult", "bundle", "cw1"])
++        .current_dir(&fx.drafts)
++        .env("TZ_CONSULT_ID", "cw1")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 1, "cwd が作業場でなければ断る");
++}
++
++/// 頼みで開いた窓の控えと、偽の bdw が受けた受けの行（1 本だけ）の字。
++fn assert_first_receipt(fx: &Fx, before: &str, after: &str) {
++    let w = fx.window(1);
++    let rq = RequestId::parse(RQ).unwrap();
++    assert_eq!(
++        (w.form, w.model, w.topic),
++        (Form::Ask, "opus".into(), Some("fx-c.2".into()))
++    );
++    assert_eq!((w.starter, w.request), (Starter::Button, Some(rq.clone())));
++    let writes = fx.writes();
++    let [verb, id, line] = writes[0].as_slice() else {
++        panic!("{writes:?}");
++    };
++    assert_eq!(
++        (writes.len(), verb.as_str(), id.as_str()),
++        (1, "update", "fx-c.1")
++    );
++    let text = line.strip_prefix("--append-notes=").unwrap();
++    let Some(Line::Receipt { subject, via, at }) = read(text) else {
++        panic!("{text}");
++    };
++    assert_eq!((subject, via), (Subject::Request(rq), Via::Watch));
++    assert!(before <= at.as_str() && at.as_str() <= after, "{at}");
++    assert_eq!(
++        text,
++        format!("相談の受け = {RQ}・経路 = 見張り・時刻 = {at}")
++    );
++}
++
++#[test]
++fn cwopn_request_receipt() {
++    let fx = Fx::new("request", true);
++    let open = |extra: &[&str]| {
++        let base = ["consult", "open", "--by", "button", "--request"];
++        fx.tz(&[&base[..], extra].concat())
++    };
++    let before = ruling::minute(events::now());
++    let o = open(&[RQ]);
++    let after = ruling::minute(events::now());
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert_first_receipt(&fx, &before, &after);
++    let o = open(&["rq-20261003T1412Z-2"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("台帳に無い"));
++    let tail = "時刻 = 20261003T1412Z\\n相談の受け = rq-20261003T1412Z-1・経路 = hook・時刻 = 20261003T1413Z\"";
++    fx.ledger(&LEDGER.replace("時刻 = 20261003T1412Z\"", tail));
++    let o = open(&[RQ, "--via", "hook"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("もう受けた"), "{}", err(&o));
++    fx.ledger(LEDGER);
++    let o = open(&[RQ, "--via", "一覧", "--topic", "別の題"]);
++    assert_eq!(rc(&o), 0);
++    assert_eq!(fx.window(2).topic.as_deref(), Some("別の題"));
++    let writes = fx.writes();
++    assert_eq!(writes.len(), 2);
++    assert!(writes[1][2].contains("・経路 = 一覧・"), "{:?}", writes[1]);
++    assert_eq!(fx.entries(), ["consult-cw1", "consult-cw2"]);
++}
++
++fn mark(k: u32, pid: u32) -> ProcMark {
++    ProcMark {
++        k,
++        form: Form::Ask,
++        pid,
++        at: "20261003T1412Z".to_string(),
++        again: k > 1,
++        tmux_window: None,
++    }
++}
++
++/// 窓の id と所見の id の読み。
++fn readers_windows_findings(fx: &Fx) {
++    for n in [1, 3] {
++        fs::create_dir_all(fx.ws(n).join("findings")).unwrap();
++        fs::create_dir_all(fx.ws(n).join(".consult")).unwrap();
++    }
++    fs::create_dir(fx.drafts.join("retired-consult-cw2")).unwrap();
++    fs::create_dir(fx.drafts.join("consult-cw0")).unwrap();
++    fs::write(fx.drafts.join("consult-cw4"), "file").unwrap();
++    let w = |n| WindowId::new(n).unwrap();
++    let want = [(w(1), false), (w(2), true), (w(3), false)];
++    assert_eq!(consult::windows(&fx.drafts), want);
++    let ws = fx.ws(1);
++    for name in [
++        "cw1-2.json",
++        "cw1-1.json",
++        "cw3-1.json",
++        "cw1-1.txt",
++        "cw1-0.json",
++    ] {
++        fs::write(ws.join("findings").join(name), "{}").unwrap();
++    }
++    let f = |k| FindingId::new(w(1), k).unwrap();
++    assert_eq!(consult::findings(&ws, w(1)), [f(1), f(2)]);
++    assert!(consult::findings(&fx.ws(3), w(3)).is_empty());
++}
++
++/// process の印の読みと生きているかの判じ。
++fn readers_procs(fx: &Fx) {
++    let ws = fx.ws(1);
++    let me = std::process::id();
++    let put = |k: u32, pid: u32| {
++        let text = wire::encode(&mark(k, pid)).unwrap();
++        fs::write(consult::proc_path(&ws, k), text).unwrap();
++    };
++    put(2, me);
++    put(1, 0);
++    fs::write(ws.join(".consult/proc-3.json"), "{\"k\":3}").unwrap();
++    assert_eq!(consult::procs(&ws), [mark(1, 0), mark(2, me)]);
++    assert!(consult::alive(me) && !consult::alive(0));
++    assert!(consult::live(&ws) && !consult::live(&fx.ws(3)));
++    put(4, 0);
++    assert!(!consult::live(&ws));
++}
++
++/// 引数の読み。
++fn readers_flags() {
++    let (values, switches, many) = (&["--via"][..], &["--dry-run"][..], &["--keep"][..]);
++    let args = [
++        "cw1",
++        "--keep",
++        "a",
++        "--keep=b",
++        "--via",
++        "hook",
++        "--dry-run",
++    ];
++    let parsed = consult::flags(&args, values, switches, many).unwrap();
++    assert_eq!(parsed.pos, ["cw1"]);
++    assert_eq!(parsed.all("--keep"), ["a", "b"]);
++    assert_eq!(parsed.get("--via"), Some("hook"));
++    assert!(parsed.has("--dry-run") && !parsed.has("--again"));
++    let bad: [&[&str]; 5] = [
++        &["--via", "a", "--via", "b"],
++        &["--dry-run", "--dry-run"],
++        &["--other", "x"],
++        &["--via="],
++        &["--via"],
++    ];
++    assert!(
++        bad.iter()
++            .all(|b| consult::flags(b, values, switches, many).is_err())
++    );
++}
++
++#[test]
++fn cwopn_workspace_readers() {
++    let fx = Fx::new("readers", true);
++    readers_windows_findings(&fx);
++    readers_procs(&fx);
++    readers_flags();
++}
+diff --git a/crates/tsuzuri-contract/src/consult.rs b/crates/tsuzuri-contract/src/consult.rs
+index 16c1ff23671f1d43850c812f8b7191a92fa41635..25fd01b782c5f9991a0c2ca16d3b904ffd68dad5 100644
+--- a/crates/tsuzuri-contract/src/consult.rs
++++ b/crates/tsuzuri-contract/src/consult.rs
+@@ -525,3 +525,39 @@ pub struct ConsultBoard {
+     pub requests: Reading<Vec<RequestRow>>,
+     pub quota: Reading<SeatQuota>,
+ }
++
++/// 作業場の窓の控え（`.consult/window.json`・open が書き、起動と一覧と board の口が読む・未知の鍵を断る）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct WindowFile {
++    pub id: WindowId,
++    pub form: Form,
++    /// 題の bead の id か自由な題（無ければ None）。
++    pub topic: Option<String>,
++    pub model: String,
++    pub effort: String,
++    pub starter: Starter,
++    /// 持ち主のチャットの発話の UTC の分の字（起こし手が持ち主のチャットの時だけ）。
++    pub uttered: Option<String>,
++    /// 頼みの id（起こし手が持ち主の button の時だけ）。
++    pub request: Option<RequestId>,
++    /// 作業場を用意した UTC の分の字。
++    pub made: String,
++}
++
++/// 起こした process の印（`.consult/proc-<k>.json`・起動の口が起こすごとに 1 つ書く・未知の鍵を断る）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct ProcMark {
++    /// 窓の中の起こしの番号（1 から）。
++    pub k: u32,
++    pub form: Form,
++    /// 問う窓は子の pid、話す窓は tmux の pane の pid。
++    pub pid: u32,
++    /// 起こした UTC の分の字。
++    pub at: String,
++    /// 撃ち直しか。
++    pub again: bool,
++    /// 話す窓の tmux の window id（`@<n>`・問う窓は None）。
++    pub tmux_window: Option<String>,
++}

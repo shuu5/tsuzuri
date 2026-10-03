@@ -1,0 +1,893 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index a708ff552da5eef397b6d2d1973012b593417d64..54b81e9ee858a6a0ed68f6b7e88669d1cca2e957 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -1,10 +1,354 @@
+-//! tz consult launch（窓を起こす口（話す窓は tmux の窓・問う窓は背景の子）・設計ノート surface-wave27a 行 cs-launch が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
++//! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
++//! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
++//! 4 つ（`TALK_ENV`・席の環境に無い名は渡さない）だけを渡す。問う窓は席の背景の子として claude -p を cwd = 作業場で撃ち、
++//! 席の環境から `ASK_DROP` を外して窓の id と私用の temp を置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
++//! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
++//! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
++//! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
++//! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::fs::{self, File};
++use std::os::unix::fs::{MetadataExt, PermissionsExt};
++use std::os::unix::process::CommandExt;
++use std::path::Path;
++use std::process::{Command, Stdio};
++use std::time::{Duration, Instant};
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult launch: まだ無い（行 cs-launch）");
+-    FAIL
++use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::launch::{
++    ASK_DROP, Launch, PROGRAM, TALK_ENV, VERSION_ENV, argv, audit, env, private_tmp, read_roots,
++    version_ok,
++};
++use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
++use tsuzuri_core::consult::quota::{admit, count};
++
++use super::{
++    COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
++    lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
++    workspace,
++};
++use crate::out::{emit, emit_err};
++use crate::server::ledger::{KILL, capture, stop_with};
++
++/// tmux の program の名。
++pub const TMUX: &str = "tmux";
++
++/// 新しい tmux の窓の id と pane の pid を出させる形。
++pub const WINDOW_FORMAT: &str = "#{window_id} #{pane_pid}";
++
++/// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
++pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
++
++/// 問う窓の終わりを見る間。
++const ASK_STEP: Duration = Duration::from_millis(200);
++
++/// tz consult launch の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let f = match flags(rest, &COMMON, &["--again", "--dry-run"], &[]) {
++        Ok(f) => f,
++        Err(e) => return refuse("launch", e),
++    };
++    let [id] = f.pos.as_slice() else {
++        return refuse("launch", (FAIL, "窓の id を 1 つ渡す".to_string()));
++    };
++    let Ok(id) = WindowId::parse(id) else {
++        return refuse("launch", (FAIL, format!("窓の id {id} の形でない")));
++    };
++    if !version_ok(std::env::var(VERSION_ENV).ok().as_deref()) {
++        let why = format!("{VERSION_ENV} が tz の版と違う（plugin の tz の解き方で撃つ）");
++        return refuse("launch", (FAIL, why));
++    }
++    match ctx(&f).and_then(|c| launch(&c, id, f.has("--again"), f.has("--dry-run"))) {
++        Ok(()) => 0,
++        Err(e) => refuse("launch", e),
++    }
++}
++
++/// 窓の材料（path は「/」で始まる絶対 path・読む根は在る dir だけ・uid は作業場の持ち主）。
++pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
++    let abs = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
++    let (repo, state) = (abs(&c.repo), abs(&c.state));
++    let (repo, state) = (repo.display().to_string(), state.display().to_string());
++    let roots = read_roots(&repo, &state)
++        .into_iter()
++        .filter(|r| Path::new(r).is_dir())
++        .collect();
++    let uid = fs::metadata(ws)
++        .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?
++        .uid();
++    Ok(Launch {
++        form: w.form,
++        window: w.id,
++        workspace: abs(ws).display().to_string(),
++        repo,
++        state,
++        roots,
++        tz: tz_path(),
++        uid: uid.to_string(),
++        model: w.model.clone(),
++        effort: w.effort.clone(),
++        question: ws.join("bundle/question.md").is_file(),
++    })
++}
++
++/// 窓の起こし手（開きの行の欄）。
++fn by_of(w: &WindowFile) -> Result<By, Refused> {
++    let missing = || (FAIL, format!("窓 {} の控えに起こし手の添えが無い", w.id));
++    Ok(match w.starter {
++        Starter::Seat => By::Seat,
++        Starter::Chat => By::Chat {
++            uttered: w.uttered.clone().ok_or_else(missing)?,
++        },
++        Starter::Button => By::Button {
++            request: w.request.clone().ok_or_else(missing)?,
++        },
++    })
++}
++
++/// 相談の開きの行を根に書く（題は器の引用の形を含めば題なし）。
++fn record(
++    c: &Ctx,
++    items: &[tsuzuri_contract::ledger::LedgerItem],
++    w: &WindowFile,
++    opened: bool,
++    again: bool,
++) -> Result<(), Refused> {
++    let line = Line::Open {
++        window: w.id,
++        form: w.form,
++        topic: w.topic.clone().filter(|t| !cited(&free(t, WORD_MAX))),
++        by: by_of(w)?,
++        model: w.model.clone(),
++        effort: w.effort.clone(),
++        opened,
++        again,
++        at: minute_now(),
++    };
++    append(c, items, None, &line).map(|_| ())
++}
++
++/// 起こす（版の照らしの後）。
++fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> {
++    let ws = workspace(&c.drafts, id);
++    let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
++    let l = material(c, &ws, &w)?;
++    let args = argv(&l);
++    let gaps = audit(&args, &l);
++    if dry {
++        emit(PROGRAM);
++        args.iter().for_each(|a| emit(a));
++        return if gaps.is_empty() {
++            Ok(())
++        } else {
++            Err((FAIL, format!("検めの欠け: {}", gaps.join(" "))))
++        };
++    }
++    let (_, items) = ledger(c)?;
++    let lines = lines_of(&items);
++    if lines
++        .iter()
++        .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
++    {
++        return Err((FAIL, format!("窓 {id} は閉じた")));
++    }
++    if w.starter == Starter::Seat && w.form == Form::Ask {
++        let live: Vec<WindowId> = windows(&c.drafts)
++            .into_iter()
++            .filter(|(n, gone)| !gone && live(&workspace(&c.drafts, *n)))
++            .map(|(n, _)| n)
++            .collect();
++        admit(count(&lines, &minute_now(), &live), again).map_err(|why| (FAIL, why.to_string()))?;
++    }
++    let started = start(&ws, &l, &args, again, &gaps);
++    record(c, &items, &w, started.is_ok(), again)?;
++    let mark = started?;
++    if w.form == Form::Talk {
++        emit(&format!("窓 {id} を開いた（tmux の窓 {}）", id.name()));
++        return Ok(());
++    }
++    wait_ask(&ws, id, mark)
++}
++
++/// 検めと私用の temp の後に窓を起こし、process の印を書く。
++fn start(
++    ws: &Path,
++    l: &Launch,
++    args: &[String],
++    again: bool,
++    gaps: &[String],
++) -> Result<Started, Refused> {
++    if !gaps.is_empty() {
++        return Err((
++            FAIL,
++            format!("検めの欠け（起こさない）: {}", gaps.join(" ")),
++        ));
++    }
++    let uid: u32 = l.uid.parse().map_err(|_| (FAIL, "uid の字".to_string()))?;
++    private(&private_tmp(&l.workspace), uid)?;
++    let k = procs(ws).last().map_or(0, |p| p.k) + 1;
++    let (pid, tmux_window, child) = match l.form {
++        Form::Talk => {
++            let (window, pane) = talk(ws, l, args)?;
++            (pane, Some(window), None)
++        }
++        Form::Ask => {
++            let child = ask(ws, l, args, k)?;
++            (child.id(), None, Some(child))
++        }
++    };
++    let mark = ProcMark {
++        k,
++        form: l.form,
++        pid,
++        at: minute_now(),
++        again,
++        tmux_window,
++    };
++    let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
++    fs::write(proc_path(ws, k), text + "\n")
++        .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
++    Ok(Started {
++        before: findings(ws, l.window),
++        child,
++    })
++}
++
++/// 起こした窓（問う窓は子と起こす前の所見）。
++struct Started {
++    before: Vec<tsuzuri_contract::consult::FindingId>,
++    child: Option<std::process::Child>,
++}
++
++/// 私用の temp を mode 0700 で作る（在れば持ち主の uid と 0700 の dir であることを確かめる）。
++fn private(path: &str, uid: u32) -> Result<(), Refused> {
++    match fs::create_dir(path) {
++        Ok(()) => fs::set_permissions(path, fs::Permissions::from_mode(0o700))
++            .map_err(|e| (FAIL, format!("私用の temp {path} の権限: {e}"))),
++        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
++            let m = fs::symlink_metadata(path)
++                .map_err(|e| (FAIL, format!("私用の temp {path}: {e}")))?;
++            if m.is_dir() && m.uid() == uid && m.mode() & 0o777 == 0o700 {
++                Ok(())
++            } else {
++                Err((
++                    FAIL,
++                    format!("私用の temp {path} が持ち主の 0700 の dir でない"),
++                ))
++            }
++        }
++        Err(e) => Err((FAIL, format!("私用の temp {path} を作れない: {e}"))),
++    }
++}
++
++/// 話す窓を席の tmux の session に開き、tmux の window id と pane の pid を返す。
++fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused> {
++    let pane = std::env::var("TMUX_PANE").map_err(|_| {
++        (
++            FAIL,
++            "席の TMUX_PANE が無い（tmux の中の席から撃つ）".to_string(),
++        )
++    })?;
++    let tmux = std::ffi::OsStr::new(TMUX);
++    let session = capture(
++        tmux,
++        ["display-message", "-p", "-t", &pane, "#{session_name}"],
++        ws,
++        GIT_TIMEOUT,
++    )
++    .and_then(|o| String::from_utf8(o).ok())
++    .map(|s| s.trim().to_string())
++    .filter(|s| !s.is_empty())
++    .ok_or((FAIL, "席の tmux の session が読めない".to_string()))?;
++    let mut a: Vec<String> = ["new-window", "-d", "-t"].map(String::from).to_vec();
++    a.push(format!("{session}:"));
++    a.extend([
++        "-n".to_string(),
++        l.window.name(),
++        "-c".to_string(),
++        l.workspace.clone(),
++    ]);
++    let own = env(l);
++    for name in TALK_ENV {
++        let value = own
++            .iter()
++            .find(|(n, _)| *n == name)
++            .map(|(_, v)| v.clone())
++            .or_else(|| std::env::var(name).ok());
++        if let Some(value) = value {
++            a.extend(["-e".to_string(), format!("{name}={value}")]);
++        }
++    }
++    a.extend(["-P", "-F", WINDOW_FORMAT, "--", PROGRAM].map(String::from));
++    a.extend(args.iter().cloned());
++    let out = capture(tmux, &a, ws, GIT_TIMEOUT)
++        .and_then(|o| String::from_utf8(o).ok())
++        .ok_or((FAIL, "tmux の new-window が落ちた".to_string()))?;
++    let (window, pane_pid) = out
++        .trim()
++        .split_once(' ')
++        .ok_or((FAIL, format!("tmux の出力 {out:?} の形")))?;
++    let pid = pane_pid
++        .parse()
++        .map_err(|_| (FAIL, format!("pane の pid {pane_pid:?} の形")))?;
++    Ok((window.to_string(), pid))
++}
++
++/// 問う窓を席の子として起こす（標準出力は `.consult/ask-<k>.json`・標準エラーは `.consult/ask-<k>.err`）。
++fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::Child, Refused> {
++    let file = |ext: &str| {
++        File::create(ws.join(format!(".consult/ask-{k}.{ext}")))
++            .map_err(|e| (UNKNOWN, format!("ask-{k}.{ext} を作れない: {e}")))
++    };
++    let mut cmd = Command::new(PROGRAM);
++    cmd.args(args)
++        .current_dir(ws)
++        .stdin(Stdio::null())
++        .stdout(file("json")?)
++        .stderr(file("err")?)
++        .process_group(0);
++    for name in ASK_DROP {
++        cmd.env_remove(name);
++    }
++    cmd.envs(env(l));
++    cmd.spawn()
++        .map_err(|e| (FAIL, format!("{PROGRAM} を起こせない: {e}")))
++}
++
++/// 問う窓の終わりを待ち、新しい所見ごとに経路 完了 の 1 行を、無ければ止まった窓の 1 行を出す。
++fn wait_ask(ws: &Path, id: WindowId, started: Started) -> Result<(), Refused> {
++    let Some(mut child) = started.child else {
++        return Ok(());
++    };
++    let end = Instant::now() + ASK_LIMIT;
++    loop {
++        match child.try_wait() {
++            Ok(Some(_)) => break,
++            Ok(None) if Instant::now() < end => std::thread::sleep(ASK_STEP),
++            _ => {
++                emit_err(&format!("tz consult launch: 問う窓 {id} を上限で止めた"));
++                stop_with(child, std::ffi::OsStr::new(KILL));
++                break;
++            }
++        }
++    }
++    let tzw = tzw();
++    let new: Vec<_> = findings(ws, id)
++        .into_iter()
++        .filter(|f| !started.before.contains(f))
++        .collect();
++    if new.is_empty() {
++        emit(&notice(&Event::Stalled(id), &tzw));
++    }
++    for f in new {
++        emit(&notice(
++            &Event::Finding {
++                id: f,
++                via: tsuzuri_contract::consult::Via::Done,
++            },
++            &tzw,
++        ));
++    }
++    Ok(())
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwlch.rs b/crates/tsuzuri-boundary/tests/cwlch.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..13d27735812c45ce4d989ee7b279f284bc5c9f0e
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwlch.rs
+@@ -0,0 +1,521 @@
++//! 窓を起こす口の歯（接頭辞 cwlch_・設計ノート surface-wave27a 行 cs-launch・受入 AC19 の起こし）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
++//! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
++//! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::{MetadataExt, PermissionsExt};
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::server::{events, ruling};
++use tsuzuri_contract::consult::{FindingId, Form, ProcMark, Via, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::launch::{Launch, PLUGIN_VERSION, argv, private_tmp};
++use tsuzuri_core::consult::lines::{Event, Line, notice, read};
++use tsuzuri_core::consult::quota::REFUSAL;
++
++/// 台帳の写し（根の epic と memo と memo の下の問い・根の notes は歯が足す）。
++const LEDGER: &str = r#"[
++{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"},
++{"id":"fx-c.1","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-c","updated_at":"2026-10-03T00:00:00Z"},
++{"id":"fx-c.2","title":"問いの題名","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-c.1","description":"問いの本文","updated_at":"2026-10-03T00:00:00Z"}
++]"#;
++
++const TZW: &str = "/x/tzw";
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++/// argv を字 0x1f で区切り、撃たれた回ごとに 1 行を足す殻の字。
++fn record(log: &Path) -> String {
++    format!(
++        "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{0}'\necho >> '{0}'",
++        log.display()
++    )
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    state: PathBuf,
++    drafts: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwlch")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [
++            &repo,
++            &state.join("fleet"),
++            &state.join("pipe"),
++            &drafts,
++            &root.join("bin"),
++        ] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        git(
++            &repo,
++            &["config", "scribe2.statedir", &state.display().to_string()],
++        );
++        git(
++            &repo,
++            &["config", "tsuzuri.draftsdir", &drafts.display().to_string()],
++        );
++        let fx = Fx {
++            root,
++            repo,
++            state,
++            drafts,
++        };
++        let (bin, r) = (fx.root.join("bin"), fx.root.display().to_string());
++        script(&bin.join("bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(&bin.join("bdw"), &record(&fx.root.join("bdw.log")));
++        let tmux = format!(
++            "{}\n[ -f '{r}/tmux.fail' ] && exit 1\ncase \"$1\" in display-message) echo seat-s ;; new-window) echo '@7 4242' ;; esac",
++            record(&fx.root.join("tmux.log"))
++        );
++        script(&bin.join("tmux"), &tmux);
++        let claude = format!(
++            "for a in \"$@\"; do printf '%s\\037' \"$a\"; done > '{r}/claude.args'\n\
++             {{ echo \"id=${{TZ_CONSULT_ID-}}\"; echo \"tmp=${{CLAUDE_CODE_TMPDIR-}}\"; echo \"tmux=${{TMUX-unset}}\"; \
++             echo \"pane=${{TMUX_PANE-unset}}\"; echo \"cwd=$(pwd -P)\"; echo \"pid=$$\"; }} > '{r}/claude.env'\n\
++             [ -f '{r}/answer' ] && echo '{{}}' > findings/cw1-1.json\necho '{{\"result\":\"ok\"}}'"
++        );
++        script(&bin.join("claude"), &claude);
++        fx.notes("");
++        fx
++    }
++
++    /// 根の notes を替える。
++    fn notes(&self, notes: &str) {
++        let text = LEDGER.replace("NOTES", &notes.replace('\n', "\\n"));
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++    }
++
++    fn command(&self, args: &[&str]) -> Command {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++        c.args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env("TZ_PLUGIN_VERSION", PLUGIN_VERSION)
++            .env("TZ_WRAPPER", TZW)
++            .env("TMUX", "/tmp/fake-tmux,1,0")
++            .env("TMUX_PANE", "%9")
++            .env("CLAUDE_CONFIG_DIR", "/cfg/x")
++            .env_remove("TZ_CONSULT_ID");
++        c
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        self.command(args).output().unwrap()
++    }
++
++    /// 窓を用意する（open の引数）。
++    fn open(&self, extra: &[&str]) {
++        let o = self.tz(&[&["consult", "open"][..], extra].concat());
++        assert_eq!(
++            o.status.code(),
++            Some(0),
++            "{}",
++            String::from_utf8_lossy(&o.stderr)
++        );
++    }
++
++    fn ws(&self, n: u32) -> PathBuf {
++        fs::canonicalize(self.drafts.join(format!("consult-cw{n}"))).unwrap()
++    }
++
++    /// 記録の file の撃たれた回ごとの argv。
++    fn calls(&self, name: &str) -> Vec<Vec<String>> {
++        fs::read_to_string(self.root.join(name))
++            .unwrap_or_default()
++            .lines()
++            .map(|l| {
++                l.split('\x1f')
++                    .filter(|a| !a.is_empty())
++                    .map(str::to_string)
++                    .collect()
++            })
++            .collect()
++    }
++
++    /// 偽の bdw が受けた行の字（--append-notes= の後）と置き場。
++    fn written(&self) -> Vec<(String, String)> {
++        self.calls("bdw.log")
++            .into_iter()
++            .map(|c| {
++                (
++                    c[1].clone(),
++                    c[2].strip_prefix("--append-notes=").unwrap().to_string(),
++                )
++            })
++            .collect()
++    }
++
++    /// 中核が同じ材料で組む材料。
++    fn launch(&self, n: u32, form: Form, question: bool) -> Launch {
++        let canon = |p: &Path| fs::canonicalize(p).unwrap().display().to_string();
++        let ws = self.ws(n);
++        let (repo, state) = (canon(&self.repo), canon(&self.state));
++        Launch {
++            form,
++            window: WindowId::new(n).unwrap(),
++            workspace: ws.display().to_string(),
++            roots: vec![
++                repo.clone(),
++                format!("{state}/fleet"),
++                format!("{state}/pipe"),
++            ],
++            repo,
++            state,
++            tz: canon(Path::new(env!("CARGO_BIN_EXE_tz"))),
++            uid: fs::metadata(&ws).unwrap().uid().to_string(),
++            model: "fable".to_string(),
++            effort: "xhigh".to_string(),
++            question,
++        }
++    }
++
++    fn mark(&self, n: u32, k: u32) -> ProcMark {
++        wire::decode(
++            &fs::read_to_string(self.ws(n).join(format!(".consult/proc-{k}.json"))).unwrap(),
++        )
++        .unwrap()
++    }
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++/// 私用の temp を消す（歯の前と後）。
++fn clear_tmp(l: &Launch) {
++    let _ = fs::remove_dir_all(private_tmp(&l.workspace));
++}
++
++/// 開きの行を読み、欄の結果と撃ち直しと時刻を返す。
++fn open_line(text: &str) -> (bool, bool, String) {
++    let Some(Line::Open {
++        opened, again, at, ..
++    }) = read(text)
++    else {
++        panic!("{text}");
++    };
++    (opened, again, at)
++}
++
++#[test]
++fn cwlch_talk_argv_and_env() {
++    let fx = Fx::new("talk");
++    fx.open(&["--by", "seat"]);
++    let l = fx.launch(1, Form::Talk, false);
++    clear_tmp(&l);
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert_eq!(out(&o), "窓 cw1 を開いた（tmux の窓 consult-cw1）\n");
++    let tmp = private_tmp(&l.workspace);
++    let mut want: Vec<String> = [
++        "new-window",
++        "-d",
++        "-t",
++        "seat-s:",
++        "-n",
++        "consult-cw1",
++        "-c",
++    ]
++    .map(String::from)
++    .to_vec();
++    want.push(l.workspace.clone());
++    let path = format!(
++        "PATH={}:{}",
++        fx.root.join("bin").display(),
++        std::env::var("PATH").unwrap()
++    );
++    for e in [
++        "CLAUDE_CONFIG_DIR=/cfg/x".to_string(),
++        path,
++        "TZ_CONSULT_ID=cw1".to_string(),
++        format!("CLAUDE_CODE_TMPDIR={tmp}"),
++    ] {
++        want.extend(["-e".to_string(), e]);
++    }
++    want.extend(["-P", "-F", "#{window_id} #{pane_pid}", "--", "claude"].map(String::from));
++    want.extend(argv(&l));
++    let display: Vec<String> = ["display-message", "-p", "-t", "%9", "#{session_name}"]
++        .map(String::from)
++        .to_vec();
++    assert_eq!(fx.calls("tmux.log"), [display, want]);
++    let mark = fx.mark(1, 1);
++    let at = mark.at.clone();
++    assert_eq!(
++        mark,
++        ProcMark {
++            k: 1,
++            form: Form::Talk,
++            pid: 4242,
++            at: at.clone(),
++            again: false,
++            tmux_window: Some("@7".into())
++        }
++    );
++    let meta = fs::symlink_metadata(&tmp).unwrap();
++    assert!(meta.is_dir() && meta.mode() & 0o777 == 0o700);
++    let line = format!(
++        "相談の開き = cw1・形 = 話す・題 = 題なし・起こし手 = 席・model = fable・念入りさ = xhigh・結果 = 開いた・時刻 = {at}"
++    );
++    assert_eq!(fx.written(), [("fx-c".to_string(), line)]);
++    assert!(!fx.root.join("claude.args").exists());
++    clear_tmp(&l);
++}
++
++/// 偽の claude が受けた環境（窓の id・私用の temp・tmux の 2 つが無い・cwd が作業場）と pid。
++fn ask_env(fx: &Fx, l: &Launch) -> String {
++    let env = fs::read_to_string(fx.root.join("claude.env")).unwrap();
++    let pid = env
++        .lines()
++        .find_map(|l| l.strip_prefix("pid="))
++        .unwrap()
++        .to_string();
++    let tmp = private_tmp(&l.workspace);
++    let want = format!(
++        "id=cw1\ntmp={tmp}\ntmux=unset\npane=unset\ncwd={}\npid={pid}\n",
++        l.workspace
++    );
++    assert_eq!(env, want);
++    pid
++}
++
++/// 偽の bdw が受けた開きの行が根の持ち主のチャットの行で、結果と撃ち直しが `want` の順。
++fn assert_chat_opens(fx: &Fx, want: &[(bool, bool)]) {
++    let written = fx.written();
++    assert!(written.iter().all(|(home, _)| home == "fx-c"));
++    let chat = "・起こし手 = 持ち主のチャット・発話 = 20261003T1410Z・";
++    assert!(written.iter().all(|(_, t)| t.contains(chat)), "{written:?}");
++    let got: Vec<(bool, bool)> = written
++        .iter()
++        .map(|(_, t)| open_line(t))
++        .map(|(o, a, _)| (o, a))
++        .collect();
++    assert_eq!(got, want);
++}
++
++#[test]
++fn cwlch_ask_child_env_and_lines() {
++    let fx = Fx::new("ask");
++    fx.open(&[
++        "--by",
++        "chat",
++        "--said",
++        "20261003T1410Z",
++        "--form",
++        "ask",
++        "--topic",
++        "fx-c.2",
++    ]);
++    let l = fx.launch(1, Form::Ask, true);
++    clear_tmp(&l);
++    fs::write(fx.root.join("answer"), "").unwrap();
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let f = FindingId::new(WindowId::new(1).unwrap(), 1).unwrap();
++    let done = Event::Finding {
++        id: f,
++        via: Via::Done,
++    };
++    assert_eq!(out(&o), notice(&done, TZW) + "\n");
++    assert_eq!(fx.calls("claude.args"), [argv(&l)]);
++    let pid = ask_env(&fx, &l);
++    let answer = fs::read_to_string(fx.ws(1).join(".consult/ask-1.json")).unwrap();
++    assert_eq!(answer, "{\"result\":\"ok\"}\n");
++    let m = fx.mark(1, 1);
++    assert_eq!(
++        (m.form, m.pid.to_string(), m.again, m.tmux_window),
++        (Form::Ask, pid, false, None)
++    );
++    fs::remove_file(fx.root.join("answer")).unwrap();
++    let o = fx.tz(&["consult", "launch", "cw1", "--again"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let stalled = Event::Stalled(WindowId::new(1).unwrap());
++    assert_eq!(out(&o), notice(&stalled, TZW) + "\n");
++    assert!(fx.mark(1, 2).again);
++    assert_chat_opens(&fx, &[(true, false), (true, true)]);
++    assert!(fx.calls("tmux.log").is_empty());
++    clear_tmp(&l);
++}
++
++/// 起こす前の断り（版のずれ・窓が無い・閉じた窓）は行を書かず tmux を撃たない。
++fn refusals_before(fx: &Fx) {
++    let launch = |c: &mut Command| c.output().unwrap();
++    let o = launch(
++        fx.command(&["consult", "launch", "cw1"])
++            .env("TZ_PLUGIN_VERSION", "0.1.0"),
++    );
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("TZ_PLUGIN_VERSION"));
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw2"])), 1);
++    assert_eq!(rc(&fx.tz(&["consult", "launch"])), 1);
++    fx.notes("相談の閉じ = cw1・起こし手 = 席・所見 = 0・時刻 = 20261003T1800Z");
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("閉じた"), "{}", err(&o));
++    assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
++    fx.notes("");
++}
++
++#[test]
++fn cwlch_refusals_without_launch() {
++    let fx = Fx::new("refuse");
++    fx.open(&["--by", "seat"]);
++    let l = fx.launch(1, Form::Talk, false);
++    clear_tmp(&l);
++    refusals_before(&fx);
++    fx.open(&["--by", "seat", "--model=--plugin-dir"]);
++    let o = fx.tz(&["consult", "launch", "cw2"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("検めの欠け"), "{}", err(&o));
++    let o = fx
++        .command(&["consult", "launch", "cw1"])
++        .env_remove("TMUX_PANE")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("TMUX_PANE"));
++    fs::write(fx.root.join("tmux.fail"), "").unwrap();
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 1);
++    let heads: Vec<(String, bool)> = fx
++        .written()
++        .iter()
++        .map(|(_, t)| (t.split('・').next().unwrap().to_string(), open_line(t).0))
++        .collect();
++    let want = [
++        ("相談の開き = cw2", false),
++        ("相談の開き = cw1", false),
++        ("相談の開き = cw1", false),
++    ];
++    assert_eq!(heads, want.map(|(a, b)| (a.to_string(), b)));
++    assert!(
++        fx.calls("tmux.log")
++            .iter()
++            .all(|c| c[0] == "display-message")
++    );
++    assert!(!fx.ws(1).join(".consult/proc-1.json").exists());
++    clear_tmp(&l);
++    clear_tmp(&fx.launch(2, Form::Talk, false));
++}
++
++#[test]
++fn cwlch_quota_r38() {
++    let fx = Fx::new("quota");
++    let today = ruling::minute(events::now());
++    let opened = |n: u32, at: &str| {
++        format!(
++            "相談の開き = cw{n}・形 = 問う・題 = 題なし・起こし手 = 席・model = fable・念入りさ = xhigh・結果 = 開いた・時刻 = {at}"
++        )
++    };
++    fx.notes(&[opened(5, &today), opened(6, &today), opened(7, &today)].join("\n"));
++    fx.open(&["--by", "seat", "--form", "ask"]);
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(rc(&o), 1);
++    assert_eq!(err(&o), format!("tz consult launch: {REFUSAL}\n"));
++    assert!(fx.written().is_empty() && !fx.root.join("claude.args").exists());
++    let l = fx.launch(1, Form::Ask, false);
++    clear_tmp(&l);
++    let o = fx.tz(&["consult", "launch", "cw1", "--again"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    fx.open(&["--by", "chat", "--said", "20261003T1410Z", "--form", "ask"]);
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw2"])), 0);
++    fx.notes(&opened(9, "20200101T0000Z"));
++    fs::create_dir_all(fx.drafts.join("consult-cw9/.consult")).unwrap();
++    let live = ProcMark {
++        k: 1,
++        form: Form::Ask,
++        pid: std::process::id(),
++        at: "20200101T0000Z".into(),
++        again: false,
++        tmux_window: None,
++    };
++    fs::write(
++        fx.drafts.join("consult-cw9/.consult/proc-1.json"),
++        wire::encode(&live).unwrap(),
++    )
++    .unwrap();
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(
++        (rc(&o), err(&o)),
++        (1, format!("tz consult launch: {REFUSAL}\n"))
++    );
++    assert_eq!(fx.written().len(), 2);
++    clear_tmp(&l);
++    clear_tmp(&fx.launch(2, Form::Ask, false));
++}
++
++#[test]
++fn cwlch_dry_run() {
++    let fx = Fx::new("dry");
++    fx.open(&["--by", "seat"]);
++    let l = fx.launch(1, Form::Talk, false);
++    clear_tmp(&l);
++    let o = fx.tz(&["consult", "launch", "cw1", "--dry-run"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let want: Vec<String> = std::iter::once("claude".to_string())
++        .chain(argv(&l))
++        .collect();
++    assert_eq!(out(&o).lines().collect::<Vec<_>>(), want);
++    assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
++    assert!(!Path::new(&private_tmp(&l.workspace)).exists());
++    assert!(!fx.ws(1).join(".consult/proc-1.json").exists());
++}
++
++#[test]
++fn cwlch_private_tmp_guard() {
++    let fx = Fx::new("tmp");
++    fx.open(&["--by", "seat"]);
++    let l = fx.launch(1, Form::Talk, false);
++    let tmp = private_tmp(&l.workspace);
++    clear_tmp(&l);
++    assert!(tmp.len() <= 30 && tmp.starts_with("/tmp/tzc-"));
++    fs::create_dir(&tmp).unwrap();
++    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).unwrap();
++    let o = fx.tz(&["consult", "launch", "cw1"]);
++    assert_eq!(rc(&o), 1);
++    assert!(err(&o).contains("0700"), "{}", err(&o));
++    assert!(fx.calls("tmux.log").is_empty());
++    assert!(!open_line(&fx.written()[0].1).0);
++    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o700)).unwrap();
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 0);
++    assert!(open_line(&fx.written()[1].1).0);
++    clear_tmp(&l);
++}

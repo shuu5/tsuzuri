@@ -1,0 +1,494 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/watch.rs b/crates/tsuzuri-boundary/src/consult/watch.rs
+index d6d5bd1f9d27ecc5810ec6a27ce3daadd179ae86..555791525db0ffe8ebe44899819a6de09df6ac79 100644
+--- a/crates/tsuzuri-boundary/src/consult/watch.rs
++++ b/crates/tsuzuri-boundary/src/consult/watch.rs
+@@ -1,10 +1,170 @@
+-//! tz consult watch（席の背景の見張り・設計ノート surface-wave27a 行 cs-watch が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult watch [--max <秒>]（行 cs-watch・席の背景の見張り・判断の記録 ADR-29 決定 (5)(8)・受入 AC16 の見張りの 1 行）。
++//! 席が背景の命令として常に 1 本置く。`TICK` ごとに起草の置き場の窓（退いた窓を除く）を見て、次の事象の最初の 1 つで
++//! 中核の `lines::notice` の固定の 1 行を標準出力に出して終わる（待ちの席を起こす）。順は (1) 受けの行の無い所見
++//! （経路 見張り）、(2) 受けの行の無い頼み、(3) 所見の無いまま最後の process の無い問う窓（閉じの行の無い物）、
++//! (4) 最後の pane の無い話す窓（閉じの行の無い物）。上限（既定 `MAX`・Bash の道具の背景の上限より短く）で
++//! 上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
++//! 変わった時だけ読み直す（読み直しが落ちれば前の読みで見る）。
++//! 生きている印 `<起草の置き場>/consult-watch.alive`（pid と始まりの分）を置き、`TOUCH` ごとに書き直し、終わりで消す。
++//! 印の更新時刻が `FRESH` の内なら 2 本目は「相談: 見張りはもう居る」の 1 行を出してすぐ終わる。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::time::{Duration, Instant, SystemTime};
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult watch: まだ無い（行 cs-watch）");
+-    FAIL
++use tsuzuri_contract::consult::{Form, Via, WindowId};
++use tsuzuri_core::consult::lines::{Event, Line, notice, unreceived};
++
++use super::{
++    COMMON, Ctx, FAIL, Refused, ctx, findings, flags, ledger, lines_of, minute_now, procs,
++    read_window, refuse, tzw, windows, workspace,
++};
++use crate::out::{emit, emit_err};
++use crate::server::ledger::{Mark, Source};
++
++/// 生きている印の file の名（起草の置き場の直下）。
++pub const ALIVE: &str = "consult-watch.alive";
++
++/// 生きている印が新しいと見る間（印は `TOUCH` ごとに書き直す）。
++pub const FRESH: Duration = Duration::from_secs(90);
++
++/// 生きている印を書き直す間。
++pub const TOUCH: Duration = Duration::from_secs(30);
++
++/// 作業場と台帳の印を見る間。
++pub const TICK: Duration = Duration::from_secs(5);
++
++/// 既定の上限（秒・Bash の道具の背景の上限 7200 秒より 2 分短く）。
++pub const MAX: u64 = 7080;
++
++/// 2 本目の見張りが出す 1 行。
++pub const ALREADY: &str = "相談: 見張りはもう居る";
++
++/// tz consult watch の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut values = COMMON.to_vec();
++    values.push("--max");
++    let made = flags(rest, &values, &[], &[]).and_then(|f| {
++        if !f.pos.is_empty() {
++            return Err((FAIL, format!("知らない引数 {}", f.pos.join(" "))));
++        }
++        let max = match f.get("--max").map(str::parse::<u64>) {
++            None => MAX,
++            Some(Ok(s)) if s > 0 => s,
++            Some(_) => return Err((FAIL, "--max は 1 以上の秒の数".to_string())),
++        };
++        let c = ctx(&f)?;
++        watch(&c, Duration::from_secs(max))
++    });
++    match made {
++        Ok(line) => {
++            emit(&line);
++            0
++        }
++        Err(e) => refuse("watch", e),
++    }
++}
++
++/// 生きている印の path。
++pub fn alive_path(drafts: &Path) -> PathBuf {
++    drafts.join(ALIVE)
++}
++
++/// 生きている印が `FRESH` の内に書かれたか。
++pub fn fresh(drafts: &Path) -> bool {
++    fs::metadata(alive_path(drafts))
++        .and_then(|m| m.modified())
++        .ok()
++        .and_then(|t| SystemTime::now().duration_since(t).ok())
++        .is_some_and(|age| age < FRESH)
++}
++
++/// 生きている印の字。
++fn mark_text(start: &str) -> String {
++    format!("pid = {}・始まり = {start}\n", std::process::id())
++}
++
++/// 見張る（出す 1 行を返す）。
++fn watch(c: &Ctx, max: Duration) -> Result<String, Refused> {
++    if fresh(&c.drafts) {
++        return Ok(ALREADY.to_string());
++    }
++    let source = Source::new(&c.repo, &c.bd);
++    let (mut seen, mut lines) = (source.mark(), lines_of(&ledger(c)?.1));
++    let path = alive_path(&c.drafts);
++    let text = mark_text(&minute_now());
++    let put =
++        || fs::write(&path, &text).map_err(|e| (FAIL, format!("生きている印を書けない: {e}")));
++    put()?;
++    let (start, mut touched) = (Instant::now(), Instant::now());
++    let found = loop {
++        if let Some(event) = scan(c, &lines) {
++            break notice(&event, &tzw());
++        }
++        if start.elapsed() >= max {
++            break notice(&Event::Timeout, &tzw());
++        }
++        std::thread::sleep(TICK.min(max.saturating_sub(start.elapsed())));
++        if touched.elapsed() >= TOUCH {
++            put()?;
++            touched = Instant::now();
++        }
++        let now: Mark = source.mark();
++        if now != seen {
++            match ledger(c) {
++                Ok((_, items)) => lines = lines_of(&items),
++                Err((_, why)) => emit_err(&format!("tz consult watch: {why}（前の読みで見る）")),
++            }
++            seen = now;
++        }
++    };
++    if fs::read_to_string(&path).is_ok_and(|t| t == text) {
++        let _ = fs::remove_file(&path);
++    }
++    Ok(found)
++}
++
++/// 窓が閉じの行を持つか。
++fn closed(lines: &[Line], id: WindowId) -> bool {
++    lines
++        .iter()
++        .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
++}
++
++/// 見張る事象の最初の 1 つ（無ければ None）。
++pub fn scan(c: &Ctx, lines: &[Line]) -> Option<Event> {
++    let open: Vec<WindowId> = windows(&c.drafts)
++        .into_iter()
++        .filter(|(_, gone)| !gone)
++        .map(|(id, _)| id)
++        .collect();
++    let found: Vec<_> = open
++        .iter()
++        .flat_map(|id| findings(&workspace(&c.drafts, *id), *id))
++        .collect();
++    let waiting = unreceived(lines, &found);
++    if let Some(id) = waiting.findings.first() {
++        return Some(Event::Finding {
++            id: *id,
++            via: Via::Watch,
++        });
++    }
++    if let Some(id) = waiting.requests.first() {
++        return Some(Event::Request(id.clone()));
++    }
++    let quiet = |id: &WindowId, form: Form| {
++        let ws = workspace(&c.drafts, *id);
++        !closed(lines, *id)
++            && read_window(&ws).is_some_and(|w| w.form == form)
++            && procs(&ws).last().is_some_and(|p| !super::alive(p.pid))
++    };
++    let stalled = open
++        .iter()
++        .find(|id| quiet(id, Form::Ask) && findings(&workspace(&c.drafts, **id), **id).is_empty());
++    if let Some(id) = stalled {
++        return Some(Event::Stalled(*id));
++    }
++    open.iter()
++        .find(|id| quiet(id, Form::Talk))
++        .map(|id| Event::Gone(*id))
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwwat.rs b/crates/tsuzuri-boundary/tests/cwwat.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a469ec0f7b1c770943ed314cb66f2df0bd54bf0
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwwat.rs
+@@ -0,0 +1,306 @@
++//! 席の背景の見張りの歯（接頭辞 cwwat_・設計ノート surface-wave27a 行 cs-watch・受入 AC16 の見張りの 1 行）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と偽の bd を置き、
++//! 窓の作業場（窓の控え・process の印・所見）を歯が直に書いて、tz consult watch を短い上限で撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++use std::time::{Duration, Instant, SystemTime};
++
++use tsuzuri_contract::consult::{
++    Finding, FindingId, Form, ProcMark, Starter, WindowFile, WindowId,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++
++/// 台帳の写し（根の epic・根の notes は歯が足す）。
++const LEDGER: &str = r#"[{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"}]"#;
++
++const RQ_LINE: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
++
++const TAIL: &str = "・「/x/tzw consult watch」を背景で置き直す";
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    drafts: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwwat")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [&repo, &state, &drafts, &root.join("bin")] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        git(
++            &repo,
++            &["config", "scribe2.statedir", &state.display().to_string()],
++        );
++        git(
++            &repo,
++            &["config", "tsuzuri.draftsdir", &drafts.display().to_string()],
++        );
++        let bd = root.join("bin/bd");
++        fs::write(
++            &bd,
++            format!("#!/bin/sh\nexec cat '{}/ledger.json'\n", root.display()),
++        )
++        .unwrap();
++        fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).unwrap();
++        let fx = Fx { root, repo, drafts };
++        fx.notes(&[]);
++        fx
++    }
++
++    fn notes(&self, lines: &[&str]) {
++        let text = LEDGER.replace("NOTES", &lines.join("\\n"));
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++    }
++
++    fn command(&self, args: &[&str]) -> Command {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++        c.args(["consult", "watch"])
++            .args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env("TZ_WRAPPER", "/x/tzw");
++        c
++    }
++
++    fn watch(&self, max: &str) -> Output {
++        self.command(&["--max", max]).output().unwrap()
++    }
++
++    /// 窓の作業場（控えと、在れば最後の process の印）。
++    fn window(&self, n: u32, form: Form, pid: Option<u32>) -> PathBuf {
++        let ws = self.drafts.join(format!("consult-cw{n}"));
++        for d in [".consult", "findings"] {
++            fs::create_dir_all(ws.join(d)).unwrap();
++        }
++        let w = WindowFile {
++            id: WindowId::new(n).unwrap(),
++            form,
++            topic: None,
++            model: "fable".into(),
++            effort: "xhigh".into(),
++            starter: Starter::Seat,
++            uttered: None,
++            request: None,
++            made: "20261003T1400Z".into(),
++        };
++        fs::write(ws.join(".consult/window.json"), wire::encode(&w).unwrap()).unwrap();
++        if let Some(pid) = pid {
++            let tmux_window = (form == Form::Talk).then(|| "@7".to_string());
++            let m = ProcMark {
++                k: 1,
++                form,
++                pid,
++                at: "20261003T1401Z".into(),
++                again: false,
++                tmux_window,
++            };
++            fs::write(ws.join(".consult/proc-1.json"), wire::encode(&m).unwrap()).unwrap();
++        }
++        ws
++    }
++
++    fn alive(&self) -> PathBuf {
++        self.drafts.join("consult-watch.alive")
++    }
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++/// 窓 cw3 の作業場に、fixture complete.json の草稿に id と時刻を足した揃った所見 cw3-1 を置く。
++fn answer(ws: &Path) {
++    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/consult/finding-2/complete.json");
++    let draft = check(&fs::read_to_string(fixture).unwrap()).unwrap();
++    let id = FindingId::new(WindowId::new(3).unwrap(), 1).unwrap();
++    let f = Finding::new(id, "20261003T1500Z", draft);
++    fs::write(ws.join("findings/cw3-1.json"), wire::encode(&f).unwrap()).unwrap();
++}
++
++#[test]
++fn cwwat_finding_line_once() {
++    let fx = Fx::new("finding");
++    let ws = fx.window(3, Form::Talk, Some(std::process::id()));
++    answer(&ws);
++    let o = fx.watch("30");
++    assert_eq!(rc(&o), 0);
++    let want = format!(
++        "相談: 窓 cw3 の所見 cw3-1 が届いた（/x/tzw consult show cw3-1 --via 見張り）{TAIL}\n"
++    );
++    assert_eq!(out(&o), want);
++    assert!(!fx.alive().exists());
++    fx.notes(&["相談の受け = cw3-1・経路 = 見張り・時刻 = 20261003T1530Z"]);
++    let start = Instant::now();
++    let o = fx.watch("1");
++    assert_eq!(
++        (rc(&o), out(&o)),
++        (0, format!("相談: 見張りが上限で終わった{TAIL}\n"))
++    );
++    assert!(start.elapsed() >= Duration::from_secs(1));
++    assert!(!fx.alive().exists());
++}
++
++#[test]
++fn cwwat_request_stalled_gone_order() {
++    let fx = Fx::new("order");
++    fx.window(4, Form::Ask, Some(0));
++    fx.window(5, Form::Talk, Some(0));
++    fx.window(8, Form::Ask, None);
++    let retired = fx.drafts.join("retired-consult-cw6/findings");
++    fs::create_dir_all(&retired).unwrap();
++    fs::write(retired.join("cw6-1.json"), "{}").unwrap();
++    let live = fx.window(7, Form::Ask, Some(std::process::id()));
++    fs::write(live.join("findings/cw7-1.json"), "{}").unwrap();
++    let got7 = "相談の受け = cw7-1・経路 = 一覧・時刻 = 20261003T1500Z";
++    fx.notes(&[RQ_LINE, got7]);
++    let want = "相談: 頼み rq-20261003T1412Z-1 が届いた（/x/tzw consult open --request rq-20261003T1412Z-1 --by button）";
++    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
++    let got_rq = "相談の受け = rq-20261003T1412Z-1・経路 = hook・時刻 = 20261003T1413Z";
++    fx.notes(&[RQ_LINE, got7, got_rq]);
++    let want = "相談: 問う窓 cw4 が所見なしで止まった（/x/tzw consult launch cw4 --again）";
++    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
++    let closed4 = "相談の閉じ = cw4・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z";
++    fx.notes(&[RQ_LINE, got7, got_rq, closed4]);
++    let want = "相談: 話す窓 cw5 が閉じられた（/x/tzw consult close cw5 --by chat）";
++    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
++    let closed5 = "相談の閉じ = cw5・起こし手 = 持ち主のチャット・所見 = 0・時刻 = 20261003T1601Z";
++    fx.notes(&[RQ_LINE, got7, got_rq, closed4, closed5]);
++    assert_eq!(
++        out(&fx.watch("1")),
++        format!("相談: 見張りが上限で終わった{TAIL}\n")
++    );
++    fs::write(live.join("findings/cw7-2.json"), "{}").unwrap();
++    fx.notes(&[got7]);
++    let o = fx.watch("30");
++    assert!(
++        out(&o).starts_with("相談: 窓 cw7 の所見 cw7-2 が届いた"),
++        "{}",
++        out(&o)
++    );
++}
++
++#[test]
++fn cwwat_alive_mark() {
++    let fx = Fx::new("alive");
++    fs::write(fx.alive(), "pid = 1・始まり = 20261003T1400Z\n").unwrap();
++    let o = fx.watch("30");
++    assert_eq!(
++        (rc(&o), out(&o)),
++        (0, "相談: 見張りはもう居る\n".to_string())
++    );
++    assert_eq!(
++        fs::read_to_string(fx.alive()).unwrap(),
++        "pid = 1・始まり = 20261003T1400Z\n"
++    );
++    let old = SystemTime::now() - Duration::from_secs(120);
++    fs::File::options()
++        .write(true)
++        .open(fx.alive())
++        .unwrap()
++        .set_modified(old)
++        .unwrap();
++    let child = fx
++        .command(&["--max", "3"])
++        .stdout(Stdio::piped())
++        .spawn()
++        .unwrap();
++    std::thread::sleep(Duration::from_millis(1500));
++    let text = fs::read_to_string(fx.alive()).unwrap();
++    assert!(
++        text.starts_with(&format!("pid = {}・始まり = ", child.id())),
++        "{text}"
++    );
++    let second = fx.watch("30");
++    assert_eq!(out(&second), "相談: 見張りはもう居る\n");
++    let first = child.wait_with_output().unwrap();
++    assert_eq!(out(&first), format!("相談: 見張りが上限で終わった{TAIL}\n"));
++    assert!(!fx.alive().exists());
++}
++
++#[test]
++fn cwwat_ledger_reread_on_mark() {
++    let fx = Fx::new("reread");
++    let child = fx
++        .command(&["--max", "6"])
++        .stdout(Stdio::piped())
++        .spawn()
++        .unwrap();
++    std::thread::sleep(Duration::from_millis(1000));
++    fx.notes(&[RQ_LINE]);
++    let quiet = child.wait_with_output().unwrap();
++    assert_eq!(
++        out(&quiet),
++        format!("相談: 見張りが上限で終わった{TAIL}\n"),
++        "印が同じなら読み直さない"
++    );
++    fx.notes(&[]);
++    let child = fx
++        .command(&["--max", "20"])
++        .stdout(Stdio::piped())
++        .spawn()
++        .unwrap();
++    std::thread::sleep(Duration::from_millis(1000));
++    fx.notes(&[RQ_LINE]);
++    fs::create_dir_all(fx.repo.join(".beads")).unwrap();
++    fs::write(fx.repo.join(".beads/issues.jsonl"), "{}\n").unwrap();
++    let start = Instant::now();
++    let seen = child.wait_with_output().unwrap();
++    assert!(
++        out(&seen).starts_with("相談: 頼み rq-20261003T1412Z-1 が届いた"),
++        "{}",
++        out(&seen)
++    );
++    assert!(start.elapsed() < Duration::from_secs(10));
++}
++
++#[test]
++fn cwwat_refusals() {
++    let fx = Fx::new("refuse");
++    for bad in [
++        &["--max", "0"][..],
++        &["--max", "x"],
++        &["extra"],
++        &["--max", "1", "--max", "2"],
++    ] {
++        let o = fx.command(bad).output().unwrap();
++        assert_eq!(rc(&o), 1, "{bad:?}");
++    }
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
++    assert_eq!(rc(&fx.watch("1")), 2);
++    assert!(!fx.alive().exists(), "台帳が読めなければ印を置かない");
++    git(&fx.repo, &["config", "--unset", "tsuzuri.draftsdir"]);
++    assert_eq!(rc(&fx.watch("1")), 2);
++}

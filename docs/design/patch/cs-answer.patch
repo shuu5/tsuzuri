@@ -1,0 +1,535 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/answer.rs b/crates/tsuzuri-boundary/src/consult/answer.rs
+index d7e6998bafb3f0621b4fe7301d0782d3f0a17ff2..196fdfa53847418440dc64fb81b0076aabdfd09b 100644
+--- a/crates/tsuzuri-boundary/src/consult/answer.rs
++++ b/crates/tsuzuri-boundary/src/consult/answer.rs
+@@ -1,10 +1,96 @@
+-//! tz consult answer（所見の口（窓の側）・設計ノート surface-wave27a 行 cs-answer が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult answer <草稿の file>（行 cs-answer・窓の側の所見の口・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
++//! 窓の id は環境の `TZ_CONSULT_ID`、作業場は cwd（窓の控えの id が同じこと）。草稿を中核の `finding::check` で検め、
++//! 断りは理由の字（欠けた欄の名の列など）を標準出力に 1 行出して rc 1（file を作らない）。添え物は作業場の下に実在する
++//! file であること（canonicalize して作業場の下・symlink で外を指す物を断る）。所見は findings/<所見 id>.json に、
++//! 一時の名に書いてから既に在る名を上書きしない hard link で置く（番号 k は窓の所見の最大 + 1・在れば次の番号）。
++//! 台帳は書かない（窓は台帳を書かない・席が読む口で記帳する）。
+ 
+-use super::FAIL;
+-use crate::out::emit_err;
++use std::fs;
++use std::path::Path;
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult answer: まだ無い（行 cs-answer）");
+-    FAIL
++use tsuzuri_contract::consult::{Finding, FindingDraft, FindingId, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++use tsuzuri_core::consult::launch::ID_ENV;
++
++use super::{FAIL, Refused, UNKNOWN, findings, flags, minute_now, read_window, refuse};
++use crate::out::emit;
++
++/// 番号を進めて撃ち直す回の上限。
++const TRIES: u32 = 64;
++
++/// tz consult answer の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    let made = flags(rest, &[], &[], &[]).and_then(|f| {
++        let [file] = f.pos.as_slice() else {
++            return Err((FAIL, "草稿の file を 1 つ渡す".to_string()));
++        };
++        let id = std::env::var(ID_ENV)
++            .ok()
++            .and_then(|v| WindowId::parse(&v).ok())
++            .ok_or((
++                FAIL,
++                format!("環境の {ID_ENV} が窓の id でない（窓の中で撃つ）"),
++            ))?;
++        let ws = std::env::current_dir().map_err(|e| (UNKNOWN, format!("cwd が読めない: {e}")))?;
++        if read_window(&ws).map(|w| w.id) != Some(id) {
++            return Err((FAIL, format!("cwd が窓 {id} の作業場でない")));
++        }
++        let text = fs::read_to_string(ws.join(file))
++            .map_err(|e| (FAIL, format!("草稿 {file} が読めない: {e}")))?;
++        let draft = match check(&text) {
++            Ok(draft) => draft,
++            Err(refusal) => {
++                emit(&refusal.to_string());
++                return Err((FAIL, "草稿を受けない".to_string()));
++            }
++        };
++        attached(&ws, &draft)?;
++        place(&ws, id, draft)
++    });
++    match made {
++        Ok(found) => {
++            emit(&format!("所見 {found} を置いた"));
++            0
++        }
++        Err(e) => refuse("answer", e),
++    }
++}
++
++/// 添え物が作業場の下に実在する file か（無い・外を指す・dir を断る）。
++pub fn attached(ws: &Path, draft: &FindingDraft) -> Result<(), Refused> {
++    let root = ws
++        .canonicalize()
++        .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?;
++    for a in &draft.attachments {
++        let real = ws.join(&a.path).canonicalize();
++        if !real.is_ok_and(|p| p.starts_with(&root) && p.is_file()) {
++            emit(&format!("添え物が作業場の下の file でない: {}", a.path));
++            return Err((FAIL, "草稿を受けない".to_string()));
++        }
++    }
++    Ok(())
++}
++
++/// 所見を findings/ に上書きせずに置き、所見の id を返す。
++fn place(ws: &Path, id: WindowId, draft: FindingDraft) -> Result<FindingId, Refused> {
++    let dir = ws.join("findings");
++    let date = minute_now();
++    let mut k = findings(ws, id).last().map_or(0, |f| f.k()) + 1;
++    let tmp = dir.join(format!(".answer-{}.tmp", std::process::id()));
++    for _ in 0..TRIES {
++        let found = FindingId::new(id, k).ok_or((FAIL, "所見の番号".to_string()))?;
++        let finding = Finding::new(found, &date, draft.clone());
++        let text = wire::encode(&finding).map_err(|e| (UNKNOWN, e.to_string()))?;
++        fs::write(&tmp, text + "\n")
++            .map_err(|e| (UNKNOWN, format!("findings/ に書けない: {e}")))?;
++        let linked = fs::hard_link(&tmp, dir.join(format!("{found}.json")));
++        let _ = fs::remove_file(&tmp);
++        match linked {
++            Ok(()) => return Ok(found),
++            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => k += 1,
++            Err(e) => return Err((UNKNOWN, format!("所見を置けない: {e}"))),
++        }
++    }
++    Err((UNKNOWN, "所見の番号が尽きた".to_string()))
+ }
+diff --git a/crates/tsuzuri-boundary/src/consult/guard.rs b/crates/tsuzuri-boundary/src/consult/guard.rs
+index 896d97ddce1d26a5cb7c0ba7d2833e66d0160e41..614a4d3faa1279350f1dcdec82d74a0b9dd7dd8e 100644
+--- a/crates/tsuzuri-boundary/src/consult/guard.rs
++++ b/crates/tsuzuri-boundary/src/consult/guard.rs
+@@ -1,10 +1,33 @@
+-//! tz consult guard（窓の守りの hook の口・設計ノート surface-wave27a 行 cs-answer が中身を置く・行 cs-open は骨だけを置く）。
++//! tz consult guard（行 cs-answer・窓の PreToolUse の守りの hook・判断の記録 ADR-29 決定 (7)）。
++//! 標準入力の hook の JSON を中核の `consult::guard::judge` で判じ、通すなら何も出さずに rc 0、断るなら理由を
++//! 標準エラーに 1 行書いて rc 2（Claude Code は PreToolUse の rc 2 を道具の断りと読み、標準エラーを窓に渡す）。
++//! 引数を取らない（在れば断る）。hook は囲いの外で持ち主の権限で走るので、読むだけで file を書かない。
++//! 起動の設定は `timeout 4 <tz> consult guard || exit 2` で撃つので、落ちても時間切れでも断る側に倒れる。
++
++use std::io::Read;
++
++use tsuzuri_core::consult::guard::judge;
+ 
+-use super::FAIL;
+ use crate::out::emit_err;
+ 
+-/// 口の中身はまだ無い（rc 1）。
+-pub fn run(_rest: &[&str]) -> u8 {
+-    emit_err("tz consult guard: まだ無い（行 cs-answer）");
+-    FAIL
++/// 断る時の終了 code（PreToolUse の hook の断り）。
++pub const DENY: u8 = 2;
++
++/// tz consult guard の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    if !rest.is_empty() {
++        emit_err("相談の窓の守り: 引数を取らない");
++        return DENY;
++    }
++    let mut payload = String::new();
++    if std::io::stdin().read_to_string(&mut payload).is_err() {
++        payload.clear();
++    }
++    match judge(&payload) {
++        Ok(()) => 0,
++        Err(why) => {
++            emit_err(&format!("相談の窓の守り: {why}"));
++            DENY
++        }
++    }
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwans.rs b/crates/tsuzuri-boundary/tests/cwans.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e84eff099743685194c953eae2824ba047320196
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwans.rs
+@@ -0,0 +1,293 @@
++//! 窓の側の所見の口と守りの hook の歯（接頭辞 cwans_・設計ノート surface-wave27a 行 cs-answer・受入 AC16 の断りと file）。
++//! 歯ごとの作業場（CARGO_TARGET_TMPDIR の下・窓の控えだけを置く）で、tz consult answer を cwd = 作業場・
++//! 環境の TZ_CONSULT_ID で撃つ。草稿は fixture tests/fixtures/consult/finding-2/ の complete.json と missing.json。
++//! 守りの hook は tz consult guard に標準入力の hook の JSON を渡して撃ち、中核の判じも直に撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++use tsuzuri_boundary::server::{events, ruling};
++use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++use tsuzuri_core::consult::guard::{SEAT_VERBS, judge};
++
++fn fixture(name: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/consult/finding-2")
++        .join(name);
++    fs::read_to_string(path).unwrap()
++}
++
++/// 窓 cw3 の作業場（窓の控えと findings/ と work/ の添え物 2 つ）。
++fn workspace(name: &str) -> PathBuf {
++    let ws = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("cwans")
++        .join(name)
++        .join("consult-cw3");
++    let _ = fs::remove_dir_all(&ws);
++    for d in [".consult", "findings", "work", "drafts"] {
++        fs::create_dir_all(ws.join(d)).unwrap();
++    }
++    let window = WindowFile {
++        id: WindowId::new(3).unwrap(),
++        form: Form::Ask,
++        topic: None,
++        model: "fable".into(),
++        effort: "xhigh".into(),
++        starter: Starter::Seat,
++        uttered: None,
++        request: None,
++        made: "20261003T1412Z".into(),
++    };
++    fs::write(
++        ws.join(".consult/window.json"),
++        wire::encode(&window).unwrap(),
++    )
++    .unwrap();
++    fs::write(ws.join("work/report.md"), "レポート\n").unwrap();
++    fs::write(ws.join("work/probe.py"), "print(1)\n").unwrap();
++    fs::write(ws.join("drafts/complete.json"), fixture("complete.json")).unwrap();
++    fs::write(ws.join("drafts/missing.json"), fixture("missing.json")).unwrap();
++    ws
++}
++
++fn answer(ws: &Path, id: Option<&str>, args: &[&str]) -> Output {
++    let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++    c.args(["consult", "answer"]).args(args).current_dir(ws);
++    match id {
++        Some(id) => c.env("TZ_CONSULT_ID", id),
++        None => c.env_remove("TZ_CONSULT_ID"),
++    };
++    c.output().unwrap()
++}
++
++fn guard(args: &[&str], payload: &str) -> Output {
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["consult", "guard"])
++        .args(args)
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    child
++        .stdin
++        .take()
++        .unwrap()
++        .write_all(payload.as_bytes())
++        .unwrap();
++    child.wait_with_output().unwrap()
++}
++
++fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++/// findings/ の file の名（字の順）。
++fn names(ws: &Path) -> Vec<String> {
++    let mut v: Vec<String> = fs::read_dir(ws.join("findings"))
++        .unwrap()
++        .map(|e| e.unwrap().file_name().into_string().unwrap())
++        .collect();
++    v.sort();
++    v
++}
++
++fn fid(k: u32) -> FindingId {
++    FindingId::new(WindowId::new(3).unwrap(), k).unwrap()
++}
++
++fn read_finding(ws: &Path, k: u32) -> Finding {
++    let text = fs::read_to_string(ws.join(format!("findings/cw3-{k}.json"))).unwrap();
++    wire::decode(&text).unwrap()
++}
++
++fn bash(command: &str) -> String {
++    format!("{{\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":{command:?}}}}}")
++}
++
++#[test]
++fn cwans_complete_written() {
++    let ws = workspace("complete");
++    let before = ruling::minute(events::now());
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    let after = ruling::minute(events::now());
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    assert_eq!(out(&o), "所見 cw3-1 を置いた\n");
++    let got = read_finding(&ws, 1);
++    assert!(before <= got.date && got.date <= after, "{}", got.date);
++    let want = Finding::new(fid(1), &got.date, check(&fixture("complete.json")).unwrap());
++    assert_eq!(got, want);
++    assert_eq!((got.id, got.window), (fid(1), WindowId::new(3).unwrap()));
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    assert_eq!(out(&o), "所見 cw3-2 を置いた\n");
++    assert_eq!(read_finding(&ws, 2).id, fid(2));
++    assert_eq!(names(&ws), ["cw3-1.json", "cw3-2.json"]);
++}
++
++#[test]
++fn cwans_missing_refused() {
++    let ws = workspace("missing");
++    let o = answer(&ws, Some("cw3"), &["drafts/missing.json"]);
++    assert_eq!(rc(&o), 1);
++    assert_eq!(out(&o), "欠けた欄: bundle_digest\n");
++    let complete = fixture("complete.json");
++    let bad = [
++        (
++            complete.replacen('{', "{\"score\": 1,", 1),
++            "知らない欄: score\n",
++        ),
++        (
++            complete.replace("\"rejected\"", "\"adopted\""),
++            "候補は 2 つ以上で、採る（adopted）のは 1 つ\n",
++        ),
++        ("[]".to_string(), "所見の草稿が JSON の object でない\n"),
++        (
++            complete.replace("work/probe.py", "../probe.py"),
++            "添え物の path が作業場からの相対でない: ../probe.py\n",
++        ),
++    ];
++    for (text, want) in bad {
++        fs::write(ws.join("drafts/bad.json"), text).unwrap();
++        let o = answer(&ws, Some("cw3"), &["drafts/bad.json"]);
++        assert_eq!((rc(&o), out(&o)), (1, want.to_string()));
++    }
++    assert!(names(&ws).is_empty());
++}
++
++#[test]
++fn cwans_attachments_under_workspace() {
++    let ws = workspace("attach");
++    fs::remove_file(ws.join("work/probe.py")).unwrap();
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    assert_eq!(rc(&o), 1);
++    assert_eq!(out(&o), "添え物が作業場の下の file でない: work/probe.py\n");
++    std::os::unix::fs::symlink("/etc/hostname", ws.join("work/probe.py")).unwrap();
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    assert_eq!((rc(&o), out(&o).contains("work/probe.py")), (1, true));
++    fs::remove_file(ws.join("work/probe.py")).unwrap();
++    fs::create_dir(ws.join("work/probe.py")).unwrap();
++    assert_eq!(rc(&answer(&ws, Some("cw3"), &["drafts/complete.json"])), 1);
++    fs::remove_dir(ws.join("work/probe.py")).unwrap();
++    std::os::unix::fs::symlink(ws.join("work/report.md"), ws.join("work/probe.py")).unwrap();
++    let o = answer(&ws, Some("cw3"), &["drafts/complete.json"]);
++    assert_eq!(rc(&o), 0, "作業場の下を指す symlink は通す: {}", out(&o));
++    assert_eq!(names(&ws), ["cw3-1.json"]);
++}
++
++#[test]
++fn cwans_window_env_and_numbers() {
++    let ws = workspace("env");
++    let draft = ["drafts/complete.json"];
++    assert_eq!(rc(&answer(&ws, None, &draft)), 1);
++    assert_eq!(rc(&answer(&ws, Some("cw4"), &draft)), 1);
++    assert_eq!(rc(&answer(&ws, Some("3"), &draft)), 1);
++    assert_eq!(
++        rc(&answer(
++            &ws.join("work"),
++            Some("cw3"),
++            &["../drafts/complete.json"]
++        )),
++        1
++    );
++    assert_eq!(rc(&answer(&ws, Some("cw3"), &[])), 1);
++    assert_eq!(rc(&answer(&ws, Some("cw3"), &["drafts/none.json"])), 1);
++    assert_eq!(
++        rc(&answer(&ws, Some("cw3"), &["drafts/complete.json", "x"])),
++        1
++    );
++    assert!(names(&ws).is_empty());
++    fs::write(ws.join("findings/cw3-1.json"), "前の所見\n").unwrap();
++    fs::write(ws.join("findings/cw9-4.json"), "ほかの窓\n").unwrap();
++    let o = answer(&ws, Some("cw3"), &draft);
++    assert_eq!(out(&o), "所見 cw3-2 を置いた\n");
++    let kept = fs::read_to_string(ws.join("findings/cw3-1.json")).unwrap();
++    assert_eq!(kept, "前の所見\n");
++    let o = answer(&ws, Some("cw3"), &draft);
++    assert_eq!(out(&o), "所見 cw3-3 を置いた\n");
++    assert_eq!(
++        names(&ws),
++        ["cw3-1.json", "cw3-2.json", "cw3-3.json", "cw9-4.json"]
++    );
++}
++
++#[test]
++fn cwans_guard_tools_and_verbs() {
++    for tool in [
++        "Read",
++        "Grep",
++        "Glob",
++        "Edit",
++        "Write",
++        "WebSearch",
++        "WebFetch",
++    ] {
++        assert_eq!(
++            judge(&format!("{{\"tool_name\":\"{tool}\"}}")),
++            Ok(()),
++            "{tool}"
++        );
++    }
++    for ok in [
++        "ls -la work",
++        "/p/tz consult answer drafts/a.json",
++        "tzw consult bundle cw3 --topic x",
++        "echo consult",
++    ] {
++        assert_eq!(judge(&bash(ok)), Ok(()), "{ok}");
++    }
++    for tool in ["Task", "mcp__x__y", "NotebookEdit", "bash"] {
++        assert!(
++            judge(&format!("{{\"tool_name\":\"{tool}\"}}")).is_err(),
++            "{tool}"
++        );
++    }
++    for verb in SEAT_VERBS {
++        let err = judge(&bash(&format!("/p/tz consult {verb} cw1"))).unwrap_err();
++        assert!(err.contains(&format!("tz consult {verb}")), "{err}");
++    }
++    for bad in [
++        "echo a; tz consult launch cw1",
++        "sh -c 'tz consult close cw1'",
++        "x && tzw consult show cw1-1",
++    ] {
++        assert!(judge(&bash(bad)).is_err(), "{bad}");
++    }
++    let unsandboxed = "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\",\"dangerouslyDisableSandbox\":true}}";
++    assert!(judge(unsandboxed).is_err());
++    for bad in ["", "not json", "[]", "{}", "{\"tool_name\":3}"] {
++        assert!(judge(bad).is_err(), "{bad}");
++    }
++    assert_eq!(SEAT_VERBS.len(), 8);
++}
++
++#[test]
++fn cwans_guard_exit_codes() {
++    let o = guard(&[], &bash("tz consult answer drafts/a.json"));
++    assert_eq!(
++        (rc(&o), out(&o), err(&o)),
++        (0, String::new(), String::new())
++    );
++    let o = guard(&[], &bash("tz consult open --by seat"));
++    assert_eq!(rc(&o), 2);
++    assert!(
++        err(&o).starts_with("相談の窓の守り: 窓から tz consult open は撃てない"),
++        "{}",
++        err(&o)
++    );
++    assert_eq!(rc(&guard(&[], "{\"tool_name\":\"Task\"}")), 2);
++    assert_eq!(rc(&guard(&[], "")), 2);
++    assert_eq!(rc(&guard(&["--x"], "{\"tool_name\":\"Read\"}")), 2);
++}
+diff --git a/crates/tsuzuri-core/src/consult/guard.rs b/crates/tsuzuri-core/src/consult/guard.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..98f8f19ee0e36ea848e0aad2a319f0c201e99950
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/guard.rs
+@@ -0,0 +1,61 @@
++//! 相談の窓の守りの hook の判じ（設計ノート surface-wave27a 行 cs-answer・判断の記録 ADR-29 決定 (7)）。
++//! 入力は Claude Code の PreToolUse の hook の JSON。道具の名が起動の閉じた列（`TOOLS` の 8 つ）に無ければ断り、
++//! Bash の命令が tz consult の席の口（`SEAT_VERBS`）を含むか、囲いの外で撃ち直す印（dangerouslyDisableSandbox）を
++//! 持てば断る。所見の口 answer と束の口 bundle は通す。JSON の object でない入力と道具の名の無い入力も断る（断る側に倒す）。
++//! 命令の語は問いの起票の門と同じ分け方（`gate::segments`）で切り、引用の中の字も空白で切って照らす。
++
++use serde_json::Value;
++
++use super::launch::TOOLS;
++use crate::gate::segments;
++
++/// 窓から撃てない tz consult の口（席と起動の口と守りの口）。
++pub const SEAT_VERBS: [&str; 8] = [
++    "open", "launch", "watch", "show", "dispose", "list", "close", "guard",
++];
++
++/// 命令の語の列（一続きごとの語と、語の中の空白で切った字）に、字 consult の次が席の口の並びが在れば、その口。
++fn seat_verb(command: &str) -> Option<&'static str> {
++    segments(command).iter().find_map(|seg| {
++        let words: Vec<&str> = seg.iter().flat_map(|w| w.split_whitespace()).collect();
++        words.windows(2).find_map(|pair| match pair {
++            ["consult", verb] => SEAT_VERBS.iter().copied().find(|v| v == verb),
++            _ => None,
++        })
++    })
++}
++
++/// hook の入力を判じる（通すなら Ok・断るなら理由の字）。
++pub fn judge(payload: &str) -> Result<(), String> {
++    let Ok(Value::Object(input)) = serde_json::from_str::<Value>(payload) else {
++        return Err("hook の入力が JSON の object でない".to_string());
++    };
++    let tool = input
++        .get("tool_name")
++        .and_then(Value::as_str)
++        .ok_or("道具の名が無い")?;
++    if !TOOLS.split(',').any(|t| t == tool) {
++        return Err(format!("道具 {tool} は窓の道具の閉じた列に無い"));
++    }
++    if tool != "Bash" {
++        return Ok(());
++    }
++    let args = input.get("tool_input").and_then(Value::as_object);
++    if args
++        .and_then(|a| a.get("dangerouslyDisableSandbox"))
++        .and_then(Value::as_bool)
++        == Some(true)
++    {
++        return Err("囲いの外で撃ち直す印は使えない".to_string());
++    }
++    let command = args
++        .and_then(|a| a.get("command"))
++        .and_then(Value::as_str)
++        .unwrap_or_default();
++    match seat_verb(command) {
++        Some(verb) => Err(format!(
++            "窓から tz consult {verb} は撃てない（所見は answer・束は bundle）"
++        )),
++        None => Ok(()),
++    }
++}
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index 65084e34f56287bbefa97b70cfd66b6fb6ca0efe..ff219ac15ee7e352ef301b16037f0e55cfcef665 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -1,10 +1,11 @@
+ //! 相談の窓の中核の純な関数（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a）。
+ //! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+ //! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+-//! 起動の argv と設定と検め（`launch`）は行 cs-argv が置く。
++//! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer が置く。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
+ 
+ pub mod finding;
++pub mod guard;
+ pub mod launch;
+ pub mod lines;
+ pub mod quota;
