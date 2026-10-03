@@ -1,0 +1,902 @@
+diff --git a/xtask/src/daily.rs b/xtask/src/daily.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..bbf7d92cd76bbd04545d3fbd3153bd056bf86e4f
+--- /dev/null
++++ b/xtask/src/daily.rs
+@@ -0,0 +1,329 @@
++//! 日に 1 度の全部の撃ち（行 v-daily・判断の記録 ADR-34 の決定 (6)）。host の利用者の timer が、作業木の外の固定の置き場の写しで
++//! `cargo run -q -p xtask -- daily` を撃つ。写しの origin の main を fetch して detach で checkout し、入れ子の段に全部を撃たせる
++//! 環境変数を置いて xtask の check を nice -n 10 で撃ち、記録の file に 1 行足す。落ちた時は席への memo を台帳に起こし
++//! （落ちが続く間は同じ memo の notes に [再発] の行を足す）、通った時は memo を書かない。host の値（記録の file・出力の file・
++//! 台帳の作業木・memo の親・bdw の program）は引数で受け、code を分けない（条 N-2）。組みの置き場は撃つ側の CARGO_TARGET_DIR。
++
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++/// 撃ち方。
++pub const USAGE: &str = "usage: cargo run -q -p xtask -- daily --log <記録の file> --out <出力の file> --ledger <台帳の作業木> --parent <memo の親の bead> [--bdw <program>]";
++
++/// check に置く環境変数（入れ子の段に全部を撃たせる・行 v-skip の FORCE_ENV と同じ名）。
++pub const FORCE: (&str, &str) = ("TSUZURI_CHECK_NESTED_ALL", "1");
++
++/// 写しを送り先の main に合わせる fetch の引数（git -C <写し> の後）。
++pub const FETCH: &[&str] = &[
++    "fetch",
++    "-q",
++    "origin",
++    "+refs/heads/main:refs/remotes/origin/main",
++];
++
++/// fetch した main を detach で取り出す引数。
++pub const CHECKOUT: &[&str] = &["checkout", "-q", "--detach", "refs/remotes/origin/main"];
++
++/// check を撃つ argv の頭（nice の program と引数・その後に cargo の program を置く）と cargo の引数。
++pub const NICE: (&str, &[&str]) = ("nice", &["-n", "10"]);
++pub const CHECK: &[&str] = &["run", "-q", "-p", "xtask", "--", "check"];
++
++/// 撃つ物の在りか。
++#[derive(Debug, PartialEq, Eq)]
++pub struct Daily {
++    /// 撃つ写しの根（git の作業木）。
++    pub root: PathBuf,
++    /// 記録の file（1 撃ち 1 行を足す）。
++    pub log: PathBuf,
++    /// check の出力の file（撃つたびに書き直す）。
++    pub out: PathBuf,
++    /// 台帳を持つ作業木（bdw の cwd）。
++    pub ledger: PathBuf,
++    /// memo の親の bead。
++    pub parent: String,
++    /// cargo の program。
++    pub cargo: String,
++    /// bdw の program。
++    pub bdw: String,
++}
++
++/// 引数を読む（--log・--out・--ledger・--parent は要る・--bdw は既定 bdw・知らない旗と 2 度の旗と値の欠けは断る）。
++pub fn parse(args: &[String], root: &Path, cargo: &str) -> Result<Daily, String> {
++    let mut got: Vec<(&str, &str)> = Vec::new();
++    let mut it = args.iter();
++    while let Some(flag) = it.next() {
++        let name = match flag.as_str() {
++            "--log" | "--out" | "--ledger" | "--parent" | "--bdw" => flag.as_str(),
++            other => return Err(format!("知らない引数: {other}")),
++        };
++        let value = it
++            .next()
++            .filter(|v| !v.is_empty())
++            .ok_or_else(|| format!("{name} の値が無い"))?;
++        if got.iter().any(|(n, _)| *n == name) {
++            return Err(format!("{name} が 2 度在る"));
++        }
++        got.push((name, value));
++    }
++    let get = |name: &str| {
++        got.iter()
++            .find(|(n, _)| *n == name)
++            .map(|(_, v)| (*v).to_string())
++    };
++    let need = |name: &str| get(name).ok_or_else(|| format!("{name} が無い"));
++    Ok(Daily {
++        root: root.to_path_buf(),
++        log: PathBuf::from(need("--log")?),
++        out: PathBuf::from(need("--out")?),
++        ledger: PathBuf::from(need("--ledger")?),
++        parent: need("--parent")?,
++        cargo: cargo.to_string(),
++        bdw: get("--bdw").unwrap_or_else(|| "bdw".to_string()),
++    })
++}
++
++/// 撃ちの結果（返す rc と記録の 1 行）。
++#[derive(Debug, PartialEq, Eq)]
++pub struct Outcome {
++    pub rc: i32,
++    pub line: String,
++}
++
++/// fetch・checkout・check を順に撃ち、記録の file に 1 行足し、落ちた時は memo を起こすか足す（now は epoch 秒）。
++pub fn run(d: &Daily, now: u64) -> Outcome {
++    let prev = std::fs::read_to_string(&d.log).unwrap_or_default();
++    let started = std::time::Instant::now();
++    let (step, rc) = shoot(d);
++    let sha = git_text(&d.root, &["rev-parse", "HEAD"]).unwrap_or_else(|| "-".to_string());
++    let sha = sha.get(..12).unwrap_or(&sha).to_string();
++    let seen = Seen {
++        stamp: stamp(now),
++        sha,
++        step,
++        rc,
++        secs: started.elapsed().as_secs(),
++    };
++    let memo = if rc == 0 {
++        "-".to_string()
++    } else {
++        tell(d, &prev, &seen)
++    };
++    let line = record(&seen, &memo);
++    let rc = match append(&d.log, &line) {
++        Ok(()) => rc,
++        Err(_) if rc == 0 => 1,
++        Err(_) => rc,
++    };
++    Outcome { rc, line }
++}
++
++/// 撃ち 1 回の材料（時刻・sha の頭 12 字・落ちた段か check・rc・秒）。
++#[derive(Debug, PartialEq, Eq)]
++pub struct Seen {
++    pub stamp: String,
++    pub sha: String,
++    pub step: &'static str,
++    pub rc: i32,
++    pub secs: u64,
++}
++
++/// 段を順に撃ち、最初に落ちた段の名と rc を返す（全部通れば check と 0）。
++fn shoot(d: &Daily) -> (&'static str, i32) {
++    for (step, args) in [("fetch", FETCH), ("checkout", CHECKOUT)] {
++        let rc = status(
++            Command::new("git")
++                .arg("-C")
++                .arg(&d.root)
++                .args(args)
++                .stdout(Stdio::null())
++                .stderr(Stdio::null()),
++        );
++        if rc != 0 {
++            return (step, rc);
++        }
++    }
++    let out = match std::fs::File::create(&d.out) {
++        Ok(f) => f,
++        Err(_) => return ("out", 1),
++    };
++    let err = match out.try_clone() {
++        Ok(f) => f,
++        Err(_) => return ("out", 1),
++    };
++    let rc = status(
++        Command::new(NICE.0)
++            .args(NICE.1)
++            .arg(&d.cargo)
++            .args(CHECK)
++            .current_dir(&d.root)
++            .env(FORCE.0, FORCE.1)
++            .stdout(out)
++            .stderr(err),
++    );
++    ("check", rc)
++}
++
++/// 撃って rc（起動できなければ 127・signal で止まれば 1）。
++fn status(cmd: &mut Command) -> i32 {
++    match cmd.status() {
++        Ok(s) => s.code().unwrap_or(1),
++        Err(_) => 127,
++    }
++}
++
++/// git の標準出力の字（前後の空白を除く・落ちれば None）。
++fn git_text(root: &Path, args: &[&str]) -> Option<String> {
++    let out = Command::new("git")
++        .arg("-C")
++        .arg(root)
++        .args(args)
++        .output()
++        .ok()?;
++    out.status
++        .success()
++        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
++}
++
++/// 今の epoch 秒。
++pub fn now() -> u64 {
++    std::time::SystemTime::now()
++        .duration_since(std::time::UNIX_EPOCH)
++        .map_or(0, |d| d.as_secs())
++}
++
++/// 記録の 1 行（時刻・sha の頭 12 字・落ちた段か check・rc・秒・memo の id か -）。
++pub fn record(seen: &Seen, memo: &str) -> String {
++    let Seen {
++        stamp,
++        sha,
++        step,
++        rc,
++        secs,
++    } = seen;
++    format!("{stamp} sha={sha} step={step} rc={rc} secs={secs} memo={memo}")
++}
++
++/// 記録の最後の行が落ちで memo の id を持てば、その id（続く落ちは同じ memo に足す）。
++pub fn open_memo(log: &str) -> Option<String> {
++    let last = log.lines().rev().find(|l| !l.trim().is_empty())?;
++    let field = |key: &str| {
++        last.split_whitespace()
++            .find_map(|w| w.strip_prefix(key).map(str::to_string))
++    };
++    let failed = field("rc=").is_some_and(|rc| rc != "0");
++    field("memo=").filter(|m| failed && m != "-" && m != "failed")
++}
++
++/// 落ちの memo を起こすか、続く落ちなら同じ memo の notes に [再発] の行を足し、記録に置く id（書けなければ failed）。
++fn tell(d: &Daily, prev: &str, seen: &Seen) -> String {
++    if let Some(id) = open_memo(prev) {
++        let note = recur_note(seen);
++        let ok = bdw(
++            d,
++            &[
++                "update".to_string(),
++                id.clone(),
++                format!("--append-notes={note}"),
++            ],
++        )
++        .is_some();
++        return if ok { id } else { "failed".to_string() };
++    }
++    let body = d.log.with_extension("memo.md");
++    if std::fs::write(&body, memo_body(seen, &d.out, &d.log)).is_err() {
++        return "failed".to_string();
++    }
++    bdw(d, &memo_argv(&d.parent, &body, &seen.stamp, &seen.sha))
++        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
++        .filter(|id| !id.is_empty() && !id.contains(char::is_whitespace))
++        .unwrap_or_else(|| "failed".to_string())
++}
++
++/// bdw を台帳の作業木で撃つ（rc 0 の時だけ出力）。
++fn bdw(d: &Daily, args: &[String]) -> Option<Output> {
++    let out = Command::new(&d.bdw)
++        .args(args)
++        .current_dir(&d.ledger)
++        .output()
++        .ok()?;
++    out.status.success().then_some(out)
++}
++
++/// memo を起こす bdw の引数（親・題・本文の file・label intake:memo・metadata の short）。
++pub fn memo_argv(parent: &str, body: &Path, stamp: &str, sha: &str) -> Vec<String> {
++    vec![
++        "create".to_string(),
++        format!("--parent={parent}"),
++        "--type=task".to_string(),
++        "--priority=3".to_string(),
++        "--labels=intake:memo".to_string(),
++        "--no-inherit-labels=true".to_string(),
++        r#"--metadata={"short":"日次の全部の撃ちが落ちた"}"#.to_string(),
++        "--silent=true".to_string(),
++        format!("--body-file={}", body.display()),
++        "--".to_string(),
++        format!("memo 日に 1 度の全部の撃ちが落ちた（{stamp}・origin/main {sha}）"),
++    ]
++}
++
++/// 続く落ちの notes の 1 行。
++pub fn recur_note(seen: &Seen) -> String {
++    let Seen {
++        stamp,
++        sha,
++        step,
++        rc,
++        ..
++    } = seen;
++    format!("[再発] {stamp} origin/main {sha} の段 {step} が rc {rc}")
++}
++
++/// memo の本文（出所・観測・候補・昇格条件の 4 節・path は file の名だけ）。
++fn memo_body(seen: &Seen, out: &Path, log: &Path) -> String {
++    let name = |p: &Path| {
++        p.file_name()
++            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
++    };
++    format!(
++        "### 出所\nxtask の daily（判断の記録 ADR-34 の決定 (6)・行 v-daily・host の利用者の timer）。\n\n\
++         ### 観測\n{} に origin/main {} の木で、環境変数 {}={} を置いた xtask の check を撃ち、段 {} が rc {} で落ちた（{} 秒）。出力は file {}、記録は file {}（どちらも撃つ写しの置き場の側）。\n\n\
++         ### 候補\n出力の末で落ちた段と歯を見る。host の道具と設定のずれ（git・tmux・nextest・rustup の版・$CARGO_HOME と祖先の .cargo の設定）か、時刻で落ちる型か、混んだ時だけ揺れる歯かを見分ける。\n\n\
++         ### 昇格条件\n引き金: 再発 2\n",
++        seen.stamp,
++        seen.sha,
++        FORCE.0,
++        FORCE.1,
++        seen.step,
++        seen.rc,
++        seen.secs,
++        name(out),
++        name(log)
++    )
++}
++
++/// 記録の file に 1 行足す（無ければ作る）。
++fn append(path: &Path, line: &str) -> std::io::Result<()> {
++    use std::io::Write;
++    let mut f = std::fs::OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(path)?;
++    writeln!(f, "{line}")
++}
++
++/// epoch 秒の UTC の分の字（年-月-日 T 時:分 Z）。
++pub fn stamp(secs: u64) -> String {
++    let days = secs / 86_400;
++    let (h, m) = ((secs % 86_400) / 3_600, (secs % 3_600) / 60);
++    // 日の数から年月日（Howard Hinnant の civil_from_days・3 月始まりの年）。
++    let z = days + 719_468;
++    let era = z / 146_097;
++    let doe = z % 146_097;
++    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
++    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
++    let mp = (5 * doy + 2) / 153;
++    let d = doy - (153 * mp + 2) / 5 + 1;
++    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
++    let y = yoe + era * 400 + u64::from(mo <= 2);
++    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}Z")
++}
+diff --git a/xtask/src/main.rs b/xtask/src/main.rs
+index 30c08634e1691262e99e5ac32ef3b648d9f8e71a..4c7d4f03b78662d7e23a8b7ed67854a0dc905eb2 100644
+--- a/xtask/src/main.rs
++++ b/xtask/src/main.rs
+@@ -7,8 +7,10 @@
+ //! check の size の段は 1 module の行数・中核の本体の総行数・歯と本体の行数比を規則の行 R-4 の上限と比べる（行 k-size-base・size の module）。
+ //! check の最後の段は根の直下の入れ子の workspace を数えて 1 行で出し、各々で build・歯・clippy・その workspace の xtask の check を撃つ（行 v-gate・nested の module）。
+ //! 割りの在る check は歯でない段を表の役だけで撃ち、歯だけを分ける（行 v-ci-split・spread の module）。
++//! daily は host の timer が撃つ日に 1 度の全部の撃ちで、写しを origin の main に合わせて check を撃ち、記録と memo を書く（行 v-daily・daily の module）。
+ 
+ mod accept;
++mod daily;
+ mod gz;
+ mod nested;
+ mod pubscan;
+@@ -55,14 +57,16 @@ fn main() -> ExitCode {
+         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
+         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
+         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
++        Some("daily") => exit_code(daily_task(args.get(1..).unwrap_or_default())),
+         Some("accept") => exit_code(accept::run(
+             args.get(1..).unwrap_or_default(),
+             &workspace_root(),
+         )),
+         _ => {
+             emit_err(&format!(
+-                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}",
+-                accept::USAGE
++                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}\n{}",
++                accept::USAGE,
++                daily::USAGE
+             ));
+             ExitCode::from(2)
+         }
+@@ -78,6 +82,21 @@ fn emit_err(line: &str) {
+     eprintln!("{line}");
+ }
+ 
++/// 日に 1 度の全部の撃ち（行 v-daily）: 引数を読み、撃ち、記録の 1 行を出して rc を返す（引数を読めなければ rc 2）。
++fn daily_task(args: &[String]) -> i32 {
++    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
++    let d = match daily::parse(args, &workspace_root(), &cargo) {
++        Ok(d) => d,
++        Err(e) => {
++            emit_err(&format!("xtask daily: {e}\n{}", daily::USAGE));
++            return 2;
++        }
++    };
++    let outcome = daily::run(&d, daily::now());
++    emit_err(&format!("xtask daily: {}", outcome.line));
++    outcome.rc
++}
++
+ fn exit_code(rc: i32) -> ExitCode {
+     ExitCode::from(u8::try_from(rc).unwrap_or(1))
+ }
+diff --git a/xtask/systemd/tsuzuri-daily.service b/xtask/systemd/tsuzuri-daily.service
+new file mode 100644
+index 0000000000000000000000000000000000000000..d7b1f01738a880960a4f35dcb0bc68b35b4a4839
+--- /dev/null
++++ b/xtask/systemd/tsuzuri-daily.service
+@@ -0,0 +1,17 @@
++# tsuzuri の日に 1 度の全部の撃ち（判断の記録 ADR-34 の決定 (6)・行 v-daily）の雛形。~/.config/systemd/user/ へ写して使う。
++# host の値は drop-in（systemctl --user edit tsuzuri-daily.service）の [Service] に Environment で置き、この file は替えない:
++#   TSUZURI_DAILY_PLACE  撃つ写しの根（作業木の外の固定の置き場・origin は送り先の repo）
++#   TSUZURI_DAILY_LOG    記録の file（1 撃ち 1 行）
++#   TSUZURI_DAILY_OUT    check の出力の file（撃つたびに書き直す）
++#   TSUZURI_DAILY_LEDGER 台帳を持つ tsuzuri の作業木（bdw の cwd）
++#   TSUZURI_DAILY_PARENT memo の親の bead
++#   CARGO_TARGET_DIR     温かく保つ組みの置き場の絶対 path（器の掃除が見る起草の置き場の下にしない）
++#   BDW_BD_BIN           bdw が撃つ native の bd
++[Unit]
++Description=tsuzuri daily full check (ADR-34)
++
++[Service]
++Type=oneshot
++Environment=PATH=%h/.cargo/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
++ExecStart=%h/.cargo/bin/cargo run -q --manifest-path ${TSUZURI_DAILY_PLACE}/Cargo.toml -p xtask -- daily --log ${TSUZURI_DAILY_LOG} --out ${TSUZURI_DAILY_OUT} --ledger ${TSUZURI_DAILY_LEDGER} --parent ${TSUZURI_DAILY_PARENT}
++TimeoutStartSec=2h
+diff --git a/xtask/systemd/tsuzuri-daily.timer b/xtask/systemd/tsuzuri-daily.timer
+new file mode 100644
+index 0000000000000000000000000000000000000000..fc0fddb596ea94423b3039a52471efef6472d683
+--- /dev/null
++++ b/xtask/systemd/tsuzuri-daily.timer
+@@ -0,0 +1,11 @@
++# tsuzuri の日に 1 度の全部の撃ち（判断の記録 ADR-34 の決定 (6)・行 v-daily）の時計。止めていた日の分は次に起きた時に 1 度撃つ。
++[Unit]
++Description=tsuzuri daily full check timer (ADR-34)
++
++[Timer]
++OnCalendar=daily
++RandomizedDelaySec=30min
++Persistent=true
++
++[Install]
++WantedBy=timers.target
+diff --git a/xtask/tests/vdaily.rs b/xtask/tests/vdaily.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f20f44f39253a99794b5d69fde1e146b17de143
+--- /dev/null
++++ b/xtask/tests/vdaily.rs
+@@ -0,0 +1,465 @@
++//! 行 v-daily の歯: 日に 1 度の全部の撃ち（xtask の src/daily.rs・判断の記録 ADR-34 の決定 (6)）を、一時の git の repo の fixture と
++//! 偽の cargo と偽の bdw（shell の script）で撃ち、記録の行と memo の書きを照らし、systemd の雛形と main.rs の呼びを字で読む。
++#![cfg(test)]
++
++#[path = "../src/daily.rs"]
++mod daily;
++
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::Command;
++
++use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, Outcome, Seen, USAGE};
++
++/// 2026-10-03T09:00Z の epoch 秒。
++const NOW: u64 = 1_791_018_000;
++
++/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
++fn read_root(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .join("..")
++        .join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// 一時の dir（名に pid と字 tag）を作り直す。
++fn fresh(tag: &str) -> PathBuf {
++    let dir = std::env::temp_dir().join(format!("tsuzuri-vdaily-{tag}-{}", std::process::id()));
++    let _ = std::fs::remove_dir_all(&dir);
++    std::fs::create_dir_all(&dir).expect("一時の dir");
++    dir
++}
++
++/// fixture の git（家と system の git の設定を読まない）。
++fn git(dir: &Path, args: &[&str]) -> String {
++    let out = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .env("GIT_CONFIG_NOSYSTEM", "1")
++        .env("GIT_CONFIG_GLOBAL", "/dev/null")
++        .env("GIT_AUTHOR_NAME", "fx")
++        .env("GIT_AUTHOR_EMAIL", "fx@example.invalid")
++        .env("GIT_COMMITTER_NAME", "fx")
++        .env("GIT_COMMITTER_EMAIL", "fx@example.invalid")
++        .output()
++        .expect("git を起動する");
++    assert!(
++        out.status.success(),
++        "git {args:?}: {}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++    String::from_utf8_lossy(&out.stdout).trim().to_string()
++}
++
++fn commit(dir: &Path, file: &str, body: &str) {
++    std::fs::write(dir.join(file), body).expect(file);
++    git(dir, &["add", "-A"]);
++    git(dir, &["commit", "-q", "-m", file]);
++}
++
++/// 実行の許しを付けた shell の script を書く。
++fn script(path: &Path, body: &str) {
++    std::fs::write(path, body).expect("script");
++    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
++}
++
++/// fixture: origin の repo と、その写し（撃つ置き場）と、偽の cargo と偽の bdw と台帳の dir。
++struct Fx {
++    dir: PathBuf,
++    origin: PathBuf,
++    daily: Daily,
++}
++
++impl Fx {
++    fn new(tag: &str) -> Fx {
++        let dir = fresh(tag);
++        let origin = dir.join("origin");
++        std::fs::create_dir_all(&origin).expect("origin");
++        git(&origin, &["init", "-q", "-b", "main"]);
++        commit(&origin, "a.txt", "a\n");
++        let place = dir.join("place");
++        git(
++            &dir,
++            &["clone", "-q", origin.to_str().expect("path"), "place"],
++        );
++        commit(&origin, "b.txt", "b\n");
++        let ledger = dir.join("ledger");
++        std::fs::create_dir_all(&ledger).expect("ledger");
++        let d = dir.display();
++        script(
++            &dir.join("cargo"),
++            &format!(
++                "#!/bin/sh\nprintf '%s\\n' \"$(pwd -P)\" \"$TSUZURI_CHECK_NESTED_ALL\" \"$*\" > {d}/cargo.seen\necho check-output\nexit $(cat {d}/cargo.rc)\n"
++            ),
++        );
++        script(
++            &dir.join("bdw"),
++            &format!(
++                "#!/bin/sh\nprintf '%s\\n' \"$(pwd -P)\" \"$@\" --- >> {d}/bdw.seen\nif [ \"$1\" = create ]; then echo fx-9; fi\nexit $(cat {d}/bdw.rc)\n"
++            ),
++        );
++        std::fs::write(dir.join("bdw.rc"), "0").expect("bdw.rc");
++        let daily = Daily {
++            root: place,
++            log: dir.join("daily.log"),
++            out: dir.join("daily.out"),
++            ledger,
++            parent: "fx-hub".to_string(),
++            cargo: dir.join("cargo").display().to_string(),
++            bdw: dir.join("bdw").display().to_string(),
++        };
++        Fx { dir, origin, daily }
++    }
++
++    /// 偽の cargo の rc を置いて撃つ。
++    fn shoot(&self, rc: i32) -> Outcome {
++        std::fs::write(self.dir.join("cargo.rc"), rc.to_string()).expect("cargo.rc");
++        daily::run(&self.daily, NOW)
++    }
++
++    fn read(&self, name: &str) -> String {
++        std::fs::read_to_string(self.dir.join(name)).unwrap_or_default()
++    }
++
++    fn sha12(&self) -> String {
++        git(&self.origin, &["rev-parse", "HEAD"])
++            .get(..12)
++            .expect("sha")
++            .to_string()
++    }
++}
++
++impl Drop for Fx {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_dir_all(&self.dir);
++    }
++}
++
++/// 段 check の撃ちの材料（秒は 5）。
++fn seen(stamp: &str, sha: &str, rc: i32) -> Seen {
++    Seen {
++        stamp: stamp.to_string(),
++        sha: sha.to_string(),
++        step: "check",
++        rc,
++        secs: 5,
++    }
++}
++
++fn strings(xs: &[&str]) -> Vec<String> {
++    xs.iter().map(|s| (*s).to_string()).collect()
++}
++
++/// 記録の行の頭（時刻・sha・段・rc）と末（memo）が見込みどおりか。
++fn assert_line(line: &str, sha: &str, step: &str, rc: i32, memo: &str) {
++    let head = format!("2026-10-03T09:00Z sha={sha} step={step} rc={rc} secs=");
++    assert!(line.starts_with(&head), "{line}");
++    assert!(line.ends_with(&format!(" memo={memo}")), "{line}");
++}
++
++#[test]
++fn vdaily_consts_fixed() {
++    assert_eq!(FORCE, ("TSUZURI_CHECK_NESTED_ALL", "1"));
++    assert!(
++        read_root("xtask/src/nested/skip.rs")
++            .contains("pub const FORCE_ENV: &str = \"TSUZURI_CHECK_NESTED_ALL\";"),
++        "行 v-skip の環境変数と同じ名"
++    );
++    assert_eq!(
++        FETCH,
++        [
++            "fetch",
++            "-q",
++            "origin",
++            "+refs/heads/main:refs/remotes/origin/main"
++        ]
++    );
++    assert_eq!(
++        CHECKOUT,
++        ["checkout", "-q", "--detach", "refs/remotes/origin/main"]
++    );
++    assert_eq!(NICE, ("nice", &["-n", "10"][..]));
++    assert_eq!(CHECK, ["run", "-q", "-p", "xtask", "--", "check"]);
++    assert_eq!(
++        USAGE,
++        "usage: cargo run -q -p xtask -- daily --log <記録の file> --out <出力の file> --ledger <台帳の作業木> --parent <memo の親の bead> [--bdw <program>]"
++    );
++    assert_eq!(
++        daily::record(&seen("T", "s", 0), "-"),
++        "T sha=s step=check rc=0 secs=5 memo=-"
++    );
++    assert_eq!(
++        daily::recur_note(&seen("T", "s", 3)),
++        "[再発] T origin/main s の段 check が rc 3"
++    );
++}
++
++#[test]
++fn vdaily_parse_flags() {
++    let root = Path::new("/r");
++    let full = strings(&[
++        "--log", "/l", "--out", "/o", "--ledger", "/g", "--parent", "fx-1",
++    ]);
++    assert_eq!(
++        daily::parse(&full, root, "cargo"),
++        Ok(Daily {
++            root: PathBuf::from("/r"),
++            log: PathBuf::from("/l"),
++            out: PathBuf::from("/o"),
++            ledger: PathBuf::from("/g"),
++            parent: "fx-1".to_string(),
++            cargo: "cargo".to_string(),
++            bdw: "bdw".to_string(),
++        })
++    );
++    let mut with_bdw = full.clone();
++    with_bdw.extend(strings(&["--bdw", "/x/bdw"]));
++    assert_eq!(
++        daily::parse(&with_bdw, root, "cargo").map(|d| d.bdw),
++        Ok("/x/bdw".to_string())
++    );
++    for (i, flag) in ["--log", "--out", "--ledger", "--parent"]
++        .iter()
++        .enumerate()
++    {
++        let mut short = full.clone();
++        short.drain(i * 2..i * 2 + 2);
++        assert_eq!(
++            daily::parse(&short, root, "cargo"),
++            Err(format!("{flag} が無い"))
++        );
++    }
++    let mut twice = full.clone();
++    twice.extend(strings(&["--log", "/l2"]));
++    assert_eq!(
++        daily::parse(&twice, root, "c"),
++        Err("--log が 2 度在る".to_string())
++    );
++    let mut unknown = full.clone();
++    unknown.push("--dry".to_string());
++    assert_eq!(
++        daily::parse(&unknown, root, "c"),
++        Err("知らない引数: --dry".to_string())
++    );
++    assert_eq!(
++        daily::parse(&strings(&["--log"]), root, "c"),
++        Err("--log の値が無い".to_string())
++    );
++    assert_eq!(
++        daily::parse(&strings(&["--log", ""]), root, "c"),
++        Err("--log の値が無い".to_string())
++    );
++}
++
++#[test]
++fn vdaily_stamp_utc() {
++    assert_eq!(daily::stamp(0), "1970-01-01T00:00Z");
++    assert_eq!(daily::stamp(NOW), "2026-10-03T09:00Z");
++    assert_eq!(daily::stamp(1_709_251_140), "2024-02-29T23:59Z");
++    assert_eq!(daily::stamp(951_868_800), "2000-03-01T00:00Z");
++    assert!(daily::now() > NOW - 86_400 * 365, "今の epoch 秒");
++}
++
++#[test]
++fn vdaily_pass_records_no_memo() {
++    let fx = Fx::new("pass");
++    let out = fx.shoot(0);
++    let sha = fx.sha12();
++    assert_eq!(out.rc, 0);
++    assert_line(&out.line, &sha, "check", 0, "-");
++    assert_eq!(fx.read("daily.log"), format!("{}\n", out.line));
++    assert_eq!(
++        git(&fx.daily.root, &["rev-parse", "HEAD"]).get(..12),
++        Some(sha.as_str())
++    );
++    assert_eq!(
++        git(&fx.daily.root, &["status", "--porcelain", "--branch"]),
++        "## HEAD (no branch)"
++    );
++    let place = fx.daily.root.canonicalize().expect("place");
++    assert_eq!(
++        fx.read("cargo.seen"),
++        format!("{}\n1\nrun -q -p xtask -- check\n", place.display())
++    );
++    assert_eq!(fx.read("daily.out"), "check-output\n");
++    assert_eq!(fx.read("bdw.seen"), "", "通った時は台帳に書かない");
++}
++
++#[test]
++fn vdaily_fail_memo_then_recur() {
++    let fx = Fx::new("fail");
++    let first = fx.shoot(3);
++    let sha = fx.sha12();
++    assert_eq!(first.rc, 3);
++    assert_line(&first.line, &sha, "check", 3, "fx-9");
++    let ledger = fx.daily.ledger.canonicalize().expect("ledger");
++    let body = fx.dir.join("daily.memo.md");
++    let mut want = vec![ledger.display().to_string()];
++    let argv = daily::memo_argv("fx-hub", &body, "2026-10-03T09:00Z", &sha);
++    want.extend(argv.clone());
++    want.push("---".to_string());
++    assert_eq!(fx.read("bdw.seen"), format!("{}\n", want.join("\n")));
++    let text = fx.read("daily.memo.md");
++    let heads: Vec<&str> = text.lines().filter(|l| l.starts_with("### ")).collect();
++    assert_eq!(heads, ["### 出所", "### 観測", "### 候補", "### 昇格条件"]);
++    assert!(text.contains("\n引き金: 再発 2\n"), "{text}");
++    assert!(text.contains(&format!("origin/main {sha} の木")), "{text}");
++    assert!(text.contains("file daily.out") && !text.contains(&fx.dir.display().to_string()));
++    assert!(
++        argv.iter().any(|a| a == "--labels=intake:memo")
++            && argv.iter().any(|a| a == "--parent=fx-hub")
++            && argv
++                .iter()
++                .any(|a| *a == format!("--body-file={}", body.display()))
++            && argv.last().is_some_and(|t| t.starts_with("memo "))
++    );
++    std::fs::write(fx.dir.join("bdw.seen"), "").expect("空にする");
++    let second = fx.shoot(100);
++    assert_line(&second.line, &sha, "check", 100, "fx-9");
++    let note = daily::recur_note(&seen("2026-10-03T09:00Z", &sha, 100));
++    assert_eq!(
++        fx.read("bdw.seen"),
++        format!(
++            "{}\nupdate\nfx-9\n--append-notes={note}\n---\n",
++            ledger.display()
++        )
++    );
++    std::fs::write(fx.dir.join("bdw.seen"), "").expect("空にする");
++    let third = fx.shoot(0);
++    assert_line(&third.line, &sha, "check", 0, "-");
++    assert_eq!(fx.read("bdw.seen"), "");
++    let fourth = fx.shoot(1);
++    assert_line(&fourth.line, &sha, "check", 1, "fx-9");
++    assert!(
++        fx.read("bdw.seen").contains("\ncreate\n"),
++        "通った後の落ちは新しい memo"
++    );
++    assert_eq!(fx.read("daily.log").lines().count(), 4);
++}
++
++#[test]
++fn vdaily_fetch_and_bdw_failures() {
++    let fx = Fx::new("fetch");
++    let gone = fx.dir.join("origin-gone");
++    std::fs::rename(&fx.origin, &gone).expect("origin を退ける");
++    let out = fx.shoot(0);
++    assert_ne!(out.rc, 0);
++    assert!(out.line.contains(" step=fetch rc="), "{}", out.line);
++    assert!(out.line.ends_with(" memo=fx-9"), "{}", out.line);
++    assert_eq!(
++        fx.read("cargo.seen"),
++        "",
++        "fetch が落ちたら check を撃たない"
++    );
++    std::fs::rename(&gone, &fx.origin).expect("戻す");
++    std::fs::write(fx.dir.join("bdw.rc"), "1").expect("bdw.rc");
++    std::fs::write(fx.dir.join("daily.log"), "").expect("記録を空に");
++    let failed = fx.shoot(2);
++    assert_line(&failed.line, &fx.sha12(), "check", 2, "failed");
++    assert_eq!(daily::open_memo(&fx.read("daily.log")), None);
++}
++
++#[test]
++fn vdaily_open_memo_reads_last_line() {
++    let line = |rc: i32, memo: &str| daily::record(&seen("T", "s", rc), memo);
++    assert_eq!(daily::open_memo(""), None);
++    assert_eq!(
++        daily::open_memo(&format!("{}\n", line(3, "fx-2"))),
++        Some("fx-2".to_string())
++    );
++    assert_eq!(
++        daily::open_memo(&format!("{}\n{}\n\n", line(3, "fx-2"), line(0, "-"))),
++        None,
++        "最後の行が通り"
++    );
++    assert_eq!(
++        daily::open_memo(&format!("{}\n{}\n", line(0, "-"), line(1, "fx-3"))),
++        Some("fx-3".to_string())
++    );
++    assert_eq!(daily::open_memo(&format!("{}\n", line(1, "failed"))), None);
++    assert_eq!(
++        daily::open_memo(&format!("{}\n", line(0, "fx-4"))),
++        None,
++        "通りの行は memo を開いたままにしない"
++    );
++    assert_eq!(daily::open_memo(&format!("{}\n", line(1, "-"))), None);
++}
++
++#[test]
++fn vdaily_units_template() {
++    let service = read_root("xtask/systemd/tsuzuri-daily.service");
++    let timer = read_root("xtask/systemd/tsuzuri-daily.timer");
++    let body = |text: &str| -> Vec<String> {
++        text.lines()
++            .map(str::trim)
++            .filter(|l| !l.is_empty() && !l.starts_with('#'))
++            .map(str::to_string)
++            .collect()
++    };
++    assert_eq!(
++        body(&service),
++        strings(&[
++            "[Unit]",
++            "Description=tsuzuri daily full check (ADR-34)",
++            "[Service]",
++            "Type=oneshot",
++            "Environment=PATH=%h/.cargo/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin",
++            "ExecStart=%h/.cargo/bin/cargo run -q --manifest-path ${TSUZURI_DAILY_PLACE}/Cargo.toml -p xtask -- daily --log ${TSUZURI_DAILY_LOG} --out ${TSUZURI_DAILY_OUT} --ledger ${TSUZURI_DAILY_LEDGER} --parent ${TSUZURI_DAILY_PARENT}",
++            "TimeoutStartSec=2h",
++        ])
++    );
++    for name in [
++        "TSUZURI_DAILY_PLACE",
++        "TSUZURI_DAILY_LOG",
++        "TSUZURI_DAILY_OUT",
++        "TSUZURI_DAILY_LEDGER",
++        "TSUZURI_DAILY_PARENT",
++        "CARGO_TARGET_DIR",
++        "BDW_BD_BIN",
++    ] {
++        assert!(
++            service
++                .lines()
++                .any(|l| l.starts_with(&format!("#   {name} "))),
++            "注に host の値 {name} の説明"
++        );
++    }
++    assert_eq!(
++        body(&timer),
++        strings(&[
++            "[Unit]",
++            "Description=tsuzuri daily full check timer (ADR-34)",
++            "[Timer]",
++            "OnCalendar=daily",
++            "RandomizedDelaySec=30min",
++            "Persistent=true",
++            "[Install]",
++            "WantedBy=timers.target",
++        ])
++    );
++    assert!(
++        !service.contains("/home/") && !timer.contains("/home/"),
++        "host の path を持たない"
++    );
++}
++
++#[test]
++fn vdaily_main_wiring() {
++    let main = read_root("xtask/src/main.rs");
++    assert_eq!(main.lines().filter(|l| *l == "mod daily;").count(), 1);
++    assert!(main.contains(
++        "        Some(\"daily\") => exit_code(daily_task(args.get(1..).unwrap_or_default())),\n"
++    ));
++    let (_, task) = main.split_once("fn daily_task(").expect("fn daily_task");
++    let (task, _) = task.split_once("\n}\n").expect("fn daily_task の終わり");
++    let order = [
++        "daily::parse(args, &workspace_root(), &cargo)",
++        "return 2;",
++        "daily::run(&d, daily::now())",
++        "emit_err(&format!(\"xtask daily: {}\", outcome.line));",
++        "outcome.rc",
++    ];
++    let at: Vec<usize> = order.iter().map(|s| task.find(s).expect(s)).collect();
++    assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
++}
