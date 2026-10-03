@@ -1,0 +1,329 @@
+diff --git a/crates/tsuzuri-core/src/consult/finding.rs b/crates/tsuzuri-core/src/consult/finding.rs
+index d240a1aeaf532f0f43be7dfcdba331f7671850e9..b15980ff935e9fe579664119afff6d4338e83aba 100644
+--- a/crates/tsuzuri-core/src/consult/finding.rs
++++ b/crates/tsuzuri-core/src/consult/finding.rs
+@@ -1 +1,92 @@
+-//! 所見の欄の検め（中身は設計ノート surface-wave27a の行 cs-finding が置く）。
++//! 所見の欄の検め（設計ノート surface-wave27a 行 cs-finding・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
++//! 入力は窓が書いた草稿の字（JSON）。欄の欠け（鍵が無い・null・空白だけの字）は `DRAFT_FIELDS` の順の名の列で断り、
++//! 知らない鍵を断り、候補は 2 つ以上で採るのは 1 つ、添え物の path は作業場からの相対（空・絶対・`~`・`..` の段・
++//! 逆斜線と制御の字と行の区切りの字「・」「、」を断る）に限る。path が作業場の下に実在するかは所見の口が確かめる。
++
++use serde_json::Value;
++use tsuzuri_contract::consult::{Adoption, DRAFT_FIELDS, FindingDraft};
++
++/// 草稿を受けない理由。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Refusal {
++    /// JSON の object でない。
++    NotObject,
++    /// 欠けた欄の名（`DRAFT_FIELDS` の順）。
++    Missing(Vec<&'static str>),
++    /// 知らない鍵（字の順）。
++    Unknown(Vec<String>),
++    /// 欄は揃うが値の形が違う（serde の理由の字）。
++    Shape(String),
++    /// 候補が 2 つ未満か、採る候補が 1 つでない。
++    Options,
++    /// 作業場からの相対の形でない添え物の path。
++    Path(String),
++}
++
++impl std::fmt::Display for Refusal {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Refusal::NotObject => f.write_str("所見の草稿が JSON の object でない"),
++            Refusal::Missing(names) => write!(f, "欠けた欄: {}", names.join(", ")),
++            Refusal::Unknown(keys) => write!(f, "知らない欄: {}", keys.join(", ")),
++            Refusal::Shape(why) => write!(f, "欄の形が違う: {why}"),
++            Refusal::Options => f.write_str("候補は 2 つ以上で、採る（adopted）のは 1 つ"),
++            Refusal::Path(path) => write!(f, "添え物の path が作業場からの相対でない: {path}"),
++        }
++    }
++}
++
++/// 欄の値が欠けか（null か空白だけの字）。
++fn blank(value: &Value) -> bool {
++    match value {
++        Value::Null => true,
++        Value::String(s) => s.trim().is_empty(),
++        _ => false,
++    }
++}
++
++/// 草稿の字を検めて読む。
++pub fn check(text: &str) -> Result<FindingDraft, Refusal> {
++    let value: Value = serde_json::from_str(text).map_err(|_| Refusal::NotObject)?;
++    let object = value.as_object().ok_or(Refusal::NotObject)?;
++    let missing: Vec<&'static str> = DRAFT_FIELDS
++        .into_iter()
++        .filter(|k| object.get(*k).is_none_or(blank))
++        .collect();
++    if !missing.is_empty() {
++        return Err(Refusal::Missing(missing));
++    }
++    let unknown: Vec<String> = object
++        .keys()
++        .filter(|k| !DRAFT_FIELDS.contains(&k.as_str()))
++        .cloned()
++        .collect();
++    if !unknown.is_empty() {
++        return Err(Refusal::Unknown(unknown));
++    }
++    let draft: FindingDraft =
++        serde_json::from_value(value).map_err(|e| Refusal::Shape(e.to_string()))?;
++    let adopted = draft
++        .options
++        .iter()
++        .filter(|o| o.verdict == Adoption::Adopted)
++        .count();
++    if draft.options.len() < 2 || adopted != 1 {
++        return Err(Refusal::Options);
++    }
++    if let Some(bad) = draft.attachments.iter().find(|a| !path_ok(&a.path)) {
++        return Err(Refusal::Path(bad.path.clone()));
++    }
++    Ok(draft)
++}
++
++/// 添え物の path が作業場からの相対の形か。
++pub fn path_ok(path: &str) -> bool {
++    !path.is_empty()
++        && !path.starts_with('/')
++        && !path.starts_with('~')
++        && path.split('/').all(|seg| seg != "..")
++        && !path
++            .chars()
++            .any(|c| c.is_control() || matches!(c, '\\' | '・' | '、'))
++}
+diff --git a/crates/tsuzuri-core/tests/cwfnd.rs b/crates/tsuzuri-core/tests/cwfnd.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d8d089b83c93e31a9eace07395b8980dc01798bd
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwfnd.rs
+@@ -0,0 +1,168 @@
++//! 所見の欄の検めの歯（接頭辞 cwfnd_・設計ノート surface-wave27a 行 cs-finding・受入 AC16 の断りの半分）。
++//! fixture: tests/fixtures/consult/finding-2/ の complete.json（12 欄が揃う）と missing.json（bundle_digest を欠く）。
++#![cfg(test)]
++
++use std::path::Path;
++
++use serde_json::Value;
++use tsuzuri_contract::consult::{Confidence, DRAFT_FIELDS};
++use tsuzuri_core::consult::finding::{Refusal, check, path_ok};
++
++fn read(rel: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../..")
++        .join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
++}
++
++fn complete() -> Value {
++    serde_json::from_str(&read("tests/fixtures/consult/finding-2/complete.json")).expect("JSON")
++}
++
++#[test]
++fn cwfnd_fixture_complete_and_missing() {
++    let draft = check(&read("tests/fixtures/consult/finding-2/complete.json")).expect("揃った所見");
++    assert_eq!(draft.topic, "fx-hub.7");
++    assert_eq!(draft.options.len(), 2);
++    assert_eq!(draft.attachments.len(), 2);
++    let got = check(&read("tests/fixtures/consult/finding-2/missing.json"));
++    assert_eq!(got, Err(Refusal::Missing(vec!["bundle_digest"])));
++    let why = got.err().map(|r| r.to_string()).unwrap_or_default();
++    assert_eq!(why, "欠けた欄: bundle_digest");
++}
++
++#[test]
++fn cwfnd_each_field_missing_named() {
++    assert_eq!(DRAFT_FIELDS.len(), 12);
++    for field in DRAFT_FIELDS {
++        let mut gone = complete();
++        gone.as_object_mut().expect("object").remove(field);
++        assert_eq!(
++            check(&gone.to_string()),
++            Err(Refusal::Missing(vec![field])),
++            "{field} を除いた"
++        );
++        let mut null = complete();
++        null[field] = Value::Null;
++        assert_eq!(
++            check(&null.to_string()),
++            Err(Refusal::Missing(vec![field])),
++            "{field} を null に"
++        );
++        if complete()[field].is_string() {
++            let mut space = complete();
++            space[field] = Value::from("  ");
++            assert_eq!(
++                check(&space.to_string()),
++                Err(Refusal::Missing(vec![field])),
++                "{field} を空白に"
++            );
++        }
++    }
++    let mut two = complete();
++    let object = two.as_object_mut().expect("object");
++    object.remove("sandbox_denials");
++    object.remove("topic");
++    assert_eq!(
++        check(&two.to_string()),
++        Err(Refusal::Missing(vec!["topic", "sandbox_denials"]))
++    );
++}
++
++#[test]
++fn cwfnd_unknown_and_not_object() {
++    let mut extra = complete();
++    extra["id"] = Value::from("cw1-1");
++    extra["score"] = Value::from(3);
++    assert_eq!(
++        check(&extra.to_string()),
++        Err(Refusal::Unknown(vec!["id".into(), "score".into()]))
++    );
++    for bad in ["[]", "x", "", "null", "3"] {
++        assert_eq!(check(bad), Err(Refusal::NotObject), "{bad:?}");
++    }
++    let mut shape = complete();
++    shape["basis"] = Value::from("ADR-29");
++    assert!(matches!(check(&shape.to_string()), Err(Refusal::Shape(_))));
++}
++
++#[test]
++fn cwfnd_options_one_adopted() {
++    let base = complete();
++    let a = base["options"][0].clone();
++    let b = base["options"][1].clone();
++    let mut adopted_b = b.clone();
++    adopted_b["verdict"] = Value::from("adopted");
++    let mut rejected_a = a.clone();
++    rejected_a["verdict"] = Value::from("rejected");
++    let cases = [
++        (vec![a.clone()], false),
++        (vec![a.clone(), adopted_b.clone()], false),
++        (vec![rejected_a.clone(), b.clone()], false),
++        (vec![rejected_a, adopted_b, b.clone()], true),
++        (vec![a, b], true),
++    ];
++    for (options, ok) in cases {
++        let mut v = base.clone();
++        v["options"] = Value::from(options);
++        let got = check(&v.to_string());
++        if ok {
++            assert!(got.is_ok(), "{got:?}");
++        } else {
++            assert_eq!(got, Err(Refusal::Options));
++        }
++    }
++}
++
++#[test]
++fn cwfnd_confidence_four_words() {
++    let words = [
++        ("verified", Confidence::Verified),
++        ("deduced", Confidence::Deduced),
++        ("inferred", Confidence::Inferred),
++        ("uncertain", Confidence::Uncertain),
++    ];
++    for (word, want) in words {
++        let mut v = complete();
++        v["claims"][0]["confidence"] = Value::from(word);
++        let draft = check(&v.to_string()).expect("閉じた語");
++        assert_eq!(draft.claims[0].confidence, want);
++    }
++    for bad in ["probable", "Verified", ""] {
++        let mut v = complete();
++        v["claims"][0]["confidence"] = Value::from(bad);
++        assert!(
++            matches!(check(&v.to_string()), Err(Refusal::Shape(_))),
++            "{bad}"
++        );
++    }
++}
++
++#[test]
++fn cwfnd_attachment_paths() {
++    for good in ["work/report.md", "a.py", "work/x/y.csv", "work/..x/a"] {
++        assert!(path_ok(good), "{good}");
++    }
++    for bad in [
++        "",
++        "/etc/passwd",
++        "../x",
++        "work/../../x",
++        "work/..",
++        "~/x",
++        "a\\b",
++        "a・b",
++        "a、b",
++        "a\nb",
++    ] {
++        assert!(!path_ok(bad), "{bad:?}");
++        let mut v = complete();
++        v["attachments"][1]["path"] = Value::from(bad);
++        let want = if bad.is_empty() {
++            Refusal::Path(String::new())
++        } else {
++            Refusal::Path(bad.to_string())
++        };
++        assert_eq!(check(&v.to_string()), Err(want), "{bad:?}");
++    }
++}
+diff --git a/tests/fixtures/consult/finding-2/complete.json b/tests/fixtures/consult/finding-2/complete.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ba597b22734cd1bca18b59d2b1879332a787329
+--- /dev/null
++++ b/tests/fixtures/consult/finding-2/complete.json
+@@ -0,0 +1,23 @@
++{
++  "topic": "fx-hub.7",
++  "model": "fable・xhigh",
++  "bundle_digest": "0123456789abcdef",
++  "conclusion": "読む根は repo と器の出力の 2 つに絞る",
++  "options": [
++    {"id": "a", "name": "絞る", "text": "repo と fleet と pipe だけを読む根にする", "verdict": "adopted", "reason": "資格の file が読めない"},
++    {"id": "b", "name": "丸ごと", "text": "state dir の全部を読む根にする", "verdict": "rejected", "reason": "資格の file が読める"}
++  ],
++  "recommendation": "案 a を採る（前提: 器の出力は fleet と pipe の下に在る）",
++  "basis": ["ADR-29", "FR19"],
++  "claims": [
++    {"text": "囲いの中から accounts の file が読める", "confidence": "verified", "how": "作業場の probe で撃った"},
++    {"text": "対話の窓でも同じ設定が効く", "confidence": "inferred", "how": "文書の字から"}
++  ],
++  "ask_owner": [],
++  "touches": ["FR19"],
++  "attachments": [
++    {"path": "work/report.md", "kind": "report", "note": "調べのレポート"},
++    {"path": "work/probe.py", "kind": "program", "note": "読めるかを撃つ program"}
++  ],
++  "sandbox_denials": []
++}
+diff --git a/tests/fixtures/consult/finding-2/missing.json b/tests/fixtures/consult/finding-2/missing.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..20598dfb738e4fb1c217b691774170184c13e4af
+--- /dev/null
++++ b/tests/fixtures/consult/finding-2/missing.json
+@@ -0,0 +1,22 @@
++{
++  "topic": "fx-hub.7",
++  "model": "fable・xhigh",
++  "conclusion": "読む根は repo と器の出力の 2 つに絞る",
++  "options": [
++    {"id": "a", "name": "絞る", "text": "repo と fleet と pipe だけを読む根にする", "verdict": "adopted", "reason": "資格の file が読めない"},
++    {"id": "b", "name": "丸ごと", "text": "state dir の全部を読む根にする", "verdict": "rejected", "reason": "資格の file が読める"}
++  ],
++  "recommendation": "案 a を採る（前提: 器の出力は fleet と pipe の下に在る）",
++  "basis": ["ADR-29", "FR19"],
++  "claims": [
++    {"text": "囲いの中から accounts の file が読める", "confidence": "verified", "how": "作業場の probe で撃った"},
++    {"text": "対話の窓でも同じ設定が効く", "confidence": "inferred", "how": "文書の字から"}
++  ],
++  "ask_owner": [],
++  "touches": ["FR19"],
++  "attachments": [
++    {"path": "work/report.md", "kind": "report", "note": "調べのレポート"},
++    {"path": "work/probe.py", "kind": "program", "note": "読めるかを撃つ program"}
++  ],
++  "sandbox_denials": []
++}

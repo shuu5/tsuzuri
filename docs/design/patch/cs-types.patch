@@ -1,0 +1,878 @@
+diff --git a/crates/tsuzuri-contract/src/consult.rs b/crates/tsuzuri-contract/src/consult.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..16c1ff23671f1d43850c812f8b7191a92fa41635
+--- /dev/null
++++ b/crates/tsuzuri-contract/src/consult.rs
+@@ -0,0 +1,527 @@
++//! 相談の窓の型（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a 行 cs-types）。
++//! 窓と所見と頼みの id の形、起こし手・経路・採否・形・窓の状態の閉じた語、所見の file の形（JSON・未知の鍵を断る）、
++//! board の口の電文を決める。所見の欄の検めと台帳の行の字は中核の crate の `consult` が持つ。
++//! 保存する添え物の写し先は木の根からの相対の path だけを決め、どの木の根に写すかは呼ぶ側が渡す。
++
++use serde::{Deserialize, Serialize};
++
++use crate::EpochSecs;
++use crate::board::Reading;
++
++/// 相談の窓の一覧の口の path。
++pub const PATH: &str = "/api/consult";
++
++/// 席に受けられていない所見と頼みの口の path。
++pub const UNRECEIVED_PATH: &str = "/api/consult/unreceived";
++
++/// board の button の頼みの口の path。
++pub const REQUEST_PATH: &str = "/api/consult/request";
++
++/// 保存する添え物を写す dir（写し先の木の根からの相対）。
++pub const KEPT_DIR: &str = "docs/consult/kept";
++
++/// 窓が書く所見の草稿の欄の名（判断の記録 ADR-10 決定 (3) の 9 つと、話題・添え物・囲いの断り）。
++pub const DRAFT_FIELDS: [&str; 12] = [
++    "topic",
++    "model",
++    "bundle_digest",
++    "conclusion",
++    "options",
++    "recommendation",
++    "basis",
++    "claims",
++    "ask_owner",
++    "touches",
++    "attachments",
++    "sandbox_denials",
++];
++
++/// id の字が形に合わない。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct ShapeError;
++
++impl std::fmt::Display for ShapeError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.write_str("consult-id-shape")
++    }
++}
++
++impl std::error::Error for ShapeError {}
++
++/// 1 以上の 10 進の数（頭の 0 を断る）。
++fn count(s: &str) -> Result<u32, ShapeError> {
++    let digits = !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) && !s.starts_with('0');
++    match s.parse::<u32>() {
++        Ok(n) if digits => Ok(n),
++        _ => Err(ShapeError),
++    }
++}
++
++/// UTC の分の字か（`20261003T1412Z` の形・14 字）。
++pub fn minute_ok(s: &str) -> bool {
++    const SHAPE: &[u8] = b"ddddddddTddddZ";
++    s.len() == SHAPE.len()
++        && SHAPE.iter().zip(s.bytes()).all(|(want, got)| match want {
++            b'd' => got.is_ascii_digit(),
++            _ => *want == got,
++        })
++}
++
++/// 窓の id（`cw<n>`・n は 1 から）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
++#[serde(try_from = "String", into = "String")]
++pub struct WindowId(u32);
++
++impl WindowId {
++    /// n が 0 なら None。
++    pub fn new(n: u32) -> Option<Self> {
++        (n > 0).then_some(Self(n))
++    }
++
++    pub fn parse(s: &str) -> Result<Self, ShapeError> {
++        s.strip_prefix("cw")
++            .ok_or(ShapeError)
++            .and_then(count)
++            .map(Self)
++    }
++
++    pub fn n(self) -> u32 {
++        self.0
++    }
++
++    /// tmux の窓と作業場の dir と `--name` の名（`consult-cw<n>`）。
++    pub fn name(self) -> String {
++        format!("consult-{self}")
++    }
++
++    /// 退いた作業場の dir の名（`retired-consult-cw<n>`）。
++    pub fn retired_name(self) -> String {
++        format!("retired-consult-{self}")
++    }
++}
++
++impl std::fmt::Display for WindowId {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "cw{}", self.0)
++    }
++}
++
++impl TryFrom<String> for WindowId {
++    type Error = ShapeError;
++    fn try_from(s: String) -> Result<Self, ShapeError> {
++        Self::parse(&s)
++    }
++}
++
++impl From<WindowId> for String {
++    fn from(id: WindowId) -> String {
++        id.to_string()
++    }
++}
++
++/// 所見の id（`cw<n>-<k>`・k は窓の中で 1 から）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
++#[serde(try_from = "String", into = "String")]
++pub struct FindingId {
++    window: WindowId,
++    k: u32,
++}
++
++impl FindingId {
++    /// k が 0 なら None。
++    pub fn new(window: WindowId, k: u32) -> Option<Self> {
++        (k > 0).then_some(Self { window, k })
++    }
++
++    pub fn parse(s: &str) -> Result<Self, ShapeError> {
++        let (w, k) = s.split_once('-').ok_or(ShapeError)?;
++        Ok(Self {
++            window: WindowId::parse(w)?,
++            k: count(k)?,
++        })
++    }
++
++    pub fn window(self) -> WindowId {
++        self.window
++    }
++
++    pub fn k(self) -> u32 {
++        self.k
++    }
++}
++
++impl std::fmt::Display for FindingId {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "{}-{}", self.window, self.k)
++    }
++}
++
++impl TryFrom<String> for FindingId {
++    type Error = ShapeError;
++    fn try_from(s: String) -> Result<Self, ShapeError> {
++        Self::parse(&s)
++    }
++}
++
++impl From<FindingId> for String {
++    fn from(id: FindingId) -> String {
++        id.to_string()
++    }
++}
++
++/// 頼みの id（`rq-<UTC の分>-<n>`・server が出す）。
++#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
++#[serde(try_from = "String", into = "String")]
++pub struct RequestId {
++    minute: String,
++    n: u32,
++}
++
++impl RequestId {
++    /// 分の字が形に合わないか n が 0 なら None。
++    pub fn new(minute: &str, n: u32) -> Option<Self> {
++        (minute_ok(minute) && n > 0).then(|| Self {
++            minute: minute.to_string(),
++            n,
++        })
++    }
++
++    pub fn parse(s: &str) -> Result<Self, ShapeError> {
++        let rest = s.strip_prefix("rq-").ok_or(ShapeError)?;
++        let (minute, n) = rest.split_once('-').ok_or(ShapeError)?;
++        Self::new(minute, count(n)?).ok_or(ShapeError)
++    }
++
++    pub fn minute(&self) -> &str {
++        &self.minute
++    }
++
++    pub fn n(&self) -> u32 {
++        self.n
++    }
++}
++
++impl std::fmt::Display for RequestId {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "rq-{}-{}", self.minute, self.n)
++    }
++}
++
++impl TryFrom<String> for RequestId {
++    type Error = ShapeError;
++    fn try_from(s: String) -> Result<Self, ShapeError> {
++        Self::parse(&s)
++    }
++}
++
++impl From<RequestId> for String {
++    fn from(id: RequestId) -> String {
++        id.to_string()
++    }
++}
++
++/// 台帳の行と一覧に出す閉じた語（語と値は 1 対 1）。
++pub trait Word: Sized + Copy + PartialEq + 'static {
++    /// 全部の値（この順が語の一覧の順）。
++    const ALL: &'static [Self];
++
++    fn word(self) -> &'static str;
++
++    fn from_word(word: &str) -> Option<Self> {
++        Self::ALL.iter().copied().find(|v| v.word() == word)
++    }
++}
++
++/// 窓の形（話す窓・問う窓）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Form {
++    Talk,
++    Ask,
++}
++
++impl Word for Form {
++    const ALL: &'static [Self] = &[Form::Talk, Form::Ask];
++    fn word(self) -> &'static str {
++        match self {
++            Form::Talk => "話す",
++            Form::Ask => "問う",
++        }
++    }
++}
++
++/// 起こし手（席・持ち主のチャット・持ち主の button）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Starter {
++    Seat,
++    Chat,
++    Button,
++}
++
++impl Word for Starter {
++    const ALL: &'static [Self] = &[Starter::Seat, Starter::Chat, Starter::Button];
++    fn word(self) -> &'static str {
++        match self {
++            Starter::Seat => "席",
++            Starter::Chat => "持ち主のチャット",
++            Starter::Button => "持ち主の button",
++        }
++    }
++}
++
++/// 席が所見と頼みを受けた経路（見張り・完了・hook・一覧）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Via {
++    Watch,
++    Done,
++    Hook,
++    List,
++}
++
++impl Word for Via {
++    const ALL: &'static [Self] = &[Via::Watch, Via::Done, Via::Hook, Via::List];
++    fn word(self) -> &'static str {
++        match self {
++            Via::Watch => "見張り",
++            Via::Done => "完了",
++            Via::Hook => "hook",
++            Via::List => "一覧",
++        }
++    }
++}
++
++/// 所見の処分の採否（採る・一部採る・採らない）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Verdict {
++    Adopt,
++    Partial,
++    Reject,
++}
++
++impl Word for Verdict {
++    const ALL: &'static [Self] = &[Verdict::Adopt, Verdict::Partial, Verdict::Reject];
++    fn word(self) -> &'static str {
++        match self {
++            Verdict::Adopt => "採る",
++            Verdict::Partial => "一部採る",
++            Verdict::Reject => "採らない",
++        }
++    }
++}
++
++/// 窓の状態（生きている・止まった・閉じた・退いた）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum WindowState {
++    Live,
++    Stalled,
++    Closed,
++    Retired,
++}
++
++impl Word for WindowState {
++    const ALL: &'static [Self] = &[
++        WindowState::Live,
++        WindowState::Stalled,
++        WindowState::Closed,
++        WindowState::Retired,
++    ];
++    fn word(self) -> &'static str {
++        match self {
++            WindowState::Live => "生きている",
++            WindowState::Stalled => "止まった",
++            WindowState::Closed => "閉じた",
++            WindowState::Retired => "退いた",
++        }
++    }
++}
++
++/// 所見の候補の採否（採るのは 1 つ）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Adoption {
++    Adopted,
++    Rejected,
++}
++
++/// 主張の確かさ（撃って確かめた・導いた・推し量った・分からない）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Confidence {
++    Verified,
++    Deduced,
++    Inferred,
++    Uncertain,
++}
++
++/// 添え物の種類（レポート・プログラム・結果）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum AttachmentKind {
++    Report,
++    Program,
++    Result,
++}
++
++/// 所見の候補の 1 つ。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct FindingOption {
++    pub id: String,
++    pub name: String,
++    pub text: String,
++    pub verdict: Adoption,
++    pub reason: String,
++}
++
++/// 主張の 1 つと確かさ。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Claim {
++    pub text: String,
++    pub confidence: Confidence,
++    pub how: String,
++}
++
++/// 添え物の 1 つ（path は作業場からの相対）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Attachment {
++    pub path: String,
++    pub kind: AttachmentKind,
++    pub note: String,
++}
++
++/// 保存する添え物の写し先（写し先の木の根からの相対・`docs/consult/kept/<所見 id>/<添え物の path>`）。
++pub fn kept_path(finding: FindingId, attachment: &str) -> String {
++    format!("{KEPT_DIR}/{finding}/{attachment}")
++}
++
++/// 窓が書く所見の草稿（欄は `DRAFT_FIELDS`・未知の鍵を断る）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct FindingDraft {
++    /// 題の bead の id か自由な題か「なし」。
++    pub topic: String,
++    /// 出した時の model と念入りさ。
++    pub model: String,
++    pub bundle_digest: String,
++    pub conclusion: String,
++    pub options: Vec<FindingOption>,
++    pub recommendation: String,
++    pub basis: Vec<String>,
++    pub claims: Vec<Claim>,
++    pub ask_owner: Vec<String>,
++    pub touches: Vec<String>,
++    pub attachments: Vec<Attachment>,
++    /// 囲いに断られて困った事（空の列でよい）。
++    pub sandbox_denials: Vec<String>,
++}
++
++/// 作業場の findings/ に置く所見（草稿の欄と、所見の口が埋める id・窓・日付・未知の鍵を断る）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Finding {
++    pub id: FindingId,
++    pub window: WindowId,
++    /// 所見の口が置いた UTC の分の字。
++    pub date: String,
++    pub topic: String,
++    pub model: String,
++    pub bundle_digest: String,
++    pub conclusion: String,
++    pub options: Vec<FindingOption>,
++    pub recommendation: String,
++    pub basis: Vec<String>,
++    pub claims: Vec<Claim>,
++    pub ask_owner: Vec<String>,
++    pub touches: Vec<String>,
++    pub attachments: Vec<Attachment>,
++    pub sandbox_denials: Vec<String>,
++}
++
++impl Finding {
++    /// 草稿に id と日付を足す（窓は id の窓）。
++    pub fn new(id: FindingId, date: &str, draft: FindingDraft) -> Self {
++        Self {
++            id,
++            window: id.window(),
++            date: date.to_string(),
++            topic: draft.topic,
++            model: draft.model,
++            bundle_digest: draft.bundle_digest,
++            conclusion: draft.conclusion,
++            options: draft.options,
++            recommendation: draft.recommendation,
++            basis: draft.basis,
++            claims: draft.claims,
++            ask_owner: draft.ask_owner,
++            touches: draft.touches,
++            attachments: draft.attachments,
++            sandbox_denials: draft.sandbox_denials,
++        }
++    }
++}
++
++/// board の button の頼み（口 POST /api/consult/request の入力・題は省ける）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct ConsultRequest {
++    pub topic: Option<String>,
++    pub form: Form,
++    pub model: String,
++}
++
++/// 席に受けられていない所見と頼み（口 GET /api/consult/unreceived の出力）。
++#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
++pub struct ConsultUnreceived {
++    pub findings: Vec<FindingId>,
++    pub requests: Vec<RequestId>,
++}
++
++/// 席が自分で開いた問う窓の今日（UTC の日）の数と今の数（規則の行 R-38）。
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
++pub struct SeatQuota {
++    pub today: u32,
++    pub live: u32,
++}
++
++/// 窓の一覧の 1 行。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct WindowRow {
++    pub id: WindowId,
++    pub form: Form,
++    pub topic: Option<String>,
++    pub state: WindowState,
++    pub opened: Option<EpochSecs>,
++    pub findings: u32,
++    pub undisposed: u32,
++}
++
++/// 処分の無い所見の 1 行。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct FindingRow {
++    pub id: FindingId,
++    pub topic: Option<String>,
++    pub arrived: Option<EpochSecs>,
++    pub received: Option<EpochSecs>,
++}
++
++/// 受けの無い頼みの 1 行。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct RequestRow {
++    pub id: RequestId,
++    pub topic: Option<String>,
++    pub at: EpochSecs,
++}
++
++/// 相談の窓の一覧（口 GET /api/consult の出力・読めない材料の段は Unknown）。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct ConsultBoard {
++    pub windows: Reading<Vec<WindowRow>>,
++    pub findings: Reading<Vec<FindingRow>>,
++    pub requests: Reading<Vec<RequestRow>>,
++    pub quota: Reading<SeatQuota>,
++}
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index 1a6af2d9516298e1c9d1fe830d5db38feba9b40a..117bac1bd665676ad956b03949a4848bb56e2cac 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -5,6 +5,7 @@
+ pub mod account;
+ pub mod board;
+ pub mod case;
++pub mod consult;
+ pub mod graph;
+ pub mod ledger;
+ pub mod notice;
+diff --git a/crates/tsuzuri-contract/tests/cwty.rs b/crates/tsuzuri-contract/tests/cwty.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a964194704a5f2e644e333f368ceab49d0e5c3e
+--- /dev/null
++++ b/crates/tsuzuri-contract/tests/cwty.rs
+@@ -0,0 +1,266 @@
++//! 相談の窓の型の歯（接頭辞 cwty_・設計ノート surface-wave27a 行 cs-types・判断の記録 ADR-29・要件 FR19）。
++//! id の形の読みと断り・閉じた語・電文の往復・未知の鍵の断り・草稿の欄の名・保存の写し先の相対の path を見る。
++#![cfg(test)]
++
++use std::collections::BTreeSet;
++
++use serde_json::Value;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    Adoption, Attachment, AttachmentKind, Claim, Confidence, ConsultBoard, ConsultRequest,
++    ConsultUnreceived, DRAFT_FIELDS, Finding, FindingDraft, FindingId, FindingOption, FindingRow,
++    Form, RequestId, RequestRow, SeatQuota, Starter, Verdict, Via, WindowId, WindowRow,
++    WindowState, Word, kept_path, minute_ok,
++};
++use tsuzuri_contract::wire;
++
++fn draft() -> FindingDraft {
++    FindingDraft {
++        topic: "t3-hub.75".into(),
++        model: "fable・xhigh".into(),
++        bundle_digest: "0123456789abcdef".into(),
++        conclusion: "読む根を絞る".into(),
++        options: vec![
++            FindingOption {
++                id: "a".into(),
++                name: "絞る".into(),
++                text: "fleet と pipe だけ".into(),
++                verdict: Adoption::Adopted,
++                reason: "資格が見えない".into(),
++            },
++            FindingOption {
++                id: "b".into(),
++                name: "丸ごと".into(),
++                text: "state dir の全部".into(),
++                verdict: Adoption::Rejected,
++                reason: "資格が見える".into(),
++            },
++        ],
++        recommendation: "a".into(),
++        basis: vec!["ADR-29".into()],
++        claims: vec![Claim {
++            text: "accounts が読める".into(),
++            confidence: Confidence::Verified,
++            how: "撃った".into(),
++        }],
++        ask_owner: vec![],
++        touches: vec!["FR19".into()],
++        attachments: vec![Attachment {
++            path: "work/report.md".into(),
++            kind: AttachmentKind::Report,
++            note: "調べ".into(),
++        }],
++        sandbox_denials: vec![],
++    }
++}
++
++fn finding() -> Finding {
++    let id = FindingId::parse("cw3-1").expect("所見 id");
++    Finding::new(id, "20261003T1530Z", draft())
++}
++
++#[test]
++fn cwty_window_ids_read_and_refuse() {
++    let w = WindowId::parse("cw12").expect("窓 id");
++    assert_eq!((w.n(), w.to_string()), (12, "cw12".to_string()));
++    assert_eq!(w.name(), "consult-cw12");
++    assert_eq!(w.retired_name(), "retired-consult-cw12");
++    assert_eq!(WindowId::new(0), None);
++    assert_eq!(WindowId::new(3).map(|w| w.to_string()), Some("cw3".into()));
++    for bad in ["cw0", "cw", "cw01", "w1", "cw1x", "cw-1", "CW1", "cw1 "] {
++        assert!(WindowId::parse(bad).is_err(), "{bad} が窓 id に読める");
++    }
++    let f = FindingId::parse("cw3-1").expect("所見 id");
++    assert_eq!(
++        (f.window().n(), f.k(), f.to_string()),
++        (3, 1, "cw3-1".into())
++    );
++    assert_eq!(FindingId::new(w, 0), None);
++    for bad in ["cw3-0", "cw3", "cw3-01", "cw0-1", "cw3-1-2", "cw3-", "-1"] {
++        assert!(FindingId::parse(bad).is_err(), "{bad} が所見 id に読める");
++    }
++}
++
++#[test]
++fn cwty_request_ids_read_and_refuse() {
++    let r = RequestId::parse("rq-20261003T1412Z-1").expect("頼み id");
++    assert_eq!((r.minute(), r.n()), ("20261003T1412Z", 1));
++    assert_eq!(r.to_string(), "rq-20261003T1412Z-1");
++    assert_eq!(RequestId::new("20261003T1412", 1), None);
++    for bad in [
++        "rq-20261003T1412-1",
++        "rq-20261003T1412Z-0",
++        "rq-2026100XT1412Z-1",
++        "rq-20261003T1412Z",
++        "rq20261003T1412Z-1",
++        "rq-20261003T1412Z-1x",
++    ] {
++        assert!(RequestId::parse(bad).is_err(), "{bad} が頼み id に読める");
++    }
++    assert!(minute_ok("20261003T1412Z"));
++    assert!(!minute_ok("20261003T1412z"));
++}
++
++#[test]
++fn cwty_words_closed() {
++    fn words<T: Word>() -> Vec<&'static str> {
++        T::ALL.iter().map(|v| v.word()).collect()
++    }
++    fn back<T: Word + std::fmt::Debug>() {
++        for v in T::ALL {
++            assert_eq!(T::from_word(v.word()), Some(*v));
++        }
++        assert_eq!(T::from_word("なし"), None);
++    }
++    assert_eq!(words::<Form>(), ["話す", "問う"]);
++    assert_eq!(
++        words::<Starter>(),
++        ["席", "持ち主のチャット", "持ち主の button"]
++    );
++    assert_eq!(words::<Via>(), ["見張り", "完了", "hook", "一覧"]);
++    assert_eq!(words::<Verdict>(), ["採る", "一部採る", "採らない"]);
++    assert_eq!(
++        words::<WindowState>(),
++        ["生きている", "止まった", "閉じた", "退いた"]
++    );
++    back::<Form>();
++    back::<Starter>();
++    back::<Via>();
++    back::<Verdict>();
++    back::<WindowState>();
++    let wire_words = |v: &str| wire::encode(&v).expect("字");
++    assert_eq!(
++        wire::encode(&Verdict::Partial).expect("電文"),
++        wire_words("partial")
++    );
++    assert_eq!(wire::encode(&Via::Done).expect("電文"), wire_words("done"));
++    assert_eq!(
++        wire::encode(&Starter::Button).expect("電文"),
++        wire_words("button")
++    );
++    assert_eq!(wire::encode(&Form::Ask).expect("電文"), wire_words("ask"));
++    assert!(wire::decode::<Confidence>(r#""probable""#).is_err());
++    assert!(wire::decode::<AttachmentKind>(r#""image""#).is_err());
++}
++
++#[test]
++fn cwty_wire_roundtrip() {
++    let f = finding();
++    let text = wire::encode(&f).expect("電文");
++    let v: Value = serde_json::from_str(&text).expect("JSON");
++    assert_eq!(v["id"], "cw3-1");
++    assert_eq!(v["window"], "cw3");
++    assert_eq!(v["options"][0]["verdict"], "adopted");
++    assert_eq!(v["claims"][0]["confidence"], "verified");
++    assert_eq!(v["attachments"][0]["kind"], "report");
++    assert_eq!(wire::decode::<Finding>(&text).expect("往復"), f);
++    let d = draft();
++    let dt = wire::encode(&d).expect("電文");
++    assert_eq!(wire::decode::<FindingDraft>(&dt).expect("往復"), d);
++    let req = ConsultRequest {
++        topic: None,
++        form: Form::Talk,
++        model: "fable".into(),
++    };
++    let rt = wire::encode(&req).expect("電文");
++    assert_eq!(wire::decode::<ConsultRequest>(&rt).expect("往復"), req);
++    let un = ConsultUnreceived {
++        findings: vec![f.id],
++        requests: vec![RequestId::parse("rq-20261003T1412Z-2").expect("頼み id")],
++    };
++    let ut = wire::encode(&un).expect("電文");
++    assert_eq!(
++        ut,
++        r#"{"findings":["cw3-1"],"requests":["rq-20261003T1412Z-2"]}"#
++    );
++    assert_eq!(wire::decode::<ConsultUnreceived>(&ut).expect("往復"), un);
++}
++
++#[test]
++fn cwty_board_roundtrip() {
++    let f = finding();
++    let board = ConsultBoard {
++        windows: Reading::Known(vec![WindowRow {
++            id: f.window,
++            form: Form::Ask,
++            topic: Some("t3-hub.75".into()),
++            state: WindowState::Stalled,
++            opened: Some(1_790_000_000),
++            findings: 1,
++            undisposed: 1,
++        }]),
++        findings: Reading::Known(vec![FindingRow {
++            id: f.id,
++            topic: None,
++            arrived: Some(1_790_000_100),
++            received: None,
++        }]),
++        requests: Reading::Known(vec![RequestRow {
++            id: RequestId::parse("rq-20261003T1412Z-1").expect("頼み id"),
++            topic: None,
++            at: 1_790_000_200,
++        }]),
++        quota: Reading::Known(SeatQuota { today: 2, live: 1 }),
++    };
++    let bt = wire::encode(&board).expect("電文");
++    assert_eq!(wire::decode::<ConsultBoard>(&bt).expect("往復"), board);
++    let unknown = ConsultBoard {
++        windows: Reading::Unknown,
++        findings: Reading::Unknown,
++        requests: Reading::Unknown,
++        quota: Reading::Unknown,
++    };
++    let kt = wire::encode(&unknown).expect("電文");
++    assert_eq!(wire::decode::<ConsultBoard>(&kt).expect("往復"), unknown);
++}
++
++#[test]
++fn cwty_unknown_keys_refused() {
++    let mut v: Value = serde_json::to_value(finding()).expect("値");
++    v["extra"] = Value::from("x");
++    assert!(wire::decode::<Finding>(&v.to_string()).is_err());
++    let mut d: Value = serde_json::to_value(draft()).expect("値");
++    d["id"] = Value::from("cw3-1");
++    assert!(wire::decode::<FindingDraft>(&d.to_string()).is_err());
++    let mut o: Value = serde_json::to_value(draft()).expect("値");
++    o["options"][0]["score"] = Value::from(1);
++    assert!(wire::decode::<FindingDraft>(&o.to_string()).is_err());
++    let mut a: Value = serde_json::to_value(draft()).expect("値");
++    a["attachments"][0]["size"] = Value::from(1);
++    assert!(wire::decode::<FindingDraft>(&a.to_string()).is_err());
++    let mut c: Value = serde_json::to_value(draft()).expect("値");
++    c["claims"][0]["source"] = Value::from("x");
++    assert!(wire::decode::<FindingDraft>(&c.to_string()).is_err());
++    let mut w: Value = serde_json::to_value(finding()).expect("値");
++    w["window"] = Value::from("cw0");
++    assert!(wire::decode::<Finding>(&w.to_string()).is_err());
++}
++
++#[test]
++fn cwty_draft_fields_and_kept_path() {
++    let v: Value = serde_json::to_value(draft()).expect("値");
++    let keys: BTreeSet<&str> = v
++        .as_object()
++        .expect("object")
++        .keys()
++        .map(String::as_str)
++        .collect();
++    let want: BTreeSet<&str> = DRAFT_FIELDS.into_iter().collect();
++    assert_eq!(DRAFT_FIELDS.len(), 12);
++    assert_eq!(keys, want);
++    let fv: Value = serde_json::to_value(finding()).expect("値");
++    let fkeys: BTreeSet<&str> = fv
++        .as_object()
++        .expect("object")
++        .keys()
++        .map(String::as_str)
++        .collect();
++    let mut fwant = want.clone();
++    fwant.extend(["id", "window", "date"]);
++    assert_eq!(fkeys, fwant);
++    let id = FindingId::parse("cw3-1").expect("所見 id");
++    assert_eq!(
++        kept_path(id, "work/report.md"),
++        "docs/consult/kept/cw3-1/work/report.md"
++    );
++}
+diff --git a/crates/tsuzuri-core/src/consult/finding.rs b/crates/tsuzuri-core/src/consult/finding.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d240a1aeaf532f0f43be7dfcdba331f7671850e9
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/finding.rs
+@@ -0,0 +1 @@
++//! 所見の欄の検め（中身は設計ノート surface-wave27a の行 cs-finding が置く）。
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..86485f2ebb6cfa948944e839707f32b0541111cb
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -0,0 +1 @@
++//! 起動の argv と設定と検め（中身は設計ノート surface-wave27a の行 cs-argv が置く）。
+diff --git a/crates/tsuzuri-core/src/consult/lines.rs b/crates/tsuzuri-core/src/consult/lines.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..04a3be456b5b618df446bfc150f6bade25483820
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/lines.rs
+@@ -0,0 +1 @@
++//! 台帳の相談の行の字と置き場（中身は設計ノート surface-wave27a の行 cs-lines が置く）。
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..65084e34f56287bbefa97b70cfd66b6fb6ca0efe
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -0,0 +1,10 @@
++//! 相談の窓の中核の純な関数（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a）。
++//! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
++//! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
++//! 起動の argv と設定と検め（`launch`）は行 cs-argv が置く。
++//! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
++
++pub mod finding;
++pub mod launch;
++pub mod lines;
++pub mod quota;
+diff --git a/crates/tsuzuri-core/src/consult/quota.rs b/crates/tsuzuri-core/src/consult/quota.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f25c1ca99beb342869e2be9060179e45a34a15ee
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/quota.rs
+@@ -0,0 +1 @@
++//! 席が自分で開く問う窓の数え（中身は設計ノート surface-wave27a の行 cs-quota が置く）。
+diff --git a/crates/tsuzuri-core/src/lib.rs b/crates/tsuzuri-core/src/lib.rs
+index 60a449f465f21ab91f8e0508e807fd7c2d7e256e..3bfff6e0e2556639036e3be704ba0a7520495dd2 100644
+--- a/crates/tsuzuri-core/src/lib.rs
++++ b/crates/tsuzuri-core/src/lib.rs
+@@ -6,10 +6,12 @@
+ //! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）は行 f-mark が置く。
+ //! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）は行 f-gate が置く。
+ //! 器の局面の出力の読み（`case`）は行 c-case-read が置く。
++//! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）は、ノート surface-wave27a の行 cs-types から cs-argv が置く。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
+ 
+ pub mod account;
+ pub mod case;
++pub mod consult;
+ pub mod delivery;
+ pub mod gate;
+ pub mod graph;
