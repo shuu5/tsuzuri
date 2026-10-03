@@ -33,8 +33,8 @@
 # repos:
 #   primary: "."  # Primary repo (where this database lives)
 #   additional:   # Additional repos to hydrate from (read-only)
-#     - ~/beads-planning  # Personal planning repo
-#     - ~/work-planning   # Work planning repo
+#     - $HOME/beads-planning  # Personal planning repo
+#     - $HOME/work-planning   # Work planning repo
 
 # Dolt-native backup (periodic backup for off-machine recovery)
 # This is full database backup only. Cross-machine sync uses Dolt remotes.
