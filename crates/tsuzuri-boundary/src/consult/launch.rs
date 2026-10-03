@@ -1,10 +1,352 @@
-//! tz consult launch（窓を起こす口（話す窓は tmux の窓・問う窓は背景の子）・設計ノート surface-wave27a 行 cs-launch が中身を置く・行 cs-open は骨だけを置く）。
+//! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+//! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
+//! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
+//! 4 つ（`TALK_ENV`・席の環境に無い名は渡さない）だけを渡す。問う窓は席の背景の子として claude -p を cwd = 作業場で撃ち、
+//! 席の環境から `ASK_DROP` を外して窓の id と私用の temp を置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
+//! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
+//! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+//! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
+//! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
 
-use super::FAIL;
-use crate::out::emit_err;
+use std::fs::{self, File};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::process::CommandExt;
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
-/// 口の中身はまだ無い（rc 1）。
-pub fn run(_rest: &[&str]) -> u8 {
-    emit_err("tz consult launch: まだ無い（行 cs-launch）");
-    FAIL
+use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
+use tsuzuri_contract::wire;
+use tsuzuri_core::consult::launch::{
+    ASK_DROP, Launch, PROGRAM, TALK_ENV, VERSION_ENV, argv, audit, env, private_tmp, read_roots,
+    version_ok,
+};
+use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
+use tsuzuri_core::consult::quota::{admit, count};
+
+use super::{
+    COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
+    lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
+    workspace,
+};
+use crate::out::{emit, emit_err};
+use crate::server::ledger::{KILL, capture, stop_with};
+
+/// tmux の program の名。
+pub const TMUX: &str = "tmux";
+
+/// 新しい tmux の窓の id と pane の pid を出させる形。
+pub const WINDOW_FORMAT: &str = "#{window_id} #{pane_pid}";
+
+/// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
+pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
+
+/// 問う窓の終わりを見る間。
+const ASK_STEP: Duration = Duration::from_millis(200);
+
+/// tz consult launch の残りの引数を受けて終了 code を返す。
+pub fn run(rest: &[&str]) -> u8 {
+    let f = match flags(rest, &COMMON, &["--again", "--dry-run"], &[]) {
+        Ok(f) => f,
+        Err(e) => return refuse("launch", e),
+    };
+    let [id] = f.pos.as_slice() else {
+        return refuse("launch", (FAIL, "窓の id を 1 つ渡す".to_string()));
+    };
+    let Ok(id) = WindowId::parse(id) else {
+        return refuse("launch", (FAIL, format!("窓の id {id} の形でない")));
+    };
+    if !version_ok(std::env::var(VERSION_ENV).ok().as_deref()) {
+        let why = format!("{VERSION_ENV} が tz の版と違う（plugin の tz の解き方で撃つ）");
+        return refuse("launch", (FAIL, why));
+    }
+    match ctx(&f).and_then(|c| launch(&c, id, f.has("--again"), f.has("--dry-run"))) {
+        Ok(()) => 0,
+        Err(e) => refuse("launch", e),
+    }
+}
+
+/// 窓の材料（path は「/」で始まる絶対 path・読む根は在る dir だけ・uid は作業場の持ち主）。
+pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+    let abs = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let (repo, state) = (abs(&c.repo), abs(&c.state));
+    let (repo, state) = (repo.display().to_string(), state.display().to_string());
+    let roots = read_roots(&repo, &state)
+        .into_iter()
+        .filter(|r| Path::new(r).is_dir())
+        .collect();
+    let uid = fs::metadata(ws)
+        .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?
+        .uid();
+    Ok(Launch {
+        form: w.form,
+        window: w.id,
+        workspace: abs(ws).display().to_string(),
+        repo,
+        state,
+        roots,
+        tz: tz_path(),
+        uid: uid.to_string(),
+        model: w.model.clone(),
+        effort: w.effort.clone(),
+        question: ws.join("bundle/question.md").is_file(),
+    })
+}
+
+/// 窓の起こし手（開きの行の欄）。
+fn by_of(w: &WindowFile) -> Result<By, Refused> {
+    let missing = || (FAIL, format!("窓 {} の控えに起こし手の添えが無い", w.id));
+    Ok(match w.starter {
+        Starter::Seat => By::Seat,
+        Starter::Chat => By::Chat {
+            uttered: w.uttered.clone().ok_or_else(missing)?,
+        },
+        Starter::Button => By::Button {
+            request: w.request.clone().ok_or_else(missing)?,
+        },
+    })
+}
+
+/// 相談の開きの行を根に書く（題は器の引用の形を含めば題なし）。
+fn record(
+    c: &Ctx,
+    items: &[tsuzuri_contract::ledger::LedgerItem],
+    w: &WindowFile,
+    opened: bool,
+    again: bool,
+) -> Result<(), Refused> {
+    let line = Line::Open {
+        window: w.id,
+        form: w.form,
+        topic: w.topic.clone().filter(|t| !cited(&free(t, WORD_MAX))),
+        by: by_of(w)?,
+        model: w.model.clone(),
+        effort: w.effort.clone(),
+        opened,
+        again,
+        at: minute_now(),
+    };
+    append(c, items, None, &line).map(|_| ())
+}
+
+/// 起こす（版の照らしの後）。
+fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> {
+    let ws = workspace(&c.drafts, id);
+    let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
+    let l = material(c, &ws, &w)?;
+    let args = argv(&l);
+    let gaps = audit(&args, &l);
+    if dry {
+        emit(PROGRAM);
+        args.iter().for_each(|a| emit(a));
+        return if gaps.is_empty() {
+            Ok(())
+        } else {
+            Err((FAIL, format!("検めの欠け: {}", gaps.join(" "))))
+        };
+    }
+    let (_, items) = ledger(c)?;
+    let lines = lines_of(&items);
+    if lines
+        .iter()
+        .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
+    {
+        return Err((FAIL, format!("窓 {id} は閉じた")));
+    }
+    if w.starter == Starter::Seat && w.form == Form::Ask {
+        let live: Vec<WindowId> = windows(&c.drafts)
+            .into_iter()
+            .filter(|(n, gone)| !gone && live(&workspace(&c.drafts, *n)))
+            .map(|(n, _)| n)
+            .collect();
+        admit(count(&lines, &minute_now(), &live), again).map_err(|why| (FAIL, why.to_string()))?;
+    }
+    let started = start(&ws, &l, &args, again, &gaps);
+    record(c, &items, &w, started.is_ok(), again)?;
+    let mark = started?;
+    if w.form == Form::Talk {
+        emit(&format!("窓 {id} を開いた（tmux の窓 {}）", id.name()));
+        return Ok(());
+    }
+    wait_ask(&ws, id, mark)
+}
+
+/// 検めと私用の temp の後に窓を起こし、process の印を書く。
+fn start(
+    ws: &Path,
+    l: &Launch,
+    args: &[String],
+    again: bool,
+    gaps: &[String],
+) -> Result<Started, Refused> {
+    if !gaps.is_empty() {
+        return Err((
+            FAIL,
+            format!("検めの欠け（起こさない）: {}", gaps.join(" ")),
+        ));
+    }
+    let uid: u32 = l.uid.parse().map_err(|_| (FAIL, "uid の字".to_string()))?;
+    private(&private_tmp(&l.workspace), uid)?;
+    let k = procs(ws).last().map_or(0, |p| p.k) + 1;
+    let before = findings(ws, l.window);
+    let (pid, tmux_window, child) = match l.form {
+        Form::Talk => {
+            let (window, pane) = talk(ws, l, args)?;
+            (pane, Some(window), None)
+        }
+        Form::Ask => {
+            let child = ask(ws, l, args, k)?;
+            (child.id(), None, Some(child))
+        }
+    };
+    let mark = ProcMark {
+        k,
+        form: l.form,
+        pid,
+        at: minute_now(),
+        again,
+        tmux_window,
+    };
+    let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
+    fs::write(proc_path(ws, k), text + "\n")
+        .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
+    Ok(Started { before, child })
+}
+
+/// 起こした窓（問う窓は子と起こす前の所見）。
+struct Started {
+    before: Vec<tsuzuri_contract::consult::FindingId>,
+    child: Option<std::process::Child>,
+}
+
+/// 私用の temp を mode 0700 で作る（在れば持ち主の uid と 0700 の dir であることを確かめる）。
+fn private(path: &str, uid: u32) -> Result<(), Refused> {
+    match fs::create_dir(path) {
+        Ok(()) => fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+            .map_err(|e| (FAIL, format!("私用の temp {path} の権限: {e}"))),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let m = fs::symlink_metadata(path)
+                .map_err(|e| (FAIL, format!("私用の temp {path}: {e}")))?;
+            if m.is_dir() && m.uid() == uid && m.mode() & 0o777 == 0o700 {
+                Ok(())
+            } else {
+                Err((
+                    FAIL,
+                    format!("私用の temp {path} が持ち主の 0700 の dir でない"),
+                ))
+            }
+        }
+        Err(e) => Err((FAIL, format!("私用の temp {path} を作れない: {e}"))),
+    }
+}
+
+/// 話す窓を席の tmux の session に開き、tmux の window id と pane の pid を返す。
+fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused> {
+    let pane = std::env::var("TMUX_PANE").map_err(|_| {
+        (
+            FAIL,
+            "席の TMUX_PANE が無い（tmux の中の席から撃つ）".to_string(),
+        )
+    })?;
+    let tmux = std::ffi::OsStr::new(TMUX);
+    let session = capture(
+        tmux,
+        ["display-message", "-p", "-t", &pane, "#{session_name}"],
+        ws,
+        GIT_TIMEOUT,
+    )
+    .and_then(|o| String::from_utf8(o).ok())
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty())
+    .ok_or((FAIL, "席の tmux の session が読めない".to_string()))?;
+    let mut a: Vec<String> = ["new-window", "-d", "-t"].map(String::from).to_vec();
+    a.push(format!("{session}:"));
+    a.extend([
+        "-n".to_string(),
+        l.window.name(),
+        "-c".to_string(),
+        l.workspace.clone(),
+    ]);
+    let own = env(l);
+    for name in TALK_ENV {
+        let value = own
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| v.clone())
+            .or_else(|| std::env::var(name).ok());
+        if let Some(value) = value {
+            a.extend(["-e".to_string(), format!("{name}={value}")]);
+        }
+    }
+    a.extend(["-P", "-F", WINDOW_FORMAT, "--", PROGRAM].map(String::from));
+    a.extend(args.iter().cloned());
+    let out = capture(tmux, &a, ws, GIT_TIMEOUT)
+        .and_then(|o| String::from_utf8(o).ok())
+        .ok_or((FAIL, "tmux の new-window が落ちた".to_string()))?;
+    let (window, pane_pid) = out
+        .trim()
+        .split_once(' ')
+        .ok_or((FAIL, format!("tmux の出力 {out:?} の形")))?;
+    let pid = pane_pid
+        .parse()
+        .map_err(|_| (FAIL, format!("pane の pid {pane_pid:?} の形")))?;
+    Ok((window.to_string(), pid))
+}
+
+/// 問う窓を席の子として起こす（標準出力は `.consult/ask-<k>.json`・標準エラーは `.consult/ask-<k>.err`）。
+fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::Child, Refused> {
+    let file = |ext: &str| {
+        File::create(ws.join(format!(".consult/ask-{k}.{ext}")))
+            .map_err(|e| (UNKNOWN, format!("ask-{k}.{ext} を作れない: {e}")))
+    };
+    let mut cmd = Command::new(PROGRAM);
+    cmd.args(args)
+        .current_dir(ws)
+        .stdin(Stdio::null())
+        .stdout(file("json")?)
+        .stderr(file("err")?)
+        .process_group(0);
+    for name in ASK_DROP {
+        cmd.env_remove(name);
+    }
+    cmd.envs(env(l));
+    cmd.spawn()
+        .map_err(|e| (FAIL, format!("{PROGRAM} を起こせない: {e}")))
+}
+
+/// 問う窓の終わりを待ち、新しい所見ごとに経路 完了 の 1 行を、無ければ止まった窓の 1 行を出す。
+fn wait_ask(ws: &Path, id: WindowId, started: Started) -> Result<(), Refused> {
+    let Some(mut child) = started.child else {
+        return Ok(());
+    };
+    let end = Instant::now() + ASK_LIMIT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < end => std::thread::sleep(ASK_STEP),
+            _ => {
+                emit_err(&format!("tz consult launch: 問う窓 {id} を上限で止めた"));
+                stop_with(child, std::ffi::OsStr::new(KILL));
+                break;
+            }
+        }
+    }
+    let tzw = tzw();
+    let new: Vec<_> = findings(ws, id)
+        .into_iter()
+        .filter(|f| !started.before.contains(f))
+        .collect();
+    if new.is_empty() {
+        emit(&notice(&Event::Stalled(id), &tzw));
+    }
+    for f in new {
+        emit(&notice(
+            &Event::Finding {
+                id: f,
+                via: tsuzuri_contract::consult::Via::Done,
+            },
+            &tzw,
+        ));
+    }
+    Ok(())
 }
