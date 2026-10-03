@@ -19,23 +19,7 @@ yaml-rust2 = { version = "0.12", default-features = false }
 workspace = true
 
 # binary を撃たない歯（行 k-tz-tests）
-[[test]]
-name = "constitution_enums"
 
 [[test]]
-name = "deps"
-
-[[test]]
-name = "face_labels"
-
-[[test]]
-name = "face_style"
-
-[[test]]
-name = "fdrop"
-
-[[test]]
-name = "modules"
-
-[[test]]
-name = "parts_catalog"
+name = "teeth1"
+path = "tests/teeth1/main.rs"

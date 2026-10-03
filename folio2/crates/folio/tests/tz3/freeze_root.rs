@@ -1,0 +1,836 @@
+//! 列の根の表と始まりの凍結 `folio check --freeze-start` の歯（便 121・docs/design/delivery-121.md §1 (f)・ADR-16 決定 (2)(ア)(イ)・
+//! FR23 / FR24）。folio は実行 file の crate なので命令を撃つ。
+//! 凍結 anchor（P-10.1）は 3 つ: (1) 歯の中の定数 ROOT（folio2 の列の根の digest・day-1 の床の値・crate の中の表は読まない）、
+//! (2) 床の凍結の土台の凍結済みの anchors/（constitution-v1.0.yaml の digest の欄と ids-v1.8.yaml の byte 列）、
+//! (3) tests/fixtures/anchor/root-digest-drift/ の索引の digest の値（定数 DRIFT に写す）。
+//! 写しは一時 dir に design-intent/ として作り、置き場の親の contracts/ に器の導出 file を写し、git init と 1 commit を行う
+//! （tests/tz3/freeze.rs と同じ作り方・歯の終わりに消す）。版管理の履歴に anchor を残したくない置き場は、commit の前に消す。
+//! 1. folio2 の床と 1 行の写し／2. 名の書き換えは床で落ちる／3. 別の中身の根は名でも行でも落ちる／
+//! 4. 始まりの凍結が 2 つを書き、書いた後の床が合格／5. どちらか 1 本在れば断る／
+//! 6. ほかの検査に違反か「まだ分からない」・表に無い名（--freeze-anchor も）／7. 写しは置き場の名の行だけ（folio schema）／
+//! 8. tsuzuri の名は表の 2 行目を写し、床が folio2 の根をその行と照らして落とす（便 133 が旧 scribe3 の名で足し・
+//!    docs/design/delivery-133.md §1 (c)2・便 134 が改名の後の名に改めた・docs/design/delivery-134.md §1 (c)2）／
+//! 9. 始まりの凍結は書く承認一覧を凍結の後の床と同じ関数で確かめ、承認欄の空いた憲法を凍結しない
+//!    （便 155・docs/design/delivery-155.md §1 (c)）／
+//! 10. 承認一覧の承認者と逐語の雛形の印「未記入」は空と同じで、日付は年-月-日。凍結の前も後も同じ本文の行で落ち、
+//!     判断の記録の承認欄の逐語の印も落ちる（便 158・docs/design/delivery-158.md §1 (c)）。
+//!
+//! 便 174（docs/design/delivery-174.md §1 (e)）: 名を folio2 の外の名に替えた写しは、設計ノートの欄の決まりの写しも外の置き場の
+//! 形に揃える（`abroad_note`・列の根の表を空にする `empty_table` と同じ扱い）。
+#![cfg(test)]
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+/// folio2 の列の根の digest（憲法 第 1.0 版の凍結・tests/tz1/anchor.rs の定数と同じ値）。
+const ROOT: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
+/// tests/fixtures/anchor/root-digest-drift/anchors/index.yaml の entries[0].digest（自分自身と一致する別の中身の根）。
+const DRIFT: &str = "85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe";
+const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+const FOLIO2: &str = "folio2-constitution";
+/// 表に無い名（歯のための名）。
+const OTHER: &str = "renamed-constitution";
+/// tsuzuri の憲法の名と列の根の digest（旧 scribe3 の版 e52d24c の始まりの凍結・便 133・版 1c93e70 の改名で名を
+/// 改めた・便 134・digest は名の外で不変・crate の中の表は読まない）。
+const TSUZURI: &str = "tsuzuri-constitution";
+const TSUZURI_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9de832f8c5356";
+/// 始まりの凍結が書く承認一覧の違反の頭（便 155・手書き）。
+const APPROVAL_AT: &str =
+    "[anchor] constitution-v1.0.yaml（凍結で書く承認一覧・憲法 meta.approval の写し）: ";
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+}
+
+fn copy_tree(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+}
+
+/// git を呼ぶ。環境変数 GIT_* は継承しない。
+fn git(cwd: &Path, args: &[&str]) {
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            cmd.env_remove(key);
+        }
+    }
+    let out = cmd
+        .current_dir(cwd)
+        .args([
+            "-c",
+            "user.email=fx@example",
+            "-c",
+            "user.name=fx",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .expect("git を起動できない");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// 写しの一時 dir（歯の終わりに消す）。
+struct Work {
+    root: PathBuf,
+}
+
+impl Work {
+    /// `src` を design-intent/ として写し、`contracts` なら器の導出 file を写し、`prep` を当ててから git init と 1 commit。
+    fn new(case: &str, src: &str, contracts: bool, prep: impl FnOnce(&Path)) -> Work {
+        let root = std::env::temp_dir().join(format!("folio-f121-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        copy_tree(&repo_root().join(src), &root.join("design-intent"));
+        if contracts {
+            fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+            fs::copy(
+                repo_root().join("contracts/schema.toml"),
+                root.join("contracts/field-schema/schema.toml"),
+            )
+            .unwrap();
+        }
+        prep(&root.join("design-intent"));
+        git(&root, &["init", "-q"]);
+        let w = Work { root };
+        w.commit();
+        w
+    }
+
+    /// 一時の根の直下の design-intent に `folio init` をしてから git init と 1 commit（外の置き場と同じ形・便 155）。
+    fn init(case: &str) -> Work {
+        let root = std::env::temp_dir().join(format!("folio-f155-{case}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        git(&root, &["init", "-q"]);
+        let out = folio(&["init", "--dir"], &root.join("design-intent"), &[]);
+        assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+        let w = Work { root };
+        w.commit();
+        w
+    }
+
+    fn commit(&self) {
+        git(&self.root, &["add", "-A"]);
+        git(&self.root, &["commit", "-q", "--allow-empty", "-m", "fixture"]);
+    }
+
+    fn dir(&self) -> PathBuf {
+        self.root.join("design-intent")
+    }
+
+    fn check(&self, flags: &[&str]) -> Output {
+        folio(&["check", "--dir"], &self.dir(), flags)
+    }
+
+    fn schema(&self, mode: &str) -> Output {
+        folio(&["schema", "--dir"], &self.dir(), &[mode])
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_tz"))
+        .args(head)
+        .arg(dir)
+        .args(tail)
+        .output()
+        .expect("folio を起動できない")
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn show(out: &Output) -> String {
+    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
+}
+
+/// 標準出力の違反の行（「[種別] 」で始まる）。
+fn violations(out: &Output) -> Vec<String> {
+    text(&out.stdout)
+        .lines()
+        .filter(|l| l.starts_with('['))
+        .map(str::to_string)
+        .collect()
+}
+
+fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+    let before = fs::read_to_string(path).unwrap();
+    let after = f(&before);
+    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+    fs::write(path, after).unwrap();
+}
+
+/// 憲法の meta.id を `name` に書き換える。
+fn rename(dir: &Path, from: &str, name: &str) {
+    edit(&dir.join("constitution.yaml"), |t| {
+        t.replacen(
+            &format!("\nmeta:\n  id: {from}\n"),
+            &format!("\nmeta:\n  id: {name}\n"),
+            1,
+        )
+    });
+}
+
+/// 欄の決まりの写しの列の根の表を空の表にする（folio2 の block の 2 行 → 1 行）。
+fn empty_table(dir: &Path) {
+    edit(&dir.join("adr/schema.yaml"), |t| {
+        t.replacen(
+            &format!("    root_digests:\n      {FOLIO2}: {ROOT}\n"),
+            "    root_digests: {}\n",
+            1,
+        )
+    });
+}
+
+/// 設計ノートの欄の決まりの写しを外の置き場の形にする（便 174）: folio2 の置き場にだけ在る 5 欄の行を落とし、図の spec の
+/// 字から判断の記録の番号の項を落とす（期待の字は手書き・注の欄は床が読まないので触らない）。
+fn abroad_note(dir: &Path) {
+    edit(&dir.join("design-note/schema.yaml"), |t| {
+        let mut t = t.replacen(
+            "（JSON の 5 型の欄の決まりそのまま・ADR-4 決定 (1)）",
+            "（JSON の 5 型の欄の決まりそのまま）",
+            1,
+        );
+        for line in [
+            "    body_classes_rules_row: R-3\n",
+            "    quality_rules_row: R-14\n",
+            "    tool_version_rules_row: R-15\n",
+            "    retry_rules_row: R-7\n",
+            "    p18_4_judged_by: R-13\n",
+        ] {
+            assert!(t.contains(line), "{line}");
+            t = t.replacen(line, "", 1);
+        }
+        t
+    });
+}
+
+fn remove(dir: &Path, files: &[&str]) {
+    for f in files {
+        fs::remove_file(dir.join("anchors").join(f)).unwrap();
+    }
+}
+
+fn no_anchors(dir: &Path) {
+    fs::remove_dir_all(dir.join("anchors")).unwrap();
+}
+
+/// 憲法 meta.approval の欄を書き換える（床の土台の写しの 1 行の承認欄）。
+fn approval(dir: &Path, from: &str, to: &str) {
+    edit(&dir.join("constitution.yaml"), |t| t.replacen(from, to, 1));
+}
+
+/// 憲法の承認欄の裁定 id を 未記入 にする。
+fn blank_ruling(dir: &Path) {
+    approval(
+        dir,
+        "ruling: \"f2-648.1 notes 2026-09-12 20:2x（発効承認）\", verbatim:",
+        "ruling: 未記入, verbatim:",
+    );
+}
+
+/// init の骨格の憲法の承認欄の 4 欄（対話面の前まで）を書き換える。
+fn skeleton_approval(dir: &Path, who: &str, date: &str, ruling: &str, verbatim: &str) {
+    approval(
+        dir,
+        "approval: {who: 未記入, date: 未記入, ruling: 未記入, verbatim: 未記入,",
+        &format!("approval: {{who: {who}, date: {date}, ruling: {ruling}, verbatim: {verbatim},"),
+    );
+}
+
+/// 凍結済みの anchor の承認一覧（approvals の節）の欄 `key` の行を書き換える（meta_approval の写しは変えない）。
+fn anchor_approval(dir: &Path, key: &str, from: &str, to: &str) {
+    edit(&dir.join("anchors/constitution-v1.0.yaml"), |t| {
+        let (head, tail) = t.split_once("\napprovals:\n").expect("approvals の節が無い");
+        format!(
+            "{head}\napprovals:\n{}",
+            tail.replacen(&format!("\n  {key}: {from}\n"), &format!("\n  {key}: {to}\n"), 1)
+        )
+    });
+}
+
+/// 始まりの凍結が書く承認一覧の違反の行。
+fn approval_rows(out: &Output) -> Vec<String> {
+    violations(out)
+        .into_iter()
+        .filter(|l| l.starts_with(APPROVAL_AT))
+        .collect()
+}
+
+/// anchors/ の名と byte 列（無ければ空）。
+fn anchors_snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let Ok(rd) = fs::read_dir(dir.join("anchors")) else {
+        return Vec::new();
+    };
+    let mut files: Vec<(String, Vec<u8>)> = rd
+        .map(|e| {
+            let e = e.unwrap();
+            (
+                e.file_name().to_string_lossy().into_owned(),
+                fs::read(e.path()).unwrap(),
+            )
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// file の digest の欄の値（「digest: 」か「"digest": "」の行・字下げは問わない）を全部。
+fn digests(path: &Path) -> Vec<String> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim_start().trim_start_matches("- ");
+            l.strip_prefix("\"digest\": ")
+                .or_else(|| l.strip_prefix("digest: "))
+                .map(|v| v.trim_matches('"').to_string())
+        })
+        .collect()
+}
+
+/// 列の根の欄の行とその次の行（2 行）。
+fn table_lines(path: &Path) -> Vec<String> {
+    let text = fs::read_to_string(path).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("root_digests:"))
+        .unwrap_or_else(|| panic!("root_digests の行が無い: {}", path.display()));
+    lines[at..(at + 2).min(lines.len())]
+        .iter()
+        .map(|l| l.to_string())
+        .collect()
+}
+
+/// 1. folio2 の床と 1 行の写し: 土台の床は合格のまま、実の生成区間と土台の写しの列の根の表は folio2 の 1 行。
+#[test]
+fn f121_folio2_floor_passes_and_the_copy_holds_its_own_row() {
+    let w = Work::new("floor", FLOOR_BASE, true, |_| {});
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    assert!(
+        text(&out.stdout).contains("合格（違反 0・まだ分からない 0）"),
+        "{}",
+        show(&out)
+    );
+    let want = [
+        "    root_digests:".to_string(),
+        format!("      {FOLIO2}: {ROOT}"),
+    ];
+    for path in [
+        repo_root().join("design-intent/adr/schema.yaml"),
+        repo_root().join(FLOOR_BASE).join("adr/schema.yaml"),
+    ] {
+        assert_eq!(table_lines(&path), want, "{}", path.display());
+        let next = fs::read_to_string(&path).unwrap();
+        let after = next
+            .lines()
+            .skip_while(|l| !l.trim_start().starts_with("root_digests:"))
+            .nth(2)
+            .unwrap_or_default();
+        assert!(!after.starts_with("      "), "表の行が 2 つ以上: {after}");
+    }
+    let real = fs::read_to_string(repo_root().join("design-intent/adr/schema.yaml")).unwrap();
+    assert!(!real.contains("    root_digest: "), "前の欄名 root_digest の行が残る");
+}
+
+/// 2. 名の書き換えは床で落ちる: 表に無いの違反（digest の全桁）と写しの違反の 2 件。
+#[test]
+fn f121_renamed_constitution_fails_the_floor_twice() {
+    let w = Work::new("rename", FLOOR_BASE, true, |_| {});
+    rename(&w.dir(), FOLIO2, OTHER);
+    abroad_note(&w.dir());
+    w.commit();
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 2, "{v:?}");
+    assert_eq!(
+        v.iter()
+            .filter(|l| l.starts_with("[anchor] ")
+                && l.contains("列の根")
+                && l.contains(OTHER)
+                && l.contains("表に無い")
+                && l.contains(ROOT))
+            .count(),
+        1,
+        "{v:?}"
+    );
+    assert_eq!(
+        v.iter()
+            .filter(|l| l.starts_with("[adr] ") && l.contains("schema.anchor.root_digests"))
+            .count(),
+        1,
+        "{v:?}"
+    );
+}
+
+/// 3. 別の中身の根は、表に無い名で落ち、folio2 の名に書き換えると表の行と違うで落ちる。
+#[test]
+fn f121_foreign_root_fails_by_name_and_by_row() {
+    let w = Work::new("drift", "tests/fixtures/anchor/root-digest-drift", true, |_| {});
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert!(
+        v[0].contains("fixture-constitution") && v[0].contains("表に無い") && v[0].contains(DRIFT),
+        "{v:?}"
+    );
+    rename(&w.dir(), "fixture-constitution", FOLIO2);
+    w.commit();
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert!(
+        v.iter().any(|l| l.contains("列の根")
+            && l.contains(&format!("列の根の表の {FOLIO2} の行"))
+            && l.contains("と違う")),
+        "{v:?}"
+    );
+    assert!(!v.iter().any(|l| l.contains("表に無い")), "{v:?}");
+}
+
+/// 4. 2 つの基準が無い置き場: 既存の 2 つの旗は互いに断り、--freeze-start が 3 file を書き、commit の後の床は合格。
+#[test]
+fn f121_freeze_start_writes_both_and_the_floor_passes() {
+    let w = Work::new("start", FLOOR_BASE, true, no_anchors);
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+    assert!(violations(&out).is_empty(), "{}", show(&out));
+    for flag in ["--freeze-anchor", "--freeze-ids"] {
+        let out = w.check(&[flag]);
+        assert_eq!(out.status.code(), Some(2), "{flag}: {}", show(&out));
+        assert!(text(&out.stderr).contains("凍結しない"), "{flag}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{flag} が anchors/ を作った");
+    }
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    assert!(text(&out.stderr).contains("始まりの凍結をした"), "{}", show(&out));
+    let names: Vec<String> = anchors_snapshot(&w.dir()).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["constitution-v1.0.yaml", "ids-v1.8.yaml", "index.yaml"]);
+    let base = repo_root().join(FLOOR_BASE).join("anchors");
+    assert_eq!(digests(&base.join("constitution-v1.0.yaml")), [ROOT]);
+    assert_eq!(digests(&w.dir().join("anchors/constitution-v1.0.yaml")), [ROOT]);
+    assert_eq!(digests(&w.dir().join("anchors/index.yaml")), [ROOT]);
+    assert!(
+        fs::read(w.dir().join("anchors/ids-v1.8.yaml")).unwrap()
+            == fs::read(base.join("ids-v1.8.yaml")).unwrap(),
+        "書いた id の一覧が土台の凍結済みの file と byte 一致しない"
+    );
+    w.commit();
+    floor_after_start(&w, &base);
+}
+
+/// 始まりの凍結の commit の後の素の床と、--freeze-adrs が封の一覧を書いた後の床の合格を見る。
+fn floor_after_start(w: &Work, base: &Path) {
+    // 便 170: 始まりの凍結は判断の記録の封を書かない＝素の床は封の一覧の不在の「まだ分からない」1 行だけ
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+    assert!(violations(&out).is_empty(), "{}", show(&out));
+    assert!(
+        text(&out.stdout).contains("まだ分からない（違反 0・まだ分からない 1）")
+            && text(&out.stderr).contains("anchors/adr-seals.yaml（判断の記録の封の一覧）が無い"),
+        "{}",
+        show(&out)
+    );
+    // --freeze-adrs が封の一覧を書き（土台の凍結済みの封と byte 一致）、commit の後の床は合格
+    let out = w.check(&["--freeze-adrs"]);
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    assert!(text(&out.stderr).contains("封を足した: "), "{}", show(&out));
+    assert!(
+        fs::read(w.dir().join("anchors/adr-seals.yaml")).unwrap()
+            == fs::read(base.join("adr-seals.yaml")).unwrap(),
+        "書いた封の一覧が土台の凍結済みの file と byte 一致しない"
+    );
+    w.commit();
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    assert!(
+        text(&out.stdout).contains("合格（違反 0・まだ分からない 0）"),
+        "{}",
+        show(&out)
+    );
+}
+
+/// 5. どちらか 1 本在れば、何も書かずに 1 で断る。
+#[test]
+fn f121_freeze_start_refuses_when_either_exists() {
+    for (case, gone, present) in [
+        ("chain-only", &["ids-v1.8.yaml"][..], "憲法の列"),
+        (
+            "ids-only",
+            &["constitution-v1.0.yaml", "index.yaml"][..],
+            "id の一覧",
+        ),
+    ] {
+        let w = Work::new(case, FLOOR_BASE, true, |d| remove(d, gone));
+        let before = anchors_snapshot(&w.dir());
+        let out = w.check(&["--freeze-start"]);
+        let se = text(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
+        assert!(
+            se.contains("--freeze-start") && se.contains(present) && se.contains("在る"),
+            "{case}: {se}"
+        );
+        assert_eq!(anchors_snapshot(&w.dir()), before, "{case}: anchors/ が変わった");
+    }
+}
+
+/// 6. ほかの検査に違反か「まだ分からない」・表に無い名では書かない。--freeze-anchor も表に無い名で digest の全桁を出す。
+#[test]
+fn f121_freeze_start_writes_nothing_on_any_finding() {
+    // (1) 違反 1 つ
+    let w = Work::new("violation", FLOOR_BASE, true, |d| {
+        no_anchors(d);
+        edit(&d.join("adr/schema.yaml"), |t| {
+            t.replacen("options_rule: {min: 2, adopted: 1}", "options_rule: {min: 3, adopted: 1}", 1)
+        });
+    });
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert_eq!(violations(&out).len(), 1, "{}", show(&out));
+    assert!(text(&out.stderr).contains("凍結しない"), "{}", show(&out));
+    assert!(!w.dir().join("anchors").exists());
+    drop(w);
+
+    // (2) まだ分からない 1 つ（器の導出 file を置かない）
+    let w = Work::new("unknown", FLOOR_BASE, false, no_anchors);
+    let out = w.check(&["--freeze-start"]);
+    let se = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+    assert!(violations(&out).is_empty(), "{}", show(&out));
+    assert!(se.contains("contracts/field-schema/schema.toml") && se.contains("凍結しない"), "{se}");
+    assert!(!w.dir().join("anchors").exists());
+    drop(w);
+
+    // (3) 表に無い名（写しは空の表に揃える＝写しの違反を立てない）
+    let w = Work::new("unlisted", FLOOR_BASE, true, |d| {
+        no_anchors(d);
+        rename(d, FOLIO2, OTHER);
+        empty_table(d);
+        abroad_note(d);
+    });
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert!(
+        v[0].contains(OTHER) && v[0].contains("表に無い") && v[0].contains(ROOT),
+        "{v:?}"
+    );
+    assert!(!w.dir().join("anchors").exists());
+    drop(w);
+
+    unlisted_anchor();
+}
+
+/// id の一覧だけが在る置き場の表に無い名で、--freeze-anchor が digest の全桁を出し anchors/ を変えないのを見る。
+fn unlisted_anchor() {
+    // (4) id の一覧だけが在る置き場で同じ名の書き換え → --freeze-anchor も digest の全桁を出す
+    let w = Work::new("unlisted-anchor", FLOOR_BASE, true, |d| {
+        remove(d, &["constitution-v1.0.yaml", "index.yaml"]);
+        rename(d, FOLIO2, OTHER);
+        empty_table(d);
+    });
+    let before = anchors_snapshot(&w.dir());
+    let out = w.check(&["--freeze-anchor"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert!(
+        v.iter().any(|l| l.contains("--freeze-anchor") && l.contains("表に無い") && l.contains(ROOT)),
+        "{v:?}"
+    );
+    assert_eq!(anchors_snapshot(&w.dir()), before);
+}
+
+/// 7. folio schema は置き場の名の行だけを写す: 名を書き換えると check 1・write の後は空の表で check 0・meta.id が無ければ 2。
+#[test]
+fn f121_schema_copies_only_the_named_row() {
+    let w = Work::new("schema", "design-intent", true, |_| {});
+    let out = w.schema("--check");
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    rename(&w.dir(), FOLIO2, OTHER);
+    let out = w.schema("--check");
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert!(text(&out.stderr).contains("adr/schema.yaml"), "{}", show(&out));
+    let out = w.schema("--write");
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    let file = fs::read_to_string(w.dir().join("adr/schema.yaml")).unwrap();
+    let rows: Vec<&str> = file
+        .lines()
+        .filter(|l| l.trim_start().starts_with("root_digests"))
+        .collect();
+    assert_eq!(rows, ["    root_digests: {}"]);
+    assert!(!file.contains(ROOT), "写しに folio2 の行が残る");
+    let out = w.schema("--check");
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    edit(&w.dir().join("constitution.yaml"), |t| {
+        t.replacen(&format!("\nmeta:\n  id: {OTHER}\n"), "\nmeta:\n", 1)
+    });
+    let out = w.schema("--check");
+    assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+    assert!(text(&out.stderr).contains("meta.id"), "{}", show(&out));
+}
+
+/// tsuzuri の名（8）: folio schema --write が列の根の欄を tsuzuri の行 1 行にし、commit の後の床は
+/// 写しの folio2 の根を表の tsuzuri の行と照らして違うの違反ちょうど 1 件で 1。
+#[test]
+fn f134_tsuzuri_name_picks_its_row() {
+    let w = Work::new("tsuzuri", "design-intent", true, |_| {});
+    rename(&w.dir(), FOLIO2, TSUZURI);
+    let out = w.schema("--write");
+    assert_eq!(out.status.code(), Some(0), "{}", show(&out));
+    let path = w.dir().join("adr/schema.yaml");
+    assert_eq!(
+        table_lines(&path),
+        [
+            "    root_digests:".to_string(),
+            format!("      {TSUZURI}: {TSUZURI_ROOT}"),
+        ]
+    );
+    let file = fs::read_to_string(&path).unwrap();
+    let after = file
+        .lines()
+        .skip_while(|l| !l.trim_start().starts_with("root_digests:"))
+        .nth(2)
+        .unwrap_or_default();
+    assert!(!after.starts_with("      "), "表の行が 2 つ以上: {after}");
+    assert!(!file.contains(ROOT), "写しに folio2 の行が残る");
+    w.commit();
+    let out = w.check(&[]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert!(
+        v[0].starts_with("[anchor] ")
+            && v[0].contains(&format!("列の根の表の {TSUZURI} の行"))
+            && !v[0].contains("表に無い"),
+        "{v:?}"
+    );
+}
+
+/// 9 の 1（便 155）: 骨格のままの置き場で、check と --freeze-ids と --emit-amends は 2 で違反 0 のまま、
+/// --freeze-start は承認欄の違反と表に無い名の違反のちょうど 2 件で 1 を返し、anchors/ を作らない。
+#[test]
+fn f155_skeleton_freeze_start_refuses_the_empty_approval() {
+    let w = Work::init("skeleton");
+    for flags in [&[][..], &["--freeze-ids"], &["--emit-amends"]] {
+        let out = w.check(flags);
+        assert_eq!(out.status.code(), Some(2), "{flags:?}: {}", show(&out));
+        assert!(violations(&out).is_empty(), "{flags:?}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{flags:?} が anchors/ を作った");
+    }
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    let v = violations(&out);
+    assert_eq!(v.len(), 2, "{v:?}");
+    assert_eq!(
+        approval_rows(&out),
+        [format!("{APPROVAL_AT}approvals[0].ruling に台帳 id が無い")],
+        "{v:?}"
+    );
+    assert_eq!(
+        v.iter()
+            .filter(|l| l.starts_with("[anchor] ") && l.contains("表に無い"))
+            .count(),
+        1,
+        "{v:?}"
+    );
+    assert!(text(&out.stderr).contains("凍結しない"), "{}", show(&out));
+    assert!(!w.dir().join("anchors").exists(), "--freeze-start が anchors/ を作った");
+}
+
+/// 9 の 2（便 155）: 床の土台の写しで裁定 id を 未記入 にすると、列の無い置き場の --freeze-start は承認欄の行を
+/// ちょうど 1 件足し、id の一覧だけが在る置き場の --freeze-anchor は足さない。どちらも 1 で anchors/ は変わらない。
+#[test]
+fn f155_freeze_start_checks_the_approval_and_freeze_anchor_is_unchanged() {
+    let w = Work::new("f155-start", FLOOR_BASE, true, |d| {
+        no_anchors(d);
+        blank_ruling(d);
+    });
+    let before = anchors_snapshot(&w.dir());
+    let out = w.check(&["--freeze-start"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert_eq!(
+        approval_rows(&out),
+        [format!("{APPROVAL_AT}approvals[0].ruling に台帳 id が無い")],
+        "{}",
+        show(&out)
+    );
+    assert_eq!(anchors_snapshot(&w.dir()), before, "--freeze-start: anchors/ が変わった");
+    drop(w);
+
+    let w = Work::new("f155-anchor", FLOOR_BASE, true, |d| {
+        remove(d, &["constitution-v1.0.yaml", "index.yaml"]);
+        blank_ruling(d);
+    });
+    let before = anchors_snapshot(&w.dir());
+    let out = w.check(&["--freeze-anchor"]);
+    assert_eq!(out.status.code(), Some(1), "{}", show(&out));
+    assert!(approval_rows(&out).is_empty(), "{}", show(&out));
+    assert_eq!(anchors_snapshot(&w.dir()), before, "--freeze-anchor: anchors/ が変わった");
+}
+
+/// 9 の 3（便 155）: 凍結の前の確かめは凍結の後の床と同じ関数に同じ項（欄 adr は空）を渡す。承認者が空の字なら
+/// who / ruling / verbatim の違反ちょうど 1 件、meta.approval に欄 adr が在っても承認欄の違反 0 件。どちらも 1 で書かない。
+#[test]
+fn f155_freeze_start_approval_is_the_floor_row() {
+    fn blank_who(d: &Path) {
+        approval(d, "{who: 持ち主（shuu5）,", "{who: \"\",");
+    }
+    fn with_adr(d: &Path) {
+        approval(d, "{who:", "{adr: ADR-1, who:");
+    }
+    let cases = [
+        (
+            "f155-who",
+            blank_who as fn(&Path),
+            vec![format!("{APPROVAL_AT}approvals[0] に who / ruling / verbatim が無い")],
+        ),
+        ("f155-adr", with_adr, Vec::new()),
+    ];
+    for (case, prep, want) in cases {
+        let w = Work::new(case, FLOOR_BASE, true, |d| {
+            no_anchors(d);
+            prep(d);
+        });
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
+        assert_eq!(approval_rows(&out), want, "{case}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{case}: anchors/ を作った");
+    }
+}
+
+/// 10 の 1（便 158）: 骨格の承認欄の裁定 id だけを台帳 id の形にすると、--freeze-start は承認者と逐語の印の行と
+/// 表に無い名のちょうど 2 件で 1。日付だけ 未記入 なら承認欄の行は日付の形。どちらも anchors/ を作らない。
+#[test]
+fn f158_skeleton_freeze_start_reads_the_mark_and_the_date() {
+    let cases = [
+        (
+            "f158-mark",
+            ["未記入", "未記入", "p1-1", "未記入"],
+            format!("{APPROVAL_AT}approvals[0] の who / verbatim が 未記入（init の雛形の印・空と同じ）"),
+        ),
+        (
+            "f158-date",
+            ["持ち主", "未記入", "p1-1", "承認する"],
+            format!("{APPROVAL_AT}approvals[0].date「未記入」が年-月-日でない"),
+        ),
+    ];
+    for (case, [who, date, ruling, verbatim], want) in cases {
+        let w = Work::init(case);
+        skeleton_approval(&w.dir(), who, date, ruling, verbatim);
+        w.commit();
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{case}: {}", show(&out));
+        let v = violations(&out);
+        assert_eq!(v.len(), 2, "{case}: {v:?}");
+        assert_eq!(approval_rows(&out), [want], "{case}: {v:?}");
+        assert_eq!(
+            v.iter()
+                .filter(|l| l.starts_with("[anchor] ") && l.contains("表に無い"))
+                .count(),
+            1,
+            "{case}: {v:?}"
+        );
+        assert!(!w.dir().join("anchors").exists(), "{case}: anchors/ を作った");
+    }
+}
+
+/// 10 の 2（便 158）: 床の土台の写しで、凍結の前（列の無い置き場の憲法 meta.approval → --freeze-start）と
+/// 凍結の後（凍結済みの anchor の承認一覧 → 素の check）に同じ書き換えを当てると、承認欄の行は頭を除いて同じ本文。
+#[test]
+fn f158_the_mark_and_the_date_are_the_same_rows_before_and_after_the_freeze() {
+    // 欄・今の値・書き換えた値・憲法の行の前後の字・承認欄の行の本文（頭の「<file>: 」の後）
+    let cases = [
+        ("who", "持ち主（shuu5）", "未記入", "{", ",", Some("approvals[0] の who が 未記入（init の雛形の印・空と同じ）")),
+        ("who", "持ち主（shuu5）", "\"　未記入 \"", "{", ",", Some("approvals[0] の who が 未記入（init の雛形の印・空と同じ）")),
+        ("date", "2026-09-12", "2026/09/12", " ", ",", Some("approvals[0].date「2026/09/12」が年-月-日でない")),
+        ("date", "2026-09-12", "2026-9-12", " ", ",", Some("approvals[0].date「2026-9-12」が年-月-日でない")),
+        ("date", "2026-09-12", "\"2026-09-12 20:20\"", " ", ",", Some("approvals[0].date「2026-09-12 20:20」が年-月-日でない")),
+        ("verbatim", "承認する", "未記入の欄は無いので承認する", " ", ",", None),
+    ];
+    for (n, (key, from, to, pre, post, want)) in cases.into_iter().enumerate() {
+        let want: Vec<String> = want.into_iter().map(str::to_string).collect();
+        let w = Work::new(&format!("f158-before-{n}"), FLOOR_BASE, true, |d| {
+            no_anchors(d);
+            approval(d, &format!("{pre}{key}: {from}{post}"), &format!("{pre}{key}: {to}{post}"));
+        });
+        let out = w.check(&["--freeze-start"]);
+        assert_eq!(out.status.code(), Some(1), "{key} {to}: {}", show(&out));
+        let before: Vec<String> = approval_rows(&out)
+            .iter()
+            .map(|l| l[APPROVAL_AT.len()..].to_string())
+            .collect();
+        assert_eq!(before, want, "{key} {to}: {}", show(&out));
+        assert!(!w.dir().join("anchors").exists(), "{key} {to}: anchors/ を作った");
+        drop(w);
+
+        let w = Work::new(&format!("f158-after-{n}"), FLOOR_BASE, true, |d| {
+            anchor_approval(d, key, from, to);
+        });
+        let out = w.check(&[]);
+        assert_eq!(out.status.code(), Some(1), "{key} {to}: {}", show(&out));
+        let head = "[anchor] constitution-v1.0.yaml: ";
+        let after: Vec<String> = violations(&out)
+            .iter()
+            .filter(|l| l.starts_with(head) && l.contains("approvals["))
+            .map(|l| l[head.len()..].to_string())
+            .collect();
+        assert_eq!(after, before, "{key} {to}: {}", show(&out));
+    }
+}
+
+/// 10 の 3（便 158）: 判断の記録の承認欄の逐語の印は N-4 の 1 行で落ち、印を含むだけの字は通る。
+/// 承認者の印は値域外の 1 行だけ（印の行を 2 重に積まない）。
+#[test]
+fn f158_adr_approval_verbatim_mark_is_empty() {
+    let mark = "[N-4] ADR-1.approval.verbatim が 未記入（init の雛形の印・空と同じ）";
+    let cases = [
+        ("verbatim: すべて承認する,", "verbatim: 未記入,", Some(mark)),
+        ("verbatim: すべて承認する,", "verbatim: \" 未記入　\",", Some(mark)),
+        ("verbatim: すべて承認する,", "verbatim: 未記入の欄は無い,", None),
+        ("{who: 持ち主,", "{who: 未記入,", Some("who が値域外")),
+    ];
+    for (n, (from, to, want)) in cases.into_iter().enumerate() {
+        let w = Work::new(&format!("f158-adr-{n}"), FLOOR_BASE, true, |d| {
+            edit(&d.join("adr/ADR-1.yaml"), |t| t.replacen(from, to, 1));
+        });
+        let out = w.check(&[]);
+        // 発効した ADR-1 の承認欄を写しの上で変えた＝封の違反 1 行（便 170）を確かめて外す
+        let mut v = violations(&out);
+        let seal = "[adr] ADR-1: 発効した判断の記録の本文が封（anchors/adr-seals.yaml）の行と違う";
+        assert_eq!(v.iter().filter(|l| l.starts_with(seal)).count(), 1, "{to}: {v:?}");
+        v.retain(|l| !l.starts_with(seal));
+        assert_eq!(out.status.code(), Some(1), "{to}: {}", show(&out));
+        match want {
+            None => assert!(v.is_empty(), "{to}: {v:?}"),
+            Some(want) => {
+                assert_eq!(v.len(), 1, "{to}: {v:?}");
+                assert!(v[0].starts_with("[N-4] ") && v[0].contains(want), "{to}: {v:?}");
+            }
+        }
+    }
+}
