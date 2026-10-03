@@ -1,4 +1,7 @@
 {
+  "claudeMdExcludes": [
+    "**/scribe2/CLAUDE.md"
+  ],
   "hooks": {
     "SessionStart": [
       {
