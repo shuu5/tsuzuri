@@ -545,7 +545,7 @@ const WORDS: &[&str] = &[
 #[test]
 fn kdeny_own_names_clean() {
     assert_eq!(WORDS.len(), 321);
-    let text = read("xtask/tests/deny.rs");
+    let text = read("xtask/tests/teeth1/deny.rs");
     let lines: Vec<&str> = text.lines().collect();
     let names: Vec<&str> = lines
         .windows(2)

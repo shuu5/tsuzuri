@@ -460,7 +460,7 @@ fn klint_print_hands() {
 #[test]
 fn klint_r4_no_attr_exceptions() {
     let root = repo_root();
-    let own = root.join("xtask/tests/klint.rs");
+    let own = root.join("xtask/tests/teeth1/klint.rs");
     let mut marks: Vec<String> = MAP
         .iter()
         .filter(|m| m.3 == "R-4")
@@ -493,7 +493,7 @@ fn klint_r4_no_attr_exceptions() {
 
 #[test]
 fn klint_own_names_clean() {
-    let text = read("xtask/tests/klint.rs");
+    let text = read("xtask/tests/teeth1/klint.rs");
     let mut names = Vec::new();
     let mut rest = text.as_str();
     // 属性の行と次の行の `fn `（この字の literal は逆斜線の escape で改行を持たず当たらない）。

@@ -617,7 +617,7 @@ const WORDS: &[&str] = &[
 #[test]
 fn cexcl_own_names_clean() {
     assert_eq!(WORDS.len(), 294);
-    let text = read("xtask/tests/carry.rs");
+    let text = read("xtask/tests/teeth1/carry.rs");
     let lines: Vec<&str> = text.lines().collect();
     let names: Vec<&str> = lines
         .windows(2)

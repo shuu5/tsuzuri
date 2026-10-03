@@ -5,7 +5,7 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const FOLIO2: &str = "folio2";
 const RETIRED: &str = "folio2/retired";
@@ -204,36 +204,75 @@ fn f2ret_folio_binary_retired() {
     assert!(lines.contains(&"autotests = false"), "folio の manifest に autotests = false が無い");
 }
 
+/// folio の tests/ の歯の単位: 直下の .rs（段）の stem と、main.rs を持つ dir（群・判断の記録 ADR-32）の名。
+fn folio_units(tests_dir: &Path) -> BTreeSet<String> {
+    let mut units = BTreeSet::new();
+    for entry in std::fs::read_dir(tests_dir).expect("folio の tests/ を読む") {
+        let path = entry.expect("tests/ の項目").path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if let Some(stem) = name.strip_suffix(".rs") {
+            units.insert(stem.to_string());
+        } else if path.join("main.rs").is_file() {
+            units.insert(name.to_string());
+        }
+    }
+    units
+}
+
+/// 歯の単位の根の path（tests/ からの字）と、単位の歯の file（群は main.rs を除く .rs）。
+fn unit_root_and_files(tests_dir: &Path, name: &str) -> (String, Vec<PathBuf>) {
+    let single = tests_dir.join(format!("{name}.rs"));
+    if single.is_file() {
+        return (format!("tests/{name}.rs"), vec![single]);
+    }
+    let mut files: Vec<PathBuf> = std::fs::read_dir(tests_dir.join(name))
+        .expect("群の dir を読む")
+        .map(|e| e.expect("群の項目").path())
+        .filter(|p| p.extension().is_some_and(|x| x == "rs") && !p.ends_with("main.rs"))
+        .collect();
+    files.sort();
+    (format!("tests/{name}/main.rs"), files)
+}
+
 #[test]
 fn f2ret_folio_tests_named_once() {
     let tests_dir = repo_root().join(FOLIO).join("tests");
-    let mut files: BTreeSet<String> = BTreeSet::new();
-    for entry in std::fs::read_dir(&tests_dir).expect("folio の tests/ を読む") {
-        let path = entry.expect("tests/ の項目").path();
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".rs")) {
-            files.insert(name.to_string());
-        }
-    }
+    let units = folio_units(&tests_dir);
     let folio_tables = test_tables(&format!("{FOLIO}/Cargo.toml"));
-    assert!(folio_tables.iter().all(|(_, path)| path.is_empty()), "folio の表に path が在る");
+    for (name, path) in &folio_tables {
+        let root = unit_root_and_files(&tests_dir, name).0;
+        let plain = path.is_empty() && root == format!("tests/{name}.rs");
+        assert!(plain || *path == root, "folio の {name} の path {path}");
+    }
     let folio: BTreeSet<String> = folio_tables.into_iter().map(|(name, _)| name).collect();
     let boundary_tables = test_tables(BOUNDARY_MANIFEST);
     for (name, path) in &boundary_tables {
-        assert_eq!(path, &format!("../../{FOLIO}/tests/{name}.rs"), "{name} の path");
+        let root = unit_root_and_files(&tests_dir, name).0;
+        assert_eq!(path, &format!("../../{FOLIO}/{root}"), "{name} の path");
     }
     let boundary: BTreeSet<String> = boundary_tables.into_iter().map(|(name, _)| name).collect();
     assert!(folio.is_disjoint(&boundary), "2 つの manifest が同じ歯を名指す");
     let named: BTreeSet<String> = folio.union(&boundary).cloned().collect();
-    assert_eq!(files, named, "tests/ の file と 2 つの manifest の表の名の和");
+    assert_eq!(units, named, "tests/ の歯の単位と 2 つの manifest の表の名の和");
     let mut with_tz: BTreeSet<String> = BTreeSet::new();
-    for name in &files {
-        let text = std::fs::read_to_string(tests_dir.join(format!("{name}.rs"))).expect("歯の file を読む");
-        assert!(!text.contains("CARGO_BIN_EXE_folio"), "{name} が folio の binary を撃つ");
-        if text.contains("CARGO_BIN_EXE_tz") {
-            with_tz.insert(name.clone());
+    let mut without_tz: BTreeSet<String> = BTreeSet::new();
+    for name in &units {
+        let files = unit_root_and_files(&tests_dir, name).1;
+        assert!(!files.is_empty(), "{name} に歯の file が無い");
+        for file in &files {
+            let text = std::fs::read_to_string(file).expect("歯の file を読む");
+            assert!(!text.contains("CARGO_BIN_EXE_folio"), "{} が folio を撃つ", file.display());
+            if text.contains("CARGO_BIN_EXE_tz") {
+                with_tz.insert(name.clone());
+            } else {
+                without_tz.insert(name.clone());
+            }
         }
     }
-    assert_eq!(with_tz, boundary, "tz の binary を撃つ file と境界の manifest の表");
+    assert_eq!(with_tz, boundary, "tz を撃つ file を持つ単位と境界の manifest の表");
+    assert!(without_tz.is_disjoint(&boundary), "境界の単位に tz を撃たない file が在る");
 }
 
 /// 起草の時の main 58c1da55 の契約表の verify の最後の字（この行の語を除く）。
@@ -560,8 +599,8 @@ const WORDS: &[&str] = &[
 #[test]
 fn f2ret_own_names_clean() {
     assert_eq!(WORDS.len(), 317);
-    let text = std::fs::read_to_string(repo_root().join("xtask/tests/retire.rs"))
-        .expect("xtask/tests/retire.rs を読む");
+    let text = std::fs::read_to_string(repo_root().join("xtask/tests/teeth1/retire.rs"))
+        .expect("xtask/tests/teeth1/retire.rs を読む");
     let lines: Vec<&str> = text.lines().collect();
     let names: Vec<&str> = lines
         .windows(2)

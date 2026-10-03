@@ -200,8 +200,8 @@ fn klintf_no_allow_attrs() {
 fn klintf_own_names_clean() {
     let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
     assert_eq!(words.len(), 357, "filter の語の数");
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/klintf.rs");
-    let text = fs::read_to_string(&path).expect("tests/klintf.rs を読む");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/teeth1/klintf.rs");
+    let text = fs::read_to_string(&path).expect("tests/teeth1/klintf.rs を読む");
     let lines: Vec<&str> = text.lines().collect();
     let names: Vec<&str> = lines
         .windows(2)
