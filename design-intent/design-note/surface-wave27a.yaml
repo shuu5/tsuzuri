@@ -3,20 +3,20 @@
 meta:
   id: surface-wave27a
   title: 第 27 波 a — 相談の窓 consult の作り直し（判断の記録 ADR-29）の行と、後で足す行
-  version: v0.2
+  version: v0.3
   status: effective
   generated: 2026-10-03
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-02, ruling: t3-hub.75.1（裁定 id = t3-hub.75.1:20261002T2238Z-1・席とのチャット・notes に逐語）・t3-hub.75.2（裁定 id = t3-hub.75.2:20261002T2258Z-1・席とのチャット・パッケージ の形は乙）, verbatim: 4.これは微妙だ。相談といっても例えば新しい技術のスクラッチ実験とかデータの検証のためにプログラムを組むとかはできるべきだ。それがそのプロジェクトを汚さない形であるようにしてほしい。調査レポートなども作れるべきで、ただしそれを直接プロジェクト内に保存するのではなく、orchestratorに渡して保存するかどうか選ばせる形だ 5.常にweb調査もできるべき。上記の通りスクラッチ昨日は残さないと上質な調査は不可能だ それ以外は推奨で良い あと、consultは以前は一つの議題についての相談に特化していた気がするが、そのようにむやみに限定するのではなく、もっとorchestratorのコンテキストを汚さないために分離しているだけの自由な調査検証の場として作って。一つ話終わったからすぐに閉じるわけではない。途中でclearして別の話題について検証して結果をorchestratorに渡す、みたいな運用もあり得るし、なんならconsult窓が複数もあり得る／乙でよいだろう, surface: R-8}
-  note: ノート surface-wave26b（32 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-29 の持ち主の裁定（t3-hub.75.1:20261002T2238Z-1 と t3-hub.75.2:20261002T2258Z-1）。第 0.1 版（2026-10-03）は目的と、相談の窓の第 1 の波の行 cs-types・cs-finding・cs-lines・cs-argv・cs-quota を置いた。 第 0.2 版（2026-10-03）は、器 scribe2 の持ち込みの前の行 v-gate（xtask の check の最後に入れ子の workspace の段・判断の記録 ADR-18 の決定 (2) と ADR-22 の決定 (7)）を足した。
+  note: ノート surface-wave26b（32 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-29 の持ち主の裁定（t3-hub.75.1:20261002T2238Z-1 と t3-hub.75.2:20261002T2258Z-1）。第 0.1 版（2026-10-03）は目的と、相談の窓の第 1 の波の行 cs-types・cs-finding・cs-lines・cs-argv・cs-quota を置いた。 第 0.2 版（2026-10-03）は、器 scribe2 の持ち込みの前の行 v-gate（xtask の check の最後に入れ子の workspace の段・判断の記録 ADR-18 の決定 (2) と ADR-22 の決定 (7)）を足した。 第 0.3 版（2026-10-03）は、判断の記録 ADR-31 の行 r-dbg・r-nextest-timeout（dev の debuginfo を行の表だけ・nextest の歯の時間切れ・節 9〜10）を足した（新しいノートを置くと生きたノートが 7 本になり規則の行 R-31 の上限 6 本を越えるので、このノートに置いた・席の決め）。
 
 sections:
   - n: 1
     type: prose
     title: 目的
     body: |
-      判断の記録 ADR-29（相談の窓 consult の作り直し・持ち主の裁定 t3-hub.75.1 と t3-hub.75.2）の作る行と、後で足す行（同じ波に置く別の判断の記録の行）を流す。相談の窓は、席の文脈を汚さないために分けた自由な調べと検証の場で、tsuzuri の plugin の機能（skill /tsuzuri:consult と tz consult の命令）として作る（決定 (2)(3)）。形は持ち主が直に話す窓と席が背景で起こす問う窓の 2 つで、同じ起動の口・口座・基本ソフトの囲い・所見の口・受け方を通る（決定 (3)(5)(7)(8)）。計画は 16 行（型と中核の純な関数・tz consult の命令・席の hook・board の server の口と面・plugin）で、この版は第 1 の波の 5 行（型・所見の欄の検め・台帳の相談の行と置き場・席が自分で開く問う窓の数え・起動の argv と設定の組みと検め）を置く。残りの行（命令・hook・server・面・plugin）と後で足す行は起草の後に足す。受入 AC16 は行 cs-finding と後の行の歯で、AC19 は行 cs-argv と後の起こす口の行の歯で測り、囲いの実の効き（作業場の外と repo へ書けない）は着地の後に席の手で問う窓と話す窓の両方で撃って確かめる。当座の手順 docs/consult/ は命令の口が着地した後に席の設計の commit で退かせる（決定 (1) のク）。
+      判断の記録 ADR-29（相談の窓 consult の作り直し・持ち主の裁定 t3-hub.75.1 と t3-hub.75.2）の作る行と、後で足す行（同じ波に置く別の判断の記録の行）を流す。相談の窓は、席の文脈を汚さないために分けた自由な調べと検証の場で、tsuzuri の plugin の機能（skill /tsuzuri:consult と tz consult の命令）として作る（決定 (2)(3)）。形は持ち主が直に話す窓と席が背景で起こす問う窓の 2 つで、同じ起動の口・口座・基本ソフトの囲い・所見の口・受け方を通る（決定 (3)(5)(7)(8)）。計画は 16 行（型と中核の純な関数・tz consult の命令・席の hook・board の server の口と面・plugin）で、この版は第 1 の波の 5 行（型・所見の欄の検め・台帳の相談の行と置き場・席が自分で開く問う窓の数え・起動の argv と設定の組みと検め）を置く。残りの行（命令・hook・server・面・plugin）と後で足す行は起草の後に足す。受入 AC16 は行 cs-finding と後の行の歯で、AC19 は行 cs-argv と後の起こす口の行の歯で測り、囲いの実の効き（作業場の外と repo へ書けない）は着地の後に席の手で問う窓と話す窓の両方で撃って確かめる。当座の手順 docs/consult/ は命令の口が着地した後に席の設計の commit で退かせる（決定 (1) のク）。後で足す行のうち、判断の記録 ADR-31（開発の組みの書き込みと CPU を減らす・持ち主の memo t3-hub.77）の行 r-dbg・r-nextest-timeout を第 0.3 版で足した（開発の組みの debuginfo を行の表だけにする・nextest の歯の時間切れ・試作は係 w86a・差の file の形・生きたノートを増やさないためにこのノートに置く）。
   - n: 2
     type: contract-table
     title: 契約表
@@ -78,6 +78,24 @@ sections:
         verify: ["git apply --reverse --check docs/design/patch/v-gate.patch", "cargo clippy -p xtask --all-targets --no-deps -- -D warnings", "cargo nextest run -p xtask --bin xtask --no-tests=fail vnest_", "cargo nextest run -p xtask --bin xtask --no-tests=fail ksize_", "cargo run -q -p xtask -- check"]
         size: M
         done: (1) git apply --reverse --check docs/design/patch/v-gate.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p xtask --all-targets --no-deps -- -D warnings が rc 0 (3) xtask の nested の fn find は、根の直下の dir のうち Cargo.toml の行の前後の空白を除いた字が [workspace] に等しい行を持つ dir の名を字の順で返し（fixture の木で Z・a・b の順）、根の Cargo.toml・下の dir の manifest・節 [workspace.package] だけの manifest・注の行の [workspace]・package だけの manifest・名が Cargo.toml の dir・根の直下の file を数えず、子の無い根は空の列、無い根は Err（歯 vnest_finds_marked_dirs_in_order） (4) const STEPS は build --workspace・nextest run --workspace・clippy --workspace --all-targets -- -D warnings・xtask check の 4 段の字で、fn plan は入れ子の dir の順に dir ごとに 4 段を並べ（dir 2 つで 8 段）、各段の撃つ dir は根の下の dir の名・置き場は base の下の dir の名・引数は partition の字が在れば頭の語が nextest の段にだけ --partition と字を足した字で、ほかの段と partition の無い時は段の字のまま、dir が無ければ空（歯 vnest_shots_with_and_without_partition） (5) fn summary は入れ子が 0 の時に字 nested workspaces=0 だけを返し、在れば字 nested workspaces= と数と空白と字 dirs= と名を , でつないだ字（1 つなら nested workspaces=1 dirs=scribe2・2 つなら nested workspaces=2 dirs=a,b）を返す（歯 vnest_summary_line_counts_zero） (6) const TARGET_SUB は字 nested で、fn target_base は環境変数の値が無いか空なら根の下の target の下の nested、絶対の path ならその path の下の nested、相対の path なら根からのその path の下の nested を返す（歯 vnest_target_dir_under_root_target） (7) fn run は入れ子の無い木では cargo を撃たずに 0 を返し、入れ子の在る木で cargo を起動できなければ 1 を返し、無い根では 1 を返す（歯 vnest_run_zero_and_missing_cargo） (8) xtask の src/main.rs は行 mod nested; を持ち、fn check の中で cargo の段の繰り返し・surface_build(root)・nested::run(root, &cargo, part) がこの順に在り、surface_build(root) と nested::run の間に return rc; が在り、fn check の最後の式が nested::run(root, &cargo, part)（歯 vnest_check_runs_last） (9) 歯の file xtask/src/nested.rs の test の fn は 7 つで、名はどれも vnest_ で始まり、file は 8 節の filter の語の一覧の 409 語を字のまま持って数 409 を断言し、名から vnest_ を除いた字はその 409 語のどれも含まない（歯 vnest_own_names_clean） (10) xtask の src/main.rs の fn check の中で pubscan::run(root)・size::measure(root)・cargo の段の繰り返しがこの順に在り、数えと cargo の段の間に return 1; が在る（歯 ksize_check_wiring ほか ksize_ の 7 本） (11) cargo run -q -p xtask -- check が rc 0
+        depends: []
+      - id: r-dbg
+        title: 開発の組み（dev と test の profile）の debuginfo を行の表だけにする（根の Cargo.toml に段 profile.dev と debug の 1 行・器 scribe2 と同じ値・歯 wstrip_release_profile_keys の見出しの一覧と段の断言を合わせる・判断の記録 ADR-31 の決定 (1)）
+        req: ["NFR3"]
+        section: "9"
+        write-set: ["Cargo.toml", "crates/tsuzuri-surface/tests/wstrip.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/r-dbg.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test wstrip --no-tests=fail wstrip_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/r-dbg.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings が rc 0 (3) 歯 wstrip_release_profile_keys は、根の Cargo.toml の表の見出しを字の順に並べた一覧が profile.dev・profile.dev.package.folio・profile.release・workspace・workspace.dependencies・workspace.lints.clippy・workspace.lints.rust・workspace.package の 8 つと等しいことと、見出し profile.dev の段の行（井桁で始まる行と空の行を除き trim）が、字 debug と空白と等号と空白と二重引用符で囲んだ line-tables-only の 1 行だけであることを断言する（段 profile.release の strip と段 profile.dev.package.folio の opt-level の断言は元のまま） (4) cargo nextest run -p tsuzuri-surface --test wstrip --no-tests=fail wstrip_ が rc 0 (5) cargo run -q -p xtask -- check が rc 0
+        depends: []
+      - id: r-nextest-timeout
+        title: nextest の設定 .config/nextest.toml を足し、歯の時間切れを置く（profile.default の slow-timeout・60 秒ごとに SLOW と報せ 5 回目の 300 秒で止めて TIMEOUT の落ちにする・値を字で照らす xtask の歯 ntmo_・判断の記録 ADR-31 の決定 (2)）
+        req: ["NFR3"]
+        section: "10"
+        write-set: ["+.config/nextest.toml", "+xtask/tests/ntmo.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/r-nextest-timeout.patch", "cargo clippy -p xtask --all-targets --no-deps -- -D warnings", "cargo nextest run -p xtask --test ntmo --no-tests=fail ntmo_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/r-nextest-timeout.patch が rc 0（差の file の hunk が全部木に在る） (2) cargo clippy -p xtask --all-targets --no-deps -- -D warnings が rc 0 (3) 歯 ntmo_slow_timeout_is_sixty_seconds_five_times は、repo の根の .config/nextest.toml の行（trim して空の行と井桁で始まる行を除く）が、見出し profile.default の行と、slow-timeout の行（inline の表で period は二重引用符で囲んだ 60s・terminate-after は 5）の 2 行だけであることを、行の字のまま断言する (4) cargo nextest run -p xtask --test ntmo --no-tests=fail ntmo_ が rc 0 (5) cargo run -q -p xtask -- check が rc 0
         depends: []
   - n: 3
     type: prose
@@ -248,5 +266,43 @@ sections:
       流す時と順。depends は空。書く file は xtask/src/main.rs と新しい nested.rs だけで、同じノートの行 cs-types・cs-finding・cs-lines・cs-argv・cs-quota と重ならない。器を持ち込む merge（席が書き持ち主が撃つ script）の前に着地させる（merge の木の xtask の check が器の歯を撃つため）。merge の木では器の歯 4 本（git の根の宣言を器の宣言と読む歯・2 本は requirements の path を入れ子から読めない歯）が落ちるので、器の側の直しが器の main に入るまで merge の木の xtask の check は落ちる。その間は merge を撃たない。
 
       範囲の外。CI の job の割りと時間（入れ子の歯の分で job ごとに延びる・規則の行 R-5 の CI 5 分は検出線・job の数か入れ子の job の分けは後の行で決める）。入れ子の insta と cargo deny（後の行 v-ci）。器の xtask の check の 4 つの門（paths-clean・private-clean・non-rust-exec・prose-gate）が入れ子で n/a(not-a-repo-root) になる穴と、器の PR だけの門と main-provenance（器の席への問いと後の行）。根の workspace に入れる形（器の xtask の名替えと member の読み・後の行）。.vessel.toml の crate-roots（後の行）。
+  - n: 9
+    type: prose
+    title: 行 r-dbg — 開発の組みの debuginfo を行の表だけにする
+    body: |
+      在りか。差の file docs/design/patch/r-dbg.patch は main f3730538 の上の試作（係 w86a の写し・branch w86a-proto の commit 2cf411a6）から切った。書く file は根の Cargo.toml と crates/tsuzuri-surface/tests/wstrip.rs の 2 つで、差はこの 2 つに閉じる。
+
+      なぜ。歯の実行 file は tests/ の 1 file ごとに lib と依存と std の debuginfo を丸ごと入れて作られ、dev の既定の full の debuginfo が大半を占める。main f3730538 の歯の全部の組み（cargo nextest run --workspace --no-run）は 23.6 GB で、core の lib に注を 1 行足すと 20.6 GB を書き直した（係 w86a の測り）。行の表だけにすると、0 からの組みは 10.6 GB・lib 1 行は 8.9 GB・組みの CPU は 3 割減る。panic と歯の落ちの file と行、RUST_BACKTRACE の各段の file と行は残り、抜けるのは debugger の変数と型だけ（tsuzuri と器と hook と skill に debugger を使う所は 0）。器 scribe2 は同じ値をもう使っている。判断の記録 ADR-31 の決定 (1)。
+
+      形。根の Cargo.toml の末（段 profile.dev.package.folio の後）に空の行と注 2 行と段 profile.dev を足し、中身は debug の 1 行（値は line-tables-only）だけ。test の profile は dev を継ぐので歯の組みにも効く。段 profile.dev.package.folio（opt-level 2）と段 profile.release（strip）は替えない。歯 wstrip_release_profile_keys は、見出しの一覧の期待に profile.dev を足し、関数の末に段 profile.dev の中身が 1 行だけであることの断言（注 1 行と assert_eq の 1 行）を足す。字の正本は差の file。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目、(2) は 2 行目、(3) と (4) は 3 行目（歯 wstrip_release_profile_keys）、(5) は 4 行目で測る。
+
+      構造の連鎖。根の Cargo.toml の表の見出しを字で照らす歯は wstrip_release_profile_keys だけ（main f3730538 で grep・profile の見出しを読む歯はほかに無い）。xtask の歯 skeleton_ は manifest の members と依存の表を読み、profile の段を見ない。CI（.github/workflows/ci.yml）は xtask の check を撃つだけで profile を替えない。
+
+      試作と噛み。試作の木（この行と行 r-nextest-timeout を載せた木）で verify の 4 行が全部 rc 0（xtask の check は歯 3,027 本が全部緑）。差の file は main f3730538 の木に git apply --check が rc 0、試作の木に git apply --reverse --check が rc 0。噛みは cargo の profile の値を替えない変異 3 つで撃ち、どれも歯 wstrip_release_profile_keys が落ちた（rc 100）: 値を一重の引用符で囲む・見出しの角括弧の内に空白を足す・段に 2 行目 debug-assertions = true を足す。当てる前の木に段だけを足すと、この歯だけが落ちる（歯の全部の撃ちで 3,025 本が緑・1 本が赤）。
+
+      範囲の外。release の profile・面の wasm の組み・依存の部品だけ debuginfo を抜く段（案 A3・A1 より 4% 小さいだけで採らない）・debuginfo を無しにする案（A2・持ち主に問う）。
+  - n: 10
+    type: prose
+    title: 行 r-nextest-timeout — 歯の時間切れ（止まった歯を止まったと報せる）
+    body: |
+      在りか。差の file docs/design/patch/r-nextest-timeout.patch は main f3730538 の上の試作（係 w86a の写し・branch w86a-proto の commit d3564cc5・行 r-dbg の試作の commit 2cf411a6 の上）から切った。書く file は新しい .config/nextest.toml と xtask/tests/ntmo.rs の 2 つで、差はこの 2 つに閉じ、main f3730538 の木にもそのまま当たる（git apply --check が rc 0）。
+
+      なぜ。nextest の設定の file が無く、歯の時間切れが無い。便 t3-hub.74.31 の着地の前の xtask の check で、歯 face_note_escapes_values_from_the_source が図の描き手（node の renderer）の待ちで 30 分止まった。今の歯の最長は host の load によって 26〜62 秒（boundary の歯 site と badge）なので、300 秒（約 5 倍）で止めても性能を削らない。判断の記録 ADR-31 の決定 (2)。
+
+      形。.config/nextest.toml は注 2 行と、見出し profile.default と、slow-timeout の 1 行（inline の表で period は 60s・terminate-after は 5）だけ。並びの数・再試行・落ちた時の止め方は nextest の既定のまま。nextest は 60 秒を越えた歯を SLOW と報せ、5 回目（300 秒）で歯の process group を止めて TIMEOUT の落ちにする（子の node も止まる）。歯の file xtask/tests/ntmo.rs は、頭の //! の 2 行のすぐ次の行に #![cfg(test)] を置き、repo の根（xtask の manifest の dir の 1 つ上）からの相対で設定を読み、注と空の行を除いた行を字のまま断言する歯 ntmo_slow_timeout_is_sixty_seconds_five_times を 1 本持つ。接頭辞 ntmo_ は main f3730538 の契約表の verify の filter の語（409 語）のどれとも部分の字として重ならない。字の正本は差の file。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目、(2) は 2 行目、(3) と (4) は 3 行目（歯 ntmo_slow_timeout_is_sixty_seconds_five_times）、(5) は 4 行目で測る。
+
+      構造の連鎖。nextest は repo の根の .config/nextest.toml を自分で読むので、歯の全部の撃ち（xtask の check の nextest の段・CI の 8 つの job）に効く。xtask の check の段の並びと CI の partition の字は替えない。
+
+      試作と噛み。試作の木で verify の 4 行が全部 rc 0（xtask の check は pub-scan と size と lint の歯を含めて緑・歯 3,027 本）。その check で歯 f163_note_approval_list_builds_one_sign_per_item が 60 秒を越えて SLOW と報され、61.7 秒で緑のまま通った（報せるだけで止めない形の実の確かめ）。噛みは 4 つの変異で撃ち、どれも歯が落ちた（rc 100）: period を 120s に替える・terminate-after を 4 に替える・行 retries = 0 を足す・file を退かせる。
+
+      範囲の外。歯ごとの時間切れの上書き（overrides）・再試行（retries）・並びの数（test-threads）・CI の別の profile。歯の束ね（係 w87a の行）。
 
 figures: []

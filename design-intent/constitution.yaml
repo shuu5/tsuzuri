@@ -493,7 +493,7 @@ articles:
     rationale:
       - {kind: scribe2-article, ref: scribe2 C6（C6.1〜C6.3）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 型（Budget は Precheck からのみ）と唯一の起動口。数値は行 R-6（今は記録だけの検出線で、人手を待たずに止める門へ上げるのは止める実装ができた時に裁定 id つき）。}
-    relations: {rules: [R-6]}
+    relations: {rules: [R-6, R-40]}
   - id: P-24
     title: 危ない書き方は lint で禁じる
     amended_by:

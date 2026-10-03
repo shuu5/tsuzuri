@@ -1,0 +1,35 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index c0c236939144df9654b81f45c2fe5a17226a108d..237e0d0e6e40662991632fd81cb4842acd26ee62 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -58,3 +58,8 @@ strip = "symbols"
+ # 最適化の無い組みは CPU で遅いので folio の crate だけを opt-level 2 で組む（外の部品と tsuzuri の crate は変えない・4 core の測りで歯の組みは 86 → 147 秒）。
+ [profile.dev.package.folio]
+ opt-level = 2
++
++# 行 r-dbg: 開発の組み（dev と test の profile）の debuginfo を行の表だけにする（判断の記録 ADR-31 の決定 (1)）。
++# 歯の落ちと panic の file と行・RUST_BACKTRACE の各段の file と行は残り、debugger の変数と型の情報だけが抜ける。器 scribe2 と同じ値。
++[profile.dev]
++debug = "line-tables-only"
+diff --git a/crates/tsuzuri-surface/tests/wstrip.rs b/crates/tsuzuri-surface/tests/wstrip.rs
+index 31e4f70562fe4124cd64745366b5cbb25bbc3cc1..fd18f5dd0932fdfe6ca65c0191ac12b9beb70d96 100644
+--- a/crates/tsuzuri-surface/tests/wstrip.rs
++++ b/crates/tsuzuri-surface/tests/wstrip.rs
+@@ -42,6 +42,7 @@ fn wstrip_release_profile_keys() {
+     let mut heads: Vec<&str> = text.lines().filter_map(heading).collect();
+     heads.sort_unstable();
+     let mut want = vec![
++        "profile.dev",
+         "profile.dev.package.folio",
+         "workspace",
+         "workspace.package",
+@@ -63,6 +64,9 @@ fn wstrip_release_profile_keys() {
+ 
+     // 行 k-join-folio: folio の crate だけを最適化して組む段は opt-level = 2 の 1 行だけ。
+     assert_eq!(section(&text, "profile.dev.package.folio"), ["opt-level = 2"]);
++
++    // 行 r-dbg: 開発の組みの debuginfo は行の表だけの 1 行だけ（判断の記録 ADR-31 の決定 (1)）。
++    assert_eq!(section(&text, "profile.dev"), [r#"debug = "line-tables-only""#]);
+ }
+ 
+ #[test]
