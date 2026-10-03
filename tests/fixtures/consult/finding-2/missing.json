@@ -1,0 +1,22 @@
+{
+  "topic": "fx-hub.7",
+  "model": "fable・xhigh",
+  "conclusion": "読む根は repo と器の出力の 2 つに絞る",
+  "options": [
+    {"id": "a", "name": "絞る", "text": "repo と fleet と pipe だけを読む根にする", "verdict": "adopted", "reason": "資格の file が読めない"},
+    {"id": "b", "name": "丸ごと", "text": "state dir の全部を読む根にする", "verdict": "rejected", "reason": "資格の file が読める"}
+  ],
+  "recommendation": "案 a を採る（前提: 器の出力は fleet と pipe の下に在る）",
+  "basis": ["ADR-29", "FR19"],
+  "claims": [
+    {"text": "囲いの中から accounts の file が読める", "confidence": "verified", "how": "作業場の probe で撃った"},
+    {"text": "対話の窓でも同じ設定が効く", "confidence": "inferred", "how": "文書の字から"}
+  ],
+  "ask_owner": [],
+  "touches": ["FR19"],
+  "attachments": [
+    {"path": "work/report.md", "kind": "report", "note": "調べのレポート"},
+    {"path": "work/probe.py", "kind": "program", "note": "読めるかを撃つ program"}
+  ],
+  "sandbox_denials": []
+}
