@@ -207,7 +207,7 @@ const FILTER: [&str; 153] = [
 const FILES: [&str; 3] = [
     "crates/tsuzuri-contract/tests/teeth1/ctick.rs",
     "crates/tsuzuri-core/tests/teeth1/ctick.rs",
-    "crates/tsuzuri-surface/tests/ctickface.rs",
+    "crates/tsuzuri-surface/tests/teeth2/ctickface.rs",
 ];
 
 /// (15) 3 つの file の歯の名は 12 本とも ctick_ で始まり、残りの字は filter の語を含まない。

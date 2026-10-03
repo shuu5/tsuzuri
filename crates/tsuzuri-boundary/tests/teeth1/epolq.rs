@@ -1072,7 +1072,7 @@ fn test_names(text: &str) -> Vec<String> {
 fn epolq_own_names_clean() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mine = fs::read_to_string(dir.join("tests/teeth1/epolq.rs")).expect("この file");
-    let hist = fs::read_to_string(dir.join("../tsuzuri-surface/tests/epolqhist.rs"))
+    let hist = fs::read_to_string(dir.join("../tsuzuri-surface/tests/teeth2/epolqhist.rs"))
         .expect("面の歯の file");
     let names: Vec<String> = [mine, hist].iter().flat_map(|t| test_names(t)).collect();
     assert_eq!(names.len(), 13, "{names:?}");

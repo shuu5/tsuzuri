@@ -313,7 +313,7 @@ fn abss_own_names_clean() {
     assert_eq!(WORDS.len(), 217);
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut names = test_names(&root.join("tests/teeth1/abss.rs"));
-    names.extend(test_names(&root.join("../tsuzuri-surface/tests/abssface.rs")));
+    names.extend(test_names(&root.join("../tsuzuri-surface/tests/teeth1/abssface.rs")));
     assert_eq!(names.len(), 9, "{names:?}");
     for name in &names {
         let rest = name

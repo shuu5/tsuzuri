@@ -254,7 +254,7 @@ fn pkac_own_names_clean() {
     let mut names = Vec::new();
     for path in [
         "crates/tsuzuri-core/tests/teeth2/pkac.rs",
-        "crates/tsuzuri-surface/tests/pkacface.rs",
+        "crates/tsuzuri-surface/tests/teeth4/pkacface.rs",
     ] {
         let text = read(path);
         let lines: Vec<&str> = text.lines().collect();
