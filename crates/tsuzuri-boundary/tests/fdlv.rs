@@ -1,6 +1,6 @@
 //! 配達の hook の歯（行 f-deliver・接頭辞 fdlv_）。
 //! 偽の bd は撃たれた回ごとの引数と cwd を記録の置き場に足してから作業場の out.json を出す script。
-//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/fdlv.rs が持つ。
+//! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/teeth1/fdlv.rs が持つ。
 #![cfg(test)]
 
 use std::ffi::OsString;

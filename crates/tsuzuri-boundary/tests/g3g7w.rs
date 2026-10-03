@@ -514,7 +514,7 @@ fn g3g7_own_names_clean() {
     let mut names: Vec<String> = Vec::new();
     for file in [
         dir.join("tests/g3g7w.rs"),
-        dir.join("../tsuzuri-core/tests/g3g7.rs"),
+        dir.join("../tsuzuri-core/tests/teeth1/g3g7.rs"),
     ] {
         let text = fs::read_to_string(&file)
             .unwrap_or_else(|e| panic!("{} を読む: {e}", file.display()));

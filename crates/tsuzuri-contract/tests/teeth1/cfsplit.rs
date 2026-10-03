@@ -1,7 +1,7 @@
 //! 群ごとの snapshot と歯の file の見張りの歯（接頭辞 cfsplit_・設計ノート surface-wave16a 行 t-cform-json と t-cform-split）。
 //! 群の json（tests/snapshots の群の名の json）は群の module の見本だけを持ち、鍵は群どうしで重ならず、群の歯の file（tests/cform_ と群の名の .rs）は自分の群の json だけを比べる。
 //! 鍵の和は割る前の snapshot の鍵を、群の file の歯の名は割る前の歯の名を含む（床・足す行は一覧を直さず・消すか名を替える行だけが直す）。
-//! 共通の手は tests/common/mod.rs に 1 度ずつだけ在り、tests の下の file はどれも受付の行数の上限以下。
+//! 共通の手は tests/teeth1/common/mod.rs に 1 度ずつだけ在り、tests の下の file はどれも受付の行数の上限以下。
 //! 割る前の歯と snapshot の path の字は repo の crates と xtask の code に残らない（この file 自身は数えない）。
 #![cfg(test)]
 
@@ -87,7 +87,7 @@ const BEFORE_KEYS: [&str; 62] = [
     "seat::SeatCard",
 ];
 
-/// 共通の手の定義の字（tests/common/mod.rs に 1 度ずつだけ在り、群の file には無い）。
+/// 共通の手の定義の字（tests/teeth1/common/mod.rs に 1 度ずつだけ在り、群の file には無い）。
 const HANDS: [&str; 10] = [
     "const AT:",
     "fn bead(",

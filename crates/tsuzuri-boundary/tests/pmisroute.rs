@@ -1,6 +1,6 @@
 //! 行 c-pipe-misfit と行 c-misfit-pair の歯（境界）: 台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち
 //! （`form::Form`）、その字と台帳の形の行を組（`form::Kept`）で持ち、口 /api/pipeline は札を今の台帳の字から、
-//! 形の崩れの一覧を持った組から写す。知らせの接続も撃ちを許す（歯の名は中核の tests/pmisfit.rs と同じ接頭辞 pmisfit_）。
+//! 形の崩れの一覧を持った組から写す。知らせの接続も撃ちを許す（歯の名は中核の tests/teeth2/pmisfit.rs と同じ接頭辞 pmisfit_）。
 //! 偽の bd は撃たれるたびに記録の file bd に 1 行を足して作業場の ledger.json の字を出し、偽の器は受けた argv を
 //! 記録の file argv に 1 行ずつ足し、argv の頭が doctor なら作業場の sleep の字の秒だけ待ってから out-doctor の字を出す
 //! （ほかと file の無い出力は rc 1）。作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。

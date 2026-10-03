@@ -380,7 +380,7 @@ fn test_names(text: &str) -> Vec<String> {
 fn lresume_own_names_clean() {
     for (rel, n) in [
         ("../tsuzuri-contract/tests/teeth1/lresume.rs", 2),
-        ("../tsuzuri-core/tests/lresume.rs", 4),
+        ("../tsuzuri-core/tests/teeth2/lresume.rs", 4),
         ("tests/lresumepill.rs", 4),
     ] {
         let names = test_names(&read(rel));

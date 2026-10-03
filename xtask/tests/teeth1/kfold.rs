@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 const GROUPS: &[(&str, usize)] = &[
     // kfold-groups-begin
     ("crates/tsuzuri-contract/tests/teeth1", 13),
+    ("crates/tsuzuri-core/tests/teeth1", 29),
+    ("crates/tsuzuri-core/tests/teeth2", 25),
     ("xtask/tests/teeth1", 9),
     // kfold-groups-end
 ];

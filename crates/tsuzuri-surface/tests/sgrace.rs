@@ -474,7 +474,7 @@ const WORDS: &[&str] = &[
 fn sgrace_own_names_clean() {
     assert_eq!(WORDS.len(), 210);
     let mut names = Vec::new();
-    for rel in ["tests/sgrace.rs", "../tsuzuri-core/tests/sgrace.rs"] {
+    for rel in ["tests/sgrace.rs", "../tsuzuri-core/tests/teeth2/sgrace.rs"] {
         let text = read(rel);
         let lines: Vec<&str> = text.lines().collect();
         for w in lines.windows(2).filter(|w| w[0].trim() == "#[test]") {
