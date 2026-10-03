@@ -9,6 +9,8 @@ license.workspace = true
 # 行 g-gz（裁定 t3-hub.52.40:20260928T0156Z-1）: 配布の file の gzip の写しの deflate（枠と CRC-32 は gz の module で書く）。
 miniz_oxide = "0.8"
 tsuzuri-boundary = { path = "../crates/tsuzuri-boundary" }
+# 行 v-daily: 日に 1 度の撃ちが memo の状態（bd の show の JSON）を台帳の読みと同じ型 BdLine と wire で読む（外の依存を足さない）。
+tsuzuri-contract = { path = "../crates/tsuzuri-contract" }
 
 [lints]
 workspace = true

@@ -7,8 +7,10 @@
 //! check の size の段は 1 module の行数・中核の本体の総行数・歯と本体の行数比を規則の行 R-4 の上限と比べる（行 k-size-base・size の module）。
 //! check の最後の段は根の直下の入れ子の workspace を数えて 1 行で出し、各々で build・歯・clippy・その workspace の xtask の check を撃つ（行 v-gate・nested の module）。
 //! 割りの在る check は歯でない段を表の役だけで撃ち、歯だけを分ける（行 v-ci-split・spread の module）。
+//! daily は host の timer が撃つ日に 1 度の全部の撃ちで、写しを origin の main に合わせて check を撃ち、記録と memo を書く（行 v-daily・daily の module）。
 
 mod accept;
+mod daily;
 mod gz;
 mod nested;
 mod pubscan;
@@ -55,14 +57,16 @@ fn main() -> ExitCode {
         Some("check") if args.len() == 1 => exit_code(check(&workspace_root())),
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
+        Some("daily") => exit_code(daily_task(args.get(1..).unwrap_or_default())),
         Some("accept") => exit_code(accept::run(
             args.get(1..).unwrap_or_default(),
             &workspace_root(),
         )),
         _ => {
             emit_err(&format!(
-                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}",
-                accept::USAGE
+                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan>\n{}\n{}",
+                accept::USAGE,
+                daily::USAGE
             ));
             ExitCode::from(2)
         }
@@ -76,6 +80,21 @@ fn main() -> ExitCode {
 )]
 fn emit_err(line: &str) {
     eprintln!("{line}");
+}
+
+/// 日に 1 度の全部の撃ち（行 v-daily）: 引数を読み、撃ち、記録の 1 行を出して rc を返す（引数を読めなければ rc 2）。
+fn daily_task(args: &[String]) -> i32 {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let d = match daily::parse(args, &workspace_root(), &cargo) {
+        Ok(d) => d,
+        Err(e) => {
+            emit_err(&format!("xtask daily: {e}\n{}", daily::USAGE));
+            return 2;
+        }
+    };
+    let outcome = daily::run(&d, daily::now());
+    emit_err(&format!("xtask daily: {}", outcome.line));
+    outcome.rc
 }
 
 fn exit_code(rc: i32) -> ExitCode {
@@ -488,6 +507,7 @@ mod tests {
     /// miniz_oxide（行 g-gz・xtask だけ・裁定 t3-hub.52.40:20260928T0156Z-1）・
     /// clap と yaml-rust2（行 k-join-folio・持ち込んだ folio だけ・判断の記録 ADR-21 の承認）。
     /// 境界の crate の folio は workspace の member（行 k-tz-entry・folio の lib の入口を tz の口が撃つ）。
+    /// xtask の tsuzuri-contract は行 v-daily（日に 1 度の撃ちが memo の状態を台帳の読みの型 BdLine と wire で読む・外の部品は増えない）。
     /// 名を足す便はこの一覧を直す。一覧に無い名が manifest に在れば落ちる。
     const DIRECT_DEPS: [(&str, &[&str]); 6] = [
         ("crates/tsuzuri-contract", &["serde", "serde_json"]),
@@ -510,7 +530,10 @@ mod tests {
             ],
         ),
         ("folio2/crates/folio", &["clap", "yaml-rust2"]),
-        ("xtask", &["miniz_oxide", "tsuzuri-boundary"]),
+        (
+            "xtask",
+            &["miniz_oxide", "tsuzuri-boundary", "tsuzuri-contract"],
+        ),
     ];
 
     /// 面の crate の直接依存の上限（規則の行 R-25 の値・要件 NFR3）。rules の file の行 R-25 の字と照らす。

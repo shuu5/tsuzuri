@@ -1,0 +1,11 @@
+# tsuzuri の日に 1 度の全部の撃ち（判断の記録 ADR-34 の決定 (6)・行 v-daily）の時計。止めていた日の分は次に起きた時に 1 度撃つ。
+[Unit]
+Description=tsuzuri daily full check timer (ADR-34)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

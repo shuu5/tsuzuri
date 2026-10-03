@@ -1,0 +1,17 @@
+# tsuzuri の日に 1 度の全部の撃ち（判断の記録 ADR-34 の決定 (6)・行 v-daily）の雛形。~/.config/systemd/user/ へ写して使う。
+# host の値は drop-in（systemctl --user edit tsuzuri-daily.service）の [Service] に Environment で置き、この file は替えない:
+#   TSUZURI_DAILY_PLACE  撃つ写しの根（作業木の外の固定の置き場・origin は送り先の repo）
+#   TSUZURI_DAILY_LOG    記録の file（1 撃ち 1 行）
+#   TSUZURI_DAILY_OUT    check の出力の file（撃つたびに書き直す）
+#   TSUZURI_DAILY_LEDGER 台帳を持つ tsuzuri の作業木（bdw の cwd）
+#   TSUZURI_DAILY_PARENT memo の親の bead
+#   CARGO_TARGET_DIR     温かく保つ組みの置き場の絶対 path（器の掃除が見る起草の置き場の下にしない）
+#   BDW_BD_BIN           bdw が撃つ native の bd
+[Unit]
+Description=tsuzuri daily full check (ADR-34)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.cargo/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.cargo/bin/cargo run -q --manifest-path ${TSUZURI_DAILY_PLACE}/Cargo.toml -p xtask -- daily --log ${TSUZURI_DAILY_LOG} --out ${TSUZURI_DAILY_OUT} --ledger ${TSUZURI_DAILY_LEDGER} --parent ${TSUZURI_DAILY_PARENT}
+TimeoutStartSec=2h
