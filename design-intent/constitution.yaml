@@ -366,7 +366,7 @@ articles:
       - {kind: folio2-ruling, ref: folio2 P18（枝 1〜4）}
       - {kind: scribe2-article, ref: scribe2 C16（仕様からの逸脱は編集時に止める）}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 極性一覧の生成と行 R-11 の下限。編集時の guard は器の PreToolUse。}
-    relations: {rules: [R-11]}
+    relations: {rules: [R-11, R-39]}
   - id: P-15
     title: 自動の仕掛けに寄りかからない
     tier: always
