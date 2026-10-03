@@ -58,3 +58,8 @@ strip = "symbols"
 # 最適化の無い組みは CPU で遅いので folio の crate だけを opt-level 2 で組む（外の部品と tsuzuri の crate は変えない・4 core の測りで歯の組みは 86 → 147 秒）。
 [profile.dev.package.folio]
 opt-level = 2
+
+# 行 r-dbg: 開発の組み（dev と test の profile）の debuginfo を行の表だけにする（判断の記録 ADR-31 の決定 (1)）。
+# 歯の落ちと panic の file と行・RUST_BACKTRACE の各段の file と行は残り、debugger の変数と型の情報だけが抜ける。器 scribe2 と同じ値。
+[profile.dev]
+debug = "line-tables-only"

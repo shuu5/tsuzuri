@@ -42,6 +42,7 @@ fn wstrip_release_profile_keys() {
     let mut heads: Vec<&str> = text.lines().filter_map(heading).collect();
     heads.sort_unstable();
     let mut want = vec![
+        "profile.dev",
         "profile.dev.package.folio",
         "workspace",
         "workspace.package",
@@ -63,6 +64,9 @@ fn wstrip_release_profile_keys() {
 
     // 行 k-join-folio: folio の crate だけを最適化して組む段は opt-level = 2 の 1 行だけ。
     assert_eq!(section(&text, "profile.dev.package.folio"), ["opt-level = 2"]);
+
+    // 行 r-dbg: 開発の組みの debuginfo は行の表だけの 1 行だけ（判断の記録 ADR-31 の決定 (1)）。
+    assert_eq!(section(&text, "profile.dev"), [r#"debug = "line-tables-only""#]);
 }
 
 #[test]
