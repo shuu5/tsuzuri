@@ -3,12 +3,13 @@
 //! 各々の dir で build・歯（根と同じ partition）・clippy・その workspace の `cargo xtask check` を順に撃ち、最初に落ちた段の rc を返す。
 //! 入れ子の組み立ては根の target の下の nested/<dir の名> に書く（根の xtask と入れ子の xtask の binary を同じ dir に置かない）。
 //! 数えた 1 行の後、dir ごとに省くかを判じて 1 行ずつ出し、省いた dir の段は撃たない（行 v-skip・判断の記録 ADR-34・skip の module）。
+//! 割りの在る撃ちでは、歯でない段（build・clippy・xtask の check）は spread の表の役だけが撃つ（行 v-ci-split）。
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::{emit_err, step_args};
+use crate::{emit_err, spread, step_args, turn};
 
 mod skip;
 
@@ -111,6 +112,11 @@ pub fn run(root: &Path, cargo: &str, part: Option<&str>) -> i32 {
     }
     let base = target_base(root, std::env::var_os("CARGO_TARGET_DIR"));
     for shot in plan(root, &base, &dirs, part) {
+        match turn(&spread::key("nested", &shot.args), part) {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(rc) => return rc,
+        }
         let line = format!("nested {}: cargo {}", shot.name, shot.args.join(" "));
         emit_err(&format!("xtask check: {line}"));
         let status = Command::new(cargo)
