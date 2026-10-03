@@ -525,3 +525,39 @@ pub struct ConsultBoard {
     pub requests: Reading<Vec<RequestRow>>,
     pub quota: Reading<SeatQuota>,
 }
+
+/// 作業場の窓の控え（`.consult/window.json`・open が書き、起動と一覧と board の口が読む・未知の鍵を断る）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowFile {
+    pub id: WindowId,
+    pub form: Form,
+    /// 題の bead の id か自由な題（無ければ None）。
+    pub topic: Option<String>,
+    pub model: String,
+    pub effort: String,
+    pub starter: Starter,
+    /// 持ち主のチャットの発話の UTC の分の字（起こし手が持ち主のチャットの時だけ）。
+    pub uttered: Option<String>,
+    /// 頼みの id（起こし手が持ち主の button の時だけ）。
+    pub request: Option<RequestId>,
+    /// 作業場を用意した UTC の分の字。
+    pub made: String,
+}
+
+/// 起こした process の印（`.consult/proc-<k>.json`・起動の口が起こすごとに 1 つ書く・未知の鍵を断る）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProcMark {
+    /// 窓の中の起こしの番号（1 から）。
+    pub k: u32,
+    pub form: Form,
+    /// 問う窓は子の pid、話す窓は tmux の pane の pid。
+    pub pid: u32,
+    /// 起こした UTC の分の字。
+    pub at: String,
+    /// 撃ち直しか。
+    pub again: bool,
+    /// 話す窓の tmux の window id（`@<n>`・問う窓は None）。
+    pub tmux_window: Option<String>,
+}
