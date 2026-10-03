@@ -1,0 +1,976 @@
+diff --git a/.vessel.toml b/.vessel.toml
+index ac519ea40d2953e167385ee273063bf0a0c691cc..89ac447d50cab166416b3f55242710703b4178e1 100644
+--- a/.vessel.toml
++++ b/.vessel.toml
+@@ -15,3 +15,10 @@ design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/", "docs/consul
+ # folio2/crates/ の下の crate を、器の追随の再 gate・着地の後の検出線・受付の上限の余地と歯の導出が crates/ の直下の crate と同じに読む。
+ # 器の持ち込みの前に folio2/crates/ だけを足した（持ち主の承認 2026-10-01T06:40Z）。scribe2/crates/ は器の持ち込みの時に足す。
+ crate-roots = ["folio2/crates/"]
++# 契約表の置き場（器の任意の key contract-tables・器の判断の記録 ADR-0109・器の行 cb〜cg・器の設計 contract-source.md の 69 節）。
++# 既定の docs/design/ の直下の .md に足す。dir の項目は直下の .md と .toml を全部契約表と読むので、契約表の欄の写しは下の dir
++# contracts/field-schema/ に置く（行 v-field-schema）。持ち主の承認 t3-hub.74.29:20261002T2330Z-1。
++contract-tables = ["contracts/"]
++# 憲法の置き場（器の任意の key constitution・器の判断の記録 ADR-0110・器の行 as）。器の審査役は既定の docs/constitution.md の代わりに
++# この 2 file を読む（案内の docs/constitution.md は残す）。持ち主の承認 t3-hub.74.29:20261002T2330Z-1。
++constitution = ["design-intent/constitution.yaml", "design-intent/rules.yaml"]
+diff --git a/contracts/schema.toml b/contracts/field-schema/schema.toml
+similarity index 100%
+rename from contracts/schema.toml
+rename to contracts/field-schema/schema.toml
+diff --git a/folio2/crates/folio/src/entry.rs b/folio2/crates/folio/src/entry.rs
+index 19fd99311f0b86b5b4223958e0635b76d6df1ea2..cf5b454a3c1636c6ccbfbe87cea6215c32edb0e5 100644
+--- a/folio2/crates/folio/src/entry.rs
++++ b/folio2/crates/folio/src/entry.rs
+@@ -145,7 +145,7 @@ enum Command {
+     /// byte 一致を数える（--check）。配信の組み立てから切り離した独立の命令で、面の生成器も様式の file も呼ばない
+     #[command(name = floor_note::DERIVED_SUBCOMMAND, group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
+     Derive {
+-        /// 正本の置き場（design-note/ と、版管理の根〔無ければ置き場の親 dir〕の contracts/schema.toml を読む）
++        /// 正本の置き場（design-note/ と、版管理の根〔無ければ置き場の親 dir〕の contracts/field-schema/schema.toml を読む）
+         #[arg(long, default_value = "design-intent")]
+         dir: PathBuf,
+         /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対〔--from-root なら根からの相対〕・絶対ならそのまま）
+diff --git a/folio2/crates/folio/src/face_note.rs b/folio2/crates/folio/src/face_note.rs
+index 858e52eb139279a79ad58c0c47fe09dabd191e57..3d4966f909cbba8c5225f636e43a4a59001712ba 100644
+--- a/folio2/crates/folio/src/face_note.rs
++++ b/folio2/crates/folio/src/face_note.rs
+@@ -6,7 +6,7 @@
+ //! `Frame` を関数の中で組む。節の型は閉じた一覧 9 つで、一覧に無い型が 1 つでもあれば面を導出しない（要件書 FR9）。
+ //! 計画の設計ノートの 3 つの型（行の索引・計画だけの行・判断の表・判断の記録 ADR-31 決定 (2)(イ)(7)・要件書 FR27）は便 184 で
+ //! 描けるようにした（索引の行は所属の設計ノートの面へ・計画だけの行は大きさ・依存・書く file・拠る裁定・判断の表は裁定の字）。
+-//! 契約表の節の欄は器（scribe2）の導出 file `contracts/schema.toml` の field の順に出し、欄の一覧を自前に持たない（FR10・P-6.4）。
++//! 契約表の節の欄は器（scribe2）の導出 file（`EXTERNAL_PATH`）の field の順に出し、欄の一覧を自前に持たない（FR10・P-6.4）。
+ //! 図の章（便 31）は図ごとに図の枠（figure-panel・便 34 からは `face.rs` の共有の口）を置き、図の本体（SVG）は
+ //! `figure.rs` の `render` が図の道具で描いたものを逐語で埋める。図が 1 枚でも導出できなければ面全体を導出しない
+ //! （全部か無しか・FR15）。
+diff --git a/folio2/crates/folio/src/floor_note.rs b/folio2/crates/folio/src/floor_note.rs
+index afee204bd808a9598da02880f3ea5cb4d67fb22b..5f07f12cb5f2eabace33d16dcbd9b83d02a18f86 100644
+--- a/folio2/crates/folio/src/floor_note.rs
++++ b/folio2/crates/folio/src/floor_note.rs
+@@ -119,8 +119,9 @@ pub(crate) const ROWS_BEGIN: &str = "# folio:rows:begin — 生成区間・手
+ pub(crate) const ROWS_END: &str = "# folio:rows:end";
+ /// 計画の名札の行の欄 key の値（規則の表の閉じた一覧 `rules::KEYS` の 1 つ・字はここが持ち `rules::PLAN_NOTE` が引く）。
+ pub(crate) const PLAN_KEY: &str = "plan-note";
+-/// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。
+-pub(crate) const EXTERNAL_PATH: &str = "contracts/schema.toml";
++/// 器（scribe2）の導出 file の置き場（repo の根からの相対）と読み手の期待する形。置き場は契約表の dir contracts/ の直下でなく
++/// 下の dir（器の vessel 宣言の key contract-tables の dir の項目は直下の .toml を全部契約表と読み、[[field]] の表を読めない）。
++pub(crate) const EXTERNAL_PATH: &str = "contracts/field-schema/schema.toml";
+ pub(crate) const EXTERNAL_HEAD: &str = "schema = 1";
+ pub(crate) const EXTERNAL_ROWS_KEY: &str = "field";
+ pub(crate) const EXTERNAL_ROW_FIELDS: &[&str] = &["name", "need", "shape"];
+diff --git a/folio2/crates/folio/src/note.rs b/folio2/crates/folio/src/note.rs
+index 6fe0f9785107ed018f045e72a07b648467401b66..2a9ff3d08219fc27965e8e5fa5c14f4216f98745 100644
+--- a/folio2/crates/folio/src/note.rs
++++ b/folio2/crates/folio/src/note.rs
+@@ -1,7 +1,7 @@
+ //! `folio check` の設計ノートの正本（`design-note/*.yaml`・ADR-3 決定 (1)・要件書 FR9 / FR10）の形の検査
+ //! （便 23・docs/design/delivery-23.md §1）。
+ //! 数えるのは 欄の決まり（同じ dir の `schema.yaml`）の schema 節が定める形（文書と meta の欄・節の番号と型・
+-//! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `contracts/schema.toml` から読む・
++//! 型ごとの行の欄と値域・承認欄の要否）と、契約表の節の欄（器 scribe2 の導出 file `EXTERNAL_PATH` から読む・
+ //! 欄の一覧も値域も自分の型にも散文にも持たない・FR10）と、参照 id の解決（folio2 が所有する id 空間）である。
+ //! 散文の門（FR12・rules 行 R-16）は便 24 で入り、索引（FR14）は 2026-09-22 に着地した（folio graph --print・graph.rs）。導出物（FR11）は便 119 の独立の命令 folio derive（derive.rs）が、ここの読み手 3 つ（load_notes・has_contract_table・load_external）を共有して組む。
+ //! 欄の決まりの閾値・値域・置き場は床の定数（`FLOOR`）で持ち、`design-note/schema.yaml` の schema 節はその写し
+diff --git a/folio2/crates/folio/tests/adr.rs b/folio2/crates/folio/tests/adr.rs
+index 6e7e8f9bffd05a1ce7e4628a500069521fc0a93a..d6d6b7b84a1684056d83f924a066f871804b52d5 100644
+--- a/folio2/crates/folio/tests/adr.rs
++++ b/folio2/crates/folio/tests/adr.rs
+@@ -87,10 +87,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/badge.rs b/folio2/crates/folio/tests/badge.rs
+index 2c9e6ae4198cb5b72cdaa66b6a1afb71c81497cb..990e55d9c7ce02ba3e48de3793bccbe51ffd2ee7 100644
+--- a/folio2/crates/folio/tests/badge.rs
++++ b/folio2/crates/folio/tests/badge.rs
+@@ -233,7 +233,7 @@ fn face_copy(td: &Path) -> PathBuf {
+     fs::create_dir_all(work.join("preview")).unwrap();
+     fs::create_dir_all(work.join("adr")).unwrap();
+     fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     for name in [
+         "constitution.yaml",
+         "rules.yaml",
+@@ -252,7 +252,7 @@ fn face_copy(td: &Path) -> PathBuf {
+     }
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_tree(
+@@ -297,10 +297,10 @@ fn real_copy(td: &Path, mark: &str) -> PathBuf {
+     let dir = td.join("design-intent");
+     copy_tree(&design_intent(), &dir);
+     put_mark(&dir, mark);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_tree(
+diff --git a/folio2/crates/folio/tests/bundle.rs b/folio2/crates/folio/tests/bundle.rs
+index 4b4a7764fdd49a9dccb4530bf0b71314593834a4..8dba8b0d358f2f1a6ed02471b74eb0ff3d1cd29d 100644
+--- a/folio2/crates/folio/tests/bundle.rs
++++ b/folio2/crates/folio/tests/bundle.rs
+@@ -761,10 +761,10 @@ fn real_bundle(case: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+     let td = temp_dir(case);
+     let dir = td.join("design-intent");
+     copy_tree(&design_intent(), &dir);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_tree(
+diff --git a/folio2/crates/folio/tests/ceiling.rs b/folio2/crates/folio/tests/ceiling.rs
+index 1966883a33dc911701b53317d3f11cfb50179108..518e7fb265d2955365956b2cbfe0f8810da7e673 100644
+--- a/folio2/crates/folio/tests/ceiling.rs
++++ b/folio2/crates/folio/tests/ceiling.rs
+@@ -31,10 +31,10 @@ fn copy_tree(src: &Path, dst: &Path) {
+ 
+ /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+ fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts")).unwrap();
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+ }
+diff --git a/folio2/crates/folio/tests/check.rs b/folio2/crates/folio/tests/check.rs
+index 13d896c41de45b25a86bf16f98a80ad30be2d75b..d1d0d690df3d4d0318ed0f72d8c93cc392bf8e29 100644
+--- a/folio2/crates/folio/tests/check.rs
++++ b/folio2/crates/folio/tests/check.rs
+@@ -89,10 +89,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/constitution_range.rs b/folio2/crates/folio/tests/constitution_range.rs
+index 7b2b16fb52ce0e4535b687deb51b1fb71f2f4a54..811a2d738f43b3c53fce1d1e93fb410f26cc7bc6 100644
+--- a/folio2/crates/folio/tests/constitution_range.rs
++++ b/folio2/crates/folio/tests/constitution_range.rs
+@@ -83,10 +83,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/derive.rs b/folio2/crates/folio/tests/derive.rs
+index 0ea68f27f59ee0dbc2cfe70849a48d3dd9ee150b..70ad69524da77541b4fe02905c3fc4fa3e0fae6b 100644
+--- a/folio2/crates/folio/tests/derive.rs
++++ b/folio2/crates/folio/tests/derive.rs
+@@ -41,7 +41,7 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// 一時 dir（`<tmp>/design-intent/design-note/` と `<tmp>/contracts/schema.toml`）。落ちても消す。
++/// 一時 dir（`<tmp>/design-intent/design-note/` と `<tmp>/contracts/field-schema/schema.toml`）。落ちても消す。
+ struct Work {
+     root: PathBuf,
+ }
+@@ -69,10 +69,10 @@ impl Work {
+     fn empty(case: &str) -> Work {
+         let root = std::env::temp_dir().join(format!("folio-derive-{case}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&root);
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         Work { root }
+@@ -314,11 +314,11 @@ fn refuse_all(cases: [(&str, &str, &str, &str); 9]) {
+         assert_code(&w.derive("--check"), 2, &[why]);
+     }
+     let w = Work::anchor("refuse-no-schema");
+-    fs::remove_file(w.root.join("contracts/schema.toml")).unwrap();
++    fs::remove_file(w.root.join("contracts/field-schema/schema.toml")).unwrap();
+     assert_code(
+         &w.derive("--write"),
+         2,
+-        &["contracts/schema.toml", "読めない"],
++        &["contracts/field-schema/schema.toml", "読めない"],
+     );
+     assert!(!w.out().exists(), "置き場を作らない");
+     // 設計ノートの置き場が symlink なら読まずに 2
+@@ -443,7 +443,7 @@ fn f120_conditional_fields_are_copied_as_the_row_has_them() {
+     let fixtures = repo_root().join("tests/fixtures/design-note");
+     fs::copy(
+         fixtures.join("need-conditional-schema.toml"),
+-        w.root.join("contracts/schema.toml"),
++        w.root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     fs::create_dir_all(w.dir().join("design-note")).unwrap();
+@@ -564,10 +564,10 @@ fn f192_from_root_resolves_out_from_the_repo_root() {
+ fn f192_from_root_without_a_repo_is_the_parent_of_the_place() {
+     // 版管理の根が無ければ置き場の親（器の導出 file を探す根と同じ・ADR-16 決定 (2)(キ)）
+     let (w, _) = nested("plain", false);
+-    fs::create_dir_all(w.root.join("docs/contracts")).unwrap();
++    fs::create_dir_all(w.root.join("docs/contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        w.root.join("docs/contracts/schema.toml"),
++        w.root.join("docs/contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     assert_code(
+diff --git a/folio2/crates/folio/tests/emit_rulings.rs b/folio2/crates/folio/tests/emit_rulings.rs
+index 6c81c67a5def37a2a5a3cd1462c8bf09262867bb..a26a7598548743024db09e653133087dae090118 100644
+--- a/folio2/crates/folio/tests/emit_rulings.rs
++++ b/folio2/crates/folio/tests/emit_rulings.rs
+@@ -63,8 +63,8 @@ impl Work {
+         let _ = fs::remove_dir_all(&root);
+         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2");
+         copy_tree(&repo.join(src), &root.join("design-intent"));
+-        fs::create_dir_all(root.join("contracts")).unwrap();
+-        fs::copy(repo.join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
++        fs::copy(repo.join("contracts/schema.toml"), root.join("contracts/field-schema/schema.toml")).unwrap();
+         git(&root, &["init", "-q"]);
+         git(&root, &["add", "-A"]);
+         git(&root, &["commit", "-q", "-m", "fixture"]);
+diff --git a/folio2/crates/folio/tests/entrance.rs b/folio2/crates/folio/tests/entrance.rs
+index 080b1901862140b28a59d96bdd806e21b4376ac4..7ae00e69580200a65a48a2fad8036c28ea3315f5 100644
+--- a/folio2/crates/folio/tests/entrance.rs
++++ b/folio2/crates/folio/tests/entrance.rs
+@@ -27,10 +27,10 @@ fn copy_tree(src: &Path, dst: &Path) {
+ 
+ /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+ fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts")).unwrap();
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+ }
+diff --git a/folio2/crates/folio/tests/face_index.rs b/folio2/crates/folio/tests/face_index.rs
+index d4d09a62e8bd5efcc3ebf7fb2f349c1ed00d8c32..7310ca87ed7bf391589dccc7143a1681487bbedd 100644
+--- a/folio2/crates/folio/tests/face_index.rs
++++ b/folio2/crates/folio/tests/face_index.rs
+@@ -196,7 +196,7 @@ fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+ /// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+ /// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+ /// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/schema.toml）は写さない。
++/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+ fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     let (td, work) = fixture_copy(case);
+     for name in ["index.yaml", "intake.yaml"] {
+diff --git a/folio2/crates/folio/tests/face_index_sheet.rs b/folio2/crates/folio/tests/face_index_sheet.rs
+index b46aa4640e95403cd8355e7b9543bf3160de6741..54ba3971e0a886e7e88703aa9e0812f310a21903 100644
+--- a/folio2/crates/folio/tests/face_index_sheet.rs
++++ b/folio2/crates/folio/tests/face_index_sheet.rs
+@@ -143,7 +143,7 @@ fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+ /// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+ /// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+ /// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/schema.toml）は写さない。
++/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+ fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     let (td, work) = fixture_copy(case);
+     for name in ["index.yaml", "intake.yaml"] {
+diff --git a/folio2/crates/folio/tests/face_index_shelf.rs b/folio2/crates/folio/tests/face_index_shelf.rs
+index c6c7e08e8de0164381a9dac4d5af7745c27eb19c..e2ebf2472e50bdeb1e3f283100ebbb9beea1bb3d 100644
+--- a/folio2/crates/folio/tests/face_index_shelf.rs
++++ b/folio2/crates/folio/tests/face_index_shelf.rs
+@@ -148,7 +148,7 @@ fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+ /// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+ /// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+ /// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/schema.toml）は写さない。
++/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+ fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     let (td, work) = fixture_copy(case);
+     for name in ["index.yaml", "intake.yaml"] {
+diff --git a/folio2/crates/folio/tests/face_note.rs b/folio2/crates/folio/tests/face_note.rs
+index a762705782e8cf2970139acb81e8fa4198c44731..211417a8a3f960a023884907a646e4ceee7ec4a6 100644
+--- a/folio2/crates/folio/tests/face_note.rs
++++ b/folio2/crates/folio/tests/face_note.rs
+@@ -58,7 +58,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     let td = temp_dir(case);
+     let work = td.join("src");
+     fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     for name in [
+         "constitution.yaml",
+         "rules.yaml",
+@@ -71,7 +71,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     }
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_dir(&vendor(), &td.join("vendor/archify"));
+@@ -809,7 +809,7 @@ fn face_note_unknown_when_a_contract_field_is_not_in_the_derived_file() {
+ #[test]
+ fn face_note_unknown_when_the_derived_file_is_missing() {
+     let (td, work) = fixture_copy("no-external");
+-    fs::remove_file(td.join("contracts/schema.toml")).unwrap();
++    fs::remove_file(td.join("contracts/field-schema/schema.toml")).unwrap();
+     let out = td.join("note-full.html");
+     let run = folio_face("note", Some("full"), &work, &out, "--write");
+     let exists = out.exists();
+diff --git a/folio2/crates/folio/tests/figure.rs b/folio2/crates/folio/tests/figure.rs
+index de003dde92b4028fafabbb4872ed6b1e394e1d27..9d77a663e632295350fc60f72c197758add2319f 100644
+--- a/folio2/crates/folio/tests/figure.rs
++++ b/folio2/crates/folio/tests/figure.rs
+@@ -529,10 +529,10 @@ fn anchor_drift_makes_the_note_face_unknown() {
+         work.join("ceiling.yaml"),
+     )
+     .unwrap();
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     drift_tool(&td);
+diff --git a/folio2/crates/folio/tests/findings.rs b/folio2/crates/folio/tests/findings.rs
+index 1f73cc9938631de6eb22a308c580abb20a1506d9..14fe860a26733045fd8515c1ffce2d47a95f2d23 100644
+--- a/folio2/crates/folio/tests/findings.rs
++++ b/folio2/crates/folio/tests/findings.rs
+@@ -93,10 +93,10 @@ fn git(cwd: &Path, args: &[&str]) {
+ fn real_copy(td: &Path) -> PathBuf {
+     let dir = td.join("design-intent");
+     copy_tree(&design_intent(), &dir);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_tree(
+diff --git a/folio2/crates/folio/tests/floor_cases.rs b/folio2/crates/folio/tests/floor_cases.rs
+index 54105612c8be5493836d99e475dcb777b9087886..b6f018623ce1b6804c3ee2af95d0f4ca78c4438a 100644
+--- a/folio2/crates/folio/tests/floor_cases.rs
++++ b/folio2/crates/folio/tests/floor_cases.rs
+@@ -233,13 +233,13 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), String> {
+ /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+ fn copy_external_schema(root: &Path) -> Result<(), String> {
+     io(
+-        fs::create_dir_all(root.join("contracts")),
+-        "contracts/ を作れない",
++        fs::create_dir_all(root.join("contracts/field-schema")),
++        "contracts/field-schema/ を作れない",
+     )?;
+     io(
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         ),
+         "器の導出 file を写せない",
+     )?;
+diff --git a/folio2/crates/folio/tests/floor_faces.rs b/folio2/crates/folio/tests/floor_faces.rs
+index e2407fbdb3600335d766be7e3af30a49f0e9db50..126b8a45f2f770c4ba961c1c89dd9e3261260ca7 100644
+--- a/folio2/crates/folio/tests/floor_faces.rs
++++ b/folio2/crates/folio/tests/floor_faces.rs
+@@ -101,10 +101,10 @@ fn place(case: &str) -> (PathBuf, PathBuf) {
+     let td = temp_dir(case);
+     let dir = td.join("design-intent");
+     copy_dir(&repo_root().join("tests/fixtures/floor_base/design-intent"), &dir);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     proposed_adr(&dir);
+@@ -484,10 +484,10 @@ fn f187_the_face_stage_runs_only_on_an_otherwise_silent_floor() {
+     let td = temp_dir("no-git");
+     let dir = td.join("design-intent");
+     copy_dir(&repo_root().join("tests/fixtures/floor_base/design-intent"), &dir);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     face_gap(&dir);
+diff --git a/folio2/crates/folio/tests/freeze.rs b/folio2/crates/folio/tests/freeze.rs
+index 2541926f5db4c13f7974f9592026e11970652f6e..9828ffd9db159ca96decc33a8f45288919a65ec5 100644
+--- a/folio2/crates/folio/tests/freeze.rs
++++ b/folio2/crates/folio/tests/freeze.rs
+@@ -33,10 +33,10 @@ fn copy_tree(src: &Path, dst: &Path) {
+ 
+ /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+ fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts")).unwrap();
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+ }
+diff --git a/folio2/crates/folio/tests/freeze_root.rs b/folio2/crates/folio/tests/freeze_root.rs
+index 462b5cf8f137b06bbd86ac53d3b8092b329c6c5b..7dd91009c7b0317108a9d6360ad99f195c3fb785 100644
+--- a/folio2/crates/folio/tests/freeze_root.rs
++++ b/folio2/crates/folio/tests/freeze_root.rs
+@@ -96,10 +96,10 @@ impl Work {
+         let _ = fs::remove_dir_all(&root);
+         copy_tree(&repo_root().join(src), &root.join("design-intent"));
+         if contracts {
+-            fs::create_dir_all(root.join("contracts")).unwrap();
++            fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+             fs::copy(
+                 repo_root().join("contracts/schema.toml"),
+-                root.join("contracts/schema.toml"),
++                root.join("contracts/field-schema/schema.toml"),
+             )
+             .unwrap();
+         }
+@@ -521,7 +521,7 @@ fn f121_freeze_start_writes_nothing_on_any_finding() {
+     let se = text(&out.stderr);
+     assert_eq!(out.status.code(), Some(2), "{}", show(&out));
+     assert!(violations(&out).is_empty(), "{}", show(&out));
+-    assert!(se.contains("contracts/schema.toml") && se.contains("凍結しない"), "{se}");
++    assert!(se.contains("contracts/field-schema/schema.toml") && se.contains("凍結しない"), "{se}");
+     assert!(!w.dir().join("anchors").exists());
+     drop(w);
+ 
+diff --git a/folio2/crates/folio/tests/graph.rs b/folio2/crates/folio/tests/graph.rs
+index aef7f7262ba23030d6f75589f740d9104171a1c7..6fce800636b2b37603f098f9c2a18042274bd54e 100644
+--- a/folio2/crates/folio/tests/graph.rs
++++ b/folio2/crates/folio/tests/graph.rs
+@@ -499,7 +499,8 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
+ /// 便 185: 土台の設計ノートの契約表の行 example#a が節点になり（独立の実装に設計ノートの行を足した）、その行と要約の 2 行が動いた値。
+ /// 便 196: 土台の設計ノートの欄の決まりの写しに known_values の 1 行が入り（83 byte 増）、残差の 2 行だけが動いた値。
+ /// 便 207: 土台の規則の表に数の上限の行 R-23〜R-25（欄 key）が入り、その 3 節点の行と要約の行だけが動いた値。
+-const F99_ANCHOR_SHA256: &str = "18107e99dec4dca1664025520e62b57c60d37f7f05fdef250f193453a5bfefe8";
++/// 行 v-field-schema: 土台の設計ノートの欄の決まりの写しの器の導出 file の path が 13 byte 伸び、残差の 2 行だけが動いた値。
++const F99_ANCHOR_SHA256: &str = "42fe42396f3ecea0ba24afa74b860ec57ca83dc1f4042477adf908f5fad8ee7f";
+ const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ 
+ /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
+diff --git a/folio2/crates/folio/tests/ids.rs b/folio2/crates/folio/tests/ids.rs
+index d441780df63fd6d51ecb933a1872713c31d57728..914d855415ce4cc9d98d8fdc4cd6b27b447dbf6d 100644
+--- a/folio2/crates/folio/tests/ids.rs
++++ b/folio2/crates/folio/tests/ids.rs
+@@ -72,10 +72,10 @@ impl Work {
+             &repo_root().join("tests/fixtures/floor_base/design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         mutate(&root.join("design-intent"));
+diff --git a/folio2/crates/folio/tests/intake.rs b/folio2/crates/folio/tests/intake.rs
+index 8915adebe6b9cbc131d43494e37661bf9cee349f..f8abf47ccbcdc3d64ee6773754496278b75cc0bf 100644
+--- a/folio2/crates/folio/tests/intake.rs
++++ b/folio2/crates/folio/tests/intake.rs
+@@ -27,10 +27,10 @@ fn copy_tree(src: &Path, dst: &Path) {
+ 
+ /// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+ fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts")).unwrap();
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+ }
+diff --git a/folio2/crates/folio/tests/mechanism_live.rs b/folio2/crates/folio/tests/mechanism_live.rs
+index 3bede9e2bc47dd7fb3c2f1c8bc80329376659c9f..8ee77efb8503f3e923e59f7cca42617a5d3120cd 100644
+--- a/folio2/crates/folio/tests/mechanism_live.rs
++++ b/folio2/crates/folio/tests/mechanism_live.rs
+@@ -94,10 +94,10 @@ impl Work {
+     fn floor_base(case: &str, prep: impl FnOnce(&Path)) -> Work {
+         let root = Work::root(case);
+         copy_tree(&repo_root().join(FLOOR_BASE), &root.join("design-intent"));
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         prep(&root.join("design-intent"));
+diff --git a/folio2/crates/folio/tests/note.rs b/folio2/crates/folio/tests/note.rs
+index e0bbf35ff4883cf3c9ff3b6e580ffc091802de47..909646f4f170b262e784611a3e4da0f4d3b5fd04 100644
+--- a/folio2/crates/folio/tests/note.rs
++++ b/folio2/crates/folio/tests/note.rs
+@@ -79,10 +79,10 @@ impl Work {
+             &root.join("design-intent"),
+         );
+         // 器（scribe2）の導出 file は正本の置き場の親 dir の contracts/ に在る
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+@@ -101,7 +101,7 @@ impl Work {
+     }
+ 
+     fn external(&self) -> PathBuf {
+-        self.root.join("contracts/schema.toml")
++        self.root.join("contracts/field-schema/schema.toml")
+     }
+ 
+     /// 凍結 fixture の file を設計ノートの置き場（か写しの根の contracts/）へ置く。
+@@ -1002,10 +1002,10 @@ fn growth_base(case: &str) -> Work {
+         &repo_root().join("tests/fixtures/floor_base/design-intent"),
+         &root.join("design-intent"),
+     );
+-    fs::create_dir_all(root.join("contracts")).unwrap();
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     let w = Work { root };
+diff --git a/folio2/crates/folio/tests/place_name.rs b/folio2/crates/folio/tests/place_name.rs
+index 83d8d9ac8c9bbd3ce3b42a58d7f42614c5b8418f..5737ebe9dd916f7a2b9143ba71a24d554b504090 100644
+--- a/folio2/crates/folio/tests/place_name.rs
++++ b/folio2/crates/folio/tests/place_name.rs
+@@ -253,10 +253,10 @@ fn f154_folio2_keeps_its_own_name() {
+     let place = w.root.join("start/design-intent");
+     copy_tree(&repo_root().join(FLOOR_BASE), &place);
+     fs::remove_dir_all(place.join("anchors")).unwrap();
+-    fs::create_dir_all(w.root.join("start/contracts")).unwrap();
++    fs::create_dir_all(w.root.join("start/contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        w.root.join("start/contracts/schema.toml"),
++        w.root.join("start/contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     let start = w.root.join("start");
+@@ -297,10 +297,10 @@ fn f154_every_face_of_an_unnamed_place_shows_no_name() {
+     for name in ["folio.css", "folio-ui.js"] {
+         fs::copy(fixture.join(name), src.join("preview").join(name)).unwrap();
+     }
+-    fs::create_dir_all(w.root.join("contracts")).unwrap();
++    fs::create_dir_all(w.root.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        w.root.join("contracts/schema.toml"),
++        w.root.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_tree(&repo_root().join("vendor/archify"), &w.root.join("vendor/archify"));
+diff --git a/folio2/crates/folio/tests/plan.rs b/folio2/crates/folio/tests/plan.rs
+index 974f485a94956c0a1fd062efeac121f7ab9437e3..84b5ecf5da25edc691c0e0ec2e6b3538fc30ed7c 100644
+--- a/folio2/crates/folio/tests/plan.rs
++++ b/folio2/crates/folio/tests/plan.rs
+@@ -90,8 +90,8 @@ impl Work {
+         let root = std::env::temp_dir().join(format!("folio-plan-{case}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&root);
+         copy_tree(&repo().join(FLOOR_BASE), &root.join("design-intent"));
+-        fs::create_dir_all(root.join("contracts")).unwrap();
+-        fs::copy(repo().join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
++        fs::copy(repo().join("contracts/schema.toml"), root.join("contracts/field-schema/schema.toml")).unwrap();
+         let w = Work(root);
+         fs::write(w.path("design-note/plan.yaml"), plan_note()).unwrap();
+         if with_row {
+@@ -192,7 +192,7 @@ fn f183_a_new_contract_row_is_one_violation_until_derive_write() {
+     assert_eq!(drift.status.code(), Some(1), "{}", text(&drift));
+     assert!(text(&drift).contains("DRIFT: design-note/plan.yaml（行の索引の生成区間が契約表からの導出と違う"), "{}", text(&drift));
+     // 器の導出 file が無い置き場は書けない（まだ分からない・計画のノートは変えない）
+-    let schema = w.0.join("contracts/schema.toml");
++    let schema = w.0.join("contracts/field-schema/schema.toml");
+     let keep = fs::read(&schema).unwrap();
+     fs::remove_file(&schema).unwrap();
+     let before = w.read("design-note/plan.yaml");
+diff --git a/folio2/crates/folio/tests/polarity.rs b/folio2/crates/folio/tests/polarity.rs
+index 2013512f6da7d0d2deec48e276c9bd047499e8f7..65af87e0cc7a01a940678a4725a237e997f637c8 100644
+--- a/folio2/crates/folio/tests/polarity.rs
++++ b/folio2/crates/folio/tests/polarity.rs
+@@ -90,8 +90,8 @@ impl Work {
+         let root = std::env::temp_dir().join(format!("folio-f200-{case}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&root);
+         copy_tree(&repo_root().join(FLOOR_BASE), &root.join("design-intent"));
+-        fs::create_dir_all(root.join("contracts")).unwrap();
+-        fs::copy(repo_root().join("contracts/schema.toml"), root.join("contracts/schema.toml")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
++        fs::copy(repo_root().join("contracts/schema.toml"), root.join("contracts/field-schema/schema.toml")).unwrap();
+         let path = root.join("design-intent").join(file);
+         let mut text = fs::read_to_string(&path).unwrap();
+         for (from, to) in edits {
+diff --git a/folio2/crates/folio/tests/proposed.rs b/folio2/crates/folio/tests/proposed.rs
+index f87b7ad009197fa629dc0ccfcb16a1b170ee51c0..dc1c5b00f9d4ab096f425dff064a609cde376359 100644
+--- a/folio2/crates/folio/tests/proposed.rs
++++ b/folio2/crates/folio/tests/proposed.rs
+@@ -71,8 +71,8 @@ impl Work {
+         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2");
+         let place = root.join("repo");
+         copy_tree(&repo.join(FLOOR_BASE), &place.join("design-intent"));
+-        fs::create_dir_all(place.join("contracts")).unwrap();
+-        fs::copy(repo.join("contracts/schema.toml"), place.join("contracts/schema.toml")).unwrap();
++        fs::create_dir_all(place.join("contracts/field-schema")).unwrap();
++        fs::copy(repo.join("contracts/schema.toml"), place.join("contracts/field-schema/schema.toml")).unwrap();
+         git(&place, &["init", "-q"]);
+         git(&place, &["add", "-A"]);
+         git(&place, &["commit", "-q", "-m", "fixture"]);
+diff --git a/folio2/crates/folio/tests/prose.rs b/folio2/crates/folio/tests/prose.rs
+index f5dffa1d85f2ea563e03267475157328a34dd54a..b7d5a0759ec0e77676fd9268845fe2d972885191 100644
+--- a/folio2/crates/folio/tests/prose.rs
++++ b/folio2/crates/folio/tests/prose.rs
+@@ -71,10 +71,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/resolve.rs b/folio2/crates/folio/tests/resolve.rs
+index f2f18b8685330ac8b368af4ce002c2902b9eacda..aca7e67ea77c534de3f78752d42202214f48359c 100644
+--- a/folio2/crates/folio/tests/resolve.rs
++++ b/folio2/crates/folio/tests/resolve.rs
+@@ -1,5 +1,5 @@
+ //! 便 123（docs/design/delivery-123.md §1 (e)・判断の記録 ADR-16 決定 (2)(キ)(オ)）: 器の導出 file の解決先と生成区間の注の歯。
+-//! 器の導出 file `contracts/schema.toml` は、置き場を含む版管理の根が在ればその下、無ければ置き場の親の下で解く
++//! 器の導出 file `contracts/field-schema/schema.toml` は、置き場を含む版管理の根が在ればその下、無ければ置き場の親の下で解く
+ //! （床の読み手と面の生成器が同じ式を共有する・根の下に無くても親へは倒さない）。凍結 anchor は手書きの設計ノート
+ //! tests/fixtures/design-note/derive-anchor.yaml と repo の contracts/schema.toml の写しで、生成器の出力を写さない（P-10.1）。
+ //! 土台: 一時 dir の下の置き場（`<一時 dir>/<段>/design-intent`）に実の design-intent の写しと上の設計ノートを置き、
+@@ -11,6 +11,10 @@
+ //! 5. 置き場そのものが版管理の根なら置き場の下を読み親を読まない（床は照合の違反と読めないの両方・面は書かない）。
+ //! 6. 版管理の根は repo の根（folio2 の 1 つ上）で、根の design-intent の親。folio2/design-intent の版管理の根も repo の根。
+ //! 7. 5 file の生成区間の注 top_level_note は条 id N-3 を名指さない。
++//! 8. repo の根の器の導出 file は EXTERNAL に在り、契約表の dir contracts/ の直下の .toml は契約の表の見出しだけを持つ
++//!    （器の vessel 宣言の key contract-tables の dir の項目は直下の .toml を全部契約表と読む）。
++//! 9. 前の置き場 contracts/schema.toml にだけ写しの在る根は読めず（床 2）、新しい置き場を名指す（前の置き場へ黙って倒れない）。
++//! 10. repo の根の vessel 宣言は key contract-tables で contracts/ を、key constitution で憲法の 2 file を名乗る（各 1 行・2 file は在る）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -18,7 +22,9 @@ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+ const ANCHOR_NOTE: &str = "tests/fixtures/design-note/derive-anchor.yaml";
+-const EXTERNAL: &str = "contracts/schema.toml";
++const EXTERNAL: &str = "contracts/field-schema/schema.toml";
++/// 歯の材料の写し（folio2/ の下・動かさない）。
++const REPO_COPY: &str = "contracts/schema.toml";
+ const BROKEN: &str = "schema = 2\n";
+ const UNREADABLE: &str = "器の導出 file が読めない";
+ const NO_GIT: &str = "版管理（git）が無いか読めない";
+@@ -109,15 +115,15 @@ impl Work {
+         self.root.join("out/note-derive-anchor.html")
+     }
+ 
+-    /// `<at>/contracts/schema.toml` に repo の写しを置く。
++    /// `<at>/contracts/field-schema/schema.toml` に repo の写しを置く。
+     fn put_external(&self, at: &Path) {
+-        fs::create_dir_all(at.join("contracts")).unwrap();
+-        fs::copy(repo_root().join(EXTERNAL), at.join(EXTERNAL)).unwrap();
++        fs::create_dir_all(at.join("contracts/field-schema")).unwrap();
++        fs::copy(repo_root().join(REPO_COPY), at.join(EXTERNAL)).unwrap();
+     }
+ 
+-    /// `<at>/contracts/schema.toml` に先頭の字の違う壊れた写しを置く。
++    /// `<at>/contracts/field-schema/schema.toml` に先頭の字の違う壊れた写しを置く。
+     fn put_broken(&self, at: &Path) {
+-        fs::create_dir_all(at.join("contracts")).unwrap();
++        fs::create_dir_all(at.join("contracts/field-schema")).unwrap();
+         fs::write(at.join(EXTERNAL), BROKEN).unwrap();
+     }
+ 
+@@ -303,3 +309,65 @@ fn f123_region_top_level_notes_do_not_name_an_article_id() {
+         assert!(!line.contains("N-3"), "{name}: 条 id N-3 を名指す: {line}");
+     }
+ }
++
++// ── 8. 根の器の導出 file は契約表の dir の直下に無い ──
++
++#[test]
++fn fsch_external_copy_sits_below_the_contract_table_dir() {
++    let root = fs::canonicalize(repo_root().join("..")).unwrap();
++    // 写しの中身（欄の数）は器の版上げで替わるので、形だけを見る（歯の材料の写しと字を比べない）
++    let copy = fs::read_to_string(root.join(EXTERNAL)).unwrap();
++    assert_eq!(copy.lines().nth(1), Some("schema = 1"), "根の写しの 2 行目");
++    assert!(copy.contains("\n[[field]]\n"), "根の写しに [[field]] の表が無い");
++    let mut tables = 0;
++    for entry in fs::read_dir(root.join("contracts")).unwrap() {
++        let path = entry.unwrap().path();
++        if !path.is_file() || path.extension().is_none_or(|e| e != "toml") {
++            continue;
++        }
++        tables += 1;
++        let text = fs::read_to_string(&path).unwrap();
++        let heads: Vec<&str> = text
++            .lines()
++            .filter(|l| l.starts_with('[') && *l != "[[contract]]")
++            .collect();
++        assert!(heads.is_empty(), "{}: 契約の表でない見出し {heads:?}", path.display());
++    }
++    assert!(tables > 0, "contracts/ の直下に .toml が無い");
++}
++
++// ── 9. 前の置き場にだけ写しの在る根は読まない ──
++
++#[test]
++fn fsch_copy_only_at_the_old_place_is_not_read() {
++    let w = Work::new("old-place", &["stage"]);
++    fs::create_dir_all(w.root.join("contracts")).unwrap();
++    fs::copy(repo_root().join(REPO_COPY), w.root.join("contracts/schema.toml")).unwrap();
++    git_commit_all(&w.root);
++    let floor = w.check();
++    assert_rc(&floor, 2, "folio check");
++    assert_has(&floor, UNREADABLE, "folio check");
++    assert_has(&floor, EXTERNAL, "folio check");
++    w.put_external(&w.root);
++    assert_rc(&w.check(), 0, "folio check（新しい置き場にも写し）");
++}
++
++// ── 10. vessel 宣言は契約表の dir と憲法の 2 file を名乗る ──
++
++#[test]
++fn fsch_vessel_declares_the_table_dir_and_the_constitution() {
++    let root = fs::canonicalize(repo_root().join("..")).unwrap();
++    let decl = fs::read_to_string(root.join(".vessel.toml")).unwrap();
++    let lines = |key: &str| -> Vec<&str> {
++        decl.lines().filter(|l| l.split_once(" = ").is_some_and(|(k, _)| k == key)).collect()
++    };
++    assert_eq!(lines("contract-tables"), ["contract-tables = [\"contracts/\"]"], "key contract-tables の行");
++    assert_eq!(
++        lines("constitution"),
++        ["constitution = [\"design-intent/constitution.yaml\", \"design-intent/rules.yaml\"]"],
++        "key constitution の行"
++    );
++    for file in ["design-intent/constitution.yaml", "design-intent/rules.yaml"] {
++        assert!(root.join(file).is_file(), "憲法の file {file} が無い");
++    }
++}
+diff --git a/folio2/crates/folio/tests/schema.rs b/folio2/crates/folio/tests/schema.rs
+index 238675ea2a1fd6224836ed441185d7b7932a5712..00c78868a3ffa0abb5bc533b1f8edf0255ea9be8 100644
+--- a/folio2/crates/folio/tests/schema.rs
++++ b/folio2/crates/folio/tests/schema.rs
+@@ -55,8 +55,8 @@ const REGION_SHA256: &str = "daf05362b909ca04b81ff8f480fd23054425e86f845c8c83ba3
+ /// 注 3 つを直した後の値）。便 130 (b)(e): 注 index_note の正本の指し先を graph.rs の定数に直した後の値（行数は不変）。便 209: 注 supersede_note の 1 行。
+ /// 便 140 (b): placement の字から（器 scribe2）を外した後の値（17 byte 減）。便 185 (b): index_note の契約表の行の字を直した値。便 196: known_values の行と注。
+ const NOTE_REGION_LINES: usize = 166;
+-const NOTE_REGION_BYTES: usize = 21426;
+-const NOTE_REGION_SHA256: &str = "b3c3f8b7da9e6d34cd9a812620c838e720563c80380997580895c8a4599d2d54";
++const NOTE_REGION_BYTES: usize = 21439;
++const NOTE_REGION_SHA256: &str = "ef1da7d14051aef55680d15a60bd9f4a081ac0867774791762e873edb5cc3086";
+ 
+ /// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
+ /// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
+@@ -155,10 +155,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/schema_docs.rs b/folio2/crates/folio/tests/schema_docs.rs
+index bec618fe15982058decf442c433e717b3cc18592..3ad74a28638a30edd277777826fd6594fdc392a3 100644
+--- a/folio2/crates/folio/tests/schema_docs.rs
++++ b/folio2/crates/folio/tests/schema_docs.rs
+@@ -233,10 +233,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/seal.rs b/folio2/crates/folio/tests/seal.rs
+index dd79e21cd7f3bd04363b4f18ea67aec6d88bd23e..884bae1eb86564a94a8fa27b25c244fb33c02dcb 100644
+--- a/folio2/crates/folio/tests/seal.rs
++++ b/folio2/crates/folio/tests/seal.rs
+@@ -75,10 +75,10 @@ impl Work {
+         let root = std::env::temp_dir().join(format!("folio-seal-{case}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&root);
+         copy_tree(&repo_root().join(src), &root.join("design-intent"));
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/crates/folio/tests/site.rs b/folio2/crates/folio/tests/site.rs
+index 5cad075d7edee4ea0606fd34c1111ae8f936ed86..14b398cdf9c0a46f4fddd09707e812bcd8da68d1 100644
+--- a/folio2/crates/folio/tests/site.rs
++++ b/folio2/crates/folio/tests/site.rs
+@@ -59,7 +59,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     fs::create_dir_all(work.join("preview")).unwrap();
+     fs::create_dir_all(work.join("adr")).unwrap();
+     fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     for name in [
+         "constitution.yaml",
+         "rules.yaml",
+@@ -86,7 +86,7 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     .unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     for name in ["folio.css", "folio-ui.js"] {
+@@ -601,10 +601,10 @@ fn real_copy(case: &str, commit: bool) -> (PathBuf, PathBuf) {
+     let td = temp_dir(case);
+     let dir = td.join("design-intent");
+     copy_dir(&design_intent(), &dir);
+-    fs::create_dir_all(td.join("contracts")).unwrap();
++    fs::create_dir_all(td.join("contracts/field-schema")).unwrap();
+     fs::copy(
+         repo_root().join("contracts/schema.toml"),
+-        td.join("contracts/schema.toml"),
++        td.join("contracts/field-schema/schema.toml"),
+     )
+     .unwrap();
+     copy_dir(&vendor(), &td.join("vendor/archify"));
+diff --git a/folio2/crates/folio/tests/unknown_fields.rs b/folio2/crates/folio/tests/unknown_fields.rs
+index 2700b8ebd08ac460bd7cba7d718fb6da57534177..7b447bd4cbf284a43197ad97b817b08415e5361a 100644
+--- a/folio2/crates/folio/tests/unknown_fields.rs
++++ b/folio2/crates/folio/tests/unknown_fields.rs
+@@ -128,10 +128,10 @@ impl Work {
+             &repo_root().join("design-intent"),
+             &root.join("design-intent"),
+         );
+-        fs::create_dir_all(root.join("contracts")).unwrap();
++        fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+         fs::copy(
+             repo_root().join("contracts/schema.toml"),
+-            root.join("contracts/schema.toml"),
++            root.join("contracts/field-schema/schema.toml"),
+         )
+         .unwrap();
+         git(&root, &["init", "-q"]);
+diff --git a/folio2/design-intent/design-note/schema.yaml b/folio2/design-intent/design-note/schema.yaml
+index 418ae1bbdbf7d79c571ea5db4b9ae8f1ddb848e6..16574a64f2f17f1cf357ab61df0a9fe3eb2a5241 100644
+--- a/folio2/design-intent/design-note/schema.yaml
++++ b/folio2/design-intent/design-note/schema.yaml
+@@ -114,7 +114,7 @@ schema:
+   contract_table:
+     external_schema:
+       owner: scribe2
+-      path: contracts/schema.toml
++      path: contracts/field-schema/schema.toml
+       format: toml
+       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
+       value_domains: from-file
+diff --git a/folio2/tests/fixtures/floor_base/design-intent/design-note/schema.yaml b/folio2/tests/fixtures/floor_base/design-intent/design-note/schema.yaml
+index d0e3a3e5528e009e58fda833d14cf76cdca9a20a..d41af177512bb3dfcc185c93a422f18db7dc9c55 100644
+--- a/folio2/tests/fixtures/floor_base/design-intent/design-note/schema.yaml
++++ b/folio2/tests/fixtures/floor_base/design-intent/design-note/schema.yaml
+@@ -113,7 +113,7 @@ schema:
+   contract_table:
+     external_schema:
+       owner: scribe2
+-      path: contracts/schema.toml
++      path: contracts/field-schema/schema.toml
+       format: toml
+       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
+       value_domains: from-file
+diff --git a/folio2/tests/fixtures/schema/node-digest-anchor.txt b/folio2/tests/fixtures/schema/node-digest-anchor.txt
+index d7890e718887adca4ec30884b5d50af80b2b4219..c4465e1dd3ebcd06ba004f41eb3bdb7ba473d7d4 100644
+--- a/folio2/tests/fixtures/schema/node-digest-anchor.txt
++++ b/folio2/tests/fixtures/schema/node-digest-anchor.txt
+@@ -193,5 +193,5 @@ prep-sheet	de2c6e1c
+ scribe2	98133617
+ three-faces	111536ed
+ verdict	f2d63709
+-# 残差 sha256 bb32c00c828670d86e0c72eef5dce64010a065bf4de4342f0d4f73bf5e47f989
+-# 節点 194・本文の byte 246106・辺の欄の byte 4927・残差の byte 144863・合計 395896
++# 残差 sha256 0312e464792aa6a638432ea30242b8b769a859bb28d171d292211035ed9ec186
++# 節点 194・本文の byte 246106・辺の欄の byte 4927・残差の byte 144876・合計 395909
+diff --git a/folio2/tests/fixtures/schema/note-region.txt b/folio2/tests/fixtures/schema/note-region.txt
+index d68805971da3541cb903669cf8dfef131ef26aa1..037faa306b5cbc6f8b50938261670d2cde8a29cb 100644
+--- a/folio2/tests/fixtures/schema/note-region.txt
++++ b/folio2/tests/fixtures/schema/note-region.txt
+@@ -94,7 +94,7 @@ schema:
+   contract_table:
+     external_schema:
+       owner: scribe2
+-      path: contracts/schema.toml
++      path: contracts/field-schema/schema.toml
+       format: toml
+       reader_expects: {head: schema = 1, rows_key: field, row_fields: [name, need, shape]}
+       value_domains: from-file
