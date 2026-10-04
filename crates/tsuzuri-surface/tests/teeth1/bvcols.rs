@@ -258,6 +258,7 @@ fn part(phase: &str, reason: &str, on: &[&str]) -> CasePart {
         turn: "vessel".to_string(),
         since: None,
         reason: Some(reason.to_string()),
+        why: None,
         closed: false,
         links: CaseLinks {
             on: on.iter().map(|s| s.to_string()).collect(),

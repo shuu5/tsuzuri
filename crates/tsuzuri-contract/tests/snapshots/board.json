@@ -2,6 +2,7 @@
   "board::Stage": [
     "Queued",
     "Blocked",
+    "Held",
     "Running",
     "Gated",
     "Questioned",

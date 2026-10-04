@@ -155,7 +155,7 @@ fn contract_form_board_roundtrip_all_types() {
 fn contract_form_board_closed_lists() {
     assert_eq!(distinct(&NextMove::ALL), 7);
     assert_eq!(distinct(&LedgerJudge::ALL), 5);
-    assert_eq!(distinct(&Stage::ALL), 8);
+    assert_eq!(distinct(&Stage::ALL), 9);
     let labels: BTreeSet<&str> = NextMove::ALL.iter().map(|m| m.label()).collect();
     assert_eq!(labels.len(), 7, "次の一手の名が重なる");
     let mut sorted = NextMove::ALL.to_vec();

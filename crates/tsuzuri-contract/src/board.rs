@@ -16,10 +16,13 @@ pub enum Reading<T> {
 }
 
 /// 走行の段（段の名は英語のまま面に出す）。
+/// Held（留め置き）は依存でない理由で人の手が入るまで器が起こさない契約（席の止めと受付の断り）で、列は Blocked と同じ
+/// （判断の記録 ADR-42 決定 (1)(3)・行 c-held-stage）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Stage {
     Queued,
     Blocked,
+    Held,
     Running,
     Gated,
     Questioned,
@@ -29,9 +32,10 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub const ALL: [Stage; 8] = [
+    pub const ALL: [Stage; 9] = [
         Stage::Queued,
         Stage::Blocked,
+        Stage::Held,
         Stage::Running,
         Stage::Gated,
         Stage::Questioned,
@@ -43,7 +47,7 @@ impl Stage {
     /// 段が載る pipeline の列。
     pub fn column(self) -> PipelineColumn {
         match self {
-            Stage::Blocked => PipelineColumn::Blocked,
+            Stage::Blocked | Stage::Held => PipelineColumn::Blocked,
             Stage::Queued => PipelineColumn::Queued,
             Stage::Running | Stage::Gated => PipelineColumn::RunningGated,
             Stage::Questioned | Stage::Failed | Stage::Stopped => {

@@ -101,7 +101,7 @@ pub fn key_line(line: &LineSrc, now: EpochSecs) -> KeyLine {
             let lead = line.wait.clone().unwrap_or_else(|| label(wait));
             (format!("{lead} · {age}"), plain)
         }
-        Stage::Queued => {
+        Stage::Queued | Stage::Held => {
             let made = age_at(line.created, now);
             let body = format!("{} {age} · {} {made}", label(queue), label(created));
             if queued_warn(card, now) {

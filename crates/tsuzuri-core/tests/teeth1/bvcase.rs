@@ -51,6 +51,7 @@ fn bvcase_fields_copied_from_fixture() {
             turn: "vessel".into(),
             since: Some(1_790_863_200),
             reason: Some("dependency".into()),
+            why: None,
             closed: false,
             links: CaseLinks {
                 on: ids(&["t3-hub.903"]),

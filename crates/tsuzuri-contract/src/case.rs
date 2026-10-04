@@ -34,6 +34,10 @@ pub struct CasePart {
     pub turn: String,
     pub since: Option<EpochSecs>,
     pub reason: Option<String>,
+    /// 止めの理由の字（器の任意の欄 why・席の止めは止めの印の理由・受付の断りは断りの 1 行の理由・欠けた鍵は None・
+    /// 判断の記録 ADR-42 決定 (6)・行 c-held-stage）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
     pub closed: bool,
     pub links: CaseLinks,
 }

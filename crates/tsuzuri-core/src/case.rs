@@ -5,7 +5,7 @@
 //! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
 //! 出力の字が在るのに部品が「まだ分からない」になった周は電文の unreadable を真にする（面は「読めない」と出す）。
 //! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま（行 c-case-unreadable）。
-//! 欄が欠けるか型が違う部品は落とす。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
+//! 欄が欠けるか型が違う部品は落とす（任意の欄 why は欠けても落とさない・行 c-held-stage）。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
 //! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
 
 use serde_json::Value;
@@ -81,6 +81,7 @@ fn part_of(node: &Value) -> Option<CasePart> {
         turn: word("turn")?,
         since: optional(node, "since")?.and_then(|at| epoch_secs(&at)),
         reason: optional(node, "reason")?,
+        why: loose(node, "why")?,
         closed: node.get("closed")?.as_bool()?,
         links: links_of(node.get("links")?)?,
     })
@@ -92,6 +93,14 @@ fn optional(node: &Value, key: &str) -> Option<Option<String>> {
         Value::Null => Some(None),
         Value::String(text) => Some(Some(text.clone())),
         _ => None,
+    }
+}
+
+/// 任意の字の欄（鍵が無いか null は None・字は Some・型が違えば None で部品を落とす・行 c-held-stage）。
+fn loose(node: &Value, key: &str) -> Option<Option<String>> {
+    match node.get(key) {
+        None => Some(None),
+        Some(_) => optional(node, key),
     }
 }
 

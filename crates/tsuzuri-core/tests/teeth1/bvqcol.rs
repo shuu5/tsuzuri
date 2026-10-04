@@ -142,7 +142,7 @@ fn bvqcol_since_and_reason_from_case() {
     assert_eq!(card(&b, "qc.1").reason.as_deref(), Some("dependency"));
     assert_eq!(
         row(&b, "qc.5"),
-        (Stage::Queued, Some("hold".to_string()), None),
+        (Stage::Held, Some("hold".to_string()), None),
         "since の無い部品"
     );
     let c = card(&b, "qc.4");

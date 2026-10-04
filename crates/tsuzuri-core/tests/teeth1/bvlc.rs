@@ -197,7 +197,7 @@ fn bvlc_waiting_contract_with_runs() {
     );
     assert_eq!(
         wait("contract-refused", "no-room"),
-        (Stage::Queued, Some("no-room".into()), Some(WAIT_SINCE))
+        (Stage::Held, Some("no-room".into()), Some(WAIT_SINCE))
     );
     assert_eq!(
         wait("contract-queued", "settled"),
@@ -217,7 +217,7 @@ fn bvlc_runless_from_parts() {
     )]);
     assert_eq!(
         row(&board_with_cases(&ledger(), &log, &refused, NOW), "lc.4"),
-        (Stage::Queued, Some("admission".into()), Some(WAIT_SINCE))
+        (Stage::Held, Some("admission".into()), Some(WAIT_SINCE))
     );
     let mut parts = running("lc.4", "run-implementing");
     parts[1]["reason"] = json!("Spawned");

@@ -21,6 +21,7 @@ fn parts() -> Vec<CasePart> {
             turn: "vessel".into(),
             since: Some(AT - 600),
             reason: Some("dependency".into()),
+            why: None,
             closed: false,
             links: CaseLinks {
                 on: vec!["t3-hub.903".into()],
@@ -34,6 +35,7 @@ fn parts() -> Vec<CasePart> {
             turn: "user".into(),
             since: None,
             reason: None,
+            why: None,
             closed: false,
             links: CaseLinks::default(),
         },

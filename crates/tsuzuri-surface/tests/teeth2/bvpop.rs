@@ -76,6 +76,7 @@ fn part(x: &str, on: &[&str]) -> CasePart {
         turn: "vessel".to_string(),
         since: Some(NOW - 600),
         reason: Some("dependency".to_string()),
+        why: None,
         closed: false,
         links: CaseLinks {
             on: on.iter().map(|s| s.to_string()).collect(),

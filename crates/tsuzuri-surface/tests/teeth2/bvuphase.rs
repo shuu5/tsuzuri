@@ -47,6 +47,7 @@ fn part(kind: &str, id: &str, phase: &str, turn: &str) -> CasePart {
         turn: turn.to_string(),
         since: None,
         reason: None,
+        why: None,
         closed: false,
         links: CaseLinks::default(),
     }

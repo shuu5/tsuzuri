@@ -441,7 +441,7 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
             };
             vec![f(STAGE_KEYS[0], list), f(STAGE_KEYS[1], since())]
         }
-        Stage::Queued => vec![f(STAGE_KEYS[2], since())],
+        Stage::Queued | Stage::Held => vec![f(STAGE_KEYS[2], since())],
         Stage::Running | Stage::Gated => vec![
             f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
             f(STAGE_KEYS[4], account()),
@@ -617,7 +617,7 @@ pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
     };
     let [why, wait_why, wait_runs] = WHY_KEYS;
     match (card.stage, wait_of(src, card)) {
-        (Stage::Queued, Wait::Queue(reason, _)) => {
+        (Stage::Queued | Stage::Held, Wait::Queue(reason, _)) => {
             let val = reason_val(reason.as_deref());
             put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
         }

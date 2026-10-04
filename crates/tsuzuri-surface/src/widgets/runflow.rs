@@ -224,7 +224,7 @@ pub fn with_runs(mut p: Pop, runs: Reading<&[RunLine]>) -> Pop {
                 },
             );
         }
-        Stage::Blocked | Stage::Queued => {}
+        Stage::Blocked | Stage::Held | Stage::Queued => {}
     }
     p
 }

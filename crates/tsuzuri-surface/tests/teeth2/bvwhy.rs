@@ -41,6 +41,7 @@ fn part(x: &str, phase: &str, reason: Option<&str>, on: &[&str], runs: &[&str]) 
         turn: "vessel".to_string(),
         since: Some(NOW - 60),
         reason: reason.map(str::to_string),
+        why: None,
         closed: false,
         links: CaseLinks {
             on: on.iter().map(|s| s.to_string()).collect(),

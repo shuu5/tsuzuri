@@ -100,7 +100,12 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
     assert_eq!(cards.len(), 12);
     for stage in Stage::ALL {
         let n = cards.iter().filter(|c| c.stage == stage).count();
-        let want = if stage == Stage::Landed { 5 } else { 1 };
+        // 段 Held の札は局面の出力が要るので fixture（event log と台帳だけ）に無い（行 c-held-stage）。
+        let want = match stage {
+            Stage::Landed => 5,
+            Stage::Held => 0,
+            _ => 1,
+        };
         assert_eq!(n, want, "{stage:?} の札の数");
     }
     let cols = filled();

@@ -191,6 +191,7 @@ pub fn stage_word(stage: Stage) -> &'static str {
     match stage {
         Stage::Queued => "Queued",
         Stage::Blocked => "Blocked",
+        Stage::Held => "Held",
         Stage::Running => "Running",
         Stage::Gated => "Gated",
         Stage::Questioned => "Questioned",

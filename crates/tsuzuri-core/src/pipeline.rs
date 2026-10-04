@@ -23,7 +23,7 @@
 //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
 //! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
 //! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
-//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
+//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
 //! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
 //! （`queued_cards`）。
 //! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`・行 c-ledger-lc）:
@@ -31,6 +31,8 @@
 //! 理由と since は event log の読みが段を持てばその字・持たなければ便の部品の字。表に無い局面の語は「まだ分からない」
 //! （札を作らず unmapped に数える・走行の無い札は台帳の blocks の割り）。契約の部品が無いか `CLOSED_PHASE` か便の部品が
 //! 無ければ event log の段のまま。台帳で閉じた bead の札は今までどおり。CI の読みは段が Landed で event log も Landed の時だけ。
+//! 段 Held（留め置き・列は Blocked）は契約の部品の局面が `QUEUED_PHASE` で理由が `HOLD`（席の止め）か `REFUSED_PHASE`（受付の断り）の札
+//! （判断の記録 ADR-42 決定 (1)(2)・行 c-held-stage）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -124,6 +126,9 @@ pub const QUEUED_PHASE: &str = "contract-queued";
 /// 列の待ちの理由のうち相手を待つ語（板の Blocked の列・ほかの語は Queued の列・判断の記録 ADR-27 の決定 (6)）。
 pub const PARTNER_REASONS: [&str; 3] = ["dependency", "overlap", "reserved"];
 
+/// 列の待ちの理由のうち席の止めの語（段 Held・判断の記録 ADR-42 決定 (1)・行 c-held-stage）。
+pub const HOLD: &str = "hold";
+
 /// 局面の出力の便の部品の種類の字。
 pub const RUN_PART: &str = "run";
 
@@ -133,7 +138,7 @@ pub const RUNNING_PHASE: &str = "contract-running";
 /// 列の待ちの理由のうち手番を最新の便の部品が持つ語（器の case-lifecycle §3）。
 pub const SETTLED: &str = "settled";
 
-/// 契約の受付の断りの局面の語（段は Queued・理由は断りの名）。
+/// 契約の受付の断りの局面の語（段は Held・理由は断りの名・判断の記録 ADR-42 決定 (1)）。
 pub const REFUSED_PHASE: &str = "contract-refused";
 
 /// 閉じた契約の局面の語（札の段は event log と台帳の閉じのまま）。
@@ -657,7 +662,7 @@ pub fn phase_of<'p>(parts: &'p [CasePart], id: &str) -> Option<Phased<'p>> {
             queued_of(contract.reason.as_deref()),
             contract,
         )),
-        REFUSED_PHASE => Some(Phased::Waiting(Stage::Queued, contract)),
+        REFUSED_PHASE => Some(Phased::Waiting(Stage::Held, contract)),
         RUNNING_PHASE | QUEUED_PHASE => {
             let run = contract.links.runs.iter().find_map(|r| find(RUN_PART, r))?;
             Some(
@@ -671,10 +676,11 @@ pub fn phase_of<'p>(parts: &'p [CasePart], id: &str) -> Option<Phased<'p>> {
     }
 }
 
-/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
+/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・`HOLD` なら Held・ほかの語と理由の無い部品は Queued）。
 pub fn queued_of(reason: Option<&str>) -> Stage {
     match reason {
         Some(word) if PARTNER_REASONS.contains(&word) => Stage::Blocked,
+        Some(HOLD) => Stage::Held,
         _ => Stage::Queued,
     }
 }

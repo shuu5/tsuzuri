@@ -278,11 +278,11 @@ fn stats_pipeline_matches_fixture() {
     let want: Vec<PipelineCard> = serde_json::from_value(v["cards"].clone()).expect("期待の札");
     assert_eq!(got.board.cards, Reading::Known(want.clone()));
     assert_eq!(u64::from(got.unmapped), v["unmapped"].as_u64().unwrap());
-    // Stopped のほかの段は、どれも 1 枚以上の札で出る。
+    // Stopped と Held（局面の出力が要る）のほかの段は、どれも 1 枚以上の札で出る。
     let stages: BTreeSet<String> = want.iter().map(|c| format!("{:?}", c.stage)).collect();
     let all: BTreeSet<String> = Stage::ALL
         .iter()
-        .filter(|s| **s != Stage::Stopped)
+        .filter(|s| !matches!(s, Stage::Stopped | Stage::Held))
         .map(|s| format!("{s:?}"))
         .collect();
     assert_eq!(stages, all);
