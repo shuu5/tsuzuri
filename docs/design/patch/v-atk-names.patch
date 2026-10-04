@@ -1,0 +1,270 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+index 12692e7bfdace726d51da14af6cb6b3c00a32927..655577275eec6055f448d8185b7ce3bfb439f77e 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+@@ -1908,6 +1908,48 @@ fn done_teeth_review_outside_tooth_turns_the_row_review_inconclusive() {
+     clean(&[&place.repo, &place.state]);
+ }
+ 
++// ───── 宣言の歯 `@<k>` の内に k 本目の検証行が選ぶ歯の名を数える（判断の記録 ADR-44 の決定 (1) の G3・行 v-atk-names・接頭辞 `vatk_`） ─────
++
++/// (5) Reviewed の段: 欄 done-teeth の項目 3 が `@1`（`tooth_` を選ぶ検証行の全体）の行で、偽 lens の表が項目 3 に 1 本目の行が選ばない名
++/// `fang_new` を書いた PASS は INCONCLUSIVE・unparsed で evidence の頭に項目 3 の理由が付き（rc 3）、選ぶ名 `tooth_new` を書いた PASS は PASS のまま（rc 0）。
++#[test]
++fn vatk_intake_counts_a_name_the_line_selects() {
++    let (repo, state) = derive_repo_with(&teeth_doc(&["ok"]), TEETH_FILES);
++    let (rules, repo_arg, state_arg) = (ceiling_rules(&state), repo.display().to_string(), state.display().to_string());
++    let shoot = |bead: &str, table: &str| {
++        let lens = says(&state, &table_pass(table));
++        run_pipe(&["intake", "--design", "docs/design/toy.md#ok", "--bead", bead, "--repo", &repo_arg, "--state-dir", &state_arg, "--rules", &rules, "--lens", &lens])
++    };
++    let outside = shoot("s2-vk1", "1:tooth_a,2:tooth_kept,3:fang_new");
++    let want = "3|INCONCLUSIVE|unparsed|<無し>|done の対応の表が欠ける（無い番号 (3)・形の合わない項目 1 件）: fake";
++    assert_eq!(judged(&state, &outside), want, "1 本目の行が選ばない名は外: {}", stderr_of(&outside));
++    let inside = shoot("s2-vk2", "1:tooth_a,2:tooth_kept,3:tooth_new");
++    assert_eq!(judged(&state, &inside), "0|PASS|<無し>|<無し>|fake", "1 本目の行が選ぶ名は @1 の内: {}", stderr_of(&inside));
++    clean(&[&repo, &state]);
++}
++
++/// (6) 行の審査の読み口: 欄 done-teeth を持つ行（項目 3 が `@1`・検証行は `pre_<id>_` を選ぶ）で、偽 lens の表が項目 3 に 1 本目の行が選ぶ名を書いた PASS の
++/// 行は記録が PASS のまま、選ばない名を書いた PASS の行は INCONCLUSIVE・unparsed（actual の INCONCLUSIVE の行が在る周は fail・rc 1）。
++#[test]
++fn vatk_row_review_counts_a_name_the_line_selects() {
++    let files = [("crates/toy/tests/k1.rs", rv_tooth_file("k1")), ("crates/toy/tests/k2.rs", rv_tooth_file("k2"))];
++    let place = rv_place(&["本文 1"], &[rv_row("m", 1, &[])], &files);
++    rv_out(&place, "k1", &table_pass("1:pre_k1_one,2:pre_k1_two,3:pre_k1_three"));
++    rv_out(&place, "k2", &table_pass("1:pre_k2_one,2:pre_k2_two,3:post_k2_three"));
++    let rows = [rv_row("m", 1, &[]), rv_keyed_row("k1"), rv_keyed_row("k2")];
++    let sha = rv_commit(&place, None, &[(DESIGN_FILE, rv_doc(&["本文 1"], &rows))]);
++    let out = rv_review(&place, &sha);
++    let kind = |id: &str| {
++        let record = rv_record(&place, rv_row_out(&out, id).get("record").map_or("", String::as_str));
++        (record.get("verdict").cloned().unwrap_or_default(), record.get("kind").cloned().unwrap_or_default())
++    };
++    let msg = format!("{} / {}", stdout_of(&out), stderr_of(&out));
++    assert_eq!(kind("k1"), ("PASS".to_owned(), "-".to_owned()), "1 本目の行が選ぶ名は @1 の内: {msg}");
++    assert_eq!(kind("k2"), ("INCONCLUSIVE".to_owned(), "unparsed".to_owned()), "1 本目の行が選ばない名は外: {msg}");
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "actual の INCONCLUSIVE の行が在る周は fail: {msg}");
++    clean(&[&place.repo, &place.state]);
++}
++
+ // ───── Reviewed の段の行の審査の記録の使い回し（設計 docs/design/row-review.md §5・行 c・接頭辞 `pipe_review_row_reuse_`） ─────
+ //
+ // 設計の PR の commit を `pipe review --ref` で審査して actual の PASS の記録を作り、その commit を main にして `pipe intake` の Reviewed を撃つ。
+diff --git a/scribe2/crates/scribe2/src/pipe/review.rs b/scribe2/crates/scribe2/src/pipe/review.rs
+index f9831a436389c80c7454559124cfd4d14f4a5426..3da1d6015ffa41b95c9eb75ae84e7dc935ed5a8c 100644
+--- a/scribe2/crates/scribe2/src/pipe/review.rs
++++ b/scribe2/crates/scribe2/src/pipe/review.rs
+@@ -333,12 +333,13 @@ pub fn review(entry: &Review<'_>) -> Outcome {
+         (LensSource::Cmd(cmd), Some(sha)) => row_reused(entry, (&source, &dir), cmd, sha),
+         _ => None,
+     };
+-    // done の項目の数（Promised の行は 0・材料の書き手 `materials` と同じ読み手 `done_items`・§64 形 5）と宣言の歯（契約 file の key・§66 形 6）。
++    // done の項目の数（Promised の行は 0・材料の書き手 `materials` と同じ読み手 `done_items`・§64 形 5）と宣言の歯（契約 file の key・§66 形 6）と
++    // 検証行（宣言の歯 `@<k>` が指す行）。
+     let teeth = match if promised { Ok(Vec::new()) } else { done_teeth_of(&source) } {
+         Ok(found) => found,
+         Err(reason) => return broken(reason),
+     };
+-    let items = (if promised { 0 } else { items::done_items(&entry.contract.done).len() }, teeth.as_slice());
++    let items = (if promised { 0 } else { items::done_items(&entry.contract.done).len() }, teeth.as_slice(), entry.contract.verify.as_slice());
+     let (finding, scope, spent, tree) = match &reused {
+         Some((rc, text)) => (read_outcome(*rc, text, items), None, None, None),
+         None => decide(entry, &contract, items, head.as_deref()),
+@@ -643,8 +644,8 @@ fn lens_outcome(waited: std::io::Result<std::process::Output>, confinement: &con
+     read_outcome(out.status.code(), &text, items)
+ }
+ 
+-/// done の項目の数と宣言の歯（契約 file の key `done-teeth` の要素・key の無い契約は空・§66 形 6）。
+-type Items<'a> = (usize, &'a [String]);
++/// done の項目の数と宣言の歯（契約 file の key `done-teeth` の要素・key の無い契約は空・§66 形 6）と検証行（宣言の歯 `@<k>` が指す行）。
++type Items<'a> = (usize, &'a [String], &'a [String]);
+ 
+ /// 終わった lens の rc と stdout から判定を読む（rc → 最後の JSON 行 → done の対応の表の順・[`lens_outcome`] の後段の 1 本）。
+ /// `items` は done の項目の数（0 は表を読まない・§64 形 5・lens を撃った周と行の審査の記録を使い回した周が同じこの 1 本を通る）と宣言の歯。
+@@ -657,7 +658,7 @@ fn read_outcome(rc: Option<i32>, text: &str, items: Items<'_>) -> Finding {
+ 
+ /// done の対応の表の倒し（§64 形 4）: JSON が読め verdict が 3 値の周だけ、表の欠けは INCONCLUSIVE・unparsed に、歯の無い項目を
+ /// 持つ PASS は FAIL・vacuous-assert に、FAIL / INCONCLUSIVE は at と evidence の末尾に歯の無い項目を足す。他の周は不変。宣言の歯を持つ契約は、
+-/// 宣言の歯の外の表の歯も形の合わない項目に数える（§66 形 6）。
++/// 宣言の歯の外の表の歯も形の合わない項目に数える（§66 形 6・`@<k>` の宣言は k 本目の検証行が選ぶ歯の名も内に数える）。
+ fn tip(found: Finding, text: &str, items: Items<'_>) -> Finding {
+     let pairs = last_json_object(text).unwrap_or_default();
+     let get = |key: &str| pairs.iter().find(|(name, _)| name == key).map(|(_, value)| value);
+@@ -665,7 +666,7 @@ fn tip(found: Finding, text: &str, items: Items<'_>) -> Finding {
+         return found;
+     }
+     let evidence = found.evidence.as_str();
+-    match (items::holes(get("done"), items.0, items.1), found.verdict) {
++    match (items::holes(get("done"), items.0, items.1, items.2), found.verdict) {
+         (Err(reason), verdict) => Finding {
+             verdict: Verdict::Inconclusive,
+             evidence: format!("done の対応の表が欠ける（{reason}）: {evidence}"),
+@@ -701,8 +702,8 @@ pub(in crate::pipe) struct Lensed {
+ 
+ /// 行の審査が撃った lens の判定を読む口（設計 row-review.md §3 形 5・Reviewed と同じ読みの 2 本 [`read_outcome`]（done の対応の表の倒しを含む）→
+ /// [`narrow`]（約束の行の kind の絞り）をこの 1 本で通す・私有の 3 本は保つ）。`done` は契約の done の字と約束の行を持つかの対
+-/// （約束の行を持つ行の done は項目に割らない・§64 形 5）。宣言の歯は審査の材料の契約の写し `copy` の key `done-teeth` から読む（読めない周は
+-/// INCONCLUSIVE・§66 形 6）。箱の scope は読む前に片付ける。
++/// （約束の行を持つ行の done は項目に割らない・§64 形 5）。宣言の歯と検証行は審査の材料の契約の写し `copy` の key `done-teeth` と `verify` から読む
++/// （読めない周は INCONCLUSIVE・§66 形 6）。箱の scope は読む前に片付ける。
+ pub(in crate::pipe) fn read_lens(
+     waited: std::io::Result<std::process::Output>,
+     confinement: &confine::Confinement,
+@@ -712,18 +713,27 @@ pub(in crate::pipe) fn read_lens(
+     let _ = confine::release_scope(confinement);
+     let usage = waited.as_ref().ok().filter(|out| out.status.success()).and_then(|out| lens_usage(&String::from_utf8_lossy(&out.stdout)));
+     let (text, promised) = done;
+-    let teeth = match if promised { Ok(Vec::new()) } else { done_teeth_of(copy) } {
++    let declared = if promised { Ok((Vec::new(), Vec::new())) } else { done_teeth_of(copy).and_then(|teeth| verify_of(copy).map(|verify| (teeth, verify))) };
++    let (teeth, verify) = match declared {
+         Ok(found) => found,
+         Err(reason) => {
+             let found = Finding::inconclusive(format!("宣言の歯を読めない: {reason}"));
+             return Lensed { verdict: found.verdict, kind: found.kind, evidence: found.evidence, usage };
+         }
+     };
+-    let items = (if promised { 0 } else { items::done_items(text).len() }, teeth.as_slice());
++    let items = (if promised { 0 } else { items::done_items(text).len() }, teeth.as_slice(), verify.as_slice());
+     let found = narrow(lens_outcome(waited, confinement, items), promised);
+     Lensed { verdict: found.verdict, kind: found.kind, evidence: found.evidence, usage }
+ }
+ 
++/// 契約 file `path` の検証行（宣言の歯 `@<k>` が指す行・§66 形 6）。読みは [`Contract::load`]（読めない file は [`done_teeth_of`] と同じ形の理由）。
++fn verify_of(path: &Path) -> Result<Vec<String>, String> {
++    Contract::load(path).map(|found| found.verify).map_err(|errors| {
++        let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
++        format!("{} を読めない: {}", path.display(), lines.join(" / "))
++    })
++}
++
+ /// lens の版の 1 行を出させる flag（lens の口の閉じた flag の列の 9 語目・値を取らない・設計 row-review.md §5）。
+ const VERSION_FLAG: &str = "--print-version";
+ 
+@@ -932,7 +942,7 @@ mod tests {
+     fn done_teeth_review_lens_tooth_outside_the_declared_is_misshaped() {
+         let teeth = owned(&["1:tooth_a", "2:=tooth_kept", "3:@1"]);
+         let table = |text: &str| Value::Str(text.to_owned());
+-        let read = |text: &str, teeth: &[String]| holes(Some(&table(text)), 3, teeth);
++        let read = |text: &str, teeth: &[String]| holes(Some(&table(text)), 3, teeth, &[]);
+         assert_eq!(read("1:tooth_a,2:tooth_kept,3:@1", &teeth), Ok(Vec::new()), "宣言の歯だけの表は揃う（= を付けない書きも通る）");
+         assert_eq!(read("1:=tooth_a,2:=tooth_kept,3:@1", &teeth), Ok(Vec::new()), "= を付けた書きも通る");
+         assert_eq!(read("1:tooth_a,2:b,3:@1", &teeth), Err("無い番号 (2)・形の合わない項目 1 件".to_owned()), "宣言の外の歯は形の合わない項目");
+diff --git a/scribe2/crates/scribe2/src/pipe/review/items.rs b/scribe2/crates/scribe2/src/pipe/review/items.rs
+index cee4f8c71e87b2d397f54a7585979642f4f9c407..3a768fb5f94f9221b952aea0ea73b42d616141f4 100644
+--- a/scribe2/crates/scribe2/src/pipe/review/items.rs
++++ b/scribe2/crates/scribe2/src/pipe/review/items.rs
+@@ -4,9 +4,14 @@
+ //! 項目を番号つきで材料の [`super::ITEMS_FILE`] に置き（[`items_text`]）、lens の最終行の key `done` に「<番号>:<歯>」の表を返させ、
+ //! 表の揃い（[`holes`]）と歯の無い項目（`-`）の番号だけを測る。項目の読み手は [`done_items`] の 1 本で、材料の書き手と判定の読みが
+ //! 同じ関数を呼ぶ（数え方を 2 通りにしない・C2）。歯の中身の正しさは器が照らさない（lens の判断）。
++//!
++//! 欄 `done-teeth` の検証行の番号の歯 `@<k>` は k 本目の検証行の全体なので、表の歯がその行の選ぶ歯の名でも宣言の歯の内に数える（[`declares`]・
++//! 選ぶの述語は受付と gate の段 ① が名の歯に使う [`selects`] の 1 本・判断の記録 ADR-44 の決定 (1) の G3・行 v-atk-names・接頭辞 `vatk_`）。
+ 
+ use crate::fleet::json_lite::Value;
+-use crate::pipe::table::parse_element;
++use crate::name::NAME;
++use crate::pipe::closure::selects;
++use crate::pipe::table::{parse_element, Tooth};
+ 
+ /// 見出しの行（K 個の数を持つ）。
+ const HEADING: &str = "## done の項目";
+@@ -53,6 +58,15 @@ fn plain(tooth: &str) -> &str {
+     tooth.strip_prefix('=').unwrap_or(tooth)
+ }
+ 
++/// 表の歯 `tooth` が番号 `number` の宣言の歯の内か: 宣言の歯と字が等しい（`=` の有無は問わない）か、宣言の検証行の番号の歯 `@<k>` の k 本目の
++/// 検証行（`verify`）が選ぶ歯の名（[`selects`]・nextest の形でない行と本数の外の k は名を選ばない）である。名の歯と既存の歯は字だけで照らす。
++fn declares(teeth: &[String], verify: &[String], number: usize, tooth: &str) -> bool {
++    let wanted = u64::try_from(number).ok();
++    let elements = teeth.iter().filter_map(|element| parse_element(element).ok()).filter(|(at, _)| Some(*at) == wanted);
++    let mut lines = elements.filter_map(|(_, found)| if let Tooth::Line(k) = found { k.checked_sub(1).and_then(|at| verify.get(at)) } else { None });
++    declared_of(teeth, number).iter().any(|declared| plain(declared) == plain(tooth)) || lines.any(|line| selects(line, plain(tooth), NAME))
++}
++
+ /// 材料 [`super::ITEMS_FILE`] の本文（項目 0 個は空＝置かない）: 見出し・表の形の指示・項目を 1 行ずつ「(n) <本文>」。`teeth` は契約 file の
+ /// key `done-teeth` の要素で、空でない周（key を持つ契約）だけ項目の行の末尾に「 ／ 歯: <その番号の歯を , で並べた字>」を添え、`<歯>` の指示を
+ /// 宣言の歯の読みへ替える（key の無い契約の本文は 1 字も変えない・設計 §66 形 6）。
+@@ -87,8 +101,8 @@ pub fn items_text(done: &str, teeth: &[String]) -> String {
+ /// 文字列でない」か、「無い番号」「余る番号」「重なる番号」「形の合わない項目 k 件」のうち在るものを「・」で結んだもの）を `Err` に返す。
+ ///
+ /// `teeth` は契約 file の key `done-teeth` の要素で、空でない周（key を持つ契約）だけ、`-` でない表の歯がその番号の宣言の歯（`=` の有無は
+-/// 問わない）の外の項目を形の合わない項目に数える（設計 §66 形 6）。
+-pub fn holes(value: Option<&Value>, count: usize, teeth: &[String]) -> Result<Vec<usize>, String> {
++/// 問わない）の外の項目を形の合わない項目に数える（設計 §66 形 6）。`verify` は契約の検証行で、`@<k>` の宣言の内外を [`declares`] で読む。
++pub fn holes(value: Option<&Value>, count: usize, teeth: &[String], verify: &[String]) -> Result<Vec<usize>, String> {
+     let text = match value {
+         None => return Err("key done が無い".to_owned()),
+         Some(found) => found.as_str().ok_or_else(|| "key done が文字列でない".to_owned())?,
+@@ -102,7 +116,7 @@ pub fn holes(value: Option<&Value>, count: usize, teeth: &[String]) -> Result<Ve
+             let outside = !teeth.is_empty()
+                 && tooth != NO_TOOTH
+                 && (1..=count).contains(&found)
+-                && !declared_of(teeth, found).iter().any(|declared| plain(declared) == plain(tooth));
++                && !declares(teeth, verify, found, tooth);
+             (!outside).then_some((found, tooth == NO_TOOTH))
+         });
+         match parsed {
+@@ -151,3 +165,61 @@ pub fn named_at(at: Option<&str>, none: &[usize]) -> Option<String> {
+ pub fn listed(numbers: &[usize]) -> String {
+     numbers.iter().map(|number| format!("({number})")).collect()
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::holes;
++    use crate::fleet::json_lite::Value;
++
++    /// 文字列の列（歯の fixture）。
++    fn owned(items: &[&str]) -> Vec<String> {
++        items.iter().map(|item| (*item).to_owned()).collect()
++    }
++
++    /// 項目 3 つの表 `text` を宣言の歯 `teeth` と検証行 `verify` で読む。
++    fn read(text: &str, teeth: &[&str], verify: &[&str]) -> Result<Vec<usize>, String> {
++        holes(Some(&Value::Str(text.to_owned())), 3, &owned(teeth), &owned(verify))
++    }
++
++    /// 宣言の歯（項目 3 が 1 本目の検証行の全体 `@1`）。
++    const TEETH: [&str; 3] = ["1:pre_one", "2:=pre_kept", "3:@1"];
++
++    /// 検証行（1 本目は接頭辞 `pre_` を選ぶ nextest の行・2 本目は nextest の形でない行）。
++    const VERIFY: [&str; 2] = ["cargo nextest run -p toy --lib --no-tests=fail pre_", "cargo run -q -p xtask -- check"];
++
++    /// 項目 3 の外れの理由。
++    const THIRD_OUT: &str = "無い番号 (3)・形の合わない項目 1 件";
++
++    /// (2) `@<k>` の項目は、字の `@<k>` のほか k 本目の検証行が選ぶ歯の名も宣言の内（揃った表）で、選ばない名は外、`-` は歯の無い項目のまま。
++    #[test]
++    fn vatk_names_the_kth_line_selects_are_inside() {
++        assert_eq!(read("1:pre_one,2:pre_kept,3:@1", &TEETH, &VERIFY), Ok(Vec::new()), "字の @1 は内");
++        assert_eq!(read("1:pre_one,2:pre_kept,3:pre_three", &TEETH, &VERIFY), Ok(Vec::new()), "1 本目の行が選ぶ名は @1 の内");
++        assert_eq!(read("1:pre_one,2:pre_kept,3:post_three", &TEETH, &VERIFY), Err(THIRD_OUT.to_owned()), "1 本目の行が選ばない名は外");
++        assert_eq!(read("1:pre_one,2:pre_kept,3:-", &TEETH, &VERIFY), Ok(vec![3]), "@1 の項目の - は歯の無い項目");
++    }
++
++    /// (3) 名を選ばない行: nextest の形でない k 本目の行・filter の語の無い nextest の行・本数の外の k は名を内に数えず（字の `@<k>` だけが内）、
++    /// `--exact` の行は等しい名だけを選ぶ（`=` を剥がして照らす）。
++    #[test]
++    fn vatk_lines_that_select_no_name_keep_only_the_literal() {
++        let second = ["1:pre_one", "2:=pre_kept", "3:@2"];
++        assert_eq!(read("1:pre_one,2:pre_kept,3:check_three", &second, &VERIFY), Err(THIRD_OUT.to_owned()), "nextest の形でない行は名を選ばない");
++        assert_eq!(read("1:pre_one,2:pre_kept,3:@2", &second, &VERIFY), Ok(Vec::new()), "字の @2 は内");
++        let bare = ["cargo nextest run -p toy --lib --no-tests=fail"];
++        assert_eq!(read("1:pre_one,2:pre_kept,3:pre_three", &TEETH, &bare), Err(THIRD_OUT.to_owned()), "filter の語の無い行は名を選ばない");
++        let past = ["1:pre_one", "2:=pre_kept", "3:@5"];
++        assert_eq!(read("1:pre_one,2:pre_kept,3:pre_three", &past, &VERIFY), Err(THIRD_OUT.to_owned()), "本数の外の k は名を選ばない");
++        let exact = ["cargo nextest run -p toy --lib --no-tests=fail -- --exact pre_three"];
++        assert_eq!(read("1:pre_one,2:pre_kept,3:=pre_three", &TEETH, &exact), Ok(Vec::new()), "--exact の行は等しい名を選ぶ（= は剥がす）");
++        assert_eq!(read("1:pre_one,2:pre_kept,3:pre_three_more", &TEETH, &exact), Err(THIRD_OUT.to_owned()), "--exact の行は長い名を選ばない");
++    }
++
++    /// (4) 名の歯と既存の歯は字だけで照らし、ほかの番号の `@<k>` の行が選ぶ名でも内に数えない。key の無い契約は検証行を渡しても歯の字を問わない。
++    #[test]
++    fn vatk_named_and_kept_teeth_stay_literal() {
++        assert_eq!(read("1:pre_other,2:pre_kept,3:@1", &TEETH, &VERIFY), Err("無い番号 (1)・形の合わない項目 1 件".to_owned()), "名の歯は広げず、項目 3 の @1 の行が選ぶ名も項目 1 の内に数えない");
++        assert_eq!(read("1:pre_one,2:pre_other,3:@1", &TEETH, &VERIFY), Err("無い番号 (2)・形の合わない項目 1 件".to_owned()), "既存の歯は広げない");
++        assert_eq!(read("1:a,2:b,3:c", &[], &VERIFY), Ok(Vec::new()), "key の無い契約は §64 のまま");
++    }
++}
