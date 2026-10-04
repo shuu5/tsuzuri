@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.30 版（2026-10-04）: 器 scribe2 の要件書 v0.36 の制約 6 本を、番号に 1000 を足して制約 CON1001〜CON1006 として写した（取り込みの段 1 の続き・持ち主の裁定 t3-hub.74.60.1〔裁定 id = t3-hub.74.60.1:20261004T0113Z-1〕・判断の記録 ADR-39 の決定 (4) の (ア)・段 2 の判断の記録の写しが制約の id を解ける形で引くための先置き）。欄の写しは label → title・text → text・regulation → source の字・basis は空。器の憲法を指す字「憲法」は「器の憲法」、「本書」は「器の要件書」に直した。器の判断の記録の id は段 1 と同じく字のまま。
 # 第 0.29 版（2026-10-04）: 要件 FR10 の shall と plain に、依存でない理由で人の手を待つ契約の留め置き（Held）の札と吹き出しと個別の頁の段を足した（判断の記録 ADR-42・持ち主の裁定 t3-hub.79.1（裁定 id = t3-hub.79.1:20261004T0959Z-1・ADR-42 の案 A のまま承認・席とのチャット・notes に逐語））。
 # 第 0.28 版（2026-10-04）: 要件 FR1 の shall と plain と note に、その browser の保存に残す物の 4 つ目（個別の頁の本文と記録の段の開き閉じ・段の種類ごとに 1 つ）を足し、adrs に ADR-30 を足した（持ち主の裁定 t3-hub.76.4〔裁定 id = t3-hub.76.4:20261003T0057Z-1〕・判断の記録 ADR-30 決定 (4)・ノート surface-wave27b の行 g-fold-keep）。
 # 第 0.27 版（2026-10-04）: 器 scribe2 の要件書 v0.36（scribe2/design-intent/spec の srs.srs.yaml と srs.prose.yaml）を、番号に 1000 を足して写した（持ち主の裁定 t3-hub.74.60.1〔裁定 id = t3-hub.74.60.1:20261004T0113Z-1〕の形 ii の段 1・判断の記録 ADR-39）。器の FR1〜FR113 を FR1001〜FR1113・NFR1〜NFR6 を NFR1001〜NFR1006・受入 AC1〜AC90 の 82 本を AC1001〜AC1090・上位の必要 N-1〜N-5 を目的 GOAL1001〜GOAL1005 にし、字の中の器の id も同じ規則で直した（code の注の元の id は替えない・器の判断の記録 ADR-0xyz は字のまま残し段 2 で ADR-1xyz へ直す）。欄の写しは要件 = label → title・ears の pattern と condition と response → pattern と when と shall・priority → strength・prose の plain → plain・trace の backward → goals・trace の acceptance → verify の ac・prose の rationale → note（basis は空）・受入の平易文は新しく書いた。器の憲法の番号を引く字「憲法 C<n>」は「器の憲法 C<n>」、「本 SRS」は「器の要件書」に直した（提案中の判断の記録 ADR-38 の決定 (12)）。食い違い D1（行 v-swap〔882e0298〕が口 vessel update に足した busy と unchanged の断り）を FR1061 の shall と plain と AC1031 に足した。語彙の検査が知らない器の英字の語は語彙の identifiers に群を 1 つ足した（段 4 で terms へ照らす）。
@@ -17,7 +18,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.29
+  version: v0.30
   status: draft
   generated: 2026-09-28
   approval:
@@ -27,6 +28,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-03, stamp: "board の概要の出し分けと個別の頁の詳細の表示と短い題の上限と起票の門と「測れていない」の直し（t3-hub.76.1（裁定 id = t3-hub.76.1:20261003T0057Z-1）・t3-hub.76.2（裁定 id = t3-hub.76.2:20261003T0057Z-1）・t3-hub.76.3（裁定 id = t3-hub.76.3:20261003T0057Z-1）・t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1）・t3-hub.76.6（裁定 id = t3-hub.76.6:20261003T0057Z-1）・t3-hub.76.5（裁定 id = t3-hub.76.5:20261003T0057Z-1）・席とのチャット・notes に逐語・判断の記録 ADR-30・第 1〜6 問の推奨の全部）", verbatim: "AとBのクエスチョンは全部推奨で良い", version: v0.26}
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "器 scribe2 の設計の資料の取り込みの段 1（要件）（t3-hub.74.60.1（裁定 id = t3-hub.74.60.1:20261004T0113Z-1・席とのチャット・notes に逐語・判断の記録 ADR-39・推奨の全部）", verbatim: "１−７はすべて推奨で良い", version: v0.27}
     - {role: 承認, who: 持ち主, when: 2026-10-03, stamp: "個別の頁の本文と記録の段の開き閉じをその browser の保存に残す（t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1）・席とのチャット・notes に逐語・判断の記録 ADR-30 決定 (4)・要件 FR1 の 4 つ目）", verbatim: "AとBのクエスチョンは全部推奨で良い", version: v0.28}
+    - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "器 scribe2 の設計の資料の取り込みの段 1 の続き（制約）（t3-hub.74.60.1（裁定 id = t3-hub.74.60.1:20261004T0113Z-1・席とのチャット・notes に逐語・判断の記録 ADR-39・推奨の全部）", verbatim: "１−７はすべて推奨で良い", version: v0.30}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -1946,6 +1948,12 @@ constraints:
   - {id: CON4, title: mock は見本, text: tsuzuri-site の mock は仕様の見本であり本番ではない。本番の面は Rust の wasm（判断の記録 ADR-3）で作る。, basis: [P-6], source: 判断の記録 ADR-7 決定 (13)}
   - {id: CON6, title: 席のモデル, text: orchestrator の席は Opus 5.5・念入りさ xhigh で動かす。相談の窓 consult は既定が Fable・念入りさ xhigh で、持ち主が開く窓は model と念入りさを持ち主が選び、席が自分で開く問う窓は既定で開く。席の model を下げる変更は判断の記録を要する。, basis: [P-16], source: 持ち主の裁定 2026-09-27（t3-hub.1）・判断の記録 ADR-10 と ADR-12 と ADR-29, adrs: [ADR-10, ADR-12, ADR-29]}
   - {id: CON5, title: 見せる先, text: 見せる先の制限は条 N-6 が持つ（ここには写さない）。, basis: [N-6], source: 憲法 N-6}
+  - {id: CON1001, title: "器の憲法", text: "器の憲法（Always 17 / Ask-first 4 / Never 4）を器の要件書の上位に置き、 矛盾する要件を書かない", basis: [], source: "器の要件書 v0.36 の制約の 1 番（規定の出所 = 器の憲法 v0.5.0）"}
+  - {id: CON1002, title: "公開", text: "本 repo は PUBLIC。 絶対 path・host 名・口座名・user 逐語を tracked file に書かない", basis: [], source: "器の要件書 v0.36 の制約の 2 番（規定の出所 = 器の憲法 A1（出す））"}
+  - {id: CON1003, title: "歯", text: "test は Rust の 1 framework だけで、 bash / bats の歯を書かない", basis: [], source: "器の要件書 v0.36 の制約の 3 番（規定の出所 = 器の憲法 C12）"}
+  - {id: CON1004, title: "作法", text: "前の器（v1）の役割席・gate 席・QA 席・契約押印・tier ラベルを持ち込まない", basis: [], source: "器の要件書 v0.36 の制約の 4 番（規定の出所 = ADR-0003）"}
+  - {id: CON1005, title: "口", text: "binary は不可逆操作（force push・削除・公開・課金）の口を持たない", basis: [], source: "器の要件書 v0.36 の制約の 5 番（規定の出所 = 器の憲法 A1 / N1）"}
+  - {id: CON1006, title: "headless", text: "headless の runner / lens は permission を毎回明示・rate limit は stream-json で検知・context の上限は契約の大きさで受ける（開発 session の context は /compact で扱う）", basis: [], source: "器の要件書 v0.36 の制約の 6 番（規定の出所の欄は空）"}
 
 sources:
   - {id: mock3, name: mock v3（面の見本・静的 HTML）, where: ~/projects/local-projects/tsuzuri-site/mock3/（配信 http://<tailnet の住所>:8101/mock3/・直しの report は席の作業場・外部 pointer なので参照の母集団に入れない）}
