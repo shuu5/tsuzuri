@@ -64,7 +64,9 @@ use crate::name::NAME;
 use intake::intake;
 use preflight::preflight;
 use run::{run_all, start};
-use std::path::PathBuf;
+use crate::invocation::Invocation;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use step::{answer_run, approve_run, gate_run, land_run, retire_run};
 
 /// `pipe` の subcommand（閉じた語・宣言順は [`subcommand`] の腕の順・設計 contract-source.md §17 の形 (vii)）。
@@ -615,6 +617,9 @@ fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
                     Err(reason) => return refused(reason),
                 };
                 let marked = queue::mark(&state_dir, bead, mark, detail, policy);
+                if mark == Mark::Hold && marked.rc == RC_OK {
+                    rewrite_after_hold(args, &state_dir);
+                }
                 if mark == Mark::Hold || marked.rc != RC_OK {
                     return marked;
                 }
@@ -628,6 +633,23 @@ fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
             Outcome { out, err, rc: RC_OK }
         }
     }
+}
+
+/// 止めの印を書いた周に、局面の出力の全部の書き直し（`fleet lifecycle write`）を自分の binary の子として切り離して起こす（`--repo` を
+/// 渡された周だけ・`--bd` と `--rules` はそのまま渡す・待たない・入出力は捨てる・口の rc と字は替えない・設計 case-lifecycle.md §21 の
+/// 答えの口と同じ形）。起こせなかった周は何もしない（次の契機の全部の書き直しが拾う）。
+fn rewrite_after_hold(args: &[String], state_dir: &Path) {
+    let Ok(Some(repo)) = flag(args, REPO_FLAG) else {
+        return;
+    };
+    let mut child = Invocation::new(queue::myself());
+    child.args(["fleet", "lifecycle", "write", "--state-dir"]).arg(state_dir).args(["--repo", repo]);
+    for name in ["--bd", "--rules"] {
+        if let Ok(Some(found)) = flag(args, name) {
+            child.args([name, found]);
+        }
+    }
+    let _ = child.process_group(0).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
 }
 
 /// `contracts` の使い方（設計 contract-source.md §2「表の検査」）。

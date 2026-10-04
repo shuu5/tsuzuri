@@ -481,7 +481,7 @@ mod tests {
 
     fn contract(bead: &str) -> Part {
         let mut found = part(Kind::Contract, bead, Phase::ContractRunning, [Some("run-implementing"), None]);
-        found.extra = Extra::Contract { pointer: Some(POINTER.to_owned()) };
+        found.extra = Extra::Contract { pointer: Some(POINTER.to_owned()), why: None };
         found
     }
 
@@ -744,6 +744,24 @@ mod tests {
         assert_eq!((&out.marks.ledger, &out.marks.main, out.interval_s, out.closed_window_h, &out.unmeasured), (&before.marks.ledger, &before.marks.main, Some(600), Some(72), &before.unmeasured));
         assert_eq!(out.marks.events, Events { len: found.bytes.len() as u64, head: Some(HEAD_TS.to_owned()) }, "events の印だけが末尾の次まで進む");
         assert_eq!(out.parts, before.parts, "契約と要件の部品は動かさない");
+    }
+
+    /// 契約の部品の欄 why は部分の書き直しの読みと書きを通って残り、why の無い契約の部品は鍵を書かない（行 v-hold-case）。
+    #[test]
+    fn vhdcase_partial_rewrite_keeps_the_why_of_the_contract_part() {
+        let bed = Bed::new("why");
+        let found = log(&[], 0, &[stage("2026-09-30T00:00:00Z", "RunStage", ["r7", "s2-u.1", "Spawned"], None)]);
+        let mut held = part(Kind::Contract, "s2-h.1", Phase::ContractQueued, [Some("hold"), Some("2026-09-30T01:00:00Z")]);
+        held.extra = Extra::Contract { pointer: Some(POINTER.to_owned()), why: Some("設計の行 を直す".to_owned()) };
+        let before = output(&Log { len: 0, bytes: Vec::new() }, vec![held.clone(), contract(C1)]);
+        let before = Output { marks: Marks { events: Events { len: found.len, head: Some(HEAD_TS.to_owned()) }, ..before.marks.clone() }, ..before };
+        bed.put(&before);
+        assert_eq!(bed.go(&found).0, Rewrote::Wrote(Wrote::Written));
+        let out = bed.out();
+        let extra = |id: &str| out.parts.iter().find(|one| one.id == id).map(|one| one.extra.clone());
+        assert_eq!(extra("s2-h.1"), Some(held.extra), "why は読みと書きを通って残る");
+        assert_eq!(extra(C1), Some(contract(C1).extra), "why の無い契約は無いまま");
+        assert_eq!(bed.json().matches(r#""why":"#).count(), 1, "鍵 why は理由を持つ部品だけ: {}", bed.json());
     }
 
     /// log が繋がらない 3 形（head が違う・短い・直前が改行でない）は書かず、読めない印（理由 events）を付け、既に在る印は消さない。

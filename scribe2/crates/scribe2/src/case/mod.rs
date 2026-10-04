@@ -280,10 +280,12 @@ pub enum Extra {
         /// keep の記帳が在るか。
         keep: Option<bool>,
     },
-    /// 契約: `pointer`（任意・設計 pointer の字か null）。
+    /// 契約: `pointer`（任意・設計 pointer の字か null）と `why`（任意・止めの印の理由・無ければ鍵を書かない）。
     Contract {
         /// 設計 pointer の字。
         pointer: Option<String>,
+        /// 止めの印の理由（局面 contract-queued・理由 `hold` の印が理由を持つ周だけ）。
+        why: Option<String>,
     },
     /// 便: `bead`（便が属する契約の bead id）。
     Run {

@@ -27,7 +27,12 @@ pub struct Judged {
     pub name: String,
     /// 理由の値の字（`dependency` は `,` 区切りの bead id・`overlap` は `<run id>/<file 数>`・`admission` は断りの名）。
     pub value: String,
+    /// 止めの印の理由（理由が `hold` で印の行が理由を持つ周だけ・判定には使わず契約の部品の欄 `why` に写す）。
+    pub why: Option<String>,
 }
+
+/// 止めの理由の名（契約の部品の since を印の時刻〔値の字〕にし、欄 `why` に印の理由を写す理由）。
+const HOLD: &str = "hold";
 
 /// 開いた契約 1 本（閉じていない契約の bead id と、設計 pointer の字）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,27 +179,32 @@ fn run_phase(latest: &Latest) -> (Phase, Option<String>) {
 fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -> Part {
     let queued = input.queue.iter().find(|judged| judged.bead == open.bead);
     let refusal = input.refusals.iter().find(|refused| refused.bead == open.bead && !refused.run_after);
-    let (phase, reason, since) = if let Some(live) = run.filter(|found| found.alive) {
-        (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None)
+    let (phase, reason, since, why) = if let Some(live) = run.filter(|found| found.alive) {
+        (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None, None)
     } else if let Some((name, since)) = refusal_of(queued, refusal) {
-        (Phase::ContractRefused, Some(name), since)
+        (Phase::ContractRefused, Some(name), since, None)
     } else if let Some(judged) = queued {
-        (Phase::ContractQueued, Some(judged.name.clone()), None)
+        // 止め（理由 `hold`）は印の時刻（値の字）を since に、印の理由を why に持つ（ほかの理由の since は書き手が継ぐ）。
+        let held = judged.name == HOLD;
+        (Phase::ContractQueued, Some(judged.name.clone()), held.then(|| judged.value.clone()), judged.why.clone().filter(|_| held))
     } else {
-        (Phase::Misfit, Some(Misfit::NoPhase.as_str().to_owned()), None)
+        (Phase::Misfit, Some(Misfit::NoPhase.as_str().to_owned()), None, None)
     };
     let mut found = part(Kind::Contract, &open.bead, phase, reason);
     found.since = since;
     found.links.runs = run.map(|latest| latest.run.clone()).into_iter().collect();
     found.links.on = queued.map(|judged| links_on(judged, input.run_beads)).unwrap_or_default();
-    found.extra = Extra::Contract { pointer: open.pointer.clone() };
+    found.extra = Extra::Contract { pointer: open.pointer.clone(), why };
     found
 }
 
-/// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。
+/// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。since は断りの記録の
+/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。
 fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>)> {
     match (queued, refusal) {
-        (Some(judged), _) if judged.name == "admission" => Some((judged.value.clone(), None)),
+        (Some(judged), _) if judged.name == "admission" => {
+            Some((judged.value.clone(), refusal.filter(|found| found.name == judged.value).map(|found| found.ts.clone())))
+        }
         (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()))),
         _ => None,
     }
@@ -337,7 +347,66 @@ mod tests {
     }
 
     fn judged(bead: &str, name: &str, value: &str) -> Judged {
-        Judged { bead: bead.to_owned(), name: name.to_owned(), value: value.to_owned() }
+        Judged { bead: bead.to_owned(), name: name.to_owned(), value: value.to_owned(), why: None }
+    }
+
+    fn judged_why(bead: &str, name: &str, value: &str, why: &str) -> Judged {
+        Judged { why: Some(why.to_owned()), ..judged(bead, name, value) }
+    }
+
+    /// 契約の部品の (局面, 理由, since, 欄 why)。
+    fn held_of(part: &Part) -> (Phase, Option<&str>, Option<&str>, Option<&str>) {
+        let why = match part.extra {
+            Extra::Contract { ref why, .. } => why.as_deref(),
+            _ => panic!("契約の欄"),
+        };
+        (part.phase, part.reason.as_deref(), part.since.as_deref(), why)
+    }
+
+    /// 理由 `hold` の契約は since が印の時刻（値の字）で欄 why が印の理由・理由の無い印は why なし・ほかの理由は理由の字を持っても
+    /// since も why も持たない（行 v-hold-case）。
+    #[test]
+    fn vhdcase_hold_part_takes_the_mark_time_and_the_reason() {
+        let world = World {
+            queue: vec![
+                judged_why("s2-h", "hold", "2026-09-30T09:00:00Z", "設計の行 を直す"),
+                judged("s2-n", "hold", "2026-09-30T09:30:00Z"),
+                judged_why("s2-d", "dependency", "s2-z", "x"),
+            ],
+            open: vec![open("s2-h"), open("s2-n"), open("s2-d")],
+            ..World::default()
+        };
+        let queued = Phase::ContractQueued;
+        let [h, n, d] = ["s2-h", "s2-n", "s2-d"].map(|bead| world.contract(bead));
+        assert_eq!(held_of(&h), (queued, Some("hold"), Some("2026-09-30T09:00:00Z"), Some("設計の行 を直す")), "理由つきの止め");
+        assert_eq!(held_of(&n), (queued, Some("hold"), Some("2026-09-30T09:30:00Z"), None), "理由の無い止め");
+        assert_eq!(held_of(&d), (queued, Some("dependency"), None, None), "止めでない理由は持たない");
+    }
+
+    /// 受付の断りの契約の since は、列の理由が `admission` の周も同じ名の断りの記録の時刻・名が違う記録と記録の無い周は持たない
+    /// （書き手が継ぐ）・列に無い断りは今のとおり記録の時刻（行 v-hold-case）。
+    #[test]
+    fn vhdcase_refused_part_since_is_the_record_time_of_the_same_name() {
+        let world = World {
+            queue: vec![
+                judged("s2-a", "admission", "cap-headroom"),
+                judged("s2-b", "admission", "cap-headroom"),
+                judged("s2-c", "admission", "cap-headroom"),
+            ],
+            open: vec![open("s2-a"), open("s2-b"), open("s2-c"), open("s2-d")],
+            refusals: vec![
+                refused("s2-a", "cap-headroom", false),
+                refused("s2-b", "teeth-outside-write-set", false),
+                refused("s2-d", "contract-table", false),
+            ],
+            ..World::default()
+        };
+        let refused_at = Some("2026-09-30T10:00:00Z");
+        let [a, b, c, d] = ["s2-a", "s2-b", "s2-c", "s2-d"].map(|bead| world.contract(bead));
+        assert_eq!(held_of(&a), (Phase::ContractRefused, Some("cap-headroom"), refused_at, None), "同じ名の記録の時刻");
+        assert_eq!(held_of(&b), (Phase::ContractRefused, Some("cap-headroom"), None, None), "名が違う記録の時刻は持たない");
+        assert_eq!(held_of(&c), (Phase::ContractRefused, Some("cap-headroom"), None, None), "記録の無い周は持たない");
+        assert_eq!(held_of(&d), (Phase::ContractRefused, Some("contract-table"), refused_at, None), "列に無い断り");
     }
 
     fn latest(bead: &str, run: &str, stage: Stage, alive: bool) -> Latest {

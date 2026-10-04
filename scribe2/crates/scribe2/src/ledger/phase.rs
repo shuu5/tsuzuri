@@ -389,7 +389,7 @@ impl<'a> Ctx<'a> {
                 Draft { links, extra: Extra::Memo { due: None, triggers: None, keep: None }, ..closed(Phase::MemoClosed) }
             }
             Kind::Epic => Draft { since: closed_at(issue), ..closed(Phase::EpicClosed) },
-            _ => Draft { extra: Extra::Contract { pointer: pointer_text(&issue.acceptance).map(str::to_owned) }, ..closed(Phase::ContractClosed) },
+            _ => Draft { extra: Extra::Contract { pointer: pointer_text(&issue.acceptance).map(str::to_owned), why: None }, ..closed(Phase::ContractClosed) },
         }
     }
 
@@ -1235,6 +1235,6 @@ mod tests {
         assert_eq!(part(&out, "s2-m").extra, memo_extra, "満ちていない期日の最も早い値・引き金の写し・keep");
         let only_met = Extra::Memo { due: None, triggers: Some(vec![view("期日", "2026-09-01T00:00:00Z", true)]), keep: Some(false) };
         assert_eq!(part(&out, "s2-n").extra, only_met, "期日が全部満ちていれば due は無い");
-        assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()) }, "閉じた契約の pointer");
+        assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()), why: None }, "閉じた契約の pointer");
     }
 }

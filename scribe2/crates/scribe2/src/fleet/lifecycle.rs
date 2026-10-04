@@ -218,7 +218,7 @@ fn extra_pairs(extra: &Extra) -> Vec<(&'static str, Tree)> {
             items.extend(keep.map(|found| ("keep", Tree::Bool(found))));
             items
         }
-        Extra::Contract { pointer } => vec![("pointer", maybe(pointer))],
+        Extra::Contract { pointer, why } => [("pointer", maybe(pointer))].into_iter().chain(why.as_deref().map(|found| ("why", text(found)))).collect(),
         Extra::Run { bead } => vec![("bead", text(bead))],
     }
 }
@@ -335,7 +335,7 @@ fn extra_of(kind: Kind, node: &Tree) -> Option<Extra> {
             };
             Extra::Memo { due: optional_text(node, "due")?, triggers, keep }
         }
-        Kind::Contract => Extra::Contract { pointer: optional_text(node, "pointer").unwrap_or(None) },
+        Kind::Contract => Extra::Contract { pointer: optional_text(node, "pointer").unwrap_or(None), why: optional_text(node, "why").unwrap_or(None) },
         Kind::Run => Extra::Run { bead: node.get("bead")?.as_str()?.to_owned() },
         Kind::Question | Kind::Row | Kind::Requirement | Kind::Epic | Kind::Commit => Extra::None,
     })

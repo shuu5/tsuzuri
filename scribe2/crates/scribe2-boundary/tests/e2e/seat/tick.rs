@@ -2727,7 +2727,7 @@ fn seat_tick_rewrites_lifecycle_moves_a_due_memo_without_changing_the_tick() {
 fn seat_tick_rewrites_lifecycle_moves_a_run_stage_without_changing_the_tick() {
     use vessel::case::{Extra, Kind, Phase};
     let stamp = vessel::fleet::cli::format_utc(unix_now().saturating_sub(60));
-    let pointer = Extra::Contract { pointer: Some("design = docs/design/x.md#a".to_owned()) };
+    let pointer = Extra::Contract { pointer: Some("design = docs/design/x.md#a".to_owned()), why: None };
     let contract = lc_part(Kind::Contract, "s2-w.1", Phase::ContractRunning, [Some("run-implementing"), None], pointer);
     let run = lc_part(Kind::Run, "r-w1", Phase::RunImplementing, [Some("Spawned"), Some("2026-09-30T00:00:00Z")], Extra::Run { bead: "s2-w.1".to_owned() });
     let tail = [format!("{{\"schema\":1,\"ts\":\"{stamp}\",\"kind\":\"RunStage\",\"run\":\"r-w1\",\"bead\":\"s2-w.1\",\"host\":\"h\",\"actor\":\"machine\",\"stage\":\"Gated\",\"detail\":\"verdict:PASS\"}}")];

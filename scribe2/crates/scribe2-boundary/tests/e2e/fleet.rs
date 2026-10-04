@@ -3380,6 +3380,45 @@ fn fleet_lifecycle_usage_and_help_page_name_the_verb() {
     assert!(page.lines().any(|line| line.starts_with("  lifecycle ")), "SUBCOMMANDS: {page}");
 }
 
+/// 理由つきの止めの口は印の直後に局面の出力の全部の書き直しを切り離した子で起こし（口の字は印の行だけ・`--repo` の無い止めは
+/// 起こさない）、出力の契約の部品は contract-queued・理由 hold・since は印の時刻・欄 why は止めの理由（行 v-hold-case）。
+#[test]
+fn vhdcase_hold_rewrites_the_output_with_the_reason_and_the_mark_time() {
+    let life = Life::new();
+    let pointer = super::pipe::design_pointer();
+    let free = format!("{{\"id\":\"toy-c2\",\"status\":\"open\",\"priority\":2,\"labels\":[],\"acceptance_criteria\":\"design = {pointer}\",\"dependencies\":[]}}");
+    life.put("ledger", &format!("[{LIFE_TASK},{free}]\n"));
+    let state = life.state.display().to_string();
+    let bare = super::pipe::run_pipe(&["dispatch", "hold", "toy-c2", "--reason", "前の止め", "--state-dir", &state]);
+    assert_eq!(bare.status.code(), Some(i32::from(RC_OK)), "--repo の無い止めも rc 0: {}", super::pipe::stderr_of(&bare));
+    std::thread::sleep(Duration::from_millis(800));
+    assert_eq!(life.generated(), None, "--repo の無い止めは書き直しを起こさない");
+    let out = super::pipe::run_pipe(&life.pipe_args(&["dispatch", "hold", "toy-c2"], &["--reason", "設計の行 を直す"]));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "止めは rc 0: {}", super::pipe::stderr_of(&out));
+    assert_eq!(super::pipe::stdout_of(&out).trim_end(), "[DISPATCH] bead=toy-c2 mark=hold", "口の字は印の行だけ");
+    let since = super::pipe::events(&life.state).last().map(|event| event.ts.clone()).unwrap_or_default();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while life.generated().is_none() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let shown = life.shown();
+    let line = shown.lines().find(|line| line.starts_with("part=contract id=toy-c2 ")).unwrap_or_default();
+    assert!(line.contains(" phase=contract-queued ") && line.ends_with(" reason=hold"), "止めの局面と理由: {shown}");
+    assert!(line.contains(&format!(" since={since} ")), "since は印の時刻 {since}: {shown}");
+    assert_eq!(life.contract_why("toy-c2").as_deref(), Some("設計の行 を直す"), "欄 why は止めの理由");
+    super::pipe::clean(&[&life.repo, &life.state]);
+}
+
+impl Life {
+    /// 出力の契約の部品 `id` の欄 why（出力・部品・欄の無い周は `None`）。
+    fn contract_why(&self, id: &str) -> Option<String> {
+        let tree = parse(&fs::read_to_string(self.json_path()).ok()?).ok()?;
+        let parts = tree.get("parts")?.as_array()?;
+        let found = parts.iter().find(|part| part.get("part").and_then(Tree::as_str) == Some("contract") && part.get("id").and_then(Tree::as_str) == Some(id))?;
+        found.get("why")?.as_str().map(str::to_owned)
+    }
+}
+
 /// 契機 (a) の `pipe dispatch` と (e) の `fleet lifecycle write` で出力が進み、`dispatch ls` では進まない。どの契機の出力にも
 /// 依存を待つ開いた契約が contract-queued・理由 dependency で出る。
 #[test]

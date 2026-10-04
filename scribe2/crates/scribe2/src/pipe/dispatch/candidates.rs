@@ -520,7 +520,11 @@ fn judged_of(turn: &Turn) -> Vec<Judged> {
             }
             None => ("launched".to_owned(), String::new()),
         };
-        Judged { bead: candidate.bead.clone(), name, value }
+        let why = match candidate.reason {
+            Some(WaitReason::Hold { ref why, .. }) => why.clone(),
+            _ => None,
+        };
+        Judged { bead: candidate.bead.clone(), name, value, why }
     };
     turn.candidates.iter().map(one).collect()
 }
