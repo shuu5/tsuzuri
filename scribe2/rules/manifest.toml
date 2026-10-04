@@ -1062,6 +1062,17 @@ enabled = true
 ruling = "user 2026-09-30T22:13Z 項 index-timeout"
 ruled_at = "2026-09-30"
 
+# 便の木の並びの合計の上限（MiB = 40 GiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。器の掃除が並びの木の大きさを足し、越える間は live な
+# 便が持たない並びを印の新しさの古い順に丸ごと退かせる（move だけ）。読めない周は退かせない（既定値に倒さない）。
+
+[[rule]]
+id = "pipe.lanes_cap_mb"
+kind = "PipeLanesCapMb"
+value = 40960
+enabled = true
+ruling = "user 2026-10-03T22:11Z 問い t3-hub.77.15"
+ruled_at = "2026-10-03"
+
 # 口座の宣言（設計 fleet-usage.md §2・account-lifecycle.md §2・ADR-0026 §2.1）は host の manifest（state dir
 # の host.toml）にだけ置く。この file に口座の表は置かない（文法は残る・足す変更は A1 の対話面で聞く・本 repo
 # は PUBLIC・SRS CON2）。器は credential の置き場を走査せず、宣言だけを真実として読む（C3）。

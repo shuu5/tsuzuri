@@ -4,6 +4,7 @@
 
 use super::declaration::terminal_facts;
 use super::land::{broken, close_reason, refused, retire_worktree, CloseTail, WorktreeCheck, CLOSE_REASON, MAIN_REF};
+use super::lane::{held_lane, resting_place};
 use super::{branch_name, emit, git_bytes, git_ok, verdict_path, worktree_path, worktrees_dir, Emit};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
 use crate::fleet::json_lite;
@@ -153,10 +154,12 @@ fn plain_retire(entry: &Retire<'_>) -> Outcome {
 
 /// worktree を可逆に move して `detail=retired` を 1 件記す（畳むだけの周の本体・move の失敗は rc 2）。
 fn fold(entry: &Retire<'_>, worktree: &Path) -> Outcome {
+    // 並びを持つ便は clean な木を並びへ返すので、木の在りかは並びの木を名指す（判断の記録 ADR-35）。
+    let held = held_lane(entry.repo, entry.run);
     if let Some(failure) = move_and_record(entry, worktree) {
         return failure;
     }
-    Outcome::ok_line(format!("run={} retired={}", entry.run, retired_path(entry.repo, entry.run).display()))
+    Outcome::ok_line(format!("run={} retired={}", entry.run, resting_place(entry.repo, entry.run, held).display()))
 }
 
 /// move して `retired` を記す。失敗は畳めなかった周の Outcome（rc 2）で、成功は `None`。
@@ -323,14 +326,14 @@ fn fold_after_close(entry: &Retire<'_>, worktree: &Path) -> Outcome {
     if let Err(reason) = record(entry, EventKind::RunDone, CLOSE_OK) {
         return broken(reason);
     }
-    let dest = retired_path(entry.repo, entry.run);
+    let (dest, held) = (retired_path(entry.repo, entry.run), held_lane(entry.repo, entry.run));
     if dest.exists() || !retire_worktree(entry.repo, entry.run, worktree).is_empty() {
         return declined(entry, Refusal::WorktreeUnready);
     }
     if let Err(reason) = record(entry, EventKind::RunStage, "retired") {
         return broken(reason);
     }
-    Outcome::ok_line(format!("run={} retired={} close=ok", entry.run, dest.display()))
+    Outcome::ok_line(format!("run={} retired={} close=ok", entry.run, resting_place(entry.repo, entry.run, held).display()))
 }
 
 /// `verdict.json` の文字列 field を 1 つ読む（**JSON の読み手はこの 1 本**・読めない周は `None`）。

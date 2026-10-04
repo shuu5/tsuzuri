@@ -6,7 +6,7 @@
 
 use super::cli::{int_row, live};
 use super::retire::retired_path;
-use super::{current, git_bytes, repo_of_run, worktree_path, DIR};
+use super::{current, git_bytes, lane, repo_of_run, worktree_path, DIR};
 use crate::fleet::store::{self, LockPolicy};
 use crate::rules::manifest::Manifest;
 use crate::seat::{drafts_dir, seats_root, write_drafts_cap, DraftsCap};
@@ -39,6 +39,9 @@ const ROW_DRAFTS_STALE: &str = "seat.drafts_stale_h";
 /// 量の線の上限（MiB）と組み立て中の窓（秒）の rules 行の id（設計 dispatcher.md §39 形 8）。
 const ROW_DRAFTS_CAP: &str = "seat.drafts_cap_mb";
 const ROW_DRAFTS_BUSY: &str = "seat.drafts_busy_s";
+
+/// 便の木の並びの合計の上限（MiB・repo ごと）の rules 行の id（判断の記録 ADR-35 の決定 (5)）。
+const ROW_LANES_CAP: &str = "pipe.lanes_cap_mb";
 
 /// 上限の MiB を byte へ引く係数。
 const MIB: u64 = 1_048_576;
@@ -113,17 +116,20 @@ pub(super) fn sweep(state_dir: &Path, policy: LockPolicy, manifest: &Manifest) -
     let _held = Held(lock);
     let mut totals = Totals::default();
     sweep_runs(state_dir, &mut totals);
+    let lanes = sweep_lanes(state_dir, manifest, policy, &mut totals);
     let drafts = sweep_drafts(state_dir, manifest, &mut totals);
-    if totals.removed == 0 && totals.failed.is_empty() && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
+    let quiet = totals.removed == 0 && lanes == 0 && totals.failed.is_empty();
+    if quiet && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
         return None;
     }
     let named = if totals.failed.is_empty() { String::new() } else { format!(":{}", totals.failed.join(",")) };
+    let shed = if lanes == 0 { String::new() } else { format!(" lanes={lanes}") };
     let tail = drafts.map_or_else(String::new, |found| {
         let swept = if found.no_rule { "no-rule".to_owned() } else { found.swept.to_string() };
         let cap = if found.shed > 0 || found.over > 0 { format!(" cap={} over={}", found.shed, found.over) } else { String::new() };
         format!(" drafts={swept} nogit={}{cap}", found.nogit)
     });
-    Some(format!("sweep: removed={} runs={} failed={}{named}{tail}", totals.removed, totals.runs, totals.failed.len()))
+    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{tail}", totals.removed, totals.runs, totals.failed.len()))
 }
 
 /// live でない便の木を掃く（置き場の replay を読めない周は 1 本も撃たない）。
@@ -137,6 +143,23 @@ fn sweep_runs(state_dir: &Path, totals: &mut Totals) {
         };
         totals.runs = totals.runs.saturating_add(usize::from(totals.add(&swept(&tree, None), &run.id)));
     }
+}
+
+/// 名乗った repo の並びの木の合計を上限で切り、退かせた並びの数を返す（repo は置き場の便から引く・判断の記録 ADR-35 の決定 (5)）。
+/// 行を読めない周と置き場の replay を読めない周は 1 つも退かせない（既定値へ倒さない・測れないを「live でない」に読み替えない・C10）。
+fn sweep_lanes(state_dir: &Path, manifest: &Manifest, policy: LockPolicy, totals: &mut Totals) -> usize {
+    let (Ok(cap_mb), Ok(state)) = (int_row(manifest, ROW_LANES_CAP), current(state_dir)) else {
+        return 0;
+    };
+    let repos: BTreeSet<PathBuf> = state.runs.keys().filter_map(|id| repo_of_run(state_dir, id)).collect();
+    let live_of = |id: &str| state.runs.get(id).and_then(|run| live(state_dir, id, run.stage));
+    let mut shed = 0_usize;
+    for repo in repos {
+        let (moved, failed) = lane::shed(&repo, cap_mb.saturating_mul(MIB), policy, &live_of);
+        shed = shed.saturating_add(moved);
+        failed.iter().for_each(|name| totals.fail(name));
+    }
+    shed
 }
 
 /// 席の起草の木を掃く（起草の置き場が 1 つも無い周は `None`・書きの線の行は木が 1 本以上在る周だけ `no_rule` に読む・
@@ -228,7 +251,7 @@ fn candidates_of(name: &str, tree: &Path, rels: &[PathBuf]) -> Option<Vec<Candid
 
 /// dir 自身と下の全 entry の使用量（lstat の `st_blocks` × 512 の和）と mtime の最新。symlink は辿らずに symlink
 /// そのものを数える。読めない dir・entry が在れば `None`（0 と読まない・C10）。
-fn measure(dir: &Path) -> Option<(u64, SystemTime)> {
+pub(super) fn measure(dir: &Path) -> Option<(u64, SystemTime)> {
     let own = std::fs::symlink_metadata(dir).ok()?;
     let (mut bytes, mut newest, mut pending) = (own.blocks().saturating_mul(512), own.modified().ok()?, vec![dir.to_path_buf()]);
     while let Some(current) = pending.pop() {

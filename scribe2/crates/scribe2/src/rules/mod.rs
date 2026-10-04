@@ -425,6 +425,9 @@ pub enum RuleKind {
     /// code の索引の外の道具 1 本を待つ上限（秒・設計 reverse-index.md §4 形 2・形 9）。越えた子は process group ごと止めて failed:timeout と読む。
     /// 撃ち中の持ち主の終わりを待つ上限も同じ値。読み手は `pipe::dispatch::index_build` の 1 本。
     IndexTimeoutS,
+    /// 便の木の並びの合計の上限（MiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。並びの木の大きさの合計がこれを越える周に、live な便が
+    /// 持たない並びを印の新しさの古い順に丸ごと退かせる。行を読めない周は退かせない。読み手は `pipe::sweep` の 1 本。
+    PipeLanesCapMb,
 }
 
 /// [`RuleKind`] の全 variant。parity test の母集団である。
@@ -524,6 +527,7 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::MemoTriagePerRound,
     RuleKind::IndexCapMb,
     RuleKind::IndexTimeoutS,
+    RuleKind::PipeLanesCapMb,
 ];
 
 impl RuleKind {
@@ -589,7 +593,7 @@ impl RuleKind {
             Self::SeatPrecheckAlarmS => "SeatPrecheckAlarmS", Self::FloorTimeoutS => "FloorTimeoutS", Self::PipeReserveH => "PipeReserveH",
             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
-            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS",
+            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
         }
     }
 
@@ -628,7 +632,7 @@ impl RuleKind {
             | Self::HostBlockedPerCore
             | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
-            | Self::LedgerTimeoutS
+            | Self::LedgerTimeoutS | Self::PipeLanesCapMb
             | Self::PipeSizeSLines
             | Self::PipeSizeMLines
             | Self::PipeSizeLLines
@@ -685,7 +689,7 @@ impl RuleKind {
             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
-            | Self::IndexCapMb | Self::IndexTimeoutS => false,
+            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb => false,
         }
     }
 
