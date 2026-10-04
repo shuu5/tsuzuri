@@ -252,6 +252,9 @@ pub(in crate::pipe) enum PushTip<'a> {
     Tip,
     /// 先端でない commit（CI の run が付かない＝自分を祖先に持つ先端の commit〔値〕の CI で照合する）。
     Behind(&'a str),
+    /// remote の main に既に載った commit（値は remote の main の先端）。push を撃たず（自分で押していない main を押し直さない）、
+    /// 先端の CI で照合する（終端だけの撃ち直しが main-red の便の squash を受け入れる周・判断の記録 ADR-45 の門 H6）。
+    Adopted(&'a str),
 }
 
 /// land の終端（設計 contract-source.md §5）: push → CI の照合 → 台帳の close。
@@ -262,6 +265,8 @@ pub(in crate::pipe) enum PushTip<'a> {
 /// `landed <sha> ci=none` の理由で撃つ（記すのは `close:ok` の 1 件・結末は [`Terminal::ClosedWithoutCi`]）。
 /// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ちも
 /// `ci_now` も）を先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。
+/// [`PushTip::Adopted`] の周は push を撃たず（記帳もしない）、`Behind` と同じく先端の CI で照合する（先端が自分の sha なら
+/// reason に `tip=` を置かない）。
 pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
     let facts = match super::declaration::terminal_facts(entry.repo) {
         Ok(found) => found,
@@ -281,18 +286,20 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
             failed => failed,
         };
     };
-    // (1) push。**main:main だけ**を押す（便の branch は押さない）。
-    if super::git_bytes(entry.repo, &["push", remote, "main:main"]).is_none() {
-        note(entry, "push:failed:git");
-        return Terminal::PushFailed("git".to_owned());
+    // (1) push。**main:main だけ**を押す（便の branch は押さない）。remote に載った commit を受け入れる周は押さない。
+    if !matches!(tip, PushTip::Adopted(_)) {
+        if super::git_bytes(entry.repo, &["push", remote, "main:main"]).is_none() {
+            note(entry, "push:failed:git");
+            return Terminal::PushFailed("git".to_owned());
+        }
+        note(entry, &format!("push:{remote}"));
     }
-    note(entry, &format!("push:{remote}"));
     // 先端でない sha には forge の CI の run が付かない＝自分を祖先に持つ先端の CI で照合する（§53）。祖先でない周と
     // 測れない周（rc 0 以外は区別しない）は照合を撃たない（close しない極性）。
     let checked = match tip {
         PushTip::Tip => sha,
-        PushTip::Behind(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
-        PushTip::Behind(_) => {
+        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
+        PushTip::Behind(_) | PushTip::Adopted(_) => {
             note(entry, "ci:unmeasurable");
             return Terminal::CiUnmeasurable;
         }
@@ -321,6 +328,7 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
     let tail = match tip {
         PushTip::Tip => CloseTail::CiSuccess(None),
         PushTip::Behind(head) => CloseTail::CiSuccess(Some(head)),
+        PushTip::Adopted(head) => CloseTail::CiSuccess((head != sha).then_some(head)),
     };
     close_bead(entry, &close_reason(sha, tail))
 }

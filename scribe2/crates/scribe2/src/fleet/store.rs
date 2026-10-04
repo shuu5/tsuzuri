@@ -71,6 +71,9 @@ pub enum StoreError {
     /// 条件付き追記（[`append_if`]）の述語が偽だった: 便（値）は `pipe stop --run` で `Stopped` に落ちている
     /// （設計 pipeline.md §39）。書かずに断る。
     Stopped(String),
+    /// 条件付き追記（[`append_if`]）の述語 [`Condition::NotStopped`] が偽だった: 便（値）の最後の段は `Landed` で、書こうとした
+    /// event の段は `Landed` でない（`Landed` を終わりの段にする・判断の記録 ADR-45 の門 H6）。書かずに断る。
+    Landed(String),
     /// 条件付き追記（[`append_if`]）の述語 [`Condition::LineAbsent`] が偽だった（線の記帳・設計 case-lifecycle.md §11）。
     /// 書かずに断る。
     Refused(Refusal),
@@ -94,6 +97,7 @@ impl std::fmt::Display for StoreError {
             Self::ReclaimToken(path) => write!(f, "fleet: 回収の token {path} が残っている（人が外す）"),
             Self::Rules(reason) => write!(f, "fleet: rules 行を引けない（{reason}）"),
             Self::Stopped(run) => write!(f, "fleet: run {run} は Stopped である（後の段を記帳しない）"),
+            Self::Landed(run) => write!(f, "fleet: run {run} は Landed である（Landed でない段を後に記帳しない）"),
             Self::Refused(Refusal::Present) => write!(f, "fleet: 線は既に在る（動かさない）"),
             Self::Refused(Refusal::NoCutover) => write!(f, "fleet: 切り替えの線が無い（close-check の線を先に足さない）"),
         }
@@ -103,7 +107,9 @@ impl std::fmt::Display for StoreError {
 /// 条件付き追記（[`append_if`]）の述語（**閉じた enum**・自由な closure は受けない・設計 pipeline.md §39）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Condition<'a> {
-    /// 便 `run` が `Stopped` でない（その便の段を持つ最後の event の段が `Stopped` でない＝replay の段と同じ読み）。
+    /// 便 `run` が `Stopped` でない（その便の段を持つ最後の event の段が `Stopped` でない＝replay の段と同じ読み）。加えて、その段が
+    /// `Landed` の周は書く event の段も `Landed` である（終端の push・CI・close の記帳と retire の記帳は通り、`Failed` や `Gated` は
+    /// 断る・判断の記録 ADR-45 の門 H6）。
     NotStopped {
         /// 便 id。
         run: &'a str,
@@ -343,11 +349,11 @@ pub fn append(dir: &Path, event: &Event, policy: LockPolicy) -> Result<Vec<Warni
 /// 断りのまま・fail-closed）。
 pub fn append_if(dir: &Path, event: &Event, policy: LockPolicy, condition: Condition<'_>) -> Result<Vec<Warning>, StoreError> {
     let path = events_path(dir);
-    append_line_when(&path, &event.to_line(), policy, || holds(&path, condition))
+    append_line_when(&path, &event.to_line(), policy, || holds(&path, condition, event.stage))
 }
 
-/// 述語を log の現物で評価する（呼ぶのは lock を握った [`append_line_when`] の中だけ）。
-fn holds(path: &Path, condition: Condition<'_>) -> Result<(), StoreError> {
+/// 述語を log の現物で評価する（呼ぶのは lock を握った [`append_line_when`] の中だけ・`stage` は書く event の段）。
+fn holds(path: &Path, condition: Condition<'_>, stage: Option<Stage>) -> Result<(), StoreError> {
     let events = read_events(path).map_err(|errors| {
         errors
             .into_iter()
@@ -357,10 +363,10 @@ fn holds(path: &Path, condition: Condition<'_>) -> Result<(), StoreError> {
     match condition {
         Condition::NotStopped { run } => {
             let last = events.iter().rev().filter(|event| event.run == run).find_map(|event| event.stage);
-            if last == Some(Stage::Stopped) {
-                Err(StoreError::Stopped(run.to_owned()))
-            } else {
-                Ok(())
+            match last {
+                Some(Stage::Stopped) => Err(StoreError::Stopped(run.to_owned())),
+                Some(Stage::Landed) if stage != Some(Stage::Landed) => Err(StoreError::Landed(run.to_owned())),
+                _ => Ok(()),
             }
         }
         Condition::LineAbsent { close_check } => {
@@ -881,6 +887,33 @@ mod tests {
         std::fs::write(events_path(&dir), "こわれ\n").expect("壊れた行を書ける");
         assert!(matches!(append_if(&dir, &other, policy, Condition::NotStopped { run: "other" }), Err(StoreError::Malformed { .. })));
         assert_eq!(std::fs::read_to_string(events_path(&dir)).unwrap_or_default(), "こわれ\n", "読めない周は書かない");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 最後の段が `Landed` の便に段が `Landed` でない `RunStage` か `RunDone`（段なしを含む）を足す条件付き追記は `Landed` で断って
+    /// file を 1 byte も変えず、段が `Landed` の `RunDone` と `RunStage`（終端の記帳・retire の記帳）と他の便の記帳は書ける。
+    #[test]
+    fn vredc_append_refuses_a_non_landed_stage_after_landed() {
+        use super::{append_if, events_path, Condition};
+        use crate::fleet::{EventKind, Stage};
+        use crate::pipe::fixture::event;
+        let dir = scratch("append-landed");
+        let policy = LockPolicy { retry_ms: 30, stale_ms: 600_000 };
+        let me = Condition::NotStopped { run: "me" };
+        let landed = event("me", EventKind::RunDone, Some(Stage::Landed), None, Some("sha:x main:x"));
+        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Gated), None, None), policy, me).expect("Gated を書ける");
+        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Failed), None, Some("main-red")), policy, me).expect("Landed の前の Failed は書ける");
+        append_if(&dir, &landed, policy, me).expect("Failed の後の Landed は書ける");
+        let before = std::fs::read(events_path(&dir)).expect("log を読める");
+        for (kind, stage) in [(EventKind::RunStage, Some(Stage::Failed)), (EventKind::RunDone, Some(Stage::Failed)), (EventKind::RunStage, Some(Stage::Gated)), (EventKind::RunDone, None)] {
+            let late = event("me", kind, stage, None, Some("main-red"));
+            assert_eq!(append_if(&dir, &late, policy, me), Err(StoreError::Landed("me".to_owned())), "{kind:?} {stage:?} は断る");
+        }
+        assert_eq!(std::fs::read(events_path(&dir)).expect("log を読める"), before, "断った周は 1 byte も変えない");
+        append_if(&dir, &event("me", EventKind::RunDone, Some(Stage::Landed), None, Some("terminal:close:ok")), policy, me).expect("終端の記帳は書ける");
+        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Landed), None, Some("retired")), policy, me).expect("retire の記帳は書ける");
+        let other = event("other", EventKind::RunStage, Some(Stage::Failed), None, Some("main-red"));
+        append_if(&dir, &other, policy, Condition::NotStopped { run: "other" }).expect("他の便は書ける");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

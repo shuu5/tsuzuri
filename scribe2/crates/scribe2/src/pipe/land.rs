@@ -581,6 +581,11 @@ fn attempt(entry: &Land<'_>, worktree: &Path, turned: &Turned, lines: &mut Vec<S
     if now != old {
         return Attempt::Stale { old, now };
     }
+    // **squash の前に段を読み直す**（判断の記録 ADR-45 の門 H6）: 番待ちの直後の読みを過ぎてから列の先頭が自分を着地 / 終端させた便は、
+    // squash も CAS も主実測も撃たない（既着地の追随が古い base で主実測を撃ち直し、Landed の後に Failed を記帳しない）。
+    if let Some(settled) = settled_in_train(entry, turned.order) {
+        return Attempt::Settled(settled);
+    }
     // anchor の見立ては **ref を進める前**に読む: 進めた後の `git status` は index の遅れを
     // 「変更」として出すので、人の未 commit と区別できない。
     let plan = anchor_plan(entry.repo);

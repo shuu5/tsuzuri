@@ -4,11 +4,11 @@
 //! `pipe::land`）へ渡す。`s2-07l.295` で `cli.rs` から純移動した（本文は不変・各段の手順は宣言順のまま）。
 //! 規則の値は rules 行から読む（数値を焼かない・C1 / C5）。
 
-use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_of, Extra};
-use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK};
+use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_of, Extra, Resolved};
+use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::lifecycle::{self, Place};
 use crate::fleet::store::{LockPolicy, StoreError};
-use crate::fleet::Stage;
+use crate::fleet::{store, EventKind, Stage};
 use crate::pipe::approve::{Approve, RC_BLOCKED};
 use crate::pipe::current;
 use crate::pipe::declaration::{self, Ceiling, CEILING_ROW, DENIED_ROW};
@@ -21,7 +21,8 @@ use crate::pipe::lens_record::{self, LensSource};
 use crate::pipe::ratelimit::Pool;
 use crate::pipe::review::{review, Review};
 use crate::pipe::spawn::EndGate;
-use crate::pipe::run_dir;
+use crate::pipe::retire::{read_tip, RemoteTip};
+use crate::pipe::{emit, run_dir, Emit};
 use crate::rules::manifest::Manifest;
 use std::path::Path;
 
@@ -62,17 +63,100 @@ fn terminal_input<'a>(args: &'a [String], manifest: &Manifest) -> Result<(u64, u
 /// 記録の sha が先端と違う周は、先端の祖先から本文に `run: <run id>` の行を持つ squash を 1 回探し直し
 /// （設計 §65・anchor の main を揃えて着地の commit の sha が変わった便）、見つけた sha を着地の sha として側を選ぶ。
 /// 見つからない周は記録の sha のまま今の分岐へ渡す（fail-closed）。
+///
+/// 前提の段が `Failed` の便は、remote の main に載った自分の squash を受け入れる形（[`adopt`]）だけを通す（判断の記録 ADR-45 の門 H6）。
 fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
-    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
+    let resolved = match resolve(args, id, &[Stage::Landed, Stage::Failed], &Extra::Nothing) {
         Ok(found) => found,
         Err(outcome) => return outcome,
     };
+    if resolved.stage == Stage::Failed {
+        return adopt(args, id, manifest, policy, &resolved);
+    }
     let Some(sha) = super::land::landed_sha(&resolved.state_dir, id) else {
         return refused(format!("run {id} の着地した sha を記録から読めない"));
     };
     let Some(head) = git_line(&resolved.repo, &["rev-parse", MAIN_REF]) else {
         return refused(format!("{MAIN_REF} を読めない"));
     };
+    // 撃ち直しの push が押すのは anchor の main そのもの＝押した先端は main の今の先端（設計 contract-source.md §58）。
+    let sha = if head == sha {
+        sha
+    } else {
+        landed_squash_of(&resolved.repo, &head, id).unwrap_or(sha)
+    };
+    let tip = if head == sha { PushTip::Tip } else { PushTip::Behind(&head) };
+    settle(args, (id, manifest, policy), &resolved, (&sha, tip, ""), |_| Ok(()))
+}
+
+/// 終端だけの撃ち直しが受け入れる `Failed` の detail（主実測が赤か測れなかった便・land の `main_red` と `main_unmeasured` の字）。
+const ADOPTABLE: [&str; 2] = ["main-red", "main-unmeasured"];
+
+/// 畳んだ事実の detail（retire が段のまま積む字・受け入れの判定は読み飛ばす）。
+const RETIRED: &str = "retired";
+
+/// 受け入れない周の `adopt=` の語（最後の `Failed` の detail が [`ADOPTABLE`] でない・宣言に remote が無い・remote の main の祖先に
+/// 自分の squash が無い）。
+const NOT_RED: &str = "not-red";
+const NO_REMOTE: &str = "no-remote";
+const NOT_ON_REMOTE: &str = "not-on-remote";
+
+/// `pipe land --run <id> --terminal-only` の `Failed` の形（判断の記録 ADR-45 の門 H6）: 最後の `Failed` の detail が main-red か
+/// main-unmeasured で、宣言の remote の main の先端の祖先に本文に `run: <id>` の行を持つ squash が在る周だけ、push を撃たずに
+/// `Landed` の `RunDone`（detail `sha:<squash> main:<先端> adopted`）を 1 件積み、先端の CI で照合して着地の形で閉じる
+/// （[`PushTip::Adopted`]）。
+///
+/// 受け入れない周は stdout の 1 行 `run=<id> adopt=<語>` と rc 1 で、何も書かず何も撃たない（remote の main の読みの fetch を除く）。
+/// event log・宣言・remote の main を読めない周は rc 2（測れないを「載っていない」に読み替えない・C10）。
+fn adopt(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy, resolved: &Resolved) -> Outcome {
+    let declined = |word: &str| Outcome { out: vec![format!("run={id} adopt={word}")], err: Vec::new(), rc: RC_REFUSED };
+    match red_of(&resolved.state_dir, id) {
+        Err(outcome) => return outcome,
+        Ok(false) => return declined(NOT_RED),
+        Ok(true) => {}
+    }
+    let facts = match declaration::terminal_facts(&resolved.repo) {
+        Ok(found) => found,
+        Err(errors) => return broken(errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / ")),
+    };
+    let Some(remote) = facts.remote else {
+        return declined(NO_REMOTE);
+    };
+    let tip = match read_tip(&resolved.repo, &remote) {
+        RemoteTip::Found(found) => found,
+        RemoteTip::NoMain => return declined(NOT_ON_REMOTE),
+        RemoteTip::Unread => return broken(format!("remote {remote} の main を読めない")),
+    };
+    let Some(sha) = landed_squash_of(&resolved.repo, &tip, id) else {
+        return declined(NOT_ON_REMOTE);
+    };
+    let record = |entry: &Land<'_>| {
+        let detail = format!("sha:{sha} main:{tip} adopted");
+        let landed = Emit { kind: EventKind::RunDone, run: id, bead: entry.bead, stage: Some(Stage::Landed), seat: None, pid: None, detail: Some(detail) };
+        emit(entry.state_dir, &landed, entry.policy).map_err(|err| broken(err.to_string()))
+    };
+    let label = format!(" adopted={sha}");
+    settle(args, (id, manifest, policy), resolved, (&sha, PushTip::Adopted(&tip), &label), record)
+}
+
+/// 便の最後の `Failed` の記帳（retire の記帳を除く）の detail が [`ADOPTABLE`] か（event log を読めない周は rc 2 の Outcome）。
+fn red_of(state_dir: &Path, id: &str) -> Result<bool, Outcome> {
+    let events = store::read_all(state_dir).map_err(|errors| Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))?;
+    let last = events.iter().rev().find(|event| {
+        event.run == id && event.kind == EventKind::RunStage && event.stage == Some(Stage::Failed) && event.detail.as_deref() != Some(RETIRED)
+    });
+    Ok(last.and_then(|event| event.detail.as_deref()).is_some_and(|detail| ADOPTABLE.contains(&detail)))
+}
+
+/// 終端を撃って `run=<id><label> terminal=<token>` の 1 行にする（`--terminal-only` の 2 つの形が共有する後半・`record` は終端の前に
+/// 1 回撃つ記帳・`label` は受け入れの周の ` adopted=<squash>`）。
+fn settle(
+    args: &[String],
+    (id, manifest, policy): (&str, &Manifest, LockPolicy),
+    resolved: &Resolved,
+    (sha, tip, label): (&str, PushTip<'_>, &str),
+    record: impl FnOnce(&Land<'_>) -> Result<(), Outcome>,
+) -> Outcome {
     let (ci_wait_s, ci_poll_s, bd) = match terminal_input(args, manifest) {
         Ok(found) => found,
         Err(outcome) => return outcome,
@@ -101,19 +185,15 @@ fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPol
         train_max: 1,
         rules: None,
     };
-    // 撃ち直しの push が押すのは anchor の main そのもの＝押した先端は main の今の先端（設計 contract-source.md §58）。
-    let sha = if head == sha {
-        sha
-    } else {
-        landed_squash_of(&resolved.repo, &head, id).unwrap_or(sha)
-    };
-    let tip = if head == sha { PushTip::Tip } else { PushTip::Behind(&head) };
-    let terminal = super::land::terminal(&entry, &sha, tip);
+    if let Err(outcome) = record(&entry) {
+        return outcome;
+    }
+    let terminal = super::land::terminal(&entry, sha, tip);
     // 局面の出力の書き直し（契機 (d)）は終端が close した周（rc 0）だけ・呼び手の rc と stdout は変えない（設計 case-lifecycle.md §12 約束 8）。
     let place = Place { state_dir: entry.state_dir, repo: entry.repo, manifest, bd: entry.bd, policy };
     let err = if terminal.rc() == RC_OK { lifecycle::after_close(&place) } else { Vec::new() };
     Outcome {
-        out: vec![format!("run={id} terminal={}", terminal.as_token())],
+        out: vec![format!("run={id}{label} terminal={}", terminal.as_token())],
         err,
         rc: terminal.rc(),
     }
