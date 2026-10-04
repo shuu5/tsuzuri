@@ -564,11 +564,11 @@ fn with_turn(args: &[String], manifest: &Manifest, mut outcome: Outcome) -> Outc
 }
 
 /// 局面の出力の全部の書き直し（契機 (a)）の返りのうち `Written`・`Unchanged`・`Coalesced` の外の語を `lifecycle=<語>` の 1 行に、memo の審査の渡しが
-/// 規則の行を読めず撃たなかった周の語を `triage=<語>` の 1 行にして stderr へ（呼び手の rc と stdout の字は変えない・設計 case-lifecycle.md §12 約束 8・
-/// dispatcher.md §42 約束 5）。
+/// 規則の行を読めず撃たなかった周の語を `triage=<語>` の 1 行にし、閉じた bead の便の段の `closed-runs` の 1 行を続けて stderr へ（呼び手の rc と stdout の字は
+/// 変えない・設計 case-lifecycle.md §12 約束 8・dispatcher.md §42 約束 5・判断の記録 ADR-45 の門 H6）。
 fn round_err(turn: &queue::Turn) -> Vec<String> {
     let lifecycle = turn.lifecycle.map(|word| format!("lifecycle={word}"));
-    lifecycle.into_iter().chain(turn.triage.map(|word| format!("triage={word}"))).collect()
+    lifecycle.into_iter().chain(turn.triage.map(|word| format!("triage={word}"))).chain(turn.closed.clone()).collect()
 }
 
 /// 列の 1 周の行（引数から材料を解いて [`queue::fire`] を撃つ＝**起こす側**）と stderr の行。stdout の最後の行は列の 1 行で、終端の周の軸を

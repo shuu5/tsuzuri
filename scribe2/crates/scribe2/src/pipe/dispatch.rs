@@ -74,6 +74,9 @@ mod revive;
 /// code の索引の組み立ての口 `pipe index build` と状態の読み（床の検査の撃ち方を共用する兄弟・設計 reverse-index.md §4 の行 a2）。
 pub mod index_build;
 
+/// 閉じた bead の便の作業木を畳み、亡骸を名指す段（判断の記録 ADR-45 の門 H6）。
+mod closed;
+
 use candidates::{build_index, entry_of, indexed, is_input, marks_of, settle, siblings_of, tools};
 pub use revive::{admits_gated, advance, handoff};
 use revive::{progress_of, resume, revivals, revive_of};
@@ -464,6 +467,9 @@ pub struct Turn {
     /// memo の審査の渡しが規則の行を読めず撃たなかった周の語 `no-rule`（起こす側の [`fire`] だけ `Some` になりうる・呼び手が stderr の
     /// `triage=<語>` の 1 行にする・設計 §42 約束 5）。
     pub triage: Option<&'static str>,
+    /// 閉じた bead の便の段の 1 行（`closed-runs folded=…`・起こす側の [`fire`] だけ `Some` になりうる・呼び手が stderr へ足す・
+    /// 判断の記録 ADR-45 の門 H6）。
+    pub closed: Option<String>,
 }
 
 /// 列の 1 周に要る材料（すべて永続面から解いたもの・process の記憶を持たない）。
@@ -670,6 +676,9 @@ pub fn fire(input: &Input<'_>) -> Turn {
     if turn.unmeasured.is_some() {
         return turn;
     }
+    // **閉じた bead の便の段は列を測れた周の頭で 1 回**（判断の記録 ADR-45 の門 H6）: 同じ周の台帳と event の列を借りる（2 度読まない）。
+    let swept = read.as_ref().map(|found| closed::round(input, &found.issues, found.events.as_deref())).unwrap_or_default();
+    turn.closed = swept.line();
     // **索引の組み立ては起こす側の周だけが裏で起こす**（設計 reverse-index.md §7 (b)・待たない・観測の口は起こさない）。
     build_index(input, &turn);
     // **関門が開いた待ちの便は、driver の周なら段を前へ進めた周だけ起こす**（設計 §13・[`admits_gated`]）。
@@ -680,6 +689,8 @@ pub fn fire(input: &Input<'_>) -> Turn {
         Some((moved, _)) => moved.is_some_and(|found| admits_gated(Some(found))),
     };
     turn.revives = revivals(input, gated);
+    // 亡骸は起こし直さない（閉じた契約を着地させない・止めるかは人か席・判断の記録 ADR-45 の門 H6）。
+    turn.revives.retain(|revive| !swept.corpses.contains(&revive.run));
     // **呼び手の便を継ぐ**（設計 §5「1 段進めた driver は終端の 1 周で自分の便を次の driver に渡す」）:
     // 自分の札は生きている（いま握っているのは自分である）ので [`revivals`] は拾わない。渡す周だけ
     // 足し、渡さなかった周は理由を [`Turn::drive`] に残す（C10）。
@@ -714,19 +725,21 @@ pub fn fire(input: &Input<'_>) -> Turn {
     }
     // **終端の周の軸は起こし終えた後に 1 回**（設計 consumer-sync.md §15 形 2）: この周に起こした便・起こし直した便が
     // 在れば live は 0 でない（子の `RunCreated` を待たずに数える＝走り出した便の下で binary を入れ替えない）。
-    turn.vessel = crate::hook::vessel::sync(input.state_dir, idle(input, &turn));
+    turn.vessel = crate::hook::vessel::sync(input.state_dir, idle(input, &turn, &swept.corpses));
     turn
 }
 
 /// live な便が 0 の周か（`None` = 置き場か便の生死を測れない・live 0 に読み替えない・C10）。
 ///
-/// 生死は起こし直しと同じ 1 本（[`live`]）で読む。この周に起こした便か起こし直した便が在れば `Some(false)`。
-fn idle(input: &Input<'_>, turn: &Turn) -> Option<bool> {
+/// 生死は起こし直しと同じ 1 本（[`live`]）で読む。この周に起こした便か起こし直した便が在れば `Some(false)`。閉じた bead の亡骸
+/// （`corpses`）は数えない（判断の記録 ADR-45 の門 H6）。
+fn idle(input: &Input<'_>, turn: &Turn, corpses: &BTreeSet<String>) -> Option<bool> {
     if !turn.launches.is_empty() || !turn.revives.is_empty() {
         return Some(false);
     }
     let state = current(input.state_dir).ok()?;
-    let lives: Vec<Option<bool>> = state.runs.iter().map(|(id, run)| live(input.state_dir, id, run.stage)).collect();
+    let lives: Vec<Option<bool>> =
+        state.runs.iter().filter(|(id, _)| !corpses.contains(*id)).map(|(id, run)| live(input.state_dir, id, run.stage)).collect();
     if lives.contains(&Some(true)) {
         return Some(false);
     }
@@ -763,6 +776,7 @@ fn unmeasured(reason: Unmeasured) -> Turn {
         vessel: None,
         lifecycle: None,
         triage: None,
+        closed: None,
     }
 }
 
