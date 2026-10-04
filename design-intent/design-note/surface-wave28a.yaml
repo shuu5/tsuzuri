@@ -3,13 +3,14 @@
 meta:
   id: surface-wave28a
   title: 第 28 波 a — board の留め置き（判断の記録 ADR-42）の器の行と board の行と、後で足す行
-  version: v0.2
-  status: effective
+  version: v0.3
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-10-04
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.79.1（裁定 id = t3-hub.79.1:20261004T0959Z-1・ADR-42 の案 A のまま承認・席とのチャット・notes に逐語）〔判断の記録 ADR-42 の承認・ノートの承認〕, verbatim: 承認する, surface: R-8}
-  note: ノート bakeoff-surface（下書き・契約表の行 0・比較試作は判断の記録 ADR-3 で決着済み・同じ commit で廃止）の後。承認は判断の記録 ADR-42 の持ち主の裁定（承認の列）。第 0.1 版（2026-10-04）は目的と、判断の記録 ADR-42 の器の行 v-hold-why・v-hold-case・v-refuse-why（止めの口の理由と観測の口の止めの行と待ちの知らせの重なりの欄の名・局面の出力の契約の部品の止めの理由と時刻と止めの直後の書き直し・受付の断りの 1 行の理由・試作は係 w132a・直しは係 w134a と w136a・差の file の形・差は 27b の器の行の差の上で切った・27b の器の行の着地の後に流す）を置いた。 第 0.2 版（2026-10-04）は board の行 c-held-stage・g-held-col・g-held-pop・g-held-name・g-held-page（試作は係 w133a・直しは係 w134a と w135a・差の file の形）を足した。
+  note: ノート bakeoff-surface（下書き・契約表の行 0・比較試作は判断の記録 ADR-3 で決着済み・同じ commit で廃止）の後。承認は判断の記録 ADR-42 の持ち主の裁定（承認の列）。第 0.1 版（2026-10-04）は目的と、判断の記録 ADR-42 の器の行 v-hold-why・v-hold-case・v-refuse-why（止めの口の理由と観測の口の止めの行と待ちの知らせの重なりの欄の名・局面の出力の契約の部品の止めの理由と時刻と止めの直後の書き直し・受付の断りの 1 行の理由・試作は係 w132a・直しは係 w134a と w136a・差の file の形・差は 27b の器の行の差の上で切った・27b の器の行の着地の後に流す）を置いた。 第 0.2 版（2026-10-04）は board の行 c-held-stage・g-held-col・g-held-pop・g-held-name・g-held-page（試作は係 w133a・直しは係 w134a と w135a・差の file の形）を足した。第 0.3 版（2026-10-04）で、8 行の全部の着地を main の commit の件名（便の bead の id の頭）で照らして廃止した（superseded_by surface-plan）。
 
 sections:
   - n: 1
