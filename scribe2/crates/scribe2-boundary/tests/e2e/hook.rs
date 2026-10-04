@@ -2889,7 +2889,7 @@ fn group_role_place() -> RolePlace {
     let bd = fake_bd(&sock_dir, LEDGER_JSON);
     RolePlace {
         repo,
-        state: TmpDir { path: Some(state) },
+        state: TmpDir { root: state.clone(), path: Some(state) },
         sock_dir,
         socket,
         launch: launch.display().to_string(),

@@ -351,6 +351,12 @@ pub fn host_write_budget_dir(state_dir: &Path, name: &str) -> PathBuf {
     host_root(state_dir).join("write-budget").join(name)
 }
 
+/// host 単位の走りの札の置き場（`<state_dir の親>/<NAME>-host/runs/`・行 xp-host-runs）: runner の間、器が選んだ口座の札を置く
+/// （[`crate::pipe::live`]）。[`host_slots_dir`] と同じ host の根から導く（env を読まない）。
+pub fn host_runs_dir(state_dir: &Path) -> PathBuf {
+    host_root(state_dir).join("runs")
+}
+
 /// host の根（`<state_dir の親>/<NAME>-host`・親を持たない path はそれ自身を親と読む）。
 fn host_root(state_dir: &Path) -> PathBuf {
     state_dir.parent().unwrap_or(state_dir).join(format!("{}-host", crate::name::NAME))

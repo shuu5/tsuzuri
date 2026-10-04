@@ -221,7 +221,7 @@ fn ticket_started_ms(pid: u32) -> Option<u64> {
 }
 
 /// いまの時刻（epoch ms）。
-fn now_ms() -> u64 {
+pub(super) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX))

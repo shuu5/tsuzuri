@@ -583,6 +583,8 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
     let unit = confine::unit_name(launch.run, RUNNER_STAGE, 1);
     let wrap = confine::Wrap { unit: &unit, limit: confine::Limit::PerJob(1), caps: confine::Caps::embedded(), width: None };
     let (mut command, confinement) = confine::wrap_line(cmd, &wrap);
+    // **runner の間は host の根に走りの札を置く**（器が選んだ口座の label・終わりで外れる・置けない周は止めず理由の 1 行・行 xp-host-runs）。
+    let live = super::live::hold(launch.state_dir, launch.run, launch.account.label());
     // **env を 1 つも足さない**: `.env()` / `.envs()` を呼ばず親の env をそのまま継承する（`TMUX_PANE` だけは外す＝confine）。
     // stdout は捕らえる（質問 record の読み面・`gate.rs::ask_lens` と同じ形）。stderr も同じ形で捕らえる
     // （起動の失敗の理由を run dir に残す・設計 dispatcher.md §12）——継承のままだと、列が起こした端末の無い
@@ -660,7 +662,7 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
         // **rc が 76 / 75 / 77 でない周は最終行を読まない**（従来どおり）。
         settle(launch, worktree, base, rc)
     };
-    outcome.err.extend(kept.into_iter().chain(kept_err).chain(cost).chain(scope));
+    outcome.err.extend(kept.into_iter().chain(kept_err).chain(cost).chain(scope).chain(live.err()));
     outcome
 }
 
