@@ -22,3 +22,6 @@ contract-tables = ["contracts/"]
 # 憲法の置き場（器の任意の key constitution・器の判断の記録 ADR-0110・器の行 as）。器の審査役は既定の docs/constitution.md の代わりに
 # この 2 file を読む（案内の docs/constitution.md は残す）。持ち主の承認 t3-hub.74.29:20261002T2330Z-1。
 constitution = ["design-intent/constitution.yaml", "design-intent/rules.yaml"]
+# 席の手元の憲法の要の写し（器の任意の key seat-constitution・tsuzuri の判断の記録 ADR-38 の決定 (5)・器の行 v-brief-const）。
+# 器の SessionStart は、この project の席に器の憲法の 5 行の代わりにこの写しを字のまま出す。写しは tz derive が design-intent から書く。
+seat-constitution = "contracts/seat/brief.txt"
