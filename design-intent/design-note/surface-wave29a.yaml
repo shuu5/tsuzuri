@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29a
   title: 第 29 波 a — 目指す所の段 0〜2 の行（判断の記録 ADR-44・ADR-45・ADR-46）
-  version: v0.5
+  version: v0.6
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -11,7 +11,7 @@ meta:
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.1（裁定 id = t3-hub.80.1:20261004T1456Z-1・目指す所の目的は案 A）と t3-hub.80.5（裁定 id = t3-hub.80.5:20261004T1456Z-1・5 段の順は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-44 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.4（裁定 id = t3-hub.80.4:20261004T1456Z-1・案 A・束 batch:20261004T1456Z-1・裁定面・notes に逐語）〔判断の記録 ADR-45 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.3（裁定 id = t3-hub.80.3:20261004T1456Z-1・読み取りの置き場は案 A）と t3-hub.80.2（裁定 id = t3-hub.80.2:20261004T1456Z-1・今在る code の入れ方は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-46 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
-  note: ノート surface-wave27b（31 行の全部が着地・同じ commit で廃止）の後。承認は行の出所の判断の記録ごとの持ち主の裁定（承認の列・ADR-44・ADR-45・ADR-46・逐語はそれぞれの判断の記録の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、グラフの土台の 1 便目の 2 行（c-g3-bindline・c-commit-node）と行の節（3〜5 節）を足した（持ち主の答えを待たない行・試作と噛みは係 w146a・差の file の形・差を切った main は 0ee9c0da・名の形は判断の記録 ADR-47〔提案中〕に拠る）。 第 0.3 版（2026-10-05）は、行 t-teeth-col（契約表の欄の写しを器の今の版の 20 欄に揃え、設計ノートの行の欄 done-teeth と code-facts を tz が受けて契約表へ写す・判断の記録 ADR-45 の門 H1 の teeth-check の前の 1 歩・試作は係 w147a・差の file の形）を足した。 第 0.4 版（2026-10-05）は判断の記録 ADR-44 の段 0 の行 t-hook-drop・v-anchor-missing（tsuzuri の根の plugin の暫定の SessionStart を外す行と、器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す器の行・試作は係 w151a・差の file の形）を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-44 の決定 (3) の器の行 v-notes-head・v-accept-ptr・v-drafts-env（起票の門の notes の頭の時刻（束 B03）・preflight の bead の acceptance の pointer の照らし（束 B04）・席の起草の写しの門の組みの置き場と TMPDIR の行き先（束 B08）・起草は係 w148a・試作と噛みは係 w152a・差の file の形・器を書く便は同時に 1 本まで・depends の鎖）を足した。
+  note: ノート surface-wave27b（31 行の全部が着地・同じ commit で廃止）の後。承認は行の出所の判断の記録ごとの持ち主の裁定（承認の列・ADR-44・ADR-45・ADR-46・逐語はそれぞれの判断の記録の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、グラフの土台の 1 便目の 2 行（c-g3-bindline・c-commit-node）と行の節（3〜5 節）を足した（持ち主の答えを待たない行・試作と噛みは係 w146a・差の file の形・差を切った main は 0ee9c0da・名の形は判断の記録 ADR-47〔提案中〕に拠る）。 第 0.3 版（2026-10-05）は、行 t-teeth-col（契約表の欄の写しを器の今の版の 20 欄に揃え、設計ノートの行の欄 done-teeth と code-facts を tz が受けて契約表へ写す・判断の記録 ADR-45 の門 H1 の teeth-check の前の 1 歩・試作は係 w147a・差の file の形）を足した。 第 0.4 版（2026-10-05）は判断の記録 ADR-44 の段 0 の行 t-hook-drop・v-anchor-missing（tsuzuri の根の plugin の暫定の SessionStart を外す行と、器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す器の行・試作は係 w151a・差の file の形）を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-44 の決定 (3) の器の行 v-notes-head・v-accept-ptr・v-drafts-env（起票の門の notes の頭の時刻（束 B03）・preflight の bead の acceptance の pointer の照らし（束 B04）・席の起草の写しの門の組みの置き場と TMPDIR の行き先（束 B08）・起草は係 w148a・試作と噛みは係 w152a・差の file の形・器を書く便は同時に 1 本まで・depends の鎖）を足した。 第 0.6 版（2026-10-05）は、行 v-notes-head・v-accept-ptr・v-drafts-env の欄 done-teeth を外し、3 つの節の done と verify の対応の段の欄の字を替えた（verify の行の番号の形の宣言の歯と、done の項の字が名指す歯の名が食い違い、行 v-notes-head の便の契約の審査が対応の表の欠けで INCONCLUSIVE に倒れた・done と verify は替えない）。
 
 sections:
   - n: 1
@@ -79,7 +79,6 @@ sections:
         size: M
         growth: ["scribe2/crates/scribe2/src/hook/ledger_guard/notes.rs:160", "scribe2/crates/scribe2/src/hook/ledger_guard.rs:2"]
         done: (1) git apply --reverse --check docs/design/patch/v-notes-head.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の clippy（-p scribe2 と -p scribe2-boundary の --all-targets --no-deps と -D warnings）が rc 0（verify の 2 行目） (3) 頭の行の時刻の字の読みは、本文の最初の空でない行の頭の札の中で最初に現れる字か札の直後の頭の字で、分・10 分・時・秒・小数秒の 5 形を下の端の秒に読み、Z の無い字・日付と時刻の間が空白の字・日本時間の印の字・日付だけの字・頭でない字・2 行目の字・札の直後に別の字を挟んだ字・暦の外の字・小数点の後に数字の無い字・札の無い行を読まない（歯 vnhead_reads_the_first_utc_token_of_the_head） (4) 下の端が今の UTC の秒より後の頭の書きは、update の append-notes・create の notes・note の本文の語・note の file の 4 つの口で reason notes-head-future で断り、下の端が今と同じか前の頭（同じ分・今を含む 10 分・同じ秒・前の日）と読まない頭と notes でない flag の頭は通す（歯 vnhead_future_heads_are_refused_and_present_or_past_heads_pass） (5) 断りの 1 行は時刻の字と今の UTC の字と字 date -u +%Y-%m-%dT%H:%MZ を持ち、同じ command に裁定の行の書きか読めない書きが在れば先にその語で断る（歯 vnhead_refusal_names_the_token_and_the_date_route_after_the_other_words） (6) 器の binary の pre-tool-use は、頭が 2999 年の note の本文と頭が 2999 年の note の file を rc 2・stderr 1 行・時刻の字と字 date -u +%Y-%m-%dT%H:%MZ・記録 ledger-deny notes-head-future で断り、頭が 2000 年の append-notes を rc 0・記録なしで通す（器の e2e の歯 vnhead_binary_denies_a_future_head_and_passes_a_past_head） (7) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
-        done-teeth: ["1:@1", "2:@2", "3:@3", "4:@3", "5:@3", "6:@4", "7:@5"]
         depends: []
       - id: v-accept-ptr
         title: 器の pipe preflight に値の無い flag --placed を足し、渡した周だけ --bead の bead の acceptance を dispatch と同じ読み手で読み、design = の行が無いかほかの行を指す bead を refuse=acceptance-pointer で出す（判断の記録 ADR-44 の決定 (3)・束 B04・差の file）
@@ -90,7 +89,6 @@ sections:
         size: M
         growth: ["scribe2/crates/scribe2/src/pipe/cli/preflight.rs:140", "scribe2/crates/scribe2/src/pipe/dispatch.rs:1"]
         done: (1) git apply --reverse --check docs/design/patch/v-accept-ptr.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の clippy（-p scribe2 と -p scribe2-boundary の --all-targets --no-deps と -D warnings）が rc 0（verify の 2 行目） (3) bead の acceptance の読みは dispatch の列の読み手と同じ 1 本で、台帳の bead の acceptance の design = の行が --design と同じ置き場と行 id を指せば通し、台帳に無い bead・design = の行の無い bead・ほかの行 id を指す bead・ほかの置き場を指す bead・design = の後の空白の無い行の bead・同じ台帳のほかの bead の行を指す bead を断る（歯 vaccpt_pointer_of_the_bead_is_matched_against_the_design） (4) 照らしの行は、通る周に行 acceptance=matched・台帳を読めない周に行 acceptance=unmeasured と半角のコロンと字 ledger・断る周に行 refuse=acceptance-pointer と半角のコロンと理由で、理由は bead の id を持ち、design = の行の無い周は字 bdw update と字 --acceptance と --design の字を持ち、ほかの行を指す周は acceptance の行の字と --design の字を持ち、照らさない周は行を出さない（歯 vaccpt_lines_name_the_bead_and_the_route） (5) 器の binary の pipe preflight は、--placed の無い周に偽の台帳を 1 度も読まず行 acceptance= を出さず末尾 ok で通し、--placed の周は 1 周に偽の台帳を 1 回だけ読んで、行を指す bead を rc 0 と行 acceptance=matched と末尾 ok で通し、design = の行の無い bead・ほかの行を指す bead・台帳に無い bead を rc 1 と refuse=acceptance-pointer の 1 行と末尾の件数 1 で断り、偽の台帳が rc 3 で終わる周を rc 0 と行 acceptance=unmeasured と半角のコロンと字 ledger と末尾 ok で通し、run dir と event を書かない（器の e2e の歯 vaccpt_binary_refuses_a_bead_whose_acceptance_does_not_point_at_the_row） (6) 着地済みの preflight の歯と裁定 id の照らしの歯が緑（器の e2e の歯 pipe_preflight_ の 4 本と pipe_intake_ruling_ の 11 本・引用の無い周と ruling-check の無い周は台帳を読まない数えを含む） (7) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
-        done-teeth: ["1:@1", "2:@2", "3:@3", "4:@3", "5:@4", "6:@5", "6:@6", "7:@7"]
         depends: ["v-notes-head"]
       - id: v-drafts-env
         title: 器の席の起草の写しの門が組みの置き場の環境変数と cargo の --target-dir と TMPDIR の行き先も読み、起草の置き場の写しの中の掃除の名の dir の外の組みの置き場と tmpfs の上の行き先を断る（判断の記録 ADR-44 の決定 (3)・束 B08・差の file）
@@ -101,7 +99,6 @@ sections:
         size: M
         growth: ["scribe2/crates/scribe2/src/hook/drafts_guard.rs:360", "scribe2/crates/scribe2/src/pipe/mod.rs:1"]
         done: (1) git apply --reverse --check docs/design/patch/v-drafts-env.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の clippy（-p scribe2 と -p scribe2-boundary の --all-targets --no-deps と -D warnings）が rc 0（verify の 2 行目） (3) 読みは、segment の頭の割り当ての並び・export と declare と typeset と readonly と local の後ろ・env の後ろの割り当てから名が CARGO_TARGET_DIR・CARGO_BUILD_TARGET_DIR・PYTHONPYCACHEPREFIX・TMPDIR の語を、頭の語が cargo の segment の --target-dir の値（次の語と = の後ろの 2 形）を拾い、割り当てだけの segment と宣言の語の割り当てを後ろの segment へ残して command の前置きの割り当てを残さず、同じ command の前で字のまま決めた変数と PWD を値の頭で解き、~ と解けない変数と解けない作業 dir の PWD を unresolved・頭が / でない値を relative にし、echo の引数・cargo でない segment の --target-dir・名の違う割り当て・空の値・-- の後ろの --target-dir を拾わない（歯 vdrenv_reads_the_target_and_tmpdir_assignments） (4) 組みの置き場は、起草の置き場からの段が 2 つ以上で 2 段目から下のどれかの段の名が掃除の名の列に在る path だけを通し、置き場の直下の target・掃除の名の段の無い子の下・置き場の外を outside、相対の値を relative、解けない値を unresolved、tmpfs の上を tmpfs で断り、断りの 1 行は名と行き先と起草の置き場の例を持つ（歯 vdrenv_target_dir_must_be_a_target_under_a_drafts_child） (5) tmpfs の判じは mount の表で path の段ごとの前置きになる最も長い点の型が tmpfs か ramfs かで、8 進の escape の空白を解き、表を読めない周は /dev/shm だけを tmpfs と読み、TMPDIR は tmpfs の上だけを tmpfs で断って disk の上の /tmp の下と起草の置き場の下を通し、断りの 1 行は tmpfs の点を持つ（歯 vdrenv_tmpdir_on_tmpfs_is_refused_by_the_mount_table） (6) 器の binary の pre-tool-use は、登録した席の撃ちで起草の置き場の子の target を組みの置き場にした cargo と e2e の一時 dir の下の TMPDIR を rc 0・記録 0 で通し、e2e の一時 dir の下の target を drafts-deny outside（1 行は字 via=CARGO_TARGET_DIR と行き先と起草の置き場の path を持つ）・相対の export を drafts-deny relative・/dev/shm の下の TMPDIR を drafts-deny tmpfs で断り、--pane の無い周の同じ outside の command を通す（器の e2e の歯 vdrenv_binary_denies_targets_outside_the_drafts_and_tmpdir_on_tmpfs） (7) 着地済みの写しの行き先の歯が緑（器の e2e の歯 hook_drafts_place_limits_copies_to_the_children_of_the_two_places） (8) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
-        done-teeth: ["1:@1", "2:@2", "3:@3", "4:@3", "5:@3", "6:@4", "7:@5", "8:@6"]
         depends: ["v-accept-ptr"]
   - n: 3
     type: prose
@@ -271,7 +268,7 @@ sections:
 
       実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
 
-      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3〜5 番目の項は 3 行目（器の lib の歯 vnhead_ の 3 本・在りかは hook/ledger_guard/notes.rs の歯の区間）、6 番目の項は 4 行目（器の e2e の歯 vnhead_ の 1 本・在りかは e2e の hook/guards.rs）、最後の 7 番目の項は 5 行目で測る。欄 done-teeth は、器が選ぶ行を解けない入れ子の器の歯（--manifest-path の lib と e2e）なので、項ごとに撃つ verify の行の番号で書いた。
+      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3〜5 番目の項は 3 行目（器の lib の歯 vnhead_ の 3 本・在りかは hook/ledger_guard/notes.rs の歯の区間）、6 番目の項は 4 行目（器の e2e の歯 vnhead_ の 1 本・在りかは e2e の hook/guards.rs）、最後の 7 番目の項は 5 行目で測る。欄 done-teeth は書かない（入れ子の器の歯は器が選ぶ行を解けないので、書くなら項ごとに撃つ verify の行の番号になる。その形では、審査役が done の項の字が名指す歯の名を対応の表に書き、器がそれを宣言の歯の外の項目に数えて審査を INCONCLUSIVE に倒す・第 0.5 版の行 v-notes-head の便 t3-hub.80.19-20261004T182144Z の契約の審査）。
 
       構造の連鎖（木 0ee9c0da で grep）。notes::judge の呼び手は ledger_guard.rs の decide の 1 か所。decide の呼び手は hook/mod.rs の pre_tool_use と歯 1 本（host_guard_tests.rs の hook_notes_ruling_decide_reads_the_three_mouths・字は替えない）。NOTES_NEXT の読み手は e2e の assert_notes_deny の 1 か所。器の trigger.rs が数える notes の [再発] と [keep] の行（札の直後の時刻を持つ形）は、先の時刻の書きだけを断られる。器の file の行の上限（1500・幅で数える）: 幅 120 で数えて notes.rs は 229 行から 392 行・ledger_guard.rs は 904 行から 905 行。
 
@@ -298,7 +295,7 @@ sections:
 
       実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
 
-      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3 と 4 番目の項は 3 行目（器の lib の歯 vaccpt_ の 2 本・在りかは pipe/cli/preflight.rs の歯の区間）、5 番目の項は 4 行目（器の e2e の歯 vaccpt_ の 1 本・在りかは e2e の pipe/intake.rs）、6 番目の項は 5 行目と 6 行目（着地済みの器の e2e の歯 pipe_preflight_ の 4 本と pipe_intake_ruling_ の 11 本・在りかは同じ file・断言の字は替えない）、最後の 7 番目の項は 7 行目で測る。欄 done-teeth は、器が選ぶ行を解けない入れ子の器の歯（--manifest-path の lib と e2e）なので、項ごとに撃つ verify の行の番号で書いた。
+      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3 と 4 番目の項は 3 行目（器の lib の歯 vaccpt_ の 2 本・在りかは pipe/cli/preflight.rs の歯の区間）、5 番目の項は 4 行目（器の e2e の歯 vaccpt_ の 1 本・在りかは e2e の pipe/intake.rs）、6 番目の項は 5 行目と 6 行目（着地済みの器の e2e の歯 pipe_preflight_ の 4 本と pipe_intake_ruling_ の 11 本・在りかは同じ file・断言の字は替えない）、最後の 7 番目の項は 7 行目で測る。欄 done-teeth は書かない（入れ子の器の歯は器が選ぶ行を解けないので、書くなら項ごとに撃つ verify の行の番号になる。その形では、審査役が done の項の字が名指す歯の名を対応の表に書き、器がそれを宣言の歯の外の項目に数えて審査を INCONCLUSIVE に倒す・第 0.5 版の行 v-notes-head の便 t3-hub.80.19-20261004T182144Z の契約の審査）。
 
       構造の連鎖（木 0ee9c0da で grep）。preflight の呼び手は pipe/cli.rs の pipe preflight の 1 か所、render の呼び手は preflight の 1 か所。ALLOWED_PREFLIGHT の読み手は allowed_of の 1 か所。pointer_of の呼び手は candidates.rs の 2 か所と memo.rs の 2 か所（字と振る舞いは替えない）。read_ledger と one_read と timeout_of は seat/ledger.rs の既存の口で、裁定 id の判定（intake/ruling.rs の load）と同じ引数で読む。器の file の行の上限（1500・幅 120 で数える）: preflight.rs は 222 行から 362 行・args.rs は 245 行から 246 行・dispatch.rs は 1446 行から 1447 行（余地 54 で growth 1）。
 
@@ -326,7 +323,7 @@ sections:
 
       実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
 
-      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3〜5 番目の項は 3 行目（器の lib の歯 vdrenv_ の 3 本・在りかは hook/drafts_guard.rs の歯の区間）、6 番目の項は 4 行目（器の e2e の歯 vdrenv_ の 1 本・在りかは e2e の hook/guards.rs）、7 番目の項は 5 行目（着地済みの器の e2e の歯 hook_drafts_place_ の 1 本・同じ file）、最後の 8 番目の項は 6 行目で測る。欄 done-teeth は、器が選ぶ行を解けない入れ子の器の歯（--manifest-path の lib と e2e）なので、項ごとに撃つ verify の行の番号で書いた。
+      done と verify の対応。done の 1 番目の項は verify の 1 行目（差の hunk が全部木に在る）、2 番目の項は 2 行目（器の clippy）、3〜5 番目の項は 3 行目（器の lib の歯 vdrenv_ の 3 本・在りかは hook/drafts_guard.rs の歯の区間）、6 番目の項は 4 行目（器の e2e の歯 vdrenv_ の 1 本・在りかは e2e の hook/guards.rs）、7 番目の項は 5 行目（着地済みの器の e2e の歯 hook_drafts_place_ の 1 本・同じ file）、最後の 8 番目の項は 6 行目で測る。欄 done-teeth は書かない（入れ子の器の歯は器が選ぶ行を解けないので、書くなら項ごとに撃つ verify の行の番号になる。その形では、審査役が done の項の字が名指す歯の名を対応の表に書き、器がそれを宣言の歯の外の項目に数えて審査を INCONCLUSIVE に倒す・第 0.5 版の行 v-notes-head の便 t3-hub.80.19-20261004T182144Z の契約の審査）。
 
       構造の連鎖（木 0ee9c0da で grep）。drafts_guard::decide の呼び手は hook/mod.rs の pre_tool_use の 1 か所。copy_places の呼び手は decide と live_row の歯の 1 か所。literal と normalized と moved は live_row の中だけで使われ、見える範囲を広げるだけ。NAMES の読み手は掃除の 1 か所で、見える範囲を広げるだけ。Reason の語を数える読み手は記録の what の 1 か所（字 drafts-deny と語）。席の会話の記録で 10-03 以後に断りになる撃ちは 13 件（席の管理の組みの置き場 7・解けない値 4・ほか 2・係 w148a の実測）で、席は着地の前に管理の組みの置き場を起草の置き場の子の target へ移す。器の file の行の上限: 幅 120 で数えて drafts_guard.rs は 221 行から 579 行・pipe/mod.rs は 1377 行のまま（余地 123 で growth 1）。
 
