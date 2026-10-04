@@ -1,0 +1,2 @@
+生成物・手で直さない・design-intent/rules.yaml seat-role-bytes
+2000
