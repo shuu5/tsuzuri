@@ -1,0 +1,532 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+index c1b96d7023fe324008635dfc3cee7f438610687a..448e753a582f2fb06cbc8130cdad8e572f041cfb 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+@@ -7,11 +7,13 @@
+ //!
+ //! 歯は族ごとの子 module にも置く（設計 docs/design/carry-prep.md §10 行 l・`s2-07l.684`）: `follow`（接頭辞 `pipe_follow_`）・
+ //! `retire`（接頭辞 `pipe_retire_` / `pipe_train_`）・`order`（接頭辞 `pipe_terminal_` / `pipe_order_`）・`rebase`（接頭辞
+-//! `pipe_land_rebase_` / `pipe_land_onto_`）。この file には共有の helper と const・他の族の歯だけを残す。
++//! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）。この file には共有の helper と
++//! const・他の族の歯だけを残す。
+ 
+ mod follow;
+ mod order;
+ mod rebase;
++mod redclose;
+ mod retire;
+ // flip-check: moved s2-07l.684
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/redclose.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/redclose.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5f0de4c01f69905b4cc85763a5a90c8be782870e
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/redclose.rs
+@@ -0,0 +1,179 @@
++//! 便の終わりの段を 1 つに定める歯（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
++//!
++//! 着地の口が squash の前に段を読み直すこと（列の先頭が着地させた便の撃ち直しを止める）と、終端だけの撃ち直しが main-red の便の
++//! squash を remote の main の上で受け入れて着地の形で閉じることを外形から測る。
++
++use super::*;
++
++/// 便の event の 1 行を、段 `Landed` の `RunDone`（detail `sha:<sha> main:<sha>`＝列の先頭が着地させた形）に替えた行。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn landed_line(state: &Path, id: &str, sha: &str) -> String {
++    let last = events(state).into_iter().rfind(|event| event.run == id).expect("便の event が在る");
++    let landed = vessel::fleet::Event {
++        kind: EventKind::RunDone,
++        stage: Some(Stage::Landed),
++        detail: Some(format!("sha:{sha} main:{sha}")),
++        ..last
++    };
++    landed.to_line()
++}
++
++/// toy repo の `reference-transaction` hook: 最初の `committed` の段で `line` を event log の末に 1 行足す（**1 度だけ**・印を
++/// `marker` に置く）。land の追随の rebase（便の branch の更新）が最初の ref の書きで、番待ちの直後の段の読みの後に列の先頭が自分を
++/// 着地させた形を land の外の手で作る。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn install_landing_hook(repo: &Path, state: &Path, line: &str, marker: &Path) {
++    use std::os::unix::fs::PermissionsExt;
++    let body = state.join("landed-line.jsonl");
++    fs::write(&body, format!("{line}\n")).expect("足す行を書ける");
++    let hook = repo.join(".git").join("hooks").join("reference-transaction");
++    fs::create_dir_all(hook.parent().expect("hooks の親 dir")).expect("hooks dir を作れる");
++    let script = format!(
++        "#!/bin/sh\n[ \"$1\" = committed ] || exit 0\n[ -f '{marker}' ] && exit 0\ntouch '{marker}'\ncat '{body}' >> '{log}'\nexit 0\n",
++        marker = marker.display(),
++        body = body.display(),
++        log = state.join("fleet").join("events.jsonl").display()
++    );
++    fs::write(&hook, script).expect("hook を書ける");
++    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).expect("hook に実行権を付ける");
++}
++
++/// 既着地の追随の fixture（main に自分の squash・主実測の共通 verify は赤）で、追随の rebase の後に段が `Landed` になった周の land は
++/// squash も CAS も主実測も撃たず、stdout に `already-landed=1` を出して rc 0 で返り、`Failed` を記帳しない。段の読み直しの無い周
++/// （hook を置かない同じ fixture）は今までどおり主実測を撃って `Failed main-red` で落ちる。
++#[test]
++fn vredc_land_rereads_the_stage_before_the_squash() {
++    for hooked in [true, false] {
++        let (repo, state) = repo_with_state();
++        let marker = state.join("lens-ran");
++        let (id, squash) = gated_run_squashed_on_main(&repo, &state, &marker, run_trailer);
++        make_tree_differ(&repo, &state, &id, &format!("{squash}^"));
++        let frozen = vessel::pipe::vessel_path(&state, &id);
++        let text = fs::read_to_string(&frozen).unwrap_or_else(|err| panic!("宣言の写しを読める: {err}"));
++        let common = format!("common-verify = {VESSEL_COMMON}\n");
++        fs::write(&frozen, text.replace(&common, "common-verify = [\"sh verify-red.sh\"]\n")).unwrap_or_else(|err| panic!("写しを書ける: {err}"));
++        let hook_ran = state.join("landing-hook-ran");
++        if hooked {
++            install_landing_hook(&repo, &state, &landed_line(&state, &id, &squash), &hook_ran);
++        }
++        let out = land_once(&repo, &state, &id);
++        let measured = state.join("pipe").join(&id).join("verify-main.jsonl").exists();
++        let failed = trail(&state, &id).iter().any(|(_, stage, _)| *stage == Some(Stage::Failed));
++        assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), squash, "hooked={hooked}: main は動かない");
++        if hooked {
++            assert!(hook_ran.exists(), "前提: 追随の rebase で hook が段を Landed にした");
++            assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "読み直した周は rc 0: {}", stderr_of(&out));
++            assert!(stdout_of(&out).contains(&format!("run={id} already-landed=1")), "already-landed の行: {}", stdout_of(&out));
++            assert!(!measured, "主実測を撃たない（verify-main.jsonl が無い）");
++            assert!(!failed, "Failed を記帳しない: {:?}", trail(&state, &id));
++            assert_eq!(landed_details(&state, &id), [format!("sha:{squash} main:{squash}")], "Landed の記帳は列の先頭の 1 件だけ");
++        } else {
++            assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "読み直しの無い周は main-red の rc 1: {}", stderr_of(&out));
++            assert!(measured && failed, "読み直しの無い周は主実測を撃って Failed で落ちる");
++        }
++        clean(&[&repo, &state]);
++    }
++}
++
++/// main-red の便の fixture: 偽 remote と偽 CI（`conclusion`）を宣言した toy で、主実測だけが赤い便を land して `Failed main-red`
++/// で終わらせ（squash は local の main に残る）、後の便の commit を 1 つ積んで偽 remote の main へ押す。返すのは道具・便・`--bd` と
++/// `--rules` の値・squash・押した先端。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn red_run(repo: &Path, state: &Path, declared: bool) -> (FakeTerminal, String, [String; 2], String, String) {
++    let json = "[{\"status\":\"completed\",\"conclusion\":\"success\"}]";
++    let tools = fake_terminal_decl(repo, state, json, declared);
++    let design = write_contract(repo, &["verify"], &[r#"verify = ["sh verify-once.sh"]"#]);
++    let id = gated_pass(repo, state, &design, &state.join("lens-ran"));
++    make_tree_differ(repo, state, &id, "refs/heads/main");
++    let red = land_once(repo, state, &id);
++    assert_eq!(red.status.code(), Some(i32::from(RC_REFUSED)), "前提: main-red の rc 1: {}", stderr_of(&red));
++    assert_eq!(stages(state, &id).last().cloned(), Some((Some(Stage::Failed), Some("main-red".to_owned()))), "前提: Failed main-red");
++    let squash = git(repo, &["rev-parse", "refs/heads/main"]);
++    fs::write(repo.join("later.md"), "後の便\n").expect("後の便の file を書ける");
++    git(repo, &["add", "-A"]);
++    git(repo, &["commit", "-q", "-m", "later-run"]);
++    let tip = git(repo, &["rev-parse", "refs/heads/main"]);
++    git(repo, &["push", "-q", "fake", "main:main"]);
++    // 押していない local だけの commit（受け入れの周に push を撃てば偽 remote の main が動く形）。
++    fs::write(repo.join("local.md"), "local だけ\n").expect("local の file を書ける");
++    git(repo, &["add", "-A"]);
++    git(repo, &["commit", "-q", "-m", "local-only"]);
++    let flags = [state.join("fake-bd.sh").display().to_string(), ceiling_rules(state)];
++    (tools, id, flags, squash, tip)
++}
++
++/// 終端だけを撃ち直す（`pipe land --terminal-only`・`--bd` と `--rules` は fixture の値）。
++fn terminal_only(repo: &Path, state: &Path, id: &str, flags: &[String; 2]) -> Output {
++    land_extra(repo, state, id, &["--bd", &flags[0], "--rules", &flags[1], "--terminal-only"])
++}
++
++/// `Failed main-red` の便（木を retire で畳んだ後・retire の記帳は読み飛ばす）の squash が偽 remote の main の先端の祖先に在る周の
++/// 終端だけの撃ち直しは、push を撃たず、`RunDone stage=Landed detail=sha:<squash> main:<先端> adopted` を 1 件積み、先端の CI
++/// （success）で照合して `landed <squash> ci=success tip=<先端>` で bead を閉じ、rc 0 と `run=<id> adopted=<squash> terminal=closed` を返す。
++#[test]
++fn vredc_terminal_only_adopts_a_red_squash_on_remote() {
++    let (repo, state) = repo_with_state();
++    let (tools, id, flags, squash, tip) = red_run(&repo, &state, true);
++    let folded = retire_once(&repo, &state, &id);
++    assert_eq!(folded.status.code(), Some(i32::from(RC_OK)), "前提: main-red の便の木を畳める: {}", stderr_of(&folded));
++    assert_eq!(stages(&state, &id).last().cloned(), Some((Some(Stage::Failed), Some("retired".to_owned()))), "前提: retire の記帳が最後");
++    let out = terminal_only(&repo, &state, &id, &flags);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "受け入れた周は rc 0: {}", stderr_of(&out));
++    assert_eq!(stdout_of(&out).trim(), format!("run={id} adopted={squash} terminal=closed"), "1 行");
++    assert_eq!(
++        landed_details(&state, &id),
++        [format!("sha:{squash} main:{tip} adopted"), "terminal:ci:success".to_owned(), "terminal:close:ok".to_owned()],
++        "Landed の記帳と終端の 2 件（push の記帳は無い）"
++    );
++    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は押さない（local だけの commit は載らない）");
++    let ci_argv = fs::read_to_string(&tools.ci_log).unwrap_or_default();
++    assert!(ci_argv.lines().any(|word| word == tip), "CI は先端の sha で照合する: {ci_argv}");
++    let argv = fs::read_to_string(&tools.bd_log).unwrap_or_default();
++    assert_eq!(argv.lines().nth(3), Some(format!("landed {squash} ci=success tip={tip}").as_str()), "着地の形の理由: {argv}");
++    assert!(show_line(&repo, &state, &id).contains("stage=Landed"), "段は Landed");
++    clean(&[&repo, &state]);
++}
++
++/// 受け入れの見本から 1 句ずつ外した周は何も積まず何も撃たず、rc 1 と `run=<id> adopt=<語>` を返す: 偽 remote の main の祖先に
++/// squash が無い（`not-on-remote`）・最後の `Failed` の detail が main-red でも main-unmeasured でもない（`not-red`）・宣言に
++/// remote が無い（`no-remote`）。
++#[test]
++fn vredc_terminal_only_refuses_without_a_red_squash_on_remote() {
++    let (repo, state) = repo_with_state();
++    let (tools, id, flags, squash, tip) = red_run(&repo, &state, true);
++    let refused_with = |word: &str, state: &Path, id: &str, out: &Output, events: usize| {
++        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{word}: rc 1: {}", stderr_of(out));
++        assert_eq!(stdout_of(out).trim(), format!("run={id} adopt={word}"), "{word}: 1 行");
++        assert_eq!(event_count(state), events, "{word}: 何も積まない");
++    };
++    let before = event_count(&state);
++    git(&tools.remote, &["update-ref", "refs/heads/main", &format!("{squash}^")]);
++    refused_with("not-on-remote", &state, &id, &terminal_only(&repo, &state, &id, &flags), before);
++    git(&tools.remote, &["update-ref", "refs/heads/main", &tip]);
++    let red = events(&state).into_iter().rfind(|event| event.run == id).unwrap_or_else(|| panic!("便の event が在る"));
++    let other = vessel::fleet::Event { detail: Some("precheck".to_owned()), ..red };
++    fs::write(state.join("fleet").join("events.jsonl"), format!("{}{}\n", String::from_utf8_lossy(&events_bytes(&state)), other.to_line()))
++        .unwrap_or_else(|err| panic!("Failed の detail を替えた行を足せる: {err}"));
++    let swapped = event_count(&state);
++    refused_with("not-red", &state, &id, &terminal_only(&repo, &state, &id, &flags), swapped);
++    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
++    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
++    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
++    clean(&[&repo, &state]);
++    let (repo, state) = repo_with_state();
++    let (tools, id, flags, _, tip) = red_run(&repo, &state, false);
++    let before = event_count(&state);
++    refused_with("no-remote", &state, &id, &terminal_only(&repo, &state, &id, &flags), before);
++    assert!(!tools.bd_log.exists(), "宣言に remote の無い周も偽 bd は撃たれない");
++    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/fleet/store.rs b/scribe2/crates/scribe2/src/fleet/store.rs
+index 2f7d0a077741bd5b641e55a812ac96879b1c4487..0768e28cbcbfa2699d994e2089283938a40df8ad 100644
+--- a/scribe2/crates/scribe2/src/fleet/store.rs
++++ b/scribe2/crates/scribe2/src/fleet/store.rs
+@@ -71,6 +71,9 @@ pub enum StoreError {
+     /// 条件付き追記（[`append_if`]）の述語が偽だった: 便（値）は `pipe stop --run` で `Stopped` に落ちている
+     /// （設計 pipeline.md §39）。書かずに断る。
+     Stopped(String),
++    /// 条件付き追記（[`append_if`]）の述語 [`Condition::NotStopped`] が偽だった: 便（値）の最後の段は `Landed` で、書こうとした
++    /// event の段は `Landed` でない（`Landed` を終わりの段にする・判断の記録 ADR-45 の門 H6）。書かずに断る。
++    Landed(String),
+     /// 条件付き追記（[`append_if`]）の述語 [`Condition::LineAbsent`] が偽だった（線の記帳・設計 case-lifecycle.md §11）。
+     /// 書かずに断る。
+     Refused(Refusal),
+@@ -94,6 +97,7 @@ impl std::fmt::Display for StoreError {
+             Self::ReclaimToken(path) => write!(f, "fleet: 回収の token {path} が残っている（人が外す）"),
+             Self::Rules(reason) => write!(f, "fleet: rules 行を引けない（{reason}）"),
+             Self::Stopped(run) => write!(f, "fleet: run {run} は Stopped である（後の段を記帳しない）"),
++            Self::Landed(run) => write!(f, "fleet: run {run} は Landed である（Landed でない段を後に記帳しない）"),
+             Self::Refused(Refusal::Present) => write!(f, "fleet: 線は既に在る（動かさない）"),
+             Self::Refused(Refusal::NoCutover) => write!(f, "fleet: 切り替えの線が無い（close-check の線を先に足さない）"),
+         }
+@@ -103,7 +107,9 @@ impl std::fmt::Display for StoreError {
+ /// 条件付き追記（[`append_if`]）の述語（**閉じた enum**・自由な closure は受けない・設計 pipeline.md §39）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Condition<'a> {
+-    /// 便 `run` が `Stopped` でない（その便の段を持つ最後の event の段が `Stopped` でない＝replay の段と同じ読み）。
++    /// 便 `run` が `Stopped` でない（その便の段を持つ最後の event の段が `Stopped` でない＝replay の段と同じ読み）。加えて、その段が
++    /// `Landed` の周は書く event の段も `Landed` である（終端の push・CI・close の記帳と retire の記帳は通り、`Failed` や `Gated` は
++    /// 断る・判断の記録 ADR-45 の門 H6）。
+     NotStopped {
+         /// 便 id。
+         run: &'a str,
+@@ -343,11 +349,11 @@ pub fn append(dir: &Path, event: &Event, policy: LockPolicy) -> Result<Vec<Warni
+ /// 断りのまま・fail-closed）。
+ pub fn append_if(dir: &Path, event: &Event, policy: LockPolicy, condition: Condition<'_>) -> Result<Vec<Warning>, StoreError> {
+     let path = events_path(dir);
+-    append_line_when(&path, &event.to_line(), policy, || holds(&path, condition))
++    append_line_when(&path, &event.to_line(), policy, || holds(&path, condition, event.stage))
+ }
+ 
+-/// 述語を log の現物で評価する（呼ぶのは lock を握った [`append_line_when`] の中だけ）。
+-fn holds(path: &Path, condition: Condition<'_>) -> Result<(), StoreError> {
++/// 述語を log の現物で評価する（呼ぶのは lock を握った [`append_line_when`] の中だけ・`stage` は書く event の段）。
++fn holds(path: &Path, condition: Condition<'_>, stage: Option<Stage>) -> Result<(), StoreError> {
+     let events = read_events(path).map_err(|errors| {
+         errors
+             .into_iter()
+@@ -357,10 +363,10 @@ fn holds(path: &Path, condition: Condition<'_>) -> Result<(), StoreError> {
+     match condition {
+         Condition::NotStopped { run } => {
+             let last = events.iter().rev().filter(|event| event.run == run).find_map(|event| event.stage);
+-            if last == Some(Stage::Stopped) {
+-                Err(StoreError::Stopped(run.to_owned()))
+-            } else {
+-                Ok(())
++            match last {
++                Some(Stage::Stopped) => Err(StoreError::Stopped(run.to_owned())),
++                Some(Stage::Landed) if stage != Some(Stage::Landed) => Err(StoreError::Landed(run.to_owned())),
++                _ => Ok(()),
+             }
+         }
+         Condition::LineAbsent { close_check } => {
+@@ -884,6 +890,33 @@ mod tests {
+         let _ = std::fs::remove_dir_all(&dir);
+     }
+ 
++    /// 最後の段が `Landed` の便に段が `Landed` でない `RunStage` か `RunDone`（段なしを含む）を足す条件付き追記は `Landed` で断って
++    /// file を 1 byte も変えず、段が `Landed` の `RunDone` と `RunStage`（終端の記帳・retire の記帳）と他の便の記帳は書ける。
++    #[test]
++    fn vredc_append_refuses_a_non_landed_stage_after_landed() {
++        use super::{append_if, events_path, Condition};
++        use crate::fleet::{EventKind, Stage};
++        use crate::pipe::fixture::event;
++        let dir = scratch("append-landed");
++        let policy = LockPolicy { retry_ms: 30, stale_ms: 600_000 };
++        let me = Condition::NotStopped { run: "me" };
++        let landed = event("me", EventKind::RunDone, Some(Stage::Landed), None, Some("sha:x main:x"));
++        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Gated), None, None), policy, me).expect("Gated を書ける");
++        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Failed), None, Some("main-red")), policy, me).expect("Landed の前の Failed は書ける");
++        append_if(&dir, &landed, policy, me).expect("Failed の後の Landed は書ける");
++        let before = std::fs::read(events_path(&dir)).expect("log を読める");
++        for (kind, stage) in [(EventKind::RunStage, Some(Stage::Failed)), (EventKind::RunDone, Some(Stage::Failed)), (EventKind::RunStage, Some(Stage::Gated)), (EventKind::RunDone, None)] {
++            let late = event("me", kind, stage, None, Some("main-red"));
++            assert_eq!(append_if(&dir, &late, policy, me), Err(StoreError::Landed("me".to_owned())), "{kind:?} {stage:?} は断る");
++        }
++        assert_eq!(std::fs::read(events_path(&dir)).expect("log を読める"), before, "断った周は 1 byte も変えない");
++        append_if(&dir, &event("me", EventKind::RunDone, Some(Stage::Landed), None, Some("terminal:close:ok")), policy, me).expect("終端の記帳は書ける");
++        append_if(&dir, &event("me", EventKind::RunStage, Some(Stage::Landed), None, Some("retired")), policy, me).expect("retire の記帳は書ける");
++        let other = event("other", EventKind::RunStage, Some(Stage::Failed), None, Some("main-red"));
++        append_if(&dir, &other, policy, Condition::NotStopped { run: "other" }).expect("他の便は書ける");
++        let _ = std::fs::remove_dir_all(&dir);
++    }
++
+     /// (2) 線の述語は lock の中で評価する: 2 本の thread が同じ `LineAbsent` で足すと 1 件だけ入り、もう一方は `Present` で断る。
+     /// close-check の述語は切り替えの線の無い log では `NoCutover` で断り、線の後は足せて 2 度目は `Present` で断る。
+     #[test]
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/step.rs b/scribe2/crates/scribe2/src/pipe/cli/step.rs
+index ab8bb8892c57039547c7285eec61aba33f594d3a..38e095572978a53013030561435880316e556d03 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/step.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/step.rs
+@@ -4,11 +4,11 @@
+ //! `pipe::land`）へ渡す。`s2-07l.295` で `cli.rs` から純移動した（本文は不変・各段の手順は宣言順のまま）。
+ //! 規則の値は rules 行から読む（数値を焼かない・C1 / C5）。
+ 
+-use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_of, Extra};
+-use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK};
++use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_of, Extra, Resolved};
++use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+ use crate::fleet::lifecycle::{self, Place};
+ use crate::fleet::store::{LockPolicy, StoreError};
+-use crate::fleet::Stage;
++use crate::fleet::{store, EventKind, Stage};
+ use crate::pipe::approve::{Approve, RC_BLOCKED};
+ use crate::pipe::current;
+ use crate::pipe::declaration::{self, Ceiling, CEILING_ROW, DENIED_ROW};
+@@ -21,7 +21,8 @@ use crate::pipe::lens_record::{self, LensSource};
+ use crate::pipe::ratelimit::Pool;
+ use crate::pipe::review::{review, Review};
+ use crate::pipe::spawn::EndGate;
+-use crate::pipe::run_dir;
++use crate::pipe::retire::{read_tip, RemoteTip};
++use crate::pipe::{emit, run_dir, Emit};
+ use crate::rules::manifest::Manifest;
+ use std::path::Path;
+ 
+@@ -62,17 +63,100 @@ fn terminal_input<'a>(args: &'a [String], manifest: &Manifest) -> Result<(u64, u
+ /// 記録の sha が先端と違う周は、先端の祖先から本文に `run: <run id>` の行を持つ squash を 1 回探し直し
+ /// （設計 §65・anchor の main を揃えて着地の commit の sha が変わった便）、見つけた sha を着地の sha として側を選ぶ。
+ /// 見つからない周は記録の sha のまま今の分岐へ渡す（fail-closed）。
++///
++/// 前提の段が `Failed` の便は、remote の main に載った自分の squash を受け入れる形（[`adopt`]）だけを通す（判断の記録 ADR-45 の門 H6）。
+ fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+-    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
++    let resolved = match resolve(args, id, &[Stage::Landed, Stage::Failed], &Extra::Nothing) {
+         Ok(found) => found,
+         Err(outcome) => return outcome,
+     };
++    if resolved.stage == Stage::Failed {
++        return adopt(args, id, manifest, policy, &resolved);
++    }
+     let Some(sha) = super::land::landed_sha(&resolved.state_dir, id) else {
+         return refused(format!("run {id} の着地した sha を記録から読めない"));
+     };
+     let Some(head) = git_line(&resolved.repo, &["rev-parse", MAIN_REF]) else {
+         return refused(format!("{MAIN_REF} を読めない"));
+     };
++    // 撃ち直しの push が押すのは anchor の main そのもの＝押した先端は main の今の先端（設計 contract-source.md §58）。
++    let sha = if head == sha {
++        sha
++    } else {
++        landed_squash_of(&resolved.repo, &head, id).unwrap_or(sha)
++    };
++    let tip = if head == sha { PushTip::Tip } else { PushTip::Behind(&head) };
++    settle(args, (id, manifest, policy), &resolved, (&sha, tip, ""), |_| Ok(()))
++}
++
++/// 終端だけの撃ち直しが受け入れる `Failed` の detail（主実測が赤か測れなかった便・land の `main_red` と `main_unmeasured` の字）。
++const ADOPTABLE: [&str; 2] = ["main-red", "main-unmeasured"];
++
++/// 畳んだ事実の detail（retire が段のまま積む字・受け入れの判定は読み飛ばす）。
++const RETIRED: &str = "retired";
++
++/// 受け入れない周の `adopt=` の語（最後の `Failed` の detail が [`ADOPTABLE`] でない・宣言に remote が無い・remote の main の祖先に
++/// 自分の squash が無い）。
++const NOT_RED: &str = "not-red";
++const NO_REMOTE: &str = "no-remote";
++const NOT_ON_REMOTE: &str = "not-on-remote";
++
++/// `pipe land --run <id> --terminal-only` の `Failed` の形（判断の記録 ADR-45 の門 H6）: 最後の `Failed` の detail が main-red か
++/// main-unmeasured で、宣言の remote の main の先端の祖先に本文に `run: <id>` の行を持つ squash が在る周だけ、push を撃たずに
++/// `Landed` の `RunDone`（detail `sha:<squash> main:<先端> adopted`）を 1 件積み、先端の CI で照合して着地の形で閉じる
++/// （[`PushTip::Adopted`]）。
++///
++/// 受け入れない周は stdout の 1 行 `run=<id> adopt=<語>` と rc 1 で、何も書かず何も撃たない（remote の main の読みの fetch を除く）。
++/// event log・宣言・remote の main を読めない周は rc 2（測れないを「載っていない」に読み替えない・C10）。
++fn adopt(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy, resolved: &Resolved) -> Outcome {
++    let declined = |word: &str| Outcome { out: vec![format!("run={id} adopt={word}")], err: Vec::new(), rc: RC_REFUSED };
++    match red_of(&resolved.state_dir, id) {
++        Err(outcome) => return outcome,
++        Ok(false) => return declined(NOT_RED),
++        Ok(true) => {}
++    }
++    let facts = match declaration::terminal_facts(&resolved.repo) {
++        Ok(found) => found,
++        Err(errors) => return broken(errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / ")),
++    };
++    let Some(remote) = facts.remote else {
++        return declined(NO_REMOTE);
++    };
++    let tip = match read_tip(&resolved.repo, &remote) {
++        RemoteTip::Found(found) => found,
++        RemoteTip::NoMain => return declined(NOT_ON_REMOTE),
++        RemoteTip::Unread => return broken(format!("remote {remote} の main を読めない")),
++    };
++    let Some(sha) = landed_squash_of(&resolved.repo, &tip, id) else {
++        return declined(NOT_ON_REMOTE);
++    };
++    let record = |entry: &Land<'_>| {
++        let detail = format!("sha:{sha} main:{tip} adopted");
++        let landed = Emit { kind: EventKind::RunDone, run: id, bead: entry.bead, stage: Some(Stage::Landed), seat: None, pid: None, detail: Some(detail) };
++        emit(entry.state_dir, &landed, entry.policy).map_err(|err| broken(err.to_string()))
++    };
++    let label = format!(" adopted={sha}");
++    settle(args, (id, manifest, policy), resolved, (&sha, PushTip::Adopted(&tip), &label), record)
++}
++
++/// 便の最後の `Failed` の記帳（retire の記帳を除く）の detail が [`ADOPTABLE`] か（event log を読めない周は rc 2 の Outcome）。
++fn red_of(state_dir: &Path, id: &str) -> Result<bool, Outcome> {
++    let events = store::read_all(state_dir).map_err(|errors| Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))?;
++    let last = events.iter().rev().find(|event| {
++        event.run == id && event.kind == EventKind::RunStage && event.stage == Some(Stage::Failed) && event.detail.as_deref() != Some(RETIRED)
++    });
++    Ok(last.and_then(|event| event.detail.as_deref()).is_some_and(|detail| ADOPTABLE.contains(&detail)))
++}
++
++/// 終端を撃って `run=<id><label> terminal=<token>` の 1 行にする（`--terminal-only` の 2 つの形が共有する後半・`record` は終端の前に
++/// 1 回撃つ記帳・`label` は受け入れの周の ` adopted=<squash>`）。
++fn settle(
++    args: &[String],
++    (id, manifest, policy): (&str, &Manifest, LockPolicy),
++    resolved: &Resolved,
++    (sha, tip, label): (&str, PushTip<'_>, &str),
++    record: impl FnOnce(&Land<'_>) -> Result<(), Outcome>,
++) -> Outcome {
+     let (ci_wait_s, ci_poll_s, bd) = match terminal_input(args, manifest) {
+         Ok(found) => found,
+         Err(outcome) => return outcome,
+@@ -101,19 +185,15 @@ fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPol
+         train_max: 1,
+         rules: None,
+     };
+-    // 撃ち直しの push が押すのは anchor の main そのもの＝押した先端は main の今の先端（設計 contract-source.md §58）。
+-    let sha = if head == sha {
+-        sha
+-    } else {
+-        landed_squash_of(&resolved.repo, &head, id).unwrap_or(sha)
+-    };
+-    let tip = if head == sha { PushTip::Tip } else { PushTip::Behind(&head) };
+-    let terminal = super::land::terminal(&entry, &sha, tip);
++    if let Err(outcome) = record(&entry) {
++        return outcome;
++    }
++    let terminal = super::land::terminal(&entry, sha, tip);
+     // 局面の出力の書き直し（契機 (d)）は終端が close した周（rc 0）だけ・呼び手の rc と stdout は変えない（設計 case-lifecycle.md §12 約束 8）。
+     let place = Place { state_dir: entry.state_dir, repo: entry.repo, manifest, bd: entry.bd, policy };
+     let err = if terminal.rc() == RC_OK { lifecycle::after_close(&place) } else { Vec::new() };
+     Outcome {
+-        out: vec![format!("run={id} terminal={}", terminal.as_token())],
++        out: vec![format!("run={id}{label} terminal={}", terminal.as_token())],
+         err,
+         rc: terminal.rc(),
+     }
+diff --git a/scribe2/crates/scribe2/src/pipe/land.rs b/scribe2/crates/scribe2/src/pipe/land.rs
+index e6783d9beaad444cb98b0931669b4621a6fbee91..3dbf9fa47aaef9bec769d746964af39710abf75a 100644
+--- a/scribe2/crates/scribe2/src/pipe/land.rs
++++ b/scribe2/crates/scribe2/src/pipe/land.rs
+@@ -581,6 +581,11 @@ fn attempt(entry: &Land<'_>, worktree: &Path, turned: &Turned, lines: &mut Vec<S
+     if now != old {
+         return Attempt::Stale { old, now };
+     }
++    // **squash の前に段を読み直す**（判断の記録 ADR-45 の門 H6）: 番待ちの直後の読みを過ぎてから列の先頭が自分を着地 / 終端させた便は、
++    // squash も CAS も主実測も撃たない（既着地の追随が古い base で主実測を撃ち直し、Landed の後に Failed を記帳しない）。
++    if let Some(settled) = settled_in_train(entry, turned.order) {
++        return Attempt::Settled(settled);
++    }
+     // anchor の見立ては **ref を進める前**に読む: 進めた後の `git status` は index の遅れを
+     // 「変更」として出すので、人の未 commit と区別できない。
+     let plan = anchor_plan(entry.repo);
+diff --git a/scribe2/crates/scribe2/src/pipe/land/finish.rs b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+index f560ceba33f57f224eb002372218692f1cb9e0b1..71c4455d85947c580f7adbd454f468b3ef0b3525 100644
+--- a/scribe2/crates/scribe2/src/pipe/land/finish.rs
++++ b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+@@ -252,6 +252,9 @@ pub(in crate::pipe) enum PushTip<'a> {
+     Tip,
+     /// 先端でない commit（CI の run が付かない＝自分を祖先に持つ先端の commit〔値〕の CI で照合する）。
+     Behind(&'a str),
++    /// remote の main に既に載った commit（値は remote の main の先端）。push を撃たず（自分で押していない main を押し直さない）、
++    /// 先端の CI で照合する（終端だけの撃ち直しが main-red の便の squash を受け入れる周・判断の記録 ADR-45 の門 H6）。
++    Adopted(&'a str),
+ }
+ 
+ /// land の終端（設計 contract-source.md §5）: push → CI の照合 → 台帳の close。
+@@ -262,6 +265,8 @@ pub(in crate::pipe) enum PushTip<'a> {
+ /// `landed <sha> ci=none` の理由で撃つ（記すのは `close:ok` の 1 件・結末は [`Terminal::ClosedWithoutCi`]）。
+ /// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ちも
+ /// `ci_now` も）を先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。
++/// [`PushTip::Adopted`] の周は push を撃たず（記帳もしない）、`Behind` と同じく先端の CI で照合する（先端が自分の sha なら
++/// reason に `tip=` を置かない）。
+ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
+     let facts = match super::declaration::terminal_facts(entry.repo) {
+         Ok(found) => found,
+@@ -281,18 +286,20 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
+             failed => failed,
+         };
+     };
+-    // (1) push。**main:main だけ**を押す（便の branch は押さない）。
+-    if super::git_bytes(entry.repo, &["push", remote, "main:main"]).is_none() {
+-        note(entry, "push:failed:git");
+-        return Terminal::PushFailed("git".to_owned());
++    // (1) push。**main:main だけ**を押す（便の branch は押さない）。remote に載った commit を受け入れる周は押さない。
++    if !matches!(tip, PushTip::Adopted(_)) {
++        if super::git_bytes(entry.repo, &["push", remote, "main:main"]).is_none() {
++            note(entry, "push:failed:git");
++            return Terminal::PushFailed("git".to_owned());
++        }
++        note(entry, &format!("push:{remote}"));
+     }
+-    note(entry, &format!("push:{remote}"));
+     // 先端でない sha には forge の CI の run が付かない＝自分を祖先に持つ先端の CI で照合する（§53）。祖先でない周と
+     // 測れない周（rc 0 以外は区別しない）は照合を撃たない（close しない極性）。
+     let checked = match tip {
+         PushTip::Tip => sha,
+-        PushTip::Behind(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
+-        PushTip::Behind(_) => {
++        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
++        PushTip::Behind(_) | PushTip::Adopted(_) => {
+             note(entry, "ci:unmeasurable");
+             return Terminal::CiUnmeasurable;
+         }
+@@ -321,6 +328,7 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
+     let tail = match tip {
+         PushTip::Tip => CloseTail::CiSuccess(None),
+         PushTip::Behind(head) => CloseTail::CiSuccess(Some(head)),
++        PushTip::Adopted(head) => CloseTail::CiSuccess((head != sha).then_some(head)),
+     };
+     close_bead(entry, &close_reason(sha, tail))
+ }
