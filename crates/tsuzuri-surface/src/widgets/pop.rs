@@ -13,17 +13,21 @@
 //! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
 //! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
 //! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
+//! 概要は吹き出しを開いた時に開いた bead の 1 本の引きの口（`ITEM_PATH`）の本文から読み、表示の型の 1 つを部品 sumpick で選んで
+//! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::case::{CaseDoc, CasePart};
 use tsuzuri_contract::graph::{GraphDoc, NodeKind};
-use tsuzuri_contract::ledger::{BeadFact, BeadFacts, FACTS_PATH, LedgerRow};
+use tsuzuri_contract::ledger::{BeadFact, BeadFacts, FACTS_PATH, ITEM_PATH, LedgerItem, LedgerRow};
+use tsuzuri_contract::summary::{excerpt, summaries};
 use tsuzuri_contract::wire;
 
 use super::hover::{Point, Rect, Size};
 use super::modal::Hit;
 use super::runflow::{Hist, Seg};
+use super::sumpick::{self, POP_SUM_MAX, Picked};
 use crate::frame::{self, Mode};
 use crate::mapview::band::kind_key;
 use crate::project::{pipeline, timeline};
@@ -116,6 +120,12 @@ pub const WHY_KEYS: [&str; 3] = ["pf_why", "pf_wait_why", "pf_wait_runs"];
 
 /// 承認待ちの相手（持ち主）と待つ理由（持ち主の承認）の語の鍵。
 pub const APPROVAL_KEYS: [&str; 2] = ["pw_owner", "pw_approval"];
+
+/// 概要の口の語の鍵（畳んだ形の開く口・開いた形の畳む口・行 g-pop-sum）。
+pub const SUM_KEYS: [&str; 2] = ["psum_more", "psum_less"];
+
+/// 概要の口の class。
+pub const SUM_CLASS: &str = "pmore";
 
 /// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
 pub const QUEUED_PHASE: &str = "contract-queued";
@@ -241,13 +251,24 @@ pub struct Fact {
     pub val: Val,
 }
 
+/// 吹き出しの概要（行 g-pop-sum）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Sum {
+    /// 1 本の引きをまだ読めない（まだ分からない）。
+    Unread,
+    /// 2 つの概要も本文の頭の 1 行も無い（要約なし）。
+    Empty,
+    /// 表示の型で選んだ概要（字は切らない）。
+    Picked(Picked),
+}
+
 /// 吹き出しの中身（頭の短い題・題の全体・概要・札の段・欄・止まりの次の手の語の鍵）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pop {
     pub id: String,
     pub short: String,
     pub title: Option<String>,
-    pub summary: Option<String>,
+    pub summary: Sum,
     pub stage: Option<Stage>,
     pub facts: Vec<Fact>,
     pub next: Option<&'static str>,
@@ -481,18 +502,58 @@ pub fn pop(id: &str, src: &Src<'_>) -> Pop {
     if let Some(c) = card {
         facts.extend(stage_facts(src, c));
     }
-    let (short, summary) = match fact {
-        Reading::Known(Some(f)) => (f.short.clone(), Some(f.summary.clone())),
-        _ => (id.to_string(), None),
+    let short = match fact {
+        Reading::Known(Some(f)) => f.short.clone(),
+        _ => id.to_string(),
     };
     Pop {
         id: id.to_string(),
         short,
         title: row.map(|r| r.title.clone()),
-        summary,
+        summary: Sum::Unread,
         stage,
         facts,
         next: stage.and_then(next_key),
+    }
+}
+
+/// 開いた bead の 1 本の引きの口の path（行 g-pop-sum）。
+pub fn item_path(id: &str) -> String {
+    format!("{ITEM_PATH}{id}")
+}
+
+/// 吹き出しに概要を置く（行 g-pop-sum）: 開いた bead の 1 本の引きの電文の本文から 2 つの概要と本文の頭の 1 行を読み、
+/// 表示の型の 1 つを部品 sumpick で選ぶ。引きをまだ読めない・読めない・ほかの bead の電文の間は Unread、どれも無ければ Empty。
+pub fn with_sum(mut p: Pop, item: &Fetched, mode: Mode) -> Pop {
+    let read = match item {
+        Fetched::Body(text) => wire::decode::<LedgerItem>(text).ok(),
+        Fetched::NotRead | Fetched::Failed => None,
+    };
+    p.summary = match read {
+        Some(it) if it.row.id.as_str() == p.id => {
+            let two = summaries(&it.description);
+            let body = excerpt(&it.description);
+            let picked = sumpick::pick(
+                mode,
+                two.plain.as_deref(),
+                two.eng.as_deref(),
+                body.as_deref(),
+            );
+            picked.map_or(Sum::Empty, Sum::Picked)
+        }
+        _ => Sum::Unread,
+    };
+    p
+}
+
+/// 概要の見せる字と口の語の鍵: `POP_SUM_MAX` 字以下は全文で口なし、越えれば畳んだ形は頭と … と開く口、
+/// 開いた形は全文と畳む口（行 g-pop-sum）。
+pub fn sum_text(text: &str, whole: bool) -> (String, Option<&'static str>) {
+    let f = sumpick::fold(text, POP_SUM_MAX);
+    match (f.rest.is_some(), whole) {
+        (false, _) => (f.head, None),
+        (true, false) => (f.shut(), Some(SUM_KEYS[0])),
+        (true, true) => (f.whole(), Some(SUM_KEYS[1])),
     }
 }
 
@@ -604,12 +665,14 @@ mod dom {
         Hist, Seg, flow_text, read_runs, seg_secs, unknown_text, with_runs,
     };
     use super::{
-        BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, Src, UNKNOWN_KEY,
-        Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
-        opener_selector, place, pop, read_facts, read_parts, toggle, with_why,
+        BEADS_PATH, CLASSES, CLOSE_KEY, ID, Open, PAGE_KEY, Partner, Pop, SCRIM, SUM_CLASS, Src,
+        Sum, UNKNOWN_KEY, Val, Via, anchor_selectors, at_text, board_unread, hit_of, item_path,
+        known, next_href, opener_selector, place, pop, read_facts, read_parts, sum_text, toggle,
+        with_sum, with_why,
     };
     use crate::consultwin::{POP_KEY, consult_href};
     use crate::frame::{Mode, node_href};
+    use crate::project::node::NO_SUMMARY;
     use crate::project::{ledger, map, pipeline, timeline, unmeasured};
     use crate::view::read_rows;
     use crate::vocab::label;
@@ -621,6 +684,8 @@ mod dom {
         open: RwSignal<Option<Open>>,
         /// 置いた左上（測って置くまでは None）。
         at: RwSignal<Option<Point>>,
+        /// 概要を開いた形で出すか（開く bead が替われば畳んで始める・行 g-pop-sum）。
+        whole: RwSignal<bool>,
         node: NodeRef<Div>,
     }
 
@@ -629,6 +694,7 @@ mod dom {
             Self {
                 open: RwSignal::new(None),
                 at: RwSignal::new(None),
+                whole: RwSignal::new(false),
                 node: NodeRef::new(),
             }
         }
@@ -664,6 +730,7 @@ mod dom {
             };
             let now = self.open.with_untracked(|o| toggle(o.as_ref(), next));
             self.at.set(None);
+            self.whole.set(false);
             self.open.set(now);
             request_animation_frame(move || self.settle());
         }
@@ -785,6 +852,36 @@ mod dom {
         .into_any()
     }
 
+    /// 概要（行 g-pop-sum）: 読めない間はまだ分からない、どれも無ければ要約なし。表示の型の側でない字は頭に語の印を置き、
+    /// 畳む字は口を押すと開いてもう 1 度押すと畳む（口の要素は残し語だけ替える）。字の置き場は台帳の字の印を持つ。
+    fn sum_view(ctx: PopCtx, sum: Sum) -> AnyView {
+        let class = CLASSES[3];
+        let p = match sum {
+            Sum::Unread => {
+                return view! { <div class=class><span class=CLASSES[8]>{label(UNKNOWN_KEY)}</span></div> }
+                    .into_any();
+            }
+            Sum::Empty => return view! { <div class=class>{NO_SUMMARY}</div> }.into_any(),
+            Sum::Picked(p) => p,
+        };
+        let mark = p.marked.then(|| view! { <small>{label(p.key)}</small>" " });
+        let folds = sum_text(&p.text, false).1.is_some();
+        let text = p.text;
+        let shown = move || sum_text(&text, ctx.whole.get());
+        let word = shown.clone();
+        let button = folds.then(|| {
+            view! {
+                <button type="button" class=SUM_CLASS on:click=move |_| ctx.whole.update(|w| *w = !*w)>
+                    {move || word().1.map(label)}
+                </button>
+            }
+        });
+        view! {
+            <div class=class>{mark}<span data-ledger-text="">{move || shown().0}</span>{button}</div>
+        }
+        .into_any()
+    }
+
     fn val_view(ctx: PopCtx, val: Val, now: u64) -> AnyView {
         match val {
             Val::Text(t) => view! { <span>{t}</span> }.into_any(),
@@ -809,7 +906,7 @@ mod dom {
     }
 
     fn pop_view(ctx: PopCtx, p: Pop, mode: Mode, now: u64) -> AnyView {
-        let [head, main, title, sum, table, foot, _, link, _] = CLASSES;
+        let [head, main, title, _, table, foot, _, link, _] = CLASSES;
         let sym = p
             .stage
             .map(|s| pipeline::stage_sym(false, pipeline::lane(s.column()).state));
@@ -829,7 +926,7 @@ mod dom {
             </div>
             <div class=main>
                 <div class=title>{p.title.unwrap_or_else(unknown)}</div>
-                <div class=sum>{p.summary.unwrap_or_else(unknown)}</div>
+                {sum_view(ctx, p.summary)}
                 <table class=table>{rows}</table>
                 {next}
             </div>
@@ -884,6 +981,10 @@ mod dom {
                 .unwrap_or_default()
         });
         let runs = crate::net::read_path(runs_path);
+        // 1 本の引きの口も吹き出しを開いた時に開いた bead の path で読む（閉じていれば空の path で読まない・行 g-pop-sum）。
+        let item_at =
+            Signal::derive(move || ctx.shown().map(|id| item_path(&id)).unwrap_or_default());
+        let item = crate::net::read_path(item_at);
         listen(ctx);
         let style = move || ctx.style();
         let content = move || {
@@ -906,6 +1007,7 @@ mod dom {
             let lines = runs.with(|(f, _)| read_runs(f));
             let p = with_runs(pop(&id, &src), known(&lines));
             let p = with_why(p, &src);
+            let p = item.with(|(f, _)| with_sum(p, f, mode));
             Some(
                 view! { {pop_view(ctx, p, mode, crate::net::now())}{unread.map(unmeasured)} }
                     .into_any(),

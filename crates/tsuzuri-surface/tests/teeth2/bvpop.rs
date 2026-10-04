@@ -19,7 +19,7 @@ use tsuzuri_surface::widgets::hover::{Point, Rect, Size};
 use tsuzuri_surface::widgets::modal::{FULL_MAX_PX, Hit, closes};
 use tsuzuri_surface::widgets::pop::{
     BEADS_PATH, CLASSES, CLOSE_KEY, COMMON_KEYS, Fact, ID, NEXT_KEYS, Open, PAGE_KEY, Partner,
-    SCRIM, STAGE_KEYS, Src, UNKNOWN_KEY, Val, Via, anchor_selectors, board_unread, hit_of,
+    SCRIM, STAGE_KEYS, Src, Sum, UNKNOWN_KEY, Val, Via, anchor_selectors, board_unread, hit_of,
     next_href, place, pop, toggle,
 };
 
@@ -174,7 +174,8 @@ fn bvpop_common_rows_in_order() {
     );
     assert_eq!(p.short, "短い題");
     assert_eq!(p.title.as_deref(), Some("t-1.2 の題の全体"));
-    assert_eq!(p.summary.as_deref(), Some("t-1.2 の概要"));
+    // 概要は事実の口から読まず、1 本の引きを読むまでまだ分からない（行 g-pop-sum の with_sum が置く）。
+    assert_eq!(p.summary, Sum::Unread);
     assert_eq!((p.stage, p.next), (Some(Stage::Running), None));
     // epic の無い bead と pointer の無い bead は epic と設計の行の欄を出さない。札の無い bead は段ごとの欄を出さない。
     let lone = pop("t-1", &src);
@@ -205,7 +206,10 @@ fn bvpop_unknown_fields_marked() {
     for f in &p.facts[1..] {
         assert_eq!(f.val, Val::Unknown, "{}", f.key);
     }
-    assert_eq!((p.short.as_str(), p.title, p.summary), ("t-9", None, None));
+    assert_eq!(
+        (p.short.as_str(), p.title, p.summary),
+        ("t-9", None, Sum::Unread)
+    );
 }
 
 /// Blocked の待つ相手: 局面の出力の契約の部品が在れば links.on（相手の短い題と札の段）、無ければ事実の blocks のうち

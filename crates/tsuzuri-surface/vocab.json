@@ -1464,6 +1464,16 @@
    "plain": "記録が読めず値が分からない\n✗ 無いとは違う",
    "internal": "口が読めない・欄が無い（行 g-pop）"
   },
+  "psum_more": {
+   "label": "続きを読む",
+   "plain": "畳んだ概要の全文を開く\n・ もう 1 度押すと畳む",
+   "internal": "sumpick::fold・POP_SUM_MAX（規則の行 R-19 の 200 字・行 g-pop-sum）"
+  },
+  "psum_less": {
+   "label": "短く畳む",
+   "plain": "開いた概要を頭の字に畳む",
+   "internal": "sumpick::Folded::shut（行 g-pop-sum）"
+  },
   "pf_id": {
    "label": "id",
    "plain": "台帳の bead の番号",

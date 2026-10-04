@@ -358,6 +358,8 @@ body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }
 .pb { padding: 8px 12px 4px; }
 .pt { margin-bottom: 6px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .psum { color: var(--ink-3); font-size: var(--fs-1); line-height: 1.55; overflow-wrap: anywhere; }
+.psum small { padding: 0 4px; border: 1px dashed var(--line-2); border-radius: 4px; }
+.pmore { margin-left: 4px; padding: 0 2px; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
 .facts { width: 100%; margin: 6px 0; border-collapse: collapse; font-size: var(--fs-1); }
 .facts th { width: 1%; padding: 4px 10px 4px 0; border-top: 1px solid var(--line); color: var(--ink-3); font-weight: 500; text-align: left; white-space: nowrap; vertical-align: top; }
 .facts td { padding: 4px 0; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }

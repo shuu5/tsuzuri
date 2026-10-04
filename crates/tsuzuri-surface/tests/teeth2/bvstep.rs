@@ -9,7 +9,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::runs::{GateVerdict, ReviewVerdict, RunCost, RunLine, RunStep};
 use tsuzuri_surface::vocab::{label, vocab};
-use tsuzuri_surface::widgets::pop::{Fact, Pop, STAGE_KEYS, Val};
+use tsuzuri_surface::widgets::pop::{Fact, Pop, STAGE_KEYS, Sum, Val};
 use tsuzuri_surface::widgets::runflow::{
     COMMIT_CHARS, FLOW_KEYS, Hist, OPEN_END, STAGES, Seg, Step, commit, flow, flow_text, history,
     known_stage, with_runs,
@@ -229,7 +229,7 @@ fn base(stage: Stage, keys: &[&'static str]) -> Pop {
         id: "b-1".to_string(),
         short: "b-1".to_string(),
         title: None,
-        summary: None,
+        summary: Sum::Unread,
         stage: Some(stage),
         facts: keys
             .iter()
