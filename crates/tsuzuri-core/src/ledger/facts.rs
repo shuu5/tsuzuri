@@ -1,6 +1,7 @@
 //! bead の事実の一覧（起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
 //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
-//! 短い題は metadata の鍵 short の字か、無ければ題から機械で作る。概要は本文の 1 行を Unicode の字で 120 に切る。
+//! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
+//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。概要は本文の 1 行を Unicode の字で 120 に切る。
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
@@ -25,6 +26,12 @@ pub const SUMMARY_LABEL: &str = "概要 =";
 
 /// 概要の字数の上限（Unicode の字）。
 pub const SUMMARY_MAX: usize = 120;
+
+/// 短い題の字数の上限（Unicode のスカラー値・規則の行 R-19）。
+pub const SHORT_MAX: usize = 20;
+
+/// 上限を越えて切った短い題の末の字。
+pub const ELLIPSIS: char = '…';
 
 /// 台帳の字から bead の事実の一覧を組む（字が空か JSON の配列として読めなければ行は `Unknown`）。
 /// bd が消した bead（tombstone）と、id が bead の id の形でない bead は出さない。行は台帳の順。
@@ -54,7 +61,7 @@ fn fact(bead: BdBead) -> Option<BeadFact> {
     Some(BeadFact {
         id,
         created_at: bead.created_at.as_deref().and_then(epoch_secs),
-        short: set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default())),
+        short: capped(&set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default()))),
         short_set,
         summary: summary_of(bead.description.as_deref().unwrap_or_default()),
         blocks,
@@ -70,6 +77,18 @@ pub fn short_of(title: &str) -> String {
         None => title.split(TITLE_DASH).next().unwrap_or_default().trim(),
     };
     if made.is_empty() { title } else { made }.to_string()
+}
+
+/// 短い題を上限の字数に切る（`SHORT_MAX` 字以下ならそのまま・越えれば頭の `SHORT_MAX` − 1 字と `ELLIPSIS` の `SHORT_MAX` 字）。
+pub fn capped(short: &str) -> String {
+    if short.chars().count() <= SHORT_MAX {
+        return short.to_string();
+    }
+    short
+        .chars()
+        .take(SHORT_MAX - 1)
+        .chain([ELLIPSIS])
+        .collect()
 }
 
 /// 本文から作る概要。見出しの行 `OBSERVATION_HEADING` が在ればその下の最初の空でない行、無ければ空の行と

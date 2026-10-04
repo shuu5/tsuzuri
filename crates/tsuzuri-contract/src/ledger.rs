@@ -157,7 +157,7 @@ pub struct BeadFact {
     pub id: BeadId,
     /// 起票の時刻（bd の欄 created_at・読めなければ None）。
     pub created_at: Option<EpochSecs>,
-    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字）。
+    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字・規則の行 R-19 の字数を越えれば頭の字と … で切る）。
     pub short: String,
     /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
     pub short_set: bool,
