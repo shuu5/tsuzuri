@@ -1,0 +1,681 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/notify.rs b/scribe2/crates/scribe2-boundary/tests/e2e/notify.rs
+index 4ce4da66466d2d0b4753db2ed6f91c2fc0a29184..05d1fd14d0e5037cf5cc07888fb854f1bdac6958 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/notify.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/notify.rs
+@@ -330,7 +330,7 @@ fn idle_round(issues: &[&str], hold: bool) -> (Output, Vec<String>) {
+     live_run(&state);
+     let bd = fake_bd(&state, "bd-notify", issues);
+     if hold {
+-        let held = run_pipe(&["dispatch", "hold", QUEUED, "--state-dir", &state.display().to_string()]);
++        let held = run_pipe(&["dispatch", "hold", QUEUED, "--reason", "知らせの見本", "--state-dir", &state.display().to_string()]);
+         assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&held));
+     }
+     let out = run_pipe(&[
+@@ -400,7 +400,7 @@ fn crossing_round() -> (Output, Vec<String>, String) {
+ }
+ 
+ /// (§26 歯 (a)) 候補の write-set が live な便 1 本と 1 file 交差する周の終端: idle の行は既存の `reason=overlap:<相手>/1` を
+-/// 持ったまま、末尾が ` live=1 idle=- held=1:lib.rs`（live が 1 本以上の周の分数は値なし・file 名は最後の 1 要素）。
++/// 持ったまま、末尾が ` live=1 idle=- overlap=1:lib.rs`（live が 1 本以上の周の分数は値なし・file 名は最後の 1 要素）。
+ #[test]
+ fn pipe_notify_facts_crossing_live_run_reports_one_live_and_the_crossed_file() {
+     let (out, sent, crossed) = crossing_round();
+@@ -410,18 +410,18 @@ fn pipe_notify_facts_crossing_live_run_reports_one_live_and_the_crossed_file() {
+         line.contains(&format!("ready=1 launched=0 reason=overlap:{crossed}/1 ")),
+         "既存の key と順と reason= の字面は不変: {line} / {sent:?}"
+     );
+-    assert!(line.ends_with(" live=1 idle=- held=1:lib.rs"), "末尾に並列の実測: {line} / {sent:?}");
++    assert!(line.ends_with(" live=1 idle=- overlap=1:lib.rs"), "末尾に並列の実測: {line} / {sent:?}");
+ }
+ 
+ /// (§26 歯 (b)) live な便が無く候補が hold の周の終端: idle の行は `ready=1 launched=0 reason=hold` の後に
+-/// ` live=0 idle=0m held=0` で終わる（終端の直後なので 0 分・重なりで待つ候補 0 はコロンなし）。
++/// ` live=0 idle=0m overlap=0` で終わる（終端の直後なので 0 分・重なりで待つ候補 0 はコロンなし）。
+ #[test]
+ fn pipe_notify_facts_hold_round_without_live_runs_reports_zero_live_and_zero_minutes() {
+     let (out, sent) = idle_round(&[QUEUED], true);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "stop は rc 0: {}", told(&out));
+     let line = idle_of(&sent);
+     assert!(line.contains("ready=1 launched=0 reason=hold:"), "既存の字面は同じ行に在る: {line} / {sent:?}");
+-    assert!(line.ends_with(" live=0 idle=0m held=0"), "末尾に並列の実測: {line} / {sent:?}");
++    assert!(line.ends_with(" live=0 idle=0m overlap=0"), "末尾に並列の実測: {line} / {sent:?}");
+ }
+ 
+ // ───── 未処置の終端（設計 dispatcher.md §29・行 ad・接頭辞 `pipe_notify_pending_`） ─────
+@@ -602,7 +602,7 @@ fn precheck_place() -> (PathBuf, PathBuf, String) {
+     register(&state, &repo);
+     precheck_rows(&repo, "src/nowhere.rs");
+     let bd = precheck_bd(&state);
+-    let held = run_pipe(&["dispatch", "hold", ANCESTOR, "--state-dir", &state.display().to_string()]);
++    let held = run_pipe(&["dispatch", "hold", ANCESTOR, "--reason", "祖先を起こさない", "--state-dir", &state.display().to_string()]);
+     assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&held));
+     (repo, state, bd)
+ }
+@@ -763,7 +763,7 @@ fn record_stage(state: &Path, run: &str, bead: &str, stage: &str, detail: &str)
+ 
+ /// bead を hold にする（測る周に列が便を起こさない・起こす便の子が足す event で語が揺れない）。
+ fn hold(state: &Path, bead: &str) {
+-    let out = run_pipe(&["dispatch", "hold", bead, "--state-dir", &state.display().to_string()]);
++    let out = run_pipe(&["dispatch", "hold", bead, "--reason", "測る周に起こさない", "--state-dir", &state.display().to_string()]);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&out));
+ }
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+index 1129cb17fe1d0219b11d38b5ceb2f709d20ef3a5..1469fba18665f54ec3997e1c52996867a813fa29 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+@@ -420,7 +420,8 @@ fn pipe_dispatch_first_outranks_priority_and_hold_stops_the_start() {
+     assert_eq!(beads(&plain), vec!["s2-toy.2", "s2-toy.1"], "印が無ければ P0 が先: {}", stdout_of(&plain));
+     assert_eq!(count_of(&plain), format!("{COUNT} total=2 ready=2"), "交差しない 2 本は両方起こせる");
+     let mark = |verb: &str, bead: &str| {
+-        let out = run_pipe(&["dispatch", verb, bead, "--state-dir", &state.display().to_string()]);
++        let why: &[&str] = if verb == "hold" { &["--reason", "印の往復"] } else { &[] };
++        let out = run_pipe(&[&["dispatch", verb, bead, "--state-dir", &state.display().to_string()][..], why].concat());
+         assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{verb}: {}", stderr_of(&out));
+     };
+     let marked = run_pipe(&["dispatch", "first", "s2-toy.1", "--state-dir", &state.display().to_string()]);
+@@ -3764,7 +3765,7 @@ fn pipe_dispatch_index_closure_waits_on_absent_and_the_runner_turn_builds_once_i
+ #[test]
+ fn pipe_dispatch_index_closure_hold_and_failed_state_and_plain_candidates_do_not_build() {
+     let (place, bd) = ixc_candidates(IDXB_DECL);
+-    let held = run_pipe(&["dispatch", "hold", "s2-toy.1", "--state-dir", &place.state.display().to_string()]);
++    let held = run_pipe(&["dispatch", "hold", "s2-toy.1", "--reason", "置き場を分ける", "--state-dir", &place.state.display().to_string()]);
+     assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&held));
+     let listed = ls(&place.repo, &place.state, &bd);
+     assert!(reason_of(&listed, "s2-toy.1").starts_with("hold:"), "hold の理由: {}", told(&listed));
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
+index d184900bc1cc136d53c2c953b122a723dab0c9f9..6f7b98d38c7bcf36d67481b5dccb6a57f81b3786 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
+@@ -284,7 +284,7 @@ fn pipe_terminal_dispatch_marks_fire_without_children() {
+     assert_eq!(first.status.code(), Some(i32::from(RC_OK)), "first は rc 0（{}）", told(&first));
+     assert_eq!(stdout_of(&first).lines().last(), Some(waiting), "first の直後に 1 周（{}）", told(&first));
+     // `hold` は起こす側を増やさないので 1 周を撃たない（印の行だけ）。
+-    let held = turn(&["hold", "s2-toy.1"]);
++    let held = turn(&["hold", "s2-toy.1", "--reason", "交差の待ち"]);
+     assert_eq!(stdout_of(&held).lines().count(), 1, "hold は印の行だけ（{}）", told(&held));
+     assert!(!stdout_of(&held).contains("dispatch="), "hold は 1 周を撃たない（{}）", told(&held));
+     // `release` の記録の直後にも 1 周。
+@@ -297,6 +297,77 @@ fn pipe_terminal_dispatch_marks_fire_without_children() {
+     clean(&[&repo, &state]);
+ }
+ 
++// ───── 止めの理由（判断の記録 ADR-42・器の行 v-hold-why・接頭辞 `vhold_`） ─────
++
++/// 置き場の event log の止めの印の行の detail（記帳順）。
++fn hold_rows(state: &Path) -> Vec<Option<String>> {
++    super::super::events(state)
++        .into_iter()
++        .filter(|event| event.mark == Some(vessel::fleet::Mark::Hold))
++        .map(|event| event.detail)
++        .collect()
++}
++
++/// 理由の無い止め・空白だけの理由・改行を含む理由と、理由つきの `first` と `release` は使い方の誤り（rc 1）で印を書かず、
++/// 理由つきの止めだけが detail `reason:<理由>` の印を 1 行書く（行 v-hold-why）。
++#[test]
++fn vhold_hold_needs_one_line_reason_and_other_marks_refuse_it_without_a_mark() {
++    let (repo, state) = repo_with_state();
++    let dir = state.display().to_string();
++    let refused: [(&[&str], &str); 5] = [
++        (&["hold", "s2-toy.1"], "hold は --reason の理由を要る"),
++        (&["hold", "s2-toy.1", "--reason", "  "], "--reason の理由が空である"),
++        (&["hold", "s2-toy.1", "--reason", "前\n後"], "--reason の理由が改行を含む"),
++        (&["first", "s2-toy.1", "--reason", "先に"], "--reason は hold だけが受ける（first）"),
++        (&["release", "s2-toy.1", "--reason", "外す"], "--reason は hold だけが受ける（release）"),
++    ];
++    for (verb, want) in refused {
++        let out = run_pipe(&[&["dispatch"][..], verb, &["--state-dir", &dir]].concat());
++        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{verb:?} は rc 1（{}）", told(&out));
++        assert!(stderr_of(&out).contains(want), "{verb:?} の断りの字 {want}（{}）", told(&out));
++        assert_eq!(super::super::events(&state).len(), 0, "{verb:?} は印を書かない");
++    }
++    let out = run_pipe(&["dispatch", "hold", "s2-toy.1", "--reason", "設計の行 を直す", "--state-dir", &dir]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "理由つきの止めは rc 0（{}）", told(&out));
++    assert_eq!(stdout_of(&out).trim_end(), "[DISPATCH] bead=s2-toy.1 mark=hold", "印の行の字は替えない");
++    assert_eq!(hold_rows(&state), [Some("reason:設計の行 を直す".to_owned())], "印の行は 1 つで detail は理由");
++    clean(&[&repo, &state]);
++}
++
++/// `dispatch ls` は理由が `hold` の候補ごとに `[DISPATCH-HOLD] bead=<id> since=<印の時刻> why=<理由>` を件数の行の前に足し、
++/// `[DISPATCH]` の行の字は替えず、`release` と後の `first` の後は足さない（行 v-hold-why）。
++#[test]
++fn vhold_listing_adds_the_hold_line_before_the_count_until_release_or_first() {
++    let (repo, state) = repo_with_state();
++    two_rows(&repo);
++    let bd = fake_bd(&state, &[issue("s2-toy.1", 2, "a"), issue("s2-toy.2", 0, "b")]);
++    let dir = state.display().to_string();
++    let mark = |args: &[&str]| {
++        let out = run_pipe(&[&["dispatch"][..], args, &["--state-dir", &dir]].concat());
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{args:?}（{}）", told(&out));
++    };
++    let holds = |out: &Output| -> Vec<String> {
++        stdout_of(out).lines().filter(|line| line.starts_with("[DISPATCH-HOLD]")).map(str::to_owned).collect()
++    };
++    mark(&["hold", "s2-toy.1", "--reason", "設計の行 を直す"]);
++    let since = super::super::events(&state).last().map(|event| event.ts.clone()).unwrap_or_default();
++    let held = ls(&repo, &state, &bd);
++    let want = format!("[DISPATCH-HOLD] bead=s2-toy.1 since={since} why=設計の行 を直す");
++    assert_eq!(holds(&held), std::slice::from_ref(&want), "止めの行は 1 つ（{}）", told(&held));
++    let lines: Vec<String> = stdout_of(&held).lines().map(str::to_owned).collect();
++    let at = |line: &str| lines.iter().position(|found| found == line);
++    assert_eq!(at(&want).map(|found| found + 1), at(&count_of(&held)), "件数の行の直前（{}）", told(&held));
++    let row = format!("{LINE} bead=s2-toy.1 prio=2 mark=hold reason=hold:{since}");
++    assert!(at(&row).is_some(), "[DISPATCH] の行の字は替えない（{}）", told(&held));
++    mark(&["release", "s2-toy.1"]);
++    assert_eq!(holds(&ls(&repo, &state, &bd)), Vec::<String>::new(), "release の後は足さない");
++    mark(&["hold", "s2-toy.1", "--reason", "もう一度"]);
++    assert_eq!(holds(&ls(&repo, &state, &bd)).len(), 1, "止め直すと戻る");
++    mark(&["first", "s2-toy.1"]);
++    assert_eq!(holds(&ls(&repo, &state, &bd)), Vec::<String>::new(), "後の first の後は足さない");
++    clean(&[&repo, &state]);
++}
++
+ // ───── 事前審査（設計 docs/design/dispatcher.md §27・行 x・接頭辞 `pipe_dispatch_precheck_`） ─────
+ //
+ // 依存を待つ行に受付の判定を予想の base（未着地の祖先の宣言か Gated PASS の実物）で先に撃ち、結果を置き場の
+@@ -344,7 +415,7 @@ fn waiting_on(id: &str, row: &str, deps: &[(&str, &str)]) -> String {
+ /// 介入 `hold` を打つ（依存を持たない祖先を列が起こさないように・`hold` は 1 周を撃たない）。
+ fn hold(state: &Path, beads: &[&str]) {
+     for &bead in beads {
+-        let out = run_pipe(&["dispatch", "hold", bead, "--state-dir", &state.display().to_string()]);
++        let out = run_pipe(&["dispatch", "hold", bead, "--reason", "祖先を起こさない", "--state-dir", &state.display().to_string()]);
+         assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold は rc 0（{}）", told(&out));
+     }
+ }
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/waiting.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/waiting.rs
+index 3b89b9b78e88f9a3ce53bf0fce13c0f6bf173ed8..57634034ca2178a57133e59f72c39ade255f2e61 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/waiting.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/waiting.rs
+@@ -1526,7 +1526,7 @@ fn pipe_dispatch_row_reservation_ends_by_hold_expiry_close_or_a_memo_or_question
+         assert_eq!(reason_of(&held, LATER), format!("reserved:{FALLEN}/1"), "{form}: 前提は予約が掛かる（{}）", told(&held));
+         let (rules, bd) = match form {
+             "hold" => {
+-                let out = run_pipe(&["dispatch", "hold", FALLEN, "--state-dir", &state.display().to_string()]);
++                let out = run_pipe(&["dispatch", "hold", FALLEN, "--reason", "落ちた行を止める", "--state-dir", &state.display().to_string()]);
+                 assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&out));
+                 (reserve_rules(&state, Some(24)), bd)
+             }
+@@ -1868,7 +1868,7 @@ fn pipe_dispatch_sibling_wait_ends_by_a_fix_a_mark_a_close_a_deadline_or_the_sib
+                 commit_sections(&repo, &[widened, section_row("b", "1", "src/b.rs")]);
+             }
+             "hold" => {
+-                let out = run_pipe(&["dispatch", "hold", FALLEN, "--state-dir", &state.display().to_string()]);
++                let out = run_pipe(&["dispatch", "hold", FALLEN, "--reason", "落ちた行を止める", "--state-dir", &state.display().to_string()]);
+                 assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&out));
+             }
+             "release" => release(&state, FALLEN),
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
+index db238fb9fa7845a2304a445990916ec5a0ac300f..5095ac2a7d704f9b2e8901683b574b02dc710f74 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
+@@ -1522,7 +1522,7 @@ fn tick_facts_sent(stage: Option<&str>, ago: u64) -> String {
+     texts.into_iter().next().unwrap_or_default()
+ }
+ 
+-/// 段 0 の合図の文面（`signal` の返り値）の後ろに並列の実測の字面 `tail` が付いた送り（`held=` は含まない）。
++/// 段 0 の合図の文面（`signal` の返り値）の後ろに並列の実測の字面 `tail` が付いた送り（`overlap=` は含まない）。
+ fn tick_facts_want(tail: &str) -> String {
+     let signal = tick_signal(0);
+     format!("{}{tail}", signal.strip_suffix(" live=0 idle=-").unwrap_or(&signal))
+@@ -1534,7 +1534,7 @@ fn tick_facts_want(tail: &str) -> String {
+ fn seat_tick_facts_landed_run_7230s_ago_ends_live_zero_idle_120m() {
+     let sent = tick_facts_sent(Some("Landed"), 7230);
+     assert_eq!(sent, tick_facts_want(" live=0 idle=120m alarm=idle"));
+-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
++    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
+ }
+ 
+ /// (t-b) Spawned の便 1 本 → ` live=1 idle=-`（live が 1 本以上の周の 0 本の分数は値なし）。
+@@ -1542,7 +1542,7 @@ fn seat_tick_facts_landed_run_7230s_ago_ends_live_zero_idle_120m() {
+ fn seat_tick_facts_spawned_run_ends_live_one_idle_absent() {
+     let sent = tick_facts_sent(Some("Spawned"), 60);
+     assert_eq!(sent, tick_facts_want(" live=1 idle=-"));
+-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
++    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
+ }
+ 
+ /// (t-c) 便 0 本 → ` live=0 idle=-`（便の無い周の 0 本の分数は値なし）。
+@@ -1550,7 +1550,7 @@ fn seat_tick_facts_spawned_run_ends_live_one_idle_absent() {
+ fn seat_tick_facts_no_runs_ends_live_zero_idle_absent() {
+     let sent = tick_facts_sent(None, 0);
+     assert_eq!(sent, tick_facts_want(" live=0 idle=-"));
+-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
++    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
+ }
+ 
+ /// (t-d) verdict の読めない Gated の便 → ` live=? idle=?`（測れないを 0 本に読み替えない）。
+@@ -1558,7 +1558,7 @@ fn seat_tick_facts_no_runs_ends_live_zero_idle_absent() {
+ fn seat_tick_facts_gated_run_without_a_verdict_ends_unmeasured() {
+     let sent = tick_facts_sent(Some("Gated"), 7230);
+     assert_eq!(sent, tick_facts_want(" live=? idle=?"));
+-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
++    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
+ }
+ 
+ /// 行 u（設計 seat-heartbeat.md §17）の歯の置き場: 置き場の event log に便 1 本の event（`RunCreated` と段 `stage` の
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
+index 0439920ec8fd543467be14715eb05bb6ecc40fc7..85996da1ee1ae318d411e54f109d29b95cbec410 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
+@@ -2,7 +2,7 @@
+ source: crates/scribe2-boundary/tests/e2e/pipe.rs
+ expression: form
+ ---
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+@@ -13,7 +13,7 @@ usage: scribe2 pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH]
+ usage: scribe2 pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）
+ pipe: --run が要る
+ pipe: --all が要る
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+@@ -23,7 +23,7 @@ usage: scribe2 pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH
+ usage: scribe2 pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）
+ usage: scribe2 pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）
+ pipe: 未知の引数 --no-review（審査の段を飛ばす口は無い）
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+diff --git a/scribe2/crates/scribe2/src/help.rs b/scribe2/crates/scribe2/src/help.rs
+index dd25623da7cfcbc9f215970578d4afd8aea81b7c..609187df080722b913d4df611fc98838e3a78f49 100644
+--- a/scribe2/crates/scribe2/src/help.rs
++++ b/scribe2/crates/scribe2/src/help.rs
+@@ -253,7 +253,7 @@ pub const TABLE: &[Entry] = &[
+             "it on main. Each subcommand moves one run one stage, or shows and steers the queue.",
+             "The pipeline has no switch that skips the review stage.",
+         ],
+-        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]",
++        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]",
+         subcommands: &[
+             ("intake", "Take one contract row in and create its run."),
+             ("preflight", "Review a contract before intake, without creating a run."),
+diff --git a/scribe2/crates/scribe2/src/pipe/cli.rs b/scribe2/crates/scribe2/src/pipe/cli.rs
+index eb153e06f8819e27081865a94e08ad4225b8c3e4..2bba5c5bb4dc0b5a0626d5ba2a76e61f219dd6df 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli.rs
+@@ -176,7 +176,7 @@ impl PipeCommand {
+ /// `pipe` の使い方。
+ pub fn usage() -> String {
+     format!(
+-        "usage: {NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [{REASON_FLAG} WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]\nusage: {NAME} pipe land-window [--state-dir D] --repo R [{WINDOW_WAIT_FLAG} N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）\nusage: {NAME} pipe regate --run ID {REASON_FLAG} WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）\nusage: {NAME} pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）\nusage: {NAME} pipe anchor-sync --repo R [--state-dir D] [--rules PATH]（着地が揃えなかった anchor の index と作業の木のうち着地前の中身のままの path だけを main の先端へ戻して印を外す・利用者の編集は触らない）\nusage: {NAME} pipe review --ref SHA --repo R --state-dir S --lens CMD [--rules PATH]（設計の PR の head の commit で変わった契約表の行ごとに機械の検査と lens を撃ち、行ごとの記録と ref の記録を置き場に書いて [ROW-REVIEW] の行を返す・pass は rc 0・fail と pending と stale は rc 1・組めない周は rc 2）\nusage: {NAME} pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH]（ref〔既定は HEAD〕の commit の code の索引を、宣言の 2 key の command で組んで置き場へ置き、[INDEX] の 1 行を返す・built と cached は rc 0・failed は rc 1・宣言の不備と組めない周は rc 2・宣言の無い repo は undeclared で rc 0）\nusage: {NAME} pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）\nusage: {NAME} pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）"
++        "usage: {NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [{REASON_FLAG} WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: {REASON_FLAG} WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]\nusage: {NAME} pipe land-window [--state-dir D] --repo R [{WINDOW_WAIT_FLAG} N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）\nusage: {NAME} pipe regate --run ID {REASON_FLAG} WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）\nusage: {NAME} pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）\nusage: {NAME} pipe anchor-sync --repo R [--state-dir D] [--rules PATH]（着地が揃えなかった anchor の index と作業の木のうち着地前の中身のままの path だけを main の先端へ戻して印を外す・利用者の編集は触らない）\nusage: {NAME} pipe review --ref SHA --repo R --state-dir S --lens CMD [--rules PATH]（設計の PR の head の commit で変わった契約表の行ごとに機械の検査と lens を撃ち、行ごとの記録と ref の記録を置き場に書いて [ROW-REVIEW] の行を返す・pass は rc 0・fail と pending と stale は rc 1・組めない周は rc 2）\nusage: {NAME} pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH]（ref〔既定は HEAD〕の commit の code の索引を、宣言の 2 key の command で組んで置き場へ置き、[INDEX] の 1 行を返す・built と cached は rc 0・failed は rc 1・宣言の不備と組めない周は rc 2・宣言の無い repo は undeclared で rc 0）\nusage: {NAME} pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）\nusage: {NAME} pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）"
+     )
+ }
+ 
+@@ -609,7 +609,12 @@ fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
+         Some(name) if !name.starts_with("--") => match (Mark::parse(name), args.get(2)) {
+             // **印の直後にも 1 周撃つ**（設計 §5）: `hold` は起こす側を増やさないので撃たない。
+             (Some(mark), Some(bead)) if !bead.starts_with("--") => {
+-                let marked = queue::mark(&state_dir, bead, mark, policy);
++                // 止めの理由は印の行の detail だけに置く（`hold` は要り、ほかの印は断る・断りは印を書かない）。
++                let detail = match flag(args, REASON_FLAG).and_then(|words| queue::why_of(mark, words)) {
++                    Ok(found) => found,
++                    Err(reason) => return refused(reason),
++                };
++                let marked = queue::mark(&state_dir, bead, mark, detail, policy);
+                 if mark == Mark::Hold || marked.rc != RC_OK {
+                     return marked;
+                 }
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/args.rs b/scribe2/crates/scribe2/src/pipe/cli/args.rs
+index 1c3209b729fee7bba3b1da82035f778caae7d0d9..b736684a9bd4e1e2dd9d6cf33e5c9c8c215b175a 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/args.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/args.rs
+@@ -174,8 +174,9 @@ const ALLOWED_STOP: &[cli_args::Allowed] = &[
+     PLACE[0], PLACE[1], PLACE[2],
+     value("--run"), Allowed::switch("--all"), value(crate::pipe::regate::REASON_FLAG), TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3],
+ ];
+-/// `pipe dispatch`（`ls|first|hold|release BEAD` は positional）。
+-const ALLOWED_DISPATCH: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3]];
++/// `pipe dispatch`（`ls|first|hold|release BEAD` は positional・`--reason` は `hold` の理由で、ほかの印は断る）。
++const ALLOWED_DISPATCH: &[cli_args::Allowed] =
++    &[PLACE[0], PLACE[1], PLACE[2], TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3], value(crate::pipe::regate::REASON_FLAG)];
+ /// `pipe land-window`。
+ const ALLOWED_LAND_WINDOW: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], value(super::WINDOW_WAIT_FLAG)];
+ /// `pipe report`。
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch.rs b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+index 1f4b673828418f57eb5ae7568be842412f158a98..10edf169b17c7fcae280b29cae5b0c53f969601f 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+@@ -147,6 +147,8 @@ pub enum WaitReason {
+     Hold {
+         /// 印を付けた event の ts。
+         since: String,
++        /// 印の行の理由（detail の `reason:` の後ろ・理由の無い古い印は `None`・判定に使わない＝`render` は書かない）。
++        why: Option<String>,
+     },
+     /// 列が起こした便がまだ受付に届いていない（最新の `launched` の後に同じ bead の `RunCreated` も
+     /// `release` も無い・設計 §17）。受付で落ちた便を毎周起こし直さない。
+@@ -212,7 +214,7 @@ impl WaitReason {
+             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
+             Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
+             Self::Admission { reason } => format!("{name}:{reason}"),
+-            Self::Hold { ref since } | Self::Launched { ref since } => format!("{name}:{since}"),
++            Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
+             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
+             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
+             Self::Floor(ref found) => format!("{name}:{}", found.rc.map_or_else(|| found.word.as_str().to_owned(), |rc| rc.to_string())),
+@@ -537,6 +539,7 @@ fn measure(input: &Input<'_>) -> (Turn, Option<Read>) {
+     let (mut turn, materials, events) = {
+         let ledger = Ledger {
+             marks: marks.order,
++            why: marks.why,
+             launched: (!unreadable).then_some(marks.launched),
+             events,
+             closed: issues.iter().filter(|issue| issue.status == CLOSED).map(|issue| issue.id.as_str()).collect(),
+@@ -620,6 +623,8 @@ fn hold_for_host(turn: &mut Turn) {
+ struct Ledger<'a> {
+     /// bead ごとの最後の介入の印（`first` / `hold`）。
+     marks: BTreeMap<String, (Mark, String)>,
++    /// bead ごとの効いている `hold` の理由（[`Marks`] の `why`）。
++    why: BTreeMap<String, String>,
+     /// 起こしたのにまだ受付に届いていない bead と最新の `launched` の ts（event log を読めない周は `None`＝測れない）。
+     launched: Option<BTreeMap<String, String>>,
+     /// 置き場の event の並び（`release` が終端の便の最後の記帳より後かを位置で引く・設計 §12）。
+@@ -764,6 +769,8 @@ struct Marks {
+     /// bead ごとの最新の `launched` の ts（その後に同じ bead の `RunCreated` も `release` も無いものだけ・設計 §17）。
+     /// 介入の印とは**独立の値**で持つ（`hold` と同じ側に畳まない）。
+     launched: BTreeMap<String, String>,
++    /// bead ごとの効いている `hold` の理由（最後の印が理由つきの `hold` の bead だけ・`first` と `release` が外す）。
++    why: BTreeMap<String, String>,
+ }
+ 
+ /// 列の 1 行の書き出し（設計 §6）。
+@@ -778,10 +785,16 @@ const NONE_LINE: &str = "[DISPATCH-NONE]";
+ /// 値を持たない欄の字面（priority が読めない・理由が無い・印が無い）。
+ const DASH: &str = "-";
+ 
++/// 効いている止めの行の書き出し（件数の行の前・候補の理由が `hold` の件ごと）。
++const HOLD_LINE: &str = "[DISPATCH-HOLD]";
++
++/// 止めの印の行の detail の頭（後ろは `--reason` の理由そのもの・`pipe stop --all` の逐語と同じ形）。
++const WHY_PREFIX: &str = "reason:";
++
+ /// `pipe dispatch` の使い方。
+ pub fn usage() -> String {
+     format!(
+-        "usage: {} pipe dispatch <ls|first|hold|release> [BEAD] [--state-dir D] [--repo R] [--bd PATH] [--rules PATH]",
++        "usage: {} pipe dispatch <ls|first|hold|release> [BEAD] [--reason WORDS（hold は要る）] [--state-dir D] [--repo R] [--bd PATH] [--rules PATH]",
+         crate::name::NAME
+     )
+ }
+@@ -835,7 +848,8 @@ pub fn render(turn: &Turn) -> Outcome {
+ pub fn listing(input: &Input<'_>, turn: &Turn) -> Outcome {
+     let mut outcome = render(turn);
+     if let Some(at) = outcome.out.iter().position(|line| line.starts_with(COUNT)) {
+-        outcome.out.splice(at..at, precheck::lines(input, turn).into_iter().chain(bundle::lines(input.state_dir)));
++        let held = turn.candidates.iter().filter_map(hold_line);
++        outcome.out.splice(at..at, held.chain(precheck::lines(input, turn)).chain(bundle::lines(input.state_dir)));
+     }
+     outcome
+ }
+@@ -857,12 +871,33 @@ fn line_of(candidate: &Candidate) -> String {
+     format!("{LINE} bead={} prio={prio} mark={mark} reason={reason}", candidate.bead)
+ }
+ 
+-/// 介入の印を記帳する（`dispatch first|hold|release <bead>`・設計 §4）。
++/// 理由が `hold` の候補の止めの 1 行（`[DISPATCH-HOLD] bead=<id> since=<印の時刻> why=<理由>`・理由の無い古い印は `why=-`）。
++fn hold_line(candidate: &Candidate) -> Option<String> {
++    let Some(WaitReason::Hold { ref since, ref why }) = candidate.reason else {
++        return None;
++    };
++    Some(format!("{HOLD_LINE} bead={} since={since} why={}", candidate.bead, why.as_deref().unwrap_or(DASH)))
++}
++
++/// 印の `--reason` を受けて印の行の detail を返す（`hold` は理由を要り、空白だけと改行を含む理由を断る・
++/// ほかの印は `--reason` を断る・断りは印を書かない使い方の誤り）。器は理由の字を判定に使わない（設計 §4）。
++pub fn why_of(mark: Mark, words: Option<&str>) -> Result<Option<String>, String> {
++    match (mark, words) {
++        (Mark::Hold, None) => Err("hold は --reason の理由を要る".to_owned()),
++        (Mark::Hold, Some(found)) if found.trim().is_empty() => Err("--reason の理由が空である".to_owned()),
++        (Mark::Hold, Some(found)) if found.contains(['\n', '\r']) => Err("--reason の理由が改行を含む".to_owned()),
++        (Mark::Hold, Some(found)) => Ok(Some(format!("{WHY_PREFIX}{found}"))),
++        (_, Some(_)) => Err(format!("--reason は hold だけが受ける（{}）", mark.as_str())),
++        (_, None) => Ok(None),
++    }
++}
++
++/// 介入の印を記帳する（`dispatch first|hold|release <bead>`・設計 §4・`hold` の detail は [`why_of`] の字）。
+ ///
+ /// 印は台帳の priority を書き換えない（憲法 C15）。`release` も 1 行として残す——印を外した事実が
+ /// 記録から消えると「なぜこの順か」が読めなくなる（設計 §10）。
+-pub fn mark(state_dir: &Path, bead: &str, mark: Mark, policy: store::LockPolicy) -> Outcome {
+-    match super::emit_mark(state_dir, bead, mark, policy) {
++pub fn mark(state_dir: &Path, bead: &str, mark: Mark, detail: Option<String>, policy: store::LockPolicy) -> Outcome {
++    match super::emit_mark(state_dir, bead, mark, detail, policy) {
+         Ok(()) => Outcome::ok(vec![format!("{LINE} bead={bead} mark={}", mark.as_str())]),
+         Err(err) => Outcome::failed_line(crate::cli_outcome::RC_BROKEN, format!("pipe: {err}")),
+     }
+@@ -880,8 +915,8 @@ use revive::rank;
+ mod tests {
+     // flip-check: moved s2-07l.531
+     use super::{
+-        admits_gated, advance, digits_of, handoff, launch_of, marks_of, order, rank, released_after, requeues,
+-        review_unmeasured, revive_of, section_keyed, tools, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
++        admits_gated, advance, digits_of, handoff, hold_line, launch_of, marks_of, order, rank, released_after, requeues,
++        review_unmeasured, revive_of, section_keyed, tools, why_of, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
+         DRIVE, HANDOFFS, WAIT_REASONS,
+     };
+     use super::{floor, reserve};
+@@ -1187,6 +1222,66 @@ mod tests {
+         assert_eq!(found.launched.len(), 2, "母集団 4 bead のうち残るのは 2 つ");
+     }
+ 
++    /// 止めの印の行 1 件（detail に理由の字）。
++    fn held_with(ts: &str, bead: &str, detail: Option<&str>) -> Event {
++        let mut event = marked(ts, bead, Mark::Hold);
++        event.detail = detail.map(str::to_owned);
++        event
++    }
++
++    /// 止めの理由は最後の印が理由つきの `hold` の bead だけが持ち、`first`・`release`・理由の無い `hold`・頭が `reason:` でない
++    /// detail の `hold` は持たない（pure・行 v-hold-why）。
++    #[test]
++    fn vhold_marks_keep_the_reason_of_the_last_hold_only() {
++        let events = vec![
++            held_with("t1", "s2-a", Some("reason:設計の行を直す")),
++            held_with("t2", "s2-b", Some("reason:x")),
++            marked("t3", "s2-b", Mark::First),
++            held_with("t4", "s2-c", Some("reason:y")),
++            marked("t5", "s2-c", Mark::Release),
++            held_with("t6", "s2-d", Some("reason:z")),
++            held_with("t7", "s2-d", None),
++            held_with("t8", "s2-e", Some("why:w")),
++            held_with("t9", "s2-f", Some("reason:前")),
++            held_with("t10", "s2-f", Some("reason:後")),
++        ];
++        let found = marks_of(&events);
++        assert_eq!(found.why.get("s2-a").map(String::as_str), Some("設計の行を直す"), "理由つきの hold は理由を持つ");
++        assert_eq!(found.why.get("s2-b"), None, "後の first が外す");
++        assert_eq!(found.why.get("s2-c"), None, "release が外す");
++        assert_eq!(found.why.get("s2-d"), None, "後の理由の無い hold が外す");
++        assert_eq!(found.why.get("s2-e"), None, "頭が reason: でない detail は理由でない");
++        assert_eq!(found.why.get("s2-f").map(String::as_str), Some("後"), "最後の hold の理由");
++        assert_eq!(found.why.len(), 2, "母集団 6 bead のうち理由を持つのは 2 つ");
++        assert_eq!(found.order.get("s2-d"), Some(&(Mark::Hold, "t7".to_owned())), "理由の無い hold も印は効く");
++    }
++
++    /// `hold` は 1 行の理由を要り detail を `reason:<理由>` にし、ほかの印は `--reason` を断り理由なしは detail なし（pure・行 v-hold-why）。
++    #[test]
++    fn vhold_why_of_needs_one_line_on_hold_and_refuses_it_on_the_other_marks() {
++        assert_eq!(why_of(Mark::Hold, Some("設計の行 を直す")), Ok(Some("reason:設計の行 を直す".to_owned())), "通る理由");
++        assert_eq!(why_of(Mark::Hold, None), Err("hold は --reason の理由を要る".to_owned()), "理由なし");
++        assert_eq!(why_of(Mark::Hold, Some(" \t ")), Err("--reason の理由が空である".to_owned()), "空白だけ");
++        assert_eq!(why_of(Mark::Hold, Some("前\n後")), Err("--reason の理由が改行を含む".to_owned()), "改行");
++        assert_eq!(why_of(Mark::Hold, Some("前\r後")), Err("--reason の理由が改行を含む".to_owned()), "復帰");
++        for mark in [Mark::First, Mark::Release, Mark::Launched] {
++            assert_eq!(why_of(mark, Some("x")), Err(format!("--reason は hold だけが受ける（{}）", mark.as_str())), "{mark:?}");
++            assert_eq!(why_of(mark, None), Ok(None), "{mark:?} は理由なしで通る");
++        }
++    }
++
++    /// 止めの行は理由が `hold` の候補だけに立ち、bead と印の時刻と理由（理由の無い古い印は `-`）を名指す（pure・行 v-hold-why）。
++    #[test]
++    fn vhold_hold_line_names_bead_since_and_why_only_for_the_hold_reason() {
++        let with = |reason: Option<WaitReason>| Candidate { reason, ..candidate("s2-a", Some(2), Some(Mark::Hold)) };
++        let hold = |why: Option<&str>| with(Some(WaitReason::Hold { since: "t1".to_owned(), why: why.map(str::to_owned) }));
++        assert_eq!(hold_line(&hold(Some("直す 間"))), Some("[DISPATCH-HOLD] bead=s2-a since=t1 why=直す 間".to_owned()), "理由つき");
++        assert_eq!(hold_line(&hold(None)), Some("[DISPATCH-HOLD] bead=s2-a since=t1 why=-".to_owned()), "理由の無い古い印");
++        let behind = with(Some(WaitReason::Dependency { on: vec!["s2-z".to_owned()] }));
++        assert_eq!(hold_line(&behind), None, "印が hold でも理由が依存の候補は立たない");
++        assert_eq!(hold_line(&with(None)), None, "理由の無い候補は立たない");
++    }
++
+     // flip-check: retroactive s2-07l.738.37.2
+     // flip-check: retroactive s2-07l.738.37.5
+     /// 理由の名は [`WAIT_REASONS`] と 1 対 1 で、値を持つ variant は値も描く（`dispatch ls` の `reason=`）。
+@@ -1197,7 +1292,7 @@ mod tests {
+             WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
+             WaitReason::Admission { reason: "cap-headroom" },
+             WaitReason::HostBusy,
+-            WaitReason::Hold { since: "t1".to_owned() },
++            WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
+             WaitReason::Launched { since: "t2".to_owned() },
+             WaitReason::Settled { sha: "abc".to_owned(), stage: Stage::Landed },
+             WaitReason::NoDesignPointer,
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+index f2daf395217d250d954e5b4e2950be035d58cd4a..6d30829ff7e94397a1610cb1c4b090bc50ee411a 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+@@ -23,7 +23,7 @@ use super::super::{contract_path, current, git_bytes, git_line, show_head};
+ use super::index_build::{status as index_status, Status as IndexStatus};
+ use super::{
+     measure, reserve, spawn_self, Candidate, Input, Launch, Ledger, Marks, Read, Turn, Unmeasured, WaitReason, BLOCKS, DESIGN_KEY, DRIVE, MARK,
+-    OPEN, ROW_JOB_MB, ROW_RESERVE_MB, SLOT,
++    OPEN, ROW_JOB_MB, ROW_RESERVE_MB, SLOT, WHY_PREFIX,
+ };
+ use crate::fleet::lifecycle::{self, Place, Round, Source};
+ use crate::fleet::phase::Judged;
+@@ -61,7 +61,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
+         return wait(WaitReason::Dependency { on: blocked });
+     }
+     if let Some((Mark::Hold, since)) = marked {
+-        return wait(WaitReason::Hold { since: since.clone() });
++        return wait(WaitReason::Hold { since: since.clone(), why: ledger.why.get(&issue.id).cloned() });
+     }
+     // **起こした便が受付に届くまで同じ bead を起こさない**（設計 §17）。印を測れない周は起こさない側に倒す。
+     match ledger.launched.as_ref().map(|found| found.get(&issue.id)) {
+@@ -561,7 +561,7 @@ fn sizes_of(manifest: &Manifest) -> Sizes {
+ /// bead ごとの印を畳む（`release` は介入の印も起こした事実の印も外す・`RunCreated` は起こした事実の印を外す・
+ /// **pure**・設計 §4・§17）。
+ pub(super) fn marks_of(events: &[Event]) -> Marks {
+-    let mut found = Marks { order: BTreeMap::new(), launched: BTreeMap::new() };
++    let mut found = Marks { order: BTreeMap::new(), launched: BTreeMap::new(), why: BTreeMap::new() };
+     for event in events {
+         if event.kind == EventKind::RunCreated {
+             found.launched.remove(&event.bead);
+@@ -574,9 +574,15 @@ pub(super) fn marks_of(events: &[Event]) -> Marks {
+             Mark::Release => {
+                 found.order.remove(&event.bead);
+                 found.launched.remove(&event.bead);
++                found.why.remove(&event.bead);
+             }
+             Mark::First | Mark::Hold => {
+                 found.order.insert(event.bead.clone(), (mark, event.ts.clone()));
++                // 理由は最後の印の detail が `reason:` で始まる時だけ持つ（理由を書かない `first` と理由の無い `hold` は外す）。
++                match event.detail.as_deref().and_then(|detail| detail.strip_prefix(WHY_PREFIX)) {
++                    Some(why) => found.why.insert(event.bead.clone(), why.to_owned()),
++                    None => found.why.remove(&event.bead),
++                };
+             }
+             Mark::Launched => {
+                 found.launched.insert(event.bead.clone(), event.ts.clone());
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/facts.rs b/scribe2/crates/scribe2/src/pipe/dispatch/facts.rs
+index e4c6700dc66609e9b51da6f53d70c8b96e28a986..1c3c5a0b6c514cdd709f671e1657df3895c7b775 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/facts.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/facts.rs
+@@ -63,7 +63,7 @@ pub(crate) struct Facts {
+     pub(crate) live: Fact<usize>,
+     /// live が 0 本になってからの分（全便の `updated` の最大から今まで・切り捨て）。
+     pub(crate) idle: Fact<u64>,
+-    /// 重なりで待つ便（列の結果の無い呼び手は `None`＝`held=` を出さない）。
++    /// 重なりで待つ便（列の結果の無い呼び手は `None`＝`overlap=` を出さない）。
+     pub(crate) held: Option<Fact<Held>>,
+     /// 事前審査の本数（置き場に事前審査の dir が無ければ `None`＝`precheck=` を出さない）。
+     pub(crate) precheck: Option<Precheck>,
+@@ -128,9 +128,10 @@ fn leaf(path: &str) -> String {
+     }
+ }
+ 
+-/// 知らせの末尾に足す字面（` live=<n> idle=<m>m held=<k>:<名,名> precheck=<確定>/<結果>:<束>`・設計 §26 形 2・§27 形 3）。
++/// 知らせの末尾に足す字面（` live=<n> idle=<m>m overlap=<k>:<名,名> precheck=<確定>/<結果>:<束>`・設計 §26 形 2・§27 形 3・
++/// 重なりの欄の名は設計の `held=` から替えた＝board の留め置き〔Held〕と取り違えない・数と file の並びの形は同じ）。
+ ///
+-/// 測れない値は `?`、値なしは `-`、重なり 0 は `held=0`（コロンなし）、列の結果の無い呼び手は `held=` を出さない。事前審査の dir の
++/// 測れない値は `?`、値なしは `-`、重なり 0 は `overlap=0`（コロンなし）、列の結果の無い呼び手は `overlap=` を出さない。事前審査の dir の
+ /// 無い置き場は `precheck=` を出さない。
+ pub(crate) fn line(facts: &Facts) -> String {
+     let live = match facts.live {
+@@ -145,10 +146,10 @@ pub(crate) fn line(facts: &Facts) -> String {
+     };
+     let held = match facts.held {
+         None => String::new(),
+-        Some(Fact::Value(ref found)) if found.count == 0 => " held=0".to_owned(),
+-        Some(Fact::Value(ref found)) => format!(" held={}:{}", found.count, found.names.join(",")),
+-        Some(Fact::Absent) => format!(" held={ABSENT}"),
+-        Some(Fact::Unmeasured) => format!(" held={UNMEASURED}"),
++        Some(Fact::Value(ref found)) if found.count == 0 => " overlap=0".to_owned(),
++        Some(Fact::Value(ref found)) => format!(" overlap={}:{}", found.count, found.names.join(",")),
++        Some(Fact::Absent) => format!(" overlap={ABSENT}"),
++        Some(Fact::Unmeasured) => format!(" overlap={UNMEASURED}"),
+     };
+     let precheck = facts.precheck.as_ref().map_or_else(String::new, |found| {
+         format!(" precheck={}/{}:{}", found.firm, found.results, found.bundles)
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs b/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
+index 86eb915705adfd4e72d66b62a9baf18513650e1d..e98127853ea2d4ef814e982daa7bada4428226de 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
+@@ -118,7 +118,7 @@ mod tests {
+             candidate("s2-ref.3", Some(WaitReason::Dependency { on: vec!["s2-ref.9".to_owned()] })),
+             candidate("s2-ref.4", admission(super::super::SLOT)),
+             candidate("s2-ref.5", admission(super::SPAWN)),
+-            candidate("s2-ref.6", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned() })),
++            candidate("s2-ref.6", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned(), why: None })),
+             candidate("s2-ref.7", None),
+         ];
+         assert_eq!(
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index 8866b09e3e6aec1a7356cbad10ae98d9b549aaeb..dfb79257210856e08dd2ad0ba7ceb29906bc2b0e 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -696,8 +696,8 @@ pub fn emit(state_dir: &Path, entry: &Emit<'_>, policy: LockPolicy) -> Result<()
+ ///
+ /// 段の event（[`emit`]）と**本体の形が違う**ので口を分ける——印は便でなく bead に付き、`run` を持たず、
+ /// typed な [`Mark`] が本体である（自由文の `detail` を判定入力にしない・憲法 C3.3）。追記そのものは
+-/// fleet の 1 本（[`store::append`]）を通る（C6.3）。
+-pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -> Result<(), StoreError> {
++/// fleet の 1 本（[`store::append`]）を通る（C6.3）。`hold` の理由は detail（`reason:<理由>`）に載せるが判定には使わない。
++pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, detail: Option<String>, policy: LockPolicy) -> Result<(), StoreError> {
+     let event = Event {
+         schema: SCHEMA,
+         ts: fleet::cli::now_utc(),
+@@ -709,7 +709,7 @@ pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -
+         stage: None,
+         seat: None,
+         pid: None,
+-        detail: None,
++        detail,
+         allowance: None,
+         registration: None,
+         mark: Some(mark),
+diff --git a/scribe2/crates/scribe2/src/seat/tick.rs b/scribe2/crates/scribe2/src/seat/tick.rs
+index ea5d0eba0e2b0d87f5a495bc2f5192b607f1dfa6..1b7570da6535dc22b37f56632de595b80e1288e1 100644
+--- a/scribe2/crates/scribe2/src/seat/tick.rs
++++ b/scribe2/crates/scribe2/src/seat/tick.rs
+@@ -869,7 +869,7 @@ fn ladder(input: &Input, front: Front) -> Result<Front, Verdict> {
+         Some(found) => Some(settled(seat, found, &stamps, digest, (now, rows.pace.stale_s))?),
+         None => None,
+     };
+-    // 並列の実測（設計 §16・列の結果なし＝`held=` を出さない・台帳も列も撃たない）で段を上げるかを決める（§17 形 2）。
++    // 並列の実測（設計 §16・列の結果なし＝`overlap=` を出さない・台帳も列も撃たない）で段を上げるかを決める（§17 形 2）。
+     let measured = facts::facts(&input.state.path, None, now);
+     // 局面の出力は置き場の出力・古さの印の file・event log の印だけ読む（比べる組は event log の 1 種類・台帳も git も撃たない・§24 約束 2）。
+     let lifecycle = lifecycle_read::read(&input.state.path, &input.state.path, &[lifecycle_read::Input::Events]);

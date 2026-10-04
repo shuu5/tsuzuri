@@ -2,11 +2,14 @@
 meta:
   id: bakeoff-surface
   title: 面の比較試作 — 表示 server と契約を固定し client を 3 つ作り分ける
-  version: v0.1
-  status: draft
+  version: v0.2
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-09-24
   profile: design-note
-  note: 判断の記録 ADR-2 の組み立て。結果の数値は §6 に追記する。
+  approval:
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.79.1（裁定 id = t3-hub.79.1:20261004T0959Z-1・ADR-42 の案 A のまま承認・席とのチャット・notes に逐語）〔判断の記録 ADR-42 の承認・ノート surface-wave28a を置くための廃止〕, verbatim: 承認する, surface: R-8}
+  note: 判断の記録 ADR-2 の組み立て。結果の数値は §6 に追記する。 第 0.2 版（2026-10-04）で廃止した（契約表の行 0・比較試作は判断の記録 ADR-3 で決着済みで結果の字は file に残る・同じ commit で置くノート surface-wave28a と入れ替え、生きたノートは 6 本のまま・規則の行 R-31）。
 
 sections:
   - n: 1

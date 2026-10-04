@@ -1,0 +1,289 @@
+diff --git a/crates/tsuzuri-surface/src/project/node.rs b/crates/tsuzuri-surface/src/project/node.rs
+index 5959309e7296cf35f99ed6d4d3d947e4995d3cf1..ae74b72b26672278ade6a9553219374f58c3d62d 100644
+--- a/crates/tsuzuri-surface/src/project/node.rs
++++ b/crates/tsuzuri-surface/src/project/node.rs
+@@ -8,7 +8,10 @@
+ //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
+ //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
+ //! 撃ち直しは同じ button をもう一度押す（server は行を足さず開き直しだけを撃つ）。
++//! 中心の bead の札が段 Held（留め置き）の時は、頭と概要の下に吹き出しと同じ 4 つの欄（止めた者・理由・止めた時刻と経過・
++//! 解く条件）を 1 段で出す。欄は吹き出しの `pop::held_facts` で組み、2 本目を書かない（判断の記録 ADR-42 決定 (7)・行 g-held-page）。
+ 
++use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
+ use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
+ use tsuzuri_contract::summary::excerpt;
+@@ -23,7 +26,7 @@ use crate::topbar::{Win, win_href};
+ use crate::view::Fetched;
+ use crate::vocab::label;
+ use crate::widgets::nodecard::full_src;
+-use crate::widgets::pop::UNKNOWN_KEY;
++use crate::widgets::pop::{self, Fact, Src, UNKNOWN_KEY, Val, at_text, held_facts};
+ use crate::widgets::sumpick::{self, Picked};
+ 
+ pub const BLOCK: Block = Block {
+@@ -178,6 +181,26 @@ pub fn summary_in(center: &AroundRow, mode: Mode, body: &Excerpt) -> SumBox {
+     }
+ }
+ 
++/// 留め置きの段の見出しの語の鍵と class（行 g-held-page）。
++pub const HELD_HEAD: &str = "nb_held";
++pub const HELD_CLASS: &str = "nheld";
++
++/// 留め置きの段の欄（中心の bead `id` の札が段 Held の時だけ吹き出しと同じ `pop::held_facts`・札が無いかほかの段なら None）。
++pub fn held_rows(id: &str, src: &Src<'_>) -> Option<Vec<Fact>> {
++    let card = pop::card_of(src.cards, id)?;
++    let facts = held_facts(src, card);
++    (!facts.is_empty()).then_some(facts)
++}
++
++/// 留め置きの欄の値の字（字はそのまま・時刻は日本時間の字と経過・ほかはまだ分からない）。
++pub fn held_text(val: &Val, now: EpochSecs) -> String {
++    match val {
++        Val::Text(text) => text.clone(),
++        Val::At(at) => at_text(*at, now),
++        _ => label(UNKNOWN_KEY),
++    }
++}
++
+ /// 質問の窓への link（home の頁を質問の窓を開いて読み直す・問いの id を `%XX` にして残す・mode を URL に残す・
+ /// 行 g-one-screen-a）。
+ pub fn answer_href(id: &str, mode: Mode) -> String {
+@@ -252,21 +275,24 @@ mod dom {
+     use leptos::ev;
+     use leptos::prelude::*;
+     use leptos::task::spawn_local;
++    use tsuzuri_contract::board::Reading;
++    use tsuzuri_contract::case::PATH as CASES_PATH;
+     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
+ 
+     use super::{
+-        BLOCK, Excerpt, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href,
+-        center, excerpt_of, head, item_path, kept_subject, revoke_body, revoke_target,
+-        shows_revoke, summary_in,
++        BLOCK, Excerpt, Fact, HELD_CLASS, HELD_HEAD, Head, PageState, Revoke, SUMBOX_OTHER,
++        SUMMARY_NONE, Src, SumBox, answer_href, center, excerpt_of, head, held_rows, held_text,
++        item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary_in,
+     };
+     use crate::mapview::band_chip;
+     use crate::project::ask::{Outcome, can_send, outcome};
+     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
+     use crate::project::nodebody::item_source;
+-    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
++    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, pipeline, state_icon, unmeasured};
+     use crate::view::{Fetched, PageSubject};
+     use crate::vocab::label;
+-    use crate::widgets::help::{h1, h2};
++    use crate::widgets::help::{h1, h2, hs};
++    use crate::widgets::pop::{known, read_parts};
+     use crate::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
+ 
+     /// 出所の印（見本の IC.file）。
+@@ -334,6 +360,9 @@ mod dom {
+             })
+         }));
+         let drafts: Drafts = StoredValue::new(Vec::new());
++        // 留め置きの段は板と局面の出力の口から札と部品を読む（吹き出しと同じ読み・行 g-held-page）。
++        let pipe = crate::net::read(pipeline::PATH);
++        let cases = crate::net::read(CASES_PATH);
+         let content = move || {
+             let st = read.with(|(f, s)| state(f, *s));
+             if let Some(reason) = unmeasured_reason(&st) {
+@@ -351,7 +380,8 @@ mod dom {
+                             let d = draft(drafts, &t.ruling);
+                             revoke_view(t, item, d)
+                         });
+-                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div> }
++                        let held = held_of(pipe, cases, &h.id);
++                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div>{held} }
+                             .into_any()
+                     }
+                     _ => unmeasured(NO_CONTENT),
+@@ -387,6 +417,33 @@ mod dom {
+         .into_any()
+     }
+ 
++    /// 中心の bead の留め置きの段（板と局面の出力の口の読みから・札が段 Held でなければ None）。
++    fn held_of(pipe: ReadSignal<Fetched>, cases: ReadSignal<Fetched>, id: &str) -> Option<AnyView> {
++        let cards = pipe.with(|p| pipeline::cards(p).unwrap_or_default());
++        let parts = cases.with(read_parts);
++        let src = Src {
++            facts: Reading::Unknown,
++            rows: Reading::Unknown,
++            cards: &cards,
++            parts: known(&parts),
++            graph: None,
++        };
++        held_rows(id, &src).map(held_view)
++    }
++
++    /// 留め置きの段（見出しと、吹き出しと同じ欄の表）。
++    fn held_view(rows: Vec<Fact>) -> AnyView {
++        let now = crate::net::now();
++        let rows = rows
++            .into_iter()
++            .map(|f| view! { <tr><th>{hs(f.key)}</th><td>{held_text(&f.val, now)}</td></tr> })
++            .collect_view();
++        view! {
++            <section class=HELD_CLASS><header>{h2(HELD_HEAD)}</header><table class="facts">{rows}</table></section>
++        }
++        .into_any()
++    }
++
+     /// 見つからない（見出しと、id が在れば id の字）。
+     fn not_found(id: Option<String>) -> AnyView {
+         let line = id.map(|id| {
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 9cf33b3456c84e28cd708800dc0a87a9d9763f63..86067703a191605d8d31a7e01ba479e7d3ff25d2 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -474,6 +474,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
+ .nhead .t { font-size: var(--fs-4); font-weight: 750; line-height: 1.35; }
+ .nhead .kind { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 600; font-size: var(--fs-1); }
+ .nsum { display: grid; gap: var(--s2); margin-bottom: var(--s3); }
++.nheld { min-width: 0; margin-bottom: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-left: 4px solid var(--st-limit); border-radius: var(--r2); } /* 留め置きの段（行 g-held-page） */
+ .sumbox { border-radius: var(--r3); padding: var(--s3); background: var(--panel); border: 1px solid var(--line); }
+ .sumbox > header { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); color: var(--ink-2); }
+ .sumbox > header svg { width: 20px; height: 20px; }
+diff --git a/crates/tsuzuri-surface/tests/hdpage.rs b/crates/tsuzuri-surface/tests/hdpage.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..996d2a7c677cb2a229a12efdd182490aeb5881eb
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hdpage.rs
+@@ -0,0 +1,120 @@
++//! 個別の頁の留め置きの段の歯（面・接頭辞 hdpage_・設計ノート surface-wave28a 行 g-held-page・判断の記録 ADR-42 決定 (7)）。
++//! 中心の bead の札が段 Held の時だけ、頭と概要の下に吹き出しと同じ 4 つの欄を 1 段で出す（欄は pop::held_facts の 1 本）。
++//! 札が無いかほかの段の bead は出さない。否定の見本は 1 欄だけ替える。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++use tsuzuri_contract::case::{CaseLinks, CasePart};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::project::node::{HELD_CLASS, HELD_HEAD, held_rows, held_text};
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::keyline::HOLD;
++use tsuzuri_surface::widgets::pop::{
++    HELD_KEYS, Src, UNKNOWN_KEY, Val, at_text, held_facts, stage_facts,
++};
++
++const NOW: EpochSecs = 1_790_000_000;
++const AT: EpochSecs = NOW - 7_200;
++const WHY: &str = "書く file の重なりを席が確かめる";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(stage: Stage) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new("h-1").unwrap_or_else(|e| panic!("{e:?}")),
++        runs: 0,
++        stage,
++        reason: Some(HOLD.to_string()),
++        account: None,
++        since: Some(AT),
++        ci: None,
++    }
++}
++
++fn parts() -> Vec<CasePart> {
++    vec![CasePart {
++        part: "contract".to_string(),
++        id: "h-1".to_string(),
++        phase: "contract-queued".to_string(),
++        turn: "seat".to_string(),
++        since: Some(AT),
++        reason: Some(HOLD.to_string()),
++        why: Some(WHY.to_string()),
++        closed: false,
++        links: CaseLinks::default(),
++    }]
++}
++
++fn src<'a>(cards: &'a [PipelineCard], parts: &'a [CasePart]) -> Src<'a> {
++    Src {
++        facts: Reading::Unknown,
++        rows: Reading::Unknown,
++        cards,
++        parts: Reading::Known(parts),
++        graph: None,
++    }
++}
++
++#[test]
++fn hdpage_held_rows_same_as_pop() {
++    let cards = [card(Stage::Held)];
++    let parts = parts();
++    let s = src(&cards, &parts);
++    let rows = held_rows("h-1", &s).unwrap_or_else(|| panic!("留め置きの段が無い"));
++    assert_eq!(rows, held_facts(&s, &cards[0]));
++    assert_eq!(rows, stage_facts(&s, &cards[0]), "吹き出しと同じ欄");
++    let keys: Vec<&str> = rows.iter().map(|f| f.key).collect();
++    assert_eq!(keys, HELD_KEYS);
++    assert_eq!(rows[1].val, Val::Text(WHY.to_string()));
++}
++
++#[test]
++fn hdpage_not_held_no_section() {
++    let parts = parts();
++    for stage in [Stage::Queued, Stage::Blocked] {
++        let cards = [card(stage)];
++        assert_eq!(
++            held_rows("h-1", &src(&cards, &parts)),
++            None,
++            "段だけ替えた見本 {stage:?}"
++        );
++    }
++    let cards = [card(Stage::Held)];
++    assert_eq!(
++        held_rows("h-2", &src(&cards, &parts)),
++        None,
++        "札の無い bead"
++    );
++}
++
++#[test]
++fn hdpage_held_text_values() {
++    assert_eq!(held_text(&Val::Text(WHY.to_string()), NOW), WHY);
++    assert_eq!(held_text(&Val::At(AT), NOW), at_text(AT, NOW));
++    assert_eq!(held_text(&Val::Unknown, NOW), label(UNKNOWN_KEY));
++}
++
++#[test]
++fn hdpage_dom_and_words() {
++    assert_eq!((HELD_HEAD, HELD_CLASS), ("nb_held", "nheld"));
++    let t = vocab()
++        .term(HELD_HEAD)
++        .unwrap_or_else(|| panic!("nb_held が語の辞書に無い"));
++    assert_eq!(t.label, "留め置き");
++    assert!(read("style.css").contains(".nheld {"));
++    let src = read("src/project/node.rs");
++    assert!(src.contains("let held = held_of(pipe, cases, &h.id);"));
++    assert!(src.contains("        held_rows(id, &src).map(held_view)\n"));
++    assert!(
++        src.contains(
++            "view! { {head_view(h, mode, revoke)}<div class=\"nsum\">{boxes}</div>{held} }"
++        )
++    );
++    assert!(src.contains("<td>{held_text(&f.val, now)}</td>"));
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index d03696d2e3c952c0f1a35ce3f0c9bb4293d8e558..00cb313ac128df007cf544360af8289dd8d59e02 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -597,6 +597,11 @@
+    "plain": "条の文や ADR の decision の先頭",
+    "internal": "statements[0].text / decision / what・value"
+   },
++  "nb_held": {
++   "label": "留め置き",
++   "plain": "この bead は留め置かれている\n・ 止めた者・理由・止めた時刻・解く条件\n・ 吹き出しと同じ字",
++   "internal": "段 Held の札の pop::held_facts（判断の記録 ADR-42 決定 (7)・行 g-held-page）"
++  },
+   "nb_summary": {
+    "label": "概要",
+    "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",

@@ -1,0 +1,378 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
+index 6f7b98d38c7bcf36d67481b5dccb6a57f81b3786..9f49106202a8881ff0fdc7545b9db6b42e9a5690 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs
+@@ -707,6 +707,68 @@ fn pipe_dispatch_intake_refused_records_the_refusal_once_and_only_from_the_firin
+     clean(&[&repo, &state]);
+ }
+ 
++// ───── 受付の断りの理由（判断の記録 ADR-42・器の行 v-refuse-why・接頭辞 `vhdref_`） ─────
++
++/// 置き場の局面の出力を全部書き直し、契約の部品 `id` の欄 `key` の字を返す（書き直しは rc 0・部品か欄が無ければ `None`）。
++#[expect(
++    clippy::panic,
++    reason = "統合 test の helper。clippy の allow-panic-in-tests は #[test] 関数の中だけに効く"
++)]
++fn written_field(repo: &Path, state: &Path, bd: &str, (id, key): (&str, &str)) -> Option<String> {
++    let out = bin_cmd()
++        .args(["fleet", "lifecycle", "write", "--state-dir"])
++        .arg(state)
++        .arg("--repo")
++        .arg(repo)
++        .args(["--bd", bd, "--rules", &dispatch_rules(state)])
++        .output()
++        .unwrap_or_else(|err| panic!("binary: {err}"));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "fleet lifecycle write（{}）", told(&out));
++    let text = fs::read_to_string(state.join("fleet").join("lifecycle.json")).unwrap_or_default();
++    let tree = vessel::fleet::json_tree::parse(&text).unwrap_or_else(|err| panic!("出力: {err:?}"));
++    let parts = tree.get("parts").and_then(vessel::fleet::json_tree::Tree::as_array).unwrap_or_default();
++    let part = parts.iter().find(|part| part.get("part").and_then(|found| found.as_str()) == Some("contract") && part.get("id").and_then(|found| found.as_str()) == Some(id));
++    part.and_then(|found| found.get(key)).and_then(|value| value.as_str()).map(str::to_owned)
++}
++
++/// 局面の出力を書ける置き場にする（台帳の印の file と git の exclude の `.beads/` と origin/main の ref）。
++#[expect(
++    clippy::panic,
++    reason = "統合 test の helper。clippy の allow-panic-in-tests は #[test] 関数の中だけに効く"
++)]
++fn writable_place(repo: &Path) {
++    fs::create_dir_all(repo.join(".beads")).unwrap_or_else(|err| panic!(".beads: {err}"));
++    fs::write(repo.join(".beads/issues.jsonl"), "[]\n").unwrap_or_else(|err| panic!("台帳の file: {err}"));
++    let exclude = repo.join(".git/info/exclude");
++    let body = fs::read_to_string(&exclude).unwrap_or_default();
++    fs::write(&exclude, format!("{body}.beads/\n")).unwrap_or_else(|err| panic!("exclude: {err}"));
++    let main = git(repo, &["rev-parse", "refs/heads/main"]);
++    git(repo, &["update-ref", "refs/remotes/origin/main", main.trim()]);
++}
++
++/// 断りの記録の前の観測の書き直しの契約の部品は contract-refused で欄 why が列の判定の 1 行、起こす側の 1 周が書く受付の断りの
++/// 記録は 1 件で detail がその 1 行（断られた file を名指す・改行なし）、止めた後の書き直し（列の理由が admission でない周）は
++/// 便の起きていない記録の detail を欄 why に持ち、止めた契約の部品の欄 why は止めの理由（行 v-refuse-why）。
++#[test]
++fn vhdref_firing_round_records_the_one_line_reason_and_the_output_carries_it() {
++    let (repo, state, bd) = refused_ledger();
++    writable_place(&repo);
++    assert_eq!(written_field(&repo, &state, &bd, (REFUSED, "phase")).as_deref(), Some("contract-refused"), "記録の前も断られた契約");
++    let observed = written_field(&repo, &state, &bd, (REFUSED, "why"));
++    precheck_turn(&repo, &state, &bd);
++    let found: Vec<vessel::fleet::Event> =
++        super::super::events(&state).into_iter().filter(|event| event.kind == vessel::fleet::EventKind::IntakeRefused).collect();
++    assert_eq!(found.len(), 1, "断りの記録は 1 件: {found:?}");
++    let why = found.first().and_then(|event| event.detail.clone()).unwrap_or_default();
++    assert!(why.contains("src/absent.rs") && !why.contains('\n'), "detail は断られた file を名指す 1 行: {why:?}");
++    assert_eq!(observed.as_deref(), Some(why.as_str()), "記録の前の書き直しの欄 why は列の判定の 1 行");
++    let held = run_pipe(&["dispatch", "hold", REFUSED, "--reason", "断りを見る", "--state-dir", &state.display().to_string()]);
++    assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold（{}）", told(&held));
++    assert_eq!(written_field(&repo, &state, &bd, (REFUSED, "why")), Some(why), "止めた後の書き直しは記録の 1 行");
++    assert_eq!(written_field(&repo, &state, &bd, (HELD, "why")).as_deref(), Some("祖先を起こさない"), "止めた契約は止めの理由");
++    clean(&[&repo, &state]);
++}
++
+ /// (B) 1 周の後に r へ `release` を打つと、次の周は同じ断りをもう 1 件書き、2 件目は release の行より後に在る。
+ #[test]
+ fn pipe_dispatch_intake_refused_records_again_after_a_release() {
+diff --git a/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs b/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
+index 220586f064fc6888fd1c849616c590d3bdebd726..5e9ee6f6381fae2f50e9716f08f32e3a0a49e4df 100644
+--- a/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
++++ b/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
+@@ -789,7 +789,7 @@ pub fn refusals_of(events: &[Event]) -> Vec<Refused> {
+             let event = events.get(at)?;
+             let Some(Case::Refused { refuse }) = &event.case else { return None };
+             let run_after = events.iter().skip(at + 1).any(|later| later.kind.as_str() == "RunCreated" && later.bead == bead);
+-            Some(Refused { bead: bead.to_owned(), name: refuse.clone(), ts: event.ts.clone(), run_after })
++            Some(Refused { bead: bead.to_owned(), name: refuse.clone(), ts: event.ts.clone(), run_after, why: event.detail.clone() })
+         })
+         .collect()
+ }
+diff --git a/scribe2/crates/scribe2/src/fleet/phase.rs b/scribe2/crates/scribe2/src/fleet/phase.rs
+index 791b176d118b6e95e1c5f90088d30014bd1df5c7..75b89e3b5f76f05bb5645e96a96be10c4175cdd0 100644
+--- a/scribe2/crates/scribe2/src/fleet/phase.rs
++++ b/scribe2/crates/scribe2/src/fleet/phase.rs
+@@ -75,6 +75,8 @@ pub struct Refused {
+     pub ts: String,
+     /// その断りの後に便が起きたか（起きていれば断りは局面に効かない）。
+     pub run_after: bool,
++    /// 断りの記録の detail（1 行の理由・無い記録は `None`）。
++    pub why: Option<String>,
+ }
+ 
+ /// [`phases`] への入力。
+@@ -181,8 +183,8 @@ fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -
+     let refusal = input.refusals.iter().find(|refused| refused.bead == open.bead && !refused.run_after);
+     let (phase, reason, since, why) = if let Some(live) = run.filter(|found| found.alive) {
+         (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None, None)
+-    } else if let Some((name, since)) = refusal_of(queued, refusal) {
+-        (Phase::ContractRefused, Some(name), since, None)
++    } else if let Some((name, since, why)) = refusal_of(queued, refusal) {
++        (Phase::ContractRefused, Some(name), since, why)
+     } else if let Some(judged) = queued {
+         // 止め（理由 `hold`）は印の時刻（値の字）を since に、印の理由を why に持つ（ほかの理由の since は書き手が継ぐ）。
+         let held = judged.name == HOLD;
+@@ -199,13 +201,16 @@ fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -
+ }
+ 
+ /// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。since は断りの記録の
+-/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。
+-fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>)> {
++/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。1 行の理由は
++/// 列の判定の理由（無ければ同じ名の記録の detail）か、列に無い断りは記録の detail。
++fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>, Option<String>)> {
+     match (queued, refusal) {
+         (Some(judged), _) if judged.name == "admission" => {
+-            Some((judged.value.clone(), refusal.filter(|found| found.name == judged.value).map(|found| found.ts.clone())))
++            let same = refusal.filter(|found| found.name == judged.value);
++            let why = judged.why.clone().or_else(|| same.and_then(|found| found.why.clone()));
++            Some((judged.value.clone(), same.map(|found| found.ts.clone()), why))
+         }
+-        (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()))),
++        (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()), refused.why.clone())),
+         _ => None,
+     }
+ }
+@@ -423,7 +428,34 @@ mod tests {
+     }
+ 
+     fn refused(bead: &str, name: &str, run_after: bool) -> Refused {
+-        Refused { bead: bead.to_owned(), name: name.to_owned(), ts: "2026-09-30T10:00:00Z".to_owned(), run_after }
++        Refused { bead: bead.to_owned(), name: name.to_owned(), ts: "2026-09-30T10:00:00Z".to_owned(), run_after, why: None }
++    }
++
++    /// 受付の断りの契約の欄 why は列の判定の 1 行の理由で、列の判定が理由を持たない周は同じ名の記録の detail・名の違う記録の
++    /// detail は持たない・列に無い断りは記録の detail（行 v-refuse-why）。
++    #[test]
++    fn vhdref_refused_part_carries_the_one_line_reason() {
++        let noted = |bead: &str, name: &str, why: &str| Refused { why: Some(why.to_owned()), ..refused(bead, name, false) };
++        let world = World {
++            queue: vec![
++                judged_why("s2-a", "admission", "cap-headroom", "列の 1 行"),
++                judged("s2-b", "admission", "cap-headroom"),
++                judged("s2-c", "admission", "cap-headroom"),
++            ],
++            open: vec![open("s2-a"), open("s2-b"), open("s2-c"), open("s2-d")],
++            refusals: vec![
++                noted("s2-a", "cap-headroom", "記録の 1 行"),
++                noted("s2-b", "cap-headroom", "記録の 1 行"),
++                noted("s2-c", "teeth-outside-write-set", "別の名の 1 行"),
++                noted("s2-d", "contract-table", "記録だけの 1 行"),
++            ],
++            ..World::default()
++        };
++        let [a, b, c, d] = ["s2-a", "s2-b", "s2-c", "s2-d"].map(|bead| world.contract(bead));
++        assert_eq!(held_of(&a).3, Some("列の 1 行"), "列の判定の理由が先");
++        assert_eq!(held_of(&b).3, Some("記録の 1 行"), "列が理由を持たなければ同じ名の記録");
++        assert_eq!(held_of(&c).3, None, "名の違う記録の理由は持たない");
++        assert_eq!(held_of(&d), (Phase::ContractRefused, Some("contract-table"), Some("2026-09-30T10:00:00Z"), Some("記録だけの 1 行")), "列に無い断り");
+     }
+ 
+     fn event(line: &str) -> Event {
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch.rs b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+index 10edf169b17c7fcae280b29cae5b0c53f969601f..565bbe15aaea996526b3f8af03448799a74ac4c5 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+@@ -139,6 +139,9 @@ pub enum WaitReason {
+     Admission {
+         /// 受付が断った名（[`crate::pipe::refuse::Refuse::as_str`] か [`SLOT`] / [`SPAWN`] / [`MARK`]・すべて `'static`）。
+         reason: &'static str,
++        /// 断りの 1 行の理由（型の断りの先頭の [`crate::pipe::refuse::Refuse::reason`]・型を持たない断りと列自身の語は `None`・
++        /// 判定に使わない＝`render` は書かない・断りの記録の detail と局面の出力の欄 `why` に写す）。
++        why: Option<String>,
+     },
+     /// 器の健康の遮断器が「待つ」を返した周（gate と同じ 1 関数 [`health::act`] が [`health::Action::Wait`]・
+     /// 設計 §18）。混んだ host に便を起こしても落ちるだけなので、その周は 1 本も起こさない。
+@@ -213,7 +216,7 @@ impl WaitReason {
+         match *self {
+             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
+             Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
+-            Self::Admission { reason } => format!("{name}:{reason}"),
++            Self::Admission { reason, .. } => format!("{name}:{reason}"),
+             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
+             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
+             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
+@@ -696,7 +699,7 @@ pub fn fire(input: &Input<'_>) -> Turn {
+     turn.launches.retain(|launch| !failed.contains_key(&launch.bead));
+     for candidate in &mut turn.candidates {
+         if let Some(&reason) = failed.get(&candidate.bead) {
+-            candidate.reason = Some(WaitReason::Admission { reason });
++            candidate.reason = Some(WaitReason::Admission { reason, why: None });
+         }
+     }
+     // **受付の断りの記帳は上書きの後・事前審査の前**（設計 §32）: 同じ周が読んだ event の列を借りる（2 度読まない）。
+@@ -1290,7 +1293,7 @@ mod tests {
+         let listed = vec![
+             WaitReason::Dependency { on: vec!["s2-x".to_owned(), "s2-y".to_owned()] },
+             WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
+-            WaitReason::Admission { reason: "cap-headroom" },
++            WaitReason::Admission { reason: "cap-headroom", why: Some("x".to_owned()) },
+             WaitReason::HostBusy,
+             WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
+             WaitReason::Launched { since: "t2".to_owned() },
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+index f2ae90439d68a6a25eb5188180e17f2cd113621f..49d40b489e9c42ad7a5339789cf56c11a6fa09fc 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+@@ -12,10 +12,10 @@
+ // flip-check: moved s2-07l.531
+ 
+ use super::super::admission::{self, Sizes};
+-use super::super::cli::{crossings, generated, int_row, judge, live, Material, Materials};
++use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
+ use super::super::contract::Contract;
+ use super::super::gate::Verdict;
+-use super::super::refuse::{overlaps, INDEX_BUILD_TRIGGERS};
++use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
+ use super::super::review;
+ use super::super::row_review::{self, Basis};
+ use super::super::table::{self, read_rows, Pointer};
+@@ -65,7 +65,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
+     }
+     // **起こした便が受付に届くまで同じ bead を起こさない**（設計 §17）。印を測れない周は起こさない側に倒す。
+     match ledger.launched.as_ref().map(|found| found.get(&issue.id)) {
+-        None => return wait(WaitReason::Admission { reason: MARK }),
++        None => return wait(WaitReason::Admission { reason: MARK, why: None }),
+         Some(Some(since)) => return wait(WaitReason::Launched { since: since.clone() }),
+         Some(None) => {}
+     }
+@@ -74,7 +74,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
+     };
+     let materials = match &ledger.materials {
+         Ok(found) => found,
+-        Err(denial) => return wait(WaitReason::Admission { reason: denial.name }),
++        Err(denial) => return wait(refused_by(denial)),
+     };
+     let contract = match generated(input.repo, &pointer, materials) {
+         Ok((found, body)) => match settled(input, &issue.id, &body, &found.design, &ledger.events) {
+@@ -88,11 +88,16 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
+                 found
+             }
+         },
+-        Err(denial) => return wait(WaitReason::Admission { reason: denial.name }),
++        Err(denial) => return wait(refused_by(&denial)),
+     };
+     (at(None), Some((pointer, contract)))
+ }
+ 
++/// 受付の断りの待ちの理由（断りの名と、型の断りの先頭の 1 行の理由・型を持たない断りは理由なし・設計 dispatcher.md §32）。
++fn refused_by(denial: &Denial) -> WaitReason {
++    WaitReason::Admission { reason: denial.name, why: denial.refusals.first().map(Refuse::reason) }
++}
++
+ /// 材料に base（`HEAD`）の commit の索引の状態を載せる（設計 reverse-index.md §7 (b)・状態の読みだけで撃たず待たない・`HEAD` を解けない周は
+ /// 状態なしのまま）。観測の口（`dispatch ls`）と起こす側の周が同じ 1 本で載せる。
+ pub(super) fn indexed(input: &Input<'_>, materials: Materials) -> Materials {
+@@ -110,7 +115,7 @@ pub(super) fn build_index(input: &Input<'_>, turn: &Turn) {
+     let waits = turn
+         .candidates
+         .iter()
+-        .any(|candidate| matches!(&candidate.reason, Some(WaitReason::Admission { reason }) if INDEX_BUILD_TRIGGERS.contains(reason)));
++        .any(|candidate| matches!(&candidate.reason, Some(WaitReason::Admission { reason, .. }) if INDEX_BUILD_TRIGGERS.contains(reason)));
+     let Some(sha) = git_line(input.repo, &["rev-parse", "HEAD"]).filter(|_| waits) else {
+         return;
+     };
+@@ -298,7 +303,7 @@ fn blocker(
+                 return Some(WaitReason::Overlap { with: run, files });
+             }
+         }
+-        Err(denial) => return Some(WaitReason::Admission { reason: denial.name }),
++        Err(denial) => return Some(refused_by(&denial)),
+     }
+     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
+     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。
+@@ -313,10 +318,10 @@ fn blocker(
+         early: None,
+     };
+     if let Some(denial) = judge(&material).denials.first() {
+-        return Some(WaitReason::Admission { reason: denial.name });
++        return Some(refused_by(denial));
+     }
+     if !admission::has_room(&room.slots, 1, room.sizes) {
+-        return Some(WaitReason::Admission { reason: SLOT });
++        return Some(WaitReason::Admission { reason: SLOT, why: None });
+     }
+     None
+ }
+@@ -521,7 +526,7 @@ fn judged_of(turn: &Turn) -> Vec<Judged> {
+             None => ("launched".to_owned(), String::new()),
+         };
+         let why = match candidate.reason {
+-            Some(WaitReason::Hold { ref why, .. }) => why.clone(),
++            Some(WaitReason::Hold { ref why, .. } | WaitReason::Admission { ref why, .. }) => why.clone(),
+             _ => None,
+         };
+         Judged { bead: candidate.bead.clone(), name, value, why }
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs b/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
+index e98127853ea2d4ef814e982daa7bada4428226de..812aff63ca3cdeceb581ac2a2659e541d8a78e21 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/refused.rs
+@@ -16,7 +16,7 @@ fn chosen(candidates: &[Candidate]) -> Vec<(&str, &'static str)> {
+     candidates
+         .iter()
+         .filter_map(|candidate| match candidate.reason {
+-            Some(WaitReason::Admission { reason }) if reason != MARK && reason != SPAWN => {
++            Some(WaitReason::Admission { reason, .. }) if reason != MARK && reason != SPAWN => {
+                 Some((candidate.bead.as_str(), reason))
+             }
+             _ => None,
+@@ -45,12 +45,22 @@ pub(super) fn record(input: &Input<'_>, candidates: &[Candidate], events: Option
+     };
+     for (bead, name) in chosen(candidates) {
+         if due(events, bead, name) {
+-            let _ = store::append(input.state_dir, &refusal(bead, name), policy);
++            // 断りの 1 行の理由は detail に載せる（判定には使わない・局面の出力の契約の部品の欄 why に写る）。
++            let event = Event { detail: reason_line(candidates, bead), ..refusal(bead, name) };
++            let _ = store::append(input.state_dir, &event, policy);
+         }
+     }
+ }
+ 
+-/// 書く 1 行（kind `IntakeRefused`・refuse = 断りの名・actor は kind の既定・detail なし）。
++/// 候補 `bead` の受付の断りの 1 行の理由（[`WaitReason::Admission`] の `why`・無ければ `None`）。
++fn reason_line(candidates: &[Candidate], bead: &str) -> Option<String> {
++    candidates.iter().find(|candidate| candidate.bead == bead).and_then(|candidate| match candidate.reason {
++        Some(WaitReason::Admission { ref why, .. }) => why.clone(),
++        _ => None,
++    })
++}
++
++/// 書く 1 行（kind `IntakeRefused`・refuse = 断りの名・actor は kind の既定・detail なし＝理由は [`record`] が足す）。
+ fn refusal(bead: &str, name: &str) -> Event {
+     let kind = EventKind::IntakeRefused;
+     Event {
+@@ -77,7 +87,7 @@ fn refusal(bead: &str, name: &str) -> Event {
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{chosen, due, refusal, Candidate, WaitReason};
++    use super::{chosen, due, reason_line, refusal, Candidate, WaitReason};
+     use crate::fleet::Event;
+ 
+     /// 断られた bead（歯の fixture の既定）。
+@@ -111,7 +121,7 @@ mod tests {
+     /// 2 件だけで、候補の順。
+     #[test]
+     fn refusal_record_chooses_only_intake_refusals_in_candidate_order() {
+-        let admission = |reason: &'static str| Some(WaitReason::Admission { reason });
++        let admission = |reason: &'static str| Some(WaitReason::Admission { reason, why: None });
+         let candidates = [
+             candidate("s2-ref.1", admission("cap-headroom")),
+             candidate("s2-ref.2", admission(super::MARK)),
+@@ -167,6 +177,20 @@ mod tests {
+         assert_eq!(written.detail, None);
+     }
+ 
++    /// 断りの記録の detail は候補の受付の断りの 1 行の理由で、理由の無い断り・受付でない理由・候補に無い bead は持たない（行 v-refuse-why）。
++    #[test]
++    fn vhdref_record_detail_is_the_one_line_reason_of_the_candidate() {
++        let candidates = [
++            candidate("s2-ref.1", Some(WaitReason::Admission { reason: "cap-headroom", why: Some("余地が足りない 1 行".to_owned()) })),
++            candidate("s2-ref.2", Some(WaitReason::Admission { reason: "contract-table", why: None })),
++            candidate("s2-ref.3", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned(), why: Some("止め".to_owned()) })),
++        ];
++        assert_eq!(reason_line(&candidates, "s2-ref.1").as_deref(), Some("余地が足りない 1 行"), "受付の断りの 1 行");
++        assert_eq!(reason_line(&candidates, "s2-ref.2"), None, "理由の無い断り");
++        assert_eq!(reason_line(&candidates, "s2-ref.3"), None, "受付でない理由の字は写さない");
++        assert_eq!(reason_line(&candidates, "s2-ref.9"), None, "候補に無い bead");
++    }
++
+     /// (g) event log を読めない周は書かない。
+     #[test]
+     fn refusal_record_writes_nothing_when_the_log_is_unreadable() {

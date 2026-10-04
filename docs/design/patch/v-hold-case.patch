@@ -1,0 +1,355 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+index 283ca508e4a1626d3abcfaf8c9fd426a824af999..ce21cb31065fad47d506d1706c24961d537cdbe0 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+@@ -3380,6 +3380,45 @@ fn fleet_lifecycle_usage_and_help_page_name_the_verb() {
+     assert!(page.lines().any(|line| line.starts_with("  lifecycle ")), "SUBCOMMANDS: {page}");
+ }
+ 
++/// 理由つきの止めの口は印の直後に局面の出力の全部の書き直しを切り離した子で起こし（口の字は印の行だけ・`--repo` の無い止めは
++/// 起こさない）、出力の契約の部品は contract-queued・理由 hold・since は印の時刻・欄 why は止めの理由（行 v-hold-case）。
++#[test]
++fn vhdcase_hold_rewrites_the_output_with_the_reason_and_the_mark_time() {
++    let life = Life::new();
++    let pointer = super::pipe::design_pointer();
++    let free = format!("{{\"id\":\"toy-c2\",\"status\":\"open\",\"priority\":2,\"labels\":[],\"acceptance_criteria\":\"design = {pointer}\",\"dependencies\":[]}}");
++    life.put("ledger", &format!("[{LIFE_TASK},{free}]\n"));
++    let state = life.state.display().to_string();
++    let bare = super::pipe::run_pipe(&["dispatch", "hold", "toy-c2", "--reason", "前の止め", "--state-dir", &state]);
++    assert_eq!(bare.status.code(), Some(i32::from(RC_OK)), "--repo の無い止めも rc 0: {}", super::pipe::stderr_of(&bare));
++    std::thread::sleep(Duration::from_millis(800));
++    assert_eq!(life.generated(), None, "--repo の無い止めは書き直しを起こさない");
++    let out = super::pipe::run_pipe(&life.pipe_args(&["dispatch", "hold", "toy-c2"], &["--reason", "設計の行 を直す"]));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "止めは rc 0: {}", super::pipe::stderr_of(&out));
++    assert_eq!(super::pipe::stdout_of(&out).trim_end(), "[DISPATCH] bead=toy-c2 mark=hold", "口の字は印の行だけ");
++    let since = super::pipe::events(&life.state).last().map(|event| event.ts.clone()).unwrap_or_default();
++    let deadline = Instant::now() + Duration::from_secs(20);
++    while life.generated().is_none() && Instant::now() < deadline {
++        std::thread::sleep(Duration::from_millis(50));
++    }
++    let shown = life.shown();
++    let line = shown.lines().find(|line| line.starts_with("part=contract id=toy-c2 ")).unwrap_or_default();
++    assert!(line.contains(" phase=contract-queued ") && line.ends_with(" reason=hold"), "止めの局面と理由: {shown}");
++    assert!(line.contains(&format!(" since={since} ")), "since は印の時刻 {since}: {shown}");
++    assert_eq!(life.contract_why("toy-c2").as_deref(), Some("設計の行 を直す"), "欄 why は止めの理由");
++    super::pipe::clean(&[&life.repo, &life.state]);
++}
++
++impl Life {
++    /// 出力の契約の部品 `id` の欄 why（出力・部品・欄の無い周は `None`）。
++    fn contract_why(&self, id: &str) -> Option<String> {
++        let tree = parse(&fs::read_to_string(self.json_path()).ok()?).ok()?;
++        let parts = tree.get("parts")?.as_array()?;
++        let found = parts.iter().find(|part| part.get("part").and_then(Tree::as_str) == Some("contract") && part.get("id").and_then(Tree::as_str) == Some(id))?;
++        found.get("why")?.as_str().map(str::to_owned)
++    }
++}
++
+ /// 契機 (a) の `pipe dispatch` と (e) の `fleet lifecycle write` で出力が進み、`dispatch ls` では進まない。どの契機の出力にも
+ /// 依存を待つ開いた契約が contract-queued・理由 dependency で出る。
+ #[test]
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
+index 5095ac2a7d704f9b2e8901683b574b02dc710f74..8d2595dc8402ba97a4367f5e58e62e548025328c 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs
+@@ -2727,7 +2727,7 @@ fn seat_tick_rewrites_lifecycle_moves_a_due_memo_without_changing_the_tick() {
+ fn seat_tick_rewrites_lifecycle_moves_a_run_stage_without_changing_the_tick() {
+     use vessel::case::{Extra, Kind, Phase};
+     let stamp = vessel::fleet::cli::format_utc(unix_now().saturating_sub(60));
+-    let pointer = Extra::Contract { pointer: Some("design = docs/design/x.md#a".to_owned()) };
++    let pointer = Extra::Contract { pointer: Some("design = docs/design/x.md#a".to_owned()), why: None };
+     let contract = lc_part(Kind::Contract, "s2-w.1", Phase::ContractRunning, [Some("run-implementing"), None], pointer);
+     let run = lc_part(Kind::Run, "r-w1", Phase::RunImplementing, [Some("Spawned"), Some("2026-09-30T00:00:00Z")], Extra::Run { bead: "s2-w.1".to_owned() });
+     let tail = [format!("{{\"schema\":1,\"ts\":\"{stamp}\",\"kind\":\"RunStage\",\"run\":\"r-w1\",\"bead\":\"s2-w.1\",\"host\":\"h\",\"actor\":\"machine\",\"stage\":\"Gated\",\"detail\":\"verdict:PASS\"}}")];
+diff --git a/scribe2/crates/scribe2/src/case/mod.rs b/scribe2/crates/scribe2/src/case/mod.rs
+index 8e525c3f6a4ce765c245325115cb5ea0c9516e89..77d85241123d9df6a93453fedb5fdc064a66f4ec 100644
+--- a/scribe2/crates/scribe2/src/case/mod.rs
++++ b/scribe2/crates/scribe2/src/case/mod.rs
+@@ -280,10 +280,12 @@ pub enum Extra {
+         /// keep の記帳が在るか。
+         keep: Option<bool>,
+     },
+-    /// 契約: `pointer`（任意・設計 pointer の字か null）。
++    /// 契約: `pointer`（任意・設計 pointer の字か null）と `why`（任意・止めの印の理由・無ければ鍵を書かない）。
+     Contract {
+         /// 設計 pointer の字。
+         pointer: Option<String>,
++        /// 止めの印の理由（局面 contract-queued・理由 `hold` の印が理由を持つ周だけ）。
++        why: Option<String>,
+     },
+     /// 便: `bead`（便が属する契約の bead id）。
+     Run {
+diff --git a/scribe2/crates/scribe2/src/fleet/lifecycle.rs b/scribe2/crates/scribe2/src/fleet/lifecycle.rs
+index 91bfa5d1efebf728af954379a95b25938cdd1e79..7cb2620c7a06b20e8c2e978e094a97561e826cc2 100644
+--- a/scribe2/crates/scribe2/src/fleet/lifecycle.rs
++++ b/scribe2/crates/scribe2/src/fleet/lifecycle.rs
+@@ -218,7 +218,7 @@ fn extra_pairs(extra: &Extra) -> Vec<(&'static str, Tree)> {
+             items.extend(keep.map(|found| ("keep", Tree::Bool(found))));
+             items
+         }
+-        Extra::Contract { pointer } => vec![("pointer", maybe(pointer))],
++        Extra::Contract { pointer, why } => [("pointer", maybe(pointer))].into_iter().chain(why.as_deref().map(|found| ("why", text(found)))).collect(),
+         Extra::Run { bead } => vec![("bead", text(bead))],
+     }
+ }
+@@ -335,7 +335,7 @@ fn extra_of(kind: Kind, node: &Tree) -> Option<Extra> {
+             };
+             Extra::Memo { due: optional_text(node, "due")?, triggers, keep }
+         }
+-        Kind::Contract => Extra::Contract { pointer: optional_text(node, "pointer").unwrap_or(None) },
++        Kind::Contract => Extra::Contract { pointer: optional_text(node, "pointer").unwrap_or(None), why: optional_text(node, "why").unwrap_or(None) },
+         Kind::Run => Extra::Run { bead: node.get("bead")?.as_str()?.to_owned() },
+         Kind::Question | Kind::Row | Kind::Requirement | Kind::Epic | Kind::Commit => Extra::None,
+     })
+diff --git a/scribe2/crates/scribe2/src/fleet/lifecycle_partial.rs b/scribe2/crates/scribe2/src/fleet/lifecycle_partial.rs
+index 9bd45985692699ecb597dead8294e0ec867629c3..88e8cdb6709f0e4abea4649411ee5572042f0b5f 100644
+--- a/scribe2/crates/scribe2/src/fleet/lifecycle_partial.rs
++++ b/scribe2/crates/scribe2/src/fleet/lifecycle_partial.rs
+@@ -481,7 +481,7 @@ mod tests {
+ 
+     fn contract(bead: &str) -> Part {
+         let mut found = part(Kind::Contract, bead, Phase::ContractRunning, [Some("run-implementing"), None]);
+-        found.extra = Extra::Contract { pointer: Some(POINTER.to_owned()) };
++        found.extra = Extra::Contract { pointer: Some(POINTER.to_owned()), why: None };
+         found
+     }
+ 
+@@ -746,6 +746,24 @@ mod tests {
+         assert_eq!(out.parts, before.parts, "契約と要件の部品は動かさない");
+     }
+ 
++    /// 契約の部品の欄 why は部分の書き直しの読みと書きを通って残り、why の無い契約の部品は鍵を書かない（行 v-hold-case）。
++    #[test]
++    fn vhdcase_partial_rewrite_keeps_the_why_of_the_contract_part() {
++        let bed = Bed::new("why");
++        let found = log(&[], 0, &[stage("2026-09-30T00:00:00Z", "RunStage", ["r7", "s2-u.1", "Spawned"], None)]);
++        let mut held = part(Kind::Contract, "s2-h.1", Phase::ContractQueued, [Some("hold"), Some("2026-09-30T01:00:00Z")]);
++        held.extra = Extra::Contract { pointer: Some(POINTER.to_owned()), why: Some("設計の行 を直す".to_owned()) };
++        let before = output(&Log { len: 0, bytes: Vec::new() }, vec![held.clone(), contract(C1)]);
++        let before = Output { marks: Marks { events: Events { len: found.len, head: Some(HEAD_TS.to_owned()) }, ..before.marks.clone() }, ..before };
++        bed.put(&before);
++        assert_eq!(bed.go(&found).0, Rewrote::Wrote(Wrote::Written));
++        let out = bed.out();
++        let extra = |id: &str| out.parts.iter().find(|one| one.id == id).map(|one| one.extra.clone());
++        assert_eq!(extra("s2-h.1"), Some(held.extra), "why は読みと書きを通って残る");
++        assert_eq!(extra(C1), Some(contract(C1).extra), "why の無い契約は無いまま");
++        assert_eq!(bed.json().matches(r#""why":"#).count(), 1, "鍵 why は理由を持つ部品だけ: {}", bed.json());
++    }
++
+     /// log が繋がらない 3 形（head が違う・短い・直前が改行でない）は書かず、読めない印（理由 events）を付け、既に在る印は消さない。
+     #[test]
+     fn lifecycle_partial_unjoined_log_writes_nothing_marks_unreadable_and_keeps_the_marks() {
+diff --git a/scribe2/crates/scribe2/src/fleet/phase.rs b/scribe2/crates/scribe2/src/fleet/phase.rs
+index 83ef21460b2b2e9c51798e030029b6fa1ed8faaf..791b176d118b6e95e1c5f90088d30014bd1df5c7 100644
+--- a/scribe2/crates/scribe2/src/fleet/phase.rs
++++ b/scribe2/crates/scribe2/src/fleet/phase.rs
+@@ -27,8 +27,13 @@ pub struct Judged {
+     pub name: String,
+     /// 理由の値の字（`dependency` は `,` 区切りの bead id・`overlap` は `<run id>/<file 数>`・`admission` は断りの名）。
+     pub value: String,
++    /// 止めの印の理由（理由が `hold` で印の行が理由を持つ周だけ・判定には使わず契約の部品の欄 `why` に写す）。
++    pub why: Option<String>,
+ }
+ 
++/// 止めの理由の名（契約の部品の since を印の時刻〔値の字〕にし、欄 `why` に印の理由を写す理由）。
++const HOLD: &str = "hold";
++
+ /// 開いた契約 1 本（閉じていない契約の bead id と、設計 pointer の字）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct OpenContract {
+@@ -174,27 +179,32 @@ fn run_phase(latest: &Latest) -> (Phase, Option<String>) {
+ fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -> Part {
+     let queued = input.queue.iter().find(|judged| judged.bead == open.bead);
+     let refusal = input.refusals.iter().find(|refused| refused.bead == open.bead && !refused.run_after);
+-    let (phase, reason, since) = if let Some(live) = run.filter(|found| found.alive) {
+-        (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None)
++    let (phase, reason, since, why) = if let Some(live) = run.filter(|found| found.alive) {
++        (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None, None)
+     } else if let Some((name, since)) = refusal_of(queued, refusal) {
+-        (Phase::ContractRefused, Some(name), since)
++        (Phase::ContractRefused, Some(name), since, None)
+     } else if let Some(judged) = queued {
+-        (Phase::ContractQueued, Some(judged.name.clone()), None)
++        // 止め（理由 `hold`）は印の時刻（値の字）を since に、印の理由を why に持つ（ほかの理由の since は書き手が継ぐ）。
++        let held = judged.name == HOLD;
++        (Phase::ContractQueued, Some(judged.name.clone()), held.then(|| judged.value.clone()), judged.why.clone().filter(|_| held))
+     } else {
+-        (Phase::Misfit, Some(Misfit::NoPhase.as_str().to_owned()), None)
++        (Phase::Misfit, Some(Misfit::NoPhase.as_str().to_owned()), None, None)
+     };
+     let mut found = part(Kind::Contract, &open.bead, phase, reason);
+     found.since = since;
+     found.links.runs = run.map(|latest| latest.run.clone()).into_iter().collect();
+     found.links.on = queued.map(|judged| links_on(judged, input.run_beads)).unwrap_or_default();
+-    found.extra = Extra::Contract { pointer: open.pointer.clone() };
++    found.extra = Extra::Contract { pointer: open.pointer.clone(), why };
+     found
+ }
+ 
+-/// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。
++/// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。since は断りの記録の
++/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。
+ fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>)> {
+     match (queued, refusal) {
+-        (Some(judged), _) if judged.name == "admission" => Some((judged.value.clone(), None)),
++        (Some(judged), _) if judged.name == "admission" => {
++            Some((judged.value.clone(), refusal.filter(|found| found.name == judged.value).map(|found| found.ts.clone())))
++        }
+         (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()))),
+         _ => None,
+     }
+@@ -337,7 +347,66 @@ mod tests {
+     }
+ 
+     fn judged(bead: &str, name: &str, value: &str) -> Judged {
+-        Judged { bead: bead.to_owned(), name: name.to_owned(), value: value.to_owned() }
++        Judged { bead: bead.to_owned(), name: name.to_owned(), value: value.to_owned(), why: None }
++    }
++
++    fn judged_why(bead: &str, name: &str, value: &str, why: &str) -> Judged {
++        Judged { why: Some(why.to_owned()), ..judged(bead, name, value) }
++    }
++
++    /// 契約の部品の (局面, 理由, since, 欄 why)。
++    fn held_of(part: &Part) -> (Phase, Option<&str>, Option<&str>, Option<&str>) {
++        let why = match part.extra {
++            Extra::Contract { ref why, .. } => why.as_deref(),
++            _ => panic!("契約の欄"),
++        };
++        (part.phase, part.reason.as_deref(), part.since.as_deref(), why)
++    }
++
++    /// 理由 `hold` の契約は since が印の時刻（値の字）で欄 why が印の理由・理由の無い印は why なし・ほかの理由は理由の字を持っても
++    /// since も why も持たない（行 v-hold-case）。
++    #[test]
++    fn vhdcase_hold_part_takes_the_mark_time_and_the_reason() {
++        let world = World {
++            queue: vec![
++                judged_why("s2-h", "hold", "2026-09-30T09:00:00Z", "設計の行 を直す"),
++                judged("s2-n", "hold", "2026-09-30T09:30:00Z"),
++                judged_why("s2-d", "dependency", "s2-z", "x"),
++            ],
++            open: vec![open("s2-h"), open("s2-n"), open("s2-d")],
++            ..World::default()
++        };
++        let queued = Phase::ContractQueued;
++        let [h, n, d] = ["s2-h", "s2-n", "s2-d"].map(|bead| world.contract(bead));
++        assert_eq!(held_of(&h), (queued, Some("hold"), Some("2026-09-30T09:00:00Z"), Some("設計の行 を直す")), "理由つきの止め");
++        assert_eq!(held_of(&n), (queued, Some("hold"), Some("2026-09-30T09:30:00Z"), None), "理由の無い止め");
++        assert_eq!(held_of(&d), (queued, Some("dependency"), None, None), "止めでない理由は持たない");
++    }
++
++    /// 受付の断りの契約の since は、列の理由が `admission` の周も同じ名の断りの記録の時刻・名が違う記録と記録の無い周は持たない
++    /// （書き手が継ぐ）・列に無い断りは今のとおり記録の時刻（行 v-hold-case）。
++    #[test]
++    fn vhdcase_refused_part_since_is_the_record_time_of_the_same_name() {
++        let world = World {
++            queue: vec![
++                judged("s2-a", "admission", "cap-headroom"),
++                judged("s2-b", "admission", "cap-headroom"),
++                judged("s2-c", "admission", "cap-headroom"),
++            ],
++            open: vec![open("s2-a"), open("s2-b"), open("s2-c"), open("s2-d")],
++            refusals: vec![
++                refused("s2-a", "cap-headroom", false),
++                refused("s2-b", "teeth-outside-write-set", false),
++                refused("s2-d", "contract-table", false),
++            ],
++            ..World::default()
++        };
++        let refused_at = Some("2026-09-30T10:00:00Z");
++        let [a, b, c, d] = ["s2-a", "s2-b", "s2-c", "s2-d"].map(|bead| world.contract(bead));
++        assert_eq!(held_of(&a), (Phase::ContractRefused, Some("cap-headroom"), refused_at, None), "同じ名の記録の時刻");
++        assert_eq!(held_of(&b), (Phase::ContractRefused, Some("cap-headroom"), None, None), "名が違う記録の時刻は持たない");
++        assert_eq!(held_of(&c), (Phase::ContractRefused, Some("cap-headroom"), None, None), "記録の無い周は持たない");
++        assert_eq!(held_of(&d), (Phase::ContractRefused, Some("contract-table"), refused_at, None), "列に無い断り");
+     }
+ 
+     fn latest(bead: &str, run: &str, stage: Stage, alive: bool) -> Latest {
+diff --git a/scribe2/crates/scribe2/src/ledger/phase.rs b/scribe2/crates/scribe2/src/ledger/phase.rs
+index c02a176b91cb64ce98080fa16114936203c18c0a..c00fdc05e4fd3c5d2e3bc8da8ea8216a6f21852b 100644
+--- a/scribe2/crates/scribe2/src/ledger/phase.rs
++++ b/scribe2/crates/scribe2/src/ledger/phase.rs
+@@ -389,7 +389,7 @@ impl<'a> Ctx<'a> {
+                 Draft { links, extra: Extra::Memo { due: None, triggers: None, keep: None }, ..closed(Phase::MemoClosed) }
+             }
+             Kind::Epic => Draft { since: closed_at(issue), ..closed(Phase::EpicClosed) },
+-            _ => Draft { extra: Extra::Contract { pointer: pointer_text(&issue.acceptance).map(str::to_owned) }, ..closed(Phase::ContractClosed) },
++            _ => Draft { extra: Extra::Contract { pointer: pointer_text(&issue.acceptance).map(str::to_owned), why: None }, ..closed(Phase::ContractClosed) },
+         }
+     }
+ 
+@@ -1235,6 +1235,6 @@ mod tests {
+         assert_eq!(part(&out, "s2-m").extra, memo_extra, "満ちていない期日の最も早い値・引き金の写し・keep");
+         let only_met = Extra::Memo { due: None, triggers: Some(vec![view("期日", "2026-09-01T00:00:00Z", true)]), keep: Some(false) };
+         assert_eq!(part(&out, "s2-n").extra, only_met, "期日が全部満ちていれば due は無い");
+-        assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()) }, "閉じた契約の pointer");
++        assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()), why: None }, "閉じた契約の pointer");
+     }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/cli.rs b/scribe2/crates/scribe2/src/pipe/cli.rs
+index 2bba5c5bb4dc0b5a0626d5ba2a76e61f219dd6df..0b0a6aaa1167d954b5fbc70168a6f7a9bd41e397 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli.rs
+@@ -64,7 +64,9 @@ use crate::name::NAME;
+ use intake::intake;
+ use preflight::preflight;
+ use run::{run_all, start};
+-use std::path::PathBuf;
++use crate::invocation::Invocation;
++use std::path::{Path, PathBuf};
++use std::process::Stdio;
+ use step::{answer_run, approve_run, gate_run, land_run, retire_run};
+ 
+ /// `pipe` の subcommand（閉じた語・宣言順は [`subcommand`] の腕の順・設計 contract-source.md §17 の形 (vii)）。
+@@ -615,6 +617,9 @@ fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
+                     Err(reason) => return refused(reason),
+                 };
+                 let marked = queue::mark(&state_dir, bead, mark, detail, policy);
++                if mark == Mark::Hold && marked.rc == RC_OK {
++                    rewrite_after_hold(args, &state_dir);
++                }
+                 if mark == Mark::Hold || marked.rc != RC_OK {
+                     return marked;
+                 }
+@@ -630,6 +635,23 @@ fn queued(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Outcome {
+     }
+ }
+ 
++/// 止めの印を書いた周に、局面の出力の全部の書き直し（`fleet lifecycle write`）を自分の binary の子として切り離して起こす（`--repo` を
++/// 渡された周だけ・`--bd` と `--rules` はそのまま渡す・待たない・入出力は捨てる・口の rc と字は替えない・設計 case-lifecycle.md §21 の
++/// 答えの口と同じ形）。起こせなかった周は何もしない（次の契機の全部の書き直しが拾う）。
++fn rewrite_after_hold(args: &[String], state_dir: &Path) {
++    let Ok(Some(repo)) = flag(args, REPO_FLAG) else {
++        return;
++    };
++    let mut child = Invocation::new(queue::myself());
++    child.args(["fleet", "lifecycle", "write", "--state-dir"]).arg(state_dir).args(["--repo", repo]);
++    for name in ["--bd", "--rules"] {
++        if let Ok(Some(found)) = flag(args, name) {
++            child.args([name, found]);
++        }
++    }
++    let _ = child.process_group(0).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
++}
++
+ /// `contracts` の使い方（設計 contract-source.md §2「表の検査」）。
+ pub fn contracts_usage() -> String {
+     format!("usage: {NAME} contracts <check --repo R [--rules PATH] [{BASE_FLAG} SHA] [{VERBOSE_FLAG}]|schema>")
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+index 6d30829ff7e94397a1610cb1c4b090bc50ee411a..f2ae90439d68a6a25eb5188180e17f2cd113621f 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+@@ -520,7 +520,11 @@ fn judged_of(turn: &Turn) -> Vec<Judged> {
+             }
+             None => ("launched".to_owned(), String::new()),
+         };
+-        Judged { bead: candidate.bead.clone(), name, value }
++        let why = match candidate.reason {
++            Some(WaitReason::Hold { ref why, .. }) => why.clone(),
++            _ => None,
++        };
++        Judged { bead: candidate.bead.clone(), name, value, why }
+     };
+     turn.candidates.iter().map(one).collect()
+ }

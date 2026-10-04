@@ -1,0 +1,375 @@
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index e042c436e00e5ab4b1a5fb45ad959a7e83c03b19..3128dd0fa56de84f43573772e776028bb591101a 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -17,6 +17,7 @@
+ //! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
+ //! Held（留め置き）は止めた者・理由・止めた時刻と経過・解く条件の 4 つ（`held_facts`・個別の頁も同じ関数で組む・
+ //! 判断の記録 ADR-42 決定 (7)・行 g-held-pop）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
++//! 受付の断りの名は器の 27 語（`REFUSALS`）を平易な字にした語の辞書の鍵 `rf:<名>` で引く（表に無い名は名のまま・行 g-held-name）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -139,6 +140,40 @@ pub const HELD_WORDS: [(HeldBy, &str, &str); 2] = [
+     (HeldBy::Intake, "hb:intake", "hu:intake"),
+ ];
+ 
++/// 器の受付の断りの名（器の pipe/refuse.rs の REFUSALS の 27 語・宣言の順・行 g-held-name）。
++pub const REFUSALS: [&str; 27] = [
++    "not-a-repo",
++    "duplicate-run",
++    "write-set-overlap",
++    "write-set-unreadable",
++    "write-set-incomplete",
++    "write-set-dir-without-slash",
++    "contract-table",
++    "write-set-item-unresolved",
++    "cap-headroom",
++    "name-unresolved",
++    "write-set-drift",
++    "teeth-place-unresolved",
++    "also-names-rust",
++    "tests-not-a-teeth-file",
++    "fn-undeclared",
++    "teeth-outside-write-set",
++    "hand-written-contract",
++    "same-kind-repeated",
++    "finding-unaddressed",
++    "promised-field-written",
++    "promise-symbol-unresolved",
++    "max-live",
++    "entrance-not-red",
++    "ruling-unresolved",
++    "index-building",
++    "code-facts",
++    "code-facts-unmeasured",
++];
++
++/// 断りの名の語の辞書の鍵の頭（鍵は頭に断りの名を続けた字）。
++pub const REFUSAL_HEAD: &str = "rf:";
++
+ /// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
+ pub const QUEUED_PHASE: &str = "contract-queued";
+ 
+@@ -482,9 +517,18 @@ pub fn held_why(src: &Src<'_>, card: &PipelineCard) -> Option<String> {
+     }
+ }
+ 
+-/// 受付の断りの名の字（理由の語のまま・無ければまだ分からない）。
++/// 受付の断りの名の平易な字（名の `:` の後の詳細は外して `REFUSALS` の語なら語の辞書の鍵 `rf:<名>` の字・表に無い名は
++/// 名のまま・名が無ければまだ分からない・行 g-held-name）。
+ pub fn refusal_text(name: Option<&str>) -> String {
+-    name.map_or_else(|| label(UNKNOWN_KEY), str::to_string)
++    let Some(name) = name else {
++        return label(UNKNOWN_KEY);
++    };
++    let word = name.split(':').next().unwrap_or(name);
++    if REFUSALS.contains(&word) {
++        label(&format!("{REFUSAL_HEAD}{word}"))
++    } else {
++        name.to_string()
++    }
+ }
+ 
+ /// 留め置きの欄（`HELD_KEYS` の順・段 Held でない札は空）。止めた者は席か器の受付、理由は席の止めなら why の字
+diff --git a/crates/tsuzuri-surface/tests/hdnm.rs b/crates/tsuzuri-surface/tests/hdnm.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..784745ad0dda85eb8c6f10b27ef0e416a7ae267c
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hdnm.rs
+@@ -0,0 +1,102 @@
++//! 受付の断りの名の平易な字の歯（面・接頭辞 hdnm_・設計ノート surface-wave28a 行 g-held-name・判断の記録 ADR-42 決定 (7)）。
++//! 器の受付の断りの名 27 語は語の辞書の鍵 rf:<名> の平易な字を持ち、留め置きの吹き出しの理由はその字で始まる。
++//! 名の : の後の詳細は外して引き、表に無い名は名のまま、名が無ければまだ分からない。否定の見本は 1 欄だけ替える。
++#![cfg(test)]
++
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::pop::{
++    HELD_KEYS, REFUSAL_HEAD, REFUSALS, Src, UNKNOWN_KEY, Val, held_facts, refusal_text,
++};
++
++/// 器の pipe/refuse.rs の REFUSALS の写し（宣言の順・歯が字で持つ）。
++const WANT: [&str; 27] = [
++    "not-a-repo",
++    "duplicate-run",
++    "write-set-overlap",
++    "write-set-unreadable",
++    "write-set-incomplete",
++    "write-set-dir-without-slash",
++    "contract-table",
++    "write-set-item-unresolved",
++    "cap-headroom",
++    "name-unresolved",
++    "write-set-drift",
++    "teeth-place-unresolved",
++    "also-names-rust",
++    "tests-not-a-teeth-file",
++    "fn-undeclared",
++    "teeth-outside-write-set",
++    "hand-written-contract",
++    "same-kind-repeated",
++    "finding-unaddressed",
++    "promised-field-written",
++    "promise-symbol-unresolved",
++    "max-live",
++    "entrance-not-red",
++    "ruling-unresolved",
++    "index-building",
++    "code-facts",
++    "code-facts-unmeasured",
++];
++
++#[test]
++fn hdnm_refusal_names_in_vocab() {
++    assert_eq!(REFUSALS, WANT);
++    assert_eq!(REFUSAL_HEAD, "rf:");
++    let mut seen = Vec::new();
++    for name in REFUSALS {
++        let key = format!("rf:{name}");
++        let t = vocab()
++            .term(&key)
++            .unwrap_or_else(|| panic!("{key} が語の辞書に無い"));
++        assert!(!t.label.is_ascii() && !t.note.is_empty(), "{key}");
++        assert!(!seen.contains(&t.label), "{key} の字が重なる");
++        seen.push(t.label.clone());
++    }
++}
++
++#[test]
++fn hdnm_refusal_text_plain() {
++    let plain = label("rf:teeth-outside-write-set");
++    assert_eq!(refusal_text(Some("teeth-outside-write-set")), plain);
++    assert_eq!(
++        refusal_text(Some("contract-table:verify")),
++        label("rf:contract-table"),
++        "詳細つきの名"
++    );
++    assert_eq!(
++        refusal_text(Some("teeth-outside-write-sets")),
++        "teeth-outside-write-sets",
++        "表に無い名は名のまま"
++    );
++    assert_eq!(refusal_text(None), label(UNKNOWN_KEY));
++}
++
++#[test]
++fn hdnm_pop_reason_starts_plain() {
++    let card = PipelineCard {
++        contract: BeadId::new("h-1").unwrap_or_else(|e| panic!("{e:?}")),
++        runs: 0,
++        stage: Stage::Held,
++        reason: Some("cap-headroom".to_string()),
++        account: None,
++        since: None,
++        ci: None,
++    };
++    let src = Src {
++        facts: Reading::Unknown,
++        rows: Reading::Unknown,
++        cards: std::slice::from_ref(&card),
++        parts: Reading::Unknown,
++        graph: None,
++    };
++    let facts = held_facts(&src, &card);
++    let why = facts
++        .iter()
++        .find(|f| f.key == HELD_KEYS[1])
++        .unwrap_or_else(|| panic!("理由の欄が無い"));
++    let want = format!("{}：{}", label("rf:cap-headroom"), label(UNKNOWN_KEY));
++    assert_eq!(why.val, Val::Text(want));
++}
+diff --git a/crates/tsuzuri-surface/tests/hdpop.rs b/crates/tsuzuri-surface/tests/hdpop.rs
+index 7fefe3f950c4e791e084c45e0cf94f8a19087433..d98f7b23b8e1e87644420ed011037be577311df5 100644
+--- a/crates/tsuzuri-surface/tests/hdpop.rs
++++ b/crates/tsuzuri-surface/tests/hdpop.rs
+@@ -23,6 +23,9 @@ const AT: EpochSecs = NOW - 7_200;
+ const NAME: &str = "teeth-outside-write-set";
+ const WHY: &str = "書く file の重なりを席が確かめる";
+ 
++/// 断りの名の平易な字（語の辞書の rf:teeth-outside-write-set の字・行 g-held-name）。
++const PLAIN: &str = "verify の歯の file が書く file の外";
++
+ fn read(rel: &str) -> String {
+     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+@@ -97,7 +100,7 @@ fn hdpop_intake_refusal_facts() {
+     let got = stage_facts(&s, &cards[0]);
+     assert_eq!(keys(&got), HELD_KEYS);
+     assert_eq!(got[0].val, text("hb:intake"));
+-    assert_eq!(got[1].val, Val::Text(format!("{NAME}：{WHY}")));
++    assert_eq!(got[1].val, Val::Text(format!("{PLAIN}：{WHY}")));
+     assert_eq!(got[2].val, Val::At(AT));
+     assert_eq!(got[3].val, text("hu:intake"));
+ }
+@@ -110,7 +113,7 @@ fn hdpop_missing_why_and_since_unknown() {
+         (
+             NAME,
+             "contract-refused",
+-            Val::Text(format!("{NAME}：{unknown}")),
++            Val::Text(format!("{PLAIN}：{unknown}")),
+         ),
+     ] {
+         let cards = [card(Stage::Held, reason)];
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvlex.rs b/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+index aeae52d8b965b4f5ca4bd6b3b1ef0cd18a618162..e6d88617dc7700443293fb4bc6e94bf092b4db2e 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
+ 
+ use tsuzuri_surface::vocab::vocab;
+ 
+-/// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由）。
+-const KEY_PREFIXES: [&str; 5] = ["e:", "lc:", "qr:", "turn:", "unref:"];
++/// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由と受付の断りの名）。
++const KEY_PREFIXES: [&str; 6] = ["e:", "lc:", "qr:", "rf:", "turn:", "unref:"];
+ 
+ /// class を組む接頭辞（接頭辞と値の字をつなぐ所・値の字は src の字の literal に在る）。
+ const CLASS_PREFIXES: [&str; 7] = ["c-", "fb-", "h-", "r-", "sd-", "sev-", "st-"];
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index c7bd2c612130b811cfa15bafd61c0e8846d197d9..d03696d2e3c952c0f1a35ce3f0c9bb4293d8e558 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1769,6 +1769,141 @@
+    "plain": "断りの理由を直すと、器が次の周に受付をやり直す",
+    "internal": "器の起こす側の周の受付の判定"
+   },
++  "rf:not-a-repo": {
++   "label": "置き場が git の repo でない",
++   "plain": "器が撃つ置き場が git の repo でない",
++   "internal": "器の受付の断り Refuse::NotARepo（not-a-repo）"
++  },
++  "rf:duplicate-run": {
++   "label": "同じ便が同じ秒に重なった",
++   "plain": "同じ bead を同じ秒にもう 1 度受け付けようとした\n→ 少し待つと次の周に通る",
++   "internal": "器の受付の断り Refuse::DuplicateRun（duplicate-run）"
++  },
++  "rf:write-set-overlap": {
++   "label": "走っている便と書く file が重なる",
++   "plain": "走っている便の書く file と重なる\n→ その便が終わると通る",
++   "internal": "器の受付の断り Refuse::WriteSetOverlap（write-set-overlap）"
++  },
++  "rf:write-set-unreadable": {
++   "label": "走っている便の書く file が読めない",
++   "plain": "走っている便の契約の写しが読めない",
++   "internal": "器の受付の断り Refuse::WriteSetUnreadable（write-set-unreadable）"
++  },
++  "rf:write-set-incomplete": {
++   "label": "書く file の一覧に要る file が足りない",
++   "plain": "契約の行の書く file の一覧に、触れる file が足りない\n→ 席が一覧を直す",
++   "internal": "器の受付の断り Refuse::WriteSetIncomplete（write-set-incomplete）"
++  },
++  "rf:write-set-dir-without-slash": {
++   "label": "書く file の一覧の dir に / が無い",
++   "plain": "書く file の一覧の dir の末に / が無い\n→ 席が一覧を直す",
++   "internal": "器の受付の断り Refuse::WriteSetDirWithoutSlash（write-set-dir-without-slash）"
++  },
++  "rf:contract-table": {
++   "label": "契約表の行の形が崩れている",
++   "plain": "契約表の行の形が読めない\n→ 席が契約表を直す",
++   "internal": "器の受付の断り Refuse::ContractTable（contract-table）"
++  },
++  "rf:write-set-item-unresolved": {
++   "label": "書く file の項目が今の木に無い",
++   "plain": "書く file の一覧の項目が今の main の木に無い\n・ 前の行の着地を待つ時にも出る",
++   "internal": "器の受付の断り Refuse::WriteSetItemUnresolved（write-set-item-unresolved）"
++  },
++  "rf:cap-headroom": {
++   "label": "file の行数の上限の余地が足りない",
++   "plain": "書く file の行数の上限に余地が足りない\n→ 席が file を割るか見込みを直す",
++   "internal": "器の受付の断り Refuse::CapHeadroom（cap-headroom）"
++  },
++  "rf:name-unresolved": {
++   "label": "名指した名が今の木に無い",
++   "plain": "契約の字が名指す path・型・fn が今の main の木に無い",
++   "internal": "器の受付の断り Refuse::NameUnresolved（name-unresolved）"
++  },
++  "rf:write-set-drift": {
++   "label": "書く file の一覧が導いた値と違う",
++   "plain": "手で書いた書く file の一覧が、器が導いた一覧と違う",
++   "internal": "器の受付の断り Refuse::WriteSetDrift（write-set-drift）"
++  },
++  "rf:teeth-place-unresolved": {
++   "label": "歯の置き場が分からない",
++   "plain": "verify の歯の名の file が今の木に無く、欄にも無い",
++   "internal": "器の受付の断り Refuse::TeethPlaceUnresolved（teeth-place-unresolved）"
++  },
++  "rf:also-names-rust": {
++   "label": "欄 also に .rs が在る",
++   "plain": "欄 also に Rust の file を書いた\n→ 席が欄を直す",
++   "internal": "器の受付の断り Refuse::AlsoNamesRust（also-names-rust）"
++  },
++  "rf:tests-not-a-teeth-file": {
++   "label": "欄 tests の項目が歯の file でない",
++   "plain": "欄 tests に歯でない file を書いた\n→ 席が欄を直す",
++   "internal": "器の受付の断り Refuse::TestsNotATeethFile（tests-not-a-teeth-file）"
++  },
++  "rf:fn-undeclared": {
++   "label": "名指した fn の file が無い",
++   "plain": "触れる fn を宣言する file が今の木に無い",
++   "internal": "器の受付の断り Refuse::FnUndeclared（fn-undeclared）"
++  },
++  "rf:teeth-outside-write-set": {
++   "label": "verify の歯の file が書く file の外",
++   "plain": "verify の歯が当たる file が書く file の一覧に無い\n→ 席が一覧に足す",
++   "internal": "器の受付の断り Refuse::TeethOutsideWriteSet（teeth-outside-write-set）"
++  },
++  "rf:hand-written-contract": {
++   "label": "手で書いた契約を渡した",
++   "plain": "契約の正本は設計の行だけ\n→ 設計の行から受け付け直す",
++   "internal": "器の受付の断り Refuse::HandWrittenContract（hand-written-contract）"
++  },
++  "rf:same-kind-repeated": {
++   "label": "同じ型の審査の落ちが続いた",
++   "plain": "同じ理由の審査の落ちが続き、契約も節も替わっていない\n→ 席が契約か節を直す",
++   "internal": "器の受付の断り Refuse::SameKindRepeated（same-kind-repeated）"
++  },
++  "rf:finding-unaddressed": {
++   "label": "前の便の指摘に応えていない",
++   "plain": "前の便の審査の指摘に応える直しが無い\n→ 席が契約か節を直す",
++   "internal": "器の受付の断り Refuse::FindingUnaddressed（finding-unaddressed）"
++  },
++  "rf:promised-field-written": {
++   "label": "約束の行が器の導く欄を書いた",
++   "plain": "約束の行が、器が導く欄を手で書いた",
++   "internal": "器の受付の断り Refuse::PromisedFieldWritten（promised-field-written）"
++  },
++  "rf:promise-symbol-unresolved": {
++   "label": "約束の行の名が今の木と合わない",
++   "plain": "約束の行の名が今の木に無いか、新しい名が既に在る",
++   "internal": "器の受付の断り Refuse::PromiseSymbolUnresolved（promise-symbol-unresolved）"
++  },
++  "rf:max-live": {
++   "label": "走っている便の数が上限",
++   "plain": "走っている便の数が上限に達した\n→ 便が終わると通る",
++   "internal": "器の受付の断り Refuse::MaxLive（max-live）"
++  },
++  "rf:entrance-not-red": {
++   "label": "入口の歯が今の木で赤くない",
++   "plain": "verify の歯が着地の前の木で既に緑か測れない",
++   "internal": "器の受付の断り Refuse::EntranceNotRed（entrance-not-red）"
++  },
++  "rf:ruling-unresolved": {
++   "label": "引いた裁定が台帳に無い",
++   "plain": "契約の字が引く裁定 id が台帳に解けない",
++   "internal": "器の受付の断り Refuse::RulingUnresolved（ruling-unresolved）"
++  },
++  "rf:index-building": {
++   "label": "code の索引を組んでいる",
++   "plain": "code の索引の組み立てが済んでいない\n→ 済むと通る",
++   "internal": "器の受付の断り Refuse::IndexBuilding（index-building）"
++  },
++  "rf:code-facts": {
++   "label": "code の事実の名乗りが実測と違う",
++   "plain": "契約が名乗る code の事実が、索引の実測と違う",
++   "internal": "器の受付の断り Refuse::CodeFacts（code-facts）"
++  },
++  "rf:code-facts-unmeasured": {
++   "label": "code の索引を測れない",
++   "plain": "契約が名乗る code の事実を、索引が無くて測れない",
++   "internal": "器の受付の断り Refuse::CodeFactsUnmeasured（code-facts-unmeasured）"
++  },
+   "hm:intake": {
+    "label": "受付の断り",
+    "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",

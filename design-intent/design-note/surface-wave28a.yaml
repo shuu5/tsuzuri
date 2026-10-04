@@ -1,0 +1,267 @@
+# 設計ノート surface-wave28a — （発効 2026-10-04・持ち主の裁定〔判断の記録 ADR-42 の承認・承認の列〕・行の拠り = 判断の記録 ADR-42 と ADR-27 と ADR-36）第 28 波 a。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave28a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave28a.toml#<行 id>。
+meta:
+  id: surface-wave28a
+  title: 第 28 波 a — board の留め置き（判断の記録 ADR-42）の器の行と board の行と、後で足す行
+  version: v0.2
+  status: effective
+  generated: 2026-10-04
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.79.1（裁定 id = t3-hub.79.1:20261004T0959Z-1・ADR-42 の案 A のまま承認・席とのチャット・notes に逐語）〔判断の記録 ADR-42 の承認・ノートの承認〕, verbatim: 承認する, surface: R-8}
+  note: ノート bakeoff-surface（下書き・契約表の行 0・比較試作は判断の記録 ADR-3 で決着済み・同じ commit で廃止）の後。承認は判断の記録 ADR-42 の持ち主の裁定（承認の列）。第 0.1 版（2026-10-04）は目的と、判断の記録 ADR-42 の器の行 v-hold-why・v-hold-case・v-refuse-why（止めの口の理由と観測の口の止めの行と待ちの知らせの重なりの欄の名・局面の出力の契約の部品の止めの理由と時刻と止めの直後の書き直し・受付の断りの 1 行の理由・試作は係 w132a・直しは係 w134a と w136a・差の file の形・差は 27b の器の行の差の上で切った・27b の器の行の着地の後に流す）を置いた。 第 0.2 版（2026-10-04）は board の行 c-held-stage・g-held-col・g-held-pop・g-held-name・g-held-page（試作は係 w133a・直しは係 w134a と w135a・差の file の形）を足した。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      判断の記録 ADR-42（board の新しい状態の留め置き〔Held〕・依存でない理由で人の手を待つ契約を Blocked と同じ列に印で分けて出し、席の止めの理由は器の止めの印だけに置く）の器の行と board の行と、後で足す行。器の行は止めの口の理由・局面の出力の止めの理由と時刻・受付の断りの理由を器に足す（器 scribe2/ を書く便は同時に 1 本まで・判断の記録 ADR-33 の決定 (12)・27b の器の行の着地の後に流す）。board の行は段 Held の分類と札と吹き出しと個別の頁を足す。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: v-hold-why
+        title: 器の止めの口 pipe dispatch hold が 1 行の理由（--reason）を要って印の行の detail に書き、dispatch ls が理由が hold の候補ごとに止めの行を件数の行の前に足し、器の待ちの知らせの重なりの欄の名を overlap に替える（判断の記録 ADR-42 の決定 (4)(5)(8)・差の file）
+        req: ["FR1068"]
+        section: "3"
+        write-set: ["scribe2/crates/scribe2/src/help.rs", "scribe2/crates/scribe2/src/pipe/cli.rs", "scribe2/crates/scribe2/src/pipe/cli/args.rs", "scribe2/crates/scribe2/src/pipe/dispatch.rs", "scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs", "scribe2/crates/scribe2/src/pipe/dispatch/facts.rs", "scribe2/crates/scribe2/src/pipe/dispatch/refused.rs", "scribe2/crates/scribe2/src/pipe/mod.rs", "scribe2/crates/scribe2/src/seat/tick.rs", "scribe2/crates/scribe2-boundary/tests/e2e/notify.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/waiting.rs", "scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap"]
+        verify: ["git apply --reverse --check docs/design/patch/v-hold-why.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vhold_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vhold_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_notify_facts_", "cargo run -q -p xtask -- check"]
+        size: M
+        growth: ["scribe2/crates/scribe2/src/pipe/dispatch.rs:110", "scribe2/crates/scribe2/src/pipe/mod.rs:5", "scribe2/crates/scribe2/src/seat/tick.rs:2"]
+        done: (1) 器の lib の印の畳みは、bead ごとの最後の印が理由つきの hold の時だけ理由を持ち（理由は detail の頭の 7 字〔字 reason と半角のコロン〕の後ろ）、後の first・release・理由の無い hold が理由を外し、頭がその 7 字でない detail は理由にせず、同じ bead の後の hold の理由が前の理由に勝ち、理由の無い hold も印としては効く（歯 vhold_marks_keep_the_reason_of_the_last_hold_only） (2) 印の理由の受けは、hold で理由が無い・空白だけ・改行（LF か CR）を含む周を断りの字（hold は --reason の理由を要る・--reason の理由が空である・--reason の理由が改行を含む）で断り、通る理由は detail を頭の 7 字と理由の字にし、first・release・launched は理由を断りの字（--reason は hold だけが受ける と全角の括弧の中の印の名）で断り、理由なしは detail なしで通す（歯 vhold_why_of_needs_one_line_on_hold_and_refuses_it_on_the_other_marks） (3) 止めの行は理由が hold の候補だけに立ち、字は [DISPATCH-HOLD] と bead=<id> と since=<印の時刻> と why=<理由> を空白でつないだ 1 行で、理由の無い古い印は why=- で、印が hold でも理由が依存の候補と理由の無い候補は立たない（歯 vhold_hold_line_names_bead_since_and_why_only_for_the_hold_reason） (4) 器の binary の pipe dispatch で、理由の無い hold・空白だけの理由の hold・改行を含む理由の hold・理由つきの first・理由つきの release は rc 1 で断りの字を stderr に出して印を 1 行も書かず、理由つきの hold は rc 0 で stdout は印の行 [DISPATCH] bead=<id> mark=hold の 1 行のまま、置き場の止めの印の行は 1 行で detail は頭の 7 字と理由（器の e2e の歯 vhold_hold_needs_one_line_reason_and_other_marks_refuse_it_without_a_mark） (5) 器の binary の dispatch ls は、理由が hold の候補の止めの行を件数の行の直前に 1 行足し（since は印の行の時刻・why は理由）、その候補の [DISPATCH] の行は mark=hold reason=hold と半角のコロンと印の時刻のまま替えず、release の後と止め直した後の first の後は止めの行を足さない（器の e2e の歯 vhold_listing_adds_the_hold_line_before_the_count_until_release_or_first） (6) 終端の待ちの知らせの末尾の重なりの欄の名は overlap で、重なる候補 1 本と file 1 つの周の末尾は live=1 idle=- overlap=1 と半角のコロンと file 名、重なる候補の無い周は overlap=0（器の e2e の着地済みの歯 pipe_notify_facts_crossing_live_run_reports_one_live_and_the_crossed_file と pipe_notify_facts_hold_round_without_live_runs_reports_zero_live_and_zero_minutes） (7) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+      - id: v-hold-case
+        title: 器の局面の出力の契約の部品に任意の欄 why（止めの印の理由）と止めた時刻の since を載せ、受付の断りの since を列の理由が admission の周も断りの記録の時刻にし、理由つきの止めの口が印の直後に全部の書き直しを切り離した子で起こす（判断の記録 ADR-42 の決定 (5)(6)・差の file）
+        req: ["FR1090", "FR1068"]
+        section: "4"
+        write-set: ["scribe2/crates/scribe2/src/case/mod.rs", "scribe2/crates/scribe2/src/fleet/lifecycle.rs", "scribe2/crates/scribe2/src/fleet/lifecycle_partial.rs", "scribe2/crates/scribe2/src/fleet/phase.rs", "scribe2/crates/scribe2/src/ledger/phase.rs", "scribe2/crates/scribe2/src/pipe/cli.rs", "scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs", "scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs", "scribe2/crates/scribe2-boundary/tests/e2e/seat/tick.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/v-hold-case.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vhdcase_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vhdcase_", "cargo run -q -p xtask -- check"]
+        size: M
+        growth: ["scribe2/crates/scribe2/src/fleet/lifecycle.rs:5", "scribe2/crates/scribe2/src/ledger/phase.rs:5"]
+        done: (1) 器の lib の局面の部品は、列の理由が hold の契約を contract-queued・理由 hold にし、since を列の判定の値の字（印の時刻）に、欄 why を印の理由にし、理由の無い印の契約は why を持たず、hold でない理由（依存）の判定は理由の字を持っても since と why を持たない（歯 vhdcase_hold_part_takes_the_mark_time_and_the_reason） (2) 受付の断りの契約の since は、列の理由が admission の周も同じ名の断りの記録の時刻で、名の違う記録しか無い周と記録の無い周は持たず（書き手が継ぐ）、列に無い断りは今のとおり記録の時刻（歯 vhdcase_refused_part_since_is_the_record_time_of_the_same_name） (3) 部分の書き直しは契約の部品の欄 why を出力の読みと書きを通して残し、why の無い契約の部品は鍵 why を書かない（歯 vhdcase_partial_rewrite_keeps_the_why_of_the_contract_part） (4) 器の binary で、--repo を渡した理由つきの止めは rc 0 で stdout は印の行の 1 行のまま、局面の出力の全部の書き直しを切り離した子で起こし、出力の契約の部品は contract-queued・理由 hold・since が印の行の時刻・欄 why が最後の止めの理由（器の e2e の歯 vhdcase_hold_rewrites_the_output_with_the_reason_and_the_mark_time） (5) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["v-hold-why"]
+      - id: v-refuse-why
+        title: 器の受付の断りの 1 行の理由を列の待ちの理由と断りの記録の行の detail に持ち、局面の出力の contract-refused の部品の欄 why に写す（判断の記録 ADR-42 の決定 (6)・差の file）
+        req: ["FR1090", "FR1068"]
+        section: "5"
+        write-set: ["scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs", "scribe2/crates/scribe2/src/fleet/phase.rs", "scribe2/crates/scribe2/src/pipe/dispatch.rs", "scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs", "scribe2/crates/scribe2/src/pipe/dispatch/refused.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/terminal.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/v-refuse-why.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vhdref_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vhdref_", "cargo run -q -p xtask -- check"]
+        size: M
+        growth: ["scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs:3", "scribe2/crates/scribe2/src/pipe/dispatch.rs:10"]
+        done: (1) 断りの記録の行の detail に書く 1 行は、候補の受付の断りの 1 行の理由で、理由の無い断り・受付でない理由（止め）の候補・候補に無い bead は持たない（歯 vhdref_record_detail_is_the_one_line_reason_of_the_candidate） (2) 受付の断りの契約の部品の欄 why は列の判定の 1 行の理由で、列の判定が理由を持たない周は同じ名の断りの記録の detail、名の違う記録の detail は持たず、列に無い断りは記録の detail（歯 vhdref_refused_part_carries_the_one_line_reason） (3) 器の binary で、断りの記録の前の局面の出力の全部の書き直しは断られた bead の契約の部品を contract-refused にして欄 why を列の判定の 1 行にし、起こす側の 1 周が書く受付の断りの記録は 1 件で detail がその同じ 1 行（断られた file を名指す・改行なし）、その bead を止めた後の書き直し（列の理由が admission でない周）は便の起きていない記録の detail を欄 why に持ち、同じ置き場で止めた別の契約の部品の欄 why は止めの理由（器の e2e の歯 vhdref_firing_round_records_the_one_line_reason_and_the_output_carries_it） (4) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["v-hold-case"]
+      - id: c-held-stage
+        title: 契約の型の段に留め置き（Held・列は Blocked）を足し、中核が局面の出力の止め（hold）と受付の断りを Held にし、契約の部品に任意の欄 why を読む（判断の記録 ADR-42 決定 (1)(2)(6)・差の file）
+        req: ["FR10"]
+        section: "7"
+        write-set: ["crates/tsuzuri-contract/src/board.rs", "crates/tsuzuri-contract/src/case.rs", "crates/tsuzuri-contract/tests/snapshots/board.json", "crates/tsuzuri-contract/tests/teeth1/cform_board.rs", "crates/tsuzuri-contract/tests/teeth1/cform_case.rs", "crates/tsuzuri-core/src/case.rs", "crates/tsuzuri-core/src/pipeline.rs", "+crates/tsuzuri-core/tests/hdst.rs", "crates/tsuzuri-core/tests/teeth1/bvcase.rs", "crates/tsuzuri-core/tests/teeth1/bvlc.rs", "crates/tsuzuri-core/tests/teeth1/bvqcol.rs", "crates/tsuzuri-core/tests/teeth2/stats.rs", "crates/tsuzuri-surface/src/account/session.rs", "crates/tsuzuri-surface/src/widgets/keyline.rs", "crates/tsuzuri-surface/src/widgets/pop.rs", "crates/tsuzuri-surface/src/widgets/runflow.rs", "crates/tsuzuri-surface/tests/teeth1/bvcols.rs", "crates/tsuzuri-surface/tests/teeth2/bvpop.rs", "crates/tsuzuri-surface/tests/teeth2/bvuphase.rs", "crates/tsuzuri-surface/tests/teeth2/bvwhy.rs", "crates/tsuzuri-surface/tests/teeth4/pipe.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-held-stage.patch", "cargo clippy -p tsuzuri-contract -p tsuzuri-core -p tsuzuri-surface -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test hdst --no-tests=fail hdst_", "cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail contract_form_board_", "cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail bvcform_", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail bvcase_", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail bvlc_", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail bvqcol_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail stats_pipeline_", "cargo nextest run -p tsuzuri-surface --test teeth1 --no-tests=fail bvcols_", "cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail bvpop_", "cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail bvuphase_", "cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail bvwhy_", "cargo nextest run -p tsuzuri-surface --test teeth4 --no-tests=fail pipe_columns_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 契約の型の段の閉じた列 Stage::ALL は 9 で Held を持ち、Held の列は Blocked で、電文の字は Held（歯 hdst_held_in_closed_stages） (2) 局面の出力の契約の部品が contract-queued で理由 hold の札は、走行の無い札も走行の在る札も段 Held で理由は hold・since は部品の時刻で、理由だけ host-busy に替えた見本は Queued（歯 hdst_seat_hold_is_held） (3) contract-refused の札は走行の有無によらず段 Held で理由は断りの名・since は部品の時刻で、局面だけ contract-queued に替えた見本は Queued（歯 hdst_intake_refusal_is_held） (4) 理由 dependency・overlap・reserved は Blocked のまま（歯 hdst_partner_reasons_stay_blocked）、理由 host-busy・launched・floor・unreflected-ruling・sibling は Queued のまま（歯 hdst_self_clearing_reasons_stay_queued） (5) 局面の出力が読めない（版が 2）間は止めと断りの部品が字に在っても Held にせず、台帳の blocks の割り（blocker が無ければ Queued・在れば Blocked で理由と since は None）（歯 hdst_unreadable_cases_no_held） (6) 中核の局面の出力の読みは部品の欄 why の字を読み、鍵の無い why と null は None で部品を落とさず、型の違う why の部品は落とし、契約の型の None の why は電文に鍵を書かない（歯 hdst_why_optional_field） (7) 着地した歯の段の数と段の集合と止めと断りの段を Held に直した歯が緑（歯 contract_form_board_closed_lists・contract_form_board_snapshot_matches・bvqcol_since_and_reason_from_case・bvlc_waiting_contract_with_runs・bvlc_runless_from_parts・stats_pipeline_matches_fixture・pipe_columns_order_and_cards_sorted_by_elapsed） (8) 契約の部品を字で組む着地した歯の見本に why の 1 行を足して緑（歯 bvcform_snapshot_matches・bvcase_fields_copied_from_fixture・bvcols_lines_from_pop_wait・bvpop_blocked_targets_with_stage・bvuphase_rows_get_phase・bvwhy_queued_why_from_case） (9) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+      - id: g-held-col
+        title: Blocked の列の見出しを Blocked / Held にして数を内訳にし、留め置きの札に席の止めと受付の断りの印と要の 1 行を出す（判断の記録 ADR-42 決定 (3)(7)・差の file）
+        req: ["FR10"]
+        section: "8"
+        write-set: ["crates/tsuzuri-surface/src/project/pipeline.rs", "crates/tsuzuri-surface/src/widgets/keyline.rs", "crates/tsuzuri-surface/style.css", "+crates/tsuzuri-surface/tests/hdcol.rs", "crates/tsuzuri-surface/tests/teeth1/bvcull.rs", "crates/tsuzuri-surface/tests/teeth1/bvfive.rs", "crates/tsuzuri-surface/vocab.json"]
+        verify: ["git apply --reverse --check docs/design/patch/g-held-col.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test hdcol --no-tests=fail hdcol_", "cargo nextest run -p tsuzuri-surface --test teeth1 --no-tests=fail bvcull_", "cargo nextest run -p tsuzuri-surface --test teeth1 --no-tests=fail bvfive_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 段 Held の札は理由の語 hold なら席の止め・ほかの理由なら受付の断りで、段だけ Queued か Blocked に替えた見本は印なし（歯 hdcol_held_by_reason） (2) 板の Blocked の列の札は、Held の札が止めた者の印を持ち Blocked の札は印なし（歯 hdcol_card_mark_in_blocked_column） (3) Blocked の列の見出しの数は Blocked の数と中黒（U+00B7）と Held の数を空白を挟まずにつないだ内訳で、ほかの列は札の数（歯 hdcol_count_breakdown） (4) Held の札の要の 1 行は印の語と中黒と止めてからの経過で、since が無ければ経過は ― 、段だけ Queued に替えた見本は列にの字の行（歯 hdcol_key_line_mark_and_age） (5) 語の辞書の col_block の字は Blocked / Held で注は Held = 留め置きを含み、印の表は席の止めが鍵 hm:seat と class hdm hd-seat・受付の断りが鍵 hm:intake と class hdm hd-intake で語の辞書に在る（歯 hdcol_vocab_and_marks） (6) stylesheet に印の 3 つの規則が在り、列の見出しの数は count_text で、札の meta に印の span を置く（歯 hdcol_css_and_dom_text） (7) 着地した歯の札の欄の一覧と列の見出しの字を直した歯が緑（歯 bvcull_card_hover_values_gone・bvfive_column_words_in_vocab） (8) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["c-held-stage"]
+      - id: g-held-pop
+        title: 留め置きの札の吹き出しに止めた者・理由・止めた時刻と経過・解く条件の 4 つの欄を出す（判断の記録 ADR-42 決定 (7)・差の file）
+        req: ["FR10", "FR5"]
+        section: "9"
+        write-set: ["crates/tsuzuri-surface/src/widgets/pop.rs", "+crates/tsuzuri-surface/tests/hdpop.rs", "crates/tsuzuri-surface/vocab.json"]
+        verify: ["git apply --reverse --check docs/design/patch/g-held-pop.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test hdpop --no-tests=fail hdpop_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 席の止めの札の段の欄は止めた者 席・理由は部品の why の字・止めた時刻は札の since・解く条件 hu:seat の字の 4 つちょうどで、held_facts と同じ（歯 hdpop_seat_hold_facts） (2) 受付の断りの札は止めた者 器の受付・理由は断りの名の字と全角のコロンと why・止めた時刻・解く条件 hu:intake の字（歯 hdpop_intake_refusal_facts） (3) why の無い部品と読めない局面の出力では席の止めの理由はまだ分からない・受付の断りは断りの名の字と全角のコロンとまだ分からないの字で、since の無い札の止めた時刻はまだ分からない（歯 hdpop_missing_why_and_since_unknown） (4) 段だけ Queued か Blocked に替えた見本は留め置きの欄を持たず、Queued は列に入ったの欄だけ（歯 hdpop_other_stages_no_held_facts） (5) with_why は留め置きの札に起きない理由を足さず、吹き出しの末の 4 つの欄が留め置きの欄（歯 hdpop_with_why_leaves_held） (6) 欄の語の鍵 4 つと止めた者と解く条件の語の鍵 4 つは語の辞書に在り、stage_facts の Held の腕は held_facts（歯 hdpop_vocab_words） (7) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["g-held-col"]
+      - id: g-held-name
+        title: 器の受付の断りの名 27 語を平易な字にした語の辞書の鍵 rf と表を置き、留め置きの吹き出しの理由をその字で出す（判断の記録 ADR-42 決定 (7)・差の file）
+        req: ["FR10"]
+        section: "10"
+        write-set: ["crates/tsuzuri-surface/src/widgets/pop.rs", "+crates/tsuzuri-surface/tests/hdnm.rs", "crates/tsuzuri-surface/tests/hdpop.rs", "crates/tsuzuri-surface/tests/teeth2/bvlex.rs", "crates/tsuzuri-surface/vocab.json"]
+        verify: ["git apply --reverse --check docs/design/patch/g-held-name.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test hdnm --no-tests=fail hdnm_", "cargo nextest run -p tsuzuri-surface --test hdpop --no-tests=fail hdpop_", "cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail bvlex_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 表 REFUSALS は器の受付の断りの名 27 語を宣言の順に持ち、どの名も語の辞書の鍵 rf と名の字を持ち、字は名ごとに違う（歯 hdnm_refusal_names_in_vocab） (2) refusal_text は表の名を平易な字に引き、名の半角のコロンの後の詳細は外して引き、1 字違いの表に無い名は名のまま・名が無ければまだ分からない（歯 hdnm_refusal_text_plain） (3) 受付の断りの札の吹き出しの理由は断りの名の平易な字で始まる（歯 hdnm_pop_reason_starts_plain） (4) 行 g-held-pop の歯の受付の断りの理由の字を平易な字に直して緑（歯 hdpop_intake_refusal_facts・hdpop_missing_why_and_since_unknown） (5) 着地済みの歯の群 teeth2 の bvlex.rs の表 KEY_PREFIXES は字 rf と半角のコロンを持つ 6 つの接頭辞で、語の辞書の鍵 rf の 27 語は接頭辞で組む鍵として src から引かれる鍵に数えられ、組む所は pop.rs の REFUSAL_HEAD の字（歯 bvlex_keys_named_in_src・bvlex_prefix_sites_in_src） (6) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["g-held-pop"]
+      - id: g-held-page
+        title: 留め置きの bead の個別の頁の頭と概要の下に、吹き出しと同じ 4 つの欄の留め置きの段を出す（判断の記録 ADR-42 決定 (7)・差の file）
+        req: ["FR10", "FR15"]
+        section: "11"
+        write-set: ["crates/tsuzuri-surface/src/project/node.rs", "crates/tsuzuri-surface/style.css", "+crates/tsuzuri-surface/tests/hdpage.rs", "crates/tsuzuri-surface/vocab.json"]
+        verify: ["git apply --reverse --check docs/design/patch/g-held-page.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test hdpage --no-tests=fail hdpage_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 札が段 Held の bead の留め置きの段の欄は held_facts と吹き出しの stage_facts と同じ 4 つで、理由は部品の why の字（歯 hdpage_held_rows_same_as_pop） (2) 段だけ Queued か Blocked に替えた見本と札の無い bead は段を出さない（歯 hdpage_not_held_no_section） (3) 欄の値は字はそのまま・時刻は日本時間の字と経過・ほかはまだ分からない（歯 hdpage_held_text_values） (4) 段の見出しの鍵 nb_held は語の辞書の字 留め置き・class nheld の規則が stylesheet に在り、頁の頭と概要の後に段を置き、値の字は held_text（歯 hdpage_dom_and_words） (5) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["g-held-name"]
+  - n: 3
+    type: prose
+    title: 行 v-hold-why — 止めの口の理由と観測の口の止めの行と待ちの知らせの重なりの欄の名（判断の記録 ADR-42 の器の行の 1 本目）
+    body: |
+      差は 27b の器の行の差の上で切った。積みの木 ae47433a（main に 27b の 29 本の差と xp-host-runs の直しを重ねた席の木）の上に試作を載せ、ae47433a から 22346cc4 までを切った（58,420 byte）。27b の器の行（xp の 5 行・v-brief-const・v-brief-meter）の着地を待つのは席の止めで行う（27b は別のノートなので depends に書けない）。
+
+      在りか。差の file docs/design/patch/v-hold-why.patch は、積みの木 ae47433a とその上に試作を載せた木 22346cc4（写し drafts/w132a の branch fix-w136a）との差（15 file・+230 −50）。差の触れる file のうち main と積みの木で字が違う file（27b の器の行の足し）でも差の hunk はその足しと離れていて、床の写し main 5fabb6b7 に 3 行の差を順に当てると rc 0。
+
+      なぜ。判断の記録 ADR-42 の決定 (4)(5)(8)。器の止めの印（hold）は理由の字を持たず、止めの理由は席の台帳の notes にだけ在った。理由の正本を器の止めの印の行の欄 detail の 1 つにし、release で印を外すと効いている理由も一緒に消える形にする。器の待ちの知らせ（idle）の末尾の重なりの待ちの欄の名 held は、新しい状態の留め置き（Held）と同じ語根で取り違えるので、名を overlap に替える（数と file の並びの形は替えない）。この欄の読み手は器の中だけで、知らせの字を組む関数（pipe/dispatch/facts.rs の line）と器の e2e の歯 6 か所（notify.rs の 2 つの断言と seat/tick.rs の 4 つの否定の断言）。tsuzuri の crates と plugin の差し込みと席の script には無い（係の notes の表）。器の設計文書 dispatcher §4・§6・§26 は凍ったまま（ADR-36 の決定 (7)）で、この節が新しい振る舞いを書く: §4 の印は typed な欄 mark のまま判定に使い、理由は detail の自由文で判定に使わない（C3.3 を守る）。§6 の観測の口は今の行の字を替えずに行を足す。§26 の知らせの字の held は overlap と読み替える。
+
+      形。 - 口: pipe dispatch hold BEAD --reason WORDS（--reason は器の stop と regate と同じ字 REASON_FLAG・pipe dispatch の許す引数に足した）。印の名を解いた後、印を書く前に dispatch.rs の why_of が受けを決め、断る周は cli.rs が refused の 1 行（rc 1）で返り、印を書かない。通る周は mark が detail を emit_mark に渡す（emit_mark は detail の引数を足しただけ・ほかの欄は替えない）。 - 畳み: candidates.rs の marks_of が、First と Hold の印の行の detail の頭が定数 WHY_PREFIX（字 reason と半角のコロン）の時だけ bead ごとの理由の map（Marks の欄 why）に入れ、そうでない First と Hold と Release は外す。entry_of は WaitReason::Hold に欄 why（印の理由・判定に使わない）を載せる。render は why を書かない（reason=hold と半角のコロンと印の時刻のまま）。 - 観測: listing が件数の行の位置に、候補の理由が Hold の件ごとの止めの行（hold_line・書き出しは定数 HOLD_LINE の [DISPATCH-HOLD]）を、事前審査の行と束の行の前に差す。依存が開いた bead に付けた止めは、理由が依存なので止めの行を出さない（器の判定の順は依存が先・ADR-42 の決定 (2)）。 - 使い方: dispatch の usage の字に --reason WORDS（hold は要る）を足し、pipe の使い方の行と help の FORM に [dispatch hold: --reason WORDS（要る）] の括りを足した（外形の snapshot の 3 行も同じ）。 - 知らせ: facts.rs の line の 4 つの字 held を overlap に替え、doc の字を合わせた（seat/tick.rs の注 1 行も）。 - 着地済みの歯の止めの撃ち（e2e の notify.rs 3・pipe/dispatch.rs 2・waiting.rs 2・terminal.rs 2 の 9 か所）に理由を足し、seat/tick.rs の e2e の否定の断言 4 つの字を overlap に替えた。refused.rs の歯の見本の Hold に欄 why を足した。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜3 番目の項は verify の 3 行目（器の lib の歯 vhold_ の 3 本・在りかは pipe/dispatch.rs の歯の区間）、4 と 5 番目の項は 4 行目（器の e2e の歯 vhold_ の 2 本・在りかは e2e の pipe/dispatch/terminal.rs）、6 番目の項は 5 行目（着地済みの器の e2e の歯 pipe_notify_facts_ の 2 本・在りかは e2e の notify.rs）、最後の 7 番目の項は 6 行目で測る。verify の 1 行目（差の hunk が全部木に在る）と 2 行目（器の clippy）は命令の rc で測る守り。pipe の使い方と help の FORM の字は外形の snapshot の歯（6 行目の入れ子の nextest）が測る。
+
+      構造の連鎖（木 22346cc4 で grep）。WaitReason::Hold の構築は entry_of の 1 か所と歯 2 つ（dispatch.rs と refused.rs の見本）。Marks の構築は marks_of の 1 か所。emit_mark の呼び手は mark の 1 か所、mark の呼び手は cli.rs の queued の 1 か所。器の止めの口を撃つ着地済みの歯は e2e の 4 file の 9 か所で全部に理由を足した。知らせの字の held の読み手は上の 7 か所で全部を直した。器の file の行の上限（1500・幅で数える）: 書く src の file の最大は pipe/dispatch.rs の 1443（試作の後）。
+
+      入口の赤。積みの木 ae47433a には名に vhold_ を持つ歯が 1 本も無いので、verify の 3 行目と 4 行目は --no-tests=fail で落ちる。着地済みの歯 pipe_notify_facts_ の 2 本は、この差の e2e の字（overlap）を積みの木の src（held）で撃つと落ちる（下の噛みの facts の 2 つ）。
+
+      試作と噛み。写し drafts/w132a で書く file は write-set の中で閉じる（15 file）。verify の 2〜5 行目は rc 0。入れ子の clippy（cwd scribe2/・入れ子の置き場・--workspace --all-targets -- -D warnings）は 3 行の各先端で rc 0（係 w136a）。席が 27b の差と 28a の 8 行の差を重ねた積みの木で根の xtask check（入れ子の build・nextest・clippy・器の check を含む）を撃ち、rc 0（根の歯 3277 本・器の歯 4079 本）。係は噛みの木（先端に、印の file が無ければ全部効かない変異の枝を足した木・差の file に入れない）で、印なしの nextest --workspace --no-fail-fast を入れ子の置き場（target は nested/scribe2・cwd は scribe2/）で 1 回撃ち、4079 本のうち 4078 本が通った。落ちた 1 本は xtask の歯 check_passes_on_workspace で、理由は噛みの枝の関数が持つ印の file の絶対 path（paths-clean と private-clean の 2 つ・先端の字には無い）だけ。 噛みは 3 行の先端に、印の file に書いた変異の名だけを効かせる枝を足した木（差の file に入れない・組み直さずに変異を切り替える）で、句ごとに 1 つの変異を入れて名指しの歯を撃った。この行は 28 の変異（lib 14・e2e 14）が全部 rc 100 で、落ちた断言はどれもその句の字（done の項ごとに 1 番目 6・2 番目 6・3 番目 2・4 番目 7・5 番目 5・6 番目 2・6 番目の 2 つは知らせの字を held に戻す変異で、積みの木の src の字と同じ）。印なしの対照（lib の 8 本と e2e の 6 本）は rc 0。残りの 4 句（1 番目の項の理由の無い hold も印としては効く・2 番目の項の理由なしは detail なしで通す・3 番目の項の行の字の形と理由の無い候補は立たない）にも後から 7 つの変異（lib）を入れ、どれも名指しの歯が rc 100 で落ちた（係 w134a）。理由の無い hold を印の表に入れない変異は初め rc 0（歯の空振り・断言が印の種だけを見ていた）だったので、歯 vhold_marks_keep_the_reason_of_the_last_hold_only の断言を印の種と時刻（理由の無い hold の時刻）の組で見る形に直し、rc 100 になった。この 7 つの対照（lib の 6 本）は rc 0。
+
+      範囲の外。局面の出力への理由の足し（行 v-hold-case）。受付の断りの理由（行 v-refuse-why）。board の段と札（board の行）。器の設計文書の書き換え。席の包みの script と起草の守りと memory を理由つきの止めに替える手（着地の後の席の手）。
+  - n: 4
+    type: prose
+    title: 行 v-hold-case — 局面の出力の契約の部品の止めの理由と時刻と止めの直後の書き直し（判断の記録 ADR-42 の器の行の 2 本目）
+    body: |
+      差は 27b の器の行の差の上で切った。積みの木 ae47433a（main に 27b の 29 本の差と xp-host-runs の直しを重ねた席の木）の上に試作を載せ、22346cc4 から cfb81a4f までを切った（23,031 byte）。27b の器の行（xp の 5 行・v-brief-const・v-brief-meter）の着地を待つのは席の止めで行う（27b は別のノートなので depends に書けない）。
+
+      在りか。差の file docs/design/patch/v-hold-case.patch は、行 v-hold-why の試作の木 22346cc4 とその上に試作を載せた木 cfb81a4f（写し drafts/w132a の branch fix-w136a）との差（9 file・+172 −18）。行 v-hold-why の差を当てた木にそのまま当たる（差の触れる file は 27b の器の行の差が触れない）。
+
+      なぜ。判断の記録 ADR-42 の決定 (5)(6)。board は器の局面の出力（fleet/lifecycle.json）だけを読み、止めは契約の部品の局面 contract-queued・理由 hold で出るが、理由の字も止めた時刻も持たず（since は書き手が前の出力から継ぐかこの書きの時刻）、止めの口は列の 1 周も全部の書き直しも撃たないので、止めた直後は board に出なかった。受付の断りの部品も、列の理由が admission の周は since を持たなかった。器の設計文書 case-lifecycle §5.2（契約の種類の欄）・§12・§21（答えの口の後に切り離した子で全部の書き直しを起こす形）は凍ったまま（ADR-36 の決定 (7)）で、この節が新しい振る舞いを書く: §5.2 の契約の欄は pointer に任意の why を足す（無ければ鍵を書かない・出力の版は 1 のまま・読み手は欠けた鍵を値なしと読む）。§21 の切り離した子の形を止めの口にも使う。
+
+      形。 - 型: fleet/phase.rs の Judged（列の判定 1 件）に欄 why（止めの印の理由）を足し、candidates.rs の judged_of が WaitReason::Hold の why を渡す。case/mod.rs の Extra::Contract に欄 why を足す。 - 部品: phase.rs の contract_part が、列の理由が定数 HOLD（字 hold）の契約の since を判定の値の字（印の時刻）に、why を判定の why にし、ほかの理由は since も why も持たない。refusal_of の 1 つ目の枝（列の理由が admission）は、同じ名の断りの記録が在ればその時刻を since にする（名が替わって記録がまだ無い周は書き手が継ぐ）。 - 出力: fleet/lifecycle.rs の extra_pairs が why の在る部品だけ鍵 why を書き、part_of が鍵 why を読む（部分の書き直しは出力を読んで書き直すので、契約の部品の why はこの読みと書きで残る）。閉じた契約（ledger/phase.rs）と歯の見本の構築は why を持たない。 - 口: cli.rs の queued が、理由つきの止めの印を書けた周に rewrite_after_hold を呼び、--repo を渡された周だけ自分の binary の子 fleet lifecycle write --state-dir S --repo R（--bd と --rules はそのまま）を process group 0・入出力を捨てて起こし、待たずに返る（口の rc と字は替えない・起こせない周は何もしない＝次の契機が拾う・seat/cli.rs の rewrite_later と同じ形・起こす記述は Invocation で Command::new を書かない）。 - 着地済みの歯の Extra::Contract の構築 4 か所（ledger/phase.rs の歯・lifecycle_partial.rs の見本・e2e の seat/tick.rs）に why を足した。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 と 2 番目の項は verify の 3 行目（器の lib の歯 vhdcase_ の 2 本・在りかは fleet/phase.rs の歯の区間）、3 番目の項も 3 行目（歯 1 本・在りかは fleet/lifecycle_partial.rs の歯の区間）、4 番目の項は 4 行目（器の e2e の歯 vhdcase_ の 1 本・在りかは e2e の fleet.rs・置き場の Life の見本の台帳を依存の無い契約 toy-c2 の形に替えて撃つ）、最後の 5 番目の項は 5 行目で測る。verify の 1 行目と 2 行目は命令の rc で測る守り。
+
+      構造の連鎖（木 cfb81a4f で grep）。Judged の構築は judged_of の 1 か所と歯の見本 1 つ。Extra::Contract の構築は phase.rs と ledger/phase.rs と歯の 3 か所、読みは lifecycle.rs の part_of、書きは extra_pairs。refusal_of の呼び手は contract_part の 1 か所。rewrite_after_hold の呼び手は queued の 1 か所。器の file の行の上限（1500・幅で数える）: 書く src の file の最大は fleet/lifecycle.rs の 1468（試作の後）。
+
+      入口の赤。行 v-hold-why の木 22346cc4 には名に vhdcase_ を持つ歯が無いので、verify の 3 行目と 4 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。写し drafts/w132a で書く file は write-set の中で閉じる（9 file）。verify の 2〜4 行目は rc 0。入れ子の clippy（cwd scribe2/・入れ子の置き場・--workspace --all-targets -- -D warnings）は 3 行の各先端で rc 0（係 w136a）。席が 27b の差と 28a の 8 行の差を重ねた積みの木で根の xtask check（入れ子の build・nextest・clippy・器の check を含む）を撃ち、rc 0（根の歯 3277 本・器の歯 4079 本）。係は噛みの木（先端に、印の file が無ければ全部効かない変異の枝を足した木・差の file に入れない）で、印なしの nextest --workspace --no-fail-fast を入れ子の置き場（target は nested/scribe2・cwd は scribe2/）で 1 回撃ち、4079 本のうち 4078 本が通った。落ちた 1 本は xtask の歯 check_passes_on_workspace で、理由は噛みの枝の関数が持つ印の file の絶対 path（paths-clean と private-clean の 2 つ・先端の字には無い）だけ。 噛みは 3 行の先端に、印の file に書いた変異の名だけを効かせる枝を足した木（差の file に入れない・組み直さずに変異を切り替える）で、句ごとに 1 つの変異を入れて名指しの歯を撃った。この行は 13 の変異（lib 8・e2e 5）が全部 rc 100 で、落ちた断言はどれもその句の字（done の項ごとに 1 番目 4・2 番目 2・3 番目 2・4 番目 5）。印なしの対照は rc 0。残りの 3 句（1 番目の項の理由の無い印の契約は why を持たない・2 番目の項の記録の無い周は since を持たない と 列に無い断りは記録の時刻）にも後から 3 つの変異（lib）を入れ、どれも名指しの歯が rc 100 で落ちた（係 w134a）。対照は rc 0。
+
+      範囲の外。受付の断りの 1 行の理由（行 v-refuse-why）。局面の出力の show の字の形（欄 why は JSON にだけ載り show の行は替えない）。board の読み（board の行）。器の設計文書の書き換え。
+  - n: 5
+    type: prose
+    title: 行 v-refuse-why — 受付の断りの 1 行の理由を断りの記録と局面の出力に載せる（判断の記録 ADR-42 の器の行の 3 本目）
+    body: |
+      差は 27b の器の行の差の上で切った。積みの木 ae47433a（main に 27b の 29 本の差と xp-host-runs の直しを重ねた席の木）の上に試作を載せ、cfb81a4f から 54173ea5 までを切った（24,105 byte）。27b の器の行（xp の 5 行・v-brief-const・v-brief-meter）の着地を待つのは席の止めで行う（27b は別のノートなので depends に書けない）。
+
+      在りか。差の file docs/design/patch/v-refuse-why.patch は、行 v-hold-case の試作の木 cfb81a4f とその上に試作を載せた木 54173ea5（写し drafts/w132a の branch fix-w136a）との差（6 file・+152 −26）。行 v-hold-case の差を当てた木にそのまま当たる。
+
+      なぜ。判断の記録 ADR-42 の決定 (6)。受付の断りは列の理由 admission と断りの名だけを持ち、1 行の理由（どの file をなぜ断ったか）は捨てていた（器の preflight だけが出す）ので、board の受付の断りの札の吹き出しの理由は断りの名しか出せなかった。器の設計文書 dispatcher §32（断りの記帳）は凍ったまま（ADR-36 の決定 (7)）で、この節が新しい振る舞いを書く: 断りの記録の行（IntakeRefused）の欄 detail に 1 行の理由を載せる（書く周は今のとおり断りに入った周と名が替わった周だけ・名が同じで理由の字だけが替わった周は書かない）。理由は判定に使わない。理由の字は宣言の中の path を字のまま含む（公開の repo の中の path）。
+
+      形。 - 型: pipe/dispatch.rs の WaitReason::Admission に欄 why（断りの 1 行の理由）を足す。render と dispatch ls の字は替えない（reason=admission と半角のコロンと断りの名のまま）。 - 列: candidates.rs の refused_by が、受付の判定の断り（Denial）から断りの名と、型の断りの列の先頭の Refuse::reason（1 行・型を持たない断りは理由なし）を組む。受付の断りを返す 4 か所（材料の読み・契約の生成・交差の測り・受付の判定）がこれを使い、列自身の語（MARK・SPAWN・SLOT）は理由なし。judged_of は Admission の why も Judged に渡す。 - 記帳: refused.rs の record が、書く周の行の detail を reason_line（候補の Admission の why）にする（refusal の組みは detail なしのまま・選びと書く周の判定は替えない）。 - 読み: fleet/lifecycle_mark.rs の refusals_of が記録の detail を phase.rs の Refused の欄 why に持つ。 - 部品: phase.rs の refusal_of が 1 行の理由を返し、列の理由が admission の周は列の判定の why（無ければ同じ名の記録の why）、列に無い断りは記録の why を、contract_part が契約の部品の欄 why に置く。 - 着地済みの歯の Admission の構築（dispatch.rs と refused.rs の見本）に why を足し、candidates.rs の索引の契機の照らしの形に .. を足した。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 3 行目（器の lib の歯 vhdref_・在りかは pipe/dispatch/refused.rs の歯の区間）、2 番目の項も 3 行目（在りかは fleet/phase.rs の歯の区間）、3 番目の項は 4 行目（器の e2e の歯 vhdref_ の 1 本・在りかは e2e の pipe/dispatch/terminal.rs・受付の断りの記帳の見本 refused_ledger の置き場を局面の出力を書ける形にし〔助け writable_place〕、書き直しは助け written_field が rules の写しを渡して撃つ）、最後の 4 番目の項は 5 行目で測る。verify の 1 行目と 2 行目は命令の rc で測る守り。render の字が why を書かないことは着地済みの歯 pipe_dispatch_wait_reasons_render_the_name_and_the_value（5 行目の入れ子の nextest）が測る。
+
+      構造の連鎖（木 54173ea5 で grep）。WaitReason::Admission の構築は candidates.rs の 6 か所（refused_by 4・MARK・SLOT）と dispatch.rs の起こせない周の 1 か所と歯 2 つ、照らしの形は candidates.rs の索引の契機と refused.rs の chosen と reason_line。Refused の構築は refusals_of の 1 か所と歯の見本。器の file の行の上限（1500・幅で数える）: 書く src の file の最大は fleet/lifecycle_mark.rs の 1494（試作の後・幅で 1 行増えた）。
+
+      入口の赤。行 v-hold-case の木 cfb81a4f には名に vhdref_ を持つ歯が無いので、verify の 3 行目と 4 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。写し drafts/w132a で書く file は write-set の中で閉じる（6 file）。e2e の助け written_field と writable_place は見本の置き場の誤りで panic を使うので、器の e2e の助けの前例（hook.rs の tracked_hooks_json・pipe.rs の copied_write_set）と同じ形の属性（clippy::panic の expect と理由の字・clippy の allow-panic-in-tests は test の属性の付いた関数の中だけに効く）を関数の頭に付けた（無いと verify の 2 行目と入れ子の clippy が rc 101・係 w136a）。verify の 2〜4 行目は rc 0。入れ子の clippy（cwd scribe2/・入れ子の置き場・--workspace --all-targets -- -D warnings）は 3 行の各先端で rc 0（係 w136a）。席が 27b の差と 28a の 8 行の差を重ねた積みの木で根の xtask check（入れ子の build・nextest・clippy・器の check を含む）を撃ち、rc 0（根の歯 3277 本・器の歯 4079 本）。係は噛みの木（先端に、印の file が無ければ全部効かない変異の枝を足した木・差の file に入れない）で、印なしの nextest --workspace --no-fail-fast を入れ子の置き場（target は nested/scribe2・cwd は scribe2/）で 1 回撃ち、4079 本のうち 4078 本が通った。落ちた 1 本は xtask の歯 check_passes_on_workspace で、理由は噛みの枝の関数が持つ印の file の絶対 path（paths-clean と private-clean の 2 つ・先端の字には無い）だけ。 噛みは 3 行の先端に、印の file に書いた変異の名だけを効かせる枝を足した木（差の file に入れない・組み直さずに変異を切り替える）で、句ごとに 1 つの変異を入れて名指しの歯を撃った。この行は 12 の変異（lib 7・e2e 5）が全部 rc 100 で、落ちた断言はどれもその句の字（done の項ごとに 1 番目 3・2 番目 4・3 番目 5）。印なしの対照は rc 0。残りの 3 句（1 番目の項の理由の無い断り・3 番目の項の記録は 1 件 と 改行なし）にも後から 3 つの変異（lib 1・e2e 2）を入れ、どれも名指しの歯が rc 100 で落ちた（係 w134a）。対照は rc 0。
+
+      範囲の外。断りの名の平易な字（board の語の辞書）。preflight の出力の形。board の読み（board の行）。器の設計文書の書き換え。
+  - n: 6
+    type: prose
+    title: board の行（判断の記録 ADR-42・留め置き）
+    body: |
+      判断の記録 ADR-42（board に新しい状態 留め置き〔Held〕を足す・記帳先 memo t3-hub.79）の board の 5 行。段の分類（c-held-stage）・札の印と列の見出しの内訳と札の要の 1 行（g-held-col）・吹き出しの 4 つの欄（g-held-pop）・受付の断りの名の平易な字（g-held-name）・個別の頁の留め置きの段（g-held-page）。
+
+      係 w131a の割りの案（B1・B2・B3）から替えた所。B2 は 1 行で書く行が約 560 行になり M を越えるので、札と列（g-held-col）と吹き出し（g-held-pop）に割り、さらに受付の断りの名 27 語の平易な字の表（語の辞書の 27 の鍵と表と歯で約 290 行）を g-held-name に分けた。語の辞書の鍵 english.held は置かない（面の語の辞書の鍵は src の字で引かれる決まり〔着地した歯 bvlex_keys_named_in_src〕で、Held の説明は列の見出しの注と印の語の注が持つ）。
+
+      器の側の行（局面の出力の契約の部品の任意の欄 why と止めた時刻・同じノートの器の行）の着地を待たずに組める。why が欠けている間の理由はまだ分からないと出る（契約の型 CasePart の欄 why は serde の既定で欠けた鍵を None に読む）。depends は c-held-stage ← g-held-col ← g-held-pop ← g-held-name ← g-held-page の 1 本（語の辞書 vocab.json と widgets の pop.rs と keyline.rs を順に書く）。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+  - n: 7
+    type: prose
+    title: 行 c-held-stage — 段 Held と局面の出力の欄 why
+    body: |
+      在りか。差の file docs/design/patch/c-held-stage.patch は 席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） と、その上に試作を載せた木 1f19a6d2（写し drafts/w133a の枝 p-hdst）との差。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+
+      なぜ。判断の記録 ADR-42 決定 (1)(2)。席の止め（器の止めの印 hold）と器の受付の断りは、今の board では Queued の列に出て、止めた事が見えない。段を型に足すと、列・札・一覧・account board の段の字が同じ 1 つの分類から決まる。blocked の定義（ADR-27 決定 (6)）は替えない。
+
+      形。 - 契約の src/board.rs: Stage に Held（Blocked の次・ALL は 9）、column で Held は Blocked の列。 - 契約の src/case.rs: CasePart に任意の欄 why（serde の既定・None は電文に書かない）。 - 中核の src/case.rs: 部品の欄 why を任意の字の欄として読む関数 loose（鍵が無いか null は None・型が違えば部品を落とす）。 - 中核の src/pipeline.rs: 定数 HOLD（字 hold）・queued_of は HOLD を Held に・phase_of は contract-refused を Waiting の Held に・module の注。 - 面の網羅の match に Held の腕を足す（account/session.rs の段の字 Held・widgets の runflow.rs は Blocked と Queued と同じ何もしない腕・widgets の pop.rs と keyline.rs はこの行では Queued と同じ表示〔次の行が替える〕）。 - 着地した歯の書き替え: 契約の teeth1/cform_board.rs（段の数 8 を 9）と snapshots/board.json（Held の 1 行）・中核の teeth1/bvqcol.rs（理由 hold の札を Held）と teeth1/bvlc.rs（contract-refused の 2 か所を Held）と teeth2/stats.rs（fixture に出る段の集合から Held を除く）・面の teeth4/pipe.rs（fixture の Held の札の数は 0）。契約の部品を字で組む歯 6 本（契約 cform_case・中核 bvcase・面 bvcols・bvpop・bvuphase・bvwhy）は why の 1 行を足すだけ。 - 新しい歯の段 crates/tsuzuri-core/tests/hdst.rs（接頭辞 hdst_・7 本）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜6 番目の項は verify の 4 行目（歯 hdst_held_in_closed_stages・hdst_seat_hold_is_held・hdst_intake_refusal_is_held・hdst_partner_reasons_stay_blocked・hdst_self_clearing_reasons_stay_queued・hdst_unreadable_cases_no_held・hdst_why_optional_field）、7 番目と 8 番目の項は 5〜15 行目（歯 contract_form_board_closed_lists・contract_form_board_snapshot_matches・bvcform_snapshot_matches・bvcase_fields_copied_from_fixture・bvlc_waiting_contract_with_runs・bvlc_runless_from_parts・bvqcol_since_and_reason_from_case・stats_pipeline_matches_fixture・bvcols_lines_from_pop_wait・bvpop_blocked_targets_with_stage・bvuphase_rows_get_phase・bvwhy_queued_why_from_case・pipe_columns_order_and_cards_sorted_by_elapsed）、最後の 9 番目は 16 行目で測る。verify の 1〜3 行目は命令の rc で測る守りで、done の項にしない。
+
+      構造の連鎖（試作の木で grep）。Stage を網羅する match は面の 4 か所（session.rs の stage_word・runflow.rs の with_runs・pop.rs の stage_facts・keyline.rs の key_line）で、全部をこの差が書く。CasePart を字で組む所は中核の case.rs と歯の 6 本で、全部をこの差が書く。境界の server は CasePart を型の名だけで使う（試作の木で境界の歯 teeth1〜teeth4 の 532 本が緑）。
+
+      試作と噛み。試作は写し drafts/w133a（席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） から）で、差の file は 29,609 byte・21 file・新しい file 1・+249 −18。書く file は write-set の中で閉じる（差の名の一覧と同じ）。入口の赤は r-hdst（05ab91a5・スタブの型と定数）で hdst の 7 本のうち 5 本が rc 100（Blocked と Queued のまま の守り 2 本は今の振る舞いなので緑）。句ごとの噛みは 16（段の閉じた列 3・席の止め 3・受付の断り 2・Blocked と Queued のまま 2・読めない時 1・why の読み 5） で、どれも名指しの歯が rc 100 で落ち、対照は rc 0（bites.tsv）。verify の clippy と歯の行は試作の木で rc 0。根の xtask の check は係が撃たない（席が積みの木で撃つ）。
+
+      範囲の外。札の印と吹き出しと個別の頁（後の行）。器の止めの口と局面の出力の欄 why と since を書く側（同じノートの器の行）。
+  - n: 8
+    type: prose
+    title: 行 g-held-col — 列の見出しの内訳と札の印と要の 1 行
+    body: |
+      在りか。差の file docs/design/patch/g-held-col.patch は行 c-held-stage の試作の木 1f19a6d2 と、その上に試作を載せた木 32d248bf（写し drafts/w133a の枝 s-hdcol・係 w133a の木 b33ddc8f に係 w135a が列の見出しの数の字の形の直しを入れた）との差。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+
+      なぜ。判断の記録 ADR-42 決定 (3)(7)。留め置きは Blocked と同じ列にまとめて出し、札の印で席の止めと受付の断りを分ける（Blocked の札は印を持たない）。
+
+      形。 - widgets の keyline.rs: 定数 HOLD（字 hold・中核の写し）・型 HeldBy（Seat と Intake）・表 HELD_MARKS（止めた者・印の語の鍵・class）・関数 held_by（段 Held の札だけ・理由 hold は席・ほかは受付）・key_line の Held の腕（印の語と中黒と経過）。段の名は project の pipeline.rs に書かない決まり（着地した歯 pipe_stage_column_from_contract）なので、止めた者の判じは keyline.rs に置いた。 - project の pipeline.rs: Kcard に欄 held・kcard が held_by で置く・関数 count_text（Blocked の列は内訳で、字は Blocked の数と中黒〔U+00B7〕と Held の数を空白を挟まずにつなぐ・例 2·8）・列の見出しと札の meta の DOM。 - style.css: 印の 3 つの規則（.kcard .m .hdm と .hd-seat と .hd-intake）。 - vocab.json: col_block の字と注・hm:seat と hm:intake。 - 着地した歯の書き替え: teeth1/bvcull.rs（Kcard の欄の一覧に held）と teeth1/bvfive.rs（col_block の字）。 - 新しい歯の段 crates/tsuzuri-surface/tests/hdcol.rs（接頭辞 hdcol_・6 本）。スマホの段の tile の数は列の札の全部のまま（tile の字は語の辞書の col_block の字で Blocked / Held に替わる）。
+
+      数の字の形（係 w135a の画面の測り）。空白を挟む形（2 / 8）は列の見出しの中で空白で折れ、幅 1280 と 960 で 2 行・700 で 3 行に割れた（係 w134a）。斜線の形（2/8）は折れないが、8 件中 2 の分数と読まれうる。内訳は札の要の 1 行（印の語 · 経過）と同じ中黒（U+00B7）で、空白を挟まずにつなぐ（2·8）。数字と中黒の並びは折れ目を持たない。区切りを正符号にした形（2+8）と、語と数を対にした形（B2·H8）は幅が足りず、1280 で語 Blocked が語の中で折れた。試しの state dir の板を幅 1280・960・700・601・390 で開くと、中黒の形の数の字はどの幅でも 1 行・横の scroll は 0・ほかの 4 列の見出しの高さと語の行の数は今の木と同じで、1280 と 960 では Blocked の列の見出しの語も語の中で折れない（見出しの高さは 42 から 35 で Running / Gated の列と同じ）。700 と 601 では 5 列の全部の見出しの語が語の中で折れる（今の板の形から・見出しの箱の幅 100 と 88 に、点と語 Blocked と ? の button と隙間だけで 90 を要し、数の字の 1 桁と隙間を置けない）ので、この行の範囲の外。数が 2 桁（12·3）になると 1280 でも語 Blocked が語の中で折れる（斜線の形も同じ・数の字は 1 行のまま）。ほかの合わせ列（Running / Gated・Questioned / Failed / Stopped）の数は札の数の 1 つの数字で、内訳も同じ span（class cnt num）と同じ字の太さと大きさのまま置く。幅 600 以下の段の tile は列の札の全部の数を出し、語 Blocked / Held の末が切れるが、Running / Gated などの合わせ列の tile も前からの形なので、この行では替えない。style.css と語の辞書の col_block の注（数は Blocked / Held の内訳）はこの直しで替えない。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜6 番目の項は verify の 4 行目（歯 hdcol_held_by_reason・hdcol_card_mark_in_blocked_column・hdcol_count_breakdown・hdcol_key_line_mark_and_age・hdcol_vocab_and_marks・hdcol_css_and_dom_text）、7 番目の項は 5 行目と 6 行目（歯 bvcull_card_hover_values_gone・bvfive_column_words_in_vocab）、最後の 8 番目は 7 行目で測る。
+
+      試作と噛み。試作は写し drafts/w133a（席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） から）で、差の file は 19,506 byte・7 file・新しい file 1・+277 −10。書く file は write-set の中で閉じる（差の名の一覧と同じ）。入口の赤は r-hdcol（c5edf1af・スタブの型と関数）で hdcol の 6 本とも rc 100（直した歯を載せた枝 r3-hdcol 291b34be でも 6 本とも rc 100）。句ごとの噛みは 15（係 w133a・直しの前の木）と直しの 2（中黒を斜線に替える・中黒の前後に空白を挟む、のどちらでも hdcol_count_breakdown が rc 100・係 w135a） で、どれも名指しの歯が rc 100 で落ち、対照は rc 0（bites.tsv）。verify の clippy と歯の行は試作の木で rc 0。根の xtask の check は係が撃たない（席が積みの木で撃つ）。
+
+      範囲の外。吹き出しの欄と個別の頁（後の行）。account board の形と台帳の指標と次の一手は替えない。
+  - n: 9
+    type: prose
+    title: 行 g-held-pop — 吹き出しの留め置きの 4 つの欄
+    body: |
+      在りか。差の file docs/design/patch/g-held-pop.patch は行 g-held-col の試作の木 32d248bf と、その上に試作を載せた木 9f067d32（写し drafts/w133a の枝 s-hdpop・試作 866eb931 の載せ直し・差の字は係 w133a の差と同じ）との差。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+
+      なぜ。判断の記録 ADR-42 決定 (7)。吹き出しは止めた者（席か器の受付）・理由（席の止めは理由の字・受付の断りは断りの名と 1 行の理由）・止めた時刻と経過・解く条件を出し、理由の欄が無い時はまだ分からない。
+
+      形。 - widgets の pop.rs: 表 HELD_KEYS（pf_held_by・pf_held_why・pf_held_at・pf_held_until）と HELD_WORDS（止めた者ごとの止めた者の鍵と解く条件の鍵）・関数 held_why（局面の出力の契約の部品の欄 why）・refusal_text（この行では断りの名の字のまま・次の行が平易な字にする）・held_facts（4 つの欄・個別の頁も使う）・stage_facts の Held の腕は held_facts・with_why の Queued の腕から Held を外す（留め置きの札に起きない理由を足さない）。 - vocab.json: 欄の語の鍵 4 つと hb:seat・hb:intake・hu:seat・hu:intake。 - 新しい歯の段 crates/tsuzuri-surface/tests/hdpop.rs（接頭辞 hdpop_・6 本）。受付の断りの札は Queued の起きない理由（今は表に無い語でまだ分からない）を出さなくなり、断りの名と why を出す（係 w131a の案の wait_of の直しは要らない）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜6 番目の項は verify の 4 行目（歯 hdpop_seat_hold_facts・hdpop_intake_refusal_facts・hdpop_missing_why_and_since_unknown・hdpop_other_stages_no_held_facts・hdpop_with_why_leaves_held・hdpop_vocab_words）、最後の 7 番目は 5 行目で測る。
+
+      試作と噛み。試作は写し drafts/w133a（席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） から）で、差の file は 15,184 byte・3 file・新しい file 1・+283 −2。書く file は write-set の中で閉じる（差の名の一覧と同じ）。入口の赤は r-hdpop（f55aa908・空の表と空の関数）で hdpop の 6 本のうち 5 本が rc 100（ほかの段は欄なし の 1 本は今の振る舞いなので緑）。句ごとの噛みは 12 で、どれも名指しの歯が rc 100 で落ち、対照は rc 0（bites.tsv）。verify の clippy と歯の行は試作の木で rc 0。根の xtask の check は係が撃たない（席が積みの木で撃つ）。
+
+      範囲の外。断りの名の平易な字（次の行）。個別の頁（後の行）。
+  - n: 10
+    type: prose
+    title: 行 g-held-name — 受付の断りの名の平易な字
+    body: |
+      在りか。差の file docs/design/patch/g-held-name.patch は行 g-held-pop の試作の木 9f067d32 と、その上に試作を載せた木 55e3feb6（写し drafts/w133a の枝 s-hdnm・試作 cff524e5 と係 w134a の bvlex の表の直し 8d44c8bb の載せ直し・差の字は係 w134a の差と同じ）との差。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+
+      なぜ。判断の記録 ADR-42 決定 (7) の受付の断りは断りの名の平易な字と 1 行の理由。断りの名は器の pipe/refuse.rs の REFUSALS の 27 語（write-set-overlap・teeth-outside-write-set・cap-headroom ほか）で、名のままでは持ち主に意味が届かない。
+
+      形。 - widgets の pop.rs: 表 REFUSALS（27 語の写し・面の crate は器に依存しない）と鍵の頭 REFUSAL_HEAD（字 rf と半角のコロン）・refusal_text を表の語なら語の辞書の字に替える（詳細の後ろは外す・表に無い名は名のまま）。 - vocab.json: 27 の鍵（label は平易な字・plain は解き方の 1〜2 行・internal は器の型の名）。 - 行 g-held-pop の歯の段 hdpop.rs の受付の断りの理由の字 2 か所を平易な字（定数 PLAIN）に直す。 - 新しい歯の段 crates/tsuzuri-surface/tests/hdnm.rs（接頭辞 hdnm_・3 本・27 語を字で持つ）。 - 着地済みの歯の群 teeth2 の bvlex.rs: 表 KEY_PREFIXES（接頭辞と字をつないで語の辞書を引く口）に字 rf と半角のコロンを足し、型を 5 から 6 の配列にする（鍵 rf の 27 語は src の字の literal で引かれず REFUSAL_HEAD に名をつないで組むので、足さないと着地済みの歯 bvlex_keys_named_in_src が落ちる・群の module の file だけを書き main.rs は書かない）。器が断りの名を足したら、面は名のままで出し、この表と歯に足すのは後の行。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜3 番目の項は verify の 4 行目（歯 hdnm_refusal_names_in_vocab・hdnm_refusal_text_plain・hdnm_pop_reason_starts_plain）、4 番目の項は 5 行目（歯 hdpop_intake_refusal_facts・hdpop_missing_why_and_since_unknown）、5 番目の項は 6 行目（歯 bvlex_keys_named_in_src・bvlex_prefix_sites_in_src・着地済みの歯の群 teeth2 の bvlex_ の 5 本を撃つ）、最後の 6 番目は 7 行目で測る。
+
+      試作と噛み。試作は写し drafts/w133a（席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） から）で、差の file は 17,836 byte・5 file・新しい file 1・+290 −6。書く file は write-set の中で閉じる（差の名の一覧と同じ）。入口の赤は r-hdnm（11ccf2c4・空の表）で hdnm の 3 本とも rc 100。句ごとの噛みは 7（表 KEY_PREFIXES から字 rf と半角のコロンを外すと bvlex_keys_named_in_src が rc 100 の 1 つを含む・係 w134a） で、どれも名指しの歯が rc 100 で落ち、対照は rc 0（bites.tsv）。verify の clippy と歯の行は試作の木で rc 0。根の xtask の check は係が撃たない（席が積みの木で撃つ）。
+
+      範囲の外。dispatch ls の受付の断りの字と器の 1 行の理由の字（器の側）。
+  - n: 11
+    type: prose
+    title: 行 g-held-page — 個別の頁の留め置きの段
+    body: |
+      在りか。差の file docs/design/patch/g-held-page.patch は行 g-held-name の試作の木 55e3feb6 と、その上に試作を載せた木 12ba4239（写し drafts/w133a の枝 s-hdpage・試作 9da9d1cc の載せ直し・差の字は係 w133a と w134a の差と同じ）との差。差は 27b の board の行の差の上で切った（27b の行 g-sum-pick〜g-node-excerpt ほかが pop.rs・style.css・vocab.json・node.rs を書く）。27b の board の行の着地を待つのは席の止めで行う（27b の行は別のノートなので depends に書けない）。
+
+      なぜ。判断の記録 ADR-42 決定 (7)。吹き出しを閉じた後も、個別の頁で止めた理由と解く条件を読めるようにする。組みは吹き出しの held_facts を使い 2 本目を書かない。
+
+      形。 - project の node.rs: 定数 HELD_HEAD（鍵 nb_held）と HELD_CLASS（nheld）・関数 held_rows（中心の bead の札が段 Held の時だけ pop の held_facts）・held_text（値の字）。DOM は板と局面の出力の口（吹き出しと同じ 2 つの読み）から札と部品を読み、頭と概要の後に見出しと欄の表（class facts）を 1 段で置く（関数 held_of と held_view・view の関数の行の数の上限 60 を越えないよう分けた）。 - style.css: .nheld の 1 行。 - vocab.json: nb_held。 - 新しい歯の段 crates/tsuzuri-surface/tests/hdpage.rs（接頭辞 hdpage_・4 本）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1〜4 番目の項は verify の 4 行目（歯 hdpage_held_rows_same_as_pop・hdpage_not_held_no_section・hdpage_held_text_values・hdpage_dom_and_words）、最後の 5 番目は 5 行目で測る。
+
+      試作と噛み。試作は写し drafts/w133a（席の積みの木 ae47433a（main c9e6f915 に 27b の 29 行の試作の差を重ねた木・写し drafts/w101a-l1 の枝 seat-27b-v3） から）で、差の file は 13,296 byte・4 file・新しい file 1・+190 −7。書く file は write-set の中で閉じる（差の名の一覧と同じ）。入口の赤は r-hdpage（c7be451e・空の定数と関数）で hdpage の 4 本のうち 3 本が rc 100（段を出さない の 1 本は今の振る舞いなので緑）。句ごとの噛みは 5 で、どれも名指しの歯が rc 100 で落ち、対照は rc 0（bites.tsv）。verify の clippy と歯の行は試作の木で rc 0。根の xtask の check は係が撃たない（席が積みの木で撃つ）。
+
+      範囲の外。頁の段の開き閉じ（畳まない 1 段）。
+
+figures: []

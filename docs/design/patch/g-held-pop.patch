@@ -1,0 +1,348 @@
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index f2a6a4c46fda2aa4cb466df33a30f115b20a9ccd..e042c436e00e5ab4b1a5fb45ad959a7e83c03b19 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -15,6 +15,8 @@
+ //! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
+ //! 概要は吹き出しを開いた時に開いた bead の 1 本の引きの口（`ITEM_PATH`）の本文から読み、表示の型の 1 つを部品 sumpick で選んで
+ //! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
++//! Held（留め置き）は止めた者・理由・止めた時刻と経過・解く条件の 4 つ（`held_facts`・個別の頁も同じ関数で組む・
++//! 判断の記録 ADR-42 決定 (7)・行 g-held-pop）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -25,6 +27,7 @@ use tsuzuri_contract::summary::{excerpt, summaries};
+ use tsuzuri_contract::wire;
+ 
+ use super::hover::{Point, Rect, Size};
++use super::keyline::{HeldBy, held_by};
+ use super::modal::Hit;
+ use super::runflow::{Hist, Seg};
+ use super::sumpick::{self, POP_SUM_MAX, Picked};
+@@ -127,6 +130,15 @@ pub const SUM_KEYS: [&str; 2] = ["psum_more", "psum_less"];
+ /// 概要の口の class。
+ pub const SUM_CLASS: &str = "pmore";
+ 
++/// 留め置きの欄の語の鍵（止めた者・理由・止めた時刻・解く条件・行 g-held-pop）。
++pub const HELD_KEYS: [&str; 4] = ["pf_held_by", "pf_held_why", "pf_held_at", "pf_held_until"];
++
++/// 止めた者ごとの止めた者の語の鍵と解く条件の語の鍵（席の止め・受付の断り）。
++pub const HELD_WORDS: [(HeldBy, &str, &str); 2] = [
++    (HeldBy::Seat, "hb:seat", "hu:seat"),
++    (HeldBy::Intake, "hb:intake", "hu:intake"),
++];
++
+ /// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
+ pub const QUEUED_PHASE: &str = "contract-queued";
+ 
+@@ -441,7 +453,8 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
+             };
+             vec![f(STAGE_KEYS[0], list), f(STAGE_KEYS[1], since())]
+         }
+-        Stage::Queued | Stage::Held => vec![f(STAGE_KEYS[2], since())],
++        Stage::Queued => vec![f(STAGE_KEYS[2], since())],
++        Stage::Held => held_facts(src, card),
+         Stage::Running | Stage::Gated => vec![
+             f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
+             f(STAGE_KEYS[4], account()),
+@@ -461,6 +474,49 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
+     }
+ }
+ 
++/// 留め置きの理由の字（局面の出力の契約の部品の欄 why・部品が無いか読めないか欄が無ければ None）。
++pub fn held_why(src: &Src<'_>, card: &PipelineCard) -> Option<String> {
++    match src.parts {
++        Reading::Known(parts) => contract_part(parts, card.contract.as_str())?.why.clone(),
++        Reading::Unknown => None,
++    }
++}
++
++/// 受付の断りの名の字（理由の語のまま・無ければまだ分からない）。
++pub fn refusal_text(name: Option<&str>) -> String {
++    name.map_or_else(|| label(UNKNOWN_KEY), str::to_string)
++}
++
++/// 留め置きの欄（`HELD_KEYS` の順・段 Held でない札は空）。止めた者は席か器の受付、理由は席の止めなら why の字
++/// （無ければまだ分からない）、受付の断りなら断りの名の字と why（無ければまだ分からない）を全角のコロンでつなぐ。
++/// 止めた時刻は札の since（無ければまだ分からない）、解く条件は止めた者ごとの字。
++pub fn held_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
++    let Some(by) = held_by(card) else {
++        return Vec::new();
++    };
++    let [by_key, why_key, at_key, until_key] = HELD_KEYS;
++    let (who, until) = HELD_WORDS
++        .into_iter()
++        .find(|(b, _, _)| *b == by)
++        .map_or((UNKNOWN_KEY, UNKNOWN_KEY), |(_, w, u)| (w, u));
++    let why = held_why(src, card);
++    let reason = match by {
++        HeldBy::Seat => or_unknown(why, Val::Text),
++        HeldBy::Intake => Val::Text(format!(
++            "{}：{}",
++            refusal_text(card.reason.as_deref()),
++            why.unwrap_or_else(|| label(UNKNOWN_KEY))
++        )),
++    };
++    let f = |key, val| Fact { key, val };
++    vec![
++        f(by_key, Val::Text(label(who))),
++        f(why_key, reason),
++        f(at_key, or_unknown(card.since, Val::At)),
++        f(until_key, Val::Text(label(until))),
++    ]
++}
++
+ /// 吹き出しの中身（共通の欄を `COMMON_KEYS` の順に・札が在れば段ごとの欄を足す）。
+ /// epic の欄は親をたどって epic が在るときだけ（台帳が読めなければまだ分からない）、設計の行は pointer が在るときだけ
+ /// （グラフが読めなければまだ分からない）。
+@@ -617,7 +673,7 @@ pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
+     };
+     let [why, wait_why, wait_runs] = WHY_KEYS;
+     match (card.stage, wait_of(src, card)) {
+-        (Stage::Queued | Stage::Held, Wait::Queue(reason, _)) => {
++        (Stage::Queued, Wait::Queue(reason, _)) => {
+             let val = reason_val(reason.as_deref());
+             put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
+         }
+diff --git a/crates/tsuzuri-surface/tests/hdpop.rs b/crates/tsuzuri-surface/tests/hdpop.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7fefe3f950c4e791e084c45e0cf94f8a19087433
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hdpop.rs
+@@ -0,0 +1,185 @@
++//! 留め置きの吹き出しの歯（面・接頭辞 hdpop_・設計ノート surface-wave28a 行 g-held-pop・判断の記録 ADR-42 決定 (7)）。
++//! 段 Held の札の吹き出しは止めた者・理由・止めた時刻と経過・解く条件の 4 つ（席の止めと受付の断りで字が違う）。
++//! 理由は局面の出力の契約の部品の欄 why で、無ければまだ分からない。ほかの段の札は留め置きの欄を持たない。否定の見本は 1 欄だけ替える。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
++use tsuzuri_contract::case::{CaseLinks, CasePart};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::keyline::{HOLD, HeldBy};
++use tsuzuri_surface::widgets::pop::{
++    Fact, HELD_KEYS, HELD_WORDS, STAGE_KEYS, Src, UNKNOWN_KEY, Val, WHY_KEYS, held_facts, pop,
++    stage_facts, with_why,
++};
++
++const NOW: EpochSecs = 1_790_000_000;
++const AT: EpochSecs = NOW - 7_200;
++
++/// 受付の断りの名と、止めの理由の字。
++const NAME: &str = "teeth-outside-write-set";
++const WHY: &str = "書く file の重なりを席が確かめる";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(stage: Stage, reason: &str) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new("h-1").unwrap_or_else(|e| panic!("{e:?}")),
++        runs: 0,
++        stage,
++        reason: Some(reason.to_string()),
++        account: None,
++        since: Some(AT),
++        ci: None,
++    }
++}
++
++fn part(phase: &str, reason: &str, why: Option<&str>) -> CasePart {
++    CasePart {
++        part: "contract".to_string(),
++        id: "h-1".to_string(),
++        phase: phase.to_string(),
++        turn: "seat".to_string(),
++        since: Some(AT),
++        reason: Some(reason.to_string()),
++        why: why.map(str::to_string),
++        closed: false,
++        links: CaseLinks::default(),
++    }
++}
++
++fn src<'a>(cards: &'a [PipelineCard], parts: Reading<&'a [CasePart]>) -> Src<'a> {
++    Src {
++        facts: Reading::Unknown,
++        rows: Reading::Unknown,
++        cards,
++        parts,
++        graph: None,
++    }
++}
++
++fn text(key: &str) -> Val {
++    Val::Text(label(key))
++}
++
++fn keys(facts: &[Fact]) -> Vec<&'static str> {
++    facts.iter().map(|f| f.key).collect()
++}
++
++#[test]
++fn hdpop_seat_hold_facts() {
++    let cards = [card(Stage::Held, HOLD)];
++    let parts = [part("contract-queued", HOLD, Some(WHY))];
++    let s = src(&cards, Reading::Known(&parts));
++    let got = stage_facts(&s, &cards[0]);
++    let want = [
++        (HELD_KEYS[0], text("hb:seat")),
++        (HELD_KEYS[1], Val::Text(WHY.to_string())),
++        (HELD_KEYS[2], Val::At(AT)),
++        (HELD_KEYS[3], text("hu:seat")),
++    ];
++    let got: Vec<(&str, Val)> = got.into_iter().map(|f| (f.key, f.val)).collect();
++    assert_eq!(got, want);
++    assert_eq!(held_facts(&s, &cards[0]), stage_facts(&s, &cards[0]));
++}
++
++#[test]
++fn hdpop_intake_refusal_facts() {
++    let cards = [card(Stage::Held, NAME)];
++    let parts = [part("contract-refused", NAME, Some(WHY))];
++    let s = src(&cards, Reading::Known(&parts));
++    let got = stage_facts(&s, &cards[0]);
++    assert_eq!(keys(&got), HELD_KEYS);
++    assert_eq!(got[0].val, text("hb:intake"));
++    assert_eq!(got[1].val, Val::Text(format!("{NAME}：{WHY}")));
++    assert_eq!(got[2].val, Val::At(AT));
++    assert_eq!(got[3].val, text("hu:intake"));
++}
++
++#[test]
++fn hdpop_missing_why_and_since_unknown() {
++    let unknown = label(UNKNOWN_KEY);
++    for (reason, phase, want) in [
++        (HOLD, "contract-queued", Val::Unknown),
++        (
++            NAME,
++            "contract-refused",
++            Val::Text(format!("{NAME}：{unknown}")),
++        ),
++    ] {
++        let cards = [card(Stage::Held, reason)];
++        let parts = [part(phase, reason, None)];
++        let got = stage_facts(&src(&cards, Reading::Known(&parts)), &cards[0]);
++        assert_eq!(got[1].val, want, "why の無い部品 {reason}");
++        let got = stage_facts(&src(&cards, Reading::Unknown), &cards[0]);
++        assert_eq!(got[1].val, want, "読めない局面の出力 {reason}");
++        let mut no_since = cards[0].clone();
++        no_since.since = None;
++        let got = stage_facts(&src(&cards, Reading::Known(&parts)), &no_since);
++        assert_eq!(got[2].val, Val::Unknown, "since の無い札 {reason}");
++    }
++}
++
++#[test]
++fn hdpop_other_stages_no_held_facts() {
++    let parts = [part("contract-queued", HOLD, Some(WHY))];
++    for stage in [Stage::Queued, Stage::Blocked] {
++        let cards = [card(stage, HOLD)];
++        let s = src(&cards, Reading::Known(&parts));
++        let got = keys(&stage_facts(&s, &cards[0]));
++        assert!(
++            HELD_KEYS.iter().all(|k| !got.contains(k)),
++            "段だけ替えた見本 {stage:?}: {got:?}"
++        );
++        assert!(held_facts(&s, &cards[0]).is_empty());
++    }
++    let queued = [card(Stage::Queued, HOLD)];
++    let s = src(&queued, Reading::Known(&parts));
++    assert_eq!(keys(&stage_facts(&s, &queued[0])), [STAGE_KEYS[2]]);
++}
++
++#[test]
++fn hdpop_with_why_leaves_held() {
++    let cards = [card(Stage::Held, HOLD)];
++    let parts = [part("contract-queued", HOLD, Some(WHY))];
++    let s = src(&cards, Reading::Known(&parts));
++    let p = pop("h-1", &s);
++    let after = with_why(p.clone(), &s);
++    assert_eq!(after, p, "留め置きの札に起きない理由を足さない");
++    assert!(keys(&after.facts).iter().all(|k| !WHY_KEYS.contains(k)));
++    let tail: Vec<&str> = keys(&after.facts).into_iter().rev().take(4).collect();
++    assert_eq!(tail, HELD_KEYS.into_iter().rev().collect::<Vec<_>>());
++}
++
++#[test]
++fn hdpop_vocab_words() {
++    let v = vocab();
++    let term = |k: &str| v.term(k).unwrap_or_else(|| panic!("{k} が語の辞書に無い"));
++    assert_eq!(
++        HELD_KEYS,
++        ["pf_held_by", "pf_held_why", "pf_held_at", "pf_held_until"]
++    );
++    assert_eq!(
++        HELD_WORDS,
++        [
++            (HeldBy::Seat, "hb:seat", "hu:seat"),
++            (HeldBy::Intake, "hb:intake", "hu:intake")
++        ]
++    );
++    for (_, who, until) in HELD_WORDS {
++        for k in HELD_KEYS.into_iter().chain([who, until]) {
++            let t = term(k);
++            assert!(!t.label.is_ascii() && !t.note.is_empty(), "{k}");
++        }
++    }
++    assert_ne!(term("hb:seat").label, term("hb:intake").label);
++    assert_ne!(term("hu:seat").label, term("hu:intake").label);
++    let src = read("src/widgets/pop.rs");
++    assert!(src.contains("        Stage::Held => held_facts(src, card),\n"));
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 1e554294e56abefd4df18d1dc0c08a60ed84d957..c7bd2c612130b811cfa15bafd61c0e8846d197d9 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1729,6 +1729,46 @@
+    "plain": "席が理由を付けて器の止めの印を置いた\n→ 席が印を外すと列に戻る",
+    "internal": "段 Held・局面 contract-queued の理由 hold（行 g-held-col）"
+   },
++  "pf_held_by": {
++   "label": "止めた者",
++   "plain": "留め置いたのは誰か\n・ 席か器の受付",
++   "internal": "段 Held の札の理由の語（hold は席・ほかは受付の断りの名・行 g-held-pop）"
++  },
++  "pf_held_why": {
++   "label": "止めた理由",
++   "plain": "なぜ留め置いたか\n・ 席の止めは席が書いた理由\n・ 受付の断りは断りの名と 1 行の理由",
++   "internal": "局面の出力の契約の部品の欄 why（判断の記録 ADR-42 決定 (6)）"
++  },
++  "pf_held_at": {
++   "label": "止めた時刻",
++   "plain": "留め置いた時刻と今までの経過",
++   "internal": "局面の出力の契約の部品の since"
++  },
++  "pf_held_until": {
++   "label": "解く条件",
++   "plain": "何をすれば列に戻るか",
++   "internal": "判断の記録 ADR-42 決定 (7)"
++  },
++  "hb:seat": {
++   "label": "席",
++   "plain": "席が止めの印を置いた",
++   "internal": "器の止めの印 hold（pipe dispatch hold）"
++  },
++  "hb:intake": {
++   "label": "器の受付",
++   "plain": "器の受付が契約を通さなかった",
++   "internal": "局面 contract-refused"
++  },
++  "hu:seat": {
++   "label": "席が印を外すと列に戻る",
++   "plain": "席が止めの印を外す（release）と、器が次の周に起こす",
++   "internal": "pipe dispatch release"
++  },
++  "hu:intake": {
++   "label": "席が契約か設計の行を直すと、次の周に受付をやり直す",
++   "plain": "断りの理由を直すと、器が次の周に受付をやり直す",
++   "internal": "器の起こす側の周の受付の判定"
++  },
+   "hm:intake": {
+    "label": "受付の断り",
+    "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",

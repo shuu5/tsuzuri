@@ -1,0 +1,589 @@
+diff --git a/crates/tsuzuri-contract/src/board.rs b/crates/tsuzuri-contract/src/board.rs
+index 2ae11efdeb5d07f00a2a9180de23c9ec22e67822..24192519f094dbc93a1e4df514ab4fac49ec7245 100644
+--- a/crates/tsuzuri-contract/src/board.rs
++++ b/crates/tsuzuri-contract/src/board.rs
+@@ -16,10 +16,13 @@ pub enum Reading<T> {
+ }
+ 
+ /// 走行の段（段の名は英語のまま面に出す）。
++/// Held（留め置き）は依存でない理由で人の手が入るまで器が起こさない契約（席の止めと受付の断り）で、列は Blocked と同じ
++/// （判断の記録 ADR-42 決定 (1)(3)・行 c-held-stage）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+ pub enum Stage {
+     Queued,
+     Blocked,
++    Held,
+     Running,
+     Gated,
+     Questioned,
+@@ -29,9 +32,10 @@ pub enum Stage {
+ }
+ 
+ impl Stage {
+-    pub const ALL: [Stage; 8] = [
++    pub const ALL: [Stage; 9] = [
+         Stage::Queued,
+         Stage::Blocked,
++        Stage::Held,
+         Stage::Running,
+         Stage::Gated,
+         Stage::Questioned,
+@@ -43,7 +47,7 @@ impl Stage {
+     /// 段が載る pipeline の列。
+     pub fn column(self) -> PipelineColumn {
+         match self {
+-            Stage::Blocked => PipelineColumn::Blocked,
++            Stage::Blocked | Stage::Held => PipelineColumn::Blocked,
+             Stage::Queued => PipelineColumn::Queued,
+             Stage::Running | Stage::Gated => PipelineColumn::RunningGated,
+             Stage::Questioned | Stage::Failed | Stage::Stopped => {
+diff --git a/crates/tsuzuri-contract/src/case.rs b/crates/tsuzuri-contract/src/case.rs
+index 882a304c56be23f8968916c949ca93cbe21a9cfc..054702df98ab450b373793d808b3ac29b9a539e2 100644
+--- a/crates/tsuzuri-contract/src/case.rs
++++ b/crates/tsuzuri-contract/src/case.rs
+@@ -34,6 +34,10 @@ pub struct CasePart {
+     pub turn: String,
+     pub since: Option<EpochSecs>,
+     pub reason: Option<String>,
++    /// 止めの理由の字（器の任意の欄 why・席の止めは止めの印の理由・受付の断りは断りの 1 行の理由・欠けた鍵は None・
++    /// 判断の記録 ADR-42 決定 (6)・行 c-held-stage）。
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub why: Option<String>,
+     pub closed: bool,
+     pub links: CaseLinks,
+ }
+diff --git a/crates/tsuzuri-contract/tests/snapshots/board.json b/crates/tsuzuri-contract/tests/snapshots/board.json
+index 49370ba79068cf0cb445d260a961a60219cb6077..20d959e2f00dfffaa30b84c8ae77b975339314b9 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/board.json
++++ b/crates/tsuzuri-contract/tests/snapshots/board.json
+@@ -2,6 +2,7 @@
+   "board::Stage": [
+     "Queued",
+     "Blocked",
++    "Held",
+     "Running",
+     "Gated",
+     "Questioned",
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_board.rs b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+index 9aceccbda50a508c91b632c386261fdea084ffd9..263fb7f8d758e429295e2f1fec77b2de0297cfcb 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_board.rs
+@@ -155,7 +155,7 @@ fn contract_form_board_roundtrip_all_types() {
+ fn contract_form_board_closed_lists() {
+     assert_eq!(distinct(&NextMove::ALL), 7);
+     assert_eq!(distinct(&LedgerJudge::ALL), 5);
+-    assert_eq!(distinct(&Stage::ALL), 8);
++    assert_eq!(distinct(&Stage::ALL), 9);
+     let labels: BTreeSet<&str> = NextMove::ALL.iter().map(|m| m.label()).collect();
+     assert_eq!(labels.len(), 7, "次の一手の名が重なる");
+     let mut sorted = NextMove::ALL.to_vec();
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_case.rs b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+index 29194350f510fc283fcdf623b4e9b92796fac595..655c8370a736a09511803954dac91fadef041569 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_case.rs
+@@ -21,6 +21,7 @@ fn parts() -> Vec<CasePart> {
+             turn: "vessel".into(),
+             since: Some(AT - 600),
+             reason: Some("dependency".into()),
++            why: None,
+             closed: false,
+             links: CaseLinks {
+                 on: vec!["t3-hub.903".into()],
+@@ -34,6 +35,7 @@ fn parts() -> Vec<CasePart> {
+             turn: "user".into(),
+             since: None,
+             reason: None,
++            why: None,
+             closed: false,
+             links: CaseLinks::default(),
+         },
+diff --git a/crates/tsuzuri-core/src/case.rs b/crates/tsuzuri-core/src/case.rs
+index 1807ed8df464c655ba2a92b27126d83a124b7298..a87543fb882a64b806bca21b415d0de6e58fb9a9 100644
+--- a/crates/tsuzuri-core/src/case.rs
++++ b/crates/tsuzuri-core/src/case.rs
+@@ -5,7 +5,7 @@
+ //! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
+ //! 出力の字が在るのに部品が「まだ分からない」になった周は電文の unreadable を真にする（面は「読めない」と出す）。
+ //! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま（行 c-case-unreadable）。
+-//! 欄が欠けるか型が違う部品は落とす。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
++//! 欄が欠けるか型が違う部品は落とす（任意の欄 why は欠けても落とさない・行 c-held-stage）。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
+ //! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
+ 
+ use serde_json::Value;
+@@ -81,6 +81,7 @@ fn part_of(node: &Value) -> Option<CasePart> {
+         turn: word("turn")?,
+         since: optional(node, "since")?.and_then(|at| epoch_secs(&at)),
+         reason: optional(node, "reason")?,
++        why: loose(node, "why")?,
+         closed: node.get("closed")?.as_bool()?,
+         links: links_of(node.get("links")?)?,
+     })
+@@ -95,6 +96,14 @@ fn optional(node: &Value, key: &str) -> Option<Option<String>> {
+     }
+ }
+ 
++/// 任意の字の欄（鍵が無いか null は None・字は Some・型が違えば None で部品を落とす・行 c-held-stage）。
++fn loose(node: &Value, key: &str) -> Option<Option<String>> {
++    match node.get(key) {
++        None => Some(None),
++        Some(_) => optional(node, key),
++    }
++}
++
+ /// 結びの on と runs（欠けた key は空の列・object でないか在る key が字の列でなければ None）。
+ fn links_of(node: &Value) -> Option<CaseLinks> {
+     let ids = |key: &str| match node.get(key) {
+diff --git a/crates/tsuzuri-core/src/pipeline.rs b/crates/tsuzuri-core/src/pipeline.rs
+index f7dbf454d4cc5e678b17b2bfdc0331ad54bc2c71..7c5866f10bcb38334f8d6caa2d7eaf6b2b302476 100644
+--- a/crates/tsuzuri-core/src/pipeline.rs
++++ b/crates/tsuzuri-core/src/pipeline.rs
+@@ -23,7 +23,7 @@
+ //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
+ //! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
+ //! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
+-//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
++//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
+ //! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
+ //! （`queued_cards`）。
+ //! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`・行 c-ledger-lc）:
+@@ -31,6 +31,8 @@
+ //! 理由と since は event log の読みが段を持てばその字・持たなければ便の部品の字。表に無い局面の語は「まだ分からない」
+ //! （札を作らず unmapped に数える・走行の無い札は台帳の blocks の割り）。契約の部品が無いか `CLOSED_PHASE` か便の部品が
+ //! 無ければ event log の段のまま。台帳で閉じた bead の札は今までどおり。CI の読みは段が Landed で event log も Landed の時だけ。
++//! 段 Held（留め置き・列は Blocked）は契約の部品の局面が `QUEUED_PHASE` で理由が `HOLD`（席の止め）か `REFUSED_PHASE`（受付の断り）の札
++//! （判断の記録 ADR-42 決定 (1)(2)・行 c-held-stage）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+@@ -124,6 +126,9 @@ pub const QUEUED_PHASE: &str = "contract-queued";
+ /// 列の待ちの理由のうち相手を待つ語（板の Blocked の列・ほかの語は Queued の列・判断の記録 ADR-27 の決定 (6)）。
+ pub const PARTNER_REASONS: [&str; 3] = ["dependency", "overlap", "reserved"];
+ 
++/// 列の待ちの理由のうち席の止めの語（段 Held・判断の記録 ADR-42 決定 (1)・行 c-held-stage）。
++pub const HOLD: &str = "hold";
++
+ /// 局面の出力の便の部品の種類の字。
+ pub const RUN_PART: &str = "run";
+ 
+@@ -133,7 +138,7 @@ pub const RUNNING_PHASE: &str = "contract-running";
+ /// 列の待ちの理由のうち手番を最新の便の部品が持つ語（器の case-lifecycle §3）。
+ pub const SETTLED: &str = "settled";
+ 
+-/// 契約の受付の断りの局面の語（段は Queued・理由は断りの名）。
++/// 契約の受付の断りの局面の語（段は Held・理由は断りの名・判断の記録 ADR-42 決定 (1)）。
+ pub const REFUSED_PHASE: &str = "contract-refused";
+ 
+ /// 閉じた契約の局面の語（札の段は event log と台帳の閉じのまま）。
+@@ -657,7 +662,7 @@ pub fn phase_of<'p>(parts: &'p [CasePart], id: &str) -> Option<Phased<'p>> {
+             queued_of(contract.reason.as_deref()),
+             contract,
+         )),
+-        REFUSED_PHASE => Some(Phased::Waiting(Stage::Queued, contract)),
++        REFUSED_PHASE => Some(Phased::Waiting(Stage::Held, contract)),
+         RUNNING_PHASE | QUEUED_PHASE => {
+             let run = contract.links.runs.iter().find_map(|r| find(RUN_PART, r))?;
+             Some(
+@@ -671,10 +676,11 @@ pub fn phase_of<'p>(parts: &'p [CasePart], id: &str) -> Option<Phased<'p>> {
+     }
+ }
+ 
+-/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・ほかの語と理由の無い部品は Queued）。
++/// 列の待ちの理由の語の段（`PARTNER_REASONS` の語なら Blocked・`HOLD` なら Held・ほかの語と理由の無い部品は Queued）。
+ pub fn queued_of(reason: Option<&str>) -> Stage {
+     match reason {
+         Some(word) if PARTNER_REASONS.contains(&word) => Stage::Blocked,
++        Some(HOLD) => Stage::Held,
+         _ => Stage::Queued,
+     }
+ }
+diff --git a/crates/tsuzuri-core/tests/hdst.rs b/crates/tsuzuri-core/tests/hdst.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c722b072d3e1573ca7086619a7c89055a3596735
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/hdst.rs
+@@ -0,0 +1,194 @@
++//! 段 Held（留め置き）の歯（中核・接頭辞 hdst_・設計ノート surface-wave28a 行 c-held-stage・判断の記録 ADR-42 決定 (1)(2)(6)）。
++//! 局面の出力の契約の部品が contract-queued で理由 hold（席の止め）か contract-refused（受付の断り）の札は段 Held で列は Blocked。
++//! 理由と since は部品の字。依存・重なり・予約は Blocked のまま、自動で解ける待ちは Queued のまま。出力が読めない間は Held を判じない。
++//! 部品の任意の欄 why は欠けても部品を落とさない。否定の見本は正しい見本から 1 欄だけ替える。節の組は歯の中で組む。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_contract::board::{PipelineColumn, Reading, Stage};
++use tsuzuri_contract::case::CasePart;
++use tsuzuri_core::case::cases_of;
++use tsuzuri_core::pipeline::{
++    HOLD, PARTNER_REASONS, QUEUED_PHASE, REFUSED_PHASE, board_with_cases, queued_of,
++};
++
++/// 節の今（2026-09-27T12:00:00Z）。
++const NOW: u64 = 1_790_510_400;
++
++/// 部品の since の字（2026-09-27T11:30:00Z）と epoch 秒。
++const SINCE: &str = "2026-09-27T11:30:00Z";
++const SINCE_SECS: u64 = NOW - 1800;
++
++/// 受付の断りの名と、止めの理由の字。
++const NAME: &str = "teeth-outside-write-set";
++const WHY: &str = "書く file の重なりを席が確かめる";
++
++/// 節の台帳（配れる open の task hd.1 と、hd.1 が blocks で待つ開いた hd.2）。
++fn ledger(blocked: bool) -> String {
++    let task = |id: &str| {
++        json!({"id": id, "title": format!("t {id}"), "status": "open", "issue_type": "task",
++            "acceptance_criteria": format!("design = contracts/x.toml#{id}")})
++    };
++    let mut one = task("hd.1");
++    if blocked {
++        one["dependencies"] =
++            json!([{"issue_id": "hd.1", "depends_on_id": "hd.2", "type": "blocks"}]);
++    }
++    json!([one, task("hd.2")]).to_string()
++}
++
++/// hd.1 の走行 1 つの event log（走行の無い札は段を決めない event 1 行だけの読める log）。
++fn events(run: bool) -> String {
++    let id = "hd.1-20260927T110000Z";
++    let mut rows = vec![json!({"schema": 1, "ts": "2026-09-27T10:00:00Z", "kind": "SeatSpawned"})];
++    if run {
++        rows.push(json!({"schema": 1, "ts": "2026-09-27T11:00:00Z", "kind": "RunCreated", "run": id, "bead": "hd.1", "stage": "Intake"}));
++        rows.push(json!({"schema": 1, "ts": "2026-09-27T11:10:00Z", "kind": "RunStage", "run": id, "bead": "hd.1", "stage": "Spawned"}));
++    }
++    rows.iter()
++        .map(Value::to_string)
++        .collect::<Vec<_>>()
++        .join("\n")
++}
++
++/// hd.1 の契約の部品（局面・理由・why）。
++fn part(phase: &str, reason: &str, why: Option<&str>) -> Value {
++    json!({"part": "contract", "id": "hd.1", "phase": phase, "turn": "seat", "since": SINCE,
++        "reason": reason, "why": why, "closed": false, "overdue": null, "links": {"on": []}})
++}
++
++/// 局面の出力の字（版を選ぶ）。
++fn output(version: u64, parts: Vec<Value>) -> String {
++    json!({"version": version, "generated_at": "2026-09-27T11:59:00Z", "parts": parts}).to_string()
++}
++
++/// 部品 1 つの出力で組んだ hd.1 の札の段と理由と since（`run` は走行の在る札・`blocked` は開いた blocker を持つ台帳）。
++fn card(text: &str, run: bool, blocked: bool) -> (Stage, Option<String>, Option<u64>) {
++    let b = board_with_cases(&ledger(blocked), &events(run), &cases_of(text, None), NOW);
++    let Reading::Known(cards) = b.board.cards else {
++        panic!("札が Unknown");
++    };
++    let c = cards
++        .into_iter()
++        .find(|c| c.contract.as_str() == "hd.1")
++        .unwrap_or_else(|| panic!("hd.1 の札が無い"));
++    (c.stage, c.reason, c.since)
++}
++
++fn one(p: Value, run: bool) -> (Stage, Option<String>, Option<u64>) {
++    card(&output(1, vec![p]), run, false)
++}
++
++#[test]
++fn hdst_held_in_closed_stages() {
++    assert_eq!(Stage::ALL.len(), 9);
++    assert!(Stage::ALL.contains(&Stage::Held));
++    assert_eq!(Stage::Held.column(), PipelineColumn::Blocked);
++    assert_eq!(serde_json::to_string(&Stage::Held).unwrap(), "\"Held\"");
++    assert_eq!(
++        serde_json::from_str::<Stage>("\"Held\"").unwrap(),
++        Stage::Held
++    );
++    assert_eq!(HOLD, "hold");
++    assert_eq!(queued_of(Some(HOLD)), Stage::Held);
++}
++
++#[test]
++fn hdst_seat_hold_is_held() {
++    for run in [false, true] {
++        let want = (Stage::Held, Some(HOLD.to_string()), Some(SINCE_SECS));
++        assert_eq!(
++            one(part(QUEUED_PHASE, HOLD, Some(WHY)), run),
++            want,
++            "run={run}"
++        );
++        let other = one(part(QUEUED_PHASE, "host-busy", Some(WHY)), run);
++        assert_eq!(other.0, Stage::Queued, "理由だけ替えた見本 run={run}");
++    }
++}
++
++#[test]
++fn hdst_intake_refusal_is_held() {
++    for run in [false, true] {
++        let want = (Stage::Held, Some(NAME.to_string()), Some(SINCE_SECS));
++        assert_eq!(
++            one(part(REFUSED_PHASE, NAME, Some(WHY)), run),
++            want,
++            "run={run}"
++        );
++        let other = one(part(QUEUED_PHASE, NAME, Some(WHY)), run);
++        assert_eq!(other.0, Stage::Queued, "局面だけ替えた見本 run={run}");
++    }
++}
++
++#[test]
++fn hdst_partner_reasons_stay_blocked() {
++    assert_eq!(PARTNER_REASONS, ["dependency", "overlap", "reserved"]);
++    for word in PARTNER_REASONS {
++        for run in [false, true] {
++            let got = one(part(QUEUED_PHASE, word, None), run);
++            assert_eq!(got.0, Stage::Blocked, "{word} run={run}");
++        }
++    }
++}
++
++#[test]
++fn hdst_self_clearing_reasons_stay_queued() {
++    let words = [
++        "host-busy",
++        "launched",
++        "floor",
++        "unreflected-ruling",
++        "sibling",
++    ];
++    for word in words {
++        for run in [false, true] {
++            let got = one(part(QUEUED_PHASE, word, None), run);
++            assert_eq!(got.0, Stage::Queued, "{word} run={run}");
++        }
++    }
++}
++
++#[test]
++fn hdst_unreadable_cases_no_held() {
++    for p in [
++        part(QUEUED_PHASE, HOLD, Some(WHY)),
++        part(REFUSED_PHASE, NAME, Some(WHY)),
++    ] {
++        let held = card(&output(1, vec![p.clone()]), false, false);
++        assert_eq!(held.0, Stage::Held, "読める出力");
++        let text = output(2, vec![p]);
++        assert_eq!(cases_of(&text, None).parts, Reading::Unknown);
++        assert_eq!(card(&text, false, false), (Stage::Queued, None, None));
++        assert_eq!(card(&text, false, true), (Stage::Blocked, None, None));
++    }
++}
++
++#[test]
++fn hdst_why_optional_field() {
++    let parts = |p: Value| match cases_of(&output(1, vec![p]), None).parts {
++        Reading::Known(parts) => parts,
++        Reading::Unknown => panic!("部品が Unknown"),
++    };
++    let with = parts(part(QUEUED_PHASE, HOLD, Some(WHY)));
++    assert_eq!(with.len(), 1);
++    assert_eq!(with[0].why.as_deref(), Some(WHY));
++    let null = parts(part(QUEUED_PHASE, HOLD, None));
++    assert_eq!(null.len(), 1, "null の why");
++    assert_eq!(null[0].why, None);
++    let mut gone = part(QUEUED_PHASE, HOLD, Some(WHY));
++    gone.as_object_mut().unwrap().remove("why");
++    let gone = parts(gone);
++    assert_eq!(gone.len(), 1, "鍵の無い why");
++    assert_eq!(gone[0].why, None);
++    let mut typed = part(QUEUED_PHASE, HOLD, Some(WHY));
++    typed["why"] = json!(7);
++    assert_eq!(parts(typed).len(), 0, "型の違う why の部品は落とす");
++    let mut wire = serde_json::to_value(&with[0]).unwrap();
++    assert_eq!(wire["why"], json!(WHY));
++    wire.as_object_mut().unwrap().remove("why");
++    let back: CasePart = serde_json::from_value(wire).unwrap();
++    assert_eq!(back.why, None, "鍵の無い電文");
++    let none = serde_json::to_value(&back).unwrap();
++    assert!(none.get("why").is_none(), "None は鍵を書かない: {none}");
++}
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvcase.rs b/crates/tsuzuri-core/tests/teeth1/bvcase.rs
+index 3706b43e6ba8f0b69d9aad50bc6c25dfd3ae77fc..deb1edae6d5f20b24c073a0f8a38d37fdc0f37b7 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvcase.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvcase.rs
+@@ -51,6 +51,7 @@ fn bvcase_fields_copied_from_fixture() {
+             turn: "vessel".into(),
+             since: Some(1_790_863_200),
+             reason: Some("dependency".into()),
++            why: None,
+             closed: false,
+             links: CaseLinks {
+                 on: ids(&["t3-hub.903"]),
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvlc.rs b/crates/tsuzuri-core/tests/teeth1/bvlc.rs
+index 45216dbc1be87d95d4213ca53780f977ff92c523..cf31b220a51645dc54446070facdd635c50ea979 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvlc.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvlc.rs
+@@ -197,7 +197,7 @@ fn bvlc_waiting_contract_with_runs() {
+     );
+     assert_eq!(
+         wait("contract-refused", "no-room"),
+-        (Stage::Queued, Some("no-room".into()), Some(WAIT_SINCE))
++        (Stage::Held, Some("no-room".into()), Some(WAIT_SINCE))
+     );
+     assert_eq!(
+         wait("contract-queued", "settled"),
+@@ -217,7 +217,7 @@ fn bvlc_runless_from_parts() {
+     )]);
+     assert_eq!(
+         row(&board_with_cases(&ledger(), &log, &refused, NOW), "lc.4"),
+-        (Stage::Queued, Some("admission".into()), Some(WAIT_SINCE))
++        (Stage::Held, Some("admission".into()), Some(WAIT_SINCE))
+     );
+     let mut parts = running("lc.4", "run-implementing");
+     parts[1]["reason"] = json!("Spawned");
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvqcol.rs b/crates/tsuzuri-core/tests/teeth1/bvqcol.rs
+index 9fa1d8fb9f3b40eb2d050691c7dffeebc32d7cb7..2c97797d0fb63b1384082c800336ceaa12be2e96 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvqcol.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvqcol.rs
+@@ -142,7 +142,7 @@ fn bvqcol_since_and_reason_from_case() {
+     assert_eq!(card(&b, "qc.1").reason.as_deref(), Some("dependency"));
+     assert_eq!(
+         row(&b, "qc.5"),
+-        (Stage::Queued, Some("hold".to_string()), None),
++        (Stage::Held, Some("hold".to_string()), None),
+         "since の無い部品"
+     );
+     let c = card(&b, "qc.4");
+diff --git a/crates/tsuzuri-core/tests/teeth2/stats.rs b/crates/tsuzuri-core/tests/teeth2/stats.rs
+index 69e9f309686731ea599d77dec97bea6ebfd649de..98387599678ebd3ec3f68d5cbc0b1afbb05a0fb3 100644
+--- a/crates/tsuzuri-core/tests/teeth2/stats.rs
++++ b/crates/tsuzuri-core/tests/teeth2/stats.rs
+@@ -278,11 +278,11 @@ fn stats_pipeline_matches_fixture() {
+     let want: Vec<PipelineCard> = serde_json::from_value(v["cards"].clone()).expect("期待の札");
+     assert_eq!(got.board.cards, Reading::Known(want.clone()));
+     assert_eq!(u64::from(got.unmapped), v["unmapped"].as_u64().unwrap());
+-    // Stopped のほかの段は、どれも 1 枚以上の札で出る。
++    // Stopped と Held（局面の出力が要る）のほかの段は、どれも 1 枚以上の札で出る。
+     let stages: BTreeSet<String> = want.iter().map(|c| format!("{:?}", c.stage)).collect();
+     let all: BTreeSet<String> = Stage::ALL
+         .iter()
+-        .filter(|s| **s != Stage::Stopped)
++        .filter(|s| !matches!(s, Stage::Stopped | Stage::Held))
+         .map(|s| format!("{s:?}"))
+         .collect();
+     assert_eq!(stages, all);
+diff --git a/crates/tsuzuri-surface/src/account/session.rs b/crates/tsuzuri-surface/src/account/session.rs
+index 7bda8ee342f4394639a210c21198b0a87163b4f8..acb180b8a547ac8e11b98c20a87ce9681b63bb6a 100644
+--- a/crates/tsuzuri-surface/src/account/session.rs
++++ b/crates/tsuzuri-surface/src/account/session.rs
+@@ -191,6 +191,7 @@ pub fn stage_word(stage: Stage) -> &'static str {
+     match stage {
+         Stage::Queued => "Queued",
+         Stage::Blocked => "Blocked",
++        Stage::Held => "Held",
+         Stage::Running => "Running",
+         Stage::Gated => "Gated",
+         Stage::Questioned => "Questioned",
+diff --git a/crates/tsuzuri-surface/src/widgets/keyline.rs b/crates/tsuzuri-surface/src/widgets/keyline.rs
+index f1808c235b795cdec285933ce85af9afdcac6c97..5acea2d2c1f5869529cde9b04c43d08051dba614 100644
+--- a/crates/tsuzuri-surface/src/widgets/keyline.rs
++++ b/crates/tsuzuri-surface/src/widgets/keyline.rs
+@@ -101,7 +101,7 @@ pub fn key_line(line: &LineSrc, now: EpochSecs) -> KeyLine {
+             let lead = line.wait.clone().unwrap_or_else(|| label(wait));
+             (format!("{lead} · {age}"), plain)
+         }
+-        Stage::Queued => {
++        Stage::Queued | Stage::Held => {
+             let made = age_at(line.created, now);
+             let body = format!("{} {age} · {} {made}", label(queue), label(created));
+             if queued_warn(card, now) {
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index cb0af99e76cb0f2fe4bcd574c1da55e0acb91a9c..f2a6a4c46fda2aa4cb466df33a30f115b20a9ccd 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -441,7 +441,7 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
+             };
+             vec![f(STAGE_KEYS[0], list), f(STAGE_KEYS[1], since())]
+         }
+-        Stage::Queued => vec![f(STAGE_KEYS[2], since())],
++        Stage::Queued | Stage::Held => vec![f(STAGE_KEYS[2], since())],
+         Stage::Running | Stage::Gated => vec![
+             f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
+             f(STAGE_KEYS[4], account()),
+@@ -617,7 +617,7 @@ pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
+     };
+     let [why, wait_why, wait_runs] = WHY_KEYS;
+     match (card.stage, wait_of(src, card)) {
+-        (Stage::Queued, Wait::Queue(reason, _)) => {
++        (Stage::Queued | Stage::Held, Wait::Queue(reason, _)) => {
+             let val = reason_val(reason.as_deref());
+             put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
+         }
+diff --git a/crates/tsuzuri-surface/src/widgets/runflow.rs b/crates/tsuzuri-surface/src/widgets/runflow.rs
+index f694c0aaa9a65ac9bb1521e41234b58dc720ca64..4bb79539db48f408ed1c12515e298cde91995436 100644
+--- a/crates/tsuzuri-surface/src/widgets/runflow.rs
++++ b/crates/tsuzuri-surface/src/widgets/runflow.rs
+@@ -224,7 +224,7 @@ pub fn with_runs(mut p: Pop, runs: Reading<&[RunLine]>) -> Pop {
+                 },
+             );
+         }
+-        Stage::Blocked | Stage::Queued => {}
++        Stage::Blocked | Stage::Held | Stage::Queued => {}
+     }
+     p
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvcols.rs b/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+index 433005e8722b9ca6bc591775aedaa3ec6ce573f5..77d594eeb09341fb11494b784909a53311c07a47 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+@@ -258,6 +258,7 @@ fn part(phase: &str, reason: &str, on: &[&str]) -> CasePart {
+         turn: "vessel".to_string(),
+         since: None,
+         reason: Some(reason.to_string()),
++        why: None,
+         closed: false,
+         links: CaseLinks {
+             on: on.iter().map(|s| s.to_string()).collect(),
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+index a33ed67b877b6feef12268f48a167f1b892f11d7..71cfe53d0cbb5b258755d3668530288ab3be43ce 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+@@ -76,6 +76,7 @@ fn part(x: &str, on: &[&str]) -> CasePart {
+         turn: "vessel".to_string(),
+         since: Some(NOW - 600),
+         reason: Some("dependency".to_string()),
++        why: None,
+         closed: false,
+         links: CaseLinks {
+             on: on.iter().map(|s| s.to_string()).collect(),
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvuphase.rs b/crates/tsuzuri-surface/tests/teeth2/bvuphase.rs
+index 0ab2de5f350224108197e9b40dc1e8e2af8a7194..91fb7afe1582404fe41f1fbfb142c514ad97f5eb 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvuphase.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvuphase.rs
+@@ -47,6 +47,7 @@ fn part(kind: &str, id: &str, phase: &str, turn: &str) -> CasePart {
+         turn: turn.to_string(),
+         since: None,
+         reason: None,
++        why: None,
+         closed: false,
+         links: CaseLinks::default(),
+     }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs b/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+index 814a69ef770f3d0c2a23ebf79aeac83b6cc90396..344bfa230b6aad5fb4d89163c3e07fddb3dc76f7 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+@@ -41,6 +41,7 @@ fn part(x: &str, phase: &str, reason: Option<&str>, on: &[&str], runs: &[&str])
+         turn: "vessel".to_string(),
+         since: Some(NOW - 60),
+         reason: reason.map(str::to_string),
++        why: None,
+         closed: false,
+         links: CaseLinks {
+             on: on.iter().map(|s| s.to_string()).collect(),
+diff --git a/crates/tsuzuri-surface/tests/teeth4/pipe.rs b/crates/tsuzuri-surface/tests/teeth4/pipe.rs
+index e9114883b1da2adaac1a2cdbed1ad98a0e338b92..c54578ab4283132a9047a96d5de32ef3f6dfe6d3 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/pipe.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/pipe.rs
+@@ -100,7 +100,12 @@ fn pipe_columns_order_and_cards_sorted_by_elapsed() {
+     assert_eq!(cards.len(), 12);
+     for stage in Stage::ALL {
+         let n = cards.iter().filter(|c| c.stage == stage).count();
+-        let want = if stage == Stage::Landed { 5 } else { 1 };
++        // 段 Held の札は局面の出力が要るので fixture（event log と台帳だけ）に無い（行 c-held-stage）。
++        let want = match stage {
++            Stage::Landed => 5,
++            Stage::Held => 0,
++            _ => 1,
++        };
+         assert_eq!(n, want, "{stage:?} の札の数");
+     }
+     let cols = filled();

@@ -1,0 +1,436 @@
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 570026d5a48408c1538638915c1922936e556332..5288e8e6f17fdf5526ca4c0332f51c34e69c6879 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -15,6 +15,8 @@
+ //! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
+ //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
+ //! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
++//! 留め置きの札は Blocked の列に出し、席の止めと受付の断りで別の印（widgets の keyline の `HeldBy`）を札の meta に置く。Blocked の札は印を持たない。
++//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)・行 g-held-col）。
+ 
+ use std::collections::BTreeMap;
+ 
+@@ -30,7 +32,7 @@ use crate::frame::{self, Block};
+ use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
+ use crate::view::{Fetched, id_order, read_rows};
+ use crate::vocab::label;
+-use crate::widgets::keyline::{LineSrc, line_src};
++use crate::widgets::keyline::{HeldBy, LineSrc, held_by, line_src};
+ use crate::widgets::pop::{self, Src};
+ 
+ pub const BLOCK: Block = Block {
+@@ -199,6 +201,8 @@ pub struct Kcard {
+     pub short: Option<String>,
+     /// 要の 1 行の材料（`with_lines` が置く・置くまでは None で要の 1 行を出さない）。
+     pub line: Option<LineSrc>,
++    /// 留め置きの札の止めた者（印を出す・ほかの段は None・行 g-held-col）。
++    pub held: Option<HeldBy>,
+ }
+ 
+ 
+@@ -258,6 +262,17 @@ impl Column {
+     }
+ }
+ 
++/// 列の見出しの数（Blocked の列は Blocked と Held の内訳 `<Blocked の数>·<Held の数>`・ほかの列は札の数・行 g-held-col）。
++/// 内訳は札の要の 1 行と同じ中黒（U+00B7）でつなぎ、空白を挟まない（斜線は分数と読まれ、空白は狭い列で数の中の折れ目になる）。
++pub fn count_text(col: &Column) -> String {
++    let n = col.cards.len();
++    if col.lane.column != PipelineColumn::Blocked {
++        return n.to_string();
++    }
++    let held = col.cards.iter().filter(|c| c.held.is_some()).count();
++    format!("{}·{held}", n - held)
++}
++
+ /// 描く時の経過の字（今から段を決めた時刻を引いて `age` に渡す・今より後の時刻は 0・時刻が無ければ `NO_AGE`・行 g-tick-adopt）。
+ pub fn age_at(since: Option<EpochSecs>, now: EpochSecs) -> String {
+     since.map_or_else(|| NO_AGE.to_string(), |s| age(now.saturating_sub(s)))
+@@ -455,6 +470,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+         ci: if lane.stops() { None } else { shown },
+         short: None,
+         line: None,
++        held: held_by(card),
+     }
+ }
+ 
+@@ -631,8 +647,8 @@ mod dom {
+ 
+     use super::{
+         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard,
+-        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, misfit_cards,
+-        misfit_href, open_columns, with_closed, with_lines, with_open,
++        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, count_text,
++        misfit_cards, misfit_href, open_columns, with_closed, with_lines, with_open,
+     };
+     use crate::frame::Mode;
+     use crate::ledgerlist::{SelCtx, dim, facts, hover_lit, pick, ring};
+@@ -922,7 +938,7 @@ mod dom {
+     ) -> AnyView {
+         let column = col.lane.column;
+         let is_open = move || open.with(|o| o.contains(&column));
+-        let count = col.cards.len();
++        let count = count_text(&col);
+         let class = col.class.clone();
+         let key = col.lane.key;
+         let shown = col.clone();
+@@ -976,6 +992,9 @@ mod dom {
+         let ci = card
+             .ci
+             .map(|c| view! { <span style=ci_style(c)>{label(ci_key(c))}</span> });
++        let held = card
++            .held
++            .map(|h| view! { <span class=h.class()>{label(h.key())}</span> });
+         let title = card
+             .short
+             .clone()
+@@ -1007,6 +1026,7 @@ mod dom {
+                 <div class="m">
+                     <span class="kid">{card.id.clone()}</span>
+                     {lead}
++                    {held}
+                     {closed}
+                     {ci}
+                     <span><span inner_html=CLOCK></span><span class="num">{age}</span></span>
+diff --git a/crates/tsuzuri-surface/src/widgets/keyline.rs b/crates/tsuzuri-surface/src/widgets/keyline.rs
+index 5acea2d2c1f5869529cde9b04c43d08051dba614..a09234983082c60b69b2b8266ea103703a083ab4 100644
+--- a/crates/tsuzuri-surface/src/widgets/keyline.rs
++++ b/crates/tsuzuri-surface/src/widgets/keyline.rs
+@@ -3,6 +3,7 @@
+ //! 越えると注意の印と色・列に入った時刻が無ければ付けない）・Running は回と経過と口座・Gated は gate と回と経過と口座・Failed と Stopped は
+ //! 20 字に切った理由と経過と回・Questioned は問いと経過と回・着地は着地の時刻と CI の語。待つ相手は吹き出しと同じ読み（`pop::wait_of` と
+ //! `pop::wait_on`）。今に依らない材料（`LineSrc`）は板を組む時に置き、字は描く時の今から組む（1 秒の時計で書き直す）。
++//! Held（留め置き）は止めた者の印の語と止めてからの経過（行 g-held-col・判断の記録 ADR-42 決定 (7)）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -37,6 +38,55 @@ pub const LINE_CLASSES: [&str; 4] = ["kl", "kl klwarn", "kl klstop", "kl klask"]
+ /// 止まりの理由を切る字数（札の値の行と同じ 20）。
+ pub const WHY_CHARS: usize = 20;
+ 
++/// 席の止めの理由の語（中核の crate の pipeline の `HOLD` の写し・面の crate は中核の crate に依存しない）。
++pub const HOLD: &str = "hold";
++
++/// 留め置きの札の止めた者（判断の記録 ADR-42 決定 (1)(7)・行 g-held-col）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum HeldBy {
++    /// 席が器の止めの印で止めた（理由の語 `HOLD`）。
++    Seat,
++    /// 器の受付が断った（局面 contract-refused・理由は断りの名）。
++    Intake,
++}
++
++/// 止めた者ごとの印の語の鍵と class（席の止め・受付の断り）。
++pub const HELD_MARKS: [(HeldBy, &str, &str); 2] = [
++    (HeldBy::Seat, "hm:seat", "hdm hd-seat"),
++    (HeldBy::Intake, "hm:intake", "hdm hd-intake"),
++];
++
++impl HeldBy {
++    /// 印の語の鍵。
++    pub fn key(self) -> &'static str {
++        self.mark().1
++    }
++
++    /// 印の class。
++    pub fn class(self) -> &'static str {
++        self.mark().2
++    }
++
++    #[expect(clippy::expect_used, reason = "印の表は止めた者の全部を持つ")]
++    fn mark(self) -> (HeldBy, &'static str, &'static str) {
++        HELD_MARKS
++            .into_iter()
++            .find(|(by, _, _)| *by == self)
++            .expect("印の表は止めた者の全部を持つ")
++    }
++}
++
++/// 札の止めた者（段 Held の札だけ・理由の語が `HOLD` なら席・ほかは受付・ほかの段は None）。
++pub fn held_by(card: &PipelineCard) -> Option<HeldBy> {
++    (card.stage == Stage::Held).then(|| {
++        if card.reason.as_deref() == Some(HOLD) {
++            HeldBy::Seat
++        } else {
++            HeldBy::Intake
++        }
++    })
++}
++
+ /// 要の 1 行の材料（札の電文と、今に依らない字: Blocked の頭の字と起票の時刻）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct LineSrc {
+@@ -101,7 +151,11 @@ pub fn key_line(line: &LineSrc, now: EpochSecs) -> KeyLine {
+             let lead = line.wait.clone().unwrap_or_else(|| label(wait));
+             (format!("{lead} · {age}"), plain)
+         }
+-        Stage::Queued | Stage::Held => {
++        Stage::Held => {
++            let mark = held_by(card).map_or_else(|| label(queue), |h| label(h.key()));
++            (format!("{mark} · {age}"), plain)
++        }
++        Stage::Queued => {
+             let made = age_at(line.created, now);
+             let body = format!("{} {age} · {} {made}", label(queue), label(created));
+             if queued_warn(card, now) {
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index cd9eda40f3cd373beb76a3e1d63ef8adc062cfc7..9cf33b3456c84e28cd708800dc0a87a9d9763f63 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -267,6 +267,9 @@ a.tile:hover { box-shadow: var(--shadow); }
+ .kcard .m .why { flex-wrap: wrap; }
+ .kcard .m svg { width: 12px; height: 12px; }
+ .kcard.why-stop .m .why { color: var(--s-stop); font-weight: 600; }
++.kcard .m .hdm { padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font-weight: 600; line-height: 1.5; } /* 留め置きの印（行 g-held-col） */
++.kcard .m .hd-seat { color: var(--st-limit); }
++.kcard .m .hd-intake { color: var(--s-stop); }
+ button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+ .kcard .kl { margin-top: 3px; padding-left: 24px; color: var(--ink-2); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
+ .kcard .kl.klwarn { color: var(--st-limit); font-weight: 600; }
+diff --git a/crates/tsuzuri-surface/tests/hdcol.rs b/crates/tsuzuri-surface/tests/hdcol.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..695bf62099539210f647177bdcbd1bae42c1e1fe
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hdcol.rs
+@@ -0,0 +1,180 @@
++//! 留め置きの札と列の見出しの歯（面・接頭辞 hdcol_・設計ノート surface-wave28a 行 g-held-col・判断の記録 ADR-42 決定 (3)(7)）。
++//! 段 Held の札は Blocked の列に出て、理由の語 hold は席の止め・ほかは受付の断りの印を持つ（Blocked の札は印なし）。
++//! Blocked の列の見出しの数は Blocked と Held の内訳、札の要の 1 行は印の語と止めてからの経過。否定の見本は 1 欄だけ替える。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_surface::project::pipeline::{NO_AGE, columns, count_text, kcard};
++use tsuzuri_surface::vocab::{label, vocab};
++use tsuzuri_surface::widgets::keyline::{
++    HELD_MARKS, HOLD, HeldBy, LINE_KEYS, LineSrc, held_by, key_line,
++};
++
++const NOW: EpochSecs = 1_790_000_000;
++
++/// 受付の断りの名。
++const NAME: &str = "teeth-outside-write-set";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn card(x: &str, stage: Stage, reason: Option<&str>, since: Option<EpochSecs>) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(x).unwrap_or_else(|e| panic!("{x}: {e:?}")),
++        runs: 0,
++        stage,
++        reason: reason.map(str::to_string),
++        account: None,
++        since,
++        ci: None,
++    }
++}
++
++fn line(c: &PipelineCard) -> String {
++    let src = LineSrc {
++        card: c.clone(),
++        wait: None,
++        created: None,
++    };
++    key_line(&src, NOW).text
++}
++
++#[test]
++fn hdcol_held_by_reason() {
++    let seat = card("h-1", Stage::Held, Some(HOLD), Some(NOW));
++    let intake = card("h-2", Stage::Held, Some(NAME), Some(NOW));
++    assert_eq!(HOLD, "hold");
++    assert_eq!(held_by(&seat), Some(HeldBy::Seat));
++    assert_eq!(held_by(&intake), Some(HeldBy::Intake));
++    for stage in [Stage::Queued, Stage::Blocked] {
++        let other = PipelineCard {
++            stage,
++            ..seat.clone()
++        };
++        assert_eq!(held_by(&other), None, "段だけ替えた見本 {stage:?}");
++    }
++}
++
++#[test]
++fn hdcol_card_mark_in_blocked_column() {
++    let cards = [
++        card("h-1", Stage::Held, Some(HOLD), Some(NOW - 60)),
++        card("h-2", Stage::Held, Some(NAME), Some(NOW - 120)),
++        card("b-1", Stage::Blocked, Some("dependency"), Some(NOW - 180)),
++    ];
++    let cols = columns(&cards, &[], NOW);
++    let block = cols
++        .iter()
++        .find(|c| c.lane.column == PipelineColumn::Blocked)
++        .unwrap_or_else(|| panic!("Blocked の列が無い"));
++    let marks: Vec<(&str, Option<HeldBy>)> = block
++        .cards
++        .iter()
++        .map(|k| (k.id.as_str(), k.held))
++        .collect();
++    assert_eq!(
++        marks,
++        [
++            ("h-1", Some(HeldBy::Seat)),
++            ("h-2", Some(HeldBy::Intake)),
++            ("b-1", None)
++        ]
++    );
++    assert_eq!(kcard(&cards[0], &[], NOW).held, Some(HeldBy::Seat));
++    assert_eq!(
++        kcard(&cards[2], &[], NOW).held,
++        None,
++        "Blocked の札は印なし"
++    );
++}
++
++#[test]
++fn hdcol_count_breakdown() {
++    let cards = [
++        card("h-1", Stage::Held, Some(HOLD), Some(NOW - 60)),
++        card("b-1", Stage::Blocked, Some("dependency"), Some(NOW - 120)),
++        card("b-2", Stage::Blocked, Some("overlap"), Some(NOW - 180)),
++        card("q-1", Stage::Queued, Some(HOLD), Some(NOW - 240)),
++    ];
++    let cols = columns(&cards, &[], NOW);
++    let text = |column: PipelineColumn| {
++        let col = cols
++            .iter()
++            .find(|c| c.lane.column == column)
++            .unwrap_or_else(|| panic!("{column:?} の列が無い"));
++        count_text(col)
++    };
++    assert_eq!(
++        text(PipelineColumn::Blocked),
++        "2·1",
++        "内訳は中黒でつなぎ空白を挟まない"
++    );
++    assert_eq!(text(PipelineColumn::Queued), "1", "ほかの列は札の数");
++    let none = columns(&cards[1..], &[], NOW);
++    assert_eq!(count_text(&none[0]), "2·0", "Held の札の無い Blocked の列");
++}
++
++#[test]
++fn hdcol_key_line_mark_and_age() {
++    let seat = card("h-1", Stage::Held, Some(HOLD), Some(NOW - 7_200));
++    let intake = card("h-2", Stage::Held, Some(NAME), Some(NOW - 300));
++    assert_eq!(line(&seat), format!("{} · 2h", label("hm:seat")));
++    assert_eq!(line(&intake), format!("{} · 5m", label("hm:intake")));
++    let unknown = PipelineCard {
++        since: None,
++        ..seat.clone()
++    };
++    assert_eq!(line(&unknown), format!("{} · {NO_AGE}", label("hm:seat")));
++    let queued = PipelineCard {
++        stage: Stage::Queued,
++        ..seat
++    };
++    assert!(
++        line(&queued).contains(&label(LINE_KEYS[2])),
++        "段だけ替えた見本: {}",
++        line(&queued)
++    );
++}
++
++#[test]
++fn hdcol_vocab_and_marks() {
++    let v = vocab();
++    let term = |k: &str| v.term(k).unwrap_or_else(|| panic!("{k} が語の辞書に無い"));
++    assert_eq!(term("col_block").label, "Blocked / Held");
++    assert!(term("col_block").note.contains("Held = 留め置き"));
++    assert_eq!(
++        HELD_MARKS,
++        [
++            (HeldBy::Seat, "hm:seat", "hdm hd-seat"),
++            (HeldBy::Intake, "hm:intake", "hdm hd-intake")
++        ]
++    );
++    for (by, key, class) in HELD_MARKS {
++        assert_eq!((by.key(), by.class()), (key, class));
++        let t = term(key);
++        assert!(!t.label.is_ascii() && !t.note.is_empty(), "{key}");
++    }
++    assert_ne!(term("hm:seat").label, term("hm:intake").label);
++}
++
++#[test]
++fn hdcol_css_and_dom_text() {
++    let css = read("style.css");
++    for rule in [
++        ".kcard .m .hdm {",
++        ".kcard .m .hd-seat {",
++        ".kcard .m .hd-intake {",
++    ] {
++        assert!(css.contains(rule), "stylesheet に {rule} が無い");
++    }
++    let src = read("src/project/pipeline.rs");
++    assert!(src.contains("let count = count_text(&col);"));
++    assert!(src.contains(".map(|h| view! { <span class=h.class()>{label(h.key())}</span> });"));
++    assert!(src.contains("{lead}\n                    {held}\n                    {closed}"));
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvcull.rs b/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+index 9b8ec8c3145d5530bca6bb02a0748452da3017fe..bb6aa87ecd51f5234bab86fd9b486c6d607258f1 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+@@ -51,7 +51,7 @@ fn bvcull_card_hover_values_gone() {
+         fields,
+         [
+             "id", "title", "state", "lead", "age", "since", "class", "closed", "ci", "short",
+-            "line"
++            "line", "held"
+         ]
+     );
+     assert!(
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvfive.rs b/crates/tsuzuri-surface/tests/teeth1/bvfive.rs
+index a7ee165211de22754de6e5e7a6a04c392e2c604d..7bfc3ad8cdeec5876188058047ae966b68e90f72 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvfive.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvfive.rs
+@@ -101,7 +101,7 @@ fn bvfive_blocked_and_queued_apart() {
+ #[test]
+ fn bvfive_column_words_in_vocab() {
+     let v = vocab();
+-    assert_eq!(v.term("col_block").map(|t| t.label.as_str()), Some("Blocked"));
++    assert_eq!(v.term("col_block").map(|t| t.label.as_str()), Some("Blocked / Held"));
+     assert_eq!(v.term("col_queue").map(|t| t.label.as_str()), Some("Queued"));
+     assert_eq!(
+         v.term("col_wait").map(|t| t.label.as_str()),
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index a5eca307d444d112ef6b908a54d45b62a8b27158..1e554294e56abefd4df18d1dc0c08a60ed84d957 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -41,9 +41,9 @@
+    "internal": "Intake / Queued / Blocked / Reviewed(PASS)"
+   },
+   "col_block": {
+-   "label": "Blocked",
+-   "note": "相手を待っている run\n・ 持ち主の承認か、ほかの便の着地を待つ\n・ 器の Blocked（承認待ち）より広い",
+-   "internal": "Blocked・台帳の blocks の相手が開いている Queued"
++   "label": "Blocked / Held",
++   "note": "相手か人の手を待っている run\n・ Blocked = 持ち主の承認か、ほかの便の着地を待つ\n・ Held = 留め置き（席が止めたか、器の受付が断った）\n・ 数は Blocked / Held の内訳",
++   "internal": "Blocked・台帳の blocks の相手が開いている Queued\nHeld = contract-queued の hold と contract-refused（判断の記録 ADR-42）"
+   },
+   "col_queue": {
+    "label": "Queued",
+@@ -1724,6 +1724,16 @@
+    "plain": "札の要の 1 行: 着地の時刻と CI の結果",
+    "internal": "段 Landed の since と ci"
+   },
++  "hm:seat": {
++   "label": "席の止め",
++   "plain": "席が理由を付けて器の止めの印を置いた\n→ 席が印を外すと列に戻る",
++   "internal": "段 Held・局面 contract-queued の理由 hold（行 g-held-col）"
++  },
++  "hm:intake": {
++   "label": "受付の断り",
++   "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",
++   "internal": "段 Held・局面 contract-refused（理由は断りの名・行 g-held-col）"
++  },
+   "lc:memo-promoting": {
+    "label": "昇格の途中",
+    "plain": "契約の行か便が開いている memo\n・ または器の自動の close を待つ",
