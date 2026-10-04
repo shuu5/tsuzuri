@@ -1769,6 +1769,141 @@
    "plain": "断りの理由を直すと、器が次の周に受付をやり直す",
    "internal": "器の起こす側の周の受付の判定"
   },
+  "rf:not-a-repo": {
+   "label": "置き場が git の repo でない",
+   "plain": "器が撃つ置き場が git の repo でない",
+   "internal": "器の受付の断り Refuse::NotARepo（not-a-repo）"
+  },
+  "rf:duplicate-run": {
+   "label": "同じ便が同じ秒に重なった",
+   "plain": "同じ bead を同じ秒にもう 1 度受け付けようとした\n→ 少し待つと次の周に通る",
+   "internal": "器の受付の断り Refuse::DuplicateRun（duplicate-run）"
+  },
+  "rf:write-set-overlap": {
+   "label": "走っている便と書く file が重なる",
+   "plain": "走っている便の書く file と重なる\n→ その便が終わると通る",
+   "internal": "器の受付の断り Refuse::WriteSetOverlap（write-set-overlap）"
+  },
+  "rf:write-set-unreadable": {
+   "label": "走っている便の書く file が読めない",
+   "plain": "走っている便の契約の写しが読めない",
+   "internal": "器の受付の断り Refuse::WriteSetUnreadable（write-set-unreadable）"
+  },
+  "rf:write-set-incomplete": {
+   "label": "書く file の一覧に要る file が足りない",
+   "plain": "契約の行の書く file の一覧に、触れる file が足りない\n→ 席が一覧を直す",
+   "internal": "器の受付の断り Refuse::WriteSetIncomplete（write-set-incomplete）"
+  },
+  "rf:write-set-dir-without-slash": {
+   "label": "書く file の一覧の dir に / が無い",
+   "plain": "書く file の一覧の dir の末に / が無い\n→ 席が一覧を直す",
+   "internal": "器の受付の断り Refuse::WriteSetDirWithoutSlash（write-set-dir-without-slash）"
+  },
+  "rf:contract-table": {
+   "label": "契約表の行の形が崩れている",
+   "plain": "契約表の行の形が読めない\n→ 席が契約表を直す",
+   "internal": "器の受付の断り Refuse::ContractTable（contract-table）"
+  },
+  "rf:write-set-item-unresolved": {
+   "label": "書く file の項目が今の木に無い",
+   "plain": "書く file の一覧の項目が今の main の木に無い\n・ 前の行の着地を待つ時にも出る",
+   "internal": "器の受付の断り Refuse::WriteSetItemUnresolved（write-set-item-unresolved）"
+  },
+  "rf:cap-headroom": {
+   "label": "file の行数の上限の余地が足りない",
+   "plain": "書く file の行数の上限に余地が足りない\n→ 席が file を割るか見込みを直す",
+   "internal": "器の受付の断り Refuse::CapHeadroom（cap-headroom）"
+  },
+  "rf:name-unresolved": {
+   "label": "名指した名が今の木に無い",
+   "plain": "契約の字が名指す path・型・fn が今の main の木に無い",
+   "internal": "器の受付の断り Refuse::NameUnresolved（name-unresolved）"
+  },
+  "rf:write-set-drift": {
+   "label": "書く file の一覧が導いた値と違う",
+   "plain": "手で書いた書く file の一覧が、器が導いた一覧と違う",
+   "internal": "器の受付の断り Refuse::WriteSetDrift（write-set-drift）"
+  },
+  "rf:teeth-place-unresolved": {
+   "label": "歯の置き場が分からない",
+   "plain": "verify の歯の名の file が今の木に無く、欄にも無い",
+   "internal": "器の受付の断り Refuse::TeethPlaceUnresolved（teeth-place-unresolved）"
+  },
+  "rf:also-names-rust": {
+   "label": "欄 also に .rs が在る",
+   "plain": "欄 also に Rust の file を書いた\n→ 席が欄を直す",
+   "internal": "器の受付の断り Refuse::AlsoNamesRust（also-names-rust）"
+  },
+  "rf:tests-not-a-teeth-file": {
+   "label": "欄 tests の項目が歯の file でない",
+   "plain": "欄 tests に歯でない file を書いた\n→ 席が欄を直す",
+   "internal": "器の受付の断り Refuse::TestsNotATeethFile（tests-not-a-teeth-file）"
+  },
+  "rf:fn-undeclared": {
+   "label": "名指した fn の file が無い",
+   "plain": "触れる fn を宣言する file が今の木に無い",
+   "internal": "器の受付の断り Refuse::FnUndeclared（fn-undeclared）"
+  },
+  "rf:teeth-outside-write-set": {
+   "label": "verify の歯の file が書く file の外",
+   "plain": "verify の歯が当たる file が書く file の一覧に無い\n→ 席が一覧に足す",
+   "internal": "器の受付の断り Refuse::TeethOutsideWriteSet（teeth-outside-write-set）"
+  },
+  "rf:hand-written-contract": {
+   "label": "手で書いた契約を渡した",
+   "plain": "契約の正本は設計の行だけ\n→ 設計の行から受け付け直す",
+   "internal": "器の受付の断り Refuse::HandWrittenContract（hand-written-contract）"
+  },
+  "rf:same-kind-repeated": {
+   "label": "同じ型の審査の落ちが続いた",
+   "plain": "同じ理由の審査の落ちが続き、契約も節も替わっていない\n→ 席が契約か節を直す",
+   "internal": "器の受付の断り Refuse::SameKindRepeated（same-kind-repeated）"
+  },
+  "rf:finding-unaddressed": {
+   "label": "前の便の指摘に応えていない",
+   "plain": "前の便の審査の指摘に応える直しが無い\n→ 席が契約か節を直す",
+   "internal": "器の受付の断り Refuse::FindingUnaddressed（finding-unaddressed）"
+  },
+  "rf:promised-field-written": {
+   "label": "約束の行が器の導く欄を書いた",
+   "plain": "約束の行が、器が導く欄を手で書いた",
+   "internal": "器の受付の断り Refuse::PromisedFieldWritten（promised-field-written）"
+  },
+  "rf:promise-symbol-unresolved": {
+   "label": "約束の行の名が今の木と合わない",
+   "plain": "約束の行の名が今の木に無いか、新しい名が既に在る",
+   "internal": "器の受付の断り Refuse::PromiseSymbolUnresolved（promise-symbol-unresolved）"
+  },
+  "rf:max-live": {
+   "label": "走っている便の数が上限",
+   "plain": "走っている便の数が上限に達した\n→ 便が終わると通る",
+   "internal": "器の受付の断り Refuse::MaxLive（max-live）"
+  },
+  "rf:entrance-not-red": {
+   "label": "入口の歯が今の木で赤くない",
+   "plain": "verify の歯が着地の前の木で既に緑か測れない",
+   "internal": "器の受付の断り Refuse::EntranceNotRed（entrance-not-red）"
+  },
+  "rf:ruling-unresolved": {
+   "label": "引いた裁定が台帳に無い",
+   "plain": "契約の字が引く裁定 id が台帳に解けない",
+   "internal": "器の受付の断り Refuse::RulingUnresolved（ruling-unresolved）"
+  },
+  "rf:index-building": {
+   "label": "code の索引を組んでいる",
+   "plain": "code の索引の組み立てが済んでいない\n→ 済むと通る",
+   "internal": "器の受付の断り Refuse::IndexBuilding（index-building）"
+  },
+  "rf:code-facts": {
+   "label": "code の事実の名乗りが実測と違う",
+   "plain": "契約が名乗る code の事実が、索引の実測と違う",
+   "internal": "器の受付の断り Refuse::CodeFacts（code-facts）"
+  },
+  "rf:code-facts-unmeasured": {
+   "label": "code の索引を測れない",
+   "plain": "契約が名乗る code の事実を、索引が無くて測れない",
+   "internal": "器の受付の断り Refuse::CodeFactsUnmeasured（code-facts-unmeasured）"
+  },
   "hm:intake": {
    "label": "受付の断り",
    "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",

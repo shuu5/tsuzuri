@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use tsuzuri_surface::vocab::vocab;
 
-/// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由）。
-const KEY_PREFIXES: [&str; 5] = ["e:", "lc:", "qr:", "turn:", "unref:"];
+/// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由と受付の断りの名）。
+const KEY_PREFIXES: [&str; 6] = ["e:", "lc:", "qr:", "rf:", "turn:", "unref:"];
 
 /// class を組む接頭辞（接頭辞と値の字をつなぐ所・値の字は src の字の literal に在る）。
 const CLASS_PREFIXES: [&str; 7] = ["c-", "fb-", "h-", "r-", "sd-", "sev-", "st-"];

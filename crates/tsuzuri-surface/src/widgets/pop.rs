@@ -17,6 +17,7 @@
 //! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
 //! Held（留め置き）は止めた者・理由・止めた時刻と経過・解く条件の 4 つ（`held_facts`・個別の頁も同じ関数で組む・
 //! 判断の記録 ADR-42 決定 (7)・行 g-held-pop）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
+//! 受付の断りの名は器の 27 語（`REFUSALS`）を平易な字にした語の辞書の鍵 `rf:<名>` で引く（表に無い名は名のまま・行 g-held-name）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -138,6 +139,40 @@ pub const HELD_WORDS: [(HeldBy, &str, &str); 2] = [
     (HeldBy::Seat, "hb:seat", "hu:seat"),
     (HeldBy::Intake, "hb:intake", "hu:intake"),
 ];
+
+/// 器の受付の断りの名（器の pipe/refuse.rs の REFUSALS の 27 語・宣言の順・行 g-held-name）。
+pub const REFUSALS: [&str; 27] = [
+    "not-a-repo",
+    "duplicate-run",
+    "write-set-overlap",
+    "write-set-unreadable",
+    "write-set-incomplete",
+    "write-set-dir-without-slash",
+    "contract-table",
+    "write-set-item-unresolved",
+    "cap-headroom",
+    "name-unresolved",
+    "write-set-drift",
+    "teeth-place-unresolved",
+    "also-names-rust",
+    "tests-not-a-teeth-file",
+    "fn-undeclared",
+    "teeth-outside-write-set",
+    "hand-written-contract",
+    "same-kind-repeated",
+    "finding-unaddressed",
+    "promised-field-written",
+    "promise-symbol-unresolved",
+    "max-live",
+    "entrance-not-red",
+    "ruling-unresolved",
+    "index-building",
+    "code-facts",
+    "code-facts-unmeasured",
+];
+
+/// 断りの名の語の辞書の鍵の頭（鍵は頭に断りの名を続けた字）。
+pub const REFUSAL_HEAD: &str = "rf:";
 
 /// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
 pub const QUEUED_PHASE: &str = "contract-queued";
@@ -482,9 +517,18 @@ pub fn held_why(src: &Src<'_>, card: &PipelineCard) -> Option<String> {
     }
 }
 
-/// 受付の断りの名の字（理由の語のまま・無ければまだ分からない）。
+/// 受付の断りの名の平易な字（名の `:` の後の詳細は外して `REFUSALS` の語なら語の辞書の鍵 `rf:<名>` の字・表に無い名は
+/// 名のまま・名が無ければまだ分からない・行 g-held-name）。
 pub fn refusal_text(name: Option<&str>) -> String {
-    name.map_or_else(|| label(UNKNOWN_KEY), str::to_string)
+    let Some(name) = name else {
+        return label(UNKNOWN_KEY);
+    };
+    let word = name.split(':').next().unwrap_or(name);
+    if REFUSALS.contains(&word) {
+        label(&format!("{REFUSAL_HEAD}{word}"))
+    } else {
+        name.to_string()
+    }
 }
 
 /// 留め置きの欄（`HELD_KEYS` の順・段 Held でない札は空）。止めた者は席か器の受付、理由は席の止めなら why の字

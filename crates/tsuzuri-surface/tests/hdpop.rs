@@ -23,6 +23,9 @@ const AT: EpochSecs = NOW - 7_200;
 const NAME: &str = "teeth-outside-write-set";
 const WHY: &str = "書く file の重なりを席が確かめる";
 
+/// 断りの名の平易な字（語の辞書の rf:teeth-outside-write-set の字・行 g-held-name）。
+const PLAIN: &str = "verify の歯の file が書く file の外";
+
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
@@ -97,7 +100,7 @@ fn hdpop_intake_refusal_facts() {
     let got = stage_facts(&s, &cards[0]);
     assert_eq!(keys(&got), HELD_KEYS);
     assert_eq!(got[0].val, text("hb:intake"));
-    assert_eq!(got[1].val, Val::Text(format!("{NAME}：{WHY}")));
+    assert_eq!(got[1].val, Val::Text(format!("{PLAIN}：{WHY}")));
     assert_eq!(got[2].val, Val::At(AT));
     assert_eq!(got[3].val, text("hu:intake"));
 }
@@ -110,7 +113,7 @@ fn hdpop_missing_why_and_since_unknown() {
         (
             NAME,
             "contract-refused",
-            Val::Text(format!("{NAME}：{unknown}")),
+            Val::Text(format!("{PLAIN}：{unknown}")),
         ),
     ] {
         let cards = [card(Stage::Held, reason)];
