@@ -41,9 +41,9 @@
    "internal": "Intake / Queued / Blocked / Reviewed(PASS)"
   },
   "col_block": {
-   "label": "Blocked",
-   "note": "相手を待っている run\n・ 持ち主の承認か、ほかの便の着地を待つ\n・ 器の Blocked（承認待ち）より広い",
-   "internal": "Blocked・台帳の blocks の相手が開いている Queued"
+   "label": "Blocked / Held",
+   "note": "相手か人の手を待っている run\n・ Blocked = 持ち主の承認か、ほかの便の着地を待つ\n・ Held = 留め置き（席が止めたか、器の受付が断った）\n・ 数は Blocked / Held の内訳",
+   "internal": "Blocked・台帳の blocks の相手が開いている Queued\nHeld = contract-queued の hold と contract-refused（判断の記録 ADR-42）"
   },
   "col_queue": {
    "label": "Queued",
@@ -1723,6 +1723,16 @@
    "label": "着地",
    "plain": "札の要の 1 行: 着地の時刻と CI の結果",
    "internal": "段 Landed の since と ci"
+  },
+  "hm:seat": {
+   "label": "席の止め",
+   "plain": "席が理由を付けて器の止めの印を置いた\n→ 席が印を外すと列に戻る",
+   "internal": "段 Held・局面 contract-queued の理由 hold（行 g-held-col）"
+  },
+  "hm:intake": {
+   "label": "受付の断り",
+   "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",
+   "internal": "段 Held・局面 contract-refused（理由は断りの名・行 g-held-col）"
   },
   "lc:memo-promoting": {
    "label": "昇格の途中",

@@ -3,6 +3,7 @@
 //! 越えると注意の印と色・列に入った時刻が無ければ付けない）・Running は回と経過と口座・Gated は gate と回と経過と口座・Failed と Stopped は
 //! 20 字に切った理由と経過と回・Questioned は問いと経過と回・着地は着地の時刻と CI の語。待つ相手は吹き出しと同じ読み（`pop::wait_of` と
 //! `pop::wait_on`）。今に依らない材料（`LineSrc`）は板を組む時に置き、字は描く時の今から組む（1 秒の時計で書き直す）。
+//! Held（留め置き）は止めた者の印の語と止めてからの経過（行 g-held-col・判断の記録 ADR-42 決定 (7)）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -36,6 +37,55 @@ pub const LINE_CLASSES: [&str; 4] = ["kl", "kl klwarn", "kl klstop", "kl klask"]
 
 /// 止まりの理由を切る字数（札の値の行と同じ 20）。
 pub const WHY_CHARS: usize = 20;
+
+/// 席の止めの理由の語（中核の crate の pipeline の `HOLD` の写し・面の crate は中核の crate に依存しない）。
+pub const HOLD: &str = "hold";
+
+/// 留め置きの札の止めた者（判断の記録 ADR-42 決定 (1)(7)・行 g-held-col）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeldBy {
+    /// 席が器の止めの印で止めた（理由の語 `HOLD`）。
+    Seat,
+    /// 器の受付が断った（局面 contract-refused・理由は断りの名）。
+    Intake,
+}
+
+/// 止めた者ごとの印の語の鍵と class（席の止め・受付の断り）。
+pub const HELD_MARKS: [(HeldBy, &str, &str); 2] = [
+    (HeldBy::Seat, "hm:seat", "hdm hd-seat"),
+    (HeldBy::Intake, "hm:intake", "hdm hd-intake"),
+];
+
+impl HeldBy {
+    /// 印の語の鍵。
+    pub fn key(self) -> &'static str {
+        self.mark().1
+    }
+
+    /// 印の class。
+    pub fn class(self) -> &'static str {
+        self.mark().2
+    }
+
+    #[expect(clippy::expect_used, reason = "印の表は止めた者の全部を持つ")]
+    fn mark(self) -> (HeldBy, &'static str, &'static str) {
+        HELD_MARKS
+            .into_iter()
+            .find(|(by, _, _)| *by == self)
+            .expect("印の表は止めた者の全部を持つ")
+    }
+}
+
+/// 札の止めた者（段 Held の札だけ・理由の語が `HOLD` なら席・ほかは受付・ほかの段は None）。
+pub fn held_by(card: &PipelineCard) -> Option<HeldBy> {
+    (card.stage == Stage::Held).then(|| {
+        if card.reason.as_deref() == Some(HOLD) {
+            HeldBy::Seat
+        } else {
+            HeldBy::Intake
+        }
+    })
+}
 
 /// 要の 1 行の材料（札の電文と、今に依らない字: Blocked の頭の字と起票の時刻）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,7 +151,11 @@ pub fn key_line(line: &LineSrc, now: EpochSecs) -> KeyLine {
             let lead = line.wait.clone().unwrap_or_else(|| label(wait));
             (format!("{lead} · {age}"), plain)
         }
-        Stage::Queued | Stage::Held => {
+        Stage::Held => {
+            let mark = held_by(card).map_or_else(|| label(queue), |h| label(h.key()));
+            (format!("{mark} · {age}"), plain)
+        }
+        Stage::Queued => {
             let made = age_at(line.created, now);
             let body = format!("{} {age} · {} {made}", label(queue), label(created));
             if queued_warn(card, now) {

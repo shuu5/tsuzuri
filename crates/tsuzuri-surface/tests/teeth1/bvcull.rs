@@ -51,7 +51,7 @@ fn bvcull_card_hover_values_gone() {
         fields,
         [
             "id", "title", "state", "lead", "age", "since", "class", "closed", "ci", "short",
-            "line"
+            "line", "held"
         ]
     );
     assert!(

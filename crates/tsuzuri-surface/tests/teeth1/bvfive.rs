@@ -101,7 +101,7 @@ fn bvfive_blocked_and_queued_apart() {
 #[test]
 fn bvfive_column_words_in_vocab() {
     let v = vocab();
-    assert_eq!(v.term("col_block").map(|t| t.label.as_str()), Some("Blocked"));
+    assert_eq!(v.term("col_block").map(|t| t.label.as_str()), Some("Blocked / Held"));
     assert_eq!(v.term("col_queue").map(|t| t.label.as_str()), Some("Queued"));
     assert_eq!(
         v.term("col_wait").map(|t| t.label.as_str()),

@@ -15,6 +15,8 @@
 //! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
 //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
 //! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
+//! 留め置きの札は Blocked の列に出し、席の止めと受付の断りで別の印（widgets の keyline の `HeldBy`）を札の meta に置く。Blocked の札は印を持たない。
+//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)・行 g-held-col）。
 
 use std::collections::BTreeMap;
 
@@ -30,7 +32,7 @@ use crate::frame::{self, Block};
 use crate::ledgerlist::{OUTSIDE_KEY, key_of, short_of};
 use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
-use crate::widgets::keyline::{LineSrc, line_src};
+use crate::widgets::keyline::{HeldBy, LineSrc, held_by, line_src};
 use crate::widgets::pop::{self, Src};
 
 pub const BLOCK: Block = Block {
@@ -199,6 +201,8 @@ pub struct Kcard {
     pub short: Option<String>,
     /// 要の 1 行の材料（`with_lines` が置く・置くまでは None で要の 1 行を出さない）。
     pub line: Option<LineSrc>,
+    /// 留め置きの札の止めた者（印を出す・ほかの段は None・行 g-held-col）。
+    pub held: Option<HeldBy>,
 }
 
 
@@ -256,6 +260,17 @@ impl Column {
     pub fn closable(&self, open: bool) -> bool {
         open && self.cards.len() > SHOW
     }
+}
+
+/// 列の見出しの数（Blocked の列は Blocked と Held の内訳 `<Blocked の数>·<Held の数>`・ほかの列は札の数・行 g-held-col）。
+/// 内訳は札の要の 1 行と同じ中黒（U+00B7）でつなぎ、空白を挟まない（斜線は分数と読まれ、空白は狭い列で数の中の折れ目になる）。
+pub fn count_text(col: &Column) -> String {
+    let n = col.cards.len();
+    if col.lane.column != PipelineColumn::Blocked {
+        return n.to_string();
+    }
+    let held = col.cards.iter().filter(|c| c.held.is_some()).count();
+    format!("{}·{held}", n - held)
 }
 
 /// 描く時の経過の字（今から段を決めた時刻を引いて `age` に渡す・今より後の時刻は 0・時刻が無ければ `NO_AGE`・行 g-tick-adopt）。
@@ -455,6 +470,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
         ci: if lane.stops() { None } else { shown },
         short: None,
         line: None,
+        held: held_by(card),
     }
 }
 
@@ -631,8 +647,8 @@ mod dom {
 
     use super::{
         BLOCK, CLOSE, CLOSED_STAGE, Column, Kcard, Lead, MISFIT_CLASS, MISFIT_KEY, MisfitCard,
-        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, misfit_cards,
-        misfit_href, open_columns, with_closed, with_lines, with_open,
+        PATH, age_at, card_keys, chips, ci_key, ci_style, columns, content, count_text,
+        misfit_cards, misfit_href, open_columns, with_closed, with_lines, with_open,
     };
     use crate::frame::Mode;
     use crate::ledgerlist::{SelCtx, dim, facts, hover_lit, pick, ring};
@@ -922,7 +938,7 @@ mod dom {
     ) -> AnyView {
         let column = col.lane.column;
         let is_open = move || open.with(|o| o.contains(&column));
-        let count = col.cards.len();
+        let count = count_text(&col);
         let class = col.class.clone();
         let key = col.lane.key;
         let shown = col.clone();
@@ -976,6 +992,9 @@ mod dom {
         let ci = card
             .ci
             .map(|c| view! { <span style=ci_style(c)>{label(ci_key(c))}</span> });
+        let held = card
+            .held
+            .map(|h| view! { <span class=h.class()>{label(h.key())}</span> });
         let title = card
             .short
             .clone()
@@ -1007,6 +1026,7 @@ mod dom {
                 <div class="m">
                     <span class="kid">{card.id.clone()}</span>
                     {lead}
+                    {held}
                     {closed}
                     {ci}
                     <span><span inner_html=CLOCK></span><span class="num">{age}</span></span>

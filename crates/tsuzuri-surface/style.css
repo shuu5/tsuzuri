@@ -267,6 +267,9 @@ a.tile:hover { box-shadow: var(--shadow); }
 .kcard .m .why { flex-wrap: wrap; }
 .kcard .m svg { width: 12px; height: 12px; }
 .kcard.why-stop .m .why { color: var(--s-stop); font-weight: 600; }
+.kcard .m .hdm { padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font-weight: 600; line-height: 1.5; } /* 留め置きの印（行 g-held-col） */
+.kcard .m .hd-seat { color: var(--st-limit); }
+.kcard .m .hd-intake { color: var(--s-stop); }
 button.kcard { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .kcard .kl { margin-top: 3px; padding-left: 24px; color: var(--ink-2); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .kcard .kl.klwarn { color: var(--st-limit); font-weight: 600; }
