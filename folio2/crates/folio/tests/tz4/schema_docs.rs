@@ -1071,9 +1071,10 @@ const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
 /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
 /// 便 185 で node_note・node_kinds・edge_types・edge_fields・edge_fields_note・digest_note に設計ノートの行を足した値（anchor は字面の置き換えで作った）。
 /// 便 195 で末尾に ids・mentions と 2 つの注の 62 行を足した値（anchor は導出を使わない独立の script が組み、wc と sha256sum で測った）。
+/// 行 f-row-basis で edge_fields の design-note に basis を足した値（anchor は字面の置き換えで作り、wc と sha256sum で測った）。
 const F95_GRAPH_LINES: usize = 100;
-const F95_GRAPH_BYTES: usize = 7372;
-const F95_GRAPH_SHA256: &str = "459a0d588fcd1bba634dab87586014a2a66c31b52c9e3a50d70c1a68c09f0691";
+const F95_GRAPH_BYTES: usize = 7379;
+const F95_GRAPH_SHA256: &str = "c6a989a9e534bbc2861879fd6196ea036f626db269003102f5cdd6306c53b6f9";
 
 /// 生成区間の変異（node_kinds の行の最後の種類の末尾の 1 字・便 185 で最後の種類が 設計ノートの行 に）。
 const F95_DRIFT_FROM: &str = ", 設計ノートの行]\n";

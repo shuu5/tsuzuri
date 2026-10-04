@@ -5,7 +5,7 @@
 //! 便 180（docs/design/delivery-180.md §1・要件 FR14 第 1.52 版）: `--print --summary` は表の代わりに、節点ごとに
 //! 所属 file の中の id の行の番号・平易文の欄の字・技術の要約の字（受入基準は題の全文）を添えた 1 行の JSON（JSON Lines）を出す。
 //! 便 185（docs/design/delivery-185.md §1・判断の記録 ADR-32・要件 FR14 第 1.54 版）: 設計ノートの契約表の節の行も節点にする
-//! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends）。読み手は床と導出と同じ note.rs の load_notes。
+//! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends と basis〔basis は行 f-row-basis〕）。読み手は床と導出と同じ note.rs の load_notes。
 //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
 //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
 //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
@@ -72,7 +72,7 @@ pub const EDGE_FIELDS: [(&str, &[&str]); 5] = [
     ("rules.yaml", &["article", "refs"]),
     ("srs.yaml", &["basis", "goals", "rules", "adrs", "verifies", "verify.ac"]),
     ("adr", &["basis", "produced"]),
-    ("design-note", &["req", "depends"]),
+    ("design-note", &["req", "depends", "basis"]),
 ];
 
 /// 索引の欄の決まりの正本 `graph.yaml` の最上位の節の閉じた一覧（便 95）。
@@ -541,7 +541,7 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends。id は meta の id と行 id を「#」でつないだ字、
+/// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends・basis（行の根拠の条・規則行・判断の記録・行 f-row-basis）。id は meta の id と行 id を「#」でつないだ字、
 /// 題は行の section が指す節の題、技術の要約は行の題の全文、状態はノートの meta.status（便 208）。読み手は床と導出と同じ `note::load_notes`（置き場が無ければ
 /// 0 本・dir でない・読めない file が在れば Err＝索引を組まない・P-4.1）。
 fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
@@ -584,6 +584,7 @@ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
             for to in row.get("depends").map(ids).unwrap_or_default() {
                 index.edge(&id, &format!("{meta}#{to}"), EDGE_TYPES[18]);
             }
+            index.field(&id, row.get("basis"), EDGE_TYPES[8]);
         }
     }
     Ok(())

@@ -34,7 +34,7 @@ EDGE_FIELDS = {
     "rules.yaml": ["article", "refs"],
     "srs.yaml": ["basis", "goals", "rules", "adrs", "verifies", "verify.ac"],
     "adr": ["basis", "produced"],
-    "design-note": ["req", "depends"],
+    "design-note": ["req", "depends", "basis"],
 }
 
 NOTE_DIR = "design-note"

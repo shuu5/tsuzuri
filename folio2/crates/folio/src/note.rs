@@ -931,7 +931,12 @@ fn check_contract_rows(
     report: &mut Report,
 ) {
     let Place { file, at } = place;
-    let Ctx { requirements, external, .. } = ctx;
+    let Ctx {
+        requirements,
+        external,
+        base,
+        ..
+    } = ctx;
     let row_ids: HashSet<String> = rows
         .iter()
         .map(|row| row_id(row))
@@ -959,6 +964,7 @@ fn check_contract_rows(
         }
         resolve_ids(Place { file, at: &rat }, row, "req", requirements, report);
         resolve_ids(Place { file, at: &rat }, row, "depends", &row_ids, report);
+        resolve_ids(Place { file, at: &rat }, row, "basis", base, report);
     }
 }
 
