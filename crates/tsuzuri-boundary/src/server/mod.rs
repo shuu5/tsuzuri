@@ -25,6 +25,8 @@
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
 //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
 //! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
+//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は行 cs-server が足す（`consult`・頼みの口は方針の口と同じ守りで、
+//! 読むだけの server は 403・置き場に相談の頼みの行を 1 行足すだけで窓を開かず配達を撃たない）。
 //! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
 //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
 //! （`Cases::watch`・行 c-cases-watch）。
@@ -38,6 +40,7 @@ pub mod cases;
 pub mod clock;
 pub mod coalesce;
 mod config;
+pub mod consult;
 pub mod design;
 pub mod events;
 pub mod files;
@@ -78,6 +81,7 @@ use crate::stagecall::Caller;
 
 use self::board::Sources;
 use self::cases::Cases;
+use self::consult::Consult;
 use self::design::Design;
 use self::events::Hub;
 use self::form::Form;
@@ -173,6 +177,8 @@ struct Shared {
     notify: Option<PathBuf>,
     /// 表示先の設定と窓を開く頼みの撃ち先（tz と器の program と --repo・行 e-stage-target）。
     stage: Caller,
+    /// 相談の窓の口の置き場の材料（行 cs-server）。
+    consult: Consult,
 }
 
 /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
@@ -254,6 +260,7 @@ impl Server {
                     scribe2: config.scribe2.clone(),
                     repo: config.repo.clone(),
                 },
+                consult: Consult::new(config, git),
             }),
         })
     }
