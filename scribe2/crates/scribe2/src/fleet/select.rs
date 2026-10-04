@@ -8,6 +8,8 @@
 //! 便用の順序（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede・C9.2「窓の終わりまで使い切る」）: 候補を
 //! **(1) 口座単位の 7 日窓の reset**（昇順・7 日窓の reset を持たない口座は最後）→ **(2) 走行中の便数**（昇順）→
 //! **(3) label** で並べた先頭。7 日窓の枠は reset までに使わなければ消えるので、**消える順に使い潰す**。
+//! 鍵 (1) の前に頭の鍵を 1 つ置く（行 xp-host-live・判断の記録 ADR-41）: **ほかの置き場の生きた走りの札を持つ口座**
+//! （[`select_with`] の `elsewhere`）は外さずに最後へ回す（ほかに候補が無ければ選ぶ）。[`select`] は空の集合で呼ぶ形。
 //! 5 時間窓とモデル別窓は鍵にしない（当たっている判定と逼迫度にだけ効く）。逼迫度（使用率の最大）は当たって
 //! いる判定と session 用にだけ残る。
 //!
@@ -26,7 +28,7 @@ pub const LIMIT_PCT: u64 = 100;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
     /// 便用: 当たっていない口座のうち **7 日窓の reset** が最も早い → 走行中の便数が最少 → label（reset で消える
-    /// 残りから使う側・C9.2・ADR-0042）。閾値を持たない。
+    /// 残りから使う側・C9.2・ADR-0042）。その前にほかの置き場の走りの札を持たない口座が先（[`select_with`]）。閾値を持たない。
     Run,
     /// session 用: [`Input::prefer`] が候補ならそれ・でなければ逼迫度が最小かつ R-C9-1 の値未満（余裕を残す側）。
     Session,
@@ -208,6 +210,8 @@ struct Candidate<'a> {
     week_reset: Option<String>,
     /// 走行中の便数（便用の 2 つ目の鍵）。
     inflight: usize,
+    /// ほかの置き場の生きた走りの札を持つか（便用の頭の鍵・立つ口座は最後・行 xp-host-live）。
+    elsewhere: bool,
 }
 
 /// 口座 1 つの見立て。
@@ -218,12 +222,19 @@ enum Standing<'a> {
     Out(NoCandidateReason, Option<String>),
 }
 
-/// 口座を 1 つ選ぶ。同点は label の辞書順で先の口座。
+/// 口座を 1 つ選ぶ。同点は label の辞書順で先の口座。ほかの置き場の走りを数えない形（[`select_with`] に空の集合）。
 pub fn select(input: &Input<'_>) -> Selection {
+    select_with(input, &BTreeSet::new())
+}
+
+/// 口座を 1 つ選ぶ（[`select`] の本体）。`elsewhere` はほかの置き場の生きた走りの札を持つ口座の label
+/// （[`crate::pipe::live::elsewhere`]）で、便用だけが [`run_key`] の頭で最後に回す（候補から外さない・候補なしの理由は替えない）。
+/// session 用は読まない。
+pub fn select_with(input: &Input<'_>, elsewhere: &BTreeSet<String>) -> Selection {
     let mut candidates: Vec<Candidate<'_>> = Vec::new();
     let mut outs: Vec<(&str, NoCandidateReason, Option<String>)> = Vec::new();
     for label in input.labels {
-        match standing(input, label) {
+        match standing(input, label, elsewhere) {
             Standing::Candidate(found) => candidates.push(found),
             Standing::Out(reason, reopens) => outs.push((label.as_str(), reason, reopens)),
         }
@@ -277,15 +288,17 @@ fn pick<'a>(purpose: Purpose, prefer: Option<&str>, candidates: &[Candidate<'a>]
     found.map(|found| found.label)
 }
 
-/// 便用の並べ鍵（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede）: **7 日窓の reset** の最も早いもの（鍵の reset を
-/// 持たない口座は最後＝先頭の `bool` が立つ）→ 走行中の便数 → label。5 時間窓・モデル別窓の reset はここに入らない。
+/// 便用の並べ鍵（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede）: ほかの置き場の生きた走りの札を持たない口座が先（頭の
+/// `bool`・行 xp-host-live・判断の記録 ADR-41）→ **7 日窓の reset** の最も早いもの（鍵の reset を持たない口座は最後＝
+/// 2 つ目の `bool` が立つ）→ 走行中の便数 → label。5 時間窓・モデル別窓の reset はここに入らない。
 /// 辞書順の比較でそのまま並ぶ形にしておく（比較関数に分岐を持たない）。
-fn run_key<'a>(found: &'a Candidate<'_>) -> (bool, Option<&'a str>, usize, &'a str) {
-    (found.week_reset.is_none(), found.week_reset.as_deref(), found.inflight, found.label)
+fn run_key<'a>(found: &'a Candidate<'_>) -> (bool, bool, Option<&'a str>, usize, &'a str) {
+    (found.elsewhere, found.week_reset.is_none(), found.week_reset.as_deref(), found.inflight, found.label)
 }
 
-/// 口座 1 つを候補か、外れた理由かに分ける（除外 → 測れない → 当たっている → 閾値の順に見る）。
-fn standing<'a>(input: &Input<'_>, label: &'a str) -> Standing<'a> {
+/// 口座 1 つを候補か、外れた理由かに分ける（除外 → 測れない → 当たっている → 閾値の順に見る）。`elsewhere` は
+/// 候補の頭の鍵にだけ写す（外す理由にしない）。
+fn standing<'a>(input: &Input<'_>, label: &'a str, elsewhere: &BTreeSet<String>) -> Standing<'a> {
     if input.exclude.contains(label) {
         return Standing::Out(NoCandidateReason::Excluded, None);
     }
@@ -303,6 +316,7 @@ fn standing<'a>(input: &Input<'_>, label: &'a str) -> Standing<'a> {
         pressure: found.pressure,
         week_reset: found.week_reset,
         inflight: input.inflight.get(label).copied().unwrap_or(0),
+        elsewhere: elsewhere.contains(label),
     })
 }
 

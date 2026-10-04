@@ -160,11 +160,14 @@ pub struct RunSelect<'a> {
 /// 口座（[`State::run_registered_accounts`]・設計 §14・区画の row は数えない）に [`RunSelect::grouped`] を重ねたもの。走行中の便数は state から
 /// 導く（[`State::inflight_by_account`]・呼び手は渡さない）。閾値は便用の規則が持たないので**窓の全量**
 /// （[`select::LIMIT_PCT`]）を置く＝session 用の分岐に届かない値であって、R-C9-1 の値ではない。
-pub fn select_for_run(state: &State, pool: &RunSelect<'_>, now: &str) -> select::Selection {
+///
+/// ほかの置き場の走り（置き場 `state_dir` の host の根の走りの札・[`crate::pipe::live::elsewhere`]・自分の置き場の札は
+/// 走行中の便数で数えるので除く）を持つ口座は、外さずに順の最後へ回す（[`select::select_with`]・行 xp-host-live）。
+pub fn select_for_run(state: &State, pool: &RunSelect<'_>, state_dir: &Path, now: &str) -> select::Selection {
     let labels = state.without_retired(pool.labels.iter().map(String::as_str));
     let mut exclude = state.run_registered_accounts(Some(pool.repo), pool.park);
     exclude.extend(pool.grouped.iter().cloned());
-    select::select(&select::Input {
+    let input = select::Input {
         labels: &labels,
         allowance: &state.allowance,
         purpose: select::Purpose::Run,
@@ -175,7 +178,8 @@ pub fn select_for_run(state: &State, pool: &RunSelect<'_>, now: &str) -> select:
         now,
         // 便用は留まる口座を読まない（session 用の規則・`s2-07l.312`）。
         prefer: None,
-    })
+    };
+    select::select_with(&input, &crate::pipe::live::elsewhere(state_dir))
 }
 
 /// event の並びから現在地を導く。物理順で後の event が勝つ。
@@ -412,12 +416,14 @@ mod tests {
         }
     }
 
-    /// 便の repo が `repo`・候補が `label` だけ・`grouped` は空で、区画の anchors だけを `park` に渡した選定。
+    /// 便の repo が `repo`・候補が `label` だけ・`grouped` は空で、区画の anchors だけを `park` に渡した選定（置き場は
+    /// host の根に札の無い temp の dir の下）。
     fn pick(state: &State, repo: &str, label: &str, park: &BTreeSet<String>) -> Selection {
         let labels = [label.to_owned()];
         let grouped = BTreeSet::new();
         let pool = RunSelect { repo: Path::new(repo), labels: &labels, model: None, grouped: &grouped, park };
-        select_for_run(state, &pool, NOW)
+        let place = std::env::temp_dir().join(format!("xplive-park-{}", std::process::id())).join("state");
+        select_for_run(state, &pool, &place, NOW)
     }
 
     /// (h) 区画の anchors に在る置き場の row は便用の除外に数えない: 便の repo が区画の置き場（`/lot`）のとき、区画の anchors が
@@ -430,5 +436,26 @@ mod tests {
         assert_eq!(pick(&state, "/lot", "p", &lot), Selection::Chosen("p".to_owned()), "区画の row の p は数えない");
         assert!(matches!(pick(&state, "/lot", "p", &none), Selection::None(_)), "対: 区画の anchors が空なら p は外れる");
         assert!(matches!(pick(&state, "/group", "g", &lot), Selection::None(_)), "群の置き場の row の g は外れる（回帰）");
+    }
+
+    /// 行 xp-host-live: 便用の選定は置き場の host の根の走りの札を読み、ほかの置き場の生きた札を持つ口座を後に回す。同じ
+    /// host の根でも自分の置き場の札は数えず、札を外すと順が戻る（2 口座は同じ窓で label の順なら a1 が先）。
+    #[test]
+    fn xplive_select_for_run_reads_the_host_root_of_the_state_dir() {
+        let root = std::env::temp_dir().join(format!("xplive-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (mine, other) = (root.join("mine"), root.join("other"));
+        let state = State { allowance: [measured("a1"), measured("a2")].into_iter().collect(), ..State::default() };
+        let (labels, none) = (["a1".to_owned(), "a2".to_owned()], BTreeSet::new());
+        let pool = RunSelect { repo: Path::new("/repo"), labels: &labels, model: None, grouped: &none, park: &none };
+        let chosen = |place: &Path| select_for_run(&state, &pool, place, NOW);
+        assert_eq!(chosen(&mine), Selection::Chosen("a1".to_owned()), "札が無ければ label の順");
+        let held = crate::pipe::live::hold(&other, "r-1", Some("a1"));
+        assert!(held.as_ref().is_ok_and(Option::is_some), "札を置ける: {held:?}");
+        assert_eq!(chosen(&mine), Selection::Chosen("a2".to_owned()), "ほかの置き場の札を持つ a1 は後");
+        assert_eq!(chosen(&other), Selection::Chosen("a1".to_owned()), "自分の置き場の札は数えない");
+        drop(held);
+        assert_eq!(chosen(&mine), Selection::Chosen("a1".to_owned()), "札を外すと戻る");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

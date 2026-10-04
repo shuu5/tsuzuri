@@ -230,7 +230,7 @@ fn select_account(args: &[String], dir: &Path) -> Outcome {
     }
     let now = now_utc();
     // 走行中の便数は便用の 2 つ目の鍵（`select_for_run` と同じ導出・ADR-0027 §2.3）。
-    let found = select::select(&select::Input {
+    let input = select::Input {
         labels: &labels,
         allowance: &state.allowance,
         purpose,
@@ -241,7 +241,10 @@ fn select_account(args: &[String], dir: &Path) -> Outcome {
         now: &now,
         // 留まる口座は席の立て直しだけが渡す（`fleet select` の外形は不変・`s2-07l.312`）。
         prefer: None,
-    });
+    };
+    // ほかの置き場の走りの札を持つ口座を最後に回す頭の鍵も `select_for_run` と同じ 1 本で置き場から読む（行 xp-host-live・
+    // session 用は読まない）。
+    let found = select::select_with(&input, &crate::pipe::live::elsewhere(dir));
     let mut outcome = Outcome::ok(vec![select::line(purpose, &found)]);
     outcome.err = measured.out.into_iter().chain(measured.err).collect();
     outcome

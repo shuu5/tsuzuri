@@ -464,7 +464,7 @@ fn account_free(state_dir: &Path, run: &str, expected: Stage, pool: &RunSelect<'
     if state.runs.get(run).map(|found| found.stage) != Some(expected) {
         return true;
     }
-    matches!(select_for_run(&state, pool, &cli::now_utc()), select::Selection::Chosen(_))
+    matches!(select_for_run(&state, pool, state_dir, &cli::now_utc()), select::Selection::Chosen(_))
 }
 
 /// `YYYY-MM-DDTHH:MM:SSZ` を UNIX 秒にする（[`cli::format_utc`] の逆・**それ以外の形は `None`**）。

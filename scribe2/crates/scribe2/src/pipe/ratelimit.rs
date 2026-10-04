@@ -305,7 +305,7 @@ pub(super) fn select_lens_account(
     let state = current(state_dir).map_err(|errors| {
         errors.iter().map(StoreError::to_string).collect::<Vec<String>>().join(" / ")
     })?;
-    let found = fleet::select_for_run(&state, &pool.run_select(repo), &fleet::cli::now_utc());
+    let found = fleet::select_for_run(&state, &pool.run_select(repo), state_dir, &fleet::cli::now_utc());
     Ok(match found {
         Selection::Chosen(label) => LensAccount::Chosen(label),
         Selection::None(none) => LensAccount::None(none.reason.as_str().to_owned()),
@@ -335,7 +335,7 @@ fn choose_or_wait(
         }
         // 便用の選定は便が使う model の窓だけを数え、除外は便の repo を anchor に持つ席の口座だけ（待ちの観測
         // `AccountFree` も同じ model と repo を運ぶ・C3.4）。
-        let found = match fleet::select_for_run(&state, &pool.run_select(repo), &fleet::cli::now_utc()) {
+        let found = match fleet::select_for_run(&state, &pool.run_select(repo), state_dir, &fleet::cli::now_utc()) {
             Selection::Chosen(label) => return Ok(Some(label)),
             Selection::None(found) => found,
         };

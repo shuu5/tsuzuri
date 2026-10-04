@@ -8,7 +8,7 @@
 // flip-check: moved s2-07l.460
 
 use super::{
-    line, select, Input, Model, NoCandidate, NoCandidateReason, Purpose, Selection, LIMIT_PCT,
+    line, select, select_with, Input, Model, NoCandidate, NoCandidateReason, Purpose, Selection, LIMIT_PCT,
     MODELS, NO_CANDIDATE_REASONS, PURPOSES,
 };
 use crate::fleet::{
@@ -928,4 +928,82 @@ proptest! {
             unordered(evaluate(&specs, &IDENTITY, purpose, model, threshold))
         );
     }
+}
+
+/// 行 xp-host-live: ほかの置き場の生きた走りの札を持つ口座 `held` を渡した選定（ほかの条件は [`choose_full`] と同じ）。
+fn choose_held(labels: &[&str], allowance: &BTreeMap<AllowanceKey, AllowanceLatest>, ask: &Ask<'_>, held: &[&str]) -> Selection {
+    let labels: Vec<String> = labels.iter().map(|label| (*label).to_owned()).collect();
+    let exclude: BTreeSet<String> = ask.exclude.iter().map(|label| (*label).to_owned()).collect();
+    let inflight: BTreeMap<String, usize> = ask.inflight.iter().map(|(label, n)| ((*label).to_owned(), *n)).collect();
+    let held: BTreeSet<String> = held.iter().map(|label| (*label).to_owned()).collect();
+    let input = Input {
+        labels: &labels,
+        allowance,
+        purpose: ask.purpose,
+        model: ask.model,
+        exclude: &exclude,
+        inflight: &inflight,
+        threshold_pct: ask.threshold_pct,
+        now: NOW,
+        prefer: ask.prefer,
+    };
+    select_with(&input, &held)
+}
+
+/// 7 日窓の reset だけが違う 2 口座（`early` の口座が `WEEK_SOON_RESET`・もう 1 つが `WEEK_RESET`・5 時間窓は同じ）。
+fn week_first(early: &str, late: &str) -> BTreeMap<AllowanceKey, AllowanceLatest> {
+    table(&[(TS, vec![
+        measured(early, WindowKind::FiveHour, None, 10, FIVE_RESET),
+        measured(early, WindowKind::SevenDay, None, 10, WEEK_SOON_RESET),
+        measured(late, WindowKind::FiveHour, None, 10, FIVE_RESET),
+        measured(late, WindowKind::SevenDay, None, 10, WEEK_RESET),
+    ])])
+}
+
+/// 行 xp-host-live: 便用はほかの置き場の札を持つ口座を順の最後に回す（頭の鍵）。7 日窓の reset・走行中の便数・label の
+/// どれで先の口座でも後に回り、札を持つ口座どうしは今の順（label の後の a2 が 7 日窓の reset で先）のまま並ぶ。
+#[test]
+fn xplive_run_key_puts_accounts_held_elsewhere_last() {
+    let pair = ["a1", "a2"];
+    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 10, 10)].concat())]);
+    assert_eq!(choose_held(&pair, &rows, &run(), &["a1"]), chosen("a2"), "札が label より先");
+    let busy = Ask { inflight: &[("a2", 5)], ..run() };
+    assert_eq!(choose_held(&pair, &rows, &busy, &[]), chosen("a1"), "札が無ければ便数の少ない a1");
+    assert_eq!(choose_held(&pair, &rows, &busy, &["a1"]), chosen("a2"), "札が便数より先");
+    let soon = week_first("a1", "a2");
+    assert_eq!(choose_held(&pair, &soon, &run(), &[]), chosen("a1"), "札が無ければ 7 日窓の reset の早い a1");
+    assert_eq!(choose_held(&pair, &soon, &run(), &["a1"]), chosen("a2"), "札が 7 日窓の reset より先");
+    assert_eq!(choose_held(&pair, &soon, &run(), &["a2"]), chosen("a1"), "札を持つのが後の口座なら替わらない");
+    let late = week_first("a2", "a1");
+    assert_eq!(choose_held(&pair, &late, &run(), &["a1", "a2"]), chosen("a2"), "両方が持てば今の順（7 日窓の reset）");
+}
+
+/// 行 xp-host-live: 札を持つ口座は後に回るが候補から外れない。ほかに候補が無ければ選び、候補なしの周の理由と reset は札で
+/// 替わらない。
+#[test]
+fn xplive_held_elsewhere_goes_last_but_is_not_dropped() {
+    let even = table(&[(TS, [round("a1", 10, 10), round("a2", 10, 10)].concat())]);
+    assert_eq!(choose_held(&["a1", "a2"], &even, &run(), &["a1"]), chosen("a2"), "ほかに候補が在れば後");
+    assert_eq!(choose_held(&["a1"], &even, &run(), &["a1"]), chosen("a1"), "候補が 1 つだけなら選ぶ");
+    let away = Ask { exclude: &["a2"], ..run() };
+    assert_eq!(choose_held(&["a1", "a2"], &even, &away, &["a1"]), chosen("a1"), "ほかは除外");
+    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 100, 10)].concat())]);
+    assert_eq!(choose_held(&["a1", "a2"], &rows, &run(), &["a1"]), chosen("a1"), "ほかは当たっている");
+    let limited = table(&[(TS, round("a1", 100, 10))]);
+    assert_eq!(
+        choose_held(&["a1"], &limited, &run(), &["a1"]),
+        choose_full(&["a1"], &limited, &run()),
+        "候補なしは札が無い周と同じ"
+    );
+    assert!(matches!(choose_held(&["a1"], &limited, &run(), &["a1"]), Selection::None(_)), "候補なしのまま");
+}
+
+/// 行 xp-host-live: 札を読むのは便用だけで、session 用は読まない（同じ口座と札で、便用は札を持つ口座を後に回し、session 用は
+/// 逼迫度の最小を選ぶ）。
+#[test]
+fn xplive_only_the_run_purpose_reads_tickets_elsewhere() {
+    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 20, 20)].concat())]);
+    assert_eq!(choose_held(&["a1", "a2"], &rows, &run(), &["a1"]), chosen("a2"), "便用は札を持つ a1 を後に回す");
+    assert_eq!(choose_held(&["a1", "a2"], &rows, &session(), &[]), chosen("a1"), "session 用は逼迫度の最小");
+    assert_eq!(choose_held(&["a1", "a2"], &rows, &session(), &["a1"]), chosen("a1"), "session 用は札を持っても逼迫度の最小");
 }
