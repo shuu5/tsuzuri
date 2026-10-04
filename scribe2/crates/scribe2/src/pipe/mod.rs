@@ -696,8 +696,8 @@ pub fn emit(state_dir: &Path, entry: &Emit<'_>, policy: LockPolicy) -> Result<()
 ///
 /// 段の event（[`emit`]）と**本体の形が違う**ので口を分ける——印は便でなく bead に付き、`run` を持たず、
 /// typed な [`Mark`] が本体である（自由文の `detail` を判定入力にしない・憲法 C3.3）。追記そのものは
-/// fleet の 1 本（[`store::append`]）を通る（C6.3）。
-pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -> Result<(), StoreError> {
+/// fleet の 1 本（[`store::append`]）を通る（C6.3）。`hold` の理由は detail（`reason:<理由>`）に載せるが判定には使わない。
+pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, detail: Option<String>, policy: LockPolicy) -> Result<(), StoreError> {
     let event = Event {
         schema: SCHEMA,
         ts: fleet::cli::now_utc(),
@@ -709,7 +709,7 @@ pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -
         stage: None,
         seat: None,
         pid: None,
-        detail: None,
+        detail,
         allowance: None,
         registration: None,
         mark: Some(mark),

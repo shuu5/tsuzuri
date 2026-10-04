@@ -63,7 +63,7 @@ pub(crate) struct Facts {
     pub(crate) live: Fact<usize>,
     /// live が 0 本になってからの分（全便の `updated` の最大から今まで・切り捨て）。
     pub(crate) idle: Fact<u64>,
-    /// 重なりで待つ便（列の結果の無い呼び手は `None`＝`held=` を出さない）。
+    /// 重なりで待つ便（列の結果の無い呼び手は `None`＝`overlap=` を出さない）。
     pub(crate) held: Option<Fact<Held>>,
     /// 事前審査の本数（置き場に事前審査の dir が無ければ `None`＝`precheck=` を出さない）。
     pub(crate) precheck: Option<Precheck>,
@@ -128,9 +128,10 @@ fn leaf(path: &str) -> String {
     }
 }
 
-/// 知らせの末尾に足す字面（` live=<n> idle=<m>m held=<k>:<名,名> precheck=<確定>/<結果>:<束>`・設計 §26 形 2・§27 形 3）。
+/// 知らせの末尾に足す字面（` live=<n> idle=<m>m overlap=<k>:<名,名> precheck=<確定>/<結果>:<束>`・設計 §26 形 2・§27 形 3・
+/// 重なりの欄の名は設計の `held=` から替えた＝board の留め置き〔Held〕と取り違えない・数と file の並びの形は同じ）。
 ///
-/// 測れない値は `?`、値なしは `-`、重なり 0 は `held=0`（コロンなし）、列の結果の無い呼び手は `held=` を出さない。事前審査の dir の
+/// 測れない値は `?`、値なしは `-`、重なり 0 は `overlap=0`（コロンなし）、列の結果の無い呼び手は `overlap=` を出さない。事前審査の dir の
 /// 無い置き場は `precheck=` を出さない。
 pub(crate) fn line(facts: &Facts) -> String {
     let live = match facts.live {
@@ -145,10 +146,10 @@ pub(crate) fn line(facts: &Facts) -> String {
     };
     let held = match facts.held {
         None => String::new(),
-        Some(Fact::Value(ref found)) if found.count == 0 => " held=0".to_owned(),
-        Some(Fact::Value(ref found)) => format!(" held={}:{}", found.count, found.names.join(",")),
-        Some(Fact::Absent) => format!(" held={ABSENT}"),
-        Some(Fact::Unmeasured) => format!(" held={UNMEASURED}"),
+        Some(Fact::Value(ref found)) if found.count == 0 => " overlap=0".to_owned(),
+        Some(Fact::Value(ref found)) => format!(" overlap={}:{}", found.count, found.names.join(",")),
+        Some(Fact::Absent) => format!(" overlap={ABSENT}"),
+        Some(Fact::Unmeasured) => format!(" overlap={UNMEASURED}"),
     };
     let precheck = facts.precheck.as_ref().map_or_else(String::new, |found| {
         format!(" precheck={}/{}:{}", found.firm, found.results, found.bundles)

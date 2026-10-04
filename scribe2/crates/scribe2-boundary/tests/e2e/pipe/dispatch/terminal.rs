@@ -284,7 +284,7 @@ fn pipe_terminal_dispatch_marks_fire_without_children() {
     assert_eq!(first.status.code(), Some(i32::from(RC_OK)), "first は rc 0（{}）", told(&first));
     assert_eq!(stdout_of(&first).lines().last(), Some(waiting), "first の直後に 1 周（{}）", told(&first));
     // `hold` は起こす側を増やさないので 1 周を撃たない（印の行だけ）。
-    let held = turn(&["hold", "s2-toy.1"]);
+    let held = turn(&["hold", "s2-toy.1", "--reason", "交差の待ち"]);
     assert_eq!(stdout_of(&held).lines().count(), 1, "hold は印の行だけ（{}）", told(&held));
     assert!(!stdout_of(&held).contains("dispatch="), "hold は 1 周を撃たない（{}）", told(&held));
     // `release` の記録の直後にも 1 周。
@@ -294,6 +294,77 @@ fn pipe_terminal_dispatch_marks_fire_without_children() {
     // **子 process は 1 つも生まれない**（母集団 = 撃った 1 周 4 回）。
     assert_eq!(created(&state, &["s2-toy.1"], 0), 0, "便を 1 本も起こさない（1 周 4 回）");
     assert_eq!(kind_count(&state, &live, vessel::fleet::EventKind::RunCreated), 1, "live な便は元の 1 件のまま");
+    clean(&[&repo, &state]);
+}
+
+// ───── 止めの理由（判断の記録 ADR-42・器の行 v-hold-why・接頭辞 `vhold_`） ─────
+
+/// 置き場の event log の止めの印の行の detail（記帳順）。
+fn hold_rows(state: &Path) -> Vec<Option<String>> {
+    super::super::events(state)
+        .into_iter()
+        .filter(|event| event.mark == Some(vessel::fleet::Mark::Hold))
+        .map(|event| event.detail)
+        .collect()
+}
+
+/// 理由の無い止め・空白だけの理由・改行を含む理由と、理由つきの `first` と `release` は使い方の誤り（rc 1）で印を書かず、
+/// 理由つきの止めだけが detail `reason:<理由>` の印を 1 行書く（行 v-hold-why）。
+#[test]
+fn vhold_hold_needs_one_line_reason_and_other_marks_refuse_it_without_a_mark() {
+    let (repo, state) = repo_with_state();
+    let dir = state.display().to_string();
+    let refused: [(&[&str], &str); 5] = [
+        (&["hold", "s2-toy.1"], "hold は --reason の理由を要る"),
+        (&["hold", "s2-toy.1", "--reason", "  "], "--reason の理由が空である"),
+        (&["hold", "s2-toy.1", "--reason", "前\n後"], "--reason の理由が改行を含む"),
+        (&["first", "s2-toy.1", "--reason", "先に"], "--reason は hold だけが受ける（first）"),
+        (&["release", "s2-toy.1", "--reason", "外す"], "--reason は hold だけが受ける（release）"),
+    ];
+    for (verb, want) in refused {
+        let out = run_pipe(&[&["dispatch"][..], verb, &["--state-dir", &dir]].concat());
+        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{verb:?} は rc 1（{}）", told(&out));
+        assert!(stderr_of(&out).contains(want), "{verb:?} の断りの字 {want}（{}）", told(&out));
+        assert_eq!(super::super::events(&state).len(), 0, "{verb:?} は印を書かない");
+    }
+    let out = run_pipe(&["dispatch", "hold", "s2-toy.1", "--reason", "設計の行 を直す", "--state-dir", &dir]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "理由つきの止めは rc 0（{}）", told(&out));
+    assert_eq!(stdout_of(&out).trim_end(), "[DISPATCH] bead=s2-toy.1 mark=hold", "印の行の字は替えない");
+    assert_eq!(hold_rows(&state), [Some("reason:設計の行 を直す".to_owned())], "印の行は 1 つで detail は理由");
+    clean(&[&repo, &state]);
+}
+
+/// `dispatch ls` は理由が `hold` の候補ごとに `[DISPATCH-HOLD] bead=<id> since=<印の時刻> why=<理由>` を件数の行の前に足し、
+/// `[DISPATCH]` の行の字は替えず、`release` と後の `first` の後は足さない（行 v-hold-why）。
+#[test]
+fn vhold_listing_adds_the_hold_line_before_the_count_until_release_or_first() {
+    let (repo, state) = repo_with_state();
+    two_rows(&repo);
+    let bd = fake_bd(&state, &[issue("s2-toy.1", 2, "a"), issue("s2-toy.2", 0, "b")]);
+    let dir = state.display().to_string();
+    let mark = |args: &[&str]| {
+        let out = run_pipe(&[&["dispatch"][..], args, &["--state-dir", &dir]].concat());
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{args:?}（{}）", told(&out));
+    };
+    let holds = |out: &Output| -> Vec<String> {
+        stdout_of(out).lines().filter(|line| line.starts_with("[DISPATCH-HOLD]")).map(str::to_owned).collect()
+    };
+    mark(&["hold", "s2-toy.1", "--reason", "設計の行 を直す"]);
+    let since = super::super::events(&state).last().map(|event| event.ts.clone()).unwrap_or_default();
+    let held = ls(&repo, &state, &bd);
+    let want = format!("[DISPATCH-HOLD] bead=s2-toy.1 since={since} why=設計の行 を直す");
+    assert_eq!(holds(&held), std::slice::from_ref(&want), "止めの行は 1 つ（{}）", told(&held));
+    let lines: Vec<String> = stdout_of(&held).lines().map(str::to_owned).collect();
+    let at = |line: &str| lines.iter().position(|found| found == line);
+    assert_eq!(at(&want).map(|found| found + 1), at(&count_of(&held)), "件数の行の直前（{}）", told(&held));
+    let row = format!("{LINE} bead=s2-toy.1 prio=2 mark=hold reason=hold:{since}");
+    assert!(at(&row).is_some(), "[DISPATCH] の行の字は替えない（{}）", told(&held));
+    mark(&["release", "s2-toy.1"]);
+    assert_eq!(holds(&ls(&repo, &state, &bd)), Vec::<String>::new(), "release の後は足さない");
+    mark(&["hold", "s2-toy.1", "--reason", "もう一度"]);
+    assert_eq!(holds(&ls(&repo, &state, &bd)).len(), 1, "止め直すと戻る");
+    mark(&["first", "s2-toy.1"]);
+    assert_eq!(holds(&ls(&repo, &state, &bd)), Vec::<String>::new(), "後の first の後は足さない");
     clean(&[&repo, &state]);
 }
 
@@ -344,7 +415,7 @@ fn waiting_on(id: &str, row: &str, deps: &[(&str, &str)]) -> String {
 /// 介入 `hold` を打つ（依存を持たない祖先を列が起こさないように・`hold` は 1 周を撃たない）。
 fn hold(state: &Path, beads: &[&str]) {
     for &bead in beads {
-        let out = run_pipe(&["dispatch", "hold", bead, "--state-dir", &state.display().to_string()]);
+        let out = run_pipe(&["dispatch", "hold", bead, "--reason", "祖先を起こさない", "--state-dir", &state.display().to_string()]);
         assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold は rc 0（{}）", told(&out));
     }
 }

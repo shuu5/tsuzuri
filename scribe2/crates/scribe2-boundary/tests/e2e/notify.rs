@@ -330,7 +330,7 @@ fn idle_round(issues: &[&str], hold: bool) -> (Output, Vec<String>) {
     live_run(&state);
     let bd = fake_bd(&state, "bd-notify", issues);
     if hold {
-        let held = run_pipe(&["dispatch", "hold", QUEUED, "--state-dir", &state.display().to_string()]);
+        let held = run_pipe(&["dispatch", "hold", QUEUED, "--reason", "知らせの見本", "--state-dir", &state.display().to_string()]);
         assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&held));
     }
     let out = run_pipe(&[
@@ -400,7 +400,7 @@ fn crossing_round() -> (Output, Vec<String>, String) {
 }
 
 /// (§26 歯 (a)) 候補の write-set が live な便 1 本と 1 file 交差する周の終端: idle の行は既存の `reason=overlap:<相手>/1` を
-/// 持ったまま、末尾が ` live=1 idle=- held=1:lib.rs`（live が 1 本以上の周の分数は値なし・file 名は最後の 1 要素）。
+/// 持ったまま、末尾が ` live=1 idle=- overlap=1:lib.rs`（live が 1 本以上の周の分数は値なし・file 名は最後の 1 要素）。
 #[test]
 fn pipe_notify_facts_crossing_live_run_reports_one_live_and_the_crossed_file() {
     let (out, sent, crossed) = crossing_round();
@@ -410,18 +410,18 @@ fn pipe_notify_facts_crossing_live_run_reports_one_live_and_the_crossed_file() {
         line.contains(&format!("ready=1 launched=0 reason=overlap:{crossed}/1 ")),
         "既存の key と順と reason= の字面は不変: {line} / {sent:?}"
     );
-    assert!(line.ends_with(" live=1 idle=- held=1:lib.rs"), "末尾に並列の実測: {line} / {sent:?}");
+    assert!(line.ends_with(" live=1 idle=- overlap=1:lib.rs"), "末尾に並列の実測: {line} / {sent:?}");
 }
 
 /// (§26 歯 (b)) live な便が無く候補が hold の周の終端: idle の行は `ready=1 launched=0 reason=hold` の後に
-/// ` live=0 idle=0m held=0` で終わる（終端の直後なので 0 分・重なりで待つ候補 0 はコロンなし）。
+/// ` live=0 idle=0m overlap=0` で終わる（終端の直後なので 0 分・重なりで待つ候補 0 はコロンなし）。
 #[test]
 fn pipe_notify_facts_hold_round_without_live_runs_reports_zero_live_and_zero_minutes() {
     let (out, sent) = idle_round(&[QUEUED], true);
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "stop は rc 0: {}", told(&out));
     let line = idle_of(&sent);
     assert!(line.contains("ready=1 launched=0 reason=hold:"), "既存の字面は同じ行に在る: {line} / {sent:?}");
-    assert!(line.ends_with(" live=0 idle=0m held=0"), "末尾に並列の実測: {line} / {sent:?}");
+    assert!(line.ends_with(" live=0 idle=0m overlap=0"), "末尾に並列の実測: {line} / {sent:?}");
 }
 
 // ───── 未処置の終端（設計 dispatcher.md §29・行 ad・接頭辞 `pipe_notify_pending_`） ─────
@@ -602,7 +602,7 @@ fn precheck_place() -> (PathBuf, PathBuf, String) {
     register(&state, &repo);
     precheck_rows(&repo, "src/nowhere.rs");
     let bd = precheck_bd(&state);
-    let held = run_pipe(&["dispatch", "hold", ANCESTOR, "--state-dir", &state.display().to_string()]);
+    let held = run_pipe(&["dispatch", "hold", ANCESTOR, "--reason", "祖先を起こさない", "--state-dir", &state.display().to_string()]);
     assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&held));
     (repo, state, bd)
 }
@@ -763,7 +763,7 @@ fn record_stage(state: &Path, run: &str, bead: &str, stage: &str, detail: &str) 
 
 /// bead を hold にする（測る周に列が便を起こさない・起こす便の子が足す event で語が揺れない）。
 fn hold(state: &Path, bead: &str) {
-    let out = run_pipe(&["dispatch", "hold", bead, "--state-dir", &state.display().to_string()]);
+    let out = run_pipe(&["dispatch", "hold", bead, "--reason", "測る周に起こさない", "--state-dir", &state.display().to_string()]);
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", told(&out));
 }
 

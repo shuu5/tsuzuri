@@ -1526,7 +1526,7 @@ fn pipe_dispatch_row_reservation_ends_by_hold_expiry_close_or_a_memo_or_question
         assert_eq!(reason_of(&held, LATER), format!("reserved:{FALLEN}/1"), "{form}: 前提は予約が掛かる（{}）", told(&held));
         let (rules, bd) = match form {
             "hold" => {
-                let out = run_pipe(&["dispatch", "hold", FALLEN, "--state-dir", &state.display().to_string()]);
+                let out = run_pipe(&["dispatch", "hold", FALLEN, "--reason", "落ちた行を止める", "--state-dir", &state.display().to_string()]);
                 assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&out));
                 (reserve_rules(&state, Some(24)), bd)
             }
@@ -1868,7 +1868,7 @@ fn pipe_dispatch_sibling_wait_ends_by_a_fix_a_mark_a_close_a_deadline_or_the_sib
                 commit_sections(&repo, &[widened, section_row("b", "1", "src/b.rs")]);
             }
             "hold" => {
-                let out = run_pipe(&["dispatch", "hold", FALLEN, "--state-dir", &state.display().to_string()]);
+                let out = run_pipe(&["dispatch", "hold", FALLEN, "--reason", "落ちた行を止める", "--state-dir", &state.display().to_string()]);
                 assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&out));
             }
             "release" => release(&state, FALLEN),

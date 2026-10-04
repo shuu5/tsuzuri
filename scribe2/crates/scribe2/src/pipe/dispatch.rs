@@ -147,6 +147,8 @@ pub enum WaitReason {
     Hold {
         /// 印を付けた event の ts。
         since: String,
+        /// 印の行の理由（detail の `reason:` の後ろ・理由の無い古い印は `None`・判定に使わない＝`render` は書かない）。
+        why: Option<String>,
     },
     /// 列が起こした便がまだ受付に届いていない（最新の `launched` の後に同じ bead の `RunCreated` も
     /// `release` も無い・設計 §17）。受付で落ちた便を毎周起こし直さない。
@@ -212,7 +214,7 @@ impl WaitReason {
             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
             Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
             Self::Admission { reason } => format!("{name}:{reason}"),
-            Self::Hold { ref since } | Self::Launched { ref since } => format!("{name}:{since}"),
+            Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
             Self::Floor(ref found) => format!("{name}:{}", found.rc.map_or_else(|| found.word.as_str().to_owned(), |rc| rc.to_string())),
@@ -537,6 +539,7 @@ fn measure(input: &Input<'_>) -> (Turn, Option<Read>) {
     let (mut turn, materials, events) = {
         let ledger = Ledger {
             marks: marks.order,
+            why: marks.why,
             launched: (!unreadable).then_some(marks.launched),
             events,
             closed: issues.iter().filter(|issue| issue.status == CLOSED).map(|issue| issue.id.as_str()).collect(),
@@ -620,6 +623,8 @@ fn hold_for_host(turn: &mut Turn) {
 struct Ledger<'a> {
     /// bead ごとの最後の介入の印（`first` / `hold`）。
     marks: BTreeMap<String, (Mark, String)>,
+    /// bead ごとの効いている `hold` の理由（[`Marks`] の `why`）。
+    why: BTreeMap<String, String>,
     /// 起こしたのにまだ受付に届いていない bead と最新の `launched` の ts（event log を読めない周は `None`＝測れない）。
     launched: Option<BTreeMap<String, String>>,
     /// 置き場の event の並び（`release` が終端の便の最後の記帳より後かを位置で引く・設計 §12）。
@@ -764,6 +769,8 @@ struct Marks {
     /// bead ごとの最新の `launched` の ts（その後に同じ bead の `RunCreated` も `release` も無いものだけ・設計 §17）。
     /// 介入の印とは**独立の値**で持つ（`hold` と同じ側に畳まない）。
     launched: BTreeMap<String, String>,
+    /// bead ごとの効いている `hold` の理由（最後の印が理由つきの `hold` の bead だけ・`first` と `release` が外す）。
+    why: BTreeMap<String, String>,
 }
 
 /// 列の 1 行の書き出し（設計 §6）。
@@ -778,10 +785,16 @@ const NONE_LINE: &str = "[DISPATCH-NONE]";
 /// 値を持たない欄の字面（priority が読めない・理由が無い・印が無い）。
 const DASH: &str = "-";
 
+/// 効いている止めの行の書き出し（件数の行の前・候補の理由が `hold` の件ごと）。
+const HOLD_LINE: &str = "[DISPATCH-HOLD]";
+
+/// 止めの印の行の detail の頭（後ろは `--reason` の理由そのもの・`pipe stop --all` の逐語と同じ形）。
+const WHY_PREFIX: &str = "reason:";
+
 /// `pipe dispatch` の使い方。
 pub fn usage() -> String {
     format!(
-        "usage: {} pipe dispatch <ls|first|hold|release> [BEAD] [--state-dir D] [--repo R] [--bd PATH] [--rules PATH]",
+        "usage: {} pipe dispatch <ls|first|hold|release> [BEAD] [--reason WORDS（hold は要る）] [--state-dir D] [--repo R] [--bd PATH] [--rules PATH]",
         crate::name::NAME
     )
 }
@@ -835,7 +848,8 @@ pub fn render(turn: &Turn) -> Outcome {
 pub fn listing(input: &Input<'_>, turn: &Turn) -> Outcome {
     let mut outcome = render(turn);
     if let Some(at) = outcome.out.iter().position(|line| line.starts_with(COUNT)) {
-        outcome.out.splice(at..at, precheck::lines(input, turn).into_iter().chain(bundle::lines(input.state_dir)));
+        let held = turn.candidates.iter().filter_map(hold_line);
+        outcome.out.splice(at..at, held.chain(precheck::lines(input, turn)).chain(bundle::lines(input.state_dir)));
     }
     outcome
 }
@@ -857,12 +871,33 @@ fn line_of(candidate: &Candidate) -> String {
     format!("{LINE} bead={} prio={prio} mark={mark} reason={reason}", candidate.bead)
 }
 
-/// 介入の印を記帳する（`dispatch first|hold|release <bead>`・設計 §4）。
+/// 理由が `hold` の候補の止めの 1 行（`[DISPATCH-HOLD] bead=<id> since=<印の時刻> why=<理由>`・理由の無い古い印は `why=-`）。
+fn hold_line(candidate: &Candidate) -> Option<String> {
+    let Some(WaitReason::Hold { ref since, ref why }) = candidate.reason else {
+        return None;
+    };
+    Some(format!("{HOLD_LINE} bead={} since={since} why={}", candidate.bead, why.as_deref().unwrap_or(DASH)))
+}
+
+/// 印の `--reason` を受けて印の行の detail を返す（`hold` は理由を要り、空白だけと改行を含む理由を断る・
+/// ほかの印は `--reason` を断る・断りは印を書かない使い方の誤り）。器は理由の字を判定に使わない（設計 §4）。
+pub fn why_of(mark: Mark, words: Option<&str>) -> Result<Option<String>, String> {
+    match (mark, words) {
+        (Mark::Hold, None) => Err("hold は --reason の理由を要る".to_owned()),
+        (Mark::Hold, Some(found)) if found.trim().is_empty() => Err("--reason の理由が空である".to_owned()),
+        (Mark::Hold, Some(found)) if found.contains(['\n', '\r']) => Err("--reason の理由が改行を含む".to_owned()),
+        (Mark::Hold, Some(found)) => Ok(Some(format!("{WHY_PREFIX}{found}"))),
+        (_, Some(_)) => Err(format!("--reason は hold だけが受ける（{}）", mark.as_str())),
+        (_, None) => Ok(None),
+    }
+}
+
+/// 介入の印を記帳する（`dispatch first|hold|release <bead>`・設計 §4・`hold` の detail は [`why_of`] の字）。
 ///
 /// 印は台帳の priority を書き換えない（憲法 C15）。`release` も 1 行として残す——印を外した事実が
 /// 記録から消えると「なぜこの順か」が読めなくなる（設計 §10）。
-pub fn mark(state_dir: &Path, bead: &str, mark: Mark, policy: store::LockPolicy) -> Outcome {
-    match super::emit_mark(state_dir, bead, mark, policy) {
+pub fn mark(state_dir: &Path, bead: &str, mark: Mark, detail: Option<String>, policy: store::LockPolicy) -> Outcome {
+    match super::emit_mark(state_dir, bead, mark, detail, policy) {
         Ok(()) => Outcome::ok(vec![format!("{LINE} bead={bead} mark={}", mark.as_str())]),
         Err(err) => Outcome::failed_line(crate::cli_outcome::RC_BROKEN, format!("pipe: {err}")),
     }
@@ -880,8 +915,8 @@ use revive::rank;
 mod tests {
     // flip-check: moved s2-07l.531
     use super::{
-        admits_gated, advance, digits_of, handoff, launch_of, marks_of, order, rank, released_after, requeues,
-        review_unmeasured, revive_of, section_keyed, tools, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
+        admits_gated, advance, digits_of, handoff, hold_line, launch_of, marks_of, order, rank, released_after, requeues,
+        review_unmeasured, revive_of, section_keyed, tools, why_of, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
         DRIVE, HANDOFFS, WAIT_REASONS,
     };
     use super::{floor, reserve};
@@ -1187,6 +1222,66 @@ mod tests {
         assert_eq!(found.launched.len(), 2, "母集団 4 bead のうち残るのは 2 つ");
     }
 
+    /// 止めの印の行 1 件（detail に理由の字）。
+    fn held_with(ts: &str, bead: &str, detail: Option<&str>) -> Event {
+        let mut event = marked(ts, bead, Mark::Hold);
+        event.detail = detail.map(str::to_owned);
+        event
+    }
+
+    /// 止めの理由は最後の印が理由つきの `hold` の bead だけが持ち、`first`・`release`・理由の無い `hold`・頭が `reason:` でない
+    /// detail の `hold` は持たない（pure・行 v-hold-why）。
+    #[test]
+    fn vhold_marks_keep_the_reason_of_the_last_hold_only() {
+        let events = vec![
+            held_with("t1", "s2-a", Some("reason:設計の行を直す")),
+            held_with("t2", "s2-b", Some("reason:x")),
+            marked("t3", "s2-b", Mark::First),
+            held_with("t4", "s2-c", Some("reason:y")),
+            marked("t5", "s2-c", Mark::Release),
+            held_with("t6", "s2-d", Some("reason:z")),
+            held_with("t7", "s2-d", None),
+            held_with("t8", "s2-e", Some("why:w")),
+            held_with("t9", "s2-f", Some("reason:前")),
+            held_with("t10", "s2-f", Some("reason:後")),
+        ];
+        let found = marks_of(&events);
+        assert_eq!(found.why.get("s2-a").map(String::as_str), Some("設計の行を直す"), "理由つきの hold は理由を持つ");
+        assert_eq!(found.why.get("s2-b"), None, "後の first が外す");
+        assert_eq!(found.why.get("s2-c"), None, "release が外す");
+        assert_eq!(found.why.get("s2-d"), None, "後の理由の無い hold が外す");
+        assert_eq!(found.why.get("s2-e"), None, "頭が reason: でない detail は理由でない");
+        assert_eq!(found.why.get("s2-f").map(String::as_str), Some("後"), "最後の hold の理由");
+        assert_eq!(found.why.len(), 2, "母集団 6 bead のうち理由を持つのは 2 つ");
+        assert_eq!(found.order.get("s2-d"), Some(&(Mark::Hold, "t7".to_owned())), "理由の無い hold も印は効く");
+    }
+
+    /// `hold` は 1 行の理由を要り detail を `reason:<理由>` にし、ほかの印は `--reason` を断り理由なしは detail なし（pure・行 v-hold-why）。
+    #[test]
+    fn vhold_why_of_needs_one_line_on_hold_and_refuses_it_on_the_other_marks() {
+        assert_eq!(why_of(Mark::Hold, Some("設計の行 を直す")), Ok(Some("reason:設計の行 を直す".to_owned())), "通る理由");
+        assert_eq!(why_of(Mark::Hold, None), Err("hold は --reason の理由を要る".to_owned()), "理由なし");
+        assert_eq!(why_of(Mark::Hold, Some(" \t ")), Err("--reason の理由が空である".to_owned()), "空白だけ");
+        assert_eq!(why_of(Mark::Hold, Some("前\n後")), Err("--reason の理由が改行を含む".to_owned()), "改行");
+        assert_eq!(why_of(Mark::Hold, Some("前\r後")), Err("--reason の理由が改行を含む".to_owned()), "復帰");
+        for mark in [Mark::First, Mark::Release, Mark::Launched] {
+            assert_eq!(why_of(mark, Some("x")), Err(format!("--reason は hold だけが受ける（{}）", mark.as_str())), "{mark:?}");
+            assert_eq!(why_of(mark, None), Ok(None), "{mark:?} は理由なしで通る");
+        }
+    }
+
+    /// 止めの行は理由が `hold` の候補だけに立ち、bead と印の時刻と理由（理由の無い古い印は `-`）を名指す（pure・行 v-hold-why）。
+    #[test]
+    fn vhold_hold_line_names_bead_since_and_why_only_for_the_hold_reason() {
+        let with = |reason: Option<WaitReason>| Candidate { reason, ..candidate("s2-a", Some(2), Some(Mark::Hold)) };
+        let hold = |why: Option<&str>| with(Some(WaitReason::Hold { since: "t1".to_owned(), why: why.map(str::to_owned) }));
+        assert_eq!(hold_line(&hold(Some("直す 間"))), Some("[DISPATCH-HOLD] bead=s2-a since=t1 why=直す 間".to_owned()), "理由つき");
+        assert_eq!(hold_line(&hold(None)), Some("[DISPATCH-HOLD] bead=s2-a since=t1 why=-".to_owned()), "理由の無い古い印");
+        let behind = with(Some(WaitReason::Dependency { on: vec!["s2-z".to_owned()] }));
+        assert_eq!(hold_line(&behind), None, "印が hold でも理由が依存の候補は立たない");
+        assert_eq!(hold_line(&with(None)), None, "理由の無い候補は立たない");
+    }
+
     // flip-check: retroactive s2-07l.738.37.2
     // flip-check: retroactive s2-07l.738.37.5
     /// 理由の名は [`WAIT_REASONS`] と 1 対 1 で、値を持つ variant は値も描く（`dispatch ls` の `reason=`）。
@@ -1197,7 +1292,7 @@ mod tests {
             WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
             WaitReason::Admission { reason: "cap-headroom" },
             WaitReason::HostBusy,
-            WaitReason::Hold { since: "t1".to_owned() },
+            WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
             WaitReason::Launched { since: "t2".to_owned() },
             WaitReason::Settled { sha: "abc".to_owned(), stage: Stage::Landed },
             WaitReason::NoDesignPointer,

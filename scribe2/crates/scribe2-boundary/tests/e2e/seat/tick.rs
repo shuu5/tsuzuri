@@ -1522,7 +1522,7 @@ fn tick_facts_sent(stage: Option<&str>, ago: u64) -> String {
     texts.into_iter().next().unwrap_or_default()
 }
 
-/// 段 0 の合図の文面（`signal` の返り値）の後ろに並列の実測の字面 `tail` が付いた送り（`held=` は含まない）。
+/// 段 0 の合図の文面（`signal` の返り値）の後ろに並列の実測の字面 `tail` が付いた送り（`overlap=` は含まない）。
 fn tick_facts_want(tail: &str) -> String {
     let signal = tick_signal(0);
     format!("{}{tail}", signal.strip_suffix(" live=0 idle=-").unwrap_or(&signal))
@@ -1534,7 +1534,7 @@ fn tick_facts_want(tail: &str) -> String {
 fn seat_tick_facts_landed_run_7230s_ago_ends_live_zero_idle_120m() {
     let sent = tick_facts_sent(Some("Landed"), 7230);
     assert_eq!(sent, tick_facts_want(" live=0 idle=120m alarm=idle"));
-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
+    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
 }
 
 /// (t-b) Spawned の便 1 本 → ` live=1 idle=-`（live が 1 本以上の周の 0 本の分数は値なし）。
@@ -1542,7 +1542,7 @@ fn seat_tick_facts_landed_run_7230s_ago_ends_live_zero_idle_120m() {
 fn seat_tick_facts_spawned_run_ends_live_one_idle_absent() {
     let sent = tick_facts_sent(Some("Spawned"), 60);
     assert_eq!(sent, tick_facts_want(" live=1 idle=-"));
-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
+    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
 }
 
 /// (t-c) 便 0 本 → ` live=0 idle=-`（便の無い周の 0 本の分数は値なし）。
@@ -1550,7 +1550,7 @@ fn seat_tick_facts_spawned_run_ends_live_one_idle_absent() {
 fn seat_tick_facts_no_runs_ends_live_zero_idle_absent() {
     let sent = tick_facts_sent(None, 0);
     assert_eq!(sent, tick_facts_want(" live=0 idle=-"));
-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
+    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
 }
 
 /// (t-d) verdict の読めない Gated の便 → ` live=? idle=?`（測れないを 0 本に読み替えない）。
@@ -1558,7 +1558,7 @@ fn seat_tick_facts_no_runs_ends_live_zero_idle_absent() {
 fn seat_tick_facts_gated_run_without_a_verdict_ends_unmeasured() {
     let sent = tick_facts_sent(Some("Gated"), 7230);
     assert_eq!(sent, tick_facts_want(" live=? idle=?"));
-    assert!(!sent.contains("held="), "列の結果なし: {sent}");
+    assert!(!sent.contains("overlap="), "列の結果なし: {sent}");
 }
 
 /// 行 u（設計 seat-heartbeat.md §17）の歯の置き場: 置き場の event log に便 1 本の event（`RunCreated` と段 `stage` の

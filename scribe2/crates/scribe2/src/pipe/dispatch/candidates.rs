@@ -23,7 +23,7 @@ use super::super::{contract_path, current, git_bytes, git_line, show_head};
 use super::index_build::{status as index_status, Status as IndexStatus};
 use super::{
     measure, reserve, spawn_self, Candidate, Input, Launch, Ledger, Marks, Read, Turn, Unmeasured, WaitReason, BLOCKS, DESIGN_KEY, DRIVE, MARK,
-    OPEN, ROW_JOB_MB, ROW_RESERVE_MB, SLOT,
+    OPEN, ROW_JOB_MB, ROW_RESERVE_MB, SLOT, WHY_PREFIX,
 };
 use crate::fleet::lifecycle::{self, Place, Round, Source};
 use crate::fleet::phase::Judged;
@@ -61,7 +61,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
         return wait(WaitReason::Dependency { on: blocked });
     }
     if let Some((Mark::Hold, since)) = marked {
-        return wait(WaitReason::Hold { since: since.clone() });
+        return wait(WaitReason::Hold { since: since.clone(), why: ledger.why.get(&issue.id).cloned() });
     }
     // **起こした便が受付に届くまで同じ bead を起こさない**（設計 §17）。印を測れない周は起こさない側に倒す。
     match ledger.launched.as_ref().map(|found| found.get(&issue.id)) {
@@ -561,7 +561,7 @@ fn sizes_of(manifest: &Manifest) -> Sizes {
 /// bead ごとの印を畳む（`release` は介入の印も起こした事実の印も外す・`RunCreated` は起こした事実の印を外す・
 /// **pure**・設計 §4・§17）。
 pub(super) fn marks_of(events: &[Event]) -> Marks {
-    let mut found = Marks { order: BTreeMap::new(), launched: BTreeMap::new() };
+    let mut found = Marks { order: BTreeMap::new(), launched: BTreeMap::new(), why: BTreeMap::new() };
     for event in events {
         if event.kind == EventKind::RunCreated {
             found.launched.remove(&event.bead);
@@ -574,9 +574,15 @@ pub(super) fn marks_of(events: &[Event]) -> Marks {
             Mark::Release => {
                 found.order.remove(&event.bead);
                 found.launched.remove(&event.bead);
+                found.why.remove(&event.bead);
             }
             Mark::First | Mark::Hold => {
                 found.order.insert(event.bead.clone(), (mark, event.ts.clone()));
+                // 理由は最後の印の detail が `reason:` で始まる時だけ持つ（理由を書かない `first` と理由の無い `hold` は外す）。
+                match event.detail.as_deref().and_then(|detail| detail.strip_prefix(WHY_PREFIX)) {
+                    Some(why) => found.why.insert(event.bead.clone(), why.to_owned()),
+                    None => found.why.remove(&event.bead),
+                };
             }
             Mark::Launched => {
                 found.launched.insert(event.bead.clone(), event.ts.clone());

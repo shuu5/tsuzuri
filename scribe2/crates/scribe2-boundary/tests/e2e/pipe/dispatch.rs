@@ -420,7 +420,8 @@ fn pipe_dispatch_first_outranks_priority_and_hold_stops_the_start() {
     assert_eq!(beads(&plain), vec!["s2-toy.2", "s2-toy.1"], "印が無ければ P0 が先: {}", stdout_of(&plain));
     assert_eq!(count_of(&plain), format!("{COUNT} total=2 ready=2"), "交差しない 2 本は両方起こせる");
     let mark = |verb: &str, bead: &str| {
-        let out = run_pipe(&["dispatch", verb, bead, "--state-dir", &state.display().to_string()]);
+        let why: &[&str] = if verb == "hold" { &["--reason", "印の往復"] } else { &[] };
+        let out = run_pipe(&[&["dispatch", verb, bead, "--state-dir", &state.display().to_string()][..], why].concat());
         assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{verb}: {}", stderr_of(&out));
     };
     let marked = run_pipe(&["dispatch", "first", "s2-toy.1", "--state-dir", &state.display().to_string()]);
@@ -3764,7 +3765,7 @@ fn pipe_dispatch_index_closure_waits_on_absent_and_the_runner_turn_builds_once_i
 #[test]
 fn pipe_dispatch_index_closure_hold_and_failed_state_and_plain_candidates_do_not_build() {
     let (place, bd) = ixc_candidates(IDXB_DECL);
-    let held = run_pipe(&["dispatch", "hold", "s2-toy.1", "--state-dir", &place.state.display().to_string()]);
+    let held = run_pipe(&["dispatch", "hold", "s2-toy.1", "--reason", "置き場を分ける", "--state-dir", &place.state.display().to_string()]);
     assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold: {}", stderr_of(&held));
     let listed = ls(&place.repo, &place.state, &bd);
     assert!(reason_of(&listed, "s2-toy.1").starts_with("hold:"), "hold の理由: {}", told(&listed));

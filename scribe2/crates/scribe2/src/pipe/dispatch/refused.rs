@@ -118,7 +118,7 @@ mod tests {
             candidate("s2-ref.3", Some(WaitReason::Dependency { on: vec!["s2-ref.9".to_owned()] })),
             candidate("s2-ref.4", admission(super::super::SLOT)),
             candidate("s2-ref.5", admission(super::SPAWN)),
-            candidate("s2-ref.6", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned() })),
+            candidate("s2-ref.6", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned(), why: None })),
             candidate("s2-ref.7", None),
         ];
         assert_eq!(

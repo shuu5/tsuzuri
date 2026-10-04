@@ -869,7 +869,7 @@ fn ladder(input: &Input, front: Front) -> Result<Front, Verdict> {
         Some(found) => Some(settled(seat, found, &stamps, digest, (now, rows.pace.stale_s))?),
         None => None,
     };
-    // 並列の実測（設計 §16・列の結果なし＝`held=` を出さない・台帳も列も撃たない）で段を上げるかを決める（§17 形 2）。
+    // 並列の実測（設計 §16・列の結果なし＝`overlap=` を出さない・台帳も列も撃たない）で段を上げるかを決める（§17 形 2）。
     let measured = facts::facts(&input.state.path, None, now);
     // 局面の出力は置き場の出力・古さの印の file・event log の印だけ読む（比べる組は event log の 1 種類・台帳も git も撃たない・§24 約束 2）。
     let lifecycle = lifecycle_read::read(&input.state.path, &input.state.path, &[lifecycle_read::Input::Events]);
