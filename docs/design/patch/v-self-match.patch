@@ -1,0 +1,682 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook/guards.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook/guards.rs
+index 4cbb4661d9fa3e9601ea213de9cc719ce6ba1d72..413311af8a265db70b268df1157ea61febb1a51e 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook/guards.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook/guards.rs
+@@ -577,6 +577,31 @@ fn host_guard_kind_command_guard_names_the_tmux_row_from_the_embedded_rules() {
+     clean(&[&repo, &state]);
+ }
+ 
++/// 自分に当たる待ちと止めの行の裁定 id（埋め込みの rules の host_guard.self_match・判断の記録 ADR-44 の決定 (3)）。
++const SELF_MATCH_RULING: &str = "user 2026-10-04T20:37Z 問い t3-hub.80.6";
++/// 自分に当たる待ちと止めの断りの経路（SRS FR1056 の次の手）。
++const SELF_MATCH_ROUTE: &str = "待つ相手の pid を取って kill -0 <pid> で待つか、型の 1 字を [] で囲む（例 pgrep -f '[m]erge'）— -f の型は自分の command 行にも当たる";
++
++/// 自分に当たる待ちと止め（判断の記録 ADR-44 の決定 (3)・行 v-self-match・接頭辞 `vselfm_`）: 埋め込みの rules で、型が自分の
++/// command 行に当たる `pgrep -f` の待ちと `pkill -f` を rc 2・1 行（kind=self-match・hit は語列・行 id host_guard.self_match・
++/// 裁定 id・経路）・記録 host-guard-deny self-match で断り、kill -0 の待ち・角括弧の型・丸括弧の型・-f の無い pgrep は 0 byte・
++/// rc 0 で通し、記録は断った 2 本だけ。
++#[test]
++fn vselfm_host_guard_denies_self_matching_waits_and_kills() {
++    let state = tmp();
++    for (command, hit) in [("while pgrep -f 'merge.sh 5'; do sleep 15; done", "pgrep -f"), ("pkill -f 'cargo xtask check'", "pkill -f")] {
++        let text = assert_host_guard_deny(&run_host_guard_in(&state, &bash_payload(&state, command)), command);
++        let want = format!("{NAME}: host-guard deny kind=self-match hit={hit} row=host_guard.self_match ruling={SELF_MATCH_RULING} — {SELF_MATCH_ROUTE}");
++        assert_eq!(text.trim_end(), want, "{command}");
++    }
++    for command in ["while kill -0 123 2>/dev/null; do sleep 15; done", "pgrep -f '[m]erge.sh 5'", "pgrep -fc 'scribe2(.bin)? pipe'", "pgrep merge.sh"] {
++        assert_silent(&run_host_guard_in(&state, &bash_payload(&state, command)), command);
++    }
++    let whats: Vec<String> = host_guard_records(&state).iter().map(|line| what_of(line)).collect();
++    assert_eq!(whats, ["host-guard-deny self-match", "host-guard-deny self-match"], "断った 2 本だけが記録を残す");
++    clean(&[&state]);
++}
++
+ /// `rm <tracked>` と `rm -rf <tracked の親 dir>` は kind=rm・hit=repo-tracked:<path> で rc 2。
+ #[test]
+ fn host_guard_rm_denies_a_tracked_file_and_its_parent_dir() {
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+index e22317124289b1e763084329fa9d52768c21e391..fb06dc9ce55d97f745b92a0fe2cf8a4ea5ea432a 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+@@ -850,7 +850,7 @@ fn rules_embedded_manifest_is_valid_and_covers_all_kinds() {
+     // **tracked な `rules/manifest.toml` の全行が受理される**（`parse` は 1 件でも違反が
+     // 在れば `Err` を返すので、ここに届いた時点で全行が必須 key を持つ）。母集団を額面に
+     // 出すのは、行が黙って落ちた周を「全部読めた」と読み違えないためである。
+-    assert_eq!(manifest.rows().len(), 110, "埋め込み manifest の行数（母集団・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
++    assert_eq!(manifest.rows().len(), 111, "埋め込み manifest の行数（母集団・行 v-self-match で +1〔host の見張りの自分に当たる待ちと止めの行〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
+     for kind in ALL {
+         let covered = manifest.rows().iter().any(|row| row.kind == *kind);
+         assert!(covered, "{} の行が manifest に無い", kind.as_str());
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+index bba72081380e637f9c149c8b10514fb1dc935a0c..e054e753a90db7037662de016c861247bbe3d002 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+@@ -950,7 +950,7 @@ pub(super) const HOST_GUARD_HEAD: &str = "host-guard: ";
+ 
+ /// 種類の行を持たない manifest（[`NO_ACCOUNT_RULES`]）・口座 0 の host・`--bin` が歯の binary の周の host-guard の 1 行。
+ pub(super) const HOST_GUARD_BARE: &str =
+-    "host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self=on rows=0/5 wired=0/0 entities=0 binary=ok ungrouped=1";
++    "host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self-match=no-row self=on rows=0/6 wired=0/0 entities=0 binary=ok ungrouped=1";
+ 
+ /// `[[account]]` を `labels` の順に宣言した manifest の本文。
+ fn account_rules(labels: &[&str]) -> String {
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat/account.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat/account.rs
+index 741751e563f2610d3e4ac2c89a041c4184d7771f..1b57c0045f46f57b8f202820e5040026c61442c1 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat/account.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat/account.rs
+@@ -320,7 +320,7 @@ fn account_tombstone_reading_leaves_the_file_and_prints_no_token() {
+ // ─── doctor の host-guard の 1 行（vessel-hook.md §12 行 d 形 5 / 6・ADR-0056 §2・接頭辞 `host_guard_doctor_`） ───
+ 
+ /// 種類の行を持たない manifest の host-guard の行の頭（`wired=` より前）。
+-const GUARD_NO_ROWS: &str = "host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self=on rows=0/5";
++const GUARD_NO_ROWS: &str = "host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self-match=no-row self=on rows=0/6";
+ 
+ /// 行の列の末尾の host-guard の 1 行（無ければ空）と、host-guard の行の本数。
+ fn guard_line(lines: &[String]) -> (String, usize) {
+@@ -328,19 +328,20 @@ fn guard_line(lines: &[String]) -> (String, usize) {
+     (last, lines.iter().filter(|line| line.starts_with(HOST_GUARD_HEAD)).count())
+ }
+ 
+-/// 種類の 5 行（git の行は `git` が `None` なら欠き、`Some(enabled)` ならその発効で置く）と `labels` の口座を持つ manifest。
++/// 種類の 6 行（git の行は `git` が `None` なら欠き、`Some(enabled)` ならその発効で置く）と `labels` の口座を持つ manifest。
+ fn guard_rules(git: Option<bool>, labels: &[&str]) -> String {
+     let row = |id: &str, kind: &str, value: &str, enabled: bool| {
+         format!("\n[[rule]]\nid = \"{id}\"\nkind = \"{kind}\"\nvalue = [\"{value}\"]\nenabled = {enabled}\nruling = \"r\"\nruled_at = \"d\"\n")
+     };
+     let git = git.map(|enabled| row("host_guard.git", "HostGuardDeniedCommands", "git push --force", enabled)).unwrap_or_default();
+     format!(
+-        "{}{git}{}{}{}{}",
++        "{}{git}{}{}{}{}{}",
+         account_rules(labels),
+         row("host_guard.tmux", "HostGuardDeniedCommands", "tmux kill-server", true),
+         row("host_guard.ledger", "HostGuardDeniedCommands", "bd delete", true),
+         row("host_guard.rm", "HostGuardRmProtected", "state-dir", true),
+-        row("host_guard.publish", "HostGuardPublish", "form repo-name", true)
++        row("host_guard.publish", "HostGuardPublish", "form repo-name", true),
++        row("host_guard.self_match", "HostGuardDeniedCommands", "pgrep -f", true)
+     )
+ }
+ 
+@@ -372,15 +373,15 @@ fn host_guard_doctor_counts_wired_accounts_and_entities_in_one_line() {
+     fs::remove_dir_all(&place.dir).ok();
+ }
+ 
+-/// (6) 種類ごとの欄は行の `enabled` を読む: 5 行とも発効で `on` と `rows=5/5`、`--rules` で host_guard.git を `enabled = false`
+-/// にすると `git=off`、行を欠くと `git=no-row`（どちらも rows=4/5）。口座 0 の host は `wired=0/0 entities=0`。
++/// (6) 種類ごとの欄は行の `enabled` を読む: 6 行とも発効で `on` と `rows=6/6`、`--rules` で host_guard.git を `enabled = false`
++/// にすると `git=off`、行を欠くと `git=no-row`（どちらも rows=5/6）。口座 0 の host は `wired=0/0 entities=0`。
+ #[test]
+ fn host_guard_doctor_names_each_kind_on_off_or_no_row() {
+     let place = role_doctor_place();
+     for (git, want) in [
+-        (Some(true), "git=on tmux=on ledger=on rm=on publish=on self=on rows=5/5"),
+-        (Some(false), "git=off tmux=on ledger=on rm=on publish=on self=on rows=4/5"),
+-        (None, "git=no-row tmux=on ledger=on rm=on publish=on self=on rows=4/5"),
++        (Some(true), "git=on tmux=on ledger=on rm=on publish=on self-match=on self=on rows=6/6"),
++        (Some(false), "git=off tmux=on ledger=on rm=on publish=on self-match=on self=on rows=5/6"),
++        (None, "git=no-row tmux=on ledger=on rm=on publish=on self-match=on self=on rows=5/6"),
+     ] {
+         let lines = doctor_rows(&place, &guard_rules(git, &[]));
+         assert_eq!(guard_line(&lines), (format!("host-guard: {want} wired=0/0 entities=0 binary=ok ungrouped=1"), 1), "{git:?}: {lines:?}");
+@@ -388,7 +389,7 @@ fn host_guard_doctor_names_each_kind_on_off_or_no_row() {
+     // 列でない値の行（id は host_guard.git・kind は閾値）は発効でも `no-row`。
+     let not_list = "\n[[rule]]\nid = \"host_guard.git\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
+     let lines = doctor_rows(&place, &format!("{}{not_list}", guard_rules(None, &[])));
+-    let want = "host-guard: git=no-row tmux=on ledger=on rm=on publish=on self=on rows=4/5 wired=0/0 entities=0 binary=ok ungrouped=1";
++    let want = "host-guard: git=no-row tmux=on ledger=on rm=on publish=on self-match=on self=on rows=5/6 wired=0/0 entities=0 binary=ok ungrouped=1";
+     assert_eq!(guard_line(&lines), (want.to_owned(), 1), "列でない行: {lines:?}");
+     fs::remove_dir_all(&place.dir).ok();
+ }
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+index 95f638fa3423aff830fe245396e49510fa11bc9f..021d78670c5f9469a38a458208706e583f907550 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+@@ -3,8 +3,8 @@ source: crates/scribe2/tests/e2e/rules.rs
+ expression: form
+ ---
+ usage: scribe2 <name|--version|doctor|account|rules|fleet|vessel|hook|host-guard|pipe|runner|lens|seat|polarity|contracts|utterance>
+-rules: ok rows=110 kinds=96
++rules: ok rows=111 kinds=96
+ rules: no such id
+ 95
+-rules: ok rows=110 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
++rules: ok rows=111 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
+ usage: rules <validate|get <id>> [--rules PATH] [--state-dir S]
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__seat__seat_doctor_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__seat__seat_doctor_external_form.snap
+index a07d3f1e1befad1dbe360c7982e339b7d771a8c2..00a8016231895b8f1c92461cb61343b219534b7f 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__seat__seat_doctor_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__seat__seat_doctor_external_form.snap
+@@ -6,4 +6,4 @@ seat: role=orchestrator anchor=/repo target=rolesdoc:rolesdoc account=acct-1 mod
+ seats: registered=1 live=unmeasurable missing=unmeasurable
+ host-manifest=absent
+ consumer=/repo source=launch scope=- binary=unrecorded plugin=unrecorded ledger=- cache=absent head=undeclared behind=- drift=unrecorded
+-host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self=on rows=0/5 wired=0/0 entities=0 binary=ok ungrouped=1
++host-guard: git=no-row tmux=no-row ledger=no-row rm=no-row publish=no-row self-match=no-row self=on rows=0/6 wired=0/0 entities=0 binary=ok ungrouped=1
+diff --git a/scribe2/crates/scribe2/src/account/wire.rs b/scribe2/crates/scribe2/src/account/wire.rs
+index 866a99ae0f90add9f39034e45a7ae0bd69f5d834..cdc4d14f1903000209cfc1f3e72902e1fd544cc5 100644
+--- a/scribe2/crates/scribe2/src/account/wire.rs
++++ b/scribe2/crates/scribe2/src/account/wire.rs
+@@ -31,8 +31,8 @@ pub const TIMEOUT_S: u64 = 10;
+ const SUBCOMMAND: &str = "host-guard";
+ /// doctor の行の頭。
+ const HEAD: &str = "host-guard:";
+-/// doctor の欄に出す種類（欄の順・5 つとも rules 行を持つ）。見張り自身の設定の種類は行を持たず `self=on` で固定。
+-const ROW_KINDS: [Kind; 5] = [Kind::Git, Kind::Tmux, Kind::Ledger, Kind::Rm, Kind::Publish];
++/// doctor の欄に出す種類（欄の順・6 つとも rules 行を持つ）。見張り自身の設定の種類は行を持たず `self=on` で固定。
++const ROW_KINDS: [Kind; 6] = [Kind::Git, Kind::Tmux, Kind::Ledger, Kind::Rm, Kind::Publish, Kind::SelfMatch];
+ /// 設定の key（hook の event の束・PreToolUse の配列・要素の hook の配列・hook の command）。
+ const KEY_HOOKS: &str = "hooks";
+ /// PreToolUse の配列の key。
+@@ -264,7 +264,7 @@ pub fn resolve(bin: &Path, version: &str) -> Binary {
+     }
+ }
+ 
+-/// doctor の 1 行（`--state-dir` の周・導入先の行の後ろ）: `host-guard: git= tmux= ledger= rm= publish= self=on rows=<発効>/5
++/// doctor の 1 行（`--state-dir` の周・導入先の行の後ろ）: `host-guard: git= tmux= ledger= rm= publish= self-match= self=on rows=<発効>/6
+ /// wired=<配線を持つ口座>/<口座> entities=<実体> [unreadable=<読めない口座>] binary=<ok|missing|other> ungrouped=<数|unreadable>`。宣言（`rules` = `--rules`
+ /// か埋め込み + host の面）を読めない周は `host-guard: rules=unreadable`。実体が割れても一覧は出さない（1 行の外形を保つ）。
+ pub fn doctor_line(state_dir: &Path, rules: Option<&str>, version: &str, bin: &Path, state: Option<&State>) -> String {
+diff --git a/scribe2/crates/scribe2/src/hook/host_guard.rs b/scribe2/crates/scribe2/src/hook/host_guard.rs
+index a9f066f26de0e557f55e9cef12a99f6aca50a1c0..50b882764118ed53550181b188c3eb1fcf200c19 100644
+--- a/scribe2/crates/scribe2/src/hook/host_guard.rs
++++ b/scribe2/crates/scribe2/src/hook/host_guard.rs
+@@ -3,7 +3,7 @@
+ //!
+ //! 口座の設定から PreToolUse で呼ばれる器の 1 つの口で、**marker と anchor に依らず**判定する（hook の入口の沈黙
+ //! 〔FR24〕は持ち込まない＝`.vessel` の無い repo・他の name の marker・git repo でない cwd でも同じ判定）。種類は閉じた
+-//! 6 値 [`Kind`] で、判定は宣言順に 1 種類 1 関数、**先に当たった 1 つだけ**を断る（1 周に deny 1 行）。何を止めるかは
++//! 7 値 [`Kind`] で、判定は宣言順に 1 種類 1 関数、**先に当たった 1 つだけ**を断る（1 周に deny 1 行）。何を止めるかは
+ //! 種類ごとの rules 行（[`WORD_ROWS`] と [`RM_ROW`]・裁定 id つき）が持ち、見張り自身の設定の種類は行を持たない。
+ //!
+ //! 語列の 3 種類（git / tmux / 台帳）は、command 行を起票の門の分割（[`segments`]・引用符と `\` を解く）で切り、
+@@ -53,8 +53,11 @@ pub const LEDGER_ROW: &str = "host_guard.ledger";
+ pub const RM_ROW: &str = "host_guard.rm";
+ /// 公開の見張りの行（識別子の形の記号と除外の digest・設計 vessel-hook.md §16）。
+ pub const PUBLISH_ROW: &str = "host_guard.publish";
++/// 自分に当たる待ちと止めの行（語列 pgrep -f と pkill -f・判断の記録 ADR-44 の決定 (3)・SRS FR1056）。
++pub const SELF_MATCH_ROW: &str = "host_guard.self_match";
+ 
+ pub mod publish;
++pub mod self_match;
+ 
+ /// 語列の行の閉じた列（宣言順・command guard も enabled を見ずに読む）。
+ pub const WORD_ROWS: [&str; 3] = [GIT_ROW, TMUX_ROW, LEDGER_ROW];
+@@ -167,7 +170,7 @@ pub struct Scene<'a> {
+     pub host: &'a Manifest,
+ }
+ 
+-/// 止める種類（閉じた 6 値・宣言順が判定の順）。
++/// 止める種類（閉じた 7 値・宣言順が判定の順）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Kind {
+     /// git の履歴破壊。
+@@ -182,10 +185,12 @@ pub enum Kind {
+     Settings,
+     /// 隣の repo の識別子の公開（行 j / k・§16 / §17・行が無い周と、字面で読めない印を持つ公開の segment を断る）。
+     Publish,
++    /// 型が撃った shell 自身の command 行にも当たる `pgrep -f` / `pkill -f` の待ちと止め（[`self_match`]・語は self-match）。
++    SelfMatch,
+ }
+ 
+ /// [`Kind`] の全 variant（宣言順）。
+-pub const KINDS: &[Kind] = &[Kind::Git, Kind::Rm, Kind::Tmux, Kind::Ledger, Kind::Settings, Kind::Publish];
++pub const KINDS: &[Kind] = &[Kind::Git, Kind::Rm, Kind::Tmux, Kind::Ledger, Kind::Settings, Kind::Publish, Kind::SelfMatch];
+ 
+ impl Kind {
+     /// 断りの行と記録に出す種類の語。
+@@ -197,6 +202,7 @@ impl Kind {
+             Self::Ledger => "ledger",
+             Self::Settings => "self",
+             Self::Publish => "publish",
++            Self::SelfMatch => "self-match",
+         }
+     }
+ 
+@@ -209,6 +215,7 @@ impl Kind {
+             Self::Ledger => Some(LEDGER_ROW),
+             Self::Settings => None,
+             Self::Publish => Some(PUBLISH_ROW),
++            Self::SelfMatch => Some(SELF_MATCH_ROW),
+         }
+     }
+ 
+@@ -221,6 +228,7 @@ impl Kind {
+             Self::Ledger => "台帳は bdw と --append-notes で書く",
+             Self::Settings => "見張り自身の設定は user が編集する",
+             Self::Publish => "publish の行を裁定を添えて置く（器の manifest の host_guard.publish）",
++            Self::SelfMatch => "待つ相手の pid を取って kill -0 <pid> で待つか、型の 1 字を [] で囲む（例 pgrep -f '[m]erge'）— -f の型は自分の command 行にも当たる",
+         }
+     }
+ }
+@@ -438,6 +446,7 @@ fn judge_kind(kind: Kind, subject: &Subject, manifest: &Manifest) -> Option<Refu
+         Kind::Rm => removals(kind, subject, manifest),
+         Kind::Settings => own_settings(kind, subject),
+         Kind::Publish => publish::judge(kind, subject, manifest),
++        Kind::SelfMatch => self_match::judge(kind, subject, manifest),
+     }
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/hook/host_guard/self_match.rs b/scribe2/crates/scribe2/src/hook/host_guard/self_match.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3aeec3a7794ec56d7535a98ee45c8129532c3a04
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/hook/host_guard/self_match.rs
+@@ -0,0 +1,356 @@
++//! host-guard の 7 つ目の種類 self-match（判断の記録 ADR-44 の決定 (3)・束 B05・rules 行 host_guard.self_match・SRS FR1056）。
++//!
++//! `pgrep -f` と `pkill -f` は型を process の command 行の全体に当てる。撃った shell の command 行も型の字を持つので、型が
++//! その字に当たる形では待ちが終わらず、`pkill` は撃った shell を止める。呼びの読み（[`calls`]）は command 行を段に分け
++//! （[`levels`]・単引用符の外の置換と subshell の本文を別の段へ）、段ごとに起票の門の分割（[`segments`]）で切った segment の
++//! 頭（制御の語と `NAME=value` を読み飛ばし、launcher を剥いだ動詞・[`verb_of`]）が pgrep か pkill の呼びを getopt の形で読む。
++//! 型の判じ（[`verdict`]）は字だけで決まる形だけを断る: 変数や置換で字の決まらない型と、型の字が command 行に字のまま在り
++//! `|` で割ったどれかの枝が字と `.` と `.*` と `.+` だけの型（自分の字に当たる）。角括弧などを持つ型は決めずに通す。子 process
++//! を撃たず、fs も読まない。
++
++use super::{verb_of, Kind, Refusal, Subject, SELF_MATCH_ROW};
++use crate::hook::ledger_guard::{is_assignment, segments};
++use crate::rules::manifest::Manifest;
++use crate::rules::RuleValue;
++
++/// 呼びの動詞（launcher を剥いだ頭の語の basename）。
++const VERBS: [&str; 2] = ["pgrep", "pkill"];
++/// segment の頭で読み飛ばす制御の語（後ろの語が command の頭）。
++const KEYWORDS: [&str; 10] = ["while", "until", "if", "elif", "then", "do", "else", "!", "time", "{"];
++/// full の長い flag。
++const FULL: &str = "--full";
++/// full の短い字。
++const FULL_SHORT: char = 'f';
++/// 値を取る短い flag の字（束の残りか、束の末なら次の語が値・大文字の F は pidfile）。
++const SHORT_VALUED: [char; 12] = ['d', 'g', 'G', 'O', 'P', 'q', 's', 't', 'u', 'U', 'F', 'r'];
++/// 値を取る長い flag（`=` が無ければ次の語が値）。
++const LONG_VALUED: [&str; 16] = [
++    "--delimiter", "--pgroup", "--group", "--older", "--parent", "--session", "--signal", "--terminal", "--euid", "--uid",
++    "--pidfile", "--runstates", "--cgroup", "--ns", "--nslist", "--queue",
++];
++/// flag の読みを終える語（後ろは全部が非 flag）。
++const END: &str = "--";
++/// 型の判じを決めない字（角括弧・丸括弧・波括弧・`^`・逆斜線・`$`〔名の前の `$` は先に解けない形へ〕）。
++const OPAQUE: [char; 9] = ['[', ']', '(', ')', '{', '}', '^', '\\', '$'];
++/// 自分の字に当たる繰り返しの字（`.` の直後だけ）。
++const REPEATS: [char; 2] = ['*', '+'];
++/// 型の枝の区切り。
++const BRANCH: char = '|';
++
++/// pgrep / pkill の呼び 1 つ。
++#[derive(Debug, Clone, PartialEq, Eq)]
++struct Call {
++    /// 動詞（[`VERBS`] の 1 つ）。
++    verb: &'static str,
++    /// `--full` か、値を取る字より前に `f` を持つ短い束を持つ。
++    full: bool,
++    /// 最初の非 flag の語（無ければ `None`）。
++    pattern: Option<String>,
++}
++
++/// 型の判じ（閉じた 3 値）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum Verdict {
++    /// 型が自分の command 行の字に当たる。
++    SelfMatch,
++    /// 変数か置換で型の字が決まらない。
++    Unresolved,
++    /// 当たらないか、字だけでは決めない。
++    Other,
++}
++
++/// 判定（宣言の末の種類）: Bash の command 行に full の呼びが無ければ行を読まずに通す（編集系の道具の周は command 行が空）。在れば行 [`SELF_MATCH_ROW`] を読み、無い・列でない
++/// 周は no-row で断り（FailClosed）、`enabled = false` の周は通す。行の語列を順に見て、頭の語と同じ動詞の full の呼びの型が
++/// 自分に当たる形か字の決まらない形なら、hit をその語列にして断る。
++pub(super) fn judge(kind: Kind, subject: &Subject, manifest: &Manifest) -> Option<Refusal> {
++    let found: Vec<Call> = calls(subject.command).into_iter().filter(|call| call.full).collect();
++    if found.is_empty() {
++        return None;
++    }
++    let Some(row) = manifest.get(SELF_MATCH_ROW) else {
++        return Some(Refusal::no_row(kind, SELF_MATCH_ROW));
++    };
++    if !row.enabled {
++        return None;
++    }
++    let RuleValue::List(ref sequences) = row.value else {
++        return Some(Refusal::no_row(kind, SELF_MATCH_ROW));
++    };
++    let refused = |call: &Call| call.pattern.as_deref().is_some_and(|pattern| verdict(pattern, subject.command) != Verdict::Other);
++    let hit = sequences.iter().find(|sequence| {
++        let verb = sequence.split_whitespace().next();
++        found.iter().any(|call| verb == Some(call.verb) && refused(call))
++    })?;
++    Some(Refusal { kind, hit: hit.clone(), row: SELF_MATCH_ROW, ruling: row.ruling.clone(), route: kind.route() })
++}
++
++/// command 行の pgrep と pkill の呼び（[`levels`] の段ごとに [`segments`] で切り、segment ごとに [`call_of`] で読む）。
++fn calls(command: &str) -> Vec<Call> {
++    levels(command).iter().flat_map(|level| segments(level)).filter_map(|words| call_of(&words)).collect()
++}
++
++/// segment 1 つの呼び: 頭の制御の語と `NAME=value` を読み飛ばし、launcher を剥いだ動詞が pgrep か pkill なら後ろの語を読む。
++fn call_of(words: &[String]) -> Option<Call> {
++    let at = words.iter().position(|word| !KEYWORDS.contains(&word.as_str()) && !is_assignment(word))?;
++    let (verb, rest) = verb_of(words.get(at..)?)?;
++    let verb = VERBS.into_iter().find(|found| *found == verb)?;
++    let (full, pattern) = read_args(rest);
++    Some(Call { verb, full, pattern })
++}
++
++/// 呼びの後ろの語を getopt の形で読む（flag の順は問わない・`--` の後ろは全部が非 flag）: `--full` か、値を取る字より前に
++/// `f` を持つ短い束を full と読み、値を取る flag の値（束の残りか次の語・長い名は `=` が無ければ次の語）を飛ばし、最初の
++/// 非 flag の語を型にする。
++fn read_args(rest: &[String]) -> (bool, Option<String>) {
++    let (mut full, mut pattern, mut ended) = (false, None::<String>, false);
++    let mut words = rest.iter();
++    while let Some(word) = words.next() {
++        let valued = if ended || word.len() < 2 || !word.starts_with('-') {
++            pattern.get_or_insert_with(|| word.clone());
++            false
++        } else if word == END {
++            ended = true;
++            false
++        } else if word.starts_with(END) {
++            full |= word == FULL;
++            LONG_VALUED.contains(&word.as_str())
++        } else {
++            let (bundled, takes_next) = bundle(word);
++            full |= bundled;
++            takes_next
++        };
++        if valued {
++            words.next();
++        }
++    }
++    (full, pattern)
++}
++
++/// 短い flag の束（頭の `-` の後ろの字）: 値を取る字より前に `f` を持つかと、値を取る字が束の末で次の語を値に取るか。
++fn bundle(word: &str) -> (bool, bool) {
++    let letters: Vec<char> = word.chars().skip(1).collect();
++    let valued = letters.iter().position(|letter| SHORT_VALUED.contains(letter));
++    let full = letters.iter().take(valued.unwrap_or(letters.len())).any(|letter| *letter == FULL_SHORT);
++    (full, valued.is_some_and(|at| at.saturating_add(1) == letters.len()))
++}
++
++/// command 行の段: 1 つ目は command 行で、単引用符の外の置換と subshell（`$(…)`・`` `…` ``・`(…)`）を中の無い対（`$()`・
++/// ``` `` ```・`()`）に替えた字（中の字を外の segment の語に混ぜない）、後ろは対の中の本文ごとの段（入れ子も同じ形・閉じない
++/// 本文は末まで）。
++fn levels(command: &str) -> Vec<String> {
++    let chars: Vec<char> = command.chars().collect();
++    let (mut flat, mut inner) = (String::new(), Vec::new());
++    let (mut at, mut single, mut double) = (0_usize, false, false);
++    while let Some(found) = chars.get(at) {
++        if let Some((open, close, empty)) = opening(&chars, at, single, double) {
++            let start = at.saturating_add(open);
++            let end = closing(&chars, start, close);
++            inner.extend(levels(&chars.get(start..end).unwrap_or_default().iter().collect::<String>()));
++            flat.push_str(empty);
++            at = end.saturating_add(1);
++            continue;
++        }
++        let step = match found {
++            '\'' if !double => {
++                single = !single;
++                1
++            }
++            '"' if !single => {
++                double = !double;
++                1
++            }
++            '\\' if !single => 2,
++            _ => 1,
++        };
++        let next = at.saturating_add(step).min(chars.len());
++        flat.extend(chars.get(at..next).unwrap_or_default());
++        at = next;
++    }
++    std::iter::once(flat).chain(inner).collect()
++}
++
++/// `at` の字が置換か subshell を開くなら（開きの字の数・閉じの字・外の段に残す対）。単引用符の中は開かず、二重引用符の中の
++/// `(` は字（subshell でない）。
++fn opening(chars: &[char], at: usize, single: bool, double: bool) -> Option<(usize, char, &'static str)> {
++    if single {
++        return None;
++    }
++    match (chars.get(at)?, chars.get(at.saturating_add(1))) {
++        ('`', _) => Some((1, '`', "``")),
++        ('$', Some('(')) => Some((2, ')', "$()")),
++        ('(', _) if !double => Some((1, ')', "()")),
++        _ => None,
++    }
++}
++
++/// 本文の始まり `start` から閉じの字の位置（閉じなければ末）。`)` は引用符の外の丸括弧の入れ子を数え、逆斜線の次の字は読まない。
++fn closing(chars: &[char], start: usize, close: char) -> usize {
++    let (mut at, mut depth, mut quote) = (start, 0_usize, None::<char>);
++    while let Some(found) = chars.get(at) {
++        match (quote, *found) {
++            (Some(open), now) if now == open => quote = None,
++            (Some('\''), _) => {}
++            (_, '\\') => at = at.saturating_add(1),
++            (Some(_), _) => {}
++            (None, now @ ('\'' | '"')) if close == ')' => quote = Some(now),
++            (None, '(') if close == ')' => depth = depth.saturating_add(1),
++            (None, now) if now == close && depth == 0 => return at,
++            (None, ')') => depth = depth.saturating_sub(1),
++            (None, _) => {}
++        }
++        at = at.saturating_add(1);
++    }
++    chars.len()
++}
++
++/// 型の判じ: 逆引用符か名の前の `$` を持てば解けない、[`OPAQUE`] の字を持つか型の字が command 行に字のまま無ければ決めない
++/// （通す）、`|` で割った枝のどれかが自分の字に当たる形（[`own`]）なら自分に当たる。
++fn verdict(pattern: &str, command: &str) -> Verdict {
++    if pattern.contains('`') || named(pattern) {
++        Verdict::Unresolved
++    } else if pattern.contains(OPAQUE) || !command.contains(pattern) || !pattern.split(BRANCH).any(own) {
++        Verdict::Other
++    } else {
++        Verdict::SelfMatch
++    }
++}
++
++/// `$` の後に英字か `_` か波括弧か丸括弧が続く字を持つか（変数と置換）。
++fn named(pattern: &str) -> bool {
++    pattern.split('$').skip(1).any(|rest| rest.starts_with(|next: char| next.is_ascii_alphabetic() || matches!(next, '_' | '{' | '(')))
++}
++
++/// 枝が自分の字に当たる形か: `?` を持たず、[`REPEATS`] の字が全部 `.` の直後（字と `.` と `.*` と `.+` だけ）。
++fn own(branch: &str) -> bool {
++    let chars: Vec<char> = branch.chars().collect();
++    let after_dot = |at: usize| at.checked_sub(1).and_then(|before| chars.get(before)) == Some(&'.');
++    !chars.contains(&'?') && chars.iter().enumerate().all(|(at, found)| !REPEATS.contains(found) || after_dot(at))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::super::{HostGuardDecision, Kind, Refusal, Scene, Subject, BASH};
++    use super::{calls, judge, verdict, Call, Verdict, KEYWORDS};
++    use crate::name::NAME;
++    use crate::rules::manifest::Manifest;
++    use std::path::Path;
++
++    /// 呼び 1 つ（型あり）。
++    fn call(verb: &'static str, full: bool, pattern: &str) -> Call {
++        Call { verb, full, pattern: Some(pattern.to_owned()) }
++    }
++
++    /// full の呼びを 1 つだけ読む見本（command・動詞・型）。
++    fn full_samples() -> Vec<(String, &'static str, &'static str)> {
++        let mut samples: Vec<(String, &str, &str)> = [
++            ("pgrep -f x", "pgrep", "x"),
++            ("pkill -f x", "pkill", "x"),
++            ("while pgrep -f 'x y'; do sleep 1; done", "pgrep", "x y"),
++            ("until pgrep --full x; do :; done", "pgrep", "x"),
++            ("X=1 pgrep -f x", "pgrep", "x"),
++            ("sudo pgrep -af x", "pgrep", "x"),
++            ("/usr/bin/pgrep -f x", "pgrep", "x"),
++            ("kill $(pgrep -f x)", "pgrep", "x"),
++            ("echo \"$(pgrep -f x)\"", "pgrep", "x"),
++            ("n=`pkill -fc x`", "pkill", "x"),
++            ("(sleep 1; pgrep -f x)", "pgrep", "x"),
++            ("(cd a; pgrep -f '[m]y')", "pgrep", "[m]y"),
++            ("pgrep -u root -f x", "pgrep", "x"),
++            ("pgrep -d , -f x", "pgrep", "x"),
++            ("pgrep --parent 1 -f x", "pgrep", "x"),
++            ("pkill --signal=KILL -f x", "pkill", "x"),
++            ("pgrep x -f", "pgrep", "x"),
++            ("pgrep -f -- -x", "pgrep", "-x"),
++            ("echo $( (cd a); pgrep -f x)", "pgrep", "x"),
++            ("kill $(pgrep -f 'a)b')", "pgrep", "a)b"),
++        ]
++        .iter()
++        .map(|(command, verb, pattern)| ((*command).to_owned(), *verb, *pattern))
++        .collect();
++        samples.extend(KEYWORDS.iter().map(|word| (format!("{word} pgrep -f x"), "pgrep", "x")));
++        samples
++    }
++
++    /// (1) 呼びの読み: segment の頭・制御の語の後・置換と subshell の段の中の pgrep と pkill を、getopt の形で full と型に読む。
++    /// full でない見本は full の見本 `pgrep -f x` から 1 句だけ外し（flag 無し・大文字の F・-u の値の f・-- の後の -f）、
++    /// 呼びでない見本は動詞が頭に無いか単引用符の中か名が違う。
++    #[test]
++    fn vselfm_finds_pgrep_and_pkill_with_the_full_flag() {
++        for (command, verb, pattern) in full_samples() {
++            assert_eq!(calls(&command), vec![call(verb, true, pattern)], "{command}");
++        }
++        for (command, pattern) in [("pgrep x", "x"), ("pgrep -F f x", "x"), ("pgrep -uf x", "x"), ("pgrep -u f x", "x"), ("pgrep -- -f x", "-f")] {
++            assert_eq!(calls(command), vec![call("pgrep", false, pattern)], "{command}");
++        }
++        for command in ["echo pgrep -f x", "grep -f x pgrep", "echo '$(pgrep -f x)'", "pgrepx -f x", "echo '(pkill -f x)'", "echo \"(pkill -f x)\""] {
++            assert_eq!(calls(command), Vec::new(), "{command}");
++        }
++    }
++
++    /// (2) 型の判じ: 型の字が command 行に字のまま在り、どれかの枝が字と `.` と `.*` と `.+` だけなら自分に当たり、自分に当たる
++    /// 見本 `merge.sh` に字を 1 つ足した型（判じを決めない字・`.` でない字の後の繰り返し・`?`）と、字のまま無い command は通す。
++    #[test]
++    fn vselfm_bracket_or_caret_patterns_pass() {
++        let quoted = |pattern: &str| format!("pgrep -f '{pattern}'");
++        for pattern in ["merge.sh", "merge-scribe2.sh 5eaf4426", "a.*b", "x.+y", "cargo|rustc", "ab*c|merge.sh"] {
++            assert_eq!(verdict(pattern, &quoted(pattern)), Verdict::SelfMatch, "{pattern}");
++        }
++        let opaque = ["merge[.sh", "merge.sh]", "merge(.sh", "merge.sh)", "merge{.sh", "merge.sh}", "^merge.sh", "merge\\.sh", "merge.sh$"];
++        for pattern in opaque.into_iter().chain(["mer*ge.sh", "merg+e.sh", "merge.s?h", "ab*c|x?y", "[m]erge.sh"]) {
++            assert_eq!(verdict(pattern, &quoted(pattern)), Verdict::Other, "{pattern}");
++        }
++        assert_eq!(verdict("merge.sh", "pgrep -f merge\\.sh"), Verdict::Other, "command 行に字のまま無い");
++    }
++
++    /// 行 host_guard.self_match（値は語列の列・`enabled` は引数）の本文。
++    fn self_row(value: &str, enabled: bool) -> String {
++        format!("\n[[rule]]\nid = \"host_guard.self_match\"\nkind = \"HostGuardDeniedCommands\"\nvalue = {value}\nenabled = {enabled}\nruling = \"r\"\nruled_at = \"d\"\n")
++    }
++
++    /// `rules`（行の本文）の manifest で Bash の command を判じた断りの 1 行（通せば `None`）。
++    fn judged(command: &str, rules: &str) -> Option<String> {
++        let manifest = Manifest::parse(&format!("schema = 1\n{rules}")).unwrap_or_else(|errors| panic!("fixture を読める: {errors:?}"));
++        let host = Manifest::default();
++        let scene = Scene { cwd: Path::new("/nonexistent"), state_dir: Path::new("/nonexistent/state"), git: Path::new("git"), gh: Path::new("gh"), host: &host };
++        let subject = Subject { tool: BASH, segments: Vec::new(), command, edited: None, scene: &scene };
++        judge(Kind::SelfMatch, &subject, &manifest).map(Refusal::decision).map(|decision| match decision {
++            HostGuardDecision::Deny { what, line } => format!("{what} | {line}"),
++            HostGuardDecision::Allow => panic!("断りは Deny に写る"),
++        })
++    }
++
++    /// 変数と置換の型は解けない（`$` の後が数字か無い型は決めない）。
++    fn unresolved_verdicts() {
++        for pattern in ["$P", "${P}", "$(cat f)", "`cat f`", "x$_y"] {
++            assert_eq!(verdict(pattern, &format!("pgrep -f \"{pattern}\"")), Verdict::Unresolved, "{pattern}");
++        }
++        for pattern in ["x$1", "x$"] {
++            assert_eq!(verdict(pattern, &format!("pgrep -f '{pattern}'")), Verdict::Other, "{pattern}");
++        }
++    }
++
++    /// (3) 変数と置換の型は解けずに断り（`$` の後が数字か無い型は決めない）、断りの hit は当たった動詞の行の語列で、行に無い
++    /// 動詞の呼びと full でない呼びと自分に当たらない型は通し、行が無い・列でない周は no-row で断り、`enabled = false` の周と
++    /// full の呼びが無い周（行が無くても）は通す。
++    #[test]
++    fn vselfm_unresolved_patterns_are_refused() {
++        unresolved_verdicts();
++        let both = self_row("[\"pgrep -f\", \"pkill -f\"]", true);
++        let refusal = |hit: &str, ruling: &str| {
++            format!("host-guard-deny self-match | {NAME}: host-guard deny kind=self-match hit={hit} row=host_guard.self_match ruling={ruling} — {}", Kind::SelfMatch.route())
++        };
++        assert_eq!(judged("while pgrep -f 'merge.sh 5'; do sleep 15; done", &both), Some(refusal("pgrep -f", "r")), "待ち");
++        assert_eq!(judged("pkill -f merge.sh", &both), Some(refusal("pkill -f", "r")), "止め");
++        assert_eq!(judged("pgrep -f \"$P\"", &both), Some(refusal("pgrep -f", "r")), "解けない型");
++        assert_eq!(judged("pgrep -f '[m]erge.sh'", &both), None, "自分に当たらない型");
++        assert_eq!(judged("pgrep merge.sh", &both), None, "full でない呼び");
++        let pkill_only = self_row("[\"pkill -f\"]", true);
++        assert_eq!(judged("pgrep -f merge.sh", &pkill_only), None, "行に無い動詞");
++        assert_eq!(judged("pgrep -f merge.sh; pkill -f merge.sh", &pkill_only), Some(refusal("pkill -f", "r")), "行に在る動詞");
++        assert_eq!(judged("pgrep -f merge.sh", &self_row("[\"pgrep -f\"]", false)), None, "切った行");
++        assert_eq!(judged("pgrep -f merge.sh", ""), Some(refusal("no-row", "-")), "行が無い");
++        let not_list = "\n[[rule]]\nid = \"host_guard.self_match\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
++        assert_eq!(judged("pgrep -f merge.sh", not_list), Some(refusal("no-row", "-")), "列でない行");
++        assert_eq!(judged("pgrep merge.sh", ""), None, "full の呼びが無い周は行を読まない");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/hook/host_guard_tests.rs b/scribe2/crates/scribe2/src/hook/host_guard_tests.rs
+index fd8712a7535b69a4a90a775bc648e0f6a0633d3a..0b470ba0d6e1f28faf4bcc4fb7e256bf83c344e1 100644
+--- a/scribe2/crates/scribe2/src/hook/host_guard_tests.rs
++++ b/scribe2/crates/scribe2/src/hook/host_guard_tests.rs
+@@ -84,14 +84,14 @@ fn bash(command: &str) -> String {
+     format!("{{\"cwd\":\"/tmp\",\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":{}}}}}", crate::fleet::json_lite::quote(command))
+ }
+ 
+-/// 種類は閉じた 6 値で、const slice は宣言順に 6 本（git → rm → tmux → 台帳 → 自身の設定 → 公開）。行を持たないのは自身の設定だけ。
++/// 種類は閉じた 7 値で、const slice は宣言順に 7 本（git → rm → tmux → 台帳 → 自身の設定 → 公開 → 自分に当たる待ちと止め）。行を持たないのは自身の設定だけ。
+ #[test]
+-fn host_guard_kind_slice_is_the_six_kinds_in_declaration_order() {
++fn host_guard_kind_slice_is_the_closed_kinds_in_declaration_order() {
+     assert!(is_declaration_order(KINDS, |kind| kind as usize), "KINDS は宣言順: {KINDS:?}");
+     let words: Vec<&str> = KINDS.iter().map(|kind| kind.as_str()).collect();
+-    assert_eq!(words, ["git", "rm", "tmux", "ledger", "self", "publish"], "6 値の語");
++    assert_eq!(words, ["git", "rm", "tmux", "ledger", "self", "publish", "self-match"], "7 値の語");
+     let rows: Vec<Option<&str>> = KINDS.iter().map(|kind| kind.row()).collect();
+-    assert_eq!(rows, [Some(super::GIT_ROW), Some(RM_ROW), Some(TMUX_ROW), Some(LEDGER_ROW), None, Some(super::PUBLISH_ROW)], "行 id");
++    assert_eq!(rows, [Some(super::GIT_ROW), Some(RM_ROW), Some(TMUX_ROW), Some(LEDGER_ROW), None, Some(super::PUBLISH_ROW), Some(super::SELF_MATCH_ROW)], "行 id");
+     assert!(!is_declaration_order(&[Kind::Rm, Kind::Git], |kind| kind as usize), "述語は並べ替えを落とす");
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/rules/mod.rs b/scribe2/crates/scribe2/src/rules/mod.rs
+index cf1275c8eb80db090eb647bff7b605e00fdbafe5..ba10d22c8a26a3dd9ef2fa9b509cc837d6124e9d 100644
+--- a/scribe2/crates/scribe2/src/rules/mod.rs
++++ b/scribe2/crates/scribe2/src/rules/mod.rs
+@@ -360,7 +360,8 @@ pub enum RuleKind {
+     /// （[`crate::ledger::graph`]）が id で引いて整数だけを読み、越えた親を over に名指す。0 は over を数えない。
+     LedgerOpenChildrenMax,
+     /// host の破壊防止の見張りの語列（設計 vessel-hook.md §11 行 b・ADR-0056）。値は [`Self::RunnerDeniedCommands`] と
+-    /// 同じ形の語列の配列で、**1 kind で行が 3 つ**（id は [`crate::hook::host_guard::WORD_ROWS`]・種類ごとに 1 行）。
++    /// 同じ形の語列の配列で、**1 kind で行が 4 つ**（語列の 3 行は id が [`crate::hook::host_guard::WORD_ROWS`]・種類ごとに 1 行。
++    /// 4 つ目は自分に当たる待ちと止めの [`crate::hook::host_guard::SELF_MATCH_ROW`] で、command guard と intake は読まない）。
+     HostGuardDeniedCommands,
+     /// host の破壊防止の見張りの rm の守る集合（設計 vessel-hook.md §11 行 b / c）。値は守る集合の記号の列（各語を
+     /// [`crate::hook::host_guard::Protected`] で引く）。id は `host_guard.rm` の 1 行。
+diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
+index 75c32af78898238b1ab88392a6f9f6bf98465fbf..83835e5f98c1a39d1899dba3c8047d0bfe0f795a 100644
+--- a/scribe2/rules/manifest.toml
++++ b/scribe2/rules/manifest.toml
+@@ -776,6 +776,20 @@ enabled = true
+ ruling = "user 2026-09-29T04:37Z"
+ ruled_at = "2026-09-29"
+ 
++# host-guard の 7 つ目の種類 self-match（判断の記録 ADR-44 の決定 (3)・SRS FR1056）の行。値の語列の頭の語と同じ動詞（pgrep か
++# pkill）の full の呼び（--full か f を持つ短い束）のうち、型が撃った shell 自身の command 行にも当たると字だけで決まる形（型の字が
++# command 行に字のまま在り、| で割ったどれかの枝が字と . と .* と .+ だけ）と、変数や置換で型の字が決まらない形だけを断る
++# （角括弧・丸括弧・波括弧・^・逆斜線・名の前でない $ を持つ型は通す）。command guard と intake は語列の 3 行だけを読むので、
++# この行は runner の verify の照合に掛からない。行が無い・列でない周は full の呼びを持つ command だけを断る（fail-closed）。
++
++[[rule]]
++id = "host_guard.self_match"
++kind = "HostGuardDeniedCommands"
++value = ["pgrep -f", "pkill -f"]
++enabled = true
++ruling = "user 2026-10-04T20:37Z 問い t3-hub.80.6"
++ruled_at = "2026-10-04"
++
+ # 管理 tick（seat tick・設計 seat-heartbeat.md §2 形 5 / §10 形 5〜7・ADR-0058 §2・ADR-0068）の 3 行。tick_interval_s は
+ # timer の周期（秒・unit を書く口が読む）、tick_stale_s は黙りの閾値（settle の基準）・Busy の古さの 2 役（秒）、
+ # pointer_ladder_s は合図の梯子の列（秒の文字列・非空・狭義に昇順・段 n の待ちは列の n 番目・列を越えた段は送らない）。
