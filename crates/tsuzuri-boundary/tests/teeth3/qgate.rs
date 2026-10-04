@@ -192,7 +192,7 @@ fn payload(command: &str) -> String {
 /// 問いの起票の command（not-relevant の中身と digest）。
 fn question_command(not_relevant: &str, digest: &str) -> String {
     let meta = format!(
-        r#"{{"touches":["FR4"],"not-relevant":{{{not_relevant}}},"digest":"{digest}"}}"#
+        r#"{{"short":"門の歯","touches":["FR4"],"not-relevant":{{{not_relevant}}},"digest":"{digest}"}}"#
     );
     format!("bdw create --parent=fx-q --labels=intake:question --metadata='{meta}' 門の歯の問い")
 }
@@ -234,7 +234,7 @@ fn others() -> Vec<String> {
         format!(r#"{{"tool_name":"Edit","tool_input":{{"command":"{command}"}}}}"#),
         "not json".to_string(),
         payload("ls -la"),
-        payload("bdw create --parent=fx-q --labels=intake:memo --metadata='{}' 門の歯の問い"),
+        payload(r#"bdw create --parent=fx-q --labels=intake:memo --metadata='{"short":"門の歯"}' 門の歯の問い"#),
         payload("bdw update fx-q.1 --add-label=intake:question"),
         payload("echo bdw create --labels=intake:question"),
     ]

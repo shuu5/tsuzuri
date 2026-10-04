@@ -279,7 +279,7 @@ fn meta_m(graph: &Graph, premises: Option<&str>) -> String {
     let premises = premises
         .map(|p| format!(r#","premises":{p}"#))
         .unwrap_or_default();
-    format!(r#"{{"touches":["FR4"],"not-relevant":{{{NR_FOUR}}},"digest":"{digest}"{premises}}}"#)
+    format!(r#"{{"short":"方針の歯","touches":["FR4"],"not-relevant":{{{NR_FOUR}}},"digest":"{digest}"{premises}}}"#)
 }
 
 /// 問いの起票の Bash の PreToolUse の hook の入力の字（metadata の字を一重引用符で囲む）。

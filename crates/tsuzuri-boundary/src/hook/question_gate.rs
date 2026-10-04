@@ -3,7 +3,8 @@
 //! 導出グラフで判じて、通さないときだけ deny の答えを標準出力に 1 行で書く（通すときは何も出さない）。順:
 //! 1. 標準入力を全部読む（読めなければ空の字）。
 //! 2. 使い方の誤りか repo が dir でなければ、下書きが無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
-//! 3. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
+//! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39・行 c-short-gate）。
+//! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
 //!
 //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
 
@@ -78,8 +79,11 @@ pub fn graph(args: &Args) -> Graph {
     })
 }
 
-/// 答えの字（下書きが無ければ子 process を撃たずに None・通すときも None）。
+/// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None）。
 pub fn answer(args: &Args, payload: &str) -> Option<String> {
+    if let Some(why) = gate::short_gate(payload) {
+        return Some(gate::short_output(why));
+    }
     let drafts = gate::drafts(payload);
     if drafts.is_empty() {
         return None;
