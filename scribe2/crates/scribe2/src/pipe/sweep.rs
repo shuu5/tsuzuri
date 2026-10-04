@@ -282,10 +282,13 @@ fn drafts_of(state_dir: &Path) -> Option<(Vec<(String, PathBuf)>, usize)> {
     any.then_some((trees, nogit))
 }
 
-/// 便の木（元の場所と退役先のうち在る方・repo を解けない便と木の無い便は `None`）。
+/// 便の木（元の場所と退役先のうち在る方・repo を解けない便と木の無い便は `None`）。便の path が並びの木を指す symlink の
+/// 便は `None`（並びの target は便の終わりで消さない・判断の記録 ADR-35）。
 fn tree_of(state_dir: &Path, id: &str) -> Option<PathBuf> {
     let repo = repo_of_run(state_dir, id)?;
-    [worktree_path(&repo, id), retired_path(&repo, id)].into_iter().find(|tree| tree.is_dir())
+    [worktree_path(&repo, id), retired_path(&repo, id)]
+        .into_iter()
+        .find(|tree| std::fs::symlink_metadata(tree).is_ok_and(|meta| meta.is_dir()))
 }
 
 /// 木を `.git` に降りずに歩き、名が列に在り追跡されている file を持たない dir を消す（[`Swept`]）。

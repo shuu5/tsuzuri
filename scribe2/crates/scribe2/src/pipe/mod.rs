@@ -43,6 +43,7 @@ mod regate;
 mod follow_step;
 mod retire;
 mod sweep;
+mod lane;
 mod train;
 
 use crate::polarity::{OnFailure, Polarity, Timing};

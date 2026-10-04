@@ -34,6 +34,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     ROW_REVIEW_KEY,
     CONTRACT_TABLES_KEY,
     CONSTITUTION_KEY,
+    BUILD_LANES_KEY,
 ];
 
 /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
@@ -56,6 +57,10 @@ const CONTRACT_TABLES_KEY: &str = "contract-tables";
 /// **憲法の file の列**の key（任意・設計 gate-cost.md §48・ADR-0110）。repo 相対の file の path の配列（書いた順）で、既定の
 /// [`DEFAULT_CONSTITUTION`] を**置き換える**（足さない）。
 const CONSTITUTION_KEY: &str = "constitution";
+
+/// **便の木を並びで使い回すか**の key（任意・判断の記録 ADR-35 の形 c・`pipe::lane`）。値は真偽だけ（書かない宣言は false と同じ＝
+/// 便ごとに木を切る今の形）。
+const BUILD_LANES_KEY: &str = "build-lanes";
 
 /// 憲法の file の既定 path（宣言 `constitution` が無い周・lens が測る 1 本）。
 pub const DEFAULT_CONSTITUTION: &str = "docs/constitution.md";
@@ -321,7 +326,13 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     ROW_REVIEW_KEY,
     CONTRACT_TABLES_KEY,
     CONSTITUTION_KEY,
+    BUILD_LANES_KEY,
 ];
+
+/// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
+pub(super) fn build_lanes_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, BUILD_LANES_KEY, errors)
+}
 
 /// 床の検査の 1 行（任意）。前後の空白を除いて空でない文字列だけを受ける（列・整数・真偽・空・空白だけは key と行番号を名指す不備）。
 pub(super) fn floor_check_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
@@ -343,6 +354,13 @@ pub fn floor_check_at(repo: &Path, sha: &str) -> Result<Option<String>, Vec<Decl
         None => Ok(None),
         Some(bytes) => Declared::parse(&String::from_utf8_lossy(&bytes)).map(|declared| declared.floor_check),
     }
+}
+
+/// 名指した sha の tree の宣言が便の木を並びで使い回すか（`true` を書いた周だけ真・宣言が無い・読めない・不備の周は偽＝今の形）。
+pub fn build_lanes_at(repo: &Path, sha: &str) -> bool {
+    let spec = format!("{sha}:{}", super::DECL_FILE);
+    super::super::git_bytes(repo, &["show", &spec])
+        .is_some_and(|bytes| Declared::parse(&String::from_utf8_lossy(&bytes)).is_ok_and(|declared| declared.build_lanes == Some(true)))
 }
 
 /// close の理由の門に加わるか（任意）。真偽だけを受ける（文字列・整数・列は key と行番号を名指す不備）。

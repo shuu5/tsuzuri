@@ -1258,6 +1258,10 @@ fn prepare_worktree(launch: &Launch<'_>) -> Result<(PathBuf, String), String> {
     if launch.answered.is_none() && launch.follow.is_none() && launch.resumed.is_none() && launch.red.is_none() {
         let base = super::head_of(launch.repo)
             .ok_or_else(|| format!("{} の HEAD を読めない", launch.repo.display()))?;
+        // 宣言 `build-lanes = true` の repo は並びの木を使い回す（判断の記録 ADR-35・便の path は並びを指す symlink）。
+        if super::declaration::build_lanes_at(launch.repo, &base) {
+            return super::lane::take(launch.repo, launch.run, &base, launch.policy).map(|tree| (tree, base));
+        }
         add_worktree(launch.repo, &worktree, launch.run, &base)?;
         return Ok((worktree, base));
     }

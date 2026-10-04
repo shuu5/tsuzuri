@@ -1058,7 +1058,15 @@ impl Terminal {
 /// ——2 実装に割ると、一方だけが削除へ寄る余地が生まれる。失敗は stderr 行の列で返し、
 /// rc は呼び手が決める（land では 0 のまま・retire では 2）。
 pub(crate) fn retire_worktree(repo: &Path, run: &str, worktree: &Path) -> Vec<String> {
-    let dest = retired_path(repo, run);
+    // 並びの木を持つ便は move せずに並びへ返す（clean でない木だけ今の形で退役へ・判断の記録 ADR-35）。
+    if let Some(failures) = super::lane::give_back(repo, run) {
+        return failures;
+    }
+    move_tree(repo, worktree, &retired_path(repo, run))
+}
+
+/// 木を `dest` へ move する（親 dir を作る・**move の中身はこの 1 本**で、並びの木の退役も撃つ・判断の記録 ADR-35）。
+pub(crate) fn move_tree(repo: &Path, worktree: &Path, dest: &Path) -> Vec<String> {
     let Some(parent) = dest.parent() else {
         return vec!["pipe: retired の親 dir を解けない".to_owned()];
     };
