@@ -1,0 +1,313 @@
+diff --git a/crates/tsuzuri-boundary/tests/rowbasis.rs b/crates/tsuzuri-boundary/tests/rowbasis.rs
+new file mode 100644
+index 00000000..481767fd
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/rowbasis.rs
+@@ -0,0 +1,186 @@
++//! 契約表の行の欄 basis の歯（設計の道具・接頭辞 rowbasis_・設計ノート surface-wave29a 行 f-row-basis・判断の記録 ADR-44 段 2・
++//! ADR-47）。行の欄 basis（行の根拠の条・規範文・規則行・判断の記録の id の列）を、設計の索引が型 basis の辺（行 → id）にし、
++//! 床が参照 id の母集団で解き、導出が契約表の写しに運ぶ。欄 basis は辺の欄なので行の要約値を替えない。
++//! 土台は folio2 の凍結の土台 floor_base の design-intent の写し（git の 1 commit）と、器の欄の写しに basis を足した file。
++//! 否定の見本は正しい見本から 1 句だけ替える。
++#![cfg(test)]
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++/// 行 a の流れの形の末尾（正しい見本はこの後ろに欄 basis を足す）。
++const ROW_END: &str = ", depends: []}";
++
++/// 器の欄の写しに足す欄 basis の塊。
++const BASIS_FIELD: &str = "\n[[field]]\nname = \"basis\"\nneed = \"optional\"\nshape = \"list\"\n";
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn copy_tree(src: &Path, dst: &Path) {
++    fs::create_dir_all(dst).expect("写しの dir");
++    for entry in fs::read_dir(src).expect("土台を読む") {
++        let entry = entry.expect("土台の項");
++        let to = dst.join(entry.file_name());
++        if entry.file_type().expect("項の種類").is_dir() {
++            copy_tree(&entry.path(), &to);
++        } else {
++            fs::copy(entry.path(), &to).expect("写す");
++        }
++    }
++}
++
++/// git を呼ぶ（環境変数 GIT_* は継承しない）。
++fn git(cwd: &Path, args: &[&str]) {
++    let mut cmd = Command::new("git");
++    for (key, _) in std::env::vars_os() {
++        if key.to_string_lossy().starts_with("GIT_") {
++            cmd.env_remove(key);
++        }
++    }
++    let out = cmd
++        .current_dir(cwd)
++        .args(["-c", "user.email=fx@example", "-c", "user.name=fx"])
++        .args(["-c", "commit.gpgsign=false"])
++        .args(args)
++        .output()
++        .expect("git を起動する");
++    assert!(out.status.success(), "git {args:?}: {out:?}");
++}
++
++/// 土台の写し（`basis` は行 a の欄 basis の流れの形の値・None なら欄を足さない・`field` が偽なら欄の写しに basis を置かない・
++/// 根の欄の写しが既に basis を持っていても 1 度外してから足す）。
++struct Work {
++    dir: PathBuf,
++}
++
++impl Work {
++    fn new(name: &str, basis: Option<&str>, field: bool) -> Work {
++        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("rowbasis")
++            .join(name);
++        let _ = fs::remove_dir_all(&dir);
++        copy_tree(
++            &root().join("folio2/tests/fixtures/floor_base/design-intent"),
++            &dir.join("design-intent"),
++        );
++        let schema = fs::read_to_string(root().join("contracts/field-schema/schema.toml"))
++            .expect("器の欄の写しを読む");
++        let schema = schema.replace(BASIS_FIELD, "");
++        let schema = if field {
++            format!("{schema}{BASIS_FIELD}")
++        } else {
++            schema
++        };
++        fs::create_dir_all(dir.join("contracts/field-schema")).expect("欄の写しの dir");
++        fs::write(dir.join("contracts/field-schema/schema.toml"), schema).expect("欄の写し");
++        let note = dir.join("design-intent/design-note/example.yaml");
++        let text = fs::read_to_string(&note).expect("見本のノート");
++        assert_eq!(text.matches(ROW_END).count(), 1, "行 a の末尾は 1 つ");
++        let tail = basis.map_or(ROW_END.to_string(), |b| {
++            format!(", depends: [], basis: {b}}}")
++        });
++        fs::write(&note, text.replace(ROW_END, &tail)).expect("見本のノートを書く");
++        git(&dir, &["init", "-q"]);
++        git(&dir, &["add", "-A"]);
++        git(&dir, &["commit", "-q", "-m", "fx"]);
++        Work { dir }
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        Command::new(env!("CARGO_BIN_EXE_tz"))
++            .current_dir(self.dir.join("design-intent"))
++            .args(args)
++            .output()
++            .expect("tz を撃つ")
++    }
++
++    /// 索引の行 a の節点の行と、行 a から出る辺の行。
++    fn index_of_a(&self) -> Vec<String> {
++        let out = self.tz(&["graph", "--print", "--dir", "."]);
++        assert_eq!(out.status.code(), Some(0), "{out:?}");
++        stdout(&out)
++            .lines()
++            .filter(|l| l.starts_with("example#a\t"))
++            .map(str::to_string)
++            .collect()
++    }
++
++    /// 床の違反の行（`[` で始まる標準出力の行）と終了 code。
++    fn check(&self) -> (Option<i32>, Vec<String>) {
++        let out = self.tz(&["check", "--dir", "."]);
++        let lines = stdout(&out)
++            .lines()
++            .filter(|l| l.starts_with('['))
++            .map(str::to_string)
++            .collect();
++        (out.status.code(), lines)
++    }
++}
++
++fn stdout(out: &Output) -> String {
++    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
++}
++
++#[test]
++fn rowbasis_index_makes_basis_edges_and_keeps_the_digest() {
++    let with = Work::new("index-with", Some("[ADR-4, P-10]"), true);
++    let got = with.index_of_a();
++    assert_eq!(got.len(), 4, "{got:?}");
++    assert!(got[0].starts_with("example#a\t設計ノートの行\tdesign-note/example.yaml\t"));
++    assert_eq!(
++        got[1..].to_vec(),
++        vec![
++            "example#a\tADR-4\tbasis",
++            "example#a\tFR15\treq",
++            "example#a\tP-10\tbasis"
++        ]
++    );
++    let without = Work::new("index-without", None, true);
++    let bare = without.index_of_a();
++    assert_eq!(bare[0], got[0], "欄 basis は行の要約値を替えない");
++    assert_eq!(bare[1..].to_vec(), vec!["example#a\tFR15\treq"]);
++}
++
++#[test]
++fn rowbasis_floor_resolves_basis_ids() {
++    let good = Work::new("floor-good", Some("[ADR-4, P-10]"), true);
++    assert_eq!(good.check(), (Some(0), Vec::new()));
++    let unknown = Work::new("floor-unknown", Some("[ADR-4, ADR-99]"), true);
++    assert_eq!(
++        unknown.check(),
++        (
++            Some(1),
++            vec![
++                "[note] design-note/example.yaml: §6 の行 a の basis[1]: id「ADR-99」が実在しない"
++                    .to_string()
++            ]
++        )
++    );
++}
++
++#[test]
++fn rowbasis_floor_needs_the_field_in_the_vessel_schema() {
++    let missing = Work::new("floor-no-field", Some("[ADR-4, P-10]"), false);
++    assert_eq!(
++        missing.check(),
++        (
++            Some(1),
++            vec!["[note] design-note/example.yaml: §6 の行 a: 契約表の欄「basis」が器の導出 file に無い".to_string()]
++        )
++    );
++}
++
++#[test]
++fn rowbasis_derive_carries_basis_to_the_table() {
++    let work = Work::new("derive", Some("[ADR-4, P-10]"), true);
++    let out = work.tz(&["derive", "--dir", ".", "--out", "../contracts", "--write"]);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    let table = fs::read_to_string(work.dir.join("contracts/example.toml")).expect("導出の写し");
++    let lines: Vec<&str> = table
++        .lines()
++        .filter(|l| l.starts_with("basis = "))
++        .collect();
++    assert_eq!(lines, vec!["basis = [\"ADR-4\", \"P-10\"]"]);
++}
+diff --git a/folio2/crates/folio/src/graph.rs b/folio2/crates/folio/src/graph.rs
+index 29bbafb9..9e8dcac2 100644
+--- a/folio2/crates/folio/src/graph.rs
++++ b/folio2/crates/folio/src/graph.rs
+@@ -5,7 +5,7 @@
+ //! 便 180（docs/design/delivery-180.md §1・要件 FR14 第 1.52 版）: `--print --summary` は表の代わりに、節点ごとに
+ //! 所属 file の中の id の行の番号・平易文の欄の字・技術の要約の字（受入基準は題の全文）を添えた 1 行の JSON（JSON Lines）を出す。
+ //! 便 185（docs/design/delivery-185.md §1・判断の記録 ADR-32・要件 FR14 第 1.54 版）: 設計ノートの契約表の節の行も節点にする
+-//! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends）。読み手は床と導出と同じ note.rs の load_notes。
++//! （種類 設計ノートの行・id は meta の id と行 id を「#」でつないだ字・辺は req と depends と basis〔basis は行 f-row-basis〕）。読み手は床と導出と同じ note.rs の load_notes。
+ //! 同じ id の節点を 2 度組んだ索引は、どの口（--print・--summary・--digest・folio hello）も まだ分からない にする（P-4.1）。
+ //! 便 208（docs/design/delivery-208.md §1・判断の記録 ADR-35 決定 (2)・要件 FR31）: `--summary` の 1 行の末尾に欄 status を置く。
+ //! 値は所属 file が 1 つの状態を持つ文書（判断の記録の status・設計ノートの meta.status）の字をそのまま、ほかは null。
+@@ -72,7 +72,7 @@ pub const EDGE_FIELDS: [(&str, &[&str]); 5] = [
+     ("rules.yaml", &["article", "refs"]),
+     ("srs.yaml", &["basis", "goals", "rules", "adrs", "verifies", "verify.ac"]),
+     ("adr", &["basis", "produced"]),
+-    ("design-note", &["req", "depends"]),
++    ("design-note", &["req", "depends", "basis"]),
+ ];
+ 
+ /// 索引の欄の決まりの正本 `graph.yaml` の最上位の節の閉じた一覧（便 95）。
+@@ -541,7 +541,7 @@ fn adr(index: &mut Index, dir: &Path) -> Result<(), String> {
+     Ok(())
+ }
+ 
+-/// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends。id は meta の id と行 id を「#」でつないだ字、
++/// 設計ノート（便 185・判断の記録 ADR-32）: 契約表の節の行・req・depends・basis（行の根拠の条・規則行・判断の記録・行 f-row-basis）。id は meta の id と行 id を「#」でつないだ字、
+ /// 題は行の section が指す節の題、技術の要約は行の題の全文、状態はノートの meta.status（便 208）。読み手は床と導出と同じ `note::load_notes`（置き場が無ければ
+ /// 0 本・dir でない・読めない file が在れば Err＝索引を組まない・P-4.1）。
+ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
+@@ -584,6 +584,7 @@ fn notes(index: &mut Index, dir: &Path) -> Result<(), String> {
+             for to in row.get("depends").map(ids).unwrap_or_default() {
+                 index.edge(&id, &format!("{meta}#{to}"), EDGE_TYPES[18]);
+             }
++            index.field(&id, row.get("basis"), EDGE_TYPES[8]);
+         }
+     }
+     Ok(())
+diff --git a/folio2/crates/folio/src/note.rs b/folio2/crates/folio/src/note.rs
+index 2a9ff3d0..32528799 100644
+--- a/folio2/crates/folio/src/note.rs
++++ b/folio2/crates/folio/src/note.rs
+@@ -931,7 +931,12 @@ fn check_contract_rows(
+     report: &mut Report,
+ ) {
+     let Place { file, at } = place;
+-    let Ctx { requirements, external, .. } = ctx;
++    let Ctx {
++        requirements,
++        external,
++        base,
++        ..
++    } = ctx;
+     let row_ids: HashSet<String> = rows
+         .iter()
+         .map(|row| row_id(row))
+@@ -959,6 +964,7 @@ fn check_contract_rows(
+         }
+         resolve_ids(Place { file, at: &rat }, row, "req", requirements, report);
+         resolve_ids(Place { file, at: &rat }, row, "depends", &row_ids, report);
++        resolve_ids(Place { file, at: &rat }, row, "basis", base, report);
+     }
+ }
+ 
+diff --git a/folio2/crates/folio/tests/tz4/schema_docs.rs b/folio2/crates/folio/tests/tz4/schema_docs.rs
+index c9a4fef6..22c5090d 100644
+--- a/folio2/crates/folio/tests/tz4/schema_docs.rs
++++ b/folio2/crates/folio/tests/tz4/schema_docs.rs
+@@ -1071,9 +1071,10 @@ const F95_GRAPH_ANCHOR: &str = "tests/fixtures/schema/graph-region.txt";
+ /// 便 99 で node の digest と edge_fields・edge_fields_note・digest_note を足した値（docs/design/delivery-99.md §1 (f)）。
+ /// 便 185 で node_note・node_kinds・edge_types・edge_fields・edge_fields_note・digest_note に設計ノートの行を足した値（anchor は字面の置き換えで作った）。
+ /// 便 195 で末尾に ids・mentions と 2 つの注の 62 行を足した値（anchor は導出を使わない独立の script が組み、wc と sha256sum で測った）。
++/// 行 f-row-basis で edge_fields の design-note に basis を足した値（anchor は字面の置き換えで作り、wc と sha256sum で測った）。
+ const F95_GRAPH_LINES: usize = 100;
+-const F95_GRAPH_BYTES: usize = 7372;
+-const F95_GRAPH_SHA256: &str = "459a0d588fcd1bba634dab87586014a2a66c31b52c9e3a50d70c1a68c09f0691";
++const F95_GRAPH_BYTES: usize = 7379;
++const F95_GRAPH_SHA256: &str = "c6a989a9e534bbc2861879fd6196ea036f626db269003102f5cdd6306c53b6f9";
+ 
+ /// 生成区間の変異（node_kinds の行の最後の種類の末尾の 1 字・便 185 で最後の種類が 設計ノートの行 に）。
+ const F95_DRIFT_FROM: &str = ", 設計ノートの行]\n";
+diff --git a/folio2/design-intent/graph.yaml b/folio2/design-intent/graph.yaml
+index 359b3f4c..9c666c59 100644
+--- a/folio2/design-intent/graph.yaml
++++ b/folio2/design-intent/graph.yaml
+@@ -47,7 +47,7 @@ schema:
+     rules.yaml: [article, refs]
+     srs.yaml: [basis, goals, rules, adrs, verifies, verify.ac]
+     adr: [basis, produced]
+-    design-note: [req, depends]
++    design-note: [req, depends, basis]
+   edge_fields_note: 辺の欄の閉じた一覧（正本の file ごと・欄の名・design-note は設計ノートの契約表の節の行の欄）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す
+   digest_note: 節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行・設計ノートの行は契約表の rows の中の字下げ 6 の「- 」の行から）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値
+   ids:
+diff --git a/folio2/tests/fixtures/schema/graph-region.txt b/folio2/tests/fixtures/schema/graph-region.txt
+index 5a958b89..a661bd19 100644
+--- a/folio2/tests/fixtures/schema/graph-region.txt
++++ b/folio2/tests/fixtures/schema/graph-region.txt
+@@ -33,7 +33,7 @@ schema:
+     rules.yaml: [article, refs]
+     srs.yaml: [basis, goals, rules, adrs, verifies, verify.ac]
+     adr: [basis, produced]
+-    design-note: [req, depends]
++    design-note: [req, depends, basis]
+   edge_fields_note: 辺の欄の閉じた一覧（正本の file ごと・欄の名・design-note は設計ノートの契約表の節の行の欄）。節点の要約値はこの欄を落とした本文だけを数えるので、この欄に id を足すだけの変更は節点の要約値を動かさない。正本は実装の型付きの定数 crates/folio/src/graph.rs の EDGE_FIELDS で、この節はその写しである（P-5.1・P-5.6）。verify.ac は要件の verify の中の対を指す。図の欄（figures）と改訂の来歴の欄（amended_by・amends）は散文を持つので本文の側に残す
+   digest_note: 節点の要約値の式（正本の読み口に依らず、行の逐語の byte で決まる）。① 節点の block は、その id を持つ行から、空行でなく字下げが頭の行以下である最初の行の直前まで（判断の記録は file の全行・設計ノートの行は契約表の rows の中の字下げ 6 の「- 」の行から）。② block から、入れ子の節点の block と 辺の欄の行（その行より深い続きの行も）を落とし、流れの形の行からは辺の欄の対を落とす。③ 末尾の空行を落とし、残った行を改行ごと連結した byte の sha256 の先頭 8 字が要約値
+   ids:
+diff --git a/folio2/tests/fixtures/schema/node-digest.py b/folio2/tests/fixtures/schema/node-digest.py
+index 8e9bb1f8..1cc9b222 100644
+--- a/folio2/tests/fixtures/schema/node-digest.py
++++ b/folio2/tests/fixtures/schema/node-digest.py
+@@ -34,7 +34,7 @@ EDGE_FIELDS = {
+     "rules.yaml": ["article", "refs"],
+     "srs.yaml": ["basis", "goals", "rules", "adrs", "verifies", "verify.ac"],
+     "adr": ["basis", "produced"],
+-    "design-note": ["req", "depends"],
++    "design-note": ["req", "depends", "basis"],
+ }
+ 
+ NOTE_DIR = "design-note"

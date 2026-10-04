@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29a
   title: 第 29 波 a — 目指す所の段 0〜2 の行（判断の記録 ADR-44・ADR-45・ADR-46）
-  version: v0.12
+  version: v0.13
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -11,7 +11,8 @@ meta:
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.1（裁定 id = t3-hub.80.1:20261004T1456Z-1・目指す所の目的は案 A）と t3-hub.80.5（裁定 id = t3-hub.80.5:20261004T1456Z-1・5 段の順は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-44 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.4（裁定 id = t3-hub.80.4:20261004T1456Z-1・案 A・束 batch:20261004T1456Z-1・裁定面・notes に逐語）〔判断の記録 ADR-45 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.3（裁定 id = t3-hub.80.3:20261004T1456Z-1・読み取りの置き場は案 A）と t3-hub.80.2（裁定 id = t3-hub.80.2:20261004T1456Z-1・今在る code の入れ方は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-46 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
-  note: ノート surface-wave27b（31 行の全部が着地・同じ commit で廃止）の後。承認は行の出所の判断の記録ごとの持ち主の裁定（承認の列・ADR-44・ADR-45・ADR-46・逐語はそれぞれの判断の記録の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、グラフの土台の 1 便目の 2 行（c-g3-bindline・c-commit-node）と行の節（3〜5 節）を足した（持ち主の答えを待たない行・試作と噛みは係 w146a・差の file の形・差を切った main は 0ee9c0da・名の形は判断の記録 ADR-47〔提案中〕に拠る）。 第 0.3 版（2026-10-05）は、行 t-teeth-col（契約表の欄の写しを器の今の版の 20 欄に揃え、設計ノートの行の欄 done-teeth と code-facts を tz が受けて契約表へ写す・判断の記録 ADR-45 の門 H1 の teeth-check の前の 1 歩・試作は係 w147a・差の file の形）を足した。 第 0.4 版（2026-10-05）は判断の記録 ADR-44 の段 0 の行 t-hook-drop・v-anchor-missing（tsuzuri の根の plugin の暫定の SessionStart を外す行と、器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す器の行・試作は係 w151a・差の file の形）を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-44 の決定 (3) の器の行 v-notes-head・v-accept-ptr・v-drafts-env（起票の門の notes の頭の時刻（束 B03）・preflight の bead の acceptance の pointer の照らし（束 B04）・席の起草の写しの門の組みの置き場と TMPDIR の行き先（束 B08）・起草は係 w148a・試作と噛みは係 w152a・差の file の形・器を書く便は同時に 1 本まで・depends の鎖）を足した。 第 0.6 版（2026-10-05）は、行 v-notes-head・v-accept-ptr・v-drafts-env の欄 done-teeth を外し、3 つの節の done と verify の対応の段の欄の字を替えた（verify の行の番号の形の宣言の歯と、done の項の字が名指す歯の名が食い違い、行 v-notes-head の便の契約の審査が対応の表の欠けで INCONCLUSIVE に倒れた・done と verify は替えない）。 第 0.7 版（2026-10-05）は、同じ 3 行の done から器の clippy の項と xtask の check の項を外して番号を詰め、3 つの節の done と verify の対応の段を合わせた（第 0.6 版の行 v-notes-head の便の契約の審査が、歯の名で測らない 2 項を歯の無い項に数えて FAIL〔vacuous-assert〕に倒した・verify と差の file は替えない）。 第 0.8 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 の器の行 v-closed-runs・v-red-close（閉じた bead の便の作業木の畳みと亡骸の名指し（器の memo t3-hub.74.47.3）・Landed の後の記帳の断りと main-red の squash の受け入れ（器の memo t3-hub.74.49.3 と t3-hub.74.50.10）・起草は係 w149a・試作と噛みは係 w153a・差の file の形・depends は write-set の交差だけ）を足した。 第 0.9 版（2026-10-05）は、判断の記録 ADR-44 の段 3 の前の器の行 v-review-dedup（契約の審査の材料で、設計の節の本文が契約の goal と同じ字の周に 2 度載せない・調べは係 w150a・試作と噛みは係 w155a・差の file の形・器を書く便は同時に 1 本まで）を足した。 第 0.10 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 の器の行 v-scope-empty（管理 tick の周が作り手の死んだ空の器の scope を止める・起草は係 w154a・試作と噛みは係 w156a・差の file の形・depends は無い〔write-set の交差が無い〕）を足した。 第 0.11 版（2026-10-05）は、判断の記録 ADR-44 の決定 (1) の G3 と ADR-45 の門 H1 の前の器の行 v-atk-names（契約の審査の対応の表で、欄 done-teeth の検証行の番号の歯 @k の項に審査役が書いた歯の名を、k 本目の検証行が選ぶ名なら宣言の歯の内に数える・行 v-notes-head の便の契約の審査の 1 度目の倒れの直し・比べと試作と噛みは係 w157a・差の file の形・器を書く便は同時に 1 本まで）を足した。 第 0.12 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 と H7 の器の行 v-ci-last（着地の終端が、CI の待ちが最後に読んだ答えで分けて読み直さず、push の後の remote の追跡の ref が着地の sha の子孫で着地の sha でない周はその commit の CI で照合する・器の memo t3-hub.74.49.6 の道 1 と道 2・列の 1 周が終端だけの撃ち直しを子で起こす形は要らないと決めて行にしない・起草と試作と噛みは係 w159a・差の file の形・depends は v-red-close・器を書く便は同時に 1 本まで）を足した。
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.10（裁定 id = t3-hub.80.10:20261004T2037Z-1・名前の形と名前空間は案 a）・t3-hub.80.11（裁定 id = t3-hub.80.11:20261004T2037Z-1・門 H4 の閉じた契約は着地で閉じた契約と読む案 A）・t3-hub.80.12（裁定 id = t3-hub.80.12:20261004T2037Z-1・memo と epic の touches はまず数える案 A）・t3-hub.80.13（裁定 id = t3-hub.80.13:20261004T2037Z-1・行の根拠は器の欄 basis の案 A）・束 batch:20261004T2037Z-1・裁定面・notes に逐語〔判断の記録 ADR-47 の承認・行 k-commit-count・c-memo-touch・v-row-basis・f-row-basis の承認〕, verbatim: すべて推奨で承認する, surface: R-8}
+  note: ノート surface-wave27b（31 行の全部が着地・同じ commit で廃止）の後。承認は行の出所の判断の記録ごとの持ち主の裁定（承認の列・ADR-44・ADR-45・ADR-46・逐語はそれぞれの判断の記録の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、グラフの土台の 1 便目の 2 行（c-g3-bindline・c-commit-node）と行の節（3〜5 節）を足した（持ち主の答えを待たない行・試作と噛みは係 w146a・差の file の形・差を切った main は 0ee9c0da・名の形は判断の記録 ADR-47〔提案中〕に拠る）。 第 0.3 版（2026-10-05）は、行 t-teeth-col（契約表の欄の写しを器の今の版の 20 欄に揃え、設計ノートの行の欄 done-teeth と code-facts を tz が受けて契約表へ写す・判断の記録 ADR-45 の門 H1 の teeth-check の前の 1 歩・試作は係 w147a・差の file の形）を足した。 第 0.4 版（2026-10-05）は判断の記録 ADR-44 の段 0 の行 t-hook-drop・v-anchor-missing（tsuzuri の根の plugin の暫定の SessionStart を外す行と、器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す器の行・試作は係 w151a・差の file の形）を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-44 の決定 (3) の器の行 v-notes-head・v-accept-ptr・v-drafts-env（起票の門の notes の頭の時刻（束 B03）・preflight の bead の acceptance の pointer の照らし（束 B04）・席の起草の写しの門の組みの置き場と TMPDIR の行き先（束 B08）・起草は係 w148a・試作と噛みは係 w152a・差の file の形・器を書く便は同時に 1 本まで・depends の鎖）を足した。 第 0.6 版（2026-10-05）は、行 v-notes-head・v-accept-ptr・v-drafts-env の欄 done-teeth を外し、3 つの節の done と verify の対応の段の欄の字を替えた（verify の行の番号の形の宣言の歯と、done の項の字が名指す歯の名が食い違い、行 v-notes-head の便の契約の審査が対応の表の欠けで INCONCLUSIVE に倒れた・done と verify は替えない）。 第 0.7 版（2026-10-05）は、同じ 3 行の done から器の clippy の項と xtask の check の項を外して番号を詰め、3 つの節の done と verify の対応の段を合わせた（第 0.6 版の行 v-notes-head の便の契約の審査が、歯の名で測らない 2 項を歯の無い項に数えて FAIL〔vacuous-assert〕に倒した・verify と差の file は替えない）。 第 0.8 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 の器の行 v-closed-runs・v-red-close（閉じた bead の便の作業木の畳みと亡骸の名指し（器の memo t3-hub.74.47.3）・Landed の後の記帳の断りと main-red の squash の受け入れ（器の memo t3-hub.74.49.3 と t3-hub.74.50.10）・起草は係 w149a・試作と噛みは係 w153a・差の file の形・depends は write-set の交差だけ）を足した。 第 0.9 版（2026-10-05）は、判断の記録 ADR-44 の段 3 の前の器の行 v-review-dedup（契約の審査の材料で、設計の節の本文が契約の goal と同じ字の周に 2 度載せない・調べは係 w150a・試作と噛みは係 w155a・差の file の形・器を書く便は同時に 1 本まで）を足した。 第 0.10 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 の器の行 v-scope-empty（管理 tick の周が作り手の死んだ空の器の scope を止める・起草は係 w154a・試作と噛みは係 w156a・差の file の形・depends は無い〔write-set の交差が無い〕）を足した。 第 0.11 版（2026-10-05）は、判断の記録 ADR-44 の決定 (1) の G3 と ADR-45 の門 H1 の前の器の行 v-atk-names（契約の審査の対応の表で、欄 done-teeth の検証行の番号の歯 @k の項に審査役が書いた歯の名を、k 本目の検証行が選ぶ名なら宣言の歯の内に数える・行 v-notes-head の便の契約の審査の 1 度目の倒れの直し・比べと試作と噛みは係 w157a・差の file の形・器を書く便は同時に 1 本まで）を足した。 第 0.12 版（2026-10-05）は、判断の記録 ADR-45 の門 H6 と H7 の器の行 v-ci-last（着地の終端が、CI の待ちが最後に読んだ答えで分けて読み直さず、push の後の remote の追跡の ref が着地の sha の子孫で着地の sha でない周はその commit の CI で照合する・器の memo t3-hub.74.49.6 の道 1 と道 2・列の 1 周が終端だけの撃ち直しを子で起こす形は要らないと決めて行にしない・起草と試作と噛みは係 w159a・差の file の形・depends は v-red-close・器を書く便は同時に 1 本まで）を足した。 第 0.13 版（2026-10-05）は、持ち主の裁定（問い t3-hub.80.10〜80.13・束 batch:20261004T2037Z-1）の後のグラフの土台の 2 便目の 4 行（k-commit-count・c-memo-touch・v-row-basis・f-row-basis）と行の節（18〜23 節）を足し、承認の列に 4 行目（ADR-47 の承認と 3 つの問いの裁定・逐語は台帳の問いの notes の字）を足し、3 節の ADR-47 の字を発効に合わせた（試作と噛みは係 w146a・差の file の形・差を切った main は dd950b03・欄 done-teeth は書かない）。
 
 sections:
   - n: 1
@@ -159,14 +160,52 @@ sections:
         growth: ["scribe2/crates/scribe2/src/fleet/wait.rs:67", "scribe2/crates/scribe2/src/pipe/land/finish.rs:14"]
         done: (1) git apply --reverse --check docs/design/patch/v-ci-last.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) CI の待ちの口 ci_wait は待ちと同じ 1 本の loop で待ち、満ちた周に読んだ答えを返して読み直さず、1 回目が走っている run・2 回目が success の CI には success を、1 回目が走っている run・2 回目が failure の CI には failure を返し、どちらも CI を撃つのは 2 回（3 回目に置いた rc 1 の答えを撃たない）（歯 vcil_wait_returns_the_read_that_met_without_rereading） (3) 上限まで満ちない待ちは最後の周に読んだ答えを返して pending と unmeasured を畳まず、1 回目が rc 1 で後は走り続ける CI には pending を、1 回目が走っていて後は rc 1 の CI には unmeasured を返す（歯 vcil_wait_keeps_the_last_read_at_the_limit） (4) 1 回目は success・2 回目から rc 1 を返す偽 CI の着地は rc 0 と字 terminal=closed を出し、終端の記帳は terminal:push:fake・terminal:ci:success・terminal:close:ok の 3 件、偽 CI の呼び出しは 1 回、台帳の close の理由は字 landed と着地の sha と字 ci=success の 3 語（器の e2e の歯 vcil_terminal_closes_on_the_read_the_wait_saw） (5) 終端の push の前に main を着地の sha の子の commit へ進める偽 git の下の着地は rc 0 と字 terminal=closed を出し、終端の記帳は同じ 3 件、偽 remote の main と偽 CI の argv はその commit で、close の理由は字 landed と着地の sha と字 ci=success と字 tip= に続くその commit の 4 語（器の e2e の歯 vcil_terminal_checks_the_commit_the_push_carried） (6) 終端の push の後に main を進める偽 git の下の着地は rc 0 で終端の記帳は同じ 3 件、偽 remote の main は着地の sha のまま、偽 CI の argv は着地の sha、close の理由は字 tip= を持たない 3 語（器の e2e の歯 vcil_terminal_ignores_a_main_moved_after_the_push） (7) 終端の push の前に main を着地の sha の兄弟の commit（着地の sha の親の上の commit）へ動かす偽 git の下の着地は rc 1 と字 terminal=ci:unmeasurable を出し、終端の記帳は terminal:push:fake と terminal:ci:unmeasurable の 2 件、偽 remote の main はその commit、偽 CI の argv は着地の sha だけで、台帳を撃たない（器の e2e の歯 vcil_terminal_keeps_its_own_sha_when_the_pushed_commit_is_not_a_descendant） (8) 着地済みの終端の歯が緑（器の e2e の歯 pipe_terminal_land_pushes_checks_ci_and_closes_the_bead・pipe_terminal_land_close_cwd_survives_a_vanished_driver_cwd・pipe_terminal_land_ci_failure_does_not_close_the_bead・pipe_terminal_land_generation_is_the_binary_build_commit_not_the_landed_sha・pipe_terminal_land_ci_failure_wins_over_a_still_running_workflow・pipe_terminal_land_ci_ignores_scheduled_runs・pipe_terminal_land_ci_only_scheduled_runs_is_unmeasurable） (9) 着地済みの CI の照合の間隔の歯が緑で、最初の評価の歯は偽 CI の呼び出しを 1 回と断言する（器の e2e の歯 pipe_terminal_ci_poll_interval_bounds_the_ci_calls・pipe_terminal_ci_poll_first_check_is_before_the_sleep・pipe_terminal_ci_poll_sleep_never_overruns_the_limit・pipe_terminal_ci_poll_missing_row_moves_nothing） (10) 着地済みの列の終端の歯が緑で、3 本の列の歯は偽 CI の呼び出しを 3 回と断言する（器の e2e の歯 pipe_train_terminal_every_run_checks_the_tip_ci_and_closes・pipe_train_tip_close_reason_names_the_tip_and_failure_closes_none） (11) 着地済みの終端だけの撃ち直しの歯が緑（器の e2e の歯 pipe_replay_tip_behind_checks_the_current_main_tip_and_closes・pipe_replay_tip_non_ancestor_stays_open_and_own_tip_closes_without_tip・pipe_replay_tip_unreadable_main_refuses_without_events・pipe_replay_relocate_finds_the_copy_by_run_line_and_checks_the_tip・pipe_replay_relocate_copy_at_the_tip_closes_without_tip）
         depends: ["v-red-close"]
+      - id: k-commit-count
+        title: tz graph --check が、着地した設計ノートの行の次に、着地の commit の無い着地した契約の数と id を 1 行で出し、読めない周は まだ分からない の行を標準エラーに出す（判断の記録 ADR-45 の門 H4 の測り・差の file）
+        req: ["FR3"]
+        section: "19"
+        write-set: ["crates/tsuzuri-boundary/src/cli/graph.rs", "crates/tsuzuri-boundary/src/server/board.rs", "+crates/tsuzuri-boundary/tests/cmtcnt.rs", "crates/tsuzuri-boundary/tests/teeth1/cnote.rs", "crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs", "crates/tsuzuri-boundary/tests/teeth2/kcli.rs", "crates/tsuzuri-boundary/tests/teeth2/kg9.rs", "crates/tsuzuri-boundary/tests/teeth2/ksum.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/k-commit-count.patch", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test cmtcnt --no-tests=fail cmtcnt_", "cargo nextest run -p tsuzuri-boundary --test teeth2 --no-tests=fail kcli_", "cargo nextest run -p tsuzuri-boundary --test teeth2 --no-tests=fail kg9_", "cargo nextest run -p tsuzuri-boundary --test teeth2 --no-tests=fail ksum_", "cargo nextest run -p tsuzuri-boundary --test teeth2 --no-tests=fail g3g7_", "cargo nextest run -p tsuzuri-boundary --test teeth1 --no-tests=fail cnote_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/k-commit-count.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 行の頭の定数は 19 節の字 UNLANDED_HEAD の値、読めない周の定数は 19 節の字 UNLANDED_UNKNOWN の値で、行を組む関数は id が 0 個なら頭と空白と 0、1 個以上なら頭と空白と数と全角の括弧の中に渡した順の id を中黒でつないだ字を返し、床の組み built_floors の欄 unlanded は中核の床の値 unlanded_contracts と同じ値で、着地で閉じた 2 本の契約（ほかに取り下げで閉じた 1 本）のうち 1 本だけが札を持つ見本で札の無い 1 本を名指し、両方が札を持つ見本で 0 個、event log の字が空の見本で まだ分からない（歯 cmtcnt_line_and_built_floors） (3) 偽の bd と偽の設計の道具で撃つ tz graph --check の標準出力は、末の 3 行が着地した設計ノートの行・この行・要約の行の順で、この行は 1 本だけを名指し、頭の字の行は標準出力にちょうど 1 行で標準エラーには無く、両方が札を持つ見本ではこの行が 0 個の字（歯 cmtcnt_check_names_after_landed_notes） (4) state dir が無い周と bd が無い周は rc 2 で、標準出力にこの行の頭の字が無く、標準エラーに 19 節の まだ分からない の行がちょうど 1 行在る（歯 cmtcnt_unread_goes_to_stderr） (5) tz graph --check の標準出力の末の行を字で比べる着地済みの歯は、着地した設計ノートの行の次にこの行の字を足した出力で通る（着地済みの歯 kcli_check_cut_line_names_k1・kcli_check_all_read_is_unknown・kg9_check_names_pairs・kg9_unread_goes_to_stderr・ksum_check_names_bare・ksum_unread_goes_to_stderr・g3g7_check_names_the_record・g3g7_failed_floor_is_unknown・g3g7_check_counts_outside_ids・cnote_check_names_notes）
+        depends: ["c-commit-node"]
+      - id: c-memo-touch
+        title: 導出グラフが touches の辺を問いに加えて memo と epic の bead の metadata の touches からも組み、契約の touches は辺にせず、premises は問いだけ・source は memo だけのままにする（判断の記録 ADR-44 の段 2・差の file）
+        req: ["FR2"]
+        section: "20"
+        write-set: ["crates/tsuzuri-contract/src/graph.rs", "crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/tests/memotch.rs", "=crates/tsuzuri-core/tests/teeth2/graph.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-memo-touch.patch", "cargo clippy -p tsuzuri-contract -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test memotch --no-tests=fail memotch_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail graph_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/c-memo-touch.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) touches を読む種類の定数 TOUCH_KINDS は Question・Memo・Epic の 3 つでこの順（歯 memotch_touch_kinds_are_question_memo_epic） (3) memo の配列の touches・epic の字 1 つの touches・問いの配列の touches・memo の JSON の字の metadata の touches から、台帳の順と touches の順のまま touches の辺を組み、読めない出所を立てない（歯 memotch_memo_and_epic_touches_make_edges） (4) label を外して種類が task になった bead の touches は bead の属性に残り辺にならない（歯 memotch_contract_touches_make_no_edge） (5) premises の辺は問いからだけ、source の辺は memo からだけ組み、memo と epic と問いが同じ premises と source を持つ見本で premises は問いの 1 本・source は memo の 1 本・touches は 0 本（歯 memotch_premises_stay_question_only_and_source_memo_only） (6) memo の touches の行き先が無い見本で不変条件の 1 番がその id を名指して違反になり、touches の無い memo と epic だけの見本で不変条件の 4 番は合格（歯 memotch_dangling_memo_touch_is_g1_and_g4_stays_question_only）
+        depends: ["c-commit-node"]
+      - id: v-row-basis
+        title: 器の契約表の行に任意の欄 basis（行の根拠の条・規範文・規則行・判断の記録の id の字の配列）を足し、器は読んで運ぶだけで照らさず生成する契約 file に写さず、欄の生成物 contracts/schema.toml と根の欄の写し contracts/field-schema/schema.toml にも同じ塊を足す（判断の記録 ADR-44 の段 2・差の file）
+        req: ["FR1047"]
+        section: "21"
+        write-set: ["contracts/field-schema/schema.toml", "=crates/tsuzuri-boundary/tests/dtcol.rs", "scribe2/contracts/schema.toml", "scribe2/crates/scribe2/src/pipe/contract.rs", "scribe2/crates/scribe2/src/pipe/table.rs", "scribe2/crates/scribe2/src/pipe/table/check.rs", "scribe2/crates/scribe2/src/pipe/table/parse.rs", "=scribe2/crates/scribe2-boundary/tests/e2e/pipe/contracts.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/v-row-basis.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vbasis_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail pipe::table::tests::", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail contract_schema_", "cargo nextest run -p tsuzuri-boundary --test dtcol --no-tests=fail dtcol_", "cargo run -q -p xtask -- check"]
+        size: M
+        growth: ["scribe2/crates/scribe2/src/pipe/table.rs:5", "scribe2/crates/scribe2/src/pipe/table/check.rs:1"]
+        done: (1) git apply --reverse --check docs/design/patch/v-row-basis.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の lib で、.toml の全文の行の字の配列の basis は宣言の順のまま行の欄 basis に入り、basis を省いた行は空、字 1 つの basis を書いた行は basis の行の行番号と理由の字 basis は文字列の配列でなければならない の断りで読めず、欄の列の末は basis（歯 vbasis_toml_row_reads_the_basis_list_and_refuses_a_string） (3) 器の lib の欄の列の着地済みの歯は、欄の宣言順の末が basis で、欄の数が 21（必須 5・条件付き 2・任意 14）で通る（着地済みの器の lib の歯 table_fields_pin_the_schema_columns_and_the_reader_enforces_their_shapes・contract_promise_need_conditional_is_two_fields_in_the_schema・contract_whole_goal_head_pins_the_folio2_schema_and_the_goal_stays_off_the_fields） (4) 器の binary の contracts schema の出力は tracked の contracts/schema.toml と byte で同じで、欄の名の列は器の欄の列と同じ順（着地済みの器の e2e の歯 contract_schema_matches_the_tracked_file_and_the_field_slice） (5) 根の欄の写し contracts/field-schema/schema.toml は、頭の 1 行の後ろが器の生成物 scribe2/contracts/schema.toml と byte で同じ（着地済みの歯 dtcol_copy_matches_the_vessel_schema）
+        depends: []
+      - id: f-row-basis
+        title: 設計の道具が、設計ノートの契約表の行の欄 basis を、行から根拠の id への型 basis の辺にし（行の要約値は替えない）、床が参照 id の母集団で解き、導出が契約表の写しに運ぶ（判断の記録 ADR-44 の段 2・差の file）
+        req: ["FR2"]
+        section: "22"
+        write-set: ["+crates/tsuzuri-boundary/tests/rowbasis.rs", "folio2/crates/folio/src/graph.rs", "folio2/crates/folio/src/note.rs", "folio2/crates/folio/tests/tz4/schema_docs.rs", "folio2/design-intent/graph.yaml", "folio2/tests/fixtures/schema/graph-region.txt", "folio2/tests/fixtures/schema/node-digest.py"]
+        verify: ["git apply --reverse --check docs/design/patch/f-row-basis.patch", "cargo clippy -p folio -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test rowbasis --no-tests=fail rowbasis_", "cargo nextest run -p tsuzuri-boundary --test tz4 --no-tests=fail f95_", "cargo run -q -p xtask -- check"]
+        size: M
+        growth: ["folio2/crates/folio/src/graph.rs:1"]
+        done: (1) git apply --reverse --check docs/design/patch/f-row-basis.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 行 a に basis の 2 つの id を書いた見本の索引は、行 a の節点の行と、行 a から 2 つの id への型 basis の辺と要件への型 req の辺を id の順に並べ、basis を書かない見本と節点の行が同じ（要約値が替わらない）で辺は req の 1 本だけ（歯 rowbasis_index_makes_basis_edges_and_keeps_the_digest） (3) basis の id が全部在る見本の床は rc 0 で違反 0、2 つ目の id が無い見本の床は rc 1 で、違反はその行の basis の 2 つ目の id が実在しないの 1 行だけ（歯 rowbasis_floor_resolves_basis_ids） (4) 器の欄の写しに basis が無い見本の床は rc 1 で、違反はその行の契約表の欄 basis が器の導出 file に無いの 1 行だけ（歯 rowbasis_floor_needs_the_field_in_the_vessel_schema） (5) 導出の契約表の写しの basis の行は、行 a の 2 つの id を宣言の順で並べた字の配列の 1 行（歯 rowbasis_derive_carries_basis_to_the_table） (6) 索引の欄の決まりの区間（folio2/design-intent/graph.yaml の生成区間）と凍結の anchor と要約値の写しは、設計ノートの辺の欄の列 req・depends・basis の字で揃う（着地済みの歯 f95_the_graph_schema_region_matches_the_anchor・f95_the_command_now_sees_nine_files・f95_a_drift_in_the_graph_region_fails）
+        depends: []
   - n: 3
     type: prose
     title: グラフの土台の行（c-g3-bindline と c-commit-node）の目的と順
     body: |
       判断の記録 ADR-44 の段 0 の 2 つ目（導出グラフの不変条件の 3 番の違反の原因）と、段 2 のうち着地の commit の節点を、導出グラフ（tsuzuri-core の graph）に足す。行 c-g3-bindline は ADR-45 の門 H3（グラフの正確さ）の 3 番の違反を消す行、行 c-commit-node は門 H4（グラフに着地の commit の節点が在り、閉じた契約の bead が着地の commit の節点に結ぶ）を測れる形にする最初の行である。
-      名前の形は ADR-47 の決定 (2)（commit の id は 40 字の小文字の 16 進・題は頭の 8 字・電文の名は commit と landed）に拠る（ADR-47 は提案中・c-commit-node の字は ADR-46 の決定 (2) の中に在る）。導出は git を読まず、器の event log の走行の終わり（RunDone）の札 sha: から組む。
+      名前の形は ADR-47 の決定 (2)（commit の id は 40 字の小文字の 16 進・題は頭の 8 字・電文の名は commit と landed）に拠る（ADR-47 は持ち主の裁定 t3-hub.80.10:20261004T2037Z-1 で発効・c-commit-node の字は ADR-46 の決定 (2) の中に在る）。導出は git を読まず、器の event log の走行の終わり（RunDone）の札 sha: から組む。
       行の順。c-g3-bindline → c-commit-node。c-commit-node は c-g3-bindline と同じ file（中核の build.rs）を書き、差はその上で切った。
-      グラフの土台の残りの 4 行（k-commit-count・c-memo-touch・v-row-basis・f-row-basis）は、持ち主への問い（席が起票した問い）の裁定の後に別の適用で足す。
+      グラフの土台の残りの 4 行（k-commit-count・c-memo-touch・v-row-basis・f-row-basis）は、持ち主の裁定（問い t3-hub.80.10〜80.13）の後に 18〜23 節で足した。
   - n: 4
     type: prose
     title: 行 c-g3-bindline — 器の結びの口の裁定の行を読む
@@ -583,3 +622,122 @@ sections:
       範囲の外。B（終端だけの撃ち直しを列の 1 周が子で起こす形・回数の上限の rules 行）。rules 行 pipe.ci_wait_s と pipe.ci_poll_s の値。着地の番を終端の push の後まで持つ形（47.6 の候補 2・列の待ちが push と CI の待ちの分だけ延びる）。remote を URL で宣言した repo の追跡の ref の代わりの読み（ls-remote・今の終端のまま）。終端だけの撃ち直しの側の選び（step.rs・今のまま）。既に席が手で閉じた 23 本の bead。器の設計文書 contract-source.md の書き換え。
 
       ほかの project で。宣言の remote と ci-cmd と git の追跡の ref だけを読み、tsuzuri の字を持たない。remote を名で宣言した repo（git の既定の fetch の refspec）で道 2 が閉じ、URL で宣言した repo は今の終端のまま（道 1 はどの repo でも閉じる）。
+  - n: 18
+    type: prose
+    title: グラフの土台の残りの 4 行（k-commit-count・c-memo-touch・v-row-basis・f-row-basis）の目的と順
+    body: |
+      判断の記録 ADR-44 の段 2 のうち、着地の commit の床の値と、memo と epic から設計への辺と、契約の行から条と判断の記録への辺を、導出グラフと設計の道具（folio）と器（scribe2）の契約表に足す。行 k-commit-count は ADR-45 の門 H4 を tz graph --check の床の値で見えるようにする。持ち主の裁定（問い t3-hub.80.10〜80.13・束 batch:20261004T2037Z-1・4 問とも推奨の案・23 節）を受けて置いた。
+      行の順。4 行は互いに file が重ならず、どれも main dd950b03 の上に単独で当たる（差は 4 本を k-commit-count・c-memo-touch・v-row-basis・f-row-basis の順に当てた積み〔写し drafts/w146a の branch rows4b〕で切った）。k-commit-count と c-memo-touch は着地済みの行 c-commit-node の字（中核の床の値 unlanded_contracts と build.rs の add_meta_edges）の上に書く。器の下を書く v-row-basis は器を書く便の同時に 1 本の枠（ADR-33 の決定 (12)）に入る。
+      done と欄の形（このノートの第 0.6 版と第 0.7 版の決め）。4 行とも欄 done-teeth を書かない（v-row-basis は入れ子の器の行で、器は宣言の歯を verify の行から選べない）。done の項は、差の当たりの 1 番目の項と、歯の名で測る項だけにし、項の末に括弧で歯の名を書く。clippy と xtask の check は verify の行にだけ置く（gate は verify の全部の行を撃つので、測る物は減らない）。
+      欄 basis を設計ノートの行に書くのは、v-row-basis と f-row-basis の着地と器の binary と tz の pin の入れ替えの後の席の手（23 節）。
+  - n: 19
+    type: prose
+    title: 行 k-commit-count — tz graph --check の着地の commit の無い着地した契約の行
+    body: |
+      在りか。差の file docs/design/patch/k-commit-count.patch は、main dd950b03 と、その上に試作を載せた木 b019e43f（写し drafts/w146a の branch rows4b）との差（8 file・+286 −13・21,531 byte）。試作は行 c-commit-node の試作の木 905d1179 の上で起こし、着地の後の main の上で切り直した（差の足す行と消す行の字は同じ）。
+
+      なぜ。判断の記録 ADR-45 の門 H4 を床の値で見えるようにする。中核の床の値 unlanded_contracts（行 c-commit-node・着地済み）を、tz graph --check の床の行の並び（要約の欠け・欄に無い名指し・着地した設計ノート）の次に出す。数えるのは閉じた理由の頭が landed か着地の契約（着地で閉じた契約）で、取り下げで閉じた契約を数えない（問い t3-hub.80.11 の裁定・ADR-45 の本文は替えず、測りの口の notes に読みを記帳する）。
+
+      形。
+      - 境界の床の組み（crates/tsuzuri-boundary の src/server/board.rs）。床の値の束 Floors に欄 unlanded を足し、built_floors が中核の unlanded_contracts をグラフと台帳の字で呼ぶ。
+      - 出力（src/cli/graph.rs）。定数 UNLANDED_HEAD の値は字 着地の commit の無い着地した契約、定数 UNLANDED_UNKNOWN の値は字 着地の commit の無い着地した契約（台帳か走行の記録が読めない）。関数 unlanded_line は、id が 0 個なら頭と空白と 0、1 個以上なら頭と空白と数と全角の括弧の中に id を中黒でつないだ字を返す。読めた周は標準出力に着地した設計ノートの行の次の 1 行で出し、読めない周は標準エラーに字 # と空白と まだ分からない と半角のコロンと空白と UNLANDED_UNKNOWN の値の 1 行を出す。設計の索引が読めない周（design_doc）の床の束でも unlanded は まだ分からない。
+      - 字。歯 cmtcnt_check_names_after_landed_notes が比べる末の 3 行は、字 全部の行が着地した設計ノート 0 と、字 着地の commit の無い着地した契約 1（x.2）と、頭が字 tz graph --check と半角のコロンと空白の要約の行。両方が札を持つ見本の 2 行目は字 着地の commit の無い着地した契約 0。
+      - 着地済みの歯の書き換え。tz graph --check の標準出力の字を比べる歯（teeth2 の kcli.rs の 2 か所・kg9.rs の定数 LANDED・ksum.rs の 3 か所・g3g7w.rs の助けの関数 summary・teeth1 の cnote.rs の末の 3 行）に、この行の字を足した。字が替わる着地済みの歯は 10 本（kcli_check_cut_line_names_k1・kcli_check_all_read_is_unknown・kg9_check_names_pairs・kg9_unread_goes_to_stderr・ksum_check_names_bare・ksum_unread_goes_to_stderr・g3g7_check_names_the_record・g3g7_failed_floor_is_unknown・g3g7_check_counts_outside_ids・cnote_check_names_notes）。cnote.rs の見本では 8 本（x.1・x.10・x.11・x.12・x.2・x.4・x.5・x.7）を名指す。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。1 番目の項は verify の 1 行目。2〜4 番目の項は 3 行目（新しい歯の file crates/tsuzuri-boundary/tests/cmtcnt.rs の 3 本・項の順と歯の順は同じ）。最後の 5 番目の項は 4〜8 行目（字が替わる着地済みの歯 10 本）。2 行目の clippy と最後の 9 行目の xtask の check は命令の rc で測る守りで、done に載せない。
+
+      構造の連鎖（木 b019e43f で grep）。Floors の構築は built_floors と design_doc の 2 か所で、どちらにも欄を足した。tz graph --check の標準出力の末の行を字で比べる着地済みの歯は上の 5 file の 10 本で全部を直した。
+
+      入口の赤。main dd950b03 には歯の file cmtcnt.rs が無いので verify の 3 行目は --no-tests=fail で落ち、差の字を足した着地済みの歯 10 本は行の無い出力で落ちる。
+
+      試作と噛み。書く file は write-set の中で閉じる（8 file）。4 本を全部当てた木 50e9af00 で verify の 1〜9 行目が rc 0（xtask check は根の歯 3308 本と入れ子の器の段を含む）。噛みは 5 つの変異（床の組みが中核の床の値を引かない・読めた周の行を出さない・読めない周の行を出さない・id のつなぎを読点に・行を着地した設計ノートの行の前に出す）が全部 rc 100 で名指した歯が落ち（読めた周の行を出さない変異は、字が替わる着地済みの歯 10 本も全部落とした）、対照は rc 0（木 50e9af00 で撃った）。
+
+      範囲の外。board の画面への表示。測りの口への記帳（席の手・23 節）。
+  - n: 20
+    type: prose
+    title: 行 c-memo-touch — memo と epic の touches の辺
+    body: |
+      在りか。差の file docs/design/patch/c-memo-touch.patch は、木 b019e43f と、その上に試作を載せた木 b512fea4 との差（3 file・+171 −3・7,633 byte）。行 k-commit-count の file とは重ならず、main dd950b03 の上にも単独で当たる。
+
+      なぜ。判断の記録 ADR-44 の段 2（memo と epic から設計への辺）。memo と epic が設計のどこを触るかを辺にし、席と AI が近傍で引けるようにする。どの欄から読むか: 問いと同じ台帳の bead の metadata の閉じた key touches（字 1 つか字の配列・object か object を JSON にした字）から読み、辺の型は問いと同じ touches（型を足さない）。台帳の実の値（2026-10-05）では open の memo 50 本と epic 8 本の touches は 0 本で、辺は席の書き足しの後に立つ（23 節）。起票の門との関係: 問いの起票の門（要件 FR4・touches を 1 つ以上要る）は問いだけに掛かったままにする。memo と epic は、まず touches の無い open の数を数えて見せるだけにし、2 周の実測の後に起票の門にするかを決める（問い t3-hub.80.12 の裁定・案 A）。不変条件の 4 番（問いは処分を持つ）も問いだけを見たまま。
+
+      形。中核の src/graph/build.rs に定数 TOUCH_KINDS（Question・Memo・Epic）を置き、add_meta_edges が種類が TOUCH_KINDS に在る bead の touches から辺を組む（前は問いだけ）。premises は問いだけ・source は memo だけのまま。契約の型の src/graph.rs の Touches の doc を字 問い・memo・epic → 任意の節点 に替えた。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。1 番目の項は verify の 1 行目。2〜6 番目の項は 3 行目（新しい歯の file crates/tsuzuri-core/tests/memotch.rs の 5 本・項の順と歯の順は同じ）。4 行目（着地済みの歯 graph_ の 11 本・在りかは teeth2/graph.rs・この差は字を替えない）と、2 行目の clippy と最後の 5 行目の xtask の check は命令の rc で測る守りで、done に載せない。
+
+      構造の連鎖。add_meta_edges の呼び手は add_typed の 1 か所。touches の辺を数える着地済みの歯は無い（木 b512fea4 で grep・実の台帳の memo と epic の touches は 0 本）。
+
+      入口の赤。main dd950b03 には歯の file memotch.rs が無いので verify の 3 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。書く file は write-set の中で閉じる（3 file）。4 本を全部当てた木 50e9af00 で verify の 1〜5 行目が rc 0。噛みは 4 つの変異（定数から epic を外す・契約の touches も辺にする・premises を問いの外でも組む・定数から memo を外す）が全部 rc 100 で名指した歯が落ち、対照は rc 0（木 50e9af00 で撃った）。
+
+      範囲の外。memo と epic の touches の書き足しと、touches の無い open の数の測り（席の手）。memo と epic の起票の門（2 周の実測の後）。memo の昇格先の辺 promoted_to（候補のまま）。
+  - n: 21
+    type: prose
+    title: 行 v-row-basis — 器の契約表の任意の欄 basis
+    body: |
+      在りか。差の file docs/design/patch/v-row-basis.patch は、木 b512fea4 と、その上に試作を載せた木 8e62f7de との差（6 file・+53 −11・12,282 byte）。前の版の差（器の下の 5 file）に、根の欄の写し contracts/field-schema/schema.toml の basis の塊を足した。着地済みの行 t-teeth-col の歯 dtcol_copy_matches_the_vessel_schema が、写しの頭の 1 行の後ろと器の生成物 scribe2/contracts/schema.toml を byte で比べるため（器の生成物だけを替えた前の版の差を 4 本とも当てた木 0b32a65c で、xtask check がこの歯で rc 100）。前の 2 行とは file が重ならず、main dd950b03 の上にも単独で当たる。
+
+      なぜ。判断の記録 ADR-44 の段 2（契約の行から条と判断の記録への辺の型）。持ち主の裁定（問い t3-hub.80.13・案 A）は、行の根拠を器の契約表の任意の欄 basis で持つ形。設計の道具は契約表の行の欄を根の欄の写し（正本は器の欄の列 FIELDS）だけで照らし、写しに無い欄を断る。器は欄を読んで運ぶだけで照らさない（id の実在は設計の道具の床が数える・行 f-row-basis）。
+      本文の名指しを型付きの辺にする案は採らない。本文の名指しは不変条件の 9 番（名指した id は欄にも在る）が既に数えており、辺にすると同じ名指しを 2 度数える。
+
+      形。器の src/pipe/table.rs の欄の列 FIELDS の末に basis（任意・字の配列）を足し、ContractRow に欄 basis（字の列）を足した。src/pipe/table/parse.rs の typed が list_of で読む。行の構築の 2 か所（src/pipe/contract.rs と src/pipe/table/check.rs の歯の見本）に空の basis を足した。欄の生成物 scribe2/contracts/schema.toml と根の欄の写し contracts/field-schema/schema.toml の code-facts の塊の次に、同じ basis の塊（name・need は optional・shape は list）を足した（写しの頭の 1 行の注は替えない）。src/pipe/table.rs の歯の区間の着地済みの歯 3 本の欄の数（20 を 21・任意 13 を 14）と宣言順の一覧（末に basis）と doc の字を合わせた。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。1 番目の項は verify の 1 行目。2 番目の項は 3 行目（器の lib の歯 vbasis_ の 1 本・在りかは src/pipe/table/parse.rs の歯の区間）。3 番目の項は 4 行目（字が替わる着地済みの器の lib の歯 3 本・在りかは src/pipe/table.rs の歯の区間）。4 番目の項は 5 行目（着地済みの器の e2e の歯・在りかは e2e の pipe/contracts.rs）。最後の 5 番目の項は 6 行目（着地済みの根の歯 dtcol_・在りかは crates/tsuzuri-boundary/tests/dtcol.rs）。2 行目の器の clippy と最後の 7 行目の xtask の check は命令の rc で測る守りで、done に載せない。
+
+      構造の連鎖（木 8e62f7de で grep）。ContractRow の構築は typed の 1 か所と歯の見本 2 か所で、全部に欄を足した。欄の数と宣言順を断言する着地済みの器の歯は src/pipe/table.rs の 3 本で全部を直した（器の nextest の全部を印なしで撃って見つけた）。欄の生成物の写しを byte で比べる根の歯は dtcol.rs の 1 本（4 本を当てた木で xtask check を撃って見つけた）。欄の写しを読む根の歯（行 f-row-basis の rowbasis.rs と folio2 の tz の歯の 7 file）は、写しを丸ごと見本の置き場へ写すか basis の塊を除いてから足すので、塊の有無で替わらない。欄の列 FIELDS の読み手（器の contracts schema・契約表の検査の欄の照らし）は列をそのまま回すので替えない。器の file の行の上限（1500・幅で数える）: src/pipe/table/check.rs は 1455 行、src/pipe/table.rs は 1274 行（growth の欄）。
+
+      入口の赤。main dd950b03 には名に vbasis_ を持つ歯が無いので verify の 3 行目は --no-tests=fail で落ちる。この差の着地済みの器の lib の歯 3 本の字（欄 21）は、main の src（欄 20）で撃つと欄の数で落ちる。
+
+      試作と噛み。書く file は write-set の中で閉じる（6 file）。4 本を全部当てた木 50e9af00 で verify の 1〜7 行目が rc 0（xtask check は入れ子の器の build と nextest 4089 本と clippy と器の check を含む）。噛みは 4 つの変異（行の basis を読まない・欄の列から basis を外す・器の生成物の basis の塊を外す・根の欄の写しの basis の塊を外す）が全部 rc 100 で名指した歯が落ち、対照は rc 0（木 50e9af00 で撃った）。
+
+      範囲の外。器の binary の入れ替え（席の手・23 節）。器が basis の id を照らすこと（照らすのは設計の道具の床）。生成する契約 file への写し。
+  - n: 22
+    type: prose
+    title: 行 f-row-basis — 設計の道具の辺 basis と床と導出
+    body: |
+      在りか。差の file docs/design/patch/f-row-basis.patch は、木 8e62f7de と、その上に試作を載せた木 50e9af00 との差（7 file・+203 −9・17,377 byte）。folio2/ と境界の新しい歯の file だけを書き、前の 3 行とは file が重ならず、main dd950b03 の上にも単独で当たる。
+
+      なぜ。判断の記録 ADR-44 の段 2 と持ち主の裁定（問い t3-hub.80.13・案 A）。設計ノートの契約表の行の欄 basis を、行から根拠の id への辺にし、導出グラフに届ける。辺の型は設計文書の型の basis（判断の記録の根拠の欄と同じ型・閉じた一覧は替えない）。
+
+      形。
+      - 索引（folio2/crates/folio/src/graph.rs）。辺の欄の表 EDGE_FIELDS の design-note の列を req・depends・basis にし、notes() が行の欄 basis を EDGE_TYPES の 9 番目（basis）の辺にする。辺の欄は要約値の外なので行の要約値は替わらない。
+      - 床（src/note.rs）。check_contract_rows が欄 basis の id を参照 id の母集団（条・規範文・規則行・判断の記録・要件の全部の id）で解く（resolve_ids）。欄が器の欄の写しに無い周は今のとおり契約表の欄が器の導出 file に無いで断る。
+      - 導出は今の形のまま欄の写しの順で欄を運ぶ（差なし）。
+      - 索引の欄の決まりの区間（folio2/design-intent/graph.yaml の生成区間）と凍結の anchor（tests/fixtures/schema/graph-region.txt）と要約値の写し（node-digest.py の辺の欄の一覧）と歯 f95_ の定数（区間の byte 7379 と sha256）を合わせた。
+      - 歯 crates/tsuzuri-boundary/tests/rowbasis.rs は folio2 の凍結の土台 floor_base の写しに git の 1 commit を置き、根の欄の写しから basis の塊を除いた後に、塊を末に足した file（足さない file）で tz を撃つ。写しが塊を持つ木（行 v-row-basis の後）でも持たない木でも、見本は同じ字になる。見本の行 a の欄 basis は流れの形の [ADR-4, P-10]（無い id の見本は [ADR-4, ADR-99]）。
+      - 字。歯 rowbasis_floor_resolves_basis_ids の違反の 1 行は [note] design-note/example.yaml: §6 の行 a の basis[1]: id「ADR-99」が実在しない。歯 rowbasis_floor_needs_the_field_in_the_vessel_schema の違反の 1 行は [note] design-note/example.yaml: §6 の行 a: 契約表の欄「basis」が器の導出 file に無い。歯 rowbasis_derive_carries_basis_to_the_table が比べる導出の写しの行は basis = [ADR-4, P-10] の字の値を二重引用符で囲んだ 1 行（空白は = の前後とカンマの後ろだけ）。索引の行は id とタブと先の id とタブと型の字（例 example#a とタブと ADR-4 とタブと basis）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。1 番目の項は verify の 1 行目。2〜5 番目の項は 3 行目（新しい歯の file rowbasis.rs の 4 本・項の順と歯の順は同じ）。最後の 6 番目の項は 4 行目（定数の字が替わる着地済みの歯 f95_ の 3 本・在りかは folio2/crates/folio/tests/tz4/schema_docs.rs）。2 行目の clippy と最後の 5 行目の xtask の check は命令の rc で測る守りで、done に載せない。
+
+      構造の連鎖（木 50e9af00 で grep）。EDGE_FIELDS の読み手は索引の辺の組みと欄の決まりの区間の生成の 2 か所。resolve_ids の呼び手に 1 か所を足した。folio2 の file の行の上限: src/graph.rs は 1225 行（growth の欄）・src/note.rs は 1201 行。
+
+      入口の赤。木 8e62f7de には歯の file rowbasis.rs が無いので verify の 3 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。書く file は write-set の中で閉じる（7 file）。4 本を全部当てた木 50e9af00 で verify の 1〜5 行目が rc 0。噛みは 10 の変異（索引が basis の辺を組まない・辺の型を adrs に・辺の欄の一覧から basis を外す・床が basis を要件だけの母集団で解く・床が basis を解かない・凍結の anchor を元の字へ・床の欄の照らしが basis を写しの外でも通す・導出が basis を運ばない・欄の決まりの区間を元の字へ・区間の byte の定数を前の値へ）が全部 rc 100 で名指した歯が落ち（最後の変異は f95_ の 3 本を全部落とした）、対照は rc 0（木 50e9af00 で撃った）。
+
+      範囲の外。設計ノートの行への basis の書き足し（席の手・23 節）。board の近傍に辺を出す画面の直し。
+  - n: 23
+    type: prose
+    title: 持ち主の裁定と席の手
+    body: |
+      持ち主の裁定（束 batch:20261004T2037Z-1・4 問とも推奨の案・承認の列の 4 行目・逐語は台帳の問いの notes）。
+      - 問い t3-hub.80.10: 判断の記録 ADR-47（名前の形と名前空間）は案 a で発効（ADR-47 の承認の欄）。
+      - 問い t3-hub.80.11: ADR-45 の門 H4 の「閉じた契約」は、着地で閉じた契約（閉じた理由の頭が landed か着地）と読む。ADR-45 の本文は替えず、測りの口（ADR-36 の決定 (11)・ADR-45 の決定 (3)）の notes に読みを記帳する。行 k-commit-count の床の値はこの読み。
+      - 問い t3-hub.80.12: memo と epic の touches の欠けは、まず touches の無い open の memo と epic の数を測って見せるだけにし、2 周の実測の後に起票の門にするかを決める。
+      - 問い t3-hub.80.13: 契約の行の根拠は器の契約表の任意の欄 basis で持つ（行 v-row-basis と f-row-basis の形）。
+
+      席の手（行の着地の後）。
+      - 行 v-row-basis と f-row-basis の両方の着地の後に、器の binary を入れ替え（器が欄 basis を読む）、tz の pin を入れ替え（床が basis を解く）、その後に生きたノートの行に basis を書き足す（行ごとの根拠の判断の記録と条）。どちらかの入れ替えの前に書くと、器の表の読みか床が断る。
+      - 行 c-memo-touch の着地の後に、open の memo と epic の metadata に touches を書き足し、touches の無い open の memo と epic の数を測り始める（書き足しの前の数と、2 周の数を記帳する）。
+      - 行 k-commit-count の着地の後に、測りの口に床の値（着地の commit の無い着地した契約の数と id）を記帳する。
+
+      後の行。touches の無い open の memo と epic の数を床の値に出す行（問い t3-hub.80.12 の案 A が言う数えを機械にする・それまでは席の手の数え）。ADR-44 の段 4 の file・定義・歯の節点（電文の名 file・def・tooth）と辺（wrote・implements・tests）・名前空間の規則の関数（ADR-47 の決定 (6)）・古い pointer の引き（ADR-47 の決定 (7)・取り込みの段 3 の後）。

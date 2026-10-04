@@ -1,0 +1,440 @@
+diff --git a/crates/tsuzuri-boundary/src/cli/graph.rs b/crates/tsuzuri-boundary/src/cli/graph.rs
+index 75e4aafc..4237b103 100644
+--- a/crates/tsuzuri-boundary/src/cli/graph.rs
++++ b/crates/tsuzuri-boundary/src/cli/graph.rs
+@@ -9,6 +9,8 @@
+ //!   終了 code は変えない・行 k-g9-count）
+ //!   その次に全部の契約表の行が着地した設計ノート（廃止したものを除く）の数と文書 id の行（設計の索引か台帳か
+ //!   要約の状態の欄が読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 c-note-stale・行 c-note-retired）
++//!   その次に着地の commit の節点から landed の辺を受けない着地した契約の数と id の行（台帳か走行の記録が読めなければ
++//!   まだ分からないの行を標準エラー・終了 code は変えない・行 c-commit-node）
+ //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
+ //!
+ //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
+@@ -134,6 +136,21 @@ pub fn landed_line(docs: &[String]) -> String {
+     }
+ }
+ 
++/// 着地の commit の無い着地した契約の行の頭の字（行 c-commit-node）。
++pub const UNLANDED_HEAD: &str = "着地の commit の無い着地した契約";
++
++/// 着地の commit の無い着地した契約がまだ分からないときの字（標準エラーのまだ分からないの行に続ける）。
++pub const UNLANDED_UNKNOWN: &str = "着地の commit の無い着地した契約（台帳か走行の記録が読めない）";
++
++/// 着地の commit の無い着地した契約の行（空なら数 0 だけ、在れば数と中黒つなぎの bead の id・違反の行と同じ形）。
++pub fn unlanded_line(ids: &[String]) -> String {
++    if ids.is_empty() {
++        format!("{UNLANDED_HEAD} 0")
++    } else {
++        format!("{UNLANDED_HEAD} {}（{}）", ids.len(), ids.join("・"))
++    }
++}
++
+ /// 使い方の誤り。
+ const FAIL: u8 = 1;
+ 
+@@ -283,6 +300,7 @@ fn design_doc(args: &Args) -> (GraphDoc, Floors) {
+         bare: Reading::Unknown,
+         unfielded: Reading::Unknown,
+         landed: Reading::Unknown,
++        unlanded: Reading::Unknown,
+     };
+     (design_view(&board::graph(&texts)), floors)
+ }
+@@ -305,8 +323,8 @@ fn outside_of(projects: &[PathBuf], bd: &str) -> Vec<Option<Outside>> {
+ /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
+ /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
+ /// `heads` は g-3 が確かめられない外の台帳の行だけのためにまだ分からないときの節点の数と族（`check::outside_heads`）。
+-/// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノート（`board::built_floors`・
+-/// 要約の行の前にこの順に出し、終了 code は変えない）。
++/// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノートと着地の commit の無い
++/// 着地した契約（`board::built_floors`・要約の行の前にこの順に出し、終了 code は変えない）。
+ fn check(
+     invariants: &[InvariantCheck],
+     outside: Option<usize>,
+@@ -358,6 +376,10 @@ fn check(
+         Reading::Known(docs) => emit(&landed_line(docs)),
+         Reading::Unknown => emit_err(&format!("# まだ分からない: {LANDED_UNKNOWN}")),
+     }
++    match &floors.unlanded {
++        Reading::Known(ids) => emit(&unlanded_line(ids)),
++        Reading::Unknown => emit_err(&format!("# まだ分からない: {UNLANDED_UNKNOWN}")),
++    }
+     let verdict = overall(invariants);
+     let word = match verdict {
+         Verdict::Pass => "合格",
+diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
+index 3a5cce9c..81c6e1e5 100644
+--- a/crates/tsuzuri-boundary/src/server/board.rs
++++ b/crates/tsuzuri-boundary/src/server/board.rs
+@@ -158,6 +158,8 @@ pub struct Floors {
+     /// 全部の契約表の行が着地した設計ノートのうち廃止していない文書 id（中核の `check::landed_notes`・行 c-note-stale・
+     /// 行 c-note-retired）。
+     pub landed: Reading<Vec<String>>,
++    /// 着地の commit の節点から landed の辺を受けない着地した契約（中核の `check::unlanded_contracts`・行 c-commit-node）。
++    pub unlanded: Reading<Vec<String>>,
+ }
+ 
+ /// `built` と同じ導出グラフと床の値（要約を写せたかを 2 つの床の関数に渡し、着地した設計ノートには台帳の字を
+@@ -168,6 +170,7 @@ pub fn built_floors(texts: &Texts) -> (Graph, Floors) {
+         bare: graph::check::unsummarized(&g, summary),
+         unfielded: graph::check::unfielded_mentions(&g, summary),
+         landed: graph::check::landed_notes(&g, &texts.ledger, &texts.summary),
++        unlanded: graph::check::unlanded_contracts(&g, &texts.ledger),
+     };
+     (g, floors)
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cmtcnt.rs b/crates/tsuzuri-boundary/tests/cmtcnt.rs
+new file mode 100644
+index 00000000..2f3a8093
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cmtcnt.rs
+@@ -0,0 +1,243 @@
++//! 着地の commit の無い着地した契約の行の歯（境界・接頭辞 cmtcnt_・設計ノート surface-wave29a 行 k-commit-count・
++//! 判断の記録 ADR-45 の門 H4・要件 FR3）。偽の bd（台帳の字の file を返す script）と偽の設計の道具（要約には要約の字・
++//! ほかの引数には索引の字を返す script）を歯ごとの作業場に置き、event log の字を作業場の state dir に置いて、
++//! tz graph --check を撃つ。否定の見本は正しい見本から 1 句だけ替える。
++#![cfg(test)]
++use std::ffi::OsString;
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::cli::graph::{UNLANDED_HEAD, UNLANDED_UNKNOWN, unlanded_line};
++use tsuzuri_boundary::server::board::{Texts, built, built_floors};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_core::graph::check::unlanded_contracts;
++
++/// 設計の索引（節点 1・辺 0）。
++const INDEX: &str = "FR1\t要件\tsrs.yaml\t00000000\t面は 2 つ\n";
++
++/// 節の要約の字（FR1 の 1 行）。
++const SUM: &str = "{\"id\":\"FR1\",\"kind\":\"要件\",\"file\":\"srs.yaml\",\"plain\":\"見本\"}\n";
++
++/// 着地の commit の名（40 字の小文字の 16 進）。
++const SHA_1: &str = "1111111111111111111111111111111111111111";
++const SHA_2: &str = "2222222222222222222222222222222222222222";
++
++/// 根の epic x と契約 3 本（x.1 と x.2 は landed で閉じ、x.3 は取り下げで閉じる）。
++const LEDGER: &str = r#"[
++{"id": "x", "title": "根", "status": "open", "issue_type": "epic"},
++{"id": "x.1", "title": "契約", "status": "closed", "issue_type": "task", "close_reason": "landed 1111111 ci=success", "acceptance_criteria": "design = contracts/n.toml#r1", "dependencies": [{"issue_id": "x.1", "depends_on_id": "x", "type": "parent-child"}]},
++{"id": "x.2", "title": "契約", "status": "closed", "issue_type": "task", "close_reason": "landed 2222222 ci=success", "acceptance_criteria": "design = contracts/n.toml#r2", "dependencies": [{"issue_id": "x.2", "depends_on_id": "x", "type": "parent-child"}]},
++{"id": "x.3", "title": "契約", "status": "closed", "issue_type": "task", "close_reason": "取り下げ 中身は x.1 の便に載った", "acceptance_criteria": "design = contracts/n.toml#r3", "dependencies": [{"issue_id": "x.3", "depends_on_id": "x", "type": "parent-child"}]}
++]
++"#;
++
++const RUN_1: &str = "x.1-20260927T000000Z";
++const RUN_2: &str = "x.2-20260927T010000Z";
++
++/// event log の 1 行。
++fn line(run: &str, kind: &str, detail: &str) -> String {
++    format!(
++        "{{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"{kind}\",\"run\":\"{run}\",\"detail\":\"{detail}\"}}\n"
++    )
++}
++
++/// x.1 だけが着地の commit を持つ event log（x.2 の RunDone は札 sha: を持たない）。
++fn events_one() -> String {
++    [
++        line(RUN_1, "RunCreated", ""),
++        line(RUN_2, "RunCreated", ""),
++        line(RUN_1, "RunDone", &format!("sha:{SHA_1} main:{SHA_1}")),
++        line(RUN_2, "RunDone", "terminal:close:ok"),
++    ]
++    .concat()
++}
++
++/// x.1 と x.2 の両方が着地の commit を持つ event log（events_one から x.2 の RunDone の 1 句だけ替える）。
++fn events_both() -> String {
++    [
++        line(RUN_1, "RunCreated", ""),
++        line(RUN_2, "RunCreated", ""),
++        line(RUN_1, "RunDone", &format!("sha:{SHA_1} main:{SHA_1}")),
++        line(RUN_2, "RunDone", &format!("sha:{SHA_2} main:{SHA_2}")),
++    ]
++    .concat()
++}
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("script");
++    let mut perm = fs::metadata(path).expect("script の属性").permissions();
++    perm.set_mode(0o755);
++    fs::set_permissions(path, perm).expect("script の権限");
++}
++
++/// 歯ごとの作業場（偽の bd と偽の設計の道具・repo と state dir の置き場）。
++struct Place {
++    root: PathBuf,
++    repo: PathBuf,
++    state: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str, events: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cmtcnt")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let repo = root.join("repo");
++        let state = root.join("state");
++        fs::create_dir_all(repo.join(".beads")).expect("repo の置き場");
++        fs::write(repo.join(".beads/issues.jsonl"), "{}\n").expect("印の file");
++        fs::create_dir_all(state.join("fleet")).expect("state dir");
++        fs::write(state.join("fleet/events.jsonl"), events).expect("event log");
++        fs::write(root.join("ledger.json"), LEDGER).expect("台帳の字");
++        fs::write(root.join("index.tsv"), INDEX).expect("索引の字");
++        fs::write(root.join("summary.jsonl"), SUM).expect("要約の字");
++        script(
++            &root.join("bd"),
++            &format!("exec cat '{}'", root.join("ledger.json").display()),
++        );
++        script(
++            &root.join("folio"),
++            &format!(
++                "[ \"$3\" = --summary ] && exec cat '{}'\nexec cat '{}'",
++                root.join("summary.jsonl").display(),
++                root.join("index.tsv").display()
++            ),
++        );
++        Place { root, repo, state }
++    }
++
++    /// tz graph --check を撃つ（`bd` が偽なら bd は無い path・`state` が偽なら state dir は無い path）。
++    fn check(&self, bd: bool, state: bool) -> Output {
++        let bd = if bd {
++            self.root.join("bd")
++        } else {
++            self.root.join("no-such-bd")
++        };
++        let state = if state {
++            self.state.clone()
++        } else {
++            self.root.join("no-such-state")
++        };
++        let args: Vec<OsString> = vec![
++            "graph".into(),
++            "--check".into(),
++            "--repo".into(),
++            self.repo.clone().into(),
++            "--bd".into(),
++            bd.into(),
++            "--folio".into(),
++            self.root.join("folio").into(),
++            "--state-dir".into(),
++            state.into(),
++        ];
++        Command::new(env!("CARGO_BIN_EXE_tz"))
++            .args(args)
++            .output()
++            .expect("tz を撃つ")
++    }
++}
++
++fn texts(events: &str) -> Texts {
++    Texts {
++        design: INDEX.to_string(),
++        ledger: LEDGER.to_string(),
++        events: events.to_string(),
++        summary: SUM.to_string(),
++        rulings: String::new(),
++    }
++}
++
++fn stdout(out: &Output) -> String {
++    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
++}
++
++fn stderr(out: &Output) -> String {
++    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
++}
++
++/// 標準出力の末の 3 行（着地した設計ノートの行・この行・要約の行）。
++fn tail3(out: &Output) -> Vec<String> {
++    let text = stdout(out);
++    let lines: Vec<String> = text.lines().map(str::to_string).collect();
++    lines[lines.len().saturating_sub(3)..].to_vec()
++}
++
++#[test]
++fn cmtcnt_line_and_built_floors() {
++    let head: &str = UNLANDED_HEAD;
++    let unknown: &str = UNLANDED_UNKNOWN;
++    assert_eq!(head, "着地の commit の無い着地した契約");
++    assert_eq!(
++        unknown,
++        "着地の commit の無い着地した契約（台帳か走行の記録が読めない）"
++    );
++    let line: fn(&[String]) -> String = unlanded_line;
++    assert_eq!(line(&[]), "着地の commit の無い着地した契約 0");
++    assert_eq!(
++        line(&["x.2".to_string(), "x.10".to_string()]),
++        "着地の commit の無い着地した契約 2（x.2・x.10）"
++    );
++
++    let read = texts(&events_one());
++    let (g, floors) = built_floors(&read);
++    assert_eq!(g, built(&read));
++    assert_eq!(floors.unlanded, unlanded_contracts(&g, LEDGER));
++    assert_eq!(floors.unlanded, Reading::Known(vec!["x.2".to_string()]));
++
++    let (_, floors) = built_floors(&texts(&events_both()));
++    assert_eq!(floors.unlanded, Reading::Known(Vec::new()));
++
++    let (_, floors) = built_floors(&texts(""));
++    assert_eq!(floors.unlanded, Reading::Unknown);
++}
++
++#[test]
++fn cmtcnt_check_names_after_landed_notes() {
++    let place = Place::new("names", &events_one());
++    let out = place.check(true, true);
++    let tail = tail3(&out);
++    assert_eq!(tail[0], "全部の行が着地した設計ノート 0", "{out:?}");
++    assert_eq!(
++        tail[1], "着地の commit の無い着地した契約 1（x.2）",
++        "{out:?}"
++    );
++    assert!(tail[2].starts_with("tz graph --check: "), "{out:?}");
++    let heads = stdout(&out)
++        .lines()
++        .filter(|l| l.starts_with(UNLANDED_HEAD))
++        .count();
++    assert_eq!(heads, 1);
++    assert!(!stderr(&out).contains(UNLANDED_HEAD), "{out:?}");
++
++    let place = Place::new("zero", &events_both());
++    let out = place.check(true, true);
++    assert_eq!(
++        tail3(&out)[1],
++        "着地の commit の無い着地した契約 0",
++        "{out:?}"
++    );
++}
++
++#[test]
++fn cmtcnt_unread_goes_to_stderr() {
++    let want = format!("# まだ分からない: {UNLANDED_UNKNOWN}");
++    for (name, bd, state) in [("no-state", true, false), ("no-bd", false, true)] {
++        let place = Place::new(name, &events_one());
++        let out = place.check(bd, state);
++        assert_eq!(out.status.code(), Some(2), "{name}: {out:?}");
++        assert!(
++            !stdout(&out).contains(UNLANDED_HEAD),
++            "{name}: {}",
++            stdout(&out)
++        );
++        let err = stderr(&out);
++        assert_eq!(
++            err.lines().filter(|l| *l == want).count(),
++            1,
++            "{name}: {err}"
++        );
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/cnote.rs b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+index bb089617..dfdb89fa 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+@@ -493,8 +493,11 @@ fn cnote_check_names_notes() {
+     let text = stdout(&out);
+     let lines: Vec<&str> = text.lines().collect();
+     assert_eq!(
+-        lines[lines.len() - 2..].join("\n"),
+-        format!("全部の行が着地した設計ノート 3（na・nc・ni）\n{}", SUMMARY.trim_end()),
++        lines[lines.len() - 3..].join("\n"),
++        format!(
++            "全部の行が着地した設計ノート 3（na・nc・ni）\n着地の commit の無い着地した契約 8（x.1・x.10・x.11・x.12・x.2・x.4・x.5・x.7）\n{}",
++            SUMMARY.trim_end()
++        ),
+         "{text}"
+     );
+     let heads = lines.iter().filter(|l| l.starts_with(LANDED_HEAD)).count();
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+index 755abf89..cd9443a5 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+@@ -155,10 +155,11 @@ fn next(id: &str) -> &'static str {
+         .expect("次の 1 手")
+ }
+ 
+-/// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）。
++/// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）と
++/// 着地の commit の無い着地した契約の行（着地した契約は無い・行 c-commit-node）。
+ fn summary(word: &str, violations: usize, unknowns: usize) -> String {
+     format!(
+-        "全部の行が着地した設計ノート 0\ntz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n"
++        "全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\ntz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n"
+     )
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/kcli.rs b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+index 5ecc4891..cc582dc0 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+@@ -346,7 +346,7 @@ fn kcli_check_all_read_is_unknown() {
+     assert_eq!(out.status.code(), Some(2), "{out:?}");
+     assert_eq!(
+         stdout(&out),
+-        "全部の行が着地した設計ノート 0\ntz graph --check: まだ分からない（違反 0・まだ分からない 3）\n"
++        "全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\ntz graph --check: まだ分からない（違反 0・まだ分からない 3）\n"
+     );
+     let err = stderr(&out);
+     for id in UNMEASURED {
+@@ -369,7 +369,7 @@ fn kcli_check_cut_line_names_k1() {
+     assert_eq!(
+         stdout(&out),
+         format!(
+-            "[g-2] 違反 1（k.1） next={next}\n全部の行が着地した設計ノート 0\ntz graph --check: 不合格（違反 1・まだ分からない 3）\n"
++            "[g-2] 違反 1（k.1） next={next}\n全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\ntz graph --check: 不合格（違反 1・まだ分からない 3）\n"
+         )
+     );
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/kg9.rs b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+index ef67e151..bf798cbf 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+@@ -364,8 +364,9 @@ const BARE: &str = "要約の無い節点 2（A-1.1・R-2）\n";
+ /// 節の索引で本文だけで名指した id の対の行。
+ const UNFIELDED: &str = "本文だけで名指した id の対 3（A-1→R-2・nt#r1→FR1・nt#r1→R-2）\n";
+ 
+-/// 全部の行が着地した設計ノートの行（nt#r1 を指す bead は無い・行 c-note-stale）。
+-const LANDED: &str = "全部の行が着地した設計ノート 0\n";
++/// 全部の行が着地した設計ノートの行（nt#r1 を指す bead は無い・行 c-note-stale）と、着地の commit の無い着地した
++/// 契約の行（着地した契約は無い・行 c-commit-node）。
++const LANDED: &str = "全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n";
+ 
+ #[test]
+ fn kg9_line_and_built_floors() {
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/ksum.rs b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+index 21e5a607..230808e4 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+@@ -373,7 +373,7 @@ fn ksum_check_names_bare() {
+     assert_eq!(
+         stdout(&out),
+         format!(
+-            "要約の無い節点 2（A-1.1・k.1）\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n{}",
++            "要約の無い節点 2（A-1.1・k.1）\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}",
+             summary(3)
+         )
+     );
+@@ -386,7 +386,7 @@ fn ksum_check_names_bare() {
+     assert_eq!(
+         stdout(&out),
+         format!(
+-            "要約の無い節点 0\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n{}",
++            "要約の無い節点 0\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}",
+             summary(3)
+         )
+     );
+@@ -400,7 +400,7 @@ fn ksum_unread_goes_to_stderr() {
+     assert_eq!(out.status.code(), Some(2), "{out:?}");
+     assert_eq!(
+         stdout(&out),
+-        format!("全部の行が着地した設計ノート 0\n{}", summary(3))
++        format!("全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}", summary(3))
+     );
+     let err = stderr(&out);
+     assert_eq!(err.lines().filter(|l| *l == line).count(), 1, "{err}");

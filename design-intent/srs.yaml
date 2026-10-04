@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.34 版（2026-10-05）: ノート surface-wave29a の行 v-row-basis に合わせ、要件 FR1047 の shall と plain に契約表の行の任意の欄 basis を足した（判断の記録 ADR-39 の決定 (6)）。
 # 第 0.33 版（2026-10-05）: 持ち主の裁定 t3-hub.80.6〔裁定 id = t3-hub.80.6:20261004T2037Z-1〕を写した（要件 FR1056 の shall と plain に、host の見張り〔host-guard〕の自分に当たる待ちと止めを断る種類の行〔語列 pgrep -f と pkill -f〕が、型が撃った shell 自身の command 行にも当たる形と字の決まらない形だけを断り、ほかの型を通し、intake の verify の判定に掛けないことを足した・器の行 v-self-match の前置き）。
 # 第 0.32 版（2026-10-05）: ノート surface-wave29a の行 c-commit-node に合わせ、要件 FR2 の shall と plain に着地の commit の節点と辺 landed を足した（判断の記録 ADR-46 の決定 (2)）。
 # 第 0.31 版（2026-10-04）: 判断の記録 ADR-44 の決定 (2)（持ち主の裁定 t3-hub.80.1〔裁定 id = t3-hub.80.1:20261004T1456Z-1〕）を写した（目的 GOAL2 の字を、着地の commit と code までの図と便ごとの積み上げへ広げ、目的 GOAL5〔ほかの project でも最初から十全に動く〕を足した）。
@@ -21,7 +22,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.33
+  version: v0.34
   status: draft
   generated: 2026-09-28
   approval:
@@ -913,8 +914,8 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: "常時"
-    shall: "契約は契約表の置き場（tracked・ADR-0109）の契約表の 1 行（少なくとも要件 id・実装する設計の節・write-set・検証を持ち、 done の項目ごとの歯を名指す任意の欄と、 code の事実を数で名乗る任意の欄〔要素は列・項目・値の組で、 列は閉じた 7 語・項目は touches と同じ path の形・値は件数か可視性の字〕を持てる）だけから取る。 契約表の置き場は既定で設計 doc の dir（docs/design/）の直下の markdown で、 vessel 宣言の任意 key contract-tables が dir（直下の拡張子が .md か .toml の file）か file を足し（置き換えない）、 宣言を読めない周は既定の置き場に倒さない（読み手ごとの倒れ方は ADR-0109）"
-    plain: "契約の正本は、契約表の置き場（契約表を置いてよい tracked な file の一覧）にある契約表の 1 行だけです。行は少なくとも要件 id・実装する設計の節・write-set・検証を持ち、done の項目ごとの歯を名指す任意の欄と、code の事実を数で名乗る任意の欄を持てます。code の事実の欄の要素は、列・項目・値の組です（列は閉じた 7 語、項目は touches と同じ path の形、値は件数か公開範囲の字）。契約表の置き場は、既定では docs/design/ のすぐ下の markdown で、設定 file（vessel 宣言）の contract-tables に書いた dir（すぐ下の .md と .toml）か file が足されます（置き換えません）。宣言を読めないときは既定の置き場に倒しません（読み手ごとに、止めるか広く見る側に倒れます・ADR-0109）。"
+    shall: "契約は契約表の置き場（tracked・ADR-0109）の契約表の 1 行（少なくとも要件 id・実装する設計の節・write-set・検証を持ち、 done の項目ごとの歯を名指す任意の欄と、 code の事実を数で名乗る任意の欄〔要素は列・項目・値の組で、 列は閉じた 7 語・項目は touches と同じ path の形・値は件数か可視性の字〕と、 行の根拠の条・規範文・規則行・判断の記録の id を並べる任意の欄 basis〔器は読んで運ぶだけで照らさず、 生成する契約 file に写さない〕を持てる）だけから取る。 契約表の置き場は既定で設計 doc の dir（docs/design/）の直下の markdown で、 vessel 宣言の任意 key contract-tables が dir（直下の拡張子が .md か .toml の file）か file を足し（置き換えない）、 宣言を読めない周は既定の置き場に倒さない（読み手ごとの倒れ方は ADR-0109）"
+    plain: "契約の正本は、契約表の置き場（契約表を置いてよい tracked な file の一覧）にある契約表の 1 行だけです。行は少なくとも要件 id・実装する設計の節・write-set・検証を持ち、done の項目ごとの歯を名指す任意の欄と、code の事実を数で名乗る任意の欄と、行の根拠（条・規則・判断の記録の id）を並べる任意の欄 basis を持てます。code の事実の欄の要素は、列・項目・値の組です（列は閉じた 7 語、項目は touches と同じ path の形、値は件数か公開範囲の字）。契約表の置き場は、既定では docs/design/ のすぐ下の markdown で、設定 file（vessel 宣言）の contract-tables に書いた dir（すぐ下の .md と .toml）か file が足されます（置き換えません）。宣言を読めないときは既定の置き場に倒しません（読み手ごとに、止めるか広く見る側に倒れます・ADR-0109）。"
     basis: []
     verify: {method: test, how: "器の歯で ac の欄の受入の基準を撃つ（器の確かめ方の字 T・test）", ac: [AC1021, AC1077, AC1083, AC1087, AC1088]}
     goals: [GOAL1004, GOAL1003]
