@@ -1,0 +1,163 @@
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 8eda9f3ecf5bcbe83f771c60f192a5e7c7e81735..35fa3763ac364d2e31195eb365087db87dd95827 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -41,13 +41,17 @@ pub const DOMAINS: [&str; 6] = [
+     "registry.npmjs.org",
+ ];
+ 
++/// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。
++const CLAUDE_CREDENTIALS: &str = "~/.claude/.credentials.json";
++
+ /// 囲いから見えなくする資格の file（home の下・ほかに state dir の accounts と repo の台帳の鍵と共有の temp）。
+-pub const CREDENTIALS: [&str; 5] = [
++pub const CREDENTIALS: [&str; 6] = [
+     "~/.config/gh",
+     "~/.ssh",
+     "~/.git-credentials",
+     "~/.config/git/credentials",
+     "~/.cld-env",
++    CLAUDE_CREDENTIALS,
+ ];
+ 
+ /// argv に在ってはならない字（plugin の置き場・確かめを飛ばす形・外の道具の設定・指示の足し）。
+@@ -144,7 +148,11 @@ pub fn settings(l: &Launch) -> Value {
+     json!({
+         "permissions": {
+             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
+-            "deny": [format!("Read(/{s}/accounts/**)"), format!("Read(/{r}/.beads/.env)")],
++            "deny": [
++                format!("Read(/{s}/accounts/**)"),
++                format!("Read(/{r}/.beads/.env)"),
++                format!("Read({CLAUDE_CREDENTIALS})"),
++            ],
+         },
+         "sandbox": {
+             "enabled": true,
+@@ -331,6 +339,7 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+     let want = [
+         format!("Read(/{}/accounts/**)", l.state),
+         format!("Read(/{}/.beads/.env)", l.repo),
++        format!("Read({CLAUDE_CREDENTIALS})"),
+     ];
+     if want.iter().any(|w| !deny.contains(&w.as_str())) {
+         gaps.push("/permissions/deny".to_string());
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 20aa778b9dcd3f5edd616e1a11991bea3eab99eb..d2da9969b6ee7a26a843f71eea52993367d9f3fa 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -1,6 +1,7 @@
+ //! 起動の口の argv と設定の歯（接頭辞 cwarg_・設計ノート surface-wave27a 行 cs-argv・受入 AC19 の argv と設定）。
+ //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
+ //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
++//! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
+ #![cfg(test)]
+ 
+ use std::path::Path;
+@@ -8,8 +9,8 @@ use std::path::Path;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_core::consult::launch::{
+-    ASK_DROP, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp, prompt,
+-    read_roots, settings, version_ok,
++    ASK_DROP, CREDENTIALS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp,
++    prompt, read_roots, settings, version_ok,
+ };
+ 
+ fn fixture() -> Value {
+@@ -178,9 +179,9 @@ fn cwarg_audit_refuses_each_missing_key() {
+         assert!(!audit(&a, &l).is_empty(), "{pointer} を除いた");
+     }
+     for (list, n) in [
+-        ("/sandbox/credentials/files", 8),
++        ("/sandbox/credentials/files", 9),
+         ("/sandbox/filesystem/denyWrite", 3),
+-        ("/permissions/deny", 2),
++        ("/permissions/deny", 3),
+     ] {
+         for i in 0..n {
+             let a = with_settings(&l, |set| {
+@@ -279,6 +280,62 @@ fn cwarg_audit_refuses_wide_sandbox() {
+     ]);
+ }
+ 
++#[test]
++fn cwarg_hides_the_claude_credentials() {
++    let fx = fixture();
++    let file = "~/.claude/.credentials.json";
++    let rule = "Read(~/.claude/.credentials.json)";
++    assert_eq!(CREDENTIALS.last(), Some(&file));
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let set = settings(&l);
++        let files = set["sandbox"]["credentials"]["files"]
++            .as_array()
++            .expect("列");
++        let hidden = |x: &&Value| x["path"] == json!(file);
++        assert_eq!(
++            files.iter().filter(hidden).collect::<Vec<_>>(),
++            [&json!({"path": file, "mode": "deny"})],
++            "{form}"
++        );
++        let deny = set["permissions"]["deny"].as_array().expect("列");
++        assert_eq!(
++            deny.iter().filter(|r| **r == json!(rule)).count(),
++            1,
++            "{form}"
++        );
++        let gaps = |edit: &dyn Fn(&mut Value)| audit(&with_settings(&l, edit), &l);
++        let drop = |pointer: &'static str, want: &'static str| {
++            move |s: &mut Value| {
++                s.pointer_mut(pointer)
++                    .and_then(Value::as_array_mut)
++                    .expect("列")
++                    .retain(|x| x != &json!(want) && x["path"] != json!(want));
++            }
++        };
++        let files_gap = ["/sandbox/credentials/files".to_string()];
++        let deny_gap = ["/permissions/deny".to_string()];
++        assert_eq!(gaps(&drop("/sandbox/credentials/files", file)), files_gap);
++        assert_eq!(gaps(&drop("/permissions/deny", rule)), deny_gap);
++        let allow = |s: &mut Value| {
++            let xs = s["sandbox"]["credentials"]["files"]
++                .as_array_mut()
++                .expect("列");
++            xs.iter_mut()
++                .filter(|x| x["path"] == json!(file))
++                .for_each(|x| x["mode"] = json!("allow"));
++        };
++        assert_eq!(gaps(&allow), files_gap, "{form} の allow");
++        let wide = |s: &mut Value| {
++            let xs = s["permissions"]["deny"].as_array_mut().expect("列");
++            xs.iter_mut()
++                .filter(|r| **r == json!(rule))
++                .for_each(|r| *r = json!("Read(~/.claude/**/x)"));
++        };
++        assert_eq!(gaps(&wide), deny_gap, "{form} の別の字");
++    }
++}
++
+ #[test]
+ fn cwarg_tmp_and_version() {
+     assert_eq!(private_tmp("/W"), "/tmp/tzc-07d671");
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index ad98159a590a85b8a2d4e2000f87c1e60977024c..3a1ed5e0d0753df55517a26a9192bb9666127130 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -44,7 +44,7 @@
+   "settings": {
+     "permissions": {
+       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
+-      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)"]
++      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)", "Read(~/.claude/.credentials.json)"]
+     },
+     "sandbox": {
+       "enabled": true,
+@@ -58,6 +58,7 @@
+         {"path": "~/.git-credentials", "mode": "deny"},
+         {"path": "~/.config/git/credentials", "mode": "deny"},
+         {"path": "~/.cld-env", "mode": "deny"},
++        {"path": "~/.claude/.credentials.json", "mode": "deny"},
+         {"path": "/S/accounts", "mode": "deny"},
+         {"path": "/R/.beads/.env", "mode": "deny"},
+         {"path": "/tmp/claude-U", "mode": "deny"}
