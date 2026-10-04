@@ -1,0 +1,196 @@
+diff --git a/scribe2/crates/scribe2/src/account/consumers.rs b/scribe2/crates/scribe2/src/account/consumers.rs
+index 069a3403..08a17126 100644
+--- a/scribe2/crates/scribe2/src/account/consumers.rs
++++ b/scribe2/crates/scribe2/src/account/consumers.rs
+@@ -426,7 +426,15 @@ mod tests {
+         let dir = std::env::temp_dir().join(format!("account-consumers-{name}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&dir);
+         let _ = fs::create_dir_all(&dir);
+-        dir
++        crate::pipe::fixture::held(dir)
++    }
++
++    /// 作った dir は歯の thread の終わりに消える（[`crate::pipe::fixture::held`]・memo t3-hub.74.49.10）。
++    #[test]
++    fn vschd_account_consumers_scratch_is_gone_after_the_thread_ends() {
++        let (inside, gone, dir) = crate::pipe::fixture::made_in_thread(|| scratch("vschd-gone"));
++        assert!(inside, "thread の中では在り file を置ける: {}", dir.display());
++        assert!(gone, "join の後は無い: {}", dir.display());
+     }
+ 
+     /// 席 `target` の記録 file に `sid` / `ts` の読める記録を書く（形は `digest.rs` の書き手 [`PluginRecord::to_line`]）。
+diff --git a/scribe2/crates/scribe2/src/account/mod.rs b/scribe2/crates/scribe2/src/account/mod.rs
+index a85dc9e3..f5e2391f 100644
+--- a/scribe2/crates/scribe2/src/account/mod.rs
++++ b/scribe2/crates/scribe2/src/account/mod.rs
+@@ -1035,7 +1035,15 @@ mod tests {
+         let dir = std::env::temp_dir().join(format!("account-stage-{name}-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&dir);
+         let _ = fs::create_dir_all(&dir);
+-        dir
++        crate::pipe::fixture::held(dir)
++    }
++
++    /// 作った dir は歯の thread の終わりに消える（[`crate::pipe::fixture::held`]・memo t3-hub.74.49.10）。
++    #[test]
++    fn vschd_account_stage_scratch_is_gone_after_the_thread_ends() {
++        let (inside, gone, dir) = crate::pipe::fixture::made_in_thread(|| scratch("vschd-gone"));
++        assert!(inside, "thread の中では在り file を置ける: {}", dir.display());
++        assert!(gone, "join の後は無い: {}", dir.display());
+     }
+ 
+     /// `body` を一時 file に書いて [`staged_fits`] を撃つ（書けない周は歯を落とす＝空虚に通さない）。
+diff --git a/scribe2/crates/scribe2/src/pipe/live.rs b/scribe2/crates/scribe2/src/pipe/live.rs
+index b080affe..57d5b800 100644
+--- a/scribe2/crates/scribe2/src/pipe/live.rs
++++ b/scribe2/crates/scribe2/src/pipe/live.rs
+@@ -176,7 +176,19 @@ mod tests {
+     fn place(tag: &str) -> PathBuf {
+         let root = std::env::temp_dir().join(format!("xphost-{}-{tag}", std::process::id()));
+         let _ = std::fs::remove_dir_all(&root);
+-        root.join("state")
++        crate::pipe::fixture::held(root).join("state")
++    }
++
++    /// 置き場の根（返した path の親）は歯の thread の終わりに消える（[`crate::pipe::fixture::held`]・memo t3-hub.74.49.10）。
++    #[test]
++    fn vschd_live_place_root_is_gone_after_the_thread_ends() {
++        let (inside, gone, root) = crate::pipe::fixture::made_in_thread(|| {
++            let state = place("vschd-gone");
++            let _ = std::fs::create_dir_all(&state);
++            state.parent().map(Path::to_path_buf).unwrap_or_default()
++        });
++        assert!(inside, "thread の中では根が在り file を置ける: {}", root.display());
++        assert!(gone, "join の後は根が無い: {}", root.display());
+     }
+ 
+     fn ticket() -> Ticket {
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index dffd412f..3db5427c 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -822,14 +822,50 @@ pub(crate) mod fixture {
+         }
+     }
+ 
+-    /// 歯ごとの空の tmp dir。
++    /// 歯ごとの空の tmp dir（[`held`] で歯の thread に預ける＝歯の終わりに dir ごと消える）。
+     pub(crate) fn scratch(name: &str) -> PathBuf {
+         let dir = std::env::temp_dir().join(format!("pipe-mutant-{name}-{}", std::process::id()));
+         let _ = std::fs::remove_dir_all(&dir);
+         let _ = std::fs::create_dir_all(&dir);
++        held(dir)
++    }
++
++    thread_local! {
++        /// [`held`] が預かった dir（thread の終端で drop＝libtest は歯 1 本を 1 thread で走らせる・panic の unwind でも drop）。
++        static HELD: RefCell<Vec<Held>> = const { RefCell::new(Vec::new()) };
++    }
++
++    /// 預けた dir の包み（drop で再帰削除・e2e の `TmpDir::held` と同じ形・設計 gate-cost.md §17・memo t3-hub.74.49.10）。
++    struct Held(PathBuf);
++
++    impl Drop for Held {
++        fn drop(&mut self) {
++            let _ = std::fs::remove_dir_all(&self.0);
++        }
++    }
++
++    /// dir をいま走っている歯の thread に預け、同じ path を返す（thread の終わりに dir ごと消える・呼び手の字は替えない）。
++    ///
++    /// 歯の一時 dir の助け（[`scratch`]・account の `scratch`・live の `place`）が使う口である。
++    pub(crate) fn held(dir: PathBuf) -> PathBuf {
++        HELD.with(|list| list.borrow_mut().push(Held(dir.clone())));
+         dir
+     }
+ 
++    /// `make` を別の thread で撃ち、返した dir に file を置けたか・join の後に dir が無いか・dir の path を返す（歯の一時 dir の助けの歯の共通の測り）。
++    ///
++    /// 測った後の dir は呼んだ歯の thread にも預ける（助けが預け損ねた周も歯の終わりに消える・預けるのは測った後）。
++    pub(crate) fn made_in_thread(make: impl FnOnce() -> PathBuf + Send + 'static) -> (bool, bool, PathBuf) {
++        let (inside, dir) = std::thread::spawn(move || {
++            let dir = make();
++            (std::fs::write(dir.join("f"), "1").is_ok(), dir)
++        })
++        .join()
++        .unwrap_or_else(|_| (false, PathBuf::new()));
++        let gone = !dir.as_os_str().is_empty() && !dir.exists();
++        (inside, gone, held(dir))
++    }
++
+     /// log の 1 行（固定 ts・段と席と pid と detail は呼び手が選ぶ）。
+     pub(crate) fn event(run: &str, kind: EventKind, stage: Option<Stage>, seat: Option<&str>, detail: Option<&str>) -> Event {
+         Event {
+@@ -1039,6 +1075,10 @@ pub(crate) mod fixture {
+     }
+ }
+ 
++/// 歯の一時 dir の助けの歯（[`fixture::held`]・memo t3-hub.74.49.10）。
++#[cfg(test)]
++mod scratch_tests;
++
+ #[cfg(test)]
+ mod tests {
+     use super::fixture::{append_all, event, exited, scratch, Call, Real, Stub};
+diff --git a/scribe2/crates/scribe2/src/pipe/scratch_tests.rs b/scribe2/crates/scribe2/src/pipe/scratch_tests.rs
+new file mode 100644
+index 00000000..5374f212
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/scratch_tests.rs
+@@ -0,0 +1,56 @@
++//! 歯の一時 dir の助け（`pipe::fixture` の `scratch` と `held`）の歯（memo t3-hub.74.49.10）。
++//!
++//! 助けが作った dir は歯の thread の終わりに消える（panic で終わった thread も）。
++//! 歯は自分の作った dir を全部 `held` に預けるので、/tmp に dir を残さない（預けるのは在る無しを測った後）。
++
++use super::fixture::{held, made_in_thread, scratch};
++use std::fs;
++use std::sync::mpsc;
++use std::thread;
++
++/// 作った dir は thread の中では在り、中に file を置いた周も join の後は無い。
++#[test]
++fn vschd_scratch_dir_is_gone_after_the_thread_ends() {
++    let (inside, gone, dir) = made_in_thread(|| scratch("vschd-gone"));
++    assert!(inside, "thread の中では在り file を置ける: {}", dir.display());
++    assert!(gone, "join の後は無い: {}", dir.display());
++}
++
++/// panic で終わった thread の dir も join の後は無い。
++#[test]
++fn vschd_scratch_dir_is_gone_after_a_panicking_thread() {
++    let (sent, got) = mpsc::channel();
++    let joined = thread::spawn(move || {
++        let dir = scratch("vschd-panic");
++        let _ = fs::write(dir.join("f"), "1");
++        let _ = sent.send(dir);
++        panic!("歯の中の panic");
++    })
++    .join();
++    let dir = got.recv().expect("thread が path を渡す");
++    let gone = !dir.exists();
++    let dir = held(dir);
++    assert!(joined.is_err(), "thread は panic で終わった");
++    assert!(gone, "panic の後も無い: {}", dir.display());
++}
++
++/// 同じ名の 2 回目は空の dir を返し、thread の後は無く、隣の同じ頭の語の別の名の dir は残る。
++#[test]
++fn vschd_scratch_removes_only_its_own_dir() {
++    let sibling = held(std::env::temp_dir().join(format!("pipe-mutant-vschd-own-sibling-{}", std::process::id())));
++    fs::create_dir_all(&sibling).expect("隣の dir");
++    fs::write(sibling.join("keep"), "1").expect("隣の file");
++    let (empty, dir) = thread::spawn(|| {
++        let first = scratch("vschd-own");
++        let _ = fs::write(first.join("f"), "1");
++        let second = scratch("vschd-own");
++        (fs::read_dir(&second).map(|mut entries| entries.next().is_none()).unwrap_or(false), second)
++    })
++    .join()
++    .expect("thread が終わる");
++    let gone = !dir.exists();
++    let dir = held(dir);
++    assert!(empty, "2 回目は空の dir: {}", dir.display());
++    assert!(gone, "thread の後は無い: {}", dir.display());
++    assert!(sibling.join("keep").is_file(), "隣の dir は残る: {}", sibling.display());
++}
