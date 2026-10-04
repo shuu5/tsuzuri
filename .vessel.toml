@@ -25,6 +25,3 @@ constitution = ["design-intent/constitution.yaml", "design-intent/rules.yaml"]
 # 席の手元の憲法の要の写し（器の任意の key seat-constitution・tsuzuri の判断の記録 ADR-38 の決定 (5)・器の行 v-brief-const）。
 # 器の SessionStart は、この project の席に器の憲法の 5 行の代わりにこの写しを字のまま出す。写しは tz derive が design-intent から書く。
 seat-constitution = "contracts/seat/brief.txt"
-# 便の組みを並び（同時に走る便の枠）ごとに温かく使い回す（器の任意の key build-lanes・tsuzuri の判断の記録 ADR-35 の決定 (1) と (7)・器の行 v-lane と v-lane-cap）。
-# 名乗った repo の便は、並びの木 .worktrees/scribe2/lane/<n> の path を固定して中身だけを便の base に替え、木の中の target で組む。並びの合計の上限は器の rules の行 pipe.lanes_cap_mb。
-build-lanes = true
