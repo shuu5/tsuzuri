@@ -2,6 +2,8 @@
 //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
 //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（行 g-sum-pick・判断の記録 ADR-30 決定 (2)）。
+//! 2 つの概要が両方無い bead は、本文の頭の 1 行を「本文から」の印つきで箱に出す。本文は block「本文と記録」と同じ
+//! 1 本の引きの読み（nodebody の module の `item_source`）から取り、同じ口を 2 度読まない（行 g-node-excerpt）。
 //! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
 //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
 //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
@@ -9,6 +11,7 @@
 
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
 use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
+use tsuzuri_contract::summary::excerpt;
 use tsuzuri_contract::surface::{RevokeRequest, RulingId, revocable};
 use tsuzuri_contract::wire;
 
@@ -18,7 +21,9 @@ use crate::mapview::{encode, is_open};
 use crate::project::nodearound::PageState;
 use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
+use crate::vocab::label;
 use crate::widgets::nodecard::full_src;
+use crate::widgets::pop::UNKNOWN_KEY;
 use crate::widgets::sumpick::{self, Picked};
 
 pub const BLOCK: Block = Block {
@@ -112,11 +117,46 @@ pub struct SumBox {
     pub other: Option<Picked>,
 }
 
-/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら表示の型の側の見出しで要約なし）。
+/// 概要の箱に渡す本文の頭の 1 行（行 g-node-excerpt）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Excerpt {
+    /// 中心が台帳の bead でない（1 本の引きを読まない・設計の節点と走行と決定）。
+    Never,
+    /// 1 本の引きをまだ読んでいない・口が読めない・電文が読めない・ほかの bead の電文の間。
+    Unread,
+    /// 読んだ本文の頭の 1 行（本文に行が無ければ None）。
+    Read(Option<String>),
+}
+
+/// 中心の bead の 1 本の引きの電文から本文の頭の 1 行（bead が None なら Never・電文の行の id が bead と同じ時だけ読む）。
+pub fn excerpt_of(item: &Fetched, bead: Option<&BeadId>) -> Excerpt {
+    let Some(bead) = bead else {
+        return Excerpt::Never;
+    };
+    match item {
+        Fetched::Body(text) => match wire::decode::<LedgerItem>(text) {
+            Ok(it) if it.row.id == *bead => Excerpt::Read(excerpt(&it.description)),
+            _ => Excerpt::Unread,
+        },
+        Fetched::NotRead | Fetched::Failed => Excerpt::Unread,
+    }
+}
+
+/// 概要の箱（本文の頭の 1 行を渡さない形・`summary_in` に `Excerpt::Never` を渡す）。
 pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
+    summary_in(center, mode, &Excerpt::Never)
+}
+
+/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら本文の頭の 1 行を本文からの
+/// 印つきで・それも無ければ表示の型の側の見出しで要約なし・本文をまだ読めていない間は要約なしでなくまだ分からない）。
+pub fn summary_in(center: &AroundRow, mode: Mode, body: &Excerpt) -> SumBox {
     let (plain, eng) = (center.node.plain.as_deref(), center.node.eng.as_deref());
     let other = sumpick::other(mode, plain, eng);
-    match sumpick::pick(mode, plain, eng, None) {
+    let line = match body {
+        Excerpt::Read(line) => line.as_deref(),
+        Excerpt::Never | Excerpt::Unread => None,
+    };
+    match sumpick::pick(mode, plain, eng, line) {
         Some(p) => SumBox {
             key: p.key,
             class: if p.marked { SUMMARY_MARKED } else { "sumbox" },
@@ -129,7 +169,10 @@ pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
                 Mode::Expert => sumpick::ENG_KEY,
             },
             class: SUMMARY_NONE,
-            text: NO_SUMMARY.to_string(),
+            text: match body {
+                Excerpt::Unread => label(UNKNOWN_KEY),
+                Excerpt::Never | Excerpt::Read(_) => NO_SUMMARY.to_string(),
+            },
             other,
         },
     }
@@ -212,12 +255,14 @@ mod dom {
     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
 
     use super::{
-        BLOCK, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href, center,
-        head, item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary,
+        BLOCK, Excerpt, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href,
+        center, excerpt_of, head, item_path, kept_subject, revoke_body, revoke_target,
+        shows_revoke, summary_in,
     };
     use crate::mapview::band_chip;
     use crate::project::ask::{Outcome, can_send, outcome};
     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
+    use crate::project::nodebody::item_source;
     use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
     use crate::view::{Fetched, PageSubject};
     use crate::vocab::label;
@@ -274,6 +319,8 @@ mod dom {
             });
         }
         let mode = mode_of(search);
+        // 中心の bead の本文の頭の 1 行は、block「本文と記録」と同じ 1 本の引きの読みから取る（同じ口を 2 度読まない・行 g-node-excerpt）。
+        let body = item_source();
         // 決定の頁の取り消しの的と、その問いの 1 本の引き（的が無ければ空の path で読まない）。
         let target = Memo::new(move |_| match read.with(|(f, s)| state(f, *s)) {
             PageState::Doc(doc) => revoke_target(&doc),
@@ -295,7 +342,11 @@ mod dom {
             match st {
                 PageState::Doc(doc) => match (head(&doc), center(&doc)) {
                     (Some(h), Some(c)) => {
-                        let boxes = sum_view(summary(c, mode()));
+                        let excerpt = body.map_or(Excerpt::Never, |s| {
+                            s.bead
+                                .with(|b| s.item.with(|(f, _)| excerpt_of(f, b.as_ref())))
+                        });
+                        let boxes = sum_view(summary_in(c, mode(), &excerpt));
                         let revoke = target.get().map(|t| {
                             let d = draft(drafts, &t.ruling);
                             revoke_view(t, item, d)

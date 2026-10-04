@@ -297,7 +297,7 @@ fn gsum_dom_text() {
     let node = read("src/project/node.rs");
     let dom = dom_part(&node);
     for want in [
-        "summary(c, mode())",
+        "summary_in(c, mode(), &excerpt)",
         "{h2(b.key)}</header><p data-t=",
         "M4 21c1-4 4-6 8-6s7 2 8 6",
         "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",

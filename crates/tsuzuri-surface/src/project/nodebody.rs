@@ -4,6 +4,7 @@
 //! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
 //! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
 //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る（行 g-node-excerpt）。
 
 use tsuzuri_contract::graph::{AroundRow, NodeKind};
 use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
@@ -97,15 +98,19 @@ pub fn texts(fetched: &Fetched, bead: &BeadId) -> Body<Texts> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use dom::view;
+pub use dom::{ItemSource, item_source, view};
 
 /// 本文と記録の block の DOM（wasm の target のときだけ）。
 #[cfg(target_arch = "wasm32")]
 mod dom {
+    use std::cell::Cell;
+
     use leptos::prelude::*;
     use tsuzuri_contract::ledger::BeadId;
 
-    use super::{BLANK, BLOCK, Body, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts};
+    use super::{
+        BLANK, BLOCK, Body, Fetched, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts,
+    };
     use crate::project::nodearound::{source, state};
     use crate::project::{fold, section, unmeasured};
     use crate::store;
@@ -132,12 +137,25 @@ mod dom {
         view! { <div data-ledger-text="">{md::view(blocks)}</div> }.into_any()
     }
 
-    /// 本文と記録の block（台帳の bead でない節点と、近傍をまだ読んでいない間は何も出さない）。
-    pub fn view() -> AnyView {
-        let src = source();
-        let Some(near) = src.read else {
-            return ().into_any();
-        };
+    /// 頁に 1 つの中心の bead の 1 本の引きの読み（この block と block「節点」の概要の箱が分ける・行 g-node-excerpt）。
+    #[derive(Clone, Copy)]
+    pub struct ItemSource {
+        near: ReadSignal<(Fetched, Option<u16>)>,
+        pub bead: Memo<Option<BeadId>>,
+        pub item: ReadSignal<(Fetched, Option<u16>)>,
+    }
+
+    thread_local! {
+        /// 頁の block が分ける 1 本の引きの読み（近傍の読みと同じ一生・近傍の読みが替われば作り直す）。
+        static ITEM: Cell<Option<ItemSource>> = const { Cell::new(None) };
+    }
+
+    /// 頁に 1 つの 1 本の引きの読み（近傍の読みが無ければ None・初めて呼んだ block が作り、次の block は同じ読みを使う）。
+    pub fn item_source() -> Option<ItemSource> {
+        let near = source().read?;
+        if let Some(s) = ITEM.get().filter(|s| s.near == near) {
+            return Some(s);
+        }
         let bead = Memo::new(move |before: Option<&Option<BeadId>>| {
             let st = near.with(|(f, s)| state(f, *s));
             kept_bead(before.cloned().flatten(), &st)
@@ -145,6 +163,16 @@ mod dom {
         let path =
             Signal::derive(move || bead.with(|b| b.as_ref().map(item_path).unwrap_or_default()));
         let item = crate::net::read_path(path);
+        let s = ItemSource { near, bead, item };
+        ITEM.set(Some(s));
+        Some(s)
+    }
+
+    /// 本文と記録の block（台帳の bead でない節点と、近傍をまだ読んでいない間は何も出さない）。
+    pub fn view() -> AnyView {
+        let Some(ItemSource { bead, item, .. }) = item_source() else {
+            return ().into_any();
+        };
         let content = move || {
             let Some(b) = bead.get() else {
                 return ().into_any();
