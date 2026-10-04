@@ -374,7 +374,7 @@ pub(super) fn is_blocking(dep: &Dep, closed: &BTreeSet<&str>) -> bool {
 }
 
 /// acceptance の `design = <doc>#<id>` の行から設計 pointer を引く（受付の `--design` と同じ字面・同じ parse）。
-pub(super) fn pointer_of(acceptance: &str) -> Option<Pointer> {
+pub(in crate::pipe) fn pointer_of(acceptance: &str) -> Option<Pointer> {
     let line = acceptance.lines().map(str::trim).find_map(|line| line.strip_prefix(DESIGN_KEY))?;
     table::parse_pointer(line.trim()).ok()
 }

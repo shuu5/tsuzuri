@@ -15,21 +15,25 @@
 //! 自分の write-set の .rs の候補を覆わない組・項目の辞書順・読めない周は `widen=unmeasured:<理由>` の 1 行・rc と判定は変えない）/
 //! `index=unavailable:<語>`（索引を作れない周〔状態が failed〕で touches に型の項目を持つ行だけ・字面の閉包に縮退して通す・rc と判定は
 //! 変えない）/
-//! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]）/ 末尾に
+//! `acceptance=<matched|unmeasured:ledger>`（`--placed` を渡した周だけ・`--bead` の bead の acceptance の `design = ` の行を dispatch の
+//! 列と同じ読み手で読み `--design` と照らす・`done-teeth=` の行の次・判断の記録 ADR-44 の決定 (3)）/
+//! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]・`--placed` の周の照らしの断りは judge の断りの後に
+//! preflight だけの名 `acceptance-pointer` の 1 行）/ 末尾に
 //! `preflight: <ok|refused n=<件数>|broken>`。rc = 0（断り 0）/ 1（断り ≥ 1）/ 2（読めない = `RC_BROKEN` の周）。
 //! `--state-dir` が無く git 設定からも解けない周は `overlap=unmeasured` を出し、rc は他の断りで決める（測れないを 0 に
 //! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
 
 use super::base_run::BaseRun;
 use super::intake::{ceiling_of, early, generated, judge, read_args, Denial, Judged, Material, Materials};
-use super::{flag, refused, state_dir_of};
+use super::{flag, present, refused, state_dir_of};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+use crate::pipe::dispatch::pointer_of;
 use crate::pipe::refuse::covered;
 use crate::pipe::review::section_text;
 use crate::pipe::spawn::table_rows;
 use crate::pipe::{show_head, table};
 use crate::rules::manifest::Manifest;
-use crate::seat::ledger::DEFAULT_BD;
+use crate::seat::ledger::{one_read, read_ledger, timeout_of, Issue, DEFAULT_BD};
 use std::path::Path;
 
 /// 末尾の判定行の書き出し。
@@ -44,8 +48,67 @@ const UNMEASURED: &str = "overlap=unmeasured";
 /// 空の file の列の字面（交差 0・歯の file 0）。
 const NONE: &str = "-";
 
-/// `pipe preflight`: judge だけを撃ち、事実と断りを stdout に並べる。
+/// `--bead` の bead を行に置いた bead と名乗り、その acceptance を照らす flag（値なし・在る周だけ台帳を読む）。
+pub(super) const PLACED: &str = "--placed";
+
+/// 照らしの断りの名（preflight だけの名・受付の [`crate::pipe::refuse::Refuse`] の外）。
+const ACCEPTANCE: &str = "acceptance-pointer";
+
+/// 置いた bead の acceptance の照らし（閉じた 3 値）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Accepted {
+    /// acceptance の `design = ` の行が `--design` と同じ置き場と行 id を指す。
+    Matched,
+    /// 断る（理由の字）。
+    Refused(String),
+    /// 台帳を読めない（語）。
+    Unmeasured(&'static str),
+}
+
+/// 台帳の issue の列から `bead` を id で引き、acceptance を dispatch の列と同じ読み手（[`pointer_of`]）で読んで `pointer` と照らす。
+fn accepted(issues: &[Issue], bead: &str, pointer: &table::Pointer) -> Accepted {
+    let design = format!("{}#{}", pointer.path, pointer.id);
+    let Some(issue) = issues.iter().find(|issue| issue.id == bead) else {
+        return Accepted::Refused(format!("bead {bead} が台帳に無い — 行に置いた bead の id を --bead に渡す"));
+    };
+    let Some(found) = pointer_of(&issue.acceptance) else {
+        return Accepted::Refused(format!(
+            "bead {bead} の acceptance に design = の行が無い — bdw update {bead} --acceptance 'design = {design}' で足す（dispatch は acceptance の design = の行だけを契約の pointer と読む）"
+        ));
+    };
+    if found != *pointer {
+        return Accepted::Refused(format!(
+            "bead {bead} の acceptance は design = {}#{} で --design {design} と違う — 行に合う bead を渡すか acceptance を直す",
+            found.path, found.id
+        ));
+    }
+    Accepted::Matched
+}
+
+/// `--placed` の周の照らし（rules の待ち上限の行が無い周と台帳を読めない周は `Unmeasured`）。台帳は `--repo` を作業 dir に `bd` で読む
+/// （裁定 id の判定と同じ引数・[`one_read`] の区間の中で 1 回の出力を分ける）。
+fn acceptance_of(bd: &str, repo: &Path, manifest: &Manifest, bead: &str, pointer: &table::Pointer) -> Accepted {
+    let read = timeout_of(manifest).and_then(|timeout| read_ledger(bd, repo, timeout).ok());
+    read.map_or(Accepted::Unmeasured("ledger"), |issues| accepted(&issues, bead, pointer))
+}
+
+/// 照らしの行の対（事実の行・断りの行）。
+fn acceptance_lines(found: Option<&Accepted>) -> (Option<String>, Option<String>) {
+    match found {
+        None => (None, None),
+        Some(Accepted::Matched) => (Some("acceptance=matched".to_owned()), None),
+        Some(Accepted::Unmeasured(word)) => (Some(format!("acceptance=unmeasured:{word}")), None),
+        Some(Accepted::Refused(why)) => (None, Some(format!("refuse={ACCEPTANCE}:{why}"))),
+    }
+}
+
+/// `pipe preflight`: judge だけを撃ち、事実と断りを stdout に並べる（台帳の読みは 1 回の出力を分ける区間の中）。
 pub(super) fn preflight(args: &[String], manifest: &Manifest) -> Outcome {
+    one_read(|| checked(args, manifest))
+}
+
+/// preflight の本体。
+fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     let (pointer, bead, repo) = match read_args(args) {
         Ok(found) => found,
         Err(denial) => return denial.outcome,
@@ -94,7 +157,8 @@ pub(super) fn preflight(args: &[String], manifest: &Manifest) -> Outcome {
     let entrance = early.base.as_ref().map(BaseRun::fact);
     let judged = judge(&material);
     let widen = widen_lines(&repo, &sha, &pointer, &contract.write_set);
-    render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth))
+    let placed = present(args, PLACED).then(|| acceptance_of(bd, &repo, manifest, &bead, &pointer));
+    render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth), placed.as_ref())
 }
 
 /// `widen=<項目>@<doc>#<行 id>:<file,…>`（設計 reverse-index.md の閉包の広がりの予想）: 自分の行の § の本文が語として名指す型形の項目を
@@ -162,15 +226,18 @@ fn tailed(denial: Denial) -> Outcome {
 
 /// judge の結果を 1 行 1 事実に描く。`measured` は置き場が在った（交差を撃った）か。`facts` は base の木で撃った周の欄 `entrance` と、
 /// 索引を作れない周の尾 `index=unavailable:<語>`（設計 reverse-index.md §7 (b)）。`tail` は閉包の広がりの行と、行が欄 `done-teeth` を持つか
-/// （`done-teeth=present|absent`・`design=` の行の次・設計 contract-source.md §66 行 bx）。
-fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String>), tail: (Vec<String>, bool)) -> Outcome {
+/// （`done-teeth=present|absent`・`design=` の行の次・設計 contract-source.md §66 行 bx）。`placed` は `--placed` の周の照らし（事実の行は
+/// `done-teeth=` の次・断りは judge の断りの後に 1 行で末尾の件数と rc に数える）。
+fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String>), tail: (Vec<String>, bool), placed: Option<&Accepted>) -> Outcome {
     let (entrance, index) = facts;
     let (widen, teeth) = tail;
+    let (accepted, refused) = acceptance_lines(placed);
     let mut out: Vec<String> = Vec::new();
     if let Some((design, section)) = &judged.design {
         out.push(format!("design={design} section={section}"));
         out.push(format!("done-teeth={}", if teeth { "present" } else { "absent" }));
     }
+    out.extend(accepted);
     if let Some((kind, files)) = judged.write_set {
         out.push(format!("write-set={} files={files}", kind.as_str()));
     }
@@ -190,8 +257,10 @@ fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String
     out.extend(index);
     out.extend(widen);
     out.extend(judged.denials.iter().map(refuse_line));
+    let count = judged.denials.len().saturating_add(usize::from(refused.is_some()));
+    out.extend(refused);
     let broken = judged.denials.iter().any(|denial| denial.outcome.rc == RC_BROKEN);
-    let (rc, tail) = match (judged.denials.len(), broken) {
+    let (rc, tail) = match (count, broken) {
         (0, _) => (RC_OK, "ok".to_owned()),
         (_, true) => (RC_BROKEN, "broken".to_owned()),
         (count, false) => (RC_REFUSED, format!("refused n={count}")),
@@ -213,5 +282,69 @@ fn listed(files: &[String]) -> String {
         NONE.to_owned()
     } else {
         files.join(",")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{acceptance_lines, accepted, Accepted};
+    use crate::pipe::table::parse_pointer;
+    use crate::seat::ledger::Issue;
+
+    /// acceptance だけを持つ台帳の 1 件。
+    fn issue(id: &str, acceptance: &str) -> Issue {
+        Issue {
+            id: id.to_owned(),
+            status: "open".to_owned(),
+            priority: None,
+            labels: Vec::new(),
+            acceptance: acceptance.to_owned(),
+            deps: Vec::new(),
+            kind: String::new(),
+            description: String::new(),
+            notes: String::new(),
+            close_reason: String::new(),
+            created_at: None,
+            closed_at: None,
+            updated_at: None,
+            effect: String::new(),
+        }
+    }
+
+    /// 台帳 `issues` で `bead` を `docs/design/toy.md#a` と照らした結果。
+    fn judged(issues: &[Issue], bead: &str) -> Accepted {
+        let pointer = parse_pointer("docs/design/toy.md#a").unwrap();
+        accepted(issues, bead, &pointer)
+    }
+
+    /// 通る見本（行を指す bead）と、通る見本から 1 句だけ外した断る見本。
+    #[test]
+    fn vaccpt_pointer_of_the_bead_is_matched_against_the_design() {
+        let matched = "design = docs/design/toy.md#a";
+        assert_eq!(judged(&[issue("s2-a", matched)], "s2-a"), Accepted::Matched);
+        assert_eq!(judged(&[issue("s2-a", &format!("先の行\n  {matched}  \n後の行"))], "s2-a"), Accepted::Matched);
+        let refused = |issues: &[Issue], bead: &str| matches!(judged(issues, bead), Accepted::Refused(why) if why.contains(&format!("bead {bead} ")));
+        assert!(refused(&[issue("s2-a", matched)], "s2-z"), "台帳に無い bead");
+        assert!(refused(&[issue("s2-a", "先の行だけ")], "s2-a"), "design = の行が無い");
+        assert!(refused(&[issue("s2-a", "design = docs/design/toy.md#b")], "s2-a"), "ほかの行 id");
+        assert!(refused(&[issue("s2-a", "design = docs/design/other.md#a")], "s2-a"), "ほかの置き場");
+        assert!(refused(&[issue("s2-a", "design =docs/design/toy.md#a")], "s2-a"), "design = の後の空白が無い（dispatch の読み手は読まない）");
+        assert!(refused(&[issue("s2-a", matched), issue("s2-b", "design = docs/design/toy.md#b")], "s2-b"), "同じ台帳のほかの bead の行");
+    }
+
+    /// 照らしの行: 通る周は事実の行・読めない周は unmeasured の事実の行・断る周は refuse=acceptance-pointer の 1 行と経路の字。
+    #[test]
+    fn vaccpt_lines_name_the_bead_and_the_route() {
+        assert_eq!(acceptance_lines(None), (None, None));
+        assert_eq!(acceptance_lines(Some(&Accepted::Matched)), (Some("acceptance=matched".to_owned()), None));
+        assert_eq!(acceptance_lines(Some(&Accepted::Unmeasured("ledger"))), (Some("acceptance=unmeasured:ledger".to_owned()), None));
+        let (fact, line) = acceptance_lines(Some(&judged(&[issue("s2-a", "先の行だけ")], "s2-a")));
+        let line = line.unwrap_or_default();
+        assert!(fact.is_none() && line.starts_with("refuse=acceptance-pointer:bead s2-a "), "{line}");
+        for needle in ["bdw update s2-a", "--acceptance", "design = docs/design/toy.md#a"] {
+            assert!(line.contains(needle), "{needle}: {line}");
+        }
+        let (_, other) = acceptance_lines(Some(&judged(&[issue("s2-a", "design = docs/design/toy.md#b")], "s2-a")));
+        assert!(other.unwrap_or_default().contains("design = docs/design/toy.md#b で --design docs/design/toy.md#a と違う"));
     }
 }

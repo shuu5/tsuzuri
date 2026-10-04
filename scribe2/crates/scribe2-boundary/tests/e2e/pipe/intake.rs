@@ -3655,3 +3655,60 @@ fn intake_place_outside_passes_a_pointer_in_the_default_place() {
     assert_eq!(taken.status.code(), Some(i32::from(RC_OK)), "既定の置き場は通る: {}", stderr_of(&taken));
     clean(&[&repo, &state]);
 }
+
+// ───── 置いた bead の acceptance の照らし（判断の記録 ADR-44 の決定 (3)・行 v-accept-ptr・接頭辞 `vaccpt_`） ─────
+
+/// 偽の台帳: 行 t を指す s2-a・design = の行の無い s2-b・ほかの行を指す s2-c。
+const ACCEPT_LEDGER: &str = "[{\"id\":\"s2-a\",\"status\":\"open\",\"acceptance_criteria\":\"design = docs/design/toy.md#t\"},\
+{\"id\":\"s2-b\",\"status\":\"open\",\"acceptance_criteria\":\"本文だけ\"},\
+{\"id\":\"s2-c\",\"status\":\"open\",\"acceptance_criteria\":\"design = docs/design/toy.md#u\"}]\n";
+
+/// 行 t の preflight を `bead` で 1 回撃つ（`--bd` は偽の台帳・`placed` の周だけ `--placed` を足す）。
+fn accept_run(repo: &Path, state: &Path, bead: &str, bd: &str, placed: bool) -> Output {
+    let (rules, repo, dir) = (ruling_rules(state), repo.display().to_string(), state.display().to_string());
+    let mut args = vec![
+        "preflight", "--design", BASE_RUN_DESIGN, "--bead", bead, "--repo", &repo, "--state-dir", &dir, "--rules", &rules, "--bd", bd,
+    ];
+    if placed {
+        args.push("--placed");
+    }
+    run_pipe(&args)
+}
+
+/// rc 1・refuse=acceptance-pointer の 1 行（bead の id を持つ）・acceptance= の事実の行なし・末尾の件数 1。
+fn assert_accept_refused(out: &Output, bead: &str) {
+    let text = stdout_of(out);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{bead}: {text}");
+    let refuses = fact_lines(out, "refuse=");
+    assert_eq!(refuses.len(), 1, "{bead}: {text}");
+    assert!(refuses.iter().all(|line| line.starts_with(&format!("refuse=acceptance-pointer:bead {bead} "))), "{bead}: {text}");
+    assert!(fact_lines(out, "acceptance=").is_empty(), "{bead}: {text}");
+    assert_eq!(tail_line(out), "preflight: refused n=1", "{bead}: {text}");
+}
+
+/// `--placed` の preflight は、行を指す bead を rc 0 と acceptance=matched で通し、design = の行の無い bead・ほかの行を指す bead・台帳に無い
+/// bead を rc 1 と refuse=acceptance-pointer の 1 行と末尾の件数 1 で断り、台帳が rc 3 で落ちる周を rc 0 と acceptance=unmeasured:ledger で通す。
+/// `--placed` の無い周は台帳を読まない。どの周も run dir と event を書かない。
+#[test]
+fn vaccpt_binary_refuses_a_bead_whose_acceptance_does_not_point_at_the_row() {
+    let (repo, state) = ruling_repo("", "本文。", &[ruling_row(&[])]);
+    let (bd, log) = ruling_bd(&state, "bd-accept", Some(ACCEPT_LEDGER));
+    let plain = accept_run(&repo, &state, "s2-b", &bd, false);
+    assert_eq!(tail_line(&plain), "preflight: ok", "{}", stdout_of(&plain));
+    assert!(fact_lines(&plain, "acceptance=").is_empty() && ruling_calls(&log) == 0, "--placed の無い周は台帳を読まない: {}", stdout_of(&plain));
+    let matched = accept_run(&repo, &state, "s2-a", &bd, true);
+    assert_eq!(matched.status.code(), Some(i32::from(RC_OK)), "{}{}", stdout_of(&matched), stderr_of(&matched));
+    assert_eq!(fact_lines(&matched, "acceptance="), ["acceptance=matched"], "{}", stdout_of(&matched));
+    assert_eq!(tail_line(&matched), "preflight: ok", "{}", stdout_of(&matched));
+    for bead in ["s2-b", "s2-c", "s2-z"] {
+        assert_accept_refused(&accept_run(&repo, &state, bead, &bd, true), bead);
+    }
+    assert_eq!(ruling_calls(&log), 4, "--placed の 1 周に台帳を 1 回だけ読む");
+    let (failing, _) = ruling_bd(&state, "bd-accept-failing", None);
+    let unmeasured = accept_run(&repo, &state, "s2-a", &failing, true);
+    assert_eq!(unmeasured.status.code(), Some(i32::from(RC_OK)), "{}", stdout_of(&unmeasured));
+    assert_eq!(fact_lines(&unmeasured, "acceptance="), ["acceptance=unmeasured:ledger"], "{}", stdout_of(&unmeasured));
+    assert_eq!(tail_line(&unmeasured), "preflight: ok", "{}", stdout_of(&unmeasured));
+    assert_eq!((run_dirs(&state).len(), event_count(&state)), (0, 0), "run dir も event も書かない");
+    clean(&[&repo, &state]);
+}

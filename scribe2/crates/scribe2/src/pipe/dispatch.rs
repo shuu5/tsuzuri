@@ -80,6 +80,7 @@ use revive::{progress_of, resume, revivals, revive_of};
 
 /// 観測の 1 周（起こさない）を置き場・repo・rules・台帳 client から撃つ口と、その結果（局面の出力の全部の書き直しが列の判定を得る）。
 pub use candidates::{observe_round, Observed};
+pub(in crate::pipe) use candidates::pointer_of;
 
 /// 台帳の閉じた status の字面（依存が閉じたかの判定が読む）。
 const CLOSED: &str = "closed";
