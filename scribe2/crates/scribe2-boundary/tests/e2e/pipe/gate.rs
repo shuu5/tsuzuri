@@ -3455,6 +3455,10 @@ fn pipe_gate_lens_reread_does_not_rerun_a_well_formed_inconclusive() {
     clean(&[&repo, &state]);
 }
 
+/// 偽 claude の版の 1 行（器の lens が claude を起こす直前に撃つ `--version` の 1 回だけに答えて終わり、回数を積まない・
+/// 行 xp-provenance）。
+const CLAUDE_VERSION: &str = "[ \"$1\" = --version ] && { echo '0.0.7 (Claude Code)'; exit 0; }\n";
+
 /// 起こされるたびに回数を [`lens_calls`] の置き場へ積み、`subtype` が `error_max_turns` の封筒（`result` に findings と population を
 /// 持つ PASS の判定の行を含む）を返す偽 claude を書き、gate の lens の行を**器の lens**（本 binary の `lens` に `{contract}` と
 /// `{worktree}` と `--claude` を渡す形）にして返す。
@@ -3473,7 +3477,7 @@ fn max_turns_lens(state: &Path) -> String {
     );
     fs::write(spy.join("envelope"), envelope).expect("封筒を書ける");
     let script = format!(
-        "#!/bin/sh\ncat >/dev/null\nprintf 'call\\n' >> '{}'\ncat '{}'\n",
+        "#!/bin/sh\n{CLAUDE_VERSION}cat >/dev/null\nprintf 'call\\n' >> '{}'\ncat '{}'\n",
         spy.join("calls").display(),
         spy.join("envelope").display()
     );
@@ -4325,7 +4329,11 @@ fn tight_copy(state: &Path) -> PathBuf {
 )]
 fn real_lens(state: &Path, rules: &Path) -> (PathBuf, String) {
     let claude = state.join("permit-claude.sh");
-    let script = format!("#!/bin/sh\ncat >/dev/null\nprintf 'call\\n' >> '{}'\necho '{}'\n", state.join("permit-calls").display(), lens_verdict("PASS"));
+    let script = format!(
+        "#!/bin/sh\n{CLAUDE_VERSION}cat >/dev/null\nprintf 'call\\n' >> '{}'\necho '{}'\n",
+        state.join("permit-calls").display(),
+        lens_verdict("PASS")
+    );
     fs::write(&claude, script).expect("偽 claude を書ける");
     let mut perm = fs::metadata(&claude).expect("権限を読める").permissions();
     std::os::unix::fs::PermissionsExt::set_mode(&mut perm, 0o755);

@@ -24,7 +24,7 @@ use crate::fleet::json_lite::{self, Value};
 use crate::fleet::store::{acquire_with, append_line, lock_owner, owner_pid, read_all, started_ms, LockPolicy, Owner, Reclaim};
 use crate::fleet::{Cost, CostSource, EventKind, Stage};
 use crate::headless::runner::{stop_status, summary_usage, top_level_string};
-use crate::headless::{NO_VALUE, RC_RATE_LIMIT, RC_UNREACHABLE};
+use crate::headless::{provenance, NO_VALUE, RC_RATE_LIMIT, RC_UNREACHABLE};
 use crate::name::{NAME, PLUGIN_DIR};
 use crate::pipe::contract::Contract;
 use crate::polarity::{OnFailure, Polarity, Timing};
@@ -640,7 +640,7 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
     let kept_err = keep_stderr(launch, rc, &stderr).err().map(|reason| format!("pipe: runner の stderr を残せない: {reason}"));
     relay_stderr(&out.stderr);
     // **runner の消費は段の event の前に 1 件**（設計 gate-cost.md §26 形 (2)）。停止中の便は段と同じく書かない。
-    let cost = if stopping { None } else { runner_cost(launch, &stdout, &confinement) };
+    let cost = if stopping { None } else { runner_cost(launch, (&stdout, &stderr), &confinement) };
     let mut outcome = if stopping {
         // **停止中の便は段を 1 件も書かない**（設計 pipeline.md §23）。runner を消したのは `pipe stop` で、
         // 終端は `RunStopped` の経路が書く——ここで `Failed` を書くと stop の終端を上書きする。
@@ -667,10 +667,12 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
 /// runner の要約行（[`summary_usage`]）の消費の 6 値を 1 件書く（揃わない周は書かない・書けない周の理由は stderr の
 /// 1 行で返す＝段の判定と rc は変えない）。
 ///
-/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）。
-fn runner_cost(launch: &Launch<'_>, stdout: &str, confinement: &confine::Confinement) -> Option<String> {
+/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）と、
+/// 捕らえた stderr の版の 4 語（`runner: provenance` の行・無い周は 4 語とも unmeasured・行 xp-provenance）。
+fn runner_cost(launch: &Launch<'_>, (stdout, stderr): (&str, &str), confinement: &confine::Confinement) -> Option<String> {
     let cost = summary_usage(stdout).map(|usage| Cost { source: CostSource::Runner, usage });
-    let written = Some(confine::io::detail(confine::io::written(confinement, stdout)));
+    let write = confine::io::detail(confine::io::written(confinement, stdout));
+    let written = Some(provenance::detail(&write, provenance::from_stderr(stderr)));
     record_cost_with(launch.state_dir, (launch.run, launch.bead), cost, written, launch.policy)
 }
 

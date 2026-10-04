@@ -13,6 +13,7 @@
 mod lens_body;
 #[path = "runner.rs"]
 mod runner_body;
+pub mod provenance;
 
 /// 値を取る headless の flag。**重なりは閉包の断りにしない**: 本体の [`flag`] が両方の値を名乗って断る
 /// （設計 account-autonomy.md §16・その字面と rc は不変）。
@@ -377,6 +378,12 @@ pub fn fill(template: &str, pairs: &[(&str, &str)]) -> String {
     }
 }
 
+/// claude の実行 file を起こす記述（引数・env・stdio は空）。runner と lens の起動 [`build`] と版の 1 回の撃ち
+/// （[`provenance::version_of`]・行 xp-provenance）が共有する、構築の字面のただ 1 か所。
+fn claude_program(claude: &str) -> Invocation {
+    Invocation::new(claude)
+}
+
 /// [`Call`] から起動の記述を組む。**prompt は argv でなく stdin で渡す**。
 ///
 /// argv で渡すと Linux の 1 引数上限（`MAX_ARG_STRLEN` = 128KiB）に当たり、**user が
@@ -386,7 +393,7 @@ pub fn fill(template: &str, pairs: &[(&str, &str)]) -> String {
 /// 包みの結果（unit 名）も返す——呼び手は子の終端で [`confine::release_scope`] を撃つ
 /// （設計 gate-cost.md §4.4 errata・`s2-07l.234`）。
 pub fn build(call: &Call<'_>) -> (Invocation, confine::Confinement) {
-    let mut inner = Invocation::new(call.claude);
+    let mut inner = claude_program(call.claude);
     inner
         .arg("-p")
         // permission mode は**毎回**渡す。省くと版の既定に従い、同じ 1 行が

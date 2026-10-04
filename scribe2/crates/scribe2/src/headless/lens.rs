@@ -76,7 +76,7 @@ use super::runner::{
     has_top_level_key, is_result_record, result_subtype, result_usage, scope_line, top_level_string, ResultKind,
 };
 use super::{
-    build, feed, fill, flag, model_row, need, read_stdin_bytes, rules_of, runner_effort, Call, Effort, Format,
+    build, feed, fill, flag, model_row, need, provenance, read_stdin_bytes, rules_of, runner_effort, Call, Effort, Format,
     DEFAULT_CLAUDE, ROW_LENS_MODEL,
 };
 use crate::cli_args::{refusal, ArgsError};
@@ -623,6 +623,8 @@ fn state(contract: &Contract, teeth: &[String]) -> String {
 /// 最後の process の終了で scope が消えた正常系を測れない。**poll の間も stdout を読み切る**——子の stdout は
 /// pipe なので、誰も読まないと 64 KiB で子が書き待ちになり poll が永久に回る（[`drain`]）。
 fn ask(call: &Call<'_>, cgroup_root: &Path) -> Outcome {
+    // 版の 4 語は claude を起こす直前に 1 回だけ組む（行 xp-provenance・消費の 6 値を運ぶ判定 object に載る）。
+    let words = provenance::probe(call);
     let (mut command, confinement) = build(call);
     let spawned = command.spawn();
     let mut child = match spawned {
@@ -634,7 +636,7 @@ fn ask(call: &Call<'_>, cgroup_root: &Path) -> Outcome {
     let waited = drain(&mut child, |child| poll(child, &mut sampler));
     // **終端で scope を片付ける**（設計 gate-cost.md §4.4 errata・`s2-07l.234`）。stdout の 1 行は
     // 判定の面なので、結果は stderr の 1 行だけに出す。
-    let mut outcome = read_verdict(waited);
+    let mut outcome = read_verdict(waited, &words);
     outcome.err.extend(scope_line("lens", &confinement, sampler.peak()));
     outcome
 }
@@ -667,8 +669,9 @@ fn poll(child: &mut Child, sampler: &mut confine::Sampler<'_>) -> std::io::Resul
     }
 }
 
-/// 終わった claude の出力から判定の JSON 行を読む（[`verdict_line`]）。
-fn read_verdict(waited: std::io::Result<std::process::Output>) -> Outcome {
+/// 終わった claude の出力から判定の JSON 行を読む（[`verdict_line`]）。消費の 6 値を運ぶ判定には版の 4 語の対を足す
+/// （[`provenance::with_object`]）。
+fn read_verdict(waited: std::io::Result<std::process::Output>, words: &str) -> Outcome {
     let out = match waited {
         Ok(found) => found,
         Err(err) => return Outcome::failed_line(RC_BROKEN, format!("lens: claude の出力を読めない: {err}")),
@@ -676,7 +679,7 @@ fn read_verdict(waited: std::io::Result<std::process::Output>) -> Outcome {
     match verdict_line(&String::from_utf8_lossy(&out.stdout)) {
         // 読めない出力を握り潰さない。**判定に届かなかった**と名乗る。
         None => Outcome::ok_line(inconclusive("lens output has no json line")),
-        Some(line) => Outcome::ok_line(line),
+        Some(line) => Outcome::ok_line(provenance::with_object(&line, words)),
     }
 }
 
@@ -973,5 +976,18 @@ mod tests {
         let refused = prompt_of(&contract, STATED, "（裁定なし）", u64::MAX).map_err(|outcome| outcome.rc);
         assert_eq!(refused, Err(crate::cli_outcome::RC_BROKEN), "読めない材料は prompt を組まない");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// claude の出力から読んだ判定のうち消費の 6 値を運ぶ object にだけ版の 4 語の対が載る（行 xp-provenance）。
+    #[test]
+    fn xpprov_lens_verdict_carries_the_words() {
+        use std::os::unix::process::ExitStatusExt;
+        let good = "build:abc claude:9.8.7 model:opus effort:high";
+        let out = |text: &str| Ok(std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: text.as_bytes().to_vec(), stderr: Vec::new() });
+        let envelope = r#"{"type":"result","subtype":"success","is_error":false,"num_turns":5,"duration_ms":6,"result":"{\"verdict\":\"PASS\"}","usage":{"input_tokens":1,"cache_creation_input_tokens":4,"cache_read_input_tokens":3,"output_tokens":2}}"#;
+        let costed = super::read_verdict(out(envelope), good).out.join("\n");
+        assert!(costed.ends_with(&format!(",\"provenance\":\"{good}\"}}")), "{costed}");
+        let plain = super::read_verdict(out("{\"verdict\":\"PASS\"}"), good).out.join("\n");
+        assert_eq!(plain, "{\"verdict\":\"PASS\"}", "消費の 6 値が無い判定は変えない");
     }
 }

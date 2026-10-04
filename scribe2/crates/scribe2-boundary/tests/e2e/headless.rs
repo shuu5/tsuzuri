@@ -21,6 +21,7 @@ use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 use vessel::cli_outcome::{RC_BROKEN, RC_OK, RC_REFUSED};
 use vessel::headless::{RC_RATE_LIMIT, RC_UNREACHABLE};
+use vessel::name::BUILD_COMMIT;
 
 /// binary の path。
 fn bin() -> &'static str {
@@ -36,6 +37,13 @@ fn tmp() -> TmpDir {
     let dir = make_tmp_dir().expect("tmp dir を作れる");
     dir.canonical().expect("tmp dir の実体 path を解ける")
 }
+
+/// fake claude の版の 1 行（runner と lens が claude を起こす直前に撃つ `--version` の 1 回だけに答えて終わる・痕跡を残さない・
+/// 行 xp-provenance）。版の語は [`FAKE_CLAUDE_VERSION`]。
+const FAKE_VERSION: &str = "[ \"$1\" = --version ] && { echo '0.0.7 (Claude Code)'; exit 0; }\n";
+
+/// [`FAKE_VERSION`] が答える版の語。
+const FAKE_CLAUDE_VERSION: &str = "0.0.7";
 
 /// fake claude を 1 本作る。
 ///
@@ -55,6 +63,7 @@ fn fake_claude(dir: &Path, body: &str, lingering: bool, rc: u8) -> PathBuf {
     fs::write(dir.join("body"), body).expect("body を書ける");
     let script = format!(
         "#!/bin/sh\n\
+         {FAKE_VERSION}\
          : > \"{d}/called\"\n\
          printf '%s\\n' \"$@\" > \"{d}/args\"\n\
          cat > \"{d}/stdin\"\n\
@@ -1167,7 +1176,7 @@ fn peak_fixture(root: &Path) -> PathBuf {
 )]
 fn peak_claude(dir: &Path, body: &str) -> PathBuf {
     let path = dir.join("fake-claude");
-    fs::write(&path, format!("#!/bin/sh\n: > \"{}/called\"\n{body}", dir.display())).expect("fake を書ける");
+    fs::write(&path, format!("#!/bin/sh\n{FAKE_VERSION}: > \"{}/called\"\n{body}", dir.display())).expect("fake を書ける");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("fake を実行可能にできる");
     path
 }
@@ -1597,11 +1606,9 @@ fn run_cost_lens_verdict_object_carries_usage_from_the_json_envelope() {
     let result = format!("読みました\n{{\"verdict\":\"FAIL\",\"evidence\":\"途中\"}}\n{COST_VERDICT}\nおしまい");
     let out = lens_stdout_with(&cost_record("\"num_turns\":5,", "6000", &result));
     let head = COST_VERDICT.strip_suffix('}').unwrap_or_default();
-    assert_eq!(
-        out.trim(),
-        format!("{head},\"usage\":\"in:11,out:22,cache_read:33,cache_create:44\",\"turns\":5,\"wall_ms\":6000}}"),
-        "最後の判定 + 6 値"
-    );
+    let costed = format!("{head},\"usage\":\"in:11,out:22,cache_read:33,cache_create:44\",\"turns\":5,\"wall_ms\":6000");
+    let stamped = format!("{costed},\"provenance\":\"build:{BUILD_COMMIT} claude:{FAKE_CLAUDE_VERSION} model:");
+    assert!(out.trim().starts_with(&stamped), "最後の判定 + 6 値 + 版の 4 語（行 xp-provenance）: {out}");
     assert_eq!(out.lines().count(), 1, "stdout は 1 行だけ");
 }
 

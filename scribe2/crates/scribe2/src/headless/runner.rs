@@ -16,8 +16,8 @@
 
 use crate::polarity::{OnFailure, Polarity, Timing};
 use super::{
-    build, feed, fill, flag, need, plugin_dirs, read_stdin_bytes, rules_of, runner_effort, runner_model, Call, Effort,
-    Format, DEFAULT_CLAUDE, RC_RATE_LIMIT, RC_UNREACHABLE,
+    build, feed, fill, flag, need, plugin_dirs, provenance, read_stdin_bytes, rules_of, runner_effort, runner_model, Call,
+    Effort, Format, DEFAULT_CLAUDE, RC_RATE_LIMIT, RC_UNREACHABLE,
 };
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
 use crate::fleet::select::Model;
@@ -190,6 +190,8 @@ fn save_prompt(vessel: &Path, prompt: &str) -> Result<(), String> {
 /// 行を読む各周で `memory.peak` を 1 回読み（[`confine::Sampler`]・待ちは足さない）、終端の `scope=` 行に
 /// `claude_peak_bytes=` で写す。終端で読む形は、最後の process の終了で scope が消えた正常系を測れない。
 fn launch(call: &Call<'_>, tools: &str, cgroup_root: &Path) -> Outcome {
+    // 版の 4 語は claude を起こす直前に 1 回だけ組む（行 xp-provenance・pipe の spawn が消費の event に写す）。
+    let words = provenance::probe(call);
     let (mut command, confinement) = build(call);
     command.arg("--allowedTools").arg(tools);
     let spawned = command.spawn();
@@ -236,6 +238,7 @@ fn launch(call: &Call<'_>, tools: &str, cgroup_root: &Path) -> Outcome {
     // （stdout は pipeline が読む面なので、結果は stderr の 1 行だけに出す）。
     let mut outcome = conclude(status, &seen);
     outcome.err.extend(scope_line("runner", &confinement, sampler.peak()));
+    outcome.err.push(provenance::line(&words));
     outcome
 }
 

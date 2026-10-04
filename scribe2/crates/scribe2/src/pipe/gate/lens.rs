@@ -6,6 +6,7 @@ use super::findings::{Tally, Unread};
 use super::{Verdict, JSON_HEAD};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::Usage;
+use crate::headless::provenance;
 use crate::pipe::confine::{self, Confinement, Reason, Released};
 use crate::pipe::git_bytes;
 use crate::pipe::move_proof::{self, LensInput, Side};
@@ -439,11 +440,14 @@ pub(super) struct Judged {
     ///
     /// **無くても判定を変えない**（古い lens・偽 lens の周は field を欠くだけ＝`None`）。読めた周だけ消費の event を書く。
     pub(super) usage: Option<Usage>,
+    /// lens の版の 4 語（判定 object の `provenance`・[`provenance::of_pairs`]・行 xp-provenance）。**無い・形の違う周は
+    /// `None`**＝消費の event の detail は 4 語とも `unmeasured`。判定は変えない。
+    pub(super) provenance: Option<String>,
 }
 
 /// 判定に届かなかった周の戻り（集計は無い・撃ち直しの印は伏せた側）。
 pub(super) fn unjudged(evidence: String) -> Judged {
-    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None }
+    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None, provenance: None }
 }
 
 /// 出力の形が読めなかった周の戻り（[`unjudged`] に撃ち直しの印を立てた形・[`parse_lens`] 専用）。
@@ -569,7 +573,7 @@ fn parse_lens(text: &str) -> Judged {
         Err(reason) => return unreadable(format!("lens の{reason}")),
     };
     // 消費の 6 値は `findings` / `population` と同じ flat な object から読む（揃わない周は `None`・判定は動かさない）。
-    Judged { usage: Usage::from_pairs(&pairs), ..judge_pairs(&pairs) }
+    Judged { usage: Usage::from_pairs(&pairs), provenance: provenance::of_pairs(&pairs), ..judge_pairs(&pairs) }
 }
 
 /// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。
@@ -593,7 +597,7 @@ fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
         (Some(counted), Some(population)) => Tally::parse(counted, population),
     };
     match read {
-        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None },
+        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None, provenance: None },
         Err(unread) => {
             let evidence = format!("lens の{}", unread.reason());
             match unread {
@@ -833,5 +837,18 @@ mod tests {
         ] {
             assert_eq!(tightened(&diff), (diff.clone(), 0, 0), "逐語のまま数えない");
         }
+    }
+
+    /// gate は lens の判定 object の provenance の 4 語を読み、対が無い・形の違う周は読まない（判定は変えない・行 xp-provenance）。
+    #[test]
+    fn xpprov_gate_reads_the_lens_words() {
+        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"a:0","population":"files:1,lines:1""#;
+        let good = "build:abc claude:9.8.7 model:opus effort:high";
+        let judged = super::parse_lens(&format!("{head},\"provenance\":\"{good}\"}}"));
+        assert_eq!(judged.provenance.as_deref(), Some(good));
+        let bare = super::parse_lens(&format!("{head}}}"));
+        assert_eq!((judged.verdict, judged.evidence), (bare.verdict, bare.evidence), "判定は変えない");
+        assert_eq!(bare.provenance, None, "対が無い");
+        assert_eq!(super::parse_lens(&format!("{head},\"provenance\":\"build:abc\"}}")).provenance, None, "形の違う対");
     }
 }

@@ -68,6 +68,7 @@ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::store::{self, LockPolicy, StoreError};
 use crate::fleet::{cli::now_utc, Cost, CostSource, Event, EventKind, Stage, SCHEMA};
+use crate::headless::provenance;
 use crate::invocation::Invocation;
 use crate::rules::manifest::Manifest;
 use crate::seat::state::now_secs;
@@ -486,7 +487,8 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
     // 書けない周も判定と rc は変えない（stderr の 1 行だけ）。
     let cost = decided.judged.usage.map(|usage| Cost { source: CostSource::Lens, usage });
     // 消費の行の detail に verify 行の囲いの書きの和を置く（行 xp-io-bytes・測れない周は字 unmeasured）。
-    let written = Some(confine::io::detail(measured.written));
+    // 続けて lens の版の 4 語（判定 object の `provenance`・無い周は 4 語とも unmeasured・行 xp-provenance）。
+    let written = Some(provenance::detail(&confine::io::detail(measured.written), decided.judged.provenance.as_deref()));
     notes.extend(record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, written, entry.policy));
     let decision = Decision {
         verdict: decided.judged.verdict,
@@ -675,7 +677,7 @@ fn machine_order(measured: &Measured) -> Option<Judged> {
     if measured.red > 0 {
         // 赤い周は lens を呼ばない＝findings は測っていない（`tally` は `None`・C10）。
         let evidence = format!("verify の {} 行が rc≠0", measured.red);
-        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None });
+        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None, provenance: None });
     }
     None
 }
