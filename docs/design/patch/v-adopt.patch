@@ -1,0 +1,312 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+index ce21cb31065fad47d506d1706c24961d537cdbe0..3ee5ff5e8a074b8368cb62badc03ba18e59a6023 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+@@ -9,6 +9,7 @@
+ //! `host_group_`・入れ子の子では指す先が変わる）・他の族の歯だけを残す。
+ 
+ mod account;
++mod adopt;
+ mod json;
+ mod usage;
+ // flip-check: moved s2-07l.680
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/adopt.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/adopt.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5b12efe4ecc006f249c483d01a19b04ceaf4322e
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/adopt.rs
+@@ -0,0 +1,60 @@
++//! 追認の札の族の歯（接頭辞 `vadopt_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/fleet.rs` の helper を `use super::*` で使う）。
++//!
++//! 発端の trailer を持つ後の commit の本文の行 `<Name>-Adopts: <sha> <bead id>…` が、切り替えの線より後の trailer の無い commit に
++//! 発端を結び、全部の書き直しの出力がその commit を発端の判じ（台帳に在れば commit-landed・無ければ source-unresolved）に掛ける
++//! ことを binary で測る（key は core の導出と独立に組む）。
++
++use super::*;
++
++/// trailer の key（NAME の先頭を大文字にして `-<stem>: ` を足す・core の導出と独立に組む）。
++fn key(stem: &str) -> String {
++    let mut chars = vessel::name::NAME.chars();
++    let head: String = chars.next().map(|first| first.to_uppercase().to_string()).unwrap_or_default();
++    format!("{head}{}-{stem}: ", chars.as_str())
++}
++
++/// toy repo に本文 `message` の空の commit を 1 つ積み、`refs/remotes/origin/main` をそこへ進めて sha を返す。
++fn land(life: &Life, message: &str) -> String {
++    crate::pipe::git(&life.repo, &["commit", "-q", "--allow-empty", "-m", message]);
++    let sha = crate::pipe::git(&life.repo, &["rev-parse", "HEAD"]);
++    crate::pipe::git(&life.repo, &["update-ref", "refs/remotes/origin/main", &sha]);
++    sha
++}
++
++/// `fleet lifecycle show` の commit の部品の行から、sha の (局面, 理由) を引く（無ければ `None`）。
++fn commit_phase(life: &Life, sha: &str) -> Option<(String, String)> {
++    let shown = life.shown();
++    let line = shown.lines().find(|line| line.starts_with(&format!("part=commit id={sha} ")))?;
++    let field = |key: &str| line.split_whitespace().find_map(|word| word.strip_prefix(key)).map(str::to_owned);
++    Some((field("phase=")?, field("reason=")?))
++}
++
++fn phase(word: &str, reason: &str) -> Option<(String, String)> {
++    Some((word.to_owned(), reason.to_owned()))
++}
++
++/// 札の前は、切り替えの線より後の trailer の無い commit が 3 本とも commit-no-trailer の misfit。発端の trailer（台帳に在る `toy-c1`）を
++/// 持つ commit の札が名指した 2 本は、台帳に在る id なら commit-landed・無い id なら source-unresolved に移る。発端の trailer を持たない
++/// commit の札は何も結ばず、名指された 3 本目も札だけの commit 自身も commit-no-trailer のまま・札を持つ commit は自分の発端で判じる。
++#[test]
++fn vadopt_adopts_line_binds_the_source_and_leaves_other_commits() {
++    let life = Life::new();
++    assert_eq!(life.write(&[]).status.code(), Some(i32::from(RC_OK)), "切り替えの線を引く 1 周目");
++    let old = land(&life, "trailer の無い commit");
++    let unknown = land(&life, "台帳に無い id で結ぶ commit");
++    let bare = land(&life, "札だけの commit が名指す commit");
++    assert_eq!(life.write(&[]).status.code(), Some(i32::from(RC_OK)));
++    for sha in [&old, &unknown, &bare] {
++        assert_eq!(commit_phase(&life, sha), phase("misfit", "commit-no-trailer"), "札の前は misfit");
++    }
++    let (source, adopts) = (key("Source"), key("Adopts"));
++    let adopter = land(&life, &format!("札\n\n{source}toy-c1\n{adopts}{old} toy-c1\n{adopts}{unknown} toy-zz"));
++    let unsourced = land(&life, &format!("発端の trailer の無い札\n\n{adopts}{bare} toy-c1"));
++    assert_eq!(life.write(&[]).status.code(), Some(i32::from(RC_OK)));
++    assert_eq!(commit_phase(&life, &old), phase("commit-landed", "-"), "札が台帳に在る id を結ぶ");
++    assert_eq!(commit_phase(&life, &unknown), phase("misfit", "source-unresolved"), "台帳に無い id は source-unresolved");
++    assert_eq!(commit_phase(&life, &bare), phase("misfit", "commit-no-trailer"), "発端の trailer の無い commit の札は結ばない");
++    assert_eq!(commit_phase(&life, &adopter), phase("commit-landed", "-"), "札を持つ commit は自分の発端で判じる");
++    assert_eq!(commit_phase(&life, &unsourced), phase("misfit", "commit-no-trailer"), "札だけの commit は自分の外れを解かない");
++    crate::pipe::clean(&[&life.repo, &life.state]);
++}
+diff --git a/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs b/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
+index 7c349699c450803bc8d65cf62c284a0fb19821c9..13439d55f5e18481d46dd3d1aded1a52c0ccca27 100644
+--- a/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
++++ b/scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
+@@ -11,7 +11,8 @@
+ //!
+ //! 台帳の印の隣に journal の長さの読み（[`read_journal_len`]）を持つ（先読みの口の store の鍵・設計 ledger-form.md §20）。
+ //!
+-//! 全部の書き直しの入力の読み（契約表・SRS・main の commit の trailer・event log の便と断りと結び）も末尾の区間に置く。
++//! 全部の書き直しの入力の読み（契約表・SRS・event log の便と断りと結び）も末尾の区間に置く。main の commit の trailer と追認の札の
++//! 読みは子の module `commits` に置き、[`read_commits`] を同じ名で再輸出する。
+ 
+ use super::json_tree::{self, Tree};
+ use super::phase::{Latest, Refused};
+@@ -22,11 +23,11 @@ use crate::case::Kind as Part;
+ use crate::hook::vessel::digest::fnv1a_64;
+ use crate::hook::vessel::state_dir as named_state_dir;
+ use crate::ledger::form::{is_memo, is_question, pointer_text};
+-use crate::ledger::phase_main::{Commit, Row};
++use crate::ledger::phase_main::Row;
+ use crate::pipe::declaration::{requirements_at_sha, TablePlaces};
+ use crate::pipe::dispatch::memo::Word;
+ use crate::pipe::dispatch::unreflected::{asked, Asked, Question};
+-use crate::pipe::land::{contract_key, source_key, RUN_TRAILER, TERMINAL_TOKENS};
++use crate::pipe::land::TERMINAL_TOKENS;
+ use crate::pipe::table::{design_docs, read_table as table_rows, requirement_ids};
+ use crate::pipe::{git_bytes, live_driver};
+ use crate::seat::ledger::Issue;
+@@ -36,6 +37,9 @@ use std::fs;
+ use std::io::{BufRead, Write};
+ use std::path::{Path, PathBuf};
+ 
++mod commits;
++pub use commits::read_commits;
++
+ /// 出力の file 名（読み手が見る 2 つの名の 1 つ）。
+ pub const JSON_FILE: &str = "lifecycle.json";
+ 
+@@ -689,42 +693,6 @@ pub fn open_write_set(issues: &[Issue], write_sets: &[(String, Vec<String>)]) ->
+     write_sets.iter().filter(|(pointer, _)| pointers.contains(&pointer.as_str())).flat_map(|(_, items)| items.clone()).collect()
+ }
+ 
+-/// 設計 pointer から bead を引く（開いた bead が先・無ければ閉じた時刻が最も新しい bead）。
+-fn bead_of<'i>(issues: &'i [Issue], pointer: &str) -> Option<&'i Issue> {
+-    let mut named: Vec<&Issue> = issues.iter().filter(|issue| pointer_text(&issue.acceptance) == Some(pointer)).collect();
+-    named.sort_by_key(|issue| (issue.status == "closed", std::cmp::Reverse(issue.closed_at.clone())));
+-    named.first().copied()
+-}
+-
+-/// main の commit（切り替えの線の main の sha の次から先端まで・first-parent・古い順）を trailer つきで読む。
+-pub fn read_commits(repo: &Path, from: &str, to: &str, issues: &[Issue]) -> Option<Vec<Commit>> {
+-    let range = format!("{from}..{to}");
+-    let raw = git_bytes(repo, &["log", "--first-parent", "--format=%H%x1f%ct%x1f%B%x1e", &range])?;
+-    let body = String::from_utf8_lossy(&raw);
+-    let mut commits: Vec<Commit> = body.split('\x1e').filter_map(|record| commit_of(record.trim_start_matches('\n'), issues)).collect();
+-    commits.reverse();
+-    Some(commits)
+-}
+-
+-/// commit 1 本（`run:`・発端・契約の 3 つの trailer を読む・契約の trailer は pointer を bead id へ引き直し、引けない pointer は渡さない）。
+-fn commit_of(record: &str, issues: &[Issue]) -> Option<Commit> {
+-    let mut fields = record.splitn(3, '\x1f');
+-    let sha = fields.next()?.trim().to_owned();
+-    let at = fields.next()?.trim().parse().ok()?;
+-    let (source, contract) = (source_key(), contract_key());
+-    let mut found = Commit { sha, at, sources: Vec::new(), run: None, contracts: Vec::new() };
+-    for line in fields.next().unwrap_or_default().lines().map(str::trim_end) {
+-        if let Some(run) = line.strip_prefix(RUN_TRAILER).map(str::trim).filter(|run| !run.is_empty()) {
+-            found.run.get_or_insert_with(|| run.to_owned());
+-        } else if let Some(ids) = line.strip_prefix(source.as_str()) {
+-            found.sources.extend(ids.split_whitespace().map(str::to_owned));
+-        } else if let Some(pointer) = line.strip_prefix(contract.as_str()) {
+-            found.contracts.extend(bead_of(issues, pointer.trim()).map(|issue| issue.id.clone()));
+-        }
+-    }
+-    (!found.sha.is_empty()).then_some(found)
+-}
+-
+ /// `verdict:<語>` の語（`,account:<label>` などの後ろは読まない）。
+ fn verdict_word(detail: &str) -> Option<String> {
+     let word = detail.split_whitespace().find_map(|token| token.strip_prefix("verdict:"))?;
+diff --git a/scribe2/crates/scribe2/src/fleet/lifecycle_mark/commits.rs b/scribe2/crates/scribe2/src/fleet/lifecycle_mark/commits.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..74951642110d3f8e45a6a0e35ef2fc817976e706
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/fleet/lifecycle_mark/commits.rs
+@@ -0,0 +1,112 @@
++//! main の commit の trailer の読み（設計 docs/design/case-lifecycle.md §5・FR90・FR92・ADR-0088）と追認の札（判断の記録 ADR-45 の
++//! 門 H6）。`fleet/lifecycle_mark.rs` の [`read_commits`] の群（bead の引き・commit 1 本の読み）を移し、追認の札の読みを足した。
++//!
++//! 追認の札は、発端の trailer を持つ commit の本文の行 `<Name>-Adopts: <sha> <bead id>…`（key は [`adopts_key`]・sha は `%H` の
++//! 40 字と同じ字）で、同じ範囲の発端の trailer も器の便の trailer も持たない commit に、名指した id を発端として結ぶ。結んだ id は
++//! 本文の発端と同じ判じを受け（台帳に無い id は source-unresolved）、照らしから外れる commit は無い。発端の trailer を持たない
++//! commit の札・自分の trailer を持つ commit を名指す札・範囲に無い sha の札は何も結ばない（外れは外れのまま出力に残る）。
++
++use crate::ledger::form::pointer_text;
++use crate::ledger::phase_main::Commit;
++use crate::pipe::git_bytes;
++use crate::pipe::land::{adopts_key, contract_key, source_key, RUN_TRAILER};
++use crate::seat::ledger::Issue;
++use std::path::Path;
++
++/// 追認の札 1 行（名指す sha と、結ぶ id の列）。
++type Adoption = (String, Vec<String>);
++
++/// 設計 pointer から bead を引く（開いた bead が先・無ければ閉じた時刻が最も新しい bead）。
++fn bead_of<'i>(issues: &'i [Issue], pointer: &str) -> Option<&'i Issue> {
++    let mut named: Vec<&Issue> = issues.iter().filter(|issue| pointer_text(&issue.acceptance) == Some(pointer)).collect();
++    named.sort_by_key(|issue| (issue.status == "closed", std::cmp::Reverse(issue.closed_at.clone())));
++    named.first().copied()
++}
++
++/// main の commit（切り替えの線の main の sha の次から先端まで・first-parent・古い順）を trailer つきで読み、追認の札で発端を結ぶ。
++pub fn read_commits(repo: &Path, from: &str, to: &str, issues: &[Issue]) -> Option<Vec<Commit>> {
++    let range = format!("{from}..{to}");
++    let raw = git_bytes(repo, &["log", "--first-parent", "--format=%H%x1f%ct%x1f%B%x1e", &range])?;
++    Some(commits_of(&String::from_utf8_lossy(&raw), issues))
++}
++
++/// `git log` の字（record ごとに `%H`・`%ct`・`%B` を `\x1f` で区切り `\x1e` で終える・新しい順）から古い順の commit の列を組み、
++/// 発端の trailer を持つ commit の追認の札を、発端の trailer も器の便の trailer も持たない commit に当てる（id は古い札から順に足す）。
++fn commits_of(log: &str, issues: &[Issue]) -> Vec<Commit> {
++    let mut read: Vec<(Commit, Vec<Adoption>)> = log.split('\x1e').filter_map(|record| commit_of(record.trim_start_matches('\n'), issues)).collect();
++    read.reverse();
++    let adoptions: Vec<Adoption> = read.iter().filter(|(commit, _)| !commit.sources.is_empty()).flat_map(|(_, adopts)| adopts.clone()).collect();
++    let mut commits: Vec<Commit> = read.into_iter().map(|(commit, _)| commit).collect();
++    for commit in commits.iter_mut().filter(|commit| commit.sources.is_empty() && commit.run.is_none()) {
++        commit.sources = adoptions.iter().filter(|(sha, _)| *sha == commit.sha).flat_map(|(_, ids)| ids.iter().cloned()).collect();
++    }
++    commits
++}
++
++/// commit 1 本（`run:`・発端・契約の 3 つの trailer と追認の札を読む・契約の trailer は pointer を bead id へ引き直し、引けない pointer は
++/// 渡さない・札は sha の後に id を 1 本以上持つ行だけ）。
++fn commit_of(record: &str, issues: &[Issue]) -> Option<(Commit, Vec<Adoption>)> {
++    let mut fields = record.splitn(3, '\x1f');
++    let sha = fields.next()?.trim().to_owned();
++    let at = fields.next()?.trim().parse().ok()?;
++    let (source, contract, adopts) = (source_key(), contract_key(), adopts_key());
++    let mut found = Commit { sha, at, sources: Vec::new(), run: None, contracts: Vec::new() };
++    let mut adoptions = Vec::new();
++    for line in fields.next().unwrap_or_default().lines().map(str::trim_end) {
++        if let Some(run) = line.strip_prefix(RUN_TRAILER).map(str::trim).filter(|run| !run.is_empty()) {
++            found.run.get_or_insert_with(|| run.to_owned());
++        } else if let Some(ids) = line.strip_prefix(source.as_str()) {
++            found.sources.extend(ids.split_whitespace().map(str::to_owned));
++        } else if let Some(pointer) = line.strip_prefix(contract.as_str()) {
++            found.contracts.extend(bead_of(issues, pointer.trim()).map(|issue| issue.id.clone()));
++        } else if let Some((named, ids)) = line.strip_prefix(adopts.as_str()).and_then(|rest| rest.trim().split_once(char::is_whitespace)) {
++            adoptions.push((named.to_owned(), ids.split_whitespace().map(str::to_owned).collect()));
++        }
++    }
++    (!found.sha.is_empty()).then_some((found, adoptions))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{adopts_key, commits_of, source_key};
++
++    /// 40 字の toy の sha（`n` の 16 進を 0 で埋める）。
++    fn sha(n: u32) -> String {
++        format!("{n:040x}")
++    }
++
++    /// `git log` の 1 record の字（時刻は n）。
++    fn record(n: u32, body: &str) -> String {
++        format!("{}\x1f{n}\x1f{body}\n\x1e\n", sha(n))
++    }
++
++    /// 発端の trailer を持つ commit の札は、発端の trailer も器の便の trailer も持たない commit にだけ、40 字の sha が同じ時に id を
++    /// 古い札から順に結ぶ。否定はどれも 1 句だけ外す: 札を持つ commit が発端の trailer を持たない（t2）・名指す commit が自分の発端の
++    /// trailer を持つ（t3）・器の便の trailer を持つ（t4）・sha が 12 字の頭だけ（t5）。札を持つ commit 自身は札で結ばれない。
++    #[test]
++    fn vadopt_binds_the_named_bead_only_to_a_commit_without_trailers() {
++        let (source, adopts) = (source_key(), adopts_key());
++        assert_eq!(adopts, source.replace("-Source: ", "-Adopts: "), "key は発端の trailer と同じく器の名から導く");
++        let adopt = |n: u32, ids: &str| format!("{adopts}{} {ids}", sha(n));
++        let short = format!("{adopts}{} toy-d", &sha(5)[..12]);
++        let log = [
++            record(9, &format!("要旨\n\n{source}s-p3\n{}", adopt(6, "toy-h toy-i"))),
++            record(8, &format!("要旨\n\n{}", adopt(2, "toy-f"))),
++            record(7, &format!("要旨\n\n{source}s-p1\n{}\n{}\n{}\n{short}\n{}", adopt(1, "toy-a"), adopt(3, "toy-b"), adopt(4, "toy-c"), adopt(6, "toy-e"))),
++            record(6, "札の無い commit"),
++            record(5, "札の無い commit"),
++            record(4, "run: r-4"),
++            record(3, &format!("要旨\n\n{source}s-3")),
++            record(2, "札の無い commit"),
++            record(1, "札の無い commit"),
++        ]
++        .concat();
++        let commits = commits_of(&log, &[]);
++        let shas: Vec<String> = commits.iter().map(|commit| commit.sha.clone()).collect();
++        assert_eq!(shas, (1..=9).map(sha).collect::<Vec<_>>(), "古い順");
++        let sources: Vec<Vec<&str>> = commits.iter().map(|commit| commit.sources.iter().map(String::as_str).collect()).collect();
++        let want: [&[&str]; 9] = [&["toy-a"], &[], &["s-3"], &[], &[], &["toy-e", "toy-h", "toy-i"], &["s-p1"], &[], &["s-p3"]];
++        assert_eq!(sources, want, "札は発端の trailer を持つ commit から・trailer の無い commit にだけ・40 字の sha で結ぶ");
++        assert_eq!(commits.get(3).and_then(|commit| commit.run.as_deref()), Some("r-4"), "器の便の trailer は残る");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/ledger/phase_main.rs b/scribe2/crates/scribe2/src/ledger/phase_main.rs
+index 2dc56264ca1c621fc187cd565f6798663d229b4f..071da2c1d287b345b078b81ce934aacafefc56e0 100644
+--- a/scribe2/crates/scribe2/src/ledger/phase_main.rs
++++ b/scribe2/crates/scribe2/src/ledger/phase_main.rs
+@@ -32,7 +32,8 @@ pub struct Commit {
+     pub sha: String,
+     /// commit の時刻（UNIX 秒）。
+     pub at: u64,
+-    /// 発端の trailer の id の列（無ければ空）。
++    /// 発端の trailer の id の列（本文に発端の trailer も器の便の trailer も無い commit は、後の commit の追認の札が結んだ id・どちらも
++    /// 無ければ空）。
+     pub sources: Vec<String>,
+     /// 器の便の trailer `run:` の値（無ければ `None`）。
+     pub run: Option<String>,
+diff --git a/scribe2/crates/scribe2/src/pipe/land.rs b/scribe2/crates/scribe2/src/pipe/land.rs
+index 3dbf9fa47aaef9bec769d746964af39710abf75a..8bed97d06552a5e07472945e093d96021703080d 100644
+--- a/scribe2/crates/scribe2/src/pipe/land.rs
++++ b/scribe2/crates/scribe2/src/pipe/land.rs
+@@ -152,6 +152,16 @@ impl AnchorSkip {
+ /// 本文の最後に置く trailer の key（読み手が fleet の記録へ辿る鍵・merge の門も同じ字で run の行を読む）。
+ pub(crate) const RUN_TRAILER: &str = "run: ";
+ 
++/// 追認の札の語幹（判断の記録 ADR-45 の門 H6・発端の trailer を持つ後の commit が、発端の trailer も器の便の trailer も持たない
++/// commit に発端を結ぶ）。
++const ADOPTS_TRAILER: &str = "Adopts";
++
++/// 追認の札の key（`<Name>-Adopts: `・値は 40 字の sha と bead id の列・局面の出力が main の commit から読む 1 本・名は発端の
++/// trailer と同じく器の名から導く）。
++pub(crate) fn adopts_key() -> String {
++    finish::trailer_key(ADOPTS_TRAILER)
++}
++
+ /// 検出線（変異検査）の面（**閉じた集合**・設計 §30・`s2-07l.397`）。末尾 `/` の項目は dir の接頭辞、
+ /// それ以外は file の完全一致。検出線の行の出所（`.vessel.toml`）と、変異検査が読む面（crate の source・
+ /// Cargo の manifest / lock・rules）である。docs / design-intent / README / .github はこの外＝検出線の
