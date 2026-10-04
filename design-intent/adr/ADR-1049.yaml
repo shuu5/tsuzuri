@@ -163,3 +163,4 @@ note: |
   器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
   器の頁の末: 機械SSoT: ADR-1049.adr.yaml · 生成: 2026-09-20 06:37 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
   器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会
+  取り込みの段 2 の写しの決め: 本文の持ち主の言葉らしい引用は、持ち主の裁定 t3-hub.74.60.3:20261004T1121Z-1（問い t3-hub.74.60.3）で中身を伏せた（元の字は器の HTML に在る）。
