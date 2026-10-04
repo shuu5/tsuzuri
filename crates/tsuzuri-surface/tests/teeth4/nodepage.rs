@@ -89,7 +89,7 @@ fn nodepage_frame_and_nav() {
     let page = frame::page(PageId::Node);
     assert_eq!(page.id, PageId::Node);
     assert_eq!(page.id.id(), "node");
-    assert_eq!(page.block_ids(), vec!["node", "around", "timeline"]);
+    assert_eq!(page.block_ids(), vec!["node", "around", "body", "timeline"]);
     let blocks: Vec<(&str, &str, &str)> = page
         .columns
         .iter()
@@ -100,6 +100,7 @@ fn nodepage_frame_and_nav() {
         vec![
             ("node", "nb_summary", "stack"),
             ("around", "around", "panel"),
+            ("body", "nb_body", "panel"),
             ("timeline", "timeline", "panel")
         ]
     );

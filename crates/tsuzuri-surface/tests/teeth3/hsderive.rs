@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 
 use tsuzuri_surface::project::{
-    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, notice,
-    pipeline, policy, seat, stage, timeline,
+    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, nodebody,
+    notice, pipeline, policy, seat, stage, timeline,
 };
 
 fn crate_dir() -> PathBuf {
@@ -32,6 +32,7 @@ const CONSTS: &[Consts] = &[
     ("next", next::PATHS, next::FOLDS),
     ("node", node::PATHS, node::FOLDS),
     ("nodearound", nodearound::PATHS, nodearound::FOLDS),
+    ("nodebody", nodebody::PATHS, nodebody::FOLDS),
     ("notice", notice::PATHS, notice::FOLDS),
     ("pipeline", pipeline::PATHS, pipeline::FOLDS),
     ("policy", policy::PATHS, policy::FOLDS),
@@ -61,6 +62,7 @@ fn hsderive_consts_match_note() {
         ("next", &["/api/next"], &[]),
         ("node", &[], &["node:other"]),
         ("nodearound", &["/api/around"], &[]),
+        ("nodebody", &[], &["node:body", "node:notes"]),
         ("notice", &["/api/notices"], &[]),
         ("pipeline", &["/api/pipeline"], &[]),
         ("policy", &["/api/policy"], &[]),

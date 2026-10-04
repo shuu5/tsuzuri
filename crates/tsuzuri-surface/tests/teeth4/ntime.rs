@@ -129,7 +129,7 @@ fn ntime_block_and_page() {
     assert_eq!(m.block(), BLOCK);
     assert_eq!(
         frame::page(PageId::Node).block_ids(),
-        vec!["node", "around", "timeline"]
+        vec!["node", "around", "body", "timeline"]
     );
     let text = read("src/project/timeline.rs");
     assert!(text.contains("id: \"timeline\""));

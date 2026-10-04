@@ -602,6 +602,21 @@
    "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",
    "internal": "plain / eng"
   },
+  "nb_body": {
+   "label": "本文と記録",
+   "plain": "台帳の本文と記録を畳んで置く\n・ 押すと開く\n・ 設計の節点と run には無い",
+   "internal": "GET /api/ledger/<id> の description と notes（判断の記録 ADR-30 決定 (4)・行 g-node-body）"
+  },
+  "nb_text": {
+   "label": "本文",
+   "plain": "bead の本文\n・ 見出しと箇条と番号と等幅の字の形で描く\n・ 表は字のまま",
+   "internal": "LedgerItem.description・widgets::md::parse"
+  },
+  "nb_notes": {
+   "label": "記録",
+   "plain": "bead に足された記録（notes）\n・ 本文と同じ形で描く",
+   "internal": "LedgerItem.notes・widgets::md::parse"
+  },
   "sum_body": {
    "label": "本文から",
    "plain": "2 つの概要が無い時の本文の頭の 1 行",

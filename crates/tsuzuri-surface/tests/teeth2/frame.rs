@@ -91,7 +91,7 @@ fn frame_home_blocks_in_order_and_map_page() {
     );
     assert_eq!(
         frame::page(PageId::Node).block_ids(),
-        vec!["node", "around", "timeline"]
+        vec!["node", "around", "body", "timeline"]
     );
     for id in PageId::ALL {
         assert_eq!(frame::page(id).id, id);

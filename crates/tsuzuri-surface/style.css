@@ -359,6 +359,20 @@ body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }
 .pt { margin-bottom: 6px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .psum { color: var(--ink-3); font-size: var(--fs-1); line-height: 1.55; overflow-wrap: anywhere; }
 .psum small { padding: 0 4px; border: 1px dashed var(--line-2); border-radius: 4px; }
+/* ---------- 本文と記録（行 g-node-body・本文の書式の部品 md の段〔行 g-md-view〕・字は字の node で描く） ---------- */
+details.nbody { margin: 4px 0; }
+details.nbody > summary { cursor: pointer; }
+.md { padding: 4px 2px; font-size: var(--fs-1); line-height: 1.6; overflow-wrap: anywhere; }
+.md p { margin: 4px 0; }
+.mdh1, .mdh2, .mdh3, .mdh4 { margin: 10px 0 4px; font-weight: 600; }
+.mdh1 { font-size: 15px; }
+.mdh2 { font-size: 14px; }
+.mdh3 { font-size: 13px; }
+.mdh4 { font-size: 12.5px; color: var(--ink-2); }
+.mdli { display: flex; gap: 4px; margin: 2px 0; }
+.mdli > span:first-child { flex: none; color: var(--ink-3); }
+.mdpre { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--panel-2); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.md code { padding: 0 3px; border-radius: 3px; background: var(--panel-2); font-size: .92em; }
 .pmore { margin-left: 4px; padding: 0 2px; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
 .facts { width: 100%; margin: 6px 0; border-collapse: collapse; font-size: var(--fs-1); }
 .facts th { width: 1%; padding: 4px 10px 4px 0; border-top: 1px solid var(--line); color: var(--ink-3); font-weight: 500; text-align: left; white-space: nowrap; vertical-align: top; }

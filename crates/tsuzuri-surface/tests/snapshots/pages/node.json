@@ -8,6 +8,7 @@
           "blocks": [
             {"id": "node", "heading": "nb_summary", "class": "stack"},
             {"id": "around", "heading": "around", "class": "panel"},
+            {"id": "body", "heading": "nb_body", "class": "panel"},
             {"id": "timeline", "heading": "timeline", "class": "panel"}
           ]
         }
