@@ -4,7 +4,7 @@
 //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
 //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
-//! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
+//! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
 //! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
 //! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
 //! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
@@ -19,10 +19,10 @@ use serde_json::Value;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
 pub(crate) use tsuzuri_contract::ledger::bead_kind;
+use tsuzuri_contract::summary::summaries;
 
 use super::{BeadAttr, Graph, Inputs, Outside, PolicyAttr, RulingRow, RunAttr, Source};
 use crate::ledger::epoch_secs;
-use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
 
 /// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
 pub const DESIGN_KINDS: usize = 12;
@@ -509,7 +509,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
     for bead in beads {
         let labels = bead.labels.unwrap_or_default();
         let kind = bead_kind(bead.issue_type.as_deref().unwrap_or_default(), &labels);
-        let description = bead.description.as_deref().unwrap_or_default();
+        let two = summaries(bead.description.as_deref().unwrap_or_default());
         g.nodes.push(GraphNode {
             id: bead.id.clone(),
             kind,
@@ -517,8 +517,8 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
             digest: None,
             title: title36(bead.title.as_deref().unwrap_or_default()),
             line: None,
-            plain: typed(description, PLAIN_PREFIX),
-            eng: typed(description, ENG_PREFIX),
+            plain: two.plain,
+            eng: two.eng,
             updated: bead.updated_at.as_deref().and_then(epoch_secs),
         });
         for dep in bead.dependencies.unwrap_or_default() {

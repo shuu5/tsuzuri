@@ -16,6 +16,7 @@ pub mod seat;
 pub mod seathb;
 pub mod stage;
 pub mod stats;
+pub mod summary;
 pub mod surface;
 
 /// 時刻（UTC の epoch 秒）。器の tick-last と heartbeat-off と同じ単位。

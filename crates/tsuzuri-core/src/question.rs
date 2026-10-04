@@ -12,15 +12,13 @@ use serde_json::Value;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow, QUESTION_LABEL};
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
+use tsuzuri_contract::summary::summaries;
 
 use crate::graph::build::{BdBead, read_ledger};
 use crate::ledger::epoch_secs;
 
-/// 非エンジニア向けの概要の行の頭。
-pub const PLAIN_PREFIX: &str = "概要 = ";
-
-/// エンジニア向けの概要の行の頭。
-pub const ENG_PREFIX: &str = "技術 = ";
+/// 非エンジニア向けとエンジニア向けの概要の行の頭（契約の summary の定数・名は残す）。
+pub use tsuzuri_contract::summary::{ENG_LINE as ENG_PREFIX, PLAIN_LINE as PLAIN_PREFIX};
 
 /// 理由の行の頭。
 pub const REASON_PREFIX: &str = "理由 = ";
@@ -124,9 +122,10 @@ fn open_question(bead: BdBead, blocking: Vec<String>) -> Option<OpenQuestion> {
     };
     let digest = item.digest();
     let field = |prefix: &str| typed(&item.description, prefix);
+    let two = summaries(&item.description);
     let card = QuestionCard {
-        plain: field(PLAIN_PREFIX),
-        eng: field(ENG_PREFIX),
+        plain: two.plain,
+        eng: two.eng,
         reason: field(REASON_PREFIX),
         recommend: field(RECOMMEND_PREFIX),
         a1: item.row.labels.iter().any(|l| l.starts_with(A1_PREFIX)),
@@ -143,15 +142,8 @@ fn open_question(bead: BdBead, blocking: Vec<String>) -> Option<OpenQuestion> {
     })
 }
 
-/// 本文の定型行の値（行頭が `prefix` の最初の行の残り・前後の空白を除く・空なら None）。
-pub fn typed(description: &str, prefix: &str) -> Option<String> {
-    let rest = description
-        .lines()
-        .map(|l| l.trim_end_matches('\r'))
-        .find_map(|l| l.strip_prefix(prefix))?
-        .trim();
-    (!rest.is_empty()).then(|| rest.to_string())
-}
+/// 本文の定型行の値（行頭が `prefix` の最初の行の残り・前後の空白を除く・空なら None・読みは契約の summary の 1 関数）。
+pub use tsuzuri_contract::summary::typed_line as typed;
 
 /// metadata の touches の欄の id（欄は字 1 つか字の配列・metadata は object か、object を JSON にした字）。
 pub fn touches(metadata: &Value) -> Vec<String> {
