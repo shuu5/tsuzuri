@@ -12,6 +12,7 @@
 //! 無い置き場は今のまま（契約表の導出物だけ）。
 //! 行 t-seatcopy（判断の記録 ADR-38 決定 (3)(4)）から、規則の表に欄 key が seat-bytes と seat-role-bytes の行が在れば、憲法の
 //! 正本から席の手元の 2 つの写し（`seat.rs`）も置き場の下の dir seat に同じ回に書き（--write）・byte で比べる（--check）。
+//! 行 t-seatcap から、同じ dir に役割の行の上限の file（seat-role-bytes の値）も同じ回に書き・比べる（条 P-2.3）。
 //! 要の写しの file 全体の byte が 2 つの値の差を越えれば、どちらの命令も何も書かずに 1（違反）。
 
 use std::collections::HashSet;
@@ -123,8 +124,8 @@ fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String
     Ok(Some(PlanIndex { path, name, text, rows }))
 }
 
-/// 席の手元の 2 つの写しを置き場の下の dir seat の導出物にする（行 t-seatcopy）。
-fn seat_files(c: seat::Copies) -> [Derived; 2] {
+/// 席の手元の 2 つの写しと役割の行の上限の file を置き場の下の dir seat の導出物にする（行 t-seatcopy・t-seatcap）。
+fn seat_files(c: seat::Copies) -> [Derived; 3] {
     [
         Derived {
             name: format!("{}/{}", seat::DIR, seat::BRIEF),
@@ -133,6 +134,10 @@ fn seat_files(c: seat::Copies) -> [Derived; 2] {
         Derived {
             name: format!("{}/{}", seat::DIR, seat::FULL),
             text: c.full,
+        },
+        Derived {
+            name: format!("{}/{}", seat::DIR, seat::ROLE_MAX),
+            text: c.role_max,
         },
     ]
 }

@@ -143,7 +143,7 @@ fn seatcp_two_files_shape() {
     let p = Place::new("shape");
     let (rc, out) = p.derive("--write");
     assert_eq!(rc, 0, "{out}");
-    assert!(out.contains("書いた 2 file・変わらない 0 file"), "{out}");
+    assert!(out.contains("書いた 3 file・変わらない 0 file"), "{out}");
     assert_eq!(p.seat("brief.txt").as_deref(), Some(BRIEF));
     assert_eq!(p.seat("constitution.txt").as_deref(), Some(FULL));
     assert_eq!(p.contracts(), ["seat"], "置き場の直下には dir seat だけ");
@@ -152,7 +152,7 @@ fn seatcp_two_files_shape() {
     }
     let (rc, out) = p.derive("--check");
     assert_eq!(rc, 0, "{out}");
-    assert!(out.contains("一致 2・差分 0"), "{out}");
+    assert!(out.contains("一致 3・差分 0"), "{out}");
 }
 
 #[test]

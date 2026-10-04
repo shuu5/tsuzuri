@@ -6,6 +6,8 @@
 //! 区切り、区切りに「: 」を使わず、字は空白を 1 つに畳むだけで逐語。規則の表に欄 key が seat-bytes と seat-role-bytes の行が
 //! 2 本とも無い置き場は写しを導かない。強さが規範の値でない文・「。」で終わらない文・文 0 本は Err（まだ分からない・退いた
 //! folio inject の導き方を引き継ぐ）。
+//! 同じ dir に 3 つ目の file として役割の行の上限（頭の 1 行と、欄 key が seat-role-bytes の行の値の 10 進の数の 1 行）も導く
+//! （行 t-seatcap・条 P-2.3）。器の SessionStart は宣言が名乗る要の写しの隣のこの file の 2 行目を読み、頭の行は読まない。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,6 +26,9 @@ pub(crate) const BRIEF: &str = "brief.txt";
 
 /// 全文の写しの file の名。
 pub(crate) const FULL: &str = "constitution.txt";
+
+/// 役割の行の上限の file の名（器が要の写しの隣から読む名・行 t-seatcap）。
+pub(crate) const ROLE_MAX: &str = "role-max-bytes.txt";
 
 /// 頭の 1 行の頭の字（続けて憲法の正本の版管理の根からの path と空白 1 つと版の字）。
 const HEAD: &str = "生成物・手で直さない・";
@@ -44,10 +49,14 @@ const TIERS: [(Tier, &str); 3] = [
 /// 憲法の正本の file の名（正本の置き場の直下）。
 const CONSTITUTION: &str = "constitution.yaml";
 
-/// 導いた 2 つの写しの字と、要の写しの file 全体の byte の上限。
+/// 規則の表の file の名（正本の置き場の直下・上限の file の頭の行が名指す）。
+const RULES: &str = "rules.yaml";
+
+/// 導いた 2 つの写しと役割の行の上限の file の字と、要の写しの file 全体の byte の上限。
 pub(crate) struct Copies {
     pub(crate) brief: String,
     pub(crate) full: String,
+    pub(crate) role_max: String,
     /// 欄 key が seat-bytes の行の値から seat-role-bytes の行の値を引いた数（規則の行 R-1 − R-41）。
     pub(crate) cap: usize,
 }
@@ -65,7 +74,7 @@ pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, Strin
     let Some(rules) = plan::load_rules(dir)? else {
         return Ok(None);
     };
-    let Some(cap) = cap(&rules)? else {
+    let Some((cap, role)) = cap(&rules)? else {
         return Ok(None);
     };
     let path = dir.join(CONSTITUTION);
@@ -90,21 +99,26 @@ pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, Strin
     let full_at = under(rel(&root, out_dir)?, &format!("{DIR}/{FULL}"));
     let arts = articles(&c)?;
     let pre = format!("{PRECEDENCE} {pre}");
+    let role_max = format!(
+        "{HEAD}{} {SEAT_ROLE_BYTES}\n{role}\n",
+        rel(&root, &dir.join(RULES))?
+    );
     Ok(Some(Copies {
         brief: brief(&[&head, &pre], &arts, &full_at),
         full: full(&[&head, &pre], &arts),
+        role_max,
         cap,
     }))
 }
 
-/// 要の写しの上限（欄 key の 2 本の値の差）。2 本とも無ければ None。片方だけ・差が 0 以下は Err。
-fn cap(rules: &Node) -> Result<Option<usize>, String> {
+/// 要の写しの上限（欄 key の 2 本の値の差）と役割の行の上限（seat-role-bytes の値）。2 本とも無ければ None。片方だけ・差が 0 以下は Err。
+fn cap(rules: &Node) -> Result<Option<(usize, usize)>, String> {
     match (rules::bytes(rules, SEAT_BYTES)?, rules::bytes(rules, SEAT_ROLE_BYTES)?) {
         (None, None) => Ok(None),
         (Some(total), Some(role)) => total
             .checked_sub(role)
             .filter(|n| *n > 0)
-            .map(Some)
+            .map(|n| Some((n, role)))
             .ok_or_else(|| format!("欄 key が {SEAT_ROLE_BYTES} の値 {role} byte が {SEAT_BYTES} の値 {total} byte 以上（要の写しの上限が 0 以下）")),
         (Some(_), None) => Err(format!("欄 key が {SEAT_ROLE_BYTES} の閾値の行が無い（{SEAT_BYTES} の行は在る）")),
         (None, Some(_)) => Err(format!("欄 key が {SEAT_BYTES} の閾値の行が無い（{SEAT_ROLE_BYTES} の行は在る）")),
