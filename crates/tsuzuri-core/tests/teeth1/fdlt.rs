@@ -264,7 +264,7 @@ const FILTERS: &[&str] = &[
 const PREFIX: &str = "fdlt_";
 
 /// hooks.json の PostToolBatch の command の字。
-const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
+const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
 
 /// runner の印の file の名。
 const MARK_NAME: &str = "scribe2-runner";
@@ -509,6 +509,32 @@ fn tool_mark_line() {
     );
 }
 
+/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
+fn plugin_dir(dir: &Path) {
+    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
+        let to = dir.join(rel);
+        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
+        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
+    }
+}
+
+/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
+fn declared(project: &Path) {
+    std::fs::create_dir_all(project).expect("project の dir を作る");
+    for args in [
+        &["init", "-q"][..],
+        &["config", "scribe2.statedir", "/nonexistent/state"],
+    ] {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(project)
+            .args(args)
+            .status()
+            .expect("git");
+        assert!(ok.success(), "git {args:?}");
+    }
+}
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -546,6 +572,7 @@ fn run_sh(project: &Path, plugin: &Path) -> Output {
         .arg(COMMAND)
         .env("CLAUDE_PROJECT_DIR", project)
         .env("CLAUDE_PLUGIN_ROOT", plugin)
+        .env("PATH", "/usr/bin:/bin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -569,8 +596,9 @@ fn fdlt_command_under_sh() {
         std::fs::remove_dir_all(&work).expect("前の作業場を消す");
     }
     let project = work.join("project");
-    let bin = project.join("target/debug");
-    std::fs::create_dir_all(&bin).expect("project の dir を作る");
+    let bin = work.join("target/debug");
+    std::fs::create_dir_all(&bin).expect("build の dir を作る");
+    declared(&project);
     let args_rec = work.join("args.rec");
     let stdin_rec = work.join("stdin.rec");
     let script = format!(
@@ -583,7 +611,7 @@ fn fdlt_command_under_sh() {
     std::fs::set_permissions(&tz, std::fs::Permissions::from_mode(0o755))
         .expect("偽の tz を撃てる形にする");
     let plain = work.join("plugin-plain");
-    std::fs::create_dir_all(&plain).expect("印の無い plugin の dir を作る");
+    plugin_dir(&plain);
     let marked = work.join("plugin-marked");
     std::fs::create_dir_all(&marked).expect("印の在る plugin の dir を作る");
     std::fs::write(marked.join(MARK_NAME), "").expect("印を置く");

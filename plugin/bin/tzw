@@ -1,0 +1,30 @@
+#!/bin/sh
+# tsuzuri の plugin の tz の解き方（判断の記録 ADR-29 決定 (2)・設計ノート surface-wave27b 行 cs-plugin）。
+# plugin の hook と skill はこの file だけを通して tz を撃つ。plugin の根はこの file の dir の親。
+# 解きの順: (1) plugin と同じ checkout の build（<plugin の根>/../target/debug/tz が撃てる file）、(2) PATH の tz。
+# 頭の引数が hook の時（hook の口）: repo（環境の CLAUDE_PROJECT_DIR・無ければ cwd）の git config に project の宣言
+# scribe2.statedir が無いか、tz が解けなければ、tz を撃たずに 0 で終わる（宣言を持たない project では何もしない・配達を止めない）。
+# ほかの口（consult など）: tz が解けなければ標準エラーに 1 行を出して 1 で終わる。
+# 撃つ時は環境に TZ_PLUGIN_VERSION（plugin.json の version の字・tz consult open が中核の版と照らす）と
+# TZ_WRAPPER（この file の絶対 path・席への 1 行の命令の頭の字）を置き、tz に exec する。
+here=$(cd "$(dirname "$0")" && pwd -P) || exit 1
+root=$(dirname "$here")
+tz=$root/../target/debug/tz
+if [ ! -f "$tz" ] || [ ! -x "$tz" ]; then
+    tz=$(command -v tz) || tz=
+fi
+if [ "$1" = hook ]; then
+    git -C "${CLAUDE_PROJECT_DIR:-.}" config --get scribe2.statedir >/dev/null 2>&1 || exit 0
+    if [ -z "$tz" ]; then
+        echo "tzw: tz が無い（plugin と同じ checkout の target/debug/tz も PATH の tz も無い）・hook は何もしない" >&2
+        exit 0
+    fi
+fi
+if [ -z "$tz" ]; then
+    echo "tzw: tz が無い（plugin と同じ checkout の target/debug/tz も PATH の tz も無い）" >&2
+    exit 1
+fi
+TZ_PLUGIN_VERSION=$(sed -n 's/^ *"version": *"\([^"]*\)".*$/\1/p' "$root/.claude-plugin/plugin.json")
+TZ_WRAPPER=$here/tzw
+export TZ_PLUGIN_VERSION TZ_WRAPPER
+exec "$tz" "$@"

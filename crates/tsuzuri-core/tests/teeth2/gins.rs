@@ -17,7 +17,7 @@ const COMMAND_WORDS: [&str; 10] = [
     "$CLAUDE_PLUGIN_ROOT/scribe2-runner",
     "]",
     "||",
-    "$CLAUDE_PROJECT_DIR/target/debug/tz",
+    "$CLAUDE_PLUGIN_ROOT/bin/tzw",
     "hook",
     "question-gate",
     "--repo",
@@ -38,6 +38,32 @@ const PAYLOAD: &str = r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#;
 
 /// 偽の tz が標準出力に出す字。
 const FAKE_OUT: &str = "deny-line\n";
+
+/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
+fn plugin_dir(dir: &Path) {
+    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
+        let to = dir.join(rel);
+        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
+        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
+    }
+}
+
+/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
+fn declared(project: &Path) {
+    std::fs::create_dir_all(project).expect("project の dir を作る");
+    for args in [
+        &["init", "-q"][..],
+        &["config", "scribe2.statedir", "/nonexistent/state"],
+    ] {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(project)
+            .args(args)
+            .status()
+            .expect("git");
+        assert!(ok.success(), "git {args:?}");
+    }
+}
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -109,8 +135,8 @@ fn gins_pretool_bash_entry() {
     assert_eq!(words(command), COMMAND_WORDS, "{command}");
     let quoted_dir = format!("\"{PROJECT_DIR}\"");
     let quoted_mark = format!("\"{RUNNER_MARK}\"");
-    assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
-    assert_eq!(command.matches(&quoted_dir).count(), 2, "{command}");
+    assert_eq!(command.matches(PROJECT_DIR).count(), 1, "{command}");
+    assert_eq!(command.matches(&quoted_dir).count(), 1, "{command}");
     assert_eq!(command.matches(&quoted_mark).count(), 1, "{command}");
 }
 
@@ -146,6 +172,7 @@ fn run_sh(command: &str, project: &Path, plugin: &Path) -> Output {
         .arg(command)
         .env("CLAUDE_PROJECT_DIR", project)
         .env("CLAUDE_PLUGIN_ROOT", plugin)
+        .env("PATH", "/usr/bin:/bin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -171,8 +198,9 @@ fn gins_command_under_sh() {
         std::fs::remove_dir_all(&work).expect("前の作業場を消す");
     }
     let project = work.join("project");
-    let bin = project.join("target/debug");
-    std::fs::create_dir_all(&bin).expect("project の dir を作る");
+    let bin = work.join("target/debug");
+    std::fs::create_dir_all(&bin).expect("build の dir を作る");
+    declared(&project);
     let args_rec = work.join("args.rec");
     let stdin_rec = work.join("stdin.rec");
     let script = format!(
@@ -185,12 +213,12 @@ fn gins_command_under_sh() {
     std::fs::set_permissions(&tz, std::fs::Permissions::from_mode(0o755)).expect("偽の tz を撃てる形にする");
 
     let plain = work.join("plugin-plain");
-    std::fs::create_dir_all(&plain).expect("印の無い plugin の dir を作る");
+    plugin_dir(&plain);
     let marked = work.join("plugin-marked");
     std::fs::create_dir_all(&marked).expect("印の在る plugin の dir を作る");
     std::fs::write(marked.join(MARK_NAME), "").expect("印を置く");
-    let bare = work.join("project-bare");
-    std::fs::create_dir_all(&bare).expect("tz の無い project の dir を作る");
+    let bare = work.join("no-build/plugin-plain");
+    plugin_dir(&bare);
 
     // 席: 印が無く tz が在る。
     let out = run_sh(&command, &project, &plain);
@@ -211,10 +239,9 @@ fn gins_command_under_sh() {
     assert!(!args_rec.exists(), "runner で tz が撃たれた");
     assert!(!stdin_rec.exists(), "runner で tz が撃たれた");
 
-    // tz が無い: 止めない誤り。
-    let out = run_sh(&command, &bare, &plain);
-    let code = out.status.code();
-    assert!(code != Some(0) && code != Some(2), "tz の無い場の rc: {out:?}");
+    // tz が無い（plugin の checkout に build が無く PATH にも無い）: 何もせず止めない。
+    let out = run_sh(&command, &project, &bare);
+    assert_eq!(out.status.code(), Some(0), "tz の無い場の rc: {out:?}");
     assert!(out.stdout.is_empty(), "tz の無い場の標準出力: {out:?}");
 
     std::fs::remove_dir_all(&work).expect("作業場を消す");

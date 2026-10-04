@@ -1,5 +1,5 @@
 {
   "name": "tsuzuri",
-  "version": "0.1.0",
-  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る"
+  "version": "0.2.0",
+  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る。skill の consult は相談の窓を開き、bin の tzw は hook と skill が撃つ tz を解く"
 }

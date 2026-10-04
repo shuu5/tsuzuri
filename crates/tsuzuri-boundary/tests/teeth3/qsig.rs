@@ -25,7 +25,7 @@ use tsuzuri_contract::surface::QuestionNudge;
 use tsuzuri_contract::wire;
 
 /// hooks.json の PostToolUse の command の字（門の command の question-gate を question-signal に替えた字）。
-const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"";
+const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"";
 
 /// 問いの起票の command。
 const ASK: &str = "bdw create --title 'q' --labels intake:question";
@@ -386,6 +386,7 @@ fn run_sh(project: &Path, plugin: &Path, input: &str) -> Output {
         .arg(COMMAND)
         .env("CLAUDE_PROJECT_DIR", project)
         .env("CLAUDE_PLUGIN_ROOT", plugin)
+        .env("PATH", "/usr/bin:/bin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -402,14 +403,42 @@ fn run_sh(project: &Path, plugin: &Path, input: &str) -> Output {
     child.wait_with_output().expect("sh の終わりを待つ")
 }
 
+/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
+fn plugin_dir(dir: &Path) {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
+    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
+        let to = dir.join(rel);
+        fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir");
+        fs::copy(src.join(rel), &to).expect("plugin の file を写す");
+    }
+}
+
+/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
+fn declared(project: &Path) {
+    fs::create_dir_all(project).expect("project の dir");
+    for args in [
+        &["init", "-q"][..],
+        &["config", "scribe2.statedir", "/nonexistent/state"],
+    ] {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(project)
+            .args(args)
+            .status()
+            .expect("git");
+        assert!(ok.success(), "git {args:?}");
+    }
+}
+
 #[test]
 fn qsig_command_under_sh() {
     let command = json::unquote(json::member(&post_hook(), "command").expect("鍵 command"));
     assert_eq!(command.as_deref(), Some(COMMAND));
     let root = place("sh");
     let project = root.join("project");
-    let bin = project.join("target/debug");
-    fs::create_dir_all(&bin).expect("project の dir");
+    let bin = root.join("target/debug");
+    fs::create_dir_all(&bin).expect("build の dir");
+    declared(&project);
     let (args_rec, stdin_rec) = (root.join("args.rec"), root.join("stdin.rec"));
     let tz = bin.join("tz");
     fs::write(
@@ -423,7 +452,7 @@ fn qsig_command_under_sh() {
     .expect("偽の tz");
     fs::set_permissions(&tz, fs::Permissions::from_mode(0o755)).expect("偽の tz の権限");
     let plain = root.join("plugin-plain");
-    fs::create_dir_all(&plain).expect("印の無い plugin の dir");
+    plugin_dir(&plain);
     let marked = root.join("plugin-marked");
     fs::create_dir_all(&marked).expect("印の在る plugin の dir");
     fs::write(marked.join(MARK_NAME), "").expect("印");

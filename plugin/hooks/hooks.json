@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"",
             "timeout": 30
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"",
             "async": true
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-gate --repo \"$CLAUDE_PROJECT_DIR\"",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-gate --repo \"$CLAUDE_PROJECT_DIR\"",
             "timeout": 10
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook stop --repo \"$CLAUDE_PROJECT_DIR\"",
+            "command": "\"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook stop --repo \"$CLAUDE_PROJECT_DIR\"",
             "timeout": 30
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver --repo \"$CLAUDE_PROJECT_DIR\"",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver --repo \"$CLAUDE_PROJECT_DIR\"",
             "timeout": 10
           }
         ]

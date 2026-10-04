@@ -105,7 +105,7 @@ const FILTER_WORDS: [&str; 92] = [
 
 /// hooks.json の command の語（二重引用符を除いた字）。
 const COMMAND_WORDS: [&str; 5] = [
-    "$CLAUDE_PROJECT_DIR/target/debug/tz",
+    "$CLAUDE_PLUGIN_ROOT/bin/tzw",
     "hook",
     "stop",
     "--repo",
@@ -181,8 +181,8 @@ fn fstop_plugin_stop_entry() {
     let command = hook["command"].as_str().expect("command は字");
     assert_eq!(words(command), COMMAND_WORDS, "{command}");
     let quoted = format!("\"{PROJECT_DIR}\"");
-    assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
-    assert_eq!(command.matches(&quoted).count(), 2, "{command}");
+    assert_eq!(command.matches(PROJECT_DIR).count(), 1, "{command}");
+    assert_eq!(command.matches(&quoted).count(), 1, "{command}");
 
     no_absolute_paths(plugin, hooks);
 }
