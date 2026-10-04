@@ -154,7 +154,7 @@ pub enum EdgeType {
     /// 裁定 → 問い。
     #[serde(rename = "answers")]
     Answers,
-    /// 問い → 任意の節点。
+    /// 問い・memo・epic → 任意の節点（memo と epic は行 c-memo-touch）。
     #[serde(rename = "touches")]
     Touches,
     /// 問い → 方針。

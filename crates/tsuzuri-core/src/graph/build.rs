@@ -76,6 +76,9 @@ pub const SCOPE_ALL: &str = "all";
 /// 問いの metadata の前提の鍵（型 premises の辺の先の id）。
 pub const PREMISES_KEY: &str = "premises";
 
+/// metadata の touches の欄から touches の辺を組む bead の種類（問い・memo・epic・行 c-memo-touch）。
+pub const TOUCH_KINDS: [NodeKind; 3] = [NodeKind::Question, NodeKind::Memo, NodeKind::Epic];
+
 /// 着地の event の種類（器の語・detail に着地の commit の札を持つ）。
 pub const RUN_DONE: &str = "RunDone";
 
@@ -502,7 +505,8 @@ fn add_typed(
     }
 }
 
-/// 問いの bead の touches と premises の辺と、memo の bead の source の辺を組む。
+/// 問いと memo と epic の bead の touches の辺と、問いの bead の premises の辺と、memo の bead の source の辺を組む
+/// （memo と epic の touches は行 c-memo-touch）。
 fn add_meta_edges(
     g: &mut Graph,
     kind: NodeKind,
@@ -510,10 +514,12 @@ fn add_meta_edges(
     metadata: &Value,
     touches: &[String],
 ) {
-    if kind == NodeKind::Question {
+    if TOUCH_KINDS.contains(&kind) {
         for to in touches {
             g.edges.push(edge(bead, to, EdgeType::Touches));
         }
+    }
+    if kind == NodeKind::Question {
         for to in metadata_ids(metadata, PREMISES_KEY) {
             g.edges.push(edge(bead, &to, EdgeType::Premises));
         }
