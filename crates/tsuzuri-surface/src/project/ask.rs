@@ -21,9 +21,10 @@ use tsuzuri_contract::surface::{Refusal, RefusalResponse, RulingId, RulingReques
 use tsuzuri_contract::wire;
 
 use super::{Body, NOT_READ};
-use crate::frame::Block;
+use crate::frame::{Block, Mode};
 use crate::view::{Fetched, clock};
 use crate::widgets::hover::clip;
+use crate::widgets::sumpick;
 
 pub const BLOCK: Block = Block {
     id: "ask",
@@ -73,9 +74,6 @@ pub const EMPTY: &str = "答えを待つ質問は無い";
 
 /// 概要が両方無いときの 1 行。
 pub const NO_SUMMARY: &str = "要約なし";
-
-/// 概要の片方が無いときの字。
-pub const MISSING: &str = "―";
 
 /// 200 の応答の後に card に出す字（記録した id と時刻の前）。
 pub const RECORDED: &str = "記録した";
@@ -176,13 +174,14 @@ pub const LAYOUT: [Slot; 6] = [
     },
 ];
 
-/// 概要の 1 行（class・語の鍵・字・エンジニア向けか）。
+/// 概要の 1 行（class・語の鍵・字・エンジニア向けか・表示の型の側でない印を出すか）。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SumLine {
     pub class: &'static str,
     pub key: Option<&'static str>,
     pub text: String,
     pub eng: bool,
+    pub marked: bool,
 }
 
 /// 1 本の card の中身（番号は 1 から・題は 36 字で切る）。
@@ -193,7 +192,9 @@ pub struct Card {
     pub title: String,
     pub a1: bool,
     pub posted_at: EpochSecs,
-    pub summary: Vec<SumLine>,
+    /// 2 つの概要（電文の字のまま・出す 1 行は表示の型で summary が選ぶ・行 g-ask-mode）。
+    pub plain: Option<String>,
+    pub eng: Option<String>,
     pub reason: String,
     pub recommend: String,
     pub touches: Vec<String>,
@@ -315,7 +316,8 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
         title: clip(&q.title),
         a1: q.a1,
         posted_at: q.posted_at,
-        summary: summary(q.plain.as_deref(), q.eng.as_deref()),
+        plain: q.plain.clone(),
+        eng: q.eng.clone(),
         reason: q.reason.clone().unwrap_or_default(),
         recommend: q.recommend.clone().unwrap_or_default(),
         touches: q.touches.clone(),
@@ -326,30 +328,33 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
     }
 }
 
-/// 概要の行（2 行・片方だけ無ければ「―」・両方無ければ「要約なし」の 1 行）。
-pub fn summary(plain: Option<&str>, eng: Option<&str>) -> Vec<SumLine> {
-    if plain.is_none() && eng.is_none() {
-        return vec![SumLine {
+/// 概要の 1 行（表示の型の 1 つを部品 sumpick で選ぶ・表示の型の側が無ければもう一方を印つきで・
+/// 両方無ければ「要約なし」・判断の記録 ADR-30 決定 (2)・行 g-ask-mode）。
+pub fn summary(plain: Option<&str>, eng: Option<&str>, mode: Mode) -> SumLine {
+    match sumpick::pick(mode, plain, eng, None) {
+        Some(p) => {
+            let eng = p.key == sumpick::ENG_KEY;
+            SumLine {
+                class: match (eng, p.marked) {
+                    (false, false) => "ln plain",
+                    (false, true) => "ln plain marked",
+                    (true, false) => "ln eng",
+                    (true, true) => "ln eng marked",
+                },
+                key: Some(p.key),
+                text: p.text,
+                eng,
+                marked: p.marked,
+            }
+        }
+        None => SumLine {
             class: "ln plain muted",
             key: None,
             text: NO_SUMMARY.to_string(),
             eng: false,
-        }];
+            marked: false,
+        },
     }
-    vec![
-        SumLine {
-            class: "ln plain",
-            key: Some("summary_plain"),
-            text: plain.unwrap_or(MISSING).to_string(),
-            eng: false,
-        },
-        SumLine {
-            class: "ln eng",
-            key: Some("summary_eng"),
-            text: eng.unwrap_or(MISSING).to_string(),
-            eng: true,
-        },
-    ]
 }
 
 /// 置かれてからの経過の字（60 分未満は分・48 時間未満は時間と分・それ以上は日・見本の durMs）。
@@ -628,7 +633,7 @@ mod dom {
     use super::{
         CHAT_KEY, Card, KeyAction, LAYOUT, MORE, MORE_KEY, Outcome, PATH, Part, RULING_PATH, Slot,
         UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, key_action, listed,
-        outcome, posted_tip, request_body, send_text, target_number,
+        outcome, posted_tip, request_body, send_text, summary, target_number,
     };
     use crate::frame::{Mode, node_href};
     use crate::project::fold;
@@ -814,7 +819,7 @@ mod dom {
                 }
                 .into_any()
             }
-            Part::Summary => summary_view(slot, card),
+            Part::Summary => summary_view(slot, card, mode),
             Part::Reason => {
                 let key = slot.key.unwrap_or_default();
                 view! {
@@ -843,21 +848,24 @@ mod dom {
     }
 
     /// 要約の行（人の字と作りの字の印・字）。
-    fn summary_view(slot: Slot, card: &Card) -> AnyView {
-        let lines = card
-            .summary
-            .iter()
-            .map(|l| {
-                let icon = if l.eng { CODE } else { PERSON };
-                view! {
-                    <div class=l.class data-term=l.key>
-                        <span inner_html=icon></span>
-                        <span data-t="" data-ledger-text="">{l.text.clone()}</span>
-                    </div>
-                }
-            })
-            .collect_view();
-        view! { <div class=slot.class>{lines}</div> }.into_any()
+    fn summary_view<M>(slot: Slot, card: &Card, mode: M) -> AnyView
+    where
+        M: Fn() -> Mode + Copy + Send + Sync + 'static,
+    {
+        let (plain, eng) = (card.plain.clone(), card.eng.clone());
+        let line = move || {
+            let one = summary(plain.as_deref(), eng.as_deref(), mode());
+            let l = &one;
+            let icon = if l.eng { CODE } else { PERSON };
+            let mark = l.key.filter(|_| l.marked).map(|k| view! { <small>{label(k)}</small> });
+            view! {
+                <div class=l.class data-term=l.key>
+                    <span inner_html=icon></span>
+                    <span>{mark}<span data-t="" data-ledger-text="">{l.text.clone()}</span></span>
+                </div>
+            }
+        };
+        view! { <div class=slot.class>{line}</div> }.into_any()
     }
 
     /// つながりの段（開いたときに図の口を読み始め、開き閉じを記録へ書き戻す）。

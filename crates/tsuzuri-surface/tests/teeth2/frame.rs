@@ -223,9 +223,9 @@ fn used_classes() -> BTreeSet<String> {
     for slot in ask::LAYOUT {
         add(slot.class);
     }
-    for (plain, eng) in [(Some("a"), Some("b")), (None, None)] {
-        for line in ask::summary(plain, eng) {
-            add(line.class);
+    for (plain, eng) in [(Some("a"), Some("b")), (Some("a"), None), (None, Some("b")), (None, None)] {
+        for mode in Mode::ALL {
+            add(ask::summary(plain, eng, mode).class);
         }
     }
     built_classes(&mut add);

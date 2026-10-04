@@ -12,6 +12,7 @@ use tsuzuri_contract::surface::{
     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
 };
 use tsuzuri_contract::wire;
+use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
 use tsuzuri_surface::view::{Fetched, clock};
 use tsuzuri_surface::vocab::vocab;
@@ -94,25 +95,12 @@ fn askcard_fixture_cards_text() {
     assert_eq!(first.title, "質問の頁の答えの欄は 1 問に 1 つでよいか");
     assert!(first.a1);
     assert_eq!(first.posted_at, 1_790_488_800);
-    let lines: Vec<(&str, Option<&str>, &str)> = first
-        .summary
-        .iter()
-        .map(|l| (l.class, l.key, l.text.as_str()))
-        .collect();
     assert_eq!(
-        lines,
-        vec![
-            (
-                "ln plain",
-                Some("summary_plain"),
-                "答えを書く欄を質問ごとに 1 つ置く"
-            ),
-            (
-                "ln eng",
-                Some("summary_eng"),
-                "qcard ごとに textarea と送る button を 1 組"
-            ),
-        ]
+        (first.plain.as_deref(), first.eng.as_deref()),
+        (
+            Some("答えを書く欄を質問ごとに 1 つ置く"),
+            Some("qcard ごとに textarea と送る button を 1 組")
+        )
     );
     assert_eq!(
         first.reason,
@@ -134,14 +122,16 @@ fn second_card(cards: &[ask::Card], first: &ask::Card) {
     );
     assert_eq!(second.title.chars().count(), 36);
     assert!(!second.a1);
+    assert_eq!((second.plain.as_deref(), second.eng.as_deref()), (None, None));
     assert_eq!(
-        second.summary,
-        vec![ask::SumLine {
+        ask::summary(None, None, Mode::Beginner),
+        ask::SumLine {
             class: "ln plain muted",
             key: None,
             text: ask::NO_SUMMARY.to_string(),
             eng: false,
-        }]
+            marked: false,
+        }
     );
     assert_eq!(ask::NO_SUMMARY, "要約なし");
     // 理由はつねに出す（在れば字・無ければ空）・推奨の無い card は空の字。
@@ -164,19 +154,20 @@ fn card_ages(first: &ask::Card) {
     assert_eq!(ask::age(0, first.posted_at), "0m");
 }
 
-/// 概要の片方だけ無い card は無い側に「―」。
+/// 概要の片方だけ無い card は、表示の型の側が無ければもう一方の 1 行を印つきで出す（行 g-ask-mode で 2 行と「―」をやめた）。
 #[test]
 fn askcard_summary_one_side_missing() {
-    let only_plain = ask::summary(Some("やさしい説明"), None);
-    let texts: Vec<&str> = only_plain.iter().map(|l| l.text.as_str()).collect();
-    assert_eq!(texts, vec!["やさしい説明", "―"]);
-    let only_eng = ask::summary(None, Some("statements[0]"));
-    let texts: Vec<&str> = only_eng.iter().map(|l| l.text.as_str()).collect();
-    assert_eq!(texts, vec!["―", "statements[0]"]);
-    let classes: Vec<&str> = only_eng.iter().map(|l| l.class).collect();
-    assert_eq!(classes, vec!["ln plain", "ln eng"]);
-    assert_eq!(ask::MISSING, "―");
-    assert_eq!(ask::summary(None, None).len(), 1);
+    let only_plain = ask::summary(Some("やさしい説明"), None, Mode::Expert);
+    assert_eq!(
+        (only_plain.class, only_plain.text.as_str(), only_plain.marked),
+        ("ln plain marked", "やさしい説明", true)
+    );
+    let only_eng = ask::summary(None, Some("statements[0]"), Mode::Beginner);
+    assert_eq!(
+        (only_eng.class, only_eng.text.as_str(), only_eng.marked),
+        ("ln eng marked", "statements[0]", true)
+    );
+    assert_eq!(ask::summary(None, None, Mode::Expert).key, None);
 }
 
 /// 番号は電文の順（古い順）のまま 1 から・つながりの見出しの数と中の id は card の touches と同じ。
