@@ -1,0 +1,242 @@
+//! 席の手元へ要の写しを出す暫定の hook の歯（接頭辞 seathk_・設計ノート surface-wave27b 行 t-seathook・判断の記録 ADR-38 決定 (6)(7)）。
+//! workspace の根の plugin/hooks/hooks.json を JSON として読み（境界の crate は serde_json に直に依存しないので中核の crate に置く）、
+//! SessionStart の command を sh で撃つ。器の binary は偽の script（受けた引数を記録し、置いた rc で終わる）で、置き場は
+//! CARGO_TARGET_TMPDIR の下に歯ごとに作る（plugin の根・project の根の contracts/seat/brief.txt・偽の dir）。
+#![cfg(test)]
+
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+use serde_json::Value;
+
+/// runner の印の除きの字（command の頭・印の名は器の名の定数と尾の字から成る）。
+const EXCLUDE_HEAD: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/";
+
+/// 印の名の尾（器の pipe/spawn.rs の定数の字）。
+const MARK_SUFFIX: &str = "-runner";
+
+/// 器の名の定数の行の頭と、印の名の尾の定数の行（器の src の字）。
+const NAME_LINE: &str = "pub const NAME: &str = \"";
+const SUFFIX_LINE: &str = "const RUNNER_MARK_SUFFIX: &str = \"-runner\";";
+
+/// 器の binary への問いの語（器の hook と同じ呼び・行 v-brief-const と合わせる仮の名）。
+const QUERY: &str = "\"${SCRIBE2_BIN:-scribe2}\" vessel seat-constitution --project \"$CLAUDE_PROJECT_DIR\" >/dev/null 2>&1";
+
+/// 要の写しの在りか（$CLAUDE_PROJECT_DIR からの相対）。
+const COPY_AT: &str = "cat \"$CLAUDE_PROJECT_DIR/contracts/seat/brief.txt\"";
+
+/// 置き場の要の写し（字のまま出るかを見る・多字節と空白の並びと末尾の改行）。
+const COPY: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9\n順位 甲  乙\n全文 contracts/seat/constitution.txt\n";
+
+fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn read(rel: &str) -> String {
+    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+}
+
+fn hooks() -> Value {
+    serde_json::from_str(&read("plugin/hooks/hooks.json"))
+        .unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
+}
+
+/// 要素 1 つの配列のその要素。
+fn only(v: &Value) -> &Value {
+    match v.as_array().map(Vec::as_slice) {
+        Some([one]) => one,
+        _ => panic!("要素 1 つの配列でない: {v}"),
+    }
+}
+
+/// object の鍵を並べ替えた列。
+fn keys(v: &Value) -> Vec<&str> {
+    let mut keys: Vec<&str> = v
+        .as_object()
+        .unwrap_or_else(|| panic!("object でない: {v}"))
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    keys
+}
+
+/// SessionStart の要素の hook（要素 1 つ・matcher なし）。
+fn session_hook() -> Value {
+    let all = hooks();
+    let entry = only(&all["hooks"]["SessionStart"]);
+    assert_eq!(keys(entry), ["hooks"], "matcher を持たない");
+    only(&entry["hooks"]).clone()
+}
+
+fn session_command() -> String {
+    session_hook()["command"]
+        .as_str()
+        .expect("command は字")
+        .to_owned()
+}
+
+/// 器の名の定数の字（器の src/name.rs の 1 行から）。
+fn vessel_name() -> String {
+    let src = read("scribe2/crates/scribe2/src/name.rs");
+    let line = src
+        .lines()
+        .find(|l| l.starts_with(NAME_LINE))
+        .expect("器の名の定数の行");
+    line.strip_prefix(NAME_LINE)
+        .and_then(|rest| rest.strip_suffix("\";"))
+        .expect("器の名の定数の字")
+        .to_owned()
+}
+
+/// 歯ごとの置き場（plugin の根・project の根・偽の器の dir）。
+struct Fx {
+    work: PathBuf,
+}
+
+impl Fx {
+    fn new(name: &str) -> Fx {
+        let work = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join("seathk")
+            .join(name);
+        let _ = fs::remove_dir_all(&work);
+        for d in ["plugin", "project/contracts/seat", "path"] {
+            fs::create_dir_all(work.join(d)).expect("置き場");
+        }
+        fs::write(work.join("project/contracts/seat/brief.txt"), COPY).expect("要の写し");
+        Fx { work }
+    }
+
+    /// 偽の器（受けた引数を記録の file に 1 行で足し、rc で終わる・標準出力と標準エラーにも字を出す）。
+    fn vessel(&self, at: &str, rc: i32) -> PathBuf {
+        let path = self.work.join(at);
+        let rec = self.work.join("calls");
+        fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\necho \"$*\" >> '{}'\necho out\necho err >&2\nexit {rc}\n",
+                rec.display()
+            ),
+        )
+        .expect("偽の器");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("偽の器の権限");
+        path
+    }
+
+    /// command を sh で撃つ（SCRIBE2_BIN は bin が Some の時だけ置く・PATH は /usr/bin と /bin と偽の dir）。
+    fn run(&self, bin: Option<&Path>) -> Output {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg(session_command())
+            .env("CLAUDE_PLUGIN_ROOT", self.work.join("plugin"))
+            .env("CLAUDE_PROJECT_DIR", self.work.join("project"))
+            .env(
+                "PATH",
+                format!("/usr/bin:/bin:{}", self.work.join("path").display()),
+            )
+            .env_remove("SCRIBE2_BIN");
+        if let Some(b) = bin {
+            cmd.env("SCRIBE2_BIN", b);
+        }
+        cmd.output().expect("sh を撃つ")
+    }
+
+    fn calls(&self) -> Option<String> {
+        fs::read_to_string(self.work.join("calls")).ok()
+    }
+}
+
+#[test]
+fn seathk_runner_mark_excluded() {
+    let command = session_command();
+    let mark = format!("{EXCLUDE_HEAD}{}{MARK_SUFFIX}\" ] || ", vessel_name());
+    assert!(command.starts_with(&mark), "{command}");
+    assert_eq!(command.matches(&mark).count(), 1, "{command}");
+}
+
+#[test]
+fn seathk_mark_name_from_vessel() {
+    let spawn = read("scribe2/crates/scribe2/src/pipe/spawn.rs");
+    assert_eq!(
+        spawn.lines().filter(|l| *l == SUFFIX_LINE).count(),
+        1,
+        "器の印の名の尾は {MARK_SUFFIX}"
+    );
+    let command = session_command();
+    let name = command
+        .strip_prefix(EXCLUDE_HEAD)
+        .and_then(|rest| rest.split('"').next())
+        .expect("除きの印の名");
+    assert_eq!(name, format!("{}{MARK_SUFFIX}", vessel_name()));
+}
+
+#[test]
+fn seathk_entry_shape() {
+    let hook = session_hook();
+    assert_eq!(keys(&hook), ["command", "timeout", "type"]);
+    assert_eq!(hook["type"], "command");
+    assert_eq!(hook["timeout"].as_u64(), Some(10), "timeout は数 10");
+    let command = session_command();
+    let want = format!(
+        "{EXCLUDE_HEAD}{}{MARK_SUFFIX}\" ] || {QUERY} || {COPY_AT}",
+        vessel_name()
+    );
+    assert_eq!(command, want);
+}
+
+#[test]
+fn seathk_prints_copy_verbatim() {
+    let fx = Fx::new("print-path");
+    fx.vessel("path/scribe2", 1);
+    let out = fx.run(None);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        out.stdout,
+        COPY.as_bytes(),
+        "要の写しを字のまま・前後に字を足さない"
+    );
+    assert!(out.stderr.is_empty(), "{out:?}");
+    let project = fx.work.join("project");
+    assert_eq!(
+        fx.calls(),
+        Some(format!(
+            "vessel seat-constitution --project {}\n",
+            project.display()
+        ))
+    );
+    let fx = Fx::new("print-missing");
+    let out = fx.run(Some(&fx.work.join("path/none")));
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(out.stdout, COPY.as_bytes(), "器が無ければ出す");
+    assert!(out.stderr.is_empty(), "{out:?}");
+}
+
+#[test]
+fn seathk_quiet_when_vessel_serves() {
+    let fx = Fx::new("serves");
+    let bin = fx.vessel("vessel", 0);
+    let out = fx.run(Some(&bin));
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "器が出す周は出さない: {out:?}");
+    assert!(out.stderr.is_empty(), "{out:?}");
+    assert!(fx.calls().is_some(), "器に問うた");
+}
+
+#[test]
+fn seathk_quiet_for_runner() {
+    let fx = Fx::new("runner");
+    let bin = fx.vessel("vessel", 1);
+    fs::write(
+        fx.work
+            .join("plugin")
+            .join(format!("{}{MARK_SUFFIX}", vessel_name())),
+        "",
+    )
+    .expect("印");
+    let out = fx.run(Some(&bin));
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "runner の写しでは出さない: {out:?}");
+    assert_eq!(fx.calls(), None, "器にも問わない");
+}
