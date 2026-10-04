@@ -4,7 +4,8 @@
 //! 下の段は口 GET /api/consult の一覧（退いていない窓・処分の無い所見・受けの無い頼み）で、受けの無い頼みは
 //! 頼みの時刻から `DELIVER_SPAN` を越えると `LATE` を添える。読めない段は測れていない。
 //! 帯の相談の口は色の付く数を持たない（所見の処分は席の手番・決定 (9)）。窓を開いた link が bead の id を持てば、
-//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
+//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。札と行の吹き出しの相談の口（行 cs-pop）は `consult_href` の link で、
+//! 押すとその bead の id を題に入れてこの窓を開く（hover では開かない）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
 //! wasm の target のときだけ組む。
 
 use tsuzuri_contract::EpochSecs;
@@ -15,13 +16,20 @@ use tsuzuri_contract::consult::{
 };
 use tsuzuri_contract::wire;
 
+use crate::frame::Mode;
+use crate::mapview::encode;
 use crate::project::Body;
+use crate::project::ask::FOCUS_KEY;
+use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
 
 pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
 
 /// 帯の相談の口と窓の題の語の鍵。
 pub const CONSULT_KEY: &str = "consult";
+
+/// 吹き出しの相談の口の語の鍵（行 cs-pop）。
+pub const POP_KEY: &str = "pop_consult";
 
 /// 受けの無い頼みを「席に届いていない」と見る経過（秒・server の配達の撃ち直しの幅と同じ 1800 秒）。
 pub const DELIVER_SPAN: EpochSecs = 1800;
@@ -49,6 +57,15 @@ pub struct Row {
     pub topic: String,
     pub note: String,
     pub late: bool,
+}
+
+/// 吹き出しの相談の口の先（相談の窓を開いた home の頁・bead の id を題の初めの字に渡す・行 cs-pop）。
+pub fn consult_href(id: &str, mode: Mode) -> String {
+    format!(
+        "{}&{FOCUS_KEY}={}",
+        win_href(Win::Consult, mode),
+        encode(id)
+    )
 }
 
 /// 頼みの電文（題は前後の空白を除いて空なら無し・model が `MODELS` に無ければ None）。

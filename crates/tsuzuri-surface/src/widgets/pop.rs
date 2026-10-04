@@ -12,6 +12,7 @@
 //! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
 //! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
 //! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
+//! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -607,6 +608,7 @@ mod dom {
         Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
         opener_selector, place, pop, read_facts, read_parts, toggle, with_why,
     };
+    use crate::consultwin::{POP_KEY, consult_href};
     use crate::frame::{Mode, node_href};
     use crate::project::{ledger, map, pipeline, timeline, unmeasured};
     use crate::view::read_rows;
@@ -833,6 +835,7 @@ mod dom {
             </div>
             <div class=foot>
                 <a class=link href=node_href(&p.id, mode)>{format!("{} ›", label(PAGE_KEY))}</a>
+                <a class=link href=consult_href(&p.id, mode)>{format!("{} ›", label(POP_KEY))}</a>
             </div>
         }
         .into_any()

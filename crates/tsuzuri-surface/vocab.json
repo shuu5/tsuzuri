@@ -1808,6 +1808,11 @@
    "label": "相談",
    "plain": "席の文脈と分けた調べと検証の窓\n・ 題と形と model を書いて頼む\n・ 窓を開くのは席\n・ 30 分受けられなければ席に届いていない\n→ 色の付く数は持たない",
    "internal": "GET /api/consult ・ POST /api/consult/request（判断の記録 ADR-29 決定 (4)(9)・行 cs-bar）"
+  },
+  "pop_consult": {
+   "label": "相談する",
+   "plain": "この bead を題にした相談の窓を開く\n・ 押した時だけ開く\n・ 頼みを送ると席が受けて窓を開く",
+   "internal": "?win=consult&id=<bead>（判断の記録 ADR-29 決定 (4)・行 cs-pop）"
   }
  }
 }
