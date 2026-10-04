@@ -1,0 +1,566 @@
+diff --git a/crates/tsuzuri-surface/src/pages/node.rs b/crates/tsuzuri-surface/src/pages/node.rs
+index 0ac5de1d2f5582ca95191869ccc1441b0789ed45..75c05ab7bbd9e3347b53190d725fd6e2fbc646d4 100644
+--- a/crates/tsuzuri-surface/src/pages/node.rs
++++ b/crates/tsuzuri-surface/src/pages/node.rs
+@@ -1,8 +1,9 @@
+-//! 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around と、run の時間軸の timeline の 3 つ）。
++//! 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around と、本文と記録の body と、
++//! run の時間軸の timeline の 4 つ・詳細の表示の順は判断の記録 ADR-30 決定 (4)・行 g-node-body）。
+ //! query の page=node と id で開く。
+ 
+ use crate::frame::{Column, PageDef, STACK};
+-use crate::project::{node, nodearound, timeline};
++use crate::project::{node, nodearound, nodebody, timeline};
+ 
+ pub const PAGE: PageDef = PageDef {
+     heading: "nb_self",
+@@ -13,6 +14,11 @@ pub const PAGE: PageDef = PageDef {
+ fn columns() -> Vec<Column> {
+     vec![Column {
+         class: STACK,
+-        blocks: vec![node::BLOCK, nodearound::BLOCK, timeline::BLOCK],
++        blocks: vec![
++            node::BLOCK,
++            nodearound::BLOCK,
++            nodebody::BLOCK,
++            timeline::BLOCK,
++        ],
+     }]
+ }
+diff --git a/crates/tsuzuri-surface/src/project/nodebody.rs b/crates/tsuzuri-surface/src/project/nodebody.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..bda9660fd6078b99706b3bde184cbd301f0eaa1b
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/project/nodebody.rs
+@@ -0,0 +1,161 @@
++//! block「本文と記録」（行 g-node-body・判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
++//! run の時間軸の前）。中心の節点が台帳の bead（契約・epic・memo・問い）の時だけ、その 1 本の引きの口（`ITEM_PATH`）から
++//! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも閉じて始め、
++//! 開き閉じは畳める段の記録に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
++//! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
++
++use tsuzuri_contract::graph::{AroundRow, NodeKind};
++use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
++use tsuzuri_contract::wire;
++
++use super::node::center;
++use super::nodearound::PageState;
++use super::{Body, NO_CONTENT, NOT_READ};
++use crate::frame::Block;
++use crate::view::Fetched;
++use crate::widgets::md::{self, Block as MdBlock};
++
++pub const BLOCK: Block = Block {
++    id: "body",
++    heading: "nb_body",
++    class: "panel",
++};
++
++/// この file が字を持つ口の path（無い・1 本の引きの口の path は契約の型の ITEM_PATH・行 hs-derived）。
++pub const PATHS: &[&str] = &[];
++
++/// この file の畳める段の開き閉じの鍵の形（本文と記録・行 hs-derived・行 g-node-body）。
++pub const FOLDS: &[&str] = &["node:body", "node:notes"];
++
++/// 本文と記録の段の見出しの語の鍵（FOLDS と同じ順）。
++pub const PART_KEYS: [&str; 2] = ["nb_text", "nb_notes"];
++
++/// 畳める段の class。
++pub const PART_CLASS: &str = "fold nbody";
++
++/// 段を出す節点の種類（台帳の bead）。
++pub const KINDS: [NodeKind; 4] = [
++    NodeKind::Task,
++    NodeKind::Epic,
++    NodeKind::Memo,
++    NodeKind::Question,
++];
++
++/// 1 本の引きの口が読めないときの理由。
++pub const REASON: &str = "台帳の 1 本の引きの口が読めない（server にまだ無い・届かない）";
++
++/// 本文か記録が空のときの 1 行。
++pub const BLANK: &str = "書かれていない";
++
++/// 読んだ本文と記録（本文の書式の段の列）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Texts {
++    pub body: Vec<MdBlock>,
++    pub notes: Vec<MdBlock>,
++}
++
++/// 中心の行の bead（台帳の bead の種類で、id が bead の id の形の時だけ）。
++pub fn bead_of(row: &AroundRow) -> Option<BeadId> {
++    if !KINDS.contains(&row.node.kind) {
++        return None;
++    }
++    BeadId::new(row.node.id.clone()).ok()
++}
++
++/// bead の 1 本の引きの口の path。
++pub fn item_path(bead: &BeadId) -> String {
++    format!("{ITEM_PATH}{bead}")
++}
++
++/// 読む bead（近傍を読めた時は中心の行から決め、読み直しの間は前の bead を保つ）。
++pub fn kept_bead(before: Option<BeadId>, state: &PageState) -> Option<BeadId> {
++    match state {
++        PageState::Doc(doc) => center(doc).and_then(bead_of),
++        PageState::NotFound => None,
++        PageState::NotRead | PageState::Unread(_) => before,
++    }
++}
++
++/// 中身の 3 値（読めない間は測れていないの 1 行・ほかの bead の電文の間はまだ読んでいない）。
++pub fn texts(fetched: &Fetched, bead: &BeadId) -> Body<Texts> {
++    let text = match fetched {
++        Fetched::NotRead => return Body::Unmeasured(NOT_READ),
++        Fetched::Failed => return Body::Unmeasured(REASON),
++        Fetched::Body(text) => text,
++    };
++    let Ok(item) = wire::decode::<LedgerItem>(text) else {
++        return Body::Unmeasured(NO_CONTENT);
++    };
++    if item.row.id != *bead {
++        return Body::Unmeasured(NOT_READ);
++    }
++    Body::Filled(Texts {
++        body: md::parse(&item.description),
++        notes: md::parse(&item.notes),
++    })
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::view;
++
++/// 本文と記録の block の DOM（wasm の target のときだけ）。
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::prelude::*;
++    use tsuzuri_contract::ledger::BeadId;
++
++    use super::{BLANK, BLOCK, Body, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts};
++    use crate::project::nodearound::{source, state};
++    use crate::project::{fold, section, unmeasured};
++    use crate::widgets::help::h2;
++    use crate::widgets::md;
++
++    /// 畳める段の中（空なら 1 行・字は台帳の字の印の下に描く）。
++    fn part(blocks: Vec<MdBlock>) -> AnyView {
++        if blocks.is_empty() {
++            return view! { <div class="empty"><span>{BLANK}</span></div> }.into_any();
++        }
++        view! { <div data-ledger-text="">{md::view(blocks)}</div> }.into_any()
++    }
++
++    /// 本文と記録の block（台帳の bead でない節点と、近傍をまだ読んでいない間は何も出さない）。
++    pub fn view() -> AnyView {
++        let src = source();
++        let Some(near) = src.read else {
++            return ().into_any();
++        };
++        let bead = Memo::new(move |before: Option<&Option<BeadId>>| {
++            let st = near.with(|(f, s)| state(f, *s));
++            kept_bead(before.cloned().flatten(), &st)
++        });
++        let path =
++            Signal::derive(move || bead.with(|b| b.as_ref().map(item_path).unwrap_or_default()));
++        let item = crate::net::read_path(path);
++        let content = move || {
++            let Some(b) = bead.get() else {
++                return ().into_any();
++            };
++            match item.with(|(f, _)| texts(f, &b)) {
++                Body::Filled(t) => {
++                    let [text_key, notes_key] = PART_KEYS;
++                    let (open_text, toggle_text) = fold("node:body".to_string(), || false);
++                    let (open_notes, toggle_notes) = fold("node:notes".to_string(), || false);
++                    let body = view! {
++                        <details class=PART_CLASS prop:open=open_text on:toggle=toggle_text>
++                            <summary>{h2(text_key)}</summary>
++                            {part(t.body)}
++                        </details>
++                        <details class=PART_CLASS prop:open=open_notes on:toggle=toggle_notes>
++                            <summary>{h2(notes_key)}</summary>
++                            {part(t.notes)}
++                        </details>
++                    };
++                    section(BLOCK, ().into_any(), body.into_any())
++                }
++                Body::Unmeasured(reason) => section(BLOCK, ().into_any(), unmeasured(reason)),
++                Body::Empty(_) => ().into_any(),
++            }
++        };
++        view! { {content} }.into_any()
++    }
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 6a059ad6f6e60913fc7d04b105faf90a3e71fa32..f5909a1df709cf6994e025f84201099bd248d4fe 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -359,6 +359,20 @@ body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }
+ .pt { margin-bottom: 6px; color: var(--ink-2); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+ .psum { color: var(--ink-3); font-size: var(--fs-1); line-height: 1.55; overflow-wrap: anywhere; }
+ .psum small { padding: 0 4px; border: 1px dashed var(--line-2); border-radius: 4px; }
++/* ---------- 本文と記録（行 g-node-body・本文の書式の部品 md の段〔行 g-md-view〕・字は字の node で描く） ---------- */
++details.nbody { margin: 4px 0; }
++details.nbody > summary { cursor: pointer; }
++.md { padding: 4px 2px; font-size: var(--fs-1); line-height: 1.6; overflow-wrap: anywhere; }
++.md p { margin: 4px 0; }
++.mdh1, .mdh2, .mdh3, .mdh4 { margin: 10px 0 4px; font-weight: 600; }
++.mdh1 { font-size: 15px; }
++.mdh2 { font-size: 14px; }
++.mdh3 { font-size: 13px; }
++.mdh4 { font-size: 12.5px; color: var(--ink-2); }
++.mdli { display: flex; gap: 4px; margin: 2px 0; }
++.mdli > span:first-child { flex: none; color: var(--ink-3); }
++.mdpre { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--panel-2); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
++.md code { padding: 0 3px; border-radius: 3px; background: var(--panel-2); font-size: .92em; }
+ .pmore { margin-left: 4px; padding: 0 2px; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+ .facts { width: 100%; margin: 6px 0; border-collapse: collapse; font-size: var(--fs-1); }
+ .facts th { width: 1%; padding: 4px 10px 4px 0; border-top: 1px solid var(--line); color: var(--ink-3); font-weight: 500; text-align: left; white-space: nowrap; vertical-align: top; }
+diff --git a/crates/tsuzuri-surface/tests/ndbody.rs b/crates/tsuzuri-surface/tests/ndbody.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c65bb394c35ce20ed3acd5ca2a61989ec19f054
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/ndbody.rs
+@@ -0,0 +1,223 @@
++//! 個別の頁の本文と記録の block の歯（行 g-node-body・接頭辞 ndbody_・判断の記録 ADR-30 決定 (4)・要件 FR5）。
++//! 頁の block の並びと畳める段の鍵と初めの閉じ、読む bead の決め方（台帳の bead の種類だけ）、1 本の引きの電文の本文と記録の
++//! 段の列と、読めない間の測れていないの 1 行を断言し、DOM（wasm の枝）の配線の字を block の file の範囲で照らす。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::graph::{AroundDoc, NodeKind};
++use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::{self, Block, PageId};
++use tsuzuri_surface::project::nodearound::PageState;
++use tsuzuri_surface::project::nodebody::{
++    self, BLANK, BLOCK, FOLDS, PART_CLASS, PART_KEYS, REASON, Texts, bead_of, item_path, kept_bead,
++    texts,
++};
++use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::widgets::md;
++
++const ID: &str = "t-1.2";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// block の file の DOM（wasm の枝）の字。
++fn dom() -> String {
++    let src = read("src/project/nodebody.rs");
++    src[src.find("mod dom {").expect("wasm の枝")..].to_string()
++}
++
++fn bead(s: &str) -> BeadId {
++    BeadId::new(s).expect("bead の id")
++}
++
++/// 中心の節点の種類と id を替えた近傍の電文（fixture は着地した歯 gsum と同じ file）。
++fn around(kind: NodeKind, id: &str) -> AroundDoc {
++    let mut doc: AroundDoc = wire::decode(&read("../../tests/fixtures/surface/around-doc.json"))
++        .expect("around-doc.json が電文として読める");
++    let c = doc
++        .rows
++        .iter_mut()
++        .find(|r| r.col == 0)
++        .expect("fixture の中心の行");
++    c.node.kind = kind;
++    c.node.id = id.to_string();
++    doc
++}
++
++fn center_bead(kind: NodeKind, id: &str) -> Option<BeadId> {
++    let doc = around(kind, id);
++    let c = doc.rows.iter().find(|r| r.col == 0).expect("中心の行");
++    bead_of(c)
++}
++
++/// 1 本の引きの電文（id と本文と記録だけを替える）。
++fn item(id: &str, description: &str, notes: &str) -> Fetched {
++    let row = LedgerRow {
++        id: bead(id),
++        kind: "task".to_string(),
++        title: format!("{id} の題"),
++        status: "open".to_string(),
++        updated_at: 1_790_000_000,
++        parent: None,
++        labels: Vec::new(),
++    };
++    let it = LedgerItem {
++        row,
++        description: description.to_string(),
++        notes: notes.to_string(),
++    };
++    Fetched::Body(wire::encode(&it).expect("電文に書ける"))
++}
++
++/// 節点の頁の block の並びは node・around・body・timeline。本文と記録の block は id body・見出しの鍵 nb_body・class panel で、
++/// 見出しと 2 つの段の語は語の辞書に在る。
++#[test]
++fn ndbody_page_order() {
++    assert_eq!(
++        frame::page(PageId::Node).block_ids(),
++        vec!["node", "around", "body", "timeline"]
++    );
++    assert_eq!(
++        BLOCK,
++        Block {
++            id: "body",
++            heading: "nb_body",
++            class: "panel",
++        }
++    );
++    assert_eq!(PART_KEYS, ["nb_text", "nb_notes"]);
++    for (k, want) in [
++        ("nb_body", "本文と記録"),
++        ("nb_text", "本文"),
++        ("nb_notes", "記録"),
++    ] {
++        let t = vocab()
++            .term(k)
++            .unwrap_or_else(|| panic!("{k} が語の辞書に無い"));
++        assert_eq!(t.label, want, "{k}");
++        assert!(!t.note.is_empty(), "{k}");
++    }
++}
++
++/// 畳める段は鍵 node:body と node:notes の 2 つで、どちらも表示の型によらず閉じて始め（初めの値は偽）、開き閉じを
++/// 畳める段の記録に書き戻す。段の class は stylesheet に在る。
++#[test]
++fn ndbody_folds_closed() {
++    assert_eq!(FOLDS, ["node:body", "node:notes"]);
++    let dom = dom();
++    for key in FOLDS {
++        let call = format!("fold(\"{key}\".to_string(), || false);");
++        assert_eq!(dom.matches(&call).count(), 1, "{call}");
++    }
++    assert_eq!(
++        dom.matches("<details class=PART_CLASS prop:open=open_")
++            .count(),
++        2
++    );
++    assert_eq!(dom.matches("on:toggle=toggle_").count(), 2);
++    assert!(!dom.contains("mode"), "段の開き閉じが表示の型を読む");
++    assert_eq!(PART_CLASS, "fold nbody");
++    assert!(read("style.css").contains("details.nbody { "));
++}
++
++/// 中心の節点が台帳の bead の種類（契約・epic・memo・問い）で id が bead の id の形の時だけ bead を返し、設計の節点・
++/// 走行・決定は同じ id でも None。読む口の path は 1 本の引きの口。近傍の読み直しの間は前の bead を保つ。
++#[test]
++fn ndbody_reads_bead_only() {
++    for kind in [
++        NodeKind::Task,
++        NodeKind::Epic,
++        NodeKind::Memo,
++        NodeKind::Question,
++    ] {
++        assert_eq!(center_bead(kind, ID), Some(bead(ID)), "{kind:?}");
++    }
++    for kind in [
++        NodeKind::Run,
++        NodeKind::NoteRow,
++        NodeKind::Req,
++        NodeKind::Adr,
++        NodeKind::Ruling,
++    ] {
++        assert_eq!(center_bead(kind, ID), None, "{kind:?}");
++    }
++    assert_eq!(center_bead(NodeKind::Task, "contracts/n.toml#r-a"), None);
++    assert_eq!(item_path(&bead(ID)), "/api/ledger/t-1.2");
++    let before = Some(bead("t-9"));
++    let doc = PageState::Doc(around(NodeKind::Memo, ID));
++    assert_eq!(kept_bead(before.clone(), &doc), Some(bead(ID)));
++    for st in [PageState::NotRead, PageState::Unread(NOT_READ)] {
++        assert_eq!(kept_bead(before.clone(), &st), before);
++    }
++    assert_eq!(kept_bead(before, &PageState::NotFound), None);
++    let dom = dom();
++    for s in [
++        "bead.with(|b| b.as_ref().map(item_path).unwrap_or_default())",
++        "let item = crate::net::read_path(path);",
++        "let Some(b) = bead.get() else {\n                return ().into_any();",
++    ] {
++        assert_eq!(dom.matches(s).count(), 1, "{s}");
++    }
++}
++
++/// 読めた電文の本文と記録は部品 md の parse の段の列で、DOM は段を台帳の字の印の下に md::view で描き、空の段は 1 行。
++#[test]
++fn ndbody_body_parsed() {
++    let desc = "## 概要\n- a `b`\n\n本文の行";
++    let notes = "記録の行\n\n| x |";
++    let got = texts(&item(ID, desc, notes), &bead(ID));
++    assert_eq!(
++        got,
++        Body::Filled(Texts {
++            body: md::parse(desc),
++            notes: md::parse(notes),
++        })
++    );
++    let Body::Filled(t) = got else {
++        panic!("中身が無い");
++    };
++    assert_eq!((t.body.len(), t.notes.len()), (3, 2));
++    let empty = texts(&item(ID, desc, ""), &bead(ID));
++    assert!(matches!(empty, Body::Filled(Texts { notes, .. }) if notes.is_empty()));
++    let dom = dom();
++    assert_eq!(
++        dom.matches("<div data-ledger-text=\"\">{md::view(blocks)}</div>")
++            .count(),
++        1
++    );
++    assert_eq!(dom.matches("<span>{BLANK}</span>").count(), 1);
++    assert_eq!(BLANK, "書かれていない");
++    assert_eq!(dom.matches("{part(t.body)}").count(), 1);
++    assert_eq!(dom.matches("{part(t.notes)}").count(), 1);
++}
++
++/// 引きが読めない間は測れていないの 1 行: まだ読んでいない・口が読めない・電文が読めない・ほかの bead の電文。
++#[test]
++fn ndbody_unread_line() {
++    let b = bead(ID);
++    assert!(matches!(texts(&item(ID, "x", "y"), &b), Body::Filled(_)));
++    for (f, why) in [
++        (Fetched::NotRead, NOT_READ),
++        (Fetched::Failed, REASON),
++        (Fetched::Body("{".to_string()), NO_CONTENT),
++        (item("t-9", "x", "y"), NOT_READ),
++    ] {
++        assert_eq!(texts(&f, &b), Body::Unmeasured(why), "{f:?}");
++    }
++    assert!(REASON.contains("読めない"));
++    assert_eq!(
++        dom()
++            .matches(
++                "Body::Unmeasured(reason) => section(BLOCK, ().into_any(), unmeasured(reason)),"
++            )
++            .count(),
++        1
++    );
++    assert_eq!(nodebody::PATHS, [] as [&str; 0]);
++}
+diff --git a/crates/tsuzuri-surface/tests/snapshots/pages/node.json b/crates/tsuzuri-surface/tests/snapshots/pages/node.json
+index a1987d84131758e0b58f4c03cc592b7da22e4b32..60bc7c87fe7a0290e3f669f241bbb1240f946345 100644
+--- a/crates/tsuzuri-surface/tests/snapshots/pages/node.json
++++ b/crates/tsuzuri-surface/tests/snapshots/pages/node.json
+@@ -8,6 +8,7 @@
+           "blocks": [
+             {"id": "node", "heading": "nb_summary", "class": "stack"},
+             {"id": "around", "heading": "around", "class": "panel"},
++            {"id": "body", "heading": "nb_body", "class": "panel"},
+             {"id": "timeline", "heading": "timeline", "class": "panel"}
+           ]
+         }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+index 8df82f55cc9219ec1f9260e0ccb58ee61019cf34..263bb15eee849643b2755ca65b1dee4bf2b5cf91 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/frame.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+@@ -91,7 +91,7 @@ fn frame_home_blocks_in_order_and_map_page() {
+     );
+     assert_eq!(
+         frame::page(PageId::Node).block_ids(),
+-        vec!["node", "around", "timeline"]
++        vec!["node", "around", "body", "timeline"]
+     );
+     for id in PageId::ALL {
+         assert_eq!(frame::page(id).id, id);
+diff --git a/crates/tsuzuri-surface/tests/teeth3/hsderive.rs b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+index 83020c700ec69bbb88591057dff47ae73a885a71..3ede70bf6ca225d55b2f4f7791d8a0a8921f55ac 100644
+--- a/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+@@ -6,8 +6,8 @@
+ use std::path::PathBuf;
+ 
+ use tsuzuri_surface::project::{
+-    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, notice,
+-    pipeline, policy, seat, stage, timeline,
++    self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, nodebody,
++    notice, pipeline, policy, seat, stage, timeline,
+ };
+ 
+ fn crate_dir() -> PathBuf {
+@@ -32,6 +32,7 @@ const CONSTS: &[Consts] = &[
+     ("next", next::PATHS, next::FOLDS),
+     ("node", node::PATHS, node::FOLDS),
+     ("nodearound", nodearound::PATHS, nodearound::FOLDS),
++    ("nodebody", nodebody::PATHS, nodebody::FOLDS),
+     ("notice", notice::PATHS, notice::FOLDS),
+     ("pipeline", pipeline::PATHS, pipeline::FOLDS),
+     ("policy", policy::PATHS, policy::FOLDS),
+@@ -61,6 +62,7 @@ fn hsderive_consts_match_note() {
+         ("next", &["/api/next"], &[]),
+         ("node", &[], &["node:other"]),
+         ("nodearound", &["/api/around"], &[]),
++        ("nodebody", &[], &["node:body", "node:notes"]),
+         ("notice", &["/api/notices"], &[]),
+         ("pipeline", &["/api/pipeline"], &[]),
+         ("policy", &["/api/policy"], &[]),
+diff --git a/crates/tsuzuri-surface/tests/teeth4/nodepage.rs b/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+index 444f91375aee31b84c0766cd585e2b0e8eb549bb..b1637c6709848952879b88c7852512331e333280 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+@@ -89,7 +89,7 @@ fn nodepage_frame_and_nav() {
+     let page = frame::page(PageId::Node);
+     assert_eq!(page.id, PageId::Node);
+     assert_eq!(page.id.id(), "node");
+-    assert_eq!(page.block_ids(), vec!["node", "around", "timeline"]);
++    assert_eq!(page.block_ids(), vec!["node", "around", "body", "timeline"]);
+     let blocks: Vec<(&str, &str, &str)> = page
+         .columns
+         .iter()
+@@ -100,6 +100,7 @@ fn nodepage_frame_and_nav() {
+         vec![
+             ("node", "nb_summary", "stack"),
+             ("around", "around", "panel"),
++            ("body", "nb_body", "panel"),
+             ("timeline", "timeline", "panel")
+         ]
+     );
+diff --git a/crates/tsuzuri-surface/tests/teeth4/ntime.rs b/crates/tsuzuri-surface/tests/teeth4/ntime.rs
+index a48a5a737a1acfd94c4f06e37762567f8a3445fa..e1e177e288abc65301d86f716c9f82396dfe81f3 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/ntime.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/ntime.rs
+@@ -129,7 +129,7 @@ fn ntime_block_and_page() {
+     assert_eq!(m.block(), BLOCK);
+     assert_eq!(
+         frame::page(PageId::Node).block_ids(),
+-        vec!["node", "around", "timeline"]
++        vec!["node", "around", "body", "timeline"]
+     );
+     let text = read("src/project/timeline.rs");
+     assert!(text.contains("id: \"timeline\""));
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 8dd9d9c3cf6f33388d7bbffdd222c333c8fc6151..a5eca307d444d112ef6b908a54d45b62a8b27158 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -602,6 +602,21 @@
+    "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",
+    "internal": "plain / eng"
+   },
++  "nb_body": {
++   "label": "本文と記録",
++   "plain": "台帳の本文と記録を畳んで置く\n・ 押すと開く\n・ 設計の節点と run には無い",
++   "internal": "GET /api/ledger/<id> の description と notes（判断の記録 ADR-30 決定 (4)・行 g-node-body）"
++  },
++  "nb_text": {
++   "label": "本文",
++   "plain": "bead の本文\n・ 見出しと箇条と番号と等幅の字の形で描く\n・ 表は字のまま",
++   "internal": "LedgerItem.description・widgets::md::parse"
++  },
++  "nb_notes": {
++   "label": "記録",
++   "plain": "bead に足された記録（notes）\n・ 本文と同じ形で描く",
++   "internal": "LedgerItem.notes・widgets::md::parse"
++  },
+   "sum_body": {
+    "label": "本文から",
+    "plain": "2 つの概要が無い時の本文の頭の 1 行",

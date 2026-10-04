@@ -1,0 +1,265 @@
+diff --git a/crates/tsuzuri-surface/src/project/nodebody.rs b/crates/tsuzuri-surface/src/project/nodebody.rs
+index bda9660fd6078b99706b3bde184cbd301f0eaa1b..2d0aca42085fa16ce98befe560a59d1e1a323bb3 100644
+--- a/crates/tsuzuri-surface/src/project/nodebody.rs
++++ b/crates/tsuzuri-surface/src/project/nodebody.rs
+@@ -1,7 +1,8 @@
+ //! block「本文と記録」（行 g-node-body・判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
+ //! run の時間軸の前）。中心の節点が台帳の bead（契約・epic・memo・問い）の時だけ、その 1 本の引きの口（`ITEM_PATH`）から
+-//! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも閉じて始め、
+-//! 開き閉じは畳める段の記録に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
++//! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも、その browser の
++//! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
++//! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
+ //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use tsuzuri_contract::graph::{AroundRow, NodeKind};
+@@ -107,9 +108,22 @@ mod dom {
+     use super::{BLANK, BLOCK, Body, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts};
+     use crate::project::nodearound::{source, state};
+     use crate::project::{fold, section, unmeasured};
++    use crate::store;
+     use crate::widgets::help::h2;
+     use crate::widgets::md;
+ 
++    /// toggle の後に今の開き閉じをその browser の保存にも写す（段の種類ごとの鍵・保存は便利の写しで正本でない・行 g-fold-keep）。
++    fn kept(
++        key: &'static str,
++        toggle: impl Fn(web_sys::Event) + 'static,
++    ) -> impl Fn(web_sys::Event) + 'static {
++        move |ev: web_sys::Event| {
++            let now = event_target::<web_sys::Element>(&ev).has_attribute("open");
++            store::keep_fold(key, now);
++            toggle(ev);
++        }
++    }
++
+     /// 畳める段の中（空なら 1 行・字は台帳の字の印の下に描く）。
+     fn part(blocks: Vec<MdBlock>) -> AnyView {
+         if blocks.is_empty() {
+@@ -138,8 +152,12 @@ mod dom {
+             match item.with(|(f, _)| texts(f, &b)) {
+                 Body::Filled(t) => {
+                     let [text_key, notes_key] = PART_KEYS;
+-                    let (open_text, toggle_text) = fold("node:body".to_string(), || false);
+-                    let (open_notes, toggle_notes) = fold("node:notes".to_string(), || false);
++                    let (open_text, toggle_text) =
++                        fold("node:body".to_string(), || store::fold_open("node:body"));
++                    let (open_notes, toggle_notes) =
++                        fold("node:notes".to_string(), || store::fold_open("node:notes"));
++                    let toggle_text = kept("node:body", toggle_text);
++                    let toggle_notes = kept("node:notes", toggle_notes);
+                     let body = view! {
+                         <details class=PART_CLASS prop:open=open_text on:toggle=toggle_text>
+                             <summary>{h2(text_key)}</summary>
+diff --git a/crates/tsuzuri-surface/src/store.rs b/crates/tsuzuri-surface/src/store.rs
+index 9bf20f19e10e4e980e3ba53d41073d4fb1a88e8b..782194a0f62726900073c1713f60e8cab9b2f8e1 100644
+--- a/crates/tsuzuri-surface/src/store.rs
++++ b/crates/tsuzuri-surface/src/store.rs
+@@ -4,6 +4,8 @@
+ //! 決め方（mode_start）は host でも組み立てて試し、保存と URL を撃つ所は wasm の target のときだけ組み立てる。
+ //! 保存は origin ごとなので、port の違う account board と各 project board はそれぞれ自分の写しを持つ。
+ //! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し・行 h-win-store）。
++//! 個別の頁の本文と記録の 2 つの畳める段の開き閉じも、段の種類ごとの鍵でその browser に残す（節点ごとでない・
++//! 判断の記録 ADR-30 決定 (4)・持ち主の裁定 t3-hub.76.4・行 g-fold-keep）。ほかの畳める段は頁の一生の間だけ持つ。
+ 
+ use crate::frame::{self, Mode};
+ 
+@@ -49,6 +51,33 @@ pub fn mode_start(query: &str, saved: Option<&str>) -> ModeStart {
+     }
+ }
+ 
++/// 保存に残す畳める段の鍵と、その保存の鍵（個別の頁の本文と記録・段の種類ごとに 1 つ・行 g-fold-keep）。
++pub const FOLD_KEYS: [(&str, &str); 2] = [
++    ("node:body", "tz-node-body"),
++    ("node:notes", "tz-node-notes"),
++];
++
++/// 開いた段の保存の字。
++pub const FOLD_OPEN: &str = "open";
++
++/// 閉じた段の保存の字。
++pub const FOLD_SHUT: &str = "shut";
++
++/// 畳める段の鍵の保存の鍵（`FOLD_KEYS` に無い鍵は None で、保存に書かない）。
++pub fn fold_store_key(fold: &str) -> Option<&'static str> {
++    FOLD_KEYS.iter().find(|(f, _)| *f == fold).map(|(_, k)| *k)
++}
++
++/// 保存の字から決める段の初めの開き閉じ（`FOLD_OPEN` だけ開く・保存が無い・読めない・ほかの字は閉じて始める）。
++pub fn fold_start(saved: Option<&str>) -> bool {
++    saved == Some(FOLD_OPEN)
++}
++
++/// 段の開き閉じを保存に書く字。
++pub fn fold_text(open: bool) -> &'static str {
++    if open { FOLD_OPEN } else { FOLD_SHUT }
++}
++
+ /// 保存の口（window が無い・使えないときは None）。
+ #[cfg(target_arch = "wasm32")]
+ fn storage() -> Option<web_sys::Storage> {
+@@ -102,3 +131,17 @@ pub fn settle_mode() {
+ pub fn keep_mode(mode: Mode) {
+     set(MODE_KEY, mode.key());
+ }
++
++/// 畳める段の初めの開き閉じを保存から読む（`FOLD_KEYS` に無い鍵と、保存が無い・読めない時は閉じ）。
++#[cfg(target_arch = "wasm32")]
++pub fn fold_open(fold: &str) -> bool {
++    fold_store_key(fold).is_some_and(|k| fold_start(get(k).as_deref()))
++}
++
++/// 畳める段の開き閉じを保存に写す（`FOLD_KEYS` に無い鍵は書かない）。
++#[cfg(target_arch = "wasm32")]
++pub fn keep_fold(fold: &str, open: bool) {
++    if let Some(k) = fold_store_key(fold) {
++        set(k, fold_text(open));
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/fkeep.rs b/crates/tsuzuri-surface/tests/fkeep.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6eba91d95ab60f1d8631d8bfe379af553d318936
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/fkeep.rs
+@@ -0,0 +1,119 @@
++//! 個別の頁の本文と記録の開き閉じをその browser に残す歯（行 g-fold-keep・接頭辞 fkeep_・判断の記録 ADR-30 決定 (4)・要件 FR1）。
++//! 保存の鍵と保存の字の決め方を純な関数で断言し、保存の口（wasm の枝）と block の DOM の配線の字を照らす。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::project::nodebody::FOLDS;
++use tsuzuri_surface::store::{
++    FOLD_KEYS, FOLD_OPEN, FOLD_SHUT, fold_start, fold_store_key, fold_text,
++};
++
++const WASM: &str = "#[cfg(target_arch = \"wasm32\")]";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
++fn span(src: &str, start: &str, end: &str) -> String {
++    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
++    let rest = &src[at..];
++    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
++    rest[..to].to_string()
++}
++
++#[test]
++fn fkeep_keys_by_part() {
++    assert_eq!(
++        FOLD_KEYS,
++        [
++            ("node:body", "tz-node-body"),
++            ("node:notes", "tz-node-notes")
++        ]
++    );
++    let parts: Vec<&str> = FOLD_KEYS.iter().map(|(f, _)| *f).collect();
++    assert_eq!(parts, FOLDS, "保存に残す段は個別の頁の本文と記録の 2 つ");
++    for (fold, key) in FOLD_KEYS {
++        assert!(key.starts_with("tz-"), "{key} の頭が tz- でない");
++        assert_eq!(fold_store_key(fold), Some(key), "{fold}");
++    }
++    for other in [
++        "ledger:more",
++        "seat:hist",
++        "ask:around:t-1.2",
++        "node:body:t-1.2",
++        "",
++    ] {
++        assert_eq!(fold_store_key(other), None, "{other} は保存に書かない");
++    }
++}
++
++#[test]
++fn fkeep_saved_start() {
++    assert_eq!((FOLD_OPEN, FOLD_SHUT), ("open", "shut"));
++    assert!(fold_start(Some("open")));
++    assert!(!fold_start(None), "保存が無ければ閉じて始める");
++    assert!(!fold_start(Some("shut")));
++    assert!(!fold_start(Some("")), "読めない字は閉じて始める");
++    assert!(!fold_start(Some("Open")), "知らない字は閉じて始める");
++    assert_eq!(fold_text(true), "open");
++    assert_eq!(fold_text(false), "shut");
++    for open in [true, false] {
++        assert_eq!(
++            fold_start(Some(fold_text(open))),
++            open,
++            "書いた字の読み戻し"
++        );
++    }
++}
++
++#[test]
++fn fkeep_store_wasm_only() {
++    let src = read("src/store.rs");
++    let lines: Vec<&str> = src.lines().map(str::trim).collect();
++    for head in [
++        "pub fn fold_open(fold: &str) -> bool {",
++        "pub fn keep_fold(fold: &str, open: bool) {",
++    ] {
++        assert!(
++            lines.windows(2).any(|w| w[0] == WASM && w[1] == head),
++            "store.rs の {head} が wasm の target のときだけの行の次に無い"
++        );
++    }
++    let open = span(&src, "pub fn fold_open(", "\n}\n");
++    assert!(
++        open.contains("fold_store_key(fold).is_some_and(|k| fold_start(get(k).as_deref()))"),
++        "読みは保存の鍵の値を fold_start で決める"
++    );
++    let keep = span(&src, "pub fn keep_fold(", "\n}\n");
++    for want in [
++        "if let Some(k) = fold_store_key(fold) {",
++        "set(k, fold_text(open));",
++    ] {
++        assert!(keep.contains(want), "keep_fold に {want} が無い");
++    }
++}
++
++#[test]
++fn fkeep_node_dom_wiring() {
++    let src = read("src/project/nodebody.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for (key, part) in [("node:body", "text"), ("node:notes", "notes")] {
++        let call = format!("fold(\"{key}\".to_string(), || store::fold_open(\"{key}\"));");
++        assert_eq!(dom.matches(&call).count(), 1, "{call}");
++        let wrap = format!("let toggle_{part} = kept(\"{key}\", toggle_{part});");
++        assert_eq!(dom.matches(&wrap).count(), 1, "{wrap}");
++    }
++    let kept = span(dom, "fn kept(", "\n    }\n");
++    assert!(
++        kept.contains("store::keep_fold(key, now);"),
++        "toggle で今の開き閉じを保存へ写す"
++    );
++    assert!(kept.contains("toggle(ev);"), "畳める段の記録へも書き戻す");
++    assert!(
++        kept.contains("let now = event_target::<web_sys::Element>(&ev).has_attribute(\"open\");"),
++        "今の開き閉じは details の open の属性"
++    );
++}
+diff --git a/crates/tsuzuri-surface/tests/ndbody.rs b/crates/tsuzuri-surface/tests/ndbody.rs
+index 2c65bb394c35ce20ed3acd5ca2a61989ec19f054..9d1472c8d53f52534d505ce01aec585ca4a628db 100644
+--- a/crates/tsuzuri-surface/tests/ndbody.rs
++++ b/crates/tsuzuri-surface/tests/ndbody.rs
+@@ -105,14 +105,14 @@ fn ndbody_page_order() {
+     }
+ }
+ 
+-/// 畳める段は鍵 node:body と node:notes の 2 つで、どちらも表示の型によらず閉じて始め（初めの値は偽）、開き閉じを
+-/// 畳める段の記録に書き戻す。段の class は stylesheet に在る。
++/// 畳める段は鍵 node:body と node:notes の 2 つで、どちらも表示の型によらず、初めの値はその browser の保存の値
++/// （無ければ閉じ・行 g-fold-keep）で、開き閉じを畳める段の記録に書き戻す。段の class は stylesheet に在る。
+ #[test]
+ fn ndbody_folds_closed() {
+     assert_eq!(FOLDS, ["node:body", "node:notes"]);
+     let dom = dom();
+     for key in FOLDS {
+-        let call = format!("fold(\"{key}\".to_string(), || false);");
++        let call = format!("fold(\"{key}\".to_string(), || store::fold_open(\"{key}\"));");
+         assert_eq!(dom.matches(&call).count(), 1, "{call}");
+     }
+     assert_eq!(

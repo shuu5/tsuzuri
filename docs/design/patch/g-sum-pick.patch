@@ -1,0 +1,718 @@
+diff --git a/crates/tsuzuri-surface/src/project/node.rs b/crates/tsuzuri-surface/src/project/node.rs
+index 588e854288d164df33f5faff0d65f8998aeb97b3..71dc1ae17bc0ab6b5ace3c0e74f50c42fbe058e9 100644
+--- a/crates/tsuzuri-surface/src/project/node.rs
++++ b/crates/tsuzuri-surface/src/project/node.rs
+@@ -1,6 +1,7 @@
+-//! block「節点」（見本の bead.html の頭と 2 面の概要・便 g-node）: 節点の頁の 1 つ目の block。
++//! block「節点」（見本の bead.html の頭と概要・便 g-node）: 節点の頁の 1 つ目の block。
+ //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
+ //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
++//! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（行 g-sum-pick・判断の記録 ADR-30 決定 (2)）。
+ //! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
+ //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
+ //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
+@@ -18,18 +19,19 @@ use crate::project::nodearound::PageState;
+ use crate::topbar::{Win, win_href};
+ use crate::view::Fetched;
+ use crate::widgets::nodecard::full_src;
++use crate::widgets::sumpick::{self, Picked};
+ 
+ pub const BLOCK: Block = Block {
+     id: "node",
+-    heading: "summary_plain",
++    heading: "nb_summary",
+     class: "stack",
+ };
+ 
+ /// この file が字を持つ口の path（無い・近傍の口は nodearound の module が持つ・行 hs-derived）。
+ pub const PATHS: &[&str] = &[];
+ 
+-/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
+-pub const FOLDS: &[&str] = &[];
++/// この file の畳める段の開き閉じの鍵の形（概要の箱の下のもう一方の概要・行 hs-derived・行 g-sum-pick）。
++pub const FOLDS: &[&str] = &["node:other"];
+ 
+ /// 電文の節点に概要の字が無いときの概要の字。
+ pub const NO_SUMMARY: &str = "要約なし";
+@@ -37,12 +39,15 @@ pub const NO_SUMMARY: &str = "要約なし";
+ /// 出所の file を持たない節点（台帳と走行）の出所の字。
+ pub const NO_SRC: &str = "出所なし";
+ 
+-/// 概要の箱の見出しの語の鍵（非エンジニア向け・エンジニア向けの順）。
+-pub const SUMMARY_KEYS: [&str; 2] = ["summary_plain", "summary_eng"];
+-
+ /// 要約の無い概要の箱の class。
+ pub const SUMMARY_NONE: &str = "sumbox none";
+ 
++/// 表示の型の側でない概要を出す箱の class（見出しの語がどちら向けかの印）。
++pub const SUMMARY_MARKED: &str = "sumbox marked";
++
++/// 箱の下に畳むもう一方の概要の class。
++pub const SUMBOX_OTHER: &str = "fold sumother";
++
+ /// 節点の頁の頭（印・種類の見出し・帯・状態・id・題・出所・質問の頁への link）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Head {
+@@ -98,34 +103,34 @@ pub fn head(doc: &AroundDoc) -> Option<Head> {
+     })
+ }
+ 
+-/// 概要の 1 つの箱（見出しの語の鍵・class・字）。
++/// 概要の箱（見出しの語の鍵・class・字・箱の下に畳むもう一方の概要）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct SumBox {
+     pub key: &'static str,
+     pub class: &'static str,
+     pub text: String,
++    pub other: Option<Picked>,
+ }
+ 
+-/// 概要の 2 つの箱（中心の節点の plain と eng を切らずに写す・字が無いか空なら要約なし）。
+-pub fn summary(center: &AroundRow) -> [SumBox; 2] {
+-    let [plain, eng] = SUMMARY_KEYS;
+-    [
+-        sum_box(plain, &center.node.plain),
+-        sum_box(eng, &center.node.eng),
+-    ]
+-}
+-
+-fn sum_box(key: &'static str, text: &Option<String>) -> SumBox {
+-    match text.as_deref().filter(|s| !s.is_empty()) {
+-        Some(t) => SumBox {
+-            key,
+-            class: "sumbox",
+-            text: t.to_string(),
++/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら表示の型の側の見出しで要約なし）。
++pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
++    let (plain, eng) = (center.node.plain.as_deref(), center.node.eng.as_deref());
++    let other = sumpick::other(mode, plain, eng);
++    match sumpick::pick(mode, plain, eng, None) {
++        Some(p) => SumBox {
++            key: p.key,
++            class: if p.marked { SUMMARY_MARKED } else { "sumbox" },
++            text: p.text,
++            other,
+         },
+         None => SumBox {
+-            key,
++            key: match mode {
++                Mode::Beginner => sumpick::PLAIN_KEY,
++                Mode::Expert => sumpick::ENG_KEY,
++            },
+             class: SUMMARY_NONE,
+             text: NO_SUMMARY.to_string(),
++            other,
+         },
+     }
+ }
+@@ -207,16 +212,17 @@ mod dom {
+     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
+ 
+     use super::{
+-        BLOCK, Head, PageState, Revoke, SUMMARY_NONE, answer_href, center, head, item_path,
+-        kept_subject, revoke_body, revoke_target, shows_revoke, summary,
++        BLOCK, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href, center,
++        head, item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary,
+     };
+     use crate::mapview::band_chip;
+     use crate::project::ask::{Outcome, can_send, outcome};
+     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
+-    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, state_icon, unmeasured};
++    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
+     use crate::view::{Fetched, PageSubject};
+     use crate::vocab::label;
+     use crate::widgets::help::{h1, h2};
++    use crate::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
+ 
+     /// 出所の印（見本の IC.file）。
+     const FILE_ICON: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>"#;
+@@ -289,21 +295,13 @@ mod dom {
+             match st {
+                 PageState::Doc(doc) => match (head(&doc), center(&doc)) {
+                     (Some(h), Some(c)) => {
+-                        let boxes = summary(c)
+-                            .into_iter()
+-                            .zip([PERSON, CODE])
+-                            .map(|(b, icon)| {
+-                                let t = (b.class != SUMMARY_NONE).then_some("");
+-                                view! {
+-                                    <section class=b.class><header><span inner_html=icon></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
+-                                }
+-                            })
+-                            .collect_view();
++                        let boxes = sum_view(summary(c, mode()));
+                         let revoke = target.get().map(|t| {
+                             let d = draft(drafts, &t.ruling);
+                             revoke_view(t, item, d)
+                         });
+-                        view! { {head_view(h, mode, revoke)}<div class="two">{boxes}</div> }.into_any()
++                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div> }
++                            .into_any()
+                     }
+                     _ => unmeasured(NO_CONTENT),
+                 },
+@@ -313,6 +311,31 @@ mod dom {
+         view! { <section class=BLOCK.class id=BLOCK.id>{content}</section> }.into_any()
+     }
+ 
++    /// 見出しの語の鍵の印（非エンジニア向けは人・エンジニア向けは code・本文からは file）。
++    fn icon_of(key: &str) -> &'static str {
++        match key {
++            PLAIN_KEY => PERSON,
++            ENG_KEY => CODE,
++            _ => FILE_ICON,
++        }
++    }
++
++    /// 概要の箱と、その下に畳んだもう一方の概要（押すと開く）。
++    fn sum_view(b: SumBox) -> AnyView {
++        let t = (b.class != SUMMARY_NONE).then_some("");
++        let other = b.other.map(|o| {
++            let (open, toggle) = fold("node:other".to_string(), || false);
++            view! {
++                <details class=SUMBOX_OTHER prop:open=open on:toggle=toggle><summary><span inner_html=icon_of(o.key)></span>{h2(o.key)}</summary><p data-t="">{o.text}</p></details>
++            }
++        });
++        view! {
++            <section class=b.class><header><span inner_html=icon_of(b.key)></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
++            {other}
++        }
++        .into_any()
++    }
++
+     /// 見つからない（見出しと、id が在れば id の字）。
+     fn not_found(id: Option<String>) -> AnyView {
+         let line = id.map(|id| {
+diff --git a/crates/tsuzuri-surface/src/widgets/mod.rs b/crates/tsuzuri-surface/src/widgets/mod.rs
+index 119d39564ecb8e9c4d9abf9c91bc36e836c2be17..7c563641e1cfe674eca35de7bf55502b17462864 100644
+--- a/crates/tsuzuri-surface/src/widgets/mod.rs
++++ b/crates/tsuzuri-surface/src/widgets/mod.rs
+@@ -5,7 +5,8 @@
+ //! 帯の印を押すと開く窓の枠（modal・行 g-win-frame・閉じる判定と窓の積みは host でも組む）と、
+ //! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）と、
+ //! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）と、
+-//! pipeline の札の段ごとの要の 1 行（keyline・行 g-pipe-cards・host でも組む）。
++//! pipeline の札の段ごとの要の 1 行（keyline・行 g-pipe-cards・host でも組む）と、
++//! 表示の型で概要を 1 つ選ぶ部品と長い概要の畳み（sumpick・行 g-sum-pick・host でも組む）。
+ 
+ pub mod coach;
+ pub mod fig;
+@@ -16,3 +17,4 @@ pub mod modal;
+ pub mod nodecard;
+ pub mod pop;
+ pub mod runflow;
++pub mod sumpick;
+diff --git a/crates/tsuzuri-surface/src/widgets/sumpick.rs b/crates/tsuzuri-surface/src/widgets/sumpick.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f74da093d6ab67ec712088ceb286ab2d218f61d4
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/widgets/sumpick.rs
+@@ -0,0 +1,115 @@
++//! 表示の型で概要を 1 つ選ぶ部品と、長い概要の畳み（行 g-sum-pick・判断の記録 ADR-30 決定 (2)(3)・規則の行 R-19）。
++//! 個別の頁・質問の窓の card・hover の card・吹き出しが同じ関数で選ぶ。純な関数だけを持ち host でも組む。
++
++use crate::frame::Mode;
++
++/// 吹き出しの概要を畳む字数（規則の行 R-19・Unicode のスカラー値で数える）。
++pub const POP_SUM_MAX: usize = 200;
++
++/// 畳んだ頭の後ろに置く印。
++pub const ELLIPSIS: char = '…';
++
++/// 非エンジニア向けの概要の語の鍵。
++pub const PLAIN_KEY: &str = "summary_plain";
++
++/// エンジニア向けの概要の語の鍵。
++pub const ENG_KEY: &str = "summary_eng";
++
++/// 本文の頭の 1 行の語の鍵（2 つの概要が両方無い時の印）。
++pub const BODY_KEY: &str = "sum_body";
++
++/// 選んだ概要（どの字かの語の鍵・字・表示の型の側の概要でない時の印を出すか）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Picked {
++    pub key: &'static str,
++    pub text: String,
++    pub marked: bool,
++}
++
++/// 空か空白だけの字は無いと見る。
++fn given(text: Option<&str>) -> Option<&str> {
++    text.filter(|t| !t.trim().is_empty())
++}
++
++/// 表示の型の側の概要の鍵と字・もう一方の鍵と字（初心者は非エンジニア向けが側）。
++fn sides<'a>(
++    mode: Mode,
++    plain: Option<&'a str>,
++    eng: Option<&'a str>,
++) -> [(&'static str, Option<&'a str>); 2] {
++    match mode {
++        Mode::Beginner => [(PLAIN_KEY, plain), (ENG_KEY, eng)],
++        Mode::Expert => [(ENG_KEY, eng), (PLAIN_KEY, plain)],
++    }
++}
++
++/// 表示の型の概要を 1 つ選ぶ（字は切らない）。表示の型の側が無ければもう一方を印つきで、
++/// 両方無ければ本文の頭の 1 行を印つきで返し、それも無ければ None。
++pub fn pick(
++    mode: Mode,
++    plain: Option<&str>,
++    eng: Option<&str>,
++    excerpt: Option<&str>,
++) -> Option<Picked> {
++    let [own, other] = sides(mode, plain, eng);
++    [(own, false), (other, true), ((BODY_KEY, excerpt), true)]
++        .into_iter()
++        .find_map(|((key, text), marked)| {
++            given(text).map(|t| Picked {
++                key,
++                text: t.to_string(),
++                marked,
++            })
++        })
++}
++
++/// 表示の型の側でないもう一方の概要（表示の型の側が在る時だけ・個別の頁が概要の下に畳んで置く）。
++pub fn other(mode: Mode, plain: Option<&str>, eng: Option<&str>) -> Option<Picked> {
++    let [(_, own), (key, text)] = sides(mode, plain, eng);
++    given(own)?;
++    given(text).map(|t| Picked {
++        key,
++        text: t.to_string(),
++        marked: true,
++    })
++}
++
++/// 畳んだ字（頭と、畳んだ残り・畳まない時は残りが None）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Folded {
++    pub head: String,
++    pub rest: Option<String>,
++}
++
++impl Folded {
++    /// 畳んだ形の字（頭と印・畳まない時は全文）。
++    pub fn shut(&self) -> String {
++        match self.rest {
++            Some(_) => format!("{}{ELLIPSIS}", self.head),
++            None => self.head.clone(),
++        }
++    }
++
++    /// 開いた形の字（頭と残りをつないだ全文）。
++    pub fn whole(&self) -> String {
++        format!("{}{}", self.head, self.rest.as_deref().unwrap_or_default())
++    }
++}
++
++/// `max` 字以下なら畳まず、越えれば頭の `max - 1` 字と残りに分ける（畳んだ形は頭と印の `max` 字）。
++pub fn fold(text: &str, max: usize) -> Folded {
++    if text.chars().count() <= max {
++        return Folded {
++            head: text.to_string(),
++            rest: None,
++        };
++    }
++    let cut = text
++        .char_indices()
++        .nth(max.saturating_sub(1))
++        .map_or(text.len(), |(i, _)| i);
++    Folded {
++        head: text[..cut].to_string(),
++        rest: Some(text[cut..].to_string()),
++    }
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index ef46732f841c7b6eb59d2a46ef5a9b830c93b869..466fec6bd7ae1a054c84daecdf630aa4978df0f8 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -454,12 +454,16 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
+ .nhead { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); }
+ .nhead .t { font-size: var(--fs-4); font-weight: 750; line-height: 1.35; }
+ .nhead .kind { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 600; font-size: var(--fs-1); }
+-.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-bottom: var(--s3); }
++.nsum { display: grid; gap: var(--s2); margin-bottom: var(--s3); }
+ .sumbox { border-radius: var(--r3); padding: var(--s3); background: var(--panel); border: 1px solid var(--line); }
+ .sumbox > header { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); color: var(--ink-2); }
+ .sumbox > header svg { width: 20px; height: 20px; }
+ .sumbox p { margin: 0; font-size: var(--fs-3); line-height: 1.65; }
+ .sumbox.none p { color: var(--ink-3); font-size: var(--fs-2); }
++.sumbox.marked { border-style: dashed; }
++details.sumother { padding: 0 var(--s3); color: var(--ink-2); }
++details.sumother > summary svg { width: 16px; height: 16px; }
++details.sumother p { margin: 0 0 var(--s2); line-height: 1.65; overflow-wrap: anywhere; }
+ .runs { display: flex; flex-direction: column; gap: var(--s2); }
+ .runrow { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s2); align-items: center; }
+ .runrow .nth { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+@@ -514,7 +518,7 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+ @media (max-width: 760px) {
+   .page { padding: var(--s3) var(--s3) var(--s6); }
+   .tile { min-height: 80px; padding: var(--s2) var(--s3); }
+-  .home, .ask, .two { grid-template-columns: minmax(0, 1fr); }
++  .home, .ask { grid-template-columns: minmax(0, 1fr); }
+   .board { grid-template-columns: minmax(0, 1fr); }
+   .col.is-empty .cards, .col.is-empty .more { display: none; }
+   .band { grid-template-columns: minmax(0, 1fr); }
+@@ -528,7 +532,7 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
+ }
+ 
+ /* 390 幅の溢れ止め（grid / flex の子は縮める・長い語は折る） */
+-.page, .panel, .two > *, .home > *, .ask > *, .stack > * { min-width: 0; }
++.page, .panel, .nsum > *, .home > *, .ask > *, .stack > * { min-width: 0; }
+ .sumbox p, .nhead .t, .qcard .head .t, .rec, .gitem .ttl { overflow-wrap: anywhere; }
+ .items > li > ul.items { flex: 1; min-width: 0; margin-left: var(--s4); }
+ .items li.nest { display: block; border: 0; min-height: 0; padding: 0; }
+diff --git a/crates/tsuzuri-surface/tests/mpick.rs b/crates/tsuzuri-surface/tests/mpick.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..29c70f833e31b490ac6b9efa3aecec28878802ff
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/mpick.rs
+@@ -0,0 +1,125 @@
++//! 表示の型で概要を 1 つ選ぶ部品と畳みの歯（行 g-sum-pick・接頭辞 mpick_・判断の記録 ADR-30 決定 (2)(3)・規則の行 R-19）。
++//! 2 つの概要を違う字にした fixture を、2 つの表示の型で選びの関数と個別の頁の概要の箱に通し、両向きで断言する。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::graph::AroundDoc;
++use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::node::{self, SUMMARY_MARKED};
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::widgets::sumpick::{
++    BODY_KEY, ELLIPSIS, ENG_KEY, PLAIN_KEY, POP_SUM_MAX, Picked, fold, other, pick,
++};
++
++const P: &str = "P-字は画面を 2 つにする話です。";
++const E: &str = "E-字 surface を 2 面にする。";
++const X: &str = "X-字 本文の頭の 1 行";
++
++fn picked(key: &'static str, text: &str, marked: bool) -> Option<Picked> {
++    Some(Picked {
++        key,
++        text: text.to_string(),
++        marked,
++    })
++}
++
++/// 中心の節点の plain と eng を替えた近傍の電文（fixture は着地した歯 gsum と同じ file）。
++fn around(plain: Option<&str>, eng: Option<&str>) -> AroundDoc {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/surface/around-doc.json");
++    let text = std::fs::read_to_string(&path).expect("around-doc.json が読める");
++    let mut doc: AroundDoc = wire::decode(&text).expect("around-doc.json が電文として読める");
++    let c = doc
++        .rows
++        .iter_mut()
++        .find(|r| r.col == 0)
++        .expect("fixture の中心の行");
++    c.node.plain = plain.map(str::to_string);
++    c.node.eng = eng.map(str::to_string);
++    doc
++}
++
++/// (1) 2 つの字が違う時、初心者は非エンジニア向けの字だけ・経験者はエンジニア向けの字だけを印なしで返す。
++#[test]
++fn mpick_mode_picks_one() {
++    let b = pick(Mode::Beginner, Some(P), Some(E), Some(X));
++    assert_eq!(b, picked(PLAIN_KEY, P, false));
++    let e = pick(Mode::Expert, Some(P), Some(E), Some(X));
++    assert_eq!(e, picked(ENG_KEY, E, false));
++    let (b, e) = (b.expect("初心者"), e.expect("経験者"));
++    assert!(!b.text.contains("E-字") && !e.text.contains("P-字"));
++    assert_eq!((PLAIN_KEY, ENG_KEY), ("summary_plain", "summary_eng"));
++}
++
++/// (2) 表示の型の側が無い（None・空・空白だけ）時はもう一方を印つきで、両方無ければ本文の頭の 1 行を鍵 sum_body の印つきで返し、
++/// それも無ければ None。鍵 sum_body の語は 本文から。
++#[test]
++fn mpick_fallback_marks() {
++    for gone in [None, Some(""), Some("  ")] {
++        assert_eq!(
++            pick(Mode::Beginner, gone, Some(E), Some(X)),
++            picked(ENG_KEY, E, true)
++        );
++        assert_eq!(
++            pick(Mode::Expert, Some(P), gone, Some(X)),
++            picked(PLAIN_KEY, P, true)
++        );
++    }
++    for mode in Mode::ALL {
++        assert_eq!(pick(mode, None, None, Some(X)), picked(BODY_KEY, X, true));
++        assert_eq!(pick(mode, None, None, None), None);
++    }
++    assert_eq!(BODY_KEY, "sum_body");
++    assert_eq!(vocab().label(BODY_KEY), "本文から");
++}
++
++/// (3) 200 字以下は畳まず、201 字以上は頭の 199 字と残りに分け、畳んだ形は頭と … の 200 字、頭と残りをつなぐと元の字。
++#[test]
++fn mpick_fold_lossless() {
++    assert_eq!((POP_SUM_MAX, ELLIPSIS), (200, '…'));
++    let at = "あ".repeat(200);
++    let f = fold(&at, POP_SUM_MAX);
++    assert_eq!((f.head.as_str(), f.rest.as_deref()), (at.as_str(), None));
++    assert_eq!((f.shut(), f.whole()), (at.clone(), at.clone()));
++    let over = format!("{}い字", "あ".repeat(199));
++    let f = fold(&over, POP_SUM_MAX);
++    assert_eq!(f.head, "あ".repeat(199));
++    assert_eq!(f.rest.as_deref(), Some("い字"));
++    assert_eq!(f.shut(), format!("{}…", "あ".repeat(199)));
++    assert_eq!(f.shut().chars().count(), 200);
++    assert_eq!(f.whole(), over);
++}
++
++/// (4) 個別の頁の概要の箱は 1 つで表示の型の字を切らずに持ち、もう一方は箱の下に畳む字として持つ。
++/// 表示の型の側が無ければもう一方を印の class で出し畳む字は無い。block の見出しの鍵は nb_summary（語 概要）。
++#[test]
++fn mpick_node_one_box() {
++    let long = format!("{P}{}", "あ".repeat(300));
++    let doc = around(Some(&long), Some(E));
++    let c = node::center(&doc).expect("中心の行");
++    let b = node::summary(c, Mode::Beginner);
++    assert_eq!(
++        (b.key, b.class, b.text.as_str()),
++        (PLAIN_KEY, "sumbox", long.as_str())
++    );
++    assert_eq!(b.other, picked(ENG_KEY, E, true));
++    let e = node::summary(c, Mode::Expert);
++    assert_eq!((e.key, e.class, e.text.as_str()), (ENG_KEY, "sumbox", E));
++    assert_eq!(e.other, picked(PLAIN_KEY, &long, true));
++    assert_eq!(
++        other(Mode::Expert, Some(P), Some(E)),
++        picked(PLAIN_KEY, P, true)
++    );
++    let doc = around(None, Some(E));
++    let c = node::center(&doc).expect("中心の行");
++    let m = node::summary(c, Mode::Beginner);
++    assert_eq!(
++        (m.key, m.class, m.text.as_str()),
++        (ENG_KEY, SUMMARY_MARKED, E)
++    );
++    assert_eq!(m.other, None);
++    assert_eq!(node::BLOCK.heading, "nb_summary");
++    assert_eq!(vocab().label("nb_summary"), "概要");
++}
+diff --git a/crates/tsuzuri-surface/tests/snapshots/pages/node.json b/crates/tsuzuri-surface/tests/snapshots/pages/node.json
+index 16ea65d66f6aa524e639cd67503b870303d619af..a1987d84131758e0b58f4c03cc592b7da22e4b32 100644
+--- a/crates/tsuzuri-surface/tests/snapshots/pages/node.json
++++ b/crates/tsuzuri-surface/tests/snapshots/pages/node.json
+@@ -6,7 +6,7 @@
+         {
+           "class": "stack",
+           "blocks": [
+-            {"id": "node", "heading": "summary_plain", "class": "stack"},
++            {"id": "node", "heading": "nb_summary", "class": "stack"},
+             {"id": "around", "heading": "around", "class": "panel"},
+             {"id": "timeline", "heading": "timeline", "class": "panel"}
+           ]
+diff --git a/crates/tsuzuri-surface/tests/teeth2/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+index ebb541635eb7c6f0ce719f77271201813e372145..3285c7cc3dce09cef4896579d54aaac0ce39e610 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/frame.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+@@ -262,10 +262,12 @@ fn built_classes(add: &mut impl FnMut(&str)) {
+         add(h.band.class_name());
+     }
+     if let Some(c) = node::center(&around) {
+-        for b in node::summary(c) {
+-            add(b.class);
++        for mode in Mode::ALL {
++            add(node::summary(c, mode).class);
+         }
+     }
++    add(node::SUMMARY_MARKED);
++    add(node::SUMBOX_OTHER);
+ }
+ 
+ #[test]
+diff --git a/crates/tsuzuri-surface/tests/teeth3/gsum.rs b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+index 6209d765d387f052d5f72f5d89c793aee4352866..3ff0e23803c0b073825c3e988fc5fb31249efcf4 100644
+--- a/crates/tsuzuri-surface/tests/teeth3/gsum.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+@@ -7,7 +7,8 @@ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::graph::{AroundDoc, AroundRow, GraphDoc, GraphNode};
+ use tsuzuri_contract::wire;
+-use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_NONE};
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_MARKED, SUMMARY_NONE};
+ use tsuzuri_surface::widgets::hover::Card;
+ use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_LINE, card_for, gist, node_card};
+ 
+@@ -220,45 +221,46 @@ fn gsum_card_more_rows() {
+     );
+ }
+ 
+-/// (6) 概要の 2 つの箱は中心の節点の plain と eng を切らずに写す（無いか空なら要約なし）。
++/// (6) 概要の箱は中心の節点の plain と eng から表示の型の 1 つを切らずに写す（無いか空なら要約なし・
++/// 表示の型の側が無ければもう一方を印の class で・行 g-sum-pick で 1 つの箱にした）。
+ #[test]
+ fn gsum_node_boxes() {
+-    let boxes = |plain: Option<String>, eng: Option<String>| {
++    let boxes = |plain: Option<String>, eng: Option<String>, mode: Mode| {
+         let mut doc = around_doc();
+         let c = center_mut(&mut doc);
+         c.node.plain = plain;
+         c.node.eng = eng;
+-        node::summary(node::center(&doc).expect("中心の行"))
++        node::summary(node::center(&doc).expect("中心の行"), mode)
+     };
+     let two = "画面は 2 つです。";
+-    let b = boxes(some(two), None);
++    let b = boxes(some(two), None, Mode::Beginner);
+     assert_eq!(
+-        (b[0].key, b[0].class, b[0].text.as_str()),
++        (b.key, b.class, b.text.as_str()),
+         ("summary_plain", "sumbox", two)
+     );
++    let b = boxes(some(two), None, Mode::Expert);
+     assert_eq!(
+-        (b[1].key, b[1].class, b[1].text.as_str()),
+-        ("summary_eng", SUMMARY_NONE, NO_SUMMARY)
++        (b.key, b.class, b.text.as_str()),
++        ("summary_plain", SUMMARY_MARKED, two)
+     );
+     assert_eq!(SUMMARY_NONE, "sumbox none");
++    assert_eq!(SUMMARY_MARKED, "sumbox marked");
+     assert_eq!(NO_SUMMARY, "要約なし");
+ 
+     let face = "面は 2 つとする。";
+-    let b = boxes(None, some(face));
+-    assert_eq!((b[0].class, b[0].text.as_str()), (SUMMARY_NONE, NO_SUMMARY));
+-    assert_eq!((b[1].class, b[1].text.as_str()), ("sumbox", face));
++    let b = boxes(None, some(face), Mode::Expert);
++    assert_eq!((b.class, b.text.as_str()), ("sumbox", face));
+ 
+     let long = format!("一つ目です。\n{}", "あ".repeat(200));
+-    let b = boxes(Some(long.clone()), None);
+-    assert_eq!(b[0].text, long);
++    let b = boxes(Some(long.clone()), None, Mode::Beginner);
++    assert_eq!(b.text, long);
+ 
+-    let b = boxes(some(""), some(""));
+-    for x in &b {
++    for mode in Mode::ALL {
++        let b = boxes(some(""), some(""), mode);
+         assert_eq!(
+-            (x.class, x.text.as_str()),
++            (b.class, b.text.as_str()),
+             (SUMMARY_NONE, NO_SUMMARY),
+-            "{}",
+-            x.key
++            "{mode:?}"
+         );
+     }
+ }
+@@ -288,13 +290,14 @@ fn dom_part(text: &str) -> &str {
+     &text[at..]
+ }
+ 
+-/// (8) 節点の頁の概要の箱と出所の行の DOM の字（一覧の面の行の要約の欄は行 m-map-compact で消した）。
++/// (8) 節点の頁の概要の箱と出所の行の DOM の字（一覧の面の行の要約の欄は行 m-map-compact で消した・
++/// 畳む段はもう一方の概要の 1 つだけ・行 g-sum-pick）。
+ #[test]
+ fn gsum_dom_text() {
+     let node = read("src/project/node.rs");
+     let dom = dom_part(&node);
+     for want in [
+-        "summary(c)",
++        "summary(c, mode())",
+         "{h2(b.key)}</header><p data-t=",
+         "M4 21c1-4 4-6 8-6s7 2 8 6",
+         "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
+@@ -302,7 +305,12 @@ fn gsum_dom_text() {
+     ] {
+         assert!(dom.contains(want), "node.rs の DOM に {want} が無い");
+     }
+-    assert!(!node.contains("<details"), "node.rs に <details が在る");
++    assert_eq!(
++        node.matches("<details").count(),
++        node.matches("<details class=SUMBOX_OTHER prop:open=open on:toggle=toggle>")
++            .count(),
++        "node.rs の <details はもう一方の概要の畳みだけ"
++    );
+ }
+ 
+ /// 着地済みの行と第 3 波から第 8 波の行の verify の filter の語。
+diff --git a/crates/tsuzuri-surface/tests/teeth3/hsderive.rs b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+index bef94b1e530b19384c9e03ecdf4f972452e9b8a8..83020c700ec69bbb88591057dff47ae73a885a71 100644
+--- a/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/hsderive.rs
+@@ -59,7 +59,7 @@ fn hsderive_consts_match_note() {
+         ),
+         ("legend", &[], &[]),
+         ("next", &["/api/next"], &[]),
+-        ("node", &[], &[]),
++        ("node", &[], &["node:other"]),
+         ("nodearound", &["/api/around"], &[]),
+         ("notice", &["/api/notices"], &[]),
+         ("pipeline", &["/api/pipeline"], &[]),
+diff --git a/crates/tsuzuri-surface/tests/teeth4/nodepage.rs b/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+index d0c623b655345c7b995da768bdc27f145806739a..444f91375aee31b84c0766cd585e2b0e8eb549bb 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/nodepage.rs
+@@ -98,7 +98,7 @@ fn nodepage_frame_and_nav() {
+     assert_eq!(
+         blocks,
+         vec![
+-            ("node", "summary_plain", "stack"),
++            ("node", "nb_summary", "stack"),
+             ("around", "around", "panel"),
+             ("timeline", "timeline", "panel")
+         ]
+@@ -506,19 +506,19 @@ fn other_heads() {
+     assert_eq!(node::head(&none), None);
+ }
+ 
+-/// (8) 概要の 2 つの箱は要約なしの字と class none。
++/// (8) 概要の箱は 1 つで、要約の無い節点は表示の型の側の見出しの鍵と要約なしの字と class none（行 g-sum-pick）。
+ #[test]
+ fn nodepage_summary() {
+     let doc = fixture();
+     let c = node::center(&doc).expect("中心");
+     assert_eq!(c.node.id, "FR1");
+-    let boxes = node::summary(c);
+-    let keys: Vec<&str> = boxes.iter().map(|b| b.key).collect();
+-    assert_eq!(keys, vec!["summary_plain", "summary_eng"]);
+-    for b in boxes {
++    for (mode, key) in [(Mode::Beginner, "summary_plain"), (Mode::Expert, "summary_eng")] {
++        let b = node::summary(c, mode);
++        assert_eq!(b.key, key);
+         assert_eq!(b.text, node::NO_SUMMARY);
+         assert_eq!(b.class, "sumbox none");
+         assert!(b.class.split_whitespace().any(|c| c == "none"));
++        assert_eq!(b.other, None);
+     }
+     assert_eq!(node::NO_SUMMARY, "要約なし");
+ }
+@@ -732,6 +732,8 @@ fn nodepage_keys_fixture_and_deps() {
+         "answer_here",
+         "summary_plain",
+         "summary_eng",
++        "nb_summary",
++        "sum_body",
+         "nb_up",
+         "nb_down",
+         "nb_self",
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index e0fa9fe0cc77f266eee1ffd71e9078f982259c95..2053547598bf9bba48881ae7a9b0b7d2972f1e35 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -597,6 +597,16 @@
+    "plain": "条の文や ADR の decision の先頭",
+    "internal": "statements[0].text / decision / what・value"
+   },
++  "nb_summary": {
++   "label": "概要",
++   "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",
++   "internal": "plain / eng"
++  },
++  "sum_body": {
++   "label": "本文から",
++   "plain": "2 つの概要が無い時の本文の頭の 1 行",
++   "internal": "summary::excerpt"
++  },
+   "timeline": {
+    "label": "run の時間軸",
+    "plain": "この task の run を 1 行ずつ並べる\n{ic:redo} 何回実行したか\n! どの段で止まったか",

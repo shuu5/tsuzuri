@@ -1,0 +1,380 @@
+diff --git a/crates/tsuzuri-surface/src/widgets/md.rs b/crates/tsuzuri-surface/src/widgets/md.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ca422f1af36b08b8f630c74441e736b6d81de467
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/widgets/md.rs
+@@ -0,0 +1,209 @@
++//! 本文の書式（Markdown）の一部を描く部品（行 g-md-view・判断の記録 ADR-30 決定 (4)・規則の行 R-25）。
++//! 台帳の本文と記録が使う形（見出し・箇条・番号つきの箇条・段落・等幅の字）だけを読み、描けない形（表の行・囲いの code）は
++//! 字のままの段にする。字は HTML として読まず、DOM は字の node で組む。読み手は純な関数で host でも組み、外の部品を足さない。
++
++/// 見出しの段の class（段の深さ 1〜4 の順）。
++pub const HEAD_CLASSES: [&str; 4] = ["mdh1", "mdh2", "mdh3", "mdh4"];
++
++/// 箇条の段・字のままの段・描いた本文の箱の class。
++pub const CLASSES: [&str; 3] = ["mdli", "mdpre", "md"];
++
++/// 箇条の印（番号の無い箇条）。
++pub const BULLET: &str = "・";
++
++/// 囲いの code の行の頭。
++pub const FENCE: &str = "```";
++
++/// 行の中の片。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Inline {
++    /// 字のまま（山括弧の字も字のまま）。
++    Text(String),
++    /// 逆引用符の対の中（等幅の字）。
++    Code(String),
++}
++
++/// 段。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Block {
++    /// 見出し（行頭の # の数 1〜4 と、残りの片）。
++    Head(u8, Vec<Inline>),
++    /// 段落（続く行は段落の中の改行として行ごとに残す）。
++    Para(Vec<Vec<Inline>>),
++    /// 箇条（深さは字下げ 2 字ごとに 1・番号つきなら番号の字）。
++    Item {
++        depth: u8,
++        ordered: Option<String>,
++        body: Vec<Inline>,
++    },
++    /// 字のままの段（表の行・囲いの code）。
++    Pre(String),
++}
++
++/// 行の中の逆引用符の対を等幅の片にする（対にならない逆引用符は字のまま）。
++pub fn inline(line: &str) -> Vec<Inline> {
++    let mut out = Vec::new();
++    let mut rest = line;
++    while let Some(open) = rest.find('`') {
++        let Some(len) = rest[open + 1..].find('`') else {
++            break;
++        };
++        if open > 0 {
++            out.push(Inline::Text(rest[..open].to_string()));
++        }
++        out.push(Inline::Code(rest[open + 1..open + 1 + len].to_string()));
++        rest = &rest[open + len + 2..];
++    }
++    if !rest.is_empty() {
++        out.push(Inline::Text(rest.to_string()));
++    }
++    out
++}
++
++/// 見出しの行（行頭の # が 1〜4 個と空白）なら深さと残り。
++fn head(line: &str) -> Option<(u8, &str)> {
++    let n = line.len() - line.trim_start_matches('#').len();
++    let rest = line[n..].strip_prefix(' ')?;
++    u8::try_from(n)
++        .ok()
++        .filter(|n| (1..=4).contains(n))
++        .map(|n| (n, rest))
++}
++
++/// 箇条の行（字下げと「- 」「* 」か、数字と「. 」「) 」）なら段。
++fn item(line: &str) -> Option<Block> {
++    let body = line.trim_start_matches(' ');
++    let depth = u8::try_from((line.len() - body.len()) / 2).unwrap_or(u8::MAX);
++    if let Some(rest) = body.strip_prefix("- ").or_else(|| body.strip_prefix("* ")) {
++        return Some(Block::Item {
++            depth,
++            ordered: None,
++            body: inline(rest),
++        });
++    }
++    let digits = body.len() - body.trim_start_matches(|c: char| c.is_ascii_digit()).len();
++    let rest = body.get(digits..).filter(|_| digits > 0)?;
++    let rest = rest
++        .strip_prefix(". ")
++        .or_else(|| rest.strip_prefix(") "))?;
++    Some(Block::Item {
++        depth,
++        ordered: Some(body[..=digits].to_string()),
++        body: inline(rest),
++    })
++}
++
++/// 1 行（囲いの code なら閉じる行まで）を段にする（空の行は None）。
++fn block<'a>(line: &'a str, lines: &mut impl Iterator<Item = &'a str>) -> Option<Block> {
++    if line.trim_start().starts_with(FENCE) {
++        let mut kept = vec![line];
++        for l in lines.by_ref() {
++            kept.push(l);
++            if l.trim_start().starts_with(FENCE) {
++                break;
++            }
++        }
++        return Some(Block::Pre(kept.join("\n")));
++    }
++    if line.trim().is_empty() {
++        return None;
++    }
++    if let Some((n, rest)) = head(line) {
++        return Some(Block::Head(n, inline(rest)));
++    }
++    item(line).or_else(|| {
++        Some(if line.starts_with('|') {
++            Block::Pre(line.to_string())
++        } else {
++            Block::Para(vec![inline(line)])
++        })
++    })
++}
++
++/// 本文を段の列に読む。空の行で段落を分け、続く段落の行と続く表の行は 1 つの段に足す。
++pub fn parse(text: &str) -> Vec<Block> {
++    let mut out: Vec<Block> = Vec::new();
++    // 前の行が続きを受ける段（段落の行か表の行）か（空の行とほかの段で切れる）。
++    let mut cont = false;
++    let mut lines = text.lines().map(|l| l.trim_end_matches('\r'));
++    while let Some(line) = lines.next() {
++        let b = block(line, &mut lines);
++        let joined = match (&b, out.last_mut()) {
++            (Some(Block::Pre(row)), Some(Block::Pre(at))) if cont && line.starts_with('|') => {
++                at.push('\n');
++                at.push_str(row);
++                true
++            }
++            (Some(Block::Para(row)), Some(Block::Para(at))) if cont => {
++                at.extend(row.iter().cloned());
++                true
++            }
++            _ => false,
++        };
++        cont = match &b {
++            Some(Block::Para(_)) => true,
++            Some(Block::Pre(_)) => line.starts_with('|'),
++            _ => false,
++        };
++        if !joined {
++            out.extend(b);
++        }
++    }
++    out
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::view;
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::prelude::*;
++
++    use super::{BULLET, Block, CLASSES, HEAD_CLASSES, Inline};
++
++    fn inline_view(xs: Vec<Inline>) -> AnyView {
++        xs.into_iter()
++            .map(|x| match x {
++                Inline::Text(t) => view! { <span>{t}</span> }.into_any(),
++                Inline::Code(t) => view! { <code>{t}</code> }.into_any(),
++            })
++            .collect_view()
++            .into_any()
++    }
++
++    fn block_view(b: Block) -> AnyView {
++        let [li, pre, _] = CLASSES;
++        match b {
++            Block::Head(n, xs) => {
++                let at = usize::from(n).saturating_sub(1);
++                let class = HEAD_CLASSES.get(at).copied().unwrap_or_default();
++                view! { <div class=class>{inline_view(xs)}</div> }.into_any()
++            }
++            Block::Para(lines) => {
++                let lines = lines
++                    .into_iter()
++                    .enumerate()
++                    .map(|(i, xs)| view! { {(i > 0).then(|| view! { <br/> })}{inline_view(xs)} })
++                    .collect_view();
++                view! { <p>{lines}</p> }.into_any()
++            }
++            Block::Item {
++                depth,
++                ordered,
++                body,
++            } => {
++                let style = format!("margin-left:{}em", f32::from(depth) * 1.2);
++                let mark = ordered.unwrap_or_else(|| BULLET.to_string());
++                view! { <div class=li style=style><span>{mark}</span><span>{inline_view(body)}</span></div> }
++                    .into_any()
++            }
++            Block::Pre(t) => view! { <pre class=pre>{t}</pre> }.into_any(),
++        }
++    }
++
++    /// 段の列を描く（字は字の node で出し、HTML として読まない）。
++    pub fn view(blocks: Vec<Block>) -> AnyView {
++        let items = blocks.into_iter().map(block_view).collect_view();
++        view! { <div class=CLASSES[2]>{items}</div> }.into_any()
++    }
++}
+diff --git a/crates/tsuzuri-surface/src/widgets/mod.rs b/crates/tsuzuri-surface/src/widgets/mod.rs
+index 7c563641e1cfe674eca35de7bf55502b17462864..be87bdfd3280c44954db80947ad61bea7a045915 100644
+--- a/crates/tsuzuri-surface/src/widgets/mod.rs
++++ b/crates/tsuzuri-surface/src/widgets/mod.rs
+@@ -6,13 +6,15 @@
+ //! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）と、
+ //! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）と、
+ //! pipeline の札の段ごとの要の 1 行（keyline・行 g-pipe-cards・host でも組む）と、
+-//! 表示の型で概要を 1 つ選ぶ部品と長い概要の畳み（sumpick・行 g-sum-pick・host でも組む）。
++//! 表示の型で概要を 1 つ選ぶ部品と長い概要の畳み（sumpick・行 g-sum-pick・host でも組む）と、
++//! 本文の書式（Markdown）の一部を字の node で描く部品（md・行 g-md-view・読み手は host でも組む）。
+ 
+ pub mod coach;
+ pub mod fig;
+ pub mod help;
+ pub mod hover;
+ pub mod keyline;
++pub mod md;
+ pub mod modal;
+ pub mod nodecard;
+ pub mod pop;
+diff --git a/crates/tsuzuri-surface/tests/mdview.rs b/crates/tsuzuri-surface/tests/mdview.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f6eec7fd46f7ee904adcfa18b2e52a8d1d8e14e8
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/mdview.rs
+@@ -0,0 +1,138 @@
++//! 本文の書式（Markdown）の一部の読み手の歯（行 g-md-view・接頭辞 mdview_・判断の記録 ADR-30 決定 (4)・規則の行 R-25）。
++//! 見出し・箇条・番号つきの箇条・段落・等幅の字を段の列に読み、山括弧の字と描けない形（表の行・囲いの code）を字のまま残し、
++//! 部品の file が inner_html の字を持たないことを断言する。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::widgets::md::{Block, FENCE, Inline, parse};
++
++fn text(s: &str) -> Inline {
++    Inline::Text(s.to_string())
++}
++
++fn code(s: &str) -> Inline {
++    Inline::Code(s.to_string())
++}
++
++fn para(lines: &[&str]) -> Block {
++    Block::Para(lines.iter().map(|l| vec![text(l)]).collect())
++}
++
++fn item(depth: u8, ordered: Option<&str>, body: &str) -> Block {
++    Block::Item {
++        depth,
++        ordered: ordered.map(str::to_string),
++        body: vec![text(body)],
++    }
++}
++
++/// 行頭の # が 1〜4 個と空白の行は見出しの段（深さは # の数）。# が 5 個の行と空白の無い行は段落。
++#[test]
++fn mdview_heads() {
++    assert_eq!(
++        parse("# a\n## b\n### c\n#### d"),
++        [1, 2, 3, 4]
++            .into_iter()
++            .zip(["a", "b", "c", "d"])
++            .map(|(n, t)| Block::Head(n, vec![text(t)]))
++            .collect::<Vec<_>>()
++    );
++    assert_eq!(parse("##### e"), [para(&["##### e"])]);
++    assert_eq!(parse("#f"), [para(&["#f"])]);
++}
++
++/// 「- 」「* 」の箇条は字下げ 2 字ごとに深さ 1、数字と「. 」「) 」は番号つきの箇条で番号の字を持つ。
++#[test]
++fn mdview_items_depth() {
++    let got = parse("- a\n  - b\n    * c\n1. x\n12) y\n  3. z");
++    assert_eq!(
++        got,
++        [
++            item(0, None, "a"),
++            item(1, None, "b"),
++            item(2, None, "c"),
++            item(0, Some("1."), "x"),
++            item(0, Some("12)"), "y"),
++            item(1, Some("3."), "z"),
++        ]
++    );
++    assert_eq!(parse("-a\n1.x"), [para(&["-a", "1.x"])]);
++}
++
++/// 空の行で段落を分け、続く行は 1 つの段落の中の行として残す（行末の \r は外す）。
++#[test]
++fn mdview_paragraphs() {
++    let want = [para(&["a", "b"]), para(&["c"])];
++    assert_eq!(parse("a\nb\n\nc"), want);
++    assert_eq!(parse("a\r\nb\r\n\r\nc\r\n"), want);
++    assert_eq!(
++        parse("a\n## h\nb"),
++        [para(&["a"]), Block::Head(2, vec![text("h")]), para(&["b"])]
++    );
++}
++
++/// 逆引用符の対の中は等幅の片、対にならない逆引用符は字のまま。
++#[test]
++fn mdview_inline_code() {
++    assert_eq!(
++        parse("x `y` z `w"),
++        [Block::Para(vec![vec![
++            text("x "),
++            code("y"),
++            text(" z `w")
++        ]])]
++    );
++    assert_eq!(
++        parse("- `a`"),
++        [Block::Item {
++            depth: 0,
++            ordered: None,
++            body: vec![code("a")]
++        }]
++    );
++}
++
++/// 山括弧の字は字の片のまま（HTML として読まない）。
++#[test]
++fn mdview_angle_text() {
++    let s = "<k> と <b>太</b> と &amp;";
++    assert_eq!(parse(s), [para(&[s])]);
++}
++
++/// 「|」で始まる続く行は 1 つの字のままの段、囲いの code は閉じる行まで（閉じなければ末まで）字のままの段。
++#[test]
++fn mdview_unknown_pre() {
++    assert_eq!(FENCE, "```");
++    assert_eq!(
++        parse("| a | b |\n| - | - |\n\n| c |"),
++        [
++            Block::Pre("| a | b |\n| - | - |".to_string()),
++            Block::Pre("| c |".to_string())
++        ]
++    );
++    assert_eq!(
++        parse("```\n# x\n- y\n```\nz"),
++        [Block::Pre("```\n# x\n- y\n```".to_string()), para(&["z"])]
++    );
++    assert_eq!(
++        parse("```rust\nfn f() {}"),
++        [Block::Pre("```rust\nfn f() {}".to_string())]
++    );
++}
++
++/// 部品の file は inner_html の字を持たず、DOM（wasm の枝）は字を字の node で出す。
++#[test]
++fn mdview_no_inner_html() {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/widgets/md.rs");
++    let src = std::fs::read_to_string(&path).expect("md.rs が読める");
++    assert!(!src.contains("inner_html"));
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    for s in [
++        "Inline::Text(t) => view! { <span>{t}</span> }",
++        "Inline::Code(t) => view! { <code>{t}</code> }",
++        "Block::Pre(t) => view! { <pre class=pre>{t}</pre> }",
++    ] {
++        assert_eq!(dom.matches(s).count(), 1, "{s}");
++    }
++}

@@ -1,0 +1,638 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
+index 4727d3d44c738deff27d71d766afcad06569bc11..9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
+@@ -1680,3 +1680,35 @@ fn hook_session_recent_owned_copies_the_output_and_never_recounts_the_marks() {
+     assert_eq!(owned, ["[RECENT-NONE] kind=owned"], "件数 0・印を持つ部品 1");
+     clean(&[&place.repo, &place.state, &place.sock_dir]);
+ }
++
++// ---- 要の写し（行 v-brief-const・tsuzuri の判断の記録 ADR-38 の決定 (5)・接頭辞 `vbconst_`）----
++
++/// 要の写しを名乗った席は、HEAD の宣言の key が名指す写しの file を名乗りの直後に字のまま出し、その後ろに役割の 7 行を出して憲法の
++/// 5 行（4〜8 行目）を出さない。写しの file が無い周は、写しの代わりに path と次の 1 手を名指す 1 行で 5 行へ戻さない。key の無い同じ
++/// 席は 12 行（対照）。
++#[test]
++fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
++    let place = role_place();
++    let path = stub_seat(&place, "vbconst", Some("orchestrator"));
++    let (twelve, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
++    assert_eq!(twelve.len(), 12, "key の無い席は 12 行: {twelve:?}");
++    let roles: Vec<String> = twelve.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| line.clone()).collect();
++    let copy = "生成物・手で直さない・design-intent/constitution.yaml v9.9\n順位 甲  乙\n全文 contracts/seat/constitution.txt\n";
++    let seat = place.repo.join("contracts").join("seat");
++    fs::create_dir_all(&seat).expect("写しの置き場を作れる");
++    fs::write(seat.join("brief.txt"), copy).expect("写しを書ける");
++    let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
++    fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
++    git(&place.repo, &["add", ".vessel.toml"]);
++    git(&place.repo, &["commit", "-q", "-m", "decl"]);
++    let (brief, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
++    let head: String = brief.iter().take(3).map(|line| format!("{line}\n")).collect();
++    assert_eq!(head, copy, "写しを字のまま名乗りの直後に: {brief:?}");
++    assert_eq!(brief.get(3..), Some(&roles[..]), "その後ろは役割の 7 行で 5 行を出さない");
++    fs::remove_file(seat.join("brief.txt")).expect("写しを消せる");
++    let (brief, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
++    let first = brief.first().cloned().unwrap_or_default();
++    assert!(first.contains("path=contracts/seat/brief.txt reason=not-found") && first.contains("tz derive --write"), "{first}");
++    assert_eq!(brief.get(1..), Some(&roles[..]), "断りの 1 行の後ろは役割の 7 行で 5 行へ戻さない");
++    clean(&[&place.repo, &place.state, &place.sock_dir]);
++}
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__hook__vessel_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__hook__vessel_external_form.snap
+index 9da5d394983d8e78d7d422df28a69d72721ca63a..11409166d0e682475773f3bda8e443858cf415a6 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__hook__vessel_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__hook__vessel_external_form.snap
+@@ -6,3 +6,4 @@ name=scribe2
+ version=2
+ usage: scribe2 vessel <init --state-dir D [--version N]|show|check> [ROOT]
+        scribe2 vessel update --state-dir S [--remote R] [--branch B]
++       scribe2 vessel seat-constitution --project DIR
+diff --git a/scribe2/crates/scribe2/src/help.rs b/scribe2/crates/scribe2/src/help.rs
+index b17c417bceab3ebca2924481312983f4236b0593..dd25623da7cfcbc9f215970578d4afd8aea81b7c 100644
+--- a/scribe2/crates/scribe2/src/help.rs
++++ b/scribe2/crates/scribe2/src/help.rs
+@@ -188,12 +188,14 @@ pub const TABLE: &[Entry] = &[
+             ("show", "Print the marker of ROOT."),
+             ("check", "Exit 0 when ROOT belongs to this vessel, else non-zero."),
+             ("update", "Update the installed vessel from --remote R / --branch B."),
++            ("seat-constitution", "Exit 0 when the seat brief of --project DIR prints its declared copy."),
+         ],
+         flags: &[
+             ("--state-dir D", "Host state dir recorded in the local git config (init, update)."),
+             ("--version N", "Vessel generation written into the marker (init)."),
+             ("--remote R", "Remote to update from (update)."),
+             ("--branch B", "Branch to update from (update)."),
++            ("--project DIR", "Repo whose declaration is asked (seat-constitution)."),
+         ],
+         examples: &["{NAME} vessel init --state-dir STATE .", "{NAME} vessel check ."],
+         see: &["docs/design/vessel-hook.md", "docs/design/consumer-sync.md"],
+diff --git a/scribe2/crates/scribe2/src/hook/mod.rs b/scribe2/crates/scribe2/src/hook/mod.rs
+index 84340b5d36d27987a486db760d721b8a228e6b29..46a7efe460df6c60c9ca8f2fdf6adb2b14123442 100644
+--- a/scribe2/crates/scribe2/src/hook/mod.rs
++++ b/scribe2/crates/scribe2/src/hook/mod.rs
+@@ -41,6 +41,7 @@ use crate::fleet::store::{self, LockPolicy, StoreError};
+ use crate::name::{BUILD_COMMIT, NAME};
+ use crate::rules::manifest::Manifest;
+ use crate::seat::ledger::LedgerError;
++use crate::seat::brief::copy::Copy;
+ use crate::seat::recent;
+ use crate::seat::state::Event;
+ use anchor_guard::AnchorDecision;
+@@ -551,9 +552,13 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
+     let drafts_dir = crate::seat::drafts_dir(hooked.dir, &target);
+     let drafts = std::path::absolute(&drafts_dir).unwrap_or(drafts_dir);
+     let text = crate::seat::brief::render(row.role, row, &capabilities, &ledger, &drafts.to_string_lossy());
+-    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: text.trim_end_matches('\n') };
++    // 要の写しを名乗った席は憲法の 5 行の代わりに写しを字のまま出す（tsuzuri の判断の記録 ADR-38 の決定 (5)・key の無い席は 12 行のまま）。
++    let copy = Copy::read(hooked.root, &crate::pipe::declaration::seat_constitution(hooked.root));
++    let lines = copy.lines(&text);
++    let joined = lines.join("\n");
++    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: &joined };
+     outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
+-    outcome.out.extend(text.lines().map(str::to_owned));
++    outcome.out.extend(lines);
+     precompact_out(hooked, outcome, payload, &target, started);
+     recent(hooked, outcome, started, read.as_deref().map_err(|reason| *reason));
+ }
+diff --git a/scribe2/crates/scribe2/src/hook/vessel.rs b/scribe2/crates/scribe2/src/hook/vessel.rs
+index 5dd949adf5fa044be9df040cc4fae4fca7050272..3a50fe9d87906f29d2da6d380629427cdd1c96a5 100644
+--- a/scribe2/crates/scribe2/src/hook/vessel.rs
++++ b/scribe2/crates/scribe2/src/hook/vessel.rs
+@@ -14,6 +14,7 @@ use crate::cli_args::{self, Allowed};
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+ use crate::invocation::Invocation;
+ use crate::name::NAME;
++use crate::pipe::declaration::SeatConstitution;
+ use std::path::{Path, PathBuf};
+ 
+ /// 所属の目印の固定名（ADR-0004 §2.2 面 1）。**版番号に依らず固定**する（R-O3）。
+@@ -159,7 +160,7 @@ pub fn state_dir(root: &Path) -> Option<PathBuf> {
+ /// `vessel` の使い方。
+ pub fn usage() -> String {
+     format!(
+-        "usage: {NAME} vessel <init --state-dir D [--version N]|show|check> [ROOT]\n       {NAME} vessel update --state-dir S [--remote R] [--branch B]"
++        "usage: {NAME} vessel <init --state-dir D [--version N]|show|check> [ROOT]\n       {NAME} vessel update --state-dir S [--remote R] [--branch B]\n       {NAME} vessel seat-constitution --project DIR"
+     )
+ }
+ 
+@@ -167,6 +168,8 @@ pub fn usage() -> String {
+ const ALLOWED_INIT: &[cli_args::Allowed] = &[Allowed::value("--state-dir"), Allowed::value("--version")];
+ /// `vessel show` / `vessel check`（flag を受けない）。
+ const ALLOWED_BARE: &[cli_args::Allowed] = &[];
++/// `vessel seat-constitution`（`--project` だけ・tsuzuri の判断の記録 ADR-38 の決定 (6)・`ROOT` を取らない）。
++const ALLOWED_SEAT: &[cli_args::Allowed] = &[Allowed::value("--project")];
+ /// `vessel update`（設計 consumer-sync.md §5・`ROOT` を取らない＝repo は `[[vessel]] repo` が名指す）。
+ const ALLOWED_UPDATE: &[cli_args::Allowed] =
+     &[Allowed::value("--state-dir"), Allowed::value("--remote"), Allowed::value("--branch")];
+@@ -177,6 +180,7 @@ pub fn dispatch(args: &[String]) -> Outcome {
+         Some("init") => Some(ALLOWED_INIT),
+         Some("show" | "check") => Some(ALLOWED_BARE),
+         Some("update") => Some(ALLOWED_UPDATE),
++        Some("seat-constitution") => Some(ALLOWED_SEAT),
+         _ => None,
+     };
+     let rest = args.get(1..).unwrap_or_default();
+@@ -186,6 +190,9 @@ pub fn dispatch(args: &[String]) -> Outcome {
+     if args.first().is_some_and(|verb| verb == "update") {
+         return update_cmd(rest);
+     }
++    if args.first().is_some_and(|verb| verb == "seat-constitution") {
++        return seat_constitution_cmd(rest);
++    }
+     let root = match root_of(args) {
+         Ok(found) => found,
+         Err(reason) => return Outcome::failed(RC_REFUSED, vec![format!("vessel: {reason}")]),
+@@ -335,6 +342,36 @@ fn check(root: &Path) -> Outcome {
+     }
+ }
+ 
++/// `vessel seat-constitution --project DIR` の口（tsuzuri の判断の記録 ADR-38 の決定 (6)）: DIR を含む repo にこの器が仕え、その HEAD の
++/// 宣言が任意 key `seat-constitution` を名乗る周だけ rc 0（stdout に `seat-constitution <path>` の 1 行）で、この binary の SessionStart の
++/// brief が要の写しを出す（写しの file を読めない周も brief が名指す）。仕えない・key が無い周は rc 1、宣言を読めない周は rc 2（stderr に
++/// 1 行）。暫定の hook がこの rc で黙るかを決める（器を古い binary へ戻すと口が無く rc が 0 でなくなる）。
++fn seat_constitution_cmd(rest: &[String]) -> Outcome {
++    let refused = |error: cli_args::ArgsError| cli_args::refusal("vessel", &error, usage());
++    let parsed = match cli_args::parse(rest, ALLOWED_SEAT) {
++        Ok(found) => found,
++        Err(error) => return refused(error),
++    };
++    if let Some(extra) = parsed.positionals().first() {
++        return refused(cli_args::ArgsError::Unknown((*extra).to_owned()));
++    }
++    let project = match parsed.need("--project") {
++        Ok(found) => found,
++        Err(error) => return refused(error),
++    };
++    let Some(root) = repo_root(Path::new(project)) else {
++        return Outcome::failed(RC_REFUSED, vec![format!("vessel: {project} は git の repo でない")]);
++    };
++    if !matches!(served(&root), Served::ByMe(_)) {
++        return Outcome::failed(RC_REFUSED, vec![format!("vessel: {} にこの器が仕えない", root.display())]);
++    }
++    match crate::pipe::declaration::seat_constitution(&root) {
++        SeatConstitution::Declared(path) => Outcome::ok_line(format!("seat-constitution {path}")),
++        SeatConstitution::Absent => Outcome::failed(RC_REFUSED, vec!["vessel: 宣言に seat-constitution が無い".to_owned()]),
++        SeatConstitution::Unreadable => Outcome::failed(RC_BROKEN, vec!["vessel: HEAD の宣言を読めない".to_owned()]),
++    }
++}
++
+ /// `vessel update` の既定の remote（設計 consumer-sync.md §5 (2)）。
+ pub const DEFAULT_REMOTE: &str = "origin";
+ /// `vessel update` の既定の branch（設計 consumer-sync.md §5 (2)）。
+@@ -639,10 +676,53 @@ fn record_install(state_dir: &Path, install: &crate::fleet::Install) -> Result<(
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{repo_root, update, UpdateError};
++    use super::{dispatch, git_ok, marker_path, repo_root, update, write_binding, UpdateError, GENERATION};
+     use crate::name::NAME;
+     use crate::pipe::fixture::{exited, scratch, Call, Stub};
+-    use std::path::PathBuf;
++    use std::path::{Path, PathBuf};
++
++    /// 必須 key だけの宣言の本文の後ろに `extra` を足す。
++    fn decl(extra: &str) -> String {
++        format!("schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n{extra}")
++    }
++
++    /// 宣言を書いて木の全部を commit する。
++    fn commit_decl(repo: &Path, body: &str) {
++        let _ = std::fs::write(repo.join(".vessel.toml"), body);
++        let _ = git_ok(repo, &["add", "-A"]);
++        let _ = git_ok(repo, &["commit", "-q", "-m", "decl"]);
++    }
++
++    /// 要の写しの問いの口（rc・stdout・stderr の行数）を撃つ。
++    fn ask(repo: &Path) -> (u8, Vec<String>, usize) {
++        let args: Vec<String> = ["seat-constitution", "--project"].iter().map(|arg| (*arg).to_owned()).chain([repo.display().to_string()]).collect();
++        let outcome = dispatch(&args);
++        (outcome.rc, outcome.out, outcome.err.len())
++    }
++
++    /// 要の写しの問いの口は、この器が仕える repo の HEAD の宣言が key を名乗る周だけ rc 0 と `seat-constitution <path>` の 1 行で、
++    /// 1 句だけ外した周（key の無い宣言・作業ツリーにだけ在る key・別の器の名乗り）は rc 1、不備の宣言は rc 2（どれも stdout 0 行・
++    /// stderr 1 行）。
++    #[test]
++    fn vbconst_query_answers_zero_only_for_a_declared_key_of_a_served_repo() {
++        let (repo, state) = (scratch("vbconst-query-repo"), scratch("vbconst-query-state"));
++        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "q"], &["config", "user.email", "q@example.invalid"]] {
++            let _ = git_ok(&repo, args);
++        }
++        assert!(write_binding(&repo, &state.display().to_string(), GENERATION).is_ok(), "この器が仕える");
++        let key = "seat-constitution = \"contracts/seat/brief.txt\"\n";
++        commit_decl(&repo, &decl(""));
++        assert_eq!(ask(&repo), (1, Vec::new(), 1), "key の無い宣言");
++        let _ = std::fs::write(repo.join(".vessel.toml"), decl(key));
++        assert_eq!(ask(&repo), (1, Vec::new(), 1), "作業ツリーにだけ在る key は読まない");
++        commit_decl(&repo, &decl(key));
++        assert_eq!(ask(&repo), (0, vec!["seat-constitution contracts/seat/brief.txt".to_owned()], 0), "仕える repo の HEAD の key");
++        commit_decl(&repo, &decl("seat-constitution = [\"a.txt\"]\n"));
++        assert_eq!(ask(&repo), (2, Vec::new(), 1), "不備の宣言");
++        commit_decl(&repo, &decl(key));
++        let _ = std::fs::write(marker_path(&repo), "name=other\nversion=2\n");
++        assert_eq!(ask(&repo), (1, Vec::new(), 1), "別の器の名乗り");
++    }
+ 
+     /// vessel の git の 3 関数と cargo は起動の記述を通る（設計 core-boundary.md §9 行 h）: git は `-C <repo>` の後に
+     /// 呼び手の列・cargo は install の引数を repo の cwd で撃つ。update は status → fetch → merge → cargo の順で、cargo の
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration.rs b/scribe2/crates/scribe2/src/pipe/declaration.rs
+index 100b7e63ea514d9a2a15c91224f43da541884efb..fa91c493ed996db6653e7d76af2342ebf1bc64d6 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration.rs
+@@ -27,7 +27,8 @@ pub use entrance_flip::{measure_named, EntranceFlip};
+ use entrance_flip::{entrance_of, KEY as ENTRANCE_KEY};
+ pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, requirements_at_sha, floor_check_at, question_route, table_facts, table_facts_named, terminal_facts, CloseCheck, QuestionRoute, TableFacts, TerminalFacts};
+ pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
+-use optional_keys::{build_lanes_of, ci_cmd_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
++pub use optional_keys::{seat_constitution, SeatConstitution};
++use optional_keys::{build_lanes_of, ci_cmd_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
+ pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
+ pub(crate) use write_set::is_under;
+ 
+@@ -327,6 +328,8 @@ pub struct Declared {
+     teeth_check: Option<bool>,
+     /// 便の木を並びで使い回すか（任意 key `build-lanes`・無ければ `None`＝false と同じ・判断の記録 ADR-35）。
+     build_lanes: Option<bool>,
++    /// 席の手元の要の写しの repo 相対の path（任意 key `seat-constitution`・無ければ `None`＝brief は 12 行・tsuzuri の判断の記録 ADR-38）。
++    seat_constitution: Option<String>,
+ }
+ 
+ /// 出所つきの宣言。**[`Effective`] はこれを消費してしか作れない**（C10）。
+@@ -568,6 +571,7 @@ impl Declared {
+         let row_review = row_review_of(&found, &mut errors);
+         let teeth_check = teeth_check_of(&found, &mut errors);
+         let build_lanes = build_lanes_of(&found, &mut errors);
++        let seat_constitution = seat_constitution_of(&found, &mut errors);
+         let index = index_keys_of(&found, &mut errors);
+         let contract_tables = contract_tables_of(&found, &mut errors);
+         let constitution = constitution_of(&found, &mut errors);
+@@ -602,6 +606,7 @@ impl Declared {
+                 index,
+                 teeth_check,
+                 build_lanes,
++                seat_constitution,
+             })
+         } else {
+             Err(errors)
+@@ -1299,8 +1304,9 @@ mod tests {
+                 "contract-tables",
+                 "constitution",
+                 "build-lanes",
++                "seat-constitution",
+             ],
+-            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本）"
++            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本）"
+         );
+     }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+index 0c308c8026bc0657c1d8a64d597719fead54a567..e00e3227339168bec0a0471510a0f7f3f36e645b 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+@@ -35,6 +35,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
+     CONTRACT_TABLES_KEY,
+     CONSTITUTION_KEY,
+     BUILD_LANES_KEY,
++    SEAT_CONSTITUTION_KEY,
+ ];
+ 
+ /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
+@@ -62,6 +63,11 @@ const CONSTITUTION_KEY: &str = "constitution";
+ /// 便ごとに木を切る今の形）。
+ const BUILD_LANES_KEY: &str = "build-lanes";
+ 
++/// **席の手元の要の写しの file** の key（任意・tsuzuri の判断の記録 ADR-38 の決定 (5)）。repo 相対の 1 file の path で、名乗った project の
++/// 席では SessionStart の brief がこの file を字のまま出し、雛形の憲法の 5 行（[`crate::seat::brief::CONSTITUTION_LINES`]）を出さない
++/// （書かない宣言は今の 12 行のまま）。
++const SEAT_CONSTITUTION_KEY: &str = "seat-constitution";
++
+ /// 憲法の file の既定 path（宣言 `constitution` が無い周・lens が測る 1 本）。
+ pub const DEFAULT_CONSTITUTION: &str = "docs/constitution.md";
+ 
+@@ -154,14 +160,58 @@ pub(super) fn constitution_of(found: &[(String, Raw, u64)], errors: &mut Vec<Dec
+         errors.push(DeclError::new(*line, format!("{CONSTITUTION_KEY} は repo 相対の file の path の配列である")));
+         return None;
+     };
+-    let closed = |item: &str| item.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'));
+-    for item in items.iter().filter(|item| !repo_relative(item) || item.ends_with('/') || !closed(item)) {
++    for item in items.iter().filter(|item| !repo_file(item)) {
+         let reason = format!("{CONSTITUTION_KEY} の {item:?} は repo 相対の file の path である（空・絶対 path・home の短縮記号・..・末尾 /・英数字と . _ / - のほかの字は書けない）");
+         errors.push(DeclError::new(*line, reason));
+     }
+     Some((items.clone(), *line))
+ }
+ 
++/// repo 相対の 1 file の path か（[`repo_relative`] で末尾 `/` が無く、字が英数字と `.` `_` `/` `-` に閉じる・頼みの文や席の手元へ
++/// 差し込む path の字を閉じる）。
++fn repo_file(item: &str) -> bool {
++    repo_relative(item) && !item.ends_with('/') && item.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'))
++}
++
++/// 要の写しの file（任意・無ければ `None`）。[`repo_file`] の 1 本の文字列だけを受ける（配列・真偽・空・絶対 path・home の短縮記号・`..`・
++/// 末尾 `/`・閉じた字の外は key と行番号を名指す不備）。
++pub(super) fn seat_constitution_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
++    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == SEAT_CONSTITUTION_KEY)?;
++    match value {
++        Raw::Text(path) if repo_file(path) => Some(path.clone()),
++        _ => {
++            let reason = format!("{SEAT_CONSTITUTION_KEY} は repo 相対の 1 file の path の文字列である（空・絶対 path・home の短縮記号・..・末尾 /・英数字と . _ / - のほかの字は書けない）");
++            errors.push(DeclError::new(*line, reason));
++            None
++        }
++    }
++}
++
++/// anchor の HEAD の宣言が名乗る要の写し（閉じた 3 値・[`QuestionRoute`] と同じ読み）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum SeatConstitution {
++    /// 宣言 file が HEAD に無い・git を撃てない・key の無い宣言（brief は今の 12 行のまま）。
++    Absent,
++    /// 宣言が在って読めない（key を書いたかも読めない・12 行に倒さない・C10）。
++    Unreadable,
++    /// 宣言が名乗った要の写しの repo 相対の path。
++    Declared(String),
++}
++
++/// anchor の HEAD の宣言の `seat-constitution`（`git show HEAD:.vessel.toml`・作業ツリーの宣言は読まない・[`question_route`] と同じ読み）。
++pub fn seat_constitution(repo: &Path) -> SeatConstitution {
++    seat_of(head_declaration(repo))
++}
++
++/// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し（[`route_of`] と同じ形）。
++fn seat_of(read: Option<Result<Declared, Vec<DeclError>>>) -> SeatConstitution {
++    match read {
++        None => SeatConstitution::Absent,
++        Some(Err(_)) => SeatConstitution::Unreadable,
++        Some(Ok(declared)) => declared.seat_constitution.map_or(SeatConstitution::Absent, SeatConstitution::Declared),
++    }
++}
++
+ /// 名指した rev の宣言が名乗る憲法の file の列（閉じた 3 値・設計 gate-cost.md §48 形 3）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum ConstitutionFiles {
+@@ -327,6 +377,7 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
+     CONTRACT_TABLES_KEY,
+     CONSTITUTION_KEY,
+     BUILD_LANES_KEY,
++    SEAT_CONSTITUTION_KEY,
+ ];
+ 
+ /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
+@@ -624,6 +675,7 @@ pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
+ mod tests {
+     use super::super::Declared;
+     use super::{check_of, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
++    use super::{seat_of, SeatConstitution};
+ 
+     /// 必須 key だけの宣言の本文（3 行）の後ろに `extra` を足す。
+     fn with(extra: &str) -> String {
+@@ -657,6 +709,29 @@ mod tests {
+         assert_eq!(route_of(Some(declared)), QuestionRoute::Declared("x".to_owned()));
+     }
+ 
++    /// 要の写しの key は repo 相対の 1 file の字だけを受け（key の無い宣言は値なし）、HEAD の読みは閉じた 3 値に写る（無い宣言・key の無い
++    /// 宣言は Absent・不備の宣言は Unreadable で Absent に倒さない・名乗りは字のまま）。
++    #[test]
++    fn vbconst_key_reads_one_repo_file_and_maps_the_head_read() {
++        assert_eq!(Declared::parse(&with("")).map(|found| found.seat_constitution), Ok(None));
++        let declared = Declared::parse(&with("seat-constitution = \"contracts/seat/brief.txt\"\n"));
++        assert_eq!(declared.map(|found| found.seat_constitution), Ok(Some("contracts/seat/brief.txt".to_owned())));
++        assert_eq!(seat_of(None), SeatConstitution::Absent, "宣言が無い");
++        assert_eq!(seat_of(Some(Declared::parse(&with("")))), SeatConstitution::Absent, "key の無い宣言");
++        assert_eq!(seat_of(Some(Err(Vec::new()))), SeatConstitution::Unreadable, "不備の宣言");
++        let declared = Declared::parse(&with("seat-constitution = \"a/b.txt\"\n"));
++        assert_eq!(seat_of(Some(declared)), SeatConstitution::Declared("a/b.txt".to_owned()), "名乗りの字のまま");
++    }
++
++    /// 配列・真偽・空・絶対 path・home の短縮記号・..・末尾 /・閉じた字の外（空白）は key と行番号（4 行目）を名指す不備。
++    #[test]
++    fn vbconst_key_refuses_lists_bools_and_paths_outside_the_repo() {
++        for value in ["[\"a.txt\"]", "true", "\"\"", "\"/abs/a.txt\"", "\"a~b.txt\"", "\"../a.txt\"", "\"dir/\"", "\"a b.txt\""] {
++            let errors = Declared::parse(&with(&format!("seat-constitution = {value}\n"))).expect_err(value);
++            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("seat-constitution")), "{value}: {errors:?}");
++        }
++    }
++
+     /// key が true は加わる・false と key の無い宣言は加わらない（欄は真偽のまま）。
+     #[test]
+     fn declaration_close_check_reads_true_false_and_absent() {
+diff --git a/scribe2/crates/scribe2/src/seat/brief/copy.rs b/scribe2/crates/scribe2/src/seat/brief/copy.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6f32a309f9b01fda7002696ff1568d60d134e9d7
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/seat/brief/copy.rs
+@@ -0,0 +1,152 @@
++//! 席の手元の要の写し（tsuzuri の判断の記録 ADR-38 の決定 (5)(11)・行 v-brief-const）: 宣言の任意 key `seat-constitution` が名乗る
++//! file を SessionStart の brief が字のまま出し、その後に役割の行（[`super::role_lines`]）を出す。key の無い宣言の席は雛形の 12 行の
++//! まま（ADR-0045・ADR-0046 の決めを受け直した形）。写しか宣言を読めない周は、写しの代わりに何を読めなかったかと次の 1 手を名指す
++//! 1 行を出し、憲法の 5 行へ黙って戻さない（tsuzuri の条 P-7）。写しは anchor の作業ツリーの file を読む（導く道具が書く場所）。
++
++use super::role_lines;
++use crate::name::NAME;
++use crate::pipe::declaration::SeatConstitution;
++use std::path::Path;
++
++/// 写しを導き直す次の 1 手（tsuzuri の道具の口・写しを導く行 t-seatcopy）。
++pub const NEXT_STEP: &str = "tz derive --write";
++
++/// brief の出し分け（閉じた 3 値）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Copy {
++    /// key の無い宣言（雛形の 12 行のまま）。
++    Absent,
++    /// 写しを読めた（file の字のまま）。
++    Read(String),
++    /// 写しか宣言を読めない（写しの代わりに出す 1 行）。
++    Refused(String),
++}
++
++impl Copy {
++    /// HEAD の宣言の読みから写しを読む（`root` は anchor・path は宣言の repo 相対の字）。
++    pub fn read(root: &Path, declared: &SeatConstitution) -> Self {
++        match declared {
++            SeatConstitution::Absent => Self::Absent,
++            SeatConstitution::Unreadable => Self::Refused(format!(
++                "{NAME}: 要の写しを出せない reason=declaration-unreadable（HEAD の .vessel.toml を読めず seat-constitution の有無が分からない・憲法の 5 行は出さない）"
++            )),
++            SeatConstitution::Declared(path) => match std::fs::read_to_string(root.join(path)) {
++                Ok(text) => Self::Read(text),
++                Err(err) => Self::Refused(format!(
++                    "{NAME}: 要の写しを読めない path={path} reason={}（次の 1 手: {NEXT_STEP}・憲法の 5 行は出さない）",
++                    reason_of(&err)
++                )),
++            },
++        }
++    }
++
++    /// brief の行（`brief` は穴を埋めた雛形の 12 行）: key の無い席は 12 行のまま、名乗った席は写しの字（読めない周は断りの 1 行）の後ろに
++    /// 役割の行。
++    pub fn lines(&self, brief: &str) -> Vec<String> {
++        let head: Vec<String> = match self {
++            Self::Absent => return brief.lines().map(str::to_owned).collect(),
++            Self::Read(text) => verbatim(text),
++            Self::Refused(line) => vec![line.clone()],
++        };
++        head.into_iter().chain(role_lines(brief).map(str::to_owned)).collect()
++    }
++}
++
++/// 写しの字を行に割る（出力層が行ごとに改行 1 つを足すので、末尾の改行 1 つだけを外す・行の中の字と `\r` は替えない・空の file は 0 行）。
++fn verbatim(text: &str) -> Vec<String> {
++    if text.is_empty() {
++        return Vec::new();
++    }
++    text.strip_suffix('\n').unwrap_or(text).split('\n').map(str::to_owned).collect()
++}
++
++/// 読めない理由の 1 語（閉じた 3 語）。
++fn reason_of(err: &std::io::Error) -> &'static str {
++    match err.kind() {
++        std::io::ErrorKind::NotFound => "not-found",
++        std::io::ErrorKind::InvalidData => "not-utf8",
++        _ => "unreadable",
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{Copy, NEXT_STEP};
++    use crate::pipe::declaration::SeatConstitution;
++    use crate::pipe::fixture::scratch;
++    use crate::seat::brief::template;
++    use crate::seat::role::Role;
++
++    /// 写しの見本（多字節・空白の並び・末尾の改行）。
++    const SAMPLE: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9\n順位 甲  乙\n全文 contracts/seat/constitution.txt\n";
++
++    /// 雛形の 12 行の 4〜8 行目（憲法の 5 行）。
++    fn five() -> Vec<String> {
++        template(Role::Orchestrator).lines().skip(3).take(5).map(str::to_owned).collect()
++    }
++
++    /// 雛形の 12 行から 5 行を除いた 7 行。
++    fn seven() -> Vec<String> {
++        let all: Vec<&str> = template(Role::Orchestrator).lines().collect();
++        all.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| (*line).to_owned()).collect()
++    }
++
++    /// key の無い宣言は写しを読まず、brief は雛形の 12 行のまま（5 行を含む）。
++    #[test]
++    fn vbconst_absent_key_keeps_the_twelve_lines() {
++        let root = scratch("vbconst-absent");
++        std::fs::create_dir_all(root.join("contracts/seat")).expect("置き場");
++        std::fs::write(root.join("contracts/seat/brief.txt"), SAMPLE).expect("写し");
++        let copy = Copy::read(&root, &SeatConstitution::Absent);
++        assert_eq!(copy, Copy::Absent, "key が無ければ写しを読まない");
++        let brief = template(Role::Orchestrator);
++        let lines = copy.lines(brief);
++        assert_eq!(lines, brief.lines().map(str::to_owned).collect::<Vec<String>>(), "12 行のまま");
++        assert!(five().iter().all(|line| lines.contains(line)), "5 行を出す");
++    }
++
++    /// 名乗った写しは字のまま（末尾の改行まで byte で同じ）先に出て、その後ろに役割の 7 行が並び、5 行は 1 行も出ない。
++    #[test]
++    fn vbconst_copy_is_printed_verbatim_before_the_role_lines() {
++        let root = scratch("vbconst-read");
++        std::fs::create_dir_all(root.join("contracts/seat")).expect("置き場");
++        std::fs::write(root.join("contracts/seat/brief.txt"), SAMPLE).expect("写し");
++        let copy = Copy::read(&root, &SeatConstitution::Declared("contracts/seat/brief.txt".to_owned()));
++        assert_eq!(copy, Copy::Read(SAMPLE.to_owned()), "file の字のまま");
++        let lines = copy.lines(template(Role::Orchestrator));
++        let printed: String = lines.iter().map(|line| format!("{line}\n")).collect();
++        assert!(printed.starts_with(SAMPLE), "写しの byte が頭に並ぶ: {printed}");
++        assert_eq!(lines.get(3..).map(<[String]>::to_vec), Some(seven()), "写しの 3 行の後ろは役割の 7 行");
++        assert!(!five().iter().any(|line| lines.contains(line)), "5 行を出さない");
++    }
++
++    /// 名乗った写しが無い周は、写しの代わりに path と理由と次の 1 手を名指す 1 行を出し、その後ろは役割の 7 行で、5 行へ戻さない。
++    #[test]
++    fn vbconst_missing_copy_names_the_path_and_the_next_step() {
++        let root = scratch("vbconst-missing");
++        let copy = Copy::read(&root, &SeatConstitution::Declared("contracts/seat/brief.txt".to_owned()));
++        let Copy::Refused(line) = &copy else {
++            panic!("読めない周は断りの 1 行: {copy:?}");
++        };
++        assert!(line.contains("path=contracts/seat/brief.txt reason=not-found"), "{line}");
++        assert!(line.contains(NEXT_STEP), "次の 1 手を名指す: {line}");
++        let lines = copy.lines(template(Role::Orchestrator));
++        assert_eq!(lines.first(), Some(line), "断りの 1 行が頭");
++        assert_eq!(lines.get(1..).map(<[String]>::to_vec), Some(seven()), "その後ろは役割の 7 行");
++        assert!(!five().iter().any(|five| lines.contains(five)), "5 行へ黙って戻さない");
++    }
++
++    /// 宣言を読めない周は 12 行に倒さず、宣言を名指す 1 行と役割の 7 行（5 行は出さない）。
++    #[test]
++    fn vbconst_unreadable_declaration_is_not_folded_into_twelve_lines() {
++        let root = scratch("vbconst-unreadable");
++        let copy = Copy::read(&root, &SeatConstitution::Unreadable);
++        let Copy::Refused(line) = &copy else {
++            panic!("宣言を読めない周は断りの 1 行: {copy:?}");
++        };
++        assert!(line.contains("reason=declaration-unreadable") && line.contains(".vessel.toml"), "{line}");
++        let lines = copy.lines(template(Role::Orchestrator));
++        assert_eq!(lines.len(), 8, "断りの 1 行と役割の 7 行: {lines:?}");
++        assert_eq!(lines.get(1..).map(<[String]>::to_vec), Some(seven()));
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/seat/brief/mod.rs b/scribe2/crates/scribe2/src/seat/brief/mod.rs
+index 4e726906ce9ba8f27c856f15deb1bfc6c334fc47..6136ba48761e9c908a1bf9d32b03ff529e19c280 100644
+--- a/scribe2/crates/scribe2/src/seat/brief/mod.rs
++++ b/scribe2/crates/scribe2/src/seat/brief/mod.rs
+@@ -10,7 +10,11 @@
+ //! [`pointer::classify`] が 1 本残らず分類する・字面の語彙で判定しない・ADR-0090）。行の分類（[`classify_line`]）は in-file の歯が読み、
+ //! xtask の drift 検査（C14.2・AC17）は同じ規律を雛形 file に対して測る。**env を読まない**（C2.2）: 穴の値は
+ //! 登録 row と rules 行 `role.<役割>` から来る。
++//!
++//! 宣言の任意 key `seat-constitution` を名乗った project の席では、憲法の 5 行（[`CONSTITUTION_LINES`]）を出さず、要の写しを字のまま
++//! 出してから残りの 7 行（役割の行）を出す（[`copy`]・tsuzuri の判断の記録 ADR-38 の決定 (5)(11)・key の無い席は 12 行のまま）。
+ 
++pub mod copy;
+ pub mod pointer;
+ 
+ use super::role::{Capability, Role};
+@@ -57,6 +61,14 @@ impl Hole {
+     }
+ }
+ 
++/// 雛形の憲法の効く部分の 5 行（1 始まりの行番号・ADR-0045 §2 (3)）。要の写しを名乗った席では出さない（[`role_lines`]）。
++pub const CONSTITUTION_LINES: std::ops::RangeInclusive<usize> = 4..=8;
++
++/// 穴を埋めた指示文から憲法の 5 行（[`CONSTITUTION_LINES`]）を除いた役割の行（並びのまま・行の字は替えない）。
++pub fn role_lines(brief: &str) -> impl Iterator<Item = &str> {
++    brief.lines().enumerate().filter(|(at, _)| !CONSTITUTION_LINES.contains(&at.saturating_add(1))).map(|(_, line)| line)
++}
++
+ /// 権能の名の列の区切り（生成文の `{capabilities}` の中）。
+ const CAPABILITY_SEPARATOR: &str = "・";
+ 
+@@ -173,7 +185,7 @@ pub fn render(role: Role, registration: &Registration, capabilities: &[Capabilit
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{braces, capabilities_of, classify_line, render, template, violations, Hole, LineKind, HOLES};
++    use super::{braces, capabilities_of, classify_line, render, role_lines, template, violations, Hole, LineKind, CONSTITUTION_LINES, HOLES};
+     use crate::fleet::Registration;
+     use crate::order::is_declaration_order;
+     use crate::rules::manifest::Manifest;
+@@ -328,6 +340,21 @@ mod tests {
+         assert_eq!(braced.lines().count(), 12, "行の追加も削除もしない");
+     }
+ 
++    /// 役割の行は雛形の 12 行から 4〜8 行目だけを除いた 7 行で並びと字を替えず、除く 5 行は器の憲法の禁止と確認と順位（憲法 A と N の条・
++    /// ADR-0046）を名指す行の全部で、残る 7 行はそれを 1 つも名指さない。
++    #[test]
++    fn vbconst_role_lines_drop_only_the_five_constitution_lines() {
++        let text = template(Role::Orchestrator);
++        let all: Vec<&str> = text.lines().collect();
++        let kept: Vec<&str> = role_lines(text).collect();
++        let want: Vec<&str> = all.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| *line).collect();
++        assert_eq!(kept, want, "4〜8 行目だけを除き並びのまま");
++        assert_eq!((kept.len(), CONSTITUTION_LINES.clone().count()), (7, 5), "7 行と 5 行");
++        let cites = |line: &str| line.contains("憲法 A") || line.contains("憲法 N") || line.contains("ADR-0046");
++        assert!(all[3..8].iter().all(|line| cites(line)), "除く 5 行は器の憲法の禁止と確認と順位を名指す");
++        assert!(!kept.iter().any(|line| cites(line)), "残る 7 行はそれを名指さない: {kept:?}");
++    }
++
+     /// 権能は rules 行 `role.<役割>` から読む: 行が無い・不発効・列でない周は `None`。
+     #[test]
+     fn seat_brief_capabilities_come_from_the_role_row() {

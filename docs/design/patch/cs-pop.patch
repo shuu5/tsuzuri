@@ -1,0 +1,168 @@
+diff --git a/crates/tsuzuri-surface/src/consultwin.rs b/crates/tsuzuri-surface/src/consultwin.rs
+index 73942a4de8100fcaa5b13d782f642b74c0c82c4e..653bbaac24006acaf12899894f710b137c6bcf84 100644
+--- a/crates/tsuzuri-surface/src/consultwin.rs
++++ b/crates/tsuzuri-surface/src/consultwin.rs
+@@ -4,7 +4,8 @@
+ //! 下の段は口 GET /api/consult の一覧（退いていない窓・処分の無い所見・受けの無い頼み）で、受けの無い頼みは
+ //! 頼みの時刻から `DELIVER_SPAN` を越えると `LATE` を添える。読めない段は測れていない。
+ //! 帯の相談の口は色の付く数を持たない（所見の処分は席の手番・決定 (9)）。窓を開いた link が bead の id を持てば、
+-//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
++//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。札と行の吹き出しの相談の口（行 cs-pop）は `consult_href` の link で、
++//! 押すとその bead の id を題に入れてこの窓を開く（hover では開かない）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
+ //! wasm の target のときだけ組む。
+ 
+ use tsuzuri_contract::EpochSecs;
+@@ -15,7 +16,11 @@ use tsuzuri_contract::consult::{
+ };
+ use tsuzuri_contract::wire;
+ 
++use crate::frame::Mode;
++use crate::mapview::encode;
+ use crate::project::Body;
++use crate::project::ask::FOCUS_KEY;
++use crate::topbar::{Win, win_href};
+ use crate::view::Fetched;
+ 
+ pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
+@@ -23,6 +28,9 @@ pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
+ /// 帯の相談の口と窓の題の語の鍵。
+ pub const CONSULT_KEY: &str = "consult";
+ 
++/// 吹き出しの相談の口の語の鍵（行 cs-pop）。
++pub const POP_KEY: &str = "pop_consult";
++
+ /// 受けの無い頼みを「席に届いていない」と見る経過（秒・server の配達の撃ち直しの幅と同じ 1800 秒）。
+ pub const DELIVER_SPAN: EpochSecs = 1800;
+ 
+@@ -51,6 +59,15 @@ pub struct Row {
+     pub late: bool,
+ }
+ 
++/// 吹き出しの相談の口の先（相談の窓を開いた home の頁・bead の id を題の初めの字に渡す・行 cs-pop）。
++pub fn consult_href(id: &str, mode: Mode) -> String {
++    format!(
++        "{}&{FOCUS_KEY}={}",
++        win_href(Win::Consult, mode),
++        encode(id)
++    )
++}
++
+ /// 頼みの電文（題は前後の空白を除いて空なら無し・model が `MODELS` に無ければ None）。
+ pub fn request(topic: &str, form: Form, model: &str) -> Option<String> {
+     if !MODELS.contains(&model) {
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index d89464d9ca41cff84c0bb11800eb9f68f07ee5ee..dff92410af88e97552734137b123a35a9c7c9fc8 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -12,6 +12,7 @@
+ //! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
+ //! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
+ //! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
++//! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+@@ -607,6 +608,7 @@ mod dom {
+         Val, Via, anchor_selectors, at_text, board_unread, hit_of, known, next_href,
+         opener_selector, place, pop, read_facts, read_parts, toggle, with_why,
+     };
++    use crate::consultwin::{POP_KEY, consult_href};
+     use crate::frame::{Mode, node_href};
+     use crate::project::{ledger, map, pipeline, timeline, unmeasured};
+     use crate::view::read_rows;
+@@ -833,6 +835,7 @@ mod dom {
+             </div>
+             <div class=foot>
+                 <a class=link href=node_href(&p.id, mode)>{format!("{} ›", label(PAGE_KEY))}</a>
++                <a class=link href=consult_href(&p.id, mode)>{format!("{} ›", label(POP_KEY))}</a>
+             </div>
+         }
+         .into_any()
+diff --git a/crates/tsuzuri-surface/tests/cwpop.rs b/crates/tsuzuri-surface/tests/cwpop.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9a74c8d70bd1244e9caaeabf9a6be340b42bb472
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/cwpop.rs
+@@ -0,0 +1,65 @@
++//! 札と行の吹き出しの相談の口の歯（行 cs-pop・接頭辞 cwpop_・判断の記録 ADR-29 決定 (4)）。
++//! 口の先の URL（純な関数）を host で撃ち、吹き出しの層の DOM（wasm の枝）は配線の字を読む。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::consultwin::{POP_KEY, consult_href};
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::topbar::{Win, win_of_href};
++use tsuzuri_surface::vocab::vocab;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// 口の先は相談の窓を開いた home の頁の URL で、bead の id を query の id に置き（%XX で包む）、窓と id に読み戻る。
++#[test]
++fn cwpop_href_opens_consult_with_id() {
++    for mode in Mode::ALL {
++        assert_eq!(
++            consult_href("t3-hub.78", mode),
++            format!("?mode={}&win=consult&id=t3-hub.78", mode.key())
++        );
++        for id in ["t3-hub.78", "e.2:x", "a b&c"] {
++            assert_eq!(
++                win_of_href(&consult_href(id, mode)),
++                Some((Win::Consult, Some(id.to_string()))),
++                "{id}"
++            );
++        }
++    }
++}
++
++/// どの段の吹き出しも、末の口の並び（class foot の段）の個別の頁への口の後に相談の口を 1 つだけ持ち、口は hover の card を
++/// 付けない（押した時だけ開く）。窓を開く link の押しは、頁の層が id を題の初めの字に渡して窓を開く。
++#[test]
++fn cwpop_foot_link_once_without_hover() {
++    let src = read("src/widgets/pop.rs");
++    let dom = &src[src.find("mod dom {").expect("wasm の枝")..];
++    let link =
++        "<a class=link href=consult_href(&p.id, mode)>{format!(\"{} ›\", label(POP_KEY))}</a>";
++    assert_eq!(
++        dom.matches("consult_href(").count(),
++        1,
++        "相談の口が 1 つでない"
++    );
++    let foot = &dom[dom.find("<div class=foot>").expect("末の段")..];
++    let foot = &foot[..foot.find("</div>").expect("末の段の終わり")];
++    let page = foot.find("label(PAGE_KEY)").expect("個別の頁への口");
++    let at = foot.find(link).expect("末の段に相談の口が無い");
++    assert!(page < at, "相談の口が個別の頁への口の前");
++    assert!(!foot.contains("use:attach"), "末の段の口に hover の card");
++    let board = read("src/board.rs");
++    assert!(board.contains("focus.0.set(id);\n    win.open(w, from_win);"));
++}
++
++/// 口の語は語の辞書の「相談する」で、注釈が在る。
++#[test]
++fn cwpop_word_key() {
++    assert_eq!(POP_KEY, "pop_consult");
++    let term = vocab().term(POP_KEY).expect("語の辞書の pop_consult");
++    assert_eq!(term.label, "相談する");
++    assert!(!term.note.is_empty(), "注釈が空");
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index f50f9792bdf20823329f795757642a6fcee434f9..e0fa9fe0cc77f266eee1ffd71e9078f982259c95 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1808,6 +1808,11 @@
+    "label": "相談",
+    "plain": "席の文脈と分けた調べと検証の窓\n・ 題と形と model を書いて頼む\n・ 窓を開くのは席\n・ 30 分受けられなければ席に届いていない\n→ 色の付く数は持たない",
+    "internal": "GET /api/consult ・ POST /api/consult/request（判断の記録 ADR-29 決定 (4)(9)・行 cs-bar）"
++  },
++  "pop_consult": {
++   "label": "相談する",
++   "plain": "この bead を題にした相談の窓を開く\n・ 押した時だけ開く\n・ 頼みを送ると席が受けて窓を開く",
++   "internal": "?win=consult&id=<bead>（判断の記録 ADR-29 決定 (4)・行 cs-pop）"
+   }
+  }
+ }
+\ No newline at end of file

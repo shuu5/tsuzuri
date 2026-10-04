@@ -1,0 +1,768 @@
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/qsig.rs b/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+index 0d039d1bc319e14c4868f39f7fe1dabc26b079aa..6d11c3b9e1745c4abdfdb181b1ca0ab4d25a637d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+@@ -25,7 +25,7 @@ use tsuzuri_contract::surface::QuestionNudge;
+ use tsuzuri_contract::wire;
+ 
+ /// hooks.json の PostToolUse の command の字（門の command の question-gate を question-signal に替えた字）。
+-const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"";
++const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"";
+ 
+ /// 問いの起票の command。
+ const ASK: &str = "bdw create --title 'q' --labels intake:question";
+@@ -386,6 +386,7 @@ fn run_sh(project: &Path, plugin: &Path, input: &str) -> Output {
+         .arg(COMMAND)
+         .env("CLAUDE_PROJECT_DIR", project)
+         .env("CLAUDE_PLUGIN_ROOT", plugin)
++        .env("PATH", "/usr/bin:/bin")
+         .stdin(Stdio::piped())
+         .stdout(Stdio::piped())
+         .stderr(Stdio::piped())
+@@ -402,14 +403,42 @@ fn run_sh(project: &Path, plugin: &Path, input: &str) -> Output {
+     child.wait_with_output().expect("sh の終わりを待つ")
+ }
+ 
++/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
++fn plugin_dir(dir: &Path) {
++    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
++    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++        let to = dir.join(rel);
++        fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir");
++        fs::copy(src.join(rel), &to).expect("plugin の file を写す");
++    }
++}
++
++/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
++fn declared(project: &Path) {
++    fs::create_dir_all(project).expect("project の dir");
++    for args in [
++        &["init", "-q"][..],
++        &["config", "scribe2.statedir", "/nonexistent/state"],
++    ] {
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(project)
++            .args(args)
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git {args:?}");
++    }
++}
++
+ #[test]
+ fn qsig_command_under_sh() {
+     let command = json::unquote(json::member(&post_hook(), "command").expect("鍵 command"));
+     assert_eq!(command.as_deref(), Some(COMMAND));
+     let root = place("sh");
+     let project = root.join("project");
+-    let bin = project.join("target/debug");
+-    fs::create_dir_all(&bin).expect("project の dir");
++    let bin = root.join("target/debug");
++    fs::create_dir_all(&bin).expect("build の dir");
++    declared(&project);
+     let (args_rec, stdin_rec) = (root.join("args.rec"), root.join("stdin.rec"));
+     let tz = bin.join("tz");
+     fs::write(
+@@ -423,7 +452,7 @@ fn qsig_command_under_sh() {
+     .expect("偽の tz");
+     fs::set_permissions(&tz, fs::Permissions::from_mode(0o755)).expect("偽の tz の権限");
+     let plain = root.join("plugin-plain");
+-    fs::create_dir_all(&plain).expect("印の無い plugin の dir");
++    plugin_dir(&plain);
+     let marked = root.join("plugin-marked");
+     fs::create_dir_all(&marked).expect("印の在る plugin の dir");
+     fs::write(marked.join(MARK_NAME), "").expect("印");
+diff --git a/crates/tsuzuri-core/tests/cwplg.rs b/crates/tsuzuri-core/tests/cwplg.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..88d9a5bfecb16d40fa39fb70b44145eeccfb5af0
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwplg.rs
+@@ -0,0 +1,235 @@
++//! tsuzuri の plugin の相談の窓の skill と tz の解き方の歯（接頭辞 cwplg_・設計ノート surface-wave27b 行 cs-plugin）。
++//! workspace の根の plugin/ の file を読み、bin/tzw は歯ごとの置き場（CARGO_TARGET_TMPDIR の下）の plugin の形の dir に
++//! plugin.json と一緒に写して撃つ（偽の tz は受けた引数と環境を記録する・PATH は /usr/bin と /bin と偽の dir だけ）。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use serde_json::Value;
++use tsuzuri_core::consult::launch::PLUGIN_VERSION;
++
++/// skill の本文が字のまま持つ句。
++const SKILL_WORDS: [&str; 9] = [
++    "tzw consult open",
++    "tzw consult launch",
++    "tzw consult watch",
++    "tzw consult show",
++    "tzw consult dispose",
++    "run_in_background",
++    "R-38",
++    "承認にならない",
++    "! で打つ命令は囲いの外で走る",
++];
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn read(rel: &str) -> String {
++    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .expect("git");
++    assert!(ok.success(), "git {args:?}");
++}
++
++/// 歯ごとの置き場（plugin の形の dir・同じ checkout の build の置き場・PATH の偽の dir・宣言の在る repo と無い repo）。
++struct Fx {
++    work: PathBuf,
++    plugin: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let work = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwplg")
++            .join(name);
++        let _ = fs::remove_dir_all(&work);
++        let plugin = work.join("plugin");
++        for d in [
++            "plugin/bin",
++            "plugin/.claude-plugin",
++            "target/debug",
++            "path",
++            "decl",
++            "bare",
++        ] {
++            fs::create_dir_all(work.join(d)).expect("置き場");
++        }
++        for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++            fs::copy(root().join("plugin").join(rel), plugin.join(rel))
++                .expect("plugin の file を写す");
++        }
++        git(&work.join("decl"), &["init", "-q"]);
++        git(
++            &work.join("decl"),
++            &["config", "scribe2.statedir", "/nonexistent/state"],
++        );
++        git(&work.join("bare"), &["init", "-q"]);
++        Fx { work, plugin }
++    }
++
++    /// 偽の tz を置く（`at` は置き場からの相対・`who` は記録の頭の字）。
++    fn tz(&self, at: &str, who: &str) {
++        let rec = self.work.join("rec");
++        script(
++            &self.work.join(at),
++            &format!(
++                "{{ echo '{who}'; for a in \"$@\"; do printf '%s\\n' \"$a\"; done; echo \"v=$TZ_PLUGIN_VERSION\"; echo \"w=$TZ_WRAPPER\"; }} > '{}'\necho out",
++                rec.display()
++            ),
++        );
++    }
++
++    /// plugin の bin/tzw を撃つ（`project` は環境の CLAUDE_PROJECT_DIR の dir の名）。
++    fn tzw(&self, project: &str, args: &[&str]) -> Output {
++        let _ = fs::remove_file(self.work.join("rec"));
++        Command::new(self.plugin.join("bin/tzw"))
++            .args(args)
++            .env(
++                "PATH",
++                format!("{}:/usr/bin:/bin", self.work.join("path").display()),
++            )
++            .env("CLAUDE_PROJECT_DIR", self.work.join(project))
++            .env_remove("TZ_PLUGIN_VERSION")
++            .env_remove("TZ_WRAPPER")
++            .output()
++            .expect("tzw を撃つ")
++    }
++
++    /// 偽の tz の記録の行（撃たれていなければ None）。
++    fn rec(&self) -> Option<Vec<String>> {
++        let text = fs::read_to_string(self.work.join("rec")).ok()?;
++        Some(text.lines().map(String::from).collect())
++    }
++
++    fn want(&self, who: &str, args: &[&str]) -> Option<Vec<String>> {
++        let mut out = vec![who.to_string()];
++        out.extend(args.iter().map(|a| (*a).to_string()));
++        out.push(format!("v={PLUGIN_VERSION}"));
++        let here = self
++            .plugin
++            .join("bin")
++            .canonicalize()
++            .expect("bin の正しい path");
++        out.push(format!("w={}", here.join("tzw").display()));
++        Some(out)
++    }
++}
++
++/// (1) plugin.json の version の字は中核の PLUGIN_VERSION と同じで、鍵は description・name・version の 3 つのまま。
++#[test]
++fn cwplg_version_is_plugin_version() {
++    let plugin: Value = serde_json::from_str(&read("plugin/.claude-plugin/plugin.json"))
++        .expect("plugin.json は JSON");
++    assert_eq!(plugin["version"].as_str(), Some(PLUGIN_VERSION));
++    let mut keys: Vec<&str> = plugin
++        .as_object()
++        .expect("object")
++        .keys()
++        .map(String::as_str)
++        .collect();
++    keys.sort_unstable();
++    assert_eq!(keys, ["description", "name", "version"]);
++}
++
++/// (2) tzw は plugin と同じ checkout の build（plugin の根の親の target/debug/tz）を PATH の tz より先に撃ち、
++/// 無ければ PATH の tz を撃ち、どちらにも引数をそのまま渡し、環境に plugin.json の版の字と自分の絶対 path を置く。
++#[test]
++fn cwplg_tzw_resolves_checkout_then_path() {
++    let fx = Fx::new("resolve");
++    fx.tz("target/debug/tz", "checkout");
++    fx.tz("path/tz", "path");
++    let out = fx.tzw("decl", &["consult", "list", "--json"]);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    assert_eq!(String::from_utf8_lossy(&out.stdout), "out\n");
++    assert_eq!(
++        fx.rec(),
++        fx.want("checkout", &["consult", "list", "--json"])
++    );
++    fs::remove_file(fx.work.join("target/debug/tz")).expect("checkout の tz を外す");
++    let out = fx.tzw("decl", &["consult", "list"]);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    assert_eq!(fx.rec(), fx.want("path", &["consult", "list"]));
++}
++
++/// (3) tz が解けない時、hook の口は何も撃たずに rc 0、ほかの口は字 tzw と半角のコロンで始まる 1 行を標準エラーに出して rc 1。
++#[test]
++fn cwplg_tzw_without_tz() {
++    let fx = Fx::new("none");
++    let out = fx.tzw("decl", &["hook", "stop", "--repo", "x"]);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    assert!(out.stdout.is_empty(), "{out:?}");
++    let out = fx.tzw("decl", &["consult", "list"]);
++    assert_eq!(out.status.code(), Some(1), "{out:?}");
++    let err = String::from_utf8_lossy(&out.stderr);
++    assert!(
++        err.starts_with("tzw: ") && err.lines().count() == 1,
++        "{err}"
++    );
++    assert_eq!(fx.rec(), None);
++}
++
++/// (4) hook の口は、CLAUDE_PROJECT_DIR の repo の git config に scribe2.statedir が無ければ tz を撃たずに rc 0 で、
++/// 在れば撃つ。hook でない口は宣言を見ない（宣言の無い repo でも撃つ）。
++#[test]
++fn cwplg_hook_needs_declaration() {
++    let fx = Fx::new("decl");
++    fx.tz("target/debug/tz", "checkout");
++    let args = ["hook", "stop", "--repo", "r"];
++    let out = fx.tzw("bare", &args);
++    assert_eq!((out.status.code(), fx.rec()), (Some(0), None), "{out:?}");
++    let out = fx.tzw("decl", &args);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    assert_eq!(fx.rec(), fx.want("checkout", &args));
++    let out = fx.tzw("bare", &["consult", "list"]);
++    assert_eq!(out.status.code(), Some(0), "{out:?}");
++    assert_eq!(fx.rec(), fx.want("checkout", &["consult", "list"]));
++}
++
++/// (5) skill は plugin/skills/consult/SKILL.md で、頭の --- の間に name の値 consult と空でない description を持ち、
++/// disable-model-invocation を持たず（席も撃てる）、本文は SKILL_WORDS の 9 句を字のまま持ち、字 target/debug/tz を持たない。
++#[test]
++fn cwplg_skill_shape() {
++    let text = read("plugin/skills/consult/SKILL.md");
++    let mut parts = text.splitn(3, "---\n");
++    assert_eq!(parts.next(), Some(""), "頭は ---");
++    let head = parts.next().expect("頭の --- の間");
++    let body = parts.next().expect("本文");
++    let lines: Vec<&str> = head.lines().collect();
++    assert!(lines.contains(&"name: consult"), "{head}");
++    assert!(
++        lines.iter().any(|l| l
++            .strip_prefix("description: ")
++            .is_some_and(|d| !d.trim().is_empty())),
++        "{head}"
++    );
++    assert!(!head.contains("disable-model-invocation"), "{head}");
++    for word in SKILL_WORDS {
++        assert!(body.contains(word), "本文に {word} が無い");
++    }
++    assert!(!text.contains("target/debug/tz"), "tz を直に名指す");
++}
++
++/// (6) tzw は字 #!/bin/sh で始まり、持ち主と group とほかの者の全部が撃てる mode の file。
++#[test]
++fn cwplg_tzw_is_executable_sh() {
++    let path = root().join("plugin/bin/tzw");
++    let mode = fs::metadata(&path).expect("tzw").permissions().mode();
++    assert_eq!(mode & 0o111, 0o111, "{mode:o}");
++    assert!(read("plugin/bin/tzw").starts_with("#!/bin/sh\n"));
++}
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlt.rs b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+index 592948552143642d637813b81455a9de7c9610e6..e2ebdfe44714ba305c7607c58556aafa5006730b 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlt.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+@@ -264,7 +264,7 @@ const FILTERS: &[&str] = &[
+ const PREFIX: &str = "fdlt_";
+ 
+ /// hooks.json の PostToolBatch の command の字。
+-const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
++const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
+ 
+ /// runner の印の file の名。
+ const MARK_NAME: &str = "scribe2-runner";
+@@ -509,6 +509,32 @@ fn tool_mark_line() {
+     );
+ }
+ 
++/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
++fn plugin_dir(dir: &Path) {
++    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++        let to = dir.join(rel);
++        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
++        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
++    }
++}
++
++/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
++fn declared(project: &Path) {
++    std::fs::create_dir_all(project).expect("project の dir を作る");
++    for args in [
++        &["init", "-q"][..],
++        &["config", "scribe2.statedir", "/nonexistent/state"],
++    ] {
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(project)
++            .args(args)
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git {args:?}");
++    }
++}
++
+ fn root() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+ }
+@@ -546,6 +572,7 @@ fn run_sh(project: &Path, plugin: &Path) -> Output {
+         .arg(COMMAND)
+         .env("CLAUDE_PROJECT_DIR", project)
+         .env("CLAUDE_PLUGIN_ROOT", plugin)
++        .env("PATH", "/usr/bin:/bin")
+         .stdin(Stdio::piped())
+         .stdout(Stdio::piped())
+         .stderr(Stdio::piped())
+@@ -569,8 +596,9 @@ fn fdlt_command_under_sh() {
+         std::fs::remove_dir_all(&work).expect("前の作業場を消す");
+     }
+     let project = work.join("project");
+-    let bin = project.join("target/debug");
+-    std::fs::create_dir_all(&bin).expect("project の dir を作る");
++    let bin = work.join("target/debug");
++    std::fs::create_dir_all(&bin).expect("build の dir を作る");
++    declared(&project);
+     let args_rec = work.join("args.rec");
+     let stdin_rec = work.join("stdin.rec");
+     let script = format!(
+@@ -583,7 +611,7 @@ fn fdlt_command_under_sh() {
+     std::fs::set_permissions(&tz, std::fs::Permissions::from_mode(0o755))
+         .expect("偽の tz を撃てる形にする");
+     let plain = work.join("plugin-plain");
+-    std::fs::create_dir_all(&plain).expect("印の無い plugin の dir を作る");
++    plugin_dir(&plain);
+     let marked = work.join("plugin-marked");
+     std::fs::create_dir_all(&marked).expect("印の在る plugin の dir を作る");
+     std::fs::write(marked.join(MARK_NAME), "").expect("印を置く");
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlv.rs b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+index ebf177f82276439ef904adc54d04c5ed269463da..8bb6c8326e47bdb42514cf09cf5643f115803ddf 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlv.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+@@ -252,7 +252,7 @@ const FILTERS: &[&str] = &[
+ const PREFIX: &str = "fdlv_";
+ 
+ /// hooks.json の UserPromptSubmit の command の字。
+-const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver --repo \"$CLAUDE_PROJECT_DIR\"";
++const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver --repo \"$CLAUDE_PROJECT_DIR\"";
+ 
+ /// runner の印の file の名。
+ const MARK_NAME: &str = "scribe2-runner";
+@@ -448,6 +448,32 @@ fn fdlv_context_shape_and_cap() {
+     assert!(text.chars().count() < 10_000);
+ }
+ 
++/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
++fn plugin_dir(dir: &Path) {
++    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++        let to = dir.join(rel);
++        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
++        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
++    }
++}
++
++/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
++fn declared(project: &Path) {
++    std::fs::create_dir_all(project).expect("project の dir を作る");
++    for args in [
++        &["init", "-q"][..],
++        &["config", "scribe2.statedir", "/nonexistent/state"],
++    ] {
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(project)
++            .args(args)
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git {args:?}");
++    }
++}
++
+ fn root() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+ }
+@@ -497,6 +523,7 @@ fn run_sh(project: &Path, plugin: &Path) -> Output {
+         .arg(COMMAND)
+         .env("CLAUDE_PROJECT_DIR", project)
+         .env("CLAUDE_PLUGIN_ROOT", plugin)
++        .env("PATH", "/usr/bin:/bin")
+         .stdin(Stdio::piped())
+         .stdout(Stdio::piped())
+         .stderr(Stdio::piped())
+@@ -520,8 +547,9 @@ fn fdlv_command_under_sh() {
+         std::fs::remove_dir_all(&work).expect("前の作業場を消す");
+     }
+     let project = work.join("project");
+-    let bin = project.join("target/debug");
+-    std::fs::create_dir_all(&bin).expect("project の dir を作る");
++    let bin = work.join("target/debug");
++    std::fs::create_dir_all(&bin).expect("build の dir を作る");
++    declared(&project);
+     let args_rec = work.join("args.rec");
+     let stdin_rec = work.join("stdin.rec");
+     let script = format!(
+@@ -534,7 +562,7 @@ fn fdlv_command_under_sh() {
+     std::fs::set_permissions(&tz, std::fs::Permissions::from_mode(0o755))
+         .expect("偽の tz を撃てる形にする");
+     let plain = work.join("plugin-plain");
+-    std::fs::create_dir_all(&plain).expect("印の無い plugin の dir を作る");
++    plugin_dir(&plain);
+     let marked = work.join("plugin-marked");
+     std::fs::create_dir_all(&marked).expect("印の在る plugin の dir を作る");
+     std::fs::write(marked.join(MARK_NAME), "").expect("印を置く");
+diff --git a/crates/tsuzuri-core/tests/teeth1/fstop.rs b/crates/tsuzuri-core/tests/teeth1/fstop.rs
+index e593ba15e8188c79107b22df375745bc8ecfd217..bf7bdc528ff0ec0f7d0896efc818788f61bade6d 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fstop.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fstop.rs
+@@ -105,7 +105,7 @@ const FILTER_WORDS: [&str; 92] = [
+ 
+ /// hooks.json の command の語（二重引用符を除いた字）。
+ const COMMAND_WORDS: [&str; 5] = [
+-    "$CLAUDE_PROJECT_DIR/target/debug/tz",
++    "$CLAUDE_PLUGIN_ROOT/bin/tzw",
+     "hook",
+     "stop",
+     "--repo",
+@@ -181,8 +181,8 @@ fn fstop_plugin_stop_entry() {
+     let command = hook["command"].as_str().expect("command は字");
+     assert_eq!(words(command), COMMAND_WORDS, "{command}");
+     let quoted = format!("\"{PROJECT_DIR}\"");
+-    assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
+-    assert_eq!(command.matches(&quoted).count(), 2, "{command}");
++    assert_eq!(command.matches(PROJECT_DIR).count(), 1, "{command}");
++    assert_eq!(command.matches(&quoted).count(), 1, "{command}");
+ 
+     no_absolute_paths(plugin, hooks);
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth2/gins.rs b/crates/tsuzuri-core/tests/teeth2/gins.rs
+index 7d78ff038c591a732179f84dd2d2bf95b39436d3..bdc0110f8724e44884403db1c6a6f3a6f94fa186 100644
+--- a/crates/tsuzuri-core/tests/teeth2/gins.rs
++++ b/crates/tsuzuri-core/tests/teeth2/gins.rs
+@@ -17,7 +17,7 @@ const COMMAND_WORDS: [&str; 10] = [
+     "$CLAUDE_PLUGIN_ROOT/scribe2-runner",
+     "]",
+     "||",
+-    "$CLAUDE_PROJECT_DIR/target/debug/tz",
++    "$CLAUDE_PLUGIN_ROOT/bin/tzw",
+     "hook",
+     "question-gate",
+     "--repo",
+@@ -39,6 +39,32 @@ const PAYLOAD: &str = r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+ /// 偽の tz が標準出力に出す字。
+ const FAKE_OUT: &str = "deny-line\n";
+ 
++/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
++fn plugin_dir(dir: &Path) {
++    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++        let to = dir.join(rel);
++        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
++        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
++    }
++}
++
++/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
++fn declared(project: &Path) {
++    std::fs::create_dir_all(project).expect("project の dir を作る");
++    for args in [
++        &["init", "-q"][..],
++        &["config", "scribe2.statedir", "/nonexistent/state"],
++    ] {
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(project)
++            .args(args)
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git {args:?}");
++    }
++}
++
+ fn root() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+ }
+@@ -109,8 +135,8 @@ fn gins_pretool_bash_entry() {
+     assert_eq!(words(command), COMMAND_WORDS, "{command}");
+     let quoted_dir = format!("\"{PROJECT_DIR}\"");
+     let quoted_mark = format!("\"{RUNNER_MARK}\"");
+-    assert_eq!(command.matches(PROJECT_DIR).count(), 2, "{command}");
+-    assert_eq!(command.matches(&quoted_dir).count(), 2, "{command}");
++    assert_eq!(command.matches(PROJECT_DIR).count(), 1, "{command}");
++    assert_eq!(command.matches(&quoted_dir).count(), 1, "{command}");
+     assert_eq!(command.matches(&quoted_mark).count(), 1, "{command}");
+ }
+ 
+@@ -146,6 +172,7 @@ fn run_sh(command: &str, project: &Path, plugin: &Path) -> Output {
+         .arg(command)
+         .env("CLAUDE_PROJECT_DIR", project)
+         .env("CLAUDE_PLUGIN_ROOT", plugin)
++        .env("PATH", "/usr/bin:/bin")
+         .stdin(Stdio::piped())
+         .stdout(Stdio::piped())
+         .stderr(Stdio::piped())
+@@ -171,8 +198,9 @@ fn gins_command_under_sh() {
+         std::fs::remove_dir_all(&work).expect("前の作業場を消す");
+     }
+     let project = work.join("project");
+-    let bin = project.join("target/debug");
+-    std::fs::create_dir_all(&bin).expect("project の dir を作る");
++    let bin = work.join("target/debug");
++    std::fs::create_dir_all(&bin).expect("build の dir を作る");
++    declared(&project);
+     let args_rec = work.join("args.rec");
+     let stdin_rec = work.join("stdin.rec");
+     let script = format!(
+@@ -185,12 +213,12 @@ fn gins_command_under_sh() {
+     std::fs::set_permissions(&tz, std::fs::Permissions::from_mode(0o755)).expect("偽の tz を撃てる形にする");
+ 
+     let plain = work.join("plugin-plain");
+-    std::fs::create_dir_all(&plain).expect("印の無い plugin の dir を作る");
++    plugin_dir(&plain);
+     let marked = work.join("plugin-marked");
+     std::fs::create_dir_all(&marked).expect("印の在る plugin の dir を作る");
+     std::fs::write(marked.join(MARK_NAME), "").expect("印を置く");
+-    let bare = work.join("project-bare");
+-    std::fs::create_dir_all(&bare).expect("tz の無い project の dir を作る");
++    let bare = work.join("no-build/plugin-plain");
++    plugin_dir(&bare);
+ 
+     // 席: 印が無く tz が在る。
+     let out = run_sh(&command, &project, &plain);
+@@ -211,10 +239,9 @@ fn gins_command_under_sh() {
+     assert!(!args_rec.exists(), "runner で tz が撃たれた");
+     assert!(!stdin_rec.exists(), "runner で tz が撃たれた");
+ 
+-    // tz が無い: 止めない誤り。
+-    let out = run_sh(&command, &bare, &plain);
+-    let code = out.status.code();
+-    assert!(code != Some(0) && code != Some(2), "tz の無い場の rc: {out:?}");
++    // tz が無い（plugin の checkout に build が無く PATH にも無い）: 何もせず止めない。
++    let out = run_sh(&command, &project, &bare);
++    assert_eq!(out.status.code(), Some(0), "tz の無い場の rc: {out:?}");
+     assert!(out.stdout.is_empty(), "tz の無い場の標準出力: {out:?}");
+ 
+     std::fs::remove_dir_all(&work).expect("作業場を消す");
+diff --git a/plugin/.claude-plugin/plugin.json b/plugin/.claude-plugin/plugin.json
+index edc4ded023b04434306d2771151f5a32268c6d3a..a9d65b2eda5447035eca724f4774f12268ae5316 100644
+--- a/plugin/.claude-plugin/plugin.json
++++ b/plugin/.claude-plugin/plugin.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "tsuzuri",
+-  "version": "0.1.0",
+-  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る"
++  "version": "0.2.0",
++  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る。skill の consult は相談の窓を開き、bin の tzw は hook と skill が撃つ tz を解く"
+ }
+diff --git a/plugin/bin/tzw b/plugin/bin/tzw
+new file mode 100755
+index 0000000000000000000000000000000000000000..f60967f481a3e0fdce5c3ed38502360f4ad6e7e0
+--- /dev/null
++++ b/plugin/bin/tzw
+@@ -0,0 +1,30 @@
++#!/bin/sh
++# tsuzuri の plugin の tz の解き方（判断の記録 ADR-29 決定 (2)・設計ノート surface-wave27b 行 cs-plugin）。
++# plugin の hook と skill はこの file だけを通して tz を撃つ。plugin の根はこの file の dir の親。
++# 解きの順: (1) plugin と同じ checkout の build（<plugin の根>/../target/debug/tz が撃てる file）、(2) PATH の tz。
++# 頭の引数が hook の時（hook の口）: repo（環境の CLAUDE_PROJECT_DIR・無ければ cwd）の git config に project の宣言
++# scribe2.statedir が無いか、tz が解けなければ、tz を撃たずに 0 で終わる（宣言を持たない project では何もしない・配達を止めない）。
++# ほかの口（consult など）: tz が解けなければ標準エラーに 1 行を出して 1 で終わる。
++# 撃つ時は環境に TZ_PLUGIN_VERSION（plugin.json の version の字・tz consult open が中核の版と照らす）と
++# TZ_WRAPPER（この file の絶対 path・席への 1 行の命令の頭の字）を置き、tz に exec する。
++here=$(cd "$(dirname "$0")" && pwd -P) || exit 1
++root=$(dirname "$here")
++tz=$root/../target/debug/tz
++if [ ! -f "$tz" ] || [ ! -x "$tz" ]; then
++    tz=$(command -v tz) || tz=
++fi
++if [ "$1" = hook ]; then
++    git -C "${CLAUDE_PROJECT_DIR:-.}" config --get scribe2.statedir >/dev/null 2>&1 || exit 0
++    if [ -z "$tz" ]; then
++        echo "tzw: tz が無い（plugin と同じ checkout の target/debug/tz も PATH の tz も無い）・hook は何もしない" >&2
++        exit 0
++    fi
++fi
++if [ -z "$tz" ]; then
++    echo "tzw: tz が無い（plugin と同じ checkout の target/debug/tz も PATH の tz も無い）" >&2
++    exit 1
++fi
++TZ_PLUGIN_VERSION=$(sed -n 's/^ *"version": *"\([^"]*\)".*$/\1/p' "$root/.claude-plugin/plugin.json")
++TZ_WRAPPER=$here/tzw
++export TZ_PLUGIN_VERSION TZ_WRAPPER
++exec "$tz" "$@"
+diff --git a/plugin/hooks/hooks.json b/plugin/hooks/hooks.json
+index 2dec06439b486a464fa56f7fd7a5206554a87b3e..2a6092a0eb90029636294d9d6e1a285e4a88dd2f 100644
+--- a/plugin/hooks/hooks.json
++++ b/plugin/hooks/hooks.json
+@@ -5,7 +5,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"",
+             "timeout": 30
+           }
+         ]
+@@ -17,7 +17,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-signal --repo \"$CLAUDE_PROJECT_DIR\"",
+             "async": true
+           }
+         ]
+@@ -29,7 +29,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook question-gate --repo \"$CLAUDE_PROJECT_DIR\"",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook question-gate --repo \"$CLAUDE_PROJECT_DIR\"",
+             "timeout": 10
+           }
+         ]
+@@ -40,7 +40,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "\"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook stop --repo \"$CLAUDE_PROJECT_DIR\"",
++            "command": "\"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook stop --repo \"$CLAUDE_PROJECT_DIR\"",
+             "timeout": 30
+           }
+         ]
+@@ -51,7 +51,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PROJECT_DIR\"/target/debug/tz hook deliver --repo \"$CLAUDE_PROJECT_DIR\"",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver --repo \"$CLAUDE_PROJECT_DIR\"",
+             "timeout": 10
+           }
+         ]
+diff --git a/plugin/skills/consult/SKILL.md b/plugin/skills/consult/SKILL.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..794dcf7c0dc8386fcf046e2e9a6569e3568979ca
+--- /dev/null
++++ b/plugin/skills/consult/SKILL.md
+@@ -0,0 +1,68 @@
++---
++name: consult
++description: 相談の窓（判断の記録 ADR-29）を開く手引き。席の文脈を汚さない自由な調べと検証の場を、窓ごとの作業場と囲いの中で起こす。形は話す窓（持ち主が端末で直に話す）と問う窓（席が強い model に問い、所見を受ける）。持ち主が相談の窓を開くと言った時、board の相談の頼みが届いた時、席が自分で強い model に問いたい時に使う。
++argument-hint: "[題（bead の id か自由な題）] [talk|ask] [model]"
++---
++
++# 相談の窓を開く（consult）
++
++相談の窓は、席の文脈を汚さないために分けた、自由な調べと検証の場である（判断の記録 ADR-29 決定 (3)）。窓は作業場の dir の中で、囲い（基本ソフトの sandbox）の下で動き、作業場の外と repo へは書けない。結果は所見として席へ届き、席が処分を宣言する。
++
++## 決まり
++
++- **命令は tzw だけで撃つ。** tzw は tsuzuri の plugin の bin に在り、Bash の道具の PATH に載る。tzw は plugin と同じ checkout の build の tz か、無ければ PATH の tz を引き、plugin の版を tz に渡す。tz を直に撃たない（版の照らしが効かず open が断る）。
++- **引数は省ける。** 渡された引数 $ARGUMENTS の 1 つ目は題（bead の id か自由な題）、2 つ目は形（talk か ask）、3 つ目は model。省けば題なし・話す窓（talk）・既定の model と念入りさ（fable・xhigh）。
++- **起こし手を正しく書く。** 持ち主がチャットで開くと言った時は --by chat と --said（その発話の UTC の分の字・形 20261003T1412Z）、board の相談の頼みは --by button と --request（頼みの id）、席が自分で開く時は --by seat。
++- **規則の行 R-38。** 席が自分で開く問う窓は、同時に 1 本・1 日（UTC）3 本までである。越える時は launch が断るので、決定の画面で持ち主に問う。持ち主の言葉で開く窓は数えない。
++- **相談の窓の会話と所見は承認にならない。** 所見はそのまま採らず、所見ごとに処分を宣言する（下の 4）。窓は repo と台帳を書かない。
++- **話す窓で持ち主が ! で打つ命令は囲いの外で走る。** 話す窓を開いた時に、このことを持ち主に一言伝える。
++- **落ちたら止まる。** 命令が rc 1 か rc 2 で落ちたら、標準エラーの断りの 1 行をそのまま持ち主に見せて止まる。file を直に書く・別の旗で撃ち直すといった回り道をしない。
++
++## 1 窓を用意する
++
++```
++tzw consult open --topic <題> --form talk --by chat --said <分>
++```
++
++- 題を省くなら --topic を書かない。問う窓は --form ask、model と念入りさは --model と --effort。
++- board の頼みは `tzw consult open --request <頼みの id> --by button`（形と model と題は頼みの行から読む）。
++- 出力の 1 行目は「窓 cw<n> を用意した」、2 行目は作業場の絶対 path。
++
++## 2 窓を起こす
++
++```
++tzw consult launch <窓の id>
++```
++
++- 話す窓は席の tmux の session に名 consult-cw<n> の窓を開いて戻る（持ち主の見ている窓は替えない）。持ち主にその窓で話すよう伝える。
++- 問う窓は所見を出して終わるまで待つので、Bash の道具の背景（run_in_background）で撃つ。終わりに所見の 1 行が出る。
++- 所見の無いまま止まった問う窓は `tzw consult launch <窓の id> --again` で撃ち直す。
++
++## 3 見張りを置く
++
++```
++tzw consult watch
++```
++
++- Bash の道具の背景（run_in_background・timeout は 7200000）で常に 1 本置く。所見か頼みが届くと「相談:」で始まる 1 行を出して終わる。
++- 1 行で起きたら、その件を受けてから同じ命令で置き直す。2 本目は「見張りはもう居る」で終わる。
++
++## 4 所見を受けて処分する
++
++```
++tzw consult show <所見の id> --via 見張り
++tzw consult dispose <所見の id> --verdict 一部採る --reason <理由> --keep <添え物の path> --drop <添え物の path>
++```
++
++- --via は受けた経路（見張り・完了・hook・一覧）。show が台帳に所見と受けの行を書く。
++- 採否は 採る・一部採る・採らない。添え物の全部に --keep か --drop を 1 度ずつ書く。保存した添え物は repo の docs/consult/kept/ の下に写るので、席が commit する。
++
++## 5 一覧と閉じ
++
++```
++tzw consult list
++tzw consult close <窓の id> --by chat
++```
++
++- 一覧は窓・処分の無い所見・受けの無い頼み・席の問う窓の今日の数と今の数を出す。見張りが無い間の拾いにも使う（受けは show --via 一覧）。
++- 窓は持ち主が閉じる。持ち主が閉じると言った時だけ close を撃つ（起こし手は言った者）。

@@ -1,0 +1,433 @@
+diff --git a/scribe2/crates/scribe2/src/pipe/confine.rs b/scribe2/crates/scribe2/src/pipe/confine.rs
+index b4f952c09839aaefdef84ff23799af39dac5068f..92d6377e30f2ccb8523edd764e8c101ba4c85887 100644
+--- a/scribe2/crates/scribe2/src/pipe/confine.rs
++++ b/scribe2/crates/scribe2/src/pipe/confine.rs
+@@ -36,6 +36,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
+ use std::sync::OnceLock;
+ 
+ mod cpu;
++pub mod io;
+ pub use cpu::seat_quota;
+ 
+ /// scope を作る道具。**PATH で解決する**（絶対 path を焼かない・env も読まない）。
+@@ -873,9 +874,12 @@ fn script(line: &str, unit: &str) -> String {
+          [ -r \"$__d/memory.peak\" ] && __peak=$(cat \"$__d/memory.peak\")\n\
+          __oom=-\n\
+          [ -r \"$__d/memory.events\" ] && __oom=$(while read -r __k __v; do case \"$__k\" in oom_kill) echo \"$__v\";; esac; done < \"$__d/memory.events\")\n\
+-         printf '{USAGE_HEAD} peak_bytes=%s oom_kill=%s\\n' \"${{__peak:--}}\" \"${{__oom:--}}\"\n\
++         __io=/proc/$$/io\n\
++         {net}\
++         printf '{USAGE_HEAD} peak_bytes=%s oom_kill=%s write_bytes=%s\\n' \"${{__peak:--}}\" \"${{__oom:--}}\" \"$__wb\"\n\
+          fi\n\
+-         exit $__rc\n"
++         exit $__rc\n",
++        net = io::NET_WRITE
+     )
+ }
+ 
+@@ -886,6 +890,8 @@ pub struct Usage {
+     pub peak_mb: Option<u64>,
+     /// scope の中で kernel が殺した数。**終端行が無い / 読めない周は `None`**（0 と「測れない」を融合しない）。
+     pub oom_kill: Option<u64>,
++    /// scope の装置への正味の書き（byte・[`io`]）。**終端行が無い / `unmeasured` / 負の周は `None`**（0 と書かない）。
++    pub write_bytes: Option<u64>,
+ }
+ 
+ /// stdout の**最後の終端行**を剥がす（pure・in-file の歯が fixture 文字列で測る）。
+@@ -907,9 +913,11 @@ pub fn read_usage(stdout: &str) -> Usage {
+     Usage {
+         peak_mb: field("peak_bytes=").map(|bytes| bytes / MIB),
+         oom_kill: field("oom_kill="),
++        write_bytes: field("write_bytes="),
+     }
+ }
+ 
++
+ #[cfg(test)]
+ mod tests {
+     use super::{
+diff --git a/scribe2/crates/scribe2/src/pipe/confine/io.rs b/scribe2/crates/scribe2/src/pipe/confine/io.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..35fef0776325943fccb32df5453c33cbbaa5abd6
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/confine/io.rs
+@@ -0,0 +1,153 @@
++//! 囲いごとの装置への正味の書き（行 xp-io-bytes）。
++//!
++//! 測りの源は包みの `sh` の `/proc/$$/io`（`write_bytes − cancelled_write_bytes`）である。user の scope には io の
++//! controller が委ねられない host が在り（`io.stat` が無い）、`/proc` の io は子を刈った親へ数が積もるので、行の
++//! 終端で `sh` 自身の io を読めば刈った子孫の書きの和になる。刈られずに親を離れた子孫（孤児）の書きは入らない＝下限。
++//! 読めない周（file が無い・欄が欠ける・数でない）は字 `unmeasured` と書き 0 と書かない（C10）。
++
++use super::{read_usage, Confinement};
++
++/// 終端行の epilogue が `__io`（読む file の path）から `__wb`（正味の byte か字 `unmeasured`）を組む shell の字。
++///
++/// 欄は `write_bytes:` と `cancelled_write_bytes:` の 2 つで、どちらかが欠けるか数でない周は `unmeasured` のまま。
++pub(super) const NET_WRITE: &str = "__wb=unmeasured\n\
++     __w=\n\
++     __c=\n\
++     [ -r \"$__io\" ] && while read -r __k __v; do case \"$__k\" in write_bytes:) __w=$__v;; cancelled_write_bytes:) __c=$__v;; esac; done < \"$__io\"\n\
++     case \"$__w\" in ''|*[!0-9]*) ;; *) case \"$__c\" in ''|*[!0-9]*) ;; *) __wb=$((__w - __c));; esac;; esac\n";
++
++/// 包めた周だけ stdout の終端行の書きを読む（包めなかった周の stdout は測定として読まない・`None`）。
++pub fn written(confinement: &Confinement, stdout: &str) -> Option<u64> {
++    if confinement.confined() {
++        read_usage(stdout).write_bytes
++    } else {
++        None
++    }
++}
++
++/// 測れない周の字。
++pub const UNMEASURED: &str = "unmeasured";
++
++/// 書きの字（測れた周は 10 進・測れない周は [`UNMEASURED`]）。
++pub fn word(bytes: Option<u64>) -> String {
++    bytes.map_or_else(|| UNMEASURED.to_owned(), |found| found.to_string())
++}
++
++/// 消費の event の `detail` に置く語（`write:<word>`）。
++pub fn detail(bytes: Option<u64>) -> String {
++    format!("write:{}", word(bytes))
++}
++
++/// 囲いの書きの和。1 つでも測れない囲いが在る周と囲いが 0 の周は `None`（部分の和を全体と書かない）。
++pub fn total(parts: impl IntoIterator<Item = Option<u64>>) -> Option<u64> {
++    let mut sum: Option<u64> = None;
++    for part in parts {
++        sum = Some(sum.unwrap_or(0).checked_add(part?)?);
++    }
++    sum
++}
++
++#[cfg(test)]
++mod tests {
++    use super::super::{read_usage, script, Confinement, Reason};
++    use super::{detail, total, word, written, NET_WRITE};
++    use crate::fleet::store::{read_all, LockPolicy};
++    use crate::fleet::{Cost, CostSource, Usage};
++    use crate::pipe::{record_cost, record_cost_with};
++    use std::process::Command;
++
++    /// fixture の io の字を `__io` に置いて [`NET_WRITE`] を撃ち、`__wb` の字を返す（host の `/proc` を読まない）。
++    fn net_of(io: Option<&str>) -> String {
++        let dir = std::env::temp_dir().join(format!("xpio-{}-{}", std::process::id(), io.map_or(0, str::len)));
++        let _ = std::fs::create_dir_all(&dir);
++        let path = dir.join("io");
++        let _ = std::fs::remove_file(&path);
++        if let Some(text) = io {
++            let _ = std::fs::write(&path, text);
++        }
++        let line = format!("__io='{}'\n{NET_WRITE}printf %s \"$__wb\"", path.display());
++        let out = Command::new("sh").arg("-c").arg(line).output();
++        let _ = std::fs::remove_dir_all(&dir);
++        out.map(|found| String::from_utf8_lossy(&found.stdout).into_owned()).unwrap_or_default()
++    }
++
++    /// 正味は write_bytes から cancelled_write_bytes を引いた数で、ほかの欄（rchar・wchar・read_bytes）は数えない。
++    #[test]
++    fn xpio_net_write_subtracts_cancelled_bytes() {
++        let io = "rchar: 900\nwchar: 800\nsyscr: 1\nsyscw: 2\nread_bytes: 4096\nwrite_bytes: 1052672\ncancelled_write_bytes: 4096\n";
++        assert_eq!(net_of(Some(io)), "1048576");
++    }
++
++    /// 欄が欠ける・数でない・file が無い周は字 unmeasured（0 と書かない）。
++    #[test]
++    fn xpio_net_write_is_unmeasured_without_both_fields() {
++        let whole = "write_bytes: 8192\ncancelled_write_bytes: 0\n";
++        assert_eq!(net_of(Some(whole)), "8192", "対照");
++        assert_eq!(net_of(Some("write_bytes: 8192\n")), "unmeasured", "cancelled の欠け");
++        assert_eq!(net_of(Some("cancelled_write_bytes: 0\n")), "unmeasured", "write の欠け");
++        assert_eq!(net_of(Some("write_bytes: 8x92\ncancelled_write_bytes: 0\n")), "unmeasured", "数でない");
++        assert_eq!(net_of(None), "unmeasured", "file が無い");
++    }
++
++    /// 終端行は自分の `sh` の `/proc/$$/io` を読み、peak と oom の後に字 write_bytes= を足す。
++    #[test]
++    fn xpio_epilogue_reads_own_proc_io() {
++        let body = script("true", "u1");
++        assert!(body.contains("__io=/proc/$$/io\n"), "{body}");
++        assert!(body.contains(NET_WRITE), "{body}");
++        assert!(body.contains("confine-usage peak_bytes=%s oom_kill=%s write_bytes=%s\\n"), "{body}");
++        assert!(body.contains("\"${__oom:--}\" \"$__wb\""), "{body}");
++    }
++
++    /// 終端行の write_bytes= は数の周だけ値を持ち、unmeasured・負・欠けは `None`。
++    #[test]
++    fn xpio_read_usage_reads_write_bytes() {
++        let found = read_usage("confine-usage peak_bytes=1048576 oom_kill=0 write_bytes=5368709120\n");
++        assert_eq!(found.write_bytes, Some(5_368_709_120));
++        assert_eq!(found.peak_mb, Some(1), "peak は不変");
++        let unread = read_usage("confine-usage peak_bytes=1048576 oom_kill=0 write_bytes=unmeasured\n");
++        assert_eq!(unread.write_bytes, None);
++        assert_eq!(read_usage("confine-usage peak_bytes=1 oom_kill=0 write_bytes=-4096\n").write_bytes, None, "負");
++        assert_eq!(read_usage("confine-usage peak_bytes=1 oom_kill=0\n").write_bytes, None, "旧い行");
++    }
++
++    /// 包めた周だけ終端行の書きを読み、包めなかった周は素の行の字を測定として読まない。
++    #[test]
++    fn xpio_written_reads_only_confined_runs() {
++        let stdout = "runner: rc=0 records=1\nconfine-usage peak_bytes=1 oom_kill=0 write_bytes=4096\n";
++        let confined = Confinement::Confined { unit: "u1".to_owned() };
++        assert_eq!(written(&confined, stdout), Some(4096));
++        assert_eq!(written(&Confinement::Unconfined(Reason::NoTool), stdout), None);
++    }
++
++    /// 語は write: と数か字 unmeasured・和は 1 つでも測れない囲いか囲い 0 の周は測れない。
++    #[test]
++    fn xpio_detail_and_total_keep_unmeasured() {
++        assert_eq!(detail(Some(0)), "write:0");
++        assert_eq!(detail(None), "write:unmeasured");
++        assert_eq!(word(Some(12)), "12");
++        assert_eq!(total([Some(1), Some(2)]), Some(3));
++        assert_eq!(total([Some(1), None]), None);
++        assert_eq!(total(Vec::<Option<u64>>::new()), None);
++    }
++
++    /// 消費の行は detail に語を運び、読み返しても同じ字で、detail の無い口は key を書かない（旧い行と同じ形）。
++    #[test]
++    fn xpio_cost_event_carries_write_detail() {
++        let dir = std::env::temp_dir().join(format!("xpio-ev-{}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&dir);
++        let _ = std::fs::create_dir_all(&dir);
++        let Ok(policy) = LockPolicy::embedded() else {
++            panic!("lock の既定を読めない");
++        };
++        let usage = Usage::from_words("usage=in:1,out:2,cache_read:3,cache_create:4 turns=5 wall_ms=6");
++        let cost = usage.map(|found| Cost { source: CostSource::Runner, usage: found });
++        assert_eq!(record_cost_with(&dir, ("r1", "b1"), cost, Some(detail(Some(4096))), policy), None);
++        assert_eq!(record_cost(&dir, ("r1", "b1"), cost, policy), None);
++        let events = read_all(&dir).unwrap_or_default();
++        let _ = std::fs::remove_dir_all(&dir);
++        let details: Vec<Option<&str>> = events.iter().map(|event| event.detail.as_deref()).collect();
++        assert_eq!(details, [Some("write:4096"), None]);
++        assert!(events.iter().all(|event| event.cost == cost), "6 値は不変");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/gate.rs b/scribe2/crates/scribe2/src/pipe/gate.rs
+index c90ca807271c3f355883dcffaa1b20a4bd250028..1297628423008baad4a31d62a754555dd4dcb8da 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate.rs
+@@ -62,7 +62,7 @@ use super::move_proof::{self, LensInput, NotPure};
+ use super::permit::{permitted, Effect};
+ use super::ratelimit::{select_lens_account, LensAccount, Pool};
+ use super::{
+-    contract_path, emit, git_bytes, git_line, record_cost, run_dir, verdict_path, worktree_path, Emit,
++    contract_path, emit, git_bytes, git_line, record_cost_with, run_dir, verdict_path, worktree_path, Emit,
+ };
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+ use crate::fleet::json_lite::{self, Value};
+@@ -413,6 +413,8 @@ struct Measured {
+     /// lens 用の diff（設計 gate-cost.md §41 形 2・diff の周は rename の置換だけの docs の hunk を畳んだ本文・
+     /// 要約の周は生 diff のまま）。cap の照合と lens の stdin はこちら、`diff_bytes` は [`diff`](Self::diff)。
+     lens_diff: Vec<u8>,
++    /// verify 行の囲いの装置への正味の書きの和（byte・測れない周は `None`・行 xp-io-bytes）。
++    written: Option<u64>,
+ }
+ 
+ /// 書き留める判定 1 件。
+@@ -483,7 +485,9 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
+     // **lens の消費は判定を書く周に 1 件**（`Gated` の前・設計 gate-cost.md §26 形 (2)）。6 値の揃わない周は書かず、
+     // 書けない周も判定と rc は変えない（stderr の 1 行だけ）。
+     let cost = decided.judged.usage.map(|usage| Cost { source: CostSource::Lens, usage });
+-    notes.extend(record_cost(entry.state_dir, (entry.run, entry.bead), cost, entry.policy));
++    // 消費の行の detail に verify 行の囲いの書きの和を置く（行 xp-io-bytes・測れない周は字 unmeasured）。
++    let written = Some(confine::io::detail(measured.written));
++    notes.extend(record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, written, entry.policy));
+     let decision = Decision {
+         verdict: decided.judged.verdict,
+         evidence: decided.judged.evidence,
+@@ -540,6 +544,7 @@ fn precheck(worktree: &Path, base: &str) -> Option<String> {
+ fn measure(entry: &Gate<'_>, worktree: &Path, base: &str, cap: u64) -> Result<Measured, String> {
+     let counted = record_verify(entry, worktree, base)?;
+     let (red, unreadable, killed, busy) = (counted.red, counted.unreadable, counted.killed, counted.busy);
++    let written = counted.written;
+     // 段①が diff を読めない周は同じ range の生 diff も読めない。ここで broken（rc 2・
+     // verdict を書かない）にすると便は Implemented のまま「測り直せる便」に見えない。
+     let (diff, input) = if unreadable {
+@@ -575,7 +580,7 @@ fn measure(entry: &Gate<'_>, worktree: &Path, base: &str, cap: u64) -> Result<Me
+         LensInput::Summary(_) => (diff.clone(), (0, 0), (0, 0), false),
+     };
+     record_notice(entry, &input, elided, (pruned, tight))?;
+-    Ok(Measured { red, diff, unreadable, killed, busy, input, lens_diff })
++    Ok(Measured { red, diff, unreadable, killed, busy, input, lens_diff, written })
+ }
+ 
+ /// 判定順を 1 か所に閉じる（**wildcard 無し・上から順に効く**）。
+@@ -897,6 +902,7 @@ mod tests {
+             busy,
+             input: LensInput::Diff(NotPure::Unreadable),
+             lens_diff: Vec::new(),
++            written: None,
+         }
+     }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/record.rs b/scribe2/crates/scribe2/src/pipe/gate/record.rs
+index b002c0a546490207f5c6ba1eada6bc60b01f9f64..a11f13f9a6ed098f531baf2d2b60a6be98818066 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/record.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/record.rs
+@@ -7,7 +7,7 @@ use super::{DetectionSkip, Gate, Limits};
+ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::store::{append_line, read_all, LockPolicy};
+ use crate::fleet::{Stage, SCHEMA};
+-use crate::pipe::confine::Reason;
++use crate::pipe::confine::{io, Reason};
+ use crate::pipe::contract::Contract;
+ use crate::pipe::declaration::Effective;
+ use crate::pipe::move_proof::{self, LensInput};
+@@ -216,7 +216,9 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
+         record.diagnose(tail_path, policy)?;
+         append_line(path, &record.body, policy).map_err(|err| err.to_string())?;
+     }
+-    Ok(Counted { red, unreadable, killed, busy })
++    // 撃った行（秒を持つ段）の囲いの書きの和（1 本でも測れない周は測れない・行 xp-io-bytes）。
++    let written = io::total(steps.iter().filter(|step| step.secs.is_some()).map(|step| step.write_bytes));
++    Ok(Counted { red, unreadable, killed, busy, written })
+ }
+ 
+ /// 検出線の的を渡す旗（`cargo xtask mutants-diff` の `--targets <file>`・設計 gate-cost.md §16 (2)）。
+@@ -802,6 +804,7 @@ fn step_fields(number: u64, step: &Step) -> Vec<(&'static str, Value)> {
+         ("jobs", Value::Num(step.jobs)),
+         ("confined", Value::Bool(step.confined)),
+         ("peak_mb", Value::Str(shown_peak(step.peak_mb))),
++        ("write_bytes", Value::Str(io::word(step.write_bytes))),
+         ("kind", Value::Str(step.stage.as_str().to_owned())),
+     ];
+     if let Some(reason) = step.reason {
+@@ -849,6 +852,8 @@ pub(crate) struct Counted {
+     pub(crate) killed: Option<Reason>,
+     /// 器の健康の遮断器が閉じて撃たなかった行の `n`（最初の 1 行・在れば・設計 gate-cost.md §32 約束 5）。
+     pub(crate) busy: Option<u64>,
++    /// 撃った行の囲いの装置への正味の書きの和（byte・1 本でも測れない周と撃った行 0 の周は `None`・[`io::total`]）。
++    pub(crate) written: Option<u64>,
+ }
+ 
+ /// 検出線（`Check::Detection`）の **rc 2 = 測れなかった**か（`s2-07l.331`・設計 pipeline.md §5.3）。
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/verify.rs b/scribe2/crates/scribe2/src/pipe/gate/verify.rs
+index 9958248c482d7d12aac9ae8544a1a98817be6ef0..a378ca474364a86c7de5c6df15fba9155c35d966 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/verify.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/verify.rs
+@@ -82,6 +82,8 @@ pub struct Step {
+     pub reason: Option<Reason>,
+     /// scope の peak（MiB）。**読めない周は `None`**＝record は `-`（0 と書かない）。
+     pub peak_mb: Option<u64>,
++    /// scope の装置への正味の書き（byte・record の `write_bytes=`・[`confine::io`]）。**読めない周は `None`**＝字 `unmeasured`。
++    pub write_bytes: Option<u64>,
+     /// 段の壁時計（秒・record の `secs=`・設計 gate-cost.md §26 形 (1)）。
+     ///
+     /// **撃つ process を持たない段（[`unwrapped`]）は `None`**＝record は field を欠く（0 と書かない
+@@ -130,6 +132,7 @@ fn unwrapped(cmd: String, rc: i32, stderr: String) -> Step {
+         confined: false,
+         reason: None,
+         peak_mb: None,
++        write_bytes: None,
+         secs: None,
+         jobs: UNADMITTED_JOBS,
+         slot: None,
+@@ -154,6 +157,7 @@ fn closed(entry: &Fire<'_>) -> Step {
+         confined: false,
+         reason: None,
+         peak_mb: None,
++        write_bytes: None,
+         secs: None,
+         jobs: UNADMITTED_JOBS,
+         slot: None,
+@@ -360,6 +364,7 @@ fn fire(entry: &Fire<'_>, caps: Result<confine::Caps, RuleRead>, admit: Option<&
+         confined,
+         reason,
+         peak_mb,
++        write_bytes: fired.usage.write_bytes,
+         secs: Some(fired.secs),
+         jobs,
+         slot,
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index ef71fe491b029b983efe59296ad093a6f4df1637..130007255c84777409b098cb16091377bed4fe9f 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -725,7 +725,16 @@ pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -
+ /// 段の event（[`emit`]）と**本体の形が違う**ので口を分ける——段を持たず、typed な [`Cost`] が本体である（[`Emit`] に
+ /// 欄を足すと構築点の閉包が全 file へ広がる）。段を進めない記帳なので記帳の門は通さない。追記そのものは fleet の
+ /// 1 本（[`store::append`]）を通る＝store は `fleet/events.jsonl` の 1 つで、run dir に別 file を作らない（C6.3）。
+-pub fn emit_cost(state_dir: &Path, run: &str, bead: &str, cost: Cost, policy: LockPolicy) -> Result<(), StoreError> {
++///
++/// `detail` は消費の行に添える語（囲いの書き `write:` など・`None` は key ごと書かない＝旧い行と同じ形）。
++pub fn emit_cost(
++    state_dir: &Path,
++    ids: (&str, &str),
++    cost: Cost,
++    detail: Option<String>,
++    policy: LockPolicy,
++) -> Result<(), StoreError> {
++    let (run, bead) = ids;
+     let event = Event {
+         schema: SCHEMA,
+         ts: fleet::cli::now_utc(),
+@@ -737,7 +746,7 @@ pub fn emit_cost(state_dir: &Path, run: &str, bead: &str, cost: Cost, policy: Lo
+         stage: None,
+         seat: None,
+         pid: None,
+-        detail: None,
++        detail,
+         allowance: None,
+         registration: None,
+         mark: None,
+@@ -757,9 +766,19 @@ pub fn record_cost(
+     cost: Option<Cost>,
+     policy: LockPolicy,
+ ) -> Option<String> {
+-    let (run, bead) = ids;
++    record_cost_with(state_dir, ids, cost, None, policy)
++}
++
++/// [`record_cost`] に消費の行の `detail` を添える口（囲いの書き・行 xp-io-bytes）。揃わない周は detail も書かない。
++pub fn record_cost_with(
++    state_dir: &Path,
++    ids: (&str, &str),
++    cost: Option<Cost>,
++    detail: Option<String>,
++    policy: LockPolicy,
++) -> Option<String> {
+     let found = cost?;
+-    emit_cost(state_dir, run, bead, found, policy)
++    emit_cost(state_dir, ids, found, detail, policy)
+         .err()
+         .map(|err| format!("pipe: 消費の event を書けない（source={}）: {err}", found.source.as_str()))
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/spawn.rs b/scribe2/crates/scribe2/src/pipe/spawn.rs
+index 4898f1dc351a1166c825f4cf001bf7858622ebf5..44bbf42cb476eb3d11ac9730d5f576fefb8ead77 100644
+--- a/scribe2/crates/scribe2/src/pipe/spawn.rs
++++ b/scribe2/crates/scribe2/src/pipe/spawn.rs
+@@ -16,7 +16,7 @@ use super::land::MAIN_REF;
+ use super::refuse;
+ use super::table::{design_docs, read_table};
+ use super::{
+-    base_of_run, branch_name, contract_path, emit, git_bytes, git_line, plugin_path, record_cost, run_dir,
++    base_of_run, branch_name, contract_path, emit, git_bytes, git_line, plugin_path, record_cost_with, run_dir,
+     runner_stderr_path, runner_stdout_path, vessel_path, worktree_path, Budget, Emit, Question, RC_QUESTION,
+ };
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+@@ -640,7 +640,7 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
+     let kept_err = keep_stderr(launch, rc, &stderr).err().map(|reason| format!("pipe: runner の stderr を残せない: {reason}"));
+     relay_stderr(&out.stderr);
+     // **runner の消費は段の event の前に 1 件**（設計 gate-cost.md §26 形 (2)）。停止中の便は段と同じく書かない。
+-    let cost = if stopping { None } else { runner_cost(launch, &stdout) };
++    let cost = if stopping { None } else { runner_cost(launch, &stdout, &confinement) };
+     let mut outcome = if stopping {
+         // **停止中の便は段を 1 件も書かない**（設計 pipeline.md §23）。runner を消したのは `pipe stop` で、
+         // 終端は `RunStopped` の経路が書く——ここで `Failed` を書くと stop の終端を上書きする。
+@@ -666,9 +666,12 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
+ 
+ /// runner の要約行（[`summary_usage`]）の消費の 6 値を 1 件書く（揃わない周は書かない・書けない周の理由は stderr の
+ /// 1 行で返す＝段の判定と rc は変えない）。
+-fn runner_cost(launch: &Launch<'_>, stdout: &str) -> Option<String> {
++///
++/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）。
++fn runner_cost(launch: &Launch<'_>, stdout: &str, confinement: &confine::Confinement) -> Option<String> {
+     let cost = summary_usage(stdout).map(|usage| Cost { source: CostSource::Runner, usage });
+-    record_cost(launch.state_dir, (launch.run, launch.bead), cost, launch.policy)
++    let written = Some(confine::io::detail(confine::io::written(confinement, stdout)));
++    record_cost_with(launch.state_dir, (launch.run, launch.bead), cost, written, launch.policy)
+ }
+ 
+ /// 捕らえた runner の stderr を呼び手の stderr へ**そのまま**流す（設計 dispatcher.md §12「手で撃った周の

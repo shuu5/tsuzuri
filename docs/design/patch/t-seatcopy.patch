@@ -1,0 +1,888 @@
+diff --git a/crates/tsuzuri-boundary/tests/seatcp.rs b/crates/tsuzuri-boundary/tests/seatcp.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..07df0791469765af9ac1b28cd3c0df63f7579d90
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/seatcp.rs
+@@ -0,0 +1,308 @@
++//! 席の手元の 2 つの写しを tz derive が導く歯（接頭辞 seatcp_・設計ノート surface-wave27b 行 t-seatcopy・判断の記録 ADR-38 決定 (3)(4)）。
++//! 置き場は CARGO_TARGET_TMPDIR の下に歯ごとに作り、根で git init する（版管理の根が置き場の親になる）。正本は手で書いた小さな憲法と
++//! 規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++/// 小さな憲法（段の順は file の中で always・never・ask-first・always・空白の続きを持つ字）。
++const CONSTITUTION: &str = "meta:
++  version: v9.9
++precedence:
++  text: 段の順  で解く。
++articles:
++  - id: P-1
++    tier: always
++    title: 題  いち
++    statements:
++      - {id: P-1.1, strength: must, text: いつもの  文。}
++  - id: N-1
++    tier: never
++    title: 題に
++    statements:
++      - {id: N-1.1, strength: must-not, text: 消さない。}
++      - {id: N-1.2, strength: must, text: 移す  だけ。}
++  - id: A-1
++    tier: ask-first
++    title: 題さん
++    statements:
++      - {id: A-1.1, strength: should, text: 問う。}
++  - id: P-2
++    tier: always
++    title: 題よん
++";
++
++/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
++const RULES: &str = "thresholds:
++  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
++  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
++discipline: []
++";
++
++/// 要の写しの字（頭の行・順位・段の名と規範文・段「いつも守る」の条の id と題・在りか）。
++const BRIEF: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9
++順位 段の順 で解く。
++絶対にやらない
++N-1.1 消さない。
++N-1.2 移す だけ。
++確認してから
++A-1.1 問う。
++いつも守る
++P-1 題 いち
++P-2 題よん
++全文 contracts/seat/constitution.txt
++";
++
++/// 全文の写しの字（頭の行・順位・全部の規範文を正本の順に）。
++const FULL: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9
++順位 段の順 で解く。
++P-1.1 いつもの 文。
++N-1.1 消さない。
++N-1.2 移す だけ。
++A-1.1 問う。
++";
++
++/// 歯ごとの置き場（根で git init・design-intent/ に正本・contracts/ が導出物の置き場）。
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("seatcp")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        fs::create_dir_all(root.join("design-intent/design-note")).expect("正本の置き場");
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(&root)
++            .args(["init", "-q"])
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git init");
++        let p = Place { root };
++        p.put("constitution.yaml", CONSTITUTION);
++        p.put("rules.yaml", RULES);
++        p
++    }
++
++    fn put(&self, name: &str, text: &str) {
++        fs::write(self.root.join("design-intent").join(name), text).expect("正本を書く");
++    }
++
++    /// 正本の字の 1 か所を替える（元の字はちょうど 1 度在る）。
++    fn swap(&self, name: &str, from: &str, to: &str) {
++        let path = self.root.join("design-intent").join(name);
++        let text = fs::read_to_string(&path).expect("正本を読む");
++        assert_eq!(text.matches(from).count(), 1, "{from}");
++        fs::write(&path, text.replacen(from, to, 1)).expect("正本を書く");
++    }
++
++    fn derive(&self, flag: &str) -> (i32, String) {
++        let out: Output = Command::new(env!("CARGO_BIN_EXE_tz"))
++            .args([
++                "derive",
++                flag,
++                "--dir",
++                "design-intent",
++                "--out",
++                "../contracts",
++            ])
++            .current_dir(&self.root)
++            .output()
++            .expect("tz を撃つ");
++        let text = format!(
++            "{}{}",
++            String::from_utf8_lossy(&out.stdout),
++            String::from_utf8_lossy(&out.stderr)
++        );
++        (out.status.code().expect("終了 code"), text)
++    }
++
++    fn seat(&self, name: &str) -> Option<String> {
++        fs::read_to_string(self.root.join("contracts/seat").join(name)).ok()
++    }
++
++    fn contracts(&self) -> Vec<String> {
++        let mut names: Vec<String> = fs::read_dir(self.root.join("contracts"))
++            .map(|d| {
++                d.map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
++                    .collect()
++            })
++            .unwrap_or_default();
++        names.sort();
++        names
++    }
++}
++
++#[test]
++fn seatcp_two_files_shape() {
++    let p = Place::new("shape");
++    let (rc, out) = p.derive("--write");
++    assert_eq!(rc, 0, "{out}");
++    assert!(out.contains("書いた 2 file・変わらない 0 file"), "{out}");
++    assert_eq!(p.seat("brief.txt").as_deref(), Some(BRIEF));
++    assert_eq!(p.seat("constitution.txt").as_deref(), Some(FULL));
++    assert_eq!(p.contracts(), ["seat"], "置き場の直下には dir seat だけ");
++    for text in [BRIEF, FULL] {
++        assert!(!text.contains(": "), "区切りに「: 」を使わない");
++    }
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 0, "{out}");
++    assert!(out.contains("一致 2・差分 0"), "{out}");
++}
++
++#[test]
++fn seatcp_refuses_three() {
++    for (name, from, to, why) in [
++        (
++            "strength",
++            "strength: must, text: いつもの",
++            "strength: may, text: いつもの",
++            "P-1.1: strength が規範の値でない",
++        ),
++        (
++            "period",
++            "text: 移す  だけ。",
++            "text: 移す  だけ",
++            "N-1.2: 規範文が「。」で終わらない",
++        ),
++        (
++            "none",
++            "articles:\n  - id: P-1\n",
++            "articles: []\nrest:\n  - id: P-1\n",
++            "規範文が 0 本",
++        ),
++    ] {
++        let p = Place::new(name);
++        p.swap("constitution.yaml", from, to);
++        for flag in ["--write", "--check"] {
++            let (rc, out) = p.derive(flag);
++            assert_eq!(rc, 2, "{name} {flag}: {out}");
++            assert!(
++                out.contains("まだ分からない") && out.contains(why),
++                "{name} {flag}: {out}"
++            );
++        }
++        assert!(p.contracts().is_empty(), "{name}: 何も書かない");
++    }
++}
++
++#[test]
++fn seatcp_needs_both_keys() {
++    let p = Place::new("nokeys");
++    p.put("rules.yaml", "thresholds: []\ndiscipline: []\n");
++    let (rc, out) = p.derive("--write");
++    assert_eq!(rc, 0, "{out}");
++    assert!(out.contains("書いた 0 file・変わらない 0 file"), "{out}");
++    assert!(p.contracts().is_empty(), "写しを導かない");
++    for (name, gone, why) in [
++        (
++            "role",
++            "  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}\n",
++            "seat-role-bytes の閾値の行が無い",
++        ),
++        (
++            "total",
++            "  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}\n",
++            "seat-bytes の閾値の行が無い",
++        ),
++    ] {
++        let p = Place::new(name);
++        p.swap("rules.yaml", gone, "");
++        let (rc, out) = p.derive("--write");
++        assert_eq!(rc, 2, "{name}: {out}");
++        assert!(out.contains(why), "{name}: {out}");
++        assert!(p.contracts().is_empty(), "{name}: 何も書かない");
++    }
++}
++
++#[test]
++fn seatcp_byte_value_form() {
++    let form = "が「<正の整数> byte 以下」の形でない";
++    for (name, from, to, refusal) in [
++        ("plain", "8,000 byte", "8000 byte", None),
++        ("group", "8,000 byte", "8,0000 byte", Some(form)),
++        ("zero", "8,000 byte", "08000 byte", Some(form)),
++        ("unit", "8,000 byte 以下", "8,000 byte 未満", Some(form)),
++        ("wide", "8,000 byte", "８,000 byte", Some(form)),
++        (
++            "equal",
++            "2,000 byte 以下",
++            "8,000 byte 以下",
++            Some("上限が 0 以下"),
++        ),
++    ] {
++        let p = Place::new(&format!("form-{name}"));
++        p.swap("rules.yaml", from, to);
++        let (rc, out) = p.derive("--write");
++        if let Some(why) = refusal {
++            assert_eq!(rc, 2, "{name}: {out}");
++            assert!(out.contains(why), "{name}: {out}");
++            assert!(p.contracts().is_empty(), "{name}: 何も書かない");
++        } else {
++            assert_eq!(rc, 0, "{name}: {out}");
++            assert_eq!(p.seat("brief.txt").as_deref(), Some(BRIEF), "{name}");
++        }
++    }
++}
++
++#[test]
++fn seatcp_check_drift() {
++    let p = Place::new("drift");
++    assert_eq!(p.derive("--write").0, 0);
++    let brief = p.root.join("contracts/seat/brief.txt");
++    fs::write(&brief, BRIEF.replacen("問う。", "問え。", 1)).expect("1 字を替える");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/brief.txt（導出と byte で違う）"),
++        "{out}"
++    );
++    assert!(!out.contains("DRIFT: seat/constitution.txt"), "{out}");
++    assert_eq!(p.derive("--write").0, 0);
++    fs::remove_file(p.root.join("contracts/seat/constitution.txt")).expect("全文の写しを消す");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/constitution.txt（置き場に無い）"),
++        "{out}"
++    );
++    assert_eq!(p.derive("--write").0, 0);
++    p.swap("constitution.yaml", "text: 問う。", "text: 問うてから。");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/brief.txt（導出と byte で違う）"),
++        "{out}"
++    );
++    assert!(
++        out.contains("DRIFT: seat/constitution.txt（導出と byte で違う）"),
++        "{out}"
++    );
++}
++
++#[test]
++fn seatcp_cap_edge() {
++    let n = BRIEF.len();
++    for (name, total, rc_want) in [("at", n + 1, 0), ("over", n, 1)] {
++        let p = Place::new(&format!("cap-{name}"));
++        p.swap("rules.yaml", "8,000 byte", &format!("{total} byte"));
++        p.swap("rules.yaml", "2,000 byte", "1 byte");
++        for flag in ["--write", "--check"] {
++            let (rc, out) = p.derive(flag);
++            assert_eq!(rc, rc_want, "{name} {flag}: {out}");
++            let want = format!("要の写し seat/brief.txt が {n} byte で上限 {} byte", n - 1);
++            assert_eq!(out.contains(&want), rc_want == 1, "{name} {flag}: {out}");
++        }
++        let brief = p.seat("brief.txt");
++        assert_eq!(
++            brief.as_deref(),
++            (rc_want == 0).then_some(BRIEF),
++            "{name}: 越えれば何も書かない"
++        );
++    }
++}
+diff --git a/folio2/crates/folio/src/derive.rs b/folio2/crates/folio/src/derive.rs
+index b94dfc7be762ac07db7b11465b078a2e9cff087e..91fd3fa89f1f6eacf31816d4f7c3bc1321f23494 100644
+--- a/folio2/crates/folio/src/derive.rs
++++ b/folio2/crates/folio/src/derive.rs
+@@ -10,6 +10,9 @@
+ //! 便 183（判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）から、規則の表に計画の名札の行が在れば、計画のノートの行の索引の
+ //! 生成区間も同じ回に書き（--write・全部か無しか）、床と同じ関数 `plan::drift` で比べる（--check）。名札の行が無い・規則の表が
+ //! 無い置き場は今のまま（契約表の導出物だけ）。
++//! 行 t-seatcopy（判断の記録 ADR-38 決定 (3)(4)）から、規則の表に欄 key が seat-bytes と seat-role-bytes の行が在れば、憲法の
++//! 正本から席の手元の 2 つの写し（`seat.rs`）も置き場の下の dir seat に同じ回に書き（--write）・byte で比べる（--check）。
++//! 要の写しの file 全体の byte が 2 つの値の差を越えれば、どちらの命令も何も書かずに 1（違反）。
+ 
+ use std::collections::HashSet;
+ use std::fs;
+@@ -21,6 +24,7 @@ use crate::floor_note::{
+ use crate::note::{self, Field, NoteDoc};
+ use crate::plan::{self, IndexRow};
+ use crate::rules;
++use crate::seat;
+ use crate::verdict::{Report, Verdict};
+ use crate::yaml::{self, Node};
+ 
+@@ -82,10 +86,16 @@ pub fn run(dir: &Path, out: &Path, from_root: bool, mode: Mode) -> Outcome {
+         dir.to_path_buf()
+     };
+     let out_dir = base.join(out);
+-    let (derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
++    let (mut derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
+         Ok(d) => d,
+         Err(e) => return Outcome::unknown(e),
+     };
++    match seat::derive(dir, &out_dir) {
++        Ok(None) => {}
++        Ok(Some(c)) if c.brief.len() > c.cap => return over_cap(&c),
++        Ok(Some(c)) => derived.extend(seat_files(c)),
++        Err(e) => return Outcome::unknown(e),
++    }
+     match mode {
+         Mode::Write => write_all(&out_dir, &derived, index.as_ref()),
+         Mode::Check => check_all(&out_dir, &derived, index.as_ref()),
+@@ -113,6 +123,37 @@ fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String
+     Ok(Some(PlanIndex { path, name, text, rows }))
+ }
+ 
++/// 席の手元の 2 つの写しを置き場の下の dir seat の導出物にする（行 t-seatcopy）。
++fn seat_files(c: seat::Copies) -> [Derived; 2] {
++    [
++        Derived {
++            name: format!("{}/{}", seat::DIR, seat::BRIEF),
++            text: c.brief,
++        },
++        Derived {
++            name: format!("{}/{}", seat::DIR, seat::FULL),
++            text: c.full,
++        },
++    ]
++}
++
++/// 要の写しが上限を越える（違反 1・どの file も書かない・判断の記録 ADR-38 決定 (4)）。
++fn over_cap(c: &seat::Copies) -> Outcome {
++    Outcome {
++        verdict: Verdict::Fail,
++        stdout: vec![format!(
++            "folio {DERIVED_SUBCOMMAND}: 要の写し {}/{} が {} byte で上限 {} byte（欄 key {} の値から {} の値を引いた数）を越える",
++            seat::DIR,
++            seat::BRIEF,
++            c.brief.len(),
++            c.cap,
++            rules::SEAT_BYTES,
++            rules::SEAT_ROLE_BYTES
++        )],
++        stderr: None,
++    }
++}
++
+ /// 契約表を持つ設計ノートを全部導出する（1 本でも導出できなければ Err）。読めた設計ノートも返す（行の索引の母集団・便 183）。
+ fn derive_all(dir: &Path) -> Result<(Vec<Derived>, Vec<NoteDoc>), String> {
+     let nd = dir.join(NOTE_DIR);
+@@ -291,6 +332,11 @@ fn orphans(out_dir: &Path, derived: &[Derived]) -> Result<Vec<String>, String> {
+         .collect())
+ }
+ 
++/// 導出物の path が file として書けない形か（symlink・symlink の dir の下・dir）。
++fn not_plain(path: &Path) -> bool {
++    path.is_symlink() || path.parent().is_some_and(Path::is_symlink) || (path.exists() && !path.is_file())
++}
++
+ /// 置き場が dir として在るか（symlink は認めない）。
+ fn out_is_dir(out_dir: &Path) -> bool {
+     !out_dir.is_symlink() && out_dir.is_dir()
+@@ -321,17 +367,15 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) ->
+     let mut pending = Vec::new();
+     for d in derived {
+         let path = out_dir.join(&d.name);
+-        if path.is_symlink() || (path.exists() && !path.is_file()) {
++        if not_plain(&path) {
+             return Outcome::unknown(format!("{}: file でない（symlink・dir）", path.display()));
+         }
+         if fs::read(&path).ok().as_deref() != Some(d.text.as_bytes()) {
+             pending.push((path, d));
+         }
+     }
+-    if !out_dir.exists()
+-        && let Err(e) = fs::create_dir(out_dir)
+-    {
+-        return Outcome::unknown(format!("{}: 置き場を作れない: {e}", out_dir.display()));
++    if let Err(e) = make_dirs(out_dir, &pending) {
++        return Outcome::unknown(e);
+     }
+     let mut written = pending.len();
+     for (path, d) in pending {
+@@ -350,6 +394,23 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) ->
+     write_summary(out_dir, derived, index, written)
+ }
+ 
++/// 置き場と、書く file の親の dir（置き場の下の dir seat）が無ければ作る（親 dir の親は作らない）。dir でない物が在れば何も作らない。
++fn make_dirs(out_dir: &Path, pending: &[(PathBuf, &Derived)]) -> Result<(), String> {
++    let parents = pending.iter().filter_map(|(p, _)| p.parent());
++    let dirs: Vec<&Path> = std::iter::once(out_dir).chain(parents).collect();
++    if let Some(d) = dirs.iter().find(|d| d.exists() && !d.is_dir()) {
++        return Err(format!("{}: dir でない", d.display()));
++    }
++    for dir in dirs {
++        if !dir.exists()
++            && let Err(e) = fs::create_dir(dir)
++        {
++            return Err(format!("{}: 置き場を作れない: {e}", dir.display()));
++        }
++    }
++    Ok(())
++}
++
+ /// --write の結果: 置き場に残る導出元の無い .toml の行と、書いた file の数の行を標準出力に並べる。
+ fn write_summary(
+     out_dir: &Path,
+@@ -395,7 +456,7 @@ fn check_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) ->
+     let mut stdout = Vec::new();
+     for d in derived {
+         let path = out_dir.join(&d.name);
+-        if path.is_symlink() {
++        if path.is_symlink() || path.parent().is_some_and(Path::is_symlink) {
+             return Outcome::unknown(format!("{}: symlink は認めない", path.display()));
+         }
+         match fs::read(&path) {
+diff --git a/folio2/crates/folio/src/lib.rs b/folio2/crates/folio/src/lib.rs
+index 657ef9bbc1bc9515359f3caa77e7a6319cd367b1..4d2c6ef486d8cf1e412170910e44318644143b68 100644
+--- a/folio2/crates/folio/src/lib.rs
++++ b/folio2/crates/folio/src/lib.rs
+@@ -57,6 +57,7 @@ mod rules;
+ mod ruling;
+ mod schema;
+ mod seal;
++mod seat;
+ #[doc(hidden)]
+ pub mod sha256;
+ mod sheet;
+diff --git a/folio2/crates/folio/src/rules.rs b/folio2/crates/folio/src/rules.rs
+index 1a60fa1b6af3b50527befdd8b0475475e2daa068..4f3e9b4d9ce38f121e056932912aaea6faafa1b3 100644
+--- a/folio2/crates/folio/src/rules.rs
++++ b/folio2/crates/folio/src/rules.rs
+@@ -130,8 +130,25 @@ pub const NOTE_ROWS: &str = "note-rows";
+ /// 生きた設計ノートの計画だけの行の数の置き場の合計の上限の行の印（欄 key の値・値は「<正の整数> 行 以下」・便 207）。
+ pub const PLAN_ROWS: &str = "plan-rows";
+ 
+-/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min・便 207 で数の上限 3 つを足した）。
+-pub const KEYS: [&str; 6] = [NOTE_CHAPTERS, PLAN_NOTE, IN_LOOP_MIN, LIVE_NOTES, NOTE_ROWS, PLAN_ROWS];
++/// 席の手元の生成区間の総バイト数の上限の行の印（欄 key の値・値は「<正の整数> byte 以下」・導出の命令 `seat.rs` が `bytes` で読む・
++/// 行 t-seatcopy・判断の記録 ADR-38 決定 (4)）。
++pub const SEAT_BYTES: &str = "seat-bytes";
++
++/// 器の SessionStart の brief の役割の行の byte の上限の行の印（欄 key の値・値の形は `SEAT_BYTES` と同じ・行 t-seatcopy）。
++pub const SEAT_ROLE_BYTES: &str = "seat-role-bytes";
++
++/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min・便 207 で数の上限 3 つ・
++/// 行 t-seatcopy で byte の上限 2 つを足した）。
++pub const KEYS: [&str; 8] = [
++    NOTE_CHAPTERS,
++    PLAN_NOTE,
++    IN_LOOP_MIN,
++    LIVE_NOTES,
++    NOTE_ROWS,
++    PLAN_ROWS,
++    SEAT_BYTES,
++    SEAT_ROLE_BYTES,
++];
+ 
+ /// 数の上限の欄 key と、値の形「<正の整数> <単位> 以下」の単位と、数えるものの名（違反の字・便 179 の章の上限に便 207 で 3 つを足した・
+ /// ADR-35 決定 (1)(ア)(ウ)）。
+@@ -206,6 +223,33 @@ pub fn over_cap(at: &str, key: &str, count: usize, cap: usize) -> Option<(String
+     (count > cap).then(|| (format!("{at}: {what}が多すぎる（{limit}）"), format!("{at}: {what}の今の数 {count}（{limit}）")))
+ }
+ 
++/// byte の上限（欄 key が `key` の閾値の行の value「<正の整数> byte 以下」の数・正の整数は 3 桁ごとの「,」で区切ってよい・
++/// 行 t-seatcopy・判断の記録 ADR-38 決定 (4)）。行が無ければ None（呼び手が決める）。2 本以上か値の形が違えば Err（既定の値に倒れない）。
++pub fn bytes(rules: &Node, key: &str) -> Result<Option<usize>, String> {
++    let rows = keyed_rows(rules, key);
++    let row = match rows[..] {
++        [] => return Ok(None),
++        [row] => row,
++        _ => return Err(format!("欄 {ROW_KEY} が {key} の閾値の行が {} 本ある", rows.len())),
++    };
++    let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
++    value.strip_suffix(" byte 以下").and_then(grouped).map(Some).ok_or_else(|| {
++        let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
++        format!("行 {id} の value「{value}」が「<正の整数> byte 以下」の形でない")
++    })
++}
++
++/// 正の整数の字（頭は 0 でない・「,」は在れば 3 桁ごとの全部の区切りに置く）の数。形が違えば None。
++fn grouped(n: &str) -> Option<usize> {
++    let mut parts = n.split(',');
++    let head = parts.next().unwrap_or_default();
++    let tail: Vec<&str> = parts.collect();
++    let digits = |p: &str| p.bytes().all(|b| b.is_ascii_digit());
++    let head_ok = !head.is_empty() && !head.starts_with('0') && digits(head) && (tail.is_empty() || head.len() <= 3);
++    let tail_ok = tail.iter().all(|p| p.len() == 3 && digits(p));
++    (head_ok && tail_ok).then(|| tail.concat()).and_then(|t| format!("{head}{t}").parse().ok())
++}
++
+ /// 編集時の止めの本数の下限（欄 key が in-loop-min の閾値の行の id と value「<正の整数> 本以上」の数・便 200・ADR-33 決定 (5)）。
+ /// 行が無ければ None（数えない）。2 本以上か値の形が違えば Err（呼び手は まだ分からない にする）。
+ pub fn in_loop_min(rules: &Node) -> Result<Option<(String, usize)>, String> {
+@@ -432,7 +476,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
+     (
+         "key_note",
+         Floor::Val(
+-            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）",
++            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）。seat-bytes（値 = 席の手元の生成区間の総バイト数の上限「<正の整数> byte 以下」・正の整数は 3 桁ごとの「,」で区切ってよい）と seat-role-bytes（値 = 器の SessionStart の brief の役割の行の byte の上限・同じ形）は、導出の命令（folio derive）が 2 本の値の差を要の写しの file 全体の byte の上限として読む。2 本とも無ければ席の手元の写しを導かず、片方だけ在るか 2 本以上在るか値の形が違うか差が 0 以下なら、導出が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-38 決定 (4)）",
+         ),
+     ),
+     (
+@@ -564,7 +608,7 @@ mod tests {
+         assert_eq!(listed.len(), 1, "{listed:?}");
+         let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
+         assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
+-        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min", "live-notes", "note-rows", "plan-rows"]);
++        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min", "live-notes", "note-rows", "plan-rows", "seat-bytes", "seat-role-bytes"]);
+     }
+ 
+     /// 便 207 (c)1: 数の上限 3 つは章の上限と同じ読み手で、単位だけが key ごとに違う（本数は「本」・行の数は「行」）。行の id に依らず、
+diff --git a/folio2/crates/folio/src/seat.rs b/folio2/crates/folio/src/seat.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2950c2c44e5a26fefd0cd13c5f8660ed77001375
+--- /dev/null
++++ b/folio2/crates/folio/src/seat.rs
+@@ -0,0 +1,248 @@
++//! 席の手元の写し（行 t-seatcopy・判断の記録 ADR-38 決定 (3)(4)・条 P-13・P-2）。憲法の正本から、要の写し（順位・段
++//! 「絶対にやらない」と段「確認してから」の規範文の全文・段「いつも守る」の条の id と題・全文の写しの在りか）と、全文の写し
++//! （順位と全部の規範文の 1 行 1 文）の 2 つの file の字を導く。`derive.rs` が導出物の置き場の下の dir `seat` に書き・比べる
++//! （置き場の直下に置かないのは、器の契約表の宣言が直下の .md と .toml を契約表と読むため）。
++//! 形は中身を削らない最短の形: 頭の 1 行・順位の行・段の名だけの行・「id 字」の行・「条の id 題」の行・在りかの行を改行 1 つで
++//! 区切り、区切りに「: 」を使わず、字は空白を 1 つに畳むだけで逐語。規則の表に欄 key が seat-bytes と seat-role-bytes の行が
++//! 2 本とも無い置き場は写しを導かない。強さが規範の値でない文・「。」で終わらない文・文 0 本は Err（まだ分からない・退いた
++//! folio inject の導き方を引き継ぐ）。
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use crate::constitution_enums::{Strength, Tier};
++use crate::note;
++use crate::plan;
++use crate::rules::{self, SEAT_BYTES, SEAT_ROLE_BYTES};
++use crate::yaml::{self, Node};
++
++/// 導出物の置き場の下の写しの dir。
++pub(crate) const DIR: &str = "seat";
++
++/// 要の写しの file の名。
++pub(crate) const BRIEF: &str = "brief.txt";
++
++/// 全文の写しの file の名。
++pub(crate) const FULL: &str = "constitution.txt";
++
++/// 頭の 1 行の頭の字（続けて憲法の正本の版管理の根からの path と空白 1 つと版の字）。
++const HEAD: &str = "生成物・手で直さない・";
++
++/// 順位の行の頭の語（続けて空白 1 つと順位の字）。
++const PRECEDENCE: &str = "順位";
++
++/// 在りかの行の頭の語（続けて空白 1 つと全文の写しの版管理の根からの path）。
++const LOCATION: &str = "全文";
++
++/// 要の写しの段の順と段の名の行（条 P-13.1 の字）。
++const TIERS: [(Tier, &str); 3] = [
++    (Tier::Never, "絶対にやらない"),
++    (Tier::AskFirst, "確認してから"),
++    (Tier::Always, "いつも守る"),
++];
++
++/// 憲法の正本の file の名（正本の置き場の直下）。
++const CONSTITUTION: &str = "constitution.yaml";
++
++/// 導いた 2 つの写しの字と、要の写しの file 全体の byte の上限。
++pub(crate) struct Copies {
++    pub(crate) brief: String,
++    pub(crate) full: String,
++    /// 欄 key が seat-bytes の行の値から seat-role-bytes の行の値を引いた数（規則の行 R-1 − R-41）。
++    pub(crate) cap: usize,
++}
++
++/// 条 1 つ（段・題と、規範文の「id 字」の行）。
++struct Article<'a> {
++    id: &'a str,
++    tier: Tier,
++    title: &'a str,
++    lines: Vec<String>,
++}
++
++/// 2 つの写しを導く。欄 key の行が 2 本とも無い（規則の表が無いを含む）置き場は None。`out_dir` は導出物の置き場（無くてもよい）。
++pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, String> {
++    let Some(rules) = plan::load_rules(dir)? else {
++        return Ok(None);
++    };
++    let Some(cap) = cap(&rules)? else {
++        return Ok(None);
++    };
++    let path = dir.join(CONSTITUTION);
++    let text = fs::read_to_string(&path).map_err(|e| format!("{CONSTITUTION}: 読めない: {e}"))?;
++    let c = yaml::parse(&text)
++        .map_err(|e| format!("{CONSTITUTION}: parse できない: {e}"))?
++        .root;
++    let version = c
++        .get("meta")
++        .and_then(|m| m.get("version"))
++        .and_then(Node::as_str)
++        .ok_or_else(|| format!("{CONSTITUTION}: meta.version が字でない"))?;
++    let pre = c
++        .get("precedence")
++        .and_then(|p| p.get("text"))
++        .and_then(Node::as_str)
++        .map(squash)
++        .filter(|p| !p.is_empty())
++        .ok_or_else(|| format!("{CONSTITUTION}: precedence.text が無いか空"))?;
++    let root = place_root(dir)?;
++    let head = format!("{HEAD}{} {version}", rel(&root, &path)?);
++    let full_at = under(rel(&root, out_dir)?, &format!("{DIR}/{FULL}"));
++    let arts = articles(&c)?;
++    let pre = format!("{PRECEDENCE} {pre}");
++    Ok(Some(Copies {
++        brief: brief(&[&head, &pre], &arts, &full_at),
++        full: full(&[&head, &pre], &arts),
++        cap,
++    }))
++}
++
++/// 要の写しの上限（欄 key の 2 本の値の差）。2 本とも無ければ None。片方だけ・差が 0 以下は Err。
++fn cap(rules: &Node) -> Result<Option<usize>, String> {
++    match (rules::bytes(rules, SEAT_BYTES)?, rules::bytes(rules, SEAT_ROLE_BYTES)?) {
++        (None, None) => Ok(None),
++        (Some(total), Some(role)) => total
++            .checked_sub(role)
++            .filter(|n| *n > 0)
++            .map(Some)
++            .ok_or_else(|| format!("欄 key が {SEAT_ROLE_BYTES} の値 {role} byte が {SEAT_BYTES} の値 {total} byte 以上（要の写しの上限が 0 以下）")),
++        (Some(_), None) => Err(format!("欄 key が {SEAT_ROLE_BYTES} の閾値の行が無い（{SEAT_BYTES} の行は在る）")),
++        (None, Some(_)) => Err(format!("欄 key が {SEAT_BYTES} の閾値の行が無い（{SEAT_ROLE_BYTES} の行は在る）")),
++    }
++}
++
++/// 憲法の条の全部（正本の順）。規範文が 1 本も無ければ Err。
++fn articles(c: &Node) -> Result<Vec<Article<'_>>, String> {
++    let list = c
++        .get("articles")
++        .and_then(Node::as_seq)
++        .ok_or("articles が一覧でない")?;
++    let mut out = Vec::with_capacity(list.len());
++    for a in list {
++        let id = a.get("id").and_then(Node::as_str).ok_or("条に id が無い")?;
++        let tier = a
++            .get("tier")
++            .and_then(Node::as_str)
++            .and_then(Tier::from_name)
++            .ok_or_else(|| format!("{id}: tier が段の値でない"))?;
++        let title = a
++            .get("title")
++            .and_then(Node::as_str)
++            .ok_or_else(|| format!("{id}: title が無い"))?;
++        let statements = match a.get("statements") {
++            None => &[][..],
++            Some(s) => s
++                .as_seq()
++                .ok_or_else(|| format!("{id}: statements が一覧でない"))?,
++        };
++        let lines = statements
++            .iter()
++            .map(statement)
++            .collect::<Result<Vec<_>, _>>()?;
++        out.push(Article {
++            id,
++            tier,
++            title,
++            lines,
++        });
++    }
++    if out.iter().all(|a| a.lines.is_empty()) {
++        return Err("規範文が 0 本（母集団が空 = 正本が壊れている）".to_string());
++    }
++    Ok(out)
++}
++
++/// 規範文 1 つの「id 字」の行。強さが規範の値でない・「。」で終わらないは Err（判定は正本の strength 欄で行い文末の語で判じない）。
++fn statement(s: &Node) -> Result<String, String> {
++    let id = s
++        .get("id")
++        .and_then(Node::as_str)
++        .ok_or("規範文に id が無い")?;
++    let strength = s.get("strength").and_then(Node::as_str);
++    if !strength.is_some_and(|v| Strength::from_name(v).is_some()) {
++        return Err(format!("{id}: strength が規範の値でない: {strength:?}"));
++    }
++    let text = s
++        .get("text")
++        .and_then(Node::as_str)
++        .map(squash)
++        .ok_or_else(|| format!("{id}: text が無い"))?;
++    if !text.ends_with('。') {
++        return Err(format!("{id}: 規範文が「。」で終わらない"));
++    }
++    Ok(format!("{id} {text}"))
++}
++
++/// 要の写し: 頭の行と順位の行・段ごとに段の名の行と、段「いつも守る」は条の「id 題」・ほかの段は規範文の行・在りかの行。
++fn brief(top: &[&str], arts: &[Article], full_at: &str) -> String {
++    let mut lines: Vec<String> = top.iter().map(|s| (*s).to_string()).collect();
++    for (tier, name) in TIERS {
++        lines.push(name.to_string());
++        for a in arts.iter().filter(|a| a.tier == tier) {
++            if tier == Tier::Always {
++                lines.push(format!("{} {}", a.id, squash(a.title)));
++            } else {
++                lines.extend(a.lines.iter().cloned());
++            }
++        }
++    }
++    lines.push(format!("{LOCATION} {full_at}"));
++    lines.join("\n") + "\n"
++}
++
++/// 全文の写し: 頭の行と順位の行と、全部の規範文の行（正本の順）。
++fn full(top: &[&str], arts: &[Article]) -> String {
++    let mut lines: Vec<String> = top.iter().map(|s| (*s).to_string()).collect();
++    lines.extend(arts.iter().flat_map(|a| a.lines.iter().cloned()));
++    lines.join("\n") + "\n"
++}
++
++/// 前後の空白を落とし、続く空白を半角空白 1 つに畳む。
++fn squash(text: &str) -> String {
++    text.split_whitespace().collect::<Vec<_>>().join(" ")
++}
++
++/// 置き場を含む版管理の根（`note::root_of` を実の path で解く）。
++fn place_root(dir: &Path) -> Result<PathBuf, String> {
++    let here = fs::canonicalize(dir).map_err(|e| format!("{}: 解けない: {e}", dir.display()))?;
++    note::root_of(&here)
++}
++
++/// 根からの path の字の下の字（根そのものなら下の字だけ）。
++fn under(base: String, tail: &str) -> String {
++    if base.is_empty() {
++        tail.to_string()
++    } else {
++        format!("{base}/{tail}")
++    }
++}
++
++/// 根からの path の字（`/` で区切る・根そのものは空の字）。path が無ければ親を実の path で解いて名を足す。根の外は Err。
++fn rel(root: &Path, path: &Path) -> Result<String, String> {
++    let real = match fs::canonicalize(path) {
++        Ok(p) => p,
++        Err(_) => {
++            let parent = path
++                .parent()
++                .ok_or_else(|| format!("{}: 親 dir が無い", path.display()))?;
++            let name = path
++                .file_name()
++                .ok_or_else(|| format!("{}: 名が無い", path.display()))?;
++            fs::canonicalize(parent)
++                .map_err(|e| format!("{}: 解けない: {e}", parent.display()))?
++                .join(name)
++        }
++    };
++    let tail = real.strip_prefix(root).map_err(|_| {
++        format!(
++            "{} が版管理の根 {} の下に無い",
++            real.display(),
++            root.display()
++        )
++    })?;
++    Ok(tail
++        .iter()
++        .map(|c| c.to_string_lossy())
++        .collect::<Vec<_>>()
++        .join("/"))
++}
+diff --git a/folio2/crates/folio/tests/teeth1/modules.rs b/folio2/crates/folio/tests/teeth1/modules.rs
+index 366e297ab15e12cf7335a18238ebdc3649bce5c7..26706e1d78cc007fa9162b238019126b75235fb5 100644
+--- a/folio2/crates/folio/tests/teeth1/modules.rs
++++ b/folio2/crates/folio/tests/teeth1/modules.rs
+@@ -57,6 +57,7 @@ const LAYERS: &[(&str, u8)] = &[
+     ("init", 3),
+     ("proposed", 3),
+     ("schema", 3),
++    ("seat", 3),
+     ("sheet", 3),
+     ("stamp", 3),
+     ("face", 4),
+diff --git a/folio2/crates/folio/tests/tz4/schema_docs.rs b/folio2/crates/folio/tests/tz4/schema_docs.rs
+index c74947ed76bfbcd8382b27bb913ffbfe2febe089..c9a4fef623e0c2c0955f13ac7669f7a5c1aa8b77 100644
+--- a/folio2/crates/folio/tests/tz4/schema_docs.rs
++++ b/folio2/crates/folio/tests/tz4/schema_docs.rs
+@@ -87,10 +87,12 @@ const CEILING_REGION_SHA256: &str =
+ /// 1 文を前の anchor に手で足した写しを sha256sum で測り直した値。
+ /// 便 207（delivery-207.md §1 (c)）: 欄 key の値域に数の上限 3 つ（live-notes・note-rows・plan-rows）と key_note の末尾の 2 文を
+ /// 前の anchor に手で足した写しを sha256sum で測り直した値。
+-const RULES_REGION_LINES: usize = 34;
+-const RULES_REGION_BYTES: usize = 5558;
++/// 行 t-seatcopy（判断の記録 ADR-38 決定 (4)）: 欄 key の値域に byte の上限 2 つ（seat-bytes・seat-role-bytes）と key_note の
++/// 末尾の 1 文を前の anchor に手で足した写しを sha256sum で測り直した値（値域は 1 行の並びから 1 行 1 値の 9 行になる）。
++const RULES_REGION_LINES: usize = 42;
++const RULES_REGION_BYTES: usize = 6301;
+ const RULES_REGION_SHA256: &str =
+-    "c16b7721c1897f1f8ed0af1c8b7cb5803a206626048613b6bf53e0e67c6e9af1";
++    "9b53763e45c4b15de6f781e832127fc13c5be45762a27db2a93c5d1786521392";
+ 
+ /// 便 76 (b) 凍結 anchor: index.yaml の生成区間（設計判断の席が独立に組んだ・tests/fixtures/schema/index-region.txt と同じ byte）。
+ const INDEX_REGION_LINES: usize = 9;
+diff --git a/folio2/design-intent/rules.yaml b/folio2/design-intent/rules.yaml
+index 329734f8c6b40d9b45e650385ec8e6d9e3bf015c..a7a72c82f3105d8eae8e84c76a0afcac78a1159a 100644
+--- a/folio2/design-intent/rules.yaml
++++ b/folio2/design-intent/rules.yaml
+@@ -22,9 +22,17 @@ schema:
+     kind: [deny, build-check, detect, human-review]
+     status: [仮, 凍結, 未定]
+     stage: [in-loop, post]
+-    key: [note-chapters, plan-note, in-loop-min, live-notes, note-rows, plan-rows]
++    key:
++      - note-chapters
++      - plan-note
++      - in-loop-min
++      - live-notes
++      - note-rows
++      - plan-rows
++      - seat-bytes
++      - seat-role-bytes
+   enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
+-  key_note: 閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）
++  key_note: 閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）。seat-bytes（値 = 席の手元の生成区間の総バイト数の上限「<正の整数> byte 以下」・正の整数は 3 桁ごとの「,」で区切ってよい）と seat-role-bytes（値 = 器の SessionStart の brief の役割の行の byte の上限・同じ形）は、導出の命令（folio derive）が 2 本の値の差を要の写しの file 全体の byte の上限として読む。2 本とも無ければ席の手元の写しを導かず、片方だけ在るか 2 本以上在るか値の形が違うか差が 0 以下なら、導出が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-38 決定 (4)）
+   kind_meaning:
+     deny: 機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）
+     build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）
+diff --git a/folio2/tests/fixtures/schema/rules-region.txt b/folio2/tests/fixtures/schema/rules-region.txt
+index 8d92d031d3d1527a1cf7a8b3f0eeb65eb640479d..c2c81d253c96c1fbe9207af78fefdcd95f2fde3b 100644
+--- a/folio2/tests/fixtures/schema/rules-region.txt
++++ b/folio2/tests/fixtures/schema/rules-region.txt
+@@ -15,9 +15,17 @@ schema:
+     kind: [deny, build-check, detect, human-review]
+     status: [仮, 凍結, 未定]
+     stage: [in-loop, post]
+-    key: [note-chapters, plan-note, in-loop-min, live-notes, note-rows, plan-rows]
++    key:
++      - note-chapters
++      - plan-note
++      - in-loop-min
++      - live-notes
++      - note-rows
++      - plan-rows
++      - seat-bytes
++      - seat-role-bytes
+   enums_note: stage は憲法の値域 stage と同じ値（実装は憲法から導出した名の列を使う）
+-  key_note: 閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）
++  key_note: 閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）。seat-bytes（値 = 席の手元の生成区間の総バイト数の上限「<正の整数> byte 以下」・正の整数は 3 桁ごとの「,」で区切ってよい）と seat-role-bytes（値 = 器の SessionStart の brief の役割の行の byte の上限・同じ形）は、導出の命令（folio derive）が 2 本の値の差を要の写しの file 全体の byte の上限として読む。2 本とも無ければ席の手元の写しを導かず、片方だけ在るか 2 本以上在るか値の形が違うか差が 0 以下なら、導出が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-38 決定 (4)）
+   kind_meaning:
+     deny: 機械が測って、値域の外なら落とす（上限の超過・下限の不足・固定の値との違い。憲法の reject / build-check に対応）
+     build-check: 生成時の検査で数え、違反なら落とす（憲法の build-check に対応）

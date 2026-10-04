@@ -1,0 +1,355 @@
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index af1de766baec1c21681a167c6fc0bdb89950af4e..e7042ba436e6c58204fc12c351ebaac891a7553e 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -12,6 +12,8 @@
+ //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
+ //! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
+ //! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
++//! 行にマウスの pointer を載せると板の対応する札に輪より薄い hover の印を付け、離すと外す（吹き出しは出さない・pointer の
++//! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)・行 g-list-hover）。
+ //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use std::collections::BTreeMap;
+@@ -550,6 +552,19 @@ pub fn ring(shown: Option<&str>, key: &str) -> bool {
+     shown == Some(key)
+ }
+ 
++/// 札に hover の印を付ける pointer の種類（マウスだけ・指で触る画面とペンは付けない・行 g-list-hover）。
++pub const HOVER_POINTER: &str = "mouse";
++
++/// 一覧の行に pointer が入った時に置く hover の id（pointer の種類が `HOVER_POINTER` の時だけ行の id・ほかは None）。
++pub fn hover_on(pointer: &str, id: &str) -> Option<String> {
++    (pointer == HOVER_POINTER).then(|| id.to_string())
++}
++
++/// 札に hover の印を付けるか（hover の id が札の id と同じで、吹き出しの開いている札でない＝輪が先・行 g-list-hover）。
++pub fn hover_lit(shown: Option<&str>, hover: Option<&str>, id: &str) -> bool {
++    hover == Some(id) && shown != Some(id)
++}
++
+ /// 組の頭に輪の印を付けるか（吹き出しの開いている bead が組の open の行のどれか・見本の applyMarks の gh）。
+ pub fn head_ring(g: &Lgroup, shown: Option<&str>) -> bool {
+     shown.is_some_and(|s| g.rows.iter().any(|r| r.id == s))
+@@ -572,8 +587,8 @@ mod dom {
+ 
+     use super::{
+         COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
+-        content, filtered, filtering, head_counts, head_ring, key_of, kind_tag, kpi, phases, pick,
+-        ring, unref_head, with_phases,
++        content, filtered, filtering, head_counts, head_ring, hover_on, key_of, kind_tag, kpi,
++        phases, pick, ring, unref_head, with_phases,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::kit::Folds;
+@@ -585,17 +600,20 @@ mod dom {
+     use crate::widgets::hover::attach_some;
+     use crate::widgets::pop::{PopCtx, Via, board_unread};
+ 
+-    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
++    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵と、
++    /// 一覧の行にマウスの pointer が載っている bead の id（行 g-list-hover）。
+     /// 選んだ bead は吹き出しの開いている bead（`PopCtx::shown`）で、ここには持たない。
+     #[derive(Clone, Copy)]
+     pub struct SelCtx {
+         pub epic: RwSignal<Option<String>>,
++        pub hover: RwSignal<Option<String>>,
+     }
+ 
+     impl Default for SelCtx {
+         fn default() -> Self {
+             Self {
+                 epic: RwSignal::new(None),
++                hover: RwSignal::new(None),
+             }
+         }
+     }
+@@ -654,7 +672,14 @@ mod dom {
+         };
+         // 板の札が読めない間は、段の数と行の段の字が出ない理由を一覧の頭に出す（札が無いとは見せない）。
+         let unread = move || pipe.with(board_unread).map(unmeasured);
+-        view! { {head_line(kind, query)}<div class="ll-body">{unread}{list}</div> }.into_any()
++        // 一覧を出た pointer は hover の印を外す（行の組み直しで行の要素が替わっても印を残さない・行 g-list-hover）。
++        let out = move |_| {
++            if let Some(s) = sel {
++                s.hover.set(None);
++            }
++        };
++        view! { {head_line(kind, query)}<div class="ll-body" on:pointerleave=out>{unread}{list}</div> }
++            .into_any()
+     }
+ 
+     /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。
+@@ -824,6 +849,21 @@ mod dom {
+             let id = r.id.clone();
+             move || ring(shown().as_deref(), &id)
+         };
++        // マウスの pointer を載せた行は板の札に hover の印を付け、離すと外す（吹き出しは出さない・行 g-list-hover）。
++        let sel = use_context::<SelCtx>();
++        let enter = {
++            let id = r.id.clone();
++            move |e: ev::PointerEvent| {
++                if let Some(s) = sel {
++                    s.hover.set(hover_on(&e.pointer_type(), &id));
++                }
++            }
++        };
++        let leave = move |_| {
++            if let Some(s) = sel {
++                s.hover.set(None);
++            }
++        };
+         // 短い題の link の普通の押しは頁を移らず行の押しに任せる（新しい窓や tab で開く押しは link のまま）。
+         let stay = |e: ev::MouseEvent| {
+             if crate::board::plain_click(&e) {
+@@ -831,7 +871,8 @@ mod dom {
+             }
+         };
+         view! {
+-            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>
++            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press
++                on:pointerenter=enter on:pointerleave=leave>
+                 <span class=class>{tag}</span>
+                 <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
+                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 24dd72c8df82b82d209fe6f863c62856312eaf98..5ed0afb9d97ddb7be3e65acd322e6d5707dead3f 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -628,7 +628,7 @@ mod dom {
+         misfit_href, open_columns, with_closed, with_lines, with_open,
+     };
+     use crate::frame::Mode;
+-    use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
++    use crate::ledgerlist::{SelCtx, dim, facts, hover_lit, pick, ring};
+     use crate::tiles::{open_of, press, tiles};
+     use tsuzuri_contract::case::PATH as CASES_PATH;
+ 
+@@ -775,7 +775,8 @@ mod dom {
+         view! { <div class="pchips" role="group">{items}</div> }.into_any()
+     }
+ 
+-    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select）。
++    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select・
++    /// 一覧の行にマウスの pointer が載っている札は輪より薄い hover の印・行 g-list-hover）。
+     fn pick_view(
+         card: &Kcard,
+         keys: StoredValue<BTreeMap<String, String>>,
+@@ -787,8 +788,19 @@ mod dom {
+         let dimmed =
+             move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), key.as_deref())));
+         let id = card.id.clone();
++        let hovered = {
++            let id = id.clone();
++            move || {
++                let shown = pop.and_then(PopCtx::shown);
++                sel.is_some_and(|s| {
++                    s.hover
++                        .with(|h| hover_lit(shown.as_deref(), h.as_deref(), &id))
++                })
++            }
++        };
+         let ringed = move || ring(pop.and_then(PopCtx::shown).as_deref(), &id);
+-        view! { <div class="kpick" class:dim=dimmed class:ring=ringed>{inner}</div> }.into_any()
++        view! { <div class="kpick" class:dim=dimmed class:ring=ringed class:hov=hovered>{inner}</div> }
++            .into_any()
+     }
+ 
+     /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index f5909a1df709cf6994e025f84201099bd248d4fe..59987ddb662fe618f93db44249fd556dcac36830 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1124,6 +1124,9 @@ button.ll-gname:hover { background: var(--panel-2); }
+ .ll-row { cursor: pointer; border-radius: 6px; }
+ .ll-row:hover { background: var(--panel-2); }
+ .ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }
++/* 一覧の行の hover の印（行 g-list-hover・判断の記録 ADR-30 決定 (8)）: マウスを載せた行の札に選びの輪より薄い輪・薄い札も見せる */
++.kpick.hov > .kcard { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 35%, transparent); }
++.kpick.dim.hov { opacity: 1; }
+ /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
+ body:has(#bar) { padding-top: 52px; }
+ .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
+diff --git a/crates/tsuzuri-surface/tests/lhov.rs b/crates/tsuzuri-surface/tests/lhov.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7b8ecfa403319cb885c49c5a9b3f16826263d61a
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/lhov.rs
+@@ -0,0 +1,129 @@
++//! 台帳 open の一覧の行の hover で板の札に印を付ける歯（行 g-list-hover・接頭辞 lhov_・判断の記録 ADR-30 決定 (8)）。
++//! 印を置く pointer の種類と輪が先の決まりを純な関数で断言し、DOM（wasm の枝）の配線の字と stylesheet の規則を照らす。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::ledgerlist::{HOVER_POINTER, hover_lit, hover_on};
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
++fn span(src: &str, start: &str, end: &str) -> String {
++    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
++    let rest = &src[at..];
++    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
++    rest[..to].to_string()
++}
++
++#[test]
++fn lhov_pointer_mouse_only() {
++    assert_eq!(HOVER_POINTER, "mouse");
++    assert_eq!(hover_on("mouse", "fx-h.1"), Some("fx-h.1".to_string()));
++    assert_eq!(
++        hover_on("touch", "fx-h.1"),
++        None,
++        "指で触る pointer は印を置かない"
++    );
++    assert_eq!(hover_on("pen", "fx-h.1"), None, "ペンはマウスでない");
++    assert_eq!(
++        hover_on("", "fx-h.1"),
++        None,
++        "種類の無い pointer は置かない"
++    );
++}
++
++#[test]
++fn lhov_lit_ring_first() {
++    assert!(hover_lit(None, Some("fx-h.1"), "fx-h.1"));
++    assert!(
++        hover_lit(Some("fx-h.2"), Some("fx-h.1"), "fx-h.1"),
++        "ほかの bead の吹き出しが開いていても印"
++    );
++    assert!(
++        !hover_lit(Some("fx-h.1"), Some("fx-h.1"), "fx-h.1"),
++        "吹き出しの開いている札は輪だけ（輪が先）"
++    );
++    assert!(
++        !hover_lit(None, Some("fx-h.2"), "fx-h.1"),
++        "hover の id と違う札"
++    );
++    assert!(!hover_lit(None, None, "fx-h.1"), "hover の無い間は印なし");
++}
++
++#[test]
++fn lhov_row_enter_leave() {
++    let list = read("src/ledgerlist.rs");
++    let dom = &list[list.find("mod dom {").expect("wasm の枝")..];
++    assert!(
++        dom.contains("hover: RwSignal::new(None),"),
++        "SelCtx の hover は None で始まる"
++    );
++    let row = span(dom, "fn row_view(", "\n    }\n");
++    assert!(
++        row.contains(
++            "on:click=press\n                on:pointerenter=enter on:pointerleave=leave>"
++        ),
++        "一覧の行の tag に入りと出の口が無い"
++    );
++    let enter = span(&row, "let enter = {", "let leave = ");
++    assert!(
++        enter.contains("s.hover.set(hover_on(&e.pointer_type(), &id));"),
++        "入りは pointer の種類で hover を置く"
++    );
++    assert!(!enter.contains("press"), "入りは吹き出しを開かない");
++    let leave = span(&row, "let leave = ", "};\n");
++    assert!(leave.contains("s.hover.set(None);"), "出は hover を外す");
++    for width in ["inner_width", "match_media", "max-width", "outer_width"] {
++        assert!(!row.contains(width), "行の hover が窓の幅 {width} で分ける");
++    }
++    assert!(
++        dom.contains("<div class=\"ll-body\" on:pointerleave=out>"),
++        "一覧を出た pointer は hover を外す"
++    );
++}
++
++#[test]
++fn lhov_card_marked() {
++    let pipe = read("src/project/pipeline.rs");
++    let pick = span(&pipe, "fn pick_view(", "\n    }\n");
++    assert!(
++        pick.contains(
++            "<div class=\"kpick\" class:dim=dimmed class:ring=ringed class:hov=hovered>{inner}</div>"
++        ),
++        "札の包みに hover の class が無い"
++    );
++    assert!(
++        pick.contains(".with(|h| hover_lit(shown.as_deref(), h.as_deref(), &id))"),
++        "札の hover の印は hover_lit で決める"
++    );
++}
++
++#[test]
++fn lhov_style_rule() {
++    let css = read("style.css");
++    let rule = ".kpick.hov > .kcard { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 35%, transparent); }";
++    assert_eq!(
++        css.matches(".kpick.hov > .kcard").count(),
++        1,
++        "hover の印の規則は 1 つ"
++    );
++    let at = css.find(rule).expect("hover の印の規則の字");
++    let before = &css[..at];
++    assert_eq!(
++        before.matches('{').count(),
++        before.matches('}').count(),
++        "hover の印の規則は @media の外（窓の幅で分けない）"
++    );
++    assert!(
++        css.contains(".kpick.ring > .kcard { box-shadow: 0 0 0 2px var(--ink); }"),
++        "選びの輪は濃いまま"
++    );
++    assert!(
++        css.contains(".kpick.dim.hov { opacity: 1; }"),
++        "薄い札も印は見せる"
++    );
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvlist.rs b/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+index 3754160dde30de26083b9c7465fdb571395258ed..8a88232fe193a31d2739f5f62d35eda757a8b660 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+@@ -486,7 +486,7 @@ fn bvlist_board_unread_line() {
+     let ldom = &list[list.find("mod dom {").expect("mod dom")..];
+     for want in [
+         "let unread = move || pipe.with(board_unread).map(unmeasured);",
+-        "<div class=\"ll-body\">{unread}{list}</div>",
++        "<div class=\"ll-body\" on:pointerleave=out>{unread}{list}</div>",
+     ] {
+         assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
+     }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+index 2a96b5e775b6788f9a2eaa8d2d5527f907ed466e..3097232969f954a65d6636147afbe4024a87c94c 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+@@ -246,7 +246,7 @@ fn bvsel_dom_wiring_text() {
+     let list = read("src/ledgerlist.rs");
+     let ldom = &list[list.find("mod dom {").expect("mod dom")..];
+     for want in [
+-        "<div class=\"ll-row\" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>",
++        "<div class=\"ll-row\" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press",
+         "p.press(&id, Via::Row);",
+         "<a class=\"ll-ls\" href=href on:click=stay title=r.title.clone()>",
+         "if crate::board::plain_click(&e) {",
+@@ -267,7 +267,7 @@ fn bvsel_dom_wiring_text() {
+         "let all = beads.with(|b| chips(&cols, &keys, list, &facts(b)));",
+         "sel.epic.update(|e| *e = pick(e.as_deref(), &key))",
+         "pick_view(c, keys, kcard_view(c, mode(), clock))",
+-        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed>{inner}</div>",
++        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed class:hov=hovered>{inner}</div>",
+         "let key = keys.with_value(|k| k.get(&card.id).cloned());",
+         "s.epic.with(|e| dim(e.as_deref(), key.as_deref()))",
+     ] {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs b/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+index d1462fba43c916c369165e998557184e05b2c981..3ae2c7a6e61ecb3c56063827e1ea266edd8200bc 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+@@ -169,7 +169,7 @@ fn bvtrim_head_figure_burndown() {
+         assert_eq!(head.matches(want).count(), 1, "{want}");
+     }
+     let view = cut(&dom, "pub fn view() -> AnyView {", "\n    }\n");
+-    let want = "view! { {head_line(kind, query)}<div class=\"ll-body\">{unread}{list}</div> }.into_any()";
++    let want = "view! { {head_line(kind, query)}<div class=\"ll-body\" on:pointerleave=out>{unread}{list}</div> }\n            .into_any()";
+     assert!(view.ends_with(&format!("\n        {want}")), "見出しが一覧の上に無い");
+     let css = read("style.css");
+     assert_eq!(

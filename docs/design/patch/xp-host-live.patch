@@ -1,0 +1,486 @@
+diff --git a/scribe2/crates/scribe2/src/fleet/cli.rs b/scribe2/crates/scribe2/src/fleet/cli.rs
+index 95aa1714e241feaa9184adeb936314335fbab0b2..6b0e978cbf6af1152faa650a5b2738f2c85decb6 100644
+--- a/scribe2/crates/scribe2/src/fleet/cli.rs
++++ b/scribe2/crates/scribe2/src/fleet/cli.rs
+@@ -230,7 +230,7 @@ fn select_account(args: &[String], dir: &Path) -> Outcome {
+     }
+     let now = now_utc();
+     // 走行中の便数は便用の 2 つ目の鍵（`select_for_run` と同じ導出・ADR-0027 §2.3）。
+-    let found = select::select(&select::Input {
++    let input = select::Input {
+         labels: &labels,
+         allowance: &state.allowance,
+         purpose,
+@@ -241,7 +241,10 @@ fn select_account(args: &[String], dir: &Path) -> Outcome {
+         now: &now,
+         // 留まる口座は席の立て直しだけが渡す（`fleet select` の外形は不変・`s2-07l.312`）。
+         prefer: None,
+-    });
++    };
++    // ほかの置き場の走りの札を持つ口座を最後に回す頭の鍵も `select_for_run` と同じ 1 本で置き場から読む（行 xp-host-live・
++    // session 用は読まない）。
++    let found = select::select_with(&input, &crate::pipe::live::elsewhere(dir));
+     let mut outcome = Outcome::ok(vec![select::line(purpose, &found)]);
+     outcome.err = measured.out.into_iter().chain(measured.err).collect();
+     outcome
+diff --git a/scribe2/crates/scribe2/src/fleet/replay.rs b/scribe2/crates/scribe2/src/fleet/replay.rs
+index 6a4172bba3222d9781c8ba2152b0c8559330bdda..1d007734bc6cc1fdd7ac831608c98e1e3ccc0978 100644
+--- a/scribe2/crates/scribe2/src/fleet/replay.rs
++++ b/scribe2/crates/scribe2/src/fleet/replay.rs
+@@ -160,11 +160,14 @@ pub struct RunSelect<'a> {
+ /// 口座（[`State::run_registered_accounts`]・設計 §14・区画の row は数えない）に [`RunSelect::grouped`] を重ねたもの。走行中の便数は state から
+ /// 導く（[`State::inflight_by_account`]・呼び手は渡さない）。閾値は便用の規則が持たないので**窓の全量**
+ /// （[`select::LIMIT_PCT`]）を置く＝session 用の分岐に届かない値であって、R-C9-1 の値ではない。
+-pub fn select_for_run(state: &State, pool: &RunSelect<'_>, now: &str) -> select::Selection {
++///
++/// ほかの置き場の走り（置き場 `state_dir` の host の根の走りの札・[`crate::pipe::live::elsewhere`]・自分の置き場の札は
++/// 走行中の便数で数えるので除く）を持つ口座は、外さずに順の最後へ回す（[`select::select_with`]・行 xp-host-live）。
++pub fn select_for_run(state: &State, pool: &RunSelect<'_>, state_dir: &Path, now: &str) -> select::Selection {
+     let labels = state.without_retired(pool.labels.iter().map(String::as_str));
+     let mut exclude = state.run_registered_accounts(Some(pool.repo), pool.park);
+     exclude.extend(pool.grouped.iter().cloned());
+-    select::select(&select::Input {
++    let input = select::Input {
+         labels: &labels,
+         allowance: &state.allowance,
+         purpose: select::Purpose::Run,
+@@ -175,7 +178,8 @@ pub fn select_for_run(state: &State, pool: &RunSelect<'_>, now: &str) -> select:
+         now,
+         // 便用は留まる口座を読まない（session 用の規則・`s2-07l.312`）。
+         prefer: None,
+-    })
++    };
++    select::select_with(&input, &crate::pipe::live::elsewhere(state_dir))
+ }
+ 
+ /// event の並びから現在地を導く。物理順で後の event が勝つ。
+@@ -412,12 +416,14 @@ mod tests {
+         }
+     }
+ 
+-    /// 便の repo が `repo`・候補が `label` だけ・`grouped` は空で、区画の anchors だけを `park` に渡した選定。
++    /// 便の repo が `repo`・候補が `label` だけ・`grouped` は空で、区画の anchors だけを `park` に渡した選定（置き場は
++    /// host の根に札の無い temp の dir の下）。
+     fn pick(state: &State, repo: &str, label: &str, park: &BTreeSet<String>) -> Selection {
+         let labels = [label.to_owned()];
+         let grouped = BTreeSet::new();
+         let pool = RunSelect { repo: Path::new(repo), labels: &labels, model: None, grouped: &grouped, park };
+-        select_for_run(state, &pool, NOW)
++        let place = std::env::temp_dir().join(format!("xplive-park-{}", std::process::id())).join("state");
++        select_for_run(state, &pool, &place, NOW)
+     }
+ 
+     /// (h) 区画の anchors に在る置き場の row は便用の除外に数えない: 便の repo が区画の置き場（`/lot`）のとき、区画の anchors が
+@@ -431,4 +437,25 @@ mod tests {
+         assert!(matches!(pick(&state, "/lot", "p", &none), Selection::None(_)), "対: 区画の anchors が空なら p は外れる");
+         assert!(matches!(pick(&state, "/group", "g", &lot), Selection::None(_)), "群の置き場の row の g は外れる（回帰）");
+     }
++
++    /// 行 xp-host-live: 便用の選定は置き場の host の根の走りの札を読み、ほかの置き場の生きた札を持つ口座を後に回す。同じ
++    /// host の根でも自分の置き場の札は数えず、札を外すと順が戻る（2 口座は同じ窓で label の順なら a1 が先）。
++    #[test]
++    fn xplive_select_for_run_reads_the_host_root_of_the_state_dir() {
++        let root = std::env::temp_dir().join(format!("xplive-run-{}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&root);
++        let (mine, other) = (root.join("mine"), root.join("other"));
++        let state = State { allowance: [measured("a1"), measured("a2")].into_iter().collect(), ..State::default() };
++        let (labels, none) = (["a1".to_owned(), "a2".to_owned()], BTreeSet::new());
++        let pool = RunSelect { repo: Path::new("/repo"), labels: &labels, model: None, grouped: &none, park: &none };
++        let chosen = |place: &Path| select_for_run(&state, &pool, place, NOW);
++        assert_eq!(chosen(&mine), Selection::Chosen("a1".to_owned()), "札が無ければ label の順");
++        let held = crate::pipe::live::hold(&other, "r-1", Some("a1"));
++        assert!(held.as_ref().is_ok_and(Option::is_some), "札を置ける: {held:?}");
++        assert_eq!(chosen(&mine), Selection::Chosen("a2".to_owned()), "ほかの置き場の札を持つ a1 は後");
++        assert_eq!(chosen(&other), Selection::Chosen("a1".to_owned()), "自分の置き場の札は数えない");
++        drop(held);
++        assert_eq!(chosen(&mine), Selection::Chosen("a1".to_owned()), "札を外すと戻る");
++        let _ = std::fs::remove_dir_all(&root);
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/fleet/select.rs b/scribe2/crates/scribe2/src/fleet/select.rs
+index bea32082502b6e86a1a035b27bdacd67e54d6f86..edef6047738bae705aa6a3a2bf1f56e04591ced7 100644
+--- a/scribe2/crates/scribe2/src/fleet/select.rs
++++ b/scribe2/crates/scribe2/src/fleet/select.rs
+@@ -8,6 +8,8 @@
+ //! 便用の順序（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede・C9.2「窓の終わりまで使い切る」）: 候補を
+ //! **(1) 口座単位の 7 日窓の reset**（昇順・7 日窓の reset を持たない口座は最後）→ **(2) 走行中の便数**（昇順）→
+ //! **(3) label** で並べた先頭。7 日窓の枠は reset までに使わなければ消えるので、**消える順に使い潰す**。
++//! 鍵 (1) の前に頭の鍵を 1 つ置く（行 xp-host-live・判断の記録 ADR-41）: **ほかの置き場の生きた走りの札を持つ口座**
++//! （[`select_with`] の `elsewhere`）は外さずに最後へ回す（ほかに候補が無ければ選ぶ）。[`select`] は空の集合で呼ぶ形。
+ //! 5 時間窓とモデル別窓は鍵にしない（当たっている判定と逼迫度にだけ効く）。逼迫度（使用率の最大）は当たって
+ //! いる判定と session 用にだけ残る。
+ //!
+@@ -26,7 +28,7 @@ pub const LIMIT_PCT: u64 = 100;
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Purpose {
+     /// 便用: 当たっていない口座のうち **7 日窓の reset** が最も早い → 走行中の便数が最少 → label（reset で消える
+-    /// 残りから使う側・C9.2・ADR-0042）。閾値を持たない。
++    /// 残りから使う側・C9.2・ADR-0042）。その前にほかの置き場の走りの札を持たない口座が先（[`select_with`]）。閾値を持たない。
+     Run,
+     /// session 用: [`Input::prefer`] が候補ならそれ・でなければ逼迫度が最小かつ R-C9-1 の値未満（余裕を残す側）。
+     Session,
+@@ -208,6 +210,8 @@ struct Candidate<'a> {
+     week_reset: Option<String>,
+     /// 走行中の便数（便用の 2 つ目の鍵）。
+     inflight: usize,
++    /// ほかの置き場の生きた走りの札を持つか（便用の頭の鍵・立つ口座は最後・行 xp-host-live）。
++    elsewhere: bool,
+ }
+ 
+ /// 口座 1 つの見立て。
+@@ -218,12 +222,19 @@ enum Standing<'a> {
+     Out(NoCandidateReason, Option<String>),
+ }
+ 
+-/// 口座を 1 つ選ぶ。同点は label の辞書順で先の口座。
++/// 口座を 1 つ選ぶ。同点は label の辞書順で先の口座。ほかの置き場の走りを数えない形（[`select_with`] に空の集合）。
+ pub fn select(input: &Input<'_>) -> Selection {
++    select_with(input, &BTreeSet::new())
++}
++
++/// 口座を 1 つ選ぶ（[`select`] の本体）。`elsewhere` はほかの置き場の生きた走りの札を持つ口座の label
++/// （[`crate::pipe::live::elsewhere`]）で、便用だけが [`run_key`] の頭で最後に回す（候補から外さない・候補なしの理由は替えない）。
++/// session 用は読まない。
++pub fn select_with(input: &Input<'_>, elsewhere: &BTreeSet<String>) -> Selection {
+     let mut candidates: Vec<Candidate<'_>> = Vec::new();
+     let mut outs: Vec<(&str, NoCandidateReason, Option<String>)> = Vec::new();
+     for label in input.labels {
+-        match standing(input, label) {
++        match standing(input, label, elsewhere) {
+             Standing::Candidate(found) => candidates.push(found),
+             Standing::Out(reason, reopens) => outs.push((label.as_str(), reason, reopens)),
+         }
+@@ -277,15 +288,17 @@ fn pick<'a>(purpose: Purpose, prefer: Option<&str>, candidates: &[Candidate<'a>]
+     found.map(|found| found.label)
+ }
+ 
+-/// 便用の並べ鍵（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede）: **7 日窓の reset** の最も早いもの（鍵の reset を
+-/// 持たない口座は最後＝先頭の `bool` が立つ）→ 走行中の便数 → label。5 時間窓・モデル別窓の reset はここに入らない。
++/// 便用の並べ鍵（ADR-0042・ADR-0027 §2.2 の鍵 (1) を supersede）: ほかの置き場の生きた走りの札を持たない口座が先（頭の
++/// `bool`・行 xp-host-live・判断の記録 ADR-41）→ **7 日窓の reset** の最も早いもの（鍵の reset を持たない口座は最後＝
++/// 2 つ目の `bool` が立つ）→ 走行中の便数 → label。5 時間窓・モデル別窓の reset はここに入らない。
+ /// 辞書順の比較でそのまま並ぶ形にしておく（比較関数に分岐を持たない）。
+-fn run_key<'a>(found: &'a Candidate<'_>) -> (bool, Option<&'a str>, usize, &'a str) {
+-    (found.week_reset.is_none(), found.week_reset.as_deref(), found.inflight, found.label)
++fn run_key<'a>(found: &'a Candidate<'_>) -> (bool, bool, Option<&'a str>, usize, &'a str) {
++    (found.elsewhere, found.week_reset.is_none(), found.week_reset.as_deref(), found.inflight, found.label)
+ }
+ 
+-/// 口座 1 つを候補か、外れた理由かに分ける（除外 → 測れない → 当たっている → 閾値の順に見る）。
+-fn standing<'a>(input: &Input<'_>, label: &'a str) -> Standing<'a> {
++/// 口座 1 つを候補か、外れた理由かに分ける（除外 → 測れない → 当たっている → 閾値の順に見る）。`elsewhere` は
++/// 候補の頭の鍵にだけ写す（外す理由にしない）。
++fn standing<'a>(input: &Input<'_>, label: &'a str, elsewhere: &BTreeSet<String>) -> Standing<'a> {
+     if input.exclude.contains(label) {
+         return Standing::Out(NoCandidateReason::Excluded, None);
+     }
+@@ -303,6 +316,7 @@ fn standing<'a>(input: &Input<'_>, label: &'a str) -> Standing<'a> {
+         pressure: found.pressure,
+         week_reset: found.week_reset,
+         inflight: input.inflight.get(label).copied().unwrap_or(0),
++        elsewhere: elsewhere.contains(label),
+     })
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/fleet/select_tests.rs b/scribe2/crates/scribe2/src/fleet/select_tests.rs
+index 4b1a2cf93f3a5c566b019e94b4a979c34f46b910..449e7a702c4d5e238d9c3c9832fd6a9792019e16 100644
+--- a/scribe2/crates/scribe2/src/fleet/select_tests.rs
++++ b/scribe2/crates/scribe2/src/fleet/select_tests.rs
+@@ -8,7 +8,7 @@
+ // flip-check: moved s2-07l.460
+ 
+ use super::{
+-    line, select, Input, Model, NoCandidate, NoCandidateReason, Purpose, Selection, LIMIT_PCT,
++    line, select, select_with, Input, Model, NoCandidate, NoCandidateReason, Purpose, Selection, LIMIT_PCT,
+     MODELS, NO_CANDIDATE_REASONS, PURPOSES,
+ };
+ use crate::fleet::{
+@@ -929,3 +929,81 @@ proptest! {
+         );
+     }
+ }
++
++/// 行 xp-host-live: ほかの置き場の生きた走りの札を持つ口座 `held` を渡した選定（ほかの条件は [`choose_full`] と同じ）。
++fn choose_held(labels: &[&str], allowance: &BTreeMap<AllowanceKey, AllowanceLatest>, ask: &Ask<'_>, held: &[&str]) -> Selection {
++    let labels: Vec<String> = labels.iter().map(|label| (*label).to_owned()).collect();
++    let exclude: BTreeSet<String> = ask.exclude.iter().map(|label| (*label).to_owned()).collect();
++    let inflight: BTreeMap<String, usize> = ask.inflight.iter().map(|(label, n)| ((*label).to_owned(), *n)).collect();
++    let held: BTreeSet<String> = held.iter().map(|label| (*label).to_owned()).collect();
++    let input = Input {
++        labels: &labels,
++        allowance,
++        purpose: ask.purpose,
++        model: ask.model,
++        exclude: &exclude,
++        inflight: &inflight,
++        threshold_pct: ask.threshold_pct,
++        now: NOW,
++        prefer: ask.prefer,
++    };
++    select_with(&input, &held)
++}
++
++/// 7 日窓の reset だけが違う 2 口座（`early` の口座が `WEEK_SOON_RESET`・もう 1 つが `WEEK_RESET`・5 時間窓は同じ）。
++fn week_first(early: &str, late: &str) -> BTreeMap<AllowanceKey, AllowanceLatest> {
++    table(&[(TS, vec![
++        measured(early, WindowKind::FiveHour, None, 10, FIVE_RESET),
++        measured(early, WindowKind::SevenDay, None, 10, WEEK_SOON_RESET),
++        measured(late, WindowKind::FiveHour, None, 10, FIVE_RESET),
++        measured(late, WindowKind::SevenDay, None, 10, WEEK_RESET),
++    ])])
++}
++
++/// 行 xp-host-live: 便用はほかの置き場の札を持つ口座を順の最後に回す（頭の鍵）。7 日窓の reset・走行中の便数・label の
++/// どれで先の口座でも後に回り、札を持つ口座どうしは今の順（label の後の a2 が 7 日窓の reset で先）のまま並ぶ。
++#[test]
++fn xplive_run_key_puts_accounts_held_elsewhere_last() {
++    let pair = ["a1", "a2"];
++    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 10, 10)].concat())]);
++    assert_eq!(choose_held(&pair, &rows, &run(), &["a1"]), chosen("a2"), "札が label より先");
++    let busy = Ask { inflight: &[("a2", 5)], ..run() };
++    assert_eq!(choose_held(&pair, &rows, &busy, &[]), chosen("a1"), "札が無ければ便数の少ない a1");
++    assert_eq!(choose_held(&pair, &rows, &busy, &["a1"]), chosen("a2"), "札が便数より先");
++    let soon = week_first("a1", "a2");
++    assert_eq!(choose_held(&pair, &soon, &run(), &[]), chosen("a1"), "札が無ければ 7 日窓の reset の早い a1");
++    assert_eq!(choose_held(&pair, &soon, &run(), &["a1"]), chosen("a2"), "札が 7 日窓の reset より先");
++    assert_eq!(choose_held(&pair, &soon, &run(), &["a2"]), chosen("a1"), "札を持つのが後の口座なら替わらない");
++    let late = week_first("a2", "a1");
++    assert_eq!(choose_held(&pair, &late, &run(), &["a1", "a2"]), chosen("a2"), "両方が持てば今の順（7 日窓の reset）");
++}
++
++/// 行 xp-host-live: 札を持つ口座は後に回るが候補から外れない。ほかに候補が無ければ選び、候補なしの周の理由と reset は札で
++/// 替わらない。
++#[test]
++fn xplive_held_elsewhere_goes_last_but_is_not_dropped() {
++    let even = table(&[(TS, [round("a1", 10, 10), round("a2", 10, 10)].concat())]);
++    assert_eq!(choose_held(&["a1", "a2"], &even, &run(), &["a1"]), chosen("a2"), "ほかに候補が在れば後");
++    assert_eq!(choose_held(&["a1"], &even, &run(), &["a1"]), chosen("a1"), "候補が 1 つだけなら選ぶ");
++    let away = Ask { exclude: &["a2"], ..run() };
++    assert_eq!(choose_held(&["a1", "a2"], &even, &away, &["a1"]), chosen("a1"), "ほかは除外");
++    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 100, 10)].concat())]);
++    assert_eq!(choose_held(&["a1", "a2"], &rows, &run(), &["a1"]), chosen("a1"), "ほかは当たっている");
++    let limited = table(&[(TS, round("a1", 100, 10))]);
++    assert_eq!(
++        choose_held(&["a1"], &limited, &run(), &["a1"]),
++        choose_full(&["a1"], &limited, &run()),
++        "候補なしは札が無い周と同じ"
++    );
++    assert!(matches!(choose_held(&["a1"], &limited, &run(), &["a1"]), Selection::None(_)), "候補なしのまま");
++}
++
++/// 行 xp-host-live: 札を読むのは便用だけで、session 用は読まない（同じ口座と札で、便用は札を持つ口座を後に回し、session 用は
++/// 逼迫度の最小を選ぶ）。
++#[test]
++fn xplive_only_the_run_purpose_reads_tickets_elsewhere() {
++    let rows = table(&[(TS, [round("a1", 10, 10), round("a2", 20, 20)].concat())]);
++    assert_eq!(choose_held(&["a1", "a2"], &rows, &run(), &["a1"]), chosen("a2"), "便用は札を持つ a1 を後に回す");
++    assert_eq!(choose_held(&["a1", "a2"], &rows, &session(), &[]), chosen("a1"), "session 用は逼迫度の最小");
++    assert_eq!(choose_held(&["a1", "a2"], &rows, &session(), &["a1"]), chosen("a1"), "session 用は札を持っても逼迫度の最小");
++}
+diff --git a/scribe2/crates/scribe2/src/fleet/wait.rs b/scribe2/crates/scribe2/src/fleet/wait.rs
+index 341d73b519e6f60d19b34597e5701dfc1a5552ee..1b7cb230443f90ac368e42b7193161aaa5d1528c 100644
+--- a/scribe2/crates/scribe2/src/fleet/wait.rs
++++ b/scribe2/crates/scribe2/src/fleet/wait.rs
+@@ -464,7 +464,7 @@ fn account_free(state_dir: &Path, run: &str, expected: Stage, pool: &RunSelect<'
+     if state.runs.get(run).map(|found| found.stage) != Some(expected) {
+         return true;
+     }
+-    matches!(select_for_run(&state, pool, &cli::now_utc()), select::Selection::Chosen(_))
++    matches!(select_for_run(&state, pool, state_dir, &cli::now_utc()), select::Selection::Chosen(_))
+ }
+ 
+ /// `YYYY-MM-DDTHH:MM:SSZ` を UNIX 秒にする（[`cli::format_utc`] の逆・**それ以外の形は `None`**）。
+diff --git a/scribe2/crates/scribe2/src/pipe/live.rs b/scribe2/crates/scribe2/src/pipe/live.rs
+index 529587a3ecbc91ae82adecd8f911f83bec43d9b1..b080affe0c05542ce960af6400c98d9d3276808c 100644
+--- a/scribe2/crates/scribe2/src/pipe/live.rs
++++ b/scribe2/crates/scribe2/src/pipe/live.rs
+@@ -3,13 +3,19 @@
+ //! runner を起こしてから終わりを見届けるまで、器が選んだ口座の label を持つ札 1 枚を host の根の `runs/`
+ //! （[`host_runs_dir`]・受付札の置き場と同じ state dir の親から導く）に置き、終わりで外す（[`Hold`] の `Drop`）。
+ //! 同じ親の下の置き場（本番と実験）の走りが 1 つの dir に並ぶので、口座の選びが置き場の event の外の走りを
+-//! 数えられる（数える側は後の行）。札は受付札と同じく一時の印で、口座を選ばない周（親の環境の継承）は置かない。
++//! 数えられる（[`elsewhere`]・行 xp-host-live）。札は受付札と同じく一時の印で、口座を選ばない周（親の環境の継承）は置かない。
+ //! 置けない周は runner を止めず、理由の 1 行を呼び手へ返す（黙って落とさない・NFR4）。
++//!
++//! 数える側（行 xp-host-live・判断の記録 ADR-41）: 便用の選定（[`crate::fleet::select_for_run`]）は、ほかの置き場の生きた札を
++//! 持つ口座を外さず順の最後に回す。生死は受付札と同じ pid と起動の時刻で判じ（[`crate::fleet::store::started_ms`]）、
++//! 死んだ札と読めない札は数えるたびに消して回収する（受付札と同じく憲法 N1 の対象外）。
+ 
+ use super::admission::now_ms;
+ use crate::fleet::json_lite::{self, Value};
++use crate::fleet::store::started_ms;
+ use crate::fleet::SCHEMA;
+ use crate::seat::{host_runs_dir, sanitize_target};
++use std::collections::BTreeSet;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ 
+@@ -115,12 +121,56 @@ fn put(dir: &Path, ticket: &Ticket) -> Result<Hold, String> {
+     Ok(Hold { path })
+ }
+ 
++/// 札の dir の判じ（[`scan`] の返り・消さない）。
++#[derive(Debug, Default, PartialEq, Eq)]
++pub struct Scan {
++    /// ほかの置き場の生きた札が持つ口座の label。
++    pub elsewhere: BTreeSet<String>,
++    /// 回収する札（持ち主が死んだ札か pid の再利用・読めない札）。
++    pub doomed: Vec<PathBuf>,
++}
++
++/// 札の dir を判じる（pure に `started` を受ける・消さない）。`started` は pid の起動時刻（epoch ms・無い process は `None`）で、
++/// 生きた札 = process が在り、起動時刻が札の ts 以前（受付札の判じ [`super::admission::judge`] と同じ形）。自分の置き場
++/// `place` の札は数えない（その走りは置き場の event の便数で数える）。拡張子 [`EXT`] でない file は見ない。dir を読めない周は空。
++pub fn scan(dir: &Path, place: &str, started: impl Fn(u32) -> Option<u64>) -> Scan {
++    let mut found = Scan::default();
++    let Ok(entries) = fs::read_dir(dir) else {
++        return found;
++    };
++    for path in entries.flatten().map(|entry| entry.path()) {
++        if path.extension().is_none_or(|ext| ext != EXT) {
++            continue;
++        }
++        match fs::read_to_string(&path).ok().as_deref().and_then(Ticket::parse) {
++            Some(ticket) if started(ticket.pid).is_some_and(|ms| ms <= ticket.ts_ms) => {
++                if ticket.place != place {
++                    found.elsewhere.insert(ticket.account);
++                }
++            }
++            Some(_) | None => found.doomed.push(path),
++        }
++    }
++    found
++}
++
++/// ほかの置き場の生きた走りの札を持つ口座（便用の選定の頭の鍵・行 xp-host-live）。置き場 `state_dir` の host の根の札を
++/// [`scan`] で判じ、死んだ札と読めない札を消して回収する（別の読み手が先に消した札は黙って飛ばす）。
++pub fn elsewhere(state_dir: &Path) -> BTreeSet<String> {
++    let found = scan(&host_runs_dir(state_dir), &state_dir.display().to_string(), |pid| started_ms(pid).started());
++    for path in &found.doomed {
++        let _ = fs::remove_file(path);
++    }
++    found.elsewhere
++}
++
+ #[cfg(test)]
+ mod tests {
+-    use super::{hold, Ticket, EXT};
++    use super::{elsewhere, hold, put, scan, Ticket, EXT, PARTIAL_EXT};
+     use crate::fleet::SCHEMA;
+     use crate::seat::{host_runs_dir, host_slots_dir};
+-    use std::path::PathBuf;
++    use std::collections::BTreeSet;
++    use std::path::{Path, PathBuf};
+ 
+     /// temp の dir の下の置き場（`<temp>/xphost-<pid>-<tag>/state`）。host の根はその親の下に在る。
+     fn place(tag: &str) -> PathBuf {
+@@ -196,4 +246,87 @@ mod tests {
+         let found = hold(&state, "r-1", Some("acct-a"));
+         assert!(found.as_ref().is_err_and(|reason| reason.starts_with("pipe: 走りの札 ") && reason.contains("を置けない")), "{found:?}");
+     }
++
++    /// 札の dir に札 1 枚を `<stem>.<ext>` の名で書く。
++    fn write(dir: &Path, stem: &str, ext: &str, line: &str) -> PathBuf {
++        let path = dir.join(format!("{stem}.{ext}"));
++        let _ = std::fs::create_dir_all(dir);
++        let _ = std::fs::write(&path, format!("{line}\n"));
++        path
++    }
++
++    /// ほかの置き場（`/s/other`）の生きた札（pid 11・ts 1700）から口座の label と 1 つの欄だけを替えた札。
++    fn other(account: &str, pid: u32, place: &str) -> String {
++        Ticket { pid, account: account.to_owned(), place: place.to_owned(), ..ticket() }.to_line()
++    }
++
++    /// 偽の起動時刻: pid 11 は札の ts ちょうど・12 は無い process・13 は ts の 1 ms 後（pid の再利用）・ほかは ts より前。
++    fn started(pid: u32) -> Option<u64> {
++        match pid {
++            11 => Some(1_700),
++            12 => None,
++            13 => Some(1_701),
++            _ => Some(1_699),
++        }
++    }
++
++    /// 自分の置き場を `/s/state` とする札の dir の見本（生きた札 2 枚・自分の置き場の札・死んだ札・pid の再利用・壊れた札・
++    /// 書きかけ）と、回収に回る札の path（名の順）。
++    fn fixture(tag: &str) -> (PathBuf, Vec<PathBuf>) {
++        let dir = place(tag).join("runs");
++        write(&dir, "11-live", EXT, &other("live", 11, "/s/other"));
++        write(&dir, "4242-early", EXT, &other("early", 4242, "/s/other"));
++        write(&dir, "11-own", EXT, &other("own", 11, "/s/state"));
++        write(&dir, "11-partial", PARTIAL_EXT, &other("partial", 11, "/s/other"));
++        let broken = other("broken", 11, "/s/other").replacen(&format!("\"schema\":{SCHEMA}"), "\"schema\":999", 1);
++        let doomed = vec![
++            write(&dir, "11-broken", EXT, &broken),
++            write(&dir, "12-dead", EXT, &other("dead", 12, "/s/other")),
++            write(&dir, "13-reused", EXT, &other("reused", 13, "/s/other")),
++        ];
++        (dir, doomed)
++    }
++
++    /// 数えるのはほかの置き場の生きた札（起動時刻が札の ts 以前・ちょうども生）の口座だけで、自分の置き場の札と拡張子
++    /// run でない file は数えない。dir が無い周は空。
++    #[test]
++    fn xplive_scan_names_accounts_of_live_tickets_of_other_places() {
++        let (dir, _) = fixture("scan-live");
++        let found = scan(&dir, "/s/state", started);
++        let want: BTreeSet<String> = ["early".to_owned(), "live".to_owned()].into_iter().collect();
++        assert_eq!(found.elsewhere, want, "生きた札 2 枚の口座だけ");
++        assert_eq!(scan(&dir, "/s/other", started).elsewhere, BTreeSet::from(["own".to_owned()]), "置き場の字で除く");
++        assert_eq!(scan(&dir.join("none"), "/s/state", started), super::Scan::default(), "dir が無い");
++    }
++
++    /// 持ち主の process が無い札・起動時刻が札の ts より後の札（pid の再利用）・読めない札は回収に回し、口座を数えない。
++    /// 生きた札・自分の置き場の札・書きかけは回収に回さない。
++    #[test]
++    fn xplive_scan_dooms_dead_reused_and_broken_tickets() {
++        let (dir, want) = fixture("scan-doom");
++        let mut found = scan(&dir, "/s/state", started).doomed;
++        found.sort();
++        assert_eq!(found, want, "壊れた札・死んだ札・pid の再利用の 3 枚だけ");
++        assert!(dir.join(format!("12-dead.{EXT}")).is_file(), "scan は消さない");
++    }
++
++    /// 置き場の host の根の札を読み、ほかの置き場の生きた札の口座を返し、回収に回る札を消す（生きた札は残す）。自分の
++    /// 置き場の札は数えない。持ち主の判じは本物の起動時刻（自分の pid・札の ts 0 は起動より前＝pid の再利用）。
++    #[test]
++    fn xplive_elsewhere_reads_the_host_root_and_reclaims_doomed_tickets() {
++        let mine = place("reclaim");
++        let theirs = mine.with_file_name("other");
++        let held = hold(&theirs, "r-1", Some("acct-b"));
++        let live = held.as_ref().ok().and_then(Option::as_ref).map(|found| found.path().to_path_buf()).unwrap_or_default();
++        let place = theirs.display().to_string();
++        let stale = Ticket { pid: std::process::id(), run: "r-2".to_owned(), account: "acct-c".to_owned(), place, ts_ms: 0 };
++        let doomed = put(&host_runs_dir(&mine), &stale);
++        let gone = doomed.as_ref().map(|found| found.path().to_path_buf()).unwrap_or_default();
++        assert!(live.is_file() && gone.is_file(), "札 2 枚を置ける: {held:?} {doomed:?}");
++        assert_eq!(elsewhere(&mine), BTreeSet::from(["acct-b".to_owned()]), "ほかの置き場の生きた札の口座");
++        assert!(!gone.exists(), "死んだ札は消す");
++        assert!(live.is_file(), "生きた札は残す");
++        assert_eq!(elsewhere(&theirs), BTreeSet::new(), "自分の置き場の札は数えない");
++        assert!(live.is_file(), "自分の置き場の札も残す");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/ratelimit.rs b/scribe2/crates/scribe2/src/pipe/ratelimit.rs
+index 905049faa56c2b7eb36f449d748af85fee6dc5c4..0b5dd1b6b2448dd6168391e363f0154c8c9ba069 100644
+--- a/scribe2/crates/scribe2/src/pipe/ratelimit.rs
++++ b/scribe2/crates/scribe2/src/pipe/ratelimit.rs
+@@ -305,7 +305,7 @@ pub(super) fn select_lens_account(
+     let state = current(state_dir).map_err(|errors| {
+         errors.iter().map(StoreError::to_string).collect::<Vec<String>>().join(" / ")
+     })?;
+-    let found = fleet::select_for_run(&state, &pool.run_select(repo), &fleet::cli::now_utc());
++    let found = fleet::select_for_run(&state, &pool.run_select(repo), state_dir, &fleet::cli::now_utc());
+     Ok(match found {
+         Selection::Chosen(label) => LensAccount::Chosen(label),
+         Selection::None(none) => LensAccount::None(none.reason.as_str().to_owned()),
+@@ -335,7 +335,7 @@ fn choose_or_wait(
+         }
+         // 便用の選定は便が使う model の窓だけを数え、除外は便の repo を anchor に持つ席の口座だけ（待ちの観測
+         // `AccountFree` も同じ model と repo を運ぶ・C3.4）。
+-        let found = match fleet::select_for_run(&state, &pool.run_select(repo), &fleet::cli::now_utc()) {
++        let found = match fleet::select_for_run(&state, &pool.run_select(repo), state_dir, &fleet::cli::now_utc()) {
+             Selection::Chosen(label) => return Ok(Some(label)),
+             Selection::None(found) => found,
+         };

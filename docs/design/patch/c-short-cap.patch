@@ -1,0 +1,195 @@
+diff --git a/crates/tsuzuri-contract/src/ledger.rs b/crates/tsuzuri-contract/src/ledger.rs
+index 996670d00b16397f56f3da3070c98dbf29093a02..85b2b057c29fb46069b33281ccf426a34ad83788 100644
+--- a/crates/tsuzuri-contract/src/ledger.rs
++++ b/crates/tsuzuri-contract/src/ledger.rs
+@@ -157,7 +157,7 @@ pub struct BeadFact {
+     pub id: BeadId,
+     /// 起票の時刻（bd の欄 created_at・読めなければ None）。
+     pub created_at: Option<EpochSecs>,
+-    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字）。
++    /// 短い題（metadata の鍵 short の字・無ければ題から機械で作った字・規則の行 R-19 の字数を越えれば頭の字と … で切る）。
+     pub short: String,
+     /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
+     pub short_set: bool,
+diff --git a/crates/tsuzuri-core/src/ledger/facts.rs b/crates/tsuzuri-core/src/ledger/facts.rs
+index eed8c1191a3f8c9fab94c8306a76908cc0dd448f..13dbd104488a77cf624c3b873b19233803e740c3 100644
+--- a/crates/tsuzuri-core/src/ledger/facts.rs
++++ b/crates/tsuzuri-core/src/ledger/facts.rs
+@@ -1,6 +1,7 @@
+ //! bead の事実の一覧（起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
+-//! 短い題は metadata の鍵 short の字か、無ければ題から機械で作る。概要は本文の 1 行を Unicode の字で 120 に切る。
++//! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
++//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。概要は本文の 1 行を Unicode の字で 120 に切る。
+ 
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
+@@ -26,6 +27,12 @@ pub const SUMMARY_LABEL: &str = "概要 =";
+ /// 概要の字数の上限（Unicode の字）。
+ pub const SUMMARY_MAX: usize = 120;
+ 
++/// 短い題の字数の上限（Unicode のスカラー値・規則の行 R-19）。
++pub const SHORT_MAX: usize = 20;
++
++/// 上限を越えて切った短い題の末の字。
++pub const ELLIPSIS: char = '…';
++
+ /// 台帳の字から bead の事実の一覧を組む（字が空か JSON の配列として読めなければ行は `Unknown`）。
+ /// bd が消した bead（tombstone）と、id が bead の id の形でない bead は出さない。行は台帳の順。
+ pub fn facts(ledger: &str) -> BeadFacts {
+@@ -54,7 +61,7 @@ fn fact(bead: BdBead) -> Option<BeadFact> {
+     Some(BeadFact {
+         id,
+         created_at: bead.created_at.as_deref().and_then(epoch_secs),
+-        short: set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default())),
++        short: capped(&set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default()))),
+         short_set,
+         summary: summary_of(bead.description.as_deref().unwrap_or_default()),
+         blocks,
+@@ -72,6 +79,18 @@ pub fn short_of(title: &str) -> String {
+     if made.is_empty() { title } else { made }.to_string()
+ }
+ 
++/// 短い題を上限の字数に切る（`SHORT_MAX` 字以下ならそのまま・越えれば頭の `SHORT_MAX` − 1 字と `ELLIPSIS` の `SHORT_MAX` 字）。
++pub fn capped(short: &str) -> String {
++    if short.chars().count() <= SHORT_MAX {
++        return short.to_string();
++    }
++    short
++        .chars()
++        .take(SHORT_MAX - 1)
++        .chain([ELLIPSIS])
++        .collect()
++}
++
+ /// 本文から作る概要。見出しの行 `OBSERVATION_HEADING` が在ればその下の最初の空でない行、無ければ空の行と
+ /// 字 # で始まる行を飛ばした最初の行（どれも前後の空白を除く）から、頭の `SUMMARY_LABEL` とその後の空白を外し、
+ /// Unicode の字で `SUMMARY_MAX` に切る。行が無ければ空の字。
+diff --git a/crates/tsuzuri-core/tests/shcap.rs b/crates/tsuzuri-core/tests/shcap.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6672d6d19a5fc344a69f38fee32fb97eb610104
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/shcap.rs
+@@ -0,0 +1,70 @@
++//! 短い題の字数の上限の歯（接頭辞 shcap_・設計ノート surface-wave27b 行 c-short-cap・判断の記録 ADR-30 決定 (5)・規則の行 R-19）。
++//! 台帳の字は歯の中の JSON の配列（bd の読み取りの口の形）。字数は Unicode のスカラー値で数える（全角の字は 3 byte）。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::ledger::BeadFact;
++use tsuzuri_core::ledger::facts::facts;
++
++/// 全角の字を n 字（字は 1 から 9 の全角の数字を繰り返す）。
++fn wide(n: usize) -> String {
++    "１２３４５６７８９".chars().cycle().take(n).collect()
++}
++
++fn bead(id: &str, title: &str, metadata: Value) -> Value {
++    json!({"id": id, "title": title, "status": "open", "issue_type": "task", "metadata": metadata})
++}
++
++fn rows(beads: Vec<Value>) -> Vec<BeadFact> {
++    match facts(&Value::Array(beads).to_string()).rows {
++        Reading::Known(rows) => rows,
++        Reading::Unknown => panic!("読める台帳が Unknown"),
++    }
++}
++
++fn short_of(rows: &[BeadFact], id: &str) -> (String, bool) {
++    let f = rows
++        .iter()
++        .find(|f| f.id.as_str() == id)
++        .unwrap_or_else(|| panic!("{id} が無い"));
++    (f.short.clone(), f.short_set)
++}
++
++#[test]
++fn shcap_machine_cut() {
++    let rows = rows(vec![
++        bead("fx-c.1", &format!("{} — 残りの題", wide(30)), json!({})),
++        bead("fx-c.2", &format!("便 {} の行", "a".repeat(25)), json!({})),
++    ]);
++    let cut = format!("{}…", wide(19));
++    assert_eq!(cut.chars().count(), 20);
++    assert_eq!(short_of(&rows, "fx-c.1"), (cut, false));
++    assert_eq!(
++        short_of(&rows, "fx-c.2"),
++        (format!("{}…", "a".repeat(19)), false)
++    );
++}
++
++#[test]
++fn shcap_twenty_kept() {
++    let rows = rows(vec![
++        bead("fx-c.1", &format!("{} — 残り", wide(20)), json!({})),
++        bead("fx-c.2", &format!("{} — 残り", wide(21)), json!({})),
++        bead("fx-c.3", &"a".repeat(20), json!({})),
++    ]);
++    assert!(wide(20).len() > 20, "byte でなく字で数える見本");
++    assert_eq!(short_of(&rows, "fx-c.1"), (wide(20), false));
++    assert_eq!(short_of(&rows, "fx-c.2"), (format!("{}…", wide(19)), false));
++    assert_eq!(short_of(&rows, "fx-c.3"), ("a".repeat(20), false));
++}
++
++#[test]
++fn shcap_set_cut() {
++    let rows = rows(vec![
++        bead("fx-c.1", "題 — 残り", json!({"short": wide(25)})),
++        bead("fx-c.2", "題 — 残り", json!({"short": wide(20)})),
++    ]);
++    assert_eq!(short_of(&rows, "fx-c.1"), (format!("{}…", wide(19)), true));
++    assert_eq!(short_of(&rows, "fx-c.2"), (wide(20), true));
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index f5623a52668c886795232eb606a571001fe10a1d..07670a2aaf497853d04cbe9322e5e8dcc64ed5bb 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -364,6 +364,8 @@ body:has(#bar):has(.coach) { padding-top: calc(52px + var(--coach-h)); }
+ .pbl { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+ .plk { display: inline-flex; align-items: center; gap: 5px; padding: 0 2px; border: 0; border-radius: 5px; background: none; color: var(--accent); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+ .plk:hover { background: var(--panel-2); }
++.plk > span { min-width: 0; }
++.plk code { flex: none; }
+ .plk small, .pun { color: var(--ink-3); }
+ .pf { display: flex; gap: 12px; padding: 6px 12px 10px; border-top: 1px solid var(--line); font-size: var(--fs-1); }
+ .ptl { display: flex; gap: 2px; height: 8px; margin: 3px 0; }
+diff --git a/crates/tsuzuri-surface/tests/shcss.rs b/crates/tsuzuri-surface/tests/shcss.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..28c9e94631f204f59bd396a3f7be227e62747eaf
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/shcss.rs
+@@ -0,0 +1,33 @@
++//! 待っている相手の口の id の字を縮めない stylesheet の規則の歯（接頭辞 shcss_・設計ノート surface-wave27b 行 c-short-cap・
++//! 判断の記録 ADR-30 決定 (5)）。口は吹き出しの partner_view の button（class plk）で、短い題の span と id の code を並べる。
++#![cfg(test)]
++
++const CSS: &str = include_str!("../style.css");
++
++/// 行頭が `selector` と空白と字 { の規則の宣言（{ と } の間の字・前後の空白を除く）。無ければ None。
++fn rule<'a>(css: &'a str, selector: &str) -> Option<&'a str> {
++    let head = format!("{selector} {{");
++    let line = css.lines().find(|l| l.starts_with(&head))?;
++    let body = line.strip_prefix(&head)?;
++    Some(body.split('}').next()?.trim())
++}
++
++#[test]
++fn shcss_partner_id_not_shrunk() {
++    let decls = |sel: &str| -> Vec<String> {
++        rule(CSS, sel)
++            .unwrap_or_else(|| panic!("{sel} の規則が無い"))
++            .split(';')
++            .map(|d| d.trim().to_string())
++            .filter(|d| !d.is_empty())
++            .collect()
++    };
++    assert!(
++        decls(".plk code").contains(&"flex: none".to_string()),
++        "id の code は縮まない"
++    );
++    assert!(
++        decls(".plk > span").contains(&"min-width: 0".to_string()),
++        "短い題の span が先に縮む"
++    );
++}

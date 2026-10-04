@@ -1,0 +1,425 @@
+diff --git a/crates/tsuzuri-boundary/src/server/ledger.rs b/crates/tsuzuri-boundary/src/server/ledger.rs
+index 3f7e41e4a8c8f0dcb71f4326ec2261dd23cb131d..60ec6bd9d8519519ca8562812db9cc6e43cc0782 100644
+--- a/crates/tsuzuri-boundary/src/server/ledger.rs
++++ b/crates/tsuzuri-boundary/src/server/ledger.rs
+@@ -10,6 +10,9 @@
+ //! `watched` の Source の `got` と `text` は、最後に始めた合流の読みの前に取った印（`read_mark`）が今の印と同じなら
+ //! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す
+ //! （行 e-snap）。印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す（行 e-ledger-lazy）。
++//! `watched` の Source は、今の印が最後に読めた読みの前に取った印（`good_mark`）と同じ間は bd を撃たず、最後に読めた字を
++//! 新しい字（stale の無し）として返し、落ちた読みの結果は持たない（次の `got` が読み直す）。変化の見張りの `read` の上限は
++//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
+ //! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
+ //! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
+ 
+@@ -43,6 +46,12 @@ pub const BD_TIMEOUT: Duration = Duration::from_secs(5);
+ /// 走っている読みに合流した呼び出しが待つ上限（`BD_TIMEOUT` に 1 秒を足す・便 e-coalesce）。
+ pub const BD_WAIT: Duration = BD_TIMEOUT.saturating_add(GRACE);
+ 
++/// 変化の見張りの読み（`Source::read`）の bd が返すまでの上限（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
++pub const WATCH_TIMEOUT: Duration = Duration::from_secs(30);
++
++/// 変化の見張りの読みが走っている読みに合流して待つ上限（`WATCH_TIMEOUT` に 1 秒を足す）。
++pub const WATCH_WAIT: Duration = WATCH_TIMEOUT.saturating_add(GRACE);
++
+ /// 読みが落ちても最後に読めた字を返す上限（契約の `READ_HOLD_S` 秒・行 e-hold）。
+ pub const READ_HOLD: Duration = Duration::from_secs(READ_HOLD_S);
+ 
+@@ -91,10 +100,12 @@ pub struct Source {
+     last: Arc<Mutex<(Option<Arc<str>>, Instant)>>,
+     /// 持ち回しの上限。
+     hold: Duration,
+-    /// 最後に終えた合流の読みの結果（読めた字か None・一度も終えていなければ外の None・行 e-snap）。
++    /// 最後に終えた合流の読みの結果（読めた字・一度も終えていないか最後の読みが落ちていれば None・行 e-snap・行 e-hold-mark）。
+     latest: Arc<Mutex<Option<Option<Arc<str>>>>>,
+     /// 最後に始めた合流の読みの前に取った印（一度も始めていなければ None・行 e-ledger-lazy）。
+     read_mark: Arc<Mutex<Option<Mark>>>,
++    /// 最後に読めた合流の読みの前に取った印（一度も読めていなければ None・行 e-hold-mark）。
++    good_mark: Arc<Mutex<Option<Mark>>>,
+     /// 真なら `got` と `text` は、印が `read_mark` と同じ間は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
+     watched: bool,
+     /// 見張りの読みの後に撃つ器の doctor の台帳の形の行（行 c-pipe-misfit）。
+@@ -129,6 +140,7 @@ impl Source {
+             hold: READ_HOLD,
+             latest: Arc::new(Mutex::new(None)),
+             read_mark: Arc::new(Mutex::new(None)),
++            good_mark: Arc::new(Mutex::new(None)),
+             watched: false,
+             form: None,
+         }
+@@ -210,10 +222,24 @@ impl Source {
+         Mark::Store { manifest, sizes }
+     }
+ 
+-    /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
++    /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。上限は、最後に読めた字が在れば
++    /// `WATCH_TIMEOUT`、一度も読めていなければ `BD_TIMEOUT`（server の起動の読みを長く止めない）。
++    /// 走っている読みに合流して落ちた結果を受けたときは、自分で読み直す（行 e-hold-mark）。
+     /// 読めた字は最後に読めた字に置く。`form` が在れば読んだ字の複製で撃ちを起こす（待たない）。
+     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
+-        let text = self.fresh();
++        let (timeout, wait) = if lock(&self.last).0.is_some() {
++            (WATCH_TIMEOUT, WATCH_WAIT)
++        } else {
++            (BD_TIMEOUT, BD_WAIT)
++        };
++        let mut own = false;
++        let mut text = self.shared.share(wait, || {
++            own = true;
++            self.shoot(timeout)
++        });
++        if text.is_none() && !own {
++            text = self.shared.share(wait, || self.shoot(timeout));
++        }
+         if let Some(form) = &self.form {
+             form.kick(text.as_deref().map(str::to_string));
+         }
+@@ -230,7 +256,14 @@ impl Source {
+     /// `watched` の Source は、今の印が最後に始めた読みの前の印と違えば見張りを待たず自分で読み（`form` が在れば
+     /// 読んだ字で撃ちを起こす）、同じなら bd を撃たず、走っている読みが在ればその終わりを `BD_WAIT` まで待った結果、
+     /// 無ければ最後に終えた読みの結果を使う（一度も終えていなければ読む・行 e-snap・行 e-ledger-lazy）。
++    /// `watched` の Source は、今の印が `good_mark` と同じなら bd を撃たず最後に読めた字を stale の無しで返す（行 e-hold-mark）。
+     pub fn got(&self) -> Got {
++        if let Some(text) = self.unmoved() {
++            return Got {
++                text: Some(text),
++                stale: None,
++            };
++        }
+         let text = if self.watched {
+             if self.behind() {
+                 let text = self.fresh();
+@@ -261,6 +294,17 @@ impl Source {
+         }
+     }
+ 
++    /// `watched` の Source で、今の印が最後に読めた読みの前に取った印と同じなら最後に読めた字（行 e-hold-mark）。
++    fn unmoved(&self) -> Option<Arc<str>> {
++        if !self.watched {
++            return None;
++        }
++        let good = lock(&self.good_mark).clone()?;
++        (good == self.mark())
++            .then(|| lock(&self.last).0.clone())
++            .flatten()
++    }
++
+     /// 今の印が最後に始めた合流の読みの前に取った印と違うか（一度も始めていなければ偽）。
+     fn behind(&self) -> bool {
+         let was = lock(&self.read_mark).clone();
+@@ -268,22 +312,29 @@ impl Source {
+     }
+ 
+     /// 合流の読み（走っている読みが在れば新しく撃たず、その終わりを `BD_WAIT` まで待って同じ結果・便 e-coalesce）。
+-    /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える・`parse_bd` も中核の台帳の読みも
+-    /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置き、
+-    /// 結果を最後に終えた読みの結果（`latest`）に置く。始める前に取った印を `read_mark` に置く。
++    /// 読みは `shoot`（上限 `BD_TIMEOUT`）。
+     fn fresh(&self) -> Option<Arc<str>> {
+-        self.shared.share(BD_WAIT, || {
+-            *lock(&self.read_mark) = Some(self.mark());
+-            let text = self
+-                .text_alone()
+-                .filter(|t| readable(t))
+-                .map(Arc::<str>::from);
+-            if let Some(text) = &text {
+-                *lock(&self.last) = (Some(text.clone()), Instant::now());
+-            }
+-            *lock(&self.latest) = Some(text.clone());
+-            text
+-        })
++        self.shared.share(BD_WAIT, || self.shoot(BD_TIMEOUT))
++    }
++
++    /// 合流の読みの中身（上限 `timeout` の bd の 1 本）。起動できない・rc が 0 でない・UTF-8 でない・上限を越える・
++    /// `parse_bd` も中核の台帳の読みも Unknown の字、のどれでも None。始める前に取った印を `read_mark` に置き、
++    /// 読めれば字と時刻を最後に読めた字に、その印を `good_mark` に、字を最後に終えた読みの結果（`latest`）に置き、
++    /// 落ちれば `latest` を空にする（落ちた結果を持たない・行 e-hold-mark）。
++    fn shoot(&self, timeout: Duration) -> Option<Arc<str>> {
++        let mark = self.mark();
++        *lock(&self.read_mark) = Some(mark.clone());
++        let text = self
++            .text_within(timeout)
++            .ok()
++            .filter(|t| readable(t))
++            .map(Arc::<str>::from);
++        if let Some(text) = &text {
++            *lock(&self.last) = (Some(text.clone()), Instant::now());
++            *lock(&self.good_mark) = Some(mark);
++        }
++        *lock(&self.latest) = text.clone().map(Some);
++        text
+     }
+ 
+     /// 走っている読みを分け合わず、新しい子 process で bd を撃つ（停止の hook・問いの門・見張りの読み・便 e-ask）。
+diff --git a/crates/tsuzuri-boundary/tests/ehmark.rs b/crates/tsuzuri-boundary/tests/ehmark.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7783d9463f7aa3be18e3e829b652feaadf8b702
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/ehmark.rs
+@@ -0,0 +1,193 @@
++//! 台帳の印が最後に読めた時と同じ間の持ち回しの歯（接頭辞 ehmark_・設計ノート surface-wave27b 行 e-hold-mark・判断の記録 ADR-30 決定 (10)）。
++//! 偽の bd は撃たれるたびに記録の file に 1 行を足し、作業場に down の file が在れば rc 1、once の file が在ればそれを消して rc 1、
++//! slow の file が在れば 6 秒眠ってから、置いた字の file（out.json）を出す script。印は repo の .beads/issues.jsonl（store は置かない）。
++//! 作業場は CARGO_TARGET_TMPDIR の下に歯ごとに作る。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::PathBuf;
++use std::thread;
++use std::time::{Duration, Instant};
++
++use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, Got, Source, WATCH_TIMEOUT};
++use tsuzuri_contract::board::Reading;
++
++/// 偽の bd が出す 2 つの字（どちらも読める台帳の字）。
++const A: &str = "[]\n";
++const B: &str = "[ ]\n";
++
++/// 持ち回しの上限を短くした歯の上限と、それを越える眠り。
++const HOLD: Duration = Duration::from_millis(300);
++const PAST: Duration = Duration::from_millis(600);
++
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("ehmark")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        fs::create_dir_all(root.join("repo/.beads")).expect("repo の置き場");
++        fs::write(root.join("repo/.beads/issues.jsonl"), "{}\n").expect("印の file");
++        let r = root.display();
++        let script = format!(
++            "#!/bin/sh\necho x >> '{r}/calls'\nif [ -e '{r}/down' ]; then exit 1; fi\n\
++             if [ -e '{r}/once' ]; then rm '{r}/once'; exit 1; fi\n\
++             if [ -e '{r}/slow' ]; then sleep 6; fi\nexec cat '{r}/out.json'\n"
++        );
++        fs::write(root.join("bd"), script).expect("偽の bd");
++        fs::set_permissions(root.join("bd"), fs::Permissions::from_mode(0o755)).expect("権限");
++        let place = Place { root };
++        place.returns(A);
++        place
++    }
++
++    /// 見張りの付いた Source（面の server の口が読む形）。
++    fn source(&self) -> Source {
++        Source::new(self.root.join("repo"), self.root.join("bd")).watched()
++    }
++
++    /// 偽の bd が撃たれた回。
++    fn calls(&self) -> usize {
++        fs::read_to_string(self.root.join("calls"))
++            .unwrap_or_default()
++            .lines()
++            .count()
++    }
++
++    fn flag(&self, name: &str, on: bool) {
++        let path = self.root.join(name);
++        if on {
++            fs::write(path, "").expect("印の file");
++        } else {
++            fs::remove_file(path).expect("印の file を消す");
++        }
++    }
++
++    fn returns(&self, text: &str) {
++        fs::write(self.root.join("out.json"), text).expect("置いた字");
++    }
++
++    /// 台帳の印を動かす（issues.jsonl に 1 行足した字を隣に書いて rename で置き替える）。
++    fn touch(&self) {
++        let path = self.root.join("repo/.beads/issues.jsonl");
++        let text = fs::read_to_string(&path).unwrap_or_default() + "{}\n";
++        let tmp = path.with_file_name("issues.jsonl.tmp");
++        fs::write(&tmp, text).expect("隣の file");
++        fs::rename(&tmp, &path).expect("置き替える");
++    }
++}
++
++fn fresh(text: &str) -> Got {
++    Got {
++        text: Some(text.into()),
++        stale: None,
++    }
++}
++
++#[test]
++fn ehmark_same_mark_no_read() {
++    let place = Place::new("same");
++    let source = place.source();
++    assert_eq!(source.got(), fresh(A));
++    assert_eq!(place.calls(), 1, "最初の読み");
++    // 字を替えても印が同じなら bd を撃たず、最後に読めた字を新しい字として返す。
++    place.returns(B);
++    assert_eq!(source.got(), fresh(A));
++    assert_eq!(source.text().as_deref(), Some(A));
++    assert_eq!(place.calls(), 1, "印が同じ間の got と text");
++    // 印が動けば読む。
++    place.touch();
++    assert_eq!(source.got(), fresh(B));
++    assert_eq!(place.calls(), 2, "印が動いた後の got");
++}
++
++#[test]
++fn ehmark_fail_keeps_text() {
++    let place = Place::new("keeps");
++    let source = place.source().with_hold(HOLD);
++    assert_eq!(source.got(), fresh(A));
++    // 見張りの読みが落ちても、印が同じなら上限を越えても最後に読めた字を新しい字として返す。
++    place.flag("down", true);
++    assert_eq!(source.read(), Reading::Unknown);
++    let calls = place.calls();
++    thread::sleep(PAST);
++    assert_eq!(source.got(), fresh(A));
++    assert_eq!(source.text().as_deref(), Some(A));
++    assert_eq!(place.calls(), calls, "落ちた後も印が同じ間は撃たない");
++}
++
++#[test]
++fn ehmark_moved_mark_holds() {
++    let place = Place::new("moved");
++    let source = place.source().with_hold(HOLD);
++    let before = Instant::now();
++    assert_eq!(source.got(), fresh(A));
++    let after = Instant::now();
++    // 印が動いて読みが落ちれば、上限の内は最後に読めた字と読めた時刻。
++    place.flag("down", true);
++    place.touch();
++    let held = source.got();
++    assert_eq!(held.text.as_deref(), Some(A));
++    let at = held.stale.expect("落ちた読みの時刻");
++    assert!(before <= at && at <= after, "{at:?} は読めた時刻でない");
++    // 上限を越えれば字は無い（時刻は同じ）。
++    thread::sleep(PAST);
++    assert_eq!(
++        source.got(),
++        Got {
++            text: None,
++            stale: Some(at)
++        }
++    );
++}
++
++#[test]
++fn ehmark_retry_after_fail() {
++    let place = Place::new("retry");
++    let source = place.source();
++    assert_eq!(source.got(), fresh(A));
++    // 印が動き、次の 1 回だけ落ちる。落ちた結果を持たず、次の got が読み直す。
++    place.returns(B);
++    place.flag("once", true);
++    place.touch();
++    let held = source.got();
++    assert_eq!(held.text.as_deref(), Some(A));
++    assert!(held.stale.is_some(), "落ちた読み");
++    assert_eq!(place.calls(), 2);
++    assert_eq!(source.got(), fresh(B));
++    assert_eq!(place.calls(), 3, "落ちた後の got は読み直す");
++    assert_eq!(source.got(), fresh(B));
++    assert_eq!(place.calls(), 3, "読めた後は印が同じなので撃たない");
++}
++
++#[test]
++fn ehmark_watch_timeout() {
++    assert_eq!(WATCH_TIMEOUT, Duration::from_secs(30));
++    assert_eq!(BD_TIMEOUT, Duration::from_secs(5));
++    let place = Place::new("watch");
++    let source = place.source();
++    // 一度も読めていない Source の read（server の起動の読み）は 5 秒で落ちる。
++    place.flag("slow", true);
++    assert_eq!(source.read(), Reading::Unknown, "起動の読み");
++    place.flag("slow", false);
++    assert_eq!(source.got(), fresh(A));
++    // 6 秒かかる bd: 口の要求の読み（5 秒）は落ち、見張りの読み（30 秒）は読める。
++    place.returns(B);
++    place.flag("slow", true);
++    place.touch();
++    let held = source.got();
++    assert_eq!(held.text.as_deref(), Some(A));
++    assert!(held.stale.is_some(), "5 秒を越えた要求の読み");
++    assert!(
++        matches!(source.read(), Reading::Known(_)),
++        "6 秒の見張りの読み"
++    );
++    let calls = place.calls();
++    assert_eq!(source.got(), fresh(B));
++    assert_eq!(place.calls(), calls, "見張りの読みの後は撃たない");
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+index 9f161a7032608abfa38c196981139c50e660da82..b52b24583a9cd1b43a42af1fd43ac1c7f5c46c24 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+@@ -395,16 +395,18 @@ fn lsnap_watched_source_reads_once() {
+     down_then_alone(place, source);
+ }
+ 
+-/// 見張りの読みが落ちた後の字と時刻と、watched でない Source の読みの数を見る。
++/// 見張りの読みが落ちた後の字と、watched でない Source の読みの数を見る。
+ fn down_then_alone(place: Place, source: Source) {
+-    // 見張りの読みが落ちれば、最後に読めた字と、その時刻。
++    // 見張りの読みが落ちても、印が最後に読めた時と同じなら最後に読めた字を新しい字として返す（行 e-hold-mark）。
+     place.flag("down", true);
+-    let before = Instant::now();
+     assert_eq!(source.read(), Reading::Unknown);
+-    let held = source.got();
+-    assert_eq!(held.text, Some(one().into()));
+-    let at = held.stale.expect("落ちた読みの時刻");
+-    assert!(at <= before, "{at:?} は落とす前の時刻 {before:?} より後");
++    assert_eq!(
++        source.got(),
++        Got {
++            text: Some(one().into()),
++            stale: None
++        }
++    );
+     assert_eq!(place.calls(), 3);
+     // watched でない Source は撃つたびに読む。
+     place.flag("down", false);
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs b/crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs
+index ff56a7fc969c29f792242e7dcae5f94cb2ea3f57..8946328333fbfa038e017054c2081b46276d58d4 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_coalesce.rs
+@@ -430,7 +430,8 @@ fn server_coalesce_shared_failure_then_new_read() {
+     .to_vec();
+     let replies = get_all(addr, &paths);
+     let shot = place.bd_calls() - before;
+-    assert_eq!(shot, 0, "{shot} 回");
++    // 落ちた読みの結果を持たないので、口は bd を撃ち直す（合流すれば 1 回・行 e-hold-mark）。
++    assert!((1..=paths.len()).contains(&shot), "{shot} 回");
+     for r in &replies[..2] {
+         assert_eq!(ledger_rows(r), None, "{}", r.body);
+     }
+@@ -441,20 +442,18 @@ fn server_coalesce_shared_failure_then_new_read() {
+         (replies[3].status, replies[3].body.as_str()),
+         (503, "ledger-unknown")
+     );
+-    // 口は bd を撃たない（戻しても、見張りが読むまでは落ちた読みの結果・行 e-snap）。
++    // 戻せば、次の口の読みが見張りを待たず bd を 1 回撃ち直して戻った出力を返す（行 e-hold-mark）。
+     place.fail(false);
+     let before = place.bd_calls();
+     let r = get(addr, "/api/ledger");
+-    assert_eq!(place.bd_calls() - before, 0, "口は bd を撃たない");
+-    assert_eq!(ledger_rows(&r), None, "{}", r.body);
+-    // 印を動かせば見張りが読み、戻った bd の出力を返す。
++    assert_eq!(place.bd_calls() - before, 1, "口が撃ち直す");
++    assert_eq!(ledger_rows(&r), Some(8), "{}", r.body);
++    // 読めた後は、印が同じ間は撃たない。
+     let before = place.bd_calls();
+-    place.touch();
+-    let rows = until_rows(addr, Some(8));
+-    let shot = place.bd_calls() - before;
++    let r = get(addr, "/api/ledger");
+     before_reread(started);
+-    assert_eq!(rows, Some(8), "戻った後の出力");
+-    assert_eq!(shot, 1, "見張りの読み");
++    assert_eq!(place.bd_calls() - before, 0, "読めた後の口");
++    assert_eq!(ledger_rows(&r), Some(8), "{}", r.body);
+ }
+ 
+ #[test]

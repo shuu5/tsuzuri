@@ -1,0 +1,427 @@
+diff --git a/crates/tsuzuri-surface/src/project/node.rs b/crates/tsuzuri-surface/src/project/node.rs
+index 71dc1ae17bc0ab6b5ace3c0e74f50c42fbe058e9..5959309e7296cf35f99ed6d4d3d947e4995d3cf1 100644
+--- a/crates/tsuzuri-surface/src/project/node.rs
++++ b/crates/tsuzuri-surface/src/project/node.rs
+@@ -2,6 +2,8 @@
+ //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
+ //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ //! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（行 g-sum-pick・判断の記録 ADR-30 決定 (2)）。
++//! 2 つの概要が両方無い bead は、本文の頭の 1 行を「本文から」の印つきで箱に出す。本文は block「本文と記録」と同じ
++//! 1 本の引きの読み（nodebody の module の `item_source`）から取り、同じ口を 2 度読まない（行 g-node-excerpt）。
+ //! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
+ //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
+ //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
+@@ -9,6 +11,7 @@
+ 
+ use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
+ use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
++use tsuzuri_contract::summary::excerpt;
+ use tsuzuri_contract::surface::{RevokeRequest, RulingId, revocable};
+ use tsuzuri_contract::wire;
+ 
+@@ -18,7 +21,9 @@ use crate::mapview::{encode, is_open};
+ use crate::project::nodearound::PageState;
+ use crate::topbar::{Win, win_href};
+ use crate::view::Fetched;
++use crate::vocab::label;
+ use crate::widgets::nodecard::full_src;
++use crate::widgets::pop::UNKNOWN_KEY;
+ use crate::widgets::sumpick::{self, Picked};
+ 
+ pub const BLOCK: Block = Block {
+@@ -112,11 +117,46 @@ pub struct SumBox {
+     pub other: Option<Picked>,
+ }
+ 
+-/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら表示の型の側の見出しで要約なし）。
++/// 概要の箱に渡す本文の頭の 1 行（行 g-node-excerpt）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Excerpt {
++    /// 中心が台帳の bead でない（1 本の引きを読まない・設計の節点と走行と決定）。
++    Never,
++    /// 1 本の引きをまだ読んでいない・口が読めない・電文が読めない・ほかの bead の電文の間。
++    Unread,
++    /// 読んだ本文の頭の 1 行（本文に行が無ければ None）。
++    Read(Option<String>),
++}
++
++/// 中心の bead の 1 本の引きの電文から本文の頭の 1 行（bead が None なら Never・電文の行の id が bead と同じ時だけ読む）。
++pub fn excerpt_of(item: &Fetched, bead: Option<&BeadId>) -> Excerpt {
++    let Some(bead) = bead else {
++        return Excerpt::Never;
++    };
++    match item {
++        Fetched::Body(text) => match wire::decode::<LedgerItem>(text) {
++            Ok(it) if it.row.id == *bead => Excerpt::Read(excerpt(&it.description)),
++            _ => Excerpt::Unread,
++        },
++        Fetched::NotRead | Fetched::Failed => Excerpt::Unread,
++    }
++}
++
++/// 概要の箱（本文の頭の 1 行を渡さない形・`summary_in` に `Excerpt::Never` を渡す）。
+ pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
++    summary_in(center, mode, &Excerpt::Never)
++}
++
++/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら本文の頭の 1 行を本文からの
++/// 印つきで・それも無ければ表示の型の側の見出しで要約なし・本文をまだ読めていない間は要約なしでなくまだ分からない）。
++pub fn summary_in(center: &AroundRow, mode: Mode, body: &Excerpt) -> SumBox {
+     let (plain, eng) = (center.node.plain.as_deref(), center.node.eng.as_deref());
+     let other = sumpick::other(mode, plain, eng);
+-    match sumpick::pick(mode, plain, eng, None) {
++    let line = match body {
++        Excerpt::Read(line) => line.as_deref(),
++        Excerpt::Never | Excerpt::Unread => None,
++    };
++    match sumpick::pick(mode, plain, eng, line) {
+         Some(p) => SumBox {
+             key: p.key,
+             class: if p.marked { SUMMARY_MARKED } else { "sumbox" },
+@@ -129,7 +169,10 @@ pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
+                 Mode::Expert => sumpick::ENG_KEY,
+             },
+             class: SUMMARY_NONE,
+-            text: NO_SUMMARY.to_string(),
++            text: match body {
++                Excerpt::Unread => label(UNKNOWN_KEY),
++                Excerpt::Never | Excerpt::Read(_) => NO_SUMMARY.to_string(),
++            },
+             other,
+         },
+     }
+@@ -212,12 +255,14 @@ mod dom {
+     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
+ 
+     use super::{
+-        BLOCK, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href, center,
+-        head, item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary,
++        BLOCK, Excerpt, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href,
++        center, excerpt_of, head, item_path, kept_subject, revoke_body, revoke_target,
++        shows_revoke, summary_in,
+     };
+     use crate::mapview::band_chip;
+     use crate::project::ask::{Outcome, can_send, outcome};
+     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
++    use crate::project::nodebody::item_source;
+     use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
+     use crate::view::{Fetched, PageSubject};
+     use crate::vocab::label;
+@@ -274,6 +319,8 @@ mod dom {
+             });
+         }
+         let mode = mode_of(search);
++        // 中心の bead の本文の頭の 1 行は、block「本文と記録」と同じ 1 本の引きの読みから取る（同じ口を 2 度読まない・行 g-node-excerpt）。
++        let body = item_source();
+         // 決定の頁の取り消しの的と、その問いの 1 本の引き（的が無ければ空の path で読まない）。
+         let target = Memo::new(move |_| match read.with(|(f, s)| state(f, *s)) {
+             PageState::Doc(doc) => revoke_target(&doc),
+@@ -295,7 +342,11 @@ mod dom {
+             match st {
+                 PageState::Doc(doc) => match (head(&doc), center(&doc)) {
+                     (Some(h), Some(c)) => {
+-                        let boxes = sum_view(summary(c, mode()));
++                        let excerpt = body.map_or(Excerpt::Never, |s| {
++                            s.bead
++                                .with(|b| s.item.with(|(f, _)| excerpt_of(f, b.as_ref())))
++                        });
++                        let boxes = sum_view(summary_in(c, mode(), &excerpt));
+                         let revoke = target.get().map(|t| {
+                             let d = draft(drafts, &t.ruling);
+                             revoke_view(t, item, d)
+diff --git a/crates/tsuzuri-surface/src/project/nodebody.rs b/crates/tsuzuri-surface/src/project/nodebody.rs
+index 2d0aca42085fa16ce98befe560a59d1e1a323bb3..8c4c8cdbefee95d653e417d0966093aa5a120296 100644
+--- a/crates/tsuzuri-surface/src/project/nodebody.rs
++++ b/crates/tsuzuri-surface/src/project/nodebody.rs
+@@ -4,6 +4,7 @@
+ //! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
+ //! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
+ //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
++//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る（行 g-node-excerpt）。
+ 
+ use tsuzuri_contract::graph::{AroundRow, NodeKind};
+ use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
+@@ -97,15 +98,19 @@ pub fn texts(fetched: &Fetched, bead: &BeadId) -> Body<Texts> {
+ }
+ 
+ #[cfg(target_arch = "wasm32")]
+-pub use dom::view;
++pub use dom::{ItemSource, item_source, view};
+ 
+ /// 本文と記録の block の DOM（wasm の target のときだけ）。
+ #[cfg(target_arch = "wasm32")]
+ mod dom {
++    use std::cell::Cell;
++
+     use leptos::prelude::*;
+     use tsuzuri_contract::ledger::BeadId;
+ 
+-    use super::{BLANK, BLOCK, Body, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts};
++    use super::{
++        BLANK, BLOCK, Body, Fetched, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts,
++    };
+     use crate::project::nodearound::{source, state};
+     use crate::project::{fold, section, unmeasured};
+     use crate::store;
+@@ -132,12 +137,25 @@ mod dom {
+         view! { <div data-ledger-text="">{md::view(blocks)}</div> }.into_any()
+     }
+ 
+-    /// 本文と記録の block（台帳の bead でない節点と、近傍をまだ読んでいない間は何も出さない）。
+-    pub fn view() -> AnyView {
+-        let src = source();
+-        let Some(near) = src.read else {
+-            return ().into_any();
+-        };
++    /// 頁に 1 つの中心の bead の 1 本の引きの読み（この block と block「節点」の概要の箱が分ける・行 g-node-excerpt）。
++    #[derive(Clone, Copy)]
++    pub struct ItemSource {
++        near: ReadSignal<(Fetched, Option<u16>)>,
++        pub bead: Memo<Option<BeadId>>,
++        pub item: ReadSignal<(Fetched, Option<u16>)>,
++    }
++
++    thread_local! {
++        /// 頁の block が分ける 1 本の引きの読み（近傍の読みと同じ一生・近傍の読みが替われば作り直す）。
++        static ITEM: Cell<Option<ItemSource>> = const { Cell::new(None) };
++    }
++
++    /// 頁に 1 つの 1 本の引きの読み（近傍の読みが無ければ None・初めて呼んだ block が作り、次の block は同じ読みを使う）。
++    pub fn item_source() -> Option<ItemSource> {
++        let near = source().read?;
++        if let Some(s) = ITEM.get().filter(|s| s.near == near) {
++            return Some(s);
++        }
+         let bead = Memo::new(move |before: Option<&Option<BeadId>>| {
+             let st = near.with(|(f, s)| state(f, *s));
+             kept_bead(before.cloned().flatten(), &st)
+@@ -145,6 +163,16 @@ mod dom {
+         let path =
+             Signal::derive(move || bead.with(|b| b.as_ref().map(item_path).unwrap_or_default()));
+         let item = crate::net::read_path(path);
++        let s = ItemSource { near, bead, item };
++        ITEM.set(Some(s));
++        Some(s)
++    }
++
++    /// 本文と記録の block（台帳の bead でない節点と、近傍をまだ読んでいない間は何も出さない）。
++    pub fn view() -> AnyView {
++        let Some(ItemSource { bead, item, .. }) = item_source() else {
++            return ().into_any();
++        };
+         let content = move || {
+             let Some(b) = bead.get() else {
+                 return ().into_any();
+diff --git a/crates/tsuzuri-surface/tests/nexc.rs b/crates/tsuzuri-surface/tests/nexc.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a4e734e8afaa471d582d93232470238a92cbf2c1
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/nexc.rs
+@@ -0,0 +1,194 @@
++//! 個別の頁の概要の箱に本文の頭の 1 行を出す歯（行 g-node-excerpt・接頭辞 nexc_・判断の記録 ADR-30 決定 (2)）。
++//! 1 本の引きの電文から本文の頭の 1 行の 3 値を読み、2 つの概要が両方無い時だけ「本文から」の印つきで箱に出すことを断言し、
++//! 本文と記録の block と同じ 1 本の引きの読みを使う DOM（wasm の枝）の配線の字を照らす。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::graph::{AroundDoc, NodeKind};
++use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::node::{
++    self, Excerpt, NO_SUMMARY, SUMMARY_MARKED, SUMMARY_NONE, excerpt_of, summary_in,
++};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::widgets::sumpick::{BODY_KEY, ENG_KEY, PLAIN_KEY};
++
++const ID: &str = "t-1.2";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
++fn span(src: &str, start: &str, end: &str) -> String {
++    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
++    let rest = &src[at..];
++    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
++    rest[..to].to_string()
++}
++
++/// file の wasm の枝の字。
++fn dom(rel: &str) -> String {
++    let src = read(rel);
++    src[src.find("mod dom {").expect("wasm の枝")..].to_string()
++}
++
++fn bead(s: &str) -> BeadId {
++    BeadId::new(s).expect("bead の id")
++}
++
++/// 中心の節点を memo の bead にし、2 つの概要を替えた近傍の電文（fixture は着地した歯 gsum と同じ file）。
++fn around(plain: Option<&str>, eng: Option<&str>) -> AroundDoc {
++    let mut doc: AroundDoc = wire::decode(&read("../../tests/fixtures/surface/around-doc.json"))
++        .expect("around-doc.json が電文として読める");
++    let c = doc
++        .rows
++        .iter_mut()
++        .find(|r| r.col == 0)
++        .expect("fixture の中心の行");
++    c.node.kind = NodeKind::Memo;
++    c.node.id = ID.to_string();
++    c.node.plain = plain.map(str::to_string);
++    c.node.eng = eng.map(str::to_string);
++    doc
++}
++
++/// 1 本の引きの電文（id と本文だけを替える）。
++fn item(id: &str, description: &str) -> Fetched {
++    let it = LedgerItem {
++        row: LedgerRow {
++            id: bead(id),
++            kind: "task".to_string(),
++            title: format!("{id} の題"),
++            status: "open".to_string(),
++            updated_at: 1_790_000_000,
++            parent: None,
++            labels: Vec::new(),
++        },
++        description: description.to_string(),
++        notes: String::new(),
++    };
++    Fetched::Body(wire::encode(&it).expect("電文に書ける"))
++}
++
++const BODY: &str = "## 見出し\n\n本文の頭の行\n次の行";
++
++#[test]
++fn nexc_excerpt_states() {
++    let b = bead(ID);
++    assert_eq!(
++        excerpt_of(&item(ID, BODY), Some(&b)),
++        Excerpt::Read(Some("本文の頭の行".to_string()))
++    );
++    assert_eq!(
++        excerpt_of(&item(ID, "# 見出しだけ\n"), Some(&b)),
++        Excerpt::Read(None)
++    );
++    assert_eq!(
++        excerpt_of(&item(ID, BODY), None),
++        Excerpt::Never,
++        "bead でない節点は読まない"
++    );
++    for f in [
++        Fetched::NotRead,
++        Fetched::Failed,
++        Fetched::Body("{".to_string()),
++        item("t-9", BODY),
++    ] {
++        assert_eq!(excerpt_of(&f, Some(&b)), Excerpt::Unread, "{f:?}");
++    }
++}
++
++#[test]
++fn nexc_box_body_line() {
++    let line = Excerpt::Read(Some("本文の頭の行".to_string()));
++    let doc = around(None, None);
++    let c = node::center(&doc).expect("中心の行");
++    for mode in [Mode::Beginner, Mode::Expert] {
++        let b = summary_in(c, mode, &line);
++        assert_eq!(
++            (b.key, b.class, b.text.as_str()),
++            (BODY_KEY, SUMMARY_MARKED, "本文の頭の行"),
++            "{mode:?}"
++        );
++        assert_eq!(b.other, None);
++    }
++    assert_eq!(vocab().label(BODY_KEY), "本文から");
++    // 表示の型の側の概要が在れば本文の頭の 1 行は出さない（見本の違いは非エンジニア向けの概要の有無だけ）。
++    let doc = around(Some("平の概要"), None);
++    let c = node::center(&doc).expect("中心の行");
++    let b = summary_in(c, Mode::Beginner, &line);
++    assert_eq!(
++        (b.key, b.class, b.text.as_str()),
++        (PLAIN_KEY, "sumbox", "平の概要")
++    );
++    // もう一方の概要だけが在ればもう一方を印つきで出す（本文の頭の 1 行より先）。
++    let b = summary_in(c, Mode::Expert, &line);
++    assert_eq!(
++        (b.key, b.class, b.text.as_str()),
++        (PLAIN_KEY, SUMMARY_MARKED, "平の概要")
++    );
++}
++
++#[test]
++fn nexc_box_unread_none() {
++    let doc = around(None, None);
++    let c = node::center(&doc).expect("中心の行");
++    let unread = summary_in(c, Mode::Beginner, &Excerpt::Unread);
++    assert_eq!(
++        (unread.key, unread.class, unread.text.as_str()),
++        (PLAIN_KEY, SUMMARY_NONE, "まだ分からない"),
++        "本文を読めていない間は要約なしと見せない"
++    );
++    for body in [Excerpt::Read(None), Excerpt::Never] {
++        let b = summary_in(c, Mode::Expert, &body);
++        assert_eq!(
++            (b.key, b.class, b.text.as_str()),
++            (ENG_KEY, SUMMARY_NONE, NO_SUMMARY),
++            "{body:?}"
++        );
++    }
++    assert_eq!(
++        node::summary(c, Mode::Beginner),
++        summary_in(c, Mode::Beginner, &Excerpt::Never)
++    );
++}
++
++#[test]
++fn nexc_one_item_read() {
++    let node_dom = dom("src/project/node.rs");
++    for want in [
++        "let body = item_source();",
++        "s.item.with(|(f, _)| excerpt_of(f, b.as_ref()))",
++        "let boxes = sum_view(summary_in(c, mode(), &excerpt));",
++    ] {
++        assert_eq!(
++            node_dom.matches(want).count(),
++            1,
++            "node.rs の DOM の {want}"
++        );
++    }
++    assert_eq!(
++        node_dom.matches("crate::net::read_path(").count(),
++        1,
++        "節点の block の 1 本の引きは決定の頁の問いの 1 つだけ"
++    );
++    let body_dom = dom("src/project/nodebody.rs");
++    assert_eq!(body_dom.matches("crate::net::read_path(").count(), 1);
++    let source = span(&body_dom, "pub fn item_source()", "\n    }\n");
++    for want in [
++        "let item = crate::net::read_path(path);",
++        "if let Some(s) = ITEM.get().filter(|s| s.near == near) {",
++        "ITEM.set(Some(s));",
++    ] {
++        assert!(source.contains(want), "item_source に {want} が無い");
++    }
++    assert!(
++        body_dom.contains("let Some(ItemSource { bead, item, .. }) = item_source() else {"),
++        "本文と記録の block も item_source の読みを使う"
++    );
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth3/gsum.rs b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+index 3ff0e23803c0b073825c3e988fc5fb31249efcf4..69176b1648eb53f7d6baa7ec65b051eb43230ece 100644
+--- a/crates/tsuzuri-surface/tests/teeth3/gsum.rs
++++ b/crates/tsuzuri-surface/tests/teeth3/gsum.rs
+@@ -297,7 +297,7 @@ fn gsum_dom_text() {
+     let node = read("src/project/node.rs");
+     let dom = dom_part(&node);
+     for want in [
+-        "summary(c, mode())",
++        "summary_in(c, mode(), &excerpt)",
+         "{h2(b.key)}</header><p data-t=",
+         "M4 21c1-4 4-6 8-6s7 2 8 6",
+         "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",

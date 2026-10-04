@@ -1,0 +1,804 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index de59d545bef683685d9017bea2ae58182ebc3686..5721e1eab69e2df1f97479823e5c673aec02c617 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -439,10 +439,10 @@ pub const WIDTHS: [u32; 4] = [1280, 960, 700, 390];
+ pub const MODES: [&str; 2] = ["beginner", "expert"];
+ 
+ /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
+-/// project board の 1 枚の画面と、その上に帯の印が開く 7 つの窓（query の win・行 g-accept）と account board の
++/// project board の 1 枚の画面と、その上に帯の印が開く 8 つの窓（query の win・行 g-accept・相談の窓は行 cs-bar）と account board の
+ /// 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は行 m-map-page で、質問の頁と抜けの検査の頁は
+ /// 行 g-one-screen-a で消した）。
+-pub const SCREENS: [&str; 11] = [
++pub const SCREENS: [&str; 12] = [
+     "?",
+     "?win=ask&",
+     "?win=stalled&",
+@@ -451,6 +451,7 @@ pub const SCREENS: [&str; 11] = [
+     "?win=gaps&",
+     "?win=legend&",
+     "?win=dest&",
++    "?win=consult&",
+     "?board=account&tab=home&",
+     "?board=account&tab=session&",
+     "?board=account&tab=projects&",
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+index 91e4831dcd5a2c4b59e47e96fb860c5a899f952d..08ad484751ada28f6450780bb41b234797e9b208 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+@@ -39,7 +39,7 @@ fn bvacc_widths_are_rule_r23() {
+     assert!(row.contains(&want), "R-23 に {want} が無い: {row}");
+ }
+ 
+-/// (3) 画面は home・帯の印が開く 7 つの窓（窓の宣言の順・query の名は topbar の WIN_PARAM）・account board の
++/// (3) 画面は home・帯の印が開く 8 つの窓（窓の宣言の順・相談の窓は行 cs-bar・query の名は topbar の WIN_PARAM）・account board の
+ /// 3 つの tab の順で、home は最初（節点の頁に開く最初の節点を採る画面）。
+ #[test]
+ fn bvacc_screens_open_windows() {
+@@ -57,7 +57,7 @@ fn bvacc_screens_open_windows() {
+     assert_eq!(
+         keys,
+         [
+-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest"
++            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
+         ]
+     );
+     let mut want = vec!["?".to_string()];
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs b/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+index 2169d7e902282696d650dbaa0a2f95cede7d68e4..a885a853f97875e1808dbcd49a67ad8e5638241b 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+@@ -220,7 +220,7 @@ fn bvsettle_sweep_counts_unknown() {
+         report.contains("\n違反 計 0\nまだ分からない 計 4\n"),
+         "{report}"
+     );
+-    assert_eq!(report.lines().count(), 1 + 96 + 3);
++    assert_eq!(report.lines().count(), 1 + 104 + 3);
+ 
+     assert_eq!(SCREENS[0], "?");
+     let mut page = stuck_at(format!("{BOARD}?mode=expert"));
+@@ -238,7 +238,7 @@ fn bvsettle_sweep_counts_unknown() {
+     );
+     let blind = format!(" expert {BOARD}?page=node&mode=expert {UNSETTLED}");
+     assert_eq!(report.lines().filter(|l| l.ends_with(&blind)).count(), 4);
+-    assert_eq!(page.navigated().len(), 96 - 4);
++    assert_eq!(page.navigated().len(), 104 - 4);
+     accept_unknown_rc();
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/jrun.rs b/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+index ddb366a4cfa8afca49a5da936f26f8d58bd105fb..aea9d6f28f5994ce6c49922c9aa3987643b5c845 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+@@ -160,7 +160,7 @@ fn jrun_screens_cover_surface() {
+     // 帯の印が開く窓は home の頁の query の win で開く（行 g-accept）。
+     let topbar = fs::read_to_string(src.join("topbar.rs")).expect("topbar.rs を読む");
+     let wins = arms(&topbar, "pub fn key(self) -> &'static str {");
+-    assert_eq!(wins.len(), 7, "{wins:?}");
++    assert_eq!(wins.len(), 8, "{wins:?}");
+     want.extend(wins.iter().map(|w| format!("?win={w}&")));
+     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
+     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
+@@ -169,7 +169,7 @@ fn jrun_screens_cover_surface() {
+     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
+     got.sort();
+     got.dedup();
+-    assert_eq!(got.len(), 11, "SCREENS に重なりが無い");
++    assert_eq!(got.len(), 12, "SCREENS に重なりが無い");
+     want.sort();
+     assert_eq!(got, want);
+ }
+@@ -335,7 +335,7 @@ fn jrun_sweep_all_cases() {
+             urls.extend(group.into_iter().map(|u| (width, mode, u)));
+         }
+     }
+-    assert_eq!(urls.len(), 96);
++    assert_eq!(urls.len(), 104);
+     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
+     assert_eq!(page.navigated(), navigated);
+     let mut want = vec![head()];
+diff --git a/crates/tsuzuri-surface/src/consultwin.rs b/crates/tsuzuri-surface/src/consultwin.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..73942a4de8100fcaa5b13d782f642b74c0c82c4e
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/consultwin.rs
+@@ -0,0 +1,254 @@
++//! 相談の窓（設計ノート surface-wave27b 行 cs-bar・判断の記録 ADR-29 決定 (4)(9)）: 帯の相談の口が開く窓。
++//! 上の段は頼みの form（題〔省ける・自由な字か bead の id〕・形〔話す・問う〕・model〔`MODELS`〕・送る）で、
++//! 送ると口 POST /api/consult/request に電文 ConsultRequest を送る（面は窓を開かない・席が受けて開く）。
++//! 下の段は口 GET /api/consult の一覧（退いていない窓・処分の無い所見・受けの無い頼み）で、受けの無い頼みは
++//! 頼みの時刻から `DELIVER_SPAN` を越えると `LATE` を添える。読めない段は測れていない。
++//! 帯の相談の口は色の付く数を持たない（所見の処分は席の手番・決定 (9)）。窓を開いた link が bead の id を持てば、
++//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
++//! wasm の target のときだけ組む。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    ConsultBoard, ConsultRequest, FindingRow, Form, RequestId, RequestRow, WindowRow, WindowState,
++    Word,
++};
++use tsuzuri_contract::wire;
++
++use crate::project::Body;
++use crate::view::Fetched;
++
++pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
++
++/// 帯の相談の口と窓の題の語の鍵。
++pub const CONSULT_KEY: &str = "consult";
++
++/// 受けの無い頼みを「席に届いていない」と見る経過（秒・server の配達の撃ち直しの幅と同じ 1800 秒）。
++pub const DELIVER_SPAN: EpochSecs = 1800;
++
++/// `DELIVER_SPAN` を越えた受けの無い頼みに添える字。
++pub const LATE: &str = "席に届いていない";
++
++/// 頼みの form で選べる model（先頭が既定）。
++pub const MODELS: [&str; 3] = ["fable", "opus", "sonnet"];
++
++/// 一覧の口が読めない時の理由。
++pub const UNREAD: &str = "相談の一覧が読めない";
++
++/// 3 つの段の 0 件の 1 行（窓・所見・頼み）。
++pub const NONE_LINES: [&str; 3] = [
++    "開いている相談の窓は無い",
++    "処分の無い所見は無い",
++    "受けの無い頼みは無い",
++];
++
++/// 一覧の 1 行（id・題・状態の字・席に届いていないか）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Row {
++    pub id: String,
++    pub topic: String,
++    pub note: String,
++    pub late: bool,
++}
++
++/// 頼みの電文（題は前後の空白を除いて空なら無し・model が `MODELS` に無ければ None）。
++pub fn request(topic: &str, form: Form, model: &str) -> Option<String> {
++    if !MODELS.contains(&model) {
++        return None;
++    }
++    let topic = Some(topic.trim())
++        .filter(|t| !t.is_empty())
++        .map(str::to_string);
++    wire::encode(&ConsultRequest {
++        topic,
++        form,
++        model: model.to_string(),
++    })
++    .ok()
++}
++
++/// 頼みの口の応答の 1 行（200 は頼みの id・403 は読むだけ・400 は字・503 は台帳・届かなければ届かない）。
++pub fn sent_line(reply: Option<(u16, &str)>) -> String {
++    match reply {
++        Some((200, body)) => match wire::decode::<RequestId>(body) {
++            Ok(id) => format!("頼み {id} を送った（席が受けて窓を開く）"),
++            Err(_) => "頼みの応答が読めない".to_string(),
++        },
++        Some((403, _)) => "読むだけの board なので送れない".to_string(),
++        Some((400, _)) => "頼みの字が書けない（題の字を見直す）".to_string(),
++        Some((code, body)) => format!("頼みを置けなかった（状態 {code}・{body}）"),
++        None => "board に届かない".to_string(),
++    }
++}
++
++/// 口の本文の一覧（読めなければ `UNREAD`）。
++pub fn board(f: &Fetched) -> Result<ConsultBoard, &'static str> {
++    match f {
++        Fetched::Body(t) => wire::decode(t).map_err(|_| UNREAD),
++        Fetched::NotRead | Fetched::Failed => Err(UNREAD),
++    }
++}
++
++/// 題の字（無ければ「題なし」）。
++fn topic_of(topic: Option<&String>) -> String {
++    topic.map_or_else(|| "題なし".to_string(), Clone::clone)
++}
++
++/// 段の読みを行の列にする（Unknown は測れていない・0 件は `none` の 1 行）。
++fn rows<T>(
++    r: &Reading<Vec<T>>,
++    none: &'static str,
++    f: impl Fn(&T) -> Option<Row>,
++) -> Body<Vec<Row>> {
++    match r {
++        Reading::Unknown => Body::Unmeasured(UNREAD),
++        Reading::Known(v) => {
++            let out: Vec<Row> = v.iter().filter_map(f).collect();
++            if out.is_empty() {
++                Body::Empty(none)
++            } else {
++                Body::Filled(out)
++            }
++        }
++    }
++}
++
++/// 窓の段（退いた窓は載せない・状態は形と状態の語と所見の数）。
++pub fn windows(r: &Reading<Vec<WindowRow>>) -> Body<Vec<Row>> {
++    rows(r, NONE_LINES[0], |w| {
++        (w.state != WindowState::Retired).then(|| Row {
++            id: w.id.to_string(),
++            topic: topic_of(w.topic.as_ref()),
++            note: format!(
++                "{}・{}・所見 {}（処分なし {}）",
++                w.form.word(),
++                w.state.word(),
++                w.findings,
++                w.undisposed
++            ),
++            late: false,
++        })
++    })
++}
++
++/// 所見の段（席が受けたか）。
++pub fn findings(r: &Reading<Vec<FindingRow>>) -> Body<Vec<Row>> {
++    rows(r, NONE_LINES[1], |f| {
++        Some(Row {
++            id: f.id.to_string(),
++            topic: topic_of(f.topic.as_ref()),
++            note: if f.received.is_some() {
++                "席が受けた"
++            } else {
++                "席が受けていない"
++            }
++            .to_string(),
++            late: false,
++        })
++    })
++}
++
++/// 頼みの段（`now` が頼みの時刻から `DELIVER_SPAN` を越えたら `LATE`・越えなければ待ち）。
++pub fn requests(r: &Reading<Vec<RequestRow>>, now: EpochSecs) -> Body<Vec<Row>> {
++    rows(r, NONE_LINES[2], |q| {
++        let late = now.saturating_sub(q.at) > DELIVER_SPAN;
++        Some(Row {
++            id: q.id.to_string(),
++            topic: topic_of(q.topic.as_ref()),
++            note: if late { LATE } else { "席の受けを待つ" }.to_string(),
++            late,
++        })
++    })
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::body;
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::ev;
++    use leptos::prelude::*;
++    use leptos::task::spawn_local;
++    use tsuzuri_contract::consult::{Form, Word};
++
++    use super::{
++        MODELS, PATH, REQUEST_PATH, Row, board, findings, request, requests, sent_line, windows,
++    };
++    use crate::askwin::AskFocus;
++    use crate::project::{Body, body_view, unmeasured};
++
++    fn rows_view(body: Body<Vec<Row>>) -> AnyView {
++        match body {
++            Body::Filled(rows) => rows
++                .into_iter()
++                .map(|r| {
++                    let class = if r.late { "csr late" } else { "csr" };
++                    view! { <div class=class><code>{r.id}</code><span class="cst">{r.topic}</span><span class="csn">{r.note}</span></div> }
++                })
++                .collect_view()
++                .into_any(),
++            Body::Empty(line) => body_view(Body::Empty(line)),
++            Body::Unmeasured(reason) => unmeasured(reason),
++        }
++    }
++
++    fn form_view(
++        topic: RwSignal<String>,
++        form: RwSignal<Form>,
++        model: RwSignal<String>,
++        sent: RwSignal<Option<String>>,
++    ) -> AnyView {
++        let send = move |_| {
++            let Some(body) = request(
++                &topic.get_untracked(),
++                form.get_untracked(),
++                &model.get_untracked(),
++            ) else {
++                return;
++            };
++            spawn_local(async move {
++                let reply = crate::net::post(REQUEST_PATH, body).await;
++                sent.set(Some(sent_line(
++                    reply.as_ref().map(|(st, t)| (*st, t.as_str())),
++                )));
++                crate::net::reload_all();
++            });
++        };
++        let forms = [Form::Talk, Form::Ask].map(|f| {
++            view! { <label><input type="radio" name="csform" prop:checked=move || form.get() == f on:change=move |_| form.set(f)/>{f.word()}</label> }
++        });
++        let models = MODELS
++            .map(|m| view! { <option value=m selected=move || model.get() == m>{m}</option> });
++        view! {
++            <div class="csf">
++                <input type="text" placeholder="題（省ける・bead の id か自由な字）" prop:value=move || topic.get() on:input=move |ev: ev::Event| topic.set(event_target_value(&ev))/>
++                <span class="csfm">{forms}</span>
++                <select on:change=move |ev: ev::Event| model.set(event_target_value(&ev))>{models}</select>
++                <button type="button" class="btn" on:click=send>"送る ›"</button>
++            </div>
++            {move || sent.get().map(|s| view! { <div class="small" role="status">{s}</div> })}
++        }
++        .into_any()
++    }
++
++    /// 相談の窓の本文（頼みの form と一覧の 3 つの段）。
++    pub fn body() -> AnyView {
++        let doc = crate::net::read(PATH);
++        let now = crate::net::ticker();
++        let first = use_context::<AskFocus>().and_then(|f| f.0.get_untracked());
++        let topic = RwSignal::new(first.unwrap_or_default());
++        let form = RwSignal::new(Form::Talk);
++        let model = RwSignal::new(MODELS[0].to_string());
++        let sent = RwSignal::new(None);
++        let lists = move || match doc.with(board) {
++            Err(reason) => unmeasured(reason),
++            Ok(b) => view! {
++                <h4>"開いている相談の窓"</h4>{rows_view(windows(&b.windows))}
++                <h4>"処分の無い所見"</h4>{rows_view(findings(&b.findings))}
++                <h4>"受けの無い頼み"</h4>{rows_view(requests(&b.requests, now.get()))}
++            }
++            .into_any(),
++        };
++        view! { <div class="cswin">{form_view(topic, form, model, sent)}{lists}</div> }.into_any()
++    }
++}
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index d3fcb643ecf0f02205a60504befe55dfdb9e37b6..53b91ae54a2f200048e8172e6141ec7ec41247a0 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -9,6 +9,8 @@
+ pub mod account;
+ /// 質問の窓（1 問ずつの選び方と局面は host でも組む・窓の DOM は wasm の target だけ・行 g-ask-win）。
+ pub mod askwin;
++/// 相談の窓（頼みの form と一覧の段は host でも組む・窓の DOM は wasm の target だけ・行 cs-bar）。
++pub mod consultwin;
+ /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
+ pub mod flight;
+ pub mod frame;
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+index 7bb5810f8efc8aa3c64a51cb0a19c22de3ef20c1..d6ef5a94fba4a2713f3f5039d318e0e88a4b55b9 100644
+--- a/crates/tsuzuri-surface/src/topbar.rs
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -19,7 +19,7 @@ use crate::project::{Body, UNKNOWN, next, notice, state_key};
+ use crate::view::{Fetched, hhmm};
+ use crate::vocab::label;
+ 
+-/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先）。
++/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Win {
+     Ask,
+@@ -29,11 +29,12 @@ pub enum Win {
+     Gaps,
+     Legend,
+     Dest,
++    Consult,
+ }
+ 
+ impl Win {
+     /// 全部の窓（宣言の順）。
+-    pub const ALL: [Win; 7] = [
++    pub const ALL: [Win; 8] = [
+         Win::Ask,
+         Win::Stalled,
+         Win::Notices,
+@@ -41,6 +42,7 @@ impl Win {
+         Win::Gaps,
+         Win::Legend,
+         Win::Dest,
++        Win::Consult,
+     ];
+ 
+     /// URL の query の win の値の名。
+@@ -53,6 +55,7 @@ impl Win {
+             Win::Gaps => "gaps",
+             Win::Legend => "legend",
+             Win::Dest => "dest",
++            Win::Consult => "consult",
+         }
+     }
+ 
+@@ -411,6 +414,7 @@ mod dom {
+         BAR, Count, GEAR, GEAR_KEY, NoticeLine, RECENT_KEY, SEAT_KEY, SeatBar, Use, Win, counts,
+         gaps_mark, lead, notice_line, seat_bar,
+     };
++    use crate::consultwin::CONSULT_KEY;
+     use crate::frame::Mode;
+     use crate::project::{Body, map, next, notice, seat, state_icon};
+     use crate::view::hhmm;
+@@ -588,6 +592,7 @@ mod dom {
+                 <div class="clock">
+                     {seat_part}
+                     {gp}
++                    <button type="button" class="cslt" aria-label=label(CONSULT_KEY) on:click=move |_| wins.open(Win::Consult, false)>{label(CONSULT_KEY)}</button>
+                     <span class="tm">{move || hhmm(now.get())}" "<small>"JST"</small></span>
+                     {gear_view(bar)}
+                 </div>
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index 77278e5c5cddef1ed679e2c0124965bc3eacc368..c410f4caf0076b3c4583ec2f35899476ee60417e 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -5,7 +5,7 @@
+ //! （頁から block を外したのは 1 枚の画面への切り替えの行）。抜けの検査の窓の下に台帳の module の未反映の段を
+ //! 描く（要件 FR13・台帳の block から移した・行 g-ledger-trim）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
+ //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
+-//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。
++//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。相談の窓は頼みの form と一覧（consultwin の body・行 cs-bar）。
+ //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
+ 
+ use std::cmp::Reverse;
+@@ -14,6 +14,7 @@ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
+ use tsuzuri_contract::graph::{GraphNode, NodeKind};
+ 
++use crate::consultwin::CONSULT_KEY;
+ use crate::frame::{Mode, node_href};
+ use crate::project::Body;
+ use crate::project::pipeline::{self, age_at, stage_word};
+@@ -32,6 +33,7 @@ pub fn frame_of(win: Win) -> (u32, &'static str) {
+         Win::Gaps => (600, "gaps"),
+         Win::Legend => (560, "status"),
+         Win::Dest => (520, "stage_target"),
++        Win::Consult => (720, CONSULT_KEY),
+     }
+ }
+ 
+@@ -175,6 +177,7 @@ mod dom {
+             Win::Gaps => view! { {gaps::inner()}{ledger::unref_panel()} }.into_any(),
+             Win::Legend => legend::inner(),
+             Win::Dest => stage::inner(),
++            Win::Consult => crate::consultwin::body(),
+         };
+         Frame {
+             width,
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 07670a2aaf497853d04cbe9322e5e8dcc64ed5bb..ef46732f841c7b6eb59d2a46ef5a9b830c93b869 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -125,6 +125,7 @@ h3 { font-size: var(--fs-2); }
+ #bar .tm small { color: var(--ink-3); font-size: 10px; font-weight: 500; }
+ #bar .gearw { position: relative; }
+ #bar .gearb { width: 28px; height: 28px; border-radius: 6px; color: var(--ink-2); font-size: 15px; text-align: center; }
++#bar .cslt { height: 28px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); font-size: 13px; }
+ #bar .gearb:hover { background: var(--panel-2); }
+ #bar .gmenu { position: absolute; top: 34px; right: 0; z-index: 35; width: 200px; padding: 8px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.15); }
+ #bar .gm-h { margin: 2px 4px 4px; color: var(--ink-3); font-size: 11px; }
+@@ -1144,3 +1145,13 @@ body:not(:has(.one)) .freshw { position: static; width: fit-content; height: aut
+ .ptwarn { color: var(--st-limit); margin-left: 2px; }
+ .ptlist { display: flex; flex-direction: column; gap: 6px; }
+ .ptlh { font-size: 12px; font-weight: 700; padding: 2px 2px 0; }
++
++/* 相談の窓（行 cs-bar） */
++.cswin h4 { margin: 12px 0 4px; font-size: 13px; }
++.csf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
++.csf input[type=text] { flex: 1 1 220px; min-width: 0; }
++.csfm { display: inline-flex; gap: 8px; }
++.csr { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
++.csr .cst { flex: 1; min-width: 0; overflow-wrap: anywhere; }
++.csr .csn { color: var(--ink-2); font-size: 12px; }
++.csr.late .csn { color: var(--s-stop); font-weight: 600; }
+diff --git a/crates/tsuzuri-surface/tests/cwbar.rs b/crates/tsuzuri-surface/tests/cwbar.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..97a12f7eef7ab3c7cbde33705fbd20384e485194
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/cwbar.rs
+@@ -0,0 +1,244 @@
++//! 帯の相談の口と相談の窓の歯（行 cs-bar・接頭辞 cwbar_・判断の記録 ADR-29 決定 (4)(9)）。
++//! 純な関数（頼みの電文・一覧の段・応答の 1 行・窓の名と幅と語）を host で撃ち、窓の DOM（wasm の枝）は配線の字を読む。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    FindingId, FindingRow, Form, RequestId, RequestRow, WindowId, WindowRow, WindowState,
++};
++use tsuzuri_surface::consultwin::{
++    CONSULT_KEY, DELIVER_SPAN, LATE, MODELS, NONE_LINES, Row, UNREAD, board, findings, request,
++    requests, sent_line, windows,
++};
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::Body;
++use tsuzuri_surface::topbar::{TODOS, Win, win_href, win_of_href};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::wins::frame_of;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の wasm の枝（`mod dom {` から後）。
++fn dom(rel: &str) -> String {
++    let src = read(rel);
++    let at = src
++        .find("mod dom {")
++        .unwrap_or_else(|| panic!("{rel} に wasm の枝が無い"));
++    src[at..].to_string()
++}
++
++fn row(id: &str, topic: &str, note: &str, late: bool) -> Row {
++    Row {
++        id: id.to_string(),
++        topic: topic.to_string(),
++        note: note.to_string(),
++        late,
++    }
++}
++
++fn rid(s: &str) -> RequestId {
++    RequestId::parse(s).expect("頼みの id")
++}
++
++/// 窓の名は 8 つ目に consult を足し、URL の query に読み戻り、幅は 720 で、題の語は語彙の「相談」と空でない注釈。
++#[test]
++fn cwbar_window_named_consult() {
++    assert_eq!(Win::ALL.len(), 8);
++    assert_eq!(Win::ALL.last(), Some(&Win::Consult));
++    assert_eq!(Win::Consult.key(), "consult");
++    for mode in Mode::ALL {
++        assert_eq!(
++            win_of_href(&win_href(Win::Consult, mode)),
++            Some((Win::Consult, None))
++        );
++    }
++    assert_eq!(CONSULT_KEY, "consult");
++    assert_eq!(frame_of(Win::Consult), (720, CONSULT_KEY));
++    let term = vocab().term(CONSULT_KEY).expect("語彙の consult");
++    assert_eq!(term.label, "相談");
++    assert!(!term.note.is_empty(), "注釈が空");
++}
++
++/// 帯の相談の口は色の付く数を持たない（やる事の 3 つに入らない）・帯の wasm の枝は consult の語の button で窓を開く。
++#[test]
++fn cwbar_band_button_without_count() {
++    assert_eq!(TODOS.len(), 3);
++    assert!(
++        TODOS.iter().all(|(_, _, w)| *w != Win::Consult),
++        "やる事の数に相談が在る"
++    );
++    let bar = dom("src/topbar.rs");
++    let button = "<button type=\"button\" class=\"cslt\" aria-label=label(CONSULT_KEY) on:click=move |_| wins.open(Win::Consult, false)>{label(CONSULT_KEY)}</button>";
++    assert_eq!(bar.matches(button).count(), 1, "帯の相談の口");
++    assert_eq!(
++        bar.matches("Win::Consult").count(),
++        1,
++        "帯の wasm の枝の相談の窓の口"
++    );
++}
++
++/// 頼みの電文は題の前後の空白を除き（空なら null）・形の語・model を持ち、model が選べる 3 つでなければ None。
++#[test]
++fn cwbar_request_body() {
++    assert_eq!(MODELS, ["fable", "opus", "sonnet"]);
++    assert_eq!(
++        request("  t3-hub.78 ", Form::Ask, "opus").as_deref(),
++        Some(r#"{"topic":"t3-hub.78","form":"ask","model":"opus"}"#)
++    );
++    assert_eq!(
++        request(" \t", Form::Talk, "fable").as_deref(),
++        Some(r#"{"topic":null,"form":"talk","model":"fable"}"#)
++    );
++    assert_eq!(request("t3-hub.78", Form::Ask, "haiku"), None);
++    assert_eq!(request("t3-hub.78", Form::Ask, ""), None);
++}
++
++/// 受けの無い頼みは、頼みの時刻から 1800 秒を越えた時だけ「席に届いていない」で、ちょうど 1800 秒は待ち。
++#[test]
++fn cwbar_requests_late_after_span() {
++    assert_eq!(DELIVER_SPAN, 1800);
++    assert_eq!(LATE, "席に届いていない");
++    let at = 1_000_000;
++    let list = Reading::Known(vec![
++        RequestRow {
++            id: rid("rq-20261003T1412Z-1"),
++            topic: Some("t3-hub.78".to_string()),
++            at,
++        },
++        RequestRow {
++            id: rid("rq-20261003T1442Z-1"),
++            topic: None,
++            at: at + 1,
++        },
++    ]);
++    assert_eq!(
++        requests(&list, at + DELIVER_SPAN + 1),
++        Body::Filled(vec![
++            row("rq-20261003T1412Z-1", "t3-hub.78", LATE, true),
++            row("rq-20261003T1442Z-1", "題なし", "席の受けを待つ", false),
++        ])
++    );
++    let Body::Filled(rows) = requests(&list, at + DELIVER_SPAN) else {
++        panic!("2 行");
++    };
++    assert!(
++        rows.iter().all(|r| !r.late),
++        "ちょうど 1800 秒で届いていない"
++    );
++    assert_eq!(
++        requests(&Reading::Known(Vec::new()), at),
++        Body::Empty(NONE_LINES[2])
++    );
++    assert_eq!(requests(&Reading::Unknown, at), Body::Unmeasured(UNREAD));
++}
++
++fn window(n: u32, state: WindowState) -> WindowRow {
++    WindowRow {
++        id: WindowId::parse(&format!("cw{n}")).expect("窓の id"),
++        form: Form::Ask,
++        topic: None,
++        state,
++        opened: Some(1),
++        findings: 2,
++        undisposed: 1,
++    }
++}
++
++/// 窓の段は退いた窓を載せず形と状態と所見の数を並べ、所見の段は席の受けを書き、読めない口と段は測れていない。
++#[test]
++fn cwbar_lists_and_unread() {
++    let ws = Reading::Known(vec![
++        window(1, WindowState::Live),
++        window(2, WindowState::Retired),
++    ]);
++    assert_eq!(
++        windows(&ws),
++        Body::Filled(vec![row(
++            "cw1",
++            "題なし",
++            "問う・生きている・所見 2（処分なし 1）",
++            false
++        )])
++    );
++    let gone = Reading::Known(vec![window(2, WindowState::Retired)]);
++    assert_eq!(windows(&gone), Body::Empty(NONE_LINES[0]));
++    let fs = Reading::Known(vec![
++        FindingRow {
++            id: FindingId::parse("cw1-1").expect("所見の id"),
++            topic: Some("t3-hub.78".to_string()),
++            arrived: Some(1),
++            received: Some(2),
++        },
++        FindingRow {
++            id: FindingId::parse("cw1-2").expect("所見の id"),
++            topic: None,
++            arrived: Some(3),
++            received: None,
++        },
++    ]);
++    assert_eq!(
++        findings(&fs),
++        Body::Filled(vec![
++            row("cw1-1", "t3-hub.78", "席が受けた", false),
++            row("cw1-2", "題なし", "席が受けていない", false),
++        ])
++    );
++    assert_eq!(findings(&Reading::Unknown), Body::Unmeasured(UNREAD));
++    assert_eq!(board(&Fetched::Failed), Err(UNREAD));
++    assert_eq!(board(&Fetched::NotRead), Err(UNREAD));
++    assert_eq!(board(&Fetched::Body("[]".to_string())), Err(UNREAD));
++    let text =
++        r#"{"windows":"unknown","findings":{"known":[]},"requests":"unknown","quota":"unknown"}"#;
++    let got = board(&Fetched::Body(text.to_string())).expect("一覧");
++    assert_eq!(got.findings, Reading::Known(Vec::new()));
++    assert_eq!(windows(&got.windows), Body::Unmeasured(UNREAD));
++}
++
++/// 頼みの口の応答の 1 行（200 は頼みの id・403・400・ほかの状態と本文・届かない）。
++#[test]
++fn cwbar_sent_lines() {
++    assert_eq!(
++        sent_line(Some((200, r#""rq-20261003T1412Z-1""#))),
++        "頼み rq-20261003T1412Z-1 を送った（席が受けて窓を開く）"
++    );
++    assert_eq!(sent_line(Some((200, "x"))), "頼みの応答が読めない");
++    assert_eq!(
++        sent_line(Some((403, ""))),
++        "読むだけの board なので送れない"
++    );
++    assert_eq!(
++        sent_line(Some((400, "bad-line"))),
++        "頼みの字が書けない（題の字を見直す）"
++    );
++    assert_eq!(
++        sent_line(Some((503, "no-root"))),
++        "頼みを置けなかった（状態 503・no-root）"
++    );
++    assert_eq!(sent_line(None), "board に届かない");
++}
++
++/// 窓の DOM の配線の字: 窓の名の振り分け・一覧の口の読み・頼みの口の送り・題の初めの字は窓を開いた link の id。
++#[test]
++fn cwbar_dom_wiring_text() {
++    assert!(dom("src/wins.rs").contains("Win::Consult => crate::consultwin::body(),"));
++    let win = dom("src/consultwin.rs");
++    for needle in [
++        "crate::net::read(PATH)",
++        "crate::net::post(REQUEST_PATH, body).await",
++        "crate::net::reload_all();",
++        "use_context::<AskFocus>().and_then(|f| f.0.get_untracked())",
++        "requests(&b.requests, now.get())",
++    ] {
++        assert_eq!(
++            win.matches(needle).count(),
++            1,
++            "wasm の枝に {needle} が 1 つでない"
++        );
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvhelp.rs b/crates/tsuzuri-surface/tests/teeth1/bvhelp.rs
+index 164c0cf8bd579164e9d53c9697dba02c38362072..05f1f5bb0458d267248ec69e4dbac2efc2c59831 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvhelp.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvhelp.rs
+@@ -77,7 +77,7 @@ fn note(key: &str) -> String {
+         .clone()
+ }
+ 
+-const WINS: [Win; 7] = [
++const WINS: [Win; 8] = [
+     Win::Ask,
+     Win::Stalled,
+     Win::Notices,
+@@ -85,6 +85,7 @@ const WINS: [Win; 7] = [
+     Win::Gaps,
+     Win::Legend,
+     Win::Dest,
++    Win::Consult,
+ ];
+ 
+ /// 質問の窓の題の横の残りの数（局面の残りを count_text で出す span）。
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+index 8b154a0ce9fc0fe9000fa463b228ed64ce2aefcc..67f0d8843a051ee88fbae5c1e44810c7f1378839 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+@@ -17,14 +17,14 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-/// 窓の名は 7 つで query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
++/// 窓の名は 8 つ（相談の窓 consult は行 cs-bar）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
+ #[test]
+ fn bvnav_win_query_round_trip() {
+     let keys: Vec<&str> = Win::ALL.iter().map(|w| w.key()).collect();
+     assert_eq!(
+         keys,
+         [
+-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest"
++            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
+         ]
+     );
+     assert_eq!(WIN_PARAM, "win");
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 32be9bedb3c2ae66474fcbd8d1c9ba1bbe14c5ae..f50f9792bdf20823329f795757642a6fcee434f9 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -1803,6 +1803,11 @@
+    "label": "段の tile",
+    "plain": "スマホの形で板の代わりに出る\n・ 5 つの段の数と色\n・ 押した段の札だけが下に開く\n・ 初めは札の在る一番急ぐ段",
+    "internal": "pipeline の tiles_view と src/tiles.rs（行 g-layout）"
++  },
++  "consult": {
++   "label": "相談",
++   "plain": "席の文脈と分けた調べと検証の窓\n・ 題と形と model を書いて頼む\n・ 窓を開くのは席\n・ 30 分受けられなければ席に届いていない\n→ 色の付く数は持たない",
++   "internal": "GET /api/consult ・ POST /api/consult/request（判断の記録 ADR-29 決定 (4)(9)・行 cs-bar）"
+   }
+  }
+ }
+\ No newline at end of file

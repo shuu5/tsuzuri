@@ -1,0 +1,324 @@
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index e7042ba436e6c58204fc12c351ebaac891a7553e..2885299a7879e5f8a197ed1af6b44f1be02ad9f1 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -14,6 +14,7 @@
+ //! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
+ //! 行にマウスの pointer を載せると板の対応する札に輪より薄い hover の印を付け、離すと外す（吹き出しは出さない・pointer の
+ //! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)・行 g-list-hover）。
++//! 札を持つ行の段の字と、組の頭の段ごとの数の頭には、板の札と同じ段の記号を付ける（判断の記録 ADR-30 決定 (9)・行 g-list-sym）。
+ //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use std::collections::BTreeMap;
+@@ -30,7 +31,7 @@ use crate::project::ledger::{
+     BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, NONE, OUTSIDE, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
+     burn_svg, burndown, kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, stats,
+ };
+-use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
++use crate::project::pipeline::{LANES, Lane, age_at, card_sym, cards, stage_word};
+ use crate::project::{Body, LEDGER_UNREAD};
+ use crate::view::{Fetched, id_order, read_rows};
+ use crate::vocab::label;
+@@ -78,6 +79,8 @@ pub struct Lrow {
+     pub rank: u8,
+     /// 局面と手番の平易な字（memo と問いの行だけ・`with_phases` が置く・行 g-unref-lc）。
+     pub phase: Option<String>,
++    /// 右の段の字の頭の段の記号の材料（札の在る行だけ・板の札と同じ `card_sym` の値・行 g-list-sym）。
++    pub sym: Option<(bool, Option<&'static str>)>,
+ }
+ 
+ /// 一覧の 1 組（epic の組・epic の外の組は `epic` が None）。
+@@ -178,6 +181,7 @@ fn lrow(
+         ),
+         rank: row_rank(row.node_kind(), card),
+         phase: None,
++        sym: card.map(|c| card_sym(c, now)),
+     }
+ }
+ 
+@@ -791,7 +795,8 @@ mod dom {
+             Some(counts) => counts
+                 .into_iter()
+                 .map(|(lane, n)| {
+-                    view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{n}</b> }
++                    let sym = pipeline::stage_sym(false, lane.state);
++                    view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{sym}{n}</b> }
+                 })
+                 .collect_view()
+                 .into_any(),
+@@ -826,6 +831,10 @@ mod dom {
+     /// 1 行（種類の札・短い題・右の字・短い題は節点の頁への link で、題の全体を title に置く）。
+     fn row_view(r: &Lrow) -> AnyView {
+         let (tag, class) = kind_tag(r.kind);
++        // 札の在る行は段の字の頭に板の札と同じ段の記号を置く（札の無い行は置かない・行 g-list-sym）。
++        let sym = r
++            .sym
++            .map(|(closed, state)| pipeline::stage_sym(closed, state));
+         let ctx = use_context::<HelpCtx>();
+         let id = r.id.clone();
+         let href = move || {
+@@ -876,7 +885,7 @@ mod dom {
+                 <span class=class>{tag}</span>
+                 <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
+                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
+-                <span class="ll-rt">{r.right.clone()}</span>
++                <span class="ll-rt">{sym}{r.right.clone()}</span>
+             </div>
+         }
+         .into_any()
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 5ed0afb9d97ddb7be3e65acd322e6d5707dead3f..570026d5a48408c1538638915c1922936e556332 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -411,6 +411,17 @@ pub fn stage_word(card: &PipelineCard) -> String {
+     }
+ }
+ 
++/// 札の段の記号の材料（台帳で閉じた（着地せず）の札か・状態の記号の値〔CI を待つ札は `CI_WAIT_STATE`・ほかは列の値〕）。
++/// 板の札と台帳 open の一覧の行の段の字の頭が、同じ値で `stage_sym` を描く（行 g-list-sym・判断の記録 ADR-30 決定 (9)）。
++pub fn card_sym(card: &PipelineCard, now: EpochSecs) -> (bool, Option<&'static str>) {
++    let state = if ci_shown(card, now) == Some(Ci::Waiting) {
++        Some(CI_WAIT_STATE)
++    } else {
++        lane(card.stage.column()).state
++    };
++    (closed_card(card), state)
++}
++
+ /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
+ /// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にする。
+ /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
+@@ -419,7 +430,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+     let lane = lane(card.stage.column());
+     let id = card.contract.to_string();
+     let title = title_of(rows, &id);
+-    let closed = closed_card(card);
++    let (closed, state) = card_sym(card, now);
+     let stage = stage_word(card);
+     let age = age_at(card.since, now);
+     let shown = ci_shown(card, now);
+@@ -435,11 +446,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
+     Kcard {
+         id,
+         title,
+-        state: if shown == Some(Ci::Waiting) {
+-            Some(CI_WAIT_STATE)
+-        } else {
+-            lane.state
+-        },
++        state,
+         lead,
+         age,
+         since: card.since,
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 59987ddb662fe618f93db44249fd556dcac36830..cd9eda40f3cd373beb76a3e1d63ef8adc062cfc7 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1127,6 +1127,8 @@ button.ll-gname:hover { background: var(--panel-2); }
+ /* 一覧の行の hover の印（行 g-list-hover・判断の記録 ADR-30 決定 (8)）: マウスを載せた行の札に選びの輪より薄い輪・薄い札も見せる */
+ .kpick.hov > .kcard { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 35%, transparent); }
+ .kpick.dim.hov { opacity: 1; }
++/* 一覧の段の記号（行 g-list-sym・判断の記録 ADR-30 決定 (9)）: 行の段の字と組の頭の段の数の頭に板の札と同じ記号を並べる */
++.ll-rt, .ll-sd { display: inline-flex; align-items: center; gap: 3px; }
+ /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
+ body:has(#bar) { padding-top: 52px; }
+ .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
+diff --git a/crates/tsuzuri-surface/tests/lsym.rs b/crates/tsuzuri-surface/tests/lsym.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ba17f0eecbca570cc30931fddb595af4d2d0b12
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/lsym.rs
+@@ -0,0 +1,193 @@
++//! 台帳 open の一覧の段の字と組の頭の段の数に板の札と同じ段の記号を付ける歯（行 g-list-sym・接頭辞 lsym_・判断の記録 ADR-30 決定 (9)）。
++//! 行の記号の材料を板の札の値と照らし、札の無い行は記号を持たないことを断言し、DOM（wasm の枝）の配線の字と stylesheet の規則を照らす。
++//! 台帳の行と札は歯の中で組む（bead の id の接頭辞は fx-y）。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::path::PathBuf;
++
++use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
++use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
++use tsuzuri_surface::ledgerlist::{Lrow, groups};
++use tsuzuri_surface::project::pipeline::{CLOSED_TAG, card_sym, kcard};
++
++/// 一覧を組む今。
++const NOW: u64 = 1_790_510_400;
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
++fn span(src: &str, start: &str, end: &str) -> String {
++    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
++    let rest = &src[at..];
++    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
++    rest[..to].to_string()
++}
++
++fn row(id: &str, labels: &[&str]) -> LedgerRow {
++    LedgerRow {
++        id: BeadId::new(id).expect("id"),
++        kind: "task".to_string(),
++        title: format!("{id} の題"),
++        status: "open".to_string(),
++        updated_at: NOW - 600,
++        parent: None,
++        labels: labels.iter().map(|l| (*l).to_string()).collect(),
++    }
++}
++
++fn card(id: &str, stage: Stage) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(id).expect("id"),
++        runs: 1,
++        stage,
++        reason: None,
++        account: None,
++        since: Some(NOW - 120),
++        ci: None,
++    }
++}
++
++/// 台帳: epic fx-y の下に便 8 本（札を持つ 7 本と札の無い 1 本）と memo と問い。
++fn rows() -> Vec<LedgerRow> {
++    let mut rows = vec![LedgerRow {
++        kind: "epic".to_string(),
++        ..row("fx-y", &[])
++    }];
++    rows.extend((1..=8).map(|n| row(&format!("fx-y.{n}"), &[])));
++    rows.push(row("fx-y.9", &[MEMO_LABEL]));
++    rows.push(row("fx-y.10", &[QUESTION_LABEL]));
++    rows
++}
++
++/// 札: 5 つの段と、台帳で閉じた（着地せず）の札と、CI を待つ着地の札（fx-y.8 は札なし）。
++fn cards() -> Vec<PipelineCard> {
++    let closed = PipelineCard {
++        reason: Some(format!("{CLOSED_TAG} 取り下げ")),
++        ..card("fx-y.6", Stage::Landed)
++    };
++    let waiting = PipelineCard {
++        ci: Some(Ci::Waiting),
++        since: Some(NOW - 86_400),
++        ..card("fx-y.7", Stage::Landed)
++    };
++    vec![
++        card("fx-y.1", Stage::Blocked),
++        card("fx-y.2", Stage::Queued),
++        card("fx-y.3", Stage::Running),
++        card("fx-y.4", Stage::Failed),
++        card("fx-y.5", Stage::Landed),
++        closed,
++        waiting,
++    ]
++}
++
++/// 一覧の行を id で引く表。
++fn listed() -> BTreeMap<String, Lrow> {
++    groups(&rows(), &cards(), &BTreeMap::new(), NOW)
++        .into_iter()
++        .flat_map(|g| g.rows)
++        .map(|r| (r.id.clone(), r))
++        .collect()
++}
++
++#[test]
++fn lsym_row_sym_like_card() {
++    let listed = listed();
++    let rows = rows();
++    for c in cards() {
++        let id = c.contract.to_string();
++        let got = listed
++            .get(&id)
++            .unwrap_or_else(|| panic!("{id} の行が無い"))
++            .sym;
++        let board = kcard(&c, &rows, NOW);
++        assert_eq!(got, Some((board.closed, board.state)), "{id} の行と板の札");
++        assert_eq!(got, Some(card_sym(&c, NOW)), "{id} の行は card_sym の値");
++    }
++    let want = [
++        ("fx-y.1", (false, Some("wait"))),
++        ("fx-y.2", (false, Some("wait"))),
++        ("fx-y.3", (false, Some("run"))),
++        ("fx-y.4", (false, Some("wait"))),
++        ("fx-y.5", (false, None)),
++        ("fx-y.6", (true, None)),
++        ("fx-y.7", (false, Some("run"))),
++    ];
++    for (id, sym) in want {
++        assert_eq!(listed[id].sym, Some(sym), "{id} の段の記号の材料");
++    }
++}
++
++#[test]
++fn lsym_no_card_plain() {
++    let listed = listed();
++    for id in ["fx-y.8", "fx-y.9", "fx-y.10"] {
++        assert_eq!(listed[id].sym, None, "札の無い行 {id} は記号を持たない");
++    }
++    // 札の無い便の行に札を 1 枚だけ足すと記号を持つ（行の違いは札の有無だけ）。
++    let mut cards = cards();
++    cards.push(card("fx-y.8", Stage::Queued));
++    let with_card = groups(&rows(), &cards, &BTreeMap::new(), NOW)
++        .into_iter()
++        .flat_map(|g| g.rows)
++        .find(|r| r.id == "fx-y.8")
++        .expect("fx-y.8 の行");
++    assert_eq!(with_card.sym, Some((false, Some("wait"))));
++}
++
++#[test]
++fn lsym_row_and_head_dom() {
++    let list = read("src/ledgerlist.rs");
++    let dom = &list[list.find("mod dom {").expect("wasm の枝")..];
++    let row = span(dom, "fn row_view(", "\n    }\n");
++    assert!(
++        row.contains(".map(|(closed, state)| pipeline::stage_sym(closed, state));"),
++        "行の記号は札と同じ stage_sym で描く"
++    );
++    assert!(
++        row.contains("<span class=\"ll-rt\">{sym}{r.right.clone()}</span>"),
++        "記号は右の段の字の前"
++    );
++    let head = span(dom, "fn head_view(", "\n    }\n");
++    assert!(
++        head.contains("let sym = pipeline::stage_sym(false, lane.state);"),
++        "組の頭の数の記号は列の状態の記号"
++    );
++    assert!(
++        head.contains("title=label(lane.key)>{sym}{n}</b>"),
++        "記号は段の数の前"
++    );
++    assert!(
++        head.contains("<b class=\"ll-sd\" title=label(state_key(UNKNOWN))>{COUNTS_UNKNOWN}</b>"),
++        "板が読めない時の ? の 1 つは記号を持たない"
++    );
++    let css = read("style.css");
++    assert_eq!(
++        css.matches(".ll-rt, .ll-sd { display: inline-flex; align-items: center; gap: 3px; }")
++            .count(),
++        1,
++        "記号と字を横に並べる規則"
++    );
++}
++
++#[test]
++fn lsym_kcard_shares_sym() {
++    let pipe = read("src/project/pipeline.rs");
++    let body = span(&pipe, "pub fn kcard(", "\n}\n");
++    assert!(
++        body.contains("let (closed, state) = card_sym(card, now);"),
++        "板の札も card_sym の値で記号を決める"
++    );
++    assert!(
++        !body.contains("CI_WAIT_STATE"),
++        "kcard が状態の記号を別に決める"
++    );
++    assert!(
++        !body.contains("closed_card("),
++        "kcard が閉じた札を別に決める"
++    );
++}

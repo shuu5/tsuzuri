@@ -1,0 +1,457 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/question_gate.rs b/crates/tsuzuri-boundary/src/hook/question_gate.rs
+index 6b49c5634fb111843401a01e38fb713a6c02d36b..ba553bd8947b78d44727d03bec92dad47bd27037 100644
+--- a/crates/tsuzuri-boundary/src/hook/question_gate.rs
++++ b/crates/tsuzuri-boundary/src/hook/question_gate.rs
+@@ -3,7 +3,8 @@
+ //! 導出グラフで判じて、通さないときだけ deny の答えを標準出力に 1 行で書く（通すときは何も出さない）。順:
+ //! 1. 標準入力を全部読む（読めなければ空の字）。
+ //! 2. 使い方の誤りか repo が dir でなければ、下書きが無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
+-//! 3. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
++//! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39・行 c-short-gate）。
++//! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
+ //!
+ //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
+ 
+@@ -78,8 +79,11 @@ pub fn graph(args: &Args) -> Graph {
+     })
+ }
+ 
+-/// 答えの字（下書きが無ければ子 process を撃たずに None・通すときも None）。
++/// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None）。
+ pub fn answer(args: &Args, payload: &str) -> Option<String> {
++    if let Some(why) = gate::short_gate(payload) {
++        return Some(gate::short_output(why));
++    }
+     let drafts = gate::drafts(payload);
+     if drafts.is_empty() {
+         return None;
+diff --git a/crates/tsuzuri-boundary/tests/shrtb.rs b/crates/tsuzuri-boundary/tests/shrtb.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..11813bd87874c1a648a72d558a638065e9e6b51c
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/shrtb.rs
+@@ -0,0 +1,98 @@
++//! 問いの起票の門の hook が短い題の断りを先に出す歯（接頭辞 shrtb_・設計ノート surface-wave27b 行 c-short-gate・規則の行 R-39）。
++//! 境界の歯は JSON を読まないので hook の入力は字で組む。tz hook question-gate を偽の bd と偽の設計の道具（撃たれたら記録の file に 1 行を足して rc 1）で撃つ。作業場は CARGO_TARGET_TMPDIR の下。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Stdio};
++
++use tsuzuri_core::gate::{ShortWhy, short_output};
++
++fn place(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("shrtb")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(root.join("repo")).expect("repo");
++    for program in ["bd", "folio"] {
++        let path = root.join(program);
++        fs::write(
++            &path,
++            format!("#!/bin/sh\necho x >> '{}/calls'\nexit 1\n", root.display()),
++        )
++        .expect("偽の program");
++        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("権限");
++    }
++    root
++}
++
++/// tz hook question-gate を `command` の Bash の hook の入力で撃ち、rc と標準出力と、偽の program が撃たれた回を返す。
++fn gate(root: &Path, command: &str) -> (Option<i32>, String, usize) {
++    let command = command.replace('\\', "\\\\").replace('"', "\\\"");
++    let input = format!(
++        r#"{{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{{"command":"{command}"}}}}"#
++    );
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", "question-gate", "--repo"])
++        .arg(root.join("repo"))
++        .arg("--bd")
++        .arg(root.join("bd"))
++        .arg("--folio")
++        .arg(root.join("folio"))
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++        .expect("tz を撃つ");
++    child
++        .stdin
++        .take()
++        .expect("標準入力")
++        .write_all(input.as_bytes())
++        .expect("hook の入力");
++    let out = child.wait_with_output().expect("tz の終わり");
++    let calls = fs::read_to_string(root.join("calls"))
++        .unwrap_or_default()
++        .lines()
++        .count();
++    (
++        out.status.code(),
++        String::from_utf8_lossy(&out.stdout).into_owned(),
++        calls,
++    )
++}
++
++#[test]
++fn shrtb_deny_without_short() {
++    let root = place("deny");
++    let memo = "bdw create --parent=fx-q --labels=intake:memo --metadata='{\"touches\":[\"FR4\"]}' 門の歯のメモ";
++    let want = format!("{}\n", short_output(ShortWhy::Missing));
++    assert_eq!(gate(&root, memo), (Some(0), want.clone(), 0), "memo の起票");
++    // 問いの起票も、問いの判じ（台帳と設計の索引の読み）より先に短い題で断る。
++    let question = "bdw create --parent=fx-q --labels=intake:question --metadata='{\"touches\":[\"FR4\"]}' 門の歯の問い";
++    assert_eq!(gate(&root, question), (Some(0), want, 0), "問いの起票");
++    let long = format!(
++        "bd create --metadata='{{\"short\":\"{}\"}}' 長い題",
++        "長".repeat(21)
++    );
++    assert_eq!(
++        gate(&root, &long),
++        (Some(0), format!("{}\n", short_output(ShortWhy::Long)), 0)
++    );
++}
++
++#[test]
++fn shrtb_pass_with_short() {
++    let root = place("pass");
++    let memo = format!(
++        "bdw create --parent=fx-q --labels=intake:memo --metadata='{{\"short\":\"{}\"}}' 門の歯のメモ",
++        "短".repeat(20)
++    );
++    assert_eq!(gate(&root, &memo), (Some(0), String::new(), 0));
++    assert_eq!(
++        gate(&root, "bd update fx-q.1 --notes x"),
++        (Some(0), String::new(), 0)
++    );
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+index ad337fb62a82647f413245c8503bf45ae8e143b8..fb00dc7a76871fe048500d3a50660c9ba4135314 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+@@ -279,7 +279,7 @@ fn meta_m(graph: &Graph, premises: Option<&str>) -> String {
+     let premises = premises
+         .map(|p| format!(r#","premises":{p}"#))
+         .unwrap_or_default();
+-    format!(r#"{{"touches":["FR4"],"not-relevant":{{{NR_FOUR}}},"digest":"{digest}"{premises}}}"#)
++    format!(r#"{{"short":"方針の歯","touches":["FR4"],"not-relevant":{{{NR_FOUR}}},"digest":"{digest}"{premises}}}"#)
+ }
+ 
+ /// 問いの起票の Bash の PreToolUse の hook の入力の字（metadata の字を一重引用符で囲む）。
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/qgate.rs b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+index a5252bcd9e3caba8ee8f643f0873b445bcde0135..9b5decc2eb71ee5336e340626b031d34a3bb86aa 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+@@ -192,7 +192,7 @@ fn payload(command: &str) -> String {
+ /// 問いの起票の command（not-relevant の中身と digest）。
+ fn question_command(not_relevant: &str, digest: &str) -> String {
+     let meta = format!(
+-        r#"{{"touches":["FR4"],"not-relevant":{{{not_relevant}}},"digest":"{digest}"}}"#
++        r#"{{"short":"門の歯","touches":["FR4"],"not-relevant":{{{not_relevant}}},"digest":"{digest}"}}"#
+     );
+     format!("bdw create --parent=fx-q --labels=intake:question --metadata='{meta}' 門の歯の問い")
+ }
+@@ -234,7 +234,7 @@ fn others() -> Vec<String> {
+         format!(r#"{{"tool_name":"Edit","tool_input":{{"command":"{command}"}}}}"#),
+         "not json".to_string(),
+         payload("ls -la"),
+-        payload("bdw create --parent=fx-q --labels=intake:memo --metadata='{}' 門の歯の問い"),
++        payload(r#"bdw create --parent=fx-q --labels=intake:memo --metadata='{"short":"門の歯"}' 門の歯の問い"#),
+         payload("bdw update fx-q.1 --add-label=intake:question"),
+         payload("echo bdw create --labels=intake:question"),
+     ]
+diff --git a/crates/tsuzuri-core/src/gate.rs b/crates/tsuzuri-core/src/gate.rs
+index 11d8af252dc761a027abd28b24236b4d4238e3e6..27f9a36fe9baa21a1b7f22b18175178837475457 100644
+--- a/crates/tsuzuri-core/src/gate.rs
++++ b/crates/tsuzuri-core/src/gate.rs
+@@ -8,6 +8,8 @@
+ //! 処分より先に方針を読ませる（設計ノート surface-wave13b 行 f-premises・要件 FR8）。metadata の premises は方針の id だけで、
+ //! 範囲がその問いに及び、まだどの問いの premises にも無い方針（`due_policies`）の全部を premises に持つときだけ先へ進む。
+ //! 門は allow を出さない（通すことは止めないことで、ほかの許可の仕組みはそのまま効く）。
++//! 起票の短い題の門（規則の行 R-39・判断の記録 ADR-30 決定 (6)・行 c-short-gate）: bd か bdw の create の全部（label を問わない）の
++//! metadata の鍵 short が空でなく `SHORT_MAX` 字以下の字かを見る（`short_gate`）。止める答えは同じ形の deny（`short_output`）。
+ 
+ use std::collections::BTreeSet;
+ 
+@@ -17,6 +19,7 @@ use tsuzuri_contract::ledger::{QUESTION_LABEL, fnv1a64};
+ 
+ use crate::graph::build::{PREMISES_KEY, SCOPE_ALL, metadata_ids};
+ use crate::graph::{Graph, Source};
++use crate::ledger::facts::{SHORT_KEY, SHORT_MAX};
+ use crate::question::touches;
+ 
+ /// 次数がこれを越える節点が hub（処分の要る節点から除く）。
+@@ -121,6 +124,52 @@ impl Why {
+     }
+ }
+ 
++/// 起票の短い題の門の断りの理由（閉じた 5・規則の行 R-39）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ShortWhy {
++    /// --metadata が無い。
++    NoMetadata,
++    /// metadata の字が JSON の object として読めない。
++    NotObject,
++    /// metadata に鍵 short の字が無い（鍵が無いか値が字でない）。
++    Missing,
++    /// short の字が空か空白だけ。
++    Empty,
++    /// short の字が `SHORT_MAX` 字を越える。
++    Long,
++}
++
++impl ShortWhy {
++    pub const ALL: [ShortWhy; 5] = [
++        ShortWhy::NoMetadata,
++        ShortWhy::NotObject,
++        ShortWhy::Missing,
++        ShortWhy::Empty,
++        ShortWhy::Long,
++    ];
++
++    /// 理由の語。
++    pub fn word(self) -> &'static str {
++        match self {
++            ShortWhy::NoMetadata => "short-no-metadata",
++            ShortWhy::NotObject => "short-not-object",
++            ShortWhy::Missing => "short-missing",
++            ShortWhy::Empty => "short-empty",
++            ShortWhy::Long => "short-long",
++        }
++    }
++
++    /// 答えの字の次の一手の 1 文。
++    fn next_move(self) -> &'static str {
++        match self {
++            ShortWhy::Long => "metadata の short を 20 字以下に縮めて置き直す。",
++            _ => {
++                "--metadata に鍵 short の 20 字以下の短い題を持つ JSON の object を渡して置き直す。"
++            }
++        }
++    }
++}
++
+ /// 門の答え。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum Gate {
+@@ -241,6 +290,58 @@ fn metadata_value(words: &[String]) -> Option<String> {
+ 
+ /// PreToolUse の hook の入力から問いの起票の下書きを command の順に拾う（Bash の呼び出しでなければ空）。
+ pub fn drafts(payload: &str) -> Vec<Draft> {
++    create_segments(payload)
++        .into_iter()
++        .filter(|(question, _)| *question)
++        .map(|(_, metadata)| Draft { metadata })
++        .collect()
++}
++
++/// PreToolUse の hook の入力から bd か bdw の create の一続きの --metadata の値を command の順に拾う（label を問わない・
++/// Bash の呼び出しでなければ空・行 c-short-gate）。
++pub fn creates(payload: &str) -> Vec<Option<String>> {
++    create_segments(payload)
++        .into_iter()
++        .map(|(_, metadata)| metadata)
++        .collect()
++}
++
++/// metadata の字の短い題の断りの理由（short が空でなく `SHORT_MAX` 字以下の字なら None・字数は Unicode のスカラー値）。
++pub fn short_why(metadata: Option<&str>) -> Option<ShortWhy> {
++    let Some(text) = metadata else {
++        return Some(ShortWhy::NoMetadata);
++    };
++    let Ok(Value::Object(object)) = serde_json::from_str::<Value>(text) else {
++        return Some(ShortWhy::NotObject);
++    };
++    let Some(short) = object.get(SHORT_KEY).and_then(Value::as_str) else {
++        return Some(ShortWhy::Missing);
++    };
++    if short.trim().is_empty() {
++        return Some(ShortWhy::Empty);
++    }
++    (short.chars().count() > SHORT_MAX).then_some(ShortWhy::Long)
++}
++
++/// 起票の短い題の門（create の全部の metadata を command の順に見た最初の断りの理由・無ければ None）。
++pub fn short_gate(payload: &str) -> Option<ShortWhy> {
++    creates(payload)
++        .iter()
++        .find_map(|metadata| short_why(metadata.as_deref()))
++}
++
++/// 短い題の断りの hook の答えの JSON の字（PreToolUse の deny と理由）。
++pub fn short_output(why: ShortWhy) -> String {
++    deny_json(format!(
++        "起票の短い題の門は止める（{}） 次の一手 = {}",
++        why.word(),
++        why.next_move()
++    ))
++}
++
++/// bd か bdw の create の一続きを command の順に拾い、問いの起票か（label に `intake:question` を持つか）と
++/// --metadata の値の組にする（Bash の呼び出しでなければ空）。
++fn create_segments(payload: &str) -> Vec<(bool, Option<String>)> {
+     let Ok(Value::Object(input)) = serde_json::from_str::<Value>(payload) else {
+         return Vec::new();
+     };
+@@ -261,14 +362,11 @@ pub fn drafts(payload: &str) -> Vec<Draft> {
+             let start = seg.iter().position(|w| !is_assignment(w))?;
+             let (head, rest) = seg.get(start..)?.split_first()?;
+             let program = head.rsplit('/').next().unwrap_or(head);
+-            let question = PROGRAMS.contains(&program)
+-                && rest.iter().any(|w| w == CREATE)
+-                && label_values(rest)
+-                    .iter()
+-                    .any(|v| v.split(',').any(|l| l.trim() == QUESTION_LABEL));
+-            question.then(|| Draft {
+-                metadata: metadata_value(rest),
+-            })
++            let create = PROGRAMS.contains(&program) && rest.iter().any(|w| w == CREATE);
++            let question = label_values(rest)
++                .iter()
++                .any(|v| v.split(',').any(|l| l.trim() == QUESTION_LABEL));
++            create.then(|| (question, metadata_value(rest)))
+         })
+         .collect()
+ }
+@@ -500,6 +598,11 @@ pub fn output(gate: &Gate) -> Option<String> {
+     }
+     reason.push_str(" 次の一手 = ");
+     reason.push_str(why.next_move());
++    Some(deny_json(reason))
++}
++
++/// PreToolUse の deny の答えの JSON の字（理由は `reason`）。
++fn deny_json(reason: String) -> String {
+     let mut inner = Map::new();
+     inner.insert(
+         "hookEventName".to_string(),
+@@ -515,5 +618,5 @@ pub fn output(gate: &Gate) -> Option<String> {
+     );
+     let mut answer = Map::new();
+     answer.insert("hookSpecificOutput".to_string(), Value::Object(inner));
+-    Some(Value::Object(answer).to_string())
++    Value::Object(answer).to_string()
+ }
+diff --git a/crates/tsuzuri-core/tests/shrtc.rs b/crates/tsuzuri-core/tests/shrtc.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4bdc9b87d130d689452981ae496d5681432aaa15
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/shrtc.rs
+@@ -0,0 +1,113 @@
++//! 起票の短い題の門の判じの歯（接頭辞 shrtc_・設計ノート surface-wave27b 行 c-short-gate・規則の行 R-39・判断の記録 ADR-30 決定 (6)）。
++//! hook の入力の字は歯の中で組む（command の字は JSON の字に写す）。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_core::gate::{ShortWhy, creates, short_gate, short_output, short_why};
++
++/// Bash の PreToolUse の hook の入力の字。
++fn payload(command: &str) -> String {
++    json!({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command}})
++        .to_string()
++}
++
++/// 全角の字を n 字。
++fn wide(n: usize) -> String {
++    "短い題の字".chars().cycle().take(n).collect()
++}
++
++#[test]
++fn shrtc_creates_all() {
++    let command = "bd create --labels=intake:memo --metadata='{\"short\":\"m\"}' 題1; \
++                   bdw create -l intake:question --metadata x 題2; \
++                   bd update fx.1 --metadata='{}'; echo bd create 題3; \
++                   FOO=1 /usr/bin/bdw create 題4 && bd list";
++    assert_eq!(
++        creates(&payload(command)),
++        vec![
++            Some("{\"short\":\"m\"}".to_string()),
++            Some("x".to_string()),
++            None
++        ]
++    );
++    let other = json!({"tool_name": "Edit", "tool_input": {"command": "bd create x"}}).to_string();
++    assert_eq!(creates(&other), Vec::<Option<String>>::new());
++}
++
++#[test]
++fn shrtc_short_reasons() {
++    let ok = format!(r#"{{"short":"{}","touches":["FR4"]}}"#, wide(20));
++    assert_eq!(short_why(Some(&ok)), None, "20 字は通す");
++    let cases = [
++        (None, ShortWhy::NoMetadata),
++        (
++            Some(format!(r#"{{"short":"{}","touches":["FR4"]"#, wide(20))),
++            ShortWhy::NotObject,
++        ),
++        (
++            Some(format!(r#"["short","{}"]"#, wide(20))),
++            ShortWhy::NotObject,
++        ),
++        (
++            Some(r#"{"touches":["FR4"]}"#.to_string()),
++            ShortWhy::Missing,
++        ),
++        (
++            Some(r#"{"short":20,"touches":["FR4"]}"#.to_string()),
++            ShortWhy::Missing,
++        ),
++        (
++            Some(r#"{"short":"","touches":["FR4"]}"#.to_string()),
++            ShortWhy::Empty,
++        ),
++        (
++            Some(r#"{"short":"  ","touches":["FR4"]}"#.to_string()),
++            ShortWhy::Empty,
++        ),
++        (
++            Some(format!(r#"{{"short":"{}","touches":["FR4"]}}"#, wide(21))),
++            ShortWhy::Long,
++        ),
++    ];
++    for (metadata, why) in cases {
++        assert_eq!(short_why(metadata.as_deref()), Some(why), "{metadata:?}");
++    }
++    let words: Vec<&str> = ShortWhy::ALL.iter().map(|w| w.word()).collect();
++    assert_eq!(
++        words,
++        [
++            "short-no-metadata",
++            "short-not-object",
++            "short-missing",
++            "short-empty",
++            "short-long"
++        ]
++    );
++}
++
++#[test]
++fn shrtc_gate_first_refusal() {
++    let good = "bd create --metadata='{\"short\":\"a\"}' 題1";
++    assert_eq!(short_gate(&payload(good)), None);
++    assert_eq!(
++        short_gate(&payload("ls; bd list")),
++        None,
++        "create の無い呼び"
++    );
++    let two = format!("{good}; bdw create 題2; bd create --metadata='{{}}' 題3");
++    assert_eq!(
++        short_gate(&payload(&two)),
++        Some(ShortWhy::NoMetadata),
++        "command の順の最初"
++    );
++    let text = short_output(ShortWhy::Long);
++    let v: Value = serde_json::from_str(&text).expect("JSON の字");
++    let out = &v["hookSpecificOutput"];
++    assert_eq!(out["hookEventName"], "PreToolUse");
++    assert_eq!(out["permissionDecision"], "deny");
++    let reason = out["permissionDecisionReason"].as_str().expect("理由");
++    assert!(
++        reason.starts_with("起票の短い題の門は止める（short-long） 次の一手 = "),
++        "{reason}"
++    );
++}

@@ -1,0 +1,137 @@
+diff --git a/scribe2/crates/scribe2/src/pipe/review.rs b/scribe2/crates/scribe2/src/pipe/review.rs
+index 3a81709ff4e53d4348dd816517fe1188543ed5ec..f9831a436389c80c7454559124cfd4d14f4a5426 100644
+--- a/scribe2/crates/scribe2/src/pipe/review.rs
++++ b/scribe2/crates/scribe2/src/pipe/review.rs
+@@ -66,11 +66,12 @@ use super::gate::{last_json_object, lens_usage, Verdict};
+ use super::lens_record::LensSource;
+ use super::dispatch::floor::Worktree;
+ use super::row_review::{self, Basis};
+-use super::{confine, contract_path, emit, git_line, record_cost, run_dir, table, Emit};
++use super::{confine, contract_path, emit, git_line, record_cost_with, run_dir, table, Emit};
+ use crate::cli_outcome::{Outcome, RC_BROKEN};
+ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::store::LockPolicy;
+ use crate::fleet::{cli::now_utc, Cost, CostSource, EventKind, Stage, Usage, SCHEMA};
++use crate::headless::provenance;
+ use crate::invocation::Invocation;
+ use crate::polarity::{OnFailure, Polarity, Timing};
+ use std::path::{Path, PathBuf};
+@@ -338,16 +339,16 @@ pub fn review(entry: &Review<'_>) -> Outcome {
+         Err(reason) => return broken(reason),
+     };
+     let items = (if promised { 0 } else { items::done_items(&entry.contract.done).len() }, teeth.as_slice());
+-    let (finding, scope, usage, tree) = match &reused {
++    let (finding, scope, spent, tree) = match &reused {
+         Some((rc, text)) => (read_outcome(*rc, text, items), None, None, None),
+         None => decide(entry, &contract, items, head.as_deref()),
+     };
+     let finding = narrow(finding, promised);
+     let verdict = finding.verdict;
+     // **審査の lens の消費は判定を書く周に 1 件**（`Reviewed` の前・設計 gate-cost.md §26 形 (2)）。揃わない周は書かず、
+-    // 書けない周も判定と rc は変えない。使い回した周は lens を撃っていないので書かない（形 ac 2）。
+-    let cost = usage.map(|found| Cost { source: CostSource::Review, usage: found });
+-    let noted = record_cost(entry.state_dir, (entry.run, entry.bead), cost, entry.policy);
++    // 書けない周も判定と rc は変えない。使い回した周は lens を撃っていないので書かない（形 ac 2）。detail は lens の版の 4 語（行 xp-prov-review）。
++    let (cost, words) = review_cost(spent);
++    let noted = record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, words, entry.policy);
+     match settle(entry, &finding, scope, reused.as_ref().map(|_| ROW_REUSED), tree.as_deref()) {
+         Err(reason) => broken(reason),
+         Ok(()) => Outcome {
+@@ -551,8 +552,8 @@ fn lens_cmd(source: &LensSource) -> Result<&str, Finding> {
+ 
+ /// lens を 1 回撃って判定を得る（**wildcard 無し・判定に届かない周は INCONCLUSIVE**）。
+ ///
+-/// 2 つ目は lens の scope を片付けた結果（record に書く周だけ `Some`）・3 つ目は lens の claude の消費の 6 値（lens が
+-/// rc 0 で終わり判定 object が運んだ周だけ `Some`＝gate の lens と同じ読み [`lens_usage`]）。4 つ目は lens が読んだ審査の木の sha
++/// 2 つ目は lens の scope を片付けた結果（record に書く周だけ `Some`）・3 つ目は lens の claude の消費の 6 値と版の 4 語（lens が
++/// rc 0 で終わり判定 object が 6 値を運んだ周だけ `Some`＝gate の lens と同じ読み [`lens_usage`] に版を足す [`lens_spent`]）。4 つ目は lens が読んだ審査の木の sha
+ /// （木を作って lens を撃った周だけ `Some`）。
+ ///
+ /// **lens の cwd と `{worktree}` は審査の木**（run dir の直下の `<sha>.tree`・`head` は審査の前に読んだ repo の HEAD の sha に detach
+@@ -563,7 +564,7 @@ fn decide(
+     contract: &Path,
+     items: Items<'_>,
+     head: Option<&str>,
+-) -> (Finding, Option<confine::Released>, Option<Usage>, Option<String>) {
++) -> (Finding, Option<confine::Released>, Option<Spent>, Option<String>) {
+     let cmd = match lens_cmd(entry.lens) {
+         Ok(found) => found,
+         Err(finding) => return (finding, None, None, None),
+@@ -601,12 +602,28 @@ fn decide(
+     drop(child.stdin.take());
+     let waited = child.wait_with_output();
+     let scope = confine::release_scope(&confinement);
+-    let usage = waited
++    let spent = waited
+         .as_ref()
+         .ok()
+         .filter(|out| out.status.success())
+-        .and_then(|out| lens_usage(&String::from_utf8_lossy(&out.stdout)));
+-    (lens_outcome(waited, &confinement, items), scope, usage, Some(sha.to_owned()))
++        .and_then(|out| lens_spent(&String::from_utf8_lossy(&out.stdout)));
++    (lens_outcome(waited, &confinement, items), scope, spent, Some(sha.to_owned()))
++}
++
++/// 審査の lens の消費（6 値と版の 4 語・行 xp-prov-review）。
++type Spent = (Usage, String);
++
++/// lens の stdout の最後の JSON 行から、消費の 6 値と版の 4 語（判定 object の `provenance`・無い・形の違う周は 4 語とも
++/// `unmeasured`・行 xp-prov-review）。6 値が揃わない周は `None`（[`lens_usage`] と同じ読み）。
++fn lens_spent(text: &str) -> Option<Spent> {
++    let pairs = last_json_object(text).ok()?;
++    let usage = Usage::from_pairs(&pairs)?;
++    Some((usage, provenance::of_pairs(&pairs).unwrap_or_else(|| provenance::UNMEASURED_WORDS.to_owned())))
++}
++
++/// 審査の lens の消費の event の材料（出所は審査・detail は版の 4 語）。lens を撃たなかった周と 6 値の揃わない周は両方 `None`。
++fn review_cost(spent: Option<Spent>) -> (Option<Cost>, Option<String>) {
++    spent.map(|(usage, words)| (Cost { source: CostSource::Review, usage }, words)).unzip()
+ }
+ 
+ /// 終わった lens の出力から判定を読む（箱の中の死 → rc → 最後の JSON 行の順・gate の lens と同じ極性）。
+@@ -853,9 +870,9 @@ mod tests {
+     // flip-check: moved s2-07l.541
+     // flip-check: moved s2-07l.545
+     use super::{
+-        detail_of, judgement_of, lens_cmd, lens_version, narrow, parse_lens, read_detail, render_promises, requirement_md,
++        detail_of, judgement_of, lens_cmd, lens_spent, lens_version, narrow, parse_lens, read_detail, render_promises, requirement_md,
+         requirement_row, requirement_yaml, requirements_text, section_text, split_at, strip_tags, unaddressed, verdict_of,
+-        write_review, Finding, FindingKind, Found, Judgement, ReviewCheck, Rework, FINDING_KINDS,
++        review_cost, write_review, Finding, FindingKind, Found, Judgement, ReviewCheck, Rework, FINDING_KINDS,
+     };
+     use super::items::{done_items, holes, items_text};
+     use crate::fleet::json_lite::Value;
+@@ -1386,4 +1403,33 @@ mod tests {
+         assert!(!absent.exists() && !Path::new(&absent.with_extension("json.partial")).exists());
+         let _ = std::fs::remove_dir_all(&dir);
+     }
++
++    /// 審査の lens の stdout の最後の JSON 行から 6 値と版の 4 語を読み、対が無い・形の違う周は 4 語とも unmeasured、6 値が揃わない周は
++    /// 読まない（行 xp-prov-review）。
++    #[test]
++    fn xprev_spent_reads_usage_and_words_from_the_last_object() {
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        let usage = r#""usage":"in:1,out:2,cache_read:3,cache_create:4","turns":5,"wall_ms":6"#;
++        let line = |tail: &str| format!("{{\"verdict\":\"PASS\",{usage}{tail}}}");
++        let found = lens_spent(&format!("noise\n{}\n", line(&format!(",\"provenance\":\"{good}\""))));
++        assert_eq!(found.as_ref().map(|(usage, _)| (usage.tokens(), usage.turns, usage.wall_ms)), Some(("in:1,out:2,cache_read:3,cache_create:4".to_owned(), 5, 6)));
++        assert_eq!(found.map(|(_, words)| words).as_deref(), Some(good), "4 語");
++        let unmeasured = Some(crate::headless::provenance::UNMEASURED_WORDS);
++        assert_eq!(lens_spent(&line("")).map(|(_, words)| words).as_deref(), unmeasured, "対が無い");
++        assert_eq!(lens_spent(&line(",\"provenance\":\"build:abc\"")).map(|(_, words)| words).as_deref(), unmeasured, "形の違う対");
++        let early = format!("{}\n{{\"verdict\":\"PASS\"}}\n", line(&format!(",\"provenance\":\"{good}\"")));
++        assert_eq!(lens_spent(&early), None, "最後の JSON 行が 6 値を持たない");
++        assert_eq!(lens_spent(&format!("{{\"verdict\":\"PASS\",\"provenance\":\"{good}\"}}")), None, "6 値が無い");
++    }
++
++    /// 審査の消費の event の材料は出所 review と 6 値と detail の 4 語の対で、lens を撃たなかった周は両方 None（行 xp-prov-review）。
++    #[test]
++    fn xprev_cost_is_review_with_the_words_as_detail() {
++        let found = lens_spent(r#"{"verdict":"PASS","usage":"in:1,out:2,cache_read:3,cache_create:4","turns":5,"wall_ms":6}"#);
++        let usage = found.as_ref().map(|(usage, _)| *usage);
++        let (cost, words) = review_cost(found);
++        assert_eq!(cost.map(|found| (found.source, Some(found.usage))), Some((crate::fleet::CostSource::Review, usage)));
++        assert_eq!(words.as_deref(), Some(crate::headless::provenance::UNMEASURED_WORDS));
++        assert_eq!(review_cost(None), (None, None), "撃たなかった周");
++    }
+ }

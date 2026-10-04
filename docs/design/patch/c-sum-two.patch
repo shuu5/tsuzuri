@@ -1,0 +1,371 @@
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index 0c12dff3019ef896eddfe5ee9b27c3934a70a765..d4c0438686f960aaa4a78b53ce7b2508abd9e1d1 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -16,6 +16,7 @@ pub mod seat;
+ pub mod seathb;
+ pub mod stage;
+ pub mod stats;
++pub mod summary;
+ pub mod surface;
+ 
+ /// 時刻（UTC の epoch 秒）。器の tick-last と heartbeat-off と同じ単位。
+diff --git a/crates/tsuzuri-contract/src/summary.rs b/crates/tsuzuri-contract/src/summary.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..292a5c74d86b41bdd6ef5f4445b63558e3708fe8
+--- /dev/null
++++ b/crates/tsuzuri-contract/src/summary.rs
+@@ -0,0 +1,81 @@
++//! bead の 2 つの概要と本文の頭の 1 行の読み（判断の記録 ADR-30 決定 (2)(7)・要件 FR15・行 c-sum-two）。
++//! 導出グラフ・問いの card・吹き出しが同じ関数で読む（中核と面の両方が使う純な関数・file も時計も触らない）。
++//! 定型行（「概要 = 」「技術 = 」で始まる行）が在ればその行の残り、無ければ見出しの行（「## 概要」「## 技術」）の下の
++//! 次の見出しまでの字を、その bead の概要とする（2 つの概要は別々に読む）。
++
++/// 非エンジニア向けの概要の定型行の頭。
++pub const PLAIN_LINE: &str = "概要 = ";
++
++/// エンジニア向けの概要の定型行の頭。
++pub const ENG_LINE: &str = "技術 = ";
++
++/// 非エンジニア向けの概要の見出しの行。
++pub const PLAIN_HEAD: &str = "## 概要";
++
++/// エンジニア向けの概要の見出しの行。
++pub const ENG_HEAD: &str = "## 技術";
++
++/// 本文の頭の 1 行を取る見出しの行（その下の最初の空でない行を取る）。
++pub const OBSERVATION_HEAD: &str = "### 観測";
++
++/// 本文の頭の 1 行から外す頭の字。
++pub const EXCERPT_LABEL: &str = "概要 =";
++
++/// bead の 2 つの概要（無い方は None）。
++#[derive(Debug, Clone, Default, PartialEq, Eq)]
++pub struct Summaries {
++    pub plain: Option<String>,
++    pub eng: Option<String>,
++}
++
++/// 本文の 2 つの概要（それぞれ定型行か、無ければ見出しの下の字）。
++pub fn summaries(description: &str) -> Summaries {
++    let one = |line: &str, head: &str| {
++        typed_line(description, line).or_else(|| section(description, head))
++    };
++    Summaries {
++        plain: one(PLAIN_LINE, PLAIN_HEAD),
++        eng: one(ENG_LINE, ENG_HEAD),
++    }
++}
++
++/// 定型行の値（行頭が `prefix` の最初の行の残り・前後の空白を除く・空なら None）。
++pub fn typed_line(description: &str, prefix: &str) -> Option<String> {
++    let rest = description
++        .lines()
++        .map(|l| l.trim_end_matches('\r'))
++        .find_map(|l| l.strip_prefix(prefix))?
++        .trim();
++    (!rest.is_empty()).then(|| rest.to_string())
++}
++
++/// 見出しの行（末の空白を除いて `head` と同じ最初の行）の下から、次の字 # で始まる行の前までの字。
++/// 行は str::lines の行（改行の \r\n も 1 つの改行）で、頭と末の空の行を除き、中の改行は残す。字が無ければ None。
++pub fn section(description: &str, head: &str) -> Option<String> {
++    let mut lines = description.lines();
++    lines.find(|l| l.trim_end() == head)?;
++    let body: Vec<&str> = lines.take_while(|l| !l.starts_with('#')).collect();
++    let first = body.iter().position(|l| !l.trim().is_empty())?;
++    let last = body.iter().rposition(|l| !l.trim().is_empty())?;
++    Some(body.get(first..=last)?.join("\n"))
++}
++
++/// 本文の頭の 1 行（切らない）。見出しの行 `OBSERVATION_HEAD` が在ればその下の最初の空でない行、無ければ空の行と
++/// 字 # で始まる行を飛ばした最初の行（どれも前後の空白を除く）から、頭の `EXCERPT_LABEL` とその後の空白を外した字。
++/// 字が無ければ None。
++pub fn excerpt(description: &str) -> Option<String> {
++    let lines: Vec<&str> = description.lines().map(str::trim).collect();
++    let line = match lines.iter().position(|l| *l == OBSERVATION_HEAD) {
++        Some(at) => lines
++            .get(at + 1..)
++            .unwrap_or_default()
++            .iter()
++            .find(|l| !l.is_empty()),
++        None => lines.iter().find(|l| !l.is_empty() && !l.starts_with('#')),
++    };
++    let line = line.copied().unwrap_or_default();
++    let text = line
++        .strip_prefix(EXCERPT_LABEL)
++        .map_or(line, str::trim_start);
++    (!text.is_empty()).then(|| text.to_string())
++}
+diff --git a/crates/tsuzuri-contract/tests/sumtw.rs b/crates/tsuzuri-contract/tests/sumtw.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9ba617dfdb88d3007ced058ac1219227a7b688c
+--- /dev/null
++++ b/crates/tsuzuri-contract/tests/sumtw.rs
+@@ -0,0 +1,80 @@
++//! 2 つの概要と本文の頭の 1 行の読みの歯（接頭辞 sumtw_・設計ノート surface-wave27b 行 c-sum-two・判断の記録 ADR-30 決定 (7)）。
++//! 本文の字は歯の中に置く（2 つの概要の字は P と E で始まる違う字）。
++#![cfg(test)]
++
++use tsuzuri_contract::summary::{Summaries, excerpt, summaries};
++
++fn two(plain: Option<&str>, eng: Option<&str>) -> Summaries {
++    Summaries {
++        plain: plain.map(str::to_string),
++        eng: eng.map(str::to_string),
++    }
++}
++
++#[test]
++fn sumtw_typed_line_wins() {
++    let body = "概要 = P-定型\n技術 = E-定型\n\n## 概要\nP-見出し\n\n## 技術\nE-見出し\n";
++    assert_eq!(summaries(body), two(Some("P-定型"), Some("E-定型")));
++    // 片方の定型行だけが在る本文は、もう片方を見出しから読む。
++    let body = "概要 = P-定型\n\n## 概要\nP-見出し\n\n## 技術\nE-見出し\n";
++    assert_eq!(summaries(body), two(Some("P-定型"), Some("E-見出し")));
++    let body = "技術 = E-定型\n\n## 概要\nP-見出し\n\n## 技術\nE-見出し\n";
++    assert_eq!(summaries(body), two(Some("P-見出し"), Some("E-定型")));
++    // 定型行の値が空なら見出しの下の字。
++    let body = "概要 = \n## 概要\nP-見出し\n";
++    assert_eq!(summaries(body), two(Some("P-見出し"), None));
++}
++
++#[test]
++fn sumtw_head_section_until_next_head() {
++    let body = "題の行\n## 概要\n\nP-1 行目\n\nP-2 行目\n\n## 技術\nE-1 行目\n### 次の段\nX-段の字\n## 契約\nY\n";
++    assert_eq!(
++        summaries(body),
++        two(Some("P-1 行目\n\nP-2 行目"), Some("E-1 行目"))
++    );
++    // 本文の末まで見出しが無ければ末まで。
++    assert_eq!(
++        summaries("## 技術\nE-1\nE-2\n").eng.as_deref(),
++        Some("E-1\nE-2")
++    );
++    // 行の末の \r を除く。
++    let crlf = "## 概要\r\n\r\nP-1\r\nP-2\r\n\r\n## 技術\r\nE-1\r\n";
++    assert_eq!(summaries(crlf), two(Some("P-1\nP-2"), Some("E-1")));
++    // 見出しの行の末の空白は見出しのまま。
++    assert_eq!(summaries("## 概要  \nP-1\n").plain.as_deref(), Some("P-1"));
++}
++
++#[test]
++fn sumtw_empty_is_none() {
++    assert_eq!(summaries(""), Summaries::default());
++    assert_eq!(summaries("本文だけ\n- 箇条\n"), Summaries::default());
++    // 見出しの下が空の行だけで次の見出し。
++    assert_eq!(
++        summaries("## 概要\n\n  \n## 技術\nE-1\n"),
++        two(None, Some("E-1"))
++    );
++    // 見出しの行の字が違う（段が違う・字が続く・行頭に空白）なら見出しでない。
++    assert_eq!(summaries("### 概要\nP-1\n").plain, None);
++    assert_eq!(summaries("## 概要の補足\nP-1\n").plain, None);
++    assert_eq!(summaries(" ## 概要\nP-1\n").plain, None);
++    assert_eq!(summaries("## 概要\nP-1\n").plain.as_deref(), Some("P-1"));
++}
++
++#[test]
++fn sumtw_excerpt_keeps_whole_line() {
++    let long = "長".repeat(150);
++    let memo = format!("# 題\n### 観測\n\n概要 = {long}\n次の行\n");
++    assert_eq!(excerpt(&memo), Some(long.clone()), "観測の下の行を切らない");
++    let memo = format!("先の行\n### 観測\n{long}\n");
++    assert_eq!(excerpt(&memo), Some(long.clone()), "観測の見出しが先");
++    let typed = format!("\n# 題\n概要 =   {long}\n技術 = E\n");
++    assert_eq!(excerpt(&typed), Some(long), "頭の字と空白を外す");
++    let heads = "## 概要\nP-見出し\n## 技術\nE-見出し\n";
++    assert_eq!(
++        excerpt(heads).as_deref(),
++        Some("P-見出し"),
++        "見出しの行を飛ばす"
++    );
++    assert_eq!(excerpt("# 題\n\n## 概要\n"), None);
++    assert_eq!(excerpt(""), None);
++}
+diff --git a/crates/tsuzuri-core/src/graph/build.rs b/crates/tsuzuri-core/src/graph/build.rs
+index b99c691d29ec3911e24e2568eeb2cb1c7c7014cb..93d4c264779e69fd4cdc2001320836b69920e17f 100644
+--- a/crates/tsuzuri-core/src/graph/build.rs
++++ b/crates/tsuzuri-core/src/graph/build.rs
+@@ -4,7 +4,7 @@
+ //! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
+ //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
+ //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
+-//! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）から写す（行は無し）。
++//! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
+ //! 設計の節点の行と 2 つの概要は組まず（無し）、build の後に `add_summary` が folio の要約の字から写す。
+ //! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
+ //! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
+@@ -19,10 +19,10 @@ use serde_json::Value;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36};
+ pub(crate) use tsuzuri_contract::ledger::bead_kind;
++use tsuzuri_contract::summary::summaries;
+ 
+ use super::{BeadAttr, Graph, Inputs, Outside, PolicyAttr, RulingRow, RunAttr, Source};
+ use crate::ledger::epoch_secs;
+-use crate::question::{ENG_PREFIX, PLAIN_PREFIX, typed};
+ 
+ /// 設計の索引の節点の種類の数（`NodeKind::ALL` の先頭の 12 = 設計文書の 11 種と設計ノートの行）。
+ pub const DESIGN_KINDS: usize = 12;
+@@ -509,7 +509,7 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
+     for bead in beads {
+         let labels = bead.labels.unwrap_or_default();
+         let kind = bead_kind(bead.issue_type.as_deref().unwrap_or_default(), &labels);
+-        let description = bead.description.as_deref().unwrap_or_default();
++        let two = summaries(bead.description.as_deref().unwrap_or_default());
+         g.nodes.push(GraphNode {
+             id: bead.id.clone(),
+             kind,
+@@ -517,8 +517,8 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
+             digest: None,
+             title: title36(bead.title.as_deref().unwrap_or_default()),
+             line: None,
+-            plain: typed(description, PLAIN_PREFIX),
+-            eng: typed(description, ENG_PREFIX),
++            plain: two.plain,
++            eng: two.eng,
+             updated: bead.updated_at.as_deref().and_then(epoch_secs),
+         });
+         for dep in bead.dependencies.unwrap_or_default() {
+diff --git a/crates/tsuzuri-core/src/question.rs b/crates/tsuzuri-core/src/question.rs
+index f70afeb412f424a48df8452e2ff95a2035dd0be7..61011fbc801a89ab0d21edc4d0c4a93ad1efbf4a 100644
+--- a/crates/tsuzuri-core/src/question.rs
++++ b/crates/tsuzuri-core/src/question.rs
+@@ -12,15 +12,13 @@ use serde_json::Value;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow, QUESTION_LABEL};
+ use tsuzuri_contract::question::{QuestionCard, QuestionList};
++use tsuzuri_contract::summary::summaries;
+ 
+ use crate::graph::build::{BdBead, read_ledger};
+ use crate::ledger::epoch_secs;
+ 
+-/// 非エンジニア向けの概要の行の頭。
+-pub const PLAIN_PREFIX: &str = "概要 = ";
+-
+-/// エンジニア向けの概要の行の頭。
+-pub const ENG_PREFIX: &str = "技術 = ";
++/// 非エンジニア向けとエンジニア向けの概要の行の頭（契約の summary の定数・名は残す）。
++pub use tsuzuri_contract::summary::{ENG_LINE as ENG_PREFIX, PLAIN_LINE as PLAIN_PREFIX};
+ 
+ /// 理由の行の頭。
+ pub const REASON_PREFIX: &str = "理由 = ";
+@@ -124,9 +122,10 @@ fn open_question(bead: BdBead, blocking: Vec<String>) -> Option<OpenQuestion> {
+     };
+     let digest = item.digest();
+     let field = |prefix: &str| typed(&item.description, prefix);
++    let two = summaries(&item.description);
+     let card = QuestionCard {
+-        plain: field(PLAIN_PREFIX),
+-        eng: field(ENG_PREFIX),
++        plain: two.plain,
++        eng: two.eng,
+         reason: field(REASON_PREFIX),
+         recommend: field(RECOMMEND_PREFIX),
+         a1: item.row.labels.iter().any(|l| l.starts_with(A1_PREFIX)),
+@@ -143,15 +142,8 @@ fn open_question(bead: BdBead, blocking: Vec<String>) -> Option<OpenQuestion> {
+     })
+ }
+ 
+-/// 本文の定型行の値（行頭が `prefix` の最初の行の残り・前後の空白を除く・空なら None）。
+-pub fn typed(description: &str, prefix: &str) -> Option<String> {
+-    let rest = description
+-        .lines()
+-        .map(|l| l.trim_end_matches('\r'))
+-        .find_map(|l| l.strip_prefix(prefix))?
+-        .trim();
+-    (!rest.is_empty()).then(|| rest.to_string())
+-}
++/// 本文の定型行の値（行頭が `prefix` の最初の行の残り・前後の空白を除く・空なら None・読みは契約の summary の 1 関数）。
++pub use tsuzuri_contract::summary::typed_line as typed;
+ 
+ /// metadata の touches の欄の id（欄は字 1 つか字の配列・metadata は object か、object を JSON にした字）。
+ pub fn touches(metadata: &Value) -> Vec<String> {
+diff --git a/crates/tsuzuri-core/tests/sumcr.rs b/crates/tsuzuri-core/tests/sumcr.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b243fcf0995edf3d661db15c638afc8ff7f8cf2
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/sumcr.rs
+@@ -0,0 +1,81 @@
++//! 導出グラフの節点と問いの card が 2 つの概要を見出しの形の本文からも読む歯（接頭辞 sumcr_・設計ノート surface-wave27b
++//! 行 c-sum-two・判断の記録 ADR-30 決定 (7)）。台帳の字は歯の中の JSON の配列（bd の読み取りの口の形）。
++#![cfg(test)]
++
++use serde_json::json;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::graph::GraphNode;
++use tsuzuri_core::graph::{Inputs, build};
++use tsuzuri_core::question::list;
++
++/// 見出しの形の本文（便の bead の形）。
++const HEADS: &str =
++    "## 概要\nP-見出しの字\n\n## 技術\nE-見出しの字\n\n## 契約\ndesign = contracts/x.toml#a\n";
++
++/// 定型行の形の本文。
++const TYPED: &str = "前置き\n概要 = P-定型の字\n技術 = E-定型の字\n";
++
++fn bead(id: &str, description: &str, labels: &[&str]) -> serde_json::Value {
++    json!({
++        "id": id,
++        "title": format!("題 — {id}"),
++        "description": description,
++        "status": "open",
++        "issue_type": "task",
++        "created_at": "2026-10-03T01:00:00Z",
++        "updated_at": "2026-10-03T01:00:00Z",
++        "labels": labels,
++    })
++}
++
++fn node<'a>(nodes: &'a [GraphNode], id: &str) -> &'a GraphNode {
++    nodes
++        .iter()
++        .find(|n| n.id == id)
++        .unwrap_or_else(|| panic!("節点 {id} が無い"))
++}
++
++#[test]
++fn sumcr_build_reads_heads() {
++    let ledger = json!([
++        bead("fx-s.1", HEADS, &[]),
++        bead("fx-s.2", TYPED, &[]),
++        bead("fx-s.3", "本文だけ\n", &[]),
++    ])
++    .to_string();
++    let g = build(&Inputs {
++        design_index: "",
++        ledger: &ledger,
++        events: "",
++    });
++    let got = |id: &str| {
++        let n = node(&g.nodes, id);
++        (n.plain.as_deref(), n.eng.as_deref())
++    };
++    assert_eq!(got("fx-s.1"), (Some("P-見出しの字"), Some("E-見出しの字")));
++    assert_eq!(got("fx-s.2"), (Some("P-定型の字"), Some("E-定型の字")));
++    assert_eq!(got("fx-s.3"), (None, None));
++}
++
++#[test]
++fn sumcr_card_reads_heads() {
++    let ledger = json!([
++        bead("fx-s.1", HEADS, &["intake:question"]),
++        bead("fx-s.2", TYPED, &["intake:question"]),
++    ])
++    .to_string();
++    let Reading::Known(cards) = list(&ledger).cards else {
++        panic!("読める台帳が Unknown");
++    };
++    let got: Vec<(&str, Option<&str>, Option<&str>)> = cards
++        .iter()
++        .map(|c| (c.id.as_str(), c.plain.as_deref(), c.eng.as_deref()))
++        .collect();
++    assert_eq!(
++        got,
++        [
++            ("fx-s.1", Some("P-見出しの字"), Some("E-見出しの字")),
++            ("fx-s.2", Some("P-定型の字"), Some("E-定型の字")),
++        ]
++    );
++}

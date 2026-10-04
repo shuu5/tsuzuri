@@ -1,0 +1,561 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/headless.rs b/scribe2/crates/scribe2-boundary/tests/e2e/headless.rs
+index efdea1078f312726cc3635c5a5ea1d9a642e71e9..49db384c2ddd36ae2b772d71fa3b7cf1d1eec0f6 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/headless.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/headless.rs
+@@ -21,6 +21,7 @@ use std::process::{Child, Command, Output, Stdio};
+ use std::time::{Duration, Instant};
+ use vessel::cli_outcome::{RC_BROKEN, RC_OK, RC_REFUSED};
+ use vessel::headless::{RC_RATE_LIMIT, RC_UNREACHABLE};
++use vessel::name::BUILD_COMMIT;
+ 
+ /// binary の path。
+ fn bin() -> &'static str {
+@@ -37,6 +38,13 @@ fn tmp() -> TmpDir {
+     dir.canonical().expect("tmp dir の実体 path を解ける")
+ }
+ 
++/// fake claude の版の 1 行（runner と lens が claude を起こす直前に撃つ `--version` の 1 回だけに答えて終わる・痕跡を残さない・
++/// 行 xp-provenance）。版の語は [`FAKE_CLAUDE_VERSION`]。
++const FAKE_VERSION: &str = "[ \"$1\" = --version ] && { echo '0.0.7 (Claude Code)'; exit 0; }\n";
++
++/// [`FAKE_VERSION`] が答える版の語。
++const FAKE_CLAUDE_VERSION: &str = "0.0.7";
++
+ /// fake claude を 1 本作る。
+ ///
+ /// 起動されたら `called` を残し、引数を `args`・cwd を `cwd`・口座 env を `account`・agent view の
+@@ -55,6 +63,7 @@ fn fake_claude(dir: &Path, body: &str, lingering: bool, rc: u8) -> PathBuf {
+     fs::write(dir.join("body"), body).expect("body を書ける");
+     let script = format!(
+         "#!/bin/sh\n\
++         {FAKE_VERSION}\
+          : > \"{d}/called\"\n\
+          printf '%s\\n' \"$@\" > \"{d}/args\"\n\
+          cat > \"{d}/stdin\"\n\
+@@ -1167,7 +1176,7 @@ fn peak_fixture(root: &Path) -> PathBuf {
+ )]
+ fn peak_claude(dir: &Path, body: &str) -> PathBuf {
+     let path = dir.join("fake-claude");
+-    fs::write(&path, format!("#!/bin/sh\n: > \"{}/called\"\n{body}", dir.display())).expect("fake を書ける");
++    fs::write(&path, format!("#!/bin/sh\n{FAKE_VERSION}: > \"{}/called\"\n{body}", dir.display())).expect("fake を書ける");
+     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("fake を実行可能にできる");
+     path
+ }
+@@ -1597,11 +1606,9 @@ fn run_cost_lens_verdict_object_carries_usage_from_the_json_envelope() {
+     let result = format!("読みました\n{{\"verdict\":\"FAIL\",\"evidence\":\"途中\"}}\n{COST_VERDICT}\nおしまい");
+     let out = lens_stdout_with(&cost_record("\"num_turns\":5,", "6000", &result));
+     let head = COST_VERDICT.strip_suffix('}').unwrap_or_default();
+-    assert_eq!(
+-        out.trim(),
+-        format!("{head},\"usage\":\"in:11,out:22,cache_read:33,cache_create:44\",\"turns\":5,\"wall_ms\":6000}}"),
+-        "最後の判定 + 6 値"
+-    );
++    let costed = format!("{head},\"usage\":\"in:11,out:22,cache_read:33,cache_create:44\",\"turns\":5,\"wall_ms\":6000");
++    let stamped = format!("{costed},\"provenance\":\"build:{BUILD_COMMIT} claude:{FAKE_CLAUDE_VERSION} model:");
++    assert!(out.trim().starts_with(&stamped), "最後の判定 + 6 値 + 版の 4 語（行 xp-provenance）: {out}");
+     assert_eq!(out.lines().count(), 1, "stdout は 1 行だけ");
+ }
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index 65ea9c8380b8facfcc9b6ef12681fba335c1bfbb..65cdbdecbd2d267a0527ffe29b2b6a63749ab2df 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -3455,6 +3455,10 @@ fn pipe_gate_lens_reread_does_not_rerun_a_well_formed_inconclusive() {
+     clean(&[&repo, &state]);
+ }
+ 
++/// 偽 claude の版の 1 行（器の lens が claude を起こす直前に撃つ `--version` の 1 回だけに答えて終わり、回数を積まない・
++/// 行 xp-provenance）。
++const CLAUDE_VERSION: &str = "[ \"$1\" = --version ] && { echo '0.0.7 (Claude Code)'; exit 0; }\n";
++
+ /// 起こされるたびに回数を [`lens_calls`] の置き場へ積み、`subtype` が `error_max_turns` の封筒（`result` に findings と population を
+ /// 持つ PASS の判定の行を含む）を返す偽 claude を書き、gate の lens の行を**器の lens**（本 binary の `lens` に `{contract}` と
+ /// `{worktree}` と `--claude` を渡す形）にして返す。
+@@ -3473,7 +3477,7 @@ fn max_turns_lens(state: &Path) -> String {
+     );
+     fs::write(spy.join("envelope"), envelope).expect("封筒を書ける");
+     let script = format!(
+-        "#!/bin/sh\ncat >/dev/null\nprintf 'call\\n' >> '{}'\ncat '{}'\n",
++        "#!/bin/sh\n{CLAUDE_VERSION}cat >/dev/null\nprintf 'call\\n' >> '{}'\ncat '{}'\n",
+         spy.join("calls").display(),
+         spy.join("envelope").display()
+     );
+@@ -4325,7 +4329,11 @@ fn tight_copy(state: &Path) -> PathBuf {
+ )]
+ fn real_lens(state: &Path, rules: &Path) -> (PathBuf, String) {
+     let claude = state.join("permit-claude.sh");
+-    let script = format!("#!/bin/sh\ncat >/dev/null\nprintf 'call\\n' >> '{}'\necho '{}'\n", state.join("permit-calls").display(), lens_verdict("PASS"));
++    let script = format!(
++        "#!/bin/sh\n{CLAUDE_VERSION}cat >/dev/null\nprintf 'call\\n' >> '{}'\necho '{}'\n",
++        state.join("permit-calls").display(),
++        lens_verdict("PASS")
++    );
+     fs::write(&claude, script).expect("偽 claude を書ける");
+     let mut perm = fs::metadata(&claude).expect("権限を読める").permissions();
+     std::os::unix::fs::PermissionsExt::set_mode(&mut perm, 0o755);
+diff --git a/scribe2/crates/scribe2/src/headless/lens.rs b/scribe2/crates/scribe2/src/headless/lens.rs
+index 2b60d30fa71607b2b511367577eaa7c2db7cc827..c2915266da2b5792f8ddacdeeea997a1d785e911 100644
+--- a/scribe2/crates/scribe2/src/headless/lens.rs
++++ b/scribe2/crates/scribe2/src/headless/lens.rs
+@@ -76,7 +76,7 @@ use super::runner::{
+     has_top_level_key, is_result_record, result_subtype, result_usage, scope_line, top_level_string, ResultKind,
+ };
+ use super::{
+-    build, feed, fill, flag, model_row, need, read_stdin_bytes, rules_of, runner_effort, Call, Effort, Format,
++    build, feed, fill, flag, model_row, need, provenance, read_stdin_bytes, rules_of, runner_effort, Call, Effort, Format,
+     DEFAULT_CLAUDE, ROW_LENS_MODEL,
+ };
+ use crate::cli_args::{refusal, ArgsError};
+@@ -623,6 +623,8 @@ fn state(contract: &Contract, teeth: &[String]) -> String {
+ /// 最後の process の終了で scope が消えた正常系を測れない。**poll の間も stdout を読み切る**——子の stdout は
+ /// pipe なので、誰も読まないと 64 KiB で子が書き待ちになり poll が永久に回る（[`drain`]）。
+ fn ask(call: &Call<'_>, cgroup_root: &Path) -> Outcome {
++    // 版の 4 語は claude を起こす直前に 1 回だけ組む（行 xp-provenance・消費の 6 値を運ぶ判定 object に載る）。
++    let words = provenance::probe(call);
+     let (mut command, confinement) = build(call);
+     let spawned = command.spawn();
+     let mut child = match spawned {
+@@ -634,7 +636,7 @@ fn ask(call: &Call<'_>, cgroup_root: &Path) -> Outcome {
+     let waited = drain(&mut child, |child| poll(child, &mut sampler));
+     // **終端で scope を片付ける**（設計 gate-cost.md §4.4 errata・`s2-07l.234`）。stdout の 1 行は
+     // 判定の面なので、結果は stderr の 1 行だけに出す。
+-    let mut outcome = read_verdict(waited);
++    let mut outcome = read_verdict(waited, &words);
+     outcome.err.extend(scope_line("lens", &confinement, sampler.peak()));
+     outcome
+ }
+@@ -667,8 +669,9 @@ fn poll(child: &mut Child, sampler: &mut confine::Sampler<'_>) -> std::io::Resul
+     }
+ }
+ 
+-/// 終わった claude の出力から判定の JSON 行を読む（[`verdict_line`]）。
+-fn read_verdict(waited: std::io::Result<std::process::Output>) -> Outcome {
++/// 終わった claude の出力から判定の JSON 行を読む（[`verdict_line`]）。消費の 6 値を運ぶ判定には版の 4 語の対を足す
++/// （[`provenance::with_object`]）。
++fn read_verdict(waited: std::io::Result<std::process::Output>, words: &str) -> Outcome {
+     let out = match waited {
+         Ok(found) => found,
+         Err(err) => return Outcome::failed_line(RC_BROKEN, format!("lens: claude の出力を読めない: {err}")),
+@@ -676,7 +679,7 @@ fn read_verdict(waited: std::io::Result<std::process::Output>) -> Outcome {
+     match verdict_line(&String::from_utf8_lossy(&out.stdout)) {
+         // 読めない出力を握り潰さない。**判定に届かなかった**と名乗る。
+         None => Outcome::ok_line(inconclusive("lens output has no json line")),
+-        Some(line) => Outcome::ok_line(line),
++        Some(line) => Outcome::ok_line(provenance::with_object(&line, words)),
+     }
+ }
+ 
+@@ -974,4 +977,17 @@ mod tests {
+         assert_eq!(refused, Err(crate::cli_outcome::RC_BROKEN), "読めない材料は prompt を組まない");
+         let _ = std::fs::remove_dir_all(&dir);
+     }
++
++    /// claude の出力から読んだ判定のうち消費の 6 値を運ぶ object にだけ版の 4 語の対が載る（行 xp-provenance）。
++    #[test]
++    fn xpprov_lens_verdict_carries_the_words() {
++        use std::os::unix::process::ExitStatusExt;
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        let out = |text: &str| Ok(std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: text.as_bytes().to_vec(), stderr: Vec::new() });
++        let envelope = r#"{"type":"result","subtype":"success","is_error":false,"num_turns":5,"duration_ms":6,"result":"{\"verdict\":\"PASS\"}","usage":{"input_tokens":1,"cache_creation_input_tokens":4,"cache_read_input_tokens":3,"output_tokens":2}}"#;
++        let costed = super::read_verdict(out(envelope), good).out.join("\n");
++        assert!(costed.ends_with(&format!(",\"provenance\":\"{good}\"}}")), "{costed}");
++        let plain = super::read_verdict(out("{\"verdict\":\"PASS\"}"), good).out.join("\n");
++        assert_eq!(plain, "{\"verdict\":\"PASS\"}", "消費の 6 値が無い判定は変えない");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/headless/mod.rs b/scribe2/crates/scribe2/src/headless/mod.rs
+index 185511f8be17fa361d44f57c8ee7dfe0d9c7b5c0..1bbb86d33e1515826fc8b97044722de95cafeffc 100644
+--- a/scribe2/crates/scribe2/src/headless/mod.rs
++++ b/scribe2/crates/scribe2/src/headless/mod.rs
+@@ -13,6 +13,7 @@
+ mod lens_body;
+ #[path = "runner.rs"]
+ mod runner_body;
++pub mod provenance;
+ 
+ /// 値を取る headless の flag。**重なりは閉包の断りにしない**: 本体の [`flag`] が両方の値を名乗って断る
+ /// （設計 account-autonomy.md §16・その字面と rc は不変）。
+@@ -377,6 +378,12 @@ pub fn fill(template: &str, pairs: &[(&str, &str)]) -> String {
+     }
+ }
+ 
++/// claude の実行 file を起こす記述（引数・env・stdio は空）。runner と lens の起動 [`build`] と版の 1 回の撃ち
++/// （[`provenance::version_of`]・行 xp-provenance）が共有する、構築の字面のただ 1 か所。
++fn claude_program(claude: &str) -> Invocation {
++    Invocation::new(claude)
++}
++
+ /// [`Call`] から起動の記述を組む。**prompt は argv でなく stdin で渡す**。
+ ///
+ /// argv で渡すと Linux の 1 引数上限（`MAX_ARG_STRLEN` = 128KiB）に当たり、**user が
+@@ -386,7 +393,7 @@ pub fn fill(template: &str, pairs: &[(&str, &str)]) -> String {
+ /// 包みの結果（unit 名）も返す——呼び手は子の終端で [`confine::release_scope`] を撃つ
+ /// （設計 gate-cost.md §4.4 errata・`s2-07l.234`）。
+ pub fn build(call: &Call<'_>) -> (Invocation, confine::Confinement) {
+-    let mut inner = Invocation::new(call.claude);
++    let mut inner = claude_program(call.claude);
+     inner
+         .arg("-p")
+         // permission mode は**毎回**渡す。省くと版の既定に従い、同じ 1 行が
+diff --git a/scribe2/crates/scribe2/src/headless/provenance.rs b/scribe2/crates/scribe2/src/headless/provenance.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..211194e5485662b48ea3d190682ddc50e8d846b9
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/headless/provenance.rs
+@@ -0,0 +1,191 @@
++//! 便ごとの版の記録（行 xp-provenance・判断の記録 ADR-37 の決定 (7)）。
++//!
++//! runner と lens は claude を起こす直前に 4 語を組む（[`probe`]）: 器の binary の組みの commit（[`BUILD_COMMIT`] の字のまま）・
++//! claude の CLI の版（`<claude> --version` を 1 回撃った stdout の版の語）・claude に渡す model と effort。runner は stderr の
++//! 1 行（[`line`]）で、lens は消費の 6 値を運ぶ判定 object の 1 対（[`with_object`]）で呼び手へ渡し、pipe の spawn と gate が
++//! 消費の event の `detail` に囲いの書きの語に続けて写す（[`detail`]）。版を読めない周（撃てない・rc ≠ 0・版の語でない）は
++//! 字 `unmeasured`、行や対が無いか形の違う周は 4 語とも `unmeasured` と書き、黙って落とさない（C10）。
++
++use super::runner::has_top_level_key;
++use super::{claude_program, Call};
++use crate::fleet::json_lite::{self, Value};
++use crate::name::BUILD_COMMIT;
++use std::process::Stdio;
++
++/// 測れない語の字。
++pub const UNMEASURED: &str = "unmeasured";
++
++/// 4 語とも測れない周の字（行も対も無い・形の違う周）。
++pub const UNMEASURED_WORDS: &str = "build:unmeasured claude:unmeasured model:unmeasured effort:unmeasured";
++
++/// runner の stderr の行の頭。
++pub const LINE_HEAD: &str = "runner: provenance ";
++
++/// lens の判定 object の key。
++pub const KEY: &str = "provenance";
++
++/// 4 語の頭（この順）。
++const HEADS: [&str; 4] = ["build:", "claude:", "model:", "effort:"];
++
++/// `call` の claude を起こす直前の 4 語（[`version_of`] を 1 回撃つ）。
++pub fn probe(call: &Call<'_>) -> String {
++    let version = version_of(call.claude);
++    words(version.as_deref(), call.model.unwrap_or(UNMEASURED), call.effort.unwrap_or(UNMEASURED))
++}
++
++/// `<claude> --version` を 1 回撃ち、rc 0 の周だけ stdout の版の語（[`version_word`]）を返す（stdin と stderr は null）。
++pub fn version_of(claude: &str) -> Option<String> {
++    let mut command = claude_program(claude);
++    command.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
++    let out = command.output().ok().filter(|found| found.status.success())?;
++    version_word(&String::from_utf8_lossy(&out.stdout)).map(str::to_owned)
++}
++
++/// stdout の最初の行の最初の語が数字で始まり数字と点だけなら版の語。
++pub fn version_word(stdout: &str) -> Option<&str> {
++    let word = stdout.lines().next()?.split_whitespace().next()?;
++    let digits = word.chars().all(|found| found.is_ascii_digit() || found == '.');
++    (digits && word.starts_with(|found: char| found.is_ascii_digit())).then_some(word)
++}
++
++/// 4 語（`build:<commit> claude:<版|unmeasured> model:<model> effort:<effort>`）。
++pub fn words(version: Option<&str>, model: &str, effort: &str) -> String {
++    format!("build:{BUILD_COMMIT} claude:{} model:{model} effort:{effort}", version.unwrap_or(UNMEASURED))
++}
++
++/// runner の stderr の 1 行。
++pub fn line(words: &str) -> String {
++    format!("{LINE_HEAD}{words}")
++}
++
++/// 4 語の形（空白で割って 4 語・[`HEADS`] の頭をこの順に持ち値が空でない）の字だけを返す。
++pub fn checked(text: &str) -> Option<&str> {
++    let found: Vec<&str> = text.split(' ').collect();
++    let shaped = found.len() == HEADS.len()
++        && found.iter().zip(HEADS).all(|(word, head)| word.strip_prefix(head).is_some_and(|value| !value.is_empty()));
++    shaped.then_some(text)
++}
++
++/// 捕らえた runner の stderr の最後の [`LINE_HEAD`] の行の 4 語（無い・形の違う周は `None`）。
++pub fn from_stderr(stderr: &str) -> Option<&str> {
++    stderr.lines().rev().find_map(|found| found.strip_prefix(LINE_HEAD)).and_then(checked)
++}
++
++/// lens の判定 object の [`KEY`] の 4 語（無い・字でない・形の違う周は `None`）。
++pub fn of_pairs(pairs: &[(String, Value)]) -> Option<String> {
++    let found = pairs.iter().find(|(key, _)| key == KEY).and_then(|(_, value)| value.as_str())?;
++    checked(found).map(str::to_owned)
++}
++
++/// 判定 object へ [`KEY`] の対を足す。消費の 6 値（key `usage`）を運ぶ object だけで、key を既に持つ周と `}` で
++/// 閉じない周は 1 字も変えない（消費の event を書く周だけ版を運ぶ・判定の意味は動かさない）。
++pub fn with_object(verdict: &str, words: &str) -> String {
++    if !has_top_level_key(verdict, "usage") || has_top_level_key(verdict, KEY) {
++        return verdict.to_owned();
++    }
++    let Some(head) = verdict.strip_suffix('}').map(str::trim_end) else {
++        return verdict.to_owned();
++    };
++    let added = json_lite::write_object(&[(KEY, Value::Str(words.to_owned()))]);
++    let added = added.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')).unwrap_or_default();
++    format!("{head},{added}}}")
++}
++
++/// 消費の event の `detail`（囲いの書きの語・半角の空白 1 つ・4 語か [`UNMEASURED_WORDS`]）。
++pub fn detail(written: &str, words: Option<&str>) -> String {
++    format!("{written} {}", words.unwrap_or(UNMEASURED_WORDS))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{checked, detail, from_stderr, line, of_pairs, version_of, version_word, with_object, words, UNMEASURED_WORDS};
++    use crate::fleet::json_lite;
++    use crate::name::BUILD_COMMIT;
++    use std::os::unix::fs::PermissionsExt;
++    use std::path::PathBuf;
++
++    /// 偽 claude を temp の dir に置く（引数を `args` へ 1 行で足し、`body` を撃つ）。host の claude は撃たない。
++    fn fake(tag: &str, body: &str) -> PathBuf {
++        let dir = std::env::temp_dir().join(format!("xpprov-{}-{tag}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&dir);
++        let _ = std::fs::create_dir_all(&dir);
++        let path = dir.join("claude");
++        let script = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n{body}\n", dir.join("args").display());
++        let _ = std::fs::write(&path, script);
++        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
++        path
++    }
++
++    /// 版の語は最初の行の最初の語で、数字で始まり数字と点だけの周だけ（ほかは測れない）。
++    #[test]
++    fn xpprov_version_word_reads_the_first_word_of_the_first_line() {
++        assert_eq!(version_word("2.1.289 (Claude Code)\nnext 9.9\n"), Some("2.1.289"));
++        assert_eq!(version_word("\n2.1.289 (Claude Code)\n"), None, "最初の行が空");
++        assert_eq!(version_word("2.1.289-beta (Claude Code)\n"), None, "数字と点だけでない");
++        assert_eq!(version_word(".2.1 (Claude Code)\n"), None, "数字で始まらない");
++        assert_eq!(version_word(""), None, "空");
++    }
++
++    /// 撃つのは引数 --version の 1 回で、rc 0 の周だけ版を読み、rc ≠ 0 と撃てない周は測れない。
++    #[test]
++    fn xpprov_version_of_runs_the_flag_once_and_needs_rc_zero() {
++        let ok = fake("ok", "echo '9.8.7 (Claude Code)'");
++        assert_eq!(version_of(&ok.display().to_string()).as_deref(), Some("9.8.7"));
++        let args = std::fs::read_to_string(ok.with_file_name("args")).unwrap_or_default();
++        assert_eq!(args, "--version\n", "引数は --version だけで 1 回");
++        let failed = fake("rc1", "echo '9.8.7 (Claude Code)'\nexit 1");
++        assert_eq!(version_of(&failed.display().to_string()), None, "rc 1");
++        let missing = ok.with_file_name("absent");
++        assert_eq!(version_of(&missing.display().to_string()), None, "撃てない");
++        for path in [ok, failed] {
++            let _ = path.parent().map(std::fs::remove_dir_all);
++        }
++    }
++
++    /// 4 語は build（器の BUILD_COMMIT の字）・claude（版か字 unmeasured）・model・effort の順で、runner の行はその頭に字を足す。
++    #[test]
++    fn xpprov_words_name_build_claude_model_effort() {
++        let found = words(Some("9.8.7"), "opus", "high");
++        assert_eq!(found, format!("build:{BUILD_COMMIT} claude:9.8.7 model:opus effort:high"));
++        assert_eq!(words(None, "opus", "high"), format!("build:{BUILD_COMMIT} claude:unmeasured model:opus effort:high"));
++        assert_eq!(line(&found), format!("runner: provenance {found}"));
++    }
++
++    /// 形は 4 語・頭の順・空でない値で、runner の stderr からは最後の行の 4 語を読み、無い・形の違う周は読まない。
++    #[test]
++    fn xpprov_stderr_line_is_read_only_in_shape() {
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        assert_eq!(checked(good), Some(good));
++        assert_eq!(checked("build:abc claude:9.8.7 model:opus"), None, "3 語");
++        assert_eq!(checked("claude:9.8.7 build:abc model:opus effort:high"), None, "頭の順");
++        assert_eq!(checked("build:abc claude: model:opus effort:high"), None, "空の値");
++        let stderr = format!("runner: scope=gone\nrunner: provenance build:old claude:1 model:a effort:b\n{}\n", line(good));
++        assert_eq!(from_stderr(&stderr), Some(good), "最後の行");
++        assert_eq!(from_stderr("runner: scope=gone\n"), None, "行が無い");
++        assert_eq!(from_stderr("runner: provenance build:abc\n"), None, "形の違う行");
++    }
++
++    /// 判定 object へ足すのは消費の 6 値を運ぶ object だけで、key を既に持つ・閉じない object は変えず、読み返すと同じ 4 語。
++    #[test]
++    fn xpprov_lens_object_carries_words_only_with_usage() {
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        let costed = r#"{"verdict":"PASS","usage":"in:1,out:2,cache_read:3,cache_create:4","turns":5,"wall_ms":6}"#;
++        let added = with_object(costed, good);
++        assert_eq!(added, format!("{},\"provenance\":\"{good}\"}}", costed.strip_suffix('}').unwrap_or_default()));
++        let pairs = json_lite::parse_object(&added).unwrap_or_default();
++        assert_eq!(of_pairs(&pairs).as_deref(), Some(good));
++        let plain = r#"{"verdict":"PASS"}"#;
++        assert_eq!(with_object(plain, good), plain, "usage が無い");
++        assert_eq!(with_object(&added, "build:x claude:1 model:a effort:b"), added, "key を既に持つ");
++        assert_eq!(of_pairs(&json_lite::parse_object(plain).unwrap_or_default()), None, "対が無い");
++    }
++
++    /// detail は囲いの書きの語の後に半角の空白 1 つと 4 語、4 語が無い周は 4 語とも unmeasured。
++    #[test]
++    fn xpprov_detail_follows_the_write_word() {
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        assert_eq!(detail("write:4096", Some(good)), format!("write:4096 {good}"));
++        assert_eq!(detail("write:unmeasured", None), format!("write:unmeasured {UNMEASURED_WORDS}"));
++        assert_eq!(UNMEASURED_WORDS, "build:unmeasured claude:unmeasured model:unmeasured effort:unmeasured");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/headless/runner.rs b/scribe2/crates/scribe2/src/headless/runner.rs
+index c970f2c13869522c0758cc482f1a032ad72318c5..113fc9bf6d8c92559564508c05c00d6d1cd30e4c 100644
+--- a/scribe2/crates/scribe2/src/headless/runner.rs
++++ b/scribe2/crates/scribe2/src/headless/runner.rs
+@@ -16,8 +16,8 @@
+ 
+ use crate::polarity::{OnFailure, Polarity, Timing};
+ use super::{
+-    build, feed, fill, flag, need, plugin_dirs, read_stdin_bytes, rules_of, runner_effort, runner_model, Call, Effort,
+-    Format, DEFAULT_CLAUDE, RC_RATE_LIMIT, RC_UNREACHABLE,
++    build, feed, fill, flag, need, plugin_dirs, provenance, read_stdin_bytes, rules_of, runner_effort, runner_model, Call,
++    Effort, Format, DEFAULT_CLAUDE, RC_RATE_LIMIT, RC_UNREACHABLE,
+ };
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+ use crate::fleet::select::Model;
+@@ -190,6 +190,8 @@ fn save_prompt(vessel: &Path, prompt: &str) -> Result<(), String> {
+ /// 行を読む各周で `memory.peak` を 1 回読み（[`confine::Sampler`]・待ちは足さない）、終端の `scope=` 行に
+ /// `claude_peak_bytes=` で写す。終端で読む形は、最後の process の終了で scope が消えた正常系を測れない。
+ fn launch(call: &Call<'_>, tools: &str, cgroup_root: &Path) -> Outcome {
++    // 版の 4 語は claude を起こす直前に 1 回だけ組む（行 xp-provenance・pipe の spawn が消費の event に写す）。
++    let words = provenance::probe(call);
+     let (mut command, confinement) = build(call);
+     command.arg("--allowedTools").arg(tools);
+     let spawned = command.spawn();
+@@ -236,6 +238,7 @@ fn launch(call: &Call<'_>, tools: &str, cgroup_root: &Path) -> Outcome {
+     // （stdout は pipeline が読む面なので、結果は stderr の 1 行だけに出す）。
+     let mut outcome = conclude(status, &seen);
+     outcome.err.extend(scope_line("runner", &confinement, sampler.peak()));
++    outcome.err.push(provenance::line(&words));
+     outcome
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/gate.rs b/scribe2/crates/scribe2/src/pipe/gate.rs
+index 1297628423008baad4a31d62a754555dd4dcb8da..f1ab818e71c5ae561af691d7265c32a1414471a2 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate.rs
+@@ -68,6 +68,7 @@ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::store::{self, LockPolicy, StoreError};
+ use crate::fleet::{cli::now_utc, Cost, CostSource, Event, EventKind, Stage, SCHEMA};
++use crate::headless::provenance;
+ use crate::invocation::Invocation;
+ use crate::rules::manifest::Manifest;
+ use crate::seat::state::now_secs;
+@@ -486,7 +487,8 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
+     // 書けない周も判定と rc は変えない（stderr の 1 行だけ）。
+     let cost = decided.judged.usage.map(|usage| Cost { source: CostSource::Lens, usage });
+     // 消費の行の detail に verify 行の囲いの書きの和を置く（行 xp-io-bytes・測れない周は字 unmeasured）。
+-    let written = Some(confine::io::detail(measured.written));
++    // 続けて lens の版の 4 語（判定 object の `provenance`・無い周は 4 語とも unmeasured・行 xp-provenance）。
++    let written = Some(provenance::detail(&confine::io::detail(measured.written), decided.judged.provenance.as_deref()));
+     notes.extend(record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, written, entry.policy));
+     let decision = Decision {
+         verdict: decided.judged.verdict,
+@@ -675,7 +677,7 @@ fn machine_order(measured: &Measured) -> Option<Judged> {
+     if measured.red > 0 {
+         // 赤い周は lens を呼ばない＝findings は測っていない（`tally` は `None`・C10）。
+         let evidence = format!("verify の {} 行が rc≠0", measured.red);
+-        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None });
++        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None, provenance: None });
+     }
+     None
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/lens.rs b/scribe2/crates/scribe2/src/pipe/gate/lens.rs
+index c89d31141165a0960889a6f9159e26a349c7d3f5..612929583b5bb35fb64faffe0f5dc4f043094ea9 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/lens.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/lens.rs
+@@ -6,6 +6,7 @@ use super::findings::{Tally, Unread};
+ use super::{Verdict, JSON_HEAD};
+ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::Usage;
++use crate::headless::provenance;
+ use crate::pipe::confine::{self, Confinement, Reason, Released};
+ use crate::pipe::git_bytes;
+ use crate::pipe::move_proof::{self, LensInput, Side};
+@@ -439,11 +440,14 @@ pub(super) struct Judged {
+     ///
+     /// **無くても判定を変えない**（古い lens・偽 lens の周は field を欠くだけ＝`None`）。読めた周だけ消費の event を書く。
+     pub(super) usage: Option<Usage>,
++    /// lens の版の 4 語（判定 object の `provenance`・[`provenance::of_pairs`]・行 xp-provenance）。**無い・形の違う周は
++    /// `None`**＝消費の event の detail は 4 語とも `unmeasured`。判定は変えない。
++    pub(super) provenance: Option<String>,
+ }
+ 
+ /// 判定に届かなかった周の戻り（集計は無い・撃ち直しの印は伏せた側）。
+ pub(super) fn unjudged(evidence: String) -> Judged {
+-    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None }
++    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None, provenance: None }
+ }
+ 
+ /// 出力の形が読めなかった周の戻り（[`unjudged`] に撃ち直しの印を立てた形・[`parse_lens`] 専用）。
+@@ -569,7 +573,7 @@ fn parse_lens(text: &str) -> Judged {
+         Err(reason) => return unreadable(format!("lens の{reason}")),
+     };
+     // 消費の 6 値は `findings` / `population` と同じ flat な object から読む（揃わない周は `None`・判定は動かさない）。
+-    Judged { usage: Usage::from_pairs(&pairs), ..judge_pairs(&pairs) }
++    Judged { usage: Usage::from_pairs(&pairs), provenance: provenance::of_pairs(&pairs), ..judge_pairs(&pairs) }
+ }
+ 
+ /// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。
+@@ -593,7 +597,7 @@ fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
+         (Some(counted), Some(population)) => Tally::parse(counted, population),
+     };
+     match read {
+-        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None },
++        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None, provenance: None },
+         Err(unread) => {
+             let evidence = format!("lens の{}", unread.reason());
+             match unread {
+@@ -834,4 +838,17 @@ mod tests {
+             assert_eq!(tightened(&diff), (diff.clone(), 0, 0), "逐語のまま数えない");
+         }
+     }
++
++    /// gate は lens の判定 object の provenance の 4 語を読み、対が無い・形の違う周は読まない（判定は変えない・行 xp-provenance）。
++    #[test]
++    fn xpprov_gate_reads_the_lens_words() {
++        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"a:0","population":"files:1,lines:1""#;
++        let good = "build:abc claude:9.8.7 model:opus effort:high";
++        let judged = super::parse_lens(&format!("{head},\"provenance\":\"{good}\"}}"));
++        assert_eq!(judged.provenance.as_deref(), Some(good));
++        let bare = super::parse_lens(&format!("{head}}}"));
++        assert_eq!((judged.verdict, judged.evidence), (bare.verdict, bare.evidence), "判定は変えない");
++        assert_eq!(bare.provenance, None, "対が無い");
++        assert_eq!(super::parse_lens(&format!("{head},\"provenance\":\"build:abc\"}}")).provenance, None, "形の違う対");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/spawn.rs b/scribe2/crates/scribe2/src/pipe/spawn.rs
+index 44bbf42cb476eb3d11ac9730d5f576fefb8ead77..980912c68cd0f5c2b45c50351e120549924f8c83 100644
+--- a/scribe2/crates/scribe2/src/pipe/spawn.rs
++++ b/scribe2/crates/scribe2/src/pipe/spawn.rs
+@@ -24,7 +24,7 @@ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::store::{acquire_with, append_line, lock_owner, owner_pid, read_all, started_ms, LockPolicy, Owner, Reclaim};
+ use crate::fleet::{Cost, CostSource, EventKind, Stage};
+ use crate::headless::runner::{stop_status, summary_usage, top_level_string};
+-use crate::headless::{NO_VALUE, RC_RATE_LIMIT, RC_UNREACHABLE};
++use crate::headless::{provenance, NO_VALUE, RC_RATE_LIMIT, RC_UNREACHABLE};
+ use crate::name::{NAME, PLUGIN_DIR};
+ use crate::pipe::contract::Contract;
+ use crate::polarity::{OnFailure, Polarity, Timing};
+@@ -640,7 +640,7 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
+     let kept_err = keep_stderr(launch, rc, &stderr).err().map(|reason| format!("pipe: runner の stderr を残せない: {reason}"));
+     relay_stderr(&out.stderr);
+     // **runner の消費は段の event の前に 1 件**（設計 gate-cost.md §26 形 (2)）。停止中の便は段と同じく書かない。
+-    let cost = if stopping { None } else { runner_cost(launch, &stdout, &confinement) };
++    let cost = if stopping { None } else { runner_cost(launch, (&stdout, &stderr), &confinement) };
+     let mut outcome = if stopping {
+         // **停止中の便は段を 1 件も書かない**（設計 pipeline.md §23）。runner を消したのは `pipe stop` で、
+         // 終端は `RunStopped` の経路が書く——ここで `Failed` を書くと stop の終端を上書きする。
+@@ -667,10 +667,12 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
+ /// runner の要約行（[`summary_usage`]）の消費の 6 値を 1 件書く（揃わない周は書かない・書けない周の理由は stderr の
+ /// 1 行で返す＝段の判定と rc は変えない）。
+ ///
+-/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）。
+-fn runner_cost(launch: &Launch<'_>, stdout: &str, confinement: &confine::Confinement) -> Option<String> {
++/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）と、
++/// 捕らえた stderr の版の 4 語（`runner: provenance` の行・無い周は 4 語とも unmeasured・行 xp-provenance）。
++fn runner_cost(launch: &Launch<'_>, (stdout, stderr): (&str, &str), confinement: &confine::Confinement) -> Option<String> {
+     let cost = summary_usage(stdout).map(|usage| Cost { source: CostSource::Runner, usage });
+-    let written = Some(confine::io::detail(confine::io::written(confinement, stdout)));
++    let write = confine::io::detail(confine::io::written(confinement, stdout));
++    let written = Some(provenance::detail(&write, provenance::from_stderr(stderr)));
+     record_cost_with(launch.state_dir, (launch.run, launch.bead), cost, written, launch.policy)
+ }
+ 

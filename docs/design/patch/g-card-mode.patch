@@ -1,0 +1,493 @@
+diff --git a/crates/tsuzuri-surface/src/project/askpage.rs b/crates/tsuzuri-surface/src/project/askpage.rs
+index e2063ce0a82ce577a09aa4d399a43791008ed29a..bd182221d5a9ad44980e865cd406eed3a025b57f 100644
+--- a/crates/tsuzuri-surface/src/project/askpage.rs
++++ b/crates/tsuzuri-surface/src/project/askpage.rs
+@@ -17,12 +17,12 @@ use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
+ use tsuzuri_contract::wire;
+ 
+ use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
+-use crate::frame::Block;
++use crate::frame::{Block, Mode};
+ use crate::ledgerlist::{facts, short_of};
+ use crate::view::{Fetched, JST, hhmm, id_order};
+ use crate::vocab::label;
+ use crate::widgets::hover::Card;
+-use crate::widgets::nodecard::card_of;
++use crate::widgets::nodecard::card_of_in;
+ 
+ pub const BLOCK: Block = Block {
+     id: "hist",
+@@ -156,15 +156,20 @@ pub fn hist_rows(items: &[Item], graph: &Fetched) -> Vec<HistEntry> {
+         .collect()
+ }
+ 
+-/// 行の問いの id と答えた決定の id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い id は持たない）。
++/// 行の問いの id と答えた決定の id ごとの節点の hover の card（初心者の表示の型の `hist_cards_in`）。
+ pub fn hist_cards(entries: &[HistEntry], graph: &Fetched) -> BTreeMap<String, Card> {
++    hist_cards_in(entries, graph, Mode::Beginner)
++}
++
++/// 行の問いの id と答えた決定の id ごとの節点の表示の型の hover の card（グラフの口が読めなければ空・電文に無い id は持たない）。
++pub fn hist_cards_in(entries: &[HistEntry], graph: &Fetched, mode: Mode) -> BTreeMap<String, Card> {
+     let Ok(doc) = super::map::doc(graph) else {
+         return BTreeMap::new();
+     };
+     entries
+         .iter()
+         .flat_map(|e| std::iter::once(e.item.id.as_str()).chain(e.ruling.as_deref()))
+-        .filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
++        .filter_map(|id| card_of_in(&doc, id, mode).map(|c| (id.to_string(), c)))
+         .collect()
+ }
+ 
+@@ -300,7 +305,7 @@ pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {
+                 });
+             }
+             let entries: Vec<HistEntry> = ds.iter().map(|d| d.entry.clone()).collect();
+-            let cards = graph.with(|g| hist_cards(&entries, g));
++            let cards = graph.with(|g| hist_cards_in(&entries, g, mode()));
+             let now = crate::net::now();
+             let rows = ds
+                 .into_iter()
+diff --git a/crates/tsuzuri-surface/src/project/gaps.rs b/crates/tsuzuri-surface/src/project/gaps.rs
+index 90f0da2ef747f0874b204b0bd754e77d45e3072d..9e89f1d3505219d8bc1462dc88bdca17ab76c172 100644
+--- a/crates/tsuzuri-surface/src/project/gaps.rs
++++ b/crates/tsuzuri-surface/src/project/gaps.rs
+@@ -10,10 +10,10 @@ use tsuzuri_contract::graph::{GraphDoc, InvariantCheck, Verdict};
+ use tsuzuri_contract::wire;
+ 
+ use super::{Body, Item, NOT_READ, node_item};
+-use crate::frame::Block;
++use crate::frame::{Block, Mode};
+ use crate::view::Fetched;
+ use crate::widgets::hover::Card;
+-use crate::widgets::nodecard::card_of;
++use crate::widgets::nodecard::card_of_in;
+ 
+ pub const BLOCK: Block = Block {
+     id: "gaps",
+@@ -207,8 +207,14 @@ pub fn checks(fetched: &Fetched) -> Result<Vec<InvariantCheck>, &'static str> {
+     doc(fetched).map(|d| d.invariants)
+ }
+ 
+-/// 頁の中身（測れていない・0 本・札と一覧）。測れていないときは合格と出さない（要件 NFR2）。
++/// 頁の中身（初心者の表示の型の `body_in`）。
+ pub fn body(fetched: &Fetched) -> Body<Gaps> {
++    body_in(fetched, Mode::Beginner)
++}
++
++/// 頁の中身（測れていない・0 本・札と一覧・節点の card は表示の型の要約・行 g-card-mode）。
++/// 測れていないときは合格と出さない（要件 NFR2）。
++pub fn body_in(fetched: &Fetched, mode: Mode) -> Body<Gaps> {
+     match doc(fetched) {
+         Err(reason) => Body::Unmeasured(reason),
+         Ok(d) if d.invariants.is_empty() => Body::Empty(EMPTY),
+@@ -222,7 +228,7 @@ pub fn body(fetched: &Fetched) -> Body<Gaps> {
+             let cards = rows
+                 .iter()
+                 .flat_map(|r| &r.named)
+-                .filter_map(|id| card_of(&d, id).map(|card| (id.clone(), card)))
++                .filter_map(|id| card_of_in(&d, id, mode).map(|card| (id.clone(), card)))
+                 .collect();
+             Body::Filled(Gaps {
+                 tiles: tiles(&d.invariants),
+@@ -253,10 +259,10 @@ mod dom {
+ 
+     use leptos::prelude::*;
+ 
+-    use super::{BLOCK, Body, Card, Gaps, Item, Row, Tile, body, mark_class, summary_tip};
++    use super::{BLOCK, Body, Card, Gaps, Item, Mode, Row, Tile, body_in, mark_class, summary_tip};
+     use crate::project::{body_view, fold, item_view, map, unmeasured};
+     use crate::vocab::label;
+-    use crate::widgets::help::{expert_tip, h1, hs};
++    use crate::widgets::help::{HelpCtx, expert_tip, h1, hs};
+ 
+     fn tile_view(t: Tile) -> AnyView {
+         view! {
+@@ -341,7 +347,12 @@ mod dom {
+     /// 頁の本文（札と一覧・抜けの検査の窓も使う）。
+     pub fn inner() -> AnyView {
+         let fetched = crate::net::read(map::PATH);
+-        let content = move || match fetched.with(body) {
++        let mode = {
++            let ctx = use_context::<HelpCtx>();
++            let url = Mode::from_query(&window().location().search().unwrap_or_default());
++            move || ctx.map_or(url, |c| c.mode.get())
++        };
++        let content = move || match fetched.with(|f| body_in(f, mode())) {
+             Body::Unmeasured(reason) => panel(unmeasured(reason)),
+             Body::Empty(line) => panel(body_view(Body::Empty(line))),
+             Body::Filled(g) => filled(g),
+diff --git a/crates/tsuzuri-surface/src/project/nodearound.rs b/crates/tsuzuri-surface/src/project/nodearound.rs
+index 721ac3000ddcf20b1c1329867802ca9627051bec..34921de2d63ae5e26db093193d3301724d928820 100644
+--- a/crates/tsuzuri-surface/src/project/nodearound.rs
++++ b/crates/tsuzuri-surface/src/project/nodearound.rs
+@@ -278,7 +278,7 @@ mod dom {
+     use crate::vocab::label;
+     use crate::widgets::help::{HelpCtx, hs, shows_internal};
+     use crate::widgets::hover::{Card, attach, delegate, leaves};
+-    use crate::widgets::nodecard::view_cards;
++    use crate::widgets::nodecard::view_cards_in;
+ 
+     /// 頁に 1 つの読み（URL の query の signal と口の読みの結果・id が無ければ読まない）。
+     #[derive(Debug, Clone, Copy)]
+@@ -521,7 +521,7 @@ mod dom {
+         let lay = layout(&doc);
+         let picture = svg(&doc, &lay);
+         let gv = as_view(&doc);
+-        let cards = view_cards(&gv.nodes);
++        let cards = view_cards_in(&gv.nodes, mode());
+         let lg = legend(&gv);
+         let sides = chain(&doc);
+         let count = count_line(&doc);
+diff --git a/crates/tsuzuri-surface/src/project/timeline.rs b/crates/tsuzuri-surface/src/project/timeline.rs
+index ea83ddb6b76cf9d30592f9f16cf9b5d7007a88c1..e00d230f808447206db3e8b79bc1cca1ac1c0418 100644
+--- a/crates/tsuzuri-surface/src/project/timeline.rs
++++ b/crates/tsuzuri-surface/src/project/timeline.rs
+@@ -12,11 +12,11 @@ use super::nodearound::PageState;
+ use super::node::center;
+ use super::{Body, NO_CONTENT, NOT_READ};
+ use crate::account::home::{EXPERT_CHARS, wrap_words};
+-use crate::frame::Block;
++use crate::frame::{Block, Mode};
+ use crate::mapview::encode;
+ use crate::view::Fetched;
+ use crate::widgets::hover::Card;
+-use crate::widgets::nodecard::card_for;
++use crate::widgets::nodecard::card_in;
+ 
+ pub const BLOCK: Block = Block {
+     id: "timeline",
+@@ -229,12 +229,17 @@ pub fn body(fetched: &Fetched, only: Option<&str>) -> Body<Vec<RunRow>> {
+     }
+ }
+ 
+-/// 走行の行の link の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
+-/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
++/// 走行の行の link の hover の card（初心者の表示の型の `run_card_in`）。
+ pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
++    run_card_in(rows, run, Mode::Beginner)
++}
++
++/// 走行の行の link の表示の型の hover の card（ほかの節点の頁への link と同じ `card_in` の card・行 g-accept-face・行 g-card-mode）。
++/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
++pub fn run_card_in(rows: &[AroundRow], run: &str, mode: Mode) -> Card {
+     match rows.iter().find(|r| r.node.id == run) {
+-        Some(r) => card_for(&r.node, r.status.as_deref()),
+-        None => card_for(
++        Some(r) => card_in(&r.node, r.status.as_deref(), mode),
++        None => card_in(
+             &GraphNode {
+                 id: run.to_string(),
+                 kind: NodeKind::Run,
+@@ -247,6 +252,7 @@ pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
+                 updated: None,
+             },
+             None,
++            mode,
+         ),
+     }
+ }
+@@ -259,7 +265,7 @@ pub use dom::view;
+ mod dom {
+     use leptos::prelude::*;
+ 
+-    use super::{BLOCK, RunRow, Want, body, kept_want, run_card};
++    use super::{BLOCK, RunRow, Want, body, kept_want, run_card_in};
+     use crate::frame::{Mode, node_href};
+     use crate::project::nodearound::{PageState, mode_of, source, state};
+     use crate::project::{Body, body_view, section, unmeasured};
+@@ -304,7 +310,7 @@ mod dom {
+                     let list = rows
+                         .into_iter()
+                         .map(|r| {
+-                            let card = run_card(&around, &r.run);
++                            let card = run_card_in(&around, &r.run, mode());
+                             row_view(r, card, mode)
+                         })
+                         .collect_view();
+diff --git a/crates/tsuzuri-surface/src/widgets/nodecard.rs b/crates/tsuzuri-surface/src/widgets/nodecard.rs
+index 901231bbed11c58fb098dcc2b85872cd5d153def..d6d6a389bfc527818526022579d09214dc166543 100644
+--- a/crates/tsuzuri-surface/src/widgets/nodecard.rs
++++ b/crates/tsuzuri-surface/src/widgets/nodecard.rs
+@@ -4,17 +4,21 @@
+ //! 出所は節点の file と行（無ければ帯の path）を短くし、長い概要を折った行と出所の全部の字は詳しくに置く。
+ //! 地図の面の札と行が同じ id と電文から同じ card を引けるように、id から引く `card_of` も置く（host でも組む）。
+ //! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く（行 g-card-around）。
++//! 要約は表示の型の 1 つを部品 sumpick で選び、表示の型の側が無ければもう一方を出して詳しくの頭に印の語を置く
++//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)・行 g-card-mode）。表示の型を受けない関数は初心者の包み。
+ 
+ use std::collections::BTreeMap;
+ 
+ use tsuzuri_contract::graph::{GraphDoc, GraphNode, ViewNode};
+ 
++use crate::frame::Mode;
+ use crate::mapview::band::{band_of, kind_key};
+ use crate::mapview::graph::cut;
+ use crate::mapview::graph::fold::{fold_key, plain_title};
+ use crate::mapview::state;
+ use crate::vocab::label;
+ use crate::widgets::hover::{Card, ELLIPSIS};
++use crate::widgets::sumpick::{self, Picked};
+ 
+ /// 状態の無い節点の状態の語。
+ pub const NO_STATE: &str = "状態なし";
+@@ -41,6 +45,11 @@ pub fn gist(node: &GraphNode) -> Option<&str> {
+         .find_map(|s| s.as_deref().filter(|s| !s.is_empty()))
+ }
+ 
++/// 表示の型の概要（部品 sumpick の pick・本文の頭の 1 行は渡さない・行 g-card-mode）。
++pub fn gist_in(node: &GraphNode, mode: Mode) -> Option<Picked> {
++    sumpick::pick(mode, node.plain.as_deref(), node.eng.as_deref(), None)
++}
++
+ /// 出所の全部の字（file が在れば file とコロンと行か file と NO_LINE・無ければ帯の path・見本の srcText）。
+ pub fn full_src(node: &GraphNode) -> String {
+     match (&node.file, node.line) {
+@@ -96,15 +105,27 @@ pub fn short_path(path: &str) -> String {
+ 
+ /// 節点の card（電文の状態を引いて `card_for` に渡す）。
+ pub fn node_card(doc: &GraphDoc, node: &GraphNode) -> Card {
+-    card_for(node, state(doc, node))
++    node_card_in(doc, node, Mode::Beginner)
+ }
+ 
+-/// 節点と状態の字の card（題・種類と帯と状態・id と要約・出所と行・詳しくは長い概要を折った行と出所の全部の字）。
+-/// 状態の字は判じずそのまま種類の行に置く（無ければ「状態なし」）。
++/// 表示の型の節点の card（電文の状態を引いて `card_in` に渡す）。
++pub fn node_card_in(doc: &GraphDoc, node: &GraphNode, mode: Mode) -> Card {
++    card_in(node, state(doc, node), mode)
++}
++
++/// 節点と状態の字の card（初心者の表示の型の `card_in`）。
+ pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
++    card_in(node, status, Mode::Beginner)
++}
++
++/// 節点と状態の字の card（題・種類と帯と状態・id と要約・出所と行・詳しくは長い概要を折った行と出所の全部の字）。
++/// 状態の字は判じずそのまま種類の行に置く（無ければ「状態なし」）。要約は表示の型の 1 つで、
++/// 表示の型の側が無くもう一方を出す時は詳しくの頭にその語の鍵の語を置く。
++pub fn card_in(node: &GraphNode, status: Option<&str>, mode: Mode) -> Card {
+     let band = band_of(node.kind);
+     let title = node.title.split_whitespace().collect::<Vec<_>>().join(" ");
+-    let g = gist(node);
++    let picked = gist_in(node, mode);
++    let g = picked.as_ref().map(|p| p.text.as_str());
+     let value = match g {
+         None => format!("{} {NO_GIST}", node.id),
+         Some(g) => {
+@@ -126,6 +147,9 @@ pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
+         Some(g) if g.chars().count() > FOLD_OVER => fold_rows(g),
+         _ => Vec::new(),
+     };
++    if let Some(p) = picked.as_ref().filter(|p| p.marked) {
++        more.insert(0, label(p.key));
++    }
+     let full = full_src(node);
+     if full != src {
+         more.push(full);
+@@ -166,25 +190,35 @@ pub fn group_card(n: &ViewNode) -> Card {
+     }
+ }
+ 
+-/// 眺めの節点の列の id ごとの card（同じ id が 2 つ在れば前の節点の値・組の箱は `group_card`・近傍の図と一覧が引く）。
++/// 眺めの節点の列の id ごとの card（初心者の表示の型の `view_cards_in`）。
+ pub fn view_cards(nodes: &[ViewNode]) -> BTreeMap<String, Card> {
++    view_cards_in(nodes, Mode::Beginner)
++}
++
++/// 眺めの節点の列の id ごとの表示の型の card（同じ id が 2 つ在れば前の節点の値・組の箱は `group_card`・近傍の図と一覧が引く）。
++pub fn view_cards_in(nodes: &[ViewNode], mode: Mode) -> BTreeMap<String, Card> {
+     let mut cards = BTreeMap::new();
+     for n in nodes {
+         cards.entry(n.node.id.clone()).or_insert_with(|| {
+             if n.group {
+                 group_card(n)
+             } else {
+-                card_for(&n.node, n.status.as_deref())
++                card_in(&n.node, n.status.as_deref(), mode)
+             }
+         });
+     }
+     cards
+ }
+ 
+-/// id の節点の card（電文の nodes の前から見て最初の同じ id・無ければ None）。
++/// id の節点の card（初心者の表示の型の `card_of_in`）。
+ pub fn card_of(doc: &GraphDoc, id: &str) -> Option<Card> {
++    card_of_in(doc, id, Mode::Beginner)
++}
++
++/// id の節点の表示の型の card（電文の nodes の前から見て最初の同じ id・無ければ None）。
++pub fn card_of_in(doc: &GraphDoc, id: &str, mode: Mode) -> Option<Card> {
+     doc.nodes
+         .iter()
+         .find(|n| n.id == id)
+-        .map(|n| node_card(doc, n))
++        .map(|n| node_card_in(doc, n, mode))
+ }
+diff --git a/crates/tsuzuri-surface/tests/hcmode.rs b/crates/tsuzuri-surface/tests/hcmode.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..296e71757e4f76d0db0fa1c130e0c054c055a89f
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hcmode.rs
+@@ -0,0 +1,120 @@
++//! hover の card の要約を表示の型の 1 つにする歯（行 g-card-mode・接頭辞 hcmode_・判断の記録 ADR-30 決定 (2)）。
++//! card の値は host の純な関数で撃ち、DOM の呼び手（wasm の枝）は字を読む。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::graph::{GraphNode, NodeKind};
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::widgets::nodecard::{card_for, card_in, gist_in};
++use tsuzuri_surface::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
++
++const P: &str = "P字やさしい";
++const E: &str = "E字かたい";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn node(plain: Option<&str>, eng: Option<&str>) -> GraphNode {
++    GraphNode {
++        id: "FR1".to_string(),
++        kind: NodeKind::Req,
++        file: Some("design-intent/srs.yaml".to_string()),
++        digest: None,
++        title: "題".to_string(),
++        line: Some(3),
++        plain: plain.map(str::to_string),
++        eng: eng.map(str::to_string),
++        updated: None,
++    }
++}
++
++/// (1) card の値の行と詳しくの概要の字は、初心者は非エンジニア向け・経験者はエンジニア向けから作り、もう一方の字を含まない。
++#[test]
++fn hcmode_value_by_mode() {
++    let long_p = format!("{P}、{}", "あ".repeat(30));
++    let long_e = format!("{E}、{}", "い".repeat(30));
++    let n = node(Some(&long_p), Some(&long_e));
++    let b = card_in(&n, None, Mode::Beginner);
++    assert_eq!(b.value, format!("FR1 {P}、{}…", "あ".repeat(22)));
++    assert!(b.more.iter().any(|r| r.starts_with(P)));
++    let e = card_in(&n, None, Mode::Expert);
++    assert_eq!(e.value, format!("FR1 {E}、{}…", "い".repeat(23)));
++    assert!(e.more.iter().any(|r| r.starts_with(E)));
++    for (c, other) in [(&b, "E字"), (&e, "P字")] {
++        assert!(!c.value.contains(other));
++        assert!(c.more.iter().all(|r| !r.contains(other)), "{:?}", c.more);
++    }
++}
++
++/// (2) 表示の型の側が無い時はもう一方の字を出し、詳しくの頭にその語の鍵の語を置く。表示の型の側が在れば印の行は無い。
++#[test]
++fn hcmode_mark_row() {
++    let only_e = node(None, Some(E));
++    let b = card_in(&only_e, None, Mode::Beginner);
++    assert_eq!(b.value, format!("FR1 {E}"));
++    assert_eq!(b.more.first(), Some(&vocab().label(ENG_KEY)));
++    let only_p = node(Some(P), None);
++    let e = card_in(&only_p, None, Mode::Expert);
++    assert_eq!(e.more.first(), Some(&vocab().label(PLAIN_KEY)));
++    let both = node(Some(P), Some(E));
++    for mode in Mode::ALL {
++        let c = card_in(&both, None, mode);
++        assert!(!c.more.contains(&vocab().label(ENG_KEY)), "{mode:?}");
++        assert!(!c.more.contains(&vocab().label(PLAIN_KEY)), "{mode:?}");
++    }
++    assert_eq!(
++        gist_in(&only_e, Mode::Beginner).map(|p| p.marked),
++        Some(true)
++    );
++}
++
++/// (3) 表示の型を受けない card_for は初心者の card_in と同じ値（着地した呼び手と歯の包み）。
++#[test]
++fn hcmode_beginner_wrapper() {
++    for (p, e) in [
++        (Some(P), Some(E)),
++        (None, Some(E)),
++        (Some(P), None),
++        (None, None),
++    ] {
++        let n = node(p, e);
++        assert_eq!(
++            card_for(&n, Some("open")),
++            card_in(&n, Some("open"), Mode::Beginner)
++        );
++    }
++}
++
++/// (4) DOM の呼び手（近傍の図と一覧・走行の行・決定の歴・抜けの検査）は表示の型の版を呼ぶ。
++#[test]
++fn hcmode_callers_pass_mode() {
++    for (file, want) in [
++        (
++            "src/project/nodearound.rs",
++            "let cards = view_cards_in(&gv.nodes, mode());",
++        ),
++        (
++            "src/project/timeline.rs",
++            "let card = run_card_in(&around, &r.run, mode());",
++        ),
++        (
++            "src/project/askpage.rs",
++            "hist_cards_in(&entries, g, mode())",
++        ),
++        (
++            "src/project/gaps.rs",
++            "fetched.with(|f| body_in(f, mode()))",
++        ),
++    ] {
++        let text = read(file);
++        let dom = &text[text
++            .find("mod dom {")
++            .or_else(|| text.find("pub fn inner("))
++            .expect("DOM の部分")..];
++        assert!(dom.contains(want), "{file} の DOM に {want} が無い");
++    }
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvfront.rs b/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+index 2b3656d3cdfbb87c5144288a08870ddaa27a2d53..88db57ed4109c2e101724fc4c92ca9a9d9b35f1c 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+@@ -217,7 +217,7 @@ fn bvfront_run_link_card() {
+     assert_eq!(run_card(&[], run), lone);
+     let timeline = read("src/project/timeline.rs");
+     assert!(timeline.contains("<a class=\"nth num\" href=href use:attach=card>"));
+-    assert!(timeline.contains("let card = run_card(&around, &r.run);"));
++    assert!(timeline.contains("let card = run_card_in(&around, &r.run, mode());"));
+     // 近傍の行は読めた近傍の頁の行の全部（読めていなければ空）。
+     assert_eq!(
+         joined(&timeline, "let around = near.with(", ";\n"),
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cadq.rs b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+index 42f374b3f6fa0d88e6be50be2ec764490fc61be1..106160904eae63943aac122003408b05e5caef0e 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cadq.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+@@ -165,7 +165,7 @@ fn cadq_dom_wiring() {
+     let page = read("src/project/askpage.rs");
+     let view = after(&page, "pub fn view(");
+     for want in [
+-        "hist_cards(&entries, g)",
++        "hist_cards_in(&entries, g, mode())",
+         "hist_li(d, &cards, now, mode)",
+         "use crate::widgets::hover::attach_some;",
+         "use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>",
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cround.rs b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+index 38bf284ec7c81bc4a78fd2341e5a9abb2733977f..732427c5b5571776a2a0387b71cfcbce8744c257 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cround.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+@@ -263,7 +263,7 @@ fn around_dom_text() {
+     let around = read("src/project/nodearound.rs");
+     let dom = dom_part(&around);
+     for want in [
+-        "view_cards(&gv.nodes)",
++        "view_cards_in(&gv.nodes, mode())",
+         "delegate()",
+         ".get(&item.id)",
+         "on:mouseover=over on:mouseout=out",

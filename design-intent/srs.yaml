@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.28 版（2026-10-04）: 要件 FR1 の shall と plain と note に、その browser の保存に残す物の 4 つ目（個別の頁の本文と記録の段の開き閉じ・段の種類ごとに 1 つ）を足し、adrs に ADR-30 を足した（持ち主の裁定 t3-hub.76.4〔裁定 id = t3-hub.76.4:20261003T0057Z-1〕・判断の記録 ADR-30 決定 (4)・ノート surface-wave27b の行 g-fold-keep）。
 # 第 0.27 版（2026-10-04）: 器 scribe2 の要件書 v0.36（scribe2/design-intent/spec の srs.srs.yaml と srs.prose.yaml）を、番号に 1000 を足して写した（持ち主の裁定 t3-hub.74.60.1〔裁定 id = t3-hub.74.60.1:20261004T0113Z-1〕の形 ii の段 1・判断の記録 ADR-39）。器の FR1〜FR113 を FR1001〜FR1113・NFR1〜NFR6 を NFR1001〜NFR1006・受入 AC1〜AC90 の 82 本を AC1001〜AC1090・上位の必要 N-1〜N-5 を目的 GOAL1001〜GOAL1005 にし、字の中の器の id も同じ規則で直した（code の注の元の id は替えない・器の判断の記録 ADR-0xyz は字のまま残し段 2 で ADR-1xyz へ直す）。欄の写しは要件 = label → title・ears の pattern と condition と response → pattern と when と shall・priority → strength・prose の plain → plain・trace の backward → goals・trace の acceptance → verify の ac・prose の rationale → note（basis は空）・受入の平易文は新しく書いた。器の憲法の番号を引く字「憲法 C<n>」は「器の憲法 C<n>」、「本 SRS」は「器の要件書」に直した（提案中の判断の記録 ADR-38 の決定 (12)）。食い違い D1（行 v-swap〔882e0298〕が口 vessel update に足した busy と unchanged の断り）を FR1061 の shall と plain と AC1031 に足した。語彙の検査が知らない器の英字の語は語彙の identifiers に群を 1 つ足した（段 4 で terms へ照らす）。
 # 第 0.26 版（2026-10-03）: 判断の記録 ADR-30（持ち主の裁定 t3-hub.76.1〜t3-hub.76.6〔裁定 id はどれも末尾が :20261003T0057Z-1〕）を写した（要件 FR15 に 2 つの概要の置き場と、表示の型の 1 つだけを出す board の全体の決まりを足し、FR5 の個別の頁を詳細の表示にして吹き出しの概要の畳みと一覧の行の hover の印を足し、FR6 の card の概要を表示の型の 1 つにし、FR10 の短い題に字数の上限と起票の門と一覧の段の印を足して電文から本文の概要を外し、FR4 の note に起票の短い題の門を足し、受入 AC20 を足し、規則の行 R-19 と R-39 を結んだ）。
 # 第 0.25 版（2026-10-02）: 判断の記録 ADR-29（持ち主の裁定 t3-hub.75.1〔裁定 id = t3-hub.75.1:20261002T2238Z-1〕と t3-hub.75.2〔裁定 id = t3-hub.75.2:20261002T2258Z-1〕）を写した（要件 FR19 を、席の文脈から分けた自由な調べと検証の場・話す窓と問う窓・席の環境を継ぐ起動と囲い・作業場への所見・席の背景の見張り・添え物の保存の選び・board の帯と吹き出しの相談の口の字に改め、FR5 の吹き出しに相談の口を足し、受入 AC16 を改めて AC19 を足し、制約 CON6 に問う窓の model の選び手を足し、scope の字を改め、規則の行 R-38 を結んだ）。
@@ -15,7 +16,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.27
+  version: v0.28
   status: draft
   generated: 2026-09-28
   approval:
@@ -24,6 +25,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-02, stamp: "相談の窓の作り直し（t3-hub.75.1（裁定 id = t3-hub.75.1:20261002T2238Z-1・席とのチャット・notes に逐語）と t3-hub.75.2（裁定 id = t3-hub.75.2:20261002T2258Z-1・package の形は乙）・判断の記録 ADR-29）", verbatim: "4.これは微妙だ。相談といっても例えば新しい技術のスクラッチ実験とかデータの検証のためにプログラムを組むとかはできるべきだ。それがそのプロジェクトを汚さない形であるようにしてほしい。調査レポートなども作れるべきで、ただしそれを直接プロジェクト内に保存するのではなく、orchestratorに渡して保存するかどうか選ばせる形だ 5.常にweb調査もできるべき。上記の通りスクラッチ昨日は残さないと上質な調査は不可能だ それ以外は推奨で良い あと、consultは以前は一つの議題についての相談に特化していた気がするが、そのようにむやみに限定するのではなく、もっとorchestratorのコンテキストを汚さないために分離しているだけの自由な調査検証の場として作って。一つ話終わったからすぐに閉じるわけではない。途中でclearして別の話題について検証して結果をorchestratorに渡す、みたいな運用もあり得るし、なんならconsult窓が複数もあり得る／乙でよいだろう", version: v0.25}
     - {role: 承認, who: 持ち主, when: 2026-10-03, stamp: "board の概要の出し分けと個別の頁の詳細の表示と短い題の上限と起票の門と「測れていない」の直し（t3-hub.76.1（裁定 id = t3-hub.76.1:20261003T0057Z-1）・t3-hub.76.2（裁定 id = t3-hub.76.2:20261003T0057Z-1）・t3-hub.76.3（裁定 id = t3-hub.76.3:20261003T0057Z-1）・t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1）・t3-hub.76.6（裁定 id = t3-hub.76.6:20261003T0057Z-1）・t3-hub.76.5（裁定 id = t3-hub.76.5:20261003T0057Z-1）・席とのチャット・notes に逐語・判断の記録 ADR-30・第 1〜6 問の推奨の全部）", verbatim: "AとBのクエスチョンは全部推奨で良い", version: v0.26}
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "器 scribe2 の設計の資料の取り込みの段 1（要件）（t3-hub.74.60.1（裁定 id = t3-hub.74.60.1:20261004T0113Z-1・席とのチャット・notes に逐語・判断の記録 ADR-39・推奨の全部）", verbatim: "１−７はすべて推奨で良い", version: v0.27}
+    - {role: 承認, who: 持ち主, when: 2026-10-03, stamp: "個別の頁の本文と記録の段の開き閉じをその browser の保存に残す（t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1）・席とのチャット・notes に逐語・判断の記録 ADR-30 決定 (4)・要件 FR1 の 4 つ目）", verbatim: "AとBのクエスチョンは全部推奨で良い", version: v0.28}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -89,14 +91,14 @@ requirements:
     pattern: ubiquitous
     strength: must
     when: つねに
-    shall: 面は project ごとの project board と器の側の account board の 2 つとし、account board は HOME・session・各 project の 3 つの tab を持つ。project board は account board から名前つきの新しい窓で開き、既に開いていれば前面に出し、「戻る」は自分の窓を閉じて account board へ戻る。mode（初心者と経験者）と、account board から開いた窓の一覧と、最初の案内を見終えた印の 3 つは、その browser の保存に残す。これは便利のための写しで正本ではなく、台帳と設計文書と器の値は browser に置かず、保存が消えても面は URL と server の読みから同じ画面を組む。
-    plain: 画面は 2 つです。project ごとの画面と、複数の project と口座をまとめて見る画面です。project の画面は新しい窓で開き、「戻る」で窓を閉じて元へ戻ります。初心者と経験者の切り替えや開いた窓の一覧は、その browser に覚えさせます（消えても画面は元どおり組めます）。
+    shall: 面は project ごとの project board と器の側の account board の 2 つとし、account board は HOME・session・各 project の 3 つの tab を持つ。project board は account board から名前つきの新しい窓で開き、既に開いていれば前面に出し、「戻る」は自分の窓を閉じて account board へ戻る。mode（初心者と経験者）と、account board から開いた窓の一覧と、最初の案内を見終えた印と、個別の頁の本文と記録の段の開き閉じ（段の種類ごとに 1 つ・節点ごとでない）の 4 つは、その browser の保存に残す。これは便利のための写しで正本ではなく、台帳と設計文書と器の値は browser に置かず、保存が消えても面は URL と server の読みから同じ画面を組む。
+    plain: 画面は 2 つです。project ごとの画面と、複数の project と口座をまとめて見る画面です。project の画面は新しい窓で開き、「戻る」で窓を閉じて元へ戻ります。初心者と経験者の切り替えや開いた窓の一覧、個別の頁の本文と記録を開いたか閉じたかは、その browser に覚えさせます（消えても画面は元どおり組めます）。
     basis: [P-2]
     verify: {method: test, how: 2 つの窓の名と「戻る」の 3 段（前面・開く・閉じる）を browser の runner で撃つ, ac: [AC9]}
     goals: [GOAL1, GOAL3]
     figures: []
-    adrs: [ADR-7]
-    note: 画面の設定（mode・開いた窓の一覧・最初の案内の済み印）をその browser に残すのは持ち主の裁定 t3-hub.52.16（裁定 id = t3-hub.52.16:20260927T2233Z-1）。
+    adrs: [ADR-7, ADR-30]
+    note: 画面の設定（mode・開いた窓の一覧・最初の案内の済み印）をその browser に残すのは持ち主の裁定 t3-hub.52.16（裁定 id = t3-hub.52.16:20260927T2233Z-1）。個別の頁の本文と記録の段の開き閉じを残すのは持ち主の裁定 t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1・判断の記録 ADR-30 決定 (4)）。ほかの畳める段の開き閉じは頁の一生の間だけ持つ（ノート surface-board の節 21）。
   - id: FR2
     title: 導出グラフ（設計文書と設計ノートと台帳と走行を 1 つに結ぶ）
     pattern: event

@@ -1,0 +1,418 @@
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index 8c3a1e7cadb5889cbd1497dcd0525ca661e531e7..7d1105e3c7efd2df2f7b7601788ac2e34e10ddeb 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -21,9 +21,10 @@ use tsuzuri_contract::surface::{Refusal, RefusalResponse, RulingId, RulingReques
+ use tsuzuri_contract::wire;
+ 
+ use super::{Body, NOT_READ};
+-use crate::frame::Block;
++use crate::frame::{Block, Mode};
+ use crate::view::{Fetched, clock};
+ use crate::widgets::hover::clip;
++use crate::widgets::sumpick;
+ 
+ pub const BLOCK: Block = Block {
+     id: "ask",
+@@ -74,9 +75,6 @@ pub const EMPTY: &str = "答えを待つ質問は無い";
+ /// 概要が両方無いときの 1 行。
+ pub const NO_SUMMARY: &str = "要約なし";
+ 
+-/// 概要の片方が無いときの字。
+-pub const MISSING: &str = "―";
+-
+ /// 200 の応答の後に card に出す字（記録した id と時刻の前）。
+ pub const RECORDED: &str = "記録した";
+ 
+@@ -176,13 +174,14 @@ pub const LAYOUT: [Slot; 6] = [
+     },
+ ];
+ 
+-/// 概要の 1 行（class・語の鍵・字・エンジニア向けか）。
++/// 概要の 1 行（class・語の鍵・字・エンジニア向けか・表示の型の側でない印を出すか）。
+ #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+ pub struct SumLine {
+     pub class: &'static str,
+     pub key: Option<&'static str>,
+     pub text: String,
+     pub eng: bool,
++    pub marked: bool,
+ }
+ 
+ /// 1 本の card の中身（番号は 1 から・題は 36 字で切る）。
+@@ -193,7 +192,9 @@ pub struct Card {
+     pub title: String,
+     pub a1: bool,
+     pub posted_at: EpochSecs,
+-    pub summary: Vec<SumLine>,
++    /// 2 つの概要（電文の字のまま・出す 1 行は表示の型で summary が選ぶ・行 g-ask-mode）。
++    pub plain: Option<String>,
++    pub eng: Option<String>,
+     pub reason: String,
+     pub recommend: String,
+     pub touches: Vec<String>,
+@@ -315,7 +316,8 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
+         title: clip(&q.title),
+         a1: q.a1,
+         posted_at: q.posted_at,
+-        summary: summary(q.plain.as_deref(), q.eng.as_deref()),
++        plain: q.plain.clone(),
++        eng: q.eng.clone(),
+         reason: q.reason.clone().unwrap_or_default(),
+         recommend: q.recommend.clone().unwrap_or_default(),
+         touches: q.touches.clone(),
+@@ -326,30 +328,33 @@ pub fn card(number: usize, q: &QuestionCard) -> Card {
+     }
+ }
+ 
+-/// 概要の行（2 行・片方だけ無ければ「―」・両方無ければ「要約なし」の 1 行）。
+-pub fn summary(plain: Option<&str>, eng: Option<&str>) -> Vec<SumLine> {
+-    if plain.is_none() && eng.is_none() {
+-        return vec![SumLine {
++/// 概要の 1 行（表示の型の 1 つを部品 sumpick で選ぶ・表示の型の側が無ければもう一方を印つきで・
++/// 両方無ければ「要約なし」・判断の記録 ADR-30 決定 (2)・行 g-ask-mode）。
++pub fn summary(plain: Option<&str>, eng: Option<&str>, mode: Mode) -> SumLine {
++    match sumpick::pick(mode, plain, eng, None) {
++        Some(p) => {
++            let eng = p.key == sumpick::ENG_KEY;
++            SumLine {
++                class: match (eng, p.marked) {
++                    (false, false) => "ln plain",
++                    (false, true) => "ln plain marked",
++                    (true, false) => "ln eng",
++                    (true, true) => "ln eng marked",
++                },
++                key: Some(p.key),
++                text: p.text,
++                eng,
++                marked: p.marked,
++            }
++        }
++        None => SumLine {
+             class: "ln plain muted",
+             key: None,
+             text: NO_SUMMARY.to_string(),
+             eng: false,
+-        }];
+-    }
+-    vec![
+-        SumLine {
+-            class: "ln plain",
+-            key: Some("summary_plain"),
+-            text: plain.unwrap_or(MISSING).to_string(),
+-            eng: false,
++            marked: false,
+         },
+-        SumLine {
+-            class: "ln eng",
+-            key: Some("summary_eng"),
+-            text: eng.unwrap_or(MISSING).to_string(),
+-            eng: true,
+-        },
+-    ]
++    }
+ }
+ 
+ /// 置かれてからの経過の字（60 分未満は分・48 時間未満は時間と分・それ以上は日・見本の durMs）。
+@@ -628,7 +633,7 @@ mod dom {
+     use super::{
+         CHAT_KEY, Card, KeyAction, LAYOUT, MORE, MORE_KEY, Outcome, PATH, Part, RULING_PATH, Slot,
+         UNRECEIVED_PATH, age, anchor, answerable, can_send, card_class, key_action, listed,
+-        outcome, posted_tip, request_body, send_text, target_number,
++        outcome, posted_tip, request_body, send_text, summary, target_number,
+     };
+     use crate::frame::{Mode, node_href};
+     use crate::project::fold;
+@@ -814,7 +819,7 @@ mod dom {
+                 }
+                 .into_any()
+             }
+-            Part::Summary => summary_view(slot, card),
++            Part::Summary => summary_view(slot, card, mode),
+             Part::Reason => {
+                 let key = slot.key.unwrap_or_default();
+                 view! {
+@@ -843,21 +848,24 @@ mod dom {
+     }
+ 
+     /// 要約の行（人の字と作りの字の印・字）。
+-    fn summary_view(slot: Slot, card: &Card) -> AnyView {
+-        let lines = card
+-            .summary
+-            .iter()
+-            .map(|l| {
+-                let icon = if l.eng { CODE } else { PERSON };
+-                view! {
+-                    <div class=l.class data-term=l.key>
+-                        <span inner_html=icon></span>
+-                        <span data-t="" data-ledger-text="">{l.text.clone()}</span>
+-                    </div>
+-                }
+-            })
+-            .collect_view();
+-        view! { <div class=slot.class>{lines}</div> }.into_any()
++    fn summary_view<M>(slot: Slot, card: &Card, mode: M) -> AnyView
++    where
++        M: Fn() -> Mode + Copy + Send + Sync + 'static,
++    {
++        let (plain, eng) = (card.plain.clone(), card.eng.clone());
++        let line = move || {
++            let one = summary(plain.as_deref(), eng.as_deref(), mode());
++            let l = &one;
++            let icon = if l.eng { CODE } else { PERSON };
++            let mark = l.key.filter(|_| l.marked).map(|k| view! { <small>{label(k)}</small> });
++            view! {
++                <div class=l.class data-term=l.key>
++                    <span inner_html=icon></span>
++                    <span>{mark}<span data-t="" data-ledger-text="">{l.text.clone()}</span></span>
++                </div>
++            }
++        };
++        view! { <div class=slot.class>{line}</div> }.into_any()
+     }
+ 
+     /// つながりの段（開いたときに図の口を読み始め、開き閉じを記録へ書き戻す）。
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 466fec6bd7ae1a054c84daecdf630aa4978df0f8..fc6cf9479c1c974ff4087a409cb0fd4a88c8d421 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -708,8 +708,8 @@ svg.hlsvg g.node.lit-self rect.hit { stroke: var(--ink); stroke-width: 3.5; }
+ .qsum { display: flex; flex-direction: column; gap: 2px; margin: var(--s2) 0; font-size: 13px; }
+ .qsum .ln { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--s1); align-items: start; min-width: 0; overflow-wrap: anywhere; }
+ .qsum .ln svg { width: 14px; height: 14px; margin-top: 3px; color: var(--ink-3); }
+-.qsum .ln.eng { color: var(--ink-2); font-size: 12px; }
+-body.mode-beginner .qsum .ln.eng { display: none; }
++.qsum .ln.eng svg { color: var(--ink-2); }
++.qsum .ln.marked small { color: var(--ink-3); margin-right: var(--s1); }
+ .qreason { margin: var(--s2) 0; font-size: 13px; overflow-wrap: anywhere; }
+ .qreason b { margin-right: var(--s1); }
+ .qcard summary { flex-wrap: wrap; }
+diff --git a/crates/tsuzuri-surface/tests/qmode.rs b/crates/tsuzuri-surface/tests/qmode.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a8fdb7586a34e1f4a91f1ec7bc85e888f8490a6
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/qmode.rs
+@@ -0,0 +1,111 @@
++//! 質問の窓の card の概要を表示の型の 1 行にする歯（行 g-ask-mode・接頭辞 qmode_・判断の記録 ADR-30 決定 (2)）。
++//! card の 1 行は host の純な関数で撃ち、card の DOM（wasm の枝）と stylesheet は字を読む。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::project::ask::{self, SumLine};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::widgets::sumpick::{self, ENG_KEY, PLAIN_KEY};
++
++const P: &str = "P-字 答えの欄を 1 つ置く";
++const E: &str = "E-字 qcard ごとに textarea";
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn line(class: &'static str, key: &'static str, text: &str, marked: bool) -> SumLine {
++    SumLine {
++        class,
++        key: Some(key),
++        text: text.to_string(),
++        eng: key == ENG_KEY,
++        marked,
++    }
++}
++
++/// (1) card は電文の 2 つの概要を字のまま持ち、概要の行は 1 つで、初心者は非エンジニア向けの字・経験者はエンジニア向けの字を印なしで出す。
++#[test]
++fn qmode_card_one_line() {
++    let cards = ask::cards(&Fetched::Body(read(
++        "../../tests/fixtures/surface/question-list.json",
++    )))
++    .expect("問いの一覧の fixture");
++    let mut q = cards[0].clone();
++    q.plain = Some(P.to_string());
++    q.eng = Some(E.to_string());
++    let card = ask::card(1, &q);
++    assert_eq!(
++        (card.plain.as_deref(), card.eng.as_deref()),
++        (Some(P), Some(E))
++    );
++    let (plain, eng) = (card.plain.as_deref(), card.eng.as_deref());
++    let b = ask::summary(plain, eng, Mode::Beginner);
++    assert_eq!(b, line("ln plain", PLAIN_KEY, P, false));
++    let e = ask::summary(plain, eng, Mode::Expert);
++    assert_eq!(e, line("ln eng", ENG_KEY, E, false));
++    assert!(!b.text.contains("E-字") && !e.text.contains("P-字"));
++}
++
++/// (2) 表示の型の側が無い（None か空）時はもう一方の 1 行を class の印 marked つきで、部品 sumpick の pick と同じ字と鍵で出し、
++/// 両方無ければ語の鍵の無い 要約なし の 1 行（class ln plain muted）。
++#[test]
++fn qmode_card_fallback() {
++    assert_eq!(
++        ask::summary(None, Some(E), Mode::Beginner),
++        line("ln eng marked", ENG_KEY, E, true)
++    );
++    assert_eq!(
++        ask::summary(Some(P), Some(""), Mode::Expert),
++        line("ln plain marked", PLAIN_KEY, P, true)
++    );
++    for mode in Mode::ALL {
++        for (plain, eng) in [(Some(P), Some(E)), (None, Some(E)), (Some(P), None)] {
++            let got = ask::summary(plain, eng, mode);
++            let want = sumpick::pick(mode, plain, eng, None).expect("どちらかが在る");
++            assert_eq!(
++                (got.key, got.text, got.marked),
++                (Some(want.key), want.text, want.marked)
++            );
++        }
++        let none = ask::summary(None, None, mode);
++        assert_eq!(
++            none,
++            SumLine {
++                class: "ln plain muted",
++                key: None,
++                text: ask::NO_SUMMARY.to_string(),
++                eng: false,
++                marked: false,
++            }
++        );
++    }
++}
++
++/// (3) card の DOM は概要の段で表示の型を渡して 1 行を組み、印の時だけ語の鍵の語を small で前に置き、
++/// stylesheet は初心者の表示の型でエンジニア向けの行を隠す規則を持たない。
++#[test]
++fn qmode_dom_one_line() {
++    let src = read("src/project/ask.rs");
++    let dom = &src[src.find("mod dom {").expect("字 mod dom { が在る")..];
++    for want in [
++        "Part::Summary => summary_view(slot, card, mode),",
++        "let one = summary(plain.as_deref(), eng.as_deref(), mode());",
++        "l.key.filter(|_| l.marked).map(|k| view! { <small>{label(k)}</small> })",
++    ] {
++        assert!(dom.contains(want), "ask.rs の DOM に {want} が無い");
++    }
++    assert!(
++        !src.contains(".summary\n"),
++        "ask.rs が card の 2 行の列を読む"
++    );
++    let css = read("style.css");
++    assert!(
++        !css.contains("body.mode-beginner .qsum .ln.eng"),
++        "初心者でエンジニア向けの行を隠す規則が在る"
++    );
++    assert!(css.contains(".qsum .ln.marked small {"));
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth1/askcard.rs b/crates/tsuzuri-surface/tests/teeth1/askcard.rs
+index c117dfcd77ce5dd798e9bb7f6c09dce2c0e037d6..408ae35723ec96aa6d7344924465cd545683e362 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/askcard.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/askcard.rs
+@@ -12,6 +12,7 @@ use tsuzuri_contract::surface::{
+     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
+ };
+ use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::Mode;
+ use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
+ use tsuzuri_surface::view::{Fetched, clock};
+ use tsuzuri_surface::vocab::vocab;
+@@ -94,25 +95,12 @@ fn askcard_fixture_cards_text() {
+     assert_eq!(first.title, "質問の頁の答えの欄は 1 問に 1 つでよいか");
+     assert!(first.a1);
+     assert_eq!(first.posted_at, 1_790_488_800);
+-    let lines: Vec<(&str, Option<&str>, &str)> = first
+-        .summary
+-        .iter()
+-        .map(|l| (l.class, l.key, l.text.as_str()))
+-        .collect();
+     assert_eq!(
+-        lines,
+-        vec![
+-            (
+-                "ln plain",
+-                Some("summary_plain"),
+-                "答えを書く欄を質問ごとに 1 つ置く"
+-            ),
+-            (
+-                "ln eng",
+-                Some("summary_eng"),
+-                "qcard ごとに textarea と送る button を 1 組"
+-            ),
+-        ]
++        (first.plain.as_deref(), first.eng.as_deref()),
++        (
++            Some("答えを書く欄を質問ごとに 1 つ置く"),
++            Some("qcard ごとに textarea と送る button を 1 組")
++        )
+     );
+     assert_eq!(
+         first.reason,
+@@ -134,14 +122,16 @@ fn second_card(cards: &[ask::Card], first: &ask::Card) {
+     );
+     assert_eq!(second.title.chars().count(), 36);
+     assert!(!second.a1);
++    assert_eq!((second.plain.as_deref(), second.eng.as_deref()), (None, None));
+     assert_eq!(
+-        second.summary,
+-        vec![ask::SumLine {
++        ask::summary(None, None, Mode::Beginner),
++        ask::SumLine {
+             class: "ln plain muted",
+             key: None,
+             text: ask::NO_SUMMARY.to_string(),
+             eng: false,
+-        }]
++            marked: false,
++        }
+     );
+     assert_eq!(ask::NO_SUMMARY, "要約なし");
+     // 理由はつねに出す（在れば字・無ければ空）・推奨の無い card は空の字。
+@@ -164,19 +154,20 @@ fn card_ages(first: &ask::Card) {
+     assert_eq!(ask::age(0, first.posted_at), "0m");
+ }
+ 
+-/// 概要の片方だけ無い card は無い側に「―」。
++/// 概要の片方だけ無い card は、表示の型の側が無ければもう一方の 1 行を印つきで出す（行 g-ask-mode で 2 行と「―」をやめた）。
+ #[test]
+ fn askcard_summary_one_side_missing() {
+-    let only_plain = ask::summary(Some("やさしい説明"), None);
+-    let texts: Vec<&str> = only_plain.iter().map(|l| l.text.as_str()).collect();
+-    assert_eq!(texts, vec!["やさしい説明", "―"]);
+-    let only_eng = ask::summary(None, Some("statements[0]"));
+-    let texts: Vec<&str> = only_eng.iter().map(|l| l.text.as_str()).collect();
+-    assert_eq!(texts, vec!["―", "statements[0]"]);
+-    let classes: Vec<&str> = only_eng.iter().map(|l| l.class).collect();
+-    assert_eq!(classes, vec!["ln plain", "ln eng"]);
+-    assert_eq!(ask::MISSING, "―");
+-    assert_eq!(ask::summary(None, None).len(), 1);
++    let only_plain = ask::summary(Some("やさしい説明"), None, Mode::Expert);
++    assert_eq!(
++        (only_plain.class, only_plain.text.as_str(), only_plain.marked),
++        ("ln plain marked", "やさしい説明", true)
++    );
++    let only_eng = ask::summary(None, Some("statements[0]"), Mode::Beginner);
++    assert_eq!(
++        (only_eng.class, only_eng.text.as_str(), only_eng.marked),
++        ("ln eng marked", "statements[0]", true)
++    );
++    assert_eq!(ask::summary(None, None, Mode::Expert).key, None);
+ }
+ 
+ /// 番号は電文の順（古い順）のまま 1 から・つながりの見出しの数と中の id は card の touches と同じ。
+diff --git a/crates/tsuzuri-surface/tests/teeth2/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+index 3285c7cc3dce09cef4896579d54aaac0ce39e610..8df82f55cc9219ec1f9260e0ccb58ee61019cf34 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/frame.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+@@ -223,9 +223,9 @@ fn used_classes() -> BTreeSet<String> {
+     for slot in ask::LAYOUT {
+         add(slot.class);
+     }
+-    for (plain, eng) in [(Some("a"), Some("b")), (None, None)] {
+-        for line in ask::summary(plain, eng) {
+-            add(line.class);
++    for (plain, eng) in [(Some("a"), Some("b")), (Some("a"), None), (None, Some("b")), (None, None)] {
++        for mode in Mode::ALL {
++            add(ask::summary(plain, eng, mode).class);
+         }
+     }
+     built_classes(&mut add);

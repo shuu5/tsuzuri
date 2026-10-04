@@ -81,4 +81,6 @@
     "sum": "df1fdeff4d2f4c45b8256a3a48ad4e789dfd51acaaacba8bc4d4a97c707dab4b"
   - "id": "ADR-38"
     "sum": "e6928c5508c088145ea06aa8a6ee3ae31a9491fef532581654ec8db0fb628bb2"
-"digest": "fb736be8c32f7e03f43f0b413293109ec462b6e4dfc31f2eedca8a1305c68e64"
+  - "id": "ADR-41"
+    "sum": "1d1a51b0e036d3438d94bebb2dfd3882c69ddcd78a050976eb3852e300041a76"
+"digest": "6296ec3716c95a7eb04e785e4fdac5cb744f30326ece0c007752bbc1803f1cd6"

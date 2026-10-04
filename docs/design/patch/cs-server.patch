@@ -1,0 +1,809 @@
+diff --git a/crates/tsuzuri-boundary/src/server/consult.rs b/crates/tsuzuri-boundary/src/server/consult.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd334156b20c73f957543a6bd743438e9fa4cdc2
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/consult.rs
+@@ -0,0 +1,161 @@
++//! 相談の窓の board の口の材料（設計ノート surface-wave27b 行 cs-server・判断の記録 ADR-29 決定 (4)(8)(9)）。
++//! 一覧の口（GET /api/consult）と未受けの口（GET /api/consult/unreceived）は、repo の git config の鍵
++//! `tsuzuri.draftsdir` の起草の置き場の作業場の file と、台帳の見張りの最後の読みの相談の行を読む（読むだけ）。
++//! state dir が無い server・鍵が無いか dir でない置き場・読めない台帳は、一覧の 4 つの段と未受けを Unknown にする。
++//! 頼みの口（POST /api/consult/request）は台帳を新しい子 process で読み直し、題の置き場（中核の `home_of`・memo か根）に
++//! 相談の頼みの行を bdw で 1 行足すだけで、窓を開かず、裁定の配達を撃たず、承認として数えない。
++//! 頼みの id の数は、同じ分の字の頼みの行の数の最大 + 1。
++
++use std::ffi::{OsStr, OsString};
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{ConsultBoard, ConsultRequest, ConsultUnreceived, RequestId};
++use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_core::consult::lines::{Line, home_of, render, unreceived};
++
++use crate::consult::list::board as list_board;
++use crate::consult::{Ctx, DRAFTS_ARGS, GIT_TIMEOUT, findings, lines_of, windows, workspace};
++use crate::server::Config;
++use crate::server::ledger::{Source, capture, parse_bd};
++use crate::server::ruling::{WRITE_TIMEOUT, Writer, minute};
++
++/// 口の置き場の材料（repo・state dir・台帳の読みと書きの program・置き場を引く git の program）。
++#[derive(Debug, Clone)]
++pub struct Consult {
++    repo: PathBuf,
++    state: Option<PathBuf>,
++    bd: OsString,
++    bdw: OsString,
++    git: OsString,
++}
++
++impl Consult {
++    /// 起動の引数の repo と state dir と bd と bdw の program と、置き場を引く git の program から作る。
++    pub fn new(config: &Config, git: &OsStr) -> Consult {
++        Consult {
++            repo: config.repo.clone(),
++            state: config.state_dir.clone(),
++            bd: config.bd.clone(),
++            bdw: config.bdw.clone(),
++            git: git.to_os_string(),
++        }
++    }
++
++    /// 口の置き場（state dir が無いか、鍵 `tsuzuri.draftsdir` が引けないか、その値が dir でなければ None）。
++    /// 鍵は要求ごとに引く（server を起こした後に置いた鍵も効く）。
++    pub fn ctx(&self) -> Option<Ctx> {
++        let state = self.state.clone()?;
++        let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), self.repo.as_os_str()];
++        args.extend(DRAFTS_ARGS.iter().map(OsStr::new));
++        let out = capture(&self.git, args, &self.repo, GIT_TIMEOUT)?;
++        let drafts = PathBuf::from(String::from_utf8(out).ok()?.trim());
++        drafts.is_dir().then(|| Ctx {
++            repo: self.repo.clone(),
++            state,
++            drafts,
++            bd: self.bd.clone(),
++            bdw: self.bdw.clone(),
++        })
++    }
++}
++
++/// 台帳の字の相談の行（読めない字は None）。
++fn lines(text: Option<&str>) -> Option<Vec<Line>> {
++    match parse_bd(text?) {
++        Reading::Known(items) => Some(lines_of(&items)),
++        Reading::Unknown => None,
++    }
++}
++
++/// 4 つの段が全部 Unknown の一覧。
++pub fn unknown_board() -> ConsultBoard {
++    ConsultBoard {
++        windows: Reading::Unknown,
++        findings: Reading::Unknown,
++        requests: Reading::Unknown,
++        quota: Reading::Unknown,
++    }
++}
++
++/// 一覧の電文（置き場か台帳が読めなければ全部の段が Unknown・ほかは tz consult list と同じ組み）。
++pub fn board(c: Option<&Ctx>, text: Option<&str>, now: &str) -> ConsultBoard {
++    match (c, lines(text)) {
++        (Some(c), Some(lines)) => list_board(c, &lines, now),
++        _ => unknown_board(),
++    }
++}
++
++/// 未受けの所見（退いていない作業場の所見で受けの行の無い物）と頼み（受けの行の無い頼みの行）。
++pub fn waiting(c: Option<&Ctx>, text: Option<&str>) -> Reading<ConsultUnreceived> {
++    let (Some(c), Some(lines)) = (c, lines(text)) else {
++        return Reading::Unknown;
++    };
++    let found: Vec<_> = windows(&c.drafts)
++        .into_iter()
++        .filter(|(_, gone)| !gone)
++        .flat_map(|(id, _)| findings(&workspace(&c.drafts, id), id))
++        .collect();
++    Reading::Known(unreceived(&lines, &found))
++}
++
++/// 次の頼みの id（分の字 `minute` の頼みの行の数の最大 + 1・分の字が形でなければ None）。
++pub fn next_request(lines: &[Line], minute: &str) -> Option<RequestId> {
++    let last = lines
++        .iter()
++        .filter_map(|l| match l {
++            Line::Request { id, .. } if id.minute() == minute => Some(id.n()),
++            _ => None,
++        })
++        .max()
++        .unwrap_or(0);
++    RequestId::new(minute, last.checked_add(1)?)
++}
++
++/// 頼みの受付の結果。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Outcome {
++    /// 頼みの行を置いた（頼みの id と置いた bead の id）。
++    Recorded(RequestId, BeadId),
++    /// 台帳が読めない（何も書いていない）。
++    LedgerUnknown,
++    /// 行の字が書けない（model が空・題に器の引用の形が在るなど・何も書いていない）。
++    BadLine,
++    /// 根の epic が無い（何も書いていない）。
++    NoRoot,
++    /// bdw の書きが落ちた（置き場の bead の id）。
++    AppendFailed(BeadId),
++}
++
++/// 頼みを受ける（台帳を新しい子 process で読み直し、置き場に相談の頼みの行を 1 行足す・配達は撃たない）。
++pub fn request(req: &ConsultRequest, ledger: &Source, writer: &Writer, now: EpochSecs) -> Outcome {
++    let Some(Reading::Known(items)) = ledger.text_alone().map(|t| parse_bd(&t)) else {
++        return Outcome::LedgerUnknown;
++    };
++    let at = minute(now);
++    let Some(id) = next_request(&lines_of(&items), &at) else {
++        return Outcome::BadLine;
++    };
++    let line = Line::Request {
++        id: id.clone(),
++        topic: req.topic.clone(),
++        form: req.form,
++        model: req.model.clone(),
++        at,
++    };
++    let Ok(text) = render(&line) else {
++        return Outcome::BadLine;
++    };
++    let Ok(home) = home_of(&items, req.topic.as_deref(), &text) else {
++        return Outcome::NoRoot;
++    };
++    let write = LedgerWrite::AppendNotes {
++        id: home.id.clone(),
++        line: home.line(&text),
++    };
++    match capture(&writer.bdw, write.argv(), &writer.repo, WRITE_TIMEOUT) {
++        Some(_) => Outcome::Recorded(id, home.id),
++        None => Outcome::AppendFailed(home.id),
++    }
++}
+diff --git a/crates/tsuzuri-boundary/src/server/mod.rs b/crates/tsuzuri-boundary/src/server/mod.rs
+index 6408bf820f450eca2f377fddfddba3dcf5bb180a..aa2cee1452591802928cf9c69171f19c9fe0c6b4 100644
+--- a/crates/tsuzuri-boundary/src/server/mod.rs
++++ b/crates/tsuzuri-boundary/src/server/mod.rs
+@@ -25,6 +25,8 @@
+ //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
+ //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
+ //! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
++//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は行 cs-server が足す（`consult`・頼みの口は方針の口と同じ守りで、
++//! 読むだけの server は 403・置き場に相談の頼みの行を 1 行足すだけで窓を開かず配達を撃たない）。
+ //! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
+ //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
+ //! （`Cases::watch`・行 c-cases-watch）。
+@@ -38,6 +40,7 @@ pub mod cases;
+ pub mod clock;
+ pub mod coalesce;
+ mod config;
++pub mod consult;
+ pub mod design;
+ pub mod events;
+ pub mod files;
+@@ -78,6 +81,7 @@ use crate::stagecall::Caller;
+ 
+ use self::board::Sources;
+ use self::cases::Cases;
++use self::consult::Consult;
+ use self::design::Design;
+ use self::events::Hub;
+ use self::form::Form;
+@@ -173,6 +177,8 @@ struct Shared {
+     notify: Option<PathBuf>,
+     /// 表示先の設定と窓を開く頼みの撃ち先（tz と器の program と --repo・行 e-stage-target）。
+     stage: Caller,
++    /// 相談の窓の口の置き場の材料（行 cs-server）。
++    consult: Consult,
+ }
+ 
+ /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
+@@ -254,6 +260,7 @@ impl Server {
+                     scribe2: config.scribe2.clone(),
+                     repo: config.repo.clone(),
+                 },
++                consult: Consult::new(config, git),
+             }),
+         })
+     }
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consult.rs b/crates/tsuzuri-boundary/src/server/routes/consult.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9726de9618965f56f4af6fc3e147ce80ec949ad1
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/routes/consult.rs
+@@ -0,0 +1,29 @@
++//! GET /api/consult — 相談の窓の一覧（ConsultBoard・行 cs-server）。
++//! 作業場の file と台帳の見張りの最後の読みの相談の行から tz consult list と同じ組みの電文を返す
++//! （置き場か台帳が読めなければ 4 つの段が Unknown・読むだけの server も同じ）。
++
++use tsuzuri_contract::consult::PATH;
++use tsuzuri_contract::wire;
++
++use crate::consult::minute_now;
++use crate::server::http::{Request, Response};
++use crate::server::route::{Entry, Key, Match};
++use crate::server::{Shared, aged, consult, json};
++
++pub(in crate::server) const ROUTE: Entry = Entry {
++    key: Key {
++        method: "GET",
++        path: Match::Exact(PATH),
++    },
++    handle: board,
++};
++
++fn board(_: &Request, shared: &Shared) -> Response {
++    let got = shared.sources.ledger.got();
++    let board = consult::board(
++        shared.consult.ctx().as_ref(),
++        got.text.as_deref(),
++        &minute_now(),
++    );
++    aged(json(200, wire::encode(&board)), got.stale)
++}
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consultreq.rs b/crates/tsuzuri-boundary/src/server/routes/consultreq.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7c77c3cc0f15f04990e36a9b86604b6d5872be1e
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/routes/consultreq.rs
+@@ -0,0 +1,48 @@
++//! POST /api/consult/request — board の button の相談の頼み（ConsultRequest・行 cs-server）。
++//! 守りは方針の口と同じ `guarded`・読むだけの server は受付の前に `read_only` で断る。
++//! 置き場に相談の頼みの行を 1 行足すだけで、窓を開かず、裁定の配達を撃たない。応答は頼みの id の電文。
++
++use tsuzuri_contract::consult::{ConsultRequest, REQUEST_PATH};
++use tsuzuri_contract::wire;
++
++use crate::out::emit_err;
++use crate::server::consult::{Outcome, request};
++use crate::server::http::{Request, Response};
++use crate::server::route::{Entry, Key, Match};
++use crate::server::ruling::refusal_line;
++use crate::server::{Shared, events, guarded, json, read_only};
++
++pub(in crate::server) const ROUTE: Entry = Entry {
++    key: Key {
++        method: "POST",
++        path: Match::Exact(REQUEST_PATH),
++    },
++    handle: post_request,
++};
++
++/// 頼みの受付（200 でなければ `refusal_line` の 1 行を標準エラーに書いてから返す）。
++fn post_request(req: &Request, shared: &Shared) -> Response {
++    let body = match guarded(req, |t| wire::decode::<ConsultRequest>(t).ok()) {
++        Ok(body) => body,
++        Err(response) => return response,
++    };
++    if shared.read_only {
++        return read_only(REQUEST_PATH, &[]);
++    }
++    let response = match request(&body, &shared.sources.ledger, &shared.writer, events::now()) {
++        Outcome::Recorded(id, _) => json(200, wire::encode(&id)),
++        Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
++        Outcome::BadLine => Response::text(400, "bad-line"),
++        Outcome::NoRoot => Response::text(503, "no-root"),
++        Outcome::AppendFailed(id) => Response::text(502, &format!("ledger-append {id}")),
++    };
++    if response.status != 200 {
++        emit_err(&refusal_line(
++            REQUEST_PATH,
++            response.status,
++            &response.body,
++            &[],
++        ));
++    }
++    response
++}
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consultun.rs b/crates/tsuzuri-boundary/src/server/routes/consultun.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d9e7178bf23fdefb4755e1827478029ded350bc6
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/routes/consultun.rs
+@@ -0,0 +1,23 @@
++//! GET /api/consult/unreceived — 席に受けられていない所見と頼み（Reading<ConsultUnreceived>・行 cs-server）。
++//! 席の hook の安い判じが撃つ（置き場か台帳が読めなければ Unknown・読むだけの server も同じ）。
++
++use tsuzuri_contract::consult::UNRECEIVED_PATH;
++use tsuzuri_contract::wire;
++
++use crate::server::http::{Request, Response};
++use crate::server::route::{Entry, Key, Match};
++use crate::server::{Shared, aged, consult, json};
++
++pub(in crate::server) const ROUTE: Entry = Entry {
++    key: Key {
++        method: "GET",
++        path: Match::Exact(UNRECEIVED_PATH),
++    },
++    handle: unreceived,
++};
++
++fn unreceived(_: &Request, shared: &Shared) -> Response {
++    let got = shared.sources.ledger.got();
++    let reading = consult::waiting(shared.consult.ctx().as_ref(), got.text.as_deref());
++    aged(json(200, wire::encode(&reading)), got.stale)
++}
+diff --git a/crates/tsuzuri-boundary/tests/cwsrv.rs b/crates/tsuzuri-boundary/tests/cwsrv.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed84d66ea30c641d07d1d87166e59a0005675b00
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwsrv.rs
+@@ -0,0 +1,472 @@
++//! board の server の相談の窓の 3 つの口の歯（接頭辞 cwsrv_・設計ノート surface-wave27b 行 cs-server）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo（鍵 tsuzuri.draftsdir）と state dir と起草の置き場と、
++//! 台帳の file を返す偽の bd と、受けた argv を記録する偽の bdw と偽の器の CLI を置き、server を同じ process の thread で
++//! 127.0.0.1 の空き port に立てて素の TCP で撃つ。窓の作業場（控えと所見の file の名）は歯が直に書く。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::Command;
++use std::thread;
++use std::time::Duration;
++
++use tsuzuri_boundary::consult::list::board;
++use tsuzuri_boundary::consult::{Ctx, minute_now};
++use tsuzuri_boundary::server::consult::next_request;
++use tsuzuri_boundary::server::{Config, Server};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::consult::{
++    ConsultBoard, ConsultRequest, ConsultUnreceived, FindingId, Form, PATH, REQUEST_PATH,
++    RequestId, Starter, UNRECEIVED_PATH, WindowFile, WindowId,
++};
++use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::lines::{Line, render, scan};
++
++const LEDGER: &str = r#"[
++{"id":"fx-s","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"},
++{"id":"fx-s.1","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-s","updated_at":"2026-10-03T00:00:00Z"},
++{"id":"fx-s.2","title":"問い","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-s.1","updated_at":"2026-10-03T00:00:00Z"}
++]"#;
++
++/// 頼みの行（受けの無い頼み）。
++const RQ: &str = "相談の頼み = rq-20261003T1412Z-1・題 = fx-s.2・形 = 問う・model = opus・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
++
++/// 所見 cw1-2 の受けの行。
++const GOT_F: &str = "相談の受け = cw1-2・経路 = 見張り・時刻 = 20261003T1530Z";
++
++/// 頼みの受けの行。
++const GOT_RQ: &str = "相談の受け = rq-20261003T1412Z-1・経路 = 一覧・時刻 = 20261003T1531Z";
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .expect("git");
++    assert!(ok.success(), "git {args:?}");
++}
++
++fn w(n: u32) -> WindowId {
++    WindowId::new(n).expect("窓の id")
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    state: PathBuf,
++    drafts: PathBuf,
++}
++
++impl Fx {
++    /// 鍵 tsuzuri.draftsdir は置かない（歯が置く）。
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwsrv")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [
++            &repo,
++            &state,
++            &drafts,
++            &root.join("files"),
++            &root.join("bin"),
++        ] {
++            fs::create_dir_all(d).expect("置き場");
++        }
++        fs::write(root.join("files/index.html"), "tz").expect("index.html");
++        git(&repo, &["init", "-q"]);
++        let r = root.display().to_string();
++        let record = |log: &str| {
++            format!(
++                "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{r}/{log}'\necho >> '{r}/{log}'"
++            )
++        };
++        script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(&root.join("bin/bdw"), &record("bdw.log"));
++        script(&root.join("bin/scribe2"), &record("scribe2.log"));
++        let fx = Fx {
++            root,
++            repo,
++            state,
++            drafts,
++        };
++        fx.notes(LEDGER, &[]);
++        fx
++    }
++
++    /// 根の notes に `lines` を置いた台帳の字を書く。
++    fn notes(&self, ledger: &str, lines: &[&str]) {
++        let text = ledger.replace("NOTES", &lines.join("\\n"));
++        fs::write(self.root.join("ledger.json"), text).expect("台帳の file");
++    }
++
++    /// 窓の作業場（`dir` は dir の名）と所見の file の名（中身は空の object）。
++    fn window(&self, dir: &str, n: u32, ks: &[u32]) {
++        let ws = self.drafts.join(dir);
++        for d in [".consult", "findings"] {
++            fs::create_dir_all(ws.join(d)).expect("作業場");
++        }
++        let file = WindowFile {
++            id: w(n),
++            form: Form::Talk,
++            topic: Some("fx-s.2".to_string()),
++            model: "fable".into(),
++            effort: "xhigh".into(),
++            starter: Starter::Seat,
++            uttered: None,
++            request: None,
++            made: "20261003T1400Z".into(),
++        };
++        fs::write(
++            ws.join(".consult/window.json"),
++            wire::encode(&file).expect("控えの電文"),
++        )
++        .expect("控え");
++        for k in ks {
++            fs::write(ws.join(format!("findings/cw{n}-{k}.json")), "{}").expect("所見の file");
++        }
++    }
++
++    /// state dir を置くか・読むだけかを選んで server を立て、口の住所を返す（席の target と器の CLI は偽）。
++    fn serve(&self, with_state: bool, read_only: bool) -> SocketAddr {
++        let config = Config {
++            bd: self.root.join("bin/bd").into(),
++            bdw: self.root.join("bin/bdw").into(),
++            scribe2: self.root.join("bin/scribe2").into(),
++            seat: Some("fx-seat".to_string()),
++            state_dir: with_state.then(|| self.state.clone()),
++            read_only,
++            ..Config::new(
++                self.repo.clone(),
++                "127.0.0.1:0".parse().expect("bind 先"),
++                self.root.join("files"),
++            )
++        };
++        let server = Server::bind(&config).expect("起動");
++        let addr = server.local_addr().expect("口の住所");
++        thread::spawn(move || server.run());
++        addr
++    }
++
++    fn ctx(&self) -> Ctx {
++        Ctx {
++            repo: self.repo.clone(),
++            state: self.state.clone(),
++            drafts: self.drafts.clone(),
++            bd: self.root.join("bin/bd").into(),
++            bdw: self.root.join("bin/bdw").into(),
++        }
++    }
++
++    /// 偽の program の記録の行（無ければ空）。
++    fn log(&self, name: &str) -> Vec<Vec<String>> {
++        fs::read_to_string(self.root.join(name))
++            .unwrap_or_default()
++            .lines()
++            .map(|l| {
++                l.split('\u{1f}')
++                    .filter(|a| !a.is_empty())
++                    .map(String::from)
++                    .collect()
++            })
++            .collect()
++    }
++}
++
++/// 要求を 1 つ撃ち、状態の code と本文を返す（`origin` は頭 Origin の字）。
++fn call(
++    addr: SocketAddr,
++    method: &str,
++    path: &str,
++    origin: Option<&str>,
++    body: &str,
++) -> (u16, String) {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    let origin = origin
++        .map(|o| format!("Origin: {o}\r\n"))
++        .unwrap_or_default();
++    s.write_all(
++        format!(
++            "{method} {path} HTTP/1.1\r\nHost: {addr}\r\n{origin}Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
++            body.len()
++        )
++        .as_bytes(),
++    )
++    .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    let status = head
++        .split(' ')
++        .nth(1)
++        .and_then(|c| c.parse().ok())
++        .expect("状態の code");
++    (status, body.to_string())
++}
++
++fn get(addr: SocketAddr, path: &str) -> String {
++    let (status, body) = call(addr, "GET", path, None, "");
++    assert_eq!(status, 200, "{path}: {body}");
++    body
++}
++
++fn ask(topic: Option<&str>, model: &str) -> String {
++    wire::encode(&ConsultRequest {
++        topic: topic.map(String::from),
++        form: Form::Ask,
++        model: model.to_string(),
++    })
++    .expect("頼みの電文")
++}
++
++fn known_board(b: &ConsultBoard) -> bool {
++    [
++        matches!(b.windows, Reading::Known(_)),
++        matches!(b.findings, Reading::Known(_)),
++        matches!(b.requests, Reading::Known(_)),
++        matches!(b.quota, Reading::Known(_)),
++    ] == [true; 4]
++}
++
++fn unknown_board(b: &ConsultBoard) -> bool {
++    [
++        b.windows == Reading::Unknown,
++        b.findings == Reading::Unknown,
++        b.requests == Reading::Unknown,
++        b.quota == Reading::Unknown,
++    ] == [true; 4]
++}
++
++/// (1) 口 /api/consult の電文は、作業場の file と台帳の相談の行から tz consult list の組み（`list::board`）が作る
++/// 電文と同じ字で、窓は退いた窓を含む 2 つ・処分の無い所見は cw1-1・受けの無い頼みは 1 つ。
++#[test]
++fn cwsrv_board_matches_list() {
++    let fx = Fx::new("board");
++    git(
++        &fx.repo,
++        &[
++            "config",
++            "tsuzuri.draftsdir",
++            &fx.drafts.display().to_string(),
++        ],
++    );
++    fx.window("consult-cw1", 1, &[1]);
++    fx.window("retired-consult-cw2", 2, &[]);
++    fx.notes(LEDGER, &[RQ]);
++    let body = get(fx.serve(true, false), PATH);
++    let lines = scan(RQ);
++    let want = board(&fx.ctx(), &lines, &minute_now());
++    assert_eq!(body, wire::encode(&want).expect("電文"));
++    let got: ConsultBoard = wire::decode(&body).expect("一覧の電文");
++    assert!(known_board(&got), "{body}");
++    let Reading::Known(wins) = &got.windows else {
++        panic!("{body}")
++    };
++    assert_eq!(wins.iter().map(|r| r.id).collect::<Vec<_>>(), [w(1), w(2)]);
++    let Reading::Known(open) = &got.findings else {
++        panic!("{body}")
++    };
++    assert_eq!(
++        open.iter().map(|r| r.id.to_string()).collect::<Vec<_>>(),
++        ["cw1-1"]
++    );
++    let Reading::Known(rqs) = &got.requests else {
++        panic!("{body}")
++    };
++    assert_eq!(
++        rqs.iter().map(|r| r.id.to_string()).collect::<Vec<_>>(),
++        ["rq-20261003T1412Z-1"]
++    );
++}
++
++/// (2) state dir の無い server・鍵 tsuzuri.draftsdir の無い repo・dir でない鍵の値・読めない台帳は、どれも
++/// 一覧の 4 つの段を Unknown にし、未受けの口を Unknown にする（ほかの材料は揃えた形・揃えた対照は 4 段とも Known）。
++#[test]
++fn cwsrv_unknown_without_place() {
++    let fx = Fx::new("unknown");
++    let drafts = fx.drafts.display().to_string();
++    let both = |addr: SocketAddr| {
++        let b: ConsultBoard = wire::decode(&get(addr, PATH)).expect("一覧の電文");
++        let u: Reading<ConsultUnreceived> =
++            wire::decode(&get(addr, UNRECEIVED_PATH)).expect("未受けの電文");
++        (b, u)
++    };
++    let (b, u) = both(fx.serve(true, false));
++    assert!(unknown_board(&b) && u == Reading::Unknown, "鍵が無い");
++    git(
++        &fx.repo,
++        &["config", "tsuzuri.draftsdir", &format!("{drafts}/none")],
++    );
++    let (b, u) = both(fx.serve(true, false));
++    assert!(unknown_board(&b) && u == Reading::Unknown, "dir でない");
++    git(&fx.repo, &["config", "tsuzuri.draftsdir", &drafts]);
++    let (b, u) = both(fx.serve(false, false));
++    assert!(
++        unknown_board(&b) && u == Reading::Unknown,
++        "state dir が無い"
++    );
++    let (b, u) = both(fx.serve(true, false));
++    assert!(
++        known_board(&b) && matches!(u, Reading::Known(_)),
++        "揃えた対照"
++    );
++    fs::write(fx.root.join("ledger.json"), "not json").expect("読めない台帳");
++    let (b, u) = both(fx.serve(true, false));
++    assert!(unknown_board(&b) && u == Reading::Unknown, "読めない台帳");
++}
++
++/// (3) 口 /api/consult/unreceived の電文は、退いていない作業場の所見のうち受けの行の無い id と、受けの行の無い頼みの id
++/// （退いた作業場の所見と受けた所見と受けた頼みは載らない）。
++#[test]
++fn cwsrv_unreceived_lists_findings_and_requests() {
++    let fx = Fx::new("unreceived");
++    git(
++        &fx.repo,
++        &[
++            "config",
++            "tsuzuri.draftsdir",
++            &fx.drafts.display().to_string(),
++        ],
++    );
++    fx.window("consult-cw1", 1, &[1, 2]);
++    fx.window("retired-consult-cw2", 2, &[1]);
++    fx.notes(LEDGER, &[RQ, GOT_F]);
++    let addr = fx.serve(true, false);
++    let got: Reading<ConsultUnreceived> = wire::decode(&get(addr, UNRECEIVED_PATH)).expect("電文");
++    let f1 = FindingId::parse("cw1-1").expect("所見の id");
++    let rq = RequestId::parse("rq-20261003T1412Z-1").expect("頼みの id");
++    assert_eq!(
++        got,
++        Reading::Known(ConsultUnreceived {
++            findings: vec![f1],
++            requests: vec![rq],
++        })
++    );
++    fx.notes(LEDGER, &[RQ, GOT_F, GOT_RQ]);
++    let addr = fx.serve(true, false);
++    let got: Reading<ConsultUnreceived> = wire::decode(&get(addr, UNRECEIVED_PATH)).expect("電文");
++    assert_eq!(
++        got,
++        Reading::Known(ConsultUnreceived {
++            findings: vec![f1],
++            requests: vec![],
++        })
++    );
++}
++
++/// (4) 次の頼みの id は、同じ分の字の頼みの行の数の最大に 1 を足した数（ほかの分の字の行は数えず、無ければ 1）で、
++/// 分の字が形でなければ None。
++#[test]
++fn cwsrv_next_request_counts_same_minute() {
++    let m = "20261003T1412Z";
++    let rq = |minute: &str, n: u32| Line::Request {
++        id: RequestId::new(minute, n).expect("頼みの id"),
++        topic: None,
++        form: Form::Talk,
++        model: "fable".into(),
++        at: minute.into(),
++    };
++    let lines = [rq(m, 1), rq(m, 3), rq("20261003T1413Z", 7)];
++    let next = |minute: &str| next_request(&lines, minute).map(|id| id.to_string());
++    assert_eq!(next(m).as_deref(), Some("rq-20261003T1412Z-4"));
++    assert_eq!(
++        next("20261003T1413Z").as_deref(),
++        Some("rq-20261003T1413Z-8")
++    );
++    assert_eq!(
++        next("20261003T1414Z").as_deref(),
++        Some("rq-20261003T1414Z-1")
++    );
++    assert_eq!(next_request(&[], m).map(|id| id.n()), Some(1));
++    assert_eq!(next("20261003T1412z"), None);
++}
++
++/// (5) 口 POST /api/consult/request は、題の bead から上った memo（題が無ければ根）に、頼みの id と題と形と model と
++/// 起こし手 持ち主の button と時刻の相談の頼みの行を bdw の AppendNotes で 1 本だけ足し、応答は頼みの id の電文で、
++/// 器の CLI（裁定の配達）を撃たない。
++#[test]
++fn cwsrv_request_appends_one_line() {
++    let fx = Fx::new("request");
++    let addr = fx.serve(true, false);
++    let origin = format!("http://{addr}");
++    for (topic, home) in [(Some("fx-s.2"), "fx-s.1"), (None, "fx-s")] {
++        let _ = fs::remove_file(fx.root.join("bdw.log"));
++        let (status, body) = call(
++            addr,
++            "POST",
++            REQUEST_PATH,
++            Some(&origin),
++            &ask(topic, "opus"),
++        );
++        assert_eq!(status, 200, "{body}");
++        let id: RequestId = wire::decode(&body).expect("頼みの id の電文");
++        let line = Line::Request {
++            id: id.clone(),
++            topic: topic.map(String::from),
++            form: Form::Ask,
++            model: "opus".into(),
++            at: id.minute().to_string(),
++        };
++        let text = render(&line).expect("行の字");
++        assert!(text.contains("・起こし手 = 持ち主の button・"), "{text}");
++        let want = LedgerWrite::AppendNotes {
++            id: BeadId::new(home).expect("bead の id"),
++            line: text,
++        };
++        assert_eq!(fx.log("bdw.log"), [want.argv()]);
++    }
++    assert!(fx.log("scribe2.log").is_empty(), "配達を撃たない");
++}
++
++/// (6) 頼みの口は、読むだけの server（403）・別の Origin（403）・model が空の頼み（400 bad-line）・読めない台帳
++/// （503 ledger-unknown）・根の無い台帳（503 no-root）を断り、どれも bdw を撃たない（ほかの欄は揃えた形）。
++#[test]
++fn cwsrv_request_refusals() {
++    let fx = Fx::new("refuse");
++    let post = |addr: SocketAddr, origin: &str, body: &str| {
++        call(addr, "POST", REQUEST_PATH, Some(origin), body)
++    };
++    let ro = fx.serve(true, true);
++    assert_eq!(
++        post(ro, &format!("http://{ro}"), &ask(None, "opus")).0,
++        403,
++        "読むだけ"
++    );
++    let addr = fx.serve(true, false);
++    let me = format!("http://{addr}");
++    assert_eq!(
++        post(addr, "http://198.51.100.7:8120", &ask(None, "opus")).0,
++        403,
++        "別の Origin"
++    );
++    assert_eq!(
++        post(addr, &me, &ask(None, "")),
++        (400, "bad-line".to_string())
++    );
++    fx.notes(&LEDGER.replace("\"epic\"", "\"task\""), &[]);
++    assert_eq!(
++        post(addr, &me, &ask(None, "opus")),
++        (503, "no-root".to_string())
++    );
++    fs::write(fx.root.join("ledger.json"), "not json").expect("読めない台帳");
++    assert_eq!(
++        post(addr, &me, &ask(None, "opus")),
++        (503, "ledger-unknown".to_string())
++    );
++    assert!(fx.log("bdw.log").is_empty(), "bdw を撃たない");
++}

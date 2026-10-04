@@ -1,0 +1,403 @@
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+index 29a1292be6f054589507b9899e08bd8168bb8fb4..267e2bf121c8b83a7248cd61aa2b5fd17b1029c1 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+@@ -180,7 +180,6 @@ fn bvfroute_shape_on_fixture() {
+         created_at: Some(CREATED_7),
+         short: "3".into(),
+         short_set: false,
+-        summary: "fixture の bead（本文は見本の字）".into(),
+         blocks: vec![bead("fx-hub.6")],
+     };
+     assert_eq!(rows.first(), Some(&blocked));
+diff --git a/crates/tsuzuri-contract/src/ledger.rs b/crates/tsuzuri-contract/src/ledger.rs
+index 85b2b057c29fb46069b33281ccf426a34ad83788..072e51cf195424ad6a688cb7d84805c16c002812 100644
+--- a/crates/tsuzuri-contract/src/ledger.rs
++++ b/crates/tsuzuri-contract/src/ledger.rs
+@@ -151,7 +151,8 @@ pub struct BeadFacts {
+     pub rows: Reading<Vec<BeadFact>>,
+ }
+ 
+-/// bead の 1 本の事実（id・起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)）。
++/// bead の 1 本の事実（id・起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)）。
++/// 本文の概要は持たない（吹き出しは開いた時に 1 本の引きの口から読む・判断の記録 ADR-30 決定 (3)・行 c-fact-trim）。
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct BeadFact {
+     pub id: BeadId,
+@@ -161,8 +162,6 @@ pub struct BeadFact {
+     pub short: String,
+     /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
+     pub short_set: bool,
+-    /// 概要（本文の 1 行・Unicode の字で 120 まで）。
+-    pub summary: String,
+     /// blocks の相手（依存の type が blocks の先の bead の全部・台帳の順）。
+     pub blocks: Vec<BeadId>,
+ }
+diff --git a/crates/tsuzuri-contract/tests/snapshots/ledger.json b/crates/tsuzuri-contract/tests/snapshots/ledger.json
+index 4c3b63bf8f3cc1099e655b803337bffa9bad3fb0..a4ee2315fbad1bd62497eca725d2d3272c4eb346 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/ledger.json
++++ b/crates/tsuzuri-contract/tests/snapshots/ledger.json
+@@ -83,7 +83,6 @@
+       "created_at": 1790494620,
+       "short": "契約の型",
+       "short_set": true,
+-      "summary": "契約の型を足す",
+       "blocks": [
+         "t3-hub.4"
+       ]
+@@ -93,7 +92,6 @@
+       "created_at": null,
+       "short": "根",
+       "short_set": false,
+-      "summary": "",
+       "blocks": []
+     }
+   ],
+@@ -106,7 +104,6 @@
+             "created_at": 1790494620,
+             "short": "契約の型",
+             "short_set": true,
+-            "summary": "契約の型を足す",
+             "blocks": [
+               "t3-hub.4"
+             ]
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+index 90d9412466fc6687fd16f667a4828a63215dddd0..bb3d97127582e496894e18af61f4fb4cfcf7f719 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_ledger.rs
+@@ -98,7 +98,6 @@ fn bead_fact() -> BeadFact {
+         created_at: Some(AT),
+         short: "契約の型".into(),
+         short_set: true,
+-        summary: "契約の型を足す".into(),
+         blocks: vec![bead("t3-hub.4")],
+     }
+ }
+@@ -147,13 +146,12 @@ fn forms() -> Vec<Box<dyn Form>> {
+             "ledger::BeadFact",
+             vec![
+                 bead_fact(),
+-                // 起票の時刻が読めず、短い題を題から作り、概要も blocks の相手も無い bead。
++                // 起票の時刻が読めず、短い題を題から作り、blocks の相手も無い bead。
+                 BeadFact {
+                     id: bead("t3-hub"),
+                     created_at: None,
+                     short: "根".into(),
+                     short_set: false,
+-                    summary: String::new(),
+                     blocks: vec![],
+                 },
+             ],
+diff --git a/crates/tsuzuri-core/src/ledger/facts.rs b/crates/tsuzuri-core/src/ledger/facts.rs
+index 13dbd104488a77cf624c3b873b19233803e740c3..bf70acdc2e0d128eae380c8c0932f32e983b1510 100644
+--- a/crates/tsuzuri-core/src/ledger/facts.rs
++++ b/crates/tsuzuri-core/src/ledger/facts.rs
+@@ -1,7 +1,7 @@
+-//! bead の事実の一覧（起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
++//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
+ //! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
+-//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。概要は本文の 1 行を Unicode の字で 120 に切る。
++//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む・行 c-fact-trim）。
+ 
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
+@@ -18,15 +18,6 @@ pub const ROW_TITLE_PREFIX: &str = "便 ";
+ /// 題の区切りの字（前の字が短い題）。
+ pub const TITLE_DASH: char = '—';
+ 
+-/// 概要を取る見出しの行。
+-pub const OBSERVATION_HEADING: &str = "### 観測";
+-
+-/// 概要の行から外す頭の字。
+-pub const SUMMARY_LABEL: &str = "概要 =";
+-
+-/// 概要の字数の上限（Unicode の字）。
+-pub const SUMMARY_MAX: usize = 120;
+-
+ /// 短い題の字数の上限（Unicode のスカラー値・規則の行 R-19）。
+ pub const SHORT_MAX: usize = 20;
+ 
+@@ -63,7 +54,6 @@ fn fact(bead: BdBead) -> Option<BeadFact> {
+         created_at: bead.created_at.as_deref().and_then(epoch_secs),
+         short: capped(&set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default()))),
+         short_set,
+-        summary: summary_of(bead.description.as_deref().unwrap_or_default()),
+         blocks,
+     })
+ }
+@@ -90,24 +80,3 @@ pub fn capped(short: &str) -> String {
+         .chain([ELLIPSIS])
+         .collect()
+ }
+-
+-/// 本文から作る概要。見出しの行 `OBSERVATION_HEADING` が在ればその下の最初の空でない行、無ければ空の行と
+-/// 字 # で始まる行を飛ばした最初の行（どれも前後の空白を除く）から、頭の `SUMMARY_LABEL` とその後の空白を外し、
+-/// Unicode の字で `SUMMARY_MAX` に切る。行が無ければ空の字。
+-pub fn summary_of(description: &str) -> String {
+-    let lines: Vec<&str> = description.lines().map(str::trim).collect();
+-    let line = match lines.iter().position(|l| *l == OBSERVATION_HEADING) {
+-        Some(at) => lines
+-            .get(at + 1..)
+-            .unwrap_or_default()
+-            .iter()
+-            .find(|l| !l.is_empty()),
+-        None => lines.iter().find(|l| !l.is_empty() && !l.starts_with('#')),
+-    };
+-    let line = line.copied().unwrap_or_default();
+-    line.strip_prefix(SUMMARY_LABEL)
+-        .map_or(line, str::trim_start)
+-        .chars()
+-        .take(SUMMARY_MAX)
+-        .collect()
+-}
+diff --git a/crates/tsuzuri-core/tests/ftrim.rs b/crates/tsuzuri-core/tests/ftrim.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..960a4ba44f84d529eb0562e0882216efc9c2068c
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/ftrim.rs
+@@ -0,0 +1,80 @@
++//! 事実の口の概要を消す歯（接頭辞 ftrim_・設計ノート surface-wave27b 行 c-fact-trim・判断の記録 ADR-30 決定 (3)）。
++//! 吹き出しは概要を 1 本の引きの口から読むので、bead の事実の一覧は本文を読まず、電文の行は概要の鍵を持たない。
++#![cfg(test)]
++
++use std::path::Path;
++
++use serde_json::{Value, json};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_core::ledger::facts::facts;
++
++/// 中核の crate の根からの相対 path の字（読めなければ落ちる）。
++fn src(rel: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} が読めない: {e}", path.display()))
++}
++
++/// 本文に観測の見出しと 2 つの概要の定型行を持つ bead（ほかの欄は全部読める形）。
++fn bead_with_body() -> Value {
++    json!({
++        "id": "fx-c.1",
++        "title": "問い — 色",
++        "description": "### 観測\n見た事の行\n概要 = 平の字の概要\n技術 = 技術の字の概要\n",
++        "status": "open",
++        "issue_type": "task",
++        "created_at": "2026-09-27T00:00:00Z",
++        "metadata": {"short": "色"},
++        "dependencies": [{"depends_on_id": "fx-c.2", "type": "blocks"}],
++    })
++}
++
++#[test]
++fn ftrim_fact_keys_without_summary() {
++    let got = facts(&Value::Array(vec![bead_with_body()]).to_string());
++    let Reading::Known(rows) = got.rows.clone() else {
++        panic!("読める台帳が Unknown");
++    };
++    assert_eq!(rows.len(), 1, "{rows:?}");
++    let row = serde_json::to_value(&rows[0]).expect("事実の行を JSON にする");
++    let mut keys: Vec<&str> = row
++        .as_object()
++        .expect("事実の行は object")
++        .keys()
++        .map(String::as_str)
++        .collect();
++    keys.sort_unstable();
++    assert_eq!(
++        keys,
++        ["blocks", "created_at", "id", "short", "short_set"],
++        "事実の行の鍵は 5 つで summary を持たない"
++    );
++    let wire = serde_json::to_string(&got).expect("事実の一覧を JSON にする");
++    for body in ["見た事の行", "平の字の概要", "技術の字の概要"] {
++        assert!(
++            !wire.contains(body),
++            "事実の電文が本文の字 {body} を運ぶ: {wire}"
++        );
++    }
++}
++
++#[test]
++fn ftrim_facts_src_without_summary() {
++    let contract = src("../tsuzuri-contract/src/ledger.rs");
++    let start = contract
++        .find("pub struct BeadFact {")
++        .expect("契約に BeadFact が在る");
++    let block = &contract[start..];
++    let block = &block[..block.find("\n}\n").expect("BeadFact の閉じ")];
++    assert!(!block.contains("summary"), "BeadFact が欄 summary を持つ");
++    let text = src("src/ledger/facts.rs");
++    for name in [
++        "summary_of",
++        "SUMMARY_MAX",
++        "OBSERVATION_HEADING",
++        "SUMMARY_LABEL",
++        "summary",
++        "description",
++    ] {
++        assert!(!text.contains(name), "facts.rs が字 {name} を持つ");
++    }
++}
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvfact.rs b/crates/tsuzuri-core/tests/teeth1/bvfact.rs
+index 0ce59ff07315c31a6e8e0be0525243543bd5effa..ee2ad6ce38ca293df91f823b1693c9f5cb8efe9c 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvfact.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvfact.rs
+@@ -1,4 +1,4 @@
+-//! 行 c-bead-facts の歯（中核・接頭辞 bvfact_）: 台帳の字から bead の事実の一覧（起票の時刻・短い題・概要・
++//! 行 c-bead-facts の歯（中核・接頭辞 bvfact_）: 台帳の字から bead の事実の一覧（起票の時刻・短い題・
+ //! blocks の相手）を組む。台帳の字は歯の中で組む（fixture の file は使わない）。
+ #![cfg(test)]
+ 
+@@ -6,7 +6,6 @@ use serde_json::{Value, json};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadFact, BeadId};
+ use tsuzuri_core::ledger::facts;
+-use tsuzuri_core::ledger::facts::SUMMARY_MAX;
+ 
+ fn bead(id: &str) -> BeadId {
+     BeadId::new(id).expect("見本の bead id")
+@@ -96,52 +95,6 @@ fn bvfact_short_fallback_dash() {
+     assert_eq!(lead.short, "— だけの題", "「—」の前が空なら題の全体");
+ }
+ 
+-#[test]
+-fn bvfact_summary_from_observation() {
+-    let description = "## memo\n### 出所\n出所の行。\n### 観測\n\n  観測の 1 行目。  \n2 行目\n";
+-    let row = one(line("fx.1", "題", description, Value::Null));
+-    assert_eq!(row.summary, "観測の 1 行目。");
+-    // 観測の下の行も頭の「概要 =」を外す。
+-    let label = one(line(
+-        "fx.2",
+-        "題",
+-        "前置き\n### 観測\n概要 = 見た事",
+-        Value::Null,
+-    ));
+-    assert_eq!(label.summary, "見た事");
+-}
+-
+-#[test]
+-fn bvfact_summary_skips_heading_and_label() {
+-    let row = one(line(
+-        "fx.1",
+-        "題",
+-        "\n## 見出し\n\n概要 =   板を 5 列にする\n技術 = 列の型\n",
+-        Value::Null,
+-    ));
+-    assert_eq!(row.summary, "板を 5 列にする");
+-    let plain = one(line(
+-        "fx.2",
+-        "題",
+-        "# 頭\n最初の段落の行\n次の行",
+-        Value::Null,
+-    ));
+-    assert_eq!(plain.summary, "最初の段落の行");
+-    let none = one(line("fx.3", "題", "# 見出しだけ\n\n", Value::Null));
+-    assert_eq!(none.summary, "", "行が無ければ空の字");
+-}
+-
+-#[test]
+-fn bvfact_summary_cut_120() {
+-    assert_eq!(SUMMARY_MAX, 120);
+-    let long = "あ".repeat(SUMMARY_MAX + 5);
+-    let row = one(line("fx.1", "題", &format!("概要 = {long}"), Value::Null));
+-    assert_eq!(row.summary.chars().count(), SUMMARY_MAX);
+-    assert_eq!(row.summary, "あ".repeat(SUMMARY_MAX));
+-    let short = "a".repeat(SUMMARY_MAX);
+-    assert_eq!(one(line("fx.2", "題", &short, Value::Null)).summary, short);
+-}
+-
+ #[test]
+ fn bvfact_blocks_all_targets() {
+     let mut b = line("fx.1", "題", "", Value::Null);
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index 998d6123cf1154120f73d66192765268b6b64859..cb0af99e76cb0f2fe4bcd574c1da55e0acb91a9c 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -5,7 +5,7 @@
+ //! （Blocked は待つ相手〔相手の段つき・押すと相手の吹き出し〕と待ちの長さ・Queued は列に入った時刻・Running / Gated は
+ //! run の回と口座・止まりは理由の全文と run の回と口座と次の手・着地は着地の時刻と CI）。読めない欄は「まだ分からない」。
+ //! 板の札が読めない間は段ごとの欄を出せないので、吹き出しの末に板の読めない理由を測れていないの 1 行で出す（札が無いとは見せない）。
+-//! 材料は bead の事実の口（`BEADS_PATH`・短い題・概要・起票・blocks の相手）と局面の出力の口（待つ相手の links.on）と、
++//! 材料は bead の事実の口（`BEADS_PATH`・短い題・起票・blocks の相手）と局面の出力の口（待つ相手の links.on）と、
+ //! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
+ //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
+ //! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvcols.rs b/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+index 4a08352b3ad03bec8d7bc21bbd64a8ac8744acd2..433005e8722b9ca6bc591775aedaa3ec6ce573f5 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvcols.rs
+@@ -237,7 +237,6 @@ fn bvcols_short_title_or_fallback() {
+         created_at: None,
+         short: "短い題".to_string(),
+         short_set: true,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     };
+     let facts = [fact];
+@@ -287,7 +286,6 @@ fn bvcols_lines_from_pop_wait() {
+         created_at: Some(NOW - 60),
+         short: "s".to_string(),
+         short_set: false,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     }];
+     let one = [part("contract-queued", "dependency", &["t-5"])];
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvkpi.rs b/crates/tsuzuri-surface/tests/teeth2/bvkpi.rs
+index 379bf0d4a863270521ef45e602a8589e18574780..36090ffcdab94231d82d989f81219c43f1d90092 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvkpi.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvkpi.rs
+@@ -63,7 +63,6 @@ fn sample() -> Vec<Lgroup> {
+         created_at: None,
+         short: "札の幅".to_string(),
+         short_set: true,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     };
+     let facts = BTreeMap::from([("fx-k1.1".to_string(), fact)]);
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvlist.rs b/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+index f1dea0c2fa5b50ca05d174ff36bb9347786c00c7..3754160dde30de26083b9c7465fdb571395258ed 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvlist.rs
+@@ -61,7 +61,6 @@ fn fact(id: &str, short: &str, created: Option<u64>) -> BeadFact {
+         created_at: created,
+         short: short.to_string(),
+         short_set: true,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     }
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+index 9813fbb8baf6cb6bae6f655b269d98dbd717e0c3..a33ed67b877b6feef12268f48a167f1b892f11d7 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+@@ -40,7 +40,6 @@ fn fact(x: &str, short: &str, blocks: &[&str]) -> BeadFact {
+         created_at: Some(NOW - 7_200),
+         short: short.to_string(),
+         short_set: true,
+-        summary: format!("{x} の概要"),
+         blocks: blocks.iter().map(|b| id(b)).collect(),
+     }
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvqhist.rs b/crates/tsuzuri-surface/tests/teeth2/bvqhist.rs
+index a06da1046ccf9ef963ab38b63396036de2aa6465..d0fc662d1c7624b244fd698ec16975c5d321e15c 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvqhist.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvqhist.rs
+@@ -65,7 +65,6 @@ fn fact(name: &str, short: &str) -> BeadFact {
+         created_at: None,
+         short: short.to_string(),
+         short_set: true,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     }
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+index 373d47948aeb070320640021b90c7c70c44b8ee5..2a96b5e775b6788f9a2eaa8d2d5527f907ed466e 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+@@ -52,7 +52,6 @@ fn fact(id: &str, short: &str) -> BeadFact {
+         created_at: Some(NOW - 3_600),
+         short: short.to_string(),
+         short_set: true,
+-        summary: String::new(),
+         blocks: Vec::new(),
+     }
+ }
