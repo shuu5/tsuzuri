@@ -196,7 +196,7 @@ articles:
       - {id: P-1.7, pattern: ubiquitous, strength: must, text: 読み手の無い設定の行を検査が記録し、落とす門へ上げるのは裁定 id つきのときだけにする。}
     plain: 決まりは文章でなく、機械が読める表や型に置き、文書からは番号で呼びます。台帳は仕事と裁定を記す場所で、決まりは置きません。原則と裁定は設計文書が、機械が守らせる規則は型付きの表が正本です。道具の中の定数を正本にしているあいだは、その写しを設計文書の置き場へ機械が書きます。規則の種類は 1 つの型の枝として持ち、新しい理由は新しい枝としてだけ足します。どの道具も読まない設定の行は検査が記録し、それで落とすのはあなたの裁定の番号があるときだけです。
     rationale:
-      - {kind: folio2-ruling, ref: folio2 P5（枝 1〜6）}
+      - {kind: folio2-ruling, ref: folio2 P5（枝 1・2・4〜6。枝 3 の P-5.3 は写していない・写すかは持ち主に問う）}
       - {kind: scribe2-article, ref: scribe2 C1・C2（新しい理由は新しい variant）・C14（規律の 2 面）・C15（台帳に規律を置かない）・C10.3（読み手の無い設定の行・判断の記録 ADR-19）}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 床が正本 4 file の形と参照 id の解決を数える（設計側）。器の側は閉じた型の網羅の検査（compile）と宣言 file の 1 か所の読み（M1 = code の持ち込み後）。P-1.7 は器の配線の検査（rules-wired・記録だけ）が M1 で受け持ち、今の床は数えない。}
     relations: {rules: [R-16]}
@@ -213,7 +213,7 @@ articles:
     rationale:
       - {kind: folio2-ruling, ref: folio2 P6（枝 1〜4）}
       - {kind: scribe2-article, ref: scribe2 C1.2（宣言 file 由来の生成物）}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 導出物の差分 0 の検査（folio derive --check・folio inject --check）。}
+    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 導出物の差分 0 の検査（folio derive --check）。}
     relations: {rules: [R-18, R-19, R-20, R-21, R-22, R-23, R-24, R-26, R-27, R-28, R-34, R-35, R-36, R-37]}
   - id: P-3
     title: 番号は増やすだけ（append only）
@@ -350,7 +350,7 @@ articles:
     rationale:
       - {kind: folio2-ruling, ref: folio2 P14（枝 1〜3）}
       - {kind: scribe2-article, ref: scribe2 の役割の注入（ADR-0022 §2.4・SessionStart の brief）}
-    mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: folio inject --check と器の SessionStart の brief。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 今は器の SessionStart の brief が器の憲法の番号の要点だけを出し、この憲法を写していない（folio inject は退いた）。tz derive が導く写しの file と、その差の検査（tz derive --check）と、器の SessionStart がその file を字のまま出す形にする。}
     relations: {rules: [R-1]}
   - id: P-14
     title: 逸脱は編集の時点で止める（極性一覧）
@@ -491,7 +491,7 @@ articles:
       - {id: P-23.3, pattern: ubiquitous, strength: must, text: 消費は 1 つの追記だけの記録に残す。}
     plain: AI を動かすときの予算は、先に測ってからしか作れない型にします。起動する口は 1 つだけで、必ず予算を渡します。使った分は消せない記録に残します。
     rationale:
-      - {kind: scribe2-article, ref: scribe2 C6（C6.1〜C6.3）}
+      - {kind: scribe2-article, ref: scribe2 C6・C6.3（C6.2 は判断の記録 ADR-19 の決定 (3) で写さない）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 型（Budget は Precheck からのみ）と唯一の起動口。数値は行 R-6（今は記録だけの検出線で、人手を待たずに止める門へ上げるのは止める実装ができた時に裁定 id つき）。}
     relations: {rules: [R-6, R-40]}
   - id: P-24
@@ -545,7 +545,7 @@ articles:
       - {id: P-26.5, pattern: ubiquitous, strength: must, text: 依存の重複した版・脆弱性・使ってよい条件（ライセンス）を CI で監査する。}
     plain: 使う部品には許可の一覧と予算があり、足すときはあなたの確認と組み立て時間の差を添えます。中心の部分は非同期の仕組みを持ちません。組み立ての時間は測って記録し、悪くなったら原因を名指しますが、取り込みは止めません。使う部品の重複した版・安全の穴・使ってよい条件は、自動の検査（CI）で監査します。
     rationale:
-      - {kind: scribe2-article, ref: scribe2 C13（C13.1〜C13.5）}
+      - {kind: scribe2-article, ref: scribe2 C13・C13.2・C13.3・C13.5（C13.4 は判断の記録 ADR-19 の決定 (8) で写さない）}
       - {kind: folio2-ruling, ref: folio2 A3（予算の行）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: cargo deny と許可の一覧と compile 時間の記録。面の crate の予算は core と別枠（判断の記録 ADR-3 決定 (3)）。P-26.5 の監査は tsuzuri の CI で cargo deny を撃つ便で置く（今の CI は撃たない）。}
     relations: {rules: [R-2, R-5, R-25]}
