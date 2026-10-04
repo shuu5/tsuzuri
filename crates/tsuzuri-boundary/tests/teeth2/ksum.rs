@@ -373,7 +373,7 @@ fn ksum_check_names_bare() {
     assert_eq!(
         stdout(&out),
         format!(
-            "要約の無い節点 2（A-1.1・k.1）\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n{}",
+            "要約の無い節点 2（A-1.1・k.1）\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}",
             summary(3)
         )
     );
@@ -386,7 +386,7 @@ fn ksum_check_names_bare() {
     assert_eq!(
         stdout(&out),
         format!(
-            "要約の無い節点 0\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n{}",
+            "要約の無い節点 0\n本文だけで名指した id の対 0\n全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}",
             summary(3)
         )
     );
@@ -400,7 +400,7 @@ fn ksum_unread_goes_to_stderr() {
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(
         stdout(&out),
-        format!("全部の行が着地した設計ノート 0\n{}", summary(3))
+        format!("全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n{}", summary(3))
     );
     let err = stderr(&out);
     assert_eq!(err.lines().filter(|l| *l == line).count(), 1, "{err}");

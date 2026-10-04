@@ -493,8 +493,11 @@ fn cnote_check_names_notes() {
     let text = stdout(&out);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(
-        lines[lines.len() - 2..].join("\n"),
-        format!("全部の行が着地した設計ノート 3（na・nc・ni）\n{}", SUMMARY.trim_end()),
+        lines[lines.len() - 3..].join("\n"),
+        format!(
+            "全部の行が着地した設計ノート 3（na・nc・ni）\n着地の commit の無い着地した契約 8（x.1・x.10・x.11・x.12・x.2・x.4・x.5・x.7）\n{}",
+            SUMMARY.trim_end()
+        ),
         "{text}"
     );
     let heads = lines.iter().filter(|l| l.starts_with(LANDED_HEAD)).count();

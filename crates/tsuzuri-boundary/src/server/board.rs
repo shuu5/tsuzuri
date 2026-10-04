@@ -158,6 +158,8 @@ pub struct Floors {
     /// 全部の契約表の行が着地した設計ノートのうち廃止していない文書 id（中核の `check::landed_notes`・行 c-note-stale・
     /// 行 c-note-retired）。
     pub landed: Reading<Vec<String>>,
+    /// 着地の commit の節点から landed の辺を受けない着地した契約（中核の `check::unlanded_contracts`・行 c-commit-node）。
+    pub unlanded: Reading<Vec<String>>,
 }
 
 /// `built` と同じ導出グラフと床の値（要約を写せたかを 2 つの床の関数に渡し、着地した設計ノートには台帳の字を
@@ -168,6 +170,7 @@ pub fn built_floors(texts: &Texts) -> (Graph, Floors) {
         bare: graph::check::unsummarized(&g, summary),
         unfielded: graph::check::unfielded_mentions(&g, summary),
         landed: graph::check::landed_notes(&g, &texts.ledger, &texts.summary),
+        unlanded: graph::check::unlanded_contracts(&g, &texts.ledger),
     };
     (g, floors)
 }

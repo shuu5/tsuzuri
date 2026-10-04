@@ -364,8 +364,9 @@ const BARE: &str = "要約の無い節点 2（A-1.1・R-2）\n";
 /// 節の索引で本文だけで名指した id の対の行。
 const UNFIELDED: &str = "本文だけで名指した id の対 3（A-1→R-2・nt#r1→FR1・nt#r1→R-2）\n";
 
-/// 全部の行が着地した設計ノートの行（nt#r1 を指す bead は無い・行 c-note-stale）。
-const LANDED: &str = "全部の行が着地した設計ノート 0\n";
+/// 全部の行が着地した設計ノートの行（nt#r1 を指す bead は無い・行 c-note-stale）と、着地の commit の無い着地した
+/// 契約の行（着地した契約は無い・行 c-commit-node）。
+const LANDED: &str = "全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\n";
 
 #[test]
 fn kg9_line_and_built_floors() {

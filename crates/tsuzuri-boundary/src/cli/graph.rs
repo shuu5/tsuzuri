@@ -9,6 +9,8 @@
 //!   終了 code は変えない・行 k-g9-count）
 //!   その次に全部の契約表の行が着地した設計ノート（廃止したものを除く）の数と文書 id の行（設計の索引か台帳か
 //!   要約の状態の欄が読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 c-note-stale・行 c-note-retired）
+//!   その次に着地の commit の節点から landed の辺を受けない着地した契約の数と id の行（台帳か走行の記録が読めなければ
+//!   まだ分からないの行を標準エラー・終了 code は変えない・行 c-commit-node）
 //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
 //!
 //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
@@ -131,6 +133,21 @@ pub fn landed_line(docs: &[String]) -> String {
         format!("{LANDED_HEAD} 0")
     } else {
         format!("{LANDED_HEAD} {}（{}）", docs.len(), docs.join("・"))
+    }
+}
+
+/// 着地の commit の無い着地した契約の行の頭の字（行 c-commit-node）。
+pub const UNLANDED_HEAD: &str = "着地の commit の無い着地した契約";
+
+/// 着地の commit の無い着地した契約がまだ分からないときの字（標準エラーのまだ分からないの行に続ける）。
+pub const UNLANDED_UNKNOWN: &str = "着地の commit の無い着地した契約（台帳か走行の記録が読めない）";
+
+/// 着地の commit の無い着地した契約の行（空なら数 0 だけ、在れば数と中黒つなぎの bead の id・違反の行と同じ形）。
+pub fn unlanded_line(ids: &[String]) -> String {
+    if ids.is_empty() {
+        format!("{UNLANDED_HEAD} 0")
+    } else {
+        format!("{UNLANDED_HEAD} {}（{}）", ids.len(), ids.join("・"))
     }
 }
 
@@ -283,6 +300,7 @@ fn design_doc(args: &Args) -> (GraphDoc, Floors) {
         bare: Reading::Unknown,
         unfielded: Reading::Unknown,
         landed: Reading::Unknown,
+        unlanded: Reading::Unknown,
     };
     (design_view(&board::graph(&texts)), floors)
 }
@@ -305,8 +323,8 @@ fn outside_of(projects: &[PathBuf], bd: &str) -> Vec<Option<Outside>> {
 /// 違反の行と要約の行を標準出力、まだ分からないの行を標準エラーに出し、3 値の終了 code を返す。
 /// `outside` は g-7 が文法の外の id の裁定だけのためにまだ分からないときのその数（`check::outside_rulings`）。
 /// `heads` は g-3 が確かめられない外の台帳の行だけのためにまだ分からないときの節点の数と族（`check::outside_heads`）。
-/// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノート（`board::built_floors`・
-/// 要約の行の前にこの順に出し、終了 code は変えない）。
+/// `floors` は要約の無い節点の列と本文だけで名指した id の対と全部の行が着地した設計ノートと着地の commit の無い
+/// 着地した契約（`board::built_floors`・要約の行の前にこの順に出し、終了 code は変えない）。
 fn check(
     invariants: &[InvariantCheck],
     outside: Option<usize>,
@@ -357,6 +375,10 @@ fn check(
     match &floors.landed {
         Reading::Known(docs) => emit(&landed_line(docs)),
         Reading::Unknown => emit_err(&format!("# まだ分からない: {LANDED_UNKNOWN}")),
+    }
+    match &floors.unlanded {
+        Reading::Known(ids) => emit(&unlanded_line(ids)),
+        Reading::Unknown => emit_err(&format!("# まだ分からない: {UNLANDED_UNKNOWN}")),
     }
     let verdict = overall(invariants);
     let word = match verdict {

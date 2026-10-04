@@ -155,10 +155,11 @@ fn next(id: &str) -> &'static str {
         .expect("次の 1 手")
 }
 
-/// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）。
+/// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）と
+/// 着地の commit の無い着地した契約の行（着地した契約は無い・行 c-commit-node）。
 fn summary(word: &str, violations: usize, unknowns: usize) -> String {
     format!(
-        "全部の行が着地した設計ノート 0\ntz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n"
+        "全部の行が着地した設計ノート 0\n着地の commit の無い着地した契約 0\ntz graph --check: {word}（違反 {violations}・まだ分からない {unknowns}）\n"
     )
 }
 
