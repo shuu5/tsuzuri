@@ -3,6 +3,7 @@
 //! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
 //! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
 //! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
+//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）は行 c-commit-node で足す（判断の記録 ADR-46 決定 (2)・ADR-47）。
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::EpochSecs;
 
-/// 節点の種類（閉じた 20・順は設計文書の 11 種・設計ノートの行・台帳の 7 種・走行）。
+/// 節点の種類（閉じた 21・順は設計文書の 11 種・設計ノートの行・台帳の 7 種・走行・着地の commit）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum NodeKind {
     #[serde(rename = "条")]
@@ -61,11 +62,14 @@ pub enum NodeKind {
     /// 走行（器の event RunCreated から導く）。
     #[serde(rename = "run")]
     Run,
+    /// 着地の commit（器の event RunDone の sha から導く・id は 40 字の小文字の 16 進・判断の記録 ADR-47）。
+    #[serde(rename = "commit")]
+    Commit,
 }
 
 impl NodeKind {
     /// 閉じた一覧（順も固定）。
-    pub const ALL: [NodeKind; 20] = [
+    pub const ALL: [NodeKind; 21] = [
         NodeKind::Article,
         NodeKind::Norm,
         NodeKind::Rule,
@@ -86,10 +90,11 @@ impl NodeKind {
         NodeKind::Receipt,
         NodeKind::Policy,
         NodeKind::Run,
+        NodeKind::Commit,
     ];
 }
 
-/// 辺の型（閉じた 32・順は設計文書の 17 型・設計ノートの行の 2 型・台帳の 4 型・結びの 6 型・走行の 3 型）。
+/// 辺の型（閉じた 33・順は設計文書の 17 型・設計ノートの行の 2 型・台帳の 4 型・結びの 6 型・走行の 3 型・着地の 1 型）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EdgeType {
     #[serde(rename = "in-article")]
@@ -167,11 +172,14 @@ pub enum EdgeType {
     /// 走行 → 口座（口座は節点にせず走行の属性の札で出す）。
     #[serde(rename = "ran_by")]
     RanBy,
+    /// 着地の commit → 契約 bead。
+    #[serde(rename = "landed")]
+    Landed,
 }
 
 impl EdgeType {
     /// 閉じた一覧（順も固定）。
-    pub const ALL: [EdgeType; 32] = [
+    pub const ALL: [EdgeType; 33] = [
         EdgeType::InArticle,
         EdgeType::RelationsArticles,
         EdgeType::RelationsReqs,
@@ -204,6 +212,7 @@ impl EdgeType {
         EdgeType::RunOf,
         EdgeType::Raised,
         EdgeType::RanBy,
+        EdgeType::Landed,
     ];
 }
 

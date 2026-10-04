@@ -275,6 +275,11 @@
    "note": "1 つの task の 1 回の実行",
    "internal": "走行（原文の名）"
   },
+  "k:commit": {
+   "label": "commit",
+   "note": "task が着地した 1 つの commit",
+   "internal": "着地の commit（原文の名）"
+  },
   "k:受け": {
    "label": "orchestrator の受け",
    "note": "裁定を受けて処分を宣言した記録\n・ 台帳の notes の 1 行\n→ あなたの決定を受ける",
@@ -359,6 +364,11 @@
    "label": "run_of",
    "note": "{edge:run_of} run が属する task",
    "internal": "edge type=run_of"
+  },
+  "e:landed": {
+   "label": "landed",
+   "note": "{edge:landed} commit が着地させた task",
+   "internal": "edge type=landed"
   },
   "e:raised": {
    "label": "raised",

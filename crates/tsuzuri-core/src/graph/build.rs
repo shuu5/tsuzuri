@@ -3,6 +3,7 @@
 //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
 //! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く（行 c-g3-bindline）。
 //! 走行は event log の RunCreated から導く。
+//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む（行 c-commit-node）。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
 //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
@@ -74,6 +75,18 @@ pub const SCOPE_ALL: &str = "all";
 
 /// 問いの metadata の前提の鍵（型 premises の辺の先の id）。
 pub const PREMISES_KEY: &str = "premises";
+
+/// 着地の event の種類（器の語・detail に着地の commit の札を持つ）。
+pub const RUN_DONE: &str = "RunDone";
+
+/// RunDone の detail の着地の commit の札の頭（後ろに 40 字の小文字の 16 進）。
+pub const SHA_TAG: &str = "sha:";
+
+/// commit の名の字数（git の object の名・判断の記録 ADR-47）。
+pub const SHA_LEN: usize = 40;
+
+/// commit の節点の題の字数（commit の名の頭）。
+pub const SHA_TITLE: usize = 8;
 
 /// 3 つの字から導出グラフを組む。
 pub fn build(inputs: &Inputs) -> Graph {
@@ -616,9 +629,20 @@ fn event_account(event: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// RunDone の detail の着地の commit の名（空白か「,」で割った札のうち頭が `SHA_TAG` の最初の札の後ろの字が、
+/// ちょうど `SHA_LEN` 字の小文字の 16 進のときだけ・ほかは None）。
+pub fn landed_sha(detail: &str) -> Option<&str> {
+    let sha = detail
+        .split([',', ' '])
+        .find_map(|tok| tok.strip_prefix(SHA_TAG))?;
+    (sha.len() == SHA_LEN && sha.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')))
+        .then_some(sha)
+}
+
 /// event log から走行の節点と run_of・raised の辺を組む。段と口座と答えの無い問いの数は走行の属性に持つ。
 /// raised の辺は QuestionRaised が問いの id の欄（question）を持つときだけ組む（器の実物は持たない）。
 /// 同じ run の RunCreated の 2 件目は節点を足さない。RunCreated の無い run の event は読み捨てる。
+/// 着地の commit の節点と landed の辺は走行の節点と辺の後に `add_commits` が足す。
 fn add_runs(g: &mut Graph, events: &[Value]) {
     let mut order: Vec<String> = Vec::new();
     let mut attrs: BTreeMap<String, RunAttr> = BTreeMap::new();
@@ -666,6 +690,51 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
         .filter(|e| runs.contains_key(&e.from))
         .collect();
     g.edges.extend(raised);
+    add_commits(g, events);
+}
+
+/// 走行の節点を持つ run の RunDone のうち detail に着地の commit の名（`landed_sha`）を持つ event から、
+/// event log の順に commit の節点（名ごとに 1 つ・題は名の頭の `SHA_TITLE` 字・更新の時刻は最初の event の読める ts）と、
+/// run の id の前半（`run_bead`）が在れば commit から その bead への landed の辺（同じ組は 1 本）を足す。
+fn add_commits(g: &mut Graph, events: &[Value]) {
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut pairs: BTreeSet<(String, String)> = BTreeSet::new();
+    for event in events {
+        if event.get("kind").and_then(Value::as_str) != Some(RUN_DONE) {
+            continue;
+        }
+        let Some(run) = event.get("run").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(sha) = event
+            .get("detail")
+            .and_then(Value::as_str)
+            .and_then(landed_sha)
+        else {
+            continue;
+        };
+        if !g.runs.contains_key(run) {
+            continue;
+        }
+        if seen.insert(sha.to_string()) {
+            g.nodes.push(GraphNode {
+                id: sha.to_string(),
+                kind: NodeKind::Commit,
+                file: None,
+                digest: None,
+                title: title36(&sha[..SHA_TITLE]),
+                line: None,
+                plain: None,
+                eng: None,
+                updated: event.get("ts").and_then(Value::as_str).and_then(epoch_secs),
+            });
+        }
+        if let Some(bead) = run_bead(run)
+            && pairs.insert((sha.to_string(), bead.to_string()))
+        {
+            g.edges.push(edge(sha, bead, EdgeType::Landed));
+        }
+    }
 }
 
 /// 作った順の走行の節点と run_of の辺を足し、走行の属性を置く。

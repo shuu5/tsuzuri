@@ -250,7 +250,7 @@ fn graph_no_state_unknown_only_runs() {
     assert_eq!(v["events"], "", "event log の字が空");
     let g = build_from(&v);
     assert_eq!(g.unread, vec![Source::Runs]);
-    assert_eq!(g.unknown_kinds(), vec![NodeKind::Run]);
+    assert_eq!(g.unknown_kinds(), vec![NodeKind::Run, NodeKind::Commit]);
     assert!(g.count_nodes(NodeKind::Article) > 0, "設計の節点は組める");
     assert!(
         BEAD_KINDS.iter().all(|k| g.count_nodes(*k) > 0),

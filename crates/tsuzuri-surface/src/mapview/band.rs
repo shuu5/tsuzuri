@@ -112,8 +112,8 @@ const fn kind_row(kind: NodeKind, band: Band, key: &'static str) -> KindRow {
     KindRow { kind, band, key }
 }
 
-/// 節点の種類から帯と語の鍵への閉じた表（20 行・順は契約の型の `NodeKind::ALL`）。
-pub const KINDS: [KindRow; 20] = [
+/// 節点の種類から帯と語の鍵への閉じた表（21 行・順は契約の型の `NodeKind::ALL`）。
+pub const KINDS: [KindRow; 21] = [
     kind_row(NodeKind::Article, Band::Constitution, "k:条"),
     kind_row(NodeKind::Norm, Band::Constitution, "k:規範文"),
     kind_row(NodeKind::Rule, Band::Rules, "k:規則行"),
@@ -134,17 +134,18 @@ pub const KINDS: [KindRow; 20] = [
     kind_row(NodeKind::Receipt, Band::Beads, "k:受け"),
     kind_row(NodeKind::Policy, Band::Beads, "k:方針"),
     kind_row(NodeKind::Run, Band::Pipeline, "k:走行"),
+    kind_row(NodeKind::Commit, Band::Pipeline, "k:commit"),
 ];
 
 /// 種類の語の鍵の頭。
 pub const KIND_KEY_PREFIX: &str = "k:";
 
-#[expect(clippy::expect_used, reason = "種類の表は種類の 20 個の全部を持つ")]
+#[expect(clippy::expect_used, reason = "種類の表は種類の 21 個の全部を持つ")]
 fn row(kind: NodeKind) -> &'static KindRow {
     KINDS
         .iter()
         .find(|r| r.kind == kind)
-        .expect("種類の表は種類の 20 個の全部を持つ")
+        .expect("種類の表は種類の 21 個の全部を持つ")
 }
 
 /// 種類の帯。

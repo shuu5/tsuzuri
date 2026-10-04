@@ -60,7 +60,7 @@ fn triple(from: &str, to: &str, t: EdgeType) -> (String, String, EdgeType) {
 
 #[test]
 fn dnedge_types_closed() {
-    assert_eq!(EdgeType::ALL.len(), 32);
+    assert_eq!(EdgeType::ALL.len(), 33);
     assert_eq!(DESIGN_EDGE_TYPES, 19);
     let words: Vec<String> = EdgeType::ALL[..DESIGN_EDGE_TYPES]
         .iter()

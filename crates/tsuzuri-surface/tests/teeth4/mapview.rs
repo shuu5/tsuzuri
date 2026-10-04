@@ -40,7 +40,7 @@ fn mapview_fixture_is_small() {
     assert!(doc.edges.len() <= 60, "辺 {}", doc.edges.len());
 }
 
-/// (1) 種類の 20 個の全部が 7 つの帯のちょうど 1 つに当たり、語の鍵も 20 個の全部を持つ。
+/// (1) 種類の 21 個の全部が 7 つの帯のちょうど 1 つに当たり、語の鍵も 21 個の全部を持つ。
 #[test]
 fn mapview_kind_table_is_closed() {
     let kinds: Vec<NodeKind> = KINDS.iter().map(|r| r.kind).collect();
@@ -49,7 +49,7 @@ fn mapview_kind_table_is_closed() {
         NodeKind::ALL.to_vec(),
         "表は種類の全部を 1 度ずつ持つ"
     );
-    let want: [(NodeKind, &str, &str); 20] = [
+    let want: [(NodeKind, &str, &str); 21] = [
         (NodeKind::Article, "constitution", "k:条"),
         (NodeKind::Norm, "constitution", "k:規範文"),
         (NodeKind::Rule, "rules", "k:規則行"),
@@ -70,6 +70,7 @@ fn mapview_kind_table_is_closed() {
         (NodeKind::Receipt, "beads", "k:受け"),
         (NodeKind::Policy, "beads", "k:方針"),
         (NodeKind::Run, "pipeline", "k:走行"),
+        (NodeKind::Commit, "pipeline", "k:commit"),
     ];
     for (kind, band, key) in want {
         assert_eq!(band_of(kind).name(), band, "{kind:?} の帯");

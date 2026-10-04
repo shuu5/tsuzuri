@@ -141,12 +141,13 @@ fn mapgraph_line_style_table() {
             EdgeType::ArticleRef,
             EdgeType::ParentChild,
             EdgeType::RunOf,
-            EdgeType::RanBy
+            EdgeType::RanBy,
+            EdgeType::Landed
         ]
     );
     assert_eq!(by["arrow"], vec![EdgeType::Amends]);
     assert_eq!(by["solid"].len(), 25);
-    assert_eq!(by.values().map(Vec::len).sum::<usize>(), 32);
+    assert_eq!(by.values().map(Vec::len).sum::<usize>(), 33);
     // 見た目の値は見本の edgeSVG と同じ。
     assert_eq!(
         LineStyle::Bold.stroke(),
@@ -334,12 +335,12 @@ fn mapgraph_legend_bands_and_types() {
             EdgeType::RunOf
         ]
     );
-    // 注釈の属性は語の辞書に鍵の在る型だけ（20 個）。
+    // 注釈の属性は語の辞書に鍵の在る型だけ（21 個）。
     let with_term: Vec<EdgeType> = EdgeType::ALL
         .into_iter()
         .filter(|t| edge_term(*t).is_some())
         .collect();
-    assert_eq!(with_term.len(), 20);
+    assert_eq!(with_term.len(), 21);
     assert_eq!(edge_term(EdgeType::Basis).as_deref(), Some("e:basis"));
     assert_eq!(edge_term(EdgeType::VerifyAc), None);
     for t in with_term {

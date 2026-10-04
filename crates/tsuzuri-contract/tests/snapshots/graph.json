@@ -19,7 +19,8 @@
     "ruling",
     "receipt",
     "policy",
-    "run"
+    "run",
+    "commit"
   ],
   "graph::EdgeType": [
     "in-article",
@@ -53,7 +54,8 @@
     "source",
     "run_of",
     "raised",
-    "ran_by"
+    "ran_by",
+    "landed"
   ],
   "graph::GraphNode": [
     {

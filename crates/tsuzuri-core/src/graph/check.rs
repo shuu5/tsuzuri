@@ -9,6 +9,8 @@
 //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
 //! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
 //! 廃止した（状態 retired）ノートは名指さず、要約の状態の字が読めなければ「まだ分からない」（行 c-note-retired）。
+//! 着地の commit の節点から landed の辺を受けない着地した契約は床の値で `unlanded_contracts` が名指す（行 c-commit-node・
+//! 判断の記録 ADR-45 の門 H4）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -664,6 +666,33 @@ fn landed(bead: &BdBead) -> bool {
             .strip_prefix(head)
             .is_some_and(|rest| rest.chars().next().is_none_or(|c| c.is_whitespace() || c == '（'))
     })
+}
+
+/// 着地した契約のうち、着地の commit の節点から landed の辺を受けない bead の id（字の順・重複なし・行 c-commit-node）。
+/// 着地した契約は台帳の字 `ledger` の bead のうち `landed` の述語に合い、グラフの属性の種類が契約（task）の bead。
+/// 辺は元が種類 commit の節点で先がその bead の landed の辺だけを数える。台帳か走行の記録が読めないか、台帳の字
+/// `ledger` が読めなければ「まだ分からない」。
+pub fn unlanded_contracts(g: &Graph, ledger: &str) -> Reading<Vec<String>> {
+    if !g.is_read(Source::Ledger) || !g.is_read(Source::Runs) {
+        return Reading::Unknown;
+    }
+    let Some(beads) = read_ledger(ledger) else {
+        return Reading::Unknown;
+    };
+    let index = g.index();
+    let carried: BTreeSet<&str> = pairs(g, EdgeType::Landed)
+        .into_iter()
+        .filter(|(from, _)| index.get(from).is_some_and(|n| n.kind == NodeKind::Commit))
+        .map(|(_, to)| to)
+        .collect();
+    let ids: BTreeSet<String> = beads
+        .iter()
+        .filter(|b| landed(b))
+        .filter(|b| g.beads.get(&b.id).is_some_and(|a| a.kind == NodeKind::Task))
+        .filter(|b| !carried.contains(b.id.as_str()))
+        .map(|b| b.id.clone())
+        .collect();
+    Reading::Known(ids.into_iter().collect())
 }
 
 /// 設計ノートの状態の字のうち廃止を表す字（folio の索引の要約の欄 status・行 c-note-retired）。

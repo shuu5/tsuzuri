@@ -77,7 +77,9 @@ pub fn line_style(t: EdgeType) -> LineStyle {
     use EdgeType as E;
     match t {
         E::Blocks => LineStyle::Bold,
-        E::InArticle | E::ArticleRef | E::ParentChild | E::RunOf | E::RanBy => LineStyle::Dotted,
+        E::InArticle | E::ArticleRef | E::ParentChild | E::RunOf | E::RanBy | E::Landed => {
+            LineStyle::Dotted
+        }
         E::Amends => LineStyle::Arrow,
         E::RelationsArticles
         | E::RelationsReqs
