@@ -62,7 +62,7 @@ use super::move_proof::{self, LensInput, NotPure};
 use super::permit::{permitted, Effect};
 use super::ratelimit::{select_lens_account, LensAccount, Pool};
 use super::{
-    contract_path, emit, git_bytes, git_line, record_cost, run_dir, verdict_path, worktree_path, Emit,
+    contract_path, emit, git_bytes, git_line, record_cost_with, run_dir, verdict_path, worktree_path, Emit,
 };
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::json_lite::{self, Value};
@@ -413,6 +413,8 @@ struct Measured {
     /// lens 用の diff（設計 gate-cost.md §41 形 2・diff の周は rename の置換だけの docs の hunk を畳んだ本文・
     /// 要約の周は生 diff のまま）。cap の照合と lens の stdin はこちら、`diff_bytes` は [`diff`](Self::diff)。
     lens_diff: Vec<u8>,
+    /// verify 行の囲いの装置への正味の書きの和（byte・測れない周は `None`・行 xp-io-bytes）。
+    written: Option<u64>,
 }
 
 /// 書き留める判定 1 件。
@@ -483,7 +485,9 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
     // **lens の消費は判定を書く周に 1 件**（`Gated` の前・設計 gate-cost.md §26 形 (2)）。6 値の揃わない周は書かず、
     // 書けない周も判定と rc は変えない（stderr の 1 行だけ）。
     let cost = decided.judged.usage.map(|usage| Cost { source: CostSource::Lens, usage });
-    notes.extend(record_cost(entry.state_dir, (entry.run, entry.bead), cost, entry.policy));
+    // 消費の行の detail に verify 行の囲いの書きの和を置く（行 xp-io-bytes・測れない周は字 unmeasured）。
+    let written = Some(confine::io::detail(measured.written));
+    notes.extend(record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, written, entry.policy));
     let decision = Decision {
         verdict: decided.judged.verdict,
         evidence: decided.judged.evidence,
@@ -540,6 +544,7 @@ fn precheck(worktree: &Path, base: &str) -> Option<String> {
 fn measure(entry: &Gate<'_>, worktree: &Path, base: &str, cap: u64) -> Result<Measured, String> {
     let counted = record_verify(entry, worktree, base)?;
     let (red, unreadable, killed, busy) = (counted.red, counted.unreadable, counted.killed, counted.busy);
+    let written = counted.written;
     // 段①が diff を読めない周は同じ range の生 diff も読めない。ここで broken（rc 2・
     // verdict を書かない）にすると便は Implemented のまま「測り直せる便」に見えない。
     let (diff, input) = if unreadable {
@@ -575,7 +580,7 @@ fn measure(entry: &Gate<'_>, worktree: &Path, base: &str, cap: u64) -> Result<Me
         LensInput::Summary(_) => (diff.clone(), (0, 0), (0, 0), false),
     };
     record_notice(entry, &input, elided, (pruned, tight))?;
-    Ok(Measured { red, diff, unreadable, killed, busy, input, lens_diff })
+    Ok(Measured { red, diff, unreadable, killed, busy, input, lens_diff, written })
 }
 
 /// 判定順を 1 か所に閉じる（**wildcard 無し・上から順に効く**）。
@@ -897,6 +902,7 @@ mod tests {
             busy,
             input: LensInput::Diff(NotPure::Unreadable),
             lens_diff: Vec::new(),
+            written: None,
         }
     }
 

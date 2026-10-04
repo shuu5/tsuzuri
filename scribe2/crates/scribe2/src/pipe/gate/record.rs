@@ -7,7 +7,7 @@ use super::{DetectionSkip, Gate, Limits};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::store::{append_line, read_all, LockPolicy};
 use crate::fleet::{Stage, SCHEMA};
-use crate::pipe::confine::Reason;
+use crate::pipe::confine::{io, Reason};
 use crate::pipe::contract::Contract;
 use crate::pipe::declaration::Effective;
 use crate::pipe::move_proof::{self, LensInput};
@@ -216,7 +216,9 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
         record.diagnose(tail_path, policy)?;
         append_line(path, &record.body, policy).map_err(|err| err.to_string())?;
     }
-    Ok(Counted { red, unreadable, killed, busy })
+    // 撃った行（秒を持つ段）の囲いの書きの和（1 本でも測れない周は測れない・行 xp-io-bytes）。
+    let written = io::total(steps.iter().filter(|step| step.secs.is_some()).map(|step| step.write_bytes));
+    Ok(Counted { red, unreadable, killed, busy, written })
 }
 
 /// 検出線の的を渡す旗（`cargo xtask mutants-diff` の `--targets <file>`・設計 gate-cost.md §16 (2)）。
@@ -802,6 +804,7 @@ fn step_fields(number: u64, step: &Step) -> Vec<(&'static str, Value)> {
         ("jobs", Value::Num(step.jobs)),
         ("confined", Value::Bool(step.confined)),
         ("peak_mb", Value::Str(shown_peak(step.peak_mb))),
+        ("write_bytes", Value::Str(io::word(step.write_bytes))),
         ("kind", Value::Str(step.stage.as_str().to_owned())),
     ];
     if let Some(reason) = step.reason {
@@ -849,6 +852,8 @@ pub(crate) struct Counted {
     pub(crate) killed: Option<Reason>,
     /// 器の健康の遮断器が閉じて撃たなかった行の `n`（最初の 1 行・在れば・設計 gate-cost.md §32 約束 5）。
     pub(crate) busy: Option<u64>,
+    /// 撃った行の囲いの装置への正味の書きの和（byte・1 本でも測れない周と撃った行 0 の周は `None`・[`io::total`]）。
+    pub(crate) written: Option<u64>,
 }
 
 /// 検出線（`Check::Detection`）の **rc 2 = 測れなかった**か（`s2-07l.331`・設計 pipeline.md §5.3）。

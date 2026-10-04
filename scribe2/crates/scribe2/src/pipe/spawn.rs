@@ -16,7 +16,7 @@ use super::land::MAIN_REF;
 use super::refuse;
 use super::table::{design_docs, read_table};
 use super::{
-    base_of_run, branch_name, contract_path, emit, git_bytes, git_line, plugin_path, record_cost, run_dir,
+    base_of_run, branch_name, contract_path, emit, git_bytes, git_line, plugin_path, record_cost_with, run_dir,
     runner_stderr_path, runner_stdout_path, vessel_path, worktree_path, Budget, Emit, Question, RC_QUESTION,
 };
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
@@ -640,7 +640,7 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
     let kept_err = keep_stderr(launch, rc, &stderr).err().map(|reason| format!("pipe: runner の stderr を残せない: {reason}"));
     relay_stderr(&out.stderr);
     // **runner の消費は段の event の前に 1 件**（設計 gate-cost.md §26 形 (2)）。停止中の便は段と同じく書かない。
-    let cost = if stopping { None } else { runner_cost(launch, &stdout) };
+    let cost = if stopping { None } else { runner_cost(launch, &stdout, &confinement) };
     let mut outcome = if stopping {
         // **停止中の便は段を 1 件も書かない**（設計 pipeline.md §23）。runner を消したのは `pipe stop` で、
         // 終端は `RunStopped` の経路が書く——ここで `Failed` を書くと stop の終端を上書きする。
@@ -666,9 +666,12 @@ fn launch_runner(launch: &Launch<'_>, worktree: &Path, cmd: &str, base: &str) ->
 
 /// runner の要約行（[`summary_usage`]）の消費の 6 値を 1 件書く（揃わない周は書かない・書けない周の理由は stderr の
 /// 1 行で返す＝段の判定と rc は変えない）。
-fn runner_cost(launch: &Launch<'_>, stdout: &str) -> Option<String> {
+///
+/// detail は runner の囲いの装置への正味の書き（`write:<byte|unmeasured>`・終端行の `write_bytes=`・行 xp-io-bytes）。
+fn runner_cost(launch: &Launch<'_>, stdout: &str, confinement: &confine::Confinement) -> Option<String> {
     let cost = summary_usage(stdout).map(|usage| Cost { source: CostSource::Runner, usage });
-    record_cost(launch.state_dir, (launch.run, launch.bead), cost, launch.policy)
+    let written = Some(confine::io::detail(confine::io::written(confinement, stdout)));
+    record_cost_with(launch.state_dir, (launch.run, launch.bead), cost, written, launch.policy)
 }
 
 /// 捕らえた runner の stderr を呼び手の stderr へ**そのまま**流す（設計 dispatcher.md §12「手で撃った周の

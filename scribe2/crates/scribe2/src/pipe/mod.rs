@@ -725,7 +725,16 @@ pub fn emit_mark(state_dir: &Path, bead: &str, mark: Mark, policy: LockPolicy) -
 /// 段の event（[`emit`]）と**本体の形が違う**ので口を分ける——段を持たず、typed な [`Cost`] が本体である（[`Emit`] に
 /// 欄を足すと構築点の閉包が全 file へ広がる）。段を進めない記帳なので記帳の門は通さない。追記そのものは fleet の
 /// 1 本（[`store::append`]）を通る＝store は `fleet/events.jsonl` の 1 つで、run dir に別 file を作らない（C6.3）。
-pub fn emit_cost(state_dir: &Path, run: &str, bead: &str, cost: Cost, policy: LockPolicy) -> Result<(), StoreError> {
+///
+/// `detail` は消費の行に添える語（囲いの書き `write:` など・`None` は key ごと書かない＝旧い行と同じ形）。
+pub fn emit_cost(
+    state_dir: &Path,
+    ids: (&str, &str),
+    cost: Cost,
+    detail: Option<String>,
+    policy: LockPolicy,
+) -> Result<(), StoreError> {
+    let (run, bead) = ids;
     let event = Event {
         schema: SCHEMA,
         ts: fleet::cli::now_utc(),
@@ -737,7 +746,7 @@ pub fn emit_cost(state_dir: &Path, run: &str, bead: &str, cost: Cost, policy: Lo
         stage: None,
         seat: None,
         pid: None,
-        detail: None,
+        detail,
         allowance: None,
         registration: None,
         mark: None,
@@ -757,9 +766,19 @@ pub fn record_cost(
     cost: Option<Cost>,
     policy: LockPolicy,
 ) -> Option<String> {
-    let (run, bead) = ids;
+    record_cost_with(state_dir, ids, cost, None, policy)
+}
+
+/// [`record_cost`] に消費の行の `detail` を添える口（囲いの書き・行 xp-io-bytes）。揃わない周は detail も書かない。
+pub fn record_cost_with(
+    state_dir: &Path,
+    ids: (&str, &str),
+    cost: Option<Cost>,
+    detail: Option<String>,
+    policy: LockPolicy,
+) -> Option<String> {
     let found = cost?;
-    emit_cost(state_dir, run, bead, found, policy)
+    emit_cost(state_dir, ids, found, detail, policy)
         .err()
         .map(|err| format!("pipe: 消費の event を書けない（source={}）: {err}", found.source.as_str()))
 }

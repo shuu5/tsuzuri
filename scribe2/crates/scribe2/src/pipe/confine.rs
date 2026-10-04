@@ -36,6 +36,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 mod cpu;
+pub mod io;
 pub use cpu::seat_quota;
 
 /// scope を作る道具。**PATH で解決する**（絶対 path を焼かない・env も読まない）。
@@ -873,9 +874,12 @@ fn script(line: &str, unit: &str) -> String {
          [ -r \"$__d/memory.peak\" ] && __peak=$(cat \"$__d/memory.peak\")\n\
          __oom=-\n\
          [ -r \"$__d/memory.events\" ] && __oom=$(while read -r __k __v; do case \"$__k\" in oom_kill) echo \"$__v\";; esac; done < \"$__d/memory.events\")\n\
-         printf '{USAGE_HEAD} peak_bytes=%s oom_kill=%s\\n' \"${{__peak:--}}\" \"${{__oom:--}}\"\n\
+         __io=/proc/$$/io\n\
+         {net}\
+         printf '{USAGE_HEAD} peak_bytes=%s oom_kill=%s write_bytes=%s\\n' \"${{__peak:--}}\" \"${{__oom:--}}\" \"$__wb\"\n\
          fi\n\
-         exit $__rc\n"
+         exit $__rc\n",
+        net = io::NET_WRITE
     )
 }
 
@@ -886,6 +890,8 @@ pub struct Usage {
     pub peak_mb: Option<u64>,
     /// scope の中で kernel が殺した数。**終端行が無い / 読めない周は `None`**（0 と「測れない」を融合しない）。
     pub oom_kill: Option<u64>,
+    /// scope の装置への正味の書き（byte・[`io`]）。**終端行が無い / `unmeasured` / 負の周は `None`**（0 と書かない）。
+    pub write_bytes: Option<u64>,
 }
 
 /// stdout の**最後の終端行**を剥がす（pure・in-file の歯が fixture 文字列で測る）。
@@ -907,8 +913,10 @@ pub fn read_usage(stdout: &str) -> Usage {
     Usage {
         peak_mb: field("peak_bytes=").map(|bytes| bytes / MIB),
         oom_kill: field("oom_kill="),
+        write_bytes: field("write_bytes="),
     }
 }
+
 
 #[cfg(test)]
 mod tests {

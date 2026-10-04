@@ -82,6 +82,8 @@ pub struct Step {
     pub reason: Option<Reason>,
     /// scope の peak（MiB）。**読めない周は `None`**＝record は `-`（0 と書かない）。
     pub peak_mb: Option<u64>,
+    /// scope の装置への正味の書き（byte・record の `write_bytes=`・[`confine::io`]）。**読めない周は `None`**＝字 `unmeasured`。
+    pub write_bytes: Option<u64>,
     /// 段の壁時計（秒・record の `secs=`・設計 gate-cost.md §26 形 (1)）。
     ///
     /// **撃つ process を持たない段（[`unwrapped`]）は `None`**＝record は field を欠く（0 と書かない
@@ -130,6 +132,7 @@ fn unwrapped(cmd: String, rc: i32, stderr: String) -> Step {
         confined: false,
         reason: None,
         peak_mb: None,
+        write_bytes: None,
         secs: None,
         jobs: UNADMITTED_JOBS,
         slot: None,
@@ -154,6 +157,7 @@ fn closed(entry: &Fire<'_>) -> Step {
         confined: false,
         reason: None,
         peak_mb: None,
+        write_bytes: None,
         secs: None,
         jobs: UNADMITTED_JOBS,
         slot: None,
@@ -360,6 +364,7 @@ fn fire(entry: &Fire<'_>, caps: Result<confine::Caps, RuleRead>, admit: Option<&
         confined,
         reason,
         peak_mb,
+        write_bytes: fired.usage.write_bytes,
         secs: Some(fired.secs),
         jobs,
         slot,
