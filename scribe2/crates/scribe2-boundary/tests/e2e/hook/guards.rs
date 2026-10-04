@@ -1613,7 +1613,11 @@ const NOTES_RULINGS: [&str; 3] = [
 ];
 
 /// 断り文の語ごとの案内の字（§18）。
-const NOTES_NEXT: [(&str, &str); 2] = [("notes-ruling-line", "seat ruling bind"), ("notes-unreadable", "note <id> --file")];
+const NOTES_NEXT: [(&str, &str); 3] = [
+    ("notes-ruling-line", "seat ruling bind"),
+    ("notes-unreadable", "note <id> --file"),
+    ("notes-head-future", "date -u +%Y-%m-%dT%H:%MZ"),
+];
 
 /// 写しの rules で撃ち、notes の段の deny の外形（rc 2・stdout 0 byte・stderr 1 行・`deny bd <sub>` の頭・語・§18・語ごとの案内）
 /// と記録 1 行を確かめる。
@@ -1735,6 +1739,24 @@ fn hook_notes_ruling_keeps_the_stage_order_and_bd_note_is_a_write() {
     assert_ledger_deny(&state, &repo, memo, "no-source");
     assert_write_denied(&state, &repo, "bd note s2-1 x", "bd-outside-bdw");
     assert_ledger_pass(&state, &repo, "bdw note s2-1 x");
+    clean(&[&repo, &state]);
+}
+
+/// 頭の時刻（判断の記録 ADR-44 の決定 (3)・行 v-notes-head・接頭辞 `vnhead_`）: 頭が 2999 年の note の本文と note の file は
+/// notes-head-future で断られ、断りの 1 行は時刻の字を持つ。頭が 2000 年の append-notes は rc 0 で記録を残さない（時計に依らない）。
+#[test]
+fn vnhead_binary_denies_a_future_head_and_passes_a_past_head() {
+    let repo = git_repo();
+    let state = linked(&repo);
+    let rules = question_rules(&state);
+    fs::write(repo.join("h.md"), "[席 2999-01-01T00:00Z] 先の頭\n").expect("本文の file を書ける");
+    for (command, sub) in [("bdw note s2-1 \"[席 2999-01-01T00:00Z] x\"", "note"), ("bdw note s2-1 --file h.md", "note")] {
+        assert_notes_deny(&state, &repo, &rules, command, (sub, "notes-head-future"));
+        let out = run_hook_args(&["pre-tool-use", "--rules", &rules], &bash_payload(&repo, command));
+        assert!(stderr_text(&out).contains("2999-01-01T00:00Z"), "{command}: 時刻の字: {}", stderr_text(&out));
+    }
+    assert_question_pass(&state, &repo, &rules, "bdw update s2-1 --append-notes \"[席 2000-01-01T00:00Z] x\"");
+    assert_eq!(ledger_records(&state).len(), 4, "断った 4 本だけが記録を残す");
     clean(&[&repo, &state]);
 }
 

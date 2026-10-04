@@ -21,7 +21,7 @@
 //! rules を読まずに通す）。
 //!
 //! notes の段（ledger-form.md §18）: create の段の後・6 形の前に、notes の本文（[`notes`] の子 module が読む）に裁定の行を足す
-//! 書きと本文を読めない書きを止める。
+//! 書きと本文を読めない書きと、頭の時刻が今より先の書きを止める。
 //!
 //! 引き金の段（ledger-form.md §15）: memo の判定で止まらない memo の create と 6 形で止まらない本文を書く update は、昇格条件
 //! の節に読める引き金の行（[`trigger::read`]）が無ければ止める。台帳は読まず、接頭辞は cwd から上の `.beads` の設定から解く。
@@ -331,7 +331,7 @@ pub fn decide(command: &str, cwd: &Path, rules: Option<&Path>) -> LedgerDecision
         let found = judge(&create, read).map(|found| deny(found.as_str(), denied_line(found)));
         found.or_else(|| memo_untriggered(&create, read, cwd).map(Untriggered::decision))
     });
-    if let Some(found) = created.or_else(|| notes::judge(&all, &read, || ledger_prefix(cwd))) {
+    if let Some(found) = created.or_else(|| notes::judge(&all, &read, || ledger_prefix(cwd), crate::seat::state::now_secs())) {
         return found;
     }
     let writes: Vec<Write> = all.iter().filter_map(|words| write_of(words)).collect();
