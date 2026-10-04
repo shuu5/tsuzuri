@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 /// 消す dir の名（器が対応する言語の build と依存の置き場・宣言順・形 1）: Rust・TypeScript・Python・React Native + Expo。
-pub(super) const NAMES: &[&str] =
+pub(crate) const NAMES: &[&str] =
     &["target", "node_modules", ".venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".expo"];
 
 /// 置き場の掃除の lock の名（`<state_dir>/pipe/` の直下・置き場ごとに 1 本・形 4）。

@@ -433,7 +433,7 @@ fn short_extra(cluster: &str, flags: &Flags) -> Option<usize> {
 }
 
 /// `cd` / `pushd` の後ろの作業 dir（引数が literal なら前の dir から解き、でなければ解けなくする）。
-fn moved(dir: &Path, resolved: bool, rest: &[String]) -> (PathBuf, bool) {
+pub(crate) fn moved(dir: &Path, resolved: bool, rest: &[String]) -> (PathBuf, bool) {
     let target = rest.iter().find(|word| !(word.starts_with('-') && word.len() > 1));
     match target {
         Some(word) if literal(word) && word != "-" => {
@@ -445,7 +445,7 @@ fn moved(dir: &Path, resolved: bool, rest: &[String]) -> (PathBuf, bool) {
 }
 
 /// literal な path の語か（変数・command 置換・brace・glob・`~` 始まりを持たない）。
-fn literal(word: &str) -> bool {
+pub(crate) fn literal(word: &str) -> bool {
     !word.is_empty() && !word.starts_with('~') && !word.contains(NOT_LITERAL)
 }
 
@@ -570,7 +570,7 @@ fn replaced(text: &str, edit: &Tree) -> Option<String> {
 }
 
 /// `.` と `..` を字面で畳む（fs を読まない）。
-fn normalized(path: &Path) -> PathBuf {
+pub(crate) fn normalized(path: &Path) -> PathBuf {
     let mut found = PathBuf::new();
     for part in path.components() {
         match part {

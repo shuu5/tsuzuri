@@ -4326,6 +4326,34 @@ fn drafts_denies_when_the_seat_cannot_be_resolved(place: &RolePlace, path: &str,
     }
 }
 
+/// 組みの置き場と TMPDIR の行き先（判断の記録 ADR-44 の決定 (3)・行 v-drafts-env・接頭辞 `vdrenv_`）: 登録した席の撃ちで、起草の置き場の子の
+/// target を組みの置き場にした cargo は rc 0・記録 0、/tmp の下の target は outside（1 行は via=CARGO_TARGET_DIR と置き場の path を持つ）・
+/// 相対の export は relative・/dev/shm の下の TMPDIR は tmpfs で断り、/tmp の下の TMPDIR と `--pane` の無い周の同じ outside の command は通す。
+#[test]
+fn vdrenv_binary_denies_targets_outside_the_drafts_and_tmpdir_on_tmpfs() {
+    let place = role_place();
+    let path = stub_seat(&place, "draftsenv", Some("orchestrator"));
+    let drafts = PathBuf::from(brief_drafts_of(&place, "draftsenv:draftsenv"));
+    let repo = place.repo.as_path();
+    let (inside, outside) = (format!("{}/w1/target", drafts.display()), place.sock_dir.join("target"));
+    assert_silent(&drafts_hook(&place, &path, DRAFTS_SEAT, (repo, &format!("CARGO_TARGET_DIR={inside} cargo build"))), "子の target");
+    let tmp = format!("TMPDIR={} cargo test", place.sock_dir.join("tmp").display());
+    assert_silent(&drafts_hook(&place, &path, DRAFTS_SEAT, (repo, &tmp)), "/tmp の下の TMPDIR");
+    assert!(drafts_records(&place).is_empty(), "通した周は記録 0: {:?}", drafts_records(&place));
+    let far = format!("CARGO_TARGET_DIR={} cargo build", outside.display());
+    let line = assert_drafts_deny(&place, &drafts_hook(&place, &path, DRAFTS_SEAT, (repo, &far)), "drafts-deny outside");
+    for needle in ["via=CARGO_TARGET_DIR", &format!("to={}", outside.display()), &drafts.display().to_string()] {
+        assert!(line.contains(needle), "{needle}: {line}");
+    }
+    let relative = drafts_hook(&place, &path, DRAFTS_SEAT, (repo, "export CARGO_TARGET_DIR=target; cargo build"));
+    assert_drafts_deny(&place, &relative, "drafts-deny relative");
+    let shm = drafts_hook(&place, &path, DRAFTS_SEAT, (repo, "TMPDIR=/dev/shm/x cargo test"));
+    assert_drafts_deny(&place, &shm, "drafts-deny tmpfs");
+    assert_silent(&drafts_hook(&place, &path, &[], (repo, &far)), "--pane 無し");
+    assert_eq!(drafts_records(&place).len(), 3, "断った 3 本だけが記録を残す");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}
+
 /// 席の起草の写しの行き先の門: 置き場の直下 2 つだけ通し、外と解けない行き先と席を解けない周を断る（設計 §25 約束 2〜4）。
 #[test]
 fn hook_drafts_place_limits_copies_to_the_children_of_the_two_places() {

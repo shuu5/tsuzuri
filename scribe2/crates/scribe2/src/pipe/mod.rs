@@ -43,7 +43,7 @@ mod queue;
 mod regate;
 mod follow_step;
 mod retire;
-mod sweep;
+pub(crate) mod sweep;
 mod lane;
 mod train;
 
