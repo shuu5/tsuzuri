@@ -2,7 +2,7 @@
 # 起草は係 w115a（2026-10-04）。材料は drafts/w115a/w（map.tsv・refs.tsv・inject-design.md・interim.md・organize.md・notes.md）と検証役 qv118 の報告。承認の欄は席が埋める。
 id: ADR-38
 title: 憲法は tsuzuri の 1 つとし器の憲法を凍った資料にし、席の手元へは要の写しを注ぎ、全文の写しを別の file に導く
-status: proposed
+status: accepted
 date: 2026-10-04
 context: |
   持ち主の求め（台帳の控え（t3-hub.74.59）の notes）。まず憲法の統合と整理、そして tsuzuri の orchestrator の席に憲法を正しく注ぐ仕組みを完全に働かせること。
@@ -54,6 +54,7 @@ options:
     text: 段「いつも守る」の条を写さない。
     verdict: rejected
     reason: 段「いつも守る」の 28 条の番号と題が手元に無いと、席が条を引く時に在りかも分からない。丙' との差は約 1,654 byte で R-1 の内に収まる。
+produced: [R-41]
 basis: [ADR-4, ADR-8, ADR-18, ADR-19, ADR-33, ADR-35, ADR-36, CON2, P-1, P-2, P-4, P-7, P-8, P-13, P-17, P-18, P-20, P-22, P-25, A-1, A-2, A-3, A-4, N-1, N-2, N-3, N-4, N-5, N-7, R-1]
 grill:
   when: 2026-10-04
@@ -75,9 +76,27 @@ plain: |
   写しの大きさの上限（8,000 byte）は変えません。上限は、道具（tz）と器の検査が分けて測ります。
   器の直しが届くまでは、tsuzuri の部品の起動時の仕掛けが同じ写しを出します。器の直しが届いたら、その仕掛けは退きます。
   器と folio2 の憲法から写っていなかった文のうち、3 つを足し、8 つは足さない理由を残します。ほかの project の席には、今の 5 行を番号だけ tsuzuri に合わせて出します。
+amends:
+  - {"target": "P-13", "field": "statements.P-13.1.text", "version": "v1.4", "previous_text": "注入の命令を実行したとき、憲法の前文と規範文を持つ条と席の役割の指示文を、席の手元の生成区間へ決定的に導出して書く。", "new_text": "注入の命令を実行したとき、憲法の前文の順位と、段「絶対にやらない」と段「確認してから」の規範文の全文と、段「いつも守る」の条の id と題の一覧と、全文の写しの在りかと、席の役割の指示文を、この順で席の手元の生成区間へ決定的に導出して書く。"}
+  - {"target": "P-20", "field": "statements.P-20.5.pattern", "version": "v1.4", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-20", "field": "statements.P-20.5.strength", "version": "v1.4", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-20", "field": "statements.P-20.5.text", "version": "v1.4", "previous_text": "（新設）", "new_text": "器と道具は、席の状態を、自由文の字面からでなく型の列挙か形を検査した記録の行から判じる。"}
+  - {"target": "P-25", "field": "statements.P-25.7.pattern", "version": "v1.4", "previous_text": "（新設）", "new_text": "unwanted"}
+  - {"target": "P-25", "field": "statements.P-25.7.strength", "version": "v1.4", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-25", "field": "statements.P-25.7.text", "version": "v1.4", "previous_text": "（新設）", "new_text": "main の先端が測り直しても赤なら、戻すか直す取り込みを次の取り込みより先にする。"}
+  - {"target": "P-8", "field": "statements.P-8.3.pattern", "version": "v1.4", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-8", "field": "statements.P-8.3.strength", "version": "v1.4", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-8", "field": "statements.P-8.3.text", "version": "v1.4", "previous_text": "（新設）", "new_text": "器と道具は、報告と一覧を、手で書いた要約からでなく正本と記録から導いて出す。"}
+  - {"target": "precedence", "field": "mechanism.note", "version": "v1.4", "previous_text": "判断の規則であって機械では検査できない。順位の出所は scribe2 の前文（場当たりの修正の禁止 → 増殖の防止 → compile 速度）と folio2 の前文（網羅より揃い ／ 速さより黙らない ／ 賢さより戻せる）を 1 本に並べたもの。", "new_text": "判断の規則であって機械では検査できない。条の順位の 5 つは、scribe2 の前文の 3 つ（場当たりの修正の禁止 → 増殖の防止 → compile 速度）の 1 つ目と 2 つ目の間に、folio2 の前文から黙らないこと（速さより黙らない）と戻せること（賢さより戻せる）を挟んだもの。folio2 の前文の網羅より揃いは写していない（2026-09-24 に承認した順位の 5 つ・判断の記録 ADR-38）。"}
+approval:
+  who: 持ち主
+  date: 2026-10-04
+  ruling: t3-hub.74.59.1（裁定 id = t3-hub.74.59.1:20261004T0113Z-1・ほかの席は案 A）・t3-hub.74.59.2（裁定 id = t3-hub.74.59.2:20261004T0113Z-1・写す量は丙'）・t3-hub.74.59.3（裁定 id = t3-hub.74.59.3:20261004T0113Z-1・暫定は案 A）・t3-hub.74.59.4（裁定 id = t3-hub.74.59.4:20261004T0113Z-1・足す 3 と足さない 8）・t3-hub.74.59.5（裁定 id = t3-hub.74.59.5:20261004T0222Z-1・字は案 A）・t3-hub.74.59.6（裁定 id = t3-hub.74.59.6:20261004T0222Z-1・暫定の間の上限は案 A）
+  verbatim: "2問とも推奨で良い"
+  surface: R-8
 consequences:
   - 置く行は行（t-seatcopy）（tsuzuri の側・M）・行（v-brief-const）（器の列・M）・行（v-renum-face）（器の列・S〜M）と、code の注の番号の便 3 行ほど（行（v-join）と行（v-gates）の後）。席の手の 1 歩は全部の席の起動行の器の plugin の dir の付け替え。
-  - 第 1.4 版の改憲の字は、検証役がもう一度攻めた後に持ち主の字の承認を得てから入れる。それまでこの記録は提案中で、改訂の欄を持たない。
+  - 第 1.4 版の改憲の字は、検証役がもう一度攻めた後に持ち主の字の承認（承認の欄の ruling の最後の裁定）を得て入れた。
   - R-1 と新しい行の欄（key）は、行（t-seatcopy）が規則の表の欄（key）の閉じた一覧に値を足した後の設計の commit で書く。
   - 器の判断の記録（ADR-0045）と（ADR-0046）の受け直しは、ADR-36 の基準（A3）の 17 本の数えに入る。
 note: 起草 w115a（2026-10-04）。数は係の表（drafts/w115a/w の measure.out・measure-v14.out・map-summary.out・refs-summary.out）と検証役 qv118 と qv122 の報告から。持ち主の逐語は台帳の問い t3-hub.74.59.1〜.4 の notes に在り、ここには書かない。

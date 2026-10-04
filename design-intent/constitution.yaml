@@ -1,4 +1,4 @@
-# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）。第 1.1 版（2026-09-27）は条 P-16 の改訂（判断の記録 ADR-12・反対側からの検証 docs/grill/2026-09-27-J-p16-amend-grill.md）。第 1.2 版（2026-09-29）は写しの表の答えによる規範文の追加（判断の記録 ADR-19・反対側からの検証 docs/grill/2026-09-29-L-copy-tables-amend-grill.md）。第 1.3 版（2026-09-29）は条 P-28 の新設（判断の記録 ADR-20・設計ノートの増え方を folio の床の上限で縛る）
+# tsuzuri 憲法 — 正本（改名前の仮の名は scribe3・ADR-6）（v1.0・発効 2026-09-25・持ち主の裁定 user 2026-09-24T22:39Z「これでよい」・記帳先 scribe2 台帳 s2-07l.214 notes・s3:design 席が scribe2 と folio2 の憲法を合流させて起草）。第 1.1 版（2026-09-27）は条 P-16 の改訂（判断の記録 ADR-12・反対側からの検証 docs/grill/2026-09-27-J-p16-amend-grill.md）。第 1.2 版（2026-09-29）は写しの表の答えによる規範文の追加（判断の記録 ADR-19・反対側からの検証 docs/grill/2026-09-29-L-copy-tables-amend-grill.md）。第 1.3 版（2026-09-29）は条 P-28 の新設（判断の記録 ADR-20・設計ノートの増え方を folio の床の上限で縛る）。第 1.4 版（2026-10-04）は条 P-13.1 の改訂と規範文 P-8.3・P-20.5・P-25.7 の新設と前文の機構の注の出所の直し（判断の記録 ADR-38・反対側からの検証 docs/grill/2026-10-04-Q-constitution-inject-grill.md）
 "schema":
   "version": 1
   "top_level":
@@ -154,7 +154,7 @@
 
 meta:
   id: tsuzuri-constitution
-  version: v1.3
+  version: v1.4
   status: effective
   binding: true
   baseline: 未記入
@@ -173,7 +173,7 @@ precedence:
   text: 段どうしが衝突したら「絶対にやらない ＞ 確認してから ＞ いつも守る」の順で解き、条どうしが衝突したら「場当たりの修正の禁止 ／ 黙らないこと ／ 戻せること ／ 増殖の防止 ／ compile の速さ」の順で解く。
   plain: 決まりどうしがぶつかったら、まず「絶対にやらない」が勝ち、次に「確認してから」、最後に「いつも守る」です。同じ段の中でぶつかったら、その場しのぎの直しをしないことを一番に、次に黙って飛ばさないこと、次に元に戻せること、次に仕組みを増やさないこと、最後に組み立ての速さの順で決めます。
   binds: both
-  mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。順位の出所は scribe2 の前文（場当たりの修正の禁止 → 増殖の防止 → compile 速度）と folio2 の前文（網羅より揃い ／ 速さより黙らない ／ 賢さより戻せる）を 1 本に並べたもの。}
+  mechanism: {kind: none, live: now, note: 判断の規則であって機械では検査できない。条の順位の 5 つは、scribe2 の前文の 3 つ（場当たりの修正の禁止 → 増殖の防止 → compile 速度）の 1 つ目と 2 つ目の間に、folio2 の前文から黙らないこと（速さより黙らない）と戻せること（賢さより戻せる）を挟んだもの。folio2 の前文の網羅より揃いは写していない（2026-09-24 に承認した順位の 5 つ・判断の記録 ADR-38）。}
   rationale:
     - {kind: scribe2-article, ref: scribe2 憲法 §1 の順位（論点 1）}
     - {kind: folio2-ruling, ref: folio2 憲法の前文（precedence）}
@@ -279,15 +279,18 @@ articles:
     relations: {rules: [D-2]}
   - id: P-8
     title: 値の出所を型で弁別する
+    amended_by:
+      - {adr: ADR-38, date: 2026-10-04, approved_by: 持ち主, ruling: t3-hub.74.59.4（裁定 id = t3-hub.74.59.4:20261004T0113Z-1・足す 3 と足さない 8）・t3-hub.74.59.5（裁定 id = t3-hub.74.59.5:20261004T0222Z-1・字は案 A）, previous_text: （新設）, rationale: P-8.3 の新設。器の条 C10.2 の半分。「手書きの検証済みを受けない」は P-8.2 の言い直しなので写さず、報告と一覧を手で書いた要約でなく正本と記録から導く向きに絞った（2 度目の検証 qv122 で出所の句に直した）。}
     tier: always
     binds: tool
     statements:
       - {id: P-8.1, pattern: ubiquitous, strength: must, text: 宣言した値・出所つきで測った値・導出した値・効いている値を型で区別する。}
       - {id: P-8.2, pattern: ubiquitous, strength: must, text: 宣言した値を効いている値へ昇格させるのは測定を通したときだけとする。}
-    plain: 「こう決めた値」「測った値」「計算で出した値」「いま効いている値」を型で分けます。決めただけの値は、測って初めて効く値になります。
+      - {id: P-8.3, pattern: ubiquitous, strength: must, text: 器と道具は、報告と一覧を、手で書いた要約からでなく正本と記録から導いて出す。}
+    plain: 「こう決めた値」「測った値」「計算で出した値」「いま効いている値」を型で分けます。決めただけの値は、測って初めて効く値になります。器と道具が出す報告や一覧は、手で書いた要約でなく、正本と記録から機械が作ります。
     rationale:
       - {kind: scribe2-article, ref: scribe2 C10}
-    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 器の型（Declared / Measured / Derived / Effective）と compile。M1 = code の持ち込み後。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 器の型（Declared / Measured / Derived / Effective）と compile。M1 = code の持ち込み後。P-8.3 の測る者は、報告と一覧の口が読む先を台帳と database と正本と event の記録に限る検査の行の候補で、行はまだ無い。}
   - id: P-9
     title: 検査の物差しを、検査されるものから独立に持つ
     tier: always
@@ -340,18 +343,20 @@ articles:
     relations: {rules: [R-8, D-3]}
   - id: P-13
     title: 憲法と役割を席の手元へ写す（注入）
+    amended_by:
+      - {adr: ADR-38, date: 2026-10-04, approved_by: 持ち主, ruling: t3-hub.74.59.2（裁定 id = t3-hub.74.59.2:20261004T0113Z-1・写す量は丙'）・t3-hub.74.59.5（裁定 id = t3-hub.74.59.5:20261004T0222Z-1・字は案 A）, previous_text: 注入の命令を実行したとき、憲法の前文と規範文を持つ条と席の役割の指示文を、席の手元の生成区間へ決定的に導出して書く。, rationale: P-13.1 の改訂。全文は R-1 の約 2 倍で、検証役 qv118 は全文で席の判断が良くなる証拠を見つけず、名指せる実害（器の番号の取り違え）は要の写しで消えるので、段「絶対にやらない」と「確認してから」の全文と段「いつも守る」の条の id と題に絞り、全文の写しの file を別に導く。}
     tier: always
     binds: tool
     statements:
-      - {id: P-13.1, pattern: event, strength: must, text: 注入の命令を実行したとき、憲法の前文と規範文を持つ条と席の役割の指示文を、席の手元の生成区間へ決定的に導出して書く。}
+      - {id: P-13.1, pattern: event, strength: must, text: 注入の命令を実行したとき、憲法の前文の順位と、段「絶対にやらない」と段「確認してから」の規範文の全文と、段「いつも守る」の条の id と題の一覧と、全文の写しの在りかと、席の役割の指示文を、この順で席の手元の生成区間へ決定的に導出して書く。}
       - {id: P-13.2, pattern: event, strength: must, text: 注入の検査は生成区間と正本の差分を検出し、差があれば失敗で終える。}
       - {id: P-13.3, pattern: ubiquitous, strength: must, text: 生成区間の総バイト数は規則の表の行 R-1 以下に収める。}
-    plain: 憲法の要点と席の役割は、機械が AI の手元に写します。写しが元とずれていたら検査が落ちます。写しの大きさには上限があります。
+    plain: 憲法の要の部分（ぶつかった時の順位・「絶対にやらない」と「確認してから」の全文・「いつも守る」の条の番号と題）と席の役割は、機械が AI の手元に写します。全文は別の写しの file に置き、要る時に読みます。写しが元とずれていたら検査が落ちます。写しの大きさには上限があります。
     rationale:
       - {kind: folio2-ruling, ref: folio2 P14（枝 1〜3）}
       - {kind: scribe2-article, ref: scribe2 の役割の注入（ADR-0022 §2.4・SessionStart の brief）}
-    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 今は器の SessionStart の brief が器の憲法の番号の要点だけを出し、この憲法を写していない（folio inject は退いた）。tz derive が導く写しの file と、その差の検査（tz derive --check）と、器の SessionStart がその file を字のまま出す形にする。}
-    relations: {rules: [R-1]}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 要の写し（tz derive が導く contracts/seat/brief.txt）と全文の写し（contracts/seat/constitution.txt）とその差の検査（tz derive --check）を行 t-seatcopy が置き、器の SessionStart が要の写しを字のまま出す形を行 v-brief-const が置く（判断の記録 ADR-38）。それまでは tsuzuri の plugin の SessionStart の暫定の 1 本が要の写しを出す。R-1 の内訳は R-41。全文の写しは生成区間の外で R-1 で数えず、差の検査は P-2 の derive --check が持つ。要の写しの byte は頭の 1 行を含む file 全体で数える。}
+    relations: {rules: [R-1, R-41]}
   - id: P-14
     title: 逸脱は編集の時点で止める（極性一覧）
     tier: always
@@ -440,6 +445,7 @@ articles:
     title: 状態は 1 つの database に置き、描画を読まない
     amended_by:
       - {adr: ADR-19, date: 2026-09-29, approved_by: 持ち主, ruling: t3-hub.67.18（裁定 id = t3-hub.67.18:20260929T0616Z-1・束 batch:20260929T0616Z-1）・t3-hub.67.27（裁定 id = t3-hub.67.27:20260929T0720Z-1・改訂の字と型と強さの承認）, previous_text: （新設）, rationale: P-20.4 の新設。器の条 C9.2 の写し。持ち込みの後に口座の選び方の行が縛る条を失わないようにした。}
+      - {adr: ADR-38, date: 2026-10-04, approved_by: 持ち主, ruling: t3-hub.74.59.4（裁定 id = t3-hub.74.59.4:20261004T0113Z-1・足す 3 と足さない 8）・t3-hub.74.59.5（裁定 id = t3-hub.74.59.5:20261004T0222Z-1・字は案 A）, previous_text: （新設）, rationale: P-20.5 の新設。器の条 C3.3 のうち P-20.3（描画を読まない）に無い句を、縛る相手を器と道具に絞り、判じる元を型の列挙か形を検査した記録の行として足した（語「席の状態」は語彙が狭く定める・2 度目の検証 qv122）。}
     tier: always
     binds: tool
     statements:
@@ -447,10 +453,11 @@ articles:
       - {id: P-20.2, pattern: ubiquitous, strength: must-not, text: host ごとの dir・TSV・cache に真実を置かない。}
       - {id: P-20.3, pattern: ubiquitous, strength: must, text: 器は席の状態を描画からでなく構造（hook・状態 file・SDK の口）から読む。}
       - {id: P-20.4, pattern: ubiquitous, strength: must, text: 器は口座を割り当ての窓の終わりまで使い、選び方は規則の表の行で持つ。}
-    plain: 器が管理する状態は、どの機械のものかが分かる列を持つ 1 つの database に置きます。機械ごとの隠し場所に真実を置きません。AI の席の状態は、画面の見た目でなく、仕組みが出す構造から読みます。器は口座を割り当ての時間の窓の終わりまで使い、どの口座を選ぶかは規則の表の行で決めます。口座を移る線は規則の表の行が持ちます。
+      - {id: P-20.5, pattern: ubiquitous, strength: must, text: 器と道具は、席の状態を、自由文の字面からでなく型の列挙か形を検査した記録の行から判じる。}
+    plain: 器が管理する状態は、どの機械のものかが分かる列を持つ 1 つの database に置きます。機械ごとの隠し場所に真実を置きません。AI の席の状態は、画面の見た目でなく、仕組みが出す構造から読みます。器は口座を割り当ての時間の窓の終わりまで使い、どの口座を選ぶかは規則の表の行で決めます。口座を移る線は規則の表の行が持ちます。席の状態（動いているか・何を待っているか・健やかか）は、自由な文章の字面からでなく、決まった種類の一覧か、形を確かめた記録の行から判じます。
     rationale:
       - {kind: scribe2-article, ref: scribe2 C3（C3.3 = 描画を読まない柵）・v2 の残り 1（dialog の literal を足す形を持ち込まない）・C9.2（口座を窓の終わりまで使う・判断の記録 ADR-19）}
-    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 器の database の型と、描画を読む口（tmux の capture）の lint 禁止。P-20.4 の口座を移る線は行 R-30 で、器の群の判定が読む。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 器の database の型と、描画を読む口（tmux の capture）の lint 禁止。P-20.4 の口座を移る線は行 R-30 で、器の群の判定が読む。P-20.5 の測る者は、席の状態を判じる関数が読む先を型の列挙と形を検査した記録の行に限る検査の行の候補で、行はまだ無い。}
     relations: {rules: [R-30]}
   - id: P-21
     title: 選定・除外・経路は 1 関数 1 列挙で
@@ -517,6 +524,7 @@ articles:
     amended_by:
       - {adr: ADR-19, date: 2026-09-29, approved_by: 持ち主, ruling: t3-hub.67.12（裁定 id = t3-hub.67.12:20260929T0616Z-1・束 batch:20260929T0616Z-1）・t3-hub.67.27（裁定 id = t3-hub.67.27:20260929T0720Z-1・改訂の字と型と強さの承認）, previous_text: （新設）, rationale: P-25.5 の新設。器の条 C12.2 の写し。器の木を下の階層へ移すと器の CI の確かめが走らなくなるので、tsuzuri の CI へ移す根拠にした。}
       - {adr: ADR-19, date: 2026-09-29, approved_by: 持ち主, ruling: t3-hub.67.13（裁定 id = t3-hub.67.13:20260929T0616Z-1・束 batch:20260929T0616Z-1）・t3-hub.67.27（裁定 id = t3-hub.67.27:20260929T0720Z-1・改訂の字と型と強さの承認）, previous_text: （新設）, rationale: P-25.6 の新設。器の条 C12.3 の写し。歯を書かずに通る抜け道を塞ぐ、P-25.5 と対の門。}
+      - {adr: ADR-38, date: 2026-10-04, approved_by: 持ち主, ruling: t3-hub.74.59.4（裁定 id = t3-hub.74.59.4:20261004T0113Z-1・足す 3 と足さない 8）・t3-hub.74.59.5（裁定 id = t3-hub.74.59.5:20261004T0222Z-1・字は案 A）, previous_text: （新設）, rationale: P-25.7 の新設。器の条 C12.6「main を常に緑に保つ」は字のままだと着地の後の main の赤の回復の運用で即座に違反になり、1 度の赤が揺れの時も違反に読めるので、測り直しても赤の時の回復の順の字に言い直した（前半の落ちたままの歯の台帳を持たないは P-25.4）。}
     tier: always
     binds: tool
     statements:
@@ -526,10 +534,11 @@ articles:
       - {id: P-25.4, pattern: ubiquitous, strength: must-not, text: 落ちたままの歯の台帳（KNOWN-RED）を持たない。}
       - {id: P-25.5, pattern: ubiquitous, strength: must, text: 変更は落ちる歯から始め、歯の差分だけを base に当てると落ち、HEAD で通ることを検査が確かめる。}
       - {id: P-25.6, pattern: unwanted, strength: must, text: 歯の差分を持たない変更は、文書だけの面の変更でなければ、検査が落とす。}
-    plain: 検査は Rust の 1 つの仕組みだけで書きます。命令の出力や生成した文書の形は、凍結した写しで守ります。落ちたままの検査を「既知」として残しません。変更は、まず落ちる検査を書いてから直し、検査の変更だけを前の版に当てると落ち、直した版で通ることを機械が確かめます。検査の変更を持たない変更は、文書だけの変更でなければ落ちます。
+      - {id: P-25.7, pattern: unwanted, strength: must, text: main の先端が測り直しても赤なら、戻すか直す取り込みを次の取り込みより先にする。}
+    plain: 検査は Rust の 1 つの仕組みだけで書きます。命令の出力や生成した文書の形は、凍結した写しで守ります。落ちたままの検査を「既知」として残しません。変更は、まず落ちる検査を書いてから直し、検査の変更だけを前の版に当てると落ち、直した版で通ることを機械が確かめます。検査の変更を持たない変更は、文書だけの変更でなければ落ちます。main の先端が測り直しても赤いままなら、戻すか直す取り込みを、ほかの取り込みより先に入れます。
     rationale:
       - {kind: scribe2-article, ref: scribe2 C12（C12・C12.2〜C12.6。C12.2 と C12.3 は判断の記録 ADR-19 で足した。C12.7 は写さない）}
-    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: nextest と insta の snapshot と mutants の記録。P-25.5 と P-25.6 は器の落ちる歯の確かめ（flip-check）と歯の差分なしの門で、持ち込みの後に tsuzuri の CI へ移す。文書だけの面の値は持ち込みの時に tsuzuri の木で決める。文書だけの面（P-25.6 と同じ値）の変更は P-25.5 の確かめの外。}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: nextest と insta の snapshot と mutants の記録。P-25.5 と P-25.6 は器の落ちる歯の確かめ（flip-check）と歯の差分なしの門で、持ち込みの後に tsuzuri の CI へ移す。文書だけの面の値は持ち込みの時に tsuzuri の木で決める。文書だけの面（P-25.6 と同じ値）の変更は P-25.5 の確かめの外。P-25.7 の測る者は、器の着地の門（赤の間はほかを着地させない）の行の候補で、それまでは席の運用。}
     relations: {rules: [R-9]}
   - id: P-26
     title: 依存と compile に予算を持つ

@@ -15,6 +15,7 @@ terms:
   - {id: display-mode, term: 表示の型, en: mode, short: 初心者と経験者の 2 つの見せ方, def: board の見せ方の 2 つ。初心者は説明の注釈と非エンジニア向けの概要を、経験者は経験者向けの 1 行とエンジニア向けの概要を出す。選んだ型は URL とその browser に残す。}
   - {id: two-summaries, term: 2 つの概要, en: summaries, short: 非エンジニア向けとエンジニア向けの 2 つの説明, def: 節点ごとの 2 つの説明。設計文書は plain の欄、台帳は bead の本文の定型行か見出しの下の字に置き、面は表示の型の 1 つを写す。}
   - {id: short-title, term: 短い題, en: short title, short: 一覧と札と待つ相手の欄に出す、字数に上限のある題, def: bead ごとに台帳の付帯の欄（metadata）の鍵（short）に置く題。席は起票の時に書き、無ければ面が題から機械で作る。上限の字数を越えれば切って「…」を付ける。}
+  - {id: seat-state, term: 席の状態, en: seat state, short: 席が動いているか止まっているか・何を待っているか・健やかか, def: 席が動いているか止まっているか、何を待っているか、健やかかの 3 つだけを指す。器の席の状態の型（SeatState）の値と、席の打刻の file（tick と heartbeat）と、台帳の決まった形の行（裁定の行と配達の印の行）が持つ値で、席の出力の字や画面の描画は含まない。条 P-20 の 5 つ目の規範文が使う。}
 field_terms: []
 identifiers:
   - {group: 骨格の雛形の語, words: [folio, ai, intake, rules, file, id, schema, repo], why: 骨格の雛形に出る識別子（命令名・file 名・code の語）}
