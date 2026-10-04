@@ -1,3 +1,109 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
+index 635f23645c1c173aea445deb996cf3988376d2b4..80b75952e94aa3c8f84e13c054de29d59736ff75 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
+@@ -2889,7 +2889,7 @@ fn group_role_place() -> RolePlace {
+     let bd = fake_bd(&sock_dir, LEDGER_JSON);
+     RolePlace {
+         repo,
+-        state: TmpDir { path: Some(state) },
++        state: TmpDir { root: state.clone(), path: Some(state) },
+         sock_dir,
+         socket,
+         launch: launch.display().to_string(),
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/main.rs b/scribe2/crates/scribe2-boundary/tests/e2e/main.rs
+index fc0e742afc9357cb8a276d3d0c74f74cd413f045..74b09a9797d210fca74527d5d572b74eca6b9e4f 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/main.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/main.rs
+@@ -53,6 +53,10 @@ pub fn install_spawner() {
+ ///
+ /// 先頭で [`install_spawner`] を呼ぶ（この helper を使う歯が core の lib の起動の site に同じ process で届く周の
+ /// 据え付け・census の外で `pipe` の git の読みに届く polarity の worktree の判定の歯がこの helper を先に呼ぶ）。
++///
++/// 返す dir は一意な根（`<temp>/e2e-<pid>-<nanos>-<seq>`）の 1 段下の子 [`TMP_LEAF`] で、drop は根ごと消す。器は host の根を
++/// 置き場の親の下（`<置き場の親>/<NAME>-host`）に導くので、この dir を置き場に渡した歯の host の根（受付札・群の記録・走りの札）は
++/// 根の下に閉じる＝歯どうしも同じ host のほかの木の歯とも共有しない（temp の直下の `<NAME>-host` を書かない・行 xp-host-runs）。
+ pub fn make_tmp_dir() -> Option<TmpDir> {
+     install_spawner();
+     let base = std::env::temp_dir();
+@@ -62,21 +66,30 @@ pub fn make_tmp_dir() -> Option<TmpDir> {
+             .map(|d| d.subsec_nanos())
+             .unwrap_or(0);
+         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+-        let dir = base.join(format!("e2e-{}-{nanos}-{seq}", std::process::id()));
+-        if std::fs::create_dir(&dir).is_ok() {
+-            return Some(TmpDir { path: Some(dir) });
++        let root = base.join(format!("e2e-{}-{nanos}-{seq}", std::process::id()));
++        if std::fs::create_dir(&root).is_ok() {
++            let dir = root.join(TMP_LEAF);
++            if std::fs::create_dir(&dir).is_ok() {
++                return Some(TmpDir { root, path: Some(dir) });
++            }
++            fs::remove_dir_all(&root).ok();
+         }
+     }
+     None
+ }
+ 
++/// [`make_tmp_dir`] が返す dir の名（一意な根の 1 段下）。
++const TMP_LEAF: &str = "tmp";
++
+ /// 歯の fixture の一時 dir の包み（`Drop` で再帰削除・panic の unwind の途中でも消える）。
+ ///
+ /// path として読める（`Deref` で `Path` を貸す）ので、path を繋ぐだけの呼び手は素の `PathBuf` と同じに書ける。
+ /// 落ちた歯の dir を調べたい周は [`TmpDir::keep`] で path を取り出して guard を降ろす（env は読まない・C2.2）。
+ #[derive(Debug)]
+ pub struct TmpDir {
+-    /// 消す dir（`None` = guard を降ろした後・`keep` の中だけが `None` にする）。
++    /// drop で消す一意な根（[`make_tmp_dir`] が作った `<temp>/e2e-…`・path はその 1 段下の子）。
++    root: PathBuf,
++    /// 包みの path（`None` = guard を降ろした後・`keep` の中だけが `None` にする）。
+     path: Option<PathBuf>,
+ }
+ 
+@@ -116,8 +129,8 @@ thread_local! {
+ 
+ impl Drop for TmpDir {
+     fn drop(&mut self) {
+-        if let Some(path) = self.path.take() {
+-            fs::remove_dir_all(path).ok();
++        if self.path.take().is_some() {
++            fs::remove_dir_all(&self.root).ok();
+         }
+     }
+ }
+@@ -188,7 +201,7 @@ fn e2e_fixture_tmp_dir_survives_when_kept() {
+     let dir = make_tmp_dir().unwrap_or_else(|| panic!("tmp dir を作れる"));
+     let path = dir.keep();
+     assert!(path.is_dir(), "降ろした周は dir が在る: {}", path.display());
+-    fs::remove_dir_all(&path).ok();
++    fs::remove_dir_all(path.parent().unwrap_or(&path)).ok();
+     let canonical = make_tmp_dir().and_then(TmpDir::canonical).unwrap_or_else(|| panic!("正規化できる"));
+     let path = canonical.to_path_buf();
+     drop(canonical);
+@@ -204,6 +217,22 @@ fn e2e_fixture_tmp_dir_paths_are_unique() {
+     assert!(first.is_dir() && second.is_dir(), "どちらも在る");
+ }
+ 
++/// (e) 一時 dir を置き場に渡した歯の host の根（器の [`vessel::seat::host_runs_dir`] が置き場の親の下に導く走りの札の dir）は、
++/// temp の直下の `<NAME>-host`（同じ host のほかの木の歯と共有する所）の下に無く、2 つの一時 dir で別で、包みを落とすと消える
++/// （行 xp-host-runs・歯どうしが host の根を共有すると、口座の選びの歯が別の歯の runner の札で揺れる）。
++#[test]
++fn xphost_e2e_tmp_dir_closes_the_host_root() {
++    let first = make_tmp_dir().unwrap_or_else(|| panic!("1 つ目を作れる"));
++    let second = make_tmp_dir().unwrap_or_else(|| panic!("2 つ目を作れる"));
++    let runs = vessel::seat::host_runs_dir(&first);
++    let shared = std::env::temp_dir().join(format!("{NAME}-host"));
++    assert!(!runs.starts_with(&shared), "temp の直下の host の根の下に無い: {}", runs.display());
++    assert_ne!(runs, vessel::seat::host_runs_dir(&second), "2 つの一時 dir の host の根は別");
++    fs::create_dir_all(&runs).unwrap_or_else(|e| panic!("host の根の札の dir を作れる: {e}"));
++    drop(first);
++    assert!(!runs.exists(), "包みを落とすと host の根の札の dir も消える: {}", runs.display());
++}
++
+ // ─────────── 固定日付を持つ fixture の母集団（設計 docs/design/pipeline.md §50・行 as・`s2-07l.469`） ───────────
+ 
+ /// reset / 期限の欄の key（`concat!` で 2 片に割る＝この file の本文が自分の母集団に数えられない）。
 diff --git a/scribe2/crates/scribe2/src/pipe/admission.rs b/scribe2/crates/scribe2/src/pipe/admission.rs
 index af234f725f34f1e687562602b68f06a7cfd0755d..2db3c7cd02dc09e1dda22160413c80d0824c34e6 100644
 --- a/scribe2/crates/scribe2/src/pipe/admission.rs
