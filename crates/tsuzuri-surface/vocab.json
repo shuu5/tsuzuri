@@ -597,6 +597,11 @@
    "plain": "条の文や ADR の decision の先頭",
    "internal": "statements[0].text / decision / what・value"
   },
+  "nb_held": {
+   "label": "留め置き",
+   "plain": "この bead は留め置かれている\n・ 止めた者・理由・止めた時刻・解く条件\n・ 吹き出しと同じ字",
+   "internal": "段 Held の札の pop::held_facts（判断の記録 ADR-42 決定 (7)・行 g-held-page）"
+  },
   "nb_summary": {
    "label": "概要",
    "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",

@@ -474,6 +474,7 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
 .nhead .t { font-size: var(--fs-4); font-weight: 750; line-height: 1.35; }
 .nhead .kind { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 600; font-size: var(--fs-1); }
 .nsum { display: grid; gap: var(--s2); margin-bottom: var(--s3); }
+.nheld { min-width: 0; margin-bottom: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-left: 4px solid var(--st-limit); border-radius: var(--r2); } /* 留め置きの段（行 g-held-page） */
 .sumbox { border-radius: var(--r3); padding: var(--s3); background: var(--panel); border: 1px solid var(--line); }
 .sumbox > header { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); color: var(--ink-2); }
 .sumbox > header svg { width: 20px; height: 20px; }

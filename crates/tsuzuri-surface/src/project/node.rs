@@ -8,7 +8,10 @@
 //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
 //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
 //! 撃ち直しは同じ button をもう一度押す（server は行を足さず開き直しだけを撃つ）。
+//! 中心の bead の札が段 Held（留め置き）の時は、頭と概要の下に吹き出しと同じ 4 つの欄（止めた者・理由・止めた時刻と経過・
+//! 解く条件）を 1 段で出す。欄は吹き出しの `pop::held_facts` で組み、2 本目を書かない（判断の記録 ADR-42 決定 (7)・行 g-held-page）。
 
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
 use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
 use tsuzuri_contract::summary::excerpt;
@@ -23,7 +26,7 @@ use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
 use crate::vocab::label;
 use crate::widgets::nodecard::full_src;
-use crate::widgets::pop::UNKNOWN_KEY;
+use crate::widgets::pop::{self, Fact, Src, UNKNOWN_KEY, Val, at_text, held_facts};
 use crate::widgets::sumpick::{self, Picked};
 
 pub const BLOCK: Block = Block {
@@ -178,6 +181,26 @@ pub fn summary_in(center: &AroundRow, mode: Mode, body: &Excerpt) -> SumBox {
     }
 }
 
+/// 留め置きの段の見出しの語の鍵と class（行 g-held-page）。
+pub const HELD_HEAD: &str = "nb_held";
+pub const HELD_CLASS: &str = "nheld";
+
+/// 留め置きの段の欄（中心の bead `id` の札が段 Held の時だけ吹き出しと同じ `pop::held_facts`・札が無いかほかの段なら None）。
+pub fn held_rows(id: &str, src: &Src<'_>) -> Option<Vec<Fact>> {
+    let card = pop::card_of(src.cards, id)?;
+    let facts = held_facts(src, card);
+    (!facts.is_empty()).then_some(facts)
+}
+
+/// 留め置きの欄の値の字（字はそのまま・時刻は日本時間の字と経過・ほかはまだ分からない）。
+pub fn held_text(val: &Val, now: EpochSecs) -> String {
+    match val {
+        Val::Text(text) => text.clone(),
+        Val::At(at) => at_text(*at, now),
+        _ => label(UNKNOWN_KEY),
+    }
+}
+
 /// 質問の窓への link（home の頁を質問の窓を開いて読み直す・問いの id を `%XX` にして残す・mode を URL に残す・
 /// 行 g-one-screen-a）。
 pub fn answer_href(id: &str, mode: Mode) -> String {
@@ -252,21 +275,24 @@ mod dom {
     use leptos::ev;
     use leptos::prelude::*;
     use leptos::task::spawn_local;
+    use tsuzuri_contract::board::Reading;
+    use tsuzuri_contract::case::PATH as CASES_PATH;
     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
 
     use super::{
-        BLOCK, Excerpt, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href,
-        center, excerpt_of, head, item_path, kept_subject, revoke_body, revoke_target,
-        shows_revoke, summary_in,
+        BLOCK, Excerpt, Fact, HELD_CLASS, HELD_HEAD, Head, PageState, Revoke, SUMBOX_OTHER,
+        SUMMARY_NONE, Src, SumBox, answer_href, center, excerpt_of, head, held_rows, held_text,
+        item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary_in,
     };
     use crate::mapview::band_chip;
     use crate::project::ask::{Outcome, can_send, outcome};
     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
     use crate::project::nodebody::item_source;
-    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
+    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, pipeline, state_icon, unmeasured};
     use crate::view::{Fetched, PageSubject};
     use crate::vocab::label;
-    use crate::widgets::help::{h1, h2};
+    use crate::widgets::help::{h1, h2, hs};
+    use crate::widgets::pop::{known, read_parts};
     use crate::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
 
     /// 出所の印（見本の IC.file）。
@@ -334,6 +360,9 @@ mod dom {
             })
         }));
         let drafts: Drafts = StoredValue::new(Vec::new());
+        // 留め置きの段は板と局面の出力の口から札と部品を読む（吹き出しと同じ読み・行 g-held-page）。
+        let pipe = crate::net::read(pipeline::PATH);
+        let cases = crate::net::read(CASES_PATH);
         let content = move || {
             let st = read.with(|(f, s)| state(f, *s));
             if let Some(reason) = unmeasured_reason(&st) {
@@ -351,7 +380,8 @@ mod dom {
                             let d = draft(drafts, &t.ruling);
                             revoke_view(t, item, d)
                         });
-                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div> }
+                        let held = held_of(pipe, cases, &h.id);
+                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div>{held} }
                             .into_any()
                     }
                     _ => unmeasured(NO_CONTENT),
@@ -383,6 +413,33 @@ mod dom {
         view! {
             <section class=b.class><header><span inner_html=icon_of(b.key)></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
             {other}
+        }
+        .into_any()
+    }
+
+    /// 中心の bead の留め置きの段（板と局面の出力の口の読みから・札が段 Held でなければ None）。
+    fn held_of(pipe: ReadSignal<Fetched>, cases: ReadSignal<Fetched>, id: &str) -> Option<AnyView> {
+        let cards = pipe.with(|p| pipeline::cards(p).unwrap_or_default());
+        let parts = cases.with(read_parts);
+        let src = Src {
+            facts: Reading::Unknown,
+            rows: Reading::Unknown,
+            cards: &cards,
+            parts: known(&parts),
+            graph: None,
+        };
+        held_rows(id, &src).map(held_view)
+    }
+
+    /// 留め置きの段（見出しと、吹き出しと同じ欄の表）。
+    fn held_view(rows: Vec<Fact>) -> AnyView {
+        let now = crate::net::now();
+        let rows = rows
+            .into_iter()
+            .map(|f| view! { <tr><th>{hs(f.key)}</th><td>{held_text(&f.val, now)}</td></tr> })
+            .collect_view();
+        view! {
+            <section class=HELD_CLASS><header>{h2(HELD_HEAD)}</header><table class="facts">{rows}</table></section>
         }
         .into_any()
     }
