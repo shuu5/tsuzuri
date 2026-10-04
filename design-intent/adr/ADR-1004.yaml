@@ -1,0 +1,163 @@
+# 判断の記録 ADR-1004 — 器 scribe2 の判断の記録 ADR-0004 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1004
+title: "MVP の永続面と跨版 5 面の on-disk 形式"
+status: accepted
+date: 2026-09-09
+context: |
+  MVP を小さく切り直したとき、 「状態をどこに、 どんな形で置くか」を決めないと契約が書けなくなりました。 憲法は状態の置き場を「SQLite 1 file」と例示しますが、 この repo は外部 crate を 1 本も持たない (依存 0 本) と決めていて、 SQLite を今すぐ入れると矛盾します。 加えて、 前の版と次の版が共有する 5 つの接点 (所属の目印・観測・台帳・停止・審査結果) の file の形と、 設定を環境変数で受け渡してよいかも、 契約より先に決める必要がありました。 本 ADR はその決定の記録です。
+  MVP 切り直し (user 裁定 2026-09-09) により、 SRS の到達点は toy repo 5 便 + 自己ホスト 1 便に絞られ、 契約は 5 本 + 不足 3 本に分かれた (docs/design/ の 4 設計)。 各契約が同じ on-disk 面を読み書きするため、 形式は契約に先立って 1 箇所で決める必要がある。 拘束条件は次の 4 つである。 (1) C3 は fleet の状態を「host 列を持つ 1 つの database file」に置くと定め、 機構欄は SQLite 1 file を例示する。 (2) NFR1003 と C13 は実行時の直接依存 0 本 (許可リストの外は歯が落とす) を定め、 依存の追加は A3 の user 確認を要する。 (3) C2.2 は環境変数の直読と新しい env seam の新設を禁じる。 (4) 器 SPEC §12.2 (要件カタログ R-O3) は跨版契約を 5 面 (所属 marker / 観測 export / 台帳 adapter / 停止 1 コマンド / oracle) と定め、 版番号に依らず固定する。 CLAUDE.md の「ADR を書く条件」のうち 1 (憲法条の解釈) と 3 (schema・on-disk 形式・跨版契約) に当たる。
+decision: |
+  決めたことは 5 つです。 (1) 状態は「1 行 1 出来事を末尾に足していく JSONL の file 1 つ」に置き、 SQLite は次の版で依存の確認を経てから入れます。 (2) 前の版と共有する 5 つの接点の file の形を固定します。 (3) 契約 file と規則の値の file は、 標準ライブラリだけで読める小さな TOML の形にします。 (4) 環境変数を読みません (HOME も読みません)。 置き場は引数と、 repo に紐づけた git の local 設定で渡します。 (5) file の形には版番号を付け、 壊す変更は版を上げて行います。
+  §2.1 永続面 = 追記だけの JSONL 1 file (C3 の MVP 解釈)
+  「1 つの database file」を、 MVP では「追記だけの JSONL 1 file」と読みます。 各行に host 名を持たせるので、 憲法が求める「host 列」も満たします。 SQLite は次の版で、 依存の追加を user に確認してから入れます。
+  決定文 1: scribe2 SHALL keep the fleet state of the MVP in exactly one append-only JSONL file, <state_dir>/fleet/events.jsonl, in which every line is one event carrying a host field, and SHALL derive the current position of every run and seat only by replaying that file.
+  決定文 1.2: IF a line of the event log cannot be parsed, THEN scribe2 SHALL report every such line with its line number and SHALL NOT skip it silently.
+  解釈
+  C3 の規範文が求めるのは「1 つの file」「host 列」「per-host の dir / TSV / cache に真実を置かない」の 3 点であり、 storage engine は機構欄の例示である。 JSONL 1 file は 3 点を満たす。 SQLite 化は依存許可リスト (C13 / A3) を経た v3 の手番とし、 その際も event log は消さず投影元として残す (跨版 面 2 の path を固定するため)。
+  機構
+  lock file (events.jsonl.lock・create_new・stale 30 s で除去し warn) を伴う O_APPEND の 1 行 write。 reader は fail-closed (NFR1004)。 型は EventKind (閉じた 8 variant) と Stage (閉じた 8 variant)。 設計は docs/design/fleet-event-log.md。
+  出所
+  器 SPEC v0.4.6 §4 (MVP の state store は std の JSONL・SQLite は v3)・SRS FR1003
+  §2.2 跨版 5 面の v2 側の形
+  前の版と次の版が共有する 5 つの接点のうち、 MVP で作るのは 4 つ (所属・観測・停止・審査結果) です。 台帳の接点は「bead の id を文字列で持つだけ」に留め、 台帳への書き込みは MVP の外です。
+  面｜v2 側の形 (MUST)｜SRS
+  1 所属｜repo root の固定名 .vessel。 中身は 2 行・LF・この順・末尾改行・余白なし: name=<NAME> / version=<N>。 不在・読めない・parse 不能は「黙る」側へ倒す｜FR1019 / FR1024
+  2 観測｜<state_dir>/fleet/events.jsonl (schema 1) と <NAME> fleet export (stdout 1 行目が schema header・read-only・lock を取らない)｜FR1003
+  3 台帳｜MVP 外。 event と契約は bead id を文字列で持つだけで、 台帳 (bd) の read / write を行わない｜SRS scope out
+  4 停止｜<NAME> pipe stop --all 1 コマンド・冪等。 rc = 0 (全部止まった / 対象なし)・1 (残った)・2 (state が読めない)｜FR1013
+  5 oracle｜<state_dir>/fleet/verdicts.jsonl に land ごと 1 行 {"schema":1,"run","bead","sha","verdict","evidence","ts"} を append。 evidence は verdict.json の path｜FR1012
+  path・file 名・rc 語彙は版番号に依らず固定する (R-O3)。 面 5 は要件カタログ R-O3 では「oracle 再 gate」(前の版が次の版の land を独立に gate し直す面) だが、 ADR-1003 により前の版が再 gate する形は無くなった。 v2 が固定するのは verdict を外へ出す面 (verdicts.jsonl) だけであり、 読み手が再 gate するかは読み手の版が決める。 <state_dir> は §2.4 のとおり repo ごとに git の local 設定で紐づける (env からも HOME からも導かない)。
+  §2.3 契約 file と rules manifest = TOML subset
+  契約 file と規則の値の file は、 どちらも小さな TOML の形にします。 読み手は標準ライブラリだけで書く自前の scanner で、 未知の key は拒みます。 数字を書く file は、 人が裁定 id を添えて手で編集できる形であることが大事です。
+  決定文 3: scribe2 SHALL read the contract file and the rules manifest as a TOML subset (top-level scalars, [[rule]] array-of-tables, string / integer / boolean values, string arrays) with a scanner written in the standard library only, and SHALL reject unknown keys, missing required keys and type mismatches by collecting every error with its line number.
+  契約 file
+  key = goal / done / size / owner / disposition / write-set / verify / req / design / classes (任意)。 req (SRS の要件 id・1 本以上) と design (設計 doc の repo 相対 path) は SRS FR1002 の帰結として必須。 verify の各要素は 1 行で完結する。 設計は docs/design/pipeline.md §3。
+  rules manifest
+  rules/manifest.toml・schema = 1・行 = id / kind / value / enabled / ruling / ruled_at。 全行が user の裁定 id を持つ (C5・裁定の無い行は loader が拒む)。 憲法 §3 の行 id は manifest の行 id の接頭辞として一致する。 user 逐語の key は持たない (PUBLIC repo)。 tracked な manifest は build 時に binary へ埋め込む (include_str!) ので、 別 repo の worktree で走る gate も path に依存せず同じ規則を読む。 --rules <path> は test 用の override。 設計は docs/design/rules-manifest.md。
+  出所
+  C1 (manifest は TOML・未知 key 拒否・起動時 1 回読み)・FR1017・xtask の既存 scanner (toml_lite) と同形
+  §2.4 env seam を持たない (C2.2 の適用)
+  「状態の置き場」や「触ってよい file の一覧」を環境変数で渡すのはやめ、 HOME も読みません。 置き場は、 その repo を器に紐づけるときに git の local 設定へ書いておき、 引数で上書きできます。 触ってよい file の一覧は作業場所の git の私有 dir に置いた file で、 実装役への情報は起動コマンドの穴埋めで渡します。
+  決定文 4: scribe2 SHALL NOT read any environment variable, SHALL take the state directory of a served repository from that repository's local git configuration key derived from NAME (written once by vessel init --state-dir) or from an explicit --state-dir argument, and SHALL pass every other location or policy as a command-line argument, a file under the worktree's private git directory, or a placeholder substituted into the runner command.
+  機構
+  vessel init --state-dir <dir> が git config --local <NAME>.stateDir <dir> を書く (key 名は NAME 定数から導出・C2.2 の「state directory は NAME から導く」の MVP 形)。 hook と pipe はそれを git config --get で読み、 fleet は --state-dir を必須にする (既定を持たない)。 guard の policy は <git-dir>/<NAME>/write-set.txt (worktree ごとに私有・tracked 面に触れない・git status を汚さない)。 runner cmd の {run} {worktree} {contract} {write_set} {base} を置換し、 scribe2 固有の env は 1 つも足さない (親の env はそのまま継承)。 hooks.json の command に書く ${…_BIN:-<NAME>} の展開は Claude Code 側の shell が行い、 scribe2 は読まない。 headless wrapper が子 process (claude) へ設定 dir を環境変数として渡す行為は SRS FR1005「口座は環境変数で切替」の履行であり、 「読む」ではないため本条に触れない。
+  解釈
+  C2.2 は「env を直読しない」「新しい env seam を作らない」「state dir を NAME から導く」の 3 点を課す。 HOME を読んで既定を組む案は 1 点目に当たるため採らない (std に HOME を介さず home dir を得る API は無く、 依存 0 本のまま条文を字面どおり守る唯一の道は「読まない」である)。 repo ごとの git local 設定は tracked 面に無く、 key 名が NAME から導出されるので 3 点目を満たす。
+  出所
+  C2.2。 前の器で SCRIBE_* env が 533 種に増えて改名不能になった実測 (器 SPEC §7)。
+  §2.5 schema 版と互換性
+  JSONL の各行と TOML の先頭に schema の番号を持たせます。 field を足すだけの変更は同じ番号のまま、 読めなくなる変更は番号を上げて「新しい版」として行います。
+  決定文 5: scribe2 SHALL carry an integer schema field in every event line, every verdict line, every injection record and at the top of the rules manifest, SHALL treat the addition of an optional field as compatible within the same schema number, and SHALL treat any change that makes an existing line unreadable as schema-incompatible, to be carried out only as a new version (N4).
+  機構
+  reader は schema が自分の知る値でなければ行番号付きで error にする (fail-closed)。 初期値はすべて 1。
+  出所
+  N4 (schema 非互換は新しい版)・R-O3 (export の schema 版付き)
+  §2.6 本 ADR の射程外
+  依存 OSS の追加・削除は決めない (rtk / graphify の seam と依存予算は別 ADR)。 folio の位置は決めない (別 ADR)。 SQLite 化の時期と schema は決めない (v3 の A3 を通す周で新 ADR)。 憲法の条文も SRS の要件文も 1 字も変えない (本 ADR は C3 / C2.2 の解釈を記録する。 FR1005「口座は環境変数で切替」は子 process への設定であり、 §2.4 と矛盾しない)。 口座・lease・退役・tmux 席の状態 (C3 の残りの列・C9) は MVP の event log に持たせない (SRS scope out)。
+options:
+  - id: "chosen"
+    name: "MVP の永続面と跨版 5 面の on-disk 形式"
+    text: |
+      決めたことは 5 つです。 (1) 状態は「1 行 1 出来事を末尾に足していく JSONL の file 1 つ」に置き、 SQLite は次の版で依存の確認を経てから入れます。 (2) 前の版と共有する 5 つの接点の file の形を固定します。 (3) 契約 file と規則の値の file は、 標準ライブラリだけで読める小さな TOML の形にします。 (4) 環境変数を読みません (HOME も読みません)。 置き場は引数と、 repo に紐づけた git の local 設定で渡します。 (5) file の形には版番号を付け、 壊す変更は版を上げて行います。
+      採った案（器の却下案の節の表の行）: 永続 案 4 lock 付き append-only JSONL 1 file｜本 ADR §2.1｜C3 の 3 要件を満たし依存 0 本。 fail-closed reader で NFR1004｜採用
+      採った案（器の却下案の節の表の行）: 受け渡し 案 b 引数 + git local 設定 + git dir + placeholder｜本 ADR §2.4｜env を 1 つも読まずに hook・test・runner の全部へ届く｜採用
+      採った案（器の却下案の節の表の行）: 形式 案 ii TOML subset｜本 ADR §2.3｜C1 の例示 (TOML) と一致。 std だけの scanner が既に 1 本在る｜採用
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: MVP を小さく切り直したとき、 「状態をどこに、 どんな形で置くか」を決めないと契約が書けなくなりました。 憲法は状態の置き場を「SQLite 1 file」と例示しますが、 この repo は外部 crate を 1 本も持たない (依存 0 本) と決めていて、 SQLite を今すぐ入れると矛盾します。 加えて、 前の版と次の版が共有する 5 つの接点 (所属の目印・観測・台帳・停止・審査結果) の file の形と、 設定を環境変数で受け渡してよいかも、 契約より先に決める必要がありました。 本 ADR はその決定の記録です。"
+  - id: "r1"
+    name: "永続 案 1 SQLite を今入れる"
+    text: |
+      永続 案 1 SQLite を今入れる｜C3 の例示どおり rusqlite 等で 1 file｜NFR1003 (依存 0 本) と cell sandbox の crates.io 不達に衝突。 A3 の user 確認も要る｜却下 (v3 で再提案)
+    verdict: rejected
+    reason: "NFR1003 (依存 0 本) と cell sandbox の crates.io 不達に衝突。 A3 の user 確認も要る（却下 (v3 で再提案)）"
+  - id: "r2"
+    name: "永続 案 2 per-run の JSON file を上書き"
+    text: |
+      永続 案 2 per-run の JSON file を上書き｜<state_dir>/pipe/<run>/state.json を段ごとに置換｜置換 write は先行の印を消す (記帳は追記であること・要件カタログ R-I16)。 人由来 event の計数 (FR1022) が成立しない｜却下
+    verdict: rejected
+    reason: "置換 write は先行の印を消す (記帳は追記であること・要件カタログ R-I16)。 人由来 event の計数 (FR1022) が成立しない（却下）"
+  - id: "r3"
+    name: "永続 案 3 lock 無しの append"
+    text: |
+      永続 案 3 lock 無しの append｜複数 process の同時 append を許す｜同 host の並列 write で行が interleave する｜却下
+    verdict: rejected
+    reason: "同 host の並列 write で行が interleave する（却下）"
+  - id: "r4"
+    name: "受け渡し 案 a env (<NAME>_STATE_DIR 等)"
+    text: |
+      受け渡し 案 a env (<NAME>_STATE_DIR 等)｜state dir / write-set / run 情報を env で｜C2.2 (env 直読禁止・seam 新設禁止)。 前の器の env 533 種の再演｜却下
+    verdict: rejected
+    reason: "C2.2 (env 直読禁止・seam 新設禁止)。 前の器の env 533 種の再演（却下）"
+  - id: "r5"
+    name: "受け渡し 案 a′ HOME だけ読んで既定を組む"
+    text: |
+      受け渡し 案 a′ HOME だけ読んで既定を組む｜state dir の既定 = $HOME/.local/state/<NAME>/｜「HOME 以外は読まない」は C2.2 の SHALL NOT の縮小であって解釈ではなく、 AI 可決の範囲を外れる (lens 指摘)。 読まない形 (git local 設定 + 引数) で条文どおりにできる｜却下
+    verdict: rejected
+    reason: "「HOME 以外は読まない」は C2.2 の SHALL NOT の縮小であって解釈ではなく、 AI 可決の範囲を外れる (lens 指摘)。 読まない形 (git local 設定 + 引数) で条文どおりにできる（却下）"
+  - id: "r6"
+    name: "manifest 案 実行時に cwd 相対の rules/manifest.toml を読む"
+    text: |
+      manifest 案 実行時に cwd 相対の rules/manifest.toml を読む｜gate が走る repo の root から読む｜toy repo の worktree に manifest は無く、 gate が規則を見失う (lens 指摘)。 埋め込み + --rules override にする｜却下
+    verdict: rejected
+    reason: "toy repo の worktree に manifest は無く、 gate が規則を見失う (lens 指摘)。 埋め込み + --rules override にする（却下）"
+  - id: "r7"
+    name: "形式 案 i JSON"
+    text: |
+      形式 案 i JSON｜契約 file と manifest を JSON で｜裁定 id を添えて人が手で編集する file としては読みにくい。 xtask の既存 scanner と二重化｜却下
+    verdict: rejected
+    reason: "裁定 id を添えて人が手で編集する file としては読みにくい。 xtask の既存 scanner と二重化（却下）"
+  - id: "r8"
+    name: "marker 案 版番号入りの file 名"
+    text: |
+      marker 案 版番号入りの file 名｜.<NAME>2 等｜次の版のたびに前の版の hook を直す (R-O3 違反)。 器 SPEC §7 の却下案｜却下
+    verdict: rejected
+    reason: "次の版のたびに前の版の hook を直す (R-O3 違反)。 器 SPEC §7 の却下案（却下）"
+basis: [FR1002, FR1003, FR1005, FR1012, FR1013, FR1017, FR1019, FR1022, FR1024, NFR1003, NFR1004, AC1004, ADR-1003]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めたことは 5 つです。 (1) 状態は「1 行 1 出来事を末尾に足していく JSONL の file 1 つ」に置き、 SQLite は次の版で依存の確認を経てから入れます。 (2) 前の版と共有する 5 つの接点の file の形を固定します。 (3) 契約 file と規則の値の file は、 標準ライブラリだけで読める小さな TOML の形にします。 (4) 環境変数を読みません (HOME も読みません)。 置き場は引数と、 repo に紐づけた git の local 設定で渡します。 (5) file の形には版番号を付け、 壊す変更は版を上げて行います。
+approval:
+  who: 持ち主
+  date: 2026-09-09
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 依存 0 本のまま今日から状態を永続でき、 process を殺しても続きが引けること、 環境変数の増殖を最初から塞げることです。 悪い点は、 file が追記だけなので大きくなり続けること、 同じ host の中でしか lock が効かないこと、 憲法 §3 の写しと manifest の drift をまだ機械が測れないことです。"
+  - "Positive"
+  - "・直接依存 0 本 (NFR1003) を保ったまま fleet の永続面が手に入る。 cell の sandbox が crates.io を引けなくても build できる。"
+  - "・現在地が replay で決まるため、 process を殺して別 process で resume できる (SRS AC1004)。 席の記憶や散文を判定入力にしない (C3.3) 形が構造で決まる。"
+  - "・跨版 5 面の path と rc 語彙が版番号に依らず固定され、 v2 が「前の版」になる日に同じ面をそのまま提供できる (R-O3)。"
+  - "・env を 1 つも読まないため、 改名 (NAME 定数の差替え) が env の洗い替えを伴わず、 test が env の漏れに左右されない。 manifest を埋め込むので gate がどの repo で走っても規則は 1 つ。"
+  - "・契約 file と manifest が同じ scanner で読めるため、 形式の実装が 1 本で済む。"
+  - "Negative"
+  - "・無限追記: event log は圧縮も rotation も持たない。 1 便あたり 10 行程度ゆえ MVP では問題にならないが、 v3 で SQLite 化するか rotation を足す判断が要る。"
+  - "・lock は同 host 内のみ: 複数 host からの append は想定しない (C3 の host 列は「どこで起きたか」を記録するだけで、 cross-host の直列化は担わない)。 fleet を複数 host で共有する形は v3 の SQLite / 同期の手番。"
+  - "・drift の歯が無い: manifest が憲法 §3 の行 id と字面一致するよう設計したが、 §3 の HTML と manifest を突合する CI の歯 (C14.2) は本 ADR の時点で存在しない。 最小形 (xtask の閾値 const と manifest の値の一致) だけを rules manifest の契約に含める。"
+  - "・repo の初期化が要る: state dir は vessel init --state-dir を 1 回打った repo でしか解決しない。 未初期化の repo では hook は黙り、 pipe は rc 1 で止まる (fail-closed)。"
+  - "・manifest の版は binary の版: 埋め込みゆえ manifest を直しても再 build するまで効かない。 tracked file と binary の drift は「build して使う」運用で吸収する (test の override は --rules)。"
+  - "・guard の policy を git dir に置くため、 git を使わない repo では guard が不活性になる (git は core 依存ゆえ許容)。"
+  - "Neutral"
+  - "・本 ADR は user 裁定を要しない (依存の増減も条文改訂も無く、 C2.2 の例外も作らない)。 前提の MVP 切り直しは user 裁定 2026-09-09。 AI が提案した運用の数値 (停止の猶予・lock の再試行と stale 線・hook の timeout) は本 ADR では決めず、 C5 の手続き (user 裁定 id 付きの rules 行) で manifest に入る。"
+  - "・REORG 案が予約していた ADR 番号 (0004 = 依存予算・0005 = folio) は 0005 / 0006 へ繰り下がる。 番号は land 順で採る。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0004-mvp-persistence-and-cross-version-formats.html
+  器の記録の頭: Status: accepted · Date: 2026-09-09 · version 0.1.0 (SRS の版に追随する) · AI 可決 (依存の増減も憲法条文の改訂も伴わない・条の解釈と on-disk 形式の決定) · MVP 切り直しの user 裁定 2026-09-09 を前提にする
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.1.0 (SRS の版に追随する)
+  器の機械の欄 decided-by: AI (開発 session・2026-09-09) — 依存の増減 (A3) も憲法条文の改訂 (A2) も伴わないため user 裁定を要しない。 前提となる MVP 切り直しは user 裁定 2026-09-09 (逐語は repo 外)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: (none)
+  器の機械の欄 related: constitution C1 / C2 / C3 / C6 / C11 / C13 / A3 / N4・SRS FR1003 / FR1012 / FR1013 / FR1017 / FR1019 / NFR1003 / NFR1004・ADR-1003
+  器の却下案の節の要約: 状態の置き場は 4 案、 受け渡しは 2 案、 file の形は 2 案を比べました。 いずれも「依存 0 本」「環境変数を増やさない」「壊れた行を黙って捨てない」の 3 つの物差しで決めています。
+  器の記録の出所（Trace）:
+  出所は、 憲法の C1 / C2 / C3 / C13 / N4 と、 SRS の FR1003 / FR1012 / FR1013 / FR1017 / FR1019 / NFR1003 / NFR1004、 器 SPEC の v0.4.6 (MVP 切り直し) と §7 / §12.2 です。 決定は AI が行い、 前提の切り直しは user の裁定です。
+  ・前提: MVP 切り直しの user 裁定 (2026-09-09・逐語は repo 外)。 器 SPEC v0.4.6 §4 (state store は std の JSONL・SQLite は v3)・§7 (marker の字面)・§12.2 (跨版 5 面)。
+  ・憲法: C1 (manifest は TOML 1 file)・C2.2 (env 直読禁止)・C3 (1 つの file・host 列)・C6.3 (計測は append-only store 1 つ)・C11.2 (極性は型で)・C13 / A3 (依存の予算と確認)・N4 (schema 非互換は新しい版)。
+  ・SRS: FR1003 / FR1005 (口座は子 process の環境変数で切替) / FR1012 / FR1013 / FR1017 / FR1019 / NFR1003 / NFR1004。 要件カタログ R-O3 (5 面・版に依らず固定)・R-I16 (記帳は追記)・R-G10 (破損入力は loud)。
+  ・設計 doc: docs/design/fleet-event-log.md / docs/design/rules-manifest.md / docs/design/vessel-hook.md / docs/design/pipeline.md。 契約はこれらを pointer で指す (SRS FR1002)。
+  ・関連 ADR: ADR-1003 (前の版を oracle にしない = 跨版 5 面は「v2 が前の版になる日」のために実装する)。
+  ・記録した日: 2026-09-09 (決定日と同日)。
+  （取り込みの規則）この記録 の決定文の印（字 D と「-」と番号）は根の規則の表の行の id と同じ形なので、この写しでは字「決定文 <番号>」と書いた（ADR-1004 の決定の節の各文の頭の印）。

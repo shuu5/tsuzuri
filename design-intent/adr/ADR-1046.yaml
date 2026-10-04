@@ -1,0 +1,129 @@
+# 判断の記録 ADR-1046 — 器 scribe2 の判断の記録 ADR-0046 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1046
+title: "憲法の置き場: C 条文は CI と guard の執行だけで持ち、 注入するのは順位と Ask-first / Never の条だけ (生成区間を CLAUDE.md から生成 file 1 枚へ移し pointer 1 行を残す・orchestrator の SessionStart は順位 + A1 / A2 / A3 / A4.2 / N1 / N2 / N3 の pointer 行だけ・runner には憲法の散文を注入しない・本 repo だけの決定で他 project の憲法の執行は整理の後へ送る)"
+status: proposed
+date: 2026-09-18
+context: |
+  憲法の規範文 (英語の SHALL 文・約 117 行・約 1 万字) は CLAUDE.md の生成区間に載り、 CLAUDE.md の 74% を占める。 公式 docs は「長い CLAUDE.md は実際の指示を無視させる」と名指し、 C 条文の執行は CI と PreToolUse の guard が既に担っている。 生成区間を生成 file 1 枚へ移して CLAUDE.md には pointer 1 行を残し、 人間と話す席 (orchestrator) の SessionStart には順位と Ask-first / Never の条だけを pointer 行で注入し、 runner には憲法の散文を 1 行も注入しない。 本 repo だけの決定で、 他 project へ生成した憲法の執行の形は scribe2 の整理の後に決める。
+  なぜこの判断が要るのかを、現物と公式 docs と裁定から説明します。憲法の規範文は CLAUDE.md の生成区間に全文で載り、CLAUDE.md の 4 分の 3 を占めています。公式 docs は長い CLAUDE.md が指示の遵守を下げると明言し、CLAUDE.md は system prompt ではなく user message として届くと書いています。一方で、憲法の C 条文はどれも CI の門か編集時の guard が既に守らせていて、注入しても止める力は増えません。増えないのに毎回載る、という形を直します。
+  CTX1 現物 — 憲法の全文が CLAUDE.md の 74% を占める
+  `cargo xtask gen-claude-md` は constitution.html の機械層 (data-audience="machine" の段落のうち MUST / SHALL を含むもの) から規範文を抽出し、 CLAUDE.md の生成区間 (`constitution:begin` 〜 `constitution:end`) に書く。 `cargo xtask check` の measure `claude-md-constitution` が区間と抽出結果の byte 一致を deny で測る (設計 rules-manifest.md §3)。 実測 2026-09-18: project の CLAUDE.md は 189 行 / 14,374 字、 うち生成区間が約 117 行 / 10,617 字 = 74%。 区間を除いた作法の面は 72 行。 user global の CLAUDE.md 52 行と SessionStart の席の指示文 14 行を足すと、 planner 席の起動 1 回で約 256 行 / 20,616 字が載り、 その 52% が憲法の全文である。 lens (gate の審査役) は `--worktree` で起こした claude が起動 cwd の CLAUDE.md を読む形で憲法を載せており、 `headless/lens.txt` の観点 `constitution` は「CLAUDE.md の生成区間」を名指している。
+  CTX2 公式 docs — 長い CLAUDE.md は遵守を下げ、 CLAUDE.md は user message で、 compact 後に戻るのは SessionStart
+  Claude Code の公式 docs (best-practices / memory / hooks / context-window・2026 年版) は次を明言する: 「Bloated CLAUDE.md files cause Claude to ignore your actual instructions」「target under 200 lines … Longer files consume more context and reduce adherence」／CLAUDE.md の内容は「system prompt の後ろの user message」として届き、 厳密な遵守の保証は無い／SessionStart hook の出力は会話先頭の system-reminder として入り、 matcher `compact` を持つ hook は圧縮のたびに出力を組み直せる (途中で注入した文は要約に飲まれる)／PreToolUse の hook は「CLAUDE.md の指示は advisory、 hook は deterministic」。 置き場所 (system prompt か user message か) による遵守率の定量差は文書化されていない。 したがって主張できるのは「短いこと自体に効果がある」「hook なら席ごとに絞れ・機械の値で埋まり・compact のたびに戻る」の 2 点で、 「hook で注入すれば強い」ではない。
+  CTX3 執行の対応 — C 条文はすべて CI の門か PreToolUse の guard が持つ
+  憲法 §2 の一覧表と §3 の rules 行、 設計 rules-manifest.md / polarity.md / vessel-hook.md、 CI (`.github/workflows/ci.yml` の 8 本の run 行 = CLAUDE.md の done 区間) を突合した対応 (母集団 = C1〜C16 の 16 条と枝番): C1 / C1.2 / C2 / C2.2 / C10.2 / C10.3 = `xtask check` の name-literal / manifest-name / enum-slices / env-reads / rules-wired / claude-md-constitution (生成 doc の drift) と閉じた enum の網羅 match (compile)。 C3 / C3.3 / C3.4 / C6 / C10 / C11.3 = 型 (host 列を持つ DB 1 file・`SeatState` / `Completion` の列挙・`Budget` は `Precheck` からしか作れない・timeout は Result) で、 逸脱は compile で止まる。 C4 = `xtask check` の core-lines / file-lines / test-src-ratio と clippy の関数粒度 lint (rules 行 R-C4-1〜R-C4-4・deny)。 C5 / C14.2 / C15.2 = `xtask rules-diff` (裁定 id の無い rules 行の変更を reject) / rules-parity (§3 の行 id と manifest の双方向突合) / contracts-schema。 C6.2 / C6.3 = 便の上限 record で止める `Stop` と append-only の store (`inject.jsonl`)。 C7 / C7.2 = rules 行 R-C7-1 と approval event (pipeline は approval.requested で Blocked に止まる・FR1015 / FR1016)。 C8 / C8.2 / C8.3 = folio validate (delta-marker gate) と design-intent/spec/ の PreToolUse guard。 C9 / C9.2 = 席の状態の打刻・管理 tick・rules 行 R-C9-1。 C11 / C11.2 = workspace lint (`clippy -D warnings`・lints-set / lints-optin / allow の measure) と極性一覧の snapshot。 C12 / C12.2 / C12.3 / C12.5 / C12.6 / C12.7 = nextest 1 framework (non-rust-exec) / `xtask flip-check` / `cargo insta --unreferenced reject` / main の CI。 C12.4 = 検出線 R-C12-1。 C13 / C13.2 / C13.4 / C13.5 = `cargo deny` / `xtask deps-delta` (rules 行 R-C13-1・R-C13-2) / dep-budget / toolchain-pin / check-delta-ms の検出線 (R-C13-3)。 C14 / C15 = prose-gate (docs/design の散文の印と pointer) と claude-md-prose の検出線。 C16 / C16.2 = PreToolUse の write-set guard・command guard・role guard (すべて InLoop / FailClosed・極性一覧) と `xtask check` の polarity (in-loop 0 件を reject)。 対応の無い C 条は 0 (母集団 16 条 / 枝番込み 39 本)。 C17 (ADR-1044・proposed) の機械の面は lens の過剰設計 5 観点と便の規模の record で、 同じく注入しない側に入る (orchestrator の役割特性の行がはしごを運ぶ・ADR-1045)。
+  CTX4 執行の面が無いのは Ask-first / Never の一部だけ
+  A1 の 3 クラスのうち「消す」は PermissionRequest の一律 deny と command guard (rules 行 `runner.denied_commands`) が一部を拾うが、 「出す」(公開) と「使う」(課金) を止める面は無い。 A2 / A3 は裁定 id を rules-diff と deps-delta が要求するが、 「先に聞く」振る舞いそのものに面は無い。 A4.2 (不可逆な操作は先に聞く) も同じ。 N1 は denied_commands が一部 (force push・reset --hard) を拾うだけ、 N2 は prose-gate と claude-md-prose が docs/design と CLAUDE.md の外を見ない、 N3 は paths-clean / private-clean が字面を拾うだけで「host 固有値で分岐する code」は拾わない。 これらは「いつ止まって聞くか」「何を拒むか」というその場の振る舞いで、 散文でしか運べない。 A4 (自己開発は既定で可) は許可であって止める行ではなく、 N1.2 (退役は可逆な move) は code の形、 N4 / N4.2 は folio の delta-marker gate と rules-diff が持つので、 注入する側に入らない。
+  CTX5 裁定と適用範囲 — 本 repo だけの決定・他 project の憲法の執行は整理の後へ
+  user 裁定 2026-09-18T08:5xZ (対話面・逐語は台帳 epic s2-07l の notes) は、 憲法の置き場を「C 条文は執行で持ち、 注入は順位と Ask-first / Never だけ」へ改め、 生成区間を CLAUDE.md から生成 file 1 枚へ移すと決めた。 同じ裁定は適用範囲を明示する: 本 ADR は scribe2 自身の repo の置き場だけを決める。 scribe + folio が他の project へ生成する憲法が、 その project でどう執行の面を得るか (CI の門・guard・注入の形) は、 scribe2 の整理 (役割の刷新・WM 機構の削除) が終わるまで明示的に先送りし、 本 ADR は決めない。
+  CTX6 憲法の向き
+  C1.2 は「人が読む規則文書は型と manifest から生成し、 手書きの規範行は 0」と定め、 生成物の置き場は決めていない。 C14 は規律を文書 (原則と裁定・人が読む面) と data (manifest・機械が執行する面) の 2 面で持ち、 文書を原則の正本とする。 N2 は散文にしか無い規則を規則と認めない。 C8.3 は design-intent の変更を ADR か版付き文書で残す。 C2.2 は名前と設定を 1 定数と manifest から導く。 席の指示文 (ADR-1022 §2.4・設計 seat-roles.md §5) は「穴か出所 pointer を持つ行だけ」という規律を既に持ち、 `xtask check` の seat-brief がそれを測る。 憲法の順位は「場当たりの修正の禁止 → 増殖の防止 → compile 速度」。
+  （選択肢を測るものさし）判断を評価する 5 本のものさしです。機械が守らせられる条は機械で守らせ、注入で代用しないこと。人が読む規則文書は生成物のままで、手書きの規範行を増やさず drift 検査を残すこと。context に載せるのは、その turn の振る舞いを実際に変える部分だけにすること。新しい生成器や規則の行や走査を足さず、既に在る仕組みで済ませること。そして、決める範囲を scribe2 自身の repo に限ることです。
+  DR1｜機械が守らせられる条は CI の門か編集時の guard で守らせ、 散文の注入で代用しない (注入は執行を 1 つも増やさない) 憲法 C16 / C14 / CTX3
+  DR2｜人が読む規則文書は生成物のままにし (手書きの規範行 0)、 生成元 (constitution.html) との drift 検査を残す 憲法 C1.2 / C14.2 / N2
+  DR3｜context に載せるのは、 その turn の振る舞いを実際に変える最小の集合だけ (公式 docs の「would removing this cause mistakes?」) CTX2 / SRS NFR1005
+  DR4｜新しい生成器・rules 行・走査・record を足さず、 既に在る生成器 (gen-claude-md)・drift 検査・席の指示文の規律で済ませる 憲法の順位「増殖の防止」/ ADR-1044 (C17 の段 2)
+  DR5｜決める範囲は scribe2 自身の repo だけ。 他 project へ生成した憲法の執行は整理の後の別 ADR CTX5 (裁定)
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。生成区間を生成 file 1 枚へ移し、CLAUDE.md には pointer 1 行を残し、orchestrator の起動文には順位と Ask-first / Never の条だけを pointer 行で入れ、runner には入れません。C 条文は CI と guard の執行で持ちます。席の指示文の注入（FR1042）、編集時の guard（FR1020）、hook の軽さ（NFR1005）に対応します。
+  採用 — OPT1
+  憲法の生成区間 SHALL `CLAUDE.md` から生成 file 1 枚 (`docs/constitution.md`・tracked・同じ生成器 `gen-claude-md`・同じ印 `constitution:begin` / `constitution:end`・同じ抽出) へ移り、 `CLAUDE.md` SHALL その file を名指す pointer 1 行 (規範の印を持たない行) だけを残す。 drift 検査 `claude-md-constitution` SHALL 憲法の書き先の定数を `CLAUDE.md` から生成 file へ差し替えるだけで生き残り、 done 区間 (`claude-md-done`) と区間外の検出線 (`claude-md-prose`) SHALL `CLAUDE.md` のまま。 生成 file の置き場 SHALL prose-gate の母集団 (docs/design/ 直下) の外・folio の走査 root (design-intent/) の外・design-intent/spec/ の guard の外にある (規範文 117 行を散文の門に数えさせず、 生成物を仕様の dir に置かない)。 orchestrator の席の指示文 SHALL 憲法から、 順位の行 1 本・A1 / A2 / A3 / A4.2 / N1 / N2 / N3 を要約した pointer 行 (5〜6 行)・全文 (生成 file) の pointer 1 本だけを持ち、 雛形の規律 (穴か pointer 行) と `xtask check` の seat-brief SHALL 不変。 C 条文 (C1〜C17) SHALL 注入しない: 各条は CTX3 の対応のとおり CI の門 (xtask check / clippy deny / flip-check / rules-diff / deps-delta / cargo deny / insta) か PreToolUse の guard (write-set / command / role) が執行する。 runner SHALL 憲法の散文を 0 行 (SessionStart は 0 byte のまま・`headless/runner.txt` に足さない)。 lens の観点 `constitution` SHALL 生成 file を名指す (`--worktree` で起こす形は不変)。 本 ADR SHALL NOT 新しい生成器・rules 行・走査・record を足す (ADR-1044 C17 の段 2)。 適用範囲 SHALL scribe2 自身の repo に限り、 scribe + folio が他 project へ生成する憲法の執行の形 SHALL scribe2 の整理の後に別の ADR で決める (本 ADR は決めない)。 発効 SHALL 生成区間の移動 (xtask の定数と CLAUDE.md の pointer) と席の指示文の雛形の改訂 (ADR-1045 の orchestrator の雛形) が land した版とし、 本 ADR SHALL それまで proposed のまま何も拘束しない。
+  （平易）憲法の全文は、いまと同じ仕組みで生成した 1 枚の file（docs/constitution.md）に置き、CLAUDE.md にはその場所を書いた 1 行だけを残します。ずれを見つける検査は書き先を変えるだけでそのまま使います。人間と話す席（orchestrator）の起動時には、憲法の順位と「先に聞く」「拒む」の条（A1 / A2 / A3 / A4.2 / N1 / N2 / N3）を、出所付きの短い行で 6〜7 行だけ入れます。機械が守らせている条（C 条文）は入れません。実装役（runner）には憲法の文章を 1 行も入れません。審査役（lens）は生成 file を読みます。新しい仕組みや規則の行は足しません。この決め方は scribe2 自身の repo だけのもので、他 project に生成した憲法をどう守らせるかは整理の後に別に決めます。
+  （理由）C 条文はどれも CI の門か編集時の guard が既に守らせていて、context に載せても止める力は 1 つも増えません（CTX3）。増えないのに CLAUDE.md の 4 分の 3 を占め、公式 docs が「長すぎると指示を無視する」と名指す形になっていました。一方、「先に聞く」「拒む」の条（A / N）は機械の面をほとんど持たず、人間と話す席がそれを知らないと、聞かずに消す・出す・使うが起きます。だから注入するのはそこだけにします。全文を消すのではなく生成 file 1 枚へ移すのは、生成物と drift 検査（C1.2 / C14.2）をそのまま残すためで、生成器も検査も新しく作りません。席の起動文は「出所付きの短い行だけ」という決まりを既に持ち、いまも A1 をその形で運んでいるので、抜粋の生成器を足す案は「既に在るか」の段で止まります。範囲を scribe2 自身の repo に限るのは、他 project では CI や guard の形がまだ決まっておらず、そこでの執行の面を先に決めると空の約束になるからです。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1042（claim）: 席の指示文の注入は雛形 1 枚と rules 行の穴埋めのままで、 憲法から運ぶのは順位と Ask-first / Never の pointer 行だけ (雛形の規律「穴か pointer 行」と seat-brief の measure は不変・C 条文は載せない)。
+  FR1020（claim）: C16 (逸脱は編集の時点で止める) の本体は write-set guard で、 憲法の条文を context に載せることではない。 C 条文を注入しないのは、 執行が guard と CI に在ることの表明である。
+  NFR1005（claim）: SessionStart が出す文は約 117 行減り、 hook は重い I/O を足さない (生成 file を hook が読むことはなく、 雛形は binary に埋め込まれたまま)。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。既存の ADR は 1 本も置き換えません。席の指示文の規律（ADR-1022 §2.4・ADR-1032）と決定はしご（ADR-1044）の上に乗り、orchestrator の役割（ADR-1045）と対になります。行き着く原則は「執行できる条は執行で持ち、注入するのは執行の面が無い振る舞いだけ」です。
+  改訂状態: current (proposed)
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  憲法 (版 0.4.6) の条文は不変で、 本 ADR は C1.2 の「生成された規則文書」の置き場と、 席の指示文が憲法から運ぶ行の集合を決めるだけ。 ADR-1022 §2.4 (席の指示文は穴か pointer 行) と ADR-1032 (対話面の作法は設計 doc 1 本と雛形) は不変で、 本 ADR はその規律の上に乗る。 ADR-1044 の C17 は注入しない C 条文の側に入り、 はしごは orchestrator の役割特性の行が運ぶ。 ADR-1045 (orchestrator の役割・並行して起草中) が雛形の行の全体を決め、 本 ADR はそのうち憲法から来る行の集合を決める (番号でのみ参照・link は land 後)。 他 project へ生成した憲法の執行は本 ADR の範囲外で、 整理の後の別 ADR が決める。
+  照会終端 — PRIN-ENFORCE-DO-NOT-RECITE (本 ADR)
+  機械が守らせられる条は、 門と guard で守らせる。 context に載せるのは、 機械の面が無く、 その場の振る舞い (聞く・拒む) を変える条だけにする。
+  本 ADR の判断はこの原則に行き着く (これ以上は遡らない照会終端)。 憲法 C14 の 2 面 (文書 = 人が読み裁定する面 / manifest = 機械が執行する面) と C16 (逸脱は編集の時点で止める) を、 「何を context に載せるか」の形で持ったものである。 載せることは執行ではない。
+options:
+  - id: "OPT1"
+    name: "生成区間を生成 file 1 枚へ移し CLAUDE.md に pointer 1 行・orchestrator の指示文は順位 + Ask-first / Never の pointer 行だけ・runner は 0 行"
+    text: |
+      同じ生成器 (gen-claude-md) の書き先を CLAUDE.md の区間から `docs/constitution.md` 1 枚へ付け替え (印と抽出は不変・drift 検査は書き先の定数の差し替えだけ)、 CLAUDE.md にはその file を名指す pointer 1 行を残す。 orchestrator の席の指示文の雛形に、 順位 1 行と A1 / A2 / A3 / A4.2 / N1 / N2 / N3 を要約した pointer 行 (5〜6 行) と全文の pointer を置く (雛形の規律「穴か pointer 行」と seat-brief の measure はそのまま)。 lens の観点 `constitution` は生成 file を名指す。 runner の SessionStart は 0 byte のまま。
+      （平易）憲法の全文は「生成した 1 枚の file」に置き、CLAUDE.md にはその file の場所を書いた 1 行だけを残します。人間と話す席の起動時には、憲法の順位と「先に聞く」「拒む」の条だけを、出所付きの短い行で入れます。実装役には何も入れません。生成の仕組みも、ずれを見つける検査も、いまあるものをそのまま使います。
+      利点: CLAUDE.md が 189 行 → 約 73 行 (公式の目安 200 行に対して余裕)・注入する憲法は約 117 行 → 6〜7 行で、 載るのは振る舞いを変える部分だけ (DR3)
+      利点: C1.2 / C14.2 はそのまま満たす: 生成物は生成物のまま・drift 検査は書き先の定数 1 つの差し替えで生き残る (DR2)・生成 file は plain な markdown で grep が効く
+      利点: 席ごとに絞れ・compact のたびに戻る (CTX2)・新しい生成器も rules 行も足さない (DR4)
+      欠点: 席の登録が無い session (ad-hoc・素の session) には憲法が pointer 1 行でしか載らない (読むかは session 次第)
+      欠点: 雛形の pointer 行は条文の要約で、 条文そのものではない (逐語は生成 file・要約のずれは seat-brief の measure では測れず、 lens と人の目で見る)
+    verdict: adopted
+    reason: "同じ生成器 (gen-claude-md) の書き先を CLAUDE.md の区間から `docs/constitution.md` 1 枚へ付け替え (印と抽出は不変・drift 検査は書き先の定数の差し替えだけ)、 CLAUDE.md にはその file を名指す pointer 1 行を残す。 orchestrator の席の指示文の雛形に、 順位 1 行と A1 / A2 / A3 / A4.2 / N1 / N2 / N3 を要約した pointer 行 (5〜6 行) と全文の pointer を置く (雛形の規律「穴か pointer 行」と seat-brief の measure はそのまま)。 lens の観点 `constitution` は生成 file を名指す。 runner の SessionStart は 0 byte のまま。"
+  - id: "OPT2"
+    name: "CLAUDE.md の生成区間に全文 (現行)"
+    text: |
+      席の登録が無い session にも必ず載り、 drift 検査も既に在る。 だが 117 行 / 74% は公式が名指しで禁じる形そのもので、 内容の大半は CI と guard が既に執行している (CTX3)。 条文が増えるたびに常時の payload が増える (憲法の順位 2 位と逆向き)。
+      （平易）いまのまま、憲法の全文を CLAUDE.md に置き続ける案です。どの session にも必ず載る安心はありますが、公式 docs が「長すぎると半分は無視される」と書いている形そのもので、しかも載せている中身のほとんどは機械が別の場所で守らせています。
+      利点: 変更が 0・登録の無い session にも載る・drift 検査が既に在る
+      欠点: CLAUDE.md の 74% が執行済みの条文の写し (DR1 / DR3 に反する)・英語の SHALL 文が日本語の作法 file に混ざる・条文が増えるほど常時の payload が増える
+    verdict: rejected
+    reason: "席の登録が無い session にも必ず載り、 drift 検査も既に在る。 だが 117 行 / 74% は公式が名指しで禁じる形そのもので、 内容の大半は CI と guard が既に執行している (CTX3)。 条文が増えるたびに常時の payload が増える (憲法の順位 2 位と逆向き)。"
+  - id: "OPT3"
+    name: "憲法の散文を一切注入しない (rules manifest + hook だけ)"
+    text: |
+      C14 の 2 面にいちばん忠実。 だが A1 の「出す」「使う」と A2 / A3 / A4.2 の「先に聞く」、 N1〜N3 の「拒む」は機械の面をほとんど持たない (CTX4)。 注入しない orchestrator は聞かずに消す・出す・使う = user がいま直そうとしている失敗を再現する。 runner は 3 クラスの操作をしないので、 runner にはこの形が正解。
+      （平易）憲法の文章を context にまったく入れず、機械の門だけに任せる案です。いちばん筋は通りますが、「先に聞く」「拒む」の条は機械では止められないものが多く、人間と話す席がそれを知らないと、聞かずに消したり公開したりします。実装役はそういう操作をしないので、実装役にだけはこの形を採ります。
+      利点: C14 / N2 に最も忠実・注入量 0
+      欠点: A / N 条の「聞く・拒む」に機械の面が無い (CTX4)・人間と話す席には不適
+    verdict: rejected
+    reason: "C14 の 2 面にいちばん忠実。 だが A1 の「出す」「使う」と A2 / A3 / A4.2 の「先に聞く」、 N1〜N3 の「拒む」は機械の面をほとんど持たない (CTX4)。 注入しない orchestrator は聞かずに消す・出す・使う = user がいま直そうとしている失敗を再現する。 runner は 3 クラスの操作をしないので、 runner にはこの形が正解。"
+  - id: "OPT4"
+    name: "注入する条の id を rules 行で選び、 生成器が抜粋 (2 枚目の生成 file) を作って雛形へ埋め込む"
+    text: |
+      雛形の pointer 行が「要約」であることを嫌い、 条文の逐語を constitution.html から抜粋して埋め込む案。 rules 行 (List・裁定 id 付き) が id を選び、 gen-claude-md が 2 枚目の生成 file を書き、 drift 検査をもう 1 面足す。 だが席の指示文は既に「穴か pointer 行」の規律を持ち (ADR-1022 §2.4)、 planner の雛形は A1 を pointer 行で運んでいる。 生成器の 2 枚目・rules 行・drift の面を足すのは、 決定はしごの段 2 (既に在るか) で止まる (ADR-1044)。
+      （平易）注入する条を規則の行で選び、条文そのものを憲法から切り出して席の起動文に埋める案です。正確ではありますが、席の起動文は「出所付きの短い行」という決まりを既に持っていて、いまも A1 をその形で運んでいます。新しい生成物と規則の行とずれ検査を足すことになり、「既に在るか」の段で止まります。
+      利点: 注入する文が条文の逐語になり、 要約のずれが無い・選ぶ条が manifest から辿れる
+      欠点: 生成 file・rules 行・drift 検査を 1 面ずつ足す (DR4)・英語の SHALL 文が指示文に混ざる・雛形の規律 (pointer 行) が既に同じ役を果たしている
+    verdict: rejected
+    reason: "雛形の pointer 行が「要約」であることを嫌い、 条文の逐語を constitution.html から抜粋して埋め込む案。 rules 行 (List・裁定 id 付き) が id を選び、 gen-claude-md が 2 枚目の生成 file を書き、 drift 検査をもう 1 面足す。 だが席の指示文は既に「穴か pointer 行」の規律を持ち (ADR-1022 §2.4)、 planner の雛形は A1 を pointer 行で運んでいる。 生成器の 2 枚目・rules 行・drift の面を足すのは、 決定はしごの段 2 (既に在るか) で止まる (ADR-1044)。"
+  - id: "OPT5"
+    name: "全文を CLAUDE.md でなく SessionStart で注入する"
+    text: |
+      「hook で注入すれば強い」という直観に基づく案。 だが SessionStart の出力も system prompt ではなく会話先頭の system-reminder で、 置き場所による遵守率の差は文書化されていない (CTX2)。 長さは 117 行のまま、 席ごとの絞りも効かない。 得るものが無い。
+      （平易）全文をそのまま、置き場所だけ CLAUDE.md から起動時の hook に変える案です。hook のほうが強く効きそうに見えますが、公式 docs にそういう根拠はなく、長さの問題はそのまま残ります。
+      利点: compact のたびに全文が戻る
+      欠点: 長さの問題が不変 (DR3)・「hook だから強い」の根拠が無い・plugin の hooks.json から system prompt 層へ書く正規経路も無い
+    verdict: rejected
+    reason: "「hook で注入すれば強い」という直観に基づく案。 だが SessionStart の出力も system prompt ではなく会話先頭の system-reminder で、 置き場所による遵守率の差は文書化されていない (CTX2)。 長さは 117 行のまま、 席ごとの絞りも効かない。 得るものが無い。"
+basis: [FR1015, FR1016, FR1020, FR1042, NFR1005, ADR-1022, ADR-1032, ADR-1044, ADR-1045]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  憲法のうち機械が既に守らせている条（C 条文）は、CI と編集時の guard だけで持ち、agent の context には毎回載せません。生成した規範文は CLAUDE.md から専用の生成 file 1 枚へ移し、CLAUDE.md にはその file を指す 1 行だけを残します。人間と話す席（orchestrator）の起動時には、憲法の順位と「先に聞く」「拒む」の条（A1 / A2 / A3 / A4.2 / N1 / N2 / N3）だけを、出所付きの短い行で注入します。実装役（runner）には憲法の文章を 1 行も注入しません。この決め方は scribe2 自身の repo だけのもので、他の project に生成した憲法をどう守らせるかは、scribe2 の整理が終わってから別に決めます。
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。CLAUDE.md が 4 分の 1 の長さになり、注入は振る舞いを変える 6〜7 行だけになり、生成物と drift 検査と C1.2 / C14 はそのまま保たれ、新しい仕組みは足しません。代わりに、登録の無い session には pointer しか載らないこと、pointer 行が条文の要約であること、審査役の読み先を生成 file へ変えること、他 project の憲法の執行を先送りにすることを引き受けます。"
+  - "良い結果: CLAUDE.md は 189 行 → 約 73 行・orchestrator の起動 1 回に載る憲法は約 117 行 → 6〜7 行 (公式の「短く・高信号」に沿う・compact のたびに戻る)"
+  - "良い結果: C1.2 / C14 / C14.2 はそのまま満たす: 文書 (constitution.html) が原則の正本・生成 file は同じ生成器の生成物・drift 検査 `claude-md-constitution` は書き先の定数の差し替えだけで生き残る"
+  - "良い結果: C 条文の執行の所在が明文になる (CTX3 の対応・母集団 16 条で対応の無い条 0)・注入と執行の二重化が消える"
+  - "良い結果: 新しい生成器・rules 行・走査・record は 0 (C17 の段 2)・runner の SessionStart は 0 byte のまま"
+  - "代償: 席の登録が無い session (ad-hoc・素の session) には憲法が pointer 1 行でしか載らない。 読むかは session 次第 (執行は CI と guard が持つので、 読まなくても止まる側は変わらない)"
+  - "代償: 雛形の pointer 行は条文の要約で逐語ではない。 要約のずれは seat-brief の measure では測れず、 lens と人の目で見る (逐語は生成 file にあり、 pointer が指す)"
+  - "代償: lens の観点 `constitution` の読み先を生成 file へ変える便が要る (雛形 `headless/lens.txt` の 1 行)。 変え忘れると lens は憲法を読まずに `constitution` の観点を 0 件と書く (0 件と未測の弁別は lens の INCONCLUSIVE の形に頼る)"
+  - "代償: 他 project へ生成した憲法の執行の形は決めない (先送り)。 その project で憲法が「注入も執行も無い」状態になりうることを、 scribe2 の整理が終わるまで受け入れる"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0046-constitution-is-enforced-by-gates-and-only-ask-first-and-never-are-injected.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — 憲法の置き場 (執行と注入)
+  器の表紙: 状態proposed選択肢5件 (OPT1–OPT5)結果良い 4 / トレードオフ 4版v0.1.0 / 2026-09-18
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1042・FR1020・NFR1005
+  器の表紙: 想定読者: scribe2 の開発 session と user — Claude Code の hook や CLAUDE.md の読み込み順の知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・user 2026-09-18T08:5xZ (対話面・憲法の置き場を「執行 + 最小注入」へ・適用は本 repo に限り他 project の憲法の執行は整理の後へ送る・逐語は台帳 epic s2-07l の notes)・裁定済
+  器の承認の欄: 設計 (planner)・planner・2026-09-18 起票 (role 注入の調査 §1 / §2 / §4 と本 repo の実測・拘束する constitution の版 0.4.6)。 発効は生成区間の移動と席の指示文の雛形の改訂が land した版・作成
+  器の案の章の要約: 候補を 5 つ並べます。生成区間を専用 file へ移して orchestrator には順位と Ask-first / Never の条だけを pointer 行で注入する案、CLAUDE.md に全文を置いたままにする現行の案、憲法の文章を一切注入しない案、注入する条を規則の行で選んで生成器がもう 1 枚の抜粋を作る案、そして全文を CLAUDE.md でなく SessionStart で注入する案です。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・生成区間（generated region）: `cargo xtask gen-claude-md` が書き、 印 (`constitution:begin` / `constitution:end`) で囲まれた区間。 中身は constitution.html の機械層から抽出した規範文で、 手で編集しない (`xtask check` の claude-md-constitution が drift を deny で落とす)。 本 ADR はこの区間を CLAUDE.md から生成 file 1 枚へ移す。
+  ・憲法の生成 file（constitution generated file）: 生成区間の移り先 (docs/constitution.md・tracked)。 正本は constitution.html で、 この file は生成物。 CLAUDE.md の pointer 1 行と席の指示文の pointer と lens の観点 `constitution` がこの file を指す。
+  ・pointer 行（pointer line）: 席の指示文の雛形の行のうち、 行末の `→ SSOT:` の後ろに出所 (憲法の条・ADR・設計 doc・rules 行) を持つ行。 出所を持たない行は規範文として雛形の規律に反し、 `xtask check` の seat-brief が落とす (ADR-1022 §2.4)。 本 ADR が orchestrator に注入する憲法の行はすべてこの形。
+  ・席の指示文（seat brief）: SessionStart の hook が、 役割ごとの雛形 1 枚の穴を登録 row と rules 行の値で埋めて stdout に出す文。 登録の無い席 (runner・ad-hoc の session) には 0 byte。 compact のたびに出し直される (Claude Code の SessionStart の性質)。
+  ・CI の門 / in-loop guard（CI gate / in-loop guard）: CI の門 = PR の入口で撃つ検査 (xtask check・clippy・flip-check・cargo deny・insta 等・PostHoc)。 in-loop guard = 編集や command の時点で止める PreToolUse の hook (write-set / command / role・InLoop / FailClosed)。 C 条文の執行はこの 2 種のどちらかに在る (CTX3)。
+  ・Ask-first / Never の条（Ask-first / Never articles）: 憲法 §2 の段のうち、 「先に user に聞く」(A1〜A4) と「拒む」(N1〜N4)。 本 ADR が注入するのはそのうち機械の面をほとんど持たない A1 / A2 / A3 / A4.2 / N1 / N2 / N3 で、 A4 (許可)・N1.2 (code の形)・N4 (folio の gate と rules-diff) は注入しない。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1046.build.adr.yaml · 生成: 2026-09-18 10:30 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

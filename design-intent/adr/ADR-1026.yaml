@@ -1,0 +1,99 @@
+# 判断の記録 ADR-1026 — 器 scribe2 の判断の記録 ADR-0026 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1026
+title: "口座の宣言と host 固有の起動値は host の manifest が持ち、 口座の登録・一覧・退役と席の起動を器の口が担う (ADR-1017 §2.3 / ADR-1020 §2.4 / ADR-1022 §2.1 を部分 supersede)"
+status: accepted
+date: 2026-09-14
+context: |
+  口座の「生涯」は、 登録 → 準備 → 計測 → 選定 → 席の起動 → 退役、 の順です。 器が持っているのは真ん中の計測・選定・立て直しだけで、 両端は器の外に在ります。 口座を足すには、 設定 dir を作り・login し・設定の前提を仕込み・宣言の行を足し・state dir に link を張る、 の 5 手が user と planner の手作業です。 席を初めて起こすのは、 別 repo の口座切替 wrapper と前の版の launcher に頼っています。 口座の宣言は tracked の manifest と host の私用 manifest (rules 部の写し + 口座節) の 2 か所に割れ、 規則が動くたびに写しを手で作り直しています。 この記録は、 宣言の置き場を 1 つにし、 口座の口 4 つと席の起動の口 1 つを器に足して、 外の wrapper への依存を切ります。
+  記録時点 (2026-09-14) の現物 (main 5697a2c): 口座の宣言は tracked の rules/manifest.toml の [[account]] (5 行・ADR-1017 §2.3) と、 host の私用 manifest (<state_dir>/rules.host.toml = tracked の rules 部の写し + [[account]] 7 行) の 2 面に在り、 rules 行が動く便のたびに写しを手で再生成している (台帳 s2-07l.220・C1 の外に第 2 の写し)。 seat tick の unit は --rules を渡さないので埋め込みの 5 行を読み、 fleet usage は --rules で 7 行を読む (宣言が 2 つ・台帳 s2-07l.224 の懸念の型)。 credential の場所 <state_dir>/accounts/<label> は user と planner が手で張る link で、 2026-09-13〜14 に 7 口座分を planner が手で差し替えた (台帳 s2-07l.226 (1)・credential だけの dir では立て直しが落ちる)。 席の起動: 器が起こす claude (runner / lens・ADR-1011 §2.1) と席の立て直し (ADR-1020 §2.4・登録 row の雛形の穴を埋めて shell へ注入) は器の口で、 外の script を呼ばない。 しかし user が席を初めて起こす口は器に無く、 別 repo の口座切替 wrapper (台帳から label を引いて CLAUDE_CONFIG_DIR を export し前の版の launcher へ透過) と前の版の launcher (plugin の自動検出・cgroup の防壁) に乗っている。 登録 row の起動の雛形も planner が手で書いた行 (host 固有の絶対 path を含む・state dir 内なので tracked ではない)。 SRS の scope は「席の起動 (v3)」を扱わない側に置く。 一覧 (前提の充足・残量) と退役 (可逆 move) の口も無い (doctor の口座行 s2-07l.233 が一覧の半分)。 台帳 s2-07l.38 (seat autonomy の memo) は「席の起動と初回の口座選択」を後続に残し、 設計 account-autonomy.md §11 が同じ pointer を持つ。
+  憲法の向き: C10.2 は host 固有の値を manifest にだけ置く。 C1 は規則の値を repo の manifest 1 file に置く (口座の宣言は規則ではなく宣言値・ADR-1017 §2.3)。 C3 は口座と退役の状態を 1 つの DB に置き、 per-host の dir や cache に真実を置かない。 C2.2 は env を読まず、 名前は NAME 定数から導く。 C9.2 は口座を窓の終わりまで使い切る (R-C9-1 の選定)。 N1.2 は退役を可逆 move に限る。 A1 は「消す / 出す / 使う」で聞く。 先行決定: ADR-1004 §2.3 (TOML subset) / §2.4 (場所は manifest の外に置く経路)・ADR-1017 §2.3 (label は不透明・dir を走査しない)・ADR-1020 §2.2 (選定の純関数・session 用は余裕を残す側) / §2.4 (雛形の穴 1 つ・注入の門)・ADR-1022 §2.1 (登録 row の鍵と書き手)。
+decision: |
+  §2.1 口座の宣言と host 固有の起動値は state dir の host の manifest 1 file が持つ (manifest の host の面・C10.2 の読み)
+  「どの口座があるか」「席にどの plugin を積むか」「起動に足す引数」は、 host ごとに違う値です。 これを state dir の 1 つの file (host の manifest) に置きます。 規則の値 (rules 行) は今までどおり repo の manifest だけが持ち、 host の file には規則を 1 行も書きません。 器は両方を同じ読み方・同じ断り方で読みます。 host の file が無い host では口座 0 として動き続け、 在るのに壊れている host では止まります。 この repo の tracked の manifest からは口座の行を外します (公開面の情報が減る側)。
+  manifest SHALL 2 つの面を持つ: tracked の面 (rules/manifest.toml・埋め込み・rules 行の唯一の置き場・C1) と host の面 (<state_dir>/host.toml・host 固有の宣言値の唯一の置き場・C10.2)。 本 ADR は C10.2 の「manifest」をこの 2 面を合わせた 1 つの文法と読む (憲法の条文は動かさない・解釈の記録)。 host の面 SHALL TOML subset (ADR-1004 §2.3・同じ reader) の array-of-tables 3 種だけを持つ: [[account]] label (口座の宣言・ADR-1017 §2.3 の意味のまま)・[[plugin]] dir (席に積む plugin dir)・[[launch-arg]] value (起動行に足す引数・宣言順)。 rules 行 ([[rule]]) SHALL NOT host の面に置かない (在れば拒否)。 loader SHALL 1 本で、 未知 key・型違い・label の重複 (面をまたぐ重複を含む)・schema の欠落を行番号付きで全件拒む (既存の拒否形と同じ)。 host の面の場所 SHALL --state-dir からだけ解く (C2.2・env を読まない)。 --rules PATH は tracked の面の override のままで、 host の面の override は持たない。 host の面が無い周 SHALL 0 宣言として続く (縮退・止めない)。 読めない周 (在るが壊れている・権限) SHALL typed に断って止める (FailClosed・manifest の拒否と同じ極性・既存の Guard::Rules の断りに host の面が加わる・Guard の variant は増えない・ADR-1014 §2.1)。 本 repo の tracked の面 SHALL 口座行を 0 にする (減る側・A1 非該当)。 以後 tracked の面に口座行を足す変更は A1 の対話面で聞く (ADR-1017 §2.3 の規律のまま)。 host の私用 manifest (rules 部の写し) SHALL 退役する (mv・N1)。
+  §2.2 口座の登録・一覧・退役・復帰は器の口 4 つが担い、 login は user の手番、 退役は event + 可逆 move
+  口座を足す口は、 設定 dir を作り・器が起こす席の前提 (agent view を切る) を sett定に書き・host の manifest に宣言を 1 行足し・login のための起動行を tmux の窓へ差し込む (または表示する) ところまでをやります。 login そのものと trust の受け入れは user が行い、 器は credential に触りません。 一覧の口は doctor と同じ行に、 退役中かどうかと最新の残量を足して出します。 退役の口は、 設定 dir を退役用の場所へ動かし (消さない)、 退役の出来事を記録に 1 行残します。 復帰はその逆です。 使っている席がある口座は退役できません。
+  器 SHALL subcommand account に add <label> / ls / retire <label> / restore <label> の 4 口を持つ (--state-dir 必須)。 add SHALL (1) label を検査し宣言済み (退役中を含む) なら断り、 (2) <state_dir>/accounts/<label>/ を dir として作り (既存の dir / link は断る・中身を読まない)、 (3) 直下に settings を書き (項目は器が起こす席の前提 = agent view を切る 1 つだけ・user が置いた既存 dir には書かない)、 (4) host の面に [[account]] 行を 1 つ足し (読み → 検査 → 一時 file → rename・部分書きなし)、 (5) login の起動行 (CLAUDE_CONFIG_DIR=<dir> claude・cwd は --anchor・trust を同じ session で通すため) を --target の shell へ §2.3 と同じ注入の門を通して差し込むか、 無ければ stdout に 1 行出す。 器 SHALL NOT credential を読まず・書かず・代筆せず (ADR-1017 §2.3)、 login の完了を待たない (doctor / ls の credential= が示す)。 ls SHALL doctor の口座行 (台帳 s2-07l.233) と同じ関数の行に retired= と最新の実測行の要約 (event log を読むだけ・計測は撃たない) を足し、 判定を持たない (C10.2)。 retire SHALL 登録 row のいずれかが持つ label を断り (in-use)、 accounts/<label> を accounts/.retired/<label>.<ts> へ mv し (link は link のまま・N1.2)、 fleet の event log に AccountRetired を 1 件 (EventKind の新 variant・宣言順の末尾・schema 1 のまま) 書く。 host の面の行 SHALL NOT 消さない (宣言は残る)。 restore SHALL 逆の mv と AccountRestored 1 件。 有効な口座の集合 SHALL 1 関数 (fleet の replay): 宣言 − 退役中 (最後の Retired の後に Restored が無い label)。 計測・選定・tick の逼迫度・doctor・ls はこの 1 関数を読む (退役中の口座は測らず選ばない・C3「退役は DB」)。 前提違反の断りは typed (closed enum・as_str) で、 file も event も書かない。 削除の口 SHALL NOT 持たない (N1・退役 dir の削除は A1 の後続)。
+  §2.3 席の起動は器の口 1 つが担う: 役割は必須、 口座は選定の純関数、 起動行は器が導出し、 登録を同時に書く
+  席を初めて起こす口を器に足します。 「planner か管理席か」は必ず指定します。 口座は指定してもよく、 指定しなければ器が席用の規則 (余裕を残す側・他の席の口座は避ける) で選びます。 起動に使う行は器が組みます: 口座の設定 dir と agent view を切る環境変数、 器自身の plugin、 host の manifest に書かれた plugin と引数です。 手書きの雛形 file は使いません。 器はその行を tmux の窓の shell へ差し込み (窓が無ければ作り)、 同時に席の登録を書きます。 席が立った後に復元の command を差し込むのは、 立て直しと同じ経路です。
+  器 SHALL seat launch --state-dir S --role <Role> --target S:W [--account L] [--anchor DIR] [--model M] [--restore CMD] を持つ。 --role SHALL 閉じた Role の名で必須 (ADR-1022 §2.1)。 口座 SHALL --account (有効な口座でなければ断る) か、 無ければ ADR-1020 §2.2 の session 用の純関数 (model = --model・除外 = 他の席の登録 row の口座・候補なしは断って起こさない)。 起動行 SHALL pure な関数 1 本が導出する: CLAUDE_CODE_DISABLE_AGENT_VIEW=1 CLAUDE_CONFIG_DIR={account_dir} claude --plugin-dir <anchor> [--plugin-dir <[[plugin]] dir>…] [<[[launch-arg]] value>…] (穴は {account_dir} 1 つのまま・fill_launch 不変・器自身の plugin = anchor・claude は語で器はその場所を持たない〔ADR-1011 と同じ〕・env は子へ設定する側で読まない〔C2.2〕)。 雛形 file SHALL NOT 読まない・書かない。 登録 SHALL SeatRegistered 1 件 (鍵 (role, anchor)・launch = 導出した行・account = 選んだ label・model = --model) を、 起動の前に器の内部の同じ 1 関数が書く (書き手は register / tick / launch の 3 つ)。 Registration.sid SHALL 任意 (launch の row は無し・register の row は従来どおり・schema 1 のまま・既存 row は読める)。 起動 SHALL target の tmux session が無ければ断り (session を作らない)、 window が無ければ作り、 ADR-1020 §2.4 の shell への注入の門 (前面 process が shell ∧ prompt 末尾) を通して穴を埋めた行を送る。 門を通らない周 SHALL 1 key も送らない (row は書き終えているので再実行できる)。 --restore は立て直しと同じ関数 (SessionStart の打刻を待って注入)。 経路 SHALL 立て直しと同じ 1 本 (差は「row を先に書く」「window を作れる」の 2 点)。 記録は inject.jsonl に kind=launch 1 行 (InjectKind の新 variant・末尾)。 seat register SHALL 残る (hook の走った session が自分で登録する口・既存 row の更新)。 席 SHALL NOT 器の子 process にしない (shell の子・立て直しと同型・NFR1006 の「器の子」に当たらない)。 Guard SHALL 増えない (注入の門は既存の Guard::Inject・前提違反は入力の拒否で guard ではない・C16.2 の母集団は不変)。
+  §2.4 ADR-1017 §2.3 / ADR-1020 §2.4 / ADR-1022 §2.1 を部分 supersede する
+  先行の 3 つの記録のうち、 「口座の宣言は tracked の manifest」の一文を「host の面」に、 「起動の雛形は登録時に渡す」の一文を「器が導出する (register の雛形は残る)」に、 「登録は hook の走った session からだけ」の一文を「器の起動の口も書く」に改めます。 それ以外 (label の不透明性・credential の場所・計測と選定・登録 row の鍵・権能の執行) はそのままです。
+  ADR-1017 §2.3 の「manifest SHALL 口座を [[account]] 行で列挙する」SHALL 「manifest の host の面 (host.toml) が列挙する (tracked の面の文法は残るが本 repo では 0 行)」と読み替える。 ADR-1020 §2.4 の「席の登録 row が持つ起動の雛形 (登録時に渡す)」SHALL 「登録 row が持つ起動行 (seat register では渡した雛形・seat launch では器が導出した行)」と読み替える (穴 1 つ・立て直しの 3 条件・注入の門は不変)。 ADR-1022 §2.1 の「登録 SHALL 器の hook が走った session からしか受け付けない」SHALL 「席の session からの登録は打刻を要し、 器自身の口 (tick の口座更新・seat launch) は同じ 1 関数で sid 無しの row を書く」と読み替える (鍵・置き換え・権能の執行は不変)。 ADR-1004 §2.4 「場所は manifest の外」は、 host の面が「場所」(state dir) から解かれる点で整合し、 supersede しない。
+  §2.5 射程外
+  この記録が決めるのは「宣言の置き場」「口座の口 4 つ」「席の起動の口 1 つ」の 3 つだけです。 user の設定の同期、 別口座への再開の混線を止める仕掛け、 主口座の写像、 credential の再取得、 退役した dir の削除、 起動直後に落ちた席の起こし直しは、 別の便・裁定の領分です。
+  次は本 ADR の決定ではない (MUST NOT be read as such): user-scope MCP 設定の同期・別口座への --resume の混線 fence・primary 口座の写像 (user 裁定 2026-09-14「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」・理由は §5 (E))、 login と trust の代筆 (ADR-1017 §2.3・account-autonomy.md §10 で却下済み)、 credential の失効後の再 login (user の手番・doctor が示す)、 退役した dir の削除 (A1・削除の口は持たない)、 launch 直後に止まった席の起こし直し (account-autonomy.md §11 の crash と同じ)、 tracked の面に口座行を戻す形 (A1)、 席の cgroup の防壁 (席は shell の子)、 runner / lens の起動形 (ADR-1011・不変)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書に在ります。 「口座残量の計測と credential の場所」「口座の選定」「席の退避と立て直し」「席の登録」の 4 つと、 別口座での立て直しの受入基準です。 口座の登録・退役と席の起動そのものを名指す要件は、 次の要件書の改訂 (材料は planner の置き場に用意済み・scope の「席の起動」を扱う側へ移す) で足し、 その id は改訂の後に本 ADR から辿れます。 この記録は要件書を 1 字も変えません。
+  本 ADR の §2.1〜§2.3 が仕える要件: FR1033 (口座残量の計測・credential の場所 = state dir 配下の label 名 dir)・FR1036 (口座の選定・session 用の規則)・FR1038 (席の退避と立て直し・注入の門・登録 row の起動行)・FR1040 (席の登録・(役割, anchor) の鍵・起動の雛形は項目)・AC1013 (別口座での立て直し 1 回)。 口座の登録・一覧・退役と席の起動を名指す要件 (FR1057 / FR1058 相当) と scope の移動 (「席の起動 (v3)」→ 扱う) は SRS v0.10 の改訂で足す (材料 = planner state dir srs-account-lifecycle-fr-ac.md・改訂は user の /folio-architect)。 改訂まで本 ADR は上の 4 要件の境界を指す。 実装手段 (host の面の表 3 種・口の引数・起動行の導出・退役の mv・sid の任意化) は §2 が正本で SRS は持たない。
+options:
+  - id: "chosen"
+    name: "口座の宣言と host 固有の起動値は host の manifest が持ち、 口座の登録・一覧・退役と席の起動を器の口が担う (ADR-1017 §2.3 / ADR-1020 §2.4 / ADR-1022 §2.1 を部分 supersede)"
+    text: |
+      「どの口座があるか」「席にどの plugin を積むか」「起動に足す引数」は、 host ごとに違う値です。 これを state dir の 1 つの file (host の manifest) に置きます。 規則の値 (rules 行) は今までどおり repo の manifest だけが持ち、 host の file には規則を 1 行も書きません。 器は両方を同じ読み方・同じ断り方で読みます。 host の file が無い host では口座 0 として動き続け、 在るのに壊れている host では止まります。 この repo の tracked の manifest からは口座の行を外します (公開面の情報が減る側)。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 口座の「生涯」は、 登録 → 準備 → 計測 → 選定 → 席の起動 → 退役、 の順です。 器が持っているのは真ん中の計測・選定・立て直しだけで、 両端は器の外に在ります。 口座を足すには、 設定 dir を作り・login し・設定の前提を仕込み・宣言の行を足し・state dir に link を張る、 の 5 手が user と planner の手作業です。 席を初めて起こすのは、 別 repo の口座切替 wrapper と前の版の launcher に頼っています。 口座の宣言は tracked の manifest と host の私用 manifest (rules 部の写し + 口座節) の 2 か所に割れ、 規則が動くたびに写しを手で作り直しています。 この記録は、 宣言の置き場を 1 つにし、 口座の口 4 つと席の起動の口 1 つを器に足して、 外の wrapper への依存を切ります。"
+  - id: "A"
+    name: "口座の宣言を tracked の manifest に残し、 host の私用 manifest を廃止する"
+    text: |
+      (A) 口座の宣言を tracked の manifest に残し、 host の私用 manifest を廃止する。 却下: 公開 repo に host 固有の値 (口座の数・label) を置き続ける (CON1002・A1 の対話面が毎回要る)。 plugin dir と起動引数は絶対 path を含み tracked に置けない。 host の面 1 file が C10.2 の読みとして素直。
+    verdict: rejected
+    reason: "公開 repo に host 固有の値 (口座の数・label) を置き続ける (CON1002・A1 の対話面が毎回要る)。 plugin dir と起動引数は絶対 path を含み tracked に置けない。 host の面 1 file が C10.2 の読みとして素直。"
+  - id: "B"
+    name: "<state_dir>/accounts/ を走査して口座の集合を導く"
+    text: |
+      (B) <state_dir>/accounts/ を走査して口座の集合を導く。 却下: ADR-1017 §2.3 (真実は宣言・C3「per-host dir に真実を置かない」)。 dir が在っても宣言の無い口座は「無い」。 退役中の dir を除く判定が場所に依存する。
+    verdict: rejected
+    reason: "ADR-1017 §2.3 (真実は宣言・C3「per-host dir に真実を置かない」)。 dir が在っても宣言の無い口座は「無い」。 退役中の dir を除く判定が場所に依存する。"
+  - id: "C"
+    name: "退役 = host の面の行を消す"
+    text: |
+      (C) 退役 = host の面の行を消す。 却下: 退役は状態 (C3「退役は DB」) で、 宣言 file の書き換えは可逆 move にならない (行を失う・N1.2)。 event + mv が復帰の逆操作を持つ。
+    verdict: rejected
+    reason: "退役は状態 (C3「退役は DB」) で、 宣言 file の書き換えは可逆 move にならない (行を失う・N1.2)。 event + mv が復帰の逆操作を持つ。"
+  - id: "D"
+    name: "seat launch --launch FILE (雛形 file を渡す)"
+    text: |
+      (D) seat launch --launch FILE (雛形 file を渡す)。 却下: 雛形が手書きに戻り host 固有の絶対 path が file に散る (C10.2)。 host 固有の値は [[plugin]] / [[launch-arg]] の行で持ち、 行は器が組む。 seat register --launch FILE は既存 row の更新のために残す (register の雛形は supersede しない)。
+    verdict: rejected
+    reason: "雛形が手書きに戻り host 固有の絶対 path が file に散る (C10.2)。 host 固有の値は [[plugin]] / [[launch-arg]] の行で持ち、 行は器が組む。 seat register --launch FILE は既存 row の更新のために残す (register の雛形は supersede しない)。"
+  - id: "E"
+    name: "外の wrapper の周辺機能 (user-scope MCP 設定の同期・別口座への --resume の混線 fence・primary 口座の写像) を器に持ち込む"
+    text: |
+      (E) 外の wrapper の周辺機能 (user-scope MCP 設定の同期・別口座への --resume の混線 fence・primary 口座の写像) を器に持ち込む。 却下 (user 裁定 2026-09-14): MCP 同期は別 repo の運用 (器は口座の設定 dir の中身を書かない・agent view の 1 項目を除く)、 --resume の混線は登録 row が口座を持つ器の構造で起きない (席の口座は row・立て直しも row から)、 primary は session 用の選定 (ADR-1020 §2.2) が代替する。
+    verdict: rejected
+    reason: "MCP 同期は別 repo の運用 (器は口座の設定 dir の中身を書かない・agent view の 1 項目を除く)、 --resume の混線は登録 row が口座を持つ器の構造で起きない (席の口座は row・立て直しも row から)、 primary は session 用の選定 (ADR-1020 §2.2) が代替する。"
+basis: [FR1033, FR1036, FR1038, FR1040, FR1057, FR1058, NFR1006, AC1013, ADR-1004, ADR-1009, ADR-1011, ADR-1014, ADR-1017, ADR-1020, ADR-1022, CON1002]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  「どの口座があるか」「席にどの plugin を積むか」「起動に足す引数」は、 host ごとに違う値です。 これを state dir の 1 つの file (host の manifest) に置きます。 規則の値 (rules 行) は今までどおり repo の manifest だけが持ち、 host の file には規則を 1 行も書きません。 器は両方を同じ読み方・同じ断り方で読みます。 host の file が無い host では口座 0 として動き続け、 在るのに壊れている host では止まります。 この repo の tracked の manifest からは口座の行を外します (公開面の情報が減る側)。
+approval:
+  who: 持ち主
+  date: 2026-09-14
+  ruling: "s2-07l.38・s2-07l.220・s2-07l.226・s2-07l（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.38・s2-07l.220・s2-07l.226・s2-07l の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 口座の宣言が host ごとに 1 file になり写しの再生成が消えること、 口座を足す・外す・席を起こすが器の口で済み、 別 repo の wrapper と前の版の launcher が要らなくなること、 退役が記録に残り可逆であること、 起動行が導出されて手書きの絶対 path が減ることです。 悪い面は、 host の manifest という 2 面目の file が増えること (rules 行は置けないので規則の置き場は 1 つのまま)、 出来事の種類が 2 つ増えて数え直しが要ること、 login と trust は依然 user の手番であること、 host の file が壊れていると計測も tick も止まることです。"
+  - "Positive: 宣言の置き場が 1 つ (host の面) になり、 rules.host.toml の写し (台帳 s2-07l.220) が消える。 tick と fleet usage が同じ宣言を読む (台帳 s2-07l.224)。 外の wrapper 2 本への依存が切れる (器の視野の内側・ADR-1009 §1 の根因の型を再発させない)。 退役が C3 の DB に載る (AccountRetired / AccountRestored)。 起動行の host 固有の値は [[plugin]] / [[launch-arg]] の行に集まり (C10.2)、 手書きの雛形が消える。 Guard・rules 行は増えない。"
+  - "Negative (受け入れるコスト): manifest の面が 2 つ (loader は 1 本・rules 行は tracked だけ・面をまたぐ重複の検査が要る)。 EventKind +2 (KINDS の pin・property の生成器・literal 構築点が動く)。 Registration.sid の任意化 (読み手 3 か所)。 login / trust / 再 login は user の手番のまま (器は代筆しない)。 host の面が壊れている host では計測・選定・tick・doctor が止まる (FailClosed・manifest の拒否と同じ極性・無い host は縮退で続く)。 席の起動は依然 tmux の pane への注入 (tmux の外の起動は持たない)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0026-account-lifecycle-host-manifest-and-seat-launch.html
+  器の記録の頭: Status: accepted · Date: 2026-09-14 · version 0.4.6 (拘束する constitution の版) · C10.2 / C3 / C2.2 / N1.2 の適用を記録し、 ADR-1017 §2.3 の「口座の列挙は tracked の manifest」を「host の manifest の面」に、 ADR-1020 §2.4 の「起動の雛形は登録時に渡す」を「器が導出する (雛形は override)」に、 ADR-1022 §2.1 の「登録の書き手は席の session」を「器の起動の口も書く」形に、 それぞれ限って supersede · 要件は SRS (FR1033 / FR1036 / FR1038 / FR1040 / AC1013) が正本
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user の裁定 (2026-09-14・逐語は台帳が原本で本 file には写さない〔CON1002〕) で、 §3 は SRS への pointer である。 本 ADR は要件の文面を 1 字も持たず、 理由・形・却下案 だけを持つ。 本 ADR は ADR-1017 §2.3 のうち「口座は tracked の manifest に宣言する」の一文をhost の manifest の面に限って、 ADR-1020 §2.4 のうち「立て直しに使う起動行は登録時に渡した雛形」の一文を器が導出する形に限って、 ADR-1022 §2.1 のうち「登録は器の hook が走った session からしか受け付けない」の一文を器自身の起動の口が書く row に限って supersede する (label の不透明性・credential の場所・計測と選定の形・登録 row の鍵・権能の執行は不変)。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない。 C10.2 の「host 固有の値は manifest にだけ」を manifest の host の面として読む解釈を記録する)
+  器の機械の欄 decided-by: user (2026-09-14) — planner の提案 (口座の口 4 つ・席の起動の口・host の manifest・持ち込まない範囲 3 つ・順序) を承認。 出所は user の指摘 (口座の登録の口が無い・口座の管理系が器の中に無い・外の wrapper 2 本に割れている) と planner の実測 (台帳 s2-07l.38 / s2-07l.220 / s2-07l.226)。 裁定の逐語は台帳 s2-07l の notes が原本で、 本 file には写さない (CON1002)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: ADR-1017 §2.3 の「manifest SHALL 口座を [[account]] 行で列挙する」を、 その manifest が state dir の host の面 (host.toml) である形に限って supersede する (tracked の manifest の [[account]] の文法・label の不透明性・credential の場所・走査しない・A1 の対話面は不変)。 ADR-1020 §2.4 の「登録 row が持つ起動の雛形 (登録時に渡す)」を、 器の起動の口が導出した行を row に書く形に限って supersede する (穴 1 つ・fill_launch・立て直しの 3 条件・注入の門は不変)。 ADR-1022 §2.1 の「登録 SHALL 器の hook が走った session からしか受け付けない」を、 器自身の起動の口が書く row (sid 無し) を書き手に足す形に限って supersede する (鍵・置き換え・権能の執行は不変)
+  器の機械の欄 related: ADR-1004 §2.3 / §2.4 (TOML subset・場所は manifest の外) / ADR-1011 §2.1 (器が起こす claude は settings を読まない・runner / lens に限る・不変) / ADR-1014 §2.1 (guard の定義・本 ADR は Guard を増やさない) / ADR-1017 §2.1 / §2.3 (計測・宣言) / ADR-1020 §2.2 / §2.4 (選定・立て直し) / ADR-1022 §2.1 / §2.5 (登録・対話面) / constitution C1 / C2 / C2.2 / C3 / C3.2 / C9 / C10 / C10.2 / C11.3 / C16.2 / N1 / N1.2 / A1 / SRS FR1033 / FR1036 / FR1038 / FR1040 / AC1013 / CON1002
+  器の却下案の節の要約: 5 つの案を退けました。 口座の宣言を tracked の manifest に残す案は、 公開 repo に host の値を書き続けます。 state dir の dir を数えて口座にする案は、 宣言でなく場所を真実にします。 退役を宣言の行の削除で表す案は、 取り消せません。 起動の雛形 file を口の引数に残す案は、 手書きの絶対 path が戻ります。 外の wrapper が持つ周辺機能 (設定の同期・再開の混線 fence・主口座) を持ち込む案は、 器の構造で不要になっているか、 用途が別 repo の運用です。
+  器の記録の出所（Trace）:
+  出所は、 user の指摘 (口座の登録の口が無い・管理系が器の中に無い・2 つの command に割れている)、 planner の実測 (外の wrapper 2 本の実体・7 口座の link の手作業・私用 manifest の写し・SRS の scope)、 器の現物 (宣言の読み手・立て直しの経路・登録 row)、 そして user の裁定です。
+  ・user の指摘 (2026-09-14・会話面): 席の起動が別 repo の口座切替 wrapper と前の版の launcher に乗っている・口座の登録の口が無い・口座の管理系が器の中に無い・2 command に割れている時点で整理されていない。 逐語は台帳 s2-07l の notes が原本。
+  ・planner の実測 (2026-09-14): wrapper 2 本の実体 (label → CLAUDE_CONFIG_DIR の export と透過／launcher = plugin の自動検出と cgroup の防壁)・器の現物 (rules/manifest.rs の [[account]] reader・seat/cycle.rs の fill_launch / relaunch・fleet/mod.rs の Registration・seat/tick.rs の計測が --rules を伝える形)・tick の unit が --rules を渡さない・tracked の面に [[account]] 5 行・私用 manifest に 7 行・登録 row の雛形が手書きの絶対 path・SRS scope「席の起動 (v3)」。
+  ・台帳: s2-07l.38 (seat autonomy の memo・「席の起動と初回の口座選択」を後続に残す)・s2-07l.220 (私用 manifest の写しの再生成・判定点 .217 Landed 済み)・s2-07l.224 (tick と usage が同じ宣言を読む)・s2-07l.226 (1) (credential だけの dir では立て直しが落ちる・7 口座の link を手で差し替え)・s2-07l.233 (doctor の口座行)。
+  ・user 裁定 (2026-09-14・会話面): 席の起動の口 (役割は必須) / 口座の口 4 つ / host の面 / 持ち込まない範囲 3 つ / 順序 (席の起動の便は .222 の後・.208 run 5 の前) を承認。 逐語は台帳 s2-07l の notes が原本。
+  ・先行決定: ADR-1004 §2.3 / §2.4・ADR-1011 §2.1・ADR-1014 §2.1・ADR-1017 §2.1 / §2.3・ADR-1020 §2.2 / §2.4・ADR-1022 §2.1。
+  ・設計: docs/design/account-lifecycle.md (§2 host の面 / §3 口座の口 / §4 席の起動 / §10 契約 3 便)・docs/design/fleet-usage.md §2 (pointer)・docs/design/account-autonomy.md §11 (pointer)・docs/design/seat-roles.md §2 (書き手 3 つ)・docs/design/rules-manifest.md §5 (host の面)。 契約は台帳 (本 ADR の land 後に起票)。

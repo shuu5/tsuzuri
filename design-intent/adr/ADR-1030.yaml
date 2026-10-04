@@ -1,0 +1,108 @@
+# 判断の記録 ADR-1030 — 器 scribe2 の判断の記録 ADR-0030 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1030
+title: "管理 tick の unit は器が書いて有効化する (席ごとの service / timer を導出して host へ書く・間隔は rules 行・有効化は 3 クラス非該当)"
+status: accepted
+date: 2026-09-15
+context: |
+  管理 tick は席の外から周期で回ります。 その周期を作る systemd の unit は、 記録時点では人が host ごとに手で書いています。 project が増えるたびに service と timer を 1 組ずつ写し、 間隔を変えるには全部の file を直します。 器は unit を書かず、 有効化も人の手番に置いていました。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「間隔は 1 分でよい」と裁定しました。
+  記録時点 (2026-09-15) の現物 (main 1206210): 設計 docs/design/seat-autonomy.md §8 は unit の雛形 (template unit・%i = tmux target・OnCalendar=*:0/5) を示し、 「器はこの unit を書き出さない・有効化と停止は user の手番 (A1)」と定める。 host の実物は project (導入先) ごとに service / timer の対を手で写した 3 組 (器・ubuntu-note-system・folio2) で、 各 file が state dir・作業記憶 dir・binary の場所を %h 相対で持ち、 間隔は全部 5 分。 間隔の裁定 (1 分・台帳 s2-07l.315) を host に写す手順は器の外に在る。 tick の判定 (seat/tick.rs) と退避の合図の brake (seat.tick_stale_s・seat.signal_backoff_s) は rules 行で持つのに、 それを撃つ周期だけが手書きの file に在る。
+  憲法の向き: C1 は閾値を manifest の行 1 つで持つ。 C2.2 は env を読まず、 host 固有の値を manifest か引数で受ける。 C5 は rules 行に裁定 id を要する。 A1 は消す / 出す / 使う の 3 クラスにだけ承認を要する。 N1.2 は退役を可逆な移動でだけ行う。 N3 は host 固有の値で分岐しない。
+decision: |
+  §2.1 席ごとの service / timer の 2 file を 1 関数で導出し、 unit dir と binary は引数で受ける
+  器の口 1 つで、 席 1 つ分の service と timer の中身を器が組みます。 中身に入る場所 (状態の置き場・作業記憶の置き場・器の実行 file・unit を置く dir) は、 全部 command の引数で受け取ります。 器は home の場所も環境変数も読みません。 unit の名前は席の target から機械的に決まります。
+  器 SHALL subcommand <NAME> seat tick install --state-dir S --target S:W --wm-dir D --unit-dir U --binary PATH [--rules PATH] を 1 つ持つ。 unit の中身 SHALL pure な関数 1 本 (derive_units・入力 = NAME・target・state dir・wm dir・binary・間隔) で導出し、 file 名 SHALL <NAME>-seat-tick-<潰した target>.service / .timer (潰し方は打刻の dir と同じ 1 関数・template unit と %i は使わない・§5 (B))。 service SHALL Type=oneshot と ExecStart=<binary> seat tick --target <target> --wm-dir <wm dir> --state-dir <state dir> [--rules <path>] を持ち、 Environment=・WorkingDirectory=・%h を持たない (path は全部引数の値・C2.2・N3)。 器 SHALL NOT env・home・自分の実行 file の場所を読まない (env-reads の禁止集合・--binary は shell が解いて渡す)。
+  §2.2 間隔は rules 行 1 つ (秒) で、 timer は単調時計で回す
+  timer の間隔は器の規則の表に 1 行で持ちます (user の裁定 id 付き)。 timer は「前回の実行から n 秒後」の形で回し、 時刻の割り算はしません。 起動直後も同じ n 秒後に最初の 1 回が来ます。
+  間隔 SHALL rules 行 seat.tick_interval_s (整数の秒・裁定 id = user 2026-09-15T02:30Z・C1 / C5) で持ち、 timer SHALL OnBootSec=<n>s と OnUnitActiveSec=<n>s (単調時計・Persistent=false・WantedBy=timers.target) で組む。 OnCalendar の割り算 (*:0/5) は使わない (60 の約数でない値で毎時の頭に揃わなくなる・§5 (F))。 rules 行が読めない周 SHALL no-rule で断る (既定値に倒さない・C10)。
+  §2.3 書きは一時 file と rename、 器の生成物でない既存 file は上書きしない、 有効化は子 process
+  file は途中の状態を残さない書き方で置きます。 同じ名前の file がすでに在って、 それが器の作った中身と違うなら (人が手で書いた unit など)、 器は上書きせずに断ります。 中身が同じなら何もしません。 置いた後は systemd に読み直させ、 timer を有効化して起動します。 どこかで失敗したら、 何が失敗したかを 1 語で名指します。
+  書き SHALL 一時 file → rename (口座の口が host の manifest を書く形と同じ・ADR-1026 §2.2) で、 部分書きを残さない。 既存 file SHALL 導出の結果と bytes で比べ、 一致 → unchanged (書かない・有効化は撃つ)・不一致 → unit-exists で断る (人の手書きを上書きしない・N1・書き換えは §2.4 の撤去の後に入れ直す手番)。 有効化 SHALL 子 process systemctl --user daemon-reload → systemctl --user enable --now <timer> の順序固定で撃ち、 timeout は既存の唯一の wait、 失敗は typed (reload-failed / enable-failed・rc を添える)。 systemctl は host の道具 (git / tmux と同種) で、 crate の依存は足さない (C13)。 記録 SHALL 器の inject の記録と同じ置き場に kind=tick-install の 1 行 (書いた file 名・結果の語)。
+  §2.4 unit の有効化と停止は 3 クラス非該当で、 撤去は退役 dir への移動
+  timer を有効にすることは、 何かを消す・外に出す・お金を使うのどれでもありません。 器の tick は器の管理する席にだけ働き、 課金も送信もしません。 だから器が自分で有効化してよく、 人の承認は要りません (この判断は user の裁定で確かめました)。 止めるときも消さず、 file を退役 dir に移すだけにします。 元に戻せます。
+  unit の有効化 SHALL 3 クラス (消す / 出す / 使う・A1) の**いずれにも当たらない**と読む: 書くのは host の user unit dir の file 2 つ (作る)・有効化は host の timer (課金・送信なし)・tick が撃つのは器の既存の口 (FR1027 / FR1029 の合図・A1 の判定は合図の側で済んでいる)。 設計 seat-autonomy §8 の「有効化と停止は user の手番 (A1)」は本 ADR で置き換える (user 裁定 2026-09-15T03:52Z 問 3 が向きを定めた)。 撤去 SHALL seat tick uninstall --target S:W --unit-dir U = systemctl --user disable --now <timer> → 2 file を <unit dir>/.retired/<name>.<ts> へ **mv** (N1.2・削除しない・器の生成物でない file は動かさず unit-foreign で断る)。 前の版の timer SHALL 止めない (器の管理物でない・切替は seat-autonomy §5 の便 5 の user 裁定)。
+  §2.5 doctor は登録 row のある席ごとに unit の有無と一致を名指す
+  doctor は、 登録されている席ごとに「timer の file が在るか・器が今組む中身と同じか」を 1 語で示します。 有効化されているかは systemd に聞かないと分からないので、 doctor はそこまでは言いません。 判定もしません。
+  doctor (--state-dir S --unit-dir U) SHALL 登録 row (ADR-1022 §2.1) のある席ごとに語 tick=<installed|drift|absent|unreadable> を持つ (installed = 2 file が在り導出と bytes で一致・drift = 在るが違う〔間隔の裁定が変わった後の古い file を含む〕・absent = 無い・unreadable = 読めない・absent に潰さない)。 --unit-dir が無い周は語を出さず tick=- (評価していない印)。 systemctl は doctor から呼ばない (file の読みだけ・C10.2 の生成物)。 判定はしない。
+  §2.6 射程外
+  この記録が決めるのは、 unit の導出・間隔の持ち方・書きと有効化・承認の扱い・doctor の語の 5 つです。 前の版の timer を止めること、 他の host へ unit を配ること、 tick を常駐 process で回すこと、 systemd 以外の駆動は決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 前の版の timer の停止 (user の手番・消す)・host をまたぐ unit の配布 (doctor が host ごとに名指すだけ・C3.2)・器が常駐して tick を回す形 (§5 (D))・systemd の無い host の駆動 (cron 等・別の ADR)・enabled 状態の実測 (systemctl を doctor から呼ぶ形)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書 (SRS v0.11) に在ります。 要件の文面はここには置かず、 当該行を指すだけにします。 「打刻の合図」「退避の合図」を撃つ管理 tick の駆動を器の口に入れ、 doctor が席ごとに名指せるようにします。 駆動そのものを名指す要件は記録時点の要件書に無く、 要件書の改訂 (user の手番) で 1 本足します。
+  本 ADR が仕える要件は SRS v0.11 が正本である: FR1027 打刻の合図 と FR1029 退避の合図 (管理 tick の判定と注入 = 本 ADR の unit が周期で撃つもの)・FR1040 席の登録 (unit を持つ席の母集団 = 登録 row)・FR1061 導入先の同期 (doctor の行に語を足す)。 「管理 tick の駆動 (unit) を器が導出して書き、 間隔を rules 行で持つ」を名指す FR は記録時点の SRS に無く、 要件書の改訂 (/folio-architect・user の手番) で 1 本足す。 それまで契約は FR1027 / FR1029 を指す。 要件書は本 ADR では 1 字も変えない。
+options:
+  - id: "chosen"
+    name: "管理 tick の unit は器が書いて有効化する (席ごとの service / timer を導出して host へ書く・間隔は rules 行・有効化は 3 クラス非該当)"
+    text: |
+      器の口 1 つで、 席 1 つ分の service と timer の中身を器が組みます。 中身に入る場所 (状態の置き場・作業記憶の置き場・器の実行 file・unit を置く dir) は、 全部 command の引数で受け取ります。 器は home の場所も環境変数も読みません。 unit の名前は席の target から機械的に決まります。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 管理 tick は席の外から周期で回ります。 その周期を作る systemd の unit は、 記録時点では人が host ごとに手で書いています。 project が増えるたびに service と timer を 1 組ずつ写し、 間隔を変えるには全部の file を直します。 器は unit を書かず、 有効化も人の手番に置いていました。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「間隔は 1 分でよい」と裁定しました。"
+  - id: "A"
+    name: "雛形を人が写す"
+    text: |
+      (A) 雛形を人が写す (記録時点の seat-autonomy §8)。 却下: project ごとに 2 file の手書きが増え、 間隔の裁定 (s2-07l.315) が host の手順に依存する (N2 の向き)。 §2.1〜§2.3 で器の口に置く。
+    verdict: rejected
+    reason: "project ごとに 2 file の手書きが増え、 間隔の裁定 (s2-07l.315) が host の手順に依存する (N2 の向き)。 §2.1〜§2.3 で器の口に置く。"
+  - id: "B"
+    name: "template unit (@.service + %i = tmux target)"
+    text: |
+      (B) template unit (@.service + %i = tmux target)。 却下: : を含む instance 名の escape が host 側の作法になり、 state dir が違う導入先ごとに template が増える (現物は 3 組)。 席ごとの非 template unit なら名前は潰した target 1 つで決まり、 中身は全部引数の値。
+    verdict: rejected
+    reason: ": を含む instance 名の escape が host 側の作法になり、 state dir が違う導入先ごとに template が増える (現物は 3 組)。 席ごとの非 template unit なら名前は潰した target 1 つで決まり、 中身は全部引数の値。"
+  - id: "C"
+    name: "%h (home 相対) で書く"
+    text: |
+      (C) %h (home 相対) で書く (現物の手書き unit の形)。 却下: file を置く場所 (--unit-dir) を決めるのに home が要り、 器は env も home も読まない (C2.2)。 引数で受けた絶対 path をそのまま書く。
+    verdict: rejected
+    reason: "file を置く場所 (--unit-dir) を決めるのに home が要り、 器は env も home も読まない (C2.2)。 引数で受けた絶対 path をそのまま書く。"
+  - id: "D"
+    name: "器が常駐 process で tick を回す"
+    text: |
+      (D) 器が常駐 process で tick を回す (timer を持たない)。 却下: 常駐の監視・再起動・多重起動の防止が要り、 core に async も loop も持ち込む (C13.3)。 駆動は host の systemd に任せ、 器は oneshot のまま。
+    verdict: rejected
+    reason: "常駐の監視・再起動・多重起動の防止が要り、 core に async も loop も持ち込む (C13.3)。 駆動は host の systemd に任せ、 器は oneshot のまま。"
+  - id: "E"
+    name: "binary の場所を器が自分で読む"
+    text: |
+      (E) binary の場所を器が自分で読む (current_exe)。 却下: env-reads の禁止集合 (C2.2 の字面の門) に在る。 --binary PATH を必須の引数で受ける (shell の command -v が解く)。
+    verdict: rejected
+    reason: "env-reads の禁止集合 (C2.2 の字面の門) に在る。 --binary PATH を必須の引数で受ける (shell の command -v が解く)。"
+  - id: "F"
+    name: "OnCalendar の割り算で回す"
+    text: |
+      (F) OnCalendar の割り算で回す (*:0/<n>)。 却下: n が 60 の約数でないと毎時の頭で不揃いになり、 秒の単位を持たない。 OnUnitActiveSec の単調時計なら秒の値をそのまま写せる。
+    verdict: rejected
+    reason: "n が 60 の約数でないと毎時の頭で不揃いになり、 秒の単位を持たない。 OnUnitActiveSec の単調時計なら秒の値をそのまま写せる。"
+basis: [FR1027, FR1029, FR1040, FR1061, ADR-1020, ADR-1022, ADR-1026, ADR-1028]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  器の口 1 つで、 席 1 つ分の service と timer の中身を器が組みます。 中身に入る場所 (状態の置き場・作業記憶の置き場・器の実行 file・unit を置く dir) は、 全部 command の引数で受け取ります。 器は home の場所も環境変数も読みません。 unit の名前は席の target から機械的に決まります。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l.321・s2-07l.315（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.321・s2-07l.315 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 project を足すときに unit を手で写さなくてよいこと、 間隔の裁定が規則の表 1 行で全席に効くこと (doctor が古い file を名指す)、 人の手番が「切替の裁定」だけに減ることです。 悪い面は、 command の引数が増えること (置き場を全部渡す)、 systemd のある host にしか効かないこと、 既存の手書き unit を一度退役させてから入れ直す手番が要ることです。"
+  - "Positive: 駆動の値が manifest の 1 行 (C1・C5)。 導出が pure な 1 関数で snapshot に pin できる (C12.5)。 host 固有の値は引数だけ (C2.2・N3)。 撤去が可逆 (N1.2)。 doctor が席ごとに名指す (C3.2・C10.2)。 手順の散文が消える (N2)。 依存を足さない (C13)。"
+  - "Negative (受け入れるコスト): 引数 5 つ (--unit-dir と --binary は shell が解いて渡す)。 systemd user session の無い host では reload-failed で断るだけ (代替の駆動は §2.6)。 既存の手書き unit (3 組) は unit-exists で断られ、 退役 → 入れ直しの手番が 1 回 (user が前の版の timer を止める便と同時が自然)。 --unit-dir の無い doctor は tick=- (評価していない) で、 導入先ごとの実測は引数を渡した周だけ。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0030-tick-units-are-written-and-enabled-by-the-vessel.html
+  器の記録の頭: Status: accepted · Date: 2026-09-15 · version 0.4.6 (拘束する constitution の版) · C1 / C2.2 / C5 / A1 / N1.2 の適用を記録し、 設計 seat-autonomy §8「器はこの unit を書き出さない・有効化は user の手番」を器の口に置き換える (憲法は動かさない・設計 doc の版を上げる) · 要件は SRS が正本 (FR1027 / FR1029 / FR1040 / FR1061)
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は設計判断で、 その向き (unit を器が書く) は user の裁定 1 件 (2026-09-15T03:52Z 問 3) が、 間隔の値 (1 分) は user の裁定 1 件 (2026-09-15T02:30Z) が定めた。 §2.4 は憲法 A1 の適用の記録 (解釈の記録であって条文の改訂ではない)。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: planner (2026-09-15・設計判断) — 向きは user の裁定 2 件 (2026-09-15T03:52Z 問 3「unit を器が書く」= よい・2026-09-15T02:30Z「timer を 1 分へ」= それでよい) が定めた。 逐語は台帳 s2-07l.321 / s2-07l.315 の notes (本 file には写さない)。
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: なし (追補)。 設計 doc seat-autonomy §8 の「器はこの unit を書き出さない・有効化と停止は user の手番」の 2 文を器の口に置き換える (設計 doc の版で記録・C8.3)。 rules 行を 1 つ足す (§2.2・C5 の裁定 id 付き)。 既存の rules 行・口・行は不変。
+  器の機械の欄 related: ADR-1020 §2.4 (退避の合図と立て直し = tick が駆動する動作) / ADR-1022 §2.1 (席の登録 row = unit を持つ席の母集団) / ADR-1026 §2.1 / §2.2 (host の manifest・口座の口が host の file を一時 file と rename で書く形) / ADR-1028 §2.3 (器が host に書く口 vessel update・子 process の形) / constitution C1 / C2.2 / C5 / C10.2 / C11 / C13.3 / A1 / N1 / N1.2 / N2 / N3
+  器の却下案の節の要約: 6 つの案を退けました。 「雛形を人が写す」は今の形で、 間隔の変更が手順に頼ります。 「template unit に席名を渡す」は名前の記号の扱いが host 側の作法になり、 置き場が違う project ごとに template が増えます。 「home 相対で書く」は器が home を知らないと file の場所を決められません。 「器を常駐させて回す」は監視する物が増えます。 「器が自分の実行 file の場所を読む」は禁じられた読みです。 「時刻の割り算で回す」は 1 分以外の値で揃わなくなります。
+  器の記録の出所（Trace）:
+  出所は、 user の裁定 2 件 (unit を器が書く・間隔は 1 分)、 host の手書き unit の現物、 設計 doc の §8、 器の rules 行です。
+  ・user の裁定 (2026-09-15T03:52Z 問 3・報告書「マルチアカウント管理の現状と対策」§7): unit を器が書く = よい。 逐語は台帳 s2-07l.321 の notes。
+  ・user の裁定 (2026-09-15T02:30Z): 退避の合図の再送 back-off と timer を 1 分へ = それでよい。 逐語は台帳 s2-07l.315 の notes (rules 行 seat.signal_backoff_s の裁定と同じ 1 件)。
+  ・host の現物 (2026-09-15・planner 実測): user unit dir に project ごとの service / timer の対が 3 組 (手書き・%h 相対・OnCalendar=*:0/5・template unit と %i)。
+  ・器の現物 (main 1206210): rules/manifest.toml の seat.* 行 (tick_stale_s / cycle_lock_ttl_s / cycle_settle_s / cycle_poll_ms・間隔の行は無い)・seat/cli.rs の seat tick の口・xtask の env-reads の禁止集合 (current_exe を含む)。
+  ・先行決定: ADR-1026 §2.1 / §2.2・ADR-1028 §2.3・ADR-1022 §2.1・ADR-1020 §2.4。
+  ・設計: docs/design/seat-autonomy.md §5 (便 5) / §8 (駆動・本 PR で書き換え)。 契約は台帳 s2-07l.321 (本 ADR の land 後・s2-07l.315 Landed 後に dispatch)。

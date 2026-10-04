@@ -1,0 +1,102 @@
+# 判断の記録 ADR-1025 — 器 scribe2 の判断の記録 ADR-0025 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1025
+title: "runner の allowlist は先頭語の許可に加えて「禁じる語列」の rules 行を対で持ち、 hook の command guard が Bash の実行時点で止め、 intake は verify 行に同じ判定を掛ける (ADR-1009 §2.1 / ADR-1010 §2.3 を部分 supersede)"
+status: accepted
+date: 2026-09-14
+context: |
+  実装役 (runner) に器が与える権限は「cargo と git を丸ごと」の 2 つです。 この形では、 便を殺す cargo mutants の全 suite 実行も、 取り消せない git push --force も、 同じ許可の内側に入ります。 実際に 1 本の便が自分で変異検査を回して host のほぼ全量 (54 GB) まで膨らみ、 kernel に殺されて終端しました。 監査は同じ穴を「破壊的 git が便から撃てる」として先に指摘していました。 runner は起動した人の設定 file を 1 つも読まないので、 host 側の guard は届きません。 一方で器の plugin の hook は runner にも届いており、 Edit / Write の write-set guard と権能 guard はそこで動いています。 足りないのは「Bash の command そのものを見る guard」1 つで、 その値の置き場と判定の置き場をこの記録で決めます。
+  記録時点 (2026-09-14) の現物 (main d19cacb): rules 行 runner.allowed_commands = ["cargo", "git"] (kind RunnerAllowedCommands・ADR-1009 §2.1) は上限で、 対象 repo の vessel 宣言 allowed-commands (ADR-1010 §2.1) がその内側で先頭語を名乗り、 runner は写しの各要素を Bash(<cmd>:*) の形で --allowedTools に渡す (headless/runner.rs allowed_tools)。 判定の粒度は先頭 1 語で、 intake の突合 (pipe/declaration.rs の unfit: 制御文字・先頭語・repo 外 path・穴) も同じ粒度である。 hook の pre-tool-use は matcher Bash|Edit|Write|MultiEdit|NotebookEdit で runner にも届く (runner は --plugin-dir で器の plugin を積む・settings は読まない〔ADR-1011〕) が、 hook/guard.rs は Bash を通し (設計 vessel-hook.md §5「Bash と他 tool → rc 0・0 byte」)、 権能 guard (ADR-1022 §2.3) の Bash 判定は器自身の権能付き subcommand だけを見る。 実害 2 件: (1) 便 s2-07l.222 run 1 (2026-09-13) の runner が自分の箱の中で cargo mutants の全 suite を回し、 loop 条件の反転の変異が alloc を止めず箱の上限 (MemTotal − reserve ≈ 54 GB) まで膨らみ oom-kill で便が終端 (台帳 s2-07l.230)。 (2) 監査 2026-09-12 (台帳 s2-07l.168) の findings: git push --force origin main は制御文字も絶対 path も含まないので intake が受理し、 gate / land が sh -c で実走する＝N1 が verify の境界で成立していない。 host の git guard (PreToolUse hook・host 固有) は runner に届かない (--setting-sources "")。 契約の散文 (「runner は cargo mutants を回さず 1 行当ての A/B」) で回避してきたが、 それは規則を prose に置く形 (N2) である。
+  憲法の向き: N1 は回復不能な削除を拒む。 C16 は逸脱を編集・実行の時点で止め、 事後の検証で代替しない。 C1 は規則の値を manifest だけに置き、 C14 は執行される規則の正本を manifest とする (宣言 file は consumer が緩められる面)。 C2 は判定を 1 関数・1 列挙で持ち、 新しい理由は 1 variant で表す。 C5 は rules 行の追加に裁定 id を要する。 C11.2 / C16.2 は guard を極性一覧に in-loop として載せる。 先行決定: ADR-1021 §4.2 は runner の箱の上限を「MemTotal − reserve」の 1 種に決め、 行ごとの上限を足さない (台帳 s2-07l.230 の案 (A) は ADR-1021 に反する)。 ADR-1014 §2.1 は「行為を止めうる判定」を guard と定める。
+decision: |
+  §2.1 禁じる語列は rules 行 runner.denied_commands が持ち、 許す先頭語の行と対で読む
+  「使ってよい command の先頭語」の行はそのままにして、 「その先頭語で始まっても撃ってはいけない語の並び」の行を 1 本足します。 値は器の規則 file (manifest) だけが持ち、 相手の repo の宣言 file からは緩められません。 最初の値は、 cargo の mutants と publish、 git の force push・hard reset・branch の強制削除・clean・stash の削除です。
+  manifest SHALL rules 行 runner.denied_commands (kind RunnerDeniedCommands・閉じた RuleKind の新 variant・値は語列の配列・各要素は空白区切りの語 1 つ以上・空配列と空要素は不備・裁定 id = user 2026-09-14〔台帳 s2-07l.168 notes〕) を持つ。 初期値 SHALL cargo mutants / cargo publish / git push --force / git push -f / git reset --hard / git branch -D / git clean -f / git stash drop / git stash clear とする。 行の意味は上限側の禁止である: vessel 宣言 (ADR-1010 §2.1) は禁じる語列を名乗らず、 緩めることも足すこともできない (MUST NOT・C14: 執行される規則の正本は manifest)。 runner.allowed_commands の値形 (先頭語の配列・上限) と runner が Bash(<cmd>:*) を渡す形は不変 (MUST NOT change)。 照合規則 (1 関数・C2): command 行を shell の区切り (; / && / || / | / 改行) で segment に分け、 各 segment を空白で語に分け、 語列の先頭の語が segment の先頭の語と一致し、 残りの語がすべて segment の語に含まれる (順序を問わない・git push origin main --force と git push --force origin main を同じ 1 語列で当てる) とき「当たる」とする。 引用符の中身・変数の展開・interpreter の引数 (sh -c "…") は解かない (§2.6)。 判定の出力は閉じた型 (当たった語列を持つ variant か、 当たらない) で、 呼び手 (§2.2 / §2.3) が分岐を強制される (C11.3)。
+  §2.2 hook の command guard が Bash の実行時点で止める (全席共通・in-loop・fail-closed)
+  Bash が呼ばれる瞬間に hook が command を読み、 禁じる語の並びに当たれば実行の前に止め、 「どのrules 行のどの並びに当たったか」と「次の一手」を 1 行で返します。 この guard は実装役だけでなく planner・管理席にも同じく効きます (同じ hook だからです)。 規則 file が読めないときは通さず止めます。
+  hook pre-tool-use SHALL tool_name == "Bash" の周に §2.1 の関数を command 文字列に掛け、 当たる周は deny (rc 2 + stderr 1 行 + stdout 0 byte・FR1020 の write-set guard と同じ外形) とし、 stderr の 1 行 SHALL rules 行 id (runner.denied_commands) と当たった語列と次の一手 (契約の A/B 手順・別の形への書き直し) を含む。 記録 SHALL inject.jsonl に 1 行 (who=hook:pre-tool-use / what=command-deny <語列>)。 通す周は 1 byte も書かない (write-set guard と同じ・hook budget)。 判定の順序 SHALL write-set guard → seat guard → command guard → 権能 guard とし、 順序は閉じた列挙の宣言順で持つ (C2・prose の順序注記を持たない)。 活性化 SHALL marker .vessel が自分の NAME を言う repo だけ (FR1024・他の repo を 1 byte も汚さない)。 極性: manifest が読めない・行が無い → deny (FailClosed) (NFR1004・read できない store を黙って通さない)。 guard SHALL 閉じた Guard enum の新 variant Command として極性一覧に InLoop / FailClosed で載る (ADR-1014 §2.1・C16.2)。 席の弁別 SHALL しない (runner / planner / 管理席の全 Bash に同じ判定・席ごとの例外行を持たない)。
+  §2.3 intake は宣言の共通 verify と契約の verify 行に同じ関数を掛ける
+  受付 (intake) は、 相手の repo の宣言に書かれた共通の検証行と、 契約に書かれた検証行の両方を、 同じ関数で見ます。 禁じる語の並びを含む行が 1 本でもあれば、 行番号付きで断り、 便を起こしません。 審査 (gate) と取り込み (land) はその行を sh -c で実走するので、 入口で止めるしかないからです。
+  intake の突合 (ADR-1010 §2.3・pipe/declaration.rs の unfit) SHALL 既存の 4 判定 (上限・argv 1 本・制御文字・repo 外 path) に、 §2.1 の関数による禁じる語列の判定を 1 つ足し、 common-verify / detection-verify / 契約 verify の各行に掛ける。 当たる行は他の不備と同じく全件・行番号付きで rc 1 (event を書かない・ADR-1009 §2.2)。 verify 行は argv 1 本 (制御文字なし) なので segment は 1 つである。 gate / land が実走する行は intake が凍結した写しだけ (ADR-1010 §2.4・不変) なので、 §2.3 の判定は写しの側で二度掛けない。 Guard::Intake の断りの 1 理由が増えるだけで、 Guard は増えない。
+  §2.4 claude の権限系 (--disallowedTools) を正本にしない
+  claude 自身にも「この command は駄目」と伝える起動 flag がありますが、 それを止める仕組みの正本にはしません。 claude の版ごとに振る舞いが変わりうるうえ、 器の「止める仕組みの一覧」に載らないからです。 止めるのは器の hook で、 claude への許可の渡し方は今までどおりです。
+  runner SHALL NOT --disallowedTools を渡さない形を保つ (ADR-1011 §2.1 の起動形は不変・--allowedTools の Bash(<cmd>:*) 形も不変)。 理由: claude の権限系は版依存で (pattern の意味が版で変わりうる)、 極性一覧に載らず (C16.2 の in-loop guard の母集団に入らない)、 器の deny 文 (次の一手を含む 1 行) を運べない。 hook の command guard (§2.2) が唯一の執行点で、 ADR-1009 §2.1 の「明示 allow の外は PermissionRequest hook が deny」と対になる (allow の内側の禁止 = 本 ADR・allow の外 = ADR-1009)。
+  §2.5 ADR-1009 §2.1 と ADR-1010 §2.3 を部分 supersede する
+  先行の 2 つの記録のうち、 「許可の正本は先頭語の行」の一文と「受付の突合は 4 つ」の一文だけを、 それぞれ「禁じる語列の行と対で読む」「突合は 5 つ」に改めます。 それ以外 (宣言 file の形・写しの凍結・起動形・一律 deny) はそのままです。
+  ADR-1009 §2.1 の「allowlist の正本は manifest の rules 行 runner.allowed_commands (値は command 名の列)」SHALL 「許す先頭語の行 runner.allowed_commands と禁じる語列の行 runner.denied_commands の対」と読み替える。 ADR-1010 §2.3 の突合 SHALL §2.3 の 5 判定と読み替える。 ADR-1010 §2.2 「manifest は上限を持つ」は、 禁じる語列の行が上限側の禁止である点で整合し、 supersede しない。 vessel-hook.md §8 の却下案「Bash command の parse guard — interpreter 経路は v3」は、 語列の照合 (parse ではない) に限って採用し、 interpreter 経路の中身の解析は v3 のまま (§2.6)。
+  §2.6 射程外
+  この記録が決めるのは「禁じる語列の置き場」「Bash の実行時点の guard」「受付の同型判定」の 3 つだけです。 sh -c や script file の中身まで読むこと、 変数展開の先を読むこと、 runner の箱の memory 上限を行ごとに持つこと、 禁じる語列の値の改訂そのものは、 別の便・裁定の領分です。
+  次は本 ADR の決定ではない (MUST NOT be read as such): interpreter 経路 (sh -c "…" / bash script.sh / python -c / xargs) の引数や file の中身の解析 (v3・字面照合の誤爆を持ち込まない〔ADR-1012 §2.2 の教訓〕)、 環境変数・alias・関数の展開先、 runner の箱の行ごとの memory 上限 (台帳 s2-07l.230 案 (A)・ADR-1021 §4.2 に反するので却下)、 禁じる語列の値の追加・削除 (rules 行の改訂 = C5 の裁定 id を持つ便)、 host 側の git guard の撤去 (器の guard と二重に効いてよい・host 固有の道具は器の視野の外)、 lens の Bash (lens は Bash を撃たない・不変)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書に在ります。 「実行の時点で止める」「write-set の外の編集を止める」「実装役の起動形」「不正な入力を黙って落とさない」の 4 つです。 禁じる語列そのものを名指す要件は、 次の要件書の改訂 (材料は planner の置き場に用意済み) で足し、 その id は改訂の後に本 ADR から辿れます。 この記録は要件書を 1 字も変えません。
+  本 ADR の §2.1〜§2.4 が仕える要件: FR1045 (権能で守られた操作の検査は編集・実行の時点で〔in-loop〕・同じ PreToolUse の境界)・FR1020 (write-set の外への編集を編集の時点で deny・fail-closed・deny の外形の前例)・FR1005 (runner と lens は claude -p の 1 形・起動形は不変)・NFR1004 (不正入力を黙って落とす件数 0・読めない store は止まる)。 禁じる語列の command を実行の時点で拒む要件 (FR1056 相当) は SRS v0.9 の改訂で足す (材料 = planner state dir srs-command-guard-fr.md・改訂は user の /folio-architect)。 SRS の改訂まで本 ADR は FR1045 / FR1020 の境界を指す。 実装手段 (行の id と kind・照合規則・deny 文・極性) は §2 が正本で SRS は持たない。
+options:
+  - id: "chosen"
+    name: "runner の allowlist は先頭語の許可に加えて「禁じる語列」の rules 行を対で持ち、 hook の command guard が Bash の実行時点で止め、 intake は verify 行に同じ判定を掛ける (ADR-1009 §2.1 / ADR-1010 §2.3 を部分 supersede)"
+    text: |
+      「使ってよい command の先頭語」の行はそのままにして、 「その先頭語で始まっても撃ってはいけない語の並び」の行を 1 本足します。 値は器の規則 file (manifest) だけが持ち、 相手の repo の宣言 file からは緩められません。 最初の値は、 cargo の mutants と publish、 git の force push・hard reset・branch の強制削除・clean・stash の削除です。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 実装役 (runner) に器が与える権限は「cargo と git を丸ごと」の 2 つです。 この形では、 便を殺す cargo mutants の全 suite 実行も、 取り消せない git push --force も、 同じ許可の内側に入ります。 実際に 1 本の便が自分で変異検査を回して host のほぼ全量 (54 GB) まで膨らみ、 kernel に殺されて終端しました。 監査は同じ穴を「破壊的 git が便から撃てる」として先に指摘していました。 runner は起動した人の設定 file を 1 つも読まないので、 host 側の guard は届きません。 一方で器の plugin の hook は runner にも届いており、 Edit / Write の write-set guard と権能 guard はそこで動いています。 足りないのは「Bash の command そのものを見る guard」1 つで、 その値の置き場と判定の置き場をこの記録で決めます。"
+  - id: "A"
+    name: "runner.allowed_commands の値形を「先頭語 + 禁じる語列」の入れ子に変える"
+    text: |
+      (A) runner.allowed_commands の値形を「先頭語 + 禁じる語列」の入れ子に変える。 却下: manifest の reader は TOML subset (文字列と 1 行の文字列配列・ADR-1010 §2.1・ADR-1004 §2.3) で、 入れ子を許すと第 2 の parser か文字列 encoding ("cargo:mutants,publish") になる (C10「型で分ける」に反する・C11.3 の untyped に近い)。 行を 1 本足す形は C2「新しい理由は 1 variant」と C5 の内側で済む。
+    verdict: rejected
+    reason: "manifest の reader は TOML subset (文字列と 1 行の文字列配列・ADR-1010 §2.1・ADR-1004 §2.3) で、 入れ子を許すと第 2 の parser か文字列 encoding (\"cargo:mutants,publish\") になる (C10「型で分ける」に反する・C11.3 の untyped に近い)。 行を 1 本足す形は C2「新しい理由は 1 variant」と C5 の内側で済む。"
+  - id: "B"
+    name: "--disallowedTools \"Bash(cargo mutants:*)\" を runner に渡す"
+    text: |
+      (B) --disallowedTools "Bash(cargo mutants:*)" を runner に渡す。 却下: 版依存・極性一覧の外・deny 文を運べない (§2.4)。 席 (planner・管理席) には届かない。
+    verdict: rejected
+    reason: "版依存・極性一覧の外・deny 文を運べない (§2.4)。 席 (planner・管理席) には届かない。"
+  - id: "C"
+    name: "vessel 宣言に denied-commands key を足す"
+    text: |
+      (C) vessel 宣言に denied-commands key を足す。 却下: 宣言は consumer が書く面で、 禁じる語列を消せる・緩められる (C14: 執行される規則の正本は manifest)。 宣言の key 集合 (3 つ必須) を変えると ADR-1010 §2.1 の supersede 範囲が広がる。
+    verdict: rejected
+    reason: "宣言は consumer が書く面で、 禁じる語列を消せる・緩められる (C14: 執行される規則の正本は manifest)。 宣言の key 集合 (3 つ必須) を変えると ADR-1010 §2.1 の supersede 範囲が広がる。"
+  - id: "D"
+    name: "runner の箱に行ごとの memory 上限 (新 rules 行 gate.runner_memory_mb) を持たせる"
+    text: |
+      (D) runner の箱に行ごとの memory 上限 (新 rules 行 gate.runner_memory_mb) を持たせる (台帳 s2-07l.230 案 (A))。 却下: ADR-1021 §4.2「上限は 2 種・行ごとの値を持たない」に反する。 memory の症状だけを見て force push を止められない。 分布 (peak の実測) が溜まった後の別裁定の領分。
+    verdict: rejected
+    reason: "ADR-1021 §4.2「上限は 2 種・行ごとの値を持たない」に反する。 memory の症状だけを見て force push を止められない。 分布 (peak の実測) が溜まった後の別裁定の領分。"
+  - id: "E"
+    name: "現状維持 (契約の手順で「runner は cargo mutants を回さない」と書く・reserve が host を守る)"
+    text: |
+      (E) 現状維持 (契約の手順で「runner は cargo mutants を回さない」と書く・reserve が host を守る)。 却下: 規則が prose にしか無い (N2)。 runner が判断を誤れば再発し (.222 run 1)、 破壊的 git は 1 度も止まらない。
+    verdict: rejected
+    reason: "規則が prose にしか無い (N2)。 runner が判断を誤れば再発し (.222 run 1)、 破壊的 git は 1 度も止まらない。"
+basis: [FR1005, FR1020, FR1024, FR1045, FR1056, NFR1004, ADR-1004, ADR-1009, ADR-1010, ADR-1011, ADR-1012, ADR-1014, ADR-1021, ADR-1022, CON1002]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  「使ってよい command の先頭語」の行はそのままにして、 「その先頭語で始まっても撃ってはいけない語の並び」の行を 1 本足します。 値は器の規則 file (manifest) だけが持ち、 相手の repo の宣言 file からは緩められません。 最初の値は、 cargo の mutants と publish、 git の force push・hard reset・branch の強制削除・clean・stash の削除です。
+approval:
+  who: 持ち主
+  date: 2026-09-14
+  ruling: "s2-07l.168・s2-07l.230・s2-07l.222（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.168・s2-07l.230・s2-07l.222 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 便を殺す検査と取り消せない git が実行の前に止まること、 その規則が器の規則 file 1 か所に在り相手の repo から緩められないこと、 止める仕組みの一覧に 1 本増えて数えられること、 planner と管理席にも同じ guard が効くことです。 悪い面は、 hook が Bash のたびに規則 file を読む分の費用、 語列の照合が引用符や interpreter の中身を見ないという既知の限界、 禁じる語列を増やすたびに裁定が要ることです。"
+  - "Positive: N1 / C16 が Bash の境界で成立する (契約の散文による回避を撤去できる・N2)。 値は manifest 1 行 (C1 / C14)・判定は 1 関数 (C2)・guard は極性一覧 +1 (C16.2 の母集団が増える)。 全席共通 (runner の穴と席の穴を 1 つの guard で塞ぐ・host の guard との二重化は許容)。 rules 行 1 本 (C5 の裁定 id 付き)・Guard variant 1 本・極性一覧 snapshot +1 行・seat / hook の外形 snapshot の更新。"
+  - "Negative (受け入れるコスト): hook が Bash ごとに manifest を読む (rules の読みは既存の権能 guard と同じ経路・hook budget の内側で測る)。 照合は語列の包含で、 引用符・展開・interpreter の中身を見ない (§2.6・回避は可能だが「runner が判断を誤る」型の事故を塞ぐには足りる・悪意の runner は本 ADR の射程外)。 禁じる語列の改訂は毎回 C5 の裁定を要する (規則の増殖を裁定で抑える側に倒す)。 fail-closed ゆえ manifest が読めない周は全席の Bash が止まる (権能 guard の registry-unreadable と同じ極性・.225 直後の事故の型を再現しうる＝event 形を変える便は PATH 版の install を先に)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0025-denied-command-rows-and-bash-command-guard.html
+  器の記録の頭: Status: accepted · Date: 2026-09-14 · version 0.4.6 (拘束する constitution の版) · N1 / C16 / C1 / C2 / C11 の適用を記録し、 ADR-1009 §2.1 の「allowlist の正本は runner.allowed_commands (値は command 名の列)」を「禁じる語列の行と対で読む」形に、 ADR-1010 §2.3 の intake の突合に禁じる語列の判定を足す形に、 それぞれ限って supersede · 要件は SRS (FR1020 / FR1045 / FR1005 / NFR1004) が正本
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user の裁定 (2026-09-14・rules 行を足すため C5 の裁定 id を要する・逐語は台帳が原本で本 file には写さない〔CON1002〕) で、 §3 は SRS への pointer である。 本 ADR は要件の文面を 1 字も持たず、 理由・形・却下案 だけを持つ。 本 ADR は ADR-1009 §2.1 のうち「allowlist の正本は manifest の rules 行 runner.allowed_commands (値は command 名の列)」の一文を禁じる語列の行と対で読む形に限って、 ADR-1010 §2.3 のうち intake の突合 (上限・argv 1 本・制御文字・repo 外 path) を禁じる語列の判定を 1 つ足す形に限って supersede する (runner の起動形〔ADR-1011〕・宣言 file の形〔ADR-1010 §2.1〕・凍結した写しの読み〔ADR-1010 §2.4〕は不変)。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: user (2026-09-14) — rules 行の追加は C5 の裁定 id を要する。 出所は監査 memo (台帳 s2-07l.168) と便の終端の実測 (台帳 s2-07l.230・s2-07l.222 の description)。 裁定の逐語は台帳 s2-07l.168 の notes が原本で、 本 file には写さない (CON1002)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: ADR-1009 §2.1 の一文「allowlist の正本は manifest の rules 行 runner.allowed_commands (kind RunnerAllowedCommands・値は command 名の列)」を、 禁じる語列の行 runner.denied_commands と対で読む形に限って supersede する (先頭語の許可の形・Bash(<cmd>:*) の渡し方・PermissionRequest の一律 deny は不変)。 ADR-1010 §2.3 の intake の突合を、 禁じる語列の判定を 1 つ足す形に限って supersede する (突合の他の 4 つ・凍結・写しの形は不変)
+  器の機械の欄 related: ADR-1009 §2.1 / §2.2 (runner の権限・intake の拒否) / ADR-1010 §2.1 / §2.2 / §2.3 / §2.4 (宣言 file・上限・突合・写し) / ADR-1011 §2.1 (settings を読まない起動形・不変) / ADR-1014 §2.1 (guard の定義・極性一覧) / ADR-1021 §4.2 (runner の箱の上限は 1 種・行ごとの上限を足さない) / ADR-1022 §2.3 (PreToolUse の権能 guard・同じ境界) / constitution C1 / C2 / C5 / C11 / C11.2 / C14 / C16 / C16.2 / N1 / SRS FR1005 / FR1020 / FR1045 / NFR1004 / CON1002
+  器の却下案の節の要約: 5 つの案を退けました。 許可の行の値の形そのものを変える案は、 規則 file の読み手 (文字列と 1 行の配列だけ) を広げるか、 文字列の中に構造を詰めることになります。 claude の起動 flag で禁じる案は、 版依存で一覧に載りません。 相手の repo の宣言 file に禁じる語列を置く案は、 相手が自分で緩められます。 実装役の箱に行ごとの memory 上限を持たせる案は、 先行の記録に反し、 force push を止められません。 現状維持は、 規則を散文に置いたままです。
+  器の記録の出所（Trace）:
+  出所は、 便が自分で変異検査を回して殺された実測、 監査が先に指摘していた「破壊的 git が便から撃てる」findings、 器の現物 (許可の渡し方・hook の Bash の扱い・受付の突合)、 hook が runner に届いている記録、 そして user の裁定です。
+  ・便の終端の実測 (2026-09-13 20:23Z・管理席): s2-07l.222 run 1 が Failed detail=oom-kill。 runner が箱の中で cargo mutants の全 suite を回し 54 GB まで膨らんだ (台帳 s2-07l.230 の description が原本)。
+  ・監査 2026-09-12 (台帳 s2-07l.168): findings srs:F10 / outside-prose:f12 (反証済み upheld)。 verify 行の allowlist は先頭語だけ・runner の git は先頭語だけで許され、 破壊形の弁別を host の hook に頼っている。
+  ・器の現物 (main d19cacb): headless/runner.rs allowed_tools (Bash(<cmd>:*))・headless/mod.rs build (--setting-sources ""・--plugin-dir)・hook/guard.rs (Bash を通す)・hook/role_guard.rs subject (Bash は権能付き subcommand だけ)・pipe/declaration.rs unfit (先頭語)・hooks/hooks.json (PreToolUse matcher に Bash)。 hook が runner に届く証跡: inject.jsonl の permission-request deny 63 件・pre-tool-use deny 8 件 (2026-09-14 planner 実測)。
+  ・user 裁定 (2026-09-14・会話面): 推奨案 (禁じる語列を manifest に・hook の command guard・intake の同型判定・--disallowedTools を使わない・初期値 9 語列) を承認。 逐語は台帳 s2-07l.168 の notes が原本。
+  ・先行決定: ADR-1009 §2.1 / §2.2・ADR-1010 §2.1〜§2.4・ADR-1011 §2.1・ADR-1014 §2.1・ADR-1021 §4.2・ADR-1022 §2.3。
+  ・設計: docs/design/vessel-hook.md §5 (command guard の bullet) / §8 (却下案の限定採用)・docs/design/pipeline.md §5.1 (突合 5 つ目)・docs/design/rules-manifest.md (行の表に runner.denied_commands)。 契約は台帳 s2-07l.168 (本 ADR の land 後に契約化・s2-07l.230 を吸収)。

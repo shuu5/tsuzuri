@@ -1,0 +1,118 @@
+# 判断の記録 ADR-1006 — 器 scribe2 の判断の記録 ADR-0006 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1006
+title: "cargo xtask check が measure する tag の列挙"
+status: accepted
+date: 2026-09-10
+context: |
+  構造検査が何を測るかの一覧が、 実際に動いているものより 1 つ少ないままになっています。 前の記録は決定時点で凍結する約束なので、 その file を書き換えるのではなく、 新しい記録で一覧を差し替えます。
+  ADR-1002 §2.4 は cargo xtask check が measure する tag を 10 本として列挙した (2026-09-07 の決定時点の記録)。 その後の便が 11 本目 paths-clean を足し、 判定行の現物は 11 tag を出す。 ADR は決定時点の記録 (frozen) であり前文の凍結規定により in-place 改訂できないため、 列挙を現物へ合わせるには本 ADR を新設して当該列挙だけを supersede するほかない。 12 本目の案として挙がっていた ci-decl は CI 便で不採用となり xtask 側に実体を持たない (CI の job そのものが検証面である) ため、 本 ADR の列挙にも含めない。 番号は 0003 (憲法改訂) / 0004 (永続面) / 0005 (A3) が使用済みゆえ 0006 である。
+decision: |
+  決めることは 3 つです。 測る項目は 11 本であること、 それぞれが何を測るのかの 1 行、 そして増やしたり減らしたりするときは新しい記録を立てること。 数値のしきい値は前の記録のままで、 ここでは触りません。
+  本 ADR は ADR-1002 §2.4 の tag 列挙のみを差し替える。 同 §の他の規定 (構造検査が独立に必要な理由・test-src-ratio の測定定義・xtask を std のみで書く決定) は有効であり、 §2.5 の閾値の実値も無改変である。
+  §2.1 measure する tag は 11 本
+  測る項目は 11 本で、 順番は検査が出す 1 行の並びと同じです。
+  cargo xtask check が measure する tag は次の 11 本とする (MUST)。 順序は判定行の出力順である。
+  ・core-lines
+  ・file-lines
+  ・test-src-ratio
+  ・name-literal
+  ・manifest-name
+  ・manifest-version
+  ・lints-set
+  ・lints-optin
+  ・deps-empty
+  ・toolchain-pin
+  ・paths-clean
+  判定行は違反 0 のときだけ出る 1 行で、 各 tag の実測値を <tag>=<値> の形で並べる。 本列挙の正しさは判定行の現物と突き合わせて確かめる (字面の pin ではなく実行出力との照合)。
+  §2.2 各 tag が測るもの
+  それぞれが何を見ているかを 1 行ずつ書きます。 数値そのものは前の記録の表にあります。
+  core-lines
+  core crate の src 配下の総行数 (C4 の上限・tests 配下は母集団外)
+  file-lines
+  crates/*/src 配下 .rs の 1 file 最大行数 (C4 の上限)
+  test-src-ratio
+  test 行と src 行の比 (測定定義は ADR-1002 §2.4 が固定した形のまま)
+  name-literal
+  core crate の名前定数がただ 1 箇所で宣言されていること
+  manifest-name
+  manifest 群が名乗る名前の一致
+  manifest-version
+  manifest 群が名乗る版の一致
+  lints-set
+  workspace が宣言する lint の集合 (宣言の欠落を測る唯一の面)
+  lints-optin
+  member 側が workspace の lint を opt-in していること
+  deps-empty
+  直接依存が許可の集合に収まっていること (C13)
+  toolchain-pin
+  toolchain が版番号の字面で固定されていること
+  paths-clean
+  index を母集団に、 tracked file の本文へ private path 形が残っていないこと (実装は crates/xtask/src/paths_clean.rs)
+  §2.3 増減のしかたと射程外
+  項目を増やしたり減らしたりするときは、 この記録を差し替える新しい記録を立てます。 前の記録を後から書き換えることはしません。
+  tag の増減は本 ADR を supersede する新 ADR で行う (MUST)。 ADR-1002 前文の凍結規定をそのまま継承する。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 閾値の実値と置き場 (ADR-1002 §2.5 が有効)、 test-src-ratio の測定定義 (同 §2.4 の当該規定が有効)、 各 tag の実装 (C12 の歯が測る面)、 CI の job 構成。 本 ADR が差し替えるのは ADR-1002 §2.4 の列挙 1 文だけである。
+  なお ADR-1002 §2.6 (a) が数える「cargo xtask check の 10 tag」は、 本 ADR の 11 本に読み替える。 同 (a) の主張 (shell / Python の test file を数える口が無い) は依然として真であり、 §2.6 の規定そのものは有効のままである。
+  §2.4 ADR-1002 §2.2 の例示の訂正
+  前の記録に書かれた実験の例が、 そのままでは再現しません。 引数の数が 1 つ足りないためです。 決めたこと自体は正しいので、 ここに訂正だけを残します。
+  ADR-1002 §2.2 の実測引用は逐語では再現しない。 本 ADR に訂正を記録する (ADR-1002 は frozen ゆえ本文は触らない)。
+  当該引用は「宣言ゼロの crate で 7 引数関数が -D clippy::too-many-arguments implied by -D warnings として error」と述べる。 too_many_arguments の既定閾値は 7 で、 発火は閾値の超過ゆえ、 宣言ゼロ・clippy.toml 不在の条件では 7 引数は通る。 本 ADR の記録時点で撃ち直した実測は次のとおり:
+  7 引数 / 宣言ゼロ / clippy.toml 不在
+  rc 0 (error にならない)
+  8 引数 / 同条件
+  rc 101 — -D clippy::too-many-arguments implied by -D warnings
+  7 引数 / clippy.toml の閾値 5 (本 repo の設定)
+  rc 101
+  すなわち元の引用は閾値を下げた条件での実測を、 宣言の有無だけの条件として書いたものである。 決定そのもの (too_many_arguments の既定 level は warn ゆえ宣言が無くても違反は -D warnings 下で落ちる) は正しく、 本訂正は決定に影響しない——変わるのは「何引数で落ちるか」という例示の数だけである。
+options:
+  - id: "chosen"
+    name: "cargo xtask check が measure する tag の列挙"
+    text: |
+      決めることは 3 つです。 測る項目は 11 本であること、 それぞれが何を測るのかの 1 行、 そして増やしたり減らしたりするときは新しい記録を立てること。 数値のしきい値は前の記録のままで、 ここでは触りません。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 構造検査が何を測るかの一覧が、 実際に動いているものより 1 つ少ないままになっています。 前の記録は決定時点で凍結する約束なので、 その file を書き換えるのではなく、 新しい記録で一覧を差し替えます。"
+  - id: "i"
+    name: "ADR-1002 §2.4 を in-place 改訂する"
+    text: |
+      案 (i) ADR-1002 §2.4 を in-place 改訂する: 却下。 ADR は決定時点の記録 (frozen) であり、 前文の凍結規定が in-place 改訂を禁じている。 記録を書き換えると「2026-09-07 に何を決めたか」が読めなくなり、 ADR が持つ唯一の値 (決定の時点と理由が残ること) を失う。
+    verdict: rejected
+    reason: "ADR は決定時点の記録 (frozen) であり、 前文の凍結規定が in-place 改訂を禁じている。 記録を書き換えると「2026-09-07 に何を決めたか」が読めなくなり、 ADR が持つ唯一の値 (決定の時点と理由が残ること) を失う。"
+  - id: "ii"
+    name: "ci-decl を 12 本目として先行記録する"
+    text: |
+      案 (ii) ci-decl を 12 本目として先行記録する: 却下。 xtask 側に実体が無く、 検証面は CI の job そのものである。 実体の無い項目を記録すると、 記録が事実に先行し「列挙は現物と一致する」という本 ADR の前提そのものが崩れる。 CI 便の契約化でも不採用となった。
+    verdict: rejected
+    reason: "xtask 側に実体が無く、 検証面は CI の job そのものである。 実体の無い項目を記録すると、 記録が事実に先行し「列挙は現物と一致する」という本 ADR の前提そのものが崩れる。 CI 便の契約化でも不採用となった。"
+basis: [NFR1003, ADR-1002]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めることは 3 つです。 測る項目は 11 本であること、 それぞれが何を測るのかの 1 行、 そして増やしたり減らしたりするときは新しい記録を立てること。 数値のしきい値は前の記録のままで、 ここでは触りません。
+approval:
+  who: 持ち主
+  date: 2026-09-10
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 記録と実際に動いているものが一致し、 検査の 1 行を読めば何が測られているか分かることです。 弱い点は、 一致を機械が見張っているわけではないことです。"
+  - "Positive: 記録された列挙と判定行の現物が一致するため、 判定行 1 行から「何が測られているか」を辿れる。 tag を足す便は本 ADR の supersede を伴うので、 測定面の増減が記録面に残る。"
+  - "Negative: 列挙と現物の一致を測る機械は無い。 tag を足しても本 ADR を supersede しなければ、 記録は再び現物より少ないまま気付かれない (ADR-1002 §2.4 が 10 本のまま残ったのと同じ形)。 この乖離は現時点では便の手続き (契約が ADR の更新を要求する) で抑える。 ci-decl のように「実体を持たない案」を先に記録しない規律も、 同じ理由で人間の手続き側に在る。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0006-xtask-check-measure-tags.html
+  器の記録の頭: Status: accepted · Date: 2026-09-10 · version 0.4.6 (拘束する constitution の版) · ADR-1002 §2.4 の tag 列挙を部分 supersede
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版・決定時点で凍結)
+  器の機械の欄 decided-by: admin (2026-09-08 の leg 1 裁定 §3) + planner の契約化 (2026-09-10・12 本目の案 ci-decl は不採用)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: ADR-1002 §2.4 の measure tag の列挙のみ (部分 supersede)。 ADR-1002 の §2.1〜§2.3 / §2.5 / §2.6 は有効のままである
+  器の機械の欄 related: ADR-1002 (§2.4 の構造検査)・constitution C4 / C12 / C13・SRS NFR1003
+  器の却下案の節の要約: 2 つの案を退けました。 前の記録を直接書き換える案と、 まだ実体の無い項目を先に書いておく案です。
+  器の記録の出所（Trace）:
+  出所は 2 件です。 実装側の裁定と、 その後の契約化で 12 本目を採らないと決めたことです。
+  ・決定の出所: 2026-09-08 の leg 1 裁定 §3 (11 本目 paths-clean を measure 面へ足す) と、 2026-09-10 の契約化 (12 本目の案 ci-decl は不採用・CI の job が検証面)。 本 repo は public のため、 裁定の逐語・席や台帳の識別子・host 名は本 file に載せない (出所は日付で指す)。
+  ・supersede 対象: ADR-1002 §2.4 の measure tag の列挙 1 文のみ (部分)。 同 §の他の規定と §2.5 の閾値は有効。
+  ・拘束条件: C4 (大きさの上限を measure する)、 C12 (歯は Rust の 1 framework)、 C13 (依存の許可集合)。 要件は SRS NFR1003 (measure = cargo xtask check)。
+  ・前提: paths-clean が main に実在すること (判定行の現物で確認できる)。
+  ・記録した日: 2026-09-10。

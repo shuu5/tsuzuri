@@ -1,0 +1,98 @@
+# 判断の記録 ADR-1005 — 器 scribe2 の判断の記録 ADR-0005 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1005
+title: "憲法改訂 = A3 の承認経路を C7 の対話面へ揃える"
+status: accepted
+date: 2026-09-09
+context: |
+  承認を受け取る窓口を「ちょうど 1 つ」と決め直したとき、 その決定を A1 (消す / 出す / 使う) には反映しましたが、 A3 (依存 OSS の追加・削除) には反映し忘れていました。 A3 の条文には、 もう存在しない席の名前 —「planner を通った印」— が残ったままです。 本 ADR は、 その取りこぼしを直す記録です。
+  ADR-1003 §2.1 は、 承認の受理面はちょうど 1 つであるという不変量だけを条文に残し、 その面の identity は条文でなく rules 行 R-C7-1 が持つ、 と決めた。 この決定は C7 と A1 に反映され、 A4.2 の受理面の語もこれに合わせた。 しかし ADR-1003 の射程は C7 / A1・C8 / A4・N4 に限られており、 A3 は射程に入っていなかった。 その結果、 A3 の規範文には改訂前の機構「as a relay stamp through the planner」が残った。 これは vocabulary が「歴史的な語」と定めた relay 印と、 唯一の対話面ではなくなった planner 席を、 現行条文が名指したまま参照し続ける状態である。 A3 は依存 OSS の追加・削除という C13 の手続きの入口であり、 承認の受理面が機械的に定まらないと Ask-first が成立しない。 憲法条文の改訂は A2 の user 裁定事項であり、 2026-09-09 に user は A3 を A1 と同形へ書き換える裁定を出した。 N4.2 が憲法改訂に新しい ADRを要求するため、 land 済みの ADR-1003 を書き換えるのではなく本 ADR を新設して記録面とする。
+decision: |
+  決めたことは 1 つです。 A3 で user の承認を取る経路を、 A1 と同じ「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」に揃えます。 依存を足すときの手続き (予算の範囲に収める・compile 時間の実測差を記す) は 1 mm も変えません。
+  下の EARS block は決定時点の条文案であり、 施行された条文の正本は ../spec/constitution.html の #a3 である。 齟齬時は憲法を正とする (本 ADR は WHY を持ち、 条文の WHAT は憲法が持つ)。
+  §2.1 A3 = 承認は C7 の対話面を通す・C13 の手続きは据置
+  A3 の「user に確認し」を「C7 の対話面を通して user の承認を取り」に改めます。 これは A1 に入れたのと同じ文で、 新しい決まりを足すものではありません。 対話面が誰かは条文でなく差し替えできる行 (R-C7-1) が持ち、 今の値は「user 直」です。
+  A3 の条文を次に置き換える (MUST)。 射程は承認の受理面だけである: C13 の手続き (許可リスト + 予算・compile 時間の実測差) と R-C13-1 の値は据置く。
+  A3: WHEN an OSS dependency is to be added or removed, scribe2 SHALL obtain the user's approval through the dialogue surface designated by R-C7-1 (C7) first, and SHALL follow the C13 procedure (C13, R-C13-1).
+  機構 (型 / lint / CI)
+  承認の受理面は C7 の対話面 (rules 行 R-C7-1・初期値 = user 直) のみで、 受理した承認は approval event に逐語付きで記帳する (C7.2)。 改訂前の「planner 発行の relay 印」は廃止 (席の名を条文に焼いた形だったため・ADR-1003 §2.1 と同じ理由)。 C13 の許可リスト + 予算 (R-C13-1) と cargo deny は無改変。
+  出所
+  user 裁定 2026-09-09 (A3 の承認経路・ADR-1003 とは別の裁定)・本 ADR §1
+  本改訂は ADR-1003 §2.1 の決定を A3 へ適用したものであり、 新しい決定ではない。 A1 と A3 で承認経路の語が食い違わないようにすることが目的で、 A1 の EARS の該当句と逐語で同形にする。
+  §2.2 憲法 file への反映のしかた
+  憲法の file は作り直さず、 同じ file の中で書き換えます。 消した文は消し線、 足した文は下線の印を付けて本文に残すので、 何がどう変わったかが後から読めます。
+  design-intent/spec/constitution.html を同一 file の中で改訂する (MUST)。
+  ・(a) #a3 の card の要旨・規範文・出所を §2.1 の文へ置き換え、 旧文は folio の delta marker (del.delta / ins.delta・data-delta-id = 差分の印 2026-09-09-011) で本文に残す。 機構 dd は C13 の記述のみで改訂前の席の名を含まないため触らない。
+  ・(b) §2 の一覧表の A3 行の「機構の要点」と「出所」を新文に合わせる (ins.delta のみ。 旧文「C13 の手続き」は据置ゆえ del にしない)。
+  ・(c) 前書きの machine-readable dl の source と §5 Trace に、 本 ADR による A3 の改訂を項として足す。 ADR-1003 の項 (5 条・差分の印 2026-09-09-001〜005・009〜010) は変えない。
+  ・(d) 条数は変えない (Always 16 / Ask-first 4 / Never 4)。 folio-version と JSON-LD の folio:version は 0.4.6 のまま (本改訂は SPEC の版を動かさない)。
+  ・(e) JSON-LD への dc:isReferencedBy の追加と各 page の chrome は folio の生成物であり、 手編集しない。
+  §2.3 本 ADR の射程外
+  この ADR は A3 の承認の窓口だけを直します。 依存を足すときの予算や手続き、 ADR-1003 が決めたことそのものには手を触れません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): C13 の手続きと R-C13-1 の値 (無改変)、 ADR-1003 の本文 (frozen・本 ADR は supersede しない)、 R-C7-1 の値 (対話面が誰かの判断は rules 行の変更で行う・C5)、 A1 / A2 / A4 / N4 の条文。 本 ADR が変えるのは constitution の #a3 と、 それに伴う §2 一覧表の 1 行・前書きの source・§5 Trace だけである。
+options:
+  - id: "chosen"
+    name: "憲法改訂 = A3 の承認経路を C7 の対話面へ揃える"
+    text: |
+      決めたことは 1 つです。 A3 で user の承認を取る経路を、 A1 と同じ「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」に揃えます。 依存を足すときの手続き (予算の範囲に収める・compile 時間の実測差を記す) は 1 mm も変えません。
+      採った案（器の却下案の節の表の行）: 案 A 新 ADR｜本 ADR (ADR-1005) を新設し、 A3 の改訂の記録面とする。 ADR-1003 は無改変｜user 裁定 2026-09-09。 N4.2 の「新 ADR」を字義で満たす唯一の形。 ADR-1003 の frozen 性を保てる｜採用
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 承認を受け取る窓口を「ちょうど 1 つ」と決め直したとき、 その決定を A1 (消す / 出す / 使う) には反映しましたが、 A3 (依存 OSS の追加・削除) には反映し忘れていました。 A3 の条文には、 もう存在しない席の名前 —「planner を通った印」— が残ったままです。 本 ADR は、 その取りこぼしを直す記録です。"
+  - id: "r1"
+    name: "案 B ADR-1003 の射程拡大"
+    text: |
+      案 B ADR-1003 の射程拡大｜ADR-1003 を in-place で改訂し、 §2.1 に A3 の 1 行・§2.5 の対象・§5 Trace を足したうえで、 題名 / dc:title / h1 / supersedes / §1 の「3 点」を 5 条 → 6 条へ全面追随させる｜実態 (同じ決定の適用漏れの是正) には合うが、 N4.2 は憲法改訂に新 ADRを要求しており、 land 済み ADR の再利用はこれを満たさない。 憲法を破って憲法を直す形になる。 accepted 済み ADR の題名を後から書き換える点も、 決定時点の記録という ADR の性質に反する｜却下
+    verdict: rejected
+    reason: "実態 (同じ決定の適用漏れの是正) には合うが、 N4.2 は憲法改訂に新 ADRを要求しており、 land 済み ADR の再利用はこれを満たさない。 憲法を破って憲法を直す形になる。 accepted 済み ADR の題名を後から書き換える点も、 決定時点の記録という ADR の性質に反する（却下）"
+  - id: "r2"
+    name: "案 C 据え置き"
+    text: |
+      案 C 据え置き｜A3 は改訂せず、 現行の「as a relay stamp through the planner」を残す｜存在しない席の印を要求する条文が残り、 A3 の Ask-first が機械的に成立しない。 同じ承認経路を定める A1 / A4 と条文間で食い違い続ける。 vocabulary が歴史的な語と定めた relay 印を現行条文が参照したままになる｜却下
+    verdict: rejected
+    reason: "存在しない席の印を要求する条文が残り、 A3 の Ask-first が機械的に成立しない。 同じ承認経路を定める A1 / A4 と条文間で食い違い続ける。 vocabulary が歴史的な語と定めた relay 印を現行条文が参照したままになる（却下）"
+basis: [ADR-1003]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めたことは 1 つです。 A3 で user の承認を取る経路を、 A1 と同じ「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」に揃えます。 依存を足すときの手続き (予算の範囲に収める・compile 時間の実測差を記す) は 1 mm も変えません。
+approval:
+  who: 持ち主
+  date: 2026-09-09
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 承認の窓口の言い方が 4 条すべてで揃い、 席が無い今でも A3 の承認が機械的に受け取れることです。 悪い点は、 この改訂が守られているかを測る機械がまだ無いことです。"
+  - "Positive"
+  - "・A1 / A3 / A4 の承認経路が「C7 の対話面 (R-C7-1)」の 1 語に揃い、 条文の中に生きた席の名が残らなくなった。 Ask-first 4 条の受理面が 1 つであることを、 条文を横断して読める。"
+  - "・planner 席が存在しない現在の構成でも A3 の承認が機械的に受理可能になった (改訂前は存在しない席の印を要求していた)。"
+  - "・ADR-1003 を frozen のまま保てた。 land 済み ADR の題名・identity・決定本文を後から書き換えずに済み、 「ADR は決定時点の記録」という性質が壊れない。"
+  - "・N4.2 が要求する 3 点セット (新 ADR・delta marker・裁定 id) を、 本改訂自身が満たす形で land できる。"
+  - "Negative"
+  - "・本改訂を守る歯が無い: folio validate の delta-marker gate は marker の形式 (D-YYYY-MM-DD-NNN) と data-delta-superseded-by の解決だけを見る。 marker を付けずに条文を書き換えても gate は通る。 したがって「条文に廃止語が残っていないか」「改訂に ADR と裁定 id が伴うか」を測る機械は存在せず、 base で RED になる test も無い。 ADR-1003 §3 が記した「3 点セットを測る機械が無い」は本 ADR でも解消していない。"
+  - "・裁定 id が日付表記 (user 裁定 2026-09-09) のため、 同じ日の複数の裁定を id だけでは弁別できない。 本件は ADR 番号 (ADR-1005) が弁別子を兼ねているが、 裁定 id そのものの一意性は未解決である。"
+  - "・ADR が 1 本増える。 決定の内容は「先の決定の適用漏れの是正」であり薄いが、 N4.2 が新 ADR を要求する以上この形を取る。"
+  - "Neutral"
+  - "・条数は変えない (Always 16 / Ask-first 4 / Never 4)。 constitution の版も 0.4.6 のまま動かさない。"
+  - "・C13 の手続きと R-C13-1 の値は無改変。 day-1 optional adapter (rtk / graphify) の採用が A3 の対象である点も変わらない。"
+  - "・本 ADR は決定の記録であり、 決定は user 裁定 (2026-09-09) で行われた。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0005-a3-approval-surface-c7.html
+  器の記録の頭: Status: accepted · Date: 2026-09-09 · version 0.4.6 (改訂後の constitution の版) · user 裁定 2026-09-09 · 憲法条文の改訂ゆえ A2 の user 裁定を経た
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.4.6 (改訂後の constitution の版・SPEC の版に追随する。 本改訂は SPEC の版を動かさない)
+  器の機械の欄 decided-by: user (2026-09-09) — 憲法条文の改訂は A2 の user 裁定事項。 本 ADR の裁定は ADR-1003 の裁定とは別の 1 件で、 逐語は repo 外の RULING file が原本
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: (none — ADR を supersede しない。 constitution の A3 だけを改訂する)
+  器の機械の欄 related: ADR-1003 (§2.1 の決定を A3 へ適用する) / constitution A1 / A2 / A3 / C7 / C13 / N4 / R-C7-1 / R-C13-1
+  器の却下案の節の要約: 3 つの案を比べました。 新しい ADR を立てる案 (採用)、 前の ADR を書き足す案、 何もしない案です。 比べた第 1 の基準は「憲法自身の改訂手続き (N4) を破らずに直せるか」です。
+  器の却下案の節の注: 案 B と案 C は、 いずれも「A3 の条文が現実と食い違っている」という事実そのものは争わない。 分岐点は是正の手続きにある: 案 B は手続き (N4.2) を満たさずに内容を直し、 案 C は手続きを守るために内容の食い違いを残す。 案 A は両立する唯一の形であり、 コストは ADR 1 本である。
+  器の記録の出所（Trace）:
+  出所は user の裁定 1 件です。 逐語の記録は、 この repo が public のため repo の外に置いています。
+  ・決定の原本: user 裁定 2026-09-09 (A2・A3 を A1 と同形へ書き換えてよい)。 逐語は repo 外の RULING file。 本 repo は public のため、 裁定の逐語・席や台帳の識別子・host 名は本 file に載せない。
+  ・前提になった決定: ADR-1003 §2.1 (対話面はちょうど 1 つ・identity は rules 行 R-C7-1)。 本 ADR はその決定を A3 へ適用する。
+  ・拘束条件: A2 (憲法条文の改訂は grill 前置の user 裁定)、 N4 (改訂は新 ADR + delta marker + 裁定 id の 3 点セットを伴う — 本 ADR がその新 ADR にあたる)。
+  ・改訂対象: design-intent/spec/constitution.html の #a3 (要旨・規範文・出所)、 §2 一覧表の A3 行、 前書きの source、 §5 Trace。 delta id は 差分の印 2026-09-09-011。
+  ・射程外: C13 の手続きと R-C13-1 の値、 ADR-1003 の本文、 R-C7-1 の値。
+  ・記録した日: 2026-09-09 (決定日と同日)。
+  （取り込みの規則）folio の差分の印（字 D と「-」と日付と連番・器の憲法の改訂の印）は根の規則の表の行の id と同じ頭の形なので、この写しでは字「差分の印 <日付>-<連番>」と書いた。

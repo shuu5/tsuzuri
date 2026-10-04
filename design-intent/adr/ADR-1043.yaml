@@ -1,0 +1,137 @@
+# 判断の記録 ADR-1043 — 器 scribe2 の判断の記録 ADR-0043 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1043
+title: "主実測は着地する木が gate の木と同じなら全段を撃たない (木の sha の一致を測定の再現と見なし record 1 本で残す・一致しない周と tree の無い verdict の周は全段撃つ・ADR-1021 §2.4「木が同じ main 実測は検出線を撃ち直さない」を「全段を撃ち直さない」へ広げる部分 supersede)"
+status: accepted
+date: 2026-09-17
+context: |
+  着地の直後にもう一度撃つ検査 (主実測) は、 着地した木が gate で検査した木と byte 単位で同じでも、 検出線を除く 3 段を撃ち直していた (同じ木の便 27 本で中央値 14.9 分)。 木の sha が同じ周は全段を撃たず、 「どの木の測定を再現と見なしたか」を record 1 本に残して着地を進める。 木が違う周と木の記録が無い周は今までどおり全段撃つ。
+  なぜこの判断が要るのかを、実測と現物から説明します。着地の直後の検査（主実測）は、前の決定で「木が同じなら変異検査だけ省く」と決めましたが、残りの 3 段は同じ木でも撃ち直しています。同じ木だった便が 4 本のうち 3 本で、その 3 段に中央値で約 15 分かかっています。user の裁定と憲法の向きも併せて示します。
+  CTX1 実測 — 同じ木の便が 36 本中 27 本で、 主実測の残り 3 段に中央値 14.9 分かかる
+  2026-09-17 の planner の実測 (main 12e64cc・逐語は台帳 s2-07l.464): verify-main.jsonl を持つ着地 39 便のうち理由を持つ 36 便の内訳は same-tree 27 / outside-scope 9。 same-tree の 27 便で、 squash の commit 時刻から主実測の record の終端までの壁時計は中央値 14.9 分 (p25 5.6 / p75 15.9 / 最大 30.6) で、 これは③を省いた後に残る ①②④ の時間。 着地 45 便の Gated(PASS) → Landed は中央値 10.4 分 (p25 5.1 / p75 15.9)。 1 便の壁時計の中央値 126 分のうち land は約 1 割。
+  CTX2 現物 — 主実測は tmp worktree を切ってから木を比べ、 ③だけを省く
+  land の主実測（着地した main の木に対して撃ち直す検査） (設計 gate-cost.md §5・pipeline.md §5.4) は、 追跡 file だけの tmp worktree を切り、 着地する commit の木の sha と gate の verdict.json の tree を比べ、 一致する周は③ 検出線だけを skipped=detection reason=same-tree で省き、 ① write-set 照合・② 共通 verify・④ 契約 verify は撃ち直す (ADR-1021 §2.4)。 ADR-1021 §2.4 (2026-09-12) の実測は main 実測 78 分のうち変異検査が約 75 分で、 当時は③が大半だったので③だけを省いた。 ③を省いた後は ①②④ が主実測のすべてになった。 skip record の構築の口は段ごとに閉じており (検出線・再 gate の 2 つ)、 主実測の段の口は無い。
+  CTX3 裁定 — 最大の bottleneck は 1 便あたりの時間と token
+  user 裁定 2026-09-17T22:4xZ (逐語は台帳 s2-07l.462 の notes) は、 器の最大の bottleneck を「1 便あたりの時間と token」と名指した。 着地の列 (ADR-1039) は gate の回数を便の数に比例させない側を決めたが、 着地後の主実測は便ごとに残っている。 本 ADR はその主実測を、 木が同じ周は record 1 本に縮める。
+  CTX4 憲法と要件の向き
+  C12.6 は main を常に緑に保つ (未検査の木を main にしない)。 C10 は持ち越した値を実測と型で区別する (撃たなかった事実を黙って落とさず、 どの木の測定を再現と見なしたかを残す)。 C11.2 は skip の口を閉じた型で持つ。 C2 は省く条件を 1 関数の 1 比較で持ち、 段の手書きの選別を持たない。 C3.3 は判定の入力を描画や自由文でなく typed な値 (木の sha) にする。 FR1034 は追随の周の gate のやり直しを、 FR1012 は着地ごとの Landed と record を、 FR1050 は先端の着地 commit の CI の照合を求める。 ADR-1039 の原則 PRIN-GATE-THE-TREE-NOT-THE-RUN は「着地の前の検査は着地後の木に対して行い、 検査の回数を便の数に比例させない」。
+  （選択肢を測るものさし）判断を評価する 5 本のものさしです。main が常に緑であること、同じ木を 2 度測らないこと、撃たなかった事実を型で残すこと、省く条件が 1 つの比較で段の手書きの選別を持たないこと、record の形と規則の値を増やさないことです。
+  DR1｜main の先端は常に緑で、 検査されていない木を main にしない (木が違う周・木の記録が無い周は全段撃つ = fail-closed) 憲法 C12.6 / SRS FR1034 / FR1050
+  DR2｜同じ木を 2 度測っても情報は増えない = 検査の回数を便の数に比例させない CTX1 / ADR-1039 PRIN-GATE-THE-TREE-NOT-THE-RUN
+  DR3｜撃たなかった事実は黙って落とさず、 どの木の測定を再現と見なしたかを record に残し、 実測と型で区別する 憲法 C10 / C11.2 / SRS FR1012
+  DR4｜省く条件は 1 関数の 1 比較 (木の sha の一致) で、 段の名や行の種類による手書きの選別を持たない 憲法 C2 / C3.3
+  DR5｜record の schema・gate の段と順序・③の省き方の面・rules 行は変えない ADR-1021 §2.4 / ADR-1009 §2.4 / 設計 gate-cost.md §5
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。着地する木の sha が gate の記録の木と同じ周は主実測の全段を撃たず、木の sha を持つ record を 1 本残して着地を進めます。違う周と木の記録が無い周は全段撃ちます。追随の周の gate のやり直し（FR1034）、着地ごとの記録（FR1012）、先端の commit の CI の照合（FR1050）に対応します。
+  採用 — OPT1
+  land の主実測 (設計 gate-cost.md §5・pipeline.md §5.4) は、 着地する commit の木の sha が gate の verdict.json の tree と一致する周、 ① write-set 照合・② 共通 verify・③ 検出線・④ 契約 verify の全段 SHALL 撃たず、 verify-main.jsonl に record 1 本 (kind=main skipped=main tree=<sha> reason=same-tree) SHALL 書いて main-green とし finish (Landed) へ進む。 一致しない周と verdict に tree が無い周 SHALL 従来どおり全段を撃つ (③は ADR-1021 §2.4 の面の規則のまま)。 record SHALL 既存の skip record の閉じた口に主実測の段の口を 1 つ足す形で作り、 木 (tree) SHALL 必ず持つ。 schema SHALL 1 のまま field を足さず、 読み手は skipped の非空で従来どおり拾う。 ADR-1039 の候補の木の主実測 SHALL 同じ 1 関数を通り、 候補の先端の木と着地の先端の木が同じ周は record 1 本とする。
+  （平易）着地する commit の木の sha が、gate が記録した木の sha と同じなら、着地後の検査は 4 段とも撃たず、「この木の gate の測定を再現と見なした」という record を 1 本だけ書いて着地を終えます。違う周と、gate の記録に木の sha が無い周は、今までどおり全段撃ちます。record は既存の「省いた」record と同じ形で、木の sha を必ず持ちます。record の形も規則の値も増やしません。着地の列（ADR-1039）でまとめて着地する周も同じ 1 つの関数を通ります。
+  （理由）木の sha は中身から計算されるので、同じ sha は byte 単位で同じ木です。gate はその木に全段を撃って緑にしており、同じ木にもう一度撃っても新しいことは分かりません。これは「main が赤かもしれないが先に着地する」楽観着地（ADR-1039 で却下）とは違い、着地する木そのものが既に全段緑です。撃たなかった事実は record に木の sha ごと残すので、後から「どの木の測定を再現と見なしたか」を辿れます。木が違う周は全段撃つ経路がそのまま残るので、main が未検査の木になることはありません。省く条件を「木の sha の一致」の 1 つの比較に限り、段や行を手で選ぶ規則を持ちません。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1034（claim）: 追随の周の「gate をやり直す」は不変で、 やり直した gate が記録した木と着地する木が同じ周だけ主実測を record 1 本にする = 木が違う周は全段撃つ。
+  FR1012（claim）: 着地ごとの Landed と record は不変で、 撃たなかった主実測も verify-main.jsonl に木の sha を持つ record 1 本として便ごとに残る。
+  FR1050（claim）: 先端の着地 commit の CI の照合は不変で、 同じ木の周に主実測が撃たなかった面 (追跡 file だけの木での検査) は CI の照合が残る。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。ADR-1021 §2.4 のうち「木が同じ周は検出線だけ撃たない」を「全段を撃たない」へ広げ、それ以外の文は変えません。ADR-1039 は着地後の検査を決めていないので変わらず、その原則「検査は木に対して行い、回数を便の数に比例させない」に本 ADR も行き着きます。
+  改訂状態: current
+  置き換える ADR: ADR-1021
+  置き換えられた: なし (現行)
+  ADR-1021 §2.4 のうち「git rev-parse <new>^{tree} が verdict の tree と一致する周に③を撃たず skipped=detection tree=<sha> を記し、 ①②④ は従来どおり撃つ」を、 本 ADR は「一致する周は全段を撃たず skipped=main tree=<sha> の record 1 本を記す」と読む。 同 §2.4 の「一致しない周と tree の無い verdict の周は全部撃つ」・③の面の規則 (検出線は面に触れた周だけ)・verify.jsonl と verify-main.jsonl の record 形・verdict.json の tree は不変。 ADR-1009 §2.4 の verify の順序と ADR-1021 §2.6 の読み替えは不変。 ADR-1039 (候補の木) は主実測を規定していないので不変で、 候補の木の主実測も本 ADR の 1 関数を通る。
+  照会終端 — PRIN-GATE-THE-TREE-NOT-THE-RUN (ADR-1039)
+  着地の前の検査は着地後の木に対して行い、 検査の回数を便の数に比例させない。 便ごとに持つのは記録であって検査ではない。
+  本 ADR の判断は ADR-1039 のこの原則に行き着く (これ以上は遡らない照会終端)。 同じ木を 2 度測っても情報は増えず、 便ごとに残すのは「どの木の測定を再現と見なしたか」の記録である。
+options:
+  - id: "OPT1"
+    name: "同じ木なら全段を撃たず、 木の sha を持つ record 1 本で主実測を残す"
+    text: |
+      着地する commit の木の sha が verdict の tree と一致する周は ①②③④ の全段を撃たず、 verify-main.jsonl に record 1 本 (kind=main skipped=main tree=<sha> reason=same-tree) を書いて main-green とする。 一致しない周と tree の無い verdict の周は従来どおり全段撃つ。
+      （平易）着地した木が gate で検査した木と同じ sha なら、検査を 1 段も撃たず、「この木の gate の測定を再現と見なした」という record を 1 本だけ書いて着地を終えます。木が違う周や、gate の記録に木の sha が無い周は今までどおり全段撃ちます。省く条件は「木の sha が同じか」の 1 つの比較だけです。
+      利点: 同じ木の周 (実測で 36 本中 27 本) の主実測が中央値 14.9 分から record 1 本の書き込みに縮む
+      利点: 省く条件は 1 比較で段の選別を持たず (C2)、 撃たなかった事実は木の sha 付きの record で残る (C10)
+      利点: schema・rules 行・gate の段と順序は変えず、 skip record の閉じた口に主実測の 1 つを足すだけ (C11.2)
+      欠点: gate は便の worktree で撃ち、 主実測は切りたての worktree で撃つ。 untracked と未 commit は gate の前提検査 (status --porcelain が空) が既に断るので木の外には無いが、 ignore された file (build の中間物など) に依って gate を通った便を同じ木の周に主実測が捕まえる機会は無くなる (その面は main の CI の照合 FR1050 が残る)
+      欠点: ADR-1021 §2.4 の「①②④ は従来どおり撃つ」を部分 supersede する
+    verdict: adopted
+    reason: "着地する commit の木の sha が verdict の tree と一致する周は ①②③④ の全段を撃たず、 verify-main.jsonl に record 1 本 (kind=main skipped=main tree=<sha> reason=same-tree) を書いて main-green とする。 一致しない周と tree の無い verdict の周は従来どおり全段撃つ。"
+  - id: "OPT2"
+    name: "現行のまま (同じ木でも ①②④ を撃ち直し、 ③だけ省く・ADR-1021 §2.4)"
+    text: |
+      前提は「squash の木は gate の木と違いうる」。 実測では 36 本中 27 本が同じ木で、 違う周は既に全段撃つ経路が在る。
+      （平易）今の形です。同じ木でも変異検査以外の 3 段を撃ち直します。「squash した木は gate の木と違うかもしれない」という前提でしたが、実測では 4 本のうち 3 本が同じ木で、違う周には既に全段撃つ経路が在ります。同じ木を 2 度測る時間が便ごとに残ります。
+      利点: 器の変更が無い・ignore された file に依って通った便を切りたての worktree の主実測が捕まえる面が残る (untracked は gate の前提検査が既に断る＝ADR-1021 §03 (C) の前提は今は無い)
+      欠点: 同じ木の周 (36 本中 27 本) に ①②④ の中央値 14.9 分を便ごとに払い続ける = 同じ木の同じ測定の重複で情報を足さない
+    verdict: rejected
+    reason: "前提は「squash の木は gate の木と違いうる」。 実測では 36 本中 27 本が同じ木で、 違う周は既に全段撃つ経路が在る。"
+  - id: "OPT3"
+    name: "① write-set の照合だけ残し、 ②③④ を省く"
+    text: |
+      ①は数秒で終わるが、 同じ木の周に「撃つ段」と「省く段」の 2 経路が残り、 木の一致で守れている diff を 2 度測る。
+      （平易）4 段のうち、いちばん軽い「変更した file が契約の範囲に収まっているか」の照合だけ残す案です。数秒で済みますが、同じ木の周に「撃つ段」と「省く段」の 2 つの経路ができ、木が同じなら既に守れている diff をもう一度測ることになります。
+      利点: ①は数秒で終わる
+      欠点: 同じ木の周に経路が 2 本 (撃つ / 省く) になり、 木の一致で守れている diff を 2 度測る = 段の手書きの選別 (C2)
+    verdict: rejected
+    reason: "①は数秒で終わるが、 同じ木の周に「撃つ段」と「省く段」の 2 経路が残り、 木の一致で守れている diff を 2 度測る。"
+  - id: "OPT4"
+    name: "主実測を廃止し、 gate の後は常に着地する"
+    text: |
+      木が違う周 (outside-scope・docs の merge で main が動き §33 で再 gate を省いた周) に main が未検査の木になる。
+      （平易）着地後の検査をなくし、gate が緑なら必ず着地する案です。いちばん速いですが、着地した木が gate の木と違う周（実測で 36 本中 9 本）に、誰も検査していない木が main になります。「main は常に緑」という憲法の線を越えます。
+      利点: 主実測の時間が全周で 0 になる
+      欠点: 木が違う周 (36 本中 9 本の outside-scope) に main が未検査の木になる (C12.6 に反する)
+    verdict: rejected
+    reason: "木が違う周 (outside-scope・docs の merge で main が動き §33 で再 gate を省いた周) に main が未検査の木になる。"
+  - id: "OPT5"
+    name: "主実測を Landed の後に非同期で撃つ"
+    text: |
+      着地を待たせないが、 赤の周に main が赤のまま次の便が積まれる。
+      （平易）着地を先に終え、検査を後から別に走らせる案です。便は待ちませんが、検査が赤だった周に main が赤のまま残り、次の便がその上に積まれます。「main は常に緑」に反します。
+      利点: 着地の壁時計から主実測が消える
+      欠点: 赤の周に main が赤のまま次の便が積まれる (C12.6 に反する)・赤を戻す経路が新たに要る
+    verdict: rejected
+    reason: "着地を待たせないが、 赤の周に main が赤のまま次の便が積まれる。"
+  - id: "OPT6"
+    name: "②④ のうち clippy / deny のような重い行だけ省く"
+    text: |
+      どの行を省くかを手で選ぶ = 行の種類による分岐と散文の規則。
+      （平易）時間のかかる行（lint や依存監査）だけを省く案です。速くはなりますが、「どの行を省くか」を人が選ぶことになり、行の種類で分岐する規則が器に入ります。「1 つの列挙の上の 1 つの関数」という憲法の形に反します。
+      利点: 重い行のぶんだけ短くなる
+      欠点: 行の種類による手書きの選別 (C2)・省いた行の分だけ主実測の意味が散文に依る (N2)
+    verdict: rejected
+    reason: "どの行を省くかを手で選ぶ = 行の種類による分岐と散文の規則。"
+basis: [FR1012, FR1034, FR1050, ADR-1009, ADR-1021, ADR-1039]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  便が main に着地した直後の検査（主実測）は、着地した木が gate で検査した木と同じ sha なら 4 段のどれも撃たず、「この木の gate の測定を再現と見なした」という record を 1 本だけ残して着地を終えます。木が違う周や、gate の記録に木の sha が無い周は、今までどおり全段を撃ちます。record の形や規則の値は増やしません。
+approval:
+  who: 持ち主
+  date: 2026-09-17
+  ruling: "s2-07l.462（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.462 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。同じ木の周の主実測が record 1 本になり、形も規則も増えません。代わりに、git が無視する file（build の中間物など）のせいで gate を通った便を主実測が捕まえる機会が同じ木の周には無くなること（追跡していない file は gate の前提検査がもともと断ります）、同じ木の周には段ごとの秒の記録が残らないこと、前の決定記録の 1 文を部分的に置き換えることを引き受けます。"
+  - "良い結果: 同じ木の周 (実測で 36 本中 27 本) の主実測が、 ①②④ の中央値 14.9 分から record 1 本の書き込みに縮む"
+  - "良い結果: record の schema・rules 行・gate の段と順序は増えず、 変更は skip record の閉じた口に主実測の 1 つを足すことと、 木の比較を tmp worktree を切る前へ移すこと"
+  - "良い結果: 木が違う周と tree の無い verdict の周の経路は不変 (全段撃つ) で、 main が未検査の木になる周は増えない (fail-closed)"
+  - "代償: gate は便の worktree で撃ち、 主実測は切りたての worktree で撃つ (ADR-1021 §2.4)。 untracked と未 commit は gate の前提検査 (status --porcelain が空・verdict の tree はその木) が既に断るが、 ignore された file に依って gate を通った便を同じ木の周に主実測が捕まえる機会は無くなる (その面は main の CI の照合 FR1050 に残る)"
+  - "代償: 同じ木の周は verify-main.jsonl に段ごとの record が並ばないので、 主実測の段ごとの秒の分布はその周から取れない (skip record は秒を持たない規則のまま)"
+  - "代償: ADR-1021 §2.4 の「①②④ は従来どおり撃つ」を部分 supersede する (③の省き方の面と record の形の文は残る)"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0043-same-tree-main-check-is-one-record.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — 着地後の主実測
+  器の表紙: 状態accepted選択肢6件 (OPT1–OPT6)結果良い 3 / トレードオフ 3版v0.1.0 / 2026-09-17
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1034・FR1012・FR1050
+  器の表紙: 想定読者: scribe2 の開発 session (planner / admin) と user — git の内部構造や CI の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・不要 — rules 行を足さず憲法の閾値にも触れない (A1 / A2 / A3 非該当・AI 裁定)。出所の方針は user 裁定 2026-09-17T22:4xZ (対話面・「最大の bottleneck は 1 便あたりの時間と token」・逐語は台帳 s2-07l.462 の notes)・AI 裁定
+  器の承認の欄: 設計 (planner)・planner・2026-09-17 起票 (docs/design/gate-cost.md §27・契約表の行 s・台帳 s2-07l.464・拘束する constitution の版 0.4.6)・作成
+  器の案の章の要約: 候補を 6 つ並べます。同じ木なら全段を撃たず record 1 本にする案、今のまま検出線だけ省く案、write-set の照合だけ残す案、主実測をなくして gate の後は常に着地する案、主実測を着地の後に非同期で撃つ案、そして重い段だけ選んで省く案です。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・主実測（main check）: 便が main に着地した直後に、 着地した main の木 (追跡 file だけ) に対して gate と同じ検証を撃ち直すこと。 record は verify-main.jsonl に残る (ADR-1021 §2.4・設計 gate-cost.md §5)。
+  ・同じ木の主実測（same-tree main check）: 着地する commit の木の sha が gate の verdict.json の tree と一致する周の主実測。 本 ADR では全段を撃たず record 1 本で残す。
+  ・主実測の省略の record（main skip record）: 同じ木の周に verify-main.jsonl へ 1 本だけ書く record (kind=main skipped=main tree=<sha> reason=same-tree)。 どの木の測定を再現と見なしたかを木の sha で持つ。 既存の skip record と同じ形で schema は 1 のまま。
+  ・木の sha（tree sha）: git が commit の中身 (追跡 file の集合) から計算する識別子。 中身が byte 単位で同じなら同じ値になる (content-addressed)。 gate は verdict.json の tree に、 主実測は着地する commit から取って比べる。
+  ・4 段（four stages）: gate と主実測が撃つ順序: ① write-set 照合 → ② 共通 verify → ③ 検出線 → ④ 契約 verify (ADR-1009 §2.4 に ADR-1021 §2.4 が③を挿した順)。 本 ADR は順序を変えない。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1043.build.adr.yaml · 生成: 2026-09-17 23:59 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

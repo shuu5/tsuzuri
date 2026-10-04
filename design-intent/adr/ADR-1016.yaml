@@ -1,0 +1,96 @@
+# 判断の記録 ADR-1016 — 器 scribe2 の判断の記録 ADR-0016 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1016
+title: "便の既定の配送構造は planner 1 席 + 管理席 N 席が pipeline を流す形とし、 runner は契約の不足を typed な質問 record で返して止まる (管理席が自分の手で実装するのは pipeline が回せない便だけ)"
+status: accepted
+date: 2026-09-11
+context: |
+  要件書は「実装役と審査役は画面なしの使い捨て process で起こし、 便の並列は pipeline の便の層で作る」と描いていました。 ところが 2026-09-11 の現実は、 管理席を 3 つ並べて席が自分の手で実装し、 席の中で審査役を起こし、 同じ席が merge する形で 1 日に 43 本 (JST 日・merged PR) を main に入れました。 速い一方で、 審査の独立性は文章の約束と計画役の再実測に寄り、 計画役は context の上限で 2 回止まり、 席からの質問が届かない周がありました。 使い捨ての実装役は聞き返せないので、 契約の穴は失敗か推測にしかなりません。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「並べる形を既定と呼ぶべきか」と問い、 調べた上で「claude -p のまま、 質問にも機械的に対応できる形に整理する方向で進める」と裁定しました。 この記録はその形を決めます。
+  SRS FR1005 は runner / lens を claude -p の 1 形で呼ぶと定め、 FR1004 は契約 1 本に worktree 1 つと runner 1 つを結ぶ。 記録時点 (2026-09-11) の実測 (research §2): main へ merge された PR 43 本 (JST 日・母集団 = merged PR 60 本・UTC 日なら 33 本)、 うち scribe2 自身の便で pipeline を通したのは 1 本 (s2-07l.46・AC1002 の初成立)、 残りは planner 1 席 + 管理席 3 席が worktree で自分の手で実装し、 席の中の subagent で review し、 planner の再実測と go の後に同じ席が merge した。 管理席から planner への QUESTION は 9 件 (うち契約側の誤り 6 件)、 1 件は planner の入力欄が塞がって 8 回不達 (s2-07l.103)、 planner は context 上限で 2 回退避した。 runner は聞き返せない (prompt template が「対話しない」と命じ、 質問を返す record の口が無い)。
+  憲法の向き: C16 は逸脱を edit time で止めると定め、 N2 は散文にしか無い規則を規則と扱わない。 席並列の gate の独立性は dispatch file の散文 (「lens 1 本・WF 禁止」) と planner の再実測に寄っており、 pipeline の便は write-set guard・verify 行・lens・land の CAS を構造で持つ (ADR-1009)。 記録時点の SRS は席の役割の境界を定めていない (「planner や管理席のように session をまたいで対話を続ける」と触れるだけ)。 user 裁定 (2026-09-11・会話面) の要旨 (逐語は台帳 s2-07l.42 / s2-07l.111 の notes に在り、 本 file には写さない): 方向 = claude -p のまま質問にも機械的に対応できる形へ整理する。 条件 = 設計と検証を十分に行う。
+decision: |
+  §2.1 既定の配送構造は planner 1 席 + 管理席 N 席で、 便は pipeline が運ぶ
+  計画役の席が 1 つ、 便を流す係の席が何席か。 便そのものは pipeline (取り込み → 実装役 → 審査 → 合流) が運びます。 係の席の仕事は「割り当てられた契約を pipeline に流す」「実装役の質問を計画役へ届ける」「合流の許可が出たら合流する」の 3 つで、 自分の手で実装してよいのは pipeline が回せない便 (器そのものの穴・設計文書・機械の外の作業) だけです。 席を並べて自分の手で実装する今の形は、 既定ではなく移行期の足場と位置づけます。
+  器 SHALL 便の既定の配送構造を planner 1 席 + 管理席 N 席 (N ≥ 1・各席 1 口座) とし、 便 SHALL pipeline (intake → spawn → gate → land・ADR-1004) が運ぶ。 管理席の仕事 SHALL 次の 3 つに限る: (1) dispatch された契約を pipe run で流す、 (2) runner の質問 (§2.2) を planner へ pointer 1 行で中継する、 (3) planner の go の後に merge する。 管理席 MAY 自分の手で実装するのは pipeline が回せない便だけとする: 器の穴 (pipeline 自身の欠陥で便が回らない周)・design-intent と設計 doc の便・host の外部作業。 記録時点の席並列 (管理席が自分の手で実装し、 席の subagent で review し、 同じ席が merge する) は移行期の足場であり、 器 SHALL NOT それを既定として定義しない。 口座 SHALL 席ごとに持ち、 run は親 (席) の口座を継承する (--account-dir を渡さない形・s2-07l.46 の実測)。
+  §2.2 runner は契約の不足を typed な質問 record で返して止まり、 便は Questioned の段で回答を待つ
+  実装役は「この契約では作れない」と判断したら、 勝手に推測して進むのではなく、 決まった形の 1 行 (質問の record) を最後に書いて手を止めます。 器はその 1 行を読んで便を「質問中」の段に倒し、 質問の文面をそのまま記録します。 回答が記録されると、 同じ便がそこから再開します。 3 クラスの承認で使っている「止まる → 記帳 → 再開」と同じ仕組みで作ります。
+  runner SHALL 契約の不足を 最終行の JSON 1 つ ({"question":"<1 行>","about":"<契約の key>"}・about は任意) で返して止まり、 その周 SHALL NOT commit を作らない。 包み (<NAME> runner) SHALL 最終行が質問 record である周を typed な rc (RC_QUESTION) で名乗り、 record が無い・読めない周 SHALL NOT 質問と読まず claude の rc を写す (ADR-1012 §2.1 と同じ「未知は claude の rc へ落ちる」)。 pipeline SHALL 段 Stage::Questioned と event EventKind::QuestionRaised (detail = 質問の逐語) / EventKind::QuestionAnswered (detail = 回答の逐語) を 各 1 つ足し (C2「新しい理由は新 variant 1 つ」・C3.4 の完了条件は既存の Completion のまま増やさない)、 宣言順の位置 SHALL Stage は Spawned の直後・EventKind は末尾とする (C2 の宣言順・ADR-1013 §2.2 の pin の内側)。 event log の schema 版 SHALL 1 のままとする (ADR-1004 §2.5 決定文 5 が版上げを求めるのは既存の行が読めなくなる変更であり、 値の追加で既存の行は読める。 古い読み手が新しい行を Err にするのは fail-closed のとおり。 ADR-1004 §2.1 の「閉じた 8 variant」は記録時点の件数で上限ではない)。 resume SHALL Questioned から QuestionAnswered が在る周だけ同じ run を再 spawn する (Blocked → ApprovalReceived と同型・回答が無い周は rc 3 で何も書かない)。 pipeline SHALL runner の stdout を捕らえ (記録時点の spawn は rc しか見ない)、 rc が RC_QUESTION (= 76・包みが claude の正常終了の後に付ける名札であり、 上限の rc 75 = 実行の中断とは別物) の周にだけ最終行を読む。 record が無い・読めない周 SHALL Failed へ倒す (fail-closed)。 再 spawn の prompt SHALL 契約 (再読) に「回答」節 (質問と回答の逐語の対) を付ける。 質問 record を読む判定 SHALL Guard の variant 1 つ (RunnerQuestion・InLoop / FailOpen) として極性一覧に載る (ADR-1014・C11.2)。
+  §2.3 回答の権限は契約の所有者 (planner) にあり、 管理席は中継だけを担う。 user の言葉は承認 event でしか記帳しない
+  質問に答えるのは契約を持っている計画役です。 係の席は質問を届けるだけで、 その場で「いいよ」と答えません。 3 クラス (消す・出す・使う) や、 憲法の閾値・依存・裁定 id に触れる質問は「回答」では解きません。 計画役が契約にその印を書き足してから便を再開し、 既存の承認の関門で止め、 user の言葉は承認の記録にだけ残します。 回答の記録はすべて機械由来で、 人手ゼロの計測 (承認以外 0 件) は変わりません。
+  回答 SHALL 契約の所有者 (planner 席) が記帳する (pipe answer --run <id> --words "<逐語>"・actor は EventKind::default_actor の machine のまま・Emit に actor の seam を足さない)。 管理席 SHALL NOT 質問にその場で答えず、 pointer 1 行 (run id と about) を planner へ中継するだけとする。 3 クラス (A1)・憲法の閾値 (A2)・依存 (A3)・裁定 id (C5) に触れる質問 SHALL NOT answer で解かず、 planner が契約に classes または裁定 id を書き足して resume し、 既存の承認関門 (Blocked → pipe approve --words) を通す。 user の逐語 SHALL 承認 event にだけ載る (C7.2)。 本 ADR SHALL NOT FR1022 (人由来の event は approval 以外 0 件) を変えない。 承認の対話面は C7 の R-C7-1 のままで、 本 ADR SHALL NOT 対話面を増やさない。
+  §2.4 runner と lens は claude -p のまま。 teammate は席の中の review に限る
+  実装役と審査役は画面なしの claude -p のままにします。 口座を席ごとに分けられても、 claude -p にはほかに 4 つの理由 (設定を一切読まない形を器が強制できる・席が無くても binary から起こせる・答えを型のある記録で受け取れる・権限を毎回明示できる) が残るからです。 席の中で起こす teammate は、 席が自分の diff を review するときにだけ使います。
+  runner と lens SHALL claude -p の 1 形のまま (FR1005・ADR-1009・ADR-1011 不変)。 根拠は口座分離を除いて残る 4 差 (settings 不読の強制・無 session・typed な判定入力・毎回明示の権限・research §4)。 teammate (Agent tool の subagent) MAY 席の中の review (lens-NN) に使う。 器 SHALL NOT teammate を runner / lens の代替として持たない。 再検討の条件: 上の 4 差が teammate 側で埋まったとき、 新 ADR で supersede する。
+  §2.5 射程外
+  この記録が決めるのは「既定の配送構造」「質問の record と段」「誰が答えるか」「実装役の形」だけです。 record の細かい形 (複数の質問・選択肢)、 席の一覧画面、 口座の自動選定、 契約どうしの衝突の機械検査は別に決めます。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 質問 record の拡張 (複数の質問・選択肢・優先度・1 便 1 質問で始める)、 Questioned の run の一覧 (dashboard・v3)、 口座の自動選定 (SRS scope out)、 契約の write-set の交差を intake で検査する形、 管理席の cycle / tick の規範 (seat-autonomy.md・ADR-1015)、 席の増減の運用手順 (host 固有)。
+  （器の記録の §3. SRS への反映 (正本は SRS)）
+  この記録が求めた要件は、 2026-09-12 に要件書 (SRS v0.4) へ入りました。 要件の文面はここには置かず、 要件書の当該行を指すだけにします。
+  本 ADR の §2.1〜§2.3 に対応する要件は SRS v0.4 が正本である: FR1030 配送構造 (§2.1)・FR1031 質問の停止 と FR1032 質問の再開 (§2.2 / §2.3)・AC1010 (実 run の受入基準)。 FR1005 と FR1022 は不変 (§2.3 / §2.4)。 SRS の scope out (複数口座の自動選定・席の dashboard) も不変。 質問 record の形式 (最終行の JSON・rc 76) は §2.2 が正本で SRS は形式を持たない。
+options:
+  - id: "chosen"
+    name: "便の既定の配送構造は planner 1 席 + 管理席 N 席が pipeline を流す形とし、 runner は契約の不足を typed な質問 record で返して止まる (管理席が自分の手で実装するのは pipeline が回せない便だけ)"
+    text: |
+      計画役の席が 1 つ、 便を流す係の席が何席か。 便そのものは pipeline (取り込み → 実装役 → 審査 → 合流) が運びます。 係の席の仕事は「割り当てられた契約を pipeline に流す」「実装役の質問を計画役へ届ける」「合流の許可が出たら合流する」の 3 つで、 自分の手で実装してよいのは pipeline が回せない便 (器そのものの穴・設計文書・機械の外の作業) だけです。 席を並べて自分の手で実装する今の形は、 既定ではなく移行期の足場と位置づけます。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 要件書は「実装役と審査役は画面なしの使い捨て process で起こし、 便の並列は pipeline の便の層で作る」と描いていました。 ところが 2026-09-11 の現実は、 管理席を 3 つ並べて席が自分の手で実装し、 席の中で審査役を起こし、 同じ席が merge する形で 1 日に 43 本 (JST 日・merged PR) を main に入れました。 速い一方で、 審査の独立性は文章の約束と計画役の再実測に寄り、 計画役は context の上限で 2 回止まり、 席からの質問が届かない周がありました。 使い捨ての実装役は聞き返せないので、 契約の穴は失敗か推測にしかなりません。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「並べる形を既定と呼ぶべきか」と問い、 調べた上で「claude -p のまま、 質問にも機械的に対応できる形に整理する方向で進める」と裁定しました。 この記録はその形を決めます。"
+  - id: "A"
+    name: "席並列を既定として定義する"
+    text: |
+      (A) 席並列を既定として定義する (管理席 N が自分の手で実装・席の subagent で review・同じ席が merge)。 却下: gate の独立性が散文 (dispatch file) と planner の再実測に寄り、 C16 / N2 に反する向き。 planner が律速になり、 席を増やすほど悪化する (research §2 の実測)。 移行期の足場としては残す (§2.1)。
+    verdict: rejected
+    reason: "gate の独立性が散文 (dispatch file) と planner の再実測に寄り、 C16 / N2 に反する向き。 planner が律速になり、 席を増やすほど悪化する (research §2 の実測)。 移行期の足場としては残す (§2.1)。"
+  - id: "B"
+    name: "runner を teammate (Agent tool の subagent) にして親へ text で聞き返す"
+    text: |
+      (B) runner を teammate (Agent tool の subagent) にして親へ text で聞き返す。 却下: settings 不読の強制 (ADR-1011)・無 session での起動・typed な判定入力 (ADR-1012)・毎回明示の権限 (ADR-1009 / 0010) の 4 差を失い、 判定入力が自由文になる (C3.3 の向き)。 口座分離が席の層で達成できることは、 この 4 差を埋めない (research §4)。
+    verdict: rejected
+    reason: "settings 不読の強制 (ADR-1011)・無 session での起動・typed な判定入力 (ADR-1012)・毎回明示の権限 (ADR-1009 / 0010) の 4 差を失い、 判定入力が自由文になる (C3.3 の向き)。 口座分離が席の層で達成できることは、 この 4 差を埋めない (research §4)。"
+  - id: "C"
+    name: "質問を gate の FAIL で代用する"
+    text: |
+      (C) 質問を gate の FAIL で代用する。 却下: 契約の穴が「実装の失敗」として記録され、 契約側を直す向きが judgment に残る。 FR1022 の計測で人の関与 (回答) が見えない。
+    verdict: rejected
+    reason: "契約の穴が「実装の失敗」として記録され、 契約側を直す向きが judgment に残る。 FR1022 の計測で人の関与 (回答) が見えない。"
+  - id: "E"
+    name: "user が答えた質問を QuestionAnswered(actor=human) で記帳する"
+    text: |
+      (E) user が答えた質問を QuestionAnswered(actor=human) で記帳する (本 ADR の初稿)。 却下: 承認を承認 event の外に置く形で C7.2 に反し、 classes が空の契約は spawn の承認関門 (Approval::judge・classes 空なら常に Granted) を通らないので、 A3 の質問に user が答えて resume する経路が関門を素通りする。 §2.3 の経路に改めた。
+    verdict: rejected
+    reason: "承認を承認 event の外に置く形で C7.2 に反し、 classes が空の契約は spawn の承認関門 (Approval::judge・classes 空なら常に Granted) を通らないので、 A3 の質問に user が答えて resume する経路が関門を素通りする。 §2.3 の経路に改めた。"
+  - id: "D"
+    name: "管理席がその場で答える"
+    text: |
+      (D) 管理席がその場で答える。 却下: 契約の SSOT は planner が持ち (台帳の契約・C15.2)、 席が答えると契約と実装が別の言葉を持つ。 中継に限る (§2.3)。 (D') 質問を Blocked に相乗りさせる案も却下: 承認 (人由来・3 クラス) と質問 (機械由来が既定・契約の不足) は意味も actor も違い、 同じ段に載せると FR1022 の計測が混ざる。
+    verdict: rejected
+    reason: "契約の SSOT は planner が持ち (台帳の契約・C15.2)、 席が答えると契約と実装が別の言葉を持つ。 中継に限る (§2.3)。 (D') 質問を Blocked に相乗りさせる案も却下: 承認 (人由来・3 クラス) と質問 (機械由来が既定・契約の不足) は意味も actor も違い、 同じ段に載せると FR1022 の計測が混ざる。"
+basis: [FR1004, FR1005, FR1022, FR1030, FR1031, FR1032, AC1002, AC1010, ADR-1004, ADR-1009, ADR-1011, ADR-1012, ADR-1013, ADR-1014, ADR-1015]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  計画役の席が 1 つ、 便を流す係の席が何席か。 便そのものは pipeline (取り込み → 実装役 → 審査 → 合流) が運びます。 係の席の仕事は「割り当てられた契約を pipeline に流す」「実装役の質問を計画役へ届ける」「合流の許可が出たら合流する」の 3 つで、 自分の手で実装してよいのは pipeline が回せない便 (器そのものの穴・設計文書・機械の外の作業) だけです。 席を並べて自分の手で実装する今の形は、 既定ではなく移行期の足場と位置づけます。
+approval:
+  who: 持ち主
+  date: 2026-09-11
+  ruling: "s2-07l.42・s2-07l.111（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.42・s2-07l.111 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 審査の独立性が文章の約束でなく pipeline の構造に戻ること、 計画役に集まっていた再実測の仕事が機械の gate に移ること、 実装役の「分からない」が失敗ではなく質問として残ること、 口座を席ごとに分ける今の形をそのまま使えることです。 悪い面は、 段と event と終了コードが 1 つずつ増え、 pipeline が実装役の出力を読む口が 1 つ増えること、 質問が上がるたびに計画役の手番が 1 回入ること (便は止まって待つ)、 席の仕事が減る分だけ移行期の速さ (1 日 43 本) は落ちうることです。 移行期の席並列を今すぐ止めるわけではなく、 質問の口が実装されてから席の仕事を切り替えます。"
+  - "Positive: gate の独立性が pipeline の構造 (write-set guard・verify 行・lens・CAS) に戻り、 dispatch の散文と planner の再実測に寄らない (C16 / N2 の向き)。 planner の律速が契約・裁定・回答に絞られる。 契約の穴が QuestionRaised として typed に残り、 修正の向き (契約側) が記録から読める。 口座分離は席の層のまま (run は親の口座を継承)。 承認 (Blocked) と同型なので機構の追加は段 1・event 2・rc 1・Guard 1 と runner stdout の捕捉に閉じる。 user の言葉は承認 event にだけ載り FR1022 は変わらない。"
+  - "Negative (受け入れるコスト): 質問のたびに便が止まり planner の手番を 1 回要する (質問が多い契約は遅い＝契約の質が速度に直結する)。 移行期の速さ (席が手で実装する形) は既定では出ない。 管理席の仕事が中継と merge に減り、 席の context は軽くなるが席数分の運用費 (cycle / tick) は残る。 SRS の改訂 (§3) は user 手番で、 実装 bead は設計 pipeline-question.md の契約 (a)〜(c) として SRS 反映後に起票する。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0016-default-delivery-structure-and-typed-question-record.html
+  器の記録の頭: Status: accepted · Date: 2026-09-11 · version 0.4.6 (拘束する constitution の版) · C3.4 / C7 / C16 の適用と C2 の充足形を記録 · §3 の SRS 改訂は 2026-09-12 に反映済み (v0.4)
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user 裁定 (2026-09-11) を受けた決定で、 §3 は SRS への pointer (文案は反映時に SRS へ移った) である。 発効: §3 の SRS 改訂は 2026-09-12 に反映済み (SRS v0.4・FR1030 / FR1031 / FR1032 / AC1010)。 要件の正本は SRS であり、 本 ADR は理由と却下案を持つ。
+  器の却下案の節の要約: 4 つの案を退けました。 席を並べる今の形を既定にする案は、 審査の独立性が文章の約束のままです。 実装役を teammate にする案は、 設定を読まない強制・席なしの起動・型のある記録・毎回の権限明示を失います。 質問を「失敗」で代用する案は、 直す向きが記録に残りません。 係の席が答える案は、 契約を持たない席が契約を言い換えることになります。
+  器の記録の出所（Trace）:
+  出所は、 user の問いと裁定、 その日の実測 (合流した本数・pipeline を通した本数・質問の件数・計画役の詰まり)、 そして実装役と審査役の起動の形を決めた過去の記録です。
+  ・user の問いと裁定 (2026-09-11・会話面・planner 席): 席並列は本来の動きか／既定として定義すべきか／口座分離が要らないなら teammate か → 裁定の要旨は §1 (方向 = claude -p のまま質問にも機械的に対応できる形へ整理する)。 逐語は台帳 s2-07l.42 / s2-07l.111 の notes (tracked file には写さない)。
+  ・実測 (同日・research §2): merged PR 43 本 (JST 日・母集団 60)・pipeline を通した便 1 本 (s2-07l.46)・QUESTION 9 件 (契約側 6)・不達 8 回 (s2-07l.103)・planner 退避 2 回・rebase 衝突 1 便 3 file 6 区間 (s2-07l.95)。
+  ・runner が聞き返せない現物 (同日): crates/<NAME>/src/headless/runner.txt「対話しない。 人へ質問を返さず」・質問 record の口は無い。 lens の verdict は最終行の JSON (lens.txt) で、 §2.2 は同じ置き場を使う。
+  ・spawn が runner の stdout を捕らえていない現物 (同日): crates/<NAME>/src/pipe/spawn.rs の Command::new("sh") は Stdio を指定せず rc だけを settle へ渡す。 lens は gate.rs の ask_lens が piped で読む＝§2.2 は runner 側にも同じ捕捉を足す。 承認関門の現物 (同日): pipe/approve.rs の Approval::judge は classes が空なら Granted＝§2.3 の経路の根拠。
+  ・承認の同型 (既存): Stage::Blocked / EventKind::ApprovalRequested / ApprovalReceived / pipe approve --words / resume の Blocked 分岐 (crates/<NAME>/src/pipe/approve.rs・cli.rs)。 §2.2 はこれを写す。
+  ・起動形と判定入力の先行決定: ADR-1009 (権限は manifest から)・ADR-1011 (settings を 1 つも読まない)・ADR-1012 (record は専用種別・未知は claude の rc へ)・ADR-1014 (Guard の足し方)。
+  ・設計: docs/design/pipeline-question.md (質問 record の schema・段と event・subcommand・席の役割・極性・歯・却下案)。
+  （取り込みの規則）器の記録 ADR-1004 の決定文の印（字 D と「-」と番号）は根の規則の表の行の id と同じ形なので、この写しでは字「決定文 <番号>」と書いた（ADR-1004 の決定の節の各文の頭の印）。

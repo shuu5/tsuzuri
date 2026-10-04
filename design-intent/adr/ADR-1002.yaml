@@ -1,0 +1,142 @@
+# 判断の記録 ADR-1002 — 器 scribe2 の判断の記録 ADR-0002 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1002
+title: "test / lint toolchain = cargo nextest・粒度 lint は forbid・構造検査は cargo xtask check"
+status: accepted
+date: 2026-09-07
+context: |
+  憲法は「歯は Rust の 1 framework だけ」「粒度の lint は黙らせられない」を求めます。 ところが骨格の検査で、 書いたつもりの歯が 2 か所とも効いていないことが実測で分かりました。 本 ADR は、 その穴を塞ぐ形で test runner と lint の level と構造検査を決めた記録です。
+  拘束条件は user 承認済の constitution v0.3 である。 C12 は test framework を 1 つに限り bash / bats を全廃すると定め、 C11 は panic 系・unwrap 系・標準出力の直書きを lint で deny し例外を「理由を書いた #[expect]」に限ると定め、 C4 は関数の粒度に上限を置いたうえで「粒度の lint は #[allow] で黙らせられない」と明記する。 骨格 (leg 0) の敵対検査は、 この 3 条を素直に書いた設定が実際には効かない 2 例を実測した。 (a) F-01 = [workspace.lints] は member 側の [lints] workspace = true が無いと完全に不活性で、 cargo は警告を 1 行も出さない (opt-in 無しで cargo clippy --workspace --all-targets -- -D warnings が rc 0)。 (b) F-02 = clippy.toml の粒度の閾値は、 対応する lint が clippy 既定 allow のままだと 1 度も評価されない (契約と同一設定で 83 行の関数が rc 0)。 いずれも「散文には規則が在るのに機械は何も測っていない」形であり、 N2 が禁じる状態そのものである。 よって本 ADR は「どの runner で走らせるか」「lint を何 level で置くか」「散文でなく何が測るか」を決定として記録する。
+decision: |
+  test は cargo nextest で走らせます。 粒度の lint 3 本は forbid にして逃げ道を無くし、 allow_attributes だけは deny に留めて理由つきの #[expect] を残します。 構造の検査は自前の cargo xtask check が担い、 閾値の実値は本文でなく §2.5 の表に置きます。
+  §2.1 test runner = cargo nextest
+  test framework は Rust native test の 1 つだけとし (C12)、 走らせる runner は cargo nextest とする (MUST)。 bash / bats / Python の test file は置かない (0 file)。 CI の test job は cargo nextest run --workspace --no-tests=fail を呼ぶ。
+  原本 (leg 0 の契約) が挙げる採用理由は C12 の「1 framework = nextest」の充足である。 本 ADR はそれを記録するとともに、 land した .github/workflows/ci.yml の実体から 1 点を観察として付す: CI が渡している --no-tests=fail は「test が 1 本も無いときに落ちる」口であり、 cargo test には無い。 すなわち runner の層で「0 本測って GREEN」を閉じられる。 これは採用時の理由として原本に書かれたものではなく、 選択の帰結として現に効いている性質である。
+  §2.2 粒度 lint 3 本は forbid
+  [workspace.lints.clippy] に too_many_arguments / too_many_lines / cognitive_complexity の 3 本を forbid で置く (MUST)。 level を落として deny にすることも、 3 本を省いて clippy.toml の閾値だけを置くことも禁ずる。
+  理由は 2 段である。 第 1 に、 3 本のうち too_many_lines と cognitive_complexity は clippy 既定 allow なので、 Cargo.toml に載せない限り clippy.toml の閾値が 1 度も評価されない (F-02 の実測 = 契約と同一設定で 83 行の関数が rc 0)。 この 2 本と too_many_arguments は既定 level が違う: too_many_arguments は clippy 既定 warn であり、 宣言が無くても -D warnings 下では違反そのものは落ちる (clippy 0.1.98 実測 = 宣言ゼロの crate で 7 引数関数が -D clippy::too-many-arguments implied by -D warnings として error)。 それでも 3 本を揃えて宣言するのは、 既定 level に依存せず宣言を SSoT にするため、 および第 2 の理由で level を forbid へ引き上げるためである。 第 2 に、 載せたうえで level を deny にすると #[allow] で黙殺でき、 C4 が散文で禁じている「黙らせられない」が機械では真にならない。 admin が clippy 0.1.98 で実測した挙動は次表のとおりで、 forbid だけが両方の逃げ道を E0453 の hard error で塞ぐ。
+  level｜#[allow] を書いたとき｜#[expect(..., reason = ...)] を書いたとき
+  forbid｜E0453 の hard error｜E0453 の hard error
+  deny｜allow_attributes = "deny" が error で捕まえる｜通る (逃げ道が残る)
+  帰結として、 閾値を超えたのに関数を割れない case は E0453 の compile error として現れる。 その場合は lint を下げずに BLOCKED として人間 (admin) へ返す。 すなわち逃げ道は人間の層にだけ残し、 コードの中には残さない。 なお本 3 本の閾値変更は A2 (利益の grill 検証を前置した user 裁定) を要する。
+  §2.3 allow_attributes は deny に留める
+  [workspace.lints.clippy] に allow_attributes = "deny" を置く (MUST)。 これを forbid へ引き上げてはならない (MUST NOT)。
+  allow_attributes は #[allow] にだけ反応し #[expect] には反応しない (実測)。 したがって deny に留めることで、 「#[allow] を塞ぎつつ理由つきの #[expect] は残す」という C11 の例外形をそのまま成立させられる。 #[expect] を残す必要がある理由は具体的である: print_stdout / print_stderr は deny 据置で、 出力層はその例外を #[expect(clippy::print_stdout, reason = "...")] で名乗る運用になっている (F-07 系の是正)。 この 2 本を forbid にすると #[expect] ごと使えなくなるため、 出力を 1 関数へ閉じる形が書けなくなる。 #[expect] は実際にその lint を踏む関数にだけ付ける (踏まない関数へ付けると unfulfilled_lint_expectations で落ちる・実測)。 clippy が落ちたときに [lints] workspace = true を外す / lint を allow へ下げる / #[allow] を撒く、 のいずれでも解消してはならない。 許される解消は理由つき #[expect] と clippy.toml の allow-*-in-tests だけである。
+  §2.4 構造検査 = cargo xtask check
+  行数 / test:src 比 / manifest-name の構造検査は、 workspace member crates/xtask の cargo xtask check が担う (MUST)。 xtask は直接依存 0 本 (std のみ) で書く。
+  この検査が独立して必要なのは、 clippy が構造的に沈黙する領域が在るからである。 (a) F-01 の opt-in 穴 — member の [lints] workspace = true が無いと clippy は rc 0 で沈黙するので、 lints-optin tag が member 側の opt-in を測る。 (b) F-06 — unused_must_use の宣言が root の Cargo.toml から落ちたことは clippy では分からない。 違反そのものは rustc 既定 warn ゆえ -D warnings が捕まえる (clippy 0.1.98 実測 = 宣言ゼロの crate で -D unused-must-use implied by -D warnings として error・rc 101) が、 それは CI の -D warnings に依存した検出であって「宣言が在ること」の検査ではない。 宣言の欠落を測るのは lints-set tag だけである。 measure する tag は core-lines / file-lines / test-src-ratio / manifest-name / manifest-version / lints-set / lints-optin / name-literal / deps-empty / toolchain-pin である。 test-src-ratio の測定定義は「crates/*/src/**/*.rs で最初に現れる行頭 #[cfg(test)] からその file 末尾までを test 行、 それ以外を src 行とし、 raw line を整数比較する」と固定する (定義が無いと同一骨格で比が振れるため・F-03)。 xtask を std のみで書くのは leg 0 の admin 裁定 1 (直接依存 0 本・dev-dependencies を含む) による。 依存の追加は A3 の user 手番であって実装側の裁量ではない。
+  §2.5 閾値の実値と置き場
+  数値は本文に書きません。 下の表が実値と、 その値が実際に置かれている file の対応です。
+  C1 は規則の値の置き場を定めており、 N2 は散文にしか無い規則を規則として扱わない。 正本は manifest の rules 行 (C1) であり、 manifest が未存在の間は憲法 §3 の表 (R-C4-1〜R-C4-4) が値の唯一の存在箇所である (憲法 §3 の当該規定)。 したがって下表も、 「実装での置き場」列に挙げた file も、 いずれも写しである。 値を変えるときは A2 (grill 検証 → user 裁定) → 憲法 §3 の行 → 実装 file の順に降ろす。 逆向き (実装 file だけ直す) は禁ずる。 この 3 面の一致を測る機械は現時点で無い — lints-set tag は level しか突き合わせず閾値の数値を比較しないため、 実装 file だけを直すと CI 3 job は全緑のまま憲法 §3 と乖離する (§3 Negative)。 manifest への一本化は leg 2 の所管であり、 それまでこの乖離は人間の手続きで抑える。
+  項目｜実値｜憲法 §3 の行 id｜実装での置き場 (写し)
+  too-many-arguments-threshold｜5｜R-C4-4｜clippy.toml
+  too-many-lines-threshold｜60｜R-C4-4｜clippy.toml
+  cognitive-complexity-threshold｜15｜R-C4-4｜clippy.toml
+  core crate の src 総行数｜20,000 以下｜R-C4-1｜crates/xtask/src/limits.rs の MAX_CORE_LINES
+  crates/*/src の 1 file 行数｜1,500 以下｜R-C4-2｜crates/xtask/src/limits.rs の MAX_FILE_LINES
+  test:src 比｜1.0 以下 (整数比較 Σtest ≦ Σsrc)｜R-C4-3｜crates/xtask/src/check.rs の test-src-ratio
+  要求 lint の集合と level｜REQUIRED_LINTS (個数は本 ADR に書かない)｜—｜crates/xtask/src/limits.rs
+  test mod での逃がし｜allow-*-in-tests 6 key｜—｜clippy.toml
+  toolchain の版｜1.98.1 (channel 固定・"stable" 語を使わない)｜—｜rust-toolchain.toml
+  §2.6 決定の遵守をどう確かめるか
+  CI の 3 job が測る項と、 まだ機械が測っていない項を分けて書きます。 lint が本当に生きているかは機械が測っています。
+  ・runner: CI の test job が cargo nextest run --workspace --no-tests=fail を走らせる (§2.1)。
+  ・lint の level と集合: cargo xtask check の lints-set tag が REQUIRED_LINTS と root の Cargo.toml を突き合わせる (§2.2 / §2.3)。
+  ・lint が実際に効いているか: lints-optin tag が member 側の [lints] workspace = true を測る。 clippy が沈黙する領域はここで塞ぐ (§2.4)。
+  ・構造の上限: core-lines / file-lines / test-src-ratio / manifest-name の各 tag (§2.4 / §2.5)。
+  ・依存 0 本: deps-empty tag。 crates.io からの fetch が要る状態になった時点で DONE ではなく BLOCKED である。
+  まだ機械が測っていない項 (本 ADR が MUST を書いた範囲のうち、 現時点で歯が無いもの) を明示する — N2 の要求により、 測っていないものを「測っている」と書かないためである。 (a) §2.1 の「bash / bats / Python の test file を置かない (0 file)」 — cargo xtask check の 10 tag にも CI 3 job にも、 shell / Python の test file を数える口が無い。 C12 の flip check の CI 化と併せて leg 1 の所管である。 (b) §2.5 の閾値 3 面 (憲法 §3 / clippy.toml / crates/xtask/src/limits.rs) の一致 — lints-set tag は level しか見ない。 いずれも本 ADR の時点では人間の手続きで抑える。
+options:
+  - id: "chosen"
+    name: "test / lint toolchain = cargo nextest・粒度 lint は forbid・構造検査は cargo xtask check"
+    text: |
+      test は cargo nextest で走らせます。 粒度の lint 3 本は forbid にして逃げ道を無くし、 allow_attributes だけは deny に留めて理由つきの #[expect] を残します。 構造の検査は自前の cargo xtask check が担い、 閾値の実値は本文でなく §2.5 の表に置きます。
+      採った案（器の却下案の節の表の行）: 粒度 3 本 = forbid + allow_attributes = "deny"｜○ E0453｜○ allow_attributes は #[allow] にだけ反応する｜○ Cargo.toml に載るため｜admin が clippy 0.1.98 で実測した挙動表 (§2.2)・leg 0 の admin 裁定 2｜採用
+      採った案（器の却下案の節の表の行）: runner = cargo nextest｜C12「1 framework」の充足。 CI の test job が --no-tests=fail を渡せる (§2.1)｜採用
+      採った案（器の却下案の節の表の行）: 構造検査 = std のみの cargo xtask check｜leg 0 の admin 裁定 1 (直接依存 0 本・dev-dependencies を含む)｜採用
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 憲法は「歯は Rust の 1 framework だけ」「粒度の lint は黙らせられない」を求めます。 ところが骨格の検査で、 書いたつもりの歯が 2 か所とも効いていないことが実測で分かりました。 本 ADR は、 その穴を塞ぐ形で test runner と lint の level と構造検査を決めた記録です。"
+  - id: "r1"
+    name: "粒度 3 本 = deny + allow_attributes = \"deny\""
+    text: |
+      粒度 3 本 = deny + allow_attributes = "deny"｜△ allow_attributes が error で捕まえる｜○ 残る｜○ Cargo.toml に載るため｜同じ実測表 — deny では #[expect] が通り、 粒度違反を黙殺する逃げ道が残る (leg 0 の admin 裁定 2)｜却下
+    verdict: rejected
+    reason: "同じ実測表 — deny では #[expect] が通り、 粒度違反を黙殺する逃げ道が残る (leg 0 の admin 裁定 2)（却下）"
+  - id: "r2"
+    name: "粒度 3 本 = warn + CI で -D warnings"
+    text: |
+      粒度 3 本 = warn + CI で -D warnings｜× #[allow] で黙殺できる｜○ 残る｜○ Cargo.toml に載るため｜leg 0 の admin 裁定 2 — C4 の「粒度の lint は #[allow] で黙らせられない」に反する｜却下
+    verdict: rejected
+    reason: "leg 0 の admin 裁定 2 — C4 の「粒度の lint は #[allow] で黙らせられない」に反する（却下）"
+  - id: "r3"
+    name: "clippy.toml の閾値のみ (lint を Cargo.toml に載せない)"
+    text: |
+      clippy.toml の閾値のみ (lint を Cargo.toml に載せない)｜×｜—｜× too_many_lines / cognitive_complexity は既定 allow のため評価されない｜QA F-02 の実測 — 契約と同一設定で 83 行の関数が rc 0 (leg 0 の admin 裁定 2 の前提)｜却下
+    verdict: rejected
+    reason: "QA F-02 の実測 — 契約と同一設定で 83 行の関数が rc 0 (leg 0 の admin 裁定 2 の前提)（却下）"
+  - id: "r4"
+    name: "runner に bash / bats を併用する"
+    text: |
+      runner に bash / bats を併用する｜C12 が全廃を定める。 v1 で drift を招いた面そのもの (ADR-1001 §1)｜却下
+    verdict: rejected
+    reason: "C12 が全廃を定める。 v1 で drift を招いた面そのもの (ADR-1001 §1)（却下）"
+  - id: "r5"
+    name: "構造検査に tokei / cargo-deny を依存として足す"
+    text: |
+      構造検査に tokei / cargo-deny を依存として足す｜leg 0 の却下案。 依存の追加は A3 の user 手番であり実装側の裁量に置けない｜却下
+    verdict: rejected
+    reason: "leg 0 の却下案。 依存の追加は A3 の user 手番であり実装側の裁量に置けない（却下）"
+  - id: "r6"
+    name: "閾値を最初から rules 行の manifest へ置く"
+    text: |
+      閾値を最初から rules 行の manifest へ置く｜leg 0 の却下案。 当面の置き場は §2.5 の表のとおりで、 移設は leg 2 の所管｜却下 (移設は leg 2)
+    verdict: rejected
+    reason: "leg 0 の却下案。 当面の置き場は §2.5 の表のとおりで、 移設は leg 2 の所管（却下 (移設は leg 2)）"
+basis: [ADR-1001]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  test は cargo nextest で走らせます。 粒度の lint 3 本は forbid にして逃げ道を無くし、 allow_attributes だけは deny に留めて理由つきの #[expect] を残します。 構造の検査は自前の cargo xtask check が担い、 閾値の実値は本文でなく §2.5 の表に置きます。
+approval:
+  who: 持ち主
+  date: 2026-09-07
+  ruling: "s2-07l.1（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.1 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い点は「書いたが効いていない歯」が構造から消えることです。 悪い点は、 関数を割れないときに作業が compile error で止まること、 閾値の置き場が当面 2 か所に分かれることです。"
+  - "Positive"
+  - "・「散文には在るが機械は測っていない」規則が消える — lint は Cargo.toml に載って初めて評価され、 載っていることと member が opt-in していることを cargo xtask check が測る (F-01 / F-02 の二重塞ぎ)。"
+  - "・粒度違反の逃げ道がコードから消える — forbid は #[allow] も #[expect] も E0453 で塞ぐ。 逃げは人間の層 (BLOCKED → admin) にだけ残る。"
+  - "・歯が Rust の 1 framework に収まり、 bash / bats という drift の面を持ち込まない (C12)。"
+  - "・例外が「理由つき #[expect]」の形で残るので、 出力層のような正当な例外は名乗りとして読める (C11)。"
+  - "Negative"
+  - "・forbid は #[expect] も塞ぐため、 閾値を超えて関数を割れない case では作業が compile error で止まり、 admin へ返す手続きが要る。"
+  - "・閾値の実値が clippy.toml と crates/xtask/src/limits.rs の 2 か所に分かれている (一本化は leg 2 の所管)。"
+  - "・構造検査を外部 crate に頼らないので、 検査そのものを自前で保守する (TOML の読みも簡易実装)。"
+  - "・閾値が憲法 §3 の表・clippy.toml・crates/xtask/src/limits.rs の 3 面に写されているのに、 一致を測る機械が無い。 実装 file だけを直すと CI 3 job は全緑のまま憲法と乖離する (§2.5 / §2.6)。"
+  - "・「bash / bats / Python の test file 0 file」は MUST だが測る歯が無く、 これらを足す変更は現行 CI を素通りする (§2.6)。"
+  - "・allow_attributes が deny である以上、 #[expect] を悪用した黙殺は機械では止まらない。 止めるのは review である。"
+  - "Neutral"
+  - "・本 ADR は決定の記録であり、 決定そのものは leg 0 の admin 裁定 2 (2026-09-07 確定) で行われた。 本 ADR で決定を変えない。"
+  - "・print_stdout / print_stderr の forbid への引き上げは、 出力層の #[expect] 運用を変えるときに再検討する (supersede する新 ADR で行う)。"
+  - "・依存 0 本の制約は本 leg の裁定であり、 依存を足す判断は A3 と C13 の予算手続きに従う。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0002-test-lint-toolchain.html
+  器の記録の頭: Status: accepted · Date: 2026-09-07 · version 0.3.0 (拘束条件である constitution の版の写し・決定時点で固定) · AI 可決 (leg 0 の admin 裁定 2)・constitution v0.3 (user 承認済) を拘束条件として継承
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.3.0 (copy of the constraining constitution version, frozen at decision time)
+  器の機械の欄 decided-by: AI (leg 0 admin ruling 2, fixed 2026-09-07) — constitution v0.3 (user approved) constrains the decision
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: (none)
+  器の機械の欄 related: constitution C1 / C4 / C11 / C12 / C13 / A2 / A3 / N2, leg 0 admin ruling 2, QA findings F-01 / F-02 / F-06 / F-07
+  器の却下案の節の要約: lint の置き方を 4 案、 「#[allow] を塞げるか」「理由つきの #[expect] を残せるか」「閾値がそもそも評価されるか」で比べました。 3 つを同時に満たすのは採用案だけです。
+  器の却下案の節の注: 「—」= その軸が案の成否に効かないもの。 比較の順位は C4 の「粒度の lint は黙らせられない」を最上位に置く。 #[expect] を残せるかは C11 の例外形と print_stdout / print_stderr の運用 (F-07 系) に効くため第 2 の基準である。
+  器の記録の出所（Trace）:
+  出所は骨格 (leg 0) の admin 裁定 2 と、 その前提になった敵対検査の所見です。 拘束条件は憲法の C1 / C4 / C11 / C12 / C13 と A2 / A3 / N2 です。
+  ・決定の原本: leg 0 (s2-07l.1) の acceptance にある admin 裁定 2 (2026-09-07 確定・粒度 lint 3 本 = forbid、 allow_attributes = "deny" を追加) と admin 裁定 1 (直接依存 0 本)。 clippy 0.1.98 の挙動表は同裁定の実測。
+  ・前提になった敵対検査の所見: F-01 (workspace lint の opt-in 穴)、 F-02 (too_many_lines / cognitive_complexity は既定 allow で閾値が評価されない)、 F-06 (unused_must_use の宣言の欠落は clippy では分からない)、 F-07 (opt-in を正すと test mod が落ちる → allow-*-in-tests)。
+  ・拘束条件: C1 (規則はデータ)、 C4 (大きさと粒度の上限・黙らせられない)、 C11 (lint deny と理由つき #[expect])、 C12 (歯は Rust の 1 framework)、 C13 (依存の予算)、 A2 (閾値変更の手続き)、 A3 (依存の追加は Ask-first)、 N2 (散文だけの規則は規則でない)。
+  ・実装の実体 (本 ADR の写しの正本): Cargo.toml の [workspace.lints.*]、 clippy.toml、 rust-toolchain.toml、 crates/xtask/src/limits.rs、 crates/xtask/src/check.rs、 .github/workflows/ci.yml。
+  ・記録した日: 2026-09-08 (leg 0 の land 後)。 決定日 (2026-09-07) と分けて記す。
+  ・用語: 歯 / rules 行 / drift の面 は design-intent/vocabulary.yaml で定義する。

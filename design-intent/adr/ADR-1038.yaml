@@ -1,0 +1,132 @@
+# 判断の記録 ADR-1038 — 器 scribe2 の判断の記録 ADR-0038 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1038
+title: "plugin の実体は生成 dir に置き、 marketplace の source はその dir を指す (cache の写しの単位を plugin に閉じる・生成器が起こし xtask check が drift 0 を測る・plugin root を前提にする現物は 1 定数に追随・再 install は user 手番)"
+status: accepted
+date: 2026-09-16
+context: |
+  marketplace の source が repo 全体 (./) なので、 plugin の install は git-ignored の worktree 群と build 生成物まで丸ごと cache へ写し、 数十 MB の plugin が数十 GB の写しになって 120 秒で終わらない。 plugin の実体を生成 dir に寄せ、 source をその dir にし、 器の作業物の置き場は変えない。
+  なぜこの判断が要るのかを、実測と現物から説明します。plugin を入れる操作は marketplace の source を丸ごと写す実装で、source が repo 全体だったため、数十 MB の plugin が 91 GB の写しになり 120 秒で終わりませんでした。plugin の中身は root 直下の 3 dir で、root を前提にする箇所は 5 つです。
+  CTX1 install が marketplace の source（plugin がどの dir に在るかの宣言） を丸ごと cache へ写し、 plugin の実体（Claude Code に渡す plugin の中身）の千倍の写しになる
+  別 project の席の照会 (2026-09-16・帳簿の復旧中の実測) で、 plugin の install は marketplace の source を cache の一時 dir へ丸ごと copy する実装だと分かった。 本 repo の marketplace は source が repo 全体 (./・生成器 gen-manifest の生成値) なので、 git-ignored の worktree 群 (便の worktree と退役の退避・実測 174 GB) と build 生成物 (target) を含んで copy が 120 秒で終わらず、 その host の plugin cache は 91 GB に膨らんだ。 plugin の実体は 32 MB である。 その席は install の帳簿を手で足して凌いでいる。
+  CTX2 現物 — plugin の実体は root 直下の 3 dir で、 plugin root = checkout root を前提にする箇所は 5 つ
+  plugin の実体は .claude-plugin (plugin.json と marketplace.json) / hooks (hooks.json) / skills (復元と退避の 2 skill) の 3 dir で全部 repo root 直下に在り、 plugin.json と hooks.json と marketplace.json は xtask gen-manifest の生成物 (置き場は xtask の 3 定数)。 plugin root が checkout root だと前提する現物は (1) gen-manifest の 3 定数と marketplace の source (2) 席の起動行の --plugin-dir が anchor そのものを指す (seat launch の導出・外形 snapshot) (3) 便の worktree へ plugin の写しを置く spawn の include_str と写す dir の列 (4) binary の歯が workspace root の plugin.json を読む (5) 導入先の同期が席の登録 row の anchor から hooks.json を読む (anchor 直下の hooks を読み込み元とする)、 の 5 つ。 hook の root は起動元の env 由来で不変、 hook 集合の digest の path は root 相対で不変、 install 帳簿の installPath と doctor の導入先の比較は記録値どうしで形は不変である。
+  CTX3 marketplace の source は相対 subdir を取れるが、 cache の写し（install が作る plugin の複製）の範囲と読み込み元は保証が無い
+  公式 docs は marketplace の source に相対 subdir (./plugins/foo の形) を認める。 cache の写しの範囲・除外・読み込み元は未記載である。 設計 consumer-sync.md §1 の「directory source の plugin は cache でなく作業ツリーを直接読む」は読む側の実測 (保証なし) であり、 install の copy は別経路である。 設計 seat-autonomy.md §9 (b) 末尾は「軽くするには plugin root を小さな dir に分けて marketplace の source を変える (再 install（plugin を入れ直す user の手番） が要る = user 手番)・本 doc はそれを決めない」と既に名指す = 設計の宿題。
+  CTX4 憲法の向き
+  C2.2 は plugin 名・crate 名・skill の名前空間を 1 つの NAME 定数から導く (置き場の定数も同じ形で 1 つに持てる)。 C10.2 は報告と一覧を生成物としてだけ作る (plugin の実体の manifest は既に生成物・手で書かない)。 C12.5 は外形 (CLI 出力・生成文書) を snapshot で pin する (起動行と生成物の drift は歯が測る)。 A1 は消す操作に user の承認を要る (退避の worktree 群の削除は本 ADR の対象外で user 手番)。 ADR-1001 の単一 binary と ADR-1028 (導入先の同期は器が測る・帳簿と読み込み元の比較) は動かさない。
+  （選択肢を測るものさし）判断を評価する 4 本のものさしです。写しの単位が plugin の中身に閉じること、正本が 1 つで生成器が起こし検査が食い違いを測ること、器の作業物の置き場を変えないこと、root を前提にする箇所が 1 つの定数に追随することです。
+  DR1｜cache への写しの単位が plugin の実体に閉じ、 器の作業物 (worktree・build 生成物・台帳) を含まない CTX1 / SRS FR1061 (導入先の同期は帳簿と読み込み元を比べる = 写しが軽いほど install と同期が速い)
+  DR2｜plugin の実体の正本は 1 つで、 生成器が起こし xtask check が tracked との drift 0 を測る (手書きしない) 憲法 C10.2 / C12.5 / 既存の gen-manifest と drift 歯の型
+  DR3｜器の作業物の置き場 (worktree 群・build 生成物・台帳) は変えない 設計 pipeline.md の worktree の path と退役の退避先・ADR-1028 の測る側の決定は不変
+  DR4｜plugin root を前提にする現物は core の定数 1 つから解き、 NAME 定数と同じ形で散らばらない 憲法 C2.2 / SRS FR1059 (起動行の構成は決定記録が正本) / FR1062 (hook 集合の読み込み元)
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。plugin の中身を生成 dir に置き、marketplace の source をその dir にし、置き場は 1 つの定数から解きます。席の起動行が指す plugin の場所と hook の読み込み元がその dir の下になり、写しは軽くなります。
+  採用 — OPT1
+  器 SHALL plugin の実体 (plugin.json・hooks.json・skills) を生成 dir plugin/ に置き、 その置き場 SHALL core の定数 1 つを正本とし、 xtask SHALL tracked の core からその値を読む (NAME と同じ形)。 marketplace.json SHALL repo root の .claude-plugin に残り、 その source SHALL その dir (./plugin) を指す。 gen-manifest SHALL plugin.json と hooks.json と marketplace.json を生成し、 xtask check SHALL render と tracked の差分 0 を測る。 席の起動行の --plugin-dir SHALL anchor の下のその dir を指し、 便の worktree へ写す dir と binary の歯と導入先の同期が anchor から読む hooks.json の path SHALL 同じ定数から解く。 hook の root (起動元の env 由来) と hook 集合の digest の path (root 相対) と install 帳簿の比較 (記録値どうし) SHALL NOT 変わらない。 器の作業物の置き場 (worktree 群・build 生成物・台帳) SHALL NOT 変わらない。 再 install SHALL user 手番であり、 古い install は doctor の導入先の行に古い root として出る。 退避の worktree 群の削除は本 ADR の対象外 (A1・user 手番)。
+  （平易）plugin の中身は生成 dir plugin/ に置き、その場所は core の定数 1 つで決めます。marketplace の宣言は repo root に残し、source はその dir を指します。生成器が名乗りと hook の一覧と marketplace の宣言を起こし、検査が tracked との食い違いゼロを測ります。席の起動行が指す plugin の場所、便の worktree への写し、binary の歯、導入先の同期の読み込み元は同じ定数を読みます。hook の読み込み元の決め方と導入先の比較の形、器の作業物の置き場は変えません。入れ直しは user の手番で、古い install は doctor の一覧に古い場所として出ます。退避した worktree を消すかどうかは本 ADR の外で、user が決めます。
+  （理由）写しが重いのは source が repo 全体だからで、plugin の中身は数十 MB しかありません。写しの単位を中身の境界に合わせれば、作業物の置き場を 1 つも動かさずに済みます。中身は既に生成物なので、生成 dir に寄せても正本は 1 つのままで、既存の検査の型で食い違いを測れます。root を前提にする箇所は 5 つしかなく、core の定数 1 つに追随させれば散らばりません。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1059（claim）: 席の起動行の --plugin-dir が anchor そのものでなく anchor の下の plugin dir を指す = 起動行の構成 (決定記録が正本) の 1 語が変わり、 外形 snapshot が動く。
+  FR1061（claim）: 導入先の同期が比べる plugin の読み込み元と hook 集合の digest は、 root 相対の path のまま新しい plugin root の下を読む (比較の形は不変・写しが軽くなる)。
+  FR1062（claim）: 席が起動時に受けた hook 集合の digest の読み込み元が plugin dir の hooks になる = 食い違いの検出の母集団は同じで、 置き場だけが変わる。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。既存の決定記録は置き換えず、導入先の同期と単一 binary は不変で、席の起動行は plugin の場所の 1 語だけが変わります。設計 doc の「決めない」と書いた宿題を本 ADR が決めます。
+  改訂状態: current
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  本 ADR は現行。 既存の ADR を置き換えない。 ADR-1028 (導入先の同期は器が測る) は測る側の決定で不変、 ADR-1026 (席の起動と口座の dir) の起動行は --plugin-dir の値だけが変わる、 ADR-1001 の単一 binary は不変。 設計 seat-autonomy.md §9 (b) 末尾の「本 doc はそれを決めない」を本 ADR が決める。
+  照会終端 — PRIN-PAYLOAD-IS-GENERATED-AND-SEPARATE
+  器が外へ渡す物 (plugin の実体) は生成物であり、 器の作業物 (worktree・build 生成物・台帳) と同じ木に置かない。 写しの単位は渡す物の境界に一致させる。
+  本 ADR の判断はこの原則に行き着く (これ以上は遡らない照会終端)。
+options:
+  - id: "OPT1"
+    name: "plugin の実体を生成 dir（生成器が中身を起こす plugin 用の dir） plugin/ に寄せ、 marketplace の source をその dir にする"
+    text: |
+      repo root の .claude-plugin には marketplace.json だけを残し、 plugin.json と hooks.json と skills を生成 dir plugin/ (plugin/.claude-plugin/plugin.json・plugin/hooks/hooks.json・plugin/skills/) に置く。 置き場は core の定数 1 つ (NAME 定数の隣) が正本で、 xtask は tracked の core からその値を読む (xtask は core に依存しないので NAME と同じ形で読む)。 marketplace の source は ./plugin になる。 gen-manifest が 3 file を生成し、 xtask check が render と tracked の差分 0 を測る (hooks.json と極性一覧と同型)。 席の起動行の --plugin-dir は anchor/plugin を指し、 便の worktree へ写す dir と binary の歯と導入先の同期の読み込み元も同じ定数から解く。 hook の root と digest の path は不変。 再 install は user 手番 (口座 × project)。
+      （平易）plugin の中身（名乗り・hook の一覧・作法）を plugin/ という生成 dir にまとめ、marketplace の宣言はその dir を指します。dir の場所は core の定数 1 つで決め、生成器が中身を起こし、検査が tracked との食い違いゼロを測ります。席の起動行と便の worktree への写しと binary の歯と導入先の同期の読み込み元も同じ定数を読みます。hook の読み込み元の決め方は変わらず、入れ直しは user の手番です。
+      利点: copy の単位が plugin の実体 (数十 MB) に閉じ、 install が秒で終わり cache が膨らまない
+      利点: 器の作業物の置き場を 1 つも動かさない (pipeline の worktree・退役の退避先・台帳は不変)
+      利点: 置き場が定数 1 つで、 前提する 5 か所が同じ定数に追随し、 drift は既存の歯の型で測れる
+      欠点: 全 host の全口座 × project で再 install が要る (user 手番)・古い install は古い root を指し続け doctor の導入先の行に出る
+      欠点: 起動行の外形 snapshot と設計 doc の --plugin-dir の記述 (12 か所) が動く
+      欠点: skills は生成物でなく tracked の実体なので、 移動は純移動 (生成の対象は 3 file のまま)
+    verdict: adopted
+    reason: "repo root の .claude-plugin には marketplace.json だけを残し、 plugin.json と hooks.json と skills を生成 dir plugin/ (plugin/.claude-plugin/plugin.json・plugin/hooks/hooks.json・plugin/skills/) に置く。 置き場は core の定数 1 つ (NAME 定数の隣) が正本で、 xtask は tracked の core からその値を読む (xtask は core に依存しないので NAME と同じ形で読む)。 marketplace の source は ./plugin になる。 gen-manifest が 3 file を生成し、 xtask check が render と tracked の差分 0 を測る (hooks.json と極性一覧と同型)。 席の起動行の --plugin-dir は anchor/plugin を指し、 便の worktree へ写す dir と binary の歯と導入先の同期の読み込み元も同じ定数から解く。 hook の root と digest の path は不変。 再 install は user 手番 (口座 × project)。"
+  - id: "OPT2"
+    name: "worktree 群を repo の外 (state dir の下) へ移す"
+    text: |
+      git-ignored の .worktrees を state dir の worktrees/<NAME>/ に移し、 pipeline の path と退役の退避先と land の worktree 解決を変える。
+      （平易）開発中の worktree 群を repo の外へ移す案です。disk の置き場としての価値はありますが、build 生成物は repo に残るので写しはなお重く、便の worktree の場所や退役の退避先まで動かすことになります。
+      利点: disk の置き場として別途の価値が在る (退役の worktree が 174 GB)
+      欠点: build 生成物 (target) は repo に残るので copy はなお重い = 単独では解にならない
+      欠点: pipeline の worktree の path・退役の退避先・land の worktree 解決を変える (器の作業物の置き場を動かす・DR3 に反する)
+    verdict: rejected
+    reason: "git-ignored の .worktrees を state dir の worktrees/<NAME>/ に移し、 pipeline の path と退役の退避先と land の worktree 解決を変える。"
+  - id: "OPT3"
+    name: "除外 file (.claudeignore 相当) で copy の範囲を削る"
+    text: |
+      Claude Code 側の除外機構で worktree と build 生成物を copy から外す。
+      （平易）除外 file で写しの範囲を削る案です。repo の配置は変わりませんが、その機構が在るか未確認で、在っても他人の実装に依り、除外の一覧が散文の運用になります。
+      利点: repo の配置を変えない
+      欠点: 機構の有無が未確認で、 在っても他人の実装に依る (保証が無く、 版で黙って変わる)
+      欠点: plugin の実体の境界が repo の配置に無く、 除外の一覧が散文の運用になる
+    verdict: rejected
+    reason: "Claude Code 側の除外機構で worktree と build 生成物を copy から外す。"
+  - id: "OPT4"
+    name: "現行のまま (install の帳簿を手で足して凌ぐ)"
+    text: |
+      source は repo 全体のまま、 install が終わらない host は帳簿を手で書く。
+      （平易）今の形です。plugin を入れられない host では帳簿を手で書いて凌ぎます。手書きの帳簿は器が測る導入先と食い違い、doctor が偽の一致を出し、新しい host のたびに同じ手作業が要ります。
+      利点: 器の変更が無い
+      欠点: 手書きの帳簿は導入先の同期 (FR1061) の測る側と食い違い、 doctor が偽の一致を出す
+      欠点: 新しい host と口座のたびに同じ手作業が要る
+    verdict: rejected
+    reason: "source は repo 全体のまま、 install が終わらない host は帳簿を手で書く。"
+  - id: "OPT5"
+    name: "plugin の実体を別 repo に切り出す"
+    text: |
+      plugin.json と hooks.json と skills を別の repo に置き、 marketplace をそこに立てる。
+      （平易）plugin の中身を別 repo に切り出す案です。写しは小さくなりますが、正本が 2 つの repo に割れ、binary と plugin の版の同期が repo を跨ぎ、生成器の検査が届かなくなります。
+      利点: copy の単位は小さい
+      欠点: 正本が 2 repo に割れ、 binary と plugin の版の同期 (FR1061 / FR1062 の digest) が repo を跨ぐ
+      欠点: 生成器 (gen-manifest) の出力先が repo の外になり、 xtask check の drift 歯が届かない
+    verdict: rejected
+    reason: "plugin.json と hooks.json と skills を別の repo に置き、 marketplace をそこに立てる。"
+basis: [FR1059, FR1061, FR1062, ADR-1001, ADR-1026, ADR-1028]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  plugin の中身（名乗り・hook の一覧・作法）を、専用の生成 dir にまとめます。plugin を入れるときに写されるのはその dir だけになり、開発中の worktree や build 生成物は写されません。dir の場所は 1 つの定数で決め、生成器が中身を起こし、検査が食い違いゼロを測ります。器の作業物の置き場は変えず、入れ直しは user の手番です。
+approval:
+  who: 持ち主
+  date: 2026-09-16
+  ruling: "s2-07l.365（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.365 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。写しが秒で終わり正本が 1 つに揃う一方、全口座 × project で入れ直しが要り、起動行の外形や設計 doc の記述が動き、作法の移動は純移動になります。"
+  - "良い結果: install の copy が plugin の実体 (数十 MB) に閉じ、 秒で終わり、 cache が数十 GB に膨らまない"
+  - "良い結果: plugin の実体の正本が生成 dir 1 つに揃い、 drift は既存の歯の型 (render と tracked の差分 0) で測れる"
+  - "良い結果: 器の作業物の置き場を 1 つも動かさず、 pipeline と退役の退避先と台帳は不変"
+  - "代償: 全 host の全口座 × project で再 install が要り (user 手番)、 移行の間は古い root を指す install が doctor の導入先の行に出る"
+  - "代償: 起動行の外形 snapshot・便の worktree への写し・binary の歯・導入先の同期の読み込み元・設計 doc の --plugin-dir の記述 (12 か所) が 1 つの契約で動く"
+  - "代償: skills の移動は純移動で、 skill を呼ぶ側 (復元と退避の作法) の path は plugin dir の下に変わる"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0038-plugin-payload-lives-in-a-generated-dir.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — plugin の置き場
+  器の表紙: 状態accepted選択肢5件 (OPT1–OPT5)結果良い 3 / トレードオフ 3版v0.1.0 / 2026-09-16
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1059・FR1061・FR1062
+  器の表紙: 想定読者: scribe2 の開発 session (planner / admin) と user — Claude Code の plugin 機構の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・2026-09-15 (対話面・形 (a) 「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」への承認・逐語は台帳 s2-07l.365 の notes)・裁定済
+  器の承認の欄: 設計 (planner)・planner・2026-09-16 起票 (docs/design/seat-autonomy.md §16・契約表の行 l)・作成
+  器の案の章の要約: 候補を 5 つ並べます。plugin の中身を生成 dir に寄せて source をそこにする案、worktree 群を repo の外へ移す案、除外 file で写しの範囲を削る案、帳簿を手で足して凌ぐ今の形、plugin の中身を別 repo に切り出す案です。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・plugin の実体（plugin payload）: plugin.json (名乗り) と hooks.json (hook の一覧) と skills (復元と退避の作法) の 3 つ。 前 2 つは生成物で、 skills は tracked の実体。
+  ・marketplace の source（marketplace source）: marketplace.json の plugins[].source。 install はこの dir を丸ごと cache へ写す。 本 ADR で repo 全体 (./) から生成 dir (./plugin) になる。
+  ・生成 dir（generated plugin dir）: plugin の実体を置く dir (plugin/)。 置き場は core の定数 1 つが正本で xtask は tracked の core から読み、 gen-manifest が 3 file を生成し、 xtask check が tracked との drift 0 を測る。
+  ・cache の写し（plugin cache copy）: plugin の install が marketplace の source を copy して作る複製。 hook の読み込みには使われない (実測・保証なし) が、 大きいと install が終わらない。
+  ・再 install（reinstall）: marketplace の source が変わった後、 各口座 × project で plugin を入れ直すこと。 器は代筆しない (user 手番)。 古い install は doctor の導入先の行に古い root として出る。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1038.build.adr.yaml · 生成: 2026-09-16 20:40 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

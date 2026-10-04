@@ -1,0 +1,112 @@
+# 判断の記録 ADR-1017 — 器 scribe2 の判断の記録 ADR-0017 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1017
+title: "口座残量は器が host の HTTP client を子 process で呼んで読み、 出所付きの実測行として fleet の event log に記録する (manifest の口座列挙は不透明な label・上限 record は検出の合図のまま・選ぶは v3)"
+status: accepted
+date: 2026-09-12
+context: |
+  口座の残り (5 時間枠・7 日枠・モデル別の 7 日枠と、 それぞれの reset 時刻) を見る道具は host に在りますが、 前の版の python script であって、 この器の外にあります。 器は口座の残りを読む口も記録する口も持たず、 席が口座を選ぶときは前の版の道具を手で叩いて数字を写していました。 憲法は「口座を allowance の窓の終わりまで使い切る」と命じており、 その判断には残りの数字が要ります。 user の指摘を受けて要件 (FR1033 / AC1011) は先に要件書へ入りました。 この記録は、 その要件を どこに記録し・どうやって読み・口座をどう列挙し・止める合図とどう区別するか の 4 点を決めます。
+  記録時点 (2026-09-12) の現物: 口座残量を読む手段は前の版の python script (host の PATH 上・器の外) だけで、 口座の endpoint (認証 API の usage 口) を各口座の credential file の access token で読み、 five_hour / seven_day (各 utilization と resets_at) と limits[] (kind が weekly_scoped の要素にモデル別の 7 日枠・モデルは scope.model.display_name でしか結べない) を返す。 credential の expiresAt が 0 の口座は墓標 (再 login は user の操作でしか戻らない) である。 器の側: headless は --account-dir の値を子 process の設定 dir として渡すだけで口座を読まない (FR1005・ADR-1004 §2.4)。 fleet の event log は <state_dir>/fleet/events.jsonl の 1 file (ADR-1004 決定文 1) で、 行は flat JSON (値は string / u64 / bool / null) を std の reader (json_lite) で読む。 rules 行 R-C9-1 (口座の選択規則) は enabled = false のまま。 manifest は [[rule]] 行だけを持ち、 口座の列挙を持たない。
+  憲法の向き: C9.2 は各口座を allowance 窓の終わりまで使うと定め、 残量は判断入力である。 C10 は宣言値・出所付き実測値・導出値・有効値を型で分け、 宣言値は計測を通してだけ有効になる。 C3 は fleet の状態を host 列を持つ 1 つの DB file に置き、 per-host の dir / TSV / cache に真実を置かない。 C13 / NFR1003 は実行時の crate 依存 0 本を求め、 依存の増減は A3 (user 承認) を要する。 CON1002 は本 repo が PUBLIC であり、 絶対 path・host 名・口座名・user 逐語を tracked file に書かないと定める。 先行決定: ADR-1004 §2.6 は SRS v0.3 の scope (口座は扱わない) の下で「口座の状態は MVP の event log に持たせない」と書いた。 ADR-1012 §2.4 は上限 record の utilization / resetsAt を判定に用いず記録に残すだけとし、 口座の選定を射程外に置いた。 user の裁定 (2026-09-12・会話面・逐語は台帳 s2-07l.99 の notes): 見る + 記録を MVP に入れる・選ぶは v3・手段は host の道具を子 process で呼ぶ (crate 依存なし)。 要件書は同日 v0.5 で FR1033 / AC1011 を持ち、 実装手段は SRS から外して ADR の領分とした。
+decision: |
+  §2.1 記録先は fleet の event log。 ADR-1004 §2.6 の一文を口座残量の実測行に限って supersede する
+  読んだ残りは、 便や席の出来事と同じ 1 つの file (fleet の event log) に 1 行ずつ足します。 別の file を作らないのは、 憲法が「fleet の状態は 1 つの file」と命じるからです。 行には「どの口座を・どこから・いつ読んだか」を必ず添え、 読めなかった回は「測れなかった」と理由を残します。 0 と書いてごまかすことはしません。 file の版番号は変えません。 既存の行はそのまま読めるからです。
+  器 SHALL 口座残量の実測行を <state_dir>/fleet/events.jsonl (ADR-1004 §2.1 決定文 1 の 1 file・C3 の host 列付き) に追記し、 SHALL NOT 口座残量のための第 2 の file・表・cache を持たない。 EventKind SHALL AllowanceMeasured と AllowanceUnmeasured の 2 variant を末尾に足す (C2 の宣言順・ADR-1013 §2.2 の pin の内側・ADR-1016 §2.2 と同じ足し方)。 1 行 SHALL 1 口座 1 窓 (5 時間窓・7 日窓・モデル別 7 日窓のいずれか) を表し、 ts (読んだ時刻)・account (§2.3 の label)・endpoint (読んだ口の名) の 3 つを出所として持つ (C10 の Measured + Provenance)。 AllowanceMeasured 行は使用率 (整数 %) と reset 時刻 (UTC) を、 AllowanceUnmeasured 行は理由 (閉じた enum の名) を持ち、 AllowanceUnmeasured 行 SHALL NOT 使用率の field を持たない (「測れなかった」を 0 に読み替えない・FR1033)。 actor は machine (FR1022 不変)。 event log の schema 版 SHALL 1 のままとし、 run / bead は任意 field に緩め、 新しい field は任意で足す (ADR-1004 §2.5 決定文 5: 既存の行はすべて読める。 古い読み手が新しい行を Err にするのは fail-closed のとおり)。 replay SHALL 口座残量の行を run / seat の現在地に混ぜず、 口座 × 窓ごとの最新 1 行を別の導出値として持つ。 跨版 面 2 (fleet export・ADR-1004 §2.2) SHALL 本 ADR で変えない。 ADR-1004 §2.6 の「口座・lease・退役・tmux 席の状態は MVP の event log に持たせない」は、 口座残量の実測行に限って本 ADR が supersede する。 lease・退役・席の状態は引き続き持たない (SRS scope out・v3)。
+  §2.2 手段は host の HTTP client を子 process で呼ぶ形。 crate の依存は足さず、 token は argv にも記録にも載せない
+  器は自分で HTTP を話しません。 host に入っている HTTP client (git や claude と同じ「host の道具」) を子 process として呼び、 その答えを読みます。 Rust の依存を 1 本も増やさないためです。 外の道具を新しく採用するので、 user の承認 (裁定) を得ています。 口座の鍵 (access token) は command の引数に載せず (他の process から見えるため)、 標準入力で渡し、 記録にも表示にも一切出しません。 応答の読み手は標準ライブラリだけで書き、 読めない・届かない・鍵が無い、 のどれも「測れなかった + 理由」の行になり、 そのとき command は止まらず次の口座へ進みます。
+  器 SHALL 口座の endpoint を host の HTTP client (curl) を子 process として呼んで読む。 host の HTTP client は器の外の OSS であり、 その採用は A3 の対象である (憲法 A3 の機構欄は crate でない day-1 optional adapter の採用も本条の対象と定める)。 承認は user 裁定 2026-09-12 (会話面 = R-C7-1 の対話面・逐語は台帳 s2-07l.99 の notes) で得た。 C13 の手続きのうち crate に固有の面 (allow-list 行・依存予算 R-C13-1・compile 時間差の記録・cargo deny) は crate を足さないため適用対象が無く、 NFR1003 (実行時の直接依存 0 本) は不変。 git / claude / tmux は要件が名指す器の存在前提であり、 「host の道具は A3 の外」という規則は無い (本 ADR も作らない)。 実行 file の差し替えは CLI 引数 (--curl PATH・headless の --claude PATH と同型) だけで行い、 env は読まない (C2.2・ADR-1004 決定文 4)。 access token SHALL 口座の credential file から読み、 子 process へは stdin の設定 (curl の -K -) で渡す。 token SHALL NOT argv・event log・stdout / stderr・報告 file のいずれにも現れない。 応答 (入れ子の JSON・配列・小数) SHALL std だけの reader で読む (json_lite を入れ子・配列・数へ広げる。 event log の flat な行の読み方は変えない)。 endpoint の URL SHALL code の定数 1 つで持つ (host 固有の値ではない・manifest に置かない)。 失敗は境界の enum (UnmeasuredReason・閉じた variant) で持ち、 極性は FailOpen (C11.2・器の定義「測れない周は通す側へ倒し、 記録を残す」): credential file 不在・token 不在・墓標 (expiresAt が 0)・期限切れ・子 process の rc 非 0・HTTP status 非 200・本文 parse 不能・field 欠落のいずれも AllowanceUnmeasured 行 (理由は enum の 1 variant) になり、 command は止まらず次の口座へ進む。 「0 に読み替えない」(FR1033) は極性ではなく行の構造で守る (AllowanceUnmeasured 行は使用率の field を持たず、 持てば malformed)。 計測は行為を止めうる判定ではないので Guard ではなく、 極性一覧 (C16.2 の母集団) には載せない。 引数・manifest・store の誤りは別の enum (UsageError・FailClosed・rc 非 0) で持つ。 子 process の待ち時間の上限 SHALL rules 行 (C1・値には裁定 id が要る C5) で持ち、 本 ADR は値を決めない。 計測 SHALL 1 コマンド (<NAME> fleet usage --state-dir D) で manifest の全口座を読んで記録し、 口座ごとに 1 行を stdout へ出す (FR1033「1 コマンドで読み」・出力は emit 経由)。
+  §2.3 manifest の口座列挙は不透明な label の宣言。 credential の場所は state dir 配下の label 名 dir から解く
+  どの口座があるかは manifest に「宣言」します。 ただしこの repo は公開なので、 本当の口座の名前や置き場の path は書けません。 manifest に書くのは器の中だけで通じる符丁 (label) だけです。 その label がどの credential を指すかは、 host ごとに state dir の下に label と同じ名前の dir (実体は user が置く link) を用意して結びます。 label があるのに host に dir が無ければ、 その口座は「この host では測れなかった」と正直に記録します。 manifest の文法に account の表を 1 つ足すので、 前の決定 (ADR-1004) の文法の列挙もその分だけ広げます。 manifest に label を足す作業は公開面の情報を増やすので、 user に聞いてから行います。
+  manifest SHALL 口座を [[account]] label = "<label>" の行で列挙する (宣言値・C10・manifest の schema 版は 1 のまま)。 これは ADR-1004 §2.3 決定文 3 が受理する array-of-tables の列挙 ([[rule]]) を [[account]] へ広げる拡張であり、 本 ADR が 決定文 3 をその 1 点に限って supersede する ([[rule]] 行の検査・裁定 id 必須 (C5)・未知 key の拒否は不変で、 未知 key の拒否は [[account]] 行にも掛かる)。 account 行は執行される規則ではなく宣言値 (設定) であり、 C14 の 2 面 (文書 = 原則と裁定・manifest = 執行規則) のうち後者に属さない。 ゆえに C14.2 の参照要件 (rules 行と文書の相互参照) の対象は [[rule]] 行のままで、 [[account]] の表そのものは本 ADR と FR1033 が参照する。 host 固有の値のうち manifest が持つのは label の宣言だけ (C10.2) で、 label と credential を結ぶ host 上の場所は値ではなく「場所」であり、 ADR-1004 §2.4 決定文 4 が場所を manifest の外 (git の local 設定・引数・私有 dir) に置くと解釈した経路に乗る。 label SHALL 不透明 (本当の口座の識別子・host 名・path のいずれでもない) とし、 CON1002 を守る。 credential の場所 SHALL <state_dir>/accounts/<label> から解き、 その dir (または link) を host ごとに置くのは user の操作である。 state dir は ADR-1004 §2.4 の経路 (git の local 設定または --state-dir) で得て、 HOME も env も読まない。 label に対する dir が無い・読めない host では、 器 SHALL その口座を AllowanceUnmeasured (理由 = credential 不在) として記録し、 SHALL NOT command 全体を失敗にしない (他の口座の読みは続く)。 器 SHALL NOT state dir 配下の dir を走査して口座を発見しない (真実は manifest の宣言・C3「per-host の dir に真実を置かない」)。 label 行を manifest に足す変更は公開面の情報 (口座の数) を増やすため、 A1 (出す) の対話面で user に確認してから行う。 本 ADR は形だけを決め、 label 行を 1 つも足さない。
+  §2.4 上限 record は検出の合図のまま。 残量の正本は実測行で、 本版では止める判断にも選ぶ判断にも使わない
+  「上限に当たった」という合図 (claude が便の途中で返す record) と、 「あとどれだけ残っているか」という数字は別のものです。 合図は便を止めるための入力で、 これまでどおり変えません。 残りの数字の正本はこの記録で決めた実測行です。 ただしこの版では、 実測行を見て便を止めたり口座を選び直したりはしません。 使い切る前に自主的に止めるのは憲法に反し、 選ぶ規則はまだ裁定されていないからです。
+  ADR-1012 §2.1〜§2.4 は不変である: 上限の判定入力は上限 record の status だけで、 record の utilization / resetsAt は判定に用いず記録に残すだけ。 口座残量の正本 SHALL FR1033 の実測行 (§2.1) とし、 上限 record の field を残量の正本と読んではならない (MUST NOT・出所が違う 2 つの entity)。 器 SHALL NOT 本版で実測行を便の停止 (ADR-1012 §2.3・C9.2) にも口座の選定 (rules 行 R-C9-1 は enabled = false のまま・SRS scope out) にも用いない。 実測行の読み手は席 (planner / 管理席) と doctor であり、 判断は席が行う。 ADR-1012 §2.4 が「口座の選定の材料」と呼んだ上限 record の field は、 本 ADR で「止めた周の合図の記録」へ役割を再配置し、 選定の材料も残量の正本も実測行に移す (ADR-1012 の判定経路は不変だが、 役割の再配置を伴う)。
+  §2.5 射程外
+  この記録が決めるのは「記録先」「読み方」「口座の列挙の形」「合図との区別」の 4 点だけです。 口座を自動で選ぶこと、 定期的に測ること、 host をまたいで宣言と実測を突き合わせること、 鍵の更新や再 login は別に決めるか、 user の手番です。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 口座の自動選定と R-C9-1 の有効化 (v3・A2 の裁定を要する)、 計測を tick から定期実行する形 (seat-autonomy の領分・別途)、 doctor が全 host の宣言 (label) と実測 (event log) を突き合わせる面 (C3.2・v3)、 lease / 退役 / 席の状態の event log 化 (ADR-1004 §2.6 のまま)、 token の refresh と再 login (Claude Code と user の手番・器は credential file に書かない)、 モデル別 7 日窓を結ぶ規則の細部 (display name の一致・設計 doc)、 待ち時間の上限の値 (rules 行・裁定 id 待ち)、 SQLite 化 (v3・A3)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は、 先に要件書 (SRS v0.5) に入っています。 要件の文面はここには置かず、 要件書の当該行を指すだけにします。 この記録は要件書を 1 字も変えません。
+  本 ADR の §2.1〜§2.3 が仕える要件は SRS v0.5 が正本である: FR1033 口座残量の計測 (記録先・出所・「測れなかった」の扱い・manifest の口座列挙)・AC1011 (live な口座 2 つ以上での実演・器の外の独立した手段との一致・credential の無い口座の行)。 FR1022 (人由来の event は approval 以外 0 件) は不変 (実測行の actor は machine)。 SRS の scope out (複数口座の自動選定・席の dashboard) も不変。 実装手段 (host の HTTP client・token の渡し方・label の解き方・event の field) は §2 が正本で SRS は持たない。 粒度の注記: AC1011 の「口座ごとの口座残量が … 1 行ずつ増え」は vocabulary の口座残量 (1 口座 1 時刻の組) の粒度で書かれ、 本 ADR の event は 1 口座 1 窓 = 1 行 (§2.1) で、 口座ごとに複数の実測行が増える (stdout は口座ごと 1 行)。 実演 (D) では「口座ごとに行が増え、 器の外の独立した手段と値が一致し、 credential の無い口座が理由付きの行になる」を満たすことで受入とし、 AC1011 の字面を「口座 × 窓ごとに 1 行」へ揃える改訂は次の SRS 便の errata (user の手番) とする。
+options:
+  - id: "chosen"
+    name: "口座残量は器が host の HTTP client を子 process で呼んで読み、 出所付きの実測行として fleet の event log に記録する (manifest の口座列挙は不透明な label・上限 record は検出の合図のまま・選ぶは v3)"
+    text: |
+      読んだ残りは、 便や席の出来事と同じ 1 つの file (fleet の event log) に 1 行ずつ足します。 別の file を作らないのは、 憲法が「fleet の状態は 1 つの file」と命じるからです。 行には「どの口座を・どこから・いつ読んだか」を必ず添え、 読めなかった回は「測れなかった」と理由を残します。 0 と書いてごまかすことはしません。 file の版番号は変えません。 既存の行はそのまま読めるからです。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 口座の残り (5 時間枠・7 日枠・モデル別の 7 日枠と、 それぞれの reset 時刻) を見る道具は host に在りますが、 前の版の python script であって、 この器の外にあります。 器は口座の残りを読む口も記録する口も持たず、 席が口座を選ぶときは前の版の道具を手で叩いて数字を写していました。 憲法は「口座を allowance の窓の終わりまで使い切る」と命じており、 その判断には残りの数字が要ります。 user の指摘を受けて要件 (FR1033 / AC1011) は先に要件書へ入りました。 この記録は、 その要件を どこに記録し・どうやって読み・口座をどう列挙し・止める合図とどう区別するか の 4 点を決めます。"
+  - id: "A"
+    name: "Rust の HTTP crate を足す"
+    text: |
+      (A) Rust の HTTP crate を足す。 却下: NFR1003 (実行時の直接依存 0 本) と C13 (依存予算・A3 の承認・compile 時間の記録) に触れ、 TLS まで含めると依存が連鎖する。 host の道具を子 process で呼ぶ形は git / claude / tmux で既に取っている形であり、 増やすのは同種の 1 つ。
+    verdict: rejected
+    reason: "NFR1003 (実行時の直接依存 0 本) と C13 (依存予算・A3 の承認・compile 時間の記録) に触れ、 TLS まで含めると依存が連鎖する。 host の道具を子 process で呼ぶ形は git / claude / tmux で既に取っている形であり、 増やすのは同種の 1 つ。"
+  - id: "B"
+    name: "前の版の script (--json) を「器の外の観測物」として読む"
+    text: |
+      (B) 前の版の script (--json) を「器の外の観測物」として読む。 却下: 器の判断入力が前の版の python の出力に依存し、 C8 (前の版を oracle にしない) に反し、 器の判定入力が型の無い非 Rust の経路の出力になる (ADR-1009 §2.6 は host で人が撃つ shell を禁じないが、 それを器の判断入力にはしない)。 token の扱いも器の外に残る。
+    verdict: rejected
+    reason: "器の判断入力が前の版の python の出力に依存し、 C8 (前の版を oracle にしない) に反し、 器の判定入力が型の無い非 Rust の経路の出力になる (ADR-1009 §2.6 は host で人が撃つ shell を禁じないが、 それを器の判断入力にはしない)。 token の扱いも器の外に残る。"
+  - id: "C"
+    name: "Claude Code が disk に残す usage の cache を読む"
+    text: |
+      (C) Claude Code が disk に残す usage の cache を読む。 却下: 書き手 (statusline) と鮮度が器の外にあり、 C10 の出所 (いつ・どこから読んだか) を付けられない。 cache が無い・古い周を「測れなかった」と「古い値」に弁別できない。
+    verdict: rejected
+    reason: "書き手 (statusline) と鮮度が器の外にあり、 C10 の出所 (いつ・どこから読んだか) を付けられない。 cache が無い・古い周を「測れなかった」と「古い値」に弁別できない。"
+  - id: "D"
+    name: "口座残量を別 file (<state_dir>/fleet/allowance.jsonl) に置く"
+    text: |
+      (D) 口座残量を別 file (<state_dir>/fleet/allowance.jsonl) に置く。 却下: C3「exactly one database file」と ADR-1004 決定文 1 (fleet の状態は 1 つの JSONL) に反する。 verdicts / inject が別 file なのは審査結果と消費であって fleet の状態ではない (設計 fleet-event-log.md §2)。 口座残量は fleet の状態 (C3 の列挙に「accounts」が在る)。
+    verdict: rejected
+    reason: "C3「exactly one database file」と ADR-1004 決定文 1 (fleet の状態は 1 つの JSONL) に反する。 verdicts / inject が別 file なのは審査結果と消費であって fleet の状態ではない (設計 fleet-event-log.md §2)。 口座残量は fleet の状態 (C3 の列挙に「accounts」が在る)。"
+  - id: "E"
+    name: "本当の口座の識別子や credential の path を manifest に書く"
+    text: |
+      (E) 本当の口座の識別子や credential の path を manifest に書く。 却下: CON1002 (PUBLIC・絶対 path・host 名・口座名を tracked file に書かない) に反する。 不透明な label + state dir 配下の link で、 宣言 (manifest) と host 固有の結び (untracked) を分ける (§2.3)。
+    verdict: rejected
+    reason: "CON1002 (PUBLIC・絶対 path・host 名・口座名を tracked file に書かない) に反する。 不透明な label + state dir 配下の link で、 宣言 (manifest) と host 固有の結び (untracked) を分ける (§2.3)。"
+  - id: "F"
+    name: "<state_dir>/accounts/ を走査して口座を発見する (manifest に列挙しない)"
+    text: |
+      (F) <state_dir>/accounts/ を走査して口座を発見する (manifest に列挙しない)。 却下: 真実が per-host の dir に置かれ C3 に反する。 C10 の「宣言値は計測を通してだけ有効になる」の宣言側が無くなり、 doctor が宣言と実測を突き合わせる面 (C3.2) を将来持てない。 FR1033 の「manifest に列挙した口座ごとに」とも食い違う。 (F') 口座を CLI 引数で毎回渡す案も同じ理由で却下 (宣言が無い・FR1033 と食い違う)。
+    verdict: rejected
+    reason: "真実が per-host の dir に置かれ C3 に反する。 C10 の「宣言値は計測を通してだけ有効になる」の宣言側が無くなり、 doctor が宣言と実測を突き合わせる面 (C3.2) を将来持てない。 FR1033 の「manifest に列挙した口座ごとに」とも食い違う。 (F') 口座を CLI 引数で毎回渡す案も同じ理由で却下 (宣言が無い・FR1033 と食い違う)。"
+  - id: "G"
+    name: "実測行から口座を選ぶ・閾値で便を止める"
+    text: |
+      (G) 実測行から口座を選ぶ・閾値で便を止める。 却下 (本版): user 裁定 (選ぶは v3)・C9.2 (使い切る前に止めない・ADR-1012 §2.3)・R-C9-1 の有効化は A2 の裁定を要する。
+    verdict: rejected
+    reason: "user 裁定 (選ぶは v3)・C9.2 (使い切る前に止めない・ADR-1012 §2.3)・R-C9-1 の有効化は A2 の裁定を要する。"
+basis: [FR1005, FR1022, FR1033, NFR1003, AC1011, ADR-1004, ADR-1009, ADR-1012, ADR-1013, ADR-1016, CON1002]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  読んだ残りは、 便や席の出来事と同じ 1 つの file (fleet の event log) に 1 行ずつ足します。 別の file を作らないのは、 憲法が「fleet の状態は 1 つの file」と命じるからです。 行には「どの口座を・どこから・いつ読んだか」を必ず添え、 読めなかった回は「測れなかった」と理由を残します。 0 と書いてごまかすことはしません。 file の版番号は変えません。 既存の行はそのまま読めるからです。
+approval:
+  who: 持ち主
+  date: 2026-09-12
+  ruling: "s2-07l.99（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.99 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 口座の残りが器の中の 1 つの記録に出所付きで残り、 前の版の道具を手で叩いて写す作業が消えること、 依存を 1 本も増やさないこと、 「測れなかった」が数字に化けないことです。 悪い面は、 host に HTTP client が無ければ測れないこと、 label と credential を結ぶ dir を host ごとに user が置く手間、 応答を読む JSON reader を自前で広げる分の code、 そして口座の数が公開 repo の manifest から読めることです。"
+  - "Positive: 口座残量が fleet の 1 file に Measured + Provenance で残り (C3 / C10)、 席の口座選びが前の版の道具への依存を離れる (C8 の向き)。 crate 依存 0 本のまま (NFR1003 / C13)。 失敗が typed な理由で残り 0 に化けない (C11.2 / FR1033)。 上限 record との役割分担が明文化され、 ADR-1012 の判定経路は触らない。 schema 版 1 のまま (決定文 5)。"
+  - "Negative (受け入れるコスト): host の HTTP client への実行時依存 (git / claude と同種・不在は Unmeasured の理由になる)。 <state_dir>/accounts/<label> を host ごとに置く user の操作が 1 口座 1 回要る。 std だけの JSON reader を入れ子・配列・数へ広げる code (core の行数は R-C4-1 の内側で測る)。 manifest の label 行は口座の 数 を公開面に出す (label 自体は不透明・追加は A1 の確認を経る)。 credential file の形 (Claude Code の私有形式) への読み取り依存 — 形が変われば Unmeasured に倒れる (fail-closed・止まらない)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0017-account-allowance-measured-into-event-log.html
+  器の記録の頭: Status: accepted · Date: 2026-09-12 · version 0.4.6 (拘束する constitution の版) · C3 / C9.2 / C10 / C13 の適用を記録し、 ADR-1004 §2.6 の一文を口座残量の実測行に限って supersede し §2.3 決定文 3 の表の列挙を拡張 · 要件は SRS v0.5 (FR1033 / AC1011) が正本
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user 裁定 (2026-09-12) を受けた決定で、 §3 は SRS への pointer である。 要件 (FR1033 / AC1011) は本 ADR より先に SRS v0.5 へ入っており、 本 ADR は要件の文面を 1 字も持たず、 理由・形・却下案 だけを持つ。 本 ADR は ADR-1004 §2.6 のうち「口座の状態を MVP の event log に持たせない」の一文を、 口座残量の実測行に限って supersede し、 同 §2.3 決定文 3 が受理する表の列挙を [[account]] へ広げる (ADR-1004 の他の決定は不変。 ADR-1012 の判定経路は不変だが、 上限 record の field の役割は §2.4 で再配置する)。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: user (2026-09-12) — 3 論点のうち 2 論点目の裁定 (見る + 記録を MVP に・選ぶは v3・手段は host の道具を子 process で)。 逐語は台帳の notes が原本で、 本 file には写さない (CON1002)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: ADR-1004 §2.6 の一文「口座・lease・退役・tmux 席の状態は MVP の event log に持たせない」を、 口座残量の実測行 (FR1033) に限って supersede する。 lease・退役・席の状態は引き続き MVP の event log に持たない。 あわせて ADR-1004 §2.3 決定文 3 の array-of-tables の列挙 ([[rule]]) を [[account]] へ拡張する (同行の他の検査は不変)
+  器の機械の欄 related: ADR-1004 §2.1 / §2.4 / §2.5 (event log の形・state dir の受け渡し・schema 版) / ADR-1012 §2.1〜§2.4 (上限 record は不変) / ADR-1013 §2.2 (variant の足し方) / ADR-1016 §2.2 (schema 1 のまま variant を足した前例) / constitution C1 / C2.2 / C3 / C9.2 / C10 / C10.2 / C11.2 / C13 / A3 / R-C9-1 / SRS FR1033 / AC1011 / NFR1003 / CON1002
+  器の却下案の節の要約: 6 つの案を退けました。 Rust の HTTP crate を足す案は依存 0 本の約束を破ります。 前の版の script の出力を読む案は、 前の版を器の判断の元にしてしまいます。 Claude Code が disk に残す cache を読む案は、 書き手と鮮度が器の外にあり出所が付きません。 残量だけ別 file に置く案は「fleet の状態は 1 つの file」に反します。 本当の口座名や path を manifest に書く案は公開 repo で禁じられています。 state dir の下を走査して口座を見つける案は、 真実を host ごとの dir に置くことになります。
+  器の記録の出所（Trace）:
+  出所は、 user の指摘と裁定、 前の版の道具が実際にどう読んでいるかの実測、 器の現物 (event log の形・JSON reader の値域・口座の渡し方)、 そして先に要件書へ入った FR1033 / AC1011 です。
+  ・user の指摘 (2026-09-11・会話面・planner 席): 口座ごとの 5h / 7d / モデル別枠と reset を見る仕組みが要る → 前の版の道具は live な口座で正しく動くと回答し、 v2 に観測口を持つかを grill 論点として台帳 s2-07l.99 に起票。 user の裁定 (2026-09-12・逐語「推奨で」・3 論点の 2 つ目): 見る + 記録を MVP に・手段は host の道具を子 process・選ぶは v3。 逐語は台帳の notes (tracked file には写さない・CON1002)。
+  ・要件の land (2026-09-12): SRS v0.5 に FR1033 / AC1011 を追加 (user の /folio-architect・review で実装手段を SRS から外し ADR の領分とした)。 本 ADR は要件の後に書かれ、 要件の文面を持たない。
+  ・前の版の道具の実測 (2026-09-11・host 上): 口座の endpoint (認証 API の usage 口) を credential file の access token で読み、 five_hour / seven_day の utilization と resets_at、 limits[] の weekly_scoped 要素 (モデル別 7 日枠・scope.model.display_name でしか結べず id は null) を返す。 expiresAt が 0 の credential は墓標で、 復旧は user の再 login。 live な 5 口座で値が返ることを実測。
+  ・器の現物 (2026-09-12): crates/<NAME>/src/fleet/mod.rs の EventKind は 10 variant・KNOWN_KEYS は閉じた 11 key・run / bead は必須。 json_lite::Value は Str / Num(u64) / Bool / Null の flat のみ。 headless の --account-dir は子 process の設定 dir 環境変数に渡すだけ。 fleet の subcommand は record / show / export の 3 つ。 polarity.rs の定義: guard は「行為を止めうる判定を返す境界」・FailOpen は「通す側へ倒し記録を残す」(cap guard の前例)。 manifest は [[rule]] 28 行で口座の列挙を持たない。
+  ・先行決定: ADR-1004 §2.1 (1 file)・§2.4 (state dir は git local 設定か引数・env を読まない)・§2.5 (schema 版)・§2.6 (口座の状態は持たない — 本 ADR が実測行に限って supersede)。 ADR-1012 §2.3 / §2.4 (閾値で止めない・utilization は記録のみ)。 ADR-1016 §2.2 (schema 1 のまま variant を足す前例)。
+  ・設計: docs/design/fleet-usage.md (manifest の account 行・credential の解き方・子 process の呼び方と stdin 設定・応答の読み方・event の field・replay の導出値・CLI・失敗の enum と極性・歯・契約の分割・却下案)。
+  （取り込みの規則）器の記録 ADR-1004 の決定文の印（字 D と「-」と番号）は根の規則の表の行の id と同じ形なので、この写しでは字「決定文 <番号>」と書いた（ADR-1004 の決定の節の各文の頭の印）。

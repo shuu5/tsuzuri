@@ -1,0 +1,155 @@
+# 判断の記録 ADR-1064 — 器 scribe2 の判断の記録 ADR-0064 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1064
+title: "tick の unit は席の起動が入れる — host の面に表 [[tick]] (unit dir と binary・0 か 1 行) を足し、 seat launch が席を立てた周に §3 の install の 1 本を面の値で撃つ。 doctor は flag が無ければ面の値を既定にし、 init は雛形の 5 表目として写す (ADR-1030 の口と導出は不変・ADR-1063 の init が写す表を 4 から 5 に)"
+status: proposed
+date: 2026-09-25
+context: |
+  席ごとの tick の unit を書く口 (seat tick install) は unit dir と binary を引数で受ける (器は env・home・自分の実行 file の場所を読まない)。 だから今は人が席ごとに 1 回打たないと unit は入らず、 打ち忘れた席は黙ったままになる (2026-09-24 の実測で、 この host に器の作った unit は 1 本も無く、 人の手書きの unit が別の引数で落ち続けていた)。 unit dir と binary は host に 1 組しか無い。 本 ADR は、 host の面 (host.toml) に表 [[tick]] を 1 行で宣言し、 席を起こす口 (seat launch) が席を立てた周にその値で §3 の install と同じ 1 本を撃ち、 結果を起動の 1 行の末尾に足すと決める (表の在る host だけ・表の無い host は起動の行も doctor も 1 字も変わらない)。 doctor は flag が無ければ面の値で unit の有無を名指し、 init は雛形の 5 表目として写す。 人が打つ command は増えない。 導出・unit の名・install と uninstall の口・tick の判定は 1 字も変えない。
+  なぜこの判断が要るのかを、 user の決定と、 実際に起きたことと、 器の今の部品と、 これまでの決まりから説明します。 user は 2026-09-24 に、 見回り (heartbeat) を器に戻すと決め、 その候補の 1 つは席の外の周期の仕組みが見回りを撃ち、 人の手を要らなくする側でした。 前の決定 (ADR-1030) は見回りの時計を器が書いて動かす口を決めましたが、 誰がいつその口を撃つかは決めていません。 同じ日に調べると、 この host には器が書いた時計が 1 本も無く、 人の手書きの時計が別の引数で失敗し続けていました。 器の部品は揃っています。 host ごとの設定 file は 5 つの表を受け、 そのうち vessel の表は path 1 つを持つ 0 か 1 行の表の先例です。 時計を入れる口は置き場・画面の場所・file を置く dir・器の場所・規則の写しを全部引数で受け、 席を立てる口は登録を書いて起動行を差し込み、 立ち上がりを確かめて「立った」を返します。 無いのは、 file を置く dir と器の場所を器が知る口です。 決まりの側では、 環境変数と home と自分の実行 file の場所を読まないこと、 host ごとの値は設定 file に置くこと、 人が置いた file を上書きしないことが効いています。 席を退役する口はまだ無いので、 時計を外す側はこの記録では決めません。
+  CTX1 経緯 — heartbeat を器に戻す裁定と、 その続き
+  2026-09-24 に user は heartbeat (管理 tick（席の外からの見回り）) を器に戻すことを裁定した (裁定 id（user の決定の印） user 2026-09-24T22:09Z・ADR-1058 が形を決めた)。 同じ裁定の候補 2 は、 見回りを席の外の周期の仕組み (host の systemd user の timer) が撃ち、 人の手を要らなくする側を指す。 要旨だけを写し、 逐語は非公開の作業記録簿 (台帳 s2-07l.616) に在る。 ADR-1030 は tick の unit（見回りの時計の file） を器が導出して書き有効化する口 (seat tick install) を決めたが、 誰がいつその口を撃つかは決めていない。 本 ADR はその 1 点を決める。
+  CTX2 実測 — この host に器の作った unit は 1 本も無く、 heartbeat は 1 度も走っていなかった
+  2026-09-24 の実測で、 この host には器が導出して書いた tick の unit が 1 本も無かった。 在ったのは人の手書きの template unit で、 別の引数で 5 分ごとに落ち続けていた。 seat tick install は unit dir と binary を引数で受けるので、 席ごとに人が 1 回打つ必要があり、 誰も打っていなかった。 打ち忘れた席は黙ったままで、 doctor（点検の 1 コマンド） も flag (--unit-dir と --binary) を渡した周しか unit の有無を名指さない。 heartbeat を器に戻しても、 unit が入らなければ 1 度も走らない。
+  CTX3 現物 — 部品は揃っているが、 unit dir と binary を器が知る口が無い
+  base 65419fb で、 host の面 (state dir（器の状態の置き場） の host.toml) は口座・plugin・起動引数・vessel・群の 5 表を受け、 vessel の表は path 1 つを持つ 0 か 1 行の表の先例 (2 行目は loader が断る) である。 seat tick install は置き場・target・unit dir・binary・rules の写しを全部引数で受け、 導出は pure の 1 関数、 書きと有効化は daemon-reload → enable --now の順の 1 本で、 器は env・home・自分の実行 file の場所を読まない (C2.2)。 席の起動（席を立てる口） (seat launch) は登録 row を書き、 起動行を注入し、 立ち上がりを確かめて Done を返す。 短い形 (引数なし・ADR-1063) と長い形の呼び手は 1 か所。 doctor の tick-unit= の項目は --unit-dir と --binary を渡した周だけ足す。 init（repo を載せる口） (ADR-1063) は雛形の host の面の 4 表を写す。 unit dir と binary は host に 1 組しか無い値で、 席ごとに変わらない。
+  CTX4 射程 — 撤去の口と席の退役は決めない
+  席を退役する口はまだ無い (account-lifecycle の後続)。 unit の撤去は §3 の seat tick uninstall のままで、 本 ADR は撤去を起動や退役に結び付けない。 init の段が起こす席は本 ADR の形で unit が入るので、 人が打つ command は増えない。 設計は、 init 自身が unit を入れる形 (席を起こすのは seat launch の 1 本で、 入れる場所は起動の直後の 1 か所に置く) と、 install の失敗を起動の失敗にする形 (席は立っている・欠けは doctor が名指す) も退けた。 template unit と %i は ADR-1030 の却下のまま。
+  CTX5 憲法と既存の決定の向き (本 ADR の解釈)
+  C2.2 は器が値を manifest から読み env を直接読まないと定め、 ADR-1004 §2.4 は env の差し込み口を新設しないと決め、 ADR-1030 はその読みとして env-reads の禁止集合に home と自分の実行 file の場所 (current_exe) を含める。 C10 は host ごとの値を host の面 (manifest) に置き、 N3 は host 固有の値で分岐する code を拒む。 N1 は人の手で置いた file を上書きしない (§3 の unit-exists / unit-foreign の断り)。 A1 は消す・出す・使うの 3 クラスを user に聞くが、 ADR-1030 §2.4 は unit の有効化と停止を 3 クラス非該当と決めた。 C17 は足す前に要るか・既に在るかを順に問う。 ADR-1026 は host の面を置き場ごとの 1 file とし、 ADR-1030 §2.1〜§2.5 は unit の導出・書き・有効化・撤去・doctor の形を決め、 ADR-1058 は heartbeat の判定と backoff を決め、 ADR-1063 は init が雛形の面の表を写すと決めた。 FR1064 は unit を登録 row を持つ席ごとに置き有効化する口と doctor の 1 行を、 FR1059 は席の起動の判定と断りを、 FR1061 は doctor が実測を typed な語で名指すことを求める。
+  （選択肢を測るものさし）この判断を評価する 5 本のものさしです。 人が打つ command を増やさず、 席が立てば時計も入ること。 file を置く dir と器の場所を環境変数・home・自分の実行 file の場所から知らず、 host の値は host の設定 file に置くこと。 時計の作り方・file の名前・入れる口と外す口・見回りの判定を 1 字も変えず、 この表 ([[tick]]) の無い host は起動の行も点検も 1 字も変えないこと。 時計が入らなくても席を落とさず、 欠けは点検が名指すこと。 足すものを最小にして、 表 1 つと呼び出し 1 か所に閉じ、 子 process を撃つ口 (仕組み) も外部の部品も足さないことです (表の在る host で、 すでに在る口を撃つ周が増えるのは別です)。
+  DR1｜人が打つ command を増やさない — 席が立てば unit も入り、 打ち忘れで黙る席を作らない CTX1 (裁定の候補 2)・CTX2 (unit 0 本の実測)
+  DR2｜unit dir と binary を env・home・自分の実行 file の場所から知らない — host の値は host の面に置く CTX5 (C2.2・C10・N3・ADR-1004 §2.4・ADR-1030 の env-reads の禁止集合)
+  DR3｜既存の外形を変えない — 導出・unit の名・install と uninstall の口・tick の判定は 1 字も変えず、 [[tick]] の表の無い host は起動の行も doctor も 1 字も変えない (足すのは表の在る host だけ)。 群 0 の host も今のまま CTX3・CTX5 (ADR-1030・ADR-1058)
+  DR4｜unit の失敗で席を落とさない — 席は立っている。 欠けは doctor が名指す CTX2・CTX5 (FR1059・FR1061)
+  DR5｜足すものを最小にする — 表 1 つと呼び出し 1 か所で、 子 process を撃つ口 (仕組み) も依存も足さない (表の在る host で既存の口を撃つ周が増えるのは、 口を足すことではない) CTX3・CTX5 (C17)
+decision: |
+  選んだ案と、 それが要件書のどの要件を支えるかを示します。 host の設定 file に表 [[tick]] を足します。 欄は file を置く dir と器の場所の 2 つ (どちらも絶対 path)、 行は 0 か 1 で、 2 行目・相対 path・欄の欠けは読み手が行番号つきで断ります。 席を立てる口は、 席が立った直後に、 表が在れば前の決定 (ADR-1030) の入れる口と同じ 1 本 (作る・比べる・書く・systemd に読み直させる・動かす) をその値で撃ち、 結果を起動の 1 行の末尾に足します。 表の無い host では起動の行は 1 字も変わりません。 時計が入らなくても起動の結果は変えず、 席が立たなかった周は撃ちません。 点検は引数が無ければ設定 file の値で時計の有無を言い、 引数があればそちらが勝ち、 どちらも無ければ席ごとの行は今のままで、 表の在る host だけ host の行に「宣言あり」を 1 項目足します。 新しい repo を載せる口は雛形からこの表も写します。 要件書では、 見回りの時計を席ごとに置く口 (FR1064) を満たし、 席の起動 (FR1059) の判定と断りを変えないことと、 点検が実測を名指す (FR1061) 形をこの表と時計の有無へ広げることの根拠になります。
+  採用 — OPT1
+  host の面 SHALL 表 [[tick]] を受け、 欄は unit-dir (unit を置く dir の絶対 path) と binary (unit が撃つ器の絶対 path) の 2 つ、 行は 0 か 1 とし、 2 行目・相対 path・欠けた欄は loader が行番号つきで断る (vessel の表と同じ形)。 表の無い host SHALL 今のまま動く。 席の起動 (seat launch) SHALL 席を立てた周 (登録 row を書き、 起動行を注入し、 立ち上がりを確かめて Done を返す周) に、 面に [[tick]] が在れば ADR-1030 §2.1〜§2.4 の install と同じ 1 本 (導出 → 照合 → 書き → daemon-reload → enable --now) を、 置き場と target は起動のもの、 unit dir と binary は面の値、 rules の写しは起動に渡されたもの (無ければ埋め込み) で撃ち、 結果を起動の 1 行の末尾に tick-unit=installed か unchanged か refused:<理由の語> で足す。 面に [[tick]] の無い host SHALL 起動の行を 1 字も変えない (tick-unit= の項目を持たない)。 install の断りと失敗 SHALL NOT 起動の rc を変えない (席は立っている)。 起動が断られた・失敗した・立ち上がらなかった周 SHALL NOT install を撃たない。 短い形と長い形の両方 SHALL 同じ 1 か所で撃つ。 doctor SHALL --unit-dir と --binary が無く面に [[tick]] が在る周は面の値で登録 row ごとの tick-unit= を足し、 flag が在れば flag が勝ち、 面にも flag にも無い周は登録 row の行に項目を足さない。 doctor SHALL 面に [[tick]] が在る host だけ host の行に tick=declared を 1 項目足し (値は書かない)、 表の無い host の既存の外形 (host の行と登録 row の行) SHALL 1 byte も変えない。 「1 字も変えない」の対象は [[tick]] の表の無い host に限り、 表の在る host は起動の行の末尾と doctor の host の行に 1 項目ずつ増える。 init SHALL 雛形の host の面の [[tick]] を 5 表目として写す (無ければ写さない)。 器 SHALL NOT unit dir と binary を env・home・自分の実行 file の場所・install 帳簿・systemd の道具の子 process から解かない。 導出・unit の名・seat tick install と uninstall の口と引数・tick の判定の列・既存の表の形・rules 行 SHALL 変えない。 unit の撤去 SHALL seat tick uninstall のままとし、 席の退役の口は本 ADR で決めない。
+  （平易）host ごとの設定 file (host の面) は、 表 [[tick]] を受けます。 欄は時計の file を置く dir と時計が撃つ器の場所の 2 つ (どちらも絶対 path) で、 行は 0 か 1 です。 2 行目・相対 path・欄の欠けは読み手が行番号つきで断ります (vessel の表と同じ形)。 表の無い host は今のまま動きます。 席を立てる口 (seat launch) は、 席が立った周 (登録を書き、 起動行を差し込み、 立ち上がりを確かめて「立った」を返す周) に、 設定 file に [[tick]] が在れば、 前の決定 (ADR-1030) の入れる口と同じ 1 本 (作る・比べる・書く・systemd に読み直させる・動かす) を、 置き場と画面の場所は起動のもの、 dir と器の場所は設定 file の値、 規則の写しは起動に渡されたもの (無ければ器の中のもの) で撃ち、 結果を起動の 1 行の末尾に「入れた」「同じだった」「断った (理由の語)」のどれかで足します。 この表の無い host では、 起動の行は 1 字も変わりません。 時計が入らなくても起動の結果 (rc) は変えません (席は立っています)。 起動が断られた・失敗した・立ち上がらなかった周は撃ちません。 引数の無い形と引数を全部書いた形の両方が、 同じ 1 か所で撃ちます。 点検 (doctor) は、 dir と器の場所の引数が無く設定 file に [[tick]] が在れば、 その値で席ごとの時計の有無を言い、 引数があればそちらが勝ち、 設定 file にも引数にも無ければ席ごとの行に項目を足しません。 点検は、 表の在る host だけ host の行に「宣言あり」を 1 項目足し (値は書きません)、 表の無い host の今の見た目 (host の行も席ごとの行も) は 1 byte も変えません。 「1 字も変えない」のはこの表の無い host のことで、 表の在る host は起動の行の末尾と点検の host の行に 1 項目ずつ増えます。 新しい repo を載せる口 (init) は、 雛形の設定 file の [[tick]] を 5 つ目の表として写します (無ければ写しません)。 器は dir と器の場所を、 環境変数・home・自分の実行 file の場所・install の記録・systemd の道具の子 process から解きません。 時計の作り方・file の名前・入れる口と外す口とその引数・見回りの判定・今ある表の形・規則の行は変えません。 時計を外すのは今のまま外す口 (seat tick uninstall) で、 席を退役する口はこの記録では決めません。
+  （理由）user の決定は、 見回りを器に戻し、 席の外の周期の仕組みが撃って人の手を要らなくすることでした。 前の決定 (ADR-1030) は時計を書いて動かす口を決めましたが、 その口は dir と器の場所を引数で受けるので、 人が席ごとに打たなければ時計は入りません。 実際に、 この host には器が書いた時計が 1 本も無く、 見回りは 1 度も走っていませんでした。 dir と器の場所は host に 1 組しか無い値です。 それを環境変数や自分の実行 file の場所から知れば、 環境変数を直接読まないという決まり (C2.2) と、 その読みとして前の決定 (ADR-1030) が読まないと決めた集合 (home・自分の実行 file の場所) に反します。 systemd の道具に聞けば、 子 process を撃つ口が増え、 環境変数の読みを子に写して肩代わりさせるだけになります。 器の更新の口が残す install の記録は scribe2 の置き場にしか無く、 他の project の席が読めません。 そこで、 host ごとの値を置く場所と決まっている設定 file (host の面) に、 すでに在る vessel の表と同じ 0 か 1 行の形で 1 行を足し、 席を立てる口が席を立てた直後にその値で入れる口と同じ 1 本を撃つ形にしました。 撃つ場所を席が立った直後の 1 か所にしたのは、 席が立った周に時計の書きと有効化を撃ち (断りや失敗は起動の行の語と点検が名指します)、 新しい repo を載せる口が起こす席にも人の 1 手が要らないようにするためです。 時計が入らなくても起動の結果を変えないのは、 席はもう立っていて、 時計の欠けは起動の 1 行の末尾と点検が名指せば足りるからです。 点検が引数無しでも設定 file の値を使うのは、 人が引数を打たなくても時計の有無を言えるようにするためで、 設定 file にも引数にも無い周に項目を足さないのは、 測っていない印を持たないためです。 表の無い host の起動の行と点検を 1 字も変えないのは、 表を書いていない host に新しい項目を持ち込まないためで、 表の在る host だけ起動の行の末尾と点検の host の行に 1 項目ずつ増えます。 時計の作り方・入れる口と外す口・見回りの判定を 1 字も変えないのは、 前の決定を置き換えずに済ませ、 表の無い host を今のまま動かすためです。 時計を外す側を起動や退役に結び付けないのは、 席を退役する口がまだ無く、 別の決定が要るからです。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1064（claim）: FR1064 は器が管理 tick の unit を登録 row を持つ席ごとに導出して host の駆動機構へ置き有効化する口と、 doctor が席ごとに unit の有無と一致を 1 行で言うことを求める。 本 ADR は「口」を撃つ主体を席の起動に置き、 unit dir と binary を host の面から与えることで、 登録 row を持つ席ごとに unit が置かれ有効化される形を満たす。 doctor は flag が無くても面の値で有無と一致を名指す。 FR1064 の文面 (口を持つ) は変えず、 誰がいつ撃つかを本 ADR が決める読みである。
+  FR1059（rationale）: FR1059 は席の起動が役割を受け、 口座を決め、 登録を起動の前に書き、 断る周は typed に断り key を 1 つも送らないことを求める。 本 ADR は起動の判定と断りを変えず、 席が立った後にだけ install を撃ち、 その結果を起動の 1 行の末尾に足す。 install の断りが起動の rc を変えないのは、 FR1059 の「席の起動」が席が立ったかを言う口であって unit の有無を言う口でないという読みによる。
+  FR1061（rationale）: FR1061 は導入先ごとの binary・plugin・install の食い違いを doctor が実測して typed な語で名指し、 推測で埋めないことを求める。 本 ADR の doctor の tick=declared と、 面の値を既定にした tick-unit= は、 その形 (実測・typed な語・推測で埋めない) を tick の宣言（時計の置き場の 1 行）と unit の有無へ広げる読みで、 FR1061 の範囲 (導入先の食い違い) は変えない。 面にも flag にも無い周に項目を足さないのは、 評価していない印を持たないという FR1061 の読みによる。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この記録が版の系譜のどこに在るかと、 判断が最後に行き着く原則です。 この記録は前の決定を 1 つも置き換えません。 時計の作り方・書き方・動かし方・外し方・点検の形 (ADR-1030) と、 入れる口と外す口はそのままで、 この記録はその口を撃つ主体 (席を立てる口) と、 dir と器の場所の出所 (設定 file の表) を足すだけです。 見回りの判定 (ADR-1058) も、 設定 file は置き場ごとに 1 つという決定 (ADR-1026) も変えません。 新しい repo を載せる口 (ADR-1063) が雛形から写す表は 4 つから 5 つになります。 席を退役する口と時計を外すことの結び付けは、 後の決定に送ります。 この記録は発効前 (proposed) で、 系譜の上では現行 (current) ですが、 受け入れられるまで何も拘束しません。 原則は「host にしか無い値は host の面に 1 行で置き、 器は env や自分の場所から推さない。 席を立てる口が、 その席の見回りの時計も巻く。」です (env は環境変数のことです)。
+  改訂状態: current
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  本 ADR は何も supersede しない。 ADR-1030 §2.1〜§2.5 (unit の導出・書き・有効化・撤去・doctor の形) と seat tick install / uninstall の口は不変で、 本 ADR はその口を撃つ主体 (席の起動) と unit dir と binary の出所 (host の面の表 [[tick]]) を足すだけである。 ADR-1058 (heartbeat の判定と backoff) は不変。 ADR-1026 (host の面は置き場ごとの 1 file) は不変で、 表が 1 つ増える。 ADR-1063 の init が写す表は 4 から 5 になる (群の表は写さないまま)。 席の退役の口と unit の撤去の結び付けは後続の ADR に送る。 発効は本 ADR が accepted になった後で、 それまで何も拘束しない。
+  照会終端 — PRIN-HOST-VALUES-LIVE-IN-THE-HOST-FACE-AND-THE-DOOR-THAT-RAISES-THE-SEAT-ALSO-WINDS-ITS-CLOCK
+  host にしか無い値は host の面に 1 行で置き、 器は env や自分の場所から推さない。 席を立てる口が、 その席の見回りの時計も巻く。
+  本 ADR が env・自分の実行 file の場所・install 帳簿・systemd の道具の子 process から値を解く案と、 人が席ごとに打つ現状を退け、 host の面の表 1 つと起動の直後の呼び出し 1 か所を選んだのはこの原則に行き着く (これ以上は遡らない照会終端)。
+options:
+  - id: "OPT1"
+    name: "host の面に表 [[tick]] を足し、 席の起動が Done の周に §3 の install を面の値で撃つ"
+    text: |
+      host.toml に unit dir と binary の 2 欄を持つ 0 か 1 行の表 [[tick]] を足す (vessel の表と同じ形)。 seat launch が席を立てた周に、 面に表が在れば §3 の install と同じ 1 本 (導出 → 照合 → 書き → daemon-reload → enable --now) を面の値で撃ち、 結果を起動の 1 行の末尾に tick-unit= で足す。 doctor は flag が無ければ面の値を既定にし、 表の在る host の行に tick=declared を足し、 init は 5 表目として写す。 表の無い host は起動の行も doctor も 1 字も変わらない。 決め手は分析 (裁定の候補 2 を、 env を読まず外形を変えずに満たす形のうち、 足すものが最小の形)。
+      （平易）host ごとの設定 file に、 時計の file を置く dir と時計が撃つ器の場所の 2 つを書く表 [[tick]] を 1 行だけ足す案です (vessel の表と同じ、 0 か 1 行の形)。 席を立てる口は、 席が立った直後に、 表が在れば前の決定の入れる口と同じ 1 本 (作る・比べる・書く・systemd に読み直させる・動かす) をその値で撃ち、 結果を起動の 1 行の末尾に「入れた」「同じだった」「断った (理由)」のどれかで足します。 表の無い host では起動の行も点検も 1 字も変わりません。 点検は引数が無ければ設定 file の値で時計の有無を言い、 表の在る host の行に「宣言あり」を足し、 新しい repo を載せる口は雛形からこの表も写します。 席が立てば時計も入って人が打つ command は増えず、 環境変数も自分の場所も読まず、 時計の作り方と入れる口と見回りの判定は変えず、 時計が入らなくても席は落とさず、 足すのは表 1 つと呼び出し 1 か所だけです。 代わりに、 人が雛形の設定 file に 1 度だけ表を書き、 表の在る host では起動の 1 行と点検の host の行に項目が 1 つずつ増え、 時計を外す側は今のまま人が打ち、 表が在る周は席の起動が systemd の command をすでに在る口で撃ちます。 決め手は分析で、 user の決定の候補を、 環境変数を読まず今の形を変えずに満たす形のうち、 足すものが最小の形でした。
+      利点: 席が立てば unit も入り、 人が打つ command は増えない。 init が起こす席も同じ形で unit が入る (DR1)
+      利点: unit dir と binary は host の面の 1 行で知り、 env も home も自分の実行 file の場所も読まない。 表の形は vessel の表の先例と同じ (DR2)
+      利点: 導出・unit の名・install と uninstall の口・tick の判定・既存の表は 1 字も変えず、 [[tick]] の表の無い host は起動の行も doctor も 1 字も変わらず、 群 0 の host も今のまま (DR3)
+      利点: install の断りと失敗は起動の rc を変えず、 起動の行の末尾の語と doctor の tick= / tick-unit= が欠けを名指す (DR4)
+      利点: 足すのは表 1 つと Done の直後の呼び出し 1 か所で、 子 process の口も依存も増えない (DR5)
+      欠点: host の面の表が 1 つ増え、 人が雛形の面に 1 度だけ [[tick]] を書く (machine-local・PUBLIC repo には入らない)
+      欠点: 表の在る host では席の起動の 1 行の末尾に項目が 1 つ、 doctor の host の行に項目が 1 つ増える (表の無い host の外形 snapshot は動かない)
+      欠点: 撤去は起動や退役に結び付けず、 seat tick uninstall を人が打つまま (席の退役の口は後続)
+      欠点: 席の起動が systemctl の子 process を撃つ周が生まれる (表の在る周だけ・§3 の既存の口と同じ 1 本で、 撃つ口は増えない)
+    verdict: adopted
+    reason: "決め手は分析 (裁定の候補 2 を、 env を読まず外形を変えずに満たす形のうち、 足すものが最小の形)。"
+  - id: "OPT2"
+    name: "env (HOME / XDG_CONFIG_HOME) から unit dir を解く"
+    text: |
+      器が env の HOME か XDG_CONFIG_HOME を読み、 systemd user の unit dir を規約 (.config/systemd/user) で導く。 決め手は分析 (C2.2 に反する)。
+      （平易）器が環境変数 (HOME か XDG_CONFIG_HOME) を読み、 systemd の規約 (.config/systemd/user) で時計の file を置く dir を導く案です。 設定 file に表を足さずに済んで人が書く行が 0 になり、 systemd の規約どおりなので他の道具の利用者に説明しやすい点で勝ります。 けれども、 環境変数を読むのは、 環境変数を直接読まないという決まり (C2.2) と、 環境変数の差し込み口を新しく作らないという前の決定 (ADR-1004) に反し、 前の決定 (ADR-1030) が読まないと決めた集合 (home を含む) にも当たって、 器の検査 (env-reads) にも数えられます。 器の場所は環境変数からは解けず、 別の口が要ります。 決め手は分析です。
+      利点: host の面に表を足さずに済み、 人が書く行が 0 になる
+      利点: systemd の規約と同じ導き方で、 他の道具の利用者に説明しやすい
+      欠点: env を読むのは C2.2 (env を直接読まない) と ADR-1004 §2.4 (env の差し込み口を新設しない) に反し、 ADR-1030 の env-reads の禁止集合 (home を含む) に当たって xtask の env-reads の門に数えられる (DR2)
+      欠点: binary の場所は env からは解けず、 別の口が要る
+    verdict: rejected
+    reason: "決め手は分析 (C2.2 に反する)。"
+  - id: "OPT3"
+    name: "自分の実行 file の場所 (current_exe) で binary を解く"
+    text: |
+      器が自分の実行 file の path を OS に聞き、 unit の ExecStart に写す。 決め手は分析 (C2.2 の読み・ADR-1030 の env-reads の禁止集合に反する)。
+      （平易）器が自分の実行 file の場所を OS に聞き (current_exe)、 時計が撃つ器の場所としてそのまま写す案です。 器の場所を人が書かずに済み、 呼ばれた器と時計が撃つ器が同じになる点で勝ります。 けれども、 自分の実行 file の場所を読むのは、 決まり (C2.2) の読みとして前の決定 (ADR-1030) が読まないと決めた集合 (自分の実行 file の場所を含む) に反します。 一時の場所 (build の出力先など) から撃つと、 その場所が時計に焼かれ、 後で消える器を時計が撃ち続けます。 dir は解けず、 別の口が要ります。 決め手は分析です。
+      利点: binary の欄を人が書かずに済み、 呼ばれた器と unit が撃つ器が同じになる
+      欠点: 自分の実行 file の場所を読むのは C2.2 の読み (ADR-1030 が env-reads の禁止集合に current_exe を含める) に反する (DR2)
+      欠点: 一時の場所 (cargo の target など) から撃った周にその path が unit に焼かれ、 後で消える binary を timer が撃つ
+      欠点: unit dir は解けず、 別の口が要る
+    verdict: rejected
+    reason: "決め手は分析 (C2.2 の読み・ADR-1030 の env-reads の禁止集合に反する)。"
+  - id: "OPT4"
+    name: "install 帳簿の記録 (InstallRecorded) の path を binary にする"
+    text: |
+      器の更新の口 (vessel update) が残す install の記録 (sha・時刻・host・入れた場所) の path を binary として読む。 決め手は現物 (記録は scribe2 の置き場にしか無い)。
+      （平易）器の更新の口 (vessel update) が残す install の記録 (いつ・どこへ・どの版を入れたか) から、 器の場所を読む案です。 すでに在る記録を使い回し、 人が器の場所を書かずに済む点で勝ります。 けれども、 その記録は scribe2 自身の置き場にしか無く、 他の project の置き場の席からは読めません。 dir は解けず、 別の口が要り、 器を手で入れた host には記録が無くて解けません。 決め手は現物です。
+      利点: 既に在る記録を再利用し、 人が binary を書かずに済む
+      欠点: install 帳簿は scribe2 の state dir にしか無く、 他の置き場 (他の project の state dir) の席は読めない (DR2・DR3)
+      欠点: unit dir は解けず、 別の口が要る。 記録が無い host (手で入れた binary) では解けない
+    verdict: rejected
+    reason: "決め手は現物 (記録は scribe2 の置き場にしか無い)。"
+  - id: "OPT5"
+    name: "systemd-path か systemd-analyze unit-paths の子 process で unit dir を解く"
+    text: |
+      器が systemd の道具 (systemd-path user-configuration など) を子 process で撃ち、 その出力から unit dir を取る。 決め手は分析 (退けた理由は 2 つ — spawn の口が増える・env の読みを子に写す)。
+      （平易）器が systemd の道具 (systemd-path や systemd-analyze unit-paths) を子 process で撃ち、 その答えから dir を取る案です。 systemd 自身が答える値なので host の規約に追随し、 設定 file に表を足さずに済む点で勝ります。 けれども、 退けた理由は 2 つあります。 1 つは、 子 process を撃つ口が 1 つ増えること (差し替え口を通しても撃つ場所は増えます)。 もう 1 つは、 その道具が環境変数 (HOME や XDG) を読んで答えるので、 環境変数の読みを子に写して肩代わりさせる形になることです。 器の場所は解けず、 道具の無い host では解けません。 決め手は分析です。
+      利点: systemd 自身が答える値で、 host の規約に追随する
+      利点: host の面に表を足さずに済む
+      欠点: 子 process を撃つ口が 1 つ増える (ADR-1062 の差し替え口を通しても site は増える) (DR5)
+      欠点: その道具は env の HOME / XDG を読んで答えるので、 env の読みを子に写して肩代わりさせる形になり、 器が env を読まない向きを子で迂回する (DR2)
+      欠点: binary の場所は解けず、 別の口が要る。 道具の無い host では解けない
+    verdict: rejected
+    reason: "決め手は分析 (退けた理由は 2 つ — spawn の口が増える・env の読みを子に写す)。"
+  - id: "OPT6"
+    name: "今のまま — 人が席ごとに seat tick install を打つ"
+    text: |
+      何も足さず、 §3 の口を人が席ごとに 1 回打つ運用を続ける。 決め手は現物 (2026-09-24 の実測で 1 本も打たれていなかった)。
+      （平易）何も足さず、 今のとおり人が席ごとに入れる口 (seat tick install) を 1 回打つ運用を続ける案です。 器の変更が 0 で設定 file も起動の見た目も動かず、 撃つ時点と引数を人が完全に決められる点で勝ります。 けれども、 席ごとに人が打つ必要があり、 打ち忘れた席は黙ったままです。 2026-09-24 の実測では時計は 1 本も無く、 見回りは 1 度も走っていませんでした。 新しい repo を載せる口が起こす席にも人の 1 手が要り、 「人が打つ command を最小に」という前の決定 (ADR-1063) に反します。 決め手は現物です。
+      利点: 器の変更が 0 で、 host の面も起動の外形も動かない
+      利点: 撃つ時点と引数を人が完全に決められる
+      欠点: 席ごとに人が打つ必要があり、 打ち忘れた席は黙ったままになる。 実測で unit は 1 本も無く、 heartbeat は 1 度も走っていなかった (DR1・DR4)
+      欠点: init が起こす席にも人の 1 手が要り、 ADR-1063 の「人が打つ command を最小に」に反する (DR1)
+    verdict: rejected
+    reason: "決め手は現物 (2026-09-24 の実測で 1 本も打たれていなかった)。"
+basis: [FR1027, FR1040, FR1059, FR1061, FR1064, ADR-1004, ADR-1026, ADR-1030, ADR-1049, ADR-1058, ADR-1062, ADR-1063]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  この記録で「器」は scribe2 の本体、 「席」は人と AI が話す 1 つの session、 「見回り」(管理 tick・heartbeat) は席の外から周期で席を見て、 黙った席に続きを促す 1 行を差し入れる仕組み、 「見回りの時計」(tick の unit) は host の systemd という仕組みに置く、 席ごとに周期で見回りを撃つ file の対です。 前の決定 (ADR-1030) は、 この file を器が書いて動かす口 (seat tick install) を決めました。 その口は、 file を置く dir と、 file が撃つ器の場所を引数で受けます (器は環境変数を直接読まない決まりと、 home も自分の実行 file の場所も読まないという前の決定の読みがあるからです)。 だから今は、 席ごとに人がその口を 1 回打たないと時計は入らず、 打ち忘れた席は黙ったままです。 2026-09-24 に調べたところ、 この host には器が書いた時計が 1 本も無く、 人の手書きの時計が別の引数で 5 分ごとに失敗し続けていました。 見回りを器に戻しても、 時計が入らなければ 1 度も走りません。 この記録は、 file を置く dir と器の場所は host に 1 組しか無いので、 host ごとの設定 file (host の面) に 1 行で書き、 席を立てる口 (seat launch) が席を立てた直後にその値で時計を入れると決めます。 結果は起動の 1 行の末尾に書き足し (この表の在る host だけで、 表の無い host の起動の行と点検は 1 字も変わりません)、 時計が入らなくても席は落としません。 点検 (doctor) は引数が無ければ設定 file の値で時計の有無を言い、 新しい repo を載せる口 (init) は雛形からその 1 行も写します。 人が打つ command は増えません。 時計の中身の作り方・file の名前・入れる口と外す口・見回りの判定は 1 字も変えません。 要件書では、 見回りの時計を席ごとに置く口 (FR1064) を満たし、 席の起動 (FR1059) と点検が実測を名指すこと (FR1061) の読みを支えます。 この記録は、 受け入れられるまで何も拘束しない発効前 (proposed) の記録です。
+consequences:
+  - "この判断で良くなること 4 つと、 代わりに引き受けること 4 つです。 良くなるのは、 席が立てば時計も入って人が席ごとに打つ手が消えること、 dir と器の場所を設定 file の 1 行で知って環境変数も自分の場所も読まないこと、 時計の欠けを起動の 1 行と点検の席ごとの行が名指し、 表を書き忘れた host は点検の host の行に「宣言あり」が無いことで分かること、 時計の作り方と入れる口と見回りの判定を変えず、 この表の無い host が起動の行も点検も 1 字も変わらずに今のまま動くことです。 引き受けるのは、 人が雛形の設定 file に 1 度だけ表を書くこと、 表の在る host では起動の 1 行と点検の host の行に項目が 1 つずつ増えて見た目の記録が動くこと、 表が在る周は席の起動が systemd の command をすでに在る口で子 process として撃つこと、 そして時計を外す側は今のまま人が打ち、 席の退役の口は後に残ることです。"
+  - "良い結果: 席が立てば tick の unit も入り、 人が席ごとに seat tick install を打つ手が消える。 init が起こす席も同じ形で unit が入るので、 ADR-1063 の 3 語の外に command は増えない"
+  - "良い結果: unit dir と binary は host の面の 1 行で知り、 器は env も home も自分の実行 file の場所も読まない。 表の形は vessel の表の先例と同じで、 loader の断り (2 行目・相対 path・欠けた欄) は行番号つき"
+  - "良い結果: unit の欠けは、 表の在る host では起動の 1 行の末尾 (tick-unit=) と doctor の登録 row の行 (tick-unit=) が名指し、 表を書いていない host は doctor の host の行に tick=declared が無いことで分かる。 flag を打たなくても doctor が unit の有無を言う"
+  - "良い結果: 導出・unit の名・install と uninstall の口・tick の判定・既存の表は 1 字も変わらず、 [[tick]] の表の無い host は起動の行も doctor の行も 1 字も変わらず、 群 0 の host も今のまま動く。 install の断りと失敗は席を落とさない"
+  - "代償: 人が雛形の host の面に 1 度だけ [[tick]] を書く (machine-local の値で PUBLIC repo には入らない)。 書き忘れた host では unit は入らず、 起動の行にも doctor にも tick の項目は無い (表の無い host は 1 字も変わらない) ので、 欠けは doctor の host の行に tick=declared が無いことから読む"
+  - "代償: 表の在る host では席の起動の 1 行の末尾に tick-unit= が、 doctor の host の行に tick=declared が 1 項目ずつ増える。 表の無い host の外形 snapshot は動かないので、 増えた項目の歯は表の在る fixture でしか測れない"
+  - "代償: 表の在る周は席の起動が systemctl の子 process (daemon-reload と enable --now) を §3 の既存の口で撃つ (撃つ口は増えない)。 偽の systemctl が落ちる周は refused:enable-failed を行に残し、 席は立ったまま unit は無い"
+  - "代償: 撤去は起動や退役に結び付けず、 seat tick uninstall を人が打つまま。 席の退役の口 (登録 row の退役と unit の撤去) は後続に残る"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0064-seat-launch-installs-the-tick-unit-from-the-host-face.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — tick の unit を人が打たずに入れる
+  器の表紙: 状態proposed選択肢6件 (OPT1–OPT6)結果良い 4 / トレードオフ 4版v0.1.0 / 2026-09-25
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1064・FR1059・FR1061
+  器の表紙: 想定読者: scribe2 の開発 session と user — systemd や Rust の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・裁定 id user 2026-09-24T22:09Z (heartbeat を器に戻す裁定の候補 2 = 席の外の周期の見回りを器が持ち、 人の手を要らなくする)。 要旨だけを写す。 逐語は非公開の作業記録簿 (台帳 s2-07l.616 の notes) に在る・裁定済
+  器の承認の欄: 設計 (orchestrator)・orchestrator・2026-09-25 草稿 v1 (設計 seat-heartbeat.md の §5 と契約表の行 d を、 現物の口 (host の面の loader・seat tick install・seat launch・doctor・init の段) の読みと合わせて形にした。 拘束する constitution の版 0.5.0)・作成
+  器の案の章の要約: 候補を 6 つ並べます。 host の設定 file に表を足して席を立てた直後に時計を入れる案 (選んだ案)、 環境変数から dir を解く案、 自分の実行 file の場所から器の場所を解く案、 点検が残す install の記録から器の場所を取る案、 systemd の道具を子 process で撃って dir を聞く案、 そして今のまま人が席ごとに打つ案です。 却下した 5 案にも利点を並べ、 退けた決め手が現物か分析かを各案に書きます。 環境変数の案と systemd の道具の案は設定 file に書く行が 0 になる点で、 実行 file の場所の案と記録の案は器の場所を人が書かずに済む点で、 今のままの案は器の変更が 0 で撃つ時点を人が決められる点で、 選んだ案に勝ちます。
+  器の専門語の説明: 本文に出てくる専門語 11 個を、 やさしい言葉で説明します。 この記録で意味を決めた語は「tick の宣言」の 1 つで、 残りは器の側の言葉です。
+  ・tick の宣言（tick declaration）: host の面 (host.toml) の表 [[tick]] (本 ADR)。 unit を置く dir の絶対 path (unit-dir) と unit が撃つ器の絶対 path (binary) の 2 欄を持つ 0 か 1 行の表。 席の起動と doctor と init が読み、 器は書かない (人が雛形の面に 1 度だけ書く)。
+  ・tick の unit（tick unit）: 管理 tick を席ごとに周期で撃つ host の systemd user の unit (service と timer の対)。 seat tick install が NAME・target・置き場・binary・rules 行の間隔から 1 関数で導出して書き、 有効化まで撃つ (ADR-1030 §2.1〜§2.4)。 本 ADR の後は席の起動が同じ 1 本を撃つ。
+  ・管理 tick（heartbeat）: 開発 session が黙っていないかを周期で見て、 条件が揃ったときだけ続きを促す 1 行を注入する仕組み (SRS FR1027・ADR-1058)。 host の systemd user の timer が周期で撃つ。 本 ADR はその timer を誰がいつ入れるかを決める。
+  ・host の manifest（host manifest）: state dir の host.toml (host の面)。 口座・plugin・起動引数・vessel・群の 5 表を持つ host 固有の宣言値の置き場 (ADR-1026・ADR-1049)。 本 ADR で表 [[tick]] が増えて 6 表になる (init が写すのは群を除く 5 表)。
+  ・席の起動（seat launch）: 器の subcommand seat launch が役割と口座から起動行を導き、 席の登録を先に書いて tmux の窓へ差し込むこと (ADR-1026・ADR-1063 の引数の無い形を含む)。 本 ADR の後は、 席を立てた周に tick の unit の install を面の値で撃つ。
+  ・席の登録（seat registration）: 席の役割と anchor を鍵に、 target・口座・起動の雛形を fleet の event log に記録すること (SRS FR1040)。 tick の unit はこの登録 row を持つ席ごとに 1 対ある。 doctor は登録 row ごとに unit の有無を名指す。
+  ・state dir（state dir）: 器が状態 (event log・受付・席の登録など) と host の manifest を置く dir。 本 ADR の tick の宣言はこの dir の host.toml に置く。
+  ・doctor（doctor）: 器の状態と host の配線を 1 回で照合して行に並べる subcommand。 本 ADR の後は表の在る host の行に tick=declared を出し、 flag が無くても面の値で登録 row ごとの unit の有無を名指す (表の無い host の行は 1 字も変わらない)。
+  ・init（init）: repo ごとに 1 回撃つ器の subcommand (ADR-1063)。 雛形の host の面の表を新しい置き場へ写す。 本 ADR の後は [[tick]] を 5 表目として写す。
+  ・雛形の置き場（template state dir）: host init が git の global 設定に登録する既存の state dir 1 つ (ADR-1063)。 人はここの host の面に 1 度だけ [[tick]] を書き、 init がそれを写す。
+  ・裁定 id（ruling id）: user 裁定を一意に指す id。 裁定の時刻 (UTC)。 本 ADR は 2026-09-24T22:09Z の候補 2 を指す。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-0064-tick-unit.adr.yaml · 生成: 2026-09-25 00:30 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

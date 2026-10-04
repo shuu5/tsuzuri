@@ -1,0 +1,119 @@
+# 判断の記録 ADR-1033 — 器 scribe2 の判断の記録 ADR-0033 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1033
+title: "core の行数は本体だけを数え、 子 process を撃つ I/O 面は境界 crate へ分ける (上限 40,000 は上げない・binary は 1 つ・境界 crate にも上限)"
+status: accepted
+date: 2026-09-15
+context: |
+  core が上限の 9 割に達して契約が受付で止まる問題を、 上限を上げずに「数え方の二重計上の解消」と「I/O 面の分離」で解く
+  なぜ今この判断が要るのかを、実測から説明します。core は 36,142 行で上限 40,000 の 90% に達し、受付は契約の大きさを core の余地で見るので、size M の契約が file 12 本までしか通らなくなりました。数え方には test の行の二重計上もあります。
+  CTX1 core（器の本体の箱） が上限の 9 割に達した
+  2026-09-15 の実測で core-lines は 36,142 / 40,000 (90.3%)。 受付は write-set の core の .rs 本数 × size を余地に当てるので、 size M の契約は core の file 12 本までしか通らず、 契約 s2-07l.303 は 3 度目の受付でようやく通った (2 度は余地で断られた)。
+  CTX2 数え方に二重計上がある
+  core-lines は src の中の in-file の歯（同じ file の中の test） (cfg(test) の区間・8,591 行 = 24%) も数えている。 歯の量は R-C4-3 (歯 / src の比) が別に縛っており、 同じ行が 2 つの上限に数えられている。 xtask は歯と本体を分ける関数 (split_test_src) を既に持つが core-lines がそれを使っていない。
+  CTX3 上限を上げる案は憲法の順位に反する
+  憲法の順位は「場当たりの修正の禁止 → 成長の抑止 → compile 速度」で、 上限 R-C4-1 を上げる (A2) のは成長の抑止に反し同じ問題を先送りするだけである。 前回 (2026-09-14) は 26,000 → 40,000 へ上げ、 その裁定に「後でリファクタリングしよう」が添えられていた。
+  （選択肢を測るものさし）判断を評価する 4 本のものさしです。契約が受付で止まらないこと、成長を止める構造を保つこと、境界を散文でなく機械で決めること、実行 file は 1 つで依存 OSS を足さないことです。
+  DR1｜契約が受付で止まらない (core の余地が契約の大きさを決めない) SRS FR1048 (受付の余地) / NFR1002 (契約の大きさ)
+  DR2｜成長を止める構造を保つ (上限を上げない・抜け穴を開けない) 憲法 C4 / A2 / 順位「成長の抑止が 2 位」
+  DR3｜境界を散文でなく機械で決める (何が I/O かを人が判断しない) 憲法 C1.2 / N2 / C13.2 (境界 crate)
+  DR4｜実行 file は 1 つのまま・依存 OSS を足さない ADR-1001 (単一 binary) / 憲法 A3 / NFR1003
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。数え方を本体だけにし、子 process を起こす関数を境界 crate へ移し、境界 crate にも上限を置きます。上限 40,000 と実行 file 1 つは変えません。
+  採用 — OPT1
+  core-lines (R-C4-1) の母集団を core crate の src の本体 (in-file の歯を除く) とし、 子 process を撃つ I/O 面 (std::process::Command を構築する関数) を crate <NAME>-boundary へ移して binary <NAME> もそこに置く。 core は Command::new を 0 本しか持たない (xtask check の deny)。 境界 crate には行数の上限 R-C4-5 を置く (初期値 = 移した直後の実測 × 1.2・同じ裁定 id)。 上限 R-C4-1 = 40,000 と実行 file 1 つは不変。
+  （平易）本体の行数は test を除いて数え、外の process を起こす関数は境界 crate へ移して実行 file もそこに置きます。本体に process を起こす命令が残っていたら検査で止め、境界 crate にも行数の上限を置きます。上限 40,000 と実行 file 1 つはそのままです。
+  （理由）上限を上げると育つのを止められず、同じ断りが後で戻ってきます。数え方の二重計上を解くだけで余地は 3 倍に戻り、I/O 面の分離は「process を起こすか」という機械で判定できる境界で行えるので、人の判断や散文が要りません。境界 crate に上限を置くのは、本体から中身を押し出して数字だけ下げる抜け穴を塞ぐためです。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1048（claim）: 受付の余地 (core の .rs 本数 × size ≤ 余地) が契約の大きさを縛らなくなる = 余地 3,858 → 12,449 行。 本判断が FR1048 の受付を実用の範囲に戻す。
+  FR1047（claim）: 本判断の契約群 (core-boundary.md §6) は契約表の Derived 形 (touches / surfaces) で起票し、 純移動の証明で lens に渡る。
+  NFR1002（claim）: 1 契約の diff は 300 行程度という上限が、 core の余地に押されて実質 12 本 × 300 に縮む状態を解く。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。ADR-1001（実行 file は 1 つ）と ADR-1009（Rust で閉じる）は変えず、上限の値も変えません。
+  改訂状態: current
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  本 ADR は現行。 ADR-1001 (単一 binary) と ADR-1009 (Rust で閉じる) は不変で、 本 ADR は C4 の適用 (core の定義と数え方) を記録する。 R-C4-1 の値 (40,000・user 裁定 2026-09-14) は変えない。
+  照会終端 — PRIN-GROWTH-SECOND
+  上限に当たったら上限を上げるのでなく、 数え方の正しさと構造の分離で応える。 憲法の順位「場当たりの修正の禁止 → 成長の抑止 → compile 速度」を core の大きさに適用する。
+  本 ADR の判断はこの原則に行き着く (これ以上は遡らない照会終端)。
+options:
+  - id: "OPT1"
+    name: "数え方を本体だけにし、 I/O 面を境界 crate（外の process を起こす箱） へ分ける (両方)"
+    text: |
+      core-lines の母集団を src の本体 (in-file の歯を除く) にし、 子 process を撃つ関数を crate <NAME>-boundary へ移して binary もそこへ置く。 core は Command::new を持たない (lint で 0 固定)。 境界 crate にも行数の上限 (R-C4-5) を置く。
+      （平易）数え方から test の行を外し、外の process を起こす関数だけを別の箱へ移します。本体の箱には「process を起こす命令」を 1 つも置けない検査を付け、別の箱にも行数の上限を置いて、本体から押し出して逃げる道を塞ぎます。
+      利点: 上限を動かさずに余地が 3,858 → 12,449 行へ戻る (二重計上の解消だけで 68.9%)
+      利点: 「何が I/O か」が Command::new の有無で機械的に決まり、 散文の判断が要らない
+      利点: 移す量は 3〜5 千行で、 純移動（中身を変えずに置き場だけ変える）の機械証明 (pipeline.md §5.3) で lens に渡せる
+      利点: 境界 crate の上限が「core から押し出して逃げる」抜け穴を塞ぐ
+      欠点: crate が 2 つになり、 use の path が変わる純移動の便が 6 本ほど要る
+      欠点: 境界 crate の上限の初期値は移した直後の実測でしか確定できない (宣言値 → 測定で有効値・C10)
+    verdict: adopted
+    reason: "core-lines の母集団を src の本体 (in-file の歯を除く) にし、 子 process を撃つ関数を crate <NAME>-boundary へ移して binary もそこへ置く。 core は Command::new を持たない (lint で 0 固定)。 境界 crate にも行数の上限 (R-C4-5) を置く。"
+  - id: "OPT2"
+    name: "上限 R-C4-1 を上げる (44,000 等)"
+    text: |
+      憲法 A2 の裁定で閾を上げ、 core をそのまま育てる。
+      （平易）上限の数字を大きくします。手間はいちばん少ないですが、育つのを止めるという約束に反し、同じ問題を先送りするだけです。
+      利点: 手数が最小 (rules 行の値 1 つ)
+      欠点: 成長の抑止に反し、 同じ受付の断りを数か月先送りするだけ
+      欠点: 前回の引き上げ (26,000 → 40,000) に添えた「後でリファクタリング」を反故にする
+    verdict: rejected
+    reason: "憲法 A2 の裁定で閾を上げ、 core をそのまま育てる。"
+  - id: "OPT3"
+    name: "pure な判定を新 crate <NAME>-core へ出し、 I/O を今の crate に残す"
+    text: |
+      判定と型 (約 27 千行) を新しい core crate へ移し、 今の crate を境界にする。
+      （平易）判定と型の側（約 27 千行）を新しい箱へ移し、今の箱を外向きの箱にします。素直に見えますが、動かす量が多く、何を移すかを人の判断で決めることになります。
+      利点: core の定義が「pure な crate」として素直
+      欠点: 移動量が 27 千行で純移動の証明と review が長引く
+      欠点: 境界の判定を「pure かどうか」の散文で行うことになり、 lint で決まらない
+    verdict: rejected
+    reason: "判定と型 (約 27 千行) を新しい core crate へ移し、 今の crate を境界にする。"
+  - id: "OPT4"
+    name: "crate は分けず、 module の分割と重複の削減だけで減らす"
+    text: |
+      死んだ経路や重複を削り、 満杯の file を module に割る。
+      （平易）箱は分けず、重複や使っていない経路を削り、大きな file を分けます。減るのは数百行で、上限に近い状態が続きます。
+      利点: 構成を変えない
+      欠点: 減るのは数百行で 90% の状態が続き、 受付が契約を割らせる運用が残る
+      欠点: module の分割は行数を減らさない (純移動)
+    verdict: rejected
+    reason: "死んだ経路や重複を削り、 満杯の file を module に割る。"
+basis: [FR1047, FR1048, NFR1002, NFR1003, ADR-1001, ADR-1009]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  器の本体（core）の行数が上限の 9 割に達し、大きめの契約が受付で止まるようになりました。上限は上げず、数え方から test の行を外し（test は別の上限が縛っています）、外の process を起こす部分だけを別の箱（境界 crate）へ移して本体を判定と型に絞ります。実行 file は 1 つのままです。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l.198（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.198 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。余地が 3 倍に戻り境界が lint で決まる一方、中身を変えない移動の便が数本要り、境界 crate の上限は移した後の実測で確定します。"
+  - "良い結果: 上限を動かさずに core の余地が戻り、 契約を受付のために割る手作業が消える"
+  - "良い結果: 「何が I/O か」が lint (core の Command::new = 0) で決まり、 境界が散文に戻らない"
+  - "良い結果: 境界 crate の関数は「引数 → 子 process → 生の結果」だけを返す形になり、 判定は core の純関数に残る (歯は stub で撃てる)"
+  - "代償: 純移動の便が 6 本ほど要り、 その間 core と境界の use の path が動く (追随の周が増える)"
+  - "代償: 境界 crate の上限 R-C4-5 の初期値は宣言値で、 移動の最後の便で実測して確定するまで有効値ではない (C10)"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0033-core-lines-count-source-only-and-io-lives-in-a-boundary-crate.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — core の境界
+  器の表紙: 状態accepted選択肢4件 (OPT1–OPT4)結果良い 3 / トレードオフ 2版v0.4.6 / 2026-09-15
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1048・FR1047・NFR1002
+  器の表紙: 想定読者: scribe2 の開発 session (planner / admin) と user — Rust の crate 構成の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user・憲法 A2)・user・2026-09-15 裁定 (AskUserQuestion 2 問・逐語は台帳 s2-07l.198 notes)・裁定済
+  器の承認の欄: 設計 (planner)・planner・2026-09-15 起票 (docs/design/core-boundary.md)・作成
+  器の案の章の要約: 候補を 4 つ並べます。数え方の修正と I/O 面の分離を両方やる案、上限を上げる案、判定の側を新しい crate へ出す案、crate を分けずに削る案です。どれも core を減らせますが、成長を止めたまま機械で境界を決められるのは 1 つだけです。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・core（core crate）: 型・閉じた enum・判定の純関数・file の読み書きを持つ crate (crates/NAME・lib vessel)。 子 process を撃つ関数を持たない。
+  ・境界 crate（boundary crate）: tmux / git / claude / curl / cargo / systemd / sh を子 process として起こす関数と binary を持つ crate (crates/NAME-boundary)。 core に依存し core からは見えない。
+  ・in-file の歯（in-file tests）: src の .rs の末尾に cfg(test) の属性で置かれた test。 R-C4-3 (歯 / src の比) が数える側。
+  ・純移動（pure move）: 関数や型の本文を変えずに file や crate の間で動かす変更。 器が名と本文の hash で証明し lens には要約を渡す (pipeline.md 5.3 節)。
+  ・抜け穴（loophole）: 上限や検査の意図をすり抜けて形だけ通す変更。 境界 crate の上限は「core から押し出して逃げる」抜け穴を塞ぐ。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1033.adr.yaml · 生成: 2026-09-15 10:21 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

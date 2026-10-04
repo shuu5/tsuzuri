@@ -1,0 +1,105 @@
+# 判断の記録 ADR-1001 — 器 scribe2 の判断の記録 ADR-0001 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1001
+title: "実装言語と構成 = Rust 単一 static binary (Go / typed Python / TypeScript 却下)"
+status: accepted
+date: 2026-09-07
+context: |
+  v1 (現行 scribe) は環境層 (venv / 型検査の baseline / bash test / host 差) が場当たり修正を招く「drift の面」になっていました。 v2 は、 その面を構造から消せる「閉じた単一バイナリ」を第一条件に実装言語と構成を選びます。 判断の順位は憲法 §1 に従います。
+  v1 は Python + bash の混成で、 venv・mypy-baseline・bats・host 差の 4 面が drift の面として働き、 環境ごとの場当たり修正を招いた。 v2「次の器」は constitution で (a) 規則・経路・状態を 1 つに閉じ (C1〜C3)、 (b) 大きさ・消費・依存に予算を置き (C4 / C6 / C13)、 (c) 失敗と値の出所を型で扱い (C10 / C11)、 (d) 歯を 1 framework に限る (C12) と決めた。 C4 の上限が存在する理由 (書き手が AI で、 OSS が緩める前提 = 人間の節度が無い・論点 2) は、 上限を人の規律でなく compiler と CI で成立させられる言語を求める。 実装言語と構成はこれらを型と toolchain で成立させられるものでなければならない。 判断の順位は 憲法 §1 の順位 (論点 1) に従い、 「往復の速さ」は第三の基準に置く。
+decision: |
+  Rust を採用し、 単一の static binary として配ります。 core は async を持たず、 状態は SQLite 1 file、 設定は TOML 1 file、 Claude Code plugin は薄い manifest と hook が binary を叩く形にします。
+  §2.1 Rust を採用する
+  scribe2 の実装言語は Rust とし、 配布物は 単一 static binary 1 つとする (MUST)。 採用理由の主は「閉じた単一バイナリ」— cargo の閉じた toolchain で v1 の drift の面 (venv / mypy-baseline / bats / host 差) を構造から消すこと — であって、 言語の厳しさではない。 付随して (a) clippy / deny lint を歯にでき (C11)、 (b) 除外理由を 1 enum + 1 match に閉じ込めることを compiler が強制できる (C2)。
+  §2.2 費用と緩和
+  費用は「編集→compile の往復」と「外部 process を扱う borrow checker の負担」の 2 つです。 往復の緩和は憲法 (C4 / C13) に、 glue の緩和は SPEC §4 の方針 (薄い adapter) にあり、 C2 がそれを支えます。 非同期 runtime は憲法の裁定により core に持ちません。
+  費用は 2 つ (表の 2 行): 編集→compile の往復と、 glue (tmux / ssh / git / claude CLI) を扱う borrow checker の負担。 往復の緩和は憲法 (C4 / C13) に、 glue の緩和は SPEC §4 の方針 (std::process の薄い adapter) にあり、 C2 (経路 1 本) がそれを支える。
+  費用｜緩和｜根拠
+  編集→compile の往復｜core を小さく保つ (総行数の上限は rules 行 R-C4-1)・compile の決定論的な形は CI deny、 秒数は検出線として記録｜C4 / C13
+  glue の borrow checker｜glue は std::process の薄い adapter に閉じ、 core に持ち込まない｜SPEC §4・C2
+  非同期 runtime について: SPEC §4 は緩和として「async は 1 runtime (tokio) に固定」を置いていたが、 本 ADR の拘束条件は user 承認済の constitution v0.3 であり、 C13.3 (core は async を持たない・std::thread + channel・tokio 却下・論点 3・4) が正である。 SPEC §4 の当該句は本 ADR の拘束条件ではない。 帰結として core の並行性は std::thread + channel の範囲に限られる (§3 Negative)。
+  §2.3 構成
+  1 つの crate に bin と lib module をまとめ、 状態は SQLite 1 file、 設定は TOML 1 file、 plugin 側は薄い manifest と hook だけです。 lib module の一覧と plugin の形は本 ADR にだけあり、 spec 層 (overview) への昇格は版 N+1 で行います。
+  crate
+  1 crate = scribe2 (bin) + lib modules (ledger_adapter / accounts / seats / spawn / gate / land / rules / doctor)。 module 名は canonical entity (台帳 / 口座 / 席 / 起動 / gate / land / rules 行 / doctor) から導出した識別子。 名前の導出規則は C2。
+  state
+  SQLite 1 file (host 列)。 置き場は state dir (NAME 定数から導出) 配下の fleet.db。 単一 DB の規範は C3。
+  設定
+  TOML 1 file = manifest。 規範は C1 / C10、 照合は doctor。
+  Claude Code plugin
+  .claude-plugin/ の薄い manifest + hooks が binary を叩く。 plugin 側にロジックを持たない。
+  暫定性
+  lib module 一覧と plugin の形は本 ADR にのみ存在する構造の記述であり、 spec 層 (overview) への昇格は版 N+1 で行う (N4)。
+  §2.4 退避先
+  Go を退避先候補として記録する。 原本 SPEC §4 の表現では「Rust が重すぎると Phase 3 で判明したとき」が契機であり、 その判断材料は (導出) C13 の検出線 (rules 行 R-C13-3) の実測である。 実装言語の変更は A2 (利益の grill 検証を前置した user 裁定) を要し、 C12 (歯は Rust だけ) の改訂を伴うため N4 により版 N+1 として別 repo で行い、 本 ADR を supersede する新 ADR はその版で書く。
+  §2.5 決定の遵守をどう確かめるか
+  配布物が 1 file か、 lint と依存監査が効いているか、 行数の上限を CI が測っているか、 bash の test が残っていないかで確かめます。 このうち本 ADR 固有の検査は「配布物が 1 file」だけで、 残りは憲法の機構そのものです。
+  ・単一 static binary: release artifact が 1 file であることを CI が確認する (本 ADR 固有)。
+  ・残りの検査は憲法の機構そのもの: lint deny 群 (C11)・依存監査 (C13.2)・大きさの上限 (C4)・歯は Rust だけ + flip check (C12)。
+options:
+  - id: "chosen"
+    name: "実装言語と構成 = Rust 単一 static binary (Go / typed Python / TypeScript 却下)"
+    text: |
+      Rust を採用し、 単一の static binary として配ります。 core は async を持たず、 状態は SQLite 1 file、 設定は TOML 1 file、 Claude Code plugin は薄い manifest と hook が binary を叩く形にします。
+      採った案（器の却下案の節の表の行）: Rust｜○ static binary・閉じた toolchain｜○ enum 網羅 match・deny lint を compiler が強制｜△ compile 往復 (C4 / C13 で予算化)｜○ 構造から消える｜採用
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: v1 (現行 scribe) は環境層 (venv / 型検査の baseline / bash test / host 差) が場当たり修正を招く「drift の面」になっていました。 v2 は、 その面を構造から消せる「閉じた単一バイナリ」を第一条件に実装言語と構成を選びます。 判断の順位は憲法 §1 に従います。"
+  - id: "r1"
+    name: "Go"
+    text: |
+      Go｜○ 同じく単一バイナリ｜△ 弱い (規則を型で閉じ込める力が Rust に劣る)｜○ 速い｜—｜却下 — 退避先候補として保持 (§2.4)
+    verdict: rejected
+    reason: "—（却下 — 退避先候補として保持 (§2.4)）"
+  - id: "r2"
+    name: "typed Python"
+    text: |
+      typed Python｜× env 層が残る｜—｜◎ 最速｜× env 層が drift の面 = v1 の再演｜却下
+    verdict: rejected
+    reason: "× env 層が drift の面 = v1 の再演（却下）"
+  - id: "r3"
+    name: "TypeScript"
+    text: |
+      TypeScript｜× node 依存｜—｜—｜× node 依存が host 差になる｜却下
+    verdict: rejected
+    reason: "× node 依存が host 差になる（却下）"
+basis: [ADR-39]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  Rust を採用し、 単一の static binary として配ります。 core は async を持たず、 状態は SQLite 1 file、 設定は TOML 1 file、 Claude Code plugin は薄い manifest と hook が binary を叩く形にします。
+approval:
+  who: 持ち主
+  date: 2026-09-07
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は drift の面が構造から消え、 規則を型で閉じ込められることです。 悪い点は往復が遅くなり glue が書きにくいことで、 憲法の予算と薄い adapter で抑えます。 Go への退避路は残ります。"
+  - "Positive"
+  - "・drift の面 (venv / mypy-baseline / bats / host 差) が構造から消える — 単一 static binary + 閉じた toolchain。"
+  - "・規則・経路・除外理由を compiler が閉じ込める (enum の網羅 match・deny lint) — C1 / C2 / C11 を「歯」でなく型で成立させられる。"
+  - "・歯が 1 framework に収まる (C12) — bash / bats の全廃が現実的になる。"
+  - "Negative"
+  - "・編集→compile の往復が typed Python より遅い — C4 の大きさ上限と C13 の compile 予算で抑える。"
+  - "・glue (tmux / ssh / git / claude CLI) の borrow checker 負担 — std::process の薄い adapter に閉じる。"
+  - "・async を持たないため、 並行性は std::thread + channel の範囲に限られる (論点 3・4 の裁定)。"
+  - "Neutral"
+  - "・Go は却下だが退避先候補として残す (§2.4)。 切替は版 N+1 の新 ADR で supersede する。"
+  - "・本 ADR は AI 可決 (SPEC §4)。 拘束条件である constitution v0.3 は user 承認済であり、 本 ADR の変更は A2 / A3 を通る。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0001-rust-single-static-binary.html
+  器の記録の頭: Status: accepted · Date: 2026-09-07 · version 0.3.0 (拘束条件である constitution の版の写し・決定時点で固定) · AI 可決 (SPEC §4)・constitution v0.3 (user 承認済) を拘束条件として継承
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.3.0 (copy of the constraining constitution version, frozen at decision time)
+  器の機械の欄 decided-by: AI (SPEC §4「AI 可決」) — constitution v0.3 (user approved) constrains the decision
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: (none)
+  器の機械の欄 related: constitution C1 / C2 / C3 / C4 / C6 / C10 / C11 / C12 / C13 / A2 / A3 / N4, SPEC §4, ruling 論点 1・3・4
+  器の却下案の節の要約: 4 案を「単一バイナリになるか」「型で規則を閉じ込められるか」「往復が速いか」「drift の面 (環境層・host 差) を消せるか」で比べました。 Rust だけが「単一バイナリになるか」と「型で規則を閉じ込められるか」を両方満たします。 原本が評価を述べていない軸は空欄 (—) にしています。
+  器の却下案の節の注: 空欄 (—) = 原本 (SPEC §4) が評価を述べていない軸。 比較の順位は 憲法 §1 の順位に従う: 「drift の面を消す」と「型で閉じ込める」が上位で、 「往復の速さ」は下位。 typed Python の往復の速さは第三基準のため採用理由にならない。
+  器の記録の出所（Trace）:
+  出所は SPEC §4 と憲法 C1〜C4 / C6 / C10〜C13 / A3、 裁定は論点 1・3・4 です。
+  ・原本: SPEC-scribe-v2-vessel-v0.1-20260907.md §4 (技術・AI 可決・却下案を残す)。 抜粋 = input/SPEC-excerpt.md。
+  ・拘束条件: C1 (規則はデータ)、 C2 (経路 1 本・NAME 定数)、 C3 (fleet の状態は 1 つ)、 C4 (大きさの上限)、 C6 (消費は害)、 C10 (値の出所を型で)、 C11 (lint deny・極性)、 C12 (歯は Rust だけ)、 C13 (compile と依存に予算・async なし)、 A2 (閾値と条文の改訂手続き・§2.4 の退避判断)、 A3 (依存の追加は Ask-first)、 N4 (言語切替は版 N+1)。
+  ・裁定: 論点 1 (順位)、 論点 3・4 (compile 予算・async 却下)。 SPEC §4 の tokio 句は本 ADR の拘束条件ではない (§2.2)。
+  ・用語: 単一 static binary / drift の面 / adapter / glue / manifest / doctor は design-intent/vocabulary.yaml で定義する。

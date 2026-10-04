@@ -1,0 +1,176 @@
+# 判断の記録 ADR-1056 — 器 scribe2 の判断の記録 ADR-0056 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1056
+title: "不可逆な操作の見張りは器の binary の 1 つの口に置き、 口座の設定 file から呼ぶ (器を積まない session にも効く)"
+status: accepted
+date: 2026-09-23
+context: |
+  git の履歴の破壊・rm の不可逆な削除・tmux server の破壊・台帳の破壊を止める見張りは、 いま器の外の script と共有 plugin に在り、 判定の本体が見つからないと黙って通す。 本 ADR は、 その判定を器のプログラムの 1 つの口へ移し、 口座の設定 file の hook 行から呼んで、 口座の設定を読む全 session (器を積まない session を含む) に効かせる形を決める。 切るのは裁定つきの規則の行だけで、 切れた状態は器の健康診断が 1 行で言う。
+  なぜこの判断が要るのかを、 現物と user の決定から説明します。 危ない操作の見張りの本体は器の外の 2 つの場所に在り、 本体が無いと黙って通します。 器の中にも見張りは在りますが、 器の plugin を積んだ session でしか動きません。 器が自分で起こす session は口座の設定を読まず、 作業を進める session は plugin の見張りが、 review の session は権限の設定だけが守っています。 口座の設定 file は、 どの口座も 1 つの実体を指す道しるべです。 user は、 見張りを器へ取り込み、 口座の共通設定から器を呼び、 user の権限で切れるようにすると決めました。 規則の値は repo の規則の行にだけ置く、 という憲法の読みもここで記録します。 machine 固有の見張り (画面や mount を守るもの) は host 側に残します。
+  CTX1 現物 — 破壊の見張りの本体が器（scribe2 の本体）の外に在る
+  口座（利用者の登録ごとの設定）の設定 dir の settings.json（口座ごとの共通設定） (口座の共通設定) が、 道具の直前 (PreToolUse) に 7 本の hook（決まった瞬間に動く口） を呼ぶ。 そのうち破壊の見張りは薄い shim（本体を呼ぶだけの層） 5 本 (git の履歴破壊・tmux の server 破壊・rm の削除・台帳の破壊・台帳の素 write) で、 判定の本体 (正本（判定の本体）) は前の器の plugin と共有 plugin に在り、 本体が見つからない周は黙って通す (fail-open（迷ったら通す側）)。 見張りの群は共有 plugin の tokenizer（命令を語に切る部品） (shlex 相当) を読み込む。 本体の不在を知らせるためだけの健康診断の script が席の開始に在る。 器の規律 (N1 と同じ線) の実体を、 器でない 2 つの repo が持っている。 前の器の本体はこの shim の参照があるので退役（消さずに脇へ移す）できない。 ただしこの shim は口座の設定を読む全 session から呼ばれ、 器を積まない session にもすでに効いている。 いまの rm の見張りの射程は再帰の rm・sudo rm・find -delete と -exec rm で、 再帰しない rm は範囲の外である。 既定で通し、 tracked で clean な file の削除は git で戻せるとして許し、 守る場所 (system・HOME 配下の実データと credential・git 管理外のデータなど) への rm を断る。 HOME を解いて ~ と glob を展開して判定し、 bash -c・eval・xargs・find -exec の中も貫通する。 変数と command 置換の path は通し (fail-open)、 空の変数が root になる形だけを断る。
+  CTX2 現物 — 器の中の見張りは器の hook の入口に在る
+  器の hook の入口は道具の直前に、 write-set guard・席の権能・command guard (rules 行（裁定つきの規則の行） runner.denied_commands の語列を 1 関数で照合・区切りと空白で切り引用符は解かない・ADR-1025)・起票の門 (FR1020 の門の 1 つ・rules 行 ledger.denied_writes の 4 形を 1 関数で判定・引用符と \ を解く segment 分割) を掛ける。 語列の行には git の force push（履歴の強制上書き）・reset --hard・branch -D・clean -f・stash の drop / clear が既に在る。 この入口は器の plugin を積んだ session にだけ呼ばれ、 marker（器の管轄の目印） (器の管轄の目印) の無い repo では黙る (FR1024)。 例外は席の権能で、 pre-tool-use に --pane が在る周は anchor (仕える repo) が解けなくても権能付きの操作を断る。 入口は anchor の解決と役割の guard を持つ。 器が自分で起こす session (runner・lens・usage の更新) は、 起動の構築点が毎回 --setting-sources に空の値を渡す (ADR-1011 §2.1) ので口座の settings.json を読まない。 runner は器の plugin を積むので command guard が守る。 lens と usage の更新は plugin も allowlist も持たない起動形 (ADR-1011 §2.2) で、 permission mode だけが守る。
+  CTX3 裁定 — 器に 1 つ・配線は共通設定・user が切れる
+  2026-09-20 の user 裁定は、 破壊防止の見張りを Rust で器へ取り込み、 器を入れた fleet (器を入れた machine 全体) の共通設定から器の binary を呼ぶ形 (実装は器に 1 つ・配線は共通設定・役割の guard とは別の口) とし、 器の設定で user の権限により見張りを切る・調整できるようにすると決めた。 同じ notes の設計の論点は、 on / off と閾値は rules 行 (裁定 id（user の決定を指す印） つき)・切った状態は doctor（器の健康診断） に 1 行・席 (AI) は自分で切れない・歯は Rust で前の器の見張りと tokenizer の挙動を母集団にする、 である。 移植の母集団は、 shim 5 本 (git・tmux・rm・台帳の破壊・台帳の素 write) の判定の本体と、 共有 plugin の tokenizer である。 ただし本 ADR の rm の種類は母集団から 4 点で逸れ、 どれも設計の裁定による意図した逸脱である (歯（自動の検査）の対の表はこの向きで書く)。 変数と command 置換の path を断る (母集団は通す)。 ~・brace・守る path に当たる glob を、 母集団は展開して判定するのに対し、 展開せず解けない path として断る。 同じ command の cd を追わず、 cd の後の相対 path を解けない path として断る (母集団は cd を追って移った先で判定する)。 再帰しない rm にも掛け、 tracked で clean な file の削除も断る。 2026-09-23 に前の器の本体の退役は本件が依存を切った後と据え置かれた。 逐語は非公開の作業記録簿 (台帳（作業の記録簿） s2-07l.494 の notes) に在る。
+  CTX4 既存の置き場と決めた先例
+  規則の値は tracked の rules 行 (裁定 id と enabled 必須・C1 / C5) に在り、 build 時に binary へ埋め込まれる。 host の面（machine ごとの宣言） (state dir の host.toml) は host 固有の宣言値 (口座の [[account]] など) を持ち rules 行を置けない (ADR-1026 §2.1)。 口座の口 (account add) は新しい口座の設定 dir を作るときに settings.json を 1 回だけ書く (ADR-1026 §2.2)。 ADR-1029 §2.3 は、 既存の口座 dir の設定を書き換える口 (key 1 つの置換・他の key を保つ・読めない設定は断って上書きしない) を決めたが、 まだ実装されていない。 いまの口座の settings.json (hook 7 本を含む) は host の配備 script が書いており (本 ADR の hook 行はその script が書かず口座の口が書く)、 どの口座の settings.json も、 既定の設定 dir に在る 1 つの実体への symlink（別の file への道しるべ） である。 doctor は導入先ごとに hook 集合を実測する (FR1061)。
+  CTX5 host 側に残るもの
+  本件で器へ移すのは不可逆な操作の見張りだけである。 host の設定 repo には、 口座と設定の配備・起動の wrapper・statusline の表示の script と usage の表示・tmux の復元用の session と pane の対応・host 固有の mount の防壁・user の desktop と tmux server を signal から守る見張り (kill の broadcast・user 単位の pkill・session の終了) が残る。 これらは host の機械の形 (desktop・mount・起動の道具) に依り、 器に置くと host 固有の分岐になる (N3)。 席の開始の面 (位置の表示・fetch・台帳の prime) と終了時の台帳同期は同じ memo の別の段で扱う。
+  CTX6 憲法 C1 / C2.2 / C10 の読み (本 ADR の解釈)
+  C1 は規則の値 (閾値・enabled・裁定 id・裁定日・逐語) を repo 内の manifest 1 file に置くと書き、 C10.2 は host 固有の値を manifest にだけ置くと書く。 本 ADR はこれを次のように読む。 見張りの判定を変える値 (語列・on / off・rm の守る集合) はどれも規則の値で、 tracked の rules 行にだけ置き、 host の面には置かない。 host の面は裁定 id を持たない宣言値の面のままにする。 ゆえに host ごとの緩めは持たず、 rm の守る集合は host に依らない記号で rules 行に書き、 実行時に解く。 state dir は --state-dir から、 repo は payload（渡される中身） の cwd から git の toplevel で解き、 env と HOME は読まない (C2.2)。 path が守る path に当たる関係を「一致・それを含む (祖先か自身)・その配下」と定義するので、 上位の dir を丸ごと消す rm は祖先として当たり (home は state dir の祖先なので自然に入る)、 祖先を列挙しなくてよい。 HOME を読まないので ~ は実体の path に解けず、 rm の種類はそれを解けない path として断り、 設定の種類は ~ を除いた残りを末尾と見て比べる。 rules/manifest.toml は設定の種類の対象の外で、 C5 の CI が守る。 rules 行の裁定 id は C5 の CI が守り、 実行時に event log と照合する門は置かない。 見張り自身の設定の編集の種類が持つ対象の file の集合は、 規則の値ではなく道具の語彙 (起票の門が持つ台帳の write の語と同じく code の定数) と読み、 この種類が行を持たず切れないことは裁定の向き (user の権限で切れる) の唯一の例外とする。 台帳の種類は host-guard（口座全体の見張り） の台帳の行 (host_guard.ledger) の enabled で切れる。 不発効とは行の不在と enabled=false の両方を言い、 ledger.denied_writes の enabled=false は起票の門と同じく host-guard でも締める側に倒れる (緩めるのは host_guard.ledger だけ)。 語列の行の enabled の効力は host-guard の口に限ると読み、 同じ行を読む command guard と intake は enabled を見ない。
+  （選択肢を測るものさし）この判断を評価する 6 本のものさしです。 規則の本体を器の中に 1 つだけ置くこと、 器を使わない session にも効くこと、 黙って無効にならないこと、 AI が誤って見張りを切ることを止めること (わざと回避する相手は範囲の外)、 検査は Rust で書き外の部品を増やさないこと、 そして今日から効き移す手間が小さいことです。 向き (器へ取り込む・共通設定から呼ぶ・user が切れる) は 2026-09-20 の user の決定で決まっており、 ここで比べるのはその形です。
+  DR1｜規律の本体は器の中に 1 つ — 判定は器の型と関数、 値は rules 行にだけ置き、 器の外の script に判定を持たせない (憲法 C1・N2) CTX1・CTX6・憲法 C1 (規則はデータ) / N2 (散文の規則なし)
+  DR2｜器を積まない session にも効く — marker の無い repo でも、 口座の設定 dir を指定した起動でも、 口座の設定を読む全 session (対話の席・器を積まない session) に同じ規則の行と同じ照合の関数が掛かる。 器が起こす session のうち runner は器の plugin の command guard が守り、 lens と usage の更新は permission mode が守る CTX2 (起動の構築点)・CTX3 (裁定の向き)
+  DR3｜黙って無効にならない — 切れた状態・配線の欠け・binary の不在を doctor が 1 行で言い、 読めない入力は止める側に倒す (fail-closed（迷ったら止める側）・憲法 C10・NFR1004) CTX1 (黙って通る現物)・憲法 C10 (値の出所)・NFR1004 (読めず止める)
+  DR4｜席 (AI) が誤って切る・緩めることを止める — 切る・緩めるのは裁定 id つきの rules 行だけで、 配線（呼び出しの登録）と hook を無効にする設定の編集を見張り自身が止める。 目的は事故の防止で、 敵対的な回避は範囲の外 CTX3 (裁定の向き)・CTX6
+  DR5｜歯は Rust の 1 framework・依存 OSS は増やさない (憲法 C12・A3) CTX1 (python と shlex 相当)・憲法 C12 (歯は Rust) / A3 (依存は聞く)
+  DR6｜今日から効き、 移植の手間が小さい — 守りが切れる期間を作らず、 作る量を小さく保つ CTX1 (shim は動いている)
+decision: |
+  選んだ案と、 それが要件書のどの要件を支えるかを示します。 見張りは器のプログラムの host-guard という口 1 つにまとまり、 止める区分は閉じた 5 つです。 何を止めるかは決定の印つきの規則の行が持ち、 machine ごとの緩めは持ちません。 削除の見張りは、 守る場所に当たる削除 (その場所そのもの・それを包む上の dir・その中) と、 行き先が変数・~・{ } や、 同じ命令の中で dir を移った後の相対の場所で決まる削除を断ります。 * を含む行き先は、 その前の場所が守る場所に当たるときだけ断ります。 守る設定 file も同じ「当たる」で比べ、 file ごと書き換えを断ります。 口座の共通設定の実体に呼び出しを 1 行足して書き、 道しるべの口座は 1 度で全部に効きます。 要件書の v0.20 がこの決定から起こした要件 (FR1072〜FR1076) も挙げます。
+  採用 — OPT1
+  器 SHALL 不可逆な操作の見張りを subcommand（器の命令の入口） host-guard 1 つに置き、 hook の入口と別の口にし、 marker と anchor を解かず、 state dir を --state-dir だけで、 cwd を payload の cwd で解く。 種類 SHALL 閉じた 1 enum (git の履歴破壊・rm の不可逆削除・tmux server の破壊・台帳の破壊と素 write・見張り自身の設定の編集) で、 判定は種類ごとに 1 関数とする。 照合は command guard と 1 関数を共有し、 host-guard の分割は起票の門の segment 分割を使う。 語列・rm の守る集合は種類ごとの rules 行が持ち、 host ごとの緩めは持たない。 path は cwd を基準に .. を畳んで解き、 守る path に当たるとは一致・それを含む・その配下のどれかである。 解けない path は変数展開・command 置換・brace を含むもの・~ で始まるもの・同じ command の cd・pushd の後の相対 path と、 前の literal な dir が守る path に当たる glob である。 rm の種類 SHALL 守る集合 (state dir・cwd の repo の tracked file と .git) に当たる rm と解けない path の rm を断り、 他は通す。 台帳の種類 SHALL cwd の repo が .beads と scripts/bdw を持つ周だけ掛かり、 起票の門の判定 1 本と ledger.denied_writes の 4 形を共有し、 ledger.denied_writes が不発効の周は WRITES を全部断る。 見張り自身の設定の編集の種類 SHALL 行を持たず切れず、 守る file (host の面の [[account]] から導く口座の settings.json とその実体・cwd の git の toplevel か repo の外なら cwd の .claude の settings.json と settings.local.json) に当たる書き換えを file 単位で断る。 比べるのは matcher の Bash 以外の道具の path と、 Bash の rm・sed -i・tee・redirect の対象・mv の両端・cp と ln の destination (dir なら dir と source の basename を結ぶ) で、 ~ で始まる path は ~ を除いた残りを末尾として、 glob は fnmatch で、 導いた path と実体の path の両方と比べる。 command guard の行と重なる語列は host-guard の行へ移し、 command guard と intake は host_guard.git・host_guard.tmux・host_guard.ledger の 3 行を読み、 行が無い・形が違う周は断る。 配線 SHALL 口座の口が settings.json の実体へ merge する PreToolUse の hook 行 1 本 (matcher は Bash・Edit・Write・MultiEdit・NotebookEdit・timeout は 10 秒・引数は --state-dir だけ・無ければ足し在れば触らず・他の key と symlink は保つ・読めない設定は断る) で、 symlink の口座は実体を共有し 1 度で全口座に効く。 host-guard SHALL 通す周は 0 byte・rc 0、 断る周は rc 2 と stderr 1 行 (種類・当たった並び・行 id と裁定・代わりの経路) を返し、 payload が読めない周は断る。 binary の不在は fail-open を選ぶ。 matcher と timeout は足さず、 変えるなら新しい hook 行と新しい決定で行う。 名前・event・flag・出力の形は跨版で固定し足すだけとする。 doctor SHALL 1 行で種類ごとの on / off と出所・配線の実体の数と口座の数・binary の解決を出す。
+  （平易）危ない操作の見張りは、 器のプログラムの host-guard という口 1 つにまとめます。 止める区分は 5 つに閉じ、 何を止めるかは区分ごとの決定の印つきの規則の行が持ち、 machine ごとの緩めは持ちません。 削除の見張りは、 守る場所 (器の置き場の全部・作業中の repo の管理下の file と履歴) に当たる削除を断ります。 当たるとは、 その場所そのもの・それを包む上の dir・その中のどれかを消すことです。 相対の場所は、 作業中の dir を基準に解きます。 行き先が変数・命令の結果・~・{ } で決まる削除と、 同じ命令の中で dir を移った後の相対の場所の削除も、 行き先が確かめられないので断ります。 * を含む行き先は、 その前の場所が守る場所に当たるときだけ断ります。 それ以外は通します。 台帳の見張りは、 台帳と決まった書き込みの道具を持つ repo でだけ掛かります。 見張り自身の設定の書き換えを止める区分は行を持たず切れず、 守る設定 file (口座の設定 file と、 作業中の repo の設定 file 2 つ) に当たる書き換えを丸ごと断ります。 編集の道具でも、 削除・移動・複写・書き換えの命令でも、 導いた場所と実体の場所の両方で比べ、 ~ で始まる場所は末尾で比べます。 器の中の既存の見張りと重なる語の並びはこちらの行へ移し、 既存の見張りと出発前の審査はその行を読むので、 作業の守りは減りません。 口座の共通設定の実体に呼び出しを 1 行足して書き (他の設定と道しるべは保ち、 読めない設定には書かない)、 口座の設定を読むすべての session で効かせます。 器が起こす session には届かず、 作業を進める session は器の plugin の見張りが、 review の session と口座の残りを測る session は権限の設定が守ります。 通すときは何も言わず、 止めるときは区分・当たった並び・規則の出所・代わりの手順を 1 行で告げます。 渡された中身が読めないときは止め、 プログラムが見つからないときは通します。 呼ぶ道具の 5 つと待ち時間の 10 秒は足さずに固定し、 変えるときは新しい呼び出し行と新しい記録で行います。 名前・引数・返し方の形は版を跨いで変えず、 足すだけにします。 健康診断は区分ごとの on / off と出所・呼び出しの実体の数と口座の数・プログラムが見つかるかを 1 行で出します。
+  （理由）見張りの本体が器の外に在ると、 器の規則の行とも決定の印とも照らし合わせられず、 本体が消えれば黙って通します。 判定を器の中に 1 つだけ置けば、 規則は器の他の規則と同じ場所で決まり、 同じ健康診断に乗ります。 呼び出しを口座の共通設定に置くのは、 器の plugin を積まない session にも効かせるためです。 器が起こす session は設定を読まない決まりなのでそこには届きません。 作業を進める session には器の plugin の見張りが既に掛かり、 語の並びの規則も同じ行を読みます。 review の session の起こし方は別の記録が決めていて、 本記録では変えません。 口座の設定を書き換える口は先の記録 (まだ作られていない) で決まっているので、 同じ型で呼び出しの 1 行を足します。 設定 file は道しるべで 1 つの実体を共有しているので、 実体へ書き、 実体の場所で比べ、 実体の数で数えます。 器の既存の入口と口を分けるのは、 その入口が仕える repo を解いて役割の見張りを掛ける仕組みなのに対し、 host-guard は repo を解かず、 置き場を呼び出しの引数だけで解くからです。 既存の見張りの語の切り方を変えずに照合の部品だけを共有するのは、 既存の判定を動かさないためです。 規則の値を machine の宣言 file に置かず、 HOME も読まないのは、 規則の値を repo の 1 file にだけ置き環境を読まない憲法の線を守るためです。 その代わり machine ごとの緩めは諦め、 確かめられない行き先の削除は断る側に倒します。 今のまま残す案は今日から効き作るものが無い利点がありますが、 user の決定で器へ取り込むと決まっており、 規則の本体も外に残るので退けました。 plugin にだけ載せる案は作業の session にも届きますが、 plugin を積まない session に届かないので退けました。 shell の別名は小さく作れますが、 簡単に回避でき規則が文章に置かれるので退けました。 外の製品は表現力が高いものの、 user の決定で Rust で器へ取り込むと決まっており、 部品の追加と規則の置き場の分裂も招くので退けました。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1056（rationale）: 本 ADR は、 Bash の command を manifest の禁じる語列で実行の前に断る判定を、 口座の設定を読む全 session (対話の席・口座の設定 dir を指定した起動・器を積まない session) へ広げる根拠 (器の外に本体を置かない理由と、 hook の入口と口を分ける理由) を与える。 SRS v0.20 は FR1056 の対象を口座の設定を読む全 session と runner へ広げ (lens は対象の外)、 AC1027 に器の plugin を積む席・runner・素の席・口座の設定 dir を指定した器を積まない起動の 4 経路を持ち、 FR1024 と AC1007 の沈黙を hook の入口に限り、 NFR1005 は host-guard の git の問い合わせ 1 回を target に持ってその回数を歯で測る。
+  FR1072（rationale）: 本 ADR の見張り自身の設定の編集の種類 (行を持たず切れない・守る file を file 単位で断る・導いた path と実体の path の両方と「当たる」で比べる) が、 この要件の根拠である。
+  FR1073（rationale）: 本 ADR の doctor の 1 行 (種類ごとの on / off と出所・配線の実体の数と口座の数・binary の解決) と、 切れた状態を黙らせないものさし (DR3) が、 この要件の根拠である。
+  FR1074（rationale）: 本 ADR の rm の種類 (守る集合と「当たる」の定義・解けない path を断る・代わりの経路は git rm か退役の mv) と、 HOME を読まない憲法の読み (CTX6) が、 この要件の根拠である。
+  FR1075（rationale）: 本 ADR の配線の決定 (口座の口が settings.json の実体へ merge する hook 行 1 本・matcher と timeout は固定で足さない・symlink の口座は 1 度で効く) が、 この要件の根拠である。
+  FR1076（rationale）: 本 ADR の台帳の種類 (.beads と scripts/bdw を持つ repo でだけ掛かる・起票の門の判定と 4 形を共有する) が、 この要件の根拠である。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この記録が版の系譜のどこに在るかと、 判断が最後に行き着く原則です。 これまでの決定を置き換えない追補で、 口座の設定へ書く口を 1 つ足し、 既存の見張りの語の切り方と照らし方を分け、 照らす部品を共有し、 重なる語の並びを規則の行の変更で移します。 器が session を起こす形も、 review の session の起こし方も変えません。 原則は「守りの判定は器の中に 1 つ・外は呼ぶだけ」です。
+  改訂状態: current
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  追補。 ADR-1025 の command guard は、 照合の関数を 1 本のまま分割と照合に割り (分割は command guard の従来の 1 本と host-guard の segment 分割の 2 本)、 intake の呼び手は不変で読む行は host-guard の 3 行に広がり、 重なる語列の移動は裁定 id つきの rules 行の diff で行う。 ADR-1025 §2.6 が射程外 (決定ではない) とした host 側の git の見張りの撤去は、 本 ADR が器へ取り込む形で扱う。 ADR-1026 §2.2 の口座の口に、 既存の settings.json の実体へ hook 行 1 本を merge して書く口を足す (ADR-1029 §2.3 が決めた既存 dir の書き換えの口と同じ型・どちらも未実装)。 ADR-1026 §2.1 の host の面に rules 行を置かない線と、 ADR-1011 §2.1 の起動の構築点 (--setting-sources に空の値) と §2.2 の lens の起動形は不変。
+  照会終端 — PRIN-GUARD-JUDGEMENT-LIVES-IN-THE-VESSEL
+  守りの判定は器の中に 1 つだけ置き、 器の外の設定はそれを呼ぶ配線だけを持つ。 配線が欠けたことも、 守りが切れたことも、 器が測って言う。
+  本 ADR が現状維持・plugin だけの配布・shell の wrapper・外部製品を退け、 器の binary の別の口と口座の設定 file の hook 行 1 本を選んだのはこの原則に行き着く (これ以上は遡らない照会終端)。
+  （取り込みの時の除き）器の記録の決定の字のうち、規則の旗で見張りを切れる句（on / off の句と、enabled = false で見張りを通す道の句）は、判断の記録 ADR-19 の決定 (2) と条 N-3 により除いて、tsuzuri の記録として受け直した（持ち主の裁定 t3-hub.74.53:20261003T2211Z-1・題の括弧の後半の同じ句も外した）。
+options:
+  - id: "OPT1"
+    name: "器の binary に host-guard という別の口を 1 つ置き、 口座の設定 file の hook 行 1 本から呼ぶ"
+    text: |
+      見張りの種類（何を止めるかの区分）を閉じた 1 enum (git の履歴破壊・rm の不可逆削除・tmux server の破壊・台帳の破壊と素 write・見張り自身の設定の編集) にし、 判定は種類ごとに 1 関数とする。 command 行の分割は起票の門の segment 分割 1 本を使い、 語列の照合は command guard と同じ関数を使う。 語列と on / off と rm の守る集合は種類ごとの rules 行 (裁定 id つき) に置き、 host ごとの緩めは持たない。 口座の口が既存の settings.json の実体に PreToolUse の hook 行を 1 本 merge して書き、 その行が器の binary の host-guard を呼ぶ。 marker の有無に依らず効き、 doctor が状態を 1 行で出す。
+      （平易）器のプログラムに host-guard という口を 1 つ作ります。 止める区分は 5 つ (git の履歴を壊す操作・元に戻せない削除・tmux の server を壊す操作・台帳を壊す操作と決まった手順を経ない書き込み・見張り自身の設定の書き換え) に閉じ、 区分ごとに判定を 1 つ持ちます。 命令を語に切る部品は器に既に在る 1 本を使い、 語の並びを照らす部品は器の既存の見張りと共有します。 何を止めるかと on / off と削除で守る場所は、 区分ごとの決定の印つきの規則の行に置き、 machine ごとの緩めは持ちません。 口座の共通設定の実体に「道具を使う直前に器の host-guard を呼ぶ」行を 1 本足して書くので、 器の目印の無い repo でも、 器を積まない session でも効きます。 代わりに、 器が自分で起こす session には届かず、 既存の設定 file へ足して書く部品を実装し、 プログラムが見つからない周は通すと決め (止めると全員が締め出されるため)、 切る・戻すには規則の行の変更と入れ直しが要ります。
+      利点: 判定と値の本体が器の中の 1 か所になり、 共有 plugin と前の器への依存が切れる (DR1)
+      利点: 口座の設定を読む全 session に効き、 anchor の解決を持つ hook の入口と口が分かれる (DR2)
+      利点: 切れた状態・配線の欠けが doctor の 1 行に出て、 不在を知らせるだけの script が要らなくなる (DR3)
+      欠点: --setting-sources に空の値を渡して起動する session (器が起こす runner・lens・usage の更新) には届かない。 runner は器の plugin の command guard が守り語列の種類は掛かるが、 rm と見張り自身の設定の編集の種類は掛からない。 lens と usage の更新は plugin を積まず、 permission mode だけが守る
+      欠点: binary が PATH に無い周は通す (fail-open) と選ぶ。 止める側に倒すと、 binary の無い host で全 session の Bash と編集が止まり、 復旧の手段も塞がる (締め出し) からである。 時間切れの周も harness（Claude Code 本体） が通す。 器は後から doctor で測るだけである
+      欠点: 既存の settings.json へ merge して書く口 (ADR-1029 §2.3 が決めた既存 dir の書き換えの口と同じ型) は未実装で、 実装が要る
+      欠点: 器を積む session では hook の入口と host-guard が同じ command を 2 度見る (断りは冪等だが時間は 2 回分)
+      欠点: 切る・戻すには rules 行の PR と merge と binary の install が要り、 即時性が低い
+      欠点: 移植は大きい (前の器と共有 plugin の見張り 5 本と tokenizer の挙動を deny / allow の対の表で写す・DR6)
+    verdict: adopted
+    reason: "見張りの種類（何を止めるかの区分）を閉じた 1 enum (git の履歴破壊・rm の不可逆削除・tmux server の破壊・台帳の破壊と素 write・見張り自身の設定の編集) にし、 判定は種類ごとに 1 関数とする。 command 行の分割は起票の門の segment 分割 1 本を使い、 語列の照合は command guard と同じ関数を使う。 語列と on / off と rm の守る集合は種類ごとの rules 行 (裁定 id つき) に置き、 host ごとの緩めは持たない。 口座の口が既存の settings.json の実体に PreToolUse の hook 行を 1 本 merge して書き、 その行が器の binary の host-guard を呼ぶ。 marker の有無に依らず効き、 doctor が状態を 1 行で出す。"
+  - id: "OPT2"
+    name: "現状維持 (host の python の見張りを残す)"
+    text: |
+      口座の設定 file の shim と、 前の器と共有 plugin に在る判定の本体をそのまま使い続ける。 決め手は裁定 (2026-09-20 に器へ取り込むと決まった)。
+      （平易）今の script をそのまま使い続ける案です。 すでに動いていて作るものが無く、 前の器の自己検査もそのまま残り、 口座の設定を読む全 session から呼ばれているので器を使わない session にもすでに効いています。 けれども規則の本体が器の外に在って器の規則の行や決定の印と照らし合わせられず、 本体が無いと黙って通すので、 それを知らせるためだけの script が要ります。 前の器の本体も片付けられません。 決め手は user の決定 (器へ取り込む) です。
+      利点: 今日すでに動いていて作るものが無く、 前の器の self-test もそのまま歯として残る (DR6)
+      利点: 口座の設定を読む全 session からすでに呼ばれていて、 器を積まない session にも効いている (DR2)
+      欠点: 規律の本体が器の外に在り、 器の型・rules 行・裁定 id の照合に乗らない (C1・N2・DR1)
+      欠点: 本体の不在で黙って通し、 それを知らせるためだけの script が要る。 前の器の本体を退役できない (DR3)
+    verdict: rejected
+    reason: "決め手は裁定 (2026-09-20 に器へ取り込むと決まった)。"
+  - id: "OPT3"
+    name: "見張りを器の plugin の hook としてだけ配る"
+    text: |
+      既存の hook の入口 (pre-tool-use) に見張りの種類を足し、 器の plugin を積んだ session でだけ効かせる。 決め手は分析 (DR2 を満たさない)。
+      （平易）見張りを器の plugin の仕組みにだけ足す案です。 呼び出しを新しく足さずに済み、 plugin の読み込みの実測にもそのまま乗り、 器の plugin を積む作業の session にも届く利点があります。 けれども器の plugin を積まない session には届きません。 決め手は分析です。
+      利点: 配線を新しく足さず、 既存の入口と宣言 file の hook 集合に 1 つ足すだけで済む
+      利点: 読み込み元の digest (hook 集合の実測) の既存の測り方にそのまま乗り、 器の plugin を積む runner にも届く
+      欠点: 器の plugin を積まない session に届かない (DR2)
+    verdict: rejected
+    reason: "決め手は分析 (DR2 を満たさない)。"
+  - id: "OPT4"
+    name: "shell の alias や wrapper で危ない command を塞ぐ"
+    text: |
+      口座の shell の設定に git・rm・tmux の alias や wrapper 関数を置き、 危ない引数を弾く。 決め手は分析 (回避が容易で規則が散文になる)。
+      （平易）shell の別名や包み関数で、 危ない命令を塞ぐ案です。 hook の仕組みに頼らず人が打つ shell にも効き、 小さく作れる利点があります。 けれども、 命令をフルパスで呼ぶ・別の shell を使う、 といった方法で簡単に回避でき、 規則が shell の設定という文章の中に置かれます。 検査を Rust で書けず、 止めた理由に規則の出所を名乗れません。 決め手は分析です。
+      利点: harness の hook の仕組みに依らず、 人が打つ shell にも効く
+      利点: 実装が小さく、 道具ごとに独立して足せる (DR6)
+      欠点: 絶対 path での呼び出し・command builtin・別の shell で容易に回避でき、 規則が shell の設定という散文に置かれる (N2)
+      欠点: 歯を Rust で書けず (C12)、 断る理由に規則の出所 (行 id と裁定) を名乗れない
+    verdict: rejected
+    reason: "決め手は分析 (回避が容易で規則が散文になる)。"
+  - id: "OPT5"
+    name: "外部の guard 製品に依存する"
+    text: |
+      道具の直前の判定を外部の OSS の guard に任せ、 器はその設定を配る。 決め手は裁定 (2026-09-20 に Rust で器へ取り込むと決まった)。
+      （平易）外の製品の見張りに判定を任せる案です。 保守を外に任せられ、 多くの道具の危ない形がすでに集められている利点があります。 けれども外の部品を足すには user の承認と予算の手続きが要り、 規則が器の規則の file の外の書式に置かれて、 決定の印や健康診断の照合に乗りません。 決め手は user の決定 (Rust で器へ取り込む) です。
+      利点: 判定の保守が外に在り、 規則の表現力が高い
+      利点: 多くの道具の危ない形が既に集められている
+      欠点: 依存の追加で user の承認と C13 の予算の手続きが要る (A3)
+      欠点: 規則の値が器の manifest の外の書式に置かれ、 裁定 id と doctor の照合に乗らない (C1・C10)
+    verdict: rejected
+    reason: "決め手は裁定 (2026-09-20 に Rust で器へ取り込むと決まった)。"
+basis: [FR1020, FR1024, FR1056, FR1061, FR1072, FR1073, FR1074, FR1075, FR1076, NFR1004, NFR1005, AC1007, AC1027, ADR-19, ADR-1011, ADR-1025, ADR-1026, ADR-1029, N-3]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  この記録で「器」は scribe2 の本体、 「席」は人と AI が話す 1 つの session、 「口座」は Claude を使う利用者の登録ごとの設定のまとまり (その口座の設定を読んで起きる session が全部読む)、 「見張り」は危ない操作を実行の直前に止める仕組みのことです。 git の履歴を壊す操作・元に戻せない削除・tmux の server を壊す操作・作業の記録簿 (台帳) を壊す操作を止める見張りは、 いま器の外の script と共有の plugin に在り、 判定の本体が見つからないと黙って通してしまいます。 この記録は、 その判定を器のプログラムの 1 つの口へ移し、 口座の共通設定から呼んで、 口座の設定を読む全 session (器を使わない session を含む) に効かせることを決めます。 器が自分で起こす session は口座の設定を読まないので届きません。 そのうち作業を進める session は器の plugin の見張りが守り、 review の session と口座の残りを測る session は権限の設定だけが守ります。 切るのは user の決定の印がついた規則の行だけで、 切れていることは器の健康診断が 1 行で言います。
+approval:
+  who: 持ち主
+  date: 2026-10-03
+  ruling: "t3-hub.74.53:20261003T2211Z-1（問い t3-hub.74.53 の案 A・器の記録 ADR-0056 を、規則の旗で見張りを切れる句を除いて受け直す・器の台帳の裁定 s2-07l.494 は器の承認の欄の字）"
+  verbatim: "先ほどの問いは全部推奨で"
+  surface: R-8
+consequences:
+  - "この判断で良くなることと、 代わりに引き受けることです。 口座の設定を読む session は器を使わなくても同じ規則で守られ、 外の 2 つの場所への依存が切れて、 切れた状態は健康診断に出ます。 代わりに引き受けることは 11 あります。 プログラムが見つからない・時間切れの周は止められません。 別の shell や言語や変数を通した設定の書き換えは通り、 設定を読まない起動では見張りごと外れます。 器を使う session では同じ命令を 2 度見て、 語の切り方の違いで判断が割れることがあります。 移し終えるまで古い見張りと並んで動き、 切る・戻すには規則の行の変更と入れ直しが要り、 repo の管理下の file を消すには git の削除を使います。 器が起こす session には届かず、 review の session は権限の設定だけが守ります。 口座の設定を読む AI の session は設定 file を書き換えられず、 既定の設定の場所は口座の設定の実体でない限り守りも配線もしません。 削除の見張りは、 変数や { } や dir を移った後の相対の場所で組んだ行き先・repo の管理下の file を含む場所や器の置き場の中の * を断り (生成物だけの場所の * は通り)、 1 つだけの file の削除や git で戻せる削除にも掛かる点で今の見張りより厳しくなります。 一方で、 別の命令や sudo などの前置きの中までは見ず、 find の削除も見ず、 別の repo や system の場所、 HOME の中の大事なデータは守らない点で緩くなります。 台帳の見張りは、 別の台帳への書き込みを断りません。"
+  - "良い結果: 口座の設定を読む全 session (器を積まない session・marker の無い repo の session・口座の設定 dir を指定した起動) が、 器の中の同じ規則の行と同じ照合の関数で守られる"
+  - "良い結果: 判定と値の本体が器の中の 1 か所になり、 共有 plugin と前の器への依存が切れて、 前の器の本体を退役できる前提が揃う"
+  - "良い結果: 切れた状態・配線の欠け・binary の不在が doctor の 1 行に出て、 不在を知らせるためだけの script が要らなくなる"
+  - "代償: binary が PATH に無い周は通すと選んだ (締め出しの回避)。 時間切れの周も harness が通す。 器はその周を防げず、 doctor が後から測るだけである"
+  - "代償: 見張り自身の設定の編集の種類は、 interpreter の引数 (sh -c や python -c の中身)・変数・eval・別の shell を通して守る file を書く周を通し、 列に無い書き込みの命令 (truncate・dd・git restore など) も、 brace・command 置換・同じ command の cd の後の相対 path で守る file を書く周も通す (目的は事故の防止・ADR-1025 §2.6 と同じ残りの穴)。 rm の種類は、 変数と command 置換と brace と ~ の path と、 守る path に当たる glob を解けない path として断る。 user の設定を読まない起動 (--setting-sources) は見張りごと外れ、 止められない"
+  - "代償: 器を積む session では hook の入口と host-guard が同じ command を 2 度見て、 判定の時間が 2 回分かかる。 分割が 2 通りなので、 引用符の中に区切りを含む command (例 git commit -m の引用符の中の「; git branch -D x」) は 2 つの口で判定が割れ、 断りはその和になる"
+  - "代償: 移植が走り切るまで host の python の見張りと並走する期間があり、 同じ command が 2 度断られる (退役は歯が緑になった後の mv)"
+  - "代償: 見張りを切る・戻すには rules 行の PR と merge と binary の install が要り、 host ごとの緩めも無い。 rm の守る集合は state dir 自身とその配下全部と cwd の repo の tracked file を含むので、 tracked file を含む dir や上位の dir を丸ごと消す rm は通らず、 tracked file を消すには git rm (履歴から戻せる) を使う。 state dir には harness の口座の設定 dir (transcript・memory) も在り、 state dir の中の不要物は退役の mv で脇へ移す (器の口が在る面はその口)"
+  - "代償: 器が起こす session (runner・lens・usage の更新) には host-guard が届かない。 runner には語列の種類 (host_guard.git・host_guard.tmux・host_guard.ledger の語列) が command guard を通して掛かるが、 rm と見張り自身の設定の編集の種類は掛からない。 lens と usage の更新には語列の種類も host-guard も掛からず、 permission mode だけが守る。 lens の起動形は本 ADR では変えない (変えるなら ADR-1011 §2.2 を supersede する別の決定)"
+  - "代償: 口座の設定を読む AI の session は、 口座と project の settings file を書き換えられない (守る file は file 単位で断る)。 口座の設定の書き換えは user が session の外で行うか器の口 (口座の設定を書き換える口) を経て、 project の設定の書き換えは user が session の外で行う"
+  - "代償: 既定の設定 dir (口座の設定 dir を指定しない素の起動が読む dir) は、 HOME を読まないので、 口座の settings.json の実体でない限り守る集合にも配線先にも入れない。 いまはどの口座の settings.json もそこを指す symlink なので配線は届くが、 symlink の無い host の素の起動には届かない"
+  - "代償: rm の種類は、 変数と command 置換の path を断る点で母集団 (通す) と極性が逆である (設計の裁定による意図した逸脱)。 変数で path を組む日常の rm (一時 dir の掃除や loop の中の rm)、 brace の慣用句 (x{,.bak})、 tracked file を含む dir や state dir の中の glob (*.log や src/*.bak)、 cd の後の相対 path の rm も断られる。 守る path に当たらない場所の glob (一時 dir の * や untracked の生成物だけの build/*) は通る"
+  - "代償: rm の種類は母集団より 2 点狭い。 interpreter・eval・xargs・find -exec と透過ランチャ (sudo・env・timeout・command) を貫通せず、 find -delete も見ない。 system の path・cwd の repo でない repo (隣の repo・中に repo を含む dir)・HOME 配下の実データ・credential・git 管理外のデータを守らない"
+  - "代償: 台帳の種類は foreign の台帳 (-C・--db・--global・別 prefix) への write を母集団と違って断らない。 母集団の has-remote の門は、 .beads と scripts/bdw を持つ repo という条件で置き換える"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0056-destructive-guards-are-one-vessel-subcommand-wired-from-account-settings.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — host の破壊防止の見張り
+  器の表紙: 状態proposed選択肢5件 (OPT1–OPT5)結果良い 3 / トレードオフ 11版v0.1.0 / 2026-09-23
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1056・FR1072・FR1073・FR1074・FR1075・FR1076
+  器の表紙: 想定読者: scribe2 の開発 session と消費側 repo の席と user — 器の内部は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・2026-09-20 (破壊防止の見張りを Rust で器へ取り込み、 器を入れた fleet (器を入れた machine 全体) の共通設定から器の binary を呼ぶ・切る / 調整するのは user の権限の設定・逐語は非公開の作業記録簿 = 台帳 s2-07l.494 の notes) ・ 2026-09-23 (前の器の本体の退役は本件が依存を切った後・逐語は同じ notes)・裁定済
+  器の承認の欄: 設計 (orchestrator)・orchestrator・2026-09-23 草稿 v3.5 (裁定の向きを、 器の hook の入口・command guard・起票の門・口座の口・起動の構築点の現物に合わせて形にし、 ceiling の findings 5 周分を当てた。 拘束する constitution の版 0.5.0)・作成
+  器の案の章の要約: 候補を 5 つ並べます。 器のプログラムに別の口を 1 つ作って共通設定から呼ぶ案、 今のまま残す案、 器の plugin にだけ載せる案、 shell の別名で塞ぐ案、 外の製品に任せる案です。 却下した 4 案にも利点を並べ、 退けた決め手が user の決定か分析かを各案に書きます。 今のまま残す案は、 今日から効き作る量が無い点では選んだ案に勝ちます。 plugin にだけ載せる案は、 器が起こす作業の session に届く点で勝ちます。
+  器の専門語の説明: 本文に出てくる専門語 25 個を、 やさしい言葉で説明します。
+  ・器（vessel）: scribe2 そのもの。 Rust で書いた 1 つのプログラム (binary) と、 それが持つ規則と記録の全体。
+  ・口座（account）: Claude を使う利用者の登録ごとの設定のまとまり。 その口座の設定を読んで起きる session は全部同じ設定 dir を読む (器が起こす session の runner・lens・usage の更新は読まない)。 器は口座の口 (account add) で口座の設定 dir を作る。
+  ・subcommand（subcommand）: 器のプログラムに渡す最初の語で選ぶ入口 (口)。 host-guard・hook・doctor はそれぞれ別の口で、 同じプログラムの中の別の仕事を呼ぶ。
+  ・host-guard（host-guard）: 危ない操作を実行の直前に止める見張りのうち、 口座の設定を読む全 session に効くもの。 器の subcommand host-guard が掛け、 marker の有無に依らず効く。 役割の guard を掛ける hook の入口とは別の口で、 器が起こす session (runner・lens・usage の更新) には届かない。
+  ・見張りの種類（guard kind）: host-guard が止める操作の区分。 git の履歴破壊・rm の不可逆削除・tmux server の破壊・台帳の破壊と素 write・見張り自身の設定の編集の 5 つに閉じ、 足すときは 1 つの enum に値を 1 つ足す。
+  ・正本（source of truth）: 判定や値の、 それを見れば決まる唯一の置き場。 写しや呼び出しの薄い層ではなく、 中身を持つ側のこと。
+  ・shim（shim）: 自分では判定を持たず、 別の場所に在る本体を呼び出すだけの薄い script。 本体が見つからないと、 いまの shim は黙って通す。
+  ・配線（wiring）: どの瞬間に何を呼ぶかの登録。 本 ADR では口座の settings.json に書く hook 行 1 本で、 道具の直前に器の host-guard を --state-dir つきで呼ぶことだけを登録し、 判定は持たない。
+  ・settings.json（settings.json）: 口座の設定 dir に在る設定 file。 その口座の設定を読む全 session が読む。 いまはどの口座の file も 1 つの実体への symlink で、 器の口座の口は既存の中身と symlink を保ったまま実体へ host-guard の hook 行を merge して書く。
+  ・symlink（symbolic link）: 別の場所に在る file を指す、 中身を持たない file。 どれを開いても指す先の 1 つの実体が読まれる。 本 ADR ではどの口座の settings.json も 1 つの実体を指す形を言い、 見張り自身の設定の編集の種類は導いた path とこれを解いた実体の path の両方で比べる。
+  ・hook（hook）: 決まった瞬間に外の命令を自動で呼ぶ仕組み。 Claude Code の session は開始・道具の直前などに設定された command を呼び、 rc 2 が返るとその道具の実行を止める。
+  ・harness（harness）: AI の session を動かし、 道具の実行と hook の呼び出しを受け持つ Claude Code のプログラム。 hook の command が見つからない・時間切れの周の扱いはこちらが決める。
+  ・payload（payload）: hook が呼ぶ command へ渡される中身。 stdin の JSON で、 道具の名・道具への入力 (Bash の command や編集先の path)・作業 dir を持つ。
+  ・tokenizer（tokenizer）: 命令の行を語に切り分ける部品。 引用符と \ を解いて語に分け、 ; や && や | で区切りごとの列にする。 器では起票の門の segment 分割 1 本で、 本 ADR で host-guard もこれを使う (command guard の分割は従来のまま)。
+  ・rules 行（rules row）: 規則の値を 1 つ持つ行。 器の規則の manifest (repo 内の 1 file・build 時に binary へ埋め込む) に置き、 id・種類・値・enabled・裁定 id・裁定日を持つ (憲法 C1)。
+  ・host の面（host manifest）: machine ごとの事実を書く宣言の file。 state dir の host.toml で、 口座・席に積む plugin dir・群などの宣言値を持ち、 rules 行は置けない。 本 ADR はここに何も足さず、 口座の宣言から守る settings.json を導くのに読む。
+  ・裁定 id（ruling id）: その値を user が決めたことを指す印。 user の裁定を指す id で、 rules 行が持ち、 裁定 id の無い rules 行の変更は C5 の CI が落とす。
+  ・doctor（doctor）: 器の状態を 1 度に照らし合わせて見せる命令。 host の版・口座・退役・rules 行を照合し、 本 ADR で見張りの種類ごとの on / off と出所・配線の実体の数と口座の数・binary の解決を 1 行で出す。
+  ・fail-closed（fail-closed）: 分からないときは止める、 という倒し方。 入力が読めない・判定が決まらない周に操作を通さず断る極性で、 host-guard は payload が読めない周に断る。
+  ・fail-open（fail-open）: 分からないときは通す、 という倒し方。 判定が得られない周に操作をそのまま通す極性で、 hook の command が見つからない・時間切れの周の harness の振る舞いがこれに当たる。
+  ・退役（retirement）: 使わなくなったものを消さずに脇へ移すこと。 元に戻せる move で行う (憲法 N1)。 host-guard は不可逆な削除を断り、 代わりの経路として退役を名乗る。
+  ・force push（force push）: 遠くの履歴を手元の履歴で上書きする操作。 host-guard は断り、 上書き前の状態を確かめる --force-with-lease は通す。
+  ・台帳（ledger）: 契約と裁定を書き留める記録簿。 bd の記録で、 write は bdw を経て 1 本ずつ直列に行う。
+  ・marker（marker）: この repo は器が面倒を見る、 という目印。 repo の .vessel file で、 自分の名を言う repo でだけ器の hook の入口が仕え、 無い repo では黙る (FR1024)。 host-guard はこの目印を見ない。
+  ・歯（tooth (test)）: 決めたことが守られているかを機械で確かめる自動の検査。 器では Rust の test 1 framework だけで書く (憲法 C12)。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-0056-hostguard.adr.yaml · 生成: 2026-09-23 12:18 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

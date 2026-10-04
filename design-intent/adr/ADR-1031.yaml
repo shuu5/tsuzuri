@@ -1,0 +1,112 @@
+# 判断の記録 ADR-1031 — 器 scribe2 の判断の記録 ADR-0031 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1031
+title: "作業記憶は器が持つ側を広げる (user 直命の表・現在地の DATA・skill と compaction の hook による強制と自動退避・退避物の置き場は state dir)"
+status: accepted
+date: 2026-09-15
+context: |
+  開発 session は context を捨てる前に「作業記憶」を退避し、 作り直した後に復元します。 器は退避物の形と検査を持ちますが、 中身の大半は AI が会話から写しています。 user の発言 (直命) は逐語の文字列としてだけ運ばれ、 いつ言われたか・どの前提で言われたか・まだ有効かを機械が持ちません。 走っている便や他の席の状態は器の記録に在るのに、 復元の DATA には載らず AI が手で書いています。 復元も退避も AI が口を撃ち忘れれば起きません。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と指摘しました。
+  記録時点 (2026-09-15) の現物 (main 51d0341): 退避物の節 1 (user 直命) は Item { line, text } の生文字列で、 [YYYY-MM-DD HH:MM] は parse されず、 節 3 の since= にも日付を比べる読み手が無い (発令日・前提条件・失効の型は無い)。 器が session 横断で持つ表は events.jsonl (15 variant)・state.jsonl・tick.jsonl・inject.jsonl の 4 面で、 直命の表も教訓の表も無い。 rebrief の DATA (marker 24 種) は退避物と台帳の件数を出すが、 走行中の便 (RunStage)・席の状態 (state.jsonl)・anchor の sha は出さず、 節 2 に AI が手で書く。 hooks は 5 event (SessionStart / PreToolUse / PermissionRequest / UserPromptSubmit / Stop) で、 skill の起動 (UserPromptExpansion)・compaction の前 (PreCompact)・session の終端 (SessionEnd) は未配線。 役割の rules 行は権能の列だけで model / effort を持たない。 退避物の置き場は anchor 配下の .claude-session/ (untracked・git worktree / clean の操作圏)。
+  Claude Code の Hooks reference (記録時点): user が打つ /skill は PreToolUse を通らず UserPromptExpansion が発火し、 matcher に skill 名を書け、 additionalContext で文脈を足し decision: block で展開を止められる。 PreCompact は matcher manual / auto を持ち、 exit 2 で compaction を止められるが要約に文を足す手段は無い。 SessionStart の matcher compact は要約を渡さない。 SessionEnd は reason (clear / prompt_input_exit / other 等) を渡し、 止められない。
+  憲法の向き: C3 は状態を 1 つの置き場に持つ。 C6.3 は記録を append-only の store 1 つに持つ。 C7.2 は承認を user の逐語を載せた event として記録する。 C10 は宣言・実測・導出を型で分ける。 C14 は規律を文書と manifest の 2 面にだけ持つ。 C15 は台帳に規律を置かない。 N1.2 は退役を可逆な移動でだけ行う。 N2 は prose だけの規則を規則としない。
+decision: |
+  §2.1 user 直命は器の表が持ち、 発令時刻と前提 pointer と状態を typed に運ぶ
+  user が言ったことは、 退避物に写すのではなく器の記録に 1 件ずつ入れます。 入れるときに器が時刻を打ち、 「この発言はどの bead や決定を前提にしているか」を矢印で添えます。 復元のとき器は有効な直命を逐語で並べ、 さらに「発令から 3 日経った」「前提の bead が閉じた」「前提の決定が置き換わった」のどれかに当たる直命だけを「確認候補」として印付きで出します。 planner はその候補だけを user に「まだ有効？」と 1 件ずつ聞きます。 毎回全部は聞きません。
+  器 SHALL 直命を events store (ADR-1004 §2.4・append-only・C6.3) の variant 2 つ DirectiveIssued (id・発令時刻 = 器が打つ UTC・逐語・前提 pointer の列〔PointerKind の再利用・ADR-1018 §2.2〕・発言を受けた席の target) と DirectiveClosed (id・結果 = done / withdrawn / expired の閉じた enum・裁定 id) で持つ。 口 SHALL <NAME> seat directive add --target T --text "<逐語>" [--premise <pointer>]… / seat directive close <id> --outcome … --ruling <id> / seat directive ls の 3 つ。 逐語 SHALL 器が書き換えず、 発令時刻 SHALL 開発 session が推定せず器が打つ (C10)。 rebrief SHALL 有効な直命を [DIRECTIVE] id=… issued=… premise=<kind:resolution>… line=<逐語> で列挙し、 確認候補を [DIRECTIVE-REVIEW] id=… reason=<age|premise-closed|premise-superseded> (閉じた enum・件数と列挙の対) で出す。 age の閾値 SHALL rules 行 directive.review_after_days (整数の日・裁定 id = user 2026-09-15T07:22Z 問 1・値は manifest が持つ・C1 / C5)。 premise-closed は前提の台帳 id の status が closed (rebrief の bd 読みと同じ 1 本の口)、 premise-superseded は前提の ADR が superseded (folio の meta) を指す。 退避物の節 1 SHALL 廃止し (§2.6)、 carry-forward の対象から外す。 器 SHALL 直命の意味 (継続か失効か) を判定しない (印を出すだけ・判定は user・C7)。
+  §2.2 現在地は器が自分の記録から DATA として出す
+  「main はどこか」「どの便が走っていて何段か」「席は動いているか」「前回の退避から何が着地したか」は、 器の記録と git から機械的に分かります。 復元の DATA にこれを足し、 AI が退避物に手で書くのをやめます。 GitHub (PR や CI) は器の外の道具なので、 今回は読みません。
+  rebrief SHALL marker を 4 種足す: [MAIN] sha=… origin=<same|ahead|behind|unknown> porcelain=<n> (anchor の git・子 process は既存の git の口)・[RUN] id=… stage=… account=… base=… updated=… (events の RunStage の最終値・Landed / Failed の終端を除く)・[SEAT] target=… role=… state=<idle|busy> account=… model=… (登録 row と state.jsonl の最終打刻)・[WIN] id=… landed=… sha=… (直近の自席の .consumed.md の時刻より後に Landed した便)。 各 marker SHALL 列挙と件数 (-COUNT) と不在 (-NONE) の 3 形で出す (「0 件」と「読めない」を融合しない・C10)。 GitHub を読む口 (gh) SHALL 本 ADR で足さない (器の外の OSS を子 process で呼ぶのは A3 の対象・bd と同じ裁定を要する)。
+  §2.3 復元と退避の取得は hook で強制し、 auto compaction の前は器が自動で退避する
+  user や AI が復元の skill を呼んだ瞬間に、 器が hook で復元の DATA を context に入れます。 AI が口を撃ち忘れることはできません。 退避の skill を呼んだ瞬間には現在地の DATA を入れ、 「今どこか」を会話の記憶で書けないようにします。 session の始まりには「退避物が在るか」を 1 行入れます。 auto compaction が来るときは、 器が現在地と持ち越し分だけの退避物を自動で作ってから compaction を通します (止めません)。 session の終わり方は器が記録し、 退避せずに終わった席を後で数えられるようにします。
+  器 SHALL hooks を 4 面足す。 (1) UserPromptExpansion (matcher = 復元 skill 名) と PreToolUse (matcher Skill・同じ skill 名) SHALL seat rebrief の DATA を additionalContext で注入し、 rc 2 の周は理由 1 行を注入する (skill は止めない・FailOpen)。 (2) 同じ 2 面 (matcher = 退避 skill 名) SHALL §2.2 の現在地 DATA と §2.1 の [DIRECTIVE] を注入する (FailOpen)。 (3) SessionStart (既存の口・全 matcher) SHALL 自席の未 consumed 退避物の有無を [WM] found|missing|unreadable の 1 行で注入する (雛形の行ではなく実測)。 (4) PreCompact (matcher auto) SHALL seat externalize --trigger auto を撃ち、 開発 session の入力 file を持たない退避物 (現在地 DATA + carry-forward だけ・trigger: auto) を書く。 自席の未 consumed が在る周は何もしない (wm-exists は成功の側)。 compaction SHALL 止めない (exit 2 を返さない・FailOpen・user 裁定 2026-09-15T07:22Z 問 2)。 (5) SessionEnd SHALL reason を state.jsonl に打刻する (ADR-1015 の打刻と同じ schema・判定はしない)。 doctor SHALL 席ごとに「退避物の無いまま終わった session の件数」を名指す (C10.2)。 hook の極性 SHALL 極性一覧に載せる (C11.2・4 面とも FailOpen / post-hoc ではなく in-loop の注入)。
+  §2.4 退避物の置き場は state dir で、 消費は移動だけ
+  退避物は repo の作業ツリーの中ではなく、 器の状態の置き場 (state dir) の席ごとの dir に置きます。 作業ツリーは git の操作 (worktree の削除・clean) の圏内で、 事故の側に在るからです。 消費は今までどおり名前を変えるだけで、 消しません。 古い置き場に残っている退避物は器が候補として数え、 doctor が名指します。
+  退避物 SHALL <state_dir>/seat/<潰した target>/wm/working-memory.<sid>.md に置く (打刻・tick・heartbeat と同じ席の dir・C3)。 --wm-dir の引数 SHALL 廃止し、 置き場は state dir から解く (§5 (C))。 consume SHALL rename だけ (N1.2・不変)。 同 sid の未 consumed が在る周の再退避 SHALL 旧 file を .superseded.<ts>.md へ rename して置き換える (台帳 s2-07l.289 の吸収・削除しない)。 旧置き場 (anchor 配下) の退避物 SHALL 器が読まず、 doctor が wm-legacy=<n> で名指す (移すのは user の手番・消す側に倒さない)。 要件書 FR1023 の置き場の文面 SHALL user の手番 (/folio-architect) で改める (§3)。
+  §2.5 役割ごとの model / effort は rules 行が既定を持つ
+  planner は Fable で effort high、 admin は Opus で effort xhigh、 のような「役割ごとの既定」は、 退避物の命令行でも口座の settings でもなく、 器の規則の表に user の裁定 id 付きで持ちます。 席を起動するとき器はその行から --model と effort を起動行に載せます。 席の登録に model が書いてあればそれが優先です。
+  rules 行 SHALL 役割ごとに role.<役割>.model (Model の別名・閉じた enum) と role.<役割>.effort (閉じた enum) を持つ (値は裁定 id 付き・C1 / C5・本 ADR は値を持たない)。 起動行 SHALL 登録 row の model (ADR-1026 §2.3・台帳 s2-07l.313) が在ればそれ、 無ければ行の既定を挟み、 effort は行から挟む。 口座 dir の settings.json SHALL 読まない (C2.2)。 退避物の節 3 SHALL model / effort の行を持たない (器が持つ値を prose に持たない・N2)。
+  §2.6 skill 2 本は「次の 1 手」と「作業中だけの制約」に縮む
+  退避の skill が書くのは「次に何をするか」と「この作業の間だけ効く制約」の 2 つだけになります。 直命は発言のたびに器の口へ 1 回入れ、 現在地は器が出し、 役割の既定は規則の表が持つからです。 復元の skill は器の DATA から user 向けの 5 行を組んで、 消費の口を撃つだけになります。 cycle の案内は skill の散文でなく、 退避の口の出力に器が 1 行出します。
+  externalize の入力 SHALL --plan (次の 1 手・列の裁定・bead id) と --directives (作業中だけの制約・pointer 付き) の 2 file に減らす (--user は §2.1 の口に置き換え廃止・--retire は不変)。 externalize の stdout SHALL 次の 1 手 (next=/clear・tick が最大 1 周期で cycle を回す旨は設計 doc の pointer) を 1 行足し、 skill は cycle 案内の散文を持たない。 rebrief skill SHALL DATA から user 面の 5 slot (ADR-1032 §2.3) を組み、 AI 面の判定 (pointer の種類・3 値則・orphan) は context に入るが表示しない。 skill の本文 SHALL 手順だけで規則を持たない (N2・不変)。
+  §2.7 射程外
+  この記録が決めるのは、 直命の表・現在地の DATA・hook の 4 面と自動退避・置き場・役割の既定・skill の縮小の 6 つです。 教訓 (事故や実測から得たこと) の表は器に作りません。 GitHub を読むこと、 compaction の要約を読むこと、 admin の席の表示面は決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 教訓の表を器に持つこと (規律は文書と manifest の 2 面・C14・台帳は task と裁定・C15＝教訓は rules 行か設計 doc か host の auto-memory へ・§5 (A))・GitHub の PR / CI を rebrief が読むこと (A3・別の裁定)・auto compaction の要約の内容を器が読むこと (hook が渡さない)・admin の席の brief 面 (admin は対話面でない・ADR-1032 §2.5)・退避物の schema 2 (節 1 の廃止は「節が空」として schema 1 のまま読める)・前の版 (v1) の script の停止 (user の手番)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書 (SRS v0.12) に在ります。 置き場を state dir に変えること (FR1023 の文面) と、 「直命の表」「hook による強制と自動退避」を名指す要件は、 記録時点の要件書に無く、 要件書の改訂 (user の手番) で足します。
+  本 ADR が仕える要件は SRS v0.12 が正本である: FR1023 作業記憶の退避と復元 (置き場の文面は anchor 配下を固定しており、 §2.4 は要件書の改訂を要する)・FR1028 cycle と FR1029 退避の合図 (不変・§2.3 の自動退避は合図の側を変えない)・FR1044 席間の連絡 (現在地 DATA が relay の一部を置き換えるが経路は不変)・FR1059 席の起動 (§2.5 の既定)・FR1061 導入先の同期 (doctor の行)。 「user 直命の表 (発令時刻・前提・確認候補)」「skill と compaction の hook による取得の強制と自動退避」を名指す FR は記録時点の SRS に無く、 要件書の改訂 (/folio-architect・user の手番) で足す。 それまで契約は FR1023 / FR1029 / FR1059 を指す。 要件書は本 ADR では 1 字も変えない。
+options:
+  - id: "chosen"
+    name: "作業記憶は器が持つ側を広げる (user 直命の表・現在地の DATA・skill と compaction の hook による強制と自動退避・退避物の置き場は state dir)"
+    text: |
+      user が言ったことは、 退避物に写すのではなく器の記録に 1 件ずつ入れます。 入れるときに器が時刻を打ち、 「この発言はどの bead や決定を前提にしているか」を矢印で添えます。 復元のとき器は有効な直命を逐語で並べ、 さらに「発令から 3 日経った」「前提の bead が閉じた」「前提の決定が置き換わった」のどれかに当たる直命だけを「確認候補」として印付きで出します。 planner はその候補だけを user に「まだ有効？」と 1 件ずつ聞きます。 毎回全部は聞きません。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 開発 session は context を捨てる前に「作業記憶」を退避し、 作り直した後に復元します。 器は退避物の形と検査を持ちますが、 中身の大半は AI が会話から写しています。 user の発言 (直命) は逐語の文字列としてだけ運ばれ、 いつ言われたか・どの前提で言われたか・まだ有効かを機械が持ちません。 走っている便や他の席の状態は器の記録に在るのに、 復元の DATA には載らず AI が手で書いています。 復元も退避も AI が口を撃ち忘れれば起きません。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と指摘しました。"
+  - id: "A"
+    name: "教訓の表を器に持つ"
+    text: |
+      (A) 教訓の表を器に持つ (user の問い「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」)。 却下: 記録時点の器に教訓の表は無く、 作ると規律の置き場が文書・manifest に加えて 3 つ目になる (C14)。 台帳は task と裁定 (C15)。 教訓のうち規則になるものは rules 行か設計 doc へ、 host 固有のものは auto-memory へ、 起票すべきものは rebrief の [TICKET-CANDIDATE] が既に出す。
+    verdict: rejected
+    reason: "記録時点の器に教訓の表は無く、 作ると規律の置き場が文書・manifest に加えて 3 つ目になる (C14)。 台帳は task と裁定 (C15)。 教訓のうち規則になるものは rules 行か設計 doc へ、 host 固有のものは auto-memory へ、 起票すべきものは rebrief の [TICKET-CANDIDATE] が既に出す。"
+  - id: "B"
+    name: "PreCompact で compaction を止め、 退避 tick に任せる"
+    text: |
+      (B) PreCompact で compaction を止め、 退避 tick に任せる。 却下 (user 裁定 2026-09-15T07:22Z 問 2): context が上限の席は退避の口も撃てず詰む。 器が自動で最低限の退避物を書き、 compaction は通す (FailOpen)。
+    verdict: rejected
+    reason: "(B) PreCompact で compaction を止め、 退避 tick に任せる。 却下 (user 裁定 2026-09-15T07:22Z 問 2): context が上限の席は退避の口も撃てず詰む。 器が自動で最低限の退避物を書き、 compaction は通す (FailOpen)。"
+  - id: "C"
+    name: "置き場を anchor 配下のまま doctor の行だけ足す"
+    text: |
+      (C) 置き場を anchor 配下のまま doctor の行だけ足す。 却下 (user 裁定 2026-09-15T07:22Z 問 3): 作業ツリーは git worktree / clean の操作圏で、 退避物が消える側に在る。 state dir は C3 の 1 つの置き場と同じ側で、 席の dir に揃う。
+    verdict: rejected
+    reason: "(C) 置き場を anchor 配下のまま doctor の行だけ足す。 却下 (user 裁定 2026-09-15T07:22Z 問 3): 作業ツリーは git worktree / clean の操作圏で、 退避物が消える側に在る。 state dir は C3 の 1 つの置き場と同じ側で、 席の dir に揃う。"
+  - id: "D"
+    name: "直命を退避物の節 1 のままにし、 行頭の日付を parse して経過だけ見る"
+    text: |
+      (D) 直命を退避物の節 1 のままにし、 行頭の日付を parse して経過だけ見る。 却下: 前提 pointer と状態 (done / withdrawn / expired) を持てず、 carry-forward の逐語 carrier に判定を混ぜる。 表 (events) なら発令時刻を器が打ち (C10)、 前提の実在は既存の pointer 検査で測れる。
+    verdict: rejected
+    reason: "前提 pointer と状態 (done / withdrawn / expired) を持てず、 carry-forward の逐語 carrier に判定を混ぜる。 表 (events) なら発令時刻を器が打ち (C10)、 前提の実在は既存の pointer 検査で測れる。"
+  - id: "E"
+    name: "現在地に GitHub (PR・CI) も読む"
+    text: |
+      (E) 現在地に GitHub (PR・CI) も読む。 却下 (本 ADR の射程外): 器の外の OSS を子 process で呼ぶのは bd と同じ A3 の対象で、 別の裁定を要する。 [MAIN] は git、 [RUN] / [SEAT] / [WIN] は器の記録だけで組める。
+    verdict: rejected
+    reason: "器の外の OSS を子 process で呼ぶのは bd と同じ A3 の対象で、 別の裁定を要する。 [MAIN] は git、 [RUN] / [SEAT] / [WIN] は器の記録だけで組める。"
+  - id: "F"
+    name: "全 skill の起動に SessionStart と同じ生成文を注入する"
+    text: |
+      (F) 全 skill の起動に SessionStart と同じ生成文を注入する。 却下: UserPromptExpansion は skill 名で matcher でき、 復元と退避の 2 skill にだけ DATA を注入できる。 生成文の重複を避ける。
+    verdict: rejected
+    reason: "UserPromptExpansion は skill 名で matcher でき、 復元と退避の 2 skill にだけ DATA を注入できる。 生成文の重複を避ける。"
+basis: [FR1023, FR1028, FR1029, FR1044, FR1059, FR1061, ADR-1004, ADR-1015, ADR-1018, ADR-1022, ADR-1026, ADR-1030]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  user が言ったことは、 退避物に写すのではなく器の記録に 1 件ずつ入れます。 入れるときに器が時刻を打ち、 「この発言はどの bead や決定を前提にしているか」を矢印で添えます。 復元のとき器は有効な直命を逐語で並べ、 さらに「発令から 3 日経った」「前提の bead が閉じた」「前提の決定が置き換わった」のどれかに当たる直命だけを「確認候補」として印付きで出します。 planner はその候補だけを user に「まだ有効？」と 1 件ずつ聞きます。 毎回全部は聞きません。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l.326（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.326 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 退避のたびに AI が写す量が減ること (直命・現在地・役割の既定が消える)、 復元と退避の取得を撃ち忘れられないこと、 auto compaction でも最低限の退避物が残ること、 直命の失効を機械が候補として出せることです。 悪い面は、 events の variant と hook が増えること、 直命を言われた席がその場で口を 1 回撃つ手番が要ること、 置き場の移行で要件書の改訂と旧置き場の片付けが要ることです。"
+  - "Positive: 直命が typed (発令時刻・前提・状態) で C10 に沿う。 現在地が器の記録から導出され (C10.2)、 退避物の節 2 が縮む。 取得が hook で in-loop に強制される (C16 の向き)。 auto compaction の周に退避物が 0 件で終わらない。 置き場が C3 の 1 つの側に揃い、 doctor が数えられる。 model / effort が manifest の行 (C1・C5)。 skill の散文が減る (N2)。"
+  - "Negative (受け入れるコスト): events の variant 2 つ・rules 行 3 種・hook 4 面・rebrief の marker 4 種 (外形 snapshot が動く)。 直命を受けた席は seat directive add を撃つ手番 (撃ち忘れは doctor が「直命 0 件の session」で名指せるが止められない)。 --wm-dir の廃止は既存の skill・unit の引数を変える (ADR-1030 の unit は再生成で追随)。 旧置き場の退避物は user が移す。 premise-superseded は folio の meta を読む (design-intent を読む口は既存の rebrief の pointer 検査と同じ)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0031-working-memory-is-held-by-the-vessel-directives-status-and-hooks.html
+  器の記録の頭: Status: accepted · Date: 2026-09-15 · version 0.4.6 (拘束する constitution の版) · ADR-1018 を追補し、 開発 session (LLM) が退避物に手で書いていた 3 種 (user 直命・現在地・役割の既定) を器の記録と口へ移し、 復元と退避の取得を hook で強制する (憲法は動かさない・SRS FR1023 の置き場は要件書の改訂で動く) · 要件は SRS が正本 (FR1023 / FR1028 / FR1029 / FR1044 / FR1059 / FR1061)
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user の直命 1 件 (2026-09-15 06:5xZ・指摘 10 点) を受けた設計判断で、 §2.1 の閾値・§2.3 の auto compaction の扱い・§2.4 の置き場は user の裁定 1 件 (2026-09-15T07:22Z 問 1〜3) が定めた。 憲法の条文は動かさない。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: planner (2026-09-15・設計判断) — 向きは user の直命 (2026-09-15 06:5xZ・「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」以下 10 点) が、 値と 2 つの分岐は user の裁定 (2026-09-15T07:22Z 問 1 = 3 日 / 問 2 = 自動退避で通す / 問 3 = state dir へ) が定めた。 逐語は台帳 s2-07l.326 の notes (本 file には写さない)。
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: なし (ADR-1018 の追補)。 ADR-1018 §2.1 の「brief の文章と判断は開発 session」は不変で、 退避物の節 1 (user 直命) と節 2 の「現在地」を器の記録に置き換える。 設計 doc working-memory.md §2 の置き場 (anchor 配下) を state dir に改める (要件書 FR1023 の改訂は user の手番・§3)。 rules 行を 3 種足す (§2.1 / §2.5・C5 の裁定 id 付き)。
+  器の機械の欄 related: ADR-1015 (席の状態は hook の打刻) / ADR-1018 §2.1 / §2.2 (作業記憶の subcommand・pointer 必須の命令行) / ADR-1022 §2.1 / §2.4 (登録 row・SessionStart の生成文) / ADR-1026 §2.3 (席の起動行) / ADR-1030 §2.2 (rules 行の間隔と同じ形) / ADR-1032 (対話面の作法・brief の user 面) / constitution C1 / C2.2 / C3 / C5 / C6.3 / C7.2 / C10 / C11.2 / C14 / C15 / A3 / N1.2 / N2
+  器の却下案の節の要約: 6 つの案を退けました。 「教訓の表を器に持つ」は規律の置き場を 3 つ目に増やします。 「auto compaction を止める」は context が満杯の席を詰まらせます。 「置き場を今のまま doctor だけ足す」は事故の圏内に置き続けます。 「直命を退避物の節 1 のまま日付だけ読む」は前提と状態を持てません。 「GitHub も読む」は器の外の道具の追加で別の裁定です。 「全 skill の起動に session 開始と同じ注入をする」は skill 名で絞れる hook が在るので過剰です。
+  器の記録の出所（Trace）:
+  出所は、 user の直命 (指摘 10 点)、 user の裁定 3 件、 器の現物の棚卸し、 Claude Code の hook 仕様、 先行の決定です。
+  ・user の直命 (2026-09-15 06:5xZ・planner 席): 「ready-compaction と rebrief について整理したい」以下 10 点。 逐語は台帳 s2-07l.326 の notes。
+  ・user の裁定 (2026-09-15T07:22Z): 問 1 直命の確認候補の閾値 = 3 日 / 問 2 auto compaction の前は器の自動退避で通す = それでよい / 問 3 置き場を state dir へ = それでよい。 逐語は台帳 s2-07l.326 の notes。
+  ・器の現物 (main 51d0341・planner の棚卸し 2026-09-15): seat/wm.rs (節 1 は生文字列・since= は節 3 の文法検査のみ)・seat/rebrief.rs (marker 24 種)・fleet/mod.rs (EventKind 15 種)・hooks/hooks.json (5 event)・rules/manifest.toml (role 行は権能のみ)。
+  ・Claude Code Hooks reference (記録時点): UserPromptExpansion / PreCompact / SessionStart(compact) / SessionEnd の入出力。
+  ・先行決定: ADR-1018 §2.1 / §2.2・ADR-1015・ADR-1022 §2.1 / §2.4・ADR-1026 §2.3・ADR-1030 §2.2。
+  ・設計: docs/design/working-memory.md §2 (置き場・本 PR で書き換え) / §12 (本 ADR の器化・本 PR で追加)・docs/design/dialogue-surface.md (ADR-1032)。 契約は台帳 s2-07l.326 の配下に起票 (要件書の改訂の後・段 1 の 4 便は並列)。

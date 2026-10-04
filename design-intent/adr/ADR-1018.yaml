@@ -1,0 +1,101 @@
+# 判断の記録 ADR-1018 — 器 scribe2 の判断の記録 ADR-0018 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1018
+title: "作業記憶の退避・復元・消費は器の subcommand が機械層を担い、 命令行は照合できる出所 pointer を必須とし、 pointer の無い行は暫定の印を付けて次の cycle に引き継がない (brief の文章は開発 session が組む・前の版の script への依存を切る)"
+status: accepted
+date: 2026-09-12
+context: |
+  開発 session (planner と管理席) は context が上限に近づくと作業記憶を file に退避し、 session を作り直してから復元します。 この退避と復元は今、 どの account でも使える共通 skill の手順で動いていて、 その中身は前の版 (python と bash) の script です。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「作業記憶の命令が憲法より優先されるのはおかしい」と裁定しました。 要件書は先に改訂され、 退避と復元が器の subcommand として実在すること、 出所を持たない命令行に印を付けて次の周に引き継がないことが受入基準になりました。 この記録は、 器の subcommand に何を持たせ、 pointer をどう検査し、 前の版への依存をどう切るかを決めます。
+  記録時点 (2026-09-12) の現物: 退避 (/ready-compaction) と復元 (/rebrief) は user の全 account に置いた global skill 2 本で、 機械層は前の版の凍結 repo にある script (退避の preflight = python・復元の fetch = python + bash wrapper・作業記憶の 3 節 schema と carry-forward = python lib) を絶対 path で呼ぶ。 復元 fetch は session id を env と transcript から解決し、 planner 席でも role を admin と誤解決して自席の退避物を候補から外す (memory に記録された事故)。 作業記憶の file は <anchor>/.claude-session/working-memory.<sid>.md (untracked)・消費は .consumed.md への move・frontmatter に seat: を名乗る (SRS FR1023 の 6 作法として固定済み)。 器の側: seat tick は退避の合図 (/ready-compaction) を注入し、 seat cycle は /clear の後に復元 command (既定 /rebrief) を注入する。 自席の退避物の弁別は frontmatter の seat: が target と一致するもの (scan_wm・file 名の sid ではない)。 hook は session_id を state.jsonl の打刻行 (sid field) に残す (ADR-1015)。 cap guard は working-memory.*.md の編集だけを上限に関わらず通す口を持つ (FR1026)。 作業記憶の「命令・制約」行 24 本 (planner 席の実測) はすべて → SSOT: を持つが、 前の版の pointer 文法 (閉じた 5 形) では 8 本が形の外に落ちる (別 repo の独立 gate が指摘・台帳 s2-07l.61 notes)。
+  憲法の向き: N2 は prose・memory・chat にしか無い規則を規則と扱わない (作業記憶の命令行は規則ではなく pointer)。 C8 は前の版を oracle にしないと定め、 C12 は歯を Rust の 1 framework に限る (前の版の script は bats で守られている)。 C15 は台帳を task と裁定にだけ使い、 規律を置かない (復元の周に台帳へ書くと、 全 role が回す共通手順から role 境界を越えた起票が出る — 別 repo の gate が実際に捕らえた)。 C2.2 は env を読まず、 C2 は順序を enum の宣言順だけから取る。 C3.3 は判断入力を typed に持つ。 user の裁定 (2026-09-12・会話面・逐語「推奨で」・台帳 s2-07l.61 notes): (A) AC1008 を「器の subcommand として実在」へ改訂し、 便 3 つ (退避・復元の Rust 化・pointer 必須と暫定印・前の版の fetch 依存の切断) を pipeline で流す。 brief の文章は開発 session (LLM) のまま。 台帳の読みは bd --readonly を子 process で。 SRS v0.5 は同日 land した。
+decision: |
+  §2.1 退避・復元・消費の機械層は器の subcommand 3 つが担い、 brief の文章は開発 session が DATA から組む
+  作業記憶にまつわる機械の仕事を 3 つの subcommand に分けます。 「退避」は file を作る、 「復元」は file と台帳を突き合わせて事実の行 (DATA) を出す、 「消費」は使い終えた file を移動する。 判断 (今どこにいて次に何をするか) と、 それを人に読める文章にする仕事は、 これまでどおり開発 session が担います。 復元は何も書きません。 起票が要りそうな項目も「候補」として並べるだけで、 台帳には触りません。
+  器 SHALL 作業記憶の機械層を <NAME> seat の subcommand 3 つで提供する: externalize (退避物の生成)・rebrief (復元 DATA の出力)・consume (退避物の消費 = move)。 いずれも --target T・--wm-dir DIR・--state-dir DIR を引数で受け、 env を読まない (C2.2・ADR-1004 決定文 4)。 rebrief SHALL read-only とし (file・台帳・git のいずれも変えない)、 台帳は bd --readonly を子 process で読み (C15・記録時点の台帳 adapter は MVP 外)、 起票が要る項目 SHALL 「起票候補」の行として出すに留める (台帳への write は管理席の別の口)。 DATA SHALL 行頭 marker 付きの typed な行 (1 行 1 事実・値は typed enum の名か逐語) で出し、 brief の文章 SHALL 開発 session が DATA から組む (判断は LLM 層・器は判断を持たない)。 rebrief が DATA を出せない周 (退避物の dir が読めない・台帳が読めない・anchor を解決できない) SHALL rc 非 0 で止まり、 DATA を 1 行も出さない (FR1023「DATA が無い周は brief を出さない」の機械側)。 極性は FailClosed (読めないを「異常なし」に化けさせない)。 退避と消費は退避物の書込 / move を止めうる判定を持つので Guard として極性一覧に載る (ADR-1014 §2.1 の定義「書込を止めうる判定」・InLoop / FailClosed)。 復元は状態を読んで出すだけで行為を止めないので Guard ではない (同 §2.1「状態を選ぶだけの判定は載せない」)。 consume SHALL 冪等 (既に消費済みなら rc 0 で already) で、 別の席の退避物 (frontmatter の seat: が target と違う) を消費しない (FR1023 作法 5 / 6)。 退避物の file 名・.consumed.md の suffix・move・frontmatter の seat: は SRS FR1023 と seat tick / cycle の現物のまま変えず、 frontmatter に schema: 1 を足す (ADR-1004 決定文 5 の on-disk 形式・任意 key の追加は同じ版)。 schema を持たない退避物 (前の版の skill が書いた現物) SHALL 1 相当として読み、 読めない扱いにしない (決定文 5「既存の行を読めなくする変更は新しい版」に当たらない・scan_wm の弁別と同じ file を同じに数える)。 2 以上の版は Err (fail-closed)。
+  §2.2 命令行は照合できる出所 pointer を必須とし、 器は pointer の形を閉じた enum で分類し、 無い行を暫定の印付きで出す
+  作業記憶の「命令・制約」の各行は、 それ自体が規則ではなく「規則はここにある」という矢印です。 矢印の先を器が形で見分け、 到達できるものは実在まで確かめます。 矢印の無い行は「暫定」と印を付けて出します。 どの矢印が強いかは器の中の並び順 (enum の宣言順) で決まっていて、 散文の注記では持ちません。 並びの現物は器の外形 (snapshot) を見れば分かります。
+  「命令・制約」節の項目行 SHALL 本文末に出所 pointer (→ SSOT: <参照>) を持つ。 器 SHALL pointer の形を閉じた enum PointerKind で分類し、 優先順位は宣言順だけから取り散文の注記を持たない。 variant の列と順序の正本は機械側 (PointerKind::ALL と外形 snapshot) であり、 本 ADR は列挙を写さない (ADR-1013 §2.1)。 形の種類は「憲法条・ADR・設計 doc・rules 行・台帳・repo 内 path・memory・PR 番号」の順に強い、 と決定時点では読める (C2・ADR-1013 §2.2 の 4 つ組)。 判定 SHALL 「形で分類できる」を最小条件とし、 形から到達できる kind (憲法条の id・ADR の file・rules 行の id・repo 内 path) は実在まで検査して resolved / unresolved を分ける (実在を確かめない kind は unchecked・3 値を融合しない)。 pointer を持たない行・形で分類できない行 SHALL 暫定行 として [WM-DIRECTIVE] pointer=none 相当の印付きで DATA に列挙する (件数と列挙の対を器が持ち、 件数だけを出さない)。 器 SHALL NOT 行の内容と拘束 SSOT の食い違いを判定しない (内容の judgment は開発 session の層・器は形と実在だけ)。 pointer の文法は閉じた 5 形の列挙ではなく「実在を照合できる carrier 参照」であり、 前の版の 5 形で落ちた 8 本 (memory・docs の path) は memory と repo 内 path の形に入る。 「user 裁定 <時刻>」だけの参照は台帳 id を伴わなければ到達できないので暫定行になる (退避時に台帳 id を添える)。
+  §2.3 暫定行は次の cycle に引き継がない。 引き継ぎは退避の subcommand が機械的に行い、 開発 session は退避物を直接書かない
+  退避のとき、 前の周から引き継ぐ命令行は器が機械的に運びます。 その際、 矢印の無い暫定行は運びません (消えます)。 開発 session が書くのは「今の計画」と「新しく足す命令行」だけで、 file そのものは器が組み立てます。 こうすると、 引き継ぎのたびに命令が雪だるま式に増えることも、 出所の無い規則が周を越えて生き残ることも、 構造として起きません。
+  externalize SHALL 自席の最新の消費済み退避物から「命令・制約」節を carry-forward し、 その際 暫定行 (§2.2) と、 pointer は在るが実在検査で Unresolved になった行を落とし (落とした件数を stdout に出す・黙って消さない)、 形で分類でき Unresolved でない pointer を持つ行だけを [P0-P3] 昇順の安定 sort で運ぶ (上限は rules 行 seat.wm_directive_cap・値は裁定 id 付き・超過は rc 非 0 で止まり黙って切らない)。 「user 直命」節 SHALL 逐語のまま全行 carry する (状態が「完了」「user 撤回」の行だけ落としてよい)。 「計画弧」節と新規の命令行 SHALL 開発 session が typed な入力 (file) で渡し、 器が 3 節の schema (見出し・tag [auto|confirm|hard候補]・[P0-P3]・since=) を検査して file を書く。 新規の命令行に pointer が無いことは検査で止めない (その行は暫定行として退避物に入り、 復元の DATA で印付きで列挙され、 次の carry-forward で落ちる＝FR1023 の「印付きで列挙して次の cycle に引き継がない」の機械形)。 開発 session SHALL NOT 退避物を直接 Write / Edit しない (器の口だけが書く)。 cap guard (FR1026) の「退避物の編集を通す口」は本 ADR で変えないが、 器の口が唯一の書き手になった後は使われない (退役は §2.5)。 退避物が既に在る席 (未 consumed) で externalize を撃つ周 SHALL rc 非 0 で止まる (二重退避は退避物を取り合う・FR1028 と同じ極性)。
+  §2.4 session id は hook の打刻から得て env を読まず、 復元は台帳を read-only で読み、 前の版の script を呼ばない
+  「今の session は誰か」は、 hook が打刻に残した session id から読みます。 環境変数や画面の字面からは読みません。 これで、 planner の席が自分の退避物を admin のものと取り違える事故は構造として消えます。 復元は台帳を読むだけで書かず、 前の版の script は呼びません。 器の便が着地したら、 共通 skill は器を呼ぶ薄い入口だけになり、 前の版の script を指す行は消えます。
+  rebrief / consume / externalize SHALL 現在の session id を <state_dir>/seat/<target>/state.jsonl の最終打刻行の sid から得る (打刻の形は ADR-1015 §2.1 の typed 打刻で、 sid field の出所は設計 docs/design/seat-state.md と hook の現物・env と pane の字面は読まない・打刻が無い周は rc 非 0)。 自席の退避物の弁別 SHALL scan_wm と同じ「frontmatter の seat: が target と一致」とし、 file 名の sid が現在の sid と違う自席の退避物 (/clear の後の通常形) SHALL 候補として DATA に出し、 consume は現在の sid 名義へ move して consumed-from: <元の sid> を frontmatter に足す。 role による除外は持たない (席は target で一意・role の解決に依存しない)。 別の席の未消費退避物 SHALL orphan として列挙するだけで、 消費しない。 rebrief SHALL 台帳の現在値 (open / in_progress / blocked の件数・in_progress の一覧・退避物が言及する bead の status) を bd --readonly … --json の子 process で読み (bd は器の外の OSS であり、 器の binary が子 process として呼ぶのは初＝A3 の対象。 承認 = user 裁定 2026-09-12・ADR-1017 §2.2 と同じ扱いで C13 の crate 手続きは対象なし・NFR1003 不変)、 待ち上限は rules 行 seat.ledger_timeout_s (値は裁定 id 付き・C5)。 打刻は在るが sid が空の周 SHALL 打刻不在と同じく rc 非 0 (hook は session_id 欠落を空で打刻する現物があるため)。 台帳が読めない周は rc 非 0 (FailClosed・「BD-COUNT=0」に化けさせない)。 器 SHALL NOT 前の版の script (fetch・lib・preflight) を呼ばず、 その path を持たない (C8)。 global skill 2 本 (退避・復元) は本 ADR の便が land した後、 器の subcommand を呼ぶ入口だけの形へ改め、 前の版の script を指す行を 0 にする (skill file は本 repo の外・user の操作)。
+  §2.5 射程外
+  この記録が決めるのは「3 つの subcommand の役割」「pointer の形と暫定の印」「引き継ぎの機械化」「session id と読み取り専用」の 4 点だけです。 brief の文面、 起票、 transcript から user の言葉を拾う仕組み、 自動要約の検出、 skill の退役の手順、 cap guard の口の撤去は別に決めるか、 user の手番です。
+  次は本 ADR の決定ではない (MUST NOT be read as such): brief の文章と判断 (開発 session の層)、 起票 (管理席の write の口・C15)、 transcript から user 発言の逐語を抽出して「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」節へ入れる機構 (前の版の digest・Claude Code の config dir を要する・v3 か hook 経由で別途)、 auto-compact の検出と強制回復 mode (PreCompact hook の打刻・別途)、 飛行中の background Agent / Workflow の列挙 (前の版の overlay・transcript の layout に依存)、 global skill と plugin 版 skill の退役手順 (本 repo の外)、 cap guard の退避物編集の口の撤去 (skill の退役後に別便)、 rules 行 seat.wm_directive_cap / seat.ledger_timeout_s の値 (裁定 id 待ち・C5)、 seat tick / cycle が注入する合図の字面 (現物のまま)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は、 先に要件書 (SRS v0.5) に入っています。 要件の文面はここには置かず、 要件書の当該行を指すだけにします。 この記録は要件書を 1 字も変えません。
+  本 ADR の §2.1〜§2.4 が仕える要件は SRS v0.5 が正本である: FR1023 (subcommand・作法 6 本・暫定行の印付き列挙と非引継ぎ)・AC1008 (器の subcommand として実在・作法と復元 DATA)。 FR1026 (cap guard の口)・FR1027 / FR1029 (合図)・FR1028 (cycle) は不変。 SRS の scope out (台帳への write) も不変 (rebrief は read-only)。 subcommand の名・frontmatter の schema key・DATA の段の構成は §2 が決定時点の形であり、 marker と PointerKind の variant 列・順序の正本は機械側 (const slice と外形 snapshot・ADR-1013 §2.1) で、 SRS も本 ADR も列挙を持たない。
+options:
+  - id: "chosen"
+    name: "作業記憶の退避・復元・消費は器の subcommand が機械層を担い、 命令行は照合できる出所 pointer を必須とし、 pointer の無い行は暫定の印を付けて次の cycle に引き継がない (brief の文章は開発 session が組む・前の版の script への依存を切る)"
+    text: |
+      作業記憶にまつわる機械の仕事を 3 つの subcommand に分けます。 「退避」は file を作る、 「復元」は file と台帳を突き合わせて事実の行 (DATA) を出す、 「消費」は使い終えた file を移動する。 判断 (今どこにいて次に何をするか) と、 それを人に読める文章にする仕事は、 これまでどおり開発 session が担います。 復元は何も書きません。 起票が要りそうな項目も「候補」として並べるだけで、 台帳には触りません。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 開発 session (planner と管理席) は context が上限に近づくと作業記憶を file に退避し、 session を作り直してから復元します。 この退避と復元は今、 どの account でも使える共通 skill の手順で動いていて、 その中身は前の版 (python と bash) の script です。 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「作業記憶の命令が憲法より優先されるのはおかしい」と裁定しました。 要件書は先に改訂され、 退避と復元が器の subcommand として実在すること、 出所を持たない命令行に印を付けて次の周に引き継がないことが受入基準になりました。 この記録は、 器の subcommand に何を持たせ、 pointer をどう検査し、 前の版への依存をどう切るかを決めます。"
+  - id: "A"
+    name: "global skill と前の版の script のまま規律だけ直す"
+    text: |
+      (A) global skill と前の版の script のまま規律だけ直す (記録時点の暫定処置)。 却下: C8 (前の版を oracle にしない)・C12 (bats の歯)・2 系統 (global 版 / plugin 版) の drift が続く。 user 自身が「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と裁定。
+    verdict: rejected
+    reason: "C8 (前の版を oracle にしない)・C12 (bats の歯)・2 系統 (global 版 / plugin 版) の drift が続く。 user 自身が「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と裁定。"
+  - id: "B"
+    name: "brief の文章まで器が生成する"
+    text: |
+      (B) brief の文章まで器が生成する。 却下: 現在地・推奨・次のアクションは judgment であり、 器は判断を持たない (C3.3 の向き = 判断入力を typed に渡すのが器の役割)。 DATA の typed 行までを器に置き、 文章は開発 session の層に残す (§2.1)。
+    verdict: rejected
+    reason: "現在地・推奨・次のアクションは judgment であり、 器は判断を持たない (C3.3 の向き = 判断入力を typed に渡すのが器の役割)。 DATA の typed 行までを器に置き、 文章は開発 session の層に残す (§2.1)。"
+  - id: "C"
+    name: "作業記憶を fleet の event log (C3 の 1 file) に載せる"
+    text: |
+      (C) 作業記憶を fleet の event log (C3 の 1 file) に載せる。 却下: 作業記憶は席の一時層 (session を跨ぐと消える文脈の退避物) であって fleet の状態ではなく、 FR1023 が file 形 (session id で一意・move で消費) を固定済み。 event log に載せると消費 (move) の作法と衝突する。
+    verdict: rejected
+    reason: "作業記憶は席の一時層 (session を跨ぐと消える文脈の退避物) であって fleet の状態ではなく、 FR1023 が file 形 (session id で一意・move で消費) を固定済み。 event log に載せると消費 (move) の作法と衝突する。"
+  - id: "D"
+    name: "pointer の文法を閉じた 5 形 (憲法条 / ADR / manifest 行 / bd 裁定 / user 裁定 ts) に限る"
+    text: |
+      (D) pointer の文法を閉じた 5 形 (憲法条 / ADR / manifest 行 / bd 裁定 / user 裁定 ts) に限る (前の版の当初形)。 却下: 実測で 24 行中 8 行 (memory・docs の path) が形の外に落ち、 実在する参照を暫定へ倒す。 「照合できる carrier 参照」を PointerKind の 8 形で持ち、 到達できる kind は実在まで検査する (§2.2)。
+    verdict: rejected
+    reason: "実測で 24 行中 8 行 (memory・docs の path) が形の外に落ち、 実在する参照を暫定へ倒す。 「照合できる carrier 参照」を PointerKind の 8 形で持ち、 到達できる kind は実在まで検査する (§2.2)。"
+  - id: "E"
+    name: "器が作業記憶の行と拘束 SSOT の内容の食い違いを判定する"
+    text: |
+      (E) 器が作業記憶の行と拘束 SSOT の内容の食い違いを判定する。 却下: 内容の照合は自由文の意味判定であり typed にできない (C3.3「free text を判定入力にしない」)。 器は形・実在・優先順位 (宣言順) までを持ち、 内容の judgment は開発 session に残す (§2.2)。 (E') session id を env から読む案も却下 (C2.2・ADR-1004 決定文 4)。 打刻の sid を読む (§2.4)。
+    verdict: rejected
+    reason: "内容の照合は自由文の意味判定であり typed にできない (C3.3「free text を判定入力にしない」)。 器は形・実在・優先順位 (宣言順) までを持ち、 内容の judgment は開発 session に残す (§2.2)。 (E') session id を env から読む案も却下 (C2.2・ADR-1004 決定文 4)。 打刻の sid を読む (§2.4)。"
+basis: [FR1023, FR1026, FR1027, FR1028, FR1029, NFR1003, AC1008, ADR-1004, ADR-1013, ADR-1014, ADR-1015, ADR-1017, CON1002]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  作業記憶にまつわる機械の仕事を 3 つの subcommand に分けます。 「退避」は file を作る、 「復元」は file と台帳を突き合わせて事実の行 (DATA) を出す、 「消費」は使い終えた file を移動する。 判断 (今どこにいて次に何をするか) と、 それを人に読める文章にする仕事は、 これまでどおり開発 session が担います。 復元は何も書きません。 起票が要りそうな項目も「候補」として並べるだけで、 台帳には触りません。
+approval:
+  who: 持ち主
+  date: 2026-09-12
+  ruling: "s2-07l.61（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.61 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 退避と復元の機械の部分が Rust の歯で守られ、 session id の取り違えが構造として消え、 出所の無い規則が周を越えて生き残らなくなり、 前の版への依存が切れることです。 悪い面は、 共通 skill の書き換えという repo の外の作業が要ること、 器が持つ subcommand と enum が増えること、 前の版が持っていた便利な観測 (飛行中の agent の列挙・user 発言の自動抽出) が当面無くなることです。"
+  - "Positive: 機械層が Rust の歯 (C12) と typed enum (C3.3 / C11) で守られ、 前の版の bats と python から離れる (C8)。 sid を打刻から取るため role 誤解決の事故 (memory 記録) が構造として消える。 暫定行が次の cycle に載らないため N2 の向き (prose にしか無い規則は規則でない) が機械で守られる。 復元が read-only ゆえ全 role が回しても台帳への越境 write が出ない (C15)。 優先順位が enum の宣言順にあり散文注記を持たない (C2)。"
+  - "Negative (受け入れるコスト): subcommand 3 つ・閉じた enum 3 つ (PointerKind・実在の 3 値・DATA の marker) と境界 enum 3 つ・Guard 2 つ・rules 行 2 つ (seat.wm_directive_cap・seat.ledger_timeout_s・いずれも契約が裁定 id 付きで manifest に足すまでは本 ADR の予定行であり、 C14.2 の相互参照は行が manifest に在って初めて成立する) が増える (core の行数は R-C4-1 の内側で測る)。 global skill 2 本の書き換えと前の版 script の退役は本 repo の外 (user の操作)。 前の版の overlay (飛行中 agent / WF の列挙・transcript digest) は当面持たない (§2.5)。 開発 session が退避物を直接書けなくなるため、 計画弧と新規命令行を typed な入力 file で渡す手間が 1 段増える。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0018-working-memory-subcommands-and-pointer-required-directives.html
+  器の記録の頭: Status: accepted · Date: 2026-09-12 · version 0.4.6 (拘束する constitution の版) · N2 / C8 / C12 / C15 / A3 の適用と C2 の充足形を記録し、 ADR-1004 §2.2 面 3 の read 禁止を限定 supersede · 要件は SRS v0.5 (FR1023 / AC1008) が正本
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user 裁定 (2026-09-12) を受けた決定で、 §3 は SRS への pointer である。 要件 (FR1023 / AC1008) は本 ADR より先に SRS v0.5 へ入っており、 本 ADR は要件の文面を持たず、 理由・形・却下案 だけを持つ。 本 ADR は ADR-1004 §2.2 面 3「台帳 (bd) の read / write を行わない」のうち read の禁止だけを、 復元の subcommand が bd --readonly を子 process で読む 1 点に限って supersede する (write の禁止と「台帳 adapter は MVP 外」は不変)。 退避物の file 名・消費の suffix・move の作法は SRS FR1023 が固定済みで、 本 ADR はそれを変えない。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: user (2026-09-12) — 3 論点のうち 3 論点目の裁定 (退避・復元を器の subcommand に・pointer 必須と暫定印・前の版の script 依存の切断・便 3 つ・brief の文章は開発 session のまま)。 起点は user 直命 2026-09-10 (根幹の skill は器に入れる・作業記憶は憲法より下)。 逐語は台帳の notes が原本で本 file には写さない (CON1002)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: ADR-1004 §2.2 面 3 の「台帳 (bd) の read / write を行わない」のうち read の禁止を、 復元の subcommand が bd --readonly を子 process で読む 1 点に限って supersede する (write の禁止・台帳 adapter は MVP 外・面 1 / 2 / 4 / 5 は不変)。 前の版の global skill 2 本と plugin 版 2 本は本 ADR の便が land した後に退役する暫定処置であり、 ADR ではない
+  器の機械の欄 related: ADR-1004 §2.4 / §2.5 (env を読まない・schema 版) / ADR-1013 §2.2 (閉じた enum と宣言順の充足形) / ADR-1015 §2.1 / §2.2 (席の状態は hook の打刻から・sid field は seat-state.md) / ADR-1014 §2.1 (guard の定義) / ADR-1017 §2.2 (host の道具の A3 の扱い) / constitution C2 / C2.2 / C3.3 / C8 / C10 / C11 / C11.2 / C12 / C15 / N2 / SRS FR1023 / FR1027 / FR1028 / FR1029 / AC1008 / 器の要件書に無い受入の番号 9（元の字は AC と 9 を続けた受入の id・食い違い D12） / CON1002
+  器の却下案の節の要約: 6 つの案を退けました (session id を環境変数から読む案を含む)。 共通 skill と前の版の script のまま直す案は、 前の版を器の頼みの綱にし続けます。 brief の文章まで器に持たせる案は、 判断を機械に押し込むことになります。 作業記憶を fleet の記録 file に入れる案は、 一時的な席の記憶と fleet の状態を混ぜます。 pointer を 5 つの形に閉じる案は、 実在する参照の 3 分の 1 を落とします。 器が作業記憶と憲法の食い違いを裁く案は、 内容の判断を機械に持たせることになります。
+  器の記録の出所（Trace）:
+  出所は、 user の直命と裁定、 別 repo の独立 gate が指摘した穴、 前の版の script と skill の現物、 器の現物 (退避物の走査・打刻・cap guard の口)、 そして先に要件書へ入った FR1023 / AC1008 です。
+  ・user の直命 (2026-09-10・会話面・planner 席): 作業記憶が憲法より優先されるのはおかしい／根幹の skill (退避・復元) は器に入れるべき・global skill は暫定処置。 user の裁定 (2026-09-10・適用範囲): global のまま文法を「照合できる carrier 参照」へ広げる (暫定)。 user の裁定 (2026-09-12・逐語「推奨で」・3 論点の 3 つ目): AC1008 を器の subcommand へ・便 3 つ・brief の文章は開発 session のまま・台帳は read-only の子 process。 逐語は台帳 s2-07l.61 の notes (tracked file には写さない・CON1002)。
+  ・別 repo の独立 gate の指摘 (2026-09-11・台帳 s2-07l.61 notes に転記): 全 role が回す復元手順が起票を命じると role 境界を越えた write が出る (blocking)・pointer 文法 5 形で 24 行中 8 行が落ちる・「拘束 SSOT」が 2 値で判定不能を持たない・件数だけで列挙の置き場が無い・plugin 版と global 版の drift。 本 ADR §2.1 / §2.2 はこれらを構造で閉じる。
+  ・要件の land (2026-09-12): SRS v0.5 で AC1008 を「器の subcommand として実在」へ改訂し FR1023 に 2 義務 (subcommand・暫定行) を追記 (user の /folio-architect)。 本 ADR は要件の後に書かれ、 要件の文面を持たない。
+  ・前の版の現物 (2026-09-12・host 上): 復元 fetch = python (bash wrapper 経由・sid を env / transcript から解決・role filter で自席の退避物を除外する事故を記録)・退避 preflight = python (飛行中 WF / 常駐 process の観測)・作業記憶 lib = python (3 節の見出し定数・[P0-P3] 安定 sort・上限 24・tag 警告)。 global skill 2 本が絶対 path でこれらを呼ぶ。
+  ・器の現物 (2026-09-12): crates/<NAME>/src/seat/mod.rs の scan_wm (frontmatter の seat: で自席を弁別・WmScan::{None, Unconsumed, Unreadable})・hook/stamp.rs が session_id を state.jsonl の sid に打刻・seat/tick.rs の退避の合図 /ready-compaction・seat/cycle.rs の DEFAULT_RESTORE = "/rebrief"・cap guard の SeatDecision::Externalize (FR1026)。 退避物は .claude-session/ (untracked)。
+  ・先行決定: ADR-1004 §2.4 (env を読まない・場所は引数) / §2.5 (schema 版)・ADR-1013 §2.2 (閉じた enum + const slice + 網羅 match + 判別子順 pin)・ADR-1015 (席の状態と sid は打刻から)。
+  ・設計: docs/design/working-memory.md (3 節の schema と frontmatter・pointer の enum と判定・DATA の marker・subcommand の引数と rc・carry-forward と暫定行の扱い・歯・契約 3 便・却下案)。
+  （取り込みの規則）器の記録 ADR-1004 の決定文の印（字 D と「-」と番号）は根の規則の表の行の id と同じ形なので、この写しでは字「決定文 <番号>」と書いた（ADR-1004 の決定の節の各文の頭の印）。

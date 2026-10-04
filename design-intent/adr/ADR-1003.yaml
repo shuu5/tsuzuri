@@ -1,0 +1,169 @@
+# 判断の記録 ADR-1003 — 器 scribe2 の判断の記録 ADR-0003 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1003
+title: "憲法改訂 = v1 完全放棄に伴う C7 / A1・C8 / A4・N4 の書換え"
+status: accepted
+date: 2026-09-09
+context: |
+  憲法は「新しい版は前の版の下で作る」「user の承認は planner という席を通った印だけ受け取る」と定めていました。 ところが user は 2026-09-09 に前の版 (v1) を完全に捨てると決めました。 前の版が無いのに「前の版の下で」は守れず、 planner の席もその一部として消えます。 本 ADR は、 その裁定に伴って憲法の 4 か所を書き換えた記録です。
+  改訂前の C8「版 N+1 は版 N の下で作られる」と A4「自己開発の解禁 (成熟 4 条 AND + user go)」は、 版 N が oracle と停止権を持ち版 N+1 をその pipeline で作るという bootstrap model を憲法へ写したものである。 C7「planner が唯一の対話面」と A1 の承認経路も、 同じ model の中の席の名を条文に焼いたものである。 2026-09-09、 user は v1 を完全に放棄し、 v1 由来の plugin 機能を積まない開発 session と beads だけで v2 を進める直命を出した (拘束条件は docs と design-intent で固定する、 という方針を伴う)。 この時点で C8 の前提 (版 N が存在し oracle を担う)、 A4 の前提 (成熟条件を版 N が測る)、 C7 / A1 の前提 (planner の席が存在する) はいずれも成立しなくなった。 起草の段階では射程を C8 / A4 の 2 点と見ていたが、 user 裁定 (2026-09-09・提示した全件について推奨案を採る形) により射程は C7 / A1・C8 / A4・N4 の 3 点へ広がった。 憲法条文の改訂は A2 の user 裁定事項であり、 本 ADR はその裁定の記録面である。
+decision: |
+  決めたことは 4 つです。 (1) 承認を受け取る窓口は「ちょうど 1 つ」と定め、 その窓口が誰かは条文でなく rules 行 (差し替えできる値の行) に置きます。 (2) 新しい版を縛るのは前の版ではなく design-intent (憲法・ADR・要件 doc) です。 (3) 自己開発は既定で許可し、 user に先に聞くのは取り消せない操作だけです。 (4) 憲法の改訂は「新しい ADR + 本文の差分印 + 裁定 id」を伴うなら、 同じ版の中で行えます。
+  §2.1〜§2.4 の EARS block は決定時点の条文案であり、 施行された条文の正本は ../spec/constitution.html の各条 (#c7 / #a1 / #c8 / #a4 / #n4) である。 施行文は条文案を次の点で精緻化している: N4 の IF 節に「新 ADR・delta marker・裁定 id を伴わない憲法改訂」を条件として明示 / A4.2 の受理を「記帳された承認 event」で表現 / C8.3 の目的節 (拘束条件は常に tracked file) は機構の説明へ移した。 齟齬時は憲法を正とする (本 ADR は WHY を持ち、 条文の WHAT は憲法が持つ)。
+  §2.1 C7 / A1 = 対話面は 1 つ・その identity は rules 行
+  「承認を受け取る窓口は 1 つだけ」という決まりは残します。 変えるのは「その 1 つが誰か」を条文に書かない点です。 誰かは差し替えできる行 (R-C7-1) に置き、 初期値は「user 直」= 開発 session が user と直接やり取りする形にします。 planner の席を戻したくなったら、 行の値を変えるだけで条文は動きません。
+  C7 と A1 の条文を次に置き換える (MUST)。 要旨: 承認の受理面はちょうど 1 つであるという不変量だけを条文に残し、 その面の identity (誰が対話面か) は条文ではなく rules 行 R-C7-1 が持つ。
+  C7: scribe2 SHALL accept a user approval only through exactly one dialogue surface, whose identity is a rules row (R-C7-1) rather than a constitution article.
+  A1: WHEN an operation of one of the three classes (delete, send out, consume) is about to be performed, scribe2 SHALL obtain the user's approval through the dialogue surface designated by R-C7-1 before performing it.
+  機構 (型 / lint / CI)
+  承認の受理面は 1 つ (rules 行 R-C7-1 の値)。 初期値 = user 直 (開発 session が user と直接対話する)。 planner 席を戻すときは rules 行の値を変えるだけでよく、 条文は動かない。 承認の記帳は fleet の approval.received event (逐語付き) で行う。 改訂前の「planner 発行の relay 印だけを機械が受理する」は廃止 (席の名を条文に焼いた形だったため)。
+  出所
+  user 裁定 2026-09-09 (v1 完全放棄に伴う書換え)・本 ADR §1
+  §3 rules 行の表に次の行を足す: R-C7-1 | C7 | 対話面 | user 直 (開発 session) | rules 行 | ADR-1003。
+  §2.2 C8 = 版 N+1 は design-intent の下で作られる
+  新しい版を縛るのは、 前の版の仕組みではなく設計意図の文書です。 「前の版が成熟を測ったか」で自己開発の可否を決めるのをやめます。 設計意図と食い違う編集は、 後の検査に回さずその場で止めます。
+  C8 の条文を次に置き換える (MUST)。 要旨: 器の開発を拘束するのは design-intent (憲法・ADR・要件 doc = folio 形式の tracked 文書) であり、 前の版の pipeline や oracle ではない。 自己開発の可否を「前の版が成熟を測ったか」で決めない。
+  C8: scribe2 SHALL be developed under its design-intent (constitution, ADRs, requirements) as the binding constraint, and SHALL NOT require a previous version to act as oracle or to hold stop authority.
+  C8.2: WHEN an edit conflicts with design-intent, scribe2 SHALL stop the edit at edit time (in-loop・C16 の機構) rather than defer the judgement to a later gate of a previous version.
+  C8.3: scribe2 SHALL record every change to design-intent as an ADR or a versioned document, so that the binding constraint is always a tracked file and never a session's memory.
+  機構 (型 / lint / CI)
+  拘束条件の実体は tracked な design-intent/ (憲法・ADR・要件 doc)。 機械が守るのは (a) 契約 write-set の外への編集を編集時に止める in-loop guard (C16 の機構・PreToolUse) と (b) design-intent の validate / build が CI で緑であること。 改訂前 C8 の enum SelfDev / doctor selfdev / dispatch deny / bootstrap 4 状態は廃止 (前の版の存在を前提にした機構)。
+  出所
+  user 裁定 2026-09-09 (v1 完全放棄・書換え)・本 ADR §1
+  §2.3 A4 = 自己開発は既定で許可・不可逆操作だけ Ask-first
+  自分の repo を自分で開発することは、 いちいち許可を取らずに進めてよいことにします。 先に聞くのは取り消せない操作だけです。 消す・外に出す・お金を使う、 の 3 つです。
+  A4 の条文を次に置き換える (MUST)。 要旨: 自己開発は既定で許可する。 user に先に聞くのは、 取り消せない操作 — 消す (データ / repo / 履歴 / live 成果物の破壊)・出す (public 化・外部送信)・使う (追加課金) — だけである。 それ以外は AI が決めて進み、 記録を残す。
+  A4: scribe2 SHALL permit self-development by default, without a maturity declaration and without a user go.
+  A4.2: WHEN an operation is irreversible (destroy / publish / incur paid usage), scribe2 SHALL ask the user first and SHALL accept the answer only through the dialogue surface designated by R-C7-1 (C7).
+  A4.3: scribe2 SHALL treat merge, dispatch onto its own repository, and dependency-free code changes as reversible for the purpose of A4.2.
+  機構 (型 / lint / CI)
+  3 クラス (消す / 出す / 使う) の判定は rules 行 + enforcer (要件 doc の該当行)。 enum SelfDev と「解禁の 1 問」は廃止。 A1 (消す)・A3 (依存追加) との関係: A4 は自己開発の既定を定め、 A1 / A3 の個別 Ask-first を上書きしない。
+  出所
+  user 裁定 2026-09-09 (書換え・案 3)・承認 3 クラスの canonical block
+  A4.2 の受理面の語は §2.1 の C7 一般化に合わせた形で書く (改訂前 draft の「as a relay stamp (C7)」を「through the dialogue surface designated by R-C7-1 (C7)」に改める)。 これは §2.1 の決定の帰結であり、 A4 の内容を変えるものではない。
+  §2.4 N4 = 改訂は ADR + delta marker + 裁定 id を伴う
+  これまで憲法は「同じ版の中では書き換えない」と定めていました。 前の版を捨てた以上そのままでは二度と改訂できないので、 憲法改訂の部分だけを「新しい ADR と、 本文に残す差分の印と、 裁定 id が揃っていれば改訂できる」に変えます。 schema を壊す変更と C4 の上限を超える変更を禁じる部分は、 そのまま据え置きます。
+  N4 / N4.2 の条文を次に置き換える (MUST)。 射程は憲法改訂の部分だけである: schema 非互換と C4 超えの禁止は据置とし、 これらは従来どおり新しい版でのみ行う。
+  N4: IF a change inside the current version would break schema compatibility or exceed a C4 bound, THEN scribe2 SHALL reject the change in the current version.
+  N4.2: scribe2 SHALL carry out a constitution amendment only with a new ADR, inline delta markers in the constitution, and a user ruling id; and SHALL carry out schema-incompatible changes and changes that would exceed a C4 bound only as a new version.
+  機構 (型 / lint / CI)
+  C4 超えは CI deny (§3 の R-C4-1〜R-C4-4)。 schema 非互換は manifest の schema_version (C1) で検出。 憲法改訂は 3 点セット (新 ADR・本文の ins.delta / del.delta・裁定 id) を伴う。 改訂前 N4.2 の「版 N+1 として別 repo で行う (C8)」は憲法改訂については廃止。
+  出所
+  user 裁定 2026-09-09 (書換え)・本 ADR §1
+  本改訂自身の扱い: 本 ADR が行う改訂は改訂前の N4 に反する形 (同一版内の条文書換え) である。 これは user の直命による明示の例外であり、 本 ADR がその根拠として記録面を務める。 起草時点では N4 の扱いを射程外としていたが、 本 ADR で決めた (射程を広げた裁定による)。 理由は、 改訂前 N4 の「版 N+1 として別 repo へ」が C8 の bootstrap model (前の版が在る) を前提にした手続きであり、 v1 の放棄によりその前提自体が消えたためである。
+  §2.5 憲法 file への反映のしかた
+  憲法の file は新しく作り直さず、 同じ file の中で書き換えます。 消した文は消し線、 足した文は下線の印を付けて本文に残すので、 何がどう変わったかが後から読めます。
+  design-intent/spec/constitution.html を同一 file の中で改訂する (MUST)。
+  ・(a) #c7 / #a1 / #c8 / #a4 / #n4 の card (essence・normative・機構・出所) を §2.1〜§2.4 の文へ置き換え、 旧文は folio の delta marker (del.delta / ins.delta) で本文に残す。
+  ・(b) §2 の一覧表の C7・A1・C8・A4・N4 の 5 行 (名 / 機構の要点 / 出所) を新文に合わせる。 表の「出所」は各 card と逐語一致させる規約ゆえ、 5 行の出所欄は ADR-1003 になる。
+  ・(c) §3 rules 行の表に R-C7-1 の行を足す (§2.1)。 #r-c8-1 行は削除せず、 種別欄を 「停止 (ADR-1003・測らない・履歴として残す)」に改める。 値の欄は変えない。
+  ・(d) §4 (改訂の手続き) の essence・地の文・図 2 の「条文なら版 N+1 として別 repo で改訂 (N4)」の枝を、 新 N4.2 (新 ADR + delta marker + 裁定 id) に合わせる。
+  ・(e) §5 Trace に本 ADR への参照を足す。
+  ・(f) 条数は変えない (Always 13 / Ask-first 4 / Never 4)。 C14〜C16 の追加は §2.6 のとおり本 ADR の射程外である。
+  ・(g) folio-version と JSON-LD の folio:version は 0.4.6 (憲法 §4 の「SPEC の版に追随する」規定による)。
+  ・(h) 憲法 file の JSON-LD への dc:isReferencedBy の追加と、 各 page の chrome (prevnext ほか) は folio の生成物であり、 手編集しない。
+  §2.6 本 ADR の射程外
+  同じ変更でもう 3 条 (C14〜C16) が憲法に加わりますが、 それは本 ADR が決めたことではありません。 別に user が裁定済みの器 SPEC の条文を、 憲法へ写すだけです。
+  C14〜C16 の追随は本 ADR の決定ではない (MUST NOT be read as such)。 同じ PR で constitution.html に写す運びであっても、 それは器 SPEC v0.4.6 の user 裁定済み条文の写しであり、 本 ADR が新たに決めた事項ではない。 したがって条数の変化 (Always 13 → 16) は §2.5 (f) の「条数は変えない」と矛盾しない — (f) は本 ADR の改訂範囲について述べたものである。 本 ADR が変えるのは C7 / A1・C8 / A4・N4 / R-C8-1 と、 それに伴う §2 表・§3 表・§4 手続きだけである。
+options:
+  - id: "chosen"
+    name: "憲法改訂 = v1 完全放棄に伴う C7 / A1・C8 / A4・N4 の書換え"
+    text: |
+      決めたことは 4 つです。 (1) 承認を受け取る窓口は「ちょうど 1 つ」と定め、 その窓口が誰かは条文でなく rules 行 (差し替えできる値の行) に置きます。 (2) 新しい版を縛るのは前の版ではなく design-intent (憲法・ADR・要件 doc) です。 (3) 自己開発は既定で許可し、 user に先に聞くのは取り消せない操作だけです。 (4) 憲法の改訂は「新しい ADR + 本文の差分印 + 裁定 id」を伴うなら、 同じ版の中で行えます。
+      採った案（器の却下案の節の表の行）: C8 / A4 案 3 書換え｜C8 →「版 N+1 は design-intent の下で作られる」／A4 →「自己開発は既定で許可・不可逆操作だけ Ask-first」｜user 裁定 2026-09-09｜採用
+      採った案（器の却下案の節の表の行）: C7 / A1 案 c 一般化｜「対話面はちょうど 1 つ」だけを条文に残し、 identity は rules 行 R-C7-1 に置く｜user 裁定 2026-09-09。 不変量 (1 つであること) と可変値 (誰か) を分け、 C1「規則はデータ」と同じ向きに揃う｜採用
+      採った案（器の却下案の節の表の行）: N4 案 c 書換え｜憲法改訂の部分だけを「新 ADR + delta marker + 裁定 id を伴えば可」に改め、 schema 非互換・C4 超えの禁止は据置く｜user 裁定 2026-09-09。 改訂不能と無手続きの中間を定義し、 跡が残る形だけを許す｜採用
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 憲法は「新しい版は前の版の下で作る」「user の承認は planner という席を通った印だけ受け取る」と定めていました。 ところが user は 2026-09-09 に前の版 (v1) を完全に捨てると決めました。 前の版が無いのに「前の版の下で」は守れず、 planner の席もその一部として消えます。 本 ADR は、 その裁定に伴って憲法の 4 か所を書き換えた記録です。"
+  - id: "r1"
+    name: "C8 / A4 案 1 削除"
+    text: |
+      C8 / A4 案 1 削除｜C8 / A4 を条文ごと削る (Always 12 / Ask-first 3)｜「版 N+1 が何の下で作られるか」の規範が空白になる。 design-intent を拘束条件にする方針を憲法に書く場所が失われる｜却下
+    verdict: rejected
+    reason: "「版 N+1 が何の下で作られるか」の規範が空白になる。 design-intent を拘束条件にする方針を憲法に書く場所が失われる（却下）"
+  - id: "r2"
+    name: "C8 / A4 案 2 停止 (凍結)"
+    text: |
+      C8 / A4 案 2 停止 (凍結)｜条文は残し「停止中」と印を付ける｜停止中の条文が Always に並ぶと、 読む側が「守るべき 13 条」を数え違える (N2 の「散文だけの規則」に近い状態)｜却下
+    verdict: rejected
+    reason: "停止中の条文が Always に並ぶと、 読む側が「守るべき 13 条」を数え違える (N2 の「散文だけの規則」に近い状態)（却下）"
+  - id: "r3"
+    name: "C8 / A4 案 4 版 N+1 として別 repo"
+    text: |
+      C8 / A4 案 4 版 N+1 として別 repo｜N4 の手続きどおり、 憲法改訂は次の版として別 repo で行う｜N4 の手続きは C8 の bootstrap model (前の版が在り oracle を担う) を前提にする。 v1 を放棄した今、 「前の版の下で作る新しい repo」は作れず、 手続きの前提が消えている｜却下
+    verdict: rejected
+    reason: "N4 の手続きは C8 の bootstrap model (前の版が在り oracle を担う) を前提にする。 v1 を放棄した今、 「前の版の下で作る新しい repo」は作れず、 手続きの前提が消えている（却下）"
+  - id: "r4"
+    name: "C7 / A1 案 a planner 席を残す"
+    text: |
+      C7 / A1 案 a planner 席を残す｜条文の「planner を通った relay 印」を維持し、 v2 でも planner に相当する席を立てて承認を運ぶ｜席の実体が無い間、 承認が機械的に受理不能になる。 席を立てる判断は開発の進度に依存し、 憲法が席の構成に縛られ続ける (今回と同じ衝突を繰り返す)｜却下
+    verdict: rejected
+    reason: "席の実体が無い間、 承認が機械的に受理不能になる。 席を立てる判断は開発の進度に依存し、 憲法が席の構成に縛られ続ける (今回と同じ衝突を繰り返す)（却下）"
+  - id: "r5"
+    name: "C7 / A1 案 b C7 を撤回"
+    text: |
+      C7 / A1 案 b C7 を撤回｜承認の受理面を条文で縛らない｜承認の入口が複数になり「どの経路の承認が正か」が機械で決まらない。 N2 が禁じる「散文にしか無い規則」に近づく｜却下
+    verdict: rejected
+    reason: "承認の入口が複数になり「どの経路の承認が正か」が機械で決まらない。 N2 が禁じる「散文にしか無い規則」に近づく（却下）"
+  - id: "r6"
+    name: "N4 案 a そのまま残す"
+    text: |
+      N4 案 a そのまま残す｜「同じ版の中で憲法改訂をしない」を維持する｜次の版の repo を作らない方針の下では憲法が二度と改訂できない。 本改訂自身も根拠を持てず、 条文と実態の乖離が固定される｜却下
+    verdict: rejected
+    reason: "次の版の repo を作らない方針の下では憲法が二度と改訂できない。 本改訂自身も根拠を持てず、 条文と実態の乖離が固定される（却下）"
+  - id: "r7"
+    name: "N4 案 b 憲法改訂の条項を削除"
+    text: |
+      N4 案 b 憲法改訂の条項を削除｜N4 から憲法改訂の語を消し、 改訂に手続きを課さない｜改訂の跡 (ADR・delta marker・裁定 id) を残す義務が消え、 条文が session の判断で静かに動きうる。 「裁定は文書が正本」に反する｜却下
+    verdict: rejected
+    reason: "改訂の跡 (ADR・delta marker・裁定 id) を残す義務が消え、 条文が session の判断で静かに動きうる。 「裁定は文書が正本」に反する（却下）"
+basis: [ADR-39]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めたことは 4 つです。 (1) 承認を受け取る窓口は「ちょうど 1 つ」と定め、 その窓口が誰かは条文でなく rules 行 (差し替えできる値の行) に置きます。 (2) 新しい版を縛るのは前の版ではなく design-intent (憲法・ADR・要件 doc) です。 (3) 自己開発は既定で許可し、 user に先に聞くのは取り消せない操作だけです。 (4) 憲法の改訂は「新しい ADR + 本文の差分印 + 裁定 id」を伴うなら、 同じ版の中で行えます。
+approval:
+  who: 持ち主
+  date: 2026-09-09
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 存在しない「前の版」を待たずに今すぐ自分で作れること、 席の名前が変わっても憲法が動かなくなることです。 悪い点は、 前の版が担っていた独立の検証役を失うこと、 承認の窓口と憲法改訂の敷居がどちらも軽い手続きで動かせるようになることです。"
+  - "Positive"
+  - "・前の版の pipeline (役割席・gate・QA・契約押印) を経ずに v2 を開発できる。 「v1 由来の plugin 機能を積まない素の session + beads で進める」という直命と憲法が一致する。"
+  - "・拘束条件が tracked 文書 (design-intent) に一本化され、 session の記憶や前の版の運用状態に依存しない (C3 / C14 と同じ向き)。"
+  - "・対話面の identity が条文から rules 行へ移り、 席の構成が変わっても条文が動かない。 planner 席を戻す / 別の面を置くのは値の差し替えで足りる。 条文の寿命が席の寿命に縛られなくなる。"
+  - "・憲法改訂が同一 repo の中で閉じ、 かつ改訂の跡 (ADR・delta marker・裁定 id) を必ず伴う形になった。 改訂不能でも無手続きでもない中間が定義された。"
+  - "・SelfDev enum・doctor selfdev・bootstrap 4 状態という「前の版を前提にした機構」を実装しなくてよい。"
+  - "Negative"
+  - "・独立 oracle の喪失: 前の版が同じ land を独立に再 gate し verdict 一致率を記録する面が成立しない。 verdict の独立性は v2 自身の gate 設計 (検証は独立した席・対象席自身の記録を根拠にしない) で別途担保する必要がある。"
+  - "・承認経路が軽い手続きで動く: 対話面の identity が rules 行になったため、 その値の変更は C5 (裁定 id 付き diff) だけで通り、 A2 の grill 前置を要さない。 これは席の入替えを条文改訂にしないための意図した設計だが、 裏面として「承認をどこで受け取るか」を条文改訂より軽い手続きで変更できる。 歯は C5 の裁定 id だけである。"
+  - "・改訂の 3 点セットを測る機械が無い: 新 N4.2 は憲法改訂に ADR・delta marker・裁定 id の 3 点を要求するが、 3 点が揃っているかを測る機械は現時点で存在しない (validate は ADR の存在も delta marker の有無も数えない)。 揃っていない改訂は CI 緑のまま通る。 これは「散文にしか無い規則を規則として扱わない」という N2 の要求に照らして正直に記す。"
+  - "・「自己開発は既定で許可」は、 不可逆操作の判定 (3 クラス) を機械が持たない間は人間の注意に依存する (enforcer が未実装)。"
+  - "・器 SPEC v0.4.6 のうち前の版が仕える前提で書かれた節と C8 / A4 の写しは、 本 ADR と乖離したまま凍結されている (取り込みの原本として固定済み)。 取り込み時に本 ADR を参照して読み替える。"
+  - "Neutral"
+  - "・本 ADR の改訂では条数を変えない (Always 13 / Ask-first 4 / Never 4)。 C14〜C16 の追随は §2.6 のとおり別事項である。"
+  - "・R-C8-1 の値 (verdict 一致率 95% × 連続 20 便・3 日の K 指標と手動介入 0・doctor 全 host 緑) は履歴として表に残し、 測らない。"
+  - "・R-C7-1 の初期値は user 直 (開発 session)。 planner 席を戻す判断は本 ADR の射程外であり、 rules 行の値の変更で行う。"
+  - "・本 ADR は決定の記録であり、 決定は user 裁定 (2026-09-09) で行われた。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0003-constitution-v1-abandon-rewrite.html
+  器の記録の頭: Status: accepted · Date: 2026-09-09 · version 0.4.6 (改訂後の constitution の版) · user 裁定 2026-09-09 · 憲法条文の改訂ゆえ A2 の user 裁定を経た
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.4.6 (改訂後の constitution の版・SPEC の版に追随する)
+  器の機械の欄 decided-by: user (2026-09-09) — 憲法条文の改訂は A2 の user 裁定事項。 裁定の逐語は repo 外の RULING file が原本
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: (none — ADR ではなく constitution の C7 / A1 / C8 / A4 / N4 / R-C8-1 を改訂する)
+  器の機械の欄 related: constitution C7 / C8 / A1 / A2 / A3 / A4 / N4 / R-C8-1 / §3 / §4
+  器の却下案の節の要約: C8 / A4 については 4 案を user に示し、 「書き換え」が選ばれました。 対話面 (C7 / A1) と改訂手続き (N4) についても、 それぞれ 2 つの代わりの案を検討して退けています。
+  器の却下案の節の注: 3 つの論点 (C8 / A4・C7 / A1・N4) は独立に採否を決めたのではなく、 いずれも「前の版が存在することを前提にした条文を、 前の版の放棄後に成立する形へ移す」という同じ動機から出ている。 比較の第 1 基準は前提が消えた後も条文が成立するか、 第 2 基準は規範の空白を作らないか (N2) である。
+  器の記録の出所（Trace）:
+  出所は user の 2 つの判断です。 前の版を完全に捨てるという直命と、 それに伴う憲法の書き換え方の裁定です。 逐語の記録は、 この repo が public のため repo の外に置いています。
+  ・決定の原本: user 裁定 2026-09-09 (planner 席経由の relay・逐語は repo 外の RULING file)。 本 repo は public のため、 裁定の逐語・席や台帳の識別子・host 名は本 file に載せない。
+  ・前提になった user 直命: 同日の v1 完全放棄の判断 (v1 由来の plugin 機能を積まない開発 session と beads で v2 を進める、 拘束条件は docs と design-intent で固定する)。 逐語は同じ repo 外の RULING file。
+  ・衝突の surface: 直命を受けて憲法 C8 / A4 が新方針と正面衝突することを起草席が surface し、 対話面 (C7 / A1) と改訂手続き (N4) にも同じ前提の崩れが及ぶことが裁定の過程で確定した。
+  ・拘束条件: A2 (憲法条文の改訂は grill 前置の user 裁定)、 N4 (本改訂が明示の例外として 1 回適用し、 同時に書き換える手続き)、 A1 / A3 (A4 が上書きしない個別 Ask-first)。
+  ・改訂対象: design-intent/spec/constitution.html の #c7 / #a1 / #c8 / #a4 / #n4、 §2 一覧表の該当 5 行、 §3 (R-C7-1 の追加・R-C8-1 の停止)、 §4 の手続きと図、 §5 Trace。
+  ・射程外: C14〜C16 の追随 (器 SPEC v0.4.6 の user 裁定済み条文の写し・§2.6)。
+  ・記録した日: 2026-09-09 (決定日と同日)。

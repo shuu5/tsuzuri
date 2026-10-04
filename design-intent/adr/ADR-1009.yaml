@@ -1,0 +1,108 @@
+# 判断の記録 ADR-1009 — 器 scribe2 の判断の記録 ADR-0009 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1009
+title: "runner の権限と非空虚性の検証は器が manifest から与える (口座設定の暗黙継承・host 側 script・契約への共通規律の手書きを廃止)"
+status: accepted
+date: 2026-09-10
+context: |
+  実装役 (runner) が test を撃てない状態のまま便を流していました。 器は実装役に「何を実行してよいか」を渡しておらず、 起動した人の口座設定に黙って頼っていました。 それを直さず、 検証の script を repo の外に手書きして回避していたことが分かりました。
+  runner は claude -p --permission-mode acceptEdits で起動する (設計 pipeline §6)。 この mode の Bash は「起動口座の settings.json の allow 規則」に一致する command だけが自動許可され、 一致しない command は承認要求になる。 v2 plugin の PermissionRequest hook は Bash の承認要求を一律 deny する (2026-09-10 の便・席を dialog で止めないため)。 器はどの command を許可するかをどこにも持っておらず、 起動口座の設定を暗黙に継承していた。 実測 (2026-09-10): --setting-sources project で継承を切ると cargo も git も deny される。 継承した設定に cargo は無く、 runner は契約の verify 行を 1 行も実測できないまま実装していた (同日の便で runner が commit 本文にその旨を申告)。 runner の prompt は「verify 行が緑になるまで直す」と命じている——器が与えていない能力を要求していた。
+  planner はこれを器で直さず、 非空虚性の検証 (変異 proof) を repo の外 (host の state dir) に置いた sh + python の script へ移し、 実装の 1 行を字面で pin して gate の verify 行から撃たせた。 加えて各契約の verify 行に共通規律 (flip check・done の定義の 4 コマンド・write-set の照合) を毎便手書きしていた。 これは C12 (歯は Rust の 1 framework だけ・bash / bats 全廃・非空虚性は cargo-mutants の検出線 R-C12-1) と C1 (規則は manifest 1 file) に反し、 ADR-1001 §2.1 が Rust を採用した理由 (bash / host 差 / 環境層という drift の面を構造から消す) に真っ向から反する。 憲法の機構 (CI・xtask check) は tracked file しか見ないため、 repo の外に置いた運用物は視野の外だった。
+  cargo-mutants は host に導入済みで (README の道具 3 本・週次 CI job)、 rules manifest に R-C12-1 の行も在る。 実測 (2026-09-10): cargo mutants --in-diff <diff> -p scribe2 を 1 便の diff に当てると AST から変異を自動生成し、 約 4 分で 母集団 10 / 撃墜 6 / 生存 0 / 不成立 4 を返した。 手で pin した変異 2 本を含み、 planner が思いつかなかった変異 (関数が空 Vec を返す・match の腕を消す) も出る。 ∴ 器が憲法の名指す道具で測れる状態は既に在り、 使っていなかっただけである。
+decision: |
+  決めることは 5 つです。 実装役の権限は器が manifest から与える、 撃てない契約は最初に拒む、 検証の抜けは cargo-mutants で器が測る、 共通のきまりは契約に毎回書かず manifest に 1 か所で持つ、 そして repo の中に Rust 以外の実行物が紛れたら構造検査が機械で落とす、 です。
+  本 ADR は C1 / C2 / C12 の適用を記録する。 憲法本文は書き換えない。 rules manifest には行を 2 本足す (C5・裁定 id = 本 ADR)。 値の初期値は §2.1 / §2.4 に写すが、 正本は manifest の行である。
+  §2.1 runner の権限は器が与える
+  実装役を起こすとき、 器が「これだけ実行してよい」と明示します。 起動した人の設定は読みません。 最初の許可は cargo と git の 2 つだけです。
+  runner は claude を --setting-sources project と --allowedTools <allowlist> を付けて起こす (MUST)。 user / local の settings を継承しない (MUST NOT inherit)。 allowlist の正本は manifest の rules 行 runner.allowed_commands (kind RunnerAllowedCommands・値は command 名の列・初期値 ["cargo", "git"]・裁定 id = user 2026-09-10) であり、 runner は各要素を Bash(<cmd>:*) の形で渡す。 PermissionRequest hook の一律 deny は不変で、 「明示 allow 以外は fail-closed」の形になる (allow を返す経路は作らない・C11)。 write-set の fence は Bash では守れない (既知) が、 その構造の fence は §2.4 の gate の照合が担う。
+  §2.2 撃てない契約は intake が拒む
+  許可されていない command や、 repo の外にある script を検証に使う契約は、 動かす前に受け付けません。 動かしてから黙って詰まるより、 最初に大きく落ちる方を選びます。
+  intake は契約の verify 各行の先頭 command が runner.allowed_commands の外なら rc 1 で拒む (MUST・前提違反・event を書かない)。 verify 行が repo の外の path (絶対 path・home の短縮記号) を含む語を持つ契約も拒む (MUST)。 これにより運用物を憲法の視野の外に置く経路が閉じる——検証に使えるのは repo の中の code か、 manifest の行だけである。
+  §2.3 非空虚性は器が cargo-mutants で測る
+  「test が本当に何かを測っているか」は、 人が変異を予言して script に書くのではなく、 Rust の道具に変異を生成させて器が測ります。 生き残りをどう扱うかは manifest の行が決めます。
+  Rust repo の共通 verify (§2.4) に cargo xtask mutants-diff --base {base} を置く。 xtask が cargo mutants --in-diff を回し、 total / caught / missed / unviable / timeout の 1 行を stdout へ出す。 repo 固有の検査は xtask に置く (ADR-1002 §2.4) ので、 pipe は Rust を知らないまま (設計 §7・toy repo は Rust でないことがある)。 rc の極性は manifest の R-C12-1 行に従う: enabled=false (記録時点・検出線) の間は missed>0 でも rc 0 で記録のみ、 enabled=true へ裁定で反転したら missed>0 で rc≠0 (deny 化は C5 の裁定 id 付き diff・C12.4)。 不成立 (unviable) は撃墜に数えない。 cargo-mutants の不在は「測れなかった」として rc 2 で落ち、 0 件に化けない。 契約に変異 script・変異 anchor を書かない (MUST NOT)。
+  §2.4 共通規律は契約に手書きしない
+  どの便にも共通のきまり (flip check・test・lint・依存監査・変異検査) は manifest に 1 か所で持ち、 器が毎便自動で撃ちます。 「触ってよい file の外を触っていないか」の照合は器の Rust の関数 1 つに閉じます。 契約に書くのはその便だけの検証行です。
+  manifest の rules 行 gate.common_verify (kind GateCommonVerify・値は command 行の列・{base} は便の base に置換) に repo 共通の検証を置く。 初期値: flip check・workspace の nextest・clippy・xtask check・cargo deny (§2.3 の mutants-diff は実装の便で末尾に足す)。 gate は ①write-set の照合 (Rust: git diff --name-only <base>..HEAD の各 path が契約 write-set に含まれる) → ②共通 verify 各行 → ③契約 verify 各行 の順で撃ち、 verify.jsonl の record 形は変えない。 契約の verify は便固有の行だけを持つ (C2・規則を 1 つに閉じる)。 land の main 実測も同じ順序で撃つ。
+  §2.5 repo 内の非 Rust 実行物は構造検査が deny する
+  Rust 以外の script が repo に紛れ込んだら、 人が気付くのを待たず構造検査が落とします。 例外は manifest に裁定つきで並べたものだけです。 これは憲法が最初から求めていたのに機械が無かった項です。
+  ADR-1002 §2.1 は「bash / bats / Python の test file を置かない (0 file)」を MUST と書きながら、 同 §2.6 (a) で「測る口が無い・人間の手続きで抑える」と記録していた。 本件はその人間の手続きが破れた実例である (host 側の sh script が契約の verify 行から gate に撃たれていた)。 ∴ cargo xtask check に measure non-rust-exec を足す (MUST): tracked file 全数 (paths-clean と同じ母集団) を閉じた分類器で分け、 shebang 行を持つ file・実行 bit の立つ file・script の拡張子 (sh / bash / py / bats 等) を持つ file を deny とし、 例外は manifest の rules 行 repo.non_rust_exec_allow (path の列・裁定 id 付き) に載るものだけとする。 分類は file の種別で行い prose の字面では行わない。 記録時点の母集団は tracked 113 file で、 該当は台帳 write の shim 1 本 (scripts/bdw・host の道具へ委譲するだけの bash) だけであり、 これを例外行の初期値とするか Rust の subcommand へ置き換えるかは rules 行の裁定 (C5) で決める。 CI の workflow に書く shell step は GitHub Actions の形式上避けられないので母集団に入れず、 その行数を ci-shell-lines として検出線で記録する。
+  §2.6 射程外
+  憲法の文そのものの改訂、 契約 file や起動 command を repo のどこに置くか、 Bash 経由の編集を編集の時点で止める機構は、 ここでは決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 憲法条文の改訂 (A2)、 運用物 (契約 file・runner の起動行・PR 本文) を repo tracked にする置き場 (PUBLIC 面の情報を増やすため A1 に掛かる・次の ADR 候補)、 Bash 経路の write-set fence (A4 の機構欄の enforcer)、 allowlist と非 Rust 実行物の例外行の値の変更 (rules 行の裁定・C5)、 lens の起動形 (lens は Bash を撃たない)、 repo の外 (host) で人が撃つ shell を禁じること (器は自分が撃った検証しか verdict に数えない、 が答えである)。
+options:
+  - id: "chosen"
+    name: "runner の権限と非空虚性の検証は器が manifest から与える (口座設定の暗黙継承・host 側 script・契約への共通規律の手書きを廃止)"
+    text: |
+      決めることは 5 つです。 実装役の権限は器が manifest から与える、 撃てない契約は最初に拒む、 検証の抜けは cargo-mutants で器が測る、 共通のきまりは契約に毎回書かず manifest に 1 か所で持つ、 そして repo の中に Rust 以外の実行物が紛れたら構造検査が機械で落とす、 です。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 実装役 (runner) が test を撃てない状態のまま便を流していました。 器は実装役に「何を実行してよいか」を渡しておらず、 起動した人の口座設定に黙って頼っていました。 それを直さず、 検証の script を repo の外に手書きして回避していたことが分かりました。"
+  - id: "i"
+    name: "host 側の sh 変異 script を続ける"
+    text: |
+      案 (i) host 側の sh 変異 script を続ける: 却下。 C12 (bash 全廃・非空虚性は cargo-mutants) に反し、 まだ存在しない code の字面を契約で予言する形は runner の書き方 1 つで再走になる。 憲法の視野の外に置かれるので CI も xtask check も見ない。
+    verdict: rejected
+    reason: "C12 (bash 全廃・非空虚性は cargo-mutants) に反し、 まだ存在しない code の字面を契約で予言する形は runner の書き方 1 つで再走になる。 憲法の視野の外に置かれるので CI も xtask check も見ない。"
+  - id: "ii"
+    name: "runner が cargo mutants を自分で回して結果を申告する"
+    text: |
+      案 (ii) runner が cargo mutants を自分で回して結果を申告する: 却下。 測るのは gate であり、 runner の自己申告は verdict の根拠にならない (gate が「測れなかった」を「通った」に化けさせない設計と同じ理由)。 runner が自分の確認のために回すことは妨げない。
+    verdict: rejected
+    reason: "測るのは gate であり、 runner の自己申告は verdict の根拠にならない (gate が「測れなかった」を「通った」に化けさせない設計と同じ理由)。 runner が自分の確認のために回すことは妨げない。"
+  - id: "iii"
+    name: "口座の settings.json に cargo の allow を足す"
+    text: |
+      案 (iii) 口座の settings.json に cargo の allow を足す: 却下。 規則が manifest の外に置かれ (C1)、 口座・host ごとに挙動が変わる (ADR-1001 が消した host 差の drift の面)。 記録時点の runner が動いていたのはこの形の偶然に依存していた。
+    verdict: rejected
+    reason: "規則が manifest の外に置かれ (C1)、 口座・host ごとに挙動が変わる (ADR-1001 が消した host 差の drift の面)。 記録時点の runner が動いていたのはこの形の偶然に依存していた。"
+  - id: "iv"
+    name: "runner を bypassPermissions で起こす"
+    text: |
+      案 (iv) runner を bypassPermissions で起こす: 却下。 hook の保護 (write-set の deny・rm の肩代わり) を全部失う。 同日の別便が同じ理由で退けた案と同じ。
+    verdict: rejected
+    reason: "hook の保護 (write-set の deny・rm の肩代わり) を全部失う。 同日の別便が同じ理由で退けた案と同じ。"
+  - id: "v"
+    name: "Rust 固有の検査 (flip check・mutants) を pipe に内蔵する"
+    text: |
+      案 (v) Rust 固有の検査 (flip check・mutants) を pipe に内蔵する: 却下。 設計 §7 が「pipeline が Rust 固有の検査を内蔵する形は採らない (toy repo は Rust でないことがある)」と定め、 ADR-1002 §2.4 が repo 固有の検査を xtask に置くと決めている。 共通 verify の行として manifest に置けば pipe は言語を知らないまま撃てる。
+    verdict: rejected
+    reason: "設計 §7 が「pipeline が Rust 固有の検査を内蔵する形は採らない (toy repo は Rust でないことがある)」と定め、 ADR-1002 §2.4 が repo 固有の検査を xtask に置くと決めている。 共通 verify の行として manifest に置けば pipe は言語を知らないまま撃てる。"
+  - id: "vi"
+    name: "契約に共通規律を書き続ける"
+    text: |
+      案 (vi) 契約に共通規律を書き続ける: 却下。 同じ規則が便の数だけ手書きされ (C2 に反する)、 1 行の写し落としが契約抜けの再走になる (記録時点までに 3 回)。
+    verdict: rejected
+    reason: "同じ規則が便の数だけ手書きされ (C2 に反する)、 1 行の写し落としが契約抜けの再走になる (記録時点までに 3 回)。"
+basis: [FR1004, FR1005, FR1008, NFR1001, ADR-1001, ADR-1002, ADR-1004]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めることは 5 つです。 実装役の権限は器が manifest から与える、 撃てない契約は最初に拒む、 検証の抜けは cargo-mutants で器が測る、 共通のきまりは契約に毎回書かず manifest に 1 か所で持つ、 そして repo の中に Rust 以外の実行物が紛れたら構造検査が機械で落とす、 です。
+approval:
+  who: 持ち主
+  date: 2026-09-10
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 実装役が自分で test を撃てるようになり、 検証の抜けを人が予言しなくてよくなり、 きまりが 1 か所に集まることです。 弱い点は、 審査に数分の時間が足され、 許可の粒度が command 名までしか無いことです。"
+  - "Positive: runner の中で TDD の RED → GREEN が成立する (verify 行を自分で撃てる)。 変異が AST 生成になり planner の字面予言が消える (契約抜けの一源が消える)。 共通規律が manifest 1 か所になり契約は便固有の行だけになる。 検証に使えるものが repo の中と manifest に限られ、 憲法の視野の外に運用物が残らない (ADR-1001 が消した drift の面を再び作らない)。 Rust 以外の実行物が repo に紛れる経路は CI が構造で落とし、 ADR-1002 §2.6 (a) の「人間の手続き」が機械に置き換わる。"
+  - "Negative: gate の所要が伸びる (mutants ≈ 4 分 / 便・token は増えない)。 allowlist は command 名の prefix 一致であり、 包み (bash -c 等) は弁別できない——ゆえに包みを allowlist に載せない。 Bash 経由の write-set 抜けは編集の時点では止まらず、 gate の照合で便が落ちる形で止まる (backstop は hook・関門は gate)。 RuleKind の追加は閉じた enum の変更 (型・manifest 行・裁定 id の 3 点が 1 PR に揃う)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0009-vessel-grants-runner-permissions-and-mutation-proof.html
+  器の記録の頭: Status: accepted · Date: 2026-09-10 · version 0.4.6 (拘束する constitution の版) · C1 / C2 / C12 の適用を記録
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版・決定時点で凍結)
+  器の機械の欄 decided-by: user 裁定 (2026-09-10・「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」) を受けた記録。 憲法条文は 1 文字も変えない (C1 / C2 / C12 の適用の記録であり A2 の改訂手続きには当たらない)
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: 無し (既存 ADR の規定を差し替えない・ADR-1002 §2.4「repo 固有の構造検査は xtask」を適用する)
+  器の機械の欄 related: constitution C1 / C2 / C5 / C11 / C12 / C16・ADR-1001 §2.1 (drift の面を構造から消す)・ADR-1002 §2.4 (xtask)・ADR-1004 (env seam を持たない)・SRS FR1004 / FR1005 / FR1008 / NFR1001・設計 doc の pipeline §5.1 / §5.2 / §5.3 / §6 / §7
+  器の却下案の節の要約: 6 つの案を退けました。 repo の外の script を続ける案、 実装役に自己申告させる案、 口座の設定に cargo を足す案、 実装役の権限確認を全部外す案、 Rust 固有の検査を器に内蔵する案、 契約に共通のきまりを書き続ける案です。
+  器の記録の出所（Trace）:
+  出所は、 利用者の指摘と、 それを受けて器の挙動と repo の中身を実際に測った結果です。
+  ・裁定: 2026-09-10 に user が「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」方向と allowlist の初期値 (cargo / git) を裁定した。 本 repo は public のため逐語・席や台帳の識別子・host 名は本 file に載せない (出所は日付で指す)。
+  ・実測: claude -p --permission-mode acceptEdits --setting-sources project --allowedTools "Bash(cargo:*)" で cargo は実行され git は deny された。 同じ flag を外すと両方 deny された (2026-09-10)。 cargo mutants --in-diff は 1 便の diff で 母集団 10 / 撃墜 6 / 生存 0 / 不成立 4 (約 4 分・2026-09-10)。
+  ・実測 (repo): 記録時点の tracked 113 file のうち shebang / 実行 bit を持つのは scripts/bdw の 1 本、 script 拡張子の test file は 0 本、 CI workflow の shell step は 8 行 (2026-09-10)。 host の planner 側には sh の変異 script 5 本と起動 script 5 本が在り、 本 ADR の §2.2 により契約から参照できなくなる (退役)。
+  ・先行記述: 設計 doc の pipeline §5.3 / §6 は契約の verify 行に共通規律を置く読みと、 runner の起動 flag に権限を含めない形で land していた。 本 ADR はそれを覆し、 同じ PR で設計 doc の当該記述を改訂する。
+  ・拘束条件: C1 (規則は manifest 1 file)・C2 (規則を 1 つに閉じる)・C5 (裁定 id 付き diff)・C11 (極性は型)・C12 (歯は Rust だけ・変異検出線)・C16 (write-set fence)。 ADR-1001 §2.1・ADR-1002 §2.4・ADR-1004 (env seam を持たない)。 要件は SRS FR1004 (runner の起動) / FR1005 (runner と lens の口) / FR1008 (gate の機械検証) / NFR1001。
+  ・記録した日: 2026-09-10。

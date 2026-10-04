@@ -1,0 +1,108 @@
+# 判断の記録 ADR-1032 — 器 scribe2 の判断の記録 ADR-0032 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1032
+title: "対話面の作法は設計 doc 1 本が持ち、 planner の雛形は pointer 付きの行で運ぶ (信頼度 4 段を上位に読み手本位の 8 則を融合・harness 一般の規律は global CLAUDE.md から器へ)"
+status: accepted
+date: 2026-09-15
+context: |
+  planner は user と話す唯一の席です。 その席が user に向けて出す文の形 (要点を先に・平易に・信頼度を分けて・承認は冒頭で) は、 記録時点では user の global CLAUDE.md (host の 1 file・7 口座が共有) が持っています。 器の生成文 (SessionStart の雛形) は役割と権能と連絡の経路を持つだけで、 文の形を持ちません。 復元の brief は定型 4 節 + 判定根拠 + hygiene で 30 行を超え、 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と言いました。 user は読み手本位の公開 skill (i-have-adhd・MIT) を参考に「この 2 つを昇華して融合し、 global CLAUDE.md の harness 一般の内容を器へ移して global を痩せさせよ」と指示しました。
+  記録時点 (2026-09-15) の現物: global CLAUDE.md = ubuntu-note-system の tracked file 1 本 (52 行・8 節: 言語・伝え方 / 回答の方針 / タスク開始時 / ファイル編集後 / multi-agent 実行 / 破壊的操作の禁止 / 記憶 / ホスト・コンテナ) を口座 dir 7 つが symlink で共有し、 前の版 (v1 plugin) の docs への pointer を 4 本持つ (file は在るが v1 は積んでいない)。 planner の雛形 seat/brief/planner.txt は pointer 付きの行 10 本 (役割・権能・第一手・裁定の持ち込み先・3 クラス・中継・報告・連絡 3 行) で、 文の形の行は無い。 rebrief skill (134 行) の brief は全体像 4 slot + 判定根拠 + 推奨 + 次のアクション + hygiene の 5 節。
+  i-have-adhd (skills/i-have-adhd/SKILL.md・記録時点): 10 則 (1 次の行動を先頭に / 2 多段は番号 / 3 末尾は具体の 1 手 / 4 脇道を抑える / 5 毎 turn 状態を言い直す / 6 具体の時間見積 / 7 成果を見せる / 8 事実だけの error 表現 / 9 一覧は 5 件 / 10 前置き・要約・締めなし) + Persistence (「不確かなら適用」) + When to break (explain・破壊的操作・debug spiral・曖昧・規則と課題の衝突・harness 優先) + Pre-send check (前置き・締め・脇道・hedge・慣用句の削除)。 評価 rubric は Correctness 35% / Autonomy 25% / Actionability 20% / Safety 10% / Concision 10%。
+  憲法の向き: C7 は対話面を 1 つに定める (R-C7-1 = planner の席)。 C10 は宣言・実測・導出を型で分ける (信頼度の語の根)。 C14 は規律を文書と manifest の 2 面に持つ。 N2 は prose・memory・chat だけの規則を規則としない (雛形の規範文は 0・ADR-1022 §2.4)。 C2.2 は名前と置き場を NAME から導く (skill・雛形は plugin に同梱)。
+decision: |
+  §2.1 作法の置き場は設計 doc 1 本で、 雛形は pointer 付きの行だけを持つ
+  「user に向けて出す文の形」の規則は、 設計 doc 1 本 (dialogue-surface.md) に書きます。 planner の生成文には「文の形はこの doc」と矢印を付けた行を数本足すだけで、 規則の本文は生成文に書きません。 規則の表 (manifest) にも入れません。 機械が測って止められる値ではないからです。
+  対話面の作法の SSOT SHALL docs/design/dialogue-surface.md 1 本 (設計 doc・C14 の文書面・版で記録・C8.3)。 planner の雛形 SHALL 作法の行を pointer 付きで持ち (ADR-1022 §2.4 の規律・穴か pointer 付きの行・規範文 0・xtask の検査は不変)、 行の本文は作法の名 (「文の形」「信頼度」「brief の 5 slot」) と pointer だけとする。 rules 行 SHALL 足さない (作法は閾値でも enabled flag でもなく、 機械が enforce できない値を manifest に置かない・C14 の「manifest は enforce する規則の正本」)。 skill (rebrief) SHALL 作法の本文を持たず、 手順と pointer だけを持つ (N2)。
+  §2.2 作法は 9 則 1 体系で、 信頼度が上位に在る
+  作法は 9 つの決まりを 1 つの体系にします。 いちばん上は「信頼度」で、 言い切る文には必ず「実測した / 型や文書から導いた / 推測 / 分からない」のどれかが付きます。 その下に読み手本位の 8 つ (次の 1 手を先頭に・手順は番号・末尾は 1 手・脇道は分けて末尾に・状態を言い直す・成果を見せる・error は事実だけ・一覧は 5 件まで + 前置きと締めなし) が来ます。 参考にした skill の「時間の見積」と「不確かでも適用」は外し、 それぞれ「便の段と残り件数」と「生成文が固定するので自己判断しない」に置き換えます。
+  作法 SHALL 次の 9 則を 1 体系として設計 doc に持つ (番号は設計 doc の宣言順・本 ADR は形だけを定め、 文面は設計 doc が正本):
+  ・信頼度 (上位・他の 8 則に優先): 事実・結論の各文 SHALL verified (実行して確かめた) / deduced (型・文書・記録から導いた) / inferred (推測) / uncertain (分からない) のいずれかを負う。 hedge の副詞 SHALL この 4 語に置き換え、 削って断定に化けさせない。 時間の見積 SHALL 書かない (AI の見積は inferred にしかならず、 読み手には uniform に響く)。 代わりに便の段 (Spawned / Implemented / Gated / Landed) と残り件数 (母集団付き) を書く。
+  ・先頭は次の 1 手: 1 行目 SHALL user が今できること (承認・裁定・入力) か、 無ければ「planner が次にすること」。 承認要求は冒頭 (front-load)・材料 (やりたいこと / 理由 / 代替 / コスト / 推奨) 付き・質問形。
+  ・手順は番号: 2 段以上の手順 SHALL 番号付き・1 項目 1 動作。
+  ・末尾は 1 手: 最終行 SHALL 次に起きること 1 つ (planner の次の行為 か user の手番)。 締めの挨拶・要約の反復は持たない。
+  ・脇道は分けて末尾に: 本筋の後に「別件:」で 1 行ずつ。 列挙義務 (乖離・orphan・危険・件数と母集団) は脇道ではなく本筋の slot に載せ、 省略しない。
+  ・状態を言い直す: 毎 turn 現在地 (器の DATA [MAIN] / [RUN] / [SEAT]・ADR-1031 §2.2) を 1〜2 行。 user に「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」を頼まない (直命の表が持つ・ADR-1031 §2.1)。
+  ・成果を見せる: 前 session からの Landed を id と sha で (器の [WIN])。 作文で膨らませない。
+  ・error は事実だけ: 原因・修正・出所 (bead / run id / file:line)。 感嘆や謝罪の語を持たない。
+  ・一覧は 5 件・前置きと締めなし: 表示は 5 件まで・母集団の件数を併記・全件は file へ落として path を返す。 前置き (「〜します」の宣言)・要約の反復・締めの挨拶は持たない。 「詳細版で」と言われたら本文の長さの上限を外す (形は保つ)。
+  外す 2 則: (a) 具体の時間見積 → 則 1 に吸収 (段と残り件数)。 (b) Persistence「不確かなら適用」 → 採らない (生成文が固定するので自己判断の余地を持たない・断定の温床)。 When to break のうち採るもの: explain (「詳細版で」・則 9)・破壊的操作 (A1 の 3 クラスが既に上位)・debug spiral (3 周「まだ壊れている」で手を止め疑う前提を 1 つ名指して 1 問)・曖昧 (1 論点 1 質問・推奨 1 つ・既存)・規則と課題の衝突 (課題が勝ち形は保つ)。 Pre-send check SHALL 則 9 と則 1 に分けて持つ (前置き・締め・脇道の削除は則 9・hedge の置換は則 1)。
+  §2.3 復元の brief の user 面は 5 slot 固定で、 AI 面は表示しない
+  復元 (rebrief) が user に見せるのは 5 行です: ① 次の 1 手 (user の手番があればそれ) ② 前 session の成果 ③ 現在地 ④ 進行中の計画の上位 3 件 ⑤ 危険と乖離 (あれば)。 ②③④の材料は器の DATA から来ます。 AI が復元のために読む判定 (矢印の種類・3 値則・他席の退避物) は context には入りますが、 user には見せません。
+  rebrief の user 面 SHALL 5 slot 固定 (宣言順): (1) next = user の手番 (承認・裁定・入力・[DIRECTIVE-REVIEW] の確認候補) か planner の次の行為 / (2) wins = [WIN] の列 / (3) status = [MAIN] [RUN] [SEAT] / (4) plan = 計画弧の上位 3 件 (bead id 付き・母集団の件数) / (5) risks = 乖離・orphan・危険 (無ければ「なし」・判定不能はその理由)。 各 slot SHALL 1〜2 行。 AI 面 (pointer の kind / resolution・3 値則・consume の可否) SHALL context に在って表示しない。 brief の後の consume SHALL 不変 (ADR-1018 §2.1)。
+  §2.4 global CLAUDE.md の harness 一般の節は器へ移り、 host 固有の節だけが残る
+  global CLAUDE.md の 8 節のうち、 「言語・伝え方」「回答の方針」「multi-agent 実行」の 3 節の中身は対話面の作法 (設計 doc + 雛形の行) へ移り、 「タスク開始時」は器の hook と DATA が代替し、 「ファイル編集後」と「記憶」は 1 行に縮みます。 「破壊的操作の禁止」と「ホスト・コンテナ」は host 固有なので global に残ります。 前の版 (v1) の docs への矢印は外します。 器は user の global file を書きません。 痩せさせるのは global を持つ側 (別 repo) の手番です。
+  移す先 SHALL 設計 doc §5 の表が持つ (節ごとに「器の作法へ」「hook / DATA が代替」「縮小」「残す」の 4 値)。 器 SHALL consumer の repo にも user の global file にも file を書かない (ADR-1022 §2.4「1 経路」・不変)。 global の痩身 SHALL global を持つ repo の便 (本 repo の外・user の手番ではなく AI の便・3 クラス非該当)。 前の版の docs への pointer SHALL 外す (scribe2 では憲法 A1 の 3 クラスが SSOT)。 他 user への一般化 SHALL 雛形と設計 doc と skill が plugin に同梱されることで成立する (C2.2)。
+  §2.5 対話面でない席には適用しない
+  この作法は user と話す席 (planner) のものです。 管理席 (admin) は user と話さず中継だけをするので、 生成文に作法の行を足しません。 runner や lens の出力の形も別です。
+  作法の行 SHALL planner の雛形にだけ足す (R-C7-1 の対話面・C7)。 admin の雛形 SHALL 不変 (中継の形は ADR-1016 §2.1)。 runner / lens の出力 (headless) SHALL 本 ADR の対象外。
+  §2.6 射程外
+  決めるのは、 作法の置き場・9 則の形・brief の 5 slot・global の行き先・適用する席、 の 5 つです。 作法の文面の細部は設計 doc が持ちます。 folio が生成する文書の文体、 他の role、 rubric による自動評価は決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 作法の各則の文面 (設計 doc が正本・版で改訂)・folio の生成 doc の文体 (folio の領分)・runner / lens / admin の出力・i-have-adhd の rubric による自動評価 (歯にしない・作法は機械が測れない)・global CLAUDE.md の具体の差分 (別 repo の便)。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書 (SRS v0.12) に在ります。 「対話面の作法を設計 doc が持ち planner の生成文が pointer で運ぶ」を名指す要件は記録時点の要件書に無く、 要件書の改訂 (user の手番) で 1 本足します。
+  本 ADR が仕える要件は SRS v0.12 が正本である: FR1023 作業記憶の退避と復元 (brief の user 面は復元の一部)・FR1030 便の配送構造 (planner が唯一の対話面)・FR1044 席間の連絡 (不変)。 「対話面の作法 (信頼度 4 段 + 読み手本位の 8 則) を設計 doc が持ち、 planner の生成文が pointer 付きの行で運ぶ」を名指す FR は記録時点の SRS に無く、 要件書の改訂 (/folio-architect・user の手番) で足す。 それまで契約は FR1023 / FR1030 を指す。 要件書は本 ADR では 1 字も変えない。
+options:
+  - id: "chosen"
+    name: "対話面の作法は設計 doc 1 本が持ち、 planner の雛形は pointer 付きの行で運ぶ (信頼度 4 段を上位に読み手本位の 8 則を融合・harness 一般の規律は global CLAUDE.md から器へ)"
+    text: |
+      「user に向けて出す文の形」の規則は、 設計 doc 1 本 (dialogue-surface.md) に書きます。 planner の生成文には「文の形はこの doc」と矢印を付けた行を数本足すだけで、 規則の本文は生成文に書きません。 規則の表 (manifest) にも入れません。 機械が測って止められる値ではないからです。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: planner は user と話す唯一の席です。 その席が user に向けて出す文の形 (要点を先に・平易に・信頼度を分けて・承認は冒頭で) は、 記録時点では user の global CLAUDE.md (host の 1 file・7 口座が共有) が持っています。 器の生成文 (SessionStart の雛形) は役割と権能と連絡の経路を持つだけで、 文の形を持ちません。 復元の brief は定型 4 節 + 判定根拠 + hygiene で 30 行を超え、 user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」と言いました。 user は読み手本位の公開 skill (i-have-adhd・MIT) を参考に「この 2 つを昇華して融合し、 global CLAUDE.md の harness 一般の内容を器へ移して global を痩せさせよ」と指示しました。"
+  - id: "A"
+    name: "i-have-adhd を skill としてそのまま積む"
+    text: |
+      (A) i-have-adhd を skill としてそのまま積む。 却下: 10 則のうち時間見積と Persistence が信頼度 4 段と衝突し (§2.2)、 常時適用は SessionStart の hook で本文を注入する形 (plugin の外の規則・N2)。 形を借りて設計 doc に融合する。
+    verdict: rejected
+    reason: "10 則のうち時間見積と Persistence が信頼度 4 段と衝突し (§2.2)、 常時適用は SessionStart の hook で本文を注入する形 (plugin の外の規則・N2)。 形を借りて設計 doc に融合する。"
+  - id: "B"
+    name: "global CLAUDE.md に作法を書き続ける"
+    text: |
+      (B) global CLAUDE.md に作法を書き続ける (記録時点の形)。 却下: user ごと・host ごとの file で、 他 user の planner に届かない。 前の版の docs への pointer が残る。 規則の置き場としては prose (N2)。 host 固有の 2 節だけを残す。
+    verdict: rejected
+    reason: "user ごと・host ごとの file で、 他 user の planner に届かない。 前の版の docs への pointer が残る。 規則の置き場としては prose (N2)。 host 固有の 2 節だけを残す。"
+  - id: "C"
+    name: "planner の雛形に作法の本文を直書きする"
+    text: |
+      (C) planner の雛形に作法の本文を直書きする。 却下: 雛形の行は穴か pointer 付きの行に限る (ADR-1022 §2.4・xtask が規範文 0 を検査)。 pointer の先 (設計 doc) に本文を置く。
+    verdict: rejected
+    reason: "雛形の行は穴か pointer 付きの行に限る (ADR-1022 §2.4・xtask が規範文 0 を検査)。 pointer の先 (設計 doc) に本文を置く。"
+  - id: "D"
+    name: "rules 行に作法を持つ"
+    text: |
+      (D) rules 行に作法を持つ (例: dialogue.list_cap = 5)。 却下: 読み手が居ない行になる (C10.3 の未 wire)。 manifest は機械が enforce する規則の正本で、 文の形は測れない (C14)。 5 件の cap も設計 doc の文面で持つ。
+    verdict: rejected
+    reason: "読み手が居ない行になる (C10.3 の未 wire)。 manifest は機械が enforce する規則の正本で、 文の形は測れない (C14)。 5 件の cap も設計 doc の文面で持つ。"
+basis: [FR1023, FR1030, FR1044, ADR-1013, ADR-1016, ADR-1018, ADR-1022, ADR-1031]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  「user に向けて出す文の形」の規則は、 設計 doc 1 本 (dialogue-surface.md) に書きます。 planner の生成文には「文の形はこの doc」と矢印を付けた行を数本足すだけで、 規則の本文は生成文に書きません。 規則の表 (manifest) にも入れません。 機械が測って止められる値ではないからです。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l.326（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.326 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 user が読む文の形が 1 か所で決まり、 どの host・どの口座でも同じ生成文で planner に届くこと、 brief が 5 行になること、 global CLAUDE.md が host 固有だけに痩せることです。 悪い面は、 作法は機械が測れないので歯で守れないこと (雛形の pointer と 5 slot の形だけ snapshot で pin する)、 global を痩せさせる便が別 repo に要ることです。"
+  - "Positive: 作法の SSOT が文書面 1 本 (C14)。 雛形の規範文 0 のまま (N2・xtask)。 他 user への一般化 (plugin 同梱・C2.2)。 brief の材料が器の DATA (C10.2)。 信頼度の語が C10 の型の分類と対応する。"
+  - "Negative (受け入れるコスト): 作法の遵守は歯にできない (snapshot で pin するのは雛形の行と brief の slot の形だけ・C12.5)。 planner の雛形が +4 行 (生成文の snapshot が動く)。 global の痩身は別 repo の便 (本 repo からは pointer の撤去を依頼するだけ)。 rebrief skill の書き換えは器の DATA (ADR-1031 §2.2) の land 後。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0032-dialogue-surface-rules-live-in-one-design-doc-and-planner-brief.html
+  器の記録の頭: Status: accepted · Date: 2026-09-15 · version 0.4.6 (拘束する constitution の版) · ADR-1022 §2.4 の生成文に「user に向けて出す文の形」の行を足し、 その規則の置き場を設計 doc 1 本に定める (憲法は動かさない・雛形の規範文は 0 のまま) · 要件は SRS が正本 (FR1023 / FR1030 / FR1044)
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は user の直命 2 件 (2026-09-15・brief の表示面と、 読み手本位の skill の導入・global CLAUDE.md の移行) と user の裁定 1 件 (2026-09-15T07:22Z 問 3 の後段・「時間見積と『不確かなら適用』の 2 則を外し、 信頼度の規則を残りの 8 則と融合する」) を受けた設計判断である。 憲法の条文は動かさない。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: planner (2026-09-15・設計判断) — 向きは user の直命 2 件 (2026-09-15 06:5xZ「brief が冗長過ぎる…現在の進捗や前セッションの成果、 計画と次の 1 手を簡潔に」/ 07:0xZ「i-have-adhd を参考に rebrief と planner の対話面へ・global CLAUDE.md と整合して昇華・global を痩せさせる」) と user の裁定 (2026-09-15T07:22Z 問 3 後段) が定めた。 逐語は台帳 s2-07l.326 の notes (本 file には写さない)。
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: なし (ADR-1022 §2.4 の追補)。 雛形の行の規律 (穴か pointer 付きの行・規範文 0・xtask の検査) は不変で、 pointer の先に設計 doc docs/design/dialogue-surface.md を 1 本足す。 rules 行は足さない (作法は機械が enforce する値を持たない・C14)。
+  器の機械の欄 related: ADR-1013 §2.2 (機械は enum・文書は pointer) / ADR-1018 §2.1 (brief の文章と判断は開発 session) / ADR-1022 §2.4 (SessionStart の生成文・雛形の行の規律) / ADR-1031 §2.2 / §2.6 (現在地 DATA・skill の縮小＝brief の材料) / constitution C1.2 / C2.2 / C7 / C10 / C12.5 / C14 / A1 / N2
+  器の却下案の節の要約: 4 つの案を退けました。 「公開 skill をそのまま積む」は断定と時間見積の危険が残り、 plugin の外に規則が増えます。 「global CLAUDE.md に書き続ける」は user ごとの file で他 user に届かず、 prose だけの規則です。 「雛形に規範文を直書きする」は生成文の規律に反します。 「manifest の行に作法を持つ」は機械が enforce できない値を規則の表に入れます。
+  器の記録の出所（Trace）:
+  出所は、 user の直命 2 件と裁定 1 件、 global CLAUDE.md の現物、 planner の雛形の現物、 参考にした公開 skill です。
+  ・user の直命 (2026-09-15 06:5xZ): 「brief が冗長過ぎて全く見る気がしない。 …現在の進捗や前セッションの『成果』、 現在取り書かている計画と次の 1 手を簡潔にまとめて書くべきだ」。 逐語は台帳 s2-07l.326 の notes。
+  ・user の直命 (2026-09-15 07:0xZ): i-have-adhd を参考に rebrief の出力と planner の対話面へ・global CLAUDE.md と整合して昇華・planner 側へ移して global を痩せさせる・harness 一般の内容の移行を兼ねる。 逐語は同 notes。
+  ・user の裁定 (2026-09-15T07:22Z 問 3 後段): 信頼度も planner へ移す・時間見積と「不確かなら適用」の 2 則を外し、 信頼度の規則を残り 8 則と融合する。 逐語は同 notes。
+  ・現物 (2026-09-15): global CLAUDE.md (ubuntu-note-system claude/CLAUDE.md・52 行・8 節・7 口座が symlink)・crates/scribe2/src/seat/brief/planner.txt (10 行)・skills/rebrief/SKILL.md (134 行)。
+  ・参考: i-have-adhd (MIT・skills/i-have-adhd/SKILL.md の 10 則・When to break・Pre-send check・evals/rubric.md)。 本 ADR は文面を写さず形を借りる。
+  ・先行決定: ADR-1022 §2.4・ADR-1018 §2.1・ADR-1013 §2.2・ADR-1031 §2.2 / §2.6。
+  ・設計: docs/design/dialogue-surface.md (本 PR で新設)。 契約は台帳 s2-07l.326 の配下 (雛形の行 + xtask / skill の縮小 / global の痩身は別 repo)。

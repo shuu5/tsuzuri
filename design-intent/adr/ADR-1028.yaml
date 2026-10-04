@@ -1,0 +1,108 @@
+# 判断の記録 ADR-1028 — 器 scribe2 の判断の記録 ADR-0028 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1028
+title: "導入先の同期は器が測って器が更新する (build 元 commit・読み込み元の記録・install の event・hook 集合の食い違いは席の作り直し) と役割なしの起動行"
+status: accepted
+date: 2026-09-15
+context: |
+  器は 2 つの顔で他の project に入ります。 hook の配線 (plugin) と本体 (PATH の binary) です。 記録時点では、 どちらも「どの版で動いているか」を器が自分で測れませんでした。 本体は版番号しか名乗らず、 配線はどこから読まれたかを残しません。 更新は人が手順を覚えて行い、 更新しても走行中の席には新しい配線が載りません。 4 つの穴はどれも「黙って古くなる」型です。 加えて、 役割を持たない素の対話 session を起こす口が器に無く、 前の版の wrapper に頼っていました。
+  記録時点 (2026-09-15) の現物 (main d849870): <NAME> --version は CARGO_PKG_VERSION だけ (main.rs render_version) で build 元 commit を持たず、 install 済み binary の古さは mtime の推測でしか分からない (auto-memory の事故: event schema の追加で PATH の binary が静かに古くなり hook が events を読めなくなった)。 Claude Code の directory source の plugin は cache (installed_plugins.json の installPath) でなく repo の作業ツリーを直接読む (実測 2 例・保証なし) ため、 帳簿の gitCommitSha と cache の写しは install 時刻で止まり、 読み込み元が cache に切り替わる版が来ると黙って古い配線に戻る。 cache は口座の設定 dir ごとに 1 つを全導入先・全 worktree が共有し、 最後の install が上書きする。 hook 集合は session 起動時の snapshot で /clear では更新されない (実測)。 更新の手順 (ff → cargo install --path crates/<NAME> --locked → 導入先の planner へ 1 行通知) は planner の作業記憶の行で規則ではない (N2)。 役割なしの対話 session の起動は前の版の口座切替 wrapper (cla <label> [--resume <sid>]) だけが持つ。
+  憲法の向き: C3.2 は doctor が版を全 host で突合すると定める。 C10 は宣言値と出所付きの実測値を型で分け、 C10.2 は host 固有の値を manifest にだけ置く。 C6.3 は記録を append-only の 1 store に置く。 C9 は止まった席を人手なしで作り直す。 N2 は散文だけの規則を規則としない。 C2.2 は env を読まず NAME 定数から導く。 user の直命 (2026-09-15): 「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」。
+decision: |
+  §2.1 binary は build 元 commit を焼き、 測れない周は unknown と名乗る
+  本体は「どの commit から build されたか」を自分の中に持ち、 --version と doctor で名乗ります。 git が無いなど測れないときは「不明」と名乗り、 それらしい値をでっち上げません。
+  器 SHALL build 時に build script (build.rs・依存なし) で source の HEAD の sha (12 桁) と tracked の変更の有無 (+dirty) を読み、 compile time の値として binary に焼く。 読めない周 (git が無い・repo でない・失敗) の値 SHALL unknown とし、 成功に倒さない (C10)。 --version と doctor の版の行 SHALL 同じ 1 関数からこの値を (<sha12>[+dirty]) / (unknown) の形で出す。 実行時に env を読む形 (C2.2) は採らない (compile time の env! だけ)。
+  §2.2 SessionStart は読み込み元 (plugin root と hooks.json の digest) と binary の版を席ごとに記録する
+  席が起動するたび、 hook は「この配線はどこから読まれ、 中身はどんな指紋で、 本体はどの版か」を席の記録に 1 行で残します。 器は配線が cache から読まれるのか作業ツリーから読まれるのかを推測せず、 実際に渡された場所を記録します。
+  hook の全 command SHALL plugin root を引数 (--plugin-root・shell が $CLAUDE_PLUGIN_ROOT を展開する・器は env を読まない・C2.2) で受ける。 session-start SHALL 名乗りの後に、 席の打刻の置き場 (ADR-1015 §2.1) へ 1 file 1 行の記録 (schema・sid・root・hooks = <root>/hooks/hooks.json の bytes の digest・binary = §2.1 の値・ts) を書き、 SessionStart ごとに上書きする。 digest SHALL 依存なしの決定的な関数 (FNV-1a 64・16 hex) で、 release を跨いで値が変わりうる std の hasher を persist する値に使わない。 plugin root が空の周は記録せず黙る (止めない)。 hooks.json が読めない周は unreadable と記録する (無いと読み替えない)。
+  §2.3 更新は 1 つの口 (ff → build → install) で行い、 install は event として残し、 器の repo は host の manifest が宣言する
+  本体の更新は 1 つの命令で行います。 器は自分の checkout を上流に「前に進めるだけ」で揃え (揃えられなければ断る)、 build して PATH に入れ、 「いつ・どの sha を・どこに入れたか」を記録に 1 件残します。 checkout の場所は host ごとの設定 file に書きます。 導入先の帳簿 (Claude Code の install 記録) や cache は書きません。 doctor は導入先ごとに 1 行で「本体・配線・帳簿」の食い違いを名指しますが、 判定はしません。
+  host の manifest (ADR-1026 §2.1) SHALL array-of-tables を 1 種足す: [[vessel]] repo = "<dir>" (最大 1 行・同じ loader・同じ拒否形・host 固有の path はこの file にだけ・C10.2)。 更新の口 SHALL 順序固定で (1) 作業ツリーに tracked の変更が在れば dirty で断り (2) fetch の後 fast-forward だけで上流の既定 branch に揃え、 揃わない周は not-fast-forward で断り (rebase も reset も撃たない・N1) (3) cargo install --path crates/<NAME> --locked で PATH の binary を入れ替え (4) fleet の event log (ADR-1017 §2.1) に kind InstallRecorded (新 variant・宣言順の末尾・schema 版 1 のまま・ADR-1004 §2.5) を 1 件 (sha・host・path) 積む。 器 SHALL NOT 導入先の帳簿 (installed_plugins.json) も cache も書かない。 doctor SHALL 導入先 (口座の設定 dir の帳簿の projectPath と席の登録 row の anchor の和集合) ごとに 1 行を出し、 §2.1 / §2.2 の記録と帳簿と [[vessel]] の HEAD を比べて食い違いを閉じた語 (binary / plugin / ledger・宣言順・無ければ none) で名指し、 記録の無い導入先は unrecorded と出す (「none」に潰さない・C10)。 doctor SHALL NOT 判定も更新もしない (C10.2)。
+  §2.4 hook 集合の食い違いは退避 → 終了の手 → 立て直しの既存の経路で席を作り直す。 binary だけの食い違いでは作り直さない
+  配線 (hooks.json) が起動時と変わった席は、 /clear では直りません。 管理 tick はその席を見つけて退避させ、 いったん終了させてから同じ窓・同じ口座で作り直します。 本体だけが新しくなった場合は作り直しません (次の hook から新しい本体が動くため)。 復元のときに「どの版で動いているか」が 1 行見えます。
+  管理 tick SHALL 登録 row の在る席ごとに §2.2 の記録の digest と、 記録の root に今在る hooks.json の digest を比べ、 違う周は退避の合図 (FR1029 と同じ除外の下・busy でも送る) を注入する。 退避の合図の記録 SHALL 出所を閉じた enum (context / account / hook) で持ち、 退避後の終了の手 (ADR-1020 §2.4 の実装 = 台帳 s2-07l.226) SHALL account / hook 由来の合図にだけ立つ (context 由来は従来どおり /clear の cycle)。 立て直し SHALL 既存の経路 (前面が shell → relaunch) で、 hook 由来の周は登録 row の口座が閾値 (R-C9-1) 未満ならその口座を優先する。 binary の版だけが違う席 (digest が同じ) SHALL 作り直さない。 復元の DATA (ADR-1018 §2.3) SHALL marker [PLUGIN] の 1 行 (root・digest・binary の版・食い違いの語) を持つ。 記録が無い・読めない席は注入しない (理由 1 つ・縮退・止めない)。
+  §2.5 役割なしの起動行は FR1059 の導出から役割・登録・権能の 3 要素を除いた形
+  役割を持たない素の対話 session を、 器の口で起こせるようにします。 口座を 1 つ指定すると、 その口座の設定で claude を起動する 1 行を器が組みます (役割付きの起動と同じ組み立てから、 役割・席の登録・権能の 3 つを抜いたもの)。 窓を指定すれば差し込み、 指定しなければ 1 行を表示するだけです。 席の登録は書かないので権能はありません。
+  役割なしの起動 (FR1060) の起動行 SHALL FR1059 の導出 (ADR-1026 §2.3・同じ 1 関数) から役割・登録 row・権能の 3 要素を除いた形とし、 口座 label を必須で受け (選定は使わない)、 --resume <sid> が在れば同じ口座でその session を再開する行を組む。 器 SHALL NOT 登録 row (SeatRegistered) を書かない (権能は無い・role guard は未登録として code の編集を止める)。 target が与えられた周 SHALL FR1059 と同じ注入の門を通して差し込み、 与えられない周 SHALL 起動行を stdout に 1 行出して起動しない。 口座が宣言に無い・退役中・設定 dir が無い周 SHALL typed に断り key を 1 つも送らない。 雛形 file は持たない (ADR-1026 §2.3 と同じ)。
+  §2.6 射程外
+  この記録が決めるのは、 版の名乗り・読み込み元の記録・更新の口と記録・配線の食い違いでの作り直し・役割なしの起動行だけです。 Claude Code の帳簿を器が書き換えること、 導入先の一覧を宣言に持つこと、 本体だけが古い席を軽く直すことは決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 導入先の帳簿 (installed_plugins.json) や cache を器が書く形 (§5 (C))・導入先の state dir の一覧を host の manifest に宣言する形 (今は帳簿と登録 row から導く)・claude plugin install の打ち直しを器が撃つ形 (doctor が ledger の語で名指すだけ)・binary だけが古い席を作り直さずに直す形・合図の出所の enum を退避の合図以外の記録へ広げる形。 これらは設計 docs/design/consumer-sync.md §13 の後続。
+  （器の記録の §3. SRS との関係 (正本は SRS)）
+  この記録が仕える要件は要件書 (SRS v0.11) に在ります。 要件の文面はここには置かず、 当該行を指すだけにします。 要件書の「導入先の同期の測定と更新の口」「配線の食い違いで席を作り直す」「役割なしの起動」を、 §2.1〜§2.5 の形で満たします。 要件書は 1 字も変えません。
+  本 ADR の §2.1〜§2.3 が仕える要件は SRS v0.11 が正本である: FR1061 導入先の同期 (doctor の 1 項目として導入先ごとに build 元 commit・読み込み元・帳簿・HEAD を実測して食い違いを typed な語で名指す・1 つの口で build と install を行い event に append する・散文の手順を規則としない) と AC1031 (行 2/2 + drift 4 語 + unknown 1/1 + event 1/1)。 §2.4 は FR1062 hook 集合の食い違い (退避の合図 → FR1038 と同じ経路で同じ target・同じ口座で作り直す・binary だけの周は作り直さない・DATA に plugin の版 1 行) と 器の要件書に無い受入の番号 32（元の字は AC と 32 を続けた受入の id・食い違い D12）。 §2.5 は FR1060 役割なしの起動 と 器の要件書に無い受入の番号 30（元の字は AC と 30 を続けた受入の id・食い違い D12）。 土台は FR1051 (doctor の項目)・FR1019 (SessionStart の名乗り)・FR1029 / FR1038 (退避と立て直しの既存経路)・FR1023 (復元の DATA)・FR1059 (役割付きの起動)。 SRS は本 ADR で 1 字も変えない。
+options:
+  - id: "chosen"
+    name: "導入先の同期は器が測って器が更新する (build 元 commit・読み込み元の記録・install の event・hook 集合の食い違いは席の作り直し) と役割なしの起動行"
+    text: |
+      本体は「どの commit から build されたか」を自分の中に持ち、 --version と doctor で名乗ります。 git が無いなど測れないときは「不明」と名乗り、 それらしい値をでっち上げません。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 器は 2 つの顔で他の project に入ります。 hook の配線 (plugin) と本体 (PATH の binary) です。 記録時点では、 どちらも「どの版で動いているか」を器が自分で測れませんでした。 本体は版番号しか名乗らず、 配線はどこから読まれたかを残しません。 更新は人が手順を覚えて行い、 更新しても走行中の席には新しい配線が載りません。 4 つの穴はどれも「黙って古くなる」型です。 加えて、 役割を持たない素の対話 session を起こす口が器に無く、 前の版の wrapper に頼っていました。"
+  - id: "A"
+    name: "通知の散文"
+    text: |
+      (A) 通知の散文 (install ごとに planner が導入先の planner へ 1 行送る・記録時点の暫定運用)。 却下: 器の視野の外の作法 (N2)。 忘れた周を器が検知できない。 tick が測って動く形 (§2.4) に置き換える。
+    verdict: rejected
+    reason: "器の視野の外の作法 (N2)。 忘れた周を器が検知できない。 tick が測って動く形 (§2.4) に置き換える。"
+  - id: "B"
+    name: "Claude Code の cache の写しを正とし、 器が cache と作業ツリーを同期する"
+    text: |
+      (B) Claude Code の cache の写しを正とし、 器が cache と作業ツリーを同期する。 却下: 読み込み元 (cache か作業ツリーか) が Claude Code の版で変わる挙動に器が依存する。 器は読み込み元を推測せず、 hook が受けた root を記録して比べる (§2.2)。
+    verdict: rejected
+    reason: "読み込み元 (cache か作業ツリーか) が Claude Code の版で変わる挙動に器が依存する。 器は読み込み元を推測せず、 hook が受けた root を記録して比べる (§2.2)。"
+  - id: "C"
+    name: "installed_plugins.json を器が書く"
+    text: |
+      (C) installed_plugins.json を器が書く (帳簿の gitCommitSha を進める)。 却下: 他人の帳簿 (Claude Code の所有・形が版で変わる・上書きで壊れる)。 食い違いを ledger の語で名指し (§2.3)、 打ち直しは user / 導入先の planner の手番に置く。
+    verdict: rejected
+    reason: "他人の帳簿 (Claude Code の所有・形が版で変わる・上書きで壊れる)。 食い違いを ledger の語で名指し (§2.3)、 打ち直しは user / 導入先の planner の手番に置く。"
+  - id: "D"
+    name: "hook 集合の食い違いを /reload-plugins で解く"
+    text: |
+      (D) hook 集合の食い違いを /reload-plugins で解く。 却下: 走行中の hook 登録を差し替えるかは未確認 (uncertain) で、 器は描画も結果も読めない (C3.3)。 作り直しは既存の経路で確実に効き、 退避物は保たれる (C9)。
+    verdict: rejected
+    reason: "走行中の hook 登録を差し替えるかは未確認 (uncertain) で、 器は描画も結果も読めない (C3.3)。 作り直しは既存の経路で確実に効き、 退避物は保たれる (C9)。"
+  - id: "E"
+    name: "役割なしの起動は前の版の wrapper に残す"
+    text: |
+      (E) 役割なしの起動は前の版の wrapper に残す。 却下: 起動経路が器の視野の外に残り (ADR-1009 §1 の根因と同型)、 不測の事態の入口が host 固有の script に依存する。 FR1059 と同じ導出から 3 要素を除くだけで器が持てる (§2.5)。
+    verdict: rejected
+    reason: "起動経路が器の視野の外に残り (ADR-1009 §1 の根因と同型)、 不測の事態の入口が host 固有の script に依存する。 FR1059 と同じ導出から 3 要素を除くだけで器が持てる (§2.5)。"
+  - id: "F"
+    name: "digest に std の DefaultHasher"
+    text: |
+      (F) digest に std の DefaultHasher (純移動の機械証明が同じ process 内で使う形)。 却下: std の hasher は release で変わりうると明記されており、 persist して別の binary が読む値には使えない (偽の食い違いで席が作り直される)。 決定的で依存なしの FNV-1a 64 を器が持つ。
+    verdict: rejected
+    reason: "std の hasher は release で変わりうると明記されており、 persist して別の binary が読む値には使えない (偽の食い違いで席が作り直される)。 決定的で依存なしの FNV-1a 64 を器が持つ。"
+basis: [FR1019, FR1023, FR1029, FR1038, FR1051, FR1059, FR1060, FR1061, FR1062, AC1031, ADR-1004, ADR-1009, ADR-1015, ADR-1017, ADR-1018, ADR-1020, ADR-1022, ADR-1026]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  本体は「どの commit から build されたか」を自分の中に持ち、 --version と doctor で名乗ります。 git が無いなど測れないときは「不明」と名乗り、 それらしい値をでっち上げません。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l.268・s2-07l.303（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l.268・s2-07l.303 の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "良い面は、 複数の project で「黙って古くなる」版が無くなること (器が測り、 器が名指し、 器が作り直す)、 更新の手順を人が覚えなくてよいこと、 素の session の起動が器の視野に入り前の版の wrapper を退役できることです。 悪い面は、 hook の引数と席の記録が 1 つずつ増えること、 配線が変わるたびに planner / admin の席が作り直される (数分の空白) こと、 更新の口が git と cargo を子 process として呼ぶことです。"
+  - "Positive: 版の provenance が型で在る (C10)。 doctor が全導入先を 1 関数で突合する (C3.2)。 install の記録が append-only の 1 store (C6.3)。 配線の食い違いを人手なしで直す (C9)。 通知の散文が消える (N2)。 wrapper への依存が切れる (ADR-1009 §1 の根因と同型の外部 script を 1 本減らす)。 rules 行を足さない (C5 非該当)。"
+  - "Negative (受け入れるコスト): hooks.json の全 command に引数 1 つ (生成物の drift 検査が守る)。 席の記録 file 1 つ (打刻の置き場の隣)。 配線が変わるたびに登録席の作り直し (退避 → /exit → 立て直し・数分の空白・退避物は保たれる)。 更新の口が git と cargo を子 process で呼ぶ (timeout は唯一の wait・失敗は typed)。 [[vessel]] の宣言が無い host では head=undeclared と更新の拒否 (宣言は user の 1 回の準備)。 digest の実装 (FNV-1a) を器が持つ (10 行・依存なし)。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0028-consumer-sync-is-measured-and-updated-by-the-vessel.html
+  器の記録の頭: Status: accepted · Date: 2026-09-15 · version 0.4.6 (拘束する constitution の版) · C3.2 / C6.3 / C9 / C10 / N2 の適用を記録し、 ADR-1026 §2.1 の host の manifest に表を 1 種、 ADR-1017 §2.1 の event に kind を 1 つ、 ADR-1026 §2.3 の起動行に役割なしの形を 1 つ足す (supersede しない・追補) · 要件は SRS v0.11 (FR1060 / FR1061 / FR1062 / 器の要件書に無い受入の番号 30（元の字は AC と 30 を続けた受入の id・食い違い D12） / AC1031 / 器の要件書に無い受入の番号 32（元の字は AC と 32 を続けた受入の id・食い違い D12）) が正本
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録であり、 改訂は新しい ADR による supersede で行う。 本 ADR の §2 は設計判断 (承認 SSOT の 3 クラスに非該当) で、 その向きを定めた user の裁定 2 件 (2026-09-14「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」・2026-09-15「更新の範囲は ff してから build + install」) と user の直命 (複数の導入先の管理方法を構造で既定する・逐語は台帳 s2-07l.268 / s2-07l.303 の notes) を出所とする。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版。 本 ADR は憲法の条文を動かさない)
+  器の機械の欄 decided-by: planner (2026-09-15・設計判断) — 向きは user の裁定 2 件 (2026-09-14 12:5xZ 役割なしの起動・2026-09-15 01:0xZ 更新の範囲 = ff → build + install) と user の直命 (導入先の管理方法を構造で既定) が定めた。 逐語は台帳 s2-07l.268 / s2-07l.303 の notes (本 file には写さない)。
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: なし (追補)。 ADR-1026 §2.1 の host の manifest の表 (3 種) に [[vessel]] を 1 種、 ADR-1017 §2.1 の event の kind に InstallRecorded を 1 つ、 ADR-1026 §2.3 の起動行の導出に役割なしの形を 1 つ足す。 既存の表・kind・導出は不変。
+  器の機械の欄 related: ADR-1004 §2.5 (schema 版・既存の行はすべて読める) / ADR-1015 §2.1 (hook の打刻の置き場) / ADR-1017 §2.1 (event の形) / ADR-1018 §2.3 (rebrief の DATA の marker) / ADR-1020 §2.4 (席の退避と立て直し) / ADR-1022 §2.1 (席の登録 row) / ADR-1026 §2.1 / §2.3 (host の manifest・起動行の導出) / constitution C2 / C2.2 / C3 / C3.2 / C6.3 / C9 / C10 / C10.2 / C11.3 / N1 / N2
+  器の却下案の節の要約: 5 つの案を退けました。 「更新のたびに planner が導入先へ 1 行通知する」は散文の手順で、 忘れれば黙って古くなります。 「Claude Code の cache の写しを正とし器が同期する」は読み込み元が版で変わる挙動に依存します。 「Claude Code の帳簿を器が書く」は他人の帳簿で形が変わります。 「配線の食い違いを /reload-plugins で直す」は効くかどうかを器が確かめられません。 「役割なしの起動は wrapper のまま」は器の視野の外に起動経路を残します。
+  器の記録の出所（Trace）:
+  出所は、 導入先 (folio2・ubuntu-note-system) の planner からの問い合わせと実測、 器の現物、 そして user の裁定と直命です。
+  ・user の直命 (2026-09-15・planner の席): 「再現性の高い複数の他の project における適切な管理方法を構造で既定する」「plugin が更新されても新しく入った hook は clear + rebrief では適用されない可能性」。 裁定 (2026-09-15 01:0xZ・grill): 更新の範囲 = ff してから build + install。 逐語は台帳 s2-07l.303 の notes。
+  ・user の裁定 (2026-09-14 12:5xZ): 役割なしの起動にも対応する (不測の事態のため)。 逐語は台帳 s2-07l.268 の notes。
+  ・導入先の実測 (2026-09-15・folio2 planner の問い合わせ Q1〜Q5・ubuntu-note-system planner の実測): directory source の plugin は cache でなく作業ツリーを読む (2 例)・帳簿の sha は install 時刻で止まる・cache は口座 dir ごとに 1 つを全導入先が共有し最後の install が上書きする・hook 集合は起動時の snapshot で /clear では更新されない。
+  ・器の現物 (main d849870): main.rs render_version (版番号だけ)・hooks/hooks.json (全 command が $TMUX_PANE / $CLAUDE_PROJECT_DIR を引数で受ける形)・hook/mod.rs session_start (名乗りと打刻)・fleet/mod.rs EventKind (15 variant)・seat/tick.rs parked_entry (終了の手の入口は合図の出所を持たない = 台帳 s2-07l.307)・account/mod.rs login_line / seat/cycle.rs derive_launch (起動行の導出)。
+  ・先行決定: ADR-1026 §2.1 / §2.3・ADR-1020 §2.4・ADR-1017 §2.1・ADR-1015 §2.1・ADR-1018 §2.3・ADR-1004 §2.5。
+  ・設計: docs/design/consumer-sync.md (§2〜§6・契約 (a)〜(d))・docs/design/account-lifecycle.md §4.5 (役割なしの起動・契約 (d))。 契約は台帳 s2-07l.302 / s2-07l.303 / s2-07l.307 / s2-07l.304 / s2-07l.268 (本 ADR の land 後に dispatch)。

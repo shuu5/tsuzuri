@@ -1,0 +1,129 @@
+# 判断の記録 ADR-1034 — 器 scribe2 の判断の記録 ADR-0034 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1034
+title: "便の起動は器の dispatcher が行う (審査を通った契約を列に入れ、 依存・交差・受付を満たす便を自動で起こす・planner の手動介入は typed な口)"
+status: accepted
+date: 2026-09-15
+context: |
+  便の起動を planner → 管理席 → launcher の中継 (席の手番) から外し、 契約が出来た直後の審査と器が既に持つ判定 (台帳の依存・write-set の交差・受付) だけで自動的に起こす。 順序は planner の介入 first → 契約の priority → 起票順で決める (hold は止め、 release で戻す)。
+  なぜ今この判断が要るのかを、当日の実測から説明します。便の起動が planner → 管理席 → launcher の中継に乗っていて、着地から次の起動まで席の手番の待ちが乗り、優先便の後回しと器に無い上限の散文が事故として出ました。判定はすべて器が持っています。
+  CTX1 便の起動が 2 席の中継に乗っている
+  ADR-1016 §2.1 は管理席の仕事の 1 つ目を「dispatch された契約を pipe run で流す」と定め、 planner が便ごとに dispatch を書き、 管理席が交差を手で測って launcher を撃つ。 2026-09-15 の実測では、 着地から次の起動まで数分〜十数分の待ちが便ごとに乗り、 planner が順序を誤って user が名指した優先便を後回しにする事故 (11:47Z) と、 器に無い「同時 3 便」の上限を席の散文で持っていた事故 (11:5xZ) が起きた。
+  CTX2 起動に要る判定は器が全部持っている
+  台帳の依存 (bd ready)・live 便との write-set の交差 (FR1039・intake の 1 関数)・受付の余地と host の memory (contract-source.md §3 / gate-cost.md §3.2)・契約の審査 (FR1049・審査の段)。 席がしているのは、 これらの値を読み直して launcher を撃つことだけである。 前提が 2 つ = 審査の段 (設計 contract-source.md の契約表の行 (c)・s2-07l.241) と、 設計 doc の契約表の行から intake が契約 file を生成する口 (同 契約表の行 (b)・s2-07l.209)。 後者が無いと便の契約 file は管理席の手順 (bead の acceptance を写す script) でしか作れず、 器は起動を組めない。
+  CTX3 user の裁定
+  2026-09-15 12:5xZ に user は「持ち主の言葉（器の台帳の notes に在る・この file に写さない）」「優先度は契約のときに planner が設定し、 それをもとに自動的に dispatcher（便を自動で起こす係） に入り、 管理席は仕事を pipeline に委譲する仕組みを器として作るべき」「user が最優先を言ったら planner が後から手動で順番を入れ替えられるように」と裁定した (逐語は台帳)。 同日 13:4xZ に「planner が作ったらその直後に lens は審査すべき」と裁定し (審査の時点 = 契約が出来た直後・起動の瞬間ではない)、 13:5xZ に残りの論点 (first が priority より上・介入は 3 つ・契機は tick と land・FR1030 の改訂は /folio-architect の周) を planner の推奨どおりと裁定した。
+  （選択肢を測るものさし）判断を評価する 4 本のものさしです。並列度を席の手番に依存させないこと、判定は器の既存の実装を使うこと、planner の産物は契約と priority と介入だけにすること、起動は可逆でも止める口と観測は typed に持つことです。
+  DR1｜並列度を席の手番に依存させない (user 直命 = 並列度を下げる判断は承認が要る) 台帳 s2-07l notes 2026-09-15T11:5xZ / SRS FR1030
+  DR2｜判定は器の既存の 1 実装を使い、 席が読み直さない 憲法 C2 / C3.3 / ADR-1019 (交差は入口で排他・待ち行列と同時本数の上限は別途送り = 本 ADR が引き取る)
+  DR3｜planner の産物は契約と priority と typed な介入（planner が順番を動かす印）だけ (散文の順序を持たない) 憲法 N2 / C15 (台帳は task と裁定)
+  DR4｜起動は可逆 (承認は要らない) だが止める口と観測は typed に持つ 憲法 A4.3 / C10 / NFR1004
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。契約が出来た直後に審査し、通った契約を器の列に入れ、依存・交差・受付を満たす便を tick と land の直後に自動で起こします。数字の上限は持ちません。
+  採用 — OPT1
+  器 SHALL 契約が出来た直後に審査 (FR1049) を 1 回撃ち、 verdict を契約の sha に紐づけて記録し、 現在の sha が PASS の契約 (細目 = 設計 doc §2・依存が閉じ、 acceptance が非空で memo でなく、 設計 pointer を持つ) を dispatcher の列に入れ、 列外の便も理由付きで列挙し、 tick と land の直後に、 台帳の依存が閉じ ∧ live 便との write-set の交差が 0 ∧ 受付 (余地・host の memory) を通る便を、 planner の typed な介入 first → priority → 起票順で自動的に起こす (起動は既存の pipe run = intake → Reviewed → spawn をそのまま撃ち、 Reviewed は同じ sha の PASS を再利用して lens を撃ち直さない)。 器 SHALL NOT 便の同時本数の数値上限を持つ。 planner SHALL 契約と priority と介入だけを書き、 管理席 SHALL 質問と gate の判定の中継と着地の運びだけを担う。 器 SHALL 列の各便に「まだ出ていない理由」を閉じた型で付けて列挙する口を持つ。
+  （平易）契約が出来た直後に審査し、通った契約は器の列に入り、依存・交差・受付を満たす便から器が自動で起こします。順番は planner の印 first、契約の priority、起票順の順で決まり、同時に何本という数字の上限は持ちません。planner は契約と priority と印だけを書き、管理席は質問と判定の中継と着地だけを担います。
+  （理由）起動に要る判定は台帳の依存・write-set の交差・受付のどれも器が既に持っていて、席がしていたのはそれを読み直して launcher を撃つことだけでした。読み直しは待ちと誤りを生み、器に無い上限を散文で持ち込みました。判定と行為を器の同じ関数に置けば、待ちは交差と受付だけで決まり、介入も記録に残ります。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1030（claim）: 配送構造のうち「管理席が契約を pipeline に流す」の担い手が器の dispatcher に移る。 SRS への反映 (FR1030 の response の 1 句) は user の /folio-architect の周で行う。
+  FR1039（claim）: intake の排他 (live 便との write-set の交差) を dispatcher が起動条件として同じ 1 関数で読む。
+  FR1049（claim）: 現在の契約の sha に対する審査 PASS が列に入る条件になる (PASS でない便は起こさない、 の対)。 FR1049 の condition「便が intake を通ったとき」は「契約が出来た直後」へ改める (SRS への反映は FR1030 と同じ user の /folio-architect の周)。
+  FR1036（claim）: dispatcher は口座選定を再実装せず、 起こす便ごとに FR1036 の既存経路 (便用の選定) を通す = 自動起動でも口座の選定と除外が満たされる。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。ADR-1016 の管理席の仕事「dispatch された契約を pipe run で流す」の句を置き換え、ADR-1019 が別途送りにした待ち行列と同時本数の上限を引き取ります。他の節はそのままです。
+  改訂状態: current
+  置き換える ADR: なし (新規)
+  置き換えられた: なし (現行)
+  本 ADR は現行。 ADR-1016 §2.1 の管理席の仕事 (1)「dispatch された契約を pipe run で流す」の句は本 ADR が置き換える (担い手が器の dispatcher に移る・部分的な上書き・ADR-1016 の質問 record と中継の節は現行のまま)。 ADR-1019 が「本 ADR の決定ではない」として別途送りにした「排他で断られた契約の待ち行列と再投入」「同時に流す便の本数の上限」を本 ADR が引き取る (交差の排他は ADR-1019 のまま・数値上限を持たない判断は本 ADR の新規決定)。
+  照会終端 — PRIN-MACHINE-JUDGES-MACHINE-ACTS
+  器が持つ判定を席が読み直して行為に変えない。 判定と行為を同じ器の 1 関数に置き、 席は判定の入力 (契約・priority・介入) だけを書く。
+  本 ADR の判断はこの原則に行き着く (これ以上は遡らない照会終端)。
+options:
+  - id: "OPT1"
+    name: "器の dispatcher — 審査 PASS の契約を列に入れ、 tick と land の直後に条件を満たす便を自動で起こす"
+    text: |
+      列の入力は「台帳の依存が閉じた ∧ 現在の契約の sha に対する審査が PASS」の契約。 審査は契約が出来た直後に 1 回撃ち、 verdict を契約の sha に紐づけて記録し、 起動の pipe run は同じ sha の PASS を再利用する。 起動条件は「live 便との write-set の交差 0 ∧ 受付 (余地・memory) を通る」。 順序は planner の介入 first → priority → 起票順 (hold は起こさない・release で戻す)。 契機は tick と land の直後。 列と理由 (なぜまだ出ていないか) を typed に列挙する口を持つ。
+      （平易）契約が出来た直後に lens が審査し、通った契約だけが「起動を待つ契約の並び」に入ります。器は条件がそろった便から自動で起こし、起動のときに同じ契約を審査し直しません。planner は契約に priority を付け、急ぐときは first、止めたいときは hold の印を付けるだけです。列の口を見れば、どの便が何を待っているかが 1 行ずつ分かります。
+      利点: 着地から次の起動までの待ちが席の手番から消える
+      利点: 順序が器の 1 関数で決まり、 席が優先便を後回しにする誤りが構造で消える
+      利点: 介入 (first / hold) が記録に残り、 rebrief と tick の DATA で見える
+      欠点: 器が台帳 (bd) を子 process で読む面が 1 つ増える (rebrief の read_ledger を共用・timeout は rules 行)
+      欠点: 審査の段 (s2-07l.241) と契約表からの intake (s2-07l.209) が前提で、 その 2 便の後にしか入らない
+      欠点: QUESTION と Gated FAIL の裁定は依然 planner の手番 (本 ADR の対象外)
+    verdict: adopted
+    reason: "列の入力は「台帳の依存が閉じた ∧ 現在の契約の sha に対する審査が PASS」の契約。 審査は契約が出来た直後に 1 回撃ち、 verdict を契約の sha に紐づけて記録し、 起動の pipe run は同じ sha の PASS を再利用する。 起動条件は「live 便との write-set の交差 0 ∧ 受付 (余地・memory) を通る」。 順序は planner の介入 first → priority → 起票順 (hold は起こさない・release で戻す)。 契機は tick と land の直後。 列と理由 (なぜまだ出ていないか) を typed に列挙する口を持つ。"
+  - id: "OPT2"
+    name: "管理席が tick ごとに台帳の ready を漁って出す (手順の自動化)"
+    text: |
+      器は変えず、 管理席の tick の手順に「ready を読み交差を測って launcher を撃つ」を足す。
+      （平易）器は変えず、管理席が定期的に台帳を読んで起動する手順を足します。手順が散文のまま残り、席が止まると起動も止まります。
+      利点: 器の変更が無い
+      欠点: 判定が席の散文の手順に残り、 順序と交差の読み直しが席ごとに揺れる (N2)
+      欠点: 席が止まると起動も止まる (自律の穴が席の生存に縛られる)
+    verdict: rejected
+    reason: "器は変えず、 管理席の tick の手順に「ready を読み交差を測って launcher を撃つ」を足す。"
+  - id: "OPT3"
+    name: "planner の dispatch file と管理席の中継 (現行・ADR-1016 §2.1)"
+    text: |
+      planner が便ごとに dispatch を書き、 管理席が受けて起動する。
+      （平易）今の形です。planner が便ごとに dispatch を書き、管理席が交差を測って起動します。当日の実測で、待ちと順序の誤りがここで起きました。
+      利点: 契約の所有者が起動の瞬間を見ている
+      欠点: 2026-09-15 の実測どおり、 待ちと順序の誤りが席の手番に乗る
+      欠点: 「上限 3」のような器に無い制限が散文で入り込む
+    verdict: rejected
+    reason: "planner が便ごとに dispatch を書き、 管理席が受けて起動する。"
+  - id: "OPT4"
+    name: "台帳 (bd) の側で自動化する (台帳の hook が起動を撃つ)"
+    text: |
+      bd の hook や外部 script が ready を検知して launcher を撃つ。
+      （平易）台帳の仕組みに起動を任せます。台帳に規律と実行を置くことになり、Rust の外の経路が増えます。
+      利点: 器の変更が小さい
+      欠点: 台帳に規律と実行を置く (憲法 C15 に反する)・Rust の外の経路 (C12 / ADR-1009)
+    verdict: rejected
+    reason: "bd の hook や外部 script が ready を検知して launcher を撃つ。"
+  - id: "OPT5"
+    name: "審査は起動の瞬間 (pipe run の中) に撃ち、 列の入力に審査を持たない (planner の初案)"
+    text: |
+      列には依存が閉じた契約が全部入り、 dispatcher が起こす瞬間の pipe run の中で審査 (intake の直後) を撃つ。 FAIL の便は次の周から理由付きで待つ。
+      （平易）審査を、契約が出来たときではなく便を起こす瞬間まで遅らせる案です。審査の段の位置を変えずに済み、verdict の置き場も増えませんが、契約の不備が起動の順番が回ってくるまで見えず、planner が手空きのうちに直せる時間を捨ててしまいます。
+      利点: 審査の段 (s2-07l.241) の位置を変えず、 verdict の置き場が増えない
+      欠点: 契約の不備が起動が回ってきた時まで見えず、 planner の待ち時間が捨てられる (user 裁定 2026-09-15 13:4xZ = 時間の使い方)
+      欠点: FAIL の便が run N+1 まで列を塞ぎ、 lens を run ごとに撃つ
+    verdict: rejected
+    reason: "列には依存が閉じた契約が全部入り、 dispatcher が起こす瞬間の pipe run の中で審査 (intake の直後) を撃つ。 FAIL の便は次の周から理由付きで待つ。"
+basis: [FR1030, FR1031, FR1036, FR1039, FR1049, NFR1004, ADR-1009, ADR-1016, ADR-1019]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  便を起こす仕事を、planner と管理席の中継から器へ移します。契約が出来た直後に審査し、通った契約は自動で列に入り、依存と write-set の交差と受付を満たしたものから器が起こします。順番は planner の印 first、契約の priority、起票順で決め、管理席は質問と判定の中継と着地だけを担います。
+approval:
+  who: 持ち主
+  date: 2026-09-15
+  ruling: "s2-07l（器の台帳の id・器の記録の承認の欄が名指す・取り込みの裁定 t3-hub.74.60.1:20261004T0113Z-1）"
+  verbatim: "器の台帳 s2-07l の notes に在る（この file に写さない）"
+  surface: R-8
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。起動の待ちと順序の誤りが消える一方、器が台帳を読む面が増え、質問と判定の裁定は依然 planner の手番に残ります。"
+  - "良い結果: 着地から次の起動までの待ちが 0 に近づき、 並列度が席の手番でなく交差と受付だけで決まる"
+  - "良い結果: 順序の誤り (優先便の後回し) と散文の上限が構造で消え、 介入は記録として残る"
+  - "良い結果: rebrief と tick の DATA に列の状態 (何が何を待っているか) が typed に出る"
+  - "代償: 器が台帳を子 process で読む面が増える (timeout と読めない周の扱いは rebrief と同じ型で持つ)"
+  - "代償: 質問 (FR1031) と gate FAIL の裁定は依然 planner の手番で、 そこは本 ADR では速くならない"
+  - "代償: 便の起動条件を判定する関数 (交差・余地・受付札) は intake の既存の関数を記帳せずに呼ぶ形にする必要があり、 その可視性の変更が契約に載る"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0034-dispatcher-starts-reviewed-contracts-automatically.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — dispatcher
+  器の表紙: 状態accepted選択肢5件 (OPT1–OPT5)結果良い 3 / トレードオフ 3版v0.1.0 / 2026-09-15
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1030・FR1039・FR1049・FR1036
+  器の表紙: 想定読者: scribe2 の開発 session (planner / admin) と user — pipeline の内部構造の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・2026-09-15 裁定 (対話面・逐語は台帳 s2-07l notes 12:5xZ)・裁定済
+  器の承認の欄: 設計 (planner)・planner・2026-09-15 起票 (docs/design/dispatcher.md)・作成
+  器の案の章の要約: 候補を 5 つ並べます。器に dispatcher を持つ案、管理席の手順を自動化する案、現行の中継のままの案、台帳の側で自動化する案、そして審査を起動の瞬間まで遅らせる案です。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・dispatcher（dispatcher）: 審査を通った契約の列を持ち、 依存・交差・受付を満たす便を tick と land の直後に自動で起こす器の口。 席の中継を置き換える。
+  ・列（dispatch queue）: 現在の sha の審査が PASS の契約のうちまだ起こしていないもの。 順序は first → priority → 起票順。
+  ・介入（planner intervention）: first (最優先)・hold (止める)・release (戻す) の 3 つの typed な印。 user の直命の対で、 散文でなく列の状態として記録される。
+  ・まだ出ていない理由（wait reason）: 依存 (台帳)・交差 (相手の便)・受付 (余地・memory)・hold と、 列外の理由 (審査が無い / 審査 FAIL / 設計 pointer 無し) のどれかを閉じた型で持つ。 列の口が 1 便 1 行で列挙する。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1034.build.adr.yaml · 生成: 2026-09-15 13:44 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

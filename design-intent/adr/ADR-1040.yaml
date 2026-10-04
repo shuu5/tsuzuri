@@ -1,0 +1,117 @@
+# 判断の記録 ADR-1040 — 器 scribe2 の判断の記録 ADR-0040 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1040
+title: "runner・lens・claude の箱の上限は 1 × gate.job_memory_mb (ADR-1021 §2.2 の「host 全体から席のぶんを引いた残り」を実装役・審査役・claude の箱について部分 supersede・Limit の 2 種は不変・値は既存の rules 行)"
+status: proposed
+date: 2026-09-17
+context: |
+  実装役の箱が host の残り全部を上限にしていたので、 箱の中で重い検査を回すと host の memory が圧迫され OOM で便が死んだ。 実装役・審査役・claude の箱の上限を変異検査の 1 本ぶん (既存の rules 行) に揃える。 検証行の箱と規則の値は変えない。
+  なぜこの判断が要るのかを、実測と現物から説明します。実装役が自分の箱の中で変異検査を回したとき、箱は host の残り全部を上限にしていたので溢れず、代わりに host の memory が圧迫されて便が OOM で死にました。上限の決め方は 2 種類しか無く、呼び手 4 か所が「host の残り」を選んでいます。user の裁定と憲法の向きも併せて示します。
+  CTX1 実測 — 実装役が自分の箱で変異検査を回し、 host の memory が圧迫されて便が OOM で死んだ
+  台帳 s2-07l.222 の run 1 (2026-09-15) が Failed detail=oom-kill で終端した。 実装役 (runner) は ADR-1021 §2.2 の割り当てどおり「host 全体から席のぶんを引いた残り」を上限とする箱で走っており、 その中で cargo mutants を回したため、 箱は溢れなかったが host の memory が圧迫され、 席と他の便が影響を受けた。 箱の上限が host の残り全部だと、 箱は「他を守る壁」として機能しない。
+  CTX2 現物 — 上限は Limit の 2 種で、 呼び手 4 か所が HostReserve を選んでいる
+  上限の型 Limit は 2 種 (PerJob(n) = n × gate.job_memory_mb / HostReserve = MemTotal − host.reserve_memory_mb・設計 gate-cost.md §4.2) で、 変異検査の箱は PerJob(本数)、 検証行 (gate と main 実測の共通の 1 本)・実装役・審査役・claude の箱は HostReserve を選ぶ。 呼び手は 4 か所 (runner の unit・gate の lens の unit・審査の lens の unit・claude の unit)。 変異検査を実装役の箱（実装役 (runner) が走る囲い）から外す側 (runner の allowlist から cargo mutants を外す) は ADR-1025 (rules 行 runner.denied_commands・Bash の command guard) で main に在る。 ADR-1025 §4 は「runner の箱の行ごとの上限 = 新しい rules 行 (案 A)」を ADR-1021 §4.2 に反するとして却下した。
+  CTX3 裁定 — 上限は gate の job と同じ rules 行の値にする
+  user 裁定 2026-09-15T18:2xZ (逐語は台帳 s2-07l.230 の notes) は planner の推奨「runner の箱の上限を gate の job と同じ rules 行 (gate.job_memory_mb) の値にし、 allowlist から cargo mutants を外す」を承認した。 後半は ADR-1025 で着地済み、 前半が本 ADR。 値そのもの (gate.job_memory_mb・host.reserve_memory_mb) は変えない = C5 の裁定 id は既存の行のもの。
+  CTX4 憲法の向き
+  C2 は選定・除外・順序を 1 列挙の上の 1 関数で持つ (Limit に variant を足さず、 呼び手が選ぶ variant を替える)。 C1 / C5 は規則の値を manifest だけが持ち、 行の追加・変更に裁定 id を要る (本 ADR は行を足さない)。 FR1046 は封じ込めが使えない host で並列度 1 に縮退することを、 NFR1004 は fail-closed を求める。 ADR-1021 §2.2 の「溢れて死ぬのはその箱の中だけ」「実装役の箱が溢れた周は便を理由付きで終端し起こし直す」は不変。
+  （選択肢を測るものさし）判断を評価する 4 本のものさしです。箱が他を守る壁として働くこと、上限の種類と規則の値を増やさないこと、gate の検証行の箱を変えないこと、溢れたときの扱いを今までどおりにすることです。
+  DR1｜箱が「他を守る壁」として働く = 1 つの箱が host の残り全部を取れない CTX1 / ADR-1021 §2.2 (溢れて死ぬのはその箱の中だけ)
+  DR2｜上限の型と規則の値を増やさない (Limit は 2 種のまま・rules 行は既存の値) 憲法 C2 / C1 / C5・ADR-1021 §4.2・ADR-1025 §4
+  DR3｜検証行の箱（gate の検査 1 本が走る囲い） (gate と main 実測) は変えない = gate の費用の形 (ADR-1021 §2.1 / §2.3) は不変 ADR-1021 / 設計 gate-cost.md §4
+  DR4｜溢れた周の極性は既存のまま (実装役 = 便を理由付きで終端・記録に残す) ADR-1021 §2.2 / SRS NFR1004 / FR1046
+decision: |
+  選んだ案と、それが要件書のどの要件を支えるかを示します。実装役・審査役・claude の箱の上限を 1 × gate.job_memory_mb にし、種類も規則の値も増やさず、検証行の箱と溢れたときの扱いは変えません。封じ込めの縮退（FR1046）と黙って落とさないこと（NFR1004）に対応します。
+  採用 — OPT1
+  器 SHALL 実装役 (runner)・審査役 (gate の lens と審査の lens)・claude の子 process の箱の上限を 1 × gate.job_memory_mb (Limit の PerJob(1)) とし、 Limit の variant SHALL 2 種のままとし、 rules 行 SHALL 足さない。 検証行 (gate と main 実測の共通の 1 本) の箱 SHALL HostReserve のままとする。 溢れた周の極性 (実装役は便を理由付きで終端し起こし直す・審査役は INCONCLUSIVE) SHALL ADR-1021 §2.2 のままとする。
+  （平易）実装役（runner）・審査役（gate の lens と契約の lens）・claude の子 process の箱の上限を、変異検査 1 本ぶん（1 × gate.job_memory_mb）にします。上限の決め方の種類は 2 つのまま、規則の行は足しません。gate の検証行の箱は host の残りのままです。溢れたときの扱い（実装役は便を理由付きで終端して起こし直す・審査役は「判定できず」）は前の決定のままです。
+  （理由）箱は「溢れて死ぬのはその中だけ」という壁のために在るのに、上限が host の残り全部だと壁になりません。1 本ぶんに閉じれば、実装役が複数走っても席と他の便が守られます。既存の式と既存の規則の値をそのまま使えば、種類も行も増やさずに呼び手の 1 語を替えるだけで済みます。1 本ぶんで溢れる周が出る代償は、既存の「理由付きで終端して起こし直す」扱いで受け、値の見直しは実測の後に裁定で行います。
+  この判断が正当化する要件 (cross-doc 照会 → SRS-SCRIBE2-MVP)
+  FR1046（claim）: 封じ込めが使えない host の縮退 (箱なし・並列度 1) は不変で、 箱が使える host では箱の上限だけが変わる。
+  NFR1004（claim）: 溢れた周は黙って落とさず Failed detail=oom-kill (実装役) / INCONCLUSIVE (審査役) で記録に残す = 既存の極性のまま。
+  照会先: SRS-SCRIBE2-MVP — SRS: 設計 → 契約 → 実装 → 検証 → land を、 人の手を借りずに 1 本通す器（MVP）
+  （版の系譜と原則）この ADR が版の系譜のどこに在るかと、判断が最後に行き着く原則です。ADR-1021 §2.2 のうち実装役・審査役（と claude）の箱の割り当ての部分だけを置き換え、検証行の箱・縮退・溢れたときの扱いは変えません。ADR-1025 が却下した「新しい規則の行」も足しません。
+  改訂状態: current
+  置き換える ADR: ADR-1021
+  置き換えられた: なし (現行)
+  ADR-1021 §2.2 のうち「それ以外の箱 (他の検証行・実装役・審査役) は host 全体から席のぶんを引いた残り」の実装役・審査役 (と claude) の部分を本 ADR が置き換える。 検証行の箱・封じられない host の縮退・溢れた周の極性 (§2.2 の他の文) と §2.1 / §2.3 / §2.4 / §2.5 は不変。 ADR-1025 §4 の「案 A の却下」は不変 (本 ADR は新しい行を足さない)。
+  照会終端 — PRIN-A-BOX-IS-A-WALL
+  箱の上限は「その箱の仕事 1 つぶん」であって「host に残っている全部」ではない。 壁として働かない箱は箱ではない。
+  本 ADR の判断はこの原則に行き着く (これ以上は遡らない照会終端)。
+options:
+  - id: "OPT1"
+    name: "呼び手 4 か所の上限を HostReserve から PerJob(1) に替える (1 × gate.job_memory_mb)"
+    text: |
+      runner・gate の lens・審査の lens・claude の箱の上限を、 変異検査の 1 本ぶんと同じ式 (1 × gate.job_memory_mb) にする。 Limit の variant は増やさず、 値は既存の rules 行のまま。 検証行の箱は HostReserve のまま。
+      （平易）実装役・gate の審査役・契約の審査役・claude の子 process、の 4 か所の箱の上限を、変異検査 1 本ぶんと同じ式（1 × gate.job_memory_mb）にします。上限の決め方の種類は 2 つのまま、規則の値も既存の行のままです。gate の検証行の箱は host の残りのままにします。
+      利点: 箱が壁として働く (1 つの箱が取れる memory が 1 本ぶんに閉じる)
+      利点: 型も行も増やさない (C2 / C5)・呼び手の 1 語が替わるだけで歯は 4 本
+      利点: 値の見直しは既存の行の裁定 (A2) で済む
+      欠点: 実装役の cargo nextest / clippy の workspace build が 1 本ぶんの箱で走る = 溢れる周が出うる (溢れた周は既存の極性で Failed detail=oom-kill・値の見直しは実測後)
+      欠点: ADR-1021 §2.2 の割り当ての文 (実装役・審査役 = host の残り) を部分 supersede する
+    verdict: adopted
+    reason: "runner・gate の lens・審査の lens・claude の箱の上限を、 変異検査の 1 本ぶんと同じ式 (1 × gate.job_memory_mb) にする。 Limit の variant は増やさず、 値は既存の rules 行のまま。 検証行の箱は HostReserve のまま。"
+  - id: "OPT2"
+    name: "現行のまま (実装役・審査役・claude = host の残り)"
+    text: |
+      上限を変えず、 cargo mutants の deny (ADR-1025) だけで守る。
+      （平易）今の形です。上限は変えず、実装役が変異検査を回せないようにする deny（ADR-1025）だけで守ります。器を変えなくて済みますが、変異検査以外の重い処理でも 1 つの箱が host の残り全部を取れるので、壁にはなりません。
+      利点: 器の変更が無い
+      欠点: 変異検査以外の重い処理 (workspace build を並列で回す実装役が複数) でも host の残り全部を取れる = 壁にならない (CTX1 の型が再発しうる)
+    verdict: rejected
+    reason: "上限を変えず、 cargo mutants の deny (ADR-1025) だけで守る。"
+  - id: "OPT3"
+    name: "実装役の箱の上限を新しい rules 行にする (ADR-1025 §4 の案 A)"
+    text: |
+      runner.job_memory_mb のような行を足し、 実装役だけ別の値にする。
+      （平易）実装役の箱だけ、新しい規則の行（実装役用の memory の値）で上限を持つ案です。実装役の build に合わせた値を持てますが、上限の種類は 2 つという前の決定に反し、規則の行と裁定が 1 つ増えます。ADR-1025 で既に却下されています。
+      利点: 実装役の workspace build に合わせた値を持てる
+      欠点: ADR-1021 §4.2 (上限は 2 種) に反し、 rules 行と裁定が 1 つ増える (ADR-1025 §4 で既に却下)
+    verdict: rejected
+    reason: "runner.job_memory_mb のような行を足し、 実装役だけ別の値にする。"
+  - id: "OPT4"
+    name: "Limit に 3 つ目の variant を足す"
+    text: |
+      「実装役用」の variant を足して式を分ける。
+      （平易）上限の決め方に「実装役用」という 3 つ目の種類を足す案です。呼び手の意図が名前で読めますが、式は 1 本ぶんと同じになるので名前だけの種類が増えることになります。
+      利点: 呼び手の意図が variant 名で読める
+      欠点: 式は PerJob(1) と同じになる = 名前だけの variant (§4.2「2 種」を破る・C2 の増分 0)
+    verdict: rejected
+    reason: "「実装役用」の variant を足して式を分ける。"
+  - id: "OPT5"
+    name: "limit_of に段の名で分岐を足す"
+    text: |
+      unit 名や段の名から上限を選ぶ分岐を 1 関数に足す。
+      （平易）上限を決める 1 つの関数の中で、段の名や process の名を見て分岐する案です。呼び手を触らずに済みますが、呼び手が規則の行を渡さず名前を嗅いで選ぶ形になり、「1 つの列挙の上の 1 つの関数」という憲法の形に反します。
+      利点: 呼び手を触らない
+      欠点: 呼び手が行を渡さず字面で選んでいるので unit 名を嗅ぐ分岐になる = 1 関数 1 列挙 (C2) に反する
+    verdict: rejected
+    reason: "unit 名や段の名から上限を選ぶ分岐を 1 関数に足す。"
+basis: [FR1046, NFR1004, ADR-1021, ADR-1025]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  便の実装役・審査役・claude の子 process を閉じ込める箱の上限を、「host に残っている全部」から「変異検査 1 本ぶん」（既存の規則の値 gate.job_memory_mb）に揃えます。上限の決め方の種類も規則の値も増やしません。gate の検証行の箱と、溢れたときの扱いは今までどおりです。
+consequences:
+  - "この判断で良くなることと、代わりに引き受けることです。1 つの箱が host の残り全部を取れなくなる一方、実装役の workspace build が 1 本ぶんの箱で走るので溢れて止まる周が出うること、前の決定記録の 1 文を部分的に置き換えることを引き受けます。"
+  - "良い結果: 1 つの箱が host の残り全部を取れなくなり、 実装役が複数走っても席と他の便が守られる"
+  - "良い結果: 型 (Limit 2 種) も規則 (rules 行) も増えず、 変更は呼び手 4 か所の 1 語と歯 4 本"
+  - "代償: 実装役の workspace build が 1 本ぶんの箱で走るので、 溢れて Failed detail=oom-kill になる周が出うる (値の見直しは実測後の別裁定・A2)"
+  - "代償: ADR-1021 §2.2 の割り当ての文を部分 supersede する (検証行の箱の文は残る)"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0040-runner-and-lens-boxes-are-one-job-each.html
+  器の表紙の頭: 設計判断記録 (ADR) scribe2 — 箱の上限
+  器の表紙: 状態proposed選択肢5件 (OPT1–OPT5)結果良い 2 / トレードオフ 2版v0.1.0 / 2026-09-17
+  器の表紙: 正当化する要件: SRS-SCRIBE2-MVP の FR1046・NFR1004
+  器の表紙: 想定読者: scribe2 の開発 session (planner / admin) と user — cgroup や systemd の専門知識は不要 (専門語はやさしい言葉を併記)
+  器の承認の欄: 裁定 (user)・user・2026-09-15 (対話面・planner の推奨「runner の箱の上限を gate の job と同じ rules 行の値にし、 allowlist から cargo mutants を外す」への承認・逐語は台帳 s2-07l.230 の notes・裁定 id user 2026-09-15T18:2xZ)・裁定済
+  器の承認の欄: 設計 (planner)・planner・2026-09-17 起票 (docs/design/gate-cost.md §12・契約表の行 c・台帳 s2-07l.230)・作成
+  器の案の章の要約: 候補を 5 つ並べます。呼び手 4 か所の上限を 1 本ぶんに替える案、今のまま deny だけで守る案、実装役だけ新しい規則の値を持つ案、上限の種類を 1 つ足す案、そして 1 関数の中で段の名によって分岐する案です。
+  器の専門語の説明: 本文に出てくる専門語を、やさしい言葉で説明します。
+  ・封じ込めの箱（confinement scope）: systemd-run --user --scope で作る transient scope。 上限を超えると殺されるのはその中の process だけ (ADR-1021 §2.2)。
+  ・箱の上限の 2 種（two limit kinds）: PerJob(n) = n × gate.job_memory_mb と HostReserve = MemTotal − host.reserve_memory_mb。 本 ADR は種類を増やさず、 実装役・審査役・claude の箱を PerJob(1) にする。
+  ・実装役の箱（runner box）: 便の runner を起こす scope。 本 ADR で上限が 1 × gate.job_memory_mb になる。 溢れた周は便を理由付きで終端し、 新しい便で起こし直す (ADR-1021 §2.2)。
+  ・検証行の箱（verify-line box）: gate と main 実測の共通の検証行を起こす scope。 本 ADR では変えない (HostReserve のまま)。
+  器の頁の末: このページは、大もとの機械データ (正本) から自動で組み立てられています。構造は機械が自動で検査し、内容が元データに忠実かは独立のレビューで確かめます。
+  器の頁の末: 機械SSoT: ADR-1040.build.adr.yaml · 生成: 2026-09-17 02:43 · 検証状態: structure ✓ fabrication-free / prose ✓ 充填済 (fidelity ceiling → S5 対象)
+  器の頁の末: folio design systemADR-packfolio engine B1 (instance#2)cross-doc 照会

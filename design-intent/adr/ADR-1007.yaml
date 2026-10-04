@@ -1,0 +1,75 @@
+# 判断の記録 ADR-1007 — 器 scribe2 の判断の記録 ADR-0007 の写し（取り込みの段 2・判断の記録 ADR-39・係 w139a の mk_adr.py が器の HTML から組んだ）
+id: ADR-1007
+title: "憲法 R-C13-2「統合 test file 3 以下」は cargo の integration test target の数で数える"
+status: accepted
+date: 2026-09-10
+context: |
+  「統合 test の file は 3 つまで」という決まりがありますが、 何を 1 つと数えるのかが書かれていませんでした。 数え方しだいで、 いまの状態が「1 / 3」にも「6 / 3 で違反」にもなります。
+  憲法 C13 の rules 行 R-C13-2 は「統合 test file 3 以下」を deny (CI) の値として持つが、 何を 1 file と数えるかを定めていない。 設計 doc の rules manifest §2 は「cargo の integration test target の数で数える (tests/<dir>/main.rs は 1 target)」と読んで先に land したが (2026-09-09)、 その解釈は ADR に無い。 本 repo の作法は憲法条の解釈が要る便は実装前に ADR を書くと定めるので、 先行した解釈をここへ引き上げる。
+  現物 (本 ADR の記録時点・cargo metadata --no-deps): core crate の targets は lib 1 / bin 1 / test 1 であり、 kind = test の target は e2e の 1 本である。 一方 crates/<NAME>/tests/e2e/ 配下の物理 .rs は 6 本 (main.rs + module 5) である。 ∴ 物理 file で数える読みではすでに違反し、 target で数える読みでは 1 / 3 となる——数え方を決めないままでは、 同じ repo が同時に「違反」でも「余裕あり」でもある。
+decision: |
+  決めることは 3 つです。 何を 1 つと数えるか、 どうやって数えるか、 そして今回は決めない範囲はどこかです。
+  本 ADR は R-C13-2 の数え方の解釈だけを記録する。 閾値の実値 (3 以下) は不変であり、 憲法本文・rules 表・rules manifest の行はいずれも書き換えない。
+  §2.1 数える単位は integration test target
+  cargo が「テスト用にまとめて build する 1 つのかたまり」を 1 と数えます。 その中でファイルを分けても数は増えません。
+  R-C13-2 の「統合 test file」は cargo の integration test target 1 つを 1 と数える (MUST)。 tests/<dir>/main.rs と、 そこから mod で読み込まれる module file は合わせて 1 である。
+  単位を target に置く理由は、 R-C13-2 が属する C13 が測ろうとしているものがcompile の決定論的な形だからである。 統合 test の数が compile 時間へ効くのは target の数 (link される実行 file の数) であって、 その中の module 分割ではない。 module へ分ける自由を残しつつ target を増やさない形は C4 (1 file の行数上限) とも両立する——1 file を小さく保つために module へ割る操作が、 別の条の違反を作らない。
+  §2.2 数える手段は cargo metadata
+  数えるときは cargo に聞きます。 ディレクトリを目で見て数えたり、 ファイル数を数えたりはしません。
+  target の数は cargo metadata が返す targets のうち kind = test のものを数えて得る (MUST)。 物理 .rs file 数・dir の目視・glob の件数は用いない (MUST NOT)。
+  cargo metadata を正とするのは、 build する側が実際に何を target とみなすかがそこにしか無いためである。 file 名や配置の規約 (tests/*.rs が 1 file = 1 target・tests/<dir>/main.rs が dir = 1 target) は cargo 側の解決規則であり、 本 ADR がそれを写し取って別の場所で再実装すると、 規則が変わった日に写しだけが古い状態になる。
+  §2.3 射程外
+  この記録は数え方だけを決めます。 上限の数を変えることも、 それを機械に見張らせることも、 ここでは決めません。
+  次は本 ADR の決定ではない (MUST NOT be read as such): 閾値の実値「3 以下」の変更 (憲法の閾値変更は user 裁定を要する別手続きであり、 本 ADR は不変のまま扱う)、 憲法 §3 rules 表と rules manifest (rules/manifest.toml) の行の字面 (逐語のまま・解釈の置き場は本 ADR と設計 doc である)、 target 数を CI で deny する歯の実装 (C13 の deny 面は別便の所管)、 統合 test の中身の分け方 (module 構成は設計の領分)。
+options:
+  - id: "chosen"
+    name: "憲法 R-C13-2「統合 test file 3 以下」は cargo の integration test target の数で数える"
+    text: |
+      決めることは 3 つです。 何を 1 つと数えるか、 どうやって数えるか、 そして今回は決めない範囲はどこかです。
+    verdict: adopted
+    reason: "器の記録が採った決定（字は決定の欄・器の記録の §2）。文脈の要約: 「統合 test の file は 3 つまで」という決まりがありますが、 何を 1 つと数えるのかが書かれていませんでした。 数え方しだいで、 いまの状態が「1 / 3」にも「6 / 3 で違反」にもなります。"
+  - id: "i"
+    name: "物理 .rs file の数で数える"
+    text: |
+      案 (i) 物理 .rs file の数で数える: 却下。 現物が 6 本ゆえ採用した瞬間に違反となり、 かつ module へ割る操作 (C4 の行数上限を守るための正しい手) が違反を作る。 「file」という語の素直な読みではあるが、 C13 が測ろうとする compile の形とは対応しない。
+    verdict: rejected
+    reason: "現物が 6 本ゆえ採用した瞬間に違反となり、 かつ module へ割る操作 (C4 の行数上限を守るための正しい手) が違反を作る。 「file」という語の素直な読みではあるが、 C13 が測ろうとする compile の形とは対応しない。"
+  - id: "ii"
+    name: "「file」を「crate」と読む"
+    text: |
+      案 (ii) 「file」を「crate」と読む: 却下。 ただし理由は「厳しすぎる」でも「緩すぎる」でもなく、 語が 2 通りに割れて独立した案として立たないことである。 (a) compile 単位の crate と読む場合: cargo は integration test target 1 本を 1 つの crate として build する (本 ADR の記録時点の実測——cargo test --no-run -v が出す rustc の行は --crate-name e2e の 1 本だけである)。 ∴ この読みは §2.1 の採用案と同じものを別の語で言っているにすぎない。 (b) Cargo の package と読む場合: 1 package には統合 test target を何本でも置けるため、 target が 2 本・3 本へ増えても数は 1 のままである。 R-C13-2 が抑えようとしているもの (link される実行 file の数＝compile の形) を測らなくなるので却下する。
+    verdict: rejected
+    reason: "ただし理由は「厳しすぎる」でも「緩すぎる」でもなく、 語が 2 通りに割れて独立した案として立たないことである。 (a) compile 単位の crate と読む場合: cargo は integration test target 1 本を 1 つの crate として build する (本 ADR の記録時点の実測——cargo test --no-run -v が出す rustc の行は --crate-name e2e の 1 本だけである)。 ∴ この読みは §2.1 の採用案と同じものを別の語で言っているにすぎない。 (b) Cargo の package と読む場合: 1 package には統合 test target を何本でも置けるため、 target が 2 本・3 本へ増えても数は 1 のままである。 R-C13-2 が抑えようとしているもの (link される実行 file の数＝compile の形) を測らなくなるので却下する。"
+basis: [FR1017, FR1018]
+retreat:
+  kind: ruling
+  condition: "持ち主に問う: 器のこの判断を替えるか。替える時は、この記録の本文を直さず、後継の判断の記録を立てて替える（取り込みの決め）。"
+plain: |
+  決めることは 3 つです。 何を 1 つと数えるか、 どうやって数えるか、 そして今回は決めない範囲はどこかです。
+approval:
+  who: 持ち主
+  date: 2026-09-10
+  ruling: "t3-hub.74.60.1:20261004T0113Z-1（取り込みの裁定・器の記録は器の台帳の裁定 id を名指さない）"
+  verbatim: "tsuzuri の台帳 t3-hub.74.60.1 の notes に在る（この file に写さない・器の記録は器の台帳の裁定 id を名指さない）"
+  surface: R-8
+consequences:
+  - "良い点は、 数えた結果が人によって変わらなくなることです。 弱い点は、 その数え方を機械がまだ見張っていないことです。"
+  - "Positive: 同じ repo に対して誰が数えても同じ数になる (現物では 1 / 3)。 統合 test を module へ割る refactoring が「file が増えた」と誤読されて条に触れることが無くなり、 C4 の行数上限と R-C13-2 が互いを縛らない。"
+  - "Negative: この数え方を測る歯はまだ無い。 target が 4 本へ増えても CI は止まらず、 気付くのは人が数えたときである (C13.4 の deny 面は別便)。 また target を 1 本に保つ運用は、 統合 test 全体が1 つの実行 file へ link されることを意味し、 test の追加は link 時間へ直に効く——compile 予算 (R-C13-3) の側で観測する。"
+note: |
+  器の元の file: scribe2/design-intent/decisions/ADR-0007-integration-test-file-counts-targets.html
+  器の記録の頭: Status: accepted · Date: 2026-09-10 · version 0.4.6 (拘束する constitution の版) · R-C13-2 の数え方の解釈を記録
+  器の記録の前置き: 本 ADR は IETF RFC 2119 および RFC 8174 / BCP 14 に定義される MUST / SHALL / SHOULD / MAY のキーワード解釈規約に従う。 ADR は決定時点の記録 (frozen) であり、 改訂は本 ADR を supersede する新 ADR で行う。
+  器の機械の欄 version: 0.4.6 (拘束する constitution の版・決定時点で凍結)
+  器の機械の欄 decided-by: 設計 doc の先行記述 (2026-09-09) を ADR へ引き上げる契約化 (2026-09-10)。 閾値「3 以下」は不変ゆえ A2 の閾値変更には当たらない
+  器の機械の欄 stakeholders: Developer, AI Agent, External Reviewer
+  器の機械の欄 supersedes: 無し (既存 ADR の規定を差し替えない・R-C13-2 の数え方の解釈を新たに記録する)
+  器の機械の欄 related: constitution C13 R-C13-2 / C4・SRS FR1017 / FR1018・設計 doc の rules manifest §2
+  器の却下案の節の要約: 2 つの案を退けました。 ファイルの数をそのまま数える案と、 「crate」で数える案です。 後者は、 言葉が 2 通りに読めてしまい、 片方は採用案と同じこと、 もう片方は数えたいものを数えられません。
+  器の記録の出所（Trace）:
+  出所は 2 件です。 設計の記録が先に同じ読みを書いていたことと、 上限の数は変えないという確認です。
+  ・先行記述: 設計 doc の rules manifest §2 が同じ読み (target で数える) を書いて land した (2026-09-09)。 本 ADR はその解釈を記録面へ引き上げるものであり、 設計 doc 側の記述と食い違わない。
+  ・閾値の確認: 「3 以下」は不変である旨を 2026-09-10 に確認した。 閾値を動かさないため憲法の閾値変更 (user 裁定を要する手続き) には当たらない。 本 repo は public のため、 確認の逐語・席や台帳の識別子・host 名は本 file に載せない (出所は日付で指す)。
+  ・拘束条件: C13 (compile と依存に予算) の rules 行 R-C13-2、 および C4 (大きさの上限)。 要件は SRS FR1017 (rules manifest) / FR1018 (rules の検査)。
+  ・記録時点の現物: kind = test の target は 1、 上限は 3。
+  ・記録した日: 2026-09-10。
