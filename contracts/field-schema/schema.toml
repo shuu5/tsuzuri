@@ -1,4 +1,4 @@
-# 契約表の行の欄（器 scribe2 の生成物の写し・手で直さない・正本は scribe2 の core の pipe/table.rs の FIELDS・写した元 = scribe2 fd39667・2026-09-26）
+# 契約表の行の欄（器 scribe2 の生成物の写し・手で直さない・正本は scribe2 の core の pipe/table.rs の FIELDS・写した元 = 同じ repo の scribe2/contracts/schema.toml・2026-10-05）
 schema = 1
 
 [[field]]
@@ -88,6 +88,16 @@ shape = "list"
 
 [[field]]
 name = "growth"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "done-teeth"
+need = "optional"
+shape = "list"
+
+[[field]]
+name = "code-facts"
 need = "optional"
 shape = "list"
 
