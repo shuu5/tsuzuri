@@ -278,7 +278,7 @@ mod dom {
     use crate::vocab::label;
     use crate::widgets::help::{HelpCtx, hs, shows_internal};
     use crate::widgets::hover::{Card, attach, delegate, leaves};
-    use crate::widgets::nodecard::view_cards;
+    use crate::widgets::nodecard::view_cards_in;
 
     /// 頁に 1 つの読み（URL の query の signal と口の読みの結果・id が無ければ読まない）。
     #[derive(Debug, Clone, Copy)]
@@ -521,7 +521,7 @@ mod dom {
         let lay = layout(&doc);
         let picture = svg(&doc, &lay);
         let gv = as_view(&doc);
-        let cards = view_cards(&gv.nodes);
+        let cards = view_cards_in(&gv.nodes, mode());
         let lg = legend(&gv);
         let sides = chain(&doc);
         let count = count_line(&doc);

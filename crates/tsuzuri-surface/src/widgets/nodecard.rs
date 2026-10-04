@@ -4,17 +4,21 @@
 //! 出所は節点の file と行（無ければ帯の path）を短くし、長い概要を折った行と出所の全部の字は詳しくに置く。
 //! 地図の面の札と行が同じ id と電文から同じ card を引けるように、id から引く `card_of` も置く（host でも組む）。
 //! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く（行 g-card-around）。
+//! 要約は表示の型の 1 つを部品 sumpick で選び、表示の型の側が無ければもう一方を出して詳しくの頭に印の語を置く
+//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)・行 g-card-mode）。表示の型を受けない関数は初心者の包み。
 
 use std::collections::BTreeMap;
 
 use tsuzuri_contract::graph::{GraphDoc, GraphNode, ViewNode};
 
+use crate::frame::Mode;
 use crate::mapview::band::{band_of, kind_key};
 use crate::mapview::graph::cut;
 use crate::mapview::graph::fold::{fold_key, plain_title};
 use crate::mapview::state;
 use crate::vocab::label;
 use crate::widgets::hover::{Card, ELLIPSIS};
+use crate::widgets::sumpick::{self, Picked};
 
 /// 状態の無い節点の状態の語。
 pub const NO_STATE: &str = "状態なし";
@@ -39,6 +43,11 @@ pub fn gist(node: &GraphNode) -> Option<&str> {
     [&node.plain, &node.eng]
         .into_iter()
         .find_map(|s| s.as_deref().filter(|s| !s.is_empty()))
+}
+
+/// 表示の型の概要（部品 sumpick の pick・本文の頭の 1 行は渡さない・行 g-card-mode）。
+pub fn gist_in(node: &GraphNode, mode: Mode) -> Option<Picked> {
+    sumpick::pick(mode, node.plain.as_deref(), node.eng.as_deref(), None)
 }
 
 /// 出所の全部の字（file が在れば file とコロンと行か file と NO_LINE・無ければ帯の path・見本の srcText）。
@@ -96,15 +105,27 @@ pub fn short_path(path: &str) -> String {
 
 /// 節点の card（電文の状態を引いて `card_for` に渡す）。
 pub fn node_card(doc: &GraphDoc, node: &GraphNode) -> Card {
-    card_for(node, state(doc, node))
+    node_card_in(doc, node, Mode::Beginner)
+}
+
+/// 表示の型の節点の card（電文の状態を引いて `card_in` に渡す）。
+pub fn node_card_in(doc: &GraphDoc, node: &GraphNode, mode: Mode) -> Card {
+    card_in(node, state(doc, node), mode)
+}
+
+/// 節点と状態の字の card（初心者の表示の型の `card_in`）。
+pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
+    card_in(node, status, Mode::Beginner)
 }
 
 /// 節点と状態の字の card（題・種類と帯と状態・id と要約・出所と行・詳しくは長い概要を折った行と出所の全部の字）。
-/// 状態の字は判じずそのまま種類の行に置く（無ければ「状態なし」）。
-pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
+/// 状態の字は判じずそのまま種類の行に置く（無ければ「状態なし」）。要約は表示の型の 1 つで、
+/// 表示の型の側が無くもう一方を出す時は詳しくの頭にその語の鍵の語を置く。
+pub fn card_in(node: &GraphNode, status: Option<&str>, mode: Mode) -> Card {
     let band = band_of(node.kind);
     let title = node.title.split_whitespace().collect::<Vec<_>>().join(" ");
-    let g = gist(node);
+    let picked = gist_in(node, mode);
+    let g = picked.as_ref().map(|p| p.text.as_str());
     let value = match g {
         None => format!("{} {NO_GIST}", node.id),
         Some(g) => {
@@ -126,6 +147,9 @@ pub fn card_for(node: &GraphNode, status: Option<&str>) -> Card {
         Some(g) if g.chars().count() > FOLD_OVER => fold_rows(g),
         _ => Vec::new(),
     };
+    if let Some(p) = picked.as_ref().filter(|p| p.marked) {
+        more.insert(0, label(p.key));
+    }
     let full = full_src(node);
     if full != src {
         more.push(full);
@@ -166,25 +190,35 @@ pub fn group_card(n: &ViewNode) -> Card {
     }
 }
 
-/// 眺めの節点の列の id ごとの card（同じ id が 2 つ在れば前の節点の値・組の箱は `group_card`・近傍の図と一覧が引く）。
+/// 眺めの節点の列の id ごとの card（初心者の表示の型の `view_cards_in`）。
 pub fn view_cards(nodes: &[ViewNode]) -> BTreeMap<String, Card> {
+    view_cards_in(nodes, Mode::Beginner)
+}
+
+/// 眺めの節点の列の id ごとの表示の型の card（同じ id が 2 つ在れば前の節点の値・組の箱は `group_card`・近傍の図と一覧が引く）。
+pub fn view_cards_in(nodes: &[ViewNode], mode: Mode) -> BTreeMap<String, Card> {
     let mut cards = BTreeMap::new();
     for n in nodes {
         cards.entry(n.node.id.clone()).or_insert_with(|| {
             if n.group {
                 group_card(n)
             } else {
-                card_for(&n.node, n.status.as_deref())
+                card_in(&n.node, n.status.as_deref(), mode)
             }
         });
     }
     cards
 }
 
-/// id の節点の card（電文の nodes の前から見て最初の同じ id・無ければ None）。
+/// id の節点の card（初心者の表示の型の `card_of_in`）。
 pub fn card_of(doc: &GraphDoc, id: &str) -> Option<Card> {
+    card_of_in(doc, id, Mode::Beginner)
+}
+
+/// id の節点の表示の型の card（電文の nodes の前から見て最初の同じ id・無ければ None）。
+pub fn card_of_in(doc: &GraphDoc, id: &str, mode: Mode) -> Option<Card> {
     doc.nodes
         .iter()
         .find(|n| n.id == id)
-        .map(|n| node_card(doc, n))
+        .map(|n| node_card_in(doc, n, mode))
 }

@@ -12,11 +12,11 @@ use super::nodearound::PageState;
 use super::node::center;
 use super::{Body, NO_CONTENT, NOT_READ};
 use crate::account::home::{EXPERT_CHARS, wrap_words};
-use crate::frame::Block;
+use crate::frame::{Block, Mode};
 use crate::mapview::encode;
 use crate::view::Fetched;
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::card_for;
+use crate::widgets::nodecard::card_in;
 
 pub const BLOCK: Block = Block {
     id: "timeline",
@@ -229,12 +229,17 @@ pub fn body(fetched: &Fetched, only: Option<&str>) -> Body<Vec<RunRow>> {
     }
 }
 
-/// 走行の行の link の hover の card（ほかの節点の頁への link と同じ `card_for` の card・行 g-accept-face）。
-/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
+/// 走行の行の link の hover の card（初心者の表示の型の `run_card_in`）。
 pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
+    run_card_in(rows, run, Mode::Beginner)
+}
+
+/// 走行の行の link の表示の型の hover の card（ほかの節点の頁への link と同じ `card_in` の card・行 g-accept-face・行 g-card-mode）。
+/// 近傍の行に同じ id の節点が在ればその節点と状態から、無ければ走行の id だけの節点（種類は走行・状態なし）から組む。
+pub fn run_card_in(rows: &[AroundRow], run: &str, mode: Mode) -> Card {
     match rows.iter().find(|r| r.node.id == run) {
-        Some(r) => card_for(&r.node, r.status.as_deref()),
-        None => card_for(
+        Some(r) => card_in(&r.node, r.status.as_deref(), mode),
+        None => card_in(
             &GraphNode {
                 id: run.to_string(),
                 kind: NodeKind::Run,
@@ -247,6 +252,7 @@ pub fn run_card(rows: &[AroundRow], run: &str) -> Card {
                 updated: None,
             },
             None,
+            mode,
         ),
     }
 }
@@ -259,7 +265,7 @@ pub use dom::view;
 mod dom {
     use leptos::prelude::*;
 
-    use super::{BLOCK, RunRow, Want, body, kept_want, run_card};
+    use super::{BLOCK, RunRow, Want, body, kept_want, run_card_in};
     use crate::frame::{Mode, node_href};
     use crate::project::nodearound::{PageState, mode_of, source, state};
     use crate::project::{Body, body_view, section, unmeasured};
@@ -304,7 +310,7 @@ mod dom {
                     let list = rows
                         .into_iter()
                         .map(|r| {
-                            let card = run_card(&around, &r.run);
+                            let card = run_card_in(&around, &r.run, mode());
                             row_view(r, card, mode)
                         })
                         .collect_view();

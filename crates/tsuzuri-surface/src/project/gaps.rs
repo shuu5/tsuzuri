@@ -10,10 +10,10 @@ use tsuzuri_contract::graph::{GraphDoc, InvariantCheck, Verdict};
 use tsuzuri_contract::wire;
 
 use super::{Body, Item, NOT_READ, node_item};
-use crate::frame::Block;
+use crate::frame::{Block, Mode};
 use crate::view::Fetched;
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::card_of;
+use crate::widgets::nodecard::card_of_in;
 
 pub const BLOCK: Block = Block {
     id: "gaps",
@@ -207,8 +207,14 @@ pub fn checks(fetched: &Fetched) -> Result<Vec<InvariantCheck>, &'static str> {
     doc(fetched).map(|d| d.invariants)
 }
 
-/// 頁の中身（測れていない・0 本・札と一覧）。測れていないときは合格と出さない（要件 NFR2）。
+/// 頁の中身（初心者の表示の型の `body_in`）。
 pub fn body(fetched: &Fetched) -> Body<Gaps> {
+    body_in(fetched, Mode::Beginner)
+}
+
+/// 頁の中身（測れていない・0 本・札と一覧・節点の card は表示の型の要約・行 g-card-mode）。
+/// 測れていないときは合格と出さない（要件 NFR2）。
+pub fn body_in(fetched: &Fetched, mode: Mode) -> Body<Gaps> {
     match doc(fetched) {
         Err(reason) => Body::Unmeasured(reason),
         Ok(d) if d.invariants.is_empty() => Body::Empty(EMPTY),
@@ -222,7 +228,7 @@ pub fn body(fetched: &Fetched) -> Body<Gaps> {
             let cards = rows
                 .iter()
                 .flat_map(|r| &r.named)
-                .filter_map(|id| card_of(&d, id).map(|card| (id.clone(), card)))
+                .filter_map(|id| card_of_in(&d, id, mode).map(|card| (id.clone(), card)))
                 .collect();
             Body::Filled(Gaps {
                 tiles: tiles(&d.invariants),
@@ -253,10 +259,10 @@ mod dom {
 
     use leptos::prelude::*;
 
-    use super::{BLOCK, Body, Card, Gaps, Item, Row, Tile, body, mark_class, summary_tip};
+    use super::{BLOCK, Body, Card, Gaps, Item, Mode, Row, Tile, body_in, mark_class, summary_tip};
     use crate::project::{body_view, fold, item_view, map, unmeasured};
     use crate::vocab::label;
-    use crate::widgets::help::{expert_tip, h1, hs};
+    use crate::widgets::help::{HelpCtx, expert_tip, h1, hs};
 
     fn tile_view(t: Tile) -> AnyView {
         view! {
@@ -341,7 +347,12 @@ mod dom {
     /// 頁の本文（札と一覧・抜けの検査の窓も使う）。
     pub fn inner() -> AnyView {
         let fetched = crate::net::read(map::PATH);
-        let content = move || match fetched.with(body) {
+        let mode = {
+            let ctx = use_context::<HelpCtx>();
+            let url = Mode::from_query(&window().location().search().unwrap_or_default());
+            move || ctx.map_or(url, |c| c.mode.get())
+        };
+        let content = move || match fetched.with(|f| body_in(f, mode())) {
             Body::Unmeasured(reason) => panel(unmeasured(reason)),
             Body::Empty(line) => panel(body_view(Body::Empty(line))),
             Body::Filled(g) => filled(g),

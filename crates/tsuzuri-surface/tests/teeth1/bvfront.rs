@@ -217,7 +217,7 @@ fn bvfront_run_link_card() {
     assert_eq!(run_card(&[], run), lone);
     let timeline = read("src/project/timeline.rs");
     assert!(timeline.contains("<a class=\"nth num\" href=href use:attach=card>"));
-    assert!(timeline.contains("let card = run_card(&around, &r.run);"));
+    assert!(timeline.contains("let card = run_card_in(&around, &r.run, mode());"));
     // 近傍の行は読めた近傍の頁の行の全部（読めていなければ空）。
     assert_eq!(
         joined(&timeline, "let around = near.with(", ";\n"),

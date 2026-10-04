@@ -263,7 +263,7 @@ fn around_dom_text() {
     let around = read("src/project/nodearound.rs");
     let dom = dom_part(&around);
     for want in [
-        "view_cards(&gv.nodes)",
+        "view_cards_in(&gv.nodes, mode())",
         "delegate()",
         ".get(&item.id)",
         "on:mouseover=over on:mouseout=out",

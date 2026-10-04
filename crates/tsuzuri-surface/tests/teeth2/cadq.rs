@@ -165,7 +165,7 @@ fn cadq_dom_wiring() {
     let page = read("src/project/askpage.rs");
     let view = after(&page, "pub fn view(");
     for want in [
-        "hist_cards(&entries, g)",
+        "hist_cards_in(&entries, g, mode())",
         "hist_li(d, &cards, now, mode)",
         "use crate::widgets::hover::attach_some;",
         "use:attach_some=cards.get(&rid).cloned()>{ruling_text(&rid)}</a>",

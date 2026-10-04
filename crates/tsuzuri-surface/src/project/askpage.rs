@@ -17,12 +17,12 @@ use tsuzuri_contract::ledger::{LedgerList, LedgerRow};
 use tsuzuri_contract::wire;
 
 use super::{Body, Item, LEDGER_UNREAD, NOT_READ, item};
-use crate::frame::Block;
+use crate::frame::{Block, Mode};
 use crate::ledgerlist::{facts, short_of};
 use crate::view::{Fetched, JST, hhmm, id_order};
 use crate::vocab::label;
 use crate::widgets::hover::Card;
-use crate::widgets::nodecard::card_of;
+use crate::widgets::nodecard::card_of_in;
 
 pub const BLOCK: Block = Block {
     id: "hist",
@@ -156,15 +156,20 @@ pub fn hist_rows(items: &[Item], graph: &Fetched) -> Vec<HistEntry> {
         .collect()
 }
 
-/// 行の問いの id と答えた決定の id ごとの節点の hover の card（グラフの口が読めなければ空・電文に無い id は持たない）。
+/// 行の問いの id と答えた決定の id ごとの節点の hover の card（初心者の表示の型の `hist_cards_in`）。
 pub fn hist_cards(entries: &[HistEntry], graph: &Fetched) -> BTreeMap<String, Card> {
+    hist_cards_in(entries, graph, Mode::Beginner)
+}
+
+/// 行の問いの id と答えた決定の id ごとの節点の表示の型の hover の card（グラフの口が読めなければ空・電文に無い id は持たない）。
+pub fn hist_cards_in(entries: &[HistEntry], graph: &Fetched, mode: Mode) -> BTreeMap<String, Card> {
     let Ok(doc) = super::map::doc(graph) else {
         return BTreeMap::new();
     };
     entries
         .iter()
         .flat_map(|e| std::iter::once(e.item.id.as_str()).chain(e.ruling.as_deref()))
-        .filter_map(|id| card_of(&doc, id).map(|c| (id.to_string(), c)))
+        .filter_map(|id| card_of_in(&doc, id, mode).map(|c| (id.to_string(), c)))
         .collect()
 }
 
@@ -300,7 +305,7 @@ pub fn inner(target: Option<String>) -> leptos::prelude::AnyView {
                 });
             }
             let entries: Vec<HistEntry> = ds.iter().map(|d| d.entry.clone()).collect();
-            let cards = graph.with(|g| hist_cards(&entries, g));
+            let cards = graph.with(|g| hist_cards_in(&entries, g, mode()));
             let now = crate::net::now();
             let rows = ds
                 .into_iter()
