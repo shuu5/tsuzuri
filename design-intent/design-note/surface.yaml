@@ -3,13 +3,13 @@
 meta:
   id: surface
   title: 面の便 — 契約の型・導出グラフ・面の server・2 つの board・席の hook・表示面を便の列で運ぶ
-  version: v0.8
+  version: v0.9
   status: effective
   generated: 2026-09-26
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-09-26, ruling: t3-hub.1（裁定 id = user 2026-09-26T14:37Z・notes に逐語）, verbatim: よい, surface: R-8}
-  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.7（2026-09-29）= 口の表の行 question-nudge の断り（台帳に無い id）を外しただけ（合図は台帳の見張りを起こすだけで書かず、台帳に無い id の合図は印の動かない周なら何もしない・台帳を読んで断ると席の 2 手目が bd の読みの上限まで待つ・行 e-signal〔ノート surface-wave21d〕の起草の席の決め）。決定と契約表の行は変えない。 v0.6（2026-09-28）= 18 節の辺の型に設計ノートの行の 2 型（req・depends）の行を足した（判断の記録 ADR-17・持ち主の裁定 t3-hub.65:20260928T1228Z-1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。 v0.5（2026-09-28）= 方針の記帳先の替え（判断の記録 ADR-16 の決定 (4)・行 e-policy-q の着地）に合わせ、節点 n-policy の役と記帳 id の形の方針の字を直しただけ。決定と契約表の行は変えない。第 0.8 版（2026-09-29）は、不変条件 move-grace の赤の条件を、群の記録の時刻から数える式から器の欄 grace_left= の写しに直した（要件 FR12 と受入 AC11 の直しに合わせた）。
+  note: 持ち主の承認（2026-09-26T14:37Z）で effective（v0.1）。v0.7（2026-09-29）= 口の表の行 question-nudge の断り（台帳に無い id）を外しただけ（合図は台帳の見張りを起こすだけで書かず、台帳に無い id の合図は印の動かない周なら何もしない・台帳を読んで断ると席の 2 手目が bd の読みの上限まで待つ・行 e-signal〔ノート surface-wave21d〕の起草の席の決め）。決定と契約表の行は変えない。 v0.6（2026-09-28）= 18 節の辺の型に設計ノートの行の 2 型（req・depends）の行を足した（判断の記録 ADR-17・持ち主の裁定 t3-hub.65:20260928T1228Z-1）。v0.2（2026-09-27）= 器の seat deliver の着地に合わせた直しだけ（§3 の裁定と束の出力・§20 に記帳 id の形・§21 の器の口 3 行）で、決定と契約表の行は変えない。crate の名は判断の記録 ADR-4 決定 (1) の 6 つに tsuzuri- の接頭辞を付けたもので、scribe2 と folio2 の code の持ち込み（ADR-4 決定 (3)）はこの骨格へ入る。 v0.3（2026-09-27）= 章の上限 12（folio2 の ADR-21 決定 (3)・面の生成器の MAX_CHAPTERS）に収めるため、便の散文（旧 §5〜§15）と契約表（旧 §16）を字を変えずに設計ノート surface-base（便 a〜f）と surface-board（便 g〜k）へ移した。§ の番号は再利用しない（旧 §5〜§16 は欠番）。決定は変えない。 v0.4（2026-09-27）= 不変条件 g-12 の役を器の event の形に合わせた直しだけ（器の QuestionRaised は問いの id を持たず、作業役の問いは台帳の bead にしない＝scribe2 の席の回答・行は surface-base の c-g12）。 v0.5（2026-09-28）= 方針の記帳先の替え（判断の記録 ADR-16 の決定 (4)・行 e-policy-q の着地）に合わせ、節点 n-policy の役と記帳 id の形の方針の字を直しただけ。決定と契約表の行は変えない。第 0.8 版（2026-09-29）は、不変条件 move-grace の赤の条件を、群の記録の時刻から数える式から器の欄 grace_left= の写しに直した（要件 FR12 と受入 AC11 の直しに合わせた）。 第 0.9 版（2026-10-05）は、ノート surface-wave29a の行 c-commit-node に合わせ、17 節に節点の種類 commit の行を足して 21 にし、18 節に辺の型 landed の行を足して 33 にした（判断の記録 ADR-46 の決定 (2)・ADR-47 の決定 (9)）。
 
 sections:
   - n: 1
@@ -69,7 +69,7 @@ sections:
       - {id: tz-parity, name: tz と folio の一致, red_when: 口のどれかで終了 code か出力が folio2 と違う, fixture: tests/fixtures/tz/parity.json, ref: [AC14]}
   - n: 17
     type: parts-table
-    title: 導出グラフの節点の種類（閉じた一覧・20・判断の記録 ADR-7 決定 (2)）
+    title: 導出グラフの節点の種類（閉じた一覧・21・判断の記録 ADR-7 決定 (2) と ADR-46 決定 (2)）
     rows:
       - {id: n-folio, name: 設計文書の 11 種, role: 条・規範文・規則行・目的・要件・非機能要件・受入基準・制約・登場人物・出力・判断の記録（索引の欄の決まり graph.yaml の node_kinds の写し・正本は folio の実装の定数）, ref: [FR2]}
       - {id: n-note-row, name: 設計ノートの行, role: id を持つ行（部品・口・欄・歯・契約表の行）。id は <文書 id>#<行 id>。文書そのものは節点にしない, ref: [FR2]}
@@ -81,9 +81,10 @@ sections:
       - {id: n-receipt, name: orchestrator の受け, role: 問いの bead の notes の「受け」の定型行から導く, ref: [FR2, FR9]}
       - {id: n-policy, name: 全体への指示（方針）, role: "方針 1 つにつき根の直下の閉じた問い（label intake:question と policy-scope:<範囲>）の notes の方針 id の行と、今までの memo「方針」の notes の定型行（読むだけ）から導く（判断の記録 ADR-16 の決定 (4)・行 e-policy-q）", ref: [FR2, FR8]}
       - {id: n-run, name: run（走行）, role: 器の event log の RunCreated から導く。属性（段・理由・verdict・審査・費用・時刻）は辺にしない, ref: [FR2, FR10]}
+      - {id: n-commit, name: commit（着地の commit）, role: 器の event log の RunDone の札 sha の 40 字の小文字の 16 進から導く。id はその 40 字・題は頭の 8 字。git を読まない（判断の記録 ADR-47 の決定 (2)・行 c-commit-node）, ref: [FR2]}
   - n: 18
     type: parts-table
-    title: 導出グラフの辺の型（閉じた一覧・32 + 候補 1・判断の記録 ADR-7 決定 (2) と ADR-17）
+    title: 導出グラフの辺の型（閉じた一覧・33 + 候補 1・判断の記録 ADR-7 決定 (2) と ADR-17 と ADR-46 決定 (2)）
     rows:
       - {id: e-folio, name: 設計文書の 17 型, role: in-article・relations.articles・relations.reqs・relations.rules・relations.sections・amended_by・article・refs・basis・goals・rules・adrs・verify.ac・verifies・figures・produced・amends（graph.yaml の edge_types の写し）, ref: [FR2]}
       - {id: e-note-rows, name: 設計ノートの行の 2 型, role: req（行 → 要件）・depends（行 → 先に要る行）（folio の索引の辺の行の写し・folio2 の判断の記録 ADR-32）, ref: [FR2]}
@@ -97,6 +98,7 @@ sections:
       - {id: e-run-of, name: run_of, role: 走行 → 契約 bead。正本 = run id の前半（器の event RunCreated）, ref: [FR2, FR10]}
       - {id: e-raised, name: raised, role: 走行 → 問い。正本 = 器の event QuestionRaised と問いの bead の metadata source, ref: [FR2, FR10]}
       - {id: e-ran-by, name: ran_by, role: 走行 → 口座。口座は節点にせず走行の属性の札で出す（正本 = SeatSpawned の account）, ref: [FR2, FR10]}
+      - {id: e-landed, name: landed, role: 着地の commit → 契約 bead。正本 = 器の event log の RunDone の札 sha と run id の前半（行 c-commit-node）, ref: [FR2]}
       - {id: e-promoted-to, name: promoted_to（候補）, role: memo → 昇格先（設計の行か契約）。正本は未定（metadata の key の候補）。型の名と正本は便 c で決める, ref: [FR13]}
   - n: 19
     type: parts-table

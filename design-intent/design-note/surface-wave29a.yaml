@@ -1,0 +1,222 @@
+# 設計ノート surface-wave29a — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-44・ADR-45・ADR-46 の承認・承認の列〕・行の拠り = 判断の記録 ADR-44 の段 0〜2・ADR-45・ADR-46）第 29 波 a。
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave29a.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave29a.toml#<行 id>。
+meta:
+  id: surface-wave29a
+  title: 第 29 波 a — 目指す所の段 0〜2 の行（判断の記録 ADR-44・ADR-45・ADR-46）
+  version: v0.4
+  status: effective
+  generated: 2026-10-05
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.1（裁定 id = t3-hub.80.1:20261004T1456Z-1・目指す所の目的は案 A）と t3-hub.80.5（裁定 id = t3-hub.80.5:20261004T1456Z-1・5 段の順は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-44 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.4（裁定 id = t3-hub.80.4:20261004T1456Z-1・案 A・束 batch:20261004T1456Z-1・裁定面・notes に逐語）〔判断の記録 ADR-45 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
+    - {who: 持ち主, date: 2026-10-04, ruling: t3-hub.80.3（裁定 id = t3-hub.80.3:20261004T1456Z-1・読み取りの置き場は案 A）と t3-hub.80.2（裁定 id = t3-hub.80.2:20261004T1456Z-1・今在る code の入れ方は案 A）・束 batch:20261004T1456Z-1・裁定面・notes に逐語〔判断の記録 ADR-46 の承認・ノートの承認〕, verbatim: すべて推奨で進めて良い, surface: R-8}
+  note: ノート surface-wave27b（31 行の全部が着地・同じ commit で廃止）の後。承認は行の出所の判断の記録ごとの持ち主の裁定（承認の列・ADR-44・ADR-45・ADR-46・逐語はそれぞれの判断の記録の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、グラフの土台の 1 便目の 2 行（c-g3-bindline・c-commit-node）と行の節（3〜5 節）を足した（持ち主の答えを待たない行・試作と噛みは係 w146a・差の file の形・差を切った main は 0ee9c0da・名の形は判断の記録 ADR-47〔提案中〕に拠る）。 第 0.3 版（2026-10-05）は、行 t-teeth-col（契約表の欄の写しを器の今の版の 20 欄に揃え、設計ノートの行の欄 done-teeth と code-facts を tz が受けて契約表へ写す・判断の記録 ADR-45 の門 H1 の teeth-check の前の 1 歩・試作は係 w147a・差の file の形）を足した。 第 0.4 版（2026-10-05）は判断の記録 ADR-44 の段 0 の行 t-hook-drop・v-anchor-missing（tsuzuri の根の plugin の暫定の SessionStart を外す行と、器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す器の行・試作は係 w151a・差の file の形）を足した。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      判断の記録 ADR-44（目指す所と 5 段）の段 0（すぐ・小さい物）・段 1（土台の決め）・段 2（合流の残りと土台）の行を置く。ADR-45 の群 H の門（グラフの正確さ・commit の節点・一生の測りほか）を測れる形にする行と、ADR-46 の code のグラフの土台の行を含む。
+      行ごとの節は、行を足す適用が節の末に足す。1 本の契約表は 32 行まで（規則の行 R-32）。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: c-g3-bindline
+        title: 導出グラフの台帳の読みと外の台帳の読みが、器の結びの口が問いの notes に足す 5 欄の裁定の行（区切りは空白と縦棒と空白）も、条件を満たす時だけ裁定の定型行として読む（判断の記録 ADR-7 決定 (4)・ADR-44 の段 0・ADR-45 の門 H3・差の file）
+        req: ["FR2", "FR3"]
+        section: "4"
+        write-set: ["crates/tsuzuri-core/src/graph/build.rs", "+crates/tsuzuri-core/tests/g3bl.rs", "=crates/tsuzuri-core/tests/teeth1/g3g7.rs", "=crates/tsuzuri-core/tests/teeth2/graph.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-g3-bindline.patch", "cargo clippy -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test g3bl --no-tests=fail g3bl_", "cargo nextest run -p tsuzuri-core --lib --no-tests=fail graph_typed_lines_", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail g3g7_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail graph_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 差の file docs/design/patch/c-g3-bindline.patch の hunk が全部木に在る（verify の 1 行目） (2) 器の形の正しい行を 1 本 notes に持つ問いの bead から、1 つ目の欄の id の裁定の節点を 1 つ（題は行の title36・file と要約値と行と時刻は持たない）と、裁定から問いへの answers の辺を組み、欄の区切りと欄の数の下限の定数は空白と縦棒と空白の 3 字と 5（歯 g3bl_bind_line_makes_ruling_and_answers） (3) 欄が 4 つ・1 つ目の欄が裁定 id の文法の外・1 つ目の欄のコロンの前が 2 つ目の欄と違う・2 つ目の欄が notes を持つ bead でないの 4 つの見本は、どれも裁定の節点も answers の辺も作らず読めない出所も立てず、行を読む関数 bind_line は正しい行だけに 1 つ目の欄を返す（歯 g3bl_only_full_bind_lines_count） (4) 外の台帳の読みは、正しい行の id を裁定の id の集まりに入れ、欄が 4 つの行の id は入れず、bead の id は両方入れる（歯 g3bl_outside_reads_bind_lines） (5) 承認の欄が器の形の行の id を名指す判断の記録を不変条件の 3 番が名指さず合格にし（7 番も合格）、同じ所を欄が 4 つの行に替えると 3 番はその判断の記録の id を名指す違反（歯 g3bl_g3_stops_naming_the_bound_ruling） (6) 頭の字 裁定 id = の行は欄の区切りを含んでも前のとおり頭の字の後から中黒までを id として読み（題は行の title36）、頭の字の行を器の形の行として読まない（歯 g3bl_typed_prefix_lines_stay_first） (7) 着地済みの歯の graph_typed_lines_ と g3g7_ と graph_ が通る（verify の 4〜6 行目） (8) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+      - id: c-commit-node
+        title: 導出グラフに着地の commit の節点（種類 commit）と commit → 契約 bead の辺（型 landed）を、器の event log の RunDone の札 sha の 40 字から git を読まずに組み、着地の commit の無い着地した契約を名指す床の値を中核に置く（判断の記録 ADR-46 の決定 (2)・ADR-45 の門 H4・ADR-47 の決定 (2)・差の file）
+        req: ["FR2"]
+        section: "5"
+        write-set: ["crates/tsuzuri-contract/src/graph.rs", "crates/tsuzuri-contract/tests/snapshots/graph.json", "crates/tsuzuri-contract/tests/teeth1/cform_graph.rs", "crates/tsuzuri-core/src/graph/build.rs", "crates/tsuzuri-core/src/graph/check.rs", "crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/tests/cmtnode.rs", "crates/tsuzuri-core/tests/teeth1/dnedge.rs", "crates/tsuzuri-core/tests/teeth2/graph.rs", "crates/tsuzuri-surface/src/mapview/band.rs", "crates/tsuzuri-surface/src/mapview/graph.rs", "crates/tsuzuri-surface/tests/teeth4/mapgraph.rs", "crates/tsuzuri-surface/tests/teeth4/mapview.rs", "crates/tsuzuri-surface/vocab.json"]
+        verify: ["git apply --reverse --check docs/design/patch/c-commit-node.patch", "cargo clippy -p tsuzuri-contract -p tsuzuri-core -p tsuzuri-surface -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test cmtnode --no-tests=fail cmtnode_", "cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail contract_form_graph_", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail dnedge_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail graph_", "cargo nextest run -p tsuzuri-surface --test teeth4 --no-tests=fail mapgraph_", "cargo nextest run -p tsuzuri-surface --test teeth4 --no-tests=fail mapview_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) 差の file docs/design/patch/c-commit-node.patch の hunk が全部木に在る（verify の 1 行目） (2) 節点の種類の閉じた列は 21 で末が Commit（電文の字 commit）、辺の型の閉じた列は 33 で末が Landed（電文の字 landed）、Commit の出所は走行の記録で、走行の記録の種類は Run と Commit の 2 つ、札の頭と字数と題の字数の定数は字 sha と半角のコロン・40・8（歯 cmtnode_closed_lists_end_with_commit_and_landed） (3) 走行の RunDone の detail の札の 40 字の小文字の 16 進から commit の節点を 1 つ組み、id はその 40 字・題は頭の 8 字・更新の時刻は RunDone の ts で、file と要約値と行と平易文と英語の欄を持たず、commit からその走行の契約 bead へ landed の辺を 1 本組み、札 main の名は節点にしない（歯 cmtnode_run_done_sha_makes_commit_and_landed） (4) 札の名が 39 字・41 字・大文字・16 進でない字を含む・札が main だけ・RunDone でない event・RunCreated の無い走行の 7 つの見本は、どれも commit の節点も landed の辺も組まず読めない出所も立てず、札を探す関数は空白とカンマで切った切れの札を読み札 main と 39 字は読まない（歯 cmtnode_only_full_lower_hex_sha_of_run_done_counts） (5) 同じ名の札は event log の順で名ごとに節点 1 つで、landed の辺は名と bead の組ごとに 1 本（歯 cmtnode_same_sha_is_one_node_and_one_edge_per_bead） (6) run id の前半が bead でない走行の札は節点を組み辺を組まない（歯 cmtnode_run_without_bead_front_has_node_but_no_edge） (7) event log が読めない時は commit の種類が まだ分からない の種類に入り節点は 0（歯 cmtnode_unread_events_make_commit_unknown） (8) commit の節点が在っても不変条件の 1 番と 10 番は合格（歯 cmtnode_invariants_hold_with_commits） (9) 床の値 unlanded_contracts は、閉じた理由が landed か着地で始まる種類 task の bead のうち commit の節点から landed の辺を受けない bead の id を字の順に並べ、取り下げで閉じた契約・open の契約・memo は数えず、札の無い RunDone の走行の契約は数える（歯 cmtnode_unlanded_names_landed_contracts_without_commit） (10) 床の値は、走行の記録か台帳が読めない時と台帳の字が JSON の配列でない時は まだ分からない（歯 cmtnode_unlanded_unknown_when_unread） (11) 契約の型の snapshot と往復と閉じた一覧の歯（contract_form_graph_ の 3 本）・辺の型の数の歯（dnedge_ の 4 本）・読めない出所の種類の歯（graph_ の 11 本）・面の線の形と凡例と種類の表の歯（mapgraph_ と mapview_）が通る（verify の 5〜9 行目） (12) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: ["c-g3-bindline"]
+      - id: t-teeth-col
+        title: 契約表の欄の写し contracts/field-schema/schema.toml を器の今の版（欄 done-teeth と code-facts を足した 20 欄）に揃え、設計ノートの行がその 2 欄を書けて tz check が受け tz derive が契約表へ写すことを歯 dtcol_ で測る（判断の記録 ADR-45 の門 H1・teeth-check の前の 1 歩・差の file）
+        req: ["FR1047"]
+        section: "6"
+        write-set: ["contracts/field-schema/schema.toml", "+crates/tsuzuri-boundary/tests/dtcol.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/t-teeth-col.patch", "cargo clippy -p tsuzuri-boundary --test dtcol --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test dtcol --no-tests=fail dtcol_", "cargo nextest run -p tsuzuri-boundary --test tz4 --no-tests=fail fsch_", "cargo run -q -p xtask -- check"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/t-teeth-col.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) cargo clippy -p tsuzuri-boundary --test dtcol --no-deps -- -D warnings が rc 0 (3) 根の写し contracts/field-schema/schema.toml の頭の 1 行は井桁と空白で始まる注の行で字 scribe2/contracts/schema.toml を持ち、2 行目から後は器の生成物 scribe2/contracts/schema.toml の 2 行目から後と byte で同じで、欄 done-teeth と欄 code-facts の塊（表 field の見出しと、鍵 name の値がその欄の名・鍵 need の値が optional・鍵 shape の値が list の 3 行と、空の行）をそれぞれちょうど 1 度持つ（歯 dtcol_copy_matches_the_vessel_schema） (4) 版管理の根にした置き場で、歯の定数 NOTE の見本の設計ノート（行 a は flow の引用符の形・行 b は block の裸の形で欄を書く）と根の写しに tz derive --write を撃つと rc 0 で字 書いた 1 file を出し、導出物 dtcol-note.toml は歯の定数 DERIVED と byte で同じ（欄 done-teeth と code-facts は欄 growth の後で goal の前・要素は書いた順のまま・印 = と @ と ! を字のまま写す）で、同じ置き場の tz derive --check が rc 0（歯 dtcol_derive_writes_the_two_fields_after_growth） (5) 見本の行 b の欄 done-teeth だけを一覧でなく字 1 つにした設計ノートは、tz derive --write が rc 2 で節に書いた 5 つ目の項の字（行 b の欄 done-teeth が list の形でないと言う字）を出し、導出物を書かない（歯 dtcol_derive_refuses_a_text_done_teeth） (6) 根の写しから欄 done-teeth の塊だけを抜いた写しでは、見本の設計ノートの tz derive --write が rc 2 で字 欄「done-teeth」が器の導出 file に無い を出し、字 欄「code-facts」を出さず、導出物を書かない。欄 code-facts の塊だけを抜いた写しでは、同じく字 欄「code-facts」が器の導出 file に無い を出し、字 欄「done-teeth」を出さず、導出物を書かない（歯 dtcol_copy_without_a_field_refuses_it） (7) 床の見本 folio2/tests/fixtures/floor_base/design-intent の写し（根の写しと共に版管理に commit 済み）で、見本の設計ノート example.yaml の 行 a に欄 done-teeth と code-facts を一覧で足すと tz check が rc 0、done-teeth だけを字 1 つにすると rc 1 で節に書いた 7 つ目の項の字（行 a の欄 done-teeth が list の形でないと言う字）を出し、字 code-facts を出さない（歯 dtcol_check_accepts_the_lists_and_refuses_a_text） (8) 着地済みの歯 fsch_ の 3 本（根の写しの 2 行目と表 field の在りか・前の置き場の写しを読まない・vessel 宣言の 2 鍵）が緑（verify の 4 行目） (9) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+      - id: t-hook-drop
+        title: tsuzuri の根の plugin の hooks.json から暫定の SessionStart（行 t-seathook）を外し、歯 seathk を SessionStart が無いことと、印の除きを持つ 4 本の command の頭の印の名が器の名の定数から成ることの 2 本に縮める（判断の記録 ADR-38 決定 (6)(7)・差の file）
+        req: ["FR1042"]
+        section: "7"
+        write-set: ["plugin/hooks/hooks.json", "crates/tsuzuri-core/tests/seathk.rs", "crates/tsuzuri-core/tests/teeth2/gins.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/t-hook-drop.patch", "cargo clippy -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test seathk --no-tests=fail seathk_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail gins_", "cargo run -q -p xtask -- check"]
+        size: S
+        done: (1) hooks.json の event の鍵は字の順に PostToolBatch・PostToolUse・PreToolUse・Stop・UserPromptSubmit の 5 つで SessionStart が無く、どの command も語 seat-constitution と字 contracts/seat/ を持たず、今の値から 1 句だけ崩した見本（鍵 SessionStart を戻す・UserPromptSubmit の command に要の写しの cat を足す・PreToolUse の command に器への問いの語を足す）はその句で外れる（歯 seathk_session_start_is_gone） (2) 印の除きを持つ 4 本の command（PostToolBatch・PostToolUse・PreToolUse・UserPromptSubmit）の頭は、[ と -e と二重引用符で囲んだ $CLAUDE_PLUGIN_ROOT/ に印の名を続けた語と ] と || で始まり、除きの頭の字を 1 度だけ持ち、印の名は器の src/name.rs の名の定数の字と器の src/pipe/spawn.rs の定数 RUNNER_MARK_SUFFIX の字 -runner をつないだ字で、1 本の command だけを崩した見本（印の名を替える・除きを外す・除きを 2 度持つ）はその 1 本の event だけが外れる（歯 seathk_marked_heads_follow_the_vessel_name） (3) 問いの門の hook の歯の event の鍵の一覧は SessionStart の無い 5 つで、PreToolUse の要素は前のまま（歯 gins_pretool_bash_entry） (4) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+      - id: v-anchor-missing
+        title: 器の doctor が、anchor の dir が無い登録 row の席の行に語 anchor-dir=missing を足し、--repo を渡した周に置き場の anchor の数えに入る repo の外の row の target を 1 行で名指す（判断の記録 ADR-44 の段 0・差の file）
+        req: ["FR1090"]
+        section: "8"
+        write-set: ["scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs", "scribe2/crates/scribe2/src/seat/role.rs", "scribe2/crates/scribe2-boundary/src/main.rs", "scribe2/crates/scribe2-boundary/tests/e2e/seat/register.rs", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__seat__seat_doctor_external_form.snap"]
+        verify: ["git apply --reverse --check docs/design/patch/v-anchor-missing.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vanc_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail anchor_census_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vanc_", "cargo run -q -p xtask -- check"]
+        size: S
+        growth: ["scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs:1"]
+        done: (1) 器の lib の数えの行は、数えに入る repo の外の row（anchor が別の置き場を名乗らず、正規化した字が repo と違う row）が在る周だけ在り、頭の字 anchor-census と半角のコロンの 1 字と空白の後に、局面の出力の unmeasured と同じ理由の語 reason=multi-anchor と、anchor の path が在らない row の target をつないだ missing= と在る row の target をつないだ present= を持ち（鍵の順に , でつなぐ・無い側は字 -）、repo の row だけの組と、別の置き場を名乗る anchor の row だけを足した組は持たない（歯 vanc_census_line_names_the_rows_outside_the_repo） (2) 器の lib の席の行の語の足しは、行と row を鍵の順で対にし、anchor の path が在らない row の行だけの末尾に空白と語 anchor-dir=missing を足し、在る dir の row の行は替えない（歯 vanc_rows_mark_only_the_anchor_that_is_gone） (3) 置き場の anchor の数え census_anchors は、数えに入る repo の外の row が 1 本でも在れば Many、無くて repo が別の置き場を名乗れば Foreign、ほかは One の前の 3 値のまま（着地済みの歯 anchor_census_counts_the_registered_anchors_of_the_place・anchor_census_leaves_out_the_anchors_of_other_places・anchor_census_names_a_repo_of_another_place_foreign） (4) 器の binary の doctor は、dir の無い anchor の row の席の行の tick= の語の直後に anchor-dir=missing を持ち、在る dir の row の席の行は持たず、--repo を渡した周は突合の行（頭の字 seats）の直後に数えの行を 1 行出し、--repo の無い周と、その row を seat retire で退役させた後の --repo の周は数えの行を出さない（器の e2e の歯 vanc_doctor_names_the_gone_anchor_row_and_the_census） (5) cargo run -q -p xtask -- check が rc 0（最後の verify の行・歯の全部）
+        depends: []
+  - n: 3
+    type: prose
+    title: グラフの土台の行（c-g3-bindline と c-commit-node）の目的と順
+    body: |
+      判断の記録 ADR-44 の段 0 の 2 つ目（導出グラフの不変条件の 3 番の違反の原因）と、段 2 のうち着地の commit の節点を、導出グラフ（tsuzuri-core の graph）に足す。行 c-g3-bindline は ADR-45 の門 H3（グラフの正確さ）の 3 番の違反を消す行、行 c-commit-node は門 H4（グラフに着地の commit の節点が在り、閉じた契約の bead が着地の commit の節点に結ぶ）を測れる形にする最初の行である。
+      名前の形は ADR-47 の決定 (2)（commit の id は 40 字の小文字の 16 進・題は頭の 8 字・電文の名は commit と landed）に拠る（ADR-47 は提案中・c-commit-node の字は ADR-46 の決定 (2) の中に在る）。導出は git を読まず、器の event log の走行の終わり（RunDone）の札 sha: から組む。
+      行の順。c-g3-bindline → c-commit-node。c-commit-node は c-g3-bindline と同じ file（中核の build.rs）を書き、差はその上で切った。
+      グラフの土台の残りの 4 行（k-commit-count・c-memo-touch・v-row-basis・f-row-basis）は、持ち主への問い（席が起票した問い）の裁定の後に別の適用で足す。
+  - n: 4
+    type: prose
+    title: 行 c-g3-bindline — 器の結びの口の裁定の行を読む
+    body: |
+      在りか。差の file docs/design/patch/c-g3-bindline.patch は、main 0ee9c0da と、その上に試作を載せた木 7f767bd2（写し drafts/w146a の branch rows3）との差（2 file・+193 −11・12,957 byte）。
+
+      なぜ。判断の記録 ADR-7 の決定 (4)（答えは notes の定型行として あなたの決定 の節点になる）を、合流で入った器の結びの口（seat ruling bind・器の src/seat/ruling.rs の row_of）の行の形まで広げる（ADR-36・ADR-44 の段 0 の 2 つ目・ADR-45 の門 H3）。器の結びの口は問いの notes に 5 欄の 1 行（裁定 id・問い id・発話の ts・経路・逐語〔JSON の字の字面〕を、空白と縦棒と空白でつないだ字）を足す。tz の導出グラフの読みは頭の字 裁定 id = の行だけを読むので、承認の欄がこの裁定 id を名指す判断の記録を不変条件の 3 番が名指していた（係 w145a の測りで 240）。設計の commit で直せる字は無く（承認の字は正しく、名指す id は台帳に在る）、読みを広げる。書く形（tz の面の 裁定 id = の行）と台帳の字と承認の字は替えない。
+
+      形。
+      - 中核の src/graph/build.rs に定数 BIND_SEP（空白と縦棒と空白の 3 字）と BIND_FIELDS（5）と関数 bind_line（行と bead の id）を足した。bind_line は、区切りで割った欄が 5 以上在り、1 つ目の欄がコロンを持ち裁定 id の文法（中核の src/graph/check.rs の in_ruling_grammar・問いの形）に合い、コロンの前の字が 2 つ目の欄と同じで、2 つ目の欄が bead の id と同じ時だけ、1 つ目の欄を返す。
+      - typed_lines は bead の id を受け、頭の字（TYPED_LINES）の行を先に読み、頭の字の行でない行に bind_line を当てて裁定の行にする。呼び手の add_typed（台帳の読み）と outside（外の台帳の読み・行 c-g3-extern）が bead の id を渡す。節点の題は今と同じ title36（行）。TYPED_LINES の 3 要素と字は替えない。
+      - module の doc に 1 行。lib の歯 graph_typed_lines_cut_at_the_dot の呼びに bead の id の引数を足した（断言は替えない）。
+      - 字。歯の正しい行は q7-fx.4:20260928T0100Z-1 と q7-fx.4 と 2026-09-28T01:00:00Z と chat と、字 ADR-7 を発効する を二重引用符で囲んだ字を、空白と縦棒と空白でつないだ 1 行（土台は tests/fixtures/graph/unruled/ の台帳の q7-fx.4 の notes の 裁定 id = の行をこの行に替える）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 2〜6 番目の項は verify の 3 行目（新しい歯の file crates/tsuzuri-core/tests/g3bl.rs の 5 本・項の順と歯の順は同じ）、7 番目の項は 4〜6 行目（着地済みの歯・在りかは build.rs の歯の区間と teeth1/g3g7.rs と teeth2/graph.rs）、最後の 8 番目の項は 7 行目で測る。verify の 1 行目と 2 行目は命令の rc で測る守り。
+
+      構造の連鎖（木 7f767bd2 で grep）。typed_lines の呼び手は add_typed と outside と lib の歯の 3 か所で、全部に bead の id を渡した。in_ruling_grammar は pub の関数のまま読むだけ。
+
+      実の記録での測り。写しの tz で、器の repo を外の台帳として渡した tz graph --check（--project）は違反 0 で、不変条件の 3 番は合格（残りは 7 番の文法の外の id の裁定 56 と 9 番の機構なしの まだ分からない）。係 w145a の写しの測り（g3sim.py）でも 240 から 0。
+
+      入口の赤。main 0ee9c0da には歯の file g3bl.rs が無いので verify の 3 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。書く file は write-set の中で閉じる（2 file）。木 7f767bd2 で verify の 1〜6 行目が rc 0。噛みは 9 つの変異（器の形の行を読まない〔歯 2 本で〕・欄の数の下限を 4 に・文法を見ない・コロンの前と 2 つ目の欄を照らさない・2 つ目の欄と bead を照らさない・外の台帳の読みが bead の id を渡さない・種類を受けに・頭の字の行が区切りを含むと読まない）が全部 rc 100 で落ち、対照は rc 0。
+
+      範囲の外。器の結びの口の書きの形。台帳の notes への書き足し（係 w145a の案 N）。不変条件の 7 番の文法の外の id の裁定。
+  - n: 5
+    type: prose
+    title: 行 c-commit-node — 着地の commit の節点と辺 landed と、着地の commit の無い着地した契約の床の値
+    body: |
+      在りか。差の file docs/design/patch/c-commit-node.patch は、行 c-g3-bindline を当てた木 7f767bd2 と、その上に試作を載せた木 905d1179（写し drafts/w146a の branch rows3）との差（14 file・+437 −24・33,808 byte）。行 c-g3-bindline と同じ file（中核の build.rs）を書き、差はその足しの上で切ったので c-g3-bindline の後（depends）。
+
+      なぜ。判断の記録 ADR-46 の決定 (2)（節点に着地の commit を足し、辺 commit → bead を組む）と ADR-45 の門 H4。導出グラフは commit の節点を持たず、閉じた契約が着地の commit に結ぶかを測れない。器の event log の走行の終わり（RunDone）の detail は、着地した便では札 sha と半角のコロンの後ろに着地の squash の commit の名（40 字）を、札 main と半角のコロンの後ろに着地の後の main の先の名を持つ。この札から組めば git を読まずに済む（ADR-46 の決定 (5)・正本は器の event log）。名の形は ADR-47 の決定 (2)。
+      実の記録での測り（席の台帳と器の event log・2026-10-05・係 w146a）。commit の節点 421・辺 landed 421。床の値（着地の commit の無い着地した契約）は 0。閉じた理由を問わずに数えると 4（取り下げで閉じ中身を別の便の commit に載せた契約 1・設計の行を指さない閉じた task 3）で、ADR-45 の門 H4 の「閉じた契約」の読みは持ち主への問い（席が起票した問い・その裁定の後に行 k-commit-count を置く）。
+
+      形。
+      - 契約の型（tsuzuri-contract の src/graph.rs）。節点の種類の閉じた列の末に Commit（電文の字 commit）を足して ALL を 21 個に、辺の型の閉じた列の末に Landed（電文の字 landed・着地の commit → 契約 bead）を足して ALL を 33 個にした。module の doc に 1 行。
+      - 中核の組み（tsuzuri-core の src/graph/build.rs）。定数 RUN_DONE（字 RunDone）・SHA_TAG（字 sha と半角のコロン）・SHA_LEN（40）・SHA_TITLE（8）と、関数 landed_sha（detail をカンマと空白で切り、頭が札の切れの残りがちょうど 40 字の 0〜9 と a〜f の時だけ返す）。add_runs の末で add_commits を呼ぶ。add_commits は event log の行のうち種類が RunDone で、札の名が在り、走行の節点が在る行について、名ごとに 1 度 commit の節点（id は名・題は頭の 8 字・更新の時刻は行の ts・file と要約値と行と平易文と英語は持たない）を足し、走行の契約 bead（run id の前半・関数 run_bead）が在れば、名と bead の組ごとに 1 度 landed の辺を足す。
+      - 出所（src/graph/mod.rs）。走行の記録の種類を Run と Commit の 2 つにした（event log が読めない周は commit も まだ分からない）。
+      - 床の値（src/graph/check.rs）。関数 unlanded_contracts（グラフと台帳の字）は、台帳か走行の記録が読めない周と台帳の字が読めない周は まだ分からない。読めた周は、台帳の bead のうち閉じた理由が着地の述語（今の関数 landed・頭が landed か着地で、続きが無いか空白か全角の括弧）に当たり、グラフの種類が task で、commit の節点からの landed の辺を受けない bead の id を、字の順に並べる。tz graph --check に出すのは行 k-commit-count。
+      - 面（tsuzuri-surface）。種類の表 src/mapview/band.rs の KINDS に Commit（帯 pipeline・語 k:commit）を足して 21 行、線の形 src/mapview/graph.rs の line_style で Landed を点線（RunOf と RanBy と同じ組）、語の辞書 vocab.json の english の節に k:commit と e:landed の 2 項を足した。
+      - 着地済みの歯の書き換え。contract の snapshot graph.json（種類の列に commit・型の列に landed）・cform_graph.rs（21 と 33）・core の teeth1/dnedge.rs（33）・teeth2/graph.rs（読めない走行の まだ分からない の種類が run と commit）・surface の teeth4/mapgraph.rs（点線の型に Landed・型の数 33・種類の数の字 21 個）・teeth4/mapview.rs（21 行と commit の行）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 2〜10 番目の項は verify の 4 行目（新しい歯の file crates/tsuzuri-core/tests/cmtnode.rs の 9 本・項の順と歯の順は同じ）、11 番目の項は 5〜9 行目（着地済みの歯）、最後の 12 番目の項は 10 行目で測る。verify の 1 行目（差の hunk が全部木に在る）と 2・3 行目（clippy と wasm の clippy）は命令の rc で測る守り。
+
+      構造の連鎖（木 905d1179 で grep）。NodeKind::ALL と EdgeType::ALL の数を断言する歯は上の着地済みの歯の 6 file で全部を直した。GraphNode の構築は add_commits の 1 か所を足しただけ。Source::kinds の読み手は unknown_kinds の 1 か所。unlanded_contracts の呼び手はこの行では歯だけ（境界の呼び手は行 k-commit-count）。書く src の file の最大は tsuzuri-core の graph/check.rs の 842 行（上限 1500）。
+
+      入口の赤。木 7f767bd2 には歯の file cmtnode.rs が無いので verify の 4 行目は --no-tests=fail で落ちる。着地済みの歯は main の src で撃つと閉じた一覧の数（20 と 32）で落ちる。
+
+      試作と噛み。写し drafts/w146a で書く file は write-set の中で閉じる（14 file）。木 905d1179 で verify の 1〜10 行目が全部 rc 0（xtask check は歯 3290 本が全部通り・入れ子の器は差が触れないので省いた）。噛みは 1 つずつ変異を当てて名指しの歯を --test 1 本の範囲で撃ち、16 の変異が全部 rc 100 で落ちた（電文の字を替える・landed の辺を足さない・大文字の 16 進を許す・40 字以上を許す・種類 RunDone を見ない・走行の節点の有無を見ない・同じ名の節点を重ねる・更新の時刻を持たない・出所の種類から commit を外す・床の値が着地の述語を見ない・種類 task を見ない・走行の記録の読めなさを見ない・辺の元を走行で数える・種類の表の帯を beads に・landed を実線に・語の辞書の e:landed を外す）。対照（書き戻した後の同じ撃ち）は rc 0。
+
+      範囲の外。tz graph --check の行（行 k-commit-count）。file と定義と歯の節点（ADR-44 の段 4）。git の記録から commit を読むこと（ADR-46 の決定 (5)）。器の event log の札の形の変更（器の finish の書き手は替えない）。
+  - n: 6
+    type: prose
+    title: 行 t-teeth-col — 契約表の欄の写しを器の今の版に揃え、設計ノートの行の欄 done-teeth を契約表へ写す（判断の記録 ADR-45 の門 H1 の 1 歩目）
+    body: |
+      在りか。差を切った main は b4b816a6。起草 w147a が main b4b816a6 の写しで試作した。書く file は write-set の 2（欄の写し 1・新しい歯の file 1）。差の file docs/design/patch/t-teeth-col.patch が字の正本（試作の差 12,783 byte）。
+
+      なぜ。判断の記録 ADR-45 の門 H1 は、器が自分に掛けていた門の鍵 6 つの働きを tsuzuri で効かせることを求める。その 1 つ teeth-check（契約表の行が done の番号つきの項目ごとの歯を欄 done-teeth で名指し、器が表の検査・受付・gate の段 ① で照らす・器の設計 contract-source.md の 66 節・器の要件 FR1047 と FR1105）は、行が欄 done-teeth を書けることが先に要る。tsuzuri の契約表の行は設計ノートの契約表の節に書き、tz derive が contracts/<ノート>.toml へ写す。契約表の行の欄の集合と形は、tz（folio）が自分の型に持たず、根の写し contracts/field-schema/schema.toml を読んで決める（床の定数 EXTERNAL_PATH・欄の決まり design-note/schema.yaml の contract_table.external_schema・床の check_external_row と導出の derive_row が同じ写しの欄の列を読む）。写しは器の 2026-09-26 の版（scribe2 fd39667）の 18 欄で、器の今の欄の正本 FIELDS（scribe2/crates/scribe2/src/pipe/table.rs）の 20 欄より欄 done-teeth と code-facts が少ない。今の床は、行が欄 done-teeth を書くと 契約表の欄「done-teeth」が器の導出 file に無い で落ち、導出は 欄「done-teeth」が器の導出 file に無い で止まる（係 w147a の試し）。
+
+      形（写し）。根の写しの 2 行目から後を、同じ repo の器の生成物 scribe2/contracts/schema.toml（器の命令 scribe2 contracts schema の出力・器の歯が core の FIELDS と byte で照らす）の 2 行目から後と byte で同じにする。足すのは欄 growth の塊の後の 2 つの塊（鍵 name の値 done-teeth と code-facts・鍵 need の値 optional・鍵 shape の値 list）の 10 行。頭の 1 行（注）は、写した元の字を 同じ repo の scribe2/contracts/schema.toml と日付 2026-10-05 に替える（器の版の commit の字を持たない）。
+
+      形（folio）。folio の src と欄の決まりは替えない。床の欄の照らし（note.rs の check_external_row）と導出（derive.rs の derive_row と field_line）は写しの欄の列をそのまま読み、list の欄は文字列の一覧だけを受け、要素を書いた順のまま二重引用符で囲んで写す。欄の決まり design-note/schema.yaml の注は、欄の追加は器の版上げで足り判断の記録は要らないと書く（便 120 の先例）。folio の歯の材料の写し folio2/contracts/schema.toml（18 欄）は、行 v-field-schema の決めのとおり動かさない。
+
+      形（歯）。新しい歯の file crates/tsuzuri-boundary/tests/dtcol.rs（段・群の main.rs を書かない・判断の記録 ADR-32）。頭の //! の行の続きのすぐ次の行に #![cfg(test)] を置く。置き場は CARGO_TARGET_TMPDIR の下の dtcol/<名> に歯ごとに作り、置き場で git init する（版管理の根を置き場にする。無いと tz は置き場を包む repo の根の写しを読み、置き場の写しを見ない）。5 つ目の項の歯が見る字は 行 b: 欄「done-teeth」が list の形でない（導出の断り）、7 つ目の項の歯が見る字は 行 a: 欄「done-teeth」が list（文字列の一覧） の形でない（床の断り）。7 つ目の項の歯の置き場は床の見本 floor_base の写しに根の写しを置いて git の add と commit を撃つ（床は commit の無い置き場を まだ分からない と読む）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done (1) は verify の 1 行目、(2) は 2 行目、(3)〜(7) は 3 行目（歯 dtcol_ の 5 本）、(8) は 4 行目（着地済みの歯 fsch_ の 3 本）、(9) は 5 行目。
+
+      構造の連鎖。根の写しを読む物は、tz の床（tz check）と導出（tz derive）・着地済みの歯 fsch_ の 3 本（folio2/crates/folio/tests/tz4/resolve.rs・写しの中身の字を比べず形だけを見る）・この行の歯 dtcol_ の 4 つ。器は写しを読まず、欄を自分の binary の FIELDS から読む（PATH の器 0f6c2884 の scribe2 contracts schema は 20 欄を出し、toml の契約表の欄 done-teeth を読んで形を照らす・係 w147a の試し）。今の導出物は、どの行も 2 欄を持たないので 1 byte も変わらない（試作の木の tz derive --check が 一致 89・差分 0、tz check が rc 0）。この行の後、器の行が core の FIELDS と器の生成物を替えると、歯 dtcol_copy_matches_the_vessel_schema がその行の xtask の check で赤になるので、その行が同じ差で根の写しも写し直す（write-set に根の写しを置く）。席が新しい欄を設計ノートに書くのは、PATH の器を入れ替えて scribe2 contracts schema がその欄を出した後（器の設計 §66 形 8 の読み手が先の順）。
+
+      試作と噛み。main b4b816a6 の写しに差を当てた木で、歯 dtcol_ の 5 本と fsch_ の 3 本が緑、clippy の行が rc 0。差の前の写し（18 欄）では歯 dtcol_ の 5 本が全部赤。書く file は write-set の 2 で閉じる。変異 9（写しの頭の行から写した元の path を外す・写しの約束の欄 place を抜く・2 欄の塊の順を替える・写しから欄 code-facts を抜く・欄 done-teeth の形を text にする・derive が一覧の要素を並べ替える・derive が list の欄の字 1 つを一覧として写す・derive が写しに無い欄を飛ばす・床が list の欄の字 1 つを受ける）で、名指した歯が rc 100 で落ちた（係 w147a の bite.py と bites.tsv）。 xtask の check（分けない全部）は試作の木で rc 0（2026-10-04T15:31〜15:36Z・workspace の歯 3,286 本が緑・入れ子の scribe2 は base b4b816a6 からの差が入れ子の入力に触れないので省いた）。
+
+      filter の語。接頭辞 dtcol_ は main b4b816a6 の契約表の verify の filter の語 480 語のどれとも部分の字として重ならず、今の木の歯の名に字 dtcol を持つものは無い。歯の名 5 つは 480 語のどれも部分に持たない。
+
+      流す時と順。depends は空。着地の後、席は設計ノートの行に欄 done-teeth を書ける（PATH の器は 20 欄を読む）。宣言 teeth-check の名乗りと席の設計の着地の口の門は、この行の後の別の手（係 w147a の notes の手順）。
+
+      範囲の外。vessel 宣言の teeth-check と crate-roots・席の起草の型・器の code・導出グラフの歯の辺（判断の記録 ADR-46 の段 4）・欄 code-facts を使う行（器の宣言 index-scip と index-roles の名乗りの後）。
+
+  - n: 7
+    type: prose
+    title: 行 t-hook-drop — tsuzuri の根の plugin の暫定の SessionStart を外す（判断の記録 ADR-38 決定 (6)(7)）
+    body: |
+      在りか。差の file docs/design/patch/t-hook-drop.patch は、main b4b816a6 と、その上に試作を載せた木 47204781（写し drafts/w151a-p の branch p-w151a）との差（14,258 byte・3 file・新しい file 0・+111 −171）。main 0ee9c0da（27b と 28a の廃止を戻した commit・書く file は替わらない）にも git apply --check で当たる。
+
+      なぜ。判断の記録 ADR-38 決定 (6) は、器の行 v-brief-const が器の入れ替えで効くまでの暫定として、tsuzuri の根の plugin の SessionStart に要の写し contracts/seat/brief.txt を出す hook を置き（行 t-seathook・ノート surface-wave27b・着地済み）、決定 (6) の最後の文で、器の入れ替えの後に印が全部の席で効くと確かめた後の行で消すと決めた。器の binary は今、語 vessel と seat-constitution と --project と根の dir に rc 0 で答え（2026-10-05・係 w145a の調べ）、暫定の hook は撃たれても何も出さない。tsuzuri の席は t3:orchestrator の 1 つだけ。外すと決定 (7) のずれ（並びの hook の出力の順が決まらない）が閉じる。ADR-38 の本文は封のまま。
+
+      前提（節に書く・審査は撃たない）。器の binary が上の問いに rc 0 で答えること。器を古い binary へ戻すと要の写しは出なくなるので、戻す時はこの行の差を逆に当てる。
+
+      形。
+      - plugin/hooks/hooks.json: 鍵 SessionStart と、その要素（matcher なしの 1 つ・hook は type command と timeout 10 の 1 つ）を消す。ほかの 5 つの鍵（PostToolBatch・PostToolUse・PreToolUse・Stop・UserPromptSubmit）の字は替えない。
+      - crates/tsuzuri-core/tests/teeth2/gins.rs（着地した歯の module の書き替え・群 teeth2 の main.rs は書かない）: 歯 gins_pretool_bash_entry の event の鍵の一覧から SessionStart の 1 行を消すだけ。
+      - crates/tsuzuri-core/tests/seathk.rs（着地した歯の file の書き直し）: 暫定の hook を撃つ 6 本の歯（seathk_entry_shape・seathk_runner_mark_excluded・seathk_mark_name_from_vessel・seathk_prints_copy_verbatim・seathk_quiet_when_vessel_serves・seathk_quiet_for_runner）と偽の器の置き場を消し、新しい名の 2 本にする。消す 6 本は着地した行 t-seathook の done が名指す（着地した行の字は歴史として残す・判断の記録 ADR-32 決定 (9) と同じ読み）。
+      - 歯 seathk_session_start_is_gone: hooks.json の event の鍵が上の 5 つ（字の順）で、どの command も語 seat-constitution と字 contracts/seat/ を持たない。否定の見本は今の hooks.json の値から 1 句だけ崩した写し 3 つ（鍵 SessionStart を戻す・UserPromptSubmit の command の末に要の写しの cat を足す・PreToolUse の command の末に器への問いの語を足す）で、それぞれその句だけで外れる（鍵を戻した見本は鍵の一覧が 5 つと違い、字を足した見本は鍵の一覧が 5 つのまま、その 1 本の event だけが名指される）。
+      - 歯 seathk_marked_heads_follow_the_vessel_name: 印の名を器の src/name.rs の名の定数の行（頭の字 pub const NAME と型と =）と器の src/pipe/spawn.rs の RUNNER_MARK_SUFFIX の行（字 -runner・ちょうど 1 本）から組み、印の除きを持つ 4 本の command（PostToolBatch・PostToolUse・PreToolUse・UserPromptSubmit）の頭が、[ と -e と二重引用符で囲んだ $CLAUDE_PLUGIN_ROOT/ に印の名を続けた語と ] と || で始まり、除きの頭の字（[ と -e と空白と二重引用符と $CLAUDE_PLUGIN_ROOT/）を 1 度だけ持つことを見る。否定の見本は 1 本の command だけを崩した写し 3 つ（PreToolUse の印の名を別の名に替える・PostToolUse の除きを外す・UserPromptSubmit に除きを 2 度持たせる）で、それぞれその 1 本の event だけが名指される。Stop は除きを持たない（前のまま・見ない）。
+      - 前は歯 seathk_mark_name_from_vessel だけが印の名を器の名の定数から照らしていた（ほかの歯 gins・qsig・fdlt・fdlv は印の名を字で持つ）。SessionStart を消すとその照らしも消えるので、残る 4 本の command へ向け替えた（器の改名で除きが黙って外れないため・改名の行の write-set に hooks.json とこの歯の file を入れる）。
+      - 歯の file の頭の //! の行の続きのすぐ次の行に #![cfg(test)] を置く（空の行を挟まない）。rustfmt の形（edition 2024）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目と 2 番目の項は verify の 3 行目（歯 seathk_session_start_is_gone と seathk_marked_heads_follow_the_vessel_name の 2 本）、3 番目の項は 4 行目（歯 gins_pretool_bash_entry）、最後の 4 番目の項は 5 行目（xtask の check）で測る。verify の 1 行目と 2 行目は命令の rc で測る守りで、done の項にしない。
+
+      構造の連鎖（木 47204781 で grep）。hooks.json を読む歯は seathk・gins・fstop（Stop の要素と全部の字の値の絶対の path の語）・fdlt（PostToolBatch）・fdlv（UserPromptSubmit）・qsig（境界の crate・PostToolUse）で、seathk と gins のほかは書き替えずに通る（xtask の check）。器の plugin の hooks.json と器の歯は替えない。要の写し contracts/seat/brief.txt と constitution.txt は器が seat-constitution の鍵で読むので残す（行 t-seatcopy の歯が守る）。
+
+      試作と噛み。写し drafts/w151a-p（main b4b816a6）で書く file は write-set の中で閉じる（3 file）。verify の 2〜4 行目は rc 0（clippy・seathk の 2 本・gins の 3 本）。根の xtask の check は、この行と器の行 v-anchor-missing を当てた木 3c211a5d で rc 0（根の歯 3277 本と入れ子の器の歯 4081 本が全部通り、入れ子の clippy と器の cargo xtask check も rc 0）。噛みは句ごとに 1 つの変異（9 つ・hooks.json の字 7 つと器の src の字 2 つ）を当て、どれも名指しの歯が rc 100 で落ち、落ちた断言はその句の字。歯の判じの句を 1 つ外す変異 2 つ（除きの数えを外す・要の写しの語から seat-constitution を外す）も、否定の見本の断言で rc 100。印なしの対照は rc 0（2 本）。
+
+      範囲の外。plugin.json の版（中核の consult/launch.rs の PLUGIN_VERSION と歯 cwplg が見る・替えない）。器の SessionStart の出力と器の設計文書。ADR-38 の本文（封のまま・ずれが閉じたことは行の goal と memo に書く）。席の起動行の plugin の置き場の切り替え（係 w145a の調べの 3 節・席の手）。
+  - n: 8
+    type: prose
+    title: 行 v-anchor-missing — 器の doctor が dir の無い anchor の登録 row と置き場の anchor の数えの元の row を名指す（判断の記録 ADR-44 の段 0）
+    body: |
+      在りか。差の file docs/design/patch/v-anchor-missing.patch は、main b4b816a6 と、その上に行 t-hook-drop の試作とこの行の試作を載せた木 3c211a5d（写し drafts/w151a-p の branch p-w151a）との、この行の書く 5 file の差（24,236 byte・5 file・新しい file 0・+159 −22）。行 t-hook-drop と書く file が重ならないので、main b4b816a6 と main 0ee9c0da に単独で当たる（git apply --check）。
+
+      なぜ。器の局面の出力（fleet/lifecycle.json）は、置き場の登録 row の anchor（別の置き場を名乗る anchor を除く）と書き直しの repo を数え、2 つ以上なら 8 種の部品を理由 multi-anchor で測れないと名乗り、管理 tick の全部の書き直しを撃たない（器の設計 case-lifecycle.md 20 節 約束 1・在らない path の anchor も数える）。tsuzuri の置き場では、改名の前の anchor（dir が無い）の登録 row が退役されずに残り、出力が multi-anchor を名乗り続けた。doctor は突合の行で missing=1 と出すが、どの row を退けばよいかを名指さないので、席は event log を replay して row を探し、seat retire で手で直した（2026-10-04・係 w145a の調べ 1.2 節）。判断の記録 ADR-44 の G3（席が記憶で避けている失敗を構造へ上げる）として、doctor が元の row を名指す。数えの規則と局面の出力の形は替えない。
+
+      形。
+      - 器の lib の fleet/lifecycle_mark.rs: 関数 census_others（pub(crate)）を足す。置き場の登録 row（replay の後の鍵ごとの最新）のうち、anchor が別の置き場を名乗らず（names_other が偽）、正規化した字が repo の正規化した字と違う row を鍵の順に返す。census_anchors はこれを使い、1 本でも在れば Many、無くて repo が別の置き場を名乗れば Foreign、ほかは One（前の BTreeSet の数えと同じ 3 値・doctor が名指す row と数えの元を 1 つにする）。import の BTreeSet を外し Registration を足す。
+      - 器の lib の seat/role.rs: 定数 ANCHOR_MISSING（字 anchor-dir=missing）と CENSUS_HEAD（字 anchor-census と半角のコロン）・関数 anchor_missing（std::fs::metadata が NotFound の周だけ真・権限などで読めない周は在ると読む）・with_anchor_words（行と row を鍵の順で対にし、在らない row の行の末尾に空白と ANCHOR_MISSING を足す）・census_line（pub・census_others が空なら None、在れば 1 行）を足す。doctor_lines は登録 row の行に heartbeat と tick の 2 項目を足した直後に with_anchor_words を通す（tick-unit の語はその後・着地済みの e2e の歯が tick-unit の語で終わる行を見るので前に置いた）。doctor_lines の引数は 5 つのまま（器の clippy の too-many-arguments の閾値 5）。
+      - 数えの行の字: anchor-census: reason=multi-anchor missing=<target を , でつないだ字か -> present=<同じ形>。理由の語は局面の出力の定数 UNMEASURED_MULTI_ANCHOR の字。target は鍵（役割と anchor の字）の順。
+      - 席の行の例: seat: role=orchestrator anchor=/x/old-name target=old:design account=a model=Opus default=Opus/xhigh paths=default heartbeat=on tick=absent anchor-dir=missing（--unit-dir の周はこの後に tick-unit の語）。
+      - 器の binary の scribe2-boundary/src/main.rs: doctor の置き場の段で、seat::role::doctor_lines の直後に、--repo の値と replay の値がそろう周だけ census_line を撃って足す（1 行）。--repo の無い周は数えない（cwd を repo と読むと別の dir を数えて誤った Many を出す）。doc の 2 行を足す。
+      - 器の e2e の tests/e2e/seat/register.rs: 在らない anchor（/repo・/repo/a・/repo/b）の席の行を字で見る着地済みの歯 3 本（seat_register_model_shows_in_the_doctor_rows_with_dash_for_none・seat_role_doctor_paths_names_default_declared_and_invalid_per_anchor・seat_defaults_doctor_adds_the_row_default_or_names_why_it_cannot）の期待の字に語を足す（定数 GONE_TAIL）。歯 vanc_doctor_names_the_gone_anchor_row_and_the_census と助け census_doctor を足す。snapshot e2e__seat__seat_doctor_external_form.snap の席の行に語を足す。
+      - 語の鍵を anchor= でなく anchor-dir= にした理由: 同じ行の鍵 anchor= が既に path を持ち、tsuzuri の読み手（中核の seat.rs・account の host.rs と project.rs）は鍵の最初の値を読む。同じ鍵を 2 度置くと、最後の値を読む読み手で path が字 missing に化ける。
+
+      歯（接頭辞 vanc_）。
+      - 器の lib の歯 vanc_census_line_names_the_rows_outside_the_repo（seat/role.rs の歯の区間）: 置き場・repo の dir・在る dir（git の設定なし）・別の置き場を名乗る repo（git の設定 scribe2.stateDir が別の在る dir）・在らない 2 つの path の row で、数えの行を比べる。全部の row の見本は字 anchor-census: reason=multi-anchor missing=v:z,v:a present=v:present（在らない 2 つの row の anchor の順と target の字の順を逆にして鍵の順を測る）。否定の見本はそこから 1 句だけ外した組（repo の row だけ・在らない row だけ・在る row だけ・別の置き場を名乗る row だけ）。
+      - 器の lib の歯 vanc_rows_mark_only_the_anchor_that_is_gone: 在る dir と在らない path の 2 row の行に、在らない row の行だけ語が付き、在る row の行は替わらない。
+      - 器の e2e の歯 vanc_doctor_names_the_gone_anchor_row_and_the_census（PATH は /usr/bin と /bin・台帳の client を引かない）: repo の dir と在らない path の 2 row を seat register で積み、--repo つきの doctor の席の行と突合の行の直後の行を見て、--repo の無い doctor と seat retire の後の doctor を見る。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目と 2 番目の項は verify の 3 行目（器の lib の歯 vanc_census_line_names_the_rows_outside_the_repo と vanc_rows_mark_only_the_anchor_that_is_gone）、3 番目の項は 4 行目（着地済みの器の lib の歯 anchor_census_counts_the_registered_anchors_of_the_place・anchor_census_leaves_out_the_anchors_of_other_places・anchor_census_names_a_repo_of_another_place_foreign・census_anchors の書き替えの守り）、4 番目の項は 5 行目（器の e2e の歯 vanc_doctor_names_the_gone_anchor_row_and_the_census）、最後の 5 番目の項は 6 行目（xtask の check・入れ子の段の nextest が、書き替えた着地済みの e2e の歯 3 本と snapshot の歯 seat_doctor_external_form と、tick-unit の語で終わる行を見る着地済みの歯 seat_unit_doctor_names_present_absent_and_foreign_per_row を撃つ）で測る。verify の 1 行目と 2 行目は命令の rc で測る守り。
+
+      構造の連鎖（木 3c211a5d で grep）。census_anchors の呼び手は fleet/lifecycle.rs の gather と fleet/lifecycle_partial.rs の tick_full で、引数と 3 値は替えない。census_line の呼び手は main.rs の 1 か所、with_anchor_words は doctor_lines の 1 か所。doctor の席の行を字で見る e2e は seat/register.rs の 4 か所（書き替えた）・seat.rs の snapshot（書き替えた）・seat.rs の tick-unit の語で終わる 2 か所（語を tick-unit の前に置いたので替えない）・seat.rs の tick の語の読み（語で読むので替えない）。器の file の行の上限（1500・幅 120 で数える）: fleet/lifecycle_mark.rs は前後とも 1494（growth 1）、seat/role.rs は 556 から 646。器の xtask の check は core-lines 83552/90000・boundary-lines 301/316・file-lines 1499/1500（最大の file はこの行の外）。
+
+      試作と噛み。写し drafts/w151a-p（main b4b816a6 の上に行 t-hook-drop の試作）で書く file は write-set の中で閉じる（5 file）。入れ子の段（置き場 <target>/nested/scribe2・cwd scribe2/）で clippy --workspace --all-targets -- -D warnings は rc 0、nextest --workspace は 4081 本が全部通り、器の cargo xtask check は rc 0。verify の 2〜5 行目を字のまま根で撃って rc 0（lib の vanc_ 2 本・anchor_census_ 3 本・e2e の vanc_ 1 本）。根の xtask の check（入れ子の段を含む）は rc 0（根の歯 3277 本と入れ子の器の歯 4081 本が全部通り、入れ子の clippy と器の cargo xtask check も rc 0）。噛みは句ごとに 1 つの変異（17 = lib の vanc_ 12・e2e の vanc_ 3・lib の anchor_census_ 2）を当て、どれも名指しの歯が rc 100 で落ち、落ちた断言はその句の字。印なしの対照は rc 0（3 本）。seat retire の後に数えの行が消える句は、退役を読む replay（着地済み）の道なので変異を当てていない。
+
+      範囲の外。局面の出力の形（unmeasured の項は part と reason のまま・tsuzuri の読み手を替えない）と数えの規則。dir の無い anchor の row の自動の退役。器の設計文書（凍ったまま・この節が新しい振る舞いを書く）。doctor の help の字（doctor は help の外）。

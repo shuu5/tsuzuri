@@ -1,0 +1,763 @@
+diff --git a/crates/tsuzuri-contract/src/graph.rs b/crates/tsuzuri-contract/src/graph.rs
+index 7b996c897b7e784c40a99591822a7d4e541a5fd3..bb90291e76f0dfd63ce14b3c314d6db68df21d3e 100644
+--- a/crates/tsuzuri-contract/src/graph.rs
++++ b/crates/tsuzuri-contract/src/graph.rs
+@@ -3,6 +3,7 @@
+ //! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
+ //! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
+ //! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
++//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）は行 c-commit-node で足す（判断の記録 ADR-46 決定 (2)・ADR-47）。
+ 
+ use std::cmp::Ordering;
+ use std::collections::BTreeMap;
+@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
+ 
+ use crate::EpochSecs;
+ 
+-/// 節点の種類（閉じた 20・順は設計文書の 11 種・設計ノートの行・台帳の 7 種・走行）。
++/// 節点の種類（閉じた 21・順は設計文書の 11 種・設計ノートの行・台帳の 7 種・走行・着地の commit）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+ pub enum NodeKind {
+     #[serde(rename = "条")]
+@@ -61,11 +62,14 @@ pub enum NodeKind {
+     /// 走行（器の event RunCreated から導く）。
+     #[serde(rename = "run")]
+     Run,
++    /// 着地の commit（器の event RunDone の sha から導く・id は 40 字の小文字の 16 進・判断の記録 ADR-47）。
++    #[serde(rename = "commit")]
++    Commit,
+ }
+ 
+ impl NodeKind {
+     /// 閉じた一覧（順も固定）。
+-    pub const ALL: [NodeKind; 20] = [
++    pub const ALL: [NodeKind; 21] = [
+         NodeKind::Article,
+         NodeKind::Norm,
+         NodeKind::Rule,
+@@ -86,10 +90,11 @@ impl NodeKind {
+         NodeKind::Receipt,
+         NodeKind::Policy,
+         NodeKind::Run,
++        NodeKind::Commit,
+     ];
+ }
+ 
+-/// 辺の型（閉じた 32・順は設計文書の 17 型・設計ノートの行の 2 型・台帳の 4 型・結びの 6 型・走行の 3 型）。
++/// 辺の型（閉じた 33・順は設計文書の 17 型・設計ノートの行の 2 型・台帳の 4 型・結びの 6 型・走行の 3 型・着地の 1 型）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+ pub enum EdgeType {
+     #[serde(rename = "in-article")]
+@@ -167,11 +172,14 @@ pub enum EdgeType {
+     /// 走行 → 口座（口座は節点にせず走行の属性の札で出す）。
+     #[serde(rename = "ran_by")]
+     RanBy,
++    /// 着地の commit → 契約 bead。
++    #[serde(rename = "landed")]
++    Landed,
+ }
+ 
+ impl EdgeType {
+     /// 閉じた一覧（順も固定）。
+-    pub const ALL: [EdgeType; 32] = [
++    pub const ALL: [EdgeType; 33] = [
+         EdgeType::InArticle,
+         EdgeType::RelationsArticles,
+         EdgeType::RelationsReqs,
+@@ -204,6 +212,7 @@ impl EdgeType {
+         EdgeType::RunOf,
+         EdgeType::Raised,
+         EdgeType::RanBy,
++        EdgeType::Landed,
+     ];
+ }
+ 
+diff --git a/crates/tsuzuri-contract/tests/snapshots/graph.json b/crates/tsuzuri-contract/tests/snapshots/graph.json
+index 138b7bb29235006dd012c8fe959c1ef35067d028..0920ff6d90a9ecabe7ae84763062cbc766df5351 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/graph.json
++++ b/crates/tsuzuri-contract/tests/snapshots/graph.json
+@@ -19,7 +19,8 @@
+     "ruling",
+     "receipt",
+     "policy",
+-    "run"
++    "run",
++    "commit"
+   ],
+   "graph::EdgeType": [
+     "in-article",
+@@ -53,7 +54,8 @@
+     "source",
+     "run_of",
+     "raised",
+-    "ran_by"
++    "ran_by",
++    "landed"
+   ],
+   "graph::GraphNode": [
+     {
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+index b49d7479413fb40e063a24fb32da05043d0ba00a..7f35887034882c2bdc9f7c60f01e3ddf51278fdc 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+@@ -388,8 +388,8 @@ fn contract_form_graph_roundtrip_all_types() {
+ 
+ #[test]
+ fn contract_form_graph_closed_lists() {
+-    assert_eq!(distinct(&NodeKind::ALL), 20);
+-    assert_eq!(distinct(&EdgeType::ALL), 32);
++    assert_eq!(distinct(&NodeKind::ALL), 21);
++    assert_eq!(distinct(&EdgeType::ALL), 33);
+     assert_eq!(distinct(&GraphSource::ALL), 3);
+     assert_eq!(distinct(&EdgeEnd::ALL), 2);
+     let fold_words: Vec<String> = Fold::ALL
+diff --git a/crates/tsuzuri-core/src/graph/build.rs b/crates/tsuzuri-core/src/graph/build.rs
+index 7757df30997e08ff0ff263619dda1e50897ea1f2..9aff562ca9714efa2c7434adfa57190c77464034 100644
+--- a/crates/tsuzuri-core/src/graph/build.rs
++++ b/crates/tsuzuri-core/src/graph/build.rs
+@@ -3,6 +3,7 @@
+ //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
+ //! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く（行 c-g3-bindline）。
+ //! 走行は event log の RunCreated から導く。
++//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む（行 c-commit-node）。
+ //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
+ //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
+ //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
+@@ -75,6 +76,18 @@ pub const SCOPE_ALL: &str = "all";
+ /// 問いの metadata の前提の鍵（型 premises の辺の先の id）。
+ pub const PREMISES_KEY: &str = "premises";
+ 
++/// 着地の event の種類（器の語・detail に着地の commit の札を持つ）。
++pub const RUN_DONE: &str = "RunDone";
++
++/// RunDone の detail の着地の commit の札の頭（後ろに 40 字の小文字の 16 進）。
++pub const SHA_TAG: &str = "sha:";
++
++/// commit の名の字数（git の object の名・判断の記録 ADR-47）。
++pub const SHA_LEN: usize = 40;
++
++/// commit の節点の題の字数（commit の名の頭）。
++pub const SHA_TITLE: usize = 8;
++
+ /// 3 つの字から導出グラフを組む。
+ pub fn build(inputs: &Inputs) -> Graph {
+     let mut g = Graph::default();
+@@ -616,9 +629,20 @@ fn event_account(event: &Value) -> Option<String> {
+         .map(str::to_string)
+ }
+ 
++/// RunDone の detail の着地の commit の名（空白か「,」で割った札のうち頭が `SHA_TAG` の最初の札の後ろの字が、
++/// ちょうど `SHA_LEN` 字の小文字の 16 進のときだけ・ほかは None）。
++pub fn landed_sha(detail: &str) -> Option<&str> {
++    let sha = detail
++        .split([',', ' '])
++        .find_map(|tok| tok.strip_prefix(SHA_TAG))?;
++    (sha.len() == SHA_LEN && sha.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')))
++        .then_some(sha)
++}
++
+ /// event log から走行の節点と run_of・raised の辺を組む。段と口座と答えの無い問いの数は走行の属性に持つ。
+ /// raised の辺は QuestionRaised が問いの id の欄（question）を持つときだけ組む（器の実物は持たない）。
+ /// 同じ run の RunCreated の 2 件目は節点を足さない。RunCreated の無い run の event は読み捨てる。
++/// 着地の commit の節点と landed の辺は走行の節点と辺の後に `add_commits` が足す。
+ fn add_runs(g: &mut Graph, events: &[Value]) {
+     let mut order: Vec<String> = Vec::new();
+     let mut attrs: BTreeMap<String, RunAttr> = BTreeMap::new();
+@@ -666,6 +690,51 @@ fn add_runs(g: &mut Graph, events: &[Value]) {
+         .filter(|e| runs.contains_key(&e.from))
+         .collect();
+     g.edges.extend(raised);
++    add_commits(g, events);
++}
++
++/// 走行の節点を持つ run の RunDone のうち detail に着地の commit の名（`landed_sha`）を持つ event から、
++/// event log の順に commit の節点（名ごとに 1 つ・題は名の頭の `SHA_TITLE` 字・更新の時刻は最初の event の読める ts）と、
++/// run の id の前半（`run_bead`）が在れば commit から その bead への landed の辺（同じ組は 1 本）を足す。
++fn add_commits(g: &mut Graph, events: &[Value]) {
++    let mut seen: BTreeSet<String> = BTreeSet::new();
++    let mut pairs: BTreeSet<(String, String)> = BTreeSet::new();
++    for event in events {
++        if event.get("kind").and_then(Value::as_str) != Some(RUN_DONE) {
++            continue;
++        }
++        let Some(run) = event.get("run").and_then(Value::as_str) else {
++            continue;
++        };
++        let Some(sha) = event
++            .get("detail")
++            .and_then(Value::as_str)
++            .and_then(landed_sha)
++        else {
++            continue;
++        };
++        if !g.runs.contains_key(run) {
++            continue;
++        }
++        if seen.insert(sha.to_string()) {
++            g.nodes.push(GraphNode {
++                id: sha.to_string(),
++                kind: NodeKind::Commit,
++                file: None,
++                digest: None,
++                title: title36(&sha[..SHA_TITLE]),
++                line: None,
++                plain: None,
++                eng: None,
++                updated: event.get("ts").and_then(Value::as_str).and_then(epoch_secs),
++            });
++        }
++        if let Some(bead) = run_bead(run)
++            && pairs.insert((sha.to_string(), bead.to_string()))
++        {
++            g.edges.push(edge(sha, bead, EdgeType::Landed));
++        }
++    }
+ }
+ 
+ /// 作った順の走行の節点と run_of の辺を足し、走行の属性を置く。
+diff --git a/crates/tsuzuri-core/src/graph/check.rs b/crates/tsuzuri-core/src/graph/check.rs
+index 8268fd9580277bdacf04ef121e2c4ddd79de4691..be02e14117fbf85874da618f6a7ae7d2bbde8ee3 100644
+--- a/crates/tsuzuri-core/src/graph/check.rs
++++ b/crates/tsuzuri-core/src/graph/check.rs
+@@ -9,6 +9,8 @@
+ //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
+ //! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
+ //! 廃止した（状態 retired）ノートは名指さず、要約の状態の字が読めなければ「まだ分からない」（行 c-note-retired）。
++//! 着地の commit の節点から landed の辺を受けない着地した契約は床の値で `unlanded_contracts` が名指す（行 c-commit-node・
++//! 判断の記録 ADR-45 の門 H4）。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+@@ -666,6 +668,33 @@ fn landed(bead: &BdBead) -> bool {
+     })
+ }
+ 
++/// 着地した契約のうち、着地の commit の節点から landed の辺を受けない bead の id（字の順・重複なし・行 c-commit-node）。
++/// 着地した契約は台帳の字 `ledger` の bead のうち `landed` の述語に合い、グラフの属性の種類が契約（task）の bead。
++/// 辺は元が種類 commit の節点で先がその bead の landed の辺だけを数える。台帳か走行の記録が読めないか、台帳の字
++/// `ledger` が読めなければ「まだ分からない」。
++pub fn unlanded_contracts(g: &Graph, ledger: &str) -> Reading<Vec<String>> {
++    if !g.is_read(Source::Ledger) || !g.is_read(Source::Runs) {
++        return Reading::Unknown;
++    }
++    let Some(beads) = read_ledger(ledger) else {
++        return Reading::Unknown;
++    };
++    let index = g.index();
++    let carried: BTreeSet<&str> = pairs(g, EdgeType::Landed)
++        .into_iter()
++        .filter(|(from, _)| index.get(from).is_some_and(|n| n.kind == NodeKind::Commit))
++        .map(|(_, to)| to)
++        .collect();
++    let ids: BTreeSet<String> = beads
++        .iter()
++        .filter(|b| landed(b))
++        .filter(|b| g.beads.get(&b.id).is_some_and(|a| a.kind == NodeKind::Task))
++        .filter(|b| !carried.contains(b.id.as_str()))
++        .map(|b| b.id.clone())
++        .collect();
++    Reading::Known(ids.into_iter().collect())
++}
++
+ /// 設計ノートの状態の字のうち廃止を表す字（folio の索引の要約の欄 status・行 c-note-retired）。
+ pub const RETIRED: &str = "retired";
+ 
+diff --git a/crates/tsuzuri-core/src/graph/mod.rs b/crates/tsuzuri-core/src/graph/mod.rs
+index 1231480e0a850c4459974df39dcc274824a27c6e..39ee8d12f05422696490830df7652bc191354cae 100644
+--- a/crates/tsuzuri-core/src/graph/mod.rs
++++ b/crates/tsuzuri-core/src/graph/mod.rs
+@@ -4,6 +4,8 @@
+ //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
+ //! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
+ //! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる（行 c-g3-extern）。
++//! 着地の commit は event log の RunDone から組み（行 c-commit-node）、着地の commit の無い着地した契約は床の値で
++//! `check::unlanded_contracts` が名指す。
+ 
+ pub mod around;
+ pub mod build;
+@@ -37,7 +39,7 @@ pub enum Source {
+     Design,
+     /// 台帳（bead の 4 種と notes から導く 3 種）。
+     Ledger,
+-    /// 器の event log（走行）。
++    /// 器の event log（走行と着地の commit）。
+     Runs,
+ }
+ 
+@@ -57,11 +59,11 @@ impl Source {
+                 NodeKind::Receipt,
+                 NodeKind::Policy,
+             ],
+-            Source::Runs => &[NodeKind::Run],
++            Source::Runs => &[NodeKind::Run, NodeKind::Commit],
+         }
+     }
+ 
+-    /// 節点の種類の出所（閉じた 20 の種類はどれも 1 つの出所に当たる）。
++    /// 節点の種類の出所（閉じた 21 の種類はどれも 1 つの出所に当たる）。
+     pub fn of(kind: NodeKind) -> Option<Source> {
+         Source::ALL.into_iter().find(|s| s.kinds().contains(&kind))
+     }
+diff --git a/crates/tsuzuri-core/tests/cmtnode.rs b/crates/tsuzuri-core/tests/cmtnode.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1551c783684f8c2906f8e9e07be3d267b3700875
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cmtnode.rs
+@@ -0,0 +1,287 @@
++//! 着地の commit の節点の歯（中核・接頭辞 cmtnode_・設計ノート surface-wave29a 行 c-commit-node・判断の記録 ADR-46 決定 (2)・
++//! ADR-47・ADR-45 の門 H4）。器の event log の RunDone の detail の札 sha: の 40 字の小文字の 16 進から commit の節点を組み、
++//! commit から走行の bead へ landed の辺を組む。着地の commit の節点から landed の辺を受けない着地した契約は床の値
++//! unlanded_contracts が名指す。否定の見本は正しい見本から 1 句だけ替える。節の字は歯の中で組む。
++#![cfg(test)]
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
++use tsuzuri_contract::wire;
++use tsuzuri_core::graph::build::{SHA_LEN, SHA_TAG, SHA_TITLE, landed_sha};
++use tsuzuri_core::graph::check::unlanded_contracts;
++use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
++
++/// 着地の commit の名（40 字の小文字の 16 進）。
++const SHA_A: &str = "85bb529a8e67fa35652253b1bce533675eba145a";
++const SHA_B: &str = "7803a784c0ffee00112233445566778899aabbcc";
++
++/// 節の索引の字（設計の索引の節点の行 1 つ）。
++const IDX: &str = "FR1\t要件\tsrs.yaml\t00000000\t面は 2 つ\n";
++
++/// 2026-09-27T07:40:00Z の epoch 秒（RunDone の ts）。
++const AT_0740: EpochSecs = 1790494800;
++
++/// 節の台帳の字（契約の bead 6 本と memo 1 本）。fx-1 と fx-2 は landed で閉じ、fx-3 は「着地（便」で閉じ、
++/// fx-4 は取り下げで閉じ、fx-5 は open、fx-6 は landed で閉じた memo、fx-7 は着地で閉じた契約。
++const LED: &str = r#"[
++  {"id":"fx-1","title":"一つ目","issue_type":"task","status":"closed","close_reason":"landed 85bb529a ci=success"},
++  {"id":"fx-2","title":"二つ目","issue_type":"task","status":"closed","close_reason":"landed 7803a784 ci=success"},
++  {"id":"fx-3","title":"三つ目","issue_type":"task","status":"closed","close_reason":"着地（便 fx-3 の着地）"},
++  {"id":"fx-4","title":"四つ目","issue_type":"task","status":"closed","close_reason":"取り下げ 中身は fx-1 の便に載った"},
++  {"id":"fx-5","title":"五つ目","issue_type":"task","status":"open"},
++  {"id":"fx-6","title":"六つ目","issue_type":"task","status":"closed","labels":["intake:memo"],"close_reason":"landed"},
++  {"id":"fx-7","title":"七つ目","issue_type":"task","status":"closed","close_reason":"着地"}
++]"#;
++
++/// 走行 1 本の RunCreated の行。
++fn created(run: &str) -> String {
++    format!(r#"{{"run":"{run}","kind":"RunCreated","ts":"2026-09-27T07:39:16Z"}}"#)
++}
++
++/// 走行 1 本の event の行（種類と detail）。
++fn event(run: &str, kind: &str, detail: &str) -> String {
++    format!(r#"{{"run":"{run}","kind":"{kind}","ts":"2026-09-27T07:40:00Z","detail":"{detail}"}}"#)
++}
++
++/// 行を改行でつないだ event log の字。
++fn log(lines: &[String]) -> String {
++    lines.iter().map(|l| format!("{l}\n")).collect()
++}
++
++const RUN_1: &str = "fx-1-20260927T073916Z";
++const RUN_2: &str = "fx-2-20260927T080000Z";
++
++/// 正しい見本（fx-1 の走行の RunDone が sha:A と main:B を持つ）。
++fn good_events() -> String {
++    log(&[
++        created(RUN_1),
++        event(RUN_1, "RunDone", &format!("sha:{SHA_A} main:{SHA_B}")),
++    ])
++}
++
++fn built(events: &str) -> Graph {
++    build(&Inputs {
++        design_index: IDX,
++        ledger: LED,
++        events,
++    })
++}
++
++fn commits(g: &Graph) -> Vec<&GraphNode> {
++    g.nodes
++        .iter()
++        .filter(|n| n.kind == NodeKind::Commit)
++        .collect()
++}
++
++fn landed(g: &Graph) -> Vec<(&str, &str)> {
++    g.edges
++        .iter()
++        .filter(|e| e.edge_type == EdgeType::Landed)
++        .map(|e| (e.from.as_str(), e.to.as_str()))
++        .collect()
++}
++
++#[test]
++fn cmtnode_closed_lists_end_with_commit_and_landed() {
++    assert_eq!(NodeKind::ALL.len(), 21);
++    assert_eq!(NodeKind::ALL[20], NodeKind::Commit);
++    assert_eq!(wire::encode(&NodeKind::Commit).expect("語"), "\"commit\"");
++    assert_eq!(EdgeType::ALL.len(), 33);
++    assert_eq!(EdgeType::ALL[32], EdgeType::Landed);
++    assert_eq!(wire::encode(&EdgeType::Landed).expect("語"), "\"landed\"");
++    assert_eq!(Source::of(NodeKind::Commit), Some(Source::Runs));
++    assert_eq!(Source::Runs.kinds(), &[NodeKind::Run, NodeKind::Commit]);
++    assert_eq!((SHA_TAG, SHA_LEN, SHA_TITLE), ("sha:", 40, 8));
++}
++
++#[test]
++fn cmtnode_run_done_sha_makes_commit_and_landed() {
++    let g = built(&good_events());
++    assert!(g.unread.is_empty(), "{:?}", g.unread);
++    let got = commits(&g);
++    assert_eq!(got.len(), 1, "main: の札の名は節点にしない");
++    let n = got[0];
++    assert_eq!(n.id, SHA_A);
++    assert_eq!(n.title, "85bb529a");
++    assert_eq!(n.updated, Some(AT_0740));
++    assert_eq!(
++        (&n.file, &n.digest, n.line, &n.plain, &n.eng),
++        (&None, &None, None, &None, &None)
++    );
++    assert_eq!(landed(&g), vec![(SHA_A, "fx-1")]);
++    assert!(g.node(SHA_B).is_none());
++}
++
++/// 否定の見本（正しい見本の RunDone の行から 1 句だけ替える・理由の字と event log の字）。
++fn negative_cases() -> Vec<(&'static str, String)> {
++    let short = &SHA_A[..39];
++    let long = format!("{SHA_A}0");
++    let upper = SHA_A.to_uppercase();
++    let not_hex = format!("{}g", &SHA_A[..39]);
++    vec![
++        (
++            "39 字",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunDone", &format!("sha:{short}")),
++            ]),
++        ),
++        (
++            "41 字",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunDone", &format!("sha:{long}")),
++            ]),
++        ),
++        (
++            "大文字",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunDone", &format!("sha:{upper}")),
++            ]),
++        ),
++        (
++            "16 進でない字",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunDone", &format!("sha:{not_hex}")),
++            ]),
++        ),
++        (
++            "札が main: だけ",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunDone", &format!("main:{SHA_A}")),
++            ]),
++        ),
++        (
++            "RunDone でない event",
++            log(&[
++                created(RUN_1),
++                event(RUN_1, "RunStage", &format!("sha:{SHA_A}")),
++            ]),
++        ),
++        (
++            "RunCreated の無い走行",
++            log(&[
++                created(RUN_2),
++                event(RUN_1, "RunDone", &format!("sha:{SHA_A}")),
++            ]),
++        ),
++    ]
++}
++
++#[test]
++fn cmtnode_only_full_lower_hex_sha_of_run_done_counts() {
++    let short = &SHA_A[..39];
++    for (why, events) in negative_cases() {
++        let g = built(&events);
++        assert!(g.unread.is_empty(), "{why}: {:?}", g.unread);
++        assert!(commits(&g).is_empty(), "{why}");
++        assert!(landed(&g).is_empty(), "{why}");
++    }
++    assert_eq!(landed_sha(&format!("sha:{SHA_A}")), Some(SHA_A));
++    assert_eq!(landed_sha(&format!("terminal:x,sha:{SHA_A}")), Some(SHA_A));
++    assert_eq!(landed_sha(&format!("main:{SHA_A}")), None);
++    assert_eq!(landed_sha(&format!("sha:{short}")), None);
++}
++
++#[test]
++fn cmtnode_same_sha_is_one_node_and_one_edge_per_bead() {
++    let events = log(&[
++        created(RUN_1),
++        created(RUN_2),
++        event(RUN_1, "RunDone", &format!("sha:{SHA_A} main:{SHA_A}")),
++        event(RUN_1, "RunDone", &format!("sha:{SHA_A} main:{SHA_A}")),
++        event(RUN_2, "RunDone", &format!("sha:{SHA_A} main:{SHA_A}")),
++        event(RUN_2, "RunDone", &format!("sha:{SHA_B} main:{SHA_B}")),
++    ]);
++    let g = built(&events);
++    let ids: Vec<&str> = commits(&g).iter().map(|n| n.id.as_str()).collect();
++    assert_eq!(ids, vec![SHA_A, SHA_B], "event log の順・名ごとに 1 つ");
++    assert_eq!(
++        landed(&g),
++        vec![(SHA_A, "fx-1"), (SHA_A, "fx-2"), (SHA_B, "fx-2")]
++    );
++}
++
++#[test]
++fn cmtnode_run_without_bead_front_has_node_but_no_edge() {
++    let events = log(&[
++        created("free-run"),
++        event("free-run", "RunDone", &format!("sha:{SHA_A}")),
++    ]);
++    let g = built(&events);
++    assert_eq!(commits(&g).len(), 1);
++    assert!(landed(&g).is_empty());
++}
++
++#[test]
++fn cmtnode_unread_events_make_commit_unknown() {
++    let g = built("");
++    assert_eq!(g.unread, vec![Source::Runs]);
++    assert!(g.unknown_kinds().contains(&NodeKind::Commit));
++    assert_eq!(g.count_nodes(NodeKind::Commit), 0);
++}
++
++#[test]
++fn cmtnode_invariants_hold_with_commits() {
++    let g = built(&good_events());
++    let verdict = |id: &str| {
++        check(&g)
++            .into_iter()
++            .find(|i| i.id == id)
++            .map(|i| i.verdict)
++            .expect("不変条件")
++    };
++    assert_eq!(verdict("g-1"), Verdict::Pass);
++    assert_eq!(verdict("g-10"), Verdict::Pass);
++}
++
++#[test]
++fn cmtnode_unlanded_names_landed_contracts_without_commit() {
++    let both = log(&[
++        created(RUN_1),
++        created(RUN_2),
++        event(RUN_1, "RunDone", &format!("sha:{SHA_A} main:{SHA_A}")),
++        event(RUN_2, "RunDone", &format!("sha:{SHA_B} main:{SHA_B}")),
++    ]);
++    let g = built(&both);
++    assert_eq!(
++        unlanded_contracts(&g, LED),
++        Reading::Known(vec!["fx-3".to_string(), "fx-7".to_string()]),
++        "landed と着地の頭の契約だけ・取り下げと open と memo は数えない"
++    );
++    let one = log(&[
++        created(RUN_1),
++        created(RUN_2),
++        event(RUN_1, "RunDone", &format!("sha:{SHA_A} main:{SHA_A}")),
++        event(RUN_2, "RunDone", "terminal:close:ok"),
++    ]);
++    let g = built(&one);
++    assert_eq!(
++        unlanded_contracts(&g, LED),
++        Reading::Known(vec![
++            "fx-2".to_string(),
++            "fx-3".to_string(),
++            "fx-7".to_string()
++        ]),
++        "sha の札の無い RunDone は着地の commit を結ばない"
++    );
++}
++
++#[test]
++fn cmtnode_unlanded_unknown_when_unread() {
++    let unread_runs = built("");
++    assert_eq!(unlanded_contracts(&unread_runs, LED), Reading::Unknown);
++    let unread_ledger = build(&Inputs {
++        design_index: IDX,
++        ledger: "",
++        events: &good_events(),
++    });
++    assert_eq!(unlanded_contracts(&unread_ledger, LED), Reading::Unknown);
++    let g = built(&good_events());
++    assert_eq!(unlanded_contracts(&g, "x"), Reading::Unknown);
++    assert_eq!(unlanded_contracts(&g, ""), Reading::Unknown);
++}
+diff --git a/crates/tsuzuri-core/tests/teeth1/dnedge.rs b/crates/tsuzuri-core/tests/teeth1/dnedge.rs
+index 8ad90203bdcf24d87fd9bd637446ecdfedb5660c..71514517353c12dbb21c14c198e78d3bb89c9665 100644
+--- a/crates/tsuzuri-core/tests/teeth1/dnedge.rs
++++ b/crates/tsuzuri-core/tests/teeth1/dnedge.rs
+@@ -60,7 +60,7 @@ fn triple(from: &str, to: &str, t: EdgeType) -> (String, String, EdgeType) {
+ 
+ #[test]
+ fn dnedge_types_closed() {
+-    assert_eq!(EdgeType::ALL.len(), 32);
++    assert_eq!(EdgeType::ALL.len(), 33);
+     assert_eq!(DESIGN_EDGE_TYPES, 19);
+     let words: Vec<String> = EdgeType::ALL[..DESIGN_EDGE_TYPES]
+         .iter()
+diff --git a/crates/tsuzuri-core/tests/teeth2/graph.rs b/crates/tsuzuri-core/tests/teeth2/graph.rs
+index 765fbe53ee3d9c5860e00a941270c049e3117dfb..210446997c638b78fa1bc7038c6f70f6eae2f60d 100644
+--- a/crates/tsuzuri-core/tests/teeth2/graph.rs
++++ b/crates/tsuzuri-core/tests/teeth2/graph.rs
+@@ -250,7 +250,7 @@ fn graph_no_state_unknown_only_runs() {
+     assert_eq!(v["events"], "", "event log の字が空");
+     let g = build_from(&v);
+     assert_eq!(g.unread, vec![Source::Runs]);
+-    assert_eq!(g.unknown_kinds(), vec![NodeKind::Run]);
++    assert_eq!(g.unknown_kinds(), vec![NodeKind::Run, NodeKind::Commit]);
+     assert!(g.count_nodes(NodeKind::Article) > 0, "設計の節点は組める");
+     assert!(
+         BEAD_KINDS.iter().all(|k| g.count_nodes(*k) > 0),
+diff --git a/crates/tsuzuri-surface/src/mapview/band.rs b/crates/tsuzuri-surface/src/mapview/band.rs
+index 52e045db230e56131b11f9062ec87482aba6dfed..88e31b76591b066d8ab428a660f8dfc4b9717455 100644
+--- a/crates/tsuzuri-surface/src/mapview/band.rs
++++ b/crates/tsuzuri-surface/src/mapview/band.rs
+@@ -112,8 +112,8 @@ const fn kind_row(kind: NodeKind, band: Band, key: &'static str) -> KindRow {
+     KindRow { kind, band, key }
+ }
+ 
+-/// 節点の種類から帯と語の鍵への閉じた表（20 行・順は契約の型の `NodeKind::ALL`）。
+-pub const KINDS: [KindRow; 20] = [
++/// 節点の種類から帯と語の鍵への閉じた表（21 行・順は契約の型の `NodeKind::ALL`）。
++pub const KINDS: [KindRow; 21] = [
+     kind_row(NodeKind::Article, Band::Constitution, "k:条"),
+     kind_row(NodeKind::Norm, Band::Constitution, "k:規範文"),
+     kind_row(NodeKind::Rule, Band::Rules, "k:規則行"),
+@@ -134,17 +134,18 @@ pub const KINDS: [KindRow; 20] = [
+     kind_row(NodeKind::Receipt, Band::Beads, "k:受け"),
+     kind_row(NodeKind::Policy, Band::Beads, "k:方針"),
+     kind_row(NodeKind::Run, Band::Pipeline, "k:走行"),
++    kind_row(NodeKind::Commit, Band::Pipeline, "k:commit"),
+ ];
+ 
+ /// 種類の語の鍵の頭。
+ pub const KIND_KEY_PREFIX: &str = "k:";
+ 
+-#[expect(clippy::expect_used, reason = "種類の表は種類の 20 個の全部を持つ")]
++#[expect(clippy::expect_used, reason = "種類の表は種類の 21 個の全部を持つ")]
+ fn row(kind: NodeKind) -> &'static KindRow {
+     KINDS
+         .iter()
+         .find(|r| r.kind == kind)
+-        .expect("種類の表は種類の 20 個の全部を持つ")
++        .expect("種類の表は種類の 21 個の全部を持つ")
+ }
+ 
+ /// 種類の帯。
+diff --git a/crates/tsuzuri-surface/src/mapview/graph.rs b/crates/tsuzuri-surface/src/mapview/graph.rs
+index d320dbcdf3b71827d406bc5fc8745f75b35bd12c..c60be3c5849be2f76b39c5f3ad23d9506d9124f8 100644
+--- a/crates/tsuzuri-surface/src/mapview/graph.rs
++++ b/crates/tsuzuri-surface/src/mapview/graph.rs
+@@ -77,7 +77,9 @@ pub fn line_style(t: EdgeType) -> LineStyle {
+     use EdgeType as E;
+     match t {
+         E::Blocks => LineStyle::Bold,
+-        E::InArticle | E::ArticleRef | E::ParentChild | E::RunOf | E::RanBy => LineStyle::Dotted,
++        E::InArticle | E::ArticleRef | E::ParentChild | E::RunOf | E::RanBy | E::Landed => {
++            LineStyle::Dotted
++        }
+         E::Amends => LineStyle::Arrow,
+         E::RelationsArticles
+         | E::RelationsReqs
+diff --git a/crates/tsuzuri-surface/tests/teeth4/mapgraph.rs b/crates/tsuzuri-surface/tests/teeth4/mapgraph.rs
+index 4652dfdbab7fa58c2d26b575755d43ea25c05a87..c5d57f8630a455ad64376c0f8501d7aadf113490 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/mapgraph.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/mapgraph.rs
+@@ -141,12 +141,13 @@ fn mapgraph_line_style_table() {
+             EdgeType::ArticleRef,
+             EdgeType::ParentChild,
+             EdgeType::RunOf,
+-            EdgeType::RanBy
++            EdgeType::RanBy,
++            EdgeType::Landed
+         ]
+     );
+     assert_eq!(by["arrow"], vec![EdgeType::Amends]);
+     assert_eq!(by["solid"].len(), 25);
+-    assert_eq!(by.values().map(Vec::len).sum::<usize>(), 32);
++    assert_eq!(by.values().map(Vec::len).sum::<usize>(), 33);
+     // 見た目の値は見本の edgeSVG と同じ。
+     assert_eq!(
+         LineStyle::Bold.stroke(),
+@@ -334,12 +335,12 @@ fn mapgraph_legend_bands_and_types() {
+             EdgeType::RunOf
+         ]
+     );
+-    // 注釈の属性は語の辞書に鍵の在る型だけ（20 個）。
++    // 注釈の属性は語の辞書に鍵の在る型だけ（21 個）。
+     let with_term: Vec<EdgeType> = EdgeType::ALL
+         .into_iter()
+         .filter(|t| edge_term(*t).is_some())
+         .collect();
+-    assert_eq!(with_term.len(), 20);
++    assert_eq!(with_term.len(), 21);
+     assert_eq!(edge_term(EdgeType::Basis).as_deref(), Some("e:basis"));
+     assert_eq!(edge_term(EdgeType::VerifyAc), None);
+     for t in with_term {
+diff --git a/crates/tsuzuri-surface/tests/teeth4/mapview.rs b/crates/tsuzuri-surface/tests/teeth4/mapview.rs
+index 69ec799ee867b121fc13bafc7755f7c72c7ae3ee..5a96692e84b82f23ae652cc41dec2e8b076b6f0d 100644
+--- a/crates/tsuzuri-surface/tests/teeth4/mapview.rs
++++ b/crates/tsuzuri-surface/tests/teeth4/mapview.rs
+@@ -40,7 +40,7 @@ fn mapview_fixture_is_small() {
+     assert!(doc.edges.len() <= 60, "辺 {}", doc.edges.len());
+ }
+ 
+-/// (1) 種類の 20 個の全部が 7 つの帯のちょうど 1 つに当たり、語の鍵も 20 個の全部を持つ。
++/// (1) 種類の 21 個の全部が 7 つの帯のちょうど 1 つに当たり、語の鍵も 21 個の全部を持つ。
+ #[test]
+ fn mapview_kind_table_is_closed() {
+     let kinds: Vec<NodeKind> = KINDS.iter().map(|r| r.kind).collect();
+@@ -49,7 +49,7 @@ fn mapview_kind_table_is_closed() {
+         NodeKind::ALL.to_vec(),
+         "表は種類の全部を 1 度ずつ持つ"
+     );
+-    let want: [(NodeKind, &str, &str); 20] = [
++    let want: [(NodeKind, &str, &str); 21] = [
+         (NodeKind::Article, "constitution", "k:条"),
+         (NodeKind::Norm, "constitution", "k:規範文"),
+         (NodeKind::Rule, "rules", "k:規則行"),
+@@ -70,6 +70,7 @@ fn mapview_kind_table_is_closed() {
+         (NodeKind::Receipt, "beads", "k:受け"),
+         (NodeKind::Policy, "beads", "k:方針"),
+         (NodeKind::Run, "pipeline", "k:走行"),
++        (NodeKind::Commit, "pipeline", "k:commit"),
+     ];
+     for (kind, band, key) in want {
+         assert_eq!(band_of(kind).name(), band, "{kind:?} の帯");
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 00cb313ac128df007cf544360af8289dd8d59e02..1912eab497609ccdb40ae5da89749be565eac3b6 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -275,6 +275,11 @@
+    "note": "1 つの task の 1 回の実行",
+    "internal": "走行（原文の名）"
+   },
++  "k:commit": {
++   "label": "commit",
++   "note": "task が着地した 1 つの commit",
++   "internal": "着地の commit（原文の名）"
++  },
+   "k:受け": {
+    "label": "orchestrator の受け",
+    "note": "裁定を受けて処分を宣言した記録\n・ 台帳の notes の 1 行\n→ あなたの決定を受ける",
+@@ -360,6 +365,11 @@
+    "note": "{edge:run_of} run が属する task",
+    "internal": "edge type=run_of"
+   },
++  "e:landed": {
++   "label": "landed",
++   "note": "{edge:landed} commit が着地させた task",
++   "internal": "edge type=landed"
++  },
+   "e:raised": {
+    "label": "raised",
+    "note": "{edge:raised} run が出した question",

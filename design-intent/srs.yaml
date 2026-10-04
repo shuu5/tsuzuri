@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.32 版（2026-10-05）: ノート surface-wave29a の行 c-commit-node に合わせ、要件 FR2 の shall と plain に着地の commit の節点と辺 landed を足した（判断の記録 ADR-46 の決定 (2)）。
 # 第 0.31 版（2026-10-04）: 判断の記録 ADR-44 の決定 (2)（持ち主の裁定 t3-hub.80.1〔裁定 id = t3-hub.80.1:20261004T1456Z-1〕）を写した（目的 GOAL2 の字を、着地の commit と code までの図と便ごとの積み上げへ広げ、目的 GOAL5〔ほかの project でも最初から十全に動く〕を足した）。
 # 第 0.30 版（2026-10-04）: 器 scribe2 の要件書 v0.36 の制約 6 本を、番号に 1000 を足して制約 CON1001〜CON1006 として写した（取り込みの段 1 の続き・持ち主の裁定 t3-hub.74.60.1〔裁定 id = t3-hub.74.60.1:20261004T0113Z-1〕・判断の記録 ADR-39 の決定 (4) の (ア)・段 2 の判断の記録の写しが制約の id を解ける形で引くための先置き）。欄の写しは label → title・text → text・regulation → source の字・basis は空。器の憲法を指す字「憲法」は「器の憲法」、「本書」は「器の要件書」に直した。器の判断の記録の id は段 1 と同じく字のまま。
 # 第 0.29 版（2026-10-04）: 要件 FR10 の shall と plain に、依存でない理由で人の手を待つ契約の留め置き（Held）の札と吹き出しと個別の頁の段を足した（判断の記録 ADR-42・持ち主の裁定 t3-hub.79.1（裁定 id = t3-hub.79.1:20261004T0959Z-1・ADR-42 の案 A のまま承認・席とのチャット・notes に逐語））。
@@ -19,7 +20,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.31
+  version: v0.32
   status: draft
   generated: 2026-09-28
   approval:
@@ -110,8 +111,8 @@ requirements:
     pattern: event
     strength: must
     when: 面の server か tz graph が呼ばれたとき
-    shall: 設計文書の節点（11 種と設計ノートの行）と台帳の節点（epic・task・memo・question と notes から導く あなたの決定・orchestrator の受け・全体への指示）と走行（run）を 1 つのグラフに毎回組み直す。辺は設計文書の型と台帳の型と結びの型（design・ruled_by・answers・touches・premises・source）と走行の型（run_of・raised・ran_by）で、repo に書かない。読めない出所は、その種類だけ「まだ分からない」とし、他の種類は組む。
-    plain: 台帳と設計の文書と作業の走行を、毎回 1 つの図に組み直します。file には書きません。読めない元があれば、その種類だけ「まだ分からない」と出し、ほかは組みます。
+    shall: 設計文書の節点（11 種と設計ノートの行）と台帳の節点（epic・task・memo・question と notes から導く あなたの決定・orchestrator の受け・全体への指示）と走行（run）と着地の commit（器の event log の走行の終わりの札 sha の 40 字の名）を 1 つのグラフに毎回組み直す。辺は設計文書の型と台帳の型と結びの型（design・ruled_by・answers・touches・premises・source）と走行の型（run_of・raised・ran_by）と着地の型（landed・commit → 契約）で、repo に書かない。読めない出所は、その種類だけ「まだ分からない」とし、他の種類は組む。
+    plain: 台帳と設計の文書と作業の走行と、作業を取り込んだ commit を、毎回 1 つの図に組み直します。file には書きません。読めない元があれば、その種類だけ「まだ分からない」と出し、ほかは組みます。
     basis: [P-6, P-19, N-2]
     verify: {method: test, how: 小さな design-intent と一時の台帳と偽の state dir の fixture で節点と辺の数と種類を snapshot と比べる, ac: [AC4, AC8]}
     goals: [GOAL2]
