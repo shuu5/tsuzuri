@@ -5,13 +5,16 @@
 //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
 //! 2. repo の下の .git が file（git の worktree）なら何もせずに 0。
 //! 3. 標準入力が席の本体の入力（最上位に agent_id も agent_type も無い JSON の object）でなければ、子 process を撃たずに 0。
-//! 4. 安い判じ（自分の board の口 GET `UNRECEIVED_PATH`）が Known の空の列なら 0。読めない・Unknown なら
-//!    標準エラーに 1 行を書いて 0（台帳は読まない・印の無い裁定は停止の hook が拾う）。
-//! 5. 空でなければ台帳を bd で 1 回読み、印の無い裁定の逐語が無ければ 0、読めなければ標準エラーに 1 行を書いて 0。
-//! 6. 答えを標準出力に書いて flush し、その後に答えが名指した裁定にだけ印を bdw で置く（上限 `MARK_BUDGET`）。
+//! 4. 相談の拾い（行 cs-hooks・`consult::items`）: 見張りが居ない間、board の相談の未受けの口の受けの無い所見と頼みの行を取る。
+//! 5. 安い判じ（自分の board の口 GET `UNRECEIVED_PATH`）が Known の空の列なら裁定は無い。読めない・Unknown なら
+//!    標準エラーに 1 行を書く（台帳は読まない・印の無い裁定は停止の hook が拾う）。
+//! 6. 空でなければ台帳を bd で 1 回読み、印の無い裁定の逐語を取る。読めなければ標準エラーに 1 行を書く。
+//! 7. 裁定の逐語も相談の行も無ければ 0。在れば答え（裁定の文脈の後ろに相談の行）を標準出力に書いて flush し、
+//!    その後に答えが名指した裁定にだけ印を bdw で置く（上限 `MARK_BUDGET`）。
 //!
 //! どの形でも 2 は返さない。hook は file を書かない（台帳の書きは bdw だけ）。
-//! 待ちの上限は `WAIT`（git と tailnet の道具）・`REACH`（住所ごとの接続と読み）・`BD_TIMEOUT`・`MARK_BUDGET`。
+//! 待ちの上限は `WAIT`（git と tailnet の道具）・`REACH`（住所ごとの接続と読み）・`BD_TIMEOUT`・`MARK_BUDGET`・
+//! 相談の拾いの `PICK_BUDGET`。
 
 use std::ffi::OsStr;
 use std::io::{Read, Write};
@@ -24,6 +27,7 @@ use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_contract::wire;
+use tsuzuri_core::consult::pickup::context_with;
 use tsuzuri_core::delivery::{
     Route, Said, TOOL_EVENT, context_for, main_thread, mark_line, named, unmarked,
 };
@@ -36,6 +40,7 @@ use crate::server::proc;
 use crate::server::ruling::{WRITE_TIMEOUT, minute};
 use crate::stage::url::{STATUS_ARGS, TAILNET};
 
+use super::consult;
 use super::question_signal::{REACH, WAIT, places};
 pub use super::stop::{Args, parse};
 
@@ -52,6 +57,11 @@ const FAIL: u8 = 1;
 
 /// 口を 1 本撃ち、応答を終わりまで読んで（状態の数・本文）を返す（接続と読み書きの待ちは `wait` まで）。
 pub fn fetch(addr: SocketAddr, wait: Duration) -> Result<(u16, String), String> {
+    fetch_path(addr, UNRECEIVED_PATH, wait)
+}
+
+/// `fetch` の口の path を `path` にした撃ち（GET）。
+pub fn fetch_path(addr: SocketAddr, path: &str, wait: Duration) -> Result<(u16, String), String> {
     let mut stream =
         TcpStream::connect_timeout(&addr, wait).map_err(|e| format!("{addr} に繋がらない: {e}"))?;
     stream
@@ -59,7 +69,7 @@ pub fn fetch(addr: SocketAddr, wait: Duration) -> Result<(u16, String), String> 
         .and_then(|()| stream.set_write_timeout(Some(wait)))
         .map_err(|e| format!("{addr} の待ちの上限を置けない: {e}"))?;
     let request =
-        format!("GET {UNRECEIVED_PATH} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+        format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
     stream
         .write_all(request.as_bytes())
         .map_err(|e| format!("{addr} へ書けない: {e}"))?;
@@ -167,29 +177,9 @@ pub fn run(rest: &[&str]) -> u8 {
     if !main_thread(&payload) {
         return 0;
     }
-    match unreceived(&args.repo, OsStr::new(GIT), OsStr::new(TAILNET)) {
-        Ok(Reading::Known(ids)) if ids.is_empty() => return 0,
-        Ok(Reading::Known(_)) => {}
-        Ok(Reading::Unknown) => {
-            emit_err("tz hook deliver-tool: board が台帳を読めていない（印の無い裁定を判じない）");
-            return 0;
-        }
-        Err(e) => {
-            emit_err(&format!("tz hook deliver-tool: {e}"));
-            return 0;
-        }
-    }
-    let said = match Source::new(&args.repo, &args.bd)
-        .text_alone()
-        .map(|text| unmarked(&text))
-    {
-        Some(Reading::Known(said)) => said,
-        _ => {
-            emit_err("tz hook deliver-tool: 台帳が読めない（逐語を写せない）");
-            return 0;
-        }
-    };
-    let Some(answer) = context_for(&said, TOOL_EVENT) else {
+    let pickup = consult::items(&args.repo);
+    let said = rulings(&args);
+    let Some(answer) = context_with(context_for(&said, TOOL_EVENT), &pickup, TOOL_EVENT) else {
         return 0;
     };
     let mut out = std::io::stdout().lock();
@@ -207,6 +197,32 @@ pub fn run(rest: &[&str]) -> u8 {
         MARK_BUDGET,
     );
     0
+}
+
+/// 印の無い裁定の逐語（安い判じが空・読めない・台帳が読めない時は空の列・読めない時は標準エラーに 1 行）。
+fn rulings(args: &Args) -> Vec<Said> {
+    match unreceived(&args.repo, OsStr::new(GIT), OsStr::new(TAILNET)) {
+        Ok(Reading::Known(ids)) if ids.is_empty() => return Vec::new(),
+        Ok(Reading::Known(_)) => {}
+        Ok(Reading::Unknown) => {
+            emit_err("tz hook deliver-tool: board が台帳を読めていない（印の無い裁定を判じない）");
+            return Vec::new();
+        }
+        Err(e) => {
+            emit_err(&format!("tz hook deliver-tool: {e}"));
+            return Vec::new();
+        }
+    }
+    match Source::new(&args.repo, &args.bd)
+        .text_alone()
+        .map(|text| unmarked(&text))
+    {
+        Some(Reading::Known(said)) => said,
+        _ => {
+            emit_err("tz hook deliver-tool: 台帳が読めない（逐語を写せない）");
+            Vec::new()
+        }
+    }
 }
 
 fn usage(what: &str) -> u8 {

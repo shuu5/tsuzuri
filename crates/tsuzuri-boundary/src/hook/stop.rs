@@ -5,8 +5,10 @@
 //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
 //! 2. repo の下の .git が file（git の worktree・器の便の runner）なら何もせずに 0。
 //! 3. 標準入力の stop_hook_active が false の object でなければ（続けた後の停止・JSON の object でない）何も出さずに 0。
-//! 4. 台帳を bd で読み、読めなければ標準エラーに 1 行を書いて 0。未配達が無ければ何も出さずに 0。
-//! 5. 答えを標準出力に書いて flush し、その後に停止の印を bdw で置く（上限 `MARK_BUDGET`）。
+//! 4. 台帳を bd で読み、未配達の裁定を取る。読めなければ標準エラーに 1 行を書く。
+//! 5. 相談の拾い（行 cs-hooks・`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る。
+//! 6. 未配達も相談の行も無ければ何も出さずに 0。在れば答え（裁定の reason の後ろに相談の行）を標準出力に書いて flush し、
+//!    その後に未配達の裁定にだけ停止の印を bdw で置く（上限 `MARK_BUDGET`）。
 //!
 //! どの形でも 2 は返さない（Claude Code は停止の hook の rc 2 を続けの指示として読む）。
 //! hook は repo と state dir に file を書かない（台帳の書きは bdw だけ）。
@@ -19,12 +21,15 @@ use std::time::{Duration, Instant};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BDW, LedgerWrite};
+use tsuzuri_core::consult::pickup::block_with;
 use tsuzuri_core::delivery::{Pending, Route, block, mark_line, stop_active, undelivered};
 
 use crate::out::emit_err;
 use crate::server::events::now;
 use crate::server::ledger::{BD, Source, capture};
 use crate::server::ruling::{WRITE_TIMEOUT, minute};
+
+use super::consult;
 
 pub const USAGE: &str = "usage: tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]";
 
@@ -133,10 +138,10 @@ pub fn run(rest: &[&str]) -> u8 {
         Some(Reading::Known(pending)) => pending,
         _ => {
             emit_err("tz hook stop: 台帳が読めない（未配達の裁定を拾えない）");
-            return 0;
+            Vec::new()
         }
     };
-    let Some(answer) = block(&pending) else {
+    let Some(answer) = block_with(block(&pending), &consult::nudge(&args.repo)) else {
         return 0;
     };
     let mut out = std::io::stdout().lock();

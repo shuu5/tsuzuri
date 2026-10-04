@@ -569,12 +569,12 @@ fn fdlt_run_quiet_paths() {
 
 /// 口の空の列・受け手の居ない port・Unknown の台帳・bd の落ち・全部に印の在る台帳の静かな形。
 fn quiet_ledger_paths() {
-    // 口が Known の空の列: git だけを 1 回撃つ。
+    // 口が Known の空の列: git だけを 2 回撃つ（相談の拾いの鍵 tsuzuri.draftsdir と port の鍵・行 cs-hooks）。
     let place = Place::new("quiet-empty", &marked_ledger());
     place.serve();
     let lines = quiet(&place, BATCH_INPUT, "empty");
     assert!(lines.is_empty(), "{lines:?}");
-    assert_eq!(place.calls("git").len(), 1);
+    assert_eq!(place.calls("git").len(), 2);
     assert!(place.calls("bd").is_empty() && place.calls("bdw").is_empty());
 
     // 受け手の居ない port と、口が Unknown の台帳: bd を撃たず標準エラーは 1 行。

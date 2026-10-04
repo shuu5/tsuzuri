@@ -3,7 +3,9 @@
 //! 行 e-signal-send で問いの合図の送り手（`question_signal`・PostToolUse の async の hook）を置く。
 //! 行 f-deliver で配達の hook（`deliver`・UserPromptSubmit の hook）を置く。
 //! 行 f-deliver-tool で考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
+//! 行 cs-hooks で、停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
 
+pub mod consult;
 pub mod deliver;
 pub mod deliver_tool;
 pub mod question_gate;

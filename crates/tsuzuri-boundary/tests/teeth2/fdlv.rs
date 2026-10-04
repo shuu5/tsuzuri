@@ -1,6 +1,7 @@
 //! 配達の hook の歯（行 f-deliver・接頭辞 fdlv_）。
 //! 偽の bd は撃たれた回ごとの引数と cwd を記録の置き場に足してから作業場の out.json を出す script。
 //! tz は作業場の根（偽の bd の在る dir）を PATH の頭に足して撃つ。歯の名の数えは中核の tests/teeth1/fdlv.rs が持つ。
+//! 偽の git は落ちる（鍵 tsuzuri.draftsdir の無い repo・相談の拾い〔行 cs-hooks〕は何も足さない）。
 #![cfg(test)]
 
 use std::ffi::OsString;
@@ -59,6 +60,9 @@ impl Place {
         )
         .expect("偽の bd");
         fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("偽の bd の権限");
+        let git = root.join("git");
+        fs::write(&git, "#!/bin/sh\nexit 1\n").expect("偽の git");
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).expect("偽の git の権限");
         let place = Place { root, repo, log };
         place.bd_returns(LEDGER);
         place
