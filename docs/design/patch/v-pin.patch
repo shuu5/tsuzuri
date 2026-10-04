@@ -1,0 +1,660 @@
+diff --git a/scribe2/crates/scribe2-boundary/src/main.rs b/scribe2/crates/scribe2-boundary/src/main.rs
+index 1512cfca9b311fdf1b3fabdcd70c84e3eebdb44d..1f88a47dd555b5635e9e516af90066969522cd9b 100644
+--- a/scribe2/crates/scribe2-boundary/src/main.rs
++++ b/scribe2/crates/scribe2-boundary/src/main.rs
+@@ -11,7 +11,7 @@
+ use std::path::Path;
+ use std::process::ExitCode;
+ use vessel::cli_outcome::{Outcome, RC_REFUSED};
+-use vessel::name::{BUILD_COMMIT, NAME};
++use vessel::name::NAME;
+ 
+ /// 出力層。stdout へ書くのはこの関数だけである。
+ #[expect(
+@@ -41,10 +41,11 @@ fn render_name() -> String {
+ 
+ /// `--version` が出力する行を組み立てる（`<NAME> <version> (<build 元 commit>)`・設計 consumer-sync.md §2）。
+ ///
+-/// 括弧の中身は core の `build.rs` が compile time に焼いた [`BUILD_COMMIT`]（`<sha12>` / `<sha12>+dirty` /
+-/// 測れない周は `unknown`・C10）。実行時に env を読まない（C2.2）。doctor の 2 行目も同じ関数（FR51・FR61）。
++/// 括弧の中身は core の `build.rs` が compile time に焼いた [`vessel::name::BUILD_COMMIT`]（`<sha12>` / `<sha12>+dirty` /
++/// 測れない周は `unknown`・C10）。実行時に env を読まない（C2.2）。doctor の 2 行目も同じ関数（FR51・FR61）。字は core の
++/// [`vessel::name::version_line`] の 1 本（便の留めの版の照らしと同じ字・行 v-pin）。
+ fn render_version() -> String {
+-    format!("{NAME} {} ({})", env!("CARGO_PKG_VERSION"), BUILD_COMMIT)
++    vessel::name::version_line()
+ }
+ 
+ /// `doctor` が出力する行を組み立てる（骨格の stub: NAME と version を 1 行ずつ）。
+@@ -216,7 +217,8 @@ fn main() -> ExitCode {
+ #[cfg(test)]
+ mod tests {
+     // flip-check: moved s2-07l.198.2
+-    use super::{render_doctor, render_name, render_usage, render_version, BUILD_COMMIT, NAME};
++    use super::{render_doctor, render_name, render_usage, render_version, NAME};
++    use vessel::name::BUILD_COMMIT;
+     use std::ffi::OsStr;
+     use std::path::PathBuf;
+     use vessel::account::consumers::{drift_of, render_consumer, Consumer, Head, Source};
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
+index bf2b726de5606b3c7f2a7b5b0455fb58a770d1fe..ed3ce6acc8ef6901c988e5cf2321779aa5263cc7 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
+@@ -28,6 +28,7 @@ mod gate;
+ mod intake;
+ mod land;
+ mod launch_failure;
++mod pin;
+ mod ratelimit;
+ mod refuse;
+ mod review;
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/pin.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/pin.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..92c64152502cc98de57209a3d49fc1984ca20d07
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/pin.rs
+@@ -0,0 +1,200 @@
++//! 便ごとの器の binary の留め（器の memo t3-hub.74.50.2 の候補 1・行 v-pin・接頭辞 `vpin_`）。
++//!
++//! 偽の器（`--version` に答え、ほかの周は `$0` と 1 語目を写す script）を `InstallRecorded` の path と道具箱の PATH に置き、
++//! 実装役と審査役の命令を器の名で始めて撃つ。道具箱の偽の器は、留めを撃たなかった命令が host の器へ届かないための受け口でもある。
++
++use super::{
++    bin_cmd, ceiling_rules, clean, commit_rows, lens_verdict, repo_with_state, row_fields, run_id_of, run_pipe, show_line,
++    stderr_of, stdout_of, write_contract, DESIGN_FILE,
++};
++use std::fs;
++use std::os::unix::fs::{MetadataExt, PermissionsExt};
++use std::path::{Path, PathBuf};
++use std::process::Output;
++use vessel::cli_outcome::RC_OK;
++use vessel::name::NAME;
++
++/// 歯の binary の `--version` の 1 行目。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn version_of_bin() -> String {
++    let out = bin_cmd().arg("--version").output().expect("binary を起動できる");
++    String::from_utf8_lossy(&out.stdout).lines().next().unwrap_or_default().to_owned()
++}
++
++/// 偽の器を `file` に置く: `--version` は `version` を答え、ほかの周は `$0 $1 $2` を `rec` に足し `$0` の file の dev と inode を
++/// `rec` の名に `.inode` を足した file に書き、runner は 1 commit・lens は PASS を返す。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn fake_vessel(file: &Path, version: &str, rec: &Path) -> PathBuf {
++    fs::create_dir_all(file.parent().expect("親の dir")).expect("親の dir を作れる");
++    let (rec, verdict) = (rec.display(), lens_verdict("PASS"));
++    let body = format!(
++        "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{version}'; exit 0; }}\nprintf '%s %s %s\\n' \"$0\" \"$1\" \"$2\" >> '{rec}'\nstat -c '%d %i' \"$0\" > '{rec}.inode'\n\
++         case \"$1\" in\n  runner) printf 'x\\n' >> src/lib.rs && git add -A && git commit -q -m runner ;;\n  \
++         lens) cat >/dev/null; echo '{verdict}' ;;\nesac\nexit 0\n"
++    );
++    fs::write(file, body).expect("偽の器を書ける");
++    fs::set_permissions(file, fs::Permissions::from_mode(0o755)).expect("実行権を付ける");
++    file.to_path_buf()
++}
++
++/// 置き場の event log に `InstallRecorded` を 1 行足す（path は呼び手が選ぶ）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn record_install(state: &Path, file: &Path) {
++    let log = vessel::fleet::store::events_path(state);
++    fs::create_dir_all(log.parent().expect("log の dir")).expect("log の dir を作れる");
++    let line = format!(
++        "{{\"schema\":1,\"ts\":\"2026-10-05T00:00:00Z\",\"kind\":\"InstallRecorded\",\"host\":\"h\",\"actor\":\"machine\",\"detail\":\"sha=0123456789ab path={}\"}}\n",
++        file.display()
++    );
++    let mut text = fs::read_to_string(&log).unwrap_or_default();
++    text.push_str(&line);
++    fs::write(&log, text).expect("log に足せる");
++}
++
++/// 道具箱の dir（`pipe` の撃ちが PATH の先頭に積む）。
++fn toolbox(state: &Path) -> PathBuf {
++    state.join(crate::TOOLBOX_BIN)
++}
++
++/// 偽の器が写した行（無ければ空）。
++fn calls(rec: &Path) -> Vec<String> {
++    fs::read_to_string(rec).unwrap_or_default().lines().map(str::to_owned).collect()
++}
++
++/// 器の名で始まる runner と lens で toy の契約を 1 本 `pipe run` で流す。
++fn run_named(repo: &Path, state: &Path, bead: &str) -> Output {
++    let path = write_contract(repo, &[], &[]);
++    let (runner, lens) = (format!("{NAME} runner --worktree {{worktree}}"), format!("{NAME} lens --contract {{contract}}"));
++    run_pipe(&[
++        "run", "--design", &path, "--bead", bead, "--repo", &repo.display().to_string(), "--state-dir", &state.display().to_string(),
++        "--rules", &ceiling_rules(state), "--runner", &runner, "--lens", &lens,
++    ])
++}
++
++/// (2)(5) 同じ版の `InstallRecorded` の在る置き場の `pipe run` は便の bin の下に inode の同じ留めを置いて stderr に
++/// `pipe: pin=linked` を出し、審査の lens・runner・gate の lens（器の名で始まる命令）はこの順に留めの path で撃たれ、便は着地する
++/// （着地した便の留めは終端の掃除が消すので、inode は撃たれた留めが自分で写す）。
++#[test]
++fn vpin_run_pins_the_recorded_binary_for_its_runner_and_lenses() {
++    let (repo, state) = repo_with_state();
++    let rec = state.join("vessel-calls");
++    let version = version_of_bin();
++    let installed = fake_vessel(&state.join("installed").join(NAME), &version, &rec);
++    fake_vessel(&toolbox(&state).join(NAME), &version, &rec);
++    record_install(&state, &installed);
++    let out = run_named(&repo, &state, "s2-pin");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
++    let id = run_id_of(&out);
++    assert!(show_line(&repo, &state, &id).contains("stage=Landed"), "着地まで: {}", stdout_of(&out));
++    let pin = state.join("pipe").join(&id).join("bin").join(NAME);
++    let inode = fs::metadata(&installed).map(|found| format!("{} {}\n", found.dev(), found.ino())).ok();
++    let seen = fs::read_to_string(format!("{}.inode", rec.display())).ok();
++    assert_eq!(seen, inode, "撃たれた留めは InstallRecorded の file の hard link（中身を写さない）");
++    assert!(stderr_of(&out).lines().any(|line| line == "pipe: pin=linked"), "stderr: {}", stderr_of(&out));
++    let shown = pin.display();
++    let (lens, runner) = (format!("{shown} lens --contract"), format!("{shown} runner --worktree"));
++    assert_eq!(calls(&rec), [lens.clone(), runner, lens], "子は留めを撃つ");
++    clean(&[&repo, &state]);
++}
++
++/// (3)(5) `InstallRecorded` の無い置き場と、1 行目の違う file を最後の `InstallRecorded` が名指す置き場の `pipe run` は bin の dir を
++/// 作らず stderr に `pipe: pin=skipped:no-install`・`pipe: pin=skipped:other-version` を出し、器の名で始まる命令は PATH の器で
++/// 撃たれ、便は着地する。
++#[test]
++fn vpin_run_without_a_same_version_record_keeps_the_path_vessel() {
++    for word in ["no-install", "other-version"] {
++        let (repo, state) = repo_with_state();
++        let rec = state.join("vessel-calls");
++        let path_vessel = fake_vessel(&toolbox(&state).join(NAME), &version_of_bin(), &rec);
++        if word == "other-version" {
++            let other = fake_vessel(&state.join("installed").join(NAME), &format!("{NAME} 0.0.0 (000000000000)"), &rec);
++            record_install(&state, &other);
++        }
++        let out = run_named(&repo, &state, "s2-pin");
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{word}: {} / {}", stdout_of(&out), stderr_of(&out));
++        let id = run_id_of(&out);
++        assert!(show_line(&repo, &state, &id).contains("stage=Landed"), "{word}: 着地まで");
++        assert!(!state.join("pipe").join(&id).join("bin").exists(), "{word}: bin の dir を作らない");
++        let line = format!("pipe: pin=skipped:{word}");
++        assert!(stderr_of(&out).lines().any(|found| found == line), "{word}: stderr: {}", stderr_of(&out));
++        let shown = path_vessel.display();
++        let (lens, runner) = (format!("{shown} lens --contract"), format!("{shown} runner --worktree"));
++        assert_eq!(calls(&rec), [lens.clone(), runner, lens], "{word}: PATH の器");
++        clean(&[&repo, &state]);
++    }
++}
++
++/// (5) 呼ばれ方が留めの形（置き場の pipe の下の便の bin の下の器の名）の列の 1 周が起こす新しい便は、留めでなく器の名（PATH の器）
++/// で起き、`pipe run` の argv を受ける。
++#[test]
++fn vpin_new_runs_from_a_pinned_dispatcher_use_the_path_vessel() {
++    let (repo, state) = repo_with_state();
++    commit_rows(&repo, &[row_fields("a", &["write-set"], &[r#"write-set = ["src/lib.rs"]"#])]);
++    let ledger = state.join("ledger.json");
++    let issue = format!(
++        "[{{\"id\":\"s2-pin.1\",\"status\":\"open\",\"priority\":1,\"labels\":[],\"acceptance_criteria\":\"design = {DESIGN_FILE}#a\",\"dependencies\":[]}}]\n"
++    );
++    fs::write(&ledger, issue).expect("偽の台帳を書ける");
++    let bd = state.join("bd");
++    fs::write(&bd, format!("#!/bin/sh\ncat '{}'\n", ledger.display())).expect("偽の bd を書ける");
++    fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).expect("実行権を付ける");
++    let rules = state.join("rules-pin.toml");
++    let row = "[[rule]]\nid = \"seat.ledger_timeout_s\"\nkind = \"LedgerTimeoutS\"\nvalue = 60\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
++    fs::write(&rules, format!("{}\n{row}", fs::read_to_string(ceiling_rules(&state)).expect("写しを読める"))).expect("写しを書ける");
++    let rec = state.join("vessel-calls");
++    let path_vessel = fake_vessel(&toolbox(&state).join(NAME), &version_of_bin(), &rec);
++    let link = state.join("pipe").join("r0").join("bin").join(NAME);
++    fs::create_dir_all(link.parent().expect("bin の dir")).expect("bin の dir を作れる");
++    std::os::unix::fs::symlink(super::bin(), &link).expect("留めの形の呼ばれ方を置ける");
++    let (state_arg, repo_arg) = (state.display().to_string(), repo.display().to_string());
++    let out = std::process::Command::new(&link)
++        .current_dir(std::env::temp_dir())
++        .env("PATH", crate::toolbox_path(&state))
++        .args(["pipe", "dispatch", "--state-dir", &state_arg, "--repo", &repo_arg, "--rules", &rules.display().to_string()])
++        .args(["--bd", &bd.display().to_string(), "--lens", "true", "--runner", "true"])
++        .output()
++        .expect("留めの形で起こせる");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
++    assert!(stdout_of(&out).contains("dispatch=started:1"), "1 本起こす: {}", stdout_of(&out));
++    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
++    while calls(&rec).is_empty() && std::time::Instant::now() < deadline {
++        std::thread::sleep(std::time::Duration::from_millis(50));
++    }
++    assert_eq!(calls(&rec), [format!("{} pipe run", path_vessel.display())], "新しい便は PATH の器で起きる");
++    clean(&[&repo, &state]);
++}
++
++/// (6) 器の掃除の周（`pipe stop` の終端）は live でない便の bin の dir を消し、live の便の留めを残し、stderr の sweep の行に
++/// `pins=` と消した数が載る。
++#[test]
++fn vpin_sweep_drops_pins_of_settled_runs() {
++    let (repo, state) = repo_with_state();
++    for run in ["r-pin", "r-live"] {
++        let out = bin_cmd()
++            .args(["fleet", "record", "--kind", "RunStage", "--run", run, "--bead", "b", "--stage", "Implemented", "--detail", "x"])
++            .arg("--state-dir")
++            .arg(&state)
++            .output()
++            .expect("binary を起動できる");
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{run}: {}", stderr_of(&out));
++        let pin = state.join("pipe").join(run).join("bin").join(NAME);
++        fs::create_dir_all(pin.parent().expect("bin の dir")).expect("bin の dir を作れる");
++        fs::write(&pin, "").expect("留めを置ける");
++    }
++    let out = run_pipe(&["stop", "--run", "r-pin", "--state-dir", &state.display().to_string()]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端の rc: {}", stderr_of(&out));
++    assert!(!state.join("pipe").join("r-pin").join("bin").exists(), "止めた便の bin の dir は消える");
++    assert!(state.join("pipe").join("r-live").join("bin").join(NAME).is_file(), "live の便の留めは残る");
++    let sweep = stderr_of(&out).lines().find(|line| line.starts_with("sweep:")).unwrap_or_default().to_owned();
++    assert_eq!(sweep, "sweep: removed=0 runs=0 failed=0 pins=1", "stderr: {}", stderr_of(&out));
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/name.rs b/scribe2/crates/scribe2/src/name.rs
+index c72cb9bdb9a374ca087404904ca1a2076b87f684..ac5a35bc4275d5cde474f6889e9fe12598a3b595 100644
+--- a/scribe2/crates/scribe2/src/name.rs
++++ b/scribe2/crates/scribe2/src/name.rs
+@@ -16,6 +16,12 @@ pub const PLUGIN_DIR: &str = "plugin";
+ /// binary の世代の記録・consumer の drift はすべてこの const を読む。
+ pub const BUILD_COMMIT: &str = include_str!(concat!(env!("OUT_DIR"), "/build_commit"));
+ 
++/// `--version` が出力する行（`<NAME> <version> (<build 元 commit>)`・設計 consumer-sync.md §2）。境界の `--version` と doctor の
++/// 2 行目と、便の留めの版の照らし（行 v-pin）が同じ 1 本を読む。実行時に env を読まない（C2.2）。
++pub fn version_line() -> String {
++    format!("{NAME} {} ({BUILD_COMMIT})", env!("CARGO_PKG_VERSION"))
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::BUILD_COMMIT;
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/run.rs b/scribe2/crates/scribe2/src/pipe/cli/run.rs
+index 6c13a0523ae8dcabe5d91954103423883ae9d740..727927841ad0770c59914823336de2ecfcf9a06f 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/run.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/run.rs
+@@ -110,7 +110,8 @@ pub(super) fn run_all(
+     let mut lines = vec![format!("{}{index}", intake_line(args, &id))];
+     // **段の通知は rc に依らず段の順で持つ**（設計 §21 (1)）: gate の `lens-input=…` のような行は
+     // rc 0 の段が出すので、畳むときに捨てると連鎖で撃った周だけ理由が消える（`.286` の実測）。
+-    let mut notes: Vec<String> = Vec::new();
++    // 最初の通知は器の binary の留めの 1 行（審査の前に留め、同じ便の子は留めを撃つ・行 v-pin）。
++    let mut notes: Vec<String> = super::state_dir_of(args).ok().map(|dir| crate::pipe::pin::note(&dir, &id)).into_iter().collect();
+     // 審査が PASS でない周は spawn の前で止まる（構築点の呼出 0・AC22）。
+     let spawned = review_then_launch(args, &id, &runner, manifest, policy);
+     if let Some(stopped) = chain_noting(&mut lines, &mut notes, spawned) {
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch.rs b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+index c5c71b39bda4cf5ae8b1fa237734abeacbeb87b8..6f1a9bc9c92b2d9fe63047ad04cae21b5f0a4042 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+@@ -22,7 +22,6 @@ use crate::fleet::store;
+ use crate::fleet::{Event, EventKind, Mark, Stage, SCHEMA};
+ use crate::invocation::Invocation;
+ use crate::ledger::form::is_question;
+-use crate::name::NAME;
+ use crate::rules::manifest::Manifest;
+ use crate::seat::ledger;
+ use std::collections::{BTreeMap, BTreeSet};
+@@ -391,9 +390,11 @@ fn launched(input: &Input<'_>, launch: &Launch) -> bool {
+ ///
+ /// 子の stderr は `<state_dir>/pipe/launch.log` に append する（設計 §17・受付で落ちた子の死因を席が読める
+ /// 場所に残す・C10）。file を開けない周は stderr を捨てて**起こす**（起動を記録の失敗で止めない）。
+-/// land の着地後の検出（設計 gate-cost.md §44 形 (11)）も同じ 1 本で起こす。
++/// land の着地後の検出（設計 gate-cost.md §44 形 (11)）も同じ 1 本で起こす。argv に `--run` を持つ子（起こし直しと着地後の
++/// 検出）は便の留めを撃つ（[`super::pin::program`]・行 v-pin）。
+ pub(in crate::pipe) fn spawn_self(state_dir: &Path, argv: &[String]) -> bool {
+-    Invocation::new(myself())
++    let program = super::pin::run_of(argv).map_or_else(myself, |run| super::pin::program(state_dir, run));
++    Invocation::new(program)
+         .arg(PIPE)
+         .args(argv)
+         .process_group(0)
+@@ -422,8 +423,9 @@ fn launch_log(state_dir: &Path) -> Stdio {
+ /// 外側で、xtask の門が違反として数える。`argv[0]` は**呼ばれ方そのもの**なので、同じ呼ばれ方で子を起こす。
+ ///
+ /// 席の hook が鮮度の外の口座を子で測る口（`hook::group`・設計 account-lifecycle.md §19 形 5）も同じ 1 本を読む。
++/// 呼ばれ方が便の留めの形の周は器の名に戻す（新しい便と便に結ばれない子は PATH の器で起こす・[`super::pin::launcher`]）。
+ pub(crate) fn myself() -> String {
+-    std::env::args().next().unwrap_or_else(|| NAME.to_owned())
++    super::pin::launcher(std::env::args().next())
+ }
+ 
+ /// 起動の構築点（`pipe run` の引数まで組んだ 1 件・[`start`] がそのまま子 process へ渡す）。
+diff --git a/scribe2/crates/scribe2/src/pipe/gate.rs b/scribe2/crates/scribe2/src/pipe/gate.rs
+index f1ab818e71c5ae561af691d7265c32a1414471a2..3be6299380208f42760e8a6afe7f751a54158660 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate.rs
+@@ -637,7 +637,9 @@ fn decide(
+     keep_cap(entry, cap)?;
+     let contract = contract_path(entry.state_dir, entry.run);
+     // **lens の口座は起こす直前に選ぶ**（裁定の写しを書いた後・設計 account-autonomy.md §15）。
+-    let (line, account) = match lens_account(entry, substitute(cmd, &contract, worktree), notes) {
++    // 最初の語が器の名の lens は便の留めを撃つ（行 v-pin）。
++    let line = super::pin::head(entry.state_dir, entry.run, &substitute(cmd, &contract, worktree));
++    let (line, account) = match lens_account(entry, line, notes) {
+         Ok(found) => found,
+         Err(reason) => return inconclusive(reason),
+     };
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index dffd412f4a436c8a9118c178736495a099895eb1..70ca2227b09bde5031a50f208ec72fb18572156f 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -29,6 +29,7 @@ pub mod move_proof;
+ pub(crate) mod notify;
+ /// 上限の許可の記帳の本体・読み手・効きの純関数（設計 limit-permit.md §18）。
+ pub mod permit;
++pub mod pin;
+ pub mod refuse;
+ pub mod report;
+ pub mod review;
+diff --git a/scribe2/crates/scribe2/src/pipe/pin.rs b/scribe2/crates/scribe2/src/pipe/pin.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dff1a9338112a689d6d302b08075377e193f8efa
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/pin.rs
+@@ -0,0 +1,233 @@
++//! 便ごとの器の binary の留め（器の memo t3-hub.74.50.2 の候補 1・行 v-pin）。
++//!
++//! 便の受付（`pipe run` の受付の後・[`note`]）が、置き場の event log の最後の `InstallRecorded` の path の file を run dir の
++//! `bin/<NAME>`（[`path`]）に hard link で置く（中身は写さない＝SSD の書き 0）。置いた留めを `--version` で撃った 1 行目が
++//! 自分の 1 行目（[`version_line`]）と字で同じ周だけ残し、違う周・読めない周・同じ file system でない周は bin の dir を残さず
++//! 理由の語を返す。照らすのは置いた後の留めなので、照らしの間に PATH の器が入れ替わっても別の版を留めない。器は env も
++//! HOME も `/proc` の自分の実行 file も読まない（C2.2）ので、自分の実行 file は `InstallRecorded` の path と `--version` の
++//! 照らしで知る。
++//!
++//! 留めの読みは 3 つ: 同じ便の実装役と審査役の命令は [`head`] が最初の語を留めに替え、便に結ばれる子（argv に `--run` を持つ
++//! 起こし直しと着地後の検出）は [`program`] が留めを返し、便に結ばれない子（列が起こす新しい便ほか）は [`launcher`] が留めの
++//! 形の呼ばれ方を器の名に戻す（新しい便は PATH の器で起きる）。終わった便の留めは器の掃除が消す（[`drop_bin`]）。
++
++use super::run_dir;
++use crate::fleet::{store, EventKind, Install};
++use crate::invocation::Invocation;
++use crate::name::{version_line, NAME};
++use std::io::ErrorKind;
++use std::path::{Path, PathBuf};
++
++/// 留めを置く run dir の直下の dir の名。
++pub const BIN_DIR: &str = "bin";
++
++/// 置き場の event log に `InstallRecorded` が無い。
++pub const NO_INSTALL: &str = "no-install";
++/// event log・`InstallRecorded` の detail・path の file・留めの `--version` のどれかを読めない。
++pub const UNREADABLE: &str = "unreadable";
++/// path の file と置き場が同じ file system でない（hard link を置けない・写さない）。
++pub const CROSS_DEVICE: &str = "cross-device";
++/// 留めの `--version` の 1 行目が自分の 1 行目と違う。
++pub const OTHER_VERSION: &str = "other-version";
++
++/// 便の留めの path（`<state_dir>/pipe/<run>/bin/<NAME>`）。
++pub fn path(state_dir: &Path, run: &str) -> PathBuf {
++    run_dir(state_dir, run).join(BIN_DIR).join(NAME)
++}
++
++/// 受付の留めの stderr の 1 行（`pipe: pin=linked` か `pipe: pin=skipped:<理由の語>`）。
++pub fn note(state_dir: &Path, run: &str) -> String {
++    match link(state_dir, run) {
++        Ok(()) => "pipe: pin=linked".to_owned(),
++        Err(word) => format!("pipe: pin=skipped:{word}"),
++    }
++}
++
++/// 留めを置く（置けなかった周は bin の dir を残さず理由の語を返す）。
++pub fn link(state_dir: &Path, run: &str) -> Result<(), &'static str> {
++    let events = store::read_all(state_dir).map_err(|_| UNREADABLE)?;
++    let last = events.iter().rev().find(|event| event.kind == EventKind::InstallRecorded).ok_or(NO_INSTALL)?;
++    let install = last.detail.as_deref().and_then(Install::parse).ok_or(UNREADABLE)?;
++    let (dir, pin) = (run_dir(state_dir, run).join(BIN_DIR), path(state_dir, run));
++    let placed = std::fs::create_dir_all(&dir)
++        .and_then(|()| std::fs::hard_link(&install.path, &pin))
++        .map_err(|err| link_reason(&err))
++        .and_then(|()| match first_line(&pin) {
++            Some(line) if line == version_line() => Ok(()),
++            Some(_) => Err(OTHER_VERSION),
++            None => Err(UNREADABLE),
++        });
++    if placed.is_err() {
++        let _ = std::fs::remove_dir_all(&dir);
++    }
++    placed
++}
++
++/// hard link を置けなかった理由の語（別の file system の断り EXDEV は cross-device・ほかは unreadable）。
++fn link_reason(err: &std::io::Error) -> &'static str {
++    if err.kind() == ErrorKind::CrossesDevices {
++        CROSS_DEVICE
++    } else {
++        UNREADABLE
++    }
++}
++
++/// file を `--version` で 1 回撃った stdout の 1 行目（起動できない・rc 0 でない・行が無い周は `None`）。
++fn first_line(program: &Path) -> Option<String> {
++    let out = Invocation::new(program).arg("--version").output().ok()?;
++    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).lines().next().map(str::to_owned))?
++}
++
++/// 命令の最初の語が器の名と字で同じで便の留めの file が在る周だけ、最初の語を留めの絶対 path に替える（実装役と審査役の
++/// 命令・呼び手は置き場の穴を埋めた後に撃つ）。絶対 path や別の語で始まる命令と、留めの無い便の命令は 1 字も替えない。
++pub fn head(state_dir: &Path, run: &str, line: &str) -> String {
++    let pin = path(state_dir, run);
++    match line.strip_prefix(NAME) {
++        Some(rest) if (rest.is_empty() || rest.starts_with(' ')) && pin.is_file() => format!("{}{rest}", pin.display()),
++        _ => line.to_owned(),
++    }
++}
++
++/// 便に結ばれる子の program（留めの file が在れば留めの path・無ければ [`launcher`] を通した自分の呼ばれ方）。
++pub fn program(state_dir: &Path, run: &str) -> String {
++    let pin = path(state_dir, run);
++    if pin.is_file() {
++        pin.display().to_string()
++    } else {
++        super::dispatch::myself()
++    }
++}
++
++/// 呼ばれ方（`argv[0]`）が留めの形（`…/pipe/<run>/bin/<NAME>`）の周だけ器の名を返し、ほかは呼ばれ方のまま（無ければ器の名）。
++/// 留めた便の起こし直しで起きた driver が、列の 1 周で新しい便を古い版で起こさない。
++pub fn launcher(argv0: Option<String>) -> String {
++    match argv0 {
++        Some(found) if !pinned_form(Path::new(&found)) => found,
++        _ => NAME.to_owned(),
++    }
++}
++
++/// path が留めの形か（名が器の名・親の名が bin・親の親の親の名が pipe の dir）。
++fn pinned_form(path: &Path) -> bool {
++    let name = |at: Option<&Path>| at.and_then(Path::file_name).and_then(std::ffi::OsStr::to_str).map(str::to_owned);
++    let bin = path.parent();
++    let pipe = bin.and_then(Path::parent).and_then(Path::parent);
++    name(Some(path)).as_deref() == Some(NAME) && name(bin).as_deref() == Some(BIN_DIR) && name(pipe).as_deref() == Some(super::DIR)
++}
++
++/// argv の `--run` の値（便に結ばれる子の印・持たない argv は `None`）。
++pub(super) fn run_of(argv: &[String]) -> Option<&str> {
++    argv.windows(2).find(|pair| pair.first().map(String::as_str) == Some("--run")).and_then(|pair| pair.get(1)).map(String::as_str)
++}
++
++/// 終わった便の bin の dir を消す（在って消せた周だけ真・器の掃除が live でない便に撃つ）。
++pub(super) fn drop_bin(state_dir: &Path, run: &str) -> bool {
++    let dir = run_dir(state_dir, run).join(BIN_DIR);
++    dir.is_dir() && std::fs::remove_dir_all(&dir).is_ok()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{head, launcher, link, link_reason, path, program, BIN_DIR, CROSS_DEVICE, NO_INSTALL, OTHER_VERSION, UNREADABLE};
++    use crate::fleet::{EventKind, Install};
++    use crate::name::{version_line, NAME};
++    use crate::pipe::fixture::{append_all, event, exited, scratch, Stub};
++    use std::os::unix::fs::{MetadataExt, PermissionsExt};
++    use std::path::{Path, PathBuf};
++
++    /// `--version` に `line` を答える偽の器を `dir` に置く（実行権つき）。
++    fn fake_vessel(dir: &Path, name: &str, line: &str) -> PathBuf {
++        let file = dir.join(name);
++        std::fs::write(&file, format!("#!/bin/sh\necho '{line}'\n")).expect("偽の器を書ける");
++        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).expect("実行権を付ける");
++        file
++    }
++
++    /// 置き場に `InstallRecorded` を 1 件積む（path は呼び手が選ぶ）。
++    fn installed(state: &Path, file: &Path) {
++        let detail = Install { sha: "0123456789ab".to_owned(), path: file.display().to_string() }.render();
++        append_all(state, &[event("", EventKind::InstallRecorded, None, None, Some(&detail))]);
++    }
++
++    /// 留めは同じ版の hard link だけ: 自分と同じ 1 行目を答える file は inode の同じ留めになり、InstallRecorded の無い置き場・
++    /// path の file の無い置き場・event log の行が壊れた置き場・1 行目の違う file の置き場は bin の dir を残さず理由の語を返す。
++    /// 最後の InstallRecorded が勝ち、hard link の断りは別の file system（EXDEV）だけ語 cross-device・ほか（file が無い）は unreadable。
++    #[test]
++    fn vpin_link_keeps_only_a_same_version_hard_link() {
++        let state = scratch("vpin-link");
++        let same = fake_vessel(&state, "same", &version_line());
++        let other = fake_vessel(&state, "other", &format!("{NAME} 0.0.0 (000000000000)"));
++        assert_eq!(link(&state, "r0"), Err(NO_INSTALL), "InstallRecorded の無い置き場");
++        assert!(!state.join("pipe").join("r0").join(BIN_DIR).exists(), "置かない周は bin の dir を残さない");
++        installed(&state, &other);
++        installed(&state, &same);
++        assert_eq!(link(&state, "r1"), Ok(()), "最後の InstallRecorded の file が同じ版");
++        let inode = |file: &Path| std::fs::metadata(file).map(|found| (found.dev(), found.ino())).ok();
++        assert_eq!(inode(&path(&state, "r1")), inode(&same), "留めは hard link（中身を写さない）");
++        installed(&state, &other);
++        assert_eq!(link(&state, "r2"), Err(OTHER_VERSION), "1 行目の違う file");
++        assert!(!state.join("pipe").join("r2").join(BIN_DIR).exists(), "違う版は bin の dir ごと外す");
++        installed(&state, &state.join("absent"));
++        assert_eq!(link(&state, "r3"), Err(UNREADABLE), "path の file が無い");
++        assert!(!state.join("pipe").join("r3").join(BIN_DIR).exists(), "読めない周も bin の dir を残さない");
++        let broken = scratch("vpin-link-broken");
++        std::fs::create_dir_all(broken.join("fleet")).expect("log の dir を作れる");
++        std::fs::write(broken.join("fleet").join("events.jsonl"), "{\"schema\":1,\"kind\":\"Nonsense\"}\n").expect("壊れた行");
++        assert_eq!(link(&broken, "r4"), Err(UNREADABLE), "event log を読めない");
++        assert_eq!(link_reason(&std::io::Error::from_raw_os_error(18)), CROSS_DEVICE, "EXDEV");
++        assert_eq!(link_reason(&std::io::Error::from(std::io::ErrorKind::NotFound)), UNREADABLE, "file が無い");
++        let _ = std::fs::remove_dir_all(&state);
++        let _ = std::fs::remove_dir_all(&broken);
++    }
++
++    /// head は最初の語が器の名と字で同じ命令だけを留めの path に替え、後ろの字は 1 字も替えない。絶対 path・名を頭に持つ別の語・
++    /// 頭の空白・sh の包みの命令と、留めの file の無い便（dir だけ在る便を含む）の命令は替えない。
++    #[test]
++    fn vpin_head_swaps_only_the_bare_vessel_name() {
++        let state = scratch("vpin-head");
++        let pin = path(&state, "r1");
++        std::fs::create_dir_all(pin.parent().expect("bin の dir")).expect("bin の dir を作れる");
++        std::fs::write(&pin, "").expect("留めを置ける");
++        let swapped = |line: &str| head(&state, "r1", line);
++        assert_eq!(swapped(&format!("{NAME} runner --worktree /w  {{x}}")), format!("{} runner --worktree /w  {{x}}", pin.display()));
++        assert_eq!(swapped(NAME), pin.display().to_string(), "名だけの命令");
++        for kept in [format!("/opt/{NAME} lens --contract c"), format!("{NAME}x lens"), format!(" {NAME} lens"), format!("sh -c {NAME} lens")] {
++            assert_eq!(swapped(&kept), kept, "替えない: {kept}");
++        }
++        let bare = format!("{NAME} runner --worktree /w");
++        assert_eq!(head(&state, "r2", &bare), bare, "留めの無い便");
++        std::fs::create_dir_all(path(&state, "r3")).expect("dir だけの留め");
++        assert_eq!(head(&state, "r3", &bare), bare, "留めの path が file でない便");
++        let _ = std::fs::remove_dir_all(&state);
++    }
++
++    /// 起こす子の program: argv に `--run` を持つ子は便の留めが在れば留めを、無ければ自分の呼ばれ方を撃ち、`--run` を持たない子は
++    /// 留めの在る置き場でも自分の呼ばれ方を撃つ。呼ばれ方が留めの形（pipe の dir・便・bin・器の名）の周だけ器の名に戻す。
++    #[test]
++    fn vpin_spawn_self_runs_bound_children_from_the_pin() {
++        let state = scratch("vpin-spawn");
++        let pin = path(&state, "r1");
++        std::fs::create_dir_all(pin.parent().expect("bin の dir")).expect("bin の dir を作れる");
++        std::fs::write(&pin, "").expect("留めを置ける");
++        let argv = |words: &[&str]| words.iter().map(|word| (*word).to_owned()).collect::<Vec<String>>();
++        let stub = Stub::install(|_| exited(0, b""));
++        let me = crate::pipe::dispatch::myself();
++        for (args, want) in [
++            (argv(&["resume", "--run", "r1", "--drive"]), pin.display().to_string()),
++            (argv(&["land", "--run", "r2", "--detection-only"]), me.clone()),
++            (argv(&["run", "--design", "d", "--bead", "r1"]), me.clone()),
++        ] {
++            let _ = crate::pipe::dispatch::spawn_self(&state, &args);
++            assert_eq!(stub.calls().last().map(|call| call.program.clone()), Some(want.clone()), "{args:?}");
++        }
++        assert_eq!(program(&state, "r2"), me, "留めの無い便は自分の呼ばれ方");
++        let pinned = format!("/s/pipe/r1/{BIN_DIR}/{NAME}");
++        assert_eq!(launcher(Some(pinned)), NAME, "留めの形は器の名に戻す");
++        let others = [format!("/usr/local/bin/{NAME}"), format!("/s/pip/r1/{BIN_DIR}/{NAME}"), format!("/s/pipe/r1/sbin/{NAME}")];
++        for kept in others.into_iter().chain([NAME.to_owned(), format!("/s/pipe/r1/{BIN_DIR}/{NAME}x")]) {
++            assert_eq!(launcher(Some(kept.clone())), kept, "留めの形でない呼ばれ方はそのまま");
++        }
++        assert_eq!(launcher(None), NAME, "呼ばれ方の無い周は器の名");
++        let _ = std::fs::remove_dir_all(&state);
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/review.rs b/scribe2/crates/scribe2/src/pipe/review.rs
+index 3da1d6015ffa41b95c9eb75ae84e7dc935ed5a8c..4799cb2937397d323a60e79d2503c411b1cd83c1 100644
+--- a/scribe2/crates/scribe2/src/pipe/review.rs
++++ b/scribe2/crates/scribe2/src/pipe/review.rs
+@@ -585,6 +585,8 @@ fn decide(
+         cmd,
+         &[("{contract}", &contract.display().to_string()), ("{worktree}", &tree.path.display().to_string())],
+     );
++    // 最初の語が器の名の lens は便の留めを撃つ（行 v-pin）。
++    let line = super::pin::head(entry.state_dir, entry.run, &line);
+     let unit = confine::unit_name(entry.run, REVIEW_STAGE, 1);
+     // 審査の lens の箱は 1 × `gate.job_memory_mb`（設計 gate-cost.md §12）。
+     let wrap = confine::Wrap { unit: &unit, limit: confine::Limit::PerJob(1), caps: confine::Caps::embedded(), width: None };
+diff --git a/scribe2/crates/scribe2/src/pipe/spawn.rs b/scribe2/crates/scribe2/src/pipe/spawn.rs
+index 5e00d7a105701121d148b096ae5b8f8e3dad8f21..f973f416f9adb7f43bcfe0f306f06e48ebe2ebdc 100644
+--- a/scribe2/crates/scribe2/src/pipe/spawn.rs
++++ b/scribe2/crates/scribe2/src/pipe/spawn.rs
+@@ -524,7 +524,8 @@ pub fn spawn(budget: Budget, launch: &Launch<'_>) -> Outcome {
+     // **起動行はここで組み上げる**（`Spawned` の記帳より前）。口座の断り（[`LineRefusal`]）を
+     // `launch_runner` に置くと、段を記帳した後で起こさない周ができる——記帳した口座と実行が
+     // 一致しない行が置き場に残る。worktree は作ったまま（`prepare_worktree` の後の断りと同じ形）。
+-    let line = substitute(launch, &worktree, &write_set, &plugin, &base);
++    // 最初の語が器の名の命令は便の留めを撃つ（行 v-pin）。
++    let line = super::pin::head(launch.state_dir, launch.run, &substitute(launch, &worktree, &write_set, &plugin, &base));
+     let cmd = match with_account(line, launch.account.label(), launch.state_dir) {
+         Ok(line) => line,
+         Err(refusal) => return refused(refusal.to_string()),
+diff --git a/scribe2/crates/scribe2/src/pipe/sweep.rs b/scribe2/crates/scribe2/src/pipe/sweep.rs
+index faad3e8dae41936c2602a2970c4664d774d83d82..ba5e1076ac7583cc5e40034504249cc89cd2b1eb 100644
+--- a/scribe2/crates/scribe2/src/pipe/sweep.rs
++++ b/scribe2/crates/scribe2/src/pipe/sweep.rs
+@@ -51,6 +51,7 @@ const MIB: u64 = 1_048_576;
+ struct Totals {
+     removed: usize,
+     runs: usize,
++    pins: usize,
+     failed: Vec<String>,
+ }
+ 
+@@ -118,18 +119,19 @@ pub(super) fn sweep(state_dir: &Path, policy: LockPolicy, manifest: &Manifest) -
+     sweep_runs(state_dir, &mut totals);
+     let lanes = sweep_lanes(state_dir, manifest, policy, &mut totals);
+     let drafts = sweep_drafts(state_dir, manifest, &mut totals);
+-    let quiet = totals.removed == 0 && lanes == 0 && totals.failed.is_empty();
++    let quiet = totals.removed == 0 && totals.pins == 0 && lanes == 0 && totals.failed.is_empty();
+     if quiet && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
+         return None;
+     }
+     let named = if totals.failed.is_empty() { String::new() } else { format!(":{}", totals.failed.join(",")) };
+     let shed = if lanes == 0 { String::new() } else { format!(" lanes={lanes}") };
++    let pins = if totals.pins == 0 { String::new() } else { format!(" pins={}", totals.pins) };
+     let tail = drafts.map_or_else(String::new, |found| {
+         let swept = if found.no_rule { "no-rule".to_owned() } else { found.swept.to_string() };
+         let cap = if found.shed > 0 || found.over > 0 { format!(" cap={} over={}", found.shed, found.over) } else { String::new() };
+         format!(" drafts={swept} nogit={}{cap}", found.nogit)
+     });
+-    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{tail}", totals.removed, totals.runs, totals.failed.len()))
++    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{pins}{tail}", totals.removed, totals.runs, totals.failed.len()))
+ }
+ 
+ /// live でない便の木を掃く（置き場の replay を読めない周は 1 本も撃たない）。
+@@ -138,6 +140,8 @@ fn sweep_runs(state_dir: &Path, totals: &mut Totals) {
+         return;
+     };
+     for run in state.runs.values().filter(|run| live(state_dir, &run.id, run.stage) == Some(false)) {
++        // 終わった便の器の binary の留めを消す（世代の古い inode を残し続けない・行 v-pin）。
++        totals.pins = totals.pins.saturating_add(usize::from(super::pin::drop_bin(state_dir, &run.id)));
+         let Some(tree) = tree_of(state_dir, &run.id) else {
+             continue;
+         };
