@@ -120,7 +120,6 @@ fn gins_pretool_bash_entry() {
             "PostToolBatch",
             "PostToolUse",
             "PreToolUse",
-            "SessionStart",
             "Stop",
             "UserPromptSubmit"
         ]
