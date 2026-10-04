@@ -57,6 +57,7 @@ mod rules;
 mod ruling;
 mod schema;
 mod seal;
+mod seat;
 #[doc(hidden)]
 pub mod sha256;
 mod sheet;

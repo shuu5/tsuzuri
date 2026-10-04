@@ -130,8 +130,25 @@ pub const NOTE_ROWS: &str = "note-rows";
 /// 生きた設計ノートの計画だけの行の数の置き場の合計の上限の行の印（欄 key の値・値は「<正の整数> 行 以下」・便 207）。
 pub const PLAN_ROWS: &str = "plan-rows";
 
-/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min・便 207 で数の上限 3 つを足した）。
-pub const KEYS: [&str; 6] = [NOTE_CHAPTERS, PLAN_NOTE, IN_LOOP_MIN, LIVE_NOTES, NOTE_ROWS, PLAN_ROWS];
+/// 席の手元の生成区間の総バイト数の上限の行の印（欄 key の値・値は「<正の整数> byte 以下」・導出の命令 `seat.rs` が `bytes` で読む・
+/// 行 t-seatcopy・判断の記録 ADR-38 決定 (4)）。
+pub const SEAT_BYTES: &str = "seat-bytes";
+
+/// 器の SessionStart の brief の役割の行の byte の上限の行の印（欄 key の値・値の形は `SEAT_BYTES` と同じ・行 t-seatcopy）。
+pub const SEAT_ROLE_BYTES: &str = "seat-role-bytes";
+
+/// 欄 key の閉じた一覧（道具が値を読む口の名・便 179・便 183 で plan-note・便 200 で in-loop-min・便 207 で数の上限 3 つ・
+/// 行 t-seatcopy で byte の上限 2 つを足した）。
+pub const KEYS: [&str; 8] = [
+    NOTE_CHAPTERS,
+    PLAN_NOTE,
+    IN_LOOP_MIN,
+    LIVE_NOTES,
+    NOTE_ROWS,
+    PLAN_ROWS,
+    SEAT_BYTES,
+    SEAT_ROLE_BYTES,
+];
 
 /// 数の上限の欄 key と、値の形「<正の整数> <単位> 以下」の単位と、数えるものの名（違反の字・便 179 の章の上限に便 207 で 3 つを足した・
 /// ADR-35 決定 (1)(ア)(ウ)）。
@@ -204,6 +221,33 @@ pub fn over_cap(at: &str, key: &str, count: usize, cap: usize) -> Option<(String
     let (_, unit, what) = CAPS.iter().find(|c| c.0 == key)?;
     let limit = format!("{key} の上限 {cap} {unit} 以下");
     (count > cap).then(|| (format!("{at}: {what}が多すぎる（{limit}）"), format!("{at}: {what}の今の数 {count}（{limit}）")))
+}
+
+/// byte の上限（欄 key が `key` の閾値の行の value「<正の整数> byte 以下」の数・正の整数は 3 桁ごとの「,」で区切ってよい・
+/// 行 t-seatcopy・判断の記録 ADR-38 決定 (4)）。行が無ければ None（呼び手が決める）。2 本以上か値の形が違えば Err（既定の値に倒れない）。
+pub fn bytes(rules: &Node, key: &str) -> Result<Option<usize>, String> {
+    let rows = keyed_rows(rules, key);
+    let row = match rows[..] {
+        [] => return Ok(None),
+        [row] => row,
+        _ => return Err(format!("欄 {ROW_KEY} が {key} の閾値の行が {} 本ある", rows.len())),
+    };
+    let value = row.get("value").and_then(Node::as_str).unwrap_or_default();
+    value.strip_suffix(" byte 以下").and_then(grouped).map(Some).ok_or_else(|| {
+        let id = row.get("id").and_then(Node::as_str).unwrap_or("?");
+        format!("行 {id} の value「{value}」が「<正の整数> byte 以下」の形でない")
+    })
+}
+
+/// 正の整数の字（頭は 0 でない・「,」は在れば 3 桁ごとの全部の区切りに置く）の数。形が違えば None。
+fn grouped(n: &str) -> Option<usize> {
+    let mut parts = n.split(',');
+    let head = parts.next().unwrap_or_default();
+    let tail: Vec<&str> = parts.collect();
+    let digits = |p: &str| p.bytes().all(|b| b.is_ascii_digit());
+    let head_ok = !head.is_empty() && !head.starts_with('0') && digits(head) && (tail.is_empty() || head.len() <= 3);
+    let tail_ok = tail.iter().all(|p| p.len() == 3 && digits(p));
+    (head_ok && tail_ok).then(|| tail.concat()).and_then(|t| format!("{head}{t}").parse().ok())
 }
 
 /// 編集時の止めの本数の下限（欄 key が in-loop-min の閾値の行の id と value「<正の整数> 本以上」の数・便 200・ADR-33 決定 (5)）。
@@ -432,7 +476,7 @@ pub(crate) const FLOOR: Floor = Floor::Map(&[
     (
         "key_note",
         Floor::Val(
-            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）",
+            "閾値の行の欄 key は、道具がその行の値を読む口の名（閉じた一覧 enums.key）。行の id は置き場ごとに意味が違うので、道具は値を読む行を id でなくこの欄で引く。同じ値の閾値の行は置き場に 1 本まで。行が無いときの扱いは key ごとに違う。note-chapters（値 = 設計ノートの章の上限「<正の整数> 章 以下」）は、行が無いか 2 本以上在るか値の形が違えば、章の上限の判定が まだ分からない（道具は既定の値を持たない）。plan-note（値 = 計画のノートの文書 id・種別 build-check・段 post・判断の記録 ADR-31 決定 (2)(ア)）は、行が無ければ計画のノートの床を掛けない（行の索引と計画だけの行の節を名札の行が名指すノートの外に置けない決まりは、行が無くても掛かる）。2 本以上在るか値が文書 id の形でなければ、計画のノートの判定が まだ分からない。in-loop-min（値 = 極性一覧の段が in-loop の仕掛けの本数の下限「<正の整数> 本以上」・判断の記録 ADR-33 決定 (5)）は、行が無ければ下限を数えず床の標準エラーに 1 行出す。2 本以上在るか値の形が違えば、下限の判定が まだ分からない。live-notes（値 = 生きた設計ノート〔状態が draft か effective〕の本数の上限「<正の整数> 本 以下」）・note-rows（値 = 生きたノート 1 本の契約表の節の行の数の上限「<正の整数> 行 以下」）・plan-rows（値 = 生きたノートの計画だけの行の節の行の数の置き場の合計の上限「<正の整数> 行 以下」）は、置き場に読めた設計ノートが 1 本でも在れば読み、行が無いか 2 本以上在るか値の形が違えば、その数えの判定が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-35 決定 (1)）。数の上限（note-chapters とこの 3 つ）の違反の字は欄 key と上限の値と名指す先だけを持ち、今の数は持たない（今の数は床の標準エラーの「今の数」の行に出す）。seat-bytes（値 = 席の手元の生成区間の総バイト数の上限「<正の整数> byte 以下」・正の整数は 3 桁ごとの「,」で区切ってよい）と seat-role-bytes（値 = 器の SessionStart の brief の役割の行の byte の上限・同じ形）は、導出の命令（folio derive）が 2 本の値の差を要の写しの file 全体の byte の上限として読む。2 本とも無ければ席の手元の写しを導かず、片方だけ在るか 2 本以上在るか値の形が違うか差が 0 以下なら、導出が まだ分からない（道具は既定の値を持たない・判断の記録 ADR-38 決定 (4)）",
         ),
     ),
     (
@@ -564,7 +608,7 @@ mod tests {
         assert_eq!(listed.len(), 1, "{listed:?}");
         let two = v("  - {id: R-19, key: note-chapters}\n  - {id: R-26, key: note-chapters}\n");
         assert_eq!(two, ["行 R-26 の key「note-chapters」を持つ閾値の行が 2 本以上ある"]);
-        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min", "live-notes", "note-rows", "plan-rows"]);
+        assert_eq!(KEYS, ["note-chapters", "plan-note", "in-loop-min", "live-notes", "note-rows", "plan-rows", "seat-bytes", "seat-role-bytes"]);
     }
 
     /// 便 207 (c)1: 数の上限 3 つは章の上限と同じ読み手で、単位だけが key ごとに違う（本数は「本」・行の数は「行」）。行の id に依らず、

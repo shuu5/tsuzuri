@@ -10,6 +10,9 @@
 //! 便 183（判断の記録 ADR-31 決定 (2)(ウ)・要件書 FR27）から、規則の表に計画の名札の行が在れば、計画のノートの行の索引の
 //! 生成区間も同じ回に書き（--write・全部か無しか）、床と同じ関数 `plan::drift` で比べる（--check）。名札の行が無い・規則の表が
 //! 無い置き場は今のまま（契約表の導出物だけ）。
+//! 行 t-seatcopy（判断の記録 ADR-38 決定 (3)(4)）から、規則の表に欄 key が seat-bytes と seat-role-bytes の行が在れば、憲法の
+//! 正本から席の手元の 2 つの写し（`seat.rs`）も置き場の下の dir seat に同じ回に書き（--write）・byte で比べる（--check）。
+//! 要の写しの file 全体の byte が 2 つの値の差を越えれば、どちらの命令も何も書かずに 1（違反）。
 
 use std::collections::HashSet;
 use std::fs;
@@ -21,6 +24,7 @@ use crate::floor_note::{
 use crate::note::{self, Field, NoteDoc};
 use crate::plan::{self, IndexRow};
 use crate::rules;
+use crate::seat;
 use crate::verdict::{Report, Verdict};
 use crate::yaml::{self, Node};
 
@@ -82,10 +86,16 @@ pub fn run(dir: &Path, out: &Path, from_root: bool, mode: Mode) -> Outcome {
         dir.to_path_buf()
     };
     let out_dir = base.join(out);
-    let (derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
+    let (mut derived, index) = match derive_all(dir).and_then(|(d, notes)| Ok((d, plan_index(dir, &notes)?))) {
         Ok(d) => d,
         Err(e) => return Outcome::unknown(e),
     };
+    match seat::derive(dir, &out_dir) {
+        Ok(None) => {}
+        Ok(Some(c)) if c.brief.len() > c.cap => return over_cap(&c),
+        Ok(Some(c)) => derived.extend(seat_files(c)),
+        Err(e) => return Outcome::unknown(e),
+    }
     match mode {
         Mode::Write => write_all(&out_dir, &derived, index.as_ref()),
         Mode::Check => check_all(&out_dir, &derived, index.as_ref()),
@@ -111,6 +121,37 @@ fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String
     let path = dir.join(&name);
     let text = fs::read_to_string(&path).map_err(|e| format!("{name}: 読めない: {e}"))?;
     Ok(Some(PlanIndex { path, name, text, rows }))
+}
+
+/// 席の手元の 2 つの写しを置き場の下の dir seat の導出物にする（行 t-seatcopy）。
+fn seat_files(c: seat::Copies) -> [Derived; 2] {
+    [
+        Derived {
+            name: format!("{}/{}", seat::DIR, seat::BRIEF),
+            text: c.brief,
+        },
+        Derived {
+            name: format!("{}/{}", seat::DIR, seat::FULL),
+            text: c.full,
+        },
+    ]
+}
+
+/// 要の写しが上限を越える（違反 1・どの file も書かない・判断の記録 ADR-38 決定 (4)）。
+fn over_cap(c: &seat::Copies) -> Outcome {
+    Outcome {
+        verdict: Verdict::Fail,
+        stdout: vec![format!(
+            "folio {DERIVED_SUBCOMMAND}: 要の写し {}/{} が {} byte で上限 {} byte（欄 key {} の値から {} の値を引いた数）を越える",
+            seat::DIR,
+            seat::BRIEF,
+            c.brief.len(),
+            c.cap,
+            rules::SEAT_BYTES,
+            rules::SEAT_ROLE_BYTES
+        )],
+        stderr: None,
+    }
 }
 
 /// 契約表を持つ設計ノートを全部導出する（1 本でも導出できなければ Err）。読めた設計ノートも返す（行の索引の母集団・便 183）。
@@ -291,6 +332,11 @@ fn orphans(out_dir: &Path, derived: &[Derived]) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// 導出物の path が file として書けない形か（symlink・symlink の dir の下・dir）。
+fn not_plain(path: &Path) -> bool {
+    path.is_symlink() || path.parent().is_some_and(Path::is_symlink) || (path.exists() && !path.is_file())
+}
+
 /// 置き場が dir として在るか（symlink は認めない）。
 fn out_is_dir(out_dir: &Path) -> bool {
     !out_dir.is_symlink() && out_dir.is_dir()
@@ -321,17 +367,15 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> 
     let mut pending = Vec::new();
     for d in derived {
         let path = out_dir.join(&d.name);
-        if path.is_symlink() || (path.exists() && !path.is_file()) {
+        if not_plain(&path) {
             return Outcome::unknown(format!("{}: file でない（symlink・dir）", path.display()));
         }
         if fs::read(&path).ok().as_deref() != Some(d.text.as_bytes()) {
             pending.push((path, d));
         }
     }
-    if !out_dir.exists()
-        && let Err(e) = fs::create_dir(out_dir)
-    {
-        return Outcome::unknown(format!("{}: 置き場を作れない: {e}", out_dir.display()));
+    if let Err(e) = make_dirs(out_dir, &pending) {
+        return Outcome::unknown(e);
     }
     let mut written = pending.len();
     for (path, d) in pending {
@@ -348,6 +392,23 @@ fn write_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> 
         written += 1;
     }
     write_summary(out_dir, derived, index, written)
+}
+
+/// 置き場と、書く file の親の dir（置き場の下の dir seat）が無ければ作る（親 dir の親は作らない）。dir でない物が在れば何も作らない。
+fn make_dirs(out_dir: &Path, pending: &[(PathBuf, &Derived)]) -> Result<(), String> {
+    let parents = pending.iter().filter_map(|(p, _)| p.parent());
+    let dirs: Vec<&Path> = std::iter::once(out_dir).chain(parents).collect();
+    if let Some(d) = dirs.iter().find(|d| d.exists() && !d.is_dir()) {
+        return Err(format!("{}: dir でない", d.display()));
+    }
+    for dir in dirs {
+        if !dir.exists()
+            && let Err(e) = fs::create_dir(dir)
+        {
+            return Err(format!("{}: 置き場を作れない: {e}", dir.display()));
+        }
+    }
+    Ok(())
 }
 
 /// --write の結果: 置き場に残る導出元の無い .toml の行と、書いた file の数の行を標準出力に並べる。
@@ -395,7 +456,7 @@ fn check_all(out_dir: &Path, derived: &[Derived], index: Option<&PlanIndex>) -> 
     let mut stdout = Vec::new();
     for d in derived {
         let path = out_dir.join(&d.name);
-        if path.is_symlink() {
+        if path.is_symlink() || path.parent().is_some_and(Path::is_symlink) {
             return Outcome::unknown(format!("{}: symlink は認めない", path.display()));
         }
         match fs::read(&path) {

@@ -57,6 +57,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("init", 3),
     ("proposed", 3),
     ("schema", 3),
+    ("seat", 3),
     ("sheet", 3),
     ("stamp", 3),
     ("face", 4),
