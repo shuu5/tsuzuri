@@ -237,7 +237,6 @@ fn bvcols_short_title_or_fallback() {
         created_at: None,
         short: "短い題".to_string(),
         short_set: true,
-        summary: String::new(),
         blocks: Vec::new(),
     };
     let facts = [fact];
@@ -287,7 +286,6 @@ fn bvcols_lines_from_pop_wait() {
         created_at: Some(NOW - 60),
         short: "s".to_string(),
         short_set: false,
-        summary: String::new(),
         blocks: Vec::new(),
     }];
     let one = [part("contract-queued", "dependency", &["t-5"])];

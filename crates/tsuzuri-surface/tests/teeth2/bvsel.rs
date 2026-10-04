@@ -52,7 +52,6 @@ fn fact(id: &str, short: &str) -> BeadFact {
         created_at: Some(NOW - 3_600),
         short: short.to_string(),
         short_set: true,
-        summary: String::new(),
         blocks: Vec::new(),
     }
 }

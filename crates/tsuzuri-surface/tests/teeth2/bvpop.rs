@@ -40,7 +40,6 @@ fn fact(x: &str, short: &str, blocks: &[&str]) -> BeadFact {
         created_at: Some(NOW - 7_200),
         short: short.to_string(),
         short_set: true,
-        summary: format!("{x} の概要"),
         blocks: blocks.iter().map(|b| id(b)).collect(),
     }
 }

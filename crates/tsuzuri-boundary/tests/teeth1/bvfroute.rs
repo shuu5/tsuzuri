@@ -180,7 +180,6 @@ fn bvfroute_shape_on_fixture() {
         created_at: Some(CREATED_7),
         short: "3".into(),
         short_set: false,
-        summary: "fixture の bead（本文は見本の字）".into(),
         blocks: vec![bead("fx-hub.6")],
     };
     assert_eq!(rows.first(), Some(&blocked));

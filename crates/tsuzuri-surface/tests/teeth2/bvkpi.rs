@@ -63,7 +63,6 @@ fn sample() -> Vec<Lgroup> {
         created_at: None,
         short: "札の幅".to_string(),
         short_set: true,
-        summary: String::new(),
         blocks: Vec::new(),
     };
     let facts = BTreeMap::from([("fx-k1.1".to_string(), fact)]);

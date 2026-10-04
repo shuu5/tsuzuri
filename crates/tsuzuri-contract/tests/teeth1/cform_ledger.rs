@@ -98,7 +98,6 @@ fn bead_fact() -> BeadFact {
         created_at: Some(AT),
         short: "契約の型".into(),
         short_set: true,
-        summary: "契約の型を足す".into(),
         blocks: vec![bead("t3-hub.4")],
     }
 }
@@ -147,13 +146,12 @@ fn forms() -> Vec<Box<dyn Form>> {
             "ledger::BeadFact",
             vec![
                 bead_fact(),
-                // 起票の時刻が読めず、短い題を題から作り、概要も blocks の相手も無い bead。
+                // 起票の時刻が読めず、短い題を題から作り、blocks の相手も無い bead。
                 BeadFact {
                     id: bead("t3-hub"),
                     created_at: None,
                     short: "根".into(),
                     short_set: false,
-                    summary: String::new(),
                     blocks: vec![],
                 },
             ],

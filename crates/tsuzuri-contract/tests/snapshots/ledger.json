@@ -83,7 +83,6 @@
       "created_at": 1790494620,
       "short": "契約の型",
       "short_set": true,
-      "summary": "契約の型を足す",
       "blocks": [
         "t3-hub.4"
       ]
@@ -93,7 +92,6 @@
       "created_at": null,
       "short": "根",
       "short_set": false,
-      "summary": "",
       "blocks": []
     }
   ],
@@ -106,7 +104,6 @@
             "created_at": 1790494620,
             "short": "契約の型",
             "short_set": true,
-            "summary": "契約の型を足す",
             "blocks": [
               "t3-hub.4"
             ]

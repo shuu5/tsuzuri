@@ -151,7 +151,8 @@ pub struct BeadFacts {
     pub rows: Reading<Vec<BeadFact>>,
 }
 
-/// bead の 1 本の事実（id・起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)）。
+/// bead の 1 本の事実（id・起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)）。
+/// 本文の概要は持たない（吹き出しは開いた時に 1 本の引きの口から読む・判断の記録 ADR-30 決定 (3)・行 c-fact-trim）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BeadFact {
     pub id: BeadId,
@@ -161,8 +162,6 @@ pub struct BeadFact {
     pub short: String,
     /// short が metadata の鍵 short の字か（偽なら題から機械で作った字）。
     pub short_set: bool,
-    /// 概要（本文の 1 行・Unicode の字で 120 まで）。
-    pub summary: String,
     /// blocks の相手（依存の type が blocks の先の bead の全部・台帳の順）。
     pub blocks: Vec<BeadId>,
 }

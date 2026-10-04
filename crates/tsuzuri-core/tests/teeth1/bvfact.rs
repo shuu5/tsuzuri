@@ -1,4 +1,4 @@
-//! 行 c-bead-facts の歯（中核・接頭辞 bvfact_）: 台帳の字から bead の事実の一覧（起票の時刻・短い題・概要・
+//! 行 c-bead-facts の歯（中核・接頭辞 bvfact_）: 台帳の字から bead の事実の一覧（起票の時刻・短い題・
 //! blocks の相手）を組む。台帳の字は歯の中で組む（fixture の file は使わない）。
 #![cfg(test)]
 
@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadFact, BeadId};
 use tsuzuri_core::ledger::facts;
-use tsuzuri_core::ledger::facts::SUMMARY_MAX;
 
 fn bead(id: &str) -> BeadId {
     BeadId::new(id).expect("見本の bead id")
@@ -94,52 +93,6 @@ fn bvfact_short_fallback_dash() {
     );
     let lead = one(line("fx.3", "— だけの題", "", Value::Null));
     assert_eq!(lead.short, "— だけの題", "「—」の前が空なら題の全体");
-}
-
-#[test]
-fn bvfact_summary_from_observation() {
-    let description = "## memo\n### 出所\n出所の行。\n### 観測\n\n  観測の 1 行目。  \n2 行目\n";
-    let row = one(line("fx.1", "題", description, Value::Null));
-    assert_eq!(row.summary, "観測の 1 行目。");
-    // 観測の下の行も頭の「概要 =」を外す。
-    let label = one(line(
-        "fx.2",
-        "題",
-        "前置き\n### 観測\n概要 = 見た事",
-        Value::Null,
-    ));
-    assert_eq!(label.summary, "見た事");
-}
-
-#[test]
-fn bvfact_summary_skips_heading_and_label() {
-    let row = one(line(
-        "fx.1",
-        "題",
-        "\n## 見出し\n\n概要 =   板を 5 列にする\n技術 = 列の型\n",
-        Value::Null,
-    ));
-    assert_eq!(row.summary, "板を 5 列にする");
-    let plain = one(line(
-        "fx.2",
-        "題",
-        "# 頭\n最初の段落の行\n次の行",
-        Value::Null,
-    ));
-    assert_eq!(plain.summary, "最初の段落の行");
-    let none = one(line("fx.3", "題", "# 見出しだけ\n\n", Value::Null));
-    assert_eq!(none.summary, "", "行が無ければ空の字");
-}
-
-#[test]
-fn bvfact_summary_cut_120() {
-    assert_eq!(SUMMARY_MAX, 120);
-    let long = "あ".repeat(SUMMARY_MAX + 5);
-    let row = one(line("fx.1", "題", &format!("概要 = {long}"), Value::Null));
-    assert_eq!(row.summary.chars().count(), SUMMARY_MAX);
-    assert_eq!(row.summary, "あ".repeat(SUMMARY_MAX));
-    let short = "a".repeat(SUMMARY_MAX);
-    assert_eq!(one(line("fx.2", "題", &short, Value::Null)).summary, short);
 }
 
 #[test]

@@ -61,7 +61,6 @@ fn fact(id: &str, short: &str, created: Option<u64>) -> BeadFact {
         created_at: created,
         short: short.to_string(),
         short_set: true,
-        summary: String::new(),
         blocks: Vec::new(),
     }
 }

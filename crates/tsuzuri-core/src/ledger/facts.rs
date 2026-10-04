@@ -1,7 +1,7 @@
-//! bead の事実の一覧（起票の時刻・短い題・概要・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
+//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
 //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
 //! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
-//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。概要は本文の 1 行を Unicode の字で 120 に切る。
+//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む・行 c-fact-trim）。
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
@@ -17,15 +17,6 @@ pub const ROW_TITLE_PREFIX: &str = "便 ";
 
 /// 題の区切りの字（前の字が短い題）。
 pub const TITLE_DASH: char = '—';
-
-/// 概要を取る見出しの行。
-pub const OBSERVATION_HEADING: &str = "### 観測";
-
-/// 概要の行から外す頭の字。
-pub const SUMMARY_LABEL: &str = "概要 =";
-
-/// 概要の字数の上限（Unicode の字）。
-pub const SUMMARY_MAX: usize = 120;
 
 /// 短い題の字数の上限（Unicode のスカラー値・規則の行 R-19）。
 pub const SHORT_MAX: usize = 20;
@@ -63,7 +54,6 @@ fn fact(bead: BdBead) -> Option<BeadFact> {
         created_at: bead.created_at.as_deref().and_then(epoch_secs),
         short: capped(&set.unwrap_or_else(|| short_of(bead.title.as_deref().unwrap_or_default()))),
         short_set,
-        summary: summary_of(bead.description.as_deref().unwrap_or_default()),
         blocks,
     })
 }
@@ -88,26 +78,5 @@ pub fn capped(short: &str) -> String {
         .chars()
         .take(SHORT_MAX - 1)
         .chain([ELLIPSIS])
-        .collect()
-}
-
-/// 本文から作る概要。見出しの行 `OBSERVATION_HEADING` が在ればその下の最初の空でない行、無ければ空の行と
-/// 字 # で始まる行を飛ばした最初の行（どれも前後の空白を除く）から、頭の `SUMMARY_LABEL` とその後の空白を外し、
-/// Unicode の字で `SUMMARY_MAX` に切る。行が無ければ空の字。
-pub fn summary_of(description: &str) -> String {
-    let lines: Vec<&str> = description.lines().map(str::trim).collect();
-    let line = match lines.iter().position(|l| *l == OBSERVATION_HEADING) {
-        Some(at) => lines
-            .get(at + 1..)
-            .unwrap_or_default()
-            .iter()
-            .find(|l| !l.is_empty()),
-        None => lines.iter().find(|l| !l.is_empty() && !l.starts_with('#')),
-    };
-    let line = line.copied().unwrap_or_default();
-    line.strip_prefix(SUMMARY_LABEL)
-        .map_or(line, str::trim_start)
-        .chars()
-        .take(SUMMARY_MAX)
         .collect()
 }
