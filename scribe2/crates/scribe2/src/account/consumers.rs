@@ -12,7 +12,7 @@ use crate::hook::vessel::digest::{self, PluginRecord};
 use crate::hook::vessel::{upstream, Upstream, DEFAULT_BRANCH, DEFAULT_REMOTE};
 use crate::invocation::Invocation;
 use crate::name::{BUILD_COMMIT, NAME, PLUGIN_DIR};
-use crate::rules::manifest::Manifest;
+use crate::rules::manifest::{Manifest, PluginDir};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -70,6 +70,9 @@ pub enum Drift {
     Binary,
     /// 記録の digest ≠ 記録の root に今在る hooks.json の digest。
     Plugin,
+    /// 記録の root が起動行の plugin の dir（anchor の生成 dir と host の `[[plugin]]` の dir・[`Consumer::roots`]）のどれとも同じ場所で
+    /// ない（tsuzuri の判断の記録 ADR-38 の決定 (10)）。`[[plugin]]` を宣言しない host は比べる相手が無いので立てない。
+    Root,
     /// 帳簿の `gitCommitSha` ≠ vessel repo の HEAD（`source=install` を含む行だけ）。
     Ledger,
     /// 記録の root が checkout の生成 dir（`<repo>/<PLUGIN_DIR>`・consumer-sync.md §17 形 5）で、かつ同じ path の帳簿にも器が
@@ -80,7 +83,7 @@ pub enum Drift {
 }
 
 /// [`Drift`] の全 variant（宣言順）。
-pub const DRIFTS: &[Drift] = &[Drift::Binary, Drift::Plugin, Drift::Ledger, Drift::Dual, Drift::Unrecorded];
+pub const DRIFTS: &[Drift] = &[Drift::Binary, Drift::Plugin, Drift::Root, Drift::Ledger, Drift::Dual, Drift::Unrecorded];
 
 impl Drift {
     /// 行の字面。
@@ -88,6 +91,7 @@ impl Drift {
         match self {
             Self::Binary => "binary",
             Self::Plugin => "plugin",
+            Self::Root => "root",
             Self::Ledger => "ledger",
             Self::Dual => "dual",
             Self::Unrecorded => UNRECORDED,
@@ -148,6 +152,8 @@ pub struct Consumer {
     pub ledger: Option<String>,
     /// 帳簿の `installPath` に今在る hooks.json の digest（無い・読めない周は `absent`）。
     pub cache: Option<String>,
+    /// 起動行が積む plugin の dir の列（anchor の生成 dir → host の `[[plugin]]` の dir・宣言順）。`[[plugin]]` を宣言しない host は空。
+    pub roots: Vec<String>,
 }
 
 /// 行を組む前の材料（登録 row の target の列と帳簿の導入先）。
@@ -158,8 +164,8 @@ struct Draft {
 }
 
 impl Draft {
-    /// 実測へ写す（記録と cache の digest はここで読む）。
-    fn measure(&self, state_dir: &Path) -> Consumer {
+    /// 実測へ写す（記録と cache の digest はここで読む・`anchor` は導入先の path・`plugins` は host の `[[plugin]]` の宣言）。
+    fn measure(&self, state_dir: &Path, anchor: &str, plugins: &[PluginDir]) -> Consumer {
         let source = match (self.targets.is_empty(), &self.entry) {
             (false, None) => Source::Launch,
             (false, Some(_)) => Source::Both,
@@ -171,8 +177,18 @@ impl Draft {
             record: record_of(state_dir, &self.targets),
             ledger: self.entry.as_ref().and_then(|entry| entry.sha.clone()),
             cache: self.entry.as_ref().and_then(|entry| entry.install.as_deref()).and_then(|dir| digest::hooks_digest(Path::new(dir))),
+            roots: roots_of(anchor, plugins),
         }
     }
+}
+
+/// 起動行の plugin の dir の列（`[[plugin]]` の宣言が無ければ空・在れば 1 本目は anchor の生成 dir・起動行の積み方は `seat::cycle::launch`）。
+fn roots_of(anchor: &str, plugins: &[PluginDir]) -> Vec<String> {
+    if plugins.is_empty() {
+        return Vec::new();
+    }
+    let generated = Path::new(anchor).join(PLUGIN_DIR).display().to_string();
+    std::iter::once(generated).chain(plugins.iter().map(|plugin| plugin.dir().to_owned())).collect()
 }
 
 /// 帳簿の path（`<state_dir>/accounts/<label>/plugins/installed_plugins.json`）。
@@ -261,6 +277,9 @@ fn holds(word: Drift, consumer: &Consumer, head: &Head, vessel: Option<&Path>) -
     match word {
         Drift::Binary => recorded.is_some_and(|(_, _, binary)| binary != BUILD_COMMIT),
         Drift::Plugin => recorded.is_some_and(|(root, hooks, _)| *hooks != digest::hooks_digest(Path::new(root))),
+        Drift::Root => recorded.is_some_and(|(root, _, _)| {
+            !consumer.roots.is_empty() && !consumer.roots.iter().any(|dir| same_dir(Path::new(root), Path::new(dir)))
+        }),
         Drift::Ledger => matches!((head, &consumer.ledger), (Head::Sha(sha), Some(ledger)) if sha != ledger),
         Drift::Dual => {
             consumer.source != Source::Launch
@@ -382,7 +401,7 @@ pub fn doctor_lines(state_dir: &Path, rules: Option<&str>, state: Option<&State>
     let mut lines: Vec<String> = drafts
         .iter()
         .map(|(path, draft)| {
-            let consumer = draft.measure(state_dir);
+            let consumer = draft.measure(state_dir, path, manifest.plugins());
             render_consumer_behind(path, &consumer, &head, &behind, &drift_of(&consumer, &head, vessel.as_deref()))
         })
         .collect();
@@ -392,7 +411,8 @@ pub fn doctor_lines(state_dir: &Path, rules: Option<&str>, state: Option<&State>
 
 #[cfg(test)]
 mod tests {
-    use super::{drift_of, head_of, read_ledger, record_of, render_consumer, same_dir, Consumer, Drift, Head, Ledger, Source, DRIFTS};
+    use super::{drift_of, head_of, read_ledger, record_of, render_consumer, same_dir, Consumer, Draft, Drift, Head, Ledger, Source, DRIFTS};
+    use crate::rules::manifest::Manifest;
     use crate::hook::vessel::digest::{self, PluginRecord};
     use crate::invocation::Invocation;
     use crate::order::is_declaration_order;
@@ -564,11 +584,11 @@ mod tests {
         assert_eq!(stub.calls(), [call("/empty"), call("/sha"), call("/fail"), call("/gone")], "git の program と引数");
     }
 
-    /// 語は 5 つで宣言順に閉じる（variant を足した周はここの件数が変わる）。
+    /// 語は 6 つで宣言順に閉じる（variant を足した周はここの件数が変わる）。
     #[test]
     fn doctor_consumer_drift_words_are_closed_in_declaration_order() {
         let words: Vec<&str> = DRIFTS.iter().map(|word| word.as_str()).collect();
-        assert_eq!(words, ["binary", "plugin", "ledger", "dual", "unrecorded"]);
+        assert_eq!(words, ["binary", "plugin", "root", "ledger", "dual", "unrecorded"]);
         assert!(is_declaration_order(DRIFTS, |word| word as usize), "DRIFTS は宣言順: {DRIFTS:?}");
         assert_eq!(Source::Both.as_str(), "launch+install");
     }
@@ -582,6 +602,7 @@ mod tests {
             record: PluginRecord::Absent,
             ledger: Some("a".repeat(40)),
             cache: None,
+            roots: Vec::new(),
         };
         let head = Head::Sha("b".repeat(40));
         assert_eq!(drift_of(&consumer, &head, None), [Drift::Ledger, Drift::Unrecorded]);
@@ -592,5 +613,29 @@ mod tests {
         );
         assert_eq!(drift_of(&consumer, &Head::Undeclared, None), [Drift::Unrecorded], "head が無ければ帳簿は測れない");
         assert_eq!(render_consumer("/c", &consumer, &Head::Undeclared, &[]).rsplit(' ').next(), Some("drift=none"), "空は none");
+    }
+
+    /// 語 root は、登録 row の席の読める記録の root が起動行の plugin の dir（anchor の生成 dir と `[[plugin]]` の dir）のどれとも同じ場所で
+    /// ない周だけ立つ。記録が無い周・`[[plugin]]` を宣言しない host・root が生成 dir の周・root が `[[plugin]]` の dir の周は立たない。
+    #[test]
+    fn vbroot_doctor_root_names_a_record_outside_the_launch_plugin_dirs() {
+        let state_dir = scratch("vbroot");
+        let declared = Manifest::parse("schema = 1\n\n[[plugin]]\ndir = \"/opt/p2\"\n").unwrap_or_default();
+        let bare = Manifest::parse("schema = 1\n").unwrap_or_default();
+        let draft = Draft { targets: targets(&["s:1"]), entry: None };
+        let root_of = |root: &str, manifest: &Manifest| {
+            let found = PluginRecord::Recorded { root: root.to_owned(), hooks: None, binary: "b".repeat(12), sid: "s".to_owned(), ts: 1 };
+            let seat = seat_dir(&state_dir, "s:1");
+            let _ = fs::create_dir_all(&seat);
+            let _ = fs::write(digest::record_path(&seat), format!("{}\n", found.to_line().unwrap_or_default()));
+            let consumer = draft.measure(&state_dir, "/a", manifest.plugins());
+            (consumer.roots.clone(), drift_of(&consumer, &Head::Undeclared, None).contains(&Drift::Root))
+        };
+        assert_eq!(root_of("/r", &declared), (vec!["/a/plugin".to_owned(), "/opt/p2".to_owned()], true), "宣言の外の root は立つ");
+        assert!(!root_of("/a/plugin", &declared).1, "anchor の生成 dir は立たない");
+        assert!(!root_of("/opt/p2", &declared).1, "[[plugin]] の dir は立たない");
+        assert_eq!(root_of("/r", &bare), (Vec::new(), false), "[[plugin]] を宣言しない host は比べない");
+        let absent = Draft { targets: targets(&["s:2"]), entry: None }.measure(&state_dir, "/a", declared.plugins());
+        assert_eq!(drift_of(&absent, &Head::Undeclared, None), [Drift::Unrecorded], "記録が無ければ root は立たない");
     }
 }

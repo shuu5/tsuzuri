@@ -322,6 +322,7 @@ mod tests {
             record: PluginRecord::Absent,
             ledger: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
             cache: Some("cbf29ce484222325".to_owned()),
+            roots: Vec::new(),
         };
         let head = Head::Sha("fedcba9876543210fedcba9876543210fedcba98".to_owned());
         lines.push(render_consumer("/repo/a", &consumer, &head, &drift_of(&consumer, &head, None)));
