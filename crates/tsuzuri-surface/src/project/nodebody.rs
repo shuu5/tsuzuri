@@ -1,7 +1,8 @@
 //! block「本文と記録」（行 g-node-body・判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
 //! run の時間軸の前）。中心の節点が台帳の bead（契約・epic・memo・問い）の時だけ、その 1 本の引きの口（`ITEM_PATH`）から
-//! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも閉じて始め、
-//! 開き閉じは畳める段の記録に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
+//! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも、その browser の
+//! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
+//! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
 //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::graph::{AroundRow, NodeKind};
@@ -107,8 +108,21 @@ mod dom {
     use super::{BLANK, BLOCK, Body, MdBlock, PART_CLASS, PART_KEYS, item_path, kept_bead, texts};
     use crate::project::nodearound::{source, state};
     use crate::project::{fold, section, unmeasured};
+    use crate::store;
     use crate::widgets::help::h2;
     use crate::widgets::md;
+
+    /// toggle の後に今の開き閉じをその browser の保存にも写す（段の種類ごとの鍵・保存は便利の写しで正本でない・行 g-fold-keep）。
+    fn kept(
+        key: &'static str,
+        toggle: impl Fn(web_sys::Event) + 'static,
+    ) -> impl Fn(web_sys::Event) + 'static {
+        move |ev: web_sys::Event| {
+            let now = event_target::<web_sys::Element>(&ev).has_attribute("open");
+            store::keep_fold(key, now);
+            toggle(ev);
+        }
+    }
 
     /// 畳める段の中（空なら 1 行・字は台帳の字の印の下に描く）。
     fn part(blocks: Vec<MdBlock>) -> AnyView {
@@ -138,8 +152,12 @@ mod dom {
             match item.with(|(f, _)| texts(f, &b)) {
                 Body::Filled(t) => {
                     let [text_key, notes_key] = PART_KEYS;
-                    let (open_text, toggle_text) = fold("node:body".to_string(), || false);
-                    let (open_notes, toggle_notes) = fold("node:notes".to_string(), || false);
+                    let (open_text, toggle_text) =
+                        fold("node:body".to_string(), || store::fold_open("node:body"));
+                    let (open_notes, toggle_notes) =
+                        fold("node:notes".to_string(), || store::fold_open("node:notes"));
+                    let toggle_text = kept("node:body", toggle_text);
+                    let toggle_notes = kept("node:notes", toggle_notes);
                     let body = view! {
                         <details class=PART_CLASS prop:open=open_text on:toggle=toggle_text>
                             <summary>{h2(text_key)}</summary>

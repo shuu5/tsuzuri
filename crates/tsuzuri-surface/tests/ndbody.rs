@@ -105,14 +105,14 @@ fn ndbody_page_order() {
     }
 }
 
-/// 畳める段は鍵 node:body と node:notes の 2 つで、どちらも表示の型によらず閉じて始め（初めの値は偽）、開き閉じを
-/// 畳める段の記録に書き戻す。段の class は stylesheet に在る。
+/// 畳める段は鍵 node:body と node:notes の 2 つで、どちらも表示の型によらず、初めの値はその browser の保存の値
+/// （無ければ閉じ・行 g-fold-keep）で、開き閉じを畳める段の記録に書き戻す。段の class は stylesheet に在る。
 #[test]
 fn ndbody_folds_closed() {
     assert_eq!(FOLDS, ["node:body", "node:notes"]);
     let dom = dom();
     for key in FOLDS {
-        let call = format!("fold(\"{key}\".to_string(), || false);");
+        let call = format!("fold(\"{key}\".to_string(), || store::fold_open(\"{key}\"));");
         assert_eq!(dom.matches(&call).count(), 1, "{call}");
     }
     assert_eq!(
