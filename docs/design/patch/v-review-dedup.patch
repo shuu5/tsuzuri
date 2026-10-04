@@ -1,0 +1,212 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/headless/lens.rs b/scribe2/crates/scribe2-boundary/tests/e2e/headless/lens.rs
+index 42555ecab5e32e4fc9fe5f143ba413b4832f87e7..976de0491542b95f9d8164f5566d08cc24a32d71 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/headless/lens.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/headless/lens.rs
+@@ -1503,3 +1503,26 @@ fn headless_lens_permit_cap_memo_stage_ignores_the_copy() {
+     assert!(dir.join("called").exists(), "同じ dir の diff の形は写しの値 100 で claude を呼ぶ");
+     clean(&[&dir]);
+ }
++
++/// 行 v-review-dedup（接頭辞 `vrdup_`）: 契約の隣の `design.txt` の出所の 1 行の後ろが契約 file の goal と同じ字の周、lens の子が claude に渡す
++/// prompt の `{design}` の穴は出所の 1 行と同じ字の 1 行で、goal の字は契約の goal の行の 1 度だけ載る。本文が goal と違う周
++/// （[`CONTRACT_DESIGN`]）は本文のまま（対）。どちらの周も `design.txt` の中身は替わらない。
++#[test]
++fn vrdup_lens_child_puts_one_line_for_the_same_goal() {
++    let same = format!("docs/design/unlikely.toml#z §4\n{CONTRACT_GOAL}");
++    let line = "docs/design/unlikely.toml#z §4\n（本文は契約の goal と同じ字・上の契約の goal を節の本文として読む）\n\n\n## 契約が満たす要件";
++    for (design, deduped) in [(same.as_str(), true), (CONTRACT_DESIGN, false)] {
++        let dir = tmp();
++        let claude = fake_claude(&dir, "{\"verdict\":\"PASS\",\"evidence\":\"fake\"}\n", false, 0);
++        let contract = contract_in(&dir);
++        material_in(&dir, Some(design), Some(CONTRACT_REQUIREMENTS));
++        let out = run_lens(&contract, 4096, "plan", &claude, CONTRACT_STDIN);
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
++        let prompt = slurp(&dir.join("stdin"));
++        assert_eq!(prompt.contains(line), deduped, "{design}: 同じ字の 1 行: {prompt}");
++        assert_eq!(prompt.contains(&format!("\n{design}\n\n\n## 契約が満たす要件")), !deduped, "{design}: 本文のまま: {prompt}");
++        assert_eq!(prompt.matches(CONTRACT_GOAL).count(), 1, "{design}: goal の字は契約の goal の行の 1 度だけ: {prompt}");
++        assert_eq!(slurp(&dir.join("design.txt")), format!("{design}\n"), "{design}: design.txt は替わらない");
++        clean(&[&dir]);
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/headless/lens.rs b/scribe2/crates/scribe2/src/headless/lens.rs
+index c2915266da2b5792f8ddacdeeea997a1d785e911..6ac7d401ca9eaa39ea90a3f021abc42f34c3f5ff 100644
+--- a/scribe2/crates/scribe2/src/headless/lens.rs
++++ b/scribe2/crates/scribe2/src/headless/lens.rs
+@@ -71,6 +71,11 @@
+ //!
+ //! **done の番号つき項目（設計 contract-source.md §64 行 bs）も隣の file で受ける**。[`ITEMS_FILE`] が在れば契約の本文の後ろに空行
+ //! 1 つを挟んで足し（穴は足さない）、cap の照合に byte を数える。在るのに読めない周は rc 2。無ければ prompt は 1 字も変わらない。
++//!
++//! **設計の節の本文が契約の goal と同じ字の周は `{design}` に goal を 2 度載せない**（導出物の行は goal が節の本文・設計
++//! contract-source.md §47 の 6）。[`DESIGN_FILE`] の出所の 1 行の後ろが契約の goal と byte で同じ字なら、本文を [`SAME_GOAL`] の
++//! 1 行に替えて埋め（[`design_hole`]・後ろの予想の印の行は替えない）、cap の照合もその字で数える。違う周は本文のまま（違いが審査の
++//! 材料）。[`DESIGN_FILE`] の file と中身は替えない（先撃ちの材料の鍵と列外の鍵が読む）。
+ 
+ use super::runner::{
+     has_top_level_key, is_result_record, result_subtype, result_usage, scope_line, top_level_string, ResultKind,
+@@ -106,6 +111,9 @@ const TEMPLATE: &str = include_str!("lens.txt");
+ /// 契約の審査の prompt の文面（穴 = `{contract}` / `{design}` / `{requirements}`・diff は無い）。
+ const CONTRACT_TEMPLATE: &str = include_str!("lens-contract.txt");
+ 
++/// 設計の節の本文が契約の goal と同じ字の周に、`{design}` の穴で本文の代わりに置く 1 行（[`design_hole`]）。
++const SAME_GOAL: &str = "（本文は契約の goal と同じ字・上の契約の goal を節の本文として読む）";
++
+ /// 裁定の file が無い周に `{rulings}` の穴へ入れる 1 行（「裁定なし」を明示する・C10）。
+ const NO_RULINGS: &str = "（裁定なし）";
+ 
+@@ -331,7 +339,7 @@ pub fn dispatch(args: &[String]) -> Outcome {
+         Err(reason) => return Outcome::failed_line(RC_BROKEN, format!("lens: 契約を読めない: {reason}")),
+     };
+     note_ignored(contract_path, mode.as_deref());
+-    let prompt = match prompt_of(contract_path, &state(&contract, &teeth), &rulings, (cap, Path::new(&worktree))) {
++    let prompt = match prompt_of(contract_path, (&state(&contract, &teeth), &contract.goal), &rulings, (cap, Path::new(&worktree))) {
+         Ok(found) => found,
+         Err(outcome) => return outcome,
+     };
+@@ -442,11 +450,12 @@ fn note_ignored(contract: &Path, mode: Option<&str>) {
+ /// 審査の材料と prompt（**どちらの審査かは契約の隣の材料で決まる**）。
+ ///
+ /// 材料が無い周は従来の diff の審査: stdin の diff を byte で読み、cap を超えたら claude を呼ばず INCONCLUSIVE。
+-/// 材料が在る周は契約の審査: stdin は読まず、契約 + 節 + 要件の byte で cap を照合する（同じ極性）。片方だけ
++/// 材料が在る周は契約の審査: stdin は読まず、契約 + 節 + 要件の byte で cap を照合する（同じ極性・節は契約の `goal` と
++/// 同じ字の本文を 1 行にした [`design_hole`] の字）。片方だけ
+ /// 在る・読めない周は `Err(rc 2)`（材料を落として審査しない）。**1 走査で埋める**——重ねて replace すると、
+ /// 先に埋めた契約本文の中の `{diff}` / `{design}` まで展開され、外から来る text が prompt の構造へ触れられる
+ /// （runner と同じ理由・裁定も同じ走査）。
+-fn prompt_of(contract: &Path, stated: &str, rulings: &str, (cap, worktree): (u64, &Path)) -> Result<String, Outcome> {
++fn prompt_of(contract: &Path, (stated, goal): (&str, &str), rulings: &str, (cap, worktree): (u64, &Path)) -> Result<String, Outcome> {
+     let material = material_of(contract).map_err(|reason| Outcome::failed_line(RC_BROKEN, format!("lens: {reason}")))?;
+     let over = |bytes: usize| u64::try_from(bytes).unwrap_or(u64::MAX) > cap;
+     match material {
+@@ -464,10 +473,20 @@ fn prompt_of(contract: &Path, stated: &str, rulings: &str, (cap, worktree): (u64
+                 &[("{contract}", stated), ("{rulings}", rulings), ("{diff}", &String::from_utf8_lossy(&diff))],
+             ))
+         }
+-        Some((design, requirements)) => contract_prompt(contract, stated, (&design, &requirements), cap),
++        Some((design, requirements)) => contract_prompt(contract, stated, (&design_hole(&design, goal), &requirements), cap),
+     }
+ }
+ 
++/// `{design}` の穴の本文: 材料の出所の 1 行の後ろが契約の `goal` と byte で同じ字で、その後ろが改行か材料の末なら、本文を
++/// [`SAME_GOAL`] の 1 行に替える（出所の 1 行とその後ろの改行と行〔予想の印〕は 1 字も替えない）。`goal` が空の周と違う周は材料のまま。
++fn design_hole(design: &str, goal: &str) -> String {
++    let same = design.split_once('\n').filter(|_| !goal.is_empty()).and_then(|(head, rest)| {
++        let tail = rest.strip_prefix(goal)?;
++        (tail.is_empty() || tail.starts_with('\n')).then(|| format!("{head}\n{SAME_GOAL}{tail}"))
++    });
++    same.unwrap_or_else(|| design.to_owned())
++}
++
+ /// 契約の審査の prompt（材料の本文の対は [`material_of`] が読んだ `{design}` と `{requirements}`・cap は契約 + 節 + 要件 + 約束の行 +
+ /// done の項目の byte で照合し、base の要約・外の材料・逆引きの表は残りに順に収める）。
+ fn contract_prompt(contract: &Path, stated: &str, (design, requirements): (&str, &str), cap: u64) -> Result<String, Outcome> {
+@@ -756,9 +775,10 @@ mod tests {
+         assert_eq!(super::TEMPLATE.matches(super::CONSTITUTION_PHRASE).count(), 1);
+     }
+ 
+-    /// 契約の審査の周（材料が在る周）だけを撃つ歯なので worktree は測られない（憲法の測りは diff の審査の周だけ）。
++    /// 契約の審査の周（材料が在る周）だけを撃つ歯なので worktree は測られない（憲法の測りは diff の審査の周だけ）。goal は空で渡す
++    /// （節の本文を 1 行にしない・二重の外しは歯 vrdup_ が撃つ）。
+     fn prompt_of(contract: &Path, stated: &str, rulings: &str, cap: u64) -> Result<String, Outcome> {
+-        super::prompt_of(contract, stated, rulings, (cap, Path::new(".")))
++        super::prompt_of(contract, (stated, ""), rulings, (cap, Path::new(".")))
+     }
+ 
+     /// 契約の写しの隣に設計の節と要件（と `base` が在れば base の要約）を置いた tmp dir と写しの path。
+@@ -978,6 +998,95 @@ mod tests {
+         let _ = std::fs::remove_dir_all(&dir);
+     }
+ 
++    /// 契約の goal（契約・材料・雛形のどれにも現れない字面 `vg`・[`super::SAME_GOAL`] より長い）と、その goal を本文に持つ設計の節の出所の 1 行。
++    const GOAL: &str = "goal と節の本文が同じ字 vg。導出物の行は節の本文を goal に持ち、契約の審査の材料に同じ字が 2 度載る。二重を外すと空いた byte が外の材料の残りに回る。";
++    const HEAD: &str = "contracts/w.toml#a §3";
++
++    /// [`materials`] の dir の設計の節を `design` に替え、goal の行が [`GOAL`] の契約の本文と lens に渡す `goal` で prompt を組む（`cap` は契約の審査の cap）。
++    fn deduped(name: &str, design: &str, (goal, cap): (&str, u64)) -> (Result<String, Outcome>, String) {
++        let (contract, dir) = materials(name, None);
++        let _ = std::fs::write(dir.join(DESIGN_FILE), design);
++        let stated = format!("goal: {GOAL}\ndone: d");
++        let prompt = super::prompt_of(&contract, (&stated, goal), "（裁定なし）", (cap, Path::new(".")));
++        let kept = std::fs::read_to_string(dir.join(DESIGN_FILE)).unwrap_or_default();
++        let _ = std::fs::remove_dir_all(&dir);
++        (prompt, kept)
++    }
++
++    /// (a) 出所の 1 行の後ろが goal と byte で同じ設計の節は、`{design}` の穴が出所の 1 行と [`super::SAME_GOAL`] の 1 行になり、goal の字は
++    /// prompt に 1 度だけ（契約の goal の行）載り、`design.txt` の中身は 1 字も替わらない。
++    #[test]
++    fn vrdup_same_goal_body_becomes_one_line_in_the_hole() {
++        let design = format!("{HEAD}\n{GOAL}\n");
++        let (prompt, kept) = deduped("vrdup-same", &design, (GOAL, u64::MAX));
++        let prompt = prompt.unwrap_or_default();
++        assert_eq!(super::SAME_GOAL, "（本文は契約の goal と同じ字・上の契約の goal を節の本文として読む）", "1 行の字");
++        let hole = format!("## 契約が実装する設計の節\n{HEAD}\n{}\n\n\n## 契約が満たす要件\n", super::SAME_GOAL);
++        assert!(prompt.contains(&hole), "穴は出所の 1 行と同じ字の 1 行: {prompt}");
++        assert_eq!(prompt.matches(GOAL).count(), 1, "goal の字は契約の行の 1 度だけ: {prompt}");
++        assert!(prompt.contains(&format!("goal: {GOAL}\n")), "契約の goal は載る: {prompt}");
++        assert_eq!(kept, design, "design.txt は替えない");
++    }
++
++    /// (b) 1 句だけ外した見本（末に字・頭に空白・中に字・末に空白・頭の行が無い・goal が空）は、本文をそのまま穴に埋めて
++    /// [`super::SAME_GOAL`] を持たない（前後の空白も寄せない byte の比べ）。
++    #[test]
++    fn vrdup_body_off_by_one_clause_stays_whole() {
++        let (front, back) = GOAL.split_at(GOAL.find('と').unwrap_or(0));
++        let cases = [
++            ("tail", format!("{HEAD}\n{GOAL}。\n"), GOAL),
++            ("lead", format!("{HEAD}\n {GOAL}\n"), GOAL),
++            ("inner", format!("{HEAD}\n{front}挿す{back}\n"), GOAL),
++            ("space", format!("{HEAD}\n{GOAL} \n"), GOAL),
++            ("headless", format!("{GOAL}\n"), GOAL),
++            ("empty", format!("{HEAD}\n\n"), ""),
++        ];
++        for (name, design, goal) in cases {
++            let (prompt, kept) = deduped(&format!("vrdup-off-{name}"), &design, (goal, u64::MAX));
++            let prompt = prompt.unwrap_or_default();
++            assert!(prompt.contains(&format!("## 契約が実装する設計の節\n{design}\n\n## 契約が満たす要件\n")), "{name}: 本文のまま: {prompt}");
++            assert!(!prompt.contains(super::SAME_GOAL), "{name}: 同じ字の 1 行を持たない: {prompt}");
++            assert_eq!(kept, design, "{name}: design.txt は替えない");
++        }
++    }
++
++    /// (c) goal の後ろが改行で続く行（予想の印）は替えずに残り、goal の後ろが改行でない見本は本文のまま。
++    #[test]
++    fn vrdup_note_lines_after_the_goal_stay() {
++        let note = "次の行は未着地の祖先 vn\n予想の base の断り vn";
++        let (prompt, _) = deduped("vrdup-note", &format!("{HEAD}\n{GOAL}\n{note}\n"), (GOAL, u64::MAX));
++        let prompt = prompt.unwrap_or_default();
++        assert!(prompt.contains(&format!("\n{HEAD}\n{}\n{note}\n\n\n## 契約が満たす要件\n", super::SAME_GOAL)), "印の行は残る: {prompt}");
++        assert_eq!(prompt.matches(GOAL).count(), 1, "goal の字は 1 度だけ: {prompt}");
++        let glued = format!("{HEAD}\n{GOAL}{note}\n");
++        let (prompt, _) = deduped("vrdup-glued", &glued, (GOAL, u64::MAX));
++        let prompt = prompt.unwrap_or_default();
++        assert!(prompt.contains(&glued) && !prompt.contains(super::SAME_GOAL), "改行で切れない後ろは本文のまま: {prompt}");
++    }
++
++    /// (d) cap は 1 行にした節の byte で数える: 契約 + 1 行の節 + 要件のちょうどで prompt を組み、1 byte 少ないと INCONCLUSIVE。
++    /// 空いた byte は外の材料に回る（同じ cap で goal を渡す周は外の材料の塊が 2 つとも全部入り、渡さない周は全部は入らない）。
++    #[test]
++    fn vrdup_cap_counts_the_one_line_and_the_room_goes_to_outside() {
++        let design = format!("{HEAD}\n{GOAL}\n");
++        let short = format!("{HEAD}\n{}\n", super::SAME_GOAL);
++        let three = [format!("goal: {GOAL}\ndone: d").as_str(), short.as_str(), "FR1: 要件の本文\n"].iter().map(|text| text.len()).sum::<usize>();
++        let three = u64::try_from(three).unwrap_or(u64::MAX);
++        assert!(deduped("vrdup-cap", &design, (GOAL, three)).0.is_ok(), "ちょうどは組む");
++        let over = deduped("vrdup-cap-over", &design, (GOAL, three.saturating_sub(1))).0.map_err(|outcome| outcome.out);
++        assert_eq!(over, Err(vec![r#"{"verdict":"INCONCLUSIVE","evidence":"contract material exceeds cap"}"#.to_owned()]));
++        let outside = u64::try_from(super::outside_block(OUTSIDE, u64::MAX).len()).unwrap_or(u64::MAX);
++        let stated = format!("goal: {GOAL}\ndone: d");
++        for (name, goal, whole) in [("vrdup-room", GOAL, true), ("vrdup-room-bare", "", false)] {
++            let (contract, dir) = with_outside(name, None, OUTSIDE);
++            let _ = std::fs::write(dir.join(DESIGN_FILE), &design);
++            let filled = super::prompt_of(&contract, (&stated, goal), "（裁定なし）", (three + outside, Path::new("."))).unwrap_or_default();
++            let all = filled.contains("pub zq_field: u8") && filled.contains("data/zq.json: 行数 2");
++            assert_eq!(all && !filled.contains("切り詰めた") && !filled.contains("落とした名"), whole, "{name}: 外の材料: {filled}");
++            let _ = std::fs::remove_dir_all(&dir);
++        }
++    }
++
+     /// claude の出力から読んだ判定のうち消費の 6 値を運ぶ object にだけ版の 4 語の対が載る（行 xp-provenance）。
+     #[test]
+     fn xpprov_lens_verdict_carries_the_words() {
