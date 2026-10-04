@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.33 版（2026-10-05）: 持ち主の裁定 t3-hub.80.6〔裁定 id = t3-hub.80.6:20261004T2037Z-1〕を写した（要件 FR1056 の shall と plain に、host の見張り〔host-guard〕の自分に当たる待ちと止めを断る種類の行〔語列 pgrep -f と pkill -f〕が、型が撃った shell 自身の command 行にも当たる形と字の決まらない形だけを断り、ほかの型を通し、intake の verify の判定に掛けないことを足した・器の行 v-self-match の前置き）。
 # 第 0.32 版（2026-10-05）: ノート surface-wave29a の行 c-commit-node に合わせ、要件 FR2 の shall と plain に着地の commit の節点と辺 landed を足した（判断の記録 ADR-46 の決定 (2)）。
 # 第 0.31 版（2026-10-04）: 判断の記録 ADR-44 の決定 (2)（持ち主の裁定 t3-hub.80.1〔裁定 id = t3-hub.80.1:20261004T1456Z-1〕）を写した（目的 GOAL2 の字を、着地の commit と code までの図と便ごとの積み上げへ広げ、目的 GOAL5〔ほかの project でも最初から十全に動く〕を足した）。
 # 第 0.30 版（2026-10-04）: 器 scribe2 の要件書 v0.36 の制約 6 本を、番号に 1000 を足して制約 CON1001〜CON1006 として写した（取り込みの段 1 の続き・持ち主の裁定 t3-hub.74.60.1〔裁定 id = t3-hub.74.60.1:20261004T0113Z-1〕・判断の記録 ADR-39 の決定 (4) の (ア)・段 2 の判断の記録の写しが制約の id を解ける形で引くための先置き）。欄の写しは label → title・text → text・regulation → source の字・basis は空。器の憲法を指す字「憲法」は「器の憲法」、「本書」は「器の要件書」に直した。器の判断の記録の id は段 1 と同じく字のまま。
@@ -20,7 +21,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.32
+  version: v0.33
   status: draft
   generated: 2026-09-28
   approval:
@@ -32,6 +33,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-03, stamp: "個別の頁の本文と記録の段の開き閉じをその browser の保存に残す（t3-hub.76.4（裁定 id = t3-hub.76.4:20261003T0057Z-1）・席とのチャット・notes に逐語・判断の記録 ADR-30 決定 (4)・要件 FR1 の 4 つ目）", verbatim: "AとBのクエスチョンは全部推奨で良い", version: v0.28}
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "器 scribe2 の設計の資料の取り込みの段 1 の続き（制約）（t3-hub.74.60.1（裁定 id = t3-hub.74.60.1:20261004T0113Z-1・席とのチャット・notes に逐語・判断の記録 ADR-39・推奨の全部）", verbatim: "１−７はすべて推奨で良い", version: v0.30}
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "tsuzuri の目指す所（t3-hub.80.1（裁定 id = t3-hub.80.1:20261004T1456Z-1・束 batch:20261004T1456Z-1・裁定面・notes に逐語・判断の記録 ADR-44 の決定 (2)・目的 GOAL2 と GOAL5）", verbatim: "すべて推奨で進めて良い", version: v0.31}
+    - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "host の見張りに自分に当たる待ちと止めを断る種類を足す（t3-hub.80.6（裁定 id = t3-hub.80.6:20261004T2037Z-1・束 batch:20261004T2037Z-1・裁定面・notes に逐語・要件 FR1056 の shall と plain））", verbatim: "すべて推奨で承認する", version: v0.33}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -1019,8 +1021,8 @@ requirements:
     pattern: unwanted
     strength: must
     when: "口座の設定を読む session（対話の席・口座の設定 dir を指定した起動・器を積まない session）または runner の session が撃つ Bash の command が manifest の禁じる語列（host-guard の口が読むのは発効している行だけ）のいずれかに当たるとき"
-    shall: "器は実行の前に deny し（口座の設定を読む session には host-guard の口が掛かり、 器の plugin を積む席と runner には器の plugin の command guard も掛かり、 lens は対象の外。 host-guard の口は payload が読めない周も断る）、 断る理由に規則の出所と当たった並びを告げ、 intake は契約と vessel 宣言の verify 各行に同じ判定を掛け、 当たる行を行番号付きで断り便を作らない"
-    plain: "口座の設定を読む session（人と話す席と、口座の設定 dir を指定して起こした session。器を積まない素の session でも同じで、既定の設定 dir だけを読む起動は含みません）や実装役（runner）が撃つ Bash の command が、規則 file の行が持つ「禁じる語列」（撃ってはいけない語の並び。口座の設定から呼ばれる見張りが読むのは有効な行だけ）に当たるときは、器が実行の前に止め、どの rules 行のどの並びに当たったかを告げます。口座の設定を読む session には口座の設定から呼ばれる見張り（host-guard）が掛かり、器の plugin を積む席と実装役には器の plugin の command guard（禁じる語列の見張り）も掛かり、審査役（lens）には掛かりません。渡された中身が読めないときも見張りは止めます。契約と repo の宣言 file（vessel 宣言）の検証行も受付の時点で同じ判定に掛け、当たる行は行番号付きで断って便を作りません。禁じる語列に当たらない command はこの規則では止めません。"
+    shall: "器は実行の前に deny し（口座の設定を読む session には host-guard の口が掛かり、 器の plugin を積む席と runner には器の plugin の command guard も掛かり、 lens は対象の外。 host-guard の口は payload が読めない周も断る）、 断る理由に規則の出所と当たった並びを告げ、 intake は契約と vessel 宣言の verify 各行に同じ判定を掛け、 当たる行を行番号付きで断り便を作らない。 ただし host-guard の口の、 自分に当たる待ちと止めを断る種類の行（語列 pgrep -f と pkill -f）は、 語列に当たる呼びのうち、 探す型が撃った shell 自身の command 行にも当たると字だけで決まる形か、 変数や置換で型の字が決まらない形だけを断り、 ほかの型（角括弧などで自分に当たらない型）は通し、 断る理由に次の手（待つ相手の pid を kill -0 で待つか、 型の 1 字を [] で囲む）を告げる。 この行は intake の verify 各行の判定に掛けない"
+    plain: "口座の設定を読む session（人と話す席と、口座の設定 dir を指定して起こした session。器を積まない素の session でも同じで、既定の設定 dir だけを読む起動は含みません）や実装役（runner）が撃つ Bash の command が、規則 file の行が持つ「禁じる語列」（撃ってはいけない語の並び。口座の設定から呼ばれる見張りが読むのは有効な行だけ）に当たるときは、器が実行の前に止め、どの rules 行のどの並びに当たったかを告げます。口座の設定を読む session には口座の設定から呼ばれる見張り（host-guard）が掛かり、器の plugin を積む席と実装役には器の plugin の command guard（禁じる語列の見張り）も掛かり、審査役（lens）には掛かりません。渡された中身が読めないときも見張りは止めます。契約と repo の宣言 file（vessel 宣言）の検証行も受付の時点で同じ判定に掛け、当たる行は行番号付きで断って便を作りません。禁じる語列に当たらない command はこの規則では止めません。ただし「pgrep -f」と「pkill -f」の行（自分に当たる待ちと止め）だけは、探す型が撃った shell 自身の command 行にも当たる形（待ちが終わらない・自分の shell を止める形）か、型の字が変数などで決まらない形のときだけ止め、1 字を角括弧で囲んだ型などは止めません。止めたときは「相手の pid を kill -0 で待つか、型の 1 字を [] で囲む」と次の手を告げます。この行は契約の検証行の受付の判定には掛けません。"
     basis: []
     verify: {method: test, how: "器の歯で ac の欄の受入の基準を撃つ（器の確かめ方の字 T・test）", ac: [AC1027]}
     goals: [GOAL1001, GOAL1003]
