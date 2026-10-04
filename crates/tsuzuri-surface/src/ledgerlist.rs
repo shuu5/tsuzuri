@@ -14,6 +14,7 @@
 //! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
 //! 行にマウスの pointer を載せると板の対応する札に輪より薄い hover の印を付け、離すと外す（吹き出しは出さない・pointer の
 //! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)・行 g-list-hover）。
+//! 札を持つ行の段の字と、組の頭の段ごとの数の頭には、板の札と同じ段の記号を付ける（判断の記録 ADR-30 決定 (9)・行 g-list-sym）。
 //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
@@ -30,7 +31,7 @@ use crate::project::ledger::{
     BURN_H, BURN_W, CLOSED, EMPTY, NO_OPEN, NONE, OUTSIDE, TURN_KEY, UNKNOWN_WORD_KEY, Unref,
     burn_svg, burndown, kind_label, kind_name, kind_phase_text, net, phase_text, plain_word, stats,
 };
-use crate::project::pipeline::{LANES, Lane, age_at, cards, stage_word};
+use crate::project::pipeline::{LANES, Lane, age_at, card_sym, cards, stage_word};
 use crate::project::{Body, LEDGER_UNREAD};
 use crate::view::{Fetched, id_order, read_rows};
 use crate::vocab::label;
@@ -78,6 +79,8 @@ pub struct Lrow {
     pub rank: u8,
     /// 局面と手番の平易な字（memo と問いの行だけ・`with_phases` が置く・行 g-unref-lc）。
     pub phase: Option<String>,
+    /// 右の段の字の頭の段の記号の材料（札の在る行だけ・板の札と同じ `card_sym` の値・行 g-list-sym）。
+    pub sym: Option<(bool, Option<&'static str>)>,
 }
 
 /// 一覧の 1 組（epic の組・epic の外の組は `epic` が None）。
@@ -178,6 +181,7 @@ fn lrow(
         ),
         rank: row_rank(row.node_kind(), card),
         phase: None,
+        sym: card.map(|c| card_sym(c, now)),
     }
 }
 
@@ -791,7 +795,8 @@ mod dom {
             Some(counts) => counts
                 .into_iter()
                 .map(|(lane, n)| {
-                    view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{n}</b> }
+                    let sym = pipeline::stage_sym(false, lane.state);
+                    view! { <b class=format!("ll-sd sd-{}", lane.name) title=label(lane.key)>{sym}{n}</b> }
                 })
                 .collect_view()
                 .into_any(),
@@ -826,6 +831,10 @@ mod dom {
     /// 1 行（種類の札・短い題・右の字・短い題は節点の頁への link で、題の全体を title に置く）。
     fn row_view(r: &Lrow) -> AnyView {
         let (tag, class) = kind_tag(r.kind);
+        // 札の在る行は段の字の頭に板の札と同じ段の記号を置く（札の無い行は置かない・行 g-list-sym）。
+        let sym = r
+            .sym
+            .map(|(closed, state)| pipeline::stage_sym(closed, state));
         let ctx = use_context::<HelpCtx>();
         let id = r.id.clone();
         let href = move || {
@@ -876,7 +885,7 @@ mod dom {
                 <span class=class>{tag}</span>
                 <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}
-                <span class="ll-rt">{r.right.clone()}</span>
+                <span class="ll-rt">{sym}{r.right.clone()}</span>
             </div>
         }
         .into_any()

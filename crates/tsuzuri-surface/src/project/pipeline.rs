@@ -411,6 +411,17 @@ pub fn stage_word(card: &PipelineCard) -> String {
     }
 }
 
+/// 札の段の記号の材料（台帳で閉じた（着地せず）の札か・状態の記号の値〔CI を待つ札は `CI_WAIT_STATE`・ほかは列の値〕）。
+/// 板の札と台帳 open の一覧の行の段の字の頭が、同じ値で `stage_sym` を描く（行 g-list-sym・判断の記録 ADR-30 決定 (9)）。
+pub fn card_sym(card: &PipelineCard, now: EpochSecs) -> (bool, Option<&'static str>) {
+    let state = if ci_shown(card, now) == Some(Ci::Waiting) {
+        Some(CI_WAIT_STATE)
+    } else {
+        lane(card.stage.column()).state
+    };
+    (closed_card(card), state)
+}
+
 /// 1 枚の札（止まった列は回数の代わりに段の理由・理由が空なら段の名）。
 /// 閉じた（着地せず）の札は段の字を `CLOSED_STAGE` にする。
 /// CI の読みを出す札（`ci_shown`）は理由の代わりに読みの語を出し、CI を待つ札の状態の記号は `CI_WAIT_STATE`。
@@ -419,7 +430,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
     let lane = lane(card.stage.column());
     let id = card.contract.to_string();
     let title = title_of(rows, &id);
-    let closed = closed_card(card);
+    let (closed, state) = card_sym(card, now);
     let stage = stage_word(card);
     let age = age_at(card.since, now);
     let shown = ci_shown(card, now);
@@ -435,11 +446,7 @@ pub fn kcard(card: &PipelineCard, rows: &[LedgerRow], now: EpochSecs) -> Kcard {
     Kcard {
         id,
         title,
-        state: if shown == Some(Ci::Waiting) {
-            Some(CI_WAIT_STATE)
-        } else {
-            lane.state
-        },
+        state,
         lead,
         age,
         since: card.since,
