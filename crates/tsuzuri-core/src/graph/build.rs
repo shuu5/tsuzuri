@@ -1,7 +1,8 @@
 //! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
 //! 設計の索引の節点と辺は表の行を写す。種類の読めない節点の行と型の読めない辺の行は、その行だけを組まずに数える
 //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
-//! 裁定と受けと方針は notes の定型行から導く。走行は event log の RunCreated から導く。
+//! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く（行 c-g3-bindline）。
+//! 走行は event log の RunCreated から導く。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
 //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
@@ -21,6 +22,7 @@ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind, title36}
 pub(crate) use tsuzuri_contract::ledger::bead_kind;
 use tsuzuri_contract::summary::summaries;
 
+use super::check::in_ruling_grammar;
 use super::{BeadAttr, Graph, Inputs, Outside, PolicyAttr, RulingRow, RunAttr, Source};
 use crate::ledger::epoch_secs;
 
@@ -56,6 +58,13 @@ pub const TYPED_LINES: [(&str, NodeKind); 3] = [
 
 /// 定型行の id の終わりの字。
 const ID_END: char = '・';
+
+/// 器の結びの口（seat ruling bind）が問いの notes に足す裁定の行の欄の区切り
+/// （`<裁定 id> | <問い id> | <発話の ts> | <経路> | <逐語>`・行 c-g3-bindline）。
+pub const BIND_SEP: &str = " | ";
+
+/// 器の結びの口の裁定の行の欄の数の下限。
+pub const BIND_FIELDS: usize = 5;
 
 /// 方針の定型行の 2 つ目の欄の頭（範囲の欄）。
 pub const SCOPE_FIELD: &str = "範囲 = ";
@@ -227,7 +236,7 @@ pub fn outside(ledger: &str) -> Option<Outside> {
     let mut out = Outside::default();
     for bead in beads {
         let notes = bead.notes.as_deref().unwrap_or_default();
-        for (kind, id, _) in typed_lines(notes) {
+        for (kind, id, _) in typed_lines(notes, &bead.id) {
             if kind == NodeKind::Ruling {
                 out.rulings.insert(id);
             }
@@ -398,19 +407,37 @@ pub(crate) fn metadata_ids(metadata: &Value, key: &str) -> Vec<String> {
     }
 }
 
-/// notes の定型行（種類・id・行）。id は頭の字の後から最初の「・」までの字。
-fn typed_lines(notes: &str) -> Vec<(NodeKind, String, &str)> {
+/// notes の定型行（種類・id・行）。id は頭の字の後から最初の「・」までの字。頭の字を持たない行は、器の結びの口の
+/// 裁定の行（`bind_line`・`bead` は notes を持つ bead の id）なら 1 つ目の欄を id とする裁定の行にする。
+fn typed_lines<'a>(notes: &'a str, bead: &str) -> Vec<(NodeKind, String, &'a str)> {
     notes
         .lines()
         .map(|l| l.trim_end_matches('\r'))
         .filter_map(|line| {
-            TYPED_LINES.iter().find_map(|(prefix, kind)| {
-                let rest = line.strip_prefix(prefix)?;
-                let id = rest.split(ID_END).next().unwrap_or(rest).trim();
-                (!id.is_empty()).then(|| (*kind, id.to_string(), line))
-            })
+            TYPED_LINES
+                .iter()
+                .find_map(|(prefix, kind)| {
+                    let rest = line.strip_prefix(prefix)?;
+                    let id = rest.split(ID_END).next().unwrap_or(rest).trim();
+                    (!id.is_empty()).then(|| (*kind, id.to_string(), line))
+                })
+                .or_else(|| bind_line(line, bead).map(|id| (NodeKind::Ruling, id.to_string(), line)))
         })
         .collect()
+}
+
+/// 器の結びの口の裁定の行の裁定 id（行 c-g3-bindline）。`BIND_SEP` で割った欄が `BIND_FIELDS` 以上在り、1 つ目の欄が
+/// 裁定 id の文法の問いの形（「:」を持つ）で、その「:」の前の字が 2 つ目の欄と同じで、2 つ目の欄が `bead` と同じ時だけ
+/// 1 つ目の欄を返す。
+pub fn bind_line<'a>(line: &'a str, bead: &str) -> Option<&'a str> {
+    let mut fields = line.split(BIND_SEP);
+    let id = fields.next()?;
+    let question = fields.next()?;
+    if fields.count() + 2 < BIND_FIELDS {
+        return None;
+    }
+    let (front, _) = id.split_once(':')?;
+    (front == question && question == bead && in_ruling_grammar(id)).then_some(id)
 }
 
 /// 方針の定型行の範囲（「・」で割った 2 つ目の欄が `SCOPE_FIELD` で始まれば、その後の前後の空白を除いた字・
@@ -434,7 +461,7 @@ fn add_typed(
     bead: &str,
     notes: Option<&str>,
 ) {
-    for (line_kind, id, line) in typed_lines(notes.unwrap_or_default()) {
+    for (line_kind, id, line) in typed_lines(notes.unwrap_or_default(), bead) {
         if derived.insert((line_kind, id.clone())) {
             g.nodes.push(GraphNode {
                 id: id.clone(),
@@ -686,7 +713,7 @@ mod tests {
     #[test]
     fn graph_typed_lines_cut_at_the_dot() {
         let notes = "見本\n裁定 id = user 2026-09-27T03:19Z・束 b1・よい\n受け id = r-1\n 方針 id = p-1・頭に空白\n方針 id = ・空";
-        let got: Vec<(NodeKind, String)> = typed_lines(notes)
+        let got: Vec<(NodeKind, String)> = typed_lines(notes, "q-1")
             .into_iter()
             .map(|(k, id, _)| (k, id))
             .collect();
