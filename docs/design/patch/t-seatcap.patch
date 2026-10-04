@@ -1,0 +1,318 @@
+diff --git a/crates/tsuzuri-boundary/tests/rcapf.rs b/crates/tsuzuri-boundary/tests/rcapf.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..61be34fa1c2a7b6dd152f716ac8bc7ebfb948acf
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/rcapf.rs
+@@ -0,0 +1,178 @@
++//! 役割の行の上限の file を tz derive が導く歯（接頭辞 rcapf_・設計ノート surface-wave27b 行 t-seatcap・判断の記録 ADR-38 決定 (4)・条 P-2.3）。
++//! 置き場は CARGO_TARGET_TMPDIR の下に歯ごとに作り、根で git init する。正本は手で書いた小さな憲法と規則の表（欄 key が seat-bytes と
++//! seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::Command;
++
++/// 小さな憲法（規範文 2 本）。
++const CONSTITUTION: &str = "meta:
++  version: v9.9
++precedence:
++  text: 段の順で解く。
++articles:
++  - id: N-1
++    tier: never
++    title: 題
++    statements:
++      - {id: N-1.1, strength: must-not, text: 消さない。}
++  - id: P-1
++    tier: always
++    title: 題に
++    statements:
++      - {id: P-1.1, strength: must, text: 守る。}
++";
++
++/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
++const RULES: &str = "thresholds:
++  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
++  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
++discipline: []
++";
++
++/// 上限の file の字（頭の 1 行と、seat-role-bytes の行の値の 10 進の数の 1 行）。
++const ROLE_MAX: &str = "生成物・手で直さない・design-intent/rules.yaml seat-role-bytes\n2000\n";
++
++/// 歯ごとの置き場（根で git init・design-intent/ に正本・contracts/ が導出物の置き場）。
++struct Place {
++    root: PathBuf,
++}
++
++impl Place {
++    fn new(name: &str) -> Place {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("rcapf")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        fs::create_dir_all(root.join("design-intent/design-note")).expect("正本の置き場");
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(&root)
++            .args(["init", "-q"])
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git init");
++        fs::write(root.join("design-intent/constitution.yaml"), CONSTITUTION).expect("憲法");
++        fs::write(root.join("design-intent/rules.yaml"), RULES).expect("規則の表");
++        Place { root }
++    }
++
++    /// 規則の表の字の 1 か所を替える（元の字はちょうど 1 度在る）。
++    fn swap(&self, from: &str, to: &str) {
++        let path = self.root.join("design-intent/rules.yaml");
++        let text = fs::read_to_string(&path).expect("規則の表を読む");
++        assert_eq!(text.matches(from).count(), 1, "{from}");
++        fs::write(&path, text.replacen(from, to, 1)).expect("規則の表を書く");
++    }
++
++    fn derive(&self, flag: &str) -> (i32, String) {
++        let out = Command::new(env!("CARGO_BIN_EXE_tz"))
++            .args([
++                "derive",
++                flag,
++                "--dir",
++                "design-intent",
++                "--out",
++                "../contracts",
++            ])
++            .current_dir(&self.root)
++            .output()
++            .expect("tz を撃つ");
++        let text = format!(
++            "{}{}",
++            String::from_utf8_lossy(&out.stdout),
++            String::from_utf8_lossy(&out.stderr)
++        );
++        (out.status.code().expect("終了 code"), text)
++    }
++
++    fn file(&self) -> PathBuf {
++        self.root.join("contracts/seat/role-max-bytes.txt")
++    }
++
++    fn role_max(&self) -> Option<String> {
++        fs::read_to_string(self.file()).ok()
++    }
++}
++
++#[test]
++fn rcapf_role_max_file_shape() {
++    let p = Place::new("shape");
++    let (rc, out) = p.derive("--write");
++    assert_eq!(rc, 0, "{out}");
++    assert!(out.contains("書いた 3 file・変わらない 0 file"), "{out}");
++    assert_eq!(
++        p.role_max().as_deref(),
++        Some(ROLE_MAX),
++        "頭の 1 行と , を除いた 10 進の数の 1 行"
++    );
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 0, "{out}");
++    assert!(out.contains("一致 3・差分 0"), "{out}");
++}
++
++#[test]
++fn rcapf_value_follows_the_role_row() {
++    let p = Place::new("value");
++    assert_eq!(p.derive("--write").0, 0);
++    p.swap("2,000 byte 以下", "1,500 byte 以下");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/role-max-bytes.txt（導出と byte で違う）"),
++        "{out}"
++    );
++    assert!(
++        !out.contains("DRIFT: seat/brief.txt") && !out.contains("DRIFT: seat/constitution.txt"),
++        "上限の file だけ: {out}"
++    );
++    assert_eq!(p.derive("--write").0, 0);
++    assert_eq!(
++        p.role_max().as_deref(),
++        Some(ROLE_MAX.replace("\n2000\n", "\n1500\n").as_str()),
++        "2 行目は新しい値"
++    );
++}
++
++#[test]
++fn rcapf_hand_edit_drifts() {
++    let p = Place::new("hand");
++    assert_eq!(p.derive("--write").0, 0);
++    fs::write(p.file(), ROLE_MAX.replace("2000", "2001")).expect("1 字を替える");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/role-max-bytes.txt（導出と byte で違う）"),
++        "{out}"
++    );
++    fs::remove_file(p.file()).expect("上限の file を消す");
++    let (rc, out) = p.derive("--check");
++    assert_eq!(rc, 1, "{out}");
++    assert!(
++        out.contains("DRIFT: seat/role-max-bytes.txt（置き場に無い）"),
++        "{out}"
++    );
++}
++
++#[test]
++fn rcapf_no_role_max_without_the_copies() {
++    for (name, from, to, rc_want) in [
++        ("over", "8,000 byte", "2,001 byte", 1),
++        ("form", "2,000 byte 以下", "2,000 byte 未満", 2),
++        (
++            "half",
++            "  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}\n",
++            "",
++            2,
++        ),
++    ] {
++        let p = Place::new(&format!("none-{name}"));
++        p.swap(from, to);
++        let (rc, out) = p.derive("--write");
++        assert_eq!(rc, rc_want, "{name}: {out}");
++        assert_eq!(p.role_max(), None, "{name}: 上限の file も書かない");
++        assert!(!p.root.join("contracts").exists(), "{name}: 何も書かない");
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/seatcp.rs b/crates/tsuzuri-boundary/tests/seatcp.rs
+index 07df0791469765af9ac1b28cd3c0df63f7579d90..129bf6ca552eab2e7a5fb714a45ec1cb630fccef 100644
+--- a/crates/tsuzuri-boundary/tests/seatcp.rs
++++ b/crates/tsuzuri-boundary/tests/seatcp.rs
+@@ -143,7 +143,7 @@ fn seatcp_two_files_shape() {
+     let p = Place::new("shape");
+     let (rc, out) = p.derive("--write");
+     assert_eq!(rc, 0, "{out}");
+-    assert!(out.contains("書いた 2 file・変わらない 0 file"), "{out}");
++    assert!(out.contains("書いた 3 file・変わらない 0 file"), "{out}");
+     assert_eq!(p.seat("brief.txt").as_deref(), Some(BRIEF));
+     assert_eq!(p.seat("constitution.txt").as_deref(), Some(FULL));
+     assert_eq!(p.contracts(), ["seat"], "置き場の直下には dir seat だけ");
+@@ -152,7 +152,7 @@ fn seatcp_two_files_shape() {
+     }
+     let (rc, out) = p.derive("--check");
+     assert_eq!(rc, 0, "{out}");
+-    assert!(out.contains("一致 2・差分 0"), "{out}");
++    assert!(out.contains("一致 3・差分 0"), "{out}");
+ }
+ 
+ #[test]
+diff --git a/folio2/crates/folio/src/derive.rs b/folio2/crates/folio/src/derive.rs
+index 91fd3fa89f1f6eacf31816d4f7c3bc1321f23494..1d18a431c0fb593cb5528121bf0418ec46efec97 100644
+--- a/folio2/crates/folio/src/derive.rs
++++ b/folio2/crates/folio/src/derive.rs
+@@ -12,6 +12,7 @@
+ //! 無い置き場は今のまま（契約表の導出物だけ）。
+ //! 行 t-seatcopy（判断の記録 ADR-38 決定 (3)(4)）から、規則の表に欄 key が seat-bytes と seat-role-bytes の行が在れば、憲法の
+ //! 正本から席の手元の 2 つの写し（`seat.rs`）も置き場の下の dir seat に同じ回に書き（--write）・byte で比べる（--check）。
++//! 行 t-seatcap から、同じ dir に役割の行の上限の file（seat-role-bytes の値）も同じ回に書き・比べる（条 P-2.3）。
+ //! 要の写しの file 全体の byte が 2 つの値の差を越えれば、どちらの命令も何も書かずに 1（違反）。
+ 
+ use std::collections::HashSet;
+@@ -123,8 +124,8 @@ fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String
+     Ok(Some(PlanIndex { path, name, text, rows }))
+ }
+ 
+-/// 席の手元の 2 つの写しを置き場の下の dir seat の導出物にする（行 t-seatcopy）。
+-fn seat_files(c: seat::Copies) -> [Derived; 2] {
++/// 席の手元の 2 つの写しと役割の行の上限の file を置き場の下の dir seat の導出物にする（行 t-seatcopy・t-seatcap）。
++fn seat_files(c: seat::Copies) -> [Derived; 3] {
+     [
+         Derived {
+             name: format!("{}/{}", seat::DIR, seat::BRIEF),
+@@ -134,6 +135,10 @@ fn seat_files(c: seat::Copies) -> [Derived; 2] {
+             name: format!("{}/{}", seat::DIR, seat::FULL),
+             text: c.full,
+         },
++        Derived {
++            name: format!("{}/{}", seat::DIR, seat::ROLE_MAX),
++            text: c.role_max,
++        },
+     ]
+ }
+ 
+diff --git a/folio2/crates/folio/src/seat.rs b/folio2/crates/folio/src/seat.rs
+index 2950c2c44e5a26fefd0cd13c5f8660ed77001375..42ec6e361224e26e554283d0a1340d4e14f7751e 100644
+--- a/folio2/crates/folio/src/seat.rs
++++ b/folio2/crates/folio/src/seat.rs
+@@ -6,6 +6,8 @@
+ //! 区切り、区切りに「: 」を使わず、字は空白を 1 つに畳むだけで逐語。規則の表に欄 key が seat-bytes と seat-role-bytes の行が
+ //! 2 本とも無い置き場は写しを導かない。強さが規範の値でない文・「。」で終わらない文・文 0 本は Err（まだ分からない・退いた
+ //! folio inject の導き方を引き継ぐ）。
++//! 同じ dir に 3 つ目の file として役割の行の上限（頭の 1 行と、欄 key が seat-role-bytes の行の値の 10 進の数の 1 行）も導く
++//! （行 t-seatcap・条 P-2.3）。器の SessionStart は宣言が名乗る要の写しの隣のこの file の 2 行目を読み、頭の行は読まない。
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+@@ -25,6 +27,9 @@ pub(crate) const BRIEF: &str = "brief.txt";
+ /// 全文の写しの file の名。
+ pub(crate) const FULL: &str = "constitution.txt";
+ 
++/// 役割の行の上限の file の名（器が要の写しの隣から読む名・行 t-seatcap）。
++pub(crate) const ROLE_MAX: &str = "role-max-bytes.txt";
++
+ /// 頭の 1 行の頭の字（続けて憲法の正本の版管理の根からの path と空白 1 つと版の字）。
+ const HEAD: &str = "生成物・手で直さない・";
+ 
+@@ -44,10 +49,14 @@ const TIERS: [(Tier, &str); 3] = [
+ /// 憲法の正本の file の名（正本の置き場の直下）。
+ const CONSTITUTION: &str = "constitution.yaml";
+ 
+-/// 導いた 2 つの写しの字と、要の写しの file 全体の byte の上限。
++/// 規則の表の file の名（正本の置き場の直下・上限の file の頭の行が名指す）。
++const RULES: &str = "rules.yaml";
++
++/// 導いた 2 つの写しと役割の行の上限の file の字と、要の写しの file 全体の byte の上限。
+ pub(crate) struct Copies {
+     pub(crate) brief: String,
+     pub(crate) full: String,
++    pub(crate) role_max: String,
+     /// 欄 key が seat-bytes の行の値から seat-role-bytes の行の値を引いた数（規則の行 R-1 − R-41）。
+     pub(crate) cap: usize,
+ }
+@@ -65,7 +74,7 @@ pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, Strin
+     let Some(rules) = plan::load_rules(dir)? else {
+         return Ok(None);
+     };
+-    let Some(cap) = cap(&rules)? else {
++    let Some((cap, role)) = cap(&rules)? else {
+         return Ok(None);
+     };
+     let path = dir.join(CONSTITUTION);
+@@ -90,21 +99,26 @@ pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, Strin
+     let full_at = under(rel(&root, out_dir)?, &format!("{DIR}/{FULL}"));
+     let arts = articles(&c)?;
+     let pre = format!("{PRECEDENCE} {pre}");
++    let role_max = format!(
++        "{HEAD}{} {SEAT_ROLE_BYTES}\n{role}\n",
++        rel(&root, &dir.join(RULES))?
++    );
+     Ok(Some(Copies {
+         brief: brief(&[&head, &pre], &arts, &full_at),
+         full: full(&[&head, &pre], &arts),
++        role_max,
+         cap,
+     }))
+ }
+ 
+-/// 要の写しの上限（欄 key の 2 本の値の差）。2 本とも無ければ None。片方だけ・差が 0 以下は Err。
+-fn cap(rules: &Node) -> Result<Option<usize>, String> {
++/// 要の写しの上限（欄 key の 2 本の値の差）と役割の行の上限（seat-role-bytes の値）。2 本とも無ければ None。片方だけ・差が 0 以下は Err。
++fn cap(rules: &Node) -> Result<Option<(usize, usize)>, String> {
+     match (rules::bytes(rules, SEAT_BYTES)?, rules::bytes(rules, SEAT_ROLE_BYTES)?) {
+         (None, None) => Ok(None),
+         (Some(total), Some(role)) => total
+             .checked_sub(role)
+             .filter(|n| *n > 0)
+-            .map(Some)
++            .map(|n| Some((n, role)))
+             .ok_or_else(|| format!("欄 key が {SEAT_ROLE_BYTES} の値 {role} byte が {SEAT_BYTES} の値 {total} byte 以上（要の写しの上限が 0 以下）")),
+         (Some(_), None) => Err(format!("欄 key が {SEAT_ROLE_BYTES} の閾値の行が無い（{SEAT_BYTES} の行は在る）")),
+         (None, Some(_)) => Err(format!("欄 key が {SEAT_BYTES} の閾値の行が無い（{SEAT_ROLE_BYTES} の行は在る）")),

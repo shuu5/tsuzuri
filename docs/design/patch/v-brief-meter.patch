@@ -1,5 +1,5 @@
 diff --git a/scribe2/crates/scribe2-boundary/src/main.rs b/scribe2/crates/scribe2-boundary/src/main.rs
-index 4aa9014826419d40a9f8f1a15f55e4e20614d748..5f050c57ef5346b44c9e458937b7f4b0990518bc 100644
+index 4aa9014826419d40a9f8f1a15f55e4e20614d748..42552eebf3c45962ef608bc1d0734edd7cc0b647 100644
 --- a/scribe2/crates/scribe2-boundary/src/main.rs
 +++ b/scribe2/crates/scribe2-boundary/src/main.rs
 @@ -106,6 +106,7 @@ fn render_doctor_with(rest: &[String]) -> Result<Vec<String>, ()> {
@@ -10,50 +10,31 @@ index 4aa9014826419d40a9f8f1a15f55e4e20614d748..5f050c57ef5346b44c9e458937b7f4b0
          }
          (None, None, None, _) | (None, None, Some(_), Some(_)) if bin.is_none() && units.is_none() => {}
          (None, _, _, _) => return Err(()),
-@@ -321,6 +322,7 @@ mod tests {
-             record: PluginRecord::Absent,
-             ledger: Some("0123456789abcdef0123456789abcdef01234567".to_owned()),
-             cache: Some("cbf29ce484222325".to_owned()),
-+            roots: Vec::new(),
-         };
-         let head = Head::Sha("fedcba9876543210fedcba9876543210fedcba98".to_owned());
-         lines.push(render_consumer("/repo/a", &consumer, &head, &drift_of(&consumer, &head, None)));
-diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
-index 635f23645c1c173aea445deb996cf3988376d2b4..e01dd6291cbcf49737797047f8cbbb24413f0ee8 100644
---- a/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
-+++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook.rs
-@@ -1254,9 +1254,15 @@ const LEDGER_TIMEOUT_ROW: &str = concat!(
-     "enabled = true\nruling = \"r\"\nruled_at = \"2026-09-12\"\n",
- );
- 
--/// 役割の行と禁じる語列の行と台帳の待ち上限の行を持つ rules manifest の本文。
-+/// 役割の行の byte の上限の行（`seat.role_max_bytes`・要の写しを名乗った席の brief が読む・行が無い周は読めないの記録と stderr の 1 行）。
-+const ROLE_MAX_ROW: &str = concat!(
-+    "\n[[rule]]\nid = \"seat.role_max_bytes\"\nkind = \"SeatRoleMaxBytes\"\nvalue = 2000\n",
-+    "enabled = true\nruling = \"r\"\nruled_at = \"2026-10-04\"\n",
-+);
-+
-+/// 役割の行と禁じる語列の行と台帳の待ち上限の行と役割の行の上限の行を持つ rules manifest の本文。
- fn role_rules_text(caps: &[&str]) -> String {
--    format!("schema = 1\n{}{}{LEDGER_TIMEOUT_ROW}", denied_row_text(), role_rows_text(caps))
-+    format!("schema = 1\n{}{}{LEDGER_TIMEOUT_ROW}{ROLE_MAX_ROW}", denied_row_text(), role_rows_text(caps))
- }
- 
- /// 置き場を 1 つ作る（rules は裁定の値と同じ 2 行）。
 diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
-index 9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9..7a51d97ce5e2bcfe4c32dd7b539a778b7bf1e108 100644
+index 9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9..5825c5bdabc5c46d9c8346120c0f7e62a7aa52ea 100644
 --- a/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
 +++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs
-@@ -1712,3 +1712,65 @@ fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
+@@ -1697,6 +1697,7 @@ fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
+     let seat = place.repo.join("contracts").join("seat");
+     fs::create_dir_all(&seat).expect("写しの置き場を作れる");
+     fs::write(seat.join("brief.txt"), copy).expect("写しを書ける");
++    fs::write(seat.join("role-max-bytes.txt"), ROLE_MAX_FILE).expect("上限の file を書ける");
+     let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
+     fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
+     git(&place.repo, &["add", ".vessel.toml"]);
+@@ -1712,3 +1713,70 @@ fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
      assert_eq!(brief.get(1..), Some(&roles[..]), "断りの 1 行の後ろは役割の 7 行で 5 行へ戻さない");
      clean(&[&place.repo, &place.state, &place.sock_dir]);
  }
 +
 +// ---- 出力ごとの記録と役割の行の上限（行 v-brief-meter・tsuzuri の判断の記録 ADR-38 の決定 (4)・接頭辞 `vbmeter_`）----
 +
++/// 要の写しの隣の役割の行の上限の file の字（tsuzuri の tz derive が導く形・頭の 1 行と数の 1 行・器は 2 行目だけを読む）。
++const ROLE_MAX_FILE: &str = "生成物・手で直さない・design-intent/rules.yaml seat-role-bytes\n2000\n";
++
 +/// 要の写しを名乗った席の SessionStart は、記録を写し（写しの byte）と役割の行（7 行の byte）に分け、終わりに 1 回の出力の字の数の記録
-+/// （bytes は stdout の byte）を足し、上限 2000 の内なら越えの記録も stderr の行も無い。rules に上限の行が無い周は読めないの記録と stderr
-+/// の 1 行、役割の行の byte より 1 小さい上限の周は越えの記録と stderr の 1 行で、どちらも stdout は替えない。越えの周の後の doctor は
++/// （bytes は stdout の byte）を足し、写しの隣の上限の file の 2000 の内なら越えの記録も stderr の行も無い。上限の file が無い周は読めないの
++/// 記録と stderr の 1 行、役割の行の byte より 1 小さい上限の周は越えの記録と stderr の 1 行で、どちらも stdout は替えない。越えの周の後の doctor は
 +/// seat-role=over の 1 行で席と byte と上限を名指す。key の無い同じ席の記録は名乗り・指示文・DATA の 3 件のまま（対照）。
 +#[test]
 +fn vbmeter_hook_session_start_records_each_output_and_names_the_over() {
@@ -75,6 +56,8 @@ index 9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9..7a51d97ce5e2bcfe4c32dd7b539a778b
 +    let copy = "写し 甲\n乙\n";
 +    fs::create_dir_all(place.repo.join("contracts").join("seat")).expect("写しの置き場を作れる");
 +    fs::write(place.repo.join("contracts/seat/brief.txt"), copy).expect("写しを書ける");
++    let cap_file = place.repo.join("contracts/seat/role-max-bytes.txt");
++    fs::write(&cap_file, ROLE_MAX_FILE).expect("上限の file を書ける");
 +    let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
 +    fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
 +    git(&place.repo, &["add", ".vessel.toml"]);
@@ -88,17 +71,17 @@ index 9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9..7a51d97ce5e2bcfe4c32dd7b539a778b
 +    let want = [copy.len() as u64, role_bytes, stdout.len() as u64].map(|found| Some(json_lite::Value::Num(found)));
 +    assert_eq!(bytes, want, "写しの byte・役割の 7 行の byte・stdout の byte");
 +    assert!(!stderr_text(&out).contains("役割の行"), "上限の内は stderr に出さない: {}", stderr_text(&out));
-+    let rules = fs::read_to_string(&place.rules).expect("rules を読める");
-+    fs::write(&place.rules, rules.replace(ROLE_MAX_ROW, "")).expect("上限の行を外せる");
++    fs::remove_file(&cap_file).expect("上限の file を消せる");
 +    let (bare, _, whats) = shoot();
-+    assert_eq!(whats.get(3).map(String::as_str), Some("seat-role-unmeasured rule=seat.role_max_bytes"), "読めない: {whats:?}");
-+    assert!(stderr_text(&bare).contains("役割の行の上限を読めない rule=seat.role_max_bytes"), "{}", stderr_text(&bare));
++    assert_eq!(whats.get(3).map(String::as_str), Some("seat-role-unmeasured path=contracts/seat/role-max-bytes.txt"), "読めない: {whats:?}");
++    let alarm = "役割の行の上限を読めない path=contracts/seat/role-max-bytes.txt（次の 1 手: tz derive --write";
++    assert!(stderr_text(&bare).contains(alarm), "{}", stderr_text(&bare));
 +    assert_eq!(String::from_utf8_lossy(&bare.stdout), stdout, "読めなくても出力は替えない");
 +    let cap = role_bytes - 1;
-+    fs::write(&place.rules, rules.replace("value = 2000\n", &format!("value = {cap}\n"))).expect("上限を替えられる");
++    fs::write(&cap_file, ROLE_MAX_FILE.replace("\n2000\n", &format!("\n{cap}\n"))).expect("上限を替えられる");
 +    let (over, _, whats) = shoot();
 +    assert_eq!(whats.get(3), Some(&format!("seat-role-over bytes={role_bytes} cap={cap}")), "越えの記録: {whats:?}");
-+    let alarm = format!("役割の行が上限を越えた bytes={role_bytes} cap={cap} rule=seat.role_max_bytes");
++    let alarm = format!("役割の行が上限を越えた bytes={role_bytes} cap={cap} path=contracts/seat/role-max-bytes.txt");
 +    assert!(stderr_text(&over).contains(&alarm), "{}", stderr_text(&over));
 +    assert_eq!(String::from_utf8_lossy(&over.stdout), stdout, "越えても出力は替えない");
 +    let socket = place.sock_dir.join("no-server-sock").display().to_string();
@@ -110,318 +93,8 @@ index 9cce9eed90c6cf6c0fe10c34e83d0afd4450dae9..7a51d97ce5e2bcfe4c32dd7b539a778b
 +    assert!(lines.len() == 1 && lines.iter().all(|line| line.starts_with(head) && line.ends_with(&tail)), "doctor の 1 行: {lines:?}");
 +    clean(&[&place.repo, &place.state, &place.sock_dir]);
 +}
-diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
-index 82a35f745465062afc65d40e9c7fce37212f2547..fe6ca1dbe2778a2999cfabcd9f05c5b769c4c1a6 100644
---- a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
-+++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
-@@ -854,10 +854,10 @@ fn rules_floor_timeout_row_precedes_the_drafts_cap_rows() {
-     assert_eq!(manifest.rows().iter().filter(|found| found.kind == kind).count(), 1, "kind の行は 1 本");
-     // 後ろの 2 kind・14 行は局面の出力（`lifecycle.closed_window_h` の 1 行と `lifecycle.age_h.<語>` の 13 行・`.738.38.7`）。
-     // 行の予約の期限の 1 kind・1 行（`pipe.reserve_h`・`.736.33.17`）が直後に挟まる。
--    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
--    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(4).collect();
-+    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）・役割の行の上限の 1 kind・1 行（行 v-brief-meter）が続く。
-+    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(10).take(4).collect();
-     assert_eq!(kinds, [&RuleKind::SeatDraftsBusyS, &RuleKind::SeatDraftsCapMb, &RuleKind::PipeReserveH, &kind], "kind は ALL の末尾の 2 つの前から 4 つ目（母集団 {} 種）", ALL.len());
--    let rows: Vec<&str> = manifest.rows().iter().rev().skip(21).take(4).map(|found| found.id.as_str()).collect();
-+    let rows: Vec<&str> = manifest.rows().iter().rev().skip(22).take(4).map(|found| found.id.as_str()).collect();
-     assert_eq!(rows, ["seat.drafts_busy_s", "seat.drafts_cap_mb", "pipe.reserve_h", id], "行は manifest の末尾の 14 行の前から 4 つ目（母集団 {} 行）", manifest.rows().len());
-     let errors = rejected(&one_row(kind, "\"ten\"")).expect("文字列の値の fixture が受理された");
-     assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");
-@@ -910,16 +910,16 @@ fn rules_drafts_cap_rows_are_the_last_two_kinds_and_rows() {
-         assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");
-     }
-     // 後ろの 2 kind・14 行は局面の出力（`.738.38.7`）。起草の置き場の 2 つはその直前に並ぶ。
--    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
--    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(2).rev().collect();
-+    // さらに後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）・役割の行の上限の 1 kind・1 行（行 v-brief-meter）が続く。
-+    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(10).take(2).rev().collect();
-     assert_eq!(tail, [&RuleKind::SeatDraftsCapMb, &RuleKind::SeatDraftsBusyS], "kind は ALL の末尾の 2 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
--    let rows: Vec<&str> = manifest.rows().iter().rev().skip(21).take(2).rev().map(|found| found.id.as_str()).collect();
-+    let rows: Vec<&str> = manifest.rows().iter().rev().skip(22).take(2).rev().map(|found| found.id.as_str()).collect();
-     assert_eq!(rows, ["seat.drafts_cap_mb", "seat.drafts_busy_s"], "行は manifest の末尾の 14 行の前の 2 行・この順（母集団 {} 行）", manifest.rows().len());
- }
- 
- /// 索引の 2 行（設計 reverse-index.md §4 形 7・形 2・行 a2・`s2-07l.736.33.21.2`）が埋め込み manifest に id / kind / 形 Int / 値 2048 と 600 /
--/// enabled / 裁定 id / 裁定日で 1 本ずつ在り、値は int_row で引け、kind は `ALL` の末尾の 1 つの前の 2 つ・行は manifest の末尾の 1 行の前の 2 行で
--/// この順（末尾は並びの上限の kind と行・行 v-lane-cap）、字面から引け、
-+/// enabled / 裁定 id / 裁定日で 1 本ずつ在り、値は int_row で引け、kind は `ALL` の末尾の 2 つの前の 2 つ・行は manifest の末尾の 2 行の前の 2 行で
-+/// この順（末尾は並びの上限の kind と行・行 v-lane-cap と役割の行の上限の kind と行・行 v-brief-meter）、字面から引け、
- /// 文字列の値の写しは形と合わないで断られる（base では行も kind も無い ＝ RED）。
- #[test]
- fn rules_index_rows_are_the_last_two_kinds_and_rows() {
-@@ -944,10 +944,10 @@ fn rules_index_rows_are_the_last_two_kinds_and_rows() {
-     let floor = manifest.get("floor.timeout_s").expect("floor.timeout_s の行が在る");
-     let cap = manifest.get("index.cap_mb").expect("index.cap_mb の行が在る");
-     assert_ne!(floor.ruling, cap.ruling, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
--    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(1).take(2).rev().collect();
--    assert_eq!(kinds, [&RuleKind::IndexCapMb, &RuleKind::IndexTimeoutS], "kind は ALL の末尾の 1 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
--    let rows: Vec<&str> = manifest.rows().iter().rev().skip(1).take(2).rev().map(|found| found.id.as_str()).collect();
--    assert_eq!(rows, ["index.cap_mb", "index.timeout_s"], "行は manifest の末尾の 1 行の前の 2 行・この順（母集団 {} 行）", manifest.rows().len());
-+    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(2).take(2).rev().collect();
-+    assert_eq!(kinds, [&RuleKind::IndexCapMb, &RuleKind::IndexTimeoutS], "kind は ALL の末尾の 2 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
-+    let rows: Vec<&str> = manifest.rows().iter().rev().skip(2).take(2).rev().map(|found| found.id.as_str()).collect();
-+    assert_eq!(rows, ["index.cap_mb", "index.timeout_s"], "行は manifest の末尾の 2 行の前の 2 行・この順（母集団 {} 行）", manifest.rows().len());
- }
- 
- /// 局面の出力の行（設計 case-lifecycle.md §12 約束 10・行 c・`s2-07l.738.38.7`）の裁定の字（base の行 `floor.timeout_s` の裁定 id に項を足した字）。
-@@ -988,10 +988,10 @@ fn rules_lifecycle_rows_carry_the_ruled_values_and_the_lifecycle_ruling() {
-     assert_ne!(floor.ruling, LIFECYCLE_RULING, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
-     assert_eq!(RuleKind::parse("LifecycleClosedWindowH"), Some(RuleKind::LifecycleClosedWindowH), "字面から引ける");
-     assert_eq!(RuleKind::parse("LifecycleAgeH"), Some(RuleKind::LifecycleAgeH), "字面から引ける");
--    // 後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）が続く。
--    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(7).take(2).rev().collect();
--    assert_eq!(kinds, [&RuleKind::LifecycleClosedWindowH, &RuleKind::LifecycleAgeH], "kind は ALL の末尾の 7 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
--    let rows: Vec<&str> = manifest.rows().iter().rev().skip(7).take(14).rev().map(|found| found.id.as_str()).collect();
-+    // 後ろに管理 tick の下限の 1 kind・1 行（`.738.42.6`）・memo の 3 kind・3 行（`.738.39.3`）と索引の 2 kind・2 行（`.736.33.21.2`）・並びの上限の 1 kind・1 行（行 v-lane-cap）・役割の行の上限の 1 kind・1 行（行 v-brief-meter）が続く。
-+    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(8).take(2).rev().collect();
-+    assert_eq!(kinds, [&RuleKind::LifecycleClosedWindowH, &RuleKind::LifecycleAgeH], "kind は ALL の末尾の 8 つの前の 2 つ・この順（母集団 {} 種）", ALL.len());
-+    let rows: Vec<&str> = manifest.rows().iter().rev().skip(8).take(14).rev().map(|found| found.id.as_str()).collect();
-     let want: Vec<&str> = expected.iter().map(|(id, _, _)| id.as_str()).collect();
-     assert_eq!(rows, want, "行は manifest の末尾 14 行・この順（母集団 {} 行）", manifest.rows().len());
-     assert_eq!(manifest.rows().iter().filter(|found| found.kind == RuleKind::LifecycleAgeH).count(), 13, "年齢の行は 13 本");
-@@ -1312,7 +1312,7 @@ fn class_derive_embedded_row_carries_the_ruled_three_elements_and_ruling_id() {
-     // `.696` が末尾に公開の見張りの kind を足し、`.738.37.1` が床の検査の待ちの上限の kind を足した（その 2 つ前が RunnerClassCommands）。
-     // 後ろに局面の出力の 2 kind（`.738.38.7`）が続く。
-     // さらに後ろに管理 tick の下限の 1 kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）と索引の 2 kind（`.736.33.21.2`）が続く。
--    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(9).take(6).collect();
-+    let tail: Vec<&RuleKind> = ALL.iter().rev().skip(10).take(6).collect();
-     assert_eq!(
-         tail,
-         [&RuleKind::SeatDraftsBusyS, &RuleKind::SeatDraftsCapMb, &RuleKind::PipeReserveH, &RuleKind::FloorTimeoutS, &RuleKind::HostGuardPublish, &RuleKind::RunnerClassCommands],
-diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
-index e22317124289b1e763084329fa9d52768c21e391..baa574a1c06538d3309bca5c721e6dc17dc205eb 100644
---- a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
-+++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
-@@ -510,12 +510,12 @@ fn rules_embedded_manifest_declares_host_guard_kinds_at_the_tail_of_all() {
-             RuleKind::MemoTriagePerRound,
-             RuleKind::IndexCapMb,
-             RuleKind::IndexTimeoutS,
--            RuleKind::PipeLanesCapMb,
-+            RuleKind::PipeLanesCapMb, RuleKind::SeatRoleMaxBytes,
-         ],
--        "LedgerDeniedWrites の後ろに台帳のグラフの上限の kind（`.719`）・宣言順で 2 kind・管理 tick の 3 kind・退避の猶予・席の箱・段の上げ・事前審査の束の段の上げ（`.717`）・クラスの語列表の kind・公開の見張りの kind（`.696`）・床の検査の待ちの上限の kind（`.738.37.1`）・起草の置き場の量の上限と窓の 2 kind（`.736.30`）・局面の出力の窓と年齢の 2 kind（`.738.38.7`）・管理 tick の全部の書き直しの下限の kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）・索引の置き場の量の上限と待ちの上限の 2 kind（`.736.33.21.2`）・並びの上限の kind（行 v-lane-cap）で ALL が終わる（母集団 {} 種）",
-+        "LedgerDeniedWrites の後ろに台帳のグラフの上限の kind（`.719`）・宣言順で 2 kind・管理 tick の 3 kind・退避の猶予・席の箱・段の上げ・事前審査の束の段の上げ（`.717`）・クラスの語列表の kind・公開の見張りの kind（`.696`）・床の検査の待ちの上限の kind（`.738.37.1`）・起草の置き場の量の上限と窓の 2 kind（`.736.30`）・局面の出力の窓と年齢の 2 kind（`.738.38.7`）・管理 tick の全部の書き直しの下限の kind（`.738.42.6`）・memo の 3 kind（`.738.39.3`）・索引の置き場の量の上限と待ちの上限の 2 kind（`.736.33.21.2`）・並びの上限の kind（行 v-lane-cap）・役割の行の上限の kind（行 v-brief-meter）で ALL が終わる（母集団 {} 種）",
-         ALL.len()
-     );
--    let tail: Vec<RuleKind> = ALL.iter().rev().skip(9).take(13).rev().copied().collect();
-+    let tail: Vec<RuleKind> = ALL.iter().rev().skip(10).take(13).rev().copied().collect();
-     assert_eq!(
-         tail,
-         vec![
-@@ -850,7 +850,7 @@ fn rules_embedded_manifest_is_valid_and_covers_all_kinds() {
-     // **tracked な `rules/manifest.toml` の全行が受理される**（`parse` は 1 件でも違反が
-     // 在れば `Err` を返すので、ここに届いた時点で全行が必須 key を持つ）。母集団を額面に
-     // 出すのは、行が黙って落ちた周を「全部読めた」と読み違えないためである。
--    assert_eq!(manifest.rows().len(), 110, "埋め込み manifest の行数（母集団・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
-+    assert_eq!(manifest.rows().len(), 111, "埋め込み manifest の行数（母集団・行 v-brief-meter で +1〔席の brief の役割の行の上限〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
-     for kind in ALL {
-         let covered = manifest.rows().iter().any(|row| row.kind == *kind);
-         assert!(covered, "{} の行が manifest に無い", kind.as_str());
-@@ -907,7 +907,7 @@ fn rules_embedded_manifest_declares_one_capability_row_per_role() {
-     assert!(ALL.contains(&RuleKind::RoleCapabilities), "ALL に在る（末尾は `.696` の公開の見張り）");
-     assert_eq!(RuleKind::parse("RoleCapabilities"), Some(RuleKind::RoleCapabilities), "kind を字面から引ける");
-     let kinds = ALL.len();
--    assert_eq!(kinds, 96, "kind の母集団（行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
-+    assert_eq!(kinds, 97, "kind の母集団（行 v-brief-meter で +1〔席の brief の役割の行の上限〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
- }
- 
- /// 禁じる語列の行（`runner.denied_commands`・`RuleKind::RunnerDeniedCommands`・裁定 id `user 2026-09-14`・ADR-0025 §2.1・
-@@ -1165,11 +1165,11 @@ fn rules_memo_rows_are_the_last_three_kinds_and_rows() {
-     let floor = manifest.get("floor.timeout_s").expect("floor.timeout_s の行が在る");
-     let notes = manifest.get("memo.notes_max_bytes").expect("memo.notes_max_bytes の行が在る");
-     assert_ne!(floor.ruling, notes.ruling, "base の行の裁定 id を使い回さない（new-row-reuses-ruling）");
--    // 末尾の 1 kind・1 行は並びの上限（行 v-lane-cap）で、その前の 2 kind・2 行は索引（`.736.33.21.2`）。memo の 3 つはその直前に並ぶ。
--    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(3).take(3).rev().collect();
--    assert_eq!(kinds, [&RuleKind::MemoNotesMaxBytes, &RuleKind::MemoTriageIntervalH, &RuleKind::MemoTriagePerRound], "kind は ALL の末尾の 3 つの前の 3 つ・この順（母集団 {} 種）", ALL.len());
--    let rows: Vec<&str> = manifest.rows().iter().rev().skip(3).take(3).rev().map(|found| found.id.as_str()).collect();
--    assert_eq!(rows, ["memo.notes_max_bytes", "memo.triage_interval_h", "memo.triage_per_round"], "行は manifest の末尾の 3 行の前の 3 行・この順（母集団 {} 行）", manifest.rows().len());
-+    // 末尾の 2 kind・2 行は並びの上限（行 v-lane-cap）と役割の行の上限（行 v-brief-meter）で、その前の 2 kind・2 行は索引（`.736.33.21.2`）。memo の 3 つはその直前に並ぶ。
-+    let kinds: Vec<&RuleKind> = ALL.iter().rev().skip(4).take(3).rev().collect();
-+    assert_eq!(kinds, [&RuleKind::MemoNotesMaxBytes, &RuleKind::MemoTriageIntervalH, &RuleKind::MemoTriagePerRound], "kind は ALL の末尾の 4 つの前の 3 つ・この順（母集団 {} 種）", ALL.len());
-+    let rows: Vec<&str> = manifest.rows().iter().rev().skip(4).take(3).rev().map(|found| found.id.as_str()).collect();
-+    assert_eq!(rows, ["memo.notes_max_bytes", "memo.triage_interval_h", "memo.triage_per_round"], "行は manifest の末尾の 4 行の前の 3 行・この順（母集団 {} 行）", manifest.rows().len());
- }
- 
- /// 上限の許可の 2 行（設計 limit-permit.md §18 歯 (a)・契約表の行 b）: 埋め込みの manifest が `pipe.permit_rows`（List・
-diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
-index 95f638fa3423aff830fe245396e49510fa11bc9f..b1bf44fdb2bb5679e00731356b6f2b4820e1a17f 100644
---- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
-+++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
-@@ -3,8 +3,8 @@ source: crates/scribe2/tests/e2e/rules.rs
- expression: form
- ---
- usage: scribe2 <name|--version|doctor|account|rules|fleet|vessel|hook|host-guard|pipe|runner|lens|seat|polarity|contracts|utterance>
--rules: ok rows=110 kinds=96
-+rules: ok rows=111 kinds=97
- rules: no such id
- 95
--rules: ok rows=110 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
-+rules: ok rows=111 kinds=97 accounts=2 plugins=2 launch-args=2 host=present
- usage: rules <validate|get <id>> [--rules PATH] [--state-dir S]
-diff --git a/scribe2/crates/scribe2/src/account/consumers.rs b/scribe2/crates/scribe2/src/account/consumers.rs
-index 769e55e44bcd9edb46c9e61fb7a58312fc711a4b..ac3cf25b958838496b5db3c81ca391eb4dc69794 100644
---- a/scribe2/crates/scribe2/src/account/consumers.rs
-+++ b/scribe2/crates/scribe2/src/account/consumers.rs
-@@ -12,7 +12,7 @@ use crate::hook::vessel::digest::{self, PluginRecord};
- use crate::hook::vessel::{upstream, Upstream, DEFAULT_BRANCH, DEFAULT_REMOTE};
- use crate::invocation::Invocation;
- use crate::name::{BUILD_COMMIT, NAME, PLUGIN_DIR};
--use crate::rules::manifest::Manifest;
-+use crate::rules::manifest::{Manifest, PluginDir};
- use std::collections::BTreeMap;
- use std::path::{Path, PathBuf};
- 
-@@ -70,6 +70,9 @@ pub enum Drift {
-     Binary,
-     /// 記録の digest ≠ 記録の root に今在る hooks.json の digest。
-     Plugin,
-+    /// 記録の root が起動行の plugin の dir（anchor の生成 dir と host の `[[plugin]]` の dir・[`Consumer::roots`]）のどれとも同じ場所で
-+    /// ない（tsuzuri の判断の記録 ADR-38 の決定 (10)）。`[[plugin]]` を宣言しない host は比べる相手が無いので立てない。
-+    Root,
-     /// 帳簿の `gitCommitSha` ≠ vessel repo の HEAD（`source=install` を含む行だけ）。
-     Ledger,
-     /// 記録の root が checkout の生成 dir（`<repo>/<PLUGIN_DIR>`・consumer-sync.md §17 形 5）で、かつ同じ path の帳簿にも器が
-@@ -80,7 +83,7 @@ pub enum Drift {
- }
- 
- /// [`Drift`] の全 variant（宣言順）。
--pub const DRIFTS: &[Drift] = &[Drift::Binary, Drift::Plugin, Drift::Ledger, Drift::Dual, Drift::Unrecorded];
-+pub const DRIFTS: &[Drift] = &[Drift::Binary, Drift::Plugin, Drift::Root, Drift::Ledger, Drift::Dual, Drift::Unrecorded];
- 
- impl Drift {
-     /// 行の字面。
-@@ -88,6 +91,7 @@ impl Drift {
-         match self {
-             Self::Binary => "binary",
-             Self::Plugin => "plugin",
-+            Self::Root => "root",
-             Self::Ledger => "ledger",
-             Self::Dual => "dual",
-             Self::Unrecorded => UNRECORDED,
-@@ -148,6 +152,8 @@ pub struct Consumer {
-     pub ledger: Option<String>,
-     /// 帳簿の `installPath` に今在る hooks.json の digest（無い・読めない周は `absent`）。
-     pub cache: Option<String>,
-+    /// 起動行が積む plugin の dir の列（anchor の生成 dir → host の `[[plugin]]` の dir・宣言順）。`[[plugin]]` を宣言しない host は空。
-+    pub roots: Vec<String>,
- }
- 
- /// 行を組む前の材料（登録 row の target の列と帳簿の導入先）。
-@@ -158,8 +164,8 @@ struct Draft {
- }
- 
- impl Draft {
--    /// 実測へ写す（記録と cache の digest はここで読む）。
--    fn measure(&self, state_dir: &Path) -> Consumer {
-+    /// 実測へ写す（記録と cache の digest はここで読む・`anchor` は導入先の path・`plugins` は host の `[[plugin]]` の宣言）。
-+    fn measure(&self, state_dir: &Path, anchor: &str, plugins: &[PluginDir]) -> Consumer {
-         let source = match (self.targets.is_empty(), &self.entry) {
-             (false, None) => Source::Launch,
-             (false, Some(_)) => Source::Both,
-@@ -171,10 +177,20 @@ impl Draft {
-             record: record_of(state_dir, &self.targets),
-             ledger: self.entry.as_ref().and_then(|entry| entry.sha.clone()),
-             cache: self.entry.as_ref().and_then(|entry| entry.install.as_deref()).and_then(|dir| digest::hooks_digest(Path::new(dir))),
-+            roots: roots_of(anchor, plugins),
-         }
-     }
- }
- 
-+/// 起動行の plugin の dir の列（`[[plugin]]` の宣言が無ければ空・在れば 1 本目は anchor の生成 dir・起動行の積み方は `seat::cycle::launch`）。
-+fn roots_of(anchor: &str, plugins: &[PluginDir]) -> Vec<String> {
-+    if plugins.is_empty() {
-+        return Vec::new();
-+    }
-+    let generated = Path::new(anchor).join(PLUGIN_DIR).display().to_string();
-+    std::iter::once(generated).chain(plugins.iter().map(|plugin| plugin.dir().to_owned())).collect()
-+}
-+
- /// 帳簿の path（`<state_dir>/accounts/<label>/plugins/installed_plugins.json`）。
- pub fn ledger_path(state_dir: &Path, label: &str) -> PathBuf {
-     account_dir(state_dir, label).join(LEDGER_DIR).join(LEDGER_FILE)
-@@ -261,6 +277,9 @@ fn holds(word: Drift, consumer: &Consumer, head: &Head, vessel: Option<&Path>) -
-     match word {
-         Drift::Binary => recorded.is_some_and(|(_, _, binary)| binary != BUILD_COMMIT),
-         Drift::Plugin => recorded.is_some_and(|(root, hooks, _)| *hooks != digest::hooks_digest(Path::new(root))),
-+        Drift::Root => recorded.is_some_and(|(root, _, _)| {
-+            !consumer.roots.is_empty() && !consumer.roots.iter().any(|dir| same_dir(Path::new(root), Path::new(dir)))
-+        }),
-         Drift::Ledger => matches!((head, &consumer.ledger), (Head::Sha(sha), Some(ledger)) if sha != ledger),
-         Drift::Dual => {
-             consumer.source != Source::Launch
-@@ -382,7 +401,7 @@ pub fn doctor_lines(state_dir: &Path, rules: Option<&str>, state: Option<&State>
-     let mut lines: Vec<String> = drafts
-         .iter()
-         .map(|(path, draft)| {
--            let consumer = draft.measure(state_dir);
-+            let consumer = draft.measure(state_dir, path, manifest.plugins());
-             render_consumer_behind(path, &consumer, &head, &behind, &drift_of(&consumer, &head, vessel.as_deref()))
-         })
-         .collect();
-@@ -392,7 +411,8 @@ pub fn doctor_lines(state_dir: &Path, rules: Option<&str>, state: Option<&State>
- 
- #[cfg(test)]
- mod tests {
--    use super::{drift_of, head_of, read_ledger, record_of, render_consumer, same_dir, Consumer, Drift, Head, Ledger, Source, DRIFTS};
-+    use super::{drift_of, head_of, read_ledger, record_of, render_consumer, same_dir, Consumer, Draft, Drift, Head, Ledger, Source, DRIFTS};
-+    use crate::rules::manifest::Manifest;
-     use crate::hook::vessel::digest::{self, PluginRecord};
-     use crate::invocation::Invocation;
-     use crate::order::is_declaration_order;
-@@ -564,11 +584,11 @@ mod tests {
-         assert_eq!(stub.calls(), [call("/empty"), call("/sha"), call("/fail"), call("/gone")], "git の program と引数");
-     }
- 
--    /// 語は 5 つで宣言順に閉じる（variant を足した周はここの件数が変わる）。
-+    /// 語は 6 つで宣言順に閉じる（variant を足した周はここの件数が変わる）。
-     #[test]
-     fn doctor_consumer_drift_words_are_closed_in_declaration_order() {
-         let words: Vec<&str> = DRIFTS.iter().map(|word| word.as_str()).collect();
--        assert_eq!(words, ["binary", "plugin", "ledger", "dual", "unrecorded"]);
-+        assert_eq!(words, ["binary", "plugin", "root", "ledger", "dual", "unrecorded"]);
-         assert!(is_declaration_order(DRIFTS, |word| word as usize), "DRIFTS は宣言順: {DRIFTS:?}");
-         assert_eq!(Source::Both.as_str(), "launch+install");
-     }
-@@ -582,6 +602,7 @@ mod tests {
-             record: PluginRecord::Absent,
-             ledger: Some("a".repeat(40)),
-             cache: None,
-+            roots: Vec::new(),
-         };
-         let head = Head::Sha("b".repeat(40));
-         assert_eq!(drift_of(&consumer, &head, None), [Drift::Ledger, Drift::Unrecorded]);
-@@ -593,4 +614,28 @@ mod tests {
-         assert_eq!(drift_of(&consumer, &Head::Undeclared, None), [Drift::Unrecorded], "head が無ければ帳簿は測れない");
-         assert_eq!(render_consumer("/c", &consumer, &Head::Undeclared, &[]).rsplit(' ').next(), Some("drift=none"), "空は none");
-     }
-+
-+    /// 語 root は、登録 row の席の読める記録の root が起動行の plugin の dir（anchor の生成 dir と `[[plugin]]` の dir）のどれとも同じ場所で
-+    /// ない周だけ立つ。記録が無い周・`[[plugin]]` を宣言しない host・root が生成 dir の周・root が `[[plugin]]` の dir の周は立たない。
-+    #[test]
-+    fn vbmeter_doctor_root_names_a_record_outside_the_launch_plugin_dirs() {
-+        let state_dir = scratch("vbmeter-root");
-+        let declared = Manifest::parse("schema = 1\n\n[[plugin]]\ndir = \"/opt/p2\"\n").unwrap_or_default();
-+        let bare = Manifest::parse("schema = 1\n").unwrap_or_default();
-+        let draft = Draft { targets: targets(&["s:1"]), entry: None };
-+        let root_of = |root: &str, manifest: &Manifest| {
-+            let found = PluginRecord::Recorded { root: root.to_owned(), hooks: None, binary: "b".repeat(12), sid: "s".to_owned(), ts: 1 };
-+            let seat = seat_dir(&state_dir, "s:1");
-+            let _ = fs::create_dir_all(&seat);
-+            let _ = fs::write(digest::record_path(&seat), format!("{}\n", found.to_line().unwrap_or_default()));
-+            let consumer = draft.measure(&state_dir, "/a", manifest.plugins());
-+            (consumer.roots.clone(), drift_of(&consumer, &Head::Undeclared, None).contains(&Drift::Root))
-+        };
-+        assert_eq!(root_of("/r", &declared), (vec!["/a/plugin".to_owned(), "/opt/p2".to_owned()], true), "宣言の外の root は立つ");
-+        assert!(!root_of("/a/plugin", &declared).1, "anchor の生成 dir は立たない");
-+        assert!(!root_of("/opt/p2", &declared).1, "[[plugin]] の dir は立たない");
-+        assert_eq!(root_of("/r", &bare), (Vec::new(), false), "[[plugin]] を宣言しない host は比べない");
-+        let absent = Draft { targets: targets(&["s:2"]), entry: None }.measure(&state_dir, "/a", declared.plugins());
-+        assert_eq!(drift_of(&absent, &Head::Undeclared, None), [Drift::Unrecorded], "記録が無ければ root は立たない");
-+    }
- }
 diff --git a/scribe2/crates/scribe2/src/hook/mod.rs b/scribe2/crates/scribe2/src/hook/mod.rs
-index 46a7efe460df6c60c9ca8f2fdf6adb2b14123442..2071d852084f1673260e39a079f3665321d15dd2 100644
+index 46a7efe460df6c60c9ca8f2fdf6adb2b14123442..6c4836478670aa451d745c67f7b00980e52395fc 100644
 --- a/scribe2/crates/scribe2/src/hook/mod.rs
 +++ b/scribe2/crates/scribe2/src/hook/mod.rs
 @@ -42,6 +42,7 @@ use crate::name::{BUILD_COMMIT, NAME};
@@ -502,15 +175,20 @@ index 46a7efe460df6c60c9ca8f2fdf6adb2b14123442..2071d852084f1673260e39a079f36653
      };
      let bd = hooked.bd.filter(|found| !found.trim().is_empty()).unwrap_or(crate::seat::ledger::DEFAULT_BD);
      // 台帳の子 process は **1 回**（件数の 1 行と復帰の DATA が同じ出力を読む・設計 seat-roles.md §21）。
-@@ -555,12 +566,22 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
+@@ -553,14 +564,26 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
+     let drafts = std::path::absolute(&drafts_dir).unwrap_or(drafts_dir);
+     let text = crate::seat::brief::render(row.role, row, &capabilities, &ledger, &drafts.to_string_lossy());
      // 要の写しを名乗った席は憲法の 5 行の代わりに写しを字のまま出す（tsuzuri の判断の記録 ADR-38 の決定 (5)・key の無い席は 12 行のまま）。
-     let copy = Copy::read(hooked.root, &crate::pipe::declaration::seat_constitution(hooked.root));
+-    let copy = Copy::read(hooked.root, &crate::pipe::declaration::seat_constitution(hooked.root));
++    let declared = crate::pipe::declaration::seat_constitution(hooked.root);
++    let copy = Copy::read(hooked.root, &declared);
      let lines = copy.lines(&text);
 -    let joined = lines.join("\n");
 -    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: &joined };
 -    outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
-+    // 名乗った席は写しと役割の行を別の記録に書き、役割の行の byte の上限の越えを名指す（同じ記録の決定 (4)・key の無い席は 1 件のまま）。
-+    let metered = meter::brief_entries(&copy, &text, meter::cap_of(&manifest), WHAT_BRIEF);
++    // 名乗った席は写しと役割の行を別の記録に書き、役割の行の byte が写しの隣の上限の file の数を越えた周を名指す（同じ記録の決定 (4)・
++    // key の無い席は 1 件のまま）。
++    let metered = meter::brief_entries(&copy, &text, &meter::cap_of(hooked.root, &declared), WHAT_BRIEF);
 +    if let Some((entries, alarms)) = &metered {
 +        for entry in entries {
 +            outcome.err.extend(record_lines(hooked.dir, &measured(entry, hooked, started)));
@@ -528,54 +206,6 @@ index 46a7efe460df6c60c9ca8f2fdf6adb2b14123442..2071d852084f1673260e39a079f36653
  }
  
  /// 記録の `what`（圧縮の直前の 1 枠を出した周）。
-diff --git a/scribe2/crates/scribe2/src/rules/mod.rs b/scribe2/crates/scribe2/src/rules/mod.rs
-index cf1275c8eb80db090eb647bff7b605e00fdbafe5..e79c7766b161efedb78ffaf3a0fba1ced0f0e104 100644
---- a/scribe2/crates/scribe2/src/rules/mod.rs
-+++ b/scribe2/crates/scribe2/src/rules/mod.rs
-@@ -428,6 +428,9 @@ pub enum RuleKind {
-     /// 便の木の並びの合計の上限（MiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。並びの木の大きさの合計がこれを越える周に、live な便が
-     /// 持たない並びを印の新しさの古い順に丸ごと退かせる。行を読めない周は退かせない。読み手は `pipe::sweep` の 1 本。
-     PipeLanesCapMb,
-+    /// 席の brief の役割の行の byte の上限（tsuzuri の規則の行 R-41 の写し・判断の記録 ADR-38 の決定 (4)）。要の写しを名乗った席の
-+    /// SessionStart が越えた周を記録と stderr の 1 行で名指す（出力は止めない）。読み手は `seat::brief::meter` の 1 本。
-+    SeatRoleMaxBytes,
- }
- 
- /// [`RuleKind`] の全 variant。parity test の母集団である。
-@@ -528,6 +531,7 @@ pub const ALL: &[RuleKind] = &[
-     RuleKind::IndexCapMb,
-     RuleKind::IndexTimeoutS,
-     RuleKind::PipeLanesCapMb,
-+    RuleKind::SeatRoleMaxBytes,
- ];
- 
- impl RuleKind {
-@@ -594,6 +598,7 @@ impl RuleKind {
-             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
-             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
-             Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
-+            Self::SeatRoleMaxBytes => "SeatRoleMaxBytes",
-         }
-     }
- 
-@@ -632,7 +637,7 @@ impl RuleKind {
-             | Self::HostBlockedPerCore
-             | Self::PipeLandWaitS | Self::DetectionDailyMinS
-             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
--            | Self::LedgerTimeoutS | Self::PipeLanesCapMb
-+            | Self::LedgerTimeoutS | Self::PipeLanesCapMb | Self::SeatRoleMaxBytes
-             | Self::PipeSizeSLines
-             | Self::PipeSizeMLines
-             | Self::PipeSizeLLines
-@@ -689,7 +694,7 @@ impl RuleKind {
-             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
-             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
-             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
--            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb => false,
-+            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb | Self::SeatRoleMaxBytes => false,
-         }
-     }
- 
 diff --git a/scribe2/crates/scribe2/src/seat/brief/copy.rs b/scribe2/crates/scribe2/src/seat/brief/copy.rs
 index 6f32a309f9b01fda7002696ff1568d60d134e9d7..bebb4dbf31cadc6c32114fcd60c6c44eb6b1134a 100644
 --- a/scribe2/crates/scribe2/src/seat/brief/copy.rs
@@ -605,26 +235,28 @@ index 6f32a309f9b01fda7002696ff1568d60d134e9d7..bebb4dbf31cadc6c32114fcd60c6c44e
  
 diff --git a/scribe2/crates/scribe2/src/seat/brief/meter.rs b/scribe2/crates/scribe2/src/seat/brief/meter.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b03f8c460a
+index 0000000000000000000000000000000000000000..9f5715dfa0f197df855c1fa41deb5e66025d751e
 --- /dev/null
 +++ b/scribe2/crates/scribe2/src/seat/brief/meter.rs
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,295 @@
 +//! 要の写しを名乗った席の SessionStart の出力ごとの記録と役割の行の上限の検出（tsuzuri の判断の記録 ADR-38 の決定 (4)・撤退の条件 (5)・
-+//! 行 v-brief-meter）: 写しの行と役割の行を別の記録に書き、役割の行の byte（tsuzuri の規則の行 R-41 が数える量）が rules 行
-+//! [`ROW_ROLE_MAX`] を越えた周（ちょうどは越えない）と行を読めない周を、記録と stderr の 1 行で名指す（出力は止めない・読めない周を
-+//! 越えないに倒さない）。1 回の出力の字の数は SessionStart の終わりの記録 1 行（[`total`]）が持つ。数は記録の `what` の字に載せ、記録の
++//! 行 v-brief-meter）: 写しの行と役割の行を別の記録に書き、役割の行の byte（tsuzuri の規則の行 R-41 が数える量）が要の写しの隣の
++//! 上限の file（[`CAP_FILE`]・tsuzuri の tz derive が R-41 の値から導く・行 t-seatcap）の 2 行目の数を越えた周（ちょうどは越えない）と
++//! file を読めない周を、記録と stderr の 1 行で名指す（出力は止めない・読めない周を越えないに倒さない）。1 回の出力の字の数は SessionStart の終わりの記録 1 行（[`total`]）が持つ。数は記録の `what` の字に載せ、記録の
 +//! schema は上げない。key の無い席は今の記録（指示文の 1 件）のまま。越えと読めないの記録の読み手は doctor の 1 行（[`doctor_line`]）で、
 +//! 席ごとに最新の名乗った SessionStart の測りを読む（同じ記録の決定 (4) の検出の event を記録の行と doctor の行で満たす）。
 +
-+use super::copy::Copy;
++use super::copy::{Copy, NEXT_STEP};
 +use crate::fleet::json_tree::{self, Tree};
 +use crate::name::NAME;
-+use crate::rules::manifest::Manifest;
++use crate::pipe::declaration::SeatConstitution;
 +use std::collections::BTreeMap;
 +use std::path::Path;
 +
-+/// 役割の行の byte の上限の rules 行の id（tsuzuri の規則の行 R-41 の値の写し・照らしは in-file の歯）。
-+pub const ROW_ROLE_MAX: &str = "seat.role_max_bytes";
++/// 役割の行の byte の上限の file の名（宣言が名乗る要の写しと同じ dir・頭の 1 行と 10 進の数の 1 行・器は 2 行目だけを読む）。
++pub const CAP_FILE: &str = "role-max-bytes.txt";
++/// 宣言を読めず上限の file の path が分からない周の path の字。
++const UNKNOWN_PATH: &str = "-";
 +/// 記録の `what`（写しを出した周）。
 +pub const WHAT_COPY: &str = "session-start-constitution";
 +/// 記録の `what`（写しの代わりに断りの 1 行を出した周）。
@@ -633,7 +265,7 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +pub const WHAT_TOTAL: &str = "session-start-total";
 +/// 記録の `what` の頭（役割の行が上限を越えた周・後ろに ` bytes=<n> cap=<m>`）。
 +pub const WHAT_OVER: &str = "seat-role-over";
-+/// 記録の `what` の頭（上限の行を読めない周・後ろに ` rule=<行の id>`）。
++/// 記録の `what` の頭（上限の file を読めない周・後ろに ` path=<file の repo 相対の path>`）。
 +pub const WHAT_UNMEASURED: &str = "seat-role-unmeasured";
 +/// doctor の行の鍵（`seat-role=<ok|over|unmeasured|unreadable>`）。
 +const DOCTOR_KEY: &str = "seat-role";
@@ -647,33 +279,58 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +    pub bytes: u64,
 +}
 +
++/// 役割の行の上限の読み（上限の file の path と、読めた数）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Cap {
++    /// 上限の file の repo 相対の path（宣言を読めない周は字 `-`）。
++    pub path: String,
++    /// file の 2 行目の数（file が無い・2 行でない・2 行目が 10 進の数字だけでない周は `None`＝越えないに倒さない）。
++    pub value: Option<u64>,
++}
++
 +/// 出した行の byte（出力層が行ごとに足す改行 1 byte を含む）。
 +pub fn printed(lines: &[String]) -> u64 {
 +    lines.iter().map(|line| u64::try_from(line.len()).unwrap_or(u64::MAX).saturating_add(1)).fold(0, u64::saturating_add)
 +}
 +
-+/// 役割の行の上限（行が無い・不発効・整数でない周は `None`）。
-+pub fn cap_of(manifest: &Manifest) -> Option<u64> {
-+    crate::rules::int_row(manifest, ROW_ROLE_MAX).ok()
++/// 役割の行の上限（`root` は anchor・宣言が名乗る要の写しの隣の [`CAP_FILE`] の 2 行目・頭の行は読まない）。
++pub fn cap_of(root: &Path, declared: &SeatConstitution) -> Cap {
++    let SeatConstitution::Declared(copy) = declared else {
++        return Cap { path: UNKNOWN_PATH.to_owned(), value: None };
++    };
++    let path = Path::new(copy).with_file_name(CAP_FILE).display().to_string();
++    let value = std::fs::read_to_string(root.join(&path)).ok().as_deref().and_then(value_of);
++    Cap { path, value }
++}
++
++/// 上限の file の字の数（ちょうど 2 行で、2 行目が 10 進の数字だけの周だけ）。
++fn value_of(text: &str) -> Option<u64> {
++    let mut lines = text.lines();
++    let (_head, number, rest) = (lines.next()?, lines.next()?, lines.next());
++    if rest.is_some() || !number.bytes().all(|b| b.is_ascii_digit()) {
++        return None;
++    }
++    number.parse().ok()
 +}
 +
 +/// 名乗った席の brief の記録（写し → 役割の行 → 越えか読めないの順）と stderr の行。key の無い席は `None`（今の 1 件のまま）。
 +/// `brief` は穴を埋めた雛形の 12 行、`role_what` は役割の行の記録の `what`。
-+pub fn brief_entries(copy: &Copy, brief: &str, cap: Option<u64>, role_what: &str) -> Option<(Vec<Entry>, Vec<String>)> {
++pub fn brief_entries(copy: &Copy, brief: &str, cap: &Cap, role_what: &str) -> Option<(Vec<Entry>, Vec<String>)> {
 +    let (head, role) = copy.parts(brief)?;
 +    let what = if matches!(copy, Copy::Refused(_)) { WHAT_COPY_REFUSED } else { WHAT_COPY };
 +    let bytes = printed(&role);
 +    let mut entries = vec![Entry { what: what.to_owned(), bytes: printed(&head) }, Entry { what: role_what.to_owned(), bytes }];
 +    let mut alarms = Vec::new();
-+    match cap {
++    let path = &cap.path;
++    match cap.value {
 +        Some(cap) if bytes > cap => {
 +            entries.push(Entry { what: format!("{WHAT_OVER} bytes={bytes} cap={cap}"), bytes: 0 });
-+            alarms.push(format!("{NAME}: 役割の行が上限を越えた bytes={bytes} cap={cap} rule={ROW_ROLE_MAX}"));
++            alarms.push(format!("{NAME}: 役割の行が上限を越えた bytes={bytes} cap={cap} path={path}"));
 +        }
 +        Some(_) => {}
 +        None => {
-+            entries.push(Entry { what: format!("{WHAT_UNMEASURED} rule={ROW_ROLE_MAX}"), bytes: 0 });
-+            alarms.push(format!("{NAME}: 役割の行の上限を読めない rule={ROW_ROLE_MAX}（越えないに倒さない）"));
++            entries.push(Entry { what: format!("{WHAT_UNMEASURED} path={path}"), bytes: 0 });
++            alarms.push(format!("{NAME}: 役割の行の上限を読めない path={path}（次の 1 手: {NEXT_STEP}・越えないに倒さない）"));
 +        }
 +    }
 +    Some((entries, alarms))
@@ -749,9 +406,9 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +
 +#[cfg(test)]
 +mod tests {
-+    use super::{brief_entries, cap_of, doctor_line, doctor_word, printed, total, Entry, ROW_ROLE_MAX, WHAT_COPY, WHAT_COPY_REFUSED};
-+    use crate::rules::manifest::Manifest;
-+    use crate::seat::brief::copy::Copy;
++    use super::{brief_entries, cap_of, doctor_line, doctor_word, printed, total, Cap, Entry, CAP_FILE, WHAT_COPY, WHAT_COPY_REFUSED};
++    use crate::pipe::declaration::SeatConstitution;
++    use crate::seat::brief::copy::{Copy, NEXT_STEP};
 +    use crate::seat::brief::{role_lines, template};
 +    use crate::seat::role::Role;
 +
@@ -759,6 +416,9 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +    const SAMPLE: &str = "生成物・手で直さない v9.9\n順位 甲  乙\n";
 +    /// 役割の行の記録の `what`（hook の WHAT_BRIEF と同じ字）。
 +    const ROLE: &str = "session-start-brief";
++    /// 宣言が名乗る要の写しの path と、その隣の上限の file の path。
++    const COPY: &str = "contracts/seat/brief.txt";
++    const PATH: &str = "contracts/seat/role-max-bytes.txt";
 +
 +    /// 雛形の役割の 7 行の byte（行ごとの改行を含む）。
 +    fn role_bytes() -> u64 {
@@ -770,16 +430,21 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +        Entry { what: what.to_owned(), bytes }
 +    }
 +
++    /// 上限の読み（path は見本の上限の file）。
++    fn cap(value: Option<u64>) -> Cap {
++        Cap { path: PATH.to_owned(), value }
++    }
++
 +    /// 名乗った写しは写しの記録（写しの byte）と役割の行の記録（7 行の byte）の 2 件に分かれ、上限の内なら stderr は 0 行。読めない周は
 +    /// 写しの記録の what が refused で byte は断りの 1 行。
 +    #[test]
 +    fn vbmeter_keyed_seat_records_the_copy_and_the_role_lines_apart() {
 +        let brief = template(Role::Orchestrator);
-+        let read = brief_entries(&Copy::Read(SAMPLE.to_owned()), brief, Some(u64::MAX), ROLE);
++        let read = brief_entries(&Copy::Read(SAMPLE.to_owned()), brief, &cap(Some(u64::MAX)), ROLE);
 +        let want = vec![entry(WHAT_COPY, SAMPLE.len() as u64), entry(ROLE, role_bytes())];
 +        assert_eq!(read, Some((want, Vec::new())), "写しと役割の行の 2 件");
 +        let line = "断りの 1 行".to_owned();
-+        let refused = brief_entries(&Copy::Refused(line.clone()), brief, Some(u64::MAX), ROLE);
++        let refused = brief_entries(&Copy::Refused(line.clone()), brief, &cap(Some(u64::MAX)), ROLE);
 +        let want = vec![entry(WHAT_COPY_REFUSED, line.len() as u64 + 1), entry(ROLE, role_bytes())];
 +        assert_eq!(refused, Some((want, Vec::new())), "断りの 1 行と役割の行の 2 件");
 +    }
@@ -787,35 +452,50 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +    /// key の無い席は記録を分けない（指示文の 1 件のまま・`None`）。
 +    #[test]
 +    fn vbmeter_absent_key_keeps_the_single_brief_record() {
-+        assert_eq!(brief_entries(&Copy::Absent, template(Role::Orchestrator), Some(1), ROLE), None);
++        assert_eq!(brief_entries(&Copy::Absent, template(Role::Orchestrator), &cap(Some(1)), ROLE), None);
 +    }
 +
-+    /// 役割の行の byte が上限ちょうどは越えず（3 件目なし）、1 byte 下の上限は越えの記録（bytes 0）と stderr の 1 行が byte と上限と行の
-+    /// id を名指す。
++    /// 役割の行の byte が上限ちょうどは越えず（3 件目なし）、1 byte 下の上限は越えの記録（bytes 0）と stderr の 1 行が byte と上限と
++    /// 上限の file の path を名指す。
 +    #[test]
 +    fn vbmeter_role_lines_over_the_cap_are_named_and_exactly_the_cap_is_not() {
 +        let brief = template(Role::Orchestrator);
 +        let copy = Copy::Read(SAMPLE.to_owned());
 +        let bytes = role_bytes();
-+        let exact = brief_entries(&copy, brief, Some(bytes), ROLE).unwrap_or_default();
++        let exact = brief_entries(&copy, brief, &cap(Some(bytes)), ROLE).unwrap_or_default();
 +        assert_eq!((exact.0.len(), exact.1.len()), (2, 0), "ちょうどは越えない: {exact:?}");
-+        let (entries, alarms) = brief_entries(&copy, brief, Some(bytes - 1), ROLE).unwrap_or_default();
++        let (entries, alarms) = brief_entries(&copy, brief, &cap(Some(bytes - 1)), ROLE).unwrap_or_default();
 +        assert_eq!(entries.get(2), Some(&entry(&format!("seat-role-over bytes={bytes} cap={}", bytes - 1), 0)), "{entries:?}");
 +        assert_eq!(alarms.len(), 1, "{alarms:?}");
 +        let alarm = alarms.first().cloned().unwrap_or_default();
-+        assert!(alarm.contains(&format!("bytes={bytes} cap={} rule={ROW_ROLE_MAX}", bytes - 1)), "{alarm}");
++        assert!(alarm.contains(&format!("bytes={bytes} cap={} path={PATH}", bytes - 1)), "{alarm}");
 +    }
 +
-+    /// 上限の行を読めない周（行が無い・不発効）は読めないの記録と stderr の 1 行で、越えないに倒さない。読める行は値を返す。
++    /// 上限は宣言が名乗る写しの隣の file の 2 行目で、頭の行は読まない。file が無い・2 行目が数でない・行の形が違う（1 行・3 行）周と
++    /// 宣言を読めない周は読めない（`None`）で、読めないの記録と stderr の 1 行が file の path と次の 1 手を名指し、越えないに倒さない。
 +    #[test]
-+    fn vbmeter_unreadable_cap_row_is_unmeasured_not_within() {
-+        let row = |enabled: bool| format!("schema = 1\n\n[[rule]]\nid = \"{ROW_ROLE_MAX}\"\nkind = \"SeatRoleMaxBytes\"\nvalue = 7\nenabled = {enabled}\nruling = \"r\"\nruled_at = \"d\"\n");
-+        assert_eq!(Manifest::parse(&row(true)).ok().as_ref().and_then(cap_of), Some(7), "読める行の値");
-+        assert_eq!(Manifest::parse(&row(false)).ok().as_ref().and_then(cap_of), None, "不発効は読めない");
-+        assert_eq!(Manifest::parse("schema = 1\n").ok().as_ref().and_then(cap_of), None, "行が無ければ読めない");
-+        let (entries, alarms) = brief_entries(&Copy::Read(SAMPLE.to_owned()), template(Role::Orchestrator), None, ROLE).unwrap_or_default();
-+        assert_eq!(entries.get(2), Some(&entry(&format!("seat-role-unmeasured rule={ROW_ROLE_MAX}"), 0)), "{entries:?}");
-+        assert!(alarms.len() == 1 && alarms.iter().all(|line| line.contains(&format!("rule={ROW_ROLE_MAX}"))), "{alarms:?}");
++    fn vbmeter_unreadable_cap_file_is_unmeasured_not_within() {
++        let root = crate::pipe::fixture::scratch("vbmeter-cap");
++        let declared = SeatConstitution::Declared(COPY.to_owned());
++        let _ = std::fs::create_dir_all(root.join("contracts/seat"));
++        let read = |text: Option<&str>| {
++            let _ = std::fs::remove_file(root.join(PATH));
++            if let Some(text) = text {
++                let _ = std::fs::write(root.join(PATH), text);
++            }
++            cap_of(&root, &declared)
++        };
++        assert_eq!(read(Some("頭は読まない 9\n2000\n")), cap(Some(2000)), "2 行目の数");
++        assert_eq!(read(None), cap(None), "file が無い");
++        assert_eq!(read(Some("頭\n2,000\n")), cap(None), "2 行目が数でない");
++        assert_eq!(read(Some("2000\n")), cap(None), "1 行");
++        assert_eq!(read(Some("頭\n2000\n3\n")), cap(None), "3 行");
++        let unknown = cap_of(&root, &SeatConstitution::Unreadable);
++        assert_eq!((unknown.path.as_str(), unknown.value), ("-", None), "宣言を読めない");
++        assert!(PATH.ends_with(CAP_FILE), "写しの隣の名");
++        let (entries, alarms) = brief_entries(&Copy::Read(SAMPLE.to_owned()), template(Role::Orchestrator), &cap(None), ROLE).unwrap_or_default();
++        assert_eq!(entries.get(2), Some(&entry(&format!("seat-role-unmeasured path={PATH}"), 0)), "{entries:?}");
++        assert!(alarms.len() == 1 && alarms.iter().all(|line| line.contains(&format!("path={PATH}")) && line.contains(NEXT_STEP)), "{alarms:?}");
 +    }
 +
 +    /// 1 回の出力の記録は Unicode の字の数（改行を含む）を what に、byte を bytes に持つ。
@@ -823,18 +503,6 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +    fn vbmeter_total_counts_chars_and_bytes_with_newlines() {
 +        let lines = vec!["甲乙".to_owned(), "ab".to_owned()];
 +        assert_eq!(total(&lines), entry("session-start-total chars=6", 10));
-+    }
-+
-+    /// 埋め込みの行の値は tsuzuri の規則の表（design-intent/rules.yaml）の id R-41 の値（字 byte 以下の前の数・桁の , を除く）と等しい。
-+    #[test]
-+    fn vbmeter_cap_row_matches_the_r41_value_of_the_rules_table() {
-+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../design-intent/rules.yaml");
-+        let text = std::fs::read_to_string(&path).unwrap_or_default();
-+        let row = text.lines().find(|line| line.trim_start().starts_with("- {id: R-41,")).unwrap_or_default();
-+        let value = row.split("value: \"").nth(1).and_then(|rest| rest.split('"').next()).unwrap_or_default();
-+        let number = value.strip_suffix(" byte 以下").map(|found| found.replace(',', "")).and_then(|found| found.parse::<u64>().ok());
-+        assert!(number.is_some(), "R-41 の値を読める: {value:?}（{}）", path.display());
-+        assert_eq!(Manifest::embedded().ok().as_ref().and_then(cap_of), number, "埋め込みの行 {ROW_ROLE_MAX} と R-41");
 +    }
 +
 +    /// 記録 1 行（`what` と `seat`・ほかの欄は hook の記録と同じ形）。
@@ -849,13 +517,13 @@ index 0000000000000000000000000000000000000000..71045e44f4d393c7ba438af98c5d59b0
 +    fn vbmeter_doctor_line_reads_the_latest_measure_of_each_seat() {
 +        let (copy, refused) = (rec(WHAT_COPY, "a"), rec(WHAT_COPY_REFUSED, "b"));
 +        let over = rec("seat-role-over bytes=2101 cap=2000", "a");
-+        let unmeasured = rec("seat-role-unmeasured rule=seat.role_max_bytes", "b");
++        let unmeasured = rec(&format!("seat-role-unmeasured path={PATH}"), "b");
 +        assert_eq!(doctor_word(&rec("session-start-brief", "a")), None, "名乗った記録が無ければ出さない");
 +        assert_eq!(doctor_word(&format!("{copy}{refused}")), Some("seat-role=ok seats=2".to_owned()), "全部の席が上限の内");
-+        let want = "seat-role=over seats=2 over=1 unmeasured=1 last=b rule=seat.role_max_bytes";
-+        assert_eq!(doctor_word(&format!("{copy}{over}{refused}{unmeasured}")).as_deref(), Some(want), "越えが強く最後は b");
-+        let want = "seat-role=unmeasured seats=2 over=0 unmeasured=1 last=b rule=seat.role_max_bytes";
-+        assert_eq!(doctor_word(&format!("{copy}{refused}{unmeasured}")).as_deref(), Some(want), "読めないだけ");
++        let want = format!("seat-role=over seats=2 over=1 unmeasured=1 last=b path={PATH}");
++        assert_eq!(doctor_word(&format!("{copy}{over}{refused}{unmeasured}")), Some(want), "越えが強く最後は b");
++        let want = format!("seat-role=unmeasured seats=2 over=0 unmeasured=1 last=b path={PATH}");
++        assert_eq!(doctor_word(&format!("{copy}{refused}{unmeasured}")), Some(want), "読めないだけ");
 +        assert_eq!(doctor_word(&format!("{copy}{over}{copy}")).as_deref(), Some("seat-role=ok seats=1"), "後の周が前の越えを消す");
 +        let want = "seat-role=over seats=2 over=1 unmeasured=0 last=a bytes=2101 cap=2000";
 +        assert_eq!(doctor_word(&format!("{copy}{over}{refused}")).as_deref(), Some(want), "ほかの席の周は消さない");
@@ -883,25 +551,3 @@ index 6136ba48761e9c908a1bf9d32b03ff529e19c280..2fc6b2bd2df7952fd210f3948c6715a8
  pub mod pointer;
  
  use super::role::{Capability, Role};
-diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
-index 75c32af78898238b1ab88392a6f9f6bf98465fbf..5ca460386954c15de78e7103643926feeff17bb9 100644
---- a/scribe2/rules/manifest.toml
-+++ b/scribe2/rules/manifest.toml
-@@ -1073,6 +1073,17 @@ enabled = true
- ruling = "user 2026-10-03T22:11Z 問い t3-hub.77.15"
- ruled_at = "2026-10-03"
- 
-+# 席の brief の役割の行（穴を埋めた後）の byte の上限（tsuzuri の規則の行 R-41 の値の写し・判断の記録 ADR-38 の決定 (4)）。要の写しを
-+# 名乗った席の SessionStart が役割の行の byte を記録に書き、越えた周（ちょうどは越えない）を記録と stderr の 1 行で名指す。
-+
-+[[rule]]
-+id = "seat.role_max_bytes"
-+kind = "SeatRoleMaxBytes"
-+value = 2000
-+enabled = true
-+ruling = "user 2026-10-04T01:13Z 問い t3-hub.74.59.2"
-+ruled_at = "2026-10-04"
-+
- # 口座の宣言（設計 fleet-usage.md §2・account-lifecycle.md §2・ADR-0026 §2.1）は host の manifest（state dir
- # の host.toml）にだけ置く。この file に口座の表は置かない（文法は残る・足す変更は A1 の対話面で聞く・本 repo
- # は PUBLIC・SRS CON2）。器は credential の置き場を走査せず、宣言だけを真実として読む（C3）。
