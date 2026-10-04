@@ -7,7 +7,8 @@ use std::path::PathBuf;
 
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, GraphDoc, GraphNode};
 use tsuzuri_contract::wire;
-use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_NONE};
+use tsuzuri_surface::frame::Mode;
+use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_MARKED, SUMMARY_NONE};
 use tsuzuri_surface::widgets::hover::Card;
 use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_LINE, card_for, gist, node_card};
 
@@ -220,45 +221,46 @@ fn gsum_card_more_rows() {
     );
 }
 
-/// (6) 概要の 2 つの箱は中心の節点の plain と eng を切らずに写す（無いか空なら要約なし）。
+/// (6) 概要の箱は中心の節点の plain と eng から表示の型の 1 つを切らずに写す（無いか空なら要約なし・
+/// 表示の型の側が無ければもう一方を印の class で・行 g-sum-pick で 1 つの箱にした）。
 #[test]
 fn gsum_node_boxes() {
-    let boxes = |plain: Option<String>, eng: Option<String>| {
+    let boxes = |plain: Option<String>, eng: Option<String>, mode: Mode| {
         let mut doc = around_doc();
         let c = center_mut(&mut doc);
         c.node.plain = plain;
         c.node.eng = eng;
-        node::summary(node::center(&doc).expect("中心の行"))
+        node::summary(node::center(&doc).expect("中心の行"), mode)
     };
     let two = "画面は 2 つです。";
-    let b = boxes(some(two), None);
+    let b = boxes(some(two), None, Mode::Beginner);
     assert_eq!(
-        (b[0].key, b[0].class, b[0].text.as_str()),
+        (b.key, b.class, b.text.as_str()),
         ("summary_plain", "sumbox", two)
     );
+    let b = boxes(some(two), None, Mode::Expert);
     assert_eq!(
-        (b[1].key, b[1].class, b[1].text.as_str()),
-        ("summary_eng", SUMMARY_NONE, NO_SUMMARY)
+        (b.key, b.class, b.text.as_str()),
+        ("summary_plain", SUMMARY_MARKED, two)
     );
     assert_eq!(SUMMARY_NONE, "sumbox none");
+    assert_eq!(SUMMARY_MARKED, "sumbox marked");
     assert_eq!(NO_SUMMARY, "要約なし");
 
     let face = "面は 2 つとする。";
-    let b = boxes(None, some(face));
-    assert_eq!((b[0].class, b[0].text.as_str()), (SUMMARY_NONE, NO_SUMMARY));
-    assert_eq!((b[1].class, b[1].text.as_str()), ("sumbox", face));
+    let b = boxes(None, some(face), Mode::Expert);
+    assert_eq!((b.class, b.text.as_str()), ("sumbox", face));
 
     let long = format!("一つ目です。\n{}", "あ".repeat(200));
-    let b = boxes(Some(long.clone()), None);
-    assert_eq!(b[0].text, long);
+    let b = boxes(Some(long.clone()), None, Mode::Beginner);
+    assert_eq!(b.text, long);
 
-    let b = boxes(some(""), some(""));
-    for x in &b {
+    for mode in Mode::ALL {
+        let b = boxes(some(""), some(""), mode);
         assert_eq!(
-            (x.class, x.text.as_str()),
+            (b.class, b.text.as_str()),
             (SUMMARY_NONE, NO_SUMMARY),
-            "{}",
-            x.key
+            "{mode:?}"
         );
     }
 }
@@ -288,13 +290,14 @@ fn dom_part(text: &str) -> &str {
     &text[at..]
 }
 
-/// (8) 節点の頁の概要の箱と出所の行の DOM の字（一覧の面の行の要約の欄は行 m-map-compact で消した）。
+/// (8) 節点の頁の概要の箱と出所の行の DOM の字（一覧の面の行の要約の欄は行 m-map-compact で消した・
+/// 畳む段はもう一方の概要の 1 つだけ・行 g-sum-pick）。
 #[test]
 fn gsum_dom_text() {
     let node = read("src/project/node.rs");
     let dom = dom_part(&node);
     for want in [
-        "summary(c)",
+        "summary(c, mode())",
         "{h2(b.key)}</header><p data-t=",
         "M4 21c1-4 4-6 8-6s7 2 8 6",
         "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
@@ -302,7 +305,12 @@ fn gsum_dom_text() {
     ] {
         assert!(dom.contains(want), "node.rs の DOM に {want} が無い");
     }
-    assert!(!node.contains("<details"), "node.rs に <details が在る");
+    assert_eq!(
+        node.matches("<details").count(),
+        node.matches("<details class=SUMBOX_OTHER prop:open=open on:toggle=toggle>")
+            .count(),
+        "node.rs の <details はもう一方の概要の畳みだけ"
+    );
 }
 
 /// 着地済みの行と第 3 波から第 8 波の行の verify の filter の語。

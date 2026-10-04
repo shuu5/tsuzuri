@@ -1,6 +1,7 @@
-//! block「節点」（見本の bead.html の頭と 2 面の概要・便 g-node）: 節点の頁の 1 つ目の block。
+//! block「節点」（見本の bead.html の頭と概要・便 g-node）: 節点の頁の 1 つ目の block。
 //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
 //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+//! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（行 g-sum-pick・判断の記録 ADR-30 決定 (2)）。
 //! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
 //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
 //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
@@ -18,18 +19,19 @@ use crate::project::nodearound::PageState;
 use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
 use crate::widgets::nodecard::full_src;
+use crate::widgets::sumpick::{self, Picked};
 
 pub const BLOCK: Block = Block {
     id: "node",
-    heading: "summary_plain",
+    heading: "nb_summary",
     class: "stack",
 };
 
 /// この file が字を持つ口の path（無い・近傍の口は nodearound の module が持つ・行 hs-derived）。
 pub const PATHS: &[&str] = &[];
 
-/// この file の畳める段の開き閉じの鍵の形（無い・行 hs-derived）。
-pub const FOLDS: &[&str] = &[];
+/// この file の畳める段の開き閉じの鍵の形（概要の箱の下のもう一方の概要・行 hs-derived・行 g-sum-pick）。
+pub const FOLDS: &[&str] = &["node:other"];
 
 /// 電文の節点に概要の字が無いときの概要の字。
 pub const NO_SUMMARY: &str = "要約なし";
@@ -37,11 +39,14 @@ pub const NO_SUMMARY: &str = "要約なし";
 /// 出所の file を持たない節点（台帳と走行）の出所の字。
 pub const NO_SRC: &str = "出所なし";
 
-/// 概要の箱の見出しの語の鍵（非エンジニア向け・エンジニア向けの順）。
-pub const SUMMARY_KEYS: [&str; 2] = ["summary_plain", "summary_eng"];
-
 /// 要約の無い概要の箱の class。
 pub const SUMMARY_NONE: &str = "sumbox none";
+
+/// 表示の型の側でない概要を出す箱の class（見出しの語がどちら向けかの印）。
+pub const SUMMARY_MARKED: &str = "sumbox marked";
+
+/// 箱の下に畳むもう一方の概要の class。
+pub const SUMBOX_OTHER: &str = "fold sumother";
 
 /// 節点の頁の頭（印・種類の見出し・帯・状態・id・題・出所・質問の頁への link）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,34 +103,34 @@ pub fn head(doc: &AroundDoc) -> Option<Head> {
     })
 }
 
-/// 概要の 1 つの箱（見出しの語の鍵・class・字）。
+/// 概要の箱（見出しの語の鍵・class・字・箱の下に畳むもう一方の概要）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SumBox {
     pub key: &'static str,
     pub class: &'static str,
     pub text: String,
+    pub other: Option<Picked>,
 }
 
-/// 概要の 2 つの箱（中心の節点の plain と eng を切らずに写す・字が無いか空なら要約なし）。
-pub fn summary(center: &AroundRow) -> [SumBox; 2] {
-    let [plain, eng] = SUMMARY_KEYS;
-    [
-        sum_box(plain, &center.node.plain),
-        sum_box(eng, &center.node.eng),
-    ]
-}
-
-fn sum_box(key: &'static str, text: &Option<String>) -> SumBox {
-    match text.as_deref().filter(|s| !s.is_empty()) {
-        Some(t) => SumBox {
-            key,
-            class: "sumbox",
-            text: t.to_string(),
+/// 概要の箱（中心の節点の plain と eng から表示の型の 1 つを切らずに写す・両方無いか空なら表示の型の側の見出しで要約なし）。
+pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
+    let (plain, eng) = (center.node.plain.as_deref(), center.node.eng.as_deref());
+    let other = sumpick::other(mode, plain, eng);
+    match sumpick::pick(mode, plain, eng, None) {
+        Some(p) => SumBox {
+            key: p.key,
+            class: if p.marked { SUMMARY_MARKED } else { "sumbox" },
+            text: p.text,
+            other,
         },
         None => SumBox {
-            key,
+            key: match mode {
+                Mode::Beginner => sumpick::PLAIN_KEY,
+                Mode::Expert => sumpick::ENG_KEY,
+            },
             class: SUMMARY_NONE,
             text: NO_SUMMARY.to_string(),
+            other,
         },
     }
 }
@@ -207,16 +212,17 @@ mod dom {
     use tsuzuri_contract::surface::{REVOKE_PATH, RulingId};
 
     use super::{
-        BLOCK, Head, PageState, Revoke, SUMMARY_NONE, answer_href, center, head, item_path,
-        kept_subject, revoke_body, revoke_target, shows_revoke, summary,
+        BLOCK, Head, PageState, Revoke, SUMBOX_OTHER, SUMMARY_NONE, SumBox, answer_href, center,
+        head, item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary,
     };
     use crate::mapview::band_chip;
     use crate::project::ask::{Outcome, can_send, outcome};
     use crate::project::nodearound::{id_of, mode_of, source, state, unmeasured_reason};
-    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, state_icon, unmeasured};
+    use crate::project::{ALERT_STYLE, NO_CONTENT, UNKNOWN, fold, state_icon, unmeasured};
     use crate::view::{Fetched, PageSubject};
     use crate::vocab::label;
     use crate::widgets::help::{h1, h2};
+    use crate::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
 
     /// 出所の印（見本の IC.file）。
     const FILE_ICON: &str = r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>"#;
@@ -289,21 +295,13 @@ mod dom {
             match st {
                 PageState::Doc(doc) => match (head(&doc), center(&doc)) {
                     (Some(h), Some(c)) => {
-                        let boxes = summary(c)
-                            .into_iter()
-                            .zip([PERSON, CODE])
-                            .map(|(b, icon)| {
-                                let t = (b.class != SUMMARY_NONE).then_some("");
-                                view! {
-                                    <section class=b.class><header><span inner_html=icon></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
-                                }
-                            })
-                            .collect_view();
+                        let boxes = sum_view(summary(c, mode()));
                         let revoke = target.get().map(|t| {
                             let d = draft(drafts, &t.ruling);
                             revoke_view(t, item, d)
                         });
-                        view! { {head_view(h, mode, revoke)}<div class="two">{boxes}</div> }.into_any()
+                        view! { {head_view(h, mode, revoke)}<div class="nsum">{boxes}</div> }
+                            .into_any()
                     }
                     _ => unmeasured(NO_CONTENT),
                 },
@@ -311,6 +309,31 @@ mod dom {
             }
         };
         view! { <section class=BLOCK.class id=BLOCK.id>{content}</section> }.into_any()
+    }
+
+    /// 見出しの語の鍵の印（非エンジニア向けは人・エンジニア向けは code・本文からは file）。
+    fn icon_of(key: &str) -> &'static str {
+        match key {
+            PLAIN_KEY => PERSON,
+            ENG_KEY => CODE,
+            _ => FILE_ICON,
+        }
+    }
+
+    /// 概要の箱と、その下に畳んだもう一方の概要（押すと開く）。
+    fn sum_view(b: SumBox) -> AnyView {
+        let t = (b.class != SUMMARY_NONE).then_some("");
+        let other = b.other.map(|o| {
+            let (open, toggle) = fold("node:other".to_string(), || false);
+            view! {
+                <details class=SUMBOX_OTHER prop:open=open on:toggle=toggle><summary><span inner_html=icon_of(o.key)></span>{h2(o.key)}</summary><p data-t="">{o.text}</p></details>
+            }
+        });
+        view! {
+            <section class=b.class><header><span inner_html=icon_of(b.key)></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
+            {other}
+        }
+        .into_any()
     }
 
     /// 見つからない（見出しと、id が在れば id の字）。

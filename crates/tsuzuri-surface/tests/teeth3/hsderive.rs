@@ -59,7 +59,7 @@ fn hsderive_consts_match_note() {
         ),
         ("legend", &[], &[]),
         ("next", &["/api/next"], &[]),
-        ("node", &[], &[]),
+        ("node", &[], &["node:other"]),
         ("nodearound", &["/api/around"], &[]),
         ("notice", &["/api/notices"], &[]),
         ("pipeline", &["/api/pipeline"], &[]),

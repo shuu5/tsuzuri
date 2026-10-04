@@ -597,6 +597,16 @@
    "plain": "条の文や ADR の decision の先頭",
    "internal": "statements[0].text / decision / what・value"
   },
+  "nb_summary": {
+   "label": "概要",
+   "plain": "表示の型の 1 つの概要\n・ もう一方は下に畳む",
+   "internal": "plain / eng"
+  },
+  "sum_body": {
+   "label": "本文から",
+   "plain": "2 つの概要が無い時の本文の頭の 1 行",
+   "internal": "summary::excerpt"
+  },
   "timeline": {
    "label": "run の時間軸",
    "plain": "この task の run を 1 行ずつ並べる\n{ic:redo} 何回実行したか\n! どの段で止まったか",

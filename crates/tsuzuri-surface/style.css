@@ -454,12 +454,16 @@ details.fold[open] > summary::before { transform: rotate(45deg); }
 .nhead { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); }
 .nhead .t { font-size: var(--fs-4); font-weight: 750; line-height: 1.35; }
 .nhead .kind { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); font-weight: 600; font-size: var(--fs-1); }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-bottom: var(--s3); }
+.nsum { display: grid; gap: var(--s2); margin-bottom: var(--s3); }
 .sumbox { border-radius: var(--r3); padding: var(--s3); background: var(--panel); border: 1px solid var(--line); }
 .sumbox > header { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); color: var(--ink-2); }
 .sumbox > header svg { width: 20px; height: 20px; }
 .sumbox p { margin: 0; font-size: var(--fs-3); line-height: 1.65; }
 .sumbox.none p { color: var(--ink-3); font-size: var(--fs-2); }
+.sumbox.marked { border-style: dashed; }
+details.sumother { padding: 0 var(--s3); color: var(--ink-2); }
+details.sumother > summary svg { width: 16px; height: 16px; }
+details.sumother p { margin: 0 0 var(--s2); line-height: 1.65; overflow-wrap: anywhere; }
 .runs { display: flex; flex-direction: column; gap: var(--s2); }
 .runrow { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s2); align-items: center; }
 .runrow .nth { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-2); }
@@ -514,7 +518,7 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
 @media (max-width: 760px) {
   .page { padding: var(--s3) var(--s3) var(--s6); }
   .tile { min-height: 80px; padding: var(--s2) var(--s3); }
-  .home, .ask, .two { grid-template-columns: minmax(0, 1fr); }
+  .home, .ask { grid-template-columns: minmax(0, 1fr); }
   .board { grid-template-columns: minmax(0, 1fr); }
   .col.is-empty .cards, .col.is-empty .more { display: none; }
   .band { grid-template-columns: minmax(0, 1fr); }
@@ -528,7 +532,7 @@ table.mx th { background: var(--panel-2); font-weight: 600; text-align: left; }
 }
 
 /* 390 幅の溢れ止め（grid / flex の子は縮める・長い語は折る） */
-.page, .panel, .two > *, .home > *, .ask > *, .stack > * { min-width: 0; }
+.page, .panel, .nsum > *, .home > *, .ask > *, .stack > * { min-width: 0; }
 .sumbox p, .nhead .t, .qcard .head .t, .rec, .gitem .ttl { overflow-wrap: anywhere; }
 .items > li > ul.items { flex: 1; min-width: 0; margin-left: var(--s4); }
 .items li.nest { display: block; border: 0; min-height: 0; padding: 0; }

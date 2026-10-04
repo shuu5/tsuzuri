@@ -262,10 +262,12 @@ fn built_classes(add: &mut impl FnMut(&str)) {
         add(h.band.class_name());
     }
     if let Some(c) = node::center(&around) {
-        for b in node::summary(c) {
-            add(b.class);
+        for mode in Mode::ALL {
+            add(node::summary(c, mode).class);
         }
     }
+    add(node::SUMMARY_MARKED);
+    add(node::SUMBOX_OTHER);
 }
 
 #[test]

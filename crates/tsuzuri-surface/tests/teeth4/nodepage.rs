@@ -98,7 +98,7 @@ fn nodepage_frame_and_nav() {
     assert_eq!(
         blocks,
         vec![
-            ("node", "summary_plain", "stack"),
+            ("node", "nb_summary", "stack"),
             ("around", "around", "panel"),
             ("timeline", "timeline", "panel")
         ]
@@ -506,19 +506,19 @@ fn other_heads() {
     assert_eq!(node::head(&none), None);
 }
 
-/// (8) 概要の 2 つの箱は要約なしの字と class none。
+/// (8) 概要の箱は 1 つで、要約の無い節点は表示の型の側の見出しの鍵と要約なしの字と class none（行 g-sum-pick）。
 #[test]
 fn nodepage_summary() {
     let doc = fixture();
     let c = node::center(&doc).expect("中心");
     assert_eq!(c.node.id, "FR1");
-    let boxes = node::summary(c);
-    let keys: Vec<&str> = boxes.iter().map(|b| b.key).collect();
-    assert_eq!(keys, vec!["summary_plain", "summary_eng"]);
-    for b in boxes {
+    for (mode, key) in [(Mode::Beginner, "summary_plain"), (Mode::Expert, "summary_eng")] {
+        let b = node::summary(c, mode);
+        assert_eq!(b.key, key);
         assert_eq!(b.text, node::NO_SUMMARY);
         assert_eq!(b.class, "sumbox none");
         assert!(b.class.split_whitespace().any(|c| c == "none"));
+        assert_eq!(b.other, None);
     }
     assert_eq!(node::NO_SUMMARY, "要約なし");
 }
@@ -732,6 +732,8 @@ fn nodepage_keys_fixture_and_deps() {
         "answer_here",
         "summary_plain",
         "summary_eng",
+        "nb_summary",
+        "sum_body",
         "nb_up",
         "nb_down",
         "nb_self",
