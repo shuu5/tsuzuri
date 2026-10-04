@@ -1729,6 +1729,46 @@
    "plain": "席が理由を付けて器の止めの印を置いた\n→ 席が印を外すと列に戻る",
    "internal": "段 Held・局面 contract-queued の理由 hold（行 g-held-col）"
   },
+  "pf_held_by": {
+   "label": "止めた者",
+   "plain": "留め置いたのは誰か\n・ 席か器の受付",
+   "internal": "段 Held の札の理由の語（hold は席・ほかは受付の断りの名・行 g-held-pop）"
+  },
+  "pf_held_why": {
+   "label": "止めた理由",
+   "plain": "なぜ留め置いたか\n・ 席の止めは席が書いた理由\n・ 受付の断りは断りの名と 1 行の理由",
+   "internal": "局面の出力の契約の部品の欄 why（判断の記録 ADR-42 決定 (6)）"
+  },
+  "pf_held_at": {
+   "label": "止めた時刻",
+   "plain": "留め置いた時刻と今までの経過",
+   "internal": "局面の出力の契約の部品の since"
+  },
+  "pf_held_until": {
+   "label": "解く条件",
+   "plain": "何をすれば列に戻るか",
+   "internal": "判断の記録 ADR-42 決定 (7)"
+  },
+  "hb:seat": {
+   "label": "席",
+   "plain": "席が止めの印を置いた",
+   "internal": "器の止めの印 hold（pipe dispatch hold）"
+  },
+  "hb:intake": {
+   "label": "器の受付",
+   "plain": "器の受付が契約を通さなかった",
+   "internal": "局面 contract-refused"
+  },
+  "hu:seat": {
+   "label": "席が印を外すと列に戻る",
+   "plain": "席が止めの印を外す（release）と、器が次の周に起こす",
+   "internal": "pipe dispatch release"
+  },
+  "hu:intake": {
+   "label": "席が契約か設計の行を直すと、次の周に受付をやり直す",
+   "plain": "断りの理由を直すと、器が次の周に受付をやり直す",
+   "internal": "器の起こす側の周の受付の判定"
+  },
   "hm:intake": {
    "label": "受付の断り",
    "plain": "器の受付が契約を通さなかった\n→ 席が契約か設計の行を直すと受付をやり直す",

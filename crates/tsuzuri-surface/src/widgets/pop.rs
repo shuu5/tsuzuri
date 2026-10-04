@@ -15,6 +15,8 @@
 //! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
 //! 概要は吹き出しを開いた時に開いた bead の 1 本の引きの口（`ITEM_PATH`）の本文から読み、表示の型の 1 つを部品 sumpick で選んで
 //! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
+//! Held（留め置き）は止めた者・理由・止めた時刻と経過・解く条件の 4 つ（`held_facts`・個別の頁も同じ関数で組む・
+//! 判断の記録 ADR-42 決定 (7)・行 g-held-pop）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
@@ -25,6 +27,7 @@ use tsuzuri_contract::summary::{excerpt, summaries};
 use tsuzuri_contract::wire;
 
 use super::hover::{Point, Rect, Size};
+use super::keyline::{HeldBy, held_by};
 use super::modal::Hit;
 use super::runflow::{Hist, Seg};
 use super::sumpick::{self, POP_SUM_MAX, Picked};
@@ -126,6 +129,15 @@ pub const SUM_KEYS: [&str; 2] = ["psum_more", "psum_less"];
 
 /// 概要の口の class。
 pub const SUM_CLASS: &str = "pmore";
+
+/// 留め置きの欄の語の鍵（止めた者・理由・止めた時刻・解く条件・行 g-held-pop）。
+pub const HELD_KEYS: [&str; 4] = ["pf_held_by", "pf_held_why", "pf_held_at", "pf_held_until"];
+
+/// 止めた者ごとの止めた者の語の鍵と解く条件の語の鍵（席の止め・受付の断り）。
+pub const HELD_WORDS: [(HeldBy, &str, &str); 2] = [
+    (HeldBy::Seat, "hb:seat", "hu:seat"),
+    (HeldBy::Intake, "hb:intake", "hu:intake"),
+];
 
 /// 局面の出力の契約の列の待ちの局面の語（器の case-lifecycle §2・中核の pipeline の QUEUED_PHASE の写し）。
 pub const QUEUED_PHASE: &str = "contract-queued";
@@ -441,7 +453,8 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
             };
             vec![f(STAGE_KEYS[0], list), f(STAGE_KEYS[1], since())]
         }
-        Stage::Queued | Stage::Held => vec![f(STAGE_KEYS[2], since())],
+        Stage::Queued => vec![f(STAGE_KEYS[2], since())],
+        Stage::Held => held_facts(src, card),
         Stage::Running | Stage::Gated => vec![
             f(STAGE_KEYS[3], Val::Text(card.runs.to_string())),
             f(STAGE_KEYS[4], account()),
@@ -459,6 +472,49 @@ pub fn stage_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
             ),
         ],
     }
+}
+
+/// 留め置きの理由の字（局面の出力の契約の部品の欄 why・部品が無いか読めないか欄が無ければ None）。
+pub fn held_why(src: &Src<'_>, card: &PipelineCard) -> Option<String> {
+    match src.parts {
+        Reading::Known(parts) => contract_part(parts, card.contract.as_str())?.why.clone(),
+        Reading::Unknown => None,
+    }
+}
+
+/// 受付の断りの名の字（理由の語のまま・無ければまだ分からない）。
+pub fn refusal_text(name: Option<&str>) -> String {
+    name.map_or_else(|| label(UNKNOWN_KEY), str::to_string)
+}
+
+/// 留め置きの欄（`HELD_KEYS` の順・段 Held でない札は空）。止めた者は席か器の受付、理由は席の止めなら why の字
+/// （無ければまだ分からない）、受付の断りなら断りの名の字と why（無ければまだ分からない）を全角のコロンでつなぐ。
+/// 止めた時刻は札の since（無ければまだ分からない）、解く条件は止めた者ごとの字。
+pub fn held_facts(src: &Src<'_>, card: &PipelineCard) -> Vec<Fact> {
+    let Some(by) = held_by(card) else {
+        return Vec::new();
+    };
+    let [by_key, why_key, at_key, until_key] = HELD_KEYS;
+    let (who, until) = HELD_WORDS
+        .into_iter()
+        .find(|(b, _, _)| *b == by)
+        .map_or((UNKNOWN_KEY, UNKNOWN_KEY), |(_, w, u)| (w, u));
+    let why = held_why(src, card);
+    let reason = match by {
+        HeldBy::Seat => or_unknown(why, Val::Text),
+        HeldBy::Intake => Val::Text(format!(
+            "{}：{}",
+            refusal_text(card.reason.as_deref()),
+            why.unwrap_or_else(|| label(UNKNOWN_KEY))
+        )),
+    };
+    let f = |key, val| Fact { key, val };
+    vec![
+        f(by_key, Val::Text(label(who))),
+        f(why_key, reason),
+        f(at_key, or_unknown(card.since, Val::At)),
+        f(until_key, Val::Text(label(until))),
+    ]
 }
 
 /// 吹き出しの中身（共通の欄を `COMMON_KEYS` の順に・札が在れば段ごとの欄を足す）。
@@ -617,7 +673,7 @@ pub fn with_why(mut p: Pop, src: &Src<'_>) -> Pop {
     };
     let [why, wait_why, wait_runs] = WHY_KEYS;
     match (card.stage, wait_of(src, card)) {
-        (Stage::Queued | Stage::Held, Wait::Queue(reason, _)) => {
+        (Stage::Queued, Wait::Queue(reason, _)) => {
             let val = reason_val(reason.as_deref());
             put_after(&mut p.facts, STAGE_KEYS[2], Fact { key: why, val });
         }
