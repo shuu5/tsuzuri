@@ -707,6 +707,68 @@ fn pipe_dispatch_intake_refused_records_the_refusal_once_and_only_from_the_firin
     clean(&[&repo, &state]);
 }
 
+// ───── 受付の断りの理由（判断の記録 ADR-42・器の行 v-refuse-why・接頭辞 `vhdref_`） ─────
+
+/// 置き場の局面の出力を全部書き直し、契約の部品 `id` の欄 `key` の字を返す（書き直しは rc 0・部品か欄が無ければ `None`）。
+#[expect(
+    clippy::panic,
+    reason = "統合 test の helper。clippy の allow-panic-in-tests は #[test] 関数の中だけに効く"
+)]
+fn written_field(repo: &Path, state: &Path, bd: &str, (id, key): (&str, &str)) -> Option<String> {
+    let out = bin_cmd()
+        .args(["fleet", "lifecycle", "write", "--state-dir"])
+        .arg(state)
+        .arg("--repo")
+        .arg(repo)
+        .args(["--bd", bd, "--rules", &dispatch_rules(state)])
+        .output()
+        .unwrap_or_else(|err| panic!("binary: {err}"));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "fleet lifecycle write（{}）", told(&out));
+    let text = fs::read_to_string(state.join("fleet").join("lifecycle.json")).unwrap_or_default();
+    let tree = vessel::fleet::json_tree::parse(&text).unwrap_or_else(|err| panic!("出力: {err:?}"));
+    let parts = tree.get("parts").and_then(vessel::fleet::json_tree::Tree::as_array).unwrap_or_default();
+    let part = parts.iter().find(|part| part.get("part").and_then(|found| found.as_str()) == Some("contract") && part.get("id").and_then(|found| found.as_str()) == Some(id));
+    part.and_then(|found| found.get(key)).and_then(|value| value.as_str()).map(str::to_owned)
+}
+
+/// 局面の出力を書ける置き場にする（台帳の印の file と git の exclude の `.beads/` と origin/main の ref）。
+#[expect(
+    clippy::panic,
+    reason = "統合 test の helper。clippy の allow-panic-in-tests は #[test] 関数の中だけに効く"
+)]
+fn writable_place(repo: &Path) {
+    fs::create_dir_all(repo.join(".beads")).unwrap_or_else(|err| panic!(".beads: {err}"));
+    fs::write(repo.join(".beads/issues.jsonl"), "[]\n").unwrap_or_else(|err| panic!("台帳の file: {err}"));
+    let exclude = repo.join(".git/info/exclude");
+    let body = fs::read_to_string(&exclude).unwrap_or_default();
+    fs::write(&exclude, format!("{body}.beads/\n")).unwrap_or_else(|err| panic!("exclude: {err}"));
+    let main = git(repo, &["rev-parse", "refs/heads/main"]);
+    git(repo, &["update-ref", "refs/remotes/origin/main", main.trim()]);
+}
+
+/// 断りの記録の前の観測の書き直しの契約の部品は contract-refused で欄 why が列の判定の 1 行、起こす側の 1 周が書く受付の断りの
+/// 記録は 1 件で detail がその 1 行（断られた file を名指す・改行なし）、止めた後の書き直し（列の理由が admission でない周）は
+/// 便の起きていない記録の detail を欄 why に持ち、止めた契約の部品の欄 why は止めの理由（行 v-refuse-why）。
+#[test]
+fn vhdref_firing_round_records_the_one_line_reason_and_the_output_carries_it() {
+    let (repo, state, bd) = refused_ledger();
+    writable_place(&repo);
+    assert_eq!(written_field(&repo, &state, &bd, (REFUSED, "phase")).as_deref(), Some("contract-refused"), "記録の前も断られた契約");
+    let observed = written_field(&repo, &state, &bd, (REFUSED, "why"));
+    precheck_turn(&repo, &state, &bd);
+    let found: Vec<vessel::fleet::Event> =
+        super::super::events(&state).into_iter().filter(|event| event.kind == vessel::fleet::EventKind::IntakeRefused).collect();
+    assert_eq!(found.len(), 1, "断りの記録は 1 件: {found:?}");
+    let why = found.first().and_then(|event| event.detail.clone()).unwrap_or_default();
+    assert!(why.contains("src/absent.rs") && !why.contains('\n'), "detail は断られた file を名指す 1 行: {why:?}");
+    assert_eq!(observed.as_deref(), Some(why.as_str()), "記録の前の書き直しの欄 why は列の判定の 1 行");
+    let held = run_pipe(&["dispatch", "hold", REFUSED, "--reason", "断りを見る", "--state-dir", &state.display().to_string()]);
+    assert_eq!(held.status.code(), Some(i32::from(RC_OK)), "hold（{}）", told(&held));
+    assert_eq!(written_field(&repo, &state, &bd, (REFUSED, "why")), Some(why), "止めた後の書き直しは記録の 1 行");
+    assert_eq!(written_field(&repo, &state, &bd, (HELD, "why")).as_deref(), Some("祖先を起こさない"), "止めた契約は止めの理由");
+    clean(&[&repo, &state]);
+}
+
 /// (B) 1 周の後に r へ `release` を打つと、次の周は同じ断りをもう 1 件書き、2 件目は release の行より後に在る。
 #[test]
 fn pipe_dispatch_intake_refused_records_again_after_a_release() {

@@ -16,7 +16,7 @@ fn chosen(candidates: &[Candidate]) -> Vec<(&str, &'static str)> {
     candidates
         .iter()
         .filter_map(|candidate| match candidate.reason {
-            Some(WaitReason::Admission { reason }) if reason != MARK && reason != SPAWN => {
+            Some(WaitReason::Admission { reason, .. }) if reason != MARK && reason != SPAWN => {
                 Some((candidate.bead.as_str(), reason))
             }
             _ => None,
@@ -45,12 +45,22 @@ pub(super) fn record(input: &Input<'_>, candidates: &[Candidate], events: Option
     };
     for (bead, name) in chosen(candidates) {
         if due(events, bead, name) {
-            let _ = store::append(input.state_dir, &refusal(bead, name), policy);
+            // 断りの 1 行の理由は detail に載せる（判定には使わない・局面の出力の契約の部品の欄 why に写る）。
+            let event = Event { detail: reason_line(candidates, bead), ..refusal(bead, name) };
+            let _ = store::append(input.state_dir, &event, policy);
         }
     }
 }
 
-/// 書く 1 行（kind `IntakeRefused`・refuse = 断りの名・actor は kind の既定・detail なし）。
+/// 候補 `bead` の受付の断りの 1 行の理由（[`WaitReason::Admission`] の `why`・無ければ `None`）。
+fn reason_line(candidates: &[Candidate], bead: &str) -> Option<String> {
+    candidates.iter().find(|candidate| candidate.bead == bead).and_then(|candidate| match candidate.reason {
+        Some(WaitReason::Admission { ref why, .. }) => why.clone(),
+        _ => None,
+    })
+}
+
+/// 書く 1 行（kind `IntakeRefused`・refuse = 断りの名・actor は kind の既定・detail なし＝理由は [`record`] が足す）。
 fn refusal(bead: &str, name: &str) -> Event {
     let kind = EventKind::IntakeRefused;
     Event {
@@ -77,7 +87,7 @@ fn refusal(bead: &str, name: &str) -> Event {
 
 #[cfg(test)]
 mod tests {
-    use super::{chosen, due, refusal, Candidate, WaitReason};
+    use super::{chosen, due, reason_line, refusal, Candidate, WaitReason};
     use crate::fleet::Event;
 
     /// 断られた bead（歯の fixture の既定）。
@@ -111,7 +121,7 @@ mod tests {
     /// 2 件だけで、候補の順。
     #[test]
     fn refusal_record_chooses_only_intake_refusals_in_candidate_order() {
-        let admission = |reason: &'static str| Some(WaitReason::Admission { reason });
+        let admission = |reason: &'static str| Some(WaitReason::Admission { reason, why: None });
         let candidates = [
             candidate("s2-ref.1", admission("cap-headroom")),
             candidate("s2-ref.2", admission(super::MARK)),
@@ -165,6 +175,20 @@ mod tests {
         let written = refusal(BEAD, "cap-headroom");
         assert_eq!(line(&written.to_line()), written, "書く行は from_line で同じ値に読み返せる");
         assert_eq!(written.detail, None);
+    }
+
+    /// 断りの記録の detail は候補の受付の断りの 1 行の理由で、理由の無い断り・受付でない理由・候補に無い bead は持たない（行 v-refuse-why）。
+    #[test]
+    fn vhdref_record_detail_is_the_one_line_reason_of_the_candidate() {
+        let candidates = [
+            candidate("s2-ref.1", Some(WaitReason::Admission { reason: "cap-headroom", why: Some("余地が足りない 1 行".to_owned()) })),
+            candidate("s2-ref.2", Some(WaitReason::Admission { reason: "contract-table", why: None })),
+            candidate("s2-ref.3", Some(WaitReason::Hold { since: "2026-09-29T00:00:00Z".to_owned(), why: Some("止め".to_owned()) })),
+        ];
+        assert_eq!(reason_line(&candidates, "s2-ref.1").as_deref(), Some("余地が足りない 1 行"), "受付の断りの 1 行");
+        assert_eq!(reason_line(&candidates, "s2-ref.2"), None, "理由の無い断り");
+        assert_eq!(reason_line(&candidates, "s2-ref.3"), None, "受付でない理由の字は写さない");
+        assert_eq!(reason_line(&candidates, "s2-ref.9"), None, "候補に無い bead");
     }
 
     /// (g) event log を読めない周は書かない。

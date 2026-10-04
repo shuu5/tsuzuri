@@ -139,6 +139,9 @@ pub enum WaitReason {
     Admission {
         /// 受付が断った名（[`crate::pipe::refuse::Refuse::as_str`] か [`SLOT`] / [`SPAWN`] / [`MARK`]・すべて `'static`）。
         reason: &'static str,
+        /// 断りの 1 行の理由（型の断りの先頭の [`crate::pipe::refuse::Refuse::reason`]・型を持たない断りと列自身の語は `None`・
+        /// 判定に使わない＝`render` は書かない・断りの記録の detail と局面の出力の欄 `why` に写す）。
+        why: Option<String>,
     },
     /// 器の健康の遮断器が「待つ」を返した周（gate と同じ 1 関数 [`health::act`] が [`health::Action::Wait`]・
     /// 設計 §18）。混んだ host に便を起こしても落ちるだけなので、その周は 1 本も起こさない。
@@ -213,7 +216,7 @@ impl WaitReason {
         match *self {
             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
             Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
-            Self::Admission { reason } => format!("{name}:{reason}"),
+            Self::Admission { reason, .. } => format!("{name}:{reason}"),
             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
@@ -696,7 +699,7 @@ pub fn fire(input: &Input<'_>) -> Turn {
     turn.launches.retain(|launch| !failed.contains_key(&launch.bead));
     for candidate in &mut turn.candidates {
         if let Some(&reason) = failed.get(&candidate.bead) {
-            candidate.reason = Some(WaitReason::Admission { reason });
+            candidate.reason = Some(WaitReason::Admission { reason, why: None });
         }
     }
     // **受付の断りの記帳は上書きの後・事前審査の前**（設計 §32）: 同じ周が読んだ event の列を借りる（2 度読まない）。
@@ -1290,7 +1293,7 @@ mod tests {
         let listed = vec![
             WaitReason::Dependency { on: vec!["s2-x".to_owned(), "s2-y".to_owned()] },
             WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
-            WaitReason::Admission { reason: "cap-headroom" },
+            WaitReason::Admission { reason: "cap-headroom", why: Some("x".to_owned()) },
             WaitReason::HostBusy,
             WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
             WaitReason::Launched { since: "t2".to_owned() },

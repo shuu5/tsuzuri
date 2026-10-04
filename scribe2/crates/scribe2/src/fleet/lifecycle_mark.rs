@@ -789,7 +789,7 @@ pub fn refusals_of(events: &[Event]) -> Vec<Refused> {
             let event = events.get(at)?;
             let Some(Case::Refused { refuse }) = &event.case else { return None };
             let run_after = events.iter().skip(at + 1).any(|later| later.kind.as_str() == "RunCreated" && later.bead == bead);
-            Some(Refused { bead: bead.to_owned(), name: refuse.clone(), ts: event.ts.clone(), run_after })
+            Some(Refused { bead: bead.to_owned(), name: refuse.clone(), ts: event.ts.clone(), run_after, why: event.detail.clone() })
         })
         .collect()
 }

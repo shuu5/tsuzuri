@@ -12,10 +12,10 @@
 // flip-check: moved s2-07l.531
 
 use super::super::admission::{self, Sizes};
-use super::super::cli::{crossings, generated, int_row, judge, live, Material, Materials};
+use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
 use super::super::contract::Contract;
 use super::super::gate::Verdict;
-use super::super::refuse::{overlaps, INDEX_BUILD_TRIGGERS};
+use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
 use super::super::review;
 use super::super::row_review::{self, Basis};
 use super::super::table::{self, read_rows, Pointer};
@@ -65,7 +65,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
     }
     // **起こした便が受付に届くまで同じ bead を起こさない**（設計 §17）。印を測れない周は起こさない側に倒す。
     match ledger.launched.as_ref().map(|found| found.get(&issue.id)) {
-        None => return wait(WaitReason::Admission { reason: MARK }),
+        None => return wait(WaitReason::Admission { reason: MARK, why: None }),
         Some(Some(since)) => return wait(WaitReason::Launched { since: since.clone() }),
         Some(None) => {}
     }
@@ -74,7 +74,7 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
     };
     let materials = match &ledger.materials {
         Ok(found) => found,
-        Err(denial) => return wait(WaitReason::Admission { reason: denial.name }),
+        Err(denial) => return wait(refused_by(denial)),
     };
     let contract = match generated(input.repo, &pointer, materials) {
         Ok((found, body)) => match settled(input, &issue.id, &body, &found.design, &ledger.events) {
@@ -88,9 +88,14 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
                 found
             }
         },
-        Err(denial) => return wait(WaitReason::Admission { reason: denial.name }),
+        Err(denial) => return wait(refused_by(&denial)),
     };
     (at(None), Some((pointer, contract)))
+}
+
+/// 受付の断りの待ちの理由（断りの名と、型の断りの先頭の 1 行の理由・型を持たない断りは理由なし・設計 dispatcher.md §32）。
+fn refused_by(denial: &Denial) -> WaitReason {
+    WaitReason::Admission { reason: denial.name, why: denial.refusals.first().map(Refuse::reason) }
 }
 
 /// 材料に base（`HEAD`）の commit の索引の状態を載せる（設計 reverse-index.md §7 (b)・状態の読みだけで撃たず待たない・`HEAD` を解けない周は
@@ -110,7 +115,7 @@ pub(super) fn build_index(input: &Input<'_>, turn: &Turn) {
     let waits = turn
         .candidates
         .iter()
-        .any(|candidate| matches!(&candidate.reason, Some(WaitReason::Admission { reason }) if INDEX_BUILD_TRIGGERS.contains(reason)));
+        .any(|candidate| matches!(&candidate.reason, Some(WaitReason::Admission { reason, .. }) if INDEX_BUILD_TRIGGERS.contains(reason)));
     let Some(sha) = git_line(input.repo, &["rev-parse", "HEAD"]).filter(|_| waits) else {
         return;
     };
@@ -298,7 +303,7 @@ fn blocker(
                 return Some(WaitReason::Overlap { with: run, files });
             }
         }
-        Err(denial) => return Some(WaitReason::Admission { reason: denial.name }),
+        Err(denial) => return Some(refused_by(&denial)),
     }
     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。
@@ -313,10 +318,10 @@ fn blocker(
         early: None,
     };
     if let Some(denial) = judge(&material).denials.first() {
-        return Some(WaitReason::Admission { reason: denial.name });
+        return Some(refused_by(denial));
     }
     if !admission::has_room(&room.slots, 1, room.sizes) {
-        return Some(WaitReason::Admission { reason: SLOT });
+        return Some(WaitReason::Admission { reason: SLOT, why: None });
     }
     None
 }
@@ -521,7 +526,7 @@ fn judged_of(turn: &Turn) -> Vec<Judged> {
             None => ("launched".to_owned(), String::new()),
         };
         let why = match candidate.reason {
-            Some(WaitReason::Hold { ref why, .. }) => why.clone(),
+            Some(WaitReason::Hold { ref why, .. } | WaitReason::Admission { ref why, .. }) => why.clone(),
             _ => None,
         };
         Judged { bead: candidate.bead.clone(), name, value, why }

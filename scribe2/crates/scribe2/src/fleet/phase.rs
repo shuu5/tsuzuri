@@ -75,6 +75,8 @@ pub struct Refused {
     pub ts: String,
     /// その断りの後に便が起きたか（起きていれば断りは局面に効かない）。
     pub run_after: bool,
+    /// 断りの記録の detail（1 行の理由・無い記録は `None`）。
+    pub why: Option<String>,
 }
 
 /// [`phases`] への入力。
@@ -181,8 +183,8 @@ fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -
     let refusal = input.refusals.iter().find(|refused| refused.bead == open.bead && !refused.run_after);
     let (phase, reason, since, why) = if let Some(live) = run.filter(|found| found.alive) {
         (Phase::ContractRunning, Some(run_phase(live).0.as_str().to_owned()), None, None)
-    } else if let Some((name, since)) = refusal_of(queued, refusal) {
-        (Phase::ContractRefused, Some(name), since, None)
+    } else if let Some((name, since, why)) = refusal_of(queued, refusal) {
+        (Phase::ContractRefused, Some(name), since, why)
     } else if let Some(judged) = queued {
         // 止め（理由 `hold`）は印の時刻（値の字）を since に、印の理由を why に持つ（ほかの理由の since は書き手が継ぐ）。
         let held = judged.name == HOLD;
@@ -199,13 +201,16 @@ fn contract_part(open: &OpenContract, run: Option<&Latest>, input: &Input<'_>) -
 }
 
 /// 断りの名と since（列の理由が `admission` ならその値の断りの名・無ければ便の後に起きていない受付の断り）。since は断りの記録の
-/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。
-fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>)> {
+/// 時刻で、列の理由が `admission` の周も同じ名の記録が在ればその時刻（名が替わって記録がまだ無い周は書き手が継ぐ）。1 行の理由は
+/// 列の判定の理由（無ければ同じ名の記録の detail）か、列に無い断りは記録の detail。
+fn refusal_of(queued: Option<&Judged>, refusal: Option<&Refused>) -> Option<(String, Option<String>, Option<String>)> {
     match (queued, refusal) {
         (Some(judged), _) if judged.name == "admission" => {
-            Some((judged.value.clone(), refusal.filter(|found| found.name == judged.value).map(|found| found.ts.clone())))
+            let same = refusal.filter(|found| found.name == judged.value);
+            let why = judged.why.clone().or_else(|| same.and_then(|found| found.why.clone()));
+            Some((judged.value.clone(), same.map(|found| found.ts.clone()), why))
         }
-        (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()))),
+        (_, Some(refused)) => Some((refused.name.clone(), Some(refused.ts.clone()), refused.why.clone())),
         _ => None,
     }
 }
@@ -423,7 +428,34 @@ mod tests {
     }
 
     fn refused(bead: &str, name: &str, run_after: bool) -> Refused {
-        Refused { bead: bead.to_owned(), name: name.to_owned(), ts: "2026-09-30T10:00:00Z".to_owned(), run_after }
+        Refused { bead: bead.to_owned(), name: name.to_owned(), ts: "2026-09-30T10:00:00Z".to_owned(), run_after, why: None }
+    }
+
+    /// 受付の断りの契約の欄 why は列の判定の 1 行の理由で、列の判定が理由を持たない周は同じ名の記録の detail・名の違う記録の
+    /// detail は持たない・列に無い断りは記録の detail（行 v-refuse-why）。
+    #[test]
+    fn vhdref_refused_part_carries_the_one_line_reason() {
+        let noted = |bead: &str, name: &str, why: &str| Refused { why: Some(why.to_owned()), ..refused(bead, name, false) };
+        let world = World {
+            queue: vec![
+                judged_why("s2-a", "admission", "cap-headroom", "列の 1 行"),
+                judged("s2-b", "admission", "cap-headroom"),
+                judged("s2-c", "admission", "cap-headroom"),
+            ],
+            open: vec![open("s2-a"), open("s2-b"), open("s2-c"), open("s2-d")],
+            refusals: vec![
+                noted("s2-a", "cap-headroom", "記録の 1 行"),
+                noted("s2-b", "cap-headroom", "記録の 1 行"),
+                noted("s2-c", "teeth-outside-write-set", "別の名の 1 行"),
+                noted("s2-d", "contract-table", "記録だけの 1 行"),
+            ],
+            ..World::default()
+        };
+        let [a, b, c, d] = ["s2-a", "s2-b", "s2-c", "s2-d"].map(|bead| world.contract(bead));
+        assert_eq!(held_of(&a).3, Some("列の 1 行"), "列の判定の理由が先");
+        assert_eq!(held_of(&b).3, Some("記録の 1 行"), "列が理由を持たなければ同じ名の記録");
+        assert_eq!(held_of(&c).3, None, "名の違う記録の理由は持たない");
+        assert_eq!(held_of(&d), (Phase::ContractRefused, Some("contract-table"), Some("2026-09-30T10:00:00Z"), Some("記録だけの 1 行")), "列に無い断り");
     }
 
     fn event(line: &str) -> Event {
