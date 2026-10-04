@@ -6,3 +6,4 @@ name=scribe2
 version=2
 usage: scribe2 vessel <init --state-dir D [--version N]|show|check> [ROOT]
        scribe2 vessel update --state-dir S [--remote R] [--branch B]
+       scribe2 vessel seat-constitution --project DIR

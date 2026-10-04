@@ -1680,3 +1680,35 @@ fn hook_session_recent_owned_copies_the_output_and_never_recounts_the_marks() {
     assert_eq!(owned, ["[RECENT-NONE] kind=owned"], "件数 0・印を持つ部品 1");
     clean(&[&place.repo, &place.state, &place.sock_dir]);
 }
+
+// ---- 要の写し（行 v-brief-const・tsuzuri の判断の記録 ADR-38 の決定 (5)・接頭辞 `vbconst_`）----
+
+/// 要の写しを名乗った席は、HEAD の宣言の key が名指す写しの file を名乗りの直後に字のまま出し、その後ろに役割の 7 行を出して憲法の
+/// 5 行（4〜8 行目）を出さない。写しの file が無い周は、写しの代わりに path と次の 1 手を名指す 1 行で 5 行へ戻さない。key の無い同じ
+/// 席は 12 行（対照）。
+#[test]
+fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
+    let place = role_place();
+    let path = stub_seat(&place, "vbconst", Some("orchestrator"));
+    let (twelve, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
+    assert_eq!(twelve.len(), 12, "key の無い席は 12 行: {twelve:?}");
+    let roles: Vec<String> = twelve.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| line.clone()).collect();
+    let copy = "生成物・手で直さない・design-intent/constitution.yaml v9.9\n順位 甲  乙\n全文 contracts/seat/constitution.txt\n";
+    let seat = place.repo.join("contracts").join("seat");
+    fs::create_dir_all(&seat).expect("写しの置き場を作れる");
+    fs::write(seat.join("brief.txt"), copy).expect("写しを書ける");
+    let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
+    fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
+    git(&place.repo, &["add", ".vessel.toml"]);
+    git(&place.repo, &["commit", "-q", "-m", "decl"]);
+    let (brief, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
+    let head: String = brief.iter().take(3).map(|line| format!("{line}\n")).collect();
+    assert_eq!(head, copy, "写しを字のまま名乗りの直後に: {brief:?}");
+    assert_eq!(brief.get(3..), Some(&roles[..]), "その後ろは役割の 7 行で 5 行を出さない");
+    fs::remove_file(seat.join("brief.txt")).expect("写しを消せる");
+    let (brief, _) = split_recent(stub_session_lines(&place, &path, &place.bd));
+    let first = brief.first().cloned().unwrap_or_default();
+    assert!(first.contains("path=contracts/seat/brief.txt reason=not-found") && first.contains("tz derive --write"), "{first}");
+    assert_eq!(brief.get(1..), Some(&roles[..]), "断りの 1 行の後ろは役割の 7 行で 5 行へ戻さない");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}

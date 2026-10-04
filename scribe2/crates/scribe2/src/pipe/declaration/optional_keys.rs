@@ -35,6 +35,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     CONTRACT_TABLES_KEY,
     CONSTITUTION_KEY,
     BUILD_LANES_KEY,
+    SEAT_CONSTITUTION_KEY,
 ];
 
 /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
@@ -61,6 +62,11 @@ const CONSTITUTION_KEY: &str = "constitution";
 /// **便の木を並びで使い回すか**の key（任意・判断の記録 ADR-35 の形 c・`pipe::lane`）。値は真偽だけ（書かない宣言は false と同じ＝
 /// 便ごとに木を切る今の形）。
 const BUILD_LANES_KEY: &str = "build-lanes";
+
+/// **席の手元の要の写しの file** の key（任意・tsuzuri の判断の記録 ADR-38 の決定 (5)）。repo 相対の 1 file の path で、名乗った project の
+/// 席では SessionStart の brief がこの file を字のまま出し、雛形の憲法の 5 行（[`crate::seat::brief::CONSTITUTION_LINES`]）を出さない
+/// （書かない宣言は今の 12 行のまま）。
+const SEAT_CONSTITUTION_KEY: &str = "seat-constitution";
 
 /// 憲法の file の既定 path（宣言 `constitution` が無い周・lens が測る 1 本）。
 pub const DEFAULT_CONSTITUTION: &str = "docs/constitution.md";
@@ -154,12 +160,56 @@ pub(super) fn constitution_of(found: &[(String, Raw, u64)], errors: &mut Vec<Dec
         errors.push(DeclError::new(*line, format!("{CONSTITUTION_KEY} は repo 相対の file の path の配列である")));
         return None;
     };
-    let closed = |item: &str| item.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'));
-    for item in items.iter().filter(|item| !repo_relative(item) || item.ends_with('/') || !closed(item)) {
+    for item in items.iter().filter(|item| !repo_file(item)) {
         let reason = format!("{CONSTITUTION_KEY} の {item:?} は repo 相対の file の path である（空・絶対 path・home の短縮記号・..・末尾 /・英数字と . _ / - のほかの字は書けない）");
         errors.push(DeclError::new(*line, reason));
     }
     Some((items.clone(), *line))
+}
+
+/// repo 相対の 1 file の path か（[`repo_relative`] で末尾 `/` が無く、字が英数字と `.` `_` `/` `-` に閉じる・頼みの文や席の手元へ
+/// 差し込む path の字を閉じる）。
+fn repo_file(item: &str) -> bool {
+    repo_relative(item) && !item.ends_with('/') && item.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'))
+}
+
+/// 要の写しの file（任意・無ければ `None`）。[`repo_file`] の 1 本の文字列だけを受ける（配列・真偽・空・絶対 path・home の短縮記号・`..`・
+/// 末尾 `/`・閉じた字の外は key と行番号を名指す不備）。
+pub(super) fn seat_constitution_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == SEAT_CONSTITUTION_KEY)?;
+    match value {
+        Raw::Text(path) if repo_file(path) => Some(path.clone()),
+        _ => {
+            let reason = format!("{SEAT_CONSTITUTION_KEY} は repo 相対の 1 file の path の文字列である（空・絶対 path・home の短縮記号・..・末尾 /・英数字と . _ / - のほかの字は書けない）");
+            errors.push(DeclError::new(*line, reason));
+            None
+        }
+    }
+}
+
+/// anchor の HEAD の宣言が名乗る要の写し（閉じた 3 値・[`QuestionRoute`] と同じ読み）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SeatConstitution {
+    /// 宣言 file が HEAD に無い・git を撃てない・key の無い宣言（brief は今の 12 行のまま）。
+    Absent,
+    /// 宣言が在って読めない（key を書いたかも読めない・12 行に倒さない・C10）。
+    Unreadable,
+    /// 宣言が名乗った要の写しの repo 相対の path。
+    Declared(String),
+}
+
+/// anchor の HEAD の宣言の `seat-constitution`（`git show HEAD:.vessel.toml`・作業ツリーの宣言は読まない・[`question_route`] と同じ読み）。
+pub fn seat_constitution(repo: &Path) -> SeatConstitution {
+    seat_of(head_declaration(repo))
+}
+
+/// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し（[`route_of`] と同じ形）。
+fn seat_of(read: Option<Result<Declared, Vec<DeclError>>>) -> SeatConstitution {
+    match read {
+        None => SeatConstitution::Absent,
+        Some(Err(_)) => SeatConstitution::Unreadable,
+        Some(Ok(declared)) => declared.seat_constitution.map_or(SeatConstitution::Absent, SeatConstitution::Declared),
+    }
 }
 
 /// 名指した rev の宣言が名乗る憲法の file の列（閉じた 3 値・設計 gate-cost.md §48 形 3）。
@@ -327,6 +377,7 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     CONTRACT_TABLES_KEY,
     CONSTITUTION_KEY,
     BUILD_LANES_KEY,
+    SEAT_CONSTITUTION_KEY,
 ];
 
 /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
@@ -624,6 +675,7 @@ pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
 mod tests {
     use super::super::Declared;
     use super::{check_of, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
+    use super::{seat_of, SeatConstitution};
 
     /// 必須 key だけの宣言の本文（3 行）の後ろに `extra` を足す。
     fn with(extra: &str) -> String {
@@ -655,6 +707,29 @@ mod tests {
         assert_eq!(route_of(Some(Declared::parse(&with("")))), QuestionRoute::Absent);
         let declared = Declared::parse(&with("question-route = \"x\"\n"));
         assert_eq!(route_of(Some(declared)), QuestionRoute::Declared("x".to_owned()));
+    }
+
+    /// 要の写しの key は repo 相対の 1 file の字だけを受け（key の無い宣言は値なし）、HEAD の読みは閉じた 3 値に写る（無い宣言・key の無い
+    /// 宣言は Absent・不備の宣言は Unreadable で Absent に倒さない・名乗りは字のまま）。
+    #[test]
+    fn vbconst_key_reads_one_repo_file_and_maps_the_head_read() {
+        assert_eq!(Declared::parse(&with("")).map(|found| found.seat_constitution), Ok(None));
+        let declared = Declared::parse(&with("seat-constitution = \"contracts/seat/brief.txt\"\n"));
+        assert_eq!(declared.map(|found| found.seat_constitution), Ok(Some("contracts/seat/brief.txt".to_owned())));
+        assert_eq!(seat_of(None), SeatConstitution::Absent, "宣言が無い");
+        assert_eq!(seat_of(Some(Declared::parse(&with("")))), SeatConstitution::Absent, "key の無い宣言");
+        assert_eq!(seat_of(Some(Err(Vec::new()))), SeatConstitution::Unreadable, "不備の宣言");
+        let declared = Declared::parse(&with("seat-constitution = \"a/b.txt\"\n"));
+        assert_eq!(seat_of(Some(declared)), SeatConstitution::Declared("a/b.txt".to_owned()), "名乗りの字のまま");
+    }
+
+    /// 配列・真偽・空・絶対 path・home の短縮記号・..・末尾 /・閉じた字の外（空白）は key と行番号（4 行目）を名指す不備。
+    #[test]
+    fn vbconst_key_refuses_lists_bools_and_paths_outside_the_repo() {
+        for value in ["[\"a.txt\"]", "true", "\"\"", "\"/abs/a.txt\"", "\"a~b.txt\"", "\"../a.txt\"", "\"dir/\"", "\"a b.txt\""] {
+            let errors = Declared::parse(&with(&format!("seat-constitution = {value}\n"))).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("seat-constitution")), "{value}: {errors:?}");
+        }
     }
 
     /// key が true は加わる・false と key の無い宣言は加わらない（欄は真偽のまま）。

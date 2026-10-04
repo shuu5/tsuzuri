@@ -41,6 +41,7 @@ use crate::fleet::store::{self, LockPolicy, StoreError};
 use crate::name::{BUILD_COMMIT, NAME};
 use crate::rules::manifest::Manifest;
 use crate::seat::ledger::LedgerError;
+use crate::seat::brief::copy::Copy;
 use crate::seat::recent;
 use crate::seat::state::Event;
 use anchor_guard::AnchorDecision;
@@ -551,9 +552,13 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
     let drafts_dir = crate::seat::drafts_dir(hooked.dir, &target);
     let drafts = std::path::absolute(&drafts_dir).unwrap_or(drafts_dir);
     let text = crate::seat::brief::render(row.role, row, &capabilities, &ledger, &drafts.to_string_lossy());
-    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: text.trim_end_matches('\n') };
+    // 要の写しを名乗った席は憲法の 5 行の代わりに写しを字のまま出す（tsuzuri の判断の記録 ADR-38 の決定 (5)・key の無い席は 12 行のまま）。
+    let copy = Copy::read(hooked.root, &crate::pipe::declaration::seat_constitution(hooked.root));
+    let lines = copy.lines(&text);
+    let joined = lines.join("\n");
+    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: &joined };
     outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
-    outcome.out.extend(text.lines().map(str::to_owned));
+    outcome.out.extend(lines);
     precompact_out(hooked, outcome, payload, &target, started);
     recent(hooked, outcome, started, read.as_deref().map_err(|reason| *reason));
 }

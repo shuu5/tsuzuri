@@ -14,6 +14,7 @@ use crate::cli_args::{self, Allowed};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
 use crate::invocation::Invocation;
 use crate::name::NAME;
+use crate::pipe::declaration::SeatConstitution;
 use std::path::{Path, PathBuf};
 
 /// 所属の目印の固定名（ADR-0004 §2.2 面 1）。**版番号に依らず固定**する（R-O3）。
@@ -159,7 +160,7 @@ pub fn state_dir(root: &Path) -> Option<PathBuf> {
 /// `vessel` の使い方。
 pub fn usage() -> String {
     format!(
-        "usage: {NAME} vessel <init --state-dir D [--version N]|show|check> [ROOT]\n       {NAME} vessel update --state-dir S [--remote R] [--branch B]"
+        "usage: {NAME} vessel <init --state-dir D [--version N]|show|check> [ROOT]\n       {NAME} vessel update --state-dir S [--remote R] [--branch B]\n       {NAME} vessel seat-constitution --project DIR"
     )
 }
 
@@ -167,6 +168,8 @@ pub fn usage() -> String {
 const ALLOWED_INIT: &[cli_args::Allowed] = &[Allowed::value("--state-dir"), Allowed::value("--version")];
 /// `vessel show` / `vessel check`（flag を受けない）。
 const ALLOWED_BARE: &[cli_args::Allowed] = &[];
+/// `vessel seat-constitution`（`--project` だけ・tsuzuri の判断の記録 ADR-38 の決定 (6)・`ROOT` を取らない）。
+const ALLOWED_SEAT: &[cli_args::Allowed] = &[Allowed::value("--project")];
 /// `vessel update`（設計 consumer-sync.md §5・`ROOT` を取らない＝repo は `[[vessel]] repo` が名指す）。
 const ALLOWED_UPDATE: &[cli_args::Allowed] =
     &[Allowed::value("--state-dir"), Allowed::value("--remote"), Allowed::value("--branch")];
@@ -177,6 +180,7 @@ pub fn dispatch(args: &[String]) -> Outcome {
         Some("init") => Some(ALLOWED_INIT),
         Some("show" | "check") => Some(ALLOWED_BARE),
         Some("update") => Some(ALLOWED_UPDATE),
+        Some("seat-constitution") => Some(ALLOWED_SEAT),
         _ => None,
     };
     let rest = args.get(1..).unwrap_or_default();
@@ -185,6 +189,9 @@ pub fn dispatch(args: &[String]) -> Outcome {
     }
     if args.first().is_some_and(|verb| verb == "update") {
         return update_cmd(rest);
+    }
+    if args.first().is_some_and(|verb| verb == "seat-constitution") {
+        return seat_constitution_cmd(rest);
     }
     let root = match root_of(args) {
         Ok(found) => found,
@@ -332,6 +339,36 @@ fn check(root: &Path) -> Outcome {
         Served::ByOther(other) => {
             Outcome::failed(RC_BROKEN, vec![format!("vessel: {other} が名乗っている")])
         }
+    }
+}
+
+/// `vessel seat-constitution --project DIR` の口（tsuzuri の判断の記録 ADR-38 の決定 (6)）: DIR を含む repo にこの器が仕え、その HEAD の
+/// 宣言が任意 key `seat-constitution` を名乗る周だけ rc 0（stdout に `seat-constitution <path>` の 1 行）で、この binary の SessionStart の
+/// brief が要の写しを出す（写しの file を読めない周も brief が名指す）。仕えない・key が無い周は rc 1、宣言を読めない周は rc 2（stderr に
+/// 1 行）。暫定の hook がこの rc で黙るかを決める（器を古い binary へ戻すと口が無く rc が 0 でなくなる）。
+fn seat_constitution_cmd(rest: &[String]) -> Outcome {
+    let refused = |error: cli_args::ArgsError| cli_args::refusal("vessel", &error, usage());
+    let parsed = match cli_args::parse(rest, ALLOWED_SEAT) {
+        Ok(found) => found,
+        Err(error) => return refused(error),
+    };
+    if let Some(extra) = parsed.positionals().first() {
+        return refused(cli_args::ArgsError::Unknown((*extra).to_owned()));
+    }
+    let project = match parsed.need("--project") {
+        Ok(found) => found,
+        Err(error) => return refused(error),
+    };
+    let Some(root) = repo_root(Path::new(project)) else {
+        return Outcome::failed(RC_REFUSED, vec![format!("vessel: {project} は git の repo でない")]);
+    };
+    if !matches!(served(&root), Served::ByMe(_)) {
+        return Outcome::failed(RC_REFUSED, vec![format!("vessel: {} にこの器が仕えない", root.display())]);
+    }
+    match crate::pipe::declaration::seat_constitution(&root) {
+        SeatConstitution::Declared(path) => Outcome::ok_line(format!("seat-constitution {path}")),
+        SeatConstitution::Absent => Outcome::failed(RC_REFUSED, vec!["vessel: 宣言に seat-constitution が無い".to_owned()]),
+        SeatConstitution::Unreadable => Outcome::failed(RC_BROKEN, vec!["vessel: HEAD の宣言を読めない".to_owned()]),
     }
 }
 
@@ -639,10 +676,53 @@ fn record_install(state_dir: &Path, install: &crate::fleet::Install) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::{repo_root, update, UpdateError};
+    use super::{dispatch, git_ok, marker_path, repo_root, update, write_binding, UpdateError, GENERATION};
     use crate::name::NAME;
     use crate::pipe::fixture::{exited, scratch, Call, Stub};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+
+    /// 必須 key だけの宣言の本文の後ろに `extra` を足す。
+    fn decl(extra: &str) -> String {
+        format!("schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n{extra}")
+    }
+
+    /// 宣言を書いて木の全部を commit する。
+    fn commit_decl(repo: &Path, body: &str) {
+        let _ = std::fs::write(repo.join(".vessel.toml"), body);
+        let _ = git_ok(repo, &["add", "-A"]);
+        let _ = git_ok(repo, &["commit", "-q", "-m", "decl"]);
+    }
+
+    /// 要の写しの問いの口（rc・stdout・stderr の行数）を撃つ。
+    fn ask(repo: &Path) -> (u8, Vec<String>, usize) {
+        let args: Vec<String> = ["seat-constitution", "--project"].iter().map(|arg| (*arg).to_owned()).chain([repo.display().to_string()]).collect();
+        let outcome = dispatch(&args);
+        (outcome.rc, outcome.out, outcome.err.len())
+    }
+
+    /// 要の写しの問いの口は、この器が仕える repo の HEAD の宣言が key を名乗る周だけ rc 0 と `seat-constitution <path>` の 1 行で、
+    /// 1 句だけ外した周（key の無い宣言・作業ツリーにだけ在る key・別の器の名乗り）は rc 1、不備の宣言は rc 2（どれも stdout 0 行・
+    /// stderr 1 行）。
+    #[test]
+    fn vbconst_query_answers_zero_only_for_a_declared_key_of_a_served_repo() {
+        let (repo, state) = (scratch("vbconst-query-repo"), scratch("vbconst-query-state"));
+        for args in [&["init", "-q", "-b", "main"][..], &["config", "user.name", "q"], &["config", "user.email", "q@example.invalid"]] {
+            let _ = git_ok(&repo, args);
+        }
+        assert!(write_binding(&repo, &state.display().to_string(), GENERATION).is_ok(), "この器が仕える");
+        let key = "seat-constitution = \"contracts/seat/brief.txt\"\n";
+        commit_decl(&repo, &decl(""));
+        assert_eq!(ask(&repo), (1, Vec::new(), 1), "key の無い宣言");
+        let _ = std::fs::write(repo.join(".vessel.toml"), decl(key));
+        assert_eq!(ask(&repo), (1, Vec::new(), 1), "作業ツリーにだけ在る key は読まない");
+        commit_decl(&repo, &decl(key));
+        assert_eq!(ask(&repo), (0, vec!["seat-constitution contracts/seat/brief.txt".to_owned()], 0), "仕える repo の HEAD の key");
+        commit_decl(&repo, &decl("seat-constitution = [\"a.txt\"]\n"));
+        assert_eq!(ask(&repo), (2, Vec::new(), 1), "不備の宣言");
+        commit_decl(&repo, &decl(key));
+        let _ = std::fs::write(marker_path(&repo), "name=other\nversion=2\n");
+        assert_eq!(ask(&repo), (1, Vec::new(), 1), "別の器の名乗り");
+    }
 
     /// vessel の git の 3 関数と cargo は起動の記述を通る（設計 core-boundary.md §9 行 h）: git は `-C <repo>` の後に
     /// 呼び手の列・cargo は install の引数を repo の cwd で撃つ。update は status → fetch → merge → cargo の順で、cargo の

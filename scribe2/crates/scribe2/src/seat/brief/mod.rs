@@ -10,7 +10,11 @@
 //! [`pointer::classify`] が 1 本残らず分類する・字面の語彙で判定しない・ADR-0090）。行の分類（[`classify_line`]）は in-file の歯が読み、
 //! xtask の drift 検査（C14.2・AC17）は同じ規律を雛形 file に対して測る。**env を読まない**（C2.2）: 穴の値は
 //! 登録 row と rules 行 `role.<役割>` から来る。
+//!
+//! 宣言の任意 key `seat-constitution` を名乗った project の席では、憲法の 5 行（[`CONSTITUTION_LINES`]）を出さず、要の写しを字のまま
+//! 出してから残りの 7 行（役割の行）を出す（[`copy`]・tsuzuri の判断の記録 ADR-38 の決定 (5)(11)・key の無い席は 12 行のまま）。
 
+pub mod copy;
 pub mod pointer;
 
 use super::role::{Capability, Role};
@@ -55,6 +59,14 @@ impl Hole {
             Self::Drafts => "{drafts}",
         }
     }
+}
+
+/// 雛形の憲法の効く部分の 5 行（1 始まりの行番号・ADR-0045 §2 (3)）。要の写しを名乗った席では出さない（[`role_lines`]）。
+pub const CONSTITUTION_LINES: std::ops::RangeInclusive<usize> = 4..=8;
+
+/// 穴を埋めた指示文から憲法の 5 行（[`CONSTITUTION_LINES`]）を除いた役割の行（並びのまま・行の字は替えない）。
+pub fn role_lines(brief: &str) -> impl Iterator<Item = &str> {
+    brief.lines().enumerate().filter(|(at, _)| !CONSTITUTION_LINES.contains(&at.saturating_add(1))).map(|(_, line)| line)
 }
 
 /// 権能の名の列の区切り（生成文の `{capabilities}` の中）。
@@ -173,7 +185,7 @@ pub fn render(role: Role, registration: &Registration, capabilities: &[Capabilit
 
 #[cfg(test)]
 mod tests {
-    use super::{braces, capabilities_of, classify_line, render, template, violations, Hole, LineKind, HOLES};
+    use super::{braces, capabilities_of, classify_line, render, role_lines, template, violations, Hole, LineKind, CONSTITUTION_LINES, HOLES};
     use crate::fleet::Registration;
     use crate::order::is_declaration_order;
     use crate::rules::manifest::Manifest;
@@ -326,6 +338,21 @@ mod tests {
         let braced = render(role, &registration(role), &[Capability::Answer], "unknown", "/d/{role}/drafts");
         assert!(braced.contains("/d/{role}/drafts の直下（"),"値の中の {{role}} は展開しない: {braced}");
         assert_eq!(braced.lines().count(), 12, "行の追加も削除もしない");
+    }
+
+    /// 役割の行は雛形の 12 行から 4〜8 行目だけを除いた 7 行で並びと字を替えず、除く 5 行は器の憲法の禁止と確認と順位（憲法 A と N の条・
+    /// ADR-0046）を名指す行の全部で、残る 7 行はそれを 1 つも名指さない。
+    #[test]
+    fn vbconst_role_lines_drop_only_the_five_constitution_lines() {
+        let text = template(Role::Orchestrator);
+        let all: Vec<&str> = text.lines().collect();
+        let kept: Vec<&str> = role_lines(text).collect();
+        let want: Vec<&str> = all.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| *line).collect();
+        assert_eq!(kept, want, "4〜8 行目だけを除き並びのまま");
+        assert_eq!((kept.len(), CONSTITUTION_LINES.clone().count()), (7, 5), "7 行と 5 行");
+        let cites = |line: &str| line.contains("憲法 A") || line.contains("憲法 N") || line.contains("ADR-0046");
+        assert!(all[3..8].iter().all(|line| cites(line)), "除く 5 行は器の憲法の禁止と確認と順位を名指す");
+        assert!(!kept.iter().any(|line| cites(line)), "残る 7 行はそれを名指さない: {kept:?}");
     }
 
     /// 権能は rules 行 `role.<役割>` から読む: 行が無い・不発効・列でない周は `None`。
