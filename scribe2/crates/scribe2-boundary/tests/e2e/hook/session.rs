@@ -1697,6 +1697,7 @@ fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
     let seat = place.repo.join("contracts").join("seat");
     fs::create_dir_all(&seat).expect("写しの置き場を作れる");
     fs::write(seat.join("brief.txt"), copy).expect("写しを書ける");
+    fs::write(seat.join("role-max-bytes.txt"), ROLE_MAX_FILE).expect("上限の file を書ける");
     let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
     fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
     git(&place.repo, &["add", ".vessel.toml"]);
@@ -1710,5 +1711,72 @@ fn vbconst_hook_brief_prints_the_copy_in_place_of_the_five_lines() {
     let first = brief.first().cloned().unwrap_or_default();
     assert!(first.contains("path=contracts/seat/brief.txt reason=not-found") && first.contains("tz derive --write"), "{first}");
     assert_eq!(brief.get(1..), Some(&roles[..]), "断りの 1 行の後ろは役割の 7 行で 5 行へ戻さない");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}
+
+// ---- 出力ごとの記録と役割の行の上限（行 v-brief-meter・tsuzuri の判断の記録 ADR-38 の決定 (4)・接頭辞 `vbmeter_`）----
+
+/// 要の写しの隣の役割の行の上限の file の字（tsuzuri の tz derive が導く形・頭の 1 行と数の 1 行・器は 2 行目だけを読む）。
+const ROLE_MAX_FILE: &str = "生成物・手で直さない・design-intent/rules.yaml seat-role-bytes\n2000\n";
+
+/// 要の写しを名乗った席の SessionStart は、記録を写し（写しの byte）と役割の行（7 行の byte）に分け、終わりに 1 回の出力の字の数の記録
+/// （bytes は stdout の byte）を足し、写しの隣の上限の file の 2000 の内なら越えの記録も stderr の行も無い。上限の file が無い周は読めないの
+/// 記録と stderr の 1 行、役割の行の byte より 1 小さい上限の周は越えの記録と stderr の 1 行で、どちらも stdout は替えない。越えの周の後の doctor は
+/// seat-role=over の 1 行で席と byte と上限を名指す。key の無い同じ席の記録は名乗り・指示文・DATA の 3 件のまま（対照）。
+#[test]
+fn vbmeter_hook_session_start_records_each_output_and_names_the_over() {
+    let place = role_place();
+    let path = stub_seat(&place, "vbmeter", Some("orchestrator"));
+    let args = ["session-start", "--pane", STUB_PANE, "--rules", &place.rules, "--bd", &place.bd];
+    let shoot = || {
+        let before = inject_lines(&place.state).len();
+        let out = run_stub_hook(&path, &args, &stamp_payload(&place.repo, "sid-recent"));
+        let added: Vec<String> = inject_lines(&place.state).into_iter().skip(before).collect();
+        let whats: Vec<String> = added.iter().map(|line| what_of(line)).collect();
+        (out, added, whats)
+    };
+    let (out, _, whats) = shoot();
+    assert_eq!(whats, ["session-start-header", "session-start-brief", "session-start-recent"], "key の無い席は 3 件のまま");
+    let (twelve, _) = split_recent(after_header(&out));
+    let roles: Vec<String> = twelve.iter().enumerate().filter(|(at, _)| !(3..8).contains(at)).map(|(_, line)| line.clone()).collect();
+    let role_bytes = roles.join("\n").len() as u64 + 1;
+    let copy = "写し 甲\n乙\n";
+    fs::create_dir_all(place.repo.join("contracts").join("seat")).expect("写しの置き場を作れる");
+    fs::write(place.repo.join("contracts/seat/brief.txt"), copy).expect("写しを書ける");
+    let cap_file = place.repo.join("contracts/seat/role-max-bytes.txt");
+    fs::write(&cap_file, ROLE_MAX_FILE).expect("上限の file を書ける");
+    let decl = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nseat-constitution = \"contracts/seat/brief.txt\"\n";
+    fs::write(place.repo.join(".vessel.toml"), decl).expect("宣言を書ける");
+    git(&place.repo, &["add", ".vessel.toml"]);
+    git(&place.repo, &["commit", "-q", "-m", "decl"]);
+    let (out, added, whats) = shoot();
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let total = format!("session-start-total chars={}", stdout.chars().count());
+    let want = ["session-start-header", "session-start-constitution", "session-start-brief", "session-start-recent", &total];
+    assert_eq!(whats, want, "写し・役割の行・DATA・字の数（上限の内）: {added:?}");
+    let bytes: Vec<Option<json_lite::Value>> = [1, 2, 4].iter().map(|at| added.get(*at).and_then(|line| value_of(line, "bytes"))).collect();
+    let want = [copy.len() as u64, role_bytes, stdout.len() as u64].map(|found| Some(json_lite::Value::Num(found)));
+    assert_eq!(bytes, want, "写しの byte・役割の 7 行の byte・stdout の byte");
+    assert!(!stderr_text(&out).contains("役割の行"), "上限の内は stderr に出さない: {}", stderr_text(&out));
+    fs::remove_file(&cap_file).expect("上限の file を消せる");
+    let (bare, _, whats) = shoot();
+    assert_eq!(whats.get(3).map(String::as_str), Some("seat-role-unmeasured path=contracts/seat/role-max-bytes.txt"), "読めない: {whats:?}");
+    let alarm = "役割の行の上限を読めない path=contracts/seat/role-max-bytes.txt（次の 1 手: tz derive --write";
+    assert!(stderr_text(&bare).contains(alarm), "{}", stderr_text(&bare));
+    assert_eq!(String::from_utf8_lossy(&bare.stdout), stdout, "読めなくても出力は替えない");
+    let cap = role_bytes - 1;
+    fs::write(&cap_file, ROLE_MAX_FILE.replace("\n2000\n", &format!("\n{cap}\n"))).expect("上限を替えられる");
+    let (over, _, whats) = shoot();
+    assert_eq!(whats.get(3), Some(&format!("seat-role-over bytes={role_bytes} cap={cap}")), "越えの記録: {whats:?}");
+    let alarm = format!("役割の行が上限を越えた bytes={role_bytes} cap={cap} path=contracts/seat/role-max-bytes.txt");
+    assert!(stderr_text(&over).contains(&alarm), "{}", stderr_text(&over));
+    assert_eq!(String::from_utf8_lossy(&over.stdout), stdout, "越えても出力は替えない");
+    let socket = place.sock_dir.join("no-server-sock").display().to_string();
+    let state = place.state.display().to_string();
+    let doctor = Command::new(bin()).args(["doctor", "--state-dir", &state, "--tmux-socket", &socket]).env("PATH", &path).output().expect("doctor を撃てる");
+    let lines: Vec<String> = String::from_utf8_lossy(&doctor.stdout).lines().filter(|line| line.starts_with("seat-role=")).map(str::to_owned).collect();
+    let head = "seat-role=over seats=1 over=1 unmeasured=0 last=";
+    let tail = format!(" bytes={role_bytes} cap={cap}");
+    assert!(lines.len() == 1 && lines.iter().all(|line| line.starts_with(head) && line.ends_with(&tail)), "doctor の 1 行: {lines:?}");
     clean(&[&place.repo, &place.state, &place.sock_dir]);
 }

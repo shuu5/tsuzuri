@@ -12,9 +12,11 @@
 //! 登録 row と rules 行 `role.<役割>` から来る。
 //!
 //! 宣言の任意 key `seat-constitution` を名乗った project の席では、憲法の 5 行（[`CONSTITUTION_LINES`]）を出さず、要の写しを字のまま
-//! 出してから残りの 7 行（役割の行）を出す（[`copy`]・tsuzuri の判断の記録 ADR-38 の決定 (5)(11)・key の無い席は 12 行のまま）。
+//! 出してから残りの 7 行（役割の行）を出す（[`copy`]・tsuzuri の判断の記録 ADR-38 の決定 (5)(11)・key の無い席は 12 行のまま）。その席の
+//! 記録は写しと役割の行に分け、役割の行の byte の上限の越えを名指す（[`meter`]・同じ記録の決定 (4)）。
 
 pub mod copy;
+pub mod meter;
 pub mod pointer;
 
 use super::role::{Capability, Role};

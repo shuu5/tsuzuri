@@ -43,12 +43,20 @@ impl Copy {
     /// brief の行（`brief` は穴を埋めた雛形の 12 行）: key の無い席は 12 行のまま、名乗った席は写しの字（読めない周は断りの 1 行）の後ろに
     /// 役割の行。
     pub fn lines(&self, brief: &str) -> Vec<String> {
+        match self.parts(brief) {
+            None => brief.lines().map(str::to_owned).collect(),
+            Some((head, role)) => head.into_iter().chain(role).collect(),
+        }
+    }
+
+    /// 名乗った席の写しの行（読めない周は断りの 1 行）と役割の行の組（記録を分ける読み手は [`super::meter`]・key の無い席は `None`）。
+    pub fn parts(&self, brief: &str) -> Option<(Vec<String>, Vec<String>)> {
         let head: Vec<String> = match self {
-            Self::Absent => return brief.lines().map(str::to_owned).collect(),
+            Self::Absent => return None,
             Self::Read(text) => verbatim(text),
             Self::Refused(line) => vec![line.clone()],
         };
-        head.into_iter().chain(role_lines(brief).map(str::to_owned)).collect()
+        Some((head, role_lines(brief).map(str::to_owned).collect()))
     }
 }
 

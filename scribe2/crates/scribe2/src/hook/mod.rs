@@ -42,6 +42,7 @@ use crate::name::{BUILD_COMMIT, NAME};
 use crate::rules::manifest::Manifest;
 use crate::seat::ledger::LedgerError;
 use crate::seat::brief::copy::Copy;
+use crate::seat::brief::meter;
 use crate::seat::recent;
 use crate::seat::state::Event;
 use anchor_guard::AnchorDecision;
@@ -452,6 +453,12 @@ fn record(emit: &Emit, hooked: &Hooked, started: Instant) -> InjectionRecord {
     }
 }
 
+/// 数えた byte を持つ記録（要の写しを名乗った席の分けた記録・[`meter`]）。
+fn measured(entry: &meter::Entry, hooked: &Hooked, started: Instant) -> InjectionRecord {
+    let emit = Emit { who: EVENT_SESSION_START, what: &entry.what, when: "SessionStart", line: "" };
+    InjectionRecord { bytes: entry.bytes, ..silent(&emit, hooked, started) }
+}
+
 /// 1 byte も出さなかった周の記録（`bytes` は実出力どおり 0）。
 fn silent(emit: &Emit, hooked: &Hooked, started: Instant) -> InjectionRecord {
     InjectionRecord {
@@ -493,11 +500,15 @@ fn session_start(hooked: &Hooked, version: u64, payload: &str, started: Instant)
     let entry = record(&emit, hooked, started);
     let mut outcome = Outcome::ok_line(line);
     outcome.err = record_lines(hooked.dir, &entry);
-    brief(hooked, &mut outcome, payload, started);
+    let metered = brief(hooked, &mut outcome, payload, started);
     // 群の逼迫の 1 行は brief の後ろ（設計 account-lifecycle.md §19 形 5・群に属さない anchor は 1 語も足さない）。
     let (out, err) = group::lines(hooked, (EVENT_SESSION_START, "SessionStart"), started);
     outcome.out.extend(out);
     outcome.err.extend(err);
+    // 要の写しを名乗った席は 1 回の出力の字の数を記録の終わりに 1 行（tsuzuri の判断の記録 ADR-38 の撤退の条件 (5)）。
+    if metered {
+        outcome.err.extend(record_lines(hooked.dir, &measured(&meter::total(&outcome.out), hooked, started)));
+    }
     outcome
 }
 
@@ -510,31 +521,31 @@ const WHAT_BRIEF: &str = "session-start-brief";
 /// **登録の無い席・pane の無い周・target が解けない周は 0 byte**（断りも出さない・記録も増やさない）。読めない周
 /// （event log・rules 行）は guard と同じ理由の 1 語を stderr に 1 行（席は止めない＝rc は変えない・注入は guard で
 /// はない・設計 §6）。指示文の後ろは圧縮の直前の 1 枠（`source = compact` の周だけ・[`precompact_out`]）→ 復帰の
-/// DATA（[`recent`]）の順。
-fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant) {
+/// DATA（[`recent`]）の順。要の写しを名乗った席の周だけ true（記録を写しと役割の行に分けた周・[`meter`]）。
+fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant) -> bool {
     let Some(pane) = hooked.pane.filter(|found| !found.trim().is_empty()) else {
-        return;
+        return false;
     };
     let socket = hooked.socket.filter(|found| !found.trim().is_empty());
     let Some(target) = crate::seat::target_of_pane(socket, pane) else {
-        return;
+        return false;
     };
     let Ok(events) = store::read_all(hooked.dir) else {
         outcome.err.push(brief_refused("registry-unreadable"));
-        return;
+        return false;
     };
     let state = crate::fleet::replay(&events);
     let Some(row) = crate::seat::role::registration_of_target(&state, &target) else {
-        return;
+        return false;
     };
     let manifest = hooked.rules.map_or_else(Manifest::embedded, |path| Manifest::load(Path::new(path)));
     let Ok(manifest) = manifest else {
         outcome.err.push(brief_refused("rules-unreadable"));
-        return;
+        return false;
     };
     let Some(capabilities) = crate::seat::brief::capabilities_of(&manifest, row.role) else {
         outcome.err.push(brief_refused(&format!("no-row {}", role_guard::row_id(row.role))));
-        return;
+        return false;
     };
     let bd = hooked.bd.filter(|found| !found.trim().is_empty()).unwrap_or(crate::seat::ledger::DEFAULT_BD);
     // 台帳の子 process は **1 回**（件数の 1 行と復帰の DATA が同じ出力を読む・設計 seat-roles.md §21）。
@@ -553,14 +564,26 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
     let drafts = std::path::absolute(&drafts_dir).unwrap_or(drafts_dir);
     let text = crate::seat::brief::render(row.role, row, &capabilities, &ledger, &drafts.to_string_lossy());
     // 要の写しを名乗った席は憲法の 5 行の代わりに写しを字のまま出す（tsuzuri の判断の記録 ADR-38 の決定 (5)・key の無い席は 12 行のまま）。
-    let copy = Copy::read(hooked.root, &crate::pipe::declaration::seat_constitution(hooked.root));
+    let declared = crate::pipe::declaration::seat_constitution(hooked.root);
+    let copy = Copy::read(hooked.root, &declared);
     let lines = copy.lines(&text);
-    let joined = lines.join("\n");
-    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: &joined };
-    outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
+    // 名乗った席は写しと役割の行を別の記録に書き、役割の行の byte が写しの隣の上限の file の数を越えた周を名指す（同じ記録の決定 (4)・
+    // key の無い席は 1 件のまま）。
+    let metered = meter::brief_entries(&copy, &text, &meter::cap_of(hooked.root, &declared), WHAT_BRIEF);
+    if let Some((entries, alarms)) = &metered {
+        for entry in entries {
+            outcome.err.extend(record_lines(hooked.dir, &measured(entry, hooked, started)));
+        }
+        outcome.err.extend(alarms.iter().cloned());
+    } else {
+        let joined = lines.join("\n");
+        let emit = Emit { who: EVENT_SESSION_START, what: WHAT_BRIEF, when: "SessionStart", line: &joined };
+        outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
+    }
     outcome.out.extend(lines);
     precompact_out(hooked, outcome, payload, &target, started);
     recent(hooked, outcome, started, read.as_deref().map_err(|reason| *reason));
+    metered.is_some()
 }
 
 /// 記録の `what`（圧縮の直前の 1 枠を出した周）。
