@@ -1803,6 +1803,11 @@
    "label": "段の tile",
    "plain": "スマホの形で板の代わりに出る\n・ 5 つの段の数と色\n・ 押した段の札だけが下に開く\n・ 初めは札の在る一番急ぐ段",
    "internal": "pipeline の tiles_view と src/tiles.rs（行 g-layout）"
+  },
+  "consult": {
+   "label": "相談",
+   "plain": "席の文脈と分けた調べと検証の窓\n・ 題と形と model を書いて頼む\n・ 窓を開くのは席\n・ 30 分受けられなければ席に届いていない\n→ 色の付く数は持たない",
+   "internal": "GET /api/consult ・ POST /api/consult/request（判断の記録 ADR-29 決定 (4)(9)・行 cs-bar）"
   }
  }
 }

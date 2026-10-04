@@ -39,7 +39,7 @@ fn bvacc_widths_are_rule_r23() {
     assert!(row.contains(&want), "R-23 に {want} が無い: {row}");
 }
 
-/// (3) 画面は home・帯の印が開く 7 つの窓（窓の宣言の順・query の名は topbar の WIN_PARAM）・account board の
+/// (3) 画面は home・帯の印が開く 8 つの窓（窓の宣言の順・相談の窓は行 cs-bar・query の名は topbar の WIN_PARAM）・account board の
 /// 3 つの tab の順で、home は最初（節点の頁に開く最初の節点を採る画面）。
 #[test]
 fn bvacc_screens_open_windows() {
@@ -57,7 +57,7 @@ fn bvacc_screens_open_windows() {
     assert_eq!(
         keys,
         [
-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest"
+            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
         ]
     );
     let mut want = vec!["?".to_string()];

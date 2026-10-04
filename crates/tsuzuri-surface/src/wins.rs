@@ -5,7 +5,7 @@
 //! （頁から block を外したのは 1 枚の画面への切り替えの行）。抜けの検査の窓の下に台帳の module の未反映の段を
 //! 描く（要件 FR13・台帳の block から移した・行 g-ledger-trim）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
 //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
-//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。
+//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。相談の窓は頼みの form と一覧（consultwin の body・行 cs-bar）。
 //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
 
 use std::cmp::Reverse;
@@ -14,6 +14,7 @@ use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::graph::{GraphNode, NodeKind};
 
+use crate::consultwin::CONSULT_KEY;
 use crate::frame::{Mode, node_href};
 use crate::project::Body;
 use crate::project::pipeline::{self, age_at, stage_word};
@@ -32,6 +33,7 @@ pub fn frame_of(win: Win) -> (u32, &'static str) {
         Win::Gaps => (600, "gaps"),
         Win::Legend => (560, "status"),
         Win::Dest => (520, "stage_target"),
+        Win::Consult => (720, CONSULT_KEY),
     }
 }
 
@@ -175,6 +177,7 @@ mod dom {
             Win::Gaps => view! { {gaps::inner()}{ledger::unref_panel()} }.into_any(),
             Win::Legend => legend::inner(),
             Win::Dest => stage::inner(),
+            Win::Consult => crate::consultwin::body(),
         };
         Frame {
             width,

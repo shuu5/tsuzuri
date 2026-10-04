@@ -77,7 +77,7 @@ fn note(key: &str) -> String {
         .clone()
 }
 
-const WINS: [Win; 7] = [
+const WINS: [Win; 8] = [
     Win::Ask,
     Win::Stalled,
     Win::Notices,
@@ -85,6 +85,7 @@ const WINS: [Win; 7] = [
     Win::Gaps,
     Win::Legend,
     Win::Dest,
+    Win::Consult,
 ];
 
 /// 質問の窓の題の横の残りの数（局面の残りを count_text で出す span）。

@@ -9,6 +9,8 @@
 pub mod account;
 /// 質問の窓（1 問ずつの選び方と局面は host でも組む・窓の DOM は wasm の target だけ・行 g-ask-win）。
 pub mod askwin;
+/// 相談の窓（頼みの form と一覧の段は host でも組む・窓の DOM は wasm の target だけ・行 cs-bar）。
+pub mod consultwin;
 /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
 pub mod flight;
 pub mod frame;

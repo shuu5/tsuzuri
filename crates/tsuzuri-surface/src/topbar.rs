@@ -19,7 +19,7 @@ use crate::project::{Body, UNKNOWN, next, notice, state_key};
 use crate::view::{Fetched, hhmm};
 use crate::vocab::label;
 
-/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先）。
+/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Win {
     Ask,
@@ -29,11 +29,12 @@ pub enum Win {
     Gaps,
     Legend,
     Dest,
+    Consult,
 }
 
 impl Win {
     /// 全部の窓（宣言の順）。
-    pub const ALL: [Win; 7] = [
+    pub const ALL: [Win; 8] = [
         Win::Ask,
         Win::Stalled,
         Win::Notices,
@@ -41,6 +42,7 @@ impl Win {
         Win::Gaps,
         Win::Legend,
         Win::Dest,
+        Win::Consult,
     ];
 
     /// URL の query の win の値の名。
@@ -53,6 +55,7 @@ impl Win {
             Win::Gaps => "gaps",
             Win::Legend => "legend",
             Win::Dest => "dest",
+            Win::Consult => "consult",
         }
     }
 
@@ -411,6 +414,7 @@ mod dom {
         BAR, Count, GEAR, GEAR_KEY, NoticeLine, RECENT_KEY, SEAT_KEY, SeatBar, Use, Win, counts,
         gaps_mark, lead, notice_line, seat_bar,
     };
+    use crate::consultwin::CONSULT_KEY;
     use crate::frame::Mode;
     use crate::project::{Body, map, next, notice, seat, state_icon};
     use crate::view::hhmm;
@@ -588,6 +592,7 @@ mod dom {
                 <div class="clock">
                     {seat_part}
                     {gp}
+                    <button type="button" class="cslt" aria-label=label(CONSULT_KEY) on:click=move |_| wins.open(Win::Consult, false)>{label(CONSULT_KEY)}</button>
                     <span class="tm">{move || hhmm(now.get())}" "<small>"JST"</small></span>
                     {gear_view(bar)}
                 </div>
