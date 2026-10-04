@@ -486,7 +486,7 @@ fn bvlist_board_unread_line() {
     let ldom = &list[list.find("mod dom {").expect("mod dom")..];
     for want in [
         "let unread = move || pipe.with(board_unread).map(unmeasured);",
-        "<div class=\"ll-body\">{unread}{list}</div>",
+        "<div class=\"ll-body\" on:pointerleave=out>{unread}{list}</div>",
     ] {
         assert!(ldom.contains(want), "ledgerlist の DOM に {want} が無い");
     }

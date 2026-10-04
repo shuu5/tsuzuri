@@ -169,7 +169,7 @@ fn bvtrim_head_figure_burndown() {
         assert_eq!(head.matches(want).count(), 1, "{want}");
     }
     let view = cut(&dom, "pub fn view() -> AnyView {", "\n    }\n");
-    let want = "view! { {head_line(kind, query)}<div class=\"ll-body\">{unread}{list}</div> }.into_any()";
+    let want = "view! { {head_line(kind, query)}<div class=\"ll-body\" on:pointerleave=out>{unread}{list}</div> }\n            .into_any()";
     assert!(view.ends_with(&format!("\n        {want}")), "見出しが一覧の上に無い");
     let css = read("style.css");
     assert_eq!(

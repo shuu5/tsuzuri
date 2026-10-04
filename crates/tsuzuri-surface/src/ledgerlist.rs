@@ -12,6 +12,8 @@
 //! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
 //! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
 //! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
+//! 行にマウスの pointer を載せると板の対応する札に輪より薄い hover の印を付け、離すと外す（吹き出しは出さない・pointer の
+//! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)・行 g-list-hover）。
 //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use std::collections::BTreeMap;
@@ -550,6 +552,19 @@ pub fn ring(shown: Option<&str>, key: &str) -> bool {
     shown == Some(key)
 }
 
+/// 札に hover の印を付ける pointer の種類（マウスだけ・指で触る画面とペンは付けない・行 g-list-hover）。
+pub const HOVER_POINTER: &str = "mouse";
+
+/// 一覧の行に pointer が入った時に置く hover の id（pointer の種類が `HOVER_POINTER` の時だけ行の id・ほかは None）。
+pub fn hover_on(pointer: &str, id: &str) -> Option<String> {
+    (pointer == HOVER_POINTER).then(|| id.to_string())
+}
+
+/// 札に hover の印を付けるか（hover の id が札の id と同じで、吹き出しの開いている札でない＝輪が先・行 g-list-hover）。
+pub fn hover_lit(shown: Option<&str>, hover: Option<&str>, id: &str) -> bool {
+    hover == Some(id) && shown != Some(id)
+}
+
 /// 組の頭に輪の印を付けるか（吹き出しの開いている bead が組の open の行のどれか・見本の applyMarks の gh）。
 pub fn head_ring(g: &Lgroup, shown: Option<&str>) -> bool {
     shown.is_some_and(|s| g.rows.iter().any(|r| r.id == s))
@@ -572,8 +587,8 @@ mod dom {
 
     use super::{
         COUNTS_UNKNOWN, FACTS_PATH, KINDS, Kind, Lgroup, Lrow, NO_KIDS, NO_MATCH, SEARCH_HINT,
-        content, filtered, filtering, head_counts, head_ring, key_of, kind_tag, kpi, phases, pick,
-        ring, unref_head, with_phases,
+        content, filtered, filtering, head_counts, head_ring, hover_on, key_of, kind_tag, kpi,
+        phases, pick, ring, unref_head, with_phases,
     };
     use crate::frame::{Mode, node_href};
     use crate::kit::Folds;
@@ -585,17 +600,20 @@ mod dom {
     use crate::widgets::hover::attach_some;
     use crate::widgets::pop::{PopCtx, Via, board_unread};
 
-    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵。
+    /// 選びの状態（App が context に置く・頁に 1 つ・一覧と板が読む・行 g-select）: 選んだ epic の組の鍵と、
+    /// 一覧の行にマウスの pointer が載っている bead の id（行 g-list-hover）。
     /// 選んだ bead は吹き出しの開いている bead（`PopCtx::shown`）で、ここには持たない。
     #[derive(Clone, Copy)]
     pub struct SelCtx {
         pub epic: RwSignal<Option<String>>,
+        pub hover: RwSignal<Option<String>>,
     }
 
     impl Default for SelCtx {
         fn default() -> Self {
             Self {
                 epic: RwSignal::new(None),
+                hover: RwSignal::new(None),
             }
         }
     }
@@ -654,7 +672,14 @@ mod dom {
         };
         // 板の札が読めない間は、段の数と行の段の字が出ない理由を一覧の頭に出す（札が無いとは見せない）。
         let unread = move || pipe.with(board_unread).map(unmeasured);
-        view! { {head_line(kind, query)}<div class="ll-body">{unread}{list}</div> }.into_any()
+        // 一覧を出た pointer は hover の印を外す（行の組み直しで行の要素が替わっても印を残さない・行 g-list-hover）。
+        let out = move |_| {
+            if let Some(s) = sel {
+                s.hover.set(None);
+            }
+        };
+        view! { {head_line(kind, query)}<div class="ll-body" on:pointerleave=out>{unread}{list}</div> }
+            .into_any()
     }
 
     /// 一覧の見出し（指標の小さな数と 14 日の図・種類の切り替え・探す欄）。
@@ -824,6 +849,21 @@ mod dom {
             let id = r.id.clone();
             move || ring(shown().as_deref(), &id)
         };
+        // マウスの pointer を載せた行は板の札に hover の印を付け、離すと外す（吹き出しは出さない・行 g-list-hover）。
+        let sel = use_context::<SelCtx>();
+        let enter = {
+            let id = r.id.clone();
+            move |e: ev::PointerEvent| {
+                if let Some(s) = sel {
+                    s.hover.set(hover_on(&e.pointer_type(), &id));
+                }
+            }
+        };
+        let leave = move |_| {
+            if let Some(s) = sel {
+                s.hover.set(None);
+            }
+        };
         // 短い題の link の普通の押しは頁を移らず行の押しに任せる（新しい窓や tab で開く押しは link のまま）。
         let stay = |e: ev::MouseEvent| {
             if crate::board::plain_click(&e) {
@@ -831,7 +871,8 @@ mod dom {
             }
         };
         view! {
-            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>
+            <div class="ll-row" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press
+                on:pointerenter=enter on:pointerleave=leave>
                 <span class=class>{tag}</span>
                 <a class="ll-ls" href=href on:click=stay title=r.title.clone()>{r.short.clone()}</a>
                 {r.phase.clone().map(|p| view! { <span class="ll-ph">{p}</span> })}

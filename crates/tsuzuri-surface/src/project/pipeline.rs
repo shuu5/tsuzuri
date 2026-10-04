@@ -628,7 +628,7 @@ mod dom {
         misfit_href, open_columns, with_closed, with_lines, with_open,
     };
     use crate::frame::Mode;
-    use crate::ledgerlist::{SelCtx, dim, facts, pick, ring};
+    use crate::ledgerlist::{SelCtx, dim, facts, hover_lit, pick, ring};
     use crate::tiles::{open_of, press, tiles};
     use tsuzuri_contract::case::PATH as CASES_PATH;
 
@@ -775,7 +775,8 @@ mod dom {
         view! { <div class="pchips" role="group">{items}</div> }.into_any()
     }
 
-    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select）。
+    /// 札の選びの包み（選んだ epic の組でない札は薄く・吹き出しの開いている札は輪・行 g-select・
+    /// 一覧の行にマウスの pointer が載っている札は輪より薄い hover の印・行 g-list-hover）。
     fn pick_view(
         card: &Kcard,
         keys: StoredValue<BTreeMap<String, String>>,
@@ -787,8 +788,19 @@ mod dom {
         let dimmed =
             move || sel.is_some_and(|s| s.epic.with(|e| dim(e.as_deref(), key.as_deref())));
         let id = card.id.clone();
+        let hovered = {
+            let id = id.clone();
+            move || {
+                let shown = pop.and_then(PopCtx::shown);
+                sel.is_some_and(|s| {
+                    s.hover
+                        .with(|h| hover_lit(shown.as_deref(), h.as_deref(), &id))
+                })
+            }
+        };
         let ringed = move || ring(pop.and_then(PopCtx::shown).as_deref(), &id);
-        view! { <div class="kpick" class:dim=dimmed class:ring=ringed>{inner}</div> }.into_any()
+        view! { <div class="kpick" class:dim=dimmed class:ring=ringed class:hov=hovered>{inner}</div> }
+            .into_any()
     }
 
     /// 5 列の下の要修正の行（見本の案 A・札が 0 枚なら出さない・札は押すと bead と同じ id の節点の頁へ）。

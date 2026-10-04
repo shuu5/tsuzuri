@@ -246,7 +246,7 @@ fn bvsel_dom_wiring_text() {
     let list = read("src/ledgerlist.rs");
     let ldom = &list[list.find("mod dom {").expect("mod dom")..];
     for want in [
-        "<div class=\"ll-row\" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press>",
+        "<div class=\"ll-row\" class:ring=ringed data-id=r.id.clone() data-pop-row=r.id.clone() on:click=press",
         "p.press(&id, Via::Row);",
         "<a class=\"ll-ls\" href=href on:click=stay title=r.title.clone()>",
         "if crate::board::plain_click(&e) {",
@@ -267,7 +267,7 @@ fn bvsel_dom_wiring_text() {
         "let all = beads.with(|b| chips(&cols, &keys, list, &facts(b)));",
         "sel.epic.update(|e| *e = pick(e.as_deref(), &key))",
         "pick_view(c, keys, kcard_view(c, mode(), clock))",
-        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed>{inner}</div>",
+        "<div class=\"kpick\" class:dim=dimmed class:ring=ringed class:hov=hovered>{inner}</div>",
         "let key = keys.with_value(|k| k.get(&card.id).cloned());",
         "s.epic.with(|e| dim(e.as_deref(), key.as_deref()))",
     ] {

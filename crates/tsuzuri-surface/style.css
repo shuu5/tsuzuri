@@ -1124,6 +1124,9 @@ button.ll-gname:hover { background: var(--panel-2); }
 .ll-row { cursor: pointer; border-radius: 6px; }
 .ll-row:hover { background: var(--panel-2); }
 .ll-row.ring { background: color-mix(in srgb, var(--st-limit) 8%, var(--panel)); box-shadow: inset 0 0 0 2px var(--ink); }
+/* 一覧の行の hover の印（行 g-list-hover・判断の記録 ADR-30 決定 (8)）: マウスを載せた行の札に選びの輪より薄い輪・薄い札も見せる */
+.kpick.hov > .kcard { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 35%, transparent); }
+.kpick.dim.hov { opacity: 1; }
 /* 1 枚の画面（行 g-one-screen-a・見本 board-v2 の body の padding-top と main と .panel）: 帯の下の全部の高さを 2 つの面に使い、面の中だけが scroll する */
 body:has(#bar) { padding-top: 52px; }
 .page:has(> .one) { max-width: none; margin: 0; padding: 0; }
