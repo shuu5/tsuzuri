@@ -10,6 +10,9 @@
 //! `watched` の Source の `got` と `text` は、最後に始めた合流の読みの前に取った印（`read_mark`）が今の印と同じなら
 //! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す
 //! （行 e-snap）。印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す（行 e-ledger-lazy）。
+//! `watched` の Source は、今の印が最後に読めた読みの前に取った印（`good_mark`）と同じ間は bd を撃たず、最後に読めた字を
+//! 新しい字（stale の無し）として返し、落ちた読みの結果は持たない（次の `got` が読み直す）。変化の見張りの `read` の上限は
+//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
 //! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
 //! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
 
@@ -42,6 +45,12 @@ pub const BD_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 走っている読みに合流した呼び出しが待つ上限（`BD_TIMEOUT` に 1 秒を足す・便 e-coalesce）。
 pub const BD_WAIT: Duration = BD_TIMEOUT.saturating_add(GRACE);
+
+/// 変化の見張りの読み（`Source::read`）の bd が返すまでの上限（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
+pub const WATCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 変化の見張りの読みが走っている読みに合流して待つ上限（`WATCH_TIMEOUT` に 1 秒を足す）。
+pub const WATCH_WAIT: Duration = WATCH_TIMEOUT.saturating_add(GRACE);
 
 /// 読みが落ちても最後に読めた字を返す上限（契約の `READ_HOLD_S` 秒・行 e-hold）。
 pub const READ_HOLD: Duration = Duration::from_secs(READ_HOLD_S);
@@ -91,10 +100,12 @@ pub struct Source {
     last: Arc<Mutex<(Option<Arc<str>>, Instant)>>,
     /// 持ち回しの上限。
     hold: Duration,
-    /// 最後に終えた合流の読みの結果（読めた字か None・一度も終えていなければ外の None・行 e-snap）。
+    /// 最後に終えた合流の読みの結果（読めた字・一度も終えていないか最後の読みが落ちていれば None・行 e-snap・行 e-hold-mark）。
     latest: Arc<Mutex<Option<Option<Arc<str>>>>>,
     /// 最後に始めた合流の読みの前に取った印（一度も始めていなければ None・行 e-ledger-lazy）。
     read_mark: Arc<Mutex<Option<Mark>>>,
+    /// 最後に読めた合流の読みの前に取った印（一度も読めていなければ None・行 e-hold-mark）。
+    good_mark: Arc<Mutex<Option<Mark>>>,
     /// 真なら `got` と `text` は、印が `read_mark` と同じ間は bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返す。
     watched: bool,
     /// 見張りの読みの後に撃つ器の doctor の台帳の形の行（行 c-pipe-misfit）。
@@ -129,6 +140,7 @@ impl Source {
             hold: READ_HOLD,
             latest: Arc::new(Mutex::new(None)),
             read_mark: Arc::new(Mutex::new(None)),
+            good_mark: Arc::new(Mutex::new(None)),
             watched: false,
             form: None,
         }
@@ -210,10 +222,24 @@ impl Source {
         Mark::Store { manifest, sizes }
     }
 
-    /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。
+    /// bd を撃って台帳を読む（変化の見張りの読み・持ち回さない・落ちれば Unknown）。上限は、最後に読めた字が在れば
+    /// `WATCH_TIMEOUT`、一度も読めていなければ `BD_TIMEOUT`（server の起動の読みを長く止めない）。
+    /// 走っている読みに合流して落ちた結果を受けたときは、自分で読み直す（行 e-hold-mark）。
     /// 読めた字は最後に読めた字に置く。`form` が在れば読んだ字の複製で撃ちを起こす（待たない）。
     pub fn read(&self) -> Reading<Vec<LedgerItem>> {
-        let text = self.fresh();
+        let (timeout, wait) = if lock(&self.last).0.is_some() {
+            (WATCH_TIMEOUT, WATCH_WAIT)
+        } else {
+            (BD_TIMEOUT, BD_WAIT)
+        };
+        let mut own = false;
+        let mut text = self.shared.share(wait, || {
+            own = true;
+            self.shoot(timeout)
+        });
+        if text.is_none() && !own {
+            text = self.shared.share(wait, || self.shoot(timeout));
+        }
         if let Some(form) = &self.form {
             form.kick(text.as_deref().map(str::to_string));
         }
@@ -230,7 +256,14 @@ impl Source {
     /// `watched` の Source は、今の印が最後に始めた読みの前の印と違えば見張りを待たず自分で読み（`form` が在れば
     /// 読んだ字で撃ちを起こす）、同じなら bd を撃たず、走っている読みが在ればその終わりを `BD_WAIT` まで待った結果、
     /// 無ければ最後に終えた読みの結果を使う（一度も終えていなければ読む・行 e-snap・行 e-ledger-lazy）。
+    /// `watched` の Source は、今の印が `good_mark` と同じなら bd を撃たず最後に読めた字を stale の無しで返す（行 e-hold-mark）。
     pub fn got(&self) -> Got {
+        if let Some(text) = self.unmoved() {
+            return Got {
+                text: Some(text),
+                stale: None,
+            };
+        }
         let text = if self.watched {
             if self.behind() {
                 let text = self.fresh();
@@ -261,6 +294,17 @@ impl Source {
         }
     }
 
+    /// `watched` の Source で、今の印が最後に読めた読みの前に取った印と同じなら最後に読めた字（行 e-hold-mark）。
+    fn unmoved(&self) -> Option<Arc<str>> {
+        if !self.watched {
+            return None;
+        }
+        let good = lock(&self.good_mark).clone()?;
+        (good == self.mark())
+            .then(|| lock(&self.last).0.clone())
+            .flatten()
+    }
+
     /// 今の印が最後に始めた合流の読みの前に取った印と違うか（一度も始めていなければ偽）。
     fn behind(&self) -> bool {
         let was = lock(&self.read_mark).clone();
@@ -268,22 +312,29 @@ impl Source {
     }
 
     /// 合流の読み（走っている読みが在れば新しく撃たず、その終わりを `BD_WAIT` まで待って同じ結果・便 e-coalesce）。
-    /// 起動できない・rc が 0 でない・UTF-8 でない・`BD_TIMEOUT` を越える・`parse_bd` も中核の台帳の読みも
-    /// Unknown の字、のどれでも None。読みを始めた呼びが、読めた字と時刻を最後に読めた字に置き、
-    /// 結果を最後に終えた読みの結果（`latest`）に置く。始める前に取った印を `read_mark` に置く。
+    /// 読みは `shoot`（上限 `BD_TIMEOUT`）。
     fn fresh(&self) -> Option<Arc<str>> {
-        self.shared.share(BD_WAIT, || {
-            *lock(&self.read_mark) = Some(self.mark());
-            let text = self
-                .text_alone()
-                .filter(|t| readable(t))
-                .map(Arc::<str>::from);
-            if let Some(text) = &text {
-                *lock(&self.last) = (Some(text.clone()), Instant::now());
-            }
-            *lock(&self.latest) = Some(text.clone());
-            text
-        })
+        self.shared.share(BD_WAIT, || self.shoot(BD_TIMEOUT))
+    }
+
+    /// 合流の読みの中身（上限 `timeout` の bd の 1 本）。起動できない・rc が 0 でない・UTF-8 でない・上限を越える・
+    /// `parse_bd` も中核の台帳の読みも Unknown の字、のどれでも None。始める前に取った印を `read_mark` に置き、
+    /// 読めれば字と時刻を最後に読めた字に、その印を `good_mark` に、字を最後に終えた読みの結果（`latest`）に置き、
+    /// 落ちれば `latest` を空にする（落ちた結果を持たない・行 e-hold-mark）。
+    fn shoot(&self, timeout: Duration) -> Option<Arc<str>> {
+        let mark = self.mark();
+        *lock(&self.read_mark) = Some(mark.clone());
+        let text = self
+            .text_within(timeout)
+            .ok()
+            .filter(|t| readable(t))
+            .map(Arc::<str>::from);
+        if let Some(text) = &text {
+            *lock(&self.last) = (Some(text.clone()), Instant::now());
+            *lock(&self.good_mark) = Some(mark);
+        }
+        *lock(&self.latest) = text.clone().map(Some);
+        text
     }
 
     /// 走っている読みを分け合わず、新しい子 process で bd を撃つ（停止の hook・問いの門・見張りの読み・便 e-ask）。

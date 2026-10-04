@@ -430,7 +430,8 @@ fn server_coalesce_shared_failure_then_new_read() {
     .to_vec();
     let replies = get_all(addr, &paths);
     let shot = place.bd_calls() - before;
-    assert_eq!(shot, 0, "{shot} 回");
+    // 落ちた読みの結果を持たないので、口は bd を撃ち直す（合流すれば 1 回・行 e-hold-mark）。
+    assert!((1..=paths.len()).contains(&shot), "{shot} 回");
     for r in &replies[..2] {
         assert_eq!(ledger_rows(r), None, "{}", r.body);
     }
@@ -441,20 +442,18 @@ fn server_coalesce_shared_failure_then_new_read() {
         (replies[3].status, replies[3].body.as_str()),
         (503, "ledger-unknown")
     );
-    // 口は bd を撃たない（戻しても、見張りが読むまでは落ちた読みの結果・行 e-snap）。
+    // 戻せば、次の口の読みが見張りを待たず bd を 1 回撃ち直して戻った出力を返す（行 e-hold-mark）。
     place.fail(false);
     let before = place.bd_calls();
     let r = get(addr, "/api/ledger");
-    assert_eq!(place.bd_calls() - before, 0, "口は bd を撃たない");
-    assert_eq!(ledger_rows(&r), None, "{}", r.body);
-    // 印を動かせば見張りが読み、戻った bd の出力を返す。
+    assert_eq!(place.bd_calls() - before, 1, "口が撃ち直す");
+    assert_eq!(ledger_rows(&r), Some(8), "{}", r.body);
+    // 読めた後は、印が同じ間は撃たない。
     let before = place.bd_calls();
-    place.touch();
-    let rows = until_rows(addr, Some(8));
-    let shot = place.bd_calls() - before;
+    let r = get(addr, "/api/ledger");
     before_reread(started);
-    assert_eq!(rows, Some(8), "戻った後の出力");
-    assert_eq!(shot, 1, "見張りの読み");
+    assert_eq!(place.bd_calls() - before, 0, "読めた後の口");
+    assert_eq!(ledger_rows(&r), Some(8), "{}", r.body);
 }
 
 #[test]

@@ -395,16 +395,18 @@ fn lsnap_watched_source_reads_once() {
     down_then_alone(place, source);
 }
 
-/// 見張りの読みが落ちた後の字と時刻と、watched でない Source の読みの数を見る。
+/// 見張りの読みが落ちた後の字と、watched でない Source の読みの数を見る。
 fn down_then_alone(place: Place, source: Source) {
-    // 見張りの読みが落ちれば、最後に読めた字と、その時刻。
+    // 見張りの読みが落ちても、印が最後に読めた時と同じなら最後に読めた字を新しい字として返す（行 e-hold-mark）。
     place.flag("down", true);
-    let before = Instant::now();
     assert_eq!(source.read(), Reading::Unknown);
-    let held = source.got();
-    assert_eq!(held.text, Some(one().into()));
-    let at = held.stale.expect("落ちた読みの時刻");
-    assert!(at <= before, "{at:?} は落とす前の時刻 {before:?} より後");
+    assert_eq!(
+        source.got(),
+        Got {
+            text: Some(one().into()),
+            stale: None
+        }
+    );
     assert_eq!(place.calls(), 3);
     // watched でない Source は撃つたびに読む。
     place.flag("down", false);
