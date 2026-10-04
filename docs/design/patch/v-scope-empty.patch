@@ -1,0 +1,354 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+index bba72081380e637f9c149c8b10514fb1dc935a0c..8b47cf56d33c85e899b3ea40ab2fac9227d57532 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+@@ -9,6 +9,7 @@
+ //! 歯（`mutant_e2e_*`）だけを残す。
+ //!
+ //! 族ごとの子 module も置く（設計 docs/design/carry-prep.md §9 行 i・`s2-07l.681`）: `tick`（接頭辞 `seat_tick_`）。
++//! 行ごとの子 module: `empty_scope`（接頭辞 `vscpe_`・管理 tick の周の空の scope の片付け・契約表の行 v-scope-empty）。
+ //! tmux の群の歯・動詞の数を固定する歯・isolated seat の fixture はこの file に残す。
+ //!
+ //! tmux は **独立 socket**（`-S <tmp>/sock -f /dev/null`）の server だけを撃ち、開発席の
+@@ -18,6 +19,7 @@
+ // flip-check: moved s2-07l.361
+ 
+ mod account;
++mod empty_scope;
+ mod launch;
+ mod register;
+ mod ruling;
+@@ -1192,6 +1194,8 @@ const TICK_STUCK: &str = "tmux-stuck";
+ const TICK_REFUSE: &str = "tmux-refuse-send";
+ /// 偽 client の呼出の記録。
+ const TICK_CLIENT: &str = "client-calls";
++/// 偽 systemctl の呼出の記録（管理 tick の周の空の scope の片付けが撃つ・host の systemd に届かせない）。
++const TICK_SCOPE_CALLS: &str = "scope-calls";
+ /// 空の入力欄の pane。
+ const TICK_CLEAR_PANE: &str = "old output\n\u{276f} ";
+ 
+@@ -1246,7 +1250,8 @@ fn tick_place_at(anchor: Option<&str>) -> TickPlace {
+ /// 偽 tmux と偽 client を `<dir>/bin` に置き、PATH の字面を返す。偽 tmux は呼出を 1 行残し、`list-panes` は前面の語 `claude`
+ /// （席が立っている窓・pane は触らない）を、`capture-pane` は pane の file を返し（file が無ければ rc 1）、`send-keys … -l <text>`
+ /// は text を入力欄へ足し、`send-keys … Enter` は入力欄を送って新しい prompt を描く（[`TICK_STUCK`] が在れば何もしない・
+-/// [`TICK_REFUSE`] が在れば `send-keys` は rc 1）。
++/// [`TICK_REFUSE`] が在れば `send-keys` は rc 1）。偽 systemctl は呼出を [`TICK_SCOPE_CALLS`] に 1 行残し、何も出さずに rc 0
++/// （scope の一覧は 0 行）。
+ fn tick_shims(dir: &Path) -> String {
+     let bin = dir.join("bin");
+     fs::create_dir_all(&bin).ok();
+@@ -1265,7 +1270,8 @@ fn tick_shims(dir: &Path) -> String {
+         stuck = at(TICK_STUCK),
+     );
+     let client = format!("#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >> '{}'\n", at(TICK_CLIENT));
+-    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client)] {
++    let scope = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", at(TICK_SCOPE_CALLS));
++    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client), ("systemctl", scope)] {
+         let path = bin.join(name);
+         fs::write(&path, body).ok();
+         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).ok();
+@@ -1645,7 +1651,8 @@ fn move_place(root: &Path, name: &str, anchor: &str) -> MovePlace {
+ 
+ /// 移動の歯の偽 tmux を `<tools>/bin` に置き、PATH の字面を返す。呼出を 1 行残し、`list-panes` は前面の file（無ければ
+ /// `claude`）・`display-message` は pid の file（無ければ空）・`list-windows` は窓 `tk`・`has-session` は在る・`capture-pane` は pane の file を返し、`send-keys … -l <text>` は
+-/// text を pane へ足し、`send-keys … Enter` は新しい prompt を描く。偽 client（`curl` / `claude`）も置く。
++/// text を pane へ足し、`send-keys … Enter` は新しい prompt を描く。偽 client（`curl` / `claude`）と、[`tick_shims`] と同じ偽
++/// systemctl も置く。
+ fn move_shims(tools: &Path) -> String {
+     let bin = tools.join("bin");
+     fs::create_dir_all(&bin).ok();
+@@ -1670,7 +1677,8 @@ fn move_shims(tools: &Path) -> String {
+         pane = at(TICK_PANE),
+     );
+     let client = format!("#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >> '{}'\n", at(TICK_CLIENT));
+-    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client)] {
++    let scope = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", at(TICK_SCOPE_CALLS));
++    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client), ("systemctl", scope)] {
+         let path = bin.join(name);
+         fs::write(&path, body).ok();
+         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).ok();
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat/empty_scope.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat/empty_scope.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d556e96c1b65ce90207e77288b6fab297548e38
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat/empty_scope.rs
+@@ -0,0 +1,134 @@
++//! 管理 tick の周の空の scope の片付けの歯（接頭辞 `vscpe_`・判断の記録 ADR-45 の門 H6・契約表の行 v-scope-empty）。
++//!
++//! 置き場は tick の歯の fixture（[`tick_place`]・登録 row・偽 tmux）を使い、`systemctl` は偽の bin の script が引数を 1 行ずつ
++//! [`TICK_SCOPE_CALLS`] に残す（host の systemd を 1 度も撃たない）。一覧と show の答えは歯ごとに script へ書く（[`scope_shim`]）。
++//! 呼出の字面は契約から組む（実装の導出を使わない）。
++
++use super::*;
++
++/// 一覧の呼出の字面（器の名の scope の active な行だけ・legend と pager なし）。
++fn list_call() -> String {
++    format!("--user list-units --no-legend --no-pager --plain --type=scope --state=active {NAME}-*.scope")
++}
++
++/// unit の task の数を引く呼出の字面。
++fn show_call(unit: &str) -> String {
++    format!("--user show {unit}.scope -p TasksCurrent --value")
++}
++
++/// unit を止める呼出の字面（待たない）。
++fn stop_call(unit: &str) -> String {
++    format!("--user stop --no-block {unit}.scope")
++}
++
++/// 待ち終えた `true` の pid（死んだ作り手）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn dead_pid() -> u32 {
++    let mut gone = Command::new("true").spawn().expect("true を起こせる");
++    let pid = gone.id();
++    gone.wait().expect("true を待てる");
++    pid
++}
++
++/// 一覧の 5 本と unit ごとの task の数: 正しい見本（作り手が死に段 common で task 0）と、そこから 1 句ずつ外した 4 本（task 2・
++/// 作り手が生きている・段の語 seat・task が字 `[not set]`）。
++fn five(dead: u32) -> [(String, &'static str); 5] {
++    let own = std::process::id();
++    [
++        (format!("{NAME}-s2-kill-1-common-2-{dead}-2"), "0"),
++        (format!("{NAME}-s2-kill-2-common-2-{dead}-3"), "2"),
++        (format!("{NAME}-s2-kill-3-common-2-{own}-0"), "0"),
++        (format!("{NAME}-{TICK_SEAT}-seat-0-{dead}-0"), "0"),
++        (format!("{NAME}-s2-kill-4-common-2-{dead}-4"), "[not set]"),
++    ]
++}
++
++/// 偽 systemctl を書き直す: 呼出を [`TICK_SCOPE_CALLS`] に 1 行残し、`list-units` は `units` を一覧の行で出して rc `list_rc`、
++/// `show` は unit ごとの task の数を出して rc 0（`units` に無い unit は rc 1）、ほかは rc 0。
++fn scope_shim(place: &TickPlace, units: &[(String, &str)], list_rc: u8) {
++    let listed: String = units.iter().map(|(unit, _)| format!("printf '%s loaded active running x\\n' '{unit}.scope'\n")).collect();
++    let shown: String = units.iter().map(|(unit, tasks)| format!("'{unit}.scope') printf '%s\\n' '{tasks}'; exit 0;;\n")).collect();
++    let script = format!(
++        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{calls}'\ncase \"$2\" in\nlist-units)\n{listed}exit {list_rc};;\n\
++         show)\ncase \"$3\" in\n{shown}esac\nexit 1;;\nesac\nexit 0\n",
++        calls = place.at(TICK_SCOPE_CALLS).display()
++    );
++    crate::install_shim(&place.dir.join("bin").join("systemctl"), &script);
++}
++
++/// 偽 systemctl の呼出（引数の行・呼んだ順）。
++fn scope_calls(at: &Path) -> Vec<String> {
++    fs::read_to_string(at).unwrap_or_default().lines().map(str::to_owned).collect()
++}
++
++/// tick の外形（rc・stdout・stderr）。
++fn told(out: &Output) -> (i32, String, String) {
++    (rc_of(out), stdout_of(out), stderr_of(out))
++}
++
++/// 置き場の event log の byte（無ければ空）。
++fn log_bytes(place: &TickPlace) -> Vec<u8> {
++    fs::read(vessel::fleet::store::events_path(&place.state)).unwrap_or_default()
++}
++
++/// 登録 row の在る席の tick の周は、一覧の 5 本のうち作り手が死に段の語が seat でない 3 本にだけ show を撃ち、中の task がちょうど
++/// 0 の 1 本だけに stop を `--no-block` で 1 回撃ち、kill と reset-failed を撃たない。tick の rc・stdout・stderr は一覧 0 行の対照
++/// と同じで、event log の byte は tick の前と同じ。
++#[test]
++fn vscpe_tick_stops_only_the_empty_scope_of_a_dead_creator() {
++    let control = tick_place(true);
++    let expected = told(&tick_run_bare(&control, &[]));
++    let place = tick_place(true);
++    let units = five(dead_pid());
++    scope_shim(&place, &units, 0);
++    let before = log_bytes(&place);
++    let out = tick_run_bare(&place, &[]);
++    let [(empty, _), (busy, _), _, _, (unset, _)] = &units;
++    let want = [list_call(), show_call(empty), show_call(busy), show_call(unset), stop_call(empty)];
++    assert_eq!(scope_calls(&place.at(TICK_SCOPE_CALLS)), want, "一覧 1 回・show 3 回・stop 1 回だけ: stderr={}", stderr_of(&out));
++    assert_eq!(told(&out), expected, "rc と判定行と stderr は対照と同じ");
++    assert_eq!(log_bytes(&place), before, "event log は替わらない");
++}
++
++/// 正しい見本から 1 句ずつ外した周: 一覧が rc 0 でない周（偽が同じ 5 本の行を出して rc 1）は show も stop も撃たず（呼出は一覧の
++/// 1 行だけ）tick の rc・stdout・stderr は対照と同じで、登録 row の無い target の周（event log は在る）は systemctl を撃たない。
++#[test]
++fn vscpe_tick_shoots_only_the_list_when_it_fails_and_nothing_without_a_row() {
++    let control = tick_place(true);
++    let expected = told(&tick_run_bare(&control, &[]));
++    let units = five(dead_pid());
++    let failed = tick_place(true);
++    scope_shim(&failed, &units, 1);
++    let out = tick_run_bare(&failed, &[]);
++    assert_eq!(scope_calls(&failed.at(TICK_SCOPE_CALLS)), [list_call()], "一覧の 1 回だけ: stderr={}", stderr_of(&out));
++    assert_eq!(told(&out), expected, "rc と判定行と stderr は対照と同じ");
++    let other = tick_place(true);
++    scope_shim(&other, &units, 0);
++    let state = other.state.display().to_string();
++    let out = Command::new(bin())
++        .args(["seat", "tick", "--state-dir", &state, "--target", "tk:other"])
++        .env("PATH", &other.path)
++        .output()
++        .expect("binary を起動できる");
++    assert_eq!(rc_of(&out), i32::from(RC_OK), "stderr={}", stderr_of(&out));
++    assert!(stdout_of(&out).contains(" reason=no-row "), "登録 row の無い target: {}", stdout_of(&out));
++    assert!(scope_calls(&other.at(TICK_SCOPE_CALLS)).is_empty(), "systemctl 0 回");
++}
++
++/// 着地済みの tick の歯の置き場 2 つ（[`tick_shims`] と [`move_shims`] の組む PATH・host の PATH を後ろに持つ）で撃つ登録 row の
++/// 在る tick の周は、systemctl の呼出が偽の bin の systemctl に届き、記録は一覧の 1 行だけ（host の systemd に届かない）。
++#[test]
++fn vscpe_tick_places_of_the_landed_teeth_answer_the_list_with_a_fake() {
++    let place = tick_place(true);
++    let out = tick_run_bare(&place, &[]);
++    assert_eq!(rc_of(&out), i32::from(RC_OK), "stderr={}", stderr_of(&out));
++    assert_eq!(scope_calls(&place.at(TICK_SCOPE_CALLS)), [list_call()], "tick_shims の偽");
++    let root = tmp();
++    let moved = move_place(&root, "state", MOVE_ANCHOR);
++    let out = move_run(&moved);
++    assert_eq!(rc_of(&out), i32::from(RC_OK), "stderr={}", stderr_of(&out));
++    assert_eq!(scope_calls(&moved.at(TICK_SCOPE_CALLS)), [list_call()], "move_shims の偽");
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/confine.rs b/scribe2/crates/scribe2/src/pipe/confine.rs
+index 92d6377e30f2ccb8523edd764e8c101ba4c85887..8d33d6e51a66e59b7667c02fc86a278edcbc536b 100644
+--- a/scribe2/crates/scribe2/src/pipe/confine.rs
++++ b/scribe2/crates/scribe2/src/pipe/confine.rs
+@@ -36,6 +36,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
+ use std::sync::OnceLock;
+ 
+ mod cpu;
++pub mod empty;
+ pub mod io;
+ pub use cpu::seat_quota;
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/confine/empty.rs b/scribe2/crates/scribe2/src/pipe/confine/empty.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8d80341d6deb3a1743ceb344228cee3f927ba191
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/confine/empty.rs
+@@ -0,0 +1,102 @@
++//! 作り手の死んだ空の器の scope を止める（判断の記録 ADR-45 の門 H6・管理 tick の周の片付け）。
++//!
++//! 作り手（`systemd-run --scope` を撃った process）が scope の起動の途中で殺されると、中の task が 0 のまま active の scope が
++//! 残る。`--collect` は終わった unit だけを畳み、止める口の片付け（[`super::reap_orphan_scopes`]）は作り手の死んだ scope に
++//! kill と reset-failed を撃つだけで、空の scope の段を替えない。ここは止める口と同じ選び（[`reap_targets`]＝器の名・段の語
++//! seat の外し・作り手の生死）に、中の task の数がちょうど 0 の照らしを足し、選んだ unit に `systemctl --user stop --no-block`
++//! を 1 回ずつ撃つ。kill は撃たない（中に process の在る scope は選ばない）。値を持たない（閾値も rules の行も無い）。
++
++use super::{alive_creators, list_scopes, reap_targets, SYSTEMCTL};
++use crate::invocation::Invocation;
++use std::collections::BTreeSet;
++use std::io;
++use std::process::{Output, Stdio};
++
++/// 中の task の数の property（`systemctl show -p`）。
++const TASKS: &str = "TasksCurrent";
++
++/// `systemctl --user show <unit>.scope -p TasksCurrent --value` の結果が空の scope か（pure）: rc 0 で、stdout の前後の空白を
++/// 除いた字がちょうど `0`。起動できない周・rc 非 0・数でない字（`[not set]`・空）・1 以上は空でない側（止めない）。
++pub fn empty_from(out: io::Result<Output>) -> bool {
++    out.is_ok_and(|found| found.status.success() && String::from_utf8_lossy(&found.stdout).trim() == "0")
++}
++
++/// 止める相手を選ぶ（`show` は unit 名〔`.scope` なし〕ごとに task の数を引く口）: [`reap_targets`] が残す unit のうち、
++/// `show` の結果を [`empty_from`] が空と読む unit だけ（`.scope` を剥がした名・一覧の順）。`show` は [`reap_targets`] が残す
++/// unit にだけ撃つ。
++pub fn empty_targets(rows: &[String], alive: &BTreeSet<u32>, mut show: impl FnMut(&str) -> io::Result<Output>) -> Vec<String> {
++    reap_targets(rows, alive).into_iter().filter(|unit| empty_from(show(unit))).collect()
++}
++
++/// unit の中の task の数を 1 回引く（PATH 解決・[`SYSTEMCTL`]）。
++fn tasks_of(unit: &str) -> io::Result<Output> {
++    Invocation::new(SYSTEMCTL)
++        .args(["--user", "show"])
++        .arg(format!("{unit}.scope"))
++        .args(["-p", TASKS, "--value"])
++        .stdin(Stdio::null())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .output()
++}
++
++/// unit を止める job を 1 つ積む（待たない・rc 0 の周だけ `true`）。
++fn stop(unit: &str) -> bool {
++    Invocation::new(SYSTEMCTL)
++        .args(["--user", "stop", "--no-block"])
++        .arg(format!("{unit}.scope"))
++        .stdin(Stdio::null())
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .status()
++        .is_ok_and(|status| status.success())
++}
++
++/// 作り手の死んだ空の器の scope を一覧から選び、1 本ずつ止める。返りは止める job を積めた数で、一覧を測れない周（道具が無い・
++/// rc 非 0）は `None`＝何も撃たない（呼び手の管理 tick は返りを捨てる）。
++pub fn stop_empty_scopes() -> Option<usize> {
++    let rows = list_scopes()?;
++    Some(empty_targets(&rows, &alive_creators(&rows), tasks_of).iter().filter(|unit| stop(unit)).count())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::empty_targets;
++    use std::collections::BTreeSet;
++    use std::os::unix::process::ExitStatusExt;
++    use std::process::{ExitStatus, Output};
++
++    /// 選びは、正しい見本（器の名・段 common・作り手の pid 100 が死に・show が rc 0 で字 0）から 1 句ずつ外した unit を返さず、
++    /// show は器の名で始まり作り手が死に段の語が seat でない unit にだけ撃つ。
++    #[test]
++    fn vscpe_picks_only_empty_scopes_of_dead_creators_outside_seats() {
++        let name = crate::name::NAME;
++        let unit = |tail: &str| format!("{name}-{tail}");
++        let good = unit("s2-kill-1-common-2-100-2");
++        let cases = [
++            (good.clone(), Some((0, "0\n"))),
++            (unit("s2-kill-2-common-2-200-2"), Some((0, "0\n"))),
++            (unit("tk-seat-0-100-0"), Some((0, "0\n"))),
++            (unit("s2-kill-3-common-2-100-3"), Some((0, "2\n"))),
++            (unit("s2-kill-4-common-2-100-4"), Some((0, "[not set]\n"))),
++            (unit("s2-kill-5-common-2-100-5"), Some((0, "\n"))),
++            (unit("s2-kill-6-common-2-100-6"), Some((1 << 8, "0\n"))),
++            (unit("s2-kill-7-common-2-100-7"), None),
++            ("other-s2-kill-8-common-2-100-8".to_owned(), Some((0, "0\n"))),
++            (unit("s2-kill-9-common-2-x-9"), Some((0, "0\n"))),
++        ];
++        let rows: Vec<String> = cases.iter().map(|(unit, _)| format!("{unit}.scope")).collect();
++        let alive: BTreeSet<u32> = [200].into_iter().collect();
++        let mut shown = Vec::new();
++        let show = |asked: &str| {
++            shown.push(asked.to_owned());
++            match cases.iter().find(|(unit, _)| unit == asked).and_then(|(_, answer)| *answer) {
++                Some((raw, stdout)) => Ok(Output { status: ExitStatus::from_raw(raw), stdout: stdout.as_bytes().to_vec(), stderr: Vec::new() }),
++                None => Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no systemctl")),
++            }
++        };
++        assert_eq!(empty_targets(&rows, &alive, show), vec![good], "正しい見本の 1 本だけ（母集団 {} 行）", rows.len());
++        let asked: Vec<String> = [0, 3, 4, 5, 6, 7].iter().filter_map(|at| cases.get(*at).map(|(unit, _)| unit.clone())).collect();
++        assert_eq!(shown, asked, "show は器の名で始まり作り手が死に段の語が seat でない unit にだけ");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/seat/tick.rs b/scribe2/crates/scribe2/src/seat/tick.rs
+index 1b7570da6535dc22b37f56632de595b80e1288e1..2fb2340c2faa5f00f516b0219669e5762fbf5bfe 100644
+--- a/scribe2/crates/scribe2/src/seat/tick.rs
++++ b/scribe2/crates/scribe2/src/seat/tick.rs
+@@ -46,6 +46,9 @@
+ //!
+ //! 移動の周の `/exit` は猶予（`seat.move_grace_s`・起点は席に合図を書いた時刻）を越えてから送り、合図の記録が無ければ先に退避の
+ //! 合図の 1 行を 1 度だけ送る（設計 §13 / §14・契約表の行 q / 行 r・ADR-0071 / ADR-0073＝席の裏の subagent を `/exit` で落とさない）。
++//!
++//! 登録 row の在る席の周は、書き込みの測りの後に作り手の死んだ空の器の scope を止める（[`crate::pipe::confine::empty`]・判断の
++//! 記録 ADR-45 の門 H6）。返りは捨てる（判定行・rc・event log を替えない）。
+ 
+ pub mod beat;
+ pub mod install;
+@@ -501,6 +504,10 @@ pub fn run(flags: &Flags, manifest: Result<Manifest, Vec<RuleError>>) -> Outcome
+             full_rewrite(&state.path, flags, (manifest, events));
+             // 書き込みの測り（host の面の表の行ごとに host の根の記録を進める・返りは捨てる＝rc と字は変えない・write-budget.md §2）。
+             let _ = crate::fleet::write_budget::sample(&state.path, flags.target, manifest, events);
++            // 作り手の死んだ空の器の scope を止める（登録 row の在る席の周だけ・返りは捨てる＝rc と字は変えない・ADR-45 の門 H6）。
++            if super::role::registration_of_target(&crate::fleet::replay(events), flags.target).is_some() {
++                let _ = crate::pipe::confine::empty::stop_empty_scopes();
++            }
+         }
+     }
+     let rc = if matches!(verdict.decision, TickDecision::Error(_)) { RC_REFUSED } else { RC_OK };
