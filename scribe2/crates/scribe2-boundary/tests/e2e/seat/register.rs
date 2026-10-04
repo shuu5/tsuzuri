@@ -519,8 +519,8 @@ fn seat_register_model_shows_in_the_doctor_rows_with_dash_for_none() {
     assert_eq!(
         lines.get(4..),
         Some(&[
-            format!("seat: role=orchestrator anchor=/repo/a target=rm:doc-a account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}"),
-            format!("seat: role=orchestrator anchor=/repo/b target=rm:doc-b account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}"),
+            format!("seat: role=orchestrator anchor=/repo/a target=rm:doc-a account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}{GONE_TAIL}"),
+            format!("seat: role=orchestrator anchor=/repo/b target=rm:doc-b account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}{GONE_TAIL}"),
             "seats: registered=2 live=unmeasurable missing=unmeasurable".to_owned(),
             HOST_ABSENT.to_owned(),
             consumer_line_of("/repo/a"),
@@ -530,8 +530,8 @@ fn seat_register_model_shows_in_the_doctor_rows_with_dash_for_none() {
         "{lines:?}"
     );
     let rows = vessel::seat::role::render_rows(&role_state(&place), |_| PathKinds::Default, |_| Err(vessel::seat::RuleRead::Missing));
-    let rows: Vec<String> = rows.into_iter().map(|row| format!("{row}{TICK_TAIL}")).collect();
-    assert_eq!(rows, lines.get(4..6).unwrap_or_default(), "pure の一覧に `paths=` の後ろの 2 項目を足した形と同じ");
+    let rows: Vec<String> = rows.into_iter().map(|row| format!("{row}{TICK_TAIL}{GONE_TAIL}")).collect();
+    assert_eq!(rows, lines.get(4..6).unwrap_or_default(), "pure の一覧に `paths=` の後ろの 2 項目と在らない anchor の 1 語を足した形と同じ");
     fs::remove_dir_all(&place.dir).ok();
 }
 
@@ -557,6 +557,9 @@ fn paths_repo(place: &RolePlace, name: &str, declaration: Option<&str>) -> Strin
 
 /// `paths=` の後ろの 2 項目（打刻の無い席・周期の行を持たない [`NO_ACCOUNT_RULES`] の周・seat-heartbeat.md §12 行 p 形 3）。
 const TICK_TAIL: &str = " heartbeat=on tick=no-rule:missing";
+
+/// `tick=` の後ろの 1 語（anchor の path が在らない row だけ・`/repo` の形の歯の anchor は在らない・行 v-anchor-missing）。
+const GONE_TAIL: &str = " anchor-dir=missing";
 
 /// doctor の登録 row の行のうち anchor `anchor` の 1 行（無ければ空＝呼び側の assert が落ちる）。
 fn seat_line_of(lines: &[String], anchor: &str) -> String {
@@ -589,7 +592,7 @@ fn seat_role_doctor_paths_names_default_declared_and_invalid_per_anchor() {
     assert_eq!(lines.len(), 2 + 1 + 1 + 6 + 1 + 1 + 6 + 1,"欄の追加で行は増えない（末尾は host-guard の 1 行）: {lines:?}");
     assert_eq!(
         seat_line_of(&lines, "/repo"),
-        format!("seat: role=orchestrator anchor=/repo target=rolesdoc:rolesdoc account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}"),
+        format!("seat: role=orchestrator anchor=/repo target=rolesdoc:rolesdoc account=acct-1 model=Opus default=no-rule:missing paths=default{TICK_TAIL}{GONE_TAIL}"),
         "存在しない anchor は宣言 file が無い repo と同じ"
     );
     for (anchor, want) in [
@@ -705,7 +708,7 @@ fn seat_defaults_doctor_adds_the_row_default_or_names_why_it_cannot() {
     let row_of = |text: &str| text.lines().find(|line| line.starts_with("seat: ")).map(str::to_owned).unwrap_or_default();
     assert_eq!(
         row_of(&bare.1),
-        "seat: role=orchestrator anchor=/repo target=rolesdoc:rolesdoc account=acct-1 model=Opus default=Opus/xhigh paths=default heartbeat=on tick=absent",
+        "seat: role=orchestrator anchor=/repo target=rolesdoc:rolesdoc account=acct-1 model=Opus default=Opus/xhigh paths=default heartbeat=on tick=absent anchor-dir=missing",
         "埋め込みの行の既定（周期の行も埋め込み＝打刻の無い席は absent）"
     );
     let count = doctor_rows(&place, NO_ACCOUNT_RULES).len();
@@ -720,5 +723,57 @@ fn seat_defaults_doctor_adds_the_row_default_or_names_why_it_cannot() {
         assert_eq!(row.matches("default=").count(), 1, "1 語だけ: {row}");
         assert_eq!(lines.len(), count, "{want}: 行の数は変わらない: {lines:?}");
     }
+    fs::remove_dir_all(&place.dir).ok();
+}
+
+// ─────────────────── dir の無い anchor の row と置き場の anchor の数え（行 v-anchor-missing・接頭辞 `vanc_`） ───────────────────
+
+/// `doctor --state-dir --tmux-socket --rules --bin`（`repo` が在れば `--repo` も）を PATH `/usr/bin:/bin` で撃ち（台帳の client を
+/// 引かない）、rc 0 を確かめて行を返す。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn census_doctor(place: &RolePlace, repo: Option<&str>) -> Vec<String> {
+    let (state, rules) = (place.state.display().to_string(), fixture(&place.dir, "census-rules.toml", NO_ACCOUNT_RULES));
+    let mut args = vec!["doctor", "--state-dir", &state, "--tmux-socket", &place.socket, "--rules", &rules, "--bin", bin()];
+    args.extend(repo.map(|found| ["--repo", found]).into_iter().flatten());
+    let out = Command::new(bin()).args(&args).env("PATH", "/usr/bin:/bin").output().expect("binary を起動できる");
+    assert_eq!(rc_of(&out), i32::from(RC_OK), "doctor は rc を変えない: stderr={}", stderr_of(&out));
+    stdout_of(&out).lines().map(str::to_owned).collect()
+}
+
+/// 歯 vanc_: dir の無い anchor の row は doctor の席の行の `tick=` の直後に `anchor-dir=missing` を持ち（在る dir の row は持たない）、
+/// `--repo` を渡した doctor は突合の行の直後に置き場の anchor の数えの行で repo の外の row を名指す。`--repo` の無い doctor と、
+/// その row を退役させた後の doctor は数えの行を出さない。
+#[test]
+fn vanc_doctor_names_the_gone_anchor_row_and_the_census() {
+    let place = role_place();
+    let repo = place.dir.join("repo");
+    assert!(fs::create_dir_all(&repo).is_ok(), "repo の dir を作れる");
+    let (repo, gone) = (repo.display().to_string(), place.dir.join("gone").display().to_string());
+    for (target, anchor) in [("va:repo", repo.as_str()), ("va:gone", gone.as_str())] {
+        crate::seat::role_register_extra(&place, target, anchor);
+    }
+    let seat_of = |lines: &[String], target: &str| {
+        let needle = format!(" target={target} ");
+        lines.iter().find(|line| line.starts_with("seat: ") && line.contains(&needle)).cloned().unwrap_or_default()
+    };
+    let with = census_doctor(&place, Some(&repo));
+    assert!(seat_of(&with, "va:gone").ends_with(&format!("{TICK_TAIL}{GONE_TAIL}")), "{with:?}");
+    assert!(seat_of(&with, "va:repo").ends_with(TICK_TAIL), "在る dir の row は持たない: {with:?}");
+    let at = with.iter().position(|line| line.starts_with("seats: ")).unwrap_or(with.len());
+    assert_eq!(
+        with.get(at + 1).map(String::as_str),
+        Some("anchor-census: reason=multi-anchor missing=va:gone present=-"),
+        "突合の行の直後: {with:?}"
+    );
+    let without = census_doctor(&place, None);
+    assert!(seat_of(&without, "va:gone").ends_with(GONE_TAIL), "--repo の無い周も席の行は持つ: {without:?}");
+    assert!(without.iter().all(|line| !line.starts_with("anchor-census:")), "--repo の無い周は数えの行が無い: {without:?}");
+    let out = role_retire(&place, "va:gone", &["--reason", "gone"]);
+    assert_eq!(rc_of(&out), i32::from(RC_OK), "stderr={}", stderr_of(&out));
+    let after = census_doctor(&place, Some(&repo));
+    assert!(after.iter().all(|line| !line.starts_with("anchor-census:")), "退役の後は repo の外の row が無い: {after:?}");
     fs::remove_dir_all(&place.dir).ok();
 }

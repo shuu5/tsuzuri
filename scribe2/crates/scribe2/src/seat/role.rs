@@ -1,6 +1,7 @@
 //! 席の役割と登録（設計 docs/design/seat-roles.md §2 / §6・ADR-0022 §2.1 / §2.5・SRS FR40）。役割の解決は
 //! [`role_of_target`] の 1 本で**登録 row だけ**を読む（env・window 名の慣習・pane の字面は読まない・C2.2 / N3）。
 
+use crate::fleet::lifecycle_mark::{census_others, UNMEASURED_MULTI_ANCHOR};
 use crate::fleet::select::Model;
 use crate::fleet::store::{self, LockPolicy};
 use crate::fleet::{cli, replay, Event, EventKind, Registration, State, ACTOR_MACHINE, SCHEMA};
@@ -381,6 +382,36 @@ pub fn doctor_rows(state: &State, rules: &Result<Manifest, RuleRead>) -> Vec<Str
     )
 }
 
+/// doctor の登録 row の行に足す 1 語（anchor の path が在らない row だけ・置き場の anchor の数えは在らない anchor も数える
+/// ＝改名や移動で dir が消えた row が局面の出力を multi-anchor にし続ける・設計 case-lifecycle.md §20 約束 1）。
+pub const ANCHOR_MISSING: &str = "anchor-dir=missing";
+
+/// 置き場の anchor の数えの行の頭（[`census_line`]）。
+pub const CENSUS_HEAD: &str = "anchor-census:";
+
+/// anchor の path が在らないか（`metadata` が `NotFound` の周だけ真・権限などで読めない周は在ると読む）。
+fn anchor_missing(anchor: &str) -> bool {
+    std::fs::metadata(anchor).is_err_and(|err| err.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// 登録 row の行（鍵の順・[`doctor_rows`] と同じ並び）の末尾に、anchor の path が在らない row だけ [`ANCHOR_MISSING`] の 1 語を足す。
+fn with_anchor_words(lines: Vec<String>, state: &State) -> Vec<String> {
+    let rows = state.registrations.values().map(|latest| anchor_missing(&latest.registration.anchor));
+    lines.into_iter().zip(rows).map(|(line, missing)| if missing { format!("{line} {ANCHOR_MISSING}") } else { line }).collect()
+}
+
+/// 置き場の anchor の数えの 1 行（doctor が `--repo` を渡した周に撃つ・設計 case-lifecycle.md §20）: 数えに入る `repo` の外の row
+/// （[`census_others`]＝局面の出力が multi-anchor を名乗る元）が在る周だけ、局面の出力の unmeasured と同じ理由の語と、その row の
+/// target を anchor の path が在らない row（`missing=`）と在る row（`present=`）に分けて鍵の順に `,` でつないで出す（無い側は `-`）。
+pub fn census_line(state_dir: &Path, repo: &Path, state: &State) -> Option<String> {
+    let others = census_others(state_dir, repo, state);
+    let side = |missing: bool| {
+        let targets: Vec<&str> = others.iter().filter(|row| anchor_missing(&row.anchor) == missing).map(|row| row.target.as_str()).collect();
+        if targets.is_empty() { "-".to_owned() } else { targets.join(",") }
+    };
+    (!others.is_empty()).then(|| format!("{CENSUS_HEAD} reason={UNMEASURED_MULTI_ANCHOR} missing={} present={}", side(true), side(false)))
+}
+
 /// 登録 row と実在の target の突合の 1 行（pure・`seats: registered=N live=K missing=M`）。
 /// log を読めない周・tmux を撃てない周は数えられない値を**0 と書かない**。
 pub fn render_reconcile(state: Option<&State>, live: Option<&[String]>) -> String {
@@ -398,7 +429,8 @@ pub fn render_reconcile(state: Option<&State>, live: Option<&[String]>) -> Strin
 /// `units`（`--unit-dir` と `--binary` がそろった周だけ）が在る周は row の行の末尾に `tick-unit=` の 1 語を足し
 /// （[`crate::seat::tick::install::doctor_word`]・設計 seat-heartbeat.md §3）、flag が無く host の面に `[[tick]]` が在る周は面の値で
 /// 同じ 1 語を足す（flag が勝つ・§5 形 3・どちらの組も `bd` まで丸ごと使い、flag の組が在る周は面の `bd` を読まない）。どちらも無い周は `tick-unit=` を足さない。`paths=` の直後には常に
-/// `heartbeat=` / `tick=` の 2 項目（[`tick_words`]・§12 行 p 形 3）。
+/// `heartbeat=` / `tick=` の 2 項目（[`tick_words`]・§12 行 p 形 3）。anchor の path が在らない row は `tick=` の直後（`tick-unit=` の前）に
+/// [`ANCHOR_MISSING`] の 1 語。
 pub fn doctor_lines(state_dir: &Path, socket: Option<&str>, rules: Option<&str>, units: Option<&Probe>, state: Option<&State>) -> Vec<String> {
     let panes = super::tmux_stdout(socket, &["list-panes", "-a", "-F", "#{session_name}:#{window_name}"]);
     let live: Option<Vec<String>> = panes.map(|out| out.lines().map(str::to_owned).collect());
@@ -419,6 +451,7 @@ pub fn doctor_lines(state_dir: &Path, socket: Option<&str>, rules: Option<&str>,
     let rows = |found: &State| {
         let beats = found.registrations.values().map(|latest| tick_words(state_dir, &latest.registration, (&manifest, table)));
         let lines: Vec<String> = doctor_rows(found, &manifest).into_iter().zip(beats).map(|(line, words)| format!("{line} {words}")).collect();
+        let lines = with_anchor_words(lines, found);
         let Some(probe) = units else {
             return lines;
         };
@@ -534,5 +567,53 @@ mod tests {
                 "{role:?} の既定は裁定 user 2026-09-26T15:41Z の対"
             );
         }
+    }
+
+    /// 登録の event の 1 行（役割は orchestrator・target と anchor は呼び手が選ぶ）。
+    fn anchored(target: &str, anchor: &std::path::Path) -> crate::fleet::Event {
+        let line = format!(
+            "{{\"schema\":1,\"ts\":\"2026-10-05T00:00:00Z\",\"kind\":\"SeatRegistered\",\"role\":\"orchestrator\",\"anchor\":\"{}\",\"target\":\"{target}\",\"account\":\"a\",\"launch\":\"l\",\"host\":\"h\",\"actor\":\"machine\"}}",
+            anchor.display()
+        );
+        crate::fleet::Event::from_line(&line).unwrap_or_else(|why| panic!("{line}: {why}"))
+    }
+
+    /// 歯ごとの空の tmp dir。
+    fn place(name: &str) -> std::path::PathBuf {
+        crate::pipe::fixture::scratch(&format!("seat-role-vanc-{name}"))
+    }
+
+    /// 歯 vanc_: 置き場の anchor の数えの行は、数えに入る repo の外の row が在る周だけ在り、anchor の path が在らない row を `missing=`、
+    /// 在る row を `present=` に分けて鍵の順に名指す（無い側は `-`）。repo の row だけの周と、別の置き場を名乗る anchor だけの周は無い。
+    #[test]
+    fn vanc_census_line_names_the_rows_outside_the_repo() {
+        use super::census_line;
+        use crate::fleet::replay;
+        let (dir, repo, present, named, away, gone) = (place("state"), place("repo"), place("present"), place("named"), place("away"), place("gone"));
+        assert!(crate::pipe::git_ok(&named, &["init", "-q", "-b", "main"]), "git init");
+        let key = format!("{}.stateDir", crate::name::NAME);
+        assert!(crate::pipe::git_ok(&named, &["config", &key, &away.display().to_string()]), "別の置き場を名乗る");
+        let home = anchored("v:repo", &repo);
+        let all = [home.clone(), anchored("v:present", &present), anchored("v:z", &gone.join("a")), anchored("v:a", &gone.join("b"))];
+        let line = |events: &[crate::fleet::Event]| census_line(&dir, &repo, &replay(events));
+        assert_eq!(line(&all).as_deref(), Some("anchor-census: reason=multi-anchor missing=v:z,v:a present=v:present"), "鍵の順");
+        assert_eq!(line(std::slice::from_ref(&home)), None, "repo の row だけ");
+        assert_eq!(line(&[home.clone(), anchored("v:z", &gone.join("a"))]).as_deref(), Some("anchor-census: reason=multi-anchor missing=v:z present=-"));
+        assert_eq!(line(&[home.clone(), anchored("v:present", &present)]).as_deref(), Some("anchor-census: reason=multi-anchor missing=- present=v:present"));
+        assert_eq!(line(&[home, anchored("v:named", &named)]), None, "別の置き場を名乗る anchor は数えない");
+    }
+
+    /// 歯 vanc_: doctor の登録 row の行は、anchor の path が在らない row だけ末尾に `anchor-dir=missing` の 1 語を持つ（鍵の順の行と row を
+    /// 対にし、在る dir の row の行は替えない）。
+    #[test]
+    fn vanc_rows_mark_only_the_anchor_that_is_gone() {
+        use super::with_anchor_words;
+        use crate::fleet::replay;
+        let (present, gone) = (place("row-present"), place("row-gone").join("absent"));
+        let state = replay(&[anchored("v:p", &present), anchored("v:g", &gone)]);
+        let lines = with_anchor_words(vec!["first".to_owned(), "second".to_owned()], &state);
+        assert_eq!(lines, ["first anchor-dir=missing", "second"], "鍵の順は在らない row（row-gone）が先");
+        let only = replay(&[anchored("v:p", &present)]);
+        assert_eq!(with_anchor_words(vec!["first".to_owned()], &only), ["first"], "在る dir の row は替えない");
     }
 }

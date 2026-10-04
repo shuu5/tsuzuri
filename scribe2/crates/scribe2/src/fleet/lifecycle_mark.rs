@@ -17,7 +17,7 @@ use super::json_tree::{self, Tree};
 use super::phase::{Latest, Refused};
 use super::store::{acquire_with, events_path, LockPolicy, Reclaim};
 use super::wait::epoch_of;
-use super::{replay, Case, Event, State};
+use super::{replay, Case, Event, Registration, State};
 use crate::case::Kind as Part;
 use crate::hook::vessel::digest::fnv1a_64;
 use crate::hook::vessel::state_dir as named_state_dir;
@@ -31,7 +31,7 @@ use crate::pipe::table::{design_docs, read_table as table_rows, requirement_ids}
 use crate::pipe::{git_bytes, live_driver};
 use crate::seat::ledger::Issue;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -844,22 +844,21 @@ fn names_other(root: &Path, mine: &str) -> bool {
 /// 置き場の anchor を数える（`events` の登録 row の anchor から別の置き場を名乗る anchor を除き、`repo` と合わせて 2 つ以上なら
 /// [`AnchorCensus::Many`]・1 つで `repo` が別の置き場を名乗れば [`AnchorCensus::Foreign`]・ほかは [`AnchorCensus::One`]）。
 pub(crate) fn census_anchors(state_dir: &Path, repo: &Path, events: &[Event]) -> AnchorCensus {
-    let mine = canon(state_dir);
-    let mut set: BTreeSet<String> = BTreeSet::new();
-    for latest in replay(events).registrations.values() {
-        let anchor = Path::new(&latest.registration.anchor);
-        if !names_other(anchor, &mine) {
-            set.insert(canon(anchor));
-        }
-    }
-    set.insert(canon(repo));
-    if set.len() >= 2 {
+    if !census_others(state_dir, repo, &replay(events)).is_empty() {
         AnchorCensus::Many
-    } else if names_other(repo, &mine) {
+    } else if names_other(repo, &canon(state_dir)) {
         AnchorCensus::Foreign
     } else {
         AnchorCensus::One
     }
+}
+
+/// 数えに入る登録 row のうち `repo` の外の row（鍵の順）: anchor が別の置き場を名乗らず、正規化した字が `repo` と違う row。
+/// 1 本でも在れば [`census_anchors`] は [`AnchorCensus::Many`]（doctor が名指す row と数えの元を 1 つにする）。
+pub(crate) fn census_others<'a>(state_dir: &Path, repo: &Path, state: &'a State) -> Vec<&'a Registration> {
+    let (mine, home) = (canon(state_dir), canon(repo));
+    let counted = |anchor: &Path| !names_other(anchor, &mine) && canon(anchor) != home;
+    state.registrations.values().map(|latest| &latest.registration).filter(|row| counted(Path::new(&row.anchor))).collect()
 }
 
 /// 閉じて未反映の裁定を持つ問いの bead id（置き場・台帳の接頭辞・台帳の全件から引く・置き場の無い周は空・読めない周は `Unreadable`）。
