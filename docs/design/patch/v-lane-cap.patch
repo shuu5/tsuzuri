@@ -146,27 +146,28 @@ index 8965cfa163451ccbce28ce4238486e71dea1b017..95f638fa3423aff830fe245396e49510
 +rules: ok rows=110 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
  usage: rules <validate|get <id>> [--rules PATH] [--state-dir S]
 diff --git a/scribe2/crates/scribe2/src/pipe/lane.rs b/scribe2/crates/scribe2/src/pipe/lane.rs
-index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb09257663537 100644
+index 7a06b6efecf97e3dbc101a68bbfb8d12a0fc0d43..378383df92303f04412eb8c2be86adf8d68b3aca 100644
 --- a/scribe2/crates/scribe2/src/pipe/lane.rs
 +++ b/scribe2/crates/scribe2/src/pipe/lane.rs
-@@ -5,11 +5,14 @@
- //! 印 `lane/<n>.run` は最後にその木を使った便の id で、その便の path の symlink が在る間は便が並びを持つ（ほかの便に渡さない）。
+@@ -7,12 +7,15 @@
+ //! 取らず、返しはほかの便の印の並びを触らない。木を切る・替える・移す git は、番号を予約した便だけが lock の外で撃つ。
  //! 中身の替えは `git checkout -f` と `git clean -ffdx -e /target` で、git は中身の替わる file だけを書くので、cargo は
  //! 中身の替わった crate だけを組み直す（中身の替わらない file の mtime は前の組みより古いまま残る）。
 +//! 並びの木の合計は rules 行 `pipe.lanes_cap_mb` の上限で切る（器の掃除が [`shed`] を撃つ・判断の記録 ADR-35 の決定 (5)）。
  
- use super::land::{retired_path, WorktreeCheck};
+ use super::land::{move_tree, retired_path, WorktreeCheck};
 +use super::sweep::measure;
- use super::{branch_name, git_line, git_ok, worktree_path, worktrees_dir};
- use crate::fleet::store::{self, LockPolicy};
+ use super::{branch_name, git_ok, worktree_path, worktrees_dir};
+ use crate::fleet::lifecycle_mark::{hold, Held};
+ use crate::fleet::store::LockPolicy;
  use std::path::{Path, PathBuf};
 +use std::time::SystemTime;
  
  /// 並びの木を集める dir の名（`worktrees_dir` の直下）。
  const LANE_DIR: &str = "lane";
-@@ -32,6 +35,15 @@ impl Drop for Held {
-     }
- }
+@@ -26,6 +29,15 @@ const LOCK: &str = "lane.lock";
+ /// 中身の替えで消さない dir（木の中の組みの置き場）。
+ const KEEP: &str = "/target";
  
 +/// 上限の掃除が退かせる候補の並び（番号・大きさ〔byte〕・印の便・印の新しさ・印の便が並びを持つか）。
 +struct Idle {
@@ -180,57 +181,20 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
  /// 並びの木を集める dir。
  fn lanes_dir(repo: &Path) -> PathBuf {
      worktrees_dir(repo).join(LANE_DIR)
-@@ -99,20 +111,12 @@ pub(crate) fn take(repo: &Path, run: &str, base: &str, policy: LockPolicy) -> Re
- fn claim(repo: &Path, run: &str, policy: LockPolicy) -> Result<(usize, Option<String>), String> {
-     let dir = lanes_dir(repo);
-     std::fs::create_dir_all(&dir).map_err(|err| format!("{} を作れない: {err}", dir.display()))?;
--    let lock = dir.join(LOCK);
--    store::acquire_with(&lock, policy, store::Reclaim::DeadOnly).map_err(|_| format!("{} を取れない", lock.display()))?;
--    let _held = Held(lock);
-+    let _held = hold(&dir, policy)?;
-     let link = worktree_path(repo, run);
-     if std::fs::symlink_metadata(&link).is_ok() {
-         return Err(format!("{} は既に在る", link.display()));
-     }
--    let mut lanes: Vec<usize> = std::fs::read_dir(&dir)
--        .map_err(|err| format!("{} を読めない: {err}", dir.display()))?
--        .flatten()
--        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
--        .filter_map(|entry| entry.file_name().to_str().and_then(|name| name.parse().ok()))
--        .collect();
--    lanes.sort_unstable();
-+    let lanes = numbers(&dir)?;
-     let reuse = lanes.iter().copied().find(|n| !is_held(repo, *n));
-     let n = reuse.unwrap_or_else(|| (0..=lanes.len()).find(|n| !lanes.contains(n)).unwrap_or(lanes.len()));
-     let prev = reuse.map(|n| std::fs::read_to_string(mark_path(repo, n)).unwrap_or_default().trim().to_owned());
-@@ -123,6 +127,25 @@ fn claim(repo: &Path, run: &str, policy: LockPolicy) -> Result<(usize, Option<St
-     Ok((n, prev))
+@@ -52,6 +64,11 @@ fn held(repo: &Path, run: &str) -> Option<usize> {
+     std::fs::read_link(worktree_path(repo, run)).ok()?.strip_prefix(LANE_DIR).ok()?.to_str()?.parse().ok()
  }
  
-+/// 並びの lock を取る（器の store の取り方・`Drop` で外す）。
-+fn hold(dir: &Path, policy: LockPolicy) -> Result<Held, String> {
-+    let lock = dir.join(LOCK);
-+    store::acquire_with(&lock, policy, store::Reclaim::DeadOnly).map_err(|_| format!("{} を取れない", lock.display()))?;
-+    Ok(Held(lock))
++/// 便が持つ並びの木（便の path が並びの木を指す symlink の周だけ・ほかは `None`）。
++pub(crate) fn held_lane(repo: &Path, run: &str) -> Option<PathBuf> {
++    held(repo, run).map(|n| lane_path(repo, n))
 +}
 +
-+/// 並びの番号の列（並びの dir の直下の数の名の dir・昇順）。
-+fn numbers(dir: &Path) -> Result<Vec<usize>, String> {
-+    let mut lanes: Vec<usize> = std::fs::read_dir(dir)
-+        .map_err(|err| format!("{} を読めない: {err}", dir.display()))?
-+        .flatten()
-+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-+        .filter_map(|entry| entry.file_name().to_str().and_then(|name| name.parse().ok()))
-+        .collect();
-+    lanes.sort_unstable();
-+    Ok(lanes)
-+}
-+
- /// 並びの木の中身を base に替える（git は中身の替わる file だけを書く・未追跡と無視の file は target の外を全部消す）。
- /// clean で HEAD が base の周だけ branch `<NAME>/<run>` を付けて真。
- fn switch(lane: &Path, run: &str, base: &str) -> bool {
-@@ -159,15 +182,97 @@ pub(crate) fn give_back(repo: &Path, run: &str, lane: &Path) -> Vec<String> {
-     vec![format!("pipe: {from} を {to} へ移せなかった")]
+ /// 並び `n` の印の便（印の無い周は `None`）。
+ fn mark_of(repo: &Path, n: usize) -> Option<String> {
+     std::fs::read_to_string(mark_path(repo, n)).ok().map(|run| run.trim().to_owned())
+@@ -184,16 +201,93 @@ fn hand_back(repo: &Path, run: &str, n: usize) -> Result<(), String> {
+         .map_err(|err| format!("pipe: 並び {} を返せなかった: {err}", lane.display()))
  }
  
 +/// 並びの木の大きさの合計が `cap`（byte）を越える間、live な便が持たない並びを印の新しさの古い順（同じ時刻は番号の順）に丸ごと
@@ -240,12 +204,11 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +/// 合計に数えず退かせない（0 と読まない・C10）で、退かせる候補なら失敗に数える。印を読めない並びと、live な便か live を測れない便が
 +/// 持つ並びは退かせない。
 +pub(crate) fn shed(repo: &Path, cap: u64, policy: LockPolicy, live_of: &dyn Fn(&str) -> Option<bool>) -> (usize, Vec<String>) {
-+    let dir = lanes_dir(repo);
-+    let Ok(lanes) = numbers(&dir) else {
++    let Ok(lanes) = numbers(repo) else {
 +        return (0, Vec::new());
 +    };
 +    let sizes: Vec<(usize, Option<u64>)> = lanes.iter().map(|n| (*n, measure(&lane_path(repo, *n)).map(|(bytes, _)| bytes))).collect();
-+    let Ok(_held) = hold(&dir, policy) else {
++    let Ok(_held) = lock(repo, policy) else {
 +        return (0, vec![format!("{LANE_DIR}/{LOCK}")]);
 +    };
 +    let mut total = sizes.iter().filter_map(|(_, bytes)| *bytes).fold(0_u64, u64::saturating_add);
@@ -275,9 +238,8 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +
 +/// 並び `n` が退かせる候補か（印が読め、印の便が並びを持たないか、持つ便が live でない周だけ `Some`）。
 +fn idle_of(repo: &Path, n: usize, bytes: u64, live_of: &dyn Fn(&str) -> Option<bool>) -> Option<Idle> {
-+    let mark = mark_path(repo, n);
-+    let since = std::fs::metadata(&mark).and_then(|meta| meta.modified()).ok()?;
-+    let run = std::fs::read_to_string(&mark).ok()?.trim().to_owned();
++    let since = std::fs::metadata(mark_path(repo, n)).and_then(|meta| meta.modified()).ok()?;
++    let run = mark_of(repo, n)?;
 +    let held = is_held(repo, n);
 +    (!run.is_empty() && (!held || live_of(&run) == Some(false))).then_some(Idle { n, bytes, run, since, held })
 +}
@@ -290,10 +252,7 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +    if found.held && std::fs::remove_file(&link).is_err() {
 +        return false;
 +    }
-+    let (from, to) = (lane.display().to_string(), dest.display().to_string());
-+    let moved = dest.parent().is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
-+        && git_ok(repo, &["worktree", "move", &from, &to]);
-+    if !moved {
++    if !move_tree(repo, &lane, &dest).is_empty() {
 +        if found.held {
 +            let _ = std::os::unix::fs::symlink(Path::new(LANE_DIR).join(found.n.to_string()), &link);
 +        }
@@ -310,14 +269,14 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +
  #[cfg(test)]
  mod tests {
+     use super::super::declaration::build_lanes_at;
 -    use super::super::fixture::scratch;
 -    use super::super::{git_line, git_ok, worktree_path};
--    use super::{declared, give_back, held_lane, lane_path, mark_path, take};
 +    use super::super::fixture::{append_all, event, scratch};
 +    use super::super::retire::{retire, Retire};
 +    use super::super::sweep::sweep;
 +    use super::super::{git_line, git_ok, repo_path, run_dir, worktree_path};
-+    use super::{declared, give_back, held_lane, lane_path, mark_path, retired_path, take};
+     use super::{claim, give_back, held, lane_path, mark_path, retired_path, take, LANE_DIR};
      use crate::fleet::store::LockPolicy;
 +    use crate::fleet::{EventKind, Stage};
 +    use crate::rules::manifest::Manifest;
@@ -330,8 +289,8 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
      /// 必須 key だけの宣言の本文の後ろに `extra` を足した `.vessel.toml`・`.gitignore`・2 file を持つ repo（`<root>/repo`）。
      fn repo_with(name: &str, extra: &str) -> PathBuf {
          let repo = scratch(name).join("repo");
-@@ -198,6 +303,33 @@ mod tests {
-         std::fs::metadata(path).and_then(|meta| meta.modified()).ok()
+@@ -229,6 +323,33 @@ mod tests {
+         std::fs::read_to_string(mark_path(repo, n)).ok()
      }
  
 +    /// 並びの上限の行 1 本だけの rules の写し（値は MiB）。
@@ -364,9 +323,9 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
      /// 宣言の key `build-lanes` は値 true の sha だけ真で、false・無い・型違い（字）・宣言の無い sha は偽。
      #[test]
      fn vlane_only_declared_repos_take_a_lane() {
-@@ -281,4 +413,97 @@ mod tests {
-         assert_eq!(held_lane(&repo, "r2"), Some(lane.clone()), "並び 0 に新しく切る");
-         assert!(!lane.join("untracked.txt").exists());
+@@ -373,4 +494,97 @@ mod tests {
+         assert_eq!(give_back(&repo, "r1"), Some(Vec::new()), "印が自分の便の並びは返る");
+         assert!(retired_path(&repo, "r1").join("untracked.txt").is_file());
      }
 +
 +    /// 並びの合計が上限（MiB）を越える周だけ、live な便が持たない並びを印の古い順に退かせて上限以下で止まり、live な便が持つ並びは
@@ -378,8 +337,8 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +        for run in ["r1", "r2", "r3", "r4"] {
 +            let _ = take(&repo, run, &base, policy());
 +        }
-+        for (run, n) in [("r1", 0), ("r3", 2), ("r4", 3)] {
-+            let _ = give_back(&repo, run, &lane_path(&repo, n));
++        for run in ["r1", "r3", "r4"] {
++            let _ = give_back(&repo, run);
 +        }
 +        for (n, at) in [(0, 2000), (1, 1000), (2, 3000), (3, 4000)] {
 +            fill(&repo, n, at);
@@ -391,7 +350,7 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +        assert!(!lane_path(&repo, 0).exists() && !lane_path(&repo, 2).exists(), "live でない並びを古い順に 2 つ退かせる: {line}");
 +        assert!(lane_path(&repo, 3).is_dir(), "上限以下になったら止まる（最も新しい並びは残る）");
 +        assert!(lane_path(&repo, 1).is_dir(), "live な便が持つ並びは最も古くても残る");
-+        assert_eq!(held_lane(&repo, "r2"), Some(lane_path(&repo, 1)));
++        assert_eq!(held(&repo, "r2"), Some(1));
 +        assert!(line.contains(" lanes=2"), "{line}");
 +    }
 +
@@ -403,7 +362,7 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
 +        let _ = take(&repo, "r1", &base, policy());
 +        let _ = take(&repo, "r2", &base, policy());
-+        let _ = give_back(&repo, "r1", &lane_path(&repo, 0));
++        let _ = give_back(&repo, "r1");
 +        for (n, at) in [(0, 1000), (1, 2000)] {
 +            fill(&repo, n, at);
 +        }
@@ -414,7 +373,7 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +        assert!(std::fs::symlink_metadata(&home).is_ok_and(|meta| meta.is_dir()), "便が持つ並びは symlink を外して便の元の path へ移る");
 +        assert!(home.join("target/blob").is_file(), "中身ごと移る");
 +        assert!((0..2).all(|n| !lane_path(&repo, n).exists() && !mark_path(&repo, n).exists()), "並びの木と印は残らない");
-+        assert_eq!(held_lane(&repo, "r2"), None);
++        assert_eq!(held(&repo, "r2"), None);
 +        let _ = sweep(&state, policy(), &cap_rules(0));
 +        assert!(!retired.join("target").exists() && !home.join("target").exists(), "移した木の target は次の周の掃除が消す");
 +        assert!(retired.join("a.txt").is_file() && home.join("a.txt").is_file(), "追跡の file は残る");
@@ -426,7 +385,7 @@ index 615cf37f5f70bf1cf95f2d935a14a57b1376c749..4b17bae7333423d9a709ede1cd8fb092
 +        let repo = repo_with("cap-norule", "build-lanes = true\n");
 +        let base = git_line(&repo, &["rev-parse", "HEAD"]).unwrap_or_default();
 +        let _ = take(&repo, "r1", &base, policy());
-+        let _ = give_back(&repo, "r1", &lane_path(&repo, 0));
++        let _ = give_back(&repo, "r1");
 +        fill(&repo, 0, 1000);
 +        let state = state_with(&repo, &[("r1", Stage::Landed)]);
 +        let bare = Manifest::parse("schema = 1\n").expect("行の無い写し");
