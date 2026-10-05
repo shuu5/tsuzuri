@@ -25,31 +25,11 @@ pub struct Vocab {
 }
 
 impl Vocab {
-    /// 語彙の file を読む（english を先に引き、同じ鍵が rephrase にも在れば english が勝つ）。
+    /// 語彙の file を読む（rephrase と english の 2 欄の和）。同じ欄に 2 度在る鍵と両方の欄に在る鍵は、
+    /// 鍵と 2 つの在りかを書いた Err（行 g-vocab-dupkey・前は黙って後と english が勝った）。
     pub fn parse(text: &str) -> Result<Self, String> {
-        let root = json::parse(text)?;
         let mut terms = BTreeMap::new();
-        for (col, note_key) in [("rephrase", "plain"), ("english", "note")] {
-            let Some(json::Value::Object(entries)) = root.get(col) else {
-                return Err(format!("欄 {col} が無い"));
-            };
-            for (key, entry) in entries {
-                let text_of = |k: &str| entry.get(k).and_then(json::Value::as_str).unwrap_or("");
-                let mut internal = text_of("internal").to_string();
-                if let Some(orig) = entry.get("orig").and_then(json::Value::as_str) {
-                    internal.push_str("\n原語: ");
-                    internal.push_str(orig);
-                }
-                terms.insert(
-                    key.clone(),
-                    Term {
-                        label: text_of("label").to_string(),
-                        note: text_of(note_key).to_string(),
-                        internal,
-                    },
-                );
-            }
-        }
+        add_file(&mut terms, &mut BTreeMap::new(), "vocab.json", text)?;
         Ok(Self { terms })
     }
 
@@ -68,6 +48,46 @@ impl Vocab {
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.terms.keys().map(String::as_str)
     }
+}
+
+/// 鍵の在りか（file の名と欄・重なりの Err の字に使う）。
+type Owners = BTreeMap<String, (String, &'static str)>;
+
+/// 1 つの語彙の file の 2 欄を表へ足す（鍵が既に在れば、鍵と 2 つの在りかを書いた Err）。
+fn add_file(
+    terms: &mut BTreeMap<String, Term>,
+    owners: &mut Owners,
+    file: &str,
+    text: &str,
+) -> Result<(), String> {
+    let root = json::parse(text)?;
+    for (col, note_key) in [("rephrase", "plain"), ("english", "note")] {
+        let Some(json::Value::Object(entries)) = root.get(col) else {
+            return Err(format!("欄 {col} が無い"));
+        };
+        for (key, entry) in entries {
+            if let Some((first, first_col)) = owners.insert(key.clone(), (file.to_string(), col)) {
+                return Err(format!(
+                    "鍵 {key} が 2 度在る（{first} の欄 {first_col} と {file} の欄 {col}）"
+                ));
+            }
+            let text_of = |k: &str| entry.get(k).and_then(json::Value::as_str).unwrap_or("");
+            let mut internal = text_of("internal").to_string();
+            if let Some(orig) = entry.get("orig").and_then(json::Value::as_str) {
+                internal.push_str("\n原語: ");
+                internal.push_str(orig);
+            }
+            terms.insert(
+                key.clone(),
+                Term {
+                    label: text_of("label").to_string(),
+                    note: text_of(note_key).to_string(),
+                    internal,
+                },
+            );
+        }
+    }
+    Ok(())
 }
 
 /// 面の crate に写した語彙（最初に引いたときに 1 度だけ読む・読めなければ空の語彙で、見出しは語彙表に無いの字）。
