@@ -1,6 +1,6 @@
 //! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
 //! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
-//! show と dispose（行 cs-show）・list と close（行 cs-close）・stamp（行 cs-acct-mark・窓の会話の印の hook）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
+//! show と dispose（行 cs-show）・list と close（行 cs-close）・stamp（行 cs-acct-mark・窓の会話の印の hook）・statusline（行 cs-status-verb・窓の状態の 1 行）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
 //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
 //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
 //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
@@ -18,6 +18,7 @@ pub mod open;
 pub mod plain;
 pub mod show;
 pub mod stamp;
+pub mod statusline;
 pub mod watch;
 
 use std::ffi::{OsStr, OsString};
@@ -67,7 +68,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
 pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
 
 pub const USAGE: &str =
-    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp> [引数]";
+    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp|statusline> [引数]";
 
 /// tz consult の残りの引数を受けて終了 code を返す。
 pub fn run(rest: &[&str]) -> u8 {
@@ -83,6 +84,7 @@ pub fn run(rest: &[&str]) -> u8 {
         ["close", r @ ..] => close::run(r),
         ["guard", r @ ..] => guard::run(r),
         ["stamp", r @ ..] => stamp::run(r),
+        ["statusline", r @ ..] => statusline::run(r),
         _ => {
             emit_err(&format!("tz consult: 口が無い\n{USAGE}"));
             FAIL
