@@ -1,0 +1,135 @@
+diff --git a/.vessel.toml b/.vessel.toml
+index 9e62ae661c410bd6a910d8ac771c3eca197818cf..968d01f0fbf7f13ab869641056af37ae9e991b5f 100644
+--- a/.vessel.toml
++++ b/.vessel.toml
+@@ -32,8 +32,3 @@ seat-constitution = "contracts/seat/brief.txt"
+ # 名乗りは判断の記録 ADR-37 の決定 (6) の最初の比べ（形 B・判断の記録 ADR-48 と ADR-56）の後。名乗った repo の便は、並びの木 .worktrees/scribe2/lane/<n> の path を固定して
+ # 中身だけを便の base に替え、木の中の target で組む。並びの合計の上限は器の rules の行 pipe.lanes_cap_mb。外すのは ADR-35 の撤退の条件 (1)〜(3) に当たった時（行 r-lanes-on の節）。
+ build-lanes = true
+-# 器を書く便の同時の数（器の任意の key run-cap と run-cap-paths・判断の記録 ADR-63 の決定 (13)・読み手は器の行 v-one-vessel）。
+-# write-set に scribe2/ の下の項目を持つ便は、同じ dir の下を書く live な便と同じ周に起こした便が 1 本在る周に起きない（受付の断りと列の待ちの名は run-cap）。
+-# 器の追随の再 gate と着地の後の検出線が scribe2/ を見るようになる行 v-roots の着地の後に、外す行を置く（ADR-63 の撤退 (8)・ADR-33 の決定 (12)）。
+-run-cap = 1
+-run-cap-paths = ["scribe2/"]
+diff --git a/xtask/tests/onevd.rs b/xtask/tests/onevd.rs
+deleted file mode 100644
+index 0e24fc36a4fa90201526d18606e8a2ae53aa6d36..0000000000000000000000000000000000000000
+--- a/xtask/tests/onevd.rs
++++ /dev/null
+@@ -1,47 +0,0 @@
+-//! 行 t-run-cap-on の歯（接頭辞 onevd_・設計ノート surface-wave29c・判断の記録 ADR-63 の決定 (13)）: 根の器の宣言 .vessel.toml が
+-//! 任意 key run-cap を値 1 の 1 行で、run-cap-paths を値 ["scribe2/"] の 1 行で、この順に持つこと（器は write-set に scribe2/ の下の項目を持つ
+-//! 便を、同じ dir の下を書く live な便と同じ周に起こした便を合わせて 1 本までしか起こさない）。注の行を除いて key の字の行を数える。
+-//! 否定の見本は正しい見本から 1 句だけ替える。外の依存を使わない。
+-#![cfg(test)]
+-
+-use std::path::PathBuf;
+-
+-/// 名乗りの 2 行の字（key と値の間は空白 1 つずつ・file の順）。
+-const ON: [&str; 2] = ["run-cap = 1", "run-cap-paths = [\"scribe2/\"]"];
+-
+-/// 根の器の宣言の字。
+-fn declaration() -> String {
+-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+-    std::fs::read_to_string(root.join(".vessel.toml")).expect("根の .vessel.toml を読む")
+-}
+-
+-/// 注でない行のうち key が run-cap か run-cap-paths の行（前後の空白を除いた字・file の順）。
+-fn cap_lines(text: &str) -> Vec<&str> {
+-    text.lines()
+-        .map(str::trim)
+-        .filter(|line| !line.starts_with('#'))
+-        .filter(|line| matches!(line.split('=').next().map(str::trim), Some("run-cap" | "run-cap-paths")))
+-        .collect()
+-}
+-
+-#[test]
+-fn onevd_root_declaration_names_the_run_cap_of_the_vessel_dir() {
+-    assert_eq!(cap_lines(&declaration()), ON);
+-}
+-
+-#[test]
+-fn onevd_one_clause_changes_are_refused() {
+-    assert_eq!(cap_lines("schema = 1\nrun-cap = 1\nrun-cap-paths = [\"scribe2/\"]\n"), ON);
+-    let cases: [(&str, Vec<&str>); 5] = [
+-        ("schema = 1\nrun-cap = 2\nrun-cap-paths = [\"scribe2/\"]\n", vec!["run-cap = 2", ON[1]]),
+-        ("schema = 1\nrun-cap = 1\nrun-cap-paths = [\"scribe2/crates/\"]\n", vec![ON[0], "run-cap-paths = [\"scribe2/crates/\"]"]),
+-        ("schema = 1\n# run-cap = 1\nrun-cap-paths = [\"scribe2/\"]\n", vec![ON[1]]),
+-        ("schema = 1\nrun-cap-paths = [\"scribe2/\"]\nrun-cap = 1\n", vec![ON[1], ON[0]]),
+-        ("schema = 1\nrun-cap = 1\nrun-cap-paths = [\"scribe2/\"]\nrun-cap = 1\n", vec![ON[0], ON[1], ON[0]]),
+-    ];
+-    for (text, want) in cases {
+-        let got = cap_lines(text);
+-        assert_eq!(got, want, "{text}");
+-        assert_ne!(got, ON, "{text}");
+-    }
+-}
+diff --git a/xtask/tests/rcoff.rs b/xtask/tests/rcoff.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..eae2b0fa453f9851c39b73271bd5694ff028b7ad
+--- /dev/null
++++ b/xtask/tests/rcoff.rs
+@@ -0,0 +1,63 @@
++//! 行 t-run-cap-off の歯（接頭辞 rcoff_・設計ノート surface-wave29d・判断の記録 ADR-64）: 根の器の宣言 .vessel.toml が、器の任意 key
++//! run-cap と run-cap-paths の行も、その key を名指す注の行も持たないこと（器を書く便を同時に 1 本までにする床を外した・判断の記録
++//! ADR-63 の決定 (13) の値を外す行）。注の行も数え、字 run-cap を含む行を拾う。否定の見本は正しい見本に 1 句だけ足す。外の依存を使わない。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++/// 外した 2 つの key の共通の頭（run-cap-paths も含む）。
++const KEY: &str = "run-cap";
++
++/// 根の器の宣言の字。
++fn declaration() -> String {
++    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
++    std::fs::read_to_string(root.join(".vessel.toml")).expect("根の .vessel.toml を読む")
++}
++
++/// 字 run-cap を含む行（key の行と注の行・前後の空白を除いた字・file の順）。
++fn cap_lines(text: &str) -> Vec<&str> {
++    text.lines()
++        .map(str::trim)
++        .filter(|line| line.contains(KEY))
++        .collect()
++}
++
++#[test]
++fn rcoff_root_declaration_names_no_vessel_cap() {
++    let text = declaration();
++    assert_eq!(cap_lines(&text), Vec::<&str>::new());
++    assert_eq!(
++        text.lines()
++            .filter(|line| line.trim() == "schema = 1")
++            .count(),
++        1
++    );
++}
++
++#[test]
++fn rcoff_one_clause_additions_are_found() {
++    let good = "schema = 1\nbuild-lanes = true\n";
++    assert_eq!(cap_lines(good), Vec::<&str>::new());
++    let cases: [(&str, &str); 5] = [
++        (
++            "schema = 1\nbuild-lanes = true\nrun-cap = 1\n",
++            "run-cap = 1",
++        ),
++        (
++            "schema = 1\nbuild-lanes = true\nrun-cap-paths = [\"scribe2/\"]\n",
++            "run-cap-paths = [\"scribe2/\"]",
++        ),
++        (
++            "schema = 1\nbuild-lanes = true\n# 器の任意の key run-cap の注\n",
++            "# 器の任意の key run-cap の注",
++        ),
++        ("schema = 1\nbuild-lanes = true\n  run-cap=2\n", "run-cap=2"),
++        (
++            "schema = 1\nrun-cap = 1\nbuild-lanes = true\n",
++            "run-cap = 1",
++        ),
++    ];
++    for (text, want) in cases {
++        assert_eq!(cap_lines(text), [want], "{text}");
++    }
++}

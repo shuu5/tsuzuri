@@ -1,0 +1,68 @@
+# 判断の記録 ADR-64 — 器の crate の根を名乗る行 v-roots を行 v-join を待たずに流し、v-roots の着地の後に追随の撃ち直しを 1 回観てから器を書く便の同時 1 本の床を外し、器の crate の外に残る器の入力の穴は宣言の面を器の dir に広げて塞ぐまで席の門で守る
+# 判断の記録 ADR-33 の決定 (12)(14) の v-roots の順の分と、ADR-63 の撤退 (8) を置き換える（ADR-33 と ADR-63 の本文は封で凍っているので替えない・前例は ADR-60 が ADR-1019 の §2.1 と §2.3 の一部を置き換えた形）。
+# 起草は係 w254a、検証役 qv66 の攻めを映した直しは係 w258a（2026-10-05）。材料は問い t3-hub.87.38 と t3-hub.87.39 の本文（席の起草）と、係の照らし（差の両順の当たり・席の門の試し）と、検証役の記録。
+id: ADR-64
+title: 器の crate の根を名乗る行（v-roots）を大きな直しの行（v-join）を待たずに流し、v-roots の着地の後に追随の撃ち直しを 1 回観てから器を書く便の同時 1 本の床を外し、器の crate の外に残る器の入力の穴は宣言の面を器の dir に広げる行（t-scope-on）の着地まで席の門で守る（判断の記録 ADR-33 の決定 (12)(14) の v-roots の順の分と ADR-63 の撤退 (8) を置き換える）
+status: accepted
+date: 2026-10-05
+context: |
+  判断の記録 ADR-33 の決定 (12) は、器への宣言の入れ子の crate の根（crate-roots）に scribe2/crates/ を足す行（v-roots）を、器の xtask の名替え（決定 (11)・着地済み）と器の crate を根の workspace に入れる行（v-join・4 行に割る）の後に置いた。それまで器の追随の再 gate と着地の後の検出線は scribe2/ を見ないので、scribe2/ を書く便を同時に 1 本までにした。判断の記録 ADR-63 の決定 (13) は、この決まりを器への宣言 .vessel.toml の 2 つの鍵（run-cap = 1 と run-cap-paths = scribe2/）の床にし、撤退 (8) で v-roots の着地の時に値を外す行を置くとした。
+  席の照らしで、v-roots は v-join に依らず置けると分かった。v-roots は宣言の鍵 crate-roots に scribe2/crates/ を足すだけで器の code を書かず、当時の器の binary で v-roots を当てた写しと main の受付の試しを器の行 25 本に撃つと、断るかどうかは 25 本とも同じだった。席は 2026-10-05T21:04Z に v-roots の便の bead（t3-hub.89.13）の hold を外し、v-roots は 2026-10-05 に着地した（main の 785543ae・v-join の 4 行のうち v-join-xt の 9224be0d の後）。床の行（t-run-cap-on）は 2026-10-05 に着地した（main の edcff9f8）。問い（t3-hub.87.39）の推奨の「v-roots が先に着けば t-run-cap-on は流さない」は当たらず、床は宣言の 2 つの鍵で入っている。
+  v-roots の後も、器の dir の下で器の crate の外に在る器の組みと lint の入力は、追随の再 gate と着地の後の検出線と差の当たりの面の外に残る（面は器の land.rs の DETECTION_SCOPE の根の字の 5 項目〔crates/・Cargo.toml・Cargo.lock・rules/・.vessel.toml〕と、宣言した根の下の crate の和）。残るのは、器の binary が組みの時に読む規則の表 scribe2/rules/ と plugin の 2 file（scribe2/plugin/.claude-plugin/plugin.json と scribe2/plugin/hooks/hooks.json）、器の workspace の scribe2/Cargo.toml と scribe2/Cargo.lock、器の src と器の歯と根の歯が読む契約の型 scribe2/contracts/schema.toml、組みと lint を変える設定（scribe2/.cargo/ の下の cargo の設定・scribe2/clippy.toml・scribe2/rust-toolchain.toml・器の依存の許しの表（deny.toml）・scribe2/.config/ の下の歯の撃ち方の設定（nextest.toml））、器の宣言 scribe2/.vessel.toml である。器だけの repo では、根の rules/・Cargo.toml・Cargo.lock・.vessel.toml は面に入り、plugin/・.config/・clippy.toml・rust-toolchain.toml・docs/ は面の外だった。これらだけを書く器の便が着地すると、走る便は撃ち直さずに着地する。撤退 (8) の「v-roots が着地し、器の追随の再 gate と着地の後の検出線が scribe2/ を見るようになったら」は、v-roots だけでは字のとおりに満ちない。穴が実際に開いた例は無い。契約表の器の行で scribe2/ を書いて scribe2/crates/ を書かない行は着地済みの行（v-retire）の 1 本だけで、器の過去の履歴でも規則の表に触れた commit 92 本は全部 crate も書いていた。
+  穴を塞ぐ器の行（v-scope-paths）は器の任意の鍵の面の足し（scope-paths）を読み、面に repo 相対の path の接頭辞（末尾 / は dir・ほかは file）を足す。不備として断るのは、空・前後の空白・絶対 path・.. の段・空の段か . の段・固定の面の中・項目どうしの重なりで、根の鍵 crate-roots との重なりは照らさない（面は 2 つの鍵の和）。tsuzuri の宣言は検出線の鍵（detection-verify）を持たず、着地の後の検出線は撃たれない。
+  器の行は 1 本ずつ並び、待ちが長い（持ち主の急ぎ・台帳 memo t3-hub.87.31）。ADR-63 の撤退 (8) の繰り上げの引き金（器の床の待ちが 1 日 2 時間を越える日が 7 日に 3 日）は、記録が 10-05 に受理されたばかりでまだ測れていない。
+decision: |
+  (1) 行 v-roots の順。ADR-33 の決定 (12) の「v-roots は (11) の名替えと v-join の後の便の行にする」と、決定 (14) の切り替えの後の行の順のうち v-roots を v-join の後に置く分を外す。v-roots は v-join を待たずに流す（2026-10-05 に着地した）。ADR-33 の決定 (12) の後半（器を書く便を同時に 1 本までにする）は ADR-63 の決定 (13) の床が持ち、外す時機は (2) に従う。決定 (11) の名替えと v-join の中身と、決定 (14) のほかの行の順は替えない。
+  (2) 床を外す時機。ADR-63 の撤退 (8) を次に置き換える。床を外す行（t-run-cap-off・ノート surface-wave29d・宣言の 2 つの鍵とその注を外し、t-run-cap-on の歯の file を外す）は契約表に先に置くが、席は (3) の観る 1 回を確かめて記帳するまで、その行の便の bead を起こさない。観て記帳した後に、席が便の bead を起こす（起こした bead は hold を持たずに列に入る）。起票から hold までの間にほかの便の終端で起こされる隙を作らないためである。撤退 (8) の後半（待ちが 1 日 2 時間を越える日が 7 日に 3 日在れば v-join と v-roots の繰り上げを問う）は、(1) で v-roots を繰り上げたので用を終える。
+  (3) 観る 1 回。v-roots の着地の後に、器の crate の dir（scribe2/crates/ の下）を書く器の便が着地して main が動いた時に、その着地より前の base で走っていた便が、着地の段の追随で main へ積み直し、追随の再 gate を省かずに撃ち直したことを、席が 1 回確かめる。数えるのは次の 3 つを全部満たす周だけである。第一に、その便の追随の出来事（RunStage・stage は Implemented・detail は rebase:<base>..<main>）の範囲の git diff --name-only が、scribe2/crates/ の下の path を 1 つ以上持ち、DETECTION_SCOPE の 5 項目（crates/ の下・Cargo.toml・Cargo.lock・rules/ の下・.vessel.toml）と folio2/crates/ の下の path を 1 つも持たない（器の crate の面だけで撃ち直す周に限る）。第二に、その便は追随の道で着地した便で、着地の列の後ろとして候補の木で着地した便（追随を通らない）と、既着地（land の出力の already-landed）の周は数えない。第三に、撃ち直した印として、その便の verify の記録（器の pipe の run の dir の verify.jsonl）に省きの行が 1 行も無く、追随の出来事の後に Gated の出来事が在る。省きの行は JSON の 1 行で、鍵 kind の値が gate、鍵 skipped の値が regate、鍵 reason の値が outside-scope である（囲みを省いた形 kind gate・skipped regate・reason outside-scope で書き、戻す時は鍵と字の値を二重引用符で囲む）。verify.jsonl の行は時刻を持たないので、追随を 2 度以上した便は、省きの行が 1 行でも在れば数えない。land の出力の regate=skipped の字（器の定数 REGATE_SKIPPED）は、出力が読める時だけ照らす。走っていた便は器の便でも根の便でもよい（床の下では器の便は同時に 1 本なので、多くは根の便になる）。席は、着地した器の便の bead と commit、撃ち直した便の bead と run と追随の範囲とその範囲の diff の path の一覧、verify.jsonl の行の数と Gated の出来事の時刻を、便の直列の詰まりの memo（t3-hub.89）の notes に記帳してから、(2) の便の bead を起こす。撃ち直さずに省いた周を見たら便の bead を起こさず、撤退 (1) に当たる。
+  (4) 穴と席の門。穴を塞ぐまで、席の道具の門（設計の commit の script commit-design.sh の門の列・ADR-45 の門 H1 と同じ置き場・門の名は scribe2-crates・断りは床の断りの記録に 1 行）が、base から変わった契約表（contracts/*.toml）の行のうち、新しいか write-set が替わった行を判じる。行の write-set の書く項（= でない項・頭の + - ~ を外した path）のうち scribe2/ の下の項が、全部 scribe2/crates/ の下か HEAD の .vessel.toml の鍵 scope-paths の値の下（末尾 / の値は接頭辞・ほかは同じ字）に在れば通し、1 つでも外れれば、外れた項を名指して設計の commit を断る。塞ぐ前は crate を書く行でも、規則の表などの crate の外の項を持てば断る。契約表か HEAD の宣言が読めない時は rc 2 で止まる。行 t-scope-on が着地して宣言が scope-paths = scribe2/ を名乗ると、scribe2/ の下の項は全部通り、門は同じ判じのまま何も断らない。席はその後に門の行を commit-design.sh から外してよく、残してもよい。門は床の在る間も置き、床を外す前から塞ぐまで同じ 1 本で守る。
+  (5) 穴を塞ぐ行。器の任意の鍵（scope-paths）を読む器の行（v-scope-paths・便 t3-hub.89.15）と、宣言に scope-paths = scribe2/ の 1 項目を名乗る行（t-scope-on・便 t3-hub.89.16）が塞ぐ（どちらもノート surface-wave29c）。t-scope-on の値は、問いの時の 3 項目（scribe2/rules/・scribe2/Cargo.toml・scribe2/Cargo.lock）から器の dir の 1 項目に広げる。一覧にすると context の残りの入力と、後に足す file を漏らすからである。v-scope-paths の照らしはこの値を断らない（dir の接頭辞で、固定の面の外で、crate-roots との重なりを照らさない）。検出線の鍵が無いので、器の文書などを含めて増えるのは走る便の撃ち直しだけである。器は未知の鍵を宣言ごと断るので、順は v-scope-paths の着地、器の binary の入れ替え、t-scope-on（席が hold を外す）。床を外す行 t-run-cap-off と塞ぐ行の順は決めない。塞ぐ前に床を外してよく、その間は (4) の門が守る。t-run-cap-off と v-scope-paths と t-scope-on の差は、v-roots の後の main（996f81b5）の一時の index に単独と全部の順で当たり、順に依らず同じ木になる。
+  (6) 置き換えの範囲。ADR-33 と ADR-63 の本文は替えず、この記録が ADR-33 の決定 (12)(14) の v-roots の順の分と ADR-63 の撤退 (8) を置き換える。ADR-63 の決定 (13) の作法（値と数える path は宣言が持ち、器の code に scribe2/ の字を書かず、外す時も行で外す）と、ADR-60 の決定 (1)(8) の面の読み（v-roots の後は器の crate も面に入る）は替えない。
+options:
+  - id: a
+    name: 甲 — 根を名乗る行（v-roots）を今流し、撃ち直しを 1 回観て床を外し、穴は塞ぐまで席の門で守る
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: v-roots を先にすると、床を外すのに器の列の行（v-join）の 2 本を待たない。穴を塞ぐ器の行と binary の入れ替えも待たないので、床を外すのが最も早い。審査は削らない。失う物は門 1 本の手間と、塞ぐまで器の crate の外を書く行を置けないことと、単独の着地で main の赤になりうる小さな残り（結果の欄）である。
+  - id: b
+    name: 乙 — 根を名乗る行（v-roots）を今流し、床は穴を塞ぐ 3 段の後に外す
+    text: 決定 (1) は同じ。床は器の行（v-scope-paths）の着地と器の binary の入れ替えと宣言の行（t-scope-on）の着地の後に外し、席の門は置かない。
+    verdict: rejected
+    reason: 門は要らないが、器の列の便 1 本（v-scope-paths）と入れ替えの分だけ床が長く残り、器の行が 1 本ずつ並ぶ待ちが続く。穴が開いた例は無く、門で守れる。
+  - id: c
+    name: 丙 — ADR-33 の順のまま
+    text: 根を名乗る行（v-roots）は大きな直しの行（v-join）の 3 行の後に流し、床はその後に外す。穴は乙と同じに塞ぐ。
+    verdict: rejected
+    reason: v-roots は v-join に依らず置けると分かったので、順を守る得が無い。床を外すのが v-join の 3 行（器の列の 2 本と根の 1 本）の分だけ遅れる。
+basis: [ADR-33, ADR-63, ADR-60, ADR-45, P-4, P-6, N-2, A-2.3, P-17.4]
+retreat:
+  kind: measure
+  condition: |
+    数えるのは tsuzuri の設計の席で、便の直列の詰まりの memo（t3-hub.89）か後継の memo の notes に記帳する。門の断りは床の断りの記録（門の名 scribe2-crates）から数える。問う相手は持ち主。7 日の窓の始まりは、床を外す行（t-run-cap-off）の着地の commit の時刻である。
+    (1) 決定 (3) の観る周で、走っていた便が追随の再 gate を省いた（verify.jsonl に kind gate・skipped regate の行が在る）なら、床を外す行の便の bead を起こさず、器の面の読みを調べて持ち主に問う。
+    (2) 床を外した後、次のどちらかの周が 7 日に 1 度でも在れば、床を戻す行を置くかを問う。第一は、verify.jsonl に kind gate・skipped regate の行を持つ便が単独で着地し、主実測が赤になった周（出来事 RunStage・stage は Failed・detail は main-red）。第二は、着地の列の候補の木が赤で列を解いた周（land の出力の train=<N> dissolved why=<段> か、出来事 OverlapFollowed の語 train-red）のうち、列に器の便が居た周。
+    (3) 塞ぐまでの間に門 scribe2-crates が断った設計の commit が 7 日に 3 度在れば、塞ぐ行を急ぐか、門の判じを替えるかを問う。
+    (4) 床を外した日から 14 日の時点で宣言の行（t-scope-on）が着地していなければ、門の手間と穴の残りを持ち主に報告する（撤退でなく報告）。
+plain: |
+  器（便を流す道具）の部品を書く作業は、これまで同時に 1 本ずつしか流せませんでした。器の部品の変更を、走っている他の作業が見落とすおそれがあったからです。
+  見落としを無くす 1 行（v-roots）は、大きな直しを待たずに流し、もう入りました。他の作業が器の変更を見て検査をやり直すのを 1 回確かめてから、1 本ずつの縛りを外します。
+  器の部品の中身の外に在る file（規則の表・部品の一覧・組みの設定など）はまだ見落としの外に残るので、見る範囲を器の dir 全体に広げる 2 行が入るまで、それらを書く作業を席の門が置かせません。
+grill:
+  when: 2026-10-05
+  who: "検証役 qv66（AI・起草者と別の独立の文脈・読み取りだけ）"
+  where: "docs/grill/2026-10-05-ADR-64-floor-grill.md"
+  summary: "決定（甲）は崩れないが、単独の着地では撃ち直しを省いた便の組めない物が main を進めた後の主実測でしか落ちないこと（候補の木は後ろの便が居る周だけ）と、観る 1 回が根の面の差だけで撃ち直した周でも満ちることの 2 つを、封の前に字で直す。要直しは hold の隙・面の外に残る器の組みの入力の一覧・verify.jsonl の字・A-2.3 の note・封の時点の事実・撤退 (2) の数え口の 6 つ。床を外す行の差は今の main に当たり、宣言の行 t-scope-on と両順に当たる。"
+approval:
+  who: 持ち主
+  date: 2026-10-05
+  ruling: t3-hub.87.38（裁定 id = t3-hub.87.38:20261005T2102Z-1・案 1・配達の口・notes に逐語）と t3-hub.87.39（裁定 id = t3-hub.87.39:20261005T2102Z-1・甲・配達の口・notes に逐語）・束 batch:20261005T2102Z
+  verbatim: "すべて推奨で"
+  surface: R-8
+consequences:
+  - 器の行が同時に並べるようになり、器の列の待ちが縮む。器の便の着地ごとに、走るほかの便（根の便も）が審査を撃ち直す量が増え、床を外した後は並ぶ便の数だけ増える（審査は削らない）。宣言の行（t-scope-on）の後は、器の文書だけの着地でも走る便が撃ち直す。
+  - 根を名乗る行（v-roots）の後は、受付が器の src の file ごとの 1,500 行と器の core crate の本体の上限を契約の size の見込みで測って断る。器の src 273 本のうち 27 本は 1,200 行を越えるので、見込みで断られた器の行に growth を書く起草の手間が増える。
+  - 欄 done-teeth に器の歯の名を書けるのは根を名乗る行（v-roots）の着地の後に起こす便だけになる（前の base の便は審査が歯を見つけられず落ちる）。
+  - 塞ぐまでは、器の crate の外の scribe2/ の下（規則の表・plugin・manifest と錠・契約の型・組みと lint の設定・文書）を write-set に書く行を、crate を書く行でも置けない。そういう行は宣言の行（t-scope-on）の着地を待つ。門は新しいか write-set が替わった行だけを判じるので、置き済みの行は判じない。
+  - 組めない物の残り。塞ぐ前に門の外で置かれた行（門より前に置いた行）が器の crate の外の入力だけを着地させると、走る便は撃ち直しを省く。着地の列に後ろの便が居る周は、候補の木の検査（ADR-60 の決定 (6)）が組めない物を main の前に落とす。単独の着地では、撃ち直しを省いた後に squash と CAS で main を進め、主実測が赤を見つけて止まる（自動では戻さず、main の赤を戻す手が要る）。審査役だけが拾う食い違いはどちらでも残る。撤退 (2) がこれを数える。
+  - 席の門 1 本（gate-scribe2-crates.py）と、観る 1 回の記帳の手間が増える。門は宣言の行（t-scope-on）の着地の後は何も断らず、席は設計の commit の script（commit-design.sh）から外すか残すかを選べる。
+note: 起草は係 w254a、検証役の攻めを映した直しは係 w258a（2026-10-05）。承認の欄の逐語と経路は、適用の script が台帳の問いの notes の定型行から読んで入れた。条 A-2.3 と P-17.4 の字は当たらない（床は規則の行でなく宣言の鍵）。断りを外す変更なので、ADR-60 の決定 (5) の前例に倣い検証役の記録を添えた（docs/grill/2026-10-05-ADR-64-floor-grill.md）。検証役 qv66 の攻め（致命 2・要直し 6・軽い 5）は、封の前に係 w258a が全部映した。行 t-scope-on の値を器の dir の 1 項目に広げた直しは、ノート surface-wave29c の第 0.42 版。ノート surface-wave29d を起こして行 t-run-cap-off を置き、31 行の全部が着地したノート surface-wave29b を廃止した。封の行は tz check --freeze-adrs が足す。
