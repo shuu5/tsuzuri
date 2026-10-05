@@ -57,8 +57,8 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "席が起こす検証の群を置く前の試しの実の数で直した上限と引き金で置き、調べの群は置かない（t3-hub.87.6（裁定 id = t3-hub.87.6:20261005T0818Z-1・乙・配達の口・notes に逐語）・前の裁定 t3-hub.87.2（裁定 id = t3-hub.87.2:20261005T0639Z-1・乙）・判断の記録 ADR-61・要件 FR21 の shall と adrs と note・要件 FR22 と受入 AC22 を足した）", verbatim: "推奨でよい", version: v0.42}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "器を書く便を同時に 1 本までにする床を器への宣言の 2 鍵で置く（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (13)・要件 FR1068 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.43}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "gate の判定と数の食い違いを不合格に読み、場所の列を判定の記録に写し、合格の質の指摘を memo の口へ返す（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (6)(7)・要件 FR1009 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.44}
-    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "差の file を出す係の床の記録と終える前の門の撃ち直し（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (4)・要件 FR21 の shall と plainと adrsと note）", verbatim: "推奨で良い", version: v0.45}
-    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "起こしの予算の下限 15 万を起こしの門に置き、終える前の門が予算の記録を書く（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (3)(9)・要件 FR21 の shall と adrs と note）", verbatim: "推奨で良い", version: v0.46}
+    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "差の file を出す係の床の記録と終える前の門の撃ち直し（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (4)・要件 FR21 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.45}
+    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "起こしの予算の下限 15 万を起こしの門に置き、終える前の門が予算の記録を書く（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (3)(9)・要件 FR21 の shall と note）", verbatim: "推奨で良い", version: v0.46}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "差の当たりで通した組の便の後の着地の記帳（t3-hub.89.2（裁定 id = t3-hub.89.2:20261005T0513Z-1・案 C・tool の呼び・notes に逐語）・判断の記録 ADR-60 の決定 (4)・要件 FR1039 の shall と plain）", verbatim: "推奨で", version: v0.47}
 
 goals:
