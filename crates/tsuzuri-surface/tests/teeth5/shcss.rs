@@ -2,7 +2,7 @@
 //! 判断の記録 ADR-30 決定 (5)）。口は吹き出しの partner_view の button（class plk）で、短い題の span と id の code を並べる。
 #![cfg(test)]
 
-const CSS: &str = include_str!("../style.css");
+const CSS: &str = include_str!("../../style.css");
 
 /// 行頭が `selector` と空白と字 { の規則の宣言（{ と } の間の字・前後の空白を除く）。無ければ None。
 fn rule<'a>(css: &'a str, selector: &str) -> Option<&'a str> {

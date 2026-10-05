@@ -2,14 +2,23 @@
 //! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
 #![cfg(test)]
 
+mod cmtcnt;
 mod cwans;
 mod cwcls;
+mod cwhok;
 mod cwlch;
 mod cwopn;
 mod cwpln;
 mod cwshw;
+mod cwsrv;
 mod cwstp;
 mod cwwat;
+mod ehmark;
+mod kctx;
+mod rcapf;
+mod rowbasis;
+mod seatcp;
+mod shrtb;
 mod strelay;
 mod stskill;
 mod stterm;
