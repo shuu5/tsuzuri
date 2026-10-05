@@ -3,6 +3,7 @@
 //! 字は組み立ての出力の dir の project_blocks.rs に書く（今の字と同じなら書き直さない）。trunk の wasm の組み立ても同じ字を得る。
 //! project board の頁も src/pages の dir から同じ書き方で pages.rs に生成する（列挙 PageId と ALL・id・def・行 hs-pages）。
 //! stylesheet の部品は style の dir から style_parts.rs に、名と中身の表 PARTS を名の byte の順で生成する（行 g-style-parts・判断の記録 ADR-58）。
+//! 語彙の部品も vocab の dir から vocab_parts.rs に同じ書き方で生成する（行 g-vocab-parts）。
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -12,6 +13,7 @@ fn main() -> Result<(), String> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/pages");
     println!("cargo:rerun-if-changed=style");
+    println!("cargo:rerun-if-changed=vocab");
     let manifest = std::env::var("CARGO_MANIFEST_DIR").map_err(|e| format!("CARGO_MANIFEST_DIR: {e}"))?;
     let out_dir = std::env::var("OUT_DIR").map_err(|e| format!("OUT_DIR: {e}"))?;
     let dir = Path::new(&manifest).join("src").join("project");
@@ -24,6 +26,8 @@ fn main() -> Result<(), String> {
     write_if_changed(&Path::new(&out_dir).join("pages.rs"), &text)?;
     let text = parts_table(Path::new(&manifest), "style", "css")?;
     write_if_changed(&Path::new(&out_dir).join("style_parts.rs"), &text)?;
+    let text = parts_table(Path::new(&manifest), "vocab", "json")?;
+    write_if_changed(&Path::new(&out_dir).join("vocab_parts.rs"), &text)?;
     Ok(())
 }
 

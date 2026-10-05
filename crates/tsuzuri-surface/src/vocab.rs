@@ -1,12 +1,27 @@
 //! 語彙（見本の vocab.json を面の crate に写した file・便 g-frame）。見出しの語と「?」の注釈の字はここから引く。
 //! 2 欄（english = 英語のまま + 注釈・rephrase = 日本語の見出し）の和集合を鍵で引く（見本の ui.js の vt と同じ）。
 //! 面の crate は外の依存を足さないので、JSON は小さな読みで読む（object・array・字・数・真偽・null）。
+//! 基の vocab.json に加え、vocab の dir の部品（新しい鍵だけを足す行の file・名の byte の順）も 1 つの表に読み、
+//! どの file の中でも外でも鍵の重なりは Err にする（行 g-vocab-parts・判断の記録 ADR-58 決定 (1)(3)(4)）。
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 /// 面の crate に写した語彙の file の中身。
 pub const SOURCE: &str = include_str!("../vocab.json");
+
+/// 語彙の部品の表（組み立ての script が vocab の dir から生成する・名は `vocab/file`）。
+mod parts {
+    include!(concat!(env!("OUT_DIR"), "/vocab_parts.rs"));
+}
+pub use parts::PARTS;
+
+/// 置き場の語彙の file の全部（基の vocab.json の後に部品を名の順に・行 g-vocab-parts）。
+pub fn sources() -> Vec<(&'static str, &'static str)> {
+    let mut out = vec![("vocab.json", SOURCE)];
+    out.extend(PARTS);
+    out
+}
 
 /// 1 つの語（見出しの語・注釈の本文・内部の名）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,8 +43,16 @@ impl Vocab {
     /// 語彙の file を読む（rephrase と english の 2 欄の和）。同じ欄に 2 度在る鍵と両方の欄に在る鍵は、
     /// 鍵と 2 つの在りかを書いた Err（行 g-vocab-dupkey・前は黙って後と english が勝った）。
     pub fn parse(text: &str) -> Result<Self, String> {
+        Self::parse_all(&[("vocab.json", text)])
+    }
+
+    /// 語彙の file の並び（名と字）を 1 つの表に読む（file を跨ぐ重なりも鍵と 2 つの在りかを書いた Err・行 g-vocab-parts）。
+    pub fn parse_all(files: &[(&str, &str)]) -> Result<Self, String> {
         let mut terms = BTreeMap::new();
-        add_file(&mut terms, &mut BTreeMap::new(), "vocab.json", text)?;
+        let mut owners = BTreeMap::new();
+        for (file, text) in files {
+            add_file(&mut terms, &mut owners, file, text)?;
+        }
         Ok(Self { terms })
     }
 
@@ -90,11 +113,11 @@ fn add_file(
     Ok(())
 }
 
-/// 面の crate に写した語彙（最初に引いたときに 1 度だけ読む・読めなければ空の語彙で、見出しは語彙表に無いの字）。
+/// 面の crate に写した語彙（基と部品・最初に引いたときに 1 度だけ読む・読めなければ空の語彙で、見出しは語彙表に無いの字）。
 pub fn vocab() -> &'static Vocab {
     static VOCAB: OnceLock<Vocab> = OnceLock::new();
     VOCAB.get_or_init(|| {
-        Vocab::parse(SOURCE).unwrap_or_else(|_| Vocab {
+        Vocab::parse_all(&sources()).unwrap_or_else(|_| Vocab {
             terms: BTreeMap::new(),
         })
     })

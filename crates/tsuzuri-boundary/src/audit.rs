@@ -214,6 +214,31 @@ pub fn label(vocab: &str, key: &str) -> Option<String> {
     })
 }
 
+/// 語彙表の file の字の並び（基の後に部品）の english と rephrase の欄の中身をつないだ 1 つの JSON の字
+/// （受入の測りが面の vocab() と同じ和を引く・鍵の重なりは面の読みと歯が断る・行 g-vocab-parts）。
+/// 欄の無い字か object でない欄は、何番目の字かを書いた Err。
+pub fn merge_vocab(texts: &[&str]) -> Result<String, String> {
+    let mut cols = [("english", Vec::new()), ("rephrase", Vec::new())];
+    for (i, text) in texts.iter().enumerate() {
+        for (col, bodies) in &mut cols {
+            let body = member(text, col)
+                .and_then(|o| o.strip_prefix('{'))
+                .and_then(|o| o.strip_suffix('}'))
+                .ok_or_else(|| format!("語彙表の {i} 番目の字に object の欄 {col} が無い"))?
+                .trim();
+            if !body.is_empty() {
+                bodies.push(body);
+            }
+        }
+    }
+    let [(_, english), (_, rephrase)] = cols;
+    Ok(format!(
+        "{{\"english\": {{{}}}, \"rephrase\": {{{}}}}}",
+        english.join(", "),
+        rephrase.join(", ")
+    ))
+}
+
 /// 散文の片の字数（字の種類が文字の字だけ・数字と記号と約物と空白を数えない）。
 pub fn prose_chars(text: &str) -> usize {
     text.chars().filter(|c| c.is_alphabetic()).count()

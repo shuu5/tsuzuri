@@ -23,6 +23,9 @@ pub const USAGE: &str =
 /// 面の語彙表（workspace の root から）。
 const VOCAB: &str = "crates/tsuzuri-surface/vocab.json";
 
+/// 面の語彙の部品の dir（workspace の root から・行 g-vocab-parts）。
+const VOCAB_PARTS: &str = "crates/tsuzuri-surface/vocab";
+
 /// --out を省いた時の report の置き場（workspace の root から）。
 const REPORT: &str = "target/accept/report.txt";
 
@@ -93,8 +96,7 @@ pub fn run(args: &[String], root: &Path) -> i32 {
 /// 語彙表を読み、tz の口と同じ口座の dir の下で席の目の Chrome を起こして sweep を撃ち、report を書く
 /// （違反の和とまだ分からない画面の数を返す）。
 fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {
-    let vocab = fs::read_to_string(root.join(VOCAB))
-        .map_err(|e| format!("語彙表 {VOCAB} を読めない: {e}"))?;
+    let vocab = vocab_text(root)?;
     let board = flags.url.split('?').next().unwrap_or(&flags.url);
     let base = tunnel::user_dir(&env::temp_dir())?;
     let (_eyes, mut session) = Eyes::open(&flags.chrome, &base, board, TIMEOUT)?;
@@ -106,4 +108,24 @@ fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {
     fs::write(&flags.out, report)
         .map_err(|e| format!("report {} を書けない: {e}", flags.out.display()))?;
     Ok((total, unknown))
+}
+
+/// 基の語彙表と部品の dir の .json を名の順に読み、面の vocab() と同じ和の 1 つの JSON の字にする（行 g-vocab-parts）。
+fn vocab_text(root: &Path) -> Result<String, String> {
+    let dir = root.join(VOCAB_PARTS);
+    let mut files: Vec<PathBuf> = fs::read_dir(&dir)
+        .map_err(|e| format!("語彙の部品の dir {VOCAB_PARTS} を読めない: {e}"))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    files.sort();
+    files.insert(0, root.join(VOCAB));
+    let mut texts = Vec::new();
+    for file in &files {
+        texts.push(
+            fs::read_to_string(file)
+                .map_err(|e| format!("語彙表 {} を読めない: {e}", file.display()))?,
+        );
+    }
+    audit::merge_vocab(&texts.iter().map(String::as_str).collect::<Vec<_>>())
 }
