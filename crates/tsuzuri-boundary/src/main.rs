@@ -22,6 +22,7 @@
 //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
 //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
 //! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
+//! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
 //! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す（行 cs-open）。
 //! tz <口の名> [旗]（口の名は check・schema・derive・ceiling・init・parts・face・figure・build・intake・hello の 11・
 //! folio の同じ名の口と引数・出力・rc が同じ・行 k-tz-entry）。索引の旗（--print・--digest・--summary）を持つ tz graph も
@@ -69,6 +70,7 @@ fn main() -> ExitCode {
         }
         ["stage", rest @ ..] => tsuzuri_boundary::stage::cli::run(rest),
         ["consult", rest @ ..] => tsuzuri_boundary::consult::run(rest),
+        ["context", rest @ ..] => tsuzuri_boundary::cli::context::run(rest),
         ["--version"] => version(),
         [name, rest @ ..] if tsuzuri_boundary::cli::folio::NAMES.contains(name) => {
             tsuzuri_boundary::cli::folio::run(name, rest)
