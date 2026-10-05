@@ -1,0 +1,2803 @@
+diff --git a/crates/tsuzuri-core/tests/teeth1/abss.rs b/crates/tsuzuri-core/tests/teeth1/abss.rs
+index deefab159d88857fcb338c1fb0163dca15997260..635570bad5099ce08500bc90938c11bb2767116a 100644
+--- a/crates/tsuzuri-core/tests/teeth1/abss.rs
++++ b/crates/tsuzuri-core/tests/teeth1/abss.rs
+@@ -7,12 +7,11 @@
+ use std::collections::BTreeMap;
+ use std::path::{Path, PathBuf};
+ 
+-use serde::Deserialize;
+-use tsuzuri_contract::account::{AccountDoc, AccountRow, GroupCard, MoveRow};
++use crate::common::{Case, Inputs};
++use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::{SeatCard, SeatSpan};
+ use tsuzuri_contract::wire;
+-use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, assemble, doc};
+ use tsuzuri_core::seat::{SeatTexts, anchor, card};
+ 
+@@ -27,21 +26,6 @@ const SHIFTS: [u64; 4] = [1, 60, 3_600, 86_400];
+ /// 席の名。
+ const OWN: &str = "proj-1:0.1";
+ 
+-#[derive(Deserialize)]
+-struct Case {
+-    #[serde(flatten)]
+-    texts: SeatTexts,
+-    card: SeatCard,
+-}
+-
+-#[derive(Deserialize)]
+-struct Inputs {
+-    texts: HostTexts,
+-    accounts: Reading<Vec<AccountRow>>,
+-    groups: Reading<Vec<GroupCard>>,
+-    moves: Reading<Vec<MoveRow>>,
+-}
+-
+ fn read(rel: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel);
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
+diff --git a/crates/tsuzuri-core/tests/teeth1/acctcore.rs b/crates/tsuzuri-core/tests/teeth1/acctcore.rs
+index a40e41da74c16f7c419225534149f3f6ed735793..a36f13b9cc9a1cafd1130c0de730ca5ff8a8123d 100644
+--- a/crates/tsuzuri-core/tests/teeth1/acctcore.rs
++++ b/crates/tsuzuri-core/tests/teeth1/acctcore.rs
+@@ -4,23 +4,13 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
+-use serde::Deserialize;
+-use tsuzuri_contract::account::{AccountRow, GroupCard, GroupMember, MoveRow};
++use crate::common::{FIXTURE, Inputs, known};
++use tsuzuri_contract::account::{AccountRow, GroupMember, MoveRow};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::QuotaUsed;
+ use tsuzuri_core::account::host::{HostTexts, accounts, declaration, groups, moves};
+ use tsuzuri_core::account::project_name;
+ 
+-const FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
+-
+-#[derive(Deserialize)]
+-struct Inputs {
+-    texts: HostTexts,
+-    accounts: Reading<Vec<AccountRow>>,
+-    groups: Reading<Vec<GroupCard>>,
+-    moves: Reading<Vec<MoveRow>>,
+-}
+-
+ fn crate_dir() -> PathBuf {
+     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+ }
+@@ -41,13 +31,6 @@ fn texts() -> HostTexts {
+     inputs().texts
+ }
+ 
+-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
+-    match r {
+-        Reading::Known(v) => v,
+-        Reading::Unknown => panic!("Unknown"),
+-    }
+-}
+-
+ fn used(window: &str, pct: u8, resets: Option<u64>) -> QuotaUsed {
+     QuotaUsed {
+         window: window.into(),
+diff --git a/crates/tsuzuri-core/tests/teeth1/acctpcore.rs b/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
+index 4bc1197b0bb8a5877da2017e864af8a63d1ff1cf..4b2d33d1c8199eebfcfa4335244279ad4f5f8796 100644
+--- a/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
++++ b/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
+@@ -8,11 +8,9 @@ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ use std::sync::Arc;
+ 
+-use serde::Deserialize;
++use crate::common::{INPUTS, Inputs, NOW, known};
+ use serde_json::json;
+-use tsuzuri_contract::account::{
+-    AccountDoc, AccountRow, GroupCard, MoveRow, RunCounts, SessionLine,
+-};
++use tsuzuri_contract::account::{AccountDoc, RunCounts, SessionLine};
+ use tsuzuri_contract::board::{Reading, Stage};
+ use tsuzuri_contract::seat::{SeatCard, SeatState};
+ use tsuzuri_contract::surface::SeatRole;
+@@ -27,20 +25,8 @@ use tsuzuri_core::ledger::stats::stats;
+ use tsuzuri_core::next_step::next_step_seat;
+ use tsuzuri_core::seat::{SeatTexts, card};
+ 
+-const INPUTS: &str = "tests/fixtures/account/acct-inputs.json";
+ const DOC: &str = "tests/fixtures/account/acct-doc.json";
+ 
+-/// 今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+-#[derive(Deserialize)]
+-struct Inputs {
+-    texts: HostTexts,
+-    accounts: Reading<Vec<AccountRow>>,
+-    groups: Reading<Vec<GroupCard>>,
+-    moves: Reading<Vec<MoveRow>>,
+-}
+-
+ fn read(rel: &str) -> String {
+     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+         .join("../..")
+@@ -52,13 +38,6 @@ fn inputs() -> Inputs {
+     serde_json::from_str(&read(INPUTS)).expect("fixture の形")
+ }
+ 
+-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
+-    match r {
+-        Reading::Known(v) => v,
+-        Reading::Unknown => panic!("Unknown"),
+-    }
+-}
+-
+ /// 節の run と session の歯の組（bead 11 本）。欄は種類・bead・run の時刻の札・ts・stage・detail で、
+ /// ts は日の無い `HH:MM` なら 2026-09-27 の UTC。run の id は `<bead>-2026<札>`。
+ const EVENTS: &[(&str, &str, &str, &str, &str, &str)] = &[
+diff --git a/crates/tsuzuri-core/tests/teeth1/apark.rs b/crates/tsuzuri-core/tests/teeth1/apark.rs
+index fdfcf9e26944ca5b739e5fe18cdd2b5597b9b36f..bc57356789ba2f4c264a4d2695d1b3f6ed39a420 100644
+--- a/crates/tsuzuri-core/tests/teeth1/apark.rs
++++ b/crates/tsuzuri-core/tests/teeth1/apark.rs
+@@ -5,6 +5,7 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{FIXTURE, known};
+ use serde::Deserialize;
+ use tsuzuri_contract::account::{AccountRow, GroupCard};
+ use tsuzuri_contract::board::{GroupRow, Reading};
+@@ -12,8 +13,6 @@ use tsuzuri_contract::seat::Pressure;
+ use tsuzuri_core::account::host::{HostTexts, PARK_KIND, accounts, declaration, groups};
+ use tsuzuri_core::seat::{SeatTexts, card};
+ 
+-const FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
+-
+ /// 区画の宣言（fixture の群の宣言の後ろ・[seat] の前に足す・heartbeat の key は読み捨てる）。
+ const LOT_TOML: &str = "[[account-group]]\nname = \"lot\"\nanchors = [\"/work/proj-d\"]\naccounts = [\"acct-3\", \"acct-4\"]\nheartbeat = \"off\"\n\n";
+ 
+@@ -51,13 +50,6 @@ fn inputs() -> Inputs {
+     serde_json::from_str(&read(FIXTURE)).expect("fixture の形")
+ }
+ 
+-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
+-    match r {
+-        Reading::Known(v) => v,
+-        Reading::Unknown => panic!("Unknown"),
+-    }
+-}
+-
+ /// 字の一部を置き換えた字。
+ fn edit(text: &str, from: &str, to: &str) -> String {
+     assert!(text.contains(from), "{from} が字に無い");
+diff --git a/crates/tsuzuri-core/tests/teeth1/athr.rs b/crates/tsuzuri-core/tests/teeth1/athr.rs
+index e04831941dfc64cd8d32778eecbefb2f8c6bba72..7fab30f0884a4585e5e46d4e8d6a8759c9c68f84 100644
+--- a/crates/tsuzuri-core/tests/teeth1/athr.rs
++++ b/crates/tsuzuri-core/tests/teeth1/athr.rs
+@@ -6,6 +6,7 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, log};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::account::{AccountDoc, GroupNotice, WindowCap};
+ use tsuzuri_contract::board::Reading;
+@@ -15,9 +16,6 @@ use tsuzuri_core::account::host::{
+ };
+ use tsuzuri_core::account::project::{self, ProjectTexts, assemble, project_rows, session_lines};
+ 
+-/// 今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// 群の宣言の字（Tier1 の anchors は proj-a と proj-b・Tier2 は proj-c）。
+ const HOST: &str = "[[account-group]]\nname = \"Tier1\"\nanchors = [\"/work/proj-a\", \"/work/proj-b\"]\n\n\
+ [[account-group]]\nname = \"Tier2\"\nanchors = [\"/work/proj-c\"]\n";
+@@ -41,10 +39,6 @@ fn ev(ts: &str, kind: &str, account: Option<&str>, detail: &str) -> String {
+     event.to_string()
+ }
+ 
+-fn log(lines: &[String]) -> String {
+-    lines.iter().map(|l| format!("{l}\n")).collect()
+-}
+-
+ fn l1() -> String {
+     log(&[
+         ev("11:30", PRESSURE, Some("acct-2"), "group=Tier1 window=5h used=90 cap=85 sent=1"),
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvcase.rs b/crates/tsuzuri-core/tests/teeth1/bvcase.rs
+index deb1edae6d5f20b24c073a0f8a38d37fdc0f37b7..0a398f0c6ccc83aab54129131bcf63edca966404 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvcase.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvcase.rs
+@@ -2,19 +2,11 @@
+ //! fixture: tests/fixtures/case/lifecycle.json と lifecycle.stale（器の実物の形を写した小さな字・読むだけ）。短い字の組は歯の中に書く。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
++use crate::common::fixture;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart};
+ use tsuzuri_core::case::cases_of;
+ 
+-fn fixture(name: &str) -> String {
+-    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
+-        .join("../../tests/fixtures/case")
+-        .join(name);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ fn ids(list: &[&str]) -> Vec<String> {
+     list.iter().map(|s| s.to_string()).collect()
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth1/bvunref.rs b/crates/tsuzuri-core/tests/teeth1/bvunref.rs
+index 997448a42d8ed56431204a118b4d141f61b436ae..fa00549df0a4c4de1d6a8bd3c423b901c0a6ea70 100644
+--- a/crates/tsuzuri-core/tests/teeth1/bvunref.rs
++++ b/crates/tsuzuri-core/tests/teeth1/bvunref.rs
+@@ -2,20 +2,12 @@
+ //! fixture: tests/fixtures/case/unref.json（未反映の 3 種と数えない局面の部品を持つ小さな字）と lifecycle.stale（読むだけ）。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
++use crate::common::fixture;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::stats::{UnreflectedCount, UnreflectedKind};
+ use tsuzuri_core::ledger::unreflected::PHASES;
+ use tsuzuri_core::ledger::{Unreflected, UnreflectedItem, stats, unreflected, with_unreflected};
+ 
+-fn fixture(name: &str) -> String {
+-    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
+-        .join("../../tests/fixtures/case")
+-        .join(name);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ /// 題と作った時刻を引く台帳（memo の t3-hub.920 と問いの t3-hub.930 だけ・t3-hub.921 は台帳に無い）。
+ const LEDGER: &str = r#"[
+   {"id":"t3-hub.920","title":"[memo] 処置を待つ控え","status":"open","issue_type":"task","labels":["memo"],"created_at":"2026-09-30T00:00:00Z"},
+diff --git a/crates/tsuzuri-core/tests/teeth1/common.rs b/crates/tsuzuri-core/tests/teeth1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..312783b1fa1dcff0cbf2fc93aa9de442a31653bb
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/teeth1/common.rs
+@@ -0,0 +1,167 @@
++//! tsuzuri-core の歯の群 teeth1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use serde::Deserialize;
++use serde_json::{Value, json};
++use std::path::{Path, PathBuf};
++use std::process::Command;
++use tsuzuri_contract::account::{AccountRow, GroupCard, MoveRow};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_contract::seat::SeatCard;
++use tsuzuri_contract::surface::RulingId;
++use tsuzuri_core::account::host::HostTexts;
++use tsuzuri_core::delivery::Said;
++use tsuzuri_core::seat::SeatTexts;
++
++#[derive(Deserialize)]
++pub(crate) struct Case {
++    #[serde(flatten)]
++    pub(crate) texts: SeatTexts,
++    pub(crate) card: SeatCard,
++}
++
++/// 偽の tz が標準出力に出す字。
++pub(crate) const FAKE_OUT: &str = "answer-line\n";
++
++/// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。
++pub(crate) const FILTER_WORDS: &[&str] = &[
++    "aaround_", "accept_", "acchold_", "account_", "acctcore_", "acctdoc_", "accthb_",
++    "accthome_", "acctled_", "acctlook_", "acctpcore_", "acctproj_", "acctsess_", "acctwin_",
++    "acctwire_", "afocus_", "aord_", "apop_", "askcard_", "athr_", "batchpanel_", "bhalf_",
++    "board_min_", "bport_", "brand_", "btuck_", "cadopt_", "cdorm_", "cgdom_", "cmark_",
++    "contract_form_", "cround_", "csled_", "denv_", "dnrow_", "ecache_", "epolq_", "flight_",
++    "fmark_", "fprem_", "frame_", "fserve_", "fstop_", "gapspage_", "gbnote_", "gfix_",
++    "gfresh_", "ghb_", "gjst_", "glabel_", "gnav_", "gpface_", "gpill_", "gpulse_", "graph_",
++    "gsum_", "gtuck_", "gview_", "hacols_", "harest_", "hasplit_", "hbconf_", "hbmark_",
++    "hbpost_", "hbproc_", "hbroute_", "hcard_", "hcled_", "hcnx_", "hcproj_", "hcsess_",
++    "hdchip_", "hfig_", "hnunk_", "hook_", "hruling_", "hsblock_", "hsderive_", "hshist_",
++    "hspage_", "hsym_", "iclose_", "ilink_", "kcli_", "klink_", "launch_", "lcard_",
++    "ledgerblock_", "lhome_", "lidle_", "lresume_", "lsnap_", "lspark_", "lstore_", "mapview_",
++    "mkeys_", "mlink_", "mstore_", "mtree_", "nact_", "nbatch_", "ncard_", "nextstep_",
++    "nodepage_", "nstall_", "nsum_", "nsumw_", "ntime_", "nxact_", "parts_", "pclosed_",
++    "pfold_", "pipe_", "plimit_", "pmisfit_", "pmore_", "pquest_", "pqueue_", "project_",
++    "ptitle_", "punmap_", "pwhole_", "qblock_", "qgate_", "qkey_", "question_", "relay_",
++    "rhold_", "runsdoc_", "rvk_", "saxis_", "sclosed_", "seatblock_", "seatcard_", "server_",
++    "sesplit_", "shb_", "skeleton_", "smore_", "stage_", "stats_", "stcli_", "steady_",
++    "sxaxis_", "ticker_", "tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_", "pgz_",
++];
++
++pub(crate) const FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
++
++pub(crate) const INPUTS: &str = "tests/fixtures/account/acct-inputs.json";
++
++#[derive(Deserialize)]
++pub(crate) struct Inputs {
++    pub(crate) texts: HostTexts,
++    pub(crate) accounts: Reading<Vec<AccountRow>>,
++    pub(crate) groups: Reading<Vec<GroupCard>>,
++    pub(crate) moves: Reading<Vec<MoveRow>>,
++}
++
++/// runner の印の file の名。
++pub(crate) const MARK_NAME: &str = "scribe2-runner";
++
++/// 今（2026-09-27T12:00:00Z）。
++pub(crate) const NOW: u64 = 1_790_510_400;
++
++/// 歯の台帳の bead 1 本（label は問いの label か無し）。
++pub(crate) fn bead(id: &str, question_label: bool, status: &str, notes: &[&str]) -> Value {
++    let labels: Vec<&str> = if question_label {
++        vec!["intake:question"]
++    } else {
++        vec!["other"]
++    };
++    json!({"id": id, "labels": labels, "status": status, "notes": notes.join("\n")})
++}
++
++/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
++pub(crate) fn declared(project: &Path) {
++    std::fs::create_dir_all(project).expect("project の dir を作る");
++    for args in [
++        &["init", "-q"][..],
++        &["config", "scribe2.statedir", "/nonexistent/state"],
++    ] {
++        let ok = Command::new("git")
++            .arg("-C")
++            .arg(project)
++            .args(args)
++            .status()
++            .expect("git");
++        assert!(ok.success(), "git {args:?}");
++    }
++}
++
++pub(crate) fn fixture(name: &str) -> String {
++    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/case")
++        .join(name);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// object の鍵を並べ替えた列。
++pub(crate) fn keys(v: &Value) -> Vec<&str> {
++    let mut keys: Vec<&str> = v
++        .as_object()
++        .unwrap_or_else(|| panic!("object でない: {v}"))
++        .keys()
++        .map(String::as_str)
++        .collect();
++    keys.sort_unstable();
++    keys
++}
++
++pub(crate) fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
++    match r {
++        Reading::Known(v) => v,
++        Reading::Unknown => panic!("Unknown"),
++    }
++}
++
++pub(crate) fn log(lines: &[String]) -> String {
++    lines.iter().map(|l| format!("{l}\n")).collect()
++}
++
++/// 要素 1 つの配列のその要素。
++pub(crate) fn only(v: &Value) -> &Value {
++    match v.as_array().map(Vec::as_slice) {
++        Some([one]) => one,
++        _ => panic!("要素 1 つの配列でない: {v}"),
++    }
++}
++
++pub(crate) fn pair(from: &str, to: &str) -> (String, String) {
++    (from.to_string(), to.to_string())
++}
++
++/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
++pub(crate) fn plugin_dir(dir: &Path) {
++    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
++        let to = dir.join(rel);
++        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
++        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
++    }
++}
++
++pub(crate) fn read_hooks() -> Value {
++    let path = root().join("plugin/hooks/hooks.json");
++    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
++    serde_json::from_str(&text).unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
++}
++
++pub(crate) fn rid(id: &str) -> RulingId {
++    RulingId::new(id).expect("裁定の id")
++}
++
++pub(crate) fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++pub(crate) fn said_of(question: &str, id: &str, verbatim: &str) -> Said {
++    Said {
++        question: BeadId::new(question).expect("bead の id"),
++        ruling: rid(id),
++        verbatim: verbatim.to_string(),
++    }
++}
+diff --git a/crates/tsuzuri-core/tests/teeth1/csled.rs b/crates/tsuzuri-core/tests/teeth1/csled.rs
+index 789c38bd539906e46918c195bfd443efbbe3b1c1..077dcb6e86e6d4cb8b5522f961a705607d7900ea 100644
+--- a/crates/tsuzuri-core/tests/teeth1/csled.rs
++++ b/crates/tsuzuri-core/tests/teeth1/csled.rs
+@@ -4,8 +4,9 @@
+ //! workspace の根の fixture は読むだけで書かない。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::root;
+ use serde_json::json;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::{Fold, GraphNode, NodeKind};
+@@ -14,10 +15,6 @@ use tsuzuri_core::graph::check::{SUMMARY_KINDS, unsummarized};
+ use tsuzuri_core::graph::{Graph, Inputs, around, build};
+ use tsuzuri_core::question;
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn read(path: &Path) -> String {
+     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth1/cspk.rs b/crates/tsuzuri-core/tests/teeth1/cspk.rs
+index a6ea80da52be17e3d7c1c7e6ccf93ea7e5f7c90f..98b38a10bbe68834cde649721534078de6e9fdc1 100644
+--- a/crates/tsuzuri-core/tests/teeth1/cspk.rs
++++ b/crates/tsuzuri-core/tests/teeth1/cspk.rs
+@@ -4,6 +4,7 @@
+ 
+ use std::collections::BTreeMap;
+ 
++use crate::common::log;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::account::{SPARK_SPAN_S, SPARK_STEP_S, Spark, SparkLine, SparkPoint};
+ use tsuzuri_contract::board::Reading;
+@@ -55,10 +56,6 @@ fn measured(account: &str, window: &str, ago: i64, used_pct: u64) -> String {
+     event(account, window, &rfc3339(at), json!(used_pct)).to_string()
+ }
+ 
+-fn log(lines: &[String]) -> String {
+-    lines.iter().map(|l| format!("{l}\n")).collect()
+-}
+-
+ fn texts(events: Option<String>) -> HostTexts {
+     HostTexts {
+         events: events.map(Into::into),
+diff --git a/crates/tsuzuri-core/tests/teeth1/ctick.rs b/crates/tsuzuri-core/tests/teeth1/ctick.rs
+index f8b7f9204f93531ab2b2c49ad464ecb3cff8181d..68c9971c26af9471c8fc4ac026be2d7f120a1f0a 100644
+--- a/crates/tsuzuri-core/tests/teeth1/ctick.rs
++++ b/crates/tsuzuri-core/tests/teeth1/ctick.rs
+@@ -3,9 +3,8 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::{Path, PathBuf};
+ 
+-use serde::Deserialize;
++use crate::common::{Case, root};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::{SeatCard, TickHealth};
+ use tsuzuri_core::seat::{SeatTexts, anchor, card};
+@@ -15,17 +14,6 @@ const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
+ /// 組 run の doctor の席 proj-1:0.1 の行の末の字。
+ const OWN: &str = " heartbeat=on tick=healthy";
+ 
+-#[derive(Deserialize)]
+-struct Case {
+-    #[serde(flatten)]
+-    texts: SeatTexts,
+-    card: SeatCard,
+-}
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth1/dnedge.rs b/crates/tsuzuri-core/tests/teeth1/dnedge.rs
+index 71514517353c12dbb21c14c198e78d3bb89c9665..da442a242eb6cbaae975386d4f287a0bf9262aad 100644
+--- a/crates/tsuzuri-core/tests/teeth1/dnedge.rs
++++ b/crates/tsuzuri-core/tests/teeth1/dnedge.rs
+@@ -4,6 +4,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::FILTER_WORDS;
+ use serde_json::json;
+ use tsuzuri_contract::graph::{AroundDoc, EdgeType, Fold};
+ use tsuzuri_contract::wire;
+@@ -163,29 +164,6 @@ fn dnedge_around_rows() {
+     );
+ }
+ 
+-/// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。
+-const FILTER_WORDS: &[&str] = &[
+-    "aaround_", "accept_", "acchold_", "account_", "acctcore_", "acctdoc_", "accthb_",
+-    "accthome_", "acctled_", "acctlook_", "acctpcore_", "acctproj_", "acctsess_", "acctwin_",
+-    "acctwire_", "afocus_", "aord_", "apop_", "askcard_", "athr_", "batchpanel_", "bhalf_",
+-    "board_min_", "bport_", "brand_", "btuck_", "cadopt_", "cdorm_", "cgdom_", "cmark_",
+-    "contract_form_", "cround_", "csled_", "denv_", "dnrow_", "ecache_", "epolq_", "flight_",
+-    "fmark_", "fprem_", "frame_", "fserve_", "fstop_", "gapspage_", "gbnote_", "gfix_",
+-    "gfresh_", "ghb_", "gjst_", "glabel_", "gnav_", "gpface_", "gpill_", "gpulse_", "graph_",
+-    "gsum_", "gtuck_", "gview_", "hacols_", "harest_", "hasplit_", "hbconf_", "hbmark_",
+-    "hbpost_", "hbproc_", "hbroute_", "hcard_", "hcled_", "hcnx_", "hcproj_", "hcsess_",
+-    "hdchip_", "hfig_", "hnunk_", "hook_", "hruling_", "hsblock_", "hsderive_", "hshist_",
+-    "hspage_", "hsym_", "iclose_", "ilink_", "kcli_", "klink_", "launch_", "lcard_",
+-    "ledgerblock_", "lhome_", "lidle_", "lresume_", "lsnap_", "lspark_", "lstore_", "mapview_",
+-    "mkeys_", "mlink_", "mstore_", "mtree_", "nact_", "nbatch_", "ncard_", "nextstep_",
+-    "nodepage_", "nstall_", "nsum_", "nsumw_", "ntime_", "nxact_", "parts_", "pclosed_",
+-    "pfold_", "pipe_", "plimit_", "pmisfit_", "pmore_", "pquest_", "pqueue_", "project_",
+-    "ptitle_", "punmap_", "pwhole_", "qblock_", "qgate_", "qkey_", "question_", "relay_",
+-    "rhold_", "runsdoc_", "rvk_", "saxis_", "sclosed_", "seatblock_", "seatcard_", "server_",
+-    "sesplit_", "shb_", "skeleton_", "smore_", "stage_", "stats_", "stcli_", "steady_",
+-    "sxaxis_", "ticker_", "tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_", "pgz_",
+-];
+-
+ #[test]
+ fn dnedge_own_names_clean() {
+     assert_eq!(FILTER_WORDS.len(), 152, "畳んだ 151 語と pgz_");
+diff --git a/crates/tsuzuri-core/tests/teeth1/dnrow.rs b/crates/tsuzuri-core/tests/teeth1/dnrow.rs
+index dc69a387b897517176a6a0dae185c5b0caea8dff..c7fb04c8673c444d47edc43227155ae9370bc247 100644
+--- a/crates/tsuzuri-core/tests/teeth1/dnrow.rs
++++ b/crates/tsuzuri-core/tests/teeth1/dnrow.rs
+@@ -4,6 +4,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::pair;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
+ use tsuzuri_core::graph::build::{DESIGN_KINDS, NOTE_ROW_KIND, add_summary};
+@@ -89,10 +90,6 @@ fn row(id: &str, file: &str, digest: &str, title: &str) -> GraphNode {
+     }
+ }
+ 
+-fn pair(from: &str, to: &str) -> (String, String) {
+-    (from.to_string(), to.to_string())
+-}
+-
+ #[test]
+ fn dnrow_index_reads_rows() {
+     let g = g();
+diff --git a/crates/tsuzuri-core/tests/teeth1/dnskip.rs b/crates/tsuzuri-core/tests/teeth1/dnskip.rs
+index 0ac62af4ad249e75fb737111aefd4ca2fc4ae37b..e275bcf09157f2e7f7f8c52ec9854646f6f7f89c 100644
+--- a/crates/tsuzuri-core/tests/teeth1/dnskip.rs
++++ b/crates/tsuzuri-core/tests/teeth1/dnskip.rs
+@@ -5,6 +5,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::FILTER_WORDS;
+ use serde_json::json;
+ use tsuzuri_contract::graph::{EdgeType, GraphEdge, GraphNode, NodeKind};
+ use tsuzuri_core::graph::{Graph, Inputs, Skipped, Source, Verdict, build, check};
+@@ -161,29 +162,6 @@ fn dnskip_shape_still_unread() {
+     }
+ }
+ 
+-/// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。
+-const FILTER_WORDS: &[&str] = &[
+-    "aaround_", "accept_", "acchold_", "account_", "acctcore_", "acctdoc_", "accthb_",
+-    "accthome_", "acctled_", "acctlook_", "acctpcore_", "acctproj_", "acctsess_", "acctwin_",
+-    "acctwire_", "afocus_", "aord_", "apop_", "askcard_", "athr_", "batchpanel_", "bhalf_",
+-    "board_min_", "bport_", "brand_", "btuck_", "cadopt_", "cdorm_", "cgdom_", "cmark_",
+-    "contract_form_", "cround_", "csled_", "denv_", "dnrow_", "ecache_", "epolq_", "flight_",
+-    "fmark_", "fprem_", "frame_", "fserve_", "fstop_", "gapspage_", "gbnote_", "gfix_",
+-    "gfresh_", "ghb_", "gjst_", "glabel_", "gnav_", "gpface_", "gpill_", "gpulse_", "graph_",
+-    "gsum_", "gtuck_", "gview_", "hacols_", "harest_", "hasplit_", "hbconf_", "hbmark_",
+-    "hbpost_", "hbproc_", "hbroute_", "hcard_", "hcled_", "hcnx_", "hcproj_", "hcsess_",
+-    "hdchip_", "hfig_", "hnunk_", "hook_", "hruling_", "hsblock_", "hsderive_", "hshist_",
+-    "hspage_", "hsym_", "iclose_", "ilink_", "kcli_", "klink_", "launch_", "lcard_",
+-    "ledgerblock_", "lhome_", "lidle_", "lresume_", "lsnap_", "lspark_", "lstore_", "mapview_",
+-    "mkeys_", "mlink_", "mstore_", "mtree_", "nact_", "nbatch_", "ncard_", "nextstep_",
+-    "nodepage_", "nstall_", "nsum_", "nsumw_", "ntime_", "nxact_", "parts_", "pclosed_",
+-    "pfold_", "pipe_", "plimit_", "pmisfit_", "pmore_", "pquest_", "pqueue_", "project_",
+-    "ptitle_", "punmap_", "pwhole_", "qblock_", "qgate_", "qkey_", "question_", "relay_",
+-    "rhold_", "runsdoc_", "rvk_", "saxis_", "sclosed_", "seatblock_", "seatcard_", "server_",
+-    "sesplit_", "shb_", "skeleton_", "smore_", "stage_", "stats_", "stcli_", "steady_",
+-    "sxaxis_", "ticker_", "tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_", "pgz_",
+-];
+-
+ /// file の字のうち test の属性の行の次の fn の名。
+ fn test_names(path: &Path) -> Vec<String> {
+     let text = std::fs::read_to_string(path)
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlt.rs b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+index e2ebdfe44714ba305c7607c58556aafa5006730b..fe28453a04d118110b2ca7de755b8ee2a6fce7eb 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlt.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlt.rs
+@@ -8,10 +8,11 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-use serde_json::{Value, json};
++use crate::common::{
++    FAKE_OUT, MARK_NAME, bead, declared, only, plugin_dir, read_hooks, rid, root, said_of,
++};
++use serde_json::Value;
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::BeadId;
+-use tsuzuri_contract::surface::RulingId;
+ use tsuzuri_core::delivery::{
+     AGENT_KEYS, BATCH_FIELD, CONTEXT_CAP, Route, Said, TOOL_EVENT, context, context_for,
+     main_thread, mark_line, named, unmarked,
+@@ -266,15 +267,9 @@ const PREFIX: &str = "fdlt_";
+ /// hooks.json の PostToolBatch の command の字。
+ const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
+ 
+-/// runner の印の file の名。
+-const MARK_NAME: &str = "scribe2-runner";
+-
+ /// 席の本体の PostToolBatch の入力の字。
+ const BATCH_INPUT: &str = r#"{"session_id":"s-1","hook_event_name":"PostToolBatch","tool_calls":[{"tool_name":"Bash"}]}"#;
+ 
+-/// 偽の tz が標準出力に出す字。
+-const FAKE_OUT: &str = "answer-line\n";
+-
+ const T1: &str = "fx-t.1:20260930T0101Z-1";
+ const T2: &str = "fx-t.2:20260930T0102Z-1";
+ const T3: &str = "fx-t.3:20260930T0103Z-1";
+@@ -285,28 +280,6 @@ const T7A: &str = "fx-t.7:20260930T0107Z-1";
+ const T7B: &str = "fx-t.7:20260930T0107Z-2";
+ const BATCH: &str = "batch:20260930T0103Z-1";
+ 
+-fn rid(id: &str) -> RulingId {
+-    RulingId::new(id).expect("裁定の id")
+-}
+-
+-fn said_of(question: &str, id: &str, verbatim: &str) -> Said {
+-    Said {
+-        question: BeadId::new(question).expect("bead の id"),
+-        ruling: rid(id),
+-        verbatim: verbatim.to_string(),
+-    }
+-}
+-
+-/// 歯の台帳の bead 1 本（label は問いの label か無し）。
+-fn bead(id: &str, question_label: bool, status: &str, notes: &[&str]) -> Value {
+-    let labels: Vec<&str> = if question_label {
+-        vec!["intake:question"]
+-    } else {
+-        vec!["other"]
+-    };
+-    json!({"id": id, "labels": labels, "status": status, "notes": notes.join("\n")})
+-}
+-
+ /// 裁定の行（逐語の欄は escape 済みの字を渡す・束の id が空なら束の欄を書かない）。
+ fn ruling_line(id: &str, question: &str, batch: &str, verbatim: &str) -> String {
+     let batch = if batch.is_empty() {
+@@ -509,50 +482,6 @@ fn tool_mark_line() {
+     );
+ }
+ 
+-/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
+-fn plugin_dir(dir: &Path) {
+-    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
+-        let to = dir.join(rel);
+-        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
+-        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
+-    }
+-}
+-
+-/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
+-fn declared(project: &Path) {
+-    std::fs::create_dir_all(project).expect("project の dir を作る");
+-    for args in [
+-        &["init", "-q"][..],
+-        &["config", "scribe2.statedir", "/nonexistent/state"],
+-    ] {
+-        let ok = Command::new("git")
+-            .arg("-C")
+-            .arg(project)
+-            .args(args)
+-            .status()
+-            .expect("git");
+-        assert!(ok.success(), "git {args:?}");
+-    }
+-}
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read_hooks() -> Value {
+-    let path = root().join("plugin/hooks/hooks.json");
+-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
+-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
+-}
+-
+-/// 要素 1 つの配列のその要素。
+-fn only(v: &Value) -> &Value {
+-    match v.as_array().map(Vec::as_slice) {
+-        Some([one]) => one,
+-        _ => panic!("要素 1 つの配列でない: {v}"),
+-    }
+-}
+-
+ #[test]
+ fn fdlt_hooks_batch_entry() {
+     let hooks = read_hooks();
+diff --git a/crates/tsuzuri-core/tests/teeth1/fdlv.rs b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+index 8bb6c8326e47bdb42514cf09cf5643f115803ddf..31c3bedc35f676524750a7639ee7e6eebfa9e6fc 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fdlv.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fdlv.rs
+@@ -8,9 +8,11 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{
++    FAKE_OUT, MARK_NAME, bead, declared, keys, only, plugin_dir, read_hooks, rid, root, said_of,
++};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::surface::RulingId;
+ use tsuzuri_core::delivery::{
+     BATCH_FIELD, CONTEXT_CAP, POINTER_HEAD, POINTER_TAIL, Said, context, pointed, said,
+@@ -254,15 +256,9 @@ const PREFIX: &str = "fdlv_";
+ /// hooks.json の UserPromptSubmit の command の字。
+ const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver --repo \"$CLAUDE_PROJECT_DIR\"";
+ 
+-/// runner の印の file の名。
+-const MARK_NAME: &str = "scribe2-runner";
+-
+ /// 席の prompt を含む hook の入力の字（指し示しの行は器の名を持たない字でも拾う）。
+ const PROMPT_INPUT: &str = r#"{"session_id":"s-1","hook_event_name":"UserPromptSubmit","prompt":"ls"}"#;
+ 
+-/// 偽の tz が標準出力に出す字。
+-const FAKE_OUT: &str = "answer-line\n";
+-
+ const D1: &str = "fx-d.1:20260930T0101Z-1";
+ const D2: &str = "fx-d.2:20260930T0110Z-1";
+ const D3: &str = "fx-d.3:20260930T0110Z-1";
+@@ -272,28 +268,6 @@ const BATCH: &str = "batch:20260930T0110Z-1";
+ /// D1 の逐語（改行と逆斜線と区切りの字を含む）。
+ const V1: &str = "一行目\n二行目\\nの字・終わり";
+ 
+-fn rid(id: &str) -> RulingId {
+-    RulingId::new(id).expect("裁定の id")
+-}
+-
+-fn said_of(question: &str, id: &str, verbatim: &str) -> Said {
+-    Said {
+-        question: BeadId::new(question).expect("bead の id"),
+-        ruling: rid(id),
+-        verbatim: verbatim.to_string(),
+-    }
+-}
+-
+-/// 歯の台帳の bead 1 本（label は問いの label か無し）。
+-fn bead(id: &str, question_label: bool, status: &str, notes: &[&str]) -> Value {
+-    let labels: Vec<&str> = if question_label {
+-        vec!["intake:question"]
+-    } else {
+-        vec!["other"]
+-    };
+-    json!({"id": id, "labels": labels, "status": status, "notes": notes.join("\n")})
+-}
+-
+ /// 問い fx-d.1〜fx-d.6 の台帳の字。
+ fn ledger() -> String {
+     let batch_line = |id: &str, q: &str, v: &str| {
+@@ -448,62 +422,6 @@ fn fdlv_context_shape_and_cap() {
+     assert!(text.chars().count() < 10_000);
+ }
+ 
+-/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
+-fn plugin_dir(dir: &Path) {
+-    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
+-        let to = dir.join(rel);
+-        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
+-        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
+-    }
+-}
+-
+-/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
+-fn declared(project: &Path) {
+-    std::fs::create_dir_all(project).expect("project の dir を作る");
+-    for args in [
+-        &["init", "-q"][..],
+-        &["config", "scribe2.statedir", "/nonexistent/state"],
+-    ] {
+-        let ok = Command::new("git")
+-            .arg("-C")
+-            .arg(project)
+-            .args(args)
+-            .status()
+-            .expect("git");
+-        assert!(ok.success(), "git {args:?}");
+-    }
+-}
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read_hooks() -> Value {
+-    let path = root().join("plugin/hooks/hooks.json");
+-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
+-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
+-}
+-
+-/// object の鍵を並べ替えた列。
+-fn keys(v: &Value) -> Vec<&str> {
+-    let mut keys: Vec<&str> = v
+-        .as_object()
+-        .unwrap_or_else(|| panic!("object でない: {v}"))
+-        .keys()
+-        .map(String::as_str)
+-        .collect();
+-    keys.sort_unstable();
+-    keys
+-}
+-
+-/// 要素 1 つの配列のその要素。
+-fn only(v: &Value) -> &Value {
+-    match v.as_array().map(Vec::as_slice) {
+-        Some([one]) => one,
+-        _ => panic!("要素 1 つの配列でない: {v}"),
+-    }
+-}
+-
+ #[test]
+ fn fdlv_hooks_prompt_entry() {
+     let hooks = read_hooks();
+diff --git a/crates/tsuzuri-core/tests/teeth1/fstop.rs b/crates/tsuzuri-core/tests/teeth1/fstop.rs
+index bf7bdc528ff0ec0f7d0896efc818788f61bade6d..4f7041a012eb71705f68a2ef4ab41dbad0c34c31 100644
+--- a/crates/tsuzuri-core/tests/teeth1/fstop.rs
++++ b/crates/tsuzuri-core/tests/teeth1/fstop.rs
+@@ -5,6 +5,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::{keys, only};
+ use serde_json::Value;
+ 
+ /// 行 f-stop の外で決めた filter の語（この行の接頭辞 fstop_ は並べない）。
+@@ -121,26 +122,6 @@ fn read_json(rel: &str) -> Value {
+     serde_json::from_str(&text).unwrap_or_else(|e| panic!("{rel} は JSON でない: {e}"))
+ }
+ 
+-/// object の鍵を並べ替えた列。
+-fn keys(v: &Value) -> Vec<&str> {
+-    let mut keys: Vec<&str> = v
+-        .as_object()
+-        .unwrap_or_else(|| panic!("object でない: {v}"))
+-        .keys()
+-        .map(String::as_str)
+-        .collect();
+-    keys.sort_unstable();
+-    keys
+-}
+-
+-/// 要素 1 つの配列のその要素。
+-fn only(v: &Value) -> &Value {
+-    match v.as_array().map(Vec::as_slice) {
+-        Some([one]) => one,
+-        _ => panic!("要素 1 つの配列でない: {v}"),
+-    }
+-}
+-
+ /// 空白で分けて二重引用符を除いた語。
+ fn words(text: &str) -> Vec<String> {
+     text.split_whitespace().map(|w| w.replace('"', "")).collect()
+diff --git a/crates/tsuzuri-core/tests/teeth1/g3g7.rs b/crates/tsuzuri-core/tests/teeth1/g3g7.rs
+index 84f494f6334dcd1bd3aa638235528576a505e699..40e24df26514a945aac345546c5d1354d21fb2a0 100644
+--- a/crates/tsuzuri-core/tests/teeth1/g3g7.rs
++++ b/crates/tsuzuri-core/tests/teeth1/g3g7.rs
+@@ -4,6 +4,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::pair;
+ use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
+ use tsuzuri_core::graph::build::{add_rulings, read_rulings};
+ use tsuzuri_core::graph::check::{RULED, UNMEASURED, in_ruling_grammar, outside_rulings};
+@@ -120,10 +121,6 @@ fn ruled(g: &Graph) -> Vec<(String, String)> {
+         .collect()
+ }
+ 
+-fn pair(from: &str, to: &str) -> (String, String) {
+-    (from.to_string(), to.to_string())
+-}
+-
+ /// 違反の不変条件の id。
+ fn violated(g: &Graph) -> Vec<&'static str> {
+     check(g)
+diff --git a/crates/tsuzuri-core/tests/teeth1/gacct.rs b/crates/tsuzuri-core/tests/teeth1/gacct.rs
+index 8dd8238c0ddc215db89d1b13fc2bdc5adb2ecd35..7630bc6f069f0f3b31157ea96284fa7d01607ed3 100644
+--- a/crates/tsuzuri-core/tests/teeth1/gacct.rs
++++ b/crates/tsuzuri-core/tests/teeth1/gacct.rs
+@@ -5,19 +5,14 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::{INPUTS, NOW, root};
+ use serde::Deserialize;
+ use serde_json::Value;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, doc, project_rows};
+ 
+-const INPUTS: &str = "tests/fixtures/account/acct-inputs.json";
+-
+-/// 今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// proj-a の席の合図の健康の行（器の §20 の欄の前まで）。
+ const LINE: &str = "seat tick status: target=proj-a:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395";
+ 
+@@ -38,10 +33,6 @@ struct Inputs {
+     texts: HostTexts,
+ }
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth1/main.rs b/crates/tsuzuri-core/tests/teeth1/main.rs
+index f96553fd700cb34f154f40e734f20cde78a7c4aa..6e21bd1da998a2232e516920b28463e94d80d982 100644
+--- a/crates/tsuzuri-core/tests/teeth1/main.rs
++++ b/crates/tsuzuri-core/tests/teeth1/main.rs
+@@ -16,6 +16,7 @@ mod bvunref;
+ mod bvverd;
+ mod cdorm;
+ mod cg9;
++mod common;
+ mod csled;
+ mod cspk;
+ mod ctick;
+diff --git a/crates/tsuzuri-core/tests/teeth2/common.rs b/crates/tsuzuri-core/tests/teeth2/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..672dce9fcf4ebb857a0da3ab108241a706e98cac
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/teeth2/common.rs
+@@ -0,0 +1,65 @@
++//! tsuzuri-core の歯の群 teeth2 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use serde::Deserialize;
++use serde_json::Value;
++use std::path::{Path, PathBuf};
++use tsuzuri_contract::board::{PipelineCard, Reading};
++use tsuzuri_contract::seat::SeatCard;
++use tsuzuri_core::account::host::HostTexts;
++use tsuzuri_core::graph::{Graph, Verdict, check};
++use tsuzuri_core::pipeline::Board;
++use tsuzuri_core::seat::{SeatTexts, anchor, card};
++
++#[derive(Deserialize)]
++pub(crate) struct Case {
++    #[serde(flatten)]
++    pub(crate) texts: SeatTexts,
++    pub(crate) card: SeatCard,
++}
++
++pub(crate) const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
++
++/// 節の今（2026-09-27T12:00:00Z）。
++pub(crate) const NOW: u64 = 1_790_510_400;
++
++/// server と同じ組み方（anchor は doctor の席の行から）。
++pub(crate) fn build(target: &str, texts: &SeatTexts, now: u64) -> SeatCard {
++    let anchor = texts.doctor.as_deref().and_then(|d| anchor(d, target));
++    card(target, anchor.as_deref(), texts, now)
++}
++
++pub(crate) fn cards(b: &Board) -> &[PipelineCard] {
++    match &b.board.cards {
++        Reading::Known(c) => c,
++        Reading::Unknown => panic!("札が Unknown"),
++    }
++}
++
++pub(crate) fn fixture(rel: &str) -> Value {
++    serde_json::from_str(&read(rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
++}
++
++pub(crate) fn host() -> HostTexts {
++    HostTexts {
++        host_toml: Some("[[account-group]]\nname = 'g'\nanchors = ['/w/p']\n".to_string()),
++        ..HostTexts::default()
++    }
++}
++
++pub(crate) fn read(rel: &str) -> String {
++    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++pub(crate) fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++pub(crate) fn verdict_of(g: &Graph, id: &str) -> Verdict {
++    check(g)
++        .into_iter()
++        .find(|i| i.id == id)
++        .unwrap_or_else(|| panic!("不変条件 {id}"))
++        .verdict
++}
+diff --git a/crates/tsuzuri-core/tests/teeth2/gins.rs b/crates/tsuzuri-core/tests/teeth2/gins.rs
+index 3c715a4a0348168189fa5a9c9f3e4fc594ca96b6..97437ec2e215c2207240f99388f67c4c4e1cbabd 100644
+--- a/crates/tsuzuri-core/tests/teeth2/gins.rs
++++ b/crates/tsuzuri-core/tests/teeth2/gins.rs
+@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::root;
+ use serde_json::Value;
+ 
+ /// hooks.json の PreToolUse の command の語（二重引用符を除いた字）。
+@@ -65,10 +66,6 @@ fn declared(project: &Path) {
+     }
+ }
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn read_hooks() -> Value {
+     let path = root().join("plugin/hooks/hooks.json");
+     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
+diff --git a/crates/tsuzuri-core/tests/teeth2/gquestion.rs b/crates/tsuzuri-core/tests/teeth2/gquestion.rs
+index 0ac00595ed920efc2b354652cb95a121c3e669eb..133beb6cc142151ba96b28dd22f64fc8ebf50920 100644
+--- a/crates/tsuzuri-core/tests/teeth2/gquestion.rs
++++ b/crates/tsuzuri-core/tests/teeth2/gquestion.rs
+@@ -3,21 +3,16 @@
+ //! 次の QuestionRaised の直前までに同じ走行の QuestionAnswered が在れば答えが在る。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
++use crate::common::{root, verdict_of};
+ use serde_json::Value;
+ use tsuzuri_contract::graph::EdgeType;
+-use tsuzuri_core::graph::{Graph, Inputs, RunAttr, Source, Verdict, build, check};
++use tsuzuri_core::graph::{Graph, Inputs, RunAttr, Source, Verdict, build};
+ 
+ const Q_A: &str = "r.1-20260927T000000Z";
+ const Q_B: &str = "r.1-20260927T000100Z";
+ const Q_C: &str = "r.1-20260927T000200Z";
+ const Q_D: &str = "r.1-20260927T000300Z";
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn fixture(name: &str) -> Value {
+     let rel = format!("tests/fixtures/graph/{name}");
+     let text =
+@@ -54,14 +49,6 @@ fn build_from(v: &Value) -> Graph {
+     })
+ }
+ 
+-fn verdict_of(g: &Graph, id: &str) -> Verdict {
+-    check(g)
+-        .into_iter()
+-        .find(|i| i.id == id)
+-        .unwrap_or_else(|| panic!("不変条件 {id}"))
+-        .verdict
+-}
+-
+ fn attr(stage: &str, account: Option<&str>, unanswered: usize) -> RunAttr {
+     RunAttr {
+         stage: Some(stage.to_string()),
+diff --git a/crates/tsuzuri-core/tests/teeth2/graph.rs b/crates/tsuzuri-core/tests/teeth2/graph.rs
+index 210446997c638b78fa1bc7038c6f70f6eae2f60d..93a84a0d891834ccffc950ad61c5b40288bbe818 100644
+--- a/crates/tsuzuri-core/tests/teeth2/graph.rs
++++ b/crates/tsuzuri-core/tests/teeth2/graph.rs
+@@ -4,22 +4,13 @@
+ //! ledger は字か bd の出力の形の配列（配列は JSON にする）。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
++use crate::common::{read, verdict_of};
+ use serde_json::Value;
+ use tsuzuri_contract::graph::{EdgeType, NodeKind};
+ use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
+ use tsuzuri_core::graph::check::{INVARIANTS, RULED, UNMEASURED};
+ use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn fixture(name: &str) -> Value {
+     let rel = format!("tests/fixtures/graph/{name}");
+     serde_json::from_str(&read(&rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
+@@ -63,14 +54,6 @@ fn violated(g: &Graph) -> Vec<&'static str> {
+         .collect()
+ }
+ 
+-fn verdict_of(g: &Graph, id: &str) -> Verdict {
+-    check(g)
+-        .into_iter()
+-        .find(|i| i.id == id)
+-        .unwrap_or_else(|| panic!("不変条件 {id}"))
+-        .verdict
+-}
+-
+ const BEAD_KINDS: [NodeKind; 4] = [
+     NodeKind::Epic,
+     NodeKind::Task,
+diff --git a/crates/tsuzuri-core/tests/teeth2/gview.rs b/crates/tsuzuri-core/tests/teeth2/gview.rs
+index 8dd99f7572c4a37a6ed9e6af0c88d3773e6680fc..746c778eb2f49512fd71cd00d59034fbcafaaf12 100644
+--- a/crates/tsuzuri-core/tests/teeth2/gview.rs
++++ b/crates/tsuzuri-core/tests/teeth2/gview.rs
+@@ -4,8 +4,8 @@
+ 
+ use std::cmp::Ordering;
+ use std::collections::BTreeSet;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::read;
+ use serde_json::Value;
+ use tsuzuri_contract::graph::{
+     AroundDoc, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, NodeKind, basis_end, natural_cmp,
+@@ -16,14 +16,6 @@ use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build};
+ const RULING: &str = "e.2:20260927T0000Z-1";
+ const RUN: &str = "e.1-20260927T000000Z";
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// fixture の欄を入力の字にする（歯の file graph.rs と同じ読み方）。
+ fn input_text(v: &Value, key: &str) -> String {
+     match &v[key] {
+diff --git a/crates/tsuzuri-core/tests/teeth2/harestcore.rs b/crates/tsuzuri-core/tests/teeth2/harestcore.rs
+index ba995c400e5b8d13b9f9ae2fae0b674abd4fcbe1..6f6b47a0103aa7b6ae7a4f48cb20a97daa1696c1 100644
+--- a/crates/tsuzuri-core/tests/teeth2/harestcore.rs
++++ b/crates/tsuzuri-core/tests/teeth2/harestcore.rs
+@@ -2,8 +2,7 @@
+ //! LedgerStats を持つ fixture の値が同じ定義（件数の和が未反映の数・種類は閉じた一覧の順）に揃うこと。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
++use crate::common::{fixture, read};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_contract::board::Reading;
+@@ -11,18 +10,6 @@ use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::ledger::{stats, unreflected};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture(rel: &str) -> Value {
+-    serde_json::from_str(&read(rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
+-}
+-
+ fn stats_of(v: &Value, what: &str) -> LedgerStats {
+     serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{what} は LedgerStats: {e}"))
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth2/lresume.rs b/crates/tsuzuri-core/tests/teeth2/lresume.rs
+index 392c0cae106bef2ce8e9717b52d62b248b5ad64c..92fa715cbd41a22f46ca0b4e81a2aa4d90ba0630 100644
+--- a/crates/tsuzuri-core/tests/teeth2/lresume.rs
++++ b/crates/tsuzuri-core/tests/teeth2/lresume.rs
+@@ -5,14 +5,14 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::{Case, read};
+ use serde::Deserialize;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::{Reopens, SeatCard, SeatState};
+ use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, project_rows};
+-use tsuzuri_core::seat::{SeatTexts, anchor, card};
++use tsuzuri_core::seat::{anchor, card};
+ 
+ const SEAT_FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
+ const ACCT_FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
+@@ -24,26 +24,11 @@ const T24: u64 = 1_790_553_600;
+ /// 今（2026-09-27T12:00:00Z）。
+ const NOW: u64 = 1_790_510_400;
+ 
+-#[derive(Deserialize)]
+-struct Case {
+-    #[serde(flatten)]
+-    texts: SeatTexts,
+-    card: SeatCard,
+-}
+-
+ #[derive(Deserialize)]
+ struct Inputs {
+     texts: HostTexts,
+ }
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn cases() -> BTreeMap<String, Case> {
+     serde_json::from_str(&read(SEAT_FIXTURE)).expect("fixture の形")
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth2/main.rs b/crates/tsuzuri-core/tests/teeth2/main.rs
+index 7bc84007af8ae7962cf7d382ee529906d38efc6a..3a9ab6760b2825d421cc6332970fa378c910c57d 100644
+--- a/crates/tsuzuri-core/tests/teeth2/main.rs
++++ b/crates/tsuzuri-core/tests/teeth2/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/teeth2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod gins;
+ mod gquestion;
+ mod graph;
+diff --git a/crates/tsuzuri-core/tests/teeth2/nbatch.rs b/crates/tsuzuri-core/tests/teeth2/nbatch.rs
+index 182e52297de46fcce3ec8f3b3c7d9dc054e3412b..d2f0a1b6ee2dcce651f4045886d30565dab9170a 100644
+--- a/crates/tsuzuri-core/tests/teeth2/nbatch.rs
++++ b/crates/tsuzuri-core/tests/teeth2/nbatch.rs
+@@ -3,8 +3,9 @@
+ //! 台帳の字は bd の一覧の形の配列を json の macro で組む。fixture: tests/fixtures/pipeline/next.json。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::root;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::NextMove;
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+@@ -13,10 +14,6 @@ use tsuzuri_core::next_step::{BATCH_MIN, next_step, next_step_seat};
+ /// 2026-09-27T02:00:00Z。
+ const NOW: u64 = 1_790_474_400;
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn ask(id: &str, status: &str, labels: &[&str]) -> Value {
+     json!({
+         "id": id,
+diff --git a/crates/tsuzuri-core/tests/teeth2/nstall.rs b/crates/tsuzuri-core/tests/teeth2/nstall.rs
+index 5cd3e93883c97d6c1ba8174292bb754cecab79c1..d2eb404c3accda4912cb0b85305ca050c2323106 100644
+--- a/crates/tsuzuri-core/tests/teeth2/nstall.rs
++++ b/crates/tsuzuri-core/tests/teeth2/nstall.rs
+@@ -4,8 +4,9 @@
+ //! fixture: tests/fixtures/pipeline/next.json と tests/fixtures/seat/seat-inputs.json。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::root;
+ use serde_json::Value;
+ use tsuzuri_contract::board::{NextMove, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+@@ -13,10 +14,6 @@ use tsuzuri_contract::seat::SeatCard;
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+ use tsuzuri_core::next_step::{NO_INPUT, STALLED_STAGES, next_step, next_step_seat};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn fixture(rel: &str) -> Value {
+     let raw = std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"));
+     serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
+diff --git a/crates/tsuzuri-core/tests/teeth2/nsum.rs b/crates/tsuzuri-core/tests/teeth2/nsum.rs
+index e7eeb9a6ae267557a93884dad82e466e19a92e93..49cf0f9b29dc2e3f10373b79f2d02278faa367cb 100644
+--- a/crates/tsuzuri-core/tests/teeth2/nsum.rs
++++ b/crates/tsuzuri-core/tests/teeth2/nsum.rs
+@@ -3,18 +3,15 @@
+ //! build は 3 つの欄を組まない（無し）。節の字は歯の中で組み、workspace の根の fixture は読むだけで書かない。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::root;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::graph::{AroundDoc, GraphDoc, GraphNode, GraphView, NodeKind};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::graph::build::add_summary;
+ use tsuzuri_core::graph::{Graph, Inputs, build};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn read(path: &Path) -> String {
+     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
+ }
+diff --git a/crates/tsuzuri-core/tests/teeth2/pci.rs b/crates/tsuzuri-core/tests/teeth2/pci.rs
+index 3db95855c0aca01889e63286836f169dce6a3d59..8b794efaf12449fd2492cf3505681d7129f46121 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pci.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pci.rs
+@@ -4,18 +4,16 @@
+ 
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, cards};
+ use serde_json::{Value, json};
+-use tsuzuri_contract::board::{Ci, NextMove, PipelineCard, Reading, Stage};
++use tsuzuri_contract::board::{Ci, NextMove, PipelineCard, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::stats::CheckResult;
+ use tsuzuri_core::next_step::next_step;
+ use tsuzuri_core::pipeline::{
+-    Board, CI_STALLS, CI_WORDS, FAULT_WORDS, PUSH_WORD, TERMINAL_TAG, board, ci_after, ci_reading,
++    CI_STALLS, CI_WORDS, FAULT_WORDS, PUSH_WORD, TERMINAL_TAG, board, ci_after, ci_reading,
+ };
+ 
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// 閉じた bead（fx-ci.3・fx-ci.6・fx-ci.9）。
+ const CLOSED: [u32; 3] = [3, 6, 9];
+ 
+@@ -141,13 +139,6 @@ fn card(
+     }
+ }
+ 
+-fn cards(b: &Board) -> &[PipelineCard] {
+-    match &b.board.cards {
+-        Reading::Known(c) => c,
+-        Reading::Unknown => panic!("札が Unknown"),
+-    }
+-}
+-
+ /// 項 4 の 13 枚の札。
+ fn want_with_ledger() -> Vec<PipelineCard> {
+     use Stage::*;
+diff --git a/crates/tsuzuri-core/tests/teeth2/pclosed.rs b/crates/tsuzuri-core/tests/teeth2/pclosed.rs
+index 62202bc4de7c68d25ba47b9e3fca9b9f76fb0cff..2605b5a8882d0cab641262b40f980e7407ab24d4 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pclosed.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pclosed.rs
+@@ -5,18 +5,15 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, cards, host};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::account::RunCounts;
+ use tsuzuri_contract::board::{NextMove, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::stats::CheckResult;
+-use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, project_rows, run_counts, run_counts_of};
+ use tsuzuri_core::next_step::next_step;
+-use tsuzuri_core::pipeline::{Board, CLOSED_CHARS, CLOSED_TAG, board};
+-
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
++use tsuzuri_core::pipeline::{CLOSED_CHARS, CLOSED_TAG, board};
+ 
+ /// cs.1 の閉じた理由（改行と空白 2 つを間に持つ）。
+ const CS1_REASON: &str = "行を取り下げた。\n新しい行 cs.6 が  同じ直しを持つので、この行の走行は着地させずに閉じる（席の決め・2026-09-27 の点検で重なりを見つけた）";
+@@ -166,13 +163,6 @@ fn card(
+     }
+ }
+ 
+-fn cards(b: &Board) -> &[PipelineCard] {
+-    match &b.board.cards {
+-        Reading::Known(c) => c,
+-        Reading::Unknown => panic!("札が Unknown"),
+-    }
+-}
+-
+ /// 台帳が読めるときも読めないときも同じ札（cs.5・cs.6・cs.7・cs.8）。
+ fn shared() -> [PipelineCard; 4] {
+     [
+@@ -414,13 +404,6 @@ fn pclosed_run_counts_with_ledger() {
+     }
+ }
+ 
+-fn host() -> HostTexts {
+-    HostTexts {
+-        host_toml: Some("[[account-group]]\nname = 'g'\nanchors = ['/w/p']\n".to_string()),
+-        ..HostTexts::default()
+-    }
+-}
+-
+ fn texts(ledger: Option<String>) -> BTreeMap<String, ProjectTexts> {
+     BTreeMap::from([(
+         "/w/p".to_string(),
+diff --git a/crates/tsuzuri-core/tests/teeth2/pmisfit.rs b/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
+index e66c10c02ff1b4faaf76648c81f9d11934c19881..022a2361b26a162669a823d626bb83760700d4b4 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pmisfit.rs
+@@ -5,6 +5,7 @@
+ 
+ use std::path::PathBuf;
+ 
++use crate::common::NOW;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+@@ -13,9 +14,6 @@ use tsuzuri_core::pipeline::{
+     Board, FORM_FIELDS, FORM_PREFIX, board, board_with_doctor, form_ids,
+ };
+ 
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// 節の 37 字の題。
+ const LONG_TITLE: &str = "題の頭  0123456789 0123456789 0123456789";
+ 
+diff --git a/crates/tsuzuri-core/tests/teeth2/pquest.rs b/crates/tsuzuri-core/tests/teeth2/pquest.rs
+index b0029e1b7017a0ff5b389b44959cec0e91aed8bb..7869add2ba7ed894eee50962d7f1a2c574e31b52 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pquest.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pquest.rs
+@@ -6,6 +6,7 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, cards};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::{NextMove, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+@@ -15,10 +16,7 @@ use tsuzuri_contract::surface::SeatRole;
+ use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, session_lines};
+ use tsuzuri_core::next_step::next_step;
+-use tsuzuri_core::pipeline::{Board, QUESTION_STOPPED, board, stage_of};
+-
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
++use tsuzuri_core::pipeline::{QUESTION_STOPPED, board, stage_of};
+ 
+ fn bead(n: u32, status: &str) -> Value {
+     let mut b = json!({"id": format!("qa.{n}"), "title": format!("t{n}"), "status": status, "issue_type": "task"});
+@@ -116,13 +114,6 @@ fn card(n: u32, stage: Stage, reason: Option<&str>, account: Option<&str>, elaps
+     }
+ }
+ 
+-fn cards(b: &Board) -> &[PipelineCard] {
+-    match &b.board.cards {
+-        Reading::Known(c) => c,
+-        Reading::Unknown => panic!("札が Unknown"),
+-    }
+-}
+-
+ /// (1) stage_of の表は RunStage の段 Questioned を detail を見ずに段 Questioned・理由無しにし、
+ /// RunStopped と小文字の段と段の名の無い event は表に無い。
+ #[test]
+diff --git a/crates/tsuzuri-core/tests/teeth2/pqueue.rs b/crates/tsuzuri-core/tests/teeth2/pqueue.rs
+index f515664279343410ef670d1c71de55551107567d..fc938ec946787dcca47db88e2829fc29b4e0c3eb 100644
+--- a/crates/tsuzuri-core/tests/teeth2/pqueue.rs
++++ b/crates/tsuzuri-core/tests/teeth2/pqueue.rs
+@@ -5,13 +5,11 @@
+ 
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, cards};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+-use tsuzuri_core::pipeline::{Board, board};
+-
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
++use tsuzuri_core::pipeline::board;
+ 
+ /// 台帳の bead の 1 本（題は t と空白と id・欄 acceptance_criteria は design の字が在るときだけ）。
+ fn bead(id: &str, status: &str, design: Option<&str>) -> Value {
+@@ -74,13 +72,6 @@ fn card(id: &str, runs: u32, stage: Stage, elapsed: Option<u64>) -> PipelineCard
+     }
+ }
+ 
+-fn cards(b: &Board) -> &[PipelineCard] {
+-    match &b.board.cards {
+-        Reading::Known(c) => c,
+-        Reading::Unknown => panic!("札が Unknown"),
+-    }
+-}
+-
+ /// (1) 節の組の板は pq.10・pq.1・pq.4・pq.5 の 4 枚でこの順、unmapped 0。台帳の字が空の板は pq.10 の 1 枚だけ。
+ #[test]
+ fn pqueue_runless_cards() {
+diff --git a/crates/tsuzuri-core/tests/teeth2/punmap.rs b/crates/tsuzuri-core/tests/teeth2/punmap.rs
+index 20e34260cc70e463cfc36b517b454ddc6f6cb37f..cc40e358713ff02fe31479dce6ba84e156ba2ea4 100644
+--- a/crates/tsuzuri-core/tests/teeth2/punmap.rs
++++ b/crates/tsuzuri-core/tests/teeth2/punmap.rs
+@@ -6,6 +6,7 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, cards};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::board::{NextMove, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+@@ -15,10 +16,7 @@ use tsuzuri_contract::surface::SeatRole;
+ use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, session_lines};
+ use tsuzuri_core::next_step::next_step;
+-use tsuzuri_core::pipeline::{Board, RETIRED, board, stage_of};
+-
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
++use tsuzuri_core::pipeline::{RETIRED, board, stage_of};
+ 
+ fn bead(n: u32, status: &str) -> Value {
+     let mut b = json!({"id": format!("ua.{n}"), "title": format!("t{n}"), "status": status, "issue_type": "task"});
+@@ -117,13 +115,6 @@ fn card(n: u32, stage: Stage, reason: Option<&str>, account: Option<&str>, elaps
+     }
+ }
+ 
+-fn cards(b: &Board) -> &[PipelineCard] {
+-    match &b.board.cards {
+-        Reading::Known(c) => c,
+-        Reading::Unknown => panic!("札が Unknown"),
+-    }
+-}
+-
+ /// (1) stage_of の表は RunStage の段 Failed と Stopped を段 Failed と Stopped・理由は detail の字（空なら無し）にし、
+ /// RunStopped と小文字の段と段 RateLimited・Landed・Intake と段の名の無い RunStage は表に無い。
+ #[test]
+diff --git a/crates/tsuzuri-core/tests/teeth2/sclosed.rs b/crates/tsuzuri-core/tests/teeth2/sclosed.rs
+index 0a83a5f9cef082e598c7c8eaeb21e17ba993dba3..a0eb0bf26faac851c6de9bacbfeb7bacd0832a3a 100644
+--- a/crates/tsuzuri-core/tests/teeth2/sclosed.rs
++++ b/crates/tsuzuri-core/tests/teeth2/sclosed.rs
+@@ -5,17 +5,14 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::{NOW, host};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::account::SessionLine;
+ use tsuzuri_contract::board::{Reading, Stage};
+ use tsuzuri_contract::seat::SeatState;
+ use tsuzuri_contract::surface::SeatRole;
+-use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{ProjectTexts, session_lines};
+ 
+-/// 節の今（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// event の 1 行（run は bead とハイフンと RunCreated の時刻の札）。
+ fn ev(ts: &str, kind: &str, run: &str, stage: Option<&str>, detail: Option<&str>) -> String {
+     let (bead, _) = run.rsplit_once('-').expect("run の id");
+@@ -78,13 +75,6 @@ fn ledger() -> String {
+     .to_string()
+ }
+ 
+-fn host() -> HostTexts {
+-    HostTexts {
+-        host_toml: Some("[[account-group]]\nname = 'g'\nanchors = ['/w/p']\n".to_string()),
+-        ..HostTexts::default()
+-    }
+-}
+-
+ fn texts(ledger: Option<String>) -> BTreeMap<String, ProjectTexts> {
+     BTreeMap::from([(
+         "/w/p".to_string(),
+diff --git a/crates/tsuzuri-core/tests/teeth2/seat.rs b/crates/tsuzuri-core/tests/teeth2/seat.rs
+index 8b2ec3578f09a9ccf1322791906eb65660740ab2..3c47603bf43667f7ae8d3e593be5bf2b6fa1afae 100644
+--- a/crates/tsuzuri-core/tests/teeth2/seat.rs
++++ b/crates/tsuzuri-core/tests/teeth2/seat.rs
+@@ -5,36 +5,18 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::{Path, PathBuf};
+ 
+-use serde::Deserialize;
++use crate::common::{Case, FIXTURE, build, read};
+ use serde_json::Value;
+ use tsuzuri_contract::board::{GroupRow, NextMove, QuotaLeft, Reading};
+ use tsuzuri_contract::seat::{AccountMove, QuotaUsed, SeatCard, SeatSpan, SeatState, TickHealth};
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+ use tsuzuri_core::next_step::{next_step, next_step_seat};
+-use tsuzuri_core::seat::{SeatTexts, anchor, card, group_name};
+-
+-const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
++use tsuzuri_core::seat::{SeatTexts, group_name};
+ 
+ /// 6 組の名。
+ const CASES: [&str; 6] = ["run", "wait", "limit", "silent", "no-state", "unread"];
+ 
+-#[derive(Deserialize)]
+-struct Case {
+-    #[serde(flatten)]
+-    texts: SeatTexts,
+-    card: SeatCard,
+-}
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn cases() -> BTreeMap<String, Case> {
+     serde_json::from_str(&read(FIXTURE)).expect("fixture の形")
+ }
+@@ -45,12 +27,6 @@ fn case(name: &str) -> Case {
+         .unwrap_or_else(|| panic!("組 {name} が無い"))
+ }
+ 
+-/// server と同じ組み方（anchor は doctor の席の行から）。
+-fn build(target: &str, texts: &SeatTexts, now: u64) -> SeatCard {
+-    let anchor = texts.doctor.as_deref().and_then(|d| anchor(d, target));
+-    card(target, anchor.as_deref(), texts, now)
+-}
+-
+ /// 組の 7 つの字から組んだ card。
+ fn built(c: &Case) -> SeatCard {
+     build(&c.card.target, &c.texts, c.card.at)
+diff --git a/crates/tsuzuri-core/tests/teeth2/sgrace.rs b/crates/tsuzuri-core/tests/teeth2/sgrace.rs
+index 0685107b6434958e0895105e9b094420c9ea24f8..e0d90006d4e211a59fff5668b2fff21dcf2aa4fd 100644
+--- a/crates/tsuzuri-core/tests/teeth2/sgrace.rs
++++ b/crates/tsuzuri-core/tests/teeth2/sgrace.rs
+@@ -6,14 +6,10 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::{Path, PathBuf};
+ 
+-use serde::Deserialize;
++use crate::common::{Case, FIXTURE, build, read};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::seat::{Pressure, Reopens, SeatCard};
+-use tsuzuri_core::seat::{SeatTexts, anchor, card};
+-
+-const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
++use tsuzuri_contract::seat::{Pressure, Reopens};
+ 
+ /// 器の行を足して読む 4 組。
+ const SETS: [&str; 4] = ["run", "wait", "limit", "no-state"];
+@@ -24,21 +20,6 @@ const OWN: &str = "proj-1:0.1";
+ /// 2026-09-27T13:00:00Z。
+ const T13: u64 = 1_790_514_000;
+ 
+-#[derive(Deserialize)]
+-struct Case {
+-    #[serde(flatten)]
+-    texts: SeatTexts,
+-    card: SeatCard,
+-}
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn case(name: &str) -> Case {
+     serde_json::from_str::<BTreeMap<String, Case>>(&read(FIXTURE))
+         .expect("fixture の形")
+@@ -46,12 +27,6 @@ fn case(name: &str) -> Case {
+         .unwrap_or_else(|| panic!("組 {name} が無い"))
+ }
+ 
+-/// server と同じ組み方（anchor は doctor の席の行から）。
+-fn build(target: &str, texts: &SeatTexts, now: u64) -> SeatCard {
+-    let anchor = texts.doctor.as_deref().and_then(|d| anchor(d, target));
+-    card(target, anchor.as_deref(), texts, now)
+-}
+-
+ /// 合図の健康の出力のうち、席 `target` の行の末に空白と `tail` を足した字（ほかの行はそのまま）。
+ fn tick_tail(tick: &str, target: &str, tail: &str) -> String {
+     let key = format!("target={target} ");
+diff --git a/crates/tsuzuri-core/tests/teeth2/stats.rs b/crates/tsuzuri-core/tests/teeth2/stats.rs
+index 98387599678ebd3ec3f68d5cbc0b1afbb05a0fb3..d1e7fcc3a80698d2f68482b375c56ab0fa6978c6 100644
+--- a/crates/tsuzuri-core/tests/teeth2/stats.rs
++++ b/crates/tsuzuri-core/tests/teeth2/stats.rs
+@@ -5,8 +5,8 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::{fixture, read};
+ use serde_json::Value;
+ use tsuzuri_contract::board::{LedgerJudge, NextMove, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::stats::{CheckResult, NextStep, UnreflectedKind};
+@@ -16,18 +16,6 @@ use tsuzuri_core::ledger::{
+ use tsuzuri_core::next_step::next_step;
+ use tsuzuri_core::pipeline::board;
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture(rel: &str) -> Value {
+-    serde_json::from_str(&read(rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
+-}
+-
+ /// fixture の欄を入力の字にする。
+ fn input_text(v: &Value, key: &str) -> String {
+     match &v[key] {
+diff --git a/crates/tsuzuri-core/tests/teeth3/common.rs b/crates/tsuzuri-core/tests/teeth3/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d30895ec6d20383b106b7e71f30501b8e34e8883
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/teeth3/common.rs
+@@ -0,0 +1,19 @@
++//! tsuzuri-core の歯の群 teeth3 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use tsuzuri_contract::consult::WindowId;
++
++pub(crate) fn read(rel: &str) -> String {
++    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++pub(crate) fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++pub(crate) fn win(s: &str) -> WindowId {
++    WindowId::parse(s).expect("窓 id")
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwlin.rs b/crates/tsuzuri-core/tests/teeth3/cwlin.rs
+index 9e1b0739104757156351e418331d9a37f2281e21..f27106ce7787364676f8d8a3435019d85385c3a3 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwlin.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwlin.rs
+@@ -3,7 +3,8 @@
+ //! notes の上限の溢れ・未受けの計算・席への固定の 1 行の字を見る。台帳の bead は歯の中で組む。
+ #![cfg(test)]
+ 
+-use tsuzuri_contract::consult::{FindingId, Form, RequestId, Starter, Verdict, Via, WindowId};
++use crate::common::win;
++use tsuzuri_contract::consult::{FindingId, Form, RequestId, Starter, Verdict, Via};
+ use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
+ use tsuzuri_core::consult::lines::{
+     By, Event, HEADS, Home, HomeError, Line, LineError, NOTES_MAX, Subject, cited, free, home_of,
+@@ -22,10 +23,6 @@ fn rq(s: &str) -> RequestId {
+     RequestId::parse(s).expect("頼み id")
+ }
+ 
+-fn win(s: &str) -> WindowId {
+-    WindowId::parse(s).expect("窓 id")
+-}
+-
+ fn open(by: By, opened: bool, again: bool) -> Line {
+     Line::Open {
+         window: win("cw3"),
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwplg.rs b/crates/tsuzuri-core/tests/teeth3/cwplg.rs
+index 88d9a5bfecb16d40fa39fb70b44145eeccfb5af0..48d44c25acf41a106a2ad465fe4df74a9542fdba 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwplg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwplg.rs
+@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{read, root};
+ use serde_json::Value;
+ use tsuzuri_core::consult::launch::PLUGIN_VERSION;
+ 
+@@ -24,14 +25,6 @@ const SKILL_WORDS: [&str; 9] = [
+     "! で打つ命令は囲いの外で走る",
+ ];
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn script(path: &Path, body: &str) {
+     fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwquo.rs b/crates/tsuzuri-core/tests/teeth3/cwquo.rs
+index e9cf904d07e60023e782f2a1eaa856fa557ad648..6f0046f0d75796e8644dd664277fd1bb78737a52 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwquo.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwquo.rs
+@@ -4,7 +4,8 @@
+ 
+ use std::path::Path;
+ 
+-use tsuzuri_contract::consult::{SeatQuota, WindowId};
++use crate::common::win;
++use tsuzuri_contract::consult::SeatQuota;
+ use tsuzuri_core::consult::lines::scan;
+ use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, REFUSAL, admit, count};
+ 
+@@ -15,10 +16,6 @@ fn open(w: &str, form: &str, by: &str, result: &str, at: &str) -> String {
+     )
+ }
+ 
+-fn win(s: &str) -> WindowId {
+-    WindowId::parse(s).expect("窓 id")
+-}
+-
+ const SEAT: &str = "席";
+ const CHAT: &str = "持ち主のチャット・発話 = 20261003T0900Z";
+ const BUTTON: &str = "持ち主の button・頼み = rq-20261003T0900Z-1";
+diff --git a/crates/tsuzuri-core/tests/teeth3/main.rs b/crates/tsuzuri-core/tests/teeth3/main.rs
+index 641eb9193b31a4f0132a9522faff556de751eaad..d2a3f7567012700d537fdb0f986d3e7b1ce7851b 100644
+--- a/crates/tsuzuri-core/tests/teeth3/main.rs
++++ b/crates/tsuzuri-core/tests/teeth3/main.rs
+@@ -5,6 +5,7 @@
+ mod aggj;
+ mod agsp;
+ mod cmtnode;
++mod common;
+ mod cwarg;
+ mod cwflw;
+ mod cwfnd;
+diff --git a/crates/tsuzuri-core/tests/teeth3/seathk.rs b/crates/tsuzuri-core/tests/teeth3/seathk.rs
+index 72cdf1da0f558f3fd5e3c1afc4b9db25d14cad34..a653bb7f3d391ca0afe9b57452352c0d399d6db0 100644
+--- a/crates/tsuzuri-core/tests/teeth3/seathk.rs
++++ b/crates/tsuzuri-core/tests/teeth3/seathk.rs
+@@ -4,9 +4,7 @@
+ //! 頭の印の名が器の名の定数から成ることを見る（係の口の command も印を持つ・行 ag-plugin）。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
+ #![cfg(test)]
+ 
+-use std::fs;
+-use std::path::{Path, PathBuf};
+-
++use crate::common::read;
+ use serde_json::Value;
+ 
+ /// runner の印の除きの字（command の頭・印の名は器の名の定数と尾の字から成る）。
+@@ -44,14 +42,6 @@ const DROPPED: &str = "SessionStart";
+ /// 要の写しを出す hook の語（器の binary への問いの語と、要の写しの置き場の字）。
+ const COPY_WORDS: [&str; 2] = ["seat-constitution", "contracts/seat/"];
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn hooks() -> Value {
+     serde_json::from_str(&read("plugin/hooks/hooks.json"))
+         .unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
+diff --git a/xtask/tests/hpool.rs b/xtask/tests/hpool.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..bda9b420a10a8b5ba5895ac08c0271d0d0c3b7b9
+--- /dev/null
++++ b/xtask/tests/hpool.rs
+@@ -0,0 +1,495 @@
++//! 歯の群の共通の module の歯（接頭辞 hpool_・判断の記録 ADR-63 の決定 (8) の (c)）: 群の dir の共通の module（common.rs か common/mod.rs）の
++//! 頭の段の helper の item（#[test] の付かない fn・const・static・type・struct・enum・union・trait・impl）は、同じ群のほかの .rs の頭の段の
++//! helper の item と、字 pub(crate) と空白の並びを除いて同じ字にならない（畳みの道具が字で同じ写しを寄せた後に、写しが群に残らない）。
++//! item は直上の // と /// の行と属性を含めて読み、注と字と文字の literal の中の括弧は数えない（畳みの道具の読みと同じ）。
++//! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++#[expect(
++    dead_code,
++    reason = "member と群の探しだけを使い、上限の読みと命令の測りは使わない"
++)]
++#[path = "../src/kcap.rs"]
++mod kcap;
++
++/// 比べる item の種（頭の語）。use・mod・macro・内の属性は比べない。
++const HELPER: [&str; 9] = [
++    "fn", "const", "static", "type", "struct", "enum", "union", "trait", "impl",
++];
++/// 括弧の閉じで終わる item の種（ほかの種は ; で終わる）。
++const BRACED: [&str; 9] = [
++    "fn", "struct", "enum", "union", "trait", "impl", "mod", "extern", "call",
++];
++/// 頭の語の前に付く語（可視の pub の括弧は別に飛ばす）。
++const QUALIFIERS: [&str; 3] = ["async", "unsafe", "default"];
++
++#[derive(Clone, Copy, PartialEq, Eq, Debug)]
++enum Tk {
++    Word,
++    Punct(u8),
++    Lit,
++    Life,
++}
++
++#[derive(Clone, Copy, Debug)]
++struct Tok {
++    kind: Tk,
++    at: usize,
++    end: usize,
++}
++
++/// 頭の段の item（lo と hi は直上の // と /// の行を含む行の番号・0 始まり）。
++#[derive(Debug, PartialEq, Eq)]
++struct Item {
++    kind: String,
++    test: bool,
++    lo: usize,
++    hi: usize,
++    text: String,
++}
++
++fn repo_root() -> PathBuf {
++    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
++    manifest
++        .parent()
++        .map_or_else(|| manifest.join(".."), Path::to_path_buf)
++}
++
++fn read(path: &Path) -> String {
++    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
++}
++
++fn is_word(c: u8) -> bool {
++    c.is_ascii_alphanumeric() || c == b'_' || c >= 0x80
++}
++
++fn find_from(b: &[u8], from: usize, pat: &[u8]) -> Option<usize> {
++    b.get(from..)?
++        .windows(pat.len())
++        .position(|w| w == pat)
++        .map(|p| p + from)
++}
++
++fn word_end(b: &[u8], mut j: usize) -> usize {
++    while b.get(j).is_some_and(|&c| is_word(c)) {
++        j += 1;
++    }
++    j
++}
++
++/// 入れ子の注 /* … */ の終わりの次の位置。
++fn block_end(b: &[u8], mut j: usize) -> usize {
++    let mut depth = 0;
++    while j < b.len() {
++        if b[j..].starts_with(b"/*") {
++            depth += 1;
++            j += 2;
++        } else if b[j..].starts_with(b"*/") {
++            depth -= 1;
++            j += 2;
++            if depth == 0 {
++                return j;
++            }
++        } else {
++            j += 1;
++        }
++    }
++    j
++}
++
++/// raw の字（b か c の頭も可・r と # の並びと二重引用符）の終わりの次の位置。raw の字でなければ None。
++fn raw_end(b: &[u8], i: usize) -> Option<usize> {
++    let mut j = i;
++    if matches!(b.get(j), Some(b'b' | b'c')) {
++        j += 1;
++    }
++    if b.get(j) != Some(&b'r') {
++        return None;
++    }
++    let hashes = b.get(j + 1..)?.iter().take_while(|&&c| c == b'#').count();
++    j += 1 + hashes;
++    if b.get(j) != Some(&b'"') {
++        return None;
++    }
++    let mut close = vec![b'"'];
++    close.extend(std::iter::repeat_n(b'#', hashes));
++    find_from(b, j + 1, &close).map(|k| k + close.len())
++}
++
++/// 二重引用符の後の位置 j から、逆斜線の escape を飛ばして閉じの二重引用符の次の位置。
++fn str_end(b: &[u8], mut j: usize) -> usize {
++    while j < b.len() && b[j] != b'"' {
++        j += if b[j] == b'\\' { 2 } else { 1 };
++    }
++    j + 1
++}
++
++/// 一重引用符の位置 k からの文字の literal か lifetime。
++fn quote(text: &str, k: usize) -> (Tk, usize) {
++    let b = text.as_bytes();
++    if b.get(k + 1) == Some(&b'\\') {
++        return (
++            Tk::Lit,
++            find_from(b, k + 3, b"'").map_or(b.len(), |e| e + 1),
++        );
++    }
++    let width = text
++        .get(k + 1..)
++        .and_then(|s| s.chars().next())
++        .map_or(1, char::len_utf8);
++    if b.get(k + 1 + width) == Some(&b'\'') {
++        return (Tk::Lit, k + 2 + width);
++    }
++    (Tk::Life, word_end(b, k + 1))
++}
++
++/// 位置 i からの token の種（空白と注は None）と終わりの次の位置。
++fn next_tok(text: &str, i: usize) -> (Option<Tk>, usize) {
++    let b = text.as_bytes();
++    let c = b[i];
++    let glued = i > 0 && is_word(b[i - 1]);
++    let next = b.get(i + 1).copied();
++    if c.is_ascii_whitespace() {
++        return (None, i + 1);
++    }
++    if b[i..].starts_with(b"//") {
++        return (None, find_from(b, i, b"\n").unwrap_or(b.len()));
++    }
++    if b[i..].starts_with(b"/*") {
++        return (None, block_end(b, i));
++    }
++    if let Some(end) = raw_end(b, i).filter(|_| !glued) {
++        return (Some(Tk::Lit), end);
++    }
++    if c == b'"' || (!glued && matches!(c, b'b' | b'c') && next == Some(b'"')) {
++        return (
++            Some(Tk::Lit),
++            str_end(b, if c == b'"' { i + 1 } else { i + 2 }),
++        );
++    }
++    if c == b'\'' || (!glued && c == b'b' && next == Some(b'\'')) {
++        let (kind, end) = quote(text, if c == b'b' { i + 1 } else { i });
++        return (Some(kind), end);
++    }
++    if c.is_ascii_digit() {
++        let mut j = word_end(b, i);
++        if b.get(j) == Some(&b'.') && b.get(j + 1).is_some_and(u8::is_ascii_digit) {
++            j = word_end(b, j + 1);
++        }
++        return (Some(Tk::Lit), j);
++    }
++    if is_word(c) {
++        return (Some(Tk::Word), word_end(b, i));
++    }
++    (Some(Tk::Punct(c)), i + 1)
++}
++
++/// Rust の字の token の列（注を捨て、字と文字の literal を 1 つの token にする）。
++fn lex(text: &str) -> Vec<Tok> {
++    let mut out = Vec::new();
++    let mut i = 0;
++    while i < text.len() {
++        let (kind, end) = next_tok(text, i);
++        if let Some(kind) = kind {
++            out.push(Tok { kind, at: i, end });
++        }
++        i = end.max(i + 1);
++    }
++    out
++}
++
++fn word<'a>(text: &'a str, toks: &[Tok], j: usize) -> Option<&'a str> {
++    toks.get(j)
++        .filter(|t| t.kind == Tk::Word)
++        .map(|t| &text[t.at..t.end])
++}
++
++fn punct(toks: &[Tok], j: usize, c: u8) -> bool {
++    toks.get(j).is_some_and(|t| t.kind == Tk::Punct(c))
++}
++
++/// toks[k] の開き括弧の対の閉じ括弧の index。
++fn close(toks: &[Tok], k: usize) -> usize {
++    let mut depth = 0usize;
++    for (j, t) in toks.iter().enumerate().skip(k) {
++        match t.kind {
++            Tk::Punct(b'(' | b'[' | b'{') => depth += 1,
++            Tk::Punct(b')' | b']' | b'}') => {
++                depth -= 1;
++                if depth == 0 {
++                    return j;
++                }
++            }
++            _ => {}
++        }
++    }
++    panic!("閉じない括弧")
++}
++
++/// 属性の並び（toks[k] から）の後の index と、#[test] の有無と、内の属性（#!）か。
++fn attrs(text: &str, toks: &[Tok], mut k: usize) -> (usize, bool, bool) {
++    let mut test = false;
++    while punct(toks, k, b'#') {
++        let inner = punct(toks, k + 1, b'!');
++        let open = if inner { k + 2 } else { k + 1 };
++        let end = close(toks, open);
++        test |= end == open + 2 && word(text, toks, open + 1) == Some("test");
++        k = end + 1;
++        if inner {
++            return (k, test, true);
++        }
++    }
++    (k, test, false)
++}
++
++/// item の頭（属性の後の toks[k] から）の種の語。macro の呼びは call、読めない頭は other。
++fn head_kind(text: &str, toks: &[Tok], mut k: usize) -> String {
++    if word(text, toks, k) == Some("pub") {
++        k += 1;
++        if punct(toks, k, b'(') {
++            k = close(toks, k) + 1;
++        }
++    }
++    loop {
++        let w = word(text, toks, k);
++        let next = word(text, toks, k + 1);
++        if w.is_some_and(|w| QUALIFIERS.contains(&w))
++            || (w == Some("const") && next.is_some_and(|n| ["fn", "unsafe", "async"].contains(&n)))
++        {
++            k += 1;
++        } else {
++            break;
++        }
++    }
++    match word(text, toks, k) {
++        Some(_) if punct(toks, k + 1, b'!') && !punct(toks, k + 2, b'=') => "call".to_string(),
++        Some(w) => w.to_string(),
++        None => "other".to_string(),
++    }
++}
++
++/// 種 kind の item の頭（toks[k]）からの終わりの token の index（; か、括弧で終わる種の最初の波括弧の閉じ）。
++fn item_end(toks: &[Tok], kind: &str, mut j: usize) -> usize {
++    while j < toks.len() {
++        match toks[j].kind {
++            Tk::Punct(b';') => return j,
++            Tk::Punct(b'{') if BRACED.contains(&kind) => return close(toks, j),
++            Tk::Punct(b'(' | b'[' | b'{') => j = close(toks, j) + 1,
++            _ => j += 1,
++        }
++    }
++    panic!("終わらない item（{kind}）")
++}
++
++/// 行の頭の位置の列。
++fn line_starts(text: &str) -> Vec<usize> {
++    std::iter::once(0)
++        .chain(text.match_indices('\n').map(|(i, _)| i + 1))
++        .collect()
++}
++
++/// 直上の // と /// の行（//! を除き、前の item の行に入らない）を含めた item の最初の行。
++fn lead(lines: &[&str], first: usize, last: Option<usize>) -> usize {
++    let mut lo = first;
++    while lo > last.map_or(0, |l| l + 1) {
++        let above = lines[lo - 1].trim();
++        if !above.starts_with("//") || above.starts_with("//!") {
++            break;
++        }
++        lo -= 1;
++    }
++    lo
++}
++
++/// file の頭の段の item の列。
++fn items(text: &str) -> Vec<Item> {
++    let toks = lex(text);
++    let starts = line_starts(text);
++    let line_of = |at: usize| starts.partition_point(|&s| s <= at) - 1;
++    let lines: Vec<&str> = text.split('\n').collect();
++    let mut out = Vec::new();
++    let (mut k, mut last) = (0, None);
++    while k < toks.len() {
++        let (body, test, inner) = attrs(text, &toks, k);
++        let (kind, end) = if inner {
++            ("inner".to_string(), body - 1)
++        } else {
++            let kind = head_kind(text, &toks, body);
++            let end = item_end(&toks, &kind, body);
++            (kind, end)
++        };
++        let (first, hi) = (line_of(toks[k].at), line_of(toks[end].at));
++        let lo = lead(&lines, first, last);
++        out.push(Item {
++            kind,
++            test,
++            lo,
++            hi,
++            text: lines[lo..=hi].join("\n"),
++        });
++        last = Some(hi);
++        k = end + 1;
++    }
++    out
++}
++
++/// 比べる helper の item（種が HELPER で #[test] の付かない物）。
++fn helpers(text: &str) -> Vec<Item> {
++    items(text)
++        .into_iter()
++        .filter(|it| !it.test && HELPER.contains(&it.kind.as_str()))
++        .collect()
++}
++
++/// 字 pub(crate) と空白の並びを除いた字（畳みの道具は寄せる item に pub(crate) を足す）。
++fn plain(text: &str) -> String {
++    text.replace("pub(crate) ", "")
++}
++
++/// 共通の module の helper の item と同じ字（plain で比べる）の helper の item を持つ file の名と行（1 始まり）の列。
++fn copies(common: &str, others: &[(String, String)]) -> Vec<String> {
++    let pooled: Vec<String> = helpers(common).iter().map(|it| plain(&it.text)).collect();
++    let mut out = Vec::new();
++    for (name, text) in others {
++        for it in helpers(text) {
++            if pooled.contains(&plain(&it.text)) {
++                out.push(format!("{name}:{}", it.lo + 1));
++            }
++        }
++    }
++    out
++}
++
++/// 共通の module を持つ群の (群の dir, 共通の module の file) の列（member の順・群の path の順）。
++fn pools() -> Vec<(PathBuf, PathBuf)> {
++    let root = repo_root();
++    let mut out = Vec::new();
++    for member in kcap::members(&root).expect("members の表") {
++        for group in kcap::groups(&root, &member) {
++            let file = [group.join("common/mod.rs"), group.join("common.rs")]
++                .into_iter()
++                .find(|f| f.is_file());
++            if let Some(file) = file {
++                out.push((group, file));
++            }
++        }
++    }
++    out
++}
++
++/// 群の dir の直下の .rs のうち main.rs と共通の module を除く物の (名, 字)。
++fn others(group: &Path, pool: &Path) -> Vec<(String, String)> {
++    let mut out: Vec<(String, String)> = std::fs::read_dir(group)
++        .expect("群の dir を読む")
++        .map(|e| e.expect("群の項目").path())
++        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
++        .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some("main.rs") && p != pool)
++        .map(|p| (p.display().to_string(), read(&p)))
++        .collect();
++    out.sort();
++    out
++}
++
++#[test]
++fn hpool_common_items_have_no_copy_in_their_group() {
++    let (mut groups, mut pooled) = (0, 0);
++    for (group, pool) in pools() {
++        let common = read(&pool);
++        let found = copies(&common, &others(&group, &pool));
++        assert!(found.is_empty(), "{} の写し: {found:?}", pool.display());
++        groups += 1;
++        pooled += helpers(&common).len();
++    }
++    assert!(
++        groups >= GROUPS_MIN && pooled >= POOLED_MIN,
++        "共通の module を持つ群 {groups}・helper の item {pooled}"
++    );
++}
++
++/// 今の木で共通の module を持つ群と、その helper の item の数の下限（寄せの行が足すと増える）。
++const GROUPS_MIN: usize = 5;
++const POOLED_MIN: usize = 49;
++
++/// 読みの見本: 頭の注・内の属性・use・直上の /// と // の行と属性を持つ歯の fn（字と raw の字と文字の literal と入れ子の注の中に
++/// 括弧と fn の字を持つ）・括弧を持つ const・struct・impl・macro。
++const SAMPLE: &str = r##"//! 頭
++#![expect(dead_code, reason = "見本")]
++
++use std::fs;
++
++/// 一
++// 二
++#[test]
++fn a() {
++    let s = "} fn x() {";
++    let r = r#"}"{"#;
++    let c = '{';
++    let l: &'static str = "";
++    /* } /* { */ */
++}
++const B: [u8; 2] = [1, 2];
++struct C {
++    d: u8,
++}
++impl C {
++    fn e(&self) -> u8 {
++        self.d
++    }
++}
++macro_rules! m {
++    () => {};
++}
++"##;
++
++#[test]
++fn hpool_items_read_lead_comments_attributes_and_literals() {
++    let got: Vec<(String, bool, usize, usize)> = items(SAMPLE)
++        .into_iter()
++        .map(|it| (it.kind, it.test, it.lo, it.hi))
++        .collect();
++    let want = [
++        ("inner", false, 1, 1),
++        ("use", false, 3, 3),
++        ("fn", true, 5, 14),
++        ("const", false, 15, 15),
++        ("struct", false, 16, 18),
++        ("impl", false, 19, 23),
++        ("call", false, 24, 26),
++    ]
++    .map(|(k, t, lo, hi)| (k.to_string(), t, lo, hi));
++    assert_eq!(got, want);
++    assert_eq!(
++        helpers(SAMPLE).len(),
++        3,
++        "比べる item は const と struct と impl だけ（歯の fn と use と macro と内の属性は比べない）"
++    );
++}
++
++/// 写しの見本の共通の module（直上の /// の行と pub(crate) を足した fn）。
++const COMMON: &str = "//! 共通\n#![cfg(test)]\n\n/// 一つ\npub(crate) fn one() -> u8 {\n    1\n}\n";
++
++#[test]
++fn hpool_one_clause_mutants_are_named() {
++    let others = [
++        ("copy.rs", "/// 一つ\nfn one() -> u8 {\n    1\n}\n"),
++        (
++            "vis.rs",
++            "use std::fs;\n\n/// 一つ\npub(crate) fn one() -> u8 {\n    1\n}\n",
++        ),
++        ("body.rs", "/// 一つ\nfn one() -> u8 {\n    2\n}\n"),
++        ("doc.rs", "/// 二つ\nfn one() -> u8 {\n    1\n}\n"),
++        (
++            "lit.rs",
++            "const S: &str = r#\"/// 一つ\nfn one() -> u8 {\n    1\n}\"#;\n",
++        ),
++        (
++            "nested.rs",
++            "mod inner {\n/// 一つ\nfn one() -> u8 {\n    1\n}\n}\n",
++        ),
++        ("test.rs", "/// 一つ\n#[test]\nfn one() -> u8 {\n    1\n}\n"),
++    ]
++    .map(|(n, t)| (n.to_string(), t.to_string()));
++    assert_eq!(copies(COMMON, &others), ["copy.rs:1", "vis.rs:3"]);
++}
+diff --git a/xtask/tests/teeth1/carry.rs b/xtask/tests/teeth1/carry.rs
+index 002d3fee915ae1edf9ad61a9bae7118d11f4286f..422c49f89ac01c963eb54f1e2b718e9a01cc593d 100644
+--- a/xtask/tests/teeth1/carry.rs
++++ b/xtask/tests/teeth1/carry.rs
+@@ -3,8 +3,8 @@
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
+ /// 除外の表の file と、裁定 id を引く 2 つの判断の記録（repo の根からの相対）。
+ /// 持ち込んだ folio2/design-intent/adr/ の同じ名の file は読まない。
+@@ -34,13 +34,6 @@ const RULING_N3: &str = "t3-hub.67.8:20260929T0609Z-1";
+ const VESSEL_LOCK: &str = "scribe2/Cargo.lock";
+ const VESSEL_OUTSIDE: usize = 35;
+ 
+-fn repo_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+diff --git a/xtask/tests/teeth1/common.rs b/xtask/tests/teeth1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6e2bd1adf713c4793643e09017761bf89b0446ac
+--- /dev/null
++++ b/xtask/tests/teeth1/common.rs
+@@ -0,0 +1,31 @@
++//! xtask の歯の群 teeth1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
++pub(crate) fn read_root(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .join("..")
++        .join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++pub(crate) fn repo_root() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .parent()
++        .expect("xtask の dir の 1 つ上")
++        .to_path_buf()
++}
++
++pub(crate) fn root() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .parent()
++        .expect("xtask の dir の 1 つ上")
++        .to_path_buf()
++}
++
++pub(crate) fn strings(xs: &[&str]) -> Vec<String> {
++    xs.iter().map(|s| (*s).to_string()).collect()
++}
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index 44a0009ce676abf7b2bb208e5745a45e9907f160..a09ec5a53a68a67dbbd03646f9c1f0ccf762d927 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -7,7 +7,7 @@
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::path::{Path, PathBuf};
+ 
+-/// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
++/// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、mod.rs を持つ dir の module・共通の module POOL は数えない）。
+ const GROUPS: &[(&str, usize)] = &[
+     // kfold-groups-begin
+     ("crates/tsuzuri-boundary/tests/teeth1", 26),
+@@ -16,7 +16,7 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-boundary/tests/teeth4", 14),
+     ("crates/tsuzuri-boundary/tests/teeth5", 29),
+     ("crates/tsuzuri-boundary/tests/teeth6", 10),
+-    ("crates/tsuzuri-contract/tests/teeth1", 15),
++    ("crates/tsuzuri-contract/tests/teeth1", 14),
+     ("crates/tsuzuri-core/tests/teeth1", 28),
+     ("crates/tsuzuri-core/tests/teeth2", 25),
+     ("crates/tsuzuri-core/tests/teeth3", 22),
+@@ -36,6 +36,10 @@ const GROUPS: &[(&str, usize)] = &[
+     // kfold-groups-end
+ ];
+ 
++/// 群の共通の module の名（畳みの道具が字で同じ helper の写しを寄せる先・判断の記録 ADR-63 の決定 (8) の (c)）。main.rs が名指すことは
++/// ほかの module と同じに見て、表 GROUPS の module の数には数えない（群を足すたびに表を書き直さずに寄せの行を並べるため）。
++const POOL: &str = "common";
++
+ fn repo_root() -> PathBuf {
+     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+     manifest
+@@ -132,7 +136,7 @@ fn kfold_groups_declare_every_module_once() {
+                 .expect("根の下")
+                 .to_string_lossy()
+                 .into_owned();
+-            seen.insert(rel, set.len());
++            seen.insert(rel, set.iter().filter(|m| m.as_str() != POOL).count());
+         }
+     }
+     let want: BTreeMap<String, usize> =
+diff --git a/xtask/tests/teeth1/klint.rs b/xtask/tests/teeth1/klint.rs
+index 8fd26624665397bc0439999c7ffd8363d3cba451..eddf94eb27aeba588720253045815b79b649aa9d 100644
+--- a/xtask/tests/teeth1/klint.rs
++++ b/xtask/tests/teeth1/klint.rs
+@@ -5,6 +5,7 @@
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::collections::BTreeSet;
+ use std::path::PathBuf;
+ 
+@@ -53,13 +54,6 @@ const ENABLED: [&str; 18] = [
+     "too_many_arguments",
+ ];
+ 
+-fn repo_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn read(rel: &str) -> String {
+     let path = repo_root().join(rel);
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+diff --git a/xtask/tests/teeth1/klintf.rs b/xtask/tests/teeth1/klintf.rs
+index 16b47c5a92b2b2a8145b4e538973ef2b409f68bf..ec87016e9b419a5aa0a72f7fd7f2ad064d6f3962 100644
+--- a/xtask/tests/teeth1/klintf.rs
++++ b/xtask/tests/teeth1/klintf.rs
+@@ -4,6 +4,7 @@
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ 
+@@ -76,13 +77,6 @@ const COVER: [(&str, &str, &str); 15] = [
+     ("allow_attributes_without_reason", "workspace.lints.clippy", "deny"),
+ ];
+ 
+-fn repo_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn folio_dir() -> PathBuf {
+     repo_root().join("folio2/crates/folio")
+ }
+diff --git a/xtask/tests/teeth1/main.rs b/xtask/tests/teeth1/main.rs
+index 03493a25787c40ee60004536bdfac7badc4c412a..4fff977dd264255bfec4c7a24b9b09039ccd6a0f 100644
+--- a/xtask/tests/teeth1/main.rs
++++ b/xtask/tests/teeth1/main.rs
+@@ -4,6 +4,7 @@
+ 
+ mod carry;
+ mod cishard;
++mod common;
+ mod deny;
+ mod kfold;
+ mod klint;
+diff --git a/xtask/tests/teeth1/ntmo.rs b/xtask/tests/teeth1/ntmo.rs
+index 60ffcc29cdbded794780a3fdd6c0db4c2d6d3643..8a6eb601379b3d016a1dd7c1bec7c3d6751b5b11 100644
+--- a/xtask/tests/teeth1/ntmo.rs
++++ b/xtask/tests/teeth1/ntmo.rs
+@@ -2,15 +2,7 @@
+ //! 注と空の行を除いた行は、表 profile.default の見出しと slow-timeout の 1 行（60 秒ごとに SLOW・5 回目で止める）の 2 行だけ。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
+-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
+-fn read_root(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .join("..")
+-        .join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
++use crate::common::read_root;
+ 
+ /// 井桁で始まる行と空の行を除いた行（trim）。
+ fn body_lines(text: &str) -> Vec<&str> {
+diff --git a/xtask/tests/teeth1/retire.rs b/xtask/tests/teeth1/retire.rs
+index 7f449f7c768951fd6f3a8754dfad544022e271e4..a19d409d4e84a21aeca0f700e3fd507e23b1c904 100644
+--- a/xtask/tests/teeth1/retire.rs
++++ b/xtask/tests/teeth1/retire.rs
+@@ -4,6 +4,7 @@
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で木を見る。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::collections::BTreeSet;
+ use std::path::{Path, PathBuf};
+ 
+@@ -92,13 +93,6 @@ const KEPT: [&str; 8] = [
+ /// 歩かない dir（cargo の出力）。
+ const SKIP: &str = "folio2/target";
+ 
+-fn repo_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ /// dir の下の全項目（file・dir・symlink）を repo の根からの相対の path で返す。symlink は辿らず、SKIP の dir は入らない。
+ fn entries(rel: &str, out: &mut Vec<String>) {
+     let dir = repo_root().join(rel);
+diff --git a/xtask/tests/teeth1/tlic.rs b/xtask/tests/teeth1/tlic.rs
+index 5b6a57c7b9dea80e8c2f4112811a7b47d172934e..29c3d7651e3cc82d17564aaa96bc88a8f6e6f9b8 100644
+--- a/xtask/tests/teeth1/tlic.rs
++++ b/xtask/tests/teeth1/tlic.rs
+@@ -2,7 +2,7 @@
+ //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
++use crate::common::repo_root;
+ 
+ /// 5 つの member の dir（repo の根からの相対）。
+ const MEMBERS: [&str; 5] = [
+@@ -13,13 +13,6 @@ const MEMBERS: [&str; 5] = [
+     "xtask",
+ ];
+ 
+-fn repo_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+diff --git a/xtask/tests/teeth1/vdaily.rs b/xtask/tests/teeth1/vdaily.rs
+index 5753c8eba4785d54ff388efb1c9b33d2d370fca8..e2297087c2d320a53eb67aec323e4ceaadaff67c 100644
+--- a/xtask/tests/teeth1/vdaily.rs
++++ b/xtask/tests/teeth1/vdaily.rs
+@@ -9,19 +9,12 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+ 
++use crate::common::{read_root, strings};
+ use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, NOTES_MAX, Outcome, SHOW, Seen, USAGE};
+ 
+ /// 2026-10-03T09:00Z の epoch 秒。
+ const NOW: u64 = 1_791_018_000;
+ 
+-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
+-fn read_root(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .join("..")
+-        .join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 一時の dir（名に pid と字 tag）を作り直す。
+ fn fresh(tag: &str) -> PathBuf {
+     let dir = std::env::temp_dir().join(format!("tsuzuri-vdaily-{tag}-{}", std::process::id()));
+@@ -157,10 +150,6 @@ fn seen(stamp: &str, sha: &str, rc: i32) -> Seen {
+     }
+ }
+ 
+-fn strings(xs: &[&str]) -> Vec<String> {
+-    xs.iter().map(|s| (*s).to_string()).collect()
+-}
+-
+ /// 記録の行の頭（時刻・sha・段・rc）と末（memo）が見込みどおりか。
+ fn assert_line(line: &str, sha: &str, step: &str, rc: i32, memo: &str) {
+     let head = format!("2026-10-03T09:00Z sha={sha} step={step} rc={rc} secs=");
+diff --git a/xtask/tests/teeth1/vjprep.rs b/xtask/tests/teeth1/vjprep.rs
+index 54b1aab98ed0645b7c4d490ac0ccae15547867ad..a8777f90a4df8bda48641b319f48910c0ccb6d0a 100644
+--- a/xtask/tests/teeth1/vjprep.rs
++++ b/xtask/tests/teeth1/vjprep.rs
+@@ -3,8 +3,8 @@
+ //! 根の部品の名と器の部品の名が重ならないことを見る（根の workspace に入れる時の名の衝突を先に除く）。外の依存を使わず repo の根からの相対の path で読む。
+ #![cfg(test)]
+ 
++use crate::common::root;
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
+ /// 揃えた後の器の開発の道具の部品の名（package の名と crates/ の下の dir の名が同じ字）。
+ const RUNNER: &str = "scribe2-xtask";
+@@ -13,13 +13,6 @@ const OLD: &str = "xtask";
+ /// 器の cargo の設定の別名 xtask の値（cargo xtask の字の意味を保つ）。
+ const ALIAS: &str = "run -q -p scribe2-xtask --";
+ 
+-fn root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読めない: {e}"))
+ }
+diff --git a/xtask/tests/teeth1/vretb.rs b/xtask/tests/teeth1/vretb.rs
+index d3ded823d3a504a33bdd14753b30e3d97d138412..4e073dae210ad4e3e54dccb6e6b5b8bfd0dd4529 100644
+--- a/xtask/tests/teeth1/vretb.rs
++++ b/xtask/tests/teeth1/vretb.rs
+@@ -3,8 +3,8 @@
+ //! 元の path に残って、根の Claude Code の設定 .claude/settings.json の claudeMdExcludes が読ませない。外の依存を使わず repo の根からの相対の path で読む。
+ #![cfg(test)]
+ 
++use crate::common::root;
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
+ /// 移した 5 つの対（元・先）。名が字 . で始まる .gitignore は退役の置き場で働かないよう名を替える（folio2 の前例 folio2/retired/beads/gitignore.txt）。
+ const MOVED: [(&str, &str); 5] = [
+@@ -37,13 +37,6 @@ const PATTERN: &str = "**/scribe2/CLAUDE.md";
+ /// 器の検査の門 paths-clean と private-clean が見る private な path の形（器の limits.rs の PRIVATE_PATH_MARKS と同じ字）。
+ const MARKS: [&str; 2] = [concat!("/", "home", "/"), concat!("~", "/")];
+ 
+-fn root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .parent()
+-        .expect("xtask の dir の 1 つ上")
+-        .to_path_buf()
+-}
+-
+ fn read(rel: &str) -> String {
+     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+diff --git a/xtask/tests/teeth1/vskip.rs b/xtask/tests/teeth1/vskip.rs
+index 5fd4ae7b8076e45478655b46835ce0c5f10cb806..206a7dd2e1792bc002c25de5abe2a1edfe1ffc49 100644
+--- a/xtask/tests/teeth1/vskip.rs
++++ b/xtask/tests/teeth1/vskip.rs
+@@ -9,6 +9,7 @@ use std::cell::RefCell;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+ 
++use crate::common::{read_root, strings};
+ use skip::{BASE_REF, FORCE_ENV, SHARED, Verdict};
+ 
+ /// fixture の base の木（入れ子の dir s2 と s3・入力の外の crate と xtask の歯・.gitignore）。
+@@ -26,14 +27,6 @@ const BASE_FILES: &[(&str, &str)] = &[
+     (".gitignore", "/s2/ignored/\n"),
+ ];
+ 
+-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
+-fn read_root(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .join("..")
+-        .join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 一時の dir（名に pid と字 tag）を作り直す。
+ fn fresh(tag: &str) -> PathBuf {
+     let dir = std::env::temp_dir().join(format!("tsuzuri-vskip-{tag}-{}", std::process::id()));
+@@ -106,10 +99,6 @@ fn touches(dir: &Path) -> Verdict {
+     ))
+ }
+ 
+-fn strings(xs: &[&str]) -> Vec<String> {
+-    xs.iter().map(|s| (*s).to_string()).collect()
+-}
+-
+ #[test]
+ fn vskip_fixed_inputs_and_env() {
+     assert_eq!(
+diff --git a/xtask/tests/teeth1/vsplit.rs b/xtask/tests/teeth1/vsplit.rs
+index 6b6d8b0004475ee32ea5a51379bd978f40945d01..75765906a34c1c153b82c98c52d300f32d298ea0 100644
+--- a/xtask/tests/teeth1/vsplit.rs
++++ b/xtask/tests/teeth1/vsplit.rs
+@@ -5,22 +5,9 @@
+ #[path = "../../src/spread.rs"]
+ mod spread;
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{read_root, strings};
+ use spread::{SLOTS, SURFACE, TABLE, Turn};
+ 
+-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
+-fn read_root(rel: &str) -> String {
+-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-        .join("..")
+-        .join(rel);
+-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn strings(xs: &[&str]) -> Vec<String> {
+-    xs.iter().map(|s| (*s).to_string()).collect()
+-}
+-
+ /// 割り count:k/n で段を撃つ役の番号の列。
+ fn runners(key: &str, n: u64) -> Vec<u64> {
+     (1..=n)
