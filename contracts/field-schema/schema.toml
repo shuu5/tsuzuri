@@ -101,6 +101,11 @@ name = "code-facts"
 need = "optional"
 shape = "list"
 
+[[field]]
+name = "basis"
+need = "optional"
+shape = "list"
+
 # 約束の行 [[promise]] の欄（正本は同じ file の PROMISE_FIELDS）
 
 [[promise-field]]

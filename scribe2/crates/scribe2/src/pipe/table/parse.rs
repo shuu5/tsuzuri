@@ -291,6 +291,7 @@ fn typed(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<Co
         growth: list_of(raw, "growth", offset, errors),
         done_teeth: list_of(raw, "done-teeth", offset, errors),
         code_facts: list_of(raw, "code-facts", offset, errors),
+        basis: list_of(raw, "basis", offset, errors),
         goal: text_of(raw, DERIVED_GOAL, offset, errors),
     };
     (errors.len() == before).then_some(row)
@@ -536,6 +537,30 @@ mod tests {
                 "先頭の行番号 {line} の 1 件: {errors:?}"
             );
         }
+    }
+
+    /// 欄 `basis`（tsuzuri の行 v-row-basis）: `.toml` の全文の行は字の配列の basis を宣言の順のまま読み、省いた行は空、
+    /// 字 1 つを書いた行は欄の行番号で「文字列の配列でなければならない」の 1 件で断る。欄の列の末は basis。
+    #[test]
+    fn vbasis_toml_row_reads_the_basis_list_and_refuses_a_string() {
+        let row = |basis: &str| {
+            format!(
+                "{WHOLE_HEAD}\n\n[[contract]]\nid = \"a\"\ntitle = \"t\"\nreq = [\"FR1\"]\nsection = \"1\"\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"d\"\n{basis}{DERIVED_GOAL} = \"g\"\n"
+            )
+        };
+        let listed = read_rows("docs/design/t.toml", &row("basis = [\"ADR-47\", \"P-28\", \"R-31\"]\n"))
+            .unwrap_or_else(|errors| panic!("字の配列の basis は読める: {errors:?}"));
+        assert_eq!(listed.first().map(|found| found.basis.clone()), Some(vec!["ADR-47".to_owned(), "P-28".to_owned(), "R-31".to_owned()]));
+        let bare = read_rows("docs/design/t.toml", &row("")).unwrap_or_else(|errors| panic!("省いた行は読める: {errors:?}"));
+        assert_eq!(bare.first().map(|found| found.basis.len()), Some(0), "省いた basis は空");
+        let text = row("basis = \"ADR-47\"\n");
+        let at = text.lines().position(|line| line.starts_with("basis = ")).map_or(0, |index| index as u64 + 1);
+        let errors = read_rows("docs/design/t.toml", &text).expect_err("字 1 つの basis は断る");
+        assert!(
+            errors.iter().any(|error| error.line() == at && error.reason().contains("basis は文字列の配列でなければならない")),
+            "basis の行 {at} を名指す: {errors:?}"
+        );
+        assert_eq!(super::super::FIELDS.last().map(|field| field.name), Some("basis"), "欄の列の末");
     }
 
     /// doc 上で `[[promise]]` の見出しが在る行番号（1 始まり・doc 順）。

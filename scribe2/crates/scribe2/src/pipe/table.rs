@@ -155,6 +155,7 @@ pub const FIELDS: &[Field] = &[
     Field { name: "growth", need: Need::Optional, shape: Shape::List },
     Field { name: "done-teeth", need: Need::Optional, shape: Shape::List },
     Field { name: "code-facts", need: Need::Optional, shape: Shape::List },
+    Field { name: "basis", need: Need::Optional, shape: Shape::List },
 ];
 
 /// 約束の行 `[[promise]]` の欄の全体（**正本**・宣言順が `contracts schema` の描く順・設計 §33 の 9 欄）。`place` は
@@ -241,6 +242,9 @@ pub struct ContractRow {
     pub done_teeth: Vec<String>,
     /// 欄 `code-facts` の要素（`<列>:<項目>=<値>` の列・空 = 欄を持たない行・設計 reverse-index.md §7 (c)・生成する契約 file には写さない）。
     pub code_facts: Vec<String>,
+    /// 欄 `basis` の要素（行の根拠の条・規範文・規則行・判断の記録の id の列・空 = 欄を持たない行・器は読んで運ぶだけで
+    /// 照らさない〔id の実在は設計の道具の床が数える〕・生成する契約 file には写さない・tsuzuri の行 v-row-basis）。
+    pub basis: Vec<String>,
     /// 節の本文の逐語（導出物の行だけの欄 [`DERIVED_GOAL`]・空 = `section` の節を doc から読む・設計 contract-source.md §47）。
     pub goal: String,
 }
@@ -973,19 +977,20 @@ mod tests {
         text
     }
 
-    /// 欄の列は宣言順に 20（必須 5・条件付き 2・任意 13・`targets` は設計 gate-cost.md §16・`growth` は §46・`done-teeth` と `code-facts` は §67）で、
+    /// 欄の列は宣言順に 21（必須 5・条件付き 2・任意 14・`targets` は設計 gate-cost.md §16・`growth` は §46・`done-teeth` と `code-facts` は §67・
+    /// `basis` は tsuzuri の行 v-row-basis）で、
     /// `contracts schema` はその順に描く。欄の形は reader が強制する（文字列の欄に配列・配列の欄に文字列を書くと、その欄を
     /// 名指して断る）。`write-set` は任意（契約 (h)・§3「write-set の導出」: 無い行は受付が導出値を写す）。約束の行の欄は
-    /// 別の列 9（必須 7・任意 2）で、生成物は契約の行の欄の後に別の表・別の key で描く（`[[field]]` の母集団は 20）。
+    /// 別の列 9（必須 7・任意 2）で、生成物は契約の行の欄の後に別の表・別の key で描く（`[[field]]` の母集団は 21）。
     #[test]
     fn table_fields_pin_the_schema_columns_and_the_reader_enforces_their_shapes() {
         let names: Vec<&str> = FIELDS.iter().map(|field| field.name).collect();
         let want = [
             "id", "title", "req", "section", "touches", "surfaces", "write-set", "creates", "tests", "also", "verify",
-            "size", "done", "depends", "classes", "opens", "targets", "growth", "done-teeth", "code-facts",
+            "size", "done", "depends", "classes", "opens", "targets", "growth", "done-teeth", "code-facts", "basis",
         ];
         assert_eq!(names, want, "欄の宣言順");
-        assert_eq!(FIELDS.iter().filter(|field| field.need == Need::Required).count(), 5, "必須 5・条件付き 2・任意 13");
+        assert_eq!(FIELDS.iter().filter(|field| field.need == Need::Required).count(), 5, "必須 5・条件付き 2・任意 14");
         let optional = |name: &str| FIELDS.iter().any(|field| field.name == name && field.need == Need::Optional);
         assert!(["write-set", "creates", "tests", "also"].iter().all(|name| optional(name)), "導出の 4 欄は任意");
         assert!(optional("targets"), "的の欄は任意（無い行は従来の経路）");
@@ -993,7 +998,7 @@ mod tests {
         let listed: Vec<&str> =
             rendered.iter().filter_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"')).collect();
         assert_eq!(listed, names, "生成物は欄の宣言順");
-        assert_eq!(FIELDS.len(), 20, "契約の行の欄は 20");
+        assert_eq!(FIELDS.len(), 21, "契約の行の欄は 21");
         assert_eq!(rendered.get(1).map(String::as_str), Some("schema = 1"), "生成物も schema = 1 を持つ");
         assert_eq!(read_rows("t.toml", &full_row(&[])).map(|rows| rows.len()), Ok(1), "全欄の行は読める");
         for field in FIELDS {
@@ -1012,14 +1017,14 @@ mod tests {
 
     // flip-check: s2-07l.512
 
-    /// §33 (f) の母集団: `FIELDS` の `need` は必須 5・条件付き 2（`verify` と `done`・宣言順）・任意 13 の和 20 で（§46 の
-    /// `growth` と §67 の 2 欄で任意が増えた）、生成物の `need` の列は `FIELDS` と同じ順に `conditional` を 2 欄（`verify` / `done`）で
+    /// §33 (f) の母集団: `FIELDS` の `need` は必須 5・条件付き 2（`verify` と `done`・宣言順）・任意 14 の和 21 で（§46 の
+    /// `growth` と §67 の 2 欄と tsuzuri の行 v-row-basis の `basis` で任意が増えた）、生成物の `need` の列は `FIELDS` と同じ順に `conditional` を 2 欄（`verify` / `done`）で
     /// 載せる（xtask の contracts-schema は variant の名を小文字にした語で照合する＝同じ語）。
     #[test]
     fn contract_promise_need_conditional_is_two_fields_in_the_schema() {
         let count = |need: Need| FIELDS.iter().filter(|field| field.need == need).count();
-        assert_eq!((count(Need::Required), count(Need::Conditional), count(Need::Optional)), (5, 2, 13), "必須 5・条件付き 2・任意 13");
-        assert_eq!(FIELDS.len(), 20, "母集団 20");
+        assert_eq!((count(Need::Required), count(Need::Conditional), count(Need::Optional)), (5, 2, 14), "必須 5・条件付き 2・任意 14");
+        assert_eq!(FIELDS.len(), 21, "母集団 21");
         let conditional: Vec<&str> =
             FIELDS.iter().filter(|field| field.need == Need::Conditional).map(|field| field.name).collect();
         assert_eq!(conditional, ["verify", "done"], "条件付きは verify と done");
@@ -1033,7 +1038,7 @@ mod tests {
     }
 
     /// §47 の 1 と 3: 導出物の先頭の版の宣言の字面は folio2 の ADR-3 決定 (4) の `schema = 1` と一致し（drift の歯・台帳
-    /// `s2-07l.214` の (3)）、rules manifest の版と同じ値である。導出物だけの欄の名は goal で、欄の正本 `FIELDS`（20）と
+    /// `s2-07l.214` の (3)）、rules manifest の版と同じ値である。導出物だけの欄の名は goal で、欄の正本 `FIELDS`（21）と
     /// 生成物に載らない。
     #[test]
     fn contract_whole_goal_head_pins_the_folio2_schema_and_the_goal_stays_off_the_fields() {
@@ -1041,7 +1046,7 @@ mod tests {
         assert_eq!(WHOLE_HEAD, format!("schema = {}", crate::rules::manifest::SCHEMA), "rules manifest の版と同じ値");
         assert_eq!(DERIVED_GOAL, "goal", "導出物だけの欄の名");
         assert!(FIELDS.iter().all(|field| field.name != DERIVED_GOAL), "FIELDS に goal は無い");
-        assert_eq!(FIELDS.len(), 20, "欄の正本は 20（goal は載らない）");
+        assert_eq!(FIELDS.len(), 21, "欄の正本は 21（goal は載らない）");
         let rendered = render_schema();
         assert!(!rendered.iter().any(|line| line.contains(DERIVED_GOAL)), "生成物に goal は無い: {rendered:?}");
     }
