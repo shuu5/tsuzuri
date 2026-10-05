@@ -1,5 +1,5 @@
-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
-//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
+//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
+//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
 //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
 //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
 #![cfg(test)]
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
 
 /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 12] = [
+const CLAUSES: [(&str, u8, &str); 19] = [
     (
         "single-home",
         0,
@@ -36,6 +36,29 @@ const CLAUSES: [(&str, u8, &str); 12] = [
     ("detour", 9, "回り込まない"),
     ("tokens", 9, "token を節約する"),
     ("budget", 10, "予算は token ちょうど 150000"),
+    (
+        "tmp-index",
+        1,
+        "一時の index（GIT_INDEX_FILE）の照らしも写しの中で撃つ",
+    ),
+    ("tmpdir", 1, "TMPDIR は /tmp/<名>-t にする"),
+    (
+        "row-count",
+        3,
+        "行の数は contracts/<ノート>.toml の id = の行で数える",
+    ),
+    (
+        "idle-check",
+        6,
+        "働きを通らない照らし（足す物が 0 の時に通る等式など）は審査で落ちる",
+    ),
+    ("findings", 8, "出す物の file の名に findings も使わない"),
+    ("reply", 8, "最後の返事（席への知らせ）は 10 行以内"),
+    (
+        "write-tree",
+        9,
+        "試しは commit せず、git write-tree の木の hash で撃つ",
+    ),
 ];
 
 /// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字）。
