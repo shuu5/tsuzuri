@@ -857,6 +857,7 @@ mod tests {
             done_teeth: Vec::new(),
             code_facts: Vec::new(),
             basis: Vec::new(),
+            patch: None,
             goal: String::new(),
         }
     }

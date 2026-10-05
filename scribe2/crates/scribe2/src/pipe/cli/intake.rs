@@ -1389,6 +1389,7 @@ mod tests {
             opens: Vec::new(),
             touches: Vec::new(),
             growth: Vec::new(),
+            patch: None,
         };
         let body = "x\n".repeat(usize::try_from(lines).unwrap_or_default());
         let materials = Materials {

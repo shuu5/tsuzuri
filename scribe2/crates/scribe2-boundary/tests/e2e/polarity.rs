@@ -163,6 +163,7 @@ fn contract_with(classes: &[&str]) -> Contract {
         opens: Vec::new(),
         touches: Vec::new(),
         growth: Vec::new(),
+        patch: None,
     }
 }
 

@@ -26,8 +26,8 @@ const REQUIRED: &[&str] = &[
 
 /// 任意の key。`touches` は契約 (b) の生成物が行から写す欄（型の閉包の宣言・受付は読まないが
 /// 写しに残す＝run dir の写しだけで行の宣言が読める）。[`TARGETS`] は検出線の的（gate が [`targets_of`] で読む）。
-/// [`GROWTH`] は file ごとの見込み行数（受付の上限の余地が読む・設計 contract-source.md §46）。
-const OPTIONAL: &[&str] = &["classes", "opens", "touches", TARGETS, GROWTH, DONE_TEETH];
+/// [`GROWTH`] は file ごとの見込み行数（受付の上限の余地が読む・設計 contract-source.md §46）。[`PATCH`] は差の file の path。
+const OPTIONAL: &[&str] = &["classes", "opens", "touches", TARGETS, GROWTH, DONE_TEETH, PATCH];
 
 /// 歯の欄の key（文字列の列・設計 contract-source.md §67）。形だけ読んで値は捨てる（[`Contract`] の field にしない）。
 const DONE_TEETH: &str = "done-teeth";
@@ -39,6 +39,10 @@ pub const GROWTH: &str = "growth";
 /// 契約が名指す生存行（変異の的）の key（設計 gate-cost.md §16・行 g）。値は `<file>:<行>:<変異の名>` の列で、
 /// 形は [`target_unfit`] の 1 本が決める。[`Contract`] の field にはしない（読むのは gate の検出線だけ・[`targets_of`]）。
 pub const TARGETS: &str = "targets";
+
+/// 契約が名指す差の file の key（`.patch` で終わる repo 相対の file の path・tsuzuri の判断の記録 ADR-60 の決定 (7)・行
+/// v-patch-field）。値の形は [`patch_unfit`] の 1 本が決め、契約表の行の読みと契約 file の読みが同じ 1 本を通る。
+pub const PATCH: &str = "patch";
 
 /// 3 クラスの自己申告が取れる値（FR15）。受理集合は閉じた型 [`Class`] の名の列（宣言順・字面を 2 面に書かない）。
 pub const CLASSES: &[&str] = &[Class::Delete.as_str(), Class::Publish.as_str(), Class::Consume.as_str()];
@@ -156,6 +160,8 @@ pub struct Contract {
     pub touches: Vec<String>,
     /// file ごとの見込み行数（`<path>:<行数>` の列・既定 空＝全 file が `size` の見込み・[`GROWTH`]）。生成の写しが行から運ぶ。
     pub growth: Vec<String>,
+    /// 差の file の repo 相対 path（既定 `None`＝差の file を名指さない契約・[`PATCH`]）。生成の写しが行から運ぶ。
+    pub patch: Option<String>,
 }
 
 /// 走査中の 1 key の値。
@@ -335,6 +341,7 @@ fn build(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Optio
         }
     }
     list_of(found, DONE_TEETH, 0, errors);
+    let patch = patch_of(found, errors);
     Some(Contract {
         goal: text_of(found, "goal", errors),
         done: text_of(found, "done", errors),
@@ -349,7 +356,22 @@ fn build(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Optio
         opens,
         touches: list_of(found, "touches", 0, errors),
         growth: list_of(found, GROWTH, 0, errors),
+        patch,
     })
+}
+
+/// 任意 key [`PATCH`] の値（key が無ければ `None`）。配列と形の外れ（[`patch_unfit`]）は行番号つきで積む。
+fn patch_of(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Option<String> {
+    let (_, raw, line) = found.iter().find(|(seen, _, _)| seen == PATCH)?;
+    let reason = match raw {
+        Raw::List(_) => "は文字列である（配列でない）".to_owned(),
+        Raw::Text(path) => match patch_unfit(path) {
+            None => return Some(path.clone()),
+            Some(reason) => format!("の値 {path} が差の file の形でない: {reason}"),
+        },
+    };
+    errors.push(ContractError::new(*line, format!("{PATCH} {reason}")));
+    None
 }
 
 /// **閉じた名の列**を取る任意 key（`classes` / `opens`）。列に無い名は行番号つきで全件積む。
@@ -408,6 +430,18 @@ pub fn target_unfit(target: &str) -> Option<String> {
         _ => name,
     };
     name.trim().is_empty().then(|| "変異の名が空".to_owned())
+}
+
+/// 差の file の path 1 本の字面が形に合わない理由（合えば `None`・[`PATCH`]）。末が `/` の字面は dir として断り、ほかは
+/// 末が `.patch` でなければ断る。file の在否は読まない。表の検査（受付と CI）と契約 file の読みが同じこの 1 本を通る（C2）。
+pub fn patch_unfit(path: &str) -> Option<String> {
+    if path.ends_with('/') {
+        Some("dir（末が /）は断る".to_owned())
+    } else if !path.ends_with(".patch") {
+        Some("末が .patch でない".to_owned())
+    } else {
+        None
+    }
 }
 
 /// 契約 file の的の列（key が無ければ空・設計 gate-cost.md §16）。本文は [`Contract::parse`] と同じ読みを通す
@@ -495,6 +529,9 @@ pub fn render(row: &crate::pipe::table::ContractRow, design: &str, write_set: &[
     if !row.done_teeth.is_empty() {
         out.push_str(&format!("{DONE_TEETH} = {}\n", list(&row.done_teeth)));
     }
+    if let Some(patch) = &row.patch {
+        out.push_str(&format!("{PATCH} = \"{patch}\"\n"));
+    }
     out
 }
 
@@ -527,8 +564,8 @@ pub fn promised_done(promises: &[&crate::pipe::table::PromiseRow]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        class_element, done_teeth_of, promised_done, promised_verify, render, target_unfit, Class, ClassElement, Contract, CLASSES,
-        CLASS_ALL, GENERATED_DISPOSITION, GENERATED_OWNER,
+        class_element, done_teeth_of, patch_unfit, promised_done, promised_verify, render, target_unfit, Class, ClassElement, Contract,
+        CLASSES, CLASS_ALL, GENERATED_DISPOSITION, GENERATED_OWNER,
     };
     use crate::order::is_declaration_order;
     use crate::pipe::declaration::fixed_roots;
@@ -591,6 +628,7 @@ mod tests {
             done_teeth: Vec::new(),
             code_facts: Vec::new(),
             basis: Vec::new(),
+            patch: None,
             goal: String::new(),
         }
     }
@@ -640,6 +678,32 @@ mod tests {
         assert_eq!(done_teeth_of(&without), Ok(Vec::new()), "key の無い file は空の列");
         assert!(done_teeth_of(&dir.join("missing.toml")).is_err(), "読めない file は理由を返す");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 欄 `patch`（tsuzuri の行 v-patch-field）: 欄を持つ行だけ契約 file が key を 1 行書き、往復で同じ path を読む。持たない行は
+    /// key を書かず `None` を読む。契約 file の読みは dir（末が /）・末が .patch でない字面・配列を key の行番号の 1 件で断る。
+    #[test]
+    fn vpatch_copy_renders_the_key_only_for_a_row_with_the_field_and_refuses_a_dir_a_suffix_and_a_list() {
+        let plain = render(&row(), "docs/design/contract-source.md#b", &row().write_set);
+        assert!(!plain.contains("patch"), "欄の無い行は key を書かない: {plain}");
+        assert_eq!(Contract::parse(&plain).map(|found| found.patch), Ok(None), "key の無い本文は None");
+        let patched = ContractRow { patch: Some("docs/design/patch/b.patch".to_owned()), ..row() };
+        let body = render(&patched, "docs/design/contract-source.md#b", &patched.write_set);
+        assert_eq!(body.lines().last(), Some("patch = \"docs/design/patch/b.patch\""), "末に 1 行: {body}");
+        assert_eq!(Contract::parse(&body).map(|found| found.patch), Ok(patched.patch.clone()), "往復で同じ path");
+        let at = plain.lines().count() as u64 + 1;
+        for (value, want) in [
+            ("\"docs/design/patch/\"", "dir（末が /）は断る"),
+            ("\"docs/design/b.diff\"", "末が .patch でない"),
+            ("[\"b.patch\"]", "patch は文字列である（配列でない）"),
+        ] {
+            let errors = Contract::parse(&format!("{plain}patch = {value}\n")).expect_err("形の外れは断る");
+            assert!(
+                matches!(errors.as_slice(), [one] if one.line == at && one.reason.contains(want)),
+                "{value} は行 {at} の 1 件: {errors:?}"
+            );
+        }
+        assert_eq!(patch_unfit("a/b.patch"), None, "形の合う path");
     }
 
     /// 的の形（設計 gate-cost.md §16）: `<file>:<行>:<変異の名>`（桁 1 つを挟んでよい）は通り、file・行・名のどれかが

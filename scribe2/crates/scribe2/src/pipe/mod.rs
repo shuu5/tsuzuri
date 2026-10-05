@@ -820,6 +820,7 @@ pub(crate) mod fixture {
             opens: Vec::new(),
             touches: Vec::new(),
             growth: Vec::new(),
+            patch: None,
         }
     }
 

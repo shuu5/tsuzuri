@@ -10,7 +10,7 @@ use super::{
     unreadable, ContractRow, Need, PromiseRow, TableError, BEGIN, DERIVED_GOAL, END, FIELDS, PROMISE, PROMISE_FIELDS,
     WHOLE_HEAD,
 };
-use crate::pipe::contract::target_unfit;
+use crate::pipe::contract::{patch_unfit, target_unfit, PATCH};
 use crate::rules::manifest::{contract_rows, list, scalar, Scalar, TableRow, TableValue};
 use std::path::Path;
 
@@ -292,6 +292,7 @@ fn typed(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<Co
         done_teeth: list_of(raw, "done-teeth", offset, errors),
         code_facts: list_of(raw, "code-facts", offset, errors),
         basis: list_of(raw, "basis", offset, errors),
+        patch: patch_of(raw, offset, errors),
         goal: text_of(raw, DERIVED_GOAL, offset, errors),
     };
     (errors.len() == before).then_some(row)
@@ -358,6 +359,20 @@ fn targets_of(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Vec<
         }
     }
     targets
+}
+
+/// 差の file の欄（`patch`・tsuzuri の判断の記録 ADR-60 の決定 (7)）: 文字列の形は [`text_of`] と同じに読み、値の形は契約 file の
+/// 読みと同じ 1 本（[`patch_unfit`]）で測って、外れた値を欄の行番号の 1 件に積む。欄が無いか空の字面なら `None`。
+fn patch_of(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<String> {
+    let line = shift(offset, raw.value(PATCH)?.1);
+    let path = text_of(raw, PATCH, offset, errors);
+    if path.is_empty() {
+        return None;
+    }
+    if let Some(reason) = patch_unfit(&path) {
+        errors.push(unreadable(line, &format!("{PATCH} {path:?} は差の file の path でない: {reason}")));
+    }
+    Some(path)
 }
 
 /// 文字列の欄（無ければ空・形が違えば積む）。
@@ -540,7 +555,7 @@ mod tests {
     }
 
     /// 欄 `basis`（tsuzuri の行 v-row-basis）: `.toml` の全文の行は字の配列の basis を宣言の順のまま読み、省いた行は空、
-    /// 字 1 つを書いた行は欄の行番号で「文字列の配列でなければならない」の 1 件で断る。欄の列の末は basis。
+    /// 字 1 つを書いた行は欄の行番号で「文字列の配列でなければならない」の 1 件で断る。欄の列の 21 番目は basis（末は行 v-patch-field の patch）。
     #[test]
     fn vbasis_toml_row_reads_the_basis_list_and_refuses_a_string() {
         let row = |basis: &str| {
@@ -560,7 +575,40 @@ mod tests {
             errors.iter().any(|error| error.line() == at && error.reason().contains("basis は文字列の配列でなければならない")),
             "basis の行 {at} を名指す: {errors:?}"
         );
-        assert_eq!(super::super::FIELDS.last().map(|field| field.name), Some("basis"), "欄の列の末");
+        let at = super::super::FIELDS.get(20).map(|field| field.name);
+        assert_eq!(at, Some("basis"), "欄の列の 21 番目（末は行 v-patch-field の patch）");
+    }
+
+    /// 欄 `patch`（tsuzuri の行 v-patch-field）: `.toml` の全文の行は `.patch` で終わる字の patch を読み、省いた行は `None`。
+    /// dir（末が /）・末が .patch でない字面・配列を書いた行は欄の行番号の 1 件で断る。欄の列の末は patch。
+    #[test]
+    fn vpatch_toml_row_reads_the_patch_path_and_refuses_a_dir_a_suffix_and_a_list() {
+        let row = |patch: &str| {
+            format!(
+                "{WHOLE_HEAD}\n\n[[contract]]\nid = \"a\"\ntitle = \"t\"\nreq = [\"FR1\"]\nsection = \"1\"\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"d\"\n{patch}{DERIVED_GOAL} = \"g\"\n"
+            )
+        };
+        let read = |patch: &str| {
+            read_rows("docs/design/t.toml", &row(patch)).map(|rows| rows.first().and_then(|found| found.patch.clone()))
+        };
+        let path = "docs/design/patch/a.patch";
+        assert_eq!(read(&format!("patch = \"{path}\"\n")), Ok(Some(path.to_owned())), "字の patch は読める");
+        assert_eq!(read(""), Ok(None), "省いた patch は None");
+        for (value, want) in [
+            ("\"docs/design/patch/\"", "は差の file の path でない: dir（末が /）は断る"),
+            ("\"docs/design/a.diff\"", "は差の file の path でない: 末が .patch でない"),
+            ("[\"a.patch\"]", "patch は空でない文字列でなければならない"),
+        ] {
+            let text = row(&format!("patch = {value}\n"));
+            let at = text.lines().position(|line| line.starts_with("patch = ")).map_or(0, |index| index as u64 + 1);
+            let errors = read_rows("docs/design/t.toml", &text).expect_err("形の外れた patch は断る");
+            assert!(
+                matches!(errors.as_slice(), [one] if one.line() == at && one.reason().contains(want)),
+                "{value} は patch の行 {at} の 1 件: {errors:?}"
+            );
+        }
+        let last = super::super::FIELDS.last().map(|field| (field.name, field.shape));
+        assert_eq!(last, Some(("patch", super::super::Shape::Text)), "欄の列の末は文字列の欄 patch");
     }
 
     /// doc 上で `[[promise]]` の見出しが在る行番号（1 始まり・doc 順）。
