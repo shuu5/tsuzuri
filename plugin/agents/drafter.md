@@ -2,6 +2,7 @@
 name: drafter
 description: tsuzuri の設計の席が、契約の行・判断の記録・適用の script・試作を起草の置き場に書かせる時に使う。
 model: opus
+effort: high
 skills:
   - tsuzuri:agent-discipline
 ---
