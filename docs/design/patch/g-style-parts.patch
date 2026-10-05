@@ -1,0 +1,388 @@
+diff --git a/crates/tsuzuri-surface/build.rs b/crates/tsuzuri-surface/build.rs
+index de315010..d7dff06b 100644
+--- a/crates/tsuzuri-surface/build.rs
++++ b/crates/tsuzuri-surface/build.rs
+@@ -2,6 +2,7 @@
+ //! mod.rs でない .rs の file ごとに path の属性と pub mod の宣言を置き、列挙 Module と ALL・name・block・view を足す。
+ //! 字は組み立ての出力の dir の project_blocks.rs に書く（今の字と同じなら書き直さない）。trunk の wasm の組み立ても同じ字を得る。
+ //! project board の頁も src/pages の dir から同じ書き方で pages.rs に生成する（列挙 PageId と ALL・id・def・行 hs-pages）。
++//! stylesheet の部品は style の dir から style_parts.rs に、名と中身の表 PARTS を名の byte の順で生成する（行 g-style-parts・判断の記録 ADR-58）。
+ 
+ use std::fmt::Write as _;
+ use std::path::Path;
+@@ -10,6 +11,7 @@ fn main() -> Result<(), String> {
+     println!("cargo:rerun-if-changed=src/project");
+     println!("cargo:rerun-if-changed=build.rs");
+     println!("cargo:rerun-if-changed=src/pages");
++    println!("cargo:rerun-if-changed=style");
+     let manifest = std::env::var("CARGO_MANIFEST_DIR").map_err(|e| format!("CARGO_MANIFEST_DIR: {e}"))?;
+     let out_dir = std::env::var("OUT_DIR").map_err(|e| format!("OUT_DIR: {e}"))?;
+     let dir = Path::new(&manifest).join("src").join("project");
+@@ -20,9 +22,63 @@ fn main() -> Result<(), String> {
+     let names = block_names(&dir)?;
+     let text = generate_pages(&dir, &names)?;
+     write_if_changed(&Path::new(&out_dir).join("pages.rs"), &text)?;
++    let text = parts_table(Path::new(&manifest), "style", "css")?;
++    write_if_changed(&Path::new(&out_dir).join("style_parts.rs"), &text)?;
+     Ok(())
+ }
+ 
++/// 部品の dir（crate の dir の下の `dir`）の `.ext` の file の表の字（名は `dir/file`・名の byte の順・行 g-style-parts）。
++/// file の名は英小文字か数字で始まり、英小文字と数字と `-` だけ（外れれば file の名を書いた Err・判断の記録 ADR-58 決定 (5)）。
++fn parts_table(manifest: &Path, dir: &str, ext: &str) -> Result<String, String> {
++    let path = manifest.join(dir);
++    let entries = std::fs::read_dir(&path).map_err(|e| format!("{}: {e}", path.display()))?;
++    let mut names = Vec::new();
++    for entry in entries {
++        let entry = entry.map_err(|e| format!("{}: {e}", path.display()))?;
++        let file = entry.file_name();
++        let Some(file) = file.to_str() else {
++            return Err(format!("file の名が UTF-8 でない: {file:?}"));
++        };
++        let Some(stem) = file.strip_suffix(&format!(".{ext}")) else {
++            continue;
++        };
++        if !part_name_ok(stem) {
++            return Err(format!(
++                "{} の部品の名は英小文字か数字で始まり英小文字と数字と - だけ: {file}",
++                path.display()
++            ));
++        }
++        names.push(file.to_string());
++    }
++    names.sort();
++    let mut s = String::new();
++    let w = |e: std::fmt::Error| e.to_string();
++    writeln!(s, "/// 部品の名（`{dir}/file`）と中身（{dir} の dir の .{ext} の file ごと・名の byte の順）。").map_err(w)?;
++    writeln!(s, "pub const PARTS: [(&str, &str); {}] = [", names.len()).map_err(w)?;
++    for name in &names {
++        let file = path.join(name);
++        let Some(file) = file.to_str() else {
++            return Err(format!("path が UTF-8 でない: {}", file.display()));
++        };
++        writeln!(
++            s,
++            "    ({:?}, include_str!({file:?})),",
++            format!("{dir}/{name}")
++        )
++        .map_err(w)?;
++    }
++    writeln!(s, "];").map_err(w)?;
++    Ok(s)
++}
++
++/// 部品の名が英小文字か数字で始まり、英小文字と数字と `-` だけか。
++fn part_name_ok(name: &str) -> bool {
++    name.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
++        && name
++            .chars()
++            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
++}
++
+ /// 今の字と違うときだけ書く。
+ fn write_if_changed(out: &Path, text: &str) -> Result<(), String> {
+     if std::fs::read_to_string(out).ok().as_deref() != Some(text) {
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index 53b91ae5..e8ce2a57 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -26,6 +26,8 @@ pub mod project;
+ pub mod seatpill;
+ /// browser の保存（mode などの便利の写し・決め方は host でも組む・行 g-mode-store）。
+ pub mod store;
++/// stylesheet の部品（style の dir の file を名の順につなぎ、wasm が基の後に入れる・行 g-style-parts・判断の記録 ADR-58）。
++pub mod style;
+ /// 幅の 3 段とスマホの段の tile（tile の組みと開く段は host でも組む・DOM は pipeline の block の DOM・行 g-layout）。
+ pub mod tiles;
+ /// 上の固定の帯（帯の中身の字と並びは host でも組む・DOM は wasm の target だけ・行 g-topbar）。
+diff --git a/crates/tsuzuri-surface/src/main.rs b/crates/tsuzuri-surface/src/main.rs
+index 6ce627e8..b3ba4083 100644
+--- a/crates/tsuzuri-surface/src/main.rs
++++ b/crates/tsuzuri-surface/src/main.rs
+@@ -1,8 +1,10 @@
+ //! 面の入口（trunk が wasm の target で組み立て、body に board を載せる）。
+ //! URL の query の board が account のときだけ account board を、ほかは今のまま project board を載せる。
++//! 載せる前に stylesheet の部品を head の末尾へ入れる（行 g-style-parts）。
+ 
+ #[cfg(target_arch = "wasm32")]
+ fn main() {
++    tsuzuri_surface::style::inject();
+     let search = leptos::prelude::window()
+         .location()
+         .search()
+diff --git a/crates/tsuzuri-surface/src/style.rs b/crates/tsuzuri-surface/src/style.rs
+new file mode 100644
+index 00000000..edefd54a
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/style.rs
+@@ -0,0 +1,36 @@
++//! stylesheet の部品（行 g-style-parts・判断の記録 ADR-58）。基の style.css は index.html の link のまま配る。
++//! style の dir の部品は組み立ての script が名の byte の順の表 PARTS にし、wasm が面を描く前に head の末尾へ
++//! `<style>` 1 つとして入れる（基の後に効く）。selector の字は基と部品の全部の中で 1 つの file だけが持つ。
++
++include!(concat!(env!("OUT_DIR"), "/style_parts.rs"));
++
++/// 部品を名の順につないだ字（部品ごとに名の注の 1 行を前に置き、末尾に改行が無ければ足す）。
++pub fn joined() -> String {
++    let mut out = String::new();
++    for (name, text) in PARTS {
++        out.push_str("/* ");
++        out.push_str(name);
++        out.push_str(" */\n");
++        out.push_str(text);
++        if !text.ends_with('\n') {
++            out.push('\n');
++        }
++    }
++    out
++}
++
++/// 部品をつないだ字を head の末尾へ `<style>` 1 つとして入れる（面を描く前に 1 度だけ呼ぶ・head が無ければ入れない）。
++#[cfg(target_arch = "wasm32")]
++pub fn inject() {
++    let document = leptos::prelude::document();
++    let (Ok(style), Ok(Some(head))) = (
++        document.create_element("style"),
++        document.query_selector("head"),
++    ) else {
++        return;
++    };
++    style.set_text_content(Some(&joined()));
++    if head.append_child(&style).is_err() {
++        leptos::logging::warn!("stylesheet の部品を head に入れられない");
++    }
++}
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 86067703..2beaec6a 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -1,5 +1,5 @@
+ /* 面の stylesheet（便 g-frame）: 見本の docs/design/mock3/ui.css の写し。class の名は変えない。
+- * 面の crate で足した規則は末尾の節だけに置く（画面が使う class は全部この file に在る・歯 frame_classes_are_in_stylesheet）。
++ * 新しい selector だけを足す行は style/ の部品の file に書く（selector は 1 つの file だけが持つ・判断の記録 ADR-58・歯 stparts_selectors_owned_once）。
+  *
+  * tsuzuri mock v3 — 共通の CSS（外部の lib 0・project dashboard と account board で共有）
+  * token: 出所の帯 7（色は帯ごとに 1 色）・段 4・状態 5・8pt grid（4 は半刻み）・dark mode */
+diff --git a/crates/tsuzuri-surface/style/000-about.css b/crates/tsuzuri-surface/style/000-about.css
+new file mode 100644
+index 00000000..b430ecb7
+--- /dev/null
++++ b/crates/tsuzuri-surface/style/000-about.css
+@@ -0,0 +1,5 @@
++/* 面の stylesheet の部品の dir（行 g-style-parts・判断の記録 ADR-58）。
++ * 新しい selector だけを足す行は、行 id を名にした file をここに置く（名は英小文字か数字で始まり、英小文字と数字と - だけ）。
++ * 部品は名の byte の順につなぎ、wasm が面を描く前に head の末尾へ <style> として入れる（基の style.css の後に効く）。
++ * selector の字は、基と部品の全部の中で 1 つの file だけが持つ。既にある selector を直す行は、それを持つ file を書く。
++ * この file は規則を持たない（dir を空にしない・組み立ての script は dir が無いと毎回走る）。 */
+diff --git a/crates/tsuzuri-surface/tests/stparts.rs b/crates/tsuzuri-surface/tests/stparts.rs
+new file mode 100644
+index 00000000..c71a42fc
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/stparts.rs
+@@ -0,0 +1,190 @@
++//! stylesheet の部品の歯（面・接頭辞 stparts_・設計ノート surface-wave29b 行 g-style-parts・判断の記録 ADR-58）。
++//! 部品の表は style の dir の .css の file の名の順・つないだ字は名の注と中身・selector の字は基と部品の全部で 1 つの file だけ・
++//! wasm は面を描く前に部品を入れる。否定の見本は 1 欄だけ替える。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_surface::style::{PARTS, joined};
++
++fn crate_dir() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
++}
++
++fn read(rel: &str) -> String {
++    fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// file の字の selector（注を除き空白を詰め `,` で割った 1 つずつ・@media などの中も数え・@keyframes の中は数えない）。
++fn selectors(css: &str) -> Vec<String> {
++    let mut text = String::new();
++    let mut rest = css;
++    while let Some(i) = rest.find("/*") {
++        text.push_str(&rest[..i]);
++        rest = rest[i..].find("*/").map_or("", |j| &rest[i + j + 2..]);
++    }
++    text.push_str(rest);
++    let mut out = Vec::new();
++    // 開いた塊の型（true = 規則の中身か @keyframes の中で、selector を読まない）。
++    let mut stack: Vec<bool> = Vec::new();
++    let mut head = String::new();
++    for c in text.chars() {
++        let skip = stack.last().copied().unwrap_or(false);
++        match c {
++            '{' => {
++                let prelude = head.split_whitespace().collect::<Vec<_>>().join(" ");
++                if !skip && !prelude.starts_with('@') {
++                    out.extend(
++                        prelude
++                            .split(',')
++                            .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ")),
++                    );
++                }
++                stack.push(skip || !prelude.starts_with('@') || prelude.starts_with("@keyframes"));
++                head.clear();
++            }
++            '}' => {
++                stack.pop();
++                head.clear();
++            }
++            ';' => head.clear(),
++            _ => head.push(c),
++        }
++    }
++    out
++}
++
++/// selector を 2 つ以上の file が持てば、selector と file の名を書いた Err（同じ file の中の 2 度は数えない）。
++fn owned_once(files: &[(&str, &str)]) -> Result<(), String> {
++    let mut owner: BTreeMap<String, &str> = BTreeMap::new();
++    for (name, css) in files {
++        for sel in selectors(css) {
++            if let Some(first) = owner.insert(sel.clone(), name).filter(|f| f != name) {
++                return Err(format!("selector {sel} が {first} と {name} の両方に在る"));
++            }
++        }
++    }
++    Ok(())
++}
++
++/// (1) 部品の表は style の dir の .css の file の名の byte の順で、名と中身の字が file と同じ。
++#[test]
++fn stparts_table_follows_dir() {
++    let mut names: Vec<String> = fs::read_dir(crate_dir().join("style"))
++        .expect("style の dir を読む")
++        .map(|e| {
++            e.expect("dir の項")
++                .file_name()
++                .to_string_lossy()
++                .into_owned()
++        })
++        .filter(|n| n.ends_with(".css"))
++        .collect();
++    names.sort();
++    assert!(names.contains(&"000-about.css".to_string()), "{names:?}");
++    let table: Vec<&str> = PARTS.iter().map(|(n, _)| *n).collect();
++    let want: Vec<String> = names.iter().map(|n| format!("style/{n}")).collect();
++    assert_eq!(table, want);
++    for (name, text) in PARTS {
++        assert_eq!(text, read(name), "{name} の中身");
++    }
++}
++
++/// (2) つないだ字は表の順に、部品ごとに名の注の 1 行と中身（末尾の改行を足す）を並べた字。
++#[test]
++fn stparts_joined_in_name_order() {
++    let mut want = String::new();
++    for (name, text) in PARTS {
++        want.push_str(&format!("/* {name} */\n{text}"));
++        if !text.ends_with('\n') {
++            want.push('\n');
++        }
++    }
++    assert_eq!(joined(), want);
++    assert!(joined().starts_with("/* style/000-about.css */\n/* 面の stylesheet の部品の dir"));
++}
++
++/// (3) 基と部品の全部の selector は 1 つの file だけに在る・部品が基の selector を書き直す見本は名指して断る。
++#[test]
++fn stparts_selectors_owned_once() {
++    let base = read("style.css");
++    let mut files = vec![("style.css", base.as_str())];
++    files.extend(PARTS.iter().copied());
++    assert_eq!(owned_once(&files), Ok(()));
++    let sels = selectors(&base);
++    assert!(sels.len() > 1000, "基の selector が少ない: {}", sels.len());
++    for s in [".plk code", ".freshw", "details.nbody > summary"] {
++        assert!(sels.iter().any(|x| x == s), "基に {s} が在る");
++    }
++    let part = ".plk  code { color: red; }\n";
++    let bad = [("style.css", base.as_str()), ("style/x.css", part)];
++    assert_eq!(
++        owned_once(&bad),
++        Err("selector .plk code が style.css と style/x.css の両方に在る".to_string())
++    );
++    let ok = [
++        ("style.css", base.as_str()),
++        ("style/x.css", ".plk-new code { color: red; }\n"),
++    ];
++    assert_eq!(owned_once(&ok), Ok(()));
++    let media = [
++        ("a.css", "@media (max-width: 600px) { .m1, .m2 { x: 1; } }"),
++        ("b.css", ".m2 { y: 2; }"),
++    ];
++    assert_eq!(
++        owned_once(&media),
++        Err("selector .m2 が a.css と b.css の両方に在る".to_string())
++    );
++    let frames = [
++        ("a.css", "@keyframes k { from { x: 0; } to { x: 1; } }"),
++        ("b.css", "@keyframes j { from { x: 0; } }"),
++    ];
++    assert_eq!(owned_once(&frames), Ok(()));
++}
++
++/// (5) wasm の main は面を描く前（2 つの mount の呼びの前）に部品を 1 度だけ入れる。
++#[test]
++fn stparts_injected_before_mount() {
++    let main = read("src/main.rs");
++    let body = main
++        .split("#[cfg(target_arch = \"wasm32\")]\nfn main() {")
++        .nth(1)
++        .and_then(|b| b.split("\n}\n").next())
++        .expect("wasm の main");
++    assert_eq!(
++        body.matches("tsuzuri_surface::style::inject();").count(),
++        1,
++        "{body}"
++    );
++    let at = body
++        .find("tsuzuri_surface::style::inject();")
++        .expect("入れる呼び");
++    for mount in [
++        "tsuzuri_surface::account::board::mount();",
++        "tsuzuri_surface::board::mount();",
++    ] {
++        assert!(
++            body.find(mount).is_some_and(|m| at < m),
++            "{mount} の前に入れる"
++        );
++    }
++}
++
++/// (6) frame の stylesheet_classes は基と部品をつないだ字から class を集める。
++#[test]
++fn stparts_frame_reads_parts() {
++    let frame = read("tests/teeth2/frame.rs");
++    let body = frame
++        .split("fn stylesheet_classes() -> BTreeSet<String> {")
++        .nth(1)
++        .and_then(|b| b.split("\n}\n").next())
++        .expect("stylesheet_classes");
++    assert_eq!(
++        body.matches("tsuzuri_surface::style::joined()").count(),
++        1,
++        "{body}"
++    );
++    assert!(body.contains("let css = read(\"style.css\") + &tsuzuri_surface::style::joined();"));
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth2/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+index 263bb15e..db11c7cb 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/frame.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+@@ -158,9 +158,9 @@ fn frame_no_heading_words_in_code() {
+     }
+ }
+ 
+-/// stylesheet の class の名（selector の `.名`）。
++/// stylesheet の class の名（selector の `.名`・基の style.css と style の部品の両方）。
+ fn stylesheet_classes() -> BTreeSet<String> {
+-    let css = read("style.css");
++    let css = read("style.css") + &tsuzuri_surface::style::joined();
+     let mut text = String::new();
+     let mut rest = css.as_str();
+     while let Some(i) = rest.find("/*") {
