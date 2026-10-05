@@ -1,0 +1,958 @@
+diff --git a/crates/tsuzuri-boundary/tests/agpl.rs b/crates/tsuzuri-boundary/tests/agpl.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..44c23c43d56bba4795642267930981a7ec08f62e
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agpl.rs
+@@ -0,0 +1,433 @@
++//! 係の型と規律の手引きと門の設定の歯（接頭辞 agpl_・設計ノート surface-wave29b 行 ag-plugin・判断の記録 ADR-59 決定 (1)(2)(5)(6)・ADR-61 決定 (4)(9)）。
++//! workspace の根の plugin/ の file を読むだけで、tz も器も撃たない。hooks.json は stage の json で読み、口の名は境界の hook の
++//! USAGE の字から、型と頭の行は中核の agent の spec の定数から組む。否定の見本は今の file から句を 1 つだけ崩して作る。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_boundary::hook::{agent_bind, agent_guard, agent_meter, agent_spawn, subagent_stop};
++use tsuzuri_boundary::stage::json;
++use tsuzuri_core::agent::spec::{HOLES, KEYS, TYPES, group};
++
++/// 係の口の command の頭（runner の印の除き）と tzw の字。
++const HEAD: &str =
++    "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook ";
++
++/// 係の口の command の末。
++const TAIL: &str = " --repo \"$CLAUDE_PROJECT_DIR\"";
++
++/// hooks.json で係の口を探す event の鍵。
++const EVENTS: [&str; 7] = [
++    "PostToolBatch",
++    "PostToolUse",
++    "PreToolUse",
++    "Stop",
++    "SubagentStart",
++    "SubagentStop",
++    "UserPromptSubmit",
++];
++
++/// 規律の手引きの置き場と名と、型が前置きする字。
++const SKILL: &str = "plugin/skills/agent-discipline";
++const SKILL_NAME: &str = "agent-discipline";
++const PRELOAD: &str = "tsuzuri:agent-discipline";
++
++/// 手引きの参照の file の名（本文が名指す）。
++const REFERENCE: &str = "reference.md";
++
++/// 手引きの本文の字数の上限（決定 (6)）。
++const BODY_MAX: usize = 2000;
++
++/// 説明の欄の末（引き金だけの 1 文）。
++const TRIGGER_END: &str = "時に使う。";
++
++/// 決まりの末の 3 つの形。
++const CEILING: &str = "（天井だけ）";
++const GATE: &str = "（門 ";
++const VESSEL_GATE: &str = "（器の門 ";
++
++/// 群の行の値の書き方。
++const GROUP_HOLE: &str = "<群 id> <i>/<k>";
++
++type Mouth = (String, Option<String>, String, Option<u64>);
++
++/// 頭の --- の間の欄（鍵と値の列）。
++type Fields = Vec<(String, Vec<String>)>;
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn read(rel: &str) -> String {
++    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// USAGE の字の tz hook の口の名。
++fn mouth_name(usage: &str) -> &str {
++    usage
++        .strip_prefix("usage: tz hook ")
++        .and_then(|rest| rest.split_whitespace().next())
++        .expect("USAGE は usage と tz hook と口の名で始まる")
++}
++
++/// 境界の 5 つの係の口の名（起こしの門・結び・測り・係の門・終える前の門の順）。
++fn gate_names() -> [&'static str; 5] {
++    [
++        agent_spawn::USAGE,
++        agent_bind::USAGE,
++        agent_meter::USAGE,
++        agent_guard::USAGE,
++        subagent_stop::USAGE,
++    ]
++    .map(mouth_name)
++}
++
++/// 係の口の結びの見込み（event・matcher・command・timeout）を並べ替えた列。
++fn wanted() -> Vec<Mouth> {
++    let [spawn, bind, meter, guard, stop] = gate_names();
++    let spawn_matcher = format!("Agent|{}", group::WORKFLOW);
++    let mut all: Vec<Mouth> = [
++        ("PreToolUse", Some(spawn_matcher.as_str()), spawn, 30),
++        ("PostToolUse", Some("Agent"), bind, 10),
++        ("PostToolUse", None, meter, 10),
++        ("PreToolUse", None, guard, 10),
++        ("SubagentStop", None, stop, 10),
++    ]
++    .into_iter()
++    .map(|(event, matcher, name, timeout)| {
++        let command = format!("{HEAD}{name}{TAIL}");
++        (
++            event.to_owned(),
++            matcher.map(str::to_owned),
++            command,
++            Some(timeout),
++        )
++    })
++    .collect();
++    all.sort();
++    all
++}
++
++/// hooks.json の字の、command が字 tzw hook agent- を持つ hook の全部（event・matcher・command・timeout）を並べ替えた列。
++fn agent_mouths(text: &str) -> Vec<Mouth> {
++    let hooks = json::member(text, "hooks").expect("鍵 hooks");
++    let mut all = Vec::new();
++    for event in EVENTS {
++        let entries = json::member(hooks, event)
++            .and_then(json::items)
++            .unwrap_or_default();
++        for entry in entries {
++            let matcher = json::member(entry, "matcher").and_then(json::unquote);
++            let inner = json::member(entry, "hooks")
++                .and_then(json::items)
++                .unwrap_or_default();
++            for hook in inner {
++                let command = json::member(hook, "command")
++                    .and_then(json::unquote)
++                    .unwrap_or_default();
++                if command.contains("tzw hook agent-") {
++                    let timeout = json::member(hook, "timeout").and_then(|t| t.parse().ok());
++                    all.push((event.to_owned(), matcher.clone(), command, timeout));
++                }
++            }
++        }
++    }
++    all.sort();
++    all
++}
++
++/// 頭の --- の間の欄（鍵と値の列・list の項は鍵ごとの値に足す）と本文。形が読めなければ None。
++fn front(text: &str) -> Option<(Fields, &str)> {
++    let rest = text.strip_prefix("---\n")?;
++    let (head, body) = rest.split_once("\n---\n")?;
++    let mut fields: Fields = Vec::new();
++    for line in head.lines() {
++        if let Some(item) = line.strip_prefix("  - ") {
++            fields.last_mut()?.1.push(item.to_owned());
++        } else {
++            let (key, value) = line.split_once(':')?;
++            let value = value.trim();
++            let values = if value.is_empty() {
++                Vec::new()
++            } else {
++                vec![value.to_owned()]
++            };
++            fields.push((key.to_owned(), values));
++        }
++    }
++    Some((fields, body))
++}
++
++/// 欄の値（無ければ空）。
++fn field<'a>(fields: &'a [(String, Vec<String>)], key: &str) -> &'a [String] {
++    fields
++        .iter()
++        .find(|(k, _)| k == key)
++        .map_or(&[], |(_, v)| v.as_slice())
++}
++
++/// 説明の欄が引き金だけの 1 文か（句点が末の 1 つだけで、末が TRIGGER_END）。
++fn trigger_only(values: &[String]) -> bool {
++    matches!(values, [d] if d.ends_with(TRIGGER_END) && d.matches('。').count() == 1)
++}
++
++/// 型の file の欠け（name・description・model・skills の順）。
++fn type_faults(stem: &str, text: &str) -> Vec<&'static str> {
++    let Some((fields, _)) = front(text) else {
++        return vec!["front"];
++    };
++    let mut faults = Vec::new();
++    if field(&fields, "name") != [stem.to_owned()] {
++        faults.push("name");
++    }
++    if !trigger_only(field(&fields, "description")) {
++        faults.push("description");
++    }
++    if !matches!(field(&fields, "model"), [m] if m != "inherit") {
++        faults.push("model");
++    }
++    if !field(&fields, "skills").iter().any(|s| s == PRELOAD) {
++        faults.push("skills");
++    }
++    faults
++}
++
++/// 頭の 4 行の塊（KEYS と HOLES の順）。
++fn head_block() -> String {
++    KEYS.iter()
++        .zip(HOLES)
++        .map(|(k, h)| format!("{k}: {h}\n"))
++        .collect()
++}
++
++/// 型の本文の頭の行の欠け（4 行の塊が 1 度だけ在るか・群の行が塊の直後に在るか、群でない型は群の鍵の行を持たないか）。
++fn head_faults(body: &str, grouped: bool) -> Vec<&'static str> {
++    let block = head_block();
++    let group_line = format!("{}: {GROUP_HOLE}\n", group::KEY);
++    let mut faults = Vec::new();
++    if body.matches(&block).count() != 1 {
++        faults.push("head");
++    }
++    let key = format!("{}:", group::KEY);
++    let ok = if grouped {
++        body.contains(&format!("{block}{group_line}"))
++    } else {
++        !body.lines().any(|l| l.starts_with(&key))
++    };
++    if !ok {
++        faults.push("group");
++    }
++    faults
++}
++
++/// 手引きの file の欠け（name・description・本文の字数・参照の file の名指し）。
++fn skill_faults(text: &str) -> Vec<&'static str> {
++    let Some((fields, body)) = front(text) else {
++        return vec!["front"];
++    };
++    let mut faults = Vec::new();
++    if field(&fields, "name") != [SKILL_NAME.to_owned()] {
++        faults.push("name");
++    }
++    if !trigger_only(field(&fields, "description")) {
++        faults.push("description");
++    }
++    if body.chars().count() > BODY_MAX {
++        faults.push("size");
++    }
++    if !body.contains(REFERENCE) {
++        faults.push("reference");
++    }
++    faults
++}
++
++/// 本文の決まり（字 - で始まる行）のうち、末が天井だけでも、門の名でも、在る器の門の名でもない行。
++fn rule_faults(body: &str, gates: &[&str], vessel: impl Fn(&str) -> bool) -> Vec<String> {
++    let ok = |rule: &str| {
++        if rule.ends_with(CEILING) {
++            return true;
++        }
++        let Some(open) = rule.strip_suffix('）') else {
++            return false;
++        };
++        open.rsplit_once(VESSEL_GATE).map_or_else(
++            || {
++                open.rsplit_once(GATE)
++                    .is_some_and(|(_, name)| gates.contains(&name))
++            },
++            |(_, name)| vessel(name),
++        )
++    };
++    body.lines()
++        .filter_map(|l| l.strip_prefix("- "))
++        .filter(|rule| !ok(rule))
++        .map(str::to_owned)
++        .collect()
++}
++
++/// 決まりの末の形ごとの数（天井だけ・門・器の門）。
++fn rule_kinds(body: &str) -> [usize; 3] {
++    let rules: Vec<&str> = body.lines().filter_map(|l| l.strip_prefix("- ")).collect();
++    let ends = |mark: &str| {
++        rules
++            .iter()
++            .filter(|r| r.ends_with('）') && r.contains(mark))
++            .count()
++    };
++    [ends(CEILING), ends(GATE), ends(VESSEL_GATE)]
++}
++
++/// 器の門の src の file が在るか。
++fn vessel_gate(name: &str) -> bool {
++    root()
++        .join(format!("scribe2/crates/scribe2/src/hook/{name}.rs"))
++        .is_file()
++}
++
++/// (1) hooks.json は係の口 5 つを、境界の USAGE の口の名で、起こしの門は matcher Agent と流れの道具、結びは matcher Agent、
++/// 測りと係の門は matcher なし、終える前の門は SubagentStop で、runner の印の除きを頭に 1 度ずつ結ぶ。
++#[test]
++fn agpl_hooks_bind_the_five_agent_mouths_once() {
++    let now = read("plugin/hooks/hooks.json");
++    assert_eq!(agent_mouths(&now), wanted());
++    let no_flow = now.replacen("\"Agent|Workflow\"", "\"Agent\"", 1);
++    assert_ne!(
++        agent_mouths(&no_flow),
++        wanted(),
++        "流れの道具の無い matcher の見本"
++    );
++    let renamed = now.replacen("hook agent-stop ", "hook agent-end ", 1);
++    assert_ne!(agent_mouths(&renamed), wanted(), "口の名だけ替えた見本");
++    let bare = now.replacen(
++        "[ -e \\\"$CLAUDE_PLUGIN_ROOT/scribe2-runner\\\" ] || \\\"$CLAUDE_PLUGIN_ROOT\\\"/bin/tzw hook agent-guard",
++        "\\\"$CLAUDE_PLUGIN_ROOT\\\"/bin/tzw hook agent-guard",
++        1,
++    );
++    assert_ne!(bare, now, "印の除きの字");
++    assert_ne!(agent_mouths(&bare), wanted(), "印の除きを外した見本");
++    let slow = now.replacen(
++        "agent-meter --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 10",
++        "agent-meter --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 11",
++        1,
++    );
++    assert_ne!(slow, now, "timeout の字");
++    assert_ne!(agent_mouths(&slow), wanted(), "timeout だけ替えた見本");
++}
++
++/// (2) plugin/agents/ の file は中核の TYPES の 3 本（plugin の名と字 : の後の名に .md）だけで、どれも name が file の名、
++/// 説明の欄が引き金だけの 1 文、model が inherit でなく、skills に規律の手引きを持つ。
++#[test]
++fn agpl_types_are_the_spec_types_with_the_discipline() {
++    let mut stems: Vec<String> = fs::read_dir(root().join("plugin/agents"))
++        .expect("plugin/agents を読む")
++        .map(|e| e.expect("項").file_name().to_string_lossy().into_owned())
++        .collect();
++    stems.sort();
++    let strip = |t: &str| t.strip_prefix("tsuzuri:").map(|s| format!("{s}.md"));
++    let mut want: Vec<String> = TYPES.iter().filter_map(|t| strip(t)).collect();
++    want.sort();
++    assert_eq!((stems.len(), &stems), (TYPES.len(), &want));
++    for name in &want {
++        let text = read(&format!("plugin/agents/{name}"));
++        assert!(
++            type_faults(name.trim_end_matches(".md"), &text).is_empty(),
++            "{name}"
++        );
++    }
++    let now = read("plugin/agents/verifier.md");
++    let bad = |from: &str, to: &str| type_faults("verifier", &now.replacen(from, to, 1));
++    assert_eq!(bad("name: verifier", "name: checker"), ["name"]);
++    assert_eq!(
++        bad(TRIGGER_END, "時に使う。主張を照らす。"),
++        ["description"]
++    );
++    assert_eq!(bad("model: opus", "model: inherit"), ["model"]);
++    assert_eq!(
++        bad(&format!("  - {PRELOAD}"), "  - tsuzuri:consult"),
++        ["skills"]
++    );
++}
++
++/// (3) 型の本文は頭の 4 行（中核の KEYS と HOLES の鍵と値の書き方）の塊を 1 度だけ持ち、検証役だけが塊の直後に群の行を持つ。
++#[test]
++fn agpl_type_bodies_carry_the_head_lines() {
++    let body = |stem: &str| {
++        let text = read(&format!("plugin/agents/{stem}.md"));
++        front(&text).map(|(_, b)| b.to_owned()).expect("頭と本文")
++    };
++    for (stem, grouped) in [
++        ("drafter", false),
++        ("verifier", true),
++        ("researcher", false),
++    ] {
++        assert!(head_faults(&body(stem), grouped).is_empty(), "{stem}");
++    }
++    let (block, line) = (head_block(), format!("{}: {GROUP_HOLE}\n", group::KEY));
++    let drafter = body("drafter");
++    let lack = drafter.replacen(&format!("{}: {}\n", KEYS[1], HOLES[1]), "", 1);
++    assert_eq!(head_faults(&lack, false), ["head"]);
++    let grouped = drafter.replacen(&block, &format!("{block}{line}"), 1);
++    assert_eq!(head_faults(&grouped, false), ["group"]);
++    assert_eq!(
++        head_faults(&body("verifier").replacen(&line, "", 1), true),
++        ["group"]
++    );
++}
++
++/// (4) 規律の手引きは name が agent-discipline、説明の欄が引き金だけの 1 文、本文が 2,000 字以下で、同じ dir の参照の file を名指し、
++/// その file が在る。
++#[test]
++fn agpl_skill_is_short_and_names_its_reference() {
++    let now = read(&format!("{SKILL}/SKILL.md"));
++    assert!(skill_faults(&now).is_empty(), "{:?}", skill_faults(&now));
++    assert!(root().join(SKILL).join(REFERENCE).is_file(), "参照の file");
++    let two = now.replacen(TRIGGER_END, "時に使う。席も読む。", 1);
++    assert_eq!(skill_faults(&two), ["description"]);
++    assert_eq!(
++        skill_faults(&now.replacen(REFERENCE, "notes.md", 1)),
++        ["reference"]
++    );
++    let (head, _) = now.split_at(now.find("\n---\n").expect("頭の末") + 5);
++    let edge = format!(
++        "{head}{REFERENCE}{}",
++        "字".repeat(BODY_MAX - REFERENCE.len())
++    );
++    assert!(skill_faults(&edge).is_empty(), "2,000 字");
++    assert_eq!(skill_faults(&format!("{edge}字")), ["size"], "2,001 字");
++}
++
++/// (5) 規律の手引きの本文の決まり 17 行は、どれも末が字（天井だけ）か、境界の係の口の名の（門 <名>）か、器の hook の src に
++/// file の在る（器の門 <名>）で、数は天井だけ 8・門 6・器の門 3。
++#[test]
++fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
++    let text = read(&format!("{SKILL}/SKILL.md"));
++    let (_, body) = front(&text).expect("頭と本文");
++    let gates = gate_names();
++    assert_eq!(rule_faults(body, &gates, vessel_gate), Vec::<String>::new());
++    assert_eq!(body.lines().filter(|l| l.starts_with("- ")).count(), 17);
++    assert_eq!(rule_kinds(body), [8, 6, 3]);
++    let cut = |from: &str, to: &str| rule_faults(&body.replacen(from, to, 1), &gates, vessel_gate);
++    let rule = "- 写しは起草の置き場の直下にだけ作る（器の門 drafts_guard）";
++    assert!(body.contains(rule), "器の門の決まり");
++    assert_eq!(
++        cut("drafts_guard）", "drafts_ward）").len(),
++        1,
++        "無い器の門"
++    );
++    assert_eq!(
++        cut("（門 agent-stop）", "（門 agent-end）").len(),
++        1,
++        "無い口の名"
++    );
++    assert_eq!(
++        cut("を見る（天井だけ）", "を見る（天井だけ）。").len(),
++        1,
++        "末の句点"
++    );
++    assert_eq!(
++        cut("（門 agent-guard）", "（agent-guard）").len(),
++        1,
++        "門の字の欠け"
++    );
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/qsig.rs b/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+index 6d11c3b9e1745c4abdfdb181b1ca0ab4d25a637d..92e85fef5e223dd7d6dd8c29c2f0545586794f34 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/qsig.rs
+@@ -351,17 +351,20 @@ fn qsig_exit_codes() {
+     let _ = fs::remove_dir_all(&root);
+ }
+ 
+-/// hooks.json の PostToolUse の要素 1 つの hook の object の字。
++/// hooks.json の PostToolUse の matcher が Bash の要素 1 つの hook の object の字（ほかの matcher の要素は係の口）。
+ fn post_hook() -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/hooks/hooks.json");
+     let text = fs::read_to_string(&path).expect("hooks.json を読む");
+     let hooks = json::member(&text, "hooks").expect("鍵 hooks");
+     let post = json::member(hooks, "PostToolUse").expect("鍵 PostToolUse");
+-    let [entry] = json::items(post).expect("PostToolUse は配列")[..] else {
+-        panic!("PostToolUse は要素 1 つの配列でない: {post}");
++    let bash: Vec<&str> = json::items(post)
++        .expect("PostToolUse は配列")
++        .into_iter()
++        .filter(|e| json::member(e, "matcher").and_then(json::unquote).as_deref() == Some("Bash"))
++        .collect();
++    let [entry] = bash[..] else {
++        panic!("PostToolUse の matcher が Bash の要素が 1 つでない: {post}");
+     };
+-    let matcher = json::member(entry, "matcher").and_then(json::unquote);
+-    assert_eq!(matcher.as_deref(), Some("Bash"));
+     let inner = json::member(entry, "hooks").expect("要素の hooks");
+     let [hook] = json::items(inner).expect("要素の hooks は配列")[..] else {
+         panic!("要素の hooks は要素 1 つの配列でない: {inner}");
+diff --git a/crates/tsuzuri-core/tests/teeth2/gins.rs b/crates/tsuzuri-core/tests/teeth2/gins.rs
+index bdc0110f8724e44884403db1c6a6f3a6f94fa186..3c715a4a0348168189fa5a9c9f3e4fc594ca96b6 100644
+--- a/crates/tsuzuri-core/tests/teeth2/gins.rs
++++ b/crates/tsuzuri-core/tests/teeth2/gins.rs
+@@ -100,9 +100,18 @@ fn words(text: &str) -> Vec<String> {
+     text.split_whitespace().map(|w| w.replace('"', "")).collect()
+ }
+ 
+-/// PreToolUse の要素の hook の command の字。
++/// PreToolUse の matcher が Bash の要素（1 つだけ・ほかの matcher の要素は係の口）。
++fn bash_entry(hooks: &Value) -> &Value {
++    let all = hooks["hooks"]["PreToolUse"].as_array().expect("PreToolUse は配列");
++    match all.iter().filter(|e| e["matcher"] == "Bash").collect::<Vec<_>>().as_slice() {
++        [one] => one,
++        _ => panic!("matcher が Bash の要素が 1 つでない: {all:?}"),
++    }
++}
++
++/// PreToolUse の matcher が Bash の要素の hook の command の字。
+ fn gate_command(hooks: &Value) -> String {
+-    let entry = only(&hooks["hooks"]["PreToolUse"]);
++    let entry = bash_entry(hooks);
+     let hook = only(&entry["hooks"]);
+     hook["command"]
+         .as_str()
+@@ -121,10 +130,11 @@ fn gins_pretool_bash_entry() {
+             "PostToolUse",
+             "PreToolUse",
+             "Stop",
++            "SubagentStop",
+             "UserPromptSubmit"
+         ]
+     );
+-    let entry = only(&hooks["hooks"]["PreToolUse"]);
++    let entry = bash_entry(&hooks);
+     assert_eq!(keys(entry), ["hooks", "matcher"]);
+     assert_eq!(entry["matcher"], "Bash");
+     let hook = only(&entry["hooks"]);
+diff --git a/crates/tsuzuri-core/tests/teeth3/seathk.rs b/crates/tsuzuri-core/tests/teeth3/seathk.rs
+index 302190f70f647c51f33704835c8ff5938f1f194e..72cdf1da0f558f3fd5e3c1afc4b9db25d14cad34 100644
+--- a/crates/tsuzuri-core/tests/teeth3/seathk.rs
++++ b/crates/tsuzuri-core/tests/teeth3/seathk.rs
+@@ -1,7 +1,7 @@
+ //! 席の手元へ要の写しを出した暫定の hook を外した後の守りの歯（接頭辞 seathk_・行 t-hook-drop・判断の記録 ADR-38 決定 (6)(7)）。
+ //! workspace の根の plugin/hooks/hooks.json を JSON として読み（境界の crate は serde_json に直に依存しないので中核の crate に置く）、
+-//! event の鍵に SessionStart が無く、どの command も要の写しを出す語を持たないことと、runner の印の除きを持つ 4 本の command の頭の
+-//! 印の名が器の名の定数から成ることを見る。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
++//! event の鍵に SessionStart が無く、どの command も要の写しを出す語を持たないことと、runner の印の除きを持つ event の全部の command の
++//! 頭の印の名が器の名の定数から成ることを見る（係の口の command も印を持つ・行 ag-plugin）。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -20,19 +20,21 @@ const NAME_LINE: &str = "pub const NAME: &str = \"";
+ const SUFFIX_LINE: &str = "const RUNNER_MARK_SUFFIX: &str = \"-runner\";";
+ 
+ /// hooks.json の event の鍵（字の順）。
+-const EVENTS: [&str; 5] = [
++const EVENTS: [&str; 6] = [
+     "PostToolBatch",
+     "PostToolUse",
+     "PreToolUse",
+     "Stop",
++    "SubagentStop",
+     "UserPromptSubmit",
+ ];
+ 
+ /// runner の印の除きを持つ command の event（Stop は除きを持たない）。
+-const MARKED: [&str; 4] = [
++const MARKED: [&str; 5] = [
+     "PostToolBatch",
+     "PostToolUse",
+     "PreToolUse",
++    "SubagentStop",
+     "UserPromptSubmit",
+ ];
+ 
+@@ -55,14 +57,6 @@ fn hooks() -> Value {
+         .unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
+ }
+ 
+-/// 要素 1 つの配列のその要素。
+-fn only(v: &Value) -> &Value {
+-    match v.as_array().map(Vec::as_slice) {
+-        Some([one]) => one,
+-        _ => panic!("要素 1 つの配列でない: {v}"),
+-    }
+-}
+-
+ /// event の鍵（字の順）。
+ fn events(hooks: &Value) -> Vec<&str> {
+     let mut keys: Vec<&str> = hooks["hooks"]
+@@ -75,26 +69,40 @@ fn events(hooks: &Value) -> Vec<&str> {
+     keys
+ }
+ 
+-/// event の要素 1 つの hook 1 つの command の字。
+-fn command<'a>(hooks: &'a Value, event: &str) -> &'a str {
+-    only(&only(&hooks["hooks"][event])["hooks"])["command"]
+-        .as_str()
+-        .unwrap_or_else(|| panic!("{event} の command は字でない"))
++/// event の全部の要素の全部の hook の command の字（要素の順）。
++fn commands<'a>(hooks: &'a Value, event: &str) -> Vec<&'a str> {
++    let all = |v: &'a Value| v.as_array().map_or(&[][..], Vec::as_slice);
++    let list: Vec<&str> = all(&hooks["hooks"][event])
++        .iter()
++        .flat_map(|entry| all(&entry["hooks"]))
++        .map(|hook| hook["command"].as_str().unwrap_or_default())
++        .collect();
++    assert!(!list.is_empty(), "{event} に command が無い");
++    list
+ }
+ 
+-/// 見本を作るために、event の command の字を `edit` で書き替えた写し。
++/// 見本を作るために、event の最初の要素の最初の command の字を `edit` で書き替えた写し。
+ fn edited(hooks: &Value, event: &str, edit: impl Fn(&str) -> String) -> Value {
+     let mut copy = hooks.clone();
+-    let text = edit(command(hooks, event));
++    let text = edit(commands(hooks, event)[0]);
+     copy["hooks"][event][0]["hooks"][0]["command"] = Value::String(text);
+     copy
+ }
+ 
++/// 見本を作るために、event の最後の要素の最初の command の字を `edit` で書き替えた写し。
++fn edited_last(hooks: &Value, event: &str, edit: impl Fn(&str) -> String) -> Value {
++    let mut copy = hooks.clone();
++    let last = hooks["hooks"][event].as_array().map_or(0, Vec::len).saturating_sub(1);
++    let text = edit(hooks["hooks"][event][last]["hooks"][0]["command"].as_str().unwrap_or_default());
++    copy["hooks"][event][last]["hooks"][0]["command"] = Value::String(text);
++    copy
++}
++
+ /// 要の写しを出す語を持つ command の event（字の順）。
+ fn copying(hooks: &Value) -> Vec<String> {
+     events(hooks)
+         .into_iter()
+-        .filter(|event| COPY_WORDS.iter().any(|w| command(hooks, event).contains(w)))
++        .filter(|event| commands(hooks, event).iter().any(|c| COPY_WORDS.iter().any(|w| c.contains(w))))
+         .map(str::to_owned)
+         .collect()
+ }
+@@ -123,14 +131,15 @@ fn mark_name() -> String {
+     format!("{}{MARK_SUFFIX}", vessel_name())
+ }
+ 
+-/// 印の除きの頭が `mark` の名で始まらないか、除きを 1 度だけ持たない command の event（MARKED の順）。
++/// 印の除きの頭が `mark` の名で始まらないか、除きを 1 度だけ持たない command を持つ event（MARKED の順）。
+ fn unmarked(hooks: &Value, mark: &str) -> Vec<String> {
+     let head = format!("{EXCLUDE_HEAD}{mark}\" ] || ");
+     MARKED
+         .iter()
+         .filter(|event| {
+-            let text = command(hooks, event);
+-            !text.starts_with(&head) || text.matches(EXCLUDE_HEAD).count() != 1
++            commands(hooks, event)
++                .iter()
++                .any(|text| !text.starts_with(&head) || text.matches(EXCLUDE_HEAD).count() != 1)
+         })
+         .map(|event| (*event).to_owned())
+         .collect()
+@@ -142,7 +151,7 @@ fn seathk_session_start_is_gone() {
+     assert_eq!(
+         events(&now),
+         EVENTS,
+-        "event の鍵は 5 つで SessionStart が無い"
++        "event の鍵は 6 つで SessionStart が無い"
+     );
+     assert!(
+         copying(&now).is_empty(),
+@@ -169,7 +178,7 @@ fn seathk_marked_heads_follow_the_vessel_name() {
+     assert_eq!(
+         unmarked(&now, &mark),
+         Vec::<String>::new(),
+-        "4 本の頭が印の除き"
++        "印を持つ event の全部の command の頭が印の除き"
+     );
+     let other = edited(&now, "PreToolUse", |c| c.replacen(&mark, "other-runner", 1));
+     assert_eq!(
+@@ -183,6 +192,8 @@ fn seathk_marked_heads_follow_the_vessel_name() {
+             .expect("除きの後")
+     });
+     assert_eq!(unmarked(&bare, &mark), ["PostToolUse"], "除きを外した見本");
++    let gate = edited_last(&now, "PreToolUse", |c| c.replacen(&mark, "other-runner", 1));
++    assert_eq!(unmarked(&gate, &mark), ["PreToolUse"], "最後の要素の印の名だけ替えた見本");
+     let twice = edited(&now, "UserPromptSubmit", |c| {
+         format!("{EXCLUDE_HEAD}{mark}\" ] || {c}")
+     });
+diff --git a/plugin/.claude-plugin/plugin.json b/plugin/.claude-plugin/plugin.json
+index a9d65b2eda5447035eca724f4774f12268ae5316..d88210c9307149dbb5c63918f7a8a51fd5c9e50b 100644
+--- a/plugin/.claude-plugin/plugin.json
++++ b/plugin/.claude-plugin/plugin.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "tsuzuri",
+   "version": "0.2.0",
+-  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る。skill の consult は相談の窓を開き、bin の tzw は hook と skill が撃つ tz を解く"
++  "description": "tsuzuri の席の停止の hook（台帳の未配達の持ち主の裁定を拾い、その指し示しを返して席を続けさせる）と問いの起票の門（Bash の呼びの問いの起票を、処分の無い問いが在れば止める）。合図の hook は問いを置いた後に自分の board へ合図を送る。skill の consult は相談の窓を開き、bin の tzw は hook と skill が撃つ tz を解く。agents の 3 本は席が起こす係の型で、skill の agent-discipline は係の規律の手引き、hook の agent-spawn・agent-bind・agent-meter・agent-guard・agent-stop は係の門と測り（判断の記録 ADR-59）"
+ }
+diff --git a/plugin/agents/drafter.md b/plugin/agents/drafter.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9a49e7876aa3195ae2c9bfcc75ffb82cd3b51a17
+--- /dev/null
++++ b/plugin/agents/drafter.md
+@@ -0,0 +1,20 @@
++---
++name: drafter
++description: tsuzuri の設計の席が、契約の行・判断の記録・適用の script・試作を起草の置き場に書かせる時に使う。
++model: opus
++skills:
++  - tsuzuri:agent-discipline
++---
++
++あなたは tsuzuri の設計の席が起こした起草係（書く係）である。頼みの対象を起草して、出す物を起草の置き場の自分の dir の w/ の下に書く。
++
++頼みの頭は次の 4 行で、起こしの門（tz hook agent-spawn）が見る。係の名は起こしの名である。
++
++```
++予算: token <数>
++組み: なし|軽|重
++対象: <bead か記録の id>
++出す物: <file>,<file>
++```
++
++頼みの全文は起草の置き場の <名>/brief.md に在る。決まりは前置きの手引き agent-discipline に在り、手順はその参照の file に在る。
+diff --git a/plugin/agents/researcher.md b/plugin/agents/researcher.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..bea4047b7cdb26def777aecf9b50d324fa5f8487
+--- /dev/null
++++ b/plugin/agents/researcher.md
+@@ -0,0 +1,20 @@
++---
++name: researcher
++description: tsuzuri の設計の席が、記録・code・文書を調べさせて事実と出所を集めさせる時に使う。
++model: opus
++skills:
++  - tsuzuri:agent-discipline
++---
++
++あなたは tsuzuri の設計の席が起こした調べ係（調べる係）である。頼みの対象を調べ、分かった事と出所を起草の置き場の自分の dir の w/ の下に書く。予算の 100% に届いたら、調べた所と残りの path を出す物に書いて終える。
++
++頼みの頭は次の 4 行で、起こしの門（tz hook agent-spawn）が見る。係の名は起こしの名である。
++
++```
++予算: token <数>
++組み: なし|軽|重
++対象: <bead か記録の id>
++出す物: <file>,<file>
++```
++
++頼みの全文は起草の置き場の <名>/brief.md に在る。決まりは前置きの手引き agent-discipline に在り、手順はその参照の file に在る。
+diff --git a/plugin/agents/verifier.md b/plugin/agents/verifier.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3143a370c299bbff555812b2050fff3749d550da
+--- /dev/null
++++ b/plugin/agents/verifier.md
+@@ -0,0 +1,21 @@
++---
++name: verifier
++description: tsuzuri の設計の席が、問いの本文・判断の記録・契約の行の下書きを攻めさせるか、主張を照らさせる時に使う。
++model: opus
++skills:
++  - tsuzuri:agent-discipline
++---
++
++あなたは tsuzuri の設計の席が起こした検証役（攻める係）である。下書きを攻め、所見を起草の置き場の自分の dir の w/ の下に書く。どの主張にも確かさの印（V・D・I・U）と、証拠の path か命令を付ける。
++
++頼みの頭は次の 4 行で、起こしの門（tz hook agent-spawn）が見る。係の名は起こしの名である。検証の群の係は 5 行目に群の行を持つ。
++
++```
++予算: token <数>
++組み: なし|軽|重
++対象: <bead か記録の id>
++出す物: <file>,<file>
++群: <群 id> <i>/<k>
++```
++
++頼みの全文は起草の置き場の <名>/brief.md に在る。決まりは前置きの手引き agent-discipline に在り、群の手順はその参照の file に在る。
+diff --git a/plugin/hooks/hooks.json b/plugin/hooks/hooks.json
+index 2a6092a0eb90029636294d9d6e1a285e4a88dd2f..966a22427844f0a30cf0246e2015952089e93e0b 100644
+--- a/plugin/hooks/hooks.json
++++ b/plugin/hooks/hooks.json
+@@ -21,6 +21,25 @@
+             "async": true
+           }
+         ]
++      },
++      {
++        "matcher": "Agent",
++        "hooks": [
++          {
++            "type": "command",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-bind --repo \"$CLAUDE_PROJECT_DIR\"",
++            "timeout": 10
++          }
++        ]
++      },
++      {
++        "hooks": [
++          {
++            "type": "command",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-meter --repo \"$CLAUDE_PROJECT_DIR\"",
++            "timeout": 10
++          }
++        ]
+       }
+     ],
+     "PreToolUse": [
+@@ -33,6 +52,25 @@
+             "timeout": 10
+           }
+         ]
++      },
++      {
++        "matcher": "Agent|Workflow",
++        "hooks": [
++          {
++            "type": "command",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-spawn --repo \"$CLAUDE_PROJECT_DIR\"",
++            "timeout": 30
++          }
++        ]
++      },
++      {
++        "hooks": [
++          {
++            "type": "command",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-guard --repo \"$CLAUDE_PROJECT_DIR\"",
++            "timeout": 10
++          }
++        ]
+       }
+     ],
+     "Stop": [
+@@ -46,6 +84,17 @@
+         ]
+       }
+     ],
++    "SubagentStop": [
++      {
++        "hooks": [
++          {
++            "type": "command",
++            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-stop --repo \"$CLAUDE_PROJECT_DIR\"",
++            "timeout": 10
++          }
++        ]
++      }
++    ],
+     "UserPromptSubmit": [
+       {
+         "hooks": [
+diff --git a/plugin/skills/agent-discipline/SKILL.md b/plugin/skills/agent-discipline/SKILL.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..425bc6207fe44720858b47ec57da3b94b5be8130
+--- /dev/null
++++ b/plugin/skills/agent-discipline/SKILL.md
+@@ -0,0 +1,37 @@
++---
++name: agent-discipline
++description: tsuzuri の設計の席が起こした係（起草係・検証役・調べ係）として働く時と、席が係を起こす時に使う。
++---
++
++# 係の規律（agent-discipline）
++
++この手引きは天井で、決まりの正本は門と歯である（条 N-2）。各決まりの末の括弧は、破りを止める門の名か、門が無く自分で守る「天井だけ」。手順と前例は同じ dir の reference.md に在り、要る時に読む。
++
++## 頼みと終わり
++
++- 頼みの頭は 4 行（予算・組み・対象・出す物）で、群の検証役は 5 行目に群の行を持つ。係の名は起こしの名（門 agent-spawn）
++- 生きた係と対象が重なる起こしは起きない（門 agent-spawn）
++- 席は流れの道具（Workflow）で係を起こさない。使うなら持ち主に問う（門 agent-spawn）
++- 頼みの全文は起草の置き場の <名>/brief.md に在る。圧縮で頼みが見えなくなったら読み直す（天井だけ）
++- 出す物を自分の <名>/w/ の下に書き、出力の path を SendMessage で席に知らせてから終える（門 agent-stop）
++- 済みと書く前に、撃った命令と rc を出す物に書く（天井だけ）
++
++## 予算
++
++- 予算は新しく読み書きした量（input と cache_creation と output の和）で数え、自己申告で数えない。測りの注ぎ（50・75・90%）が来たら調べを広げず、分かった所を書く（門 agent-meter）
++- 100% を越えたら、自分の w/ への書きと席への知らせだけをして終える（門 agent-guard）
++
++## 置き場と組み
++
++- 写しは起草の置き場の直下にだけ作る（器の門 drafts_guard）
++- 組みの置き場は自分の dir の target の絶対 path にし、tmpfs で組まない（器の門 drafts_guard）
++- repo と台帳は読むだけ。commit・push・台帳の書きは頼みが許す時だけ（天井だけ）
++- reset --hard・branch -D・force push を撃たない。file は消さずに mv で退ける（器の門 host_guard）
++- cargo fmt -p と pkill -f を撃たない。重い組みは同時に 1 つ（天井だけ）
++- 公開の file に口座の名・host の名・ほかの project の名・持ち主の逐語を書かない（天井だけ）
++
++## 検査
++
++- xtask の check は最初の落ちで止まる。落ちた後は落ちた段の nextest を --no-fail-fast で撃ち、全部の落ちを見る（天井だけ）
++- 背景で撃った物の終わりは、知らせを待たず log の rc と ps で見る（天井だけ）
++- 数は完全な記録からだけ書き、途中の log や見立てを丸めない（天井だけ）
+diff --git a/plugin/skills/agent-discipline/reference.md b/plugin/skills/agent-discipline/reference.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..f5068d9b5cf415ebf30789a6c32f47578eac27a0
+--- /dev/null
++++ b/plugin/skills/agent-discipline/reference.md
+@@ -0,0 +1,90 @@
++# 係の規律の参照（agent-discipline）
++
++前置きの手引き SKILL.md の決まりの手順と前例である。席の手元の手引き（起草役の共通の守り）の段を、判断の記録 ADR-59 の決定 (6) でここへ移した。検証の群の手順は判断の記録 ADR-61 の決定 (9)。この file も天井で、決まりの正本は門と歯である。
++
++記号: <置き場> は起草の置き場（repo の git config の鍵 tsuzuri.draftsdir）、<名> は起こしの名、<群 id> は群の id。
++
++## 1. 置き場
++
++- 書くのは自分の dir <置き場>/<名>/ の下だけ。成果（notes.md・script・差の file）は <名>/w/ の下に置き、写しで commit しない。
++- 試作の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。床の確かめの写しは <置き場>/try-<名>-fl。写しから push しない。器の掃除は、直下の写しの target などを書きが 6 時間無くなった後に消す。
++- CARGO_TARGET_DIR は <置き場>/<名>/target の絶対 path にする（相対だと xtask の面の組み立てが crates/target に書き、git add -A で commit に混ざる）。ほかの係の target を使わない（古い rmeta で clippy が偽の赤を出す）。済んだ係の target は消さず、w/retired/ の下へ mv する。
++- 動いている board の server を止めない。測るなら loopback の別の port で写しの tz を起こし、自分の pid だけを kill する。
++
++## 2. 組み（SSD の書きを抑える）
++
++- /dev/shm などの tmpfs で組まない（頁が席の cgroup に数えられ、席ごと OOM で落ちる）。
++- 床の写しは最初の組みから CARGO_INCREMENTAL=0 で撃ち、同じ target で途中から切り替えない（別の hash で組み直し、実行 file が 2 重になる）。編集を繰り返す試作の写しは incremental のまま。
++- 試作の途中は cargo nextest run -p <pkg> --test <自分の歯の file> の範囲で撃つ。workspace の全部の組み（cargo run -q -p xtask -- check・nextest --workspace）は行ごとに終わりの 1 回にする。噛みも --test 1 本の範囲で撃つ。
++- 撃つ前に自分が触った file を touch する（在る file だけ）。cargo fmt -p は約 150 file を書き替えるので、rustfmt <自分の file> だけを撃つ。
++- Rust を書かない係は cargo を撃たず、床は席の pin の tz で確かめる。
++
++## 3. 契約の行の書き方
++
++- 形は置くノートの既存の行に合わせる（title・req・write-set・verify・size・growth・done・depends と節）。
++- done の各項は、名指す歯が実際に測る字だけを書き、測らない字は節に書く。歯の名は試作の fn の名と grep で照らす。done の項の中で (n) の印を書かない（ほかの項は「最後の項」などと書く）。
++- 行の title と done に、コロンと空白の並び・空白と # の並び・二重引用符・逆斜線・逆引用符を書かない（folio derive が断るか YAML の注で切れる）。JSON は鍵と字の値の囲みを省いた形と、その戻し方を節に書く。
++- verify の 1 行目は git apply --reverse --check docs/design/patch/<行>.patch、続けて clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）と、done の歯を撃つ cargo nextest run -p <pkg> --test <file> --no-tests=fail <接頭辞>_ の行。cargo run -q -p xtask -- check は器の共通 verify が撃つので書かない。
++- verify の filter が当たる歯の file は全部 write-set に入れる。書かない着地済みの file は置き場だけの =<path> で足す（無いと受付が teeth-outside-write-set で断る）。
++- depends は同じノートの行だけ（ほかのノートの行は folio check が違反にする）。便の順は toml の depends の欄で決まる。
++- 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte まで。crate の src の file の 1500 行の上限の余地が見込みより小さい時は growth の欄を足す。
++- ノートの行は 32 まで（条 P-28）。計画だけの行を契約の行へ移す時は、同じ commit で規則の行 R-33 の値を下げる。
++- 節が大きい行は、頭の段に done の各項と verify の行の対応を書く。審査役は Read・Grep・Glob だけで読むので、節と done に「審査が撃って確かめる」前提の字を書かない。
++
++## 4. 差の file の形
++
++- 行の試作は、差を docs/design/patch/<行>.patch に置く。切り方は、当てる main に前の行の未着地の差を当てた土台の commit の上に試作の commit を作り、git diff --no-color --full-index <土台> <試作> -- <write-set の file>。
++- 確かめは、土台の木で git apply --check、試作の木で git apply --reverse --check がどちらも rc 0。差の file は write-set に足さない。
++- 節の段は、在りか（差を切った commit）・なぜ・形・実装の約束（便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる）・done と verify の対応・歯と噛み・範囲の外。
++- 同じ file を書く未置きの行が並ぶ時は、hunk の文脈を 4 行以上離し、一時の index（GIT_INDEX_FILE）で git apply --cached を両順に照らす。
++- main が差の触れる file を動かすと差は当たらなくなる。席は置く直前に当たりを撃ち直す。
++
++## 5. 歯の置き方（段の束ね・判断の記録 ADR-32）
++
++- 新しい行の歯は tests/<接頭辞>.rs の 1 本（段）で足し、群 tests/<群>/ の main.rs と module を書かない。群に module を足す行は、xtask/tests/teeth1/kfold.rs の表 GROUPS も直す。
++- 着地した群の module を直す行は、その module の file だけを write-set に置き、verify を -p <pkg> --test <群> --no-tests=fail <接頭辞>_ にする。
++- 歯の fn の名は crate の中で一意にする。新しい接頭辞は、契約表の verify の filter の語と群の module の名のどれとも部分の字で重ならない。
++- 新しい歯の file は、頭の //! の行の続きのすぐ次の行に #![cfg(test)] を置き、間に空の行を挟まない。
++- 歯の file を path で読む歯は、tests/ の直下に固定せず、名で探すか include_str! で読む。
++- 歯の fn も clippy の cognitive_complexity と too_many_lines で落ちる。歯を直したら clippy を先に撃つ。
++
++## 6. 否定の見本と噛み
++
++- 「読まない・断る」を言う done の項の否定の見本は、正しい見本から測る句を 1 つだけ外す（ほかの欄は全部正しくする）。別の理由で先に断られる見本は空振りである。
++- 置き場の字（の後に・1 度だけ）を file 全体の字で測ると、審査が vacuous-assert で落とす。関数か塊の中で照らし、数を断言する。
++- 噛みは句ごとに撃つ。その句を見ない変異で、名指しの歯が rc 100 で落ちる（nextest の rc 101 は組み立ての失敗で噛みでない）。表（句・歯・変異・rc）を notes.md に置く。噛みの道具は終わりに書き戻すので、噛みの前に試作を commit する。
++
++## 7. 床と受付の照らし
++
++- 床は頼みが名指す席の pin の tz で、床の写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
++- 適用の script（python）は前の版を照らし、ノートと計画の版を上げ、書いた字を YAML で読み直す。外れたら何も書かずに止まる。
++- 足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <床の写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
++
++## 8. 出す物と公開
++
++- 出す物は、notes.md（調べ・実測・未確か・席への問い・印は V 確かめた・D 記録から・I 見立て・U 分からない）、適用の script、commit の文の案、差の file、席が撃つ命令の列。出す物の file の名に report を使わない。
++- 持ち主への問いが要るなら、概要・技術・理由・推奨の閉じた問いにする。数は完全な記録からだけ書く。
++- repo は公開である。host の名・網の住所・口座の名・ほかの project の名・持ち主の逐語を書かない。
++
++## 9. 道具の撃ち方
++
++- gh は頭の語に置き、出力は > か | で受ける。置換・for・heredoc の中の gh と git の字は、読むだけでも器の門が断る。書き換えの script は Write の道具で file に書き、python3 <file> で撃つ。
++- 背景で撃った物の終わりの知らせは届かないことがある。log の rc の行と ps で自分で見る（pgrep -f の待ちは自分の bash の行に当たって終わらない）。
++
++## 10. 検証の群（判断の記録 ADR-61）
++
++1. 全文を読む攻めの係（検証役 1 体・頭の予算だけ・群の上限に入らない）が、分からない（U）の主張の一覧 <置き場>/<群 id>/unknowns.tsv を書く（1 行に id・主張・判じられない訳・資料の path をタブで区切る）。
++2. 一覧が 3 行未満なら群を起こさない。18 行を越えたら、下書きを割って攻め直すか 1 体の道に戻る（割った下書きは同じ対象なので、群は 7 日に 1 つの塊だけ）。下書きの種類は 問いの本文・判断の記録・消す行・緩める問い の 4 つだけ。
++3. 席は群を起こす前に <置き場>/<群 id>/plan.json を置く。欄は type（tsuzuri:verifier）・target（頭の対象と同じ）・draft・attacker・members（name・model・claims・paths）と、在れば ruling。1 体の割りの主張は 6 まで、係どうしで重ねず、和は一覧の全部。
++4. 反証役 3 体までを 1 つの返事で並べて起こす。頭は 4 行に 5 行目 群: <群 id> <i>/<k> を足し、予算は token 150000 以下、Agent の呼びの model は計画の値。群の係は続けず、段ごとに新しい係を起こす。
++5. 群の合計が止める線（新しい量 405000・読み直し 6750000）に届いたら、新しい群の係を起こさない。同じ対象の群は 7 日に 1 つ（例外は、問いの本文が群の id を名指した裁定の裁定 id を計画の ruling に書く）。
++6. 席の流れの道具（Workflow）で係を起こさない（起こしの門が全部断る・使うなら持ち主に問う）。
++7. 群の終わりに、問いの本文か判断の記録の概要と推奨が頼る主張の全部と、記録から（D）1 件以上と、確かめた（V）2 件以上を席が照らし直す。外れが 1 件でも在れば群の全部の主張を下げる。
++
++大きな調べは 1 体ずつにする。予算の 100% に届いた調べ係は、調べた所と残りの path を出す物に書く。席は残りを、前の係の終えの印の後に新しい 1 体に頼む（判断の記録 ADR-61 の決定 (3)）。
++
++## 11. 畳みの行（席の手）
++
++- 着地した段の file（群に入っていない tests/ の直下の .rs）が、未着地の行が名指す file を除いて 12 本に達したら、畳みの行を 1 行置く。
++- 切り方は、置く直前の main の写しで crate ごとに畳みの道具を撃ち、表 GROUPS も書き直す。差は git diff --no-color --full-index -M で切り、130000 byte を目安に、越えれば crate ごとに割る。
++- 確かめは、行の木で verify の行を全部撃ち、xtask の check は全部の畳みを当てた最後の木で 1 回。着地した行の verify の字と差の file は歴史として書き換えない。

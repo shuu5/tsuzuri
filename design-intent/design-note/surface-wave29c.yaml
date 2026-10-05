@@ -1,0 +1,56 @@
+# 設計ノート surface-wave29c — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-59 と ADR-61 の承認・承認の列〕・行の拠り = 行 ag-plugin は判断の記録 ADR-59 と ADR-61・ノート surface-wave29b の契約表の枠が尽きたので起こした）
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave29c.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave29c.toml#<行 id>。
+meta:
+  id: surface-wave29c
+  title: 第 29 波 c — 席が起こす係の型と規律の手引きと門の設定（判断の記録 ADR-59）・検証の群の係の門（判断の記録 ADR-61）・ノート surface-wave29b の続き
+  version: v0.1
+  status: effective
+  generated: 2026-10-05
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.87.1（裁定 id = t3-hub.87.1:20261005T0512Z-1・甲・配達の口・notes に逐語）〔判断の記録 ADR-59 の承認・ノートの承認〕, verbatim: これについては推奨で進めて良いが、例えば広い範囲の調査が必要なときはWF骨格を作っておいてそれを使ったほうがいい場合もあるよね？事実の検証も同様だ。ただしWFは下手に作ると大量のagentをたててトークンをいたずらに消費するのでそうならないような抑制や検証と逆にいつ必要かというトリガーとよく考える必要があるのでこの件は改めてよく検討した上で俺に聞いて, surface: R-8}
+    - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.87.6（裁定 id = t3-hub.87.6:20261005T0818Z-1・乙・配達の口・notes に逐語）・前の裁定 t3-hub.87.2（裁定 id = t3-hub.87.2:20261005T0639Z-1・乙）〔判断の記録 ADR-61 の承認・ノートの承認〕, verbatim: 推奨でよい, surface: R-8}
+  note: ノート surface-wave29b（契約表の枠の最後は群の係の門の行に回した）の続きで、生きたノートの上限（規則の行 R-31）のため、契約表の行を持たないノート surface を同じ commit で廃止した。承認は判断の記録 ADR-59 と ADR-61 の持ち主の裁定（承認の列・逐語は各記録の承認の欄の字）。第 0.1 版（2026-10-05）は、目的の節と、判断の記録 ADR-59 と ADR-61 の行 ag-plugin（係の型 3 本と規律の手引き agent-discipline とその参照の file と、hooks.json の係の口 5 つの結びと、着地した hooks.json の歯 3 本の直し・試作と噛みと床は係 w225a・差の file の形・ノートを跨ぐ順は便の bead の依存）を置いた。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      判断の記録 ADR-59（席が起こす係を、拡張の束の係の型 3 本と規律の手引きと係にだけ効く門で機械が持つ・持ち主の裁定 t3-hub.87.1 の甲）と、判断の記録 ADR-61（検証の群の上限と引き金・ADR-59 の決定 (2)(3)(4) への群の例外・持ち主の裁定 t3-hub.87.6 の乙）の行のうち、ノート surface-wave29b の契約表の枠（規則の行 R-32・32 行 以下）に入らない行を置く。
+
+      行は 1 本から 3 本の見込み。行 ag-plugin は型と手引きと門の設定（ADR-59 の決定 (7) の 3 本目の行・ADR-61 の決定 (9)）。後の行は、群の係の測りと係の門と終える前の門（ADR-61 の決定 (4)(7)）のうち surface-wave29b の枠に入らない分（1 本か 2 本）。
+
+      前の行（起こしの門と結び・測り・係の門・終える前の門・群の起こしの門の判じと口）はノート surface-wave29b に在る。depends は同じノートの行だけを書けるので、surface-wave29b の行との順は便の bead の依存で持つ。行ごとの節は、行を足す適用が節の末に足す。1 本の契約表は 32 行まで（規則の行 R-32）。歯の置き方は判断の記録 ADR-32 の決定 (3) のとおりで、新しい歯は段の file で足し、群の main.rs と kfold.rs は畳みの行だけが書く。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows:
+      - id: ag-plugin
+        title: tsuzuri の plugin に、席が起こす係の型 3 本（agents の drafter・verifier・researcher・規律の手引きを前置き）と、規律の手引き agent-discipline（本文 2,000 字以下・各決まりの末に止める門の名か天井だけ）とその参照の file と、hooks.json の係の口 5 つの結び（agent-spawn は matcher Agent と Workflow）を足し、着地した hooks.json の歯 3 本を要素の並ぶ形に直す（判断の記録 ADR-59 と ADR-61・差の file）
+        req: ["FR21", "FR22"]
+        section: "3"
+        write-set: ["+crates/tsuzuri-boundary/tests/agpl.rs", "crates/tsuzuri-boundary/tests/teeth3/qsig.rs", "crates/tsuzuri-core/tests/teeth2/gins.rs", "crates/tsuzuri-core/tests/teeth3/seathk.rs", "plugin/.claude-plugin/plugin.json", "+plugin/agents/drafter.md", "+plugin/agents/researcher.md", "+plugin/agents/verifier.md", "plugin/hooks/hooks.json", "+plugin/skills/agent-discipline/SKILL.md", "+plugin/skills/agent-discipline/reference.md"]
+        verify: ["git apply --reverse --check docs/design/patch/ag-plugin.patch", "cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test agpl --no-tests=fail agpl_", "cargo nextest run -p tsuzuri-boundary --test teeth3 --no-tests=fail qsig_", "cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail gins_", "cargo nextest run -p tsuzuri-core --test teeth3 --no-tests=fail seathk_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/ag-plugin.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) plugin/hooks/hooks.json の、command が字 tzw hook agent- を持つ hook の event と matcher と command と timeout の列は、PreToolUse で matcher が字 Agent と縦線の 1 字と中核の group の WORKFLOW の字の起こしの門（timeout 30）、PostToolUse で matcher が字 Agent の結び、matcher の無い PostToolUse の測りと PreToolUse の係の門と SubagentStop の終える前の門（どれも timeout 10）の 5 つだけで、口の名は境界の hook の agent_spawn・agent_bind・agent_meter・agent_guard・subagent_stop の USAGE の字の tz hook の後の語、command はどれも runner の印の除きの字と tzw hook と口の名と --repo の字の並びで、matcher から Workflow を外した見本・口の名だけ替えた見本・印の除きを外した見本・timeout だけ替えた見本は、どれも列が見込みと違う（歯 agpl_hooks_bind_the_five_agent_mouths_once） (3) plugin/agents の file の名は、中核の TYPES の 3 本から頭の字 tsuzuri とコロンを除いた名に .md を付けた名と同じで、どの file も頭の --- の間に、name が file の名、description が句点 1 つで末が字 時に使う。の 1 文、model が 1 つで inherit でなく、skills の項に tsuzuri:agent-discipline を持ち、verifier.md の name・description・model・skills を 1 つずつ崩した見本は、崩した欄だけを欠けと名指す（歯 agpl_types_are_the_spec_types_with_the_discipline） (4) 型の本文は、中核の KEYS と HOLES を順に鍵とコロンと空白と値の書き方と改行でつないだ 4 行の塊を 1 度だけ持ち、verifier.md だけが塊の直後に群の行（中核の group の KEY とコロンと空白と字 <群 id> <i>/<k>）を持ち、drafter.md と researcher.md は群の鍵とコロンで始まる行を持たない。drafter の本文から組みの行を外した見本は head、塊の直後に群の行を足した見本は group、verifier の本文から群の行を外した見本は group と名指す（歯 agpl_type_bodies_carry_the_head_lines） (5) plugin/skills/agent-discipline/SKILL.md は、頭の name が agent-discipline、description が句点 1 つで末が字 時に使う。の 1 文、頭の後の本文の字の数が 2,000 以下で、本文が字 reference.md を持ち、同じ dir に reference.md が在る。description に 2 文目を足した見本は description、本文の字 reference.md を替えた見本は reference と名指し、本文がちょうど 2,000 字の見本は欠けが無く、2,001 字の見本は size と名指す（歯 agpl_skill_is_short_and_names_its_reference） (6) SKILL.md の本文の、字 - と空白で始まる決まりの行は 17 行で、どの行も末が、字（天井だけ）か、境界の 5 つの USAGE の口の名を持つ字（門 <名>）か、器の scribe2/crates/scribe2/src/hook/<名>.rs が在る名を持つ字（器の門 <名>）で、形ごとの数は天井だけ 8・門 6・器の門 3。器の門の名を drafts_ward に替えた見本・門の名を agent-end に替えた見本・末に句点を足した見本・字 門 を外した見本は、どれも 1 行を名指す（歯 agpl_skill_rules_end_with_a_gate_or_the_ceiling） (7) 歯 gins_pretool_bash_entry は、hooks.json の event の鍵を PostToolBatch・PostToolUse・PreToolUse・Stop・SubagentStop・UserPromptSubmit の 6 つと断言し、PreToolUse の matcher が Bash の要素がちょうど 1 つでなければ落ち、その要素の hook 1 つの timeout 10 と command の語を照らす (8) 歯 seathk_session_start_is_gone は event の鍵を SubagentStop を含む 6 つと断言し、歯 seathk_marked_heads_follow_the_vessel_name は、印を持つ event（PostToolBatch・PostToolUse・PreToolUse・SubagentStop・UserPromptSubmit）の全部の要素の全部の command の頭が、器の名の印の除きで始まり除きを 1 度だけ持つことを見て、PreToolUse の最後の要素の印の名だけを替えた見本を PreToolUse と名指す (9) 歯 qsig_hooks_post_entry は、PostToolUse の matcher が Bash の要素がちょうど 1 つでなければ落ち、その要素の hook の type と async と timeout の無さと command の字を照らす
+        depends: []
+  - n: 3
+    type: prose
+    title: 行 ag-plugin — 係の型と規律の手引きと門の設定（plugin の agents と skill agent-discipline と hooks.json・判断の記録 ADR-59 の決定 (1)(2)(5)(6) と ADR-61 の決定 (4)(9)）
+    body: |
+      在りか。差の file docs/design/patch/ag-plugin.patch（50,233 byte）は、main d0d07c1a にノート surface-wave29b の未着地の行 ag-stop・ag-gjudge・ag-gspawn の差を当てた木 c5117a96 と、試作の木 1b6b61cc の差（写しは drafts の try-w225a・係 w225a）。差は 11 file で、3 行の書く file と交わらない。便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。ノートを跨ぐので depends は空で、順は便の bead の依存で持つ（歯が ag-stop の口 subagent_stop の USAGE と、ag-gjudge の group の WORKFLOW と KEY を使い、流れの道具の呼びの断りは ag-gspawn が置く）。差は 3 行の前の木にも当たるが、3 行の着地の前は歯が組めない。
+
+      なぜ。判断の記録 ADR-59 の決定 (1) は、席が起こす係を tsuzuri の plugin の型 3 本のどれかとし、型の数を歯が数えるとした。決定 (2) は頼みの頭を 4 行とし、決定 (5) は判じを tz の 5 つの口に置き、plugin の型の定義が門を持てないので口を hooks.json に置くとした。決定 (6) は、規律の手引き agent-discipline を型の手引きの欄で前置きし、本文を 2,000 字以下・説明の欄を引き金だけ・各決まりの末に止める門の名か天井だけとし、席の手元の手引きの段を参照の file へ移すとした。判断の記録 ADR-61 の決定 (1) は検証の群の係の頭に 5 行目を足し、決定 (4) は起こしの門が席の流れの道具 Workflow の呼びを全部断るとし、決定 (9) は群の手順を参照の file に書くとした。口の 5 つは前の行（ag-hook・ag-meter・ag-guard・ag-stop・ag-gspawn）が tz に置き、どの行も hooks.json の口はこの行が足すと書いた。
+
+      形。plugin/agents に drafter.md・verifier.md・researcher.md（頭の欄は name・description・model・skills・model は opus で規則の行 D-1 の席の設定を継がせない形・skills は tsuzuri:agent-discipline・本文は係の役と頭の 4 行の囲みと頼みの file の置き場・検証役だけ 5 行目の群の行）。plugin/skills/agent-discipline に SKILL.md（本文 1,184 字・決まり 17 行・節は 頼みと終わり・予算・置き場と組み・検査）と reference.md（席の手元の手引きの段を、機の path と口座の置き場と古い前例の path を外して移した 11 節・10 節が検証の群の手順・11 節が畳みの行）。plugin.json は鍵を足さず description の末に 1 文を足す（歯 fstop_ が鍵 3 つを断言する）。agents と skills は plugin の既定の dir で読まれる。
+
+      門の設定。hooks.json の PreToolUse に matcher Agent と縦線と Workflow の agent-spawn（timeout 30・群の判じが台帳を読む）と matcher の無い agent-guard、PostToolUse に matcher Agent の agent-bind と matcher の無い agent-meter、新しい event の鍵 SubagentStop に agent-stop を足す（ほかは timeout 10）。command は今の question-gate の command と同じ形（runner の印の除きの後に tzw の path と hook と口の名と --repo と project の dir・path と dir は二重引用符で囲む）で、便の中では印で黙る（ADR-59 の決定 (5)）。今の要素は配列の頭のまま、係の口の要素を後ろに足す。
+
+      着地した歯の直し。PreToolUse と PostToolUse に要素が並ぶと、要素 1 つを断言する着地した歯 3 本が落ちる。gins_ は PreToolUse の matcher Bash の要素を選ぶ助け bash_entry に替えてevent の鍵に SubagentStop を足し、qsig_ は PostToolUse の matcher Bash の要素を選ぶ形に替え、seathk_ は event の鍵を 6 つにし、印を持つ event に SubagentStop を足し、全部の要素の command を照らす助け commands と、最後の要素を書き替える見本の助け edited_last を足した。3 本は rustfmt の形でないので掛けない。歯 fstop_・fdlt_・fdlv_ は Stop・PostToolBatch・UserPromptSubmit を替えないので今の形で通る（係が撃った）。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2〜6 番目の項は 3 行目（新しい段の file tests/agpl.rs の歯 agpl_ の 5 本）、7 番目の項は 5 行目（中核の群 teeth2 の gins_）、8 番目の項は 6 行目（中核の群 teeth3 の seathk_）、最後の 9 番目の項は 4 行目（境界の群 teeth3 の qsig_）で測る。2 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので verify に書かない。入口の赤は、main に名が agpl_ の歯が無いので 3 行目が --no-tests=fail で落ちる。
+
+      歯と噛み。新しい段の file tests/agpl.rs（判断の記録 ADR-32 の決定 (3)・群の main.rs と kfold.rs は書かない）。境界に置くのは、口の名を境界の hook の USAGE から、型と頭の行を中核の定数から同じ file で組むため（hooks.json は境界の stage の json で読む）。plugin の file を読むだけで tz も器も撃たない。噛みは係が撃った（31 変異・全部 rc 100・対照の 4 つは rc 0・書き戻した後の status は空）。matcher と timeout と口の名と印の除きと event の鍵の変異 6 つで 2 番目の項、型の file の名と name と説明と model と skills の変異 5 つで 3 番目、頭の塊と群の行の変異 3 つで 4 番目、説明と字数と参照の名指しと在りの変異 4 つで 5 番目、門の名と器の門の名と末と数と形ごとの数の変異 5 つで 6 番目、event の鍵と Bash の要素の timeout と数の変異 3 つで 7 番目、event の鍵と最後の要素の印と SubagentStop の印の変異 3 つで 8 番目、async と Bash の要素の数の変異 2 つで 9 番目の項の歯が落ちた。
+
+      U と範囲の外。席の係は名で呼び合う形（teammate）で起きる。この形で PreToolUse の門が席の Agent と Workflow の呼びに撃たれるかと、終わりに SubagentStop が撃たれるかは U（判断の記録 ADR-59 の決定 (7)・ag-stop の着地の後に席が係を 1 体起こして記帳を読み閉じる）。手引きの文の効きの測り。plugin.json の version の上げ（中核の PLUGIN_VERSION と相談の窓の版の照らしに触れる）。席の頼みの文から手引きの段を指さないこと（席の手）。群の係の測りと係の門と終える前の門（後の行）。汎用の部分を器へ移す案（memo）。
