@@ -15,6 +15,7 @@ pub mod guard;
 pub mod launch;
 pub mod list;
 pub mod open;
+pub mod plain;
 pub mod show;
 pub mod watch;
 

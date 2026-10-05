@@ -14,7 +14,7 @@ const GROUPS: &[(&str, usize)] = &[
     ("crates/tsuzuri-boundary/tests/teeth2", 27),
     ("crates/tsuzuri-boundary/tests/teeth3", 16),
     ("crates/tsuzuri-boundary/tests/teeth4", 14),
-    ("crates/tsuzuri-boundary/tests/teeth5", 14),
+    ("crates/tsuzuri-boundary/tests/teeth5", 15),
     ("crates/tsuzuri-contract/tests/teeth1", 14),
     ("crates/tsuzuri-core/tests/teeth1", 29),
     ("crates/tsuzuri-core/tests/teeth2", 25),
