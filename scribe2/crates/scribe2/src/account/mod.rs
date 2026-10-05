@@ -1035,7 +1035,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("account-stage-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::create_dir_all(&dir);
-        dir
+        crate::pipe::fixture::held(dir)
+    }
+
+    /// 作った dir は歯の thread の終わりに消える（[`crate::pipe::fixture::held`]・memo t3-hub.74.49.10）。
+    #[test]
+    fn vschd_account_stage_scratch_is_gone_after_the_thread_ends() {
+        let (inside, gone, dir) = crate::pipe::fixture::made_in_thread(|| scratch("vschd-gone"));
+        assert!(inside, "thread の中では在り file を置ける: {}", dir.display());
+        assert!(gone, "join の後は無い: {}", dir.display());
     }
 
     /// `body` を一時 file に書いて [`staged_fits`] を撃つ（書けない周は歯を落とす＝空虚に通さない）。

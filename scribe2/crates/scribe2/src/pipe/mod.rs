@@ -823,12 +823,48 @@ pub(crate) mod fixture {
         }
     }
 
-    /// 歯ごとの空の tmp dir。
+    /// 歯ごとの空の tmp dir（[`held`] で歯の thread に預ける＝歯の終わりに dir ごと消える）。
     pub(crate) fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("pipe-mutant-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::create_dir_all(&dir);
+        held(dir)
+    }
+
+    thread_local! {
+        /// [`held`] が預かった dir（thread の終端で drop＝libtest は歯 1 本を 1 thread で走らせる・panic の unwind でも drop）。
+        static HELD: RefCell<Vec<Held>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// 預けた dir の包み（drop で再帰削除・e2e の `TmpDir::held` と同じ形・設計 gate-cost.md §17・memo t3-hub.74.49.10）。
+    struct Held(PathBuf);
+
+    impl Drop for Held {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// dir をいま走っている歯の thread に預け、同じ path を返す（thread の終わりに dir ごと消える・呼び手の字は替えない）。
+    ///
+    /// 歯の一時 dir の助け（[`scratch`]・account の `scratch`・live の `place`）が使う口である。
+    pub(crate) fn held(dir: PathBuf) -> PathBuf {
+        HELD.with(|list| list.borrow_mut().push(Held(dir.clone())));
         dir
+    }
+
+    /// `make` を別の thread で撃ち、返した dir に file を置けたか・join の後に dir が無いか・dir の path を返す（歯の一時 dir の助けの歯の共通の測り）。
+    ///
+    /// 測った後の dir は呼んだ歯の thread にも預ける（助けが預け損ねた周も歯の終わりに消える・預けるのは測った後）。
+    pub(crate) fn made_in_thread(make: impl FnOnce() -> PathBuf + Send + 'static) -> (bool, bool, PathBuf) {
+        let (inside, dir) = std::thread::spawn(move || {
+            let dir = make();
+            (std::fs::write(dir.join("f"), "1").is_ok(), dir)
+        })
+        .join()
+        .unwrap_or_else(|_| (false, PathBuf::new()));
+        let gone = !dir.as_os_str().is_empty() && !dir.exists();
+        (inside, gone, held(dir))
     }
 
     /// log の 1 行（固定 ts・段と席と pid と detail は呼び手が選ぶ）。
@@ -1039,6 +1075,10 @@ pub(crate) mod fixture {
         Ok(if stubbed { &Recorded } else { &Real })
     }
 }
+
+/// 歯の一時 dir の助けの歯（[`fixture::held`]・memo t3-hub.74.49.10）。
+#[cfg(test)]
+mod scratch_tests;
 
 #[cfg(test)]
 mod tests {

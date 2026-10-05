@@ -176,7 +176,19 @@ mod tests {
     fn place(tag: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!("xphost-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        root.join("state")
+        crate::pipe::fixture::held(root).join("state")
+    }
+
+    /// 置き場の根（返した path の親）は歯の thread の終わりに消える（[`crate::pipe::fixture::held`]・memo t3-hub.74.49.10）。
+    #[test]
+    fn vschd_live_place_root_is_gone_after_the_thread_ends() {
+        let (inside, gone, root) = crate::pipe::fixture::made_in_thread(|| {
+            let state = place("vschd-gone");
+            let _ = std::fs::create_dir_all(&state);
+            state.parent().map(Path::to_path_buf).unwrap_or_default()
+        });
+        assert!(inside, "thread の中では根が在り file を置ける: {}", root.display());
+        assert!(gone, "join の後は根が無い: {}", root.display());
     }
 
     fn ticket() -> Ticket {
