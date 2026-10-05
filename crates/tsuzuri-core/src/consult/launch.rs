@@ -1,6 +1,7 @@
 //! 起動の口の argv と設定と検め（設計ノート surface-wave27a 行 cs-argv・判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
 //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
 //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
+//! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
 //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
 
 use serde_json::{Value, json};
@@ -138,6 +139,14 @@ pub fn guard_command(tz: &str) -> String {
     format!("timeout 4 {tz} consult guard || exit 2")
 }
 
+/// 会話の印の hook を置く事（会話の始まり・持ち主の入力・turn の終わり・判断の記録 ADR-55 決定 (2)）。
+pub const STAMP_HOOKS: [&str; 3] = ["SessionStart", "UserPromptSubmit", "Stop"];
+
+/// 会話の印の hook の命令（作業場の絶対 path を渡す・落ちても時間切れでも窓を止めない）。
+pub fn stamp_command(tz: &str, workspace: &str) -> String {
+    format!("timeout 4 {tz} consult stamp {workspace} || true")
+}
+
 /// 最初の指示（問う窓は `-p` の問い・話す窓は最後の位置の引数）。
 pub fn prompt(l: &Launch) -> String {
     match (l.form, l.question) {
@@ -214,12 +223,27 @@ pub fn settings(l: &Launch) -> Value {
             "CARGO_HOME": format!("{w}/target/cargo-home"),
             "npm_config_cache": format!("{w}/node_modules/.npm-cache"),
         },
-        "hooks": {
-            "PreToolUse": [{"matcher": "*", "hooks": [
-                {"type": "command", "command": guard_command(&l.tz), "timeout": 10}
-            ]}]
-        },
+        "hooks": hooks(l),
     })
+}
+
+/// 設定の hook（守りの hook と会話の印の hook）。
+fn hooks(l: &Launch) -> Value {
+    let mut h = serde_json::Map::new();
+    h.insert(
+        "PreToolUse".to_string(),
+        json!([{"matcher": "*", "hooks": [
+            {"type": "command", "command": guard_command(&l.tz), "timeout": 10}
+        ]}]),
+    );
+    let stamp = stamp_command(&l.tz, &l.workspace);
+    for event in STAMP_HOOKS {
+        h.insert(
+            event.to_string(),
+            json!([{"hooks": [{"type": "command", "command": stamp, "timeout": 10}]}]),
+        );
+    }
+    Value::Object(h)
 }
 
 /// `claude` に渡す引数の列（program の名 `PROGRAM` は含めない）。
@@ -444,6 +468,13 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
         || set.pointer("/hooks/PreToolUse/0/matcher") != Some(&json!("*"))
     {
         gaps.push("/hooks/PreToolUse".to_string());
+    }
+    let stamp = stamp_command(&l.tz, &l.workspace);
+    let want = json!([{"hooks": [{"type": "command", "command": stamp, "timeout": 10}]}]);
+    for event in STAMP_HOOKS {
+        if set.pointer(&format!("/hooks/{event}")) != Some(&want) {
+            gaps.push(format!("/hooks/{event}"));
+        }
     }
 }
 

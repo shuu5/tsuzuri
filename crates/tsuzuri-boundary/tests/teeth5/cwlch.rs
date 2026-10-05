@@ -3,6 +3,7 @@
 //! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
 //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
 //! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
+//! process の印が起こした時の口座の置き場（偽の環境の CLAUDE_CONFIG_DIR）を持つことを見る（行 cs-acct-mark）。
 #![cfg(test)]
 
 use std::fs;
@@ -326,6 +327,19 @@ fn talk_env_args(fx: &Fx, l: &Launch) -> Vec<String> {
     a
 }
 
+/// 話す窓の 1 番目の process の印（偽の tmux の pane の pid と窓・偽の環境の口座の置き場）。
+fn talk_mark(at: String) -> ProcMark {
+    ProcMark {
+        k: 1,
+        form: Form::Talk,
+        pid: 4242,
+        at,
+        again: false,
+        tmux_window: Some("@7".into()),
+        account: Some("/cfg/x".into()),
+    }
+}
+
 #[test]
 fn cwlch_talk_argv_and_env() {
     let fx = Fx::new("talk");
@@ -356,17 +370,7 @@ fn cwlch_talk_argv_and_env() {
     assert_eq!(fx.calls("tmux.log"), [display, want]);
     let mark = fx.mark(1, 1);
     let at = mark.at.clone();
-    assert_eq!(
-        mark,
-        ProcMark {
-            k: 1,
-            form: Form::Talk,
-            pid: 4242,
-            at: at.clone(),
-            again: false,
-            tmux_window: Some("@7".into())
-        }
-    );
+    assert_eq!(mark, talk_mark(at.clone()));
     let meta = fs::symlink_metadata(&tmp).unwrap();
     assert!(meta.is_dir() && meta.mode() & 0o777 == 0o700);
     let line = format!(
@@ -491,6 +495,7 @@ fn cwlch_ask_child_env_and_lines() {
         (m.form, m.pid.to_string(), m.again, m.tmux_window),
         (Form::Ask, pid, false, None)
     );
+    assert_eq!(m.account.as_deref(), Some("/cfg/x"), "問う窓の印の口座");
     fs::remove_file(fx.root.join("answer")).unwrap();
     let o = fx.tz(&["consult", "launch", "cw1", "--again"]);
     assert_eq!(rc(&o), 0, "{}", err(&o));
@@ -599,6 +604,7 @@ fn put_mark(fx: &Fx, n: u32, pid: u32) {
         at: "20200101T0000Z".into(),
         again: false,
         tmux_window: None,
+        account: None,
     };
     fs::write(dir.join("proc-1.json"), wire::encode(&mark).unwrap()).unwrap();
 }

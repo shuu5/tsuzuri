@@ -8,6 +8,7 @@ mod cwlch;
 mod cwopn;
 mod cwpln;
 mod cwshw;
+mod cwstp;
 mod cwwat;
 mod strelay;
 mod stskill;

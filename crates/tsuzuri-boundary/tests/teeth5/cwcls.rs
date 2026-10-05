@@ -172,6 +172,7 @@ fn mark(ws: &Path, k: u32, form: Form, pid: u32, tmux: Option<&str>) {
         at: "20261003T1401Z".into(),
         again: false,
         tmux_window: tmux.map(str::to_string),
+        account: None,
     };
     fs::write(
         ws.join(format!(".consult/proc-{k}.json")),

@@ -133,6 +133,7 @@ fn proc_mark(ws: &Path, k: u32, form: Form, pid: u32) {
         at: "20261003T1401Z".into(),
         again: k > 1,
         tmux_window,
+        account: None,
     };
     let path = ws.join(format!(".consult/proc-{k}.json"));
     fs::write(path, wire::encode(&m).unwrap()).unwrap();

@@ -605,6 +605,7 @@ fn mark(k: u32, pid: u32) -> ProcMark {
         at: "20261003T1412Z".to_string(),
         again: k > 1,
         tmux_window: None,
+        account: None,
     }
 }
 

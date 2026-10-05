@@ -11,3 +11,4 @@ pub mod launch;
 pub mod lines;
 pub mod pickup;
 pub mod quota;
+pub mod stamp;

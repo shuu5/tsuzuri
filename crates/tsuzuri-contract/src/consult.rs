@@ -560,4 +560,41 @@ pub struct ProcMark {
     pub again: bool,
     /// 話す窓の tmux の window id（`@<n>`・問う窓は None）。
     pub tmux_window: Option<String>,
+    /// 起こした時の口座の置き場（起こし手の環境の `CLAUDE_CONFIG_DIR` の字・無ければ None・判断の記録 ADR-55 決定 (2)）。
+    #[serde(default)]
+    pub account: Option<String>,
+}
+
+/// 会話の印の事（会話の始まり・持ち主の入力・turn の終わり・Claude Code の hook の名と 1 対 1）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StampEvent {
+    Start,
+    Prompt,
+    Stop,
+}
+
+impl StampEvent {
+    /// hook の名（`hook_event_name` の字）から読む（ほかの名は None）。
+    pub fn of_hook(name: &str) -> Option<Self> {
+        match name {
+            "SessionStart" => Some(StampEvent::Start),
+            "UserPromptSubmit" => Some(StampEvent::Prompt),
+            "Stop" => Some(StampEvent::Stop),
+            _ => None,
+        }
+    }
+}
+
+/// 会話の印の 1 行（`.consult/stamps.jsonl`・会話の印の口が hook ごとに 1 行足す・未知の鍵を断る・判断の記録 ADR-55 決定 (2)）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Stamp {
+    /// 足した時刻（UTC の epoch 秒）。
+    pub at: EpochSecs,
+    pub event: StampEvent,
+    /// 会話の id（uuid の形）。
+    pub sid: String,
+    /// 会話の始まりの種類（SessionStart の source・ほかの事は None）。
+    pub source: Option<String>,
 }

@@ -3,6 +3,7 @@
 //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
+//! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
 #![cfg(test)]
 
 use std::path::Path;
@@ -10,8 +11,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
-    keep_only, private_tmp, prompt, read_roots, settings, version_ok, window_env,
+    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, STAMP_HOOKS, TALK_ENV, argv, audit,
+    brief, env, keep_only, private_tmp, prompt, read_roots, settings, stamp_command, version_ok,
+    window_env,
 };
 
 fn fixture() -> Value {
@@ -713,5 +715,47 @@ fn cwarg_brief_text() {
         "open", "launch", "show", "dispose", "close", "watch", "list", "guard",
     ] {
         assert!(!text.contains(&format!("consult {verb}")), "{verb}");
+    }
+}
+
+/// 会話の印の hook の 1 つを `edit` で替えた設定の検めの欠け。
+fn stamp_gaps(event: &str, edit: impl Fn(&mut Value)) -> Vec<String> {
+    let fx = fixture();
+    let l = launch(&fx["talk"]["inputs"]);
+    let a = with_settings(&l, |set| edit(&mut set["hooks"][event]));
+    audit(&a, &l)
+}
+
+#[test]
+fn cwarg_settings_hold_the_stamp_hooks() {
+    assert_eq!(STAMP_HOOKS, ["SessionStart", "UserPromptSubmit", "Stop"]);
+    assert_eq!(
+        stamp_command("/T", "/W"),
+        "timeout 4 /T consult stamp /W || true"
+    );
+    for event in STAMP_HOOKS {
+        let only = vec![format!("/hooks/{event}")];
+        let edits: [Edit; 6] = [
+            ("除く", |h| *h = Value::Null),
+            ("作業場を替える", |h| {
+                h[0]["hooks"][0]["command"] = "timeout 4 /T consult stamp /X || true".into();
+            }),
+            ("落ちたら断る形", |h| {
+                h[0]["hooks"][0]["command"] = "timeout 4 /T consult stamp /W || exit 2".into();
+            }),
+            ("時間を替える", |h| {
+                h[0]["hooks"][0]["timeout"] = 60.into()
+            }),
+            ("命令を足す", |h| {
+                h[0]["hooks"]
+                    .as_array_mut()
+                    .expect("列")
+                    .push(json!({"type": "command", "command": "true"}));
+            }),
+            ("matcher を足す", |h| h[0]["matcher"] = "startup".into()),
+        ];
+        for (name, edit) in edits {
+            assert_eq!(stamp_gaps(event, edit), only, "{event} を{name}");
+        }
     }
 }

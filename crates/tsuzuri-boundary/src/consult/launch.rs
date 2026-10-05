@@ -5,7 +5,7 @@
 //! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
 //! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
 //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
-//! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む・行 cs-acct-mark）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
 //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
 //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
 //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
@@ -46,6 +46,9 @@ pub const ENV: &str = "env";
 
 /// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
 pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
+
+/// 起こした時の口座の置き場を読む環境変数（process の印に書く・判断の記録 ADR-55 決定 (2)）。
+pub const ACCOUNT_ENV: &str = "CLAUDE_CONFIG_DIR";
 
 /// 問う窓の終わりを見る間。
 const ASK_STEP: Duration = Duration::from_millis(200);
@@ -250,6 +253,7 @@ fn start(
         at: minute_now(),
         again,
         tmux_window,
+        account: std::env::var(ACCOUNT_ENV).ok(),
     };
     let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
     fs::write(proc_path(ws, k), text + "\n")
