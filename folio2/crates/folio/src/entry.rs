@@ -283,6 +283,13 @@ where
     code
 }
 
+/// 設計ノートの行 1 本の近い仕様の塊（tz の口 context が撃つ・行 f-ctx-build・判断の記録 ADR-51 の決定 (1) と (4)）。`dir` は
+/// 正本の置き場、`row` は `<ノート>#<行>`。Ok は塊の字（行ごとに末に改行）。Err は終了 code と理由の 1 行で、名指しの形の誤りと
+/// ノートか行が無い は 1、正本かノートが読めない は 2（まだ分からない）。clap の命令の一覧には足さない（命令の閉じた一覧は替えない）。
+pub fn context(dir: &std::path::Path, row: &str) -> Result<String, (u8, String)> {
+    crate::context::build(dir, row).map_err(crate::context::Refusal::split)
+}
+
 /// 編集時の口の まだ分からない の行の接頭辞（素の床の まだ分からない の行と同じ字・器は標準出力を逐語で断りの字に写す）。
 const UNKNOWN_HEAD: &str = "# まだ分からない: ";
 
