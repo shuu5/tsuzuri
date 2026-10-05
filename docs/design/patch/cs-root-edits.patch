@@ -1,0 +1,113 @@
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index f3a3850934e0887142343f0cc6f81d1637867637..f72a86b091cb165d114db925466def4a65f0086b 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -150,8 +150,11 @@ fn hidden(l: &Launch) -> Vec<String> {
+ }
+ 
+ /// 読む道具の断り（accounts とその symlink の先・台帳の鍵・資格の file は file にも dir にも効くよう path と下の全部の 2 つ）。
++/// 頭に読む根の各々への書きの道具の断り Edit(/<根>/**) を置く（Edit の規則は Write と NotebookEdit にも効き、どの許可の形でも効く・
++/// 許可の形を acceptEdits に替えると --add-dir の読む根へ聞かずに書けるので・行 cs-root-edits）。
+ fn denied_reads(l: &Launch) -> Vec<String> {
+-    let mut rules = vec![format!("Read(/{}/accounts/**)", l.state)];
++    let mut rules: Vec<String> = l.roots.iter().map(|r| format!("Edit(/{r}/**)")).collect();
++    rules.push(format!("Read(/{}/accounts/**)", l.state));
+     rules.extend(l.account_dirs.iter().map(|d| format!("Read(/{d}/**)")));
+     rules.push(format!("Read(/{}/.beads/.env)", l.repo));
+     for c in CREDENTIALS {
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 5bd363c12b0312bec5296c297b05155c724624e2..f81ddc2b507285909191ba2bf370aebd5241a5e7 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -188,7 +188,7 @@ fn cwarg_audit_refuses_each_missing_key() {
+     for (list, n) in [
+         ("/sandbox/credentials/files", 11),
+         ("/sandbox/filesystem/denyWrite", 3),
+-        ("/permissions/deny", 16),
++        ("/permissions/deny", 19),
+     ] {
+         for i in 0..n {
+             let a = with_settings(&l, |set| {
+@@ -419,13 +419,69 @@ fn cwarg_hides_account_dirs_and_credential_reads() {
+         };
+         assert_eq!(
+             (n("/sandbox/credentials/files"), n("/permissions/deny")),
+-            (9, 14),
++            (9, 17),
+             "{form} の実体なし"
+         );
+         assert!(audit(&argv(&none), &none).is_empty(), "{form} の実体なし");
+     }
+ }
+ 
++/// 読む根の各々への書きの道具の断りが読む根の順に 1 つずつ在り、どれを欠いても別の字に替えても検めが断ることを見る（行 cs-root-edits）。
++#[test]
++fn cwarg_denies_edits_under_read_roots() {
++    let fx = fixture();
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let edits = |l: &Launch| -> Vec<String> {
++            strings_of(&settings(l)["permissions"]["deny"])
++                .into_iter()
++                .filter(|r| r.starts_with("Edit("))
++                .collect()
++        };
++        assert_eq!(
++            edits(&l),
++            ["Edit(//R/**)", "Edit(//S/fleet/**)", "Edit(//S/pipe/**)"],
++            "{form}"
++        );
++        assert_eq!(
++            strings_of(&settings(&l)["permissions"]["deny"])[..3],
++            edits(&l)[..],
++            "{form} の頭"
++        );
++        for rule in edits(&l) {
++            let dropped = with_settings(&l, |s| {
++                let xs = s["permissions"]["deny"].as_array_mut().expect("列");
++                xs.retain(|x| *x != json!(rule));
++            });
++            assert_eq!(
++                audit(&dropped, &l),
++                ["/permissions/deny"],
++                "{form} {rule} を除いた"
++            );
++            let write = rule.replacen("Edit(", "Write(", 1);
++            let renamed = with_settings(&l, |s| {
++                let xs = s["permissions"]["deny"].as_array_mut().expect("列");
++                xs.iter_mut()
++                    .filter(|x| **x == json!(rule))
++                    .for_each(|x| *x = json!(write));
++            });
++            assert_eq!(audit(&renamed, &l), ["/permissions/deny"], "{form} {write}");
++        }
++        let mut one = l.clone();
++        one.roots.truncate(1);
++        assert_eq!(edits(&one), ["Edit(//R/**)"], "{form} の在る根だけ");
++        assert!(audit(&argv(&one), &one).is_empty(), "{form} の在る根だけ");
++    }
++}
++
++fn strings_of(v: &Value) -> Vec<String> {
++    v.as_array()
++        .expect("列")
++        .iter()
++        .map(|x| x.as_str().expect("字").to_string())
++        .collect()
++}
++
+ #[test]
+ fn cwarg_tmp_and_version() {
+     assert_eq!(private_tmp("/W"), "/tmp/tzc-07d671");
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index 08a934f3fa0bfa0059ae36f2aaa56c916ef5e695..bdc4508dca1f76a0677f568dbaf8c84c4c84254a 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -45,6 +45,7 @@
+     "permissions": {
+       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
+       "deny": [
++        "Edit(//R/**)", "Edit(//S/fleet/**)", "Edit(//S/pipe/**)",
+         "Read(//S/accounts/**)", "Read(//A/one/**)", "Read(//A/old/**)", "Read(//R/.beads/.env)",
+         "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
+         "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",
