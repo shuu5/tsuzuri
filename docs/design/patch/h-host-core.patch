@@ -121,10 +121,10 @@ index e6151627e0722413f3d66d9e6c44a4a58c1e900c..0f4385b77685c27b39610f68d2048345
  pub mod project;
 diff --git a/crates/tsuzuri-core/src/hostload.rs b/crates/tsuzuri-core/src/hostload.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..9978b704c499c131420d1d3b3b429b495df6e2a7
+index 0000000000000000000000000000000000000000..1d34f7f64e5f593a533304fb887a0e3d59fefab0
 --- /dev/null
 +++ b/crates/tsuzuri-core/src/hostload.rs
-@@ -0,0 +1,307 @@
+@@ -0,0 +1,305 @@
 +//! host の負荷と書きの読み（要件 FR12・判断の記録 ADR-27 の決定 (5)・ADR-31 の決定 (5)）。
 +//! 入力は kernel の file の字（loadavg・動いている cpu の範囲・PSI の 3 種・meminfo・scope の memory.current と
 +//! memory.max・装置の stat）と、smartctl の JSON の字と、host の面の書きの測りの表の字。境界が読んで渡し、ここは
@@ -234,11 +234,6 @@ index 0000000000000000000000000000000000000000..9978b704c499c131420d1d3b3b429b49
 +        fifteen,
 +        cores,
 +    })
-+}
-+
-+/// 1 分の負荷の core 比（100 倍・切り捨て）。
-+pub fn load_ratio(load: &Load) -> u32 {
-+    load.one / load.cores.max(1)
 +}
 +
 +/// PSI の字の `kind`（some か full）の行の avg10 と avg60。
@@ -380,13 +375,16 @@ index 0000000000000000000000000000000000000000..9978b704c499c131420d1d3b3b429b49
 +        .collect()
 +}
 +
-+/// 線を越えた測り（`Gauge::ALL` の順・ちょうどは越えない・読めない測りは越えない）。
++/// 線を越えた測り（`Gauge::ALL` の順・ちょうどは越えない・読めない測りは越えない）。負荷は cpu の数で割らず、
++/// 1 分の負荷の 100 倍と `LOAD_WARN` と cpu の数の積を比べる（割って切り捨てると core 比 1.00〜1.01 の越えを落とす）。
++/// 詰まりは avg60 の 100 倍と線を直に比べる（PSI の字は小数 2 桁なので 100 倍に捨てる桁が無い）。
 +pub fn over(load: &Reading<Load>, pressure: &Pressure) -> Vec<Gauge> {
 +    let past = |r: &Reading<Stall>, line: u32| matches!(r, Reading::Known(s) if s.avg60 > line);
++    let busy = |l: &Load| u64::from(l.one) > u64::from(LOAD_WARN) * u64::from(l.cores);
 +    Gauge::ALL
 +        .into_iter()
 +        .filter(|g| match g {
-+            Gauge::Load => matches!(load, Reading::Known(l) if load_ratio(l) > LOAD_WARN),
++            Gauge::Load => matches!(load, Reading::Known(l) if busy(l)),
 +            Gauge::Io => past(&pressure.io_full, IO_FULL_WARN),
 +            Gauge::Memory => past(&pressure.memory_full, MEMORY_FULL_WARN),
 +        })
@@ -454,10 +452,10 @@ index b03fb3e5dfeca660aed8f9ca848631b07fdbd824..9857a883d1c2fdd5df3bf19851148615
  pub mod pipeline;
 diff --git a/crates/tsuzuri-core/tests/hload.rs b/crates/tsuzuri-core/tests/hload.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..e5cf5e039a69479fe422a257581d2bb1ef5fd52d
+index 0000000000000000000000000000000000000000..c289e7921b1df51d9449c1da6a3b15850a85e8ce
 --- /dev/null
 +++ b/crates/tsuzuri-core/tests/hload.rs
-@@ -0,0 +1,329 @@
+@@ -0,0 +1,330 @@
 +//! host の負荷と書きの読みの歯（接頭辞 hload_・持ち主の裁定 t3-hub.77.28）。
 +//! kernel の file の字・smartctl の JSON・host の面の書きの測りの表の読みと、注意の線（規則の行 R-42）の判じと電文の組み。
 +#![cfg(test)]
@@ -609,8 +607,9 @@ index 0000000000000000000000000000000000000000..e5cf5e039a69479fe422a257581d2bb1
 +#[test]
 +fn hload_over_follows_the_lines() {
 +    assert_eq!(over(&ld(3_200, 32), &calm()), Vec::<Gauge>::new());
-+    assert_eq!(over(&ld(3_232, 32), &calm()), [Gauge::Load]);
-+    assert_eq!(over(&ld(3_231, 32), &calm()), Vec::<Gauge>::new());
++    assert_eq!(over(&ld(3_201, 32), &calm()), [Gauge::Load]);
++    assert_eq!(over(&ld(3_231, 32), &calm()), [Gauge::Load]);
++    assert_eq!(over(&ld(u32::MAX, u32::MAX), &calm()), Vec::<Gauge>::new());
 +    let mut p = calm();
 +    p.io_full = known(st(9_999, 500));
 +    assert_eq!(over(&ld(0, 1), &p), Vec::<Gauge>::new());
