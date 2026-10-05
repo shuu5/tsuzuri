@@ -1,0 +1,143 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules/host.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules/host.rs
+index 30503d0201784a0cd515b3579e8a705a648050d7..f3c49db453ec3720b570b0b6bcb8b28870d285be 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules/host.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules/host.rs
+@@ -923,3 +923,50 @@ fn rules_host_write_budget_table_on_the_tracked_face_is_refused_once_per_table()
+     );
+     std::fs::remove_dir_all(&dir).ok();
+ }
++
++/// 1 行の `[[write-budget]]` に任意の key wear を足した面（見出しは 3 行目・name 4・stat 5・wear 6）。
++const HOST_WRITE_BUDGET_WEAR: &str = "schema = 1\n\n[[write-budget]]\nname = \"a\"\nstat = \"/sys/block/a/stat\"\nwear = \"/var/lib/w/a.json\"\n";
++
++/// key wear を持つ行と持たない行の 2 行の面は、wear の file が無くても `validate --state-dir` が rc 0 で、stdout が表の無い面の
++/// 1 行と同じ字。`Manifest` の口は宣言順に name・stat・wear（持たない行は None）・見出しの行番号を返す。base は wear を未知の key として断る（RED）。
++#[test]
++fn vwear_rows_with_and_without_wear_validate_and_carry_the_path() {
++    assert!(!std::path::Path::new("/var/lib/w/a.json").exists(), "見本の wear の file は在らない");
++    let tableless = host_state_dir(Some("schema = 1\n")).expect("tmp の state dir を作れる");
++    let two = host_state_dir(Some(&format!("{HOST_WRITE_BUDGET_WEAR}\n[[write-budget]]\nname = \"b_2\"\nstat = \"/sys/block/b/stat\"\n"))).expect("tmp の state dir を作れる");
++    let want = rules_dispatch(&["validate", "--state-dir", &tableless.display().to_string()]);
++    let got = rules_dispatch(&["validate", "--state-dir", &two.display().to_string()]);
++    assert_eq!(got.rc, RC_OK, "{got:?}");
++    assert_eq!((got.out, got.err), (want.out, want.err), "表を数えず、表の無い面と同じ字");
++    let manifest = Manifest::embedded()
++        .and_then(|tracked| vessel::rules::with_state_dir(tracked, Some(two.as_path())))
++        .expect("host の面を合わせられる");
++    let rows: Vec<(&str, &str, Option<&str>, u64)> = manifest.write_budgets().iter().map(|row| (row.name(), row.stat(), row.wear(), row.line())).collect();
++    assert_eq!(rows, [("a", "/sys/block/a/stat", Some("/var/lib/w/a.json"), 3), ("b_2", "/sys/block/b/stat", None, 8)], "宣言順・wear を持たない行は None");
++    std::fs::remove_dir_all(&tableless).ok();
++    std::fs::remove_dir_all(&two).ok();
++}
++
++/// wear だけを崩した 4 形（相対の path・空の字・空白を含む path・key wear の 2 度目）は、それぞれ wear の行番号つきで 1 件だけ断る
++/// （`host.toml:` の接頭辞・rc 1・stdout 0 行・字は stat の断りと同じ形）。崩す前の 1 行は rc 0。
++#[test]
++fn vwear_refuses_each_wear_defect_once_with_its_line() {
++    let dir = host_state_dir(None).expect("tmp の state dir を作れる");
++    let host = dir.join(vessel::rules::HOST_MANIFEST);
++    for (body, want) in [
++        (HOST_WRITE_BUDGET_WEAR.replace("\"/var/lib/w/a.json\"", "\"var/lib/w/a.json\""), "wear \"var/lib/w/a.json\" が絶対 path でない line=6"),
++        (HOST_WRITE_BUDGET_WEAR.replace("\"/var/lib/w/a.json\"", "\"\""), "wear \"\" が絶対 path でない line=6"),
++        (HOST_WRITE_BUDGET_WEAR.replace("/var/lib/w/a.json", "/var/lib/w/a b.json"), "wear が空白を含む: \"/var/lib/w/a b.json\" line=6"),
++        (format!("{HOST_WRITE_BUDGET_WEAR}wear = \"/var/lib/w/b.json\"\n"), "key wear が重複する line=7"),
++    ] {
++        std::fs::write(&host, &body).expect("host の面を書ける");
++        let refused = rules_dispatch(&["validate", "--state-dir", &dir.display().to_string()]);
++        assert_eq!(refused.rc, RC_REFUSED, "{body:?}: {refused:?}");
++        assert!(refused.out.is_empty(), "{body:?}: stdout へは書かない");
++        assert_eq!(refused.err, vec![format!("rules: host.toml: {want}")], "{body:?}: 1 件");
++    }
++    std::fs::write(&host, HOST_WRITE_BUDGET_WEAR).expect("host の面を書ける");
++    let alone = rules_dispatch(&["validate", "--state-dir", &dir.display().to_string()]);
++    assert_eq!(alone.rc, RC_OK, "崩す前の 1 行は通る: {alone:?}");
++    std::fs::remove_dir_all(&dir).ok();
++}
+diff --git a/scribe2/crates/scribe2/src/rules/write_budget.rs b/scribe2/crates/scribe2/src/rules/write_budget.rs
+index b19ef3c87869dc6b33d24dd6bba77ce48f221191..23e6313ae7f5d446dc049643d39ca5f4f1072e92 100644
+--- a/scribe2/crates/scribe2/src/rules/write_budget.rs
++++ b/scribe2/crates/scribe2/src/rules/write_budget.rs
+@@ -10,10 +10,10 @@ use super::RuleError;
+ /// 表の見出しの字面。
+ pub(super) const HEADER: &str = "[[write-budget]]";
+ 
+-/// 1 行が持てる key の全体（宣言順・閉じた 2 つ）。
+-pub(super) const KEYS: &[&str] = &["name", "stat"];
++/// 1 行が持てる key の全体（宣言順・閉じた 3 つ・wear だけ任意）。
++pub(super) const KEYS: &[&str] = &["name", "stat", "wear"];
+ 
+-/// 1 行に必ず要る key（2 つとも）。
++/// 1 行に必ず要る key（name と stat）。
+ pub(super) const REQUIRED: &[&str] = &["name", "stat"];
+ 
+ /// `[[write-budget]]` 1 行が名乗る測りの装置（host 固有の値・host の面にだけ書く）。
+@@ -21,6 +21,7 @@ pub(super) const REQUIRED: &[&str] = &["name", "stat"];
+ pub struct WriteBudget {
+     name: String,
+     stat: String,
++    wear: Option<String>,
+     line: u64,
+ }
+ 
+@@ -35,6 +36,11 @@ impl WriteBudget {
+         &self.stat
+     }
+ 
++    /// 装置の摩耗の記録の file の絶対 path（空白を含まない・書かない行は None）。器は path の形だけを判じ、file を読まない。
++    pub fn wear(&self) -> Option<&str> {
++        self.wear.as_deref()
++    }
++
+     /// manifest の中でこの行が始まる物理行番号。
+     pub fn line(&self) -> u64 {
+         self.line
+@@ -51,6 +57,7 @@ pub(super) fn build(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<WriteBu
+     }
+     let name = text_field(raw, "name", errors);
+     let stat = text_field(raw, "stat", errors);
++    let wear = text_field(raw, "wear", errors);
+     let (Some(name), Some(stat)) = (name, stat) else {
+         return None;
+     };
+@@ -60,12 +67,20 @@ pub(super) fn build(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<WriteBu
+     if name.is_empty() || !name.chars().all(|found| found.is_ascii_alphanumeric() || found == '-' || found == '_') {
+         errors.push(RuleError::new(line_of(raw, "name"), format!("name {name:?} は英数字と - と _ の 1 字以上でない")));
+     }
+-    if !stat.starts_with('/') {
+-        errors.push(RuleError::new(line_of(raw, "stat"), format!("stat {stat:?} が絶対 path でない")));
+-    } else if stat.chars().any(char::is_whitespace) {
+-        errors.push(RuleError::new(line_of(raw, "stat"), format!("stat が空白を含む: {stat:?}")));
++    check_path(raw, "stat", &stat, errors);
++    if let Some(wear) = &wear {
++        check_path(raw, "wear", wear, errors);
++    }
++    (errors.len() == before).then_some(WriteBudget { name, stat, wear, line: raw.line })
++}
++
++/// path の key の値が空白を含まない絶対 path でなければ、その key の行番号で 1 件断る（空の字も絶対 path でない）。
++fn check_path(raw: &RawRow, key: &str, value: &str, errors: &mut Vec<RuleError>) {
++    if !value.starts_with('/') {
++        errors.push(RuleError::new(line_of(raw, key), format!("{key} {value:?} が絶対 path でない")));
++    } else if value.chars().any(char::is_whitespace) {
++        errors.push(RuleError::new(line_of(raw, key), format!("{key} が空白を含む: {value:?}")));
+     }
+-    (errors.len() == before).then_some(WriteBudget { name, stat, line: raw.line })
+ }
+ 
+ /// key が書かれていた物理行番号（無ければ見出しの行）。
+diff --git a/scribe2/docs/design/write-budget.md b/scribe2/docs/design/write-budget.md
+index 565a9f98572dcc3f474302b0e5ab799fd88f1e5a..f68022ae7dfb1d5abd110c1eab7d8063ddf6acd0 100644
+--- a/scribe2/docs/design/write-budget.md
++++ b/scribe2/docs/design/write-budget.md
+@@ -72,9 +72,10 @@
+ ## 3. host の面の表 `[[write-budget]]`（行 a）
+ 
+ - 置き場: host の面（`<state_dir>/host.toml`）にだけ置ける。0〜n 行。tracked の面（埋め込みと `--rules`）に置いた表は中身を検査せず 1 表 1 件で `[[write-budget]] は tracked の manifest に置けない（書き込みの測りの装置は host の面だけ）` と断る（`[[device]]` と `[[publish-exclusion]]` と同じ置き方・装置の path は host 固有で PUBLIC repo に載せない・CON2）。
+-- key は 2 つで両方必須（欠けと未知の key は既存の字「必須 key <k> が無い」「未知の key <k>」）:
++- key は name と stat の 2 つが必須で、wear が任意（欠けと未知の key と 2 度目の key は既存の字「必須 key <k> が無い」「未知の key <k>」「key <k> が重複する」）:
+   - `name`: 記録の dir の名。英数字と `-` と `_` の 1 字以上（外れは `name "<値>" は英数字と - と _ の 1 字以上でない`）。面の中で一意（2 度目の行の見出しの行番号で `書き込みの測りの名 <name> が重複する`）。
+   - `stat`: block 装置の stat file の絶対 path（形は `/sys/block/<device>/stat`）。相対は `stat "<値>" が絶対 path でない`、空白を含むものは `stat が空白を含む: "<値>"`。
++  - `wear`（任意）: 装置の摩耗の記録の file の絶対 path（host の外の日に 1 度の仕組みが SMART の値を書き、誰でも読める file）。器は path の形だけを判じて file を読まず、在る無しも見ない（読み手は器の外の消費側の板）。形の断りは stat と同じ字の形で、相対と空の字は `wear "<値>" が絶対 path でない`、空白を含むものは `wear が空白を含む: "<値>"`。wear の無い行はこれまでどおり読める。
+ - 断りは行番号つきで 1 件ずつ・`host.toml:` の接頭辞・`rules validate` は rc 1。`rules validate --state-dir` の 1 行は表の無い面と同じ字（表を数えない）。
+ - 組み立ては rules の兄弟 module（行 a の write-set の `+` の file・見出しと key の列と組み立てと名の重複の検査を持つ）で、`crates/scribe2/src/rules/manifest.rs` の section の閉じた列に見出しを 1 つ足し、host の面の読みと合わせの口（joined）がその module を呼ぶ。`[[device]]` は端末の表が使う見出しなので分ける。
+ - device の名でなく file の path を書く理由: code に「`/sys/block/` + 名」を焼くと歯が sysfs を直に読むことになり、差し替えの口（env・root の seam）は C2.2 で作れない。path なら歯は tmp の fixture file を指せ、host ごとの値は面だけに在る（N3）。
