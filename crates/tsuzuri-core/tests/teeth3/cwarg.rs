@@ -1,6 +1,7 @@
 //! 起動の口の argv と設定の歯（接頭辞 cwarg_・設計ノート surface-wave27a 行 cs-argv・受入 AC19 の argv と設定）。
 //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
 //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
+//! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 #![cfg(test)]
 
 use std::path::Path;
@@ -8,8 +9,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    ASK_DROP, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp, prompt,
-    read_roots, settings, version_ok,
+    ASK_DROP, CREDENTIALS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp,
+    prompt, read_roots, settings, version_ok,
 };
 
 fn fixture() -> Value {
@@ -178,9 +179,9 @@ fn cwarg_audit_refuses_each_missing_key() {
         assert!(!audit(&a, &l).is_empty(), "{pointer} を除いた");
     }
     for (list, n) in [
-        ("/sandbox/credentials/files", 8),
+        ("/sandbox/credentials/files", 9),
         ("/sandbox/filesystem/denyWrite", 3),
-        ("/permissions/deny", 2),
+        ("/permissions/deny", 3),
     ] {
         for i in 0..n {
             let a = with_settings(&l, |set| {
@@ -277,6 +278,62 @@ fn cwarg_audit_refuses_wide_sandbox() {
             s["sandbox"]["credentials"]["files"][1]["mode"] = json!("allow")
         }),
     ]);
+}
+
+#[test]
+fn cwarg_hides_the_claude_credentials() {
+    let fx = fixture();
+    let file = "~/.claude/.credentials.json";
+    let rule = "Read(~/.claude/.credentials.json)";
+    assert_eq!(CREDENTIALS.last(), Some(&file));
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let set = settings(&l);
+        let files = set["sandbox"]["credentials"]["files"]
+            .as_array()
+            .expect("列");
+        let hidden = |x: &&Value| x["path"] == json!(file);
+        assert_eq!(
+            files.iter().filter(hidden).collect::<Vec<_>>(),
+            [&json!({"path": file, "mode": "deny"})],
+            "{form}"
+        );
+        let deny = set["permissions"]["deny"].as_array().expect("列");
+        assert_eq!(
+            deny.iter().filter(|r| **r == json!(rule)).count(),
+            1,
+            "{form}"
+        );
+        let gaps = |edit: &dyn Fn(&mut Value)| audit(&with_settings(&l, edit), &l);
+        let drop = |pointer: &'static str, want: &'static str| {
+            move |s: &mut Value| {
+                s.pointer_mut(pointer)
+                    .and_then(Value::as_array_mut)
+                    .expect("列")
+                    .retain(|x| x != &json!(want) && x["path"] != json!(want));
+            }
+        };
+        let files_gap = ["/sandbox/credentials/files".to_string()];
+        let deny_gap = ["/permissions/deny".to_string()];
+        assert_eq!(gaps(&drop("/sandbox/credentials/files", file)), files_gap);
+        assert_eq!(gaps(&drop("/permissions/deny", rule)), deny_gap);
+        let allow = |s: &mut Value| {
+            let xs = s["sandbox"]["credentials"]["files"]
+                .as_array_mut()
+                .expect("列");
+            xs.iter_mut()
+                .filter(|x| x["path"] == json!(file))
+                .for_each(|x| x["mode"] = json!("allow"));
+        };
+        assert_eq!(gaps(&allow), files_gap, "{form} の allow");
+        let wide = |s: &mut Value| {
+            let xs = s["permissions"]["deny"].as_array_mut().expect("列");
+            xs.iter_mut()
+                .filter(|r| **r == json!(rule))
+                .for_each(|r| *r = json!("Read(~/.claude/**/x)"));
+        };
+        assert_eq!(gaps(&wide), deny_gap, "{form} の別の字");
+    }
 }
 
 #[test]

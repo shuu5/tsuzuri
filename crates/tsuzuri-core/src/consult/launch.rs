@@ -41,13 +41,17 @@ pub const DOMAINS: [&str; 6] = [
     "registry.npmjs.org",
 ];
 
+/// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。
+const CLAUDE_CREDENTIALS: &str = "~/.claude/.credentials.json";
+
 /// 囲いから見えなくする資格の file（home の下・ほかに state dir の accounts と repo の台帳の鍵と共有の temp）。
-pub const CREDENTIALS: [&str; 5] = [
+pub const CREDENTIALS: [&str; 6] = [
     "~/.config/gh",
     "~/.ssh",
     "~/.git-credentials",
     "~/.config/git/credentials",
     "~/.cld-env",
+    CLAUDE_CREDENTIALS,
 ];
 
 /// argv に在ってはならない字（plugin の置き場・確かめを飛ばす形・外の道具の設定・指示の足し）。
@@ -144,7 +148,11 @@ pub fn settings(l: &Launch) -> Value {
     json!({
         "permissions": {
             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
-            "deny": [format!("Read(/{s}/accounts/**)"), format!("Read(/{r}/.beads/.env)")],
+            "deny": [
+                format!("Read(/{s}/accounts/**)"),
+                format!("Read(/{r}/.beads/.env)"),
+                format!("Read({CLAUDE_CREDENTIALS})"),
+            ],
         },
         "sandbox": {
             "enabled": true,
@@ -331,6 +339,7 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
     let want = [
         format!("Read(/{}/accounts/**)", l.state),
         format!("Read(/{}/.beads/.env)", l.repo),
+        format!("Read({CLAUDE_CREDENTIALS})"),
     ];
     if want.iter().any(|w| !deny.contains(&w.as_str())) {
         gaps.push("/permissions/deny".to_string());

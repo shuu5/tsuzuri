@@ -44,7 +44,7 @@
   "settings": {
     "permissions": {
       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
-      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)"]
+      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)", "Read(~/.claude/.credentials.json)"]
     },
     "sandbox": {
       "enabled": true,
@@ -58,6 +58,7 @@
         {"path": "~/.git-credentials", "mode": "deny"},
         {"path": "~/.config/git/credentials", "mode": "deny"},
         {"path": "~/.cld-env", "mode": "deny"},
+        {"path": "~/.claude/.credentials.json", "mode": "deny"},
         {"path": "/S/accounts", "mode": "deny"},
         {"path": "/R/.beads/.env", "mode": "deny"},
         {"path": "/tmp/claude-U", "mode": "deny"}
