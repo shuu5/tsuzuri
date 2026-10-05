@@ -5,11 +5,15 @@
 //! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・行 cs-inbound-refuse・判断の記録 ADR-57 決定 (1)(ケ)）。
 //! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
 //! 問う窓の旗（別名 `--rc` を含む）を断る（行 cs-remote・判断の記録 ADR-57 決定 (4)）。
+//! 設定には話す窓と問う窓に共通の状態の 1 行（statusLine の命令 `status::command`）を置き、検めは欠けと字の違いを断る
+//! （行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
 //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
 
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_contract::ledger::fnv1a64;
+
+use super::status;
 
 /// 話す窓を Remote Control に繋ぐ旗（値は窓の名・問う窓には付けない）。
 pub const REMOTE_FLAG: &str = "--remote-control";
@@ -241,8 +245,14 @@ pub fn settings(l: &Launch) -> Value {
             "npm_config_cache": format!("{w}/node_modules/.npm-cache"),
         },
         "hooks": hooks(l),
+        "statusLine": status_line(l),
         "crossSessionInbound": INBOUND,
     })
+}
+
+/// 設定の状態の 1 行（型 command と `status::command` の字だけ）。
+fn status_line(l: &Launch) -> Value {
+    json!({"type": "command", "command": status::command(&l.tz, &l.workspace)})
 }
 
 /// 設定の hook（守りの hook と会話の印の hook）。
@@ -535,6 +545,9 @@ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
             audit_sandbox(&set, l, &mut gaps);
             audit_permissions(&set, l, &mut gaps);
             audit_reads(&set, l, &mut gaps);
+            if set.pointer("/statusLine") != Some(&status_line(l)) {
+                gaps.push("/statusLine".to_string());
+            }
         }
         _ => gaps.push("/".to_string()),
     }

@@ -94,6 +94,7 @@
       "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
       "Stop": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}]
     },
+    "statusLine": {"type": "command", "command": "timeout 2 /T consult statusline /W"},
     "crossSessionInbound": "refuse"
   }
 }

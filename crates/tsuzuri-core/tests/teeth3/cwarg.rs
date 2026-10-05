@@ -4,6 +4,7 @@
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+//! 設定に状態の 1 行を置き、欠けと字の違いを検めが断ることを見る（行 cs-status-text）。
 //! 話す窓だけを Remote Control に窓の名で繋ぎ、欠け・名の違い・別名・問う窓の旗を検めが断ることを見る（行 cs-remote）。
 //! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
 #![cfg(test)]
@@ -212,6 +213,7 @@ fn cwarg_audit_refuses_each_missing_key() {
         "/env",
         "/hooks",
         "/crossSessionInbound",
+        "/statusLine",
     ];
     for pointer in leaves {
         let (parent, key) = pointer.rsplit_once('/').expect("pointer");
@@ -885,5 +887,38 @@ fn cwarg_talk_window_joins_remote_control() {
     ];
     for (name, items) in ask_cases {
         assert_eq!(remote_gaps(&ask, false, 3, items), only, "問う窓の{name}");
+    }
+}
+
+/// 話す窓と問う窓の設定は状態の 1 行を型 command と作業場を渡す命令の字だけで持ち、除くか型・命令・作業場を替えるか
+/// 鍵を足した設定を、検めは `/statusLine` だけで断る（行 cs-status-text）。
+#[test]
+fn cwarg_settings_hold_the_status_line() {
+    let fx = fixture();
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let want = json!({"type": "command", "command": "timeout 2 /T consult statusline /W"});
+        assert_eq!(settings(&l)["statusLine"], want, "{form}");
+        let edits: [Edit; 5] = [
+            ("除く", |s| {
+                s.as_object_mut().expect("object").remove("statusLine");
+            }),
+            ("型を替える", |s| {
+                s["statusLine"]["type"] = "static".into()
+            }),
+            ("命令を替える", |s| {
+                s["statusLine"]["command"] = "timeout 2 /T consult list".into();
+            }),
+            ("作業場を替える", |s| {
+                s["statusLine"]["command"] = "timeout 2 /T consult statusline /X".into();
+            }),
+            ("鍵を足す", |s| {
+                s["statusLine"]["refreshInterval"] = 1.into()
+            }),
+        ];
+        for (name, edit) in edits {
+            let gaps = audit(&with_settings(&l, edit), &l);
+            assert_eq!(gaps, ["/statusLine"], "{form} の statusLine を{name}");
+        }
     }
 }
