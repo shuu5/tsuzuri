@@ -2,8 +2,8 @@
 //!
 //! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
 //! 関数 [`judge`] と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の読み [`on`] を持つ。判じは交わりの関数の
-//! 中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を返す段）と、入口と起動の列への配線と記帳は
-//! 後の器の行が足す。
+//! 中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を返す段）は子の module [`names`] に置く。入口と
+//! 起動の列への配線と記帳は後の器の行が足す。
 //!
 //! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
 //! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
@@ -22,6 +22,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+mod names;
 
 /// 入り切りの規則の行 id（判断の記録 ADR-60 の決定 (5)）。
 pub const ROW: &str = "pipe.overlap_commute";
@@ -43,7 +45,7 @@ pub enum Verdict {
     OutsideFace,
     /// 差が交わる path を書かないか、4 通りか積みのどれかが当たらない。
     NotCommuting,
-    /// 両方の差の足す行が同じ宣言の名を足す（拾いは後の器の行）。
+    /// 4 通りと積みが当たり、候補の差と相手の差の 1 本が同じ宣言の名を足す（拾いは [`names`]）。
     SameName,
     /// 差の file を読めない・一時の index を作れない・時間切れ。
     Unreadable,
@@ -107,7 +109,8 @@ pub fn on(manifest: &Manifest) -> bool {
 /// [`scope_touched`] の 1 本で 1 項ずつ照らす）・差の file を読めない周（unreadable・候補は main の先端の木、相手は相手の base の
 /// 木から読む）・交わる path を書かない差（not-commuting）を断り、main の先端を読んだ一時の index に 4 通り（候補だけ・候補の後に
 /// 相手・相手だけ・相手の後に候補）を当て、相手が 2 本以上なら相手を起こした順に積んだ後に候補を当てる。当たらない周は
-/// not-commuting、index を作れない周と時間切れは unreadable。
+/// not-commuting、index を作れない周と時間切れは unreadable。全部が当たった組は、候補の差と相手の差の 1 本が同じ名を足せば
+/// same-name（[`names`] の段）。
 pub fn judge(ask: &Ask<'_>) -> Verdict {
     let Some(mine) = ask.patch else {
         return Verdict::NoPatch;
@@ -200,7 +203,8 @@ impl<'a> Round<'a> {
         if theirs.len() > 1 {
             orders.push(theirs.iter().map(PathBuf::as_path).chain([own.as_path()]).collect());
         }
-        orders.iter().map(|order| self.applies(order)).find(|found| *found != Verdict::Commutes).unwrap_or(Verdict::Commutes)
+        let refused = orders.iter().map(|order| self.applies(order)).find(|found| *found != Verdict::Commutes);
+        refused.unwrap_or_else(|| self.names(&own, &theirs))
     }
 
     /// `<tree>:<path>` の差の file を周の dir の `name` へ写し、写しの path と本文を返す（読めない周は `None`）。
