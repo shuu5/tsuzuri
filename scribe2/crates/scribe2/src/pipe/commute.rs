@@ -575,16 +575,16 @@ mod tests {
         assert!(git_ok(&place.repo, &["diff", "--cached", "--quiet"]), "repo の index を替えない");
     }
 
-    /// 結末の字は閉じた 6 つ。規則の行は埋め込みでは偽で、真の発効の行だけを真と読む。
+    /// 結末の字は閉じた 6 つ。規則の行は埋め込みでは真（判断の記録 ADR-60 の承認の裁定 id を引く）で、真の発効の行だけを真と読む。
     #[test]
     fn vcapply_verdict_tokens_and_the_rule_row_read_true_only_when_set() {
         let tokens: Vec<&str> = VERDICTS.iter().map(|found| found.as_str()).collect();
         assert_eq!(tokens, ["commutes", "no-patch", "outside-face", "not-commuting", "same-name", "unreadable"]);
         let embedded = Manifest::embedded().unwrap_or_else(|errors| panic!("{errors:?}"));
         let row = embedded.get(ROW).map(|found| (found.kind, found.value.clone(), found.enabled, found.ruling.as_str()));
-        let want = (RuleKind::PipeOverlapCommute, RuleValue::Bool(false), true, "user 2026-10-05T05:13Z 問い t3-hub.89.2");
+        let want = (RuleKind::PipeOverlapCommute, RuleValue::Bool(true), true, "user 2026-10-05T05:13Z 裁定 t3-hub.89.2:20261005T0513Z-1");
         assert_eq!(row, Some(want), "埋め込みの行");
-        assert!(!on(&embedded), "埋め込みは偽");
+        assert!(on(&embedded), "埋め込みは真");
         let one = |value: &str, enabled: &str| {
             let rule = format!("id = \"{ROW}\"\nkind = \"PipeOverlapCommute\"\nvalue = {value}\nenabled = {enabled}\n");
             Manifest::parse(&format!("schema = 1\n\n[[rule]]\n{rule}ruling = \"r\"\nruled_at = \"2026-10-05\"\n"))
