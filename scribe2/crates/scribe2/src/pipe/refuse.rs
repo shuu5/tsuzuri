@@ -70,6 +70,7 @@ pub(crate) const REFUSALS: &[&str] = &[
     "index-building",
     "code-facts",
     "code-facts-unmeasured",
+    "run-cap",
 ];
 
 /// 起動の列の起こす側の 1 周が、受付の理由にこの語で待つ候補が在るとき、HEAD の code の索引の組み立てを裏で起こす契機の語
@@ -274,6 +275,14 @@ pub(crate) enum Refuse {
         /// 測れない理由の状態の語（`absent`・`building`・`failed:<失敗の語>`・`none`・`undeclared`）。
         state: String,
     },
+    /// 宣言 `run-cap-paths` の dir の下を書く契約で、同じ dir の下を書く live な便が宣言 `run-cap` の本数に達した（tsuzuri の判断の記録
+    /// ADR-63 の決定 (13)・受付と列の待ちが同じ判じを読む・走行中の便は止めない）。
+    RunCap {
+        /// 数えた live な便の先頭の run id。
+        run: String,
+        /// 宣言の本数。
+        cap: u64,
+    },
 }
 
 /// 欄 `code-facts` の名乗りと実測が違う要素 1 つ（[`Refuse::CodeFacts`] の中身・断りの型を小さく保つために箱に入れる）。
@@ -324,6 +333,7 @@ impl Refuse {
             Self::IndexBuilding { .. } => "index-building",
             Self::CodeFacts(_) => "code-facts",
             Self::CodeFactsUnmeasured { .. } => "code-facts-unmeasured",
+            Self::RunCap { .. } => "run-cap",
         }
     }
 
@@ -396,6 +406,8 @@ impl Refuse {
             Self::IndexBuilding { ref state } => index_building_reason(self.as_str(), state),
             Self::CodeFacts(ref found) => code_facts_reason(self.as_str(), found),
             Self::CodeFactsUnmeasured { ref element, ref state } => unmeasured_reason(self.as_str(), element, state),
+            // stderr の 1 行は `pipe: run-cap run=<id> cap=<n>`（max-live と同じ名と 2 値の形）。
+            Self::RunCap { ref run, cap } => format!("{} run={run} cap={cap}", self.as_str()),
         }
     }
 
@@ -427,7 +439,8 @@ impl Refuse {
             | Self::EntranceNotRed { .. }
             | Self::RulingUnresolved { .. }
             | Self::IndexBuilding { .. }
-            | Self::CodeFactsUnmeasured { .. } => Evidence::Place,
+            | Self::CodeFactsUnmeasured { .. }
+            | Self::RunCap { .. } => Evidence::Place,
             Self::ContractTable(ref found) => found.evidence(),
         }
     }
@@ -459,7 +472,8 @@ impl Refuse {
             | Self::EntranceNotRed { .. }
             | Self::IndexBuilding { .. }
             | Self::CodeFacts(_)
-            | Self::CodeFactsUnmeasured { .. } => RC_REFUSED,
+            | Self::CodeFactsUnmeasured { .. }
+            | Self::RunCap { .. } => RC_REFUSED,
             Self::RulingUnresolved { ref unmeasured, .. } if unmeasured.is_some() => RC_BROKEN,
             Self::RulingUnresolved { .. } => RC_REFUSED,
             Self::WriteSetUnreadable { .. } => RC_BROKEN,
@@ -759,6 +773,7 @@ mod tests {
                 text: "text=9".to_owned(),
             })),
             Refuse::CodeFactsUnmeasured { element: "refs:crate::pipe::refuse::Refuse=3".to_owned(), state: "absent".to_owned() },
+            Refuse::RunCap { run: "r-1".to_owned(), cap: 1 },
         ]
     }
 
@@ -857,6 +872,14 @@ mod tests {
         assert!(found.iter().skip(7).take(3).all(|refuse| refuse.rc() == RC_REFUSED), "前提違反は rc 1");
     }
 
+    /// 宣言の同時の数の上限の断り（tsuzuri の判断の記録 ADR-63 の決定 (13)）は名と run / cap の 2 値だけの 1 行・rc 1・在り処は置き場。
+    #[test]
+    fn vrcap_refusal_names_the_run_and_the_cap() {
+        let found = Refuse::RunCap { run: "r-1".to_owned(), cap: 1 };
+        assert_eq!((found.as_str(), found.reason(), found.rc()), ("run-cap", "run-cap run=r-1 cap=1".to_owned(), RC_REFUSED));
+        assert_eq!(found.evidence(), Evidence::Place);
+    }
+
     /// 閉包の file が write-set に含まれるか: dir（末尾 `/`）は配下全部・file は字面の一致・正規化してから比べる。
     #[test]
     fn refuse_covered_follows_the_overlap_folding() {
@@ -885,12 +908,12 @@ mod tests {
         // 約束の行の 2 理由（設計 contract-source.md §33・`s2-07l.512`）が同時本数の上限（gate-cost.md §24・`s2-07l.398`）の
         // 手前に並び、base の木で撃った入口の断り（pipeline.md §56・`s2-07l.557`）がその次で、裁定 id の引用の断り（dispatcher.md
         // §37・行 al）がその次で、索引の組み立て中の断り（reverse-index.md §7 (b)・行 d）がその次で、欄 code-facts の違いと測れない周の
-        // 2 断り（§7 (c)・行 e）が末尾で、母集団は 27 値。
-        assert_eq!(REFUSALS.len(), 27, "母集団 27 値");
-        assert_eq!(names.last().copied(), Some("code-facts-unmeasured"), "末尾は欄 code-facts の測れない周");
-        assert_eq!(names.iter().rev().skip(1).take(2).copied().collect::<Vec<&str>>(), ["code-facts", "index-building"]);
+        // 2 断り（§7 (c)・行 e）がその次で、宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）が末尾で、母集団は 28 値。
+        assert_eq!(REFUSALS.len(), 28, "母集団 28 値");
+        assert_eq!(names.last().copied(), Some("run-cap"), "末尾は宣言の同時の数の上限");
+        assert_eq!(names.iter().rev().skip(1).take(3).copied().collect::<Vec<&str>>(), ["code-facts-unmeasured", "code-facts", "index-building"]);
         assert_eq!(
-            names.iter().rev().skip(3).take(4).copied().collect::<Vec<&str>>(),
+            names.iter().rev().skip(4).take(4).copied().collect::<Vec<&str>>(),
             ["ruling-unresolved", "entrance-not-red", "max-live", "promise-symbol-unresolved"]
         );
         let entrance = samples().get(22).map(|found| (found.reason(), found.rc()));
@@ -915,7 +938,8 @@ mod tests {
     /// 決まる 3 語・名指した file の 4 語（file は payload の字面）・本文の読み手の 7 語・置き場と host の 8 語・契約表の
     /// 欠陥は理由の側（samples の `section-missing` は行）。名の 23 は歯を置いた時の語数で、行 al が置き場と host に 1 語足し（24 語）、
     /// 行 d が置き場と host に索引の組み立て中の 1 語を足し（25 語）、行 e が本文の読み手に 1 語（code-facts）・置き場と host に 1 語
-    /// （code-facts-unmeasured・宣言を名乗らない周だけ vessel 宣言の file）を足した（27 語）。
+    /// （code-facts-unmeasured・宣言を名乗らない周だけ vessel 宣言の file）を足した（27 語）。tsuzuri の判断の記録 ADR-63 の決定 (13) の
+    /// 行 v-one-vessel が置き場と host に宣言の同時の数の上限の 1 語（run-cap）を足した（28 語）。
     #[test]
     fn pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words() {
         let found: Vec<(&str, String)> = samples().iter().map(|refuse| (refuse.as_str(), refuse.evidence().render())).collect();
@@ -947,6 +971,7 @@ mod tests {
             ("index-building", "place"),
             ("code-facts", "name"),
             ("code-facts-unmeasured", "place"),
+            ("run-cap", "place"),
         ];
         let want: Vec<(&str, String)> = want.iter().map(|(name, at)| (*name, (*at).to_owned())).collect();
         assert_eq!(found, want, "母集団 {} 語の在り処", REFUSALS.len());
@@ -1031,13 +1056,13 @@ mod tests {
         assert!(INDEX_BUILD_TRIGGERS.iter().all(|word| REFUSALS.contains(word)), "契機の語は断りの語");
     }
 
-    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の末尾が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
+    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の末尾の run-cap の前が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
     /// 違いの断りは要素・名乗り・実測・site の先頭 3 つと残りの件数・母集団を名指し、在り処は本文の読み手。測れない周の断りは要素と状態の語を名指し、
     /// 在り処は置き場（undeclared だけ vessel 宣言の file）で、確からしさは absent が unmeasured・undeclared が firm。
     #[test]
     fn refuse_code_facts_names_the_difference_and_the_unmeasured_state() {
-        let tail: Vec<&str> = REFUSALS.iter().rev().take(2).copied().collect();
-        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "末尾 2 語は code-facts・code-facts-unmeasured の順");
+        let tail: Vec<&str> = REFUSALS.iter().rev().skip(1).take(2).copied().collect();
+        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "末尾の run-cap の前の 2 語は code-facts・code-facts-unmeasured の順");
         let differ = Refuse::CodeFacts(Box::new(Difference {
             element: "literals:crate::x::Y=2".to_owned(),
             claimed: "2".to_owned(),

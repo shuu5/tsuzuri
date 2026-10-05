@@ -30,7 +30,7 @@
 //! 周を `finding-unaddressed` で断る。どちらも run dir も event も作らず、write-set の弁別の後・余地と交差の前に撃つ。
 
 use super::base_run::{self, BaseRun, Early};
-use super::{broken, flag, int_row, list_row, live, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};
+use super::{broken, flag, int_row, list_row, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
 use crate::fleet::store::{self, LockPolicy, StoreError};
 use crate::fleet::{self, EventKind, Stage};
@@ -67,6 +67,11 @@ mod index;
 
 /// 欄 `code-facts` の照らしと測り（設計 reverse-index.md §7 (c)・契約表の行 e）。断りの組み立ては [`exclude_unmeasured`] が書く。
 mod code_facts;
+
+/// live な便の契約の読みと宣言の同時の数の上限の判じ（tsuzuri の判断の記録 ADR-63 の決定 (13)）。
+mod run_cap;
+pub(in crate::pipe) use run_cap::capped;
+use run_cap::{exclude_run_cap, live_contracts};
 
 /// host で同時に走る便（live な便）の本数の最大値を持つ rules 行（設計 gate-cost.md §24・値は読むだけ・C1）。
 const ROW_MAX_LIVE: &str = "pipe.max_live";
@@ -771,9 +776,9 @@ pub(in crate::pipe) fn judge(material: &Material<'_>) -> Judged {
         return judged;
     };
     // **同時本数の上限は交差の前**（設計 gate-cost.md §24）。短絡しない＝上限で断る周も交差は撃ち、組は後続に並ぶ。
-    if let Err(denial) = exclude_max_live(manifest, state_dir, &measured, tracked) {
-        judged.denials.push(denial);
-    }
+    // 宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）も同じ段で、同じく短絡しない。
+    judged.denials.extend(exclude_max_live(manifest, state_dir, &measured, tracked).err());
+    judged.denials.extend(exclude_run_cap(repo, state_dir, &measured).err());
     // **入口で排他する**（ADR-0019 §2.1）。live な便と write-set が交差する契約は、
     // run dir も event も作らずに断る——後段（land の rebase）で衝突を知るより安い。
     match exclude_overlap(material, state_dir, &measured, tracked) {
@@ -1188,22 +1193,10 @@ fn exclude_max_live(manifest: &Manifest, state_dir: &Path, contract: &Contract, 
 /// [`exclude_overlap`]（受付＝交差 1 件で断る）と `pipe::dispatch`（列＝交差した相手を待ちの理由にする）が
 /// **同じこの 1 本**を読む（判定が 2 か所にならない・憲法 C2）。読めない側が勝つ極性はここが持つ。
 pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
-    let state = current(state_dir).map_err(|errors| {
-        denied(DENIAL_STORE, Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))
-    })?;
     let mut first: Option<Refuse> = None;
     let mut lines: Vec<String> = Vec::new();
     let mut runs: Vec<(String, Vec<String>)> = Vec::new();
-    for (id, run) in &state.runs {
-        let Some(alive) = live(state_dir, id, run.stage) else {
-            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
-        };
-        if !alive {
-            continue;
-        }
-        let Ok(live_contract) = Contract::load(&contract_path(state_dir, id)) else {
-            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
-        };
+    for (id, live_contract) in live_contracts(state_dir)? {
         let mut crossed: Vec<String> = Vec::new();
         for (mine, theirs) in overlaps(&contract.write_set, &live_contract.write_set, tracked) {
             if first.is_none() {
@@ -1212,7 +1205,7 @@ pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked:
             lines.push(format!("pipe: overlap run={id} contract={mine} live={theirs}"));
             crossed.push(mine);
         }
-        runs.push((id.clone(), crossed));
+        runs.push((id, crossed));
     }
     Ok(Crossed { runs, first, lines, commuted: None })
 }

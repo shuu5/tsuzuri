@@ -12,9 +12,10 @@
 // flip-check: moved s2-07l.531
 
 use super::super::admission::{self, Sizes};
-use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
+use super::super::cli::{capped, crossings, generated, int_row, judge, live, Denial, Material, Materials};
 use super::super::commute;
 use super::super::contract::Contract;
+use super::super::declaration::RunCap;
 use super::super::gate::Verdict;
 use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
 use super::super::review;
@@ -253,6 +254,8 @@ pub(super) fn settle(
         materials: found,
         sizes: sizes_of(input.manifest),
         slots: host_slots_dir(input.state_dir),
+        // 宣言を読めない周は上限を持たない（候補は受付の判定の `freeze` が宣言の不備で待たせる）。
+        cap: RunCap::at_head(input.repo).ok().flatten(),
     });
     let mut started: Vec<(String, &Contract)> = Vec::new();
     let mut turn =
@@ -282,6 +285,8 @@ struct Room<'a> {
     sizes: Sizes,
     /// host の枠の札の置き場。
     slots: std::path::PathBuf,
+    /// HEAD の宣言の同時の数の上限（無い周は `None`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
+    cap: Option<RunCap>,
 }
 
 /// 交差・余地・枠のうち最初に落ちた理由（通れば `None`）。**判定は受付の関数をそのまま撃つ**（記帳なし）。
@@ -294,6 +299,14 @@ fn blocker(
     let tracked = room.materials.tracked();
     if let Some(reason) = overlap(input, contract, tracked, started) {
         return Some(reason);
+    }
+    // 宣言の同時の数の上限は受付と同じ 1 本（[`capped`]）を、同じ周に起こした bead も数えて撃つ。
+    if let Some(cap) = room.cap.as_ref() {
+        match capped(input.state_dir, cap, contract, started) {
+            Ok(Some(with)) => return Some(WaitReason::RunCap(with)),
+            Ok(None) => {}
+            Err(denial) => return Some(refused_by(&denial)),
+        }
     }
     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。

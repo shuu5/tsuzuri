@@ -4,7 +4,7 @@
 //! 再輸出で `crate::pipe::declaration::terminal_facts` などのまま。新しい任意 key は、key の名・読み手・key の列の 1 行ずつ・
 //! 外へ渡す口をこの file へ、`Declared` の欄と `parse` の読みの 1 行を親へ足す。
 
-use super::{crate_roots, path_kinds};
+use super::{crate_roots, path_kinds, run_cap};
 use super::{declared_at_head, head_declaration, Ceiling, DeclError, Declared, EntranceFlip, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
 use std::path::Path;
 
@@ -36,6 +36,8 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     CONSTITUTION_KEY,
     BUILD_LANES_KEY,
     SEAT_CONSTITUTION_KEY,
+    run_cap::CAP_KEY,
+    run_cap::PATHS_KEY,
 ];
 
 /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
@@ -378,6 +380,8 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     CONSTITUTION_KEY,
     BUILD_LANES_KEY,
     SEAT_CONSTITUTION_KEY,
+    run_cap::CAP_KEY,
+    run_cap::PATHS_KEY,
 ];
 
 /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。

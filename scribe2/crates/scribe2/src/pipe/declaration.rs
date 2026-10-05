@@ -20,6 +20,7 @@ mod crate_roots;
 mod entrance_flip;
 mod optional_keys;
 pub mod path_kinds;
+mod run_cap;
 mod write_set;
 
 pub use crate_roots::{crate_of, fixed_roots, with_fixed, CrateFile, RootsAtHead};
@@ -28,6 +29,7 @@ use entrance_flip::{entrance_of, KEY as ENTRANCE_KEY};
 pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, requirements_at_sha, floor_check_at, question_route, table_facts, table_facts_named, terminal_facts, CloseCheck, QuestionRoute, TableFacts, TerminalFacts};
 pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
 pub use optional_keys::{seat_constitution, SeatConstitution};
+pub use run_cap::RunCap;
 use optional_keys::{build_lanes_of, ci_cmd_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
 pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
 pub(crate) use write_set::is_under;
@@ -330,6 +332,8 @@ pub struct Declared {
     build_lanes: Option<bool>,
     /// 席の手元の要の写しの repo 相対の path（任意 key `seat-constitution`・無ければ `None`＝brief は 12 行・tsuzuri の判断の記録 ADR-38）。
     seat_constitution: Option<String>,
+    /// 便の同時の数の上限（任意 key `run-cap` と `run-cap-paths`・無ければ `None`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
+    run_cap: Option<RunCap>,
 }
 
 /// 出所つきの宣言。**[`Effective`] はこれを消費してしか作れない**（C10）。
@@ -572,14 +576,12 @@ impl Declared {
         let teeth_check = teeth_check_of(&found, &mut errors);
         let build_lanes = build_lanes_of(&found, &mut errors);
         let seat_constitution = seat_constitution_of(&found, &mut errors);
+        let run_cap = run_cap::declared_of(&found, &mut errors);
         let index = index_keys_of(&found, &mut errors);
         let contract_tables = contract_tables_of(&found, &mut errors);
         let constitution = constitution_of(&found, &mut errors);
         if schema != Some(SCHEMA_VERSION) {
-            errors.push(DeclError::new(
-                0,
-                format!("schema は {SCHEMA_VERSION} である（実 {schema:?}）"),
-            ));
+            errors.push(DeclError::new(0, format!("schema は {SCHEMA_VERSION} である（実 {schema:?}）")));
         }
         if errors.is_empty() {
             Ok(Self {
@@ -607,6 +609,7 @@ impl Declared {
                 teeth_check,
                 build_lanes,
                 seat_constitution,
+                run_cap,
             })
         } else {
             Err(errors)
@@ -1305,8 +1308,10 @@ mod tests {
                 "constitution",
                 "build-lanes",
                 "seat-constitution",
+                "run-cap",
+                "run-cap-paths",
             ],
-            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本）"
+            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本と ADR-63 の run-cap と run-cap-paths の 2 本）"
         );
     }
 

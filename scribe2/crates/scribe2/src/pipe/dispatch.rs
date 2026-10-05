@@ -122,7 +122,7 @@ const LAUNCH_LOG: [&str; 2] = ["pipe", "launch.log"];
 
 /// [`WaitReason`] の全 variant の名（宣言順・`enum-slices` が集合完全性を測る）。
 pub const WAIT_REASONS: &[&str] =
-    &["dependency", "overlap", "admission", "host-busy", "hold", "launched", "settled", "no-design-pointer", "unreflected-ruling", "floor", "reserved", "sibling"];
+    &["dependency", "overlap", "admission", "host-busy", "hold", "launched", "settled", "no-design-pointer", "unreflected-ruling", "floor", "reserved", "sibling", "run-cap"];
 
 /// 列に載ったのに起こさない理由（**閉じた型**・設計 §3 の表）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +195,9 @@ pub enum WaitReason {
     /// 設計の側の終端に着いた契約 B と同じ設計から出た行で、B の直しが入るまで待つ（値は B の bead id か、期限の行を読めない周は末尾に `/unset`・
     /// 設計 row-review.md §8・行 g）。
     Sibling(String),
+    /// 宣言 `run-cap-paths` の dir の下を書く契約で、同じ dir の下を書く live な便と同じ周に起こした便が宣言 `run-cap` の本数に
+    /// 達した（値は先頭の 1 本の run id か同じ周に起こした bead id・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
+    RunCap(String),
 }
 
 impl WaitReason {
@@ -213,6 +216,7 @@ impl WaitReason {
             Self::Floor(_) => "floor",
             Self::Reserved(_) => "reserved",
             Self::Sibling(_) => "sibling",
+            Self::RunCap(_) => "run-cap",
         }
     }
 
@@ -225,7 +229,7 @@ impl WaitReason {
             Self::Overlap { ref with, ref files, verdict: Some(found) } => format!("{name}:{with}/{}/{}", files.len(), found.as_str()),
             Self::Admission { reason, .. } => format!("{name}:{reason}"),
             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
-            Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
+            Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) | Self::RunCap(ref id) => format!("{name}:{id}"),
             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
             Self::Floor(ref found) => format!("{name}:{}", found.rc.map_or_else(|| found.word.as_str().to_owned(), |rc| rc.to_string())),
             Self::Reserved(ref held) => format!("{name}:{}", held.value()),
@@ -1329,6 +1333,7 @@ mod tests {
             WaitReason::Reserved(reserve::Held { by: "s2-b".to_owned(), files: 1, unset: true }),
             WaitReason::Sibling("s2-b".to_owned()),
             WaitReason::Sibling("s2-b/unset".to_owned()),
+            WaitReason::RunCap("r3".to_owned()),
         ];
         let mut names: Vec<&str> = listed.iter().map(WaitReason::as_str).collect();
         names.dedup();
@@ -1354,8 +1359,9 @@ mod tests {
                 "reserved:s2-b/1/unset",
                 "sibling:s2-b",
                 "sibling:s2-b/unset",
+                "run-cap:r3",
             ],
-            "値を持つ 9 件は値も描き、床は 3 形（rc・unfireable・timeout）・行の予約と兄弟の待ちは 2 形（末尾 /unset）"
+            "値を持つ 10 件は値も描き、床は 3 形（rc・unfireable・timeout）・行の予約と兄弟の待ちは 2 形（末尾 /unset）"
         );
     }
 

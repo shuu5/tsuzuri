@@ -7,13 +7,15 @@
 //! 歯は族ごとの子 module に置く（設計 docs/design/carry-prep.md §10 行 n・`s2-07l.686`）: `group`（接頭辞
 //! `pipe_dispatch_group_`）・`waiting`（接頭辞 `pipe_dispatch_waiting_` / `pipe_dispatch_release_` /
 //! `pipe_dispatch_gated_` / `pipe_dispatch_regated_` / `pipe_dispatch_revive_`）・`terminal`（接頭辞 `pipe_terminal_`）・`closed`（接頭辞
-//! `vcrun_`・判断の記録 ADR-45 の門 H6）・`commute`（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)）。
+//! `vcrun_`・判断の記録 ADR-45 の門 H6）・`commute`（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)）・`run_cap`（接頭辞 `vrcap_`・
+//! tsuzuri の判断の記録 ADR-63 の決定 (13)）。
 //! この file には共有の helper と const・本文に `super::` を持つ歯（この file の頭は名指しの import しか持たず、
 //! 入れ子の子では `super::` の指す先が変わる）・他の族の歯だけを残す。
 
 mod closed;
 mod commute;
 mod group;
+mod run_cap;
 mod terminal;
 mod waiting;
 // flip-check: moved s2-07l.686
