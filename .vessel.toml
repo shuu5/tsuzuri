@@ -8,6 +8,9 @@ remote = "origin"
 common-verify = ["cargo run -q -p xtask -- check"]
 requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"
+# 歯の検査の名乗り（器の任意の key teeth-check・判断の記録 ADR-45 の門 H1 の鍵の 1 つ・判断の記録 ADR-63 の決定 (5)）。器の表の検査は --base を渡した周に、
+# base から足された行と done の字が変わった行へ番号つきの done の項目と欄 done-teeth を求める。tsuzuri でこの周を撃つのは席の設計の commit の門。
+teeth-check = true
 # path の種別の宣言（scribe2 ADR-0047・seat-roles.md §24）: 討論の記録と作業記憶は設計文書、design-intent/ は設計意図
 design-intent-paths = ["design-intent/"]
 design-doc-paths = ["docs/design/", "docs/grill/", "docs/handoff/", "docs/consult/"]
