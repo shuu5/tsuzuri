@@ -5,6 +5,7 @@
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -52,13 +53,6 @@ const ENABLED: [&str; 18] = [
     "cognitive_complexity",
     "too_many_arguments",
 ];
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn read(rel: &str) -> String {
     let path = repo_root().join(rel);

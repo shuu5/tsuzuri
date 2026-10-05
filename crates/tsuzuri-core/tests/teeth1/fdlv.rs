@@ -8,9 +8,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{
+    FAKE_OUT, MARK_NAME, bead, declared, keys, only, plugin_dir, read_hooks, rid, root, said_of,
+};
 use serde_json::{Value, json};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_core::delivery::{
     BATCH_FIELD, CONTEXT_CAP, POINTER_HEAD, POINTER_TAIL, Said, context, pointed, said,
@@ -254,14 +256,8 @@ const PREFIX: &str = "fdlv_";
 /// hooks.json の UserPromptSubmit の command の字。
 const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver --repo \"$CLAUDE_PROJECT_DIR\"";
 
-/// runner の印の file の名。
-const MARK_NAME: &str = "scribe2-runner";
-
 /// 席の prompt を含む hook の入力の字（指し示しの行は器の名を持たない字でも拾う）。
 const PROMPT_INPUT: &str = r#"{"session_id":"s-1","hook_event_name":"UserPromptSubmit","prompt":"ls"}"#;
-
-/// 偽の tz が標準出力に出す字。
-const FAKE_OUT: &str = "answer-line\n";
 
 const D1: &str = "fx-d.1:20260930T0101Z-1";
 const D2: &str = "fx-d.2:20260930T0110Z-1";
@@ -271,28 +267,6 @@ const BATCH: &str = "batch:20260930T0110Z-1";
 
 /// D1 の逐語（改行と逆斜線と区切りの字を含む）。
 const V1: &str = "一行目\n二行目\\nの字・終わり";
-
-fn rid(id: &str) -> RulingId {
-    RulingId::new(id).expect("裁定の id")
-}
-
-fn said_of(question: &str, id: &str, verbatim: &str) -> Said {
-    Said {
-        question: BeadId::new(question).expect("bead の id"),
-        ruling: rid(id),
-        verbatim: verbatim.to_string(),
-    }
-}
-
-/// 歯の台帳の bead 1 本（label は問いの label か無し）。
-fn bead(id: &str, question_label: bool, status: &str, notes: &[&str]) -> Value {
-    let labels: Vec<&str> = if question_label {
-        vec!["intake:question"]
-    } else {
-        vec!["other"]
-    };
-    json!({"id": id, "labels": labels, "status": status, "notes": notes.join("\n")})
-}
 
 /// 問い fx-d.1〜fx-d.6 の台帳の字。
 fn ledger() -> String {
@@ -446,62 +420,6 @@ fn fdlv_context_shape_and_cap() {
     assert!(last.starts_with(&format!("裁定 {D2}（問い fx-d.2）")), "{last}");
     assert!(last.ends_with("（在りかは台帳の問いの notes の裁定の行）"), "{last}");
     assert!(text.chars().count() < 10_000);
-}
-
-/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
-fn plugin_dir(dir: &Path) {
-    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
-        let to = dir.join(rel);
-        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
-        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
-    }
-}
-
-/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
-fn declared(project: &Path) {
-    std::fs::create_dir_all(project).expect("project の dir を作る");
-    for args in [
-        &["init", "-q"][..],
-        &["config", "scribe2.statedir", "/nonexistent/state"],
-    ] {
-        let ok = Command::new("git")
-            .arg("-C")
-            .arg(project)
-            .args(args)
-            .status()
-            .expect("git");
-        assert!(ok.success(), "git {args:?}");
-    }
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read_hooks() -> Value {
-    let path = root().join("plugin/hooks/hooks.json");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
-}
-
-/// object の鍵を並べ替えた列。
-fn keys(v: &Value) -> Vec<&str> {
-    let mut keys: Vec<&str> = v
-        .as_object()
-        .unwrap_or_else(|| panic!("object でない: {v}"))
-        .keys()
-        .map(String::as_str)
-        .collect();
-    keys.sort_unstable();
-    keys
-}
-
-/// 要素 1 つの配列のその要素。
-fn only(v: &Value) -> &Value {
-    match v.as_array().map(Vec::as_slice) {
-        Some([one]) => one,
-        _ => panic!("要素 1 つの配列でない: {v}"),
-    }
 }
 
 #[test]

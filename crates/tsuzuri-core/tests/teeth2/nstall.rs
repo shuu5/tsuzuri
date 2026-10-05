@@ -4,18 +4,15 @@
 //! fixture: tests/fixtures/pipeline/next.json と tests/fixtures/seat/seat-inputs.json。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::root;
 use serde_json::Value;
 use tsuzuri_contract::board::{NextMove, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
 use tsuzuri_core::next_step::{NO_INPUT, STALLED_STAGES, next_step, next_step_seat};
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn fixture(rel: &str) -> Value {
     let raw = std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"));

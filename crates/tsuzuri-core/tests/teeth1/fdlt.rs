@@ -8,10 +8,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use serde_json::{Value, json};
+use crate::common::{
+    FAKE_OUT, MARK_NAME, bead, declared, only, plugin_dir, read_hooks, rid, root, said_of,
+};
+use serde_json::Value;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_contract::surface::RulingId;
 use tsuzuri_core::delivery::{
     AGENT_KEYS, BATCH_FIELD, CONTEXT_CAP, Route, Said, TOOL_EVENT, context, context_for,
     main_thread, mark_line, named, unmarked,
@@ -266,14 +267,8 @@ const PREFIX: &str = "fdlt_";
 /// hooks.json の PostToolBatch の command の字。
 const COMMAND: &str = "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook deliver-tool --repo \"$CLAUDE_PROJECT_DIR\"";
 
-/// runner の印の file の名。
-const MARK_NAME: &str = "scribe2-runner";
-
 /// 席の本体の PostToolBatch の入力の字。
 const BATCH_INPUT: &str = r#"{"session_id":"s-1","hook_event_name":"PostToolBatch","tool_calls":[{"tool_name":"Bash"}]}"#;
-
-/// 偽の tz が標準出力に出す字。
-const FAKE_OUT: &str = "answer-line\n";
 
 const T1: &str = "fx-t.1:20260930T0101Z-1";
 const T2: &str = "fx-t.2:20260930T0102Z-1";
@@ -284,28 +279,6 @@ const T6: &str = "fx-t.6:20260930T0106Z-1";
 const T7A: &str = "fx-t.7:20260930T0107Z-1";
 const T7B: &str = "fx-t.7:20260930T0107Z-2";
 const BATCH: &str = "batch:20260930T0103Z-1";
-
-fn rid(id: &str) -> RulingId {
-    RulingId::new(id).expect("裁定の id")
-}
-
-fn said_of(question: &str, id: &str, verbatim: &str) -> Said {
-    Said {
-        question: BeadId::new(question).expect("bead の id"),
-        ruling: rid(id),
-        verbatim: verbatim.to_string(),
-    }
-}
-
-/// 歯の台帳の bead 1 本（label は問いの label か無し）。
-fn bead(id: &str, question_label: bool, status: &str, notes: &[&str]) -> Value {
-    let labels: Vec<&str> = if question_label {
-        vec!["intake:question"]
-    } else {
-        vec!["other"]
-    };
-    json!({"id": id, "labels": labels, "status": status, "notes": notes.join("\n")})
-}
 
 /// 裁定の行（逐語の欄は escape 済みの字を渡す・束の id が空なら束の欄を書かない）。
 fn ruling_line(id: &str, question: &str, batch: &str, verbatim: &str) -> String {
@@ -507,50 +480,6 @@ fn tool_mark_line() {
         mark_line(&rid(T1), Route::Tool, "20260930T0102Z"),
         "配達 = fx-t.1:20260930T0101Z-1・経路 = tool の呼び・時刻 = 20260930T0102Z"
     );
-}
-
-/// plugin の形の dir（workspace の根の plugin の bin/tzw と plugin.json を写す・tzw は dir の親の target/debug/tz を引く）。
-fn plugin_dir(dir: &Path) {
-    for rel in ["bin/tzw", ".claude-plugin/plugin.json"] {
-        let to = dir.join(rel);
-        std::fs::create_dir_all(to.parent().expect("親の dir")).expect("plugin の dir を作る");
-        std::fs::copy(root().join("plugin").join(rel), &to).expect("plugin の file を写す");
-    }
-}
-
-/// project の宣言（git config の scribe2.statedir）の在る repo の dir を作る。
-fn declared(project: &Path) {
-    std::fs::create_dir_all(project).expect("project の dir を作る");
-    for args in [
-        &["init", "-q"][..],
-        &["config", "scribe2.statedir", "/nonexistent/state"],
-    ] {
-        let ok = Command::new("git")
-            .arg("-C")
-            .arg(project)
-            .args(args)
-            .status()
-            .expect("git");
-        assert!(ok.success(), "git {args:?}");
-    }
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read_hooks() -> Value {
-    let path = root().join("plugin/hooks/hooks.json");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("hooks.json を読む: {e}"));
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
-}
-
-/// 要素 1 つの配列のその要素。
-fn only(v: &Value) -> &Value {
-    match v.as_array().map(Vec::as_slice) {
-        Some([one]) => one,
-        _ => panic!("要素 1 つの配列でない: {v}"),
-    }
 }
 
 #[test]

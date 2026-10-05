@@ -3,9 +3,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use crate::common::{Case, root};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{SeatCard, TickHealth};
 use tsuzuri_core::seat::{SeatTexts, anchor, card};
@@ -14,17 +13,6 @@ const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
 
 /// 組 run の doctor の席 proj-1:0.1 の行の末の字。
 const OWN: &str = " heartbeat=on tick=healthy";
-
-#[derive(Deserialize)]
-struct Case {
-    #[serde(flatten)]
-    texts: SeatTexts,
-    card: SeatCard,
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

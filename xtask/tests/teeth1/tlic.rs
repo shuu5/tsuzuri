@@ -2,7 +2,7 @@
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
+use crate::common::repo_root;
 
 /// 5 つの member の dir（repo の根からの相対）。
 const MEMBERS: [&str; 5] = [
@@ -12,13 +12,6 @@ const MEMBERS: [&str; 5] = [
     "crates/tsuzuri-surface",
     "xtask",
 ];
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

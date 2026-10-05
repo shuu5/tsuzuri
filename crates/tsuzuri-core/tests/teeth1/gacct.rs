@@ -5,18 +5,13 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
+use crate::common::{INPUTS, NOW, root};
 use serde::Deserialize;
 use serde_json::Value;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, doc, project_rows};
-
-const INPUTS: &str = "tests/fixtures/account/acct-inputs.json";
-
-/// 今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 /// proj-a の席の合図の健康の行（器の §20 の欄の前まで）。
 const LINE: &str = "seat tick status: target=proj-a:0.1 last=1790510390 age=10 healthy=yes heartbeat=on step=5 next=1790510395";
@@ -36,10 +31,6 @@ const PAIRS: [(&str, Option<u64>); 8] = [
 #[derive(Deserialize)]
 struct Inputs {
     texts: HostTexts,
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn read(rel: &str) -> String {

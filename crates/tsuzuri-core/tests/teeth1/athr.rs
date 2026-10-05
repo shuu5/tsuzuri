@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::{NOW, log};
 use serde_json::{Value, json};
 use tsuzuri_contract::account::{AccountDoc, GroupNotice, WindowCap};
 use tsuzuri_contract::board::Reading;
@@ -14,9 +15,6 @@ use tsuzuri_core::account::host::{
     self, CAP_ROWS, HostTexts, PRESSURE_EVENT, REFUSED_EVENT, WINDOW_WORDS,
 };
 use tsuzuri_core::account::project::{self, ProjectTexts, assemble, project_rows, session_lines};
-
-/// 今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 /// 群の宣言の字（Tier1 の anchors は proj-a と proj-b・Tier2 は proj-c）。
 const HOST: &str = "[[account-group]]\nname = \"Tier1\"\nanchors = [\"/work/proj-a\", \"/work/proj-b\"]\n\n\
@@ -39,10 +37,6 @@ fn ev(ts: &str, kind: &str, account: Option<&str>, detail: &str) -> String {
         event["account"] = json!(a);
     }
     event.to_string()
-}
-
-fn log(lines: &[String]) -> String {
-    lines.iter().map(|l| format!("{l}\n")).collect()
 }
 
 fn l1() -> String {

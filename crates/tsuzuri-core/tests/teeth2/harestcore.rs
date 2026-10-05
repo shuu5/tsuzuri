@@ -2,26 +2,13 @@
 //! LedgerStats を持つ fixture の値が同じ定義（件数の和が未反映の数・種類は閉じた一覧の順）に揃うこと。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
+use crate::common::{fixture, read};
 use serde_json::{Value, json};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind};
 use tsuzuri_contract::wire;
 use tsuzuri_core::ledger::{stats, unreflected};
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture(rel: &str) -> Value {
-    serde_json::from_str(&read(rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
-}
 
 fn stats_of(v: &Value, what: &str) -> LedgerStats {
     serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{what} は LedgerStats: {e}"))

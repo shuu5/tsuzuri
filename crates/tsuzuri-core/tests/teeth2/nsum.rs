@@ -3,17 +3,14 @@
 //! build は 3 つの欄を組まない（無し）。節の字は歯の中で組み、workspace の根の fixture は読むだけで書かない。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::root;
 use serde_json::{Value, json};
 use tsuzuri_contract::graph::{AroundDoc, GraphDoc, GraphNode, GraphView, NodeKind};
 use tsuzuri_contract::wire;
 use tsuzuri_core::graph::build::add_summary;
 use tsuzuri_core::graph::{Graph, Inputs, build};
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))

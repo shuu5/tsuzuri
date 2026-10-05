@@ -4,22 +4,12 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use tsuzuri_contract::account::{AccountRow, GroupCard, GroupMember, MoveRow};
+use crate::common::{FIXTURE, Inputs, known};
+use tsuzuri_contract::account::{AccountRow, GroupMember, MoveRow};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::QuotaUsed;
 use tsuzuri_core::account::host::{HostTexts, accounts, declaration, groups, moves};
 use tsuzuri_core::account::project_name;
-
-const FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
-
-#[derive(Deserialize)]
-struct Inputs {
-    texts: HostTexts,
-    accounts: Reading<Vec<AccountRow>>,
-    groups: Reading<Vec<GroupCard>>,
-    moves: Reading<Vec<MoveRow>>,
-}
 
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,13 +29,6 @@ fn inputs() -> Inputs {
 
 fn texts() -> HostTexts {
     inputs().texts
-}
-
-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
-    match r {
-        Reading::Known(v) => v,
-        Reading::Unknown => panic!("Unknown"),
-    }
 }
 
 fn used(window: &str, pct: u8, resets: Option<u64>) -> QuotaUsed {

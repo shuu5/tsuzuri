@@ -7,12 +7,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use tsuzuri_contract::account::{AccountDoc, AccountRow, GroupCard, MoveRow};
+use crate::common::{Case, Inputs};
+use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{SeatCard, SeatSpan};
 use tsuzuri_contract::wire;
-use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, assemble, doc};
 use tsuzuri_core::seat::{SeatTexts, anchor, card};
 
@@ -26,21 +25,6 @@ const SHIFTS: [u64; 4] = [1, 60, 3_600, 86_400];
 
 /// 席の名。
 const OWN: &str = "proj-1:0.1";
-
-#[derive(Deserialize)]
-struct Case {
-    #[serde(flatten)]
-    texts: SeatTexts,
-    card: SeatCard,
-}
-
-#[derive(Deserialize)]
-struct Inputs {
-    texts: HostTexts,
-    accounts: Reading<Vec<AccountRow>>,
-    groups: Reading<Vec<GroupCard>>,
-    moves: Reading<Vec<MoveRow>>,
-}
 
 fn read(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel);

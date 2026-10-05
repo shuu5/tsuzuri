@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use crate::common::FILTER_WORDS;
 use serde_json::json;
 use tsuzuri_contract::graph::{AroundDoc, EdgeType, Fold};
 use tsuzuri_contract::wire;
@@ -162,29 +163,6 @@ fn dnedge_around_rows() {
         ]
     );
 }
-
-/// 計画と contracts の verify の filter の語（ほかの語を部分の字として含まない語に畳んだ語と後の行の接頭辞）。
-const FILTER_WORDS: &[&str] = &[
-    "aaround_", "accept_", "acchold_", "account_", "acctcore_", "acctdoc_", "accthb_",
-    "accthome_", "acctled_", "acctlook_", "acctpcore_", "acctproj_", "acctsess_", "acctwin_",
-    "acctwire_", "afocus_", "aord_", "apop_", "askcard_", "athr_", "batchpanel_", "bhalf_",
-    "board_min_", "bport_", "brand_", "btuck_", "cadopt_", "cdorm_", "cgdom_", "cmark_",
-    "contract_form_", "cround_", "csled_", "denv_", "dnrow_", "ecache_", "epolq_", "flight_",
-    "fmark_", "fprem_", "frame_", "fserve_", "fstop_", "gapspage_", "gbnote_", "gfix_",
-    "gfresh_", "ghb_", "gjst_", "glabel_", "gnav_", "gpface_", "gpill_", "gpulse_", "graph_",
-    "gsum_", "gtuck_", "gview_", "hacols_", "harest_", "hasplit_", "hbconf_", "hbmark_",
-    "hbpost_", "hbproc_", "hbroute_", "hcard_", "hcled_", "hcnx_", "hcproj_", "hcsess_",
-    "hdchip_", "hfig_", "hnunk_", "hook_", "hruling_", "hsblock_", "hsderive_", "hshist_",
-    "hspage_", "hsym_", "iclose_", "ilink_", "kcli_", "klink_", "launch_", "lcard_",
-    "ledgerblock_", "lhome_", "lidle_", "lresume_", "lsnap_", "lspark_", "lstore_", "mapview_",
-    "mkeys_", "mlink_", "mstore_", "mtree_", "nact_", "nbatch_", "ncard_", "nextstep_",
-    "nodepage_", "nstall_", "nsum_", "nsumw_", "ntime_", "nxact_", "parts_", "pclosed_",
-    "pfold_", "pipe_", "plimit_", "pmisfit_", "pmore_", "pquest_", "pqueue_", "project_",
-    "ptitle_", "punmap_", "pwhole_", "qblock_", "qgate_", "qkey_", "question_", "relay_",
-    "rhold_", "runsdoc_", "rvk_", "saxis_", "sclosed_", "seatblock_", "seatcard_", "server_",
-    "sesplit_", "shb_", "skeleton_", "smore_", "stage_", "stats_", "stcli_", "steady_",
-    "sxaxis_", "ticker_", "tipx_", "topbar_", "tz_", "urpanel_", "uword_", "wstrip_", "pgz_",
-];
 
 #[test]
 fn dnedge_own_names_clean() {

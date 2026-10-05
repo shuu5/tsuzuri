@@ -8,11 +8,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde::Deserialize;
+use crate::common::{INPUTS, Inputs, NOW, known};
 use serde_json::json;
-use tsuzuri_contract::account::{
-    AccountDoc, AccountRow, GroupCard, MoveRow, RunCounts, SessionLine,
-};
+use tsuzuri_contract::account::{AccountDoc, RunCounts, SessionLine};
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::surface::SeatRole;
@@ -27,19 +25,7 @@ use tsuzuri_core::ledger::stats::stats;
 use tsuzuri_core::next_step::next_step_seat;
 use tsuzuri_core::seat::{SeatTexts, card};
 
-const INPUTS: &str = "tests/fixtures/account/acct-inputs.json";
 const DOC: &str = "tests/fixtures/account/acct-doc.json";
-
-/// 今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
-
-#[derive(Deserialize)]
-struct Inputs {
-    texts: HostTexts,
-    accounts: Reading<Vec<AccountRow>>,
-    groups: Reading<Vec<GroupCard>>,
-    moves: Reading<Vec<MoveRow>>,
-}
 
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -50,13 +36,6 @@ fn read(rel: &str) -> String {
 
 fn inputs() -> Inputs {
     serde_json::from_str(&read(INPUTS)).expect("fixture の形")
-}
-
-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
-    match r {
-        Reading::Known(v) => v,
-        Reading::Unknown => panic!("Unknown"),
-    }
 }
 
 /// 節の run と session の歯の組（bead 11 本）。欄は種類・bead・run の時刻の札・ts・stage・detail で、

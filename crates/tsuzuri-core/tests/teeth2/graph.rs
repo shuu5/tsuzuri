@@ -4,21 +4,12 @@
 //! ledger は字か bd の出力の形の配列（配列は JSON にする）。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
+use crate::common::{read, verdict_of};
 use serde_json::Value;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
 use tsuzuri_core::graph::build::DESIGN_EDGE_TYPES;
 use tsuzuri_core::graph::check::{INVARIANTS, RULED, UNMEASURED};
 use tsuzuri_core::graph::{Graph, Inputs, Source, Verdict, build, check};
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture(name: &str) -> Value {
     let rel = format!("tests/fixtures/graph/{name}");
@@ -61,14 +52,6 @@ fn violated(g: &Graph) -> Vec<&'static str> {
         .filter(|i| matches!(i.verdict, Verdict::Violation(_)))
         .map(|i| i.id)
         .collect()
-}
-
-fn verdict_of(g: &Graph, id: &str) -> Verdict {
-    check(g)
-        .into_iter()
-        .find(|i| i.id == id)
-        .unwrap_or_else(|| panic!("不変条件 {id}"))
-        .verdict
 }
 
 const BEAD_KINDS: [NodeKind; 4] = [

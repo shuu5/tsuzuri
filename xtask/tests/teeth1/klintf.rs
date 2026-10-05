@@ -4,6 +4,7 @@
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -75,13 +76,6 @@ const COVER: [(&str, &str, &str); 15] = [
     ("allow_attributes", "workspace.lints.clippy", "deny"),
     ("allow_attributes_without_reason", "workspace.lints.clippy", "deny"),
 ];
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn folio_dir() -> PathBuf {
     repo_root().join("folio2/crates/folio")

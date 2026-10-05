@@ -4,8 +4,8 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
 
+use crate::common::read;
 use serde_json::Value;
 use tsuzuri_contract::graph::{
     AroundDoc, EdgeEnd, EdgeType, Fold, GraphEdge, GraphNode, NodeKind, basis_end, natural_cmp,
@@ -15,14 +15,6 @@ use tsuzuri_core::graph::{BeadAttr, Graph, Inputs, RunAttr, around, build};
 
 const RULING: &str = "e.2:20260927T0000Z-1";
 const RUN: &str = "e.1-20260927T000000Z";
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の欄を入力の字にする（歯の file graph.rs と同じ読み方）。
 fn input_text(v: &Value, key: &str) -> String {

@@ -9,18 +9,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::common::{read_root, strings};
 use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, NOTES_MAX, Outcome, SHOW, Seen, USAGE};
 
 /// 2026-10-03T09:00Z の epoch 秒。
 const NOW: u64 = 1_791_018_000;
-
-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
-fn read_root(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 一時の dir（名に pid と字 tag）を作り直す。
 fn fresh(tag: &str) -> PathBuf {
@@ -155,10 +148,6 @@ fn seen(stamp: &str, sha: &str, rc: i32) -> Seen {
         rc,
         secs: 5,
     }
-}
-
-fn strings(xs: &[&str]) -> Vec<String> {
-    xs.iter().map(|s| (*s).to_string()).collect()
 }
 
 /// 記録の行の頭（時刻・sha・段・rc）と末（memo）が見込みどおりか。

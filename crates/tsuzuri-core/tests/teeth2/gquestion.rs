@@ -3,20 +3,15 @@
 //! 次の QuestionRaised の直前までに同じ走行の QuestionAnswered が在れば答えが在る。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
+use crate::common::{root, verdict_of};
 use serde_json::Value;
 use tsuzuri_contract::graph::EdgeType;
-use tsuzuri_core::graph::{Graph, Inputs, RunAttr, Source, Verdict, build, check};
+use tsuzuri_core::graph::{Graph, Inputs, RunAttr, Source, Verdict, build};
 
 const Q_A: &str = "r.1-20260927T000000Z";
 const Q_B: &str = "r.1-20260927T000100Z";
 const Q_C: &str = "r.1-20260927T000200Z";
 const Q_D: &str = "r.1-20260927T000300Z";
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn fixture(name: &str) -> Value {
     let rel = format!("tests/fixtures/graph/{name}");
@@ -52,14 +47,6 @@ fn build_from(v: &Value) -> Graph {
         ledger: &ledger,
         events: &events,
     })
-}
-
-fn verdict_of(g: &Graph, id: &str) -> Verdict {
-    check(g)
-        .into_iter()
-        .find(|i| i.id == id)
-        .unwrap_or_else(|| panic!("不変条件 {id}"))
-        .verdict
 }
 
 fn attr(stage: &str, account: Option<&str>, unanswered: usize) -> RunAttr {

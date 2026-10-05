@@ -5,14 +5,14 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
+use crate::common::{Case, read};
 use serde::Deserialize;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{Reopens, SeatCard, SeatState};
 use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, project_rows};
-use tsuzuri_core::seat::{SeatTexts, anchor, card};
+use tsuzuri_core::seat::{anchor, card};
 
 const SEAT_FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
 const ACCT_FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
@@ -25,23 +25,8 @@ const T24: u64 = 1_790_553_600;
 const NOW: u64 = 1_790_510_400;
 
 #[derive(Deserialize)]
-struct Case {
-    #[serde(flatten)]
-    texts: SeatTexts,
-    card: SeatCard,
-}
-
-#[derive(Deserialize)]
 struct Inputs {
     texts: HostTexts,
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
 fn cases() -> BTreeMap<String, Case> {

@@ -3,8 +3,8 @@
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 /// 除外の表の file と、裁定 id を引く 2 つの判断の記録（repo の根からの相対）。
 /// 持ち込んだ folio2/design-intent/adr/ の同じ名の file は読まない。
@@ -33,13 +33,6 @@ const RULING_N3: &str = "t3-hub.67.8:20260929T0609Z-1";
 /// 器の錠（repo の根からの相対）と、その外の部品（行 source を持つ塊）の数（判断の記録 ADR-33 の決定 (5)）。
 const VESSEL_LOCK: &str = "scribe2/Cargo.lock";
 const VESSEL_OUTSIDE: usize = 35;
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(repo_root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

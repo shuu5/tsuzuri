@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{read, root};
 use serde_json::Value;
 use tsuzuri_core::consult::launch::PLUGIN_VERSION;
 
@@ -23,14 +24,6 @@ const SKILL_WORDS: [&str; 9] = [
     "承認にならない",
     "! で打つ命令は囲いの外で走る",
 ];
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn script(path: &Path, body: &str) {
     fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");

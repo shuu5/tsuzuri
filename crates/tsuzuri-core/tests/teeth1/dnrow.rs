@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use crate::common::pair;
 use serde_json::{Value, json};
 use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
 use tsuzuri_core::graph::build::{DESIGN_KINDS, NOTE_ROW_KIND, add_summary};
@@ -87,10 +88,6 @@ fn row(id: &str, file: &str, digest: &str, title: &str) -> GraphNode {
         eng: None,
         updated: None,
     }
-}
-
-fn pair(from: &str, to: &str) -> (String, String) {
-    (from.to_string(), to.to_string())
 }
 
 #[test]

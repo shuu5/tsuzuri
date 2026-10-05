@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、common のような dir の module）。
+/// 歯の群（repo の根からの dir）と module の数（main.rs を除く .rs と、mod.rs を持つ dir の module・共通の module POOL は数えない）。
 const GROUPS: &[(&str, usize)] = &[
     // kfold-groups-begin
     ("crates/tsuzuri-boundary/tests/teeth1", 26),
@@ -16,7 +16,7 @@ const GROUPS: &[(&str, usize)] = &[
     ("crates/tsuzuri-boundary/tests/teeth4", 14),
     ("crates/tsuzuri-boundary/tests/teeth5", 29),
     ("crates/tsuzuri-boundary/tests/teeth6", 10),
-    ("crates/tsuzuri-contract/tests/teeth1", 15),
+    ("crates/tsuzuri-contract/tests/teeth1", 14),
     ("crates/tsuzuri-core/tests/teeth1", 28),
     ("crates/tsuzuri-core/tests/teeth2", 25),
     ("crates/tsuzuri-core/tests/teeth3", 22),
@@ -35,6 +35,10 @@ const GROUPS: &[(&str, usize)] = &[
     ("xtask/tests/teeth1", 16),
     // kfold-groups-end
 ];
+
+/// 群の共通の module の名（畳みの道具が字で同じ helper の写しを寄せる先・判断の記録 ADR-63 の決定 (8) の (c)）。main.rs が名指すことは
+/// ほかの module と同じに見て、表 GROUPS の module の数には数えない（群を足すたびに表を書き直さずに寄せの行を並べるため）。
+const POOL: &str = "common";
 
 fn repo_root() -> PathBuf {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -132,7 +136,7 @@ fn kfold_groups_declare_every_module_once() {
                 .expect("根の下")
                 .to_string_lossy()
                 .into_owned();
-            seen.insert(rel, set.len());
+            seen.insert(rel, set.iter().filter(|m| m.as_str() != POOL).count());
         }
     }
     let want: BTreeMap<String, usize> =

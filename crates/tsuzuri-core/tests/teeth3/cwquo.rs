@@ -4,7 +4,8 @@
 
 use std::path::Path;
 
-use tsuzuri_contract::consult::{SeatQuota, WindowId};
+use crate::common::win;
+use tsuzuri_contract::consult::SeatQuota;
 use tsuzuri_core::consult::lines::scan;
 use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, REFUSAL, admit, count};
 
@@ -13,10 +14,6 @@ fn open(w: &str, form: &str, by: &str, result: &str, at: &str) -> String {
     format!(
         "相談の開き = {w}・形 = {form}・題 = 題なし・起こし手 = {by}・model = fable・念入りさ = xhigh・結果 = {result}・時刻 = {at}"
     )
-}
-
-fn win(s: &str) -> WindowId {
-    WindowId::parse(s).expect("窓 id")
 }
 
 const SEAT: &str = "席";

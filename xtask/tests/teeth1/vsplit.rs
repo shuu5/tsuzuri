@@ -5,21 +5,8 @@
 #[path = "../../src/spread.rs"]
 mod spread;
 
-use std::path::PathBuf;
-
+use crate::common::{read_root, strings};
 use spread::{SLOTS, SURFACE, TABLE, Turn};
-
-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
-fn read_root(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn strings(xs: &[&str]) -> Vec<String> {
-    xs.iter().map(|s| (*s).to_string()).collect()
-}
 
 /// 割り count:k/n で段を撃つ役の番号の列。
 fn runners(key: &str, n: u64) -> Vec<u64> {

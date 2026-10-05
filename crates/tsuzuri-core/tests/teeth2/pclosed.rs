@@ -5,18 +5,15 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::{NOW, cards, host};
 use serde_json::{Value, json};
 use tsuzuri_contract::account::RunCounts;
 use tsuzuri_contract::board::{NextMove, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::stats::CheckResult;
-use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, project_rows, run_counts, run_counts_of};
 use tsuzuri_core::next_step::next_step;
-use tsuzuri_core::pipeline::{Board, CLOSED_CHARS, CLOSED_TAG, board};
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
+use tsuzuri_core::pipeline::{CLOSED_CHARS, CLOSED_TAG, board};
 
 /// cs.1 の閉じた理由（改行と空白 2 つを間に持つ）。
 const CS1_REASON: &str = "行を取り下げた。\n新しい行 cs.6 が  同じ直しを持つので、この行の走行は着地させずに閉じる（席の決め・2026-09-27 の点検で重なりを見つけた）";
@@ -163,13 +160,6 @@ fn card(
         account: account.map(str::to_string),
         since: elapsed.map(|e| NOW - e),
         ci: None,
-    }
-}
-
-fn cards(b: &Board) -> &[PipelineCard] {
-    match &b.board.cards {
-        Reading::Known(c) => c,
-        Reading::Unknown => panic!("札が Unknown"),
     }
 }
 
@@ -411,13 +401,6 @@ fn pclosed_run_counts_with_ledger() {
     assert_eq!(run_counts(Some(&ev), NOW), counts(1, 3, 4, 1));
     for e in [None, Some("")] {
         assert_eq!(run_counts_of(e, Some(&led), NOW), Reading::Unknown);
-    }
-}
-
-fn host() -> HostTexts {
-    HostTexts {
-        host_toml: Some("[[account-group]]\nname = 'g'\nanchors = ['/w/p']\n".to_string()),
-        ..HostTexts::default()
     }
 }
 

@@ -2,19 +2,11 @@
 //! fixture: tests/fixtures/case/unref.json（未反映の 3 種と数えない局面の部品を持つ小さな字）と lifecycle.stale（読むだけ）。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
+use crate::common::fixture;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{UnreflectedCount, UnreflectedKind};
 use tsuzuri_core::ledger::unreflected::PHASES;
 use tsuzuri_core::ledger::{Unreflected, UnreflectedItem, stats, unreflected, with_unreflected};
-
-fn fixture(name: &str) -> String {
-    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/case")
-        .join(name);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
 
 /// 題と作った時刻を引く台帳（memo の t3-hub.920 と問いの t3-hub.930 だけ・t3-hub.921 は台帳に無い）。
 const LEDGER: &str = r#"[

@@ -5,14 +5,13 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::common::{FIXTURE, known};
 use serde::Deserialize;
 use tsuzuri_contract::account::{AccountRow, GroupCard};
 use tsuzuri_contract::board::{GroupRow, Reading};
 use tsuzuri_contract::seat::Pressure;
 use tsuzuri_core::account::host::{HostTexts, PARK_KIND, accounts, declaration, groups};
 use tsuzuri_core::seat::{SeatTexts, card};
-
-const FIXTURE: &str = "tests/fixtures/account/acct-inputs.json";
 
 /// 区画の宣言（fixture の群の宣言の後ろ・[seat] の前に足す・heartbeat の key は読み捨てる）。
 const LOT_TOML: &str = "[[account-group]]\nname = \"lot\"\nanchors = [\"/work/proj-d\"]\naccounts = [\"acct-3\", \"acct-4\"]\nheartbeat = \"off\"\n\n";
@@ -49,13 +48,6 @@ fn read(path: &str) -> String {
 
 fn inputs() -> Inputs {
     serde_json::from_str(&read(FIXTURE)).expect("fixture の形")
-}
-
-fn known<T: std::fmt::Debug>(r: Reading<T>) -> T {
-    match r {
-        Reading::Known(v) => v,
-        Reading::Unknown => panic!("Unknown"),
-    }
 }
 
 /// 字の一部を置き換えた字。

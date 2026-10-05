@@ -2,18 +2,10 @@
 //! fixture: tests/fixtures/case/lifecycle.json と lifecycle.stale（器の実物の形を写した小さな字・読むだけ）。短い字の組は歯の中に書く。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
+use crate::common::fixture;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::case::{CaseDoc, CaseLinks, CasePart};
 use tsuzuri_core::case::cases_of;
-
-fn fixture(name: &str) -> String {
-    let path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/case")
-        .join(name);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
 
 fn ids(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()

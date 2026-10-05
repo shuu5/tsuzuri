@@ -4,9 +4,7 @@
 //! 頭の印の名が器の名の定数から成ることを見る（係の口の command も印を持つ・行 ag-plugin）。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
 #![cfg(test)]
 
-use std::fs;
-use std::path::{Path, PathBuf};
-
+use crate::common::read;
 use serde_json::Value;
 
 /// runner の印の除きの字（command の頭・印の名は器の名の定数と尾の字から成る）。
@@ -43,14 +41,6 @@ const DROPPED: &str = "SessionStart";
 
 /// 要の写しを出す hook の語（器の binary への問いの語と、要の写しの置き場の字）。
 const COPY_WORDS: [&str; 2] = ["seat-constitution", "contracts/seat/"];
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn hooks() -> Value {
     serde_json::from_str(&read("plugin/hooks/hooks.json"))

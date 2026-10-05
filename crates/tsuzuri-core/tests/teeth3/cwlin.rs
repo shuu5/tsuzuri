@@ -3,7 +3,8 @@
 //! notes の上限の溢れ・未受けの計算・席への固定の 1 行の字を見る。台帳の bead は歯の中で組む。
 #![cfg(test)]
 
-use tsuzuri_contract::consult::{FindingId, Form, RequestId, Starter, Verdict, Via, WindowId};
+use crate::common::win;
+use tsuzuri_contract::consult::{FindingId, Form, RequestId, Starter, Verdict, Via};
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 use tsuzuri_core::consult::lines::{
     By, Event, HEADS, Home, HomeError, Line, LineError, NOTES_MAX, Subject, cited, free, home_of,
@@ -20,10 +21,6 @@ fn fid(s: &str) -> FindingId {
 
 fn rq(s: &str) -> RequestId {
     RequestId::parse(s).expect("頼み id")
-}
-
-fn win(s: &str) -> WindowId {
-    WindowId::parse(s).expect("窓 id")
 }
 
 fn open(by: By, opened: bool, again: bool) -> Line {

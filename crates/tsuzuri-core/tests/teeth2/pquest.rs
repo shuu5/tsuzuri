@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::{NOW, cards};
 use serde_json::{Value, json};
 use tsuzuri_contract::board::{NextMove, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
@@ -15,10 +16,7 @@ use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, session_lines};
 use tsuzuri_core::next_step::next_step;
-use tsuzuri_core::pipeline::{Board, QUESTION_STOPPED, board, stage_of};
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
+use tsuzuri_core::pipeline::{QUESTION_STOPPED, board, stage_of};
 
 fn bead(n: u32, status: &str) -> Value {
     let mut b = json!({"id": format!("qa.{n}"), "title": format!("t{n}"), "status": status, "issue_type": "task"});
@@ -113,13 +111,6 @@ fn card(n: u32, stage: Stage, reason: Option<&str>, account: Option<&str>, elaps
         account: account.map(str::to_string),
         since: Some(NOW - elapsed),
         ci: None,
-    }
-}
-
-fn cards(b: &Board) -> &[PipelineCard] {
-    match &b.board.cards {
-        Reading::Known(c) => c,
-        Reading::Unknown => panic!("札が Unknown"),
     }
 }
 

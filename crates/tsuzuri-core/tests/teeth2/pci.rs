@@ -4,17 +4,15 @@
 
 use std::path::PathBuf;
 
+use crate::common::{NOW, cards};
 use serde_json::{Value, json};
-use tsuzuri_contract::board::{Ci, NextMove, PipelineCard, Reading, Stage};
+use tsuzuri_contract::board::{Ci, NextMove, PipelineCard, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::stats::CheckResult;
 use tsuzuri_core::next_step::next_step;
 use tsuzuri_core::pipeline::{
-    Board, CI_STALLS, CI_WORDS, FAULT_WORDS, PUSH_WORD, TERMINAL_TAG, board, ci_after, ci_reading,
+    CI_STALLS, CI_WORDS, FAULT_WORDS, PUSH_WORD, TERMINAL_TAG, board, ci_after, ci_reading,
 };
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 /// 閉じた bead（fx-ci.3・fx-ci.6・fx-ci.9）。
 const CLOSED: [u32; 3] = [3, 6, 9];
@@ -138,13 +136,6 @@ fn card(
         account: Some(account.to_string()),
         since: Some(NOW - elapsed),
         ci,
-    }
-}
-
-fn cards(b: &Board) -> &[PipelineCard] {
-    match &b.board.cards {
-        Reading::Known(c) => c,
-        Reading::Unknown => panic!("札が Unknown"),
     }
 }
 

@@ -3,8 +3,8 @@
 //! 根の部品の名と器の部品の名が重ならないことを見る（根の workspace に入れる時の名の衝突を先に除く）。外の依存を使わず repo の根からの相対の path で読む。
 #![cfg(test)]
 
+use crate::common::root;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 /// 揃えた後の器の開発の道具の部品の名（package の名と crates/ の下の dir の名が同じ字）。
 const RUNNER: &str = "scribe2-xtask";
@@ -12,13 +12,6 @@ const RUNNER: &str = "scribe2-xtask";
 const OLD: &str = "xtask";
 /// 器の cargo の設定の別名 xtask の値（cargo xtask の字の意味を保つ）。
 const ALIAS: &str = "run -q -p scribe2-xtask --";
-
-fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読めない: {e}"))

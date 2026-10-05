@@ -3,8 +3,9 @@
 //! 台帳の字は bd の一覧の形の配列を json の macro で組む。fixture: tests/fixtures/pipeline/next.json。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::root;
 use serde_json::{Value, json};
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
@@ -12,10 +13,6 @@ use tsuzuri_core::next_step::{BATCH_MIN, next_step, next_step_seat};
 
 /// 2026-09-27T02:00:00Z。
 const NOW: u64 = 1_790_474_400;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn ask(id: &str, status: &str, labels: &[&str]) -> Value {
     json!({

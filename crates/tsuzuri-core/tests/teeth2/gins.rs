@@ -8,6 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::root;
 use serde_json::Value;
 
 /// hooks.json の PreToolUse の command の語（二重引用符を除いた字）。
@@ -63,10 +64,6 @@ fn declared(project: &Path) {
             .expect("git");
         assert!(ok.success(), "git {args:?}");
     }
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn read_hooks() -> Value {

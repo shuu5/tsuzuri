@@ -6,14 +6,10 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use crate::common::{Case, FIXTURE, build, read};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::seat::{Pressure, Reopens, SeatCard};
-use tsuzuri_core::seat::{SeatTexts, anchor, card};
-
-const FIXTURE: &str = "tests/fixtures/seat/seat-inputs.json";
+use tsuzuri_contract::seat::{Pressure, Reopens};
 
 /// 器の行を足して読む 4 組。
 const SETS: [&str; 4] = ["run", "wait", "limit", "no-state"];
@@ -24,32 +20,11 @@ const OWN: &str = "proj-1:0.1";
 /// 2026-09-27T13:00:00Z。
 const T13: u64 = 1_790_514_000;
 
-#[derive(Deserialize)]
-struct Case {
-    #[serde(flatten)]
-    texts: SeatTexts,
-    card: SeatCard,
-}
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn case(name: &str) -> Case {
     serde_json::from_str::<BTreeMap<String, Case>>(&read(FIXTURE))
         .expect("fixture の形")
         .remove(name)
         .unwrap_or_else(|| panic!("組 {name} が無い"))
-}
-
-/// server と同じ組み方（anchor は doctor の席の行から）。
-fn build(target: &str, texts: &SeatTexts, now: u64) -> SeatCard {
-    let anchor = texts.doctor.as_deref().and_then(|d| anchor(d, target));
-    card(target, anchor.as_deref(), texts, now)
 }
 
 /// 合図の健康の出力のうち、席 `target` の行の末に空白と `tail` を足した字（ほかの行はそのまま）。

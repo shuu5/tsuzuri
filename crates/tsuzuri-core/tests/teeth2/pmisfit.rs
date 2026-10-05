@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use crate::common::NOW;
 use serde_json::{Value, json};
 use tsuzuri_contract::board::{Misfit, MisfitBead, PipelineBoard, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
@@ -12,9 +13,6 @@ use tsuzuri_contract::wire;
 use tsuzuri_core::pipeline::{
     Board, FORM_FIELDS, FORM_PREFIX, board, board_with_doctor, form_ids,
 };
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 /// 節の 37 字の題。
 const LONG_TITLE: &str = "題の頭  0123456789 0123456789 0123456789";

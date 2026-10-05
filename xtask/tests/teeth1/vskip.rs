@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::common::{read_root, strings};
 use skip::{BASE_REF, FORCE_ENV, SHARED, Verdict};
 
 /// fixture の base の木（入れ子の dir s2 と s3・入力の外の crate と xtask の歯・.gitignore）。
@@ -25,14 +26,6 @@ const BASE_FILES: &[(&str, &str)] = &[
     ("xtask/tests/t.rs", "// t\n"),
     (".gitignore", "/s2/ignored/\n"),
 ];
-
-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
-fn read_root(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 一時の dir（名に pid と字 tag）を作り直す。
 fn fresh(tag: &str) -> PathBuf {
@@ -104,10 +97,6 @@ fn touches(dir: &Path) -> Verdict {
         "base {} からの差が入れ子の入力に触れる",
         &base(dir)[..12]
     ))
-}
-
-fn strings(xs: &[&str]) -> Vec<String> {
-    xs.iter().map(|s| (*s).to_string()).collect()
 }
 
 #[test]

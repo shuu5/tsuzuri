@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::common::log;
 use serde_json::{Value, json};
 use tsuzuri_contract::account::{SPARK_SPAN_S, SPARK_STEP_S, Spark, SparkLine, SparkPoint};
 use tsuzuri_contract::board::Reading;
@@ -53,10 +54,6 @@ fn event(account: &str, window: &str, ts: &str, used_pct: Value) -> Value {
 fn measured(account: &str, window: &str, ago: i64, used_pct: u64) -> String {
     let at = (NOW as i64 - ago) as u64;
     event(account, window, &rfc3339(at), json!(used_pct)).to_string()
-}
-
-fn log(lines: &[String]) -> String {
-    lines.iter().map(|l| format!("{l}\n")).collect()
 }
 
 fn texts(events: Option<String>) -> HostTexts {

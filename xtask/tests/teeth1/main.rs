@@ -4,6 +4,7 @@
 
 mod carry;
 mod cishard;
+mod common;
 mod deny;
 mod kfold;
 mod klint;

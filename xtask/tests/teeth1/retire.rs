@@ -4,6 +4,7 @@
 //! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で木を見る。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -91,13 +92,6 @@ const KEPT: [&str; 8] = [
 
 /// 歩かない dir（cargo の出力）。
 const SKIP: &str = "folio2/target";
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 /// dir の下の全項目（file・dir・symlink）を repo の根からの相対の path で返す。symlink は辿らず、SKIP の dir は入らない。
 fn entries(rel: &str, out: &mut Vec<String>) {

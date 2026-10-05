@@ -5,8 +5,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
 
+use crate::common::{fixture, read};
 use serde_json::Value;
 use tsuzuri_contract::board::{LedgerJudge, NextMove, PipelineCard, Reading, Stage};
 use tsuzuri_contract::stats::{CheckResult, NextStep, UnreflectedKind};
@@ -15,18 +15,6 @@ use tsuzuri_core::ledger::{
 };
 use tsuzuri_core::next_step::next_step;
 use tsuzuri_core::pipeline::board;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture(rel: &str) -> Value {
-    serde_json::from_str(&read(rel)).unwrap_or_else(|e| panic!("{rel} は JSON: {e}"))
-}
 
 /// fixture の欄を入力の字にする。
 fn input_text(v: &Value, key: &str) -> String {

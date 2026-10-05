@@ -5,16 +5,13 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::{NOW, host};
 use serde_json::{Value, json};
 use tsuzuri_contract::account::SessionLine;
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_contract::surface::SeatRole;
-use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{ProjectTexts, session_lines};
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 /// event の 1 行（run は bead とハイフンと RunCreated の時刻の札）。
 fn ev(ts: &str, kind: &str, run: &str, stage: Option<&str>, detail: Option<&str>) -> String {
@@ -76,13 +73,6 @@ fn ledger() -> String {
         bead("ss.5", "in_progress", None),
     ])
     .to_string()
-}
-
-fn host() -> HostTexts {
-    HostTexts {
-        host_toml: Some("[[account-group]]\nname = 'g'\nanchors = ['/w/p']\n".to_string()),
-        ..HostTexts::default()
-    }
 }
 
 fn texts(ledger: Option<String>) -> BTreeMap<String, ProjectTexts> {

@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use crate::common::pair;
 use tsuzuri_contract::graph::{EdgeType, GraphNode, NodeKind};
 use tsuzuri_core::graph::build::{add_rulings, read_rulings};
 use tsuzuri_core::graph::check::{RULED, UNMEASURED, in_ruling_grammar, outside_rulings};
@@ -118,10 +119,6 @@ fn ruled(g: &Graph) -> Vec<(String, String)> {
         .filter(|e| e.edge_type == EdgeType::RuledBy)
         .map(|e| (e.from.clone(), e.to.clone()))
         .collect()
-}
-
-fn pair(from: &str, to: &str) -> (String, String) {
-    (from.to_string(), to.to_string())
 }
 
 /// 違反の不変条件の id。

@@ -5,13 +5,11 @@
 
 use std::path::PathBuf;
 
+use crate::common::{NOW, cards};
 use serde_json::{Value, json};
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
-use tsuzuri_core::pipeline::{Board, board};
-
-/// 節の今（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
+use tsuzuri_core::pipeline::board;
 
 /// 台帳の bead の 1 本（題は t と空白と id・欄 acceptance_criteria は design の字が在るときだけ）。
 fn bead(id: &str, status: &str, design: Option<&str>) -> Value {
@@ -71,13 +69,6 @@ fn card(id: &str, runs: u32, stage: Stage, elapsed: Option<u64>) -> PipelineCard
         account: None,
         since: elapsed.map(|e| NOW - e),
         ci: None,
-    }
-}
-
-fn cards(b: &Board) -> &[PipelineCard] {
-    match &b.board.cards {
-        Reading::Known(c) => c,
-        Reading::Unknown => panic!("札が Unknown"),
     }
 }
 

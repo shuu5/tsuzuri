@@ -4,8 +4,9 @@
 //! workspace の根の fixture は読むだけで書かない。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::root;
 use serde_json::json;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{Fold, GraphNode, NodeKind};
@@ -13,10 +14,6 @@ use tsuzuri_core::graph::build::add_summary;
 use tsuzuri_core::graph::check::{SUMMARY_KINDS, unsummarized};
 use tsuzuri_core::graph::{Graph, Inputs, around, build};
 use tsuzuri_core::question;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))

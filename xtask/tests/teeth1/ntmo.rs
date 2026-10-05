@@ -2,15 +2,7 @@
 //! 注と空の行を除いた行は、表 profile.default の見出しと slow-timeout の 1 行（60 秒ごとに SLOW・5 回目で止める）の 2 行だけ。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-/// repo の根（xtask の manifest の dir の 1 つ上）からの相対の path の file を読む。
-fn read_root(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
+use crate::common::read_root;
 
 /// 井桁で始まる行と空の行を除いた行（trim）。
 fn body_lines(text: &str) -> Vec<&str> {

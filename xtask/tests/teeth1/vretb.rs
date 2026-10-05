@@ -3,8 +3,8 @@
 //! 元の path に残って、根の Claude Code の設定 .claude/settings.json の claudeMdExcludes が読ませない。外の依存を使わず repo の根からの相対の path で読む。
 #![cfg(test)]
 
+use crate::common::root;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 /// 移した 5 つの対（元・先）。名が字 . で始まる .gitignore は退役の置き場で働かないよう名を替える（folio2 の前例 folio2/retired/beads/gitignore.txt）。
 const MOVED: [(&str, &str); 5] = [
@@ -36,13 +36,6 @@ const KEY: &str = "\"claudeMdExcludes\": [";
 const PATTERN: &str = "**/scribe2/CLAUDE.md";
 /// 器の検査の門 paths-clean と private-clean が見る private な path の形（器の limits.rs の PRIVATE_PATH_MARKS と同じ字）。
 const MARKS: [&str; 2] = [concat!("/", "home", "/"), concat!("~", "/")];
-
-fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask の dir の 1 つ上")
-        .to_path_buf()
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

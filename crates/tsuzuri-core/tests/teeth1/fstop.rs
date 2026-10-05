@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use crate::common::{keys, only};
 use serde_json::Value;
 
 /// 行 f-stop の外で決めた filter の語（この行の接頭辞 fstop_ は並べない）。
@@ -119,26 +120,6 @@ fn read_json(rel: &str) -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"));
     serde_json::from_str(&text).unwrap_or_else(|e| panic!("{rel} は JSON でない: {e}"))
-}
-
-/// object の鍵を並べ替えた列。
-fn keys(v: &Value) -> Vec<&str> {
-    let mut keys: Vec<&str> = v
-        .as_object()
-        .unwrap_or_else(|| panic!("object でない: {v}"))
-        .keys()
-        .map(String::as_str)
-        .collect();
-    keys.sort_unstable();
-    keys
-}
-
-/// 要素 1 つの配列のその要素。
-fn only(v: &Value) -> &Value {
-    match v.as_array().map(Vec::as_slice) {
-        Some([one]) => one,
-        _ => panic!("要素 1 つの配列でない: {v}"),
-    }
 }
 
 /// 空白で分けて二重引用符を除いた語。
