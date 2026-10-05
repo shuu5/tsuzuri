@@ -51,14 +51,18 @@
         "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
         "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",
         "Read(~/.cld-env)", "Read(~/.cld-env/**)", "Read(~/.claude/.credentials.json)", "Read(~/.claude/.credentials.json/**)"
-      ]
+      ],
+      "blockReadsOutsideWorkingDirectories": true
     },
     "sandbox": {
       "enabled": true,
       "autoAllowBashIfSandboxed": true,
       "allowUnsandboxedCommands": false,
       "failIfUnavailable": true,
-      "filesystem": {"denyWrite": ["/R", "/S/fleet", "/S/pipe"]},
+      "filesystem": {
+        "denyWrite": ["/R", "/S/fleet", "/S/pipe"],
+        "allowRead": ["~/.cargo/bin", "~/.rustup", "~/.local/bin/uv", "~/.local/bin/uvx", "~/.local/bin/claude", "~/.local/share/uv/python", "~/.local/share/claude", "/T"]
+      },
       "credentials": {"files": [
         {"path": "~/.config/gh", "mode": "deny"},
         {"path": "~/.ssh", "mode": "deny"},

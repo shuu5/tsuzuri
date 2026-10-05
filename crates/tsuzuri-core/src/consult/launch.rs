@@ -57,6 +57,18 @@ pub const CREDENTIALS: [&str; 6] = [
     CLAUDE_CREDENTIALS,
 ];
 
+/// 作業場と読む根の外の読みの断り（判断の記録 ADR-54）の下で、囲いの中の殻の命令に読みを戻す道具の置き場の閉じた列
+/// （home の下の実行 file と処理系の置き場・ほかに解いた tz を戻す）。
+pub const TOOL_READS: [&str; 7] = [
+    "~/.cargo/bin",
+    "~/.rustup",
+    "~/.local/bin/uv",
+    "~/.local/bin/uvx",
+    "~/.local/bin/claude",
+    "~/.local/share/uv/python",
+    "~/.local/share/claude",
+];
+
 /// argv に在ってはならない字（plugin の置き場・確かめを飛ばす形・外の道具の設定・指示の足し）。
 pub const FORBIDDEN: [&str; 5] = [
     "--plugin-dir",
@@ -74,12 +86,13 @@ pub const SANDBOX_FIXED: [(&str, bool); 4] = [
     ("/sandbox/failIfUnavailable", true),
 ];
 
-/// 設定に置かない鍵（JSON pointer）。
-pub const ABSENT: [&str; 4] = [
+/// 設定に置かない鍵（JSON pointer・囲いの file の仕切りを外す鍵は読みの断りも殻の命令に届かなくする）。
+pub const ABSENT: [&str; 5] = [
     "/sandbox/excludedCommands",
     "/sandbox/network/allowUnixSockets",
     "/sandbox/network/allowAllUnixSockets",
     "/permissions/defaultMode",
+    "/sandbox/filesystem/disabled",
 ];
 
 /// 窓を起こす材料（path は「/」で始まる絶対 path・uid は 10 進の字）。
@@ -166,6 +179,13 @@ fn denied_reads(l: &Launch) -> Vec<String> {
     rules
 }
 
+/// 囲いの中の殻の命令に読みを戻す path（道具の置き場の閉じた列 `TOOL_READS` の順に、解いた tz）。
+fn allowed_reads(l: &Launch) -> Vec<String> {
+    let mut paths: Vec<String> = TOOL_READS.iter().map(|t| (*t).to_string()).collect();
+    paths.push(l.tz.clone());
+    paths
+}
+
 /// `--settings` に渡す設定。
 pub fn settings(l: &Launch) -> Value {
     let w = &l.workspace;
@@ -177,13 +197,14 @@ pub fn settings(l: &Launch) -> Value {
         "permissions": {
             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
             "deny": denied_reads(l),
+            "blockReadsOutsideWorkingDirectories": true,
         },
         "sandbox": {
             "enabled": true,
             "autoAllowBashIfSandboxed": true,
             "allowUnsandboxedCommands": false,
             "failIfUnavailable": true,
-            "filesystem": {"denyWrite": l.roots},
+            "filesystem": {"denyWrite": l.roots, "allowRead": allowed_reads(l)},
             "credentials": {"files": files},
             "network": {"allowedDomains": DOMAINS},
         },
@@ -426,6 +447,18 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
     }
 }
 
+/// 設定の読みの断り（作業場と読む根の外の読みを断る鍵が true で、殻の命令に戻す読みが `allowed_reads` と字も順も同じ）。
+fn audit_reads(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+    let block = "/permissions/blockReadsOutsideWorkingDirectories";
+    if set.pointer(block) != Some(&Value::Bool(true)) {
+        gaps.push(block.to_string());
+    }
+    let allow = "/sandbox/filesystem/allowRead";
+    if set.pointer(allow) != Some(&json!(allowed_reads(l))) {
+        gaps.push(allow.to_string());
+    }
+}
+
 /// 組んだ argv を検める（欠けと広い許しの名の列・空なら起こしてよい）。
 pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
     let mut gaps = Vec::new();
@@ -434,6 +467,7 @@ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
         Some(Ok(set)) => {
             audit_sandbox(&set, l, &mut gaps);
             audit_permissions(&set, l, &mut gaps);
+            audit_reads(&set, l, &mut gaps);
         }
         _ => gaps.push("/".to_string()),
     }
@@ -447,7 +481,9 @@ pub fn brief(tz: &str, window: WindowId) -> String {
         "# 相談の窓 {window} の手引き\n\n\
          あなたは tsuzuri の相談の窓 {window} です。席（orchestrator）の文脈を汚さないために分けた、自由な調べと検証の場です。\n\n\
          - 作業場はこの dir（cwd）です。書けるのは作業場の下だけです。repo と器の出力は読むだけで、作業場の外へは基本ソフトの囲いで書けません。\n\
+         - 読めるのは作業場と repo と器の出力（fleet と pipe）と道具の置き場だけです。ほかの project と home の下の file は読めません。要る物は持ち主か所見で頼んでください（席が作業場へ写します）。\n\
          - 実験と検証のプログラムとレポートは work/ に置いてください。package の cache と入れ先は作業場の下に向けてあります。\n\
+         - 込み入った殻の命令（つないだ 1 行や heredoc など）は、許可を聞かない形で黙って断られることがあります。work/ の script に書いて bash work/<名>.sh で撃ってください。\n\
          - web の調べ（WebSearch・WebFetch）はいつも使えます。資格と private な project の中身を外へ出さないでください。\n\
          - 台帳は bundle/ledger.json の写しで読んでください（囲いの中では bd を撃てません）。束は {tz} consult bundle {window} で組み直せます。\n\
          - 話題ごとの要点は notes.md に書き足してください（開き直した時の続きに使います）。\n\

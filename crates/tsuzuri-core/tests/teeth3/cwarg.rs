@@ -582,6 +582,113 @@ fn cwarg_tmp_and_version() {
     );
 }
 
+/// 読みの断りの鍵と戻す読みの列の替えの名と、検めが出す欠けの名と、替え方。
+type ReadEdit = (&'static str, &'static str, fn(&mut Value));
+
+const BLOCK: &str = "/permissions/blockReadsOutsideWorkingDirectories";
+const ALLOW_READ: &str = "/sandbox/filesystem/allowRead";
+
+fn allow_read(s: &mut Value) -> &mut Vec<Value> {
+    s.pointer_mut(ALLOW_READ)
+        .and_then(Value::as_array_mut)
+        .expect("列")
+}
+
+/// 外れた形の 12（鍵の 3・戻す読みの 8・囲いの file の仕切りを外す 1）。
+fn read_edits() -> [ReadEdit; 12] {
+    [
+        ("鍵なし", BLOCK, |s| {
+            s["permissions"]
+                .as_object_mut()
+                .expect("object")
+                .remove("blockReadsOutsideWorkingDirectories");
+        }),
+        ("鍵が false", BLOCK, |s| {
+            s["permissions"]["blockReadsOutsideWorkingDirectories"] = json!(false)
+        }),
+        ("鍵が字の true", BLOCK, |s| {
+            s["permissions"]["blockReadsOutsideWorkingDirectories"] = json!("true")
+        }),
+        ("戻す読みなし", ALLOW_READ, |s| {
+            s["sandbox"]["filesystem"]
+                .as_object_mut()
+                .expect("object")
+                .remove("allowRead");
+        }),
+        ("home の全部", ALLOW_READ, |s| {
+            allow_read(s).push(json!("~/"))
+        }),
+        ("ほかの project", ALLOW_READ, |s| {
+            allow_read(s).push(json!("~/projects"))
+        }),
+        ("bin の dir の全部", ALLOW_READ, |s| {
+            allow_read(s)[2] = json!("~/.local/bin")
+        }),
+        ("rustup を欠く", ALLOW_READ, |s| {
+            allow_read(s).retain(|x| x != "~/.rustup")
+        }),
+        ("tz を欠く", ALLOW_READ, |s| {
+            allow_read(s).retain(|x| x != "/T")
+        }),
+        ("順の替え", ALLOW_READ, |s| allow_read(s).swap(0, 1)),
+        ("同じ path を 2 度", ALLOW_READ, |s| {
+            allow_read(s).push(json!("~/.rustup"))
+        }),
+        (
+            "file の仕切りを外す",
+            "/sandbox/filesystem/disabled",
+            |s| s["sandbox"]["filesystem"]["disabled"] = json!(true),
+        ),
+    ]
+}
+
+/// 作業場と読む根の外の読みを断る鍵を置き、殻の命令に戻す読みを道具の置き場の閉じた列と解いた tz だけにし、外れた形を
+/// 検めが欠けの名 1 つで断ることを見る（行 cs-read-roots・判断の記録 ADR-54）。
+#[test]
+fn cwarg_blocks_reads_outside_roots() {
+    let tools = [
+        "~/.cargo/bin",
+        "~/.rustup",
+        "~/.local/bin/uv",
+        "~/.local/bin/uvx",
+        "~/.local/bin/claude",
+        "~/.local/share/uv/python",
+        "~/.local/share/claude",
+    ];
+    let fx = fixture();
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let set = settings(&l);
+        let mut want: Vec<Value> = tools.iter().map(|t| json!(t)).collect();
+        want.push(json!("/T"));
+        assert_eq!(set.pointer(BLOCK), Some(&json!(true)), "{form}");
+        assert_eq!(set.pointer(ALLOW_READ), Some(&Value::from(want)), "{form}");
+        assert!(audit(&argv(&l), &l).is_empty(), "{form}");
+        for (name, gap, edit) in read_edits() {
+            assert_eq!(audit(&with_settings(&l, edit), &l), [gap], "{form} {name}");
+        }
+        let mut moved = l.clone();
+        moved.tz = "/T2".into();
+        let last = settings(&moved)
+            .pointer(ALLOW_READ)
+            .and_then(Value::as_array)
+            .and_then(|a| a.last().cloned());
+        assert_eq!(last, Some(json!("/T2")), "{form} の解いた tz");
+    }
+}
+
+/// 束の手引きが読める範囲と込み入った殻の命令の撃ち方をそれぞれ 1 行で書くことを見る（行 cs-read-roots・memo t3-hub.84 の候補 1）。
+#[test]
+fn cwarg_brief_names_reads_and_scripts() {
+    let text = brief("/T", WindowId::parse("cw3").expect("窓 id"));
+    for line in [
+        "- 読めるのは作業場と repo と器の出力（fleet と pipe）と道具の置き場だけです。ほかの project と home の下の file は読めません。要る物は持ち主か所見で頼んでください（席が作業場へ写します）。",
+        "- 込み入った殻の命令（つないだ 1 行や heredoc など）は、許可を聞かない形で黙って断られることがあります。work/ の script に書いて bash work/<名>.sh で撃ってください。",
+    ] {
+        assert_eq!(text.lines().filter(|x| *x == line).count(), 1, "{line}");
+    }
+}
+
 #[test]
 fn cwarg_brief_text() {
     let w = WindowId::parse("cw3").expect("窓 id");
