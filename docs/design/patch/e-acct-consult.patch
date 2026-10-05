@@ -1,0 +1,451 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
+index d671b3de..75e1baf7 100644
+--- a/crates/tsuzuri-boundary/src/consult/list.rs
++++ b/crates/tsuzuri-boundary/src/consult/list.rs
+@@ -4,6 +4,7 @@
+ //! 状態は、退いた作業場なら 退いた、閉じの行が在れば 閉じた、最後の process が在れば 生きている、ほかは 止まった。
+ //! 一覧の材料は作業場の file と台帳の相談の行だけ（読むだけ・台帳は書かない・席は show --via 一覧 で受ける）。
+ //! 時刻は行の分の字を epoch 秒にする（読めない字は None）。
++//! 口座は最後の process の印の口座の置き場の末の名で、印が無いか口座の欄が無ければ 分からない（判断の記録 ADR-55 決定 (4)）。
+ 
+ use std::path::Path;
+ 
+@@ -14,12 +15,13 @@ use tsuzuri_contract::consult::{
+     Word,
+ };
+ use tsuzuri_contract::wire;
++use tsuzuri_core::account::project::account_label;
+ use tsuzuri_core::consult::lines::{Line, Subject, unreceived};
+ use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, count};
+ 
+ use super::{
+-    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, read_window,
+-    refuse, retired, windows, workspace,
++    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, procs,
++    read_window, refuse, retired, windows, workspace,
+ };
+ use crate::out::emit;
+ use crate::server::clock::epoch_secs;
+@@ -65,6 +67,9 @@ pub fn epoch_of(minute: &str) -> Option<EpochSecs> {
+         .flatten()
+ }
+ 
++/// 口座の無い窓の口座の字。
++pub const NO_ACCOUNT: &str = "分からない";
++
+ /// 窓の状態。
+ pub fn state_of(c: &Ctx, id: WindowId, gone: bool, lines: &[Line]) -> WindowState {
+     if gone {
+@@ -129,6 +134,10 @@ fn rows(c: &Ctx, lines: &[Line]) -> (Vec<WindowRow>, Vec<FindingRow>) {
+             opened,
+             findings: u32::try_from(found.len()).unwrap_or(u32::MAX),
+             undisposed: u32::try_from(left.len()).unwrap_or(u32::MAX),
++            account: procs(&ws)
++                .pop()
++                .and_then(|p| p.account)
++                .and_then(|a| account_label(&a)),
+         });
+         open.extend(left.into_iter().map(|f| finding_row(&ws, f, lines)));
+     }
+@@ -184,13 +193,14 @@ pub fn text(b: &ConsultBoard) -> Vec<String> {
+     if let Reading::Known(wins) = &b.windows {
+         for w in wins {
+             out.push(format!(
+-                "窓 {}・形 {}・題 {}・状態 {}・所見 {}・未処分 {}",
++                "窓 {}・形 {}・題 {}・状態 {}・所見 {}・未処分 {}・口座 {}",
+                 w.id,
+                 w.form.word(),
+                 w.topic.as_deref().unwrap_or("題なし"),
+                 w.state.word(),
+                 w.findings,
+-                w.undisposed
++                w.undisposed,
++                w.account.as_deref().unwrap_or(NO_ACCOUNT)
+             ));
+         }
+     }
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+index 3f245782..716e8964 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+@@ -2,14 +2,17 @@
+ //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
+ //! 受けた argv を記録して窓の名を tmux.name の字で答える偽の tmux を置き（本物の tmux は撃たない）、
+ //! 窓の作業場（控え・process の印・所見）を歯が直に書いて tz consult list と close を撃つ。
++//! 一覧の口座（行 e-acct-consult）の歯は口を撃たず、起草の置き場だけを置いて一覧の組み（`list::board` と `list::text`）を直に撃つ。
+ #![cfg(test)]
+ 
++use std::ffi::OsString;
+ use std::fs;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-use tsuzuri_boundary::consult::list::epoch_of;
++use tsuzuri_boundary::consult::Ctx;
++use tsuzuri_boundary::consult::list::{NO_ACCOUNT, board, epoch_of, text};
+ use tsuzuri_boundary::server::{events, ruling};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::consult::{
+@@ -233,11 +236,11 @@ fn cwcls_list_states_and_text() {
+     let o = fx.tz(&["list"]);
+     assert_eq!(rc(&o), 0, "{}", err(&o));
+     let want = [
+-        "窓 cw1・形 問う・題 fx-c.2・状態 生きている・所見 1・未処分 1",
+-        "窓 cw2・形 問う・題 題なし・状態 止まった・所見 0・未処分 0",
+-        "窓 cw3・形 話す・題 題なし・状態 閉じた・所見 1・未処分 0",
+-        "窓 cw4・形 話す・題 題なし・状態 退いた・所見 0・未処分 0",
+-        "窓 cw5・形 話す・題 題なし・状態 止まった・所見 0・未処分 0",
++        "窓 cw1・形 問う・題 fx-c.2・状態 生きている・所見 1・未処分 1・口座 分からない",
++        "窓 cw2・形 問う・題 題なし・状態 止まった・所見 0・未処分 0・口座 分からない",
++        "窓 cw3・形 話す・題 題なし・状態 閉じた・所見 1・未処分 0・口座 分からない",
++        "窓 cw4・形 話す・題 題なし・状態 退いた・所見 0・未処分 0・口座 分からない",
++        "窓 cw5・形 話す・題 題なし・状態 止まった・所見 0・未処分 0・口座 分からない",
+         "受けの無い頼み rq-20261003T1412Z-1・題 題なし",
+         "席の問う窓: 今日 2・今 1（規則の行 R-38 の上限 同時 1・1 日 3）",
+     ];
+@@ -408,3 +411,92 @@ fn cwcls_close_refusals() {
+         "{bdw:?}"
+     );
+ }
++
++/// 口座の歯の在り得ない pid（`/proc` に無い）。
++const ACC_GONE: u32 = u32::MAX;
++
++fn acc_put(drafts: &Path, dir: &str, n: &str, accounts: &[Option<&str>]) {
++    let dot = drafts.join(dir).join(".consult");
++    fs::create_dir_all(&dot).expect(".consult");
++    let control = WindowFile {
++        id: WindowId::parse(n).expect("窓の id"),
++        form: Form::Talk,
++        topic: None,
++        model: "opus".into(),
++        effort: "high".into(),
++        starter: Starter::Seat,
++        uttered: None,
++        request: None,
++        made: "20261005T0100Z".into(),
++    };
++    fs::write(dot.join("window.json"), wire::encode(&control).expect("控えの字")).expect("控え");
++    for (i, a) in accounts.iter().enumerate() {
++        let k = u32::try_from(i).expect("k") + 1;
++        let m = ProcMark {
++            k,
++            form: Form::Talk,
++            pid: ACC_GONE,
++            at: "20261005T0100Z".into(),
++            again: k > 1,
++            tmux_window: Some(format!("@{k}")),
++            account: a.map(str::to_string),
++        };
++        let text = wire::encode(&m).expect("印の字");
++        fs::write(dot.join(format!("proc-{k}.json")), text).expect("印");
++    }
++}
++
++fn acc_ctx(name: &str) -> Ctx {
++    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
++        .join("cwcls-acc")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    let drafts = root.join("drafts");
++    acc_put(&drafts, "consult-cw1", "cw1", &[Some("/s/accounts/acct-old"), Some("/s/accounts/acct-new/")]);
++    acc_put(&drafts, "consult-cw2", "cw2", &[]);
++    acc_put(&drafts, "consult-cw3", "cw3", &[None]);
++    acc_put(&drafts, "consult-cw4", "cw4", &[Some("/s/accounts/acct-old"), None]);
++    acc_put(&drafts, "retired-consult-cw5", "cw5", &[Some("/s/accounts/acct-new")]);
++    Ctx {
++        repo: root.clone(),
++        state: root,
++        drafts,
++        bd: OsString::from("bd"),
++        bdw: OsString::from("bdw"),
++    }
++}
++
++/// 行 e-acct-consult（判断の記録 ADR-55 決定 (4)）: 電文の窓の行の口座（窓の id の順・退いた窓も同じ決まり）と、tz consult list の行の末の「口座 <名>」。
++#[test]
++fn cwcls_list_rows_hold_the_account() {
++    let c = acc_ctx("rows");
++    let b = board(&c, &[], "20261005T0300Z");
++    let Reading::Known(wins) = &b.windows else {
++        panic!("窓の段が読めない: {b:?}")
++    };
++    let got: Vec<(String, Option<&str>)> = wins
++        .iter()
++        .map(|w| (w.id.to_string(), w.account.as_deref()))
++        .collect();
++    assert_eq!(
++        got,
++        [
++            ("cw1".to_string(), Some("acct-new")),
++            ("cw2".to_string(), None),
++            ("cw3".to_string(), None),
++            ("cw4".to_string(), None),
++            ("cw5".to_string(), Some("acct-new")),
++        ]
++    );
++    let tails: Vec<String> = text(&b)
++        .into_iter()
++        .filter(|l| l.starts_with("窓 "))
++        .filter_map(|l| l.rsplit('・').next().map(str::to_string))
++        .collect();
++    let none = format!("口座 {NO_ACCOUNT}");
++    assert_eq!(
++        tails,
++        ["口座 acct-new", none.as_str(), none.as_str(), none.as_str(), "口座 acct-new"]
++    );
++    assert_eq!(NO_ACCOUNT, "分からない");
++}
+diff --git a/crates/tsuzuri-contract/src/consult.rs b/crates/tsuzuri-contract/src/consult.rs
+index 454dfb11..1bc90587 100644
+--- a/crates/tsuzuri-contract/src/consult.rs
++++ b/crates/tsuzuri-contract/src/consult.rs
+@@ -498,6 +498,9 @@ pub struct WindowRow {
+     pub opened: Option<EpochSecs>,
+     pub findings: u32,
+     pub undisposed: u32,
++    /// 最後の process の印の口座の置き場の末の名（印が無いか口座の欄が無ければ None・判断の記録 ADR-55 決定 (4)）。
++    #[serde(default)]
++    pub account: Option<String>,
+ }
+ 
+ /// 処分の無い所見の 1 行。
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cwty.rs b/crates/tsuzuri-contract/tests/teeth1/cwty.rs
+index 3a964194..9bc656ce 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cwty.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cwty.rs
+@@ -188,6 +188,7 @@ fn cwty_board_roundtrip() {
+             opened: Some(1_790_000_000),
+             findings: 1,
+             undisposed: 1,
++            account: Some("acct-x".into()),
+         }]),
+         findings: Reading::Known(vec![FindingRow {
+             id: f.id,
+diff --git a/crates/tsuzuri-surface/src/account/session.rs b/crates/tsuzuri-surface/src/account/session.rs
+index 132398ce..d2db22ef 100644
+--- a/crates/tsuzuri-surface/src/account/session.rs
++++ b/crates/tsuzuri-surface/src/account/session.rs
+@@ -5,7 +5,8 @@
+ //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
+ //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
+ //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
+-//! 相談の窓の行（役 consult）は役の語と窓の card を持つ（判断の記録 ADR-55 決定 (4)）。
++//! 相談の窓の行（役 consult）は役の語と窓の card を持ち、窓の口座が群の今の口座と違えば口座ずれの印を出す
++//! （判断の記録 ADR-55 決定 (4)）。
+ //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use tsuzuri_contract::EpochSecs;
+@@ -243,13 +244,15 @@ pub enum Move {
+     Grace(EpochSecs),
+     /// 席の口座が群の今の口座と違う。
+     Wait,
++    /// 相談の窓の口座が群の今の口座と違う。
++    Drift,
+ }
+ 
+ impl Move {
+     pub fn class(self) -> &'static str {
+         match self {
+             Move::Grace(_) => "mvgrace",
+-            Move::Wait => "mvwait",
++            Move::Wait | Move::Drift => "mvwait",
+         }
+     }
+ 
+@@ -258,6 +261,7 @@ impl Move {
+         match self {
+             Move::Grace(_) => "move_grace",
+             Move::Wait => "seat_mismatch",
++            Move::Drift => "consult_drift",
+         }
+     }
+ }
+@@ -499,10 +503,10 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
+         elapsed: elapsed_at(line.since, doc.at, doc.at),
+         spans: line.spans.clone(),
+         signs: orchestrator.then(|| signs(doc, line)),
+-        moving: if orchestrator {
+-            moving(doc, line)
+-        } else {
+-            None
++        moving: match line.role {
++            SeatRole::Orchestrator => moving(doc, line),
++            SeatRole::Consult => drift(doc, line),
++            SeatRole::Pipeline => None,
+         },
+         toggle: toggle(doc, line),
+         card: sess_card(doc, index),
+@@ -550,6 +554,14 @@ pub fn moving(doc: &AccountDoc, line: &SessionLine) -> Option<Move> {
+     (account != current).then_some(Move::Wait)
+ }
+ 
++/// 相談の窓の行の口座ずれの印（窓の口座と群の今の口座が両方分かって違う時だけ・分からない一致を不一致と出さない）。
++pub fn drift(doc: &AccountDoc, line: &SessionLine) -> Option<Move> {
++    let project = project_of(doc, &line.project)?;
++    let account = line.account.as_deref()?;
++    let current = current_account(doc, project)?;
++    (account != current).then_some(Move::Drift)
++}
++
+ /// 稼働の記録の SVG の字（窓の右端は電文の at・session の行は口座の移動を持たないので縦線は無い・区間が読めなければ測れていない）。
+ pub fn strip(spans: &Reading<Vec<SeatSpan>>, at: EpochSecs, span: Span) -> Reading<String> {
+     match spans {
+@@ -949,7 +961,7 @@ mod dom {
+                 }
+                 .into_any()
+             }
+-            Move::Wait => {
++            Move::Wait | Move::Drift => {
+                 view! { <span class=m.class()>{term(m.key(), label(m.key()))}</span> }.into_any()
+             }
+         });
+diff --git a/crates/tsuzuri-surface/src/consultwin.rs b/crates/tsuzuri-surface/src/consultwin.rs
+index 653bbaac..a2a823c6 100644
+--- a/crates/tsuzuri-surface/src/consultwin.rs
++++ b/crates/tsuzuri-surface/src/consultwin.rs
+@@ -22,6 +22,7 @@ use crate::project::Body;
+ use crate::project::ask::FOCUS_KEY;
+ use crate::topbar::{Win, win_href};
+ use crate::view::Fetched;
++use crate::vocab::label;
+ 
+ pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
+ 
+@@ -130,18 +131,22 @@ fn rows<T>(
+     }
+ }
+ 
+-/// 窓の段（退いた窓は載せない・状態は形と状態の語と所見の数）。
++/// 窓の段（退いた窓は載せない・状態は形と状態の語と所見の数と口座・口座の無い窓は語の鍵 consult_account_unknown の語・
++/// 判断の記録 ADR-55 決定 (4)）。
+ pub fn windows(r: &Reading<Vec<WindowRow>>) -> Body<Vec<Row>> {
+     rows(r, NONE_LINES[0], |w| {
+         (w.state != WindowState::Retired).then(|| Row {
+             id: w.id.to_string(),
+             topic: topic_of(w.topic.as_ref()),
+             note: format!(
+-                "{}・{}・所見 {}（処分なし {}）",
++                "{}・{}・所見 {}（処分なし {}）・口座 {}",
+                 w.form.word(),
+                 w.state.word(),
+                 w.findings,
+-                w.undisposed
++                w.undisposed,
++                w.account
++                    .clone()
++                    .unwrap_or_else(|| label("consult_account_unknown"))
+             ),
+             late: false,
+         })
+diff --git a/crates/tsuzuri-surface/tests/acctcws.rs b/crates/tsuzuri-surface/tests/acctcws.rs
+index 9f6cbedc..c10a4d43 100644
+--- a/crates/tsuzuri-surface/tests/acctcws.rs
++++ b/crates/tsuzuri-surface/tests/acctcws.rs
+@@ -6,11 +6,11 @@
+ use std::path::PathBuf;
+ 
+ use tsuzuri_contract::account::AccountDoc;
+-use tsuzuri_contract::board::Stage;
++use tsuzuri_contract::board::{Reading, Stage};
+ use tsuzuri_contract::surface::SeatRole;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::account::session::{
+-    self, CONSULT_SRC, no_account_key, role_key, role_word, sess_card,
++    self, CONSULT_SRC, Move, drift, no_account_key, role_key, role_word, sess_card,
+ };
+ use tsuzuri_surface::project::state_key;
+ use tsuzuri_surface::vocab::{label, vocab};
+@@ -85,3 +85,31 @@ fn acctcws_consult_card() {
+ fn fixture_orch() -> AccountDoc {
+     wire::decode(&read("../../tests/fixtures/account/acct-doc.json")).expect("fixture")
+ }
++
++/// (3) 行 e-acct-consult: 窓の口座と群の今の口座が両方分かって違う時だけ口座ずれの印（class mvwait・語の鍵 consult_drift・
++/// 語は口座ずれ）。席の退避の残り秒は窓に効かない。同じ口座・口座が無い・群が読めない・群が無い・project が無い行は出さない。
++#[test]
++fn acctcws_consult_drift_mark() {
++    let d = doc();
++    let b = |x: &AccountDoc| drift(x, x.sessions.get(2).expect("3 行目"));
++    assert!(d.projects.get(1).is_some_and(|p| p.move_until.is_some()), "席の残り秒が在る fixture");
++    assert_eq!(b(&d), Some(Move::Drift));
++    assert_eq!(session::row(&d, 2).moving, Some(Move::Drift));
++    assert_eq!((Move::Drift.class(), Move::Drift.key()), ("mvwait", "consult_drift"));
++    assert_eq!(label("consult_drift"), "口座ずれ");
++    let edit = |f: &dyn Fn(&mut AccountDoc)| {
++        let mut x = d.clone();
++        f(&mut x);
++        b(&x)
++    };
++    assert_eq!(edit(&|x| x.sessions[2].account = Some("acct-2".into())), None);
++    assert_eq!(edit(&|x| x.sessions[2].account = None), None);
++    assert_eq!(edit(&|x| x.groups = Reading::Unknown), None);
++    assert_eq!(edit(&|x| x.projects[1].group = None), None);
++    assert_eq!(edit(&|x| x.sessions[2].project = "proj-z".into()), None);
++    // 席の行は今までどおり退避の残り秒（窓の印は席に出さない）。
++    let orch = fixture_orch();
++    assert!(matches!(session::row(&orch, 2).moving, Some(Move::Grace(_))));
++    let src = read("src/account/session.rs");
++    assert!(src.contains("Move::Wait | Move::Drift => {"), "DOM は口座ずれを移動待ちと同じ形で描く");
++}
+diff --git a/crates/tsuzuri-surface/tests/cwbar.rs b/crates/tsuzuri-surface/tests/cwbar.rs
+index 97a12f7e..28732223 100644
+--- a/crates/tsuzuri-surface/tests/cwbar.rs
++++ b/crates/tsuzuri-surface/tests/cwbar.rs
+@@ -147,9 +147,30 @@ fn window(n: u32, state: WindowState) -> WindowRow {
+         opened: Some(1),
+         findings: 2,
+         undisposed: 1,
++        account: None,
+     }
+ }
+ 
++/// 窓の段の行は口座を並べる（最後の印の口座の置き場の末の名・無ければ分からない・判断の記録 ADR-55 決定 (4)）。
++#[test]
++fn cwbar_window_note_holds_the_account() {
++    let named = WindowRow {
++        account: Some("acct-x".into()),
++        ..window(1, WindowState::Stalled)
++    };
++    assert_eq!(
++        windows(&Reading::Known(vec![named, window(2, WindowState::Live)])),
++        Body::Filled(vec![
++            row("cw1", "題なし", "問う・止まった・所見 2（処分なし 1）・口座 acct-x", false),
++            row("cw2", "題なし", "問う・生きている・所見 2（処分なし 1）・口座 分からない", false),
++        ])
++    );
++    assert_eq!(
++        tsuzuri_surface::vocab::label("consult_account_unknown"),
++        "分からない"
++    );
++}
++
+ /// 窓の段は退いた窓を載せず形と状態と所見の数を並べ、所見の段は席の受けを書き、読めない口と段は測れていない。
+ #[test]
+ fn cwbar_lists_and_unread() {
+@@ -162,7 +183,7 @@ fn cwbar_lists_and_unread() {
+         Body::Filled(vec![row(
+             "cw1",
+             "題なし",
+-            "問う・生きている・所見 2（処分なし 1）",
++            "問う・生きている・所見 2（処分なし 1）・口座 分からない",
+             false
+         )])
+     );
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index ca063992..2ba39ef9 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -465,6 +465,11 @@
+    "note": "1 つの run を実行する session\n✗ 群の今の口座は使えない\n✓ 空きの口座で動く",
+    "internal": "run（便）・§23 便用の候補から群の今の口座を外す"
+   },
++  "consult_drift": {
++   "label": "口座ずれ",
++   "plain": "{gi:ng} 窓の口座 ≠ 群の今の口座\n→ 窓が手すきの時に席が新しい口座で開き直す\n・ 会話は続く",
++   "internal": "ProcMark.account の末の名 != current_of(群)（判断の記録 ADR-55 決定 (3)(4)）"
++  },
+   "consult_account_unknown": {
+    "label": "分からない",
+    "plain": "{gi:unknown} 窓の印に口座が無い\n・ 口座の印の前に起こした窓\n✗ 口座が無いとは違う",

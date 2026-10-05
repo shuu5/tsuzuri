@@ -1,0 +1,506 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 78840881..36fce05e 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -101,6 +101,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+         model: w.model.clone(),
+         effort: w.effort.clone(),
+         question: ws.join("bundle/question.md").is_file(),
++        resume: None,
+     })
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index e2d56b30..8a2d6215 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -6,6 +6,7 @@
+ //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
+ //! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
+ //! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
++//! 口座の信頼の印の書き手（`trust`）は行 cs-trust（ノート surface-wave29b）が置く。
+ 
+ pub mod answer;
+ pub mod bundle;
+@@ -19,6 +20,7 @@ pub mod plain;
+ pub mod show;
+ pub mod stamp;
+ pub mod statusline;
++pub mod trust;
+ pub mod watch;
+ 
+ use std::ffi::{OsStr, OsString};
+diff --git a/crates/tsuzuri-boundary/src/consult/trust.rs b/crates/tsuzuri-boundary/src/consult/trust.rs
+new file mode 100644
+index 00000000..eabd8610
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/trust.rs
+@@ -0,0 +1,46 @@
++//! 口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く書き手（行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++//! 字は中核の `trust::trusted` が組み、ここは読みと書きだけを持つ（器が席を起こす前に anchor の信頼の印を置く形と同じ:
++//! 同じ dir の一時 file に書いて読み直し、印が真なら rename で置き換える・mode を保つ・既に真なら書かない・lock は持たない）。
++//! 読めない・JSON でない・書けない置き場は rc 2 で断る（直してから撃ち直す）。
++
++use std::fs;
++use std::path::Path;
++
++use tsuzuri_core::consult::trust::{TRUST_FILE, trusted};
++
++use super::{Refused, UNKNOWN};
++
++/// 口座の置き場 `account` の設定 file に作業場 `workspace` だけの信頼の印を置く（既に真なら書かない・file が無ければ作る・
++/// 同じ dir の一時 file に書いて読み直し、印が真なら rename で置き換える・mode を保つ）。
++pub fn place_trust(account: &Path, workspace: &str) -> Result<(), Refused> {
++    let path = account.join(TRUST_FILE);
++    let unknown = |why: String| {
++        (
++            UNKNOWN,
++            format!("{} {why}（直してから撃ち直す）", path.display()),
++        )
++    };
++    let text = match fs::read_to_string(&path) {
++        Ok(text) => Some(text),
++        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
++        Err(e) => return Err(unknown(format!("が読めない: {e}"))),
++    };
++    let body = match trusted(text.as_deref(), workspace) {
++        Ok(Some(body)) => body,
++        Ok(None) => return Ok(()),
++        Err(why) => return Err(unknown(format!("の字に信頼の印を置けない: {why}"))),
++    };
++    let staged = account.join(format!("{TRUST_FILE}.{}.tz-staged", std::process::id()));
++    let mode = fs::metadata(&path).map(|m| m.permissions());
++    let written = fs::write(&staged, body)
++        .and_then(|()| mode.map_or(Ok(()), |m| fs::set_permissions(&staged, m)));
++    let settled = fs::read_to_string(&staged).ok();
++    if written.is_ok()
++        && trusted(settled.as_deref(), workspace) == Ok(None)
++        && fs::rename(&staged, &path).is_ok()
++    {
++        return Ok(());
++    }
++    let _ = fs::remove_file(&staged);
++    Err(unknown("に信頼の印を書けない".to_string()))
++}
+diff --git a/crates/tsuzuri-boundary/tests/cwtrw.rs b/crates/tsuzuri-boundary/tests/cwtrw.rs
+new file mode 100644
+index 00000000..7dbb03e3
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwtrw.rs
+@@ -0,0 +1,53 @@
++//! 口座の信頼の印の書き手の歯（接頭辞 cwtrw_・設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）を口座の置き場に見立て、書き手 `place_trust` を直に撃つ（本物の口座の置き場は読まない）。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::{MetadataExt, PermissionsExt};
++use std::path::{Path, PathBuf};
++
++use tsuzuri_boundary::consult::trust::place_trust;
++use tsuzuri_core::consult::trust::trusted;
++
++/// 歯ごとの口座の置き場（前の撃ちの残りを消して作る）。
++fn place(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("cwtrw")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(&root).unwrap();
++    root
++}
++
++/// 信頼の印の書き手は、file が無ければ印だけの file を作り、在れば中核の trusted の字に置き換え（mode を保ち・一時 file を残さない）、
++/// 既に真なら 1 byte も書かず（更新時刻も替えない）、JSON でない file は替えずに rc 2 の断りを返す。
++#[test]
++fn cwtrw_place_trust_writes_once() {
++    let acct = place("once");
++    let w = "/W";
++    let file = acct.join(".claude.json");
++    assert_eq!(place_trust(&acct, w), Ok(()));
++    assert_eq!(fs::read_to_string(&file).ok(), trusted(None, w).unwrap());
++    let before = r#"{"projects":{"/W":{"hasTrustDialogAccepted":false}},"z":1}"#;
++    fs::write(&file, before).unwrap();
++    fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
++    assert_eq!(place_trust(&acct, w), Ok(()));
++    assert_eq!(
++        fs::read_to_string(&file).ok(),
++        trusted(Some(before), w).unwrap()
++    );
++    assert_eq!(fs::metadata(&file).unwrap().mode() & 0o777, 0o600);
++    assert_eq!(
++        fs::read_dir(&acct).unwrap().count(),
++        1,
++        "一時 file を残さない"
++    );
++    let at = fs::metadata(&file).unwrap().modified().unwrap();
++    std::thread::sleep(std::time::Duration::from_millis(20));
++    assert_eq!(place_trust(&acct, w), Ok(()));
++    assert_eq!(fs::metadata(&file).unwrap().modified().unwrap(), at);
++    fs::write(&file, "{\"projects\": ").unwrap();
++    let (rc, why) = place_trust(&acct, w).unwrap_err();
++    assert!(rc == 2 && why.contains("JSON の字でない"), "{why}");
++    assert_eq!(fs::read_to_string(&file).unwrap(), "{\"projects\": ");
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index c048821e..cf2045cb 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -202,6 +202,7 @@ impl Fx {
+             model: "fable".to_string(),
+             effort: "xhigh".to_string(),
+             question,
++            resume: None,
+         }
+     }
+ 
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 5ba58c57..ad5b1e00 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -1,4 +1,5 @@
+ //! 起動の口の argv と設定と検め（設計ノート surface-wave27a 行 cs-argv・判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
++//! 話す窓の撃ち直しは材料の会話の id を続きの旗 `--resume` で渡して最初の指示を置かず、検めは旗の数と値（材料と同じ uuid の形）を照らす（行 cs-trust）。
+ //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
+ //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
+ //! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
+@@ -136,6 +137,8 @@ pub struct Launch {
+     pub effort: String,
+     /// 束に問い（question.md）が在るか（話す窓の最初の指示が読む）。
+     pub question: bool,
++    /// 話す窓の撃ち直しで続ける会話の id（uuid の形・在れば最初の指示の代わりに続きの旗で渡す・判断の記録 ADR-55）。
++    pub resume: Option<String>,
+ }
+ 
+ /// 読む根の 3 つ（repo・state dir の fleet・pipe）。
+@@ -311,7 +314,10 @@ pub fn argv(l: &Launch) -> Vec<String> {
+     ]);
+     match l.form {
+         Form::Ask => a.extend(["--output-format".to_string(), "json".to_string()]),
+-        Form::Talk => a.push(prompt(l)),
++        Form::Talk => match &l.resume {
++            Some(id) => a.extend(["--resume".to_string(), id.clone()]),
++            None => a.push(prompt(l)),
++        },
+     }
+     a
+ }
+@@ -536,10 +542,28 @@ fn audit_reads(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+     }
+ }
+ 
++/// 続きの旗（話す窓の材料に会話の id が在る時だけ、材料と同じ uuid の形の値で 1 度だけ・ほかは置かない）。
++fn audit_resume(argv: &[String], l: &Launch, gaps: &mut Vec<String>) {
++    let count = argv.iter().filter(|a| *a == "--resume").count();
++    let ok = match l.resume.as_deref() {
++        Some(id) => {
++            l.form == Form::Talk
++                && super::stamp::is_uuid(id)
++                && count == 1
++                && after(argv, "--resume") == Some(id)
++        }
++        None => count == 0,
++    };
++    if !ok {
++        gaps.push("--resume".to_string());
++    }
++}
++
+ /// 組んだ argv を検める（欠けと広い許しの名の列・空なら起こしてよい）。
+ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
+     let mut gaps = Vec::new();
+     audit_flags(argv, l, &mut gaps);
++    audit_resume(argv, l, &mut gaps);
+     match after(argv, "--settings").map(serde_json::from_str::<Value>) {
+         Some(Ok(set)) => {
+             audit_sandbox(&set, l, &mut gaps);
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index c3f8c995..c7e5f8be 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -1,4 +1,5 @@
+ //! 相談の窓の中核の純な関数（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a）。
++//! 口座の信頼の印の字（`trust`）と撃ち直しで続ける会話の id の選び（`resume`）は行 cs-trust（ノート surface-wave29b）が置く。
+ //! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+ //! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+ //! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer、
+@@ -12,5 +13,7 @@ pub mod launch;
+ pub mod lines;
+ pub mod pickup;
+ pub mod quota;
++pub mod resume;
+ pub mod stamp;
+ pub mod status;
++pub mod trust;
+diff --git a/crates/tsuzuri-core/src/consult/resume.rs b/crates/tsuzuri-core/src/consult/resume.rs
+new file mode 100644
+index 00000000..8c431764
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/resume.rs
+@@ -0,0 +1,31 @@
++//! 話す窓の撃ち直しの会話の続き（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (1)(3)）。
++//! 撃ち直しで続ける会話の id を、作業場の会話の印の最後の id と席が名指した id から決める（`pick`）。
++
++use tsuzuri_contract::consult::Form;
++
++use super::stamp::is_uuid;
++
++/// 撃ち直しで続ける会話の id（`last` は作業場の会話の印の最後の id・`named` は席が名指した id・断りは理由の字）。
++/// 続けるのは話す窓の撃ち直しだけで、名指しは会話の印を持たない窓だけに受ける。続けない時は None。
++pub fn pick(
++    form: Form,
++    again: bool,
++    last: Option<&str>,
++    named: Option<&str>,
++) -> Result<Option<String>, &'static str> {
++    let talk = again && form == Form::Talk;
++    match (named, last) {
++        (Some(_), _) if !again => Err("--session は --again と一緒に渡す"),
++        (Some(_), _) if form == Form::Ask => Err("問う窓は会話を続けない（--session を外す）"),
++        (Some(id), _) if !is_uuid(id) => Err("--session の値が会話の id の形（uuid）でない"),
++        (Some(_), Some(_)) => {
++            Err("窓は会話の印を持つ（印の最後の会話の id で続くので --session を外す）")
++        }
++        (Some(id), None) => Ok(Some(id.to_string())),
++        (None, Some(id)) if talk && is_uuid(id) => Ok(Some(id.to_string())),
++        (None, Some(_)) if talk => {
++            Err("会話の印の最後の会話の id が uuid の形でない（印の file を確かめる）")
++        }
++        (None, _) => Ok(None),
++    }
++}
+diff --git a/crates/tsuzuri-core/src/consult/trust.rs b/crates/tsuzuri-core/src/consult/trust.rs
+new file mode 100644
+index 00000000..8e74b4bf
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/trust.rs
+@@ -0,0 +1,43 @@
++//! 口座の信頼の印の字（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++//! 起こす口座の置き場の設定 file（`TRUST_FILE`）の字に、作業場 1 つだけの信頼の印を置いた字を組む（`trusted`）。
++//! 置く印は `projects.<作業場の絶対 path>.hasTrustDialogAccepted = true` の 1 つだけで、作業場の親と起草の置き場には置かない。
++
++use serde_json::{Map, Value};
++
++/// 口座の置き場の設定 file（口座の置き場からの相対・器が席の anchor の信頼の印を置く file と同じ）。
++pub const TRUST_FILE: &str = ".claude.json";
++
++/// 作業場の行の信頼の印の鍵。
++pub const TRUST_KEY: &str = "hasTrustDialogAccepted";
++
++/// 口座の置き場の設定 file の字（file が無ければ None）に、作業場 `workspace` の信頼の印を置いた字（断りは理由の字）。
++/// 既に印が真なら None（書かない）。file が無い時は印だけの字を組む。末の改行は元の字に合わせ、無い file は改行で終える。
++/// 根・projects・作業場の行が object でない字と、印が真偽でない字は断る。鍵の並びは字の順になる（JSON の値は同じ）。
++pub fn trusted(text: Option<&str>, workspace: &str) -> Result<Option<String>, &'static str> {
++    let mut root: Value = match text {
++        Some(t) => serde_json::from_str(t).map_err(|_| "JSON の字でない")?,
++        None => Value::Object(Map::new()),
++    };
++    let row = root
++        .as_object_mut()
++        .and_then(|r| {
++            r.entry("projects")
++                .or_insert_with(|| Value::Object(Map::new()))
++                .as_object_mut()
++        })
++        .and_then(|p| {
++            p.entry(workspace)
++                .or_insert_with(|| Value::Object(Map::new()))
++                .as_object_mut()
++        })
++        .ok_or("根か projects か作業場の行が object でない")?;
++    match row.get(TRUST_KEY) {
++        Some(Value::Bool(true)) => return Ok(None),
++        Some(Value::Bool(false)) | None => {}
++        Some(_) => return Err("作業場の行の信頼の印が真偽でない"),
++    }
++    row.insert(TRUST_KEY.to_string(), Value::Bool(true));
++    let body = serde_json::to_string_pretty(&root).map_err(|_| "JSON の字にできない")?;
++    let newline = text.is_none_or(|t| t.ends_with('\n'));
++    Ok(Some(if newline { body + "\n" } else { body }))
++}
+diff --git a/crates/tsuzuri-core/tests/cwrsm.rs b/crates/tsuzuri-core/tests/cwrsm.rs
+new file mode 100644
+index 00000000..bc0d21bf
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwrsm.rs
+@@ -0,0 +1,50 @@
++//! 撃ち直しの会話の続きの歯（接頭辞 cwrsm_・設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (1)(3)）。
++#![cfg(test)]
++
++use tsuzuri_contract::consult::Form;
++use tsuzuri_core::consult::resume::pick;
++
++const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
++const SID2: &str = "772c5b4c-0000-4000-8000-00000000ABCD";
++
++/// 話す窓の撃ち直しは印の最後の id で続け、撃ち直しでない周・問う窓・印の無い窓は続けず、印の最後の id が uuid の形でなければ
++/// 断る。席の名指しは話す窓の撃ち直しで印を持たない窓の uuid の形の id だけを受け、撃ち直しでない・問う窓・形でない・印を持つ窓を
++/// この順に断る（断りの字は互いに違う）。
++#[test]
++fn cwrsm_pick_continues_or_takes_a_named_id() {
++    let id = |s: &str| Ok(Some(s.to_string()));
++    let (t, a) = (Form::Talk, Form::Ask);
++    assert_eq!(pick(t, true, Some(SID), None), id(SID));
++    assert_eq!(pick(t, true, Some(SID2), None), id(SID2));
++    assert_eq!(pick(t, true, None, Some(SID)), id(SID));
++    for (form, again, last) in [
++        (t, false, Some(SID)),
++        (a, true, Some(SID)),
++        (t, true, None),
++        (t, false, Some("x")),
++    ] {
++        assert_eq!(
++            pick(form, again, last, None),
++            Ok(None),
++            "{form:?} {again} {last:?}"
++        );
++    }
++    let refused = [
++        (t, true, Some("bf1f3252"), None),
++        (t, false, None, Some(SID)),
++        (a, false, None, Some("x")),
++        (a, true, Some(SID), Some("x")),
++        (t, true, None, Some("bf1f3252-2ac9-42ce-bfb7-b5897fa4230")),
++        (t, true, Some(SID2), Some(SID)),
++    ];
++    let words: Vec<&str> = refused
++        .iter()
++        .map(|(f, g, l, n)| pick(*f, *g, *l, *n).expect_err("断る"))
++        .collect();
++    assert_eq!(words[1], words[2], "撃ち直しでない名指しは形より先に断る");
++    assert!(words[3].contains("問う窓"), "{}", words[3]);
++    let mut uniq = words.clone();
++    uniq.sort_unstable();
++    uniq.dedup();
++    assert_eq!(uniq.len(), 5, "{words:?}");
++}
+diff --git a/crates/tsuzuri-core/tests/cwtru.rs b/crates/tsuzuri-core/tests/cwtru.rs
+new file mode 100644
+index 00000000..d1686e8f
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwtru.rs
+@@ -0,0 +1,47 @@
++//! 口座の信頼の印の字の歯（接頭辞 cwtru_・設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++#![cfg(test)]
++
++use tsuzuri_core::consult::trust::{TRUST_FILE, TRUST_KEY, trusted};
++
++/// 信頼の印は作業場の行だけに置き、ほかの鍵と行と作業場の行のほかの欄は替えない。file が無い時は印だけの字を組み、既に真なら
++/// 書かない（None）。末の改行は元の字に合わせる。JSON でない字・object でない根か projects か作業場の行・真偽でない印は断る。
++#[test]
++fn cwtru_trusted_sets_only_the_workspace() {
++    assert_eq!(
++        (TRUST_FILE, TRUST_KEY),
++        (".claude.json", "hasTrustDialogAccepted")
++    );
++    let fresh = "{\n  \"projects\": {\n    \"/W\": {\n      \"hasTrustDialogAccepted\": true\n    }\n  }\n}\n";
++    assert_eq!(trusted(None, "/W"), Ok(Some(fresh.to_string())));
++    assert_eq!(
++        trusted(Some("{}"), "/W"),
++        Ok(Some(fresh.trim_end().to_string()))
++    );
++    let before = r#"{"projects":{"/D":{"hasTrustDialogAccepted":false},"/W":{"allowedTools":[],"hasTrustDialogAccepted":false}},"z":3}"#;
++    let want = "{\n  \"projects\": {\n    \"/D\": {\n      \"hasTrustDialogAccepted\": false\n    },\n    \"/W\": {\n      \
++                \"allowedTools\": [],\n      \"hasTrustDialogAccepted\": true\n    }\n  },\n  \"z\": 3\n}";
++    assert_eq!(trusted(Some(before), "/W"), Ok(Some(want.to_string())));
++    assert_eq!(
++        trusted(Some(&format!("{before}\n")), "/W"),
++        Ok(Some(format!("{want}\n")))
++    );
++    assert_eq!(trusted(Some(want), "/W"), Ok(None));
++    let sub = trusted(Some(want), "/W/sub")
++        .expect("置ける")
++        .expect("書く");
++    assert!(
++        sub.contains("\"/W/sub\": {\n      \"hasTrustDialogAccepted\": true\n    }"),
++        "{sub}"
++    );
++    let odd = [
++        "{",
++        "",
++        "[]",
++        r#"{"projects": "x"}"#,
++        r#"{"projects": {"/W": 1}}"#,
++        r#"{"projects": {"/W": {"hasTrustDialogAccepted": "yes"}}}"#,
++    ];
++    for text in odd {
++        assert!(trusted(Some(text), "/W").is_err(), "{text}");
++    }
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 94bf0ad1..3a2ede4f 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -1,6 +1,7 @@
+ //! 起動の口の argv と設定の歯（接頭辞 cwarg_・設計ノート surface-wave27a 行 cs-argv・受入 AC19 の argv と設定）。
+ //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
+ //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
++//! 話す窓の撃ち直しの続きの旗が最初の指示に替わり、旗の数と値の違いを検めが断ることを見る（行 cs-trust）。
+ //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
+ //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
+ //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+@@ -56,6 +57,7 @@ fn launch(inputs: &Value) -> Launch {
+         model: s("model"),
+         effort: s("effort"),
+         question: inputs["question"].as_bool().expect("question"),
++        resume: inputs["resume"].as_str().map(String::from),
+     }
+ }
+ 
+@@ -723,6 +725,57 @@ fn cwarg_brief_text() {
+     }
+ }
+ 
++/// 続ける会話の id の見本（uuid の形）。
++const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
++
++/// 話す窓の材料に会話の id を置くと、argv は fixture の話す窓の argv の最後の最初の指示を `--resume <id>` に替えた列で、
++/// 検めの欠けは 0。問う窓の材料に会話の id を置いても argv は替わらず、検めは欠けの名 --resume の 1 つだけで断る（行 cs-trust）。
++#[test]
++fn cwarg_resume_replaces_the_prompt() {
++    let fx = fixture();
++    let mut l = launch(&fx["talk"]["inputs"]);
++    l.resume = Some(SID.to_string());
++    let a = argv(&l);
++    assert!(audit(&a, &l).is_empty(), "{:?}", audit(&a, &l));
++    let (rest, _) = split_settings(a);
++    let mut want: Vec<String> = serde_json::from_value(fx["talk"]["argv"].clone()).expect("argv");
++    want.pop();
++    want.extend(["--resume".to_string(), SID.to_string()]);
++    assert_eq!(rest, want);
++    let mut ask = launch(&fx["ask"]["inputs"]);
++    let plain = argv(&ask);
++    ask.resume = Some(SID.to_string());
++    assert_eq!(argv(&ask), plain);
++    assert_eq!(audit(&plain, &ask), ["--resume"]);
++}
++
++/// 検めは、材料の会話の id が uuid の形でない・材料に id が在るのに旗が無い・材料に id が無いのに旗が在る・
++/// 旗の値が材料と違う・旗が 2 度ある、のどれも欠けの名 --resume の 1 つだけで断る（行 cs-trust）。
++#[test]
++fn cwarg_audit_refuses_bad_resume() {
++    let fx = fixture();
++    let mut l = launch(&fx["talk"]["inputs"]);
++    l.resume = Some(SID.to_string());
++    let good = argv(&l);
++    let mut bad = l.clone();
++    bad.resume = Some("bf1f3252-2ac9-42ce-bfb7".to_string());
++    let mut none = l.clone();
++    none.resume = None;
++    let mut other = good.clone();
++    *other.last_mut().expect("値") = "772c5b4c-0000-4000-8000-00000000abcd".to_string();
++    let twice = [good.clone(), vec!["--resume".to_string(), SID.to_string()]].concat();
++    let cases = [
++        (argv(&bad), &bad, "uuid の形でない id"),
++        (good[..good.len() - 2].to_vec(), &l, "旗が無い"),
++        (good.clone(), &none, "材料に id が無い"),
++        (other, &l, "値が材料と違う"),
++        (twice, &l, "旗が 2 度"),
++    ];
++    for (a, m, name) in cases {
++        assert_eq!(audit(&a, m), ["--resume"], "{name}");
++    }
++}
++
+ /// 会話の印の hook の 1 つを `edit` で替えた設定の検めの欠け。
+ fn stamp_gaps(event: &str, edit: impl Fn(&mut Value)) -> Vec<String> {
+     let fx = fixture();

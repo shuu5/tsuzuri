@@ -1,0 +1,470 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 36fce05e..36ba2232 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -1,4 +1,5 @@
+-//! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
++//! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
++//! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+ //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
+ //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
+ //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
+@@ -10,8 +11,13 @@
+ //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
+ //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
+ //! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
++//! 話す窓の --again は、作業場の会話の印の最後の会話の id を `--resume` で続ける（印を持たない窓は席が --session で名指す・
++//! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
++//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（行 cs-trust の `trust::place_trust`・
++//! 置けなければ起こさずに断る・行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
+ 
+ use std::fs::{self, File};
++use std::io::Read;
+ use std::os::unix::fs::{MetadataExt, PermissionsExt};
+ use std::os::unix::process::CommandExt;
+ use std::path::Path;
+@@ -26,7 +32,12 @@ use tsuzuri_core::consult::launch::{
+ };
+ use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
+ use tsuzuri_core::consult::quota::{admit, count};
++use tsuzuri_core::consult::resume::pick;
++use tsuzuri_core::consult::stamp::{last_sid, lines};
+ 
++use super::plain::{plain_path, same_file};
++use super::stamp::STAMPS;
++use super::trust::place_trust;
+ use super::{
+     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
+     lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
+@@ -53,9 +64,19 @@ pub const ACCOUNT_ENV: &str = "CLAUDE_CONFIG_DIR";
+ /// 問う窓の終わりを見る間。
+ const ASK_STEP: Duration = Duration::from_millis(200);
+ 
++/// 撃ちの形（撃ち直しか・起こさずに argv だけを出すか・席が名指す会話の id）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct Shot<'a> {
++    pub again: bool,
++    pub dry: bool,
++    pub session: Option<&'a str>,
++}
++
+ /// tz consult launch の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+-    let f = match flags(rest, &COMMON, &["--again", "--dry-run"], &[]) {
++    let mut values = COMMON.to_vec();
++    values.push("--session");
++    let f = match flags(rest, &values, &["--again", "--dry-run"], &[]) {
+         Ok(f) => f,
+         Err(e) => return refuse("launch", e),
+     };
+@@ -69,7 +90,12 @@ pub fn run(rest: &[&str]) -> u8 {
+         let why = format!("{VERSION_ENV} が tz の版と違う（plugin の tz の解き方で撃つ）");
+         return refuse("launch", (FAIL, why));
+     }
+-    match ctx(&f).and_then(|c| launch(&c, id, f.has("--again"), f.has("--dry-run"))) {
++    let shot = Shot {
++        again: f.has("--again"),
++        dry: f.has("--dry-run"),
++        session: f.get("--session"),
++    };
++    match ctx(&f).and_then(|c| launch(&c, id, &shot)) {
+         Ok(()) => 0,
+         Err(e) => refuse("launch", e),
+     }
+@@ -105,6 +131,39 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+     })
+ }
+ 
++/// 会話の印の file を読む上限（byte・越える印は断る）。
++pub const STAMPS_MAX: u64 = 1 << 22;
++
++/// 作業場の会話の印の字（印の file が無ければ None）。窓が作業場に置ける symlink と fifo を辿らないよう `plain` で照らし、
++/// 途中の段の symlink・普通でない file・上限 `STAMPS_MAX` を越える file・開いた後の照らしの違いは読まずに誤りを返す。
++pub fn read_stamps(ws: &Path) -> std::io::Result<Option<String>> {
++    let refuse = |why: &str| std::io::Error::other(why.to_string());
++    let path =
++        plain_path(ws, STAMPS).ok_or_else(|| refuse("途中の段が symlink でない dir でない"))?;
++    let before = match fs::symlink_metadata(&path) {
++        Ok(m) => m,
++        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
++        Err(e) => return Err(e),
++    };
++    if !before.file_type().is_file() || before.len() > STAMPS_MAX {
++        return Err(refuse("普通の file でないか上限を越える"));
++    }
++    let file = File::open(&path)?;
++    if !same_file(&file, &before) {
++        return Err(refuse("開いた file が照らした file と違う"));
++    }
++    let mut text = String::new();
++    file.take(STAMPS_MAX).read_to_string(&mut text)?;
++    Ok(Some(text))
++}
++
++/// 作業場の会話の印の最後の会話の id（印の file が無ければ None・読めなければ断る）。
++pub fn last_conversation(ws: &Path) -> Result<Option<String>, Refused> {
++    let text =
++        read_stamps(ws).map_err(|e| (UNKNOWN, format!("会話の印 {STAMPS} が読めない: {e}")))?;
++    Ok(text.and_then(|t| last_sid(&lines(&t)).map(str::to_string)))
++}
++
+ /// state dir の accounts と accounts/.retired の子の symlink の先（器の口座の置き場の形・解けた先は canonical の path・
+ /// 解けない先は link の字の path・字の順で重なりなし・accounts が無ければ空・読めない dir と link は断る）。
+ pub fn account_dirs(state: &Path) -> Result<Vec<String>, Refused> {
+@@ -178,13 +237,18 @@ fn record(
+ }
+ 
+ /// 起こす（版の照らしの後）。
+-fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> {
++fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
++    let again = shot.again;
+     let ws = workspace(&c.drafts, id);
+     let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
+-    let l = material(c, &ws, &w)?;
++    let last = last_conversation(&ws)?;
++    let resume = pick(w.form, again, last.as_deref(), shot.session)
++        .map_err(|why| (FAIL, why.to_string()))?;
++    let mut l = material(c, &ws, &w)?;
++    l.resume = resume;
+     let args = argv(&l);
+     let gaps = audit(&args, &l);
+-    if dry {
++    if shot.dry {
+         emit(PROGRAM);
+         args.iter().for_each(|a| emit(a));
+         return if gaps.is_empty() {
+@@ -201,6 +265,12 @@ fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused>
+     {
+         return Err((FAIL, format!("窓 {id} は閉じた")));
+     }
++    if again && w.form == Form::Talk && live(&ws) {
++        let why = format!(
++            "話す窓 {id} の前の process が生きている（同じ会話を 2 つが書くと枝が割れる・窓が終わってから撃ち直す）"
++        );
++        return Err((FAIL, why));
++    }
+     if w.starter == Starter::Seat && w.form == Form::Ask {
+         let live: Vec<WindowId> = windows(&c.drafts)
+             .into_iter()
+@@ -209,6 +279,13 @@ fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused>
+             .collect();
+         admit(count(&lines, &minute_now(), &live), again).map_err(|why| (FAIL, why.to_string()))?;
+     }
++    if l.resume.is_some() && gaps.is_empty() {
++        let account = std::env::var(ACCOUNT_ENV).map_err(|_| {
++            let why = format!("席の環境に {ACCOUNT_ENV} が無い（信頼の印を置く口座が分からない・器が起こした席から撃つ）");
++            (FAIL, why)
++        })?;
++        place_trust(Path::new(&account), &l.workspace)?;
++    }
+     let started = start(&ws, &l, &args, again, &gaps);
+     record(c, &items, &w, started.is_ok(), again)?;
+     let mark = started?;
+diff --git a/crates/tsuzuri-boundary/tests/cwres.rs b/crates/tsuzuri-boundary/tests/cwres.rs
+new file mode 100644
+index 00000000..c81836b7
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwres.rs
+@@ -0,0 +1,302 @@
++//! 撃ち直しで会話を続ける口の歯（接頭辞 cwres_・設計ノート surface-wave29b 行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と口座の置き場と、偽の bd・bdw と
++//! 受けた argv を記録する偽の tmux を置く（本物の tmux と claude は撃たず、本物の口座の置き場は読まない）。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++use tsuzuri_boundary::consult::launch::STAMPS_MAX;
++use tsuzuri_contract::consult::{Form, ProcMark, Stamp, StampEvent};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::launch::{PLUGIN_VERSION, private_tmp};
++use tsuzuri_core::consult::lines::{Line, read};
++use tsuzuri_core::consult::trust::trusted;
++
++const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
++const SID2: &str = "772c5b4c-0000-4000-8000-00000000abcd";
++
++/// 束に問いの無い話す窓の最初の指示。
++const PROMPT: &str = "bundle/brief.md を読み、notes.md と findings/ が在れば続きから始めて";
++
++/// 在り得ない pid（pid の上限より大きい・偽の tmux の pane の pid に使う）。
++const DEAD: u32 = 4_294_967_294;
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++/// 歯ごとの置き場（口座の置き場 acct は dir だけを作る）。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    acct: PathBuf,
++}
++
++impl Fx {
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwres")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, acct) = (root.join("repo"), root.join("acct"));
++        for d in ["repo", "state/fleet", "drafts", "acct", "bin"] {
++            fs::create_dir_all(root.join(d)).unwrap();
++        }
++        let r = root.display().to_string();
++        for args in [
++            vec!["init", "-q"],
++            vec!["config", "scribe2.statedir", &format!("{r}/state")],
++            vec!["config", "tsuzuri.draftsdir", &format!("{r}/drafts")],
++        ] {
++            let ok = Command::new("git")
++                .arg("-C")
++                .arg(&repo)
++                .args(args)
++                .status()
++                .unwrap();
++            assert!(ok.success());
++        }
++        let ledger = r#"[{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z"}]"#;
++        fs::write(root.join("ledger.json"), ledger).unwrap();
++        let rec = |log: &str| {
++            format!(
++                "for a in \"$@\"; do printf '%s\\037' \"$a\"; done >> '{r}/{log}'\necho >> '{r}/{log}'"
++            )
++        };
++        script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(&root.join("bin/bdw"), &rec("bdw.log"));
++        let tmux = format!(
++            "{}\ncase \"$1\" in display-message) echo seat-s ;; new-window) echo '@8 {DEAD}' ;; esac",
++            rec("tmux.log")
++        );
++        script(&root.join("bin/tmux"), &tmux);
++        Fx { root, repo, acct }
++    }
++
++    /// 口座の置き場を環境に置いた tz の命令。
++    fn command(&self, args: &[&str]) -> Command {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++        c.args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env("TZ_PLUGIN_VERSION", PLUGIN_VERSION)
++            .env("TMUX_PANE", "%9")
++            .env("CLAUDE_CONFIG_DIR", &self.acct)
++            .env_remove("TZ_CONSULT_ID");
++        c
++    }
++
++    fn tz(&self, args: &[&str]) -> Output {
++        self.command(args).output().unwrap()
++    }
++
++    /// 窓 cw<n> を用意し、process の印 proc-1（pid・話す窓は tmux の窓 @7）を置く。
++    fn window(&self, n: u32, form: Form, pid: u32) -> PathBuf {
++        let word = if form == Form::Ask { "ask" } else { "talk" };
++        let o = self.tz(&["consult", "open", "--by", "seat", "--form", word]);
++        assert_eq!(o.status.code(), Some(0));
++        let ws = fs::canonicalize(self.root.join(format!("drafts/consult-cw{n}"))).unwrap();
++        let tmux_window = (form == Form::Talk).then(|| "@7".to_string());
++        let mark = ProcMark {
++            k: 1,
++            form,
++            pid,
++            at: "20261005T0000Z".into(),
++            again: false,
++            tmux_window,
++            account: None,
++        };
++        let text = wire::encode(&mark).unwrap();
++        fs::write(ws.join(".consult/proc-1.json"), text).unwrap();
++        let _ = fs::remove_dir_all(private_tmp(&ws.display().to_string()));
++        ws
++    }
++
++    /// 撃たれた回ごとの argv（記録の file の名）。
++    fn calls(&self, log: &str) -> Vec<Vec<String>> {
++        let text = fs::read_to_string(self.root.join(log)).unwrap_or_default();
++        text.lines()
++            .map(|l| {
++                l.split('\x1f')
++                    .filter(|a| !a.is_empty())
++                    .map(String::from)
++                    .collect()
++            })
++            .collect()
++    }
++
++    /// 偽の tmux の new-window の argv の末の 2 つ。
++    fn opened(&self) -> Vec<Vec<String>> {
++        let calls = self
++            .calls("tmux.log")
++            .into_iter()
++            .filter(|c| c[0] == "new-window");
++        calls.map(|c| c[c.len() - 2..].to_vec()).collect()
++    }
++
++    /// 偽の bdw が受けた開きの行の結果と撃ち直し。
++    fn opens(&self) -> Vec<(bool, bool)> {
++        let lines = self
++            .calls("bdw.log")
++            .into_iter()
++            .filter_map(|c| read(c[2].strip_prefix("--append-notes=")?));
++        lines
++            .filter_map(|l| {
++                if let Line::Open { opened, again, .. } = l {
++                    Some((opened, again))
++                } else {
++                    None
++                }
++            })
++            .collect()
++    }
++
++    fn trust(&self) -> PathBuf {
++        self.acct.join(".claude.json")
++    }
++}
++
++/// 作業場の会話の印の file に、会話の始まり・持ち主の入力・turn の終わりの 3 行を足す。
++fn stamps(ws: &Path, sid: &str) {
++    let path = ws.join(".consult/stamps.jsonl");
++    let mut text = fs::read_to_string(&path).unwrap_or_default();
++    for (at, event) in (1_000..).zip([StampEvent::Start, StampEvent::Prompt, StampEvent::Stop]) {
++        let source = (event == StampEvent::Start).then(|| "startup".to_string());
++        let stamp = Stamp {
++            at,
++            event,
++            sid: sid.to_string(),
++            source,
++        };
++        text.push_str(&(wire::encode(&stamp).unwrap() + "\n"));
++    }
++    fs::write(path, text).unwrap();
++}
++
++fn rc_err(o: &Output) -> (i32, String) {
++    let err = String::from_utf8_lossy(&o.stderr).into_owned();
++    (o.status.code().unwrap(), err)
++}
++
++/// 話す窓の --again は会話の印の最後の id（消し直しの後の新しい id）を続きの旗で渡して最初の指示を置かず、起こす前に口座の置き場の
++/// 設定 file に作業場の行の信頼の印を置き（中核の trusted の字）、撃ち直しの印と開きの行を書く。環境に口座の置き場が無ければ、
++/// 起こさず行も書かずに rc 1 で断る。会話の印か途中の段が symlink・印が fifo か上限を越える時は、辿らず開かずに rc 2 で断る。
++#[test]
++fn cwres_again_continues_the_last_conversation() {
++    let fx = Fx::new("again");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    stamps(&ws, SID2);
++    stamps(&ws, SID);
++    let refused = |odd: &str| {
++        let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--again"]));
++        assert!(rc == 2 && err.contains("会話の印"), "{odd}: {err}");
++    };
++    let dot = ws.join(".consult");
++    let (real, kept) = (dot.join("stamps.jsonl"), ws.join("kept"));
++    fs::rename(&dot, ws.join("dot")).unwrap();
++    std::os::unix::fs::symlink(ws.join("dot"), &dot).unwrap();
++    refused("途中の段の symlink");
++    fs::remove_file(&dot).unwrap();
++    fs::rename(ws.join("dot"), &dot).unwrap();
++    fs::rename(&real, &kept).unwrap();
++    std::os::unix::fs::symlink(&kept, &real).unwrap();
++    refused("symlink");
++    fs::remove_file(&real).unwrap();
++    fs::write(&real, vec![b'\n'; STAMPS_MAX as usize + 1]).unwrap();
++    refused("上限を越える");
++    fs::remove_file(&real).unwrap();
++    let made = Command::new("mkfifo").arg(&real).status().unwrap();
++    assert!(made.success());
++    let f = real.clone();
++    let writer = std::thread::spawn(move || fs::OpenOptions::new().write(true).open(f));
++    refused("fifo");
++    assert!(!writer.is_finished(), "fifo を開いた");
++    fs::remove_file(&real).unwrap();
++    fs::rename(&kept, &real).unwrap();
++    let mut bare = fx.command(&["consult", "launch", "cw1", "--again"]);
++    let (rc, err) = rc_err(&bare.env_remove("CLAUDE_CONFIG_DIR").output().unwrap());
++    assert!(rc == 1 && err.contains("CLAUDE_CONFIG_DIR が無い"), "{err}");
++    assert!(fx.opened().is_empty() && fx.opens().is_empty());
++    let before = r#"{"projects":{"/other":{"hasTrustDialogAccepted":false}}}"#;
++    fs::write(fx.trust(), before).unwrap();
++    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--again"]));
++    assert_eq!(rc, 0, "{err}");
++    assert_eq!(fx.opened(), [["--resume", SID]]);
++    let want = trusted(Some(before), &ws.display().to_string()).unwrap();
++    assert_eq!(fs::read_to_string(fx.trust()).ok(), want);
++    let m: ProcMark =
++        wire::decode(&fs::read_to_string(ws.join(".consult/proc-2.json")).unwrap()).unwrap();
++    assert!(m.again && m.account.as_deref() == fx.acct.to_str());
++    assert_eq!(fx.opens(), [(true, true)]);
++}
++
++/// 会話の印を持たない話す窓は、席が --again と一緒に名指した id で続け、口座の置き場に信頼の印の file を作る。--again の無い
++/// 名指し・uuid の形でない名指し・問う窓への名指し・印を持つ窓への名指しは、起こさず行も書かず信頼の印も置かずに rc 1 で断る。
++#[test]
++fn cwres_session_names_an_unstamped_window() {
++    let fx = Fx::new("session");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    fx.window(2, Form::Ask, DEAD);
++    let refusals = [
++        ("cw1", &["--session", SID][..], "--again と一緒"),
++        (
++            "cw1",
++            &["--again", "--session", "bf1f3252-2ac9"][..],
++            "会話の id の形（uuid）でない",
++        ),
++        (
++            "cw2",
++            &["--again", "--session", SID][..],
++            "問う窓は会話を続けない",
++        ),
++    ];
++    let shoot =
++        |id: &str, args: &[&str]| rc_err(&fx.tz(&[&["consult", "launch", id][..], args].concat()));
++    for (id, args, word) in refusals {
++        let (rc, err) = shoot(id, args);
++        assert!(rc == 1 && err.contains(word), "{args:?}: {err}");
++    }
++    assert!(fx.opened().is_empty() && fx.opens().is_empty() && !fx.trust().exists());
++    assert_eq!(shoot("cw1", &["--again", "--session", SID]).0, 0);
++    assert_eq!(fx.opened(), [["--resume", SID]]);
++    assert_eq!(
++        fs::read_to_string(fx.trust()).ok(),
++        trusted(None, &ws.display().to_string()).unwrap()
++    );
++    stamps(&ws, SID2);
++    let (rc, err) = shoot("cw1", &["--again", "--session", SID]);
++    assert!(rc == 1 && err.contains("会話の印を持つ"), "{err}");
++    assert_eq!(fx.opens(), [(true, true)]);
++}
++
++/// 前の process が生きている話す窓の --again は、起こさず行も書かず信頼の印も置かずに rc 1 で断る。前の process が無く会話の印も
++/// 無い窓の --again は、続きの旗を置かずに最初の指示で起こし、信頼の印の file を作らない。
++#[test]
++fn cwres_live_window_refuses_again() {
++    let fx = Fx::new("live");
++    let ws = fx.window(1, Form::Talk, std::process::id());
++    stamps(&ws, SID);
++    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--again"]));
++    assert!(
++        rc == 1 && err.contains("前の process が生きている"),
++        "{err}"
++    );
++    assert!(fx.opened().is_empty() && fx.opens().is_empty() && !fx.trust().exists());
++    fx.window(2, Form::Talk, DEAD);
++    assert_eq!(
++        rc_err(&fx.tz(&["consult", "launch", "cw2", "--again"])).0,
++        0
++    );
++    let call = fx.opened().pop().unwrap();
++    assert_eq!(call[1], PROMPT);
++    assert!(call[0] != "--resume" && !fx.trust().exists());
++}

@@ -1,0 +1,728 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/follow.rs b/crates/tsuzuri-boundary/src/consult/follow.rs
+new file mode 100644
+index 00000000..18353109
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/follow.rs
+@@ -0,0 +1,156 @@
++//! tz consult launch <窓 id> --follow [--session <会話の id>] [--wait <秒>]（行 cs-follow・判断の記録 ADR-55 決定 (3)(5)）。
++//! 生きている話す窓を、席の今の口座（環境の CLAUDE_CONFIG_DIR）へ付いて来させる口。印の口座が今の口座と同じなら何もしない。
++//! 会話の印の最後の行が手すき（中核の `follow::idle`）で、tmux の pane の入力欄が空（`follow::input_clear`）になるのを待ち
++//! （会話の印を持たない窓は --session で席が会話の id を名指し、入力欄だけを待つ）、上限 --wait（既定 `WAIT` 秒）を越えたら
++//! 起こし直さず、印 `.consult/held-<k>` を置いて固定の 1 行（`Event::Held`）を出して断る（見張りはこの印の窓のずれを出さない）。
++//! 手すきなら、起こす口座に作業場の信頼の印を置き、tmux の窓を名を確かめて閉じ（close の `kill_named`）、前の process が終わるのを
++//! 待ってから、撃ち直し（--again）の形で同じ作業場に起こし直して会話を続ける。台帳には開きの行（撃ち直し）だけを書き、閉じの行は書かない。
++
++use std::path::Path;
++use std::time::{Duration, Instant};
++
++use tsuzuri_contract::consult::{Form, ProcMark, WindowId};
++use tsuzuri_core::consult::follow::{idle, input_clear};
++use tsuzuri_core::consult::lines::{Event, Line, notice};
++use tsuzuri_core::consult::resume::pick;
++use tsuzuri_core::consult::stamp::lines;
++
++use super::close::kill_named;
++use super::launch::{ACCOUNT_ENV, Shot, TMUX, last_conversation, launch, read_stamps};
++use super::plain::append_plain;
++use super::trust::place_trust;
++use super::{
++    Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, alive, ledger, lines_of, procs, read_window, tzw,
++    workspace,
++};
++use crate::out::emit;
++use crate::server::ledger::capture;
++
++/// 手すきを待つ既定の上限（秒）。
++pub const WAIT: u64 = 300;
++
++/// 手すきと入力欄を見る間。
++const STEP: Duration = Duration::from_millis(500);
++
++/// 閉じた窓の前の process の終わりを待つ上限。
++const GONE: Duration = Duration::from_secs(5);
++
++/// 付いてこなかった印の作業場からの相対 path（k は最後の process の印の番号・`plain` で見て書く）。
++pub fn held_rel(k: u32) -> String {
++    format!(".consult/held-{k}")
++}
++
++/// 作業場の会話の印の最後の行が手すきか（印の file が無いか読めなければ偽・読みは `launch::read_stamps`）。
++pub fn stamped_idle(ws: &Path) -> bool {
++    matches!(read_stamps(ws), Ok(Some(t)) if idle(&lines(&t)))
++}
++
++/// tmux の窓の pane の入力欄が空か（照らせなければ偽）。
++fn pane_clear(ws: &Path, tmux_window: &str) -> bool {
++    let args = ["capture-pane", "-p", "-J", "-t", tmux_window];
++    capture(std::ffi::OsStr::new(TMUX), args, ws, GIT_TIMEOUT)
++        .and_then(|o| String::from_utf8(o).ok())
++        .and_then(|t| input_clear(&t))
++        == Some(true)
++}
++
++/// 手すき（会話の印を持つ窓だけ）と入力欄が空になるのを `wait` まで待つ（なれば真）。
++fn settle(ws: &Path, tmux_window: &str, stamped: bool, wait: Duration) -> bool {
++    let end = Instant::now() + wait;
++    loop {
++        if (!stamped || stamped_idle(ws)) && pane_clear(ws, tmux_window) {
++            return true;
++        }
++        if Instant::now() >= end {
++            return false;
++        }
++        std::thread::sleep(STEP);
++    }
++}
++
++/// 付いて来させる窓の最後の process の印（話す窓・閉じの行が無い・process が生きている）。
++fn live_talk(c: &Ctx, id: WindowId, ws: &Path) -> Result<ProcMark, Refused> {
++    let w = read_window(ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
++    if w.form != Form::Talk {
++        let why = format!("問う窓 {id} は付いてこない（--again で撃ち直す）");
++        return Err((FAIL, why));
++    }
++    let closed = |l: &Line| matches!(l, Line::Close { window, .. } if *window == id);
++    if lines_of(&ledger(c)?.1).iter().any(closed) {
++        return Err((FAIL, format!("窓 {id} は閉じた")));
++    }
++    let mark = procs(ws).pop().filter(|p| alive(p.pid));
++    mark.ok_or((
++        FAIL,
++        format!("話す窓 {id} は動いていない（--again で開き直す）"),
++    ))
++}
++
++/// tmux の窓を名を確かめて閉じ、前の process が `GONE` の内に終わるのを待つ。
++fn close_old(ws: &Path, id: WindowId, mark: &ProcMark, tmux_window: &str) -> Result<(), Refused> {
++    if !kill_named(ws, tmux_window, &id.name()) && alive(mark.pid) {
++        let why = format!(
++            "tmux の窓 {tmux_window} は {} でない（閉じない・起こし直さない）",
++            id.name()
++        );
++        return Err((FAIL, why));
++    }
++    let end = Instant::now() + GONE;
++    while alive(mark.pid) {
++        if Instant::now() >= end {
++            let why = format!(
++                "前の process（pid {}）が終わらない（起こし直さない）",
++                mark.pid
++            );
++            return Err((FAIL, why));
++        }
++        std::thread::sleep(Duration::from_millis(100));
++    }
++    Ok(())
++}
++
++/// 付いて来させる（版の照らしの後）。
++pub fn follow(c: &Ctx, id: WindowId, session: Option<&str>, wait: Duration) -> Result<(), Refused> {
++    let ws = workspace(&c.drafts, id);
++    let mark = live_talk(c, id, &ws)?;
++    let account = std::env::var(ACCOUNT_ENV).map_err(|_| {
++        let why = format!("席の環境に {ACCOUNT_ENV} が無い（付いてくる先の口座が分からない）");
++        (FAIL, why)
++    })?;
++    if mark.account.as_deref() == Some(account.as_str()) {
++        emit(&format!(
++            "窓 {id} は席の今の口座で動いている（開き直さない）"
++        ));
++        return Ok(());
++    }
++    let tmux_window = mark
++        .tmux_window
++        .clone()
++        .ok_or((FAIL, format!("窓 {id} の印に tmux の窓が無い")))?;
++    let last = last_conversation(&ws)?;
++    if last.is_none() && session.is_none() {
++        let why = "会話の印が無い窓は --session で会話の id を名指す（持ち主に確かめてから）";
++        return Err((FAIL, why.to_string()));
++    }
++    pick(Form::Talk, true, last.as_deref(), session).map_err(|why| (FAIL, why.to_string()))?;
++    if !settle(&ws, &tmux_window, last.is_some(), wait) {
++        let _ = append_plain(&ws, &held_rel(mark.k), b"");
++        emit(&notice(&Event::Held(id), &tzw()));
++        let why = format!(
++            "話す窓 {id} は {} 秒の内に手すきにならなかった（起こし直さない）",
++            wait.as_secs()
++        );
++        return Err((FAIL, why));
++    }
++    let real = ws
++        .canonicalize()
++        .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?;
++    place_trust(Path::new(&account), &real.display().to_string())?;
++    close_old(&ws, id, &mark, &tmux_window)?;
++    let shot = Shot {
++        again: true,
++        dry: false,
++        session,
++    };
++    launch(c, id, &shot)
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 36ba2232..0e929a9c 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -1,5 +1,6 @@
+ //! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
+ //! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
++//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`・行 cs-follow）へ渡す。
+ //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
+ //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
+ //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
+@@ -35,6 +36,7 @@ use tsuzuri_core::consult::quota::{admit, count};
+ use tsuzuri_core::consult::resume::pick;
+ use tsuzuri_core::consult::stamp::{last_sid, lines};
+ 
++use super::follow;
+ use super::plain::{plain_path, same_file};
+ use super::stamp::STAMPS;
+ use super::trust::place_trust;
+@@ -75,8 +77,8 @@ pub struct Shot<'a> {
+ /// tz consult launch の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+     let mut values = COMMON.to_vec();
+-    values.push("--session");
+-    let f = match flags(rest, &values, &["--again", "--dry-run"], &[]) {
++    values.extend(["--session", "--wait"]);
++    let f = match flags(rest, &values, &["--again", "--dry-run", "--follow"], &[]) {
+         Ok(f) => f,
+         Err(e) => return refuse("launch", e),
+     };
+@@ -95,7 +97,20 @@ pub fn run(rest: &[&str]) -> u8 {
+         dry: f.has("--dry-run"),
+         session: f.get("--session"),
+     };
+-    match ctx(&f).and_then(|c| launch(&c, id, &shot)) {
++    let wait = match (f.has("--follow"), f.get("--wait").map(str::parse::<u64>)) {
++        (false, None) => None,
++        (true, None) if !shot.again && !shot.dry => Some(follow::WAIT),
++        (true, Some(Ok(s))) if s > 0 && !shot.again && !shot.dry => Some(s),
++        _ => {
++            let why = "--wait は --follow と一緒に 1 以上の秒の数で渡し、--follow は --again と --dry-run と一緒に渡さない";
++            return refuse("launch", (FAIL, why.to_string()));
++        }
++    };
++    let made = ctx(&f).and_then(|c| match wait {
++        Some(s) => follow::follow(&c, id, shot.session, Duration::from_secs(s)),
++        None => launch(&c, id, &shot),
++    });
++    match made {
+         Ok(()) => 0,
+         Err(e) => refuse("launch", e),
+     }
+@@ -237,7 +252,7 @@ fn record(
+ }
+ 
+ /// 起こす（版の照らしの後）。
+-fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
++pub fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
+     let again = shot.again;
+     let ws = workspace(&c.drafts, id);
+     let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index 8a2d6215..f4636851 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -6,12 +6,14 @@
+ //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
+ //! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
+ //! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
+-//! 口座の信頼の印の書き手（`trust`）は行 cs-trust（ノート surface-wave29b）が置く。
++//! 口座の信頼の印の書き手（`trust`）は行 cs-trust、launch --follow の口（`follow`）は行 cs-follow
++//! （どちらもノート surface-wave29b）が置く。
+ 
+ pub mod answer;
+ pub mod bundle;
+ pub mod close;
+ pub mod dispose;
++pub mod follow;
+ pub mod guard;
+ pub mod launch;
+ pub mod list;
+diff --git a/crates/tsuzuri-boundary/src/consult/watch.rs b/crates/tsuzuri-boundary/src/consult/watch.rs
+index 231f13bc..64276aa7 100644
+--- a/crates/tsuzuri-boundary/src/consult/watch.rs
++++ b/crates/tsuzuri-boundary/src/consult/watch.rs
+@@ -2,8 +2,9 @@
+ //! 席が背景の命令として常に 1 本置く。`TICK` ごとに起草の置き場の窓（退いた窓を除く）を見て、次の事象の最初の 1 つで
+ //! 中核の `lines::notice` の固定の 1 行を標準出力に出して終わる（待ちの席を起こす）。順は (1) 受けの行の無い所見
+ //! （経路 見張り）、(2) 受けの行の無い頼み、(3) 所見の無いまま最後の process の無い問う窓（閉じの行の無い物）、
+-//! (4) 最後の pane の無い話す窓（閉じの行の無い物）。上限（既定 `MAX`・Bash の道具の背景の上限より短く）で
+-//! 上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
++//! (4) 最後の pane の無い話す窓（閉じの行の無い物）、(5) 最後の process の印の口座が見張りの環境の口座と違い、
++//! 会話の印が手すきで、付いてこなかった印（`follow::held_rel`）の無い、生きている話す窓（閉じの行の無い物・行 cs-follow）。
++//! 上限（既定 `MAX`・Bash の道具の背景の上限より短く）で上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
+ //! 変わった時だけ読み直す（読み直しが落ちれば前の読みで見る）。
+ //! 生きている印 `<起草の置き場>/consult-watch.alive`（pid と始まりの分）を置き、`TOUCH` ごとに書き直し、終わりで消す。
+ //! 印の更新時刻が `FRESH` の内なら 2 本目は「相談: 見張りはもう居る」の 1 行を出してすぐ終わる。
+@@ -18,10 +19,14 @@ use std::path::{Path, PathBuf};
+ use std::time::{Duration, Instant, SystemTime};
+ 
+ use tsuzuri_contract::consult::{Form, Via, WindowId};
++use tsuzuri_core::consult::follow::drifted;
+ use tsuzuri_core::consult::lines::{Event, Line, notice, unreceived};
+ 
++use super::follow::{held_rel, stamped_idle};
++use super::launch::ACCOUNT_ENV;
++use super::plain::plain_file;
+ use super::{
+-    COMMON, Ctx, FAIL, Refused, ctx, findings, flags, ledger, lines_of, minute_now, procs,
++    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now, procs,
+     read_window, refuse, tzw, windows, workspace,
+ };
+ use crate::out::{emit, emit_err};
+@@ -234,7 +239,25 @@ pub fn scan(c: &Ctx, lines: &[Line]) -> Option<Event> {
+     if let Some(id) = stalled {
+         return Some(Event::Stalled(*id));
+     }
++    if let Some(id) = open.iter().find(|id| quiet(id, Form::Talk)) {
++        return Some(Event::Gone(*id));
++    }
++    let now = std::env::var(ACCOUNT_ENV).ok();
+     open.iter()
+-        .find(|id| quiet(id, Form::Talk))
+-        .map(|id| Event::Gone(*id))
++        .find(|id| moved(c, lines, **id, now.as_deref()))
++        .map(|id| Event::Drift(*id))
++}
++
++/// 生きている話す窓（閉じの行の無い物）の最後の process の印の口座が `now` と違い、会話の印が手すきで、付いてこなかった印が無いか。
++fn moved(c: &Ctx, lines: &[Line], id: WindowId, now: Option<&str>) -> bool {
++    let ws = workspace(&c.drafts, id);
++    let Some(mark) = procs(&ws).pop() else {
++        return false;
++    };
++    !closed(lines, id)
++        && read_window(&ws).is_some_and(|w| w.form == Form::Talk)
++        && alive(mark.pid)
++        && drifted(mark.account.as_deref(), now)
++        && stamped_idle(&ws)
++        && !plain_file(&ws, &held_rel(mark.k))
+ }
+diff --git a/crates/tsuzuri-boundary/tests/cwres.rs b/crates/tsuzuri-boundary/tests/cwres.rs
+index c81836b7..47f99ab3 100644
+--- a/crates/tsuzuri-boundary/tests/cwres.rs
++++ b/crates/tsuzuri-boundary/tests/cwres.rs
+@@ -1,6 +1,7 @@
+ //! 撃ち直しで会話を続ける口の歯（接頭辞 cwres_・設計ノート surface-wave29b 行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
+ //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と口座の置き場と、偽の bd・bdw と
+ //! 受けた argv を記録する偽の tmux を置く（本物の tmux と claude は撃たず、本物の口座の置き場は読まない）。
++//! 偽の tmux は pane の字（置き場の file pane）を出し、kill-window で置き場の file victim の pid を少し後に止める（行 cs-follow）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -12,7 +13,7 @@ use tsuzuri_boundary::consult::launch::STAMPS_MAX;
+ use tsuzuri_contract::consult::{Form, ProcMark, Stamp, StampEvent};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::consult::launch::{PLUGIN_VERSION, private_tmp};
+-use tsuzuri_core::consult::lines::{Line, read};
++use tsuzuri_core::consult::lines::{Event, Line, notice, read};
+ use tsuzuri_core::consult::trust::trusted;
+ 
+ const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
+@@ -70,7 +71,9 @@ impl Fx {
+         script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
+         script(&root.join("bin/bdw"), &rec("bdw.log"));
+         let tmux = format!(
+-            "{}\ncase \"$1\" in display-message) echo seat-s ;; new-window) echo '@8 {DEAD}' ;; esac",
++            "{}\ncase \"$1\" in display-message) case \"$*\" in *window_name*) cat '{r}/name' 2>/dev/null || echo consult-cw1 ;; \
++             *) echo seat-s ;; esac ;; new-window) echo '@8 {DEAD}' ;; capture-pane) cat '{r}/pane' ;; \
++             kill-window) [ -f '{r}/victim' ] && (sleep 0.3; kill \"$(cat '{r}/victim')\") >/dev/null 2>&1 & ;; esac",
+             rec("tmux.log")
+         );
+         script(&root.join("bin/tmux"), &tmux);
+@@ -89,6 +92,7 @@ impl Fx {
+             .current_dir(&self.repo)
+             .env("PATH", path)
+             .env("TZ_PLUGIN_VERSION", PLUGIN_VERSION)
++            .env("TZ_WRAPPER", "/x/tzw")
+             .env("TMUX_PANE", "%9")
+             .env("CLAUDE_CONFIG_DIR", &self.acct)
+             .env_remove("TZ_CONSULT_ID");
+@@ -300,3 +304,214 @@ fn cwres_live_window_refuses_again() {
+     assert_eq!(call[1], PROMPT);
+     assert!(call[0] != "--resume" && !fx.trust().exists());
+ }
++
++/// 話す窓の process の印 proc-1 を、pid と口座の置き場で置き直す（tmux の窓は @7）。
++fn remark(ws: &Path, pid: u32, account: Option<&Path>) {
++    let account = account.map(|a| a.display().to_string());
++    let mark = ProcMark {
++        k: 1,
++        form: Form::Talk,
++        pid,
++        at: "20261005T0000Z".into(),
++        again: false,
++        tmux_window: Some("@7".into()),
++        account,
++    };
++    let text = wire::encode(&mark).unwrap();
++    fs::write(ws.join(".consult/proc-1.json"), text).unwrap();
++}
++
++/// 止めてよい生きた process（親の無い sleep）の pid。
++fn sleeper() -> u32 {
++    let o = Command::new("sh")
++        .args(["-c", "sleep 30 >/dev/null 2>&1 & echo $!"])
++        .output()
++        .unwrap();
++    String::from_utf8(o.stdout).unwrap().trim().parse().unwrap()
++}
++
++/// 偽の tmux が撃たれた口の列。
++fn verbs(fx: &Fx) -> Vec<String> {
++    fx.calls("tmux.log")
++        .into_iter()
++        .map(|c| c[0].clone())
++        .collect()
++}
++
++/// --follow は、前の口座で動く手すきの話す窓の入力欄を照らし、起こす口座に信頼の印を置き、tmux の窓を名を確かめて閉じ、前の
++/// process が終わってから、会話の印の最後の id で撃ち直しの形に起こし直す（開きの行は撃ち直し・閉じの行は書かない）。
++#[test]
++fn cwres_follow_moves_an_idle_window() {
++    let fx = Fx::new("follow");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    stamps(&ws, SID);
++    let pid = sleeper();
++    remark(&ws, pid, Some(Path::new("/old")));
++    fs::write(fx.root.join("pane"), "● 答え\n\n❯ \n  ? for shortcuts\n").unwrap();
++    fs::write(fx.root.join("victim"), pid.to_string()).unwrap();
++    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "5"]));
++    assert_eq!(rc, 0, "{err}");
++    let want = [
++        "capture-pane",
++        "display-message",
++        "kill-window",
++        "display-message",
++        "new-window",
++    ];
++    assert_eq!(verbs(&fx), want);
++    assert_eq!(fx.calls("tmux.log")[2], ["kill-window", "-t", "@7"]);
++    assert_eq!(fx.opened(), [["--resume", SID]]);
++    assert!(!Path::new(&format!("/proc/{pid}")).exists());
++    let want = trusted(None, &ws.display().to_string()).unwrap();
++    assert_eq!(fs::read_to_string(fx.trust()).ok(), want);
++    let m: ProcMark =
++        wire::decode(&fs::read_to_string(ws.join(".consult/proc-2.json")).unwrap()).unwrap();
++    assert!(m.again && m.account.as_deref() == fx.acct.to_str());
++    assert_eq!(fx.opens(), [(true, true)]);
++    assert_eq!(fx.calls("bdw.log").len(), 1);
++    // 会話の印を持たない窓は、名指した id で続ける（持ち主に確かめた後の席の撃ち方）。
++    let ws2 = fx.window(2, Form::Talk, DEAD);
++    let pid2 = sleeper();
++    remark(&ws2, pid2, None);
++    fs::write(fx.root.join("victim"), pid2.to_string()).unwrap();
++    fs::write(fx.root.join("name"), "consult-cw2").unwrap();
++    let o = fx.tz(&["consult", "launch", "cw2", "--follow", "--session", SID2]);
++    assert_eq!(rc_err(&o).0, 0, "{}", rc_err(&o).1);
++    assert_eq!(fx.opened().pop().unwrap(), ["--resume", SID2]);
++}
++
++/// 待ちの上限までに手すき（turn の中）にならない窓と、入力欄に打ちかけの字が在る窓は、閉じず起こし直さず信頼の印も置かず、
++/// 付いてこなかった印 held-1 を置き、付いてこなかった 1 行を出して rc 1 で断る。held-1 が symlink なら辿って書かない。
++#[test]
++fn cwres_follow_holds_a_busy_window() {
++    let fx = Fx::new("hold");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    remark(&ws, std::process::id(), Some(Path::new("/old")));
++    let held = ws.join(".consult/held-1");
++    let line = notice(
++        &Event::Held(tsuzuri_contract::consult::WindowId::new(1).unwrap()),
++        "/x/tzw",
++    ) + "\n";
++    let busy = format!(
++        "{}\n",
++        wire::encode(&Stamp {
++            at: 9,
++            event: StampEvent::Prompt,
++            sid: SID.into(),
++            source: None
++        })
++        .unwrap()
++    );
++    for (text, pane) in [(busy.as_str(), "❯ \n"), ("", "❯ 打ちかけ\n")] {
++        stamps(&ws, SID);
++        let path = ws.join(".consult/stamps.jsonl");
++        fs::write(&path, fs::read_to_string(&path).unwrap() + text).unwrap();
++        fs::write(fx.root.join("pane"), pane).unwrap();
++        let _ = fs::remove_file(&held);
++        let o = fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "1"]);
++        assert_eq!(
++            (o.status.code(), String::from_utf8(o.stdout).unwrap()),
++            (Some(1), line.clone()),
++            "{pane}"
++        );
++        assert!(held.exists() && !fx.trust().exists());
++        assert!(
++            verbs(&fx).iter().all(|v| v == "capture-pane"),
++            "{:?}",
++            verbs(&fx)
++        );
++    }
++    fs::remove_file(&held).unwrap();
++    let kept = fx.root.join("kept");
++    fs::write(&kept, "keep").unwrap();
++    std::os::unix::fs::symlink(&kept, &held).unwrap();
++    let o = fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "1"]);
++    let after = fs::read_to_string(&kept).unwrap();
++    assert_eq!((o.status.code(), after.as_str()), (Some(1), "keep"));
++}
++
++/// 問う窓・動いていない窓・会話の印も名指しも無い窓・名の違う tmux の窓は起こし直さずに rc 1 で断り、印の口座が今の口座と同じ
++/// 窓は何もせずに rc 0 で返す。--follow と --again の組み・--follow の無い --wait・0 秒の --wait も断る。信頼の印を置けない口座では
++/// 窓を閉じる前に rc 2 で断る。
++#[test]
++fn cwres_follow_refusals() {
++    let fx = Fx::new("followno");
++    fx.window(1, Form::Ask, DEAD);
++    fx.window(2, Form::Talk, DEAD);
++    let ws = fx.window(3, Form::Talk, DEAD);
++    remark(&ws, std::process::id(), Some(&fx.acct));
++    let shoot = |args: &[&str]| rc_err(&fx.tz(&[&["consult", "launch"][..], args].concat()));
++    let o = fx.tz(&["consult", "launch", "cw3", "--follow"]);
++    assert_eq!(
++        (o.status.code(), String::from_utf8(o.stdout).unwrap()),
++        (
++            Some(0),
++            "窓 cw3 は席の今の口座で動いている（開き直さない）\n".into()
++        )
++    );
++    remark(&ws, std::process::id(), None);
++    fs::write(fx.root.join("pane"), "❯ \n").unwrap();
++    fs::write(fx.root.join("name"), "other").unwrap();
++    let cases = [
++        (&["cw1", "--follow"][..], "問う窓 cw1 は付いてこない"),
++        (&["cw2", "--follow"][..], "動いていない"),
++        (&["cw3", "--follow"][..], "--session で会話の id を名指す"),
++        (
++            &["cw3", "--follow", "--session", SID][..],
++            "consult-cw3 でない（閉じない",
++        ),
++        (&["cw3", "--follow", "--again"][..], "--follow は --again"),
++        (&["cw3", "--wait", "3"][..], "--wait は --follow と一緒"),
++        (&["cw3", "--follow", "--wait", "0"][..], "1 以上の秒"),
++    ];
++    for (args, word) in cases {
++        let (rc, err) = shoot(args);
++        assert!(rc == 1 && err.contains(word), "{args:?}: {err}");
++    }
++    // 信頼の印を置けない口座では、窓を閉じる前に rc 2 で断る。
++    fs::write(fx.root.join("name"), "consult-cw3").unwrap();
++    fs::write(fx.trust(), "{").unwrap();
++    let (rc, err) = shoot(&["cw3", "--follow", "--session", SID]);
++    assert!(rc == 2 && err.contains("JSON の字でない"), "{err}");
++    assert!(
++        !verbs(&fx)
++            .iter()
++            .any(|v| v == "kill-window" || v == "new-window"),
++        "{:?}",
++        verbs(&fx)
++    );
++}
++
++/// 見張りは、生きている話す窓の印の口座が見張りの環境の口座と違い、会話の印が手すきで、付いてこなかった印が無い時に、口座のずれの
++/// 1 行を出す。会話の印が無い・付いてこなかった印が在る・口座が同じ窓では出さずに上限の 1 行で終わる。付いてこなかった印が
++/// symlink なら印と見ずに出し、会話の印が symlink なら手すきと見ずに出さない。
++#[test]
++fn cwres_watch_names_a_moved_idle_window() {
++    let fx = Fx::new("watch");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    remark(&ws, std::process::id(), Some(Path::new("/old")));
++    let watch =
++        |max: &str| String::from_utf8(fx.tz(&["consult", "watch", "--max", max]).stdout).unwrap();
++    let w = tsuzuri_contract::consult::WindowId::new(1).unwrap();
++    let (drift, timeout) = (
++        notice(&Event::Drift(w), "/x/tzw") + "\n",
++        notice(&Event::Timeout, "/x/tzw") + "\n",
++    );
++    assert_eq!(watch("1"), timeout, "会話の印が無い");
++    stamps(&ws, SID);
++    assert_eq!(watch("3"), drift);
++    let (held, real) = (ws.join(".consult/held-1"), ws.join(".consult/stamps.jsonl"));
++    fs::write(&held, "").unwrap();
++    assert_eq!(watch("1"), timeout, "付いてこなかった印");
++    fs::remove_file(&held).unwrap();
++    std::os::unix::fs::symlink(ws.join(".consult/window.json"), &held).unwrap();
++    assert_eq!(watch("3"), drift, "付いてこなかった印が symlink");
++    fs::remove_file(&held).unwrap();
++    fs::rename(&real, ws.join("kept")).unwrap();
++    std::os::unix::fs::symlink(ws.join("kept"), &real).unwrap();
++    assert_eq!(watch("1"), timeout, "会話の印が symlink");
++    fs::remove_file(&real).unwrap();
++    fs::rename(ws.join("kept"), &real).unwrap();
++    remark(&ws, std::process::id(), Some(&fx.acct));
++    assert_eq!(watch("1"), timeout, "口座が同じ");
++}
+diff --git a/crates/tsuzuri-core/src/consult/follow.rs b/crates/tsuzuri-core/src/consult/follow.rs
+new file mode 100644
+index 00000000..f288014d
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/follow.rs
+@@ -0,0 +1,25 @@
++//! 話す窓を群の口座の移動に付いて来させる判じ（設計ノート surface-wave29b 行 cs-follow・判断の記録 ADR-55 決定 (3)）。
++//! 窓の process の印の口座と席の今の口座のずれ（`drifted`）、会話の印の最後の行が手すきか（`idle`）、tmux の pane の字の
++//! 入力欄が空か（`input_clear`・器の席の入力欄の門と同じ読み）を判じる。
++
++use tsuzuri_contract::consult::{Stamp, StampEvent};
++
++/// Claude Code の入力欄の頭の字（器の席の入力欄の門と同じ字）。
++pub const PROMPT: char = '❯';
++
++/// 印の口座 `mark` が在り、席の今の口座 `now` と違うか（どちらかが無ければ判じない＝偽）。
++pub fn drifted(mark: Option<&str>, now: Option<&str>) -> bool {
++    matches!((mark, now), (Some(m), Some(n)) if m != n)
++}
++
++/// 会話の印の最後の行が会話の始まりか turn の終わり（持ち主の入力の後の turn の中でない）か。印が無ければ偽。
++pub fn idle(stamps: &[Stamp]) -> bool {
++    stamps.last().is_some_and(|s| s.event != StampEvent::Prompt)
++}
++
++/// pane の字の、`PROMPT` を含む最後の行の `PROMPT` の右（前後の空白を除く）が空か（その行が無ければ None＝照らせない）。
++pub fn input_clear(pane: &str) -> Option<bool> {
++    let line = pane.lines().rfind(|l| l.contains(PROMPT))?;
++    line.split_once(PROMPT)
++        .map(|(_, rest)| rest.trim().is_empty())
++}
+diff --git a/crates/tsuzuri-core/src/consult/lines.rs b/crates/tsuzuri-core/src/consult/lines.rs
+index 474df8f5..a99eb190 100644
+--- a/crates/tsuzuri-core/src/consult/lines.rs
++++ b/crates/tsuzuri-core/src/consult/lines.rs
+@@ -587,6 +587,10 @@ pub enum Event {
+     Gone(WindowId),
+     /// 見張りが時間の上限で終わった。
+     Timeout,
++    /// 生きている話す窓が手すきで、席の今の口座と違う口座で動いている（行 cs-follow）。
++    Drift(WindowId),
++    /// 付いてくる口が待ちの上限までに手すきを見られず、起こし直さなかった（行 cs-follow）。
++    Held(WindowId),
+ }
+ 
+ /// 席への固定の 1 行（`tzw` は tz の解き方の命令の字）。見張りの出す行は末に置き直しの命令を足す。
+@@ -607,9 +611,13 @@ pub fn notice(event: &Event, tzw: &str) -> String {
+             "話す窓 {w} が止まった（開き直しを待つ・持ち主が閉じると言えば {tzw} consult close {w} --by chat）"
+         ),
+         Event::Timeout => "見張りが上限で終わった".to_string(),
++        Event::Drift(w) => {
++            format!("話す窓 {w} が前の口座で動いている（{tzw} consult launch {w} --follow）")
++        }
++        Event::Held(w) => format!("話す窓 {w} が手すきにならず付いてこなかった（持ち主に問う）"),
+     };
+     match event {
+-        Event::Finding { via: Via::Done, .. } => format!("{NOTICE_HEAD}{body}"),
++        Event::Finding { via: Via::Done, .. } | Event::Held(_) => format!("{NOTICE_HEAD}{body}"),
+         _ => format!("{NOTICE_HEAD}{body}{SEP}「{tzw} consult watch」を背景で置き直す"),
+     }
+ }
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index c7e5f8be..f162f350 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -1,5 +1,6 @@
+ //! 相談の窓の中核の純な関数（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a）。
+ //! 口座の信頼の印の字（`trust`）と撃ち直しで続ける会話の id の選び（`resume`）は行 cs-trust（ノート surface-wave29b）が置く。
++//! 口座の移動に付いてくる判じ（`follow`）は行 cs-follow（ノート surface-wave29b）が置く。
+ //! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+ //! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+ //! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer、
+@@ -8,6 +9,7 @@
+ //! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
+ 
+ pub mod finding;
++pub mod follow;
+ pub mod guard;
+ pub mod launch;
+ pub mod lines;
+diff --git a/crates/tsuzuri-core/tests/cwflw.rs b/crates/tsuzuri-core/tests/cwflw.rs
+new file mode 100644
+index 00000000..39c2c1e9
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwflw.rs
+@@ -0,0 +1,64 @@
++//! 話す窓を口座の移動に付いて来させる判じと 1 行の歯（接頭辞 cwflw_・設計ノート surface-wave29b 行 cs-follow・判断の記録 ADR-55 決定 (3)）。
++#![cfg(test)]
++
++use tsuzuri_contract::consult::{Stamp, StampEvent, WindowId};
++use tsuzuri_core::consult::follow::{PROMPT, drifted, idle, input_clear};
++use tsuzuri_core::consult::lines::{Event, notice};
++
++fn stamp(event: StampEvent) -> Stamp {
++    let sid = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308".to_string();
++    Stamp {
++        at: 1,
++        event,
++        sid,
++        source: None,
++    }
++}
++
++/// ずれは印の口座が在り今の口座と違う時だけ。手すきは印の最後の行が会話の始まりか turn の終わりの時だけ（印が無ければ偽）。
++#[test]
++fn cwflw_drift_and_idle() {
++    assert!(drifted(Some("/a"), Some("/b")));
++    for (mark, now) in [
++        (Some("/a"), Some("/a")),
++        (None, Some("/b")),
++        (Some("/a"), None),
++        (None, None),
++    ] {
++        assert!(!drifted(mark, now), "{mark:?} {now:?}");
++    }
++    let [start, prompt, stop] =
++        [StampEvent::Start, StampEvent::Prompt, StampEvent::Stop].map(stamp);
++    assert!(idle(std::slice::from_ref(&start)));
++    assert!(idle(&[prompt.clone(), stop.clone()]) && idle(&[stop.clone(), start.clone()]));
++    assert!(!idle(&[]) && !idle(&[start, stop, prompt]));
++}
++
++/// 入力欄は `❯` を含む最後の行の右が空白だけの時に空で、字が在れば空でなく、その行が無ければ照らせない（None）。
++#[test]
++fn cwflw_input_clear_reads_the_last_prompt_line() {
++    assert_eq!(PROMPT, '❯');
++    assert_eq!(input_clear("● 答え\n\n❯ \n  ? for shortcuts\n"), Some(true));
++    assert_eq!(input_clear("❯ 前の発言\n● 答え\n❯\u{a0}\n"), Some(true));
++    assert_eq!(input_clear("❯ \n❯ 打ちかけ\n"), Some(false));
++    assert_eq!(
++        input_clear(" ❯ 1. Yes, I trust this folder\n   2. No, exit\n"),
++        Some(false)
++    );
++    assert_eq!(input_clear("> \n$ \n"), None);
++    assert_eq!(input_clear(""), None);
++}
++
++/// 口座のずれの 1 行は付いてくる口の命令と見張りの置き直しを持ち、付いてこなかった 1 行は持ち主に問う字で置き直しを持たない。
++#[test]
++fn cwflw_notice_lines() {
++    let w = WindowId::new(1).expect("窓 id");
++    assert_eq!(
++        notice(&Event::Drift(w), "/x/tzw"),
++        "相談: 話す窓 cw1 が前の口座で動いている（/x/tzw consult launch cw1 --follow）・「/x/tzw consult watch」を背景で置き直す"
++    );
++    assert_eq!(
++        notice(&Event::Held(w), "/x/tzw"),
++        "相談: 話す窓 cw1 が手すきにならず付いてこなかった（持ち主に問う）"
++    );
++}
+diff --git a/plugin/skills/consult/SKILL.md b/plugin/skills/consult/SKILL.md
+index 794dcf7c..b6f82dfb 100644
+--- a/plugin/skills/consult/SKILL.md
++++ b/plugin/skills/consult/SKILL.md
+@@ -37,6 +37,7 @@ tzw consult launch <窓の id>
+ - 話す窓は席の tmux の session に名 consult-cw<n> の窓を開いて戻る（持ち主の見ている窓は替えない）。持ち主にその窓で話すよう伝える。
+ - 問う窓は所見を出して終わるまで待つので、Bash の道具の背景（run_in_background）で撃つ。終わりに所見の 1 行が出る。
+ - 所見の無いまま止まった問う窓は `tzw consult launch <窓の id> --again` で撃ち直す。
++- 止まった話す窓を開き直す時も `--again` で撃つ。会話の印の最後の会話を続ける（印の無い前の窓は、持ち主に確かめてから `--session <会話の id>` を足す）。
+ 
+ ## 3 見張りを置く
+ 
+@@ -46,6 +47,7 @@ tzw consult watch
+ 
+ - Bash の道具の背景（run_in_background・timeout は 7200000）で常に 1 本置く。所見か頼みが届くと「相談:」で始まる 1 行を出して終わる。
+ - 1 行で起きたら、その件を受けてから同じ命令で置き直す。2 本目は「見張りはもう居る」で終わる。
++- 「話す窓 cw<n> が前の口座で動いている」で起きたら、行の中の `tzw consult launch <窓の id> --follow` を撃つ（手すきと入力欄が空になるのを待ち、同じ作業場で席の今の口座に開き直して会話を続ける）。「手すきにならず付いてこなかった」が出たら、今開き直してよいかを持ち主に問い、よいと言われたら --follow を撃ち直す。
+ 
+ ## 4 所見を受けて処分する
+ 

@@ -1,0 +1,525 @@
+diff --git a/crates/tsuzuri-boundary/src/acct.rs b/crates/tsuzuri-boundary/src/acct.rs
+index 84db0164..73530d58 100644
+--- a/crates/tsuzuri-boundary/src/acct.rs
++++ b/crates/tsuzuri-boundary/src/acct.rs
+@@ -622,6 +622,7 @@ impl Acct {
+                     tick_last: in_seat(TICK_LAST),
+                     events,
+                     ledger,
++                    consult: Vec::new(),
+                 },
+             );
+             if let Some(d) = seat_doctor {
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+index 8ee29869..6a40d89d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+@@ -446,6 +446,7 @@ impl Place {
+                     tick_last: in_seat("tick-last"),
+                     events: self.file(&dir.join("fleet/events.jsonl")).map(Into::into),
+                     ledger: self.file(&self.root.join("bd").join(p)).map(Into::into),
++                    consult: Vec::new(),
+                 },
+             );
+             if let Some(doctor) = doctor {
+diff --git a/crates/tsuzuri-contract/src/surface.rs b/crates/tsuzuri-contract/src/surface.rs
+index 721353c1..ff1af842 100644
+--- a/crates/tsuzuri-contract/src/surface.rs
++++ b/crates/tsuzuri-contract/src/surface.rs
+@@ -59,12 +59,13 @@ impl std::fmt::Display for RulingId {
+     }
+ }
+ 
+-/// 席の役（orchestrator が上・pipeline が下）。
++/// 席の役（orchestrator が上・pipeline が下・相談の窓は口座の board の session の行だけ・判断の記録 ADR-55 決定 (4)）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+ #[serde(rename_all = "kebab-case")]
+ pub enum SeatRole {
+     Orchestrator,
+     Pipeline,
++    Consult,
+ }
+ 
+ /// 席の稼働（閉じた 5）。応答なしは tick が stale のときだけ・停止は heartbeat-off のとき。
+diff --git a/crates/tsuzuri-contract/tests/snapshots/surface.json b/crates/tsuzuri-contract/tests/snapshots/surface.json
+index f5b44011..1c15e63e 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/surface.json
++++ b/crates/tsuzuri-contract/tests/snapshots/surface.json
+@@ -5,7 +5,8 @@
+   ],
+   "surface::SeatRole": [
+     "orchestrator",
+-    "pipeline"
++    "pipeline",
++    "consult"
+   ],
+   "surface::SeatHealth": [
+     "waiting",
+diff --git a/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+index 281098f6..35646def 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/cform_surface.rs
+@@ -45,7 +45,7 @@ fn forms() -> Vec<Box<dyn Form>> {
+         ),
+         form(
+             "surface::SeatRole",
+-            vec![SeatRole::Orchestrator, SeatRole::Pipeline],
++            vec![SeatRole::Orchestrator, SeatRole::Pipeline, SeatRole::Consult],
+         ),
+         form(
+             "surface::SeatHealth",
+diff --git a/crates/tsuzuri-core/src/account/project.rs b/crates/tsuzuri-core/src/account/project.rs
+index 4dd5b7d2..80f44be4 100644
+--- a/crates/tsuzuri-core/src/account/project.rs
++++ b/crates/tsuzuri-core/src/account/project.rs
+@@ -8,8 +8,11 @@
+ //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
+ //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
+ //! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
++//! 相談の窓の行は、作業場の材料（`ConsultWindow`）と台帳の notes の相談の開きと閉じの行から組む
++//! （判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
++use std::path::Path;
+ use std::sync::Arc;
+ 
+ use serde::Deserialize;
+@@ -19,11 +22,13 @@ use tsuzuri_contract::account::{
+     AccountDoc, AccountRow, DormantSeat, GroupCard, MoveRow, ProjectRow, RunCounts, SessionLine,
+ };
+ use tsuzuri_contract::board::{Reading, Stage};
++use tsuzuri_contract::consult::{ProcMark, WindowFile, minute_ok};
+ use tsuzuri_contract::seat::{SeatCard, SeatState};
+ use tsuzuri_contract::surface::SeatRole;
+ 
+ use super::host::{self, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
+ use super::{field, project_name, same_path, value};
++use crate::consult::lines::{Line, scan};
+ use crate::graph::build::{read_events, run_bead};
+ use crate::ledger::stats::stats_of;
+ use crate::ledger::{Bead, DAY, epoch_secs, read};
+@@ -80,6 +85,27 @@ pub struct ProjectTexts {
+     /// 台帳の一覧。
+     #[serde(default, deserialize_with = "super::shared_text")]
+     pub ledger: Option<Arc<str>>,
++    /// 相談の窓の退いていない作業場の材料（窓の id の順・起草の置き場が引けなければ空・行 c-acct-consult）。
++    #[serde(default)]
++    pub consult: Vec<ConsultWindow>,
++}
++
++/// 相談の窓の作業場の材料（境が作業場の控えと process の印を読み、`/proc` で process の在る無しを見た値）。
++#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
++pub struct ConsultWindow {
++    /// 窓の控え（`.consult/window.json`）。
++    pub window: WindowFile,
++    /// 最後の process の印（k の最も大きい物・無ければ None）。
++    pub last: Option<ProcMark>,
++    /// 最後の process の印の pid の process が在るか。
++    pub alive: bool,
++}
++
++/// 台帳の bead の notes だけ（相談の行を拾う読み・ほかの欄は読み飛ばす）。
++#[derive(Deserialize)]
++struct NotesOnly {
++    #[serde(default)]
++    notes: Option<String>,
+ }
+ 
+ /// project の台帳の字と event log の字を読み解いた値（台帳の bead の列・event log の値の列・open の問いの読み）。
+@@ -92,6 +118,8 @@ pub struct Parsed {
+     pub(crate) events: Option<Vec<Value>>,
+     /// open の問いの読み（台帳の字が無いか読めなければ「まだ分からない」）。
+     pub(crate) questions: Reading<Vec<OpenQuestion>>,
++    /// 台帳の notes の相談の開きと閉じの行（台帳の順・台帳の字が無いか読めなければ None・行 c-acct-consult）。
++    pub(crate) consult: Option<Vec<Line>>,
+ }
+ 
+ impl Parsed {
+@@ -102,6 +130,7 @@ impl Parsed {
+             beads: ledger.and_then(read),
+             events: texts.events.as_deref().and_then(read_events),
+             questions: ledger.map_or(Reading::Unknown, open_questions),
++            consult: ledger.and_then(consult_lines),
+         }
+     }
+ }
+@@ -607,8 +636,8 @@ pub fn dormant(
+     out
+ }
+ 
+-/// session の行の列（project の宣言の順に、その project の orchestrator の行と、生きていて終わっていない
+-/// pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
++/// session の行の列（project の宣言の順に、その project の orchestrator の行と、閉じていない相談の窓の行
++/// 〔`consult_rows`・作業場の材料の順〕と、生きていて終わっていない pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
+ /// 席の card が読めて、その席が休止中（`dormant`）の project は orchestrator の行を出さない（run の行は出す・行 c-dormant）。
+ /// pipeline の行の状態は、段を決める最後の event が器の上限の印（RunStage の段 `RATE_LIMITED`）なら limit、
+ /// 段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
+@@ -638,10 +667,11 @@ pub fn session_lines_with(
+         let texts = texts.unwrap_or(&unknown);
+         let name = project_name(&d.anchor);
+         out.extend(seat_line(&name, seat(host, &d, texts, now), &resting));
++        let parsed = parsed_of(parsed, &d.anchor, texts);
++        out.extend(consult_rows(&name, &texts.consult, parsed.consult.as_deref()));
+         if !texts.state_dir_known {
+             continue;
+         }
+-        let parsed = parsed_of(parsed, &d.anchor, texts);
+         let Some(events) = parsed.events.as_deref() else {
+             continue;
+         };
+@@ -690,6 +720,86 @@ fn seat_line(
+     }
+ }
+ 
++/// 台帳の字の相談の開きと閉じの行（台帳の順・字が bead の配列として読めなければ None）。
++fn consult_lines(ledger: &str) -> Option<Vec<Line>> {
++    let beads: Vec<NotesOnly> = serde_json::from_str(ledger).ok()?;
++    Some(
++        beads
++            .iter()
++            .filter_map(|b| b.notes.as_deref())
++            .flat_map(scan)
++            .filter(|l| matches!(l, Line::Open { .. } | Line::Close { .. }))
++            .collect(),
++    )
++}
++
++/// 口座の置き場の path の末の名（器の口座の置き場 `<state>/accounts/<名>` の名・空なら None）。
++pub fn account_label(dir: &str) -> Option<String> {
++    Path::new(dir)
++        .file_name()
++        .and_then(|n| n.to_str())
++        .filter(|n| !n.is_empty())
++        .map(str::to_string)
++}
++
++/// UTC の分の字（`20261003T1412Z`）の epoch 秒（形が違えば None）。
++fn minute_secs(m: &str) -> Option<EpochSecs> {
++    let d = |a: usize, b: usize| m.get(a..b);
++    let rfc = format!(
++        "{}-{}-{}T{}:{}:00Z",
++        d(0, 4)?,
++        d(4, 6)?,
++        d(6, 8)?,
++        d(9, 11)?,
++        d(11, 13)?
++    );
++    minute_ok(m).then(|| epoch_secs(&rfc)).flatten()
++}
++
++/// project の相談の窓の行（台帳に閉じの行の在る窓は出さない・台帳が読めなければ外さない）。
++/// 名は窓の id・口座は最後の process の印の口座の置き場の末の名（印が無いか口座の欄が無ければ None）・
++/// 状態は process が在れば run・無ければ wait・いつからは台帳の最後の開きの行の時刻（無ければ作業場の控えの用意の時刻）。
++fn consult_rows(name: &str, windows: &[ConsultWindow], lines: Option<&[Line]>) -> Vec<SessionLine> {
++    let lines = lines.unwrap_or_default();
++    windows
++        .iter()
++        .filter(|w| {
++            !lines
++                .iter()
++                .any(|l| matches!(l, Line::Close { window, .. } if *window == w.window.id))
++        })
++        .map(|w| {
++            let opened = lines.iter().rev().find_map(|l| match l {
++                Line::Open {
++                    window,
++                    opened: true,
++                    at,
++                    ..
++                } if *window == w.window.id => minute_secs(at),
++                _ => None,
++            });
++            SessionLine {
++                project: name.to_string(),
++                role: SeatRole::Consult,
++                name: w.window.id.to_string(),
++                account: w
++                    .last
++                    .as_ref()
++                    .and_then(|p| p.account.as_deref())
++                    .and_then(account_label),
++                state: if w.alive {
++                    SeatState::Run
++                } else {
++                    SeatState::Wait
++                },
++                stage: None,
++                since: opened.or_else(|| minute_secs(&w.window.made)),
++                spans: Reading::Unknown,
++            }
++        })
++        .collect()
++}
++
+ /// pipeline の run の行（状態は上限の印なら limit・止まる段でなく席が立っていれば run・ほかは wait）。
+ fn run_line(name: &str, run: &Run<'_>) -> SessionLine {
+     let last = run.last_stage();
+diff --git a/crates/tsuzuri-core/tests/teeth1/acctpcore.rs b/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
+index 19c257bd..4bc1197b 100644
+--- a/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
++++ b/crates/tsuzuri-core/tests/teeth1/acctpcore.rs
+@@ -1,6 +1,7 @@
+ //! account board の project の側の部分と組み立ての歯（便 e-acct-proj・接頭辞 acctpcore_）。
+ //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字）・acct-doc.json（組み立ての部分）。どちらも読むだけ。
+ //! project の側の字（event log・状態の記録・台帳・合図の健康の行の器の欄）は歯の中で組む。今は 2026-09-27T12:00:00Z。
++//! 接頭辞 acctpcore_consult_ の歯は相談の窓の session の行（行 c-acct-consult・判断の記録 ADR-55 決定 (4)・今は `CW_NOW`）。
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+@@ -16,10 +17,12 @@ use tsuzuri_contract::board::{Reading, Stage};
+ use tsuzuri_contract::seat::{SeatCard, SeatState};
+ use tsuzuri_contract::surface::SeatRole;
+ use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
++use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
+ use tsuzuri_core::account::project::{
+-    Parsed, ParsedMap, ProjectTexts, assemble, doc, doc_with, project_rows, run_counts,
+-    session_lines,
++    ConsultWindow, Parsed, ParsedMap, ProjectTexts, account_label, assemble, doc, doc_with,
++    project_rows, run_counts, session_lines,
+ };
++use tsuzuri_core::consult::lines::{By, Line, render};
+ use tsuzuri_core::ledger::stats::stats;
+ use tsuzuri_core::next_step::next_step_seat;
+ use tsuzuri_core::seat::{SeatTexts, card};
+@@ -186,6 +189,7 @@ fn proj_a() -> ProjectTexts {
+         tick_last: None,
+         events: Some(events().into()),
+         ledger: Some(ledger().into()),
++        consult: Vec::new(),
+     }
+ }
+ 
+@@ -197,6 +201,7 @@ fn proj_b() -> ProjectTexts {
+         tick_last: None,
+         events: None,
+         ledger: None,
++        consult: Vec::new(),
+     }
+ }
+ 
+@@ -571,3 +576,205 @@ fn acctpcore_doc_with_parsed_equals_doc() {
+     assert_eq!(doc_with(&i.texts, &none, &parsed_of(&none), NOW), want);
+     assert_ne!(doc_with(&i.texts, &none, &parsed, NOW), want);
+ }
++
++/// 相談の窓の行の歯の今（2026-10-05T03:13:20Z・行 c-acct-consult・判断の記録 ADR-55 決定 (4)）。
++const CW_NOW: u64 = 1_791_170_000;
++
++/// 20261005T0100Z・20261005T0230Z・20261004T2300Z・20261005T0300Z の epoch 秒。
++const T0100: u64 = 1_791_162_000;
++const T0230: u64 = 1_791_167_400;
++const T2300: u64 = 1_791_154_800;
++const T0300: u64 = 1_791_169_200;
++
++fn cw_win(n: &str) -> WindowId {
++    WindowId::parse(n).expect("窓の id")
++}
++
++/// 作業場の材料（`account` は最後の印の口座の置き場・`procs` が偽なら印なし）。
++fn cw_window(n: &str, made: &str, account: Option<&str>, alive: bool, procs: bool) -> ConsultWindow {
++    ConsultWindow {
++        window: WindowFile {
++            id: cw_win(n),
++            form: Form::Talk,
++            topic: None,
++            model: "opus".into(),
++            effort: "high".into(),
++            starter: Starter::Seat,
++            uttered: None,
++            request: None,
++            made: made.into(),
++        },
++        last: procs.then(|| ProcMark {
++            k: 2,
++            form: Form::Talk,
++            pid: 4242,
++            at: made.into(),
++            again: true,
++            tmux_window: Some("@7".into()),
++            account: account.map(str::to_string),
++        }),
++        alive,
++    }
++}
++
++fn cw_open(n: &str, opened: bool, at: &str) -> String {
++    render(&Line::Open {
++        window: cw_win(n),
++        form: Form::Talk,
++        topic: None,
++        by: By::Seat,
++        model: "opus".into(),
++        effort: "high".into(),
++        opened,
++        again: false,
++        at: at.into(),
++    })
++    .expect("開きの行")
++}
++
++fn cw_close(n: &str, at: &str) -> String {
++    render(&Line::Close {
++        window: cw_win(n),
++        by: Starter::Seat,
++        findings: 0,
++        at: at.into(),
++    })
++    .expect("閉じの行")
++}
++
++/// 台帳の字（notes に相談の行を持つ bead と、notes の無い bead）。
++fn cw_ledger(notes: &[String]) -> String {
++    json!([
++        {"id": "t-1", "title": "根", "issue_type": "task", "status": "open", "notes": notes.join("\n")},
++        {"id": "t-2", "title": "ほか", "issue_type": "task", "status": "open"}
++    ])
++    .to_string()
++}
++
++fn cw_projects(
++    known: bool,
++    consult: Vec<ConsultWindow>,
++    ledger: Option<String>,
++) -> BTreeMap<String, ProjectTexts> {
++    BTreeMap::from([(
++        "/work/proj-b".to_string(),
++        ProjectTexts {
++            state_dir_known: known,
++            ledger: ledger.map(Into::into),
++            consult,
++            ..ProjectTexts::default()
++        },
++    )])
++}
++
++/// proj-b の相談の窓の行（席の行の直後に続き、ほかの位置に相談の窓の行が無いことも見る）。
++fn cw_of(lines: &[SessionLine]) -> Vec<SessionLine> {
++    let seat = lines
++        .iter()
++        .position(|l| l.project == "proj-b" && l.role == SeatRole::Orchestrator)
++        .expect("proj-b の席の行");
++    let after: Vec<SessionLine> = lines
++        .iter()
++        .skip(seat + 1)
++        .take_while(|l| l.role == SeatRole::Consult)
++        .cloned()
++        .collect();
++    assert_eq!(
++        after.len(),
++        lines.iter().filter(|l| l.role == SeatRole::Consult).count(),
++        "相談の窓の行は席の行の直後に続く: {lines:?}"
++    );
++    after
++}
++
++fn cw_line(name: &str, account: Option<&str>, state: SeatState, since: Option<u64>) -> SessionLine {
++    SessionLine {
++        project: "proj-b".into(),
++        role: SeatRole::Consult,
++        name: name.into(),
++        account: account.map(str::to_string),
++        state,
++        stage: None,
++        since,
++        spans: Reading::Unknown,
++    }
++}
++
++fn cw_two() -> Vec<ConsultWindow> {
++    vec![
++        cw_window("cw1", "20261005T0100Z", Some("/s/accounts/acct-x"), true, true),
++        cw_window("cw2", "20261005T0230Z", None, false, false),
++    ]
++}
++
++/// (1) 窓ごとに 1 行（役 consult・名は窓の id・口座は印の口座の置き場の末の名・process が在れば run・無ければ wait・
++/// いつからは台帳が無ければ控えの用意の時刻・段と稼働の記録は無い）。印に口座の欄が無い窓の口座は None。
++/// state dir の引けない project でも出す。
++#[test]
++fn acctpcore_consult_windows_follow_the_seat_line() {
++    let host = inputs().texts;
++    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), None), CW_NOW));
++    assert_eq!(
++        got,
++        vec![
++            cw_line("cw1", Some("acct-x"), SeatState::Run, Some(T0100)),
++            cw_line("cw2", None, SeatState::Wait, Some(T0230)),
++        ]
++    );
++    let bare = vec![cw_window("cw3", "20261005T0100Z", None, true, true)];
++    let got = cw_of(&session_lines(&host, &cw_projects(true, bare, None), CW_NOW));
++    assert_eq!(got, vec![cw_line("cw3", None, SeatState::Run, Some(T0100))]);
++    let got = cw_of(&session_lines(&host, &cw_projects(false, cw_two(), None), CW_NOW));
++    assert_eq!(got.len(), 2, "state dir が引けなくても出す");
++    let none = session_lines(&host, &cw_projects(true, Vec::new(), None), CW_NOW);
++    assert!(none.iter().all(|l| l.role != SeatRole::Consult));
++}
++
++/// (2) 台帳に閉じの行の在る窓は出さない。ほかの窓の閉じの行は効かない。台帳の字が読めなければ外さない。
++#[test]
++fn acctpcore_consult_closed_windows_left_out() {
++    let host = inputs().texts;
++    let names = |ledger: Option<String>| -> Vec<String> {
++        cw_of(&session_lines(&host, &cw_projects(true, cw_two(), ledger), CW_NOW))
++            .into_iter()
++            .map(|l| l.name)
++            .collect()
++    };
++    let closed = cw_ledger(&[cw_open("cw2", true, "20261005T0230Z"), cw_close("cw2", "20261005T0300Z")]);
++    assert_eq!(names(Some(closed)), ["cw1"]);
++    let other = cw_ledger(&[cw_close("cw9", "20261005T0300Z")]);
++    assert_eq!(names(Some(other)), ["cw1", "cw2"]);
++    assert_eq!(names(Some("台帳でない字".into())), ["cw1", "cw2"]);
++    assert_eq!(names(None), ["cw1", "cw2"]);
++}
++
++/// (3) いつからは台帳の最後の開きの行（結果 = 開いた）の時刻・開けなかった開きの行は見ない・
++/// 開きの行の無い窓は控えの用意の時刻・用意の時刻の形が違えば None。
++#[test]
++fn acctpcore_consult_since_from_last_open_line() {
++    let host = inputs().texts;
++    let notes = [
++        cw_open("cw1", true, "20261004T2300Z"),
++        cw_open("cw1", true, "20261005T0300Z"),
++        cw_open("cw1", false, "20261005T0330Z"),
++    ];
++    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), Some(cw_ledger(&notes))), CW_NOW));
++    let since: Vec<Option<u64>> = got.iter().map(|l| l.since).collect();
++    assert_eq!(since, [Some(T0300), Some(T0230)]);
++    let first = [cw_open("cw1", true, "20261004T2300Z")];
++    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), Some(cw_ledger(&first))), CW_NOW));
++    assert_eq!(got.first().and_then(|l| l.since), Some(T2300));
++    let bad = vec![cw_window("cw4", "2026-10-05T01:00Z", None, false, false)];
++    let got = cw_of(&session_lines(&host, &cw_projects(true, bad, None), CW_NOW));
++    assert_eq!(got.first().map(|l| l.since), Some(None));
++}
++
++/// (4) 口座は口座の置き場の path の末の名（末の区切りは除く・名の無い path は None）。
++#[test]
++fn acctpcore_consult_account_label_is_the_last_name() {
++    assert_eq!(account_label("/s/accounts/acct-x").as_deref(), Some("acct-x"));
++    assert_eq!(account_label("/s/accounts/acct-x/").as_deref(), Some("acct-x"));
++    assert_eq!(account_label("acct-y").as_deref(), Some("acct-y"));
++    assert_eq!(account_label("/"), None);
++    assert_eq!(account_label(""), None);
++}
+diff --git a/crates/tsuzuri-surface/src/account/session.rs b/crates/tsuzuri-surface/src/account/session.rs
+index acb180b8..e53dec44 100644
+--- a/crates/tsuzuri-surface/src/account/session.rs
++++ b/crates/tsuzuri-surface/src/account/session.rs
+@@ -175,6 +175,7 @@ pub fn role_word(role: SeatRole) -> &'static str {
+     match role {
+         SeatRole::Orchestrator => "orchestrator",
+         SeatRole::Pipeline => "pipeline",
++        SeatRole::Consult => "consult",
+     }
+ }
+ 
+@@ -183,6 +184,7 @@ pub fn role_key(role: SeatRole) -> &'static str {
+     match role {
+         SeatRole::Orchestrator => "role:orchestrator",
+         SeatRole::Pipeline => "role:pipeline",
++        SeatRole::Consult => "role:consult",
+     }
+ }
+ 

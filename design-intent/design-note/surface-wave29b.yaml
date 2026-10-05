@@ -3,23 +3,26 @@
 meta:
   id: surface-wave29b
   title: 第 29 波 b — 相談の窓の立て直し（判断の記録 ADR-55 と ADR-57・話す窓が群の口座の移動に付いてくる・窓の記録に口座と会話の id・口座の board に窓を並べる・窓は会話どうしの言付けを断る・話す窓の Remote Control と状態の 1 行）
-  version: v0.6
+  version: v0.7
   status: effective
   generated: 2026-10-05
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.1（裁定 id = t3-hub.88.1.1:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）と t3-hub.88.1.2（裁定 id = t3-hub.88.1.2:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）・束 batch:20261005T0058Z-1〔判断の記録 ADR-55 の承認・ノートの承認〕, verbatim: どちらも推奨で良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.3（裁定 id = t3-hub.88.1.3:20261005T0123Z-1・甲・配達の口・notes に逐語・束 batch:20261005T0123Z-1）と t3-hub.84.3（裁定 id = t3-hub.84.3:20261005T0134Z-1・案 A・配達の口・notes に逐語・条 A-1 の外へ出す確認を兼ねる）〔判断の記録 ADR-57 の承認・ノートの承認〕, verbatim: どちらも推奨で進めて（t3-hub.88.1.3）／推奨で良い（t3-hub.84.3）, surface: R-8}
-  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。 第 0.4 版（2026-10-05）は、判断の記録 ADR-57（持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A・ADR-29 の決定 (3)(7)(8) の部分の置き換え）の承認の行と、その決定 (1)(ケ) の行 cs-inbound-refuse（相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りに送る道具と一覧の道具を足す・差の file・試作と噛みは係 w188a・積みと床は係 w190a）を足し、題と頭の注に ADR-57 を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-55 の決定 (1)（止まった窓は閉じずに開き直す）の行 cs-gone-once（相談の見張りが止まった窓を同じ process について 1 度だけ知らせ、起草の置き場の知らせ済みの印を置いて見張りを続け、話す窓の知らせの字を止まったに替える・差の file・試作と噛みと床は係 w192a）を足した。 第 0.6 版（2026-10-05）は、判断の記録 ADR-57 の決定 (1)(コ)・(4) の行 cs-remote（話す窓を起動で Remote Control に窓の名で繋ぐ）・cs-status-text（状態の 1 行の字と設定）・cs-status-verb（口 tz consult statusline・symlink を辿らず fifo を開かない）を足し、目的の節に歯の置き方（判断の記録 ADR-32 の決定 (3)）と裁定を書いた（差の file・新しい歯は段の file・試作と噛みは係 w188a・積みと段の file への切り直しと床は係 w190a）。
+  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。 第 0.4 版（2026-10-05）は、判断の記録 ADR-57（持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A・ADR-29 の決定 (3)(7)(8) の部分の置き換え）の承認の行と、その決定 (1)(ケ) の行 cs-inbound-refuse（相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りに送る道具と一覧の道具を足す・差の file・試作と噛みは係 w188a・積みと床は係 w190a）を足し、題と頭の注に ADR-57 を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-55 の決定 (1)（止まった窓は閉じずに開き直す）の行 cs-gone-once（相談の見張りが止まった窓を同じ process について 1 度だけ知らせ、起草の置き場の知らせ済みの印を置いて見張りを続け、話す窓の知らせの字を止まったに替える・差の file・試作と噛みと床は係 w192a）を足した。 第 0.6 版（2026-10-05）は、判断の記録 ADR-57 の決定 (1)(コ)・(4) の行 cs-remote（話す窓を起動で Remote Control に窓の名で繋ぐ）・cs-status-text（状態の 1 行の字と設定）・cs-status-verb（口 tz consult statusline・symlink を辿らず fifo を開かない）を足し、目的の節に歯の置き方（判断の記録 ADR-32 の決定 (3)）と裁定を書いた（差の file・新しい歯は段の file・試作と噛みは係 w188a・積みと段の file への切り直しと床は係 w190a）。 第 0.7 版（2026-10-05）は、判断の記録 ADR-55 の決定 (1)(3)(4) の行 cs-trust（撃ち直しの部品と信頼の印）・cs-resume（撃ち直しが会話を続ける）・c-acct-consult（口座の board の電文と中核）・e-acct-cwread（読み手と面）・e-acct-consult（口座ずれの印と一覧の口座）・cs-follow（付いてくる口と見張りの口座のずれ）を足し、目的の節に 13 行と席の直列の順を書いた（差の file・新しい歯は段の file・試作と噛みは係 w185a と w186a・積みと段の file への切り直しと床は係 w190a・depends は起動の口の列と口座の board の列の前の行・c-acct-consult は cs-acct-mark・cs-follow は cs-resume と cs-gone-once）。
 
 sections:
   - n: 1
     type: prose
     title: 目的
     body: |
-      判断の記録 ADR-55（相談の話す窓を群の口座の移動に付いて来させ、窓の記録に起こした時の口座と今の会話の id を持たせ、口座の board に窓を口座つきで並べる・ADR-29 の決定 (5)(7) の部分の置き換え・持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2 の案 A）の行を置く。行は 5 本の見込み。窓の記録に起こした時の口座と会話の印を置く行 cs-acct-mark、続きの旗と起こす口座の信頼の印と前の process の照らしの行 cs-resume、付いてくる口と見張りの口座のずれの行 cs-follow、口座の board の電文と中核の行 c-acct-consult、読み手と面の行 e-acct-consult。試作の済んだ行から足す。
-      相談の窓の行は中核の consult/launch.rs と fixture と歯の cwarg.rs を書くので直列に流す。ノート surface-wave29a の相談の窓の行（cs-gh-read・cs-env-closed・cs-root-edits・cs-read-roots）の後に流す順は、ノートを跨ぐので depends に書かず、便の bead の依存で持つ（席が付ける）。このノートの中の順（cs-acct-mark の後に cs-resume、その後に cs-follow、cs-acct-mark の後に c-acct-consult、cs-follow と c-acct-consult の後に e-acct-consult）は depends で書く。
-      席と窓の言付け（問い t3-hub.88.1.3 の裁定の後）と、Remote Control と状態の 1 行（問いの前）の行も、決まった後にこのノートへ足せる。今の窓 cw1 の開き直し（ADR-55 の決定 (5)）は、行 cs-follow の着地の後に席が持ち主に確かめてから撃つ。
+      判断の記録 ADR-55（相談の話す窓を群の口座の移動に付いて来させ、窓の記録に起こした時の口座と今の会話の id を持たせ、口座の board に窓を口座つきで並べる・ADR-29 の決定 (5)(7) の部分の置き換え・持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2 の案 A）と、判断の記録 ADR-57（窓は会話どうしの言付けを全部断り、話す窓を起動の時から Remote Control に繋いで状態の 1 行を出す・ADR-29 の決定 (3)(7)(8) の部分の置き換え・持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A）の行を置く。
+
+      行は 13 本。ADR-55 の行は、作業場の file を symlink を辿らずに見て書く助け cs-plain-open、窓の記録に口座と会話の印 cs-acct-mark、撃ち直しの部品と信頼の印 cs-trust、撃ち直しが会話を続ける cs-resume、口座の board の電文と中核 c-acct-consult、読み手と面 e-acct-cwread、口座ずれの印と一覧の口座 e-acct-consult、止まった窓を同じ process について 1 度だけ知らせる cs-gone-once、付いてくる口と見張りの口座のずれ cs-follow。ADR-57 の行は、言付けの断り cs-inbound-refuse、Remote Control cs-remote、状態の 1 行の字と設定 cs-status-text と口 cs-status-verb。言付けの箱と知らせの行（cs-tell・cs-note・cs-note-relay の見込み）は試作の後に足す。
+
+      相談の窓の起動の口の行は中核と境の consult の file と fixture と歯の cwarg.rs を重ねて書くので、席の決めで 1 本ずつ直列に流す。順は cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow で、各行の depends は前の行を名指し、差は前の行までを当てた木で切る。口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は、新しい歯を段の file に切り直して起動の口の行と書く file が交わらないので、cs-acct-mark の後にその列と並べて流し、c-acct-consult の depends は cs-acct-mark を名指す。行 cs-gone-once は直列の外で depends を持たず、書く file の交わる cs-acct-mark と cs-follow とは器が便を順に流し、cs-follow は depends で cs-resume と cs-gone-once を名指す（差は cs-gone-once の後の木で切る）。今の窓 cw1 の開き直し（ADR-55 の決定 (5)）に要る cs-trust と cs-resume は口座の board の行を待たない。開き直しは席が持ち主に確かめてから撃つ。ノート surface-wave29a の相談の窓の行は全部着地した。
+
       行ごとの節は、行を足す適用が節の末に足す。1 本の契約表は 32 行まで（規則の行 R-32）。 歯の置き方は判断の記録 ADR-32 の決定 (3) のとおりで、新しい歯は段の file で足し、群の main.rs と kfold.rs は畳みの行だけが書く（持ち主の裁定 t3-hub.77.20:20261005T0258Z-1 で、置く前だった行 cs-status-text・cs-status-verb・cs-trust・cs-resume・e-acct-cwread・e-acct-consult・cs-follow を段の file に切り直した）。先に置いた行 cs-plain-open と cs-acct-mark は群へ直に歯の file を 3 本（cwpln・cwstm・cwstp）足して群の main.rs と kfold.rs を書いたが、3 本は crate の最後の群に名の順で入り、群の数と最後の群の上限の内で、畳みの行が段の file を群へ移した後と同じ形になるので、直す物は残らない。
   - n: 2
     type: contract-table
@@ -88,6 +91,62 @@ sections:
         size: M
         done: (1) git apply --reverse --check docs/design/patch/cs-status-verb.patch が rc 0（verify の 1 行目） (2) 作業場 consult-cw3（控えの題 t3-hub.78・model fable・念入りさ xhigh・findings/ に .json の file 2 つと .txt の file 1 つ・bundle/digest の字 3766ac7797cdf78f）で、標準入力の JSON（頂の鍵 context_window の object の鍵 used_percentage が数 42.4・鍵の字は二重引用符で囲む）の tz consult statusline <作業場> は rc 0 で 1 行「窓 cw3 ｜ 題 t3-hub.78 ｜ fable・xhigh ｜ 所見 2 ｜ 束 3766ac77 ｜ 文脈 42%」を出す（歯 cwsln_prints_the_line） (3) 控えの file・束の dir・束の file・所見の dir・所見の file の 1 つをそれぞれ外の物への symlink に替えると、その欄は外の字を出さない（控えは「窓 ?」・束は出ない・所見の dir は出ない・所見の file は 1 と数える）（歯 cwsln_does_not_follow_symlinks） (4) 束の file が fifo なら 2 秒の内に返し、束の欄を出さない（歯 cwsln_skips_fifo） (5) 控えの題に ESC・BEL・C1 の字を書いても、出す字に制御の字は無い（歯 cwsln_drops_control_chars） (6) cwd から在る作業場を指す相対の path・名が consult-cw<n> でない dir・作業場への symlink・引数の無い呼び・2 つの引数の呼びは、どれも標準出力が空で rc 1（歯 cwsln_refuses_non_workspace） (7) 境の歯 cwlch_ が緑
         depends: ["cs-status-text"]
+      - id: cs-trust
+        title: 撃ち直しの部品として、口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く字と書き手と、続きの旗 --resume の argv と検めと、続ける会話の id の選びを置く（起動の口はまだ使わない）（判断の記録 ADR-55 の決定 (1)(3)・差の file）
+        req: ["FR19"]
+        section: "10"
+        write-set: ["crates/tsuzuri-core/src/consult/mod.rs", "+crates/tsuzuri-core/src/consult/trust.rs", "+crates/tsuzuri-core/src/consult/resume.rs", "crates/tsuzuri-core/src/consult/launch.rs", "+crates/tsuzuri-core/tests/cwtru.rs", "+crates/tsuzuri-core/tests/cwrsm.rs", "crates/tsuzuri-core/tests/teeth3/cwarg.rs", "crates/tsuzuri-boundary/src/consult/mod.rs", "+crates/tsuzuri-boundary/src/consult/trust.rs", "crates/tsuzuri-boundary/src/consult/launch.rs", "+crates/tsuzuri-boundary/tests/cwtrw.rs", "crates/tsuzuri-boundary/tests/teeth5/cwlch.rs", "=crates/tsuzuri-boundary/tests/teeth5/cwpln.rs", "=crates/tsuzuri-core/tests/teeth3/cwstm.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-trust.patch", "cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test teeth3 --test cwrsm --test cwtru --no-tests=fail cwtru_ cwrsm_ cwarg_ cwstm_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --test cwtrw --no-tests=fail cwtrw_ cwlch_ cwstp_ cwcls_ cwopn_ cwwat_ cwpln_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/cs-trust.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 中核の consult::trust の TRUST_FILE は字 .claude.json・TRUST_KEY は字 hasTrustDialogAccepted で、trusted は file の無い設定と空の object に、projects の作業場の行に印 true だけを置いた 2 字下げの JSON を返し（file の無い時と元の字の末に改行が在る時だけ末に改行）、在る設定ではほかの鍵とほかの作業場の行と作業場の行のほかの欄を替えずに作業場の行の印だけを true にし、既に真なら None（書かない）を返し、作業場の下の dir は別の行にし、JSON でない字・空の字・object でない根・object でない projects か作業場の行・真偽でない印を断る（歯 cwtru_trusted_sets_only_the_workspace） (3) 境の consult::trust::place_trust は、口座の置き場に設定 file が無ければ trusted の字の file を作り、在れば同じ dir の一時 file に書いて読み直し、trusted の字に置き換えて mode を保ち一時 file を残さず、既に真なら書かず（更新時刻を替えない）、JSON でない file は替えずに rc 2 と字 JSON の字でない を含む断りを返す（歯 cwtrw_place_trust_writes_once） (4) 中核の consult::resume::pick は、話す窓の撃ち直しで会話の印の最後の id（uuid の形）を続ける id にし、撃ち直しでない周・問う窓・印の無い窓では続けず、印の最後の id が uuid の形でなければ断り、席の名指しは話す窓の撃ち直しで印を持たない窓の uuid の形の id だけを受け、撃ち直しでない名指しを形より先に断り、問う窓・形でない・印を持つ窓への名指しを互いに違う字で断る（歯 cwrsm_pick_continues_or_takes_a_named_id） (5) 起動の材料 Launch は欄 resume を持ち、在れば話す窓の argv は fixture の話す窓の argv の末の最初の指示を --resume と id の 2 つに替え（ほかは同じ・検めの欠けは 0）、問う窓の argv は替えず、問う窓の材料に id を置いた形を検めが欠けの名 --resume の 1 つで断る（歯 cwarg_resume_replaces_the_prompt） (6) 検めは、材料の id が uuid の形でない・材料に id が在るのに旗が無い・材料に id が無いのに旗が在る・旗の値が材料と違う・旗が 2 度ある、のどれも欠けの名 --resume の 1 つだけで断る（歯 cwarg_audit_refuses_bad_resume） (7) 着地済みと置き済みの起動の口の歯と窓の印の歯が緑（歯 接頭辞 cwarg_・cwstm_・cwlch_・cwstp_・cwcls_・cwopn_・cwwat_・cwpln_ の全部）
+        depends: ["cs-status-verb"]
+      - id: cs-resume
+        title: 話す窓の撃ち直しが会話の印の最後の id を続きの旗で渡して会話を続け、印の無い窓は席が --session で名指し、続ける時は起こす口座に作業場だけの信頼の印を置き、前の process が生きていれば断る（判断の記録 ADR-55 の決定 (1)(3)・差の file）
+        req: ["FR19"]
+        section: "11"
+        write-set: ["crates/tsuzuri-boundary/src/consult/launch.rs", "+crates/tsuzuri-boundary/tests/cwres.rs", "=crates/tsuzuri-boundary/tests/teeth5/cwpln.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-resume.patch", "cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test teeth5 --test cwres --test cwtrw --no-tests=fail cwres_ cwtrw_ cwlch_ cwstp_ cwcls_ cwopn_ cwwat_ cwpln_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/cs-resume.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) tz consult launch の話す窓の --again は、作業場の会話の印 .consult/stamps.jsonl の最後の id（消し直しの後の新しい id）を続きの旗 --resume で渡して最初の指示を置かず、起こす前に環境の CLAUDE_CONFIG_DIR の口座の置き場の設定 file に作業場の行の信頼の印を置き（中核の trusted の字）、撃ち直しの印（口座の置き場を持つ）と開きの行（撃ち直し）を書き、環境に CLAUDE_CONFIG_DIR が無ければ起こさず行も書かずに rc 1 で断る（歯 cwres_again_continues_the_last_conversation） (3) 作業場の .consult が symlink の時・会話の印の file が symlink か fifo の時・印の file が上限 STAMPS_MAX を 1 byte でも越える時は、印を辿らず開かずに、起こさず rc 2 と字 会話の印 を含む断りを返す（歯 cwres_again_continues_the_last_conversation） (4) 会話の印を持たない話す窓は、席が --again と一緒に --session で名指した id で続け、口座の置き場に信頼の印の file を作り、--again の無い名指し・uuid の形でない名指し・問う窓への名指し・印を持つ窓への名指しは、起こさず行も書かず信頼の印も置かずに rc 1 で断る（歯 cwres_session_names_an_unstamped_window） (5) 前の process が生きている話す窓の --again は、起こさず行も書かず信頼の印も置かずに rc 1 で断り、前の process が無く会話の印も無い窓の --again は続きの旗を置かずに最初の指示で起こし、信頼の印の file を作らない（歯 cwres_live_window_refuses_again） (6) 前の行の信頼の印の書き手の歯と、着地済みと置き済みの起動の口の歯が緑（歯 接頭辞 cwtrw_・cwlch_・cwstp_・cwcls_・cwopn_・cwwat_・cwpln_ の全部）
+        depends: ["cs-trust"]
+      - id: c-acct-consult
+        title: 口座の board の電文の席の役に consult を足し、中核が作業場の材料と台帳の notes の相談の開きと閉じの行から、閉じていない相談の窓ごとに 1 行を席の行の直後に組む（読み手の材料は次の行まで空・面は役の字と語の鍵の腕だけ）（判断の記録 ADR-55 の決定 (4)・差の file）
+        req: ["FR19"]
+        section: "12"
+        write-set: ["crates/tsuzuri-contract/src/surface.rs", "crates/tsuzuri-contract/tests/snapshots/surface.json", "crates/tsuzuri-contract/tests/teeth1/cform_surface.rs", "crates/tsuzuri-core/src/account/project.rs", "crates/tsuzuri-core/tests/teeth1/acctpcore.rs", "crates/tsuzuri-boundary/src/acct.rs", "crates/tsuzuri-boundary/tests/teeth3/server_acct.rs", "crates/tsuzuri-surface/src/account/session.rs", "=crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs", "=crates/tsuzuri-surface/tests/teeth1/acctsess.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-acct-consult.patch", "cargo clippy -p tsuzuri-contract -p tsuzuri-core -p tsuzuri-boundary -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail contract_form_surface", "cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail acctpcore_", "cargo nextest run -p tsuzuri-boundary --test teeth3 --no-tests=fail server_acct", "cargo nextest run -p tsuzuri-surface --test teeth1 --no-tests=fail acctsess_"]
+        size: M
+        growth: ["crates/tsuzuri-boundary/tests/teeth3/server_acct.rs:5"]
+        done: (1) git apply --reverse --check docs/design/patch/c-acct-consult.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 電文の席の役 SeatRole は 3 つ目の値 Consult（字 consult）を持ち、群の snapshot surface.json の surface::SeatRole は orchestrator・pipeline・consult の 3 つをこの順に持つ（歯 contract_form_surface_snapshot_matches・contract_form_surface_roundtrip_all_types） (3) 中核の session の行の列は、project ごとに席の行の直後に、作業場の材料（ProjectTexts の欄 consult・窓の控えと最後の process の印とその process が在るか）の窓ごとに 1 行を置き、役は Consult・名は窓の id・口座は最後の印の口座の置き場の末の名（印が無いか印に口座の欄が無ければ None）・状態は process が在れば run で無ければ wait・段は無く稼働の記録は測れていない・台帳が無ければいつからは作業場の控えの用意の時刻で、state dir の引けない project でも置き、材料の無い project には置かない（歯 acctpcore_consult_windows_follow_the_seat_line） (4) 台帳の notes に相談の閉じの行の在る窓の行は置かず、ほかの窓の閉じの行は効かず、台帳の字が bead の配列として読めないか字が無ければ外さない（歯 acctpcore_consult_closed_windows_left_out） (5) いつからは、台帳の notes の窓の開きの行のうち結果が開いたの最後の行の時刻で、結果が落ちたの行は見ず、開きの行の無い窓は控えの用意の時刻で、控えの用意の時刻の字が UTC の分の形でなければ None（歯 acctpcore_consult_since_from_last_open_line） (6) 中核の account_label は口座の置き場の path の末の名（末の区切りは除く）で、名の無い path（/ と空の字）は None（歯 acctpcore_consult_account_label_is_the_last_name） (7) 席の行と run の行の組みと、読み手の集めと持ち回しと、面の session の表の並べと語を含む、着地済みの account board の歯が緑（歯 接頭辞 acctpcore_・server_acct・acctsess_ の全部）
+        depends: ["cs-acct-mark"]
+      - id: e-acct-cwread
+        title: 口座の board の読み手が anchor ごとに git の鍵 tsuzuri.draftsdir で起草の置き場を引き、退いていない相談の窓の作業場の控えと最後の process の印を読んで窓の行の材料を置き、面が役の語 相談の窓 と口座の無い窓の字 分からない と窓の card を出す（判断の記録 ADR-55 の決定 (4)・差の file）
+        req: ["FR19"]
+        section: "13"
+        write-set: ["crates/tsuzuri-boundary/src/acct.rs", "+crates/tsuzuri-boundary/tests/acctcwr.rs", "crates/tsuzuri-boundary/tests/teeth3/server_acct.rs", "crates/tsuzuri-surface/src/account/session.rs", "crates/tsuzuri-surface/style.css", "crates/tsuzuri-surface/vocab.json", "+crates/tsuzuri-surface/tests/acctcws.rs", "=crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs", "=crates/tsuzuri-surface/tests/teeth1/acctsess.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/e-acct-cwread.patch", "cargo clippy -p tsuzuri-boundary -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test teeth3 --test acctcwr --no-tests=fail acctcwr_ server_acct", "cargo nextest run -p tsuzuri-surface --test teeth1 --test acctcws --no-tests=fail acctcws_ acctsess_"]
+        size: M
+        growth: ["crates/tsuzuri-boundary/tests/teeth3/server_acct.rs:10"]
+        done: (1) git apply --reverse --check docs/design/patch/e-acct-cwread.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) account board の読みの consult_windows は、起草の置き場の下の名が consult-cw<n> で窓の控えの在る dir ごとに、控えと k の最も大きい process の印と その pid の process が在るかを窓の id の順に返し、退いた dir（同じ id の作業場が在っても）・控えの無い dir・窓の名でない dir・無い置き場は読まない（歯 acctcwr_reads_open_workspaces） (3) 読みの git は宣言の anchor ごとに -C <anchor> config --get の鍵 scribe2.statedir・tsuzuri.boardport・tsuzuri.draftsdir を 1 回ずつ撃ち（GIT_HOLD のあいだ持ち回す）、鍵の字は DRAFTS_ARGS（歯 server_acct_argv_exact） (4) 起草の置き場の引けた anchor の project は、state dir が引けなくても電文の sessions の席なしの行の直後に窓の行（口座は最後の印の口座の置き場の末の名・生きた process は run で無ければ wait）を持ち、git が空の字を返す anchor は窓の行を持たない（歯 acctcwr_doc_lists_windows_from_git_drafts） (5) 面の session の表の窓の行は、行の class が srow r-consult・役の語の鍵が role:consult（語は相談の窓）で、合図・停止の切り替え・段の字を持たず、口座が無ければ語の鍵 consult_account_unknown（語は分からない）を出し、ほかの役の行は st_unknown のままで、役の欄の字下げの規則は pipeline の行と同じ（歯 acctcws_consult_row_words） (6) 窓の行の session の欄の card は、題が窓の id・種類が役の語と project・値が状態の語・出所が CONSULT_SRC・口座といつからの行を持ち（口座が無ければ分からない）、席の行は窓の card にしない（歯 acctcws_consult_card） (7) 読みの持ち回しの git の数と、面の session の表の並べと語を含む、着地済みの account board の歯が緑（歯 接頭辞 server_acct・acctsess_ の全部）
+        depends: ["c-acct-consult"]
+      - id: e-acct-consult
+        title: 口座の board の相談の窓の行が、窓の口座と群の今の口座の違う時に口座ずれの印を出し、窓の一覧の電文と tz consult list と project board の窓の段が窓ごとの口座（最後の process の印の口座の置き場の名・無ければ分からない）を並べる（判断の記録 ADR-55 の決定 (4)・差の file）
+        req: ["FR19"]
+        section: "14"
+        write-set: ["crates/tsuzuri-contract/src/consult.rs", "crates/tsuzuri-contract/tests/teeth1/cwty.rs", "crates/tsuzuri-boundary/src/consult/list.rs", "crates/tsuzuri-boundary/tests/teeth5/cwcls.rs", "crates/tsuzuri-surface/src/account/session.rs", "crates/tsuzuri-surface/src/consultwin.rs", "crates/tsuzuri-surface/vocab.json", "crates/tsuzuri-surface/tests/acctcws.rs", "crates/tsuzuri-surface/tests/cwbar.rs", "=crates/tsuzuri-surface/tests/teeth1/acctsess.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/e-acct-consult.patch", "cargo clippy -p tsuzuri-contract -p tsuzuri-boundary -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail cwty_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail cwcls_", "cargo nextest run -p tsuzuri-surface --test teeth1 --test acctcws --test cwbar --no-tests=fail acctcws_ acctsess_ cwbar_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/e-acct-consult.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 面の session の表の相談の窓の行は、行の口座と群の今の口座が両方分かって違う時だけ移動の印 Drift（class mvwait・語の鍵 consult_drift・語は口座ずれ）を持ち、project の退避の残り秒は窓の行に効かず、同じ口座・口座が無い・群が読めない・project に群が無い・project が電文に無い行は印を持たず、席の行の印は今までどおり退避の残り秒（歯 acctcws_consult_drift_mark） (3) 窓の一覧の電文の窓の行 WindowRow は欄 account（serde の default）を持ち、tz consult list --json と口 GET /api/consult の窓の行の口座は、最後の process の印（k の最も大きい物）の口座の置き場の末の名で、印が無いか最後の印に口座の欄が無ければ None で前の印の口座へ戻らず、退いた窓も同じ決まり（歯 cwcls_list_rows_hold_the_account） (4) tz consult list の窓の行は末に「・口座 <名>」か「・口座 分からない」を持ち、口座の印の無い窓の 5 行は末が「・口座 分からない」（歯 cwcls_list_rows_hold_the_account・cwcls_list_states_and_text） (5) project board の相談の窓の段の窓の行の注は末に「・口座 <名>」か「・口座 分からない」を持つ（歯 cwbar_window_note_holds_the_account・cwbar_lists_and_unread） (6) 一覧の電文の往復（歯 cwty_board_roundtrip）と、着地済みの歯が緑（歯 接頭辞 acctcws_・acctsess_・cwcls_・cwbar_ の全部）
+        depends: ["e-acct-cwread"]
+      - id: cs-follow
+        title: 見張りが前の口座で動く手すきの話す窓を 1 行で名指し、tz consult launch --follow が手すきと入力欄の空きを待って窓を名を確かめて閉じ、席の今の口座で会話を続けて起こし直す（待ちきれなければ付いてこなかった印と 1 行）（判断の記録 ADR-55 の決定 (3)・差の file）
+        req: ["FR19"]
+        section: "15"
+        write-set: ["crates/tsuzuri-core/src/consult/mod.rs", "+crates/tsuzuri-core/src/consult/follow.rs", "crates/tsuzuri-core/src/consult/lines.rs", "+crates/tsuzuri-core/tests/cwflw.rs", "crates/tsuzuri-boundary/src/consult/mod.rs", "+crates/tsuzuri-boundary/src/consult/follow.rs", "crates/tsuzuri-boundary/src/consult/launch.rs", "crates/tsuzuri-boundary/src/consult/watch.rs", "crates/tsuzuri-boundary/tests/cwres.rs", "plugin/skills/consult/SKILL.md", "=crates/tsuzuri-boundary/tests/teeth5/cwpln.rs", "=crates/tsuzuri-core/tests/cwplg.rs", "=crates/tsuzuri-core/tests/teeth3/cwstm.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-follow.patch", "cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test teeth3 --test cwflw --test cwrsm --test cwtru --no-tests=fail cwflw_ cwlin_ cwarg_ cwrsm_ cwtru_ cwstm_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --test cwres --test cwtrw --no-tests=fail cwres_ cwtrw_ cwlch_ cwstp_ cwcls_ cwopn_ cwwat_ cwpln_", "cargo nextest run -p tsuzuri-core --test cwplg --no-tests=fail cwplg_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/cs-follow.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 中核の consult::follow の drifted は印の口座と今の口座が両方在って違う時だけ真で、idle は会話の印の最後の行が持ち主の入力でない時だけ真（印が無ければ偽）（歯 cwflw_drift_and_idle） (3) input_clear は pane の字の最後の入力欄の行（字 ❯ を含む行）の印の右が空白だけなら真・字が在れば偽・入力欄の行が無ければ None（歯 cwflw_input_clear_reads_the_last_prompt_line） (4) 見張りの事 Drift の 1 行は 話す窓 <id> が前の口座で動いている（<tzw> consult launch <id> --follow）に置き直しの尾を付け、事 Held の 1 行は 話す窓 <id> が手すきにならず付いてこなかった（持ち主に問う）で尾を付けない（歯 cwflw_notice_lines） (5) tz consult launch <窓> --follow は、前の口座で動く手すきの話す窓の pane の入力欄を照らし、起こす口座に信頼の印を置き、tmux の窓を名を確かめて閉じ、前の process の終わりを待ってから、会話の印の最後の id の続きの旗で撃ち直しの形に起こし直し（開きの行は撃ち直しの 1 行だけ・process の印は今の口座を持つ）、会話の印を持たない窓は --session の id で続ける（歯 cwres_follow_moves_an_idle_window） (6) 待ちの上限の内に手すきにならない窓と、入力欄に打ちかけの字が在る窓は、閉じず起こし直さず信頼の印も置かず、付いてこなかった印 .consult/held-<k> を置いて Held の 1 行を出し rc 1 で断り、その印の path が symlink なら辿って書かない（歯 cwres_follow_holds_a_busy_window） (7) 問う窓・動いていない窓・会話の印も名指しも無い窓・名の違う tmux の窓は起こし直さずに rc 1、印の口座が今の口座と同じ窓は何もせずに rc 0 と 1 行、--follow と --again の組み・--follow の無い --wait・0 秒の --wait は rc 1、信頼の印を置けない口座では窓を閉じる前に rc 2（歯 cwres_follow_refusals） (8) tz consult watch は、生きている話す窓の印の口座が見張りの環境の口座と違い、会話の印が手すきで、付いてこなかった印（普通の file）が無い時に Drift の 1 行を出し、会話の印が無い・付いてこなかった印が在る・口座が同じ・会話の印が symlink の窓では出さず、付いてこなかった印が symlink なら印と見ない（歯 cwres_watch_names_a_moved_idle_window） (9) 前の 2 行の歯と、着地済みと置き済みの起動の口と見張りと手引きの歯が緑（歯 接頭辞 cwlin_・cwarg_・cwrsm_・cwtru_・cwstm_・cwres_・cwtrw_・cwlch_・cwstp_・cwcls_・cwopn_・cwwat_・cwpln_・cwplg_ の全部）
+        depends: ["cs-resume", "cs-gone-once"]
   - n: 3
     type: prose
     title: 行 cs-acct-mark — 窓の記録に起こした時の口座と会話の印を置く（判断の記録 ADR-55 の決定 (2)(6)）
@@ -242,3 +301,161 @@ sections:
       試作と噛み。写し drafts/w188a で verify の 2 行目から最後の行まで rc 0。句ごとに 5 つの変異（作業場の名を見ない・絶対 path を見ない・dir の symlink を辿る〔共有の plain_dir〕・file の symlink を辿る・所見の symlink を数える）を当てて全部 rc 100、対照は rc 0。
 
       範囲の外。言付けの件数の欄（行 cs-tell の予定）・refreshInterval・作業場の外の file。
+  - n: 10
+    type: prose
+    title: 行 cs-trust — 撃ち直しの部品（信頼の印の字と書き手・続きの旗・続ける会話の id）を置く（判断の記録 ADR-55 の決定 (1)(3)）
+    body: |
+      在りか。差の file docs/design/patch/cs-trust.patch は、このノートの前の行の差を順に当てた積みの木 833be821 と、その上に試作の commit b5c3e963（写し drafts/w185a の branch r185h）を cherry-pick した木 85a83889（写し drafts/w190a の branch s2c・係 w190a）との差を、切り直しで新しい歯の file を段の file に移し、群の main.rs と kfold.rs を前の木の字に戻した差（写し drafts/w190a の branch s2-hei の 2a2dc555 と 22391cad との差・12 file・+355 −1・25,145 byte）。試作の土台 8f1334a9（足す行と消す行の数は試作の差と同じ）は、main 485aacca にノート surface-wave29a の cs-env-closed と cs-read-roots の差と、このノートの cs-plain-open と cs-acct-mark の差を当てた木（係 w188a の写しの branch p188d）。その後の main afe01c84（2 本を置いた・cs-env-closed と cs-read-roots は着地済み）に置かれた 2 本の差を当てた木と、crates・xtask・tests・plugin・Cargo の字が同じ。拠りは判断の記録 ADR-55 の決定 (1)（同じ作業場で前の会話を続けて起こし直す）と (3)（起こす口座に作業場だけの信頼の印を置く）。
+
+      割り方。席の決め（案 B）で、撃ち直しの行 cs-resume（見込み 663 行・要件 NFR1002 の見積の上限 550 行を越えた）から、起動の口に繋がない部品をこの行に割り出した。中核は純な関数（信頼の印の字・続ける id の選び・argv と検め）で、境は信頼の印の書き手 1 つ。起動の口 tz consult launch はこの行ではまだ部品を使わない（材料の欄 resume は常に空）。部品を使う口は次の行 cs-resume。
+
+      順。会話の印と is_uuid と process の印を行 cs-acct-mark から読む。中核と境の consult/mod.rs の mod の行が cs-acct-mark と同じ所を替えるので、cs-acct-mark と並べられない（直列）。席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。depends は前の行 cs-status-verb（cs-acct-mark はその前に在る）。差は cs-status-text と cs-status-verb の差の後に切り直し、mod の行は status と statusline の次に並べた。
+
+      形。 - 中核: 新しい module consult/trust.rs（TRUST_FILE・TRUST_KEY・trusted）と consult/resume.rs（pick）。consult/launch.rs の Launch に欄 resume と、argv の話す窓の腕（在れば最初の指示の代わりに --resume と id）と、私用の audit_resume（audit から撃つ）。module の doc に 1 行ずつ。
+      - 境: 新しい module consult/trust.rs（place_trust・同じ dir の一時 file に書いて読み直し、印が真なら rename で置き換え、mode を保つ・既に真なら書かない・器の accept_trust と同じ形で lock は取らない）。consult/launch.rs の材料の字に resume の空の欄を 1 行。
+      - 歯: 段の file crates/tsuzuri-core/tests/cwtru.rs と cwrsm.rs（関数を直に撃つ）と crates/tsuzuri-boundary/tests/cwtrw.rs（書き手を直に撃つ・歯ごとの置き場を口座の置き場に見立てる）。cwarg.rs に cwarg_resume_replaces_the_prompt と cwarg_audit_refuses_bad_resume（歯の file の中ほど・係 w188a の行の差と hunk の文脈を分けた）と、材料の組みに欄 resume を読む 1 行。cwlch.rs の材料の字に resume の空の欄。
+      - 群の main.rs と xtask の歯の表 kfold.rs は書かない（判断の記録 ADR-32 の決定 (3)）。
+
+      信頼の印の決め。印は Claude Code の口座の置き場の設定 file（.claude.json）の projects の作業場の行の hasTrustDialogAccepted。作業場 1 つの行だけを替え、ほかの行と鍵は替えない（鍵の並びは字の順になる・serde_json の既定）。動いている Claude Code も同じ file を lock なしで書くので、書く間を短くするため一時 file に書いて読み直してから入れ替える。入れ替えの後に Claude Code が古い字で書き戻して印が消えた時は、窓に信頼の問いが出て持ち主が 1 度答える形になる（安全の側に倒れる・条 P-7）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目と 4 番目から 6 番目の項は 3 行目（在りかは段の file cwtru.rs と cwrsm.rs と中核の歯の束 teeth3 の cwarg.rs）、3 番目の項は 4 行目（在りかは段の file cwtrw.rs）、最後の 7 番目の項は 3 行目と 4 行目で測る。verify の 2 行目（clippy）は done の項に載せない守り。xtask の check は器の共通 verify が gate の各段でverify の行の前に撃つので verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。試作の頭の木で、この行の新しい振る舞いの全部を環境の印で土台の振る舞いに戻した形（信頼の印を置かない・続きの旗を置かない・検めが旗を見ない・選びが常に続けない）で、verify の 3 行目と 4 行目の新しい歯 5 本が全部 rc 100 で落ちる（係 w185a の w/bite3.py・w/bite3.log）。新しい歯の file は土台に無い。段の file への切り直しの入口の赤（係 w190a・w/red-hei.log）。前の行の木（branch s2-hei の 2a2dc555）に段の file cwtru.rs と cwrsm.rs だけを足した木で verify の 3 行目の段の file の歯（--test cwtru・--test cwrsm）は rc 101（中核の module consult::trust と consult::resume が無く組めない）、段の file cwtrw.rs だけを足した木で 4 行目の段の file の歯（--test cwtrw）は rc 101（境の consult::trust が無く組めない）。
+
+      試作と噛み。verify の 2 行目から最後の行までは、試作の commit b5c3e963（この行だけを当てた木）で rc 0（clippy・中核の歯 23 本・境の歯 33 本・xtask の歯 2 本）。3 行を当てた木 1a7f0a3d でも rc 0。噛みは句ごとに 1 つの変異を環境の印で切り替えて名指しの歯だけを撃ち（組みは 1 度）、24 の句（続きの旗と最初の指示を両方置く・問う窓にも続きの旗・検めが uuid の形を見ない・旗の数を見ない・材料に無い旗を見ない・印の最後の id の形を見ない・問う窓も印で続ける・撃ち直しでなくても続ける・名指しの撃ち直しを見ない・名指しの問う窓を見ない・印を持つ窓への名指しを受ける・名指しの形を見ない・真の印を書き直す・末の改行を足す・作業場の行の名を替える・真偽でない印を書き替える・mode を保たない・一時 file を残す・読めない file を作り直す・真の印でも書く・読めない file の rc・束の mod の行 3 つ）が全部 rc 100（組み立ての失敗の rc 101 は 0）。変異なしと使わない印の対照は rc 0。段の file への切り直しの噛みの付け替え（係 w190a）。句「束の mod の行」は、段の file では群の main.rs と kfold.rs を書かないので句が無くなった（段の file は cargo が名指しなしで test target に組む）。ほかの句の歯は関数の字が替わらず在りかが段の file に移っただけなので撃ち直していない。
+
+      範囲の外。起動の口が部品を使って会話を続け、信頼の印を置き、前の process を照らす口（行 cs-resume）。付いてくる口と見張りの口座のずれ（行 cs-follow）。口座の board（行 c-acct-consult ほか）。
+  - n: 11
+    type: prose
+    title: 行 cs-resume — 話す窓の撃ち直しで前の会話を続け、起こす口座に信頼の印を置く（判断の記録 ADR-55 の決定 (1)(3)）
+    body: |
+      在りか。差の file docs/design/patch/cs-resume.patch は、このノートの前の行の差を順に当てた積みの木 85a83889 と、その上に試作の commit ca80fb23（写し drafts/w185a の branch r185h）を cherry-pick した木 f863f9d9（写し drafts/w190a の branch s2c・係 w190a）との差を、切り直しで新しい歯の file を段の file に移し、群の main.rs と kfold.rs を前の木の字に戻した差（写し drafts/w190a の branch s2-hei の 22391cad と 69721a9d との差・2 file・+385 −6・21,936 byte）。試作の土台 8f1334a9（足す行と消す行の数は試作の差と同じ）は、main 485aacca にノート surface-wave29a の cs-env-closed と cs-read-roots の差と、このノートの cs-plain-open と cs-acct-mark の差を当てた木（係 w188a の写しの branch p188d）。その後の main afe01c84（2 本を置いた・cs-env-closed と cs-read-roots は着地済み）に置かれた 2 本の差を当てた木と、crates・xtask・tests・plugin・Cargo の字が同じ。拠りは判断の記録 ADR-55 の決定 (1) と (3)。
+
+      なぜ。群の口座が移ると、席は新しい口座で動き、相談の話す窓は古い口座のまま残る。窓を新しい口座で開き直すと、今は最初の指示から始まり、前の会話の文脈が切れる。Claude Code の --resume は口座を跨いで同じ会話を続けられる（会話の記録は全部の口座で共有・同じ作業場の cwd なら続く・検証役 qv182 が確かめた）。ただし信頼の問いは口座ごとで、新しい口座では作業場の信頼の問いで止まる。同じ id を 2 つの生きた process が続けると会話が 2 つの枝に割れる。
+
+      形。 - 境の consult/launch.rs: 引数の値の旗に --session、Shot に欄 session。材料を組んだ後に、作業場の会話の印の最後の id（last_conversation）と名指しの id を中核の resume::pick に渡し、続ける id を材料の resume に置く。話す窓の --again で前の process が生きていれば断る。続ける時は、検めの欠けが無い時だけ、起こす前に環境の CLAUDE_CONFIG_DIR（席の口座の置き場・器が起こした席の環境）の設定 file に、行 cs-trust の place_trust で作業場の行の信頼の印を置く（置けなければ起こさない）。module の doc に 4 行。
+      - 会話の印の読み（read_stamps・STAMPS_MAX は 4 MiB）: 窓は作業場の中に symlink と fifo を作れ、読み手は囲いの外で持ち主の権限で走るので、行 cs-plain-open の plain_path で途中の段を lstat で見て、印の file が普通の file で上限の内の時だけ開き、開いた後の fstat を same_file で照らす（fifo を開くと書き手の来るまで止まるので、開く前に断る）。読めない時は rc 2。行 cs-follow の見張りも同じ読みを使う。
+      - 歯: 段の file crates/tsuzuri-boundary/tests/cwres.rs（偽の bd・bdw・tmux と、歯ごとの置き場の repo と state dir と起草の置き場と口座の置き場・本物の口座の置き場は読まない）。
+      - 群の main.rs と xtask の歯の表 kfold.rs は書かない（判断の記録 ADR-32 の決定 (3)）。
+
+      順。depends は cs-trust。書く file の境の consult/launch.rs は 29a と 29b の起動の口の行と重なる。席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。差は cs-status-verb と cs-trust の差の後に切り直した。
+
+      読みの決め（条 P-7）。会話の印は窓が書ける作業場の中に在り、窓は印の字も作れる。続ける id は uuid の形だけを受け、Claude Code の --resume は同じ作業場の cwd の会話だけを続ける（qv182）ので、窓が字を作っても続けられるのはその作業場の会話だけ（I）。印が読めない・形でない時は起こさずに断り、持ち主か席が --session で名指して撃ち直す。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目から 5 番目の項は 3 行目（在りかは段の file cwres.rs）、最後の 6 番目の項は 3 行目で測る。verify の 2 行目（clippy）は done の項に載せない守り。xtask のcheck は器の共通 verify が撃つので verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。試作の頭の木で、この行の新しい振る舞いを環境の印で土台に戻した形（撃ち直しで続けない・名指しを渡さない・前の process を見ない・信頼の印を置かない）で、verify の 3 行目の新しい歯 3 本が全部 rc 100 で落ちる（係 w185a の w/bite3.log）。新しい歯の file は土台に無い。段の file への切り直しの入口の赤（係 w190a・w/red-hei.log）。前の行の木（branch s2-hei の 22391cad）に段の file cwres.rs だけを足した木で、verify の 3 行目の段の file の歯（--test cwres）は rc 101（定数 STAMPS_MAX が無く組めない）。
+
+      試作と噛み。verify の 2 行目から最後の行までは、試作の commit ca80fb23（cs-trust とこの行を当てた木）で rc 0（clippy・境の歯 36 本・xtask の歯 2 本）。3 行を当てた木 1a7f0a3d でも rc 0。噛みは句ごとに 1 つの変異を環境の印で切り替えて名指しの歯だけを撃ち、11 の句（撃ち直しで続けない・名指しを渡さない・生きている前の process を見ない・続けない時も信頼の印を置く・名指しで信頼の印を置かない・口座の置き場が無ければ印を飛ばす・普通でない印の file を開く・途中の段の symlink を辿る・印の file の上限を見ない・読めない印の rc・束の mod の行）が全部 rc 100（rc 101 は 0）。対照は rc 0。開いた後の fstat の照らし（lstat と開く間の差し替えの競りの守り）は歯で起こせず、噛みに載せない。段の file への切り直しの噛みの付け替え（係 w190a）。句「束の mod の行」は、段の file では群の main.rs と kfold.rs を書かないので句が無くなった（段の file は cargo が名指しなしで test target に組む）。ほかの句の歯は関数の字が替わらず在りかが段の file に移っただけなので撃ち直していない。
+
+      範囲の外。見張りが口座のずれを拾う口と付いてくる口（行 cs-follow）。器の口座の移動の後に席が撃ち直す手順（ADR-55 の決定 (3) の後段・行 cs-follow の見張りの 1 行が命令を名指す）。開いている窓への効き（撃ち直すまで前の口座のまま）。
+  - n: 12
+    type: prose
+    title: 行 c-acct-consult — 口座の board の session の行に相談の窓の行を組む（電文と中核・判断の記録 ADR-55 の決定 (4)）
+    body: |
+      在りか。差の file docs/design/patch/c-acct-consult.patch は、行 cs-acct-mark の試作の木 4b8577ea（写し drafts/w184a の branch p184）と、その上に試作を載せた木 fce60827（写し drafts/w186a の branch pc1）との差（8 file・+331 −8・22,559 byte）。拠りは判断の記録 ADR-55 の決定 (4)（口座の board）。窓の口座は行 cs-acct-mark が process の印に足す欄 account を読む。積み（係 w190a）。差は、このノートの前の行の差を順に当てた木（写し drafts/w190a の branch s2）の上に試作の commit を cherry-pick した木との差で、差の file は係 w186a の差と byte で同じ。席の決めで、1 つの行の案（差 744 行）を要件 NFR1002 の見積の上限 550 行の内に割った前半で、後半の行 e-acct-cwread（読み手と面）が depends でこの行を名指す。
+
+      順。書く file は相談の窓の起動の口の行（ノート surface-wave29a の cs-env-closed・cs-root-edits・cs-read-roots と、このノートの cs-acct-mark・cs-resume・cs-follow）と交わらない（係 w186a が cs-resume の試作 4e2918c6 の差と両順で当てて同じ木を確かめた）。席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。depends は窓の口座の欄 account を置く行 cs-acct-mark。口座の board の 3 行の差は、cs-acct-mark の着地の後の main 028a4989 に board の 3 行だけを当てた木（写し drafts/w190a の branch s2-par の 34966e3e）でも当たり、3 行の verify の clippy と歯の行が rc 0（係 w190a・w/par-run.log）。
+
+      なぜ。ADR-55 の決定 (4) は、口座の board が project ごとに相談の窓の作業場を読み、閉じていない窓ごとに session の行の種類 相談の窓 で、窓の名・口座（process の印の口座の置き場の名）・状態（生きている・止まった）・開いた時刻を並べ、口座の印を持たない窓の口座を 分からない と出すと決めた。今の口座の board の session の行は席と run の 2 種類に閉じている（電文の SeatRole）。この行は電文と中核の組みを置き、読み手の集めと面の語は後半の行に置く。
+
+      形。 - contract: SeatRole に Consult（字 consult・doc に 1 句）。snapshot の surface.json と歯 cform_surface.rs の見本に 3 つ目の値。
+      - 中核: project.rs に作業場の材料の型 ConsultWindow と ProjectTexts の欄 consult（serde の default・在る見本の字はそのまま読める）、読み解いた値 Parsed に台帳の notes の相談の開きと閉じの行（台帳の bead の notes だけを読む軽い型で読む・台帳の字が替わった時だけ読む）、私用の fn consult_rows・minute_secs と公開の fn account_label。session_lines_with は席の行の直後に consult_rows を足す（state dir の照らしの前）。module の doc に 2 行。
+      - 境: acct.rs の ProjectTexts の字に欄 consult の空の列（材料を読むのは後半の行）。
+      - 面: session.rs の役の字 role_word と語の鍵 role_key の match に Consult の腕（字 consult と鍵 role:consult）を 1 つずつ（match を網羅にするため・語と card と歯は後半の行）。
+      - 歯: acctpcore.rs に接頭辞 acctpcore_consult_ の 4 本（材料と台帳の行は歯の中で組む・今は CW_NOW）と、ProjectTexts の字 2 つに欄 consult。server_acct.rs の偽の読みの ProjectTexts の字に欄 consult。見本の口座の名は作り物の字。
+      - 置き場だけの項（write-set の = の項）: verify の歯の filter が当たる、この行の書かない歯の file（境の server_acctwire.rs は module の名が server_acct を含む・面の acctsess.rs は守りの接頭辞 acctsess_）。
+
+      閉じた窓の決め。窓の閉じ（行 cs-close）は台帳に閉じの行を書き、所見が全部処分されるまで作業場を退かせない。だから作業場だけでは閉じた窓と止まった窓を分けられず、台帳の閉じの行で外す。台帳の字が無いか読めない時は外さない（行 e-sess-closed と同じ・読めない事を無いと出さない・要件 NFR2）。いつからは project board の窓の一覧の開いた時刻（行 cs-close の list の opened）と同じ決まりにした。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目の項は 3 行目、3 番目から 6 番目の項は 4 行目、最後の 7 番目の項は 4 行目と 5 行目と 6 行目で測る。verify の 2 行目（clippy）は done の項に載せない守り。面の 2 つの腕は後半の行の歯が字を測る（この行では網羅の守り）。xtask の check は器の共通 verify が gate の各段で verify の行の前に撃つので verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。土台 4b8577ea に、この行の snapshot surface.json と中核の歯の file acctpcore.rs だけを当てた木で、verify の 3 行目は rc 100（contract_form_surface_snapshot_matches の 1 本が落ち 1 本が通る）、4 行目は rc 101（歯が新しい型 ConsultWindow と fn account_label と欄 consult を名指すので組み立てが落ちる）。
+
+      試作と噛み。写し drafts/w186a で書く file は write-set の中で閉じる。verify の 2 行目から最後の行までは、この行だけを当てた木 fce60827 で rc 0（clippy・契約の歯 2 本・中核の歯 acctpcore_ の 12 本・境の歯 server_acct の 30 本・面の歯 acctsess_ の 9 本）。噛みは句ごとに 1 つの変異を src に当てて名指しの歯だけを撃ち（係 w186a の w/bite.py）、6 の句（役・閉じの行の窓・開いたの行だけ・控えの用意の時刻・口座は末の名・状態）に 6 の変異を当てて全部 rc 100（組み立ての失敗の rc 101 は 0）。変異なしの対照は rc 0。噛みは割る前の 1 つの行の木で撃ち、変異を当てた中核の project.rs の字はこの行の木と同じ（歯は名を acctpcore_consult_ に替える前の acctcw_ の file・断言の字は同じ）。
+
+      範囲の外。読み手が起草の置き場を引いて窓の材料を置くことと、面の役の語と口座の無い窓の字と窓の card（行 e-acct-cwread）。窓の口座ずれの印と project board の窓の一覧の口座（行 e-acct-consult）。付いてくる口と見張りの口座のずれ（行 cs-resume・cs-follow）。
+  - n: 13
+    type: prose
+    title: 行 e-acct-cwread — 読み手が起草の置き場の窓を読み、面が窓の行の語と card を出す（判断の記録 ADR-55 の決定 (4)）
+    body: |
+      在りか。差の file docs/design/patch/e-acct-cwread.patch は、行 c-acct-consult の試作の木 fce60827 と、その上に試作を載せた木 8eed8034（写し drafts/w186a の branch pc2）との差を、切り直しで新しい歯の file を段の file に移し、群の main.rs と kfold.rs を前の木の字に戻した差（写し drafts/w190a の branch s2-hei の f34122a1 と d89f52a2 との差・7 file・+376 −23・31,614 byte）。拠りは判断の記録 ADR-55 の決定 (4)。席の決めで 1 つの行の案を割った後半で、前半の行 c-acct-consult の電文の役と中核の組みと材料の型を使い、acct.rs・server_acct.rs・session.rs を前半と重ねて書くので、depends は c-acct-consult。積み（係 w190a）。差は、このノートの前の行の差を順に当てた木（写し drafts/w190a の branch s2）の上に試作の commit を cherry-pick した木との差で、係 w186a の差とは、新しい歯の file を段の file に移し、群の main.rs と kfold.rs を書かない所が違う（判断の記録 ADR-32 の決定 (3)）。
+
+      順。書く file は相談の窓の起動の口の行と交わらない（新しい歯は段の file）。席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。depends は前の行 c-acct-consult。口座の board の 3 行の差は、cs-acct-mark の着地の後の main 028a4989 に board の 3 行だけを当てた木（写し drafts/w190a の branch s2-par の 34966e3e）でも当たり、3 行の verify の clippy と歯の行が rc 0（係 w190a・w/par-run.log）。
+
+      なぜ。前半の行の窓の行は、読み手が材料を置かない間は出ない。この行で読み手が起草の置き場を引いて窓を読み、面が役の語と、ADR-55 の決定 (4) の 分からない の字と、窓の card を出して、口座の board に窓が並ぶ。
+
+      形。 - 境: acct.rs の git の読みに鍵 tsuzuri.draftsdir（consult の DRAFTS_ARGS）を足して GitTexts を 3 つ組にし、集めの後に anchor ごとに consult_windows（公開）で材料を置く。窓の file は変化の印にしない（ほかの印と同じ周で新しくなる）。module の doc に 3 行。
+      - 面: session.rs の口座の無い行の語の鍵の fn no_account_key と SessRow の欄 no_account（DOM の口座の欄が使う）、窓の card の fn consult_card と出所の字 CONSULT_SRC、sess_card の振り分け、module の doc に 1 行。vocab.json に語の鍵 role:consult と consult_account_unknown と、sessions・role・session の注の 1 句。style.css の役の欄の字下げの 2 つの規則に .srow.r-consult .c-role を並べる。
+      - 歯: 段の file 境の crates/tsuzuri-boundary/tests/acctcwr.rs（2 本・偽の git は鍵 tsuzuri.draftsdir の時だけ置き場を返す）と面の crates/tsuzuri-surface/tests/acctcws.rs（2 本）（判断の記録 ADR-32 の決定 (3)）。server_acct.rs の git の撃ちの期待に鍵 tsuzuri.draftsdir（数は anchor ごとに 3 つ）と DRAFTS_ARGS の断言。見本の口座の名は作り物の字。
+      - 置き場だけの項（write-set の = の項）: verify の歯の filter が当たる、この行の書かない歯の file（境の server_acctwire.rs・面の acctsess.rs）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目から 4 番目の項は 3 行目（在りかは段の file acctcwr.rs と境の歯の束 teeth3 の server_acct の file）、5 番目と 6 番目の項は 4 行目（在りかは段の file acctcws.rs）、最後の 7 番目の項は 3 行目と 4 行目で測る。verify の 2 行目（clippy）は done の項に載せない守り。xtask の check は verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。撃っていない（U・席の決めで入口の赤は前半の行だけ）。新しい歯の file acctcwr.rs と acctcws.rs は前半の木に無く、歯が新しい関数 consult_windows と drafts と no_account_key と consult_card を名指すので、前半の木では組み立てが落ちる見込み（D）。段の file への切り直しの入口の赤（係 w190a・w/red-hei.log）。前の行の木（branch s2-hei の f34122a1）に段の file acctcwr.rs だけを足した木で verify の 3 行目の段の file の歯（--test acctcwr）は rc 101（consult_windows と drafts が無く組めない）、段の file acctcws.rs だけを足した木で 4 行目の段の file の歯（--test acctcws）は rc 101（CONSULT_SRC と no_account_key と欄 no_account が無く組めない）。
+
+      試作と噛み。写し drafts/w186a で書く file は write-set の中で閉じる。verify の 2 行目から最後の行までは、3 本を当てた木 1b653d18（置く木 7854ea00 とは中核の歯の fn の名 1 つだけが違い、この行の書く file は同じ）で rc 0（clippy・境の歯 acctcwr_ と server_acct の 32 本・面の歯 acctcws_ と acctsess_ の 12 本・xtask の歯 kfold_ の 2 本）。この行までを当てた木 8eed8034 だけでは撃っていない（SSD の上限）。噛みは割る前の 1 つの行の木で撃ち、5 の句（退いた作業場・最後の印・窓の材料を渡す・窓の card・口座の無い窓の語）に 5 の変異を当てて全部 rc 100・対照は rc 0。1 度目は退いた作業場の句が生き残り（退いた dir の id の作業場が無いと、作業場の path が無いので読まれなかった）、同じ id の作業場と退いた dir が並ぶ見本を足して rc 100。歯は置き場を移す前（境の teeth3・面の teeth1）で撃ち、移した後は置き場だけが違う（断言の字は同じ）。
+
+      範囲の外。窓の口座ずれの印と project board の窓の一覧の口座（行 e-acct-consult）。付いてくる口と見張りの口座のずれ（行 cs-resume・cs-follow）。器の登録（窓は器に名乗らない・ADR-55 の決定 (4) の案 2A）。
+  - n: 14
+    type: prose
+    title: 行 e-acct-consult — 窓の口座ずれの印と窓の一覧の口座（判断の記録 ADR-55 の決定 (4)）
+    body: |
+      在りか。差の file docs/design/patch/e-acct-consult.patch は、行 e-acct-cwread の試作の木 8eed8034 と、その上に試作を載せた木 7854ea00（写し drafts/w186a の branch pe186）との差を、切り直しで新しい歯の file を段の file に移し、群の main.rs と kfold.rs を前の木の字に戻した差（写し drafts/w190a の branch s2-par2 の fadbca58 と d26c6581 との差・9 file・+200 −23・20,717 byte）。拠りは判断の記録 ADR-55 の決定 (4)。面の session.rs と歯の file acctcws.rs を e-acct-cwread と重ねて書くので depends は e-acct-cwread（行 cs-acct-mark と c-acct-consult の後は推移で守られる）。積み（係 w190a）。差は、このノートの前の行の差を順に当てた木（写し drafts/w190a の branch s2）の上に試作の commit を cherry-pick した木との差で、差の file は係 w186a の差と、歯の file acctcws.rs の置き場（段の file）と、面の consultwin.rs と歯 cwbar.rs の語の引き（下の根の確かめの直し）だけが違う。
+
+      席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。depends は前の行 e-acct-cwread。起動の口の行（cs-resume・cs-follow を含む）と重なる file は無い。口座の board の 3 行の差は、cs-acct-mark の着地の後の main 028a4989 に board の 3 行だけを当てた木（写し drafts/w190a の branch s2-par の 34966e3e）でも当たり、3 行の verify の clippy と歯の行が rc 0（係 w190a・w/par-run.log）。
+
+      なぜ。ADR-55 の決定 (4) は、窓の口座が群の今の口座と違う時の印と、project board の相談の窓の一覧に窓ごとの口座を出すことを決めた。印は群の移動の後に古い口座に残った窓を目で見つける見張り（決定 (3) の付いてくる口が動かない時の守り）。
+
+      形。 - 面: session.rs の移動の印 Move に Drift（class は移動待ちと同じ mvwait・語の鍵 consult_drift）、公開の fn drift（窓の行だけ・残り秒は見ない）、row の印の振り分け（席は moving・窓は drift・run は無し）、DOM の印の腕に Drift。consultwin.rs の窓の段の注の末に口座（口座の無い窓は、行 e-acct-cwread が vocab.json に足す語の鍵 consult_account_unknown の語を crate::vocab::label で引く・board.rs と askwin.rs と同じ形・面の src は見出しの語を字で持たない〔歯 frame_no_heading_words_in_code〕）。vocab.jsonに語の鍵 consult_drift。
+      - contract: WindowRow に欄 account（Option・serde の default）。
+      - 境: consult/list.rs の窓の行の口座（最後の印の account を中核の account_label で末の名に）と、人の読む行の末の「・口座 …」と字 NO_ACCOUNT。module の doc に 1 行。
+      - 歯: acctcws.rs に acctcws_consult_drift_mark。cwcls.rs に cwcls_list_rows_hold_the_account（口は撃たず、起草の置き場だけを置いて list::board と list::text を直に撃つ）と、cwcls_list_states_and_text の 5 行の期待の末に口座。cwbar.rs に cwbar_window_note_holds_the_account（語の鍵の語が 分からない である断言を含む）と、cwbar_lists_and_unread の期待の末に口座と見本の欄。cwty.rs の見本に欄 account。
+      - 置き場だけの項（write-set の = の項）: verify の歯の filter acctsess_ が当たる、この行の書かない面の歯の file acctsess.rs。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目の項と 5 番目の項は 5 行目、3 番目と 4 番目の項は 4 行目、最後の 6 番目の項は 3 行目と 4 行目と 5 行目で測る。verify の 2 行目（clippy）は done の項に載せない守り。xtask の check は verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。撃っていない（U・席の決めで入口の赤は前半の行だけ）。歯の file cwcls.rs と cwbar.rs と acctcws.rs は新しい欄 account と値 Move::Drift と境の字 NO_ACCOUNT を名指すので、後半の木では組み立てが落ちる見込み（D）。段の file への切り直しの入口の赤（係 w190a・w/red-hei.log）。前の行の木（branch s2-hei の d89f52a2）に段の file acctcws.rs だけをこの行の字にした木で、verify の 5 行目の段の file の歯（--test acctcws）は rc 101（Move の Drift と fn drift が無く組めない）。
+
+      試作と噛み。写し drafts/w186a で書く file は write-set の中で閉じる。verify の 2 行目から最後の行までは、試作の木 1b653d18（置く木 7854ea00 とは中核の歯の fn の名 1 つだけが違い、この行の書く file は同じ）で rc 0（clippy・契約の歯 cwty_ の 7 本・境の歯 cwcls_ の 6 本・面の歯 acctcws_ と acctsess_ と cwbar_ の 20 本）。噛みは 5 の句（口座ずれの比べ・窓の行に印・一覧の最後の印・一覧の行の口座・窓の段の口座）に 5 の変異を当てて全部 rc 100・対照は rc 0。一覧の歯は置き場を移す前の木（歯の file teeth5/cwacc.rs の cwacc_list_rows_hold_the_account）で撃ち、移した後は名と置き場だけが違う。
+
+      範囲の外。付いてくる口と見張りの口座のずれの事象（行 cs-resume・cs-follow）。tz consult list の口座の欄の並べ替え。
+
+      根の確かめの直し（係 w190a）。係 w186a の差は面の consultwin.rs に字 NO_ACCOUNT（分からない）を置き、行 e-acct-cwread の後は 分からない が vocab の語になるので、根の xtask check の面の歯 frame_no_heading_words_in_code が落ちた（V・写し drafts/w190a の w/xtask-F.log）。面は語の鍵で引く形に直し、歯 cwbar.rs の断言を語の引きに替えた。境の consult/list.rs の字 NO_ACCOUNT は残す（境の src はこの歯の外で、tz consult list の人の読む行は vocab を読まない）。
+
+      段の file への切り直し（係 w190a）。この行の字は替わらない。前の行 e-acct-cwread の歯の file acctcws.rs が段の file crates/tsuzuri-surface/tests/acctcws.rs に移ったので、write-set と verify の 5 行目の --test の字だけが替わる（判断の記録 ADR-32 の決定 (3)）。
+  - n: 15
+    type: prose
+    title: 行 cs-follow — 相談の話す窓が群の口座の移動に付いてくる（見張りの 1 行と launch --follow）（判断の記録 ADR-55 の決定 (3)）
+    body: |
+      在りか。差の file docs/design/patch/cs-follow.patch は、このノートの前の行の差を順に当てた積みの木 6f97d689 と、その上に試作の commit 1a7f0a3d（写し drafts/w185a の branch r185h）を cherry-pick した木 e8be28c0（写し drafts/w190a の branch s2c・係 w190a）との差を、切り直しで新しい歯の file を段の file に移し、群の main.rs と kfold.rs を前の木の字に戻した差（写し drafts/w190a の branch s2-hei-g の 070f59fc と bf654b4b との差・10 file・+525 −13・37,338 byte）。試作の土台 8f1334a9（足す行と消す行の数は試作の差と同じ）は、main 485aacca にノート surface-wave29a の cs-env-closed と cs-read-roots の差と、このノートの cs-plain-open と cs-acct-mark の差を当てた木（係 w188a の写しの branch p188d）。その後の main afe01c84（2 本を置いた・cs-env-closed と cs-read-roots は着地済み）に置かれた 2 本の差を当てた木と、crates・xtask・tests・plugin・Cargo の字が同じ。拠りは判断の記録 ADR-55 の決定 (3)（付いてくる形）。
+
+      形。 - 中核: 新しい module consult/follow.rs（PROMPT・drifted・idle・input_clear・純関数）。consult/lines.rs の事 Drift と Held の字（Held は置き直しの尾を付けない）。module の doc に 1 行。
+      - 境: 新しい module consult/follow.rs（launch --follow の口・既定の待ち WAIT は 300 秒・見る間は 0.5 秒・閉じた窓の process の終わりを 5 秒まで待つ）。consult/launch.rs の旗 --follow と --wait（--follow は --again と --dry-run と組まない）と振り分け。consult/watch.rs の 5 つ目の事（生きている話す窓の口座のずれ・手すき・付いてこなかった印が無い）。付いてこなかった印は行 cs-plain-open の append_plain で symlink を辿らずに置き、見張りは plain_file で普通の file だけを印と見る。会話の印は行 cs-resume の read_stamps で読む。
+      - 手引き: plugin/skills/consult/SKILL.md の 2 節に --again が会話を続けることと --session の 1 行、3 節に Drift の 1 行で --follow を撃ち Held の 1 行で持ち主に問う 1 行。
+      - 歯: 段の file crates/tsuzuri-core/tests/cwflw.rs（3 本）。cwres.rs に 4 本（偽の tmux に pane の字と kill-window の後の process の止め）。
+      - 群の main.rs と xtask の歯の表 kfold.rs は書かない（判断の記録 ADR-32 の決定 (3)）。
+
+      流れ。席の見張り（tz consult watch・背景）が Drift の 1 行で起き、席が tz consult launch <窓> --follow を撃つ。口は、印の口座が席の今の口座と同じなら何もしない。違えば、会話の印の最後の行が持ち主の入力でない（turn の終わり）ことと、tmux の pane の入力欄が空であることを、上限まで待つ（持ち主の打ちかけの字を消さないため）。手すきなら、起こす口座に信頼の印を置き（置けなければ閉じずに rc 2）、tmux の窓を名 consult-cw<n> を確かめて閉じ、前の process の終わりを待ち（同じ会話を 2 つが続けると枝が割れる）、撃ち直しの形で起こし直す。待ちきれなければ付いてこなかった印を置いて Held の 1 行を出し、見張りはその窓のずれを出さない（持ち主に問い、席が撃ち直す）。問う窓は付いてこない（1 回の答えで閉じる窓）。会話の印を持たない窓（印の hook の前に起こした窓）は、持ち主に確かめた後に席が --session で会話の id を名指す。
+
+      順。席の決めで、起動の口の行は 1 本ずつ直列に流し（cs-plain-open → cs-acct-mark → cs-inbound-refuse → cs-remote → cs-status-text → cs-status-verb → cs-trust → cs-resume → cs-follow）、口座の board の 3 行（c-acct-consult → e-acct-cwread → e-acct-consult）は cs-acct-mark の後にその列と並べて流す（新しい歯を段の file に切り直して、board の行と起動の口の行の書く file が交わらなくなった）。depends は付いてくる口が使う撃ち直しの行 cs-resume と、中核の lines.rs と境の watch.rs を先に書く行 cs-gone-once（depends を持たない行・器は交わる便を順に流す）。中核の consult/mod.rs の doc と mod の行は cs-trust の行の後に足す。差は前の行までの切り直しの積みの木 ad6c0d2c に行 cs-gone-once の差を当てた木 070f59fc で切り直した（cs-gone-once の差の前の木で切った差は、中核の lines.rs の notice の Gone の腕の hunk が cs-gone-once の後の木に当たらない。口座の board の 3 行の差の無い木にも当たる）。係 w186a の行 e-acct-consult の書く 3 file（contract の consult.rs・境の consult/list.rs・teeth5/cwcls.rs）は書かない。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。done の 1 番目の項は verify の 1 行目、2 番目から 4 番目の項は 3 行目（在りかは段の file cwflw.rs）、5 番目から 8 番目の項は 4 行目（在りかは段の file cwres.rs）、最後の 9 番目の項は 3 行目と 4 行目と 5 行目（手引きの歯 cwplg_）で測る。verify の 2 行目（clippy）は done の項に載せない守り。xtask の check は器の共通 verify が撃つのでverify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。試作の頭の木で、この行の新しい振る舞いを環境の印で土台に戻した形（ずれも手すきも入力欄も読まない・1 行の字が無い・待たず閉じず信頼の印を置かない・見張りがずれを出さない）で、verify の 3 行目と 4 行目の新しい歯 7 本が全部 rc 100 で落ちる（係 w185a の w/bite3.log）。段の file cwflw.rs は土台に無い。段の file への切り直しの入口の赤（係 w190a・w/red-hei.log）。前の行の木（branch s2-hei の ad6c0d2c）に段の file cwflw.rs だけを足した木で verify の 3 行目の段の file の歯（--test cwflw）は rc 101（module consult::follow と Event の Drift・Held が無く組めない）、段の file cwres.rs だけをこの行の字にした木で 4 行目の段の file の歯（--test cwres）は rc 101（Event の Drift・Held が無く組めない）。撃った木は行 cs-gone-once の差を当てる前の木で、cs-gone-once の差は module consult::follow と Event の Drift・Held を足さない。
+
+      試作と噛み。verify の 2 行目から最後の行までは、試作の commit 1a7f0a3d で rc 0（clippy・中核の歯 35 本・境の歯 40 本・手引きの歯 6 本・xtask の歯 2 本）。噛みは句ごとに 1 つの変異を環境の印で切り替えて名指しの歯だけを撃ち、30 の句（ずれが印の口座の無い窓も数える・持ち主の入力の後も手すき・印の無い窓も手すき・最初の入力欄の行を読む・入力欄の無い pane を空と読む・付いてこなかった 1 行に置き直しの命令・ずれの 1 行の命令・待たない・入力欄を見ない・手すきを見ない・付いてこなかった印を置かない・その印の symlink を辿って書く・付いてこなかった 1 行を出さない・信頼の印を置かない・窓を閉じない・前の process の終わりを待たない・撃ち直しの形で起こさない・名の違う窓でも進む・口座が同じでも開き直す・問う窓も付いて来させる・印も名指しも無い窓を断らない・--follow と --again の組みを受ける・--follow の無い --wait を受ける・見張りが付いてこなかった印を見ない・その印の symlink を辿る・見張りが手すきを見ない・手すきの読みが印の symlink を辿る・見張りがずれを出さない・見張りが口座の違いを見ない・束の mod の行）が全部 rc 100（rc 101 は 0）。対照は rc 0。表の数の行の変異 2 つ（中核と境）も rc 100。段の file への切り直しの噛みの付け替え（係 w190a）。句「束の mod の行」と表の数の行の変異 2 つは、段の file では群の main.rs と kfold.rs を書かないので句が無くなった（段の file は cargo が名指しなしで test target に組む）。ほかの句の歯は関数の字が替わらず在りかが段の file に移っただけなので撃ち直していない。
+
+      範囲の外。器が群の口座を移す時に席の環境を替える仕組み（器の側）。口座の board に窓の行と口座のずれの印を出す行（c-acct-consult・e-acct-cwread・e-acct-consult）。窓の言付けと Remote Control と状態の 1 行（判断の記録 ADR-57 の行）。会話の印の hook の前に起こした窓の会話の id を自動で探す口（会話の記録の path は cwd ごとで当てにならない・qv182）。

@@ -1,0 +1,639 @@
+diff --git a/crates/tsuzuri-boundary/src/acct.rs b/crates/tsuzuri-boundary/src/acct.rs
+index 73530d58..f52acda2 100644
+--- a/crates/tsuzuri-boundary/src/acct.rs
++++ b/crates/tsuzuri-boundary/src/acct.rs
+@@ -22,7 +22,10 @@
+ //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
+ //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
+ //! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
+-//! git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
++//! git の読み（state dir と board の port と起草の置き場）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
++//! 起草の置き場（`-C <anchor> config --get tsuzuri.draftsdir`）の引けた anchor は、退いていない相談の窓の作業場ごとに
++//! 窓の控えと最後の process の印を読み、その pid の process の在る無しを `/proc` で見る（読むだけ・印にしない・
++//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
+ //! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
+ //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
+ //! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を、`--project` の置き場の anchor の台帳は
+@@ -39,9 +42,10 @@ use std::time::{Duration, Instant, SystemTime};
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
+-use tsuzuri_core::account::project::{self, Parsed, ParsedMap, ProjectTexts};
++use tsuzuri_core::account::project::{self, ConsultWindow, Parsed, ParsedMap, ProjectTexts};
+ use tsuzuri_core::account::project_name;
+ 
++use crate::consult::{DRAFTS_ARGS, alive, procs, read_window, windows, workspace};
+ use crate::server::events::stamp;
+ use crate::server::held::{FAILED_HOLD, Held};
+ use crate::server::ledger::{Got, Mark, Source, capture};
+@@ -90,8 +94,8 @@ struct Texts {
+     stale: Option<Instant>,
+ }
+ 
+-/// git の読みの字（宣言の anchor の順に、state dir と board の port の字）。
+-type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
++/// git の読みの字（宣言の anchor の順に、state dir と board の port の字と起草の置き場）。
++type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>, Vec<Option<PathBuf>>);
+ 
+ /// git の読みを取った時刻と、読んだ宣言の anchor の列と、git の読みの字（一度も読んでいなければ None）。
+ type Gits = Option<(Instant, Vec<String>, GitTexts)>;
+@@ -222,6 +226,11 @@ impl Acct {
+         self.git_get(anchor, &BOARD_ARGS)
+     }
+ 
++    /// anchor の起草の置き場（相談の窓の作業場の親・git が落ちる・5 秒で返らない・空なら None）。
++    pub fn drafts(&self, anchor: &Path) -> Option<PathBuf> {
++        self.git_get(anchor, &DRAFTS_ARGS).map(PathBuf::from)
++    }
++
+     /// git に `-C <anchor>` と鍵の引数を渡して撃ち、返した字の前後の空白を除いた字（空なら None）。
+     fn git_get(&self, anchor: &Path, tail: &[&str]) -> Option<String> {
+         let mut args: Vec<&OsStr> = vec![OsStr::new("-C"), anchor.as_os_str()];
+@@ -412,7 +421,7 @@ impl Acct {
+         let host_toml = read(&self.state_dir.join(HOST_TOML));
+         let anchors = anchors(host_toml.as_deref());
+         let held = self.held_gits(&anchors);
+-        let ((dirs, boards), usage, caps, doctor) = self.gather_first(&anchors, held);
++        let ((dirs, boards, drafts), usage, caps, doctor) = self.gather_first(&anchors, held);
+         let mut unique: Vec<&PathBuf> = Vec::new();
+         for dir in dirs.iter().flatten() {
+             if !unique.contains(&dir) {
+@@ -429,6 +438,11 @@ impl Acct {
+         self.gather_seat_logs(&mut texts, &unique, &outputs);
+         let mut read_logs =
+             self.gather_projects(&mut texts, &anchors, &dirs, (&unique, &outputs, ledgers));
++        for (anchor, drafts) in anchors.iter().zip(drafts) {
++            if let Some(d) = drafts {
++                texts.projects.entry(anchor.clone()).or_default().consult = consult_windows(&d);
++            }
++        }
+         if let Some(groups) = self.groups_dir() {
+             if let Some(toml) = host_toml.as_deref() {
+                 texts.marks.extend(
+@@ -471,7 +485,11 @@ impl Acct {
+                     .iter()
+                     .map(|a| s.spawn(|| self.board(Path::new(a))))
+                     .collect();
+-                (dirs, boards)
++                let drafts: Vec<_> = anchors
++                    .iter()
++                    .map(|a| s.spawn(|| self.drafts(Path::new(a))))
++                    .collect();
++                (dirs, boards, drafts)
+             });
+             let usage =
+                 s.spawn(|| self.held_out(&USAGE_ARGS, &self.state_dir));
+@@ -480,14 +498,18 @@ impl Acct {
+                 .map(|&(_, rule)| (rule, s.spawn(move || self.held_rule(rule))))
+                 .collect();
+             let doctor = self.held_out(&DOCTOR_ARGS, &self.state_dir);
+-            let (dirs, boards) = match git {
+-                Some((dirs, boards)) => {
++            let (dirs, boards, drafts) = match git {
++                Some((dirs, boards, drafts)) => {
+                     let texts: GitTexts = (
+                         dirs.into_iter().map(|h| h.join().ok().flatten()).collect(),
+                         boards
+                             .into_iter()
+                             .map(|h| h.join().ok().flatten())
+                             .collect(),
++                        drafts
++                            .into_iter()
++                            .map(|h| h.join().ok().flatten())
++                            .collect(),
+                     );
+                     *self.gits.lock().unwrap_or_else(|e| e.into_inner()) =
+                         Some((Instant::now(), anchors.to_vec(), texts.clone()));
+@@ -496,7 +518,7 @@ impl Acct {
+                 None => held.unwrap_or_default(),
+             };
+             (
+-                (dirs, boards),
++                (dirs, boards, drafts),
+                 usage.join().ok().flatten(),
+                 caps.into_iter()
+                     .filter_map(|(rule, h)| Some((rule.to_string(), h.join().ok().flatten()?)))
+@@ -675,6 +697,25 @@ impl Acct {
+     }
+ }
+ 
++/// 起草の置き場の退いていない相談の窓の作業場の材料（窓の id の順・窓の控えが読めない作業場は飛ばす）。
++pub fn consult_windows(drafts: &Path) -> Vec<ConsultWindow> {
++    windows(drafts)
++        .into_iter()
++        .filter(|(_, gone)| !gone)
++        .filter_map(|(id, _)| {
++            let ws = workspace(drafts, id);
++            let window = read_window(&ws)?;
++            let last = procs(&ws).pop();
++            let live = last.as_ref().is_some_and(|p| alive(p.pid));
++            Some(ConsultWindow {
++                window,
++                last,
++                alive: live,
++            })
++        })
++        .collect()
++}
++
+ fn read(path: &Path) -> Option<String> {
+     std::fs::read_to_string(path).ok()
+ }
+diff --git a/crates/tsuzuri-boundary/tests/acctcwr.rs b/crates/tsuzuri-boundary/tests/acctcwr.rs
+new file mode 100644
+index 00000000..36131561
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/acctcwr.rs
+@@ -0,0 +1,176 @@
++//! 行 c-acct-consult の境の歯（接頭辞 acctcwr_・判断の記録 ADR-55 決定 (4)）: account board の読みが anchor ごとに git で
++//! 起草の置き場を引き、退いていない相談の窓の作業場の控えと最後の process の印を読み、session の行に窓を出す。
++//! 偽の git は鍵 tsuzuri.draftsdir にだけ起草の置き場を返し、ほかの鍵と偽の器と偽の bd は落ちる（rc 1）。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_boundary::acct::{Acct, consult_windows};
++use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
++use tsuzuri_contract::seat::SeatState;
++use tsuzuri_contract::surface::SeatRole;
++use tsuzuri_contract::wire;
++use tsuzuri_core::account::project::ConsultWindow;
++
++/// 今（2026-10-05T03:13:20Z）。
++const NOW: u64 = 1_791_170_000;
++
++/// 在り得ない pid（`/proc` に無い）。
++const GONE: u32 = u32::MAX;
++
++fn root(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("acctcwr")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(&root).expect("歯の作業場");
++    root
++}
++
++fn control(n: &str) -> WindowFile {
++    WindowFile {
++        id: WindowId::parse(n).expect("窓の id"),
++        form: Form::Talk,
++        topic: None,
++        model: "opus".into(),
++        effort: "high".into(),
++        starter: Starter::Seat,
++        uttered: None,
++        request: None,
++        made: "20261005T0100Z".into(),
++    }
++}
++
++fn mark(k: u32, pid: u32, account: Option<&str>) -> ProcMark {
++    ProcMark {
++        k,
++        form: Form::Talk,
++        pid,
++        at: "20261005T0100Z".into(),
++        again: k > 1,
++        tmux_window: Some(format!("@{k}")),
++        account: account.map(str::to_string),
++    }
++}
++
++/// 起草の置き場の下に作業場を置く（`dir` は dir の名・控えが偽なら .consult の dir だけ）。
++fn put(drafts: &Path, dir: &str, n: &str, control_file: bool, marks: &[ProcMark]) {
++    let dot = drafts.join(dir).join(".consult");
++    fs::create_dir_all(&dot).expect(".consult");
++    if control_file {
++        let text = wire::encode(&control(n)).expect("控えの字");
++        fs::write(dot.join("window.json"), text).expect("控えを書く");
++    }
++    for m in marks {
++        let text = wire::encode(m).expect("印の字");
++        fs::write(dot.join(format!("proc-{}.json", m.k)), text).expect("印を書く");
++    }
++}
++
++/// 窓 cw1（印 2 つ・最後は生きた pid と口座 acct-new）・cw2（印なし）・cw5（最後の印の pid が無い）と、
++/// 読まない dir（退いた cw3・同じ id の退いた cw2・控えの無い cw4・窓の名でない dir）。
++fn drafts_of(root: &Path) -> PathBuf {
++    let drafts = root.join("drafts");
++    let me = std::process::id();
++    put(
++        &drafts,
++        "consult-cw1",
++        "cw1",
++        true,
++        &[mark(1, GONE, Some("/s/accounts/acct-old")), mark(2, me, Some("/s/accounts/acct-new"))],
++    );
++    put(&drafts, "consult-cw2", "cw2", true, &[]);
++    put(&drafts, "retired-consult-cw2", "cw2", true, &[mark(1, me, Some("/s/accounts/acct-old"))]);
++    put(&drafts, "retired-consult-cw3", "cw3", true, &[mark(1, me, None)]);
++    put(&drafts, "consult-cw4", "cw4", false, &[mark(1, me, None)]);
++    put(&drafts, "consult-cw5", "cw5", true, &[mark(1, GONE, Some("/s/accounts/acct-new"))]);
++    put(&drafts, "notes", "cw6", true, &[]);
++    drafts
++}
++
++/// (1) 退いていない作業場ごとに控えと最後の印（k の最も大きい物）と process の在る無し（窓の id の順）。
++/// 退いた作業場（同じ id の作業場が在っても）・控えの無い作業場・窓の名でない dir は読まない。
++#[test]
++fn acctcwr_reads_open_workspaces() {
++    let root = root("reads");
++    let drafts = drafts_of(&root);
++    let me = std::process::id();
++    let want = vec![
++        ConsultWindow {
++            window: control("cw1"),
++            last: Some(mark(2, me, Some("/s/accounts/acct-new"))),
++            alive: true,
++        },
++        ConsultWindow {
++            window: control("cw2"),
++            last: None,
++            alive: false,
++        },
++        ConsultWindow {
++            window: control("cw5"),
++            last: Some(mark(1, GONE, Some("/s/accounts/acct-new"))),
++            alive: false,
++        },
++    ];
++    assert_eq!(consult_windows(&drafts), want);
++    assert_eq!(consult_windows(&root.join("no-such")), Vec::new());
++}
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++/// 偽の git（鍵 tsuzuri.draftsdir の時だけ `answer` を返す）と落ちる器と bd と、anchor 1 つの群の宣言。
++fn world(root: &Path, answer: &str) -> Acct {
++    let bin = root.join("bin");
++    let state = root.join("state");
++    fs::create_dir_all(&bin).expect("bin");
++    fs::create_dir_all(&state).expect("state dir");
++    script(
++        &bin.join("git"),
++        &format!("case \"$*\" in *tsuzuri.draftsdir*) printf '%s\\n' '{answer}';; *) exit 1;; esac"),
++    );
++    script(&bin.join("scribe2"), "exit 1");
++    script(&bin.join("bd"), "exit 1");
++    let anchor = root.join("work/proj-w");
++    fs::create_dir_all(&anchor).expect("anchor");
++    let toml = format!(
++        "[[account]]\nlabel = \"acct-new\"\n\n[[account-group]]\nname = \"g-w\"\nanchors = [\"{}\"]\naccounts = [\"acct-new\"]\n",
++        anchor.display()
++    );
++    fs::write(state.join("host.toml"), toml).expect("群の宣言");
++    Acct::new(bin.join("scribe2"), bin.join("git"), bin.join("bd"), state, root)
++}
++
++/// (2) 起草の置き場の引けた anchor の project は、state dir が引けなくても席なしの行の直後に窓の行を出す
++/// （口座は最後の印の口座の置き場の末の名・生きた process は run・無ければ wait）。置き場が引けなければ出さない。
++#[test]
++fn acctcwr_doc_lists_windows_from_git_drafts() {
++    let root = root("doc");
++    let drafts = drafts_of(&root);
++    let acct = world(&root, &drafts.display().to_string());
++    assert_eq!(acct.drafts(&root.join("work/proj-w")), Some(drafts.clone()));
++    let got: Vec<(SeatRole, String, Option<String>, SeatState)> = acct
++        .doc(NOW)
++        .sessions
++        .into_iter()
++        .map(|l| (l.role, l.name, l.account, l.state))
++        .collect();
++    let consult = |n: &str, a: Option<&str>, s| (SeatRole::Consult, n.to_string(), a.map(str::to_string), s);
++    assert_eq!(
++        got,
++        vec![
++            (SeatRole::Orchestrator, String::new(), None, SeatState::Unknown),
++            consult("cw1", Some("acct-new"), SeatState::Run),
++            consult("cw2", None, SeatState::Wait),
++            consult("cw5", Some("acct-new"), SeatState::Wait),
++        ]
++    );
++    let blank = root.join("blank");
++    let none = world(&blank, "");
++    assert_eq!(none.drafts(&blank.join("work/proj-w")), None);
++    assert!(none.doc(NOW).sessions.iter().all(|l| l.role != SeatRole::Consult));
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+index 6a40d89d..3bf25ce0 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+@@ -16,6 +16,7 @@ use std::thread;
+ use std::time::{Duration, Instant};
+ 
+ use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD};
++use tsuzuri_boundary::consult::DRAFTS_ARGS;
+ use tsuzuri_boundary::server::held::FAILED_HOLD;
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
+@@ -562,11 +563,11 @@ fn server_acct_argv_exact() {
+     for separate in [false, true] {
+         let place = Place::new(&format!("argv-{separate}"), separate);
+         place.acct().doc(NOW);
+-        // git は宣言の anchor ごとに state dir と board の port を 1 回ずつ（同じ anchor は 1 回・書かれた字のまま）。
++        // git は宣言の anchor ごとに state dir と board の port と起草の置き場を 1 回ずつ（同じ anchor は 1 回・書かれた字のまま）。
+         let mut want: Vec<String> = PROJECTS
+             .iter()
+             .flat_map(|(p, tail, _, _)| {
+-                ["scribe2.statedir", "tsuzuri.boardport"]
++                ["scribe2.statedir", "tsuzuri.boardport", "tsuzuri.draftsdir"]
+                     .map(|key| format!("-C {}{tail} config --get {key}", place.anchor(p)))
+             })
+             .collect();
+@@ -574,6 +575,7 @@ fn server_acct_argv_exact() {
+         assert_eq!(place.calls("git"), want, "{separate}");
+         assert_eq!(GIT_ARGS, ["config", "--get", "scribe2.statedir"]);
+         assert_eq!(BOARD_ARGS, ["config", "--get", "tsuzuri.boardport"]);
++        assert_eq!(DRAFTS_ARGS, ["config", "--get", "tsuzuri.draftsdir"]);
+         // 器は state dir ごとに tick と doctor を 1 回、口座と閾値の行ごとは 1 回（猶予の rules 行は撃たない）。
+         let (sa, sb, sh) = (
+             place.state("state-a").display().to_string(),
+@@ -728,7 +730,7 @@ fn server_acct_holds_five_seconds() {
+         place.calls("bd"),
+     );
+     assert_eq!(once.0.len(), 8, "5 秒の中の読み: {:?}", once.0);
+-    assert_eq!(once.1.len(), 10, "{:?}", once.1);
++    assert_eq!(once.1.len(), 15, "{:?}", once.1);
+     assert_eq!(once.2.len(), 3, "{:?}", once.2);
+     for calls in [&once.0, &once.1, &once.2] {
+         let distinct: BTreeSet<&String> = calls.iter().collect();
+@@ -1094,7 +1096,7 @@ fn acchold_card_follows_off_file() {
+         let want = if argv.ends_with("state-a") && (argv.starts_with("seat tick") || argv.starts_with("doctor")) { 3 } else { 1 };
+         assert_eq!(calls.iter().filter(|c| *c == argv).count(), want, "{argv}");
+     }
+-    assert_eq!(place.calls("git").len(), 10, "{:?}", place.calls("git"));
++    assert_eq!(place.calls("git").len(), 15, "{:?}", place.calls("git"));
+     assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
+ }
+ 
+@@ -1186,7 +1188,7 @@ fn alean_git_held() {
+     let acct = place.acct().with_git_hold(Duration::from_millis(400));
+     let first = acct.doc(NOW);
+     let once = place.calls("git");
+-    assert_eq!(once.len(), 10, "{once:?}");
++    assert_eq!(once.len(), 15, "{once:?}");
+     alean_bump(&place.host_state());
+     assert_eq!(acct.doc(NOW), first);
+     assert_eq!(place.calls("scribe2").len(), 11, "印が動けば usage と tick status と doctor");
+diff --git a/crates/tsuzuri-surface/src/account/session.rs b/crates/tsuzuri-surface/src/account/session.rs
+index e53dec44..132398ce 100644
+--- a/crates/tsuzuri-surface/src/account/session.rs
++++ b/crates/tsuzuri-surface/src/account/session.rs
+@@ -5,6 +5,7 @@
+ //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
+ //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
+ //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
++//! 相談の窓の行（役 consult）は役の語と窓の card を持つ（判断の記録 ADR-55 決定 (4)）。
+ //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use tsuzuri_contract::EpochSecs;
+@@ -188,6 +189,14 @@ pub fn role_key(role: SeatRole) -> &'static str {
+     }
+ }
+ 
++/// 口座の無い行の口座の欄の語の鍵（相談の窓は印に口座の無い窓の「分からない」・ほかは測れていない）。
++pub fn no_account_key(role: SeatRole) -> &'static str {
++    match role {
++        SeatRole::Consult => "consult_account_unknown",
++        SeatRole::Orchestrator | SeatRole::Pipeline => "st_unknown",
++    }
++}
++
+ /// 段の字（段の名は英語のまま面に出す）。
+ pub fn stage_word(stage: Stage) -> &'static str {
+     match stage {
+@@ -284,6 +293,8 @@ pub struct SessRow {
+     /// session の名（席が無い行は None で、語の鍵 seat_none を出す）。
+     pub session: Option<String>,
+     pub account: Option<String>,
++    /// 口座が無い時の語の鍵（`no_account_key`）。
++    pub no_account: &'static str,
+     /// 状態の値（状態の記号に渡す）。
+     pub state: &'static str,
+     /// 段の字（pipeline で段が在る行だけ・ほかは状態の語を出す）。
+@@ -478,6 +489,7 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
+         role_key: role_key(line.role),
+         session: (!line.name.is_empty()).then(|| line.name.clone()),
+         account: line.account.clone(),
++        no_account: no_account_key(line.role),
+         state: state_value(line.state),
+         stage: line
+             .stage
+@@ -577,6 +589,28 @@ pub fn run_card(line: &SessionLine, at: EpochSecs) -> Card {
+     }
+ }
+ 
++/// 相談の窓の行の card の出所（作業場の控えと process の印）。
++pub const CONSULT_SRC: &str = "consult-cw<n>/.consult · window.json · proc";
++
++/// 相談の窓の行の session の欄の card（名・役と project・状態・口座といつから）。
++pub fn consult_card(line: &SessionLine, at: EpochSecs) -> Card {
++    let account = line
++        .account
++        .clone()
++        .unwrap_or_else(|| label(no_account_key(line.role)));
++    let mut more = vec![format!("口座 {account}")];
++    if let Some(s) = line.since {
++        more.push(format!("◷ {} から", hmd(s, at)));
++    }
++    Card {
++        title: line.name.clone(),
++        kind: format!("{} · {}", label("role:consult"), line.project),
++        value: label(state_key(state_value(line.state))),
++        src: CONSULT_SRC.to_string(),
++        more,
++    }
++}
++
+ /// project の card が詳しくに並べる session の数（見本の proj の枝）。
+ pub const PROJ_SHOWN: usize = 5;
+ 
+@@ -618,11 +652,14 @@ pub fn proj_card(doc: &AccountDoc, name: &str) -> Card {
+     }
+ }
+ 
+-/// 電文の sessions の i 行目の session の欄の card（run の行は run・席の読める orchestrator の行は席・ほかは project）。
++/// 電文の sessions の i 行目の session の欄の card（run の行は run・相談の窓の行は窓・席の読める orchestrator の行は席・
++/// ほかは project）。
+ pub fn sess_card(doc: &AccountDoc, index: usize) -> Card {
+     let line = doc.sessions.get(index).unwrap_or(&NO_LINE);
+-    if line.role == SeatRole::Pipeline {
+-        return run_card(line, doc.at);
++    match line.role {
++        SeatRole::Pipeline => return run_card(line, doc.at),
++        SeatRole::Consult => return consult_card(line, doc.at),
++        SeatRole::Orchestrator => {}
+     }
+     (!line.name.is_empty())
+         .then(|| project_of(doc, &line.project))
+@@ -864,7 +901,7 @@ mod dom {
+         };
+         let account = match row.account.clone() {
+             Some(a) => a.into_any(),
+-            None => view! { {state_icon(UNKNOWN)}<span class="sub">{label("st_unknown")}</span> }
++            None => view! { {state_icon(UNKNOWN)}<span class="sub">{label(row.no_account)}</span> }
+                 .into_any(),
+         };
+         let spans = row.spans.clone();
+diff --git a/crates/tsuzuri-surface/style.css b/crates/tsuzuri-surface/style.css
+index 86067703..231bc465 100644
+--- a/crates/tsuzuri-surface/style.css
++++ b/crates/tsuzuri-surface/style.css
+@@ -647,7 +647,7 @@ table.mx th .bchip { margin-right: 4px; }
+ .srow.hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line-2); }
+ .srow .mono { font: 600 12px ui-monospace, monospace; }
+ .srow .sstg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s1); min-width: 0; }
+-.srow.r-pipeline .c-role { padding-left: var(--s4); }
++.srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s4); }
+ .srow .c-proj { color: var(--ink-2); font-size: 12px; }
+ .srow .strip24 svg { display: block; width: 100%; height: 16px; }
+ .ghead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2); margin-top: var(--s2); background: var(--panel-2); border-radius: var(--r2) var(--r2) 0 0; font-weight: 700; }
+@@ -674,7 +674,7 @@ table.mx th .bchip { margin-right: 4px; }
+   .srow.hrow { display: none; }
+   .srow > div { padding: 2px var(--s2); }
+   .srow > .c-strip { grid-column: 1 / -1; }
+-  .srow.r-pipeline .c-role { padding-left: var(--s2); }
++  .srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s2); }
+   .sortbar { margin-left: 0; }
+   .mv > li { grid-template-columns: 24px 56px minmax(0, 1fr); }
+   .gcur { grid-template-columns: minmax(0, 1fr); }
+diff --git a/crates/tsuzuri-surface/tests/acctcws.rs b/crates/tsuzuri-surface/tests/acctcws.rs
+new file mode 100644
+index 00000000..9f6cbedc
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/acctcws.rs
+@@ -0,0 +1,87 @@
++//! 行 c-acct-consult の面の歯（接頭辞 acctcws_・判断の記録 ADR-55 決定 (4)）: session の表の相談の窓の行（役 consult）の
++//! 役の字と語・合図と停止の切り替えと段を持たない・口座の無い窓は「分からない」・session の欄の card は窓の card。
++//! fixture は tests/fixtures/account/acct-doc.json（読むだけ）で、3 行目（proj-b の席）を相談の窓の行に替えて試す。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::account::AccountDoc;
++use tsuzuri_contract::board::Stage;
++use tsuzuri_contract::surface::SeatRole;
++use tsuzuri_contract::wire;
++use tsuzuri_surface::account::session::{
++    self, CONSULT_SRC, no_account_key, role_key, role_word, sess_card,
++};
++use tsuzuri_surface::project::state_key;
++use tsuzuri_surface::vocab::{label, vocab};
++
++fn read(rel: &str) -> String {
++    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// fixture の 3 行目を窓 cw1 の行にした電文（口座 acct-1・段 Running を持たせても出さない）。
++fn doc() -> AccountDoc {
++    let mut d: AccountDoc =
++        wire::decode(&read("../../tests/fixtures/account/acct-doc.json")).expect("fixture");
++    let line = d.sessions.get_mut(2).expect("3 行目");
++    line.role = SeatRole::Consult;
++    line.name = "cw1".into();
++    line.stage = Some(Stage::Running);
++    d
++}
++
++/// (1) 役の字は consult・語の鍵は role:consult（語は相談の窓）・行の class は srow r-consult。
++/// 合図・停止の切り替え・段の字を持たない。口座の無い行の語の鍵は窓だけ consult_account_unknown（語は分からない）。
++#[test]
++fn acctcws_consult_row_words() {
++    assert_eq!(
++        (role_word(SeatRole::Consult), role_key(SeatRole::Consult)),
++        ("consult", "role:consult")
++    );
++    let d = doc();
++    let r = session::row(&d, 2);
++    assert_eq!(r.class, "srow r-consult");
++    assert_eq!(r.role_key, "role:consult");
++    assert_eq!(r.session.as_deref(), Some("cw1"));
++    assert_eq!(r.account.as_deref(), Some("acct-1"));
++    assert_eq!((r.signs, r.toggle, r.stage), (None, None, None));
++    assert_eq!(r.no_account, "consult_account_unknown");
++    assert_eq!(session::row(&d, 0).no_account, "st_unknown");
++    assert_eq!(no_account_key(SeatRole::Pipeline), "st_unknown");
++    let terms = vocab();
++    let word = |k: &str| terms.term(k).map(|t| t.label.clone());
++    assert_eq!(word("role:consult").as_deref(), Some("相談の窓"));
++    assert_eq!(word("consult_account_unknown").as_deref(), Some("分からない"));
++    let css = read("style.css");
++    assert!(css.contains(".srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s4); }"));
++    assert!(css.contains(".srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s2); }"));
++    let src = read("src/account/session.rs");
++    assert!(src.contains("{label(row.no_account)}"), "DOM は行の鍵の語を出す");
++}
++
++/// (2) 窓の行の session の欄の card: 題は窓の id・種類は役の語と project・値は状態の語・出所は作業場の印・
++/// 口座といつから（口座が無ければ「分からない」）。席の card と project の card を出さない。
++#[test]
++fn acctcws_consult_card() {
++    let d = doc();
++    let c = sess_card(&d, 2);
++    assert_eq!(c.title, "cw1");
++    assert_eq!(c.kind, format!("{} · proj-b", label("role:consult")));
++    assert_eq!(c.value, label(state_key("wait")));
++    assert_eq!(c.src, CONSULT_SRC);
++    assert_eq!(c.more.first().map(String::as_str), Some("口座 acct-1"));
++    assert!(c.more.get(1).is_some_and(|m| m.starts_with("◷ ") && m.ends_with(" から")));
++    let mut x = d.clone();
++    let line = x.sessions.get_mut(2).expect("3 行目");
++    line.account = None;
++    line.since = None;
++    let c = sess_card(&x, 2);
++    assert_eq!(c.more, vec![format!("口座 {}", label("consult_account_unknown"))]);
++    let orch = sess_card(&fixture_orch(), 2);
++    assert_ne!(orch.src, CONSULT_SRC, "席の行は窓の card にしない");
++}
++
++fn fixture_orch() -> AccountDoc {
++    wire::decode(&read("../../tests/fixtures/account/acct-doc.json")).expect("fixture")
++}
+diff --git a/crates/tsuzuri-surface/vocab.json b/crates/tsuzuri-surface/vocab.json
+index 1912eab4..ca063992 100644
+--- a/crates/tsuzuri-surface/vocab.json
++++ b/crates/tsuzuri-surface/vocab.json
+@@ -447,12 +447,12 @@
+   },
+   "sessions": {
+    "label": "session",
+-   "note": "いま在る session の表 = 2 種\n・ orchestrator は 1 つ\n・ pipeline = run ごと",
++   "note": "いま在る session の表 = 3 種\n・ orchestrator は 1 つ\n・ pipeline = run ごと\n・ 相談の窓 = 閉じていない窓ごと",
+    "internal": "seat = SeatRegistered + seat/<seat>/account + state.jsonl\n+ run（RunCreated〜RunDone / RunStopped・RunStage の account:）"
+   },
+   "role": {
+    "label": "role",
+-   "note": "session の種類\n・ orchestrator = 設計と指示\n・ pipeline = run を実行",
++   "note": "session の種類\n・ orchestrator = 設計と指示\n・ pipeline = run を実行\n・ 相談の窓 = 持ち主と話す・席が問う",
+    "internal": "SeatRegistered role / run"
+   },
+   "role:orchestrator": {
+@@ -465,9 +465,19 @@
+    "note": "1 つの run を実行する session\n✗ 群の今の口座は使えない\n✓ 空きの口座で動く",
+    "internal": "run（便）・§23 便用の候補から群の今の口座を外す"
+   },
++  "consult_account_unknown": {
++   "label": "分からない",
++   "plain": "{gi:unknown} 窓の印に口座が無い\n・ 口座の印の前に起こした窓\n✗ 口座が無いとは違う",
++   "internal": "ProcMark.account が None か印が無い（判断の記録 ADR-55 決定 (4)）"
++  },
++  "role:consult": {
++   "label": "相談の窓",
++   "note": "席が開いた相談の窓\n・ 起こした時の口座で動く\n・ 口座 = process の印の口座の置き場の名",
++   "internal": "<起草の置き場>/consult-cw<n>/.consult の window.json と proc-<k>.json（判断の記録 ADR-55 決定 (4)）"
++  },
+   "session": {
+    "label": "session",
+-   "note": "session の名\n・ orchestrator: target\n・ pipeline は run id",
++   "note": "session の名\n・ orchestrator: target\n・ pipeline は run id\n・ 相談の窓は窓の id",
+    "internal": "seat target / run id"
+   }
+  },
