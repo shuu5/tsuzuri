@@ -45,15 +45,16 @@ index 902b9877a7e0846331d84ad5cad7259b1f39670d..5c4b2fa7a37137f2cc0b70dbfad8b76f
          return HOLD;
 diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37ee49ee374
+index 0000000000000000000000000000000000000000..5c486ecc8b0970e167b560b35333bee45f014e3c
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,365 @@
 +//! 終える前の門の床の撃ち直し（判断の記録 ADR-63 決定 (4)・要件 FR21）。出す物が差の file を名指す係だけを見る。順:
 +//! 1. 出力の dir の床の記録 `floor.tsv` を読む。無ければ撃ち直さない。
 +//! 2. 記録に行の在る行が在れば、床の写し `<置き場>/try-<名>-fl` と空の state dir `<名>/floor-state` と道具を解き、器の表の検査
 +//!    （scribe2 contracts check --repo <床> --base main）を別の子で撃ちながら、tz check と tz derive --check と行ごとの preflight
 +//!    （空の state dir・--bead は札の対象）を撃つ。解けない物・撃てない物・上限の内に終わらない物は、まだ分からないの字にする。
++//!    待ち終えずに手放す子（上限を越えた子と、ほかの撃ちが Err で返った周の器の表の検査）は process group ごと止めて待つ。
 +//! 3. 中核の `judge` で行ごとに判じ、出力の dir の門の記録 `floor-gate.tsv` に 1 行ずつ足して、欠けの字を返す（書けなければ標準エラーに書く）。
 +//!
 +//! 道具の tz は既定でこの process の binary、scribe2 は既定で PATH の名で、旗 --tz と --scribe2 が替える。
@@ -65,7 +66,8 @@ index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37e
 +use std::os::unix::process::CommandExt;
 +use std::path::{Path, PathBuf};
 +use std::process::{Child, Command, Stdio};
-+use std::thread::{self, JoinHandle};
++use std::sync::mpsc::{self, Receiver};
++use std::thread;
 +use std::time::{Duration, Instant};
 +
 +use tsuzuri_core::agent::spec::Spec;
@@ -128,10 +130,10 @@ index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37e
 +    Ok((left, tools))
 +}
 +
-+/// 撃ち始めた子と、標準出力と標準エラーを読む thread。
++/// 撃ち始めた子と、標準出力と標準エラーを読む thread の受け口（待ち終えた子は `child` が空）。
 +struct Shot {
-+    child: Child,
-+    readers: Vec<JoinHandle<Vec<u8>>>,
++    child: Option<Child>,
++    readers: Vec<Receiver<Vec<u8>>>,
 +}
 +
 +/// 子を撃ち始める（cwd・標準入力は空・新しい process group・`keep` の時だけ標準出力と標準エラーを読む）。
@@ -161,38 +163,54 @@ index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37e
 +            .map(|s| Box::new(s) as Box<dyn Read + Send>),
 +    ];
 +    for mut stream in streams.into_iter().flatten() {
-+        readers.push(thread::spawn(move || {
++        let (tx, rx) = mpsc::channel();
++        thread::spawn(move || {
 +            let mut bytes = Vec::new();
 +            let _ = stream.read_to_end(&mut bytes);
-+            bytes
-+        }));
++            let _ = tx.send(bytes);
++        });
++        readers.push(rx);
 +    }
-+    Ok(Shot { child, readers })
++    Ok(Shot {
++        child: Some(child),
++        readers,
++    })
 +}
 +
 +impl Shot {
-+    /// 子の終わりを `deadline` まで待ち、rc と読めた字（標準出力の後に標準エラー）を返す（上限の内に終わらなければ group ごと止める）。
++    /// 読み口の終わりと子の終わりを `deadline` まで待ち、rc と読めた字（標準出力の後に標準エラー）を返す
++    /// （上限の内に終わらなければ子を手放し、`Drop` が group ごと止める）。
 +    fn land(mut self, what: &str, deadline: Instant) -> Result<(i32, String), String> {
-+        loop {
-+            match self.child.try_wait() {
++        let late = || format!("{what} が {} 秒の内に終わらない", LIMIT.as_secs());
++        let mut text = String::new();
++        for rx in std::mem::take(&mut self.readers) {
++            let bytes = rx
++                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
++                .map_err(|_| late())?;
++            text.push_str(&String::from_utf8_lossy(&bytes));
++        }
++        while let Some(child) = self.child.as_mut() {
++            match child.try_wait() {
 +                Ok(Some(status)) => {
-+                    let text: String = self
-+                        .readers
-+                        .into_iter()
-+                        .filter_map(|h| h.join().ok())
-+                        .map(|b| String::from_utf8_lossy(&b).into_owned())
-+                        .collect();
++                    self.child = None;
 +                    return status
 +                        .code()
 +                        .map(|rc| (rc, text))
 +                        .ok_or_else(|| format!("{what} が signal で止まった"));
 +                }
 +                Ok(None) if Instant::now() < deadline => thread::sleep(STEP),
-+                _ => {
-+                    stop_with(self.child, OsStr::new(KILL));
-+                    return Err(format!("{what} が {} 秒の内に終わらない", LIMIT.as_secs()));
-+                }
++                _ => break,
 +            }
++        }
++        Err(late())
++    }
++}
++
++impl Drop for Shot {
++    /// 待ち終えずに手放した子（上限を越えた子と、ほかの撃ちが Err で返った周の器の表の検査）を process group ごと止めて待つ。
++    fn drop(&mut self) {
++        if let Some(child) = self.child.take() {
++            stop_with(child, OsStr::new(KILL));
 +        }
 +    }
 +}
@@ -314,6 +332,7 @@ index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37e
 +            "main".into(),
 +        ])
 +        .collect();
++    // ほかの撃ちが Err で返った周は `table` を手放すので、`Drop` が器の表の検査を group ごと止めて待つ。
 +    let table = fire(&tools.scribe2, &table_args, &floor, true)?;
 +    let check = rc(tz.as_os_str(), &["check"], &floor, "tz check", deadline)?;
 +    let derive_args = ["derive", "--dir", ".", "--out", "../contracts", "--check"];
@@ -410,10 +429,10 @@ index 4beb46de7368bfb2a769ddde41af9d70994e4d8f..34b3879ff48bfe48e9bfd30b9b9e8212
  //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
 diff --git a/crates/tsuzuri-boundary/tests/agflr.rs b/crates/tsuzuri-boundary/tests/agflr.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..61f362d6fc93ba1756e49a52b95e4dbda3d3fb94
+index 0000000000000000000000000000000000000000..84c97caa51d891ddbfeef3acbfbf78163e3ca7d2
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/agflr.rs
-@@ -0,0 +1,591 @@
+@@ -0,0 +1,677 @@
 +//! 終える前の門の床の記録と撃ち直しの歯（接頭辞 agflr_・設計ノート surface-wave29c 行 ag-floor-rec・判断の記録 ADR-63 の決定 (4)）。
 +//! 中核の `floor` の純関数を直に撃ち、tz の binary の tz hook agent-stop に係の終わりの入力を標準入力で渡して、歯ごとの置き場
 +//! （CARGO_TARGET_TMPDIR の下）を --drafts で、偽の道具（tz と scribe2 の殻の script・撃たれた cwd と引数を log に足す）を --tz と
@@ -425,6 +444,8 @@ index 0000000000000000000000000000000000000000..61f362d6fc93ba1756e49a52b95e4dbd
 +use std::os::unix::fs::PermissionsExt;
 +use std::path::{Path, PathBuf};
 +use std::process::{Command, Output, Stdio};
++use std::thread;
++use std::time::Duration;
 +
 +use tsuzuri_core::agent::spec::Spec;
 +use tsuzuri_core::agent::stop::floor::{
@@ -925,6 +946,90 @@ index 0000000000000000000000000000000000000000..61f362d6fc93ba1756e49a52b95e4dbd
 +    );
 +    let gate = fs::read_to_string(root.join("drafts/w300a/w/STOP-GATE.txt")).unwrap();
 +    assert_eq!(gate, format!("{want}\n"));
++}
++
++/// process group `group` に、終わっていない（zombie でない）process が在るか（/proc の stat の状態と group の欄）。
++fn group_alive(group: &str) -> bool {
++    fs::read_dir("/proc").unwrap().flatten().any(|e| {
++        let stat = fs::read_to_string(e.path().join("stat")).unwrap_or_default();
++        let rest: Vec<&str> = stat
++            .rsplit_once(')')
++            .map(|(_, r)| r.split_whitespace().collect())
++            .unwrap_or_default();
++        !matches!(rest.first(), None | Some(&"Z" | &"X")) && rest.get(2) == Some(&group)
++    })
++}
++
++/// 器の表の検査（bin の hang）が自分の pid（group の id）を書いてから子の sleep を待ち続け、tz がその字を待ってから `tail` を撃って
++/// 返す置き場で、床の記録の在る 1 度目の終わりを撃ち、門の記録の行と group の id を返す（撃ちの順を固める・nointent は design-intent が無い）。
++fn hung(name: &str, tail: &str) -> (Vec<String>, String) {
++    let rec = "r1\t0\t0\t0\t0\t0,0\n";
++    let root = whole(name, &["notes.md", "patch/r1.patch"], Some(rec));
++    fake(&root, (0, 0, 0), &[]);
++    if name == "nointent" {
++        fs::remove_dir_all(root.join("drafts/try-w300a-fl/design-intent")).unwrap();
++    }
++    let pid = root.join("table.pid");
++    let hang = format!(
++        "#!/bin/sh\ncase \"$1\" in\ncontracts) echo $$ > '{0}.w'; mv '{0}.w' '{0}'; sleep 60; exit 1 ;;\nesac\nexit 0\n",
++        pid.display()
++    );
++    let tz = format!(
++        "#!/bin/sh\ni=0\nwhile [ ! -s '{}' ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done\n{tail}\nexit 0\n",
++        pid.display()
++    );
++    for (tool, body) in [("hang", hang), ("tz", tz)] {
++        let path = root.join("bin").join(tool);
++        fs::write(&path, body).unwrap();
++        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
++    }
++    let out = stop(&root, false, "hang");
++    assert_eq!(
++        (out.status.code(), out.stdout.len()),
++        (Some(2), 0),
++        "{name}"
++    );
++    let group = fs::read_to_string(&pid).unwrap().trim().to_string();
++    (gate_rows(&root), group)
++}
++
++/// group の process が 5 秒の内に居なくなるか（見た後に group へ KILL を送って残りを片付ける）。
++fn gone(group: &str) -> bool {
++    let gone = (0..100).any(|_| {
++        let alive = group_alive(group);
++        if alive {
++            thread::sleep(Duration::from_millis(50));
++        }
++        !alive
++    });
++    let _ = Command::new("kill")
++        .args(["-KILL", "--", &format!("-{group}")])
++        .status();
++    gone
++}
++
++#[test]
++fn agflr_hook_stops_the_table_group_when_another_rerun_fails() {
++    let (rows, group) = hung("nointent", "");
++    let left = !gone(&group);
++    assert!(
++        rows.len() == 1
++            && rows
++                .iter()
++                .all(|r| r.starts_with("1\tr1\tunknown\t道具 ") && r.contains("design-intent")),
++        "{rows:?}"
++    );
++    assert!(
++        !left,
++        "design-intent が無い周の器の表の検査の group {group} が残る"
++    );
++    let (rows, group) = hung("signal", "kill -9 $$");
++    let left = !gone(&group);
++    assert_eq!(rows, ["1\tr1\tunknown\ttz check が signal で止まった"]);
++    assert!(
++        !left,
++        "tz check が signal で止まった周の器の表の検査の group {group} が残る"
++    );
 +}
 +
 +/// 参照の file の置き場（workspace の根から）。
