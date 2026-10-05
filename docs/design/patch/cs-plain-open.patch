@@ -1,0 +1,185 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index b6aba8a1..f19d51a0 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -15,6 +15,7 @@ pub mod guard;
+ pub mod launch;
+ pub mod list;
+ pub mod open;
++pub mod plain;
+ pub mod show;
+ pub mod watch;
+ 
+diff --git a/crates/tsuzuri-boundary/src/consult/plain.rs b/crates/tsuzuri-boundary/src/consult/plain.rs
+new file mode 100644
+index 00000000..0ba06b81
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/plain.rs
+@@ -0,0 +1,69 @@
++//! 作業場の file を symlink を辿らずに見て書く助け（行 cs-plain-open・判断の記録 ADR-55）。
++//! 窓の hook と状態の 1 行の口は囲いの外で持ち主の権限で走り、窓は作業場の中に symlink と fifo を作れるので、作業場から file までの
++//! どの段も lstat で見て、作業場と途中の段は symlink でない dir、file は普通の file だけを受ける。在る file は開いた後の fstat で
++//! lstat と同じ dev と ino かを照らし、無い file は create_new（O_EXCL・symlink を辿らない）で作る。
++//! lstat と開く間に途中の dir を替える競りは残る（std に段ごとの O_NOFOLLOW の開きが無い）。
++
++use std::fs::{self, File, Metadata, OpenOptions};
++use std::io::{self, Write};
++use std::os::unix::fs::MetadataExt;
++use std::path::{Path, PathBuf};
++
++/// lstat で symlink でない dir か。
++pub fn plain_dir(p: &Path) -> bool {
++    fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_dir())
++}
++
++/// 作業場 `ws` からの相対 `rel` の path（作業場と途中の段が全部 symlink でない dir の時だけ）。
++pub fn plain_path(ws: &Path, rel: &str) -> Option<PathBuf> {
++    let parts: Vec<&str> = rel.split('/').collect();
++    let (name, dirs) = parts.split_last()?;
++    let mut path = ws.to_path_buf();
++    if !plain_dir(&path) {
++        return None;
++    }
++    for dir in dirs {
++        path.push(dir);
++        if !plain_dir(&path) {
++            return None;
++        }
++    }
++    path.push(name);
++    Some(path)
++}
++
++/// 開いた file が、開く前の lstat の普通の file と同じ dev と ino の普通の file か。
++pub fn same_file(file: &File, before: &Metadata) -> bool {
++    file.metadata()
++        .is_ok_and(|m| m.is_file() && (m.dev(), m.ino()) == (before.dev(), before.ino()))
++}
++
++/// 作業場からの相対 `rel` が普通の file として在るか（途中の段も lstat で見る）。
++pub fn plain_file(ws: &Path, rel: &str) -> bool {
++    plain_path(ws, rel)
++        .and_then(|p| fs::symlink_metadata(p).ok())
++        .is_some_and(|m| m.file_type().is_file())
++}
++
++/// 作業場からの相対 `rel` の普通の file の末に `bytes` を足す（無ければ create_new で作る）。途中の段の symlink・
++/// file の symlink・普通でない file・開いた後の照らしの違いは書かずに誤りを返す。
++pub fn append_plain(ws: &Path, rel: &str, bytes: &[u8]) -> io::Result<()> {
++    let refuse = |why: &str| io::Error::other(why.to_string());
++    let path = plain_path(ws, rel).ok_or_else(|| refuse("途中の段が symlink でない dir でない"))?;
++    let mut file = match fs::symlink_metadata(&path) {
++        Ok(m) if m.file_type().is_file() => {
++            let f = OpenOptions::new().append(true).open(&path)?;
++            if !same_file(&f, &m) {
++                return Err(refuse("開いた file が照らした file と違う"));
++            }
++            f
++        }
++        Ok(_) => return Err(refuse("普通の file でない")),
++        Err(e) if e.kind() == io::ErrorKind::NotFound => OpenOptions::new()
++            .append(true)
++            .create_new(true)
++            .open(&path)?,
++        Err(e) => return Err(e),
++    };
++    file.write_all(bytes)
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwpln.rs b/crates/tsuzuri-boundary/tests/teeth5/cwpln.rs
+new file mode 100644
+index 00000000..3ac6027b
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwpln.rs
+@@ -0,0 +1,67 @@
++//! 作業場の file を symlink を辿らずに見て書く助けの歯（接頭辞 cwpln_・設計ノート surface-wave29b 行 cs-plain-open・判断の記録 ADR-55）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に作業場と外の file を置き、作業場か途中の段か file が symlink か fifo の時に、
++//! 見る助けが偽か None を返し、足す助けが書かずに誤りを返して外の file を替えないことと、普通の file に足し、無い file を作ることを見る。
++#![cfg(test)]
++
++use std::fs::{self, File};
++use std::os::unix::fs::symlink;
++use std::path::{Path, PathBuf};
++use std::process::Command;
++
++use tsuzuri_boundary::consult::plain::{
++    append_plain, plain_dir, plain_file, plain_path, same_file,
++};
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）に、`.consult/window.json` を持つ作業場 ws と外の dir out を作る。
++fn place(name: &str) -> (PathBuf, PathBuf) {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cwpln-{name}"));
++    let _ = fs::remove_dir_all(&root);
++    let (ws, out) = (root.join("ws"), root.join("out"));
++    fs::create_dir_all(ws.join(".consult")).unwrap();
++    fs::create_dir_all(&out).unwrap();
++    fs::write(ws.join(".consult/window.json"), "{}").unwrap();
++    fs::write(out.join("f"), "外").unwrap();
++    (ws, out)
++}
++
++#[test]
++fn cwpln_reads_only_plain_dirs_and_files() {
++    let (ws, out) = place("see");
++    assert!(plain_dir(&ws) && plain_file(&ws, ".consult/window.json"));
++    assert_eq!(plain_path(&ws, ".consult/x"), Some(ws.join(".consult/x")));
++    symlink(&out, ws.join("link")).unwrap();
++    symlink(out.join("f"), ws.join(".consult/f")).unwrap();
++    assert!(!plain_dir(&ws.join("link")) && plain_path(&ws, "link/f").is_none());
++    assert!(!plain_file(&ws, ".consult/f") && !plain_file(&ws, ".consult"));
++    let made = Command::new("mkfifo")
++        .arg(ws.join(".consult/p"))
++        .status()
++        .unwrap();
++    assert!(made.success() && !plain_file(&ws, ".consult/p"));
++    let wsl = ws.with_file_name("wsl");
++    symlink(&ws, &wsl).unwrap();
++    assert!(plain_path(&wsl, ".consult/window.json").is_none());
++    let (a, b) = (ws.join(".consult/window.json"), out.join("f"));
++    let lst = fs::symlink_metadata(&a).unwrap();
++    assert!(same_file(&File::open(&a).unwrap(), &lst));
++    assert!(!same_file(&File::open(&b).unwrap(), &lst));
++}
++
++#[test]
++fn cwpln_appends_without_following() {
++    let (ws, out) = place("add");
++    append_plain(&ws, ".consult/s", b"a\n").unwrap();
++    append_plain(&ws, ".consult/s", b"b\n").unwrap();
++    assert_eq!(fs::read_to_string(ws.join(".consult/s")).unwrap(), "a\nb\n");
++    symlink(out.join("f"), ws.join(".consult/l")).unwrap();
++    symlink(&out, ws.join("d")).unwrap();
++    let made = Command::new("mkfifo")
++        .arg(ws.join(".consult/p"))
++        .status()
++        .unwrap();
++    assert!(made.success());
++    for rel in [".consult/l", "d/f", ".consult/p", ".consult"] {
++        assert!(append_plain(&ws, rel, b"x").is_err(), "{rel}");
++    }
++    assert_eq!(fs::read_to_string(out.join("f")).unwrap(), "外");
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+index f1b2517b..b06ec7f1 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -6,6 +6,7 @@ mod cwans;
+ mod cwcls;
+ mod cwlch;
+ mod cwopn;
++mod cwpln;
+ mod cwshw;
+ mod cwwat;
+ mod strelay;
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index e2807f01..f051500b 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -14,7 +14,7 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-boundary/tests/teeth2", 27),
+     ("crates/tsuzuri-boundary/tests/teeth3", 16),
+     ("crates/tsuzuri-boundary/tests/teeth4", 14),
+-    ("crates/tsuzuri-boundary/tests/teeth5", 14),
++    ("crates/tsuzuri-boundary/tests/teeth5", 15),
+     ("crates/tsuzuri-contract/tests/teeth1", 14),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),

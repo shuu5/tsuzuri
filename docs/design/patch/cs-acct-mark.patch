@@ -30,7 +30,7 @@ index 12438d5d..78840881 100644
      let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
      fs::write(proc_path(ws, k), text + "\n")
 diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
-index b6aba8a1..1dec06e3 100644
+index f19d51a0..6069e512 100644
 --- a/crates/tsuzuri-boundary/src/consult/mod.rs
 +++ b/crates/tsuzuri-boundary/src/consult/mod.rs
 @@ -1,6 +1,6 @@
@@ -41,15 +41,15 @@ index b6aba8a1..1dec06e3 100644
  //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
  //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
  //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
-@@ -16,6 +16,7 @@ pub mod launch;
- pub mod list;
+@@ -17,6 +17,7 @@ pub mod list;
  pub mod open;
+ pub mod plain;
  pub mod show;
 +pub mod stamp;
  pub mod watch;
  
  use std::ffi::{OsStr, OsString};
-@@ -65,7 +66,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
+@@ -66,7 +67,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
  pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
  
  pub const USAGE: &str =
@@ -58,7 +58,7 @@ index b6aba8a1..1dec06e3 100644
  
  /// tz consult の残りの引数を受けて終了 code を返す。
  pub fn run(rest: &[&str]) -> u8 {
-@@ -80,6 +81,7 @@ pub fn run(rest: &[&str]) -> u8 {
+@@ -81,6 +82,7 @@ pub fn run(rest: &[&str]) -> u8 {
          ["list", r @ ..] => list::run(r),
          ["close", r @ ..] => close::run(r),
          ["guard", r @ ..] => guard::run(r),
@@ -68,18 +68,17 @@ index b6aba8a1..1dec06e3 100644
              FAIL
 diff --git a/crates/tsuzuri-boundary/src/consult/stamp.rs b/crates/tsuzuri-boundary/src/consult/stamp.rs
 new file mode 100644
-index 00000000..0f9d9f5a
+index 00000000..e26a24ce
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/src/consult/stamp.rs
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,52 @@
 +//! tz consult stamp <作業場>（行 cs-acct-mark・窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
 +//! 標準入力の hook の JSON を中核の `consult::stamp::read` で読み、作業場の `.consult/stamps.jsonl` に印の 1 行を足す。
 +//! 書くのは、渡した path が「/」で始まり、名が `consult-cw<n>` で、窓の控え `.consult/window.json` が在る作業場の、その 1 file だけ。
 +//! hook は囲いの外で持ち主の権限で走り、turn の終わりの hook の断りは窓の終わりを止めるので、どの周も rc 0 で返す
-+//! （書かなかった周は理由を標準エラーに 1 行）。起動の設定は `timeout 4 <tz> consult stamp <作業場> || true` で撃つ。
++//! （書かなかった周は理由を標準エラーに 1 行・作業場の symlink と普通でない file も `plain` で断る）。起動の設定は `timeout 4 <tz> consult stamp <作業場> || true` で撃つ。
 +
-+use std::fs::OpenOptions;
-+use std::io::{Read, Write};
++use std::io::Read;
 +use std::path::Path;
 +
 +use tsuzuri_contract::consult::WindowId;
@@ -87,6 +86,7 @@ index 00000000..0f9d9f5a
 +use tsuzuri_core::consult::stamp::read;
 +
 +use super::WINDOW_FILE;
++use super::plain::{append_plain, plain_file};
 +use crate::out::emit_err;
 +use crate::server::events::now;
 +
@@ -116,16 +116,12 @@ index 00000000..0f9d9f5a
 +        .and_then(|n| n.to_str())
 +        .and_then(|n| n.strip_prefix("consult-"))
 +        .is_some_and(|id| WindowId::parse(id).is_ok());
-+    if !ws.is_absolute() || !named || !ws.join(WINDOW_FILE).is_file() {
++    if !ws.is_absolute() || !named || !plain_file(ws, WINDOW_FILE) {
 +        return Err(format!("{} は窓の作業場でない", ws.display()));
 +    }
 +    let line = read(payload, now()).ok_or("hook の入力の事か会話の id の形でない")?;
 +    let text = wire::encode(&line).map_err(|e| e.to_string())?;
-+    OpenOptions::new()
-+        .create(true)
-+        .append(true)
-+        .open(ws.join(STAMPS))
-+        .and_then(|mut f| f.write_all(format!("{text}\n").as_bytes()))
++    append_plain(ws, STAMPS, format!("{text}\n").as_bytes())
 +        .map_err(|e| format!("印の file を書けない: {e}"))
 +}
 diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
@@ -221,10 +217,10 @@ index 6d55b4ce..ef31b1e0 100644
  
 diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs b/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs
 new file mode 100644
-index 00000000..e7a6014b
+index 00000000..ed3074b7
 --- /dev/null
 +++ b/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,169 @@
 +//! 会話の印の口の歯（接頭辞 cwstp_・設計ノート surface-wave29b 行 cs-acct-mark・判断の記録 ADR-55 決定 (2)）。
 +//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に窓の作業場を置き、tz consult stamp に hook の入力の JSON を渡して、
 +//! 作業場の `.consult/stamps.jsonl` に 1 行ずつ足すことと、窓の作業場でない path と読めない入力では書かずに rc 0 で返すことを見る。
@@ -232,6 +228,7 @@ index 00000000..e7a6014b
 +
 +use std::fs;
 +use std::io::Write;
++use std::os::unix::fs::symlink;
 +use std::path::{Path, PathBuf};
 +use std::process::{Command, Output, Stdio};
 +
@@ -370,6 +367,29 @@ index 00000000..e7a6014b
 +        );
 +    }
 +}
++
++/// 対照には 1 行を足し、.consult・印の file・控えの 1 つを外の作業場の同じ物への symlink にした作業場は断りの 1 行で返し、
++/// 外の印の file を空のままにし、控えの symlink の作業場に印の file を作らない。
++#[test]
++fn cwstp_does_not_follow_symlinks() {
++    let (root, at) = (place("links"), |w: &Path| w.display().to_string());
++    let out = workspace(&root, "outside");
++    let (stamps, window) = (".consult/stamps.jsonl", ".consult/window.json");
++    fs::write(out.join(stamps), "").unwrap();
++    let checks: [fn(&Output); 2] = [refused_ok, quiet_ok];
++    for (i, link) in ["", ".consult", stamps, window].into_iter().enumerate() {
++        let ws = workspace(&root, &format!("consult-cw{}", i + 1));
++        if !link.is_empty() {
++            let _ = fs::remove_dir_all(ws.join(link)).or(fs::remove_file(ws.join(link)));
++            symlink(out.join(link), ws.join(link)).unwrap();
++        }
++        checks[usize::from(link.is_empty())](&stamp(&root, &[&at(&ws)], &payload("Stop", SID)));
++    }
++    let text = fs::read_to_string(root.join("consult-cw1").join(stamps)).unwrap();
++    assert_eq!(lines(&text).len(), 1);
++    assert_eq!(fs::read_to_string(out.join(stamps)).unwrap(), "");
++    assert!(!root.join("consult-cw4").join(stamps).exists());
++}
 diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
 index f881a6f2..0e97c0ab 100644
 --- a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
@@ -383,12 +403,12 @@ index f881a6f2..0e97c0ab 100644
      let path = ws.join(format!(".consult/proc-{k}.json"));
      fs::write(path, wire::encode(&m).unwrap()).unwrap();
 diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
-index f1b2517b..78bce4c8 100644
+index b06ec7f1..6fb02498 100644
 --- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
 +++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
-@@ -7,6 +7,7 @@ mod cwcls;
- mod cwlch;
+@@ -8,6 +8,7 @@ mod cwlch;
  mod cwopn;
+ mod cwpln;
  mod cwshw;
 +mod cwstp;
  mod cwwat;
@@ -781,15 +801,15 @@ index c8c6d7b1..e9971fbf 100644
    }
  }
 diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
-index e2807f01..62e23605 100644
+index f051500b..fc3da3a5 100644
 --- a/xtask/tests/teeth1/kfold.rs
 +++ b/xtask/tests/teeth1/kfold.rs
 @@ -14,11 +14,11 @@ const GROUPS: &[(&str, usize)] = &[
      ("crates/tsuzuri-boundary/tests/teeth2", 27),
      ("crates/tsuzuri-boundary/tests/teeth3", 16),
      ("crates/tsuzuri-boundary/tests/teeth4", 14),
--    ("crates/tsuzuri-boundary/tests/teeth5", 14),
-+    ("crates/tsuzuri-boundary/tests/teeth5", 15),
+-    ("crates/tsuzuri-boundary/tests/teeth5", 15),
++    ("crates/tsuzuri-boundary/tests/teeth5", 16),
      ("crates/tsuzuri-contract/tests/teeth1", 14),
      ("crates/tsuzuri-core/tests/teeth1", 29),
      ("crates/tsuzuri-core/tests/teeth2", 25),
