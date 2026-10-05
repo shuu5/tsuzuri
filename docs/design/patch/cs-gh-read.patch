@@ -1,0 +1,99 @@
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 35fa3763ac364d2e31195eb365087db87dd95827..37ff3dc05308bf1de099832008892409e03d3bcc 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -31,14 +31,17 @@ pub const ASK_DROP: [&str; 2] = ["TMUX", "TMUX_PANE"];
+ /// 道具の閉じた列。
+ pub const TOOLS: &str = "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch";
+ 
+-/// 殻の命令のネットワークに許す package の配り元。
+-pub const DOMAINS: [&str; 6] = [
++/// 殻の命令のネットワークに許すドメイン（package の配り元 6 つと、GitHub の読むだけの配り元 2 つ
++/// = file 1 本ずつの raw と source の tar.gz の codeload・判断の記録 ADR-53）。
++pub const DOMAINS: [&str; 8] = [
+     "pypi.org",
+     "files.pythonhosted.org",
+     "crates.io",
+     "index.crates.io",
+     "static.crates.io",
+     "registry.npmjs.org",
++    "raw.githubusercontent.com",
++    "codeload.github.com",
+ ];
+ 
+ /// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index d2da9969b6ee7a26a843f71eea52993367d9f3fa..5fa7f11d53b1bbbe7a559c36bd3bff68fa7da590 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -9,8 +9,8 @@ use std::path::Path;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_core::consult::launch::{
+-    ASK_DROP, CREDENTIALS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp,
+-    prompt, read_roots, settings, version_ok,
++    ASK_DROP, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
++    private_tmp, prompt, read_roots, settings, version_ok,
+ };
+ 
+ fn fixture() -> Value {
+@@ -280,6 +280,46 @@ fn cwarg_audit_refuses_wide_sandbox() {
+     ]);
+ }
+ 
++/// 殻の命令のネットワークに GitHub の読むだけの配り元 2 つだけを足し、ほかの GitHub の host を検めが断ることを見る（行 cs-gh-read）。
++#[test]
++fn cwarg_allows_github_read_only() {
++    let fx = fixture();
++    let read = ["raw.githubusercontent.com", "codeload.github.com"];
++    assert_eq!(DOMAINS[6..], read);
++    assert_eq!(DOMAINS.iter().filter(|d| d.contains("github")).count(), 2);
++    let net_gap = ["/sandbox/network/allowedDomains".to_string()];
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let set = settings(&l);
++        let net = set["sandbox"]["network"]["allowedDomains"]
++            .as_array()
++            .expect("列");
++        for host in read {
++            assert_eq!(
++                net.iter().filter(|d| **d == json!(host)).count(),
++                1,
++                "{form} {host}"
++            );
++        }
++        for host in [
++            "github.com",
++            "api.github.com",
++            "uploads.github.com",
++            "gist.githubusercontent.com",
++            "objects.githubusercontent.com",
++            "release-assets.githubusercontent.com",
++            "githubusercontent.com",
++            "*.githubusercontent.com",
++            "*.github.com",
++        ] {
++            let a = with_settings(&l, |s| {
++                push(s, "/sandbox/network/allowedDomains", json!(host))
++            });
++            assert_eq!(audit(&a, &l), net_gap, "{form} {host}");
++        }
++    }
++}
++
+ #[test]
+ fn cwarg_hides_the_claude_credentials() {
+     let fx = fixture();
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index 3a1ed5e0d0753df55517a26a9192bb9666127130..f49d0b5e8d8082ff61d8e6c013859bf929c0f558 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -63,7 +63,7 @@
+         {"path": "/R/.beads/.env", "mode": "deny"},
+         {"path": "/tmp/claude-U", "mode": "deny"}
+       ]},
+-      "network": {"allowedDomains": ["pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "registry.npmjs.org"]}
++      "network": {"allowedDomains": ["pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "registry.npmjs.org", "raw.githubusercontent.com", "codeload.github.com"]}
+     },
+     "env": {
+       "UV_CACHE_DIR": "/W/.venv/uv-cache",

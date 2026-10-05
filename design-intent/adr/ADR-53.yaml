@@ -1,0 +1,67 @@
+# 判断の記録 ADR-53 — 相談の窓の殻の命令のネットワークに GitHub の読むだけの配り元 2 つ（raw と codeload）を足す（持ち主の裁定 2026-10-05・記帳先 = tsuzuri の台帳の問い t3-hub.84.1 の notes）
+# 判断の記録 ADR-29 の決定 (7)(エ) の字のうち、この記録の決定 (1) が名指す字だけを置き換える（部分の置き換え・ほかの決定と字は効いたまま）。ADR-29 は封の一覧で本文が凍っているので本文は変えない（前例 ADR-29 の頭の注・ADR-52）。
+# 起草は係 w172a（2026-10-05）。材料は問い t3-hub.84.1 の本文と、検証役 qv169 の攻め（drafts/qv169/w/attack.md）と、行 cs-gh-read の試作。承認の欄は問い t3-hub.84.1 の裁定。
+id: ADR-53
+title: 相談の窓の殻の命令のネットワークに、パッケージ の配り元に加えて GitHub の読むだけの配り元 2 つ（file を 1 本ずつ配る raw.githubusercontent.com と、source をまとめた圧縮 file を配る codeload.github.com）を許し、GitHub の本体と書きの口と release の添え物の配り先は許さない（ADR-29 の決定 (7)(エ) の部分の置き換え）
+status: accepted
+date: 2026-10-05
+context: |
+  判断の記録 ADR-29 の決定 (7)(エ) は、相談の窓の殻の命令のネットワークを パッケージ の配り元のドメインだけに許し、git の remote の host は許さない（送り出し〔push〕と投稿の道を持たない）と決めた。起動の口の閉じた列（DOMAINS）は Python の配り元 2 つ・crates.io の 3 つ・npm の 1 つの 6 つで、起動の口の検めは、許しがこの列の外の名を 1 つでも持つ設定では窓を起こさない。要件 FR19 の字も「殻の命令のネットワークは package の配り元だけ」。
+  相談の窓の所見（cw1-2・2026-10-05）で、窓の中から GitHub の本体（github.com）と 2 つの配り元を撃ち、どれも囲いに断られることを確かめた。GitHub にだけ在る OSS の code は、窓の中で取り寄せて試せない。web の道具（WebFetch）で読むことはできるが、字は小さな model を通るので byte のままにはならない。
+  殻の命令の許しは host の名だけで絞り、repo では絞れない（Claude Code の囲いの文書・検証役（qv169）が読んだ）。足すと、誰の公開の repo の code でも取れる。GitHub の release に添えた作り済みの file は、GitHub の本体が署名つきの一時の URL へ飛ばして配る（行き先は配り先（release-assets.githubusercontent.com））ので、本体を許さない限り取れない。問いの最初の案の 3 つ目の名（objects.githubusercontent.com）は今の release の配り先でない（検証役（qv169）が撃って確かめた）。
+  ADR-29 の撤退の条件 (3)（着地の後 14 日の内に、囲いに断られて困った事が 3 件を越えたら囲いの許しを問い直す）には届いていない（今 1 件）。問い（t3-hub.84.1）は持ち主の求めから起こし、案 A に裁定された（裁定 id は承認の欄）。
+decision: |
+  (1) 置き換える字。ADR-29 の決定 (7)(エ) の「殻の命令のネットワークは パッケージ の配り元のドメインだけに許し」を、「殻の命令のネットワークは パッケージ の配り元のドメインと、GitHub の読むだけの配り元 2 つ（file を 1 本ずつ配る raw.githubusercontent.com と、source をまとめた圧縮 file〔tar.gz〕を配る codeload.github.com）だけに許し」に替える。続く「git の remote の host は許さない（送り出し〔push〕と投稿の道を持たない）」と、決定 (7) のほかの字（パッケージ の道具の cache と入れ先を作業場の下に向ける字を含む）は効いたまま。
+  (2) 許さない名。GitHub の本体（github.com）と、その書きの口（api.github.com・uploads.github.com）と、release の添え物の配り先（release-assets.githubusercontent.com・objects.githubusercontent.com）と、断片の置き場（gist.githubusercontent.com）と、ほかの GitHub の名と、ドメインの全部や下の名の全部を許す形（「*.」で始まる名）は許さない。送り出し（push）は GitHub の本体が要るので、この記録の後も道を持たない。release の添え物は取れない。
+  (3) 測り方。起動の口の閉じた列は 8 つ（パッケージ の配り元 6 つの後に raw と codeload の順）にする。起動の口の検めの決まり（許しが列の部分で空でない）は替えず、列の外の GitHub の名を 1 つでも足した設定を断る。列と設定と検めの断りは歯で測る（ノート（surface-wave29a）の行（cs-gh-read））。
+  (4) 順。この記録の行は、窓の囲いの土台の穴を塞ぐ memo（t3-hub.86）の行の後に流す。行の依存（depends）には同じ file を書いて着地済みの行（cs-cred-claude）を置き、まだ置いていない続きの行（口座の置き場の実体と資格の file の読む道具の断り）の着地までは、この記録の行の便を留め置く。要件 FR19 の字を同じ commit で改める（要件書の版上げ）。
+options:
+  - id: a
+    name: GitHub の読むだけの配り元 2 つを足す
+    text: 決定 (1) から (4)。
+    verdict: adopted
+    reason: GitHub にだけ在る code を byte のまま、木ごと窓に置いて撃てる。足す 2 つは読むだけの配り元で、書きの口は知られていない。外へ字を出す道は今でも 2 つ在る（web の道具（WebFetch）はどの URL へも出られ、crates.io と npm の配り元は同じ名で公開の口を持つので、他人の鍵を埋めた code なら公開できる）。2 つの名が足す外への道はほぼ無い。増えるのは窓に入る信用できない字と code の量で、その字が窓の model を操って web の道具で外へ出させる道と、作業場に書かれた file が所見や添え物を通じて席に届く道が起こりやすくなる。これは撤退の条件で数える。
+  - id: b
+    name: 足さない
+    text: 今のまま。GitHub の公開の code は web の道具で読むだけにする。
+    verdict: rejected
+    reason: 信用できない字と code の量は増えないが、GitHub にだけ在る code を窓で撃って試せず、持ち主の求めに応えない。web の道具の字は小さな model を通るので、code を byte のまま置けない。
+  - id: c
+    name: 席が取って窓の作業場に置く
+    text: 足さず、要る時に席（囲いの外）が source をまとめた圧縮 file を取って、窓の作業場に置く。
+    verdict: rejected
+    reason: 記録を改めずに済むが、取るたびに席の手が入り、問う窓は自分で取れない。囲いの外の席が信用できない荷を扱う。
+  - id: d
+    name: 3 つ目の名（objects.githubusercontent.com）も足す
+    text: 問いの最初の案のとおり、3 つの名を足す。
+    verdict: rejected
+    reason: 今の release の配り先でなく、所見でも撃っていない。足しても使い道が無く、許す名が 1 つ増えるだけ。
+  - id: e
+    name: GitHub の本体（github.com）も足す
+    text: git の写し（clone）と release の添え物を取れるようにする。
+    verdict: rejected
+    reason: GitHub の本体は git の remote の host で、送り出し（push）と投稿の口を持つ。ADR-29 の決定 (7)(エ) の後段（送り出しと投稿の道を持たない）に反する。囲いの文書も、広いドメインは外へ出す道になりうると警告する。
+basis: [ADR-29, FR19]
+retreat:
+  kind: measure
+  condition: |
+    数えるのは tsuzuri の設計の席で、memo（t3-hub.84）か後継の memo の notes に 1 件ごとに記帳する。数える材料は、相談の窓の所見の欄（囲いに断られて困った事・添え物）と、窓の作業場の file と、窓の会話の記録の殻の命令の字と、席の受けの記録。問う相手は持ち主。
+    (1) 窓が 2 つの配り元から取り寄せた code か字に由来する囲いの断り（作業場の外への書き・許していない名への通信）か、外へ字を出した疑い（web の道具の URL や公開の口に資格か private な project の中身の字が載った等）が 1 件でも出たら、2 つを許しから外すかを問う。
+    (2) 行の着地の後の 30 日で、窓が 2 つの配り元から取り寄せた回（窓の会話の記録の殻の命令の字に 2 つの名が在る回）が 0 なら、2 つを許しから外すかを問う。
+plain: |
+  相談の窓の中で、GitHub に置かれた公開の code を取り寄せて試せるようにする記録です。
+  今は、窓の中で撃つ命令が外へ出られる先は、Python・Rust・JavaScript の部品の配り元 6 つだけで、GitHub の file も、source をまとめた圧縮 file も取れません。
+  これからは、GitHub の読むだけの配り元 2 つ（file を 1 本ずつ配る所と、source をまとめた圧縮 file を配る所）にも出られます。GitHub の本体には出られないので、送り出し（push）や投稿はできず、release に添えた作り済みの file も取れません。
+  取り寄せた code の中の字が窓を操る危うさは少し増えます。困った事が 1 件でも出たら、また着地から 30 日使わなければ、外すかをあなたに問います。資格の file を窓から隠す直しを先に入れてから効かせます。
+approval:
+  who: 持ち主
+  date: 2026-10-05
+  ruling: t3-hub.84.1（裁定 id = t3-hub.84.1:20261005T0002Z-1・案 A・配達の口・notes に逐語）
+  verbatim: "推奨で進めて"
+  surface: R-8
+consequences:
+  - 窓の囲いの土台の穴（資格の file の覆い・口座の置き場の実体・ほかの project の読み・問う窓が継ぐ環境）は、この記録に依らず memo（t3-hub.86）の行で塞ぐ。読む根の絞りと問う窓の環境の絞り（memo の候補の 2 と 3）は、この記録の行の便の留めの条件に含めない。
+  - 許しは名だけで絞るので、誰の公開の repo の code でも取れる（攻め手が置いた荷を含む）。repo で絞るには、囲いの暗号の通信を解く自前の中継が要り、この記録の外とする。
+  - 束の手引き（bundle/brief.md）は殻の命令が出られる先を書いていない。手引きに 1 行足すかは memo（t3-hub.84）の候補で扱う。
+  - ノート（surface-wave27a）の行（cs-argv）の字「6 つ」は来歴なので替えない。
+note: 起草は係 w172a（2026-10-05）。承認の欄の逐語は、適用の script が台帳の問い t3-hub.84.1 の notes の定型行から読んで入れた。
