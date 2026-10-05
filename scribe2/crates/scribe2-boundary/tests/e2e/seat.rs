@@ -10,6 +10,7 @@
 //!
 //! 族ごとの子 module も置く（設計 docs/design/carry-prep.md §9 行 i・`s2-07l.681`）: `tick`（接頭辞 `seat_tick_`）。
 //! 行ごとの子 module: `empty_scope`（接頭辞 `vscpe_`・管理 tick の周の空の scope の片付け・契約表の行 v-scope-empty）。
+//! `write_detection`（接頭辞 `seat_doctor_write_budget_`・書き込みの検出線の doctor の行・設計 write-budget.md §5・§6）。
 //! tmux の群の歯・動詞の数を固定する歯・isolated seat の fixture はこの file に残す。
 //!
 //! tmux は **独立 socket**（`-S <tmp>/sock -f /dev/null`）の server だけを撃ち、開発席の
@@ -25,6 +26,7 @@ mod register;
 mod ruling;
 mod rules;
 mod tick;
+mod write_detection;
 // flip-check: moved s2-07l.681
 
 use crate::{make_tmp_dir, TmpDir};

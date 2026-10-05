@@ -27,7 +27,7 @@ const SECTORS_AT: usize = 6;
 /// 記録の file 名と lock file 名。
 const OPEN: &str = "open";
 const OPEN_TMP: &str = "open.tmp";
-const DAYS: &str = "days.log";
+pub(super) const DAYS: &str = "days.log";
 const LOCK: &str = "open.lock";
 
 /// `open` の 10 語の key（この順）。
@@ -50,7 +50,7 @@ pub(crate) enum Probe {
 const PROBES: &[Probe] = &[Probe::Ok, Probe::Unreadable, Probe::Malformed, Probe::StatMismatch];
 
 impl Probe {
-    fn as_str(self) -> &'static str {
+    pub(super) fn as_str(self) -> &'static str {
         match self {
             Self::Ok => "ok",
             Self::Unreadable => "unreadable",
@@ -87,7 +87,7 @@ impl Day {
         }
     }
 
-    fn parse(text: &str) -> Option<Self> {
+    pub(super) fn parse(text: &str) -> Option<Self> {
         DAYS_OF.iter().copied().find(|found| found.as_str() == text)
     }
 }
@@ -118,7 +118,7 @@ pub(super) enum Sighting {
 }
 
 /// 10 進の字だけの 1 語を数にする（符号と空は不可）。
-fn decimal(text: &str) -> Option<u64> {
+pub(super) fn decimal(text: &str) -> Option<u64> {
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
@@ -126,7 +126,7 @@ fn decimal(text: &str) -> Option<u64> {
 }
 
 /// UNIX 秒の UTC の日付（`YYYY-MM-DD`・[`format_utc`] の頭 10 字）。
-fn date_of(secs: u64) -> String {
+pub(super) fn date_of(secs: u64) -> String {
     format_utc(secs).chars().take(10).collect()
 }
 

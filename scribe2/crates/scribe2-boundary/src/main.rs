@@ -110,6 +110,7 @@ fn render_doctor_with(rest: &[String]) -> Result<Vec<String>, ()> {
             lines.extend(vessel::pipe::dispatch::unreflected::doctor_line(Path::new(dir)));
             lines.extend(vessel::seat::drafts_cap_doctor_line(Path::new(dir)));
             lines.extend(vessel::seat::brief::meter::doctor_line(Path::new(dir)));
+            lines.extend(vessel::fleet::write_detection::doctor_lines(Path::new(dir), rules));
         }
         (None, None, None, _) | (None, None, Some(_), Some(_)) if bin.is_none() && units.is_none() => {}
         (None, _, _, _) => return Err(()),

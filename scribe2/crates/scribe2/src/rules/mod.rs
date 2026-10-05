@@ -294,6 +294,14 @@ pub enum RuleKind {
     /// 器の健康の遮断器の**待ちの core あたりの倍率**（設計 gate-cost.md §32）。閾値 = 値 × 実測の core 数で、
     /// `/proc/stat` の `procs_blocked` がこれを超えた周は行を撃つ前に空くまで待つ。
     HostBlockedPerCore,
+    /// 書き込みの検出線の平均の線（10^9 byte・設計 write-budget.md §5）。昨日で終わる窓の 1 日平均がこれを越えた日は越え。
+    HostWriteAvgGb,
+    /// 書き込みの検出線の 1 日の線（10^9 byte）。1 日の書き込みがこれを越えた日は越え。
+    HostWriteDayGb,
+    /// 書き込みの検出線の平均の窓の日数（昨日で終わる日数）。
+    HostWriteAvgDays,
+    /// 書き込みの検出線の持ち主の段の連続日数（越えた閉じた日がこの数だけ続くと owner=yes）。
+    HostWriteOwnerDays,
     /// land が着地待ちの列で自分の番を待つ上限（秒）。超えたら待たずに進む（縮退・止めない）。
     PipeLandWaitS,
     /// 検出線を起こす間隔の下限（秒・設計 gate-cost.md §50）。land の終端は前に口を起こしてからこの秒が過ぎた周だけ
@@ -488,6 +496,10 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::GateCpuWeight,
     RuleKind::HostRunnablePerCore,
     RuleKind::HostBlockedPerCore,
+    RuleKind::HostWriteAvgGb,
+    RuleKind::HostWriteDayGb,
+    RuleKind::HostWriteAvgDays,
+    RuleKind::HostWriteOwnerDays,
     RuleKind::PipeLandWaitS,
     RuleKind::DetectionDailyMinS,
     RuleKind::PipeCiWaitS,
@@ -573,13 +585,12 @@ impl RuleKind {
             Self::GroupPressure5hPct => "GroupPressure5hPct", Self::GroupPressure7dPct => "GroupPressure7dPct",
             Self::GroupPressureModelPct => "GroupPressureModelPct",
             Self::FollowRetries => "FollowRetries", Self::RunnerEndGateRounds => "RunnerEndGateRounds",
-            Self::GateMutantsJobs => "GateMutantsJobs",
-            Self::GateJobMemoryMb => "GateJobMemoryMb",
-            Self::HostReserveMemoryMb => "HostReserveMemoryMb",
-            Self::GateSlotWaitS => "GateSlotWaitS",
-            Self::GateTmuxTestThreads => "GateTmuxTestThreads",
-            Self::GateCpuWeight => "GateCpuWeight",
+            Self::GateMutantsJobs => "GateMutantsJobs", Self::GateJobMemoryMb => "GateJobMemoryMb",
+            Self::HostReserveMemoryMb => "HostReserveMemoryMb", Self::GateSlotWaitS => "GateSlotWaitS",
+            Self::GateTmuxTestThreads => "GateTmuxTestThreads", Self::GateCpuWeight => "GateCpuWeight",
             Self::HostRunnablePerCore => "HostRunnablePerCore", Self::HostBlockedPerCore => "HostBlockedPerCore",
+            Self::HostWriteAvgGb => "HostWriteAvgGb", Self::HostWriteDayGb => "HostWriteDayGb",
+            Self::HostWriteAvgDays => "HostWriteAvgDays", Self::HostWriteOwnerDays => "HostWriteOwnerDays",
             Self::PipeLandWaitS => "PipeLandWaitS", Self::DetectionDailyMinS => "DetectionDailyMinS",
             Self::PipeCiWaitS => "PipeCiWaitS", Self::PipeCiPollS => "PipeCiPollS",
             Self::SeatDraftsStaleH => "SeatDraftsStaleH", Self::SeatDraftsCapMb => "SeatDraftsCapMb", Self::SeatDraftsBusyS => "SeatDraftsBusyS",
@@ -630,14 +641,9 @@ impl RuleKind {
             | Self::UsageFreshS
             | Self::GroupPressure5hPct | Self::GroupPressure7dPct | Self::GroupPressureModelPct
             | Self::FollowRetries | Self::RunnerEndGateRounds
-            | Self::GateMutantsJobs
-            | Self::GateJobMemoryMb
-            | Self::HostReserveMemoryMb
-            | Self::GateSlotWaitS
-            | Self::GateTmuxTestThreads
-            | Self::GateCpuWeight
-            | Self::HostRunnablePerCore
-            | Self::HostBlockedPerCore
+            | Self::GateMutantsJobs | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS
+            | Self::GateTmuxTestThreads | Self::GateCpuWeight | Self::HostRunnablePerCore | Self::HostBlockedPerCore
+            | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
             | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
             | Self::LedgerTimeoutS | Self::PipeLanesCapMb
@@ -687,6 +693,7 @@ impl RuleKind {
             | Self::FollowRetries | Self::RunnerEndGateRounds | Self::GateMutantsJobs | Self::GateJobMemoryMb
             | Self::HostReserveMemoryMb | Self::GateSlotWaitS | Self::GateTmuxTestThreads | Self::GateCpuWeight
             | Self::HostRunnablePerCore | Self::HostBlockedPerCore | Self::PipeLandWaitS | Self::DetectionDailyMinS
+            | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::LedgerTimeoutS | Self::RoleCapabilities
             | Self::PipeSizeSLines | Self::PipeSizeMLines | Self::PipeSizeLLines | Self::RunnerModel | Self::RunnerEffort
             | Self::LensModel | Self::RoleModel | Self::RoleEffort | Self::ReviewSameKindStop

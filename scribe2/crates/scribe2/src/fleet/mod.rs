@@ -20,6 +20,7 @@ pub mod select;
 pub mod store;
 pub mod usage;
 pub mod write_budget;
+pub mod write_detection;
 mod event;
 mod replay;
 mod wait;

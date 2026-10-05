@@ -470,6 +470,41 @@ enabled = true
 ruling = "user 2026-09-20T15:23Z"
 ruled_at = "2026-09-20"
 
+# 書き込みの検出線（設計 write-budget.md §5・ADR-0112）。単位は 10^9 byte（十進）・窓は昨日で終わる日数。平均の線か 1 日の線を
+# 越えた閉じた日が host.write_owner_days 日続くと、doctor の行が owner=yes を持つ（器は作業を止めない）。
+
+[[rule]]
+id = "host.write_avg_gb"
+kind = "HostWriteAvgGb"
+value = 1500
+enabled = true
+ruling = "user 2026-10-03T02:42Z 項 avg"
+ruled_at = "2026-10-03"
+
+[[rule]]
+id = "host.write_day_gb"
+kind = "HostWriteDayGb"
+value = 3000
+enabled = true
+ruling = "user 2026-10-03T02:42Z 項 day"
+ruled_at = "2026-10-03"
+
+[[rule]]
+id = "host.write_avg_days"
+kind = "HostWriteAvgDays"
+value = 7
+enabled = true
+ruling = "user 2026-10-03T02:42Z 項 window"
+ruled_at = "2026-10-03"
+
+[[rule]]
+id = "host.write_owner_days"
+kind = "HostWriteOwnerDays"
+value = 3
+enabled = true
+ruling = "user 2026-10-03T02:42Z 項 owner"
+ruled_at = "2026-10-03"
+
 # tmux を立てる歯（e2e の isolated seat）の同時本数（設計 gate-cost.md §3.1・契約表の行 b）。値の写しは nextest の
 # test-group `tmux` の max-threads（.config/nextest.toml）で、xtask check が写しの一致と配線を突合する（C10.3）。
 
