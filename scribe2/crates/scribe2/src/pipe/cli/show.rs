@@ -2,20 +2,26 @@
 //!
 //! 便の段の 1 行と、gate の検出線の判定行（[`detection_lines`]・在る周だけ・段の秒を伴う）と、claude の消費の
 //! 行（[`cost_lines`]・在る周だけ・母集団つき）と、便ごとの token 消費の検出線の判定行（[`ceiling_of`]・在る周だけ）。
+//! 旗 [`WRITE_FLAG`] の在る周だけ、末に便 1 本の装置への書きの段ごとと和の 1 行（[`written_of`]・行 v-run-write）を足す。
 
 use super::intake::run_repo;
-use super::{int_row, manifest_of, need, refused, state_dir_of};
+use super::{int_row, manifest_of, need, present, refused, state_dir_of};
 use crate::cli_outcome::{Outcome, RC_BROKEN};
 use crate::fleet::store::{self, StoreError};
 use crate::fleet::{replay, Cost, Event, EventKind};
 use crate::pipe::dispatch::permits;
 use crate::pipe::gate::{detection_copies, DetectionCopy};
+use crate::pipe::report::written_of;
 use crate::pipe::{run_dir, worktree_path};
 use crate::seat::state::now_secs;
 use std::cell::OnceCell;
 use std::path::{Path, PathBuf};
 
-/// `pipe show`。1 行目は便の段、2 行目以降は gate の検出線の判定行（[`detection_lines`]・在る周だけ）。
+/// `pipe show` の末に書きの 1 行を足す値なしの旗（行 v-run-write・旗の無い周の出力は替えない）。
+pub(super) const WRITE_FLAG: &str = "--write";
+
+/// `pipe show`。1 行目は便の段、2 行目以降は gate の検出線の判定行（[`detection_lines`]・在る周だけ）。旗 [`WRITE_FLAG`] の
+/// 在る周は、ほかの行の後に書きの 1 行を足す（読むだけ・event log と run dir に書かない）。
 pub(super) fn show(args: &[String]) -> Outcome {
     let id = match need(args, "--run") {
         Ok(found) => found.to_owned(),
@@ -46,6 +52,9 @@ pub(super) fn show(args: &[String]) -> Outcome {
     lines.extend(cost_lines(&events, &id));
     lines.extend(ceiling_of(args, &events, &id));
     lines.extend(permit_lines(args, &events, &run.bead));
+    if present(args, WRITE_FLAG) {
+        lines.push(written_of(&state_dir, &events, &id).line());
+    }
     Outcome::ok(lines)
 }
 

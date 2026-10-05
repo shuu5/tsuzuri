@@ -162,8 +162,9 @@ const ALLOWED_RUN: &[cli_args::Allowed] = &[
     value("--design"), value("--bead"), value("--contract"),
     TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3], value("--pr-cmd"), Allowed::switch(super::queue::DRIVE),
 ];
-/// `pipe show`。
-const ALLOWED_SHOW: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], value("--run")];
+/// `pipe show`（`--write` は書きの行を足す値なしの旗・行 v-run-write）。
+const ALLOWED_SHOW: &[cli_args::Allowed] =
+    &[PLACE[0], PLACE[1], PLACE[2], value("--run"), Allowed::switch(super::show::WRITE_FLAG)];
 /// `pipe resume`。
 const ALLOWED_RESUME: &[cli_args::Allowed] = &[
     PLACE[0], PLACE[1], PLACE[2],

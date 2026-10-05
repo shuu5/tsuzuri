@@ -14,6 +14,8 @@
 //!
 //! **2 行目は消費**（設計 gate-cost.md §26 形 (2) (d)・[`Spent`]）: 消費の event（`RunCost`）の token の和を、それを持つ
 //! 便の数（母集団）と同じ行に出し、gate の record の段の秒の和を添える。
+//!
+//! 便 1 本の装置への書きを段ごとに読む口（`pipe show --write`・[`written_of`]）は子の module `written` に置く（行 v-run-write）。
 
 use super::review::{read_detail, FindingKind, FINDING_KINDS};
 use crate::cli_outcome::{Outcome, RC_BROKEN};
@@ -24,6 +26,10 @@ use crate::pipe::gate::Verdict;
 use crate::pipe::verify_log_path;
 use std::collections::BTreeSet;
 use std::path::Path;
+
+mod written;
+
+pub use written::{written_of, Part, Written};
 
 /// 数えた 6 つ。**合算値だけを出さない**（内訳が到達点の主張そのものである）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
