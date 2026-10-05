@@ -6,14 +6,20 @@
 //! 4. 測りの札 `<名>/meter.json` の使った量（札が無いか読めなければ 0）が札の予算より小さければ通す。
 //! 5. 書き終えの段では、中核の `open` が通す呼び（SendMessage と `<名>/w` の下への書き）のほかは deny の答えを標準出力に 1 行で書いて 0。
 //!
+//! 係の dir に群の席の札 `group.json` の在る群の係は、4 の前に、読みの道具（Read）の割りの読む path の外の読みと係を起こす道具（Agent）の
+//! 呼びを断り、読み直し（測りの札の `cache_read`）が上限 `MEMBER_READ` 以上なら 5 と同じ呼びだけを通す（行 ag-gwatch・判断の記録 ADR-61 決定 (4)(7)）。
+//!
 //! rc は 0 か 1（使い方の誤り）だけ。門は file を書かない。
 
 use std::fs;
 use std::io::Read;
+use std::path::Path;
 
+use tsuzuri_core::agent::meter::group::{fence, read_path, read_refusal};
 use tsuzuri_core::agent::meter::guard::{OUT, open, refusal, spent, write_path};
 use tsuzuri_core::agent::meter::{METER, Meter, sub_call};
 use tsuzuri_core::agent::spec::deny;
+use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
 
 use super::agent_meter::resolve;
 use super::agent_spawn::{drafts, parse};
@@ -23,6 +29,21 @@ pub const USAGE: &str = "usage: tz hook agent-guard --repo <dir> [--drafts <dir>
 
 /// 使い方の誤り。
 const FAIL: u8 = 1;
+
+/// 群の係の呼びの断りの理由（割りの外の読みと入れ子・読み直しが上限以上の書き終えの段・群の係でなければ None）。
+fn member(
+    seat: Option<&Seat>,
+    tool: &str,
+    payload: &str,
+    meter: &Meter,
+    out: &Path,
+) -> Option<String> {
+    let seat = seat?;
+    fence(tool, read_path(payload).as_deref(), seat).or_else(|| {
+        (spent(meter.cache_read, MEMBER_READ) && !open(tool, write_path(payload).as_deref(), out))
+            .then(|| read_refusal(tool, meter.cache_read, out))
+    })
+}
 
 /// tz hook agent-guard の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
 pub fn run(rest: &[&str]) -> u8 {
@@ -47,12 +68,18 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some((name, spec)) = resolve(&dir, &call.agent_id) else {
         return 0;
     };
-    let used = fs::read_to_string(dir.join(&name).join(METER))
+    let meter = fs::read_to_string(dir.join(&name).join(METER))
         .ok()
         .and_then(|t| Meter::parse(&t))
-        .map_or(0, |m| m.used);
+        .unwrap_or_default();
+    let seat = fs::read_to_string(dir.join(&name).join(SEAT))
+        .ok()
+        .and_then(|t| Seat::parse(&t));
     let out = dir.join(&name).join(OUT);
-    if spent(used, spec.budget) && !open(&call.tool, write_path(&payload).as_deref(), &out) {
+    let used = meter.used;
+    if let Some(why) = member(seat.as_ref(), &call.tool, &payload, &meter, &out) {
+        emit(&deny(&why));
+    } else if spent(used, spec.budget) && !open(&call.tool, write_path(&payload).as_deref(), &out) {
         emit(&deny(&refusal(&call.tool, used, spec.budget, &out)));
     }
     0

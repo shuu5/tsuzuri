@@ -7,14 +7,20 @@
 //! 5. 測りの札 `<名>/meter.json` を書き、新しく越えた印が在れば残りの注ぎを PostToolUse の答えで 1 行出して 0。
 //!
 //! rc は 0 か 1（使い方の誤り）だけ。結びの名の解きと結びの無い呼びの記帳は、係の門と終える前の門も使う。
+//! 係の dir に群の席の札 `group.json` の在る群の係は、5 で読み直しの欄も上限 `MEMBER_READ` の印で数えて両方の欄の注ぎを出し、
+//! 読みの道具（Read）の path を群の id の dir に記帳する（行 ag-gwatch・判断の記録 ADR-61 決定 (5)(7)）。
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+use tsuzuri_core::agent::meter::group::{
+    READS, TWICE, first_reader, member_notice, read_line, read_path, twice_line,
+};
 use tsuzuri_core::agent::meter::{
     METER, Meter, SubCall, inject, notice, sub_call, transcript, unbound_line,
 };
+use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
 use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec};
 
 use super::agent_spawn::{drafts, parse};
@@ -64,6 +70,36 @@ fn tail(path: &str, offset: u64) -> Vec<u8> {
     bytes
 }
 
+/// 群の係の両方の欄の新しく越えた印の注ぎの字（越えた印が無ければ None）。
+fn member_marks(meter: &mut Meter, budget: u64) -> Option<String> {
+    let (new, read) = (meter.cross(budget), meter.cross_read(MEMBER_READ));
+    (new.is_some() || read.is_some()).then(|| member_notice(new, read, meter, budget))
+}
+
+/// 群の係の読みの path を群の id の dir の reads.jsonl に足し、同じ群のほかの係が先に読んだ path なら twice.jsonl にも足す
+/// （記帳だけで断らない・書けなければ標準エラー）。
+fn record(drafts: &Path, name: &str, seat: &Seat, path: &str) {
+    let dir = drafts.join(&seat.group);
+    let reads = fs::read_to_string(dir.join(READS)).unwrap_or_default();
+    let at = now();
+    let mut lines = vec![(READS, read_line(name, path, at))];
+    if let Some(first) = first_reader(&reads, name, path) {
+        lines.push((TWICE, twice_line(name, path, &first, at)));
+    }
+    for (file, line) in lines {
+        let wrote = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join(file))
+            .and_then(|mut f| writeln!(f, "{line}"));
+        if let Err(e) = wrote {
+            emit_err(&format!(
+                "tz hook agent-meter: 読みを記帳できない（通す）: {e}"
+            ));
+        }
+    }
+}
+
 /// tz hook agent-meter の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
 pub fn run(rest: &[&str]) -> u8 {
     let mut payload = String::new();
@@ -97,12 +133,23 @@ pub fn run(rest: &[&str]) -> u8 {
         .and_then(|t| Meter::parse(&t))
         .unwrap_or_default();
     meter.feed(&tail(&path, meter.offset));
-    let mark = meter.cross(spec.budget);
+    let seat = fs::read_to_string(dir.join(&name).join(SEAT))
+        .ok()
+        .and_then(|t| Seat::parse(&t));
+    let text = match &seat {
+        Some(_) => member_marks(&mut meter, spec.budget),
+        None => meter
+            .cross(spec.budget)
+            .map(|mark| notice(mark, &meter, spec.budget)),
+    };
     if let Err(e) = fs::write(&file, meter.render()) {
         emit_err(&format!("tz hook agent-meter: 測りの札を書けない: {e}"));
     }
-    if let Some(mark) = mark {
-        emit(&inject(&notice(mark, &meter, spec.budget)));
+    if let (Some(seat), Some(read)) = (&seat, read_path(&payload)) {
+        record(&dir, &name, seat, &read);
+    }
+    if let Some(text) = text {
+        emit(&inject(&text));
     }
     0
 }

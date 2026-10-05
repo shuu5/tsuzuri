@@ -4,7 +4,9 @@
 //! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
 //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
 //! 予算を越えた係の呼びの係の門の判じ（`guard`）は行 ag-guard が置く。
+//! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字（`group`）は行 ag-gwatch が置く。
 
+pub mod group;
 pub mod guard;
 
 use serde::{Deserialize, Serialize};
@@ -27,6 +29,9 @@ pub struct Meter {
     pub last_used: u64,
     pub last_cache_read: u64,
     pub marks: Vec<u64>,
+    /// 読み直しの欄で注いだ印（群の係だけ・行 ag-gwatch・前の札は空と読む）。
+    #[serde(default)]
+    pub read_marks: Vec<u64>,
 }
 
 /// 1 行の使用量（応答の id・新しい量・cache の読み）。assistant の行で usage の在る時だけ。
@@ -81,13 +86,23 @@ impl Meter {
 
     /// 予算 `budget` の印のうち新しく越えたものを札に足し、その最も大きい印を返す（越えた印が無ければ None）。
     pub fn cross(&mut self, budget: u64) -> Option<u64> {
-        let fresh: Vec<u64> = MARKS
-            .into_iter()
-            .filter(|m| self.used * 100 >= m * budget && !self.marks.contains(m))
-            .collect();
-        self.marks.extend(&fresh);
-        fresh.last().copied()
+        crossed(self.used, budget, &mut self.marks)
     }
+
+    /// 読み直しの上限 `limit` の印のうち新しく越えたものを読み直しの欄の印に足し、その最も大きい印を返す（群の係・行 ag-gwatch）。
+    pub fn cross_read(&mut self, limit: u64) -> Option<u64> {
+        crossed(self.cache_read, limit, &mut self.read_marks)
+    }
+}
+
+/// 値 `value` が上限 `limit` の印のうち `seen` に無く新しく越えたものを `seen` に足し、その最も大きい印を返す。
+fn crossed(value: u64, limit: u64, seen: &mut Vec<u64>) -> Option<u64> {
+    let fresh: Vec<u64> = MARKS
+        .into_iter()
+        .filter(|m| value * 100 >= m * limit && !seen.contains(m))
+        .collect();
+    seen.extend(&fresh);
+    fresh.last().copied()
 }
 
 /// 係の呼びの門の入力の欄（係の id・門の事・道具の名・親の記録の path・無い欄は空の字）。
