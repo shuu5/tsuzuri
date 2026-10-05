@@ -1,0 +1,1349 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+index 902b9877a7e0846331d84ad5cad7259b1f39670d..5c4b2fa7a37137f2cc0b70dbfad8b76f2d26f3f2 100644
+--- a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
++++ b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+@@ -10,9 +10,13 @@
+ //!
+ //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
+ //! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
++//! 出す物が差の file（.patch）を名指す係は、4 で床の記録の欠けと床の写しの撃ち直しの食い違いも子の `floor` で数え、
++//! 判じを出力の dir の門の記録に足す（判断の記録 ADR-63 決定 (4)・旗 --tz と --scribe2 は撃ち直しの道具）。
+ //!
+ //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
+ 
++pub mod floor;
++
+ use std::fs;
+ use std::io::Read;
+ use std::path::Path;
+@@ -27,7 +31,7 @@ use super::agent_spawn::{drafts, parse};
+ use crate::out::emit_err;
+ use crate::server::events::now;
+ 
+-pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>]";
++pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]";
+ 
+ /// 使い方の誤り。
+ const FAIL: u8 = 1;
+@@ -60,7 +64,8 @@ pub fn run(rest: &[&str]) -> u8 {
+     let Some(call) = sub_call(&payload) else {
+         return 0;
+     };
+-    let args = match parse(rest) {
++    let parsed = floor::tools(rest).and_then(|(left, tools)| Ok((parse(&left)?, tools)));
++    let (args, tools) = match parsed {
+         Ok(args) => args,
+         Err(e) => {
+             emit_err(&format!("tz hook agent-stop: {e}\n{USAGE}"));
+@@ -87,6 +92,7 @@ pub fn run(rest: &[&str]) -> u8 {
+         &shown,
+     );
+     holes.extend(claim_holes(&dir.join(&name), &spec, &out));
++    holes.extend(floor::holes(&dir, &spec, &out, stop.again, &tools));
+     if !holes.is_empty() && !stop.again {
+         emit_err(&hold(&holes, &shown));
+         return HOLD;
+diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..88582572cd144e455e9518b0080ac37ee49ee374
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/hook/subagent_stop/floor.rs
+@@ -0,0 +1,346 @@
++//! 終える前の門の床の撃ち直し（判断の記録 ADR-63 決定 (4)・要件 FR21）。出す物が差の file を名指す係だけを見る。順:
++//! 1. 出力の dir の床の記録 `floor.tsv` を読む。無ければ撃ち直さない。
++//! 2. 記録に行の在る行が在れば、床の写し `<置き場>/try-<名>-fl` と空の state dir `<名>/floor-state` と道具を解き、器の表の検査
++//!    （scribe2 contracts check --repo <床> --base main）を別の子で撃ちながら、tz check と tz derive --check と行ごとの preflight
++//!    （空の state dir・--bead は札の対象）を撃つ。解けない物・撃てない物・上限の内に終わらない物は、まだ分からないの字にする。
++//! 3. 中核の `judge` で行ごとに判じ、出力の dir の門の記録 `floor-gate.tsv` に 1 行ずつ足して、欠けの字を返す（書けなければ標準エラーに書く）。
++//!
++//! 道具の tz は既定でこの process の binary、scribe2 は既定で PATH の名で、旗 --tz と --scribe2 が替える。
++
++use std::collections::BTreeMap;
++use std::ffi::{OsStr, OsString};
++use std::fs;
++use std::io::{Read, Write};
++use std::os::unix::process::CommandExt;
++use std::path::{Path, PathBuf};
++use std::process::{Child, Command, Stdio};
++use std::thread::{self, JoinHandle};
++use std::time::{Duration, Instant};
++
++use tsuzuri_core::agent::spec::Spec;
++use tsuzuri_core::agent::stop::floor::{
++    LOG, RECORD, Rerun, STATE, copy_name, judge, locate, log_line, record, rows, table_rc,
++};
++
++use crate::out::emit_err;
++use crate::server::events::now;
++use crate::server::proc::{KILL, stop_with};
++use crate::server::ruling::minute;
++
++/// 撃ち直しの全部の上限（hooks.json の終える前の門の timeout の内）。
++pub const LIMIT: Duration = Duration::from_secs(100);
++
++/// 子の終わりを確かめる間隔。
++const STEP: Duration = Duration::from_millis(20);
++
++/// 撃ち直しの道具（tz の binary の path・無ければ解けない・scribe2 の program）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Tools {
++    pub tz: Option<PathBuf>,
++    pub scribe2: OsString,
++}
++
++/// 引数から旗 --tz と --scribe2 を抜き、残りの引数と道具を返す（`--名 値` か `--名=値`・空の値と 2 度目は断る）。
++pub fn tools<'a>(rest: &[&'a str]) -> Result<(Vec<&'a str>, Tools), String> {
++    let (mut tz, mut scribe2, mut left) = (None, None, Vec::new());
++    let mut it = rest.iter();
++    while let Some(arg) = it.next() {
++        let (name, inline) = match arg.split_once('=') {
++            Some((n, v)) => (n, Some(v)),
++            None => (*arg, None),
++        };
++        let slot = match name {
++            "--tz" => &mut tz,
++            "--scribe2" => &mut scribe2,
++            _ => {
++                left.push(*arg);
++                continue;
++            }
++        };
++        let value = match inline {
++            Some(v) => v,
++            None => it.next().ok_or_else(|| format!("{name} の値が無い"))?,
++        };
++        if value.is_empty() {
++            return Err(format!("{name} の値が空"));
++        }
++        if slot.replace(value).is_some() {
++            return Err(format!("{name} が 2 度ある"));
++        }
++    }
++    let tools = Tools {
++        tz: tz
++            .map(PathBuf::from)
++            .or_else(|| std::env::current_exe().ok()),
++        scribe2: OsString::from(scribe2.unwrap_or("scribe2")),
++    };
++    Ok((left, tools))
++}
++
++/// 撃ち始めた子と、標準出力と標準エラーを読む thread。
++struct Shot {
++    child: Child,
++    readers: Vec<JoinHandle<Vec<u8>>>,
++}
++
++/// 子を撃ち始める（cwd・標準入力は空・新しい process group・`keep` の時だけ標準出力と標準エラーを読む）。
++fn fire(program: &OsStr, args: &[OsString], cwd: &Path, keep: bool) -> Result<Shot, String> {
++    let pipe = || if keep { Stdio::piped() } else { Stdio::null() };
++    let mut child = Command::new(program)
++        .args(args)
++        .current_dir(cwd)
++        .stdin(Stdio::null())
++        .stdout(pipe())
++        .stderr(pipe())
++        .process_group(0)
++        .spawn()
++        .map_err(|e| {
++            let shown = Path::new(program).display();
++            format!("道具 {shown} を撃てない（cwd {}・{e}）", cwd.display())
++        })?;
++    let mut readers = Vec::new();
++    let streams: [Option<Box<dyn Read + Send>>; 2] = [
++        child
++            .stdout
++            .take()
++            .map(|s| Box::new(s) as Box<dyn Read + Send>),
++        child
++            .stderr
++            .take()
++            .map(|s| Box::new(s) as Box<dyn Read + Send>),
++    ];
++    for mut stream in streams.into_iter().flatten() {
++        readers.push(thread::spawn(move || {
++            let mut bytes = Vec::new();
++            let _ = stream.read_to_end(&mut bytes);
++            bytes
++        }));
++    }
++    Ok(Shot { child, readers })
++}
++
++impl Shot {
++    /// 子の終わりを `deadline` まで待ち、rc と読めた字（標準出力の後に標準エラー）を返す（上限の内に終わらなければ group ごと止める）。
++    fn land(mut self, what: &str, deadline: Instant) -> Result<(i32, String), String> {
++        loop {
++            match self.child.try_wait() {
++                Ok(Some(status)) => {
++                    let text: String = self
++                        .readers
++                        .into_iter()
++                        .filter_map(|h| h.join().ok())
++                        .map(|b| String::from_utf8_lossy(&b).into_owned())
++                        .collect();
++                    return status
++                        .code()
++                        .map(|rc| (rc, text))
++                        .ok_or_else(|| format!("{what} が signal で止まった"));
++                }
++                Ok(None) if Instant::now() < deadline => thread::sleep(STEP),
++                _ => {
++                    stop_with(self.child, OsStr::new(KILL));
++                    return Err(format!("{what} が {} 秒の内に終わらない", LIMIT.as_secs()));
++                }
++            }
++        }
++    }
++}
++
++/// 子を撃って rc を返す（出力は捨てる）。
++fn rc(
++    program: &OsStr,
++    args: &[&str],
++    cwd: &Path,
++    what: &str,
++    deadline: Instant,
++) -> Result<i32, String> {
++    let args: Vec<OsString> = args.iter().map(OsString::from).collect();
++    fire(program, &args, cwd, false)?
++        .land(what, deadline)
++        .map(|(rc, _)| rc)
++}
++
++/// 床の写しの contracts の直下の .toml から、行の在る file（`contracts/<名>.toml`）と行の頭と verify の行の数。
++fn find(floor: &Path, row: &str) -> Option<(String, usize, usize)> {
++    let mut files: Vec<PathBuf> = fs::read_dir(floor.join("contracts"))
++        .ok()?
++        .flatten()
++        .map(|e| e.path())
++        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
++        .collect();
++    files.sort();
++    files.iter().find_map(|p| {
++        let (head, lines) = locate(&fs::read_to_string(p).ok()?, row)?;
++        Some((
++            format!("contracts/{}", p.file_name()?.to_str()?),
++            head,
++            lines,
++        ))
++    })
++}
++
++/// 床の写しと空の state dir（解けなければ見つからない物の字）。
++fn places(dir: &Path, name: &str) -> Result<(PathBuf, PathBuf), String> {
++    let floor = dir.join(copy_name(name));
++    if !floor.is_dir() {
++        return Err(format!("床の写し {} が dir として無い", floor.display()));
++    }
++    let state = dir.join(name).join(STATE);
++    let empty = fs::create_dir_all(&state)
++        .and_then(|()| fs::read_dir(&state))
++        .is_ok_and(|mut d| d.next().is_none());
++    if !empty {
++        return Err(format!(
++            "空の state dir {} が無い（作れないか空でない）",
++            state.display()
++        ));
++    }
++    Ok((floor, state))
++}
++
++/// 1 行の preflight の rc と、行の頭（ノートの file `contracts/<名>.toml` と番号）と verify の行の数。
++struct Pre {
++    rc: i32,
++    note: String,
++    head: usize,
++    lines: usize,
++}
++
++/// 1 行の preflight を撃つ（行の在る契約表の file を床の写しから探す）。
++fn preflight(
++    tools: &Tools,
++    (floor, state): (&Path, &Path),
++    row: &str,
++    bead: &str,
++    deadline: Instant,
++) -> Result<Pre, String> {
++    let (note, head, lines) = find(floor, row)
++        .ok_or_else(|| format!("床の写しの contracts の直下の .toml に行 {row} が無い"))?;
++    let args: Vec<OsString> = [
++        OsStr::new("pipe"),
++        OsStr::new("preflight"),
++        OsStr::new("--state-dir"),
++        state.as_os_str(),
++        OsStr::new("--repo"),
++        floor.as_os_str(),
++        OsStr::new("--design"),
++        OsStr::new(&format!("{note}#{row}")),
++        OsStr::new("--bead"),
++        OsStr::new(bead),
++    ]
++    .iter()
++    .map(OsString::from)
++    .collect();
++    let what = format!("preflight（行 {row}）");
++    let (rc, _) = fire(&tools.scribe2, &args, floor, false)?.land(&what, deadline)?;
++    Ok(Pre {
++        rc,
++        note,
++        head,
++        lines,
++    })
++}
++
++/// 記録に行の在る行 `ids` の撃ち直し（器の表の検査を別の子で撃ちながらほかの 3 本を撃つ）。
++fn rerun_all(
++    dir: &Path,
++    spec: &Spec,
++    ids: &[String],
++    tools: &Tools,
++) -> Result<BTreeMap<String, Result<Rerun, String>>, String> {
++    let (floor, state) = places(dir, &spec.name)?;
++    let tz = tools
++        .tz
++        .as_deref()
++        .ok_or("道具 tz（この process の binary の path）が見つからない")?;
++    let deadline = Instant::now() + LIMIT;
++    let table_args: Vec<OsString> = ["contracts", "check", "--repo"]
++        .iter()
++        .map(OsString::from)
++        .chain([
++            floor.clone().into_os_string(),
++            "--base".into(),
++            "main".into(),
++        ])
++        .collect();
++    let table = fire(&tools.scribe2, &table_args, &floor, true)?;
++    let check = rc(tz.as_os_str(), &["check"], &floor, "tz check", deadline)?;
++    let derive_args = ["derive", "--dir", ".", "--out", "../contracts", "--check"];
++    let derive = rc(
++        tz.as_os_str(),
++        &derive_args,
++        &floor.join("design-intent"),
++        "tz derive --check",
++        deadline,
++    )?;
++    let rows: Vec<(String, Result<Pre, String>)> = ids
++        .iter()
++        .map(|id| {
++            (
++                id.clone(),
++                preflight(tools, (&floor, &state), id, &spec.target, deadline),
++            )
++        })
++        .collect();
++    let (table_rc_all, text) = table.land("器の表の検査", deadline)?;
++    Ok(rows
++        .into_iter()
++        .map(|(id, pre)| {
++            let re = pre.map(|p| Rerun {
++                rcs: [
++                    p.rc,
++                    check,
++                    derive,
++                    table_rc(&text, table_rc_all, &p.note, p.head),
++                ],
++                verify: p.lines.saturating_sub(1),
++            });
++            (id, re)
++        })
++        .collect())
++}
++
++/// 門の記録に行を足す（出力の dir が無ければ作る）。
++fn append(out: &Path, lines: &str) -> std::io::Result<()> {
++    fs::create_dir_all(out)?;
++    fs::OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(out.join(LOG))?
++        .write_all(lines.as_bytes())
++}
++
++/// 差の file を名指す係の床の欠けの字の列（差の file を名指さない係は空で、門の記録を書かない）。
++/// `dir` は起草の置き場・`out` は係の出力の dir・`again` は止めた後の 2 度目の終わりか。
++pub fn holes(dir: &Path, spec: &Spec, out: &Path, again: bool, tools: &Tools) -> Vec<String> {
++    let ids = rows(&spec.outputs);
++    if ids.is_empty() {
++        return Vec::new();
++    }
++    let text = fs::read_to_string(out.join(RECORD)).ok();
++    let had: Vec<String> = text
++        .as_deref()
++        .map(record)
++        .map(|r| ids.iter().filter(|i| r.contains_key(*i)).cloned().collect())
++        .unwrap_or_default();
++    let reruns = if had.is_empty() {
++        Ok(BTreeMap::new())
++    } else {
++        rerun_all(dir, spec, &had, tools)
++    };
++    let (verdicts, lacks) = judge(&ids, text.as_deref(), |row| match &reruns {
++        Ok(map) => map
++            .get(row)
++            .cloned()
++            .unwrap_or_else(|| Err(format!("行 {row} を撃ち直していない"))),
++        Err(what) => Err(what.clone()),
++    });
++    let at = minute(now());
++    let lines: String = verdicts.iter().map(|v| log_line(&at, again, v)).collect();
++    if let Err(e) = append(out, &lines) {
++        emit_err(&format!(
++            "tz hook agent-stop: 床の門の記録を書けない（通す）: {e}"
++        ));
++    }
++    lacks
++}
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index 4beb46de7368bfb2a769ddde41af9d70994e4d8f..34b3879ff48bfe48e9bfd30b9b9e8212090d7269 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -16,7 +16,7 @@
+ //! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く（行 i-11）。
+ //! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
+ //! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
+-//! tz hook agent-stop --repo <dir> [--drafts <dir>]（行 ag-stop・係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
++//! tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]（行 ag-stop・係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
+ //! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
+ //! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
+ //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
+diff --git a/crates/tsuzuri-boundary/tests/agflr.rs b/crates/tsuzuri-boundary/tests/agflr.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..61f362d6fc93ba1756e49a52b95e4dbda3d3fb94
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agflr.rs
+@@ -0,0 +1,591 @@
++//! 終える前の門の床の記録と撃ち直しの歯（接頭辞 agflr_・設計ノート surface-wave29c 行 ag-floor-rec・判断の記録 ADR-63 の決定 (4)）。
++//! 中核の `floor` の純関数を直に撃ち、tz の binary の tz hook agent-stop に係の終わりの入力を標準入力で渡して、歯ごとの置き場
++//! （CARGO_TARGET_TMPDIR の下）を --drafts で、偽の道具（tz と scribe2 の殻の script・撃たれた cwd と引数を log に足す）を --tz と
++//! --scribe2 で渡す。参照の file の 7 節と 11 節の句は、手引きが天井の文で振る舞いを持たないので、節の塊の中の字を照らす。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++use tsuzuri_core::agent::spec::Spec;
++use tsuzuri_core::agent::stop::floor::{
++    Kind, Rec, Rerun, Verdict, judge, locate, log_line, record, rows, table_rc,
++};
++
++/// 見本の契約表（行 r0 の頭は 3 行目で verify は 2 行・行 r1 の頭は 9 行目で verify は 3 行）。
++const TOML: &str = "schema = 1\n\n[[contract]]\nid = \"r0\"\ntitle = \"t\"\nverify = [\"a\", \"b\"]\ndone = \"d\"\n\n\
++[[contract]]\nid = \"r1\"\ntitle = \"t\"\nverify = [\"a\", \"b\", \"c\"]\ndone = \"d\"\n";
++
++#[test]
++fn agflr_rows_are_the_patch_outputs_once_in_order() {
++    let outs = [
++        "w/notes.md",
++        "w/patch/b.patch",
++        "a.patch",
++        "w/patch/b.patch",
++        "w/patch/.patch",
++        "c.patches",
++    ]
++    .map(String::from);
++    assert_eq!(rows(&outs), ["b", "a"]);
++    assert!(rows(&["notes.md".to_string()]).is_empty());
++}
++
++#[test]
++fn agflr_record_reads_six_tab_fields_and_skips_the_rest() {
++    let text = "#r9\t0\t0\t0\t0\t0\nr0\t0\t0\t0\t0\t\nr1\t0\t1\t0\t2\t0,101\nr2\t0\t0\t0\t0\nr3\t0\tx\t0\t0\t0\n\
++r4\t0\t0\t0\t0\t0,,1\n\t0\t0\t0\t0\t0\nr5\t2\t0\t0\t0\t101\nr1\t0\t0\t0\t0\t0,0\n";
++    let got = record(text);
++    assert_eq!(got.keys().collect::<Vec<_>>(), ["r0", "r1", "r5"]);
++    let rec = |rcs: [i32; 4], verify: &[i32]| Rec {
++        rcs,
++        verify: verify.to_vec(),
++    };
++    assert_eq!(got.get("r0"), Some(&rec([0; 4], &[])));
++    assert_eq!(got.get("r1"), Some(&rec([0; 4], &[0, 0])));
++    assert_eq!(got.get("r5"), Some(&rec([2, 0, 0, 0], &[101])));
++}
++
++#[test]
++fn agflr_locate_finds_the_row_head_and_its_verify_lines() {
++    assert_eq!(locate(TOML, "r1"), Some((9, 3)));
++    assert_eq!(locate(TOML, "r0"), Some((3, 2)));
++    assert_eq!(locate(TOML, "r"), None);
++    let bare = TOML.replacen("verify = [\"a\", \"b\"]\n", "", 1);
++    assert_eq!(locate(&bare, "r0"), None);
++    assert_eq!(locate(&TOML.replace("[[contract]]", "[x]"), "r1"), None);
++}
++
++#[test]
++fn agflr_table_rc_counts_only_lines_naming_the_row_head() {
++    let note = "contracts/n.toml";
++    let out = "contracts: contracts/n.toml:3 contract-table:done-teeth: 行 r0\n\
++contracts: contracts/m.toml:9 write-set-item-unresolved: x\ncontracts: contracts/n.toml:90 x\n  contracts: contracts/n.toml:9 x\n";
++    assert_eq!(table_rc(out, 1, note, 9), 0);
++    assert_eq!(table_rc(out, 1, note, 3), 1);
++    let named =
++        format!("{out}contracts: contracts/n.toml:9 contract-table:done-teeth-missing: 行 r1\n");
++    assert_eq!(table_rc(&named, 1, note, 9), 1);
++    assert_eq!(table_rc(out, 2, note, 3), 2);
++    assert_eq!(table_rc("", 0, note, 9), 0);
++}
++
++/// 撃ち直しの見本。
++fn re(rcs: [i32; 4], verify: usize) -> Result<Rerun, String> {
++    Ok(Rerun { rcs, verify })
++}
++
++/// 行ごとの (行 id・型・詳細)。
++fn kinds(all: &[Verdict]) -> Vec<(&str, Kind, &str)> {
++    all.iter()
++        .map(|v| (v.row.as_str(), v.kind, v.detail.as_str()))
++        .collect()
++}
++
++#[test]
++fn agflr_judge_names_one_kind_per_row() {
++    let ids = ["ok", "gone", "far", "lie", "red", "short", "vred", "both"].map(String::from);
++    let text = "ok\t0\t0\t0\t0\t0,0\nfar\t0\t0\t0\t0\t0,0\nlie\t0\t0\t0\t0\t0,0\nred\t1\t0\t0\t0\t0,0\n\
++short\t0\t0\t0\t0\t0\nvred\t0\t0\t0\t0\t0,101\nboth\t1\t0\t0\t1\t0,0\n";
++    let (all, lacks) = judge(&ids, Some(text), |r| match r {
++        "far" => Err("床の写し /D/try-w-fl が dir として無い".to_string()),
++        "lie" => re([0, 0, 0, 1], 2),
++        "red" | "both" => re([1, 0, 0, 0], 2),
++        _ => re([0; 4], 2),
++    });
++    assert_eq!(
++        kinds(&all),
++        [
++            ("ok", Kind::Ok, "-"),
++            ("gone", Kind::NoRow, "-"),
++            (
++                "far",
++                Kind::Unknown,
++                "床の写し /D/try-w-fl が dir として無い"
++            ),
++            ("lie", Kind::Mismatch, "table=0/1"),
++            ("red", Kind::Rc, "preflight=1"),
++            ("short", Kind::NoRow, "verify=1/2"),
++            ("vred", Kind::Rc, "verify3=101"),
++            ("both", Kind::Mismatch, "preflight=1,table=1/0"),
++        ]
++    );
++    assert_eq!(
++        lacks,
++        [
++            "床の記録 floor.tsv に行 gone の行が無い（欄はタブで区切った 6 つ・rc は整数）",
++            "床を撃ち直せない（まだ分からない）: 床の写し /D/try-w-fl が dir として無い",
++            "床の記録の行 lie の 器の表の検査 の rc 0 が撃ち直しの rc 1 と違う",
++            "床の記録の行 red の preflight の rc が 1（0 でない）",
++            "床の記録の行 short の verify の rc が 1 個（verify の 2 行目から最後の行の 2 個が要る）",
++            "床の記録の行 vred の verify の 3 行目の rc が 101（0 でない）",
++            "床の記録の行 both の preflight の rc が 1（0 でない）",
++            "床の記録の行 both の 器の表の検査 の rc 1 が撃ち直しの rc 0 と違う",
++        ]
++    );
++}
++
++#[test]
++fn agflr_judge_without_a_record_or_with_one_cause_names_it_once() {
++    let ids = ["a", "b"].map(String::from);
++    let (all, lacks) = judge(&ids, None, |_| panic!("記録の無い時は撃ち直さない"));
++    assert_eq!(
++        kinds(&all),
++        [("a", Kind::NoRecord, "-"), ("b", Kind::NoRecord, "-")]
++    );
++    assert_eq!(
++        lacks,
++        ["床の記録 floor.tsv が出力の dir に無い（差の file の行 a・b ごとに 1 行）"]
++    );
++    let text = "a\t0\t0\t0\t0\t\nb\t0\t0\t0\t0\t\n";
++    let (all, lacks) = judge(&ids, Some(text), |_| Err("道具 x を撃てない".to_string()));
++    assert_eq!(
++        all.iter().map(|v| v.kind).collect::<Vec<_>>(),
++        [Kind::Unknown; 2]
++    );
++    assert_eq!(
++        lacks,
++        ["床を撃ち直せない（まだ分からない）: 道具 x を撃てない"]
++    );
++    let (_, none) = judge(&[], None, |_| panic!("行の無い時は撃ち直さない"));
++    assert!(none.is_empty());
++}
++
++#[test]
++fn agflr_kinds_and_log_line_keep_the_measure_form() {
++    let names = [
++        Kind::NoRecord,
++        Kind::NoRow,
++        Kind::Unknown,
++        Kind::Mismatch,
++        Kind::Rc,
++        Kind::Ok,
++    ]
++    .map(Kind::as_str);
++    assert_eq!(
++        names,
++        ["no-record", "no-row", "unknown", "mismatch", "rc", "ok"]
++    );
++    let v = Verdict {
++        row: "r1".into(),
++        kind: Kind::Mismatch,
++        detail: "table=0/1".into(),
++        lacks: vec!["x".into()],
++    };
++    assert_eq!(
++        log_line("20261005T1200Z", false, &v),
++        "20261005T1200Z\t1\tr1\tmismatch\ttable=0/1\n"
++    );
++    assert_eq!(
++        log_line("20261005T1200Z", true, &v),
++        "20261005T1200Z\t2\tr1\tmismatch\ttable=0/1\n"
++    );
++}
++
++/// 係の記録の、席への SendMessage の在る行。
++const TOLD: &str = r#"{"type":"assistant","message":{"id":"A","content":[{"type":"tool_use","id":"t1","name":"SendMessage","input":{"to":"team-lead","message":"済み"}}]}}"#;
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）: 係 w300a（係の id a77・対象 t3-hub.87・出す物 `outputs`）の札と結びと記録と出す物と、
++/// 床の写し（見本の契約表 contracts/n.toml と dir design-intent）。`rec` が在れば床の記録を置く。
++fn whole(name: &str, outputs: &[&str], rec: Option<&str>) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("agflr")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    let agent = root.join("drafts/w300a");
++    let floor = root.join("drafts/try-w300a-fl");
++    for dir in [
++        agent.join("w/patch"),
++        root.join("drafts/.agents"),
++        root.join("s"),
++        root.join("bin"),
++        floor.join("contracts"),
++        floor.join("design-intent"),
++    ] {
++        fs::create_dir_all(dir).unwrap();
++    }
++    let outs: Vec<String> = outputs.iter().map(|o| format!("{o:?}")).collect();
++    let spec = format!(
++        r#"{{"name":"w300a","type":"tsuzuri:drafter","budget":1000,"build":"重","target":"t3-hub.87","outputs":[{}],"spawned":1,"agent_id":"a77","ended":null}}"#,
++        outs.join(",")
++    );
++    fs::write(agent.join("spec.json"), spec).unwrap();
++    for o in outputs {
++        fs::write(agent.join("w").join(o), "x\n").unwrap();
++    }
++    if let Some(text) = rec {
++        fs::write(agent.join("w/floor.tsv"), text).unwrap();
++    }
++    fs::write(root.join("drafts/.agents/a77"), "w300a\n").unwrap();
++    fs::write(root.join("s/agent-a77.jsonl"), format!("{TOLD}\n")).unwrap();
++    fs::write(floor.join("contracts/n.toml"), TOML).unwrap();
++    root
++}
++
++/// 偽の道具を置く（tz は check と derive の rc・scribe2 は preflight の rc と、器の表の検査が出す行と rc 1）。撃たれた cwd と引数を log に足す。
++fn fake(root: &Path, (check, derive, pre): (i32, i32, i32), lines: &[&str]) {
++    let log = |tool: &str| {
++        format!(
++            "echo \"$(pwd -P) $*\" >> '{}'\n",
++            root.join(format!("{tool}.log")).display()
++        )
++    };
++    let tz = format!(
++        "#!/bin/sh\n{}case \"$1\" in\ncheck) exit {check} ;;\nderive) exit {derive} ;;\nesac\nexit 9\n",
++        log("tz")
++    );
++    let said: String = lines.iter().map(|l| format!("echo '{l}'\n")).collect();
++    let scribe2 = format!(
++        "#!/bin/sh\n{}case \"$1\" in\npipe) exit {pre} ;;\ncontracts)\n{said}exit 1 ;;\nesac\nexit 9\n",
++        log("scribe2")
++    );
++    for (name, body) in [("tz", tz), ("scribe2", scribe2)] {
++        let path = root.join("bin").join(name);
++        fs::write(&path, body).unwrap();
++        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
++    }
++}
++
++/// tz hook agent-stop に係の終わり（止めた後の終わりか `again`）と、--repo と --drafts の後の引数 `extra` を渡した結果。
++fn hook(root: &Path, again: bool, extra: &[String]) -> Output {
++    let input = format!(
++        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","agent_id":"a77","agent_type":"tsuzuri:drafter","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"済み。出す物は {} に在る"}}"#,
++        root.join("s/agent-a77.jsonl").display(),
++        root.join("drafts/w300a/w").display()
++    );
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", "agent-stop", "--repo"])
++        .arg(root)
++        .arg("--drafts")
++        .arg(root.join("drafts"))
++        .args(extra)
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    let _ = child.stdin.take().unwrap().write_all(input.as_bytes());
++    child.wait_with_output().unwrap()
++}
++
++/// 道具を置き場の bin の下に向けた終わり（tz は --tz の 2 語・scribe2 は bin の下の名 `scribe2` を --scribe2= の 1 語）。
++fn stop(root: &Path, again: bool, scribe2: &str) -> Output {
++    let tz = root.join("bin/tz").display().to_string();
++    let s2 = format!("--scribe2={}", root.join("bin").join(scribe2).display());
++    hook(root, again, &["--tz".to_string(), tz, s2])
++}
++
++/// 門の記録の行の、時刻を除いた欄（終わりの回・行 id・型・詳細）。
++fn gate_rows(root: &Path) -> Vec<String> {
++    fs::read_to_string(root.join("drafts/w300a/w/floor-gate.tsv"))
++        .unwrap_or_default()
++        .lines()
++        .map(|l| {
++            let (at, rest) = l.split_once('\t').unwrap_or_default();
++            assert!(
++                at.len() == 14 && at.ends_with('Z') && at.chars().nth(8) == Some('T'),
++                "{l}"
++            );
++            rest.to_string()
++        })
++        .collect()
++}
++
++/// 札の終えの印。
++fn ended(root: &Path) -> Option<u64> {
++    Spec::parse(&fs::read_to_string(root.join("drafts/w300a/spec.json")).unwrap())
++        .unwrap()
++        .ended
++}
++
++#[test]
++fn agflr_hook_lets_an_agent_without_patches_end_as_before() {
++    let root = whole("plain", &["notes.md"], None);
++    fake(&root, (0, 0, 0), &[]);
++    let out = stop(&root, false, "scribe2");
++    assert_eq!(
++        (out.status.code(), out.stdout.len(), out.stderr.len()),
++        (Some(0), 0, 0)
++    );
++    assert!(ended(&root).is_some());
++    for file in [
++        "drafts/w300a/w/floor-gate.tsv",
++        "tz.log",
++        "scribe2.log",
++        "drafts/w300a/floor-state",
++    ] {
++        assert!(!root.join(file).exists(), "{file}");
++    }
++}
++
++#[test]
++fn agflr_hook_refuses_an_empty_missing_or_twice_given_tool_flag() {
++    let root = whole("flags", &["notes.md", "patch/r1.patch"], None);
++    for (extra, why) in [
++        (vec!["--tz"], "--tz の値が無い"),
++        (vec!["--scribe2="], "--scribe2 の値が空"),
++        (vec!["--tz", "a", "--tz=b"], "--tz が 2 度ある"),
++    ] {
++        let extra: Vec<String> = extra.into_iter().map(String::from).collect();
++        let out = hook(&root, false, &extra);
++        let err = String::from_utf8_lossy(&out.stderr);
++        assert_eq!(out.status.code(), Some(1), "{extra:?}");
++        assert!(
++            err.starts_with(&format!(
++                "tz hook agent-stop: {why}\nusage: tz hook agent-stop "
++            )),
++            "{err}"
++        );
++    }
++    assert!(!root.join("drafts/w300a/w/floor-gate.tsv").exists());
++}
++
++#[test]
++fn agflr_hook_holds_a_patch_agent_without_a_record_and_runs_nothing() {
++    let root = whole("norec", &["notes.md", "patch/r1.patch"], None);
++    fake(&root, (0, 0, 0), &[]);
++    let out = stop(&root, false, "scribe2");
++    assert_eq!((out.status.code(), out.stdout.len()), (Some(2), 0));
++    let err = String::from_utf8_lossy(&out.stderr);
++    assert!(
++        err.starts_with("係の終える前の門は止める（床の記録 floor.tsv が出力の dir に無い（差の file の行 r1 ごとに 1 行）） 次の一手 = "),
++        "{err}"
++    );
++    assert_eq!(gate_rows(&root), ["1\tr1\tno-record\t-"]);
++    assert_eq!(ended(&root), None);
++    assert!(!root.join("tz.log").exists() && !root.join("scribe2.log").exists());
++}
++
++#[test]
++fn agflr_hook_passes_a_record_the_rerun_agrees_with() {
++    let root = whole(
++        "agree",
++        &["notes.md", "patch/r1.patch"],
++        Some("# 頭\nr1\t0\t0\t0\t0\t0,0\n"),
++    );
++    fake(
++        &root,
++        (0, 0, 0),
++        &["contracts: contracts/n.toml:3 contract-table:done-teeth: 行 r0"],
++    );
++    let out = stop(&root, false, "scribe2");
++    assert_eq!(
++        (out.status.code(), out.stdout.len(), out.stderr.len()),
++        (Some(0), 0, 0),
++        "{}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++    assert_eq!(gate_rows(&root), ["1\tr1\tok\t-"]);
++    assert!(ended(&root).is_some());
++    let floor = fs::canonicalize(root.join("drafts/try-w300a-fl")).unwrap();
++    let state = fs::canonicalize(root.join("drafts/w300a/floor-state")).unwrap();
++    assert_eq!(fs::read_dir(&state).unwrap().count(), 0);
++    let tz = fs::read_to_string(root.join("tz.log")).unwrap();
++    let f = floor.display();
++    assert_eq!(
++        tz,
++        format!("{f} check\n{f}/design-intent derive --dir . --out ../contracts --check\n")
++    );
++    let mut seen: Vec<String> = fs::read_to_string(root.join("scribe2.log"))
++        .unwrap()
++        .lines()
++        .map(String::from)
++        .collect();
++    seen.sort();
++    let want = [
++        format!("{f} contracts check --repo {f} --base main"),
++        format!(
++            "{f} pipe preflight --state-dir {} --repo {f} --design contracts/n.toml#r1 --bead t3-hub.87",
++            state.display()
++        ),
++    ];
++    assert_eq!(seen, want);
++}
++
++/// 止める見本の置き場と、その 1 度目の終わりの標準エラーと門の記録の行。
++fn held(
++    name: &str,
++    rec: &str,
++    rcs: (i32, i32, i32),
++    lines: &[&str],
++    scribe2: &str,
++) -> (PathBuf, String, Vec<String>) {
++    let root = whole(name, &["notes.md", "patch/r1.patch"], Some(rec));
++    fake(&root, rcs, lines);
++    if name == "nofloor" {
++        fs::rename(root.join("drafts/try-w300a-fl"), root.join("drafts/away")).unwrap();
++    }
++    let out = stop(&root, false, scribe2);
++    assert_eq!(
++        (out.status.code(), out.stdout.len()),
++        (Some(2), 0),
++        "{name}"
++    );
++    assert_eq!(ended(&root), None, "{name}");
++    let err = String::from_utf8_lossy(&out.stderr).into_owned();
++    let rows = gate_rows(&root);
++    (root, err, rows)
++}
++
++#[test]
++fn agflr_hook_holds_each_kind_with_its_hole() {
++    let ok = "r1\t0\t0\t0\t0\t0,0\n";
++    let named = ["contracts: contracts/n.toml:9 contract-table:done-teeth-missing: 行 r1"];
++    let (_, err, rows) = held("mismatch", ok, (0, 0, 0), &named, "scribe2");
++    assert!(
++        err.contains("床の記録の行 r1 の 器の表の検査 の rc 0 が撃ち直しの rc 1 と違う"),
++        "{err}"
++    );
++    assert_eq!(rows, ["1\tr1\tmismatch\ttable=0/1"]);
++    let (_, err, rows) = held("rc", "r1\t0\t0\t0\t0\t0,1\n", (0, 0, 0), &[], "scribe2");
++    assert!(
++        err.contains("床の記録の行 r1 の verify の 3 行目の rc が 1（0 でない）"),
++        "{err}"
++    );
++    assert_eq!(rows, ["1\tr1\trc\tverify3=1"]);
++    let (_, err, rows) = held("pre", ok, (0, 0, 1), &[], "scribe2");
++    assert!(
++        err.contains("床の記録の行 r1 の preflight の rc 0 が撃ち直しの rc 1 と違う"),
++        "{err}"
++    );
++    assert_eq!(rows, ["1\tr1\tmismatch\tpreflight=0/1"]);
++    let (_, err, rows) = held("tzcheck", ok, (1, 2, 0), &[], "scribe2");
++    assert!(
++        err.contains("tz check の rc 0 が撃ち直しの rc 1")
++            && err.contains("tz derive --check の rc 0 が撃ち直しの rc 2"),
++        "{err}"
++    );
++    assert_eq!(rows, ["1\tr1\tmismatch\tcheck=0/1,derive=0/2"]);
++    let (_, err, rows) = held("norow", "r0\t0\t0\t0\t0\t0\n", (0, 0, 0), &[], "scribe2");
++    assert!(
++        err.contains("床の記録 floor.tsv に行 r1 の行が無い"),
++        "{err}"
++    );
++    assert_eq!(rows, ["1\tr1\tno-row\t-"]);
++}
++
++#[test]
++fn agflr_hook_names_what_it_cannot_find_and_lets_the_second_stop_go() {
++    let ok = "r1\t0\t0\t0\t0\t0,0\n";
++    let (root, err, rows) = held("nofloor", ok, (0, 0, 0), &[], "scribe2");
++    let floor = root.join("drafts/try-w300a-fl");
++    let want = format!(
++        "床を撃ち直せない（まだ分からない）: 床の写し {} が dir として無い",
++        floor.display()
++    );
++    assert!(err.contains(&want), "{err}");
++    assert_eq!(
++        rows,
++        [format!(
++            "1\tr1\tunknown\t床の写し {} が dir として無い",
++            floor.display()
++        )]
++    );
++    let (_, err, rows) = held("notool", ok, (0, 0, 0), &[], "none");
++    assert!(
++        err.contains("床を撃ち直せない（まだ分からない）: 道具 ")
++            && err.contains("bin/none を撃てない"),
++        "{err}"
++    );
++    assert!(
++        rows.len() == 1 && rows.iter().all(|r| r.starts_with("1\tr1\tunknown\t道具 ")),
++        "{rows:?}"
++    );
++    let again = stop(&root, true, "scribe2");
++    assert_eq!((again.status.code(), again.stdout.len()), (Some(0), 0));
++    assert!(ended(&root).is_some());
++    assert_eq!(
++        gate_rows(&root).get(1).map(String::as_str),
++        Some(
++            format!(
++                "2\tr1\tunknown\t床の写し {} が dir として無い",
++                floor.display()
++            )
++            .as_str()
++        )
++    );
++    let gate = fs::read_to_string(root.join("drafts/w300a/w/STOP-GATE.txt")).unwrap();
++    assert_eq!(gate, format!("{want}\n"));
++}
++
++/// 参照の file の置き場（workspace の根から）。
++const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
++
++/// 句の名と、句を置く節の番号と、節の塊の中に 1 度だけ在る字。
++const CLAUSES: [(&str, u8, &str); 7] = [
++    ("record", 7, "出力の dir に床の記録 floor.tsv を置く"),
++    (
++        "fields",
++        7,
++        "欄はタブで区切った 6 つ（行 id・preflight の rc・tz check の rc・derive --check の rc・器の表の検査の rc・verify の 2 行目から最後の行の rc を , で繋いだ字）",
++    ),
++    (
++        "table",
++        7,
++        "行の頭（contracts/<ノート>.toml の [[contract]] の行）を名指す断りが無ければ 0・在れば 1",
++    ),
++    (
++        "branch",
++        7,
++        "床の写しの行は branch に commit し、main を動かさない",
++    ),
++    ("gate", 7, "床の写し <置き場>/try-<名>-fl で安い 4 本"),
++    ("not-pass", 7, "記録の合格は完成でも審査の合格でもない"),
++    (
++        "kfold-cap",
++        11,
++        "verify に命令 kfold-cap を、書く範囲に持つ群と作る群を全部名指した 1 行で置く",
++    ),
++];
++
++fn reference() -> String {
++    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
++    fs::read_to_string(root.join(REFERENCE)).expect("参照の file を読む")
++}
++
++/// 節 n の塊（見出しの行 ## n. から次の ## の行の前まで・0 は最初の見出しの前）。
++fn section(text: &str, n: u8) -> String {
++    let head = format!("## {n}. ");
++    let mut inside = n == 0;
++    let mut out = String::new();
++    for line in text.lines() {
++        if line.starts_with("## ") {
++            inside = line.starts_with(&head);
++        }
++        if inside {
++            out.push_str(line);
++            out.push('\n');
++        }
++    }
++    out
++}
++
++/// 節の塊の中に 1 度だけ在らない句の名（表の順）。
++fn faults(text: &str) -> Vec<&'static str> {
++    CLAUSES
++        .iter()
++        .filter(|(_, n, words)| section(text, *n).matches(words).count() != 1)
++        .map(|(name, _, _)| *name)
++        .collect()
++}
++
++#[test]
++fn agflr_reference_holds_the_floor_clauses_once_in_their_sections() {
++    assert_eq!(faults(&reference()), Vec::<&str>::new());
++}
++
++#[test]
++fn agflr_reference_clause_removed_doubled_or_moved_is_named() {
++    let text = reference();
++    for (name, _, words) in CLAUSES {
++        let removed = text.replacen(words, "", 1);
++        assert_eq!(faults(&removed), vec![name], "外した {name}");
++        let doubled = text.replacen(words, &format!("{words}・{words}"), 1);
++        assert_eq!(faults(&doubled), vec![name], "重ねた {name}");
++        let moved = format!("- {words}\n{removed}");
++        assert_eq!(faults(&moved), vec![name], "頭の塊へ動かした {name}");
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth6/agpl.rs b/crates/tsuzuri-boundary/tests/teeth6/agpl.rs
+index 44c23c43d56bba4795642267930981a7ec08f62e..16481b44e7ae8b31fa1e0278ed0f5f2f6f566939 100644
+--- a/crates/tsuzuri-boundary/tests/teeth6/agpl.rs
++++ b/crates/tsuzuri-boundary/tests/teeth6/agpl.rs
+@@ -92,7 +92,7 @@ fn wanted() -> Vec<Mouth> {
+         ("PostToolUse", Some("Agent"), bind, 10),
+         ("PostToolUse", None, meter, 10),
+         ("PreToolUse", None, guard, 10),
+-        ("SubagentStop", None, stop, 10),
++        ("SubagentStop", None, stop, 120),
+     ]
+     .into_iter()
+     .map(|(event, matcher, name, timeout)| {
+diff --git a/crates/tsuzuri-core/src/agent/stop.rs b/crates/tsuzuri-core/src/agent/stop.rs
+index 19c7b8e0b796d1b9afb898e88149417945fe81f7..9fda1d09cf70527df7bd70bb905b40134f22ed3d 100644
+--- a/crates/tsuzuri-core/src/agent/stop.rs
++++ b/crates/tsuzuri-core/src/agent/stop.rs
+@@ -3,6 +3,9 @@
+ //! 欠けは 3 つで、この順に並べる: 係の記録に席（team-lead）への SendMessage の呼びが無い・札の出す物の file が出力の dir に無い・
+ //! 最後の文に出力の dir の path が無い。止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
+ //! 群の係の出す物の主張の表の欠け（`claim_lacks`）は行 ag-gstop が置く（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
++//! 差の file を名指す係の床の記録と門の撃ち直しの判じ（`floor`）は判断の記録 ADR-63 決定 (4)。
++
++pub mod floor;
+ 
+ use serde_json::Value;
+ 
+diff --git a/crates/tsuzuri-core/src/agent/stop/floor.rs b/crates/tsuzuri-core/src/agent/stop/floor.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0a4a70098d2494451a93e340d23cf5f87564d30f
+--- /dev/null
++++ b/crates/tsuzuri-core/src/agent/stop/floor.rs
+@@ -0,0 +1,276 @@
++//! 係の床の記録と終える前の門の撃ち直しの判じ（判断の記録 ADR-63 決定 (4)・要件 FR21）。
++//! 出す物が差の file（名の末が `.patch`）を名指す係は、出力の dir に床の記録 `floor.tsv` を置く。記録は差の file ごとに 1 行で、
++//! 欄はタブで区切った 6 つ（行 id・preflight・tz check・tz derive --check・器の表の検査の rc・verify の 2 行目から最後の行の rc を `,` で
++//! 繋いだ字）。`#` で始まる行は頭として読まない。門は安い 4 本を床の写しで撃ち直し、行ごとに、記録が無い・行が欠ける・
++//! 撃ち直せない（まだ分からない）・撃ち直しと違う・rc が 0 でない・合う、の 1 つの型と詳細と欠けの字に判じる。
++//! 判じは門の記録 `floor-gate.tsv` に 1 行ずつ足す。記録が在る事も撃ち直しの合格も、完成とも審査の合格とも扱わない（条 P-6.3）。
++
++use std::collections::BTreeMap;
++
++/// 係の床の記録の file（出力の dir の下）。
++pub const RECORD: &str = "floor.tsv";
++
++/// 門の判じの記録の file（出力の dir の下・判じるごとに 1 行ずつ足す）。
++pub const LOG: &str = "floor-gate.tsv";
++
++/// 門が preflight に渡す空の state dir（係の dir の下）。
++pub const STATE: &str = "floor-state";
++
++/// 撃ち直す 4 本の、門の記録の詳細の名と欠けの字の名（記録の 2〜5 欄の順）。
++pub const CHEAP: [(&str, &str); 4] = [
++    ("preflight", "preflight"),
++    ("check", "tz check"),
++    ("derive", "tz derive --check"),
++    ("table", "器の表の検査"),
++];
++
++/// 床の写しの dir の名（起草の置き場の直下）。
++pub fn copy_name(name: &str) -> String {
++    format!("try-{name}-fl")
++}
++
++/// 判じの型（門の記録の 4 欄目の字）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
++pub enum Kind {
++    NoRecord,
++    NoRow,
++    Unknown,
++    Mismatch,
++    Rc,
++    Ok,
++}
++
++impl Kind {
++    /// 門の記録の字。
++    pub fn as_str(self) -> &'static str {
++        match self {
++            Kind::NoRecord => "no-record",
++            Kind::NoRow => "no-row",
++            Kind::Unknown => "unknown",
++            Kind::Mismatch => "mismatch",
++            Kind::Rc => "rc",
++            Kind::Ok => "ok",
++        }
++    }
++}
++
++/// 床の記録の 1 行（安い 4 本の rc と、verify の 2 行目から最後の行の rc）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Rec {
++    pub rcs: [i32; 4],
++    pub verify: Vec<i32>,
++}
++
++/// 門の撃ち直し（安い 4 本の rc と、記録に要る verify の rc の数）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Rerun {
++    pub rcs: [i32; 4],
++    pub verify: usize,
++}
++
++/// 行ごとの判じ（行 id・型・詳細・欠けの字の列）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Verdict {
++    pub row: String,
++    pub kind: Kind,
++    pub detail: String,
++    pub lacks: Vec<String>,
++}
++
++/// 出す物のうち差の file の行 id（file の名から `.patch` を除いた空でない字・出す物の順・重ねない）。
++pub fn rows(outputs: &[String]) -> Vec<String> {
++    let mut ids: Vec<String> = Vec::new();
++    for o in outputs {
++        let file = o.rsplit('/').next().unwrap_or(o);
++        if let Some(id) = file.strip_suffix(".patch").filter(|s| !s.is_empty())
++            && !ids.iter().any(|x| x == id)
++        {
++            ids.push(id.to_string());
++        }
++    }
++    ids
++}
++
++/// 床の記録の字の行（`#` で始まる行を除き、タブで区切った 6 欄で、2〜5 欄が整数・6 欄が空か整数を `,` で繋いだ字の行だけ・同じ行 id は後の行）。
++pub fn record(text: &str) -> BTreeMap<String, Rec> {
++    let mut out = BTreeMap::new();
++    for line in text.lines().filter(|l| !l.starts_with('#')) {
++        let f: Vec<&str> = line.split('\t').collect();
++        let [id, a, b, c, d, v] = f.as_slice() else {
++            continue;
++        };
++        let rcs: Option<Vec<i32>> = [a, b, c, d].iter().map(|x| x.trim().parse().ok()).collect();
++        let verify: Option<Vec<i32>> = if v.trim().is_empty() {
++            Some(Vec::new())
++        } else {
++            v.split(',').map(|x| x.trim().parse().ok()).collect()
++        };
++        if let (Some([a, b, c, d]), Some(verify)) = (rcs.as_deref(), verify)
++            && !id.is_empty()
++        {
++            out.insert(
++                (*id).to_string(),
++                Rec {
++                    rcs: [*a, *b, *c, *d],
++                    verify,
++                },
++            );
++        }
++    }
++    out
++}
++
++/// 契約表の file の字から、行 `row` の頭（`[[contract]]` の行・1 から数える）と verify の行の数（無いか読めなければ None）。
++pub fn locate(toml: &str, row: &str) -> Option<(usize, usize)> {
++    let lines: Vec<&str> = toml.lines().collect();
++    let id = format!("id = {}", serde_json::to_string(row).ok()?);
++    let at = lines.iter().position(|l| *l == id)?;
++    let head = lines
++        .get(..at)?
++        .iter()
++        .rposition(|l| *l == "[[contract]]")?;
++    let verify = lines
++        .get(at..)?
++        .iter()
++        .take_while(|l| **l != "[[contract]]")
++        .find_map(|l| l.strip_prefix("verify = "))?;
++    let list: Vec<String> = serde_json::from_str(verify).ok()?;
++    Some((head + 1, list.len()))
++}
++
++/// 器の表の検査の出力 `out` と rc から、契約表の file `note`（`contracts/<ノート>.toml`）の行の頭 `head` の行の rc
++/// （検査の rc が 0 と 1 のどちらでもなければその rc・その行を名指す断りの行が在れば 1・無ければ 0）。
++pub fn table_rc(out: &str, rc: i32, note: &str, head: usize) -> i32 {
++    if rc != 0 && rc != 1 {
++        return rc;
++    }
++    let named = format!("contracts: {note}:{head} ");
++    i32::from(out.lines().any(|l| l.starts_with(&named)))
++}
++
++/// 記録の行と撃ち直しを比べた (型・詳細の項・欠けの字) の列（違う rc・0 でない rc・verify の rc の数の違い）。
++fn compare(row: &str, rec: &Rec, re: &Rerun) -> Vec<(Kind, String, String)> {
++    let mut out = Vec::new();
++    for (((key, shown), had), got) in CHEAP.iter().zip(rec.rcs).zip(re.rcs) {
++        if had != got {
++            out.push((
++                Kind::Mismatch,
++                format!("{key}={had}/{got}"),
++                format!("床の記録の行 {row} の {shown} の rc {had} が撃ち直しの rc {got} と違う"),
++            ));
++        } else if had != 0 {
++            out.push((
++                Kind::Rc,
++                format!("{key}={had}"),
++                format!("床の記録の行 {row} の {shown} の rc が {had}（0 でない）"),
++            ));
++        }
++    }
++    if rec.verify.len() != re.verify {
++        out.push((
++            Kind::NoRow,
++            format!("verify={}/{}", rec.verify.len(), re.verify),
++            format!(
++                "床の記録の行 {row} の verify の rc が {} 個（verify の 2 行目から最後の行の {} 個が要る）",
++                rec.verify.len(),
++                re.verify
++            ),
++        ));
++    }
++    for (k, rc) in rec.verify.iter().enumerate().filter(|(_, rc)| **rc != 0) {
++        out.push((
++            Kind::Rc,
++            format!("verify{}={rc}", k + 2),
++            format!(
++                "床の記録の行 {row} の verify の {} 行目の rc が {rc}（0 でない）",
++                k + 2
++            ),
++        ));
++    }
++    out
++}
++
++/// 1 行の判じ（記録 `rec` の行・撃ち直し `rerun`）。
++fn one(row: &str, rec: Option<&Rec>, rerun: &impl Fn(&str) -> Result<Rerun, String>) -> Verdict {
++    let verdict = |kind: Kind, detail: String, lacks: Vec<String>| Verdict {
++        row: row.to_string(),
++        kind,
++        detail,
++        lacks,
++    };
++    let Some(rec) = rec else {
++        let lack = format!(
++            "床の記録 floor.tsv に行 {row} の行が無い（欄はタブで区切った 6 つ・rc は整数）"
++        );
++        return verdict(Kind::NoRow, "-".into(), vec![lack]);
++    };
++    let re = match rerun(row) {
++        Ok(re) => re,
++        Err(what) => {
++            let lack = format!("床を撃ち直せない（まだ分からない）: {what}");
++            return verdict(Kind::Unknown, what, vec![lack]);
++        }
++    };
++    let found = compare(row, rec, &re);
++    let Some(kind) = found.iter().map(|(k, _, _)| *k).min() else {
++        return verdict(Kind::Ok, "-".into(), Vec::new());
++    };
++    let detail = found
++        .iter()
++        .map(|(_, d, _)| d.as_str())
++        .collect::<Vec<_>>()
++        .join(",");
++    verdict(kind, detail, found.into_iter().map(|(_, _, l)| l).collect())
++}
++
++/// 差の file の行 `rows` の判じ（床の記録の字 `record`・無ければ None）と、重ねない欠けの字の列。
++/// `rerun` は記録に行の在る行だけを撃ち直し、撃ち直せない時は見つからない物の字を返す。
++pub fn judge(
++    rows: &[String],
++    record: Option<&str>,
++    rerun: impl Fn(&str) -> Result<Rerun, String>,
++) -> (Vec<Verdict>, Vec<String>) {
++    let Some(text) = record else {
++        let lack = format!(
++            "床の記録 floor.tsv が出力の dir に無い（差の file の行 {} ごとに 1 行）",
++            rows.join("・")
++        );
++        let all = rows
++            .iter()
++            .map(|r| Verdict {
++                row: r.clone(),
++                kind: Kind::NoRecord,
++                detail: "-".into(),
++                lacks: vec![lack.clone()],
++            })
++            .collect();
++        return (
++            all,
++            if rows.is_empty() {
++                Vec::new()
++            } else {
++                vec![lack]
++            },
++        );
++    };
++    let recs = self::record(text);
++    let all: Vec<Verdict> = rows.iter().map(|r| one(r, recs.get(r), &rerun)).collect();
++    let mut lacks: Vec<String> = Vec::new();
++    for l in all.iter().flat_map(|v| v.lacks.iter()) {
++        if !lacks.contains(l) {
++            lacks.push(l.clone());
++        }
++    }
++    (all, lacks)
++}
++
++/// 門の記録の 1 行（時刻・終わりの回 1 か 2・行 id・型・詳細をタブで区切り、改行で終える）。
++pub fn log_line(at: &str, again: bool, v: &Verdict) -> String {
++    let round = if again { 2 } else { 1 };
++    format!(
++        "{at}\t{round}\t{}\t{}\t{}\n",
++        v.row,
++        v.kind.as_str(),
++        v.detail
++    )
++}
+diff --git a/plugin/hooks/hooks.json b/plugin/hooks/hooks.json
+index 966a22427844f0a30cf0246e2015952089e93e0b..d96bb628b68df28279683246a31876a90c139729 100644
+--- a/plugin/hooks/hooks.json
++++ b/plugin/hooks/hooks.json
+@@ -90,7 +90,7 @@
+           {
+             "type": "command",
+             "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-stop --repo \"$CLAUDE_PROJECT_DIR\"",
+-            "timeout": 10
++            "timeout": 120
+           }
+         ]
+       }
+diff --git a/plugin/skills/agent-discipline/reference.md b/plugin/skills/agent-discipline/reference.md
+index c20764e12b77f7b6d74c9d614f88bc41dffbf04d..4defe7cf4248580a60c7968a9ed213c9e4062af2 100644
+--- a/plugin/skills/agent-discipline/reference.md
++++ b/plugin/skills/agent-discipline/reference.md
+@@ -65,6 +65,9 @@
+ - 床は頼みが名指す席の pin の tz で、床の写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
+ - 適用の script（python）は前の版を照らし、ノートと計画の版を上げ、書いた字を YAML で読み直す。外れたら何も書かずに止まる。
+ - 足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <床の写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
++- 出す物に差の file（.patch）を持つ係は、終える前に出力の dir に床の記録 floor.tsv を置く（判断の記録 ADR-63 の決定 (4)）。差の file ごとに 1 行で、欄はタブで区切った 6 つ（行 id・preflight の rc・tz check の rc・derive --check の rc・器の表の検査の rc・verify の 2 行目から最後の行の rc を , で繋いだ字）。# で始まる行は頭として読まれない。
++- 器の表の検査の rc は、床の写しの根で撃った scribe2 contracts check --repo . --base main の出力のうち、行の頭（contracts/<ノート>.toml の [[contract]] の行）を名指す断りが無ければ 0・在れば 1 と書く（着地済みの行の断りで検査全体の rc は今いつも 1）。床の写しの行は branch に commit し、main を動かさない（preflight は HEAD を読み、--base main は当てる前の木を指す）。
++- 終える前の門は、床の写し <置き場>/try-<名>-fl で安い 4 本（preflight は空の state dir <名>/floor-state）を撃ち直して記録と比べる。記録が無い・行が欠ける・rc が 0 でない・撃ち直しと違う・撃ち直せない時は 1 度目の終わりを止め、判じを出力の dir の floor-gate.tsv に足す。記録の合格は完成でも審査の合格でもない。
+ 
+ ## 8. 出す物と公開
+ 
+@@ -95,4 +98,4 @@
+ 
+ - 着地した段の file（群に入っていない tests/ の直下の .rs）が、未着地の行が名指す file を除いて 12 本に達したら、畳みの行を 1 行置く。
+ - 切り方は、置く直前の main の写しで crate ごとに畳みの道具を撃ち、表 GROUPS も書き直す。差は git diff --no-color --full-index -M で切り、130000 byte を目安に、越えれば crate ごとに割る。
+-- 確かめは、行の木で verify の行を全部撃ち、xtask の check は全部の畳みを当てた最後の木で 1 回。着地した行の verify の字と差の file は歴史として書き換えない。
++- 確かめは、行の木で verify の行を全部撃ち、xtask の check は全部の畳みを当てた最後の木で 1 回。verify に命令 kfold-cap を、書く範囲に持つ群と作る群を全部名指した 1 行で置く（例 cargo run -q -p xtask -- kfold-cap crates/tsuzuri-surface/tests/teeth6 xtask/tests/teeth1）。着地した行の verify の字と差の file は歴史として書き換えない。
