@@ -638,6 +638,17 @@ enabled = true
 ruling = "user 2026-09-14T06:4xZ"
 ruled_at = "2026-09-14"
 
+# 入口の排他を差の当たりで通すかの入り切り（真偽・判断の記録 ADR-60 の決定 (5)・要件 FR1039）。偽の間は交差を今のまま断る。真にするのは
+# 記帳の器の行が着地した後の器の行で、同じ裁定を引く。撤退は偽に戻す 1 行。行が無い・不発効の周は偽と読む（読み手は pipe::commute::on）。
+
+[[rule]]
+id = "pipe.overlap_commute"
+kind = "PipeOverlapCommute"
+value = false
+enabled = true
+ruling = "user 2026-10-05T05:13Z 問い t3-hub.89.2"
+ruled_at = "2026-10-05"
+
 # 同型の審査 FAIL の停止の回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付（pipe intake / preflight）は同じ
 # bead の便を新しい順に読み、同じ理由の型（crates 側の FindingKind）の FAIL が PASS で途切れるまでこの本数続き、
 # 契約 file と節の本文がともに不変の周を same-kind-repeated で断る（焼き直しは書き直す）。行の無い manifest は

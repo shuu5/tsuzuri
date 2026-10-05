@@ -1014,7 +1014,7 @@ fn build_row(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<RuleRow> {
     let enabled = bool_field(raw, "enabled", errors);
     let ruling = text_field(raw, "ruling", errors);
     let ruled_at = text_field(raw, "ruled_at", errors);
-    let value = kind.and_then(|found| value_field(raw, found, &id, errors));
+    let value = kind.and_then(|found| value_field(raw, found));
     let (Some(kind), Some(value), Some(enabled), Some(ruling), Some(ruled_at)) =
         (kind, value, enabled, ruling, ruled_at)
     else {
@@ -1315,14 +1315,9 @@ fn kind_field(raw: &RawRow, id: &str, errors: &mut Vec<RuleError>) -> Option<Rul
     }
 }
 
-/// `value` を種類に応じた値へ写す。bool は value に置けない。
-fn value_field(
-    raw: &RawRow,
-    kind: RuleKind,
-    id: &str,
-    errors: &mut Vec<RuleError>,
-) -> Option<RuleValue> {
-    let (_, scalar, line) = raw.fields.iter().find(|(key, _, _)| key == "value")?;
+/// `value` を種類に応じた値へ写す（bool は真偽の値・形の照合は `RuleRow::validate`）。
+fn value_field(raw: &RawRow, kind: RuleKind) -> Option<RuleValue> {
+    let (_, scalar, _) = raw.fields.iter().find(|(key, _, _)| key == "value")?;
     match scalar {
         // **形の照合はここでしない**（`RuleRow::validate` の 1 箇所が持つ）。ここで
         // 弾くと、kind と value の対応を測る面が 2 つになる。
@@ -1330,15 +1325,9 @@ fn value_field(
         RawValue::One(Scalar::Int(found)) => Some(RuleValue::Int(*found)),
         RawValue::One(Scalar::Str(text)) => Some(match kind.shape() {
             ValueShape::Policy => RuleValue::Policy(text.clone()),
-            ValueShape::Int | ValueShape::Str | ValueShape::List => RuleValue::Str(text.clone()),
+            ValueShape::Int | ValueShape::Str | ValueShape::List | ValueShape::Bool => RuleValue::Str(text.clone()),
         }),
-        RawValue::One(Scalar::Bool(_)) => {
-            errors.push(RuleError::new(
-                *line,
-                format!("{id} の value は integer か string でなければならない"),
-            ));
-            None
-        }
+        RawValue::One(Scalar::Bool(found)) => Some(RuleValue::Bool(*found)),
         // 網羅のための枝。**到達しない**——読めなかった値を持つ行は
         // [`build_row`] が先に打ち切る（Broken を見る場所は 1 か所である）。
         RawValue::Broken => None,

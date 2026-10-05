@@ -105,6 +105,7 @@ fn sample_value(kind: RuleKind) -> String {
             ValueShape::Int => "1".to_owned(),
             ValueShape::Str | ValueShape::Policy => "\"sample\"".to_owned(),
             ValueShape::List => "[\"sample\"]".to_owned(),
+            ValueShape::Bool => "false".to_owned(),
         },
     }
 }

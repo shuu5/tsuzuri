@@ -14,6 +14,7 @@ pub mod admission;
 pub mod approve;
 pub mod cli;
 pub mod closure;
+pub mod commute;
 pub mod confine;
 pub mod contract;
 pub mod declaration;

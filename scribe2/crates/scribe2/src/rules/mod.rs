@@ -158,6 +158,8 @@ pub enum ValueShape {
     /// 文字列の列（TOML の string array）。**空は受けない**＝「規則が無い」を
     /// 空 array で表さない（書き間違いを黙って通すと allowlist が空のまま効く）。
     List,
+    /// 真偽（入り切りの行・TOML の bool）。
+    Bool,
 }
 
 /// 規則の種類。憲法 §3 の行と MVP の運用値に 1:1 で対応する。
@@ -318,6 +320,9 @@ pub enum RuleKind {
     PipeSizeMLines,
     /// 契約の `size` = L の 1 file あたりの増分の見積（行）。
     PipeSizeLLines,
+    /// 入口の排他を差の当たりで通すかの入り切り（真偽・判断の記録 ADR-60 の決定 (5)・要件 FR1039）。行が無い・不発効・偽の周は
+    /// 通さない（読めない周は偽と読む）。読み手は `pipe::commute::on` の 1 本。
+    PipeOverlapCommute,
     /// runner が claude に**毎回**渡す model（設計 pipeline.md §6 / §61・`s2-07l.297`）。値は claude CLI の別名
     /// （閉じた表は [`crate::fleet::select::Model`]）。便用の口座選定はこの model のモデル別窓だけを数える。
     RunnerModel,
@@ -493,6 +498,7 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::PipeSizeSLines,
     RuleKind::PipeSizeMLines,
     RuleKind::PipeSizeLLines,
+    RuleKind::PipeOverlapCommute,
     RuleKind::RunnerModel,
     RuleKind::RunnerEffort,
     RuleKind::LensModel,
@@ -595,6 +601,7 @@ impl RuleKind {
             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
             Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
+            Self::PipeOverlapCommute => "PipeOverlapCommute",
         }
     }
 
@@ -648,7 +655,7 @@ impl RuleKind {
             | Self::RunnerModel
             | Self::RunnerEffort | Self::LensModel
             | Self::RoleModel
-            | Self::RoleEffort => ValueShape::Str,
+            | Self::RoleEffort => ValueShape::Str, Self::PipeOverlapCommute => ValueShape::Bool,
             Self::MaturityCondition
             | Self::MutationSurvivalLine
             | Self::CompileShape
@@ -690,7 +697,7 @@ impl RuleKind {
             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
-            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb => false,
+            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb | Self::PipeOverlapCommute => false,
         }
     }
 
@@ -711,6 +718,8 @@ pub enum RuleValue {
     Policy(String),
     /// 文字列の列（順序は manifest の並びのまま＝機械が読む順序である）。
     List(Vec<String>),
+    /// 真偽。
+    Bool(bool),
 }
 
 impl RuleValue {
@@ -721,6 +730,7 @@ impl RuleValue {
             Self::Str(_) => ValueShape::Str,
             Self::Policy(_) => ValueShape::Policy,
             Self::List(_) => ValueShape::List,
+            Self::Bool(_) => ValueShape::Bool,
         }
     }
 
@@ -729,6 +739,7 @@ impl RuleValue {
         match self {
             Self::Int(value) => value.to_string(),
             Self::Str(text) | Self::Policy(text) => text.clone(),
+            Self::Bool(flag) => flag.to_string(),
             // **1 行で区切りが読める形**にする（要素を空白で継ぐと、空白を含む
             // 要素〔共通 verify の 1 行〕が何本あるのか読めなくなる）。
             Self::List(items) => {
