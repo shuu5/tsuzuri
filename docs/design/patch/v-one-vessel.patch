@@ -465,10 +465,10 @@ index e00e3227339168bec0a0471510a0f7f3f36e645b..d0f62e4fc3f378dec1c6e1c7da476a5a
  /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
 diff --git a/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs b/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..9ed05cc3583fa9f31c75a54ca5393b8ee6e90cff
+index 0000000000000000000000000000000000000000..f81986ca321c82488183e9b701432de73ca93da9
 --- /dev/null
 +++ b/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,180 @@
 +//! 便の同時の数の上限（vessel 宣言の任意 key `run-cap` と `run-cap-paths`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
 +//!
 +//! write-set の項目のどれかが `run-cap-paths` の dir の下に在る便を数える便とし、数える契約は、数える live な便と同じ周に
@@ -536,16 +536,21 @@ index 0000000000000000000000000000000000000000..9ed05cc3583fa9f31c75a54ca5393b8e
 +    (errors.len() == before).then_some(RunCap { cap: cap?, paths })
 +}
 +
-+/// 項目 1 つの不備（無ければ `None`）。
++/// 項目 1 つの不備（無ければ `None`）。数えの畳み（[`covered`]）が何にも当てない字（前後の空白・名の段の無い `./`）も不備にし、
++/// 宣言したのに何も数えない上限を作らない。
 +fn item_defect(item: &str) -> Option<&'static str> {
 +    if item.trim().is_empty() {
 +        Some("空である")
++    } else if item.trim() != item {
++        Some("前後に空白を持つ")
 +    } else if !item.ends_with('/') {
 +        Some("末尾が / でない")
 +    } else if item.starts_with('/') {
 +        Some("絶対 path である")
 +    } else if item.split('/').any(|part| part == "..") {
 +        Some(".. の段を持つ")
++    } else if item.split('/').all(|part| part.is_empty() || part == ".") {
++        Some("名の段を持たない")
 +    } else {
 +        None
 +    }
@@ -585,9 +590,9 @@ index 0000000000000000000000000000000000000000..9ed05cc3583fa9f31c75a54ca5393b8e
 +        assert_eq!(Declared::parse(&with("")).map(|found| found.run_cap), Ok(None));
 +    }
 +
-+    /// 正しい宣言から 1 句だけ外した 10 形は、key の名と書いた行（4 行目か 5 行目）を名指す不備。
++    /// 正しい宣言から 1 句だけ外した 12 形は、key の名と書いた行（4 行目か 5 行目）を名指す不備。
 +    #[test]
-+    fn vrcap_declaration_names_ten_defects() {
++    fn vrcap_declaration_names_twelve_defects() {
 +        let bad = [
 +            ("run-cap = 1\n", 4, "run-cap-paths が無い"),
 +            ("run-cap-paths = [\"vessel/\"]\n", 4, "run-cap が無い"),
@@ -599,6 +604,8 @@ index 0000000000000000000000000000000000000000..9ed05cc3583fa9f31c75a54ca5393b8e
 +            ("run-cap = 1\nrun-cap-paths = [\"vessel\"]\n", 5, "run-cap-paths の項目 \"vessel\" は末尾が / でない"),
 +            ("run-cap = 1\nrun-cap-paths = [\"/vessel/\"]\n", 5, "run-cap-paths の項目 \"/vessel/\" は絶対 path"),
 +            ("run-cap = 1\nrun-cap-paths = [\"a/../vessel/\"]\n", 5, "run-cap-paths の項目 \"a/../vessel/\" は.. の段"),
++            ("run-cap = 1\nrun-cap-paths = [\" vessel/\"]\n", 5, "run-cap-paths の項目 \" vessel/\" は前後に空白を持つ"),
++            ("run-cap = 1\nrun-cap-paths = [\"./\"]\n", 5, "run-cap-paths の項目 \"./\" は名の段を持たない"),
 +        ];
 +        for (extra, line, want) in bad {
 +            let errors = Declared::parse(&with(extra)).expect_err(extra);
