@@ -1,0 +1,3212 @@
+diff --git a/folio2/crates/folio/tests/teeth1/common.rs b/folio2/crates/folio/tests/teeth1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..758fcb6670435e3903ba0a44946ae8725dd713a6
+--- /dev/null
++++ b/folio2/crates/folio/tests/teeth1/common.rs
+@@ -0,0 +1,9 @@
++//! folio の歯の群 teeth1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
+diff --git a/folio2/crates/folio/tests/teeth1/deps.rs b/folio2/crates/folio/tests/teeth1/deps.rs
+index f62271b37b2a579693f126330be1e2b434ecda7e..9e88fd0501057b32f04c3ad28a2786996905158d 100644
+--- a/folio2/crates/folio/tests/teeth1/deps.rs
++++ b/folio2/crates/folio/tests/teeth1/deps.rs
+@@ -4,12 +4,9 @@
+ //! 外の部品を増やす・減らすときの確認は条 A-3.1 が持つ（ここは減らした後の形を数えるだけ）。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
++use std::path::Path;
+ 
+ fn read(path: &Path) -> String {
+     fs::read_to_string(path).unwrap_or_else(|e| panic!("{} が読めない: {e}", path.display()))
+diff --git a/folio2/crates/folio/tests/teeth1/face_labels.rs b/folio2/crates/folio/tests/teeth1/face_labels.rs
+index 70ba67c2b2b551a8a720b6164b44a0691402dc7d..1a86799b538bc618b00367d6743870ec1bbe32f0 100644
+--- a/folio2/crates/folio/tests/teeth1/face_labels.rs
++++ b/folio2/crates/folio/tests/teeth1/face_labels.rs
+@@ -4,12 +4,8 @@
+ //! 便 109（docs/design/delivery-109.md §1 (e) の 2・ADR-15 決定 (5)）で、棚の一覧の 3 本の置き場の見張りだけを shelf.rs へ直した。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+ 
+ fn read(rel: &str) -> String {
+     let p = repo_root().join(rel);
+diff --git a/folio2/crates/folio/tests/teeth1/face_style.rs b/folio2/crates/folio/tests/teeth1/face_style.rs
+index cf5d75ee0dcffc113767d6f41d026d4545c5cb6e..6f8790f4df87945ff4762c64ad9d9e8ea15049bf 100644
+--- a/folio2/crates/folio/tests/teeth1/face_style.rs
++++ b/folio2/crates/folio/tests/teeth1/face_style.rs
+@@ -10,12 +10,8 @@
+ //! 凍結の面（tests/fixtures/face/）と正本の様式（design-intent/preview/folio.css）は読むだけで書き換えない。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+ 
+ // ---- 面の木（開始 tag と終了 tag だけを読む小さな写し）----
+ 
+diff --git a/folio2/crates/folio/tests/teeth1/main.rs b/folio2/crates/folio/tests/teeth1/main.rs
+index f1264885e3a94db4c079e41ececd9836c5eebe5d..f50bae845489d0256b56ff5b398c948583e1ff58 100644
+--- a/folio2/crates/folio/tests/teeth1/main.rs
++++ b/folio2/crates/folio/tests/teeth1/main.rs
+@@ -5,6 +5,7 @@
+ #[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
+ #[path = "../../build.rs"]
+ mod build;
++mod common;
+ mod constitution_enums;
+ mod deps;
+ mod face_labels;
+diff --git a/folio2/crates/folio/tests/tz1/adr.rs b/folio2/crates/folio/tests/tz1/adr.rs
+index c69144fd92dac20f64abff042745bcb9eb296b8b..89e8457c9530a9a6d1894b9364575a280392ca2c 100644
+--- a/folio2/crates/folio/tests/tz1/adr.rs
++++ b/folio2/crates/folio/tests/tz1/adr.rs
+@@ -7,13 +7,10 @@
+ //! 封の違反 1 行を確かめて外した残りを見る。
+ #![cfg(test)]
+ 
++use crate::common::{folio_check, git, repo_root, stdout, violations};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
++use std::process::Output;
+ 
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+@@ -28,34 +25,6 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の ADR-1.yaml の末尾に足す。
+ const FIGURE: &str = "figures:
+   - id: fig-1
+@@ -137,28 +106,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn folio_check(dir: &Path) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("check")
+-        .arg("--dir")
+-        .arg(dir)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ fn assert_single_violation(name: &str, kind: &str, at: &str, needle: &str) {
+     let out = folio_check(&repo_root().join("tests/fixtures/adr").join(name));
+     assert_eq!(
+diff --git a/folio2/crates/folio/tests/tz1/anchor.rs b/folio2/crates/folio/tests/tz1/anchor.rs
+index fe821b597f0b077986db73f109a648fcb96a7296..53edccff07b24df02e9747a3e4f24ddb19390c2c 100644
+--- a/folio2/crates/folio/tests/tz1/anchor.rs
++++ b/folio2/crates/folio/tests/tz1/anchor.rs
+@@ -8,43 +8,13 @@
+ 
+ use folio::{sha256, yaml};
+ 
++use crate::common::{folio_check, repo_root, stderr, stdout, violations};
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
++use std::path::PathBuf;
+ 
+ /// 床の定数 root_digest（scripts/check_draft.py の ROOT_DIGEST）。
+ const ROOT_DIGEST: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn folio_check(dir: &Path) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("check")
+-        .arg("--dir")
+-        .arg(dir)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ fn fixture(name: &str) -> PathBuf {
+     repo_root().join("tests/fixtures/anchor").join(name)
+ }
+diff --git a/folio2/crates/folio/tests/tz1/badge.rs b/folio2/crates/folio/tests/tz1/badge.rs
+index ce50317c103cd09ff407dbf74612b03db6fc7048..11469920a02951ee1ce7ff6b2e7b940b8ad8ee42 100644
+--- a/folio2/crates/folio/tests/tz1/badge.rs
++++ b/folio2/crates/folio/tests/tz1/badge.rs
+@@ -18,6 +18,7 @@ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{code, design_intent, repo_root, stderr, stdout};
+ use folio::yaml_rust2::YamlLoader;
+ 
+ /// 天井の正本の観点（id・名）。正本の順。
+@@ -45,19 +46,11 @@ const HINT_BODY_OPEN: &str = "<span class=\"hint-body\">";
+ /// 印の置き場（`--dir` からの相対）。
+ const MARK: &str = "preview/ceiling-stamp.yaml";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ /// 面の凍結 fixture（正本・様式・期待の面 7 本・天井の正本 ceiling.yaml）。
+ fn fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/face")
+ }
+ 
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-badge-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -87,23 +80,6 @@ fn folio(args: &[&dyn AsRef<std::ffi::OsStr>]) -> Output {
+     cmd.output().expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ fn assert_code(out: &Output, what: &str, want: i32) {
+     assert_eq!(
+         code(out, what),
+diff --git a/folio2/crates/folio/tests/tz1/bundle.rs b/folio2/crates/folio/tests/tz1/bundle.rs
+index 220d034b04135fcdef3d52db8c9ff2054fe712a2..971ee720150a3535365d1f7de1103c7686ea0b4f 100644
+--- a/folio2/crates/folio/tests/tz1/bundle.rs
++++ b/folio2/crates/folio/tests/tz1/bundle.rs
+@@ -13,25 +13,18 @@
+ //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{code, design_intent, repo_root, stderr, stdout};
+ use std::collections::BTreeMap;
+ use std::fs;
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ /// 凍結 fixture の置き場（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本 7 本）。
+ fn fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/ceiling/bundle")
+ }
+ 
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-bundle-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -77,23 +70,6 @@ fn folio_ceiling(dir: &Path, faces: &Path, out: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// dir の下の全 file（dir からの相対 path・byte 順）と中身。
+ fn tree(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
+diff --git a/folio2/crates/folio/tests/tz1/ceiling.rs b/folio2/crates/folio/tests/tz1/ceiling.rs
+index 518e7fb265d2955365956b2cbfe0f8810da7e673..39e15246faf0a4a5a37f967e5b3b0256a6c2dd65 100644
+--- a/folio2/crates/folio/tests/tz1/ceiling.rs
++++ b/folio2/crates/folio/tests/tz1/ceiling.rs
+@@ -8,14 +8,13 @@
+ //! 便 102（docs/design/delivery-102.md §1 (g)1・2）: 生成区間を持つ file が読む文書の行に全部覆われる・ceiling.yaml の写しが全部そろう。
+ #![cfg(test)]
+ 
++use crate::common::{
++    assert_passes, assert_unknown, copy_external_schema, git, repo_root, stderr, stdout, violations,
++};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+@@ -29,44 +28,6 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+-fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+-    fs::copy(
+-        repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/field-schema/schema.toml"),
+-    )
+-    .unwrap();
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -182,33 +143,6 @@ fn third_edition(text: &str) -> String {
+     out
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+-fn assert_passes(out: &Output) {
+-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stdout(out).contains("folio check: 合格（違反 0・"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 `kind` で `words` を全部含む。
+ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
+     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
+@@ -225,24 +159,6 @@ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
+     );
+ }
+ 
+-/// まだ分からない 2・違反 0・標準エラーに `word` を含む「まだ分からない」の行が在る。
+-fn assert_unknown(out: &Output, word: &str) {
+-    assert_eq!(out.status.code(), Some(2), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stderr(out)
+-            .lines()
+-            .any(|l| l.starts_with("# まだ分からない: ") && l.contains(word)),
+-        "{}",
+-        stderr(out)
+-    );
+-    assert!(
+-        !stdout(out).contains("folio check: 合格"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ #[test]
+ fn ceiling_canonical_copy_passes() {
+     let w = Work::new("canonical");
+diff --git a/folio2/crates/folio/tests/tz1/check.rs b/folio2/crates/folio/tests/tz1/check.rs
+index 8ca065c97f089f5c8da73f04656a8eee3abae481..98a917861c65c9559f0b2c0bd1cc7966e3e1d64c 100644
+--- a/folio2/crates/folio/tests/tz1/check.rs
++++ b/folio2/crates/folio/tests/tz1/check.rs
+@@ -9,14 +9,11 @@
+ //! 写しに足した scope_m3 の節の合格・ほかの段の名の節の未知の節・実の生成区間の一覧の並びを見る（どれも数を pin しない）。
+ #![cfg(test)]
+ 
++use crate::common::{folio_check, git, repo_root, stdout, violations};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+@@ -30,34 +27,6 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の srs.yaml の末尾に足す。
+ const FIGURE: &str = "figures:
+   - id: fig-1
+@@ -169,32 +138,10 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn folio_check(dir: &Path) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("check")
+-        .arg("--dir")
+-        .arg(dir)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+ fn fixture(name: &str) -> PathBuf {
+     repo_root().join("tests/fixtures/check").join(name)
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ fn assert_single_violation(name: &str, kind: &str, file: &str) {
+     let out = folio_check(&fixture(name));
+     assert_eq!(out.status.code(), Some(1), "{name}: {}", stdout(&out));
+diff --git a/folio2/crates/folio/tests/tz1/common.rs b/folio2/crates/folio/tests/tz1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..42c44eec020d2b8e4d2e542dc78386fa1b82c57a
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz1/common.rs
+@@ -0,0 +1,153 @@
++//! folio の歯の群 tz1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++pub(crate) fn assert_passes(out: &Output) {
++    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
++    assert!(violations(out).is_empty(), "{:?}", violations(out));
++    assert!(
++        stdout(out).contains("folio check: 合格（違反 0・"),
++        "{}",
++        stdout(out)
++    );
++}
++
++/// まだ分からない 2・違反 0・標準エラーに `word` を含む「まだ分からない」の行が在る。
++pub(crate) fn assert_unknown(out: &Output, word: &str) {
++    assert_eq!(out.status.code(), Some(2), "{}{}", stdout(out), stderr(out));
++    assert!(violations(out).is_empty(), "{:?}", violations(out));
++    assert!(
++        stderr(out)
++            .lines()
++            .any(|l| l.starts_with("# まだ分からない: ") && l.contains(word)),
++        "{}",
++        stderr(out)
++    );
++    assert!(
++        !stdout(out).contains("folio check: 合格"),
++        "{}",
++        stdout(out)
++    );
++}
++
++pub(crate) fn code(out: &Output, what: &str) -> i32 {
++    out.status.code().unwrap_or_else(|| {
++        panic!(
++            "{what} が signal で終わった: {}",
++            String::from_utf8_lossy(&out.stderr)
++        )
++    })
++}
++
++pub(crate) fn copy_dir(from: &Path, to: &Path) {
++    fs::create_dir_all(to).unwrap();
++    for entry in fs::read_dir(from).unwrap() {
++        let entry = entry.unwrap();
++        let (src, dst) = (entry.path(), to.join(entry.file_name()));
++        if entry.file_type().unwrap().is_dir() {
++            copy_dir(&src, &dst);
++        } else {
++            fs::copy(&src, &dst).unwrap();
++        }
++    }
++}
++
++/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
++pub(crate) fn copy_external_schema(root: &Path) {
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
++    fs::copy(
++        repo_root().join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
++    )
++    .unwrap();
++}
++
++pub(crate) fn design_intent() -> PathBuf {
++    repo_root().join("design-intent")
++}
++
++pub(crate) fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
++    let before = fs::read_to_string(path).unwrap();
++    let after = f(&before);
++    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
++    fs::write(path, after).unwrap();
++}
++
++/// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
++pub(crate) fn esc(s: &str) -> String {
++    s.replace('&', "&amp;")
++        .replace('<', "&lt;")
++        .replace('>', "&gt;")
++        .replace('"', "&quot;")
++        .replace('\'', "&#x27;")
++}
++
++pub(crate) fn fixture() -> PathBuf {
++    repo_root().join("tests/fixtures/face")
++}
++
++pub(crate) fn folio_check(dir: &Path) -> Output {
++    Command::new(env!("CARGO_BIN_EXE_tz"))
++        .arg("check")
++        .arg("--dir")
++        .arg(dir)
++        .output()
++        .expect("folio を起動できない")
++}
++
++/// git を呼ぶ。環境変数 GIT_* は継承しない。
++pub(crate) fn git(cwd: &Path, args: &[&str]) {
++    let mut cmd = Command::new("git");
++    for (key, _) in std::env::vars_os() {
++        if key.to_string_lossy().starts_with("GIT_") {
++            cmd.env_remove(key);
++        }
++    }
++    let out = cmd
++        .current_dir(cwd)
++        .args([
++            "-c",
++            "user.email=fx@example",
++            "-c",
++            "user.name=fx",
++            "-c",
++            "commit.gpgsign=false",
++        ])
++        .args(args)
++        .output()
++        .expect("git を起動できない");
++    assert!(
++        out.status.success(),
++        "git {args:?}: {}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++}
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
++}
++
++pub(crate) fn stderr(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stderr).into_owned()
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stdout).into_owned()
++}
++
++pub(crate) fn vendor() -> PathBuf {
++    repo_root().join("vendor/archify")
++}
++
++/// 違反の行（`[種類] …`）だけを拾う。
++pub(crate) fn violations(out: &Output) -> Vec<String> {
++    stdout(out)
++        .lines()
++        .filter(|l| l.starts_with('['))
++        .map(str::to_string)
++        .collect()
++}
+diff --git a/folio2/crates/folio/tests/tz1/constitution_range.rs b/folio2/crates/folio/tests/tz1/constitution_range.rs
+index 51b5dec3d331682156d76dc7ffc1804bb96fe52c..dd9101834d4ff47526a5e67273b6b68a1443d51f 100644
+--- a/folio2/crates/folio/tests/tz1/constitution_range.rs
++++ b/folio2/crates/folio/tests/tz1/constitution_range.rs
+@@ -9,14 +9,11 @@
+ //! 便 203（docs/design/delivery-203.md §1 (c)）: 外の置き場の値域の「まだ分からない」の字は、要件の id（FR25）の片を落とす。
+ #![cfg(test)]
+ 
++use crate::common::{git, repo_root};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+@@ -30,34 +27,6 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 値域の節の見出しの行（前の改行を含む）。
+ const ENUMS_HEAD: &str = "\n  enums:\n";
+ /// 条 P-1 の機構の頭（note の頭まで・写しの中で 1 か所）。
+diff --git a/folio2/crates/folio/tests/tz1/derive.rs b/folio2/crates/folio/tests/tz1/derive.rs
+index 70ad69524da77541b4fe02905c3fc4fa3e0fae6b..0b8a90f07f1c2809ba3ed02f35e886c601d48a23 100644
+--- a/folio2/crates/folio/tests/tz1/derive.rs
++++ b/folio2/crates/folio/tests/tz1/derive.rs
+@@ -16,6 +16,7 @@
+ //!    導出物に要否の字は写さず、--check が 0。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -24,10 +25,6 @@ const ANCHOR_NOTE: &str = "tests/fixtures/design-note/derive-anchor.yaml";
+ const ANCHOR_TOML: &str = "tests/fixtures/design-note/derive-anchor.toml";
+ const OUT_NAME: &str = "derive-anchor.toml";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+diff --git a/folio2/crates/folio/tests/tz1/entrance.rs b/folio2/crates/folio/tests/tz1/entrance.rs
+index 7ae00e69580200a65a48a2fad8036c28ea3315f5..06f2ab1b6ab24ca8415be10625d2c9cb04990cfb 100644
+--- a/folio2/crates/folio/tests/tz1/entrance.rs
++++ b/folio2/crates/folio/tests/tz1/entrance.rs
+@@ -4,14 +4,13 @@
+ //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる。
+ #![cfg(test)]
+ 
++use crate::common::{
++    assert_passes, assert_unknown, copy_external_schema, git, repo_root, stderr, stdout, violations,
++};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+@@ -25,44 +24,6 @@ fn copy_tree(src: &Path, dst: &Path) {
+     }
+ }
+ 
+-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+-fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+-    fs::copy(
+-        repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/field-schema/schema.toml"),
+-    )
+-    .unwrap();
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -115,33 +76,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+-fn assert_passes(out: &Output) {
+-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stdout(out).contains("folio check: 合格（違反 0・"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 `kind` で `words` を全部含む。
+ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
+     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
+@@ -158,24 +92,6 @@ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
+     );
+ }
+ 
+-/// まだ分からない 2・違反 0・標準エラーに `word` を含む「まだ分からない」の行が在る。
+-fn assert_unknown(out: &Output, word: &str) {
+-    assert_eq!(out.status.code(), Some(2), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stderr(out)
+-            .lines()
+-            .any(|l| l.starts_with("# まだ分からない: ") && l.contains(word)),
+-        "{}",
+-        stderr(out)
+-    );
+-    assert!(
+-        !stdout(out).contains("folio check: 合格"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ #[test]
+ fn entrance_canonical_copy_passes() {
+     let w = Work::new("canonical");
+diff --git a/folio2/crates/folio/tests/tz1/face.rs b/folio2/crates/folio/tests/tz1/face.rs
+index bbb08b05bcd8b267c40a74d2701fe73d3778f0a4..1dd3e3f1bc454da39a50bc009e54a45fe3b74f26 100644
+--- a/folio2/crates/folio/tests/tz1/face.rs
++++ b/folio2/crates/folio/tests/tz1/face.rs
+@@ -15,24 +15,9 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{code, copy_dir, design_intent, edit, esc, fixture, stderr, stdout, vendor};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -40,19 +25,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// fixture の正本 4 file を一時 dir の下の src/ へ、repo の vendor/archify/（図の道具・便 34 の要件書の面は図ごとに
+ /// 撃つ）を親 dir の vendor/archify/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+@@ -86,39 +58,6 @@ fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+-/// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+-fn esc(s: &str) -> String {
+-    s.replace('&', "&amp;")
+-        .replace('<', "&lt;")
+-        .replace('>', "&gt;")
+-        .replace('"', "&quot;")
+-        .replace('\'', "&#x27;")
+-}
+-
+ // ── 凍結 fixture ──
+ 
+ #[test]
+diff --git a/folio2/crates/folio/tests/tz1/face_adr.rs b/folio2/crates/folio/tests/tz1/face_adr.rs
+index b05284afcafc89d8460b4845780a596f55dae865..5c155cc907fa7952b5d8691d06834006dbd14d70 100644
+--- a/folio2/crates/folio/tests/tz1/face_adr.rs
++++ b/folio2/crates/folio/tests/tz1/face_adr.rs
+@@ -18,24 +18,9 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{code, copy_dir, design_intent, edit, esc, fixture, stderr, stdout, vendor};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-face-adr-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -43,19 +28,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// fixture の正本 4 file と adr/ADR-1.yaml・adr/ADR-2.yaml を一時 dir の下の src/ へ、repo の vendor/archify/
+ /// （図の道具・便 33 の面は図ごとに撃つ）を親 dir の vendor/archify/ へ写す。戻り値 = (一時 dir, 写し)。
+ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+@@ -93,39 +65,6 @@ fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str)
+         .expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+-/// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+-fn esc(s: &str) -> String {
+-    s.replace('&', "&amp;")
+-        .replace('<', "&lt;")
+-        .replace('>', "&gt;")
+-        .replace('"', "&quot;")
+-        .replace('\'', "&#x27;")
+-}
+-
+ /// 写しの ADR-2 に変異を当て、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。
+ fn mutated(case: &str, mutate: impl FnOnce(&str) -> String) -> (Output, String) {
+     let (td, work) = fixture_copy(case);
+diff --git a/folio2/crates/folio/tests/tz1/main.rs b/folio2/crates/folio/tests/tz1/main.rs
+index 7dbc6be4c91f448f532458699a83ce558e420a4a..3a64d9e4cb57695d6e2dcb86482fc481c922d08d 100644
+--- a/folio2/crates/folio/tests/tz1/main.rs
++++ b/folio2/crates/folio/tests/tz1/main.rs
+@@ -8,6 +8,7 @@ mod badge;
+ mod bundle;
+ mod ceiling;
+ mod check;
++mod common;
+ mod constitution_range;
+ mod derive;
+ mod emit_rulings;
+diff --git a/folio2/crates/folio/tests/tz2/common.rs b/folio2/crates/folio/tests/tz2/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6afab173188a1434cf10c31005da6c4dbb115de8
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz2/common.rs
+@@ -0,0 +1,373 @@
++//! folio の歯の群 tz2 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use folio::yaml_rust2::{Yaml, YamlLoader};
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++/// 棚の判断の記録の置き場（`shelf-adr` の div の中・上向きの関係の矢印と card）。
++pub(crate) fn adr_card(html: &str) -> &str {
++    between(html, "<div class=\"shelf-adr\">", "\n</div>")
++}
++
++/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
++/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
++pub(crate) fn adr_mentions(text: &str) -> Vec<(usize, String)> {
++    let mut out = Vec::new();
++    for (at, _) in text.match_indices("ADR-") {
++        let before = text[..at].chars().next_back();
++        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
++            continue;
++        }
++        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
++        let after = text[at + 4 + n.len()..].chars().next();
++        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
++            continue;
++        }
++        out.push((at, n));
++    }
++    out
++}
++
++/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
++pub(crate) fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
++    if written == frozen {
++        return;
++    }
++    let at = written
++        .iter()
++        .zip(frozen)
++        .position(|(a, b)| a != b)
++        .unwrap_or(written.len().min(frozen.len()));
++    let show = |b: &[u8]| {
++        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
++            .into_owned()
++    };
++    panic!(
++        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
++        written.len(),
++        frozen.len(),
++        show(written),
++        show(frozen)
++    );
++}
++
++/// `open` の後の最初の `close` までの字面。
++pub(crate) fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
++    let start = html
++        .find(open)
++        .unwrap_or_else(|| panic!("「{open}」が無い"))
++        + open.len();
++    let end = html[start..]
++        .find(close)
++        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
++    &html[start..start + end]
++}
++
++/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
++pub(crate) fn body_outside_svg(html: &str) -> String {
++    let mut rest = &html[html.find("<body>").expect("body が無い")..];
++    let mut out = String::new();
++    while let Some(at) = rest.find("<svg") {
++        out.push_str(&rest[..at]);
++        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
++        rest = &rest[at + end + "</svg>".len()..];
++    }
++    out.push_str(rest);
++    out
++}
++
++pub(crate) fn code(out: &Output, what: &str) -> i32 {
++    out.status.code().unwrap_or_else(|| {
++        panic!(
++            "{what} が signal で終わった: {}",
++            String::from_utf8_lossy(&out.stderr)
++        )
++    })
++}
++
++/// 属性 data-component の値を出た順に。
++pub(crate) fn components(html: &str) -> Vec<&str> {
++    let needle = "data-component=\"";
++    html.match_indices(needle)
++        .map(|(i, _)| {
++            let rest = &html[i + needle.len()..];
++            &rest[..rest.find('"').unwrap()]
++        })
++        .collect()
++}
++
++pub(crate) fn copy_dir(from: &Path, to: &Path) {
++    fs::create_dir_all(to).unwrap();
++    for entry in fs::read_dir(from).unwrap() {
++        let entry = entry.unwrap();
++        let (src, dst) = (entry.path(), to.join(entry.file_name()));
++        if entry.file_type().unwrap().is_dir() {
++            copy_dir(&src, &dst);
++        } else {
++            fs::copy(&src, &dst).unwrap();
++        }
++    }
++}
++
++/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
++pub(crate) fn cut(html: &str, a: &str, b: &str) -> String {
++    let Some(start) = html.find(a) else {
++        return html.to_string();
++    };
++    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
++    format!("{}{}", &html[..start], &html[end..])
++}
++
++/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
++pub(crate) fn cut_line(html: &str, a: &str) -> String {
++    let Some(start) = html.find(a) else {
++        return html.to_string();
++    };
++    let end = html[start..]
++        .find('\n')
++        .map_or(html.len(), |e| start + e + 1);
++    format!("{}{}", &html[..start], &html[end..])
++}
++
++pub(crate) fn design_intent() -> PathBuf {
++    repo_root().join("design-intent")
++}
++
++pub(crate) fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
++    let before = fs::read_to_string(path).unwrap();
++    let after = f(&before);
++    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
++    fs::write(path, after).unwrap();
++}
++
++pub(crate) fn fixture() -> PathBuf {
++    repo_root().join("tests/fixtures/face")
++}
++
++/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
++pub(crate) fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
++    let td = temp_dir(case);
++    let work = td.join("src");
++    fs::create_dir_all(&work).unwrap();
++    for name in [
++        "constitution.yaml",
++        "rules.yaml",
++        "vocabulary.yaml",
++        "srs.yaml",
++        "ceiling.yaml",
++    ] {
++        fs::copy(fixture().join(name), work.join(name)).unwrap();
++    }
++    (td, work)
++}
++
++pub(crate) fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
++    Command::new(env!("CARGO_BIN_EXE_tz"))
++        .arg("face")
++        .arg("--face")
++        .arg(face)
++        .arg("--dir")
++        .arg(dir)
++        .arg("--out")
++        .arg(out)
++        .arg(mode)
++        .output()
++        .expect("folio を起動できない")
++}
++
++/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
++/// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
++/// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
++/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
++pub(crate) fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
++    let (td, work) = fixture_copy(case);
++    for name in ["index.yaml", "intake.yaml"] {
++        fs::copy(fixture().join(name), work.join(name)).unwrap();
++    }
++    fs::create_dir_all(work.join("adr")).unwrap();
++    fs::copy(
++        fixture().join("adr/ADR-2.yaml"),
++        work.join("adr/ADR-2.yaml"),
++    )
++    .unwrap();
++    fs::create_dir_all(work.join("design-note")).unwrap();
++    fs::copy(
++        fixture().join("design-note/full.yaml"),
++        work.join("design-note/full.yaml"),
++    )
++    .unwrap();
++    (td, work)
++}
++
++/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
++pub(crate) fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
++    let out = td.join("index.html");
++    let run = folio_face("index", work, &out, "--write");
++    assert_eq!(
++        code(&run, "folio face --face index --write"),
++        0,
++        "{case}: {}",
++        stderr(&run)
++    );
++    let html = fs::read_to_string(&out).unwrap();
++    assert_eq!(
++        stdout(&run),
++        format!("folio face: 書いた（{} byte）\n", html.len())
++    );
++    (out, html)
++}
++
++/// 入口の写しに支度表（fixture の intake-sheet.yaml）も置く（便 20）。
++pub(crate) fn index_sheet_copy(case: &str) -> (PathBuf, PathBuf) {
++    let (td, work) = index_fixture_copy(case);
++    fs::copy(
++        fixture().join("intake-sheet.yaml"),
++        work.join("intake-sheet.yaml"),
++    )
++    .unwrap();
++    (td, work)
++}
++
++/// 入口の面で、fixture の写しに変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
++pub(crate) fn index_unknown(case: &str, mutate: impl FnOnce(&Path)) {
++    index_unknown_from(
++        index_fixture_copy(&format!("index-unknown-{case}")),
++        case,
++        mutate,
++    );
++}
++
++pub(crate) fn index_unknown_from((td, work): (PathBuf, PathBuf), case: &str, mutate: impl FnOnce(&Path)) {
++    mutate(&work);
++    let out = td.join("never.html");
++    let run = folio_face("index", &work, &out, "--write");
++    let exists = out.exists();
++    let _ = fs::remove_dir_all(&td);
++    assert_eq!(
++        code(&run, "folio face --face index"),
++        2,
++        "{case}: {}",
++        stderr(&run)
++    );
++    assert!(
++        stderr(&run).contains("まだ分からない"),
++        "{case}: {}",
++        stderr(&run)
++    );
++    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
++}
++
++pub(crate) fn load_yaml(name: &str) -> Yaml {
++    load_yaml_at(&design_intent(), name)
++}
++
++pub(crate) fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
++    let text = fs::read_to_string(dir.join(name)).unwrap();
++    YamlLoader::load_from_str(&text).unwrap().remove(0)
++}
++
++/// 棚の設計ノートの card（class の字から `</article>` まで＝class の残りも見える）。
++pub(crate) fn note_card(html: &str) -> String {
++    format!(
++        "class=\"shelf-d{}",
++        between(html, "class=\"shelf-d", "</article>")
++    )
++}
++
++pub(crate) fn parts_check(pages: &[String]) -> Output {
++    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
++    cmd.arg("parts")
++        .arg("--check")
++        .arg("--dir")
++        .arg(design_intent());
++    for page in pages {
++        cmd.arg("--page").arg(page);
++    }
++    cmd.output().unwrap()
++}
++
++/// 棚の見出しの「いま読めるのは <数> 面」の数。
++pub(crate) fn readable_faces(html: &str) -> &str {
++    between(html, "いま読めるのは <b>", " 面</b>")
++}
++
++/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
++pub(crate) fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
++    let td = temp_dir(case);
++    let out = td.join("srs.html");
++    let run = folio_face("srs", &design_intent(), &out, "--write");
++    assert_eq!(
++        code(&run, "folio face --face srs --write"),
++        0,
++        "{}",
++        stderr(&run)
++    );
++    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
++    let html = fs::read_to_string(&out).unwrap();
++    (td, out, html)
++}
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
++}
++
++pub(crate) fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
++    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
++}
++
++pub(crate) fn stderr(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stderr).into_owned()
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stdout).into_owned()
++}
++
++/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
++pub(crate) fn svg_bodies(html: &str) -> usize {
++    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
++}
++
++pub(crate) fn temp_dir(case: &str) -> PathBuf {
++    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
++    let _ = fs::remove_dir_all(&td);
++    fs::create_dir_all(&td).unwrap();
++    td
++}
++
++pub(crate) fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
++    y[key]
++        .as_str()
++        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
++}
++
++/// 判断の記録の面へのリンクの包みを外す（便 135・歯の側の手書きの式）。`<a class="xref" href="adr-` で始まるリンクごとに、
++/// 中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを確かめてから、字だけを残す。
++pub(crate) fn unlink_adr(html: &str) -> String {
++    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
++    let mut out = String::new();
++    let mut rest = html;
++    while let Some(at) = rest.find(OPEN) {
++        out.push_str(&rest[..at]);
++        let (n, tail) = rest[at + OPEN.len()..]
++            .split_once(".html\">")
++            .expect("リンクの行き先の閉じが無い");
++        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
++        assert!(
++            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
++            "行き先が判断の記録の面でない: adr-{n}"
++        );
++        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
++        out.push_str(text);
++        rest = tail;
++    }
++    out.push_str(rest);
++    out
++}
++
++pub(crate) fn vendor() -> PathBuf {
++    repo_root().join("vendor/archify")
++}
+diff --git a/folio2/crates/folio/tests/tz2/face_constitution.rs b/folio2/crates/folio/tests/tz2/face_constitution.rs
+index 009c1a53bf69c89228f1521f5e8d6a3ce9e01250..01145e07943d119f33829a9c4a3fe273d85be90e 100644
+--- a/folio2/crates/folio/tests/tz2/face_constitution.rs
++++ b/folio2/crates/folio/tests/tz2/face_constitution.rs
+@@ -10,20 +10,12 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{
++    adr_mentions, body_outside_svg, code, copy_dir, design_intent, repo_root, stderr, unlink_adr,
++    vendor,
++};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!(
+         "folio-face-constitution-{case}-{}",
+@@ -34,19 +26,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// 実の置き場を一時 dir の下の src/ へ、repo の vendor/archify/ を親 dir の vendor/archify/ へ写す。
+ /// 戻り値 = (一時 dir, 写し)。
+ fn real_copy(case: &str) -> (PathBuf, PathBuf) {
+@@ -72,19 +51,6 @@ fn folio_face(dir: &Path, out: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+     s.replace('&', "&amp;")
+@@ -94,30 +60,6 @@ fn esc(s: &str) -> String {
+         .replace('\'', "&#x27;")
+ }
+ 
+-/// 判断の記録の面へのリンクの包みを外す（便 135・歯の側の手書きの式）。`<a class="xref" href="adr-` で始まるリンクごとに、
+-/// 中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを確かめてから、字だけを残す。
+-fn unlink_adr(html: &str) -> String {
+-    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
+-    let mut out = String::new();
+-    let mut rest = html;
+-    while let Some(at) = rest.find(OPEN) {
+-        out.push_str(&rest[..at]);
+-        let (n, tail) = rest[at + OPEN.len()..]
+-            .split_once(".html\">")
+-            .expect("リンクの行き先の閉じが無い");
+-        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
+-        assert!(
+-            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
+-            "行き先が判断の記録の面でない: adr-{n}"
+-        );
+-        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
+-        out.push_str(text);
+-        rest = tail;
+-    }
+-    out.push_str(rest);
+-    out
+-}
+-
+ /// 写しの置き場に変異を当て（None なら当てない）、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。
+ fn face_with(case: &str, mutate: Option<fn(&str) -> String>) -> (Output, String) {
+     let (td, work) = real_copy(case);
+@@ -738,38 +680,6 @@ fn f84_glossary_heading_counts_from_the_source() {
+ 
+ // ── 便 135: 本文の判断の記録の番号を判断の記録の面へのリンクに（docs/design/delivery-135.md §1 (c)）──
+ 
+-/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
+-fn body_outside_svg(html: &str) -> String {
+-    let mut rest = &html[html.find("<body>").expect("body が無い")..];
+-    let mut out = String::new();
+-    while let Some(at) = rest.find("<svg") {
+-        out.push_str(&rest[..at]);
+-        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
+-        rest = &rest[at + end + "</svg>".len()..];
+-    }
+-    out.push_str(rest);
+-    out
+-}
+-
+-/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
+-/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
+-fn adr_mentions(text: &str) -> Vec<(usize, String)> {
+-    let mut out = Vec::new();
+-    for (at, _) in text.match_indices("ADR-") {
+-        let before = text[..at].chars().next_back();
+-        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
+-            continue;
+-        }
+-        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
+-        let after = text[at + 4 + n.len()..].chars().next();
+-        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
+-            continue;
+-        }
+-        out.push((at, n));
+-    }
+-    out
+-}
+-
+ #[test]
+ fn f135_every_adr_mention_on_the_real_constitution_is_a_link() {
+     let html = real_html("f135-adr");
+diff --git a/folio2/crates/folio/tests/tz2/face_index.rs b/folio2/crates/folio/tests/tz2/face_index.rs
+index 7310ca87ed7bf391589dccc7143a1681487bbedd..c13da0aaa5351c85dd70c9c9a19146d0cb230b37 100644
+--- a/folio2/crates/folio/tests/tz2/face_index.rs
++++ b/folio2/crates/folio/tests/tz2/face_index.rs
+@@ -12,83 +12,14 @@
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+ 
+-use folio::yaml_rust2::{Yaml, YamlLoader};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn temp_dir(case: &str) -> PathBuf {
+-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+-    let _ = fs::remove_dir_all(&td);
+-    fs::create_dir_all(&td).unwrap();
+-    td
+-}
+-
+-/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+-fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let td = temp_dir(case);
+-    let work = td.join("src");
+-    fs::create_dir_all(&work).unwrap();
+-    for name in [
+-        "constitution.yaml",
+-        "rules.yaml",
+-        "vocabulary.yaml",
+-        "srs.yaml",
+-        "ceiling.yaml",
+-    ] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    (td, work)
+-}
+-
+-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("face")
+-        .arg("--face")
+-        .arg(face)
+-        .arg("--dir")
+-        .arg(dir)
+-        .arg("--out")
+-        .arg(out)
+-        .arg(mode)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
++use crate::common::{
++    adr_card, assert_same_bytes, between, code, components, design_intent, edit, fixture,
++    folio_face, index_fixture_copy, index_from, index_sheet_copy, index_unknown, load_yaml,
++    load_yaml_at, note_card, parts_check, readable_faces, real_srs, seq, stderr, stdout, temp_dir,
++    text,
++};
++use folio::yaml_rust2::Yaml;
+ 
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+@@ -99,29 +30,6 @@ fn esc(s: &str) -> String {
+         .replace('\'', "&#x27;")
+ }
+ 
+-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
+-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
+-    if written == frozen {
+-        return;
+-    }
+-    let at = written
+-        .iter()
+-        .zip(frozen)
+-        .position(|(a, b)| a != b)
+-        .unwrap_or(written.len().min(frozen.len()));
+-    let show = |b: &[u8]| {
+-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
+-            .into_owned()
+-    };
+-    panic!(
+-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
+-        written.len(),
+-        frozen.len(),
+-        show(written),
+-        show(frozen)
+-    );
+-}
+-
+ /// 実の正本から憲法の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+ fn real_face(case: &str) -> (PathBuf, PathBuf, String) {
+     let td = temp_dir(case);
+@@ -133,119 +41,8 @@ fn real_face(case: &str) -> (PathBuf, PathBuf, String) {
+     (td, out, html)
+ }
+ 
+-/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+-fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
+-    let td = temp_dir(case);
+-    let out = td.join("srs.html");
+-    let run = folio_face("srs", &design_intent(), &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face srs --write"),
+-        0,
+-        "{}",
+-        stderr(&run)
+-    );
+-    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
+-    let html = fs::read_to_string(&out).unwrap();
+-    (td, out, html)
+-}
+-
+-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+-    let text = fs::read_to_string(dir.join(name)).unwrap();
+-    YamlLoader::load_from_str(&text).unwrap().remove(0)
+-}
+-
+-fn load_yaml(name: &str) -> Yaml {
+-    load_yaml_at(&design_intent(), name)
+-}
+-
+-fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
+-    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
+-}
+-
+-fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
+-    y[key]
+-        .as_str()
+-        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
+-}
+-
+-/// 属性 data-component の値を出た順に。
+-fn components(html: &str) -> Vec<&str> {
+-    let needle = "data-component=\"";
+-    html.match_indices(needle)
+-        .map(|(i, _)| {
+-            let rest = &html[i + needle.len()..];
+-            &rest[..rest.find('"').unwrap()]
+-        })
+-        .collect()
+-}
+-
+-/// `open` の後の最初の `close` までの字面。
+-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+-    let start = html
+-        .find(open)
+-        .unwrap_or_else(|| panic!("「{open}」が無い"))
+-        + open.len();
+-    let end = html[start..]
+-        .find(close)
+-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+-    &html[start..start + end]
+-}
+-
+ // ── 入口の面（便 16・docs/design/delivery-16.md §1 (d)）──
+ 
+-/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+-/// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+-/// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+-fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let (td, work) = fixture_copy(case);
+-    for name in ["index.yaml", "intake.yaml"] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    fs::create_dir_all(work.join("adr")).unwrap();
+-    fs::copy(
+-        fixture().join("adr/ADR-2.yaml"),
+-        work.join("adr/ADR-2.yaml"),
+-    )
+-    .unwrap();
+-    fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::copy(
+-        fixture().join("design-note/full.yaml"),
+-        work.join("design-note/full.yaml"),
+-    )
+-    .unwrap();
+-    (td, work)
+-}
+-
+-/// 入口の写しに支度表（fixture の intake-sheet.yaml）も置く（便 20）。
+-fn index_sheet_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let (td, work) = index_fixture_copy(case);
+-    fs::copy(
+-        fixture().join("intake-sheet.yaml"),
+-        work.join("intake-sheet.yaml"),
+-    )
+-    .unwrap();
+-    (td, work)
+-}
+-
+-/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
+-fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
+-    let out = td.join("index.html");
+-    let run = folio_face("index", work, &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face index --write"),
+-        0,
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    let html = fs::read_to_string(&out).unwrap();
+-    assert_eq!(
+-        stdout(&run),
+-        format!("folio face: 書いた（{} byte）\n", html.len())
+-    );
+-    (out, html)
+-}
+-
+ /// 写しから入口の面を書き、凍結した期待の面と byte で比べる。
+ fn index_frozen(case: &str, work: &Path, td: &Path, expected: &str) {
+     let (out, _) = index_from(case, work, td);
+@@ -301,18 +98,6 @@ fn real_index(case: &str) -> (PathBuf, PathBuf, String) {
+     (td, out, html)
+ }
+ 
+-fn parts_check(pages: &[String]) -> Output {
+-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
+-    cmd.arg("parts")
+-        .arg("--check")
+-        .arg("--dir")
+-        .arg(design_intent());
+-    for page in pages {
+-        cmd.arg("--page").arg(page);
+-    }
+-    cmd.output().unwrap()
+-}
+-
+ #[test]
+ fn face_index_on_the_real_sources_passes_parts_check() {
+     let (td, out, _) = real_index("index-parts");
+@@ -351,16 +136,6 @@ fn face_index_all_three_faces_on_the_real_sources_pass_parts_check_together() {
+     assert!(stdout(&check).contains("違反 0"), "{}", stdout(&check));
+ }
+ 
+-/// 棚の判断の記録の置き場（`shelf-adr` の div の中・上向きの関係の矢印と card）。
+-fn adr_card(html: &str) -> &str {
+-    between(html, "<div class=\"shelf-adr\">", "\n</div>")
+-}
+-
+-/// 棚の見出しの「いま読めるのは <数> 面」の数。
+-fn readable_faces(html: &str) -> &str {
+-    between(html, "いま読めるのは <b>", " 面</b>")
+-}
+-
+ /// 実の正本の判断の記録を id の数の昇順に（戻り値 = (id, status)）。
+ fn real_records() -> Vec<(String, String)> {
+     let mut rows: Vec<(u64, String, String)> = fs::read_dir(design_intent().join("adr"))
+@@ -380,14 +155,6 @@ fn real_records() -> Vec<(String, String)> {
+     rows.into_iter().map(|(_, id, st)| (id, st)).collect()
+ }
+ 
+-/// 棚の設計ノートの card（class の字から `</article>` まで＝class の残りも見える）。
+-fn note_card(html: &str) -> String {
+-    format!(
+-        "class=\"shelf-d{}",
+-        between(html, "class=\"shelf-d", "</article>")
+-    )
+-}
+-
+ /// 実の正本の設計ノート（`design-note/` の `.yaml` から欄の決まりを除く）を id の字の昇順に。
+ /// 戻り値 = (id, status)。
+ fn real_notes() -> Vec<(String, String)> {
+@@ -616,35 +383,6 @@ fn face_index_check_has_three_values() {
+     );
+ }
+ 
+-/// 入口の面で、fixture の写しに変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
+-fn index_unknown(case: &str, mutate: impl FnOnce(&Path)) {
+-    index_unknown_from(
+-        index_fixture_copy(&format!("index-unknown-{case}")),
+-        case,
+-        mutate,
+-    );
+-}
+-
+-fn index_unknown_from((td, work): (PathBuf, PathBuf), case: &str, mutate: impl FnOnce(&Path)) {
+-    mutate(&work);
+-    let out = td.join("never.html");
+-    let run = folio_face("index", &work, &out, "--write");
+-    let exists = out.exists();
+-    let _ = fs::remove_dir_all(&td);
+-    assert_eq!(
+-        code(&run, "folio face --face index"),
+-        2,
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    assert!(
+-        stderr(&run).contains("まだ分からない"),
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
+-}
+-
+ fn index_edit(from: &'static str, to: &'static str) -> impl FnOnce(&Path) {
+     move |w| edit(&w.join("index.yaml"), |t| t.replacen(from, to, 1))
+ }
+diff --git a/folio2/crates/folio/tests/tz2/face_index_sheet.rs b/folio2/crates/folio/tests/tz2/face_index_sheet.rs
+index 54ba3971e0a886e7e88703aa9e0812f310a21903..faf94771ce8a6317f22d10b6518db8c246c82c12 100644
+--- a/folio2/crates/folio/tests/tz2/face_index_sheet.rs
++++ b/folio2/crates/folio/tests/tz2/face_index_sheet.rs
+@@ -9,85 +9,14 @@
+ //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{
++    between, code, components, design_intent, edit, fixture, folio_face, index_from,
++    index_sheet_copy, index_unknown, index_unknown_from, load_yaml, load_yaml_at, parts_check,
++    repo_root, seq, stderr, stdout, temp_dir, text,
++};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+-
+-use folio::yaml_rust2::{Yaml, YamlLoader};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn temp_dir(case: &str) -> PathBuf {
+-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+-    let _ = fs::remove_dir_all(&td);
+-    fs::create_dir_all(&td).unwrap();
+-    td
+-}
+-
+-/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+-fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let td = temp_dir(case);
+-    let work = td.join("src");
+-    fs::create_dir_all(&work).unwrap();
+-    for name in [
+-        "constitution.yaml",
+-        "rules.yaml",
+-        "vocabulary.yaml",
+-        "srs.yaml",
+-        "ceiling.yaml",
+-    ] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    (td, work)
+-}
+-
+-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("face")
+-        .arg("--face")
+-        .arg(face)
+-        .arg("--dir")
+-        .arg(dir)
+-        .arg("--out")
+-        .arg(out)
+-        .arg(mode)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
++use std::process::Command;
+ 
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+@@ -98,122 +27,6 @@ fn esc(s: &str) -> String {
+         .replace('\'', "&#x27;")
+ }
+ 
+-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+-    let text = fs::read_to_string(dir.join(name)).unwrap();
+-    YamlLoader::load_from_str(&text).unwrap().remove(0)
+-}
+-
+-fn load_yaml(name: &str) -> Yaml {
+-    load_yaml_at(&design_intent(), name)
+-}
+-
+-fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
+-    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
+-}
+-
+-fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
+-    y[key]
+-        .as_str()
+-        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
+-}
+-
+-/// 属性 data-component の値を出た順に。
+-fn components(html: &str) -> Vec<&str> {
+-    let needle = "data-component=\"";
+-    html.match_indices(needle)
+-        .map(|(i, _)| {
+-            let rest = &html[i + needle.len()..];
+-            &rest[..rest.find('"').unwrap()]
+-        })
+-        .collect()
+-}
+-
+-/// `open` の後の最初の `close` までの字面。
+-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+-    let start = html
+-        .find(open)
+-        .unwrap_or_else(|| panic!("「{open}」が無い"))
+-        + open.len();
+-    let end = html[start..]
+-        .find(close)
+-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+-    &html[start..start + end]
+-}
+-
+-/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+-/// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+-/// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+-fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let (td, work) = fixture_copy(case);
+-    for name in ["index.yaml", "intake.yaml"] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    fs::create_dir_all(work.join("adr")).unwrap();
+-    fs::copy(
+-        fixture().join("adr/ADR-2.yaml"),
+-        work.join("adr/ADR-2.yaml"),
+-    )
+-    .unwrap();
+-    fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::copy(
+-        fixture().join("design-note/full.yaml"),
+-        work.join("design-note/full.yaml"),
+-    )
+-    .unwrap();
+-    (td, work)
+-}
+-
+-/// 入口の写しに支度表（fixture の intake-sheet.yaml）も置く（便 20）。
+-fn index_sheet_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let (td, work) = index_fixture_copy(case);
+-    fs::copy(
+-        fixture().join("intake-sheet.yaml"),
+-        work.join("intake-sheet.yaml"),
+-    )
+-    .unwrap();
+-    (td, work)
+-}
+-
+-/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
+-fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
+-    let out = td.join("index.html");
+-    let run = folio_face("index", work, &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face index --write"),
+-        0,
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    let html = fs::read_to_string(&out).unwrap();
+-    assert_eq!(
+-        stdout(&run),
+-        format!("folio face: 書いた（{} byte）\n", html.len())
+-    );
+-    (out, html)
+-}
+-
+-fn parts_check(pages: &[String]) -> Output {
+-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
+-    cmd.arg("parts")
+-        .arg("--check")
+-        .arg("--dir")
+-        .arg(design_intent());
+-    for page in pages {
+-        cmd.arg("--page").arg(page);
+-    }
+-    cmd.output().unwrap()
+-}
+-
+-/// 入口の面で、fixture の写しに変異を 1 つ当て、`--write` = 2 ∧「まだ分からない」∧ 出力先が出来ていない。
+-fn index_unknown(case: &str, mutate: impl FnOnce(&Path)) {
+-    index_unknown_from(
+-        index_fixture_copy(&format!("index-unknown-{case}")),
+-        case,
+-        mutate,
+-    );
+-}
+-
+ /// 同じ形を支度表の在る写しで（便 20）。
+ fn index_unknown_with_a_sheet(case: &str, mutate: impl FnOnce(&Path)) {
+     index_unknown_from(
+@@ -223,26 +36,6 @@ fn index_unknown_with_a_sheet(case: &str, mutate: impl FnOnce(&Path)) {
+     );
+ }
+ 
+-fn index_unknown_from((td, work): (PathBuf, PathBuf), case: &str, mutate: impl FnOnce(&Path)) {
+-    mutate(&work);
+-    let out = td.join("never.html");
+-    let run = folio_face("index", &work, &out, "--write");
+-    let exists = out.exists();
+-    let _ = fs::remove_dir_all(&td);
+-    assert_eq!(
+-        code(&run, "folio face --face index"),
+-        2,
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    assert!(
+-        stderr(&run).contains("まだ分からない"),
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    assert!(!exists, "{case}: 導出できないのに出力先に書いた");
+-}
+-
+ // ── 入口の面の節「支度表」（便 20・docs/design/delivery-20.md §1 (d)）──
+ 
+ /// 節「支度表」の字面（帯の始まりから chapbody の終わりまで）。
+diff --git a/folio2/crates/folio/tests/tz2/face_index_shelf.rs b/folio2/crates/folio/tests/tz2/face_index_shelf.rs
+index e2ebf2472e50bdeb1e3f283100ebbb9beea1bb3d..177c5cf033a5839232dc3ef24fc2910c697b900f 100644
+--- a/folio2/crates/folio/tests/tz2/face_index_shelf.rs
++++ b/folio2/crates/folio/tests/tz2/face_index_shelf.rs
+@@ -10,81 +10,11 @@
+ //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{
++    adr_card, assert_same_bytes, between, code, edit, fixture, folio_face, index_fixture_copy,
++    index_from, load_yaml_at, note_card, readable_faces, seq, stderr, text,
++};
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+-
+-use folio::yaml_rust2::{Yaml, YamlLoader};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn temp_dir(case: &str) -> PathBuf {
+-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+-    let _ = fs::remove_dir_all(&td);
+-    fs::create_dir_all(&td).unwrap();
+-    td
+-}
+-
+-/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+-fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let td = temp_dir(case);
+-    let work = td.join("src");
+-    fs::create_dir_all(&work).unwrap();
+-    for name in [
+-        "constitution.yaml",
+-        "rules.yaml",
+-        "vocabulary.yaml",
+-        "srs.yaml",
+-        "ceiling.yaml",
+-    ] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    (td, work)
+-}
+-
+-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("face")
+-        .arg("--face")
+-        .arg(face)
+-        .arg("--dir")
+-        .arg(dir)
+-        .arg("--out")
+-        .arg(out)
+-        .arg(mode)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+ 
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+@@ -95,110 +25,8 @@ fn esc(s: &str) -> String {
+         .replace('\'', "&#x27;")
+ }
+ 
+-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
+-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
+-    if written == frozen {
+-        return;
+-    }
+-    let at = written
+-        .iter()
+-        .zip(frozen)
+-        .position(|(a, b)| a != b)
+-        .unwrap_or(written.len().min(frozen.len()));
+-    let show = |b: &[u8]| {
+-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
+-            .into_owned()
+-    };
+-    panic!(
+-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
+-        written.len(),
+-        frozen.len(),
+-        show(written),
+-        show(frozen)
+-    );
+-}
+-
+-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+-    let text = fs::read_to_string(dir.join(name)).unwrap();
+-    YamlLoader::load_from_str(&text).unwrap().remove(0)
+-}
+-
+-fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
+-    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
+-}
+-
+-fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
+-    y[key]
+-        .as_str()
+-        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
+-}
+-
+-/// `open` の後の最初の `close` までの字面。
+-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+-    let start = html
+-        .find(open)
+-        .unwrap_or_else(|| panic!("「{open}」が無い"))
+-        + open.len();
+-    let end = html[start..]
+-        .find(close)
+-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+-    &html[start..start + end]
+-}
+-
+-/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
+-/// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
+-/// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
+-/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
+-fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+-    let (td, work) = fixture_copy(case);
+-    for name in ["index.yaml", "intake.yaml"] {
+-        fs::copy(fixture().join(name), work.join(name)).unwrap();
+-    }
+-    fs::create_dir_all(work.join("adr")).unwrap();
+-    fs::copy(
+-        fixture().join("adr/ADR-2.yaml"),
+-        work.join("adr/ADR-2.yaml"),
+-    )
+-    .unwrap();
+-    fs::create_dir_all(work.join("design-note")).unwrap();
+-    fs::copy(
+-        fixture().join("design-note/full.yaml"),
+-        work.join("design-note/full.yaml"),
+-    )
+-    .unwrap();
+-    (td, work)
+-}
+-
+-/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
+-fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
+-    let out = td.join("index.html");
+-    let run = folio_face("index", work, &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face index --write"),
+-        0,
+-        "{case}: {}",
+-        stderr(&run)
+-    );
+-    let html = fs::read_to_string(&out).unwrap();
+-    assert_eq!(
+-        stdout(&run),
+-        format!("folio face: 書いた（{} byte）\n", html.len())
+-    );
+-    (out, html)
+-}
+-
+ // ── 棚の「判断の記録」の行（便 26・docs/design/delivery-26.md §1 (a)(e)）──
+ 
+-/// 棚の判断の記録の置き場（`shelf-adr` の div の中・上向きの関係の矢印と card）。
+-fn adr_card(html: &str) -> &str {
+-    between(html, "<div class=\"shelf-adr\">", "\n</div>")
+-}
+-
+-/// 棚の見出しの「いま読めるのは <数> 面」の数。
+-fn readable_faces(html: &str) -> &str {
+-    between(html, "いま読めるのは <b>", " 面</b>")
+-}
+-
+ /// status-line の「まだ無い」の行の v。
+ fn still_absent(html: &str) -> &str {
+     between(
+@@ -321,14 +149,6 @@ fn cut(html: &str, open: &str, close: &str) -> String {
+ 
+ // ── 棚の「設計ノート」の行（便 29・docs/design/delivery-29.md §1 (a)(e)）──
+ 
+-/// 棚の設計ノートの card（class の字から `</article>` まで＝class の残りも見える）。
+-fn note_card(html: &str) -> String {
+-    format!(
+-        "class=\"shelf-d{}",
+-        between(html, "class=\"shelf-d", "</article>")
+-    )
+-}
+-
+ /// 棚の見出しの型の列挙（「いま読めるのは <数> 面 ＝ このページ（入口）と、」の後）。
+ fn readable_types(html: &str) -> &str {
+     between(
+diff --git a/folio2/crates/folio/tests/tz2/face_note.rs b/folio2/crates/folio/tests/tz2/face_note.rs
+index 211417a8a3f960a023884907a646e4ceee7ec4a6..7580b5bccf5f6f51f65db6c9b48db03141b2f5e9 100644
+--- a/folio2/crates/folio/tests/tz2/face_note.rs
++++ b/folio2/crates/folio/tests/tz2/face_note.rs
+@@ -13,24 +13,12 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{
++    code, copy_dir, cut, cut_line, design_intent, edit, fixture, repo_root, stderr, stdout,
++    svg_bodies, vendor,
++};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-face-note-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -38,19 +26,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// fixture の正本 4 file と design-note/full.yaml を一時 dir の下の src/ へ、器の導出 file を親 dir の
+ /// contracts/ へ、repo の vendor/archify/（図の道具・便 31 の面は図ごとに撃つ）を親 dir の vendor/archify/ へ写す。
+ /// 戻り値 = (一時 dir, 写し)。
+@@ -94,30 +69,6 @@ fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str)
+         .expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+     s.replace('&', "&amp;")
+@@ -455,31 +406,6 @@ fn classes(html: &str) -> Vec<String> {
+     out
+ }
+ 
+-/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
+-fn cut(html: &str, a: &str, b: &str) -> String {
+-    let Some(start) = html.find(a) else {
+-        return html.to_string();
+-    };
+-    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
+-    format!("{}{}", &html[..start], &html[end..])
+-}
+-
+-/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
+-fn cut_line(html: &str, a: &str) -> String {
+-    let Some(start) = html.find(a) else {
+-        return html.to_string();
+-    };
+-    let end = html[start..]
+-        .find('\n')
+-        .map_or(html.len(), |e| start + e + 1);
+-    format!("{}{}", &html[..start], &html[end..])
+-}
+-
+-/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
+-fn svg_bodies(html: &str) -> usize {
+-    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
+-}
+-
+ /// 写しの figures を空の一覧にした面。
+ fn figureless_html(case: &str) -> String {
+     let (run, html) = mutated(case, |t| {
+diff --git a/folio2/crates/folio/tests/tz2/face_srs.rs b/folio2/crates/folio/tests/tz2/face_srs.rs
+index 175349a078736ddc7642a874434b52d251ae0087..e3978b5878caa2cfbe43fe29220f206c2315ce47 100644
+--- a/folio2/crates/folio/tests/tz2/face_srs.rs
++++ b/folio2/crates/folio/tests/tz2/face_srs.rs
+@@ -18,20 +18,11 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{
++    adr_mentions, body_outside_svg, code, copy_dir, design_intent, repo_root, vendor,
++};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-face-srs-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -39,28 +30,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+ /// 実の置き場 design-intent/ を一時 dir の下の src/ へ、図の道具 vendor/archify/ を親 dir の vendor/archify/ へ写し、
+ /// 要件書の面を一時 file へ書く。面の本文を返す（一時 dir は消す）。
+ fn real_srs(case: &str) -> String {
+@@ -620,38 +589,6 @@ fn unlink_adr(html: &str) -> String {
+     out
+ }
+ 
+-/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
+-fn body_outside_svg(html: &str) -> String {
+-    let mut rest = &html[html.find("<body>").expect("body が無い")..];
+-    let mut out = String::new();
+-    while let Some(at) = rest.find("<svg") {
+-        out.push_str(&rest[..at]);
+-        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
+-        rest = &rest[at + end + "</svg>".len()..];
+-    }
+-    out.push_str(rest);
+-    out
+-}
+-
+-/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
+-/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
+-fn adr_mentions(text: &str) -> Vec<(usize, String)> {
+-    let mut out = Vec::new();
+-    for (at, _) in text.match_indices("ADR-") {
+-        let before = text[..at].chars().next_back();
+-        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
+-            continue;
+-        }
+-        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
+-        let after = text[at + 4 + n.len()..].chars().next();
+-        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
+-            continue;
+-        }
+-        out.push((at, n));
+-    }
+-    out
+-}
+-
+ /// 面の本文の判断の記録の番号が全部 adr-<数>.html へのリンクで、行き先の正本が在り、`<a` の入れ子が無いことを数える
+ /// （1 つ以上在ることも）。歯の側の数え。
+ fn assert_every_adr_mention_is_a_link(html: &str, face: &str) {
+diff --git a/folio2/crates/folio/tests/tz2/face_srs_body.rs b/folio2/crates/folio/tests/tz2/face_srs_body.rs
+index 36dec9b9e18944269330f3f02fe252b458b99626..8d7070546ed5aca36a3e77bfcc1505189e9248c3 100644
+--- a/folio2/crates/folio/tests/tz2/face_srs_body.rs
++++ b/folio2/crates/folio/tests/tz2/face_srs_body.rs
+@@ -12,46 +12,15 @@
+ 
+ use std::fs;
+ use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
++use std::process::Command;
+ 
++use crate::common::{
++    assert_same_bytes, between, code, components, copy_dir, design_intent, edit, fixture,
++    folio_face, load_yaml, load_yaml_at, real_srs, seq, stderr, stdout, temp_dir, text, unlink_adr,
++    vendor,
++};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+-fn temp_dir(case: &str) -> PathBuf {
+-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+-    let _ = fs::remove_dir_all(&td);
+-    fs::create_dir_all(&td).unwrap();
+-    td
+-}
+-
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// fixture の正本 4 file を一時 dir の下の src/ へ、repo の vendor/archify/（図の道具・便 34 の要件書の面は図ごとに
+ /// 撃つ）を親 dir の vendor/archify/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+@@ -71,44 +40,6 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     (td, work)
+ }
+ 
+-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("face")
+-        .arg("--face")
+-        .arg(face)
+-        .arg("--dir")
+-        .arg(dir)
+-        .arg("--out")
+-        .arg(out)
+-        .arg(mode)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+     s.replace('&', "&amp;")
+@@ -118,30 +49,6 @@ fn esc(s: &str) -> String {
+         .replace('\'', "&#x27;")
+ }
+ 
+-/// 判断の記録の面へのリンクの包みを外す（便 135・歯の側の手書きの式）。`<a class="xref" href="adr-` で始まるリンクごとに、
+-/// 中の字が判断の記録の番号（ADR- に数字列）で行き先がその番号の面（adr-<数>.html）であることを確かめてから、字だけを残す。
+-fn unlink_adr(html: &str) -> String {
+-    const OPEN: &str = "<a class=\"xref\" href=\"adr-";
+-    let mut out = String::new();
+-    let mut rest = html;
+-    while let Some(at) = rest.find(OPEN) {
+-        out.push_str(&rest[..at]);
+-        let (n, tail) = rest[at + OPEN.len()..]
+-            .split_once(".html\">")
+-            .expect("リンクの行き先の閉じが無い");
+-        let (text, tail) = tail.split_once("</a>").expect("リンクの閉じが無い");
+-        assert!(
+-            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()),
+-            "行き先が判断の記録の面でない: adr-{n}"
+-        );
+-        assert_eq!(text, format!("ADR-{n}"), "リンクの中の字が行き先の番号でない");
+-        out.push_str(text);
+-        rest = tail;
+-    }
+-    out.push_str(rest);
+-    out
+-}
+-
+ /// 実の正本から一時 file へ書く。戻り値 = (一時 dir, 面の本文)。
+ fn real_face(case: &str) -> (PathBuf, PathBuf, String) {
+     let td = temp_dir(case);
+@@ -153,61 +60,8 @@ fn real_face(case: &str) -> (PathBuf, PathBuf, String) {
+     (td, out, html)
+ }
+ 
+-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+-    let text = fs::read_to_string(dir.join(name)).unwrap();
+-    YamlLoader::load_from_str(&text).unwrap().remove(0)
+-}
+-
+-fn load_yaml(name: &str) -> Yaml {
+-    load_yaml_at(&design_intent(), name)
+-}
+-
+-fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
+-    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
+-}
+-
+-fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
+-    y[key]
+-        .as_str()
+-        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
+-}
+-
+-/// 属性 data-component の値を出た順に。
+-fn components(html: &str) -> Vec<&str> {
+-    let needle = "data-component=\"";
+-    html.match_indices(needle)
+-        .map(|(i, _)| {
+-            let rest = &html[i + needle.len()..];
+-            &rest[..rest.find('"').unwrap()]
+-        })
+-        .collect()
+-}
+-
+ // ── 要件書の面（便 15・docs/design/delivery-15.md §1 (e)）──
+ 
+-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
+-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
+-    if written == frozen {
+-        return;
+-    }
+-    let at = written
+-        .iter()
+-        .zip(frozen)
+-        .position(|(a, b)| a != b)
+-        .unwrap_or(written.len().min(frozen.len()));
+-    let show = |b: &[u8]| {
+-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
+-            .into_owned()
+-    };
+-    panic!(
+-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
+-        written.len(),
+-        frozen.len(),
+-        show(written),
+-        show(frozen)
+-    );
+-}
+-
+ #[test]
+ fn face_srs_write_matches_the_frozen_fixture() {
+     let (td, work) = fixture_copy("srs-anchor");
+@@ -244,22 +98,6 @@ fn face_srs_escapes_values_from_the_sources() {
+     );
+ }
+ 
+-/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+-fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
+-    let td = temp_dir(case);
+-    let out = td.join("srs.html");
+-    let run = folio_face("srs", &design_intent(), &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face srs --write"),
+-        0,
+-        "{}",
+-        stderr(&run)
+-    );
+-    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
+-    let html = fs::read_to_string(&out).unwrap();
+-    (td, out, html)
+-}
+-
+ #[test]
+ fn face_srs_on_the_real_sources_passes_parts_check() {
+     let (td, out, html) = real_srs("srs-parts");
+@@ -292,18 +130,6 @@ fn face_srs_on_the_real_sources_passes_parts_check() {
+     );
+ }
+ 
+-/// `open` の後の最初の `close` までの字面。
+-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+-    let start = html
+-        .find(open)
+-        .unwrap_or_else(|| panic!("「{open}」が無い"))
+-        + open.len();
+-    let end = html[start..]
+-        .find(close)
+-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+-    &html[start..start + end]
+-}
+-
+ #[test]
+ fn face_srs_census_on_the_real_sources_counts_and_verbatims() {
+     let (td, _, html) = real_srs("srs-census");
+diff --git a/folio2/crates/folio/tests/tz2/face_srs_figure.rs b/folio2/crates/folio/tests/tz2/face_srs_figure.rs
+index 7a79992f1075150c717985a3a482b0346591a161..ef25bcf338c0601242cea4c914d1e6821696ee6f 100644
+--- a/folio2/crates/folio/tests/tz2/face_srs_figure.rs
++++ b/folio2/crates/folio/tests/tz2/face_srs_figure.rs
+@@ -10,47 +10,13 @@
+ //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{
++    assert_same_bytes, between, code, components, copy_dir, cut, cut_line, edit, fixture,
++    folio_face, load_yaml, real_srs, stderr, svg_bodies, temp_dir, vendor,
++};
+ use std::fs;
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+-
+-use folio::yaml_rust2::{Yaml, YamlLoader};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+-fn temp_dir(case: &str) -> PathBuf {
+-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
+-    let _ = fs::remove_dir_all(&td);
+-    fs::create_dir_all(&td).unwrap();
+-    td
+-}
+-
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
++use std::path::PathBuf;
++use std::process::Output;
+ 
+ /// fixture の正本 4 file を一時 dir の下の src/ へ、repo の vendor/archify/（図の道具・便 34 の要件書の面は図ごとに
+ /// 撃つ）を親 dir の vendor/archify/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
+@@ -71,115 +37,6 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
+     (td, work)
+ }
+ 
+-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("face")
+-        .arg("--face")
+-        .arg(face)
+-        .arg("--dir")
+-        .arg(dir)
+-        .arg("--out")
+-        .arg(out)
+-        .arg(mode)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
+-    let text = fs::read_to_string(dir.join(name)).unwrap();
+-    YamlLoader::load_from_str(&text).unwrap().remove(0)
+-}
+-
+-fn load_yaml(name: &str) -> Yaml {
+-    load_yaml_at(&design_intent(), name)
+-}
+-
+-/// 属性 data-component の値を出た順に。
+-fn components(html: &str) -> Vec<&str> {
+-    let needle = "data-component=\"";
+-    html.match_indices(needle)
+-        .map(|(i, _)| {
+-            let rest = &html[i + needle.len()..];
+-            &rest[..rest.find('"').unwrap()]
+-        })
+-        .collect()
+-}
+-
+-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
+-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
+-    if written == frozen {
+-        return;
+-    }
+-    let at = written
+-        .iter()
+-        .zip(frozen)
+-        .position(|(a, b)| a != b)
+-        .unwrap_or(written.len().min(frozen.len()));
+-    let show = |b: &[u8]| {
+-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
+-            .into_owned()
+-    };
+-    panic!(
+-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
+-        written.len(),
+-        frozen.len(),
+-        show(written),
+-        show(frozen)
+-    );
+-}
+-
+-/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
+-fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
+-    let td = temp_dir(case);
+-    let out = td.join("srs.html");
+-    let run = folio_face("srs", &design_intent(), &out, "--write");
+-    assert_eq!(
+-        code(&run, "folio face --face srs --write"),
+-        0,
+-        "{}",
+-        stderr(&run)
+-    );
+-    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
+-    let html = fs::read_to_string(&out).unwrap();
+-    (td, out, html)
+-}
+-
+-/// `open` の後の最初の `close` までの字面。
+-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
+-    let start = html
+-        .find(open)
+-        .unwrap_or_else(|| panic!("「{open}」が無い"))
+-        + open.len();
+-    let end = html[start..]
+-        .find(close)
+-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
+-    &html[start..start + end]
+-}
+-
+ #[test]
+ fn face_srs_figure_3_appears_only_with_verdicts() {
+     let (td, work) = fixture_copy("srs-verdicts");
+@@ -263,31 +120,6 @@ fn srs_figureless_html(case: &str) -> String {
+     html
+ }
+ 
+-/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
+-fn cut(html: &str, a: &str, b: &str) -> String {
+-    let Some(start) = html.find(a) else {
+-        return html.to_string();
+-    };
+-    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
+-    format!("{}{}", &html[..start], &html[end..])
+-}
+-
+-/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
+-fn cut_line(html: &str, a: &str) -> String {
+-    let Some(start) = html.find(a) else {
+-        return html.to_string();
+-    };
+-    let end = html[start..]
+-        .find('\n')
+-        .map_or(html.len(), |e| start + e + 1);
+-    format!("{}{}", &html[..start], &html[end..])
+-}
+-
+-/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
+-fn svg_bodies(html: &str) -> usize {
+-    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
+-}
+-
+ #[test]
+ fn face_srs_embeds_the_figure_in_a_figure_panel_with_label_and_refs() {
+     let html = fs::read_to_string(fixture().join("expected-srs.html")).unwrap();
+diff --git a/folio2/crates/folio/tests/tz2/figure.rs b/folio2/crates/folio/tests/tz2/figure.rs
+index 02b55ffcb8323826bbace78082f707c3bbd96f12..459aceeaec2f966bc91ba6d4ee55bffa79109466 100644
+--- a/folio2/crates/folio/tests/tz2/figure.rs
++++ b/folio2/crates/folio/tests/tz2/figure.rs
+@@ -16,12 +16,9 @@ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{code, copy_dir, design_intent, repo_root, stderr, stdout, vendor};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ /// 設計ノートの正本の写しの置き場（便 28 の fixture）。
+ fn face_fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/face")
+@@ -32,14 +29,6 @@ fn figure_fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/figure")
+ }
+ 
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+-fn vendor() -> PathBuf {
+-    repo_root().join("vendor/archify")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-figure-t-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -47,19 +36,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// 凍結 fixture の型付き記述を、設計ノートの figures の 1 行として書く。JSON の本文を 6 字下げて `spec:` の
+ /// 下に置く（JSON は YAML の流れの表として読める・実測 2026-09-19）。
+ fn fig_row(id: &str, spec: &Path) -> String {
+@@ -133,23 +109,6 @@ fn folio_figure_env(
+     cmd.output().expect("folio を起動できない")
+ }
+ 
+-fn code(out: &Output, what: &str) -> i32 {
+-    out.status.code().unwrap_or_else(|| {
+-        panic!(
+-            "{what} が signal で終わった: {}",
+-            String::from_utf8_lossy(&out.stderr)
+-        )
+-    })
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ fn frozen_body() -> Vec<u8> {
+     fs::read(figure_fixture().join("anchor/body.svg")).unwrap()
+ }
+diff --git a/folio2/crates/folio/tests/tz2/main.rs b/folio2/crates/folio/tests/tz2/main.rs
+index f459233a8a230f7bba9caf5aee71e9c159c889fb..fd14f74924b0603f9be18cdc7de31d7cbc15c2a5 100644
+--- a/folio2/crates/folio/tests/tz2/main.rs
++++ b/folio2/crates/folio/tests/tz2/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/tz2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod face_constitution;
+ mod face_index;
+ mod face_index_sheet;
+diff --git a/xtask/tests/teeth1/retire.rs b/xtask/tests/teeth1/retire.rs
+index a19d409d4e84a21aeca0f700e3fd507e23b1c904..58bb0227de45314ca1bffade3b352c313c396056 100644
+--- a/xtask/tests/teeth1/retire.rs
++++ b/xtask/tests/teeth1/retire.rs
+@@ -230,8 +230,28 @@ fn unit_root_and_files(tests_dir: &Path, name: &str) -> (String, Vec<PathBuf>) {
+     (format!("tests/{name}/main.rs"), files)
+ }
+ 
++/// tz を撃つ単位: 単位の歯の file（単位の名と file の字の対）のどれか 1 本が字 CARGO_BIN_EXE_tz を持つ単位。単位の粒で読むので、
++/// 群の共通の module（common.rs）へ寄せた helper の字も群の字に数え、字を持たない file が群に在っても単位は tz を撃つ。
++fn units_firing_tz(texts: &[(String, String)]) -> BTreeSet<String> {
++    texts
++        .iter()
++        .filter(|(_, text)| text.contains("CARGO_BIN_EXE_tz"))
++        .map(|(name, _)| name.clone())
++        .collect()
++}
++
+ #[test]
+ fn f2ret_folio_tests_named_once() {
++    // 見本: 字を common.rs だけが持つ群 g は tz を撃つ単位で、common.rs の字を外して群のどの file も字を持たなくなると落ちる。
++    let sample = |common: &str| {
++        let module = "fn adr_check() { assert!(tz().status().success()); }";
++        vec![("g".to_string(), common.to_string()), ("g".to_string(), module.to_string())]
++    };
++    let g = BTreeSet::from(["g".to_string()]);
++    let fires = r#"fn tz() -> Command { Command::new(env!("CARGO_BIN_EXE_tz")) }"#;
++    assert_eq!(units_firing_tz(&sample(fires)), g, "字を common.rs だけが持つ群の見本");
++    let silent = r#"fn tz() -> Command { Command::new("tz") }"#;
++    assert_ne!(units_firing_tz(&sample(silent)), g, "どの file も字を持たない群の見本");
+     let tests_dir = repo_root().join(FOLIO).join("tests");
+     let units = folio_units(&tests_dir);
+     let folio_tables = test_tables(&format!("{FOLIO}/Cargo.toml"));
+@@ -250,23 +270,17 @@ fn f2ret_folio_tests_named_once() {
+     assert!(folio.is_disjoint(&boundary), "2 つの manifest が同じ歯を名指す");
+     let named: BTreeSet<String> = folio.union(&boundary).cloned().collect();
+     assert_eq!(units, named, "tests/ の歯の単位と 2 つの manifest の表の名の和");
+-    let mut with_tz: BTreeSet<String> = BTreeSet::new();
+-    let mut without_tz: BTreeSet<String> = BTreeSet::new();
++    let mut texts: Vec<(String, String)> = Vec::new();
+     for name in &units {
+         let files = unit_root_and_files(&tests_dir, name).1;
+         assert!(!files.is_empty(), "{name} に歯の file が無い");
+         for file in &files {
+             let text = std::fs::read_to_string(file).expect("歯の file を読む");
+             assert!(!text.contains("CARGO_BIN_EXE_folio"), "{} が folio を撃つ", file.display());
+-            if text.contains("CARGO_BIN_EXE_tz") {
+-                with_tz.insert(name.clone());
+-            } else {
+-                without_tz.insert(name.clone());
+-            }
++            texts.push((name.clone(), text));
+         }
+     }
+-    assert_eq!(with_tz, boundary, "tz を撃つ file を持つ単位と境界の manifest の表");
+-    assert!(without_tz.is_disjoint(&boundary), "境界の単位に tz を撃たない file が在る");
++    assert_eq!(units_firing_tz(&texts), boundary, "tz を撃つ file を 1 本でも持つ単位と境界の manifest の表");
+ }
+ 
+ /// 起草の時の main 58c1da55 の契約表の verify の最後の字（この行の語を除く）。
