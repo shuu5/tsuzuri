@@ -1,4 +1,5 @@
-//! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+//! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
+//! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
 //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
 //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
 //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
@@ -10,8 +11,13 @@
 //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
 //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
 //! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
+//! 話す窓の --again は、作業場の会話の印の最後の会話の id を `--resume` で続ける（印を持たない窓は席が --session で名指す・
+//! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
+//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（行 cs-trust の `trust::place_trust`・
+//! 置けなければ起こさずに断る・行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
 
 use std::fs::{self, File};
+use std::io::Read;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -26,7 +32,12 @@ use tsuzuri_core::consult::launch::{
 };
 use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
 use tsuzuri_core::consult::quota::{admit, count};
+use tsuzuri_core::consult::resume::pick;
+use tsuzuri_core::consult::stamp::{last_sid, lines};
 
+use super::plain::{plain_path, same_file};
+use super::stamp::STAMPS;
+use super::trust::place_trust;
 use super::{
     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
     lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
@@ -53,9 +64,19 @@ pub const ACCOUNT_ENV: &str = "CLAUDE_CONFIG_DIR";
 /// 問う窓の終わりを見る間。
 const ASK_STEP: Duration = Duration::from_millis(200);
 
+/// 撃ちの形（撃ち直しか・起こさずに argv だけを出すか・席が名指す会話の id）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shot<'a> {
+    pub again: bool,
+    pub dry: bool,
+    pub session: Option<&'a str>,
+}
+
 /// tz consult launch の残りの引数を受けて終了 code を返す。
 pub fn run(rest: &[&str]) -> u8 {
-    let f = match flags(rest, &COMMON, &["--again", "--dry-run"], &[]) {
+    let mut values = COMMON.to_vec();
+    values.push("--session");
+    let f = match flags(rest, &values, &["--again", "--dry-run"], &[]) {
         Ok(f) => f,
         Err(e) => return refuse("launch", e),
     };
@@ -69,7 +90,12 @@ pub fn run(rest: &[&str]) -> u8 {
         let why = format!("{VERSION_ENV} が tz の版と違う（plugin の tz の解き方で撃つ）");
         return refuse("launch", (FAIL, why));
     }
-    match ctx(&f).and_then(|c| launch(&c, id, f.has("--again"), f.has("--dry-run"))) {
+    let shot = Shot {
+        again: f.has("--again"),
+        dry: f.has("--dry-run"),
+        session: f.get("--session"),
+    };
+    match ctx(&f).and_then(|c| launch(&c, id, &shot)) {
         Ok(()) => 0,
         Err(e) => refuse("launch", e),
     }
@@ -103,6 +129,39 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
         question: ws.join("bundle/question.md").is_file(),
         resume: None,
     })
+}
+
+/// 会話の印の file を読む上限（byte・越える印は断る）。
+pub const STAMPS_MAX: u64 = 1 << 22;
+
+/// 作業場の会話の印の字（印の file が無ければ None）。窓が作業場に置ける symlink と fifo を辿らないよう `plain` で照らし、
+/// 途中の段の symlink・普通でない file・上限 `STAMPS_MAX` を越える file・開いた後の照らしの違いは読まずに誤りを返す。
+pub fn read_stamps(ws: &Path) -> std::io::Result<Option<String>> {
+    let refuse = |why: &str| std::io::Error::other(why.to_string());
+    let path =
+        plain_path(ws, STAMPS).ok_or_else(|| refuse("途中の段が symlink でない dir でない"))?;
+    let before = match fs::symlink_metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    if !before.file_type().is_file() || before.len() > STAMPS_MAX {
+        return Err(refuse("普通の file でないか上限を越える"));
+    }
+    let file = File::open(&path)?;
+    if !same_file(&file, &before) {
+        return Err(refuse("開いた file が照らした file と違う"));
+    }
+    let mut text = String::new();
+    file.take(STAMPS_MAX).read_to_string(&mut text)?;
+    Ok(Some(text))
+}
+
+/// 作業場の会話の印の最後の会話の id（印の file が無ければ None・読めなければ断る）。
+pub fn last_conversation(ws: &Path) -> Result<Option<String>, Refused> {
+    let text =
+        read_stamps(ws).map_err(|e| (UNKNOWN, format!("会話の印 {STAMPS} が読めない: {e}")))?;
+    Ok(text.and_then(|t| last_sid(&lines(&t)).map(str::to_string)))
 }
 
 /// state dir の accounts と accounts/.retired の子の symlink の先（器の口座の置き場の形・解けた先は canonical の path・
@@ -178,13 +237,18 @@ fn record(
 }
 
 /// 起こす（版の照らしの後）。
-fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> {
+fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
+    let again = shot.again;
     let ws = workspace(&c.drafts, id);
     let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
-    let l = material(c, &ws, &w)?;
+    let last = last_conversation(&ws)?;
+    let resume = pick(w.form, again, last.as_deref(), shot.session)
+        .map_err(|why| (FAIL, why.to_string()))?;
+    let mut l = material(c, &ws, &w)?;
+    l.resume = resume;
     let args = argv(&l);
     let gaps = audit(&args, &l);
-    if dry {
+    if shot.dry {
         emit(PROGRAM);
         args.iter().for_each(|a| emit(a));
         return if gaps.is_empty() {
@@ -201,6 +265,12 @@ fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> 
     {
         return Err((FAIL, format!("窓 {id} は閉じた")));
     }
+    if again && w.form == Form::Talk && live(&ws) {
+        let why = format!(
+            "話す窓 {id} の前の process が生きている（同じ会話を 2 つが書くと枝が割れる・窓が終わってから撃ち直す）"
+        );
+        return Err((FAIL, why));
+    }
     if w.starter == Starter::Seat && w.form == Form::Ask {
         let live: Vec<WindowId> = windows(&c.drafts)
             .into_iter()
@@ -208,6 +278,13 @@ fn launch(c: &Ctx, id: WindowId, again: bool, dry: bool) -> Result<(), Refused> 
             .map(|(n, _)| n)
             .collect();
         admit(count(&lines, &minute_now(), &live), again).map_err(|why| (FAIL, why.to_string()))?;
+    }
+    if l.resume.is_some() && gaps.is_empty() {
+        let account = std::env::var(ACCOUNT_ENV).map_err(|_| {
+            let why = format!("席の環境に {ACCOUNT_ENV} が無い（信頼の印を置く口座が分からない・器が起こした席から撃つ）");
+            (FAIL, why)
+        })?;
+        place_trust(Path::new(&account), &l.workspace)?;
     }
     let started = start(&ws, &l, &args, again, &gaps);
     record(c, &items, &w, started.is_ok(), again)?;
