@@ -4,64 +4,10 @@
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる（重複 id の歯だけ 2）。
 #![cfg(test)]
 
+use crate::common::{copy_external_schema, copy_tree, git, repo_root, stderr, stdout, violations};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
-fn copy_external_schema(root: &Path) {
-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
-    fs::copy(
-        repo_root().join("contracts/schema.toml"),
-        root.join("contracts/field-schema/schema.toml"),
-    )
-    .unwrap();
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -112,23 +58,6 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
 }
 
 fn assert_passes(out: &Output) {

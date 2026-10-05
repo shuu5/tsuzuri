@@ -6,6 +6,7 @@
 //! 便 170: 合成した改訂の判断の記録は土台に無い新しい ADR-11 で足し、(4) は `--freeze-anchor` の後に `--freeze-adrs` で封を足す。
 #![cfg(test)]
 
+use crate::common::{copy_external_schema, copy_tree, edit, git, repo_root, text};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -13,61 +14,6 @@ use std::process::{Command, Output};
 const OLD_TITLE: &str = "判断する道具を作らない";
 const NEW_TITLE: &str = "判断する道具を作らない（改訂）";
 const RULING: &str = "f2-648.19 notes 2026-09-17（合成した改訂の承認）";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
-fn copy_external_schema(root: &Path) {
-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
-    fs::copy(
-        repo_root().join("contracts/schema.toml"),
-        root.join("contracts/field-schema/schema.toml"),
-    )
-    .unwrap();
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -117,17 +63,6 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
-}
-
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).into_owned()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
 }
 
 /// 憲法の P-1 の title を新しい題にし、meta.version を v1.1 にする。

@@ -16,11 +16,8 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{copy_tree, repo_root, stderr};
 use folio::yaml_rust2::YamlLoader;
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn fixture(name: &str) -> PathBuf {
     repo_root().join("tests/fixtures/intake").join(name)
@@ -57,19 +54,6 @@ fn work(case: &str) -> Work {
     Work { root: td }
 }
 
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
 fn folio_intake(dir: &Path, answers: Option<&Path>, mode: &str) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
     cmd.arg("intake").arg("--dir").arg(dir);
@@ -92,10 +76,6 @@ fn lines(out: &Output) -> Vec<String> {
         .lines()
         .map(str::to_string)
         .collect()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 /// 支度表を書き、`code` で終わったことを確かめる。

@@ -12,6 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{git, repo_root, stderr, stdout};
 use yaml::Value;
 
 /// 書く file の閉じた一覧（凍結 anchor・置き場からの相対）。
@@ -47,40 +48,8 @@ const REFUSE: [&str; 11] = [
 /// 骨格自身の番号。
 const OWN: [&str; 6] = ["ADR-1", "P-1", "P-1.1", "R-2", "R-8", "R-16"];
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
 fn folio2() -> PathBuf {
     repo_root().join("design-intent")
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
 }
 
 fn folio(args: &[&str], place: &Path) -> Output {
@@ -90,14 +59,6 @@ fn folio(args: &[&str], place: &Path) -> Output {
         .arg(place)
         .output()
         .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 fn both(out: &Output) -> String {

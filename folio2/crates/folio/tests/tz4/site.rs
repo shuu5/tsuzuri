@@ -10,21 +10,10 @@
 //! ＝ `--write` は書いて 2。版管理の `design-intent/preview/` は書き換えない（`--out` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{copy_dir, design_intent, fixture, folio_check, repo_root, stderr, stdout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
 
 fn vendor() -> PathBuf {
     repo_root().join("vendor/archify")
@@ -35,19 +24,6 @@ fn temp_dir(case: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
 }
 
 /// 凍結 fixture の正本 6 file と adr/・design-note/ を一時 dir の src/ へ写し、src/preview/ に最小の様式 2 本を、
@@ -115,14 +91,6 @@ fn code(out: &Output, what: &str) -> i32 {
             String::from_utf8_lossy(&out.stderr)
         )
     })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 /// 配信先へ出る 7 本（順もこのとおり・凍結 fixture の写しは判断の記録 1 本と設計ノート 1 本）。
@@ -635,15 +603,6 @@ fn add_prose_violation(td: &Path, dir: &Path) {
     fs::write(&path, after).unwrap();
     git(td, &["add", "-A"]);
     git(td, &["commit", "-q", "-m", "violation"]);
-}
-
-fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("check")
-        .arg("--dir")
-        .arg(dir)
-        .output()
-        .expect("folio を起動できない")
 }
 
 /// dir の直下の全 file の名と中身（名の順）。dir が無ければ空。

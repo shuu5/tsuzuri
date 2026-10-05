@@ -8,14 +8,11 @@
 //! 編集時の口のつながりの行（網の中の A-2・N-4）も同じ名札で出す（歯 f203_）。
 #![cfg(test)]
 
+use crate::common::{repo_root, stdout, violations};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn folio_check(dir: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_tz"))
@@ -24,19 +21,6 @@ fn folio_check(dir: &Path) -> Output {
         .arg(dir)
         .output()
         .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
 }
 
 fn assert_single_violation(name: &str, kind: &str, needle: &str) {

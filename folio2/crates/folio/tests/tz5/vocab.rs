@@ -5,13 +5,10 @@
 //! 名の読めない置き場と、名が folio2 の置き場で行 R-9〜R-11 を持たない置き場は外でないので、名札は行 id（便 203・歯 f203_）。
 #![cfg(test)]
 
+use crate::common::{repo_root, stdout};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn folio_check(dir: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_tz"))
@@ -20,10 +17,6 @@ fn folio_check(dir: &Path) -> Output {
         .arg(dir)
         .output()
         .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
 /// 違反の行（`[種類] …`）だけを拾う。

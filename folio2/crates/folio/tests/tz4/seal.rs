@@ -5,12 +5,12 @@
 //! sha256）は歯が字で持つ。(7) だけは folio2 自身の design-intent/ の写し。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree, git, repo_root};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const SEALS: &str = "anchors/adr-seals.yaml";
 /// 手書きの ADR-11（tests/fixtures/adr/seal-ADR-11.yaml）の要約値。
 const ADR11_SUM: &str = "8f4958791a5a475a20a96640c7d30e5f111dc00f8fe35fbaf6e060ecf2eb802e";
@@ -19,51 +19,6 @@ const ADR11_SUPERSEDES_SUM: &str = "68b74190d773205be9aebb05db9417d30ea23c1c27c6
 /// 手書きの ADR-11 から status を除いた木の json を手で写した凍結の字（Python の json.dumps(sort_keys・区切り「,」「:」・
 /// ensure_ascii なし) と同じ形）。`{SUPERSEDES}` の場所に supersedes の欄が入る（retreat と title の間）。
 const ADR11_JSON: &str = "{\"approval\":{\"date\":\"2026-09-27\",\"ruling\":\"f2-648.254 notes 2026-09-27\",\"surface\":\"R-8\",\"verbatim\":\"承認する\",\"who\":\"持ち主\"},\"basis\":[\"A-2\"],\"context\":\"封の一覧に行の無い発効した判断の記録を足す場合を作る。\",\"date\":\"2026-09-27\",\"decision\":\"封の一覧の末尾に行を足す。\",\"id\":\"ADR-11\",\"options\":[{\"id\":\"a\",\"name\":\"足す\",\"reason\":\"在る行を変えずに済む。\",\"text\":\"封の一覧の末尾に行を足す。\",\"verdict\":\"adopted\"},{\"id\":\"b\",\"name\":\"足さない\",\"reason\":\"発効した記録が封の外に残る。\",\"text\":\"封の一覧をそのままにする。\",\"verdict\":\"rejected\"}],\"plain\":\"封の一覧に新しい行を足します。\",\"retreat\":{\"condition\":\"持ち主が取り消したら元へ戻す。\",\"kind\":\"ruling\"},{SUPERSEDES}\"title\":\"封の歯のための新しい判断\"}";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。器（scribe2）の導出 file は写しの根の contracts/ に置く。
 struct Work {

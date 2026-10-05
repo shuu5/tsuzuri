@@ -4,6 +4,7 @@
 //! 便 125（docs/design/delivery-125.md §1 (f)）: 未整備の 1 行の行き先を相談窓口の命令から骨格の命令 folio init に替えた。
 #![cfg(test)]
 
+use crate::common::{copy_tree, stderr, stdout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -86,14 +87,6 @@ impl Drop for Work {
     }
 }
 
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
 /// 標準出力の行数。
 fn lines(out: &Output) -> usize {
     stdout(out).lines().count()
@@ -123,19 +116,6 @@ fn hello_unprepared_greets_and_marks() {
 /// 凍結した土台の写しの正本の置き場（便 96）。
 fn floor_base() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2/tests/fixtures/floor_base/design-intent")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
 }
 
 /// 凍結した土台の索引の数（便 94 の凍結 anchor の数え）を持つ 1 行。

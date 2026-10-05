@@ -11,11 +11,11 @@
 //! 土台（folio2 の置き場の名）では今の字のまま（f202_ の 1 本）。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree, repo_root};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 /// 土台の手で数えた本数: 憲法の条の機構の種別が reject か build-check の条 24・規則の表の閾値の行 20（便 207 で数の上限の 3 行を足した）・
 /// 床の定数の仕掛け 5（post）。
 const ARTICLES: usize = 24;
@@ -39,23 +39,6 @@ const SKELETON_ROW: &str = "  - {id: R-9, article: P-1, what: 編集時の止め
 const SKELETON_RELATIONS: &str = "relations: {rules: [R-2, R-8, R-16]}";
 /// 骨格の置き場で下限を割った違反の字（手で書く・骨格の段が in-loop の仕掛けは 0 本）。
 const SHORT_ABROAD: &str = "[polarity] 極性一覧の編集時（in-loop）の仕掛けが 0 本で、行 R-9 の下限 1 本以上を割る";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// git を呼ぶ。環境変数 GIT_* は継承しない。
 fn git(cwd: &Path, args: &[&str]) {

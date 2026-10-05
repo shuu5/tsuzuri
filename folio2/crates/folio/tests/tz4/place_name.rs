@@ -16,6 +16,7 @@
 //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, both, copy_tree, git, repo_root};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -26,52 +27,6 @@ const STYLES: [&str; 3] = ["folio.css", "folio-ui.js", "parts.json"];
 const FACES: [&str; 4] = ["index.html", "constitution.html", "srs.html", "adr-1.html"];
 /// 外の置き場の面と支度表に 1 つも在ってはならない字。
 const FORBIDDEN: [&str; 3] = ["folio2", "f2-", ">f2<"];
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 fn folio(args: &[&str], dir: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_tz"))
@@ -80,14 +35,6 @@ fn folio(args: &[&str], dir: &Path) -> Output {
         .arg(dir)
         .output()
         .expect("folio を起動できない")
-}
-
-fn both(out: &Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
 }
 
 fn edit(path: &Path, from: &str, to: &str) {

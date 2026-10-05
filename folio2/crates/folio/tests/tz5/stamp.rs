@@ -13,6 +13,7 @@
 //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{repo_root, stdout};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -29,10 +30,6 @@ const SAME_READS: &str = concat!(
     "      - {doc: adr, fields: [decision, basis, consequences, retreat]}\n",
     "      - {doc: design-note, fields: [sections]}\n",
 );
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn bundle_fixture() -> PathBuf {
     repo_root().join("tests/fixtures/ceiling/bundle")
@@ -88,10 +85,6 @@ fn code(out: &Output, what: &str) -> i32 {
             String::from_utf8_lossy(&out.stderr)
         )
     })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
 fn stderr(out: &Output) -> String {

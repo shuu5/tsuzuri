@@ -19,6 +19,7 @@
 //! 形に揃える（`abroad_note`・列の根の表を空にする `empty_table` と同じ扱い）。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree, edit, git, repo_root, show, text};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -27,7 +28,6 @@ use std::process::{Command, Output};
 const ROOT: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
 /// tests/fixtures/anchor/root-digest-drift/anchors/index.yaml の entries[0].digest（自分自身と一致する別の中身の根）。
 const DRIFT: &str = "85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe";
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const FOLIO2: &str = "folio2-constitution";
 /// 表に無い名（歯のための名）。
 const OTHER: &str = "renamed-constitution";
@@ -38,51 +38,6 @@ const TSUZURI_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9
 /// 始まりの凍結が書く承認一覧の違反の頭（便 155・手書き）。
 const APPROVAL_AT: &str =
     "[anchor] constitution-v1.0.yaml（凍結で書く承認一覧・憲法 meta.approval の写し）: ";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -156,14 +111,6 @@ fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
         .expect("folio を起動できない")
 }
 
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).into_owned()
-}
-
-fn show(out: &Output) -> String {
-    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
-}
-
 /// 標準出力の違反の行（「[種別] 」で始まる）。
 fn violations(out: &Output) -> Vec<String> {
     text(&out.stdout)
@@ -171,13 +118,6 @@ fn violations(out: &Output) -> Vec<String> {
         .filter(|l| l.starts_with('['))
         .map(str::to_string)
         .collect()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
 }
 
 /// 憲法の meta.id を `name` に書き換える。

@@ -3,34 +3,7 @@
 //! 各組の違反はちょうど 1 件で、その種類と file まで見る（別の理由で落ちた組を緑にしない）。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("check")
-        .arg("--dir")
-        .arg(dir)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
-}
+use crate::common::{folio_check, repo_root, stdout, violations};
 
 fn assert_single_violation(name: &str, kind: &str, file: &str, needle: &str) {
     let out = folio_check(&repo_root().join("tests/fixtures/refs").join(name));

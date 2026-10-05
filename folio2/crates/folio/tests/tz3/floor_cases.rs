@@ -13,11 +13,8 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::common::repo_root;
 use yaml::Value;
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 // ── 型付きの木の小道具 ──
 

@@ -7,36 +7,16 @@
 //! 版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{both, copy_dir, fixture};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
 
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-outside-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
 }
 
 /// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz3/init.rs と同じ形）。
@@ -74,14 +54,6 @@ fn folio(args: &[&str], place: &Path) -> Output {
         .arg(place)
         .output()
         .expect("folio を起動できない")
-}
-
-fn both(out: &Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    )
 }
 
 /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。

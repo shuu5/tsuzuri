@@ -8,6 +8,7 @@
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{repo_root, stderr, stdout};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -15,10 +16,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 const VIEWPOINTS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 /// 便 38 の凍結 fixture（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本）。
 fn bundle_fixture() -> PathBuf {
@@ -144,14 +141,6 @@ fn code(out: &Output, what: &str) -> i32 {
             String::from_utf8_lossy(&out.stderr)
         )
     })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 /// 組んだ束の置き場。fixture の写し（src・faces）と `--write` で組んだ束（bundle）を持つ。

@@ -7,13 +7,10 @@
 //! `folio check` を撃つ。歯は標準出力の違反の行（`[` で始まる行）を全部数える。変異で足す欄の値は id の形を含まない字にする。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn copy_tree(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();

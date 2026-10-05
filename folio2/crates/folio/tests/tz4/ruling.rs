@@ -7,26 +7,13 @@
 //! 種別（human-review を置けない）を見る。期待の字は歯の中の手書き。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const NO_ID: &str = "に台帳 id が無い（決定の欄・形は adr/schema.yaml の ruling_pattern）";
 const MARK: &str = "が 未記入（骨格の印・裁定の前＝条 P-17.3）";
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// 土台の写しの一時 dir（歯の終わりに消す）。
 struct Work(PathBuf);

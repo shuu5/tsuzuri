@@ -17,6 +17,7 @@
 //! 10. repo の根の vessel 宣言は key contract-tables で contracts/ を、key constitution で憲法の 2 file を名乗る（各 1 行・2 file は在る）。
 #![cfg(test)]
 
+use crate::common::{copy_tree, repo_root};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -29,23 +30,6 @@ const BROKEN: &str = "schema = 2\n";
 const UNREADABLE: &str = "器の導出 file が読めない";
 const NO_GIT: &str = "版管理（git）が無いか読めない";
 const NESTED: &str = "design-intent 自体が版管理の根";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// git を呼ぶ。環境変数 GIT_* は継承しない。
 fn git(cwd: &Path, args: &[&str]) -> Output {

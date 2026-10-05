@@ -7,12 +7,12 @@
 //! 計画だけの行を置き場の合計で数えることを見る。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
 const END: &str = "# folio:rows:end";
 const RULING: &str = "f2-648 notes 2026-09-28 10:29 JST";
@@ -62,19 +62,6 @@ sections:
       - {{id: d1, text: 行を足す, ruling: {RULING}}}
 "
     )
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
 }
 
 fn repo() -> PathBuf {

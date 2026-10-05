@@ -2,6 +2,7 @@
 //! この file は mod の行だけを持つ（tests/tz3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
 #![cfg(test)]
 
+mod common;
 mod findings;
 mod floor_cases;
 mod floor_faces;

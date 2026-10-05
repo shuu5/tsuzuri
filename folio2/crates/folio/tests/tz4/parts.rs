@@ -6,17 +6,10 @@
 //! （行 k-tz-tests・この file は境界の package の歯として tz の binary を撃つ）。
 #![cfg(test)]
 
+use crate::common::{design_intent, repo_root, stderr, stdout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
 
 fn floor(name: &str) -> PathBuf {
     repo_root().join("tests/fixtures/floor").join(name)
@@ -41,14 +34,6 @@ fn code(out: &Output) -> i32 {
             String::from_utf8_lossy(&out.stderr)
         )
     })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 fn temp_dir(case: &str) -> PathBuf {

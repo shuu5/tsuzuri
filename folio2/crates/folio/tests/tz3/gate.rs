@@ -20,6 +20,7 @@
 //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{repo_root, stdout};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -39,10 +40,6 @@ const READ_FILES: [&str; 6] = [
     "adr/",
     "design-note/",
 ];
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn findings_fixture(name: &str) -> String {
     fs::read_to_string(
@@ -73,10 +70,6 @@ fn code(out: &Output) -> i32 {
             String::from_utf8_lossy(&out.stderr)
         )
     })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
 /// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/tz5/stamp.rs と同じ形）。

@@ -16,6 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, repo_root};
 use folio::yaml_rust2::{Yaml, YamlLoader};
 
 /// 閉じた一覧の写し（正本は crates/folio/src/graph.rs の NODE_KINDS / EDGE_TYPES・歯は crate の中を読めない）。
@@ -56,24 +57,6 @@ const EDGE_TYPES: [&str; 19] = [
 ];
 
 const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）";
-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// 置き場の下の file の相対 path → 中身（写しを変えていないことを見る）。
 fn snapshot(dir: &Path, base: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
@@ -501,7 +484,6 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
 /// 便 207: 土台の規則の表に数の上限の行 R-23〜R-25（欄 key）が入り、その 3 節点の行と要約の行だけが動いた値。
 /// 行 v-field-schema: 土台の設計ノートの欄の決まりの写しの器の導出 file の path が 13 byte 伸び、残差の 2 行だけが動いた値。
 const F99_ANCHOR_SHA256: &str = "42fe42396f3ecea0ba24afa74b860ec57ca83dc1f4042477adf908f5fad8ee7f";
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 
 /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
 fn independent(dir: &Path) -> Option<String> {

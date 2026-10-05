@@ -5,6 +5,7 @@
 //! (5) (4) で --freeze-ids → 0・commit して素の床 → 0・二度目は断り／(6) 実の anchor の id 53 本と FR1 の要約値の凍結 literal。
 #![cfg(test)]
 
+use crate::common::{copy_tree, git, repo_root};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -12,51 +13,6 @@ use std::process::{Command, Output};
 /// FR1 の shall の字面を OS の道具 sha256sum に末尾の改行なしで与えて出した値（席の実測 2026-09-22・生成器と独立）。
 const FR1_SUM: &str = "01391bf27709cf47e6424f5b3f4e363a877c2d1fcc069f6da753b1fab650fa2c";
 const BASE_IDS: &str = "anchors/ids-v1.8.yaml";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {

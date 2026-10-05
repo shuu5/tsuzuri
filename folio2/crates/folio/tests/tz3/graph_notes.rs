@@ -17,31 +17,13 @@
 //! 9. 外の置き場（骨格 folio init に外の利用者の形のノートを足した写し）でも同じ形: 判断の記録と設計ノートの行だけが字を持つ。
 #![cfg(test)]
 
+use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, passed, repo_root};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const KIND: &str = "設計ノートの行";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// 凍結した土台の写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -86,11 +68,6 @@ fn folio(args: &[&str], dir: &Path) -> Output {
         .arg(dir)
         .output()
         .expect("folio を起動できない")
-}
-
-fn passed(out: Output) -> String {
-    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
-    String::from_utf8(out.stdout).expect("出力が UTF-8 でない")
 }
 
 fn print(dir: &Path) -> String {

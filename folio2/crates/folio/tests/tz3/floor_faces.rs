@@ -6,13 +6,10 @@
 //! 期待の字（面の字）は歯の側の手書き（P-10.1）。版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-floor-faces-{case}-{}", std::process::id()));

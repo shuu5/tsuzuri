@@ -15,55 +15,11 @@
 //! 在って土台に無い id（FR32・ADR-35）を使い、土台の置き場を読むことを確かめる。
 #![cfg(test)]
 
+use crate::common::{assert_passes, copy_tree, git, repo_root, stderr, stdout, violations};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -155,33 +111,6 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
-}
-
-fn assert_passes(out: &Output) {
-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
-    assert!(violations(out).is_empty(), "{:?}", violations(out));
-    assert!(
-        stdout(out).contains("folio check: 合格（違反 0・"),
-        "{}",
-        stdout(out)
-    );
 }
 
 /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 `kind` で `words` を全部含む。

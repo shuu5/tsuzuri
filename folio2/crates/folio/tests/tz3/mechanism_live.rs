@@ -15,11 +15,11 @@
 //! folio2 にした写しは今の字（f203_ の 1 本）。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree, git, repo_root, show, text};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const HEAD: &str = "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: ";
 const PASS: &str = "folio check: 合格（違反 0・まだ分からない 0）";
 /// 床の凍結の土台（第 1.0 版）の一覧（delivery-131.md §1 (a) の 4）。
@@ -32,51 +32,6 @@ const OFF: &str = "# 行 R-17 が規則の表に無い＝散文の言及の歯�
 const IN_LOOP_OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外・条 P-18.4）";
 /// 骨格（外の置き場）の同じ知らせ（delivery-202.md §1 (b)・手で書く・folio2 の条の番号の項だけが落ちる）。
 const IN_LOOP_OFF_ABROAD: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外）";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
 
 /// 写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -147,14 +102,6 @@ fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
         .args(tail)
         .output()
         .expect("folio を起動できない")
-}
-
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).into_owned()
-}
-
-fn show(out: &Output) -> String {
-    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
 }
 
 fn lines(bytes: &[u8]) -> Vec<String> {

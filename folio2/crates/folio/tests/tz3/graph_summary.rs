@@ -15,35 +15,16 @@
 //!    null）、ほかの行は 1 字も動かない。
 #![cfg(test)]
 
+use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, passed, repo_root};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
-
 /// 便 208 の前の組み立て（便 207 の着地の木・土台に行 R-23〜R-25 が在る）が土台 tests/fixtures/floor_base/design-intent に出した
 /// --print --summary の出力の行の数・byte の数・sha256（起草役が便 207 の見本 72d11f1 の binary で撃って sha256sum で測った・
 /// 2026-09-29・便 207 の起草役の測りと一致・凍結 anchor・P-10.1）。
 const BEFORE_208: (usize, usize, &str) = (194, 115_579, "78eab543a65fa0cc38c0e4b5f465705a8d0b411edb4ba8e5e0273050cdc0ac35");
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// 凍結した土台 tests/fixtures/floor_base/design-intent の写しの一時 dir（歯の終わりに消す）。
 struct Work {
@@ -85,11 +66,6 @@ fn graph(dir: &Path, flags: &[&str]) -> Output {
         .arg(dir)
         .output()
         .expect("folio を起動できない")
-}
-
-fn passed(out: Output) -> String {
-    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
-    String::from_utf8(out.stdout).expect("出力が UTF-8 でない")
 }
 
 fn summary(dir: &Path) -> String {

@@ -4,13 +4,13 @@
 //! 同じ字で在ること（条 P-15.2・編集時の判定 ⊆ 事後の判定）を、同じ写しで撃ち比べて見る。期待の行は歯の側の手書き。
 #![cfg(test)]
 
+use crate::common::{FLOOR_BASE, copy_tree};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
 const BOGUS: &str = "[未知の欄] rules.yaml: 行 R-2 の未知の欄「bogus」";
 const DANGLING: &str = "[参照 id] srs.yaml: requirements[0].basis[1]: id P-99 が実在しない";
 const LINK_HEAD: &str = "# つながり（編集は止めない・事後の床が数える）: ";
@@ -23,19 +23,6 @@ const INDEX: &str = "[索引の節点] srs.yaml: 索引の節点 FR1 の行を�
 const RAIL7: &str = "  - {n: 7, who: folio, what: 組み立てて、見せる, reqs: [FR7]}\n";
 const RAIL8: &str = "  - {n: 7, who: folio, what: 組み立てて、見せる, reqs: [FR7]}\n  - {n: 8, who: folio, what: 余分の段, reqs: [FR7]}\n";
 const FACE: &str = "[面] srs.yaml.rail: 段が 8 で上限 7（部品目録の pipeline-rail の max_nodes）を超える";
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// git を呼ぶ。環境変数 GIT_* は継承しない。
 fn git(cwd: &Path, args: &[&str]) {

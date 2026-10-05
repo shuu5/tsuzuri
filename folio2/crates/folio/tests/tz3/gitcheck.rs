@@ -3,27 +3,11 @@
 //! 版管理の根はその 1 つ上（写しの design-intent 自体を根にしない）に作る。
 #![cfg(test)]
 
+use crate::common::{copy_tree, repo_root, stderr, stdout, violations};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
 
 /// git を呼ぶ。環境変数 GIT_* は継承しない（外の repo へ照合先をすげ替えない）。標準出力の前後の空白を除いて返す。
 fn git(cwd: &Path, args: &[&str]) -> String {
@@ -84,23 +68,6 @@ fn folio_check(td: &Path) -> Output {
     let out = run_check(td);
     let _ = fs::remove_dir_all(td);
     out
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
 }
 
 #[test]

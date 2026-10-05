@@ -32,10 +32,13 @@
 //!
 //! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/tz4/schema_docs.rs へ移した（字は 1 字も変えていない）。
 #![cfg(test)]
+use crate::common::{
+    BEGIN, END, TARGETS, assert_outcome, copy_tree, folio, git, mutate_file, region, repo_root,
+    sha256_hex, stderr, stdout,
+};
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::path::PathBuf;
+use std::process::Output;
 
 /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
 /// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足し、便 92 (d) で帰結の欄 produced と
@@ -57,90 +60,6 @@ const REGION_SHA256: &str = "daf05362b909ca04b81ff8f480fd23054425e86f845c8c83ba3
 const NOTE_REGION_LINES: usize = 166;
 const NOTE_REGION_BYTES: usize = 21439;
 const NOTE_REGION_SHA256: &str = "ef1da7d14051aef55680d15a60bd9f4a081ac0867774791762e873edb5cc3086";
-
-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
-/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
-const TARGETS: usize = 9;
-
-const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
-const END: &str = "# folio:schema:end";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn copy_tree(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let to = dst.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), &to).unwrap();
-        }
-    }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
-fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
-    let mut child = Command::new("sha256sum")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("sha256sum を起動できない: {e}"))?;
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| "sha256sum の標準入力が無い".to_string())?
-        .write_all(bytes)
-        .map_err(|e| format!("sha256sum へ書けない: {e}"))?;
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("sha256sum を待てない: {e}"))?;
-    if !out.status.success() {
-        return Err("sha256sum が失敗した".to_string());
-    }
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    let hex = text
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_string();
-    if hex.len() != 64 {
-        return Err(format!("sha256sum の出力が 16 進 64 字でない: {text}"));
-    }
-    Ok(hex)
-}
 
 /// design-intent の写しの一時 dir（歯の終わりに消す）。git init + 1 commit 済み（歯 7 の folio check のため）。
 struct Work {
@@ -210,60 +129,6 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
-}
-
-/// file の字面の変異（当て先は 1 か所だけ）。
-fn mutate_file(path: &Path, from: &str, to: &str) {
-    let before = fs::read_to_string(path).unwrap();
-    assert_eq!(
-        before.matches(from).count(),
-        1,
-        "変異の当て先が 1 か所でない: {from:?}"
-    );
-    fs::write(path, before.replacen(from, to, 1)).unwrap();
-}
-
-fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .args(head)
-        .arg(dir)
-        .args(tail)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（`TARGETS` 行）。
-fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
-    let shown = format!("{}{}", stdout(out), stderr(out));
-    assert_eq!(out.status.code(), Some(code), "{shown}");
-    let stream = if code == 0 { stdout(out) } else { stderr(out) };
-    for word in words {
-        assert!(stream.contains(word), "「{word}」が無い: {shown}");
-    }
-    if code != 0 {
-        assert!(stdout(out).is_empty(), "標準出力は空のはず: {shown}");
-        assert!(stderr(out).starts_with("folio schema: "), "{shown}");
-    }
-    assert_eq!(
-        stdout(out).lines().count(),
-        if code == 0 { TARGETS } else { 0 },
-        "{shown}"
-    );
-}
-
-/// 生成区間（begin の行の次から end の行の手前まで）。
-fn region(text: &str) -> &str {
-    let b = text.find(&format!("{BEGIN}\n")).expect("begin が無い") + BEGIN.len() + 1;
-    let e = text.find(&format!("\n{END}\n")).expect("end が無い") + 1;
-    &text[b..e]
 }
 
 // ── 1. 実の正本 ──
