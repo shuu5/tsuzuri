@@ -6,12 +6,17 @@
 //! 4. 通す時は `<名>/brief.md` に prompt の字を、`<名>/spec.json` に係の札を書いて 0（書けなければ標準エラーに書いて通す）。
 //!
 //! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
+//! 席の流れの道具（Workflow）の呼びは 1 の前に全部断り、頼みの頭の群の行と計画の file の判じは 3 の前に子の `group` が持つ
+//! （行 ag-gspawn・判断の記録 ADR-61・要件 FR22）。
+
+pub mod group;
 
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use tsuzuri_core::agent::spec::group::{workflow, workflow_reason};
 use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, deny, judge, reason, spawn_call};
 
 use crate::acct::GIT;
@@ -101,6 +106,10 @@ pub fn run(rest: &[&str]) -> u8 {
     if std::io::stdin().read_to_string(&mut payload).is_err() {
         payload.clear();
     }
+    if workflow(&payload) {
+        emit(&deny(&workflow_reason()));
+        return 0;
+    }
     let Some(call) = spawn_call(&payload) else {
         return 0;
     };
@@ -115,9 +124,19 @@ pub fn run(rest: &[&str]) -> u8 {
         emit_err("tz hook agent-spawn: 起草の置き場を解けない（通す）");
         return 0;
     };
-    match judge(&call, &specs(&dir), now()) {
+    let gate = match group::gate(&dir, &args.repo, &call, &payload) {
+        Ok(gate) => gate,
+        Err(why) => {
+            emit(&deny(&why));
+            return 0;
+        }
+    };
+    match judge(&call, &gate.live, now()) {
         Ok(spec) => {
-            if let Err(e) = place(&dir, &call.prompt, &spec) {
+            let seat = gate.seat.as_ref();
+            let wrote = place(&dir, &call.prompt, &spec)
+                .and_then(|()| seat.map_or(Ok(()), |(s, p)| group::place(&dir, &spec.name, s, p)));
+            if let Err(e) = wrote {
                 emit_err(&format!(
                     "tz hook agent-spawn: 頼みと札を書けない（通す）: {e}"
                 ));

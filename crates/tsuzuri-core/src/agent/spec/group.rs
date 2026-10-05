@@ -8,6 +8,7 @@ pub mod judge;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::surface::RULING_LINE;
 
 use crate::ledger::DAY;
@@ -243,4 +244,39 @@ pub fn workflow_reason() -> String {
         "群の起こしの門は止める（席の流れの道具 {WORKFLOW} の呼びは計画の file と裁定 id を持っても全部断る・判断の記録 ADR-61 の決定 (4)） \
          次の一手 = 流れの道具で係を起こすには持ち主に問う（別の問いの裁定と判断の記録で決める）。今は Agent で 1 体ずつか検証の群で起こす"
     )
+}
+
+/// 群の起こしの呼びの tool_input のモデル（無いか字でなければ None・行 ag-gspawn）。
+pub fn model(payload: &str) -> Option<String> {
+    let input: Value = serde_json::from_str(payload).ok()?;
+    input
+        .pointer("/tool_input/model")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// 台帳の読み取りの口（bd の show の JSON・bead の配列か object）の最初の bead の notes と本文（JSON の bead でなければ読めない・行 ag-gspawn）。
+pub fn ledger_of(out: &[u8]) -> judge::Ledger {
+    let Ok(v) = serde_json::from_slice::<Value>(out) else {
+        return judge::Ledger::Unread;
+    };
+    let bead = v.as_array().map_or(Some(&v), |a| a.first());
+    let Some(bead) = bead.filter(|b| b.is_object()) else {
+        return judge::Ledger::Unread;
+    };
+    let text = |k: &str| {
+        bead.get(k)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    judge::Ledger::Read {
+        notes: text("notes"),
+        description: text("description"),
+    }
+}
+
+/// 割りの読む path の重なりの記帳の 1 行（時刻・係の名・重なる path の JSON・改行なし・行 ag-gspawn）。
+pub fn shared_line(name: &str, paths: &[String], at: EpochSecs) -> String {
+    serde_json::json!({"at": at, "name": name, "paths": paths}).to_string()
 }
