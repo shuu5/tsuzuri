@@ -923,3 +923,50 @@ fn rules_host_write_budget_table_on_the_tracked_face_is_refused_once_per_table()
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// 1 行の `[[write-budget]]` に任意の key wear を足した面（見出しは 3 行目・name 4・stat 5・wear 6）。
+const HOST_WRITE_BUDGET_WEAR: &str = "schema = 1\n\n[[write-budget]]\nname = \"a\"\nstat = \"/sys/block/a/stat\"\nwear = \"/var/lib/w/a.json\"\n";
+
+/// key wear を持つ行と持たない行の 2 行の面は、wear の file が無くても `validate --state-dir` が rc 0 で、stdout が表の無い面の
+/// 1 行と同じ字。`Manifest` の口は宣言順に name・stat・wear（持たない行は None）・見出しの行番号を返す。base は wear を未知の key として断る（RED）。
+#[test]
+fn vwear_rows_with_and_without_wear_validate_and_carry_the_path() {
+    assert!(!std::path::Path::new("/var/lib/w/a.json").exists(), "見本の wear の file は在らない");
+    let tableless = host_state_dir(Some("schema = 1\n")).expect("tmp の state dir を作れる");
+    let two = host_state_dir(Some(&format!("{HOST_WRITE_BUDGET_WEAR}\n[[write-budget]]\nname = \"b_2\"\nstat = \"/sys/block/b/stat\"\n"))).expect("tmp の state dir を作れる");
+    let want = rules_dispatch(&["validate", "--state-dir", &tableless.display().to_string()]);
+    let got = rules_dispatch(&["validate", "--state-dir", &two.display().to_string()]);
+    assert_eq!(got.rc, RC_OK, "{got:?}");
+    assert_eq!((got.out, got.err), (want.out, want.err), "表を数えず、表の無い面と同じ字");
+    let manifest = Manifest::embedded()
+        .and_then(|tracked| vessel::rules::with_state_dir(tracked, Some(two.as_path())))
+        .expect("host の面を合わせられる");
+    let rows: Vec<(&str, &str, Option<&str>, u64)> = manifest.write_budgets().iter().map(|row| (row.name(), row.stat(), row.wear(), row.line())).collect();
+    assert_eq!(rows, [("a", "/sys/block/a/stat", Some("/var/lib/w/a.json"), 3), ("b_2", "/sys/block/b/stat", None, 8)], "宣言順・wear を持たない行は None");
+    std::fs::remove_dir_all(&tableless).ok();
+    std::fs::remove_dir_all(&two).ok();
+}
+
+/// wear だけを崩した 4 形（相対の path・空の字・空白を含む path・key wear の 2 度目）は、それぞれ wear の行番号つきで 1 件だけ断る
+/// （`host.toml:` の接頭辞・rc 1・stdout 0 行・字は stat の断りと同じ形）。崩す前の 1 行は rc 0。
+#[test]
+fn vwear_refuses_each_wear_defect_once_with_its_line() {
+    let dir = host_state_dir(None).expect("tmp の state dir を作れる");
+    let host = dir.join(vessel::rules::HOST_MANIFEST);
+    for (body, want) in [
+        (HOST_WRITE_BUDGET_WEAR.replace("\"/var/lib/w/a.json\"", "\"var/lib/w/a.json\""), "wear \"var/lib/w/a.json\" が絶対 path でない line=6"),
+        (HOST_WRITE_BUDGET_WEAR.replace("\"/var/lib/w/a.json\"", "\"\""), "wear \"\" が絶対 path でない line=6"),
+        (HOST_WRITE_BUDGET_WEAR.replace("/var/lib/w/a.json", "/var/lib/w/a b.json"), "wear が空白を含む: \"/var/lib/w/a b.json\" line=6"),
+        (format!("{HOST_WRITE_BUDGET_WEAR}wear = \"/var/lib/w/b.json\"\n"), "key wear が重複する line=7"),
+    ] {
+        std::fs::write(&host, &body).expect("host の面を書ける");
+        let refused = rules_dispatch(&["validate", "--state-dir", &dir.display().to_string()]);
+        assert_eq!(refused.rc, RC_REFUSED, "{body:?}: {refused:?}");
+        assert!(refused.out.is_empty(), "{body:?}: stdout へは書かない");
+        assert_eq!(refused.err, vec![format!("rules: host.toml: {want}")], "{body:?}: 1 件");
+    }
+    std::fs::write(&host, HOST_WRITE_BUDGET_WEAR).expect("host の面を書ける");
+    let alone = rules_dispatch(&["validate", "--state-dir", &dir.display().to_string()]);
+    assert_eq!(alone.rc, RC_OK, "崩す前の 1 行は通る: {alone:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}

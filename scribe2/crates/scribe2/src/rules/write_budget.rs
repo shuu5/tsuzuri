@@ -10,10 +10,10 @@ use super::RuleError;
 /// 表の見出しの字面。
 pub(super) const HEADER: &str = "[[write-budget]]";
 
-/// 1 行が持てる key の全体（宣言順・閉じた 2 つ）。
-pub(super) const KEYS: &[&str] = &["name", "stat"];
+/// 1 行が持てる key の全体（宣言順・閉じた 3 つ・wear だけ任意）。
+pub(super) const KEYS: &[&str] = &["name", "stat", "wear"];
 
-/// 1 行に必ず要る key（2 つとも）。
+/// 1 行に必ず要る key（name と stat）。
 pub(super) const REQUIRED: &[&str] = &["name", "stat"];
 
 /// `[[write-budget]]` 1 行が名乗る測りの装置（host 固有の値・host の面にだけ書く）。
@@ -21,6 +21,7 @@ pub(super) const REQUIRED: &[&str] = &["name", "stat"];
 pub struct WriteBudget {
     name: String,
     stat: String,
+    wear: Option<String>,
     line: u64,
 }
 
@@ -33,6 +34,11 @@ impl WriteBudget {
     /// 装置の stat file の絶対 path（空白を含まない）。
     pub fn stat(&self) -> &str {
         &self.stat
+    }
+
+    /// 装置の摩耗の記録の file の絶対 path（空白を含まない・書かない行は None）。器は path の形だけを判じ、file を読まない。
+    pub fn wear(&self) -> Option<&str> {
+        self.wear.as_deref()
     }
 
     /// manifest の中でこの行が始まる物理行番号。
@@ -51,6 +57,7 @@ pub(super) fn build(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<WriteBu
     }
     let name = text_field(raw, "name", errors);
     let stat = text_field(raw, "stat", errors);
+    let wear = text_field(raw, "wear", errors);
     let (Some(name), Some(stat)) = (name, stat) else {
         return None;
     };
@@ -60,12 +67,20 @@ pub(super) fn build(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<WriteBu
     if name.is_empty() || !name.chars().all(|found| found.is_ascii_alphanumeric() || found == '-' || found == '_') {
         errors.push(RuleError::new(line_of(raw, "name"), format!("name {name:?} は英数字と - と _ の 1 字以上でない")));
     }
-    if !stat.starts_with('/') {
-        errors.push(RuleError::new(line_of(raw, "stat"), format!("stat {stat:?} が絶対 path でない")));
-    } else if stat.chars().any(char::is_whitespace) {
-        errors.push(RuleError::new(line_of(raw, "stat"), format!("stat が空白を含む: {stat:?}")));
+    check_path(raw, "stat", &stat, errors);
+    if let Some(wear) = &wear {
+        check_path(raw, "wear", wear, errors);
     }
-    (errors.len() == before).then_some(WriteBudget { name, stat, line: raw.line })
+    (errors.len() == before).then_some(WriteBudget { name, stat, wear, line: raw.line })
+}
+
+/// path の key の値が空白を含まない絶対 path でなければ、その key の行番号で 1 件断る（空の字も絶対 path でない）。
+fn check_path(raw: &RawRow, key: &str, value: &str, errors: &mut Vec<RuleError>) {
+    if !value.starts_with('/') {
+        errors.push(RuleError::new(line_of(raw, key), format!("{key} {value:?} が絶対 path でない")));
+    } else if value.chars().any(char::is_whitespace) {
+        errors.push(RuleError::new(line_of(raw, key), format!("{key} が空白を含む: {value:?}")));
+    }
 }
 
 /// key が書かれていた物理行番号（無ければ見出しの行）。

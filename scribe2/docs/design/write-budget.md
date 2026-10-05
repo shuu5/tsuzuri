@@ -72,9 +72,10 @@
 ## 3. host の面の表 `[[write-budget]]`（行 a）
 
 - 置き場: host の面（`<state_dir>/host.toml`）にだけ置ける。0〜n 行。tracked の面（埋め込みと `--rules`）に置いた表は中身を検査せず 1 表 1 件で `[[write-budget]] は tracked の manifest に置けない（書き込みの測りの装置は host の面だけ）` と断る（`[[device]]` と `[[publish-exclusion]]` と同じ置き方・装置の path は host 固有で PUBLIC repo に載せない・CON2）。
-- key は 2 つで両方必須（欠けと未知の key は既存の字「必須 key <k> が無い」「未知の key <k>」）:
+- key は name と stat の 2 つが必須で、wear が任意（欠けと未知の key と 2 度目の key は既存の字「必須 key <k> が無い」「未知の key <k>」「key <k> が重複する」）:
   - `name`: 記録の dir の名。英数字と `-` と `_` の 1 字以上（外れは `name "<値>" は英数字と - と _ の 1 字以上でない`）。面の中で一意（2 度目の行の見出しの行番号で `書き込みの測りの名 <name> が重複する`）。
   - `stat`: block 装置の stat file の絶対 path（形は `/sys/block/<device>/stat`）。相対は `stat "<値>" が絶対 path でない`、空白を含むものは `stat が空白を含む: "<値>"`。
+  - `wear`（任意）: 装置の摩耗の記録の file の絶対 path（host の外の日に 1 度の仕組みが SMART の値を書き、誰でも読める file）。器は path の形だけを判じて file を読まず、在る無しも見ない（読み手は器の外の消費側の板）。形の断りは stat と同じ字の形で、相対と空の字は `wear "<値>" が絶対 path でない`、空白を含むものは `wear が空白を含む: "<値>"`。wear の無い行はこれまでどおり読める。
 - 断りは行番号つきで 1 件ずつ・`host.toml:` の接頭辞・`rules validate` は rc 1。`rules validate --state-dir` の 1 行は表の無い面と同じ字（表を数えない）。
 - 組み立ては rules の兄弟 module（行 a の write-set の `+` の file・見出しと key の列と組み立てと名の重複の検査を持つ）で、`crates/scribe2/src/rules/manifest.rs` の section の閉じた列に見出しを 1 つ足し、host の面の読みと合わせの口（joined）がその module を呼ぶ。`[[device]]` は端末の表が使う見出しなので分ける。
 - device の名でなく file の path を書く理由: code に「`/sys/block/` + 名」を焼くと歯が sysfs を直に読むことになり、差し替えの口（env・root の seam）は C2.2 で作れない。path なら歯は tmp の fixture file を指せ、host ごとの値は面だけに在る（N3）。
