@@ -2,6 +2,7 @@
 //! 係の終わりの門の入力（SubagentStop の入力）の欄を読み、係の記録と出力の dir と最後の文から欠けを数える。
 //! 欠けは 3 つで、この順に並べる: 係の記録に席（team-lead）への SendMessage の呼びが無い・札の出す物の file が出力の dir に無い・
 //! 最後の文に出力の dir の path が無い。止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
+//! 群の係の出す物の主張の表の欠け（`claim_lacks`）は行 ag-gstop が置く（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
 
 use serde_json::Value;
 
@@ -76,6 +77,49 @@ pub fn lacks(
     );
     if !last.contains(out) {
         lacks.push(format!("最後の文に出力の dir の path {out} が無い"));
+    }
+    lacks
+}
+
+/// 群の係の主張の表の確かさの印（確かめた・記録から・見立て・分からない）。
+pub const CERTAINTY: [&str; 4] = ["V", "D", "I", "U"];
+
+/// 表の行の欄（`|` で始まる行の頭と末の `|` を除き、`\|` でない `|` で割って空白を除く・`|` で始まらない行は None）。
+fn cells(line: &str) -> Option<Vec<String>> {
+    let body = line.trim().strip_prefix('|')?;
+    let body = body
+        .strip_suffix('|')
+        .unwrap_or(body)
+        .replace("\\|", "\u{1}");
+    Some(
+        body.split('|')
+            .map(|c| c.trim().replace('\u{1}', "|"))
+            .collect(),
+    )
+}
+
+/// 群の係の出す物の字 `texts` の主張の表の欠けの字の列（割りの主張 `claims` の順に、表の行が無い・行に確かさの印が無い・行に証拠が無い）。
+/// 主張の表の行は頭の欄が割りの主張の id の行で、欄は id・主張・確かさの印・証拠の path か命令の順（5 つ目からの欄は見ない）。
+pub fn claim_lacks(texts: &[String], claims: &[String]) -> Vec<String> {
+    let rows: Vec<Vec<String>> = texts
+        .iter()
+        .flat_map(|t| t.lines())
+        .filter_map(cells)
+        .collect();
+    let mut lacks = Vec::new();
+    for id in claims {
+        let mine: Vec<&Vec<String>> = rows.iter().filter(|r| r.first() == Some(id)).collect();
+        if mine.is_empty() {
+            lacks.push(format!("割りの主張 {id} の表の行が出す物に無い"));
+        }
+        for row in mine {
+            if !row.get(2).is_some_and(|m| CERTAINTY.contains(&m.as_str())) {
+                lacks.push(format!("主張 {id} の行に確かさの印（V・D・I・U）が無い"));
+            }
+            if row.get(3).is_none_or(String::is_empty) {
+                lacks.push(format!("主張 {id} の行に証拠の path か命令が無い"));
+            }
+        }
     }
     lacks
 }

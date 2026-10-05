@@ -8,14 +8,19 @@
 //!    （Claude Code は SubagentStop の rc 2 を係の続けと読み、標準エラーを係に渡す）。
 //! 6. 通す時は、欠けが在れば `<名>/w/STOP-GATE.txt` に欠けを 1 行ずつ書き、札の `ended` に今の時刻を書いて 0（書けなければ標準エラーに書いて通す）。
 //!
+//! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
+//! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
+//!
 //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
 
 use std::fs;
 use std::io::Read;
+use std::path::Path;
 
 use tsuzuri_core::agent::meter::sub_call;
-use tsuzuri_core::agent::spec::SPEC;
-use tsuzuri_core::agent::stop::{GATE, OUT, end, hold, lacks};
+use tsuzuri_core::agent::spec::group::{SEAT, Seat};
+use tsuzuri_core::agent::spec::{SPEC, Spec};
+use tsuzuri_core::agent::stop::{GATE, OUT, claim_lacks, end, hold, lacks};
 
 use super::agent_meter::{resolve, unbound};
 use super::agent_spawn::{drafts, parse};
@@ -29,6 +34,22 @@ const FAIL: u8 = 1;
 
 /// 1 度目の終わりの止め（Claude Code は係を続けさせる）。
 const HOLD: u8 = 2;
+
+/// 群の係（係の dir `agent` に群の席の札の在る係）の出す物の主張の表の欠け（群の係でなければ空）。
+fn claim_holes(agent: &Path, spec: &Spec, out: &Path) -> Vec<String> {
+    let Some(seat) = fs::read_to_string(agent.join(SEAT))
+        .ok()
+        .and_then(|t| Seat::parse(&t))
+    else {
+        return Vec::new();
+    };
+    let texts: Vec<String> = spec
+        .outputs
+        .iter()
+        .filter_map(|o| fs::read_to_string(out.join(o)).ok())
+        .collect();
+    claim_lacks(&texts, &seat.claims)
+}
 
 /// tz hook agent-stop の残りの引数を受けて終了 code を返す（0 か 1 か 2）。
 pub fn run(rest: &[&str]) -> u8 {
@@ -58,13 +79,14 @@ pub fn run(rest: &[&str]) -> u8 {
     let out = dir.join(&name).join(OUT);
     let shown = out.display().to_string();
     let record = fs::read(&stop.record).unwrap_or_default();
-    let holes = lacks(
+    let mut holes = lacks(
         &record,
         &spec.outputs,
         |o| out.join(o).is_file(),
         &stop.last,
         &shown,
     );
+    holes.extend(claim_holes(&dir.join(&name), &spec, &out));
     if !holes.is_empty() && !stop.again {
         emit_err(&hold(&holes, &shown));
         return HOLD;
