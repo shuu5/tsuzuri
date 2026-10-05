@@ -1,0 +1,1515 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/answer.rs b/crates/tsuzuri-boundary/src/consult/answer.rs
+index 196fdfa53847418440dc64fb81b0076aabdfd09b..65e594f6c590b369f1c0df475dd268814c9b1e6d 100644
+--- a/crates/tsuzuri-boundary/src/consult/answer.rs
++++ b/crates/tsuzuri-boundary/src/consult/answer.rs
+@@ -1,4 +1,4 @@
+-//! tz consult answer <草稿の file>（行 cs-answer・窓の側の所見の口・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
++//! tz consult answer <草稿の file>（窓の側の所見の口・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
+ //! 窓の id は環境の `TZ_CONSULT_ID`、作業場は cwd（窓の控えの id が同じこと）。草稿を中核の `finding::check` で検め、
+ //! 断りは理由の字（欠けた欄の名の列など）を標準出力に 1 行出して rc 1（file を作らない）。添え物は作業場の下に実在する
+ //! file であること（canonicalize して作業場の下・symlink で外を指す物を断る）。所見は findings/<所見 id>.json に、
+diff --git a/crates/tsuzuri-boundary/src/consult/bundle.rs b/crates/tsuzuri-boundary/src/consult/bundle.rs
+index 78821e001995013cf5fe2a1212b51e1d8dd8dbf7..2f5c2b0d0e4553939283178f59691771cfdf0ffc 100644
+--- a/crates/tsuzuri-boundary/src/consult/bundle.rs
++++ b/crates/tsuzuri-boundary/src/consult/bundle.rs
+@@ -1,4 +1,4 @@
+-//! tz consult bundle <窓 id> [--topic <題>] [--question <file>]（行 cs-open・判断の記録 ADR-29 決定 (1)(イ)・束を機械が組む）。
++//! tz consult bundle <窓 id> [--topic <題>] [--question <file>]（判断の記録 ADR-29 決定 (1)(イ)・束を機械が組む）。
+ //! 窓の束 bundle/ に手引き brief.md・問い question.md・読む物の一覧 reads.md・台帳の写し ledger.json・要約値 digest を書き、
+ //! 標準出力に「束 <要約値 16 字>」を 1 行出す。席が撃つ時（環境に窓の id が無い時）は台帳を bd で読んで写しを替え、
+ //! 窓の中で撃つ時（環境の `TZ_CONSULT_ID` が窓の id で cwd が作業場）は台帳の写しを替えない（囲いの中では bd を撃てない）。
+diff --git a/crates/tsuzuri-boundary/src/consult/close.rs b/crates/tsuzuri-boundary/src/consult/close.rs
+index 075763f11081af126f3677ab4c243ed5f1ef19a4..18580c76b2cf44f811d0a716b151f37a89fbbcad 100644
+--- a/crates/tsuzuri-boundary/src/consult/close.rs
++++ b/crates/tsuzuri-boundary/src/consult/close.rs
+@@ -1,4 +1,4 @@
+-//! tz consult close <窓 id> --by seat|chat|button（行 cs-close・判断の記録 ADR-29 決定 (3)(5)・持ち主が閉じると言った時）。
++//! tz consult close <窓 id> --by seat|chat|button（判断の記録 ADR-29 決定 (3)(5)・持ち主が閉じると言った時）。
+ //! 話す窓は、最後の process の印の tmux の window id の窓の名が consult-cw<n> であることを確かめてから kill-window を
+ //! 撃つ（名が違うか窓が無ければ撃たない＝持ち主が先に閉じた窓と、id を使い回したほかの窓を殺さない）。
+ //! 私用の temp を消す（持ち主の uid の dir だけ・symlink は辿らない）。台帳の根に相談の閉じの行（起こし手・所見の数）を
+diff --git a/crates/tsuzuri-boundary/src/consult/dispose.rs b/crates/tsuzuri-boundary/src/consult/dispose.rs
+index 9b3bfb143986ff0b14a5de4695bdbde1daf61496..ea3a84de5e0d093dc9977993bfd29753a5db0149 100644
+--- a/crates/tsuzuri-boundary/src/consult/dispose.rs
++++ b/crates/tsuzuri-boundary/src/consult/dispose.rs
+@@ -1,5 +1,5 @@
+ //! tz consult dispose <所見 id> --verdict 採る|一部採る|採らない --reason <字> [--keep <path>]… [--drop <path>]… [--into <木の根>]
+-//! （行 cs-show・判断の記録 ADR-10 決定 (5) と ADR-29 決定 (1)(オ)・(9)）。所見ごとに採否と理由と、添え物ごとの保存する
++//! （判断の記録 ADR-10 決定 (5) と ADR-29 決定 (1)(オ)・(9)）。所見ごとに採否と理由と、添え物ごとの保存する
+ //! （--keep）・しない（--drop）を宣言する。添え物の全部がちょうど 1 度ずつ keep か drop に在ること（欠け・知らない path・
+ //! 重なりを断る）。受けの行の無い所見（先に show で受ける）と処分した所見を断る。保存する添え物は写し先の木の根
+ //! （--into・省けば repo）の `kept_path`（docs/consult/kept/<所見 id>/<path>）へ写す（在れば上書きせずに断り、
+diff --git a/crates/tsuzuri-boundary/src/consult/follow.rs b/crates/tsuzuri-boundary/src/consult/follow.rs
+index 18353109578cbfb20035b9acb8c3009787fb3da2..808346c8d09c4f67884178871e46f05cb89f5471 100644
+--- a/crates/tsuzuri-boundary/src/consult/follow.rs
++++ b/crates/tsuzuri-boundary/src/consult/follow.rs
+@@ -1,4 +1,4 @@
+-//! tz consult launch <窓 id> --follow [--session <会話の id>] [--wait <秒>]（行 cs-follow・判断の記録 ADR-55 決定 (3)(5)）。
++//! tz consult launch <窓 id> --follow [--session <会話の id>] [--wait <秒>]（判断の記録 ADR-55 決定 (3)(5)）。
+ //! 生きている話す窓を、席の今の口座（環境の CLAUDE_CONFIG_DIR）へ付いて来させる口。印の口座が今の口座と同じなら何もしない。
+ //! 会話の印の最後の行が手すき（中核の `follow::idle`）で、tmux の pane の入力欄が空（`follow::input_clear`）になるのを待ち
+ //! （会話の印を持たない窓は --session で席が会話の id を名指し、入力欄だけを待つ）、上限 --wait（既定 `WAIT` 秒）を越えたら
+diff --git a/crates/tsuzuri-boundary/src/consult/guard.rs b/crates/tsuzuri-boundary/src/consult/guard.rs
+index 614a4d3faa1279350f1dcdec82d74a0b9dd7dd8e..c5ad7fc11b91994a0c3c23b3bcfaca27affb8324 100644
+--- a/crates/tsuzuri-boundary/src/consult/guard.rs
++++ b/crates/tsuzuri-boundary/src/consult/guard.rs
+@@ -1,4 +1,4 @@
+-//! tz consult guard（行 cs-answer・窓の PreToolUse の守りの hook・判断の記録 ADR-29 決定 (7)）。
++//! tz consult guard（窓の PreToolUse の守りの hook・判断の記録 ADR-29 決定 (7)）。
+ //! 標準入力の hook の JSON を中核の `consult::guard::judge` で判じ、通すなら何も出さずに rc 0、断るなら理由を
+ //! 標準エラーに 1 行書いて rc 2（Claude Code は PreToolUse の rc 2 を道具の断りと読み、標準エラーを窓に渡す）。
+ //! 引数を取らない（在れば断る）。hook は囲いの外で持ち主の権限で走るので、読むだけで file を書かない。
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 0e929a9c3309d250740da507b43a6f2239b2a3ea..d9757bbb49c03da398eaee0fff2612880900e21d 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -1,21 +1,21 @@
+ //! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
+-//! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+-//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`・行 cs-follow）へ渡す。
++//! （判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
++//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`）へ渡す。
+ //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
+ //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
+ //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
+ //! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
+ //! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
+ //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
+-//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む・行 cs-acct-mark）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
++//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+ //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
+ //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
+ //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
+ //! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
+ //! 話す窓の --again は、作業場の会話の印の最後の会話の id を `--resume` で続ける（印を持たない窓は席が --session で名指す・
+ //! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
+-//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（行 cs-trust の `trust::place_trust`・
+-//! 置けなければ起こさずに断る・行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
++//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（`trust::place_trust`・
++//! 置けなければ起こさずに断る・判断の記録 ADR-55 決定 (1)(3)）。
+ 
+ use std::fs::{self, File};
+ use std::io::Read;
+diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
+index 75e1baf7da523224e8cd03ba5574331b75b9caed..e6fbe21caca998aa6b421c97e1700305e1a596c0 100644
+--- a/crates/tsuzuri-boundary/src/consult/list.rs
++++ b/crates/tsuzuri-boundary/src/consult/list.rs
+@@ -1,4 +1,4 @@
+-//! tz consult list [--json]（行 cs-close・窓の一覧・判断の記録 ADR-29 決定 (5)(9)(10)・hook の代わりの拾い）。
++//! tz consult list [--json]（窓の一覧・判断の記録 ADR-29 決定 (5)(9)(10)・hook の代わりの拾い）。
+ //! 起草の置き場の窓（退いた窓も）ごとに id・形・題・状態・所見の数・未処分の数を、続けて受けの無い頼みと、
+ //! 席が自分で開いた問う窓の今日の数と今の数（規則の行 R-38）を 1 行ずつ出す。--json は電文 `ConsultBoard`。
+ //! 状態は、退いた作業場なら 退いた、閉じの行が在れば 閉じた、最後の process が在れば 生きている、ほかは 止まった。
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index f46368510da47f57b8fa4f37b6e098ccac2842c6..3aa3715d60156e946977f24846901ed7261c6b0d 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -1,13 +1,12 @@
+-//! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
+-//! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
+-//! show と dispose（行 cs-show）・list と close（行 cs-close）・stamp（行 cs-acct-mark・窓の会話の印の hook）・statusline（行 cs-status-verb・窓の状態の 1 行）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
++//! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)）。
++//! 口は open と bundle・launch・answer と guard・watch・
++//! show と dispose・list と close・stamp（窓の会話の印の hook）・statusline（窓の状態の 1 行）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
+ //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
+ //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
+ //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
+ //! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
+ //! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
+-//! 口座の信頼の印の書き手（`trust`）は行 cs-trust、launch --follow の口（`follow`）は行 cs-follow
+-//! （どちらもノート surface-wave29b）が置く。
++//! 口座の信頼の印の書き手（`trust`）と launch --follow の口（`follow`）も持つ。
+ 
+ pub mod answer;
+ pub mod bundle;
+diff --git a/crates/tsuzuri-boundary/src/consult/open.rs b/crates/tsuzuri-boundary/src/consult/open.rs
+index 03eac1c8012b2355574d74f1063af4eb9026655c..0bf6a3ee9c8cdab626b4ed5b287712cb715f37b8 100644
+--- a/crates/tsuzuri-boundary/src/consult/open.rs
++++ b/crates/tsuzuri-boundary/src/consult/open.rs
+@@ -1,4 +1,4 @@
+-//! tz consult open（行 cs-open・判断の記録 ADR-29 決定 (3)(4)(5)(11)）: 窓の作業場を用意する。
++//! tz consult open（判断の記録 ADR-29 決定 (3)(4)(5)(11)）: 窓の作業場を用意する。
+ //! 引数: [--topic <題>] [--form talk|ask] [--model <名>] [--effort <段>] --by seat|chat|button [--said <分>]
+ //! [--request <頼みの id>] [--via 見張り|hook|一覧] [--question <file>] と共通の --repo・--bd・--bdw。
+ //! 環境の `TZ_PLUGIN_VERSION` が中核の `PLUGIN_VERSION` と同じでなければ断る（plugin の解き方を通さない撃ちと版のずれ）。
+@@ -7,7 +7,7 @@
+ //! （既定 見張り）で頼みの題の置き場に書く（台帳に無い頼みと受けた頼みは断る・受けの行は作業場より先に書く）。
+ //! 作業場は起草の置き場の下に `consult-cw<n>` を原子に作り（n は在る窓と退いた窓の最大 + 1）、git init し、
+ //! `DIRS` の dir・窓の控え・控えの書き場 notes.md・束を置く。標準出力は「窓 cw<n> を用意した」と作業場の絶対 path の 2 行。
+-//! 開きの行は起動の口が書く（行 cs-launch）。
++//! 開きの行は起動の口が書く。
+ 
+ use std::ffi::OsStr;
+ use std::path::{Path, PathBuf};
+diff --git a/crates/tsuzuri-boundary/src/consult/plain.rs b/crates/tsuzuri-boundary/src/consult/plain.rs
+index 0ba06b81948657164d3a2e69f7743d893dbb6081..2e7f7ca062fd9a1d11500247437aff7484371b80 100644
+--- a/crates/tsuzuri-boundary/src/consult/plain.rs
++++ b/crates/tsuzuri-boundary/src/consult/plain.rs
+@@ -1,4 +1,4 @@
+-//! 作業場の file を symlink を辿らずに見て書く助け（行 cs-plain-open・判断の記録 ADR-55）。
++//! 作業場の file を symlink を辿らずに見て書く助け（判断の記録 ADR-55）。
+ //! 窓の hook と状態の 1 行の口は囲いの外で持ち主の権限で走り、窓は作業場の中に symlink と fifo を作れるので、作業場から file までの
+ //! どの段も lstat で見て、作業場と途中の段は symlink でない dir、file は普通の file だけを受ける。在る file は開いた後の fstat で
+ //! lstat と同じ dev と ino かを照らし、無い file は create_new（O_EXCL・symlink を辿らない）で作る。
+diff --git a/crates/tsuzuri-boundary/src/consult/show.rs b/crates/tsuzuri-boundary/src/consult/show.rs
+index 29b7467054b50bcc4173841bf75120334ae5463b..e11d616dc8870583992866a526976f9ebcd2e7c0 100644
+--- a/crates/tsuzuri-boundary/src/consult/show.rs
++++ b/crates/tsuzuri-boundary/src/consult/show.rs
+@@ -1,4 +1,4 @@
+-//! tz consult show <所見 id か頼み id> --via 見張り|完了|hook|一覧（行 cs-show・席が読む口・判断の記録 ADR-29 決定 (8)・受入 AC16 の台帳の 2 行）。
++//! tz consult show <所見 id か頼み id> --via 見張り|完了|hook|一覧（席が読む口・判断の記録 ADR-29 決定 (8)・受入 AC16 の台帳の 2 行）。
+ //! 所見は作業場（退いた作業場も）の findings/<所見 id>.json を読み、全部の欄を人の読む形で標準出力に出し、添え物は
+ //! 作業場の絶対 path で出す。台帳に相談の所見の行と相談の受けの行（経路の語）が無ければ 1 つずつ書く（同じ id の行が
+ //! 在れば書かない＝何度撃っても 2 行だけ）。置き場は所見の題から中核の `home_of` で選ぶ memo か根（題が器の引用の形を
+diff --git a/crates/tsuzuri-boundary/src/consult/stamp.rs b/crates/tsuzuri-boundary/src/consult/stamp.rs
+index e26a24cedcdc6176882b25f23c1442b2ccf578f1..5919188f0a4f81b73e21e5919969d9fbf680fecc 100644
+--- a/crates/tsuzuri-boundary/src/consult/stamp.rs
++++ b/crates/tsuzuri-boundary/src/consult/stamp.rs
+@@ -1,4 +1,4 @@
+-//! tz consult stamp <作業場>（行 cs-acct-mark・窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
++//! tz consult stamp <作業場>（窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
+ //! 標準入力の hook の JSON を中核の `consult::stamp::read` で読み、作業場の `.consult/stamps.jsonl` に印の 1 行を足す。
+ //! 書くのは、渡した path が「/」で始まり、名が `consult-cw<n>` で、窓の控え `.consult/window.json` が在る作業場の、その 1 file だけ。
+ //! hook は囲いの外で持ち主の権限で走り、turn の終わりの hook の断りは窓の終わりを止めるので、どの周も rc 0 で返す
+diff --git a/crates/tsuzuri-boundary/src/consult/statusline.rs b/crates/tsuzuri-boundary/src/consult/statusline.rs
+index 84c66673159a58854f6defe54679f43ec4edd95f..27a609756ef5bde328269e7788efe72a37fd407d 100644
+--- a/crates/tsuzuri-boundary/src/consult/statusline.rs
++++ b/crates/tsuzuri-boundary/src/consult/statusline.rs
+@@ -1,8 +1,8 @@
+-//! tz consult statusline <作業場>（行 cs-status-verb・窓の状態の 1 行の口・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! tz consult statusline <作業場>（窓の状態の 1 行の口・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+ //! Claude Code が設定の statusLine の命令として撃つ（標準入力に session の JSON）。窓の控え `.consult/window.json`・
+ //! findings/ の所見の数・束の要約値 bundle/digest・標準入力の文脈の割合を中核の `status::render` で 1 行にして標準出力に出す。
+ //! 口は囲いの外で持ち主の権限で走り、材料は窓が書ける作業場の file なので symlink を辿らない（作業場から file までの
+-//! どの段も lstat で dir か普通の file かを見て、開いた後の fstat で同じ file かを照らす・助けは行 cs-plain-open の `plain`）。普通の file でない物（fifo など）は
++//! どの段も lstat で dir か普通の file かを見て、開いた後の fstat で同じ file かを照らす・助けは `plain`）。普通の file でない物（fifo など）は
+ //! 開かず、読む字に上限を置く。読めない物は欄を出さない。何も書かない。席の口でないので窓の守りは通す。
+ //! 渡した path が「/」で始まらないか名が `consult-cw<n>` でないか symlink でない dir でなければ、何も出さずに rc 1。
+ 
+diff --git a/crates/tsuzuri-boundary/src/consult/trust.rs b/crates/tsuzuri-boundary/src/consult/trust.rs
+index eabd86106a26039e3f2c5ce967869dbbed3daacc..9cf8bd3c73552a97ce13f5d98dd477f3c5efe91a 100644
+--- a/crates/tsuzuri-boundary/src/consult/trust.rs
++++ b/crates/tsuzuri-boundary/src/consult/trust.rs
+@@ -1,4 +1,4 @@
+-//! 口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く書き手（行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++//! 口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く書き手（判断の記録 ADR-55 決定 (3)）。
+ //! 字は中核の `trust::trusted` が組み、ここは読みと書きだけを持つ（器が席を起こす前に anchor の信頼の印を置く形と同じ:
+ //! 同じ dir の一時 file に書いて読み直し、印が真なら rename で置き換える・mode を保つ・既に真なら書かない・lock は持たない）。
+ //! 読めない・JSON でない・書けない置き場は rc 2 で断る（直してから撃ち直す）。
+diff --git a/crates/tsuzuri-boundary/src/consult/watch.rs b/crates/tsuzuri-boundary/src/consult/watch.rs
+index 64276aa744868bb3af90c0550825b924c0d5a748..8f222b971fdf5d7ab5b31174bfd7a922a0d573f2 100644
+--- a/crates/tsuzuri-boundary/src/consult/watch.rs
++++ b/crates/tsuzuri-boundary/src/consult/watch.rs
+@@ -1,14 +1,14 @@
+-//! tz consult watch [--max <秒>]（行 cs-watch・席の背景の見張り・判断の記録 ADR-29 決定 (5)(8)・受入 AC16 の見張りの 1 行）。
++//! tz consult watch [--max <秒>]（席の背景の見張り・判断の記録 ADR-29 決定 (5)(8)・受入 AC16 の見張りの 1 行）。
+ //! 席が背景の命令として常に 1 本置く。`TICK` ごとに起草の置き場の窓（退いた窓を除く）を見て、次の事象の最初の 1 つで
+ //! 中核の `lines::notice` の固定の 1 行を標準出力に出して終わる（待ちの席を起こす）。順は (1) 受けの行の無い所見
+ //! （経路 見張り）、(2) 受けの行の無い頼み、(3) 所見の無いまま最後の process の無い問う窓（閉じの行の無い物）、
+ //! (4) 最後の pane の無い話す窓（閉じの行の無い物）、(5) 最後の process の印の口座が見張りの環境の口座と違い、
+-//! 会話の印が手すきで、付いてこなかった印（`follow::held_rel`）の無い、生きている話す窓（閉じの行の無い物・行 cs-follow）。
++//! 会話の印が手すきで、付いてこなかった印（`follow::held_rel`）の無い、生きている話す窓（閉じの行の無い物）。
+ //! 上限（既定 `MAX`・Bash の道具の背景の上限より短く）で上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
+ //! 変わった時だけ読み直す（読み直しが落ちれば前の読みで見る）。
+ //! 生きている印 `<起草の置き場>/consult-watch.alive`（pid と始まりの分）を置き、`TOUCH` ごとに書き直し、終わりで消す。
+ //! 印の更新時刻が `FRESH` の内なら 2 本目は「相談: 見張りはもう居る」の 1 行を出してすぐ終わる。
+-//! (3) と (4) は窓ごとに同じ process（最後の process の印の番号と pid）について 1 度だけ出す（行 cs-gone-once・判断の記録 ADR-55・
++//! (3) と (4) は窓ごとに同じ process（最後の process の印の番号と pid）について 1 度だけ出す（判断の記録 ADR-55・
+ //! 止まった窓は閉じずに開き直しを待つ）。出す時に知らせ済みの印 `<起草の置き場>/consult-watch.told-cw<n>` を置き、印が最後の
+ //! process の印と同じ窓は飛ばして見張りを続ける。新しい process が起きてまた止まれば、また 1 度出す。
+ 
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_bind.rs b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+index f9449efdb8aa5eede1b5b0f4032c284e97c46201..a4f96b3ee96c3224bb366622c79a61e3c4f06a20 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_bind.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+@@ -1,4 +1,4 @@
+-//! tz hook agent-bind（行 ag-spec・判断の記録 ADR-59 決定 (4)・要件 FR21）: 結びの口。
++//! tz hook agent-bind（判断の記録 ADR-59 決定 (4)・要件 FR21）: 結びの口。
+ //! 撃つのは Claude Code（PostToolUse の hook・matcher Agent）。席の Agent の呼びの結果に係の id（`tool_response.agentId`）が在り、
+ //! 起こしの名の係の札が在る時だけ、札の `agent_id` に係の id を書き、起草の置き場の `.agents/<係の id>` に名を書く。
+ //! それ以外（係の呼び・ほかの道具・係の id の無い結果・札の無い名・置き場を解けない）は何も書かない。出力は無く、rc は 0 か 1（使い方の誤り）だけ。
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_guard.rs b/crates/tsuzuri-boundary/src/hook/agent_guard.rs
+index 30e2daf017e45c3c2a4bd4ad420ce95bff6b204c..98bf0da88bea91b517f4a066009d24577733cdde 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_guard.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_guard.rs
+@@ -1,4 +1,4 @@
+-//! tz hook agent-guard（行 ag-guard・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の門。
++//! tz hook agent-guard（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の門。
+ //! 撃つのは Claude Code（PreToolUse の hook・matcher なし）。標準入力の hook の入力が係の呼び（係の id の在る呼び）の時だけ判じる。順:
+ //! 1. 標準入力を全部読む。係の呼びでなければ（席の呼び）何も読まず何も出さずに 0。
+ //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
+@@ -7,7 +7,7 @@
+ //! 5. 書き終えの段では、中核の `open` が通す呼び（SendMessage と `<名>/w` の下への書き）のほかは deny の答えを標準出力に 1 行で書いて 0。
+ //!
+ //! 係の dir に群の席の札 `group.json` の在る群の係は、4 の前に、読みの道具（Read）の割りの読む path の外の読みと係を起こす道具（Agent）の
+-//! 呼びを断り、読み直し（測りの札の `cache_read`）が上限 `MEMBER_READ` 以上なら 5 と同じ呼びだけを通す（行 ag-gwatch・判断の記録 ADR-61 決定 (4)(7)）。
++//! 呼びを断り、読み直し（測りの札の `cache_read`）が上限 `MEMBER_READ` 以上なら 5 と同じ呼びだけを通す（判断の記録 ADR-61 決定 (4)(7)）。
+ //!
+ //! rc は 0 か 1（使い方の誤り）だけ。門は file を書かない。
+ 
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_meter.rs b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+index 8dca432928c5269daa69c739576b33f4e24fc255..6028039fb00f15a09a543ec53770fd67d88954bd 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_meter.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+@@ -1,4 +1,4 @@
+-//! tz hook agent-meter（行 ag-meter・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の測り。
++//! tz hook agent-meter（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の測り。
+ //! 撃つのは Claude Code（PostToolUse の hook・matcher なし）。標準入力の hook の入力が係の呼び（係の id の在る呼び）の時だけ測る。順:
+ //! 1. 標準入力を全部読む。係の呼びでなければ（席の呼び）何も読まず何も出さずに 0。
+ //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
+@@ -9,7 +9,7 @@
+ //!
+ //! rc は 0 か 1（使い方の誤り）だけ。結びの名の解きと結びの無い呼びの記帳は、係の門と終える前の門も使う。
+ //! 係の dir に群の席の札 `group.json` の在る群の係は、5 で読み直しの欄も上限 `MEMBER_READ` の印で数えて両方の欄の注ぎを出し、
+-//! 読みの道具（Read）の path を群の id の dir に記帳する（行 ag-gwatch・判断の記録 ADR-61 決定 (5)(7)）。
++//! 読みの道具（Read）の path を群の id の dir に記帳する（判断の記録 ADR-61 決定 (5)(7)）。
+ 
+ use std::fs::{self, File, OpenOptions};
+ use std::io::{Read, Seek, SeekFrom, Write};
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_spawn.rs b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+index fc343c35b6be300fbd5bd3e975b3ec4e278c61bf..2dd351fcff15c70d4a9980eb620fa35c5b369516 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+@@ -1,4 +1,4 @@
+-//! tz hook agent-spawn（行 ag-spec・判断の記録 ADR-59 決定 (2)(4)・要件 FR21）: 係の起こしの門。
++//! tz hook agent-spawn（判断の記録 ADR-59 決定 (2)(4)・要件 FR21）: 係の起こしの門。
+ //! 撃つのは Claude Code（PreToolUse の hook・matcher Agent）。標準入力の hook の入力が席の Agent の呼び（係の id の無い呼び）の時だけ判じる。順:
+ //! 1. 標準入力を全部読む。席の Agent の呼びでなければ（係の呼び・ほかの道具）何も読まず何も出さずに 0。
+ //! 2. 起草の置き場を --drafts か、repo の git config の鍵 `tsuzuri.draftsdir` から解く。解けなければ標準エラーに書いて通す（fail-open）。
+@@ -7,7 +7,7 @@
+ //!
+ //! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
+ //! 席の流れの道具（Workflow）の呼びは 1 の前に全部断り、頼みの頭の群の行と計画の file の判じは 3 の前に子の `group` が持つ
+-//! （行 ag-gspawn・判断の記録 ADR-61・要件 FR22）。
++//! （判断の記録 ADR-61・要件 FR22）。
+ 
+ pub mod group;
+ 
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_spawn/group.rs b/crates/tsuzuri-boundary/src/hook/agent_spawn/group.rs
+index 3ff000c22c266eeea9a404afa6b75135d6daad7a..86038f1c71ebe8c3e1d422ed49e97e1ac09a2525 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_spawn/group.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_spawn/group.rs
+@@ -1,4 +1,4 @@
+-//! 起こしの門の群の口（行 ag-gspawn・判断の記録 ADR-61 決定 (1)(2)(4)(5)(7)・要件 FR22）。
++//! 起こしの門の群の口（判断の記録 ADR-61 決定 (1)(2)(4)(5)(7)・要件 FR22）。
+ //! 席の Agent の呼びの頼みの頭に群の行が在れば、起草の置き場の群の id の dir の計画の file と一覧の file・ほかの群の係の札と群の席の札・
+ //! 群の係の測りの札（群の合計）・計画の裁定 id の問いの台帳の字を読み、中核の `judge` で判じる。群の行が無ければ、計画の file が
+ //! 割りに持つ名の起こしだけを断る（5 行目の欠け）。通す時は、同じ群の係の札を ADR-59 の対象の重なりの判じから外した生きた札を返す。
+diff --git a/crates/tsuzuri-boundary/src/hook/consult.rs b/crates/tsuzuri-boundary/src/hook/consult.rs
+index 7577ad819f92d5f6800fb5fb3170c0658347c752..764879c971ca85e1e0b04315769ff6f0b8f66dec 100644
+--- a/crates/tsuzuri-boundary/src/hook/consult.rs
++++ b/crates/tsuzuri-boundary/src/hook/consult.rs
+@@ -1,4 +1,4 @@
+-//! 席の hook の相談の拾い（設計ノート surface-wave27b 行 cs-hooks・判断の記録 ADR-29 決定 (8)）。
++//! 席の hook の相談の拾い（判断の記録 ADR-29 決定 (8)）。
+ //! repo の git config の鍵 `tsuzuri.draftsdir` の起草の置き場に見張りの生きている印（`watch::fresh`）が無い間だけ、
+ //! 自分の board の未受けの口（GET /api/consult/unreceived・住所の列は裁定の未受けの口と同じ解き方）を撃つ。
+ //! 鍵が無いか値が dir でない repo（相談の窓を使わない project）と、見張りの居る間は、鍵の読みのほかに何も撃たない。
+diff --git a/crates/tsuzuri-boundary/src/hook/deliver.rs b/crates/tsuzuri-boundary/src/hook/deliver.rs
+index 6e17ba37766ae7e75270dbab80570839ec5ae113..98600845fed3e448fcd32daa48f7eb2a63e3688d 100644
+--- a/crates/tsuzuri-boundary/src/hook/deliver.rs
++++ b/crates/tsuzuri-boundary/src/hook/deliver.rs
+@@ -1,9 +1,9 @@
+-//! tz hook deliver（行 f-deliver・要件 FR9・器の要件 FR79）: 席の UserPromptSubmit の hook。
++//! tz hook deliver（要件 FR9・器の要件 FR79）: 席の UserPromptSubmit の hook。
+ //! 器の配達の口が待ちの席へ送る指し示しの 1 行（「裁定 <id> が届いた」）が prompt に在るとき、
+ //! 名指された裁定の逐語を台帳から写して席の文脈に足す（hookSpecificOutput の additionalContext）。
+ //! 撃つのは Claude Code（plugin の hooks.json の UserPromptSubmit）。順:
+ //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
+-//! 2. 相談の拾い（行 cs-hooks・`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る
++//! 2. 相談の拾い（`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る
+ //!    （鍵 tsuzuri.draftsdir を git で読む・見張りの居る間と鍵の無い repo では行を取らない）。
+ //! 3. 標準入力の prompt に指し示しが無ければ、台帳を読まない。在れば台帳を bd で 1 回読む。読めない・名指された行が無い時は
+ //!    標準エラーに 1 行を書く（席には指し示しだけが残り、席が台帳を読む）。
+diff --git a/crates/tsuzuri-boundary/src/hook/deliver_tool.rs b/crates/tsuzuri-boundary/src/hook/deliver_tool.rs
+index d2b90093085a68339440c8a4e54b72f7a3bfa937..41b376e29bfe79d21e3cb77a968a7d8eddd11419 100644
+--- a/crates/tsuzuri-boundary/src/hook/deliver_tool.rs
++++ b/crates/tsuzuri-boundary/src/hook/deliver_tool.rs
+@@ -1,11 +1,11 @@
+-//! tz hook deliver-tool（行 f-deliver-tool・要件 FR9・器の要件 FR79）: 席の PostToolBatch の hook。
++//! tz hook deliver-tool（要件 FR9・器の要件 FR79）: 席の PostToolBatch の hook。
+ //! 考え中の席へ、tool の呼びの組が終わった後（次の model の呼びの前）に、印の無い裁定の逐語を席の文脈に足し、
+ //! 答えを書けた後にだけ、答えが名指した裁定に経路が tool の呼びの印を置く。
+ //! 撃つのは Claude Code（plugin の hooks.json の PostToolBatch・matcher なし）。順:
+ //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
+ //! 2. repo の下の .git が file（git の worktree）なら何もせずに 0。
+ //! 3. 標準入力が席の本体の入力（最上位に agent_id も agent_type も無い JSON の object）でなければ、子 process を撃たずに 0。
+-//! 4. 相談の拾い（行 cs-hooks・`consult::items`）: 見張りが居ない間、board の相談の未受けの口の受けの無い所見と頼みの行を取る。
++//! 4. 相談の拾い（`consult::items`）: 見張りが居ない間、board の相談の未受けの口の受けの無い所見と頼みの行を取る。
+ //! 5. 安い判じ（自分の board の口 GET `UNRECEIVED_PATH`）が Known の空の列なら裁定は無い。読めない・Unknown なら
+ //!    標準エラーに 1 行を書く（台帳は読まない・印の無い裁定は停止の hook が拾う）。
+ //! 6. 空でなければ台帳を bd で 1 回読み、印の無い裁定の逐語を取る。読めなければ標準エラーに 1 行を書く。
+diff --git a/crates/tsuzuri-boundary/src/hook/mod.rs b/crates/tsuzuri-boundary/src/hook/mod.rs
+index 8469fa2e9c105f88866e668a5cac4c33a7cd81c9..bf8ad77533c53d268a1dcd2c91e2e6eaa673f997 100644
+--- a/crates/tsuzuri-boundary/src/hook/mod.rs
++++ b/crates/tsuzuri-boundary/src/hook/mod.rs
+@@ -1,13 +1,13 @@
+-//! 席の hook（Claude Code が撃つ tz の口）。行 f-stop で停止の hook（`stop`）を置く。
+-//! 行 ag-stop で係の終える前の門（`subagent_stop`・SubagentStop の hook）を置く。
+-//! 行 f-gate で問いの起票の門（`question_gate`・PreToolUse の hook）を置く。
+-//! 行 e-signal-send で問いの合図の送り手（`question_signal`・PostToolUse の async の hook）を置く。
+-//! 行 f-deliver で配達の hook（`deliver`・UserPromptSubmit の hook）を置く。
+-//! 行 f-deliver-tool で考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
+-//! 行 cs-hooks で、停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
+-//! 行 ag-spec で係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
+-//! 行 ag-meter で係の測り（`agent_meter`・PostToolUse の hook）を置く。
+-//! 行 ag-guard で係の門（`agent_guard`・PreToolUse の hook）を置く。
++//! 席の hook（Claude Code が撃つ tz の口）。停止の hook（`stop`）を置く。
++//! 係の終える前の門（`subagent_stop`・SubagentStop の hook）を置く。
++//! 問いの起票の門（`question_gate`・PreToolUse の hook）を置く。
++//! 問いの合図の送り手（`question_signal`・PostToolUse の async の hook）を置く。
++//! 配達の hook（`deliver`・UserPromptSubmit の hook）を置く。
++//! 考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
++//! 停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
++//! 係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
++//! 係の測り（`agent_meter`・PostToolUse の hook）を置く。
++//! 係の門（`agent_guard`・PreToolUse の hook）を置く。
+ 
+ pub mod agent_bind;
+ pub mod agent_guard;
+diff --git a/crates/tsuzuri-boundary/src/hook/question_gate.rs b/crates/tsuzuri-boundary/src/hook/question_gate.rs
+index ba553bd8947b78d44727d03bec92dad47bd27037..d0f3ac8c635a5332a3cf41e423879aee6e1ff118 100644
+--- a/crates/tsuzuri-boundary/src/hook/question_gate.rs
++++ b/crates/tsuzuri-boundary/src/hook/question_gate.rs
+@@ -1,9 +1,9 @@
+-//! tz hook question-gate（行 f-gate・要件 FR4・受入 AC6）: 問いの起票の門。
++//! tz hook question-gate（要件 FR4・受入 AC6）: 問いの起票の門。
+ //! 撃つのは Claude Code（PreToolUse の hook・matcher Bash）。標準入力の hook の入力から問いの起票の下書きを拾い、
+ //! 導出グラフで判じて、通さないときだけ deny の答えを標準出力に 1 行で書く（通すときは何も出さない）。順:
+ //! 1. 標準入力を全部読む（読めなければ空の字）。
+ //! 2. 使い方の誤りか repo が dir でなければ、下書きが無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
+-//! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39・行 c-short-gate）。
++//! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39）。
+ //! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
+ //!
+ //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
+diff --git a/crates/tsuzuri-boundary/src/hook/question_signal.rs b/crates/tsuzuri-boundary/src/hook/question_signal.rs
+index 4d49c80c8788189f7ec7cbfa54c8f82269189826..c1a92d577b34cbb4cf1acd13a1fef630eadb27f9 100644
+--- a/crates/tsuzuri-boundary/src/hook/question_signal.rs
++++ b/crates/tsuzuri-boundary/src/hook/question_signal.rs
+@@ -1,4 +1,4 @@
+-//! tz hook question-signal（行 e-signal-send・要件 NFR2・規則の行 R-21）: 問いの合図の送り手。
++//! tz hook question-signal（要件 NFR2・規則の行 R-21）: 問いの合図の送り手。
+ //! 撃つのは Claude Code（PostToolUse の hook・matcher Bash・async で席は待たない）。標準入力の hook の入力が
+ //! 問いの起票（門と同じ読み）で、tool_response の stdout に起票の行が在るときだけ、自分の board の口
+ //! POST /api/surface/questions（`NUDGE_PATH`）へ本文 QuestionNudge を 1 本送る。順:
+diff --git a/crates/tsuzuri-boundary/src/hook/stop.rs b/crates/tsuzuri-boundary/src/hook/stop.rs
+index 57c9de9e91a55cffa46f91e8a9865ebdb4e2545d..e5305c905bb25a48d2bd68b5484702e05ae7cd79 100644
+--- a/crates/tsuzuri-boundary/src/hook/stop.rs
++++ b/crates/tsuzuri-boundary/src/hook/stop.rs
+@@ -1,4 +1,4 @@
+-//! tz hook stop（行 f-stop・要件 FR9・器の要件 FR79）: 席の停止の hook。
++//! tz hook stop（要件 FR9・器の要件 FR79）: 席の停止の hook。
+ //! 席が考え中から待ちに移る境で、台帳の問いの notes の裁定のうち配達済みの印の無いものを拾い、
+ //! 指し示し（裁定の id）を答え（decision block）として標準出力に返して席を続けさせ、返した後にだけ印を置く。
+ //! 撃つのは Claude Code（plugin の hooks.json の Stop）。順:
+@@ -6,7 +6,7 @@
+ //! 2. repo の下の .git が file（git の worktree・器の便の runner）なら何もせずに 0。
+ //! 3. 標準入力の stop_hook_active が false の object でなければ（続けた後の停止・JSON の object でない）何も出さずに 0。
+ //! 4. 台帳を bd で読み、未配達の裁定を取る。読めなければ標準エラーに 1 行を書く。
+-//! 5. 相談の拾い（行 cs-hooks・`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る。
++//! 5. 相談の拾い（`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る。
+ //! 6. 未配達も相談の行も無ければ何も出さずに 0。在れば答え（裁定の reason の後ろに相談の行）を標準出力に書いて flush し、
+ //!    その後に未配達の裁定にだけ停止の印を bdw で置く（上限 `MARK_BUDGET`）。
+ //!
+diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+index 24d282838b151b50baecfcbe10756519e136e71b..f5b30eb79b05f3f02eb4fd22a176db8ab06a1cf2 100644
+--- a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
++++ b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+@@ -1,4 +1,4 @@
+-//! tz hook agent-stop（行 ag-stop・判断の記録 ADR-59 決定 (4)・要件 FR21）: 係の終える前の門。
++//! tz hook agent-stop（判断の記録 ADR-59 決定 (4)・要件 FR21）: 係の終える前の門。
+ //! 撃つのは Claude Code（SubagentStop の hook）。標準入力の hook の入力が係の終わり（係の id の在る入力）の時だけ判じる。順:
+ //! 1. 標準入力を全部読む。係の id が無ければ何も読まず何も出さずに 0。
+ //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
+@@ -10,7 +10,7 @@
+ //!    0 の前に、4 で読んだ係の記録から中核の `Tally` で組んだ予算の記録を `<名>/usage.json` に書く（記録が空なら書かない・書けなければ標準エラーに書いて通す）。
+ //!
+ //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
+-//! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
++//! （割りの主張ごとの表の行と確かさの印と証拠・判断の記録 ADR-61 決定 (4)(8)）。
+ //! 出す物が差の file（.patch）を名指す係は、4 で床の記録の欠けと床の写しの撃ち直しの食い違いも子の `floor` で数え、
+ //! 判じを出力の dir の門の記録に足す（判断の記録 ADR-63 決定 (4)・旗 --tz と --scribe2 は撃ち直しの道具）。
+ //!
+diff --git a/crates/tsuzuri-contract/src/account.rs b/crates/tsuzuri-contract/src/account.rs
+index 62ee90a8a91bd57844ccd6d58065f35bb889c7f3..40f23ad446526e1d5f2aa223679a044111a26fd7 100644
+--- a/crates/tsuzuri-contract/src/account.rs
++++ b/crates/tsuzuri-contract/src/account.rs
+@@ -1,4 +1,4 @@
+-//! account board の電文（口座ごとの窓・群の枠・移動・project の行・session の行・停止の切り替え・設計ノート surface-base 便 b-acct）。
++//! account board の電文（口座ごとの窓・群の枠・移動・project の行・session の行・停止の切り替え）。
+ //! 電文を組むのは server で、ここは電文の形と口の path だけを決める。読めない出所はその部分だけ `Reading::Unknown` にする。
+ //! 着地済みの `board::AccountBoard` は使わない（窓・席の card・移動・部分ごとの測れていない・停止の切り替えを持たない）。
+ 
+diff --git a/crates/tsuzuri-contract/src/case.rs b/crates/tsuzuri-contract/src/case.rs
+index 054702df98ab450b373793d808b3ac29b9a539e2..196ccdffccda955259c863f8d78f1a199ddafe85 100644
+--- a/crates/tsuzuri-contract/src/case.rs
++++ b/crates/tsuzuri-contract/src/case.rs
+@@ -1,4 +1,4 @@
+-//! 器の局面の出力の電文（口 GET /api/cases・設計ノート surface-wave26a 行 c-case-read・判断の記録 ADR-27 の決定 (10)）。
++//! 器の局面の出力の電文（口 GET /api/cases・判断の記録 ADR-27 の決定 (10)）。
+ //! 器の fleet/lifecycle.json の部品の欄のうち面が読む欄だけを写す（欄の正本は器の case-lifecycle §5.2）。
+ //! 部品の種類と局面と手番と理由の語は閉じた列で持たず字のまま運び、面が知らない語を「まだ分からない」に倒す。
+ 
+diff --git a/crates/tsuzuri-contract/src/consult.rs b/crates/tsuzuri-contract/src/consult.rs
+index 1bc9058771b9c7a9e5eb6442692b9d8a556922cd..16a506b19ae9558d74a1084d3d71c679ea1b4a69 100644
+--- a/crates/tsuzuri-contract/src/consult.rs
++++ b/crates/tsuzuri-contract/src/consult.rs
+@@ -1,4 +1,4 @@
+-//! 相談の窓の型（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a 行 cs-types）。
++//! 相談の窓の型（判断の記録 ADR-29・要件 FR19）。
+ //! 窓と所見と頼みの id の形、起こし手・経路・採否・形・窓の状態の閉じた語、所見の file の形（JSON・未知の鍵を断る）、
+ //! board の口の電文を決める。所見の欄の検めと台帳の行の字は中核の crate の `consult` が持つ。
+ //! 保存する添え物の写し先は木の根からの相対の path だけを決め、どの木の根に写すかは呼ぶ側が渡す。
+diff --git a/crates/tsuzuri-contract/src/graph.rs b/crates/tsuzuri-contract/src/graph.rs
+index ee81cdcfb31fe76e5dcba096e3bc6380746227c4..f1563d91b9557d280050b4b1501aab082ad76473 100644
+--- a/crates/tsuzuri-contract/src/graph.rs
++++ b/crates/tsuzuri-contract/src/graph.rs
+@@ -1,9 +1,9 @@
+ //! 導出グラフの型: 節点の種類（閉じた 20）・辺の型（閉じた 32）・節点と辺（判断の記録 ADR-7 決定 (2)・設計ノート surface §17・§18）。
+ //! 設計文書の 11 種と 17 型と設計ノートの行の 2 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
+-//! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
+-//! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
+-//! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
+-//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）は行 c-commit-node で足す（判断の記録 ADR-46 決定 (2)・ADR-47）。
++//! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は中核の導出グラフで決めるのでここには置かない。
++//! 導出グラフの電文（GraphDoc）は中核の crate の Graph と check の値の写し。
++//! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）も持つ。
++//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）も持つ（判断の記録 ADR-46 決定 (2)・ADR-47）。
+ 
+ use std::cmp::Ordering;
+ use std::collections::BTreeMap;
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index d4c0438686f960aaa4a78b53ce7b2508abd9e1d1..e6151627e0722413f3d66d9e6c44a4a58c1e900c 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -1,4 +1,4 @@
+-//! 契約の型: server と面と hook が共有する型（設計ノート surface §20・surface-base 便 b）。
++//! 契約の型: server と面と hook が共有する型（設計ノート surface §20）。
+ //! 面の側に電文の写しを書かない。電文の形は JSON で、字の形は `wire` の 2 関数だけが決める。
+ //! 型の外形は群ごとの歯 `tests/cform_*.rs` と snapshot `tests/snapshots/*.json` が pin する（共通の手は `tests/teeth1/common/mod.rs`）。
+ 
+diff --git a/crates/tsuzuri-contract/src/notice.rs b/crates/tsuzuri-contract/src/notice.rs
+index f9fc6b728e0d54a6b01bdf3401ba4311a3b36d00..a7c99bcb82e54f01dbcdc5c2038d6e91e7a68297 100644
+--- a/crates/tsuzuri-contract/src/notice.rs
++++ b/crates/tsuzuri-contract/src/notice.rs
+@@ -1,4 +1,4 @@
+-//! 席の「見て」の知らせの電文（行 i-11・要件 FR16・判断の記録 ADR-15 の決定 (6)）。
++//! 席の「見て」の知らせの電文（要件 FR16・判断の記録 ADR-15 の決定 (6)）。
+ //! 材料は tz stage notify が project ごとに書く最新の 1 つの記録だけで、server はそれを読んで返す（書かない）。
+ //! project board は自分の名の 1 つを、account board は全部を同じ電文から読む。
+ 
+diff --git a/crates/tsuzuri-contract/src/project.rs b/crates/tsuzuri-contract/src/project.rs
+index 297854babb80b83702ed8ba2e6e116b56e0898ff..1eede3f55523294e5907211cf1b86f7d98f52a4b 100644
+--- a/crates/tsuzuri-contract/src/project.rs
++++ b/crates/tsuzuri-contract/src/project.rs
+@@ -1,4 +1,4 @@
+-//! project の名の電文（header の題が読む・設計ノート surface-wave3b 行 g-brand）。
++//! project の名の電文（header の題が読む）。
+ //! 名は起動の引数 --repo の dir の名から server が実行の時に取る（tracked な file に名を書かない）。
+ 
+ use serde::{Deserialize, Serialize};
+diff --git a/crates/tsuzuri-contract/src/question.rs b/crates/tsuzuri-contract/src/question.rs
+index 9a137deb6351ee402022a7e5ed115ec86a837ae1..fb9d9152bb7c943b791e85927a6f652cee437558 100644
+--- a/crates/tsuzuri-contract/src/question.rs
++++ b/crates/tsuzuri-contract/src/question.rs
+@@ -1,4 +1,4 @@
+-//! 問いの card の電文（画面の block「問いの card」が読む・設計ノート surface-base 便 b-cards）。
++//! 問いの card の電文（画面の block「問いの card」が読む）。
+ //! card を組むのは中核の crate で、ここは電文の形だけを決める。見た版の要約値は `LedgerItem::digest` が付ける。
+ 
+ use serde::{Deserialize, Serialize};
+diff --git a/crates/tsuzuri-contract/src/runs.rs b/crates/tsuzuri-contract/src/runs.rs
+index 44c7814e212d328b97f1334ccc985c5c130e15de..06c32f40893cf15a01d10ef486eb8b8dd5f65bff 100644
+--- a/crates/tsuzuri-contract/src/runs.rs
++++ b/crates/tsuzuri-contract/src/runs.rs
+@@ -1,6 +1,6 @@
+-//! bead の走行の時間軸の電文（節点の頁が読む・設計ノート surface-wave3b 行 e-runs・要件 FR10）。
++//! bead の走行の時間軸の電文（節点の頁が読む・要件 FR10）。
+ //! 走行ごとに段の列・審査の結び・口座・費用を持つ。器の event log から中核の pipeline の `runs_of` が組む。
+-//! 走行ごとの gate と審査の内訳は、便の dir の 2 つの file の字から中核の pipeline の `with_verdicts` が置く（行 c-run-verdict）。
++//! 走行ごとの gate と審査の内訳は、便の dir の 2 つの file の字から中核の pipeline の `with_verdicts` が置く。
+ 
+ use serde::{Deserialize, Serialize};
+ 
+diff --git a/crates/tsuzuri-contract/src/seat.rs b/crates/tsuzuri-contract/src/seat.rs
+index 0ddaa5ebf1aa78fd0d906018d0497c4a4bbcf9a0..46bde3b0fed641e5a88387fbe07492e810be291c 100644
+--- a/crates/tsuzuri-contract/src/seat.rs
++++ b/crates/tsuzuri-contract/src/seat.rs
+@@ -1,4 +1,4 @@
+-//! 席の card の電文（画面の block「orchestrator と口座」が読む・設計ノート surface-base 便 b-cards）。
++//! 席の card の電文（画面の block「orchestrator と口座」が読む）。
+ //! card を組むのは server で、ここは電文の形だけを決める。読めない出所はその欄だけ `Reading::Unknown` にする。
+ 
+ use serde::{Deserialize, Serialize};
+diff --git a/crates/tsuzuri-contract/src/seathb.rs b/crates/tsuzuri-contract/src/seathb.rs
+index 11650ffd81b56621e00f5ab07b8028db944c4802..777dce0b506d0183f8432524f938b75b301fe66a 100644
+--- a/crates/tsuzuri-contract/src/seathb.rs
++++ b/crates/tsuzuri-contract/src/seathb.rs
+@@ -1,4 +1,4 @@
+-//! project board の停止の切り替えの電文（行 e-seat-hb・裁定 t3-hub.52.29 の案 A）。
++//! project board の停止の切り替えの電文。
+ //! 本文は向きだけを持ち、撃つ席は server が自分の --repo から引く（本文の字で席を選ばない）。
+ //! 応答は account の `HeartbeatResponse` をそのまま使う。
+ 
+diff --git a/crates/tsuzuri-contract/src/stage.rs b/crates/tsuzuri-contract/src/stage.rs
+index b856e086c45b4f05216fc5feed33b30968af90b5..66eb8c0b9484944bd8e596de685b16ce256cd214 100644
+--- a/crates/tsuzuri-contract/src/stage.rs
++++ b/crates/tsuzuri-contract/src/stage.rs
+@@ -1,4 +1,4 @@
+-//! 表示先の設定の電文（行 e-stage-target・要件 FR16・判断の記録 ADR-15 の決定 (2)(6)・持ち主の裁定 t3-hub.59.1 と t3-hub.59.7）。
++//! 表示先の設定の電文（要件 FR16・判断の記録 ADR-15 の決定 (2)(6)）。
+ //! 読み（GET `PATH`）は tz stage target show --json の 1 行を `StageTargets` として返す。
+ //! 書き（POST）は `OwnTarget`（project board・自分の project だけ）と `Targets`（account board・一括か project ごと）で、
+ //! 窓を開く頼み（POST `OPEN_PATH`）は `OpenRequest`。server は設定の file を書かず、tz の口を撃つだけにする。
+diff --git a/crates/tsuzuri-contract/src/stats.rs b/crates/tsuzuri-contract/src/stats.rs
+index 0b56056e334961d81cb625a5549db7bd44e6e572..35d2cad15747997a353b6eaa2e9ebf739b259294 100644
+--- a/crates/tsuzuri-contract/src/stats.rs
++++ b/crates/tsuzuri-contract/src/stats.rs
+@@ -1,4 +1,4 @@
+-//! 台帳の指標と次の一手と未反映の一覧の電文（設計ノート surface-base 便 d・便 e-view・判断の記録 ADR-7 決定 (6)・(8)）。
++//! 台帳の指標と次の一手と未反映の一覧の電文（判断の記録 ADR-7 決定 (6)・(8)）。
+ //! 数え方は中核の crate が持ち、ここは電文の形だけを決める。作業中の数と最古の task の欄は持たない。
+ //! 台帳が読めなければ指標は `Reading::Unknown` で運び、判定は台帳なしにする。
+ 
+diff --git a/crates/tsuzuri-contract/src/summary.rs b/crates/tsuzuri-contract/src/summary.rs
+index 292a5c74d86b41bdd6ef5f4445b63558e3708fe8..96991ae9f093918e54655d867a255b7c33052b12 100644
+--- a/crates/tsuzuri-contract/src/summary.rs
++++ b/crates/tsuzuri-contract/src/summary.rs
+@@ -1,4 +1,4 @@
+-//! bead の 2 つの概要と本文の頭の 1 行の読み（判断の記録 ADR-30 決定 (2)(7)・要件 FR15・行 c-sum-two）。
++//! bead の 2 つの概要と本文の頭の 1 行の読み（判断の記録 ADR-30 決定 (2)(7)・要件 FR15）。
+ //! 導出グラフ・問いの card・吹き出しが同じ関数で読む（中核と面の両方が使う純な関数・file も時計も触らない）。
+ //! 定型行（「概要 = 」「技術 = 」で始まる行）が在ればその行の残り、無ければ見出しの行（「## 概要」「## 技術」）の下の
+ //! 次の見出しまでの字を、その bead の概要とする（2 つの概要は別々に読む）。
+diff --git a/crates/tsuzuri-contract/src/surface.rs b/crates/tsuzuri-contract/src/surface.rs
+index ff1af842644be3fd5473927bdae6c0f51ef8bed6..e530335ec8bdae69a84e9cd53c6cc4d36afade9a 100644
+--- a/crates/tsuzuri-contract/src/surface.rs
++++ b/crates/tsuzuri-contract/src/surface.rs
+@@ -1,7 +1,7 @@
+ //! 面の電文の型: 面の event・面の状態・問いの合図・裁定と束と方針の要求と応答・記帳 id の形
+ //! （設計ノート surface §3・§20・判断の記録 ADR-7 決定 (4)）。
+-//! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（行 e-revoke・server の受付と面の button が同じ関数で判じる）。
+-//! board-changed の data の型 `BoardChanged` と変化の種類 `ChangeKind`（面は種類を読む口だけを読み直す・行 c-ev-kind）。
++//! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（server の受付と面の button が同じ関数で判じる）。
++//! board-changed の data の型 `BoardChanged` と変化の種類 `ChangeKind`（面は種類を読む口だけを読み直す）。
+ 
+ use serde::{Deserialize, Serialize};
+ 
+diff --git a/crates/tsuzuri-core/src/account/host.rs b/crates/tsuzuri-core/src/account/host.rs
+index 2dd998a418c67e6edf1020623e157c4c65da31ac..009b648878e6e6fcb97db4b03fb6673fdb279e1a 100644
+--- a/crates/tsuzuri-core/src/account/host.rs
++++ b/crates/tsuzuri-core/src/account/host.rs
+@@ -1,14 +1,14 @@
+-//! host の側の部分（口座の列・群の枠・移動の列・設計ノート surface-base 便 e-acct-host）。
++//! host の側の部分（口座の列・群の枠・移動の列）。
+ //! 入力は群の宣言の字（host.toml）・残量の出力の字・host の doctor の字（群の行と口座の行を読む）・
+ //! anchor ごとの doctor の字の表（席の行を読む）・群の記録の字（今の記録と history の記録）。
+-//! doctor の区画の行（欄 kind が `PARK_KIND` の行・行 c-acct-park）は口座を占有せず、群の行に数えない。
++//! doctor の区画の行（欄 kind が `PARK_KIND` の行）は口座を占有せず、群の行に数えない。
+ //! 群の宣言は TOML の読み手を使わず、`[[account]]` の label と `[[account-group]]` の name・anchors・accounts だけを読む。
+ //! 読めない字の決まり（要件 NFR2）: host の doctor の字が無ければ口座の列と群の列が、群の宣言の字が無ければ
+ //! 3 つの列とも「まだ分からない」。残量の字が無いか口座の行が測れていなければ、その口座の usage だけが「まだ分からない」。
+ //! 窓ごとの逼迫の閾値は器の rules 行の出力の字を、群の逼迫の知らせと移動の断りは器の event log の行を写すだけで、
+-//! 閾値の数を持たず判じない（便 c-acct-thr・規則の行 R-22）。
++//! 閾値の数を持たず判じない（規則の行 R-22）。
+ //! 口座の 7 日の線は引数の state dir の event log の測りの行を 1 度だけ読み、今から 1 時間の刻みごとに最も新しい行を
+-//! 点にする（行 c-acct-spark）。log の字が無ければ線は「まだ分からない」で、最後に測った時刻の古さは判じない。
++//! 点にする。log の字が無ければ線は「まだ分からない」で、最後に測った時刻の古さは判じない。
+ 
+ use std::collections::BTreeMap;
+ use std::sync::Arc;
+diff --git a/crates/tsuzuri-core/src/account/mod.rs b/crates/tsuzuri-core/src/account/mod.rs
+index ea4ff05ece32c74398aee6b303c57fe495c2dcfa..676a2c2f6863eee1b527ade57236c6c6a6159713 100644
+--- a/crates/tsuzuri-core/src/account/mod.rs
++++ b/crates/tsuzuri-core/src/account/mod.rs
+@@ -1,6 +1,6 @@
+-//! account board の電文を組む純粋な関数（設計ノート surface-base 便 e-acct-host・e-acct-proj・規則の行 R-22）。
++//! account board の電文を組む純粋な関数（e-acct-proj・規則の行 R-22）。
+ //! host の下に口座の列と群の枠と移動の列（`host`）を置く。project の下に project の行と session の行と
+-//! 電文の組み立て（`project`）を置く（便 e-acct-proj）。
++//! 電文の組み立て（`project`）を置く。
+ //! 入力は字と今の時刻だけで、どの関数も file も子 process も時計も触らない。状態の判定は器の値を写すだけで、
+ //! 閾値を持たない。読めない字はその字から組む部分だけを「まだ分からない」にする。
+ 
+diff --git a/crates/tsuzuri-core/src/account/project.rs b/crates/tsuzuri-core/src/account/project.rs
+index 80f44be42060b79c982d0b25563b7c88aca036db..f1445e29ce860972dccca52a0067694e781ecd5b 100644
+--- a/crates/tsuzuri-core/src/account/project.rs
++++ b/crates/tsuzuri-core/src/account/project.rs
+@@ -1,15 +1,15 @@
+-//! project の側の部分（project の行・session の行・電文の組み立て・設計ノート surface-base 便 e-acct-proj）。
++//! project の側の部分（project の行・session の行・電文の組み立て）。
+ //! 入力は host の側の字（`HostTexts`）と、anchor ごとの project の字（`ProjectTexts`）と今の時刻。
+-//! 退避の終わる時刻は席の card の grace_until の写しで、tsuzuri は計算しない（規則の行 R-22・行 c-grace-acct）。
+-//! 電文の時点 at は今ではなく材料の時刻の最大（`latest`・行 c-abs-seat）。
++//! 退避の終わる時刻は席の card の grace_until の写しで、tsuzuri は計算しない（規則の行 R-22）。
++//! 電文の時点 at は今ではなく材料の時刻の最大（`latest`）。
+ //! project の宣言の順は群の宣言の順で、群の中は anchors の配列の順（同じ anchor は最初の群だけ）。
+ //! 席の card・台帳の指標・次の一手は着地済みの関数の値をそのまま写す。run の 4 列の分け方と
+ //! 生きている run の境（`ALIVE_S`）は見本の acct.js の runColsAt と runAlive の決め方（設計席の承認で置く値）。
+ //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
+ //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
+-//! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
++//! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認）。
+ //! 相談の窓の行は、作業場の材料（`ConsultWindow`）と台帳の notes の相談の開きと閉じの行から組む
+-//! （判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
++//! （判断の記録 ADR-55 決定 (4)）。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::path::Path;
+diff --git a/crates/tsuzuri-core/src/agent/meter.rs b/crates/tsuzuri-core/src/agent/meter.rs
+index b4e81a213ea80f9fb02c4e8602dbad1b00afcee9..6da596640e823691f78c9b0df38e71a261f12d38 100644
+--- a/crates/tsuzuri-core/src/agent/meter.rs
++++ b/crates/tsuzuri-core/src/agent/meter.rs
+@@ -1,12 +1,12 @@
+-//! 係の測り（行 ag-meter・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
++//! 係の測り（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
+ //! 係の呼びの門の入力（係の id `agent_id` の在る入力）を読み、係の記録の続き（前の offset から後の完全な行）の使用量を
+ //! 応答の id で重ねずに足す。新しく読み書きした量は input・cache_creation・output の和で、文脈の読み直し（cache_read）は別の欄。
+ //! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
+ //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
+ //! 終える前の門が係の dir に書く予算の記録（`Tally`・`usage.json`）は、係の記録の全部を席の道具と同じ数え（`spent`）で数えた
+ //! 新しい量と、札の頭の予算と倍率と対象を持ち、日次の物差しが読む（判断の記録 ADR-63 決定 (9)）。
+-//! 予算を越えた係の呼びの係の門の判じ（`guard`）は行 ag-guard が置く。
+-//! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字（`group`）は行 ag-gwatch が置く。
++//! 予算を越えた係の呼びの係の門の判じは `guard` が持つ。
++//! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字は `group` が持つ。
+ 
+ pub mod group;
+ pub mod guard;
+diff --git a/crates/tsuzuri-core/src/agent/meter/group.rs b/crates/tsuzuri-core/src/agent/meter/group.rs
+index f8c29723f633f1595df495740f153f642ba1b6c3..4b1dd81429e46b0e50ae1378c9c66a5c40302c39 100644
+--- a/crates/tsuzuri-core/src/agent/meter/group.rs
++++ b/crates/tsuzuri-core/src/agent/meter/group.rs
+@@ -1,5 +1,5 @@
+-//! 群の係の測りと係の門の字（行 ag-gwatch・判断の記録 ADR-61 決定 (4)(5)(7)・要件 FR22）。
+-//! 群の係は、係の dir に群の席の札（`group.json`・行 ag-gspawn が書く）を持つ係である。群の係は文脈の読み直し（cache_read）も
++//! 群の係の測りと係の門の字（判断の記録 ADR-61 決定 (4)(5)(7)・要件 FR22）。
++//! 群の係は、係の dir に群の席の札（`group.json`）を持つ係である。群の係は文脈の読み直し（cache_read）も
+ //! 上限 `MEMBER_READ` で数え、50・75・90% の注ぎを両方の欄で出し、どちらかの欄が上限以上なら書き終えの段に入る（決定 (7) の (イ)）。
+ //! 係の門は、群の係の読みの道具（Read）の割りの読む path の外の読みと、係を起こす道具（Agent）の呼び（入れ子）を断り、
+ //! 命令（Bash）と検索（Grep・Glob）の道具は見ない（決定 (4)(5)）。測りの口は、群の係の Read の path を群の id の dir の
+diff --git a/crates/tsuzuri-core/src/agent/meter/guard.rs b/crates/tsuzuri-core/src/agent/meter/guard.rs
+index 97ddd25d0b5257202353af3f2fb5ce36971ca4be..e11a3b7e30210e1195729028c5b84ef19865fbc4 100644
+--- a/crates/tsuzuri-core/src/agent/meter/guard.rs
++++ b/crates/tsuzuri-core/src/agent/meter/guard.rs
+@@ -1,4 +1,4 @@
+-//! 係の門の判じ（行 ag-guard・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
++//! 係の門の判じ（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
+ //! 結んだ係の使った量（測りの札の `used`）が札の予算以上の時は書き終えの段で、係の呼びのうち席への知らせ（SendMessage）と、
+ //! 書きの道具（Write・Edit・NotebookEdit）で係の出力の dir `<起草の置き場>/<名>/w` の下を書く呼びだけを通す。
+ //! 書きの path は `..` の成分を持たず出力の dir の成分で始まる時だけ下と読む（ほかの係の dir と `..` を持つ path は断る）。
+diff --git a/crates/tsuzuri-core/src/agent/mod.rs b/crates/tsuzuri-core/src/agent/mod.rs
+index c3df7716bcd0beee681393ddde4c98408c5efd40..d9f085e53381a5d281c9e999aa708a199db31a6c 100644
+--- a/crates/tsuzuri-core/src/agent/mod.rs
++++ b/crates/tsuzuri-core/src/agent/mod.rs
+@@ -1,6 +1,6 @@
+-//! 席が起こす係（判断の記録 ADR-59・要件 FR21）。起こしの門と結びの口の判じと係の札の字（`spec`）は行 ag-spec が置く。
+-//! 係の記録の使用量の測りと残りの注ぎ（`meter`）は行 ag-meter が置く。
+-//! 係の終える前の門の判じ（`stop`）は行 ag-stop が置く。
++//! 席が起こす係（判断の記録 ADR-59・要件 FR21）。起こしの門と結びの口の判じと係の札の字は `spec` が持つ。
++//! 係の記録の使用量の測りと残りの注ぎは `meter` が持つ。
++//! 係の終える前の門の判じは `stop` が持つ。
+ 
+ pub mod meter;
+ pub mod spec;
+diff --git a/crates/tsuzuri-core/src/agent/spec.rs b/crates/tsuzuri-core/src/agent/spec.rs
+index a08cff2c0907554321f23d22d452cdd4069fcce4..ae705d3db8eadee379d8f818c1a37e791c56ef26 100644
+--- a/crates/tsuzuri-core/src/agent/spec.rs
++++ b/crates/tsuzuri-core/src/agent/spec.rs
+@@ -1,10 +1,10 @@
+-//! 係の起こしの門と結びの口の判じ（行 ag-spec・判断の記録 ADR-59 決定 (1)(2)(4)・要件 FR21）。
++//! 係の起こしの門と結びの口の判じ（判断の記録 ADR-59 決定 (1)(2)(4)・要件 FR21）。
+ //! 起こしの門は席の Agent の呼び（PreToolUse の入力・係の id `agent_id` の無い呼び）を読み、型が tsuzuri の 3 本か・名が在るか・
+ //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
+ //! 頭の予算は下限（`BUDGET_MIN`・判断の記録 ADR-63 決定 (3)）より小さければ、直した頭の見本を付けて断る。
+ //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
+ //! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
+-//! 検証の群の起こしの門の判じ（`group`・判断の記録 ADR-61・要件 FR22）は行 ag-gjudge が置く。
++//! 検証の群の起こしの門の判じ（判断の記録 ADR-61・要件 FR22）は `group` が持つ。
+ 
+ pub mod group;
+ pub mod outs;
+diff --git a/crates/tsuzuri-core/src/agent/spec/group.rs b/crates/tsuzuri-core/src/agent/spec/group.rs
+index 82c268fa21764e2e39697ad27cedae35540660f8..315297f1f082a019e8079f6c91d7c9a742f3fb4f 100644
+--- a/crates/tsuzuri-core/src/agent/spec/group.rs
++++ b/crates/tsuzuri-core/src/agent/spec/group.rs
+@@ -1,4 +1,4 @@
+-//! 席が起こす検証の群（行 ag-gjudge・判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
++//! 席が起こす検証の群（判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
+ //! 群の係の起こしは、頼みの頭に `群: <群 id> <i>/<k>` の行（5 行目）を持つ席の Agent の呼びで、起草の置き場の群の id の dir の
+ //! 計画の file（`plan.json`）と、攻めの係が書く分からない（U）の主張の一覧の file（`unknowns.tsv`）を持つ。ここは値と file の字の読みを、
+ //! 子の `judge` は起こしの門の判じを置く。値は判断の記録 ADR-61 の決定 (2) の字で、規則の表の行にしない（値を替えるのは判断の記録・歯が値を数える）。
+diff --git a/crates/tsuzuri-core/src/agent/spec/group/judge.rs b/crates/tsuzuri-core/src/agent/spec/group/judge.rs
+index 3157ed0703b4a78acefbe2b7e0fe9f0c4332656e..2d50e5d8a6f983f182426dd4dd1fccb85718432a 100644
+--- a/crates/tsuzuri-core/src/agent/spec/group/judge.rs
++++ b/crates/tsuzuri-core/src/agent/spec/group/judge.rs
+@@ -1,4 +1,4 @@
+-//! 群の起こしの門の判じ（行 ag-gjudge・判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
++//! 群の起こしの門の判じ（判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
+ //! 順は、群の行と 2 つの file・型と下書きの種類と引き金と番と数と 1 体の割り・割りの主張の和・生きた群の係の数と頭の予算とモデルと群の合計・
+ //! 同じ対象のほかの群の 7 日。断りは歯が見る短い鍵と理由の字の中身を持つ。通す時は群の席の札を組む。
+ //! 同じ群の係どうしの対象の重なりを ADR-59 の重なりの判じから外すのは境界の口（席の札の群の id で外す・決定 (7) の (ア)）。
+diff --git a/crates/tsuzuri-core/src/agent/stop.rs b/crates/tsuzuri-core/src/agent/stop.rs
+index 9fda1d09cf70527df7bd70bb905b40134f22ed3d..6e2c987bace18faed5648142262b00c2d3b0b595 100644
+--- a/crates/tsuzuri-core/src/agent/stop.rs
++++ b/crates/tsuzuri-core/src/agent/stop.rs
+@@ -1,8 +1,8 @@
+-//! 係の終える前の門の判じ（行 ag-stop・判断の記録 ADR-59 決定 (4)・要件 FR21）。
++//! 係の終える前の門の判じ（判断の記録 ADR-59 決定 (4)・要件 FR21）。
+ //! 係の終わりの門の入力（SubagentStop の入力）の欄を読み、係の記録と出力の dir と最後の文から欠けを数える。
+ //! 欠けは 3 つで、この順に並べる: 係の記録に席（team-lead）への SendMessage の呼びが無い・札の出す物の file が出力の dir に無い・
+ //! 最後の文に出力の dir の path が無い。止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
+-//! 群の係の出す物の主張の表の欠け（`claim_lacks`）は行 ag-gstop が置く（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
++//! 群の係の出す物の主張の表の欠けは `claim_lacks` が持つ（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
+ //! 差の file を名指す係の床の記録と門の撃ち直しの判じ（`floor`）は判断の記録 ADR-63 決定 (4)。
+ 
+ pub mod floor;
+diff --git a/crates/tsuzuri-core/src/case.rs b/crates/tsuzuri-core/src/case.rs
+index a87543fb882a64b806bca21b415d0de6e58fb9a9..edb83aa08dafd5b98007d9421cbd47c25eaccf90 100644
+--- a/crates/tsuzuri-core/src/case.rs
++++ b/crates/tsuzuri-core/src/case.rs
+@@ -1,11 +1,11 @@
+-//! 器の局面の出力の読み（行 c-case-read・判断の記録 ADR-27 の決定 (10)）。
++//! 器の局面の出力の読み（判断の記録 ADR-27 の決定 (10)）。
+ //! 字は器の fleet/lifecycle.json（出力）と fleet/lifecycle.stale（古さの印）の 2 つ（欄の正本は器の case-lifecycle §5.2）。
+ //! 読めない時と古い時は器の読み手（器の fleet/lifecycle_read.rs の read を比べる入力の組を空にして呼んだ形）に合わせる:
+ //! 古さの印の file が在って読めない（JSON でない・版が 1 でない・印の列の形が違う・同じ種類の印が 2 つ在る）か、出力が無いか
+ //! 読めない（JSON でない・版が 1 でない・部品の列が無い）なら部品は「まだ分からない」。古さの印が 1 つでも在れば古い。
+ //! 出力の字が在るのに部品が「まだ分からない」になった周は電文の unreadable を真にする（面は「読めない」と出す）。
+-//! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま（行 c-case-unreadable）。
+-//! 欄が欠けるか型が違う部品は落とす（任意の欄 why は欠けても落とさない・行 c-held-stage）。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
++//! 出力の字が空（file が無いか読めない）の周は、古さの印が読めなくても偽のまま。
++//! 欄が欠けるか型が違う部品は落とす（任意の欄 why は欠けても落とさない）。部品の種類と局面と手番と理由の語と古さの印の種類は閉じた列で照らさず字のまま運ぶ
+ //! （器の読み手は知らない語の部品を落とすが、面は知らない語を「まだ分からない」に倒すので落とさない）。
+ 
+ use serde_json::Value;
+diff --git a/crates/tsuzuri-core/src/consult/finding.rs b/crates/tsuzuri-core/src/consult/finding.rs
+index b15980ff935e9fe579664119afff6d4338e83aba..0743218193759fd192d3a0373d7b041cb29f85a1 100644
+--- a/crates/tsuzuri-core/src/consult/finding.rs
++++ b/crates/tsuzuri-core/src/consult/finding.rs
+@@ -1,4 +1,4 @@
+-//! 所見の欄の検め（設計ノート surface-wave27a 行 cs-finding・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
++//! 所見の欄の検め（判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
+ //! 入力は窓が書いた草稿の字（JSON）。欄の欠け（鍵が無い・null・空白だけの字）は `DRAFT_FIELDS` の順の名の列で断り、
+ //! 知らない鍵を断り、候補は 2 つ以上で採るのは 1 つ、添え物の path は作業場からの相対（空・絶対・`~`・`..` の段・
+ //! 逆斜線と制御の字と行の区切りの字「・」「、」を断る）に限る。path が作業場の下に実在するかは所見の口が確かめる。
+diff --git a/crates/tsuzuri-core/src/consult/follow.rs b/crates/tsuzuri-core/src/consult/follow.rs
+index f288014d7fd1da9ff9f63917bf6d16f0025a297e..c48a52c687ffb1634b0f4034cd3ccd401fede6ff 100644
+--- a/crates/tsuzuri-core/src/consult/follow.rs
++++ b/crates/tsuzuri-core/src/consult/follow.rs
+@@ -1,4 +1,4 @@
+-//! 話す窓を群の口座の移動に付いて来させる判じ（設計ノート surface-wave29b 行 cs-follow・判断の記録 ADR-55 決定 (3)）。
++//! 話す窓を群の口座の移動に付いて来させる判じ（判断の記録 ADR-55 決定 (3)）。
+ //! 窓の process の印の口座と席の今の口座のずれ（`drifted`）、会話の印の最後の行が手すきか（`idle`）、tmux の pane の字の
+ //! 入力欄が空か（`input_clear`・器の席の入力欄の門と同じ読み）を判じる。
+ 
+diff --git a/crates/tsuzuri-core/src/consult/guard.rs b/crates/tsuzuri-core/src/consult/guard.rs
+index 98f8f19ee0e36ea848e0aad2a319f0c201e99950..f1fa069cefce3bae4336a2a49202edd56521f5c6 100644
+--- a/crates/tsuzuri-core/src/consult/guard.rs
++++ b/crates/tsuzuri-core/src/consult/guard.rs
+@@ -1,4 +1,4 @@
+-//! 相談の窓の守りの hook の判じ（設計ノート surface-wave27a 行 cs-answer・判断の記録 ADR-29 決定 (7)）。
++//! 相談の窓の守りの hook の判じ（判断の記録 ADR-29 決定 (7)）。
+ //! 入力は Claude Code の PreToolUse の hook の JSON。道具の名が起動の閉じた列（`TOOLS` の 8 つ）に無ければ断り、
+ //! Bash の命令が tz consult の席の口（`SEAT_VERBS`）を含むか、囲いの外で撃ち直す印（dangerouslyDisableSandbox）を
+ //! 持てば断る。所見の口 answer と束の口 bundle は通す。JSON の object でない入力と道具の名の無い入力も断る（断る側に倒す）。
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index ad5b1e00a24763f935e3b4035cc152336f07effc..9ce1a22ffa1455f1e11753d3551ded19c7201451 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -1,13 +1,13 @@
+-//! 起動の口の argv と設定と検め（設計ノート surface-wave27a 行 cs-argv・判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
+-//! 話す窓の撃ち直しは材料の会話の id を続きの旗 `--resume` で渡して最初の指示を置かず、検めは旗の数と値（材料と同じ uuid の形）を照らす（行 cs-trust）。
++//! 起動の口の argv と設定と検め（判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
++//! 話す窓の撃ち直しは材料の会話の id を続きの旗 `--resume` で渡して最初の指示を置かず、検めは旗の数と値（材料と同じ uuid の形）を照らす。
+ //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
+ //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
+-//! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
+-//! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・行 cs-inbound-refuse・判断の記録 ADR-57 決定 (1)(ケ)）。
++//! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（判断の記録 ADR-55）。
++//! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・判断の記録 ADR-57 決定 (1)(ケ)）。
+ //! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
+-//! 問う窓の旗（別名 `--rc` を含む）を断る（行 cs-remote・判断の記録 ADR-57 決定 (4)）。
++//! 問う窓の旗（別名 `--rc` を含む）を断る（判断の記録 ADR-57 決定 (4)）。
+ //! 設定には話す窓と問う窓に共通の状態の 1 行（statusLine の命令 `status::command`）を置き、検めは欠けと字の違いを断る
+-//! （行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! （判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+ //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
+ 
+ use serde_json::{Value, json};
+diff --git a/crates/tsuzuri-core/src/consult/lines.rs b/crates/tsuzuri-core/src/consult/lines.rs
+index a99eb190d88763ed51dcc7d7010a4f978ac08eec..7c336cc7e322d718c2895314a87745449d29b57a 100644
+--- a/crates/tsuzuri-core/src/consult/lines.rs
++++ b/crates/tsuzuri-core/src/consult/lines.rs
+@@ -1,4 +1,4 @@
+-//! 台帳の相談の行の字と置き場（設計ノート surface-wave27a 行 cs-lines・判断の記録 ADR-29 決定 (4)(8)・器の注意 (a)(b)(c)）。
++//! 台帳の相談の行の字と置き場（判断の記録 ADR-29 決定 (4)(8)・器の注意 (a)(b)(c)）。
+ //! 行は「相談の」で始まる 6 つの頭（頼み・開き・所見・受け・処分・閉じ）と「 = 」と主の id の後に、
+ //! 「<名> = <値>」の欄を「・」で区切って並べる。時刻は UTC の分の字で、前に user を付けない。中身（所見の欄）は書かない。
+ //! 自由な字（題・理由・model・念入りさ）は「・」を「／」に、制御の字を空白に替えて切る（題と model と念入りさ 40 字・理由 80 字）。
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index f162f350d0463fac3d8ad0cd30e61511a0a04e65..36cbb97b42497e89b38c1336a0f4a02df5795bb2 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -1,11 +1,10 @@
+ //! 相談の窓の中核の純な関数（判断の記録 ADR-29・要件 FR19・設計ノート surface-wave27a）。
+-//! 口座の信頼の印の字（`trust`）と撃ち直しで続ける会話の id の選び（`resume`）は行 cs-trust（ノート surface-wave29b）が置く。
+-//! 口座の移動に付いてくる判じ（`follow`）は行 cs-follow（ノート surface-wave29b）が置く。
+-//! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+-//! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+-//! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer、
+-//! 席の hook の相談の拾いの字（`pickup`）は行 cs-hooks（ノート surface-wave27b）、窓の状態の 1 行の字（`status`）は
+-//! 行 cs-status-text（ノート surface-wave29b）が置く。
++//! 口座の信頼の印の字（`trust`）と撃ち直しで続ける会話の id の選び（`resume`）。
++//! 口座の移動に付いてくる判じ（`follow`）。
++//! 所見の欄の検め（`finding`）、台帳の相談の行の字と置き場（`lines`）、
++//! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）、
++//! 起動の argv と設定と検め（`launch`）、窓の守りの hook の判じ（`guard`）、
++//! 席の hook の相談の拾いの字（`pickup`）、窓の状態の 1 行の字（`status`）を持つ。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
+ 
+ pub mod finding;
+diff --git a/crates/tsuzuri-core/src/consult/pickup.rs b/crates/tsuzuri-core/src/consult/pickup.rs
+index e3f780eb7f6d6017aeb752661253d01ed2f54f75..0aa221e68fa1dc0d07abd5791fade71777422be0 100644
+--- a/crates/tsuzuri-core/src/consult/pickup.rs
++++ b/crates/tsuzuri-core/src/consult/pickup.rs
+@@ -1,4 +1,4 @@
+-//! 席の hook の相談の拾いの字（設計ノート surface-wave27b 行 cs-hooks・判断の記録 ADR-29 決定 (8)）。
++//! 席の hook の相談の拾いの字（判断の記録 ADR-29 決定 (8)）。
+ //! 見張り（tz consult watch）が居ない間、席の hook（停止・入力の時・道具の周）は、board の未受けの口の答えの
+ //! 受けの無い所見（経路 hook）と頼みの固定の 1 行（`lines::notice`）を、裁定の答えの字と数を替えずにその後ろへ足す。
+ //! 受けの無い物が無いか読めない時、停止と入力の時の hook は見張りを置かせる 1 行（`missing`）だけを足す。
+diff --git a/crates/tsuzuri-core/src/consult/quota.rs b/crates/tsuzuri-core/src/consult/quota.rs
+index d537d6eecf3b6a304e1e625fdcba6ac403a3a028..35f34634c49b366c42f08897e30e8c6d4f545390 100644
+--- a/crates/tsuzuri-core/src/consult/quota.rs
++++ b/crates/tsuzuri-core/src/consult/quota.rs
+@@ -1,4 +1,4 @@
+-//! 席が自分で開く問う窓の数え（設計ノート surface-wave27a 行 cs-quota・規則の行 R-38・判断の記録 ADR-29 決定 (10)）。
++//! 席が自分で開く問う窓の数え（規則の行 R-38・判断の記録 ADR-29 決定 (10)）。
+ //! 今日の数は、台帳の相談の開きの行のうち、起こし手が席・形が問う・結果が開いた・撃ち直しの印が無い行の、
+ //! 時刻の頭 8 字（UTC の日）が今の分の字の頭 8 字と同じ物の数。今の数は、席が問う窓として開いた窓のうち、
+ //! process の印が生きている窓（呼ぶ側が渡す）の数。持ち主の言葉で開く窓（起こし手が持ち主のチャットか button）と
+diff --git a/crates/tsuzuri-core/src/consult/resume.rs b/crates/tsuzuri-core/src/consult/resume.rs
+index 8c4317645be6ef3ca3a78a7e9b9f9548be14c54e..002a3aab417227320596fce067909f95f9ccdd81 100644
+--- a/crates/tsuzuri-core/src/consult/resume.rs
++++ b/crates/tsuzuri-core/src/consult/resume.rs
+@@ -1,4 +1,4 @@
+-//! 話す窓の撃ち直しの会話の続き（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (1)(3)）。
++//! 話す窓の撃ち直しの会話の続き（判断の記録 ADR-55 決定 (1)(3)）。
+ //! 撃ち直しで続ける会話の id を、作業場の会話の印の最後の id と席が名指した id から決める（`pick`）。
+ 
+ use tsuzuri_contract::consult::Form;
+diff --git a/crates/tsuzuri-core/src/consult/stamp.rs b/crates/tsuzuri-core/src/consult/stamp.rs
+index 1217e8b4d7bbfae5d38d95ac85d96a6d0a87fd34..1360c40f45913ecb6e3996202b8a227cc44ac43a 100644
+--- a/crates/tsuzuri-core/src/consult/stamp.rs
++++ b/crates/tsuzuri-core/src/consult/stamp.rs
+@@ -1,4 +1,4 @@
+-//! 会話の印の読み（設計ノート surface-wave29b 行 cs-acct-mark・判断の記録 ADR-55 決定 (2)）。
++//! 会話の印の読み（判断の記録 ADR-55 決定 (2)）。
+ //! 窓の会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）の入力の JSON から、印の 1 行（事と会話の id と始まりの種類）を組み、
+ //! 作業場の `.consult/stamps.jsonl` の字から読める行の列と最後の会話の id を引く。会話の id は uuid の形の字だけを受ける。
+ 
+diff --git a/crates/tsuzuri-core/src/consult/status.rs b/crates/tsuzuri-core/src/consult/status.rs
+index 961d2528e35784556abb4c28cc33f29e95fb6306..66940741f2ce047760c6c69868ee11ac798cb367 100644
+--- a/crates/tsuzuri-core/src/consult/status.rs
++++ b/crates/tsuzuri-core/src/consult/status.rs
+@@ -1,4 +1,4 @@
+-//! 窓の状態の 1 行の字（設計ノート surface-wave29b 行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! 窓の状態の 1 行の字（判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+ //! 起動の口の設定の statusLine の命令の字と、Claude Code が命令の標準入力に渡す session の JSON からの文脈の割合
+ //! （鍵 `context_window.used_percentage`・無いか数でないか範囲の外なら出さない・ほかの鍵は読み飛ばす）と、窓の控え・所見の数・
+ //! 束の要約値から組む 1 行の字を持つ。材料は窓が書ける作業場の字なので、どの欄も制御の字を落として長さを切る。
+diff --git a/crates/tsuzuri-core/src/consult/trust.rs b/crates/tsuzuri-core/src/consult/trust.rs
+index 8e74b4bfbf9e057cfea14e1e3df8004f537d9141..f6eea48028217a1c1c8d2e418ef0ced5f8485ab9 100644
+--- a/crates/tsuzuri-core/src/consult/trust.rs
++++ b/crates/tsuzuri-core/src/consult/trust.rs
+@@ -1,4 +1,4 @@
+-//! 口座の信頼の印の字（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (3)）。
++//! 口座の信頼の印の字（判断の記録 ADR-55 決定 (3)）。
+ //! 起こす口座の置き場の設定 file（`TRUST_FILE`）の字に、作業場 1 つだけの信頼の印を置いた字を組む（`trusted`）。
+ //! 置く印は `projects.<作業場の絶対 path>.hasTrustDialogAccepted = true` の 1 つだけで、作業場の親と起草の置き場には置かない。
+ 
+diff --git a/crates/tsuzuri-core/src/delivery.rs b/crates/tsuzuri-core/src/delivery.rs
+index 76c9dd6a0714319ba23845a830be14686d600520..03e280140fd7abb7e5d0ebd9a08e3cb575bb4d6c 100644
+--- a/crates/tsuzuri-core/src/delivery.rs
++++ b/crates/tsuzuri-core/src/delivery.rs
+@@ -1,4 +1,4 @@
+-//! 配達済みの印と未配達の裁定（設計ノート surface-wave6 行 f-mark・要件 FR9・器の要件 FR79）。
++//! 配達済みの印と未配達の裁定（要件 FR9・器の要件 FR79）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）と停止の hook の入力の字で、
+ //! 関数は file も子 process も時計も触らない（印の分の字は呼ぶ側が渡す）。
+ //!
+diff --git a/crates/tsuzuri-core/src/gate.rs b/crates/tsuzuri-core/src/gate.rs
+index 27f9a36fe9baa21a1b7f22b18175178837475457..3dc9aa0a026454f2f55d2dc48b5bef97fba8ad92 100644
+--- a/crates/tsuzuri-core/src/gate.rs
++++ b/crates/tsuzuri-core/src/gate.rs
+@@ -1,14 +1,14 @@
+-//! 問いの起票の門（設計ノート surface-wavef 行 f-gate・要件 FR4・受入 AC6）。
++//! 問いの起票の門（要件 FR4・受入 AC6）。
+ //! 入力は Claude Code の PreToolUse の hook の入力の字と導出グラフで、関数は file も子 process も時計も触らない。
+ //!
+ //! 席は問いを bd か bdw の create で置く（label `intake:question`・名指した節点は metadata の touches）。
+ //! 門は問いの起票の下書き（`drafts`）ごとに、touches の各節点の 1 段の近傍のうち 4 種（条・規則行・判断の記録・要件）で
+ //! hub でない節点（`needs`）の全部に処分（touches か not-relevant）が在り、metadata の digest が
+ //! 今の束の要約値（`bundle_digest`）と同じときだけ通す（`judge`）。止める答えは PreToolUse の deny の JSON（`output`）。
+-//! 処分より先に方針を読ませる（設計ノート surface-wave13b 行 f-premises・要件 FR8）。metadata の premises は方針の id だけで、
++//! 処分より先に方針を読ませる（要件 FR8）。metadata の premises は方針の id だけで、
+ //! 範囲がその問いに及び、まだどの問いの premises にも無い方針（`due_policies`）の全部を premises に持つときだけ先へ進む。
+ //! 門は allow を出さない（通すことは止めないことで、ほかの許可の仕組みはそのまま効く）。
+-//! 起票の短い題の門（規則の行 R-39・判断の記録 ADR-30 決定 (6)・行 c-short-gate）: bd か bdw の create の全部（label を問わない）の
++//! 起票の短い題の門（規則の行 R-39・判断の記録 ADR-30 決定 (6)）: bd か bdw の create の全部（label を問わない）の
+ //! metadata の鍵 short が空でなく `SHORT_MAX` 字以下の字かを見る（`short_gate`）。止める答えは同じ形の deny（`short_output`）。
+ 
+ use std::collections::BTreeSet;
+diff --git a/crates/tsuzuri-core/src/graph/build.rs b/crates/tsuzuri-core/src/graph/build.rs
+index 7aa94690db117d2f80331cd6ccd83c710c8d704a..ba46f09bffd842355daac204cbb219ad8bec8427 100644
+--- a/crates/tsuzuri-core/src/graph/build.rs
++++ b/crates/tsuzuri-core/src/graph/build.rs
+@@ -1,9 +1,9 @@
+ //! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
+ //! 設計の索引の節点と辺は表の行を写す。種類の読めない節点の行と型の読めない辺の行は、その行だけを組まずに数える
+ //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
+-//! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く（行 c-g3-bindline）。
++//! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く。
+ //! 走行は event log の RunCreated から導く。
+-//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む（行 c-commit-node）。
++//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む。
+ //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
+ //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
+ //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
+@@ -11,7 +11,7 @@
+ //! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
+ //! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
+ //! 索引の表と notes の定型行は時刻の欄を持たず、tsuzuri は設計文書も git も読まないため。
+-//! ほかの project の台帳の一覧は節点にせず、`outside` が bead の id と族と notes の裁定の定型行の id だけを読む（行 c-g3-extern）。
++//! ほかの project の台帳の一覧は節点にせず、`outside` が bead の id と族と notes の裁定の定型行の id だけを読む。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+diff --git a/crates/tsuzuri-core/src/graph/check.rs b/crates/tsuzuri-core/src/graph/check.rs
+index be02e14117fbf85874da618f6a7ae7d2bbde8ee3..f07dbc7b29565c43f3e69322dfdb51fa5c76af9b 100644
+--- a/crates/tsuzuri-core/src/graph/check.rs
++++ b/crates/tsuzuri-core/src/graph/check.rs
+@@ -1,15 +1,15 @@
+ //! 不変条件の 12 本を 3 値（合格・違反・まだ分からない）で数える。
+-//! 数えるのは 11 本。g-3・g-7 は裁定の書き出しを結んだ表（`Graph::rulings`・行 c-g3g7）から数え、表が無ければ
++//! 数えるのは 11 本。g-3・g-7 は裁定の書き出しを結んだ表（`Graph::rulings`）から数え、表が無ければ
+ //! 「まだ分からない」。g-9 は detect の間（2 周の実測の前）は判定をつねに「まだ分からない」とし、
+-//! 本文で名指した id のうち欄にも辺にも無い対は床の値 `unfielded_mentions` が数えて名指す（行 c-g9）。
++//! 本文で名指した id のうち欄にも辺にも無い対は床の値 `unfielded_mentions` が数えて名指す。
+ //! 要る出所が読めなければ「まだ分からない」で、合格にしない。違反は名指す id を持つ。
+ //! g-3 は族が自分の台帳に無い行（外の台帳の行）を、その族を持つ読めたほかの project の台帳（`Graph::outside`）で確かめ、
+-//! 確かめられない行だけのためにまだ分からないとき `outside_heads` がその節点の数と族を名指す（行 c-g3-extern）。
++//! 確かめられない行だけのためにまだ分からないとき `outside_heads` がその節点の数と族を名指す。
+ //! g-7 は宙に浮いた裁定のうち id が folio の裁定 id の文法の外の裁定を数えず、それだけが在れば「まだ分からない」。
+ //! 要約の無い節点は不変条件でなく床の値で、`unsummarized` が数えて名指す（要件 FR15）。
+-//! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す（行 c-note-stale）。
+-//! 廃止した（状態 retired）ノートは名指さず、要約の状態の字が読めなければ「まだ分からない」（行 c-note-retired）。
+-//! 着地の commit の節点から landed の辺を受けない着地した契約は床の値で `unlanded_contracts` が名指す（行 c-commit-node・
++//! 全部の契約表の行が着地した設計ノートは床の値で `landed_notes` が名指す。
++//! 廃止した（状態 retired）ノートは名指さず、要約の状態の字が読めなければ「まだ分からない」。
++//! 着地の commit の節点から landed の辺を受けない着地した契約は床の値で `unlanded_contracts` が名指す（
+ //! 判断の記録 ADR-45 の門 H4）。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+diff --git a/crates/tsuzuri-core/src/graph/mod.rs b/crates/tsuzuri-core/src/graph/mod.rs
+index 39ee8d12f05422696490830df7652bc191354cae..d4925b82acc24e306edff9d7873bf89304a13e94 100644
+--- a/crates/tsuzuri-core/src/graph/mod.rs
++++ b/crates/tsuzuri-core/src/graph/mod.rs
+@@ -1,10 +1,10 @@
+-//! 導出グラフ（設計ノート surface-base 便 c・判断の記録 ADR-7 決定 (2)）。
++//! 導出グラフ（判断の記録 ADR-7 決定 (2)）。
+ //! 設計の索引・台帳の一覧・器の event log の 3 つの字から、1 つのグラフを毎回組み直す（`build`）。
+ //! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返す（`around`）。
+ //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
+-//! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
+-//! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる（行 c-g3-extern）。
+-//! 着地の commit は event log の RunDone から組み（行 c-commit-node）、着地の commit の無い着地した契約は床の値で
++//! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ。
++//! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる。
++//! 着地の commit は event log の RunDone から組み、着地の commit の無い着地した契約は床の値で
+ //! `check::unlanded_contracts` が名指す。
+ 
+ pub mod around;
+diff --git a/crates/tsuzuri-core/src/ledger/facts.rs b/crates/tsuzuri-core/src/ledger/facts.rs
+index bf70acdc2e0d128eae380c8c0932f32e983b1510..58f757ec57cf45a4a744e16c9a7f38298273fefd 100644
+--- a/crates/tsuzuri-core/src/ledger/facts.rs
++++ b/crates/tsuzuri-core/src/ledger/facts.rs
+@@ -1,7 +1,7 @@
+-//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
++//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
+ //! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
+-//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む・行 c-fact-trim）。
++//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む）。
+ 
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};
+diff --git a/crates/tsuzuri-core/src/ledger/mod.rs b/crates/tsuzuri-core/src/ledger/mod.rs
+index 708a6b8470b8697fc19feff4e4618f4bb69f2859..550911ed2a5360af9fd7488de30ab8f346fb316b 100644
+--- a/crates/tsuzuri-core/src/ledger/mod.rs
++++ b/crates/tsuzuri-core/src/ledger/mod.rs
+@@ -1,4 +1,4 @@
+-//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）（設計ノート surface-base 便 d）と bead の事実の一覧（`facts`・行 c-bead-facts）。
++//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）と bead の事実の一覧（`facts`）。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）と今の時刻（引数）で、
+ //! どの関数も file も子 process も時計も触らない。字を読んで口に出す側は境界の crate が持つ。
+ //! bead の種類は導出グラフと同じ順（epic・memo・問い・契約）で決め、指標が数える task は契約の bead。
+diff --git a/crates/tsuzuri-core/src/ledger/unreflected.rs b/crates/tsuzuri-core/src/ledger/unreflected.rs
+index 41fdb2df4b6a020e9dd7d18d00b208127757f992..95910f8c0a495bf893b475f375ae1d6cad249a28 100644
+--- a/crates/tsuzuri-core/src/ledger/unreflected.rs
++++ b/crates/tsuzuri-core/src/ledger/unreflected.rs
+@@ -1,4 +1,4 @@
+-//! 未反映の一覧（memo・裁定・発話の 3 種・種類ごとに「読めた一覧」か「まだ分からない」・行 c-unref-lc）。
++//! 未反映の一覧（memo・裁定・発話の 3 種・種類ごとに「読めた一覧」か「まだ分からない」）。
+ //! どれが席の手番かは器（scribe2）の局面の出力が決め、tsuzuri は判じない（要件 FR13・要望は種類にしない）。
+ //! 一覧は局面の出力の部品から読む（種類ごとの部品の種類と局面の語は `PHASES` の 1 か所の表）。出力が無いか
+ //! 読めないか、古さの印の file が在って読めないか、出力の unmeasured の欄が無いか形が違えば 3 種とも
+diff --git a/crates/tsuzuri-core/src/lib.rs b/crates/tsuzuri-core/src/lib.rs
+index 7628620e57dc7f4397dff301f2b154e0a94211b2..b03fb3e5dfeca660aed8f9ca848631b07fdbd824 100644
+--- a/crates/tsuzuri-core/src/lib.rs
++++ b/crates/tsuzuri-core/src/lib.rs
+@@ -1,13 +1,13 @@
+ //! 中核: 導出グラフと不変条件・台帳の指標と次の一手の純粋な関数。
+-//! 導出グラフと不変条件と近傍は便 c が置く（`graph`）。台帳の指標と未反映の一覧（`ledger`）・
+-//! pipeline の板（`pipeline`）・次の一手（`next_step`）は便 d が置く。問いの一覧（`question`）は便 e-ask が置く。
+-//! 席の card（`seat`）と、席の card から判じる次の一手の 2 種は便 e-seat が置く。
+-//! account board の電文を組む関数（`account`）は便 e-acct-host と e-acct-proj が置く。
+-//! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）は行 f-mark が置く。
+-//! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）は行 f-gate が置く。
+-//! 器の局面の出力の読み（`case`）は行 c-case-read が置く。
+-//! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）は、ノート surface-wave27a の行 cs-types から cs-argv が置く。
+-//! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）は行 ag-spec が置く。
++//! 導出グラフと不変条件と近傍（`graph`）。台帳の指標と未反映の一覧（`ledger`）・
++//! pipeline の板（`pipeline`）・次の一手（`next_step`）。問いの一覧（`question`）。
++//! 席の card（`seat`）と、席の card から判じる次の一手の 2 種。
++//! account board の電文を組む関数（`account`）。
++//! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）。
++//! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）。
++//! 器の局面の出力の読み（`case`）。
++//! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）。
++//! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
+ 
+ pub mod account;
+diff --git a/crates/tsuzuri-core/src/next_step.rs b/crates/tsuzuri-core/src/next_step.rs
+index 1bd6510a1befd5693b3c5f84fdbbc1d20084c557..c8664a6b38d9128a570bb69c96b028ede1f3f942 100644
+--- a/crates/tsuzuri-core/src/next_step.rs
++++ b/crates/tsuzuri-core/src/next_step.rs
+@@ -1,11 +1,11 @@
+-//! 次の一手（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (6)・規則の行 R-24）。
++//! 次の一手（判断の記録 ADR-7 決定 (6)・規則の行 R-24）。
+ //! 閉じた 7 種を宣言の順（優先の順）に判じ、7 種それぞれの結果（当たった・当たらない・判じなかった）と
+ //! 件数と対象の id を返し、最初に当たった 1 つを大きく出す。入力は台帳の一覧の字と event log の字と今の時刻。
+ //! この便の入力で判じるのは 3 種（止まっている走行・質問・なし）。限度と移動・応答なし・発効待ちは
+ //! 材料（席と口座の状態・発効待ちの記録）が入力に無いので判じない。
+-//! 便 e-seat は席の card も受ける関数（`next_step_seat`）を足す。限度と移動と応答なしを席の card から判じ、
++//! 席の card も受ける関数（`next_step_seat`）は、限度と移動と応答なしを席の card から判じ、
+ //! なしと大きく出す 1 つは同じ決め方で決め直す。席の card を受けない `next_step` の値は変えない。
+-//! 行 c-next-batch は束の承認を台帳の字から判じる。束の受付と束の block と同じ一覧（`open_questions`）の
++//! 束の承認は台帳の字から判じる。束の受付と束の block と同じ一覧（`open_questions`）の
+ //! A-1 の印の無い問いが `BATCH_MIN` 本以上なら当たる（要件 FR7: A-1 の問いは束に入れない）。
+ 
+ use serde_json::Value;
+diff --git a/crates/tsuzuri-core/src/pipeline.rs b/crates/tsuzuri-core/src/pipeline.rs
+index 7c5866f10bcb38334f8d6caa2d7eaf6b2b302476..40999ed028cd6bc7a8947cf7314ff7eac40ba8d3 100644
+--- a/crates/tsuzuri-core/src/pipeline.rs
++++ b/crates/tsuzuri-core/src/pipeline.rs
+@@ -1,21 +1,21 @@
+-//! pipeline の板（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (5)）。
++//! pipeline の板（判断の記録 ADR-7 決定 (5)）。
+ //! 入力は台帳の一覧の字と器の event log の字と今の時刻で、file も子 process も時計も触らない。
+ //! 札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める
+ //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
+ //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
+ //! 走行を 1 つも持たない open の契約は、acceptance に器の読める設計 pointer の行を持つ task の bead だけを Blocked か Queued の札にする
+-//! （読みは器の列の受付と同じ `dispatchable`・pointer の無い task は器が流さないので札にしない・行 c-pipe-queue）。
+-//! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする（行 c-pipe-unmapped）。
++//! （読みは器の列の受付と同じ `dispatchable`・pointer の無い task は器が流さないので札にしない）。
++//! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする。
+ //! detail が `RETIRED` の RunStage（器が worktree を畳んだ記帳）は段を決めない。
+ //! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
+-//! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
+-//! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
+-//! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
+-//! 走行ごとの gate と審査の内訳は `with_verdicts` が便の dir の 2 つの file の字から置く（行 c-run-verdict）。
++//! （閉じた（着地せず））。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
++//! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする。
++//! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む。
++//! 走行ごとの gate と審査の内訳は `with_verdicts` が便の dir の 2 つの file の字から置く。
+ //! 板は札のほかに形の崩れた open の bead の一覧を持ち、器の doctor の台帳の形の行を `form_ids` で写して題を台帳から引く
+-//! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)・行 c-pipe-misfit）。
++//! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)）。
+ //! doctor の字を受けない `board` の一覧は Unknown。
+-//! 着地の後の CI の読み（行 c-pipe-ci）: `stage_of` の段が Landed の札だけ、走行の event の行を判定の関数 `ci_reading` に渡す
++//! 着地の後の CI の読み: `stage_of` の段が Landed の札だけ、走行の event の行を判定の関数 `ci_reading` に渡す
+ //! （器の終端の RunDone の detail の語を `ci_after` で順に重ねる・判定は `ci_reading` の 1 つに閉じる）。
+ //! 段と理由の決め（閉じた bead の札を含む）の後に `with_ci` で重ねる: 読みが無いか、台帳で閉じた bead の読みが Waiting なら
+ //! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
+@@ -23,16 +23,16 @@
+ //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
+ //! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
+ //! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
+-//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
++//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字）。
+ //! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
+ //! （`queued_cards`）。
+-//! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`・行 c-ledger-lc）:
++//! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`）:
+ //! 契約の待ち（`QUEUED_PHASE` で理由が `SETTLED` でない・`REFUSED_PHASE`）は部品の理由と since、便の局面は `RUN_PHASES` の段で、
+ //! 理由と since は event log の読みが段を持てばその字・持たなければ便の部品の字。表に無い局面の語は「まだ分からない」
+ //! （札を作らず unmapped に数える・走行の無い札は台帳の blocks の割り）。契約の部品が無いか `CLOSED_PHASE` か便の部品が
+ //! 無ければ event log の段のまま。台帳で閉じた bead の札は今までどおり。CI の読みは段が Landed で event log も Landed の時だけ。
+ //! 段 Held（留め置き・列は Blocked）は契約の部品の局面が `QUEUED_PHASE` で理由が `HOLD`（席の止め）か `REFUSED_PHASE`（受付の断り）の札
+-//! （判断の記録 ADR-42 決定 (1)(2)・行 c-held-stage）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
++//! （判断の記録 ADR-42 決定 (1)(2)）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+diff --git a/crates/tsuzuri-core/src/question.rs b/crates/tsuzuri-core/src/question.rs
+index 61011fbc801a89ab0d21edc4d0c4a93ad1efbf4a..435d376acb88525013e5f242be60dafdc2348c68 100644
+--- a/crates/tsuzuri-core/src/question.rs
++++ b/crates/tsuzuri-core/src/question.rs
+@@ -1,4 +1,4 @@
+-//! 問いの一覧（設計ノート surface-base 便 e-ask）。
++//! 問いの一覧。
+ //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）で、関数は file も子 process も触らない。
+ //! open の問い（label `intake:question` を持ち、状態が closed でも tombstone でもない bead）を、
+ //! 作られた時刻の古い順（同じなら id の順）に card にする。字が読めなければ「まだ分からない」。
+@@ -6,7 +6,7 @@
+ //! 問いの本文の形: 席は問いを置くとき、本文の行頭に定型の字を書く（1 つの定型は 1 行・同じ定型が 2 行在れば
+ //! 最初の行を取る・定型の無い欄は None）。A-1 の印は label のどれかが「A-1」で始まること。
+ //! 名指した節点は bead の metadata の touches の欄（字 1 つか字の配列・metadata は object か、object を JSON にした字）。
+-//! 止めている task は、台帳の bead のうち種類 blocks の依存の先がその問いの bead（状態で選ばない・便 c-q-blocking）。
++//! 止めている task は、台帳の bead のうち種類 blocks の依存の先がその問いの bead（状態で選ばない）。
+ 
+ use serde_json::Value;
+ use tsuzuri_contract::board::Reading;
+diff --git a/crates/tsuzuri-core/src/seat.rs b/crates/tsuzuri-core/src/seat.rs
+index e302f8f21f57fd0ae91c708dfecad4756f0cffce..c32e50c8809ef9ae0b8addab663569fbfdfc4522 100644
+--- a/crates/tsuzuri-core/src/seat.rs
++++ b/crates/tsuzuri-core/src/seat.rs
+@@ -1,4 +1,4 @@
+-//! 席の card（設計ノート surface-base 便 e-seat・規則の行 R-22）。
++//! 席の card（規則の行 R-22）。
+ //! 入力は席の名・anchor の path・器の 3 つの出力（合図の健康・doctor・残量）と 3 つの file の字
+ //! （状態の記録・合図の最後の判定・群の宣言）・群の記録の字の列・今の時刻。どの関数も file も子 process も
+ //! 時計も触らない。状態の判定は器の値を写すだけで、閾値を持たない。読めない字はその字から組む欄だけを
+@@ -8,7 +8,7 @@
+ //! 器の移動の先と猶予の残り秒（同じ行の欄 `move=` と `grace_left=`）と、群の移り先の無い断りと逼迫
+ //! （doctor の同じ名の群の行の欄 `refused=` と `pressure=`）も字を写すだけで、群の記録の時刻から残りを計算しない
+ //! （残り秒は今を足した終わる時刻にして持つ）。card の時点 at は今ではなく材料の時刻で、読み直しの間に
+-//! 材料が変わらなければ同じ字になる（行 c-abs-seat）。
++//! 材料が変わらなければ同じ字になる。
+ 
+ use serde::Deserialize;
+ use tsuzuri_contract::EpochSecs;
+diff --git a/xtask/tests/mdid.rs b/xtask/tests/mdid.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea0be4e7246c7a33cd093a1b22a6e2ec95919210
+--- /dev/null
++++ b/xtask/tests/mdid.rs
+@@ -0,0 +1,302 @@
++//! 根の crate の src の module の頭の doc に行の id を書かない決まり（判断の記録 ADR-63 の決定 (2) の (b)）の lint の歯（接頭辞 mdid_）:
++//! crates/ の直下の crate ごとに、src の下の .rs の内側の doc の行（字 //! で始まる行・前の空白は除く）のうち、
++//! 行の id の字を持つ行を数え、crate ごとの上限の定数を越えたら落ちる。行の id の正本は契約と commit が持つ。
++//! 行の id の字は、正規表現で書くと次の 2 つのどちらか（id の後と bead の id の前の字の照らしは、英数字・_・.・-・/ の続きの中の字を拾わないため）。
++//! 行か便の字の後に空白 0〜1 つで `(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)+|[a-z])(?![A-Za-z0-9_.-])`、
++//! または台帳の bead の id `(?<![A-Za-z0-9_./-])[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)+`。
++//! 外の依存を使わず、repo の根（xtask の manifest の dir の 1 つ上）からの相対の path で字を読む。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::path::{Path, PathBuf};
++
++/// 境界の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
++const CAP_BOUNDARY: usize = 232;
++
++/// 契約の crate の上限。
++const CAP_CONTRACT: usize = 0;
++
++/// 中核の crate の上限。
++const CAP_CORE: usize = 0;
++
++/// 面の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
++const CAP_SURFACE: usize = 199;
++
++/// crates/ の直下の src を持つ dir の名と上限（名の順・crate を足す行はこの表も足す）。
++const CAPS: [(&str, usize); 4] = [
++    ("tsuzuri-boundary", CAP_BOUNDARY),
++    ("tsuzuri-contract", CAP_CONTRACT),
++    ("tsuzuri-core", CAP_CORE),
++    ("tsuzuri-surface", CAP_SURFACE),
++];
++
++fn repo_root() -> PathBuf {
++    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
++    manifest
++        .parent()
++        .map_or_else(|| manifest.join(".."), Path::to_path_buf)
++}
++
++/// 行の id の中の字（英小文字と数字）。
++fn id_char(c: char) -> bool {
++    c.is_ascii_lowercase() || c.is_ascii_digit()
++}
++
++/// id の後に続けば id でなくなる字（英数字・_・.・-）。
++fn word_char(c: char) -> bool {
++    c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
++}
++
++/// 字の列 `run`（英数字・_・.・- の続きの全部）が、1 字の英小文字か、- で繋いだ 2 つ以上の部分
++/// （どの部分も英小文字と数字の 1 字以上・最初の部分は英小文字で始まる）か。
++fn row_id_shape(run: &[char]) -> bool {
++    let text: String = run.iter().collect();
++    let parts: Vec<&str> = text.split('-').collect();
++    let lower_head = run.first().is_some_and(char::is_ascii_lowercase);
++    let single = run.len() == 1 && lower_head;
++    let joined = parts.len() >= 2
++        && lower_head
++        && parts
++            .iter()
++            .all(|p| !p.is_empty() && p.chars().all(id_char));
++    single || joined
++}
++
++/// 位置 i の字が行か便で、その後（空白 0〜1 つ）に行の id の形の字の続きが在るか。
++fn row_at(chars: &[char], i: usize) -> bool {
++    if !matches!(chars.get(i), Some('行' | '便')) {
++        return false;
++    }
++    let start = if chars.get(i + 1) == Some(&' ') {
++        i + 2
++    } else {
++        i + 1
++    };
++    let rest = chars.get(start..).unwrap_or_default();
++    let len = rest.iter().take_while(|c| word_char(**c)).count();
++    row_id_shape(rest.get(..len).unwrap_or_default())
++}
++
++/// 位置 i から、i から先の英小文字と数字の続きの長さ。
++fn id_run(chars: &[char], i: usize) -> usize {
++    chars
++        .get(i..)
++        .unwrap_or_default()
++        .iter()
++        .take_while(|c| id_char(**c))
++        .count()
++}
++
++/// 位置 i から台帳の bead の id（英小文字で始まる字と数字・-・字と数字・. と数字の 1 つ以上）が始まるか。
++fn bead_at(chars: &[char], i: usize) -> bool {
++    let before_ok = i == 0
++        || chars
++            .get(i - 1)
++            .is_some_and(|c| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/' | '-')));
++    if !before_ok || !chars.get(i).is_some_and(char::is_ascii_lowercase) {
++        return false;
++    }
++    let hyphen = i + id_run(chars, i);
++    if chars.get(hyphen) != Some(&'-') {
++        return false;
++    }
++    let tail = id_run(chars, hyphen + 1);
++    let dot = hyphen + 1 + tail;
++    tail >= 1
++        && chars.get(dot) == Some(&'.')
++        && chars.get(dot + 1).is_some_and(char::is_ascii_digit)
++}
++
++/// 1 行が行の id の字を持つか。
++fn has_id(line: &str) -> bool {
++    let chars: Vec<char> = line.chars().collect();
++    (0..chars.len()).any(|i| row_at(&chars, i) || bead_at(&chars, i))
++}
++
++/// 字の中の内側の doc の行のうち、行の id の字を持つ行の番号（1 から）。
++fn id_lines(text: &str) -> Vec<usize> {
++    text.lines()
++        .enumerate()
++        .filter(|(_, l)| l.trim_start().starts_with("//!") && has_id(l))
++        .map(|(i, _)| i + 1)
++        .collect()
++}
++
++/// dir の下の字 .rs で終わる file（path の順・下の dir も）。
++fn rs_files(dir: &Path) -> Vec<PathBuf> {
++    let mut out = Vec::new();
++    let entries =
++        std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{} を読む: {e}", dir.display()));
++    for entry in entries {
++        let path = entry.expect("dir の項目").path();
++        if path.is_dir() {
++            out.extend(rs_files(&path));
++        } else if path.extension().is_some_and(|e| e == "rs") {
++            out.push(path);
++        }
++    }
++    out.sort();
++    out
++}
++
++/// 根の下の crates/ の直下の src を持つ dir ごとに、行の id の字を持つ行（根からの path と行の番号の字）。
++fn count_tree(root: &Path) -> BTreeMap<String, Vec<String>> {
++    let crates = root.join("crates");
++    let entries =
++        std::fs::read_dir(&crates).unwrap_or_else(|e| panic!("{} を読む: {e}", crates.display()));
++    let mut out = BTreeMap::new();
++    for entry in entries {
++        let dir = entry.expect("dir の項目").path();
++        let src = dir.join("src");
++        if !src.is_dir() {
++            continue;
++        }
++        let mut hits = Vec::new();
++        for path in rs_files(&src) {
++            let text = std::fs::read_to_string(&path)
++                .unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()));
++            let rel = path
++                .strip_prefix(root)
++                .unwrap_or(&path)
++                .display()
++                .to_string();
++            hits.extend(id_lines(&text).into_iter().map(|n| format!("{rel}:{n}")));
++        }
++        let name = dir
++            .file_name()
++            .map(|n| n.to_string_lossy().into_owned())
++            .unwrap_or_default();
++        out.insert(name, hits);
++    }
++    out
++}
++
++/// toy の木（名に pid と字 tag）に、根からの相対の path と字の組を置く。
++fn toy(tag: &str, files: &[(&str, &str)]) -> PathBuf {
++    let root = std::env::temp_dir().join(format!("tsuzuri-mdid-{tag}-{}", std::process::id()));
++    let _ = std::fs::remove_dir_all(&root);
++    for (rel, body) in files {
++        let path = root.join(rel);
++        std::fs::create_dir_all(path.parent().expect("親の dir")).expect(rel);
++        std::fs::write(&path, body).expect(rel);
++    }
++    root
++}
++
++#[test]
++fn mdid_root_src_heads_stay_under_caps() {
++    let found = count_tree(&repo_root());
++    let names: Vec<&str> = found.keys().map(String::as_str).collect();
++    let table: Vec<&str> = CAPS.iter().map(|(n, _)| *n).collect();
++    assert_eq!(
++        names, table,
++        "crates/ の直下の src を持つ dir と表 CAPS の名が違う"
++    );
++    let counts: Vec<String> = CAPS
++        .iter()
++        .map(|(name, cap)| format!("{name} {} 行（上限 {cap}）", found[*name].len()))
++        .collect();
++    let over: Vec<&String> = CAPS
++        .iter()
++        .filter(|(name, cap)| found[*name].len() > *cap)
++        .flat_map(|(name, _)| found[*name].iter().take(20))
++        .collect();
++    assert!(
++        CAPS.iter().all(|(name, cap)| found[*name].len() <= *cap),
++        "src の内側の doc に行の id の字の行が上限を越えた: {counts:?} {over:?}"
++    );
++}
++
++#[test]
++fn mdid_id_forms_count_and_one_clause_off_does_not() {
++    // 正しい見本（数える）と、測る句を 1 つだけ外した見本（数えない）の対。
++    let pairs = [
++        (
++            "//! 札を出す（行 g-pipe-cards）。",
++            "//! 札を出す（g-pipe-cards）。",
++        ),
++        (
++            "//! 札を出す（行g-pipe-cards）。",
++            "//! 札を出す（行  g-pipe-cards）。",
++        ),
++        (
++            "//! 板の 3 段は便 c が置く。",
++            "//! 板の 3 段は便 cd が置く。",
++        ),
++        (
++            "//! 板の 3 段は便 c が置く。",
++            "//! 板の 3 段は便 C が置く。",
++        ),
++        (
++            "//! 札を出す（行 g-pipe-cards）。",
++            "//! 札を出す（行 g-pipe-cards.rs）。",
++        ),
++        (
++            "//! 札を出す（行 g-pipe-cards）。",
++            "//! 札を出す（行 G-pipe-cards）。",
++        ),
++        (
++            "//! 札を出す（行 g-pipe-cards）。",
++            "//! 札を出す（行 g--cards）。",
++        ),
++        ("//! 裁定 t3-hub.52.29 の案。", "//! 裁定 t3-hub の案。"),
++        (
++            "//! 裁定 t3-hub.52.29 の案。",
++            "//! 裁定 x/t3-hub.52.29 の案。",
++        ),
++        ("//! 裁定 s2-07l.738 の案。", "//! 裁定 s2-07l.x738 の案。"),
++    ];
++    for (yes, no) in pairs {
++        assert_eq!(id_lines(yes), vec![1], "数えない: {yes}");
++        assert_eq!(id_lines(no), Vec::<usize>::new(), "数える: {no}");
++    }
++}
++
++#[test]
++fn mdid_only_inner_doc_lines_count() {
++    let id = "行 g-pipe-cards";
++    let text = format!(
++        "//! 頭の 1 行。\n//! 札（{id}）。\n\n/// 札（{id}）。\n// 札（{id}）。\nfn f() {{}}\n\nmod m {{\n    //! 内の module（{id}）。\n}}\nconst S: &str = \"{id}\";\n"
++    );
++    assert_eq!(id_lines(&text), vec![2, 9]);
++    let moved = text.replacen("//! 札", "/// 札", 1);
++    assert_eq!(id_lines(&moved), vec![9], "頭の行を /// にしても数えた");
++    let inner = text.replacen("    //! 内", "    // 内", 1);
++    assert_eq!(
++        id_lines(&inner),
++        vec![2],
++        "内の module の行を // にしても数えた"
++    );
++}
++
++#[test]
++fn mdid_only_root_crate_src_files_count() {
++    let line = "//! 札（行 g-pipe-cards）。\n";
++    let places = [
++        "crates/a/src/lib.rs",
++        "crates/a/src/x/deep.rs",
++        "crates/a/tests/t.rs",
++        "crates/a/build.rs",
++        "crates/b/src/x.txt",
++        "folio2/crates/f/src/lib.rs",
++        "scribe2/crates/s/src/lib.rs",
++        "xtask/src/main.rs",
++    ];
++    let files: Vec<(&str, &str)> = places.iter().map(|p| (*p, line)).collect();
++    let root = toy("places", &files);
++    let found = count_tree(&root);
++    let _ = std::fs::remove_dir_all(&root);
++    let want: BTreeMap<String, Vec<String>> = [
++        (
++            "a".to_string(),
++            vec![
++                "crates/a/src/lib.rs:1".to_string(),
++                "crates/a/src/x/deep.rs:1".to_string(),
++            ],
++        ),
++        ("b".to_string(), Vec::new()),
++    ]
++    .into_iter()
++    .collect();
++    assert_eq!(found, want);
++}
