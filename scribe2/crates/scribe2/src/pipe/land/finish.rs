@@ -14,6 +14,7 @@
 
 // flip-check: moved s2-07l.498
 
+use super::super::commute::ledger::{self, Mark};
 use super::super::contract::Contract;
 use super::super::declaration::Effective;
 use super::super::dispatch::spawn_self;
@@ -419,6 +420,9 @@ pub(super) fn finish(entry: &Land<'_>, worktree: &Path, landing: &Landing, ancho
     if let Err(err) = emitted {
         return broken(err.to_string());
     }
+    // 差の当たりで通した組の便の着地を、着地の差と差の file の変えた行の数を添えて記す（判断の記録 ADR-60 の決定 (4)）。
+    let mark = Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy };
+    ledger::landed(&mark, entry.repo, new, entry.contract.patch.as_deref());
     // 着地後の検出を切り離して起こす（設計 gate-cost.md §44 形 (11)・待たない）。起こせなかった周も rc と着地は変えない。
     err.extend(spawn_detection(entry, new));
     // 後始末の失敗は land を取り消さない（**rc 0 のまま stderr 1 行**）。anchor の warning も同じ列。

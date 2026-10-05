@@ -51,6 +51,7 @@
 //! 本当に空の便として従来どおり `rebase-empty`。
 
 use crate::polarity::{OnFailure, Polarity, Timing};
+use super::commute::ledger::{self, Followed, Mark};
 use super::contract::Contract;
 use super::follow::{self, Conflict};
 use super::gate::{gate, next_number, skip_record, Gate, Limits, Skipped, Verdict};
@@ -823,9 +824,18 @@ fn follow_main(entry: &Land<'_>, worktree: &Path, base: &str, main: &str) -> Fol
     });
     lines.extend(regated.out);
     if regated.rc != RC_OK {
+        regate_failed(entry);
         return Follow::Stopped(Outcome { out: lines, err: regated.err, rc: regated.rc });
     }
     Follow::Ready(lines)
+}
+
+/// 追随の再 gate が FAIL の周、差の当たりで通した組の便に不合格を記す（判断の記録 ADR-60 の決定 (4)・FAIL でない止まりは記さない）。
+fn regate_failed(entry: &Land<'_>) {
+    if verdict_of(entry.state_dir, entry.run) == Some(Verdict::Fail) {
+        let mark = Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy };
+        ledger::note(&mark, Followed::RegateFail, "");
+    }
 }
 
 /// 追随の再 gate を丸ごと省いて前周の PASS を引き継ぐか（設計 §33 (i)・gate-cost.md §44 形 (10)）。

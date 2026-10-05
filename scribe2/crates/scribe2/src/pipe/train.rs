@@ -15,6 +15,7 @@
 //! stdout の 1 行に `train=<積んだ本数>`（解いた周は `train=<N> dissolved why=<段>`）。上限 1 と行の不在は現行の経路
 //! そのもの（[`Train::Solo`]）。
 
+use super::commute::ledger::{self, Followed, Mark};
 use super::contract::Contract;
 use super::declaration::Effective;
 use super::gate::{is_unreadable, run_checks, step_record, Check, Checks, Step};
@@ -132,6 +133,9 @@ pub(super) fn train(entry: &Land<'_>, worktree: &Path, order: Order) -> Train {
     }
     let count = stacked.len();
     if let Err(why) = check {
+        if matches!(why, Why::Verify) {
+            red(entry, &riders, &stacked);
+        }
         return dissolved(entry, count, why);
     }
     let mut cars = Vec::new();
@@ -294,6 +298,16 @@ fn unstacked(candidate: &Path, previous: Option<&str>) -> bool {
 fn fold(repo: &Path, candidate: &Path) {
     let path = candidate.display().to_string();
     let _ = git_ok(repo, &["worktree", "remove", "--force", &path]);
+}
+
+/// 候補の木の検査が赤の周、積んだ便のうち差の当たりで通した組の便に赤を記す（判断の記録 ADR-60 の決定 (4)・尾は `train=<積んだ
+/// 本数>`・どの便が赤かは帰属しない）。
+fn red(entry: &Land<'_>, riders: &[Rider], stacked: &[Stacked]) {
+    let tail = format!("train={}", stacked.len());
+    for rider in stacked.iter().filter_map(|found| riders.get(found.index)) {
+        let mark = Mark { state_dir: entry.state_dir, run: &rider.run, bead: &rider.bead, policy: entry.policy };
+        ledger::note(&mark, Followed::TrainRed, &tail);
+    }
 }
 
 /// 列を解いた周の 1 行。

@@ -30,6 +30,7 @@
 //! 新しい base を記帳できないと、次の gate が**古い base の 2 点 diff**を測り、先着便の file を
 //! write-set の外と誤る。
 
+use super::commute::ledger::{self, Followed, Mark};
 use super::contract::{Contract, CLASS_ROW};
 use super::declaration::{is_under, Ceiling, Effective, CEILING_ROW, DENIED_ROW};
 use super::gate::RC_INCONCLUSIVE;
@@ -219,6 +220,7 @@ pub(crate) fn on_conflict(entry: &Conflict<'_>) -> Outcome {
     if let Err(reason) = recorded {
         return broken(reason);
     }
+    ledger::note(&mark_of(&entry.turn), Followed::Conflict, "");
     match FollowCheck::judge(retried(entry.turn.state_dir, entry.turn.run), entry.limit) {
         FollowCheck::Unreadable => terminate(
             entry,
@@ -257,6 +259,7 @@ pub(crate) fn on_stale(entry: &Conflict<'_>) -> Result<(), Outcome> {
     if let Err(reason) = recorded {
         return Err(broken(reason));
     }
+    ledger::note(&mark_of(&entry.turn), Followed::Stale, "");
     match FollowCheck::judge(retried(entry.turn.state_dir, entry.turn.run), entry.limit) {
         FollowCheck::Unreadable => Err(terminate(
             entry,
@@ -982,6 +985,11 @@ fn terminate(entry: &Conflict<'_>, detail: &str, rc: u8, reason: String) -> Outc
         Err(broke) => broken(broke),
         Ok(()) => Outcome::failed_line(rc, format!("pipe: {reason}・main は動かさない")),
     }
+}
+
+/// 差の当たりで通した組の後の記帳の宛先（判断の記録 ADR-60 の決定 (4)・組に名の無い便は [`ledger::note`] が書かない）。
+fn mark_of<'a>(entry: &Turn<'a>) -> Mark<'a> {
+    Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy }
 }
 
 /// 段を 1 件記帳する。

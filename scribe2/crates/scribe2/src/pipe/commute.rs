@@ -3,7 +3,8 @@
 //! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
 //! 関数 [`weigh`]（規則の行が真の周だけ [`judge`] を撃つ）と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の
 //! 読み [`on`] を持つ。判じは交わりの関数の中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を
-//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。
+//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。その組の便の後の
+//! 着地の出来事（積み直しの衝突・stale・再 gate の不合格・候補の木の赤・着地）の記帳は子の module [`ledger`] に置く。
 //!
 //! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
 //! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
@@ -26,6 +27,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+pub(in crate::pipe) mod ledger;
 mod names;
 
 /// 入り切りの規則の行 id（判断の記録 ADR-60 の決定 (5)）。

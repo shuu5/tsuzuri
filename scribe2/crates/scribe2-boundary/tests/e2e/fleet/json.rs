@@ -423,14 +423,14 @@ fn fleet_replay_seat_retired_then_registered_resolves_the_last_row() {
     assert_eq!(before.registrations.len(), 1, "登録より前の退役は後の登録を消さない");
 }
 
-/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（32 種の末尾の 1 つ前は上限の許可の
+/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（33 種の末尾の 2 つ前は上限の許可の
 /// `LimitPermitted`・limit-permit.md §18）で、`fleet record` からは書けない（書き手は `seat retire` だけ・rc 1・log を作らない）。
 #[test]
 fn fleet_replay_seat_retired_kind_is_a_registration_shape_and_record_refuses_it() {
     use vessel::fleet::Shape;
-    assert_eq!(KINDS.len(), 32, "母集団");
+    assert_eq!(KINDS.len(), 33, "母集団");
     assert_eq!(KINDS.get(23), Some(&EventKind::SeatRetired), "宣言順の 24 種目");
-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "宣言順の末尾の 1 つ前");
+    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::LimitPermitted), "宣言順の末尾の 2 つ前");
     assert_eq!(EventKind::SeatRetired.shape(), Shape::Registration);
     assert_eq!(EventKind::SeatRetired.default_actor(), "human", "退役は人由来");
     assert_eq!(EventKind::parse("SeatRetired"), Some(EventKind::SeatRetired), "as_str ↔ parse の往復");
@@ -670,13 +670,13 @@ fn fleet_case_kind_utterance_is_not_counted_as_human() {
     assert_eq!(counted.rulings, 0, "裁定の数えは変わらない");
 }
 
-/// §12 歯 6: `KINDS` は 32 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）でその次が
+/// §12 歯 6: `KINDS` は 33 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）でその次が
 /// `LimitPermitted`（limit-permit.md §18）。既定の actor は 1 つ目だけ human（`MemoJudged` は machine）。5 つも `MemoJudged` も
 /// `Shape` が Run でなく、互いに同じ値。base は 30 種で RED。
 #[test]
 fn fleet_case_kind_kinds_are_appended_in_order() {
     use vessel::fleet::Shape;
-    assert_eq!(KINDS.len(), 32, "母集団");
+    assert_eq!(KINDS.len(), 33, "母集団");
     let tail: Vec<EventKind> = KINDS.iter().copied().skip(24).take(5).collect();
     assert_eq!(tail.iter().map(|kind| kind.as_str()).collect::<Vec<_>>(), CASE_KIND_NAMES, "25 番目から 5 つの字面");
     let actors: Vec<&str> = tail.iter().map(|kind| kind.default_actor()).collect();
@@ -702,13 +702,13 @@ fn permit_line(bead: Option<&str>, detail: Option<&str>, extra: &str) -> String 
     format!(r#"{{"schema":1,"ts":"2026-10-02T01:00:00Z","kind":"LimitPermitted",{extra}{bead}"host":"h","actor":"machine"{detail}}}"#)
 }
 
-/// (d) `KINDS` の末尾の 1 つ前は `LimitPermitted`（末尾は差の当たりの `OverlapCommuted`）でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
+/// (d) `KINDS` の末尾の 2 つ前は `LimitPermitted`（後は差の当たりの `OverlapCommuted` と組の後の着地の `OverlapFollowed`）でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
 /// この kind だけで `SHAPES` の末尾も `Permit`・口座残量の kind でない。
 #[test]
 fn fleet_limit_permitted_kind_and_shape_are_appended_last() {
     use vessel::fleet::{Shape, SHAPES};
-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "KINDS の末尾の 1 つ前");
-    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
+    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::LimitPermitted), "KINDS の末尾の 2 つ前");
+    assert_eq!(KINDS.get(KINDS.len() - 4), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
     assert_eq!(EventKind::LimitPermitted.as_str(), "LimitPermitted");
     assert_eq!(EventKind::parse("LimitPermitted"), Some(EventKind::LimitPermitted), "as_str ↔ parse の往復");
     assert_eq!(EventKind::LimitPermitted.default_actor(), "machine", "許可は機械の導出");

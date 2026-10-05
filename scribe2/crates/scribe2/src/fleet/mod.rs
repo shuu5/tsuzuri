@@ -119,6 +119,9 @@ pub enum EventKind {
     /// 受付が入口の排他の交差を差の当たりで通した（判断の記録 ADR-60 の決定 (4)・[`Case::Commuted`]・`bead` = 候補の契約の id・
     /// `detail` = `run=<受付の run id> with=<相手> files=<交わった項> main=<sha>`）。**便に紐づかない**。
     OverlapCommuted,
+    /// 差の当たりで通した組の便の、その後の着地の出来事（判断の記録 ADR-60 の決定 (4)・[`Case::Followed`]・`bead` = 便の契約の id・
+    /// `detail` = `run=<便 id> word=<語>` と語ごとの尾）。**便に紐づかない**（段を動かさない）。
+    OverlapFollowed,
 }
 
 /// [`EventKind`] の全 variant。
@@ -155,6 +158,7 @@ pub const KINDS: &[EventKind] = &[
     EventKind::MemoJudged,
     EventKind::LimitPermitted,
     EventKind::OverlapCommuted,
+    EventKind::OverlapFollowed,
 ];
 
 impl EventKind {
@@ -193,6 +197,7 @@ impl EventKind {
             Self::MemoJudged => "MemoJudged",
             Self::LimitPermitted => "LimitPermitted",
             Self::OverlapCommuted => "OverlapCommuted",
+            Self::OverlapFollowed => "OverlapFollowed",
         }
     }
 
@@ -233,7 +238,8 @@ impl EventKind {
             | Self::LifecycleCutover
             | Self::MemoJudged
             | Self::LimitPermitted
-            | Self::OverlapCommuted => ACTOR_MACHINE,
+            | Self::OverlapCommuted
+            | Self::OverlapFollowed => ACTOR_MACHINE,
         }
     }
 
@@ -271,7 +277,8 @@ impl EventKind {
             | Self::IntakeRefused
             | Self::LifecycleCutover
             | Self::MemoJudged
-            | Self::OverlapCommuted => Shape::Case,
+            | Self::OverlapCommuted
+            | Self::OverlapFollowed => Shape::Case,
             Self::LimitPermitted => Shape::Permit,
         }
     }
@@ -409,6 +416,8 @@ pub enum Case {
     Judged,
     /// [`EventKind::OverlapCommuted`]: 本体の欄を持たない（候補の契約の id は行の `bead`・組は `detail`）。
     Commuted,
+    /// [`EventKind::OverlapFollowed`]: 本体の欄を持たない（便の契約の id は行の `bead`・便と語は `detail`）。
+    Followed,
     /// [`EventKind::RulingReceived`] の結びの形（設計 §14）: 結んだ裁定 id・発話の ts・経路・問いの起票の時刻と、問いが
     /// metadata に持つ asked（無ければ `None`）。`bead` は問い id（行の field）。
     Ruling { ruling: String, utterance: String, channel: Channel, question_ts: String, asked: Option<String> },
@@ -431,7 +440,7 @@ impl Case {
             }
             Self::Refused { refuse } => [bead, Some(text("refuse", refuse))].into_iter().flatten().collect(),
             Self::Cutover { version, main } => vec![text("version", version), text("main", main)],
-            Self::Judged | Self::Commuted => bead.into_iter().collect(),
+            Self::Judged | Self::Commuted | Self::Followed => bead.into_iter().collect(),
             Self::Ruling { ruling, utterance, channel, question_ts, asked } => [
                 Some(text("ruling", ruling)),
                 Some(text("utterance", utterance)),
