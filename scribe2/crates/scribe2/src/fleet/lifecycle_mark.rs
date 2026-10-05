@@ -11,7 +11,8 @@
 //!
 //! 台帳の印の隣に journal の長さの読み（[`read_journal_len`]）を持つ（先読みの口の store の鍵・設計 ledger-form.md §20）。
 //!
-//! 全部の書き直しの入力の読み（契約表・SRS・main の commit の trailer・event log の便と断りと結び）も末尾の区間に置く。
+//! 全部の書き直しの入力の読み（契約表・SRS・event log の便と断りと結び）も末尾の区間に置く。main の commit の trailer と追認の札の
+//! 読みは子の module `commits` に置き、[`read_commits`] を同じ名で再輸出する。
 
 use super::json_tree::{self, Tree};
 use super::phase::{Latest, Refused};
@@ -22,11 +23,11 @@ use crate::case::Kind as Part;
 use crate::hook::vessel::digest::fnv1a_64;
 use crate::hook::vessel::state_dir as named_state_dir;
 use crate::ledger::form::{is_memo, is_question, pointer_text};
-use crate::ledger::phase_main::{Commit, Row};
+use crate::ledger::phase_main::Row;
 use crate::pipe::declaration::{requirements_at_sha, TablePlaces};
 use crate::pipe::dispatch::memo::Word;
 use crate::pipe::dispatch::unreflected::{asked, Asked, Question};
-use crate::pipe::land::{contract_key, source_key, RUN_TRAILER, TERMINAL_TOKENS};
+use crate::pipe::land::TERMINAL_TOKENS;
 use crate::pipe::table::{design_docs, read_table as table_rows, requirement_ids};
 use crate::pipe::{git_bytes, live_driver};
 use crate::seat::ledger::Issue;
@@ -35,6 +36,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
+
+mod commits;
+pub use commits::read_commits;
 
 /// 出力の file 名（読み手が見る 2 つの名の 1 つ）。
 pub const JSON_FILE: &str = "lifecycle.json";
@@ -687,42 +691,6 @@ pub fn is_open_contract(issue: &Issue) -> bool {
 pub fn open_write_set(issues: &[Issue], write_sets: &[(String, Vec<String>)]) -> Vec<String> {
     let pointers: Vec<&str> = issues.iter().filter(|issue| is_open_contract(issue)).filter_map(|issue| pointer_text(&issue.acceptance)).collect();
     write_sets.iter().filter(|(pointer, _)| pointers.contains(&pointer.as_str())).flat_map(|(_, items)| items.clone()).collect()
-}
-
-/// 設計 pointer から bead を引く（開いた bead が先・無ければ閉じた時刻が最も新しい bead）。
-fn bead_of<'i>(issues: &'i [Issue], pointer: &str) -> Option<&'i Issue> {
-    let mut named: Vec<&Issue> = issues.iter().filter(|issue| pointer_text(&issue.acceptance) == Some(pointer)).collect();
-    named.sort_by_key(|issue| (issue.status == "closed", std::cmp::Reverse(issue.closed_at.clone())));
-    named.first().copied()
-}
-
-/// main の commit（切り替えの線の main の sha の次から先端まで・first-parent・古い順）を trailer つきで読む。
-pub fn read_commits(repo: &Path, from: &str, to: &str, issues: &[Issue]) -> Option<Vec<Commit>> {
-    let range = format!("{from}..{to}");
-    let raw = git_bytes(repo, &["log", "--first-parent", "--format=%H%x1f%ct%x1f%B%x1e", &range])?;
-    let body = String::from_utf8_lossy(&raw);
-    let mut commits: Vec<Commit> = body.split('\x1e').filter_map(|record| commit_of(record.trim_start_matches('\n'), issues)).collect();
-    commits.reverse();
-    Some(commits)
-}
-
-/// commit 1 本（`run:`・発端・契約の 3 つの trailer を読む・契約の trailer は pointer を bead id へ引き直し、引けない pointer は渡さない）。
-fn commit_of(record: &str, issues: &[Issue]) -> Option<Commit> {
-    let mut fields = record.splitn(3, '\x1f');
-    let sha = fields.next()?.trim().to_owned();
-    let at = fields.next()?.trim().parse().ok()?;
-    let (source, contract) = (source_key(), contract_key());
-    let mut found = Commit { sha, at, sources: Vec::new(), run: None, contracts: Vec::new() };
-    for line in fields.next().unwrap_or_default().lines().map(str::trim_end) {
-        if let Some(run) = line.strip_prefix(RUN_TRAILER).map(str::trim).filter(|run| !run.is_empty()) {
-            found.run.get_or_insert_with(|| run.to_owned());
-        } else if let Some(ids) = line.strip_prefix(source.as_str()) {
-            found.sources.extend(ids.split_whitespace().map(str::to_owned));
-        } else if let Some(pointer) = line.strip_prefix(contract.as_str()) {
-            found.contracts.extend(bead_of(issues, pointer.trim()).map(|issue| issue.id.clone()));
-        }
-    }
-    (!found.sha.is_empty()).then_some(found)
 }
 
 /// `verdict:<語>` の語（`,account:<label>` などの後ろは読まない）。

@@ -9,6 +9,7 @@
 //! `host_group_`・入れ子の子では指す先が変わる）・他の族の歯だけを残す。
 
 mod account;
+mod adopt;
 mod json;
 mod usage;
 // flip-check: moved s2-07l.680

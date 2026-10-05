@@ -152,6 +152,16 @@ impl AnchorSkip {
 /// 本文の最後に置く trailer の key（読み手が fleet の記録へ辿る鍵・merge の門も同じ字で run の行を読む）。
 pub(crate) const RUN_TRAILER: &str = "run: ";
 
+/// 追認の札の語幹（判断の記録 ADR-45 の門 H6・発端の trailer を持つ後の commit が、発端の trailer も器の便の trailer も持たない
+/// commit に発端を結ぶ）。
+const ADOPTS_TRAILER: &str = "Adopts";
+
+/// 追認の札の key（`<Name>-Adopts: `・値は 40 字の sha と bead id の列・局面の出力が main の commit から読む 1 本・名は発端の
+/// trailer と同じく器の名から導く）。
+pub(crate) fn adopts_key() -> String {
+    finish::trailer_key(ADOPTS_TRAILER)
+}
+
 /// 検出線（変異検査）の面（**閉じた集合**・設計 §30・`s2-07l.397`）。末尾 `/` の項目は dir の接頭辞、
 /// それ以外は file の完全一致。検出線の行の出所（`.vessel.toml`）と、変異検査が読む面（crate の source・
 /// Cargo の manifest / lock・rules）である。docs / design-intent / README / .github はこの外＝検出線の

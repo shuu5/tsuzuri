@@ -32,7 +32,8 @@ pub struct Commit {
     pub sha: String,
     /// commit の時刻（UNIX 秒）。
     pub at: u64,
-    /// 発端の trailer の id の列（無ければ空）。
+    /// 発端の trailer の id の列（本文に発端の trailer も器の便の trailer も無い commit は、後の commit の追認の札が結んだ id・どちらも
+    /// 無ければ空）。
     pub sources: Vec<String>,
     /// 器の便の trailer `run:` の値（無ければ `None`）。
     pub run: Option<String>,
