@@ -130,13 +130,14 @@ index e5403196..37222f3b 100644
      })
 diff --git a/crates/tsuzuri-surface/tests/vcparts.rs b/crates/tsuzuri-surface/tests/vcparts.rs
 new file mode 100644
-index 00000000..56a09445
+index 00000000..765dd287
 --- /dev/null
 +++ b/crates/tsuzuri-surface/tests/vcparts.rs
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,249 @@
 +//! 語彙の部品の歯（面・接頭辞 vcparts_・設計ノート surface-wave29b 行 g-vocab-parts・判断の記録 ADR-58）。
 +//! 部品の表は vocab の dir の .json の名の順・vocab() は基と部品の和・鍵の重なりは file の中（基も部品も・同じ欄に 2 度と
 +//! 両方の欄）でも file を跨いでも Err・受入の測りは同じ和を引く。否定の見本は 1 欄だけ替える。
++//! 置き場の部品は鍵を持たないので、vocab() と受入の vocab_text が部品を読む事は関数の本体の範囲の字で測る。
 +#![cfg(test)]
 +
 +use std::fs;
@@ -170,6 +171,14 @@ index 00000000..56a09445
 +    text.lines()
 +        .filter(|l| l.starts_with("  \"") && l.ends_with(": {"))
 +        .count()
++}
++
++/// file の字 src の中の、頭の行 head（file に 1 つだけ）から次の行頭の `}` の前までの関数の本体。
++fn fn_body<'a>(src: &'a str, head: &str) -> &'a str {
++    assert_eq!(src.matches(head).count(), 1, "頭 {head}");
++    let at = src.find(head).expect("頭");
++    let end = at + src[at..].find("\n}\n").expect("関数の末");
++    &src[at..end]
 +}
 +
 +/// (1) 部品の表は vocab の dir の .json の file の名の byte の順で、名と中身の字が file と同じ。
@@ -318,6 +327,60 @@ index 00000000..56a09445
 +    assert_eq!(
 +        audit::merge_vocab(&[SOURCE, r#"{"english": {}}"#]),
 +        Err("語彙表の 1 番目の字に object の欄 rephrase が無い".to_string())
++    );
++}
++
++/// (6) 関数 vocab() の本体は基と部品の並び sources() を parse_all に渡し、基の字 SOURCE を直に読まない。
++#[test]
++fn vcparts_vocab_reads_sources() {
++    let src = read("src/vocab.rs");
++    let body = fn_body(&src, "pub fn vocab() -> &'static Vocab {");
++    let counts = [
++        "Vocab::parse_all(&sources())",
++        "sources",
++        "SOURCE",
++        "::parse(",
++    ]
++    .map(|s| body.matches(s).count());
++    assert_eq!(counts, [1, 1, 0, 0], "{body}");
++}
++
++/// (7) 受入の sweep は語彙を vocab_text から得て、vocab_text は部品の dir の .json を名の順に読み、基を先頭に置いて
++/// merge_vocab に渡す（並びを途中で縮める字も無い）。
++#[test]
++fn vcparts_accept_reads_dir() {
++    let src = read("../../xtask/src/accept.rs");
++    let dir = "const VOCAB_PARTS: &str = \"crates/tsuzuri-surface/vocab\";";
++    assert_eq!(src.matches(dir).count(), 1);
++    let sweep = fn_body(
++        &src,
++        "fn sweep(flags: &Flags, root: &Path) -> Result<(usize, usize), String> {",
++    );
++    let counts =
++        ["let vocab = vocab_text(root)?;", "&vocab)", "VOCAB"].map(|s| sweep.matches(s).count());
++    assert_eq!(counts, [1, 1, 0], "{sweep}");
++    let body = fn_body(
++        &src,
++        "fn vocab_text(root: &Path) -> Result<String, String> {",
++    );
++    let steps = [
++        "let dir = root.join(VOCAB_PARTS);",
++        "fs::read_dir(&dir)",
++        "is_some_and(|x| x == \"json\")",
++        "files.sort();",
++        "files.insert(0, root.join(VOCAB));",
++        "for file in &files {",
++        "texts.push(",
++        "audit::merge_vocab(&texts.iter().map(String::as_str).collect::<Vec<_>>())",
++    ];
++    let counts: Vec<usize> = steps.iter().map(|s| body.matches(s).count()).collect();
++    assert_eq!(counts, [1; 8], "{body}");
++    let at: Vec<usize> = steps.iter().filter_map(|s| body.find(s)).collect();
++    assert!(at.is_sorted(), "{at:?}");
++    assert_eq!(
++        (body.matches("files").count(), body.matches("texts").count()),
++        (4, 3),
++        "{body}"
 +    );
 +}
 diff --git a/crates/tsuzuri-surface/vocab/000-about.json b/crates/tsuzuri-surface/vocab/000-about.json
