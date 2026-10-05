@@ -1,5 +1,5 @@
-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
-//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
+//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
+//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と読む範囲の 5 句と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
 //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
 //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
 #![cfg(test)]
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
 
 /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 19] = [
+const CLAUSES: [(&str, u8, &str); 24] = [
     (
         "single-home",
         0,
@@ -59,6 +59,23 @@ const CLAUSES: [(&str, u8, &str); 19] = [
         9,
         "試しは commit せず、git write-tree の木の hash で撃つ",
     ),
+    ("scope-named", 9, "読む範囲は頼みの文が名指す"),
+    (
+        "scope-items",
+        9,
+        "手本にする前の係の出す物の file と節（1〜2 本）・要件と判断の記録の id と節・読む code の file と fn",
+    ),
+    (
+        "no-cat",
+        9,
+        "file を丸ごと cat しない。grep -n で行を当て、sed -n で当てた範囲だけを読む",
+    ),
+    (
+        "prior-outputs",
+        9,
+        "前の係の出す物は、頼みの文が名指した file と節だけを読む",
+    ),
+    ("id-grep", 9, "要件と判断の記録は、id を grep -A で読む"),
 ];
 
 /// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字）。
