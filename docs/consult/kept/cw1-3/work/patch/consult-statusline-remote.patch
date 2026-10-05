@@ -1,0 +1,411 @@
+diff -ruN tz-build-pristine/crates/tsuzuri-core/src/consult/launch.rs tz-build/crates/tsuzuri-core/src/consult/launch.rs
+--- a/crates/tsuzuri-core/src/consult/launch.rs	2026-10-05 09:24:51.931299919 +0900
++++ b/crates/tsuzuri-core/src/consult/launch.rs	2026-10-05 09:24:51.957300107 +0900
+@@ -2,11 +2,15 @@
+ //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
+ //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
+ //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
++//! 話す窓は Remote Control を付けて起こし（持ち主が claude.ai と mobile の app から席と同じ口座で続けられる・値は窓の名）、
++//! 設定に窓の status line（`status::command`）を置く（行 cs-statusline の案）。
+ 
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_contract::ledger::fnv1a64;
+ 
++use super::status;
++
+ /// 起こす program。
+ pub const PROGRAM: &str = "claude";
+ 
+@@ -22,6 +26,9 @@
+ /// 私用の temp の置き場を渡す環境変数。
+ pub const TMPDIR_ENV: &str = "CLAUDE_CODE_TMPDIR";
+ 
++/// 話す窓に Remote Control を付ける旗（値は窓の名・問う窓には付けない）。
++pub const REMOTE_FLAG: &str = "--remote-control";
++
+ /// 話す窓の tmux の `-e` で渡す閉じた 4 つ（口座の置き場・PATH・窓の id・私用の temp）。
+ pub const TALK_ENV: [&str; 4] = ["CLAUDE_CONFIG_DIR", "PATH", ID_ENV, TMPDIR_ENV];
+ 
+@@ -174,6 +181,7 @@
+                 {"type": "command", "command": guard_command(&l.tz), "timeout": 10}
+             ]}]
+         },
++        "statusLine": {"type": "command", "command": status::command(&l.tz)},
+     })
+ }
+ 
+@@ -183,9 +191,12 @@
+     if l.form == Form::Ask {
+         a.extend(["-p".to_string(), prompt(l)]);
+     }
++    a.push("--restricted".to_string());
++    if l.form == Form::Talk {
++        a.extend([REMOTE_FLAG.to_string(), l.window.name()]);
++    }
+     a.extend(
+         [
+-            "--restricted",
+             "--permission-mode",
+             "dontAsk",
+             "--tools",
+@@ -257,6 +268,12 @@
+             gaps.push(flag.to_string());
+         }
+     }
++    let remote = (l.form == Form::Talk).then_some(name.as_str());
++    if argv.iter().any(|a| a == REMOTE_FLAG) != remote.is_some()
++        || after(argv, REMOTE_FLAG) != remote
++    {
++        gaps.push(REMOTE_FLAG.to_string());
++    }
+     for flag in ["--restricted", "--strict-mcp-config", "--settings"] {
+         if !argv.iter().any(|a| a == flag) {
+             gaps.push(flag.to_string());
+@@ -371,6 +388,11 @@
+     {
+         gaps.push("/hooks/PreToolUse".to_string());
+     }
++    if set.pointer("/statusLine/type") != Some(&json!("command"))
++        || set.pointer("/statusLine/command") != Some(&json!(status::command(&l.tz)))
++    {
++        gaps.push("/statusLine".to_string());
++    }
+ }
+ 
+ /// 組んだ argv を検める（欠けと広い許しの名の列・空なら起こしてよい）。
+diff -ruN tz-build-pristine/crates/tsuzuri-core/src/consult/mod.rs tz-build/crates/tsuzuri-core/src/consult/mod.rs
+--- a/crates/tsuzuri-core/src/consult/mod.rs	2026-10-05 09:24:51.931299919 +0900
++++ b/crates/tsuzuri-core/src/consult/mod.rs	2026-10-05 09:24:51.957300107 +0900
+@@ -2,7 +2,7 @@
+ //! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+ //! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+ //! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer、
+-//! 席の hook の相談の拾いの字（`pickup`）は行 cs-hooks（ノート surface-wave27b）が置く。
++//! 席の hook の相談の拾いの字（`pickup`）は行 cs-hooks（ノート surface-wave27b）、窓の status line の字（`status`）は行 cs-statusline（案）が置く。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
+ 
+ pub mod finding;
+@@ -11,3 +11,4 @@
+ pub mod lines;
+ pub mod pickup;
+ pub mod quota;
++pub mod status;
+diff -ruN tz-build-pristine/crates/tsuzuri-core/src/consult/status.rs tz-build/crates/tsuzuri-core/src/consult/status.rs
+--- a/crates/tsuzuri-core/src/consult/status.rs	1970-01-01 09:00:00.000000000 +0900
++++ b/crates/tsuzuri-core/src/consult/status.rs	2026-10-05 09:24:51.958300114 +0900
+@@ -0,0 +1,62 @@
++//! 窓の status line の字（行 cs-statusline の案・判断の記録 ADR-29 決定 (7) の設定に statusLine を足す）。
++//! 起動の口の settings と audit は `command` の 1 関数で status line の命令の字を持つ。Claude Code は status line の命令の
++//! stdin に session の JSON を渡すので、そこから context の使用の割合を読む（鍵は `context_window.used_percentage`・
++//! 無ければ出さない・ほかの鍵は読み飛ばす＝Claude Code の字は版で増えるので断らない）。窓の控えと所見の数と束の要約値と
++//! 合わせて 1 行の字にする。読むだけで何も書かない。
++
++use serde_json::Value;
++use tsuzuri_contract::consult::WindowFile;
++
++/// status line の口の名（tz consult の口・席の口でないので窓の守りは通す）。
++pub const VERB: &str = "statusline";
++
++/// 欄の区切り。
++pub const SEP: &str = " ｜ ";
++
++/// 束の要約値の頭の字の数（16 字の要約値を短く出す）。
++pub const DIGEST_HEAD: usize = 8;
++
++/// status line の命令の字（起動の口の settings と audit が同じ字を持つ）。
++pub fn command(tz: &str) -> String {
++    format!("{tz} consult {VERB}")
++}
++
++/// Claude Code が渡す session の JSON から context の使用の割合（0〜100 の整数）。鍵が無い・数でない・範囲の外は None。
++pub fn context_percent(text: &str) -> Option<u8> {
++    let value: Value = serde_json::from_str(text).ok()?;
++    let percent = value
++        .pointer("/context_window/used_percentage")?
++        .as_f64()?;
++    if !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
++        return None;
++    }
++    u8::try_from(percent.round() as i64).ok()
++}
++
++/// 1 行の字（窓・題・model と念入りさ・所見の数・束の要約値の頭・context の割合。無い欄は出さない）。
++pub fn render(
++    window: Option<&WindowFile>,
++    findings: Option<usize>,
++    digest: Option<&str>,
++    percent: Option<u8>,
++) -> String {
++    let mut parts: Vec<String> = Vec::new();
++    match window {
++        Some(w) => {
++            parts.push(format!("窓 {}", w.id));
++            parts.push(format!("題 {}", w.topic.as_deref().unwrap_or("なし")));
++            parts.push(format!("{}・{}", w.model, w.effort));
++        }
++        None => parts.push("窓 ?".to_string()),
++    }
++    if let Some(n) = findings {
++        parts.push(format!("所見 {n}"));
++    }
++    if let Some(d) = digest.map(str::trim).filter(|d| !d.is_empty()) {
++        parts.push(format!("束 {}", d.get(..DIGEST_HEAD).unwrap_or(d)));
++    }
++    if let Some(p) = percent {
++        parts.push(format!("文脈 {p}%"));
++    }
++    parts.join(SEP)
++}
+diff -ruN tz-build-pristine/crates/tsuzuri-core/tests/teeth3/cwarg.rs tz-build/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs	2026-10-05 09:24:51.933299934 +0900
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs	2026-10-05 09:24:51.958300114 +0900
+@@ -125,6 +125,7 @@
+         ("dontAsk", "bypassPermissions"),
+         ("dontAsk", "acceptEdits"),
+         ("--restricted", "--verbose"),
++        ("--remote-control", "--verbose"),
+         ("--strict-mcp-config", "--verbose"),
+         ("mcp__*", "mcp__x"),
+         (
+@@ -165,6 +166,7 @@
+         "/permissions/deny",
+         "/env",
+         "/hooks",
++        "/statusLine",
+     ];
+     for pointer in leaves {
+         let (parent, key) = pointer.rsplit_once('/').expect("pointer");
+@@ -274,6 +276,10 @@
+         ("hook の matcher", |s| {
+             s["hooks"]["PreToolUse"][0]["matcher"] = json!("Bash")
+         }),
++        ("statusLine の命令", |s| {
++            s["statusLine"]["command"] = json!("/T consult list")
++        }),
++        ("statusLine の型", |s| s["statusLine"]["type"] = json!("static")),
+         ("credentials の allow", |s| {
+             s["sandbox"]["credentials"]["files"][1]["mode"] = json!("allow")
+         }),
+@@ -387,3 +393,29 @@
+         assert!(!text.contains(&format!("consult {verb}")), "{verb}");
+     }
+ }
++
++#[test]
++fn cwarg_audit_refuses_remote_control_mismatch() {
++    let fx = fixture();
++    let talk = launch(&fx["talk"]["inputs"]);
++    let ask = launch(&fx["ask"]["inputs"]);
++    assert_eq!(argv(&talk).get(1..3), Some(&["--remote-control".to_string(), "consult-cw3".to_string()][..]));
++    assert!(!argv(&ask).iter().any(|a| a == "--remote-control"));
++    let mut ask_rc = argv(&ask);
++    ask_rc.insert(3, "consult-cw4".into());
++    ask_rc.insert(3, "--remote-control".into());
++    assert_eq!(audit(&ask_rc, &ask), ["--remote-control"]);
++    let talk_rc: Vec<String> = argv(&talk)
++        .into_iter()
++        .filter(|x| x != "--remote-control")
++        .collect();
++    assert_eq!(audit(&talk_rc, &talk), ["--remote-control"]);
++    let other: Vec<String> = argv(&talk)
++        .into_iter()
++        .enumerate()
++        .map(|(i, x)| if i == 2 { "consult-cw9".to_string() } else { x })
++        .collect();
++    assert_eq!(audit(&other, &talk), ["--remote-control"]);
++    let set = settings(&talk);
++    assert_eq!(set["statusLine"], json!({"type": "command", "command": "/T consult statusline"}));
++}
+diff -ruN tz-build-pristine/crates/tsuzuri-core/tests/teeth3/cwsts.rs tz-build/crates/tsuzuri-core/tests/teeth3/cwsts.rs
+--- a/crates/tsuzuri-core/tests/teeth3/cwsts.rs	1970-01-01 09:00:00.000000000 +0900
++++ b/crates/tsuzuri-core/tests/teeth3/cwsts.rs	2026-10-05 09:24:51.958300114 +0900
+@@ -0,0 +1,79 @@
++//! 窓の status line の字の歯（接頭辞 cwsts_・行 cs-statusline の案・判断の記録 ADR-29 決定 (7) の設定の statusLine）。
++//! 命令の字・Claude Code の session の JSON からの context の割合の読み・1 行の字の組みを見る。
++#![cfg(test)]
++
++use tsuzuri_contract::consult::{Form, Starter, WindowFile, WindowId};
++use tsuzuri_core::consult::status::{DIGEST_HEAD, SEP, VERB, command, context_percent, render};
++
++fn window() -> WindowFile {
++    WindowFile {
++        id: WindowId::parse("cw3").expect("窓 id"),
++        form: Form::Talk,
++        topic: Some("t3-hub.78".into()),
++        model: "fable".into(),
++        effort: "xhigh".into(),
++        starter: Starter::Chat,
++        uttered: Some("20261004T2207Z".into()),
++        request: None,
++        made: "20261004T2207Z".into(),
++    }
++}
++
++#[test]
++fn cwsts_command_names_the_verb() {
++    assert_eq!(VERB, "statusline");
++    assert_eq!(command("/T"), "/T consult statusline");
++}
++
++#[test]
++fn cwsts_context_percent_reads_used_percentage_only() {
++    assert_eq!(
++        context_percent(r#"{"context_window":{"used_percentage":42.4}}"#),
++        Some(42)
++    );
++    assert_eq!(
++        context_percent(
++            r#"{"model":{"id":"x"},"context_window":{"used_percentage":99.6,"context_window_size":200000}}"#
++        ),
++        Some(100)
++    );
++    assert_eq!(context_percent(r#"{"context_window":{"used_percentage":0}}"#), Some(0));
++    for bad in [
++        "",
++        "not json",
++        "[]",
++        r#"{"context_window":{}}"#,
++        r#"{"context_window":{"used_percentage":"42"}}"#,
++        r#"{"context_window":{"used_percentage":-1}}"#,
++        r#"{"context_window":{"used_percentage":101}}"#,
++    ] {
++        assert_eq!(context_percent(bad), None, "{bad}");
++    }
++}
++
++#[test]
++fn cwsts_render_joins_the_present_fields() {
++    let w = window();
++    let line = render(Some(&w), Some(2), Some("3766ac7797cdf78f\n"), Some(42));
++    let want = [
++        "窓 cw3",
++        "題 t3-hub.78",
++        "fable・xhigh",
++        "所見 2",
++        "束 3766ac77",
++        "文脈 42%",
++    ];
++    assert_eq!(line, want.join(SEP));
++    assert_eq!(DIGEST_HEAD, 8);
++    let mut no_topic = window();
++    no_topic.topic = None;
++    assert_eq!(
++        render(Some(&no_topic), None, None, None),
++        ["窓 cw3", "題 なし", "fable・xhigh"].join(SEP)
++    );
++    assert_eq!(
++        render(None, Some(0), Some(" \n"), None),
++        ["窓 ?", "所見 0"].join(SEP)
++    );
++    assert!(render(Some(&w), None, Some("abc"), None).ends_with("束 abc"));
++}
+diff -ruN tz-build-pristine/crates/tsuzuri-core/tests/teeth3/main.rs tz-build/crates/tsuzuri-core/tests/teeth3/main.rs
+--- a/crates/tsuzuri-core/tests/teeth3/main.rs	2026-10-05 09:24:51.933299934 +0900
++++ b/crates/tsuzuri-core/tests/teeth3/main.rs	2026-10-05 09:24:51.957300107 +0900
+@@ -6,3 +6,4 @@
+ mod cwfnd;
+ mod cwlin;
+ mod cwquo;
++mod cwsts;
+diff -ruN tz-build-pristine/crates/tsuzuri-boundary/src/consult/mod.rs tz-build/crates/tsuzuri-boundary/src/consult/mod.rs
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs	2026-10-05 09:24:51.935299948 +0900
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs	2026-10-05 09:24:51.958300114 +0900
+@@ -1,6 +1,6 @@
+ //! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
+ //! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
+-//! show と dispose（行 cs-show）・list と close（行 cs-close）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
++//! show と dispose（行 cs-show）・list と close（行 cs-close）・statusline（窓の status line・行 cs-statusline の案）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
+ //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
+ //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
+ //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
+@@ -16,6 +16,7 @@
+ pub mod list;
+ pub mod open;
+ pub mod show;
++pub mod statusline;
+ pub mod watch;
+ 
+ use std::ffi::{OsStr, OsString};
+@@ -65,7 +66,7 @@
+ pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
+ 
+ pub const USAGE: &str =
+-    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard> [引数]";
++    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|statusline> [引数]";
+ 
+ /// tz consult の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+@@ -80,6 +81,7 @@
+         ["list", r @ ..] => list::run(r),
+         ["close", r @ ..] => close::run(r),
+         ["guard", r @ ..] => guard::run(r),
++        ["statusline", r @ ..] => statusline::run(r),
+         _ => {
+             emit_err(&format!("tz consult: 口が無い\n{USAGE}"));
+             FAIL
+diff -ruN tz-build-pristine/crates/tsuzuri-boundary/src/consult/statusline.rs tz-build/crates/tsuzuri-boundary/src/consult/statusline.rs
+--- a/crates/tsuzuri-boundary/src/consult/statusline.rs	1970-01-01 09:00:00.000000000 +0900
++++ b/crates/tsuzuri-boundary/src/consult/statusline.rs	2026-10-05 09:24:51.958300114 +0900
+@@ -0,0 +1,41 @@
++//! tz consult statusline（行 cs-statusline の案・窓の status line の口・判断の記録 ADR-29 決定 (7) の設定の statusLine）。
++//! Claude Code が status line の命令として撃つ（引数は取らない・stdin に session の JSON）。作業場は cwd（窓の控えを読む）。
++//! 窓の控え・findings/ の所見の数・bundle/digest の要約値・stdin の context の割合を中核の `status::render` で 1 行にして
++//! 標準出力に出す。読むだけで何も書かない。読めない物は欄を空にして落ちない（status line は席の目であって門でない）。
++//! 席の口でないので窓の守り（`SEAT_VERBS`）は通す。
++
++use std::io::Read;
++
++use tsuzuri_core::consult::status::{context_percent, render};
++
++use super::{FAIL, findings, read_window};
++use crate::out::{emit, emit_err};
++
++/// tz consult statusline の残りの引数を受けて終了 code を返す。
++pub fn run(rest: &[&str]) -> u8 {
++    if !rest.is_empty() {
++        emit_err("tz consult statusline: 引数を取らない");
++        return FAIL;
++    }
++    let mut input = String::new();
++    // stdin が無い・読めない周は context の欄を出さないだけ。
++    if std::io::stdin().read_to_string(&mut input).is_err() {
++        input.clear();
++    }
++    let ws = std::env::current_dir().ok();
++    let window = ws.as_deref().and_then(read_window);
++    let count = match (&ws, &window) {
++        (Some(ws), Some(w)) => Some(findings(ws, w.id).len()),
++        _ => None,
++    };
++    let digest = ws
++        .as_deref()
++        .and_then(|ws| std::fs::read_to_string(ws.join("bundle/digest")).ok());
++    emit(&render(
++        window.as_ref(),
++        count,
++        digest.as_deref(),
++        context_percent(&input),
++    ));
++    0
++}
+diff -ruN tz-build-pristine/tests/fixtures/consult/launch-argv.yaml tz-build/tests/fixtures/consult/launch-argv.yaml
+--- a/tests/fixtures/consult/launch-argv.yaml	2026-10-05 09:24:51.937299963 +0900
++++ b/tests/fixtures/consult/launch-argv.yaml	2026-10-05 09:24:51.958300114 +0900
+@@ -4,6 +4,7 @@
+     "inputs": {"form": "talk", "window": "cw3", "workspace": "/W", "repo": "/R", "state": "/S", "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": false},
+     "argv": [
+       "--restricted",
++      "--remote-control", "consult-cw3",
+       "--permission-mode", "dontAsk",
+       "--tools", "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch",
+       "--disallowedTools", "mcp__*",
+@@ -75,6 +76,7 @@
+       "PreToolUse": [{"matcher": "*", "hooks": [
+         {"type": "command", "command": "timeout 4 /T consult guard || exit 2", "timeout": 10}
+       ]}]
+-    }
++    },
++    "statusLine": {"type": "command", "command": "/T consult statusline"}
+   }
+ }
