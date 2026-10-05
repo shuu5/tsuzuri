@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use tsuzuri_contract::ledger::BeadId;
+use crate::common::bead;
 use tsuzuri_contract::surface::{BatchItemResult, BatchResponse, ItemOutcome, RulingId};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ask;
@@ -142,10 +142,6 @@ const FILTER_WORDS: [&str; 125] = [
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead の id")
 }
 
 fn rid(id: &str) -> RulingId {

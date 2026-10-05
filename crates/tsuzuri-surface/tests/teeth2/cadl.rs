@@ -4,21 +4,12 @@
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{after, read};
 use tsuzuri_contract::graph::{BeadAttr, GraphDoc, GraphNode, InvariantCheck, NodeKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::{Body, gaps, node_item};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::nodecard::card_of;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の判定の電文の g-2 の名指しを fx-g.9 と fx-g.15 に替え、`node` なら節点 fx-g.9 を足した本文。
 fn verdicts(node: bool) -> Fetched {
@@ -85,14 +76,6 @@ fn cadl_gaps_cards_rules() {
     };
     assert!(bare.found.is_empty());
     assert!(bare.cards.is_empty());
-}
-
-/// `start` から末尾までの字。
-fn after<'a>(text: &'a str, start: &str) -> &'a str {
-    let at = text
-        .find(start)
-        .unwrap_or_else(|| panic!("字 {start} が無い"));
-    &text[at..]
 }
 
 /// 宣言の字から、次の 4 つの空白と閉じ波括弧だけの行までの字。

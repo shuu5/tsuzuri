@@ -11,8 +11,9 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
+use crate::common::{now, tree};
 use tsuzuri_boundary::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
 use tsuzuri_boundary::server::seat::{self, DOCTOR_HOLD, HOLD, SLOW_HOLD, Seat};
 use tsuzuri_boundary::server::{Config, Server};
@@ -221,13 +222,6 @@ fn core_card(texts: &SeatTexts, now: u64) -> SeatCard {
     tsuzuri_core::seat::card(TARGET, anchor.as_deref(), texts, now)
 }
 
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
-}
-
 /// GET を 1 つ撃ち、（状態の code・本文）を返す。
 fn get(addr: SocketAddr, path: &str) -> (u16, String) {
     let mut s = TcpStream::connect(addr).expect("接続");
@@ -252,25 +246,6 @@ fn seat_card(addr: SocketAddr) -> SeatCard {
     let (status, body) = get(addr, seat::PATH);
     assert_eq!(status, 200, "{body}");
     wire::decode(&body).unwrap_or_else(|e| panic!("席の card の形でない {e}: {body}"))
-}
-
-/// dir の中の file の path と byte の一覧。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 #[test]

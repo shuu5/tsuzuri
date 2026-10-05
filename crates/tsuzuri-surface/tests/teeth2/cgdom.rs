@@ -3,19 +3,11 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::graph::GraphView;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::widgets::nodecard::{card_for, view_cards};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 例のグラフの眺め（契約の型の GraphView として読めなければ落ちる）。
 fn fixture() -> GraphView {

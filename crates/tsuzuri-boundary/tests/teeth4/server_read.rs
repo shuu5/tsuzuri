@@ -12,8 +12,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
+use crate::common::{EVENTS, INDEX, LEDGER, now};
 use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO, FOLIO_TIMEOUT};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::{PipelineBoard, Reading};
@@ -55,10 +56,6 @@ fn fixture(rel: &str) -> PathBuf {
 fn read_fixture(rel: &str) -> String {
     fs::read_to_string(fixture(rel)).expect("fixture")
 }
-
-const LEDGER: &str = "ledger/bd-list-8.json";
-const INDEX: &str = "graph/real/design-index.tsv";
-const EVENTS: &str = "graph/real/events.jsonl";
 
 /// 歯ごとの作業場（repo の置き場・面の file の置き場・state dir・偽の bd と偽の設計の道具）。
 struct Place {
@@ -190,13 +187,6 @@ impl Place {
             })
             .collect()
     }
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 /// 要求を 1 つ撃ち、接続が閉じるまで応答の（状態の code・頭・本文）を読む。

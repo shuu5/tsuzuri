@@ -2,10 +2,7 @@
 //! 窓の名を付ける所と開く手順（wasm の枝の字）・Cargo.toml と語の辞書と stylesheet を触らない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-use tsuzuri_contract::account::AccountDoc;
-use tsuzuri_contract::wire;
+use crate::common::{crate_dir, fixture, fixture_text, read};
 use tsuzuri_surface::account::windows::{
     self, ACCOUNT_WIN, EMPTY, FRONT, NOT_YET_KEY, OPEN_NEW_KEY, Opened, Win, WinState, after_close,
     after_open, button_text, open_url, row_class, state_mark, state_of, state_word, win_name,
@@ -14,22 +11,6 @@ use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::{Body, NO_CONTENT};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 fn win(project: &str, state: WinState) -> Win {
     Win {

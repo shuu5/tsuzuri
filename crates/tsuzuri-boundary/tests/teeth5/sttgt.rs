@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command as Process, Stdio};
 
+use crate::common::{src, strings};
 use tsuzuri_boundary::stage::cli::{
     Aim, Setting, TargetCall, aim, config_path, parse_target, project, show,
 };
@@ -92,17 +93,6 @@ fn value(default: Option<&str>, projects: &[(&str, &str)]) -> Targets {
             .collect(),
         shown: BTreeMap::new(),
     }
-}
-
-fn strings(words: &[&str]) -> Vec<String> {
-    words.iter().map(|w| w.to_string()).collect()
-}
-
-fn src(name: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/stage")
-        .join(name);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
 /// 歯ごとの作業場（前の撃ちの残りを消す）。

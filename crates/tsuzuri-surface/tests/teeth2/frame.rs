@@ -12,6 +12,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use crate::common::{crate_dir, read};
 use tsuzuri_boundary::server::ledger as server_ledger;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::AroundDoc;
@@ -26,14 +27,6 @@ use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::help::{self, Inline, Line};
 use tsuzuri_surface::widgets::hover::{Card, card_class};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture_rows() -> Vec<LedgerRow> {
     let text = read("../../tests/fixtures/ledger/board-8.jsonl");

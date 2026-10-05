@@ -4,9 +4,10 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
+use crate::common::root;
 use tsuzuri_boundary::cli::folio::program;
 
 /// 行 k-tz-drop の 11 節の filter の語の一覧 331 語（main 7ea3a2d3 の契約表の verify の最後の字・字のまま・空白で区切る）。
@@ -57,10 +58,6 @@ const FILTER_WORDS: &str = concat!(
     "tipx_dom_text tkad_ tlic_ topbar_ topfit_ tz_ tzent_ tzpar_ udacct_ udash_ unow_ urpanel_ uword_ ",
     "wsteady_ wstrip_"
 );
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn src(path: &str) -> String {
     fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path))

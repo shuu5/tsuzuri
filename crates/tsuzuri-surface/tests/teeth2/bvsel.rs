@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::card;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::{BeadFact, BeadId, LedgerRow};
 use tsuzuri_surface::ledgerlist::{
@@ -31,18 +32,6 @@ fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
         updated_at: NOW - 600,
         parent: None,
         labels: Vec::new(),
-    }
-}
-
-fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
-    PipelineCard {
-        contract: BeadId::new(id).expect("id"),
-        runs: 1,
-        stage,
-        reason: None,
-        account: None,
-        since: Some(since),
-        ci: None,
     }
 }
 

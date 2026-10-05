@@ -5,6 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use crate::common::crate_dir;
 use tsuzuri_surface::vocab::vocab;
 
 /// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由と受付の断りの名）。
@@ -27,10 +28,6 @@ const KEEP_CLASSES: [&str; 7] = [
     "nxlist",
     "unmeasured",
 ];
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))

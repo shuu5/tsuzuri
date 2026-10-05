@@ -2,15 +2,7 @@
 //! DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
+use crate::common::{crate_dir, read};
 
 /// `text` の中の `decl` から、その後の最初の行頭の閉じ括弧までの字。
 fn item<'a>(text: &'a str, decl: &str) -> &'a str {

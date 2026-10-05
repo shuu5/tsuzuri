@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
+use crate::common::card;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
-use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_surface::project::pipeline::columns;
 use tsuzuri_surface::tiles::{
     PHONE_MAX_PX, STACK_COL_MIN_PX, STACK_MAX_PX, STACK_MIN_PX, URGENT, WIDE_MIN_PX, default_open,
@@ -20,18 +20,6 @@ const NOW: u64 = 1_790_510_400;
 fn read(rel: &str) -> String {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
-    PipelineCard {
-        contract: BeadId::new(id).expect("id"),
-        runs: 1,
-        stage,
-        reason: None,
-        account: None,
-        since: Some(since),
-        ci: None,
-    }
 }
 
 /// stylesheet の中の `head` で始まる media の塊（次の行頭の閉じ括弧まで）。

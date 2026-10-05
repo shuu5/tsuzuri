@@ -5,13 +5,13 @@
 #![cfg(test)]
 
 use std::ffi::{OsStr, OsString};
-use std::fmt::Debug;
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::common::{LINE, debug, err, strings};
 use tsuzuri_boundary::stage::cli::USAGE;
 use tsuzuri_boundary::stage::launch;
 use tsuzuri_boundary::stage::notify::{
@@ -55,9 +55,6 @@ const TITLE: &str = "問い 2 つ it's \"見て\"";
 
 /// 節の board の URL（名は偽物・予約の頂の invalid）。
 const URL: &str = "http://srv-a.tailnet.invalid:4801/";
-
-/// 節の URL の行。
-const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
 
 /// 節の偽の tailnet の道具の出力（住所は文書の例の住所）。
 const STATUS: &str = r#"{
@@ -139,14 +136,6 @@ fn mode(path: &Path) -> u32 {
         & 0o777
 }
 
-/// Err の字（Ok なら落ちる）。
-fn err<T: Debug>(got: Result<T, String>, what: &str) -> String {
-    match got {
-        Ok(v) => panic!("{what}: Ok {v:?}"),
-        Err(e) => e,
-    }
-}
-
 /// 偽の program（sh の script・権限 0755）。
 fn fake(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
@@ -161,12 +150,6 @@ fn now() -> u64 {
         .expect("epoch 秒")
         .as_secs()
 }
-
-fn strings(words: &[&str]) -> Vec<String> {
-    words.iter().map(|w| w.to_string()).collect()
-}
-
-fn debug<T: Debug + Clone + PartialEq + Eq>() {}
 
 /// 節の記録。
 fn record(title: &str) -> Record {

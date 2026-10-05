@@ -3,15 +3,8 @@
 //! DOM は wasm の target のときだけなので、file の字で見る。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
+use crate::common::{crate_dir, read};
+use std::path::Path;
 
 fn squeeze(text: &str) -> String {
     text.chars().filter(|c| !c.is_whitespace()).collect()

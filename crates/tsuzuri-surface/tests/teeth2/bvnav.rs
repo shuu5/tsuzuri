@@ -3,19 +3,10 @@
 //! 帯の印が開く窓の層を頁に 1 つ置く。消した質問の頁と抜けの検査の頁への link は、窓を開く home の頁の URL（query の win）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{crate_dir, read};
 use tsuzuri_surface::frame::{self, Mode, PageId};
 use tsuzuri_surface::project::{ledger, pipeline};
 use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 窓の名は 8 つ（相談の窓 consult は行 cs-bar）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
 #[test]

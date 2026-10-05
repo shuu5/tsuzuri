@@ -12,6 +12,7 @@ use std::process;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::common::LOAD;
 use tsuzuri_boundary::stage::cdp::{
     self, Command, DOM_EXPRESSION, LOAD_EVENT, MEASURE_EXPRESSION, Session, Step,
 };
@@ -187,9 +188,6 @@ const MESSAGES: [&str; 17] = [
     r#"{"id":16,"method":"Runtime.enable","params":{}}"#,
     r#"{"id":17,"method":"Log.enable","params":{}}"#,
 ];
-
-/// 読み込みの終わりの event の字。
-const LOAD: &str = r#"{"method":"Page.loadEventFired","params":{"timestamp":1}}"#;
 
 /// console の event の字。
 const CONSOLE: &str = r#"{"method":"Runtime.consoleAPICalled","params":{"type":"log","args":[]}}"#;

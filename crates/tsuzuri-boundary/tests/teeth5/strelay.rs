@@ -15,6 +15,7 @@ use std::process::{ChildStdin, ChildStdout, Command as Process};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::common::{src, strings};
 use tsuzuri_boundary::stage::cdp::{Command, HISTORY, Session};
 use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch;
@@ -192,17 +193,6 @@ fn fixture() -> String {
 
 fn term(name: &str) -> Terminal {
     terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
-}
-
-fn src(name: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/stage")
-        .join(name);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn strings(words: &[&str]) -> Vec<String> {
-    words.iter().map(|w| w.to_string()).collect()
 }
 
 /// 節の自分の board。

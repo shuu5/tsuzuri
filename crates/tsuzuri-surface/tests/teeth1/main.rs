@@ -33,3 +33,4 @@ mod bvfive;
 mod bvfront;
 mod bvgdom;
 mod bvhelp;
+mod common;

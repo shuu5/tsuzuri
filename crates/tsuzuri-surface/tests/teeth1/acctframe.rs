@@ -4,10 +4,10 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::common::{crate_dir, fixture, fixture_text, read};
 use tsuzuri_contract::account::{self as contract_account, AccountDoc};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
-use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{
     self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
     session, stage, stuck_count, tab_href, tab_links, windows,
@@ -16,22 +16,6 @@ use tsuzuri_surface::frame::{Mode, PageId, STACK};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 /// src の account の下の .rs の file（名の順）。
 fn account_sources() -> Vec<(PathBuf, String)> {

@@ -11,6 +11,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{TZW, err, git, out, rc, script};
 use tsuzuri_boundary::server::{events, ruling};
 use tsuzuri_contract::consult::{FindingId, Form, ProcMark, Via, WindowId};
 use tsuzuri_contract::wire;
@@ -24,23 +25,6 @@ const LEDGER: &str = r#"[
 {"id":"fx-c.1","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-c","updated_at":"2026-10-03T00:00:00Z"},
 {"id":"fx-c.2","title":"問いの題名","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-c.1","description":"問いの本文","updated_at":"2026-10-03T00:00:00Z"}
 ]"#;
-
-const TZW: &str = "/x/tzw";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let ok = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(ok.success(), "git {args:?}");
-}
 
 /// argv を字 0x1f で区切り、撃たれた回ごとに 1 行を足す殻の字。
 fn record(log: &Path) -> String {
@@ -212,18 +196,6 @@ impl Fx {
         )
         .unwrap()
     }
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
-}
-
-fn err(o: &Output) -> String {
-    String::from_utf8(o.stderr.clone()).unwrap()
 }
 
 /// 私用の temp を消す（歯の前と後）。

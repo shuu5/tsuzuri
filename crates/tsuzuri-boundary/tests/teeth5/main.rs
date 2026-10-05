@@ -7,6 +7,7 @@ mod aggc;
 mod aggd;
 mod aggs;
 mod cmtcnt;
+mod common;
 mod cwans;
 mod cwcls;
 mod cwhok;

@@ -5,10 +5,10 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{err, git, out, rc, script};
 use tsuzuri_boundary::server::{events, ruling};
 use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
 use tsuzuri_contract::wire;
@@ -21,21 +21,6 @@ const LEDGER: &str = r#"[
 {"id":"fx-hub.5","title":"控え","status":"open","issue_type":"task","labels":["intake:memo"],"parent":"fx-hub","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"},
 {"id":"fx-hub.7","title":"問い","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-hub.5","updated_at":"2026-10-03T00:00:00Z"}
 ]"#;
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let ok = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(ok.success(), "git {args:?}");
-}
 
 /// 歯ごとの置き場（窓 cw3 の作業場と所見 cw3-1 を置いた後）。
 struct Fx {
@@ -173,18 +158,6 @@ impl Fx {
         self.notes(&lines);
         let _ = fs::remove_file(self.root.join("bdw.log"));
     }
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
-}
-
-fn err(o: &Output) -> String {
-    String::from_utf8(o.stderr.clone()).unwrap()
 }
 
 fn time_of(text: &str) -> String {

@@ -4,6 +4,7 @@
 //! 土台は folio2 の凍結の土台 floor_base の design-intent の写し（git の 1 commit）と、器の欄の写しに basis を足した file。
 //! 否定の見本は正しい見本から 1 句だけ替える。
 #![cfg(test)]
+use crate::common::{root, stdout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -13,10 +14,6 @@ const ROW_END: &str = ", depends: []}";
 
 /// 器の欄の写しに足す欄 basis の塊。
 const BASIS_FIELD: &str = "\n[[field]]\nname = \"basis\"\nneed = \"optional\"\nshape = \"list\"\n";
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn copy_tree(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).expect("写しの dir");
@@ -117,10 +114,6 @@ impl Work {
             .collect();
         (out.status.code(), lines)
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
 }
 
 #[test]

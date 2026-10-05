@@ -4,22 +4,14 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{SeatCard, TickHealth};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::seat::{
     BLANK, NG, OK, age_text, tick_age, tick_class, tick_mark, top,
 };
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn card(name: &str) -> SeatCard {
     let mut all: BTreeMap<String, SeatCard> =

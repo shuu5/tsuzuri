@@ -3,26 +3,9 @@
 //! この file の歯の名が着地済みの行の filter の語を含まない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{ledger_questions, question_list, read};
 use tsuzuri_surface::project::{Body, ask, askpage};
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn question_list() -> Fetched {
-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
-}
-
-fn ledger_questions() -> Fetched {
-    Fetched::Body(read("../../tests/fixtures/surface/ledger-questions.json"))
-}
 
 /// 字 `from` が最初に在る所から file の終わりまで（無ければ落ちる）。
 fn tail<'a>(text: &'a str, from: &str, module: &str) -> &'a str {

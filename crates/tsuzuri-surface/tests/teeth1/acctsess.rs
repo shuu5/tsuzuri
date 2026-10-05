@@ -2,8 +2,7 @@
 //! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）・席なしの行・読めないときは測れていない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{fixture, fixture_text, read};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatSpan, SeatState};
@@ -20,22 +19,6 @@ use tsuzuri_surface::project::seat::{
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 /// 行の順（fixture の行の番号・1 から）。
 fn order(doc: &AccountDoc, sort: Sort) -> Vec<usize> {

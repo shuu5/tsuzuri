@@ -5,8 +5,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::wire;
@@ -14,14 +14,6 @@ use tsuzuri_surface::account::home::EXPERT_CHARS;
 use tsuzuri_surface::project::ledger;
 use tsuzuri_surface::project::seat::{self, MOVING, Seat, Span};
 use tsuzuri_surface::project::{fold_key_ok, fold_keys};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の 5 組（組の名 → 電文の型）。
 fn fixture() -> BTreeMap<String, SeatCard> {

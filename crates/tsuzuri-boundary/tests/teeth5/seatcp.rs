@@ -3,6 +3,7 @@
 //! 規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
 #![cfg(test)]
 
+use crate::common::RULES;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -32,13 +33,6 @@ articles:
   - id: P-2
     tier: always
     title: 題よん
-";
-
-/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
-const RULES: &str = "thresholds:
-  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
-  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
-discipline: []
 ";
 
 /// 要の写しの字（頭の行・順位・段の名と規範文・段「いつも守る」の条の id と題・在りか）。

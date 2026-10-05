@@ -2,12 +2,10 @@
 //! 段ごとの測れていない・移動の畳み・出さない物・語の辞書と stylesheet と依存。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{fixture, fixture_text, read};
 use tsuzuri_contract::account::{AccountDoc, MoveRow};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
-use tsuzuri_contract::wire;
 use tsuzuri_surface::account::{self, home};
 use tsuzuri_surface::account::home::{
     ACCOUNTS_UNREAD, ACCT_HEADS, AcctRow, Cells, GROUPS_UNREAD, GroupView, Home, MARK_KINDS,
@@ -19,22 +17,6 @@ use tsuzuri_surface::project::seat::{NG, OK, window_row};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 fn filled<T: std::fmt::Debug>(body: Body<T>) -> T {
     match body {

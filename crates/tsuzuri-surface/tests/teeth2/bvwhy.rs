@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use tsuzuri_contract::EpochSecs;
+use crate::common::NOW;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::case::{CaseLinks, CasePart};
 use tsuzuri_contract::ledger::BeadId;
@@ -13,8 +13,6 @@ use tsuzuri_surface::widgets::pop::{
     APPROVAL_KEYS, Fact, Partner, REASON_HEAD, REASONS, STAGE_KEYS, Src, Val, WHY_KEYS, pop,
     reason_key, reason_val, with_why,
 };
-
-const NOW: EpochSecs = 1_790_000_000;
 
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);

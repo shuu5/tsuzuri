@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::common::{git, out, rc};
 use tsuzuri_contract::consult::{
     Finding, FindingId, Form, ProcMark, Starter, WindowFile, WindowId,
 };
@@ -23,16 +24,6 @@ const RQ_LINE: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし�
 const TAIL: &str = "・「/x/tzw consult watch」を背景で置き直す";
 
 const GONE5: &str = "相談: 話す窓 cw5 が止まった（開き直しを待つ・持ち主が閉じると言えば /x/tzw consult close cw5 --by chat）";
-
-fn git(dir: &Path, args: &[&str]) {
-    let ok = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(ok.success(), "git {args:?}");
-}
 
 /// 歯ごとの置き場。
 struct Fx {
@@ -139,14 +130,6 @@ fn proc_mark(ws: &Path, k: u32, form: Form, pid: u32) {
     };
     let path = ws.join(format!(".consult/proc-{k}.json"));
     fs::write(path, wire::encode(&m).unwrap()).unwrap();
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
 }
 
 /// 窓 cw3 の作業場に、fixture complete.json の草稿に id と時刻を足した揃った所見 cw3-1 を置く。

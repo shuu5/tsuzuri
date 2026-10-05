@@ -6,8 +6,7 @@
 //! 段の端の字は段の中へ寄せる。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::graph::{AroundRow, GraphNode, NodeKind};
 use tsuzuri_contract::ledger::READ_HOLD_S;
@@ -19,14 +18,6 @@ use tsuzuri_surface::project::timeline::run_card;
 use tsuzuri_surface::vocab::label;
 use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_STATE, card_for};
 use tsuzuri_surface::wins::{Stalled, stalled_card};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// `from` の字から次の `to` の字までの切り（`to` を含まない）。
 fn between<'a>(text: &'a str, from: &str, to: &str) -> &'a str {

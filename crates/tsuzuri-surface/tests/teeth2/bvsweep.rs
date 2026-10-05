@@ -4,18 +4,11 @@
 //! DOM は host で撃てないので、src の字で見る。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::{crate_dir, read};
 use tsuzuri_contract::ledger::{BeadId, LedgerRow, QUESTION_LABEL};
 use tsuzuri_surface::project::{Item, item};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// src の下の .rs の file の相対の path と字（path の順）。
 fn sources() -> Vec<(String, String)> {

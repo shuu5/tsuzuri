@@ -2,8 +2,7 @@
 //! 列の最大と最小の印・台帳が Unknown の行・詳しくの段の開き閉じは URL と画面の外の保存に書かない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{fixture, fixture_text, read};
 use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{LedgerJudge, Reading};
 use tsuzuri_contract::stats::{LedgerStats, OpenCounts};
@@ -18,22 +17,6 @@ use tsuzuri_surface::project::ledger::{JUDGES, NONE};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 /// fixture の proj-a の台帳（Known）の複製。
 fn base_stats() -> LedgerStats {

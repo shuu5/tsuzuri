@@ -3,8 +3,7 @@
 //! 電文が読めない・群の枠が無い時は測れていないの card。DOM は口 /api/account を 1 度読み、指を置いた時に card を組む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::account::{AccountDoc, GroupCard};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
@@ -23,14 +22,6 @@ const NOW: u64 = 1790510400;
 /// 群の chip の card（描く今は電文の at）。
 fn group_card(account: &Fetched, name: &str) -> Card {
     tsuzuri_surface::project::seat::group_card(account, name, NOW)
-}
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
 }
 
 fn fixture_text() -> String {

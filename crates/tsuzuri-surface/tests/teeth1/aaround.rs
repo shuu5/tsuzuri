@@ -2,22 +2,13 @@
 //! 開くまで空の path・見つからないも理由の 1 行・通信の module は空の path を読まない・nodearound と ask の字）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_surface::project::nodearound::{
     NO_NODE, PageState, REASON, center_path, embed_path, embed_reason, id_of, request, state,
     unmeasured_reason,
 };
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// `text` の `from` の最初の所から、その後の最初の `to` まで（`to` が無ければ終わりまで）。
 fn span<'a>(text: &'a str, from: &str, to: &str) -> &'a str {

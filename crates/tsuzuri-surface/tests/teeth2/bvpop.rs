@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use tsuzuri_contract::EpochSecs;
+use crate::common::NOW;
 use tsuzuri_contract::board::{Ci, PipelineCard, Reading, Stage};
 use tsuzuri_contract::case::{CaseLinks, CasePart};
 use tsuzuri_contract::graph::{BeadAttr, GraphDoc, NodeKind, SkippedEdges};
@@ -22,8 +22,6 @@ use tsuzuri_surface::widgets::pop::{
     SCRIM, STAGE_KEYS, Src, Sum, UNKNOWN_KEY, Val, Via, anchor_selectors, board_unread, hit_of,
     next_href, place, pop, toggle,
 };
-
-const NOW: EpochSecs = 1_790_000_000;
 
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);

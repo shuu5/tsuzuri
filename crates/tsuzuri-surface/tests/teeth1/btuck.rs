@@ -3,21 +3,12 @@
 //! 行 m-map-graph で消した。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::{BoxFold, GraphNode, GraphView, NodeKind, ViewNode};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{band_of, kind_key};
 use tsuzuri_surface::widgets::nodecard::{NO_GIST, card_for, group_card, view_cards};
 use tsuzuri_surface::vocab::{label, vocab};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 例のグラフの眺め（fixture の 8 節点・欄 group と fold は無いので偽と Leaf）。
 fn fixture() -> GraphView {

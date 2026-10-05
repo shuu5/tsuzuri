@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::common::TZW;
 use tsuzuri_boundary::consult::watch::{ALIVE, FRESH};
 use tsuzuri_boundary::hook::consult::{PICK_BUDGET, pick};
 use tsuzuri_boundary::hook::question_signal::{REACH, WAIT};
@@ -29,7 +30,6 @@ use tsuzuri_contract::wire;
 use tsuzuri_core::consult::pickup::{block_with, context_with};
 use tsuzuri_core::delivery::{Pending, block, context_for};
 
-const TZW: &str = "/x/tzw";
 const STOP: &str = r#"{"session_id":"s-1","hook_event_name":"Stop","stop_hook_active":false}"#;
 const STOP_AGAIN: &str = r#"{"session_id":"s-1","hook_event_name":"Stop","stop_hook_active":true}"#;
 const PROMPT: &str =

@@ -4,22 +4,14 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::graph::{AroundDoc, GraphDoc};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::around::{as_view, chain, layout, svg};
 use tsuzuri_surface::mapview::state;
 use tsuzuri_surface::widgets::hover::{Card, leaves, over_shows};
 use tsuzuri_surface::widgets::nodecard::{card_for, node_card, view_cards};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn graph_fixture() -> GraphDoc {
     wire::decode(&read("../../tests/fixtures/surface/graph-doc.json"))

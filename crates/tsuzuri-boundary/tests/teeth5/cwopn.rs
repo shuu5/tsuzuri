@@ -5,10 +5,10 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{err, git, out, rc, script};
 use tsuzuri_boundary::consult::{self, bundle};
 use tsuzuri_boundary::server::{events, ruling};
 use tsuzuri_contract::consult::{
@@ -27,21 +27,6 @@ const LEDGER: &str = r#"[
 ]"#;
 
 const RQ: &str = "rq-20261003T1412Z-1";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let ok = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(ok.success(), "git {args:?}");
-}
 
 /// 歯ごとの置き場。
 struct Fx {
@@ -158,18 +143,6 @@ impl Fx {
         names.sort();
         names
     }
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
-}
-
-fn err(o: &Output) -> String {
-    String::from_utf8(o.stderr.clone()).unwrap()
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
 }
 
 fn tz_exe() -> String {

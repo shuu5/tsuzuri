@@ -3,10 +3,9 @@
 //! 0 件と測れていないの区別・画面の外の保存の口の名が code に無い・足す外の依存は 0 本。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{bead, ledger_questions, question_list, read};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerList};
+use tsuzuri_contract::ledger::LedgerList;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::{
     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
@@ -17,31 +16,11 @@ use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
 use tsuzuri_surface::view::{Fetched, clock};
 use tsuzuri_surface::vocab::vocab;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn question_list() -> Fetched {
-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
-}
-
-fn ledger_questions() -> Fetched {
-    Fetched::Body(read("../../tests/fixtures/surface/ledger-questions.json"))
-}
-
 fn filled_cards() -> Vec<ask::Card> {
     match ask::body(&question_list()) {
         Body::Filled(cards) => cards,
         other => panic!("fixture の card が中身にならない: {other:?}"),
     }
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead の id")
 }
 
 

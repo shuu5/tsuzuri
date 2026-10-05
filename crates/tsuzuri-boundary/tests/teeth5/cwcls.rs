@@ -7,10 +7,10 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{err, git, out, rc, script};
 use tsuzuri_boundary::consult::Ctx;
 use tsuzuri_boundary::consult::list::{NO_ACCOUNT, board, epoch_of, text};
 use tsuzuri_boundary::server::{events, ruling};
@@ -26,21 +26,6 @@ use tsuzuri_core::consult::launch::private_tmp;
 const LEDGER: &str = r#"[{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"}]"#;
 
 const RQ: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let ok = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(ok.success(), "git {args:?}");
-}
 
 fn w(n: u32) -> WindowId {
     WindowId::new(n).unwrap()
@@ -182,18 +167,6 @@ fn mark(ws: &Path, k: u32, form: Form, pid: u32, tmux: Option<&str>) {
         wire::encode(&m).unwrap(),
     )
     .unwrap();
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
-}
-
-fn err(o: &Output) -> String {
-    String::from_utf8(o.stderr.clone()).unwrap()
 }
 
 /// 一覧の歯の置き場（cw1 生きている問う窓・cw2 止まった問う窓・cw3 process の印が生きている閉じた窓・cw4 閉じの行の在る退いた窓・cw5 起こしていない窓）。

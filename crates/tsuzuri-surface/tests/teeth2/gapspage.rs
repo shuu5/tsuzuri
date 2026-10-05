@@ -3,20 +3,11 @@
 //! fixture の大きさ・足す外の依存は 0 本。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::{InvariantCheck, Verdict};
 use tsuzuri_surface::project::{Body, NOT_READ, gaps, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 const FIXTURE: &str = "../../tests/fixtures/surface/invariants.json";
 

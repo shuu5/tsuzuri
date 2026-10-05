@@ -4,17 +4,10 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::common::{crate_dir, read};
 use tsuzuri_contract::graph::EdgeType;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::around::edge_name;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// src の下の .rs の file の全部（path の順）。
 fn sources() -> Vec<(PathBuf, String)> {

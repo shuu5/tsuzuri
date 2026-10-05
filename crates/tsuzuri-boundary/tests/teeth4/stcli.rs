@@ -6,7 +6,6 @@
 
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
@@ -18,6 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::common::{LINE, LOAD, debug, err, fixture, strings, term};
 use tsuzuri_boundary::stage::cdp::Command;
 use tsuzuri_boundary::stage::cli::{
     self, Call, LOCK_WAIT, SEAT_ENV, TIMEOUT, USAGE, VALIDATE_ARGS, Verb,
@@ -26,7 +26,7 @@ use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch;
 use tsuzuri_boundary::stage::memo;
 use tsuzuri_boundary::stage::target::{self, Targets};
-use tsuzuri_boundary::stage::terminal::{self, Terminal};
+use tsuzuri_boundary::stage::terminal;
 use tsuzuri_boundary::stage::tunnel::{self, Tunnel};
 use tsuzuri_boundary::stage::url::{self, Board};
 use tsuzuri_contract::stage::StageTargets;
@@ -52,9 +52,6 @@ const FILTER_WORDS: &str = concat!(
 
 /// 節の board の URL（名は偽物・予約の頂の invalid）。
 const BOARD_URL: &str = "http://srv-a.tailnet.invalid:4801/";
-
-/// 節の URL の行。
-const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
 
 /// 節の term-a の窓が在る時の行（起こさない）。
 const LIVE_A: &str =
@@ -83,9 +80,6 @@ const DOM: &str = "<html><body>eyes</body></html>";
 /// 偽の席の目の Chrome が Runtime.enable の前に送る console の event と、sessionId の付いたその字。
 const CONSOLE: &str = r#"{"method":"Runtime.consoleAPICalled","params":{"type":"log","args":["hello"]}}"#;
 const CONSOLE_LINE: &str = r#"{"sessionId":"S1","method":"Runtime.consoleAPICalled","params":{"type":"log","args":["hello"]}}"#;
-
-/// 読み込みの終わりの event の字。
-const LOAD: &str = r#"{"method":"Page.loadEventFired","params":{"timestamp":1}}"#;
 
 /// 節の偽の tailnet の道具の出力（住所は文書の例の住所で tailnet の住所でない）。
 const STATUS: &str = r#"{
@@ -207,24 +201,11 @@ type Flags<'a> = &'a [(&'a str, &'a str)];
 /// one の型。
 type OneFn = for<'a> fn(&'a str, Flags<'a>) -> Result<Line, String>;
 
-fn fixture() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn term(name: &str) -> Terminal {
-    terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
-}
-
 fn src(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/stage")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn strings(words: &[&str]) -> Vec<String> {
-    words.iter().map(|w| w.to_string()).collect()
 }
 
 /// 節の自分の board（hosts は節の status の self_hosts）。
@@ -270,14 +251,6 @@ fn mode(path: &Path) -> u32 {
         .permissions()
         .mode()
         & 0o777
-}
-
-/// Err の字（Ok なら落ちる）。
-fn err<T: Debug>(got: Result<T, String>, what: &str) -> String {
-    match got {
-        Ok(v) => panic!("{what}: Ok {v:?}"),
-        Err(e) => e,
-    }
 }
 
 /// 偽の ssh の tunnel の回の振る舞い。
@@ -714,8 +687,6 @@ fn verb_name(verb: &Verb) -> &'static str {
         Verb::Open => "open",
     }
 }
-
-fn debug<T: Debug + Clone + PartialEq + Eq>() {}
 
 #[test]
 fn stcli_shape_and_consts() {

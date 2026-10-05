@@ -29,6 +29,7 @@ mod cadl;
 mod cadq;
 mod cgdom;
 mod cmark;
+mod common;
 mod cround;
 mod ctickface;
 mod epolqhist;

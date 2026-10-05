@@ -5,11 +5,10 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::{bead, question_list, read};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::title36;
-use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
@@ -21,18 +20,6 @@ use tsuzuri_surface::project::{Body, NOT_READ, batch, policy};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn question_list() -> Fetched {
-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
-}
-
 fn fixture_cards() -> Vec<QuestionCard> {
     ask::cards(&question_list()).expect("fixture の card")
 }
@@ -42,10 +29,6 @@ fn fixture_rows() -> Vec<batch::Row> {
         Body::Filled(rows) => rows,
         other => panic!("fixture の行が中身にならない: {other:?}"),
     }
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead の id")
 }
 
 fn ruling(id: &str) -> RulingId {

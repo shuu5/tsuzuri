@@ -2,8 +2,9 @@
 //! 並べは電文を読む 1 か所（account の doc）で arrange を通し、doc を通して組む block はどれも同じ並びを受ける。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use crate::common::{crate_dir, fixture, fixture_text, read, sources};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
@@ -12,22 +13,6 @@ use tsuzuri_surface::account::session::{Head, Sort};
 use tsuzuri_surface::account::{self, home, session};
 use tsuzuri_surface::project::{Body, NOT_READ};
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 fn strings(names: &[&str]) -> Vec<String> {
     names.iter().map(|s| s.to_string()).collect()
@@ -162,30 +147,6 @@ fn aord_blocks_follow() {
         })
         .collect();
     assert_eq!(heads, vec!["acct-1", "acct-2", "acct-10"]);
-}
-
-/// src の下の .rs の file の全部（path の順）。
-fn sources() -> Vec<(PathBuf, String)> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                walk(&p, out);
-            } else if p.extension().is_some_and(|x| x == "rs") {
-                out.push(p);
-            }
-        }
-    }
-    let mut paths = Vec::new();
-    walk(&crate_dir().join("src"), &mut paths);
-    paths.sort();
-    paths
-        .into_iter()
-        .map(|p| {
-            let text = std::fs::read_to_string(&p).expect("src の file");
-            (p, text)
-        })
-        .collect()
 }
 
 /// (4) 電文を読む所は account の mod.rs の doc の 1 つだけで、doc の本体が arrange を通す。

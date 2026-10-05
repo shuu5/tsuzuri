@@ -2,39 +2,7 @@
 //! 面の src が眺めの口の字を持たず、グラフの module には近傍の図と節点の頁と節点の card が引く項だけが残る。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// src の下の .rs の file の全部（path の順）。
-fn sources() -> Vec<(PathBuf, String)> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                walk(&p, out);
-            } else if p.extension().is_some_and(|x| x == "rs") {
-                out.push(p);
-            }
-        }
-    }
-    let mut paths = Vec::new();
-    walk(&crate_dir().join("src"), &mut paths);
-    paths.sort();
-    paths
-        .into_iter()
-        .map(|p| {
-            let text = std::fs::read_to_string(&p).expect("src の file");
-            (p, text)
-        })
-        .collect()
-}
+use crate::common::{crate_dir, read, sources};
 
 /// file の頭の段の pub の項の名（行の頭が `pub const`・`pub fn`・`pub struct`・`pub enum`・`pub mod` の行・file の順）。
 fn pub_items(rel: &str) -> Vec<String> {

@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use crate::common::{refused, tree};
 use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::accthb::{
     BAD_BODY, HEARTBEAT_ARGS, NO_PROJECT, NO_SEAT, VESSEL_FAILED, accept, word,
@@ -202,25 +203,6 @@ impl Place {
     }
 }
 
-/// dir の中の file の path と byte の一覧。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
-}
-
 fn body(project: &str, to: &str) -> String {
     format!("{{\"project\":\"{project}\",\"to\":\"{to}\"}}")
 }
@@ -232,10 +214,6 @@ fn ok(target: &str, to: Heartbeat) -> (u16, String) {
     })
     .expect("応答の字");
     (200, json)
-}
-
-fn refused(status: u16, text: &str) -> (u16, String) {
-    (status, text.to_string())
 }
 
 #[test]

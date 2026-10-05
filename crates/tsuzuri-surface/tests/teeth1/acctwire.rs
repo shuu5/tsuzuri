@@ -1,18 +1,11 @@
 //! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (6)(7)・header の (5) は行 g-dead-sweep-b で消した）。
 #![cfg(test)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::read;
 use tsuzuri_surface::account::windows::ACCOUNT_WIN;
 use tsuzuri_surface::frame::{ACCOUNT_URL, BackStep, back_steps};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// (6) tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じる。
 #[test]

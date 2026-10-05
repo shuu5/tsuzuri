@@ -3,8 +3,7 @@
 //! 読めないときは測れていない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{fixture, fixture_text, read};
 use tsuzuri_contract::account::{AccountDoc, RunCounts};
 use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
 use tsuzuri_contract::wire;
@@ -24,22 +23,6 @@ use tsuzuri_surface::vocab::vocab;
 
 /// 描く今（fixture の電文の at）。
 const NOW: u64 = 1_790_510_400;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture_text() -> String {
-    read("../../tests/fixtures/account/acct-doc.json")
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
-}
 
 /// 行の project の名（並びの順）。
 fn names(doc: &AccountDoc, sort: PSort) -> Vec<String> {

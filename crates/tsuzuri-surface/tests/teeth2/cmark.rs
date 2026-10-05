@@ -2,20 +2,11 @@
 //! fixture の札の値・mod dom の字・歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, CLOSED_TAG, closed_card, kcard};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 札を描く今（2026-09-27T12:00:00Z）。
 const NOW: u64 = 1_790_510_400;

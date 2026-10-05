@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{err, out, rc};
 use tsuzuri_boundary::server::{events, ruling};
 use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
 use tsuzuri_contract::wire;
@@ -79,18 +80,6 @@ fn guard(args: &[&str], payload: &str) -> Output {
         assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "{e}");
     }
     child.wait_with_output().unwrap()
-}
-
-fn rc(o: &Output) -> i32 {
-    o.status.code().unwrap()
-}
-
-fn out(o: &Output) -> String {
-    String::from_utf8(o.stdout.clone()).unwrap()
-}
-
-fn err(o: &Output) -> String {
-    String::from_utf8(o.stderr.clone()).unwrap()
 }
 
 /// findings/ の file の名（字の順）。

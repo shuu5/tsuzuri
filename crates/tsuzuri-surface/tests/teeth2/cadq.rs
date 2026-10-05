@@ -3,8 +3,7 @@
 //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{after, read};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::GraphDoc;
 use tsuzuri_contract::ledger::{BeadId, LedgerList};
@@ -13,14 +12,6 @@ use tsuzuri_surface::project::{Body, askpage};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::hover::{Card, unmount_hides};
 use tsuzuri_surface::widgets::nodecard::card_of;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn graph_text() -> String {
     read("../../tests/fixtures/surface/graph-doc.json")
@@ -115,14 +106,6 @@ fn cadq_hist_cards_rules() {
     for g in unread() {
         assert!(askpage::hist_cards(&rows, &g).is_empty(), "{g:?}");
     }
-}
-
-/// `start` から末尾までの字。
-fn after<'a>(text: &'a str, start: &str) -> &'a str {
-    let at = text
-        .find(start)
-        .unwrap_or_else(|| panic!("字 {start} が無い"));
-    &text[at..]
 }
 
 /// `start` から `end` の前までの字。

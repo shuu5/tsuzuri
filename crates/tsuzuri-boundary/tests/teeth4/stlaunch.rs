@@ -18,9 +18,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::common::{strings, term};
 use tsuzuri_boundary::stage::json;
 use tsuzuri_boundary::stage::launch::{self, PORT, WINDOW_SIZE};
-use tsuzuri_boundary::stage::terminal::{self, Os, Terminal};
+use tsuzuri_boundary::stage::terminal::{Os, Terminal};
 use tsuzuri_boundary::stage::tunnel::{self, SOCKET, Tunnel, Window};
 use tsuzuri_boundary::stage::url::Board;
 
@@ -206,24 +207,11 @@ fn board() -> Board {
     }
 }
 
-fn fixture() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn term(name: &str) -> Terminal {
-    terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
-}
-
 fn src(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/stage")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn strings(words: &[&str]) -> Vec<String> {
-    words.iter().map(|w| w.to_string()).collect()
 }
 
 fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {

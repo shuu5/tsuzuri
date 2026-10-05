@@ -2,8 +2,7 @@
 //! 応答の出し方・送る間の状態の移り方）。fixture は便 b-acct の tests/fixtures/account/acct-doc.json（読むだけ）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::account::{
     self as contract_account, AccountDoc, Heartbeat, HeartbeatRequest,
 };
@@ -17,14 +16,6 @@ use tsuzuri_surface::account::heartbeat::{
 };
 use tsuzuri_surface::account::session::{self, Sort, table};
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))

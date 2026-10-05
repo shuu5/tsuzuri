@@ -11,8 +11,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::common::{EVENTS, INDEX, LEDGER, now};
 use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
@@ -40,10 +40,6 @@ fn fixture(rel: &str) -> PathBuf {
 fn read_fixture(rel: &str) -> String {
     fs::read_to_string(fixture(rel)).expect("fixture")
 }
-
-const LEDGER: &str = "ledger/bd-list-8.json";
-const INDEX: &str = "graph/real/design-index.tsv";
-const EVENTS: &str = "graph/real/events.jsonl";
 
 /// 近傍の歯の中心（実物の索引に在る規則の行）。
 const CENTER: &str = "R-25";
@@ -130,13 +126,6 @@ impl Place {
             .expect("記録の置き場")
             .count()
     }
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 /// 要求を 1 つ撃ち、接続が閉じるまで応答の（状態の code・頭・本文）を読む。

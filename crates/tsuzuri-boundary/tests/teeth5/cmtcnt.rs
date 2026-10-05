@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::stdout;
 use tsuzuri_boundary::cli::graph::{UNLANDED_HEAD, UNLANDED_UNKNOWN, unlanded_line};
 use tsuzuri_boundary::server::board::{Texts, built, built_floors};
 use tsuzuri_contract::board::Reading;
@@ -148,10 +149,6 @@ fn texts(events: &str) -> Texts {
         summary: SUM.to_string(),
         rulings: String::new(),
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
 }
 
 fn stderr(out: &Output) -> String {
