@@ -1,16 +1,16 @@
-# 設計ノート surface-wave29c — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-59 と ADR-61 の承認・承認の列〕・行の拠り = 行 ag-plugin は判断の記録 ADR-59 と ADR-61・器の行 v-commute-wire は判断の記録 ADR-60・ノート surface-wave29b の契約表の枠が尽きたので起こした）
+# 設計ノート surface-wave29c — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-59 と ADR-61 の承認・承認の列〕・行の拠り = 行 ag-plugin は判断の記録 ADR-59 と ADR-61・器の行 v-commute-wire は判断の記録 ADR-60・器の行 v-follow-mtime は判断の記録 ADR-62・ノート surface-wave29b の契約表の枠が尽きたので起こした）
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave29c.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave29c.toml#<行 id>。
 meta:
   id: surface-wave29c
-  title: 第 29 波 c — 席が起こす係の型と規律の手引きと門の設定（判断の記録 ADR-59）・検証の群の係の門（判断の記録 ADR-61）・器の入口の排他の差の当たりの配線（判断の記録 ADR-60）・ノート surface-wave29b の続き
-  version: v0.2
+  title: 第 29 波 c — 席が起こす係の型と規律の手引きと門の設定（判断の記録 ADR-59）・検証の群の係の門（判断の記録 ADR-61）・器の入口の排他の差の当たりの配線（判断の記録 ADR-60）・追随の載せ替えの時刻の戻し（判断の記録 ADR-62）・ノート surface-wave29b の続き
+  version: v0.3
   status: effective
   generated: 2026-10-05
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.87.1（裁定 id = t3-hub.87.1:20261005T0512Z-1・甲・配達の口・notes に逐語）〔判断の記録 ADR-59 の承認・ノートの承認〕, verbatim: これについては推奨で進めて良いが、例えば広い範囲の調査が必要なときはWF骨格を作っておいてそれを使ったほうがいい場合もあるよね？事実の検証も同様だ。ただしWFは下手に作ると大量のagentをたててトークンをいたずらに消費するのでそうならないような抑制や検証と逆にいつ必要かというトリガーとよく考える必要があるのでこの件は改めてよく検討した上で俺に聞いて, surface: R-8}
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.87.6（裁定 id = t3-hub.87.6:20261005T0818Z-1・乙・配達の口・notes に逐語）・前の裁定 t3-hub.87.2（裁定 id = t3-hub.87.2:20261005T0639Z-1・乙）〔判断の記録 ADR-61 の承認・ノートの承認〕, verbatim: 推奨でよい, surface: R-8}
-  note: ノート surface-wave29b（契約表の枠の最後は群の係の門の行に回した）の続きで、生きたノートの上限（規則の行 R-31）のため、契約表の行を持たないノート surface を同じ commit で廃止した。承認は判断の記録 ADR-59 と ADR-61 の持ち主の裁定（承認の列・逐語は各記録の承認の欄の字）。第 0.1 版（2026-10-05）は、目的の節と、判断の記録 ADR-59 と ADR-61 の行 ag-plugin（係の型 3 本と規律の手引き agent-discipline とその参照の file と、hooks.json の係の口 5 つの結びと、着地した hooks.json の歯 3 本の直し・試作と噛みと床は係 w225a・差の file の形・ノートを跨ぐ順は便の bead の依存）を置いた。 第 0.2 版（2026-10-05）は、判断の記録 ADR-60 の決定 (3) と (4) の器の行 v-commute-wire（入口と起動の列が交差の照らしの後に差の当たりの判じを呼ぶ 1 本の関数 weigh・断りと待ちの理由に結末の欄・受付が通した組の kind OverlapCommuted の記帳・判じの時間の上限 20 秒・規則の行は偽のまま・ADR-60 の器の行の 4 本目で前の 3 本はノート surface-wave29b・depends は空で順は便の bead の依存・器を書く便は同時に 1 本まで・試作と噛みと床は係 w226a・差の file の形）を足した。
+  note: ノート surface-wave29b（契約表の枠の最後は群の係の門の行に回した）の続きで、生きたノートの上限（規則の行 R-31）のため、契約表の行を持たないノート surface を同じ commit で廃止した。承認は判断の記録 ADR-59 と ADR-61 の持ち主の裁定（承認の列・逐語は各記録の承認の欄の字）。第 0.1 版（2026-10-05）は、目的の節と、判断の記録 ADR-59 と ADR-61 の行 ag-plugin（係の型 3 本と規律の手引き agent-discipline とその参照の file と、hooks.json の係の口 5 つの結びと、着地した hooks.json の歯 3 本の直し・試作と噛みと床は係 w225a・差の file の形・ノートを跨ぐ順は便の bead の依存）を置いた。 第 0.2 版（2026-10-05）は、判断の記録 ADR-60 の決定 (3) と (4) の器の行 v-commute-wire（入口と起動の列が交差の照らしの後に差の当たりの判じを呼ぶ 1 本の関数 weigh・断りと待ちの理由に結末の欄・受付が通した組の kind OverlapCommuted の記帳・判じの時間の上限 20 秒・規則の行は偽のまま・ADR-60 の器の行の 4 本目で前の 3 本はノート surface-wave29b・depends は空で順は便の bead の依存・器を書く便は同時に 1 本まで・試作と噛みと床は係 w226a・差の file の形）を足した。 第 0.3 版（2026-10-05）は、判断の記録 ADR-62 の決定 (6) の器の行 v-follow-mtime（追随の載せ替えの 1 段で、撃つ前に便の自分の差の path の型と中身と作業木の byte の指紋と時刻を控え、載せ替えが通り前後とも木が clean な周に、型と中身と byte の指紋が同じ普通の file だけ時刻を前の値へ戻し、追随ごとに便の dir の記録へ 1 行を書く・差は main で切った・depends は無い・器を書く便は同時に 1 本まで・試作と噛みと床は係 w228a・差の file の形）を足した。
 
 sections:
   - n: 1
@@ -43,6 +43,16 @@ sections:
         verify: ["git apply --reverse --check docs/design/patch/v-commute-wire.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vcwire_", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail pipe_dispatch_wait_reasons_render"]
         size: M
         done: (1) git apply --reverse --check docs/design/patch/v-commute-wire.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の e2e で、規則の行 pipe.overlap_commute を値 true で持つ manifest の受付は、面の中の 30 行の file crates/toy/src/lib.rs の 5 行目を替える差の行 a の live な便の下で、25 行目を替える差の行 b（bead s2-b）を rc 0 で受け、出来事の記録を読み直した kind OverlapCommuted の行は 1 行だけで、bead が s2-b、detail が字 run= と行 b の run id と空白と字 with= と行 a の run id と空白と字 files= と crates/toy/src/lib.rs と空白と字 main= と HEAD の sha の並び（歯 vcwire_intake_passes_a_commuting_pair_and_records_it） (3) 器の e2e で、同じ manifest の受付は、6 行目を替える差の行 c と差の file を持たない行 d をどちらも rc 1 で断り、stderr の 1 行目は字 pipe とコロンと空白の後に、行 c は「write-set が live な run （行 a の run id）と交差する（crates/toy/src/lib.rs・not-commuting）」、行 d は同じ字の末が「・no-patch）」で、run dir の列は替わらず kind OverlapCommuted の行は無い（歯 vcwire_intake_refusal_names_the_verdict） (4) 器の e2e で、規則の行を持たない manifest と値 false で持つ manifest のどちらでも、受付は行 b を rc 1 で断って stderr の 1 行目は結末を添えない字（末が「crates/toy/src/lib.rs）」）で、列の 1 周（pipe dispatch ls）の s2-b の理由は overlap と行 a の run id と字 /1 の並びで、kind OverlapCommuted の行は無い（歯 vcwire_rule_off_keeps_the_refusal_and_the_wait） (5) 器の e2e で、値 true の manifest の列の 1 周は、台帳の priority の順の s2-c（行 c）・s2-b（行 b）・s2-f（22 行目を替える差の行 f）・s2-d（行 d）の理由を、overlap と行 a の run id と字 /1/not-commuting の並び・字 -・字 overlap:s2-b/1/not-commuting・字 overlap:s2-b/1/no-patch と書き、件数の行の末が total=4 ready=1（同じ周に起こした s2-b を相手に判じる・歯 vcwire_dispatch_starts_the_commuting_bead_and_names_the_verdict） (6) 器の e2e で、値 true の列の 1 周が s2-b の理由を字 - と書いた後に、main に 25 行目を替える commit を足すと、受付は行 b を rc 1 で断って stderr の 1 行目の末が「・not-commuting）」で、その後の列の 1 周の s2-b の理由は overlap と行 a の run id と字 /1/not-commuting の並び（歯 vcwire_intake_judges_again_after_main_moves） (7) 器の lib で、待ちの理由の描き（src/pipe/dispatch.rs の WaitReason の render）は、結末の無い重なり（相手 r1・file 2 本）を字 overlap:r1/2、結末 same-name の重なり（相手 r2・file 1 本）を字 overlap:r2/1/same-name と描く（歯 pipe_dispatch_wait_reasons_render_the_name_and_the_value）
+        depends: []
+      - id: v-follow-mtime
+        title: 追随の載せ替えの 1 段（器の src/pipe/follow_step.rs の関数 rebase・着地の追随と pipe follow が共有）で、撃つ前に便の自分の差の path の型と中身と作業木の byte の指紋と時刻を控え、載せ替えが通り前後とも木が clean な周に、型と中身と byte の指紋が同じ普通の file だけ時刻をナノ秒まで前の値へ戻し、載せ替えが通った追随ごとに便の dir の follow-mtime.jsonl へ戻した数と外した数と倒した理由を 1 行書く（判断の記録 ADR-62・読めない周は 1 file も戻さない・dir の時刻と衝突と rebase-empty と既着地の道は今のまま・差の file）
+        req: ["FR1034"]
+        section: "5"
+        write-set: ["+scribe2/crates/scribe2/src/pipe/follow_mtime.rs", "scribe2/crates/scribe2/src/pipe/follow_step.rs", "scribe2/crates/scribe2/src/pipe/land.rs", "scribe2/crates/scribe2/src/pipe/mod.rs", "scribe2/docs/design/pipeline.md"]
+        verify: ["git apply --reverse --check docs/design/patch/v-follow-mtime.patch", "cargo clippy --manifest-path scribe2/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vfmtime_ pipe_follow_step_writes_one_rebase_event_and_keeps_main"]
+        size: M
+        growth: ["scribe2/crates/scribe2/src/pipe/follow_mtime.rs:487"]
+        done: (1) git apply --reverse --check docs/design/patch/v-follow-mtime.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 器の lib で、歯の repo（base の 8 file の上で main と便の branch に commit を 1 本ずつ積み、追跡の普通の file の時刻を全部ナノ秒の端を持つ古い値にした木・置き場は木の隣）で共有の載せ替えの 1 段（src/pipe/follow_step.rs の関数 rebase）を撃つと、載せ替えが通って木の base が main の先端になり、便の差だけの file own.rs の時刻はナノ秒まで前の値と等しく 1 行目が便の字 own のまま、main の差だけの file main.rs の時刻は前の値より新しい（歯 vfmtime_own_only_file_gets_the_old_time_back_and_main_only_file_stays_new） (3) 同じ形で、便が 1 行目と 10 行目を直し main が 1 行目に同じ字を先に持つ ret.rs と、便が中身を替えずに ren.rs から改名した先の ren2.rs は時刻が前の値と等しく、便が 1 行目を main が 10 行目を直した both.rs と、便が中身を替えずに renc.rs から改名し main が元の renc.rs の 5 行目を直した改名の先の renc2.rs は時刻が前の値より新しく、renc2.rs は main の字の行を持つ（歯 vfmtime_returning_and_renamed_same_content_come_back_and_changed_content_stays_new） (4) 同じ形で、載せ替えが通った後の木は clean で、便が直し main が属性の定め（.gitattributes の行 crlf.txt text eol=crlf）を足した crlf.txt は作業木の byte に CR を持ち時刻が前の値より新しく、便が直し main が実行の bit だけを足した m.sh は時刻が前の値より新しく、path の葉の読み（src/pipe/follow_mtime.rs の関数 leaf）は木の dir real の下の普通の file real/x.rs を普通の file と読み、dir real を指す symlink via を途中に挟む via/x.rs を戻さない姿と読む（歯 vfmtime_eol_mode_and_symlinked_dir_stay_new） (5) 同じ形で、便の dir の記録の file follow-mtime.jsonl は 1 行だけで、その字は鍵 rebase（base と main の sha を 2 つの点で結んだ字）・restored 3・skipped 5・link 1・kind 0・gone 0・mode 1・blob 2・bytes 1・write 0・changed 0・fell null をこの順に持つ JSON の object と等しい（便が足した own.rs を指す symlink の ln は link に数える）（歯 vfmtime_record_line_counts_restored_and_skipped） (6) 便が own.rs の 1 行目だけを直し main が main.rs の 1 行目だけを直す見本は own.rs の時刻が前の値と等しく記録の fell が null で、そこから 1 句ずつ外した 3 つ、控えの関数 snapshot に在らない rev を base として渡し載せ替えは git で撃って戻しの関数 settle を通った周と、載せ替えの前の木に追跡の外の file note.txt を置いた周と、main も own.rs の 1 行目を別の字に直し載せ替えが衝突して関数 rebase が偽を返した周は、どれも own.rs の時刻が前の値より新しく、記録の 1 行の fell は前の 2 つでそれぞれ before:unreadable・before:dirty、衝突の周は記録の file に行が無い（歯 vfmtime_unreadable_dirty_and_conflict_rounds_restore_nothing） (7) pipe follow の口（src/pipe/follow_step.rs の関数 follow）が通った周に、便の dir の follow-mtime.jsonl は 1 行だけで、その行は restored 1 を持つ（歯 pipe_follow_step_writes_one_rebase_event_and_keeps_main に足した断言）
         depends: []
   - n: 3
     type: prose
@@ -90,3 +100,34 @@ sections:
       試作と噛み。写し drafts/try-w226a で書く file は write-set の中で閉じる（14 file）。試作の木で verify の 1 行目から最後の行までが rc 0 で、器の入れ子の歯の全部（cd scribe2 で cargo nextest run --workspace --no-fail-fast）は 4,163 本が通り、器の xtask の check も rc 0（core-lines 85586/90000・intake.rs は幅で数えて 1492/1500）。根の xtask の check は撃っていない（書く file は全部 scribe2/ の下）。噛みは 9 の変異（記帳を外す・detail の並び・断りの字の結末・判じの結末を問わず通す・規則の行を読まない・同じ周に起こした bead を相手から外す・live な便を先に名乗る・main の先端の 1 つ前で判じる・描きの結末を外す）が全部 rc 100 で名指した歯が落ちた（2 番目から 7 番目の項の歯に各 1 つ以上・書き戻した後の写しは clean）。
 
       範囲の外。着地の記帳（積み直しの衝突・stale・再 gate の不合格・候補の木の赤と行の差の数・v-commute-ledger）・規則の行を真にする（v-commute-on）・席の置く前の照らしの道具（席の手）・器の binary の入れ替え（席の手）。この行の契約表の行は欄 patch を書かない（前の行と同じ・規則の行が偽の間は判じに使われない）。
+  - n: 5
+    type: prose
+    title: 行 v-follow-mtime — 追随の載せ替えで、便の自分の差の file のうち中身の替わらない物の更新の時刻を載せ替えの前の値へ戻す（判断の記録 ADR-62・器の行）
+    body: |
+      在りか。差の file docs/design/patch/v-follow-mtime.patch は、main 3513a0ed（判断の記録 ADR-62 の commit）と、その上に試作の commit 55f55f41 を載せた木（tree 01053d96・写し drafts/try-w228a の branch w228a-s）との差（5 file・36,588 byte・+517 −4）。便は差を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。器を書く便は同時に 1 本まで（判断の記録 ADR-33 の決定 (12)）。
+
+      依存と順。depends は書かない（同じノートの前の行 ag-plugin と v-commute-wire とは書く file も意味も交わらない）。ノート surface-wave29b の器の行 v-commute-apply（便が流れている）は src/pipe/mod.rs の 17 行目の前後に pub mod commute の 1 行を足し、この行は 46 行目の前後に mod follow_mtime の 1 行を足す。hunk の文脈は離れていて、main の一時の index に 2 つの差をどちらの順で当てても当たる（係が写しで撃った）。ほかの未着地の行の write-set とは交わらない。器の便は同時に 1 本までなので、走っている器の便の終端の後に流す。
+
+      なぜ。判断の記録 ADR-62 は、追随の載せ替え（git rebase --onto）が main の木を取り出してから便の commit を当て直し、便の自分の差の file を中身が同じのまま書き直して更新の時刻を新しくするので、器の便では追随の後の検査が入れ子の器を全部組み直す（撃ち直し 1 回で 約 3 GB）と読み、中身（作業木の byte）・型・path・時刻の組を載せ替えの前と同じに戻す事で、cargo の追う合図の上では追随を見えなくすると決めた（決定 (1) から (5)）。
+
+      形。器の src/pipe/follow_mtime.rs（新しい file）に、控えの関数 snapshot と、載せ替えの後の 1 段の関数 settle（通った周だけ戻しを撃って記録へ 1 行・衝突の周は何も戻さず何も書かない）と、記録の置き場の型 Log（置き場と便 id と lock の待ち方）と、篩で外した理由の閉じた列 Skip（link・kind・gone・mode・blob・bytes・write・changed）を置いた。src/pipe/follow_step.rs の関数 rebase は、撃つ前に snapshot を呼び、git rebase --onto の rc を受けて settle を呼び、rc の真偽だけを今のまま返す（引数に Log を足した）。呼び手の 2 つ、同じ file の関数 follow（pipe follow の口）と src/pipe/land.rs の関数 rebase_onto（着地の追随）は、各々の置き場と便 id と lock の待ち方から Log を作って渡す。src/pipe/mod.rs は mod の 1 行。器の docs/design/pipeline.md に節 70 を足した。
+
+      控え。木が clean な周だけ（git status --porcelain が空）、base から HEAD までの差の path を git diff --name-only --no-renames --diff-filter=d -z で読み（改名は元の消しと先の足しに割り、消した path は除く）、HEAD の木の型と中身を git ls-tree -r -z --full-tree HEAD で、作業木の byte の指紋をgit hash-object --no-filters で、時刻を木の根から 1 段ずつの symlink_metadata で取る。木の上の型が 100644 か 100755 でない path は控えない（120000 は link・ほかは kind に数える）。葉か途中の dir が symlink の path も控えない（link）。
+
+      戻し。載せ替えが通り、後の木も clean な周に、後の木の型（mode）と中身（blob）と葉と作業木の byte の指紋が控えと同じ path だけ、file を書きの許しで開いて時刻を控えの値へ書く（File の set_modified・依存を足さない）。書いた後に byte の指紋を 1 度照らし直し、違えばその file の時刻を今にする（changed）。dir の時刻は戻さない。
+
+      倒れ。控えか照らしで git か file の読みが 1 つでも落ちた周（before:unreadable・after:unreadable・recheck:unreadable）と、前か後の木が clean でない周（before:dirty・after:dirty ほか）は 1 file も戻さない。1 file の時刻を書けない時はその file を新しいまま残す（write）。衝突の周は何も戻さず記録も書かない（着地の衝突の今の歯 pipe_follow_counts_the_retries_from_the_event_log は、上限に達した衝突の周に便の dir の file の名の列が替わらない事を見る・pipe follow の口は衝突の周に何も書かないと決めている＝設計 §52 形 4）。戻しと記録のどの失敗も関数 rebase の返す値を替えず、衝突・rebase-empty・既着地の道と event と stdout の字は今のまま。
+
+      記録。載せ替えが通った追随ごとに便の dir（pipe の下の便 id の dir）の follow-mtime.jsonl へ、器の lock の 1 本（append_line）で 1 行を足す。鍵は rebase（base と main の sha を 2 つの点で結んだ字）・restored・skipped・外した種ごとの数 8 つ・fell（倒した理由の語か null）の順。書けない周は黙って進む。
+
+      実装の約束と done と verify の対応。1 番目の項は verify の 1 行目。2 番目から最後の 7 番目の項は 3 行目（器の lib の歯 vfmtime_ の 5 本と、pipe follow の口の今の歯 pipe_follow_step_writes_one_rebase_event_and_keeps_main に足した断言）。2 行目の器の clippy は命令の rc で測る守りで、done に載せない。xtask の check は器の共通 verify がgate の各段で撃つので verify に書かない。書いた後の照らし直しと、後の木が clean でない周と、時刻を書けない周は、どの歯も直には測らない（前の照らしが同じ byte を見るので、照らし直しだけを外す変異は落ちない・done に載せない）。欄 done-teeth は書かない。
+
+      構造の連鎖（commit 55f55f41 の木で grep）。関数 rebase の呼び手は 2 つだけ（follow_step.rs の follow と land.rs の rebase_onto）。land.rs の型 WorktreeCheck の judge・is_clean・as_str と、mod.rs の git_bytes・run_dir と、器の fleet の append_line・json_lite の write_object を読むだけで替えない。event の種別・段・detail・規則の行・子の環境変数・器の宣言の key は足さない。
+
+      器の file の行の上限（1500）。src/pipe/follow_mtime.rs は新しい file で 487 行（本体 297 行・歯の区間 190 行）で、大きさ M の見込み 300 行を越えるので growth に 487 と書く。follow_step.rs は 287 行から 297 行、land.rs は 1414 行から 1415 行（余地 85）、mod.rs は 1413 行から 1414 行（余地 86）。write-set の正味は +517 −4。
+
+      入口の赤。main には src/pipe/follow_mtime.rs も名に vfmtime_ を持つ歯も無いので、verify の 3 行目は --no-tests=fail で落ちる。
+
+      試作と噛み。写し drafts/try-w228a（main 3513a0ed から）で書く file は write-set の中で閉じる（5 file）。試作の木で verify の 1 行目から最後の行までと pipe follow の口の歯 pipe_follow_step_ の 4 本は rc 0。器の入れ子の歯の全部（cd scribe2 で cargo nextest run --workspace --no-fail-fast）は 4,153 本が全部通り、器の clippy の全部（--workspace --all-targets）と器の xtask の check（core-lines 85206 / 90000）も rc 0（最初の試作は衝突の周にも記録を書き、着地の衝突の今の歯が落ちたので、衝突の周は記録を書かない形に直した）。噛みは 12 の変異（時刻を書かない・型と中身と byte の照らしを全部外す・足した file を控えない・前と後の byte の照らしを外す・型の照らしを外す・途中の dir の symlink を見ない・中身の照らしだけを外す・記録を別の file に書く・前の木の clean を見ない・衝突の周も戻す・読めない差を空の差に読む・pipe follow の口が別の便 id の dir に書く）が全部 rc 100 で名指した歯が落ちた（書き戻した後の対照は rc 0）。
+
+      範囲の外。dir の時刻の戻し（項目の名の列が前後で同じ dir に限る形は後の行）・衝突で中止した周の戻し・便の commit の中で直して戻した file・器の binary の入れ替え（席の手）・形 G の比べと 7 日の数え（判断の記録 ADR-62 の決定 (7) と撤退の欄・席の手）。この行の契約表の行は欄 patch を書かない。
