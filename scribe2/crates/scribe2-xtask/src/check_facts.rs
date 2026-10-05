@@ -78,15 +78,37 @@ fn agreement(tag: &str, sources: &[(&str, Option<String>)]) -> Measured {
     }
 }
 
-/// root manifest の lint 集合（lints-set）と member 側 opt-in（lints-optin）。
+/// root manifest の lint 集合（lints-set）と member 側 opt-in（lints-optin）。根に入った形の木（[`Layout::joined`]）は
+/// workspace の根の manifest の lint 集合を [`measure_lints_floor`] で測る（表は消費側の根が持つ）。
 pub(crate) fn measure_lints(layout: &Layout) -> Vec<Measured> {
-    let root_manifest = match read_text(&layout.root.join("Cargo.toml")) {
+    let root_manifest = match read_text(&layout.workspace_dir().join("Cargo.toml")) {
         Ok(text) => text,
         Err(reason) => {
             return vec![failed("lints-set", &reason), failed("lints-optin", &reason)]
         }
     };
-    vec![measure_lints_set(&root_manifest), measure_lints_optin(layout)]
+    let set = if layout.joined() { measure_lints_floor(&root_manifest) } else { measure_lints_set(&root_manifest) };
+    vec![set, measure_lints_optin(layout)]
+}
+
+/// 根に入った形の木の lint 集合（lints-set）: [`REQUIRED_LINTS`] の各 lint が workspace の根の manifest に deny か forbid で
+/// 在ること（根の表の他の lint は許す・forbid の 3 つを deny で受けるのは、属性で下げない照らしを消費側の根の検査が持つため）。
+fn measure_lints_floor(manifest: &str) -> Measured {
+    let declared = declared_lints(manifest);
+    let strong = |section: &str, lint: &str| {
+        ["deny", "forbid"]
+            .iter()
+            .any(|level| declared.contains(&(section.to_owned(), lint.to_owned(), (*level).to_owned())))
+    };
+    let violations = REQUIRED_LINTS
+        .iter()
+        .filter(|(section, lint, _)| !strong(section, lint))
+        .map(|(section, lint, _)| format!("lints-set: {section}.{lint} が workspace の根の Cargo.toml に deny か forbid で無い"))
+        .collect();
+    Measured {
+        fact: format!("lints-set={}", declared.len()),
+        violations,
+    }
 }
 
 /// root manifest が宣言している `(section, lint, level)` の 3 つ組集合。
@@ -164,7 +186,8 @@ fn has_workspace_lints(manifest: &str) -> bool {
 /// 中身は allowlist だが measure tag の名は ADR-0002 §2.4 が凍結しているので
 /// `deps-empty` に据え置く。
 pub(crate) fn measure_deps_empty(layout: &Layout) -> Measured {
-    let mut manifests = vec![layout.root.join("Cargo.toml")];
+    // 根に入った形の木は root の manifest を持たない（workspace の根の manifest は消費側の依存の一覧で、器の母集団でない）。
+    let mut manifests = if layout.joined() { Vec::new() } else { vec![layout.root.join("Cargo.toml")] };
     manifests.extend(layout.member_dirs.iter().map(|dir| dir.join("Cargo.toml")));
     let mut violations = Vec::new();
     for path in &manifests {
@@ -411,10 +434,12 @@ const FILTER_TAIL: &str = ")$/)";
 /// file が無い / key が無い / e2e の木を読めない周は違反（読めなかったを一致に化けさせない）。fact は母集団
 /// （歯の本数と file 数）を出す。
 pub(crate) fn measure_nextest_tmux_group(layout: &Layout, limits: &Limits) -> Measured {
-    let text = match read_text(&layout.root.join(NEXTEST_REL)) {
+    let text = match read_text(&layout.workspace_dir().join(NEXTEST_REL)) {
         Ok(text) => text,
         Err(reason) => return failed(TMUX_TAG, &reason),
     };
+    // 根に入った形の木の group は消費側の根の設定に在り、filter は境界 crate の package を名指す。
+    let head = if layout.joined() { format!("package({}-boundary) & {FILTER_HEAD}", layout.name) } else { FILTER_HEAD.to_owned() };
     let files = match e2e_files(&layout.e2e_dir()) {
         Ok(files) => files,
         Err(reason) => return failed(TMUX_TAG, &reason),
@@ -422,7 +447,7 @@ pub(crate) fn measure_nextest_tmux_group(layout: &Layout, limits: &Limits) -> Me
     let tests = tmux_tests(&files);
     let modules: BTreeSet<&str> = tests.iter().map(|name| name.rsplit_once("::").map_or("", |(module, _)| module)).collect();
     let mut violations = threads_drift(&text, limits.tmux_test_threads);
-    violations.extend(group_drift(&text, &tests));
+    violations.extend(group_drift(&text, &tests, &head));
     let state = if violations.is_empty() { "ok" } else { "drift" };
     Measured { fact: format!("{TMUX_TAG}={state} tests={} files={}", tests.len(), modules.len()), violations }
 }
@@ -443,8 +468,8 @@ fn threads_drift(config: &str, want: u64) -> Vec<String> {
 }
 
 /// filter の列挙と歯の集合の**両向き**の差（group の外の歯・幽霊の名を 1 件 1 行）。固定形でない filter はその 1 件。
-fn group_drift(config: &str, tests: &BTreeSet<String>) -> Vec<String> {
-    let listed = match filter_names(config) {
+fn group_drift(config: &str, tests: &BTreeSet<String>, head: &str) -> Vec<String> {
+    let listed = match filter_names(config, head) {
         Ok(names) => names,
         Err(reason) => return vec![format!("{TMUX_TAG}: {reason}")],
     };
@@ -462,7 +487,7 @@ fn group_drift(config: &str, tests: &BTreeSet<String>) -> Vec<String> {
 ///
 /// override が無い / `filter` が無い / 固定形でない（頭尾が違う・名が空・名に識別子と `::` 以外の字が在る）は `Err`
 /// で、0 件の集合には化けない。
-fn filter_names(config: &str) -> Result<BTreeSet<String>, String> {
+fn filter_names(config: &str, head: &str) -> Result<BTreeSet<String>, String> {
     let pairs = sections(config)
         .into_iter()
         .filter(|(header, _)| *header == OVERRIDE_HEADER)
@@ -474,9 +499,9 @@ fn filter_names(config: &str) -> Result<BTreeSet<String>, String> {
         .find(|(key, _)| *key == "filter")
         .map(|(_, value)| *value)
         .ok_or_else(|| format!("{NEXTEST_REL} の {TMUX_GROUP} の override に filter が無い"))?;
-    let refused = || format!("{NEXTEST_REL} の filter が固定形 {FILTER_HEAD}名|名|…{FILTER_TAIL} でない: {raw}");
+    let refused = || format!("{NEXTEST_REL} の filter が固定形 {head}名|名|…{FILTER_TAIL} でない: {raw}");
     let inner = unquote(raw)
-        .and_then(|text| text.strip_prefix(FILTER_HEAD))
+        .and_then(|text| text.strip_prefix(head))
         .and_then(|text| text.strip_suffix(FILTER_TAIL))
         .ok_or_else(refused)?;
     let names: BTreeSet<String> = inner.split('|').map(str::to_owned).collect();

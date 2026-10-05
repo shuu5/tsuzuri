@@ -15,6 +15,7 @@ mod enum_slices;
 mod env_reads;
 mod flipcheck;
 mod genmanifest;
+mod joined;
 mod ledger_plan;
 mod limits;
 mod mutantsdiff;

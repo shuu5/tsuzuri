@@ -38,10 +38,12 @@ pub struct Layout {
 impl Layout {
     /// workspace root から crate の配置と NAME を読み取る。
     ///
-    /// members は 1 行の配列を前提とする（骨格の root manifest はその形である）。
+    /// members は 1 行の配列を前提とする（骨格の root manifest はその形である）。root が自分の `Cargo.toml` を持たない木
+    /// （消費側の根の workspace の member になった形）は、根の workspace の members のうち root の下の項目を読む
+    /// （[`crate::joined::members`]）。
     pub fn discover(root: &Path) -> Result<Self, String> {
-        let manifest = read_text(&root.join("Cargo.toml"))?;
-        let members = workspace_members(&manifest);
+        let own = root.join("Cargo.toml");
+        let members = if own.is_file() { workspace_members(&read_text(&own)?) } else { crate::joined::members(root)? };
         if members.is_empty() {
             return Err(format!("{} に workspace members が無い", root.display()));
         }
