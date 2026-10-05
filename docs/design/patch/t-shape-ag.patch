@@ -1,0 +1,998 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_args.rs b/crates/tsuzuri-boundary/src/hook/agent_args.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..627f537615e57381c80a2e37cf5c972cd1cbbb91
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/hook/agent_args.rs
+@@ -0,0 +1,92 @@
++//! 係の口 5 つ（起こしの門・結びの口・測り・係の門・終える前の門）の引数の読みと起草の置き場の解き（判断の記録 ADR-59 決定 (4)・要件 FR21）。
++//! 引数は `--名 値` か `--名=値` の --repo と省ける --drafts で、起草の置き場は --drafts か repo の git config の鍵 `tsuzuri.draftsdir` から解く。
++//! 口の頭の段（`begin`）は、引数の誤りを口の名（USAGE の字の `usage: ` の後の最初の ` --` の前）と訳と USAGE の 2 行で
++//! 標準エラーに書いて rc 1 を、置き場を解けなければ口の名と訳を標準エラーに書いて rc 0 を、どちらも Err で返す。
++
++use std::ffi::OsStr;
++use std::path::PathBuf;
++
++use crate::acct::GIT;
++use crate::consult::{DRAFTS_ARGS, GIT_TIMEOUT};
++use crate::out::emit_err;
++use crate::server::proc;
++
++/// 使い方の誤り。
++const FAIL: u8 = 1;
++
++/// 読んだ引数（repo の置き場・省ける起草の置き場）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Args {
++    pub repo: PathBuf,
++    pub drafts: Option<PathBuf>,
++}
++
++/// `--名 値` か `--名=値` の --repo と、省ける --drafts を読む（空の値と 2 度目は断る・--repo は省けない）。
++pub fn parse(rest: &[&str]) -> Result<Args, String> {
++    let (mut repo, mut drafts) = (None, None);
++    let mut it = rest.iter();
++    while let Some(arg) = it.next() {
++        let (name, value) = match arg.split_once('=') {
++            Some((n, v)) => (n, v),
++            None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
++        };
++        let slot = match name {
++            "--repo" => &mut repo,
++            "--drafts" => &mut drafts,
++            _ => return Err(format!("知らない引数 {name}")),
++        };
++        if value.is_empty() {
++            return Err(format!("{name} の値が空"));
++        }
++        if slot.replace(value).is_some() {
++            return Err(format!("{name} が 2 度ある"));
++        }
++    }
++    let Some(repo) = repo else {
++        return Err("--repo が要る".into());
++    };
++    Ok(Args {
++        repo: PathBuf::from(repo),
++        drafts: drafts.map(PathBuf::from),
++    })
++}
++
++/// 起草の置き場（--drafts か repo の git config の鍵・dir でなければ None）。
++pub fn drafts(args: &Args) -> Option<PathBuf> {
++    let dir = match &args.drafts {
++        Some(d) => d.clone(),
++        None => {
++            let mut git_args = vec![OsStr::new("-C"), args.repo.as_os_str()];
++            git_args.extend(DRAFTS_ARGS.iter().map(OsStr::new));
++            let out = proc::capture(OsStr::new(GIT), git_args, &args.repo, GIT_TIMEOUT)?;
++            PathBuf::from(String::from_utf8(out).ok()?.trim())
++        }
++    };
++    dir.is_dir().then_some(dir)
++}
++
++/// USAGE の字 `usage` の口の名（`usage: ` の後の、最初の ` --` の前の字）。
++fn mouth(usage: &str) -> &str {
++    let rest = usage.strip_prefix("usage: ").unwrap_or(usage);
++    rest.split(" --").next().unwrap_or(rest)
++}
++
++/// 使い方の誤りを、口の名と訳 `why` の 1 行と USAGE の字の 1 行で標準エラーに書き、rc 1 を返す。
++pub fn misuse(usage: &str, why: &str) -> u8 {
++    emit_err(&format!("{}: {why}\n{usage}", mouth(usage)));
++    FAIL
++}
++
++/// 口の頭の段: 残りの引数 `rest` を読み、起草の置き場を解く。引数の誤りは `misuse` の rc 1 を、置き場を解けなければ
++/// 口の名と字「起草の置き場を解けない（<miss>）」を標準エラーに書いて rc 0 を Err で返す。
++pub fn begin(usage: &str, miss: &str, rest: &[&str]) -> Result<(Args, PathBuf), u8> {
++    let args = parse(rest).map_err(|e| misuse(usage, &e))?;
++    let Some(dir) = drafts(&args) else {
++        emit_err(&format!(
++            "{}: 起草の置き場を解けない（{miss}）",
++            mouth(usage)
++        ));
++        return Err(0);
++    };
++    Ok((args, dir))
++}
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_bind.rs b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+index a4f96b3ee96c3224bb366622c79a61e3c4f06a20..7b103e9528c3f759d61769eb13aad533648ac35f 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_bind.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+@@ -13,14 +13,11 @@ use tsuzuri_core::agent::meter::SubCall;
+ use tsuzuri_core::agent::spec::tie::{Miss, claim, meta_name, meta_path};
+ use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec, bound};
+ 
+-use super::agent_spawn::{drafts, parse};
++use super::agent_args::begin;
+ use crate::out::emit_err;
+ 
+ pub const USAGE: &str = "usage: tz hook agent-bind --repo <dir> [--drafts <dir>]";
+ 
+-/// 使い方の誤り。
+-const FAIL: u8 = 1;
+-
+ /// 札 `spec` の `agent_id` に係の id を書いて `<名>/spec.json` に書き、`.agents/<係の id>` に名を書く。
+ pub fn tie(dir: &Path, name: &str, spec: &mut Spec, id: &str) -> io::Result<()> {
+     spec.agent_id = Some(id.to_string());
+@@ -54,16 +51,9 @@ pub fn run(rest: &[&str]) -> u8 {
+     let Some((name, id)) = bound(&payload) else {
+         return 0;
+     };
+-    let args = match parse(rest) {
+-        Ok(args) => args,
+-        Err(e) => {
+-            emit_err(&format!("tz hook agent-bind: {e}\n{USAGE}"));
+-            return FAIL;
+-        }
+-    };
+-    let Some(dir) = drafts(&args) else {
+-        emit_err("tz hook agent-bind: 起草の置き場を解けない（書かない）");
+-        return 0;
++    let (_, dir) = match begin(USAGE, "書かない", rest) {
++        Ok(found) => found,
++        Err(rc) => return rc,
+     };
+     let file = dir.join(&name).join(SPEC);
+     let Some(mut spec) = fs::read_to_string(&file).ok().and_then(|t| Spec::parse(&t)) else {
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_guard.rs b/crates/tsuzuri-boundary/src/hook/agent_guard.rs
+index 98bf0da88bea91b517f4a066009d24577733cdde..66cd37528b1ab255194c500fa78f736dd169ad88 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_guard.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_guard.rs
+@@ -15,21 +15,19 @@ use std::fs;
+ use std::io::Read;
+ use std::path::Path;
+ 
++use tsuzuri_core::agent::guard::{open, refusal, spent, write_path};
+ use tsuzuri_core::agent::meter::group::{fence, read_path, read_refusal};
+-use tsuzuri_core::agent::meter::guard::{OUT, open, refusal, spent, write_path};
+ use tsuzuri_core::agent::meter::{METER, Meter, sub_call};
+-use tsuzuri_core::agent::spec::deny;
++use tsuzuri_core::agent::spec::OUT;
+ use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
++use tsuzuri_core::gate::deny_json;
+ 
++use super::agent_args::begin;
+ use super::agent_meter::resolve;
+-use super::agent_spawn::{drafts, parse};
+-use crate::out::{emit, emit_err};
++use crate::out::emit;
+ 
+ pub const USAGE: &str = "usage: tz hook agent-guard --repo <dir> [--drafts <dir>]";
+ 
+-/// 使い方の誤り。
+-const FAIL: u8 = 1;
+-
+ /// 群の係の呼びの断りの理由（割りの外の読みと入れ子・読み直しが上限以上の書き終えの段・群の係でなければ None）。
+ fn member(
+     seat: Option<&Seat>,
+@@ -54,16 +52,9 @@ pub fn run(rest: &[&str]) -> u8 {
+     let Some(call) = sub_call(&payload) else {
+         return 0;
+     };
+-    let args = match parse(rest) {
+-        Ok(args) => args,
+-        Err(e) => {
+-            emit_err(&format!("tz hook agent-guard: {e}\n{USAGE}"));
+-            return FAIL;
+-        }
+-    };
+-    let Some(dir) = drafts(&args) else {
+-        emit_err("tz hook agent-guard: 起草の置き場を解けない（通す）");
+-        return 0;
++    let (_, dir) = match begin(USAGE, "通す", rest) {
++        Ok(found) => found,
++        Err(rc) => return rc,
+     };
+     let Ok((name, spec)) = resolve(&dir, &call) else {
+         return 0;
+@@ -78,9 +69,9 @@ pub fn run(rest: &[&str]) -> u8 {
+     let out = dir.join(&name).join(OUT);
+     let used = meter.used;
+     if let Some(why) = member(seat.as_ref(), &call.tool, &payload, &meter, &out) {
+-        emit(&deny(&why));
++        emit(&deny_json(why));
+     } else if spent(used, spec.budget) && !open(&call.tool, write_path(&payload).as_deref(), &out) {
+-        emit(&deny(&refusal(&call.tool, used, spec.budget, &out)));
++        emit(&deny_json(refusal(&call.tool, used, spec.budget, &out)));
+     }
+     0
+ }
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_meter.rs b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+index 6028039fb00f15a09a543ec53770fd67d88954bd..989ae3f0fb825570ae5789b9746e12596f7c9bcb 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_meter.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+@@ -25,8 +25,8 @@ use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
+ use tsuzuri_core::agent::spec::tie::Miss;
+ use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec};
+ 
++use super::agent_args::begin;
+ use super::agent_bind::late;
+-use super::agent_spawn::{drafts, parse};
+ use crate::out::{emit, emit_err};
+ use crate::server::events::now;
+ 
+@@ -35,9 +35,6 @@ pub const USAGE: &str = "usage: tz hook agent-meter --repo <dir> [--drafts <dir>
+ /// 結びの無い呼びの記帳の file（`.agents` の下）。
+ pub const UNBOUND: &str = "unbound.jsonl";
+ 
+-/// 使い方の誤り。
+-const FAIL: u8 = 1;
+-
+ /// 係の呼びの係の id に結んだ名と札。`.agents/<係の id>` が無ければ `late` で meta.json の名の札に結ぶ（結べないか札が読めなければ訳）。
+ pub fn resolve(drafts: &Path, call: &SubCall) -> Result<(String, Spec), Miss> {
+     let Ok(name) = fs::read_to_string(drafts.join(AGENTS).join(&call.agent_id)) else {
+@@ -123,16 +120,9 @@ pub fn run(rest: &[&str]) -> u8 {
+     let Some(call) = sub_call(&payload) else {
+         return 0;
+     };
+-    let args = match parse(rest) {
+-        Ok(args) => args,
+-        Err(e) => {
+-            emit_err(&format!("tz hook agent-meter: {e}\n{USAGE}"));
+-            return FAIL;
+-        }
+-    };
+-    let Some(dir) = drafts(&args) else {
+-        emit_err("tz hook agent-meter: 起草の置き場を解けない（通す）");
+-        return 0;
++    let (_, dir) = match begin(USAGE, "通す", rest) {
++        Ok(found) => found,
++        Err(rc) => return rc,
+     };
+     let (name, spec) = match resolve(&dir, &call) {
+         Ok(found) => found,
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_spawn.rs b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+index 2dd351fcff15c70d4a9980eb620fa35c5b369516..5ecc4626c2ee9ad5b362df2ebaed41ad30e45e9b 100644
+--- a/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
++++ b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+@@ -5,82 +5,26 @@
+ //! 3. 置き場の直下の dir の係の札を全部読み、中核の `judge` で判じる。断る時は deny の答えを標準出力に 1 行で書いて 0。
+ //! 4. 通す時は `<名>/brief.md` に prompt の字を、`<名>/spec.json` に係の札を書いて 0（書けなければ標準エラーに書いて通す）。
+ //!
+-//! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
++//! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは係の口の共通の `agent_args` が持つ。
+ //! 席の流れの道具（Workflow）の呼びは 1 の前に全部断り、頼みの頭の群の行と計画の file の判じは 3 の前に子の `group` が持つ
+ //! （判断の記録 ADR-61・要件 FR22）。
+ 
+ pub mod group;
+ 
+-use std::ffi::OsStr;
+ use std::fs;
+ use std::io::Read;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
+ use tsuzuri_core::agent::spec::group::{workflow, workflow_reason};
+-use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, deny, judge, reason, spawn_call};
++use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, judge, reason, spawn_call};
++use tsuzuri_core::gate::deny_json;
+ 
+-use crate::acct::GIT;
+-use crate::consult::{DRAFTS_ARGS, GIT_TIMEOUT};
++use super::agent_args::begin;
+ use crate::out::{emit, emit_err};
+ use crate::server::events::now;
+-use crate::server::proc;
+ 
+ pub const USAGE: &str = "usage: tz hook agent-spawn --repo <dir> [--drafts <dir>]";
+ 
+-/// 使い方の誤り。
+-const FAIL: u8 = 1;
+-
+-/// 読んだ引数（repo の置き場・省ける起草の置き場）。
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct Args {
+-    pub repo: PathBuf,
+-    pub drafts: Option<PathBuf>,
+-}
+-
+-/// `--名 値` か `--名=値` の --repo と、省ける --drafts を読む（空の値と 2 度目は断る・--repo は省けない）。
+-pub fn parse(rest: &[&str]) -> Result<Args, String> {
+-    let (mut repo, mut drafts) = (None, None);
+-    let mut it = rest.iter();
+-    while let Some(arg) = it.next() {
+-        let (name, value) = match arg.split_once('=') {
+-            Some((n, v)) => (n, v),
+-            None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
+-        };
+-        let slot = match name {
+-            "--repo" => &mut repo,
+-            "--drafts" => &mut drafts,
+-            _ => return Err(format!("知らない引数 {name}")),
+-        };
+-        if value.is_empty() {
+-            return Err(format!("{name} の値が空"));
+-        }
+-        if slot.replace(value).is_some() {
+-            return Err(format!("{name} が 2 度ある"));
+-        }
+-    }
+-    let Some(repo) = repo else {
+-        return Err("--repo が要る".into());
+-    };
+-    Ok(Args {
+-        repo: PathBuf::from(repo),
+-        drafts: drafts.map(PathBuf::from),
+-    })
+-}
+-
+-/// 起草の置き場（--drafts か repo の git config の鍵・dir でなければ None）。
+-pub fn drafts(args: &Args) -> Option<PathBuf> {
+-    let dir = match &args.drafts {
+-        Some(d) => d.clone(),
+-        None => {
+-            let mut git_args = vec![OsStr::new("-C"), args.repo.as_os_str()];
+-            git_args.extend(DRAFTS_ARGS.iter().map(OsStr::new));
+-            let out = proc::capture(OsStr::new(GIT), git_args, &args.repo, GIT_TIMEOUT)?;
+-            PathBuf::from(String::from_utf8(out).ok()?.trim())
+-        }
+-    };
+-    dir.is_dir().then_some(dir)
+-}
+-
+ /// 置き場の直下の dir の読める係の札の全部（読めない札は飛ばす）。
+ pub fn specs(drafts: &Path) -> Vec<Spec> {
+     let Ok(dir) = fs::read_dir(drafts) else {
+@@ -107,27 +51,20 @@ pub fn run(rest: &[&str]) -> u8 {
+         payload.clear();
+     }
+     if workflow(&payload) {
+-        emit(&deny(&workflow_reason()));
++        emit(&deny_json(workflow_reason()));
+         return 0;
+     }
+     let Some(call) = spawn_call(&payload) else {
+         return 0;
+     };
+-    let args = match parse(rest) {
+-        Ok(args) => args,
+-        Err(e) => {
+-            emit_err(&format!("tz hook agent-spawn: {e}\n{USAGE}"));
+-            return FAIL;
+-        }
+-    };
+-    let Some(dir) = drafts(&args) else {
+-        emit_err("tz hook agent-spawn: 起草の置き場を解けない（通す）");
+-        return 0;
++    let (args, dir) = match begin(USAGE, "通す", rest) {
++        Ok(found) => found,
++        Err(rc) => return rc,
+     };
+     let gate = match group::gate(&dir, &args.repo, &call, &payload) {
+         Ok(gate) => gate,
+         Err(why) => {
+-            emit(&deny(&why));
++            emit(&deny_json(why));
+             return 0;
+         }
+     };
+@@ -142,7 +79,7 @@ pub fn run(rest: &[&str]) -> u8 {
+                 ));
+             }
+         }
+-        Err(r) => emit(&deny(&reason(&r, &call.prompt))),
++        Err(r) => emit(&deny_json(reason(&r, &call.prompt))),
+     }
+     0
+ }
+diff --git a/crates/tsuzuri-boundary/src/hook/mod.rs b/crates/tsuzuri-boundary/src/hook/mod.rs
+index bf8ad77533c53d268a1dcd2c91e2e6eaa673f997..21dda2f0448c63724436e097b26c0ef3b925aa86 100644
+--- a/crates/tsuzuri-boundary/src/hook/mod.rs
++++ b/crates/tsuzuri-boundary/src/hook/mod.rs
+@@ -8,7 +8,9 @@
+ //! 係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
+ //! 係の測り（`agent_meter`・PostToolUse の hook）を置く。
+ //! 係の門（`agent_guard`・PreToolUse の hook）を置く。
++//! 係の口 5 つの引数の読みと起草の置き場の解き（`agent_args`）を置く。
+ 
++pub mod agent_args;
+ pub mod agent_bind;
+ pub mod agent_guard;
+ pub mod agent_meter;
+diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+index f5b30eb79b05f3f02eb4fd22a176db8ab06a1cf2..97350de738ad6e09f68214c7d819c05c97ffb749 100644
+--- a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
++++ b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+@@ -24,19 +24,16 @@ use std::path::Path;
+ 
+ use tsuzuri_core::agent::meter::{TALLY, Tally, sub_call};
+ use tsuzuri_core::agent::spec::group::{SEAT, Seat};
+-use tsuzuri_core::agent::spec::{SPEC, Spec};
+-use tsuzuri_core::agent::stop::{GATE, OUT, claim_lacks, end, hold, lacks};
++use tsuzuri_core::agent::spec::{OUT, SPEC, Spec};
++use tsuzuri_core::agent::stop::{GATE, claim_lacks, end, hold, lacks};
+ 
++use super::agent_args::{begin, misuse};
+ use super::agent_meter::{resolve, unbound};
+-use super::agent_spawn::{drafts, parse};
+ use crate::out::emit_err;
+ use crate::server::events::now;
+ 
+ pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]";
+ 
+-/// 使い方の誤り。
+-const FAIL: u8 = 1;
+-
+ /// 1 度目の終わりの止め（Claude Code は係を続けさせる）。
+ const HOLD: u8 = 2;
+ 
+@@ -78,17 +75,13 @@ pub fn run(rest: &[&str]) -> u8 {
+     let Some(call) = sub_call(&payload) else {
+         return 0;
+     };
+-    let parsed = floor::tools(rest).and_then(|(left, tools)| Ok((parse(&left)?, tools)));
+-    let (args, tools) = match parsed {
+-        Ok(args) => args,
+-        Err(e) => {
+-            emit_err(&format!("tz hook agent-stop: {e}\n{USAGE}"));
+-            return FAIL;
+-        }
++    let (left, tools) = match floor::tools(rest) {
++        Ok(found) => found,
++        Err(e) => return misuse(USAGE, &e),
+     };
+-    let Some(dir) = drafts(&args) else {
+-        emit_err("tz hook agent-stop: 起草の置き場を解けない（通す）");
+-        return 0;
++    let (_, dir) = match begin(USAGE, "通す", &left) {
++        Ok(found) => found,
++        Err(rc) => return rc,
+     };
+     let (name, mut spec) = match resolve(&dir, &call) {
+         Ok(found) => found,
+diff --git a/crates/tsuzuri-boundary/tests/agshp.rs b/crates/tsuzuri-boundary/tests/agshp.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..133df84d33d65770f7f984affc454acd2968c73d
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agshp.rs
+@@ -0,0 +1,346 @@
++//! 係の口と係の門の形の畳みの歯（接頭辞 agshp_・設計ノート surface-wave29c 行 t-shape-ag・判断の記録 ADR-63 決定 (8) の (d)）。
++//! 振る舞いは tz の binary の係の口 5 つに係の呼びの入力を標準入力で渡し、引数の誤りと置き場の解けない時の標準エラーの字を測る。
++//! 形（deny の答えの JSON の字・係の出力の dir の名・path の下の判じ・係の口の引数の読み・係の門の置き場が 1 か所に在る事）は、
++//! 写しが 2 つでも同じ字を出すので振る舞いでは測れず、中核と境界の src の字を関数の範囲（宣言の行から行の頭の閉じ括弧の行の前まで）で数える。
++//! 否定の見本は本物の src から 1 句だけ崩した写しで、崩した句だけを名指す。
++#![cfg(test)]
++
++use std::collections::BTreeMap;
++use std::fs;
++use std::io::Write;
++use std::path::Path;
++use std::process::{Command, Stdio};
++
++use tsuzuri_boundary::hook::{agent_bind, agent_guard, agent_meter, agent_spawn, subagent_stop};
++
++const GATE: &str = "tsuzuri-core/src/gate.rs";
++const SPEC: &str = "tsuzuri-core/src/agent/spec.rs";
++const STOP: &str = "tsuzuri-core/src/agent/stop.rs";
++const AGENT_MOD: &str = "tsuzuri-core/src/agent/mod.rs";
++const METER: &str = "tsuzuri-core/src/agent/meter.rs";
++const GUARD: &str = "tsuzuri-core/src/agent/guard.rs";
++const OLD_GUARD: &str = "tsuzuri-core/src/agent/meter/guard.rs";
++const GROUP: &str = "tsuzuri-core/src/agent/meter/group.rs";
++const HOOK: &str = "tsuzuri-boundary/src/hook/";
++const ARGS: &str = "tsuzuri-boundary/src/hook/agent_args.rs";
++
++/// deny の答えの JSON の鍵の字。
++const DENY_KEY: &str = "\"permissionDecision\"";
++/// gate.rs の deny_json の中の鍵の行と、ほかの関数 short_output の宣言の行（置き場だけ動かす見本）。
++const KEY_LINE: &str = "        \"permissionDecision\".to_string(),\n";
++const SHORT_HEAD: &str = "pub fn short_output(why: ShortWhy) -> String {\n";
++/// 係の出力の dir の名の定義の頭と、その 1 行。
++const OUT_DEF: &str = "const OUT: &str";
++const OUT_LINE: &str = "pub const OUT: &str = \"w\";";
++/// path の下の判じの `..` の成分の字。
++const PARENT: &str = "Component::ParentDir";
++/// 係の口の USAGE の定義の頭。
++const AGENT_USAGE: &str = "pub const USAGE: &str = \"usage: tz hook agent-";
++/// 置き場の解けない時の訳の字と、使い方の誤りの USAGE の行の書式の字。
++const MISS: &str = "起草の置き場を解けない";
++const USAGE_LINE: &str = "\\n{USAGE}";
++
++/// 係の口の file（hook の dir の下）。
++const MOUTHS: [&str; 5] = [
++    "agent_bind.rs",
++    "agent_guard.rs",
++    "agent_meter.rs",
++    "agent_spawn.rs",
++    "subagent_stop.rs",
++];
++
++/// 中核と境界の src の下の .rs の全部（`<crate>/src/<相対>` から字へ）。
++fn sources() -> BTreeMap<String, String> {
++    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .parent()
++        .expect("crates の dir");
++    let mut out = BTreeMap::new();
++    for krate in ["tsuzuri-core", "tsuzuri-boundary"] {
++        walk(
++            &root.join(krate).join("src"),
++            &format!("{krate}/src"),
++            &mut out,
++        );
++    }
++    out
++}
++
++fn walk(dir: &Path, rel: &str, out: &mut BTreeMap<String, String>) {
++    for entry in fs::read_dir(dir).expect("src の dir を読む").flatten() {
++        let path = entry.path();
++        let name = entry.file_name().to_string_lossy().into_owned();
++        if path.is_dir() {
++            walk(&path, &format!("{rel}/{name}"), out);
++        } else if name.ends_with(".rs") {
++            let text = fs::read_to_string(&path).expect("src の file を読む");
++            out.insert(format!("{rel}/{name}"), text);
++        }
++    }
++}
++
++/// 関数 `name` の範囲（宣言 `fn <name>(` の行から、行の頭の閉じ括弧の行の前まで・無ければ空）。
++fn body<'a>(files: &'a BTreeMap<String, String>, file: &str, name: &str) -> &'a str {
++    let Some(src) = files.get(file) else {
++        return "";
++    };
++    let Some(at) = src.find(&format!("fn {name}(")) else {
++        return "";
++    };
++    let start = src[..at].rfind('\n').map_or(0, |i| i + 1);
++    let end = src[start..].find("\n}\n").map_or(src.len(), |i| start + i);
++    &src[start..end]
++}
++
++/// 全部の file の中の字 `needle` の数。
++fn total(files: &BTreeMap<String, String>, needle: &str) -> usize {
++    files.values().map(|t| t.matches(needle).count()).sum()
++}
++
++/// deny の鍵の字の全部の数と、gate.rs の deny_json の範囲の中の数。
++fn deny_shape(files: &BTreeMap<String, String>) -> (usize, usize) {
++    let inner = body(files, GATE, "deny_json").matches(DENY_KEY).count();
++    (total(files, DENY_KEY), inner)
++}
++
++/// 出力の dir の名の定義の全部の数と、spec.rs の定義の 1 行の数。
++fn out_shape(files: &BTreeMap<String, String>) -> (usize, usize) {
++    let spec = files.get(SPEC).map_or(0, |t| t.matches(OUT_LINE).count());
++    (total(files, OUT_DEF), spec)
++}
++
++/// `..` の成分の字の全部の数・guard.rs の under の中の数・open の中の字 under( の数・group.rs の inside の中の字 under( の数。
++fn under_shape(files: &BTreeMap<String, String>) -> [usize; 4] {
++    [
++        total(files, PARENT),
++        body(files, GUARD, "under").matches(PARENT).count(),
++        body(files, GUARD, "open").matches("under(").count(),
++        body(files, GROUP, "inside").matches("under(").count(),
++    ]
++}
++
++/// 係の口の file の名と run の中の字 begin( の数の列・口の file の中の訳の字と USAGE の行の書式の字の数の和・
++/// agent_args.rs の begin の中の字 parse(rest)・drafts(&args)・訳の字の数。
++fn begin_shape(files: &BTreeMap<String, String>) -> (Vec<(String, usize)>, usize, [usize; 3]) {
++    let mut mouths = Vec::new();
++    let mut copies = 0;
++    for (path, text) in files {
++        let Some(name) = path.strip_prefix(HOOK) else {
++            continue;
++        };
++        if !text.contains(AGENT_USAGE) {
++            continue;
++        }
++        let run = body(files, path, "run").matches("begin(").count();
++        mouths.push((name.to_string(), run));
++        copies += text.matches(MISS).count() + text.matches(USAGE_LINE).count();
++    }
++    let begin = body(files, ARGS, "begin");
++    let reader = [
++        begin.matches("parse(rest)").count(),
++        begin.matches("drafts(&args)").count(),
++        begin.matches(MISS).count(),
++    ];
++    (mouths, copies, reader)
++}
++
++/// agent/guard.rs の在り・agent/meter/guard.rs の在り・agent/mod.rs の字 pub mod guard; の数・meter.rs の字 mod guard; の数。
++fn guard_shape(files: &BTreeMap<String, String>) -> (bool, bool, usize, usize) {
++    let count = |f: &str, s: &str| files.get(f).map_or(0, |t| t.matches(s).count());
++    (
++        files.contains_key(GUARD),
++        files.contains_key(OLD_GUARD),
++        count(AGENT_MOD, "pub mod guard;"),
++        count(METER, "mod guard;"),
++    )
++}
++
++/// 口の file の名と run の中の begin( の数の見込み（5 つの口が 1 度ずつ）。
++fn mouths_once() -> Vec<(String, usize)> {
++    MOUTHS.iter().map(|m| ((*m).to_string(), 1)).collect()
++}
++
++/// 崩れた句の名（deny・out・under・begin・guard の順・崩れが無ければ空）。
++fn broken(files: &BTreeMap<String, String>) -> Vec<&'static str> {
++    let ok = [
++        ("deny", deny_shape(files) == (1, 1)),
++        ("out", out_shape(files) == (1, 1)),
++        ("under", under_shape(files) == [1, 1, 1, 1]),
++        ("begin", begin_shape(files) == (mouths_once(), 0, [1, 1, 1])),
++        ("guard", guard_shape(files) == (true, false, 1, 0)),
++    ];
++    ok.iter().filter(|(_, ok)| !ok).map(|(n, _)| *n).collect()
++}
++
++/// 係の口を入力 `payload` と引数 `args` で撃ち、(rc, 標準出力, 標準エラー) を返す。
++fn mouth(name: &str, args: &[&str], payload: &str) -> (Option<i32>, String, String) {
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", name])
++        .args(args)
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .expect("tz を撃つ");
++    child
++        .stdin
++        .take()
++        .expect("標準入力")
++        .write_all(payload.as_bytes())
++        .expect("入力を書く");
++    let out = child.wait_with_output().expect("終わりを待つ");
++    let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
++    (out.status.code(), text(&out.stdout), text(&out.stderr))
++}
++
++#[test]
++fn agshp_five_mouths_keep_the_usage_and_the_drafts_lines() {
++    let seat = r#"{"tool_name":"Agent","tool_input":{"subagent_type":"tsuzuri:drafter","name":"w1","prompt":"p"}}"#;
++    let bound =
++        r#"{"tool_name":"Agent","tool_input":{"name":"w1"},"tool_response":{"agentId":"a1"}}"#;
++    let sub = r#"{"agent_id":"a1","hook_event_name":"PreToolUse","tool_name":"Read"}"#;
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("agshp");
++    fs::create_dir_all(&root).expect("歯の置き場");
++    let none = root.join("none");
++    let none = none.to_str().expect("path の字");
++    let repo = root.to_str().expect("path の字");
++    for (name, usage, payload, miss) in [
++        ("agent-spawn", agent_spawn::USAGE, seat, "通す"),
++        ("agent-bind", agent_bind::USAGE, bound, "書かない"),
++        ("agent-meter", agent_meter::USAGE, sub, "通す"),
++        ("agent-guard", agent_guard::USAGE, sub, "通す"),
++        ("agent-stop", subagent_stop::USAGE, sub, "通す"),
++    ] {
++        let wrong = mouth(name, &["--repo", repo, "--bogus", "x"], payload);
++        let line = format!("tz hook {name}: 知らない引数 --bogus\n{usage}\n");
++        assert_eq!(wrong, (Some(1), String::new(), line), "{name}");
++        let lost = mouth(name, &["--repo", repo, "--drafts", none], payload);
++        let line = format!("tz hook {name}: {MISS}（{miss}）\n");
++        assert_eq!(lost, (Some(0), String::new(), line), "{name}");
++    }
++}
++
++#[test]
++fn agshp_deny_answer_is_built_in_one_place() {
++    assert_eq!(deny_shape(&sources()), (1, 1));
++}
++
++#[test]
++fn agshp_out_dir_name_is_defined_once() {
++    assert_eq!(out_shape(&sources()), (1, 1));
++}
++
++#[test]
++fn agshp_path_under_is_judged_in_one_place() {
++    assert_eq!(under_shape(&sources()), [1, 1, 1, 1]);
++}
++
++#[test]
++fn agshp_agent_mouths_begin_through_one_reader() {
++    assert_eq!(begin_shape(&sources()), (mouths_once(), 0, [1, 1, 1]));
++}
++
++#[test]
++fn agshp_guard_sits_beside_meter_spec_and_stop() {
++    assert_eq!(guard_shape(&sources()), (true, false, 1, 0));
++}
++
++/// 本物の src の写しの file `file` の、ちょうど 1 度在る字 `old` を `new` に替える。
++fn swap(files: &mut BTreeMap<String, String>, file: &str, old: &str, new: &str) {
++    let text = files.get_mut(file).expect("写しの file");
++    assert_eq!(text.matches(old).count(), 1, "{file} の {old}");
++    *text = text.replacen(old, new, 1);
++}
++
++/// 本物の src の写しへの 1 句の直し。
++type Edit = fn(&mut BTreeMap<String, String>);
++
++/// deny と出力の dir の名と path の下の判じの句を 1 つだけ崩す見本（句の名と直し）。
++fn core_mutants() -> [(&'static str, Edit); 6] {
++    [
++        ("deny", |f| {
++            let copy = "\nfn deny_copy() -> &'static str {\n    \"permissionDecision\"\n}\n";
++            f.get_mut(SPEC).expect("spec").push_str(copy);
++        }),
++        ("deny", |f| {
++            swap(f, GATE, KEY_LINE, "");
++            swap(f, GATE, SHORT_HEAD, &format!("{SHORT_HEAD}{KEY_LINE}"));
++        }),
++        ("out", |f| {
++            swap(
++                f,
++                STOP,
++                "\npub mod floor;\n",
++                &format!("\npub mod floor;\n{OUT_LINE}\n"),
++            );
++        }),
++        ("out", |f| {
++            swap(f, SPEC, OUT_LINE, "");
++            swap(
++                f,
++                AGENT_MOD,
++                "pub mod guard;\n",
++                &format!("pub mod guard;\n{OUT_LINE}\n"),
++            );
++        }),
++        ("under", |f| {
++            let inline = "!Path::new(path).components().any(|c| c == Component::ParentDir) && Path::new(path).starts_with(a)";
++            swap(f, GROUP, "under(Path::new(path), Path::new(a))", inline);
++        }),
++        ("under", |f| {
++            let old = "path.is_some_and(|p| under(Path::new(p), out))";
++            swap(
++                f,
++                GUARD,
++                old,
++                "path.is_some_and(|p| Path::new(p).starts_with(out))",
++            );
++        }),
++    ]
++}
++
++/// 係の口の引数の読みと係の門の置き場の句を 1 つだけ崩す見本（句の名と直し）。
++fn mouth_mutants() -> [(&'static str, Edit); 4] {
++    [
++        ("begin", |f| {
++            let text = "pub const USAGE: &str = \"usage: tz hook agent-extra --repo <dir>\";\n\
++                        pub fn run(rest: &[&str]) -> u8 {\n    parse(rest).map_or(1, |_| 0)\n}\n";
++            f.insert(format!("{HOOK}agent_extra.rs"), text.to_string());
++        }),
++        ("begin", |f| {
++            let new = "Err(rc) => {\n            emit_err(\"tz hook agent-meter: 起草の置き場を解けない（通す）\");\n            return rc;\n        }";
++            swap(
++                f,
++                &format!("{HOOK}agent_meter.rs"),
++                "Err(rc) => return rc,",
++                new,
++            );
++        }),
++        ("guard", |f| {
++            swap(f, AGENT_MOD, "pub mod guard;\n", "");
++            swap(
++                f,
++                METER,
++                "pub mod group;\n",
++                "pub mod group;\npub mod guard;\n",
++            );
++        }),
++        ("guard", |f| {
++            f.insert(OLD_GUARD.to_string(), "//! 写し\n".to_string());
++        }),
++    ]
++}
++
++#[test]
++fn agshp_one_clause_mutants_are_named() {
++    let real = sources();
++    assert!(broken(&real).is_empty(), "{:?}", broken(&real));
++    for (i, (clause, edit)) in core_mutants()
++        .into_iter()
++        .chain(mouth_mutants())
++        .enumerate()
++    {
++        let mut files = real.clone();
++        edit(&mut files);
++        assert_eq!(broken(&files), vec![clause], "{i} 番の見本");
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/aggd.rs b/crates/tsuzuri-boundary/tests/teeth5/aggd.rs
+index e94c841049a5eff00a4bc561d0708fbfad9275b6..b25cfaa45d7d456bd1163f802f782099b1f03ea8 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/aggd.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/aggd.rs
+@@ -8,7 +8,7 @@ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-use tsuzuri_core::agent::meter::guard::{open, write_path};
++use tsuzuri_core::agent::guard::{open, write_path};
+ 
+ /// 歯ごとの置き場（前の撃ちの残りを消して作る）の drafts/。
+ fn place(name: &str) -> PathBuf {
+diff --git a/crates/tsuzuri-core/src/agent/meter/guard.rs b/crates/tsuzuri-core/src/agent/guard.rs
+similarity index 75%
+rename from crates/tsuzuri-core/src/agent/meter/guard.rs
+rename to crates/tsuzuri-core/src/agent/guard.rs
+index e11a3b7e30210e1195729028c5b84ef19865fbc4..970d10b7dd8af0a281ba8b35121bdd342cccc011 100644
+--- a/crates/tsuzuri-core/src/agent/meter/guard.rs
++++ b/crates/tsuzuri-core/src/agent/guard.rs
+@@ -1,15 +1,13 @@
+ //! 係の門の判じ（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
+ //! 結んだ係の使った量（測りの札の `used`）が札の予算以上の時は書き終えの段で、係の呼びのうち席への知らせ（SendMessage）と、
+ //! 書きの道具（Write・Edit・NotebookEdit）で係の出力の dir `<起草の置き場>/<名>/w` の下を書く呼びだけを通す。
+-//! 書きの path は `..` の成分を持たず出力の dir の成分で始まる時だけ下と読む（ほかの係の dir と `..` を持つ path は断る）。
++//! path の下の判じ（`under`）は、`..` の成分を持たず dir の成分で始まる時だけ下と読む（ほかの係の dir と `..` を持つ path は断る）。
++//! 群の係の割りの読む path の判じ（`meter::group::inside`）も同じ `under` で比べる。
+ 
+ use std::path::{Component, Path};
+ 
+ use serde_json::Value;
+ 
+-/// 係の出力の dir の名（係の dir の下）。
+-pub const OUT: &str = "w";
+-
+ /// 書き終えの段でも通す席への知らせの道具。
+ pub const NOTIFY: &str = "SendMessage";
+ 
+@@ -37,13 +35,16 @@ pub fn write_path(payload: &str) -> Option<String> {
+         .map(str::to_string)
+ }
+ 
++/// path `path` が dir `dir` と同じか、その下か（成分で比べ、`..` の成分を持つ path は外と読む）。
++pub fn under(path: &Path, dir: &Path) -> bool {
++    !path.components().any(|c| c == Component::ParentDir) && path.starts_with(dir)
++}
++
+ /// 書き終えの段でも通す呼びか（席への知らせか、書きの道具の出力の dir `out` の下への書き）。
+ pub fn open(tool: &str, path: Option<&str>, out: &Path) -> bool {
+-    let under = |p: &str| {
+-        let p = Path::new(p);
+-        !p.components().any(|c| c == Component::ParentDir) && p.starts_with(out)
+-    };
+-    tool == NOTIFY || (WRITES.iter().any(|(t, _)| *t == tool) && path.is_some_and(under))
++    tool == NOTIFY
++        || (WRITES.iter().any(|(t, _)| *t == tool)
++            && path.is_some_and(|p| under(Path::new(p), out)))
+ }
+ 
+ /// 断りの理由の字（使った量・予算・通さない道具と、通す 2 つの次の一手）。
+diff --git a/crates/tsuzuri-core/src/agent/meter.rs b/crates/tsuzuri-core/src/agent/meter.rs
+index 6da596640e823691f78c9b0df38e71a261f12d38..11e430151101fa3ae38359dbdb78d765ffba4120 100644
+--- a/crates/tsuzuri-core/src/agent/meter.rs
++++ b/crates/tsuzuri-core/src/agent/meter.rs
+@@ -5,11 +5,9 @@
+ //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
+ //! 終える前の門が係の dir に書く予算の記録（`Tally`・`usage.json`）は、係の記録の全部を席の道具と同じ数え（`spent`）で数えた
+ //! 新しい量と、札の頭の予算と倍率と対象を持ち、日次の物差しが読む（判断の記録 ADR-63 決定 (9)）。
+-//! 予算を越えた係の呼びの係の門の判じは `guard` が持つ。
+ //! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字は `group` が持つ。
+ 
+ pub mod group;
+-pub mod guard;
+ 
+ use std::collections::BTreeMap;
+ 
+diff --git a/crates/tsuzuri-core/src/agent/meter/group.rs b/crates/tsuzuri-core/src/agent/meter/group.rs
+index 4b1dd81429e46b0e50ae1378c9c66a5c40302c39..389198cd8a030ab1ac3127a43fcfeefee571d7c2 100644
+--- a/crates/tsuzuri-core/src/agent/meter/group.rs
++++ b/crates/tsuzuri-core/src/agent/meter/group.rs
+@@ -5,12 +5,13 @@
+ //! 命令（Bash）と検索（Grep・Glob）の道具は見ない（決定 (4)(5)）。測りの口は、群の係の Read の path を群の id の dir の
+ //! `reads.jsonl` に足し、同じ群のほかの係が先に読んだ path なら `twice.jsonl` にも 1 行足す（記帳だけで断らない・決定 (5)）。
+ 
+-use std::path::{Component, Path};
++use std::path::Path;
+ 
+ use serde_json::{Value, json};
+ use tsuzuri_contract::EpochSecs;
+ 
+ use super::Meter;
++use crate::agent::guard::under;
+ use crate::agent::spec::group::{MEMBER_READ, Seat};
+ 
+ /// 読みの道具の名。
+@@ -37,10 +38,9 @@ pub fn read_path(payload: &str) -> Option<String> {
+         .map(str::to_string)
+ }
+ 
+-/// path が割りの読む path のどれかと同じか、その dir の下か（成分で比べ、`..` の成分を持つ path は外と読む）。
++/// path が割りの読む path のどれかと同じか、その dir の下か（係の門の `under` で比べる）。
+ pub fn inside(path: &str, paths: &[String]) -> bool {
+-    let p = Path::new(path);
+-    !p.components().any(|c| c == Component::ParentDir) && paths.iter().any(|a| p.starts_with(a))
++    paths.iter().any(|a| under(Path::new(path), Path::new(a)))
+ }
+ 
+ /// 群の係の呼びの断りの理由（係を起こす道具の呼びと、読みの道具の割りの外の読み・ほかの呼びは None）。
+diff --git a/crates/tsuzuri-core/src/agent/mod.rs b/crates/tsuzuri-core/src/agent/mod.rs
+index d9f085e53381a5d281c9e999aa708a199db31a6c..92f5abb6a803a738ec624d235861c0206c991094 100644
+--- a/crates/tsuzuri-core/src/agent/mod.rs
++++ b/crates/tsuzuri-core/src/agent/mod.rs
+@@ -1,7 +1,9 @@
+ //! 席が起こす係（判断の記録 ADR-59・要件 FR21）。起こしの門と結びの口の判じと係の札の字は `spec` が持つ。
+ //! 係の記録の使用量の測りと残りの注ぎは `meter` が持つ。
++//! 予算を越えた係の呼びの係の門の判じは `guard` が持つ。
+ //! 係の終える前の門の判じは `stop` が持つ。
+ 
++pub mod guard;
+ pub mod meter;
+ pub mod spec;
+ pub mod stop;
+diff --git a/crates/tsuzuri-core/src/agent/spec.rs b/crates/tsuzuri-core/src/agent/spec.rs
+index ae705d3db8eadee379d8f818c1a37e791c56ef26..c9746d47d7cdd3dc6cd4274e69f313220fc17a0e 100644
+--- a/crates/tsuzuri-core/src/agent/spec.rs
++++ b/crates/tsuzuri-core/src/agent/spec.rs
+@@ -3,7 +3,7 @@
+ //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
+ //! 頭の予算は下限（`BUDGET_MIN`・判断の記録 ADR-63 決定 (3)）より小さければ、直した頭の見本を付けて断る。
+ //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
+-//! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
++//! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`<名>/w`・`.agents/<係の id>`）もここに置く。
+ //! 検証の群の起こしの門の判じ（判断の記録 ADR-61・要件 FR22）は `group` が持つ。
+ 
+ pub mod group;
+@@ -11,7 +11,7 @@ pub mod outs;
+ pub mod tie;
+ 
+ use serde::{Deserialize, Serialize};
+-use serde_json::{Map, Value, json};
++use serde_json::{Map, Value};
+ use tsuzuri_contract::EpochSecs;
+ 
+ /// 席が起こせる係の型（決定 (1)・数は 3 を上限とする）。
+@@ -40,6 +40,9 @@ pub const BRIEF: &str = "brief.md";
+ /// 係の dir の札の file。
+ pub const SPEC: &str = "spec.json";
+ 
++/// 係の出力の dir の名（係の dir の下・出す物の字はここからの相対）。
++pub const OUT: &str = "w";
++
+ /// 起草の置き場の下の結びの dir（file の名は係の id・中身は起こしの名と改行）。
+ pub const AGENTS: &str = ".agents";
+ 
+@@ -306,18 +309,6 @@ pub fn reason(r: &Refusal, prompt: &str) -> String {
+     )
+ }
+ 
+-/// PreToolUse の deny の答えの JSON の字（理由は `reason`）。
+-pub fn deny(reason: &str) -> String {
+-    json!({
+-        "hookSpecificOutput": {
+-            "hookEventName": "PreToolUse",
+-            "permissionDecision": "deny",
+-            "permissionDecisionReason": reason,
+-        }
+-    })
+-    .to_string()
+-}
+-
+ /// 結びの口の入力（席の Agent の呼びの結果）から起こしの名と係の id を読む（係の id が無いか、名か係の id の字が安全でなければ None）。
+ pub fn bound(payload: &str) -> Option<(String, String)> {
+     let input = seat_agent(payload)?;
+diff --git a/crates/tsuzuri-core/src/agent/stop.rs b/crates/tsuzuri-core/src/agent/stop.rs
+index 6e2c987bace18faed5648142262b00c2d3b0b595..b8fb5a2aaf8875ff151fbc716102c12fed369b10 100644
+--- a/crates/tsuzuri-core/src/agent/stop.rs
++++ b/crates/tsuzuri-core/src/agent/stop.rs
+@@ -9,9 +9,6 @@ pub mod floor;
+ 
+ use serde_json::Value;
+ 
+-/// 係の出力の dir の名（係の dir の下）。
+-pub const OUT: &str = "w";
+-
+ /// 席の名（名で呼び合う形の SendMessage の宛先）。
+ pub const LEAD: &str = "team-lead";
+ 
+diff --git a/crates/tsuzuri-core/src/gate.rs b/crates/tsuzuri-core/src/gate.rs
+index 3dc9aa0a026454f2f55d2dc48b5bef97fba8ad92..4f4aace29066b72ef2cb3e7c720786a17b7dce50 100644
+--- a/crates/tsuzuri-core/src/gate.rs
++++ b/crates/tsuzuri-core/src/gate.rs
+@@ -601,8 +601,8 @@ pub fn output(gate: &Gate) -> Option<String> {
+     Some(deny_json(reason))
+ }
+ 
+-/// PreToolUse の deny の答えの JSON の字（理由は `reason`）。
+-fn deny_json(reason: String) -> String {
++/// PreToolUse の deny の答えの JSON の字（理由は `reason`・問いの起票の門と、境界の係の起こしの門と係の門が使う）。
++pub fn deny_json(reason: String) -> String {
+     let mut inner = Map::new();
+     inner.insert(
+         "hookEventName".to_string(),
