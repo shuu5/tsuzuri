@@ -386,7 +386,8 @@ pub enum UpdateError {
     Undeclared(Vec<String>),
     /// `status --porcelain --untracked-files=no` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
     Dirty,
-    /// host のどの置き場かで器の process（自分の外）が生きているか、`pgrep` で測れない（走る便の下で binary を替えない）。
+    /// host のどの置き場かで器の process（自分の外・留めた便の process を除く）が生きているか、`pgrep` で測れない（走る便の下で
+    /// binary を替えない・同じ便の子が留めを撃つ便は数えない＝行 v-pin-swap）。
     Busy,
     /// `fetch` が落ちた（rc つき・`None` = 起動できない / signal）。
     FetchFailed(Option<i32>),
@@ -523,7 +524,8 @@ fn live_pattern() -> String {
 }
 
 /// host のどの置き場かで器の process が自分の外に 1 本でも在るか（`pgrep -af` の rc 1 だけが 0 本・起動できない周と
-/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行は数えない。
+/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行と、留めた便の process の行
+/// （[`crate::pipe::pin::hold`]・行 v-pin-swap）は数えない。留めの無い便の行とどの便にも解けない行は数える。
 fn busy() -> bool {
     let pattern = live_pattern();
     let Ok(out) = Invocation::new("pgrep").args(["-af", pattern.as_str()]).output() else {
@@ -533,7 +535,10 @@ fn busy() -> bool {
         Some(1) => false,
         Some(0) => {
             let me = std::process::id().to_string();
-            String::from_utf8_lossy(&out.stdout).lines().any(|line| line.split_whitespace().next() != Some(me.as_str()))
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|line| line.split_whitespace().next() != Some(me.as_str()))
+                .any(|line| crate::pipe::pin::hold(line) != crate::pipe::pin::Hold::Pinned)
         }
         _ => true,
     }

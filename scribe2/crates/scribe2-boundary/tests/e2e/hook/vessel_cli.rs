@@ -240,6 +240,67 @@ fn vswap_refuses_while_a_vessel_process_lives() {
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "生きた行の無い周は進む: {}", stderr_text(&out));
 }
 
+/// 留めた便の process の行（行 v-pin-swap）: 便 r1 の留めの形の器の語の行（起こし直しの driver と sh の包みの runner）・`--run r1` の
+/// 行・`--bead b-2` の `pipe run` で便 r2 の札の所有者の pid の行（`runs` の置き場に r1 と r2 の留めと r2 の `RunCreated` と札を置く）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn pinned_lines(runs: &Path) -> String {
+    let pin = |run: &str| runs.join("pipe").join(run).join("bin").join(NAME);
+    for run in ["r1", "r2"] {
+        fs::create_dir_all(runs.join("pipe").join(run).join("bin")).expect("bin の dir を作れる");
+        fs::write(pin(run), "").expect("留めを置ける");
+    }
+    fs::write(runs.join("pipe").join("r2").join("driver"), "4304 1\n").expect("札を書ける");
+    fs::create_dir_all(runs.join("fleet")).expect("log の dir を作れる");
+    let created = "{\"schema\":1,\"ts\":\"2026-10-05T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r2\",\"bead\":\"b-2\",\"host\":\"h\",\"actor\":\"machine\",\"stage\":\"Intake\"}\n";
+    fs::write(runs.join("fleet").join("events.jsonl"), created).expect("RunCreated を書ける");
+    let (p1, s) = (pin("r1").display().to_string(), runs.display().to_string());
+    format!(
+        "4301 {p1} pipe resume --run r1 --state-dir {s} --drive\n4302 /usr/bin/sh -c {p1} runner --worktree /w\n\
+         4303 {NAME} pipe land --run r1 --state-dir {s} --terminal-only\n4304 /opt/{NAME} pipe run --design d --bead b-2 --state-dir {s}\n"
+    )
+}
+
+/// 入れ替えの門 (3)（行 v-pin-swap）: 偽 pgrep の行が留めた便の行だけの周は busy で断らず、撃ちの列と `InstallRecorded` 1 件と
+/// stdout の 1 行は成功の見本と同じ。
+#[test]
+fn vpinswap_pinned_processes_do_not_hold_the_swap() {
+    let place = update_place(true, "", 0, 0);
+    let runs = tmp();
+    fs::write(place.bin.join("live"), pinned_lines(&runs)).expect("生きた行を書ける");
+    let out = run_update(&place);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "留めた行だけの周は進む: {}", stderr_text(&out));
+    assert_eq!(place.argv(), update_argv(), "順序固定の argv（数えの後の段へ進む）");
+    assert_eq!(place.installs().len(), 1, "InstallRecorded は 1 件");
+    let sha = UPDATE_HEAD.get(..12).unwrap_or_default();
+    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("vessel: installed sha={sha} path={UPDATE_BIN}\n"), "stdout は 1 行");
+}
+
+/// 入れ替えの門 (4)（行 v-pin-swap）: 留めた行に、留めの無い便の行（`--run r9`）か、どの便にも解けない行（置き場を持たない sh の包み
+/// の runner・札の所有者でない pid の `pipe run`）を 1 本足した周は、今までどおり数えの段より後を撃たず、event 0 件・stdout 空・
+/// stderr の 1 行目が `vessel: busy`・rc 1。
+#[test]
+fn vpinswap_unpinned_or_unresolved_lines_keep_busy() {
+    let argv = update_argv();
+    let runs = tmp();
+    let s = runs.display().to_string();
+    for extra in [
+        format!("4307 {NAME} pipe land --run r9 --state-dir {s}"),
+        format!("4308 /usr/bin/sh -c {NAME} runner --worktree /w"),
+        format!("4399 /opt/{NAME} pipe run --design d --bead b-2 --state-dir {s}"),
+    ] {
+        let place = update_place(true, "", 0, 0);
+        fs::write(place.bin.join("live"), format!("{}{extra}\n", pinned_lines(&runs))).expect("生きた行を書ける");
+        let out = run_update(&place);
+        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{extra}: busy の rc: {}", stderr_text(&out));
+        assert_eq!(stderr_text(&out).lines().next(), Some("vessel: busy"), "{extra}: 断りの語");
+        assert_eq!(place.argv(), argv.get(..2).unwrap_or_default().to_vec(), "{extra}: 数えの段より後は撃たない");
+        assert!(place.installs().is_empty() && out.stdout.is_empty(), "{extra}: event 0 件・stdout 空");
+    }
+}
+
 /// 入れ替えの門 (2): PATH の器の世代（`--version` の括弧の sha12）と HEAD の差が repo の dir の下で空（`git diff --quiet <sha12>
 /// HEAD -- .` の rc 0）の周は cargo を撃たず、event 0 件・stderr の 1 行目が `vessel: unchanged`・rc 1。差の在る見本（rc 1）と
 /// 世代の括弧が `+dirty` の見本は組む（cargo を撃ち event 1 件）。
