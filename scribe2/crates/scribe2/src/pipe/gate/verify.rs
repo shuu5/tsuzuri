@@ -582,7 +582,7 @@ fn done_teeth_sections(file: &Path, at: (&Path, &str), verify: &[String]) -> Res
     let roots = match RootsAtHead::read(worktree) {
         RootsAtHead::Unreadable => return Err("便の HEAD の宣言の crate-roots を読めない".to_owned()),
         RootsAtHead::Fixed => fixed_roots(),
-        RootsAtHead::Declared(added) => with_fixed(&added),
+        RootsAtHead::Declared(added) => with_fixed(&added.roots),
     };
     let head = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: NAME, roots: &roots };
     let changed = nul_split(&git(&["diff", "--name-only", "-z", &format!("{base}..HEAD")], "diff の path")?);

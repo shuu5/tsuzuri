@@ -312,8 +312,8 @@ pub struct Declared {
     close_check: Option<bool>,
     /// 床の検査の 1 行（任意 key `floor-check`・無ければ `None`・設計 dispatcher.md §34）。
     floor_check: Option<String>,
-    /// 足す根（任意 key `crate-roots`・無ければ空・固定の根は含まない・設計 contract-source.md §62）。
-    crate_roots: Vec<String>,
+    /// 足す根と面の path（任意 key `crate-roots` と `scope-paths`・無ければ空・固定の根と固定の面は含まない・設計 contract-source.md §62）。
+    added: crate_roots::Added,
     /// 裁定 id の引用の実在を確かめるか（任意 key `ruling-check`・無ければ `None`・設計 dispatcher.md §36）。
     ruling_check: Option<bool>,
     /// 引用の見本の一覧（任意 key `ruling-fixtures`・無ければ `None`・空の一覧は `Some` の空）。
@@ -569,7 +569,7 @@ impl Declared {
         let question_route = question_route_of(&found, &mut errors);
         let close_check = close_check_of(&found, &mut errors);
         let floor_check = floor_check_of(&found, &mut errors);
-        let crate_roots = crate_roots::declared_of(&found, &mut errors);
+        let added = crate_roots::declared_of(&found, &mut errors);
         let ruling_check = ruling_check_of(&found, &mut errors);
         let ruling_fixtures = ruling_fixtures_of(&found, &mut errors);
         let row_review = row_review_of(&found, &mut errors);
@@ -599,7 +599,7 @@ impl Declared {
                 question_route,
                 close_check,
                 floor_check,
-                crate_roots,
+                added,
                 ruling_check,
                 ruling_fixtures,
                 row_review,
@@ -1298,6 +1298,7 @@ mod tests {
                 "close-check",
                 "floor-check",
                 "crate-roots",
+                "scope-paths",
                 "ruling-check",
                 "ruling-fixtures",
                 "teeth-check",

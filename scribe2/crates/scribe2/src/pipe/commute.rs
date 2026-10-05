@@ -555,6 +555,21 @@ mod tests {
         assert_eq!(verdict(&place, "c2", &["p"], &files(&[FILE, OTHER])), Verdict::NotCommuting, "相手が OTHER を書かない");
     }
 
+    /// HEAD の宣言の任意 key scope-paths の下の交わりは面の中と読んで差を照らし（交わる path を書かない差は not-commuting）、
+    /// 宣言の無い同じ交わりは outside-face。
+    #[test]
+    fn vscope_commute_reads_the_declared_paths_as_the_face() {
+        let place = place("vscope-commute", &[("c", &[(FILE, 5, "c5")], 3, false), ("p", &[(FILE, 20, "p20")], 3, false)]);
+        let (crossed, own, theirs) = (files(&["vessel/rules/a.toml"]), path("c"), path("p"));
+        let list = [Partner { patch: Some(&theirs), base: &place.base, crossed: &crossed }];
+        assert_eq!(judge(&ask(&place, Some(&own), &list)), Verdict::OutsideFace, "宣言しない面の外");
+        let text = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nscope-paths = [\"vessel/rules/\"]\n";
+        assert!(std::fs::write(place.repo.join(crate::pipe::declaration::DECL_FILE), text).is_ok(), "宣言を書けた");
+        assert!(!commit(&place.repo, "declare").is_empty(), "宣言の commit");
+        let declared = RootsAtHead::read(&place.repo);
+        assert_eq!(judge(&Ask { roots: &declared, ..ask(&place, Some(&own), &list) }), Verdict::NotCommuting, "宣言した面の中");
+    }
+
     /// 候補は main の先端、相手は相手の base から読み、読めない周と時間切れは unreadable。周の dir は消え、repo の物の置き場と
     /// index には書かない。
     #[test]

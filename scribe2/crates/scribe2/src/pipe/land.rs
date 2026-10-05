@@ -181,22 +181,23 @@ pub fn detection_needed<'a>(paths: impl IntoIterator<Item = &'a str>) -> bool {
 
 /// path の列が検出線の面に触れるか（追随の再 gate の省きと着地後の検出線が通る 1 本・設計 contract-source.md §62）。
 ///
-/// 面は [`DETECTION_SCOPE`] の照らし（[`detection_needed`]・値は変えない）と「宣言した根のどれかの crate の中の path」の
-/// 和。宣言が在って読めない周（[`declaration::RootsAtHead::Unreadable`]）は path が 1 つでも在れば触れる側（fail-closed・
-/// 空の列は従来どおり偽）。
+/// 面は [`DETECTION_SCOPE`] の照らし（[`detection_needed`]・値は変えない）と「宣言した根のどれかの crate の中の path」と
+/// 「宣言した面の path（任意 key `scope-paths`・照らしは [`in_face`]）に触れる path」の和。宣言が在って読めない周
+/// （[`declaration::RootsAtHead::Unreadable`]）は path が 1 つでも在れば触れる側（fail-closed・空の列は従来どおり偽）。
 pub(crate) fn scope_touched(roots: &declaration::RootsAtHead, paths: &[&str]) -> bool {
     match roots {
         declaration::RootsAtHead::Unreadable => !paths.is_empty(),
         declaration::RootsAtHead::Fixed => detection_needed(paths.iter().copied()),
         declaration::RootsAtHead::Declared(added) => {
-            let all = declaration::with_fixed(added);
-            detection_needed(paths.iter().copied()) || paths.iter().any(|path| declaration::crate_of(&all, path).is_some())
+            let all = declaration::with_fixed(&added.roots);
+            let declared = |path: &&str| declaration::crate_of(&all, path).is_some() || added.paths.iter().any(|face| in_face(path, face));
+            detection_needed(paths.iter().copied()) || paths.iter().any(declared)
         }
     }
 }
 
 /// path が面の 1 項目に触れるか（dir は接頭辞・file は完全一致）。`cratesx/a.rs` は `crates/` に触れない。
-fn in_face(path: &str, face: &str) -> bool {
+pub(crate) fn in_face(path: &str, face: &str) -> bool {
     if face.ends_with('/') {
         return path.starts_with(face);
     }
@@ -1397,6 +1398,16 @@ mod tests {
         assert!(!regate_skippable(&broken, &first, &second), "読めない宣言は撃ち直す");
         let (plain, first, second) = notes_repo("crate-roots-regate-plain", "");
         assert!(regate_skippable(&plain, &first, &second), "key の無い宣言は面の外だけなら省く（対照）");
+    }
+
+    /// 宣言した面の path（scope-paths）の dir の下か file そのものだけの main の動きは再 gate を撃ち直し、触れない path だけの宣言は省く。
+    #[test]
+    fn vscope_regate_skippable_reads_the_declared_paths() {
+        let cases = [("[\"notes/\"]", false), ("[\"notes/x.md\"]", false), ("[\"notes/y.md\"]", true)];
+        for (at, (value, want)) in cases.into_iter().enumerate() {
+            let (repo, first, second) = notes_repo(&format!("vscope-regate-{at}"), &format!("scope-paths = {value}\n"));
+            assert_eq!(regate_skippable(&repo, &first, &second), want, "{value}");
+        }
     }
 
     /// 本物の git の差分（`core.quotePath=false`）を読む（設計 §62 約束 8・新しい子 module の歯を既存の `mod tests` にも 1 本置く）:

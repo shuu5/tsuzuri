@@ -26,6 +26,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     CLOSE_CHECK_KEY,
     FLOOR_CHECK_KEY,
     crate_roots::KEY,
+    crate_roots::SCOPE_KEY,
     RULING_CHECK_KEY,
     RULING_FIXTURES_KEY,
     TEETH_CHECK_KEY,
@@ -370,6 +371,7 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     CLOSE_CHECK_KEY,
     FLOOR_CHECK_KEY,
     crate_roots::KEY,
+    crate_roots::SCOPE_KEY,
     RULING_CHECK_KEY,
     RULING_FIXTURES_KEY,
     TEETH_CHECK_KEY,
@@ -647,7 +649,7 @@ pub fn table_facts_named(
     let sourced = Sourced::read(repo, ceiling)?;
     let requirements = sourced.declared.requirements.clone().unwrap_or_else(|| DEFAULT_REQUIREMENTS.to_owned());
     let entrance = sourced.declared.entrance_flip;
-    let crate_roots = crate_roots::with_fixed(&sourced.declared.crate_roots);
+    let crate_roots = crate_roots::with_fixed(&sourced.declared.added.roots);
     let teeth_check = sourced.declared.teeth_check == Some(true);
     let effective = sourced.measure(ceiling, &[])?;
     let denied = ceiling.denied.to_vec();

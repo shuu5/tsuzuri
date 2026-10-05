@@ -531,4 +531,14 @@ mod tests {
         let (plain, parent, sha) = notes_repo("crate-roots-touch-plain", "");
         assert!(!touches_scope(&plain, &parent, &sha), "key の無い宣言は面の外だけなら撃たない（対照）");
     }
+
+    /// 宣言した面の path（scope-paths）の dir の下か file そのものだけの着地は検出線の面に触れ、触れない path だけの宣言は触れない。
+    #[test]
+    fn vscope_touches_scope_reads_the_declared_paths() {
+        let cases = [("[\"notes/\"]", true), ("[\"notes/x.md\"]", true), ("[\"notes/y.md\"]", false)];
+        for (at, (value, want)) in cases.into_iter().enumerate() {
+            let (repo, parent, sha) = notes_repo(&format!("vscope-touch-{at}"), &format!("scope-paths = {value}\n"));
+            assert_eq!(touches_scope(&repo, &parent, &sha), want, "{value}");
+        }
+    }
 }
