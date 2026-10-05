@@ -2,7 +2,8 @@
 //! 撃つのは Claude Code（PostToolUse の hook・matcher なし）。標準入力の hook の入力が係の呼び（係の id の在る呼び）の時だけ測る。順:
 //! 1. 標準入力を全部読む。係の呼びでなければ（席の呼び）何も読まず何も出さずに 0。
 //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
-//! 3. 置き場の `.agents/<係の id>` の名と、その名の係の札を読む。結びが無ければ `.agents/unbound.jsonl` に 1 行足して通す（fail-open）。
+//! 3. 置き場の `.agents/<係の id>` の名と、その名の係の札を読む。結びが無ければ結びの口の `late` で係の記録の隣の meta.json の名の札に結び、
+//!    結べなければ訳を標準エラーに 1 行書き、`.agents/unbound.jsonl` に訳と 1 行足して通す（fail-open）。
 //! 4. 係の記録（親の記録の dir の下の subagents/agent-<係の id>.jsonl）を測りの札の offset から読み、中核の `feed` で足す。
 //! 5. 測りの札 `<名>/meter.json` を書き、新しく越えた印が在れば残りの注ぎを PostToolUse の答えで 1 行出して 0。
 //!
@@ -21,8 +22,10 @@ use tsuzuri_core::agent::meter::{
     METER, Meter, SubCall, inject, notice, sub_call, transcript, unbound_line,
 };
 use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
+use tsuzuri_core::agent::spec::tie::Miss;
 use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec};
 
+use super::agent_bind::late;
 use super::agent_spawn::{drafts, parse};
 use crate::out::{emit, emit_err};
 use crate::server::events::now;
@@ -35,17 +38,28 @@ pub const UNBOUND: &str = "unbound.jsonl";
 /// 使い方の誤り。
 const FAIL: u8 = 1;
 
-/// 係の id に結んだ名と札（`.agents/<係の id>` の名の係の札が読めなければ None）。
-pub fn resolve(drafts: &Path, agent_id: &str) -> Option<(String, Spec)> {
-    let name = fs::read_to_string(drafts.join(AGENTS).join(agent_id)).ok()?;
+/// 係の呼びの係の id に結んだ名と札。`.agents/<係の id>` が無ければ `late` で meta.json の名の札に結ぶ（結べないか札が読めなければ訳）。
+pub fn resolve(drafts: &Path, call: &SubCall) -> Result<(String, Spec), Miss> {
+    let Ok(name) = fs::read_to_string(drafts.join(AGENTS).join(&call.agent_id)) else {
+        return late(drafts, call);
+    };
     let name = name.trim();
-    let spec = Spec::parse(&fs::read_to_string(drafts.join(name).join(SPEC)).ok()?)?;
-    (spec.name == name).then(|| (name.to_string(), spec))
+    fs::read_to_string(drafts.join(name).join(SPEC))
+        .ok()
+        .and_then(|t| Spec::parse(&t))
+        .filter(|s| s.name == name)
+        .map(|s| (name.to_string(), s))
+        .ok_or_else(|| Miss::Spec(name.to_string()))
 }
 
-/// 結びの無い呼びを `.agents/unbound.jsonl` に 1 行足す（書けなければ標準エラー）。
-pub fn unbound(drafts: &Path, call: &SubCall) {
-    let line = unbound_line(call, now());
+/// 結びの無い呼びの訳を標準エラーに 1 行書き、`.agents/unbound.jsonl` に訳と 1 行足す（書けなければ標準エラー）。
+pub fn unbound(drafts: &Path, call: &SubCall, miss: &Miss) {
+    let cause = miss.text();
+    emit_err(&format!(
+        "tz hook agent: 係の id {} を係の札に結べない（{cause}・門は通す）",
+        call.agent_id
+    ));
+    let line = unbound_line(call, &cause, now());
     let wrote = fs::create_dir_all(drafts.join(AGENTS)).and_then(|()| {
         OpenOptions::new()
             .create(true)
@@ -120,9 +134,12 @@ pub fn run(rest: &[&str]) -> u8 {
         emit_err("tz hook agent-meter: 起草の置き場を解けない（通す）");
         return 0;
     };
-    let Some((name, spec)) = resolve(&dir, &call.agent_id) else {
-        unbound(&dir, &call);
-        return 0;
+    let (name, spec) = match resolve(&dir, &call) {
+        Ok(found) => found,
+        Err(miss) => {
+            unbound(&dir, &call, &miss);
+            return 0;
+        }
     };
     let Some(path) = transcript(&call.parent, &call.agent_id) else {
         return 0;

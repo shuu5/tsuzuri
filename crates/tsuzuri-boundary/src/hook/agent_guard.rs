@@ -65,7 +65,7 @@ pub fn run(rest: &[&str]) -> u8 {
         emit_err("tz hook agent-guard: 起草の置き場を解けない（通す）");
         return 0;
     };
-    let Some((name, spec)) = resolve(&dir, &call.agent_id) else {
+    let Ok((name, spec)) = resolve(&dir, &call) else {
         return 0;
     };
     let meter = fs::read_to_string(dir.join(&name).join(METER))

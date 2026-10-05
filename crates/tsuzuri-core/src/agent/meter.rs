@@ -202,9 +202,9 @@ pub fn sub_call(payload: &str) -> Option<SubCall> {
     })
 }
 
-/// 結びの無い呼びの記帳の 1 行（時刻・係の id・門の事・道具の名の JSON・改行なし）。
-pub fn unbound_line(call: &SubCall, at: EpochSecs) -> String {
-    json!({"at": at, "agent_id": call.agent_id, "event": call.event, "tool": call.tool}).to_string()
+/// 結びの無い呼びの記帳の 1 行（時刻・係の id・結べない訳・門の事・道具の名の JSON・改行なし）。
+pub fn unbound_line(call: &SubCall, cause: &str, at: EpochSecs) -> String {
+    json!({"at": at, "agent_id": call.agent_id, "cause": cause, "event": call.event, "tool": call.tool}).to_string()
 }
 
 /// 係の記録の path（親の記録 `transcript_path` の .jsonl を除いた dir の下の subagents/agent-<係の id>.jsonl）。

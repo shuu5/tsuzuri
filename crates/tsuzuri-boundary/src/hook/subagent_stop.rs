@@ -85,9 +85,12 @@ pub fn run(rest: &[&str]) -> u8 {
         emit_err("tz hook agent-stop: 起草の置き場を解けない（通す）");
         return 0;
     };
-    let Some((name, mut spec)) = resolve(&dir, &call.agent_id) else {
-        unbound(&dir, &call);
-        return 0;
+    let (name, mut spec) = match resolve(&dir, &call) {
+        Ok(found) => found,
+        Err(miss) => {
+            unbound(&dir, &call, &miss);
+            return 0;
+        }
     };
     let stop = end(&payload);
     let out = dir.join(&name).join(OUT);

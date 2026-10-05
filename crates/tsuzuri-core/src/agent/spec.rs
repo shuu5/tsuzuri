@@ -7,6 +7,8 @@
 //! 検証の群の起こしの門の判じ（`group`・判断の記録 ADR-61・要件 FR22）は行 ag-gjudge が置く。
 
 pub mod group;
+pub mod outs;
+pub mod tie;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -74,6 +76,7 @@ pub enum Refusal {
     Name(Option<String>),
     Head(HeadError),
     Clash { name: String, target: String },
+    Outputs(Vec<String>),
 }
 
 /// 係の札（`<名>/spec.json` の字）。終えの印（`ended`）の無い札が生きた係。係の id（`agent_id`）は結びの口が書く。
@@ -243,6 +246,10 @@ pub fn judge(call: &Call, live: &[Spec], now: EpochSecs) -> Result<Spec, Refusal
         return Err(Refusal::Name(call.name.clone()));
     };
     let head = head(&call.prompt).map_err(Refusal::Head)?;
+    let astray = outs::astray(&head.outputs);
+    if !astray.is_empty() {
+        return Err(Refusal::Outputs(astray));
+    }
     if let Some(s) = live
         .iter()
         .find(|s| s.ended.is_none() && s.target == head.target)
@@ -275,6 +282,7 @@ pub fn reason(r: &Refusal, prompt: &str) -> String {
                 TYPES.join("・")
             );
         }
+        Refusal::Outputs(bad) => return outs::reason(bad, prompt),
         Refusal::Name(_) => {
             return "係の起こしの門は止める（名が無いか、英数と - と _ の 64 字以内でない） 次の一手 = Agent の name に係の名を書く（頼みの頭には書かない）".to_string();
         }
