@@ -1,0 +1,1268 @@
+diff --git a/crates/tsuzuri-boundary/src/acct.rs b/crates/tsuzuri-boundary/src/acct.rs
+index f52acda2f65cfb2f92350c07d0e8740a8f73efc7..9d79603285f60d86c126e1b2150fb9263943c6cb 100644
+--- a/crates/tsuzuri-boundary/src/acct.rs
++++ b/crates/tsuzuri-boundary/src/acct.rs
+@@ -1,36 +1,36 @@
+-//! account board の読み（便 e-acct）。群の宣言（引数の state dir の host.toml）の anchor ごとに、git の
++//! account board の読み。群の宣言（引数の state dir の host.toml）の anchor ごとに、git の
+ //! `-C <anchor> config --get scribe2.statedir` で state dir を、`-C <anchor> config --get tsuzuri.boardport` で
+-//! project board の port を引き（電文の行には port だけを置く・便 h-board-url）、state dir ごとに器の
++//! project board の port を引き（電文の行には port だけを置く）、state dir ごとに器の
+ //! `seat tick status --state-dir <dir>` と `doctor --state-dir <dir>` を 1 回だけ撃ち、口座は引数の state dir で
+ //! `fleet usage --show --state-dir <dir>` を 1 回、窓ごとの逼迫の閾値は
+-//! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ（便 c-acct-thr）。
++//! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ。
+ //! 退避までの残り秒は tick status の席の行の器の欄の写し（中核の席の card）で、rules 行も合図の file も読まない。
+ //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
+-//! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
++//! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す。
+ //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last と
+ //! （同じ dir の heartbeat-off・heartbeat-on は読まず、有無と更新時刻を印にだけ使う）、
+-//! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
++//! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない）と、
+ //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
+-//! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
++//! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる）。file は書かない。
+ //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。
+-//! 器の出力は持ち回しの表（`Held`・行 e-held-acct と e-held-marks・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
++//! 器の出力は持ち回しの表（`Held`・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
+ //! usage と tick status と doctor は席の card の読みと同じ `read_held` で読み（鍵も印も同じ・同じ state dir の器の 3 つの出力は
+ //! 表の持ち分を分け合う）、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
+ //! file の読みは要求ごと（state dir ごとの event log だけは、更新時刻と長さの印が前の読みの前に取った印と同じなら
+-//! 読まず前の字の Arc を返し、その集めで読まなかった state dir の字は集めの終わりに放す・`log`・行 m-big-copies）。
+-//! `marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
++//! 読まず前の字の Arc を返し、その集めで読まなかった state dir の字は集めの終わりに放す・`log`）。
++//! `marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める。
+ //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
+ //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
+-//! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
++//! 字が同じ間は前の値を使う（`parsed`）。
+ //! git の読み（state dir と board の port と起草の置き場）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
+ //! 起草の置き場（`-C <anchor> config --get tsuzuri.draftsdir`）の引けた anchor は、退いていない相談の窓の作業場ごとに
+ //! 窓の控えと最後の process の印を読み、その pid の process の在る無しを `/proc` で見る（読むだけ・印にしない・
+-//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
+-//! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
++//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)）。
++//! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない。
+ //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
+ //! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を、`--project` の置き場の anchor の台帳は
+ //! `with_watched` の Source を分け合い、印が見張りの最後の読みの前と同じ間は bd を撃たない（違えば `Source::got` が自分で読む）。
+-//! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
++//! 口の登録と変化の知らせへの印の足しは `crate::server` が行う。
+ 
+ use std::collections::BTreeMap;
+ use std::ffi::{OsStr, OsString};
+diff --git a/crates/tsuzuri-boundary/src/accthb.rs b/crates/tsuzuri-boundary/src/accthb.rs
+index f118979942b28e0605e4013e8db7b2905ef9291a..5dcc8de64a36f744f21d5ac7c8df2a78060c2f11 100644
+--- a/crates/tsuzuri-boundary/src/accthb.rs
++++ b/crates/tsuzuri-boundary/src/accthb.rs
+@@ -1,11 +1,11 @@
+-//! 停止の切り替えの受付（要件 FR12・便 e-acct-hb）。面は state dir の file を書かず、器の CLI
++//! 停止の切り替えの受付（要件 FR12）。面は state dir の file を書かず、器の CLI
+ //! `seat heartbeat <on|off> --state-dir <dir> --target <target>` を 1 回撃つだけにする
+ //! （off は器が席の置き場に停止の記録を置き、on は器がそれを消す）。
+ //! 要求の本文は project の名と向きだけを持つ。state dir と target は本文の字でなく、群の宣言（引数の state dir の
+ //! host.toml）の anchor と git config（`Acct::state_dir`）と doctor の席の行（role=orchestrator）から引く。
+-//! Origin の検査と本文の大きさの上限と口の登録は、つなぐ行 h-wire が server の `guarded` と一緒に通す。
++//! Origin の検査と本文の大きさの上限と口の登録は、server が `guarded` と一緒に通す。
+ //! 子 process は `capture` で撃ち、落ちる・rc が 0 でない・5 秒で返らないは、どれも器が撃てない扱い（502）。
+-//! 2 つ目の受付 `accept_own` は project board の口（行 e-seat-hb・裁定 t3-hub.52.29 の案 A）で、本文は向きだけを持ち、
++//! 2 つ目の受付 `accept_own` は project board の口で、本文は向きだけを持ち、
+ //! anchor を名でなく server の --repo と同じ dir で引く（最後の名が同じ anchor が 2 つ在っても、この board の席だけを止める）。
+ //! anchor を引いた後の順と断りと 200 の電文は `accept` と同じ。
+ 
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index befea652836aee55a3dcb1e7c494edc19bf61d1b..dfb8a221a6cfb735b93360fbc0dfba9d55f48345 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -1,13 +1,12 @@
+-//! 面の受入 12 条の数え（行 j-count・要件 NFR1・規則の行 R-23・受入 AC9）。
++//! 面の受入 12 条の数え（要件 NFR1・規則の行 R-23・受入 AC9）。
+ //! 1 つの画面を 1 つの幅と mode で測った事実の JSON の字を読み、12 条ごとの違反の数と report の行を返す。
+-//! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式と runner は後の行 j-runner）。
++//! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式は `crate::stage::cdp` の `measure` が持つ）。
+ //! 判定の字数と閾値と origin の比べと語彙表の引きはこの側で持つ（歯が browser 無しで撃てる）。
+-//! 行 j-runner で runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
+-//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
+-//! （行 g-accept）。
++//! runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
++//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab。
+ //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
+ //! runner は頁を開いた後、面が描き、どの block も読みの印を出さなくなるまで上限つきで待ち、上限で残る画面を
+-//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（行 g-accept-runner・憲法 P-7）。
++//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（憲法 P-7）。
+ 
+ use std::fmt::Write;
+ 
+diff --git a/crates/tsuzuri-boundary/src/cli/context.rs b/crates/tsuzuri-boundary/src/cli/context.rs
+index 07d44c353543050985f9acd1b1de42df9d658757..3e77939d2b64a197575742d1c418ead1d78b0e12 100644
+--- a/crates/tsuzuri-boundary/src/cli/context.rs
++++ b/crates/tsuzuri-boundary/src/cli/context.rs
+@@ -1,7 +1,7 @@
+-//! tz context（行 k-ctx-cli・判断の記録 ADR-51 の決定 (4) と帰結）: 設計ノートの行 1 本の近い仕様（設計の層の塊）を
++//! tz context（判断の記録 ADR-51 の決定 (4) と帰結）: 設計ノートの行 1 本の近い仕様（設計の層の塊）を
+ //! 標準出力へ出す。書かない。席と係が起草の時に、器が便に渡す前の材料と同じ組みの字を引く口。
+ //! tz context --row <ノート>#<行> [--dir <dir>]（--dir は設計の置き場・省けば撃った場所からの design-intent）。
+-//! 組みは folio の lib の入口 `folio::entry::context`（行 f-ctx-build）で、塊の字はそのまま出す。
++//! 組みは folio の lib の入口 `folio::entry::context`で、塊の字はそのまま出す。
+ //! 終了 code は 組めた 0・使い方の誤りと名指しの誤り（ノートか行が無い）1・正本が読めない 2（まだ分からない）。
+ 
+ use std::path::Path;
+diff --git a/crates/tsuzuri-boundary/src/cli/folio.rs b/crates/tsuzuri-boundary/src/cli/folio.rs
+index d46d9b1e138fae393610490f523b686d869ad858..1a5ff6d033a229b7311b5eccb2a10ffb6d001695 100644
+--- a/crates/tsuzuri-boundary/src/cli/folio.rs
++++ b/crates/tsuzuri-boundary/src/cli/folio.rs
+@@ -1,9 +1,9 @@
+-//! tz の口の folio 由来の 11 subcommand（行 k-tz-entry・要件 FR17・判断の記録 ADR-8 の決定 (1)〜(6)）。
++//! tz の口の folio 由来の 11 subcommand（要件 FR17・判断の記録 ADR-8 の決定 (1)〜(6)）。
+ //! 口の名は folio の同じ名の口と同じで、引数と終了 code（合格 0・不合格 1・まだ分からない 2）も folio の口のまま、
+ //! folio の lib の入口 `folio::entry::run` を命令の名 tz で撃つだけ。inject と serve は持たない。
+ //! 索引の旗（`INDEX_FLAGS`）を 1 つでも持つ tz graph は folio の graph の口へ渡し（吸収・決定 (3)）、持たない tz graph は
+ //! 今の口（`cli::graph`）のまま。2 つを混ぜた引数は使い方の誤り 1。
+-//! 設計の索引の読みに撃つ program の既定は撃っている tz 自身（`program`・行 k-tz-self）。
++//! 設計の索引の読みに撃つ program の既定は撃っている tz 自身（`program`）。
+ 
+ use std::ffi::OsString;
+ use std::io::Write;
+diff --git a/crates/tsuzuri-boundary/src/cli/graph.rs b/crates/tsuzuri-boundary/src/cli/graph.rs
+index 4237b1032b8a880492b3f1c84a9f4d4cbc891da4..68cb571222163fcbdad66d7bf36324e37ce2b06c 100644
+--- a/crates/tsuzuri-boundary/src/cli/graph.rs
++++ b/crates/tsuzuri-boundary/src/cli/graph.rs
+@@ -1,23 +1,23 @@
+-//! tz graph（行 k-graph・要件 FR2・FR3・FR17）: 導出グラフを組み直して出す。書かない。
++//! tz graph（要件 FR2・FR3・FR17）: 導出グラフを組み直して出す。書かない。
+ //! - 旗なし — GraphDoc の電文を標準出力に 1 行
+ //! - --check — 不変条件の 12 本を 3 値で数え、違反の行と要約の行を標準出力、まだ分からないの行を標準エラー
+-//!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く・行 c-g3g7）
++//!   （g-7 が folio の裁定 id の文法の外の id の裁定だけのためにまだ分からないなら、理由にその数を書く）
+ //!   （g-3 が --project の組の台帳で確かめられない外の台帳の行だけのためにまだ分からないなら、理由に `OUTSIDE_HEAD` と
+-//!   その節点の数と族を書く・行 c-g3-extern）
+-//!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 k-sum-count）
++//!   その節点の数と族を書く）
++//!   要約の行の前に要約の無い節点の数と id の行（読めなければまだ分からないの行を標準エラー・終了 code は変えない）
+ //!   その次に本文だけで名指した id の対の数と対の行（g-9 の detect の数・読めなければまだ分からないの行を標準エラー・
+-//!   終了 code は変えない・行 k-g9-count）
++//!   終了 code は変えない）
+ //!   その次に全部の契約表の行が着地した設計ノート（廃止したものを除く）の数と文書 id の行（設計の索引か台帳か
+-//!   要約の状態の欄が読めなければまだ分からないの行を標準エラー・終了 code は変えない・行 c-note-stale・行 c-note-retired）
++//!   要約の状態の欄が読めなければまだ分からないの行を標準エラー・終了 code は変えない）
+ //!   その次に着地の commit の節点から landed の辺を受けない着地した契約の数と id の行（台帳か走行の記録が読めなければ
+-//!   まだ分からないの行を標準エラー・終了 code は変えない・行 c-commit-node）
++//!   まだ分からないの行を標準エラー・終了 code は変えない）
+ //! - --design — 設計の索引だけを読み、設計の節点と辺に絞った GraphDoc の電文（folio の graph の吸収・ADR-8 決定 (3)）
+ //!
+ //! 終了 code は folio の床の check の口に揃える（合格 0・不合格 1・まだ分からない 2）。旗なしと --design は
+ //! 読めない出所が無ければ 0、在れば 2。使い方の誤りは 1。組みは口 /api/graph と同じ `Sources::gather` と
+ //! `board::built_floors`（`board::built` と同じ組み）と `board::doc` の呼び。
+ //! --project（何度でも）は旗なしと --check が置き場ごとに読み取りの bd を 1 本ずつ、3 つの字の集めと並べて撃ち、
+-//! 外の台帳の読みを g-3 に渡す（--design は読まない・行 c-g3-extern）。
++//! 外の台帳の読みを g-3 に渡す（--design は読まない）。
+ 
+ use std::collections::BTreeMap;
+ use std::ffi::OsString;
+diff --git a/crates/tsuzuri-boundary/src/cli/mod.rs b/crates/tsuzuri-boundary/src/cli/mod.rs
+index 0f97af1deabafbca3a0e424c8c09435189023d72..b74c08ec3362397ff5f806d5b2e33a9837d1072b 100644
+--- a/crates/tsuzuri-boundary/src/cli/mod.rs
++++ b/crates/tsuzuri-boundary/src/cli/mod.rs
+@@ -1,7 +1,7 @@
+-//! 端末の口（tz の入口が surface serve のほかに撃つ subcommand・行 k-graph）。
++//! 端末の口（tz の入口が surface serve のほかに撃つ subcommand）。
+ //! 読む部品は server の module と同じものを使い、何も書かない。
+-//! folio の 11 の口と索引の形の tz graph は `folio`（folio の lib の入口を撃つ・行 k-tz-entry）。
+-//! 設計ノートの行の近い仕様の tz context は `context`（folio の lib の入口 context を撃つ・行 k-ctx-cli）。
++//! folio の 11 の口と索引の形の tz graph は `folio`（folio の lib の入口を撃つ）。
++//! 設計ノートの行の近い仕様の tz context は `context`（folio の lib の入口 context を撃つ）。
+ 
+ pub mod context;
+ pub mod folio;
+diff --git a/crates/tsuzuri-boundary/src/lib.rs b/crates/tsuzuri-boundary/src/lib.rs
+index b5eae5b8140599af7e1ae75bda5ceda71fd82957..faee5f93b4e69bd83fa9e1e10577b8b776ee6ec1 100644
+--- a/crates/tsuzuri-boundary/src/lib.rs
++++ b/crates/tsuzuri-boundary/src/lib.rs
+@@ -1,16 +1,16 @@
+-//! 境界: 面の server と席の hook と問いの起票の門（便 e・f で置く）。
+-//! 便 e-min で最小の server（台帳の読み・変化の SSE・面の file の配布）と tz の入口を置く。
+-//! 便 e-acct で account board の読み（`acct`）を置く（口の登録は便 h-wire）。
+-//! 便 e-acct-hb で停止の切り替えの受付（`accthb`）を置く（口の登録は便 h-wire）。
+-//! 行 k-graph で tz の口の graph（`cli::graph`・導出グラフと不変条件を端末で撃つ）を置く。
+-//! 行 k-tz-entry で tz の口の folio の 11 subcommand と索引の形の graph（`cli::folio`・folio の lib の入口を撃つ）を置く。
+-//! 行 f-stop で席の停止の hook（`hook::stop`・tz hook stop）を置く。
+-//! 行 i-1 で表示面の module（`stage`・端末の一覧の読み `stage::terminal`）を置く。
+-//! 行 f-gate で問いの起票の門（`hook::question_gate`・tz hook question-gate）を置く。
+-//! 行 j-count で受入 12 条の数え（`audit`・測りの事実から条ごとの違反の数と report の行）を置く。
+-//! 行 e-stage-target で表示先の設定と窓を開く頼みの受付（`stagecall`・tz の口を撃つだけ）を置く。
+-//! 行 k-lint-print で出力の手（`out`・標準出力と標準エラーへ書く 2 つの関数）を置く。
+-//! 行 cs-open で相談の窓の命令（`consult`・tz consult の口の振り分けと共通の手・判断の記録 ADR-29）を置く。
++//! 境界: 面の server と席の hook と問いの起票の門。
++//! 最小の server（台帳の読み・変化の SSE・面の file の配布）と tz の入口を置く。
++//! account board の読み（`acct`）を置く（口の登録は `server`）。
++//! 停止の切り替えの受付（`accthb`）を置く（口の登録は `server`）。
++//! tz の口の graph（`cli::graph`・導出グラフと不変条件を端末で撃つ）を置く。
++//! tz の口の folio の 11 subcommand と索引の形の graph（`cli::folio`・folio の lib の入口を撃つ）を置く。
++//! 席の停止の hook（`hook::stop`・tz hook stop）を置く。
++//! 表示面の module（`stage`・端末の一覧の読み `stage::terminal`）を置く。
++//! 問いの起票の門（`hook::question_gate`・tz hook question-gate）を置く。
++//! 受入 12 条の数え（`audit`・測りの事実から条ごとの違反の数と report の行）を置く。
++//! 表示先の設定と窓を開く頼みの受付（`stagecall`・tz の口を撃つだけ）を置く。
++//! 出力の手（`out`・標準出力と標準エラーへ書く 2 つの関数）を置く。
++//! 相談の窓の命令（`consult`・tz consult の口の振り分けと共通の手・判断の記録 ADR-29）を置く。
+ 
+ pub mod acct;
+ pub mod accthb;
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index 34b3879ff48bfe48e9bfd30b9b9e8212090d7269..245ee363eb37a19aebd2680da88564541c51cb4f 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -1,36 +1,36 @@
+-//! tz の入口（便 e-min）。終了 code は 合格 0・不合格 1・まだ分からない 2。
++//! tz の入口。終了 code は 合格 0・不合格 1・まだ分からない 2。
+ //! tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>]
+ //! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
+-//! --bd は台帳の読みに撃つ program（既定 bd・便 e-src）。
++//! --bd は台帳の読みに撃つ program（既定 bd）。
+ //! --state-dir は器の state dir（省けば走行の出所は読めない）・--folio は設計の索引の読みに撃つ program
+-//! （省けば server 自身の binary・行 k-tz-self）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
++//! （省けば server 自身の binary）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
+ //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
+-//! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
+-//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める（行 c-deliver-retry）。
+-//! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
++//! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）。
++//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める。
++//! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ）。
+ //! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
+-//! board を読むだけで起こす・行 e-ask-own-only）。
++//! board を読むだけで起こす）。
+ //! --project はほかの project の repo の置き場で、何度でも受け、その台帳の open の問いを dir の名の札つきで問いの一覧に
+-//! 混ぜる（答えは受けない・行 e-multi-ask）。
+-//! --tz は表示先の設定と窓を開く頼みに撃つ tz の program（省けば server 自身の binary・行 e-stage-target）。
+-//! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く（行 i-11）。
+-//! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
+-//! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
+-//! tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]（行 ag-stop・係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
+-//! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
+-//! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
+-//! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
+-//! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
+-//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの門・rc は 0 か 1）。
+-//! tz hook agent-bind --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
+-//! tz hook agent-meter --repo <dir> [--drafts <dir>]（行 ag-meter・係の記録の使用量を測り、印を越えた時だけ残りを係の文脈に足す・rc は 0 か 1）。
+-//! tz hook agent-guard --repo <dir> [--drafts <dir>]（行 ag-guard・係の門・予算を越えた係の呼びは SendMessage と自分の w への書きだけを通す・rc は 0 か 1）。
+-//! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
+-//! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
+-//! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
+-//! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す（行 cs-open）。
++//! 混ぜる（答えは受けない）。
++//! --tz は表示先の設定と窓を開く頼みに撃つ tz の program（省けば server 自身の binary）。
++//! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く。
++//! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]。
++//! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（席の停止の hook・rc は 0 か 1）。
++//! tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]（係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
++//! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（問いの起票の門・rc は 0 か 1）。
++//! tz hook question-signal --repo <dir>（問いの合図の送り手・rc は 0 か 1）。
++//! tz hook deliver --repo <dir> [--bd <program>]（配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
++//! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
++//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（係の起こしの門・rc は 0 か 1）。
++//! tz hook agent-bind --repo <dir> [--drafts <dir>]（係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
++//! tz hook agent-meter --repo <dir> [--drafts <dir>]（係の記録の使用量を測り、印を越えた時だけ残りを係の文脈に足す・rc は 0 か 1）。
++//! tz hook agent-guard --repo <dir> [--drafts <dir>]（係の門・予算を越えた係の呼びは SendMessage と自分の w への書きだけを通す・rc は 0 か 1）。
++//! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（表示面の命令・rc は 0 か 1）。
++//! tz consult <口> [引数]（相談の窓の命令・rc は 0 か 1 か 2）。
++//! tz context --row <ノート>#<行> [--dir <dir>]（設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
++//! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す。
+ //! tz <口の名> [旗]（口の名は check・schema・derive・ceiling・init・parts・face・figure・build・intake・hello の 11・
+-//! folio の同じ名の口と引数・出力・rc が同じ・行 k-tz-entry）。索引の旗（--print・--digest・--summary）を持つ tz graph も
++//! folio の同じ名の口と引数・出力・rc が同じ）。索引の旗（--print・--digest・--summary）を持つ tz graph も
+ //! folio の graph の口へ渡す。
+ 
+ use std::net::SocketAddr;
+diff --git a/crates/tsuzuri-boundary/src/out.rs b/crates/tsuzuri-boundary/src/out.rs
+index d76c7fbcbfb1f7e5994de7d2665c5c5ff5d1ef95..5bc802bac4cb361a12cead300cf33fe05d848ad5 100644
+--- a/crates/tsuzuri-boundary/src/out.rs
++++ b/crates/tsuzuri-boundary/src/out.rs
+@@ -1,4 +1,4 @@
+-//! 境界の crate の出力の手（行 k-lint-print）: 標準出力と標準エラーへ書くのはこの 2 つの関数だけ（器の境界の main の emit と同じ形）。
++//! 境界の crate の出力の手: 標準出力と標準エラーへ書くのはこの 2 つの関数だけ（器の境界の main の emit と同じ形）。
+ //! どちらも字の後に改行を 1 つ足して書く。lint の例外は各関数の理由を持つ expect の属性だけ（条 P-24.3）。
+ 
+ /// 標準出力へ 1 行を書く（字の後に改行）。
+diff --git a/crates/tsuzuri-boundary/src/server/batch.rs b/crates/tsuzuri-boundary/src/server/batch.rs
+index 3ee650fc70790a238257dd79da92ca2224463333..b04f9dfc0667ae9ce09f31ec5a24d6ef2916b851 100644
+--- a/crates/tsuzuri-boundary/src/server/batch.rs
++++ b/crates/tsuzuri-boundary/src/server/batch.rs
+@@ -1,4 +1,4 @@
+-//! 束の受付（口 POST /api/batch・便 e-batch）。いくつもの問いに 1 度で答える。
++//! 束の受付（口 POST /api/batch）。いくつもの問いに 1 度で答える。
+ //! server 自身は file を書かない。書きと配達の部品は裁定の受付（`ruling`）のものを使う。
+ //! 受付の順:
+ //! 1. 行が無ければ断る（EmptyBatch）。
+diff --git a/crates/tsuzuri-boundary/src/server/board.rs b/crates/tsuzuri-boundary/src/server/board.rs
+index 81c6e1e5ad1d469bd82075b43aac71e004469a0e..174fc022326fa5c502640835b061136410833fac 100644
+--- a/crates/tsuzuri-boundary/src/server/board.rs
++++ b/crates/tsuzuri-boundary/src/server/board.rs
+@@ -1,11 +1,11 @@
+-//! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
++//! 読む側の口: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
+ //! - GET /api/pipeline — pipeline の板（PipelineBoard・札は集めた今の台帳の字から組み、形の崩れは見張りの読みの周の
+-//!   台帳の字と器の doctor の台帳の形の行の組から写す・行 c-pipe-misfit・行 c-misfit-pair）
+-//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
+-//! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
++//!   台帳の字と器の doctor の台帳の形の行の組から写す）
++//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から）
++//! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける）
+ //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
+-//! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
+-//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
++//! - GET /api/around — 節点の近傍（AroundDoc）
++//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む）
+ //!
+ //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
+ //! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、
+diff --git a/crates/tsuzuri-boundary/src/server/cases.rs b/crates/tsuzuri-boundary/src/server/cases.rs
+index 730606414eaed13ad50d21f14c3709659c779d15..1415e3b6cd7669c708d79a088b2a749e14376928 100644
+--- a/crates/tsuzuri-boundary/src/server/cases.rs
++++ b/crates/tsuzuri-boundary/src/server/cases.rs
+@@ -1,10 +1,10 @@
+-//! 器の局面の出力の読み（file を 2 つ読むだけ・書かない・行 c-case-read）。
++//! 器の局面の出力の読み（file を 2 つ読むだけ・書かない）。
+ //! file は `<state dir>/fleet/lifecycle.json`（出力）と同じ dir の `lifecycle.stale`（古さの印・器の case-lifecycle §5.1）。
+ //! 器の読み手と同じく古さの印 → 出力の順に読む。state dir を省いたときは、出力は空の字で古さの印は無い。
+ //! 出力が無いか読めなければ空の字、古さの印は無ければ None・在って読めなければ空の字（中核の `cases_of` の入力の形）。
+-//! 2 つの file は見張りもする（`Cases::watch`・行 c-cases-watch）: 器は配車の周ごとに出力を書き直し、生成の時刻と
++//! 2 つの file は見張りもする（`Cases::watch`）: 器は配車の周ごとに出力を書き直し、生成の時刻と
+ //! 入力の印はそのたびに動くので、更新時刻と長さが動いた周だけ字を読み、面が読む中身（`cases_of` の古さの印の種類と
+-//! 読めない版か〔行 c-case-unreadable〕と部品）が前と違う時だけ局面の出力の種類（`ChangeKind::Cases`）の board-changed を送る。
++//! 読めない版かどうかと部品）が前と違う時だけ局面の出力の種類（`ChangeKind::Cases`）の board-changed を送る。
+ 
+ use std::io::ErrorKind;
+ use std::path::{Path, PathBuf};
+diff --git a/crates/tsuzuri-boundary/src/server/clock.rs b/crates/tsuzuri-boundary/src/server/clock.rs
+index 3ff582bdad09e38636d83c6b87fe2d5270048e6e..fbccf182c24b681f43e15d6691eab5e69f620e66 100644
+--- a/crates/tsuzuri-boundary/src/server/clock.rs
++++ b/crates/tsuzuri-boundary/src/server/clock.rs
+@@ -1,4 +1,4 @@
+-//! 時刻の読み（RFC 3339 の字を UTC の epoch 秒にする・行 hb-proc が台帳の読みから割った）。
++//! 時刻の読み（RFC 3339 の字を UTC の epoch 秒にする）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/coalesce.rs b/crates/tsuzuri-boundary/src/server/coalesce.rs
+index fc920485ab0f4829d7f438a8cd079796c77a2daa..6c2e5789fa503322da1858fb089bb4c9aae50079 100644
+--- a/crates/tsuzuri-boundary/src/server/coalesce.rs
++++ b/crates/tsuzuri-boundary/src/server/coalesce.rs
+@@ -1,9 +1,9 @@
+-//! 読みの合流（便 e-coalesce）: 走っている読みの間に届いた呼び出しは新しい読みを始めず、
++//! 読みの合流: 走っている読みの間に届いた呼び出しは新しい読みを始めず、
+ //! 走っている読みの終わりを待って同じ結果（読めた値か、読めない）を受ける。
+ //! 走っている読みが無ければ新しい読みを始める。読みが終われば結果は持ち回さない
+ //! （次の呼び出しは新しい読みを始める）。待つのは呼ぶ側が渡す上限までで、越えたら読めない。
+ //! 分け合うのは同じ `Coalesce` とその clone だけ（`new` で作った別の値とは分け合わない）。
+-//! `join` は新しい読みを始めず、走っている読みが在るときだけその終わりを待って同じ結果を受ける（行 e-snap）。
++//! `join` は新しい読みを始めず、走っている読みが在るときだけその終わりを待って同じ結果を受ける。
+ 
+ use std::fmt;
+ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+diff --git a/crates/tsuzuri-boundary/src/server/config.rs b/crates/tsuzuri-boundary/src/server/config.rs
+index c07dd65b517e6ebcd61caa5615b581a7e4c55122..ee56a2233fca31fee3bc5a6dad64762ead0f9e2c 100644
+--- a/crates/tsuzuri-boundary/src/server/config.rs
++++ b/crates/tsuzuri-boundary/src/server/config.rs
+@@ -1,4 +1,4 @@
+-//! 起動の引数（行 hb-config）。欄を足す行は、この file と main.rs だけを書く。
++//! 起動の引数。欄を足す行は、この file と main.rs だけを書く。
+ //! 歯と main.rs は `Config::new` と残りの欄の埋め（struct の更新の形）で組む。
+ 
+ use std::ffi::OsString;
+diff --git a/crates/tsuzuri-boundary/src/server/consult.rs b/crates/tsuzuri-boundary/src/server/consult.rs
+index dd334156b20c73f957543a6bd743438e9fa4cdc2..f6cd49003d8ee6590930048961bff029c9985123 100644
+--- a/crates/tsuzuri-boundary/src/server/consult.rs
++++ b/crates/tsuzuri-boundary/src/server/consult.rs
+@@ -1,4 +1,4 @@
+-//! 相談の窓の board の口の材料（設計ノート surface-wave27b 行 cs-server・判断の記録 ADR-29 決定 (4)(8)(9)）。
++//! 相談の窓の board の口の材料（判断の記録 ADR-29 決定 (4)(8)(9)）。
+ //! 一覧の口（GET /api/consult）と未受けの口（GET /api/consult/unreceived）は、repo の git config の鍵
+ //! `tsuzuri.draftsdir` の起草の置き場の作業場の file と、台帳の見張りの最後の読みの相談の行を読む（読むだけ）。
+ //! state dir が無い server・鍵が無いか dir でない置き場・読めない台帳は、一覧の 4 つの段と未受けを Unknown にする。
+diff --git a/crates/tsuzuri-boundary/src/server/design.rs b/crates/tsuzuri-boundary/src/server/design.rs
+index 137a57d4af4813c44d055edb95c41323d9b6c322..989cd0a240150561e813bb4c3f8756fbcbe25a3f 100644
+--- a/crates/tsuzuri-boundary/src/server/design.rs
++++ b/crates/tsuzuri-boundary/src/server/design.rs
+@@ -1,13 +1,13 @@
+-//! 設計の索引の読み（設計の道具を子 process で 1 本撃つだけ・書かない・便 e-read）。
++//! 設計の索引の読み（設計の道具を子 process で 1 本撃つだけ・書かない）。
+ //! 撃つ形は `<program> graph --print --dir <repo>/design-intent`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
+ //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでも設計の出所は読めない（None）。
+ //! 設計文書の dir の下の全 file は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
+-//! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
+-//! 要約の読み（行 c-summary-wire）は `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
++//! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`）。
++//! 要約の読みは `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
+ //! 索引の読みとは別の場で合流する。--summary を知らない folio では要約だけが読めない（索引は読める）。
+-//! 裁定の書き出しの読み（行 c-g3g7）は `<program> check --emit-rulings --dir <repo>/design-intent` を同じ形で撃ち、
++//! 裁定の書き出しの読みは `<program> check --emit-rulings --dir <repo>/design-intent` を同じ形で撃ち、
+ //! 別の場で合流する。rc が 0 でない書き出しは全数でない（床がまだ分からないか不合格）ので読めない（None）。
+-//! 3 つの読みは持ち回しの表（`Held`・行 e-held-design）を通り、設計文書の dir の下の全 file の印が撃つ前と同じで
++//! 3 つの読みは持ち回しの表（`Held`）を通り、設計文書の dir の下の全 file の印が撃つ前と同じで
+ //! `DESIGN_HOLD` の内なら撃ち直さない（裁定の書き出しは contracts の dir と git の印も見る・`rulings_marks`）。
+ 
+ use std::ffi::OsString;
+diff --git a/crates/tsuzuri-boundary/src/server/events.rs b/crates/tsuzuri-boundary/src/server/events.rs
+index 9c0b1ac51b0cbf8ae9f4cb6c5fe566bf73bf4938..915ad8cf4c5d7a7b8fe9e7b46034b6296d2bb99c 100644
+--- a/crates/tsuzuri-boundary/src/server/events.rs
++++ b/crates/tsuzuri-boundary/src/server/events.rs
+@@ -1,25 +1,24 @@
+-//! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
++//! 変化の知らせ（口 GET /api/surface/events・SSE）。
+ //! 変化の印（ledger の `Mark`: store の manifest の字と manifest が名指す file の長さ・store が無ければ jsonl の 2 file の
+ //! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
+ //! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 600 秒ごと、ほかは 5 秒ごとに
+-//! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
+-//! 受け手（`Subscription`）が 0 人の間は、印が動いても読まず印も置かず（口の読みが印の遅れを見て自分で読む・
+-//! 行 e-ledger-lazy）、0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
++//! 読み直す（jsonl の印は器の素の bd close で動かないことがある）。
++//! 受け手（`Subscription`）が 0 人の間は、印が動いても読まず印も置かず（口の読みが印の遅れを見て自分で読む）、
++//! 0 人から 1 人以上になった周で 1 回読む。
+ //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
+-//! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
++//! 板の変化: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
+ //! 動いたら board-changed を周に 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
+-//! 便 e-seat は席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印を板の印に足す。
+-//! 席の card の印（行 e-seat-hbmark）と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
+-//! heartbeat-off と明示の on の記録 heartbeat-on の印も持つ（停止と明示の on の切り替えで board-changed が出る・
+-//! 行 e-hb-on-mark）。
++//! 席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印も板の印に足す。
++//! 席の card の印と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
++//! heartbeat-off と明示の on の記録 heartbeat-on の印も持つ（停止と明示の on の切り替えで board-changed が出る）。
+ //! board-changed の data は契約の `BoardChanged`（`{"at":<epoch 秒>,"kinds":[…]}`・印の動いた種類）で、
+ //! ledger-changed の data は `{"at":<epoch 秒>}`。板の印は種類（`ChangeKind`）と file の組で、種類をまたいで
+-//! 一覧の並びだけが変わった周は送らない（行 c-ev-kind）。
+-//! 問いの合図（口 POST /api/surface/questions・`NUDGE_PATH`・行 e-signal）は `Hub::nudge` で台帳の見張りの周期の待ちを
++//! 一覧の並びだけが変わった周は送らない。
++//! 問いの合図（口 POST /api/surface/questions・`NUDGE_PATH`）は `Hub::nudge` で台帳の見張りの周期の待ちを
+ //! 終わらせ、次の周を待たずに印を見る（規則の行 R-21: 問いの合図ありで 200 ms 以内・要件 NFR2）。
+ //! 合図は読みを強いず、印が動いていない周では読まない（bd の読みは台帳の store の錠を取るので、合図の数で読みを増やさない）。
+ //! 待ちの間に溜まった合図は 1 周にまとめる。
+-//! ほかの project の台帳の見張り（`Hub::watch_ledger_into`・行 e-multi-ask）は server の Hub に足し、同じ受け手の数えと
++//! ほかの project の台帳の見張り（`Hub::watch_ledger_into`）は server の Hub に足し、同じ受け手の数えと
+ //! 読み直しの間隔で読んで、その Hub の受け手に ledger-changed を送る（問いの合図では起きない）。
+ 
+ use std::io::{self, Write};
+diff --git a/crates/tsuzuri-boundary/src/server/files.rs b/crates/tsuzuri-boundary/src/server/files.rs
+index 4b51cc9aed26b1753fcbdaea7a1c9c92aa0571ca..b2ab03d9c29ebb56276294d6152589838e7faaf9 100644
+--- a/crates/tsuzuri-boundary/src/server/files.rs
++++ b/crates/tsuzuri-boundary/src/server/files.rs
+@@ -1,9 +1,9 @@
+ //! 面の file の配布（API の口でない GET）。置き場の外の path は断る。
+ //! `..` と `.` の区切りを断り、実体の path（symlink を解いた先）が置き場の中に在ることを確かめる。
+ //! 名に中身の hash を持つ file（trunk が付ける）は頭 Cache-Control で 1 年持たせ（`IMMUTABLE`）、
+-//! index.html とほかの file は毎回確かめさせる（`NO_CACHE`・行 e-cache）。
++//! index.html とほかの file は毎回確かめさせる（`NO_CACHE`）。
+ //! 隣に gzip の写し（名に `GZ_SUFFIX`・xtask の surface-build が書く）の在る file には頭 Vary を足し、
+-//! 要求の Accept-Encoding が gzip を受ければ写しの中身を頭 Content-Encoding と返す（行 g-gz）。
++//! 要求の Accept-Encoding が gzip を受ければ写しの中身を頭 Content-Encoding と返す。
+ //! 写しの無い file の頭は写しの無かった時と同じで、写しを名指す要求はほかの file と同じ配り。
+ 
+ use std::path::{Path, PathBuf};
+diff --git a/crates/tsuzuri-boundary/src/server/form.rs b/crates/tsuzuri-boundary/src/server/form.rs
+index 5f706bc539deb12c14366999113e87a846bdf9f8..cbb07ff79add29b8b7484cf5df19d22302acee6c 100644
+--- a/crates/tsuzuri-boundary/src/server/form.rs
++++ b/crates/tsuzuri-boundary/src/server/form.rs
+@@ -1,14 +1,14 @@
+-//! 器の doctor の台帳の形の行（行 c-pipe-misfit・判断の記録 ADR-16 の決定 (6)）。
++//! 器の doctor の台帳の形の行（判断の記録 ADR-16 の決定 (6)）。
+ //! 器の doctor は引数 --repo を受けた周だけ台帳の形の行（頭 `tsuzuri_core::pipeline::FORM_PREFIX`）を出す。
+ //! 撃つ形は `<program> doctor --state-dir <dir> --repo .`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
+ //! 撃つのは台帳の見張りの読みの周だけ（`Source::read` がその周の台帳の字を渡す）で、口 /api/pipeline の最初の要求か
+-//! 知らせの接続（GET /api/surface/events）が撃ちを許した後から撃つ（`Form::arm`・行 c-misfit-pair）。
++//! 知らせの接続（GET /api/surface/events）が撃ちを許した後から撃つ（`Form::arm`）。
+ //! 口は持った組を読むだけで器を撃たず、席の card には触らない。
+ //! 撃ちは別の thread で同時に 1 本だけで、走っている間の読みは終わった後に最後の周の台帳の字でもう 1 回だけ撃つ。
+ //! 持つ組（`Kept`）は最後に終えた撃ちの周の台帳の字と台帳の形の行で、台帳の読みが落ちた周は器を撃たずに None、
+ //! 器が落ちるか上限を越えるか台帳の形の行が無い周も None（持ち回さない）。組から写した一覧（`misfits`）が変われば
+ //! 台帳の種類（`ChangeKind::Ledger`・台帳の見張りの読みの周の字から撃つ）の board-changed を送る
+-//! （台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる・行 c-ev-kind）。
++//! （台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる）。
+ 
+ use std::ffi::OsString;
+ use std::fmt;
+diff --git a/crates/tsuzuri-boundary/src/server/held.rs b/crates/tsuzuri-boundary/src/server/held.rs
+index 2bd41ba3226f5cfdacd80400a80df42041e78b1a..9794063d948a247e77b82e9c0523a35ef40fb5d3 100644
+--- a/crates/tsuzuri-boundary/src/server/held.rs
++++ b/crates/tsuzuri-boundary/src/server/held.rs
+@@ -1,9 +1,9 @@
+-//! 外の読みの持ち回しの表（行 e-held-design・判断の記録 ADR-23 の決定 (1)(2)）。
++//! 外の読みの持ち回しの表（判断の記録 ADR-23 の決定 (1)(2)）。
+ //! 読みの鍵ごとに、撃った時刻と撃つ前に取った印（file の更新時刻と長さ）と読めた字（読めなければ None）を持つ。
+ //! 同じ鍵の次の読みは、印が撃つ前と同じで上限の内なら読みの関数を撃たずに持っていた字を返し、
+ //! 印が動いたか上限を過ぎていれば読みの関数を撃ち直す。読めなかった読み（None）は上限と `FAILED_HOLD` の短い方だけ持つ
+ //! （持たないと読めない子を要求ごとに撃ち直す）。走っている撃ちへの合流は読みの関数の内側（`Coalesce`）に残す。
+-//! 同じ鍵の読みは 1 本ずつ（行 e-held-marks・決定 (1)）: 鍵ごとの順番の錠（`turns`）を持ち、撃っている間に来た同じ鍵の読みは
++//! 同じ鍵の読みは 1 本ずつ（決定 (1)）: 鍵ごとの順番の錠（`turns`）を持ち、撃っている間に来た同じ鍵の読みは
+ //! その終わりを待たせてから印を取って比べる。別の鍵の読みは待たない。
+ //! 表の clone は同じ表を分け合う。読みの関数を撃つ間は表の錠を持たない。
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/ledger.rs b/crates/tsuzuri-boundary/src/server/ledger.rs
+index 60ec6bd9d8519519ca8562812db9cc6e43cc0782..614e2edfc3477807632ee609cf7c7819c2830ab1 100644
+--- a/crates/tsuzuri-boundary/src/server/ledger.rs
++++ b/crates/tsuzuri-boundary/src/server/ledger.rs
+@@ -1,20 +1,20 @@
+-//! 台帳の読み（bd の読み取りの口を子 process で 1 本撃つだけ・書かない・便 e-src）。
++//! 台帳の読み（bd の読み取りの口を子 process で 1 本撃つだけ・書かない）。
+ //! 撃つ形は `bd --readonly list --all --limit 0 --json`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
+ //! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
+ //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
+ //! 変化の印は store（.beads の metadata.json が名指す db の .dolt/noms）の manifest の字と manifest が名指す file の長さで、
+-//! store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない・行 e-marks・行 e-mark-meta）。
+-//! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
++//! store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない）。
++//! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`）。
+ //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
+-//! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
++//! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す。変化の見張りの `read` は持ち回さない。
+ //! `watched` の Source の `got` と `text` は、最後に始めた合流の読みの前に取った印（`read_mark`）が今の印と同じなら
+-//! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す
+-//! （行 e-snap）。印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す（行 e-ledger-lazy）。
++//! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す。
++//! 印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す。
+ //! `watched` の Source は、今の印が最後に読めた読みの前に取った印（`good_mark`）と同じ間は bd を撃たず、最後に読めた字を
+ //! 新しい字（stale の無し）として返し、落ちた読みの結果は持たない（次の `got` が読み直す）。変化の見張りの `read` の上限は
+-//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
++//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)）。
+ //! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
+-//! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
++//! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ）。
+ 
+ use std::ffi::OsString;
+ use std::path::PathBuf;
+diff --git a/crates/tsuzuri-boundary/src/server/mod.rs b/crates/tsuzuri-boundary/src/server/mod.rs
+index aa2cee1452591802928cf9c69171f19c9fe0c6b4..c2a24660f5533712ef392d1cb43bb74568db4b30 100644
+--- a/crates/tsuzuri-boundary/src/server/mod.rs
++++ b/crates/tsuzuri-boundary/src/server/mod.rs
+@@ -1,37 +1,37 @@
+-//! 面の server の最小の形（設計ノート surface-base §9・便 e-min）。
++//! 面の server の最小の形（設計ノート surface-base §9）。
+ //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
+-//! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
+-//! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
+-//! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
+-//! account board の読みの口と停止の切り替えの口は行 h-wire が足す（`crate::acct`・`crate::accthb`）。
++//! 台帳は bd の読み取りの口を子 process で撃って読む（§10）。
++//! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11）。
++//! 問いの一覧の口と裁定の受付の口は `ruling` が持つ。束と方針の受付の口は `batch` と `policy` が持つ。
++//! account board の読みの口と停止の切り替えの口は `crate::acct` と `crate::accthb` が持つ。
+ //! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat と、
+ //! 表示先の設定と窓を開く 3 つ（/api/stage/target・/api/stage/targets・/api/stage/open・頭 Origin の無い要求は断り、
+-//! 読むだけの server も受ける・tz の口を撃つだけ・行 e-stage-target）だけで、
++//! 読むだけの server も受ける・tz の口を撃つだけ）だけで、
+ //! ほかの GET でない要求は 405 で何も書かない（問いの合図の口 /api/surface/questions も POST を受けるが、何も書かず
+-//! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける・行 e-signal）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
++//! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
+ //! 読むだけの server（`Config::read_only`）は答えと方針の口を受付の前に 403 で断り（`read_only`）、
+-//! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける・行 e-ask-own-only）。
++//! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける）。
+ //! 起動の引数 --project の置き場ごとに、その台帳を読み取りの bd で見張り、問いの一覧の電文の鍵 others に札つきで
+-//! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`・行 e-multi-ask）。
+-//! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
+-//! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
++//! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`）。
++//! 席の card の口は `seat` が持つ。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
++//! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`）。
+ //! 台帳の GET の口は、起動で作る 1 つの `Source`（`Source::watched`）とその clone の印が見張りの最後の読みの前と同じ間は
+-//! bd を撃たず、見張りの最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す（行 e-snap）。
+-//! 印が違えば（受け手が 0 人の間に印が動いた後）口が自分で読む（行 e-ledger-lazy）。見張りの読みが落ちたときは
++//! bd を撃たず、見張りの最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す。
++//! 印が違えば（受け手が 0 人の間に印が動いた後）口が自分で読む。見張りの読みが落ちたときは
+ //! 最後に読めた字を `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭（`READ_AGE_HEADER`）に最後に読めた時からの秒を
+-//! 付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
++//! 付ける。裁定の受付は合流せず、新しい子 process で読み直す。
+ //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
+-//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
++//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13）。
+ //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
+ //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
+-//! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
+-//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は行 cs-server が足す（`consult`・頼みの口は方針の口と同じ守りで、
++//! （知らせが動いた種類を載せる・知らせの記録は `crate::stage::notify` が書く）。
++//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は `consult` が持つ（頼みの口は方針の口と同じ守りで、
+ //! 読むだけの server は 403・置き場に相談の頼みの行を 1 行足すだけで窓を開かず配達を撃たない）。
+-//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
++//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`）。
+ //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
+-//! （`Cases::watch`・行 c-cases-watch）。
++//! （`Cases::watch`）。
+ //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
+-//! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
++//! その字と組で持つ（`form`）。撃ちは口 /api/pipeline の最初の要求か、
+ //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
+ 
+ pub mod batch;
+diff --git a/crates/tsuzuri-boundary/src/server/others.rs b/crates/tsuzuri-boundary/src/server/others.rs
+index 04b4f59407c55aeef5af78b19f936f9e04d59c13..e05b684da9588755174c886f3db4527d1c77e570 100644
+--- a/crates/tsuzuri-boundary/src/server/others.rs
++++ b/crates/tsuzuri-boundary/src/server/others.rs
+@@ -1,11 +1,11 @@
+-//! ほかの project の問いの読み（起動の引数 --project の置き場ごと・行 e-multi-ask）。
++//! ほかの project の問いの読み（起動の引数 --project の置き場ごと）。
+ //! 札は置き場の dir の名（`tsuzuri_core::account::project_name`・account board の project の名と同じ読み）で、
+ //! 台帳は読み取りの bd（`ledger::BD_ARGS`・--bd と同じ program）だけで撃つ。見張りは server の Hub に足し
+ //! （`Hub::watch_ledger_into`）、印が動いた周と知らせの接続が居る間の読み直しの周だけ読み、open の問いの card が
+ //! 前と変わった周だけ ledger-changed を送る。口の読みは、印が見張りの最後の読みの前と同じなら bd を撃たず
+-//! その字を返し、違えば自分で読む（`Source::watched`・行 e-ledger-lazy）。
++//! その字を返し、違えば自分で読む（`Source::watched`）。
+ //! 答えは受けない（札の組の answerable は偽・ほかの repo の台帳へ書かない）。
+-//! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す（行 c-g3-extern）。
++//! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す。
+ 
+ use std::ffi::OsStr;
+ use std::path::PathBuf;
+diff --git a/crates/tsuzuri-boundary/src/server/policy.rs b/crates/tsuzuri-boundary/src/server/policy.rs
+index 8e6ccda851506974be5f58f4dc071386c4e57a1e..63851b0c1993fed3b2539597d6bc4a5773800784 100644
+--- a/crates/tsuzuri-boundary/src/server/policy.rs
++++ b/crates/tsuzuri-boundary/src/server/policy.rs
+@@ -1,10 +1,10 @@
+-//! 方針の受付（口 POST /api/policy・便 e-batch・行 e-policy-q）。全体への指示を、方針 1 つにつき
++//! 方針の受付（口 POST /api/policy）。全体への指示を、方針 1 つにつき
+ //! 根の直下の閉じた問いの bead に残す（要件 FR8）。server 自身は file を書かない。器の配達の口は撃たず、
+ //! 開いている問いは閉じない。今までの方針の memo は探さず書かない。
+ //! 作る問いの形（本文の頭の 4 行と metadata の effect）は器の要件 FR81 の (a) に従い server が埋める。
+ //! 受付の順:
+ //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
+-//! 2. 台帳を合流しない読みで読み直す（裁定の受付の `reread` で撃ち直し、どれも読めなければ 503・行 c-ruling-reread）。
++//! 2. 台帳を合流しない読みで読み直す（裁定の受付の `reread` で撃ち直し、どれも読めなければ 503）。
+ //! 3. 範囲は字 `all` か open の問いの id（どちらでもなければ 400 scope）。
+ //! 4. 根の epic を探す（無ければ 503 no-root）。
+ //! 5. 根の下に方針の問いを作る（落ちるか作った id が読めなければ 502 ledger-create）。
+diff --git a/crates/tsuzuri-boundary/src/server/proc.rs b/crates/tsuzuri-boundary/src/server/proc.rs
+index c1b0e9fa20f057d4f9a5354c354c987b218e2b4c..ac01e669bc1df3def49235ba6910c7748cf30078 100644
+--- a/crates/tsuzuri-boundary/src/server/proc.rs
++++ b/crates/tsuzuri-boundary/src/server/proc.rs
+@@ -1,5 +1,5 @@
+-//! 子 process を撃つ共通の部品（行 hb-proc が台帳の読みから割った）。
+-//! 子は新しい process group に入れ、時間切れには孫まで group ごと止める（便 e-reap）。
++//! 子 process を撃つ共通の部品。
++//! 子は新しい process group に入れ、時間切れには孫まで group ごと止める。
+ 
+ use std::ffi::OsStr;
+ use std::io::Read;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/account.rs b/crates/tsuzuri-boundary/src/server/routes/account.rs
+index 43eea6475c6683b833161b200b6301fe7034dc9c..a5de5398c648f4796093afd5e84e15b423796c78 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/account.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/account.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/account — account board の読み（AccountDoc・行 h-wire）。
++//! GET /api/account — account board の読み（AccountDoc）。
+ 
+ use std::path::PathBuf;
+ use std::sync::{Arc, Mutex, Weak};
+diff --git a/crates/tsuzuri-boundary/src/server/routes/around.rs b/crates/tsuzuri-boundary/src/server/routes/around.rs
+index 7c3e08cf5e799ef2117ffd6e4a278be74a4887fd..5db6397413cc18a646128170be0e0b1dcf020354 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/around.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/around.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc・便 e-view）。
++//! GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc）。
+ 
+ use tsuzuri_contract::graph::Fold;
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/batch.rs b/crates/tsuzuri-boundary/src/server/routes/batch.rs
+index b823354068d6c118423b8e9cf57469518be8e0ba..ef357962dbe753e734207d3222317861dbb440c7 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/batch.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/batch.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/batch — 束の受付（BatchRequest・便 e-batch）。
++//! POST /api/batch — 束の受付（BatchRequest）。
+ 
+ use tsuzuri_contract::surface::BatchRequest;
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/beads.rs b/crates/tsuzuri-boundary/src/server/routes/beads.rs
+index f10f628345e74b4b9e62bd04741a108166d7589a..4717254d1de295923639bd44f715ab540fdd10d3 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/beads.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/beads.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/beads — bead の事実の一覧（BeadFacts・行 c-bead-route）。
++//! GET /api/beads — bead の事実の一覧（BeadFacts）。
+ //! 台帳の字は口 /api/ledger と同じ読み（`Source::got`）から中核の `ledger::facts` で組み、古さの印も同じに付ける。
+ 
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/cases.rs b/crates/tsuzuri-boundary/src/server/routes/cases.rs
+index 668ff3d888238dcbcd97587c0e937ba3881a7eb6..4ede3e54e6b6676940b7410a50812cbc7b10a66b 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/cases.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/cases.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/cases — 器の局面の出力（CaseDoc・行 c-case-read）。
++//! GET /api/cases — 器の局面の出力（CaseDoc）。
+ //! 字は state dir の fleet/lifecycle.json と lifecycle.stale だけから読む（台帳の bd も器の CLI も撃たない）。
+ 
+ use tsuzuri_contract::case::PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consult.rs b/crates/tsuzuri-boundary/src/server/routes/consult.rs
+index 9726de9618965f56f4af6fc3e147ce80ec949ad1..f59d4030e8d2c1accf0e362786c239071b7e4456 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/consult.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/consult.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/consult — 相談の窓の一覧（ConsultBoard・行 cs-server）。
++//! GET /api/consult — 相談の窓の一覧（ConsultBoard）。
+ //! 作業場の file と台帳の見張りの最後の読みの相談の行から tz consult list と同じ組みの電文を返す
+ //! （置き場か台帳が読めなければ 4 つの段が Unknown・読むだけの server も同じ）。
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consultreq.rs b/crates/tsuzuri-boundary/src/server/routes/consultreq.rs
+index 7c77c3cc0f15f04990e36a9b86604b6d5872be1e..4c6f934fe786d98239829858b21d1a22b58757c9 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/consultreq.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/consultreq.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/consult/request — board の button の相談の頼み（ConsultRequest・行 cs-server）。
++//! POST /api/consult/request — board の button の相談の頼み（ConsultRequest）。
+ //! 守りは方針の口と同じ `guarded`・読むだけの server は受付の前に `read_only` で断る。
+ //! 置き場に相談の頼みの行を 1 行足すだけで、窓を開かず、裁定の配達を撃たない。応答は頼みの id の電文。
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/consultun.rs b/crates/tsuzuri-boundary/src/server/routes/consultun.rs
+index d9e7178bf23fdefb4755e1827478029ded350bc6..c494f2203c21438b57a4b3b410ebcfbca088803b 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/consultun.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/consultun.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/consult/unreceived — 席に受けられていない所見と頼み（Reading<ConsultUnreceived>・行 cs-server）。
++//! GET /api/consult/unreceived — 席に受けられていない所見と頼み（Reading<ConsultUnreceived>）。
+ //! 席の hook の安い判じが撃つ（置き場か台帳が読めなければ Unknown・読むだけの server も同じ）。
+ 
+ use tsuzuri_contract::consult::UNRECEIVED_PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/heartbeat.rs b/crates/tsuzuri-boundary/src/server/routes/heartbeat.rs
+index d8314780060a6eeef9ad887c2273f91230a8e09c..305aec0ab9e24ef9b96674389f25d369c4c64db3 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/heartbeat.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/heartbeat.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/account/heartbeat — 停止の切り替えの受付（行 h-wire）。
++//! POST /api/account/heartbeat — 停止の切り替えの受付。
+ 
+ use tsuzuri_contract::account::HEARTBEAT_PATH;
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/metrics.rs b/crates/tsuzuri-boundary/src/server/routes/metrics.rs
+index a9f750e551a9525d11f8592bafb1bb1f4498285f..1d30b0780fb46e129ebeb67a97ecf63bdab04806 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/metrics.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/metrics.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/metrics — 台帳の指標（LedgerStats・未反映の 3 欄は state dir の局面の出力から読む・行 c-unref-lc）。
++//! GET /api/metrics — 台帳の指標（LedgerStats・未反映の 3 欄は state dir の局面の出力から読む）。
+ 
+ use tsuzuri_contract::wire;
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/notices.rs b/crates/tsuzuri-boundary/src/server/routes/notices.rs
+index b8a381e36587ee656d9925741a046ef9a0018027..0c1c473ff613374c665d00833e98036b1bc30a12 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/notices.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/notices.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/notices — 席の「見て」の知らせの project ごとの最新の 1 つ（Notices・行 i-11・要件 FR16）。
++//! GET /api/notices — 席の「見て」の知らせの project ごとの最新の 1 つ（Notices・要件 FR16）。
+ //! 材料は tz stage notify が書く記録の file だけで、ここは読むだけ（file は書かず、子 process を撃たない）。
+ //! 記録の dir は `Config::notify`（無ければ 503 no-notify-dir）、dir が読めなければ 503 notify-unread。
+ //! この board の project の名は記録の書き手と同じ `cli::project` で --repo から引く（引けなければ空の字）。
+diff --git a/crates/tsuzuri-boundary/src/server/routes/nudge.rs b/crates/tsuzuri-boundary/src/server/routes/nudge.rs
+index 51839d75853521e8e3d10488c00a38347da4f66d..e4bbec4ac75349f8d1edb79ea56df4cfc229e711 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/nudge.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/nudge.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/surface/questions — 問いの合図の受付（QuestionNudge・行 e-signal）。
++//! POST /api/surface/questions — 問いの合図の受付（QuestionNudge）。
+ //! 席が問いを bdw で置いた後に送り、台帳の見張りの周期の待ちを終わらせる（台帳にも器にも書かない）。
+ 
+ use tsuzuri_contract::surface::QuestionNudge;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/pipeline.rs b/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
+index a0f9d48ee8ecc11131284c10177498a54f8361aa..7e2ee0fb39c06c44e5bd118868f4af6b2235ccba 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/pipeline.rs
+@@ -1,8 +1,7 @@
+ //! GET /api/pipeline — pipeline の板（PipelineBoard）。
+ //! 最初の要求が器の doctor の台帳の形の行の撃ちを許し（`Form::arm`・知らせの接続も許す）、口は持った組を読むだけで器を撃たない。
+-//! 札は集めた今の台帳の字から組み、形の崩れの一覧は見張りの読みの周の台帳の字と撃ちを終えた台帳の形の行の組から写す
+-//! （行 c-pipe-misfit・行 c-misfit-pair）。
+-//! 札の段は、state dir の器の局面の出力を要求のたびに読んで中核の `board_with_cases` が決める（`cases_of`・行 c-case-columns）。
++//! 札は集めた今の台帳の字から組み、形の崩れの一覧は見張りの読みの周の台帳の字と撃ちを終えた台帳の形の行の組から写す。
++//! 札の段は、state dir の器の局面の出力を要求のたびに読んで中核の `board_with_cases` が決める（`cases_of`）。
+ 
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::case::cases_of;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/policy.rs b/crates/tsuzuri-boundary/src/server/routes/policy.rs
+index e025b99c82e75a28d50bc445aee202ab53dd96b7..25b086c88b84d098cc2d93de533d1fdb79187c4d 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/policy.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/policy.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/policy — 方針の受付（PolicyRequest・便 e-batch）。
++//! POST /api/policy — 方針の受付（PolicyRequest）。
+ 
+ use tsuzuri_contract::surface::PolicyRequest;
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/project.rs b/crates/tsuzuri-boundary/src/server/routes/project.rs
+index 1d1e58c96c1557b3b794e7b102420986668891b5..6441f43328912e66aaf19bdd14bc52d1ef5ab423 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/project.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/project.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/project — board の project の名（ProjectName・行 g-brand）。
++//! GET /api/project — board の project の名（ProjectName）。
+ //! 名は --repo の path を canonicalize した path の最後の名（できなければ字のままの path の最後の名）。
+ 
+ use tsuzuri_contract::project::{PATH, ProjectName};
+diff --git a/crates/tsuzuri-boundary/src/server/routes/questions.rs b/crates/tsuzuri-boundary/src/server/routes/questions.rs
+index fff977810f3d5984bf740565e65ea9429ab444b4..6bd94a5a8471882b04036e8e3194f5a537d77d43 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/questions.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/questions.rs
+@@ -1,6 +1,6 @@
+ //! GET /api/questions — 問いの一覧（AllQuestions・ほかの project が無ければ字は QuestionList と同じ）。
+-//! 読むだけの server は answerable を偽にする（行 e-ask-own-only）。ほかの project の問いは鍵 others に札つきで
+-//! 引数の順に載せる（行 e-multi-ask）。
++//! 読むだけの server は answerable を偽にする。ほかの project の問いは鍵 others に札つきで
++//! 引数の順に載せる。
+ 
+ use tsuzuri_contract::question::{AllQuestions, QuestionList};
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/revoke.rs b/crates/tsuzuri-boundary/src/server/routes/revoke.rs
+index e3b7a721f91f429a85108f59680d1d92c7439136..8b9dfe8daee48818980b50449eae8bfd858eca7d 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/revoke.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/revoke.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/revoke — 答えた決定の取り消しの受付（RevokeRequest・行 e-revoke）。
++//! POST /api/revoke — 答えた決定の取り消しの受付（RevokeRequest）。
+ 
+ use tsuzuri_contract::surface::{REVOKE_PATH, RevokeRequest};
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/ruling.rs b/crates/tsuzuri-boundary/src/server/routes/ruling.rs
+index 2032f7f0dcf6a87fd36c8a6b6616227161e49856..64a5d4dc9a193ee6b2b85fad24e30cb0a0dfe68c 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/ruling.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/ruling.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/ruling — 裁定の受付（RulingRequest・便 e-ask）。
++//! POST /api/ruling — 裁定の受付（RulingRequest）。
+ 
+ use tsuzuri_contract::surface::RulingRequest;
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/runs.rs b/crates/tsuzuri-boundary/src/server/routes/runs.rs
+index 6723fa62ec94db9847647f71e217dcc22f14aa79..4295d6de0ee32350494398f6b84de6cfbaf6a7e8 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/runs.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/runs.rs
+@@ -1,5 +1,5 @@
+-//! GET /api/runs?bead= — bead の走行の時間軸（RunsDoc・行 e-runs）。
+-//! 字は器の event log と便の dir の判定の file だけから読む（台帳の bd は撃たない・行 c-run-verdict）。
++//! GET /api/runs?bead= — bead の走行の時間軸（RunsDoc）。
++//! 字は器の event log と便の dir の判定の file だけから読む（台帳の bd は撃たない）。
+ 
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::runs::PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/seat.rs b/crates/tsuzuri-boundary/src/server/routes/seat.rs
+index 6b5af8204344fa6133081770f505264375a5a331..42615d38eebd65a863a65fb08a57086e35134ad9 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/seat.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/seat.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/seat — 席の card（SeatCard・便 e-seat）。
++//! GET /api/seat — 席の card（SeatCard）。
+ 
+ use tsuzuri_contract::wire;
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/routes/seathb.rs b/crates/tsuzuri-boundary/src/server/routes/seathb.rs
+index 1fa97b8357bb1fb52c08792510011c51ae2f5551..77a524e9efd80dc2e1f8696b52c7915c3229fc17 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/seathb.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/seathb.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/seat/heartbeat — project board の停止の切り替えの受付（行 e-seat-hb）。
++//! POST /api/seat/heartbeat — project board の停止の切り替えの受付。
+ //! 本文は向きだけで、撃つ席は server の --repo の anchor から引く。
+ 
+ use tsuzuri_contract::seathb::PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/stageall.rs b/crates/tsuzuri-boundary/src/server/routes/stageall.rs
+index 6f4013aa0f1c092cf392a582f0f53566d875462d..8c299120eb7bfb02dac2dd7fd5de263ec1b49577 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/stageall.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/stageall.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/stage/targets — account board の表示先の書きの受付（一括と project ごと・行 e-stage-target）。
++//! POST /api/stage/targets — account board の表示先の書きの受付（一括と project ごと）。
+ //! 群の宣言は account board の読みの state dir から引き、無ければ --repo の project だけを受ける。
+ 
+ use tsuzuri_contract::stage::ALL_PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/stageopen.rs b/crates/tsuzuri-boundary/src/server/routes/stageopen.rs
+index 0801208591659cd75b35771a6c56cb4b64aaa587..0fe3671c76deb437b03ad9410716664e0310230b 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/stageopen.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/stageopen.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/stage/open — 持ち主の button が表示先の端末の窓を開く頼みの受付（行 e-stage-target・裁定 t3-hub.59.7）。
++//! POST /api/stage/open — 持ち主の button が表示先の端末の窓を開く頼みの受付。
+ //! tz stage open を 1 回撃つ（席の印を除いた環境で撃つので、席が撃つ口は頭 Origin の無い要求の断りで閉じる）。
+ 
+ use tsuzuri_contract::stage::OPEN_PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/stageset.rs b/crates/tsuzuri-boundary/src/server/routes/stageset.rs
+index 07ea359a5aa41eb2f8ff041bba56b694e79e81f3..5484cd071a5811b9bc5850a7e27f44467955153c 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/stageset.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/stageset.rs
+@@ -1,4 +1,4 @@
+-//! POST /api/stage/target — project board の表示先の書きの受付（行 e-stage-target・裁定 t3-hub.52.29）。
++//! POST /api/stage/target — project board の表示先の書きの受付。
+ //! 本文は端末の名か null（上書きを外す）だけで、書く project は server の --repo から引く。
+ 
+ use tsuzuri_contract::stage::PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/stagetarget.rs b/crates/tsuzuri-boundary/src/server/routes/stagetarget.rs
+index 0f1ab94794e02ba17b8dfacf7574513dbf058d8b..02f20c1b97ad2b17d95d4fca7ec28c3be082707f 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/stagetarget.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/stagetarget.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/stage/target — 表示先の設定の読み（行 e-stage-target）。
++//! GET /api/stage/target — 表示先の設定の読み。
+ //! tz の口 stage target show --json を 1 回撃った 1 行を返す（守りの `guarded` は通らず、頭 Origin の無い GET も通す）。
+ 
+ use tsuzuri_contract::stage::PATH;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/unreceived.rs b/crates/tsuzuri-boundary/src/server/routes/unreceived.rs
+index 56690343cc8aec2de60be111e5c467f870868aa6..bec30d777a73d1071dce8e7584a2d36bd959384a 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/unreceived.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/unreceived.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/unreceived — 席に届いていない裁定の id の列（Reading<Vec<RulingId>>・行 f-undelivered）。
++//! GET /api/unreceived — 席に届いていない裁定の id の列（Reading<Vec<RulingId>>）。
+ //! 印の無い裁定の id を台帳の順に Known で、台帳が読めなければ Unknown で返す（読むだけの server も同じ）。
+ 
+ use tsuzuri_contract::board::Reading;
+diff --git a/crates/tsuzuri-boundary/src/server/routes/unreflected.rs b/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
+index efeb05171a3a41a77708eab9a6b5fc400dfa9932..d2737875ad9f76314c1881265daf0ae8f91b9bc2 100644
+--- a/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
++++ b/crates/tsuzuri-boundary/src/server/routes/unreflected.rs
+@@ -1,4 +1,4 @@
+-//! GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view・state dir の局面の出力から読む・行 c-unref-lc）。
++//! GET /api/unreflected — 未反映の一覧（UnreflectedList・state dir の局面の出力から読む）。
+ 
+ use tsuzuri_contract::wire;
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/ruling.rs b/crates/tsuzuri-boundary/src/server/ruling.rs
+index a7c2daf274ade0c6b94a86a638a42fd9ddaadf7e..82f9b951cc94791e4482eebc85476750b07d1640 100644
+--- a/crates/tsuzuri-boundary/src/server/ruling.rs
++++ b/crates/tsuzuri-boundary/src/server/ruling.rs
+@@ -1,11 +1,11 @@
+-//! 裁定の受付（口 POST /api/ruling・便 e-ask）。server 自身は file を書かない。
++//! 裁定の受付（口 POST /api/ruling）。server 自身は file を書かない。
+ //! 台帳に書くのは bdw（契約の型の `LedgerWrite` の argv・cwd は repo）、席へ送るのは器の CLI。
+ //! 受付の順:
+ //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
+ //! 2. 台帳を bd の読み取りの口で読み直し（持ち回しの値を使わない）、open の問いでなければ断る
+-//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。1 回の読みの上限は `READ_TIMEOUT`
+-//!    （表示の読みの `BD_TIMEOUT` でなく書きの前の読みの上限・行 e-answer-reread）。読みが落ちれば `RETRY_STEP` を空けて
+-//!    `READ_TRIES` 回まで撃ち直し（`reread`・行 e-ruling-retry）、どれも読めなければ回ごとの落ちた訳を並べた
++//!    （UnknownQuestion）。走っている読みには合流しない。1 回の読みの上限は `READ_TIMEOUT`
++//!    （表示の読みの `BD_TIMEOUT` でなく書きの前の読みの上限）。読みが落ちれば `RETRY_STEP` を空けて
++//!    `READ_TRIES` 回まで撃ち直し（`reread`）、どれも読めなければ回ごとの落ちた訳を並べた
+ //!    `unread_line` の 1 行を標準エラーに書いて 503。
+ //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
+ //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
+@@ -16,14 +16,13 @@
+ //!
+ //! 答えごとの撃ち直しの thread は process の中にだけ在り、server の起こし直しで消える。起動の入口（tz surface serve）は
+ //! 口を開いた後に `sweep_at_start` で起動の掃き（`sweep`）を別の thread で 1 度だけ始め、`PACE` の上限の内に記帳した
+-//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない・
+-//! 行 c-deliver-retry）。
++//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない）。
+ //!
+ //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
+ //! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
+-//! 台帳の読みも書きも配達も撃たない（行 e-ask-own-only）。
++//! 台帳の読みも書きも配達も撃たない。
+ //!
+-//! 取り消し（口 POST /api/revoke・`revoke`・行 e-revoke）も同じ順で受け、問いを閉じる代わりに開き直す。
++//! 取り消し（口 POST /api/revoke・`revoke`）も同じ順で受け、問いを閉じる代わりに開き直す。
+ //! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
+ //! 開き直しだけが落ちた後に同じ要求を撃ち直すと、行を足さず開き直しだけを撃ち直す。
+ 
+diff --git a/crates/tsuzuri-boundary/src/server/runs.rs b/crates/tsuzuri-boundary/src/server/runs.rs
+index 6102ff4a0b1d21fbbd689fa18fa78a8da7f3ae9a..b2fbb626f786b076ea26081650ecb7f17d46fc70 100644
+--- a/crates/tsuzuri-boundary/src/server/runs.rs
++++ b/crates/tsuzuri-boundary/src/server/runs.rs
+@@ -1,7 +1,7 @@
+-//! 器の event log の読み（file を 1 つ読むだけ・書かない・便 e-read）。
++//! 器の event log の読み（file を 1 つ読むだけ・書かない）。
+ //! file は `<state dir>/fleet/events.jsonl`。state dir を省いたとき・file が無いか読めないときは、
+ //! 走行の出所は読めない（None）。file は変化の印（更新時刻と長さ）としても見る。
+-//! 便の dir（`<state dir>/pipe/<run id>/`）の gate と審査の判定の file も読む（行 c-run-verdict）。
++//! 便の dir（`<state dir>/pipe/<run id>/`）の gate と審査の判定の file も読む。
+ //! 器はその file を書いた後に段の event を足すので、変化の印は event log だけで足りる。
+ 
+ use std::path::{Component, Path, PathBuf};
+diff --git a/crates/tsuzuri-boundary/src/server/seat.rs b/crates/tsuzuri-boundary/src/server/seat.rs
+index a34def5b4580caf840d1a5462d064c326173af1f..5ed3660bbe0e1c772c7544a31a755248f802b62f 100644
+--- a/crates/tsuzuri-boundary/src/server/seat.rs
++++ b/crates/tsuzuri-boundary/src/server/seat.rs
+@@ -1,11 +1,11 @@
+-//! 席の card の読み（口 GET /api/seat・便 e-seat）。器の 3 つの出力を子 process で撃ち、器の state dir の
++//! 席の card の読み（口 GET /api/seat）。器の 3 つの出力を子 process で撃ち、器の state dir の
+ //! file を読むだけで、書かない。撃つ形は `<program> seat tick status --state-dir <dir>`・
+ //! `<program> doctor --state-dir <dir>`・`<program> fleet usage --show --state-dir <dir>`
+ //! （cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。usage は --show を必ず付ける（付けないと器が測り直して記録を書く）。
+ //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでもその出力は読めない（None）。
+ //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
+ //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
+-//! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat と e-held-marks・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
++//! 3 つの出力は持ち回しの表（`Held`・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
+ //! 入力の印（`input_marks`・席の target に依らない）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
+ //! doctor は `DOCTOR_HOLD`（30 秒）・usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
+ //! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。
+diff --git a/crates/tsuzuri-boundary/src/stage/cdp.rs b/crates/tsuzuri-boundary/src/stage/cdp.rs
+index 13e6175f4473b269d001c7f80b9424eadaaf52cb..c3dab7368f1f4f90d0b98b5e27e4b5b790b49045 100644
+--- a/crates/tsuzuri-boundary/src/stage/cdp.rs
++++ b/crates/tsuzuri-boundary/src/stage/cdp.rs
+@@ -1,13 +1,13 @@
+-//! CDP の口と命令の列（行 i-3・要件 FR16・判断の記録 ADR-5 の決定 (1)）。
++//! CDP の口と命令の列（要件 FR16・判断の記録 ADR-5 の決定 (1)）。
+ //! 命令の語彙 `Command` を CDP の method の列 `Step` に写す純粋な `steps` と、列を撃って応答を待つ `Session` を持つ。
+ //! 任意の式を撃つ口を持たない（見積りの T6・条 P-12.1）: Command は式を運ぶ欄を持たず、Runtime.evaluate は
+ //! Dom の決まった式と受入の測りの決まった式だけで、Session は method と params を直に受ける口を持たない
+ //! （撃てるのは steps の列と measure だけ）。
+-//! 窓の置き場は持ち主に任せ（持ち主の裁定 t3-hub.59.5・判断の記録 ADR-15 の決定 (6)）、語彙は同じ窓の中の操作だけを持つ。
+-//! session は tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（繋ぐ先は行 i-2 が張る 0700 の dir の中の unix socket）。
+-//! 行 i-4 で 2 つ目の運び手（席の目の headless の Chrome の pipe に付く `attach`・ws の上の振る舞いは変えない）を足す。
+-//! 行 i-4 で頁の今の URL の読み `url` と、それが撃つ script でない決まった 1 つの method `HISTORY` を足す。
+-//! 行 j-runner で受入 12 条の測り `measure`（決まった式 `MEASURE_EXPRESSION` を 1 度撃つ・Command に枝を足さない）を足す。
++//! 窓の置き場は持ち主に任せ（判断の記録 ADR-15 の決定 (6)）、語彙は同じ窓の中の操作だけを持つ。
++//! session は tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（繋ぐ先は `tunnel` が張る 0700 の dir の中の unix socket）。
++//! 2 つ目の運び手（席の目の headless の Chrome の pipe に付く `attach`・ws の上の振る舞いは変えない）を足す。
++//! 頁の今の URL の読み `url` と、それが撃つ script でない決まった 1 つの method `HISTORY` を足す。
++//! 受入 12 条の測り `measure`（決まった式 `MEASURE_EXPRESSION` を 1 度撃つ・Command に枝を足さない）を足す。
+ 
+ use std::path::Path;
+ use std::thread;
+diff --git a/crates/tsuzuri-boundary/src/stage/cli.rs b/crates/tsuzuri-boundary/src/stage/cli.rs
+index ce29a3e8cef426f84bbb5bfbfc2d7bc7e1de9ead..bfb43b69125d904df4152e514f269067b1c2404c 100644
+--- a/crates/tsuzuri-boundary/src/stage/cli.rs
++++ b/crates/tsuzuri-boundary/src/stage/cli.rs
+@@ -1,23 +1,23 @@
+-//! tz stage の口（行 i-5・要件 FR16・判断の記録 ADR-15 の決定 (6) と (7)・持ち主の裁定 t3-hub.59.3・t3-hub.59.5・t3-hub.59.7）。
++//! tz stage の口（要件 FR16・判断の記録 ADR-15 の決定 (6) と (7)）。
+ //! 席は端末の一覧の名で命令し、命令ごとに決まった旗だけを受ける（端末の値を上書きする旗は持たず、撃つ program の
+ //! 差し替えの旗だけを持つ・条 N-3）。board の頁の上では見せるだけにし、click・入力・key を撃つ前に断る。
+ //! 窓を起こすのは持ち主の tz stage open だけで、席の中（環境変数 CLAUDECODE が 1）の open は断る（計画の 3 節の席の決め）。
+ //! open は端末ごとの錠を持って撃ち、同時の撃ちで窓を 2 つにしない。窓は board ごとに 1 つで、覚えた頁か board の頁が
+-//! 動いている Chrome に無い時だけ、持ち主の頼みとして起動の引数を 1 回撃つ（動いている Chrome が app の窓を足す・行 i-board-win）。
++//! 動いている Chrome に無い時だけ、持ち主の頼みとして起動の引数を 1 回撃つ（動いている Chrome が app の窓を足す）。
+ //! 窓の頁の path は端末ごとの file に project の名で覚え（`memo`）、選びの前に読み、窓を見つけるか起こした後に書く。
+ //! 窓を前に出す・動かす・頁を作る語は持たない。
+ //! host の面は器の rules validate --state-dir が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
+ //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
+-//! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
+-//! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない・行 i-open-mark）。
++//! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く。
++//! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない）。
+ //! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
+ //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
+ //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
+-//! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む・行 e-stage-target）。
+-//! 席の自分の board の頁でない board の頁（account board の頁とほかの project の board の頁）の上では、見せる操作も含めてどの命令も撃たず断る（行 i-stage-guard）。
++//! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む）。
++//! 席の自分の board の頁でない board の頁（account board の頁とほかの project の board の頁）の上では、見せる操作も含めてどの命令も撃たず断る。
+ //! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
+-//! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
+-//! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く（行 i-10）。
++//! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない）。
++//! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く。
+ //! notify の rc は記録を書けて端末に知らせが届いた時だけ 0 で、URL を組めた後のどの終わり方でも最後の行は url の line。
+ 
+ use std::env;
+diff --git a/crates/tsuzuri-boundary/src/stage/json.rs b/crates/tsuzuri-boundary/src/stage/json.rs
+index 4e9133d5748d8016a03328fc6cd84ea7705a5fa9..6b2896e0d4fad1bde51b3ca1c64dccd9a7d97aae 100644
+--- a/crates/tsuzuri-boundary/src/stage/json.rs
++++ b/crates/tsuzuri-boundary/src/stage/json.rs
+@@ -1,6 +1,6 @@
+-//! 表示面の小さな JSON の読み書き（行 i-3）。
++//! 表示面の小さな JSON の読み書き。
+ //! 境界の crate は serde に直に依存しないので std だけで書く。値の型は組まず、字の切り出しだけを持つ
+-//! （CDP の応答と event・行 i-2 の /json/version と /json/list の応答・行 i-5 の写真と DOM と console の応答が使う）。
++//! （CDP の応答と event・`tunnel` の /json/version と /json/list の応答・`cli` の写真と DOM と console の応答が使う）。
+ 
+ /// 字を引用符で囲んだ JSON の字にする。
+ pub fn escape(text: &str) -> String {
+diff --git a/crates/tsuzuri-boundary/src/stage/launch.rs b/crates/tsuzuri-boundary/src/stage/launch.rs
+index 7eb1746efddd710b4a16f6b4e52caa0ebf9850a5..5d0a4cdfe9f4daf024819a682f55e9a2173eba20 100644
+--- a/crates/tsuzuri-boundary/src/stage/launch.rs
++++ b/crates/tsuzuri-boundary/src/stage/launch.rs
+@@ -1,7 +1,7 @@
+-//! 端末の Chrome を起こす引数と tunnel の引数と窓の頁の選び（行 i-2・行 i-board-win・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-15 の決定 (4)・ADR-24 の決定 (2)）。
++//! 端末の Chrome を起こす引数と tunnel の引数と窓の頁の選び（要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-15 の決定 (4)・ADR-24 の決定 (2)）。
+ //! 純粋な関数だけを持ち、file も子の process も環境変数も触らない（撃つのは `tunnel`）。
+ //! 起動の引数は端末の行の os の値でだけ組み分け、host の名を見ない（条 N-7）。profile の dir は層 A の行の字のままで、
+-//! code に既定の dir を持たない（持ち主の裁定 t3-hub.59.2）。窓の位置の旗を持たない（置き場は持ち主に任せる・t3-hub.59.5）。
++//! code に既定の dir を持たない。窓の位置の旗を持たない（置き場は持ち主に任せる）。
+ 
+ use std::path::Path;
+ 
+diff --git a/crates/tsuzuri-boundary/src/stage/memo.rs b/crates/tsuzuri-boundary/src/stage/memo.rs
+index 2d7c0aefd06687703c26c2a256a186535cdcf647..272155a7fc43db14fcb6ac31303881278c8888b5 100644
+--- a/crates/tsuzuri-boundary/src/stage/memo.rs
++++ b/crates/tsuzuri-boundary/src/stage/memo.rs
+@@ -1,4 +1,4 @@
+-//! 端末の窓の覚え（行 i-board-win・要件 FR16・判断の記録 ADR-24 の決定 (2)）。
++//! 端末の窓の覚え（要件 FR16・判断の記録 ADR-24 の決定 (2)）。
+ //! 端末ごとの file（口座の dir の下の tzst-端末の名.win）に、project の名と窓の頁の target の path を 1 行ずつ
+ //! 字 tab で分けて覚える。頁の target の id は navigate で変わらないので、席が窓を開発中の app の頁へ移しても同じ窓を引ける。
+ //! 形の外の行は読まずに捨て、同じ名の行が 2 つ在れば後の行が勝つ。書くのは path が変わる時だけで、mode 0600 の file に置き換える。
+diff --git a/crates/tsuzuri-boundary/src/stage/mod.rs b/crates/tsuzuri-boundary/src/stage/mod.rs
+index 3d65facccaec56d25948684f91601763e52da2b1..ab32e7dd65784710e2e35d72d75ab80ec2751d9c 100644
+--- a/crates/tsuzuri-boundary/src/stage/mod.rs
++++ b/crates/tsuzuri-boundary/src/stage/mod.rs
+@@ -1,12 +1,12 @@
+ //! 表示面（要件 FR16・席が端末の一覧から端末の名で表示先を操る）。
+-//! 傘の行 i の子の行が file を足す（行 i-1 で端末の一覧の読み `terminal` を置く）。
+-//! 行 i-3 で CDP の口（websocket の client の側 `ws`・小さな JSON の読み書き `json`・命令の列と session の `cdp`）を置く。
+-//! 行 i-2 で起動の引数 `launch` と、tunnel と窓を 1 回だけ起こすこと `tunnel` を置く。
+-//! 行 i-4 で席の目の Chrome の pipe の運び手 `pipe`・端末に届かない時の落ちる先 `relay`・board の URL `url` を置く。
+-//! 行 i-5 で tz の口 `cli`（命令の旗の読み・board の頁の断り・席の中の open の断り・窓を開く錠）を置く。
+-//! 行 i-7 で表示先の設定 `target`（全体の既定と project ごとの上書きと初めて見せた印・追跡されない 1 つの file）を置く。
+-//! 行 i-board-win で窓の覚え `memo`（端末ごとの file に project の名と窓の頁の path を覚える）を置く。
+-//! 行 i-10 で知らせ `notify`（表示先の端末へ notify-send の知らせだけを出す・project の最新の知らせの記録）を置く。
++//! 端末の一覧の読み `terminal` を置く。
++//! CDP の口（websocket の client の側 `ws`・小さな JSON の読み書き `json`・命令の列と session の `cdp`）を置く。
++//! 起動の引数 `launch` と、tunnel と窓を 1 回だけ起こすこと `tunnel` を置く。
++//! 席の目の Chrome の pipe の運び手 `pipe`・端末に届かない時の落ちる先 `relay`・board の URL `url` を置く。
++//! tz の口 `cli`（命令の旗の読み・board の頁の断り・席の中の open の断り・窓を開く錠）を置く。
++//! 表示先の設定 `target`（全体の既定と project ごとの上書きと初めて見せた印・追跡されない 1 つの file）を置く。
++//! 窓の覚え `memo`（端末ごとの file に project の名と窓の頁の path を覚える）を置く。
++//! 知らせ `notify`（表示先の端末へ notify-send の知らせだけを出す・project の最新の知らせの記録）を置く。
+ 
+ pub mod cdp;
+ pub mod cli;
+diff --git a/crates/tsuzuri-boundary/src/stage/notify.rs b/crates/tsuzuri-boundary/src/stage/notify.rs
+index 82feffda6b88382a846ab27f9a48965c4514ddd7..2066e7b60c60e2f8160d8f6ae1d0638f305f0a2a 100644
+--- a/crates/tsuzuri-boundary/src/stage/notify.rs
++++ b/crates/tsuzuri-boundary/src/stage/notify.rs
+@@ -1,9 +1,9 @@
+-//! 表示先の端末への知らせ（行 i-10・要件 FR16・判断の記録 ADR-15 の決定 (6)・持ち主の裁定 t3-hub.59.4 と t3-hub.59.5）。
++//! 表示先の端末への知らせ（要件 FR16・判断の記録 ADR-15 の決定 (6)）。
+ //! 席が持ち主に見てほしい時、端末の画面に notify-send の知らせだけを出す。窓を起こす・前に出す・動かす語を持たず、
+ //! Chrome の口を撃たない。1 回の ssh で notify-send の在る無しと撃ちを済ませ（無ければ遠くの shell が `ABSENT` で終わる）、
+ //! ssh の届かない `UNREACHED` と notify-send の rc を分ける。知らせは linux の端末だけで、本文は board の URL。
+ //! 記録は project ごとの最新の 1 つを tsuzuri 自前の追跡されない file（XDG の state の dir の下の `DIR` の下）に書く
+-//! （行 i-11 の server がこの module の `dir`・`files`・`gather` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて
++//! （server がこの module の `dir`・`files`・`gather` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて
+ //! rename で置き換える。
+ 
+ use std::ffi::{OsStr, OsString};
+diff --git a/crates/tsuzuri-boundary/src/stage/pipe.rs b/crates/tsuzuri-boundary/src/stage/pipe.rs
+index c5a5c61b1626652796d04349d4a9c3d7ba41f3a3..674e09e30532884fd9a9023bd6d9ccb3505bc832 100644
+--- a/crates/tsuzuri-boundary/src/stage/pipe.rs
++++ b/crates/tsuzuri-boundary/src/stage/pipe.rs
+@@ -1,4 +1,4 @@
+-//! 席の目の Chrome の pipe の運び手（行 i-4・要件 FR16・判断の記録 ADR-15 の決定 (5)）。
++//! 席の目の Chrome の pipe の運び手（要件 FR16・判断の記録 ADR-15 の決定 (5)）。
+ //! 子の標準入力と標準出力（子の側では fd 3 と fd 4 に写す）で、NUL で終わる字の message を運ぶ。
+ //! 口座の外から届かない（TCP の port も unix socket も開かない・見積りの T3）。
+ //! 付いた後の message の頭に鍵 sessionId を足す（browser の段に繋がるので、頁の session へ flatten の形で送る）。
+diff --git a/crates/tsuzuri-boundary/src/stage/relay.rs b/crates/tsuzuri-boundary/src/stage/relay.rs
+index e977d280961ea68807e7dcab503405ab5aea2816..8cd447031720af8fade0416b16a189ad65a7d85f 100644
+--- a/crates/tsuzuri-boundary/src/stage/relay.rs
++++ b/crates/tsuzuri-boundary/src/stage/relay.rs
+@@ -1,4 +1,4 @@
+-//! 端末に届かない時の落ちる先（行 i-4・要件 FR16・受入 AC13・判断の記録 ADR-15 の決定 (5)・持ち主の裁定 t3-hub.59.4）。
++//! 端末に届かない時の落ちる先（要件 FR16・受入 AC13・判断の記録 ADR-15 の決定 (5)）。
+ //! ssh で届かない端末には board の URL を渡すだけにし、席はその端末の browser を操作しない。
+ //! 席の目はこの server の headless の Chrome（screenshot・DOM・console）で、画面を配信する窓は作らない。
+ //! 席の目の Chrome の口は --remote-debugging-pipe（子の fd 3 と fd 4 だけで話し、口座の外から届かない・見積りの T3）。
+diff --git a/crates/tsuzuri-boundary/src/stage/target.rs b/crates/tsuzuri-boundary/src/stage/target.rs
+index 60673a4c60bf9ce6f6c508bb5757b390a1710819..a4b0cb44840b9825edfa2af0d98d711257e1b15b 100644
+--- a/crates/tsuzuri-boundary/src/stage/target.rs
++++ b/crates/tsuzuri-boundary/src/stage/target.rs
+@@ -1,4 +1,4 @@
+-//! 表示先の設定（行 i-7・要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)・持ち主の裁定 t3-hub.59.1 と t3-hub.59.7）。
++//! 表示先の設定（要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)）。
+ //! 置き場は tsuzuri 自前の追跡されない 1 つの file（XDG の設定の dir の下の `DIR` の下の `FILE`）で、器の host の面は書かない。
+ //! 2 段で持つ: 全体の既定（根の鍵 `DEFAULT`）と project ごとの上書き（表 `PROJECT`）。表 `SHOWN` は端末ごとの印
+ //! （--to を省いた撃ちが初めて窓を起こした epoch 秒）で、印の在る端末の窓は起こし直さない（持ち主が閉じた窓は開き直さない）。
+diff --git a/crates/tsuzuri-boundary/src/stage/terminal.rs b/crates/tsuzuri-boundary/src/stage/terminal.rs
+index 4c2920a8b7d45a7358048bffa5dfc5bc21d89be8..6b2fc21fcf6e0d5d0c8ee310cf0b171dfa2a04dc 100644
+--- a/crates/tsuzuri-boundary/src/stage/terminal.rs
++++ b/crates/tsuzuri-boundary/src/stage/terminal.rs
+@@ -1,4 +1,4 @@
+-//! 端末の一覧の読み（行 i-1・要件 FR16・判断の記録 ADR-5 の決定 (2)・行 i-1b で画面を開く env の欄 display-env を足した）。
++//! 端末の一覧の読み（要件 FR16・判断の記録 ADR-5 の決定 (2)・画面を開く env の欄 display-env を持つ）。
+ //! 器の host の面（state dir の追跡されない `host.toml`）の表 `[[device]]` の行を読み、端末の名で 1 行を引く。
+ //! 端末の値は code に焼かず（条 N-7）、TOML の部品を使わず中核の host.rs の読み手と同じ自前の読み方で読む。
+ //! 本文を受ける `lookup` と `names` は file も子の process も環境変数も触らず、file を読むのは `read_face` だけ
+diff --git a/crates/tsuzuri-boundary/src/stage/tunnel.rs b/crates/tsuzuri-boundary/src/stage/tunnel.rs
+index ed0a3248fbdbcd406def0b09ef285a9cc7c68359..974cd760d296886054ad4b47709933a958e73369 100644
+--- a/crates/tsuzuri-boundary/src/stage/tunnel.rs
++++ b/crates/tsuzuri-boundary/src/stage/tunnel.rs
+@@ -1,9 +1,9 @@
+-//! tunnel と窓の頁の選びと窓を 1 回だけ起こすこと（行 i-2・行 i-board-win・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-24 の決定 (2) と (4)）。
++//! tunnel と窓の頁の選びと窓を 1 回だけ起こすこと（要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-24 の決定 (2) と (4)）。
+ //! 端末の Chrome の remote debugging の口を、この server の 0700 の dir の中の unix socket へ ssh の -L で引く
+ //! （見積りの T3・127.0.0.1 の TCP の転送だとほかの口座の process も持ち主の Chrome を操れる）。
+ //! tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（見積りの T1・drop で ssh を止めて dir を消す・Chrome は端末に残る）。
+-//! 撃つ HTTP の GET は /json/version と /json/list だけで、窓を前に出す・動かす・足す口を撃たない
+-//! （持ち主の裁定 t3-hub.59.5 と t3-hub.59.7）。窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけで、
++//! 撃つ HTTP の GET は /json/version と /json/list だけで、窓を前に出す・動かす・足す口を撃たない。
++//! 窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけで、
+ //! 撃つのは起動の引数だけ（動いている Chrome があればその Chrome が app の窓を足す）。
+ 
+ use std::ffi::{OsStr, OsString};
+diff --git a/crates/tsuzuri-boundary/src/stage/url.rs b/crates/tsuzuri-boundary/src/stage/url.rs
+index c3e5dd771a4299f3bbcbea5da4308644f461ab3c..ad61e7e6ee8949f121f2b1ef552abc1dfe51b631 100644
+--- a/crates/tsuzuri-boundary/src/stage/url.rs
++++ b/crates/tsuzuri-boundary/src/stage/url.rs
+@@ -1,13 +1,13 @@
+-//! board の URL（行 i-4・要件 FR16・判断の記録 ADR-15 の決定 (5)・持ち主の裁定 t3-hub.59.4 と t3-hub.53.1）。
++//! board の URL（要件 FR16・判断の記録 ADR-15 の決定 (5)）。
+ //! ssh で届かない端末には tailnet の中の board の URL を渡すだけにする。host の名は tailnet の道具の status の
+ //! Self の DNSName から、port は anchor の追跡されない git config の tsuzuri.boardport から実行の時に読み、
+ //! どちらも code と版管理に載る file に書かない（行 D-4）。
+ //! 自分の board とみなすのは、port が自分の boardport で、host がこの host のどの形（tailnet の名・その短い名・
+-//! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め・i-4 と i-5 の起草の問い Q1）。
+-//! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ（行 i-board-ports）、
++//! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め）。
++//! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ、
+ //! その host の形は自分の board と同じ列（同じ host の board だけ・ほかの host の同じ port は断らない）。
+-//! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign（行 i-stage-guard）。
+-//! 端末の窓の頁を選ぶ launch の board_page も shows で引く（行 i-board-win）。
++//! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign。
++//! 端末の窓の頁を選ぶ launch の board_page も shows で引く。
+ 
+ use std::ffi::{OsStr, OsString};
+ use std::path::Path;
+diff --git a/crates/tsuzuri-boundary/src/stage/ws.rs b/crates/tsuzuri-boundary/src/stage/ws.rs
+index cfd501841b032408b339d214b867ad496196b180..602c1cdfc7170e353709f6c0ff0fc559f148ebf0 100644
+--- a/crates/tsuzuri-boundary/src/stage/ws.rs
++++ b/crates/tsuzuri-boundary/src/stage/ws.rs
+@@ -1,8 +1,8 @@
+-//! websocket の client の側（行 i-3・RFC 6455）。
+-//! 行 i-2 が ssh の -L で張る unix socket に繋ぎ、字の message だけを運ぶ（binary と拡張と subprotocol は持たない）。
++//! websocket の client の側（RFC 6455）。
++//! `tunnel` が ssh の -L で張る unix socket に繋ぎ、字の message だけを運ぶ（binary と拡張と subprotocol は持たない）。
+ //! 外の部品を足さず、SHA-1 と base64 と乱れた値（std の RandomState）を std だけで書く。
+ //! 字を運ぶ `Socket::send` を使うのは cdp の Session だけ（撃てる命令の語彙は cdp の steps が決める・
+-//! 窓を足す手は動いている Chrome へ渡す起動の引数で、頁の target を作る命令は撃たない・行 i-board-win）。
++//! 窓を足す手は動いている Chrome へ渡す起動の引数で、頁の target を作る命令は撃たない）。
+ 
+ use std::collections::hash_map::RandomState;
+ use std::hash::{BuildHasher, Hasher};
+diff --git a/crates/tsuzuri-boundary/src/stagecall.rs b/crates/tsuzuri-boundary/src/stagecall.rs
+index e3e0682e9045b83df8dc4b9acb63dcdf12d2bd3f..d45df8400aac0b25558c22c0042308fc69898cb5 100644
+--- a/crates/tsuzuri-boundary/src/stagecall.rs
++++ b/crates/tsuzuri-boundary/src/stagecall.rs
+@@ -1,5 +1,4 @@
+-//! 表示先の設定と窓を開く頼みの受付（行 e-stage-target・要件 FR16・判断の記録 ADR-15 の決定 (2)(6)・
+-//! 持ち主の裁定 t3-hub.59.1 と t3-hub.59.7 と t3-hub.52.29）。
++//! 表示先の設定と窓を開く頼みの受付（要件 FR16・判断の記録 ADR-15 の決定 (2)(6)）。
+ //! 面と server は設定の file を自分で書かず、tz の口（`tz stage target show --json`・`set`・`clear`・`tz stage open`）を
+ //! 1 回撃つだけにする（読みの字は tz が組む・名に空白を含められるので server は行を割って読まない）。
+ //! 撃ちはどれも引数の後に --repo と --scribe2 を足し、cwd は --repo の dir で、子の環境から席の印を除く
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+index 3bf25ce0f185f9636d513c659e3d845b505cd85f..de3397dd0e13171be3c89d5edea7397c75bcd688 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+@@ -1284,7 +1284,7 @@ fn acchold_events_doc_names_off() {
+         .filter(|l| l.starts_with("//!"))
+         .collect::<Vec<_>>()
+         .join("\n");
+-    for word in ["heartbeat-off", "Acct::marks", "e-seat-hbmark"] {
++    for word in ["heartbeat-off", "Acct::marks", "席の card の印"] {
+         assert!(doc.contains(word), "module の doc に {word} が無い");
+     }
+ }
+diff --git a/xtask/tests/mdid.rs b/xtask/tests/mdid.rs
+index ea0be4e7246c7a33cd093a1b22a6e2ec95919210..e1ba23fc66489b1efb7bbce3353f0798f5ff5f95 100644
+--- a/xtask/tests/mdid.rs
++++ b/xtask/tests/mdid.rs
+@@ -10,8 +10,8 @@
+ use std::collections::BTreeMap;
+ use std::path::{Path, PathBuf};
+ 
+-/// 境界の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
+-const CAP_BOUNDARY: usize = 232;
++/// 境界の crate の上限。
++const CAP_BOUNDARY: usize = 0;
+ 
+ /// 契約の crate の上限。
+ const CAP_CONTRACT: usize = 0;
