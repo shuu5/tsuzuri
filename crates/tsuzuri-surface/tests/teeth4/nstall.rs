@@ -5,21 +5,13 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextStep};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::next::{KEYS, NONE_LINE, UNJUDGED_KEY, UNJUDGED_LINE, big, unjudged};
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn sets() -> BTreeMap<String, NextStep> {
     wire::decode(&read("../../tests/fixtures/surface/next-step.json"))

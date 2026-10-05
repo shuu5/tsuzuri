@@ -2,8 +2,7 @@
 //! 中心の行から読む走行・段の chip と色・経験者の行・中身の 3 値・語の鍵と stylesheet・DOM の結び・自分の歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::{AroundDoc, NodeKind};
 use tsuzuri_contract::runs::{RunLine, RunStep, RunsDoc};
 use tsuzuri_contract::wire;
@@ -17,14 +16,6 @@ use tsuzuri_surface::project::timeline::{
 use tsuzuri_surface::project::{Body, Module, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 節の fixture の電文（行 e-runs の節の値の t3-hub.2）。
 const RUNS: &str = r#"{"bead":"t3-hub.2","runs":{"known":[

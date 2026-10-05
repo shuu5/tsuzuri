@@ -3,8 +3,7 @@
 //! id の無い URL は口を読まない・全部の節点に id が出る・語の鍵・fixture の大きさ・足す外の依存は 0 本。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{FIXTURE, read};
 use tsuzuri_contract::graph::{
     AroundDoc, AroundRow, EdgeEnd, EdgeType, Fold, GraphNode, NodeKind, basis_end,
 };
@@ -23,16 +22,6 @@ use tsuzuri_surface::project::nodearound::{
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, node};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-const FIXTURE: &str = "../../tests/fixtures/surface/around-doc.json";
 
 fn fixture_text() -> String {
     read(FIXTURE)

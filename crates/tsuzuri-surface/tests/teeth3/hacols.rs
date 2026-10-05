@@ -2,8 +2,7 @@
 //! 群の card の閾値の行・台帳の表の未反映の欄と、DOM の部分の字。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{a_stats, dom_of, read};
 use tsuzuri_contract::account::{AccountDoc, WindowCap};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind};
@@ -16,34 +15,9 @@ use tsuzuri_surface::account::projects::{
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ledger::Unref;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-/// fixture の proj-a の台帳（Known）の複製。
-fn a_stats(doc: &AccountDoc) -> LedgerStats {
-    match &doc.projects[0].ledger {
-        Reading::Known(s) => s.clone(),
-        Reading::Unknown => panic!("fixture の proj-a の台帳が Known でない"),
-    }
-}
-
-/// 字の「mod dom」より後（DOM の部分）。
-fn dom_of(rel: &str) -> String {
-    let text = read(rel);
-    let at = text
-        .find("mod dom")
-        .unwrap_or_else(|| panic!("{rel} に mod dom が無い"));
-    text[at..].to_string()
 }
 
 /// (1) 決定待ちは台帳の open の問いの数（台帳が Unknown は None）・run の数の card の値の行と WAIT_NOTE。

@@ -2,8 +2,7 @@
 //! 群の枠の限度で止まった session の数と詳しくの段（記録の数・出所・doctor の群の行）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{filled, read};
 use tsuzuri_contract::account::{AccountDoc, GroupCard, MoveRow};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatState;
@@ -12,29 +11,13 @@ use tsuzuri_surface::account::home::{
     ACCT_SRC, EXPERT_CHARS, GroupMore, MvKind, MvRow, NONE, acct_card, doctor_line, group_more, home,
     limited, moves, mv_card, wrap_words,
 };
-use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::seat::hmd;
 use tsuzuri_surface::vocab::{label, vocab};
 use tsuzuri_surface::widgets::hover::Card;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-fn filled<T: std::fmt::Debug>(body: Body<T>) -> T {
-    match body {
-        Body::Filled(v) => v,
-        other => panic!("中身ありでない: {other:?}"),
-    }
 }
 
 fn groups(doc: &AccountDoc) -> Vec<GroupCard> {

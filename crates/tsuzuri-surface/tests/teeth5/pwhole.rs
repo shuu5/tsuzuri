@@ -2,16 +2,10 @@
 //! 字の欄と送る button は問いの一覧を読まずに 1 度だけ組む・自分の歯の名は着地済みの verify の filter の語を含まない。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::surface::PolicyRequest;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::policy;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 着地済みの行と第 3 波から第 9 波の行と表示面の行の verify の filter の語（この行の接頭辞は並べない）。
 const FILTERS: [&str; 113] = [

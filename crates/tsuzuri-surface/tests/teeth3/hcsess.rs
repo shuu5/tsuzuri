@@ -2,8 +2,7 @@
 //! DOM の部分の字。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{check, fn_body, read, squeeze};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{AccountDoc, SessionLine};
 use tsuzuri_contract::board::Reading;
@@ -16,26 +15,9 @@ use tsuzuri_surface::account::session::{
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::hover::Card;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-/// card の 4 行と詳しくを比べる。
-fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
-    assert_eq!(card.title, title);
-    assert_eq!(card.kind, kind, "{title} の種類");
-    assert_eq!(card.value, value, "{title} の値");
-    assert_eq!(card.src, src, "{title} の出所");
-    assert_eq!(card.more, more, "{title} の詳しく");
 }
 
 /// (1) run の行の card。
@@ -193,29 +175,6 @@ fn rows_in_tables(doc: AccountDoc) {
 fn dom_part(text: &str) -> String {
     let at = text.find("mod dom {").expect("session.rs に mod dom が在る");
     text[at + "mod dom {".len()..].to_string()
-}
-
-/// DOM の部分の fn の本体（宣言の字から、次の行頭 4 空白の fn か pub fn の宣言の前まで・無ければ終わりまで）。
-fn fn_body(dom: &str, name: &str) -> String {
-    let start = dom
-        .find(&format!("fn {name}("))
-        .unwrap_or_else(|| panic!("DOM の部分に fn {name} が無い"));
-    let rest = &dom[start..];
-    let first = rest.find('\n').map_or(rest.len(), |i| i + 1);
-    let mut end = rest.len();
-    let mut at = first;
-    for line in rest[first..].split_inclusive('\n') {
-        if line.starts_with("    fn ") || line.starts_with("    pub fn ") {
-            end = at;
-            break;
-        }
-        at += line.len();
-    }
-    rest[..end].to_string()
-}
-
-fn squeeze(text: &str) -> String {
-    text.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 /// (4) DOM の部分が session の欄に card を付ける。

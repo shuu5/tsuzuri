@@ -3,8 +3,7 @@
 //! fixture は tests/fixtures/account/acct-doc.json（読むだけ）。電文 U と M は proj-a の行の写しから組む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::stats::CheckResult;
@@ -14,14 +13,6 @@ use tsuzuri_surface::account::cards::nx_card;
 use tsuzuri_surface::account::projects::{PSort, need, need_rank, table};
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::next::{NONE_LINE, UNJUDGED_LINE};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))

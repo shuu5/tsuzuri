@@ -2,16 +2,8 @@
 //! 札の link の先 card_href と、その歯 klink_card_opens_same_id は行 g-dead-sweep-a で消した。
 #![cfg(test)]
 
-use std::path::PathBuf;
+use crate::common::read;
 
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 着地済みの行の verify の filter の語と、この波の行の接頭辞（この行の klink_ を除く）。
 const TAKEN: &[&str] = &[

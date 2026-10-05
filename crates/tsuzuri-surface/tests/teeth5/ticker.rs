@@ -3,17 +3,12 @@
 //! fixture は着地済みの tests/fixtures/account/acct-doc.json（読むだけ）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::session::{NONE_MARK, elapsed_at, grace_left, row};
 
 const AT: u64 = 1_790_510_400;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

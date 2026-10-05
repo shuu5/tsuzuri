@@ -3,20 +3,11 @@
 //! folds をつないだ列・写しの snapshot は消した。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{FILTERS, crate_dir, read};
 use tsuzuri_surface::project::{
     self, Module, ask, askpage, batch, gaps, ledger, legend, next, node, nodearound, nodebody,
     notice, pipeline, policy, seat, stage, timeline,
 };
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// module の名・PATHS・FOLDS。
 type Consts = (&'static str, &'static [&'static str], &'static [&'static str]);
@@ -157,59 +148,6 @@ fn hsderive_drops_old_copy() {
     );
     assert!(!read("tests/teeth3/hspage.rs").contains("frame.json"), "hspage.rs が frame.json を読む");
 }
-
-/// 着地済みの行とこの文書の行の verify の filter の語。
-const FILTERS: [&str; 49] = [
-    "accept_",
-    "account_",
-    "acctcore_",
-    "acctdoc_",
-    "acctframe_",
-    "accthb_",
-    "accthome_",
-    "acctled_",
-    "acctlook_",
-    "acctpcore_",
-    "acctproj_",
-    "acctsess_",
-    "acctwin_",
-    "acctwire_",
-    "askcard_",
-    "batchpanel_",
-    "board_min_",
-    "contract_form_",
-    "frame_",
-    "gapspage_",
-    "gquestion_",
-    "graph_",
-    "gview_",
-    "hook_",
-    "ledgerblock_",
-    "mapgraph_",
-    "mapview_",
-    "nextstep_",
-    "nodepage_",
-    "parts_",
-    "pipe_",
-    "project_",
-    "question_",
-    "seatblock_",
-    "seatcard_",
-    "server_",
-    "skeleton_",
-    "stage_",
-    "stats_",
-    "steady_",
-    "topbar_",
-    "tz_",
-    "hbproc_",
-    "hbconf_",
-    "hbroute_",
-    "hbpost_",
-    "hsblock_",
-    "hspage_",
-    "hsderive_",
-];
 
 /// (7) この file の歯の名はどれも hsderive_ で始まり、残りの字は filter の語を含まない。
 #[test]

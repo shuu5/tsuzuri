@@ -4,8 +4,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::crate_dir;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{UnreflectedList, UnreflectedRow};
 use tsuzuri_contract::wire;
@@ -16,10 +16,6 @@ use tsuzuri_surface::project::ledger::{
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

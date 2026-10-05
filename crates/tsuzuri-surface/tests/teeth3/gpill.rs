@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::common::function;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::wire;
@@ -20,20 +21,6 @@ use tsuzuri_surface::widgets::hover::{Card, ROW_CHARS};
 fn read(rel: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// 関数の本文（`fn name(` から次の行頭の `fn `・`pub fn `・`async fn `・`pub async fn ` まで）。
-fn function<'a>(text: &'a str, name: &str) -> &'a str {
-    let start = text
-        .find(&format!("fn {name}("))
-        .unwrap_or_else(|| panic!("fn {name} が在る"));
-    let rest = &text[start..];
-    let end = ["\nfn ", "\npub fn ", "\nasync fn ", "\npub async fn "]
-        .iter()
-        .filter_map(|m| rest[1..].find(m).map(|i| i + 1))
-        .min()
-        .unwrap_or(rest.len());
-    &rest[..end]
 }
 
 /// fixture の 5 組（組の名 → 電文の型）。

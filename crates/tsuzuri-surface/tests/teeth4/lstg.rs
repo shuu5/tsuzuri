@@ -4,19 +4,12 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::{crate_dir, read};
 use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, stage_word};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 札を描く今（札の since はこの今から経過を引いた時刻）。
 const NOW: u64 = 1_790_510_400;

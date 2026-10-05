@@ -4,8 +4,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::{read, span};
 use tsuzuri_contract::board::{Ci, PipelineCard, Stage};
 use tsuzuri_contract::ledger::{BeadId, LedgerRow, MEMO_LABEL, QUESTION_LABEL};
 use tsuzuri_surface::ledgerlist::{Lrow, groups};
@@ -13,19 +13,6 @@ use tsuzuri_surface::project::pipeline::{CLOSED_TAG, card_sym, kcard};
 
 /// 一覧を組む今。
 const NOW: u64 = 1_790_510_400;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
-fn span(src: &str, start: &str, end: &str) -> String {
-    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
-    let rest = &src[at..];
-    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
-    rest[..to].to_string()
-}
 
 fn row(id: &str, labels: &[&str]) -> LedgerRow {
     LedgerRow {

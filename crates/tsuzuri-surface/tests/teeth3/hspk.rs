@@ -1,8 +1,7 @@
 //! 便 h-acct-spark の歯: HOME の口座 × 窓の 7 列（7 日の線の svg と測った時刻）・見出しと列の幅・語の辞書の 7 日。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::account::{AccountDoc, SPARK_SPAN_S, Spark, SparkLine, SparkPoint};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
@@ -11,14 +10,6 @@ use tsuzuri_surface::account::home::{
 };
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))

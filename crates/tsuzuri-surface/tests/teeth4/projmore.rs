@@ -2,30 +2,15 @@
 //! 行の開閉・2 段目を … で切る fit_cut と、DOM の部分の字（描きの fn の本体の在る無し）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{fixture, read};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::wire;
 use tsuzuri_surface::account::projects::{
     LedMore, MORE_LED, More, NO_TOGGLE, PSort, ProjLine, fit_cut, more, table,
 };
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ledger::{Net, SPARK_H, SPARK_W, net, spark, spark_svg};
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
-        .expect("fixture が AccountDoc として読める")
-}
 
 /// projects.rs の字「mod dom {」より後（DOM の部分）。
 fn dom_part() -> String {

@@ -3,19 +3,13 @@
 //! 注釈の層と 2 つの block の DOM の字の並び。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::Verdict;
 use tsuzuri_surface::account::home::EXPERT_CHARS;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::{batch, gaps};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::widgets::help::{Inline, expert_note, inline};
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn text(s: &str) -> Inline {
     Inline::Text(s.to_string())

@@ -2,6 +2,7 @@
 //! この file は mod の行だけを持つ（tests/teeth4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
 #![cfg(test)]
 
+mod common;
 mod itemlink;
 mod kcardlink;
 mod kindlab;

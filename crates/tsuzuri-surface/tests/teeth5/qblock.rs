@@ -2,8 +2,7 @@
 //! つながりの段の見出しで関わる所の chip の後・見本の IC.stop の図と語の辞書・歯の名）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::question::{QuestionCard, QuestionList};
 use tsuzuri_contract::wire;
@@ -11,10 +10,6 @@ use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::ask;
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

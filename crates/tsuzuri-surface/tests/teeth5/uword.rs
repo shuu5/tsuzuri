@@ -3,8 +3,7 @@
 //! 字数は要件 FR14 の上限に収め、規則の行 R-19 に拠る決め（「・」の連ね・括弧の入れ子）も見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::help::{Inline, Line, Note, note};
 
@@ -25,10 +24,6 @@ const LINES: [&str; 6] = [
     "▸",
     "{st:unknown} 付きは まだ数えていない種類がある",
 ];
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

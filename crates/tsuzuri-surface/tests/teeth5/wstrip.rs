@@ -2,12 +2,7 @@
 //! trunk が cargo の release の profile で面の wasm を組むこと（Trunk.toml と index.html）と、この file の歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
+use crate::common::{read, words_front};
 
 /// trim した行が角括弧で始まるなら、最初の角括弧の中の字（表の見出し）。
 fn heading(line: &str) -> Option<&str> {
@@ -105,67 +100,6 @@ fn wstrip_own_names_clean() {
     }
     assert_eq!(names.len(), 3, "{names:?}");
     names_avoid(names, &[words_front(), words_back()].concat());
-}
-
-/// 先の歯の filter の語の前半（55 語）。
-fn words_front() -> &'static [&'static str] {
-    &[
-        "accept_",
-        "account_",
-        "acctcore_",
-        "acctdoc_",
-        "acctframe_",
-        "accthb_",
-        "accthome_",
-        "acctled_",
-        "acctlook_",
-        "acctpcore_",
-        "acctproj_",
-        "acctsess_",
-        "acctwin_",
-        "acctwire_",
-        "askcard_",
-        "batchpanel_",
-        "board_min_",
-        "contract_form_",
-        "frame_",
-        "gapspage_",
-        "gquestion_",
-        "graph_",
-        "gview_",
-        "hbconf_",
-        "hbpost_",
-        "hbproc_",
-        "hbroute_",
-        "hook_",
-        "hsblock_",
-        "hsderive_",
-        "hspage_",
-        "ledgerblock_",
-        "mapgraph_",
-        "mapview_",
-        "nextstep_",
-        "nodepage_",
-        "parts_",
-        "pipe_",
-        "project_",
-        "question_",
-        "seatblock_",
-        "seatcard_",
-        "server_",
-        "skeleton_",
-        "stage_",
-        "stats_",
-        "steady_",
-        "topbar_",
-        "tz_",
-        "mlink_",
-        "gnav_",
-        "mkeys_",
-        "klink_",
-        "ilink_",
-        "afocus_",
-    ]
 }
 
 /// 先の歯の filter の語の後半（55 語）。

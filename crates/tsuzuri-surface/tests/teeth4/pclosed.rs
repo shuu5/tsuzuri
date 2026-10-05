@@ -2,25 +2,13 @@
 //! 見分け・段の字・hover の詳しく・Landed の列の今日の札・中核の字の写し・歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{NOW, read};
 use tsuzuri_contract::board::{PipelineCard, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_surface::project::pipeline::{
     CLOSED_STAGE, CLOSED_TAG, Lead, closed_card, columns, kcard,
 };
 use tsuzuri_surface::vocab::vocab;
-
-/// 着地済みの pipe_ の歯と同じ今（UTC の日の正午）。
-const NOW: u64 = 1_790_510_400;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn card(
     id: &str,

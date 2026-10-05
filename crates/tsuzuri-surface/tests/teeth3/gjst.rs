@@ -5,19 +5,12 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::common::{crate_dir, read};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_surface::project::askpage::ruling_text;
 use tsuzuri_surface::project::seat::{Span, hm, hmd, span_ticks};
 use tsuzuri_surface::view::{JST, JST_OFFSET, clock, clock_short, hhmm, jst};
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// (1) 時差の定数と印、日本時間の日の番号とその日の 0 時からの秒。
 #[test]

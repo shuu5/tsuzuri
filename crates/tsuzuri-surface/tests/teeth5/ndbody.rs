@@ -3,8 +3,7 @@
 //! 段の列と、読めない間の測れていないの 1 行を断言し、DOM（wasm の枝）の配線の字を block の file の範囲で照らす。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{ID, bead, read};
 use tsuzuri_contract::graph::{AroundDoc, NodeKind};
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
 use tsuzuri_contract::wire;
@@ -19,21 +18,10 @@ use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::md;
 
-const ID: &str = "t-1.2";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 /// block の file の DOM（wasm の枝）の字。
 fn dom() -> String {
     let src = read("src/project/nodebody.rs");
     src[src.find("mod dom {").expect("wasm の枝")..].to_string()
-}
-
-fn bead(s: &str) -> BeadId {
-    BeadId::new(s).expect("bead の id")
 }
 
 /// 中心の節点の種類と id を替えた近傍の電文（fixture は着地した歯 gsum と同じ file）。

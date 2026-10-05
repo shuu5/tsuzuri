@@ -3,8 +3,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::account::{self as contract_account, Heartbeat};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::SeatCard;
@@ -16,14 +16,6 @@ use tsuzuri_surface::account::heartbeat::{
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::seat::content;
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の 5 組（組の名 → 電文の型）。
 fn fixture() -> BTreeMap<String, SeatCard> {

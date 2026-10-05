@@ -3,14 +3,10 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::crate_dir;
 use tsuzuri_surface::project::{Folds, Module, fold_key_ok};
 use tsuzuri_surface::view::{Fetched, RETRY_MS, Settle, settle};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

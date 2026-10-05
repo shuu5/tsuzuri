@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use crate::common::at;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{AccountDoc, DormantSeat};
 use tsuzuri_contract::board::Reading;
@@ -54,12 +55,6 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
         .min()
         .unwrap_or(rest.len());
     &rest[..end]
-}
-
-/// `text` で最初に出る `word` の位置。
-fn at(text: &str, word: &str) -> usize {
-    text.find(word)
-        .unwrap_or_else(|| panic!("{word} が無い: {text}"))
 }
 
 /// (1) 休止中の席が無い電文（fixture の dormant は空の列）では chip も card も出さない。

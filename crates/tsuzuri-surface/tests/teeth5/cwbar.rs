@@ -2,8 +2,7 @@
 //! 純な関数（頼みの電文・一覧の段・応答の 1 行・窓の名と幅と語）を host で撃ち、窓の DOM（wasm の枝）は配線の字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::consult::{
     FindingId, FindingRow, Form, RequestId, RequestRow, WindowId, WindowRow, WindowState,
@@ -18,11 +17,6 @@ use tsuzuri_surface::topbar::{TODOS, Win, win_href, win_of_href};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::wins::frame_of;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// file の wasm の枝（`mod dom {` から後）。
 fn dom(rel: &str) -> String {

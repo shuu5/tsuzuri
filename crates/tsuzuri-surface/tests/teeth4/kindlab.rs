@@ -4,8 +4,9 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::common::{crate_dir, read};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{
     LedgerStats, UnreflectedCount, UnreflectedKind, UnreflectedList, UnreflectedRow,
@@ -17,14 +18,6 @@ use tsuzuri_surface::project::ledger::{
     UNREF_KIND_KEY, Unref, kind_label, kind_name, name_label, unref_list,
 };
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の指標の組（tests/fixtures/surface/ledger-stats.json）の 1 組。
 fn stats(set: &str) -> LedgerStats {

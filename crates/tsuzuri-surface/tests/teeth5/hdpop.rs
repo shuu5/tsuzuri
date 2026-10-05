@@ -3,9 +3,7 @@
 //! 理由は局面の出力の契約の部品の欄 why で、無ければまだ分からない。ほかの段の札は留め置きの欄を持たない。否定の見本は 1 欄だけ替える。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-use tsuzuri_contract::EpochSecs;
+use crate::common::{AT, WHY, read};
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::case::{CaseLinks, CasePart};
 use tsuzuri_contract::ledger::BeadId;
@@ -16,20 +14,11 @@ use tsuzuri_surface::widgets::pop::{
     stage_facts, with_why,
 };
 
-const NOW: EpochSecs = 1_790_000_000;
-const AT: EpochSecs = NOW - 7_200;
-
 /// 受付の断りの名と、止めの理由の字。
 const NAME: &str = "teeth-outside-write-set";
-const WHY: &str = "書く file の重なりを席が確かめる";
 
 /// 断りの名の平易な字（語の辞書の rf:teeth-outside-write-set の字・行 g-held-name）。
 const PLAIN: &str = "verify の歯の file が書く file の外";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn card(stage: Stage, reason: &str) -> PipelineCard {
     PipelineCard {

@@ -2,8 +2,7 @@
 //! 数えない字 ― にして測れていないの印を添えず未反映の列の最大と最小に数えず、1 種か 2 種が分からなければ今の数と印のまま出す。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedCount, UnreflectedKind};
@@ -11,10 +10,6 @@ use tsuzuri_contract::wire;
 use tsuzuri_surface::account::ledger::{self, HI, LO, LedRow, Sort};
 use tsuzuri_surface::account::projects::NONE_MARK;
 use tsuzuri_surface::project::ledger::NONE;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

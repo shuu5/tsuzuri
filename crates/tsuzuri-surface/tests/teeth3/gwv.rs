@@ -2,18 +2,9 @@
 //! （account の windows の WINS_KEY）に残す今の形と計画の決め d4 に揃えること、見本の語彙と同じ字であること。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_surface::account::windows::WINS_KEY;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 字 open_windows を鍵に持つ行から次の閉じ波括弧まで。
 fn block(text: &str) -> &str {

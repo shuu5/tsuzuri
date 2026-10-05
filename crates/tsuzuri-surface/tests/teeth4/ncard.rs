@@ -3,20 +3,11 @@
 //! card の値は host で組み、DOM は wasm の target のときだけなので、board の字で card の層の置き方を見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::GraphDoc;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::widgets::hover::{Card, ELLIPSIS, ROW_CHARS};
 use tsuzuri_surface::widgets::nodecard::{card_of, node_card, short_path};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture() -> GraphDoc {
     wire::decode(&read("../../tests/fixtures/surface/graph-doc.json"))

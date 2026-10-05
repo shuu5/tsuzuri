@@ -2,8 +2,7 @@
 //! 未反映の 2 段目（種類ごとの件数と見出し）・未反映の列の見出しの和（Σ）・台帳の表の未反映の列の最大と最小の印と、DOM の部分の字。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{a_stats, dom_of, read};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::stats::{CheckResult, LedgerStats, UnreflectedCount, UnreflectedKind};
@@ -16,25 +15,9 @@ use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ledger::{UNREF_KIND_KEY, kind_label, kind_name};
 use tsuzuri_surface::vocab::{SOURCE, vocab};
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-/// fixture の proj-a の台帳（Known）の複製。
-fn a_stats(doc: &AccountDoc) -> LedgerStats {
-    match &doc.projects[0].ledger {
-        Reading::Known(s) => s.clone(),
-        Reading::Unknown => panic!("fixture の proj-a の台帳が Known でない"),
-    }
 }
 
 /// proj-a の台帳の未反映を memo だけの n にした複製。
@@ -72,15 +55,6 @@ fn with_batch(result: CheckResult, count: u32) -> AccountDoc {
     check.result = result;
     check.count = count;
     doc
-}
-
-/// 字の「mod dom」より後（DOM の部分）。
-fn dom_of(rel: &str) -> String {
-    let text = read(rel);
-    let at = text
-        .find("mod dom")
-        .unwrap_or_else(|| panic!("{rel} に mod dom が無い"));
-    text[at..].to_string()
 }
 
 /// (5) 決定待ちの 2 段目は中核の束の承認の判じの件数（判じなかったか次の一手が Unknown は None と空の字）。

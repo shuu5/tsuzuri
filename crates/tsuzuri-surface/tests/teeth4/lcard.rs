@@ -3,21 +3,13 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::stats::LedgerStats;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::ledger::{BURN_SRC, burn_card};
 use tsuzuri_surface::vocab::{label, vocab};
 use tsuzuri_surface::widgets::hover::{Card, ROW_CHARS};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の組（組の名 → 電文）。
 fn set(name: &str) -> LedgerStats {

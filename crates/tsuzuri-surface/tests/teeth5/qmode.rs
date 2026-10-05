@@ -2,8 +2,7 @@
 //! card の 1 行は host の純な関数で撃ち、card の DOM（wasm の枝）と stylesheet は字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ask::{self, SumLine};
 use tsuzuri_surface::view::Fetched;
@@ -11,11 +10,6 @@ use tsuzuri_surface::widgets::sumpick::{self, ENG_KEY, PLAIN_KEY};
 
 const P: &str = "P-字 答えの欄を 1 つ置く";
 const E: &str = "E-字 qcard ごとに textarea";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn line(class: &'static str, key: &'static str, text: &str, marked: bool) -> SumLine {
     SumLine {

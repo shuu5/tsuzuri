@@ -2,8 +2,7 @@
 //! card の値は host の純な関数で撃ち、DOM の呼び手（wasm の枝）は字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::{GraphNode, NodeKind};
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::vocab::vocab;
@@ -12,11 +11,6 @@ use tsuzuri_surface::widgets::sumpick::{ENG_KEY, PLAIN_KEY};
 
 const P: &str = "P字やさしい";
 const E: &str = "E字かたい";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn node(plain: Option<&str>, eng: Option<&str>) -> GraphNode {
     GraphNode {

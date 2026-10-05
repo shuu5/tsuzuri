@@ -3,10 +3,9 @@
 //! 本文と記録の block と同じ 1 本の引きの読みを使う DOM（wasm の枝）の配線の字を照らす。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{ID, bead, read, span};
 use tsuzuri_contract::graph::{AroundDoc, NodeKind};
-use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
+use tsuzuri_contract::ledger::{LedgerItem, LedgerRow};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::node::{
@@ -16,29 +15,10 @@ use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::sumpick::{BODY_KEY, ENG_KEY, PLAIN_KEY};
 
-const ID: &str = "t-1.2";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
-fn span(src: &str, start: &str, end: &str) -> String {
-    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
-    let rest = &src[at..];
-    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
-    rest[..to].to_string()
-}
-
 /// file の wasm の枝の字。
 fn dom(rel: &str) -> String {
     let src = read(rel);
     src[src.find("mod dom {").expect("wasm の枝")..].to_string()
-}
-
-fn bead(s: &str) -> BeadId {
-    BeadId::new(s).expect("bead の id")
 }
 
 /// 中心の節点を memo の bead にし、2 つの概要を替えた近傍の電文（fixture は着地した歯 gsum と同じ file）。

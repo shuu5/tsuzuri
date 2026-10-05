@@ -3,11 +3,7 @@
 //! この file の歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
+use crate::common::crate_dir;
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

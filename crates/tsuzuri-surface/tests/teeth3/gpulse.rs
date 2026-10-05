@@ -5,6 +5,7 @@
 use std::fmt::Debug;
 use std::path::PathBuf;
 
+use crate::common::at;
 use tsuzuri_surface::fresh::{PULSE_MS, Pulse, pulse_class};
 
 fn read(rel: &str) -> String {
@@ -26,12 +27,6 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
         .min()
         .unwrap_or(rest.len());
     &rest[..end]
-}
-
-/// `text` で最初に出る `word` の位置。
-fn at(text: &str, word: &str) -> usize {
-    text.find(word)
-        .unwrap_or_else(|| panic!("{word} が無い: {text}"))
 }
 
 /// 型の持つ trait（Pulse の Default の値を渡して組めることで見る）。

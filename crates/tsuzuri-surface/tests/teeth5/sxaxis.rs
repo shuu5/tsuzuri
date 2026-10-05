@@ -2,8 +2,7 @@
 //! （C_HH・SAXIS・SAXIS_M・axis_labels と mod dom の axis_view）と、段の class が stylesheet に在ることと、この file の歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{AT_OFF, crate_dir};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::session::{C_HH, COLUMNS, SAXIS, SAXIS_M, Sort, axis_labels, table};
@@ -13,15 +12,8 @@ use tsuzuri_surface::vocab::vocab;
 /// fixture の電文の at（2026-09-27 12:00Z・日本時間の 21:00・正時）。
 const AT: u64 = 1_790_510_400;
 
-/// 正時でない時点（2026-09-27 12:40Z・日本時間の 21:40）。
-const AT_OFF: u64 = 1_790_512_800;
-
 /// UTC の日の変わり目の時点（2026-09-27 00:00Z・日本時間の 09:00）。
 const AT_DAY: u64 = 1_790_467_200;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

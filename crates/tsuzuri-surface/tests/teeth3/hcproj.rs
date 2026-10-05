@@ -2,8 +2,7 @@
 //! 群の見出しの chip の hover の card（見本の nx・ledCard・pcnt・seatCard・gproj・group の枝）と、DOM の部分の字。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{check, fn_body, read, squeeze, tag};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::{AccountDoc, ProjectRow};
 use tsuzuri_contract::board::{NextMove, Reading};
@@ -19,26 +18,9 @@ use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::hover::Card;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-/// card の 4 行と詳しくを比べる。
-fn check(card: &Card, (title, kind): (&str, &str), value: &str, src: &str, more: &[&str]) {
-    assert_eq!(card.title, title);
-    assert_eq!(card.kind, kind, "{title} の種類");
-    assert_eq!(card.value, value, "{title} の値");
-    assert_eq!(card.src, src, "{title} の出所");
-    assert_eq!(card.more, more, "{title} の詳しく");
 }
 
 /// 行の next を書き換える（Known の行だけ）。
@@ -480,38 +462,6 @@ fn dom_part() -> String {
     let text = read("src/account/projects.rs");
     let at = text.find("mod dom {").expect("projects.rs に mod dom が在る");
     text[at + "mod dom {".len()..].to_string()
-}
-
-/// DOM の部分の fn の本体（宣言の字から、次の行頭 4 空白の fn か pub fn の宣言の前まで・無ければ終わりまで）。
-fn fn_body(dom: &str, name: &str) -> String {
-    let start = dom
-        .find(&format!("fn {name}("))
-        .unwrap_or_else(|| panic!("DOM の部分に fn {name} が無い"));
-    let rest = &dom[start..];
-    let first = rest.find('\n').map_or(rest.len(), |i| i + 1);
-    let mut end = rest.len();
-    let mut at = first;
-    for line in rest[first..].split_inclusive('\n') {
-        if line.starts_with("    fn ") || line.starts_with("    pub fn ") {
-            end = at;
-            break;
-        }
-        at += line.len();
-    }
-    rest[..end].to_string()
-}
-
-/// 本体の中の字 head の所から最初の > までの tag。
-fn tag(body: &str, head: &str) -> String {
-    let at = body
-        .find(head)
-        .unwrap_or_else(|| panic!("本体に字 {head} が無い"));
-    let rest = &body[at..];
-    rest[..rest.find('>').unwrap_or(rest.len())].to_string()
-}
-
-fn squeeze(text: &str) -> String {
-    text.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
 /// (8) DOM の部分が 5 つの欄と 4 つの span と群の chip に card を付ける。

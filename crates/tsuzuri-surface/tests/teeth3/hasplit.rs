@@ -3,15 +3,7 @@
 //! card の値は着地済みの歯（hcproj・hcnx・hcsess・hcled・hacols・hnunk）が cards の path で見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
+use crate::common::read;
 
 /// projects.rs から移した 8 つの関数。
 const FNS: [&str; 8] = [

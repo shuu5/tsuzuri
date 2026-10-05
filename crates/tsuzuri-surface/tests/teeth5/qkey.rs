@@ -4,19 +4,14 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
 
+use crate::common::{read, words_front};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::{Body, NOT_READ, ask, batch};
 use tsuzuri_surface::view::Fetched;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture_text() -> String {
     read("../../tests/fixtures/surface/question-list.json")
@@ -198,67 +193,6 @@ fn qkey_own_names_clean() {
     }
     assert_eq!(names.len(), 4, "{names:?}");
     names_avoid(names, &[words_front(), words_back()].concat());
-}
-
-/// 先の歯の filter の語の前半（55 語）。
-fn words_front() -> &'static [&'static str] {
-    &[
-        "accept_",
-        "account_",
-        "acctcore_",
-        "acctdoc_",
-        "acctframe_",
-        "accthb_",
-        "accthome_",
-        "acctled_",
-        "acctlook_",
-        "acctpcore_",
-        "acctproj_",
-        "acctsess_",
-        "acctwin_",
-        "acctwire_",
-        "askcard_",
-        "batchpanel_",
-        "board_min_",
-        "contract_form_",
-        "frame_",
-        "gapspage_",
-        "gquestion_",
-        "graph_",
-        "gview_",
-        "hbconf_",
-        "hbpost_",
-        "hbproc_",
-        "hbroute_",
-        "hook_",
-        "hsblock_",
-        "hsderive_",
-        "hspage_",
-        "ledgerblock_",
-        "mapgraph_",
-        "mapview_",
-        "nextstep_",
-        "nodepage_",
-        "parts_",
-        "pipe_",
-        "project_",
-        "question_",
-        "seatblock_",
-        "seatcard_",
-        "server_",
-        "skeleton_",
-        "stage_",
-        "stats_",
-        "steady_",
-        "topbar_",
-        "tz_",
-        "mlink_",
-        "gnav_",
-        "mkeys_",
-        "klink_",
-        "ilink_",
-        "afocus_",
-    ]
 }
 
 /// 先の歯の filter の語の後半（55 語）。

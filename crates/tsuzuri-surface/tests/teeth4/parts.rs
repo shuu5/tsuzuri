@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::common::crate_dir;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList};
 use tsuzuri_contract::question::QuestionList;
@@ -20,10 +21,6 @@ use tsuzuri_surface::widgets::hover::{
     Card, ELLIPSIS, GRACE_MS, OFFSET_X, OFFSET_Y, Point, ROW_CHARS, ROWS, Rect, Size, clip, keeps,
     place,
 };
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 /// src の下の .rs の file の全部（path の順）。
 fn sources() -> Vec<(PathBuf, String)> {

@@ -2,15 +2,10 @@
 //! 決め方は host の純粋な関数 mode_start で撃ち、保存と URL を撃つ所の配線は source の字で見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::store::{MODE_KEY, ModeStart, mode_start};
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     let path = crate_dir().join(rel);

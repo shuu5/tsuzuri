@@ -4,18 +4,13 @@
 //! （DOM が組めることは xtask の surface-build）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::board::{PipelineCard, Stage};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::ask::{age as ask_age, posted_tip};
 use tsuzuri_surface::project::pipeline::{Kcard, NO_AGE, age, age_at, kcard};
 use tsuzuri_surface::widgets::help::{Inline, expert_note};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

@@ -5,8 +5,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::graph::{GraphDoc, GraphSource, NodeKind};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::mapview::band::{
@@ -16,14 +16,6 @@ use tsuzuri_surface::mapview::{decode, encode, natural, param, set_param};
 use tsuzuri_surface::project::{NO_CONTENT, NOT_READ, map};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture_text() -> String {
     read("../../tests/fixtures/surface/graph-doc.json")

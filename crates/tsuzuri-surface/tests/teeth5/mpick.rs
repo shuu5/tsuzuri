@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use crate::common::{E, P, X};
 use tsuzuri_contract::graph::AroundDoc;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::Mode;
@@ -12,10 +13,6 @@ use tsuzuri_surface::vocab::vocab;
 use tsuzuri_surface::widgets::sumpick::{
     BODY_KEY, ELLIPSIS, ENG_KEY, PLAIN_KEY, POP_SUM_MAX, Picked, fold, other, pick,
 };
-
-const P: &str = "P-字は画面を 2 つにする話です。";
-const E: &str = "E-字 surface を 2 面にする。";
-const X: &str = "X-字 本文の頭の 1 行";
 
 fn picked(key: &'static str, text: &str, marked: bool) -> Option<Picked> {
     Some(Picked {

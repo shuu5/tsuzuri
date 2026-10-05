@@ -3,9 +3,7 @@
 //! 札が無いかほかの段の bead は出さない。否定の見本は 1 欄だけ替える。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-use tsuzuri_contract::EpochSecs;
+use crate::common::{AT, NOW, WHY, read};
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
 use tsuzuri_contract::case::{CaseLinks, CasePart};
 use tsuzuri_contract::ledger::BeadId;
@@ -15,15 +13,6 @@ use tsuzuri_surface::widgets::keyline::HOLD;
 use tsuzuri_surface::widgets::pop::{
     HELD_KEYS, Src, UNKNOWN_KEY, Val, at_text, held_facts, stage_facts,
 };
-
-const NOW: EpochSecs = 1_790_000_000;
-const AT: EpochSecs = NOW - 7_200;
-const WHY: &str = "書く file の重なりを席が確かめる";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn card(stage: Stage) -> PipelineCard {
     PipelineCard {

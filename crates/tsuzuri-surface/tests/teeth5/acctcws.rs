@@ -3,8 +3,7 @@
 //! fixture は tests/fixtures/account/acct-doc.json（読むだけ）で、3 行目（proj-b の席）を相談の窓の行に替えて試す。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::surface::SeatRole;
@@ -14,11 +13,6 @@ use tsuzuri_surface::account::session::{
 };
 use tsuzuri_surface::project::state_key;
 use tsuzuri_surface::vocab::{label, vocab};
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の 3 行目を窓 cw1 の行にした電文（口座 acct-1・段 Running を持たせても出さない）。
 fn doc() -> AccountDoc {

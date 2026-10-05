@@ -3,22 +3,13 @@
 //! （一覧の面の行の要約の欄は行 m-map-compact で消した）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, GraphDoc, GraphNode};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::node::{self, NO_SRC, NO_SUMMARY, SUMMARY_MARKED, SUMMARY_NONE};
 use tsuzuri_surface::widgets::hover::Card;
 use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_LINE, card_for, gist, node_card};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn graph_doc() -> GraphDoc {
     wire::decode(&read("../../tests/fixtures/surface/graph-doc.json"))

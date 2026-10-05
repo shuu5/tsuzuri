@@ -6,6 +6,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::common::FIXTURE;
 use tsuzuri_surface::frame::PageId;
 use tsuzuri_surface::project::node::kept_subject;
 use tsuzuri_surface::project::nodearound::{self, PageState, state};
@@ -95,8 +96,6 @@ const FILTERS: [&str; 80] = [
     "plimit_",
     "bport_",
 ];
-
-const FIXTURE: &str = "../../tests/fixtures/surface/around-doc.json";
 
 /// fixture の中心の行の題。
 const CENTER_TITLE: &str = "project board を 1 枚の頁で見る";

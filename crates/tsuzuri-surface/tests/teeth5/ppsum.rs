@@ -3,8 +3,7 @@
 //! 畳みの字と口の語の鍵と、層の DOM（wasm の枝）の 1 本の引きの読みと台帳の字の印の字を断言する。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{E, P, X, read};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
 use tsuzuri_contract::wire;
@@ -15,15 +14,6 @@ use tsuzuri_surface::widgets::pop::{
     Pop, SUM_CLASS, SUM_KEYS, Src, Sum, item_path, pop, sum_text, with_sum,
 };
 use tsuzuri_surface::widgets::sumpick::{BODY_KEY, ENG_KEY, PLAIN_KEY, Picked};
-
-const P: &str = "P-字は画面を 2 つにする話です。";
-const E: &str = "E-字 surface を 2 面にする。";
-const X: &str = "X-字 本文の頭の 1 行";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 1 本の引きの電文（id と本文だけを替える）。
 fn item(id: &str, description: &str) -> Fetched {

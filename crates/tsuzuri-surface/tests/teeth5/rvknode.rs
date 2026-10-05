@@ -2,8 +2,7 @@
 //! 近傍の電文と問いの 1 本の引きの電文は歯の中で組む。DOM の歯は src/project/node.rs の字 `mod dom {` の後の字を見る。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::graph::{AroundDoc, AroundRow, EdgeType, Fold, GraphNode, NodeKind};
 use tsuzuri_contract::ledger::{BeadId, LedgerItem, LedgerRow};
 use tsuzuri_contract::surface::{RevokeRequest, RevokeResponse, RulingId};
@@ -16,10 +15,6 @@ use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
 
 const ID: &str = "rv.1:20260928T0441Z-1";
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

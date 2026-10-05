@@ -5,8 +5,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::{GroupRow, Reading};
 use tsuzuri_contract::seat::SeatCard;
@@ -21,14 +21,6 @@ use tsuzuri_surface::project::seat::{
     PARK_KIND, PARK_SRC, PARK_VALUE, group_head, low, park_card, park_of,
 };
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 席の card の fixture の組 wait（群の行を区画の行の写しに替える前）。
 fn wait_card() -> SeatCard {

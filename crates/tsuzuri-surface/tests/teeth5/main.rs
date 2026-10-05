@@ -3,6 +3,7 @@
 #![cfg(test)]
 
 mod acctcws;
+mod common;
 mod cwbar;
 mod cwpop;
 mod fkeep;

@@ -3,8 +3,7 @@
 //! 器の局面の出力の無さを言う。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{UnreflectedKind, UnreflectedList};
@@ -14,10 +13,6 @@ use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::ledger::{UNREF_UNKNOWN, unref_list};
 use tsuzuri_surface::view::Fetched;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

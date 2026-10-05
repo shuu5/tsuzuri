@@ -4,8 +4,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::read;
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
@@ -14,14 +14,6 @@ use tsuzuri_surface::project::next::{self, Big, KEYS, Link, NONE_LINE, PIPE_LINK
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ, pipeline};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// fixture の 4 組（組の名 → 電文の字）。
 fn fixture() -> BTreeMap<String, String> {

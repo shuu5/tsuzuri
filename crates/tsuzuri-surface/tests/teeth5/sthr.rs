@@ -3,8 +3,7 @@
 //! 電文・窓の行・値が読めなければ線を引かず ┆? を出し、値が 100 を越えれば線は 100 で止めて字は値のまま出す。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::crate_dir;
 use tsuzuri_contract::account::{AccountDoc, WindowCap};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire;
@@ -12,10 +11,6 @@ use tsuzuri_surface::account::home::cap_of;
 use tsuzuri_surface::project::seat::{THR_MARK, Thr, WINDOWS, seat_caps, thr};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::label;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

@@ -2,27 +2,13 @@
 //! 保存の鍵と保存の字の決め方を純な関数で断言し、保存の口（wasm の枝）と block の DOM の配線の字を照らす。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{read, span};
 use tsuzuri_surface::project::nodebody::FOLDS;
 use tsuzuri_surface::store::{
     FOLD_KEYS, FOLD_OPEN, FOLD_SHUT, fold_start, fold_store_key, fold_text,
 };
 
 const WASM: &str = "#[cfg(target_arch = \"wasm32\")]";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
-fn span(src: &str, start: &str, end: &str) -> String {
-    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
-    let rest = &src[at..];
-    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
-    rest[..to].to_string()
-}
 
 #[test]
 fn fkeep_keys_by_part() {

@@ -2,22 +2,8 @@
 //! 印を置く pointer の種類と輪が先の決まりを純な関数で断言し、DOM（wasm の枝）の配線の字と stylesheet の規則を照らす。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{read, span};
 use tsuzuri_surface::ledgerlist::{HOVER_POINTER, hover_lit, hover_on};
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-/// file の字の start の字から end の字の前まで（どちらも在ることを断言する）。
-fn span(src: &str, start: &str, end: &str) -> String {
-    let at = src.find(start).unwrap_or_else(|| panic!("{start} が無い"));
-    let rest = &src[at..];
-    let to = rest.find(end).unwrap_or_else(|| panic!("{end} が無い"));
-    rest[..to].to_string()
-}
 
 #[test]
 fn lhov_pointer_mouse_only() {

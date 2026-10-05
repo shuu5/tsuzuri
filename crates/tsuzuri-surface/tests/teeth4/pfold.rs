@@ -1,8 +1,7 @@
 //! 行 g-pipe-fold の歯: 開いた列の畳む button（出す列・URL の col から外す字・button の字・DOM の字）と歯の名。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{NOW, read};
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading};
 use tsuzuri_contract::wire;
 use tsuzuri_surface::frame::Mode;
@@ -10,14 +9,6 @@ use tsuzuri_surface::project::pipeline::{
     CLOSE, Column, LANES, SHOW, columns, open_columns, with_closed, with_open,
 };
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture_cards() -> Vec<PipelineCard> {
     let text = read("../../tests/fixtures/surface/pipeline-board.json");
@@ -27,9 +18,6 @@ fn fixture_cards() -> Vec<PipelineCard> {
     };
     cards
 }
-
-/// 着地済みの pipe_ の歯と同じ今（UTC の日の正午）。
-const NOW: u64 = 1_790_510_400;
 
 fn board() -> Vec<Column> {
     columns(&fixture_cards(), &[], NOW)

@@ -2,17 +2,11 @@
 //! 口の先の URL（純な関数）を host で撃ち、吹き出しの層の DOM（wasm の枝）は配線の字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_surface::consultwin::{POP_KEY, consult_href};
 use tsuzuri_surface::frame::Mode;
 use tsuzuri_surface::topbar::{Win, win_of_href};
 use tsuzuri_surface::vocab::vocab;
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 口の先は相談の窓を開いた home の頁の URL で、bead の id を query の id に置き（%XX で包む）、窓と id に読み戻る。
 #[test]

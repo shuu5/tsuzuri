@@ -2,8 +2,7 @@
 //! 経過の字の境・段から列への対応は契約の型の関数・着地済みの外形と依存（札の hover の card の 4 行の歯は行 g-dead-sweep-a で消した）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineBoard, PipelineCard, PipelineColumn, Reading, Stage};
 use tsuzuri_contract::ledger::{BeadId, LedgerList, LedgerRow};
@@ -15,14 +14,6 @@ use tsuzuri_surface::project::pipeline::{
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
 use tsuzuri_surface::view::Fetched;
 use tsuzuri_surface::vocab::vocab;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn fixture_text() -> String {
     read("../../tests/fixtures/surface/pipeline-board.json")

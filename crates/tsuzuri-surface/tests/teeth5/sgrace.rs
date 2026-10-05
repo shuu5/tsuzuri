@@ -4,8 +4,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::crate_dir;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::seat::{Pressure, SeatCard};
 use tsuzuri_contract::wire;
@@ -25,10 +25,6 @@ const REFUSED_OLD: u64 = 1_790_410_400;
 
 /// 4 つの欄の電文の鍵。
 const KEYS: [&str; 4] = ["move_to", "grace_until", "refused", "pressure"];
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

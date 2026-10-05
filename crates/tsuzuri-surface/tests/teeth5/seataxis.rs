@@ -3,8 +3,8 @@
 #![cfg(test)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use crate::common::{AT_OFF, crate_dir};
 use tsuzuri_contract::seat::SeatCard;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::project::Body;
@@ -14,13 +14,6 @@ use tsuzuri_surface::vocab::vocab;
 
 /// fixture の組の時点（2026-09-27 12:00Z・日本時間の 21:00・正時）。
 const AT: u64 = 1_790_510_400;
-
-/// 正時でない時点（2026-09-27 12:40Z・日本時間の 21:40）。
-const AT_OFF: u64 = 1_790_512_800;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
 
 fn read(rel: &str) -> String {
     std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))

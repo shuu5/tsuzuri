@@ -2,27 +2,11 @@
 //! （見本の ledMore の `mi sp` と ledger.js の spark14）。字は project の ledger の module の spark と spark_svg で組む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
-use tsuzuri_contract::account::AccountDoc;
+use crate::common::{fixture, read};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::LedgerStats;
-use tsuzuri_contract::wire;
 use tsuzuri_surface::account::ledger::{Cells, LedRow, MORE, Sort, table};
 use tsuzuri_surface::project::ledger::{SPARK_H, SPARK_W, spark, spark_svg};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn fixture() -> AccountDoc {
-    wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
-        .expect("fixture が AccountDoc として読める")
-}
 
 fn known(row: &LedRow) -> &Cells {
     match &row.cells {

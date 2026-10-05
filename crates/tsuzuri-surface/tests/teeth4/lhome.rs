@@ -3,17 +3,8 @@
 //! 前の一覧の組と件数の関数（`listed`・`body`・`count`）の歯は行 g-list-sweep で外した。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_surface::project::ledger::{CLOSED, EMPTY, FOLDS, NO_OPEN};
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// (5) 一覧に出さない状態の字と閉じていない行が無いときの 1 行は今のまま・畳みは今のまま・block の中身は module ledgerlist の
 /// view を描き（行 g-list-groups）、見出しの件数の chip は無い（配置の表と件数の chip は行 g-ledger-trim で外した）。

@@ -4,18 +4,9 @@
 //! DOM は wasm の target のときだけなので src の字を読む。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::read;
 use tsuzuri_contract::board::Stage;
 use tsuzuri_surface::account::session::STALLED_STAGES;
-
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 /// 空白を除いた字。
 fn squash(text: &str) -> String {

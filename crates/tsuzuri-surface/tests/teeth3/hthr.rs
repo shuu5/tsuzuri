@@ -2,8 +2,7 @@
 //! 電文の caps と notices から描く（面は使った割合と閾値を比べない・R-22）。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{filled, read};
 use tsuzuri_contract::account::{AccountDoc, GroupNotice, WindowCap};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::wire::decode;
@@ -14,24 +13,9 @@ use tsuzuri_surface::account::home::{
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::view::Fetched;
 
-fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn read(rel: &str) -> String {
-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn fixture() -> AccountDoc {
     decode(&read("../../tests/fixtures/account/acct-doc.json"))
         .expect("fixture が AccountDoc として読める")
-}
-
-fn filled<T: std::fmt::Debug>(body: Body<T>) -> T {
-    match body {
-        Body::Filled(v) => v,
-        other => panic!("中身ありでない: {other:?}"),
-    }
 }
 
 fn groups(doc: &AccountDoc) -> Vec<GroupView> {

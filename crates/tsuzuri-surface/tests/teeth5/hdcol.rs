@@ -3,8 +3,7 @@
 //! Blocked の列の見出しの数は Blocked と Held の内訳、札の要の 1 行は印の語と止めてからの経過。否定の見本は 1 欄だけ替える。
 #![cfg(test)]
 
-use std::path::PathBuf;
-
+use crate::common::{NOW, read};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
 use tsuzuri_contract::ledger::BeadId;
@@ -14,15 +13,8 @@ use tsuzuri_surface::widgets::keyline::{
     HELD_MARKS, HOLD, HeldBy, LINE_KEYS, LineSrc, held_by, key_line,
 };
 
-const NOW: EpochSecs = 1_790_000_000;
-
 /// 受付の断りの名。
 const NAME: &str = "teeth-outside-write-set";
-
-fn read(rel: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
 
 fn card(x: &str, stage: Stage, reason: Option<&str>, since: Option<EpochSecs>) -> PipelineCard {
     PipelineCard {
