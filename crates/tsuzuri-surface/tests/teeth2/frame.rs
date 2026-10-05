@@ -158,9 +158,9 @@ fn frame_no_heading_words_in_code() {
     }
 }
 
-/// stylesheet の class の名（selector の `.名`）。
+/// stylesheet の class の名（selector の `.名`・基の style.css と style の部品の両方）。
 fn stylesheet_classes() -> BTreeSet<String> {
-    let css = read("style.css");
+    let css = read("style.css") + &tsuzuri_surface::style::joined();
     let mut text = String::new();
     let mut rest = css.as_str();
     while let Some(i) = rest.find("/*") {

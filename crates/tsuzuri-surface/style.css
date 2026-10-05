@@ -1,5 +1,5 @@
 /* 面の stylesheet（便 g-frame）: 見本の docs/design/mock3/ui.css の写し。class の名は変えない。
- * 面の crate で足した規則は末尾の節だけに置く（画面が使う class は全部この file に在る・歯 frame_classes_are_in_stylesheet）。
+ * 新しい selector だけを足す行は style/ の部品の file に書く（selector は 1 つの file だけが持つ・判断の記録 ADR-58・歯 stparts_selectors_owned_once）。
  *
  * tsuzuri mock v3 — 共通の CSS（外部の lib 0・project dashboard と account board で共有）
  * token: 出所の帯 7（色は帯ごとに 1 色）・段 4・状態 5・8pt grid（4 は半刻み）・dark mode */

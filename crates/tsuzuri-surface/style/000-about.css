@@ -1,0 +1,5 @@
+/* 面の stylesheet の部品の dir（行 g-style-parts・判断の記録 ADR-58）。
+ * 新しい selector だけを足す行は、行 id を名にした file をここに置く（名は英小文字か数字で始まり、英小文字と数字と - だけ）。
+ * 部品は名の byte の順につなぎ、wasm が面を描く前に head の末尾へ <style> として入れる（基の style.css の後に効く）。
+ * selector の字は、基と部品の全部の中で 1 つの file だけが持つ。既にある selector を直す行は、それを持つ file を書く。
+ * この file は規則を持たない（dir を空にしない・組み立ての script は dir が無いと毎回走る）。 */

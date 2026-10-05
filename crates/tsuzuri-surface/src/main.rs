@@ -1,8 +1,10 @@
 //! 面の入口（trunk が wasm の target で組み立て、body に board を載せる）。
 //! URL の query の board が account のときだけ account board を、ほかは今のまま project board を載せる。
+//! 載せる前に stylesheet の部品を head の末尾へ入れる（行 g-style-parts）。
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    tsuzuri_surface::style::inject();
     let search = leptos::prelude::window()
         .location()
         .search()
