@@ -1,0 +1,789 @@
+diff --git a/crates/tsuzuri-contract/src/host.rs b/crates/tsuzuri-contract/src/host.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ba0236fe3d639133c4efb23d3600caa20043c4f7
+--- /dev/null
++++ b/crates/tsuzuri-contract/src/host.rs
+@@ -0,0 +1,103 @@
++//! host の負荷と書きの電文（要件 FR12・判断の記録 ADR-27 の決定 (5)・ADR-31 の決定 (5)）。
++//! 材料は kernel の file（負荷・詰まり・メモリ・scope ごとのメモリ・装置の書いた区の数）と、host の面の
++//! 書きの測りの表が名指す摩耗の記録で、server はその場で読んで返す（database に書かない・条 P-20）。
++//! 値は整数で持つ（負荷と詰まりは 100 倍・量は byte）。線を越えたかは中核の 1 つの関数が判じ、面は判じ直さない。
++
++use serde::{Deserialize, Serialize};
++
++use crate::EpochSecs;
++use crate::board::Reading;
++
++/// host の口の path（面と server はこの定数を使う）。
++pub const PATH: &str = "/api/host";
++
++/// 注意の色の線を持つ測り（規則の行 R-42）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum Gauge {
++    /// 1 分の負荷の core 比。
++    Load,
++    /// io の詰まり（PSI の full の avg60）。
++    Io,
++    /// memory の詰まり（PSI の full の avg60）。
++    Memory,
++}
++
++impl Gauge {
++    /// 全部の測り（この順）。
++    pub const ALL: [Gauge; 3] = [Gauge::Load, Gauge::Io, Gauge::Memory];
++}
++
++/// 負荷（1・5・15 分の load の 100 倍と、動いている core の数）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Load {
++    pub one: u32,
++    pub five: u32,
++    pub fifteen: u32,
++    pub cores: u32,
++}
++
++/// 詰まりの 1 種（PSI の avg10 と avg60 の % の 100 倍）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Stall {
++    pub avg10: u32,
++    pub avg60: u32,
++}
++
++/// 詰まり（cpu の some・memory の full・io の full・種ごとに読めなければ Unknown）。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct Pressure {
++    pub cpu_some: Reading<Stall>,
++    pub memory_full: Reading<Stall>,
++    pub io_full: Reading<Stall>,
++}
++
++/// メモリ（byte・全体と使える量と swap の全体と空き）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Memory {
++    pub total: u64,
++    pub available: u64,
++    pub swap_total: u64,
++    pub swap_free: u64,
++}
++
++/// 上限を持つ scope の 1 つ（cgroup の名・今の量・上限・byte）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct ScopeMemory {
++    pub name: String,
++    pub current: u64,
++    pub max: u64,
++}
++
++/// 摩耗（smartctl の JSON の値・記録の時刻・使った割合・書いた byte・予備の割合・媒体の誤りの数）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Wear {
++    pub read_at: EpochSecs,
++    pub used_pct: u8,
++    pub written: u64,
++    pub spare_pct: u8,
++    pub media_errors: u64,
++}
++
++/// 装置の 1 つ（host の面の書きの測りの表の名・書きの速さ byte/s・摩耗）。
++/// 速さは前の読みとの差から導き、前の読みが無い・数えが戻った・間が 0 の時は Unknown。
++/// 摩耗は表の行が記録の path を持たなければ None、持って読めなければ Some(Unknown)。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct DeviceWrite {
++    pub name: String,
++    pub rate: Reading<u64>,
++    pub wear: Option<Reading<Wear>>,
++}
++
++/// host の口の電文（組んだ時刻・負荷・詰まり・メモリ・上限を持つ scope〔埋まりの多い順〕・装置〔表の順〕・
++/// 線を越えた測り〔`Gauge::ALL` の順・空なら注意なし〕）。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct HostDoc {
++    pub at: EpochSecs,
++    pub load: Reading<Load>,
++    pub pressure: Pressure,
++    pub memory: Reading<Memory>,
++    pub scopes: Reading<Vec<ScopeMemory>>,
++    pub devices: Vec<DeviceWrite>,
++    pub over: Vec<Gauge>,
++}
+diff --git a/crates/tsuzuri-contract/src/lib.rs b/crates/tsuzuri-contract/src/lib.rs
+index e6151627e0722413f3d66d9e6c44a4a58c1e900c..0f4385b77685c27b39610f68d20483458ba32b3e 100644
+--- a/crates/tsuzuri-contract/src/lib.rs
++++ b/crates/tsuzuri-contract/src/lib.rs
+@@ -7,6 +7,7 @@ pub mod board;
+ pub mod case;
+ pub mod consult;
+ pub mod graph;
++pub mod host;
+ pub mod ledger;
+ pub mod notice;
+ pub mod project;
+diff --git a/crates/tsuzuri-core/src/hostload.rs b/crates/tsuzuri-core/src/hostload.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9978b704c499c131420d1d3b3b429b495df6e2a7
+--- /dev/null
++++ b/crates/tsuzuri-core/src/hostload.rs
+@@ -0,0 +1,307 @@
++//! host の負荷と書きの読み（要件 FR12・判断の記録 ADR-27 の決定 (5)・ADR-31 の決定 (5)）。
++//! 入力は kernel の file の字（loadavg・動いている cpu の範囲・PSI の 3 種・meminfo・scope の memory.current と
++//! memory.max・装置の stat）と、smartctl の JSON の字と、host の面の書きの測りの表の字。境界が読んで渡し、ここは
++//! 字を値にして電文を組むだけ（file も時計も触らない）。線を越えたかの判じは `over` の 1 つだけで、線の値は
++//! 規則の行 R-42 の値を写した定数（面は判じ直さない・条 P-21）。
++
++use serde_json::Value;
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::{
++    DeviceWrite, Gauge, HostDoc, Load, Memory, Pressure, ScopeMemory, Stall, Wear,
++};
++
++/// 1 分の負荷の core 比の線（100 倍・1.0 を越えたら注意・規則の行 R-42）。
++pub const LOAD_WARN: u32 = 100;
++
++/// io の詰まりの線（PSI の full の avg60 の % の 100 倍・5% を越えたら注意・規則の行 R-42）。
++pub const IO_FULL_WARN: u32 = 500;
++
++/// memory の詰まりの線（PSI の full の avg60 の % の 100 倍・1% を越えたら注意・規則の行 R-42）。
++pub const MEMORY_FULL_WARN: u32 = 100;
++
++/// 装置の stat の区の大きさ（byte・kernel の数えの単位）。
++pub const SECTOR_BYTES: u64 = 512;
++
++/// smartctl の NVMe の書いた量の単位（byte・1,000 区）。
++pub const DATA_UNIT_BYTES: u64 = 512_000;
++
++/// 電文に載せる scope の数の上限（埋まりの多い順）。
++pub const SCOPES_SHOWN: usize = 5;
++
++/// host の面の書きの測りの表の見出し（器の表と同じ字）。
++pub const BUDGET_HEADER: &str = "[[write-budget]]";
++
++/// 上限を持つかもしれない scope の 1 つの字（cgroup の名・memory.current と memory.max の字・読めなければ None）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct ScopeTexts {
++    pub name: String,
++    pub current: Option<String>,
++    pub max: Option<String>,
++}
++
++/// 装置の 1 つの材料（表の名・境界が `rate` で導いた速さ・摩耗の記録の字〔表に path が無ければ None・
++/// 在って読めなければ Some(None)〕）。
++#[derive(Debug, Clone, PartialEq)]
++pub struct DeviceTexts {
++    pub name: String,
++    pub rate: Reading<u64>,
++    pub wear: Option<Option<String>>,
++}
++
++/// 電文の材料の字（どれも読めなければ None・scope は dir を読めなければ None）。
++#[derive(Debug, Clone, PartialEq, Default)]
++pub struct HostTexts {
++    pub loadavg: Option<String>,
++    pub online: Option<String>,
++    pub psi_cpu: Option<String>,
++    pub psi_memory: Option<String>,
++    pub psi_io: Option<String>,
++    pub meminfo: Option<String>,
++    pub scopes: Option<Vec<ScopeTexts>>,
++    pub devices: Vec<DeviceTexts>,
++}
++
++/// host の面の書きの測りの表の 1 行（名・stat の path・摩耗の記録の path）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct BudgetRow {
++    pub name: String,
++    pub stat: String,
++    pub wear: Option<String>,
++}
++
++/// 10 進の字の 100 倍（小数は 2 桁まで読み、3 桁目からは捨てる・符号と空の字と数でない字は None）。
++pub fn hundredths(text: &str) -> Option<u32> {
++    let (whole, frac) = text.split_once('.').unwrap_or((text, ""));
++    let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
++    if whole.is_empty() || !digits(whole) || !digits(frac) {
++        return None;
++    }
++    let cents: String = frac.chars().chain("00".chars()).take(2).collect();
++    whole
++        .parse::<u32>()
++        .ok()?
++        .checked_mul(100)?
++        .checked_add(cents.parse().ok()?)
++}
++
++/// 動いている cpu の範囲の字（例 0-31 や 0-3,5）の cpu の数。
++pub fn cores(online: &str) -> Option<u32> {
++    let mut count = 0u32;
++    for part in online.trim().split(',') {
++        let (lo, hi) = part.split_once('-').unwrap_or((part, part));
++        let (lo, hi): (u32, u32) = (lo.parse().ok()?, hi.parse().ok()?);
++        count = count.checked_add(hi.checked_sub(lo)?.checked_add(1)?)?;
++    }
++    Some(count)
++}
++
++/// loadavg の字の 3 つの負荷と cpu の数（cpu が 0 なら None）。
++pub fn load(loadavg: &str, online: &str) -> Option<Load> {
++    let mut words = loadavg.split_whitespace().map(hundredths);
++    let (one, five, fifteen) = (words.next()??, words.next()??, words.next()??);
++    let cores = cores(online).filter(|&c| c > 0)?;
++    Some(Load {
++        one,
++        five,
++        fifteen,
++        cores,
++    })
++}
++
++/// 1 分の負荷の core 比（100 倍・切り捨て）。
++pub fn load_ratio(load: &Load) -> u32 {
++    load.one / load.cores.max(1)
++}
++
++/// PSI の字の `kind`（some か full）の行の avg10 と avg60。
++pub fn stall(psi: &str, kind: &str) -> Option<Stall> {
++    let line = psi
++        .lines()
++        .find(|l| l.split_whitespace().next() == Some(kind))?;
++    let field = |key: &str| {
++        line.split_whitespace()
++            .find_map(|w| w.strip_prefix(key)?.strip_prefix('='))
++            .and_then(hundredths)
++    };
++    Some(Stall {
++        avg10: field("avg10")?,
++        avg60: field("avg60")?,
++    })
++}
++
++/// meminfo の字の全体と使える量と swap（kB の字を byte にする・4 つのどれかが無ければ None）。
++pub fn memory(meminfo: &str) -> Option<Memory> {
++    let field = |key: &str| {
++        meminfo.lines().find_map(|l| {
++            let rest = l.strip_prefix(key)?.strip_prefix(':')?;
++            let kb: u64 = rest.trim().strip_suffix("kB")?.trim().parse().ok()?;
++            kb.checked_mul(1024)
++        })
++    };
++    Some(Memory {
++        total: field("MemTotal")?,
++        available: field("MemAvailable")?,
++        swap_total: field("SwapTotal")?,
++        swap_free: field("SwapFree")?,
++    })
++}
++
++/// 上限を持つ scope（上限の字が max・読めない・0 の scope と、今の量が読めない scope を除く）を、埋まり
++/// （今の量と上限の比）の多い順・同じ埋まりは名の順に並べ、`SCOPES_SHOWN` まで。
++pub fn scopes(raw: &[ScopeTexts]) -> Vec<ScopeMemory> {
++    let num = |t: &Option<String>| t.as_deref().and_then(|s| s.trim().parse::<u64>().ok());
++    let mut rows: Vec<ScopeMemory> = raw
++        .iter()
++        .filter_map(|s| {
++            let max = num(&s.max).filter(|&m| m > 0)?;
++            Some(ScopeMemory {
++                name: s.name.clone(),
++                current: num(&s.current)?,
++                max,
++            })
++        })
++        .collect();
++    rows.sort_by(|a, b| {
++        let fill =
++            |s: &ScopeMemory, other: &ScopeMemory| u128::from(s.current) * u128::from(other.max);
++        fill(b, a)
++            .cmp(&fill(a, b))
++            .then_with(|| a.name.cmp(&b.name))
++    });
++    rows.truncate(SCOPES_SHOWN);
++    rows
++}
++
++/// 装置の stat の字の書いた区の数（7 つ目の欄）。
++pub fn sectors_written(stat: &str) -> Option<u64> {
++    stat.split_whitespace().nth(6)?.parse().ok()
++}
++
++/// 書きの速さ（byte/s）: 前の読み（区の数と ms の時刻）と今の読みの差。前が無い・数えが戻った・間が 0 なら Unknown。
++pub fn rate(before: Option<(u64, u64)>, now: (u64, u64)) -> Reading<u64> {
++    let Some((sectors, at_ms)) = before else {
++        return Reading::Unknown;
++    };
++    let (Some(moved), Some(ms)) = (now.0.checked_sub(sectors), now.1.checked_sub(at_ms)) else {
++        return Reading::Unknown;
++    };
++    if ms == 0 {
++        return Reading::Unknown;
++    }
++    let bytes = u128::from(moved) * u128::from(SECTOR_BYTES) * 1000 / u128::from(ms);
++    u64::try_from(bytes).map_or(Reading::Unknown, Reading::Known)
++}
++
++/// smartctl の JSON（-j）の摩耗（記録の時刻・使った割合・書いた量・予備の割合・媒体の誤り・どれかが無ければ None）。
++pub fn wear(json: &str) -> Option<Wear> {
++    let doc: Value = serde_json::from_str(json).ok()?;
++    let log = doc.get("nvme_smart_health_information_log")?;
++    let num = |v: Option<&Value>| v.and_then(Value::as_u64);
++    let pct = |key: &str| num(log.get(key)).and_then(|n| u8::try_from(n).ok());
++    Some(Wear {
++        read_at: num(doc.get("local_time").and_then(|t| t.get("time_t")))?,
++        used_pct: pct("percentage_used")?,
++        written: num(log.get("data_units_written"))?.checked_mul(DATA_UNIT_BYTES)?,
++        spare_pct: pct("available_spare")?,
++        media_errors: num(log.get("media_errors"))?,
++    })
++}
++
++/// 引用符 1 組で囲んだ字の中身（後ろに注釈のほかの字が続けば None）。
++fn quoted(v: &str) -> Option<String> {
++    let (body, rest) = v.strip_prefix('"')?.split_once('"')?;
++    let rest = rest.trim();
++    (rest.is_empty() || rest.starts_with('#')).then(|| body.to_string())
++}
++
++/// host の面の字の書きの測りの表の行（宣言の順・name か stat の読めない行は数えない・wear は無くてよい）。
++/// ほかの見出しは別の表を始め、別の表の中の行は読まない。
++pub fn budget_rows(host_toml: &str) -> Vec<BudgetRow> {
++    let mut rows: Vec<(Option<String>, Option<String>, Option<String>)> = Vec::new();
++    let mut inside = false;
++    for line in host_toml.lines().map(str::trim) {
++        if line.starts_with('[') {
++            inside = line.split('#').next().unwrap_or(line).trim() == BUDGET_HEADER;
++            if inside {
++                rows.push((None, None, None));
++            }
++            continue;
++        }
++        let (Some((name, stat, wear)), true) = (rows.last_mut(), inside) else {
++            continue;
++        };
++        let Some((key, value)) = line.split_once('=') else {
++            continue;
++        };
++        let slot = match key.trim() {
++            "name" => name,
++            "stat" => stat,
++            "wear" => wear,
++            _ => continue,
++        };
++        *slot = quoted(value.trim());
++    }
++    rows.into_iter()
++        .filter_map(|(name, stat, wear)| {
++            Some(BudgetRow {
++                name: name?,
++                stat: stat?,
++                wear,
++            })
++        })
++        .collect()
++}
++
++/// 線を越えた測り（`Gauge::ALL` の順・ちょうどは越えない・読めない測りは越えない）。
++pub fn over(load: &Reading<Load>, pressure: &Pressure) -> Vec<Gauge> {
++    let past = |r: &Reading<Stall>, line: u32| matches!(r, Reading::Known(s) if s.avg60 > line);
++    Gauge::ALL
++        .into_iter()
++        .filter(|g| match g {
++            Gauge::Load => matches!(load, Reading::Known(l) if load_ratio(l) > LOAD_WARN),
++            Gauge::Io => past(&pressure.io_full, IO_FULL_WARN),
++            Gauge::Memory => past(&pressure.memory_full, MEMORY_FULL_WARN),
++        })
++        .collect()
++}
++
++/// 読めた値は Known・読めなければ Unknown。
++fn known<T>(v: Option<T>) -> Reading<T> {
++    v.map_or(Reading::Unknown, Reading::Known)
++}
++
++/// 材料の字から電文を組む（読めない材料はその欄だけ Unknown）。
++pub fn host_doc(texts: &HostTexts, now: EpochSecs) -> HostDoc {
++    let psi = |t: &Option<String>, kind: &str| known(t.as_deref().and_then(|t| stall(t, kind)));
++    let load = known(
++        texts
++            .loadavg
++            .as_deref()
++            .zip(texts.online.as_deref())
++            .and_then(|(l, o)| load(l, o)),
++    );
++    let pressure = Pressure {
++        cpu_some: psi(&texts.psi_cpu, "some"),
++        memory_full: psi(&texts.psi_memory, "full"),
++        io_full: psi(&texts.psi_io, "full"),
++    };
++    let devices = texts
++        .devices
++        .iter()
++        .map(|d| DeviceWrite {
++            name: d.name.clone(),
++            rate: d.rate.clone(),
++            wear: d.wear.as_ref().map(|t| known(t.as_deref().and_then(wear))),
++        })
++        .collect();
++    HostDoc {
++        at: now,
++        over: over(&load, &pressure),
++        load,
++        pressure,
++        memory: known(texts.meminfo.as_deref().and_then(memory)),
++        scopes: known(texts.scopes.as_deref().map(scopes)),
++        devices,
++    }
++}
+diff --git a/crates/tsuzuri-core/src/lib.rs b/crates/tsuzuri-core/src/lib.rs
+index b03fb3e5dfeca660aed8f9ca848631b07fdbd824..9857a883d1c2fdd5df3bf198511486153be32ee1 100644
+--- a/crates/tsuzuri-core/src/lib.rs
++++ b/crates/tsuzuri-core/src/lib.rs
+@@ -8,6 +8,7 @@
+ //! 器の局面の出力の読み（`case`）。
+ //! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）。
+ //! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）。
++//! host の負荷と書きの読みと注意の線の判じ（`hostload`）。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
+ 
+ pub mod account;
+@@ -17,6 +18,7 @@ pub mod consult;
+ pub mod delivery;
+ pub mod gate;
+ pub mod graph;
++pub mod hostload;
+ pub mod ledger;
+ pub mod next_step;
+ pub mod pipeline;
+diff --git a/crates/tsuzuri-core/tests/hload.rs b/crates/tsuzuri-core/tests/hload.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e5cf5e039a69479fe422a257581d2bb1ef5fd52d
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/hload.rs
+@@ -0,0 +1,329 @@
++//! host の負荷と書きの読みの歯（接頭辞 hload_・持ち主の裁定 t3-hub.77.28）。
++//! kernel の file の字・smartctl の JSON・host の面の書きの測りの表の読みと、注意の線（規則の行 R-42）の判じと電文の組み。
++#![cfg(test)]
++
++use std::path::Path;
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::{Gauge, Load, Memory, Pressure, ScopeMemory, Stall, Wear};
++use tsuzuri_core::hostload::{
++    BudgetRow, DATA_UNIT_BYTES, DeviceTexts, HostTexts, IO_FULL_WARN, LOAD_WARN, MEMORY_FULL_WARN,
++    SCOPES_SHOWN, ScopeTexts, budget_rows, cores, host_doc, hundredths, load, memory, over, rate,
++    scopes, sectors_written, stall, wear,
++};
++
++const LOADAVG: &str = "25.36 19.68 18.47 3/2345 123456\n";
++const PSI_CPU: &str = "some avg10=32.90 avg60=30.80 avg300=21.80 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n";
++const PSI_MEM: &str = "some avg10=0.40 avg60=1.23 avg300=1.22 total=9\nfull avg10=0.40 avg60=1.21 avg300=1.21 total=8\n";
++const MEMINFO: &str = "MemTotal:       131710000 kB\nMemFree:         1000 kB\nMemAvailable:   86200000 kB\nSwapTotal:       8388604 kB\nSwapFree:            204 kB\n";
++const STAT: &str = "  1 2 3 4 5 6 89003451946 8 9 10 11\n";
++const SMART: &str = r#"{"local_time":{"time_t":1791180420},"nvme_smart_health_information_log":{"percentage_used":6,"data_units_written":163085937,"available_spare":100,"media_errors":0}}"#;
++
++fn known<T>(v: T) -> Reading<T> {
++    Reading::Known(v)
++}
++
++fn st(avg10: u32, avg60: u32) -> Stall {
++    Stall { avg10, avg60 }
++}
++
++fn calm() -> Pressure {
++    Pressure {
++        cpu_some: known(st(9_999, 9_999)),
++        memory_full: known(st(0, 0)),
++        io_full: known(st(0, 0)),
++    }
++}
++
++fn ld(one: u32, cores: u32) -> Reading<Load> {
++    known(Load {
++        one,
++        five: 0,
++        fifteen: 0,
++        cores,
++    })
++}
++
++fn scope(name: &str, current: Option<&str>, max: Option<&str>) -> ScopeTexts {
++    ScopeTexts {
++        name: name.into(),
++        current: current.map(Into::into),
++        max: max.map(Into::into),
++    }
++}
++
++/// 規則の行 R-42 の value の字のうち、`head` の直後から `tail` の前までの数の 100 倍。
++fn rule_number(row: &str, head: &str, tail: &str) -> u32 {
++    let (_, after) = row
++        .split_once(head)
++        .unwrap_or_else(|| panic!("R-42 に {head} が無い: {row}"));
++    let (number, _) = after
++        .split_once(tail)
++        .unwrap_or_else(|| panic!("R-42 に {tail} が無い: {row}"));
++    hundredths(number).unwrap_or_else(|| panic!("R-42 の数 {number} が読めない"))
++}
++
++#[test]
++fn hload_hundredths_and_cores() {
++    for (text, want) in [
++        ("25.36", Some(2_536)),
++        ("1.0", Some(100)),
++        ("5", Some(500)),
++        ("0.05", Some(5)),
++        ("0.129", Some(12)),
++        ("32.9", Some(3_290)),
++    ] {
++        assert_eq!(hundredths(text), want, "{text}");
++    }
++    for text in ["", "-1", "1.2.3", "a", ".5", "1.-2"] {
++        assert_eq!(hundredths(text), None, "{text}");
++    }
++    for (text, want) in [("0-31\n", Some(32)), ("0", Some(1)), ("0-3,5,7-9", Some(8))] {
++        assert_eq!(cores(text), want, "{text}");
++    }
++    for text in ["", "0-x", "3-1", "0-3,"] {
++        assert_eq!(cores(text), None, "{text}");
++    }
++}
++
++#[test]
++fn hload_reads_kernel_texts() {
++    assert_eq!(
++        load(LOADAVG, "0-31\n"),
++        Some(Load {
++            one: 2_536,
++            five: 1_968,
++            fifteen: 1_847,
++            cores: 32
++        })
++    );
++    assert_eq!(load("25.36 19.68\n", "0-31"), None);
++    assert_eq!(load(LOADAVG, "garbage"), None);
++    assert_eq!(stall(PSI_CPU, "some"), Some(st(3_290, 3_080)));
++    assert_eq!(stall(PSI_MEM, "full"), Some(st(40, 121)));
++    assert_eq!(stall("some avg10=1.00 avg300=2.00 total=1\n", "some"), None);
++    assert_eq!(stall(PSI_CPU, "none"), None);
++    assert_eq!(
++        memory(MEMINFO),
++        Some(Memory {
++            total: 131_710_000 * 1024,
++            available: 86_200_000 * 1024,
++            swap_total: 8_388_604 * 1024,
++            swap_free: 204 * 1024,
++        })
++    );
++    assert_eq!(memory(&MEMINFO.replace("SwapFree", "SwapGone")), None);
++    assert_eq!(sectors_written(STAT), Some(89_003_451_946));
++    assert_eq!(sectors_written("1 2 3 4 5 6"), None);
++}
++
++/// 線は 100 倍の整数で、規則の行 R-42 の value の字の数と同じ。越えた時だけ注意（ちょうどは付けない）・読めない測りは付けない。
++#[test]
++fn hload_lines_are_rule_r42() {
++    assert_eq!((LOAD_WARN, IO_FULL_WARN, MEMORY_FULL_WARN), (100, 500, 100));
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design-intent/rules.yaml");
++    let rules = std::fs::read_to_string(path).expect("rules の file を読む");
++    let row = rules
++        .lines()
++        .find(|l| l.contains("id: R-42,"))
++        .expect("rules の file に行 R-42 が在る");
++    assert_eq!(
++        rule_number(row, "core 比が ", " を越え"),
++        LOAD_WARN,
++        "{row}"
++    );
++    assert_eq!(
++        rule_number(row, "io の詰まり（PSI の full の avg60）が ", "% を越え"),
++        IO_FULL_WARN
++    );
++    assert_eq!(
++        rule_number(
++            row,
++            "memory の詰まり（PSI の full の avg60）が ",
++            "% を越え"
++        ),
++        MEMORY_FULL_WARN
++    );
++}
++
++#[test]
++fn hload_over_follows_the_lines() {
++    assert_eq!(over(&ld(3_200, 32), &calm()), Vec::<Gauge>::new());
++    assert_eq!(over(&ld(3_232, 32), &calm()), [Gauge::Load]);
++    assert_eq!(over(&ld(3_231, 32), &calm()), Vec::<Gauge>::new());
++    let mut p = calm();
++    p.io_full = known(st(9_999, 500));
++    assert_eq!(over(&ld(0, 1), &p), Vec::<Gauge>::new());
++    p.io_full = known(st(0, 501));
++    assert_eq!(over(&ld(0, 1), &p), [Gauge::Io]);
++    p.memory_full = known(st(0, 101));
++    assert_eq!(
++        over(&ld(101, 1), &p),
++        [Gauge::Load, Gauge::Io, Gauge::Memory]
++    );
++    p.memory_full = known(st(0, 100));
++    assert_eq!(over(&ld(0, 1), &p), [Gauge::Io]);
++    let unknown = Pressure {
++        cpu_some: Reading::Unknown,
++        memory_full: Reading::Unknown,
++        io_full: Reading::Unknown,
++    };
++    assert_eq!(over(&Reading::Unknown, &unknown), Vec::<Gauge>::new());
++}
++
++/// 上限の無い（max）・上限 0・今の量が読めない scope は落とし、埋まりの多い順・同じ埋まりは名の順に `SCOPES_SHOWN` まで。
++#[test]
++fn hload_scopes_rank_the_bounded() {
++    let raw = vec![
++        scope("free", Some("10"), Some("max")),
++        scope("zero", Some("10"), Some("0")),
++        scope("lost", None, Some("100")),
++        scope("half-b", Some("50"), Some("100")),
++        scope("half-a", Some("16"), Some("32\n")),
++        scope("most", Some("26"), Some("32")),
++        scope("low", Some("1"), Some("100")),
++        scope("tiny", Some("0"), Some("100")),
++        scope("mid", Some("30"), Some("100")),
++    ];
++    let names: Vec<String> = scopes(&raw).into_iter().map(|s| s.name).collect();
++    assert_eq!(SCOPES_SHOWN, 5);
++    assert_eq!(names, ["most", "half-a", "half-b", "mid", "low"]);
++    assert_eq!(
++        scopes(&raw[5..6]),
++        [ScopeMemory {
++            name: "most".into(),
++            current: 26,
++            max: 32
++        }]
++    );
++}
++
++#[test]
++fn hload_rate_from_sectors() {
++    assert_eq!(
++        rate(Some((1_000, 10_000)), (1_000 + 14_080_000, 20_000)),
++        known(720_896_000)
++    );
++    assert_eq!(
++        rate(Some((1_000, 10_000)), (3_000, 10_500)),
++        known(2_048_000)
++    );
++    assert_eq!(rate(None, (3_000, 10_500)), Reading::Unknown);
++    assert_eq!(
++        rate(Some((3_000, 10_000)), (2_999, 20_000)),
++        Reading::Unknown
++    );
++    assert_eq!(
++        rate(Some((1_000, 10_000)), (3_000, 10_000)),
++        Reading::Unknown
++    );
++    assert_eq!(
++        rate(Some((1_000, 10_000)), (3_000, 9_999)),
++        Reading::Unknown
++    );
++    assert_eq!(rate(Some((3_000, 0)), (2_999, 1_000_000)), Reading::Unknown);
++}
++
++#[test]
++fn hload_wear_reads_smartctl_json() {
++    assert_eq!(DATA_UNIT_BYTES, 512_000);
++    assert_eq!(
++        wear(SMART),
++        Some(Wear {
++            read_at: 1_791_180_420,
++            used_pct: 6,
++            written: 83_499_999_744_000,
++            spare_pct: 100,
++            media_errors: 0,
++        })
++    );
++    for key in [
++        "time_t",
++        "percentage_used",
++        "data_units_written",
++        "available_spare",
++        "media_errors",
++    ] {
++        assert_eq!(wear(&SMART.replace(key, "gone")), None, "{key}");
++    }
++    assert_eq!(
++        wear(&SMART.replace("\"percentage_used\":6", "\"percentage_used\":300")),
++        None
++    );
++    assert_eq!(wear("not json"), None);
++}
++
++/// 書きの測りの表の行だけを読み、name と stat の両方が読める行を宣言の順に返す（wear は無くてよい）。
++#[test]
++fn hload_budget_rows_read_the_face() {
++    let face = "[[device]]\nname = \"pc\"\nstat = \"/x\"\n\n[[write-budget]]\nname = \"sys\"\nstat = \"/sys/block/a/stat\"\nwear = \"/var/lib/w/a.json\" # 日に 1 度\n\n[[write-budget]] # 注\nname = \"bak\"\nstat = \"/sys/block/b/stat\"\n\n[[write-budget]]\nname = \"half\"\n\n[tick]\nname = \"x\"\nstat = \"/y\"\n";
++    assert_eq!(
++        budget_rows(face),
++        [
++            BudgetRow {
++                name: "sys".into(),
++                stat: "/sys/block/a/stat".into(),
++                wear: Some("/var/lib/w/a.json".into())
++            },
++            BudgetRow {
++                name: "bak".into(),
++                stat: "/sys/block/b/stat".into(),
++                wear: None
++            },
++        ]
++    );
++    assert!(budget_rows("name = \"x\"\nstat = \"/y\"\n").is_empty());
++}
++
++#[test]
++fn hload_doc_assembles_the_texts() {
++    let texts = HostTexts {
++        loadavg: Some(LOADAVG.into()),
++        online: Some("0-15".into()),
++        psi_cpu: Some(PSI_CPU.into()),
++        psi_memory: Some(PSI_MEM.into()),
++        psi_io: None,
++        meminfo: Some(MEMINFO.into()),
++        scopes: Some(vec![scope("s", Some("26"), Some("32"))]),
++        devices: vec![
++            DeviceTexts {
++                name: "sys".into(),
++                rate: known(72_000_000),
++                wear: Some(Some(SMART.into())),
++            },
++            DeviceTexts {
++                name: "bak".into(),
++                rate: Reading::Unknown,
++                wear: Some(None),
++            },
++            DeviceTexts {
++                name: "plain".into(),
++                rate: Reading::Unknown,
++                wear: None,
++            },
++        ],
++    };
++    let doc = host_doc(&texts, 77);
++    assert_eq!(doc.at, 77);
++    assert_eq!(doc.over, [Gauge::Load, Gauge::Memory]);
++    assert_eq!(doc.pressure.io_full, Reading::Unknown);
++    assert_eq!(doc.pressure.cpu_some, known(st(3_290, 3_080)));
++    assert!(matches!(doc.memory, Reading::Known(m) if m.swap_free == 204 * 1024));
++    assert!(matches!(&doc.scopes, Reading::Known(s) if s.len() == 1));
++    let wears: Vec<_> = doc.devices.iter().map(|d| d.wear.clone()).collect();
++    assert_eq!(
++        wears,
++        [
++            Some(known(wear(SMART).unwrap())),
++            Some(Reading::Unknown),
++            None
++        ]
++    );
++    assert_eq!(doc.devices[0].rate, known(72_000_000));
++    let bare = host_doc(&HostTexts::default(), 5);
++    assert_eq!(
++        (bare.load, bare.memory, bare.scopes),
++        (Reading::Unknown, Reading::Unknown, Reading::Unknown)
++    );
++    assert!(bare.over.is_empty() && bare.devices.is_empty());
++}
