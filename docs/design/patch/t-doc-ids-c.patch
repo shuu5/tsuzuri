@@ -1,0 +1,1135 @@
+diff --git a/crates/tsuzuri-surface/src/account/cards.rs b/crates/tsuzuri-surface/src/account/cards.rs
+index fa03d4576813a03bfa8b2263f82a7563e86cf5d9..f6e13d3b86f708df94dbc94a76f920845090f581 100644
+--- a/crates/tsuzuri-surface/src/account/cards.rs
++++ b/crates/tsuzuri-surface/src/account/cards.rs
+@@ -1,6 +1,6 @@
+ //! account board の各 project の表の hover の card: 5 つの欄と群の見出しの chip の card を組む純粋な関数
+ //! （見本の account/index.html の card の nx・ledCard・pcnt・seatCard・gproj・group の枝）。
+-//! 行 h-acct-split で account の projects から移した（振る舞いは同じ）。
++//! account の projects から移した（振る舞いは同じ）。
+ //! 台帳の欄の card は台帳の処理状況の表が、次の一手と口座の欄の card は HOME が、
+ //! orchestrator の欄の card は session の表も使う。
+ 
+diff --git a/crates/tsuzuri-surface/src/account/heartbeat.rs b/crates/tsuzuri-surface/src/account/heartbeat.rs
+index 1b28747fa0999a2c239e23477c8dd80dbe417704..39fd8a4efce55b0c243d94f4d923eacb129766c9 100644
+--- a/crates/tsuzuri-surface/src/account/heartbeat.rs
++++ b/crates/tsuzuri-surface/src/account/heartbeat.rs
+@@ -1,10 +1,10 @@
+-//! session の表の orchestrator の行の停止の切り替え（便 h-hb・要件 FR12）: 見本は ui.js の tkhbHTML・openHB・hbCmd。
++//! session の表の orchestrator の行の停止の切り替え（要件 FR12）: 見本は ui.js の tkhbHTML・openHB・hbCmd。
+ //! button の字は今の heartbeat の逆へ向ける語の鍵（on なら hb_to_off・off なら hb_to_on）。押すと行の下に確かめの段を開き
+ //! （dialog の要素は使わない）、撃つと契約の型の HeartbeatRequest を HEARTBEAT_PATH へ送る。
+ //! heartbeat は電文の projects の同じ名の行の席の card から引き、読めない行・席の無い行・pipeline の行は button を持たない（要件 NFR2）。
+ //! button の字・段の字・要求の本文・応答の出し方・送る間の状態の移り方は純粋な関数にして host で試し、
+ //! DOM と送りは wasm の target のときだけ組み立てる。
+-//! project board の席の block（行 g-seat-hb・裁定 t3-hub.52.29 の案 A）も同じ button と確かめの段を使う:
++//! project board の席の block も同じ button と確かめの段を使う:
+ //! 切り替えは席の card から `seat_toggle` で引き（席の名が在り heartbeat が読めるときだけ）、段は `below_to` に
+ //! 送り先 `Dest::Seat` を渡して組む。送りの本文は向きだけの SeatHeartbeatRequest で、SEAT_HEARTBEAT_PATH へ送る
+ //! （server が自分の --repo の project の席を引く）。account board の行は `below`（送り先 `Dest::Account`）のまま。
+diff --git a/crates/tsuzuri-surface/src/account/home.rs b/crates/tsuzuri-surface/src/account/home.rs
+index 5e0c978865d938f37ca16b72f1f9b2e45dd25892..b6adafcacbdbb0bc141ad86c4fb0a146f786ab6d 100644
+--- a/crates/tsuzuri-surface/src/account/home.rs
++++ b/crates/tsuzuri-surface/src/account/home.rs
+@@ -1,9 +1,9 @@
+-//! account board の HOME の block（便 h-frame の枠・便 h-home の中身）: 各 project の次の一手・群の枠・口座 × 窓・移動。
++//! account board の HOME の block: 各 project の次の一手・群の枠・口座 × 窓・移動。
+ //! 見本は account/index.html の render の home の枝（`#nxall` の nxrows・`.gtop` の over・口座 × 窓の arows・`details#moves` の mvli）と
+ //! acct.js の nextAll・meter。並べと字と class は純粋な関数（`content`）で組み、DOM は wasm の target のときだけ組む。
+ //! 群の列・口座の列・移動の列は電文で別々に Unknown になりうるので、その段だけ測れていないにし、ほかの段は出す（要件 NFR2）。
+-//! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（便 h-acct-spark・線の字は面が組み、電文は点だけ）。
+-//! 閾値の印と逼迫の強調と断りの理由と移動の段の知らせの行は電文の caps と notices から描き、面は使った割合と閾値を比べない（便 h-thr-home・R-22）。
++//! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（線の字は面が組み、電文は点だけ）。
++//! 閾値の印と逼迫の強調と断りの理由と移動の段の知らせの行は電文の caps と notices から描き、面は使った割合と閾値を比べない（R-22）。
+ //! 候補ごとの門で落ちた理由は器が出さないので、群の断りの理由の語だけを出す。
+ 
+ use tsuzuri_contract::EpochSecs;
+diff --git a/crates/tsuzuri-surface/src/account/ledger.rs b/crates/tsuzuri-surface/src/account/ledger.rs
+index d64f8b93bcc07971e767a228d7d59182de4c8ae4..a999e8981a73dc7ada00e6ef6c8d5e2a85f44672 100644
+--- a/crates/tsuzuri-surface/src/account/ledger.rs
++++ b/crates/tsuzuri-surface/src/account/ledger.rs
+@@ -1,14 +1,14 @@
+-//! account board の台帳の処理状況の block（便 h-frame の枠・便 h-led の中身）: 見本の session の tab の `#ledger`
++//! account board の台帳の処理状況の block: 見本の session の tab の `#ledger`
+ //! （account/index.html の ledTable・ledOrder・ledMore・extremes と ledger.js の judge）。
+ //! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残し、
+-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
++//! 並べ方の押しは履歴の 1 歩にする（見本の pushState）。
+ //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
+ //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
+ //! 未反映は電文の台帳の未反映の数で、project board の指標の段と同じ Unref の形にする。1 種か 2 種が読めなければ数（部分の和）に
+-//! 測れていないの印を添え、3 種とも分からなければ数えない字「―」で印は添えない（行 g-unref-dash-acct）。台帳が Unknown の行も「―」。
+-//! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU・行 h-acct-rest）。
++//! 測れていないの印を添え、3 種とも分からなければ数えない字「―」で印は添えない。台帳が Unknown の行も「―」。
++//! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU）。
+ //! 未反映の列は unref_of が数を返す行（3 種とも分からない行と台帳が Unknown の行を除く）だけで数え、印もその行だけに付ける。
+-//! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の cards の led_card で組む。
++//! 行の project の欄は hover の card（見本の ledCard）を持ち、中身は account の cards の led_card で組む。
+ //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
+ //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+diff --git a/crates/tsuzuri-surface/src/account/mod.rs b/crates/tsuzuri-surface/src/account/mod.rs
+index ffc716366b451fa5b019d557148499c47f3078fa..d109349627a56b5a6bfa7bc68e34ac32840b595f 100644
+--- a/crates/tsuzuri-surface/src/account/mod.rs
++++ b/crates/tsuzuri-surface/src/account/mod.rs
+@@ -1,11 +1,11 @@
+-//! account board の頁の枠（便 h-frame）: 入口の振り分け・3 つの tab と URL・header の部品・tab ごとの block の並び・
++//! account board の頁の枠: 入口の振り分け・3 つの tab と URL・header の部品・tab ごとの block の並び・
+ //! 数の印・読みの結果から block の中身の有無を決める関数。純粋な値と関数だけを持ち、DOM は board（wasm の target のときだけ）。
+ //! 見本は docs/design/mock3/account/index.html と ui.js の topHTML（PAGE_KIND が account の枝）と acctTabHref。
+ //! block ごとに 1 つの module（home・windows・session・ledger・projects・notices）が描く。この便は中身を描かず、
+ //! 読めたら中身はまだ無いの字を、読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行を出す。
+ //! 口は 1 つ（契約の型の crate の account の module の PATH）で、全部の block が net の同じ signal を分け合う。
+ //! tab の押しは頁を読み直さず、tab_url の URL を履歴に積む（見本の setTab・戻ると進むは board が popstate で受ける）。
+-//! 休止中の chip と card（行 h-dormant）: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
++//! 休止中の chip と card: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
+ //! card は席の名と口座と最後の時刻と tick と hb を席ごとに 1 行で出す（見本の dormant:all の枝）。
+ 
+ use tsuzuri_contract::EpochSecs;
+diff --git a/crates/tsuzuri-surface/src/account/notices.rs b/crates/tsuzuri-surface/src/account/notices.rs
+index 28bce02909166f6a985e5286681a9e437140870f..1a6ea15e9456ea4607a2e28c3230240d225aa50b 100644
+--- a/crates/tsuzuri-surface/src/account/notices.rs
++++ b/crates/tsuzuri-surface/src/account/notices.rs
+@@ -1,8 +1,8 @@
+-//! account board の各 project の席からの知らせの block（見本に無い block・HOME の頭の段・行 i-11・要件 FR16）。
++//! account board の各 project の席からの知らせの block（見本に無い block・HOME の頭の段・要件 FR16）。
+ //! project board の block「席からの知らせ」と同じ口と同じ電文を読み（`crate::project::notice`）、project ごとの最新の 1 つを
+ //! 電文の順（新しい順）に並べ、記録の読めない project の名を最後の 1 行に出す。
+ //! 題の link はその project の名前つきの窓で開く（windows の `win_name`・前に出す命令は撃たない）。
+-//! app の窓の中の左の押しは、board の open_named で窓を先に用意して app の窓にする（行 g-popup-app）。
++//! app の窓の中の左の押しは、board の open_named で窓を先に用意して app の窓にする。
+ 
+ use crate::frame::Block;
+ use crate::project::Body;
+diff --git a/crates/tsuzuri-surface/src/account/projects.rs b/crates/tsuzuri-surface/src/account/projects.rs
+index b48b61ee976b65f0b78579aecd96cbc2159ab395..e8a74ea97f52a4eef3fa89125dbe2ff5a4a20a04 100644
+--- a/crates/tsuzuri-surface/src/account/projects.rs
++++ b/crates/tsuzuri-surface/src/account/projects.rs
+@@ -1,14 +1,14 @@
+-//! account board の各 project の表の block（便 h-frame の枠・便 h-proj の中身）: 見本の projects の tab の `#ptab`
++//! account board の各 project の表の block: 見本の projects の tab の `#ptab`
+ //! （account/index.html の projTable・PSORTS）。
+ //! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残し、
+-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
++//! 並べ方の押しは履歴の 1 歩にする（見本の pushState）。
+ //! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
+ //! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」、
+ //! 未反映の 3 種とも「まだ分からない」の行の未反映も「―」。
+ //! 決定待ちの 2 段目は電文の次の一手の束の承認の件数、未反映の 2 段目は電文の台帳の読めた種類ごとの件数（見本の unrefBreak）。
+-//! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ・行 h-acct-rest）。
++//! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ）。
+ //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! 5 つの欄と群の見出しの chip の hover の card は account の cards の module が組む（行 h-acct-split で割った）。
++//! 5 つの欄と群の見出しの chip の hover の card は account の cards の module が組む。
+ 
+ use std::cmp::Reverse;
+ 
+diff --git a/crates/tsuzuri-surface/src/account/session.rs b/crates/tsuzuri-surface/src/account/session.rs
+index d2db22ef5ffb53b5a09e297732373ff3d9492934..8de5e64ba2c317d5a409ee422c4f96091dc3f816 100644
+--- a/crates/tsuzuri-surface/src/account/session.rs
++++ b/crates/tsuzuri-surface/src/account/session.rs
+@@ -1,10 +1,10 @@
+-//! account board の session の表の block（便 h-frame の枠・便 h-sess の中身）: 見本の session の tab の 1 つ目の panel
++//! account board の session の表の block: 見本の session の tab の 1 つ目の panel
+ //! （account/index.html の sessRow・sessTable・stageCell と ui.js の tkhbHTML）。
+ //! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残し、
+-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist・幅の押しは見本の setSpan と同じく置き換える）。
++//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・幅の押しは見本の setSpan と同じく置き換える）。
+ //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
+ //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
+-//! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
++//! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める。
+ //! 相談の窓の行（役 consult）は役の語と窓の card を持ち、窓の口座が群の今の口座と違えば口座ずれの印を出す
+ //! （判断の記録 ADR-55 決定 (4)）。
+ //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+diff --git a/crates/tsuzuri-surface/src/account/stage.rs b/crates/tsuzuri-surface/src/account/stage.rs
+index 83e57e9389a2bee49e4527acb31fc1e17e2ed556..7cafa1535a71a36d24cbb9a8476177d23ef0fda5 100644
+--- a/crates/tsuzuri-surface/src/account/stage.rs
++++ b/crates/tsuzuri-surface/src/account/stage.rs
+@@ -1,4 +1,4 @@
+-//! block「表示先」（HOME の最後の段・行 i-stage-all・要件 FR16・持ち主の答え t3-hub.59.22 の案 A）: 窓の表示先の設定を読み、
++//! block「表示先」（HOME の最後の段・要件 FR16）: 窓の表示先の設定を読み、
+ //! 全部の project に一括で置く・project ごとに置く・上書きを外す・窓を開く。口は契約の stage の path
+ //! （読みは project board の block と同じ `PATH`・書きは `ALL_PATH`・窓を開く頼みは `OPEN_PATH`）で、この file は口の字を書かない。
+ //! 読みは畳んだ block を開いた時と書きの後の 1 回だけ（移動の block と同じく畳める段の記録は持たない）。
+diff --git a/crates/tsuzuri-surface/src/account/windows.rs b/crates/tsuzuri-surface/src/account/windows.rs
+index de25d28a394429f85b5bd0e1cb171151fed4bace..19976079eb1b95bd7a18ddaf862997c8a87ddaeb 100644
+--- a/crates/tsuzuri-surface/src/account/windows.rs
++++ b/crates/tsuzuri-surface/src/account/windows.rs
+@@ -1,7 +1,7 @@
+-//! account board の開いている窓の block（見本の `#winsp`・HOME の 1 段目の右）と、project board を名前つきの窓で開く手順（便 h-win・案 2）。
++//! account board の開いている窓の block（見本の `#winsp`・HOME の 1 段目の右）と、project board を名前つきの窓で開く手順（案 2）。
+ //! 見本は account/index.html の openWin・drawWins。窓の名・開く URL・一覧の移り方・button の字は純粋な関数で決め、
+ //! window の open と一覧の DOM は wasm の target のときだけ組む。
+-//! 一覧は browser の保存（鍵 tz-wins・1 項 1 行の tab 区切り）に残す（行 h-win-store・持ち主の裁定 t3-hub.52.16）。
++//! 一覧は browser の保存（鍵 tz-wins・1 項 1 行の tab 区切り）に残す。
+ //! 保存は store の get・set・on_change で撃ち、頁で初めて一覧を撃つときに 1 度だけ読んで生きている handle を重ねる。
+ //! 読み直した後の窓は handle を失い、開いたはず（NoHandle）になる。ほかの tab の書き替えは storage の event で置き直し、
+ //! project board の戻るが送る閉じの知らせ（message の event・送り手の hostname が同じときだけ）でその窓を閉じたにする。
+diff --git a/crates/tsuzuri-surface/src/askwin.rs b/crates/tsuzuri-surface/src/askwin.rs
+index 26331533e486f1e135c6b4f6b66e6c2ee0ccfbc9..4cb77a0c33105194cb1e9ee031307f589c81ae7d 100644
+--- a/crates/tsuzuri-surface/src/askwin.rs
++++ b/crates/tsuzuri-surface/src/askwin.rs
+@@ -1,9 +1,9 @@
+-//! 質問の窓（行 g-ask-win・判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
++//! 質問の窓（判断の記録 ADR-27 決定 (4)・見本 board-v2 の qModal と qsend と qlater）:
+ //! この project の問いを 1 問ずつ出し、答えを送って記録されると次の問いへ進み、全部に答えると閉じる。
+ //! 題の横の点で問いを選べ、「あとで」は後ろの答えていない問いへ移る。1 問の card と答えの口と記帳は今の質問の block と同じ
+ //! （project の ask の one_view）。窓の下の段は畳んだ段で、ほかの project の質問（読むだけ）・まとめて承認・全体への指示と、
+-//! 末にこれまでの決定（project の askpage の inner・行 g-ask-hist）。
+-//! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`・行 g-one-screen-b）。
++//! 末にこれまでの決定（project の askpage の inner）。
++//! 質問の頁は 1 枚の画面への切り替えの行で消した。窓を開いた link が問いの id を持てば、その問いから出す（`AskFocus`）。
+ //! 問いの一覧が読めない時は問いが無いと見せず、本文に「測れていない」と理由を、題の残りの数に「?」を出す。窓の上に席に
+ //! 届いていない裁定の 1 行（ask の late_view）を、ほかの project の質問の段に台帳が読めない組の札と 1 行を、前の質問の
+ //! block と同じく出す（憲法 P-7.1・P-7.2）。
+diff --git a/crates/tsuzuri-surface/src/board.rs b/crates/tsuzuri-surface/src/board.rs
+index 9e281c43fa7be8450025f3b30184c1d335a03f19..f3c25f246d2b62c468b2c57ef04015cbb555a4da 100644
+--- a/crates/tsuzuri-surface/src/board.rs
++++ b/crates/tsuzuri-surface/src/board.rs
+@@ -1,17 +1,17 @@
+ //! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: 上の固定の帯と頁の枠を frame の値のとおりに並べる。
+ //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
+-//! 1 枚の画面（行 g-one-screen-a・判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
++//! 1 枚の画面（判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
+ //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
+-//! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
++//! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁は query の page=node で開く（文書を読み直す）。
+ //! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
+-//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。URL の win で窓を開いた後は history を置き替えて URL から win と
+-//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ・行 g-win-url）。
+-//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
+-//! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+-//! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
+-//! 最終の記録と読みの脈と読み込み不良の印（行 g-fresh・g-pulse）は帯の下の右端の小さな札に置く。
+-//! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
+-//! 最初の案内（coach mark）の層は home の頁だけに置く（行 g-coach）。
++//! 持てば質問の窓をその問いから出す。URL の win で窓を開いた後は history を置き替えて URL から win と
++//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ）。
++//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く。札と一覧の行の吹き出しの層も頁に 1 つ置く。
++//! 帯の戻る口は account board の窓 tz-account へ戻り、自分の窓を閉じる。
++//! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る。
++//! 最終の記録と読みの脈と読み込み不良の印は帯の下の右端の小さな札に置く。
++//! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題。
++//! 最初の案内（coach mark）の層は home の頁だけに置く。
+ 
+ use std::time::Duration;
+ 
+diff --git a/crates/tsuzuri-surface/src/consultwin.rs b/crates/tsuzuri-surface/src/consultwin.rs
+index a2a823c613ffe08d8b1d1ee685639aa6cc1e83e9..3c4af149d002bfc199eae975498d4ec11b03b371 100644
+--- a/crates/tsuzuri-surface/src/consultwin.rs
++++ b/crates/tsuzuri-surface/src/consultwin.rs
+@@ -1,10 +1,10 @@
+-//! 相談の窓（設計ノート surface-wave27b 行 cs-bar・判断の記録 ADR-29 決定 (4)(9)）: 帯の相談の口が開く窓。
++//! 相談の窓（判断の記録 ADR-29 決定 (4)(9)）: 帯の相談の口が開く窓。
+ //! 上の段は頼みの form（題〔省ける・自由な字か bead の id〕・形〔話す・問う〕・model〔`MODELS`〕・送る）で、
+ //! 送ると口 POST /api/consult/request に電文 ConsultRequest を送る（面は窓を開かない・席が受けて開く）。
+ //! 下の段は口 GET /api/consult の一覧（退いていない窓・処分の無い所見・受けの無い頼み）で、受けの無い頼みは
+ //! 頼みの時刻から `DELIVER_SPAN` を越えると `LATE` を添える。読めない段は測れていない。
+ //! 帯の相談の口は色の付く数を持たない（所見の処分は席の手番・決定 (9)）。窓を開いた link が bead の id を持てば、
+-//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。札と行の吹き出しの相談の口（行 cs-pop）は `consult_href` の link で、
++//! 題の初めの字にする（質問の窓と同じ `AskFocus`）。札と行の吹き出しの相談の口は `consult_href` の link で、
+ //! 押すとその bead の id を題に入れてこの窓を開く（hover では開かない）。字と並びは純粋な関数にして host で試し、窓の DOM（`body`）は
+ //! wasm の target のときだけ組む。
+ 
+diff --git a/crates/tsuzuri-surface/src/flight.rs b/crates/tsuzuri-surface/src/flight.rs
+index 0720bf67af0f53d6a88214ce14b3b93064c1f5b8..f90eedd882832f3d52bf662a4f0c003a89065c52 100644
+--- a/crates/tsuzuri-surface/src/flight.rs
++++ b/crates/tsuzuri-surface/src/flight.rs
+@@ -1,4 +1,4 @@
+-//! 口ごとの読みの印の決め方（行 g-reads・net が使い host でも組む）。
++//! 口ごとの読みの印の決め方（net が使い host でも組む）。
+ //! 読み直しの呼びは読みの途中なら 1 回にまとめ（読みの後にもう 1 回読む）、
+ //! 見ている部品が無い間の呼びは部品が戻ったときの 1 回にまとめる。
+ 
+diff --git a/crates/tsuzuri-surface/src/frame.rs b/crates/tsuzuri-surface/src/frame.rs
+index c2b54ac1de22ed327b99b0f903ca7854145c4fac..435089e388dfaf9ed70f87aa88abd36d5f304724 100644
+--- a/crates/tsuzuri-surface/src/frame.rs
++++ b/crates/tsuzuri-surface/src/frame.rs
+@@ -1,13 +1,13 @@
+-//! 頁の枠（便 g-frame）: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
++//! 頁の枠: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
+ //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
+ //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
+-//! 節点の頁（便 g-node）: query の page=node と id で開く。
+-//! 帯の「戻る」（行 h-wire）: account board の窓へ戻る段の列（`back_steps`）。
+-//! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
+-//! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
++//! 節点の頁: query の page=node と id で開く。
++//! 帯の「戻る」: account board の窓へ戻る段の列（`back_steps`）。
++//! 閉じられない窓の注記: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
++//! 頁は src/pages の下に 1 頁 1 file（判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
+ //! ここは頁の定義（`PageDef`）から頁の枠・link・snapshot を導く（頁の変種の名を持たない）。
+-//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める（行 g-nav）。
+-//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した（行 g-dead-sweep-b）。
++//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める。
++//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した。
+ 
+ use crate::mapview::encode;
+ pub use crate::pages::PageId;
+diff --git a/crates/tsuzuri-surface/src/fresh.rs b/crates/tsuzuri-surface/src/fresh.rs
+index 10d9e9b1a1ec07130a758ea2a5567eba9ca55093..b5d8aae727f3aea5bf8dd12ad7b376d7f21806fa 100644
+--- a/crates/tsuzuri-surface/src/fresh.rs
++++ b/crates/tsuzuri-surface/src/fresh.rs
+@@ -1,10 +1,10 @@
+-//! 中身の古さ（行 g-fresh・規則の行 R-21・要件 NFR2）: 台帳の読みが落ちたときと知らせのつながりが切れたときは、
++//! 中身の古さ（規則の行 R-21・要件 NFR2）: 台帳の読みが落ちたときと知らせのつながりが切れたときは、
+ //! 最後に読めた中身を 60 秒まで出し続け、15 秒を越えれば上端の帯に読み込み不良の印を 1 つ出す（60 秒を越えた中身は
+ //! server が 測れていない の電文にし、つながりの切れは net が全部の口を「読めない」にする）。
+ //! 古さは server が読みの落ちた応答に載せる頭（最後に読めた時からの秒）と、面の時計の経過で数える。
+-//! 1 つでも口が読みの途中なら最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す（行 g-pulse）。
++//! 1 つでも口が読みの途中なら最終の記録の横に短い脈を出し、読み終えてから PULSE_MS まで残す。
+ //! 頁を開いてから READ_HOLD_S 秒の間に知らせのつながりが一度も開かなければ（待たされたまま誤りも来ない）、頁を開いた時刻を
+-//! 古さの起点に置き、印の card の種類に理由（語の鍵 `UNOPENED_KEY`）を出す（net が全部の口を「読めない」にする・行 g-accept-face）。
++//! 古さの起点に置き、印の card の種類に理由（語の鍵 `UNOPENED_KEY`）を出す（net が全部の口を「読めない」にする）。
+ //! 決め方は host でも組んで試し、印と脈の DOM（`mark`・`pulse`）は wasm の target のときだけ組む。
+ 
+ use std::collections::BTreeMap;
+diff --git a/crates/tsuzuri-surface/src/kit.rs b/crates/tsuzuri-surface/src/kit.rs
+index 42917f7e16251a6e72bf1060d87832dcab59abcd..c643106d611cf19c9b3c0d74e7ef8e1153c6bb34 100644
+--- a/crates/tsuzuri-surface/src/kit.rs
++++ b/crates/tsuzuri-surface/src/kit.rs
+@@ -1,4 +1,4 @@
+-//! block に共通の部品（行 hs-blocks で project の mod.rs から字を変えずに移した）: 中身の 3 値・状態の記号・一覧の 1 項・
++//! block に共通の部品（project の mod.rs から字を変えずに移した）: 中身の 3 値・状態の記号・一覧の 1 項・
+ //! 読めないときの理由・畳める段の開き閉じの記録。project の mod.rs が glob で再公開するので、crate::project の path でも使える。
+ //! DOM の部品は wasm の target のときだけ組み立てる。
+ 
+diff --git a/crates/tsuzuri-surface/src/kit/map.rs b/crates/tsuzuri-surface/src/kit/map.rs
+index ef5ef71193264c957c31ff976fd6a5d84bf92757..a237a776b9c5ed8aaebf87b157b07ed3d4e1106a 100644
+--- a/crates/tsuzuri-surface/src/kit/map.rs
++++ b/crates/tsuzuri-surface/src/kit/map.rs
+@@ -1,4 +1,4 @@
+-//! グラフの口（/api/graph）の読み（行 m-map-page で地図の block から移した）: 本文を契約の型の GraphDoc に読む。
++//! グラフの口（/api/graph）の読み（地図の block から移した）: 本文を契約の型の GraphDoc に読む。
+ //! 地図の頁は消したが、節点の card（問い・台帳・pipeline・次の一手）と抜けの検査と問いの頁はこの口を読む。
+ //! kit の下に置くので block でなく（Module の列に入らない）、project の mod.rs の glob の再公開で crate::project::map の
+ //! path のまま使える（読む側の字は替えない）。
+diff --git a/crates/tsuzuri-surface/src/ledgerlist.rs b/crates/tsuzuri-surface/src/ledgerlist.rs
+index 2885299a7879e5f8a197ed1af6b44f1be02ad9f1..01af0941213ae96e95839eadba84365b9cdcbc1c 100644
+--- a/crates/tsuzuri-surface/src/ledgerlist.rs
++++ b/crates/tsuzuri-surface/src/ledgerlist.rs
+@@ -1,20 +1,20 @@
+-//! 台帳 open の一覧（判断の記録 ADR-27 の決定 (8)・行 g-list-groups）: epic ごとの組にし、組の頭の 1 行に
++//! 台帳 open の一覧（判断の記録 ADR-27 の決定 (8)）: epic ごとの組にし、組の頭の 1 行に
+ //! 進みの棒（組の行の閉じた数と全部の数）と、板で動いている札の段ごとの数と、open の行の数を出す。行は 1 行の短い題。
+ //! 既定で開く組は、板で動いている札を持つ組と open の行を持つ組だけで、ほかは畳む（開き閉じは頁の一生の間だけ持つ）。
+ //! 行は口 /api/ledger の台帳の行、段の数と行の段の字は口 /api/pipeline の札、短い題と起票の時刻は口 /api/beads の
+ //! bead の事実から引く。組の親は id の階層（`a.1` の親は `a`）のいちばん近い epic の祖先で、epic の祖先の無い行は最後の組。
+ //! 一覧の見出しは、種類の切り替え（すべて・便・memo・問い）と探す欄（短い題・題の全体・id）と、指標の口 /api/metrics の
+ //! 小さな数（open の便・memo・問いと純減 24h）と 14 日の burndown の図（棒 = 閉じた数 / 日・線 = open の task）を出す
+-//! （行 g-list-head・要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
+-//! 14 日の burndown の図には、block の前の burndown の段の card を付ける（block の指標の段を外して見出しへ縮めた・行 g-ledger-trim）。
++//! （要件 FR13 の指標で sparkline は出さない）。絞りが効いている間は合う行の在る組だけを開いて出す。
++//! 14 日の burndown の図には、block の前の burndown の段の card を付ける（block の指標の段を外して見出しへ縮めた）。
+ //! memo と問いの行と見出しの未反映の数には、口 /api/cases（器の局面の出力の部品）の局面と手番の平易な字を添える
+ //! （語は台帳の block の辞書の関数・出力がまだ無い間と知らない語は「まだ分からない」・読めない版の出力は「読めない」・
+-//! 古さの印の在る出力は「古い」と添える・要件 FR13・行 g-unref-lc）。
++//! 古さの印の在る出力は「古い」と添える・要件 FR13）。
+ //! 組の頭の名を押すと epic を選び（もう 1 度押すと解く）、板のその組でない札を薄くし、行を押すと吹き出しを開き、吹き出しの
+-//! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（行 g-select・見本の setEpic と applyMarks）。
++//! 開いている bead の行と組の頭と札に輪の印を付け、選んだ組と開いた bead の組は開く（見本の setEpic と applyMarks）。
+ //! 行にマウスの pointer を載せると板の対応する札に輪より薄い hover の印を付け、離すと外す（吹き出しは出さない・pointer の
+-//! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)・行 g-list-hover）。
+-//! 札を持つ行の段の字と、組の頭の段ごとの数の頭には、板の札と同じ段の記号を付ける（判断の記録 ADR-30 決定 (9)・行 g-list-sym）。
++//! 種類がマウスでない画面は印を出さず、窓の幅では分けない・判断の記録 ADR-30 決定 (8)）。
++//! 札を持つ行の段の字と、組の頭の段ごとの数の頭には、板の札と同じ段の記号を付ける（判断の記録 ADR-30 決定 (9)）。
+ //! 組と頭の数と既定の開きと並べと絞りは純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use std::collections::BTreeMap;
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index e8ce2a57541f825d989d70e47f621022407e8e28..c20e14759b726759ff95cc0aea34d1869a80bdd5 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -1,10 +1,10 @@
+ //! 面: 画面を持つ側。project board の頁の枠（frame）と block（project の下に 1 つずつ）と部品（widgets）を置く。
+-//! 見た目と頁の枠は見本（docs/design/mock3）に揃える（便 g-frame）: stylesheet は見本の ui.css の写し・語は vocab.json の写し。
++//! 見た目と頁の枠は見本（docs/design/mock3）に揃える: stylesheet は見本の ui.css の写し・語は vocab.json の写し。
+ //! 並べ方と状態の印と測れていないの判定（view）・枠の値（frame）・block の中身の関数は host でも組み立てて試す。
+-//! 地図の面の部品（帯・圧縮・一覧・表・グラフと近傍）は mapview に置く（便 g-map・地図の頁と block は行 m-map-page で消した）。
++//! 地図の面の部品（帯・圧縮・一覧・表・グラフと近傍）は mapview に置く（地図の頁と block は消した）。
+ //! DOM（board と各 module の view）と通信（net）は wasm の target のときだけ組み立てる（trunk が xtask の surface-build から呼ばれる）。
+-//! account board（便 h-frame）は account に置く: 入口は URL の query の board が account のときだけ選ぶ（同じ index.html と wasm）。
+-//! block に共通の部品は kit に置く（project が再公開する・行 hs-blocks）。
++//! account board は account に置く: 入口は URL の query の board が account のときだけ選ぶ（同じ index.html と wasm）。
++//! block に共通の部品は kit に置く（project が再公開する）。
+ 
+ pub mod account;
+ /// 質問の窓（1 問ずつの選び方と局面は host でも組む・窓の DOM は wasm の target だけ・行 g-ask-win）。
+diff --git a/crates/tsuzuri-surface/src/main.rs b/crates/tsuzuri-surface/src/main.rs
+index b3ba408367e5bae64f499ca4738466b3106caf0f..b343dbd80fe8b6aa44d7100b8ba13b2514f6165d 100644
+--- a/crates/tsuzuri-surface/src/main.rs
++++ b/crates/tsuzuri-surface/src/main.rs
+@@ -1,6 +1,6 @@
+ //! 面の入口（trunk が wasm の target で組み立て、body に board を載せる）。
+ //! URL の query の board が account のときだけ account board を、ほかは今のまま project board を載せる。
+-//! 載せる前に stylesheet の部品を head の末尾へ入れる（行 g-style-parts）。
++//! 載せる前に stylesheet の部品を head の末尾へ入れる。
+ 
+ #[cfg(target_arch = "wasm32")]
+ fn main() {
+diff --git a/crates/tsuzuri-surface/src/mapview/around.rs b/crates/tsuzuri-surface/src/mapview/around.rs
+index 14b6b44ac565c6e8a5aaf332ae63537deecf3c02..663838c1540fcb574495679d33063d37ab39a42c 100644
+--- a/crates/tsuzuri-surface/src/mapview/around.rs
++++ b/crates/tsuzuri-surface/src/mapview/around.rs
+@@ -1,4 +1,4 @@
+-//! 節点の近傍（見本の ui.js の svgAround・chainAround と aroundBlock の数の行・便 g-node）。
++//! 節点の近傍（見本の ui.js の svgAround・chainAround と aroundBlock の数の行）。
+ //! たどる・選ぶ・数えるのは中核の crate が済ませた近傍の電文（契約の型の AroundDoc）で、
+ //! ここは電文の値を写して座標を決めるだけ（節点を選ぶ分岐と数え直しを書かない）。
+ //! 図の配置・線の端と道・図の字・狭い幅の一覧の並び・数の行の字は純粋な関数にして host で試す。
+diff --git a/crates/tsuzuri-surface/src/mapview/band.rs b/crates/tsuzuri-surface/src/mapview/band.rs
+index 88e31b76591b066d8ab428a660f8dfc4b9717455..04cb60a8b3baf3c69a00056bb3356f340a8c0e6a 100644
+--- a/crates/tsuzuri-surface/src/mapview/band.rs
++++ b/crates/tsuzuri-surface/src/mapview/band.rs
+@@ -1,4 +1,4 @@
+-//! 出所の帯（見本の ui.js の BANDS・BAND_PATH・BEADS_LANES）と、節点の種類から帯と語の鍵への閉じた表（便 g-map）。
++//! 出所の帯（見本の ui.js の BANDS・BAND_PATH・BEADS_LANES）と、節点の種類から帯と語の鍵への閉じた表。
+ //! 種類の対応はこの file の表（`KINDS`）の 1 か所だけに置き、ほかの file は関数で引く。
+ //! URL の query に残す種類の名は語の鍵の「k:」の後の字（見本の地図の種類の名と同じ）。
+ 
+diff --git a/crates/tsuzuri-surface/src/mapview/graph.rs b/crates/tsuzuri-surface/src/mapview/graph.rs
+index c60be3c5849be2f76b39c5f3ad23d9506d9124f8..bfa6a533a5d68670dd7365daa188e60bdd8745b7 100644
+--- a/crates/tsuzuri-surface/src/mapview/graph.rs
++++ b/crates/tsuzuri-surface/src/mapview/graph.rs
+@@ -1,9 +1,9 @@
+-//! グラフの面の部品（見本の ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin・便 g-graph）のうち、
++//! グラフの面の部品（見本の ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin）のうち、
+ //! 近傍の図（around）と節点の頁の近傍（project の nodearound）と節点の card が引く物を置く。
+ //! 選ぶ・畳む・数える・段を決めるのは中核の crate が済ませた電文（契約の型の GraphView）で、
+ //! ここは電文の値を写すだけ（節点を選ぶ分岐と数え直しを書かない）。
+ //! 線の道と形・箱の縁・光らせ方・固定の移り方・凡例は純粋な関数にして host で試す。
+-//! グラフの面の DOM と、面だけの配置・拡大・狭い幅の一覧・数の行・眺めの口の読みは行 m-map-graph で消した。
++//! グラフの面の DOM と、面だけの配置・拡大・狭い幅の一覧・数の行・眺めの口の読みは消した。
+ 
+ use std::collections::BTreeMap;
+ use std::fmt::Write;
+diff --git a/crates/tsuzuri-surface/src/mapview/graph/fold.rs b/crates/tsuzuri-surface/src/mapview/graph/fold.rs
+index 8a50a6c20b60007e8fecaeff7e4c3e5f9692402d..8fbbdbeb700de84c2b7479c3fd5209edbbbc372e 100644
+--- a/crates/tsuzuri-surface/src/mapview/graph/fold.rs
++++ b/crates/tsuzuri-surface/src/mapview/graph/fold.rs
+@@ -1,7 +1,7 @@
+-//! グラフの組の箱の開き閉じ（行 g-graph-fold・host でも組む）。
++//! グラフの組の箱の開き閉じ（host でも組む）。
+ //! 箱の開き閉じの語の鍵と、組の箱の持ち主に読める題（節点の card が引く）。
+ //! 選ぶ・畳む・上限で畳み直すのは中核の crate が済ませ、ここは電文の group・fold を写すだけ。
+-//! 開いた箱の列と口の path・右下の印・組の箱の 1 行目・開けなかった id の行は行 m-map-graph で消した。
++//! 開いた箱の列と口の path・右下の印・組の箱の 1 行目・開けなかった id の行は消した。
+ 
+ use tsuzuri_contract::graph::{BoxFold, NodeKind, ViewNode};
+ 
+diff --git a/crates/tsuzuri-surface/src/mapview/mod.rs b/crates/tsuzuri-surface/src/mapview/mod.rs
+index eb1d9c99e800c004e2e9821b63d63a2678d91183..cf4f183a098c44c13c95fb108113715d51f13fe4 100644
+--- a/crates/tsuzuri-surface/src/mapview/mod.rs
++++ b/crates/tsuzuri-surface/src/mapview/mod.rs
+@@ -1,7 +1,7 @@
+-//! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
++//! 地図の面の部品（見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは消した。
+ //! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
+ //! 帯と種類の対応は band・近傍の図は around・近傍と節点の card が引くグラフの部品は graph。
+-//! 圧縮の面と一覧の面は行 m-map-compact で、表の面と 2 つの木の面は行 m-map-tree で、グラフの面の DOM は行 m-map-graph で消した。
++//! 圧縮の面・一覧の面・表の面・2 つの木の面・グラフの面の DOM は消した。
+ //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ pub mod around;
+diff --git a/crates/tsuzuri-surface/src/net.rs b/crates/tsuzuri-surface/src/net.rs
+index a05d835844f825790a278abe6ecc3b1964d61905..d09637fcdbec06632a0f5ec5598eb6cddc90f299 100644
+--- a/crates/tsuzuri-surface/src/net.rs
++++ b/crates/tsuzuri-surface/src/net.rs
+@@ -1,20 +1,20 @@
+-//! 通信（wasm の target のときだけ組み立てる・便 g-parts）: block ごとの読みの口を読み、変化の知らせ（SSE）で読み直す。
++//! 通信（wasm の target のときだけ組み立てる）: block ごとの読みの口を読み、変化の知らせ（SSE）で読み直す。
+ //! block は自分の口の path を `read` に渡し、読みの結果（3 値）の signal を受ける。
+ //! 知らせの接続は頁に 1 本だけ持ち、開いたで登録された口を全部読み直し、読み直しの合図の event を受けたで
+-//! 合図の種類（view の `changed_kinds`）を読む口（view の `reloads`）だけを読み直す（行 c-ev-kind）。
+-//! 初めての口は接続が開くまで読まず、開いた時の 1 巡を最初の読みにする（開かなければ 1 秒で読む・行 g-reads）。
++//! 合図の種類（view の `changed_kinds`）を読む口（view の `reloads`）だけを読み直す。
++//! 初めての口は接続が開くまで読まず、開いた時の 1 巡を最初の読みにする（開かなければ 1 秒で読む）。
+ //! 口ごとの読みの印（flight の Flight）で、読みの途中の呼びは読みの後の 1 回にまとめ、
+ //! 見ている部品が無い（片付いた）口の呼びは部品が戻ったときの 1 回にまとめる。
+-//! 読みの後は view の決め方で置くかを決める（同じ本文は置かない・一度の読めないは 1 秒後に読み直す・便 g-steady）。
++//! 読みの後は view の決め方で置くかを決める（同じ本文は置かない・一度の読めないは 1 秒後に読み直す）。
+ //! 知らせが切れても最後に読めた中身を READ_HOLD_S 秒まで出し続け、越えたら登録された口を全部「読めない」にする
+-//! （要件 NFR2・決め方を通さない・行 g-fresh）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
++//! （要件 NFR2・決め方を通さない）。読みの応答の頭（最後に読めた時からの秒）と切れた時刻は fresh の
+ //! Fresh に置き、上端の帯の最終の記録と読み込み不良の印が読む。台帳の読みが落ちている間は HELD_POLL_MS ごとに読み直す。
+ //! 頁を開いてから READ_HOLD_S 秒の間に知らせの接続が一度も開かなければ（待たされたまま誤りも来ない）、同じく全部を
+-//! 「読めない」にし、理由は Fresh の印の card に出す（最初の読みが開きを待つ形は残す・行 g-accept-face）。
+-//! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む（行 g-pulse）。
+-//! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す（便 g-ask）。
+-//! 読みの重い口（表示先・行 i-stage-own）は `get` で 1 回だけ読む（登録せず知らせでも読み直さない）。
+-//! path が query で変わる口（節点の近傍・便 g-node）は `read_path` に path の字の signal を渡し、
++//! 「読めない」にし、理由は Fresh の印の card に出す（最初の読みが開きを待つ形は残す）。
++//! 読みの印を変えるたびに読みの途中の口を数え直し、上端の帯の読みの脈が読む。
++//! 書きの口へは本文つきの POST を送り、状態の数と本文の字を返す。
++//! 読みの重い口（表示先）は `get` で 1 回だけ読む（登録せず知らせでも読み直さない）。
++//! path が query で変わる口（節点の近傍）は `read_path` に path の字の signal を渡し、
+ //! 読みの結果と応答の状態の数の組を受ける。path が変わったときと知らせの合図で読み直し、接続は同じ 1 本を使う。
+ 
+ use std::cell::{Cell, RefCell};
+diff --git a/crates/tsuzuri-surface/src/pages/home.rs b/crates/tsuzuri-surface/src/pages/home.rs
+index 499a7f156486cd483ff904bd83c89d2316f7ae6a..adbed7b441acd58d8a375bf018591b6bdf9bdc4a 100644
+--- a/crates/tsuzuri-surface/src/pages/home.rs
++++ b/crates/tsuzuri-surface/src/pages/home.rs
+@@ -1,4 +1,4 @@
+-//! home の頁（1 枚の画面・行 g-one-screen-a・判断の記録 ADR-27 決定 (5)）: 台帳 open の一覧 ｜ pipeline の 2 つの面。
++//! home の頁（1 枚の画面・判断の記録 ADR-27 決定 (5)）: 台帳 open の一覧 ｜ pipeline の 2 つの面。
+ //! 席からの知らせ・次の一手・凡例・orchestrator と口座・表示先の block は頁に置かず、帯の印が開く窓（wins の draw）が
+ //! 同じ中身の関数で描く。面の並べ方（幅の 3 段）は stylesheet が決める。
+ 
+diff --git a/crates/tsuzuri-surface/src/pages/mod.rs b/crates/tsuzuri-surface/src/pages/mod.rs
+index 434eb6129aa8953e43f5ba6d2fdb1b4b318d1f7b..e0b7270301d033a764e8a1c6a641413c72e01983 100644
+--- a/crates/tsuzuri-surface/src/pages/mod.rs
++++ b/crates/tsuzuri-surface/src/pages/mod.rs
+@@ -1,4 +1,4 @@
+-//! project board の頁（行 hs-pages・判断の記録 ADR-13）: 1 頁 1 file。各 file は頁の定義（`PAGE`）を持つ。
++//! project board の頁（判断の記録 ADR-13）: 1 頁 1 file。各 file は頁の定義（`PAGE`）を持つ。
+ //! 頁の module の宣言と列挙 `PageId` は組み立ての script（build.rs）が dir の file から生成する
+ //! （頁を足すのは file を 1 つ置くだけ）。
+ 
+diff --git a/crates/tsuzuri-surface/src/pages/node.rs b/crates/tsuzuri-surface/src/pages/node.rs
+index 75c05ab7bbd9e3347b53190d725fd6e2fbc646d4..43503ec31bc0708e8a6244dff6b2fe2aae7babdc 100644
+--- a/crates/tsuzuri-surface/src/pages/node.rs
++++ b/crates/tsuzuri-surface/src/pages/node.rs
+@@ -1,5 +1,5 @@
+ //! 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around と、本文と記録の body と、
+-//! run の時間軸の timeline の 4 つ・詳細の表示の順は判断の記録 ADR-30 決定 (4)・行 g-node-body）。
++//! run の時間軸の timeline の 4 つ・詳細の表示の順は判断の記録 ADR-30 決定 (4)）。
+ //! query の page=node と id で開く。
+ 
+ use crate::frame::{Column, PageDef, STACK};
+diff --git a/crates/tsuzuri-surface/src/project/ask.rs b/crates/tsuzuri-surface/src/project/ask.rs
+index 7d1105e3c7efd2df2f7b7601788ac2e34e10ddeb..8d3ae40ec3752a6c8dc7eb160316ec152984b5df 100644
+--- a/crates/tsuzuri-surface/src/project/ask.rs
++++ b/crates/tsuzuri-surface/src/project/ask.rs
+@@ -1,16 +1,16 @@
+-//! block「答えを待つ質問」（問いの頁・便 g-ask）: 口 /api/questions の card を電文の順（古い順）に番号つきで出し、
++//! block「答えを待つ質問」（問いの頁）: 口 /api/questions の card を電文の順（古い順）に番号つきで出し、
+ //! card ごとに答えの欄から口 /api/ruling へ答えを送る。見本は docs/design/mock3/ask.html の qcard。
+ //! 問いの見分けは server の側（label intake:question）が済ませていて、面は bd の種類で選ばず電文を写すだけ。
+ //! card の部分の並び（配置の表）・card の中身・送る button の状態・鍵の判定・要求の本文・応答から card の状態を決める関数は
+ //! 純粋な関数にして host で試し、DOM と通信は wasm の target のときだけ組み立てる。
+ //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+-//! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
+-//! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
+-//! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
+-//! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す（行 g-ruling-busy）。
+-//! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
++//! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる。
++//! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない）。
++//! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける。
++//! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す。
++//! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す。
+ //! 電文の鍵 others のほかの project の問いは札つきで投稿の時刻の順に 1 つの一覧へ混ぜ、題は link にせず、つながりの段を
+-//! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す（行 e-multi-ask）。
++//! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す。
+ //! 束の block（`cards`・`answerable`）は自分の問いだけを読む。
+ 
+ use tsuzuri_contract::EpochSecs;
+diff --git a/crates/tsuzuri-surface/src/project/askpage.rs b/crates/tsuzuri-surface/src/project/askpage.rs
+index bd182221d5a9ad44980e865cd406eed3a025b57f..71837769658802ac2b659069cf2d00752687b50b 100644
+--- a/crates/tsuzuri-surface/src/project/askpage.rs
++++ b/crates/tsuzuri-surface/src/project/askpage.rs
+@@ -1,11 +1,11 @@
+-//! block「これまでの決定」（問いの頁・便 g-ask）: 答え済みの問いを畳める段に並べる（見本の ask.html の `#hist`）。
++//! block「これまでの決定」（問いの頁）: 答え済みの問いを畳める段に並べる（見本の ask.html の `#hist`）。
+ //! 中は台帳の一覧（口 /api/ledger・定数は ledger の module に 1 本）から、label intake:question を持つ closed の bead を
+ //! id の自然な順（数は数として比べる）に出す。方針の問い（範囲の札の label を持つ）は承認でない（要件 FR8）ので
+ //! 出さず数えない。段は最初は閉じていて、見出しに件数を出す。
+-//! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる（便 g-ask-focus）。
++//! URL の `?id=` で名指された問いが答え済みなら、段を開いてその行に背景を置き画面の上端へ寄せる。
+ //! 選んで並べる関数と件数は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! 行の題と答えた決定の link には、グラフの口の電文から引いた節点の hover の card を付ける（行 g-card-adopt-b）。
+-//! 段は質問の窓の下の畳みの末に置く（行 g-ask-hist・見本の qModal の「これまでの決定 N ›」）: 行は台帳の更新の時刻の
++//! 行の題と答えた決定の link には、グラフの口の電文から引いた節点の hover の card を付ける。
++//! 段は質問の窓の下の畳みの末に置く（見本の qModal の「これまでの決定 N ›」）: 行は台帳の更新の時刻の
+ //! 新しい順で、時刻・短い題（bead の事実の口）・答えた決定・問いの id を出す（`decisions`・`inner`）。頁には置かない。
+ 
+ use std::collections::BTreeMap;
+diff --git a/crates/tsuzuri-surface/src/project/batch.rs b/crates/tsuzuri-surface/src/project/batch.rs
+index 5875872c814a36536dbd9d023e14e659cc996806..5f7ebca93f8768014c88b80fcf0e1375bc91f47f 100644
+--- a/crates/tsuzuri-surface/src/project/batch.rs
++++ b/crates/tsuzuri-surface/src/project/batch.rs
+@@ -1,11 +1,10 @@
+-//! block「まとめて承認」（問いの頁の右の列・便 g-batch）: 問いの一覧（ask の module の口）の card を 1 行ずつ出し、
++//! block「まとめて承認」（問いの頁の右の列）: 問いの一覧（ask の module の口）の card を 1 行ずつ出し、
+ //! 選んだ card を 1 つの束にして口 /api/batch へ送る。見本は docs/design/mock3/ask.html の side の id batch。
+ //! A-1 の印を持つ card は選べない（選ぶ box の代わりに印を出す）。ほかの行は初めは選ばれている。
+ //! 行の一覧・関わる所の数と重なりの数・送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
+ //! DOM と通信は wasm の target のときだけ組み立てる。
+ //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+-//! 問いの一覧の電文の answerable が偽（読むだけの server）なら、欄と button の代わりにチャットで答える 1 行を出す
+-//! （行 e-ask-own-only）。
++//! 問いの一覧の電文の answerable が偽（読むだけの server）なら、欄と button の代わりにチャットで答える 1 行を出す。
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+diff --git a/crates/tsuzuri-surface/src/project/gaps.rs b/crates/tsuzuri-surface/src/project/gaps.rs
+index 9e89f1d3505219d8bc1462dc88bdca17ab76c172..66cd86fdf15793ccb15bd179f8970af098a450a9 100644
+--- a/crates/tsuzuri-surface/src/project/gaps.rs
++++ b/crates/tsuzuri-surface/src/project/gaps.rs
+@@ -1,8 +1,8 @@
+-//! 抜けの検査の頁（見本の gaps.html・便 g-gaps）: 不変条件の 12 本の判定を数の札（3 枚）と畳める段の一覧で見せる。
++//! 抜けの検査の頁（見本の gaps.html）: 不変条件の 12 本の判定を数の札（3 枚）と畳める段の一覧で見せる。
+ //! 判定は中核の crate が数え済みで、口（/api/graph・定数は map の module に 1 本）の電文 GraphDoc の invariants を写すだけにする。
+ //! 札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は純粋な関数にして host で試し、
+ //! DOM は wasm の target のときだけ、この値を順にたどって組み立てる。
+-//! 名指しの項のうち電文の節点に在るものは、節点の頁への link に節点の hover の card を付ける（行 g-card-adopt-c）。
++//! 名指しの項のうち電文の節点に在るものは、節点の頁への link に節点の hover の card を付ける。
+ 
+ use std::collections::BTreeMap;
+ 
+diff --git a/crates/tsuzuri-surface/src/project/ledger.rs b/crates/tsuzuri-surface/src/project/ledger.rs
+index 825241cdc046d17bce815566de5e3bf2080791b9..0b986f78948d46ee86d71eedab6bbcc1ef9cc301 100644
+--- a/crates/tsuzuri-surface/src/project/ledger.rs
++++ b/crates/tsuzuri-surface/src/project/ledger.rs
+@@ -1,14 +1,14 @@
+-//! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数・便 g-ledger）:
++//! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数）:
+ //! 見出しの横に判定の 1 語を出し、中身は台帳 open の一覧（module ledgerlist の epic ごとの組）だけを描く。
+ //! 前の指標の段（上段の 4 数・主な指標の行・burndown・memo の段）は外し、指標は一覧の見出しの小さな数と図に縮めた
+-//! （判断の記録 ADR-27 の決定 (8)・行 g-ledger-trim）。未反映の段（数と一覧）は帯の抜けの検査の窓の下へ移した（要件 FR13）。
++//! （判断の記録 ADR-27 の決定 (8)）。未反映の段（数と一覧）は帯の抜けの検査の窓の下へ移した（要件 FR13）。
+ //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、
+ //! ここは写すだけ（数え直しと判定の分岐を持たない）。一覧の見出しの図（burndown の座標と svg と card）と純減の字も
+ //! この file の関数で、sparkline と判定の表は account board も引く。
+ //! 一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
+-//! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
+-//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
+-//! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
++//! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く。
++//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す。
++//! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える。
+ //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ 
+ use tsuzuri_contract::EpochSecs;
+diff --git a/crates/tsuzuri-surface/src/project/legend.rs b/crates/tsuzuri-surface/src/project/legend.rs
+index 3fafe6ff067fcb1414e456699fdc133bb455b368..1f41d99aa5a7f2c828606962d6ecb17525e3ed25 100644
+--- a/crates/tsuzuri-surface/src/project/legend.rs
++++ b/crates/tsuzuri-surface/src/project/legend.rs
+@@ -1,5 +1,5 @@
+ //! block「記号の見方」（見本の `#legend`）: 状態の記号 5 値の凡例と、一覧の項に付く bd の状態の印の凡例と、
+-//! 画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile の語と「?」の注釈・行 g-help-sweep）。
++//! 画面の見方（1 枚の画面・上の帯・窓・吹き出し・幅の 3 段・段の tile の語と「?」の注釈）。
+ 
+ use super::STATES;
+ use crate::frame::Block;
+diff --git a/crates/tsuzuri-surface/src/project/mod.rs b/crates/tsuzuri-surface/src/project/mod.rs
+index aa79424f20a9f133f7f3b81e809f754386f225d2..c41c59a8c183c9281687c9460defb0fd9673665e 100644
+--- a/crates/tsuzuri-surface/src/project/mod.rs
++++ b/crates/tsuzuri-surface/src/project/mod.rs
+@@ -1,16 +1,16 @@
+-//! project board の block（便 g-frame）: 1 つの block に 1 つの module。
++//! project board の block: 1 つの block に 1 つの module。
+ //! 各 module は枠の値（`BLOCK`）と中身の純粋な関数を持ち、DOM は wasm の target のときだけ組み立てる。
+-//! 問いの頁（便 g-ask）は ask（問いの card の列・口 /api/questions）と askpage（これまでの決定・台帳の一覧の口）の 2 つ。
+-//! 抜けの検査の頁（便 g-gaps）は gaps（不変条件の 12 本の判定・口 /api/graph の定数は map の module の 1 本を使う）。
+-//! 各 block は自分の読みの口の path を module の定数に持ち、通信（net）の同じ関数で読む（便 g-parts）。
++//! 問いの頁は ask（問いの card の列・口 /api/questions）と askpage（これまでの決定・台帳の一覧の口）の 2 つ。
++//! 抜けの検査の頁は gaps（不変条件の 12 本の判定・口 /api/graph の定数は map の module の 1 本を使う）。
++//! 各 block は自分の読みの口の path を module の定数に持ち、通信（net）の同じ関数で読む。
+ //! 中身の関数は読みの結果（3 値）を受けて中身を返す純粋な関数。next・pipeline・seat・map と ledger の指標の段は、
+ //! 3 値のどれを受けても測れていないの印と理由の 1 行を返す（本文を読んで中身を返すのは後の block の便）。
+-//! 畳める段（details）の開き閉じは鍵ごとの記録（`Folds`）から読み、toggle で書き戻す（組み直しの後も保つ・便 g-steady）。
+-//! 節点の頁（便 g-node）は node（頭と概要）と nodearound（つながり・口の path の頭 /api/around に query を付けて読む）の 2 つ。
++//! 畳める段（details）の開き閉じは鍵ごとの記録（`Folds`）から読み、toggle で書き戻す（組み直しの後も保つ）。
++//! 節点の頁は node（頭と概要）と nodearound（つながり・口の path の頭 /api/around に query を付けて読む）の 2 つ。
+ //! 2 つの block は nodearound の module が持つ 1 つの読みを分ける。
+-//! 問いの頁の右の列（便 g-batch）は batch（まとめて承認・口 /api/batch）と policy（全体への指示・口 /api/policy）の 2 つ。
++//! 問いの頁の右の列は batch（まとめて承認・口 /api/batch）と policy（全体への指示・口 /api/policy）の 2 つ。
+ //! 2 つとも問いの一覧を ask の module の口から読む（同じ path の読みは 1 つの signal を分ける）。
+-//! block に共通の部品は kit に置き、ここで全部を再公開する（行 hs-blocks）。block の module の宣言と列挙 `Module` は
++//! block に共通の部品は kit に置き、ここで全部を再公開する。block の module の宣言と列挙 `Module` は
+ //! 組み立ての script（build.rs）が dir の file から生成する（block を足すのは file を 1 つ置くだけ・判断の記録 ADR-13）。
+ 
+ pub use crate::kit::*;
+diff --git a/crates/tsuzuri-surface/src/project/next.rs b/crates/tsuzuri-surface/src/project/next.rs
+index 8c3f15c50e4f9a394b6aac6c6013c563e4cc8d3d..c44ec1c2f1a5d61099ea01a1fa603e874ec3d1b6 100644
+--- a/crates/tsuzuri-surface/src/project/next.rs
++++ b/crates/tsuzuri-surface/src/project/next.rs
+@@ -1,9 +1,9 @@
+-//! block「次の一手」（便 g-next）: 口 /api/next（契約の型の NextStep）の読みと、7 種の語の鍵と大きく出す 1 つの箱の字。
++//! block「次の一手」: 口 /api/next（契約の型の NextStep）の読みと、7 種の語の鍵と大きく出す 1 つの箱の字。
+ //! 判定は中核の crate が済ませていて、ここは写すだけ（大きく出す 1 つは電文の lead・各種の結果は電文の checks）。
+ //! 7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
+-//! 頁に block を置かない（1 枚の画面への切り替えの行 g-one-screen-a）。帯の pill（topbar）と account board が
++//! 頁に block を置かない（1 枚の画面への切り替え）。帯の pill（topbar）と account board が
+ //! この module の純粋な関数（`step`・`key`・`unjudged`・`big`）を使う。block の DOM と、DOM だけが使った一覧の行・
+-//! 次の手の link・窓の探し方は行 g-dead-sweep-a で消した（view は組み立ての script が module ごとに要るので空の中身）。
++//! 次の手の link・窓の探し方は消した（view は組み立ての script が module ごとに要るので空の中身）。
+ 
+ use tsuzuri_contract::board::NextMove;
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+diff --git a/crates/tsuzuri-surface/src/project/node.rs b/crates/tsuzuri-surface/src/project/node.rs
+index ae74b72b26672278ade6a9553219374f58c3d62d..e8dd44d8a2ee7e56177c9391bc8ddd98e0e9e58c 100644
+--- a/crates/tsuzuri-surface/src/project/node.rs
++++ b/crates/tsuzuri-surface/src/project/node.rs
+@@ -1,15 +1,15 @@
+-//! block「節点」（見本の bead.html の頭と概要・便 g-node）: 節点の頁の 1 つ目の block。
++//! block「節点」（見本の bead.html の頭と概要）: 節点の頁の 1 つ目の block。
+ //! 近傍の口の電文（block「つながり」と同じ 1 つの読み・nodearound の module が持つ）の中心の行（列 0）から頭と概要を組む。
+ //! 頭・概要・質問の頁への link は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（行 g-sum-pick・判断の記録 ADR-30 決定 (2)）。
++//! 概要は表示の型の 1 つを切らずに 1 つの箱に出し、もう一方は箱の下に畳んで置く（判断の記録 ADR-30 決定 (2)）。
+ //! 2 つの概要が両方無い bead は、本文の頭の 1 行を「本文から」の印つきで箱に出す。本文は block「本文と記録」と同じ
+-//! 1 本の引きの読み（nodebody の module の `item_source`）から取り、同じ口を 2 度読まない（行 g-node-excerpt）。
+-//! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く（行 e-revoke）。
++//! 1 本の引きの読み（nodebody の module の `item_source`）から取り、同じ口を 2 度読まない。
++//! 決定の頁（中心が あなたの決定）の頭には、理由の欄と 取り消す の button を置く。
+ //! 出すのは問いの 1 本の引きを読み、その決定が閉じた問いの効いている最後の決定のときだけ（server の受付と同じ関数で判じる）。
+ //! 取り消しで戻るのは台帳だけで、問いは未回答に戻る。開き直しだけが落ちた後も button は残り、
+ //! 撃ち直しは同じ button をもう一度押す（server は行を足さず開き直しだけを撃つ）。
+ //! 中心の bead の札が段 Held（留め置き）の時は、頭と概要の下に吹き出しと同じ 4 つの欄（止めた者・理由・止めた時刻と経過・
+-//! 解く条件）を 1 段で出す。欄は吹き出しの `pop::held_facts` で組み、2 本目を書かない（判断の記録 ADR-42 決定 (7)・行 g-held-page）。
++//! 解く条件）を 1 段で出す。欄は吹き出しの `pop::held_facts` で組み、2 本目を書かない（判断の記録 ADR-42 決定 (7)）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::graph::{AroundDoc, AroundRow, NodeKind, title36};
+diff --git a/crates/tsuzuri-surface/src/project/nodearound.rs b/crates/tsuzuri-surface/src/project/nodearound.rs
+index 34921de2d63ae5e26db093193d3301724d928820..f9e4a18788d4be8fca93e6c987fb89751eb4847a 100644
+--- a/crates/tsuzuri-surface/src/project/nodearound.rs
++++ b/crates/tsuzuri-surface/src/project/nodearound.rs
+@@ -1,4 +1,4 @@
+-//! block「つながり」（見本の bead.html の近傍と ui.js の aroundBlock・nbK・nbFold・便 g-node）: 節点の頁の 2 つ目の block。
++//! block「つながり」（見本の bead.html の近傍と ui.js の aroundBlock・nbK・nbFold）: 節点の頁の 2 つ目の block。
+ //! 口の本文を契約の型の AroundDoc に読み、図と一覧と数の行は mapview の around が組む（ここは写すだけ）。
+ //! 口の path は URL の query（id・k・fold）で変わるので、path の字の signal を通信の module の読みの関数に渡す。
+ //! 段数と畳みは URL の query の k と fold に残し（履歴に積まない）、変われば新しい query で口を読み直す。
+diff --git a/crates/tsuzuri-surface/src/project/nodebody.rs b/crates/tsuzuri-surface/src/project/nodebody.rs
+index 8c4c8cdbefee95d653e417d0966093aa5a120296..0616ad6c3dd899949c2339751c2a520475a54c89 100644
+--- a/crates/tsuzuri-surface/src/project/nodebody.rs
++++ b/crates/tsuzuri-surface/src/project/nodebody.rs
+@@ -1,10 +1,10 @@
+-//! block「本文と記録」（行 g-node-body・判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
++//! block「本文と記録」（判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
+ //! run の時間軸の前）。中心の節点が台帳の bead（契約・epic・memo・問い）の時だけ、その 1 本の引きの口（`ITEM_PATH`）から
+ //! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも、その browser の
+ //! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
+-//! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
++//! store の FOLD_KEYS〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
+ //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る（行 g-node-excerpt）。
++//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る。
+ 
+ use tsuzuri_contract::graph::{AroundRow, NodeKind};
+ use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
+diff --git a/crates/tsuzuri-surface/src/project/notice.rs b/crates/tsuzuri-surface/src/project/notice.rs
+index 514a9794f2bf4c9f67a828cc3cccd5ddc7f33f58..dc7b9b32298f0b84b7ce48480aae58a0c525d60f 100644
+--- a/crates/tsuzuri-surface/src/project/notice.rs
++++ b/crates/tsuzuri-surface/src/project/notice.rs
+@@ -1,4 +1,4 @@
+-//! block「席からの知らせ」（見本に無い block・home の左の列の頭・行 i-11・要件 FR16）: この project の席が「見て」と言った
++//! block「席からの知らせ」（見本に無い block・home の左の列の頭・要件 FR16）: この project の席が「見て」と言った
+ //! 最新の 1 つ（題・頁への link・時刻）。端末の知らせを見逃しても board を開けば分かる。
+ //! 中身は口 /api/notices（契約の型の Notices）の latest から自分の名の 1 つを写すだけ。材料は tz stage notify の記録だけで、
+ //! 題は書き手が検めた字を写す。link にするのは http と https の URL だけで、同じ tab で開く（窓を前に出さない）。
+diff --git a/crates/tsuzuri-surface/src/project/pipeline.rs b/crates/tsuzuri-surface/src/project/pipeline.rs
+index 5288e8e6f17fdf5526ca4c0332f51c34e69c6879..af7c22b12924b04555f5689ba66058937a17af89 100644
+--- a/crates/tsuzuri-surface/src/project/pipeline.rs
++++ b/crates/tsuzuri-surface/src/project/pipeline.rs
+@@ -1,22 +1,22 @@
+-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯。
+-//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
+-//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
++//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML）: 5 列の板・札・「+n」・0 件の帯。
++//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)）。
++//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない）。
+ //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
+ //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
+ //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
++//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
+ //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
+ //! 語は語の辞書の `CI_KEYS` の鍵から引く。
+-//! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
+-//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める（行 g-tick-adopt）。
+-//! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
++//! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く。札の meta の経過は 1 秒の時計（net の ticker）で
++//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める。
++//! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`）。
+ //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
+-//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards・
+-//! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
++//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（
++//! 札の hover の card の値の組みと節点の card への替えと札の link の先は消した）。
+ //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
+-//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
++//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`）。
+ //! 留め置きの札は Blocked の列に出し、席の止めと受付の断りで別の印（widgets の keyline の `HeldBy`）を札の meta に置く。Blocked の札は印を持たない。
+-//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)・行 g-held-col）。
++//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)）。
+ 
+ use std::collections::BTreeMap;
+ 
+diff --git a/crates/tsuzuri-surface/src/project/policy.rs b/crates/tsuzuri-surface/src/project/policy.rs
+index 05a75589a4d991fa3bd4f60f6b7f5e4be1f1b9ba..116d8619468beb4d38ca0c4f4704179a1a6edc4f 100644
+--- a/crates/tsuzuri-surface/src/project/policy.rs
++++ b/crates/tsuzuri-surface/src/project/policy.rs
+@@ -1,10 +1,10 @@
+-//! block「全体への指示」（問いの頁の右の列・便 g-batch）: 方針の逐語を、つねに範囲 全体（字 all）で口 /api/policy へ送る。
++//! block「全体への指示」（問いの頁の右の列）: 方針の逐語を、つねに範囲 全体（字 all）で口 /api/policy へ送る。
+ //! 見本は docs/design/mock3/ask.html の side の id policy（範囲の切り替えは持ち主の指示で外した・1 つの問いへの答えは問いの card の欄で書く）。
+ //! 問いの一覧は読まないので、字の欄と送る button は 1 度だけ組み、書きかけの欄の focus と caret を保つ。
+ //! 送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
+ //! DOM と通信は wasm の target のときだけ組み立てる。
+ //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
+-//! server の書きの断り（根が無い・作れない・途中で落ちた・閉じる書きだけ落ちた）は、何が起きたかと送り直してよいかを持ち主の語の 1 行にする（行 g-policy-face）。
++//! server の書きの断り（根が無い・作れない・途中で落ちた・閉じる書きだけ落ちた）は、何が起きたかと送り直してよいかを持ち主の語の 1 行にする。
+ 
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::surface::{PolicyRequest, PolicyResponse, RulingId};
+diff --git a/crates/tsuzuri-surface/src/project/seat.rs b/crates/tsuzuri-surface/src/project/seat.rs
+index c63838eabe445ab2e69b35fd0d4489be76b99b0c..090274b319a8f769df456699547947290d459395 100644
+--- a/crates/tsuzuri-surface/src/project/seat.rs
++++ b/crates/tsuzuri-surface/src/project/seat.rs
+@@ -1,12 +1,12 @@
+ //! block「orchestrator と口座」（見本の `#orch` と index.html の renderSeat・lowHTML・bandHTML・
+-//! ui.js の stripSVG・stIcon・tkhbHTML・acct.js の meter・便 g-seat）。
++//! ui.js の stripSVG・stIcon・tkhbHTML・acct.js の meter）。
+ //! 中身は口 /api/seat（契約の型の SeatCard）から読む。状態の判定は server が済ませていて、ここは写すだけ。
+ //! 電文の中の「まだ分からない」の欄はその欄だけ測れていないの記号にし、読めた欄は出す（要件 NFR2）。
+ //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+ //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
+ //! 状態の帯の猶予の内・移り先の無い断り・逼迫の行は、電文の器の移動の 4 つの欄
+ //! （move_to・grace_until・refused・pressure）を写すだけで判じない。猶予の残り秒だけは終わる時刻から
+-//! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方・行 c-abs-seat）。
++//! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方）。
+ //! 窓の行の閾値の線と印は、同じ口 /api/account の電文の caps（器の rules 行の写し）を窓の名で写すだけで判じない。
+ 
+ use tsuzuri_contract::EpochSecs;
+diff --git a/crates/tsuzuri-surface/src/project/stage.rs b/crates/tsuzuri-surface/src/project/stage.rs
+index 3700b063a4a75b8abb05d7d8f47bd853a59de084..48f696c53abd46327b61fbc234aa02b18f2f9d76 100644
+--- a/crates/tsuzuri-surface/src/project/stage.rs
++++ b/crates/tsuzuri-surface/src/project/stage.rs
+@@ -1,11 +1,11 @@
+-//! block「表示先」（home の右の列・行 i-stage-own・要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)・
+-//! 持ち主の裁定 t3-hub.59.1 と t3-hub.59.7 と t3-hub.52.29）: 窓の表示先の設定を読み、自分の project の分だけ置く・戻す。
++//! block「表示先」（home の右の列・要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)）:
++//! 窓の表示先の設定を読み、自分の project の分だけ置く・戻す。
+ //! 口は契約の stage の path（読みと書きは `PATH`・窓を開く頼みは `OPEN_PATH`）で、この file は口の字を書かない。
+ //! 読みは畳んだ block を開いた時と書きの後の 1 回だけ（GET 1 回で子 process が約 3 本立つ・判断の記録 ADR-23 の軽さの向き）。
+ //! だから知らせの登録の読みを使わず、変化の知らせでも読み直さず、上端の帯の最終の記録にも数えない。
+ //! 窓を開く button は持ち主が押す口で、席は押さない（server は頭 Origin の無い POST を断る）。
+ //! 字と本文と 1 行は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
+-//! account board の block（行 i-stage-all）も `Face` と `load` と `send` と純粋な関数を使う。
++//! account board の block も `Face` と `load` と `send` と純粋な関数を使う。
+ 
+ use tsuzuri_contract::stage::{Effective, OpenRequest, Origin, OwnTarget, StageTargets};
+ use tsuzuri_contract::wire;
+diff --git a/crates/tsuzuri-surface/src/project/timeline.rs b/crates/tsuzuri-surface/src/project/timeline.rs
+index e00d230f808447206db3e8b79bc1cca1ac1c0418..8895eccf995a0332b8c530e598b956d4f19e416b 100644
+--- a/crates/tsuzuri-surface/src/project/timeline.rs
++++ b/crates/tsuzuri-surface/src/project/timeline.rs
+@@ -1,4 +1,4 @@
+-//! block「run の時間軸」（見本の bead.html の時間軸の panel・便 g-node-timeline・要件 FR10）: 節点の頁の 3 つ目の block。
++//! block「run の時間軸」（見本の bead.html の時間軸の panel・要件 FR10）: 節点の頁の 3 つ目の block。
+ //! 契約・epic の節点はその bead の走行を 1 行ずつ、走行の節点はその 1 行を、走行の読みの口（契約の型の runs の PATH）から出す。
+ //! 近傍の読み（nodearound の module の source）の中心の行から読む bead を決め、段の chip は続く同じ段を 1 つにまとめる。
+ //! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値・走行の link の card は純粋な関数にして host で試す。
+diff --git a/crates/tsuzuri-surface/src/seatpill.rs b/crates/tsuzuri-surface/src/seatpill.rs
+index 0edf644a3c52b999d22fa403846c7b93a492be76..77023f4cd8bb9351cab74830102ac97bd9fff8cd 100644
+--- a/crates/tsuzuri-surface/src/seatpill.rs
++++ b/crates/tsuzuri-surface/src/seatpill.rs
+@@ -1,4 +1,4 @@
+-//! header の席の pill（行 g-seatpill・見本の ui.js の topHTML の `.seatpill` と seatPillHTML と seatCard）:
++//! header の席の pill（見本の ui.js の topHTML の `.seatpill` と seatPillHTML と seatCard）:
+ //! 状態の記号と語 orchestrator と、応答なしなら応答なしになった時からの経過を出し、指を置くと席の card を出す。
+ //! 中身は口 /api/seat（契約の型の SeatCard・読み手は project の seat）から読み、電文を決めずに写す。
+ //! 電文に無い見本の値（管理の tick の最後の時刻からの経過）は出さない。
+diff --git a/crates/tsuzuri-surface/src/store.rs b/crates/tsuzuri-surface/src/store.rs
+index 782194a0f62726900073c1713f60e8cab9b2f8e1..c1e579a80df0fb8531e31e4f1998630441fbd72f 100644
+--- a/crates/tsuzuri-surface/src/store.rs
++++ b/crates/tsuzuri-surface/src/store.rs
+@@ -1,11 +1,11 @@
+-//! browser の保存（見本 mock v3 の ui.js の store と同じ口・行 g-mode-store）。
+-//! 持ち主の裁定 t3-hub.52.16 と要件 FR1: mode と account board から開いた窓の一覧と最初の案内の済み印の 3 つを
++//! browser の保存（見本 mock v3 の ui.js の store と同じ口）。
++//! 要件 FR1: mode と account board から開いた窓の一覧と最初の案内の済み印の 3 つを
+ //! その browser に残す。これは便利のための写しで正本ではなく、保存が消えても面は URL と server の読みから同じ画面を組む。
+ //! 決め方（mode_start）は host でも組み立てて試し、保存と URL を撃つ所は wasm の target のときだけ組み立てる。
+ //! 保存は origin ごとなので、port の違う account board と各 project board はそれぞれ自分の写しを持つ。
+-//! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し・行 h-win-store）。
++//! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し）。
+ //! 個別の頁の本文と記録の 2 つの畳める段の開き閉じも、段の種類ごとの鍵でその browser に残す（節点ごとでない・
+-//! 判断の記録 ADR-30 決定 (4)・持ち主の裁定 t3-hub.76.4・行 g-fold-keep）。ほかの畳める段は頁の一生の間だけ持つ。
++//! 判断の記録 ADR-30 決定 (4)）。ほかの畳める段は頁の一生の間だけ持つ。
+ 
+ use crate::frame::{self, Mode};
+ 
+diff --git a/crates/tsuzuri-surface/src/style.rs b/crates/tsuzuri-surface/src/style.rs
+index edefd54a96f5f88a7650666c57daa69f13b66d40..d5305e06f2973876342562a1e5a736d9702231d7 100644
+--- a/crates/tsuzuri-surface/src/style.rs
++++ b/crates/tsuzuri-surface/src/style.rs
+@@ -1,4 +1,4 @@
+-//! stylesheet の部品（行 g-style-parts・判断の記録 ADR-58）。基の style.css は index.html の link のまま配る。
++//! stylesheet の部品（判断の記録 ADR-58）。基の style.css は index.html の link のまま配る。
+ //! style の dir の部品は組み立ての script が名の byte の順の表 PARTS にし、wasm が面を描く前に head の末尾へ
+ //! `<style>` 1 つとして入れる（基の後に効く）。selector の字は基と部品の全部の中で 1 つの file だけが持つ。
+ 
+diff --git a/crates/tsuzuri-surface/src/tiles.rs b/crates/tsuzuri-surface/src/tiles.rs
+index c822ca34baf67a925279dfd34d0a04f98156ca44..c6fd5660683dcb79ee6ae5476d5ad035d5190b5d 100644
+--- a/crates/tsuzuri-surface/src/tiles.rs
++++ b/crates/tsuzuri-surface/src/tiles.rs
+@@ -1,4 +1,4 @@
+-//! 幅の 3 段とスマホの段の tile（行 g-layout・判断の記録 ADR-27 決定 (5)・規則の行 R-35・見本 board-v2 の applyLayout と
++//! 幅の 3 段とスマホの段の tile（判断の記録 ADR-27 決定 (5)・規則の行 R-35・見本 board-v2 の applyLayout と
+ //! renderPipe の mpipe と openTile）: 幅 1200 px 以上は横並び（左に一覧・右に pipeline）、601〜1199 px は縦積み（上に pipeline の
+ //! 5 列・下に一覧・pipeline の面の中だけを横に scroll させて 5 列を保つ）、600 px 以下はスマホの形（頁は縦に scroll し、
+ //! pipeline は 5 つの段の tile と開いた段の札の並び）。並べ方は stylesheet の media の規則が決め、境の値はここの定数と同じ字。
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+index d6ef5a94fba4a2713f3f5039d318e0e88a4b55b9..7a0a78bf5977617ed96203e4f100ab66533da39b 100644
+--- a/crates/tsuzuri-surface/src/topbar.rs
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -1,12 +1,12 @@
+-//! 上の固定の帯（行 g-topbar・判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
++//! 上の固定の帯（判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
+ //! 左に account board へ戻る口と project の名、真ん中に次の一手の pill と、やる事の 3 つの数（質問・止まった run・
+ //! 抜けの検査・1 以上の物だけ色）と、席からの最新の知らせの 1 行と件数、右に席と口座（状態・直近 3 時間の細い帯・
+ //! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
+-//! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は行 g-win-parts と行 g-ask-win が描く。
++//! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は wins と askwin の module が描く。
+ //! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
+ //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
+ //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
+-//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない・行 g-win-url）。
++//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{NextMove, Reading};
+diff --git a/crates/tsuzuri-surface/src/view.rs b/crates/tsuzuri-surface/src/view.rs
+index 34a4f2f2dd10a0710da26ff6c85a77e70ff2786a..539a44c06d782092bc1ab14080cc169e0a45ba70 100644
+--- a/crates/tsuzuri-surface/src/view.rs
++++ b/crates/tsuzuri-surface/src/view.rs
+@@ -1,9 +1,9 @@
+-//! 画面の中身を決める純粋な関数（便 g-min）: 並べ方・状態の印・測れていないの判定・時刻の字（日本時間・行 g-jst）。
++//! 画面の中身を決める純粋な関数: 並べ方・状態の印・測れていないの判定・時刻の字（日本時間）。
+ //! DOM と通信に触らないので host の cargo test で試す（描くのは project の下の block・読むのは net）。
+-//! 件数と見出しは block の module が持つ（便 g-frame・見出しの語は vocab から引く）。
+-//! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品（便 g-parts）。
+-//! 合図の種類と口の path の表で、合図ごとに読み直す口を決める（行 c-ev-kind）。
+-//! 読みの後に signal へ新しい値を置くかの決め方（便 g-steady）もここに置き、net が口の読みごとに呼ぶ。
++//! 件数と見出しは block の module が持つ（見出しの語は vocab から引く）。
++//! 読みの結果の 3 値と読み直しの合図の event の名は block に共通の部品。
++//! 合図の種類と口の path の表で、合図ごとに読み直す口を決める。
++//! 読みの後に signal へ新しい値を置くかの決め方もここに置き、net が口の読みごとに呼ぶ。
+ 
+ use std::cmp::Ordering;
+ 
+diff --git a/crates/tsuzuri-surface/src/vocab.rs b/crates/tsuzuri-surface/src/vocab.rs
+index 37222f3b9bdab0332f12b938b9f7be1cd8fa388b..90566a74db59129ae029e76d27cd5f92fac2913d 100644
+--- a/crates/tsuzuri-surface/src/vocab.rs
++++ b/crates/tsuzuri-surface/src/vocab.rs
+@@ -1,8 +1,8 @@
+-//! 語彙（見本の vocab.json を面の crate に写した file・便 g-frame）。見出しの語と「?」の注釈の字はここから引く。
++//! 語彙（見本の vocab.json を面の crate に写した file）。見出しの語と「?」の注釈の字はここから引く。
+ //! 2 欄（english = 英語のまま + 注釈・rephrase = 日本語の見出し）の和集合を鍵で引く（見本の ui.js の vt と同じ）。
+ //! 面の crate は外の依存を足さないので、JSON は小さな読みで読む（object・array・字・数・真偽・null）。
+ //! 基の vocab.json に加え、vocab の dir の部品（新しい鍵だけを足す行の file・名の byte の順）も 1 つの表に読み、
+-//! どの file の中でも外でも鍵の重なりは Err にする（行 g-vocab-parts・判断の記録 ADR-58 決定 (1)(3)(4)）。
++//! どの file の中でも外でも鍵の重なりは Err にする（判断の記録 ADR-58 決定 (1)(3)(4)）。
+ 
+ use std::collections::BTreeMap;
+ use std::sync::OnceLock;
+diff --git a/crates/tsuzuri-surface/src/widgets/coach.rs b/crates/tsuzuri-surface/src/widgets/coach.rs
+index 0a64a027cf9059f30769ffe59ecafa311a0a8677..1a5bb200dcb355acd35946e350280c632858b822 100644
+--- a/crates/tsuzuri-surface/src/widgets/coach.rs
++++ b/crates/tsuzuri-surface/src/widgets/coach.rs
+@@ -1,6 +1,6 @@
+-//! 最初の案内（coach mark・行 g-coach・的と字と置き場は行 g-help-sweep で 1 枚の画面の部品に合わせた）:
++//! 最初の案内（coach mark・的と字と置き場は 1 枚の画面の部品に合わせた）:
+ //! 初心者の mode の home の頁で、帯の次の一手・帯の印・段の tile・札・⚙ を順に輪で囲み、短い字の帯を出す。
+-//! 済み印は browser の保存に残し（持ち主の裁定 t3-hub.52.16・store の口）、query の `coach=1` で出し直す。
++//! 済み印は browser の保存に残し（store の口）、query の `coach=1` で出し直す。
+ //! 本番の部品は電文を読んだ後に描くので、どれかの段の要素が出るまで 5 秒まで待ってから出す
+ //! （待ち切っても出なければ何も出さず済み印も書かない）。的は selector の片ごとの最初の要素のうち見える最初の要素で、
+ //! 見えない段（幅で隠れる tile など）は飛ばす。
+diff --git a/crates/tsuzuri-surface/src/widgets/hover.rs b/crates/tsuzuri-surface/src/widgets/hover.rs
+index 6fcb77bf78b4b14d2ab1f4140ab87d1bcd3ccf3a..d0dfd278a6d9607528fb3784549bc60ca38234ed 100644
+--- a/crates/tsuzuri-surface/src/widgets/hover.rs
++++ b/crates/tsuzuri-surface/src/widgets/hover.rs
+@@ -1,4 +1,4 @@
+-//! hover の card（見本の ui.js の card4 と同じ 4 行 + 「詳しく ▸」・便 g-parts）。節点と札に指を置くと出す。
++//! hover の card（見本の ui.js の card4 と同じ 4 行 + 「詳しく ▸」）。節点と札に指を置くと出す。
+ //! card の層は頁に 1 つ（`CardLayer`）で、block は要素に card を付ける関数（`attach`）を呼ぶだけにする。
+ //! 置き場・猶予の判定・行の切り方は純粋な関数にして host で試す。値は規則の行 R-20（右 16 px・上 20 px・猶予 150 ms）と
+ //! 行 R-19（4 行・1 行 36 字）の値で、歯が rules の file の字と照らす。
+diff --git a/crates/tsuzuri-surface/src/widgets/keyline.rs b/crates/tsuzuri-surface/src/widgets/keyline.rs
+index a09234983082c60b69b2b8266ea103703a083ab4..b9bddbda3a4fef7d89ccb5b2d2ebfca7f5b8e998 100644
+--- a/crates/tsuzuri-surface/src/widgets/keyline.rs
++++ b/crates/tsuzuri-surface/src/widgets/keyline.rs
+@@ -1,9 +1,9 @@
+-//! pipeline の札の段ごとの要の 1 行（行 g-pipe-cards・判断の記録 ADR-27 決定 (6)・見本 board-v2 の cardLine）:
++//! pipeline の札の段ごとの要の 1 行（判断の記録 ADR-27 決定 (6)・見本 board-v2 の cardLine）:
+ //! Blocked は待つ相手と待ちの長さ・Queued は列に在る長さと起票からの経過（列に在る長さが `QUEUED_WARN_S`〔30 分・規則の行 R-37〕を
+ //! 越えると注意の印と色・列に入った時刻が無ければ付けない）・Running は回と経過と口座・Gated は gate と回と経過と口座・Failed と Stopped は
+ //! 20 字に切った理由と経過と回・Questioned は問いと経過と回・着地は着地の時刻と CI の語。待つ相手は吹き出しと同じ読み（`pop::wait_of` と
+ //! `pop::wait_on`）。今に依らない材料（`LineSrc`）は板を組む時に置き、字は描く時の今から組む（1 秒の時計で書き直す）。
+-//! Held（留め置き）は止めた者の印の語と止めてからの経過（行 g-held-col・判断の記録 ADR-42 決定 (7)）。
++//! Held（留め置き）は止めた者の印の語と止めてからの経過（判断の記録 ADR-42 決定 (7)）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+diff --git a/crates/tsuzuri-surface/src/widgets/md.rs b/crates/tsuzuri-surface/src/widgets/md.rs
+index ca422f1af36b08b8f630c74441e736b6d81de467..4a7e693aa8e8c560e2fec0945ac73a931324a5f7 100644
+--- a/crates/tsuzuri-surface/src/widgets/md.rs
++++ b/crates/tsuzuri-surface/src/widgets/md.rs
+@@ -1,4 +1,4 @@
+-//! 本文の書式（Markdown）の一部を描く部品（行 g-md-view・判断の記録 ADR-30 決定 (4)・規則の行 R-25）。
++//! 本文の書式（Markdown）の一部を描く部品（判断の記録 ADR-30 決定 (4)・規則の行 R-25）。
+ //! 台帳の本文と記録が使う形（見出し・箇条・番号つきの箇条・段落・等幅の字）だけを読み、描けない形（表の行・囲いの code）は
+ //! 字のままの段にする。字は HTML として読まず、DOM は字の node で組む。読み手は純な関数で host でも組み、外の部品を足さない。
+ 
+diff --git a/crates/tsuzuri-surface/src/widgets/mod.rs b/crates/tsuzuri-surface/src/widgets/mod.rs
+index be87bdfd3280c44954db80947ad61bea7a045915..05a5d63ec3b594e1b48a5c74305bcc85d8ac2892 100644
+--- a/crates/tsuzuri-surface/src/widgets/mod.rs
++++ b/crates/tsuzuri-surface/src/widgets/mod.rs
+@@ -1,13 +1,13 @@
+-//! 画面の部品: 「?」の注釈（help・便 g-frame）と hover の card（hover・便 g-parts で層と置き場と猶予を動かす）と、
+-//! 注釈の行 `{fig:名}` を描く手順と流れの図（fig・行 g-help-fig・host でも組む SVG の字）と、
+-//! 電文の節点 1 つから組む節点の card（nodecard・行 g-card-node・host でも組む）と、
+-//! 初心者の mode の home の頁の最初の案内（coach・行 g-coach・決めと置き場は host でも組む）と、
+-//! 帯の印を押すと開く窓の枠（modal・行 g-win-frame・閉じる判定と窓の積みは host でも組む）と、
+-//! 札と一覧の行を押すと開く吹き出し（pop・行 g-pop・欄の組みと置き場と開閉は host でも組む）と、
+-//! 吹き出しの run の段の流れと run の歴（runflow・行 g-pop-flow・host でも組む）と、
+-//! pipeline の札の段ごとの要の 1 行（keyline・行 g-pipe-cards・host でも組む）と、
+-//! 表示の型で概要を 1 つ選ぶ部品と長い概要の畳み（sumpick・行 g-sum-pick・host でも組む）と、
+-//! 本文の書式（Markdown）の一部を字の node で描く部品（md・行 g-md-view・読み手は host でも組む）。
++//! 画面の部品: 「?」の注釈（help）と hover の card（hover・層と置き場と猶予を動かす）と、
++//! 注釈の行 `{fig:名}` を描く手順と流れの図（fig・host でも組む SVG の字）と、
++//! 電文の節点 1 つから組む節点の card（nodecard・host でも組む）と、
++//! 初心者の mode の home の頁の最初の案内（coach・決めと置き場は host でも組む）と、
++//! 帯の印を押すと開く窓の枠（modal・閉じる判定と窓の積みは host でも組む）と、
++//! 札と一覧の行を押すと開く吹き出し（pop・欄の組みと置き場と開閉は host でも組む）と、
++//! 吹き出しの run の段の流れと run の歴（runflow・host でも組む）と、
++//! pipeline の札の段ごとの要の 1 行（keyline・host でも組む）と、
++//! 表示の型で概要を 1 つ選ぶ部品と長い概要の畳み（sumpick・host でも組む）と、
++//! 本文の書式（Markdown）の一部を字の node で描く部品（md・読み手は host でも組む）。
+ 
+ pub mod coach;
+ pub mod fig;
+diff --git a/crates/tsuzuri-surface/src/widgets/modal.rs b/crates/tsuzuri-surface/src/widgets/modal.rs
+index 31367c1fdc1547d3b080a94f9e40b9eed3376a48..adced49c7a621e0006c7f0125a2723c97f921b7b 100644
+--- a/crates/tsuzuri-surface/src/widgets/modal.rs
++++ b/crates/tsuzuri-surface/src/widgets/modal.rs
+@@ -1,10 +1,10 @@
+-//! 窓の枠（行 g-win-frame・判断の記録 ADR-27 決定 (4)・見本 board-v2 の openModal と drawModal と closeModal と topModal）:
++//! 窓の枠（判断の記録 ADR-27 決定 (4)・見本 board-v2 の openModal と drawModal と closeModal と topModal）:
+ //! 帯の印や窓の中の口を押すと開く窓を、頁に 1 枚ずつ出す。窓は × と外の click と取り消しの鍵（Esc）で閉じる。
+ //! 窓の中の口から別の窓を開くと前の窓を積んで残し、頭に前の窓へ戻る口（‹ 戻る）を出す。
+ //! 幅 600 px 以下（規則の行 R-35 のスマホの形）の窓は全画面（stylesheet の media の規則）。
+ //! 閉じる判定（`closes`）と窓の積み（`Stack`）と幅の字は純粋な関数にして host で試し、層の DOM（`layer`）は wasm の target だけ。
+-//! 窓の題は語の鍵を持つ見出し（`data-v` と「?」の注釈・行 g-help-sweep）で、題の横の数と点は見出しの外に置く。
+-//! 吹き出し（行 g-pop）も同じ閉じる判定を使う。窓の中身は窓を足す行が描き、層を頁に置くのは 1 枚の画面への切り替えの行。
++//! 窓の題は語の鍵を持つ見出し（`data-v` と「?」の注釈）で、題の横の数と点は見出しの外に置く。
++//! 吹き出しも同じ閉じる判定を使う。窓の中身は窓を足す行が描き、層を頁に置くのは 1 枚の画面への切り替えの行。
+ 
+ /// 窓と吹き出しに届いた押し（× の button・外の click・中の click・鍵）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+diff --git a/crates/tsuzuri-surface/src/widgets/nodecard.rs b/crates/tsuzuri-surface/src/widgets/nodecard.rs
+index d6d6a389bfc527818526022579d09214dc166543..857d7e6ead7545087d584920ec3127fca59c9538 100644
+--- a/crates/tsuzuri-surface/src/widgets/nodecard.rs
++++ b/crates/tsuzuri-surface/src/widgets/nodecard.rs
+@@ -1,11 +1,11 @@
+-//! 節点の card（見本の ui.js の cardContent の節点の枝・行 g-card-node）: 電文の節点 1 つから hover の card の 4 行と詳しくを組む。
++//! 節点の card（見本の ui.js の cardContent の節点の枝）: 電文の節点 1 つから hover の card の 4 行と詳しくを組む。
+ //! 題・種類と帯と状態の行・id と要約の行・出所の file の行（36 字の切りは hover の Card の rows に任せる）。
+-//! 要約は電文の節点の概要（plain・無ければ eng）を写して切り、無ければ「要約なし」（行 g-summary）。
++//! 要約は電文の節点の概要（plain・無ければ eng）を写して切り、無ければ「要約なし」。
+ //! 出所は節点の file と行（無ければ帯の path）を短くし、長い概要を折った行と出所の全部の字は詳しくに置く。
+ //! 地図の面の札と行が同じ id と電文から同じ card を引けるように、id から引く `card_of` も置く（host でも組む）。
+-//! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く（行 g-card-around）。
++//! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く。
+ //! 要約は表示の型の 1 つを部品 sumpick で選び、表示の型の側が無ければもう一方を出して詳しくの頭に印の語を置く
+-//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)・行 g-card-mode）。表示の型を受けない関数は初心者の包み。
++//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)）。表示の型を受けない関数は初心者の包み。
+ 
+ use std::collections::BTreeMap;
+ 
+diff --git a/crates/tsuzuri-surface/src/widgets/pop.rs b/crates/tsuzuri-surface/src/widgets/pop.rs
+index 3128dd0fa56de84f43573772e776028bb591101a..9c5b485953c870bb075646a0d6b1bbfcc5423dad 100644
+--- a/crates/tsuzuri-surface/src/widgets/pop.rs
++++ b/crates/tsuzuri-surface/src/widgets/pop.rs
+@@ -1,4 +1,4 @@
+-//! 札と一覧の行の吹き出し（行 g-pop・判断の記録 ADR-27 決定 (7)・見本 board-v2 の popHTML と placePop と openPop と closePop）:
++//! 札と一覧の行の吹き出し（判断の記録 ADR-27 決定 (7)・見本 board-v2 の popHTML と placePop と openPop と closePop）:
+ //! pipeline の札か台帳 open の一覧の行を押すと、その bead の吹き出しを頁に 1 つ出す（同じ口をもう 1 度押すと閉じる）。
+ //! 吹き出しは × と外の click と取り消しの鍵（Esc）で閉じ、閉じる判定は窓の枠の `modal::closes` を使う（2 つ目を書かない）。
+ //! どの段も題の全体・概要・id・種類・epic・設計の行・起票の時刻と経過・個別の頁への口を出し、段ごとの欄を足す
+@@ -8,16 +8,16 @@
+ //! 材料は bead の事実の口（`BEADS_PATH`・短い題・起票・blocks の相手）と局面の出力の口（待つ相手の links.on）と、
+ //! 板と台帳の一覧とグラフの口（段・題・種類・親・設計の pointer）。幅 600 px 以下（規則の行 R-35）は下からの板（sheet）。
+ //! 欄の組みと置き場と開閉の判定は純粋な関数にして host で試し、層の DOM（`PopLayer`）は wasm の target だけ。
+-//! 札と行に口を付けるのは板の行（g-pipe-cards）と選びの行。
+-//! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す（行 g-pop-flow）。
+-//! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す（行 g-pop-why）: 理由の語は器の列の待ちの
++//! 札と行に口を付けるのは板の行と選びの行。
++//! 段の流れと run の歴と着地の commit は、開いた bead の走行の読みの口を層が読み `runflow::with_runs` で足す。
++//! Queued の起きない理由と Blocked の待つ理由・相手の便・承認の相手は `with_why` が足す: 理由の語は器の列の待ちの
+ //! 12 語（`REASONS`）を平易な字にした語の辞書の鍵 `qr:<語>` で引き、表に無い語と読めない理由はまだ分からない。
+-//! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（行 cs-pop・hover では開かない）。
++//! どの段の吹き出しも末の口の並びに相談の口を 1 つ置き、押すとその bead を題に入れた相談の窓を開く（hover では開かない）。
+ //! 概要は吹き出しを開いた時に開いた bead の 1 本の引きの口（`ITEM_PATH`）の本文から読み、表示の型の 1 つを部品 sumpick で選んで
+-//! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（行 g-pop-sum・判断の記録 ADR-30 決定 (2)(3)）。
++//! 切らずに出し、`POP_SUM_MAX` 字を越える時は頭と … で畳んで口を押すと開く（判断の記録 ADR-30 決定 (2)(3)）。
+ //! Held（留め置き）は止めた者・理由・止めた時刻と経過・解く条件の 4 つ（`held_facts`・個別の頁も同じ関数で組む・
+-//! 判断の記録 ADR-42 決定 (7)・行 g-held-pop）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
+-//! 受付の断りの名は器の 27 語（`REFUSALS`）を平易な字にした語の辞書の鍵 `rf:<名>` で引く（表に無い名は名のまま・行 g-held-name）。
++//! 判断の記録 ADR-42 決定 (7)）。理由は局面の出力の契約の部品の欄 why（無ければまだ分からない）。
++//! 受付の断りの名は器の 27 語（`REFUSALS`）を平易な字にした語の辞書の鍵 `rf:<名>` で引く（表に無い名は名のまま）。
+ 
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+diff --git a/crates/tsuzuri-surface/src/widgets/runflow.rs b/crates/tsuzuri-surface/src/widgets/runflow.rs
+index 4bb79539db48f408ed1c12515e298cde91995436..e6f2ba29c54c0b80c3e47bcaa31072ab286ff07c 100644
+--- a/crates/tsuzuri-surface/src/widgets/runflow.rs
++++ b/crates/tsuzuri-surface/src/widgets/runflow.rs
+@@ -1,4 +1,4 @@
+-//! 吹き出しの run の段の流れと run の歴（行 g-pop-flow・判断の記録 ADR-27 決定 (7) と (10)・見本 board-v2 の stepsHTML と histTable）:
++//! 吹き出しの run の段の流れと run の歴（判断の記録 ADR-27 決定 (7) と (10)・見本 board-v2 の stepsHTML と histTable）:
+ //! 吹き出しを開いた時に走行の読みの口（`timeline::path` の `/api/runs?bead=`）を読み、最後の走行の段の流れ（審査・実装・gate の
+ //! 始まりと長さ・走っている段は「〜」）と、走行ごとの歴（回・終わりの段・結び）と、着地の commit を吹き出しの欄に足す。
+ //! 段の語は器の case-lifecycle.md §2.1 の便の段の写しの 11 値を写した閉じた表（`STAGES`）で読み、表に無い語はまだ分からない。
+diff --git a/crates/tsuzuri-surface/src/widgets/sumpick.rs b/crates/tsuzuri-surface/src/widgets/sumpick.rs
+index f74da093d6ab67ec712088ceb286ab2d218f61d4..d3e5f7a750bb4b1ced329b7f85e7b2b25954b9c0 100644
+--- a/crates/tsuzuri-surface/src/widgets/sumpick.rs
++++ b/crates/tsuzuri-surface/src/widgets/sumpick.rs
+@@ -1,4 +1,4 @@
+-//! 表示の型で概要を 1 つ選ぶ部品と、長い概要の畳み（行 g-sum-pick・判断の記録 ADR-30 決定 (2)(3)・規則の行 R-19）。
++//! 表示の型で概要を 1 つ選ぶ部品と、長い概要の畳み（判断の記録 ADR-30 決定 (2)(3)・規則の行 R-19）。
+ //! 個別の頁・質問の窓の card・hover の card・吹き出しが同じ関数で選ぶ。純な関数だけを持ち host でも組む。
+ 
+ use crate::frame::Mode;
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index c410f4caf0076b3c4583ec2f35899476ee60417e..9209672b0101ee73ba63eb3e5c7c56557f86b169 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -1,11 +1,11 @@
+-//! 帯の印が開く窓の中身（行 g-win-parts・判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の stalledModal と noticeModal と
++//! 帯の印が開く窓の中身（判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の stalledModal と noticeModal と
+ //! seatModal と gapsModal と legendModal と destModal）: 止まった run・知らせ・席と口座・抜けの検査の 4 つの窓と、
+ //! 設定（⚙）の中の記号の見方と表示先の窓。
+ //! 知らせ・席と口座・抜けの検査・記号の見方・表示先は、今の block の中身の関数（各 module の inner）を窓の中で描く
+ //! （頁から block を外したのは 1 枚の画面への切り替えの行）。抜けの検査の窓の下に台帳の module の未反映の段を
+-//! 描く（要件 FR13・台帳の block から移した・行 g-ledger-trim）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
++//! 描く（要件 FR13・台帳の block から移した）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
+ //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
+-//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。相談の窓は頼みの form と一覧（consultwin の body・行 cs-bar）。
++//! 質問の窓は 1 問ずつの窓（askwin の frame）。相談の窓は頼みの form と一覧（consultwin の body）。
+ //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
+ 
+ use std::cmp::Reverse;
+diff --git a/xtask/tests/mdid.rs b/xtask/tests/mdid.rs
+index ea0be4e7246c7a33cd093a1b22a6e2ec95919210..70456125f9c9fef717b0a36e9520006eee50f331 100644
+--- a/xtask/tests/mdid.rs
++++ b/xtask/tests/mdid.rs
+@@ -19,8 +19,8 @@ const CAP_CONTRACT: usize = 0;
+ /// 中核の crate の上限。
+ const CAP_CORE: usize = 0;
+ 
+-/// 面の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
+-const CAP_SURFACE: usize = 199;
++/// 面の crate の上限。
++const CAP_SURFACE: usize = 0;
+ 
+ /// crates/ の直下の src を持つ dir の名と上限（名の順・crate を足す行はこの表も足す）。
+ const CAPS: [(&str, usize); 4] = [
