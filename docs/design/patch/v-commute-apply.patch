@@ -1,0 +1,673 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
+index 82a35f74..579fc964 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
+@@ -105,6 +105,7 @@ fn sample_value(kind: RuleKind) -> String {
+             ValueShape::Int => "1".to_owned(),
+             ValueShape::Str | ValueShape::Policy => "\"sample\"".to_owned(),
+             ValueShape::List => "[\"sample\"]".to_owned(),
++            ValueShape::Bool => "false".to_owned(),
+         },
+     }
+ }
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+index fb06dc9c..494fbe68 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+@@ -850,7 +850,7 @@ fn rules_embedded_manifest_is_valid_and_covers_all_kinds() {
+     // **tracked な `rules/manifest.toml` の全行が受理される**（`parse` は 1 件でも違反が
+     // 在れば `Err` を返すので、ここに届いた時点で全行が必須 key を持つ）。母集団を額面に
+     // 出すのは、行が黙って落ちた周を「全部読めた」と読み違えないためである。
+-    assert_eq!(manifest.rows().len(), 111, "埋め込み manifest の行数（母集団・行 v-self-match で +1〔host の見張りの自分に当たる待ちと止めの行〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
++    assert_eq!(manifest.rows().len(), 112, "埋め込み manifest の行数（母集団・行 v-commute-apply で +1〔差の当たりの入り切り〕・行 v-self-match で +1〔host の見張りの自分に当たる待ちと止めの行〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +14〔局面の出力の窓 1 行と年齢の 13 行〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の行の退役と梯子の列の行〕・`.600` で +1〔境界 crate の上限 R-C4-5〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の行 4 本〕・`.172` で +1〔便ごとの token 消費の検出線 R-C6-1〕・`.574` で +4〔host の見張りの種類ごとの行〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.478` で -1〔役割の行 2 本が 1 本〕・`.479.1` で -7〔席の自律の行〕・`.479.2` で -3〔作業記憶の行 1 本と棚卸しの行 2 本〕・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の model と effort〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の窓ごとの行〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
+     for kind in ALL {
+         let covered = manifest.rows().iter().any(|row| row.kind == *kind);
+         assert!(covered, "{} の行が manifest に無い", kind.as_str());
+@@ -907,7 +907,7 @@ fn rules_embedded_manifest_declares_one_capability_row_per_role() {
+     assert!(ALL.contains(&RuleKind::RoleCapabilities), "ALL に在る（末尾は `.696` の公開の見張り）");
+     assert_eq!(RuleKind::parse("RoleCapabilities"), Some(RuleKind::RoleCapabilities), "kind を字面から引ける");
+     let kinds = ALL.len();
+-    assert_eq!(kinds, 96, "kind の母集団（行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
++    assert_eq!(kinds, 97, "kind の母集団（行 v-commute-apply で +1〔差の当たりの入り切り〕・行 v-lane-cap で +1〔便の木の並びの合計の上限〕・`.742.4` で +2〔上限の許可の対象の列と期限の上限〕・`.738.42.6` で +1〔管理 tick の全部の書き直しの下限〕・`.736.33.23.3` で +1〔終わりの門の起こし直しの回数〕・`.736.33.21.2` で +2〔索引の置き場の量の上限と待ちの上限〕・`.738.39.3` で +3〔memo の notes の上限と審査の間隔と本数〕・`.736.33.17` で +1〔行の予約の期限〕・`.736.33.23.1` で +1〔lens の turn の上限〕・`.738.38.7` で +2〔局面の出力の窓と年齢の 2 種〕・`.736.30` で +2〔席の起草の置き場の量の上限と組み立て中の窓〕・`.738.37.1` で +1〔床の検査の待ちの上限〕・`.738.18` で +2〔公開の配線の締め切りと読む上限〕・`.736.25` で +1〔席の起草の置き場の書きの線〕・`.736.19` で +2〔lens の model と先撃ちの lens の model〕・`.696` で +1〔公開の見張りの行〕・`.718` で +1〔事前審査の先撃ちの 1 周の本数〕・`.717` で +1〔事前審査の確定の束の段の上げ〕・`.719` で +1〔台帳のグラフの直下の open の子の上限〕・`.704` で +1〔heartbeat の段の上げ〕・`.694` で +1〔終端の CI の照合の間隔〕・`.627` で +1〔席の箱〕・`.651` で +1〔退避の猶予〕・`.637` で -2 +1〔梯子の係数と上限の 2 種の退役と梯子の列の 1 種〕・`.600` で +1〔境界 crate の上限〕・`.601` で +1〔クラスの語列表〕・`.582` で +4〔管理 tick の 4 種〕・`.172` で +1〔便ごとの token 消費の検出線〕・`.574` で +2〔host の見張りの語列と rm の守る集合〕・`.169` で +1〔台帳 write の断る形〕・`.170` で +2〔flip の免除経路の面と札の上限〕・`.201` で +1・`.217` で +2・`.249` で +3・`.254` で +1・`.168` で +1・`.297` で +1・`.315` で +1・`.322` で +1・`.360` で +1・`.423` で +2・`.479.2` で -3・`.382` で +1〔終端の CI の上限〕・`.433` で +2〔役割の既定の 2 種〕・`.407` で +1〔選定の前計測の鮮度〕・`.396` で +1〔同型の審査 FAIL の停止の回数〕・`.504` の行 x で +2〔器の健康の遮断器の倍率〕・`.428` で +1〔着地の列の上限〕・`.398` で +1〔同時本数の最大値〕・`.491.3` で +3〔群の逼迫の閾値の 3 種〕・`.736.36` で +1〔検出線を起こす間隔の下限〕・`.736.33.16` で -2〔先撃ちの 1 周の本数と先撃ちの lens の model〕）");
+ }
+ 
+ /// 禁じる語列の行（`runner.denied_commands`・`RuleKind::RunnerDeniedCommands`・裁定 id `user 2026-09-14`・ADR-0025 §2.1・
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+index 021d7867..bbd97b08 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+@@ -3,8 +3,8 @@ source: crates/scribe2/tests/e2e/rules.rs
+ expression: form
+ ---
+ usage: scribe2 <name|--version|doctor|account|rules|fleet|vessel|hook|host-guard|pipe|runner|lens|seat|polarity|contracts|utterance>
+-rules: ok rows=111 kinds=96
++rules: ok rows=112 kinds=97
+ rules: no such id
+ 95
+-rules: ok rows=111 kinds=96 accounts=2 plugins=2 launch-args=2 host=present
++rules: ok rows=112 kinds=97 accounts=2 plugins=2 launch-args=2 host=present
+ usage: rules <validate|get <id>> [--rules PATH] [--state-dir S]
+diff --git a/scribe2/crates/scribe2/src/pipe/commute.rs b/scribe2/crates/scribe2/src/pipe/commute.rs
+new file mode 100644
+index 00000000..67c1fbd1
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/commute.rs
+@@ -0,0 +1,453 @@
++//! 入口の排他を差の当たりで通す判じ（判断の記録 ADR-60 の決定 (1)(2)(4)(5)・要件 FR1039）。
++//!
++//! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
++//! 関数 [`judge`] と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の読み [`on`] を持つ。判じは交わりの関数の
++//! 中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を返す段）と、入口と起動の列への配線と記帳は
++//! 後の器の行が足す。
++//!
++//! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
++//! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
++
++use super::declaration::RootsAtHead;
++use super::git_line;
++use super::land::scope_touched;
++use super::refuse::normalize;
++use crate::invocation::Invocation;
++use crate::rules::manifest::Manifest;
++use crate::rules::RuleValue;
++use std::collections::BTreeSet;
++use std::ffi::OsStr;
++use std::fs::File;
++use std::path::{Path, PathBuf};
++use std::process::Stdio;
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::{Duration, Instant};
++
++/// 入り切りの規則の行 id（判断の記録 ADR-60 の決定 (5)）。
++pub const ROW: &str = "pipe.overlap_commute";
++
++/// 周ごとの一時の dir を切る、state dir の下の dir の名。
++pub const SCRATCH: &str = "commute";
++
++/// 子の終わりを見る間隔。
++const POLL: Duration = Duration::from_millis(5);
++
++/// 判じの結末（閉じた列・判断の記録 ADR-60 の決定 (4)）。通す 1 つと断る 5 つ。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Verdict {
++    /// 通す（交差に数えない）。
++    Commutes,
++    /// どちらかの契約が差の file を名指さない。
++    NoPatch,
++    /// 交わる項に dir の項か、再 gate の面の外の path が在る。
++    OutsideFace,
++    /// 差が交わる path を書かないか、4 通りか積みのどれかが当たらない。
++    NotCommuting,
++    /// 両方の差の足す行が同じ宣言の名を足す（拾いは後の器の行）。
++    SameName,
++    /// 差の file を読めない・一時の index を作れない・時間切れ。
++    Unreadable,
++}
++
++/// 結末の全部（宣言順）。
++pub const VERDICTS: [Verdict; 6] =
++    [Verdict::Commutes, Verdict::NoPatch, Verdict::OutsideFace, Verdict::NotCommuting, Verdict::SameName, Verdict::Unreadable];
++
++impl Verdict {
++    /// 記帳と断りの行に書く字。
++    pub fn as_str(self) -> &'static str {
++        match self {
++            Self::Commutes => "commutes",
++            Self::NoPatch => "no-patch",
++            Self::OutsideFace => "outside-face",
++            Self::NotCommuting => "not-commuting",
++            Self::SameName => "same-name",
++            Self::Unreadable => "unreadable",
++        }
++    }
++}
++
++/// 交差の相手の便 1 本。
++pub struct Partner<'a> {
++    /// 相手の契約の写しの欄 patch（差の file の repo 相対 path）。
++    pub patch: Option<&'a str>,
++    /// 相手の便の base（相手の差の file を読む木）。
++    pub base: &'a str,
++    /// 候補と交わった項の組（[`super::refuse::overlaps`] の（候補の項, 相手の項））。
++    pub crossed: &'a [(String, String)],
++}
++
++/// 判じの材料。
++pub struct Ask<'a> {
++    /// repo の根。
++    pub repo: &'a Path,
++    /// state dir（周の一時の dir を [`SCRATCH`] の下に切る）。
++    pub state_dir: &'a Path,
++    /// その周の main の先端（候補の差の file を読む木・差を当てる土台）。
++    pub main: &'a str,
++    /// main の先端の宣言の根（再 gate の面）。
++    pub roots: &'a RootsAtHead,
++    /// 候補の契約の欄 patch。
++    pub patch: Option<&'a str>,
++    /// 相手の便（起こした順）。
++    pub partners: &'a [Partner<'a>],
++    /// 時間切れの時刻（越えた周の子は止めて unreadable）。
++    pub deadline: Instant,
++}
++
++/// 規則の行が真の周だけ真（行が無い・不発効・偽の周は偽＝読めない周は偽と読む・要件 FR1039）。値の形は manifest の読みが
++/// kind `PipeOverlapCommute` の真偽に限る。
++pub fn on(manifest: &Manifest) -> bool {
++    manifest.get(ROW).is_some_and(|row| row.enabled && row.value == RuleValue::Bool(true))
++}
++
++/// 候補と相手の組を判じる（判断の記録 ADR-60 の決定 (1)(2)）。
++///
++/// 順に、差の file を名指さない契約（no-patch）・dir の項か面の外の path（outside-face・面は追随の再 gate を撃つかを決める
++/// [`scope_touched`] の 1 本で 1 項ずつ照らす）・差の file を読めない周（unreadable・候補は main の先端の木、相手は相手の base の
++/// 木から読む）・交わる path を書かない差（not-commuting）を断り、main の先端を読んだ一時の index に 4 通り（候補だけ・候補の後に
++/// 相手・相手だけ・相手の後に候補）を当て、相手が 2 本以上なら相手を起こした順に積んだ後に候補を当てる。当たらない周は
++/// not-commuting、index を作れない周と時間切れは unreadable。
++pub fn judge(ask: &Ask<'_>) -> Verdict {
++    let Some(mine) = ask.patch else {
++        return Verdict::NoPatch;
++    };
++    if ask.partners.iter().any(|partner| partner.patch.is_none()) {
++        return Verdict::NoPatch;
++    }
++    let mut items = ask.partners.iter().flat_map(|partner| partner.crossed.iter());
++    if items.any(|(left, right)| !on_face(ask.roots, left) || !on_face(ask.roots, right)) {
++        return Verdict::OutsideFace;
++    }
++    Round::cut(ask).map_or(Verdict::Unreadable, |round| round.judge(mine))
++}
++
++/// 項が file で、再 gate の面の中か。
++fn on_face(roots: &RootsAtHead, item: &str) -> bool {
++    let path = normalize(item);
++    !path.ends_with('/') && scope_touched(roots, &[path.as_str()])
++}
++
++/// 差の file が書く path（`diff --git a/<元> b/<先>` の両方を字で読む）。
++fn written(text: &str) -> BTreeSet<String> {
++    text.lines()
++        .filter_map(|line| line.strip_prefix("diff --git a/")?.split_once(" b/"))
++        .flat_map(|(from, to)| [from.to_owned(), to.to_owned()])
++        .collect()
++}
++
++/// git の子の終わり方。
++#[derive(PartialEq, Eq)]
++enum Ran {
++    /// rc 0。
++    Done,
++    /// rc ≠ 0。
++    Failed,
++    /// 起こせない・待てない・時間切れ（子は止めた）。
++    Lost,
++}
++
++/// 1 周の一時の dir（index と物と差の写し・drop で dir ごと消す）。
++struct Round<'a> {
++    /// 判じの材料。
++    ask: &'a Ask<'a>,
++    /// 周の dir（`<state_dir>/commute/<pid>-<通し>`）。
++    dir: PathBuf,
++    /// repo の物の置き場（一時の物の置き場の alternates）。
++    objects: String,
++}
++
++impl Drop for Round<'_> {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_dir_all(&self.dir);
++    }
++}
++
++impl<'a> Round<'a> {
++    /// 周の dir を切る（repo の物の置き場を引けない周と dir を作れない周は `None`）。
++    fn cut(ask: &'a Ask<'a>) -> Option<Self> {
++        static SEQ: AtomicU64 = AtomicU64::new(0);
++        let objects = git_line(ask.repo, &["rev-parse", "--path-format=absolute", "--git-path", "objects"])?;
++        let name = format!("{}-{}", std::process::id(), SEQ.fetch_add(1, Ordering::Relaxed));
++        let round = Self { ask, dir: ask.state_dir.join(SCRATCH).join(name), objects };
++        std::fs::create_dir_all(round.dir.join("objects")).ok()?;
++        Some(round)
++    }
++
++    /// 差の file を写し、書く path を照らし、当て方を全部撃つ。
++    fn judge(&self, mine: &str) -> Verdict {
++        let Some((own, text)) = self.copy(self.ask.main, mine, "c.patch") else {
++            return Verdict::Unreadable;
++        };
++        let own_paths = written(&text);
++        let mut theirs: Vec<PathBuf> = Vec::new();
++        for (at, partner) in self.ask.partners.iter().enumerate() {
++            let Some((path, text)) = partner.patch.and_then(|patch| self.copy(partner.base, patch, &format!("p{at}.patch")))
++            else {
++                return Verdict::Unreadable;
++            };
++            let their_paths = written(&text);
++            let covered = |(left, right): &(String, String)| {
++                own_paths.contains(&normalize(left)) && their_paths.contains(&normalize(right))
++            };
++            if !partner.crossed.iter().all(covered) {
++                return Verdict::NotCommuting;
++            }
++            theirs.push(path);
++        }
++        let mut orders: Vec<Vec<&Path>> =
++            theirs.iter().flat_map(|path| [vec![own.as_path(), path.as_path()], vec![path.as_path(), own.as_path()]]).collect();
++        if theirs.len() > 1 {
++            orders.push(theirs.iter().map(PathBuf::as_path).chain([own.as_path()]).collect());
++        }
++        orders.iter().map(|order| self.applies(order)).find(|found| *found != Verdict::Commutes).unwrap_or(Verdict::Commutes)
++    }
++
++    /// `<tree>:<path>` の差の file を周の dir の `name` へ写し、写しの path と本文を返す（読めない周は `None`）。
++    fn copy(&self, tree: &str, path: &str, name: &str) -> Option<(PathBuf, String)> {
++        let out = self.dir.join(name);
++        let spec = format!("{tree}:{path}");
++        let ran = self.git(&[OsStr::new("cat-file"), OsStr::new("blob"), OsStr::new(&spec)], Some(&out));
++        (ran == Ran::Done).then_some(())?;
++        let text = std::fs::read_to_string(&out).ok()?;
++        Some((out, text))
++    }
++
++    /// main の先端を一時の index に読み、差を順に当てる（1 本ずつ当てるので、列の頭の差だけの当たりも同じ撃ちで測る）。
++    fn applies(&self, order: &[&Path]) -> Verdict {
++        if self.git(&[OsStr::new("read-tree"), OsStr::new(self.ask.main)], None) != Ran::Done {
++            return Verdict::Unreadable;
++        }
++        for patch in order {
++            match self.git(&[OsStr::new("apply"), OsStr::new("--cached"), patch.as_os_str()], None) {
++                Ran::Done => {}
++                Ran::Failed => return Verdict::NotCommuting,
++                Ran::Lost => return Verdict::Unreadable,
++            }
++        }
++        Verdict::Commutes
++    }
++
++    /// git を一時の index と物の置き場で撃ち、時間切れまで待つ（stdout は `out` の file か捨てる）。
++    fn git(&self, args: &[&OsStr], out: Option<&Path>) -> Ran {
++        let stdout = match out.map(File::create) {
++            Some(Ok(file)) => Stdio::from(file),
++            Some(Err(_)) => return Ran::Lost,
++            None => Stdio::null(),
++        };
++        let mut invocation = Invocation::new("git");
++        invocation
++            .arg("-C")
++            .arg(self.ask.repo)
++            .args(args)
++            .env("GIT_INDEX_FILE", self.dir.join("index"))
++            .env("GIT_OBJECT_DIRECTORY", self.dir.join("objects"))
++            .env("GIT_ALTERNATE_OBJECT_DIRECTORIES", &self.objects)
++            .stdin(Stdio::null())
++            .stdout(stdout)
++            .stderr(Stdio::null());
++        let Ok(mut child) = invocation.spawn() else {
++            return Ran::Lost;
++        };
++        loop {
++            if Instant::now() >= self.ask.deadline {
++                let _ = child.kill();
++                let _ = child.wait();
++                return Ran::Lost;
++            }
++            match child.try_wait() {
++                Ok(Some(status)) => return if status.success() { Ran::Done } else { Ran::Failed },
++                Ok(None) => std::thread::sleep(POLL),
++                Err(_) => return Ran::Lost,
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{judge, on, Ask, Partner, Verdict, ROW, SCRATCH, VERDICTS};
++    use crate::pipe::declaration::RootsAtHead;
++    use crate::pipe::fixture::scratch;
++    use crate::pipe::{git_bytes, git_line, git_ok};
++    use crate::rules::manifest::Manifest;
++    use crate::rules::{RuleKind, RuleValue};
++    use std::path::{Path, PathBuf};
++    use std::time::{Duration, Instant};
++
++    /// 面の中の file 2 本（固定の根 `crates/` の下）。
++    const FILE: &str = "crates/a/src/lib.rs";
++    const OTHER: &str = "crates/a/src/other.rs";
++    /// 差の file の dir。
++    const DIR: &str = "docs/design/patch";
++    /// 固定の根だけの宣言。
++    static FIXED: RootsAtHead = RootsAtHead::Fixed;
++
++    /// 差 1 本（名・（file, 行, 替えた字）の列・文脈の行数・文脈の 1 行目を壊すか）。名が `c` で始まる差は main、ほかは base に置く。
++    type Spec<'a> = (&'a str, &'a [(&'a str, usize, &'a str)], u8, bool);
++
++    /// 場（repo・state dir・seed・base・main の sha）。seed は 2 file の 30 行（行 n は `l<n>`）。
++    struct Place {
++        repo: PathBuf,
++        state: PathBuf,
++        seed: String,
++        base: String,
++        main: String,
++    }
++
++    fn lines(at: usize, text: &str) -> String {
++        (1..=30_usize).map(|n| if n == at { format!("{text}\n") } else { format!("l{n}\n") }).collect()
++    }
++
++    fn commit(repo: &Path, message: &str) -> String {
++        assert!(git_ok(repo, &["add", "-A"]) && git_ok(repo, &["commit", "-q", "--allow-empty", "-m", message]), "{message}");
++        git_line(repo, &["rev-parse", "HEAD"]).unwrap_or_default()
++    }
++
++    /// seed の後に、相手の差の file を足した base と、相手の差の file を消して候補の差の file を足した main を積む。
++    fn place(name: &str, specs: &[Spec<'_>]) -> Place {
++        let root = scratch(name);
++        let (repo, state) = (root.join("repo"), root.join("state"));
++        assert!(std::fs::create_dir_all(repo.join("crates/a/src")).is_ok() && std::fs::create_dir_all(repo.join(DIR)).is_ok());
++        let setup: [&[&str]; 4] =
++            [&["init", "-q", "-b", "main"], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]];
++        assert!(setup.iter().all(|args| git_ok(&repo, args)));
++        assert!([FILE, OTHER].iter().all(|file| std::fs::write(repo.join(file), lines(0, "")).is_ok()));
++        let seed = commit(&repo, "seed");
++        let mut made: Vec<(String, Vec<u8>)> = Vec::new();
++        for (patch, edits, context, broken) in specs {
++            assert!(edits.iter().all(|(file, at, text)| std::fs::write(repo.join(file), lines(*at, text)).is_ok()));
++            let form = ["diff", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", &format!("-U{context}")];
++            let diff = git_bytes(&repo, &form).unwrap_or_default();
++            assert!(git_ok(&repo, &["checkout", "--", "crates"]), "{patch}");
++            let text = String::from_utf8_lossy(&diff);
++            made.push(((*patch).to_owned(), if *broken { text.replacen("\n l", "\n x", 1) } else { text.into_owned() }.into_bytes()));
++        }
++        let put = |own: bool| made.iter().filter(move |(patch, _)| patch.starts_with('c') == own);
++        assert!(put(false).all(|(patch, text)| std::fs::write(repo.join(DIR).join(format!("{patch}.patch")), text).is_ok()));
++        let base = commit(&repo, "base");
++        assert!(put(false).all(|(patch, _)| std::fs::remove_file(repo.join(DIR).join(format!("{patch}.patch"))).is_ok()));
++        assert!(put(true).all(|(patch, text)| std::fs::write(repo.join(DIR).join(format!("{patch}.patch")), text).is_ok()));
++        let main = commit(&repo, "main");
++        Place { repo, state, seed, base, main }
++    }
++
++    fn files(paths: &[&str]) -> Vec<(String, String)> {
++        paths.iter().map(|path| ((*path).to_owned(), (*path).to_owned())).collect()
++    }
++
++    fn path(patch: &str) -> String {
++        format!("{DIR}/{patch}.patch")
++    }
++
++    /// 候補 `own` と相手（名の列・base から読む）の判じ。交わる項は `crossed`。
++    fn verdict(place: &Place, own: &str, partners: &[&str], crossed: &[(String, String)]) -> Verdict {
++        let (own, paths) = (path(own), partners.iter().map(|patch| path(patch)).collect::<Vec<String>>());
++        let list: Vec<Partner<'_>> =
++            paths.iter().map(|patch| Partner { patch: Some(patch), base: &place.base, crossed }).collect();
++        judge(&ask(place, Some(&own), &list))
++    }
++
++    fn ask<'a>(place: &'a Place, patch: Option<&'a str>, partners: &'a [Partner<'a>]) -> Ask<'a> {
++        let deadline = Instant::now() + Duration::from_secs(60);
++        Ask { repo: &place.repo, state_dir: &place.state, main: &place.main, roots: &FIXED, patch, partners, deadline }
++    }
++
++    /// 4 通りが全部当たる組は通り、候補だけ・相手だけ・候補の後に相手・相手の後に候補の 1 つだけが当たらない組は断る。
++    #[test]
++    fn vcapply_four_ways_pass_and_a_break_in_one_way_refuses() {
++        let cases: [(&str, Spec<'_>, Spec<'_>, Verdict); 5] = [
++            ("pass", ("c", &[(FILE, 5, "c5")], 3, false), ("p", &[(FILE, 20, "p20")], 3, false), Verdict::Commutes),
++            ("own", ("c", &[(FILE, 5, "c5")], 3, true), ("p", &[(FILE, 20, "p20")], 3, false), Verdict::NotCommuting),
++            ("their", ("c", &[(FILE, 5, "c5")], 3, false), ("p", &[(FILE, 20, "p20")], 3, true), Verdict::NotCommuting),
++            ("own-then", ("c", &[(FILE, 10, "c10")], 1, false), ("p", &[(FILE, 12, "p12")], 3, false), Verdict::NotCommuting),
++            ("their-then", ("c", &[(FILE, 12, "c12")], 3, false), ("p", &[(FILE, 10, "p10")], 1, false), Verdict::NotCommuting),
++        ];
++        for (name, own, theirs, want) in cases {
++            let place = place(&format!("vcapply-ways-{name}"), &[own, theirs]);
++            assert_eq!(verdict(&place, "c", &["p"], &files(&[FILE])), want, "{name}");
++        }
++    }
++
++    /// 相手 2 本は起こした順に積んだ後に候補を当てる（逆の順だけが当たる組は通らない）。積めない相手 2 本は、候補が各々と 4 通りで
++    /// 当たっても断る。
++    #[test]
++    fn vcapply_two_partners_stack_in_order_before_the_candidate() {
++        let own: Spec<'_> = ("c", &[(FILE, 5, "c5")], 3, false);
++        let ordered = place("vcapply-stack-order", &[own, ("p1", &[(FILE, 12, "a12")], 3, false), ("p2", &[(FILE, 10, "b10")], 1, false)]);
++        assert_eq!(verdict(&ordered, "c", &["p1", "p2"], &files(&[FILE])), Verdict::Commutes, "p1 の後に p2 は当たる");
++        assert_eq!(verdict(&ordered, "c", &["p2", "p1"], &files(&[FILE])), Verdict::NotCommuting, "p2 の後に p1 は当たらない");
++        let clash = place("vcapply-stack-clash", &[own, ("p1", &[(FILE, 20, "a20")], 3, false), ("p2", &[(FILE, 20, "b20")], 3, false)]);
++        for one in ["p1", "p2"] {
++            assert_eq!(verdict(&clash, "c", &[one], &files(&[FILE])), Verdict::Commutes, "{one} だけなら通る");
++        }
++        assert_eq!(verdict(&clash, "c", &["p1", "p2"], &files(&[FILE])), Verdict::NotCommuting, "積めない");
++    }
++
++    /// 差の file を名指さない契約は no-patch、dir の項と面の外の path は outside-face、交わる path を書かない差は not-commuting。
++    #[test]
++    fn vcapply_no_patch_outside_face_and_unwritten_paths_refuse() {
++        let place = place("vcapply-gate", &[
++            ("c", &[(FILE, 5, "c5")], 3, false),
++            ("c2", &[(FILE, 5, "c5"), (OTHER, 5, "c5")], 3, false),
++            ("p", &[(FILE, 20, "p20")], 3, false),
++            ("p2", &[(FILE, 20, "p20"), (OTHER, 20, "p20")], 3, false),
++        ]);
++        assert_eq!(verdict(&place, "c2", &["p2"], &files(&[FILE, OTHER])), Verdict::Commutes, "両方が両方を書く");
++        let crossed = files(&[FILE]);
++        let (own, theirs) = (path("c"), path("p"));
++        let partner = |patch: Option<&'static str>| Partner { patch, base: &place.base, crossed: &crossed };
++        assert_eq!(judge(&ask(&place, None, &[partner(Some("x"))])), Verdict::NoPatch, "候補が名指さない");
++        let list = [Partner { patch: Some(&theirs), ..partner(None) }, partner(None)];
++        assert_eq!(judge(&ask(&place, Some(&own), &list)), Verdict::NoPatch, "相手の 1 本が名指さない");
++        let outside = [(FILE.to_owned(), FILE.to_owned()), ("docs/a.md".to_owned(), "docs/a.md".to_owned())];
++        assert_eq!(verdict(&place, "c", &["p"], &outside), Verdict::OutsideFace, "面の外の path");
++        assert_eq!(verdict(&place, "c", &["p"], &[("crates/a/".to_owned(), FILE.to_owned())]), Verdict::OutsideFace, "候補の dir の項");
++        assert_eq!(verdict(&place, "c", &["p"], &[(FILE.to_owned(), "crates/a/".to_owned())]), Verdict::OutsideFace, "相手の dir の項");
++        assert_eq!(verdict(&place, "c", &["p2"], &files(&[FILE, OTHER])), Verdict::NotCommuting, "候補が OTHER を書かない");
++        assert_eq!(verdict(&place, "c2", &["p"], &files(&[FILE, OTHER])), Verdict::NotCommuting, "相手が OTHER を書かない");
++    }
++
++    /// 候補は main の先端、相手は相手の base から読み、読めない周と時間切れは unreadable。周の dir は消え、repo の物の置き場と
++    /// index には書かない。
++    #[test]
++    fn vcapply_unreadable_rounds_refuse_and_leave_no_trace() {
++        let place = place("vcapply-trace", &[("c", &[(FILE, 5, "c5")], 3, false), ("p", &[(FILE, 20, "p20")], 3, false)]);
++        let loose = git_line(&place.repo, &["count-objects"]);
++        let (crossed, own, theirs) = (files(&[FILE]), path("c"), path("p"));
++        let list = [Partner { patch: Some(&theirs), base: &place.base, crossed: &crossed }];
++        assert_eq!(judge(&ask(&place, Some(&own), &list)), Verdict::Commutes, "候補は main・相手は base の木");
++        assert_eq!(judge(&Ask { main: &place.base, ..ask(&place, Some(&own), &list) }), Verdict::Unreadable, "base に c は無い");
++        let seeded = [Partner { patch: Some(&theirs), base: &place.seed, crossed: &crossed }];
++        assert_eq!(judge(&ask(&place, Some(&own), &seeded)), Verdict::Unreadable, "seed に p は無い");
++        let late = Ask { deadline: Instant::now(), ..ask(&place, Some(&own), &list) };
++        assert_eq!(judge(&late), Verdict::Unreadable, "時間切れ");
++        let left = std::fs::read_dir(place.state.join(SCRATCH)).map(Iterator::count).ok();
++        assert_eq!(left, Some(0), "周の dir は消えた");
++        assert_eq!(git_line(&place.repo, &["count-objects"]), loose, "repo の物の置き場に書かない");
++        assert!(git_ok(&place.repo, &["diff", "--cached", "--quiet"]), "repo の index を替えない");
++    }
++
++    /// 結末の字は閉じた 6 つ。規則の行は埋め込みでは偽で、真の発効の行だけを真と読む。
++    #[test]
++    fn vcapply_verdict_tokens_and_the_rule_row_read_true_only_when_set() {
++        let tokens: Vec<&str> = VERDICTS.iter().map(|found| found.as_str()).collect();
++        assert_eq!(tokens, ["commutes", "no-patch", "outside-face", "not-commuting", "same-name", "unreadable"]);
++        let embedded = Manifest::embedded().unwrap_or_else(|errors| panic!("{errors:?}"));
++        let row = embedded.get(ROW).map(|found| (found.kind, found.value.clone(), found.enabled, found.ruling.as_str()));
++        let want = (RuleKind::PipeOverlapCommute, RuleValue::Bool(false), true, "user 2026-10-05T05:13Z 問い t3-hub.89.2");
++        assert_eq!(row, Some(want), "埋め込みの行");
++        assert!(!on(&embedded), "埋め込みは偽");
++        let one = |value: &str, enabled: &str| {
++            let rule = format!("id = \"{ROW}\"\nkind = \"PipeOverlapCommute\"\nvalue = {value}\nenabled = {enabled}\n");
++            Manifest::parse(&format!("schema = 1\n\n[[rule]]\n{rule}ruling = \"r\"\nruled_at = \"2026-10-05\"\n"))
++        };
++        assert!(one("true", "true").is_ok_and(|found| on(&found)), "真の発効の行は真");
++        assert!(one("true", "false").is_ok_and(|found| !on(&found)), "不発効は偽");
++        assert!(one("false", "true").is_ok_and(|found| !on(&found)), "偽は偽");
++        assert!(Manifest::parse("schema = 1\n").is_ok_and(|found| !on(&found)), "行が無い周は偽");
++        let refused = one("1", "true").err().map(|errors| format!("{errors:?}")).unwrap_or_default();
++        assert!(refused.contains("形と合わない"), "整数の値は断る: {refused}");
++        assert_eq!(RuleValue::Bool(true).render(), "true", "rules get の字");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index 754b1e7f..981018ad 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -14,6 +14,7 @@ pub mod admission;
+ pub mod approve;
+ pub mod cli;
+ pub mod closure;
++pub mod commute;
+ pub mod confine;
+ pub mod contract;
+ pub mod declaration;
+diff --git a/scribe2/crates/scribe2/src/rules/manifest.rs b/scribe2/crates/scribe2/src/rules/manifest.rs
+index 702d1da2..81d2c1e4 100644
+--- a/scribe2/crates/scribe2/src/rules/manifest.rs
++++ b/scribe2/crates/scribe2/src/rules/manifest.rs
+@@ -1014,7 +1014,7 @@ fn build_row(raw: &RawRow, errors: &mut Vec<RuleError>) -> Option<RuleRow> {
+     let enabled = bool_field(raw, "enabled", errors);
+     let ruling = text_field(raw, "ruling", errors);
+     let ruled_at = text_field(raw, "ruled_at", errors);
+-    let value = kind.and_then(|found| value_field(raw, found, &id, errors));
++    let value = kind.and_then(|found| value_field(raw, found));
+     let (Some(kind), Some(value), Some(enabled), Some(ruling), Some(ruled_at)) =
+         (kind, value, enabled, ruling, ruled_at)
+     else {
+@@ -1315,14 +1315,9 @@ fn kind_field(raw: &RawRow, id: &str, errors: &mut Vec<RuleError>) -> Option<Rul
+     }
+ }
+ 
+-/// `value` を種類に応じた値へ写す。bool は value に置けない。
+-fn value_field(
+-    raw: &RawRow,
+-    kind: RuleKind,
+-    id: &str,
+-    errors: &mut Vec<RuleError>,
+-) -> Option<RuleValue> {
+-    let (_, scalar, line) = raw.fields.iter().find(|(key, _, _)| key == "value")?;
++/// `value` を種類に応じた値へ写す（bool は真偽の値・形の照合は `RuleRow::validate`）。
++fn value_field(raw: &RawRow, kind: RuleKind) -> Option<RuleValue> {
++    let (_, scalar, _) = raw.fields.iter().find(|(key, _, _)| key == "value")?;
+     match scalar {
+         // **形の照合はここでしない**（`RuleRow::validate` の 1 箇所が持つ）。ここで
+         // 弾くと、kind と value の対応を測る面が 2 つになる。
+@@ -1330,15 +1325,9 @@ fn value_field(
+         RawValue::One(Scalar::Int(found)) => Some(RuleValue::Int(*found)),
+         RawValue::One(Scalar::Str(text)) => Some(match kind.shape() {
+             ValueShape::Policy => RuleValue::Policy(text.clone()),
+-            ValueShape::Int | ValueShape::Str | ValueShape::List => RuleValue::Str(text.clone()),
++            ValueShape::Int | ValueShape::Str | ValueShape::List | ValueShape::Bool => RuleValue::Str(text.clone()),
+         }),
+-        RawValue::One(Scalar::Bool(_)) => {
+-            errors.push(RuleError::new(
+-                *line,
+-                format!("{id} の value は integer か string でなければならない"),
+-            ));
+-            None
+-        }
++        RawValue::One(Scalar::Bool(found)) => Some(RuleValue::Bool(*found)),
+         // 網羅のための枝。**到達しない**——読めなかった値を持つ行は
+         // [`build_row`] が先に打ち切る（Broken を見る場所は 1 か所である）。
+         RawValue::Broken => None,
+diff --git a/scribe2/crates/scribe2/src/rules/mod.rs b/scribe2/crates/scribe2/src/rules/mod.rs
+index ba10d22c..4fb58391 100644
+--- a/scribe2/crates/scribe2/src/rules/mod.rs
++++ b/scribe2/crates/scribe2/src/rules/mod.rs
+@@ -158,6 +158,8 @@ pub enum ValueShape {
+     /// 文字列の列（TOML の string array）。**空は受けない**＝「規則が無い」を
+     /// 空 array で表さない（書き間違いを黙って通すと allowlist が空のまま効く）。
+     List,
++    /// 真偽（入り切りの行・TOML の bool）。
++    Bool,
+ }
+ 
+ /// 規則の種類。憲法 §3 の行と MVP の運用値に 1:1 で対応する。
+@@ -318,6 +320,9 @@ pub enum RuleKind {
+     PipeSizeMLines,
+     /// 契約の `size` = L の 1 file あたりの増分の見積（行）。
+     PipeSizeLLines,
++    /// 入口の排他を差の当たりで通すかの入り切り（真偽・判断の記録 ADR-60 の決定 (5)・要件 FR1039）。行が無い・不発効・偽の周は
++    /// 通さない（読めない周は偽と読む）。読み手は `pipe::commute::on` の 1 本。
++    PipeOverlapCommute,
+     /// runner が claude に**毎回**渡す model（設計 pipeline.md §6 / §61・`s2-07l.297`）。値は claude CLI の別名
+     /// （閉じた表は [`crate::fleet::select::Model`]）。便用の口座選定はこの model のモデル別窓だけを数える。
+     RunnerModel,
+@@ -493,6 +498,7 @@ pub const ALL: &[RuleKind] = &[
+     RuleKind::PipeSizeSLines,
+     RuleKind::PipeSizeMLines,
+     RuleKind::PipeSizeLLines,
++    RuleKind::PipeOverlapCommute,
+     RuleKind::RunnerModel,
+     RuleKind::RunnerEffort,
+     RuleKind::LensModel,
+@@ -595,6 +601,7 @@ impl RuleKind {
+             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
+             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
+             Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
++            Self::PipeOverlapCommute => "PipeOverlapCommute",
+         }
+     }
+ 
+@@ -648,7 +655,7 @@ impl RuleKind {
+             | Self::RunnerModel
+             | Self::RunnerEffort | Self::LensModel
+             | Self::RoleModel
+-            | Self::RoleEffort => ValueShape::Str,
++            | Self::RoleEffort => ValueShape::Str, Self::PipeOverlapCommute => ValueShape::Bool,
+             Self::MaturityCondition
+             | Self::MutationSurvivalLine
+             | Self::CompileShape
+@@ -690,7 +697,7 @@ impl RuleKind {
+             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
+             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
+             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
+-            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb => false,
++            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb | Self::PipeOverlapCommute => false,
+         }
+     }
+ 
+@@ -711,6 +718,8 @@ pub enum RuleValue {
+     Policy(String),
+     /// 文字列の列（順序は manifest の並びのまま＝機械が読む順序である）。
+     List(Vec<String>),
++    /// 真偽。
++    Bool(bool),
+ }
+ 
+ impl RuleValue {
+@@ -721,6 +730,7 @@ impl RuleValue {
+             Self::Str(_) => ValueShape::Str,
+             Self::Policy(_) => ValueShape::Policy,
+             Self::List(_) => ValueShape::List,
++            Self::Bool(_) => ValueShape::Bool,
+         }
+     }
+ 
+@@ -729,6 +739,7 @@ impl RuleValue {
+         match self {
+             Self::Int(value) => value.to_string(),
+             Self::Str(text) | Self::Policy(text) => text.clone(),
++            Self::Bool(flag) => flag.to_string(),
+             // **1 行で区切りが読める形**にする（要素を空白で継ぐと、空白を含む
+             // 要素〔共通 verify の 1 行〕が何本あるのか読めなくなる）。
+             Self::List(items) => {
+diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
+index 83835e5f..c21db1d9 100644
+--- a/scribe2/rules/manifest.toml
++++ b/scribe2/rules/manifest.toml
+@@ -638,6 +638,17 @@ enabled = true
+ ruling = "user 2026-09-14T06:4xZ"
+ ruled_at = "2026-09-14"
+ 
++# 入口の排他を差の当たりで通すかの入り切り（真偽・判断の記録 ADR-60 の決定 (5)・要件 FR1039）。偽の間は交差を今のまま断る。真にするのは
++# 記帳の器の行が着地した後の器の行で、同じ裁定を引く。撤退は偽に戻す 1 行。行が無い・不発効の周は偽と読む（読み手は pipe::commute::on）。
++
++[[rule]]
++id = "pipe.overlap_commute"
++kind = "PipeOverlapCommute"
++value = false
++enabled = true
++ruling = "user 2026-10-05T05:13Z 問い t3-hub.89.2"
++ruled_at = "2026-10-05"
++
+ # 同型の審査 FAIL の停止の回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付（pipe intake / preflight）は同じ
+ # bead の便を新しい順に読み、同じ理由の型（crates 側の FindingKind）の FAIL が PASS で途切れるまでこの本数続き、
+ # 契約 file と節の本文がともに不変の周を same-kind-repeated で断る（焼き直しは書き直す）。行の無い manifest は
