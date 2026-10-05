@@ -1,0 +1,463 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 666bed7ccf580db773a0fb86e438ab6ba1fd4150..481d7331a28448143c7c52b75fa6b56177f02824 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -7,6 +7,8 @@
+ //! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+ //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
+ //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
++//! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
++//! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
+ 
+ use std::fs::{self, File};
+ use std::os::unix::fs::{MetadataExt, PermissionsExt};
+@@ -78,12 +80,14 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+     let uid = fs::metadata(ws)
+         .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?
+         .uid();
++    let account_dirs = account_dirs(Path::new(&state))?;
+     Ok(Launch {
+         form: w.form,
+         window: w.id,
+         workspace: abs(ws).display().to_string(),
+         repo,
+         state,
++        account_dirs,
+         roots,
+         tz: tz_path(),
+         uid: uid.to_string(),
+@@ -93,6 +97,42 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+     })
+ }
+ 
++/// state dir の accounts と accounts/.retired の子の symlink の先（器の口座の置き場の形・解けた先は canonical の path・
++/// 解けない先は link の字の path・字の順で重なりなし・accounts が無ければ空・読めない dir と link は断る）。
++pub fn account_dirs(state: &Path) -> Result<Vec<String>, Refused> {
++    let unreadable = |p: &Path, e: std::io::Error| {
++        let why = format!(
++            "口座の置き場 {} が読めない: {e}（読める形に直してから起こし直す）",
++            p.display()
++        );
++        (UNKNOWN, why)
++    };
++    let accounts = state.join("accounts");
++    let mut dirs = Vec::new();
++    for dir in [accounts.clone(), accounts.join(".retired")] {
++        let entries = match fs::read_dir(&dir) {
++            Ok(entries) => entries,
++            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
++            Err(e) => return Err(unreadable(&dir, e)),
++        };
++        for entry in entries {
++            let link = entry.map_err(|e| unreadable(&dir, e))?.path();
++            let meta = fs::symlink_metadata(&link).map_err(|e| unreadable(&link, e))?;
++            if !meta.file_type().is_symlink() {
++                continue;
++            }
++            let target = match fs::canonicalize(&link) {
++                Ok(target) => target,
++                Err(_) => dir.join(fs::read_link(&link).map_err(|e| unreadable(&link, e))?),
++            };
++            dirs.push(target.display().to_string());
++        }
++    }
++    dirs.sort();
++    dirs.dedup();
++    Ok(dirs)
++}
++
+ /// 窓の起こし手（開きの行の欄）。
+ fn by_of(w: &WindowFile) -> Result<By, Refused> {
+     let missing = || (FAIL, format!("窓 {} の控えに起こし手の添えが無い", w.id));
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index d7f9c6af7c2ab6525159333bfa52e2b1d9411c32..c403e809f851c4ea7ed000727955d20876db47e4 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -2,6 +2,7 @@
+ //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
+ //! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
+ //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
++//! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -193,6 +194,7 @@ impl Fx {
+             ],
+             repo,
+             state,
++            account_dirs: Vec::new(),
+             tz: canon(Path::new(env!("CARGO_BIN_EXE_tz"))),
+             uid: fs::metadata(&ws).unwrap().uid().to_string(),
+             model: "fable".to_string(),
+@@ -532,3 +534,99 @@ fn cwlch_private_tmp_guard() {
+     assert!(open_line(&fx.written()[1].1).0);
+     clear_tmp(&l);
+ }
++
++/// state dir の accounts に口座の置き場の形を置く（実体の dir・ふつうの dir・解けない link・相対の link・file・退役の link）。
++fn put_accounts(fx: &Fx) -> Vec<String> {
++    let (accounts, real) = (fx.state.join("accounts"), fx.root.join("real"));
++    for d in [
++        accounts.join(".retired"),
++        accounts.join("b"),
++        real.join("a"),
++        real.join("d"),
++        real.join("old"),
++    ] {
++        fs::create_dir_all(d).unwrap();
++    }
++    let gone = fx.root.join("gone");
++    std::os::unix::fs::symlink(real.join("a"), accounts.join("a")).unwrap();
++    std::os::unix::fs::symlink(&gone, accounts.join("c")).unwrap();
++    std::os::unix::fs::symlink("../../real/d", accounts.join("d")).unwrap();
++    std::os::unix::fs::symlink(real.join("old"), accounts.join(".retired/old.1")).unwrap();
++    std::os::unix::fs::symlink(real.join("a"), accounts.join(".retired/a.2")).unwrap();
++    fs::write(accounts.join("x.txt"), "x").unwrap();
++    let canon = |p: PathBuf| fs::canonicalize(p).unwrap().display().to_string();
++    let mut want = vec![
++        canon(real.join("a")),
++        gone.display().to_string(),
++        canon(real.join("d")),
++        canon(real.join("old")),
++    ];
++    want.sort();
++    want
++}
++
++#[test]
++fn cwlch_account_links_are_hidden() {
++    let fx = Fx::new("links");
++    fx.open(&["--by", "seat"]);
++    let want = put_accounts(&fx);
++    let mut l = fx.launch(1, Form::Talk, false);
++    l.account_dirs = want.clone();
++    assert_eq!(want.len(), 4);
++    let o = fx.tz(&["consult", "launch", "cw1", "--dry-run"]);
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let lines: Vec<String> = out(&o).lines().map(String::from).collect();
++    let got: Vec<String> = std::iter::once("claude".to_string())
++        .chain(argv(&l))
++        .collect();
++    assert_eq!(lines, got);
++    let settings = lines
++        .iter()
++        .skip_while(|a| *a != "--settings")
++        .nth(1)
++        .unwrap();
++    for d in &want {
++        assert!(settings.contains(&format!("\"path\":\"{d}\"")), "{d}");
++        assert!(settings.contains(&format!("\"Read(/{d}/**)\"")), "{d}");
++    }
++    assert!(
++        !settings.contains("accounts/b\""),
++        "ふつうの dir は accounts の覆いの中"
++    );
++    assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
++}
++
++#[test]
++fn cwlch_unreadable_accounts_refuse() {
++    let fx = Fx::new("noacct");
++    fx.open(&["--by", "seat"]);
++    put_accounts(&fx);
++    let l = fx.launch(1, Form::Talk, false);
++    clear_tmp(&l);
++    for dir in [
++        fx.state.join("accounts/.retired"),
++        fx.state.join("accounts"),
++    ] {
++        fs::set_permissions(&dir, fs::Permissions::from_mode(0o000)).unwrap();
++        let o = fx.tz(&["consult", "launch", "cw1"]);
++        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
++        let shown = fs::canonicalize(&dir).unwrap().display().to_string();
++        assert_eq!(rc(&o), 2, "{}", err(&o));
++        assert!(
++            err(&o).starts_with(&format!(
++                "tz consult launch: 口座の置き場 {shown} が読めない: "
++            )),
++            "{}",
++            err(&o)
++        );
++        assert!(
++            err(&o).ends_with("（読める形に直してから起こし直す）\n"),
++            "{}",
++            err(&o)
++        );
++        assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
++        assert!(!Path::new(&private_tmp(&l.workspace)).exists());
++    }
++    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 0);
++    clear_tmp(&l);
++}
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 35fa3763ac364d2e31195eb365087db87dd95827..f3a3850934e0887142343f0cc6f81d1637867637 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -44,7 +44,7 @@ pub const DOMAINS: [&str; 6] = [
+ /// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。
+ const CLAUDE_CREDENTIALS: &str = "~/.claude/.credentials.json";
+ 
+-/// 囲いから見えなくする資格の file（home の下・ほかに state dir の accounts と repo の台帳の鍵と共有の temp）。
++/// 囲いと読む道具の断りの両方から見えなくする資格の file（home の下・囲いはほかに state dir の accounts とその symlink の先と repo の台帳の鍵と共有の temp）。
+ pub const CREDENTIALS: [&str; 6] = [
+     "~/.config/gh",
+     "~/.ssh",
+@@ -89,6 +89,8 @@ pub struct Launch {
+     pub repo: String,
+     /// project の state dir。
+     pub state: String,
++    /// state dir の accounts の symlink の先（口座の置き場の実体・境が起こす時に解く・字の順で重なりなし）。
++    pub account_dirs: Vec<String>,
+     /// 読む根のうち在る dir（`read_roots` の部分の列・順もそのまま）。
+     pub roots: Vec<String>,
+     /// 解いた tz の path。
+@@ -137,22 +139,38 @@ pub fn prompt(l: &Launch) -> String {
+     }
+ }
+ 
++/// 囲いから見えなくする path（資格の file・accounts とその symlink の先・台帳の鍵・共有の temp）。
++fn hidden(l: &Launch) -> Vec<String> {
++    let mut paths: Vec<String> = CREDENTIALS.iter().map(|c| (*c).to_string()).collect();
++    paths.push(format!("{}/accounts", l.state));
++    paths.extend(l.account_dirs.iter().cloned());
++    paths.push(format!("{}/.beads/.env", l.repo));
++    paths.push(format!("/tmp/claude-{}", l.uid));
++    paths
++}
++
++/// 読む道具の断り（accounts とその symlink の先・台帳の鍵・資格の file は file にも dir にも効くよう path と下の全部の 2 つ）。
++fn denied_reads(l: &Launch) -> Vec<String> {
++    let mut rules = vec![format!("Read(/{}/accounts/**)", l.state)];
++    rules.extend(l.account_dirs.iter().map(|d| format!("Read(/{d}/**)")));
++    rules.push(format!("Read(/{}/.beads/.env)", l.repo));
++    for c in CREDENTIALS {
++        rules.extend([format!("Read({c})"), format!("Read({c}/**)")]);
++    }
++    rules
++}
++
+ /// `--settings` に渡す設定。
+ pub fn settings(l: &Launch) -> Value {
+-    let (w, r, s) = (&l.workspace, &l.repo, &l.state);
+-    let deny = |p: String| json!({"path": p, "mode": "deny"});
+-    let mut files: Vec<Value> = CREDENTIALS.iter().map(|p| deny((*p).to_string())).collect();
+-    files.push(deny(format!("{s}/accounts")));
+-    files.push(deny(format!("{r}/.beads/.env")));
+-    files.push(deny(format!("/tmp/claude-{}", l.uid)));
++    let w = &l.workspace;
++    let files: Vec<Value> = hidden(l)
++        .into_iter()
++        .map(|p| json!({"path": p, "mode": "deny"}))
++        .collect();
+     json!({
+         "permissions": {
+             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
+-            "deny": [
+-                format!("Read(/{s}/accounts/**)"),
+-                format!("Read(/{r}/.beads/.env)"),
+-                format!("Read({CLAUDE_CREDENTIALS})"),
+-            ],
++            "deny": denied_reads(l),
+         },
+         "sandbox": {
+             "enabled": true,
+@@ -315,11 +333,7 @@ fn audit_sandbox(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+                 .collect()
+         })
+         .unwrap_or_default();
+-    let mut want: Vec<String> = CREDENTIALS.iter().map(|c| (*c).to_string()).collect();
+-    want.push(format!("{}/accounts", l.state));
+-    want.push(format!("{}/.beads/.env", l.repo));
+-    want.push(format!("/tmp/claude-{}", l.uid));
+-    if want.iter().any(|w| !denied.contains(&w.as_str())) {
++    if hidden(l).iter().any(|w| !denied.contains(&w.as_str())) {
+         gaps.push("/sandbox/credentials/files".to_string());
+     }
+ }
+@@ -336,12 +350,7 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+         gaps.push("/permissions/allow".to_string());
+     }
+     let deny = strings(set.pointer("/permissions/deny"));
+-    let want = [
+-        format!("Read(/{}/accounts/**)", l.state),
+-        format!("Read(/{}/.beads/.env)", l.repo),
+-        format!("Read({CLAUDE_CREDENTIALS})"),
+-    ];
+-    if want.iter().any(|w| !deny.contains(&w.as_str())) {
++    if denied_reads(l).iter().any(|w| !deny.contains(&w.as_str())) {
+         gaps.push("/permissions/deny".to_string());
+     }
+     let under = format!("{}/", l.workspace);
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index d2da9969b6ee7a26a843f71eea52993367d9f3fa..5bd363c12b0312bec5296c297b05155c724624e2 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -2,6 +2,7 @@
+ //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
+ //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
+ //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
++//! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
+ #![cfg(test)]
+ 
+ use std::path::Path;
+@@ -33,6 +34,12 @@ fn launch(inputs: &Value) -> Launch {
+         workspace: s("workspace"),
+         repo: s("repo"),
+         state: s("state"),
++        account_dirs: inputs["account_dirs"]
++            .as_array()
++            .expect("account_dirs")
++            .iter()
++            .map(|d| d.as_str().expect("account_dir").to_string())
++            .collect(),
+         roots: inputs["roots"]
+             .as_array()
+             .expect("roots")
+@@ -179,9 +186,9 @@ fn cwarg_audit_refuses_each_missing_key() {
+         assert!(!audit(&a, &l).is_empty(), "{pointer} を除いた");
+     }
+     for (list, n) in [
+-        ("/sandbox/credentials/files", 9),
++        ("/sandbox/credentials/files", 11),
+         ("/sandbox/filesystem/denyWrite", 3),
+-        ("/permissions/deny", 3),
++        ("/permissions/deny", 16),
+     ] {
+         for i in 0..n {
+             let a = with_settings(&l, |set| {
+@@ -336,6 +343,89 @@ fn cwarg_hides_the_claude_credentials() {
+     }
+ }
+ 
++#[test]
++fn cwarg_hides_account_dirs_and_credential_reads() {
++    let fx = fixture();
++    let one = |xs: &[Value], x: &Value| xs.iter().filter(|y| *y == x).count() == 1;
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let set = settings(&l);
++        let files = set["sandbox"]["credentials"]["files"]
++            .as_array()
++            .expect("列");
++        let deny = set["permissions"]["deny"].as_array().expect("列");
++        for d in &l.account_dirs {
++            assert!(
++                one(files, &json!({"path": d, "mode": "deny"})),
++                "{form} {d}"
++            );
++            assert!(one(deny, &json!(format!("Read(/{d}/**)"))), "{form} {d}");
++        }
++        for c in CREDENTIALS {
++            for rule in [format!("Read({c})"), format!("Read({c}/**)")] {
++                assert!(one(deny, &json!(rule)), "{form} {rule}");
++                let a = with_settings(&l, |s| {
++                    let xs = s["permissions"]["deny"].as_array_mut().expect("列");
++                    xs.retain(|x| *x != json!(rule));
++                });
++                assert_eq!(
++                    audit(&a, &l),
++                    ["/permissions/deny"],
++                    "{form} {rule} を除いた"
++                );
++            }
++        }
++        let d = l.account_dirs[1].clone();
++        let gaps = |edit: &dyn Fn(&mut Value)| audit(&with_settings(&l, edit), &l);
++        let drop_file = |s: &mut Value| {
++            let xs = s["sandbox"]["credentials"]["files"]
++                .as_array_mut()
++                .expect("列");
++            xs.retain(|x| x["path"] != json!(d));
++        };
++        assert_eq!(gaps(&drop_file), ["/sandbox/credentials/files"], "{form}");
++        let allow = |s: &mut Value| {
++            let xs = s["sandbox"]["credentials"]["files"]
++                .as_array_mut()
++                .expect("列");
++            xs.iter_mut()
++                .filter(|x| x["path"] == json!(d))
++                .for_each(|x| x["mode"] = json!("allow"));
++        };
++        assert_eq!(
++            gaps(&allow),
++            ["/sandbox/credentials/files"],
++            "{form} の allow"
++        );
++        let drop_rule = |s: &mut Value| {
++            let xs = s["permissions"]["deny"].as_array_mut().expect("列");
++            xs.retain(|x| *x != json!(format!("Read(/{d}/**)")));
++        };
++        assert_eq!(gaps(&drop_rule), ["/permissions/deny"], "{form}");
++        let mut more = l.clone();
++        more.account_dirs.push("/A/new".into());
++        assert_eq!(
++            audit(&argv(&l), &more),
++            ["/sandbox/credentials/files", "/permissions/deny"],
++            "{form} の材料にだけ在る実体"
++        );
++        let mut none = l.clone();
++        none.account_dirs.clear();
++        let bare = settings(&none);
++        let n = |p: &str| {
++            bare.pointer(p)
++                .and_then(Value::as_array)
++                .map_or(0, Vec::len)
++        };
++        assert_eq!(
++            (n("/sandbox/credentials/files"), n("/permissions/deny")),
++            (9, 14),
++            "{form} の実体なし"
++        );
++        assert!(audit(&argv(&none), &none).is_empty(), "{form} の実体なし");
++    }
++}
++
+ #[test]
+ fn cwarg_tmp_and_version() {
+     assert_eq!(private_tmp("/W"), "/tmp/tzc-07d671");
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index 3a1ed5e0d0753df55517a26a9192bb9666127130..08a934f3fa0bfa0059ae36f2aaa56c916ef5e695 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -1,7 +1,7 @@
+ {
+-  "note": "受入 AC19 の fixture（JSON の字・JSON は YAML でもある）。置き字: /W 作業場・/R repo・/S state dir・/T 解いた tz・U uid。argv の <settings> は settings の字に替わる。",
++  "note": "受入 AC19 の fixture（JSON の字・JSON は YAML でもある）。置き字: /W 作業場・/R repo・/S state dir・/A 口座の置き場の実体・/T 解いた tz・U uid。argv の <settings> は settings の字に替わる。",
+   "talk": {
+-    "inputs": {"form": "talk", "window": "cw3", "workspace": "/W", "repo": "/R", "state": "/S", "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": false},
++    "inputs": {"form": "talk", "window": "cw3", "workspace": "/W", "repo": "/R", "state": "/S", "account_dirs": ["/A/one", "/A/old"], "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": false},
+     "argv": [
+       "--restricted",
+       "--permission-mode", "dontAsk",
+@@ -20,7 +20,7 @@
+     "env": [["TZ_CONSULT_ID", "cw3"], ["CLAUDE_CODE_TMPDIR", "/tmp/tzc-07d671"]]
+   },
+   "ask": {
+-    "inputs": {"form": "ask", "window": "cw4", "workspace": "/W", "repo": "/R", "state": "/S", "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": true},
++    "inputs": {"form": "ask", "window": "cw4", "workspace": "/W", "repo": "/R", "state": "/S", "account_dirs": ["/A/one", "/A/old"], "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": true},
+     "argv": [
+       "-p", "bundle/brief.md と bundle/question.md を読んで答え、所見を tz consult answer で出して終われ",
+       "--restricted",
+@@ -44,7 +44,12 @@
+   "settings": {
+     "permissions": {
+       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
+-      "deny": ["Read(//S/accounts/**)", "Read(//R/.beads/.env)", "Read(~/.claude/.credentials.json)"]
++      "deny": [
++        "Read(//S/accounts/**)", "Read(//A/one/**)", "Read(//A/old/**)", "Read(//R/.beads/.env)",
++        "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
++        "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",
++        "Read(~/.cld-env)", "Read(~/.cld-env/**)", "Read(~/.claude/.credentials.json)", "Read(~/.claude/.credentials.json/**)"
++      ]
+     },
+     "sandbox": {
+       "enabled": true,
+@@ -60,6 +65,8 @@
+         {"path": "~/.cld-env", "mode": "deny"},
+         {"path": "~/.claude/.credentials.json", "mode": "deny"},
+         {"path": "/S/accounts", "mode": "deny"},
++        {"path": "/A/one", "mode": "deny"},
++        {"path": "/A/old", "mode": "deny"},
+         {"path": "/R/.beads/.env", "mode": "deny"},
+         {"path": "/tmp/claude-U", "mode": "deny"}
+       ]},
