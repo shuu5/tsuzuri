@@ -1,0 +1,538 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+index 902b9877a7e0846331d84ad5cad7259b1f39670d..cdcb77a8713fc4c2d1776808a28c7eb9518d4258 100644
+--- a/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
++++ b/crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+@@ -7,6 +7,7 @@
+ //! 5. 欠けが在り 1 度目の終わり（stop_hook_active が真でない）なら、理由を標準エラーに書いて 2
+ //!    （Claude Code は SubagentStop の rc 2 を係の続けと読み、標準エラーを係に渡す）。
+ //! 6. 通す時は、欠けが在れば `<名>/w/STOP-GATE.txt` に欠けを 1 行ずつ書き、札の `ended` に今の時刻を書いて 0（書けなければ標準エラーに書いて通す）。
++//!    0 の前に、4 で読んだ係の記録から中核の `Tally` で組んだ予算の記録を `<名>/usage.json` に書く（記録が空なら書かない・書けなければ標準エラーに書いて通す）。
+ //!
+ //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
+ //! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
+@@ -17,7 +18,7 @@ use std::fs;
+ use std::io::Read;
+ use std::path::Path;
+ 
+-use tsuzuri_core::agent::meter::sub_call;
++use tsuzuri_core::agent::meter::{TALLY, Tally, sub_call};
+ use tsuzuri_core::agent::spec::group::{SEAT, Seat};
+ use tsuzuri_core::agent::spec::{SPEC, Spec};
+ use tsuzuri_core::agent::stop::{GATE, OUT, claim_lacks, end, hold, lacks};
+@@ -51,6 +52,19 @@ fn claim_holes(agent: &Path, spec: &Spec, out: &Path) -> Vec<String> {
+     claim_lacks(&texts, &seat.claims)
+ }
+ 
++/// 係の dir `agent` に、札 `spec` と係の記録 `record` の予算の記録を書く（記録が空なら数えずに書かない・書けなければ標準エラーに書いて通す）。
++fn tally(agent: &Path, spec: &Spec, record: &[u8]) {
++    if record.is_empty() {
++        emit_err("tz hook agent-stop: 係の記録が読めないか空なので予算の記録を書かない（通す）");
++        return;
++    }
++    if let Err(e) = fs::write(agent.join(TALLY), Tally::of(spec, record).render()) {
++        emit_err(&format!(
++            "tz hook agent-stop: 予算の記録を書けない（通す）: {e}"
++        ));
++    }
++}
++
+ /// tz hook agent-stop の残りの引数を受けて終了 code を返す（0 か 1 か 2）。
+ pub fn run(rest: &[&str]) -> u8 {
+     let mut payload = String::new();
+@@ -105,5 +119,6 @@ pub fn run(rest: &[&str]) -> u8 {
+             "tz hook agent-stop: 札に終えの印を書けない（通す）: {e}"
+         ));
+     }
++    tally(&dir.join(&name), &spec, &record);
+     0
+ }
+diff --git a/crates/tsuzuri-boundary/tests/agbf.rs b/crates/tsuzuri-boundary/tests/agbf.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..114c508ad8cc18149abcd16ad0321fd7e896f5af
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agbf.rs
+@@ -0,0 +1,300 @@
++//! 起こしの予算の下限と予算の記録の歯（接頭辞 agbf_・設計ノート surface-wave29c 行 ag-budget-floor・判断の記録 ADR-63 の決定 (3)(9)）。
++//! 中核の `agent::spec` の頭の読みと断りの理由の見本と、`agent::meter` の係の記録の数えと予算の記録を直に撃ち、
++//! tz の binary の tz hook agent-spawn と agent-stop に係の試しの門の入力の形（会話の id と path は伏せた）を標準入力で渡し、
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）の drafts/ を --drafts で渡す。否定の見本は正しい見本から句を 1 つだけ外す。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++use tsuzuri_core::agent::meter::{TALLY, Tally, spent};
++use tsuzuri_core::agent::spec::group::MEMBER_NEW;
++use tsuzuri_core::agent::spec::{BUDGET_MIN, Call, HeadError, Refusal, Spec, head, judge, reason};
++
++/// 頼みの頭の 4 行（予算の値 `budget`・組みの値 `build`）と空の行と本文。
++fn prompt(budget: &str, build: &str) -> String {
++    format!(
++        "予算: {budget}\n組み: {build}\n対象: ag-budget-floor\n出す物: notes.md\n\n行を起草する。"
++    )
++}
++
++/// 直した頭の見本の後ろの 3 行（組み・対象・出す物）。
++const REST: &str = "\n組み: なし\n対象: ag-budget-floor\n出す物: notes.md";
++
++/// 下限: 下限より 1 小さい予算と予算 1 は下限より小さいと断り、下限ちょうどの 150000 は通す。
++#[test]
++fn agbf_head_refuses_a_budget_below_the_floor() {
++    assert_eq!(
++        head(&prompt("token 149999", "なし")),
++        Err(HeadError::Low(149_999))
++    );
++    assert_eq!(head(&prompt("token 1", "なし")), Err(HeadError::Low(1)));
++    let top = head(&prompt("token 150000", "なし")).map(|h| h.budget);
++    assert_eq!(top, Ok(150_000));
++}
++
++/// 下限は群の係ごとの上限以下で、上限ちょうどの予算の頭は下限を通る。
++#[test]
++fn agbf_floor_is_at_most_the_member_cap() {
++    let (floor, cap) = (BUDGET_MIN, MEMBER_NEW);
++    assert!(
++        floor <= cap,
++        "下限 {floor} が群の係ごとの上限 {cap} を越える"
++    );
++    let at_cap = head(&prompt(&format!("token {cap}"), "なし")).map(|h| h.budget);
++    assert_eq!(at_cap, Ok(cap));
++}
++
++/// 起こしの判じは下限より小さい予算を頭の断りにし、理由は値と下限を名指して、直した頭の見本の予算の行だけを
++/// 下限から上の書き方に替える。形の違う予算の行は今までの書き方、下限ちょうどの予算の行は値のまま。
++#[test]
++fn agbf_reason_fixes_only_the_low_budget_line() {
++    let low = prompt("token 100000", "なし");
++    let call = Call {
++        kind: Some("tsuzuri:drafter".into()),
++        name: Some("w238a".into()),
++        prompt: low.clone(),
++    };
++    let r = judge(&call, &[], 1).unwrap_err();
++    assert_eq!(r, Refusal::Head(HeadError::Low(100_000)));
++    assert_eq!(
++        reason(&r, &low),
++        format!(
++            "係の起こしの門は止める（予算の値 100000 が下限 150000 より小さい） 次の一手 = prompt の頭に次の 4 行を置き、空の行の後に頼みを書く\n予算: token <150000 以上の数>{REST}"
++        )
++    );
++    let form = prompt("token 10万", "なし");
++    let r = Refusal::Head(HeadError::Budget("token 10万".into()));
++    assert!(
++        reason(&r, &form).ends_with(&format!("\n予算: token <数>{REST}")),
++        "{}",
++        reason(&r, &form)
++    );
++    let edge = prompt("token 150000", "大");
++    let r = Refusal::Head(HeadError::Build("大".into()));
++    assert!(
++        reason(&r, &edge).ends_with(
++            "\n予算: token 150000\n組み: なし|軽|重\n対象: ag-budget-floor\n出す物: notes.md"
++        ),
++        "{}",
++        reason(&r, &edge)
++    );
++}
++
++/// 係の記録の assistant の行（応答の id の欄 `id`・usage の input・cache_creation・output・cache_read）。
++fn turn(id: &str, input: u64, create: u64, output: u64, read: u64) -> String {
++    format!(
++        r#"{{"type":"assistant","message":{{{id}"content":[{{"type":"text","text":"調べ"}}],"usage":{{"input_tokens":{input},"cache_creation_input_tokens":{create},"output_tokens":{output},"cache_read_input_tokens":{read}}}}}}}"#
++    )
++}
++
++/// 応答の id の欄の字。
++fn id(id: &str) -> String {
++    format!(r#""id":"{id}","#)
++}
++
++/// 席の道具と同じ数え: 同じ応答の id の行は離れていても最後の行だけ、id の無い行は 1 行ずつ数え、cache の読みと
++/// user の行と JSON でない行は数えず、改行で終わらない最後の行も数える。
++#[test]
++fn agbf_spent_counts_like_the_seat_tool() {
++    let lines = [
++        r#"{"type":"user","message":{"content":"頼み"}}"#.to_string(),
++        turn(&id("A"), 10, 100, 1, 1000),
++        turn(&id("A"), 10, 100, 5, 1000),
++        turn(&id("B"), 3, 0, 7, 500),
++        turn(&id("A"), 10, 100, 9, 1000),
++        r#"{"type":"user","message":{"content":"結果","usage":{"input_tokens":50}}}"#.to_string(),
++        "{".to_string(),
++        turn("", 2, 0, 2, 0),
++        turn("", 1, 0, 1, 0),
++    ];
++    let record = lines.join("\n");
++    assert_eq!(spent(record.as_bytes()), 119 + 10 + 4 + 2);
++    assert_eq!(spent(format!("{record}\n").as_bytes()), 135);
++    assert_eq!(spent(b""), 0);
++}
++
++/// 札（係 w238a・予算 150000・終えの印 `ended`）。
++fn card(ended: Option<u64>) -> Spec {
++    Spec {
++        name: "w238a".into(),
++        kind: "tsuzuri:drafter".into(),
++        budget: 150_000,
++        build: "重".into(),
++        target: "ag-budget-floor".into(),
++        outputs: vec!["notes.md".into()],
++        spawned: 100,
++        agent_id: Some("a77".into()),
++        ended,
++    }
++}
++
++/// 予算の記録の字（名・型・対象・予算・新しい量・倍率・時刻の順）。
++fn rendered(used: u64, ratio: &str, at: u64) -> String {
++    format!(
++        "{{\n  \"name\": \"w238a\",\n  \"type\": \"tsuzuri:drafter\",\n  \"target\": \"ag-budget-floor\",\n  \"budget\": 150000,\n  \"used\": {used},\n  \"ratio\": {ratio},\n  \"at\": {at}\n}}\n"
++    )
++}
++
++/// 予算の記録は札の名・型・対象・予算と、記録を数えた新しい量と、新しい量を予算で割って小数 3 桁に丸めた倍率と、
++/// 札の終えの印の時刻（無ければ起こしの時刻）を持ち、file の名は usage.json。
++#[test]
++fn agbf_tally_holds_name_type_target_budget_used_ratio_and_time() {
++    let record = turn(&id("A"), 100_000, 99_000, 1_000, 7);
++    let t = Tally::of(&card(Some(200)), record.as_bytes());
++    assert_eq!(t.render(), rendered(200_000, "1.333", 200));
++    let t = Tally::of(&card(None), record.as_bytes());
++    assert_eq!(t.render(), rendered(200_000, "1.333", 100));
++    let small = turn(&id("A"), 1, 0, 0, 0);
++    assert_eq!(
++        Tally::of(&card(None), small.as_bytes()).render(),
++        rendered(1, "0.0", 100)
++    );
++    assert_eq!(TALLY, "usage.json");
++}
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）。drafts/ と、係の記録を置く親の記録の dir。
++fn place(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("agbf")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(root.join("drafts")).unwrap();
++    fs::create_dir_all(root.join("s/subagents")).unwrap();
++    root
++}
++
++/// tz hook <verb> --repo <root> --drafts <root>/drafts に `input` を渡した結果。
++fn hook(verb: &str, root: &Path, input: &str) -> Output {
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", verb, "--repo"])
++        .arg(root)
++        .arg("--drafts")
++        .arg(root.join("drafts"))
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    let _ = child.stdin.take().unwrap().write_all(input.as_bytes());
++    child.wait_with_output().unwrap()
++}
++
++/// 席の起こしの入力（型 tsuzuri:drafter・名 w238a・頼みの予算の値 `budget`・JSON の字の中の形）。
++fn spawn_in(budget: &str) -> String {
++    format!(
++        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"/T/s.jsonl","cwd":"/W","permission_mode":"bypassPermissions","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{{"description":"起草","prompt":"予算: {budget}\n組み: なし\n対象: ag-budget-floor\n出す物: notes.md\n\n行を起草する。","subagent_type":"tsuzuri:drafter","name":"w238a"}},"tool_use_id":"toolu_X"}}"#
++    )
++}
++
++/// 起こしの門: 下限より 1 小さい予算の起こしを deny の答えで断って頼みと札を書かず、下限ちょうどは通して札の予算に書く。
++#[test]
++fn agbf_spawn_hook_denies_a_budget_below_the_floor() {
++    let root = place("spawn");
++    let low = hook("agent-spawn", &root, &spawn_in("token 149999"));
++    let text = String::from_utf8_lossy(&low.stdout);
++    assert_eq!(low.status.code(), Some(0));
++    assert!(
++        text.starts_with(r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"係の起こしの門は止める（予算の値 149999 が下限 150000 より小さい） 次の一手 = "#),
++        "{text}"
++    );
++    assert!(
++        text.contains(r"予算: token <150000 以上の数>\n組み: なし"),
++        "{text}"
++    );
++    assert!(!root.join("drafts/w238a").exists());
++    let ok = hook("agent-spawn", &root, &spawn_in("token 150000"));
++    assert_eq!((ok.status.code(), ok.stdout.len()), (Some(0), 0));
++    let card = fs::read_to_string(root.join("drafts/w238a/spec.json")).unwrap();
++    assert_eq!(Spec::parse(&card).map(|s| s.budget), Some(150_000));
++}
++
++/// 席への知らせ（team-lead への SendMessage）を持ち、usage の新しい量が 300000 の係の記録。
++fn record() -> String {
++    let told = r#"{"type":"assistant","message":{"id":"M2","content":[{"type":"tool_use","id":"toolu_1","name":"SendMessage","input":{"to":"team-lead","message":"済み"}}],"usage":{"input_tokens":1000,"cache_creation_input_tokens":49000,"output_tokens":0,"cache_read_input_tokens":9}}}"#;
++    [
++        r#"{"type":"user","message":{"content":"頼み"}}"#.to_string(),
++        turn(&id("M1"), 50_000, 199_000, 1_000, 5),
++        told.to_string(),
++    ]
++    .join("\n")
++        + "\n"
++}
++
++/// 欠けの無い終わりの置き場: 係 w238a の札（予算 150000・出す物 notes.md）と係の id a77 の結び・係の記録・w/notes.md。
++fn whole(name: &str) -> PathBuf {
++    let root = place(name);
++    let dir = root.join("drafts/w238a");
++    fs::create_dir_all(dir.join("w")).unwrap();
++    fs::write(dir.join("spec.json"), card(None).render()).unwrap();
++    fs::write(dir.join("w/notes.md"), "分かった所\n").unwrap();
++    fs::create_dir_all(root.join("drafts/.agents")).unwrap();
++    fs::write(root.join("drafts/.agents/a77"), "w238a\n").unwrap();
++    fs::write(root.join("s/subagents/agent-a77.jsonl"), record()).unwrap();
++    root
++}
++
++/// tz hook agent-stop に係 a77 の終わりの入力（止めた後の終わりか `again`・最後の文は出力の dir の path を持つ）を渡した結果。
++fn stop(root: &Path, again: bool) -> Output {
++    let w = root.join("drafts/w238a/w");
++    let input = format!(
++        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a77","agent_type":"tsuzuri:drafter","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"済み。出す物は {} に在る"}}"#,
++        root.join("s.jsonl").display(),
++        root.join("s/subagents/agent-a77.jsonl").display(),
++        w.display()
++    );
++    hook("agent-stop", root, &input)
++}
++
++/// 札の終えの印。
++fn ended(root: &Path) -> Option<u64> {
++    let card = fs::read_to_string(root.join("drafts/w238a/spec.json")).unwrap();
++    Spec::parse(&card).and_then(|s| s.ended)
++}
++
++/// 終える前の門は、通す終わりに係の記録（入力の agent_transcript_path）を数えた予算の記録を係の dir の usage.json に書き、
++/// 時刻は札に書いた終えの印。欠けの在る 2 度目の終わりも通すので書く。
++#[test]
++fn agbf_stop_hook_writes_the_tally_when_it_lets_the_agent_go() {
++    let root = whole("pass");
++    let out = stop(&root, false);
++    assert_eq!(
++        (out.status.code(), out.stdout.len(), out.stderr.len()),
++        (Some(0), 0, 0)
++    );
++    let at = ended(&root).unwrap();
++    let tally = fs::read_to_string(root.join("drafts/w238a").join(TALLY)).unwrap();
++    assert_eq!(tally, rendered(300_000, "2.0", at));
++    let again = whole("again");
++    fs::remove_file(again.join("drafts/w238a/w/notes.md")).unwrap();
++    let out = stop(&again, true);
++    assert_eq!(out.status.code(), Some(0));
++    let at = ended(&again).unwrap();
++    let tally = fs::read_to_string(again.join("drafts/w238a").join(TALLY)).unwrap();
++    assert_eq!(tally, rendered(300_000, "2.0", at));
++}
++
++/// 1 度目の終わりを止める時（出す物の欠け）は予算の記録を書かず、係の記録が読めない通す終わりは書かずに標準エラーに書く。
++#[test]
++fn agbf_stop_hook_skips_the_tally_on_a_hold_and_an_unread_record() {
++    let held = whole("held");
++    fs::remove_file(held.join("drafts/w238a/w/notes.md")).unwrap();
++    let out = stop(&held, false);
++    assert_eq!(out.status.code(), Some(2));
++    assert!(!held.join("drafts/w238a").join(TALLY).exists());
++    let unread = whole("unread");
++    fs::remove_file(unread.join("s/subagents/agent-a77.jsonl")).unwrap();
++    let out = stop(&unread, true);
++    let err = String::from_utf8_lossy(&out.stderr);
++    assert_eq!(out.status.code(), Some(0));
++    assert!(ended(&unread).is_some());
++    assert!(!unread.join("drafts/w238a").join(TALLY).exists());
++    assert!(
++        err.contains(
++            "tz hook agent-stop: 係の記録が読めないか空なので予算の記録を書かない（通す）"
++        ),
++        "{err}"
++    );
++}
+diff --git a/crates/tsuzuri-core/src/agent/meter.rs b/crates/tsuzuri-core/src/agent/meter.rs
+index 2a886b622a1f82e262b0c0e3ac01ae3928949400..b3878fedbbb7cbe0c460627638f0f7249af3aaac 100644
+--- a/crates/tsuzuri-core/src/agent/meter.rs
++++ b/crates/tsuzuri-core/src/agent/meter.rs
+@@ -3,16 +3,22 @@
+ //! 応答の id で重ねずに足す。新しく読み書きした量は input・cache_creation・output の和で、文脈の読み直し（cache_read）は別の欄。
+ //! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
+ //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
++//! 終える前の門が係の dir に書く予算の記録（`Tally`・`usage.json`）は、係の記録の全部を席の道具と同じ数え（`spent`）で数えた
++//! 新しい量と、札の頭の予算と倍率と対象を持ち、日次の物差しが読む（判断の記録 ADR-63 決定 (9)）。
+ //! 予算を越えた係の呼びの係の門の判じ（`guard`）は行 ag-guard が置く。
+ //! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字（`group`）は行 ag-gwatch が置く。
+ 
+ pub mod group;
+ pub mod guard;
+ 
++use std::collections::BTreeMap;
++
+ use serde::{Deserialize, Serialize};
+ use serde_json::{Value, json};
+ use tsuzuri_contract::EpochSecs;
+ 
++use crate::agent::spec::Spec;
++
+ /// 係の dir の測りの札。
+ pub const METER: &str = "meter.json";
+ 
+@@ -51,6 +57,61 @@ fn usage(line: &[u8]) -> Option<(Option<String>, u64, u64)> {
+     Some((id, new, n("cache_read_input_tokens")))
+ }
+ 
++/// 係の記録の全部の新しい量（席の道具と同じ数え・同じ応答の id の行は離れていても最後の行だけを数え、id の無い行は 1 行ずつ数える）。
++pub fn spent(record: &[u8]) -> u64 {
++    let mut last: BTreeMap<String, u64> = BTreeMap::new();
++    let mut bare = 0;
++    for (id, new, _) in record.split(|b| *b == b'\n').filter_map(usage) {
++        match id {
++            Some(id) => {
++                last.insert(id, new);
++            }
++            None => bare += new,
++        }
++    }
++    bare + last.values().sum::<u64>()
++}
++
++/// 係の dir の予算の記録の file（終える前の門が通す時に書く）。
++pub const TALLY: &str = "usage.json";
++
++/// 予算の記録（係の名・型・対象・頭の予算・新しい量・倍率・書いた時刻）。倍率は新しい量を予算で割り、小数 3 桁に丸める。
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct Tally {
++    pub name: String,
++    #[serde(rename = "type")]
++    pub kind: String,
++    pub target: String,
++    pub budget: u64,
++    pub used: u64,
++    pub ratio: f64,
++    pub at: EpochSecs,
++}
++
++impl Tally {
++    /// 札 `spec` と係の記録 `record` の予算の記録（時刻は札の終えの印・無ければ起こしの時刻）。
++    pub fn of(spec: &Spec, record: &[u8]) -> Self {
++        let used = spent(record);
++        let ratio = (used as f64 / spec.budget.max(1) as f64 * 1000.0).round() / 1000.0;
++        Self {
++            name: spec.name.clone(),
++            kind: spec.kind.clone(),
++            target: spec.target.clone(),
++            budget: spec.budget,
++            used,
++            ratio,
++            at: spec.ended.unwrap_or(spec.spawned),
++        }
++    }
++
++    /// 記録の字（整えた JSON と末の改行）。
++    pub fn render(&self) -> String {
++        let mut text = serde_json::to_string_pretty(self).unwrap_or_default();
++        text.push('\n');
++        text
++    }
++}
++
+ impl Meter {
+     /// 札の字を読む（JSON でなければ None）。
+     pub fn parse(text: &str) -> Option<Self> {
+diff --git a/crates/tsuzuri-core/src/agent/spec.rs b/crates/tsuzuri-core/src/agent/spec.rs
+index 111f4c750426d6c4b4807312552cc1f586d0415b..86380e618f007bd3c282f221d5870b92c9a0f274 100644
+--- a/crates/tsuzuri-core/src/agent/spec.rs
++++ b/crates/tsuzuri-core/src/agent/spec.rs
+@@ -1,6 +1,7 @@
+ //! 係の起こしの門と結びの口の判じ（行 ag-spec・判断の記録 ADR-59 決定 (1)(2)(4)・要件 FR21）。
+ //! 起こしの門は席の Agent の呼び（PreToolUse の入力・係の id `agent_id` の無い呼び）を読み、型が tsuzuri の 3 本か・名が在るか・
+ //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
++//! 頭の予算は下限（`BUDGET_MIN`・判断の記録 ADR-63 決定 (3)）より小さければ、直した頭の見本を付けて断る。
+ //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
+ //! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
+ //! 検証の群の起こしの門の判じ（`group`・判断の記録 ADR-61・要件 FR22）は行 ag-gjudge が置く。
+@@ -28,6 +29,9 @@ pub const HOLES: [&str; 4] = [
+ /// 組みの値。
+ pub const BUILDS: [&str; 3] = ["なし", "軽", "重"];
+ 
++/// 頭の予算の下限（新しい量・全部の起こし）。群の係ごとの上限（`group::MEMBER_NEW`）とは中身が違うので共有しない。
++pub const BUDGET_MIN: u64 = 150_000;
++
+ /// 係の dir の頼みの file（prompt の字のまま）。
+ pub const BRIEF: &str = "brief.md";
+ 
+@@ -46,11 +50,12 @@ pub struct Head {
+     pub outputs: Vec<String>,
+ }
+ 
+-/// 頭の読みの断り（欠けた鍵の名の列・予算の値の形・組みの値の形）。
++/// 頭の読みの断り（欠けた鍵の名の列・予算の値の形・下限より小さい予算・組みの値の形）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum HeadError {
+     Missing(Vec<&'static str>),
+     Budget(String),
++    Low(u64),
+     Build(String),
+ }
+ 
+@@ -138,7 +143,7 @@ fn outputs(v: &str) -> Vec<String> {
+         .collect()
+ }
+ 
+-/// 頼みの頭を読む（欠けた鍵が在れば全部の名・予算と組みの値の形の誤り）。
++/// 頼みの頭を読む（欠けた鍵が在れば全部の名・予算と組みの値の形の誤り・下限より小さい予算）。
+ pub fn head(prompt: &str) -> Result<Head, HeadError> {
+     let f = fields(prompt);
+     let missing: Vec<&'static str> = KEYS
+@@ -156,6 +161,9 @@ pub fn head(prompt: &str) -> Result<Head, HeadError> {
+         return Err(HeadError::Missing(missing));
+     }
+     let budget = budget(b).ok_or_else(|| HeadError::Budget(b.to_string()))?;
++    if budget < BUDGET_MIN {
++        return Err(HeadError::Low(budget));
++    }
+     if !BUILDS.contains(&build) {
+         return Err(HeadError::Build(build.to_string()));
+     }
+@@ -167,20 +175,28 @@ pub fn head(prompt: &str) -> Result<Head, HeadError> {
+     })
+ }
+ 
+-/// 直した頭の見本（形の合う値はそのまま・欠けたか形の違う値は書き方）。
++/// 直した頭の見本（形の合う値はそのまま・欠けたか形の違う値は書き方・下限より小さい予算は下限から上の書き方）。
+ pub fn fixed(prompt: &str) -> String {
+     let f = fields(prompt);
+     let ok = |i: usize, v: &str| match i {
+-        0 => budget(v).is_some(),
++        0 => budget(v).is_some_and(|n| n >= BUDGET_MIN),
+         1 => BUILDS.contains(&v),
+         3 => !outputs(v).is_empty(),
+         _ => true,
+     };
++    let low = format!("token <{BUDGET_MIN} 以上の数>");
+     KEYS.iter()
+         .zip(HOLES)
+         .zip(f)
+         .enumerate()
+-        .map(|(i, ((k, hole), v))| format!("{k}: {}", v.filter(|v| ok(i, v)).unwrap_or(hole)))
++        .map(|(i, ((k, hole), v))| {
++            let hole = if i == 0 && v.and_then(budget).is_some() {
++                low.as_str()
++            } else {
++                hole
++            };
++            format!("{k}: {}", v.filter(|v| ok(i, v)).unwrap_or(hole))
++        })
+         .collect::<Vec<_>>()
+         .join("\n")
+ }
+@@ -271,6 +287,7 @@ pub fn reason(r: &Refusal, prompt: &str) -> String {
+             format!("頼みの頭に {} の行が無い", keys.join("・"))
+         }
+         Refusal::Head(HeadError::Budget(v)) => format!("予算の値 {v} が token <数> の形でない"),
++        Refusal::Head(HeadError::Low(n)) => format!("予算の値 {n} が下限 {BUDGET_MIN} より小さい"),
+         Refusal::Head(HeadError::Build(v)) => {
+             format!("組みの値 {v} が {} のどれでもない", BUILDS.join("・"))
+         }
