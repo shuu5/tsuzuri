@@ -267,7 +267,8 @@ fn apply_account(state: &mut State, event: &Event) {
         | EventKind::IntakeRefused
         | EventKind::LifecycleCutover
         | EventKind::MemoJudged
-        | EventKind::LimitPermitted => {}
+        | EventKind::LimitPermitted
+        | EventKind::OverlapCommuted => {}
     }
 }
 
@@ -362,7 +363,8 @@ fn apply_seat(state: &mut State, event: &Event) {
         | EventKind::IntakeRefused
         | EventKind::LifecycleCutover
         | EventKind::MemoJudged
-        | EventKind::LimitPermitted => {}
+        | EventKind::LimitPermitted
+        | EventKind::OverlapCommuted => {}
     }
 }
 

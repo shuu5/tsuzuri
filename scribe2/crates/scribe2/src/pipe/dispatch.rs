@@ -11,6 +11,7 @@
 //! 台帳を読めない周は列を空と読まず [`Unmeasured`] で 1 本も起こさない（`0 件`と融合しない・C10・NFR4）。
 
 use super::cli::{live, Denial, Materials};
+use super::commute::Verdict;
 use super::contract::Contract;
 use super::gate::Limits;
 use super::health;
@@ -137,6 +138,8 @@ pub enum WaitReason {
         with: String,
         /// その相手と交差した契約側の file の列（契約が書いた字面・`render` は本数を書く・設計 §26 形 3）。
         files: Vec<String>,
+        /// 差の当たりの判じの結末（規則の行が偽の周は `None`＝`render` は本数まで・判断の記録 ADR-60 の決定 (4)）。
+        verdict: Option<Verdict>,
     },
     /// 受付（余地・host の memory）を通らない。
     Admission {
@@ -218,7 +221,8 @@ impl WaitReason {
         let name = self.as_str();
         match *self {
             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
-            Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
+            Self::Overlap { ref with, ref files, verdict: None } => format!("{name}:{with}/{}", files.len()),
+            Self::Overlap { ref with, ref files, verdict: Some(found) } => format!("{name}:{with}/{}/{}", files.len(), found.as_str()),
             Self::Admission { reason, .. } => format!("{name}:{reason}"),
             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
@@ -939,7 +943,7 @@ mod tests {
         review_unmeasured, revive_of, section_keyed, tools, why_of, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
         DRIVE, HANDOFFS, WAIT_REASONS,
     };
-    use super::{floor, reserve};
+    use super::{floor, reserve, Verdict};
     use crate::fleet::{Event, EventKind, Mark, Stage, SCHEMA, STAGES};
     use crate::rules::manifest::Manifest;
     use std::path::Path;
@@ -1309,7 +1313,8 @@ mod tests {
     fn pipe_dispatch_wait_reasons_render_the_name_and_the_value() {
         let listed = vec![
             WaitReason::Dependency { on: vec!["s2-x".to_owned(), "s2-y".to_owned()] },
-            WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
+            WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()], verdict: None },
+            WaitReason::Overlap { with: "r2".to_owned(), files: vec!["src/a.rs".to_owned()], verdict: Some(Verdict::SameName) },
             WaitReason::Admission { reason: "cap-headroom", why: Some("x".to_owned()) },
             WaitReason::HostBusy,
             WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
@@ -1334,6 +1339,7 @@ mod tests {
             vec![
                 "dependency:s2-x,s2-y",
                 "overlap:r1/2",
+                "overlap:r2/1/same-name",
                 "admission:cap-headroom",
                 "host-busy",
                 "hold:t1",

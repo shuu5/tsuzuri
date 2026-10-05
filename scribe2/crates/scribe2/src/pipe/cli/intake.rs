@@ -44,6 +44,7 @@ use crate::pipe::dispatch::index_build::{status as index_status, Status};
 use crate::pipe::refuse::{overlaps, Refuse, NEW_FILE};
 use crate::pipe::review::{self, FindingKind, Judgement, ROW_SAME_KIND_STOP};
 use crate::pipe::table::{self, ContractRow, TableError};
+use crate::pipe::commute::{self, Crossed};
 use crate::pipe::{contract_path, current, emit, run_dir, run_id, vessel_path, Emit, CONTRACT_FILE};
 use crate::rules::manifest::Manifest;
 use crate::rules::RuleValue;
@@ -775,7 +776,7 @@ pub(in crate::pipe) fn judge(material: &Material<'_>) -> Judged {
     }
     // **入口で排他する**（ADR-0019 §2.1）。live な便と write-set が交差する契約は、
     // run dir も event も作らずに断る——後段（land の rebase）で衝突を知るより安い。
-    match exclude_overlap(state_dir, &measured, tracked) {
+    match exclude_overlap(material, state_dir, &measured, tracked) {
         Ok(found) => judged.overlap = Some(found),
         Err(denial) => judged.denials.push(denial),
     }
@@ -817,7 +818,7 @@ fn create(
     body: &str,
     policy: LockPolicy,
 ) -> Result<Intaken, Outcome> {
-    let Judged { write_set, denials, derived, effective, run, .. } = judged;
+    let Judged { write_set, denials, derived, effective, run, overlap, .. } = judged;
     if let Some(first) = denials.into_iter().next() {
         return Err(first.outcome);
     }
@@ -845,7 +846,8 @@ fn create(
         },
         policy,
     );
-    match emitted {
+    let commuted = overlap.and_then(|found| found.commuted);
+    match emitted.and_then(|()| commute::record(state_dir, &id, material.bead, commuted.as_ref(), policy)) {
         Err(err) => Err(broken(err.to_string())),
         Ok(()) => Ok(Intaken {
             id,
@@ -1157,9 +1159,10 @@ fn exclude_unaddressed(state_dir: &Path, past: &[Past], today: &Today, materials
 ///
 /// 交差した周は**全組を stderr へ並べ**、理由の 1 行は先頭の 1 組を名乗る。dir 項目は base の tracked file に
 /// 展開してから数える（設計 contract-source.md §3・[`overlaps`]）。通った周は突き合わせた live な run を [`Crossed`]
-/// で返す（交差は 0・§21 の `overlap=` の材料）。
-fn exclude_overlap(state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
-    let found = crossings(state_dir, contract, tracked)?;
+/// で返す（交差は 0 か [`Crossed::settle`] が通した組・§21 の `overlap=` の材料）。
+fn exclude_overlap(material: &Material<'_>, state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
+    let mut found = crossings(state_dir, contract, tracked)?;
+    found.settle(&commute::Scene { repo: material.repo, manifest: material.manifest, state_dir, tracked }, contract);
     match &found.first {
         None => Ok(found),
         Some(reason) => Err(refuse(reason, &found.lines)),
@@ -1204,25 +1207,14 @@ pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked:
         let mut crossed: Vec<String> = Vec::new();
         for (mine, theirs) in overlaps(&contract.write_set, &live_contract.write_set, tracked) {
             if first.is_none() {
-                first = Some(Refuse::WriteSetOverlap { run: id.clone(), path: mine.clone() });
+                first = Some(Refuse::WriteSetOverlap { run: id.clone(), path: mine.clone(), verdict: None });
             }
             lines.push(format!("pipe: overlap run={id} contract={mine} live={theirs}"));
             crossed.push(mine);
         }
         runs.push((id.clone(), crossed));
     }
-    Ok(Crossed { runs, first, lines })
-}
-
-/// live との交差の事実（§21 の `overlap=` の材料）。[`exclude_overlap`] が通った周は交差が全部空である。
-pub(in crate::pipe) struct Crossed {
-    /// 突き合わせた live な run（run id の順）と、その便と交差した契約側の file（[`exclude_overlap`] が
-    /// 通った周は全部空・列は空でない組を待ちの理由にする）。
-    pub(in crate::pipe) runs: Vec<(String, Vec<String>)>,
-    /// 先頭の 1 組の断り（交差 0 なら `None`・受付の理由の 1 行）。
-    first: Option<Refuse>,
-    /// 交差の全組の行（受付の stderr・交差 0 なら空）。
-    lines: Vec<String>,
+    Ok(Crossed { runs, first, lines, commuted: None })
 }
 
 /// 上限の余地の事実（[`exclude_cap_shortfall`] が通った周・§21 の `headroom=` の材料）。

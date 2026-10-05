@@ -13,6 +13,7 @@
 
 use super::super::admission::{self, Sizes};
 use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
+use super::super::commute;
 use super::super::contract::Contract;
 use super::super::gate::Verdict;
 use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
@@ -253,7 +254,7 @@ pub(super) fn settle(
         sizes: sizes_of(input.manifest),
         slots: host_slots_dir(input.state_dir),
     });
-    let mut started: Vec<(String, Vec<String>)> = Vec::new();
+    let mut started: Vec<(String, &Contract)> = Vec::new();
     let mut turn =
         Turn { candidates: Vec::new(), launches: Vec::new(), revives: Vec::new(), unmeasured: None, drive: None, vessel: None, lifecycle: None, triage: None, closed: None };
     for mut candidate in candidates {
@@ -263,7 +264,7 @@ pub(super) fn settle(
             match held.map(WaitReason::Reserved).or_else(|| blocker(input, contract, room, &started)) {
                 Some(reason) => candidate.reason = Some(reason),
                 None => {
-                    started.push((candidate.bead.clone(), contract.write_set.clone()));
+                    started.push((candidate.bead.clone(), contract));
                     turn.launches.push(launch_of(input, &candidate.bead, pointer));
                 }
             }
@@ -288,22 +289,11 @@ fn blocker(
     input: &Input<'_>,
     contract: &Contract,
     room: &Room<'_>,
-    started: &[(String, Vec<String>)],
+    started: &[(String, &Contract)],
 ) -> Option<WaitReason> {
     let tracked = room.materials.tracked();
-    for (bead, write_set) in started {
-        let crossed = overlaps(&contract.write_set, write_set, tracked);
-        if !crossed.is_empty() {
-            return Some(WaitReason::Overlap { with: bead.clone(), files: crossed.into_iter().map(|(mine, _)| mine).collect() });
-        }
-    }
-    match crossings(input.state_dir, contract, tracked) {
-        Ok(found) => {
-            if let Some((run, files)) = found.runs.into_iter().find(|(_, files)| !files.is_empty()) {
-                return Some(WaitReason::Overlap { with: run, files });
-            }
-        }
-        Err(denial) => return Some(refused_by(&denial)),
+    if let Some(reason) = overlap(input, contract, tracked, started) {
+        return Some(reason);
     }
     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。
@@ -324,6 +314,27 @@ fn blocker(
         return Some(WaitReason::Admission { reason: SLOT, why: None });
     }
     None
+}
+
+/// 交差の待ち（通れば `None`）。同じ周に起こした bead との交差を先に、live な便との交差を後に測り、先頭の 1 組を名乗る。
+/// 交差の後に [`commute::weigh`] を撃ち、通す組は待たせない（規則の行が偽の周は今のまま待つ・判断の記録 ADR-60 の決定 (3)）。
+fn overlap(input: &Input<'_>, contract: &Contract, tracked: &[String], started: &[(String, &Contract)]) -> Option<WaitReason> {
+    let mine = |theirs: &Contract| -> Vec<String> {
+        overlaps(&contract.write_set, &theirs.write_set, tracked).into_iter().map(|(mine, _)| mine).collect()
+    };
+    let same: Vec<(&str, &Contract, Vec<String>)> =
+        started.iter().map(|(bead, theirs)| (bead.as_str(), *theirs, mine(theirs))).filter(|(_, _, files)| !files.is_empty()).collect();
+    let runs = match (same.is_empty() || commute::on(input.manifest)).then(|| crossings(input.state_dir, contract, tracked)) {
+        Some(Ok(found)) => found.runs,
+        Some(Err(denial)) => return Some(refused_by(&denial)),
+        None => Vec::new(),
+    };
+    let crossed = runs.iter().filter(|(_, files)| !files.is_empty()).cloned();
+    let (with, files) = same.iter().map(|(bead, _, files)| ((*bead).to_owned(), files.clone())).chain(crossed).next()?;
+    let started: Vec<(&str, &Contract)> = same.iter().map(|&(bead, theirs, _)| (bead, theirs)).collect();
+    let scene = commute::Scene { repo: input.repo, manifest: input.manifest, state_dir: input.state_dir, tracked };
+    let verdict = commute::weigh(&scene, contract, &runs, &started).map(|found| found.verdict);
+    (verdict != Some(commute::Verdict::Commutes)).then_some(WaitReason::Overlap { with, files, verdict })
 }
 
 /// 起動の構築点（`pipe run` の引数を組む・**撃たない**）。

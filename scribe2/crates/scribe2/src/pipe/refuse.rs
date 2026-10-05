@@ -14,6 +14,7 @@
 //! （ADR-0009 §2.1 の既知の穴はそのまま）。
 
 use super::closure::ClosureError;
+use super::commute::Verdict;
 use super::declaration::DECL_FILE;
 use super::review::{FindingKind, ROW_SAME_KIND_STOP};
 use super::table::TableError;
@@ -98,6 +99,8 @@ pub(crate) enum Refuse {
         run: String,
         /// 交差した契約側の path（字面は契約が書いたまま）。
         path: String,
+        /// 差の当たりの判じの結末（規則の行 `pipe.overlap_commute` が偽の周は `None`・判断の記録 ADR-60 の決定 (4)）。
+        verdict: Option<Verdict>,
     },
     /// live な便の write-set を読めない（契約の写しが無い / 壊れている / 判定を読めない）。
     WriteSetUnreadable {
@@ -337,8 +340,9 @@ impl Refuse {
         match *self {
             Self::NotARepo { ref repo } => format!("{repo} は git repo でない"),
             Self::DuplicateRun { ref run } => format!("run {run} は既に在る（同じ秒の再 intake）"),
-            Self::WriteSetOverlap { ref run, ref path } => {
-                format!("write-set が live な run {run} と交差する（{path}）")
+            Self::WriteSetOverlap { ref run, ref path, verdict } => {
+                let tail = verdict.map_or_else(String::new, |found| format!("・{}", found.as_str()));
+                format!("write-set が live な run {run} と交差する（{path}{tail}）")
             }
             Self::WriteSetUnreadable { ref run } => {
                 format!("live な run {run} の write-set を読めない")
@@ -713,7 +717,7 @@ mod tests {
         vec![
             Refuse::NotARepo { repo: "/tmp/x".to_owned() },
             Refuse::DuplicateRun { run: "r-1".to_owned() },
-            Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned() },
+            Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned(), verdict: None },
             Refuse::WriteSetUnreadable { run: "r-1".to_owned() },
             Refuse::WriteSetIncomplete { missing: vec!["src/a.rs".to_owned(), "src/b.rs".to_owned()] },
             Refuse::WriteSetDirWithoutSlash { path: "src".to_owned() },
@@ -1073,7 +1077,7 @@ mod tests {
             assert_eq!(rc, expected, "{} の rc", found.as_str());
             assert!(!found.reason().is_empty(), "{} は理由を 1 行で名乗る", found.as_str());
         }
-        let overlap = Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned() };
+        let overlap = Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned(), verdict: None };
         let line = overlap.reason();
         assert!(line.contains("r-1"), "相手の run id を名乗る: {line}");
         assert!(line.contains("src/lib.rs"), "交差した path を名乗る: {line}");

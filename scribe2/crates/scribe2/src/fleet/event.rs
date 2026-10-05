@@ -281,6 +281,7 @@ impl Body {
             EventKind::IntakeRefused => Self::case(pairs, &["bead", "refuse"], refused_of),
             EventKind::LifecycleCutover => Self::case(pairs, &["version", "main"], cutover_of),
             EventKind::MemoJudged => Self::case(pairs, &["bead"], judged_of),
+            EventKind::OverlapCommuted => Self::case(pairs, &["bead"], commuted_of),
             EventKind::LimitPermitted => Self::permit(pairs),
             EventKind::RunCreated
             | EventKind::RunStage
@@ -529,6 +530,11 @@ fn judged_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String
         return Err("detail が空".to_owned());
     }
     Ok((Case::Judged, Some(bead)))
+}
+
+/// OverlapCommuted: `bead`（候補の契約の id）と空でない `detail`（組）が必須（本体の欄は持たない）。
+fn commuted_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
+    judged_of(pairs).map(|(_, bead)| (Case::Commuted, bead))
 }
 
 /// LifecycleCutover: `version` と `main`（小文字の 16 進）が必須。

@@ -1,17 +1,20 @@
-//! 入口の排他を差の当たりで通す判じ（判断の記録 ADR-60 の決定 (1)(2)(4)(5)・要件 FR1039）。
+//! 入口の排他を差の当たりで通す判じ（判断の記録 ADR-60 の決定 (1)(2)(3)(4)(5)・要件 FR1039）。
 //!
 //! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
-//! 関数 [`judge`] と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の読み [`on`] を持つ。判じは交わりの関数の
-//! 中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を返す段）は子の module [`names`] に置く。入口と
-//! 起動の列への配線と記帳は後の器の行が足す。
+//! 関数 [`weigh`]（規則の行が真の周だけ [`judge`] を撃つ）と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の
+//! 読み [`on`] を持つ。判じは交わりの関数の中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を
+//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。
 //!
 //! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
 //! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
 
+use super::contract::Contract;
 use super::declaration::RootsAtHead;
-use super::git_line;
 use super::land::scope_touched;
-use super::refuse::normalize;
+use super::refuse::{normalize, overlaps, Refuse};
+use super::{base_of_run, contract_path, git_line, head_of, Base};
+use crate::fleet::store::{self, LockPolicy, StoreError};
+use crate::fleet::{cli, Case, Event, EventKind, SCHEMA};
 use crate::invocation::Invocation;
 use crate::rules::manifest::Manifest;
 use crate::rules::RuleValue;
@@ -33,6 +36,9 @@ pub const SCRATCH: &str = "commute";
 
 /// 子の終わりを見る間隔。
 const POLL: Duration = Duration::from_millis(5);
+
+/// 入口と列の 1 回の判じの時間の上限（[`Ask::deadline`] の幅・越えた周は unreadable）。
+pub const LIMIT: Duration = Duration::from_secs(20);
 
 /// 判じの結末（閉じた列・判断の記録 ADR-60 の決定 (4)）。通す 1 つと断る 5 つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +129,141 @@ pub fn judge(ask: &Ask<'_>) -> Verdict {
         return Verdict::OutsideFace;
     }
     Round::cut(ask).map_or(Verdict::Unreadable, |round| round.judge(mine))
+}
+
+/// 入口と列が [`weigh`] に渡す周の材料。
+pub(in crate::pipe) struct Scene<'a> {
+    /// repo の根（HEAD が main の先端）。
+    pub(in crate::pipe) repo: &'a Path,
+    /// 規則の表（[`on`] が読む）。
+    pub(in crate::pipe) manifest: &'a Manifest,
+    /// state dir（live な便の写しと base を読み、周の一時の dir を切る）。
+    pub(in crate::pipe) state_dir: &'a Path,
+    /// base の tracked file（交差の dir の展開・[`overlaps`]）。
+    pub(in crate::pipe) tracked: &'a [String],
+}
+
+/// [`weigh`] の結果（結末と記帳の材料）。
+pub(in crate::pipe) struct Weighed {
+    /// 結末。
+    pub(in crate::pipe) verdict: Verdict,
+    /// 判じた main の先端（読めない周は空）。
+    main: String,
+    /// 相手（live な便の run id・列が同じ周に起こした bead・起こした順）。
+    with: Vec<String>,
+    /// 候補の側の交わった項（契約が書いた字面）。
+    files: BTreeSet<String>,
+}
+
+/// 入口と起動の列が交差の照らしの後に呼ぶ 1 本（判断の記録 ADR-60 の決定 (3)）。
+///
+/// 規則の行が偽の周と交差の無い周は `None`（呼び手は今の断りと待ちのまま）。真の周は、交差した live な便（`runs` のうち
+/// 交差が空でない run・run id の末の時刻の順）と、列が同じ周に起こした bead（`started`）を相手に [`judge`] を撃つ。相手の差は
+/// live な便の base（spawn の前の便は main の先端）と、起こした bead は main の先端から読む。live な便の写しか base を
+/// 読めない周と、main の先端を読めない周は judge を撃たずに unreadable。時間の上限は [`LIMIT`]。
+pub(in crate::pipe) fn weigh(
+    scene: &Scene<'_>,
+    contract: &Contract,
+    runs: &[(String, Vec<String>)],
+    started: &[(&str, &Contract)],
+) -> Option<Weighed> {
+    let mut live: Vec<&str> = runs.iter().filter(|(_, files)| !files.is_empty()).map(|(id, _)| id.as_str()).collect();
+    if (live.is_empty() && started.is_empty()) || !on(scene.manifest) {
+        return None;
+    }
+    live.sort_by_key(|id| id.rsplit_once('-').map_or(*id, |(_, stamp)| stamp));
+    let main = head_of(scene.repo).unwrap_or_default();
+    let read = |id: &str| {
+        let theirs = Contract::load(&contract_path(scene.state_dir, id)).ok()?;
+        match base_of_run(scene.state_dir, id) {
+            Base::Known(sha) => Some((id.to_owned(), theirs, sha)),
+            Base::Absent => Some((id.to_owned(), theirs, main.clone())),
+            Base::Unreadable => None,
+        }
+    };
+    let found: Option<Vec<(String, Contract, String)>> = live
+        .into_iter()
+        .map(read)
+        .chain(started.iter().map(|&(bead, theirs)| Some((bead.to_owned(), theirs.clone(), main.clone()))))
+        .collect();
+    let owned = found.filter(|_| !main.is_empty()).unwrap_or_default();
+    let crossed: Vec<Vec<(String, String)>> =
+        owned.iter().map(|(_, theirs, _)| overlaps(&contract.write_set, &theirs.write_set, scene.tracked)).collect();
+    let partners: Vec<Partner<'_>> = owned
+        .iter()
+        .zip(&crossed)
+        .map(|((_, theirs, base), crossed)| Partner { patch: theirs.patch.as_deref(), base, crossed })
+        .collect();
+    let roots = RootsAtHead::read(scene.repo);
+    let deadline = Instant::now().checked_add(LIMIT).unwrap_or_else(Instant::now);
+    let patch = contract.patch.as_deref();
+    let ask = Ask { repo: scene.repo, state_dir: scene.state_dir, main: &main, roots: &roots, patch, partners: &partners, deadline };
+    let verdict = if partners.is_empty() { Verdict::Unreadable } else { judge(&ask) };
+    let files = crossed.iter().flatten().map(|(mine, _)| mine.clone()).collect();
+    Some(Weighed { verdict, main, with: owned.into_iter().map(|(with, ..)| with).collect(), files })
+}
+
+/// live な便との交差の事実（受付の `crossings` が組む・§21 の `overlap=` の材料・file の行の上限のため intake.rs から移した）。
+/// 受付が通した周は交差が全部空か、[`Crossed::settle`] が通した組である。
+pub(in crate::pipe) struct Crossed {
+    /// 突き合わせた live な run（run id の順）と、その便と交差した契約側の file（受付が通した周は全部空か通した組・
+    /// 列は空でない組を待ちの理由にする）。
+    pub(in crate::pipe) runs: Vec<(String, Vec<String>)>,
+    /// 先頭の 1 組の断り（交差 0 なら `None`・受付の理由の 1 行）。
+    pub(in crate::pipe) first: Option<Refuse>,
+    /// 交差の全組の行（受付の stderr・交差 0 なら空）。
+    pub(in crate::pipe) lines: Vec<String>,
+    /// 規則の行が真の周に [`Crossed::settle`] が通した組（受付の create が [`record`] で記帳する・ほかは `None`）。
+    pub(in crate::pipe) commuted: Option<Weighed>,
+}
+
+impl Crossed {
+    /// 受付の交差の後の判じ（[`weigh`]）。通す組は先頭の断りを外して `commuted` に持ち、ほかは先頭の断りに結末を添える
+    /// （規則の行が偽の周と交差の無い周は替えない）。
+    pub(in crate::pipe) fn settle(&mut self, scene: &Scene<'_>, contract: &Contract) {
+        let Some(Refuse::WriteSetOverlap { ref mut verdict, .. }) = self.first else {
+            return;
+        };
+        match weigh(scene, contract, &self.runs, &[]) {
+            Some(found) if found.verdict == Verdict::Commutes => {
+                self.first = None;
+                self.commuted = Some(found);
+            }
+            found => *verdict = found.map(|found| found.verdict),
+        }
+    }
+}
+
+/// 受付が通した組を出来事の記録に 1 行書く（kind `OverlapCommuted`・`bead` は候補・`detail` は受付の run id と相手と交わった項と
+/// main の先端・判断の記録 ADR-60 の決定 (4)・通した組の無い周は書かない）。
+pub(in crate::pipe) fn record(state_dir: &Path, run: &str, bead: &str, weighed: Option<&Weighed>, policy: LockPolicy) -> Result<(), StoreError> {
+    let Some(weighed) = weighed else {
+        return Ok(());
+    };
+    let files: Vec<&str> = weighed.files.iter().map(String::as_str).collect();
+    let detail = format!("run={run} with={} files={} main={}", weighed.with.join(","), files.join(","), weighed.main);
+    let kind = EventKind::OverlapCommuted;
+    let event = Event {
+        schema: SCHEMA,
+        ts: cli::now_utc(),
+        kind,
+        run: String::new(),
+        bead: bead.to_owned(),
+        host: cli::host(),
+        actor: kind.default_actor().to_owned(),
+        stage: None,
+        seat: None,
+        pid: None,
+        detail: Some(detail),
+        allowance: None,
+        registration: None,
+        mark: None,
+        account: None,
+        cost: None,
+        rule: None,
+        case: Some(Case::Commuted),
+    };
+    store::append(state_dir, &event, policy).map(|_| ())
 }
 
 /// 項が file で、再 gate の面の中か。
