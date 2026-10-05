@@ -25,8 +25,8 @@ use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
 use tsuzuri_core::agent::spec::tie::Miss;
 use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec};
 
+use super::agent_args::begin;
 use super::agent_bind::late;
-use super::agent_spawn::{drafts, parse};
 use crate::out::{emit, emit_err};
 use crate::server::events::now;
 
@@ -34,9 +34,6 @@ pub const USAGE: &str = "usage: tz hook agent-meter --repo <dir> [--drafts <dir>
 
 /// 結びの無い呼びの記帳の file（`.agents` の下）。
 pub const UNBOUND: &str = "unbound.jsonl";
-
-/// 使い方の誤り。
-const FAIL: u8 = 1;
 
 /// 係の呼びの係の id に結んだ名と札。`.agents/<係の id>` が無ければ `late` で meta.json の名の札に結ぶ（結べないか札が読めなければ訳）。
 pub fn resolve(drafts: &Path, call: &SubCall) -> Result<(String, Spec), Miss> {
@@ -123,16 +120,9 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let args = match parse(rest) {
-        Ok(args) => args,
-        Err(e) => {
-            emit_err(&format!("tz hook agent-meter: {e}\n{USAGE}"));
-            return FAIL;
-        }
-    };
-    let Some(dir) = drafts(&args) else {
-        emit_err("tz hook agent-meter: 起草の置き場を解けない（通す）");
-        return 0;
+    let (_, dir) = match begin(USAGE, "通す", rest) {
+        Ok(found) => found,
+        Err(rc) => return rc,
     };
     let (name, spec) = match resolve(&dir, &call) {
         Ok(found) => found,

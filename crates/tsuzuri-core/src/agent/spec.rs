@@ -3,7 +3,7 @@
 //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
 //! 頭の予算は下限（`BUDGET_MIN`・判断の記録 ADR-63 決定 (3)）より小さければ、直した頭の見本を付けて断る。
 //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
-//! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
+//! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`<名>/w`・`.agents/<係の id>`）もここに置く。
 //! 検証の群の起こしの門の判じ（判断の記録 ADR-61・要件 FR22）は `group` が持つ。
 
 pub mod group;
@@ -11,7 +11,7 @@ pub mod outs;
 pub mod tie;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use tsuzuri_contract::EpochSecs;
 
 /// 席が起こせる係の型（決定 (1)・数は 3 を上限とする）。
@@ -39,6 +39,9 @@ pub const BRIEF: &str = "brief.md";
 
 /// 係の dir の札の file。
 pub const SPEC: &str = "spec.json";
+
+/// 係の出力の dir の名（係の dir の下・出す物の字はここからの相対）。
+pub const OUT: &str = "w";
 
 /// 起草の置き場の下の結びの dir（file の名は係の id・中身は起こしの名と改行）。
 pub const AGENTS: &str = ".agents";
@@ -304,18 +307,6 @@ pub fn reason(r: &Refusal, prompt: &str) -> String {
         "係の起こしの門は止める（{what}） 次の一手 = prompt の頭に次の 4 行を置き、空の行の後に頼みを書く\n{}",
         fixed(prompt)
     )
-}
-
-/// PreToolUse の deny の答えの JSON の字（理由は `reason`）。
-pub fn deny(reason: &str) -> String {
-    json!({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
-        }
-    })
-    .to_string()
 }
 
 /// 結びの口の入力（席の Agent の呼びの結果）から起こしの名と係の id を読む（係の id が無いか、名か係の id の字が安全でなければ None）。

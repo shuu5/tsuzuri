@@ -5,81 +5,25 @@
 //! 3. 置き場の直下の dir の係の札を全部読み、中核の `judge` で判じる。断る時は deny の答えを標準出力に 1 行で書いて 0。
 //! 4. 通す時は `<名>/brief.md` に prompt の字を、`<名>/spec.json` に係の札を書いて 0（書けなければ標準エラーに書いて通す）。
 //!
-//! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
+//! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは係の口の共通の `agent_args` が持つ。
 //! 席の流れの道具（Workflow）の呼びは 1 の前に全部断り、頼みの頭の群の行と計画の file の判じは 3 の前に子の `group` が持つ
 //! （判断の記録 ADR-61・要件 FR22）。
 
 pub mod group;
 
-use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tsuzuri_core::agent::spec::group::{workflow, workflow_reason};
-use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, deny, judge, reason, spawn_call};
+use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, judge, reason, spawn_call};
+use tsuzuri_core::gate::deny_json;
 
-use crate::acct::GIT;
-use crate::consult::{DRAFTS_ARGS, GIT_TIMEOUT};
+use super::agent_args::begin;
 use crate::out::{emit, emit_err};
 use crate::server::events::now;
-use crate::server::proc;
 
 pub const USAGE: &str = "usage: tz hook agent-spawn --repo <dir> [--drafts <dir>]";
-
-/// 使い方の誤り。
-const FAIL: u8 = 1;
-
-/// 読んだ引数（repo の置き場・省ける起草の置き場）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Args {
-    pub repo: PathBuf,
-    pub drafts: Option<PathBuf>,
-}
-
-/// `--名 値` か `--名=値` の --repo と、省ける --drafts を読む（空の値と 2 度目は断る・--repo は省けない）。
-pub fn parse(rest: &[&str]) -> Result<Args, String> {
-    let (mut repo, mut drafts) = (None, None);
-    let mut it = rest.iter();
-    while let Some(arg) = it.next() {
-        let (name, value) = match arg.split_once('=') {
-            Some((n, v)) => (n, v),
-            None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
-        };
-        let slot = match name {
-            "--repo" => &mut repo,
-            "--drafts" => &mut drafts,
-            _ => return Err(format!("知らない引数 {name}")),
-        };
-        if value.is_empty() {
-            return Err(format!("{name} の値が空"));
-        }
-        if slot.replace(value).is_some() {
-            return Err(format!("{name} が 2 度ある"));
-        }
-    }
-    let Some(repo) = repo else {
-        return Err("--repo が要る".into());
-    };
-    Ok(Args {
-        repo: PathBuf::from(repo),
-        drafts: drafts.map(PathBuf::from),
-    })
-}
-
-/// 起草の置き場（--drafts か repo の git config の鍵・dir でなければ None）。
-pub fn drafts(args: &Args) -> Option<PathBuf> {
-    let dir = match &args.drafts {
-        Some(d) => d.clone(),
-        None => {
-            let mut git_args = vec![OsStr::new("-C"), args.repo.as_os_str()];
-            git_args.extend(DRAFTS_ARGS.iter().map(OsStr::new));
-            let out = proc::capture(OsStr::new(GIT), git_args, &args.repo, GIT_TIMEOUT)?;
-            PathBuf::from(String::from_utf8(out).ok()?.trim())
-        }
-    };
-    dir.is_dir().then_some(dir)
-}
 
 /// 置き場の直下の dir の読める係の札の全部（読めない札は飛ばす）。
 pub fn specs(drafts: &Path) -> Vec<Spec> {
@@ -107,27 +51,20 @@ pub fn run(rest: &[&str]) -> u8 {
         payload.clear();
     }
     if workflow(&payload) {
-        emit(&deny(&workflow_reason()));
+        emit(&deny_json(workflow_reason()));
         return 0;
     }
     let Some(call) = spawn_call(&payload) else {
         return 0;
     };
-    let args = match parse(rest) {
-        Ok(args) => args,
-        Err(e) => {
-            emit_err(&format!("tz hook agent-spawn: {e}\n{USAGE}"));
-            return FAIL;
-        }
-    };
-    let Some(dir) = drafts(&args) else {
-        emit_err("tz hook agent-spawn: 起草の置き場を解けない（通す）");
-        return 0;
+    let (args, dir) = match begin(USAGE, "通す", rest) {
+        Ok(found) => found,
+        Err(rc) => return rc,
     };
     let gate = match group::gate(&dir, &args.repo, &call, &payload) {
         Ok(gate) => gate,
         Err(why) => {
-            emit(&deny(&why));
+            emit(&deny_json(why));
             return 0;
         }
     };
@@ -142,7 +79,7 @@ pub fn run(rest: &[&str]) -> u8 {
                 ));
             }
         }
-        Err(r) => emit(&deny(&reason(&r, &call.prompt))),
+        Err(r) => emit(&deny_json(reason(&r, &call.prompt))),
     }
     0
 }

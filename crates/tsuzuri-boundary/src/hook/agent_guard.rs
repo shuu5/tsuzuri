@@ -15,20 +15,18 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use tsuzuri_core::agent::guard::{open, refusal, spent, write_path};
 use tsuzuri_core::agent::meter::group::{fence, read_path, read_refusal};
-use tsuzuri_core::agent::meter::guard::{OUT, open, refusal, spent, write_path};
 use tsuzuri_core::agent::meter::{METER, Meter, sub_call};
-use tsuzuri_core::agent::spec::deny;
+use tsuzuri_core::agent::spec::OUT;
 use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
+use tsuzuri_core::gate::deny_json;
 
+use super::agent_args::begin;
 use super::agent_meter::resolve;
-use super::agent_spawn::{drafts, parse};
-use crate::out::{emit, emit_err};
+use crate::out::emit;
 
 pub const USAGE: &str = "usage: tz hook agent-guard --repo <dir> [--drafts <dir>]";
-
-/// 使い方の誤り。
-const FAIL: u8 = 1;
 
 /// 群の係の呼びの断りの理由（割りの外の読みと入れ子・読み直しが上限以上の書き終えの段・群の係でなければ None）。
 fn member(
@@ -54,16 +52,9 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let args = match parse(rest) {
-        Ok(args) => args,
-        Err(e) => {
-            emit_err(&format!("tz hook agent-guard: {e}\n{USAGE}"));
-            return FAIL;
-        }
-    };
-    let Some(dir) = drafts(&args) else {
-        emit_err("tz hook agent-guard: 起草の置き場を解けない（通す）");
-        return 0;
+    let (_, dir) = match begin(USAGE, "通す", rest) {
+        Ok(found) => found,
+        Err(rc) => return rc,
     };
     let Ok((name, spec)) = resolve(&dir, &call) else {
         return 0;
@@ -78,9 +69,9 @@ pub fn run(rest: &[&str]) -> u8 {
     let out = dir.join(&name).join(OUT);
     let used = meter.used;
     if let Some(why) = member(seat.as_ref(), &call.tool, &payload, &meter, &out) {
-        emit(&deny(&why));
+        emit(&deny_json(why));
     } else if spent(used, spec.budget) && !open(&call.tool, write_path(&payload).as_deref(), &out) {
-        emit(&deny(&refusal(&call.tool, used, spec.budget, &out)));
+        emit(&deny_json(refusal(&call.tool, used, spec.budget, &out)));
     }
     0
 }

@@ -5,12 +5,13 @@
 //! 命令（Bash）と検索（Grep・Glob）の道具は見ない（決定 (4)(5)）。測りの口は、群の係の Read の path を群の id の dir の
 //! `reads.jsonl` に足し、同じ群のほかの係が先に読んだ path なら `twice.jsonl` にも 1 行足す（記帳だけで断らない・決定 (5)）。
 
-use std::path::{Component, Path};
+use std::path::Path;
 
 use serde_json::{Value, json};
 use tsuzuri_contract::EpochSecs;
 
 use super::Meter;
+use crate::agent::guard::under;
 use crate::agent::spec::group::{MEMBER_READ, Seat};
 
 /// 読みの道具の名。
@@ -37,10 +38,9 @@ pub fn read_path(payload: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// path が割りの読む path のどれかと同じか、その dir の下か（成分で比べ、`..` の成分を持つ path は外と読む）。
+/// path が割りの読む path のどれかと同じか、その dir の下か（係の門の `under` で比べる）。
 pub fn inside(path: &str, paths: &[String]) -> bool {
-    let p = Path::new(path);
-    !p.components().any(|c| c == Component::ParentDir) && paths.iter().any(|a| p.starts_with(a))
+    paths.iter().any(|a| under(Path::new(path), Path::new(a)))
 }
 
 /// 群の係の呼びの断りの理由（係を起こす道具の呼びと、読みの道具の割りの外の読み・ほかの呼びは None）。

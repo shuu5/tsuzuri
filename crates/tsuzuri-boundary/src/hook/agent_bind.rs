@@ -13,13 +13,10 @@ use tsuzuri_core::agent::meter::SubCall;
 use tsuzuri_core::agent::spec::tie::{Miss, claim, meta_name, meta_path};
 use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec, bound};
 
-use super::agent_spawn::{drafts, parse};
+use super::agent_args::begin;
 use crate::out::emit_err;
 
 pub const USAGE: &str = "usage: tz hook agent-bind --repo <dir> [--drafts <dir>]";
-
-/// 使い方の誤り。
-const FAIL: u8 = 1;
 
 /// 札 `spec` の `agent_id` に係の id を書いて `<名>/spec.json` に書き、`.agents/<係の id>` に名を書く。
 pub fn tie(dir: &Path, name: &str, spec: &mut Spec, id: &str) -> io::Result<()> {
@@ -54,16 +51,9 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some((name, id)) = bound(&payload) else {
         return 0;
     };
-    let args = match parse(rest) {
-        Ok(args) => args,
-        Err(e) => {
-            emit_err(&format!("tz hook agent-bind: {e}\n{USAGE}"));
-            return FAIL;
-        }
-    };
-    let Some(dir) = drafts(&args) else {
-        emit_err("tz hook agent-bind: 起草の置き場を解けない（書かない）");
-        return 0;
+    let (_, dir) = match begin(USAGE, "書かない", rest) {
+        Ok(found) => found,
+        Err(rc) => return rc,
     };
     let file = dir.join(&name).join(SPEC);
     let Some(mut spec) = fs::read_to_string(&file).ok().and_then(|t| Spec::parse(&t)) else {

@@ -24,18 +24,15 @@ use std::path::Path;
 
 use tsuzuri_core::agent::meter::{TALLY, Tally, sub_call};
 use tsuzuri_core::agent::spec::group::{SEAT, Seat};
-use tsuzuri_core::agent::spec::{SPEC, Spec};
-use tsuzuri_core::agent::stop::{GATE, OUT, claim_lacks, end, hold, lacks};
+use tsuzuri_core::agent::spec::{OUT, SPEC, Spec};
+use tsuzuri_core::agent::stop::{GATE, claim_lacks, end, hold, lacks};
 
+use super::agent_args::{begin, misuse};
 use super::agent_meter::{resolve, unbound};
-use super::agent_spawn::{drafts, parse};
 use crate::out::emit_err;
 use crate::server::events::now;
 
 pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]";
-
-/// 使い方の誤り。
-const FAIL: u8 = 1;
 
 /// 1 度目の終わりの止め（Claude Code は係を続けさせる）。
 const HOLD: u8 = 2;
@@ -78,17 +75,13 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let parsed = floor::tools(rest).and_then(|(left, tools)| Ok((parse(&left)?, tools)));
-    let (args, tools) = match parsed {
-        Ok(args) => args,
-        Err(e) => {
-            emit_err(&format!("tz hook agent-stop: {e}\n{USAGE}"));
-            return FAIL;
-        }
+    let (left, tools) = match floor::tools(rest) {
+        Ok(found) => found,
+        Err(e) => return misuse(USAGE, &e),
     };
-    let Some(dir) = drafts(&args) else {
-        emit_err("tz hook agent-stop: 起草の置き場を解けない（通す）");
-        return 0;
+    let (_, dir) = match begin(USAGE, "通す", &left) {
+        Ok(found) => found,
+        Err(rc) => return rc,
     };
     let (name, mut spec) = match resolve(&dir, &call) {
         Ok(found) => found,

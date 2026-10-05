@@ -9,9 +9,6 @@ pub mod floor;
 
 use serde_json::Value;
 
-/// 係の出力の dir の名（係の dir の下）。
-pub const OUT: &str = "w";
-
 /// 席の名（名で呼び合う形の SendMessage の宛先）。
 pub const LEAD: &str = "team-lead";
 

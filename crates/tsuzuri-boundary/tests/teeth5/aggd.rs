@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use tsuzuri_core::agent::meter::guard::{open, write_path};
+use tsuzuri_core::agent::guard::{open, write_path};
 
 /// 歯ごとの置き場（前の撃ちの残りを消して作る）の drafts/。
 fn place(name: &str) -> PathBuf {

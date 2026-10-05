@@ -601,8 +601,8 @@ pub fn output(gate: &Gate) -> Option<String> {
     Some(deny_json(reason))
 }
 
-/// PreToolUse の deny の答えの JSON の字（理由は `reason`）。
-fn deny_json(reason: String) -> String {
+/// PreToolUse の deny の答えの JSON の字（理由は `reason`・問いの起票の門と、境界の係の起こしの門と係の門が使う）。
+pub fn deny_json(reason: String) -> String {
     let mut inner = Map::new();
     inner.insert(
         "hookEventName".to_string(),

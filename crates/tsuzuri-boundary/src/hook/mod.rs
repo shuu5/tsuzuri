@@ -8,7 +8,9 @@
 //! 係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
 //! 係の測り（`agent_meter`・PostToolUse の hook）を置く。
 //! 係の門（`agent_guard`・PreToolUse の hook）を置く。
+//! 係の口 5 つの引数の読みと起草の置き場の解き（`agent_args`）を置く。
 
+pub mod agent_args;
 pub mod agent_bind;
 pub mod agent_guard;
 pub mod agent_meter;
