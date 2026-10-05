@@ -44,7 +44,7 @@ pub const DOMAINS: [&str; 6] = [
 /// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。
 const CLAUDE_CREDENTIALS: &str = "~/.claude/.credentials.json";
 
-/// 囲いから見えなくする資格の file（home の下・ほかに state dir の accounts と repo の台帳の鍵と共有の temp）。
+/// 囲いと読む道具の断りの両方から見えなくする資格の file（home の下・囲いはほかに state dir の accounts とその symlink の先と repo の台帳の鍵と共有の temp）。
 pub const CREDENTIALS: [&str; 6] = [
     "~/.config/gh",
     "~/.ssh",
@@ -89,6 +89,8 @@ pub struct Launch {
     pub repo: String,
     /// project の state dir。
     pub state: String,
+    /// state dir の accounts の symlink の先（口座の置き場の実体・境が起こす時に解く・字の順で重なりなし）。
+    pub account_dirs: Vec<String>,
     /// 読む根のうち在る dir（`read_roots` の部分の列・順もそのまま）。
     pub roots: Vec<String>,
     /// 解いた tz の path。
@@ -137,22 +139,38 @@ pub fn prompt(l: &Launch) -> String {
     }
 }
 
+/// 囲いから見えなくする path（資格の file・accounts とその symlink の先・台帳の鍵・共有の temp）。
+fn hidden(l: &Launch) -> Vec<String> {
+    let mut paths: Vec<String> = CREDENTIALS.iter().map(|c| (*c).to_string()).collect();
+    paths.push(format!("{}/accounts", l.state));
+    paths.extend(l.account_dirs.iter().cloned());
+    paths.push(format!("{}/.beads/.env", l.repo));
+    paths.push(format!("/tmp/claude-{}", l.uid));
+    paths
+}
+
+/// 読む道具の断り（accounts とその symlink の先・台帳の鍵・資格の file は file にも dir にも効くよう path と下の全部の 2 つ）。
+fn denied_reads(l: &Launch) -> Vec<String> {
+    let mut rules = vec![format!("Read(/{}/accounts/**)", l.state)];
+    rules.extend(l.account_dirs.iter().map(|d| format!("Read(/{d}/**)")));
+    rules.push(format!("Read(/{}/.beads/.env)", l.repo));
+    for c in CREDENTIALS {
+        rules.extend([format!("Read({c})"), format!("Read({c}/**)")]);
+    }
+    rules
+}
+
 /// `--settings` に渡す設定。
 pub fn settings(l: &Launch) -> Value {
-    let (w, r, s) = (&l.workspace, &l.repo, &l.state);
-    let deny = |p: String| json!({"path": p, "mode": "deny"});
-    let mut files: Vec<Value> = CREDENTIALS.iter().map(|p| deny((*p).to_string())).collect();
-    files.push(deny(format!("{s}/accounts")));
-    files.push(deny(format!("{r}/.beads/.env")));
-    files.push(deny(format!("/tmp/claude-{}", l.uid)));
+    let w = &l.workspace;
+    let files: Vec<Value> = hidden(l)
+        .into_iter()
+        .map(|p| json!({"path": p, "mode": "deny"}))
+        .collect();
     json!({
         "permissions": {
             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
-            "deny": [
-                format!("Read(/{s}/accounts/**)"),
-                format!("Read(/{r}/.beads/.env)"),
-                format!("Read({CLAUDE_CREDENTIALS})"),
-            ],
+            "deny": denied_reads(l),
         },
         "sandbox": {
             "enabled": true,
@@ -315,11 +333,7 @@ fn audit_sandbox(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
                 .collect()
         })
         .unwrap_or_default();
-    let mut want: Vec<String> = CREDENTIALS.iter().map(|c| (*c).to_string()).collect();
-    want.push(format!("{}/accounts", l.state));
-    want.push(format!("{}/.beads/.env", l.repo));
-    want.push(format!("/tmp/claude-{}", l.uid));
-    if want.iter().any(|w| !denied.contains(&w.as_str())) {
+    if hidden(l).iter().any(|w| !denied.contains(&w.as_str())) {
         gaps.push("/sandbox/credentials/files".to_string());
     }
 }
@@ -336,12 +350,7 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
         gaps.push("/permissions/allow".to_string());
     }
     let deny = strings(set.pointer("/permissions/deny"));
-    let want = [
-        format!("Read(/{}/accounts/**)", l.state),
-        format!("Read(/{}/.beads/.env)", l.repo),
-        format!("Read({CLAUDE_CREDENTIALS})"),
-    ];
-    if want.iter().any(|w| !deny.contains(&w.as_str())) {
+    if denied_reads(l).iter().any(|w| !deny.contains(&w.as_str())) {
         gaps.push("/permissions/deny".to_string());
     }
     let under = format!("{}/", l.workspace);

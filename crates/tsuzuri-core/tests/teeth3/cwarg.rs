@@ -2,6 +2,7 @@
 //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
 //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
+//! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 #![cfg(test)]
 
 use std::path::Path;
@@ -33,6 +34,12 @@ fn launch(inputs: &Value) -> Launch {
         workspace: s("workspace"),
         repo: s("repo"),
         state: s("state"),
+        account_dirs: inputs["account_dirs"]
+            .as_array()
+            .expect("account_dirs")
+            .iter()
+            .map(|d| d.as_str().expect("account_dir").to_string())
+            .collect(),
         roots: inputs["roots"]
             .as_array()
             .expect("roots")
@@ -179,9 +186,9 @@ fn cwarg_audit_refuses_each_missing_key() {
         assert!(!audit(&a, &l).is_empty(), "{pointer} を除いた");
     }
     for (list, n) in [
-        ("/sandbox/credentials/files", 9),
+        ("/sandbox/credentials/files", 11),
         ("/sandbox/filesystem/denyWrite", 3),
-        ("/permissions/deny", 3),
+        ("/permissions/deny", 16),
     ] {
         for i in 0..n {
             let a = with_settings(&l, |set| {
@@ -333,6 +340,89 @@ fn cwarg_hides_the_claude_credentials() {
                 .for_each(|r| *r = json!("Read(~/.claude/**/x)"));
         };
         assert_eq!(gaps(&wide), deny_gap, "{form} の別の字");
+    }
+}
+
+#[test]
+fn cwarg_hides_account_dirs_and_credential_reads() {
+    let fx = fixture();
+    let one = |xs: &[Value], x: &Value| xs.iter().filter(|y| *y == x).count() == 1;
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let set = settings(&l);
+        let files = set["sandbox"]["credentials"]["files"]
+            .as_array()
+            .expect("列");
+        let deny = set["permissions"]["deny"].as_array().expect("列");
+        for d in &l.account_dirs {
+            assert!(
+                one(files, &json!({"path": d, "mode": "deny"})),
+                "{form} {d}"
+            );
+            assert!(one(deny, &json!(format!("Read(/{d}/**)"))), "{form} {d}");
+        }
+        for c in CREDENTIALS {
+            for rule in [format!("Read({c})"), format!("Read({c}/**)")] {
+                assert!(one(deny, &json!(rule)), "{form} {rule}");
+                let a = with_settings(&l, |s| {
+                    let xs = s["permissions"]["deny"].as_array_mut().expect("列");
+                    xs.retain(|x| *x != json!(rule));
+                });
+                assert_eq!(
+                    audit(&a, &l),
+                    ["/permissions/deny"],
+                    "{form} {rule} を除いた"
+                );
+            }
+        }
+        let d = l.account_dirs[1].clone();
+        let gaps = |edit: &dyn Fn(&mut Value)| audit(&with_settings(&l, edit), &l);
+        let drop_file = |s: &mut Value| {
+            let xs = s["sandbox"]["credentials"]["files"]
+                .as_array_mut()
+                .expect("列");
+            xs.retain(|x| x["path"] != json!(d));
+        };
+        assert_eq!(gaps(&drop_file), ["/sandbox/credentials/files"], "{form}");
+        let allow = |s: &mut Value| {
+            let xs = s["sandbox"]["credentials"]["files"]
+                .as_array_mut()
+                .expect("列");
+            xs.iter_mut()
+                .filter(|x| x["path"] == json!(d))
+                .for_each(|x| x["mode"] = json!("allow"));
+        };
+        assert_eq!(
+            gaps(&allow),
+            ["/sandbox/credentials/files"],
+            "{form} の allow"
+        );
+        let drop_rule = |s: &mut Value| {
+            let xs = s["permissions"]["deny"].as_array_mut().expect("列");
+            xs.retain(|x| *x != json!(format!("Read(/{d}/**)")));
+        };
+        assert_eq!(gaps(&drop_rule), ["/permissions/deny"], "{form}");
+        let mut more = l.clone();
+        more.account_dirs.push("/A/new".into());
+        assert_eq!(
+            audit(&argv(&l), &more),
+            ["/sandbox/credentials/files", "/permissions/deny"],
+            "{form} の材料にだけ在る実体"
+        );
+        let mut none = l.clone();
+        none.account_dirs.clear();
+        let bare = settings(&none);
+        let n = |p: &str| {
+            bare.pointer(p)
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        };
+        assert_eq!(
+            (n("/sandbox/credentials/files"), n("/permissions/deny")),
+            (9, 14),
+            "{form} の実体なし"
+        );
+        assert!(audit(&argv(&none), &none).is_empty(), "{form} の実体なし");
     }
 }
 

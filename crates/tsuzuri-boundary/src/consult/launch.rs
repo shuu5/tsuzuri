@@ -7,6 +7,8 @@
 //! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
 //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
 //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
+//! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
+//! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
 
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -78,12 +80,14 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
     let uid = fs::metadata(ws)
         .map_err(|e| (UNKNOWN, format!("作業場が読めない: {e}")))?
         .uid();
+    let account_dirs = account_dirs(Path::new(&state))?;
     Ok(Launch {
         form: w.form,
         window: w.id,
         workspace: abs(ws).display().to_string(),
         repo,
         state,
+        account_dirs,
         roots,
         tz: tz_path(),
         uid: uid.to_string(),
@@ -91,6 +95,42 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
         effort: w.effort.clone(),
         question: ws.join("bundle/question.md").is_file(),
     })
+}
+
+/// state dir の accounts と accounts/.retired の子の symlink の先（器の口座の置き場の形・解けた先は canonical の path・
+/// 解けない先は link の字の path・字の順で重なりなし・accounts が無ければ空・読めない dir と link は断る）。
+pub fn account_dirs(state: &Path) -> Result<Vec<String>, Refused> {
+    let unreadable = |p: &Path, e: std::io::Error| {
+        let why = format!(
+            "口座の置き場 {} が読めない: {e}（読める形に直してから起こし直す）",
+            p.display()
+        );
+        (UNKNOWN, why)
+    };
+    let accounts = state.join("accounts");
+    let mut dirs = Vec::new();
+    for dir in [accounts.clone(), accounts.join(".retired")] {
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(unreadable(&dir, e)),
+        };
+        for entry in entries {
+            let link = entry.map_err(|e| unreadable(&dir, e))?.path();
+            let meta = fs::symlink_metadata(&link).map_err(|e| unreadable(&link, e))?;
+            if !meta.file_type().is_symlink() {
+                continue;
+            }
+            let target = match fs::canonicalize(&link) {
+                Ok(target) => target,
+                Err(_) => dir.join(fs::read_link(&link).map_err(|e| unreadable(&link, e))?),
+            };
+            dirs.push(target.display().to_string());
+        }
+    }
+    dirs.sort();
+    dirs.dedup();
+    Ok(dirs)
 }
 
 /// 窓の起こし手（開きの行の欄）。

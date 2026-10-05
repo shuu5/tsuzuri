@@ -2,6 +2,7 @@
 //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 //! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
 //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
+//! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
 #![cfg(test)]
 
 use std::fs;
@@ -193,6 +194,7 @@ impl Fx {
             ],
             repo,
             state,
+            account_dirs: Vec::new(),
             tz: canon(Path::new(env!("CARGO_BIN_EXE_tz"))),
             uid: fs::metadata(&ws).unwrap().uid().to_string(),
             model: "fable".to_string(),
@@ -530,5 +532,101 @@ fn cwlch_private_tmp_guard() {
     fs::set_permissions(&tmp, fs::Permissions::from_mode(0o700)).unwrap();
     assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 0);
     assert!(open_line(&fx.written()[1].1).0);
+    clear_tmp(&l);
+}
+
+/// state dir の accounts に口座の置き場の形を置く（実体の dir・ふつうの dir・解けない link・相対の link・file・退役の link）。
+fn put_accounts(fx: &Fx) -> Vec<String> {
+    let (accounts, real) = (fx.state.join("accounts"), fx.root.join("real"));
+    for d in [
+        accounts.join(".retired"),
+        accounts.join("b"),
+        real.join("a"),
+        real.join("d"),
+        real.join("old"),
+    ] {
+        fs::create_dir_all(d).unwrap();
+    }
+    let gone = fx.root.join("gone");
+    std::os::unix::fs::symlink(real.join("a"), accounts.join("a")).unwrap();
+    std::os::unix::fs::symlink(&gone, accounts.join("c")).unwrap();
+    std::os::unix::fs::symlink("../../real/d", accounts.join("d")).unwrap();
+    std::os::unix::fs::symlink(real.join("old"), accounts.join(".retired/old.1")).unwrap();
+    std::os::unix::fs::symlink(real.join("a"), accounts.join(".retired/a.2")).unwrap();
+    fs::write(accounts.join("x.txt"), "x").unwrap();
+    let canon = |p: PathBuf| fs::canonicalize(p).unwrap().display().to_string();
+    let mut want = vec![
+        canon(real.join("a")),
+        gone.display().to_string(),
+        canon(real.join("d")),
+        canon(real.join("old")),
+    ];
+    want.sort();
+    want
+}
+
+#[test]
+fn cwlch_account_links_are_hidden() {
+    let fx = Fx::new("links");
+    fx.open(&["--by", "seat"]);
+    let want = put_accounts(&fx);
+    let mut l = fx.launch(1, Form::Talk, false);
+    l.account_dirs = want.clone();
+    assert_eq!(want.len(), 4);
+    let o = fx.tz(&["consult", "launch", "cw1", "--dry-run"]);
+    assert_eq!(rc(&o), 0, "{}", err(&o));
+    let lines: Vec<String> = out(&o).lines().map(String::from).collect();
+    let got: Vec<String> = std::iter::once("claude".to_string())
+        .chain(argv(&l))
+        .collect();
+    assert_eq!(lines, got);
+    let settings = lines
+        .iter()
+        .skip_while(|a| *a != "--settings")
+        .nth(1)
+        .unwrap();
+    for d in &want {
+        assert!(settings.contains(&format!("\"path\":\"{d}\"")), "{d}");
+        assert!(settings.contains(&format!("\"Read(/{d}/**)\"")), "{d}");
+    }
+    assert!(
+        !settings.contains("accounts/b\""),
+        "ふつうの dir は accounts の覆いの中"
+    );
+    assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
+}
+
+#[test]
+fn cwlch_unreadable_accounts_refuse() {
+    let fx = Fx::new("noacct");
+    fx.open(&["--by", "seat"]);
+    put_accounts(&fx);
+    let l = fx.launch(1, Form::Talk, false);
+    clear_tmp(&l);
+    for dir in [
+        fx.state.join("accounts/.retired"),
+        fx.state.join("accounts"),
+    ] {
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o000)).unwrap();
+        let o = fx.tz(&["consult", "launch", "cw1"]);
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+        let shown = fs::canonicalize(&dir).unwrap().display().to_string();
+        assert_eq!(rc(&o), 2, "{}", err(&o));
+        assert!(
+            err(&o).starts_with(&format!(
+                "tz consult launch: 口座の置き場 {shown} が読めない: "
+            )),
+            "{}",
+            err(&o)
+        );
+        assert!(
+            err(&o).ends_with("（読める形に直してから起こし直す）\n"),
+            "{}",
+            err(&o)
+        );
+        assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
+        assert!(!Path::new(&private_tmp(&l.workspace)).exists());
+    }
+    assert_eq!(rc(&fx.tz(&["consult", "launch", "cw1"])), 0);
     clear_tmp(&l);
 }
