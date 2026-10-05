@@ -4,7 +4,10 @@
 //! 行 f-deliver で配達の hook（`deliver`・UserPromptSubmit の hook）を置く。
 //! 行 f-deliver-tool で考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
 //! 行 cs-hooks で、停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
+//! 行 ag-spec で係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
 
+pub mod agent_bind;
+pub mod agent_spawn;
 pub mod consult;
 pub mod deliver;
 pub mod deliver_tool;

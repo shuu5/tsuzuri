@@ -20,6 +20,8 @@
 //! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
 //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
 //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
+//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの門・rc は 0 か 1）。
+//! tz hook agent-bind --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
 //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
 //! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
 //! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
@@ -65,6 +67,8 @@ fn main() -> ExitCode {
         ["hook", "deliver", rest @ ..] => tsuzuri_boundary::hook::deliver::run(rest),
         ["hook", "deliver-tool", rest @ ..] => tsuzuri_boundary::hook::deliver_tool::run(rest),
         ["hook", "question-gate", rest @ ..] => tsuzuri_boundary::hook::question_gate::run(rest),
+        ["hook", "agent-spawn", rest @ ..] => tsuzuri_boundary::hook::agent_spawn::run(rest),
+        ["hook", "agent-bind", rest @ ..] => tsuzuri_boundary::hook::agent_bind::run(rest),
         ["hook", "question-signal", rest @ ..] => {
             tsuzuri_boundary::hook::question_signal::run(rest)
         }
