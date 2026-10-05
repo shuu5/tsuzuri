@@ -1,0 +1,1173 @@
+diff --git a/crates/tsuzuri-boundary/src/audit.rs b/crates/tsuzuri-boundary/src/audit.rs
+index dfb8a221a6cfb735b93360fbc0dfba9d55f48345..39ad4edb97c7b8f1e0c2e862cf413406dff889ec 100644
+--- a/crates/tsuzuri-boundary/src/audit.rs
++++ b/crates/tsuzuri-boundary/src/audit.rs
+@@ -463,10 +463,10 @@ pub const WIDTHS: [u32; 4] = [1280, 960, 700, 390];
+ pub const MODES: [&str; 2] = ["beginner", "expert"];
+ 
+ /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
+-/// project board の 1 枚の画面と、その上に帯の印が開く 8 つの窓（query の win・行 g-accept・相談の窓は行 cs-bar）と account board の
++/// project board の 1 枚の画面と、その上に帯の印が開く 9 つの窓（query の win・行 g-accept・相談の窓は行 cs-bar・末は host の窓）と account board の
+ /// 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は行 m-map-page で、質問の頁と抜けの検査の頁は
+ /// 行 g-one-screen-a で消した）。
+-pub const SCREENS: [&str; 12] = [
++pub const SCREENS: [&str; 13] = [
+     "?",
+     "?win=ask&",
+     "?win=stalled&",
+@@ -476,6 +476,7 @@ pub const SCREENS: [&str; 12] = [
+     "?win=legend&",
+     "?win=dest&",
+     "?win=consult&",
++    "?win=host&",
+     "?board=account&tab=home&",
+     "?board=account&tab=session&",
+     "?board=account&tab=projects&",
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+index 5b95f71a267e74a3655131b5d1b8d85658d8bac9..9a78fff834282a0f91d0879f932ddbc95d26352d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+@@ -30,7 +30,7 @@ fn bvacc_widths_are_rule_r23() {
+     assert!(row.contains(&want), "R-23 に {want} が無い: {row}");
+ }
+ 
+-/// (3) 画面は home・帯の印が開く 8 つの窓（窓の宣言の順・相談の窓は行 cs-bar・query の名は topbar の WIN_PARAM）・account board の
++/// (3) 画面は home・帯の印が開く 9 つの窓（窓の宣言の順・相談の窓は行 cs-bar・末は host の窓・query の名は topbar の WIN_PARAM）・account board の
+ /// 3 つの tab の順で、home は最初（節点の頁に開く最初の節点を採る画面）。
+ #[test]
+ fn bvacc_screens_open_windows() {
+@@ -48,7 +48,7 @@ fn bvacc_screens_open_windows() {
+     assert_eq!(
+         keys,
+         [
+-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
++            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult", "host"
+         ]
+     );
+     let mut want = vec!["?".to_string()];
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs b/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+index a885a853f97875e1808dbcd49a67ad8e5638241b..6e39ccbddb645f65d56c7116dd2007b30e0bef8a 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvsettle.rs
+@@ -220,7 +220,7 @@ fn bvsettle_sweep_counts_unknown() {
+         report.contains("\n違反 計 0\nまだ分からない 計 4\n"),
+         "{report}"
+     );
+-    assert_eq!(report.lines().count(), 1 + 104 + 3);
++    assert_eq!(report.lines().count(), 1 + 112 + 3);
+ 
+     assert_eq!(SCREENS[0], "?");
+     let mut page = stuck_at(format!("{BOARD}?mode=expert"));
+@@ -238,7 +238,7 @@ fn bvsettle_sweep_counts_unknown() {
+     );
+     let blind = format!(" expert {BOARD}?page=node&mode=expert {UNSETTLED}");
+     assert_eq!(report.lines().filter(|l| l.ends_with(&blind)).count(), 4);
+-    assert_eq!(page.navigated().len(), 104 - 4);
++    assert_eq!(page.navigated().len(), 112 - 4);
+     accept_unknown_rc();
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/jrun.rs b/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+index aea9d6f28f5994ce6c49922c9aa3987643b5c845..7de4a87a9e5569de3ac9c980d4ca5f7c15bcdd71 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/jrun.rs
+@@ -160,7 +160,7 @@ fn jrun_screens_cover_surface() {
+     // 帯の印が開く窓は home の頁の query の win で開く（行 g-accept）。
+     let topbar = fs::read_to_string(src.join("topbar.rs")).expect("topbar.rs を読む");
+     let wins = arms(&topbar, "pub fn key(self) -> &'static str {");
+-    assert_eq!(wins.len(), 8, "{wins:?}");
++    assert_eq!(wins.len(), 9, "{wins:?}");
+     want.extend(wins.iter().map(|w| format!("?win={w}&")));
+     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
+     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
+@@ -169,7 +169,7 @@ fn jrun_screens_cover_surface() {
+     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
+     got.sort();
+     got.dedup();
+-    assert_eq!(got.len(), 12, "SCREENS に重なりが無い");
++    assert_eq!(got.len(), 13, "SCREENS に重なりが無い");
+     want.sort();
+     assert_eq!(got, want);
+ }
+@@ -335,7 +335,7 @@ fn jrun_sweep_all_cases() {
+             urls.extend(group.into_iter().map(|u| (width, mode, u)));
+         }
+     }
+-    assert_eq!(urls.len(), 104);
++    assert_eq!(urls.len(), 112);
+     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
+     assert_eq!(page.navigated(), navigated);
+     let mut want = vec![head()];
+diff --git a/crates/tsuzuri-surface/src/hostwin.rs b/crates/tsuzuri-surface/src/hostwin.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d5968cb56617c7611d71839badcf9b569d1ea41
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/hostwin.rs
+@@ -0,0 +1,337 @@
++//! host の負荷と書きの印と窓の中身（判断の記録 ADR-27 の決定 (3)(4) の帯の印と窓の作り）: 帯の右の短い印
++//! （1 分の負荷の core 比と装置の書きの速さの和）と、印を押すと開く窓の段（負荷・詰まり・メモリと上限を持つ scope・
++//! 装置ごとの書きの速さ・摩耗と記録の時刻）。account board の HOME の block も同じ中身の関数（`content`）を描く。
++//! 口は契約の型の host の PATH。線を越えたかは中核が判じた電文の over を写すだけで、面は値と線を比べない（条 P-21）。
++//! 読めない欄はその欄だけ「?」にし、口が読めなければ全体を測れていないにする（条 P-7）。
++//! 字と並びは純粋な関数にして host で試し、DOM（`body`）は wasm の target のときだけ組む。
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::{DeviceWrite, Gauge, HostDoc, Load, Memory, ScopeMemory, Stall};
++use tsuzuri_contract::wire;
++
++use crate::project::{Body, NOT_READ};
++use crate::view::{Fetched, clock_short};
++
++pub use tsuzuri_contract::host::PATH;
++
++/// 帯の印の aria・窓の題・account board の block の見出しの語の鍵。
++pub const HOST_KEY: &str = "host_load";
++
++/// 窓の幅（px）。
++pub const WIDTH: u32 = 600;
++
++/// 口が読めないときの理由。
++pub const UNREAD: &str =
++    "host の口が読めない（届かない・知らせが切れた）ので今の負荷と書きが正しいと言えない";
++
++/// 本文が電文として読めないときの理由。
++pub const BAD_BODY: &str = "host の口の本文が電文（HostDoc）として読めない";
++
++/// 読めない欄の字。
++pub const UNKNOWN_TEXT: &str = "?";
++
++/// 印の class（線の内・線を越えた測りが在る・口が読めない）。
++pub const MARK_CLASSES: [&str; 3] = ["hostb", "hostb w", "hostb u"];
++
++/// 窓の段の見出しの語の鍵（段の順: 負荷・詰まり・メモリ・書きの速さ・摩耗）。
++pub const PART_KEYS: [&str; 5] = ["hw_load", "hw_stall", "hw_memory", "hw_write", "hw_wear"];
++
++/// 装置が 0 の時の書きの段の 1 行。
++pub const NO_DEVICES: &str = "書きの測りの表に装置が無い";
++
++/// 摩耗の記録を持つ装置が 0 の時の摩耗の段の 1 行。
++pub const NO_WEAR: &str = "摩耗の記録を持つ装置が無い";
++
++/// 上限を持つ scope が読めない時の行の名。
++pub const SCOPE_NAME: &str = "scope";
++
++/// 帯の印（class と字）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct HostMark {
++    pub class: &'static str,
++    pub text: String,
++}
++
++/// 窓の段の 1 行（名・値の字・線を越えた測りの行か）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Line {
++    pub name: String,
++    pub value: String,
++    pub warn: bool,
++}
++
++/// 窓の段（見出しの語の鍵・行・行が無い時の 1 行）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Part {
++    pub key: &'static str,
++    pub lines: Vec<Line>,
++    pub none: Option<&'static str>,
++}
++
++/// 口の本文を電文に読む（まだ読んでいない・読めない・電文が読めないは理由）。
++pub fn doc(fetched: &Fetched) -> Result<HostDoc, &'static str> {
++    match fetched {
++        Fetched::NotRead => Err(NOT_READ),
++        Fetched::Failed => Err(UNREAD),
++        Fetched::Body(text) => wire::decode::<HostDoc>(text).map_err(|_| BAD_BODY),
++    }
++}
++
++/// 100 倍の整数を小数 2 桁の字にする（42 は `0.42`・1344 は `13.44`）。
++pub fn fixed2(hundredths: u32) -> String {
++    format!("{}.{:02}", hundredths / 100, hundredths % 100)
++}
++
++/// 1 分の負荷の core 比の 100 倍（表示の丸め・切り捨て・core の数 0 は 1 で割る・線の判じは中核の over）。
++pub fn ratio(load: &Load) -> u32 {
++    load.one / load.cores.max(1)
++}
++
++/// byte/s を MB/s（10 の 6 乗 byte）の字にする（10 未満は小数 1 桁・ほかは整数・どちらも切り捨て）。
++pub fn mbps(bytes: u64) -> String {
++    let mb = 1_000_000;
++    if bytes < 10 * mb {
++        format!("{}.{}", bytes / mb, bytes % mb / (mb / 10))
++    } else {
++        (bytes / mb).to_string()
++    }
++}
++
++/// byte を GiB の小数 1 桁の字にする（切り捨て）。
++pub fn gib(bytes: u64) -> String {
++    let tenths = u128::from(bytes) * 10 / (1u128 << 30);
++    format!("{}.{}", tenths / 10, tenths % 10)
++}
++
++/// byte を TB（10 の 12 乗 byte）の小数 1 桁の字にする（切り捨て）。
++pub fn tb(bytes: u64) -> String {
++    let tenths = bytes / 100_000_000_000;
++    format!("{}.{}", tenths / 10, tenths % 10)
++}
++
++/// 装置の書きの速さの和（装置が 0・どれかが読めない時は None）。
++pub fn write_total(devices: &[DeviceWrite]) -> Option<u64> {
++    if devices.is_empty() {
++        return None;
++    }
++    devices.iter().try_fold(0u64, |sum, d| match d.rate {
++        Reading::Known(r) => Some(sum.saturating_add(r)),
++        Reading::Unknown => None,
++    })
++}
++
++/// 帯の印: 字は「負荷 <core 比> · 書き <和> MB/s」（読めない値は「?」）で、class は電文の over が空でなければ
++/// `hostb w`・空なら `hostb`。口が読めなければ `hostb u` の「負荷 ? · 書き ?」。
++pub fn mark(fetched: &Fetched) -> HostMark {
++    let Ok(d) = doc(fetched) else {
++        return HostMark {
++            class: MARK_CLASSES[2],
++            text: format!("負荷 {UNKNOWN_TEXT} · 書き {UNKNOWN_TEXT}"),
++        };
++    };
++    let load = match &d.load {
++        Reading::Known(l) => fixed2(ratio(l)),
++        Reading::Unknown => UNKNOWN_TEXT.to_string(),
++    };
++    let write = write_total(&d.devices)
++        .map_or_else(|| UNKNOWN_TEXT.to_string(), |b| format!("{} MB/s", mbps(b)));
++    HostMark {
++        class: if d.over.is_empty() {
++            MARK_CLASSES[0]
++        } else {
++            MARK_CLASSES[1]
++        },
++        text: format!("負荷 {load} · 書き {write}"),
++    }
++}
++
++fn line(name: &str, value: String, warn: bool) -> Line {
++    Line {
++        name: name.to_string(),
++        value,
++        warn,
++    }
++}
++
++/// 行が無い時だけ `none` の 1 行を持つ段。
++fn part(key: &'static str, lines: Vec<Line>, none: &'static str) -> Part {
++    let none = lines.is_empty().then_some(none);
++    Part { key, lines, none }
++}
++
++/// 行が欠けない段（読めない値は行の値が「?」）。
++fn fixed(key: &'static str, lines: Vec<Line>) -> Part {
++    Part {
++        key,
++        lines,
++        none: None,
++    }
++}
++
++/// 負荷の段: core 比（over に Load が在れば注意）・1 と 5 と 15 分の負荷・core の数。
++fn load_part(load: &Reading<Load>, over: &[Gauge]) -> Part {
++    let (r, all, cores) = match load {
++        Reading::Known(l) => (
++            fixed2(ratio(l)),
++            format!(
++                "{} · {} · {}",
++                fixed2(l.one),
++                fixed2(l.five),
++                fixed2(l.fifteen)
++            ),
++            l.cores.to_string(),
++        ),
++        Reading::Unknown => (
++            UNKNOWN_TEXT.into(),
++            UNKNOWN_TEXT.into(),
++            UNKNOWN_TEXT.into(),
++        ),
++    };
++    let lines = vec![
++        line("core 比", r, over.contains(&Gauge::Load)),
++        line("1 · 5 · 15 分", all, false),
++        line("core", cores, false),
++    ];
++    fixed(PART_KEYS[0], lines)
++}
++
++/// 詰まりの段: cpu の some・memory の full・io の full の avg10 と avg60（memory と io は over に在れば注意）。
++fn stall_part(d: &HostDoc) -> Part {
++    let text = |r: &Reading<Stall>| match r {
++        Reading::Known(s) => format!("avg10 {}% · avg60 {}%", fixed2(s.avg10), fixed2(s.avg60)),
++        Reading::Unknown => UNKNOWN_TEXT.to_string(),
++    };
++    let p = &d.pressure;
++    let lines = vec![
++        line("cpu some", text(&p.cpu_some), false),
++        line(
++            "memory full",
++            text(&p.memory_full),
++            d.over.contains(&Gauge::Memory),
++        ),
++        line("io full", text(&p.io_full), d.over.contains(&Gauge::Io)),
++    ];
++    fixed(PART_KEYS[1], lines)
++}
++
++/// メモリの段: 使っている量と全体・swap の使っている量と全体・上限を持つ scope（電文の順・今の量と上限と埋まりの %）。
++fn memory_part(memory: &Reading<Memory>, scopes: &Reading<Vec<ScopeMemory>>) -> Part {
++    let used =
++        |total: u64, free: u64| format!("{} / {} GiB", gib(total.saturating_sub(free)), gib(total));
++    let (mem, swap) = match memory {
++        Reading::Known(m) => (used(m.total, m.available), used(m.swap_total, m.swap_free)),
++        Reading::Unknown => (UNKNOWN_TEXT.into(), UNKNOWN_TEXT.into()),
++    };
++    let mut lines = vec![line("使っている", mem, false), line("swap", swap, false)];
++    match scopes {
++        Reading::Known(list) => lines.extend(list.iter().map(|s| {
++            let pct = u128::from(s.current) * 100 / u128::from(s.max.max(1));
++            line(
++                &s.name,
++                format!("{} / {} GiB · {pct}%", gib(s.current), gib(s.max)),
++                false,
++            )
++        })),
++        Reading::Unknown => lines.push(line(SCOPE_NAME, UNKNOWN_TEXT.into(), false)),
++    }
++    fixed(PART_KEYS[2], lines)
++}
++
++/// 書きの速さの段: 装置ごとの MB/s（表の順・読めない速さは「?」）。
++fn write_part(devices: &[DeviceWrite]) -> Part {
++    let lines = devices
++        .iter()
++        .map(|d| {
++            let v = match d.rate {
++                Reading::Known(r) => format!("{} MB/s", mbps(r)),
++                Reading::Unknown => UNKNOWN_TEXT.to_string(),
++            };
++            line(&d.name, v, false)
++        })
++        .collect();
++    part(PART_KEYS[3], lines, NO_DEVICES)
++}
++
++/// 摩耗の段: 記録を持つ装置ごとの使った割合・書いた量・予備・媒体の誤り・記録の時刻（読めない記録は「?」・
++/// 記録の path を持たない装置は出さない）。
++fn wear_part(devices: &[DeviceWrite], now: EpochSecs) -> Part {
++    let lines = devices
++        .iter()
++        .filter_map(|d| {
++            let v = match d.wear.as_ref()? {
++                Reading::Known(w) => format!(
++                    "使った {}% · 書いた {} TB · 予備 {}% · 誤り {} · 記録 {}",
++                    w.used_pct,
++                    tb(w.written),
++                    w.spare_pct,
++                    w.media_errors,
++                    clock_short(w.read_at, now)
++                ),
++                Reading::Unknown => UNKNOWN_TEXT.to_string(),
++            };
++            Some(line(&d.name, v, false))
++        })
++        .collect();
++    part(PART_KEYS[4], lines, NO_WEAR)
++}
++
++/// 窓の段の全部（`PART_KEYS` の順）。
++pub fn parts(d: &HostDoc, now: EpochSecs) -> Vec<Part> {
++    vec![
++        load_part(&d.load, &d.over),
++        stall_part(d),
++        memory_part(&d.memory, &d.scopes),
++        write_part(&d.devices),
++        wear_part(&d.devices, now),
++    ]
++}
++
++/// 窓と block の中身: 口が読めなければ測れていない（理由の 1 行）、読めれば段の全部。
++pub fn content(fetched: &Fetched, now: EpochSecs) -> Body<Vec<Part>> {
++    match doc(fetched) {
++        Err(reason) => Body::Unmeasured(reason),
++        Ok(d) => Body::Filled(parts(&d, now)),
++    }
++}
++
++#[cfg(target_arch = "wasm32")]
++pub use dom::body;
++
++#[cfg(target_arch = "wasm32")]
++mod dom {
++    use leptos::prelude::*;
++
++    use super::{PATH, Part, content};
++    use crate::project::{Body, body_view, unmeasured};
++    use crate::vocab::label;
++
++    fn part_view(p: Part) -> AnyView {
++        let lines = p
++            .lines
++            .into_iter()
++            .map(|l| {
++                let class = if l.warn { "hw-l w" } else { "hw-l" };
++                view! { <div class=class><span class="hw-n">{l.name}</span><span class="hw-v num">{l.value}</span></div> }
++            })
++            .collect_view();
++        let none = p
++            .none
++            .map(|n| view! { <div class="hw-l"><span class="hw-v muted">{n}</span></div> });
++        view! { <div class="hw-p"><h4>{label(p.key)}</h4>{lines}{none}</div> }.into_any()
++    }
++
++    /// 窓と block の本文（host の口を読む）。
++    pub fn body() -> AnyView {
++        let fetched = crate::net::read(PATH);
++        let inner = move || match fetched.with(|f| content(f, crate::net::now())) {
++            Body::Unmeasured(reason) => unmeasured(reason),
++            Body::Empty(line) => body_view(Body::Empty(line)),
++            Body::Filled(ps) => {
++                view! { <div class="hw">{ps.into_iter().map(part_view).collect_view()}</div> }
++                    .into_any()
++            }
++        };
++        inner.into_any()
++    }
++}
+diff --git a/crates/tsuzuri-surface/src/lib.rs b/crates/tsuzuri-surface/src/lib.rs
+index c20e14759b726759ff95cc0aea34d1869a80bdd5..8d49fa0eda440332eb9c3219f729d09c304688b3 100644
+--- a/crates/tsuzuri-surface/src/lib.rs
++++ b/crates/tsuzuri-surface/src/lib.rs
+@@ -14,6 +14,8 @@ pub mod consultwin;
+ /// 口ごとの読みの印の決め方（net が使い host でも組む・行 g-reads）。
+ pub mod flight;
+ pub mod frame;
++/// host の負荷と書きの印と窓の中身（字と段は host でも組む・DOM は wasm の target だけ）。
++pub mod hostwin;
+ /// 中身の古さと読み込み不良の印（決め方は host でも組む・印の DOM は wasm の target だけ・行 g-fresh）。
+ pub mod fresh;
+ pub mod kit;
+diff --git a/crates/tsuzuri-surface/src/topbar.rs b/crates/tsuzuri-surface/src/topbar.rs
+index 7a0a78bf5977617ed96203e4f100ab66533da39b..22502eaa1b8df4085e3c1812cda13b2f22f44f62 100644
+--- a/crates/tsuzuri-surface/src/topbar.rs
++++ b/crates/tsuzuri-surface/src/topbar.rs
+@@ -1,9 +1,10 @@
+ //! 上の固定の帯（判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
+ //! 左に account board へ戻る口と project の名、真ん中に次の一手の pill と、やる事の 3 つの数（質問・止まった run・
+ //! 抜けの検査・1 以上の物だけ色）と、席からの最新の知らせの 1 行と件数、右に席と口座（状態・直近 3 時間の細い帯・
+-//! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
++//! 口座と 5 時間と 7 日の窓の使った割合）と、host の負荷と書きの印と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と
++//! 記号の見方と表示先）。
+ //! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は wins と askwin の module が描く。
+-//! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
++//! 読む口は /api/next・/api/notices・/api/seat・/api/graph と host の口（印の字は hostwin が組む）。字と並びは純粋な関数にして host で試し、
+ //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
+ //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
+ //! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない）。
+@@ -19,7 +20,8 @@ use crate::project::{Body, UNKNOWN, next, notice, state_key};
+ use crate::view::{Fetched, hhmm};
+ use crate::vocab::label;
+ 
+-/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕）。
++/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕・
++/// host の負荷と書き）。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Win {
+     Ask,
+@@ -30,11 +32,12 @@ pub enum Win {
+     Legend,
+     Dest,
+     Consult,
++    Host,
+ }
+ 
+ impl Win {
+     /// 全部の窓（宣言の順）。
+-    pub const ALL: [Win; 8] = [
++    pub const ALL: [Win; 9] = [
+         Win::Ask,
+         Win::Stalled,
+         Win::Notices,
+@@ -43,6 +46,7 @@ impl Win {
+         Win::Legend,
+         Win::Dest,
+         Win::Consult,
++        Win::Host,
+     ];
+ 
+     /// URL の query の win の値の名。
+@@ -56,6 +60,7 @@ impl Win {
+             Win::Legend => "legend",
+             Win::Dest => "dest",
+             Win::Consult => "consult",
++            Win::Host => "host",
+         }
+     }
+ 
+@@ -416,6 +421,7 @@ mod dom {
+     };
+     use crate::consultwin::CONSULT_KEY;
+     use crate::frame::Mode;
++    use crate::hostwin::{self, HOST_KEY, HostMark};
+     use crate::project::{Body, map, next, notice, seat, state_icon};
+     use crate::view::hhmm;
+     use crate::vocab::label;
+@@ -491,6 +497,14 @@ mod dom {
+         .into_any()
+     }
+ 
++    /// host の負荷と書きの印（押すと host の窓）。
++    fn host_view(m: HostMark, wins: WinCtx<Win>) -> AnyView {
++        view! {
++            <button type="button" class=m.class aria-label=label(HOST_KEY) on:click=move |_| wins.open(Win::Host, false)>{m.text}</button>
++        }
++        .into_any()
++    }
++
+     /// 設定（⚙）の button と中身（表示の型の 2 つと、記号の見方と表示先の窓の口）。外の click と取り消しの鍵で畳む。
+     fn gear_view(bar: Bar) -> AnyView {
+         let open = RwSignal::new(false);
+@@ -560,6 +574,7 @@ mod dom {
+         let notices = crate::net::read(notice::PATH);
+         let seat_doc = crate::net::read(seat::PATH);
+         let graph = crate::net::read(map::PATH);
++        let host_doc = crate::net::read(hostwin::PATH);
+         let now = crate::net::ticker();
+         let wins = bar.wins;
+         let pill = move || {
+@@ -576,6 +591,7 @@ mod dom {
+             Body::Empty(_) | Body::Unmeasured(_) => None,
+         };
+         let seat_part = move || seat_doc.with(|s| seat_view(seat_bar(s, now.get()), wins));
++        let host_part = move || host_doc.with(|h| host_view(hostwin::mark(h), wins));
+         let gp = move || {
+             let g = graph.with(gaps_mark);
+             view! { <button type="button" class=g.class on:click=move |_| wins.open(Win::Gaps, false)>{g.text}</button> }
+@@ -591,6 +607,7 @@ mod dom {
+                 <div class="todo">{pill}{chips}{line}</div>
+                 <div class="clock">
+                     {seat_part}
++                    {host_part}
+                     {gp}
+                     <button type="button" class="cslt" aria-label=label(CONSULT_KEY) on:click=move |_| wins.open(Win::Consult, false)>{label(CONSULT_KEY)}</button>
+                     <span class="tm">{move || hhmm(now.get())}" "<small>"JST"</small></span>
+diff --git a/crates/tsuzuri-surface/src/wins.rs b/crates/tsuzuri-surface/src/wins.rs
+index 9209672b0101ee73ba63eb3e5c7c56557f86b169..a169db816647b93557dae189310dd1769304e78f 100644
+--- a/crates/tsuzuri-surface/src/wins.rs
++++ b/crates/tsuzuri-surface/src/wins.rs
+@@ -6,6 +6,7 @@
+ //! 描く（要件 FR13・台帳の block から移した）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
+ //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
+ //! 質問の窓は 1 問ずつの窓（askwin の frame）。相談の窓は頼みの form と一覧（consultwin の body）。
++//! host の窓は負荷と書きの段（hostwin の body・account board の HOME の block と同じ中身）。
+ //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
+ 
+ use std::cmp::Reverse;
+@@ -16,6 +17,7 @@ use tsuzuri_contract::graph::{GraphNode, NodeKind};
+ 
+ use crate::consultwin::CONSULT_KEY;
+ use crate::frame::{Mode, node_href};
++use crate::hostwin::{self, HOST_KEY};
+ use crate::project::Body;
+ use crate::project::pipeline::{self, age_at, stage_word};
+ use crate::topbar::{SEAT_KEY, STALL_KEY, Win};
+@@ -34,6 +36,7 @@ pub fn frame_of(win: Win) -> (u32, &'static str) {
+         Win::Legend => (560, "status"),
+         Win::Dest => (520, "stage_target"),
+         Win::Consult => (720, CONSULT_KEY),
++        Win::Host => (hostwin::WIDTH, HOST_KEY),
+     }
+ }
+ 
+@@ -178,6 +181,7 @@ mod dom {
+             Win::Legend => legend::inner(),
+             Win::Dest => stage::inner(),
+             Win::Consult => crate::consultwin::body(),
++            Win::Host => crate::hostwin::body(),
+         };
+         Frame {
+             width,
+diff --git a/crates/tsuzuri-surface/style/h-host-band.css b/crates/tsuzuri-surface/style/h-host-band.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d6a593326d3a683894af2f99fa794f30712c770
+--- /dev/null
++++ b/crates/tsuzuri-surface/style/h-host-band.css
+@@ -0,0 +1,15 @@
++/* 帯の host の負荷と書きの印と、host の窓と account board の HOME の block の段（線を越えた測りは注意の色）。
++ * 760 px 以下の 2 段の帯には置き場の格子が無いので印を出さない（中身は account board の HOME の block と URL の win=host で見る）。 */
++#bar .hostb { height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
++#bar .hostb:hover { background: var(--panel-2); }
++#bar .hostb.w { color: #92400e; border-color: #fbbf24; background: #fffbeb; }
++#bar .hostb.u { color: var(--ink-3); border-style: dashed; }
++@media (max-width: 760px) {
++  #bar .hostb { display: none; }
++}
++.hw { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 4px 24px; }
++.hw-p h4 { margin: 8px 0 4px; color: var(--ink-3); font-size: var(--fs-1); font-weight: 600; }
++.hw-l { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; padding: 2px 6px; border-radius: 6px; font-size: 12.5px; }
++.hw-n { min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
++.hw-v { min-width: 0; margin-left: auto; text-align: right; overflow-wrap: anywhere; }
++.hw-l.w { color: #92400e; background: #fffbeb; }
+diff --git a/crates/tsuzuri-surface/tests/hband.rs b/crates/tsuzuri-surface/tests/hband.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..57d5615cafb7e8ef18d87a4f7cb5ccd8311d2307
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hband.rs
+@@ -0,0 +1,469 @@
++//! 帯の host の負荷と書きの印と host の窓の歯（接頭辞 hband_）。
++//! 電文 HostDoc を契約の型で組んで字にし、印の字と class・窓の段の行・読めない欄と口・窓の名と幅と語・帯と窓の配線の字を測る。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::{
++    DeviceWrite, Gauge, HostDoc, Load, Memory, Pressure, ScopeMemory, Stall, Wear,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_surface::frame::Mode;
++use tsuzuri_surface::hostwin::{
++    BAD_BODY, HOST_KEY, Line, MARK_CLASSES, NO_DEVICES, NO_WEAR, PART_KEYS, Part, SCOPE_NAME,
++    UNREAD, WIDTH, content, fixed2, gib, mark, mbps, parts, ratio, tb, write_total,
++};
++use tsuzuri_surface::project::{Body, NOT_READ};
++use tsuzuri_surface::topbar::{TODOS, Win, win_href, win_of_href};
++use tsuzuri_surface::view::Fetched;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::wins::frame_of;
++
++const GIB: u64 = 1 << 30;
++
++/// 摩耗の記録の時刻（日本時間 2026-10-05 18:00）と、1 時間後と 30 時間後の今。
++const READ_AT: EpochSecs = 1_791_190_800;
++const SOON: EpochSecs = READ_AT + 3_600;
++const LATER: EpochSecs = READ_AT + 30 * 3_600;
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++fn stall(avg10: u32, avg60: u32) -> Reading<Stall> {
++    Reading::Known(Stall { avg10, avg60 })
++}
++
++fn device(name: &str, rate: Reading<u64>, wear: Option<Reading<Wear>>) -> DeviceWrite {
++    DeviceWrite {
++        name: name.to_string(),
++        rate,
++        wear,
++    }
++}
++
++fn wear() -> Wear {
++    Wear {
++        read_at: READ_AT,
++        used_pct: 6,
++        written: 512_345_000_000_000,
++        spare_pct: 100,
++        media_errors: 0,
++    }
++}
++
++/// 全部の欄が読めた電文（装置は 3 つ・摩耗は読めた・読めない・path なしの 3 通り・over は渡した物）。
++fn full(over: Vec<Gauge>) -> HostDoc {
++    HostDoc {
++        at: READ_AT,
++        load: Reading::Known(Load {
++            one: 1344,
++            five: 1210,
++            fifteen: 980,
++            cores: 32,
++        }),
++        pressure: Pressure {
++            cpu_some: stall(1520, 1310),
++            memory_full: stall(12, 7),
++            io_full: stall(120, 80),
++        },
++        memory: Reading::Known(Memory {
++            total: 64 * GIB,
++            available: 22 * GIB + GIB / 2,
++            swap_total: 8 * GIB,
++            swap_free: 8 * GIB,
++        }),
++        scopes: Reading::Known(vec![
++            ScopeMemory {
++                name: "seat.scope".to_string(),
++                current: 26 * GIB,
++                max: 32 * GIB,
++            },
++            ScopeMemory {
++                name: "run.scope".to_string(),
++                current: 3 * GIB,
++                max: 16 * GIB,
++            },
++        ]),
++        devices: vec![
++            device(
++                "nvme0",
++                Reading::Known(72_300_000),
++                Some(Reading::Known(wear())),
++            ),
++            device("nvme1", Reading::Known(1_500_000), Some(Reading::Unknown)),
++            device("sda", Reading::Known(0), None),
++        ],
++        over,
++    }
++}
++
++/// 全部の欄が読めない電文（装置は 0）。
++fn blank() -> HostDoc {
++    HostDoc {
++        at: READ_AT,
++        load: Reading::Unknown,
++        pressure: Pressure {
++            cpu_some: Reading::Unknown,
++            memory_full: Reading::Unknown,
++            io_full: Reading::Unknown,
++        },
++        memory: Reading::Unknown,
++        scopes: Reading::Unknown,
++        devices: Vec::new(),
++        over: Vec::new(),
++    }
++}
++
++fn body(d: &HostDoc) -> Fetched {
++    Fetched::Body(wire::encode(d).expect("電文"))
++}
++
++fn line(name: &str, value: &str, warn: bool) -> Line {
++    Line {
++        name: name.to_string(),
++        value: value.to_string(),
++        warn,
++    }
++}
++
++fn find<'a>(ps: &'a [Part], key: &str) -> &'a Part {
++    ps.iter()
++        .find(|p| p.key == key)
++        .unwrap_or_else(|| panic!("段 {key} が無い"))
++}
++
++/// 数の字: 100 倍は小数 2 桁、core 比は 1 分の負荷を core の数で切り捨てて割り（0 は 1 で割る）、MB/s は 10 未満だけ
++/// 小数 1 桁、GiB と TB は小数 1 桁（どれも切り捨て）。
++#[test]
++fn hband_number_texts() {
++    for (h, want) in [
++        (42, "0.42"),
++        (1344, "13.44"),
++        (5, "0.05"),
++        (100, "1.00"),
++        (0, "0.00"),
++    ] {
++        assert_eq!(fixed2(h), want, "{h}");
++    }
++    let load = |one, cores| Load {
++        one,
++        five: 0,
++        fifteen: 0,
++        cores,
++    };
++    assert_eq!(ratio(&load(1344, 32)), 42);
++    assert_eq!(ratio(&load(3300, 32)), 103);
++    assert_eq!(ratio(&load(3200, 32)), 100);
++    assert_eq!(ratio(&load(250, 0)), 250);
++    for (b, want) in [
++        (0, "0.0"),
++        (3_456_789, "3.4"),
++        (9_999_999, "9.9"),
++        (10_000_000, "10"),
++        (73_800_000, "73"),
++    ] {
++        assert_eq!(mbps(b), want, "{b}");
++    }
++    assert_eq!(gib(32 * GIB), "32.0");
++    assert_eq!(gib(26 * GIB + GIB / 2), "26.5");
++    assert_eq!(gib(GIB - 1), "0.9");
++    assert_eq!(tb(512_345_000_000_000), "512.3");
++    assert_eq!(tb(99_999_999_999), "0.0");
++}
++
++/// 印: 字は「負荷 <core 比> · 書き <装置の速さの和> MB/s」で、class は電文の over が空なら hostb・空でなければ
++/// hostb w。和は装置が 0 か読めない速さが 1 つでも在れば「?」、負荷が読めなければ「?」。口が読めない・まだ読んでいない・
++/// 電文でない本文は hostb u の「負荷 ? · 書き ?」。
++#[test]
++fn hband_mark_text_and_class() {
++    let m = mark(&body(&full(Vec::new())));
++    assert_eq!(
++        (m.class, m.text.as_str()),
++        ("hostb", "負荷 0.42 · 書き 73 MB/s")
++    );
++    let m = mark(&body(&full(vec![Gauge::Io])));
++    assert_eq!(
++        (m.class, m.text.as_str()),
++        ("hostb w", "負荷 0.42 · 書き 73 MB/s")
++    );
++    assert_eq!(MARK_CLASSES, ["hostb", "hostb w", "hostb u"]);
++
++    let mut d = full(Vec::new());
++    d.devices[1].rate = Reading::Unknown;
++    assert_eq!(write_total(&d.devices), None);
++    assert_eq!(mark(&body(&d)).text, "負荷 0.42 · 書き ?");
++    d.devices.clear();
++    assert_eq!(write_total(&d.devices), None);
++    assert_eq!(mark(&body(&d)).text, "負荷 0.42 · 書き ?");
++    let mut d = full(Vec::new());
++    d.devices = vec![device("nvme0", Reading::Known(3_456_789), None)];
++    assert_eq!(write_total(&d.devices), Some(3_456_789));
++    assert_eq!(mark(&body(&d)).text, "負荷 0.42 · 書き 3.4 MB/s");
++    d.load = Reading::Unknown;
++    let m = mark(&body(&d));
++    assert_eq!(
++        (m.class, m.text.as_str()),
++        ("hostb", "負荷 ? · 書き 3.4 MB/s")
++    );
++
++    for f in [
++        Fetched::NotRead,
++        Fetched::Failed,
++        Fetched::Body("{}".to_string()),
++        Fetched::Body("not json".to_string()),
++    ] {
++        let m = mark(&f);
++        assert_eq!(
++            (m.class, m.text.as_str()),
++            ("hostb u", "負荷 ? · 書き ?"),
++            "{f:?}"
++        );
++    }
++}
++
++/// 窓の段は負荷・詰まり・メモリ・書きの速さ・摩耗の順で、行は電文の値の字（scope は電文の順・装置は表の順・
++/// 摩耗は記録を持つ装置だけで読めない記録は「?」・記録の時刻は 20 時間を越えると月日を前に付ける）。
++#[test]
++fn hband_parts_lines() {
++    let ps = parts(&full(Vec::new()), SOON);
++    assert_eq!(ps.iter().map(|p| p.key).collect::<Vec<_>>(), PART_KEYS);
++    assert_eq!(
++        PART_KEYS,
++        ["hw_load", "hw_stall", "hw_memory", "hw_write", "hw_wear"]
++    );
++    assert!(ps.iter().all(|p| p.none.is_none()));
++    assert_eq!(
++        find(&ps, "hw_load").lines,
++        [
++            line("core 比", "0.42", false),
++            line("1 · 5 · 15 分", "13.44 · 12.10 · 9.80", false),
++            line("core", "32", false),
++        ]
++    );
++    assert_eq!(
++        find(&ps, "hw_stall").lines,
++        [
++            line("cpu some", "avg10 15.20% · avg60 13.10%", false),
++            line("memory full", "avg10 0.12% · avg60 0.07%", false),
++            line("io full", "avg10 1.20% · avg60 0.80%", false),
++        ]
++    );
++    assert_eq!(
++        find(&ps, "hw_memory").lines,
++        [
++            line("使っている", "41.5 / 64.0 GiB", false),
++            line("swap", "0.0 / 8.0 GiB", false),
++            line("seat.scope", "26.0 / 32.0 GiB · 81%", false),
++            line("run.scope", "3.0 / 16.0 GiB · 18%", false),
++        ]
++    );
++    assert_eq!(
++        find(&ps, "hw_write").lines,
++        [
++            line("nvme0", "72 MB/s", false),
++            line("nvme1", "1.5 MB/s", false),
++            line("sda", "0.0 MB/s", false),
++        ]
++    );
++    assert_eq!(
++        find(&ps, "hw_wear").lines,
++        [
++            line(
++                "nvme0",
++                "使った 6% · 書いた 512.3 TB · 予備 100% · 誤り 0 · 記録 18:00 JST",
++                false
++            ),
++            line("nvme1", "?", false),
++        ]
++    );
++    let later = parts(&full(Vec::new()), LATER);
++    assert_eq!(
++        find(&later, "hw_wear").lines[0].value,
++        "使った 6% · 書いた 512.3 TB · 予備 100% · 誤り 0 · 記録 10-05 18:00 JST"
++    );
++}
++
++/// 注意の色の行は電文の over の写し: Load は core 比の行・Memory は memory full の行・Io は io full の行だけで、
++/// 値が線を越えていても over に無ければ色を付けず、値が小さくても over に在れば付ける（面は値と線を比べない）。
++#[test]
++fn hband_warn_copies_over() {
++    let warned = |d: &HostDoc| -> Vec<String> {
++        parts(d, SOON)
++            .iter()
++            .flat_map(|p| p.lines.iter().filter(|l| l.warn).map(|l| l.name.clone()))
++            .collect()
++    };
++    assert!(warned(&full(Vec::new())).is_empty());
++    assert_eq!(warned(&full(vec![Gauge::Load])), ["core 比"]);
++    assert_eq!(warned(&full(vec![Gauge::Memory])), ["memory full"]);
++    assert_eq!(warned(&full(vec![Gauge::Io])), ["io full"]);
++    assert_eq!(
++        warned(&full(Gauge::ALL.to_vec())),
++        ["core 比", "memory full", "io full"]
++    );
++    let mut hot = full(Vec::new());
++    hot.load = Reading::Known(Load {
++        one: 9_000,
++        five: 0,
++        fifteen: 0,
++        cores: 1,
++    });
++    hot.pressure.io_full = stall(9_000, 9_000);
++    hot.pressure.memory_full = stall(9_000, 9_000);
++    assert!(warned(&hot).is_empty(), "over の無い電文に色");
++}
++
++/// 口が読めなければ全体が測れていない（まだ読んでいない・読めない・電文でないの 3 つの理由）。電文の欄が読めなければ
++/// その行だけ「?」・scope の列が読めなければ scope の 1 行が「?」・装置が 0 なら書きと摩耗の段は行の替わりの 1 行。
++#[test]
++fn hband_unread_and_unknown_fields() {
++    for (f, want) in [
++        (Fetched::NotRead, NOT_READ),
++        (Fetched::Failed, UNREAD),
++        (Fetched::Body("{}".to_string()), BAD_BODY),
++        (Fetched::Body(String::new()), BAD_BODY),
++    ] {
++        assert_eq!(content(&f, SOON), Body::Unmeasured(want), "{f:?}");
++    }
++    let Body::Filled(ps) = content(&body(&blank()), SOON) else {
++        panic!("読めた電文が中身でない");
++    };
++    for key in ["hw_load", "hw_stall"] {
++        let p = find(&ps, key);
++        assert_eq!(p.lines.len(), 3, "{key}");
++        assert!(p.lines.iter().all(|l| l.value == "?"), "{key}");
++    }
++    assert_eq!(
++        find(&ps, "hw_memory").lines,
++        [
++            line("使っている", "?", false),
++            line("swap", "?", false),
++            line(SCOPE_NAME, "?", false),
++        ]
++    );
++    for (key, none) in [("hw_write", NO_DEVICES), ("hw_wear", NO_WEAR)] {
++        let p = find(&ps, key);
++        assert!(p.lines.is_empty(), "{key}");
++        assert_eq!(p.none, Some(none), "{key}");
++    }
++    let mut no_wear = full(Vec::new());
++    for d in &mut no_wear.devices {
++        d.wear = None;
++    }
++    let ps = parts(&no_wear, SOON);
++    assert_eq!(find(&ps, "hw_wear").none, Some(NO_WEAR));
++    assert_eq!(find(&ps, "hw_write").none, None);
++    let mut empty_scopes = full(Vec::new());
++    empty_scopes.scopes = Reading::Known(Vec::new());
++    assert_eq!(parts(&empty_scopes, SOON)[2].lines.len(), 2);
++}
++
++/// 窓の名は 9 つ目に host を足し、URL の query に読み戻り、幅は 600 で、題の語は語彙の「host の負荷」と空でない注釈で、
++/// 段の見出しの語は全部が語彙に在り、帯のやる事の数には入らない。
++#[test]
++fn hband_window_named_host() {
++    assert_eq!(Win::ALL.len(), 9);
++    assert_eq!(Win::ALL.last(), Some(&Win::Host));
++    assert_eq!(Win::Host.key(), "host");
++    for m in Mode::ALL {
++        assert_eq!(
++            win_of_href(&win_href(Win::Host, m)),
++            Some((Win::Host, None))
++        );
++    }
++    assert_eq!((WIDTH, HOST_KEY), (600, "host_load"));
++    assert_eq!(frame_of(Win::Host), (600, HOST_KEY));
++    let term = vocab().term(HOST_KEY).expect("語彙の host_load");
++    assert_eq!(term.label, "host の負荷");
++    assert!(!term.note.is_empty(), "注釈が空");
++    for (key, want) in
++        PART_KEYS
++            .into_iter()
++            .zip(["負荷", "詰まり", "メモリ", "書きの速さ", "SSD の摩耗"])
++    {
++        assert_eq!(
++            vocab().term(key).map(|t| t.label.as_str()),
++            Some(want),
++            "{key}"
++        );
++    }
++    assert!(
++        TODOS.iter().all(|(_, _, w)| *w != Win::Host),
++        "やる事の数に host が在る"
++    );
++}
++
++/// 関数 `name` の本体（頭の行から、同じ字下げの閉じの行まで）。
++fn fn_body<'a>(src: &'a str, head: &str) -> &'a str {
++    let at = src.find(head).unwrap_or_else(|| panic!("{head} が無い"));
++    let indent = src[..at].rsplit('\n').next().map_or(0, str::len);
++    let close = format!("\n{}}}\n", " ".repeat(indent));
++    let end = src[at..]
++        .find(&close)
++        .map_or(src.len(), |e| at + e + close.len());
++    &src[at..end]
++}
++
++/// 帯と窓の DOM（wasm の枝・host で組めないので字で測る）: 帯は host の口を読み、host の印は席と口座の印の直後で抜けの
++/// 検査の印の前に 1 つだけ在り、押すと host の窓を開く。窓は host の窓の名で hostwin の本文を描き、本文は host の口を読む。
++#[test]
++fn hband_band_and_window_wiring() {
++    let bar = read("src/topbar.rs");
++    let dom = &bar[bar.find("mod dom {").expect("wasm の枝")..];
++    let view = fn_body(dom, "pub fn view(bar: Bar)");
++    assert!(view.contains("let host_doc = crate::net::read(hostwin::PATH);"));
++    assert!(
++        view.contains(
++            "let host_part = move || host_doc.with(|h| host_view(hostwin::mark(h), wins));"
++        )
++    );
++    let seat = view.find("{seat_part}").expect("席と口座の印");
++    let host = view.find("{host_part}").expect("host の印");
++    let gp = view.find("{gp}").expect("抜けの検査の印");
++    assert!(
++        seat < host && host < gp,
++        "host の印は席と口座と抜けの検査の間"
++    );
++    assert_eq!(view.matches("{host_part}").count(), 1);
++    let host_view = fn_body(dom, "fn host_view(m: HostMark, wins: WinCtx<Win>)");
++    assert!(host_view.contains("class=m.class aria-label=label(HOST_KEY) on:click=move |_| wins.open(Win::Host, false)>{m.text}</button>"));
++    assert_eq!(
++        dom.matches("Win::Host").count(),
++        1,
++        "帯の wasm の枝の host の窓の口"
++    );
++
++    let wins = read("src/wins.rs");
++    let draw = fn_body(&wins, "pub fn draw(win: Win, ctx: WinCtx<Win>)");
++    assert!(draw.contains("Win::Host => crate::hostwin::body(),"));
++    let host = read("src/hostwin.rs");
++    let body = fn_body(&host, "pub fn body() -> AnyView");
++    assert!(body.contains("crate::net::read(PATH)"));
++    assert!(body.contains("content(f, crate::net::now())"));
++    assert!(host.contains("pub use tsuzuri_contract::host::PATH;"));
++    assert!(read("src/lib.rs").contains("\npub mod hostwin;\n"));
++}
++
++/// 印と段の class は stylesheet（基と部品）に在り、印の注意の色は帯の規則の中に在る。
++#[test]
++fn hband_classes_in_stylesheet() {
++    let css = read("style.css") + &tsuzuri_surface::style::joined();
++    for rule in [
++        "#bar .hostb { height: 28px;",
++        "#bar .hostb.w {",
++        "#bar .hostb.u {",
++        ".hw {",
++        ".hw-p h4 {",
++        ".hw-l {",
++        ".hw-n {",
++        ".hw-v {",
++        ".hw-l.w {",
++    ] {
++        assert_eq!(css.matches(rule).count(), 1, "stylesheet の {rule}");
++    }
++    assert!(css.contains(".num {") && css.contains(".muted {"));
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+index 77a2e13703ea7002084a76574e422ebfbb922f65..e151b421e4de9ad0e10fdee4b88ae5740b9ba56a 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+@@ -8,14 +8,14 @@ use tsuzuri_surface::frame::{self, Mode, PageId};
+ use tsuzuri_surface::project::{ledger, pipeline};
+ use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
+ 
+-/// 窓の名は 8 つ（相談の窓 consult は行 cs-bar）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
++/// 窓の名は 9 つ（相談の窓 consult は行 cs-bar・9 つ目は host の窓）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
+ #[test]
+ fn bvnav_win_query_round_trip() {
+     let keys: Vec<&str> = Win::ALL.iter().map(|w| w.key()).collect();
+     assert_eq!(
+         keys,
+         [
+-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
++            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult", "host"
+         ]
+     );
+     assert_eq!(WIN_PARAM, "win");
+diff --git a/crates/tsuzuri-surface/tests/teeth5/cwbar.rs b/crates/tsuzuri-surface/tests/teeth5/cwbar.rs
+index e8cfa540e9f86662f2bcc48b833decc91ecac5b8..dba52733185d8f5f731f2892e93637a8da353769 100644
+--- a/crates/tsuzuri-surface/tests/teeth5/cwbar.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/cwbar.rs
+@@ -40,11 +40,11 @@ fn rid(s: &str) -> RequestId {
+     RequestId::parse(s).expect("頼みの id")
+ }
+ 
+-/// 窓の名は 8 つ目に consult を足し、URL の query に読み戻り、幅は 720 で、題の語は語彙の「相談」と空でない注釈。
++/// 窓の名は 8 つ目に consult を足し（9 つ目は host の窓）、URL の query に読み戻り、幅は 720 で、題の語は語彙の「相談」と空でない注釈。
+ #[test]
+ fn cwbar_window_named_consult() {
+-    assert_eq!(Win::ALL.len(), 8);
+-    assert_eq!(Win::ALL.last(), Some(&Win::Consult));
++    assert_eq!(Win::ALL.len(), 9);
++    assert_eq!(Win::ALL.get(7), Some(&Win::Consult));
+     assert_eq!(Win::Consult.key(), "consult");
+     for mode in Mode::ALL {
+         assert_eq!(
+diff --git a/crates/tsuzuri-surface/vocab/h-host-band.json b/crates/tsuzuri-surface/vocab/h-host-band.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..91303ac202d96772ff7d3a086bf86e6072dc3286
+--- /dev/null
++++ b/crates/tsuzuri-surface/vocab/h-host-band.json
+@@ -0,0 +1,35 @@
++{
++ "english": {},
++ "rephrase": {
++  "host_load": {
++   "label": "host の負荷",
++   "plain": "この host の負荷と SSD の書き\n・ 負荷 = 1 分の load ÷ core の数\n・ 書き = 装置の書きの速さの和\n・ 線を越えた測りが在れば注意の色\n→ 押すと host の負荷の窓",
++   "internal": "GET /api/host の電文 HostDoc（色は電文の over・線は規則の行 R-42）"
++  },
++  "hw_load": {
++   "label": "負荷",
++   "plain": "1 分の load を core の数で割った値\n・ 1.00 を越えると注意の色",
++   "internal": "/proc/loadavg と cpu の online（HostDoc の load）"
++  },
++  "hw_stall": {
++   "label": "詰まり",
++   "plain": "資源を待って止まった時間の割合\n・ io と memory の full の avg60 が線を越えると注意の色",
++   "internal": "PSI（/proc/pressure の cpu・memory・io）"
++  },
++  "hw_memory": {
++   "label": "メモリ",
++   "plain": "使っている量と全体\n・ 下は上限を持つ scope（埋まりの多い順）",
++   "internal": "/proc/meminfo と cgroup の memory.current・memory.max"
++  },
++  "hw_write": {
++   "label": "書きの速さ",
++   "plain": "装置ごとの今の書きの速さ\n・ 装置は host の面の書きの測りの表の順",
++   "internal": "装置の stat の書いた区の数の差（host.toml の [[write-budget]]）"
++  },
++  "hw_wear": {
++   "label": "SSD の摩耗",
++   "plain": "使った割合・書いた量・予備・誤りと記録の時刻\n・ 記録は 1 日 1 度 root が書く",
++   "internal": "smartctl の JSON（host.toml の [[write-budget]] の wear）"
++  }
++ }
++}
