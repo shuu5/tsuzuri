@@ -1,6 +1,7 @@
 //! 起動の口の argv と設定の歯（接頭辞 cwarg_・設計ノート surface-wave27a 行 cs-argv・受入 AC19 の argv と設定）。
 //! fixture: tests/fixtures/consult/launch-argv.yaml（JSON の字・置き字 /W /R /S /T と uid の U・host の path を書かない）。
 //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
+//! 話す窓の撃ち直しの続きの旗が最初の指示に替わり、旗の数と値の違いを検めが断ることを見る（行 cs-trust）。
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
@@ -56,6 +57,7 @@ fn launch(inputs: &Value) -> Launch {
         model: s("model"),
         effort: s("effort"),
         question: inputs["question"].as_bool().expect("question"),
+        resume: inputs["resume"].as_str().map(String::from),
     }
 }
 
@@ -720,6 +722,57 @@ fn cwarg_brief_text() {
         "open", "launch", "show", "dispose", "close", "watch", "list", "guard",
     ] {
         assert!(!text.contains(&format!("consult {verb}")), "{verb}");
+    }
+}
+
+/// 続ける会話の id の見本（uuid の形）。
+const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
+
+/// 話す窓の材料に会話の id を置くと、argv は fixture の話す窓の argv の最後の最初の指示を `--resume <id>` に替えた列で、
+/// 検めの欠けは 0。問う窓の材料に会話の id を置いても argv は替わらず、検めは欠けの名 --resume の 1 つだけで断る（行 cs-trust）。
+#[test]
+fn cwarg_resume_replaces_the_prompt() {
+    let fx = fixture();
+    let mut l = launch(&fx["talk"]["inputs"]);
+    l.resume = Some(SID.to_string());
+    let a = argv(&l);
+    assert!(audit(&a, &l).is_empty(), "{:?}", audit(&a, &l));
+    let (rest, _) = split_settings(a);
+    let mut want: Vec<String> = serde_json::from_value(fx["talk"]["argv"].clone()).expect("argv");
+    want.pop();
+    want.extend(["--resume".to_string(), SID.to_string()]);
+    assert_eq!(rest, want);
+    let mut ask = launch(&fx["ask"]["inputs"]);
+    let plain = argv(&ask);
+    ask.resume = Some(SID.to_string());
+    assert_eq!(argv(&ask), plain);
+    assert_eq!(audit(&plain, &ask), ["--resume"]);
+}
+
+/// 検めは、材料の会話の id が uuid の形でない・材料に id が在るのに旗が無い・材料に id が無いのに旗が在る・
+/// 旗の値が材料と違う・旗が 2 度ある、のどれも欠けの名 --resume の 1 つだけで断る（行 cs-trust）。
+#[test]
+fn cwarg_audit_refuses_bad_resume() {
+    let fx = fixture();
+    let mut l = launch(&fx["talk"]["inputs"]);
+    l.resume = Some(SID.to_string());
+    let good = argv(&l);
+    let mut bad = l.clone();
+    bad.resume = Some("bf1f3252-2ac9-42ce-bfb7".to_string());
+    let mut none = l.clone();
+    none.resume = None;
+    let mut other = good.clone();
+    *other.last_mut().expect("値") = "772c5b4c-0000-4000-8000-00000000abcd".to_string();
+    let twice = [good.clone(), vec!["--resume".to_string(), SID.to_string()]].concat();
+    let cases = [
+        (argv(&bad), &bad, "uuid の形でない id"),
+        (good[..good.len() - 2].to_vec(), &l, "旗が無い"),
+        (good.clone(), &none, "材料に id が無い"),
+        (other, &l, "値が材料と違う"),
+        (twice, &l, "旗が 2 度"),
+    ];
+    for (a, m, name) in cases {
+        assert_eq!(audit(&a, m), ["--resume"], "{name}");
     }
 }
 

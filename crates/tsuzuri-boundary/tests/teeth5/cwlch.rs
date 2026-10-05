@@ -202,6 +202,7 @@ impl Fx {
             model: "fable".to_string(),
             effort: "xhigh".to_string(),
             question,
+            resume: None,
         }
     }
 

@@ -1,4 +1,5 @@
 //! 起動の口の argv と設定と検め（設計ノート surface-wave27a 行 cs-argv・判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
+//! 話す窓の撃ち直しは材料の会話の id を続きの旗 `--resume` で渡して最初の指示を置かず、検めは旗の数と値（材料と同じ uuid の形）を照らす（行 cs-trust）。
 //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
 //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
 //! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
@@ -136,6 +137,8 @@ pub struct Launch {
     pub effort: String,
     /// 束に問い（question.md）が在るか（話す窓の最初の指示が読む）。
     pub question: bool,
+    /// 話す窓の撃ち直しで続ける会話の id（uuid の形・在れば最初の指示の代わりに続きの旗で渡す・判断の記録 ADR-55）。
+    pub resume: Option<String>,
 }
 
 /// 読む根の 3 つ（repo・state dir の fleet・pipe）。
@@ -311,7 +314,10 @@ pub fn argv(l: &Launch) -> Vec<String> {
     ]);
     match l.form {
         Form::Ask => a.extend(["--output-format".to_string(), "json".to_string()]),
-        Form::Talk => a.push(prompt(l)),
+        Form::Talk => match &l.resume {
+            Some(id) => a.extend(["--resume".to_string(), id.clone()]),
+            None => a.push(prompt(l)),
+        },
     }
     a
 }
@@ -536,10 +542,28 @@ fn audit_reads(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
     }
 }
 
+/// 続きの旗（話す窓の材料に会話の id が在る時だけ、材料と同じ uuid の形の値で 1 度だけ・ほかは置かない）。
+fn audit_resume(argv: &[String], l: &Launch, gaps: &mut Vec<String>) {
+    let count = argv.iter().filter(|a| *a == "--resume").count();
+    let ok = match l.resume.as_deref() {
+        Some(id) => {
+            l.form == Form::Talk
+                && super::stamp::is_uuid(id)
+                && count == 1
+                && after(argv, "--resume") == Some(id)
+        }
+        None => count == 0,
+    };
+    if !ok {
+        gaps.push("--resume".to_string());
+    }
+}
+
 /// 組んだ argv を検める（欠けと広い許しの名の列・空なら起こしてよい）。
 pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
     let mut gaps = Vec::new();
     audit_flags(argv, l, &mut gaps);
+    audit_resume(argv, l, &mut gaps);
     match after(argv, "--settings").map(serde_json::from_str::<Value>) {
         Some(Ok(set)) => {
             audit_sandbox(&set, l, &mut gaps);

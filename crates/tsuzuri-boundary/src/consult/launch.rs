@@ -101,6 +101,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
         model: w.model.clone(),
         effort: w.effort.clone(),
         question: ws.join("bundle/question.md").is_file(),
+        resume: None,
     })
 }
 
