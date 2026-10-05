@@ -9,6 +9,7 @@
 //! 歯（`mutant_e2e_*`）だけを残す。
 //!
 //! 族ごとの子 module も置く（設計 docs/design/carry-prep.md §9 行 i・`s2-07l.681`）: `tick`（接頭辞 `seat_tick_`）。
+//! 行ごとの子 module: `empty_scope`（接頭辞 `vscpe_`・管理 tick の周の空の scope の片付け・契約表の行 v-scope-empty）。
 //! tmux の群の歯・動詞の数を固定する歯・isolated seat の fixture はこの file に残す。
 //!
 //! tmux は **独立 socket**（`-S <tmp>/sock -f /dev/null`）の server だけを撃ち、開発席の
@@ -18,6 +19,7 @@
 // flip-check: moved s2-07l.361
 
 mod account;
+mod empty_scope;
 mod launch;
 mod register;
 mod ruling;
@@ -1192,6 +1194,8 @@ const TICK_STUCK: &str = "tmux-stuck";
 const TICK_REFUSE: &str = "tmux-refuse-send";
 /// 偽 client の呼出の記録。
 const TICK_CLIENT: &str = "client-calls";
+/// 偽 systemctl の呼出の記録（管理 tick の周の空の scope の片付けが撃つ・host の systemd に届かせない）。
+const TICK_SCOPE_CALLS: &str = "scope-calls";
 /// 空の入力欄の pane。
 const TICK_CLEAR_PANE: &str = "old output\n\u{276f} ";
 
@@ -1246,7 +1250,8 @@ fn tick_place_at(anchor: Option<&str>) -> TickPlace {
 /// 偽 tmux と偽 client を `<dir>/bin` に置き、PATH の字面を返す。偽 tmux は呼出を 1 行残し、`list-panes` は前面の語 `claude`
 /// （席が立っている窓・pane は触らない）を、`capture-pane` は pane の file を返し（file が無ければ rc 1）、`send-keys … -l <text>`
 /// は text を入力欄へ足し、`send-keys … Enter` は入力欄を送って新しい prompt を描く（[`TICK_STUCK`] が在れば何もしない・
-/// [`TICK_REFUSE`] が在れば `send-keys` は rc 1）。
+/// [`TICK_REFUSE`] が在れば `send-keys` は rc 1）。偽 systemctl は呼出を [`TICK_SCOPE_CALLS`] に 1 行残し、何も出さずに rc 0
+/// （scope の一覧は 0 行）。
 fn tick_shims(dir: &Path) -> String {
     let bin = dir.join("bin");
     fs::create_dir_all(&bin).ok();
@@ -1265,7 +1270,8 @@ fn tick_shims(dir: &Path) -> String {
         stuck = at(TICK_STUCK),
     );
     let client = format!("#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >> '{}'\n", at(TICK_CLIENT));
-    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client)] {
+    let scope = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", at(TICK_SCOPE_CALLS));
+    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client), ("systemctl", scope)] {
         let path = bin.join(name);
         fs::write(&path, body).ok();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).ok();
@@ -1645,7 +1651,8 @@ fn move_place(root: &Path, name: &str, anchor: &str) -> MovePlace {
 
 /// 移動の歯の偽 tmux を `<tools>/bin` に置き、PATH の字面を返す。呼出を 1 行残し、`list-panes` は前面の file（無ければ
 /// `claude`）・`display-message` は pid の file（無ければ空）・`list-windows` は窓 `tk`・`has-session` は在る・`capture-pane` は pane の file を返し、`send-keys … -l <text>` は
-/// text を pane へ足し、`send-keys … Enter` は新しい prompt を描く。偽 client（`curl` / `claude`）も置く。
+/// text を pane へ足し、`send-keys … Enter` は新しい prompt を描く。偽 client（`curl` / `claude`）と、[`tick_shims`] と同じ偽
+/// systemctl も置く。
 fn move_shims(tools: &Path) -> String {
     let bin = tools.join("bin");
     fs::create_dir_all(&bin).ok();
@@ -1670,7 +1677,8 @@ fn move_shims(tools: &Path) -> String {
         pane = at(TICK_PANE),
     );
     let client = format!("#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >> '{}'\n", at(TICK_CLIENT));
-    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client)] {
+    let scope = format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", at(TICK_SCOPE_CALLS));
+    for (name, body) in [("tmux", tmux), ("curl", client.clone()), ("claude", client), ("systemctl", scope)] {
         let path = bin.join(name);
         fs::write(&path, body).ok();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).ok();

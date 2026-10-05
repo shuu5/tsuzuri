@@ -46,6 +46,9 @@
 //!
 //! 移動の周の `/exit` は猶予（`seat.move_grace_s`・起点は席に合図を書いた時刻）を越えてから送り、合図の記録が無ければ先に退避の
 //! 合図の 1 行を 1 度だけ送る（設計 §13 / §14・契約表の行 q / 行 r・ADR-0071 / ADR-0073＝席の裏の subagent を `/exit` で落とさない）。
+//!
+//! 登録 row の在る席の周は、書き込みの測りの後に作り手の死んだ空の器の scope を止める（[`crate::pipe::confine::empty`]・判断の
+//! 記録 ADR-45 の門 H6）。返りは捨てる（判定行・rc・event log を替えない）。
 
 pub mod beat;
 pub mod install;
@@ -501,6 +504,10 @@ pub fn run(flags: &Flags, manifest: Result<Manifest, Vec<RuleError>>) -> Outcome
             full_rewrite(&state.path, flags, (manifest, events));
             // 書き込みの測り（host の面の表の行ごとに host の根の記録を進める・返りは捨てる＝rc と字は変えない・write-budget.md §2）。
             let _ = crate::fleet::write_budget::sample(&state.path, flags.target, manifest, events);
+            // 作り手の死んだ空の器の scope を止める（登録 row の在る席の周だけ・返りは捨てる＝rc と字は変えない・ADR-45 の門 H6）。
+            if super::role::registration_of_target(&crate::fleet::replay(events), flags.target).is_some() {
+                let _ = crate::pipe::confine::empty::stop_empty_scopes();
+            }
         }
     }
     let rc = if matches!(verdict.decision, TickDecision::Error(_)) { RC_REFUSED } else { RC_OK };

@@ -36,6 +36,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 mod cpu;
+pub mod empty;
 pub mod io;
 pub use cpu::seat_quota;
 
