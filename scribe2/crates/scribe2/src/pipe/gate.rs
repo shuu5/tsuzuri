@@ -6,7 +6,8 @@
 //! INCONCLUSIVE にも数えない＝record の rc 2 のまま・設計 gate-cost.md §44 形 (7)）／ lens に渡す本文の byte が cap 超
 //! → INCONCLUSIVE（lens を呼ばない）／ lens 側の不備 → INCONCLUSIVE（出力の**形が読めなかった**
 //! 周だけ同じ gate の中で 1 回撃ち直し、2 回目の戻りで読む・設計 gate-cost.md §29）／ それ以外は
-//! lens の verdict。lens に渡す本文は閉じた型 [`LensInput`]（diff か、純移動の要約・
+//! lens の verdict（PASS を返して契約適合・歯の非空虚・憲法のどれかを数えた周は FAIL・tsuzuri の判断の記録 ADR-63 の
+//! 決定 (6)）。lens に渡す本文は閉じた型 [`LensInput`]（diff か、純移動の要約・
 //! [`super::move_proof`]・`s2-07l.266`）で、判定は純関数・file の読みだけをここが担う。
 //!
 //! **偽の PASS を作らない**（AC3）。判定に届かなかった周はすべて INCONCLUSIVE へ倒す
@@ -35,6 +36,7 @@ mod lens;
 mod record;
 mod verify;
 
+pub(crate) use findings::delete_count;
 pub(crate) use lens::{last_json_object, lens_usage};
 pub use record::{
     detection_copies, next_number, records_of, skip_record, step_record, DetectionCopy, Record, Skipped,
@@ -432,6 +434,10 @@ struct Decision {
     tree: Option<String>,
     /// lens の findings の集計（`s2-07l.188`・読めた周だけ `Some`＝field `findings` / `population`）。
     tally: Option<Tally>,
+    /// 理由の型（判定と数の食い違いを FAIL に読んだ周だけ `Some`＝field `kind`・tsuzuri の判断の記録 ADR-63 の決定 (6)）。
+    kind: Option<&'static str>,
+    /// lens が 0 でない観点ごとに書いた場所の列（写せた周だけ `Some`＝field `at`・決定 (7)）。
+    at: Option<String>,
     /// lens の scope を片付けた結果（record に書く周だけ `Some`＝field `scope`・設計 gate-cost.md §4.4 errata）。
     scope: Option<Released>,
     /// lens を起こした口座（器が選んだ周だけ `Some`＝`Gated` の detail の `account:<label>`・設計
@@ -497,6 +503,8 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
         diff_bytes: byte_count(&measured.diff),
         tree,
         tally: decided.judged.tally,
+        kind: decided.judged.kind,
+        at: decided.judged.at,
         scope: decided.scope,
         account: decided.account,
         rules,
@@ -679,7 +687,7 @@ fn machine_order(measured: &Measured) -> Option<Judged> {
     if measured.red > 0 {
         // 赤い周は lens を呼ばない＝findings は測っていない（`tally` は `None`・C10）。
         let evidence = format!("verify の {} 行が rc≠0", measured.red);
-        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None, provenance: None });
+        return Some(Judged { verdict: Verdict::Fail, ..unjudged(evidence) });
     }
     None
 }
@@ -803,6 +811,13 @@ fn settle(entry: &Gate<'_>, decision: &Decision) -> Result<(), String> {
     if let Some(tally) = &decision.tally {
         fields.push(("findings", Value::Str(tally.findings_field())));
         fields.push(("population", Value::Str(tally.population_field())));
+    }
+    // 理由の型と場所の列は在る周だけ足す（schema は 1 のまま・読み手は未知の field を無視する・tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
+    if let Some(kind) = decision.kind {
+        fields.push(("kind", Value::Str(kind.to_owned())));
+    }
+    if let Some(at) = &decision.at {
+        fields.push(("at", Value::Str(at.clone())));
     }
     // 許可で数えた周だけ使用を残す（schema は 1 のまま・許可の無い周の key の列は不変・設計 limit-permit.md §20 約束 3）。
     if let Some(permit) = &decision.permit {

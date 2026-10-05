@@ -9,12 +9,16 @@
 //! 質問の逐語と about（既存の読み手 [`crate::pipe::question_of_run`]）／`Failed` = event log の `RunStage(Failed)` の
 //! detail と ts。どの形にも当たらない終端（file が無い・evidence や detail が空・log を読めない）は写さず、閉じた
 //! 理由 1 つで断る（fail-closed）。
+//!
+//! 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）: `Gated` か `Landed` の便の `verdict.json` が PASS で findings の delete を
+//! 1 以上と数えた周は、その evidence と at を写し、題の頭を [`QUALITY_HEAD`] にする（質の memo・日次の物差しがこの字で数える）。
+//! delete が 0・数えを読めない PASS と、`verdict.json` の無い・読めない `Landed` は今までどおり終端でない。
 
 use super::form::MEMO_LABEL;
 use crate::cli_outcome::{Outcome, RC_REFUSED};
-use crate::fleet::json_lite;
+use crate::fleet::json_lite::{self, Value};
 use crate::fleet::{replay, store, Event, EventKind, Stage};
-use crate::pipe::gate::Verdict;
+use crate::pipe::gate::{delete_count, Verdict};
 use crate::pipe::review::review_path;
 use crate::pipe::{question_of_run, run_dir, verdict_path};
 use std::path::Path;
@@ -28,6 +32,9 @@ pub const USER_SOURCE: &str = "user 逐語は本 bead の notes";
 /// 値の無い欄の字面（空に潰さない・C10）。
 const ABSENT: &str = "-";
 
+/// 質の memo の題の頭（`[memo] ` の後・型は delete）。
+const QUALITY_HEAD: &str = "質 delete — ";
+
 /// `ledger` の使い方（1 枚）。
 pub fn usage() -> String {
     "usage: ledger memo <--run ID --state-dir S|--from user> --parent EPIC [--relates ID]...".to_owned()
@@ -40,7 +47,7 @@ pub enum Refusal {
     NoRunDir,
     /// event log を読めない。
     LogUnreadable,
-    /// 終端でない（段が終端の 4 形の外・verdict が PASS・log に便が無い〔`None`〕）。
+    /// 終端でない（段が終端の 4 形の外・delete を数えない verdict が PASS・log に便が無い〔`None`〕）。
     NotTerminal(Option<Stage>),
     /// 終端だが原本が無い（file が無い・壊れている・evidence / 質問 / detail が空）。
     NoMaterial(Stage),
@@ -80,6 +87,15 @@ pub enum Material {
         /// 契約のどの key か（無ければ `None`）。
         about: Option<String>,
     },
+    /// gate の PASS のうち findings の delete を 1 以上と数えた判定（`verdict.json`・質の原本）。
+    Quality {
+        /// findings の delete の件数（1 以上）。
+        delete: u64,
+        /// file の `evidence`（空でない）。
+        evidence: String,
+        /// file の `at`（無ければ `None`）。
+        at: Option<String>,
+    },
     /// `RunStage(Failed)` の detail と ts。
     Failed {
         /// 閉じた理由の字面（空でない）。
@@ -101,11 +117,12 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    /// 出所の `kind`（Gated / Reviewed は verdict〔と審査の理由の型〕・Questioned は `question`・Failed は `failed`）。
+    /// 出所の `kind`（Gated / Reviewed は verdict〔と理由の型〕・質は `PASS delete:<n>`・Questioned は `question`・Failed は `failed`）。
     pub fn kind(&self) -> String {
         match &self.material {
             Material::Judged { verdict, finding: Some(found), .. } => format!("{} {found}", verdict.as_str()),
             Material::Judged { verdict, finding: None, .. } => verdict.as_str().to_owned(),
+            Material::Quality { delete, .. } => format!("{} delete:{delete}", Verdict::Pass.as_str()),
             Material::Question { .. } => "question".to_owned(),
             Material::Failed { .. } => "failed".to_owned(),
         }
@@ -121,6 +138,10 @@ pub fn terminal_of(state_dir: &Path, run: &str) -> Result<Terminal, Refusal> {
     let stage = replay(&events).runs.get(run).map(|found| found.stage).ok_or(Refusal::NotTerminal(None))?;
     let material = match stage {
         Stage::Gated => judged(&verdict_path(state_dir, run), stage)?,
+        Stage::Landed => {
+            let pairs = pairs_of(&verdict_path(state_dir, run)).ok_or(Refusal::NotTerminal(Some(stage)))?;
+            quality(&pairs, stage)?
+        }
         Stage::Reviewed => judged(&review_path(state_dir, run), stage)?,
         Stage::Questioned => question_of_run(state_dir, run)
             .filter(|found| !found.question.trim().is_empty())
@@ -132,25 +153,43 @@ pub fn terminal_of(state_dir: &Path, run: &str) -> Result<Terminal, Refusal> {
         | Stage::Spawned
         | Stage::RateLimited
         | Stage::Implemented
-        | Stage::Landed
         | Stage::Stopped => return Err(Refusal::NotTerminal(Some(stage))),
     };
     Ok(Terminal { run: run.to_owned(), stage, material })
 }
 
-/// `verdict.json` / `review.json` から FAIL・INCONCLUSIVE の原本を読む。PASS は終端でない。
+/// `verdict.json` / `review.json` の object（file が無い・壊れている周は `None`）。
+fn pairs_of(path: &Path) -> Option<Vec<(String, Value)>> {
+    let text = std::fs::read_to_string(path).ok()?;
+    json_lite::parse_object(text.trim()).ok()
+}
+
+/// object の字の値（無い・字でない key は `None`）。
+fn field(pairs: &[(String, Value)], key: &str) -> Option<String> {
+    pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str()).map(str::to_owned)
+}
+
+/// `verdict.json` / `review.json` から FAIL・INCONCLUSIVE の原本を読む。PASS は [`quality`] が読む。
 fn judged(path: &Path, stage: Stage) -> Result<Material, Refusal> {
-    let text = std::fs::read_to_string(path).map_err(|_| Refusal::NoMaterial(stage))?;
-    let pairs = json_lite::parse_object(text.trim()).map_err(|_| Refusal::NoMaterial(stage))?;
-    let get = |key: &str| {
-        pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str()).map(str::to_owned)
-    };
+    let pairs = pairs_of(path).ok_or(Refusal::NoMaterial(stage))?;
+    let get = |key: &str| field(&pairs, key);
     let verdict = get("verdict").as_deref().and_then(Verdict::parse).ok_or(Refusal::NoMaterial(stage))?;
     if verdict == Verdict::Pass {
-        return Err(Refusal::NotTerminal(Some(stage)));
+        return quality(&pairs, stage);
     }
     let evidence = get("evidence").filter(|found| !found.trim().is_empty()).ok_or(Refusal::NoMaterial(stage))?;
     Ok(Material::Judged { verdict, finding: get("kind"), evidence, at: get("at") })
+}
+
+/// PASS の判定のうち findings の delete を 1 以上と数えた周の質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）。PASS でない・
+/// 数えを読めない（`review.json` は findings を持たない）・delete が 0 の周は終端でない。evidence が空の周は原本が無い。
+fn quality(pairs: &[(String, Value)], stage: Stage) -> Result<Material, Refusal> {
+    let get = |key: &str| field(pairs, key);
+    let passed = get("verdict").as_deref().and_then(Verdict::parse) == Some(Verdict::Pass);
+    let counted = passed.then(|| delete_count(&get("findings")?, &get("population")?)).flatten();
+    let delete = counted.filter(|count| *count > 0).ok_or(Refusal::NotTerminal(Some(stage)))?;
+    let evidence = get("evidence").filter(|found| !found.trim().is_empty()).ok_or(Refusal::NoMaterial(stage))?;
+    Ok(Material::Quality { delete, evidence, at: get("at") })
 }
 
 /// 便の最後の `RunStage(Failed)` の detail と ts（detail が空なら `None`）。
@@ -184,10 +223,13 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// title（`[memo]` の接頭辞・行 d の門が読む印）。
+    /// title（`[memo]` の接頭辞・行 d の門が読む印・質の原本は続けて [`QUALITY_HEAD`]）。
     fn title(&self) -> String {
         match &self.origin {
-            Origin::Run(found) => format!("[memo] {} {} {}", found.run, found.stage.as_str(), found.kind()),
+            Origin::Run(found) => {
+                let head = if matches!(found.material, Material::Quality { .. }) { QUALITY_HEAD } else { "" };
+                format!("[memo] {head}{} {} {}", found.run, found.stage.as_str(), found.kind())
+            }
             Origin::User(date) => format!("[memo] user {date}"),
         }
     }
@@ -231,7 +273,7 @@ impl Plan {
 /// 観測の節（終端の種類ごとの原本の逐語）。
 fn observation(material: &Material) -> Vec<String> {
     match material {
-        Material::Judged { evidence, at, .. } => {
+        Material::Judged { evidence, at, .. } | Material::Quality { evidence, at, .. } => {
             vec![format!("- evidence: {evidence}"), format!("- at: {}", at.as_deref().unwrap_or(ABSENT))]
         }
         Material::Question { question, about } => {

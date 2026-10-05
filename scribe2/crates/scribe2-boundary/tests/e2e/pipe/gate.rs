@@ -770,7 +770,8 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
     let (repo, state) = repo_with_state();
     let path = write_contract(&repo, &[], &[]);
     let id = implemented(&repo, &state, &path);
-    let shuffled = "shrink:5,constitution:2,contract-fit:1,yagni:4,stdlib:3,delete:0,native:0,teeth-nonvacuous:0";
+    // 3 観点（contract-fit・teeth-nonvacuous・constitution）は 0 にする（数えた PASS は FAIL に読む・歯 vgfind_）。
+    let shuffled = "shrink:5,constitution:0,contract-fit:0,yagni:4,stdlib:3,delete:2,native:1,teeth-nonvacuous:0";
     let body = findings_body(&format!(",\"findings\":\"{shuffled}\",\"population\":\"files:7,lines:42\""));
     // lens の **stdout** の record を歯が読めるように写してから、同じ 1 行を gate へ流す。
     let record = state.join("lens-stdout.json");
@@ -787,7 +788,7 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
     let pairs = verdict_pairs(&state, &id);
     assert_eq!(
         value_of(&pairs, "findings"),
-        "contract-fit:1,teeth-nonvacuous:0,constitution:2,delete:0,stdlib:3,native:0,yagni:4,shrink:5",
+        "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:3,native:1,yagni:4,shrink:5",
         "8 category を宣言順で（0 件も 0 と）書く: {pairs:?}"
     );
     assert_eq!(value_of(&pairs, "population"), "files:7,lines:42", "母集団も同じ record に載る");
@@ -823,6 +824,72 @@ fn pipe_gate_findings_zero_population_is_inconclusive() {
     // **弁別**: 母集団が 1 以上なら同じ便が PASS で通る。
     let ok = gate_once(&repo, &state, &id, Some(&fake_lens(&marker, &lens_verdict("PASS"))));
     assert_eq!(ok.status.code(), Some(i32::from(RC_OK)), "母集団が 0 でなければ通る: {}", stderr_of(&ok));
+    clean(&[&repo, &state]);
+}
+
+// ── 判定と数の食い違いと場所の列（接頭辞 `vgfind_`・tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）──────────
+
+/// 偽 lens の判定の行（PASS・`findings` と `at` を指定・母集団は 0 でない）。
+fn vgfind_body(findings: &str, at: &str) -> String {
+    format!("{{\"verdict\":\"PASS\",\"evidence\":\"lens-saw-k8\",\"findings\":\"{findings}\",\"population\":\"files:1,lines:4\",\"at\":\"{at}\"}}")
+}
+
+/// 便の `ledger memo --run` の plan の title（`arg: --title=` の行の値・rc 0 を要る）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn vgfind_memo_title(state: &Path, id: &str) -> String {
+    let out = bin_cmd()
+        .args(["ledger", "memo", "--run", id, "--state-dir"])
+        .arg(state)
+        .args(["--parent", "s2-epic"])
+        .output()
+        .expect("binary を起動できる");
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "memo の plan は rc 0: {}", stderr_of(&out));
+    stdout_of(&out).lines().find_map(|line| line.strip_prefix("arg: --title=")).unwrap_or_default().to_owned()
+}
+
+/// lens が PASS を返して constitution を 2 と数えた便を、gate は FAIL（rc 1・stdout の verdict=FAIL）に読み、`verdict.json` は理由の型
+/// `verdict-count-mismatch` と、3 観点の数と lens の evidence を写した evidence と、数えた findings と場所の列 at を持ち（key は
+/// findings・population・kind・at・ts の順）、`Gated` の detail は verdict:FAIL で、memo の口の plan の題は理由の型を持つ。
+#[test]
+fn vgfind_gate_reads_a_pass_with_fit_counts_as_a_fail() {
+    let (repo, state) = repo_with_state();
+    let path = write_contract(&repo, &[], &[]);
+    let id = implemented(&repo, &state, &path);
+    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:2,delete:1,stdlib:0,native:0,yagni:0,shrink:0";
+    let at = "constitution:src/lib.rs:3,delete:src/lib.rs:9";
+    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "食い違いは FAIL の rc 1: {}", stdout_of(&out));
+    assert!(stdout_of(&out).contains("verdict=FAIL"), "{}", stdout_of(&out));
+    let pairs = verdict_pairs(&state, &id);
+    let want = "verdict-count-mismatch・PASS を返したが contract-fit:0,teeth-nonvacuous:0,constitution:2 を数えた・lens の evidence は lens-saw-k8";
+    assert_eq!((value_of(&pairs, "verdict"), value_of(&pairs, "evidence")), ("FAIL".to_owned(), want.to_owned()), "{pairs:?}");
+    assert_eq!((value_of(&pairs, "kind"), value_of(&pairs, "findings"), value_of(&pairs, "at")), ("verdict-count-mismatch".to_owned(), findings.to_owned(), at.to_owned()));
+    let keys: Vec<&str> = pairs.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(keys.get(keys.len().saturating_sub(5)..), Some(&["findings", "population", "kind", "at", "ts"][..]), "{keys:?}");
+    assert_eq!(gated_details(&state, &id), vec![format!("verdict:FAIL,rules:{}", rules_source(&repo, None))], "Gated の detail");
+    assert_eq!(vgfind_memo_title(&state, &id), format!("[memo] {id} Gated FAIL verdict-count-mismatch"), "memo の口の題");
+    clean(&[&repo, &state]);
+}
+
+/// 対: 3 観点を 0 と数えて delete を 2 と数えた PASS の便は PASS（rc 0）のまま kind を書かず、at を写し、memo の口の plan の題は
+/// 質の頭 `質 delete — ` と `PASS delete:2` を持つ。
+#[test]
+fn vgfind_gate_keeps_a_pass_with_quality_counts_and_copies_the_at() {
+    let (repo, state) = repo_with_state();
+    let path = write_contract(&repo, &[], &[]);
+    let id = implemented(&repo, &state, &path);
+    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:0,native:0,yagni:0,shrink:1";
+    let at = "delete:src/lib.rs:9;src/lib.rs:12,shrink:src/lib.rs:20";
+    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "質の観点だけの PASS は通る: {}", stderr_of(&out));
+    let pairs = verdict_pairs(&state, &id);
+    assert_eq!((value_of(&pairs, "verdict"), value_of(&pairs, "evidence")), ("PASS".to_owned(), "lens-saw-k8".to_owned()), "{pairs:?}");
+    assert_eq!((value_of(&pairs, "kind"), value_of(&pairs, "at")), (String::new(), at.to_owned()), "kind を書かず at を写す: {pairs:?}");
+    assert!(!pairs.iter().any(|(key, _)| key == "kind"), "kind の key を書かない: {pairs:?}");
+    assert_eq!(vgfind_memo_title(&state, &id), format!("[memo] 質 delete — {id} Gated PASS delete:2"), "memo の口の題");
     clean(&[&repo, &state]);
 }
 

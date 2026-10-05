@@ -2,7 +2,7 @@
 //! [`fold_renamed_paths`]・削除の run の畳み [`prune_deletions`]・`--lens` の cmd の穴埋め・起動・stdout の JSON 1 行の読み・`verdict.json` の書き・
 //! [`super`] から純移動・`s2-07l.286`）。判定の順と終端は親（[`super::gate`]）が持つ。
 
-use super::findings::{Tally, Unread};
+use super::findings::{Tally, Unread, MISMATCH_KIND};
 use super::{Verdict, JSON_HEAD};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::Usage;
@@ -430,6 +430,10 @@ pub(super) struct Judged {
     pub(super) evidence: String,
     /// findings の集計（読めた周だけ）。
     pub(super) tally: Option<Tally>,
+    /// 理由の型（判定と数の食い違いを FAIL に読んだ周だけ [`MISMATCH_KIND`]・`verdict.json` の `kind`）。
+    pub(super) kind: Option<&'static str>,
+    /// lens が 0 でない観点ごとに書いた場所の列（集計を読めた周で、空でない字の時だけ・`verdict.json` の `at`）。
+    pub(super) at: Option<String>,
     /// lens の**出力は在るが形が読めなかった**か（設計 gate-cost.md §29・`s2-07l.495`）。
     ///
     /// 立てるのは [`parse_lens`] の `Err` の分岐だけ——JSON でない・`verdict` が 3 値でない・key が
@@ -447,7 +451,7 @@ pub(super) struct Judged {
 
 /// 判定に届かなかった周の戻り（集計は無い・撃ち直しの印は伏せた側）。
 pub(super) fn unjudged(evidence: String) -> Judged {
-    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None, provenance: None }
+    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, kind: None, at: None, reread: false, usage: None, provenance: None }
 }
 
 /// 出力の形が読めなかった周の戻り（[`unjudged`] に撃ち直しの印を立てた形・[`parse_lens`] 専用）。
@@ -576,7 +580,8 @@ fn parse_lens(text: &str) -> Judged {
     Judged { usage: Usage::from_pairs(&pairs), provenance: provenance::of_pairs(&pairs), ..judge_pairs(&pairs) }
 }
 
-/// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。
+/// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。集計を読めた周は、PASS と数の食い違いを
+/// FAIL に読み（[`Tally::mismatch`]）、場所の列 `at` は判定を動かさずに写す（tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
 fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
     let get = |key: &str| {
         pairs
@@ -597,7 +602,18 @@ fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
         (Some(counted), Some(population)) => Tally::parse(counted, population),
     };
     match read {
-        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None, provenance: None },
+        Ok(tally) => {
+            let at = get("at").filter(|found| !found.trim().is_empty()).map(str::to_owned);
+            // **PASS と数の食い違いは FAIL に読む**（tsuzuri の判断の記録 ADR-63 の決定 (6)）。審査役が自分で違反を数えた周なので、
+            // 判じられない周でなく不合格に読み、数を evidence に写して器の FAIL の道（prior_fail・memo の口）に乗せる。
+            let (verdict, evidence, kind) = match (verdict, tally.mismatch()) {
+                (Verdict::Pass, Some(counted)) => {
+                    (Verdict::Fail, format!("{MISMATCH_KIND}・PASS を返したが {counted} を数えた・lens の evidence は {evidence}"), Some(MISMATCH_KIND))
+                }
+                _ => (verdict, evidence, None),
+            };
+            Judged { verdict, evidence, tally: Some(tally), kind, at, reread: false, usage: None, provenance: None }
+        }
         Err(unread) => {
             let evidence = format!("lens の{}", unread.reason());
             match unread {
@@ -850,5 +866,49 @@ mod tests {
         assert_eq!((judged.verdict, judged.evidence), (bare.verdict, bare.evidence), "判定は変えない");
         assert_eq!(bare.provenance, None, "対が無い");
         assert_eq!(super::parse_lens(&format!("{head},\"provenance\":\"build:abc\"}}")).provenance, None, "形の違う対");
+    }
+
+    /// PASS で 3 観点のどれかを数えた判定は FAIL（理由の型・3 観点の数・lens の evidence）に読み、FAIL・INCONCLUSIVE の判定と
+    /// 質の観点だけを数えた PASS は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
+    #[test]
+    fn vgfind_parse_reads_a_pass_with_fit_counts_as_a_fail() {
+        let line = |verdict: &str, fit: &str| {
+            format!(r#"{{"verdict":"{verdict}","evidence":"lens-saw-q3","findings":"{fit},delete:2,stdlib:0,native:0,yagni:0,shrink:1","population":"files:2,lines:9"}}"#)
+        };
+        let fits = [
+            "contract-fit:1,teeth-nonvacuous:0,constitution:0",
+            "contract-fit:0,teeth-nonvacuous:2,constitution:0",
+            "contract-fit:0,teeth-nonvacuous:0,constitution:3",
+        ];
+        for fit in fits {
+            let judged = super::parse_lens(&line("PASS", fit));
+            assert_eq!((judged.verdict, judged.kind), (super::Verdict::Fail, Some("verdict-count-mismatch")), "{fit}");
+            let want = format!("verdict-count-mismatch・PASS を返したが {fit} を数えた・lens の evidence は lens-saw-q3");
+            assert_eq!(judged.evidence, want, "数と lens の evidence を写す");
+            assert!(judged.tally.is_some(), "集計は残る: {fit}");
+            for verdict in ["FAIL", "INCONCLUSIVE"] {
+                let kept = super::parse_lens(&line(verdict, fit));
+                assert_eq!((kept.verdict.as_str(), kept.kind, kept.evidence.as_str()), (verdict, None, "lens-saw-q3"), "{verdict} は動かさない");
+            }
+        }
+        let quality = super::parse_lens(&line("PASS", "contract-fit:0,teeth-nonvacuous:0,constitution:0"));
+        assert_eq!((quality.verdict, quality.kind, quality.evidence.as_str()), (super::Verdict::Pass, None, "lens-saw-q3"), "質の観点だけ");
+    }
+
+    /// 集計を読めた周は lens の `at` の字をそのまま写し、無い・字でない・空白だけの `at` と集計を読めない周の `at` は写さず、
+    /// `at` は判定を動かさない（tsuzuri の判断の記録 ADR-63 の決定 (7)）。
+    #[test]
+    fn vgfind_parse_copies_the_at_without_moving_the_verdict() {
+        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:1,stdlib:0,native:0,yagni:0,shrink:2","population":"files:1,lines:1""#;
+        let at = "delete:src/q.rs:12,shrink:src/r.rs;src/s.rs";
+        let read = |tail: &str| super::parse_lens(&format!("{head}{tail}}}"));
+        let (copied, bare) = (read(&format!(",\"at\":\"{at}\"")), read(""));
+        assert_eq!(copied.at.as_deref(), Some(at), "字のまま写す");
+        assert_eq!((copied.verdict, copied.evidence.as_str()), (bare.verdict, bare.evidence.as_str()), "判定は動かさない");
+        for tail in ["", ",\"at\":3", ",\"at\":\" \""] {
+            assert_eq!(read(tail).at, None, "写さない: {tail}");
+        }
+        let unread = super::parse_lens(&format!("{{\"verdict\":\"PASS\",\"evidence\":\"ok\",\"at\":\"{at}\"}}"));
+        assert_eq!(unread.at, None, "集計を読めない周は写さない");
     }
 }

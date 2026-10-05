@@ -775,6 +775,21 @@ mod tests {
         assert_eq!(super::TEMPLATE.matches(super::CONSTITUTION_PHRASE).count(), 1);
     }
 
+    /// gate の雛形は、判定の決め方の節に 3 観点を数えたら PASS を返さない 1 文をちょうど 1 度持ち（雛形の全体でも 1 度）、出すものの節の
+    /// JSON の形の末に場所の列の key `at` を持ち、同じ節に `at` の形の行を 1 行持つ（tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
+    #[test]
+    fn vgfind_gate_template_names_the_rule_and_the_at() {
+        let section = |head: &str| super::TEMPLATE.split(head).nth(1).and_then(|rest| rest.split("\n## ").next()).unwrap_or_default();
+        let rule = "- contract-fit・teeth-nonvacuous・constitution を 1 以上数えたら PASS を返さない。\n";
+        assert_eq!(section("## 判定の決め方\n").matches(rule).count(), 1, "判定の決め方の節に 1 度");
+        assert_eq!(super::TEMPLATE.matches(rule).count(), 1, "雛形の全体でも 1 度");
+        let out = section("## 出すもの\n");
+        let json = out.lines().find(|line| line.starts_with("{\"verdict\"")).unwrap_or_default();
+        assert!(json.ends_with(",\"at\":\"<観点>:<場所>;<場所>,<観点>:<場所>\"}"), "JSON の形の末に at: {json}");
+        let form = out.lines().filter(|line| line.starts_with("`at` は 0 でない観点ごとの場所の列である")).count();
+        assert_eq!(form, 1, "at の形の行: {out}");
+    }
+
     /// 契約の審査の周（材料が在る周）だけを撃つ歯なので worktree は測られない（憲法の測りは diff の審査の周だけ）。goal は空で渡す
     /// （節の本文を 1 行にしない・二重の外しは歯 vrdup_ が撃つ）。
     fn prompt_of(contract: &Path, stated: &str, rulings: &str, cap: u64) -> Result<String, Outcome> {

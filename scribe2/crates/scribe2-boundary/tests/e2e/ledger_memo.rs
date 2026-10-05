@@ -1,4 +1,5 @@
-//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`）。
+//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`・質の原本の歯は接頭辞 `vgfind_`・
+//! tsuzuri の判断の記録 ADR-63 の決定 (7)）。
 //!
 //! 置き場は tmp の state dir（event log は固定 ts で積み、run dir に `verdict.json` / `review.json` を置く）で、実 binary の
 //! `ledger memo` を撃つ。PATH の先頭には argv を記録する偽の `bd` を置き、**1 回も呼ばれない**ことを毎回測る。
@@ -256,6 +257,76 @@ fn ledger_memo_plan_refuses_non_terminal_and_materialless_runs() {
         assert_eq!(shot.rc, Some(1), "{run}: rc 1");
         assert_eq!(shot.out, "", "{run}: plan を出さない");
         assert_eq!(shot.err, format!("{want}\n"), "{run}: 閉じた理由の 1 行");
+    }
+    fs::remove_dir_all(&place.dir).ok();
+}
+
+/// 質の原本の歯の `verdict.json`（3 観点は 0・delete は `delete` の字・母集団は 0 でない・at は在る周だけ）。
+fn vgfind_verdict(verdict: &str, delete: &str, evidence: &str, at: Option<&str>) -> String {
+    let at = at.map(|found| format!(",\"at\":\"{found}\"")).unwrap_or_default();
+    let findings = format!("contract-fit:0,teeth-nonvacuous:0,constitution:0,{delete},stdlib:0,native:0,yagni:0,shrink:4");
+    format!("{{\"schema\":1,\"verdict\":\"{verdict}\",\"evidence\":\"{evidence}\",\"findings\":\"{findings}\",\"population\":\"files:2,lines:8\"{at}}}\n")
+}
+
+/// 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）: `Landed` の便の `verdict.json` が PASS で findings の delete を 1 以上と数えた周は、
+/// 題の頭が `質 delete — ` で kind が `PASS delete:<n>` の plan を出し、evidence と at を観測へ写す（at の無い file は `-`）。
+#[test]
+fn vgfind_memo_plans_a_landed_pass_that_counted_delete() {
+    let place = place();
+    stage(&place, "d-land", Stage::Landed, None, "2026-09-20T00:07:00Z");
+    put(&place, "d-land", "verdict.json", &vgfind_verdict("PASS", "delete:3", "消せる枝 m2", Some("delete:src/m2.rs:4;src/m2.rs:9")));
+    stage(&place, "d-bare", Stage::Landed, None, "2026-09-20T00:07:01Z");
+    put(&place, "d-bare", "verdict.json", &vgfind_verdict("PASS", "delete:1", "使われない欄 n5", None));
+    assert_eq!(
+        plan_of(&place, "d-land", &[]),
+        want_run(
+            "[memo] 質 delete — d-land Landed PASS delete:3",
+            &["- run: d-land", "- stage: Landed", "- kind: PASS delete:3"],
+            &["- evidence: 消せる枝 m2", "- at: delete:src/m2.rs:4;src/m2.rs:9"],
+        ),
+        "着地した便の質の原本"
+    );
+    assert_eq!(
+        plan_of(&place, "d-bare", &[]),
+        want_run(
+            "[memo] 質 delete — d-bare Landed PASS delete:1",
+            &["- run: d-bare", "- stage: Landed", "- kind: PASS delete:1"],
+            &["- evidence: 使われない欄 n5", "- at: -"],
+        ),
+        "at の無い file は `-`"
+    );
+    fs::remove_dir_all(&place.dir).ok();
+}
+
+/// 質の原本の断り（正しい file から 1 句だけ外す）: delete が 0 の PASS（`Gated` と `Landed`）・母集団の無い PASS・PASS でない `Landed` の
+/// 判定は終端でない、evidence が空の PASS は原本が無い（閉じた理由の 1 行・rc 1・stdout 0 byte）。
+#[test]
+fn vgfind_memo_refuses_a_pass_without_a_counted_delete() {
+    let place = place();
+    let good = vgfind_verdict("PASS", "delete:2", "消せる枝 m2", Some("delete:src/m2.rs:4"));
+    let files = [
+        ("z-gate", Stage::Gated, good.replace("delete:2", "delete:0")),
+        ("z-land", Stage::Landed, good.replace("delete:2", "delete:0")),
+        ("u-land", Stage::Landed, good.replace(",\"population\":\"files:2,lines:8\"", "")),
+        ("f-land", Stage::Landed, good.replace("\"verdict\":\"PASS\"", "\"verdict\":\"FAIL\"")),
+        ("e-land", Stage::Landed, good.replace("消せる枝 m2", "")),
+    ];
+    for (run, found, body) in &files {
+        assert_ne!(body, &good, "{run}: 1 句を外した file");
+        stage(&place, run, *found, None, "2026-09-20T00:08:00Z");
+        put(&place, run, "verdict.json", body);
+    }
+    let cases = [
+        ("z-gate", "memo: refused reason=not-terminal run=z-gate stage=Gated"),
+        ("z-land", "memo: refused reason=not-terminal run=z-land stage=Landed"),
+        ("u-land", "memo: refused reason=not-terminal run=u-land stage=Landed"),
+        ("f-land", "memo: refused reason=not-terminal run=f-land stage=Landed"),
+        ("e-land", "memo: refused reason=no-material run=e-land stage=Landed"),
+    ];
+    let state = place.state.display().to_string();
+    for (run, want) in cases {
+        let shot = shoot(&place, &["memo", "--run", run, "--state-dir", &state, "--parent", "s2-epic"]);
+        assert_eq!((shot.rc, shot.out.as_str(), shot.err.as_str()), (Some(1), "", format!("{want}\n").as_str()), "{run}");
     }
     fs::remove_dir_all(&place.dir).ok();
 }

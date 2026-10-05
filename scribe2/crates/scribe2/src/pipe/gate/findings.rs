@@ -163,6 +163,32 @@ impl Tally {
     pub(super) fn population_field(&self) -> String {
         format!("files:{},lines:{}", self.population.files, self.population.lines)
     }
+
+    /// 観点 `found` の件数（[`Findings::ALL`] と同じ並びの `counts` から引く）。
+    fn count(&self, found: Findings) -> u64 {
+        let at = Findings::ALL.iter().position(|seen| *seen == found);
+        at.and_then(|index| self.counts.get(index)).copied().unwrap_or(0)
+    }
+
+    /// 判定と数の食い違いの材料（tsuzuri の判断の記録 ADR-63 の決定 (6)）。[`FIT`] の 3 観点のどれかを 1 以上と数えた周だけ、
+    /// 3 観点の件数を宣言順の字面（`contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>`）で返す。
+    pub(super) fn mismatch(&self) -> Option<String> {
+        FIT.iter().any(|found| self.count(*found) > 0).then(|| {
+            FIT.iter().map(|found| format!("{}:{}", found.as_str(), self.count(*found))).collect::<Vec<_>>().join(",")
+        })
+    }
+}
+
+/// 数えたら PASS を返さない 3 観点（契約適合・歯の非空虚・憲法・雛形 `lens.txt` の判定の決め方の 1 文と同じ 3 つ）。
+const FIT: [Findings; 3] = [Findings::ContractFit, Findings::TeethNonvacuous, Findings::Constitution];
+
+/// 判定と数の食い違いを FAIL に読んだ周の理由の型（`verdict.json` の `kind`・memo の口が出所の kind に写す）。
+pub(super) const MISMATCH_KIND: &str = "verdict-count-mismatch";
+
+/// `verdict.json` の 2 key から観点 delete の件数を読む（memo の口の質の原本・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
+/// 読みは [`Tally::parse`] の 1 本で、読めない周は `None`。
+pub(crate) fn delete_count(findings: &str, population: &str) -> Option<u64> {
+    Tally::parse(findings, population).ok().map(|tally| tally.count(Findings::Delete))
 }
 
 /// 表に在る category の名か。
@@ -258,5 +284,33 @@ mod tests {
             );
         }
         assert!(Tally::parse(all, READ).is_ok(), "対: 8 つ揃い母集団が 0 でなければ読める");
+    }
+
+    /// 食い違いの材料は 3 観点のどれか 1 つを 1 以上と数えた周だけ 3 観点の件数を宣言順で返し、3 観点が 0 なら質の 5 観点を
+    /// 数えても返さない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
+    #[test]
+    fn vgfind_tally_names_the_three_fit_counts_only_when_one_is_counted() {
+        let zero = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
+        let quality = "delete:4,stdlib:1,native:1,yagni:1,shrink:3";
+        let cases = [
+            ("contract-fit:2,teeth-nonvacuous:0,constitution:0", Some("contract-fit:2,teeth-nonvacuous:0,constitution:0")),
+            ("contract-fit:0,teeth-nonvacuous:1,constitution:0", Some("contract-fit:0,teeth-nonvacuous:1,constitution:0")),
+            ("contract-fit:0,teeth-nonvacuous:0,constitution:3", Some("contract-fit:0,teeth-nonvacuous:0,constitution:3")),
+            (zero, None),
+        ];
+        for (fit, want) in cases {
+            let tally = Tally::parse(&format!("{quality},{fit}"), READ).expect("8 category と母集団が揃えば読める");
+            assert_eq!(tally.mismatch().as_deref(), want, "{fit}");
+        }
+    }
+
+    /// delete の件数は 2 key の読みの 1 本から引き、読めない 2 key は `None`（memo の口の質の原本・決定 (7)）。
+    #[test]
+    fn vgfind_delete_count_reads_the_delete_of_a_readable_record() {
+        let counted = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:3,stdlib:1,native:0,yagni:0,shrink:2";
+        assert_eq!(super::delete_count(counted, READ), Some(3), "delete の件数");
+        assert_eq!(super::delete_count(&counted.replace("delete:3", "delete:0"), READ), Some(0), "0 は 0");
+        assert_eq!(super::delete_count(&counted.replace(",delete:3", ""), READ), None, "delete の欠けた 2 key は読めない");
+        assert_eq!(super::delete_count(counted, "files:0,lines:4"), None, "母集団 0 は読めない");
     }
 }
