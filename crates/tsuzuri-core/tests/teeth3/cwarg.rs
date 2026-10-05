@@ -4,6 +4,7 @@
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+//! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
 #![cfg(test)]
 
 use std::path::Path;
@@ -11,9 +12,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, STAMP_HOOKS, TALK_ENV, argv, audit,
-    brief, env, keep_only, private_tmp, prompt, read_roots, settings, stamp_command, version_ok,
-    window_env,
+    BASE_ENV, CREDENTIALS, DOMAINS, INBOUND, Launch, PEER_TOOLS, PLUGIN_VERSION, STAMP_HOOKS,
+    TALK_ENV, argv, audit, brief, env, keep_only, private_tmp, prompt, read_roots, settings,
+    stamp_command, version_ok, window_env,
 };
 
 fn fixture() -> Value {
@@ -209,6 +210,7 @@ fn cwarg_audit_refuses_each_missing_key() {
         "/permissions/deny",
         "/env",
         "/hooks",
+        "/crossSessionInbound",
     ];
     for pointer in leaves {
         let (parent, key) = pointer.rsplit_once('/').expect("pointer");
@@ -225,7 +227,7 @@ fn cwarg_audit_refuses_each_missing_key() {
     for (list, n) in [
         ("/sandbox/credentials/files", 11),
         ("/sandbox/filesystem/denyWrite", 3),
-        ("/permissions/deny", 19),
+        ("/permissions/deny", 21),
     ] {
         for i in 0..n {
             let a = with_settings(&l, |set| {
@@ -496,7 +498,7 @@ fn cwarg_hides_account_dirs_and_credential_reads() {
         };
         assert_eq!(
             (n("/sandbox/credentials/files"), n("/permissions/deny")),
-            (9, 17),
+            (9, 19),
             "{form} の実体なし"
         );
         assert!(audit(&argv(&none), &none).is_empty(), "{form} の実体なし");
@@ -756,6 +758,79 @@ fn cwarg_settings_hold_the_stamp_hooks() {
         ];
         for (name, edit) in edits {
             assert_eq!(stamp_gaps(event, edit), only, "{event} を{name}");
+        }
+    }
+}
+
+/// 断りの列の言付けの道具 `tool` を除くか（`named` なら名に specifier を付けた）設定の検めの欠け。
+fn peer_gaps(l: &Launch, tool: &str, named: bool) -> Vec<String> {
+    let a = with_settings(l, |s| {
+        let rules = s["permissions"]["deny"].as_array().expect("列").clone();
+        let edited: Vec<Value> = rules
+            .into_iter()
+            .filter(|r| named || r != tool)
+            .map(|r| {
+                if r == tool {
+                    json!(format!("{tool}(*)"))
+                } else {
+                    r
+                }
+            })
+            .collect();
+        s["permissions"]["deny"] = edited.into();
+    });
+    audit(&a, l)
+}
+
+/// 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を名だけで断る。値を替えるか鍵を除いた設定を検めは
+/// `/crossSessionInbound` だけで、道具の 1 つを除くか名に specifier を付けた設定を `/permissions/deny` だけで断る（行 cs-inbound-refuse）。
+#[test]
+fn cwarg_refuses_cross_session_messages() {
+    assert_eq!(INBOUND, "refuse");
+    assert_eq!(PEER_TOOLS, ["SendMessage", "ListAgents"]);
+    let fx = fixture();
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let set = settings(&l);
+        assert_eq!(set["crossSessionInbound"], json!("refuse"), "{form}");
+        let deny = strings_of(&set["permissions"]["deny"]);
+        assert_eq!(deny[deny.len() - 2..], PEER_TOOLS, "{form} の断りの末");
+        let values = [
+            json!("accept"),
+            json!("hold"),
+            json!("Refuse"),
+            json!(["refuse"]),
+            Value::Null,
+        ];
+        for value in values {
+            let a = with_settings(&l, |s| s["crossSessionInbound"] = value.clone());
+            assert_eq!(
+                audit(&a, &l),
+                ["/crossSessionInbound"],
+                "{form} の値 {value}"
+            );
+        }
+        let a = with_settings(&l, |s| {
+            s.as_object_mut()
+                .expect("object")
+                .remove("crossSessionInbound");
+        });
+        assert_eq!(
+            audit(&a, &l),
+            ["/crossSessionInbound"],
+            "{form} の鍵を除いた"
+        );
+        for tool in PEER_TOOLS {
+            assert_eq!(
+                peer_gaps(&l, tool, false),
+                ["/permissions/deny"],
+                "{form} の {tool} を除いた"
+            );
+            assert_eq!(
+                peer_gaps(&l, tool, true),
+                ["/permissions/deny"],
+                "{form} の {tool} に specifier"
+            );
         }
     }
 }

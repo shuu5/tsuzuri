@@ -50,7 +50,8 @@
         "Read(//S/accounts/**)", "Read(//A/one/**)", "Read(//A/old/**)", "Read(//R/.beads/.env)",
         "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
         "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",
-        "Read(~/.cld-env)", "Read(~/.cld-env/**)", "Read(~/.claude/.credentials.json)", "Read(~/.claude/.credentials.json/**)"
+        "Read(~/.cld-env)", "Read(~/.cld-env/**)", "Read(~/.claude/.credentials.json)", "Read(~/.claude/.credentials.json/**)",
+        "SendMessage", "ListAgents"
       ],
       "blockReadsOutsideWorkingDirectories": true
     },
@@ -91,6 +92,7 @@
       "SessionStart": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
       "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
       "Stop": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}]
-    }
+    },
+    "crossSessionInbound": "refuse"
   }
 }

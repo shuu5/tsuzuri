@@ -2,6 +2,7 @@
 //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
 //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
 //! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
+//! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・行 cs-inbound-refuse・判断の記録 ADR-57 決定 (1)(ケ)）。
 //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
 
 use serde_json::{Value, json};
@@ -78,6 +79,12 @@ pub const FORBIDDEN: [&str; 5] = [
     "--mcp-config",
     "--append-system-prompt",
 ];
+
+/// ほかの session からの言付けの受け方（全部断る・判断の記録 ADR-57 決定 (1)(ケ)）。
+pub const INBOUND: &str = "refuse";
+
+/// 許可の断りに置く言付けの道具（送る道具と一覧の道具・名だけで断る）。
+pub const PEER_TOOLS: [&str; 2] = ["SendMessage", "ListAgents"];
 
 /// 囲いの値の決まった 4 つ（JSON pointer と値）。
 pub const SANDBOX_FIXED: [(&str, bool); 4] = [
@@ -177,6 +184,7 @@ fn hidden(l: &Launch) -> Vec<String> {
 /// 読む道具の断り（accounts とその symlink の先・台帳の鍵・資格の file は file にも dir にも効くよう path と下の全部の 2 つ）。
 /// 頭に読む根の各々への書きの道具の断り Edit(/<根>/**) を置く（Edit の規則は Write と NotebookEdit にも効き、どの許可の形でも効く・
 /// 許可の形を acceptEdits に替えると --add-dir の読む根へ聞かずに書けるので・行 cs-root-edits）。
+/// 末に言付けの道具 `PEER_TOOLS` の断りを置く（行 cs-inbound-refuse）。
 fn denied_reads(l: &Launch) -> Vec<String> {
     let mut rules: Vec<String> = l.roots.iter().map(|r| format!("Edit(/{r}/**)")).collect();
     rules.push(format!("Read(/{}/accounts/**)", l.state));
@@ -185,6 +193,7 @@ fn denied_reads(l: &Launch) -> Vec<String> {
     for c in CREDENTIALS {
         rules.extend([format!("Read({c})"), format!("Read({c}/**)")]);
     }
+    rules.extend(PEER_TOOLS.map(String::from));
     rules
 }
 
@@ -224,6 +233,7 @@ pub fn settings(l: &Launch) -> Value {
             "npm_config_cache": format!("{w}/node_modules/.npm-cache"),
         },
         "hooks": hooks(l),
+        "crossSessionInbound": INBOUND,
     })
 }
 
@@ -427,7 +437,7 @@ fn audit_sandbox(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
     }
 }
 
-/// 設定の許しと断りと環境と hook の欠けと広い許し。
+/// 設定の許しと断りと環境と hook と言付けの受け方の欠けと広い許し。
 fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
     let edit = format!("Edit(/{}/**)", l.workspace);
     let allow = strings(set.pointer("/permissions/allow"));
@@ -468,6 +478,9 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
         || set.pointer("/hooks/PreToolUse/0/matcher") != Some(&json!("*"))
     {
         gaps.push("/hooks/PreToolUse".to_string());
+    }
+    if set.pointer("/crossSessionInbound") != Some(&json!(INBOUND)) {
+        gaps.push("/crossSessionInbound".to_string());
     }
     let stamp = stamp_command(&l.tz, &l.workspace);
     let want = json!([{"hooks": [{"type": "command", "command": stamp, "timeout": 10}]}]);
