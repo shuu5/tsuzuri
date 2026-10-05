@@ -1,0 +1,912 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+index 57fa5e5eab0456a1bdee49867a40618a4466e034..eb920ee65f178f854a4eedfb69f73b859d9e0e58 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+@@ -7,13 +7,15 @@
+ //! 歯は族ごとの子 module に置く（設計 docs/design/carry-prep.md §10 行 n・`s2-07l.686`）: `group`（接頭辞
+ //! `pipe_dispatch_group_`）・`waiting`（接頭辞 `pipe_dispatch_waiting_` / `pipe_dispatch_release_` /
+ //! `pipe_dispatch_gated_` / `pipe_dispatch_regated_` / `pipe_dispatch_revive_`）・`terminal`（接頭辞 `pipe_terminal_`）・`closed`（接頭辞
+-//! `vcrun_`・判断の記録 ADR-45 の門 H6）・`commute`（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)）。
++//! `vcrun_`・判断の記録 ADR-45 の門 H6）・`commute`（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)）・`run_cap`（接頭辞 `vrcap_`・
++//! tsuzuri の判断の記録 ADR-63 の決定 (13)）。
+ //! この file には共有の helper と const・本文に `super::` を持つ歯（この file の頭は名指しの import しか持たず、
+ //! 入れ子の子では `super::` の指す先が変わる）・他の族の歯だけを残す。
+ 
+ mod closed;
+ mod commute;
+ mod group;
++mod run_cap;
+ mod terminal;
+ mod waiting;
+ // flip-check: moved s2-07l.686
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/run_cap.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/run_cap.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a0449974978468dae3c02265354ddd19ddc565a5
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/run_cap.rs
+@@ -0,0 +1,112 @@
++//! 宣言の同時の数の上限の歯（接頭辞 `vrcap_`・tsuzuri の判断の記録 ADR-63 の決定 (13)・親 `tests/e2e/pipe/dispatch.rs` の helper を
++//! `use super::*` で使う）。
++//!
++//! 宣言の末に `run-cap` と `run-cap-paths` を足した toy repo で、数える dir（`vessel/`）の下を書く行 a・b・d と外を書く行 c を、
++//! live な便の下の受付（`pipe intake`）と列の 1 周（`pipe dispatch ls`）の外形で測る。
++
++use super::super::intake::intake_with_rules;
++use super::super::{run_dirs, write_rules};
++use super::*;
++use std::path::PathBuf;
++
++/// 行の id と書く file（a・b・d は数える dir の下・c は外）。
++const ROWS: [(&str, &str); 4] = [("a", "vessel/a.rs"), ("b", "vessel/b.rs"), ("c", "other/c.rs"), ("d", "vessel/d.rs")];
++
++/// 上限 1 本の宣言の 2 行。
++const ONE: &str = "run-cap = 1\nrun-cap-paths = [\"vessel/\"]\n";
++
++/// 行 4 本を commit し、宣言の末に `extra` を足して commit した repo と置き場。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn place(extra: &str) -> (PathBuf, PathBuf) {
++    let (repo, state) = repo_with_state();
++    let rows: Vec<Vec<String>> =
++        ROWS.iter().map(|&(id, file)| row_fields(id, &["write-set"], &[&format!("write-set = [\"{file}\"]")])).collect();
++    commit_rows(&repo, &rows);
++    let mut text = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
++    text.push_str(extra);
++    fs::write(repo.join(".vessel.toml"), text).expect("宣言を書ける");
++    git(&repo, &["add", "-f", ".vessel.toml"]);
++    git(&repo, &["commit", "-q", "--allow-empty", "-m", "run-cap"]);
++    (repo, state)
++}
++
++/// 行 `row` を bead `s2-<row>` で受付に撃つ（rc を測らない）。
++fn intake_row(repo: &Path, state: &Path, row: &str) -> Output {
++    let rules = write_rules(state, "rules-vrcap.toml", 1, 1_000_000).display().to_string();
++    intake_with_rules(repo, state, &format!("{DESIGN_FILE}#{row}"), &format!("s2-{row}"), &rules)
++}
++
++/// 行 `row` の live な便を起こして run id を返す。
++fn live(repo: &Path, state: &Path, row: &str) -> String {
++    let out = intake_row(repo, state, row);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "行 {row} は通る（{}）", told(&out));
++    run_id_of(&out)
++}
++
++/// 断りの 1 行目。
++fn first_err(out: &Output) -> Option<String> {
++    stderr_of(out).lines().next().map(str::to_owned)
++}
++
++/// 列の 1 周（台帳は bead と priority の組・行は bead の `s2-` の後ろ）の bead ごとの理由と件数の行。
++fn listed(repo: &Path, state: &Path, beads: &[(&str, u64)]) -> (Vec<String>, String) {
++    let issues: Vec<String> =
++        beads.iter().map(|&(bead, priority)| issue(bead, priority, bead.trim_start_matches("s2-"))).collect();
++    let out = ls(repo, state, &fake_bd(state, &issues));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "ls は rc 0（{}）", told(&out));
++    (beads.iter().map(|&(bead, _)| reason_of(&out, bead)).collect(), count_of(&out))
++}
++
++/// 上限 1 本の宣言の受付は、数える live な便の下で数える行 b を run id と本数の 1 行で断って run dir を作らず、外の行 c は通す。
++#[test]
++fn vrcap_intake_refuses_a_second_counted_run_and_passes_the_outside_row() {
++    let (repo, state) = place(ONE);
++    let held = live(&repo, &state, "a");
++    let dirs = run_dirs(&state);
++    let out = intake_row(&repo, &state, "b");
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "行 b は断る（{}）", told(&out));
++    assert_eq!(first_err(&out), Some(format!("pipe: run-cap run={held} cap=1")), "{}", told(&out));
++    assert_eq!(run_dirs(&state), dirs, "run dir を作らない");
++    let outside = intake_row(&repo, &state, "c");
++    assert_eq!(outside.status.code(), Some(i32::from(RC_OK)), "外の行 c は通る（{}）", told(&outside));
++    clean(&[&repo, &state]);
++}
++
++/// 上限 1 本の宣言の列: live 0 本の周は同じ周に起こした b を名乗って d が待ち、数える live な便の下では b と d がその run id で
++/// 待ち、外の行 c はどちらの周も起こす側に入る。
++#[test]
++fn vrcap_dispatch_waits_on_the_bead_started_in_the_round_and_on_the_live_run() {
++    let (repo, state) = place(ONE);
++    let beads = [("s2-b", 1), ("s2-d", 2), ("s2-c", 3)];
++    let (reasons, count) = listed(&repo, &state, &beads);
++    assert_eq!(reasons, ["-", "run-cap:s2-b", "-"], "同じ周に起こした b を数える");
++    assert_eq!(count, format!("{COUNT} total=3 ready=2"));
++    let held = live(&repo, &state, "a");
++    let (reasons, count) = listed(&repo, &state, &beads);
++    let wait = format!("run-cap:{held}");
++    assert_eq!(reasons, [wait.as_str(), wait.as_str(), "-"], "live な a を数える");
++    assert_eq!(count, format!("{COUNT} total=3 ready=1"));
++    clean(&[&repo, &state]);
++}
++
++/// 本数は宣言の値: 上限 2 本の宣言は数える live な便 1 本の下で b を通して d を断り、2 key の無い宣言は b も d も通す。
++#[test]
++fn vrcap_cap_comes_from_the_declaration_and_no_keys_keep_todays_intake() {
++    let (repo, state) = place("run-cap = 2\nrun-cap-paths = [\"vessel/\"]\n");
++    let held = live(&repo, &state, "a");
++    assert_eq!(intake_row(&repo, &state, "b").status.code(), Some(i32::from(RC_OK)), "2 本目は通る");
++    let out = intake_row(&repo, &state, "d");
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "3 本目は断る（{}）", told(&out));
++    assert_eq!(first_err(&out), Some(format!("pipe: run-cap run={held} cap=2")), "{}", told(&out));
++    clean(&[&repo, &state]);
++    let (repo, state) = place("");
++    live(&repo, &state, "a");
++    for row in ["b", "d"] {
++        let out = intake_row(&repo, &state, row);
++        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "宣言の無い行 {row} は通る（{}）", told(&out));
++    }
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/case/mod.rs b/scribe2/crates/scribe2/src/case/mod.rs
+index 77d85241123d9df6a93453fedb5fdc064a66f4ec..13d5492a941ba2821a1ed7a470866a43566112ff 100644
+--- a/scribe2/crates/scribe2/src/case/mod.rs
++++ b/scribe2/crates/scribe2/src/case/mod.rs
+@@ -132,9 +132,9 @@ pub const REASON_CONTRACT_OPEN: &str = "contract-open";
+ /// memo-promoting の理由: FR93 の自動の close を待つ。
+ pub const REASON_CLOSE_DUE: &str = "close-due";
+ 
+-/// contract-queued の理由から手番の表（§3・12 語）。`WAIT_REASONS` の 8 語と、dispatcher の後の行が足す語
+-/// unreflected-ruling・floor・reserved・sibling を含む。`admission` は contract-refused と同じ手番で持つ（表が `WAIT_REASONS` を全部覆うため）。
+-pub const QUEUED_TURNS: [(&str, Turn); 12] = [
++/// contract-queued の理由から手番の表（§3・13 語）。`WAIT_REASONS` の 8 語と、dispatcher の後の行が足す語
++/// unreflected-ruling・floor・reserved・sibling と、宣言の同時の数の上限の語 run-cap（tsuzuri の判断の記録 ADR-63 の決定 (13)）を含む。`admission` は contract-refused と同じ手番で持つ（表が `WAIT_REASONS` を全部覆うため）。
++pub const QUEUED_TURNS: [(&str, Turn); 13] = [
+     ("dependency", Turn::Vessel),
+     ("overlap", Turn::Vessel),
+     ("admission", Turn::Seat),
+@@ -147,6 +147,7 @@ pub const QUEUED_TURNS: [(&str, Turn); 12] = [
+     ("floor", Turn::Seat),
+     ("reserved", Turn::Seat),
+     ("sibling", Turn::Seat),
++    ("run-cap", Turn::Vessel),
+ ];
+ 
+ impl Phase {
+@@ -409,8 +410,8 @@ mod tests {
+         ]
+     };
+ 
+-    /// §3 の contract-queued の理由の表（12 語）。
+-    const QUEUED_TABLE: [(&str, Turn); 12] = {
++    /// §3 の contract-queued の理由の表（13 語）。
++    const QUEUED_TABLE: [(&str, Turn); 13] = {
+         use Turn::{Nobody, Seat, Vessel};
+         [
+             ("dependency", Vessel),
+@@ -425,6 +426,7 @@ mod tests {
+             ("sibling", Seat),
+             ("settled", Nobody),
+             ("admission", Seat),
++            ("run-cap", Vessel),
+         ]
+     };
+ 
+@@ -463,7 +465,7 @@ mod tests {
+         assert_eq!(Turn::ALL.map(Turn::as_str), ["user", "seat", "vessel", "runner", "ci", "none"]);
+     }
+ 
+-    /// (d) contract-queued の理由の表は `WAIT_REASONS` を全部と unreflected-ruling・floor を含む 12 語で、語は一意。
++    /// (d) contract-queued の理由の表は `WAIT_REASONS` を全部と unreflected-ruling・floor・run-cap を含む 13 語で、語は一意。
+     #[test]
+     fn phase_table_queued_reasons_cover_the_wait_reasons() {
+         let words: Vec<&str> = QUEUED_TURNS.iter().map(|(word, _)| *word).collect();
+@@ -471,9 +473,10 @@ mod tests {
+             assert!(words.contains(reason), "{reason}");
+         }
+         assert!(words.contains(&"unreflected-ruling") && words.contains(&"floor") && words.contains(&"reserved") && words.contains(&"sibling"));
+-        assert_eq!(words.len(), 12);
++        assert!(words.contains(&"run-cap"));
++        assert_eq!(words.len(), 13);
+         let unique: std::collections::BTreeSet<&str> = words.iter().copied().collect();
+-        assert_eq!(unique.len(), 12);
++        assert_eq!(unique.len(), 13);
+     }
+ 
+     /// (e) 表に無い語（語・理由）は `None`。
+@@ -527,7 +530,7 @@ mod tests {
+         assert_eq!(words, ["utterance", "question", "memo", "contract", "run", "row", "requirement", "epic", "commit"]);
+     }
+ 
+-    /// (i) 語から手番の関数は §3 の表の全行と一致する（38 語・memo-promoting の理由 2 つ・contract-queued の理由 12 語）。
++    /// (i) 語から手番の関数は §3 の表の全行と一致する（38 語・memo-promoting の理由 2 つ・contract-queued の理由 13 語）。
+     #[test]
+     fn phase_table_turn_of_matches_every_row_of_the_table() {
+         for (word, turn) in TURN_TABLE {
+diff --git a/scribe2/crates/scribe2/src/pipe/cli.rs b/scribe2/crates/scribe2/src/pipe/cli.rs
+index 079a42dd0f7396048dc7a08e429d8e543e348af9..de5efd52252805f3614489780b4e0be71dadd188 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli.rs
+@@ -30,7 +30,7 @@ mod step;
+ pub(super) use args::{broken, flag, int_row, present, refused, repo_of, state_dir_of};
+ // 列（`pipe::dispatch`）は受付の判定を**記帳せずに**撃つ（設計 dispatcher.md §3・C2 の 1 実装）。
+ // 可視性を上げるだけで本文は不変——2 本目の判定を作らないための再輸出である。
+-pub(in crate::pipe) use intake::{crossings, generated, judge, Denial, Material, Materials};
++pub(in crate::pipe) use intake::{capped, crossings, generated, judge, Denial, Material, Materials};
+ pub(super) use run::turn_of;
+ // 着地列の窓の判定（`fleet::wait` の `Completion::LandWindow` の観測と `pipe land-window` の 1 行が同じ 1 本を読む・
+ // 設計 pipeline.md §19）。列の module は `pipe` の外へ見えないので、窓の口だけをここから見せる。
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/intake.rs b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+index 0b9597244ad48244df5f111db7edaf1284784fc3..65a708a96ceb22f37d9beffdea024559bc22eae2 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/intake.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+@@ -30,7 +30,7 @@
+ //! 周を `finding-unaddressed` で断る。どちらも run dir も event も作らず、write-set の弁別の後・余地と交差の前に撃つ。
+ 
+ use super::base_run::{self, BaseRun, Early};
+-use super::{broken, flag, int_row, list_row, live, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};
++use super::{broken, flag, int_row, list_row, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+ use crate::fleet::store::{self, LockPolicy, StoreError};
+ use crate::fleet::{self, EventKind, Stage};
+@@ -68,6 +68,11 @@ mod index;
+ /// 欄 `code-facts` の照らしと測り（設計 reverse-index.md §7 (c)・契約表の行 e）。断りの組み立ては [`exclude_unmeasured`] が書く。
+ mod code_facts;
+ 
++/// live な便の契約の読みと宣言の同時の数の上限の判じ（tsuzuri の判断の記録 ADR-63 の決定 (13)）。
++mod run_cap;
++pub(in crate::pipe) use run_cap::capped;
++use run_cap::{exclude_run_cap, live_contracts};
++
+ /// host で同時に走る便（live な便）の本数の最大値を持つ rules 行（設計 gate-cost.md §24・値は読むだけ・C1）。
+ const ROW_MAX_LIVE: &str = "pipe.max_live";
+ 
+@@ -771,9 +776,9 @@ pub(in crate::pipe) fn judge(material: &Material<'_>) -> Judged {
+         return judged;
+     };
+     // **同時本数の上限は交差の前**（設計 gate-cost.md §24）。短絡しない＝上限で断る周も交差は撃ち、組は後続に並ぶ。
+-    if let Err(denial) = exclude_max_live(manifest, state_dir, &measured, tracked) {
+-        judged.denials.push(denial);
+-    }
++    // 宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）も同じ段で、同じく短絡しない。
++    judged.denials.extend(exclude_max_live(manifest, state_dir, &measured, tracked).err());
++    judged.denials.extend(exclude_run_cap(repo, state_dir, &measured).err());
+     // **入口で排他する**（ADR-0019 §2.1）。live な便と write-set が交差する契約は、
+     // run dir も event も作らずに断る——後段（land の rebase）で衝突を知るより安い。
+     match exclude_overlap(material, state_dir, &measured, tracked) {
+@@ -1188,22 +1193,10 @@ fn exclude_max_live(manifest: &Manifest, state_dir: &Path, contract: &Contract,
+ /// [`exclude_overlap`]（受付＝交差 1 件で断る）と `pipe::dispatch`（列＝交差した相手を待ちの理由にする）が
+ /// **同じこの 1 本**を読む（判定が 2 か所にならない・憲法 C2）。読めない側が勝つ極性はここが持つ。
+ pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
+-    let state = current(state_dir).map_err(|errors| {
+-        denied(DENIAL_STORE, Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))
+-    })?;
+     let mut first: Option<Refuse> = None;
+     let mut lines: Vec<String> = Vec::new();
+     let mut runs: Vec<(String, Vec<String>)> = Vec::new();
+-    for (id, run) in &state.runs {
+-        let Some(alive) = live(state_dir, id, run.stage) else {
+-            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
+-        };
+-        if !alive {
+-            continue;
+-        }
+-        let Ok(live_contract) = Contract::load(&contract_path(state_dir, id)) else {
+-            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
+-        };
++    for (id, live_contract) in live_contracts(state_dir)? {
+         let mut crossed: Vec<String> = Vec::new();
+         for (mine, theirs) in overlaps(&contract.write_set, &live_contract.write_set, tracked) {
+             if first.is_none() {
+@@ -1212,7 +1205,7 @@ pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked:
+             lines.push(format!("pipe: overlap run={id} contract={mine} live={theirs}"));
+             crossed.push(mine);
+         }
+-        runs.push((id.clone(), crossed));
++        runs.push((id, crossed));
+     }
+     Ok(Crossed { runs, first, lines, commuted: None })
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/intake/run_cap.rs b/scribe2/crates/scribe2/src/pipe/cli/intake/run_cap.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9ee085e5dba369ece5093d49344591322c3eb67f
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/cli/intake/run_cap.rs
+@@ -0,0 +1,64 @@
++//! live な便の契約の読みと、宣言の同時の数の上限の判じ（vessel 宣言の任意 key `run-cap` と `run-cap-paths`・tsuzuri の判断の記録
++//! ADR-63 の決定 (13)）。
++//!
++//! live の読みは交差（親の [`super::crossings`]）と上限の判じが同じ 1 本（[`live_contracts`]）で持ち、上限の判じは受付の断り
++//! （[`exclude_run_cap`]）と列の候補の待ち（`pipe::dispatch` の候補の段）が同じ 1 本（[`capped`]）を読む（C2）。
++
++use super::refusal::{denied, refuse, DENIAL_STORE};
++use super::Denial;
++use crate::cli_outcome::{Outcome, RC_BROKEN};
++use crate::fleet::store::StoreError;
++use crate::pipe::cli::live;
++use crate::pipe::contract::Contract;
++use crate::pipe::declaration::RunCap;
++use crate::pipe::refuse::Refuse;
++use crate::pipe::{contract_path, current};
++use std::path::Path;
++
++/// live な便と、その写しの契約（run id の順）。live な便の写しを 1 つでも読めない周は `WriteSetUnreadable`（rc 2・fail-closed）。
++pub(super) fn live_contracts(state_dir: &Path) -> Result<Vec<(String, Contract)>, Denial> {
++    let state = current(state_dir).map_err(|errors| {
++        denied(DENIAL_STORE, Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))
++    })?;
++    let mut found = Vec::new();
++    for (id, run) in &state.runs {
++        let Some(alive) = live(state_dir, id, run.stage) else {
++            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
++        };
++        if !alive {
++            continue;
++        }
++        let Ok(live_contract) = Contract::load(&contract_path(state_dir, id)) else {
++            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.clone() }, &[]));
++        };
++        found.push((id.clone(), live_contract));
++    }
++    Ok(found)
++}
++
++/// 宣言 `run-cap` の上限の判じ。数える契約の周だけ live な便を読み、同じ周に起こした bead（`started`・起こした順）と live な便を
++/// 数えて上限に達した周に先頭の 1 本の名を返す（数えない契約と上限の内は `None`）。読めない極性は交差と同じ。
++pub(in crate::pipe) fn capped(state_dir: &Path, cap: &RunCap, contract: &Contract, started: &[(String, &Contract)]) -> Result<Option<String>, Denial> {
++    if !cap.counts(&contract.write_set) {
++        return Ok(None);
++    }
++    let live = live_contracts(state_dir)?;
++    let others: Vec<(&str, &[String])> = started
++        .iter()
++        .map(|(bead, theirs)| (bead.as_str(), theirs.write_set.as_slice()))
++        .chain(live.iter().map(|(id, theirs)| (id.as_str(), theirs.write_set.as_slice())))
++        .collect();
++    Ok(cap.holder(&others).map(str::to_owned))
++}
++
++/// 宣言 `run-cap` の上限に達した周の契約を断る（便を作る前だけ撃つ＝走行中の便は止めない）。宣言を読めない周は撃たない
++/// （受付の `freeze` が宣言の不備で断る）。
++pub(super) fn exclude_run_cap(repo: &Path, state_dir: &Path, contract: &Contract) -> Result<(), Denial> {
++    let Ok(Some(cap)) = RunCap::at_head(repo) else {
++        return Ok(());
++    };
++    match capped(state_dir, &cap, contract, &[])? {
++        Some(run) => Err(refuse(&Refuse::RunCap { run, cap: cap.cap }, &[])),
++        None => Ok(()),
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration.rs b/scribe2/crates/scribe2/src/pipe/declaration.rs
+index fa91c493ed996db6653e7d76af2342ebf1bc64d6..616f692fef831daf35a237a6ea25c41fbe3b171b 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration.rs
+@@ -20,6 +20,7 @@ mod crate_roots;
+ mod entrance_flip;
+ mod optional_keys;
+ pub mod path_kinds;
++mod run_cap;
+ mod write_set;
+ 
+ pub use crate_roots::{crate_of, fixed_roots, with_fixed, CrateFile, RootsAtHead};
+@@ -28,6 +29,7 @@ use entrance_flip::{entrance_of, KEY as ENTRANCE_KEY};
+ pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, requirements_at_sha, floor_check_at, question_route, table_facts, table_facts_named, terminal_facts, CloseCheck, QuestionRoute, TableFacts, TerminalFacts};
+ pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
+ pub use optional_keys::{seat_constitution, SeatConstitution};
++pub use run_cap::RunCap;
+ use optional_keys::{build_lanes_of, ci_cmd_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
+ pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
+ pub(crate) use write_set::is_under;
+@@ -330,6 +332,8 @@ pub struct Declared {
+     build_lanes: Option<bool>,
+     /// 席の手元の要の写しの repo 相対の path（任意 key `seat-constitution`・無ければ `None`＝brief は 12 行・tsuzuri の判断の記録 ADR-38）。
+     seat_constitution: Option<String>,
++    /// 便の同時の数の上限（任意 key `run-cap` と `run-cap-paths`・無ければ `None`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
++    run_cap: Option<RunCap>,
+ }
+ 
+ /// 出所つきの宣言。**[`Effective`] はこれを消費してしか作れない**（C10）。
+@@ -572,14 +576,12 @@ impl Declared {
+         let teeth_check = teeth_check_of(&found, &mut errors);
+         let build_lanes = build_lanes_of(&found, &mut errors);
+         let seat_constitution = seat_constitution_of(&found, &mut errors);
++        let run_cap = run_cap::declared_of(&found, &mut errors);
+         let index = index_keys_of(&found, &mut errors);
+         let contract_tables = contract_tables_of(&found, &mut errors);
+         let constitution = constitution_of(&found, &mut errors);
+         if schema != Some(SCHEMA_VERSION) {
+-            errors.push(DeclError::new(
+-                0,
+-                format!("schema は {SCHEMA_VERSION} である（実 {schema:?}）"),
+-            ));
++            errors.push(DeclError::new(0, format!("schema は {SCHEMA_VERSION} である（実 {schema:?}）")));
+         }
+         if errors.is_empty() {
+             Ok(Self {
+@@ -607,6 +609,7 @@ impl Declared {
+                 teeth_check,
+                 build_lanes,
+                 seat_constitution,
++                run_cap,
+             })
+         } else {
+             Err(errors)
+@@ -1305,8 +1308,10 @@ mod tests {
+                 "constitution",
+                 "build-lanes",
+                 "seat-constitution",
++                "run-cap",
++                "run-cap-paths",
+             ],
+-            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本）"
++            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本と ADR-63 の run-cap と run-cap-paths の 2 本）"
+         );
+     }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+index e00e3227339168bec0a0471510a0f7f3f36e645b..d0f62e4fc3f378dec1c6e1c7da476a5a22f3b759 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+@@ -4,7 +4,7 @@
+ //! 再輸出で `crate::pipe::declaration::terminal_facts` などのまま。新しい任意 key は、key の名・読み手・key の列の 1 行ずつ・
+ //! 外へ渡す口をこの file へ、`Declared` の欄と `parse` の読みの 1 行を親へ足す。
+ 
+-use super::{crate_roots, path_kinds};
++use super::{crate_roots, path_kinds, run_cap};
+ use super::{declared_at_head, head_declaration, Ceiling, DeclError, Declared, EntranceFlip, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
+ use std::path::Path;
+ 
+@@ -36,6 +36,8 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
+     CONSTITUTION_KEY,
+     BUILD_LANES_KEY,
+     SEAT_CONSTITUTION_KEY,
++    run_cap::CAP_KEY,
++    run_cap::PATHS_KEY,
+ ];
+ 
+ /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
+@@ -378,6 +380,8 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
+     CONSTITUTION_KEY,
+     BUILD_LANES_KEY,
+     SEAT_CONSTITUTION_KEY,
++    run_cap::CAP_KEY,
++    run_cap::PATHS_KEY,
+ ];
+ 
+ /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs b/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..10e6e6fb77aef84921a687b13ac4b946274fc2c1
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/declaration/run_cap.rs
+@@ -0,0 +1,170 @@
++//! 便の同時の数の上限（vessel 宣言の任意 key `run-cap` と `run-cap-paths`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
++//!
++//! write-set の項目のどれかが `run-cap-paths` の dir の下に在る便を数える便とし、数える契約は、数える live な便と同じ周に
++//! 起こした数える便が `run-cap` 本に達した周に起こさない（受付の断りと列の待ちが同じ判じ〔[`RunCap::counts`] と
++//! [`RunCap::holder`] を撃つ受付の `capped`〕を読む・C2）。
++//! 数える path の字は器の code に書かず、宣言が持つ。2 key は揃えて書き、片方だけの宣言は不備。読むのは HEAD の宣言だけ。
++
++use super::{head_declaration, int_of, list_of, DeclError, Raw};
++use crate::pipe::refuse::covered;
++use std::path::Path;
++
++/// 上限の本数の key（1 以上の整数）。
++pub(super) const CAP_KEY: &str = "run-cap";
++
++/// 数える path の key（repo 相対の dir・末尾 `/`・1 項目以上）。
++pub(super) const PATHS_KEY: &str = "run-cap-paths";
++
++/// 宣言の上限（2 key を揃えた値）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct RunCap {
++    /// 同時に起こせる数える便の本数（1 以上）。
++    pub cap: u64,
++    /// 数える dir の列（書いた順）。
++    pub paths: Vec<String>,
++}
++
++impl RunCap {
++    /// write-set の項目のどれかが数える dir の下に在るか（項目の頭の印を剥がして畳む規則は交差と同じ [`covered`]）。
++    pub fn counts(&self, write_set: &[String]) -> bool {
++        write_set.iter().any(|item| covered(&self.paths, item))
++    }
++
++    /// 数える契約の前に、ほかの便 `others`（名と write-set・同じ周に起こした便と live な便）のうち数える便が上限に達していれば
++    /// 先頭の 1 本の名を返す（上限の内は `None`・契約を数えるかは呼び手が [`Self::counts`] で先に見る）。
++    pub fn holder<'a>(&self, others: &[(&'a str, &[String])]) -> Option<&'a str> {
++        let held: Vec<&'a str> = others.iter().filter(|(_, set)| self.counts(set)).map(|&(name, _)| name).collect();
++        (u64::try_from(held.len()).unwrap_or(u64::MAX) >= self.cap).then(|| held.first().copied()).flatten()
++    }
++
++    /// HEAD の宣言の上限（宣言 file が無い周と 2 key の無い周は `Ok(None)`・在って読めない周は `Err`）。
++    pub fn at_head(repo: &Path) -> Result<Option<Self>, Vec<DeclError>> {
++        head_declaration(repo).transpose().map(|found| found.and_then(|declared| declared.run_cap))
++    }
++}
++
++/// 宣言の本文から 2 key を読む（無ければ `None`・片方だけ・0・項目の不備は key と行番号を名指して積む）。
++pub(super) fn declared_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<RunCap> {
++    let line_of = |key: &str| found.iter().find(|(seen, _, _)| seen == key).map(|&(_, _, line)| line);
++    let before = errors.len();
++    let cap = int_of(found, CAP_KEY, errors);
++    let (paths, paths_at) = list_of(found, PATHS_KEY, errors);
++    match (line_of(CAP_KEY), line_of(PATHS_KEY)) {
++        (None, None) => return None,
++        (Some(line), None) => errors.push(DeclError::new(line, format!("{PATHS_KEY} が無い（{CAP_KEY} と揃える）"))),
++        (None, Some(line)) => errors.push(DeclError::new(line, format!("{CAP_KEY} が無い（{PATHS_KEY} と揃える）"))),
++        (Some(line), Some(_)) if cap == Some(0) => errors.push(DeclError::new(line, format!("{CAP_KEY} は 1 以上である"))),
++        (Some(_), Some(_)) => {}
++    }
++    for item in &paths {
++        if let Some(why) = item_defect(item) {
++            errors.push(DeclError::new(paths_at, format!("{PATHS_KEY} の項目 {item:?} は{why}")));
++        }
++    }
++    (errors.len() == before).then_some(RunCap { cap: cap?, paths })
++}
++
++/// 項目 1 つの不備（無ければ `None`）。
++fn item_defect(item: &str) -> Option<&'static str> {
++    if item.trim().is_empty() {
++        Some("空である")
++    } else if !item.ends_with('/') {
++        Some("末尾が / でない")
++    } else if item.starts_with('/') {
++        Some("絶対 path である")
++    } else if item.split('/').any(|part| part == "..") {
++        Some(".. の段を持つ")
++    } else {
++        None
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::RunCap;
++    use crate::pipe::declaration::Declared;
++
++    /// 必須 key だけの宣言（3 行）の後ろに `extra` を足す。
++    fn with(extra: &str) -> String {
++        format!("schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n{extra}")
++    }
++
++    /// 宣言だけの 1 commit を持つ使い捨ての git repo。
++    fn repo_declaring(name: &str, declaration: &str) -> std::path::PathBuf {
++        let repo = crate::pipe::fixture::scratch(name);
++        let setup: [&[&str]; 4] =
++            [&["init", "-q", "-b", "main"], &["config", "user.name", "t"], &["config", "user.email", "t@example.invalid"], &["config", "commit.gpgsign", "false"]];
++        for args in setup {
++            assert!(crate::pipe::git_ok(&repo, args), "{args:?}");
++        }
++        assert!(std::fs::write(repo.join(crate::pipe::declaration::DECL_FILE), declaration).is_ok(), "宣言を書けた");
++        assert!(crate::pipe::git_ok(&repo, &["add", "-A"]), "add");
++        assert!(crate::pipe::git_ok(&repo, &["commit", "-q", "-m", "seed"]), "commit");
++        repo
++    }
++
++    /// 2 key の宣言は値を持ち、2 key の無い宣言は `None`。
++    #[test]
++    fn vrcap_declaration_reads_the_two_keys_or_nothing() {
++        let two = Declared::parse(&with("run-cap = 1\nrun-cap-paths = [\"vessel/\", \"nest/x/\"]\n")).map(|found| found.run_cap);
++        assert_eq!(two, Ok(Some(RunCap { cap: 1, paths: vec!["vessel/".to_owned(), "nest/x/".to_owned()] })));
++        let three = Declared::parse(&with("run-cap = 3\nrun-cap-paths = [\"vessel/\"]\n")).map(|found| found.run_cap.map(|cap| cap.cap));
++        assert_eq!(three, Ok(Some(3)), "本数は宣言の値");
++        assert_eq!(Declared::parse(&with("")).map(|found| found.run_cap), Ok(None));
++    }
++
++    /// 正しい宣言から 1 句だけ外した 8 形は、key の名と書いた行（4 行目か 5 行目）を名指す不備。
++    #[test]
++    fn vrcap_declaration_names_eight_defects() {
++        let bad = [
++            ("run-cap = 1\n", 4, "run-cap-paths が無い"),
++            ("run-cap-paths = [\"vessel/\"]\n", 4, "run-cap が無い"),
++            ("run-cap = 0\nrun-cap-paths = [\"vessel/\"]\n", 4, "run-cap は 1 以上"),
++            ("run-cap = \"1\"\nrun-cap-paths = [\"vessel/\"]\n", 4, "run-cap は整数"),
++            ("run-cap = 1\nrun-cap-paths = \"vessel/\"\n", 5, "run-cap-paths は配列"),
++            ("run-cap = 1\nrun-cap-paths = [\"vessel\"]\n", 5, "末尾が / でない"),
++            ("run-cap = 1\nrun-cap-paths = [\"/vessel/\"]\n", 5, "絶対 path"),
++            ("run-cap = 1\nrun-cap-paths = [\"a/../vessel/\"]\n", 5, ".. の段"),
++        ];
++        for (extra, line, want) in bad {
++            let errors = Declared::parse(&with(extra)).expect_err(extra);
++            assert!(errors.iter().any(|error| error.line == line && error.reason.contains(want)), "{extra}: {errors:?}");
++        }
++    }
++
++    /// 数える便: 印（`+`・`-`・`~`・`=`）を剥がした項目が数える dir の下か dir そのもの（末尾 / の無い字も・交差と同じ畳み）。
++    /// 段の境目で切り、ほかの dir の下は数えない。
++    #[test]
++    fn vrcap_counts_items_under_the_declared_dirs() {
++        let cap = RunCap { cap: 1, paths: vec!["vessel/".to_owned()] };
++        let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect::<Vec<String>>();
++        for item in ["vessel/a.rs", "+vessel/new.rs", "-vessel/b.rs", "~vessel/c.rs", "=vessel/d.rs", "vessel/deep/", "vessel/", "vessel"] {
++            assert!(cap.counts(&owned(&["docs/x.md", item])), "{item}");
++        }
++        for item in ["vesselx/a.rs", "other/vessel/a.rs", "vesse"] {
++            assert!(!cap.counts(&owned(&[item])), "{item}");
++        }
++    }
++
++    /// 上限の判じ: ほかの数える便が上限の本数に達した周に先頭の 1 本を名指し、数えない便は数えない。
++    #[test]
++    fn vrcap_holder_names_the_first_counted_run_at_the_cap() {
++        let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect::<Vec<String>>();
++        let (mine, theirs, plain) = (owned(&["vessel/a.rs"]), owned(&["+vessel/b.rs"]), owned(&["docs/x.md"]));
++        let one = RunCap { cap: 1, paths: vec!["vessel/".to_owned()] };
++        let two = RunCap { cap: 2, ..one.clone() };
++        assert_eq!(one.holder(&[("r-plain", &plain), ("r-1", &theirs)]), Some("r-1"));
++        assert_eq!(one.holder(&[("r-plain", &plain)]), None, "数えない便は数えない");
++        assert_eq!(two.holder(&[("r-1", &theirs)]), None, "上限の内");
++        assert_eq!(two.holder(&[("r-1", &theirs), ("s2-b", &mine)]), Some("r-1"), "上限に達すると先頭");
++    }
++
++    /// HEAD の口: 2 key を持つ宣言は値・持たない宣言は `None`・壊した宣言は `Err`。
++    #[test]
++    fn vrcap_head_reads_the_declaration_at_head() {
++        let declared = repo_declaring("vrcap-declared", &with("run-cap = 1\nrun-cap-paths = [\"vessel/\"]\n"));
++        assert_eq!(RunCap::at_head(&declared), Ok(Some(RunCap { cap: 1, paths: vec!["vessel/".to_owned()] })));
++        assert_eq!(RunCap::at_head(&repo_declaring("vrcap-plain", &with(""))), Ok(None));
++        assert!(RunCap::at_head(&repo_declaring("vrcap-broken", &with("run-cap = 1\n"))).is_err(), "片方だけは読めない");
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch.rs b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+index 498650fa778ec5f79640063f29aa2e6aca1e992d..4cd5c3ede1464796c0a89a9cc1790c5b1b5ad581 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+@@ -122,7 +122,7 @@ const LAUNCH_LOG: [&str; 2] = ["pipe", "launch.log"];
+ 
+ /// [`WaitReason`] の全 variant の名（宣言順・`enum-slices` が集合完全性を測る）。
+ pub const WAIT_REASONS: &[&str] =
+-    &["dependency", "overlap", "admission", "host-busy", "hold", "launched", "settled", "no-design-pointer", "unreflected-ruling", "floor", "reserved", "sibling"];
++    &["dependency", "overlap", "admission", "host-busy", "hold", "launched", "settled", "no-design-pointer", "unreflected-ruling", "floor", "reserved", "sibling", "run-cap"];
+ 
+ /// 列に載ったのに起こさない理由（**閉じた型**・設計 §3 の表）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -195,6 +195,9 @@ pub enum WaitReason {
+     /// 設計の側の終端に着いた契約 B と同じ設計から出た行で、B の直しが入るまで待つ（値は B の bead id か、期限の行を読めない周は末尾に `/unset`・
+     /// 設計 row-review.md §8・行 g）。
+     Sibling(String),
++    /// 宣言 `run-cap-paths` の dir の下を書く契約で、同じ dir の下を書く live な便と同じ周に起こした便が宣言 `run-cap` の本数に
++    /// 達した（値は先頭の 1 本の run id か同じ周に起こした bead id・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
++    RunCap(String),
+ }
+ 
+ impl WaitReason {
+@@ -213,6 +216,7 @@ impl WaitReason {
+             Self::Floor(_) => "floor",
+             Self::Reserved(_) => "reserved",
+             Self::Sibling(_) => "sibling",
++            Self::RunCap(_) => "run-cap",
+         }
+     }
+ 
+@@ -225,7 +229,7 @@ impl WaitReason {
+             Self::Overlap { ref with, ref files, verdict: Some(found) } => format!("{name}:{with}/{}/{}", files.len(), found.as_str()),
+             Self::Admission { reason, .. } => format!("{name}:{reason}"),
+             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
+-            Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
++            Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) | Self::RunCap(ref id) => format!("{name}:{id}"),
+             Self::Settled { ref sha, stage } => format!("{name}:{sha}/{}", stage.as_str()),
+             Self::Floor(ref found) => format!("{name}:{}", found.rc.map_or_else(|| found.word.as_str().to_owned(), |rc| rc.to_string())),
+             Self::Reserved(ref held) => format!("{name}:{}", held.value()),
+@@ -1329,6 +1333,7 @@ mod tests {
+             WaitReason::Reserved(reserve::Held { by: "s2-b".to_owned(), files: 1, unset: true }),
+             WaitReason::Sibling("s2-b".to_owned()),
+             WaitReason::Sibling("s2-b/unset".to_owned()),
++            WaitReason::RunCap("r3".to_owned()),
+         ];
+         let mut names: Vec<&str> = listed.iter().map(WaitReason::as_str).collect();
+         names.dedup();
+@@ -1354,8 +1359,9 @@ mod tests {
+                 "reserved:s2-b/1/unset",
+                 "sibling:s2-b",
+                 "sibling:s2-b/unset",
++                "run-cap:r3",
+             ],
+-            "値を持つ 9 件は値も描き、床は 3 形（rc・unfireable・timeout）・行の予約と兄弟の待ちは 2 形（末尾 /unset）"
++            "値を持つ 10 件は値も描き、床は 3 形（rc・unfireable・timeout）・行の予約と兄弟の待ちは 2 形（末尾 /unset）"
+         );
+     }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+index 9edf9edc5b0526e30600729d7224b941f0fb46d3..c6639182d523f5e8a0d053b7085b6f7941c1254d 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+@@ -12,9 +12,10 @@
+ // flip-check: moved s2-07l.531
+ 
+ use super::super::admission::{self, Sizes};
+-use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
++use super::super::cli::{capped, crossings, generated, int_row, judge, live, Denial, Material, Materials};
+ use super::super::commute;
+ use super::super::contract::Contract;
++use super::super::declaration::RunCap;
+ use super::super::gate::Verdict;
+ use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
+ use super::super::review;
+@@ -253,6 +254,8 @@ pub(super) fn settle(
+         materials: found,
+         sizes: sizes_of(input.manifest),
+         slots: host_slots_dir(input.state_dir),
++        // 宣言を読めない周は上限を持たない（候補は受付の判定の `freeze` が宣言の不備で待たせる）。
++        cap: RunCap::at_head(input.repo).ok().flatten(),
+     });
+     let mut started: Vec<(String, &Contract)> = Vec::new();
+     let mut turn =
+@@ -282,6 +285,8 @@ struct Room<'a> {
+     sizes: Sizes,
+     /// host の枠の札の置き場。
+     slots: std::path::PathBuf,
++    /// HEAD の宣言の同時の数の上限（無い周は `None`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
++    cap: Option<RunCap>,
+ }
+ 
+ /// 交差・余地・枠のうち最初に落ちた理由（通れば `None`）。**判定は受付の関数をそのまま撃つ**（記帳なし）。
+@@ -295,6 +300,14 @@ fn blocker(
+     if let Some(reason) = overlap(input, contract, tracked, started) {
+         return Some(reason);
+     }
++    // 宣言の同時の数の上限は受付と同じ 1 本（[`capped`]）を、同じ周に起こした bead も数えて撃つ。
++    if let Some(cap) = room.cap.as_ref() {
++        match capped(input.state_dir, cap, contract, started) {
++            Ok(Some(with)) => return Some(WaitReason::RunCap(with)),
++            Ok(None) => {}
++            Err(denial) => return Some(refused_by(&denial)),
++        }
++    }
+     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
+     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。
+     // lock の前の読みは渡さない＝judge が freeze を撃ち、base の木は撃たない（入口の断りは立てない・設計 pipeline.md §56 形 7）。
+diff --git a/scribe2/crates/scribe2/src/pipe/refuse.rs b/scribe2/crates/scribe2/src/pipe/refuse.rs
+index 371725ba3f777aa912685ba880ece03f782e75d9..1048ab955a796ffdb02550e5e1969042b55cc3e6 100644
+--- a/scribe2/crates/scribe2/src/pipe/refuse.rs
++++ b/scribe2/crates/scribe2/src/pipe/refuse.rs
+@@ -70,6 +70,7 @@ pub(crate) const REFUSALS: &[&str] = &[
+     "index-building",
+     "code-facts",
+     "code-facts-unmeasured",
++    "run-cap",
+ ];
+ 
+ /// 起動の列の起こす側の 1 周が、受付の理由にこの語で待つ候補が在るとき、HEAD の code の索引の組み立てを裏で起こす契機の語
+@@ -274,6 +275,14 @@ pub(crate) enum Refuse {
+         /// 測れない理由の状態の語（`absent`・`building`・`failed:<失敗の語>`・`none`・`undeclared`）。
+         state: String,
+     },
++    /// 宣言 `run-cap-paths` の dir の下を書く契約で、同じ dir の下を書く live な便が宣言 `run-cap` の本数に達した（tsuzuri の判断の記録
++    /// ADR-63 の決定 (13)・受付と列の待ちが同じ判じを読む・走行中の便は止めない）。
++    RunCap {
++        /// 数えた live な便の先頭の run id。
++        run: String,
++        /// 宣言の本数。
++        cap: u64,
++    },
+ }
+ 
+ /// 欄 `code-facts` の名乗りと実測が違う要素 1 つ（[`Refuse::CodeFacts`] の中身・断りの型を小さく保つために箱に入れる）。
+@@ -324,6 +333,7 @@ impl Refuse {
+             Self::IndexBuilding { .. } => "index-building",
+             Self::CodeFacts(_) => "code-facts",
+             Self::CodeFactsUnmeasured { .. } => "code-facts-unmeasured",
++            Self::RunCap { .. } => "run-cap",
+         }
+     }
+ 
+@@ -396,6 +406,8 @@ impl Refuse {
+             Self::IndexBuilding { ref state } => index_building_reason(self.as_str(), state),
+             Self::CodeFacts(ref found) => code_facts_reason(self.as_str(), found),
+             Self::CodeFactsUnmeasured { ref element, ref state } => unmeasured_reason(self.as_str(), element, state),
++            // stderr の 1 行は `pipe: run-cap run=<id> cap=<n>`（max-live と同じ名と 2 値の形）。
++            Self::RunCap { ref run, cap } => format!("{} run={run} cap={cap}", self.as_str()),
+         }
+     }
+ 
+@@ -427,7 +439,8 @@ impl Refuse {
+             | Self::EntranceNotRed { .. }
+             | Self::RulingUnresolved { .. }
+             | Self::IndexBuilding { .. }
+-            | Self::CodeFactsUnmeasured { .. } => Evidence::Place,
++            | Self::CodeFactsUnmeasured { .. }
++            | Self::RunCap { .. } => Evidence::Place,
+             Self::ContractTable(ref found) => found.evidence(),
+         }
+     }
+@@ -459,7 +472,8 @@ impl Refuse {
+             | Self::EntranceNotRed { .. }
+             | Self::IndexBuilding { .. }
+             | Self::CodeFacts(_)
+-            | Self::CodeFactsUnmeasured { .. } => RC_REFUSED,
++            | Self::CodeFactsUnmeasured { .. }
++            | Self::RunCap { .. } => RC_REFUSED,
+             Self::RulingUnresolved { ref unmeasured, .. } if unmeasured.is_some() => RC_BROKEN,
+             Self::RulingUnresolved { .. } => RC_REFUSED,
+             Self::WriteSetUnreadable { .. } => RC_BROKEN,
+@@ -759,6 +773,7 @@ mod tests {
+                 text: "text=9".to_owned(),
+             })),
+             Refuse::CodeFactsUnmeasured { element: "refs:crate::pipe::refuse::Refuse=3".to_owned(), state: "absent".to_owned() },
++            Refuse::RunCap { run: "r-1".to_owned(), cap: 1 },
+         ]
+     }
+ 
+@@ -857,6 +872,14 @@ mod tests {
+         assert!(found.iter().skip(7).take(3).all(|refuse| refuse.rc() == RC_REFUSED), "前提違反は rc 1");
+     }
+ 
++    /// 宣言の同時の数の上限の断り（tsuzuri の判断の記録 ADR-63 の決定 (13)）は名と run / cap の 2 値だけの 1 行・rc 1・在り処は置き場。
++    #[test]
++    fn vrcap_refusal_names_the_run_and_the_cap() {
++        let found = Refuse::RunCap { run: "r-1".to_owned(), cap: 1 };
++        assert_eq!((found.as_str(), found.reason(), found.rc()), ("run-cap", "run-cap run=r-1 cap=1".to_owned(), RC_REFUSED));
++        assert_eq!(found.evidence(), Evidence::Place);
++    }
++
+     /// 閉包の file が write-set に含まれるか: dir（末尾 `/`）は配下全部・file は字面の一致・正規化してから比べる。
+     #[test]
+     fn refuse_covered_follows_the_overlap_folding() {
+@@ -885,12 +908,12 @@ mod tests {
+         // 約束の行の 2 理由（設計 contract-source.md §33・`s2-07l.512`）が同時本数の上限（gate-cost.md §24・`s2-07l.398`）の
+         // 手前に並び、base の木で撃った入口の断り（pipeline.md §56・`s2-07l.557`）がその次で、裁定 id の引用の断り（dispatcher.md
+         // §37・行 al）がその次で、索引の組み立て中の断り（reverse-index.md §7 (b)・行 d）がその次で、欄 code-facts の違いと測れない周の
+-        // 2 断り（§7 (c)・行 e）が末尾で、母集団は 27 値。
+-        assert_eq!(REFUSALS.len(), 27, "母集団 27 値");
+-        assert_eq!(names.last().copied(), Some("code-facts-unmeasured"), "末尾は欄 code-facts の測れない周");
+-        assert_eq!(names.iter().rev().skip(1).take(2).copied().collect::<Vec<&str>>(), ["code-facts", "index-building"]);
++        // 2 断り（§7 (c)・行 e）がその次で、宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）が末尾で、母集団は 28 値。
++        assert_eq!(REFUSALS.len(), 28, "母集団 28 値");
++        assert_eq!(names.last().copied(), Some("run-cap"), "末尾は宣言の同時の数の上限");
++        assert_eq!(names.iter().rev().skip(1).take(3).copied().collect::<Vec<&str>>(), ["code-facts-unmeasured", "code-facts", "index-building"]);
+         assert_eq!(
+-            names.iter().rev().skip(3).take(4).copied().collect::<Vec<&str>>(),
++            names.iter().rev().skip(4).take(4).copied().collect::<Vec<&str>>(),
+             ["ruling-unresolved", "entrance-not-red", "max-live", "promise-symbol-unresolved"]
+         );
+         let entrance = samples().get(22).map(|found| (found.reason(), found.rc()));
+@@ -915,7 +938,8 @@ mod tests {
+     /// 決まる 3 語・名指した file の 4 語（file は payload の字面）・本文の読み手の 7 語・置き場と host の 8 語・契約表の
+     /// 欠陥は理由の側（samples の `section-missing` は行）。名の 23 は歯を置いた時の語数で、行 al が置き場と host に 1 語足し（24 語）、
+     /// 行 d が置き場と host に索引の組み立て中の 1 語を足し（25 語）、行 e が本文の読み手に 1 語（code-facts）・置き場と host に 1 語
+-    /// （code-facts-unmeasured・宣言を名乗らない周だけ vessel 宣言の file）を足した（27 語）。
++    /// （code-facts-unmeasured・宣言を名乗らない周だけ vessel 宣言の file）を足した（27 語）。tsuzuri の判断の記録 ADR-63 の決定 (13) の
++    /// 行 v-one-vessel が置き場と host に宣言の同時の数の上限の 1 語（run-cap）を足した（28 語）。
+     #[test]
+     fn pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words() {
+         let found: Vec<(&str, String)> = samples().iter().map(|refuse| (refuse.as_str(), refuse.evidence().render())).collect();
+@@ -947,6 +971,7 @@ mod tests {
+             ("index-building", "place"),
+             ("code-facts", "name"),
+             ("code-facts-unmeasured", "place"),
++            ("run-cap", "place"),
+         ];
+         let want: Vec<(&str, String)> = want.iter().map(|(name, at)| (*name, (*at).to_owned())).collect();
+         assert_eq!(found, want, "母集団 {} 語の在り処", REFUSALS.len());
+@@ -1031,13 +1056,13 @@ mod tests {
+         assert!(INDEX_BUILD_TRIGGERS.iter().all(|word| REFUSALS.contains(word)), "契機の語は断りの語");
+     }
+ 
+-    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の末尾が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
++    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の末尾の run-cap の前が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
+     /// 違いの断りは要素・名乗り・実測・site の先頭 3 つと残りの件数・母集団を名指し、在り処は本文の読み手。測れない周の断りは要素と状態の語を名指し、
+     /// 在り処は置き場（undeclared だけ vessel 宣言の file）で、確からしさは absent が unmeasured・undeclared が firm。
+     #[test]
+     fn refuse_code_facts_names_the_difference_and_the_unmeasured_state() {
+-        let tail: Vec<&str> = REFUSALS.iter().rev().take(2).copied().collect();
+-        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "末尾 2 語は code-facts・code-facts-unmeasured の順");
++        let tail: Vec<&str> = REFUSALS.iter().rev().skip(1).take(2).copied().collect();
++        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "末尾の run-cap の前の 2 語は code-facts・code-facts-unmeasured の順");
+         let differ = Refuse::CodeFacts(Box::new(Difference {
+             element: "literals:crate::x::Y=2".to_owned(),
+             claimed: "2".to_owned(),
+diff --git a/scribe2/docs/design/case-lifecycle.md b/scribe2/docs/design/case-lifecycle.md
+index f5afbd009c57ffaa2c9ef0bd35230389ab034a77..1cf1b707c96469bbf6cf3652353ffa3489b19edf 100644
+--- a/scribe2/docs/design/case-lifecycle.md
++++ b/scribe2/docs/design/case-lifecycle.md
+@@ -97,15 +97,15 @@
+ | row-unbeaded・epic-closable・misfit | seat | |
+ | requirement-unrowed | seat | 閾値越えに数えない（FR90） |
+ 
+-contract-queued の理由から手番（語の集合が `WAIT_REASONS` を含むことを歯で測る。dispatcher の後の行が足す語 unreflected-ruling・floor と、[row-review.md](./row-review.md) の行 f・g が足す語 reserved・sibling は先に置く）:
++contract-queued の理由から手番（語の集合が `WAIT_REASONS` を含むことを歯で測る。dispatcher の後の行が足す語 unreflected-ruling・floor と、[row-review.md](./row-review.md) の行 f・g が足す語 reserved・sibling は先に置く。宣言の同時の数の上限の語 run-cap は tsuzuri の判断の記録 ADR-63 の決定 (13) の器の行 v-one-vessel が足す）:
+ 
+ | 理由 | 手番 |
+ |---|---|
+-| dependency・overlap・host-busy・launched | vessel |
++| dependency・overlap・host-busy・launched・run-cap | vessel |
+ | hold・no-design-pointer・unreflected-ruling・floor・reserved・sibling | seat |
+ | settled | none（最新の便の部品が手番を持つ） |
+ 
+-- `admission` は contract-refused に当たり、queued の部品にはならない。ただし表は `WAIT_REASONS` の 8 語を全部覆う（語が増えたら表の歯が落ちる）ので、admission を contract-refused と同じ手番 seat で持つ（表は 10 語・row-review.md の行 f と g が 1 語ずつ足して 12 語）。表に無い語は misfit `no-phase` へ倒す（fail-closed）。
++- `admission` は contract-refused に当たり、queued の部品にはならない。ただし表は `WAIT_REASONS` の 8 語を全部覆う（語が増えたら表の歯が落ちる）ので、admission を contract-refused と同じ手番 seat で持つ（表は 10 語・row-review.md の行 f と g が 1 語ずつ足して 12 語・器の行 v-one-vessel が 1 語足して 13 語）。表に無い語は misfit `no-phase` へ倒す（fail-closed）。
+ 
+ ## 4. misfit の理由の語（閉じた 15 語）
+ 
