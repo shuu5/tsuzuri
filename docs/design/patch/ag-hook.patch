@@ -1,0 +1,461 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_bind.rs b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+new file mode 100644
+index 00000000..93e96ad2
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/hook/agent_bind.rs
+@@ -0,0 +1,54 @@
++//! tz hook agent-bind（行 ag-spec・判断の記録 ADR-59 決定 (4)・要件 FR21）: 結びの口。
++//! 撃つのは Claude Code（PostToolUse の hook・matcher Agent）。席の Agent の呼びの結果に係の id（`tool_response.agentId`）が在り、
++//! 起こしの名の係の札が在る時だけ、札の `agent_id` に係の id を書き、起草の置き場の `.agents/<係の id>` に名を書く。
++//! それ以外（係の呼び・ほかの道具・係の id の無い結果・札の無い名・置き場を解けない）は何も書かない。出力は無く、rc は 0 か 1（使い方の誤り）だけ。
++
++use std::fs;
++use std::io::Read;
++
++use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec, bound};
++
++use super::agent_spawn::{drafts, parse};
++use crate::out::emit_err;
++
++pub const USAGE: &str = "usage: tz hook agent-bind --repo <dir> [--drafts <dir>]";
++
++/// 使い方の誤り。
++const FAIL: u8 = 1;
++
++/// tz hook agent-bind の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut payload = String::new();
++    if std::io::stdin().read_to_string(&mut payload).is_err() {
++        payload.clear();
++    }
++    let Some((name, id)) = bound(&payload) else {
++        return 0;
++    };
++    let args = match parse(rest) {
++        Ok(args) => args,
++        Err(e) => {
++            emit_err(&format!("tz hook agent-bind: {e}\n{USAGE}"));
++            return FAIL;
++        }
++    };
++    let Some(dir) = drafts(&args) else {
++        emit_err("tz hook agent-bind: 起草の置き場を解けない（書かない）");
++        return 0;
++    };
++    let file = dir.join(&name).join(SPEC);
++    let Some(mut spec) = fs::read_to_string(&file).ok().and_then(|t| Spec::parse(&t)) else {
++        emit_err(&format!(
++            "tz hook agent-bind: 係 {name} の札が無い（書かない）"
++        ));
++        return 0;
++    };
++    spec.agent_id = Some(id.clone());
++    let wrote = fs::write(&file, spec.render())
++        .and_then(|()| fs::create_dir_all(dir.join(AGENTS)))
++        .and_then(|()| fs::write(dir.join(AGENTS).join(&id), format!("{name}\n")));
++    if let Err(e) = wrote {
++        emit_err(&format!("tz hook agent-bind: 結びを書けない: {e}"));
++    }
++    0
++}
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_spawn.rs b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+new file mode 100644
+index 00000000..cfb053d2
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/hook/agent_spawn.rs
+@@ -0,0 +1,129 @@
++//! tz hook agent-spawn（行 ag-spec・判断の記録 ADR-59 決定 (2)(4)・要件 FR21）: 係の起こしの門。
++//! 撃つのは Claude Code（PreToolUse の hook・matcher Agent）。標準入力の hook の入力が席の Agent の呼び（係の id の無い呼び）の時だけ判じる。順:
++//! 1. 標準入力を全部読む。席の Agent の呼びでなければ（係の呼び・ほかの道具）何も読まず何も出さずに 0。
++//! 2. 起草の置き場を --drafts か、repo の git config の鍵 `tsuzuri.draftsdir` から解く。解けなければ標準エラーに書いて通す（fail-open）。
++//! 3. 置き場の直下の dir の係の札を全部読み、中核の `judge` で判じる。断る時は deny の答えを標準出力に 1 行で書いて 0。
++//! 4. 通す時は `<名>/brief.md` に prompt の字を、`<名>/spec.json` に係の札を書いて 0（書けなければ標準エラーに書いて通す）。
++//!
++//! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
++
++use std::ffi::OsStr;
++use std::fs;
++use std::io::Read;
++use std::path::{Path, PathBuf};
++
++use tsuzuri_core::agent::spec::{BRIEF, SPEC, Spec, deny, judge, reason, spawn_call};
++
++use crate::acct::GIT;
++use crate::consult::{DRAFTS_ARGS, GIT_TIMEOUT};
++use crate::out::{emit, emit_err};
++use crate::server::events::now;
++use crate::server::proc;
++
++pub const USAGE: &str = "usage: tz hook agent-spawn --repo <dir> [--drafts <dir>]";
++
++/// 使い方の誤り。
++const FAIL: u8 = 1;
++
++/// 読んだ引数（repo の置き場・省ける起草の置き場）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Args {
++    pub repo: PathBuf,
++    pub drafts: Option<PathBuf>,
++}
++
++/// `--名 値` か `--名=値` の --repo と、省ける --drafts を読む（空の値と 2 度目は断る・--repo は省けない）。
++pub fn parse(rest: &[&str]) -> Result<Args, String> {
++    let (mut repo, mut drafts) = (None, None);
++    let mut it = rest.iter();
++    while let Some(arg) = it.next() {
++        let (name, value) = match arg.split_once('=') {
++            Some((n, v)) => (n, v),
++            None => (*arg, *it.next().ok_or_else(|| format!("{arg} の値が無い"))?),
++        };
++        let slot = match name {
++            "--repo" => &mut repo,
++            "--drafts" => &mut drafts,
++            _ => return Err(format!("知らない引数 {name}")),
++        };
++        if value.is_empty() {
++            return Err(format!("{name} の値が空"));
++        }
++        if slot.replace(value).is_some() {
++            return Err(format!("{name} が 2 度ある"));
++        }
++    }
++    let Some(repo) = repo else {
++        return Err("--repo が要る".into());
++    };
++    Ok(Args {
++        repo: PathBuf::from(repo),
++        drafts: drafts.map(PathBuf::from),
++    })
++}
++
++/// 起草の置き場（--drafts か repo の git config の鍵・dir でなければ None）。
++pub fn drafts(args: &Args) -> Option<PathBuf> {
++    let dir = match &args.drafts {
++        Some(d) => d.clone(),
++        None => {
++            let mut git_args = vec![OsStr::new("-C"), args.repo.as_os_str()];
++            git_args.extend(DRAFTS_ARGS.iter().map(OsStr::new));
++            let out = proc::capture(OsStr::new(GIT), git_args, &args.repo, GIT_TIMEOUT)?;
++            PathBuf::from(String::from_utf8(out).ok()?.trim())
++        }
++    };
++    dir.is_dir().then_some(dir)
++}
++
++/// 置き場の直下の dir の読める係の札の全部（読めない札は飛ばす）。
++pub fn specs(drafts: &Path) -> Vec<Spec> {
++    let Ok(dir) = fs::read_dir(drafts) else {
++        return Vec::new();
++    };
++    dir.flatten()
++        .filter_map(|e| fs::read_to_string(e.path().join(SPEC)).ok())
++        .filter_map(|t| Spec::parse(&t))
++        .collect()
++}
++
++/// 通した頼みと札を係の dir に書く。
++fn place(drafts: &Path, prompt: &str, spec: &Spec) -> std::io::Result<()> {
++    let dir = drafts.join(&spec.name);
++    fs::create_dir_all(&dir)?;
++    fs::write(dir.join(BRIEF), prompt)?;
++    fs::write(dir.join(SPEC), spec.render())
++}
++
++/// tz hook agent-spawn の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut payload = String::new();
++    if std::io::stdin().read_to_string(&mut payload).is_err() {
++        payload.clear();
++    }
++    let Some(call) = spawn_call(&payload) else {
++        return 0;
++    };
++    let args = match parse(rest) {
++        Ok(args) => args,
++        Err(e) => {
++            emit_err(&format!("tz hook agent-spawn: {e}\n{USAGE}"));
++            return FAIL;
++        }
++    };
++    let Some(dir) = drafts(&args) else {
++        emit_err("tz hook agent-spawn: 起草の置き場を解けない（通す）");
++        return 0;
++    };
++    match judge(&call, &specs(&dir), now()) {
++        Ok(spec) => {
++            if let Err(e) = place(&dir, &call.prompt, &spec) {
++                emit_err(&format!(
++                    "tz hook agent-spawn: 頼みと札を書けない（通す）: {e}"
++                ));
++            }
++        }
++        Err(r) => emit(&deny(&reason(&r, &call.prompt))),
++    }
++    0
++}
+diff --git a/crates/tsuzuri-boundary/src/hook/mod.rs b/crates/tsuzuri-boundary/src/hook/mod.rs
+index 75a6cf52..a0f1d6a3 100644
+--- a/crates/tsuzuri-boundary/src/hook/mod.rs
++++ b/crates/tsuzuri-boundary/src/hook/mod.rs
+@@ -4,7 +4,10 @@
+ //! 行 f-deliver で配達の hook（`deliver`・UserPromptSubmit の hook）を置く。
+ //! 行 f-deliver-tool で考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
+ //! 行 cs-hooks で、停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
++//! 行 ag-spec で係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
+ 
++pub mod agent_bind;
++pub mod agent_spawn;
+ pub mod consult;
+ pub mod deliver;
+ pub mod deliver_tool;
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index 01f283cf..a98f62c1 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -20,6 +20,8 @@
+ //! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
+ //! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
+ //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
++//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの門・rc は 0 か 1）。
++//! tz hook agent-bind --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
+ //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
+ //! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
+ //! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
+@@ -65,6 +67,8 @@ fn main() -> ExitCode {
+         ["hook", "deliver", rest @ ..] => tsuzuri_boundary::hook::deliver::run(rest),
+         ["hook", "deliver-tool", rest @ ..] => tsuzuri_boundary::hook::deliver_tool::run(rest),
+         ["hook", "question-gate", rest @ ..] => tsuzuri_boundary::hook::question_gate::run(rest),
++        ["hook", "agent-spawn", rest @ ..] => tsuzuri_boundary::hook::agent_spawn::run(rest),
++        ["hook", "agent-bind", rest @ ..] => tsuzuri_boundary::hook::agent_bind::run(rest),
+         ["hook", "question-signal", rest @ ..] => {
+             tsuzuri_boundary::hook::question_signal::run(rest)
+         }
+diff --git a/crates/tsuzuri-boundary/tests/aghk.rs b/crates/tsuzuri-boundary/tests/aghk.rs
+new file mode 100644
+index 00000000..00ff6432
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/aghk.rs
+@@ -0,0 +1,223 @@
++//! 係の起こしの門と結びの口の歯（接頭辞 aghk_・設計ノート surface-wave29b 行 ag-spec・判断の記録 ADR-59 決定 (1)(2)(4)）。
++//! tz の binary の tz hook agent-spawn と agent-bind に、係の試しの門の入力の形（会話の id と path は伏せた）を標準入力で渡し、
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）の drafts/ を --drafts で渡す（本物の起草の置き場と git config は読まない）。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++use std::time::{SystemTime, UNIX_EPOCH};
++
++/// 頼み（JSON の字の中の形・頭の 4 行と空の行と本文）。
++const PROMPT: &str = r"予算: token 250000\n組み: なし\n対象: t3-hub.87\n出す物: notes.md,apply.py\n\n行 ag-spec を起草する。";
++
++/// 係の呼びの頭の欄（試しの係の id の形）。
++const SUB: &str = r#""agent_id":"aa21461fe66d86b69","agent_type":"tsuzuri:drafter","#;
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）と、その下の空の drafts/。
++fn place(name: &str) -> (PathBuf, PathBuf) {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("aghk")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    let drafts = root.join("drafts");
++    fs::create_dir_all(&drafts).unwrap();
++    (root, drafts)
++}
++
++/// tz hook <verb> --repo <root> --drafts <drafts> に `input` を渡した結果。
++fn hook(verb: &str, root: &Path, input: &str) -> Output {
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", verb, "--repo"])
++        .arg(root)
++        .arg("--drafts")
++        .arg(root.join("drafts"))
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    let _ = child.stdin.take().unwrap().write_all(input.as_bytes());
++    child.wait_with_output().unwrap()
++}
++
++/// 門の入力（`head` は頭の欄の足し・`tail` は末の欄の足し）。
++fn input(event: &str, head: &str, tool: &str, tool_input: &str, tail: &str) -> String {
++    format!(
++        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"/T/s.jsonl","cwd":"/W","permission_mode":"bypassPermissions",{head}"hook_event_name":"{event}","tool_name":"{tool}","tool_input":{tool_input},"tool_use_id":"toolu_X"{tail}}}"#
++    )
++}
++
++/// Agent の tool_input（`name` は名の欄の足し）。
++fn agent(kind: &str, name: &str) -> String {
++    format!(
++        r#"{{"description":"起草","prompt":"{PROMPT}","subagent_type":"{kind}","run_in_background":true{name}}}"#
++    )
++}
++
++/// 席の起こしの入力（型 tsuzuri:drafter・名 w208a）。
++fn spawn_in(head: &str) -> String {
++    let name = r#","name":"w208a""#;
++    input(
++        "PreToolUse",
++        head,
++        "Agent",
++        &agent("tsuzuri:drafter", name),
++        "",
++    )
++}
++
++/// 起こしの結果の入力（`response` は tool_response の中身）。
++fn bind_in(head: &str, response: &str) -> String {
++    let tail = format!(r#","tool_response":{{"status":"async_launched"{response}}}"#);
++    let name = r#","name":"w208a""#;
++    input(
++        "PostToolUse",
++        head,
++        "Agent",
++        &agent("tsuzuri:drafter", name),
++        &tail,
++    )
++}
++
++/// 置き場の下の file の名の列（並べた相対の path）。
++fn tree(dir: &Path) -> Vec<String> {
++    let mut out = Vec::new();
++    for e in fs::read_dir(dir).unwrap().flatten() {
++        let p = e.path();
++        if p.is_dir() {
++            out.extend(tree(&p));
++        } else {
++            out.push(p.display().to_string());
++        }
++    }
++    out.sort();
++    out
++}
++
++/// 何も出さず何も書かない rc 0 の撃ち。
++fn silent(out: &Output, drafts: &Path, what: &str) {
++    assert_eq!(out.status.code(), Some(0), "{what}");
++    assert!(out.stdout.is_empty(), "{what}");
++    assert!(tree(drafts).is_empty(), "{what}");
++}
++
++/// 係の id の在る入力は起こしの門と結びの口の両方で rc 0・出力なし・何も書かない（型の外の Agent の呼びでも見ない）。Agent でない道具も同じ。
++#[test]
++fn aghk_agent_calls_and_other_tools_pass_silently() {
++    let (root, drafts) = place("silent");
++    let probe = input("PreToolUse", SUB, "Agent", &agent("tryp:probe", ""), "");
++    silent(&hook("agent-spawn", &root, &probe), &drafts, "係の起こし");
++    let bash = input("PreToolUse", "", "Bash", r#"{"command":"ls"}"#, "");
++    silent(&hook("agent-spawn", &root, &bash), &drafts, "席の Bash");
++    let bound = bind_in(SUB, r#","agentId":"a9f""#);
++    silent(&hook("agent-bind", &root, &bound), &drafts, "係の結び");
++    silent(&hook("agent-bind", &root, &bash), &drafts, "結びの Bash");
++    let seat = input("PreToolUse", "", "Agent", &agent("tryp:probe", ""), "");
++    let out = hook("agent-spawn", &root, &seat);
++    assert!(String::from_utf8_lossy(&out.stdout).contains(r#""permissionDecision":"deny""#));
++}
++
++/// 型が tsuzuri の 3 本でない席の Agent の呼びを断り、断りの字に 3 本の名が在る。名の無い呼びを断る。断る時は何も書かない。
++#[test]
++fn aghk_spawn_refuses_a_type_outside_the_three_and_a_missing_name() {
++    let (root, drafts) = place("refuse");
++    let name = r#","name":"w208a""#;
++    let probe = input("PreToolUse", "", "Agent", &agent("tryp:probe", name), "");
++    let out = hook("agent-spawn", &root, &probe);
++    let text = String::from_utf8_lossy(&out.stdout).into_owned();
++    assert_eq!(out.status.code(), Some(0));
++    assert!(text.contains(r#""permissionDecision":"deny""#), "{text}");
++    for kind in ["tsuzuri:drafter", "tsuzuri:verifier", "tsuzuri:researcher"] {
++        assert!(text.contains(kind), "{kind} {text}");
++    }
++    let nameless = input("PreToolUse", "", "Agent", &agent("tsuzuri:drafter", ""), "");
++    let text = String::from_utf8_lossy(&hook("agent-spawn", &root, &nameless).stdout).into_owned();
++    assert!(text.contains(r#""permissionDecision":"deny""#), "{text}");
++    assert!(text.contains("名が無いか"), "{text}");
++    assert!(tree(&drafts).is_empty());
++}
++
++/// 通した呼びは何も出さず、brief.md に prompt の字を、spec.json に名・型・4 つの値・起こしの時刻を書く。
++/// 続けて同じ対象の別の名の起こしは、生きた札との重なりで断る。
++#[test]
++fn aghk_spawn_writes_the_brief_and_the_spec() {
++    let (root, drafts) = place("write");
++    let before = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap()
++        .as_secs();
++    let out = hook("agent-spawn", &root, &spawn_in(""));
++    let after = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap()
++        .as_secs();
++    assert_eq!(
++        (out.status.code(), out.stdout.as_slice()),
++        (Some(0), &b""[..])
++    );
++    let brief = fs::read_to_string(drafts.join("w208a/brief.md")).unwrap();
++    assert_eq!(brief, PROMPT.replace(r"\n", "\n"));
++    let spec = fs::read_to_string(drafts.join("w208a/spec.json")).unwrap();
++    for field in [
++        r#""name": "w208a""#,
++        r#""type": "tsuzuri:drafter""#,
++        r#""budget": 250000"#,
++        r#""build": "なし""#,
++        r#""target": "t3-hub.87""#,
++        "\"outputs\": [\n    \"notes.md\",\n    \"apply.py\"\n  ]",
++        r#""agent_id": null"#,
++        r#""ended": null"#,
++    ] {
++        assert!(spec.contains(field), "{field} {spec}");
++    }
++    let spawned: u64 = spec
++        .split("\"spawned\": ")
++        .nth(1)
++        .unwrap()
++        .split(',')
++        .next()
++        .unwrap()
++        .parse()
++        .unwrap();
++    assert!((before..=after).contains(&spawned), "{spawned}");
++    let other = spawn_in("").replace(r#""name":"w208a""#, r#""name":"w208b""#);
++    let text = String::from_utf8_lossy(&hook("agent-spawn", &root, &other).stdout).into_owned();
++    assert!(
++        text.contains("生きた係 w208a が同じ対象 t3-hub.87 を持つ"),
++        "{text}"
++    );
++    assert!(!drafts.join("w208b").exists());
++}
++
++/// 結びの口は agentId の無い結果では何も書かず、在る結果では spec.json の agent_id と .agents/<agentId> の名を書く。
++#[test]
++fn aghk_bind_writes_the_agent_id_and_skips_a_response_without_it() {
++    let (root, drafts) = place("bind");
++    assert_eq!(
++        hook("agent-spawn", &root, &spawn_in("")).status.code(),
++        Some(0)
++    );
++    let spec_file = drafts.join("w208a/spec.json");
++    let spec = fs::read_to_string(&spec_file).unwrap();
++    let out = hook("agent-bind", &root, &bind_in("", ""));
++    assert_eq!(
++        (out.status.code(), out.stdout.as_slice()),
++        (Some(0), &b""[..])
++    );
++    assert_eq!(fs::read_to_string(&spec_file).unwrap(), spec);
++    assert!(!drafts.join(".agents").exists());
++    let out = hook("agent-bind", &root, &bind_in("", r#","agentId":"a9f0c1""#));
++    assert_eq!(
++        (out.status.code(), out.stdout.as_slice()),
++        (Some(0), &b""[..])
++    );
++    let bound = fs::read_to_string(&spec_file).unwrap();
++    assert_eq!(
++        bound,
++        spec.replace(r#""agent_id": null"#, r#""agent_id": "a9f0c1""#)
++    );
++    let name = fs::read_to_string(drafts.join(".agents/a9f0c1")).unwrap();
++    assert_eq!(name, "w208a\n");
++}
