@@ -386,7 +386,7 @@ pub(crate) fn amends_list(d: &Node) -> impl Iterator<Item = &Node> {
         .filter(|e| e.as_map().is_some())
 }
 
-/// 憲法の現行の読み（`check_anchor` の段の間で受け渡す・`check_file` も読む）。
+/// 憲法の現行の読み（`check_anchor` が段へ貸す・`check_file` も読む）。
 struct Cur<'a> {
     /// 置き場の dir
     dir: &'a Path,
@@ -412,7 +412,7 @@ struct Cur<'a> {
     name: Option<String>,
 }
 
-/// anchors/ の読みと列の検査の結果（段の間で受け渡す）。
+/// anchors/ の読みと列の検査の結果（`check_anchor` が持ち、段へ貸す）。
 #[derive(Default)]
 struct Chain {
     /// `<dir>/anchors`
@@ -436,6 +436,7 @@ struct Chain {
 /// (e)〜(i) を掛ける。`history` は (j) の列に在った id（`history_ids`）。
 /// `flag` が `--freeze-anchor` か `--freeze-start`（便 121）のときは (i) を掛けず（凍結の前提の検査が替わる・便 9）、
 /// 列の結果を `freeze.rs` へ返す。列の根は憲法の名で列の根の表を引いて照らす（便 121・`check_root`）。
+/// 段はここが順に 1 度ずつ呼び、段どうしは呼び合わない。途中で止まるのは現行と anchors/ が読めない時だけ。
 pub fn check_anchor(
     dir: &Path,
     adr: &Adr,
@@ -443,6 +444,25 @@ pub fn check_anchor(
     flag: Flag,
     report: &mut Report,
 ) -> Option<State> {
+    let cur = read_current(dir, adr, history, flag, report)?;
+    let mut chain = read_chain(&cur, report)?;
+    check_git_records(&cur, &mut chain, report);
+    check_index(&cur, &mut chain, report);
+    check_versions(&cur, &chain, report);
+    check_reuse(&cur, &chain, report);
+    check_pairs(&cur, &chain, report);
+    check_current(&cur, &chain, report);
+    Some(finish(cur, chain))
+}
+
+/// (e) 憲法を型付きで読み、現行の写しと版と承認と名を段へ貸す読みに詰める。
+fn read_current<'a>(
+    dir: &'a Path,
+    adr: &'a Adr,
+    history: &'a HashSet<String>,
+    flag: Flag,
+    report: &mut Report,
+) -> Option<Cur<'a>> {
     let c = read_typed(&dir.join("constitution.yaml"), "constitution.yaml", report)?;
     // まだ分からない の行の folio2 の番号の片は外の置き場で落とす（便 203）
     let place = crate::adr::place_name(dir).ok();
@@ -479,7 +499,7 @@ pub fn check_anchor(
         .and_then(|m| m.get("id"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    let cur = Cur {
+    Some(Cur {
         dir,
         adr,
         history,
@@ -491,12 +511,11 @@ pub fn check_anchor(
         cur_ver,
         meta_approval,
         name,
-    };
-    read_chain(cur, report)
+    })
 }
 
-/// (f) anchors/ の索引と anchor の file を読む。列に載せた anchor と索引を次の段へ渡す。
-fn read_chain(cur: Cur, report: &mut Report) -> Option<State> {
+/// (f) anchors/ の索引と anchor の file を読む。列に載せた anchor と索引を親へ返す。
+fn read_chain(cur: &Cur, report: &mut Report) -> Option<Chain> {
     let dir = cur.dir;
     let anch = dir.join(floor(&["anchor", "dir"]));
     let index_file = floor(&["anchor", "index_file"]);
@@ -541,26 +560,25 @@ fn read_chain(cur: Cur, report: &mut Report) -> Option<State> {
             let Some(d) = read_typed(&path, &format!("anchors/{file}"), report) else {
                 continue;
             };
-            if let Some(a) = check_file(&cur, &file, d, &anchors, report) {
+            if let Some(a) = check_file(cur, &file, d, &anchors, report) {
                 anchors.push(a);
             }
         }
     }
-    let chain = Chain {
+    Some(Chain {
         anch,
         index,
         anchors,
         chain_exists,
         ..Chain::default()
-    };
-    check_git_records(cur, chain, report)
+    })
 }
 
 /// (a) 版管理との照合と、(g) の前提になる改訂の記録の有無。
-fn check_git_records(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
+fn check_git_records(cur: &Cur, chain: &mut Chain, report: &mut Report) {
     let Cur {
         dir, adr, ref c, ..
-    } = cur;
+    } = *cur;
     // (a) 版管理との照合（便 8）
     chain.git = gitcheck::check_git(dir, report);
 
@@ -573,18 +591,17 @@ fn check_git_records(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<
         .records
         .iter()
         .any(|(_, d)| is_effective(d) && amends_list(d).next().is_some());
-    check_index(cur, chain, report)
 }
 
 /// (g) 列: 索引の項を 1 つずつ anchor と照らし、索引と anchor の file の食い違いを数える。
-fn check_index(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State> {
+fn check_index(cur: &Cur, chain: &mut Chain, report: &mut Report) {
     let Chain {
         ref index,
         ref anchors,
         records_exist,
         ..
-    } = chain;
-    let Cur { ref place, .. } = cur;
+    } = *chain;
+    let Cur { ref place, .. } = *cur;
     let said = |v: &'static str| crate::floor::said(v, place.as_deref());
     let index_file = floor(&["anchor", "index_file"]);
     let mut newest: Option<String> = None;
@@ -600,7 +617,7 @@ fn check_index(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State>
                 said("（まだ分からない・P-10.3）")
             ));
         }
-        check_entries(entries, &cur, anchors, report);
+        check_entries(entries, cur, anchors, report);
         chain_versions = entries
             .iter()
             .filter(|e| e.as_map().is_some())
@@ -636,7 +653,6 @@ fn check_index(cur: Cur, mut chain: Chain, report: &mut Report) -> Option<State>
     }
     chain.newest = newest;
     chain.chain_versions = chain_versions;
-    check_versions(cur, chain, report)
 }
 
 /// (g) 索引の項ごとの照らし（欄・列の根・previous・anchor の file の有無）。
@@ -726,16 +742,16 @@ fn check_entry_anchor(
 }
 
 /// (a) 版管理に無い anchor と、(h) 発効した判断の記録が名指す版の anchor が列に在るか。
-fn check_versions(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+fn check_versions(cur: &Cur, chain: &Chain, report: &mut Report) {
     let Cur {
         adr, ref cur_ver, ..
-    } = cur;
+    } = *cur;
     let Chain {
         ref git,
         ref newest,
         ref chain_versions,
         ..
-    } = chain;
+    } = *chain;
     let first_ver = floor(&["anchor", "first_version"]);
     if let Some(g) = &git {
         g.untracked(newest.as_deref(), report);
@@ -768,17 +784,16 @@ fn check_versions(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> 
             }
         }
     }
-    check_reuse(cur, chain, report)
 }
 
 /// (h) 最新の anchor に無い番号の再利用（P-7.1）。
-fn check_reuse(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
-    let Cur { history, ref c, .. } = cur;
+fn check_reuse(cur: &Cur, chain: &Chain, report: &mut Report) {
+    let Cur { history, ref c, .. } = *cur;
     let Chain {
         ref anchors,
         ref newest,
         ..
-    } = chain;
+    } = *chain;
     let find = |v: &str| anchors.iter().find(|a| a.version == v);
     let newest_anchor = newest.as_deref().and_then(find);
     let (cur_articles, cur_statements) = article_ids(Some(c));
@@ -804,17 +819,16 @@ fn check_reuse(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
             );
         }
     }
-    check_pairs(cur, chain, report)
 }
 
 /// (h) 列の全区間の差分の照らし。
-fn check_pairs(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
-    let Cur { adr, ref c, .. } = cur;
+fn check_pairs(cur: &Cur, chain: &Chain, report: &mut Report) {
+    let Cur { adr, ref c, .. } = *cur;
     let Chain {
         ref anchors,
         ref chain_versions,
         ..
-    } = chain;
+    } = *chain;
     let find = |v: &str| anchors.iter().find(|a| a.version == v);
 
     // 列の全区間（便 8 (b)）: 隣り合う anchor の差分は、その版を名指す発効した判断の記録と 1:1
@@ -837,11 +851,10 @@ fn check_pairs(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
             );
         }
     }
-    check_current(cur, chain, report)
 }
 
 /// (i) 現行との一致（`--freeze-anchor` と `--freeze-start` では凍結の前提の検査に替わる）。
-fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
+fn check_current(cur: &Cur, chain: &Chain, report: &mut Report) {
     let Cur {
         flag,
         ref c,
@@ -850,7 +863,7 @@ fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
         ref cur_proj,
         ref cur_ver,
         ..
-    } = cur;
+    } = *cur;
     let Chain {
         ref index,
         ref anchors,
@@ -858,7 +871,7 @@ fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
         ref newest,
         records_exist,
         ..
-    } = chain;
+    } = *chain;
     let said = |v: &'static str| crate::floor::said(v, place.as_deref());
     let find = |v: &str| anchors.iter().find(|a| a.version == v);
     let newest_anchor = newest.as_deref().and_then(find);
@@ -869,7 +882,7 @@ fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
         // freeze.rs の (c) と始まりの凍結（便 121）が受け持つ。始まりの凍結は書く承認一覧（欄 adr は空・
         // 憲法 meta.approval の写し 1 項）を凍結の後の床と同じ関数で確かめる（便 155・P-15.2）
         if matches!(flag, Flag::FreezeStart) {
-            check_start_approvals(&cur, report);
+            check_start_approvals(cur, report);
         }
     } else if index.is_none() && anchors.is_empty() && !records_exist {
         report.pending(format!(
@@ -904,7 +917,6 @@ fn check_current(cur: Cur, chain: Chain, report: &mut Report) -> Option<State> {
             );
         }
     }
-    finish(cur, chain)
 }
 
 /// (i) 始まりの凍結が書く承認一覧（欄 adr は空・憲法 meta.approval の写し 1 項）の確かめ（便 155・P-15.2）。
@@ -930,7 +942,7 @@ fn check_start_approvals(cur: &Cur, report: &mut Report) {
 }
 
 /// 列の結果を `State` に詰めて返す。
-fn finish(cur: Cur, chain: Chain) -> Option<State> {
+fn finish(cur: Cur, chain: Chain) -> State {
     let Cur {
         c,
         scope,
@@ -954,7 +966,7 @@ fn finish(cur: Cur, chain: Chain) -> Option<State> {
         .as_deref()
         .and_then(|v| anchors.iter().find(|a| a.version == v));
     let newest_doc = newest_anchor.map(|a| a.doc.clone());
-    Some(State {
+    State {
         seen_in_git: git.as_ref().is_some_and(gitcheck::Tracked::seen),
         c,
         scope,
@@ -968,7 +980,7 @@ fn finish(cur: Cur, chain: Chain) -> Option<State> {
         anchors_dir: anch,
         name,
         chain_exists,
-    })
+    }
 }
 
 /// 列の根の照らし（便 121・ADR-16 決定 (2)(ア)）: 索引の最初の項の digest を、憲法の名で引いた列の根の表の行と比べる。
