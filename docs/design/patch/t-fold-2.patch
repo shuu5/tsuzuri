@@ -1,0 +1,296 @@
+diff --git a/crates/tsuzuri-boundary/tests/cmtcnt.rs b/crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cmtcnt.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwhok.rs b/crates/tsuzuri-boundary/tests/teeth5/cwhok.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwhok.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwhok.rs
+diff --git a/crates/tsuzuri-boundary/tests/cwsrv.rs b/crates/tsuzuri-boundary/tests/teeth5/cwsrv.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/cwsrv.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/cwsrv.rs
+diff --git a/crates/tsuzuri-boundary/tests/ehmark.rs b/crates/tsuzuri-boundary/tests/teeth5/ehmark.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/ehmark.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/ehmark.rs
+diff --git a/crates/tsuzuri-boundary/tests/kctx.rs b/crates/tsuzuri-boundary/tests/teeth5/kctx.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/kctx.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/kctx.rs
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+index 6fb02498944caa20853f3f67a39eaef66867b185..a762e9f65473097b2addc54049e8533fb0ae3127 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -2,14 +2,23 @@
+ //! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod cmtcnt;
+ mod cwans;
+ mod cwcls;
++mod cwhok;
+ mod cwlch;
+ mod cwopn;
+ mod cwpln;
+ mod cwshw;
++mod cwsrv;
+ mod cwstp;
+ mod cwwat;
++mod ehmark;
++mod kctx;
++mod rcapf;
++mod rowbasis;
++mod seatcp;
++mod shrtb;
+ mod strelay;
+ mod stskill;
+ mod stterm;
+diff --git a/crates/tsuzuri-boundary/tests/rcapf.rs b/crates/tsuzuri-boundary/tests/teeth5/rcapf.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/rcapf.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/rcapf.rs
+diff --git a/crates/tsuzuri-boundary/tests/rowbasis.rs b/crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/rowbasis.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs
+diff --git a/crates/tsuzuri-boundary/tests/seatcp.rs b/crates/tsuzuri-boundary/tests/teeth5/seatcp.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/seatcp.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/seatcp.rs
+diff --git a/crates/tsuzuri-boundary/tests/shrtb.rs b/crates/tsuzuri-boundary/tests/teeth5/shrtb.rs
+similarity index 100%
+rename from crates/tsuzuri-boundary/tests/shrtb.rs
+rename to crates/tsuzuri-boundary/tests/teeth5/shrtb.rs
+diff --git a/crates/tsuzuri-contract/tests/teeth1/main.rs b/crates/tsuzuri-contract/tests/teeth1/main.rs
+index fb7b5c9f9db46f680b3a7b701aa2a9c7092e37fd..0c9ef9f0cf22af42e825cdd7c67c0834b0da8ec0 100644
+--- a/crates/tsuzuri-contract/tests/teeth1/main.rs
++++ b/crates/tsuzuri-contract/tests/teeth1/main.rs
+@@ -16,3 +16,4 @@ mod ctick;
+ mod cwty;
+ mod fxpre;
+ mod lresume;
++mod sumtw;
+diff --git a/crates/tsuzuri-contract/tests/sumtw.rs b/crates/tsuzuri-contract/tests/teeth1/sumtw.rs
+similarity index 100%
+rename from crates/tsuzuri-contract/tests/sumtw.rs
+rename to crates/tsuzuri-contract/tests/teeth1/sumtw.rs
+diff --git a/crates/tsuzuri-core/tests/cmtnode.rs b/crates/tsuzuri-core/tests/teeth3/cmtnode.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/cmtnode.rs
+rename to crates/tsuzuri-core/tests/teeth3/cmtnode.rs
+diff --git a/crates/tsuzuri-core/tests/ftrim.rs b/crates/tsuzuri-core/tests/teeth3/ftrim.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/ftrim.rs
+rename to crates/tsuzuri-core/tests/teeth3/ftrim.rs
+diff --git a/crates/tsuzuri-core/tests/g3bl.rs b/crates/tsuzuri-core/tests/teeth3/g3bl.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/g3bl.rs
+rename to crates/tsuzuri-core/tests/teeth3/g3bl.rs
+diff --git a/crates/tsuzuri-core/tests/hdst.rs b/crates/tsuzuri-core/tests/teeth3/hdst.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/hdst.rs
+rename to crates/tsuzuri-core/tests/teeth3/hdst.rs
+diff --git a/crates/tsuzuri-core/tests/teeth3/main.rs b/crates/tsuzuri-core/tests/teeth3/main.rs
+index af921c4c49f0b34de71b696c54c69c97ecddb9d9..42998da87e9471d1392dae0bab26ffbaaee35922 100644
+--- a/crates/tsuzuri-core/tests/teeth3/main.rs
++++ b/crates/tsuzuri-core/tests/teeth3/main.rs
+@@ -2,8 +2,17 @@
+ //! この file は mod の行だけを持つ（tests/teeth3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod cmtnode;
+ mod cwarg;
+ mod cwfnd;
+ mod cwlin;
+ mod cwquo;
+ mod cwstm;
++mod ftrim;
++mod g3bl;
++mod hdst;
++mod memotch;
++mod seathk;
++mod shcap;
++mod shrtc;
++mod sumcr;
+diff --git a/crates/tsuzuri-core/tests/memotch.rs b/crates/tsuzuri-core/tests/teeth3/memotch.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/memotch.rs
+rename to crates/tsuzuri-core/tests/teeth3/memotch.rs
+diff --git a/crates/tsuzuri-core/tests/seathk.rs b/crates/tsuzuri-core/tests/teeth3/seathk.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/seathk.rs
+rename to crates/tsuzuri-core/tests/teeth3/seathk.rs
+diff --git a/crates/tsuzuri-core/tests/shcap.rs b/crates/tsuzuri-core/tests/teeth3/shcap.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/shcap.rs
+rename to crates/tsuzuri-core/tests/teeth3/shcap.rs
+diff --git a/crates/tsuzuri-core/tests/shrtc.rs b/crates/tsuzuri-core/tests/teeth3/shrtc.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/shrtc.rs
+rename to crates/tsuzuri-core/tests/teeth3/shrtc.rs
+diff --git a/crates/tsuzuri-core/tests/sumcr.rs b/crates/tsuzuri-core/tests/teeth3/sumcr.rs
+similarity index 100%
+rename from crates/tsuzuri-core/tests/sumcr.rs
+rename to crates/tsuzuri-core/tests/teeth3/sumcr.rs
+diff --git a/crates/tsuzuri-surface/tests/cwpop.rs b/crates/tsuzuri-surface/tests/teeth5/cwpop.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/cwpop.rs
+rename to crates/tsuzuri-surface/tests/teeth5/cwpop.rs
+diff --git a/crates/tsuzuri-surface/tests/fkeep.rs b/crates/tsuzuri-surface/tests/teeth5/fkeep.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/fkeep.rs
+rename to crates/tsuzuri-surface/tests/teeth5/fkeep.rs
+diff --git a/crates/tsuzuri-surface/tests/hcmode.rs b/crates/tsuzuri-surface/tests/teeth5/hcmode.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hcmode.rs
+rename to crates/tsuzuri-surface/tests/teeth5/hcmode.rs
+diff --git a/crates/tsuzuri-surface/tests/hdcol.rs b/crates/tsuzuri-surface/tests/teeth5/hdcol.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hdcol.rs
+rename to crates/tsuzuri-surface/tests/teeth5/hdcol.rs
+diff --git a/crates/tsuzuri-surface/tests/hdnm.rs b/crates/tsuzuri-surface/tests/teeth5/hdnm.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hdnm.rs
+rename to crates/tsuzuri-surface/tests/teeth5/hdnm.rs
+diff --git a/crates/tsuzuri-surface/tests/hdpage.rs b/crates/tsuzuri-surface/tests/teeth5/hdpage.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hdpage.rs
+rename to crates/tsuzuri-surface/tests/teeth5/hdpage.rs
+diff --git a/crates/tsuzuri-surface/tests/hdpop.rs b/crates/tsuzuri-surface/tests/teeth5/hdpop.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/hdpop.rs
+rename to crates/tsuzuri-surface/tests/teeth5/hdpop.rs
+diff --git a/crates/tsuzuri-surface/tests/lhov.rs b/crates/tsuzuri-surface/tests/teeth5/lhov.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/lhov.rs
+rename to crates/tsuzuri-surface/tests/teeth5/lhov.rs
+diff --git a/crates/tsuzuri-surface/tests/lsym.rs b/crates/tsuzuri-surface/tests/teeth5/lsym.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/lsym.rs
+rename to crates/tsuzuri-surface/tests/teeth5/lsym.rs
+diff --git a/crates/tsuzuri-surface/tests/teeth5/main.rs b/crates/tsuzuri-surface/tests/teeth5/main.rs
+index 3a2b1f505b290a50a419b8fe87865597c304fa4b..8cf19d820a2abaa67eba72a61d1b2ce99aef29bd 100644
+--- a/crates/tsuzuri-surface/tests/teeth5/main.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/main.rs
+@@ -2,15 +2,31 @@
+ //! この file は mod の行だけを持つ（tests/teeth5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod cwpop;
++mod fkeep;
++mod hcmode;
++mod hdcol;
++mod hdnm;
++mod hdpage;
++mod hdpop;
++mod lhov;
++mod lsym;
++mod mdview;
++mod mpick;
++mod ndbody;
++mod nexc;
++mod ppsum;
+ mod pwhole;
+ mod qblock;
+ mod qkey;
++mod qmode;
+ mod rbusy;
+ mod rvknode;
+ mod seataxis;
+ mod seatblock;
+ mod sesplit;
+ mod sgrace;
++mod shcss;
+ mod steady;
+ mod sthr;
+ mod sxaxis;
+diff --git a/crates/tsuzuri-surface/tests/mdview.rs b/crates/tsuzuri-surface/tests/teeth5/mdview.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/mdview.rs
+rename to crates/tsuzuri-surface/tests/teeth5/mdview.rs
+diff --git a/crates/tsuzuri-surface/tests/mpick.rs b/crates/tsuzuri-surface/tests/teeth5/mpick.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/mpick.rs
+rename to crates/tsuzuri-surface/tests/teeth5/mpick.rs
+diff --git a/crates/tsuzuri-surface/tests/ndbody.rs b/crates/tsuzuri-surface/tests/teeth5/ndbody.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/ndbody.rs
+rename to crates/tsuzuri-surface/tests/teeth5/ndbody.rs
+diff --git a/crates/tsuzuri-surface/tests/nexc.rs b/crates/tsuzuri-surface/tests/teeth5/nexc.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/nexc.rs
+rename to crates/tsuzuri-surface/tests/teeth5/nexc.rs
+diff --git a/crates/tsuzuri-surface/tests/ppsum.rs b/crates/tsuzuri-surface/tests/teeth5/ppsum.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/ppsum.rs
+rename to crates/tsuzuri-surface/tests/teeth5/ppsum.rs
+diff --git a/crates/tsuzuri-surface/tests/qmode.rs b/crates/tsuzuri-surface/tests/teeth5/qmode.rs
+similarity index 100%
+rename from crates/tsuzuri-surface/tests/qmode.rs
+rename to crates/tsuzuri-surface/tests/teeth5/qmode.rs
+diff --git a/crates/tsuzuri-surface/tests/shcss.rs b/crates/tsuzuri-surface/tests/teeth5/shcss.rs
+similarity index 96%
+rename from crates/tsuzuri-surface/tests/shcss.rs
+rename to crates/tsuzuri-surface/tests/teeth5/shcss.rs
+index 28c9e94631f204f59bd396a3f7be227e62747eaf..061d73afabeef3db78ce7cabdd749c8354be308a 100644
+--- a/crates/tsuzuri-surface/tests/shcss.rs
++++ b/crates/tsuzuri-surface/tests/teeth5/shcss.rs
+@@ -2,7 +2,7 @@
+ //! 判断の記録 ADR-30 決定 (5)）。口は吹き出しの partner_view の button（class plk）で、短い題の span と id の code を並べる。
+ #![cfg(test)]
+ 
+-const CSS: &str = include_str!("../style.css");
++const CSS: &str = include_str!("../../style.css");
+ 
+ /// 行頭が `selector` と空白と字 { の規則の宣言（{ と } の間の字・前後の空白を除く）。無ければ None。
+ fn rule<'a>(css: &'a str, selector: &str) -> Option<&'a str> {
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index fc3da3a5476eb45256886c89ea481112189c8d32..d8dbbbc7ccbb8f9a912aa36d1fd8a730aecf9695 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -14,23 +14,23 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-boundary/tests/teeth2", 27),
+     ("crates/tsuzuri-boundary/tests/teeth3", 16),
+     ("crates/tsuzuri-boundary/tests/teeth4", 14),
+-    ("crates/tsuzuri-boundary/tests/teeth5", 16),
+-    ("crates/tsuzuri-contract/tests/teeth1", 14),
++    ("crates/tsuzuri-boundary/tests/teeth5", 25),
++    ("crates/tsuzuri-contract/tests/teeth1", 15),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),
+-    ("crates/tsuzuri-core/tests/teeth3", 5),
++    ("crates/tsuzuri-core/tests/teeth3", 14),
+     ("crates/tsuzuri-surface/tests/teeth1", 31),
+     ("crates/tsuzuri-surface/tests/teeth2", 38),
+     ("crates/tsuzuri-surface/tests/teeth3", 30),
+     ("crates/tsuzuri-surface/tests/teeth4", 31),
+-    ("crates/tsuzuri-surface/tests/teeth5", 25),
++    ("crates/tsuzuri-surface/tests/teeth5", 41),
+     ("folio2/crates/folio/tests/teeth1", 7),
+     ("folio2/crates/folio/tests/tz1", 12),
+     ("folio2/crates/folio/tests/tz2", 10),
+     ("folio2/crates/folio/tests/tz3", 17),
+     ("folio2/crates/folio/tests/tz4", 16),
+     ("folio2/crates/folio/tests/tz5", 3),
+-    ("xtask/tests/teeth1", 14),
++    ("xtask/tests/teeth1", 15),
+     // kfold-groups-end
+ ];
+ 
+diff --git a/xtask/tests/teeth1/main.rs b/xtask/tests/teeth1/main.rs
+index 16d5a8e5627f26c24bd4f6add921eac4ea9d68c0..cfd58d63becfa48873cc25dab752ae5c29098b95 100644
+--- a/xtask/tests/teeth1/main.rs
++++ b/xtask/tests/teeth1/main.rs
+@@ -13,6 +13,7 @@ mod retire;
+ mod tlic;
+ mod vcij;
+ mod vdaily;
++mod vjprep;
+ mod vretb;
+ mod vskip;
+ mod vsplit;
+diff --git a/xtask/tests/vjprep.rs b/xtask/tests/teeth1/vjprep.rs
+similarity index 100%
+rename from xtask/tests/vjprep.rs
+rename to xtask/tests/teeth1/vjprep.rs
