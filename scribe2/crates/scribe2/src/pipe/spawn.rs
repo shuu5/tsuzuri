@@ -524,7 +524,8 @@ pub fn spawn(budget: Budget, launch: &Launch<'_>) -> Outcome {
     // **起動行はここで組み上げる**（`Spawned` の記帳より前）。口座の断り（[`LineRefusal`]）を
     // `launch_runner` に置くと、段を記帳した後で起こさない周ができる——記帳した口座と実行が
     // 一致しない行が置き場に残る。worktree は作ったまま（`prepare_worktree` の後の断りと同じ形）。
-    let line = substitute(launch, &worktree, &write_set, &plugin, &base);
+    // 最初の語が器の名の命令は便の留めを撃つ（行 v-pin）。
+    let line = super::pin::head(launch.state_dir, launch.run, &substitute(launch, &worktree, &write_set, &plugin, &base));
     let cmd = match with_account(line, launch.account.label(), launch.state_dir) {
         Ok(line) => line,
         Err(refusal) => return refused(refusal.to_string()),

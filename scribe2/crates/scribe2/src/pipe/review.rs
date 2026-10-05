@@ -585,6 +585,8 @@ fn decide(
         cmd,
         &[("{contract}", &contract.display().to_string()), ("{worktree}", &tree.path.display().to_string())],
     );
+    // 最初の語が器の名の lens は便の留めを撃つ（行 v-pin）。
+    let line = super::pin::head(entry.state_dir, entry.run, &line);
     let unit = confine::unit_name(entry.run, REVIEW_STAGE, 1);
     // 審査の lens の箱は 1 × `gate.job_memory_mb`（設計 gate-cost.md §12）。
     let wrap = confine::Wrap { unit: &unit, limit: confine::Limit::PerJob(1), caps: confine::Caps::embedded(), width: None };

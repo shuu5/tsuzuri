@@ -28,6 +28,7 @@ mod gate;
 mod intake;
 mod land;
 mod launch_failure;
+mod pin;
 mod ratelimit;
 mod refuse;
 mod review;

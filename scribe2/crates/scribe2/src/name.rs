@@ -16,6 +16,12 @@ pub const PLUGIN_DIR: &str = "plugin";
 /// binary の世代の記録・consumer の drift はすべてこの const を読む。
 pub const BUILD_COMMIT: &str = include_str!(concat!(env!("OUT_DIR"), "/build_commit"));
 
+/// `--version` が出力する行（`<NAME> <version> (<build 元 commit>)`・設計 consumer-sync.md §2）。境界の `--version` と doctor の
+/// 2 行目と、便の留めの版の照らし（行 v-pin）が同じ 1 本を読む。実行時に env を読まない（C2.2）。
+pub fn version_line() -> String {
+    format!("{NAME} {} ({BUILD_COMMIT})", env!("CARGO_PKG_VERSION"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::BUILD_COMMIT;

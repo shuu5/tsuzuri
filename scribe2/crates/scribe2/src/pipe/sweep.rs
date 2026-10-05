@@ -51,6 +51,7 @@ const MIB: u64 = 1_048_576;
 struct Totals {
     removed: usize,
     runs: usize,
+    pins: usize,
     failed: Vec<String>,
 }
 
@@ -118,18 +119,19 @@ pub(super) fn sweep(state_dir: &Path, policy: LockPolicy, manifest: &Manifest) -
     sweep_runs(state_dir, &mut totals);
     let lanes = sweep_lanes(state_dir, manifest, policy, &mut totals);
     let drafts = sweep_drafts(state_dir, manifest, &mut totals);
-    let quiet = totals.removed == 0 && lanes == 0 && totals.failed.is_empty();
+    let quiet = totals.removed == 0 && totals.pins == 0 && lanes == 0 && totals.failed.is_empty();
     if quiet && !drafts.as_ref().is_some_and(|found| found.no_rule || found.over > 0) {
         return None;
     }
     let named = if totals.failed.is_empty() { String::new() } else { format!(":{}", totals.failed.join(",")) };
     let shed = if lanes == 0 { String::new() } else { format!(" lanes={lanes}") };
+    let pins = if totals.pins == 0 { String::new() } else { format!(" pins={}", totals.pins) };
     let tail = drafts.map_or_else(String::new, |found| {
         let swept = if found.no_rule { "no-rule".to_owned() } else { found.swept.to_string() };
         let cap = if found.shed > 0 || found.over > 0 { format!(" cap={} over={}", found.shed, found.over) } else { String::new() };
         format!(" drafts={swept} nogit={}{cap}", found.nogit)
     });
-    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{tail}", totals.removed, totals.runs, totals.failed.len()))
+    Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{pins}{tail}", totals.removed, totals.runs, totals.failed.len()))
 }
 
 /// live でない便の木を掃く（置き場の replay を読めない周は 1 本も撃たない）。
@@ -138,6 +140,8 @@ fn sweep_runs(state_dir: &Path, totals: &mut Totals) {
         return;
     };
     for run in state.runs.values().filter(|run| live(state_dir, &run.id, run.stage) == Some(false)) {
+        // 終わった便の器の binary の留めを消す（世代の古い inode を残し続けない・行 v-pin）。
+        totals.pins = totals.pins.saturating_add(usize::from(super::pin::drop_bin(state_dir, &run.id)));
         let Some(tree) = tree_of(state_dir, &run.id) else {
             continue;
         };

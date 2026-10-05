@@ -637,7 +637,9 @@ fn decide(
     keep_cap(entry, cap)?;
     let contract = contract_path(entry.state_dir, entry.run);
     // **lens の口座は起こす直前に選ぶ**（裁定の写しを書いた後・設計 account-autonomy.md §15）。
-    let (line, account) = match lens_account(entry, substitute(cmd, &contract, worktree), notes) {
+    // 最初の語が器の名の lens は便の留めを撃つ（行 v-pin）。
+    let line = super::pin::head(entry.state_dir, entry.run, &substitute(cmd, &contract, worktree));
+    let (line, account) = match lens_account(entry, line, notes) {
         Ok(found) => found,
         Err(reason) => return inconclusive(reason),
     };

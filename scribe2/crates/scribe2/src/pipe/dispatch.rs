@@ -22,7 +22,6 @@ use crate::fleet::store;
 use crate::fleet::{Event, EventKind, Mark, Stage, SCHEMA};
 use crate::invocation::Invocation;
 use crate::ledger::form::is_question;
-use crate::name::NAME;
 use crate::rules::manifest::Manifest;
 use crate::seat::ledger;
 use std::collections::{BTreeMap, BTreeSet};
@@ -391,9 +390,11 @@ fn launched(input: &Input<'_>, launch: &Launch) -> bool {
 ///
 /// 子の stderr は `<state_dir>/pipe/launch.log` に append する（設計 §17・受付で落ちた子の死因を席が読める
 /// 場所に残す・C10）。file を開けない周は stderr を捨てて**起こす**（起動を記録の失敗で止めない）。
-/// land の着地後の検出（設計 gate-cost.md §44 形 (11)）も同じ 1 本で起こす。
+/// land の着地後の検出（設計 gate-cost.md §44 形 (11)）も同じ 1 本で起こす。argv に `--run` を持つ子（起こし直しと着地後の
+/// 検出）は便の留めを撃つ（[`super::pin::program`]・行 v-pin）。
 pub(in crate::pipe) fn spawn_self(state_dir: &Path, argv: &[String]) -> bool {
-    Invocation::new(myself())
+    let program = super::pin::run_of(argv).map_or_else(myself, |run| super::pin::program(state_dir, run));
+    Invocation::new(program)
         .arg(PIPE)
         .args(argv)
         .process_group(0)
@@ -422,8 +423,9 @@ fn launch_log(state_dir: &Path) -> Stdio {
 /// 外側で、xtask の門が違反として数える。`argv[0]` は**呼ばれ方そのもの**なので、同じ呼ばれ方で子を起こす。
 ///
 /// 席の hook が鮮度の外の口座を子で測る口（`hook::group`・設計 account-lifecycle.md §19 形 5）も同じ 1 本を読む。
+/// 呼ばれ方が便の留めの形の周は器の名に戻す（新しい便と便に結ばれない子は PATH の器で起こす・[`super::pin::launcher`]）。
 pub(crate) fn myself() -> String {
-    std::env::args().next().unwrap_or_else(|| NAME.to_owned())
+    super::pin::launcher(std::env::args().next())
 }
 
 /// 起動の構築点（`pipe run` の引数まで組んだ 1 件・[`start`] がそのまま子 process へ渡す）。

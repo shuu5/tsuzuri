@@ -110,7 +110,8 @@ pub(super) fn run_all(
     let mut lines = vec![format!("{}{index}", intake_line(args, &id))];
     // **段の通知は rc に依らず段の順で持つ**（設計 §21 (1)）: gate の `lens-input=…` のような行は
     // rc 0 の段が出すので、畳むときに捨てると連鎖で撃った周だけ理由が消える（`.286` の実測）。
-    let mut notes: Vec<String> = Vec::new();
+    // 最初の通知は器の binary の留めの 1 行（審査の前に留め、同じ便の子は留めを撃つ・行 v-pin）。
+    let mut notes: Vec<String> = super::state_dir_of(args).ok().map(|dir| crate::pipe::pin::note(&dir, &id)).into_iter().collect();
     // 審査が PASS でない周は spawn の前で止まる（構築点の呼出 0・AC22）。
     let spawned = review_then_launch(args, &id, &runner, manifest, policy);
     if let Some(stopped) = chain_noting(&mut lines, &mut notes, spawned) {
