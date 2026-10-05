@@ -1,0 +1,2741 @@
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/common.rs b/crates/tsuzuri-boundary/tests/teeth4/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5924e231ebf9e28078c79729033d27cb70d7f64
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth4/common.rs
+@@ -0,0 +1,75 @@
++//! tsuzuri-boundary の歯の群 teeth4 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fmt::Debug;
++use std::path::{Path, PathBuf};
++use std::time::{SystemTime, UNIX_EPOCH};
++use std::{env, fs};
++use tsuzuri_boundary::stage::terminal::Terminal;
++use tsuzuri_boundary::stage::terminal;
++
++pub(crate) const EVENTS: &str = "graph/real/events.jsonl";
++
++pub(crate) const INDEX: &str = "graph/real/design-index.tsv";
++
++pub(crate) const LEDGER: &str = "ledger/bd-list-8.json";
++
++/// 節の URL の行。
++pub(crate) const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
++
++/// 読み込みの終わりの event の字。
++pub(crate) const LOAD: &str = r#"{"method":"Page.loadEventFired","params":{"timestamp":1}}"#;
++
++pub(crate) fn debug<T: Debug + Clone + PartialEq + Eq>() {}
++
++/// Err の字（Ok なら落ちる）。
++pub(crate) fn err<T: Debug>(got: Result<T, String>, what: &str) -> String {
++    match got {
++        Ok(v) => panic!("{what}: Ok {v:?}"),
++        Err(e) => e,
++    }
++}
++
++pub(crate) fn fixture() -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++pub(crate) fn now() -> u64 {
++    SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .expect("時計")
++        .as_secs()
++}
++
++pub(crate) fn refused(status: u16, text: &str) -> (u16, String) {
++    (status, text.to_string())
++}
++
++pub(crate) fn strings(words: &[&str]) -> Vec<String> {
++    words.iter().map(|w| w.to_string()).collect()
++}
++
++pub(crate) fn term(name: &str) -> Terminal {
++    terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
++}
++
++/// dir の中の file の path と byte の一覧。
++pub(crate) fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
++    let mut out = Vec::new();
++    let mut stack = vec![dir.to_path_buf()];
++    while let Some(d) = stack.pop() {
++        for entry in fs::read_dir(&d).expect("dir を読む") {
++            let path = entry.expect("entry").path();
++            if path.is_dir() {
++                out.push((path.clone(), Vec::new()));
++                stack.push(path);
++            } else {
++                out.push((path.clone(), fs::read(&path).expect("file を読む")));
++            }
++        }
++    }
++    out.sort();
++    out
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/main.rs b/crates/tsuzuri-boundary/tests/teeth4/main.rs
+index 8768c1c961d19643a8811022dcfe2141c5df78ee..94839629d66cc6928192efa148cc6221771a2d54 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/teeth4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod server_hb;
+ mod server_min;
+ mod server_read;
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/server_hb.rs b/crates/tsuzuri-boundary/tests/teeth4/server_hb.rs
+index ab033e0cd725fc94ab7d41256799d86d062672c5..ec3a0a807a1c6148b18cc5c71a037516b0d8069f 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/server_hb.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/server_hb.rs
+@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{refused, tree};
+ use tsuzuri_boundary::acct::Acct;
+ use tsuzuri_boundary::accthb::{
+     BAD_BODY, HEARTBEAT_ARGS, NO_PROJECT, NO_SEAT, VESSEL_FAILED, accept, word,
+@@ -202,25 +203,6 @@ impl Place {
+     }
+ }
+ 
+-/// dir の中の file の path と byte の一覧。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ fn body(project: &str, to: &str) -> String {
+     format!("{{\"project\":\"{project}\",\"to\":\"{to}\"}}")
+ }
+@@ -234,10 +216,6 @@ fn ok(target: &str, to: Heartbeat) -> (u16, String) {
+     (200, json)
+ }
+ 
+-fn refused(status: u16, text: &str) -> (u16, String) {
+-    (status, text.to_string())
+-}
+-
+ #[test]
+ fn server_hb_off_then_on_shoots_seat() {
+     let place = Place::new("off-on");
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/server_read.rs b/crates/tsuzuri-boundary/tests/teeth4/server_read.rs
+index c9a3d0f462060a55d7190b0d408cb73b0dad41d5..c30ac520974fd5829b9936f408f20f5764704df4 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/server_read.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/server_read.rs
+@@ -12,8 +12,9 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{EVENTS, INDEX, LEDGER, now};
+ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO, FOLIO_TIMEOUT};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::{PipelineBoard, Reading};
+@@ -56,10 +57,6 @@ fn read_fixture(rel: &str) -> String {
+     fs::read_to_string(fixture(rel)).expect("fixture")
+ }
+ 
+-const LEDGER: &str = "ledger/bd-list-8.json";
+-const INDEX: &str = "graph/real/design-index.tsv";
+-const EVENTS: &str = "graph/real/events.jsonl";
+-
+ /// 歯ごとの作業場（repo の置き場・面の file の置き場・state dir・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -192,13 +189,6 @@ impl Place {
+     }
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// 要求を 1 つ撃ち、接続が閉じるまで応答の（状態の code・頭・本文）を読む。
+ fn request(addr: SocketAddr, raw: &str) -> (u16, String, String) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/server_seat.rs b/crates/tsuzuri-boundary/tests/teeth4/server_seat.rs
+index c9b80acc2fa90e12129f7f277acb9d73f4c1a4d3..36da3b687627c83a2659ba866b9c60d69164e9e6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/server_seat.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/server_seat.rs
+@@ -11,8 +11,9 @@ use std::net::{SocketAddr, TcpStream};
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{now, tree};
+ use tsuzuri_boundary::acct::{HEARTBEAT_OFF, HEARTBEAT_ON};
+ use tsuzuri_boundary::server::seat::{self, DOCTOR_HOLD, HOLD, SLOW_HOLD, Seat};
+ use tsuzuri_boundary::server::{Config, Server};
+@@ -221,13 +222,6 @@ fn core_card(texts: &SeatTexts, now: u64) -> SeatCard {
+     tsuzuri_core::seat::card(TARGET, anchor.as_deref(), texts, now)
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// GET を 1 つ撃ち、（状態の code・本文）を返す。
+ fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+@@ -254,25 +248,6 @@ fn seat_card(addr: SocketAddr) -> SeatCard {
+     wire::decode(&body).unwrap_or_else(|e| panic!("席の card の形でない {e}: {body}"))
+ }
+ 
+-/// dir の中の file の path と byte の一覧。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ #[test]
+ fn server_seat_card_matches_core() {
+     for case in ["run", "wait", "limit", "silent"] {
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/server_view.rs b/crates/tsuzuri-boundary/tests/teeth4/server_view.rs
+index 31d94bea22b9df1f5566c904fdf486c54592e6fd..545d1afdd28df0127086727cad7a0cdb48b670b6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/server_view.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/server_view.rs
+@@ -11,8 +11,8 @@ use std::net::{SocketAddr, TcpStream};
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{SystemTime, UNIX_EPOCH};
+ 
++use crate::common::{EVENTS, INDEX, LEDGER, now};
+ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_TIMEOUT};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::Reading;
+@@ -41,10 +41,6 @@ fn read_fixture(rel: &str) -> String {
+     fs::read_to_string(fixture(rel)).expect("fixture")
+ }
+ 
+-const LEDGER: &str = "ledger/bd-list-8.json";
+-const INDEX: &str = "graph/real/design-index.tsv";
+-const EVENTS: &str = "graph/real/events.jsonl";
+-
+ /// 近傍の歯の中心（実物の索引に在る規則の行）。
+ const CENTER: &str = "R-25";
+ 
+@@ -132,13 +128,6 @@ impl Place {
+     }
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// 要求を 1 つ撃ち、接続が閉じるまで応答の（状態の code・頭・本文）を読む。
+ fn request(addr: SocketAddr, raw: &str) -> (u16, String, String) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/shb.rs b/crates/tsuzuri-boundary/tests/teeth4/shb.rs
+index fb00c8b46dc073063cbde80580b0be9bbbf914d0..1806204b2a013b71e37b4786b4dcf82a01c62001 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/shb.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/shb.rs
+@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::Duration;
+ 
++use crate::common::{refused, tree};
+ use tsuzuri_boundary::acct::Acct;
+ use tsuzuri_boundary::accthb::{BAD_BODY, NO_PROJECT, NO_SEAT, VESSEL_FAILED, accept, accept_own};
+ use tsuzuri_boundary::server::route::{Key, Match};
+@@ -371,25 +372,6 @@ impl Place {
+     }
+ }
+ 
+-/// dir の中の file の path と byte の一覧。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ fn to(to: &str) -> String {
+     format!("{{\"to\":\"{to}\"}}")
+ }
+@@ -407,10 +389,6 @@ fn ok(target: &str, to: Heartbeat) -> (u16, String) {
+     (200, json)
+ }
+ 
+-fn refused(status: u16, text: &str) -> (u16, String) {
+-    (status, text.to_string())
+-}
+-
+ /// dir の下の拡張子 rs の file（再帰）。
+ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+     for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs b/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
+index c9b46d9500f3c3182c598ada57acec9e5ae70027..1f95a5c30df4a14fb2ba940f1b89d0e7afa4ef66 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stcdp.rs
+@@ -12,6 +12,7 @@ use std::process;
+ use std::thread::{self, JoinHandle};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::LOAD;
+ use tsuzuri_boundary::stage::cdp::{
+     self, Command, DOM_EXPRESSION, LOAD_EVENT, MEASURE_EXPRESSION, Session, Step,
+ };
+@@ -188,9 +189,6 @@ const MESSAGES: [&str; 17] = [
+     r#"{"id":17,"method":"Log.enable","params":{}}"#,
+ ];
+ 
+-/// 読み込みの終わりの event の字。
+-const LOAD: &str = r#"{"method":"Page.loadEventFired","params":{"timestamp":1}}"#;
+-
+ /// console の event の字。
+ const CONSOLE: &str = r#"{"method":"Runtime.consoleAPICalled","params":{"type":"log","args":[]}}"#;
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/stcli.rs b/crates/tsuzuri-boundary/tests/teeth4/stcli.rs
+index 685336b85cb8d78fc84c164fa596b303cb4d67c7..f3845e2b80668e7bc4ec99b858ec05ee74ebd56a 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/stcli.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stcli.rs
+@@ -6,7 +6,6 @@
+ 
+ use std::env;
+ use std::ffi::{OsStr, OsString};
+-use std::fmt::Debug;
+ use std::fs::{self, File, OpenOptions};
+ use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
+ use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+@@ -18,6 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::thread::{self, JoinHandle};
+ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+ 
++use crate::common::{LINE, LOAD, debug, err, fixture, strings, term};
+ use tsuzuri_boundary::stage::cdp::Command;
+ use tsuzuri_boundary::stage::cli::{
+     self, Call, LOCK_WAIT, SEAT_ENV, TIMEOUT, USAGE, VALIDATE_ARGS, Verb,
+@@ -26,7 +26,7 @@ use tsuzuri_boundary::stage::json;
+ use tsuzuri_boundary::stage::launch;
+ use tsuzuri_boundary::stage::memo;
+ use tsuzuri_boundary::stage::target::{self, Targets};
+-use tsuzuri_boundary::stage::terminal::{self, Terminal};
++use tsuzuri_boundary::stage::terminal;
+ use tsuzuri_boundary::stage::tunnel::{self, Tunnel};
+ use tsuzuri_boundary::stage::url::{self, Board};
+ use tsuzuri_contract::stage::StageTargets;
+@@ -53,9 +53,6 @@ const FILTER_WORDS: &str = concat!(
+ /// 節の board の URL（名は偽物・予約の頂の invalid）。
+ const BOARD_URL: &str = "http://srv-a.tailnet.invalid:4801/";
+ 
+-/// 節の URL の行。
+-const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
+-
+ /// 節の term-a の窓が在る時の行（起こさない）。
+ const LIVE_A: &str =
+     "端末 term-a の board http://srv-a.tailnet.invalid:4801/ の表示面の窓は在る（起こさない）";
+@@ -84,9 +81,6 @@ const DOM: &str = "<html><body>eyes</body></html>";
+ const CONSOLE: &str = r#"{"method":"Runtime.consoleAPICalled","params":{"type":"log","args":["hello"]}}"#;
+ const CONSOLE_LINE: &str = r#"{"sessionId":"S1","method":"Runtime.consoleAPICalled","params":{"type":"log","args":["hello"]}}"#;
+ 
+-/// 読み込みの終わりの event の字。
+-const LOAD: &str = r#"{"method":"Page.loadEventFired","params":{"timestamp":1}}"#;
+-
+ /// 節の偽の tailnet の道具の出力（住所は文書の例の住所で tailnet の住所でない）。
+ const STATUS: &str = r#"{
+   "BackendState": "Running",
+@@ -207,15 +201,6 @@ type Flags<'a> = &'a [(&'a str, &'a str)];
+ /// one の型。
+ type OneFn = for<'a> fn(&'a str, Flags<'a>) -> Result<Line, String>;
+ 
+-fn fixture() -> String {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+-fn term(name: &str) -> Terminal {
+-    terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
+-}
+-
+ fn src(name: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+         .join("src/stage")
+@@ -223,10 +208,6 @@ fn src(name: &str) -> String {
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+ }
+ 
+-fn strings(words: &[&str]) -> Vec<String> {
+-    words.iter().map(|w| w.to_string()).collect()
+-}
+-
+ /// 節の自分の board（hosts は節の status の self_hosts）。
+ fn own() -> Board {
+     let hosts = url::self_hosts(STATUS).expect("節の status の self_hosts");
+@@ -272,14 +253,6 @@ fn mode(path: &Path) -> u32 {
+         & 0o777
+ }
+ 
+-/// Err の字（Ok なら落ちる）。
+-fn err<T: Debug>(got: Result<T, String>, what: &str) -> String {
+-    match got {
+-        Ok(v) => panic!("{what}: Ok {v:?}"),
+-        Err(e) => e,
+-    }
+-}
+-
+ /// 偽の ssh の tunnel の回の振る舞い。
+ #[derive(Clone, Copy)]
+ enum Ssh {
+@@ -715,8 +688,6 @@ fn verb_name(verb: &Verb) -> &'static str {
+     }
+ }
+ 
+-fn debug<T: Debug + Clone + PartialEq + Eq>() {}
+-
+ #[test]
+ fn stcli_shape_and_consts() {
+     let usage: &str = USAGE;
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs b/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
+index 2a9ac9c9c04cec49dfecabb88c8dae44de55cfaf..093d76e5147c0cb2af9bc391afb99ca17a5721fd 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stlaunch.rs
+@@ -18,9 +18,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::thread::{self, JoinHandle};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{strings, term};
+ use tsuzuri_boundary::stage::json;
+ use tsuzuri_boundary::stage::launch::{self, PORT, WINDOW_SIZE};
+-use tsuzuri_boundary::stage::terminal::{self, Os, Terminal};
++use tsuzuri_boundary::stage::terminal::{Os, Terminal};
+ use tsuzuri_boundary::stage::tunnel::{self, SOCKET, Tunnel, Window};
+ use tsuzuri_boundary::stage::url::Board;
+ 
+@@ -206,15 +207,6 @@ fn board() -> Board {
+     }
+ }
+ 
+-fn fixture() -> String {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/stage/terminals.toml");
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+-fn term(name: &str) -> Terminal {
+-    terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
+-}
+-
+ fn src(name: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+         .join("src/stage")
+@@ -222,10 +214,6 @@ fn src(name: &str) -> String {
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+ }
+ 
+-fn strings(words: &[&str]) -> Vec<String> {
+-    words.iter().map(|w| w.to_string()).collect()
+-}
+-
+ fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+     pairs
+         .iter()
+diff --git a/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs b/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
+index dd4cb75161deeac820172d01a7ea754492d81c37..8673bbee9de729d7dc4819738de8c8ece3a37da6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
++++ b/crates/tsuzuri-boundary/tests/teeth4/stnfy.rs
+@@ -5,13 +5,13 @@
+ #![cfg(test)]
+ 
+ use std::ffi::{OsStr, OsString};
+-use std::fmt::Debug;
+ use std::fs;
+ use std::os::unix::fs::{PermissionsExt, symlink};
+ use std::path::{Path, PathBuf};
+ use std::process::{Command as Process, Stdio};
+ use std::time::{Duration, SystemTime, UNIX_EPOCH};
+ 
++use crate::common::{LINE, debug, err, strings};
+ use tsuzuri_boundary::stage::cli::USAGE;
+ use tsuzuri_boundary::stage::launch;
+ use tsuzuri_boundary::stage::notify::{
+@@ -56,9 +56,6 @@ const TITLE: &str = "問い 2 つ it's \"見て\"";
+ /// 節の board の URL（名は偽物・予約の頂の invalid）。
+ const URL: &str = "http://srv-a.tailnet.invalid:4801/";
+ 
+-/// 節の URL の行。
+-const LINE: &str = "board の URL http://srv-a.tailnet.invalid:4801/";
+-
+ /// 節の偽の tailnet の道具の出力（住所は文書の例の住所）。
+ const STATUS: &str = r#"{
+   "BackendState": "Running",
+@@ -139,14 +136,6 @@ fn mode(path: &Path) -> u32 {
+         & 0o777
+ }
+ 
+-/// Err の字（Ok なら落ちる）。
+-fn err<T: Debug>(got: Result<T, String>, what: &str) -> String {
+-    match got {
+-        Ok(v) => panic!("{what}: Ok {v:?}"),
+-        Err(e) => e,
+-    }
+-}
+-
+ /// 偽の program（sh の script・権限 0755）。
+ fn fake(dir: &Path, name: &str, body: &str) -> PathBuf {
+     let path = dir.join(name);
+@@ -162,12 +151,6 @@ fn now() -> u64 {
+         .as_secs()
+ }
+ 
+-fn strings(words: &[&str]) -> Vec<String> {
+-    words.iter().map(|w| w.to_string()).collect()
+-}
+-
+-fn debug<T: Debug + Clone + PartialEq + Eq>() {}
+-
+ /// 節の記録。
+ fn record(title: &str) -> Record {
+     Record {
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs b/crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs
+index 2f3a80937f6c2dd9253c80d6cd77faf912171919..c86c554b9f5363aaca704a0fcefa4ee0531b0e0f 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cmtcnt.rs
+@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::stdout;
+ use tsuzuri_boundary::cli::graph::{UNLANDED_HEAD, UNLANDED_UNKNOWN, unlanded_line};
+ use tsuzuri_boundary::server::board::{Texts, built, built_floors};
+ use tsuzuri_contract::board::Reading;
+@@ -150,10 +151,6 @@ fn texts(events: &str) -> Texts {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+ fn stderr(out: &Output) -> String {
+     String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/common.rs b/crates/tsuzuri-boundary/tests/teeth5/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dce5ac31d3ab77b2bcd48e7ed7b1574cc4c65d9b
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth5/common.rs
+@@ -0,0 +1,112 @@
++//! tsuzuri-boundary の歯の群 teeth5 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++use std::{env, fs};
++
++/// 起草の時の main 4ad0b18f の契約表の verify の最後の字の filter の語 325 語（字のまま・空白で区切る）。
++pub(crate) const FILTER_WORDS: &str = concat!(
++    "aaround_ aaround_src_ask_fold_embeds abss_ abst_ accept_ acchold_ account_ acctcore_ ",
++    "acctcore_pure_and_no_new_dependencies acctdoc_ acctframe_ accthb_ accthome_ acctled_ acctlook_ ",
++    "acctpcore_ acctproj_ acctsess_ acctwin_ acctwire_ acctwire_back_part_before_header ",
++    "acctwire_back_steps aface_ afocus_ afocus_src_links_and_scroll alean_ aord_ aown_ apark_ apop_ ",
++    "areread_ askcard_ askcard_page_frame_and_nav athr_ batchpanel_ ",
++    "batchpanel_page_frame_two_columns bhalf_ board_min_ bport_ brand_ ",
++    "brand_path_written_once_in_contract btuck_ cadl_ cadopt_ cadq_ cdorm_ cexcl_ cfsplit_ cg9_ ",
++    "cgdom_ cishard_ cmark_ cnote_ cnret_ contract_form_ cround_ csled_ cspk_ ctick_ cupd_ cupdlist_ ",
++    "denv_ dnedge_ dngrp_ dnrow_ dnskip_ dretry_ dstg_ ecache_ ecache_handle_wiring_text eheld_acct_ ",
++    "eheld_design_ eheld_held_ eheld_marks_ eheld_vessel_ elazy_ epolq_ eretry_ esig_ evkind_ f123_ ",
++    "f159_ f212_ f2ret_ fdlt_ fdlv_ flight_ fmark_ fprem_ frame_ frame_home_blocks_in_order_and_map_page ",
++    "frame_one_module_per_block fserve_ fstop_ fstop_usage_errors_are_one fundl_ fxpre_ g3g7_ gacct_ ",
++    "gapspage_ gapspage_page_frame_and_nav gatt_ gbnote_ gchip_ gcoach_ gext_ gfix_ gfresh_ ",
++    "gfresh_boards_text ghb_ gins_ gjst_ glabel_ gmret_ gmretw_ gnav_ gpface_ gpill_ gpulse_ ",
++    "gpulse_boards_text gquestion_ graph_ gsum_ gtuck_ gview_ gwv_ hacols_ harest_ hasplit_ hbconf_ ",
++    "hbconf_config_moves_to_config_rs hbconf_main_parse_fills_the_rest_with_new hbmark_ hbon_ hbpost_ ",
++    "hbpost_mod_rs_drops_post_fns hbproc_ hbroute_ hbroute_mod_rs_keeps_only_events hcard_ hcled_ ",
++    "hcnx_ hcproj_ hcsess_ hdchip_ hfig_ hnunk_ hook_ hruling_ hsblock_ hsblock_dispatch_by_list ",
++    "hsblock_ids_match_consts hsblock_kit_holds_shared hsderive_ hsderive_consts_match_note hshist_ ",
++    "hspage_ hspage_snaps_match_files hspk_ hsym_ hthr_ http_ hwstore_ iclose_ ",
++    "iclose_handle_wiring_text ilink_ inject_ jcount_ jrun_ kcli_ kdeny_ kg9_ kindlab_ klink_ ksum_ ",
++    "lateface_ launch_ lcard_ ledgerblock_ lgrp_ lhome_ lidle_ lkind_ lresume_ lsnap_ lspark_ lstg_ ",
++    "lstore_ mapgraph_ mapview_ mapview_classes_and_keys_exist mkeys_ mlink_ mqask_ mqface_ mstore_ ",
++    "mstore_module_text mtips_ mtree_ nact_ nbatch_ ncard_ nextstep_ nodepage_ ",
++    "nodepage_frame_and_nav nstall_ nsum_ nsum_core_reads_no_files nsumw_ ntc_ ntime_ nxact_ nxorg_ ",
++    "parts_ parts_paths_distinct_in_block_modules pci_ pclosed_ pfold_ pgsw_ pgz_ pipe_ pkac_ pkview_ ",
++    "plimit_ pmisfit_ pmore_ popapp_ pquest_ pqueue_ project_ ptitle_ pubfp_ pubscan_ punmap_ pwhole_ ",
++    "qblock_ qgate_ qkey_ qsig_ question_ rbusy_ relay_ rhold_ rhold_wiring_text runsdoc_ rvk_ saxis_ ",
++    "saxis_src_draws_legend_axis sclosed_ seatblock_ seatcard_ server::design::tests:: ",
++    "server::events:: server::events::tests:: server_ server_acct_ server_ask_ server_ask_http_ ",
++    "server_batch_ server_batch_policy_scope_and_refusals server_coalesce_ server_hb_ server_min_ ",
++    "server_min_bind_judge server_min_epoch_secs_reads_rfc3339 server_min_http_ ",
++    "server_min_hub_sends_to_each_subscriber server_min_parse_refuses_broken_lines ",
++    "server_min_percent_decode server_read_ server_read_board_changed_within_5s ",
++    "server_read_doc_copies_verdicts server_read_empty_texts_are_unread ",
++    "server_read_watch_board_sends_on_marks server_reap_ server_seat_ server_src_ ",
++    "server_src_marks_are_two_files server_src_unstartable_bd_is_unknown server_src_watch_ ",
++    "server_src_watch_marks_trigger_reread server_view_ server_view_http_ sesplit_ sgrace_ shb_ ",
++    "skeleton_ smore_ smore_dom_text stage_ stage_cdp_ stage_term_ stats_ ",
++    "stats_detail_account_takes_the_last stats_epoch_secs_reads_rfc ",
++    "stats_read_drops_tombstones_and_reads_parent_and_blocks stats_stage_of_closed_table stbp_ stcli_ ",
++    "steady_ steady_details_use_fold_record steady_net_uses_settle_but_lose_all_does_not sthr_ ",
++    "stnfy_ stskill_ sttgt_ sxaxis_ tgall_ tgown_ ticker_ ticker_net_holds_one_interval tipx_ ",
++    "tipx_dom_text tkad_ tlic_ topbar_ topfit_ tz_ udacct_ udash_ unow_ urpanel_ uword_ wsteady_ ",
++    "wstrip_"
++);
++
++/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
++pub(crate) const RULES: &str = "thresholds:
++  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
++  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
++discipline: []
++";
++
++pub(crate) const TZW: &str = "/x/tzw";
++
++pub(crate) fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++pub(crate) fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git")
++        .arg("-C")
++        .arg(dir)
++        .args(args)
++        .status()
++        .unwrap();
++    assert!(ok.success(), "git {args:?}");
++}
++
++pub(crate) fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++pub(crate) fn rc(o: &Output) -> i32 {
++    o.status.code().unwrap()
++}
++
++pub(crate) fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++pub(crate) fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++pub(crate) fn src(name: &str) -> String {
++    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("src/stage")
++        .join(name);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
++}
++
++pub(crate) fn strings(words: &[&str]) -> Vec<String> {
++    words.iter().map(|w| w.to_string()).collect()
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwans.rs b/crates/tsuzuri-boundary/tests/teeth5/cwans.rs
+index 10889b6f197d809461fbd0b4a94958981c5e4e61..588d46d92a19e7900cbc0a88f01f3f0f8e4742d0 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwans.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwans.rs
+@@ -9,6 +9,7 @@ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{err, out, rc};
+ use tsuzuri_boundary::server::{events, ruling};
+ use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
+ use tsuzuri_contract::wire;
+@@ -81,18 +82,6 @@ fn guard(args: &[&str], payload: &str) -> Output {
+     child.wait_with_output().unwrap()
+ }
+ 
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+-fn err(o: &Output) -> String {
+-    String::from_utf8(o.stderr.clone()).unwrap()
+-}
+-
+ /// findings/ の file の名（字の順）。
+ fn names(ws: &Path) -> Vec<String> {
+     let mut v: Vec<String> = fs::read_dir(ws.join("findings"))
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+index 716e8964a43c78285e2ef86e6124f533513b20cb..95fe6774113e9638883e04d33fc00ed82210b174 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+@@ -7,10 +7,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{err, git, out, rc, script};
+ use tsuzuri_boundary::consult::Ctx;
+ use tsuzuri_boundary::consult::list::{NO_ACCOUNT, board, epoch_of, text};
+ use tsuzuri_boundary::server::{events, ruling};
+@@ -27,21 +27,6 @@ const LEDGER: &str = r#"[{"id":"fx-c","title":"根","status":"open","issue_type"
+ 
+ const RQ: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし・形 = 話す・model = fable・起こし手 = 持ち主の button・時刻 = 20261003T1412Z";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+-}
+-
+-fn git(dir: &Path, args: &[&str]) {
+-    let ok = Command::new("git")
+-        .arg("-C")
+-        .arg(dir)
+-        .args(args)
+-        .status()
+-        .unwrap();
+-    assert!(ok.success(), "git {args:?}");
+-}
+-
+ fn w(n: u32) -> WindowId {
+     WindowId::new(n).unwrap()
+ }
+@@ -184,18 +169,6 @@ fn mark(ws: &Path, k: u32, form: Form, pid: u32, tmux: Option<&str>) {
+     .unwrap();
+ }
+ 
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+-fn err(o: &Output) -> String {
+-    String::from_utf8(o.stderr.clone()).unwrap()
+-}
+-
+ /// 一覧の歯の置き場（cw1 生きている問う窓・cw2 止まった問う窓・cw3 process の印が生きている閉じた窓・cw4 閉じの行の在る退いた窓・cw5 起こしていない窓）。
+ fn listed(fx: &Fx, today: &str) -> Vec<String> {
+     let me = std::process::id();
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwhok.rs b/crates/tsuzuri-boundary/tests/teeth5/cwhok.rs
+index a555b230b63bcaee25871d3f187e78e07a5a923b..c004d76912f1b109940a2dcff99d4de4d9e7a542 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwhok.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwhok.rs
+@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
+ use std::thread;
+ use std::time::{Duration, Instant, SystemTime};
+ 
++use crate::common::TZW;
+ use tsuzuri_boundary::consult::watch::{ALIVE, FRESH};
+ use tsuzuri_boundary::hook::consult::{PICK_BUDGET, pick};
+ use tsuzuri_boundary::hook::question_signal::{REACH, WAIT};
+@@ -29,7 +30,6 @@ use tsuzuri_contract::wire;
+ use tsuzuri_core::consult::pickup::{block_with, context_with};
+ use tsuzuri_core::delivery::{Pending, block, context_for};
+ 
+-const TZW: &str = "/x/tzw";
+ const STOP: &str = r#"{"session_id":"s-1","hook_event_name":"Stop","stop_hook_active":false}"#;
+ const STOP_AGAIN: &str = r#"{"session_id":"s-1","hook_event_name":"Stop","stop_hook_active":true}"#;
+ const PROMPT: &str =
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index cf2045cbc75cc8ed0e25a82fd238e4b1a3e5d1e0..228dfe1605d8b112659aeca5bf6e1e42794d94f6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -11,6 +11,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{TZW, err, git, out, rc, script};
+ use tsuzuri_boundary::server::{events, ruling};
+ use tsuzuri_contract::consult::{FindingId, Form, ProcMark, Via, WindowId};
+ use tsuzuri_contract::wire;
+@@ -25,23 +26,6 @@ const LEDGER: &str = r#"[
+ {"id":"fx-c.2","title":"問いの題名","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-c.1","description":"問いの本文","updated_at":"2026-10-03T00:00:00Z"}
+ ]"#;
+ 
+-const TZW: &str = "/x/tzw";
+-
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+-}
+-
+-fn git(dir: &Path, args: &[&str]) {
+-    let ok = Command::new("git")
+-        .arg("-C")
+-        .arg(dir)
+-        .args(args)
+-        .status()
+-        .unwrap();
+-    assert!(ok.success(), "git {args:?}");
+-}
+-
+ /// argv を字 0x1f で区切り、撃たれた回ごとに 1 行を足す殻の字。
+ fn record(log: &Path) -> String {
+     format!(
+@@ -214,18 +198,6 @@ impl Fx {
+     }
+ }
+ 
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+-fn err(o: &Output) -> String {
+-    String::from_utf8(o.stderr.clone()).unwrap()
+-}
+-
+ /// 私用の temp を消す（歯の前と後）。
+ fn clear_tmp(l: &Launch) {
+     let _ = fs::remove_dir_all(private_tmp(&l.workspace));
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs b/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+index ef31b1e0293066ff5ecd03e1f7b04f4547155c24..3bad4d3aaa226db9b2e2788b9ab3af65d28a13b5 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+@@ -5,10 +5,10 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{err, git, out, rc, script};
+ use tsuzuri_boundary::consult::{self, bundle};
+ use tsuzuri_boundary::server::{events, ruling};
+ use tsuzuri_contract::consult::{
+@@ -28,21 +28,6 @@ const LEDGER: &str = r#"[
+ 
+ const RQ: &str = "rq-20261003T1412Z-1";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+-}
+-
+-fn git(dir: &Path, args: &[&str]) {
+-    let ok = Command::new("git")
+-        .arg("-C")
+-        .arg(dir)
+-        .args(args)
+-        .status()
+-        .unwrap();
+-    assert!(ok.success(), "git {args:?}");
+-}
+-
+ /// 歯ごとの置き場。
+ struct Fx {
+     root: PathBuf,
+@@ -160,18 +145,6 @@ impl Fx {
+     }
+ }
+ 
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+-fn err(o: &Output) -> String {
+-    String::from_utf8(o.stderr.clone()).unwrap()
+-}
+-
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+ fn tz_exe() -> String {
+     fs::canonicalize(env!("CARGO_BIN_EXE_tz"))
+         .unwrap()
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwshw.rs b/crates/tsuzuri-boundary/tests/teeth5/cwshw.rs
+index fb1617c26192b4a991bf214def994e0fc7544504..9361d70712ef34e0beb6cd273f2bcd0c49bba1d9 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwshw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwshw.rs
+@@ -5,10 +5,10 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{err, git, out, rc, script};
+ use tsuzuri_boundary::server::{events, ruling};
+ use tsuzuri_contract::consult::{Finding, FindingId, Form, Starter, WindowFile, WindowId};
+ use tsuzuri_contract::wire;
+@@ -22,21 +22,6 @@ const LEDGER: &str = r#"[
+ {"id":"fx-hub.7","title":"問い","status":"open","issue_type":"task","labels":["intake:question"],"parent":"fx-hub.5","updated_at":"2026-10-03T00:00:00Z"}
+ ]"#;
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+-}
+-
+-fn git(dir: &Path, args: &[&str]) {
+-    let ok = Command::new("git")
+-        .arg("-C")
+-        .arg(dir)
+-        .args(args)
+-        .status()
+-        .unwrap();
+-    assert!(ok.success(), "git {args:?}");
+-}
+-
+ /// 歯ごとの置き場（窓 cw3 の作業場と所見 cw3-1 を置いた後）。
+ struct Fx {
+     root: PathBuf,
+@@ -175,18 +160,6 @@ impl Fx {
+     }
+ }
+ 
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+-fn err(o: &Output) -> String {
+-    String::from_utf8(o.stderr.clone()).unwrap()
+-}
+-
+ fn time_of(text: &str) -> String {
+     text.rsplit_once("時刻 = ").unwrap().1.to_string()
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+index c00f8b2472538ca777f7c6b9e72b624302c75988..f3ec89a9edc7e0b328cc8055ffc989691d931a6b 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ use std::time::{Duration, Instant, SystemTime};
+ 
++use crate::common::{git, out, rc};
+ use tsuzuri_contract::consult::{
+     Finding, FindingId, Form, ProcMark, Starter, WindowFile, WindowId,
+ };
+@@ -24,16 +25,6 @@ const TAIL: &str = "・「/x/tzw consult watch」を背景で置き直す";
+ 
+ const GONE5: &str = "相談: 話す窓 cw5 が止まった（開き直しを待つ・持ち主が閉じると言えば /x/tzw consult close cw5 --by chat）";
+ 
+-fn git(dir: &Path, args: &[&str]) {
+-    let ok = Command::new("git")
+-        .arg("-C")
+-        .arg(dir)
+-        .args(args)
+-        .status()
+-        .unwrap();
+-    assert!(ok.success(), "git {args:?}");
+-}
+-
+ /// 歯ごとの置き場。
+ struct Fx {
+     root: PathBuf,
+@@ -141,14 +132,6 @@ fn proc_mark(ws: &Path, k: u32, form: Form, pid: u32) {
+     fs::write(path, wire::encode(&m).unwrap()).unwrap();
+ }
+ 
+-fn rc(o: &Output) -> i32 {
+-    o.status.code().unwrap()
+-}
+-
+-fn out(o: &Output) -> String {
+-    String::from_utf8(o.stdout.clone()).unwrap()
+-}
+-
+ /// 窓 cw3 の作業場に、fixture complete.json の草稿に id と時刻を足した揃った所見 cw3-1 を置く。
+ fn answer(ws: &Path) {
+     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+index ea0832ac80d2a9c37c558b54c4f6d9631e33d1e5..61427b1f5ca74619739da6a5b417b31033431567 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -7,6 +7,7 @@ mod aggc;
+ mod aggd;
+ mod aggs;
+ mod cmtcnt;
++mod common;
+ mod cwans;
+ mod cwcls;
+ mod cwhok;
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/rcapf.rs b/crates/tsuzuri-boundary/tests/teeth5/rcapf.rs
+index 61be34fa1c2a7b6dd152f716ac8bc7ebfb948acf..be79d7bb9d5a4144d742acc0c9680aecdb088ab8 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/rcapf.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/rcapf.rs
+@@ -3,6 +3,7 @@
+ //! seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
+ #![cfg(test)]
+ 
++use crate::common::RULES;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+@@ -25,13 +26,6 @@ articles:
+       - {id: P-1.1, strength: must, text: 守る。}
+ ";
+ 
+-/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
+-const RULES: &str = "thresholds:
+-  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
+-  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
+-discipline: []
+-";
+-
+ /// 上限の file の字（頭の 1 行と、seat-role-bytes の行の値の 10 進の数の 1 行）。
+ const ROLE_MAX: &str = "生成物・手で直さない・design-intent/rules.yaml seat-role-bytes\n2000\n";
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs b/crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs
+index 481767fd72ad6c51de5d8ca6b48674bcaef10414..01f4a7ba1663880a37f1439c8dbfe9e3e25c27ac 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/rowbasis.rs
+@@ -4,6 +4,7 @@
+ //! 土台は folio2 の凍結の土台 floor_base の design-intent の写し（git の 1 commit）と、器の欄の写しに basis を足した file。
+ //! 否定の見本は正しい見本から 1 句だけ替える。
+ #![cfg(test)]
++use crate::common::{root, stdout};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -14,10 +15,6 @@ const ROW_END: &str = ", depends: []}";
+ /// 器の欄の写しに足す欄 basis の塊。
+ const BASIS_FIELD: &str = "\n[[field]]\nname = \"basis\"\nneed = \"optional\"\nshape = \"list\"\n";
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).expect("写しの dir");
+     for entry in fs::read_dir(src).expect("土台を読む") {
+@@ -119,10 +116,6 @@ impl Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+ #[test]
+ fn rowbasis_index_makes_basis_edges_and_keeps_the_digest() {
+     let with = Work::new("index-with", Some("[ADR-4, P-10]"), true);
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/seatcp.rs b/crates/tsuzuri-boundary/tests/teeth5/seatcp.rs
+index 129bf6ca552eab2e7a5fb714a45ec1cb630fccef..d788bf310f9cbd7c49edc4045dd61cdcb27078ee 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/seatcp.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/seatcp.rs
+@@ -3,6 +3,7 @@
+ //! 規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
+ #![cfg(test)]
+ 
++use crate::common::RULES;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -34,13 +35,6 @@ articles:
+     title: 題よん
+ ";
+ 
+-/// 規則の表（欄 key の 2 行・値は 3 桁ごとの , を持つ）。
+-const RULES: &str = "thresholds:
+-  - {id: R-1, value: \"8,000 byte 以下\", key: seat-bytes}
+-  - {id: R-41, value: \"2,000 byte 以下\", key: seat-role-bytes}
+-discipline: []
+-";
+-
+ /// 要の写しの字（頭の行・順位・段の名と規範文・段「いつも守る」の条の id と題・在りか）。
+ const BRIEF: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9
+ 順位 段の順 で解く。
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/strelay.rs b/crates/tsuzuri-boundary/tests/teeth5/strelay.rs
+index 7b9d05bea02df77035d0c05f3424ac6ff335e9d3..53676ca568c5a9d294f357efb1f3cdd8a42d2641 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/strelay.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/strelay.rs
+@@ -15,6 +15,7 @@ use std::process::{ChildStdin, ChildStdout, Command as Process};
+ use std::thread::{self, JoinHandle};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{src, strings};
+ use tsuzuri_boundary::stage::cdp::{Command, HISTORY, Session};
+ use tsuzuri_boundary::stage::json;
+ use tsuzuri_boundary::stage::launch;
+@@ -194,17 +195,6 @@ fn term(name: &str) -> Terminal {
+     terminal::lookup(&fixture(), name).unwrap_or_else(|e| panic!("{name}: {e}"))
+ }
+ 
+-fn src(name: &str) -> String {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+-        .join("src/stage")
+-        .join(name);
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+-fn strings(words: &[&str]) -> Vec<String> {
+-    words.iter().map(|w| w.to_string()).collect()
+-}
+-
+ /// 節の自分の board。
+ fn own() -> Board {
+     Board {
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs b/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
+index 1e7230fcdac90497b86a71078df0e1555f81423f..35d4f7e0679ab3a8dc5d33f45c53fabd15fb1b9e 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/sttgt.rs
+@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{self, Command as Process, Stdio};
+ 
++use crate::common::{src, strings};
+ use tsuzuri_boundary::stage::cli::{
+     Aim, Setting, TargetCall, aim, config_path, parse_target, project, show,
+ };
+@@ -94,17 +95,6 @@ fn value(default: Option<&str>, projects: &[(&str, &str)]) -> Targets {
+     }
+ }
+ 
+-fn strings(words: &[&str]) -> Vec<String> {
+-    words.iter().map(|w| w.to_string()).collect()
+-}
+-
+-fn src(name: &str) -> String {
+-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+-        .join("src/stage")
+-        .join(name);
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ /// 歯ごとの作業場（前の撃ちの残りを消す）。
+ fn scratch(name: &str) -> PathBuf {
+     let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/tzent.rs b/crates/tsuzuri-boundary/tests/teeth5/tzent.rs
+index 1e208165fb541b4a6ef99ed4d7b00dbea950c00a..33a9dad836588bb6e8271530238d30f2fd6a05f2 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/tzent.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzent.rs
+@@ -3,64 +3,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::process::Command;
+ 
++use crate::common::{FILTER_WORDS, root};
+ use tsuzuri_boundary::cli::folio::{GRAPH_FLAGS, INDEX_FLAGS, NAMES};
+ 
+-/// 起草の時の main 4ad0b18f の契約表の verify の最後の字の filter の語 325 語（字のまま・空白で区切る）。
+-const FILTER_WORDS: &str = concat!(
+-    "aaround_ aaround_src_ask_fold_embeds abss_ abst_ accept_ acchold_ account_ acctcore_ ",
+-    "acctcore_pure_and_no_new_dependencies acctdoc_ acctframe_ accthb_ accthome_ acctled_ acctlook_ ",
+-    "acctpcore_ acctproj_ acctsess_ acctwin_ acctwire_ acctwire_back_part_before_header ",
+-    "acctwire_back_steps aface_ afocus_ afocus_src_links_and_scroll alean_ aord_ aown_ apark_ apop_ ",
+-    "areread_ askcard_ askcard_page_frame_and_nav athr_ batchpanel_ ",
+-    "batchpanel_page_frame_two_columns bhalf_ board_min_ bport_ brand_ ",
+-    "brand_path_written_once_in_contract btuck_ cadl_ cadopt_ cadq_ cdorm_ cexcl_ cfsplit_ cg9_ ",
+-    "cgdom_ cishard_ cmark_ cnote_ cnret_ contract_form_ cround_ csled_ cspk_ ctick_ cupd_ cupdlist_ ",
+-    "denv_ dnedge_ dngrp_ dnrow_ dnskip_ dretry_ dstg_ ecache_ ecache_handle_wiring_text eheld_acct_ ",
+-    "eheld_design_ eheld_held_ eheld_marks_ eheld_vessel_ elazy_ epolq_ eretry_ esig_ evkind_ f123_ ",
+-    "f159_ f212_ f2ret_ fdlt_ fdlv_ flight_ fmark_ fprem_ frame_ frame_home_blocks_in_order_and_map_page ",
+-    "frame_one_module_per_block fserve_ fstop_ fstop_usage_errors_are_one fundl_ fxpre_ g3g7_ gacct_ ",
+-    "gapspage_ gapspage_page_frame_and_nav gatt_ gbnote_ gchip_ gcoach_ gext_ gfix_ gfresh_ ",
+-    "gfresh_boards_text ghb_ gins_ gjst_ glabel_ gmret_ gmretw_ gnav_ gpface_ gpill_ gpulse_ ",
+-    "gpulse_boards_text gquestion_ graph_ gsum_ gtuck_ gview_ gwv_ hacols_ harest_ hasplit_ hbconf_ ",
+-    "hbconf_config_moves_to_config_rs hbconf_main_parse_fills_the_rest_with_new hbmark_ hbon_ hbpost_ ",
+-    "hbpost_mod_rs_drops_post_fns hbproc_ hbroute_ hbroute_mod_rs_keeps_only_events hcard_ hcled_ ",
+-    "hcnx_ hcproj_ hcsess_ hdchip_ hfig_ hnunk_ hook_ hruling_ hsblock_ hsblock_dispatch_by_list ",
+-    "hsblock_ids_match_consts hsblock_kit_holds_shared hsderive_ hsderive_consts_match_note hshist_ ",
+-    "hspage_ hspage_snaps_match_files hspk_ hsym_ hthr_ http_ hwstore_ iclose_ ",
+-    "iclose_handle_wiring_text ilink_ inject_ jcount_ jrun_ kcli_ kdeny_ kg9_ kindlab_ klink_ ksum_ ",
+-    "lateface_ launch_ lcard_ ledgerblock_ lgrp_ lhome_ lidle_ lkind_ lresume_ lsnap_ lspark_ lstg_ ",
+-    "lstore_ mapgraph_ mapview_ mapview_classes_and_keys_exist mkeys_ mlink_ mqask_ mqface_ mstore_ ",
+-    "mstore_module_text mtips_ mtree_ nact_ nbatch_ ncard_ nextstep_ nodepage_ ",
+-    "nodepage_frame_and_nav nstall_ nsum_ nsum_core_reads_no_files nsumw_ ntc_ ntime_ nxact_ nxorg_ ",
+-    "parts_ parts_paths_distinct_in_block_modules pci_ pclosed_ pfold_ pgsw_ pgz_ pipe_ pkac_ pkview_ ",
+-    "plimit_ pmisfit_ pmore_ popapp_ pquest_ pqueue_ project_ ptitle_ pubfp_ pubscan_ punmap_ pwhole_ ",
+-    "qblock_ qgate_ qkey_ qsig_ question_ rbusy_ relay_ rhold_ rhold_wiring_text runsdoc_ rvk_ saxis_ ",
+-    "saxis_src_draws_legend_axis sclosed_ seatblock_ seatcard_ server::design::tests:: ",
+-    "server::events:: server::events::tests:: server_ server_acct_ server_ask_ server_ask_http_ ",
+-    "server_batch_ server_batch_policy_scope_and_refusals server_coalesce_ server_hb_ server_min_ ",
+-    "server_min_bind_judge server_min_epoch_secs_reads_rfc3339 server_min_http_ ",
+-    "server_min_hub_sends_to_each_subscriber server_min_parse_refuses_broken_lines ",
+-    "server_min_percent_decode server_read_ server_read_board_changed_within_5s ",
+-    "server_read_doc_copies_verdicts server_read_empty_texts_are_unread ",
+-    "server_read_watch_board_sends_on_marks server_reap_ server_seat_ server_src_ ",
+-    "server_src_marks_are_two_files server_src_unstartable_bd_is_unknown server_src_watch_ ",
+-    "server_src_watch_marks_trigger_reread server_view_ server_view_http_ sesplit_ sgrace_ shb_ ",
+-    "skeleton_ smore_ smore_dom_text stage_ stage_cdp_ stage_term_ stats_ ",
+-    "stats_detail_account_takes_the_last stats_epoch_secs_reads_rfc ",
+-    "stats_read_drops_tombstones_and_reads_parent_and_blocks stats_stage_of_closed_table stbp_ stcli_ ",
+-    "steady_ steady_details_use_fold_record steady_net_uses_settle_but_lose_all_does_not sthr_ ",
+-    "stnfy_ stskill_ sttgt_ sxaxis_ tgall_ tgown_ ticker_ ticker_net_holds_one_interval tipx_ ",
+-    "tipx_dom_text tkad_ tlic_ topbar_ topfit_ tz_ udacct_ udash_ unow_ urpanel_ uword_ wsteady_ ",
+-    "wstrip_"
+-);
+-
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ /// 本物の設計文書の置き場。
+ fn design() -> String {
+     root().join("folio2/design-intent").display().to_string()
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs b/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
+index 89af905b31fbe5ad1e77db7baba96efe6a09b62c..a7e0dc59f83c42c51fc329d7d17b7e9a7c32ed09 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzpar.rs
+@@ -8,57 +8,9 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+ 
++use crate::common::{FILTER_WORDS, root};
+ use tsuzuri_boundary::cli::folio::{INDEX_FLAGS, NAMES};
+ 
+-/// 起草の時の main 4ad0b18f の契約表の verify の最後の字の filter の語 325 語（字のまま・空白で区切る）。
+-const FILTER_WORDS: &str = concat!(
+-    "aaround_ aaround_src_ask_fold_embeds abss_ abst_ accept_ acchold_ account_ acctcore_ ",
+-    "acctcore_pure_and_no_new_dependencies acctdoc_ acctframe_ accthb_ accthome_ acctled_ acctlook_ ",
+-    "acctpcore_ acctproj_ acctsess_ acctwin_ acctwire_ acctwire_back_part_before_header ",
+-    "acctwire_back_steps aface_ afocus_ afocus_src_links_and_scroll alean_ aord_ aown_ apark_ apop_ ",
+-    "areread_ askcard_ askcard_page_frame_and_nav athr_ batchpanel_ ",
+-    "batchpanel_page_frame_two_columns bhalf_ board_min_ bport_ brand_ ",
+-    "brand_path_written_once_in_contract btuck_ cadl_ cadopt_ cadq_ cdorm_ cexcl_ cfsplit_ cg9_ ",
+-    "cgdom_ cishard_ cmark_ cnote_ cnret_ contract_form_ cround_ csled_ cspk_ ctick_ cupd_ cupdlist_ ",
+-    "denv_ dnedge_ dngrp_ dnrow_ dnskip_ dretry_ dstg_ ecache_ ecache_handle_wiring_text eheld_acct_ ",
+-    "eheld_design_ eheld_held_ eheld_marks_ eheld_vessel_ elazy_ epolq_ eretry_ esig_ evkind_ f123_ ",
+-    "f159_ f212_ f2ret_ fdlt_ fdlv_ flight_ fmark_ fprem_ frame_ frame_home_blocks_in_order_and_map_page ",
+-    "frame_one_module_per_block fserve_ fstop_ fstop_usage_errors_are_one fundl_ fxpre_ g3g7_ gacct_ ",
+-    "gapspage_ gapspage_page_frame_and_nav gatt_ gbnote_ gchip_ gcoach_ gext_ gfix_ gfresh_ ",
+-    "gfresh_boards_text ghb_ gins_ gjst_ glabel_ gmret_ gmretw_ gnav_ gpface_ gpill_ gpulse_ ",
+-    "gpulse_boards_text gquestion_ graph_ gsum_ gtuck_ gview_ gwv_ hacols_ harest_ hasplit_ hbconf_ ",
+-    "hbconf_config_moves_to_config_rs hbconf_main_parse_fills_the_rest_with_new hbmark_ hbon_ hbpost_ ",
+-    "hbpost_mod_rs_drops_post_fns hbproc_ hbroute_ hbroute_mod_rs_keeps_only_events hcard_ hcled_ ",
+-    "hcnx_ hcproj_ hcsess_ hdchip_ hfig_ hnunk_ hook_ hruling_ hsblock_ hsblock_dispatch_by_list ",
+-    "hsblock_ids_match_consts hsblock_kit_holds_shared hsderive_ hsderive_consts_match_note hshist_ ",
+-    "hspage_ hspage_snaps_match_files hspk_ hsym_ hthr_ http_ hwstore_ iclose_ ",
+-    "iclose_handle_wiring_text ilink_ inject_ jcount_ jrun_ kcli_ kdeny_ kg9_ kindlab_ klink_ ksum_ ",
+-    "lateface_ launch_ lcard_ ledgerblock_ lgrp_ lhome_ lidle_ lkind_ lresume_ lsnap_ lspark_ lstg_ ",
+-    "lstore_ mapgraph_ mapview_ mapview_classes_and_keys_exist mkeys_ mlink_ mqask_ mqface_ mstore_ ",
+-    "mstore_module_text mtips_ mtree_ nact_ nbatch_ ncard_ nextstep_ nodepage_ ",
+-    "nodepage_frame_and_nav nstall_ nsum_ nsum_core_reads_no_files nsumw_ ntc_ ntime_ nxact_ nxorg_ ",
+-    "parts_ parts_paths_distinct_in_block_modules pci_ pclosed_ pfold_ pgsw_ pgz_ pipe_ pkac_ pkview_ ",
+-    "plimit_ pmisfit_ pmore_ popapp_ pquest_ pqueue_ project_ ptitle_ pubfp_ pubscan_ punmap_ pwhole_ ",
+-    "qblock_ qgate_ qkey_ qsig_ question_ rbusy_ relay_ rhold_ rhold_wiring_text runsdoc_ rvk_ saxis_ ",
+-    "saxis_src_draws_legend_axis sclosed_ seatblock_ seatcard_ server::design::tests:: ",
+-    "server::events:: server::events::tests:: server_ server_acct_ server_ask_ server_ask_http_ ",
+-    "server_batch_ server_batch_policy_scope_and_refusals server_coalesce_ server_hb_ server_min_ ",
+-    "server_min_bind_judge server_min_epoch_secs_reads_rfc3339 server_min_http_ ",
+-    "server_min_hub_sends_to_each_subscriber server_min_parse_refuses_broken_lines ",
+-    "server_min_percent_decode server_read_ server_read_board_changed_within_5s ",
+-    "server_read_doc_copies_verdicts server_read_empty_texts_are_unread ",
+-    "server_read_watch_board_sends_on_marks server_reap_ server_seat_ server_src_ ",
+-    "server_src_marks_are_two_files server_src_unstartable_bd_is_unknown server_src_watch_ ",
+-    "server_src_watch_marks_trigger_reread server_view_ server_view_http_ sesplit_ sgrace_ shb_ ",
+-    "skeleton_ smore_ smore_dom_text stage_ stage_cdp_ stage_term_ stats_ ",
+-    "stats_detail_account_takes_the_last stats_epoch_secs_reads_rfc ",
+-    "stats_read_drops_tombstones_and_reads_parent_and_blocks stats_stage_of_closed_table stbp_ stcli_ ",
+-    "steady_ steady_details_use_fold_record steady_net_uses_settle_but_lose_all_does_not sthr_ ",
+-    "stnfy_ stskill_ sttgt_ sxaxis_ tgall_ tgown_ ticker_ ticker_net_holds_one_interval tipx_ ",
+-    "tipx_dom_text tkad_ tlic_ topbar_ topfit_ tz_ udacct_ udash_ unow_ urpanel_ uword_ wsteady_ ",
+-    "wstrip_"
+-);
+-
+ /// fixture の 1 行（1 case）。
+ struct Case {
+     mouth: String,
+@@ -75,10 +27,6 @@ struct Shot {
+     files: BTreeMap<String, Vec<u8>>,
+ }
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ /// 持ち込んだ folio の置き場 folio2。
+ fn folio_home() -> String {
+     root().join("folio2").display().to_string()
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/tzself.rs b/crates/tsuzuri-boundary/tests/teeth5/tzself.rs
+index 3841513d86f51b22a355fb493cdb46d72a65ff48..4c8c1f697bcc6e03b1bba8249caf6f0ca5d69f41 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/tzself.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/tzself.rs
+@@ -4,9 +4,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::process::Command;
+ 
++use crate::common::root;
+ use tsuzuri_boundary::cli::folio::program;
+ 
+ /// 行 k-tz-drop の 11 節の filter の語の一覧 331 語（main 7ea3a2d3 の契約表の verify の最後の字・字のまま・空白で区切る）。
+@@ -58,10 +59,6 @@ const FILTER_WORDS: &str = concat!(
+     "wsteady_ wstrip_"
+ );
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+ fn src(path: &str) -> String {
+     fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
+         .unwrap_or_else(|e| panic!("{path} を読む: {e}"))
+diff --git a/crates/tsuzuri-surface/tests/teeth1/aaround.rs b/crates/tsuzuri-surface/tests/teeth1/aaround.rs
+index c53792506679eccde021fbe47faedc3f04b06bfd..4d5939c94cf1aaeff16382f488f4ff02acb895e2 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/aaround.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/aaround.rs
+@@ -2,8 +2,7 @@
+ //! 開くまで空の path・見つからないも理由の 1 行・通信の module は空の path を読まない・nodearound と ask の字）。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_surface::project::nodearound::{
+     NO_NODE, PageState, REASON, center_path, embed_path, embed_reason, id_of, request, state,
+     unmeasured_reason,
+@@ -11,14 +10,6 @@ use tsuzuri_surface::project::nodearound::{
+ use tsuzuri_surface::project::{NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// `text` の `from` の最初の所から、その後の最初の `to` まで（`to` が無ければ終わりまで）。
+ fn span<'a>(text: &'a str, from: &str, to: &str) -> &'a str {
+     let start = text
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctframe.rs b/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+index 9758a25eeeb080846f9f7088415c56b94f3d47fe..7afcb40996724598bf2a4fa6f9d2d2cba616c68f 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+@@ -4,10 +4,10 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{crate_dir, fixture, fixture_text, read};
+ use tsuzuri_contract::account::{self as contract_account, AccountDoc};
+ use tsuzuri_contract::board::{NextMove, Reading};
+ use tsuzuri_contract::seat::SeatState;
+-use tsuzuri_contract::wire;
+ use tsuzuri_surface::account::{
+     self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
+     session, stage, stuck_count, tab_href, tab_links, windows,
+@@ -17,22 +17,6 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ /// src の account の下の .rs の file（名の順）。
+ fn account_sources() -> Vec<(PathBuf, String)> {
+     let dir = crate_dir().join("src/account");
+diff --git a/crates/tsuzuri-surface/tests/teeth1/accthb.rs b/crates/tsuzuri-surface/tests/teeth1/accthb.rs
+index 299754c972c79958d4ee6dcaa1ec7f1738a5d11d..b0d779a96720b032d1e0529f0e05da77b1a46619 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/accthb.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/accthb.rs
+@@ -2,8 +2,7 @@
+ //! 応答の出し方・送る間の状態の移り方）。fixture は便 b-acct の tests/fixtures/account/acct-doc.json（読むだけ）。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::account::{
+     self as contract_account, AccountDoc, Heartbeat, HeartbeatRequest,
+ };
+@@ -18,14 +17,6 @@ use tsuzuri_surface::account::heartbeat::{
+ use tsuzuri_surface::account::session::{self, Sort, table};
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn fixture() -> AccountDoc {
+     wire::decode(&read("../../tests/fixtures/account/acct-doc.json"))
+         .expect("fixture が AccountDoc として読める")
+diff --git a/crates/tsuzuri-surface/tests/teeth1/accthome.rs b/crates/tsuzuri-surface/tests/teeth1/accthome.rs
+index 7552d435c99703f8320c60b83dd9dec8a72cdd7a..c4ab80b04ee0e6045f98d779c29083779d3b7803 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/accthome.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/accthome.rs
+@@ -2,12 +2,10 @@
+ //! 段ごとの測れていない・移動の畳み・出さない物・語の辞書と stylesheet と依存。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{fixture, fixture_text, read};
+ use tsuzuri_contract::account::{AccountDoc, MoveRow};
+ use tsuzuri_contract::board::{NextMove, Reading};
+ use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};
+-use tsuzuri_contract::wire;
+ use tsuzuri_surface::account::{self, home};
+ use tsuzuri_surface::account::home::{
+     ACCOUNTS_UNREAD, ACCT_HEADS, AcctRow, Cells, GROUPS_UNREAD, GroupView, Home, MARK_KINDS,
+@@ -20,22 +18,6 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ fn filled<T: std::fmt::Debug>(body: Body<T>) -> T {
+     match body {
+         Body::Filled(v) => v,
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctled.rs b/crates/tsuzuri-surface/tests/teeth1/acctled.rs
+index 3609c929ee48cc4cb6b427053088b59052de8e2e..204f00bf1560b13712312de62f2faa8413797d2a 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctled.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctled.rs
+@@ -2,8 +2,7 @@
+ //! 列の最大と最小の印・台帳が Unknown の行・詳しくの段の開き閉じは URL と画面の外の保存に書かない。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{fixture, fixture_text, read};
+ use tsuzuri_contract::account::{AccountDoc, ProjectRow};
+ use tsuzuri_contract::board::{LedgerJudge, Reading};
+ use tsuzuri_contract::stats::{LedgerStats, OpenCounts};
+@@ -19,22 +18,6 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ /// fixture の proj-a の台帳（Known）の複製。
+ fn base_stats() -> LedgerStats {
+     match &fixture().projects[0].ledger {
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctproj.rs b/crates/tsuzuri-surface/tests/teeth1/acctproj.rs
+index 995e3e74e90eeb8f444434dee2772496cc22c83c..92458bb8aa3421103e7b046691921cdb1b88b121 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctproj.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctproj.rs
+@@ -3,8 +3,7 @@
+ //! 読めないときは測れていない。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{fixture, fixture_text, read};
+ use tsuzuri_contract::account::{AccountDoc, RunCounts};
+ use tsuzuri_contract::board::{LedgerJudge, NextMove, Reading};
+ use tsuzuri_contract::wire;
+@@ -25,22 +24,6 @@ use tsuzuri_surface::vocab::vocab;
+ /// 描く今（fixture の電文の at）。
+ const NOW: u64 = 1_790_510_400;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ /// 行の project の名（並びの順）。
+ fn names(doc: &AccountDoc, sort: PSort) -> Vec<String> {
+     table(doc, sort, Mode::Beginner)
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctsess.rs b/crates/tsuzuri-surface/tests/teeth1/acctsess.rs
+index 2f59f8b9dd81b31b7574dbb500c4a90be304dcfa..b90a26d77c505e2e7ef315aaed67d4bcc4409a75 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctsess.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctsess.rs
+@@ -2,8 +2,7 @@
+ //! orchestrator の行の合図（tick の健康・heartbeat・退避までの残り秒・移動待ち）・席なしの行・読めないときは測れていない。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{fixture, fixture_text, read};
+ use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_contract::board::{Reading, Stage};
+ use tsuzuri_contract::seat::{SeatSpan, SeatState};
+@@ -21,22 +20,6 @@ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ /// 行の順（fixture の行の番号・1 から）。
+ fn order(doc: &AccountDoc, sort: Sort) -> Vec<usize> {
+     table(doc, sort)
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctwin.rs b/crates/tsuzuri-surface/tests/teeth1/acctwin.rs
+index eeab771572087f792eca6f89100b94c2562a12c6..ae4b9286a89fad3a9d6b2c0a2e5cb5b892bfb9b2 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctwin.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctwin.rs
+@@ -2,10 +2,7 @@
+ //! 窓の名を付ける所と開く手順（wasm の枝の字）・Cargo.toml と語の辞書と stylesheet を触らない。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
+-use tsuzuri_contract::account::AccountDoc;
+-use tsuzuri_contract::wire;
++use crate::common::{crate_dir, fixture, fixture_text, read};
+ use tsuzuri_surface::account::windows::{
+     self, ACCOUNT_WIN, EMPTY, FRONT, NOT_YET_KEY, OPEN_NEW_KEY, Opened, Win, WinState, after_close,
+     after_open, button_text, open_url, row_class, state_mark, state_of, state_word, win_name,
+@@ -15,22 +12,6 @@ use tsuzuri_surface::project::{Body, NO_CONTENT};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ fn win(project: &str, state: WinState) -> Win {
+     Win {
+         project: project.to_string(),
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctwire.rs b/crates/tsuzuri-surface/tests/teeth1/acctwire.rs
+index 9103a065808b930381f466f87aef1c50bc805793..00fff68c59155a3dc0b36e13443ed05a212e69b8 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctwire.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctwire.rs
+@@ -1,19 +1,12 @@
+ //! project board の「戻る」の歯（接頭辞 acctwire_・行 h-wire の完了の条件 (6)(7)・header の (5) は行 g-dead-sweep-b で消した）。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::read;
+ use tsuzuri_surface::account::windows::ACCOUNT_WIN;
+ use tsuzuri_surface::frame::{ACCOUNT_URL, BackStep, back_steps};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// (6) tz-account の窓が在れば前面へ、無ければ ?board=account を新しい窓で開き、どちらの後も自分の窓を閉じる。
+ #[test]
+ fn acctwire_back_steps() {
+diff --git a/crates/tsuzuri-surface/tests/teeth1/aord.rs b/crates/tsuzuri-surface/tests/teeth1/aord.rs
+index 64bc20a7ca0b2507a37eebade95ea33a4caec8ca..0ebb71879bb5d03e27a192883f89da910047ec1a 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/aord.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/aord.rs
+@@ -2,8 +2,9 @@
+ //! 並べは電文を読む 1 か所（account の doc）で arrange を通し、doc を通して組む block はどれも同じ並びを受ける。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::PathBuf;
+ 
++use crate::common::{crate_dir, fixture, fixture_text, read, sources};
+ use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::wire;
+@@ -13,22 +14,6 @@ use tsuzuri_surface::account::{self, home, session};
+ use tsuzuri_surface::project::{Body, NOT_READ};
+ use tsuzuri_surface::view::Fetched;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn fixture_text() -> String {
+-    read("../../tests/fixtures/account/acct-doc.json")
+-}
+-
+-fn fixture() -> AccountDoc {
+-    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
+-}
+-
+ fn strings(names: &[&str]) -> Vec<String> {
+     names.iter().map(|s| s.to_string()).collect()
+ }
+@@ -164,30 +149,6 @@ fn aord_blocks_follow() {
+     assert_eq!(heads, vec!["acct-1", "acct-2", "acct-10"]);
+ }
+ 
+-/// src の下の .rs の file の全部（path の順）。
+-fn sources() -> Vec<(PathBuf, String)> {
+-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+-        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
+-            let p = entry.path();
+-            if p.is_dir() {
+-                walk(&p, out);
+-            } else if p.extension().is_some_and(|x| x == "rs") {
+-                out.push(p);
+-            }
+-        }
+-    }
+-    let mut paths = Vec::new();
+-    walk(&crate_dir().join("src"), &mut paths);
+-    paths.sort();
+-    paths
+-        .into_iter()
+-        .map(|p| {
+-            let text = std::fs::read_to_string(&p).expect("src の file");
+-            (p, text)
+-        })
+-        .collect()
+-}
+-
+ /// (4) 電文を読む所は account の mod.rs の doc の 1 つだけで、doc の本体が arrange を通す。
+ #[test]
+ fn aord_one_place() {
+diff --git a/crates/tsuzuri-surface/tests/teeth1/askcard.rs b/crates/tsuzuri-surface/tests/teeth1/askcard.rs
+index 408ae35723ec96aa6d7344924465cd545683e362..8c63a7604fbb30324e02ef69edd3d5ef4b68b3a0 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/askcard.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/askcard.rs
+@@ -3,10 +3,9 @@
+ //! 0 件と測れていないの区別・画面の外の保存の口の名が code に無い・足す外の依存は 0 本。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{bead, ledger_questions, question_list, read};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerList};
++use tsuzuri_contract::ledger::LedgerList;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::{
+     Refusal, RefusalResponse, RulingId, RulingRequest, RulingResponse,
+@@ -17,22 +16,6 @@ use tsuzuri_surface::project::{Body, NOT_READ, ask, askpage};
+ use tsuzuri_surface::view::{Fetched, clock};
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn question_list() -> Fetched {
+-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
+-}
+-
+-fn ledger_questions() -> Fetched {
+-    Fetched::Body(read("../../tests/fixtures/surface/ledger-questions.json"))
+-}
+-
+ fn filled_cards() -> Vec<ask::Card> {
+     match ask::body(&question_list()) {
+         Body::Filled(cards) => cards,
+@@ -40,10 +23,6 @@ fn filled_cards() -> Vec<ask::Card> {
+     }
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead の id")
+-}
+-
+ 
+ 
+ 
+diff --git a/crates/tsuzuri-surface/tests/teeth1/askfocus.rs b/crates/tsuzuri-surface/tests/teeth1/askfocus.rs
+index 288a9281fb04f474829720cde849cdd6b1655081..fa70f8035d820be9ce4e84b6ecdb9637c2b1dd83 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/askfocus.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/askfocus.rs
+@@ -3,27 +3,10 @@
+ //! この file の歯の名が着地済みの行の filter の語を含まない。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{ledger_questions, question_list, read};
+ use tsuzuri_surface::project::{Body, ask, askpage};
+ use tsuzuri_surface::view::Fetched;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn question_list() -> Fetched {
+-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
+-}
+-
+-fn ledger_questions() -> Fetched {
+-    Fetched::Body(read("../../tests/fixtures/surface/ledger-questions.json"))
+-}
+-
+ /// 字 `from` が最初に在る所から file の終わりまで（無ければ落ちる）。
+ fn tail<'a>(text: &'a str, from: &str, module: &str) -> &'a str {
+     let at = text
+diff --git a/crates/tsuzuri-surface/tests/teeth1/batchpanel.rs b/crates/tsuzuri-surface/tests/teeth1/batchpanel.rs
+index dfe8786ce0b8cb15230be5206f880d1f19984f61..0bc075743fb8666cd22a888e1ee49979a60b7088 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/batchpanel.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/batchpanel.rs
+@@ -5,11 +5,10 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
++use crate::common::{bead, question_list, read};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::title36;
+-use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::question::{QuestionCard, QuestionList};
+ use tsuzuri_contract::surface::{
+     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest,
+@@ -21,18 +20,6 @@ use tsuzuri_surface::project::{Body, NOT_READ, batch, policy};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn question_list() -> Fetched {
+-    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
+-}
+-
+ fn fixture_cards() -> Vec<QuestionCard> {
+     ask::cards(&question_list()).expect("fixture の card")
+ }
+@@ -44,10 +31,6 @@ fn fixture_rows() -> Vec<batch::Row> {
+     }
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead の id")
+-}
+-
+ fn ruling(id: &str) -> RulingId {
+     RulingId::new(id).expect("記帳 id")
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs b/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
+index 9c6c3aea35fab0c20001c76811b5514cc6d49e96..640dd8c6731d9f63eb5c15c3354d3b031198de11 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bhalfpanel.rs
+@@ -4,7 +4,7 @@
+ 
+ use std::path::PathBuf;
+ 
+-use tsuzuri_contract::ledger::BeadId;
++use crate::common::bead;
+ use tsuzuri_contract::surface::{BatchItemResult, BatchResponse, ItemOutcome, RulingId};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::ask;
+@@ -144,10 +144,6 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead の id")
+-}
+-
+ fn rid(id: &str) -> RulingId {
+     RulingId::new(id).expect("記帳 id")
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth1/btuck.rs b/crates/tsuzuri-surface/tests/teeth1/btuck.rs
+index 3f2dbcad8b008df55ef45d8d5169759796836d81..0436718d7152ee90be3af7de2dd7a56a9af6ca74 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/btuck.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/btuck.rs
+@@ -3,22 +3,13 @@
+ //! 行 m-map-graph で消した。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::graph::{BoxFold, GraphNode, GraphView, NodeKind, ViewNode};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::mapview::band::{band_of, kind_key};
+ use tsuzuri_surface::widgets::nodecard::{NO_GIST, card_for, group_card, view_cards};
+ use tsuzuri_surface::vocab::{label, vocab};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 例のグラフの眺め（fixture の 8 節点・欄 group と fold は無いので偽と Leaf）。
+ fn fixture() -> GraphView {
+     wire::decode(&read("../../tests/fixtures/surface/graph-view.json"))
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvcull.rs b/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+index bb6aa87ecd51f5234bab86fd9b486c6d607258f1..dc7b7a57a77573e14397cfec5c520d83d2856589 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvcull.rs
+@@ -2,15 +2,7 @@
+ //! DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
++use crate::common::{crate_dir, read};
+ 
+ /// `text` の中の `decl` から、その後の最初の行頭の閉じ括弧までの字。
+ fn item<'a>(text: &'a str, decl: &str) -> &'a str {
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvfront.rs b/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+index 88db57ed4109c2e101724fc4c92ca9a9d9b35f1c..53ea16348467e56429c4e3a7fb31faeae9fd57f0 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvfront.rs
+@@ -6,8 +6,7 @@
+ //! 段の端の字は段の中へ寄せる。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::EpochSecs;
+ use tsuzuri_contract::graph::{AroundRow, GraphNode, NodeKind};
+ use tsuzuri_contract::ledger::READ_HOLD_S;
+@@ -20,14 +19,6 @@ use tsuzuri_surface::vocab::label;
+ use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_STATE, card_for};
+ use tsuzuri_surface::wins::{Stalled, stalled_card};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// `from` の字から次の `to` の字までの切り（`to` を含まない）。
+ fn between<'a>(text: &'a str, from: &str, to: &str) -> &'a str {
+     let at = text.find(from).unwrap_or_else(|| panic!("{from} が無い"));
+diff --git a/crates/tsuzuri-surface/tests/teeth1/bvgdom.rs b/crates/tsuzuri-surface/tests/teeth1/bvgdom.rs
+index 72c20e0adcc584efdd296d7a235494727207c750..3ad5b08338cde80af71f9cf2696152dee473db0b 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/bvgdom.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/bvgdom.rs
+@@ -2,39 +2,7 @@
+ //! 面の src が眺めの口の字を持たず、グラフの module には近傍の図と節点の頁と節点の card が引く項だけが残る。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-/// src の下の .rs の file の全部（path の順）。
+-fn sources() -> Vec<(PathBuf, String)> {
+-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+-        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
+-            let p = entry.path();
+-            if p.is_dir() {
+-                walk(&p, out);
+-            } else if p.extension().is_some_and(|x| x == "rs") {
+-                out.push(p);
+-            }
+-        }
+-    }
+-    let mut paths = Vec::new();
+-    walk(&crate_dir().join("src"), &mut paths);
+-    paths.sort();
+-    paths
+-        .into_iter()
+-        .map(|p| {
+-            let text = std::fs::read_to_string(&p).expect("src の file");
+-            (p, text)
+-        })
+-        .collect()
+-}
++use crate::common::{crate_dir, read, sources};
+ 
+ /// file の頭の段の pub の項の名（行の頭が `pub const`・`pub fn`・`pub struct`・`pub enum`・`pub mod` の行・file の順）。
+ fn pub_items(rel: &str) -> Vec<String> {
+diff --git a/crates/tsuzuri-surface/tests/teeth1/common.rs b/crates/tsuzuri-surface/tests/teeth1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab84fa5b4e0ba489dbad9cb7ea97c55f87d87f14
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth1/common.rs
+@@ -0,0 +1,61 @@
++//! tsuzuri-surface の歯の群 teeth1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++use tsuzuri_contract::account::AccountDoc;
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_contract::wire;
++use tsuzuri_surface::view::Fetched;
++
++pub(crate) fn bead(id: &str) -> BeadId {
++    BeadId::new(id).expect("bead の id")
++}
++
++pub(crate) fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++pub(crate) fn fixture() -> AccountDoc {
++    wire::decode(&fixture_text()).expect("fixture が AccountDoc として読める")
++}
++
++pub(crate) fn fixture_text() -> String {
++    read("../../tests/fixtures/account/acct-doc.json")
++}
++
++pub(crate) fn ledger_questions() -> Fetched {
++    Fetched::Body(read("../../tests/fixtures/surface/ledger-questions.json"))
++}
++
++pub(crate) fn question_list() -> Fetched {
++    Fetched::Body(read("../../tests/fixtures/surface/question-list.json"))
++}
++
++pub(crate) fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// src の下の .rs の file の全部（path の順）。
++pub(crate) fn sources() -> Vec<(PathBuf, String)> {
++    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
++        for entry in std::fs::read_dir(dir).expect("src を読む").flatten() {
++            let p = entry.path();
++            if p.is_dir() {
++                walk(&p, out);
++            } else if p.extension().is_some_and(|x| x == "rs") {
++                out.push(p);
++            }
++        }
++    }
++    let mut paths = Vec::new();
++    walk(&crate_dir().join("src"), &mut paths);
++    paths.sort();
++    paths
++        .into_iter()
++        .map(|p| {
++            let text = std::fs::read_to_string(&p).expect("src の file");
++            (p, text)
++        })
++        .collect()
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth1/main.rs b/crates/tsuzuri-surface/tests/teeth1/main.rs
+index 6b6fffca29fe02c0689144512e06850a883b1ccc..0d68a7e6b9def29dbf7d51294dccbdfdecbdfb0a 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/main.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/main.rs
+@@ -33,3 +33,4 @@ mod bvfive;
+ mod bvfront;
+ mod bvgdom;
+ mod bvhelp;
++mod common;
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvlay.rs b/crates/tsuzuri-surface/tests/teeth2/bvlay.rs
+index 51cd56d237967675c14903a8ec73fd675b90e566..95f3efdbe33d45e4d9cfa8f6e817ae1fd3dc7c53 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvlay.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvlay.rs
+@@ -5,8 +5,8 @@
+ 
+ use std::path::PathBuf;
+ 
++use crate::common::card;
+ use tsuzuri_contract::board::{PipelineCard, PipelineColumn, Stage};
+-use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_surface::project::pipeline::columns;
+ use tsuzuri_surface::tiles::{
+     PHONE_MAX_PX, STACK_COL_MIN_PX, STACK_MAX_PX, STACK_MIN_PX, URGENT, WIDE_MIN_PX, default_open,
+@@ -22,18 +22,6 @@ fn read(rel: &str) -> String {
+     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+ }
+ 
+-fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
+-    PipelineCard {
+-        contract: BeadId::new(id).expect("id"),
+-        runs: 1,
+-        stage,
+-        reason: None,
+-        account: None,
+-        since: Some(since),
+-        ci: None,
+-    }
+-}
+-
+ /// stylesheet の中の `head` で始まる media の塊（次の行頭の閉じ括弧まで）。
+ fn block<'a>(css: &'a str, head: &str) -> &'a str {
+     let at = css
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvlex.rs b/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+index e6d88617dc7700443293fb4bc6e94bf092b4db2e..a263e0fa03704b70b622a72664173b422a9ed76a 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvlex.rs
+@@ -5,6 +5,7 @@
+ use std::collections::BTreeSet;
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::crate_dir;
+ use tsuzuri_surface::vocab::vocab;
+ 
+ /// 鍵を組む接頭辞（接頭辞と字をつないで語の辞書を引く所: 地図の辺の型・台帳の局面と手番と未反映の種類・吹き出しの待ちの理由と受付の断りの名）。
+@@ -28,10 +29,6 @@ const KEEP_CLASSES: [&str; 7] = [
+     "unmeasured",
+ ];
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+ fn read(path: &Path) -> String {
+     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs b/crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs
+index bfaa2a6158abe4e15115baa20cb599c5c26b4a24..7b1de0f0929ff0f2df52cef478110e1165dbee1c 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvmcomp.rs
+@@ -4,16 +4,9 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{crate_dir, read};
+ use tsuzuri_surface::widgets::nodecard::{NO_GIST, NO_STATE};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// src の下の .rs の file の全部（path の順）。
+ fn sources() -> Vec<(PathBuf, String)> {
+     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvmore.rs b/crates/tsuzuri-surface/tests/teeth2/bvmore.rs
+index f79e5e889d3a75d5745f3806c808edeb30f5ff47..4dcf7fa53fa6a24ced9919b275c77caeced4625a 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvmore.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvmore.rs
+@@ -5,8 +5,8 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::PathBuf;
+ 
++use crate::common::read;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::SeatCard;
+ use tsuzuri_contract::wire;
+@@ -15,14 +15,6 @@ use tsuzuri_surface::project::ledger;
+ use tsuzuri_surface::project::seat::{self, MOVING, Seat, Span};
+ use tsuzuri_surface::project::{fold_key_ok, fold_keys};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// fixture の 5 組（組の名 → 電文の型）。
+ fn fixture() -> BTreeMap<String, SeatCard> {
+     wire::decode(&read("../../tests/fixtures/surface/seat-card.json"))
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvmpage.rs b/crates/tsuzuri-surface/tests/teeth2/bvmpage.rs
+index 140ba67748ba1ea879d9318b9c1325883851cb70..828202ee7a325f822272668a0bc8d9953f5cb396 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvmpage.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvmpage.rs
+@@ -4,18 +4,11 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{crate_dir, read};
+ use tsuzuri_surface::frame::{self, Mode, PageId};
+ use tsuzuri_surface::project::{Module, map};
+ use tsuzuri_surface::view::Fetched;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// src の下の .rs の file の全部（path の順）。
+ fn sources() -> Vec<(PathBuf, String)> {
+     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs b/crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs
+index 6fd741117312225609522aba652c78858eaaffd1..bd98ef8c77e4b9e48529f7efc339c8d926e9d473 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvmtbl.rs
+@@ -4,18 +4,11 @@
+ 
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{crate_dir, read};
+ use tsuzuri_contract::graph::EdgeType;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::mapview::around::edge_name;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// src の下の .rs の file の全部（path の順）。
+ fn sources() -> Vec<(PathBuf, String)> {
+     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+index 67f0d8843a051ee88fbae5c1e44810c7f1378839..77a2e13703ea7002084a76574e422ebfbb922f65 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvnav.rs
+@@ -3,20 +3,11 @@
+ //! 帯の印が開く窓の層を頁に 1 つ置く。消した質問の頁と抜けの検査の頁への link は、窓を開く home の頁の URL（query の win）。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{crate_dir, read};
+ use tsuzuri_surface::frame::{self, Mode, PageId};
+ use tsuzuri_surface::project::{ledger, pipeline};
+ use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 窓の名は 8 つ（相談の窓 consult は行 cs-bar）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
+ #[test]
+ fn bvnav_win_query_round_trip() {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+index 71cfe53d0cbb5b258755d3668530288ab3be43ce..5023799330b3599b5e5a7dc6cbe952034bd66d16 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+@@ -6,7 +6,7 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
+-use tsuzuri_contract::EpochSecs;
++use crate::common::NOW;
+ use tsuzuri_contract::board::{Ci, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::case::{CaseLinks, CasePart};
+ use tsuzuri_contract::graph::{BeadAttr, GraphDoc, NodeKind, SkippedEdges};
+@@ -23,8 +23,6 @@ use tsuzuri_surface::widgets::pop::{
+     next_href, place, pop, toggle,
+ };
+ 
+-const NOW: EpochSecs = 1_790_000_000;
+-
+ fn read(rel: &str) -> String {
+     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+index 3097232969f954a65d6636147afbe4024a87c94c..4283fbd359a8bdfb6357336589083906bf068c51 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvsel.rs
+@@ -6,6 +6,7 @@
+ use std::collections::BTreeMap;
+ use std::path::PathBuf;
+ 
++use crate::common::card;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::{BeadFact, BeadId, LedgerRow};
+ use tsuzuri_surface::ledgerlist::{
+@@ -34,18 +35,6 @@ fn row(id: &str, kind: &str, status: &str) -> LedgerRow {
+     }
+ }
+ 
+-fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
+-    PipelineCard {
+-        contract: BeadId::new(id).expect("id"),
+-        runs: 1,
+-        stage,
+-        reason: None,
+-        account: None,
+-        since: Some(since),
+-        ci: None,
+-    }
+-}
+-
+ fn fact(id: &str, short: &str) -> BeadFact {
+     BeadFact {
+         id: BeadId::new(id).expect("id"),
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvshed.rs b/crates/tsuzuri-surface/tests/teeth2/bvshed.rs
+index e14f6d3f71cecf1fc3949b9f6ad95ca5d6f6606f..1542e8302b5822e11769eb7242c7faceac91cd61 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvshed.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvshed.rs
+@@ -2,18 +2,9 @@
+ //! 問いの頁の一覧の DOM と DOM だけが使った純粋な関数を歯ごと消した後の形（src の字と歯の file の有無で見る）。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{crate_dir, read};
+ use tsuzuri_surface::frame::{HeaderPart, UPDATED};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// `text` の中の `decl` から、その後の最初の行頭の閉じ括弧までの字。
+ fn item<'a>(text: &'a str, decl: &str) -> &'a str {
+     let at = text
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvsweep.rs b/crates/tsuzuri-surface/tests/teeth2/bvsweep.rs
+index 93ec15c9d007659b535b174eac6e0c8a68444f64..b87446696457286f4cce0d502d2216bde2e0cd81 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvsweep.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvsweep.rs
+@@ -4,19 +4,12 @@
+ //! DOM は host で撃てないので、src の字で見る。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
++use crate::common::{crate_dir, read};
+ use tsuzuri_contract::ledger::{BeadId, LedgerRow, QUESTION_LABEL};
+ use tsuzuri_surface::project::{Item, item};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// src の下の .rs の file の相対の path と字（path の順）。
+ fn sources() -> Vec<(String, String)> {
+     fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs b/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+index 344bfa230b6aad5fb4d89163c3e07fddb3dc76f7..acf0acba0ec7f904fad37837af43415f22b123f7 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvwhy.rs
+@@ -4,7 +4,7 @@
+ 
+ use std::path::PathBuf;
+ 
+-use tsuzuri_contract::EpochSecs;
++use crate::common::NOW;
+ use tsuzuri_contract::board::{PipelineCard, Reading, Stage};
+ use tsuzuri_contract::case::{CaseLinks, CasePart};
+ use tsuzuri_contract::ledger::BeadId;
+@@ -14,8 +14,6 @@ use tsuzuri_surface::widgets::pop::{
+     reason_key, reason_val, with_why,
+ };
+ 
+-const NOW: EpochSecs = 1_790_000_000;
+-
+ fn read(rel: &str) -> String {
+     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cadl.rs b/crates/tsuzuri-surface/tests/teeth2/cadl.rs
+index bb4b5e95c0e9ac3295d0e52e48e850c80bf3ff9e..61be3d0cdff2e52f2e6ff02aca27da5799964253 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cadl.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cadl.rs
+@@ -4,22 +4,13 @@
+ //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{after, read};
+ use tsuzuri_contract::graph::{BeadAttr, GraphDoc, GraphNode, InvariantCheck, NodeKind};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::{Body, gaps, node_item};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::widgets::nodecard::card_of;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// fixture の判定の電文の g-2 の名指しを fx-g.9 と fx-g.15 に替え、`node` なら節点 fx-g.9 を足した本文。
+ fn verdicts(node: bool) -> Fetched {
+     let mut doc: GraphDoc = wire::decode(&read("../../tests/fixtures/surface/invariants.json"))
+@@ -87,14 +78,6 @@ fn cadl_gaps_cards_rules() {
+     assert!(bare.cards.is_empty());
+ }
+ 
+-/// `start` から末尾までの字。
+-fn after<'a>(text: &'a str, start: &str) -> &'a str {
+-    let at = text
+-        .find(start)
+-        .unwrap_or_else(|| panic!("字 {start} が無い"));
+-    &text[at..]
+-}
+-
+ /// 宣言の字から、次の 4 つの空白と閉じ波括弧だけの行までの字。
+ fn fn_body<'a>(text: &'a str, decl: &str) -> &'a str {
+     let rest = after(text, decl);
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cadq.rs b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+index 106160904eae63943aac122003408b05e5caef0e..b943e8fa2bad0687d693e33de3c4fa97817847b8 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cadq.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cadq.rs
+@@ -3,8 +3,7 @@
+ //! card の値は host で組み、DOM は wasm の target のときだけなので、file の字で付け方を見る。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::{after, read};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::GraphDoc;
+ use tsuzuri_contract::ledger::{BeadId, LedgerList};
+@@ -14,14 +13,6 @@ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::widgets::hover::{Card, unmount_hides};
+ use tsuzuri_surface::widgets::nodecard::card_of;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn graph_text() -> String {
+     read("../../tests/fixtures/surface/graph-doc.json")
+ }
+@@ -117,14 +108,6 @@ fn cadq_hist_cards_rules() {
+     }
+ }
+ 
+-/// `start` から末尾までの字。
+-fn after<'a>(text: &'a str, start: &str) -> &'a str {
+-    let at = text
+-        .find(start)
+-        .unwrap_or_else(|| panic!("字 {start} が無い"));
+-    &text[at..]
+-}
+-
+ /// `start` から `end` の前までの字。
+ fn between<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+     let rest = after(text, start);
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cgdom.rs b/crates/tsuzuri-surface/tests/teeth2/cgdom.rs
+index a20a58745b801f35c264592a01370ba0830ab995..ea00bb4ab8cc89d0346ffd2c7857bbfc5a69955c 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cgdom.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cgdom.rs
+@@ -3,20 +3,12 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
++use crate::common::read;
+ use tsuzuri_contract::graph::GraphView;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::widgets::nodecard::{card_for, view_cards};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 例のグラフの眺め（契約の型の GraphView として読めなければ落ちる）。
+ fn fixture() -> GraphView {
+     wire::decode(&read("../../tests/fixtures/surface/graph-view.json"))
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cmark.rs b/crates/tsuzuri-surface/tests/teeth2/cmark.rs
+index d5f14e19a5c80650190372d30d8e4e3d45b0f39b..2d6a3e51742d31b7b0a4ffbc21d36343e9ccbf11 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cmark.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cmark.rs
+@@ -2,21 +2,12 @@
+ //! fixture の札の値・mod dom の字・歯の名。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::board::{PipelineBoard, PipelineCard, Reading, Stage};
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::project::pipeline::{CLOSED_STAGE, CLOSED_TAG, closed_card, kcard};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ /// 札を描く今（2026-09-27T12:00:00Z）。
+ const NOW: u64 = 1_790_510_400;
+ 
+diff --git a/crates/tsuzuri-surface/tests/teeth2/common.rs b/crates/tsuzuri-surface/tests/teeth2/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8fb80895e75731dbae112186bb0b8728b92ebd9e
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/teeth2/common.rs
+@@ -0,0 +1,38 @@
++//! tsuzuri-surface の歯の群 teeth2 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::path::PathBuf;
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::board::{PipelineCard, Stage};
++use tsuzuri_contract::ledger::BeadId;
++
++pub(crate) const NOW: EpochSecs = 1_790_000_000;
++
++/// `start` から末尾までの字。
++pub(crate) fn after<'a>(text: &'a str, start: &str) -> &'a str {
++    let at = text
++        .find(start)
++        .unwrap_or_else(|| panic!("字 {start} が無い"));
++    &text[at..]
++}
++
++pub(crate) fn card(id: &str, stage: Stage, since: u64) -> PipelineCard {
++    PipelineCard {
++        contract: BeadId::new(id).expect("id"),
++        runs: 1,
++        stage,
++        reason: None,
++        account: None,
++        since: Some(since),
++        ci: None,
++    }
++}
++
++pub(crate) fn crate_dir() -> PathBuf {
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++}
++
++pub(crate) fn read(rel: &str) -> String {
++    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
+diff --git a/crates/tsuzuri-surface/tests/teeth2/cround.rs b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+index 732427c5b5571776a2a0387b71cfcbce8744c257..2e8d1cddf1e85bb2fcff5cb6f52c69d8bc649732 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/cround.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/cround.rs
+@@ -4,8 +4,8 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeSet;
+-use std::path::PathBuf;
+ 
++use crate::common::read;
+ use tsuzuri_contract::graph::{AroundDoc, GraphDoc};
+ use tsuzuri_contract::wire;
+ use tsuzuri_surface::mapview::around::{as_view, chain, layout, svg};
+@@ -13,14 +13,6 @@ use tsuzuri_surface::mapview::state;
+ use tsuzuri_surface::widgets::hover::{Card, leaves, over_shows};
+ use tsuzuri_surface::widgets::nodecard::{card_for, node_card, view_cards};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn graph_fixture() -> GraphDoc {
+     wire::decode(&read("../../tests/fixtures/surface/graph-doc.json"))
+         .expect("graph-doc.json が電文として読める")
+diff --git a/crates/tsuzuri-surface/tests/teeth2/ctickface.rs b/crates/tsuzuri-surface/tests/teeth2/ctickface.rs
+index 1217836baca233df85eeecefbfbc367f77389288..b1ca2db1bb8b99df226190f783d162eea670d9a7 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/ctickface.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/ctickface.rs
+@@ -4,8 +4,8 @@
+ #![cfg(test)]
+ 
+ use std::collections::BTreeMap;
+-use std::path::PathBuf;
+ 
++use crate::common::read;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::seat::{SeatCard, TickHealth};
+ use tsuzuri_contract::wire;
+@@ -13,14 +13,6 @@ use tsuzuri_surface::project::seat::{
+     BLANK, NG, OK, age_text, tick_age, tick_class, tick_mark, top,
+ };
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn card(name: &str) -> SeatCard {
+     let mut all: BTreeMap<String, SeatCard> =
+         wire::decode(&read("../../tests/fixtures/surface/seat-card.json"))
+diff --git a/crates/tsuzuri-surface/tests/teeth2/frame.rs b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+index db11c7cb35c9f9b9c6dfa009c42bed7e1100629b..072b15778f1a9f52246d5ae326efaebdc71ec4b6 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/frame.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/frame.rs
+@@ -12,6 +12,7 @@
+ use std::collections::BTreeSet;
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{crate_dir, read};
+ use tsuzuri_boundary::server::ledger as server_ledger;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::AroundDoc;
+@@ -27,14 +28,6 @@ use tsuzuri_surface::vocab::vocab;
+ use tsuzuri_surface::widgets::help::{self, Inline, Line};
+ use tsuzuri_surface::widgets::hover::{Card, card_class};
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn fixture_rows() -> Vec<LedgerRow> {
+     let text = read("../../tests/fixtures/ledger/board-8.jsonl");
+     let Reading::Known(items) = server_ledger::parse(&text) else {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/gapspage.rs b/crates/tsuzuri-surface/tests/teeth2/gapspage.rs
+index a4573c2e6868b5e7d89ed1f507fb83a669cbf878..6e9404fd53bafd1484ff48169d15a82190f4e3d9 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/gapspage.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gapspage.rs
+@@ -3,21 +3,12 @@
+ //! fixture の大きさ・足す外の依存は 0 本。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::graph::{InvariantCheck, Verdict};
+ use tsuzuri_surface::project::{Body, NOT_READ, gaps, map};
+ use tsuzuri_surface::view::Fetched;
+ use tsuzuri_surface::vocab::vocab;
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ const FIXTURE: &str = "../../tests/fixtures/surface/invariants.json";
+ 
+ fn fixture() -> Fetched {
+diff --git a/crates/tsuzuri-surface/tests/teeth2/gatt.rs b/crates/tsuzuri-surface/tests/teeth2/gatt.rs
+index bfce36a33ad55375be1fe650f8ccded6844876d8..1b3885181b29875db72c47db348636b16b4a2db3 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/gatt.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gatt.rs
+@@ -3,15 +3,8 @@
+ //! DOM は wasm の target のときだけなので、file の字で見る。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
++use crate::common::{crate_dir, read};
++use std::path::Path;
+ 
+ fn squeeze(text: &str) -> String {
+     text.chars().filter(|c| !c.is_whitespace()).collect()
+diff --git a/crates/tsuzuri-surface/tests/teeth2/gchip.rs b/crates/tsuzuri-surface/tests/teeth2/gchip.rs
+index 7e295d97fff8296d97d8727571c9c92f2fe77274..cb6c9c9750490b6fad6419752688ded63c9aa59c 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/gchip.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/gchip.rs
+@@ -3,8 +3,7 @@
+ //! 電文が読めない・群の枠が無い時は測れていないの card。DOM は口 /api/account を 1 度読み、指を置いた時に card を組む。
+ #![cfg(test)]
+ 
+-use std::path::PathBuf;
+-
++use crate::common::read;
+ use tsuzuri_contract::account::{AccountDoc, GroupCard};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::wire;
+@@ -25,14 +24,6 @@ fn group_card(account: &Fetched, name: &str) -> Card {
+     tsuzuri_surface::project::seat::group_card(account, name, NOW)
+ }
+ 
+-fn crate_dir() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+-}
+-
+-fn read(rel: &str) -> String {
+-    std::fs::read_to_string(crate_dir().join(rel)).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn fixture_text() -> String {
+     read("../../tests/fixtures/account/acct-doc.json")
+ }
+diff --git a/crates/tsuzuri-surface/tests/teeth2/main.rs b/crates/tsuzuri-surface/tests/teeth2/main.rs
+index 257580e172a1ea111270ce2664ebd596c091c449..1eb6f67e7e26fdddadc924f9f051b7aa589d90ee 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/main.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/main.rs
+@@ -29,6 +29,7 @@ mod cadl;
+ mod cadq;
+ mod cgdom;
+ mod cmark;
++mod common;
+ mod cround;
+ mod ctickface;
+ mod epolqhist;
