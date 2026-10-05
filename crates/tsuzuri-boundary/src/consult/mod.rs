@@ -6,12 +6,14 @@
 //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
 //! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
 //! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
-//! 口座の信頼の印の書き手（`trust`）は行 cs-trust（ノート surface-wave29b）が置く。
+//! 口座の信頼の印の書き手（`trust`）は行 cs-trust、launch --follow の口（`follow`）は行 cs-follow
+//! （どちらもノート surface-wave29b）が置く。
 
 pub mod answer;
 pub mod bundle;
 pub mod close;
 pub mod dispose;
+pub mod follow;
 pub mod guard;
 pub mod launch;
 pub mod list;

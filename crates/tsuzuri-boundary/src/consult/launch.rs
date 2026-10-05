@@ -1,5 +1,6 @@
 //! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
 //! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`・行 cs-follow）へ渡す。
 //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
 //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
 //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
@@ -35,6 +36,7 @@ use tsuzuri_core::consult::quota::{admit, count};
 use tsuzuri_core::consult::resume::pick;
 use tsuzuri_core::consult::stamp::{last_sid, lines};
 
+use super::follow;
 use super::plain::{plain_path, same_file};
 use super::stamp::STAMPS;
 use super::trust::place_trust;
@@ -75,8 +77,8 @@ pub struct Shot<'a> {
 /// tz consult launch の残りの引数を受けて終了 code を返す。
 pub fn run(rest: &[&str]) -> u8 {
     let mut values = COMMON.to_vec();
-    values.push("--session");
-    let f = match flags(rest, &values, &["--again", "--dry-run"], &[]) {
+    values.extend(["--session", "--wait"]);
+    let f = match flags(rest, &values, &["--again", "--dry-run", "--follow"], &[]) {
         Ok(f) => f,
         Err(e) => return refuse("launch", e),
     };
@@ -95,7 +97,20 @@ pub fn run(rest: &[&str]) -> u8 {
         dry: f.has("--dry-run"),
         session: f.get("--session"),
     };
-    match ctx(&f).and_then(|c| launch(&c, id, &shot)) {
+    let wait = match (f.has("--follow"), f.get("--wait").map(str::parse::<u64>)) {
+        (false, None) => None,
+        (true, None) if !shot.again && !shot.dry => Some(follow::WAIT),
+        (true, Some(Ok(s))) if s > 0 && !shot.again && !shot.dry => Some(s),
+        _ => {
+            let why = "--wait は --follow と一緒に 1 以上の秒の数で渡し、--follow は --again と --dry-run と一緒に渡さない";
+            return refuse("launch", (FAIL, why.to_string()));
+        }
+    };
+    let made = ctx(&f).and_then(|c| match wait {
+        Some(s) => follow::follow(&c, id, shot.session, Duration::from_secs(s)),
+        None => launch(&c, id, &shot),
+    });
+    match made {
         Ok(()) => 0,
         Err(e) => refuse("launch", e),
     }
@@ -237,7 +252,7 @@ fn record(
 }
 
 /// 起こす（版の照らしの後）。
-fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
+pub fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
     let again = shot.again;
     let ws = workspace(&c.drafts, id);
     let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;

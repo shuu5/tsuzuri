@@ -1,6 +1,7 @@
 //! 撃ち直しで会話を続ける口の歯（接頭辞 cwres_・設計ノート surface-wave29b 行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
 //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と口座の置き場と、偽の bd・bdw と
 //! 受けた argv を記録する偽の tmux を置く（本物の tmux と claude は撃たず、本物の口座の置き場は読まない）。
+//! 偽の tmux は pane の字（置き場の file pane）を出し、kill-window で置き場の file victim の pid を少し後に止める（行 cs-follow）。
 #![cfg(test)]
 
 use std::fs;
@@ -12,7 +13,7 @@ use tsuzuri_boundary::consult::launch::STAMPS_MAX;
 use tsuzuri_contract::consult::{Form, ProcMark, Stamp, StampEvent};
 use tsuzuri_contract::wire;
 use tsuzuri_core::consult::launch::{PLUGIN_VERSION, private_tmp};
-use tsuzuri_core::consult::lines::{Line, read};
+use tsuzuri_core::consult::lines::{Event, Line, notice, read};
 use tsuzuri_core::consult::trust::trusted;
 
 const SID: &str = "bf1f3252-2ac9-42ce-bfb7-b5897fa42308";
@@ -70,7 +71,9 @@ impl Fx {
         script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
         script(&root.join("bin/bdw"), &rec("bdw.log"));
         let tmux = format!(
-            "{}\ncase \"$1\" in display-message) echo seat-s ;; new-window) echo '@8 {DEAD}' ;; esac",
+            "{}\ncase \"$1\" in display-message) case \"$*\" in *window_name*) cat '{r}/name' 2>/dev/null || echo consult-cw1 ;; \
+             *) echo seat-s ;; esac ;; new-window) echo '@8 {DEAD}' ;; capture-pane) cat '{r}/pane' ;; \
+             kill-window) [ -f '{r}/victim' ] && (sleep 0.3; kill \"$(cat '{r}/victim')\") >/dev/null 2>&1 & ;; esac",
             rec("tmux.log")
         );
         script(&root.join("bin/tmux"), &tmux);
@@ -89,6 +92,7 @@ impl Fx {
             .current_dir(&self.repo)
             .env("PATH", path)
             .env("TZ_PLUGIN_VERSION", PLUGIN_VERSION)
+            .env("TZ_WRAPPER", "/x/tzw")
             .env("TMUX_PANE", "%9")
             .env("CLAUDE_CONFIG_DIR", &self.acct)
             .env_remove("TZ_CONSULT_ID");
@@ -299,4 +303,215 @@ fn cwres_live_window_refuses_again() {
     let call = fx.opened().pop().unwrap();
     assert_eq!(call[1], PROMPT);
     assert!(call[0] != "--resume" && !fx.trust().exists());
+}
+
+/// 話す窓の process の印 proc-1 を、pid と口座の置き場で置き直す（tmux の窓は @7）。
+fn remark(ws: &Path, pid: u32, account: Option<&Path>) {
+    let account = account.map(|a| a.display().to_string());
+    let mark = ProcMark {
+        k: 1,
+        form: Form::Talk,
+        pid,
+        at: "20261005T0000Z".into(),
+        again: false,
+        tmux_window: Some("@7".into()),
+        account,
+    };
+    let text = wire::encode(&mark).unwrap();
+    fs::write(ws.join(".consult/proc-1.json"), text).unwrap();
+}
+
+/// 止めてよい生きた process（親の無い sleep）の pid。
+fn sleeper() -> u32 {
+    let o = Command::new("sh")
+        .args(["-c", "sleep 30 >/dev/null 2>&1 & echo $!"])
+        .output()
+        .unwrap();
+    String::from_utf8(o.stdout).unwrap().trim().parse().unwrap()
+}
+
+/// 偽の tmux が撃たれた口の列。
+fn verbs(fx: &Fx) -> Vec<String> {
+    fx.calls("tmux.log")
+        .into_iter()
+        .map(|c| c[0].clone())
+        .collect()
+}
+
+/// --follow は、前の口座で動く手すきの話す窓の入力欄を照らし、起こす口座に信頼の印を置き、tmux の窓を名を確かめて閉じ、前の
+/// process が終わってから、会話の印の最後の id で撃ち直しの形に起こし直す（開きの行は撃ち直し・閉じの行は書かない）。
+#[test]
+fn cwres_follow_moves_an_idle_window() {
+    let fx = Fx::new("follow");
+    let ws = fx.window(1, Form::Talk, DEAD);
+    stamps(&ws, SID);
+    let pid = sleeper();
+    remark(&ws, pid, Some(Path::new("/old")));
+    fs::write(fx.root.join("pane"), "● 答え\n\n❯ \n  ? for shortcuts\n").unwrap();
+    fs::write(fx.root.join("victim"), pid.to_string()).unwrap();
+    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "5"]));
+    assert_eq!(rc, 0, "{err}");
+    let want = [
+        "capture-pane",
+        "display-message",
+        "kill-window",
+        "display-message",
+        "new-window",
+    ];
+    assert_eq!(verbs(&fx), want);
+    assert_eq!(fx.calls("tmux.log")[2], ["kill-window", "-t", "@7"]);
+    assert_eq!(fx.opened(), [["--resume", SID]]);
+    assert!(!Path::new(&format!("/proc/{pid}")).exists());
+    let want = trusted(None, &ws.display().to_string()).unwrap();
+    assert_eq!(fs::read_to_string(fx.trust()).ok(), want);
+    let m: ProcMark =
+        wire::decode(&fs::read_to_string(ws.join(".consult/proc-2.json")).unwrap()).unwrap();
+    assert!(m.again && m.account.as_deref() == fx.acct.to_str());
+    assert_eq!(fx.opens(), [(true, true)]);
+    assert_eq!(fx.calls("bdw.log").len(), 1);
+    // 会話の印を持たない窓は、名指した id で続ける（持ち主に確かめた後の席の撃ち方）。
+    let ws2 = fx.window(2, Form::Talk, DEAD);
+    let pid2 = sleeper();
+    remark(&ws2, pid2, None);
+    fs::write(fx.root.join("victim"), pid2.to_string()).unwrap();
+    fs::write(fx.root.join("name"), "consult-cw2").unwrap();
+    let o = fx.tz(&["consult", "launch", "cw2", "--follow", "--session", SID2]);
+    assert_eq!(rc_err(&o).0, 0, "{}", rc_err(&o).1);
+    assert_eq!(fx.opened().pop().unwrap(), ["--resume", SID2]);
+}
+
+/// 待ちの上限までに手すき（turn の中）にならない窓と、入力欄に打ちかけの字が在る窓は、閉じず起こし直さず信頼の印も置かず、
+/// 付いてこなかった印 held-1 を置き、付いてこなかった 1 行を出して rc 1 で断る。held-1 が symlink なら辿って書かない。
+#[test]
+fn cwres_follow_holds_a_busy_window() {
+    let fx = Fx::new("hold");
+    let ws = fx.window(1, Form::Talk, DEAD);
+    remark(&ws, std::process::id(), Some(Path::new("/old")));
+    let held = ws.join(".consult/held-1");
+    let line = notice(
+        &Event::Held(tsuzuri_contract::consult::WindowId::new(1).unwrap()),
+        "/x/tzw",
+    ) + "\n";
+    let busy = format!(
+        "{}\n",
+        wire::encode(&Stamp {
+            at: 9,
+            event: StampEvent::Prompt,
+            sid: SID.into(),
+            source: None
+        })
+        .unwrap()
+    );
+    for (text, pane) in [(busy.as_str(), "❯ \n"), ("", "❯ 打ちかけ\n")] {
+        stamps(&ws, SID);
+        let path = ws.join(".consult/stamps.jsonl");
+        fs::write(&path, fs::read_to_string(&path).unwrap() + text).unwrap();
+        fs::write(fx.root.join("pane"), pane).unwrap();
+        let _ = fs::remove_file(&held);
+        let o = fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "1"]);
+        assert_eq!(
+            (o.status.code(), String::from_utf8(o.stdout).unwrap()),
+            (Some(1), line.clone()),
+            "{pane}"
+        );
+        assert!(held.exists() && !fx.trust().exists());
+        assert!(
+            verbs(&fx).iter().all(|v| v == "capture-pane"),
+            "{:?}",
+            verbs(&fx)
+        );
+    }
+    fs::remove_file(&held).unwrap();
+    let kept = fx.root.join("kept");
+    fs::write(&kept, "keep").unwrap();
+    std::os::unix::fs::symlink(&kept, &held).unwrap();
+    let o = fx.tz(&["consult", "launch", "cw1", "--follow", "--wait", "1"]);
+    let after = fs::read_to_string(&kept).unwrap();
+    assert_eq!((o.status.code(), after.as_str()), (Some(1), "keep"));
+}
+
+/// 問う窓・動いていない窓・会話の印も名指しも無い窓・名の違う tmux の窓は起こし直さずに rc 1 で断り、印の口座が今の口座と同じ
+/// 窓は何もせずに rc 0 で返す。--follow と --again の組み・--follow の無い --wait・0 秒の --wait も断る。信頼の印を置けない口座では
+/// 窓を閉じる前に rc 2 で断る。
+#[test]
+fn cwres_follow_refusals() {
+    let fx = Fx::new("followno");
+    fx.window(1, Form::Ask, DEAD);
+    fx.window(2, Form::Talk, DEAD);
+    let ws = fx.window(3, Form::Talk, DEAD);
+    remark(&ws, std::process::id(), Some(&fx.acct));
+    let shoot = |args: &[&str]| rc_err(&fx.tz(&[&["consult", "launch"][..], args].concat()));
+    let o = fx.tz(&["consult", "launch", "cw3", "--follow"]);
+    assert_eq!(
+        (o.status.code(), String::from_utf8(o.stdout).unwrap()),
+        (
+            Some(0),
+            "窓 cw3 は席の今の口座で動いている（開き直さない）\n".into()
+        )
+    );
+    remark(&ws, std::process::id(), None);
+    fs::write(fx.root.join("pane"), "❯ \n").unwrap();
+    fs::write(fx.root.join("name"), "other").unwrap();
+    let cases = [
+        (&["cw1", "--follow"][..], "問う窓 cw1 は付いてこない"),
+        (&["cw2", "--follow"][..], "動いていない"),
+        (&["cw3", "--follow"][..], "--session で会話の id を名指す"),
+        (
+            &["cw3", "--follow", "--session", SID][..],
+            "consult-cw3 でない（閉じない",
+        ),
+        (&["cw3", "--follow", "--again"][..], "--follow は --again"),
+        (&["cw3", "--wait", "3"][..], "--wait は --follow と一緒"),
+        (&["cw3", "--follow", "--wait", "0"][..], "1 以上の秒"),
+    ];
+    for (args, word) in cases {
+        let (rc, err) = shoot(args);
+        assert!(rc == 1 && err.contains(word), "{args:?}: {err}");
+    }
+    // 信頼の印を置けない口座では、窓を閉じる前に rc 2 で断る。
+    fs::write(fx.root.join("name"), "consult-cw3").unwrap();
+    fs::write(fx.trust(), "{").unwrap();
+    let (rc, err) = shoot(&["cw3", "--follow", "--session", SID]);
+    assert!(rc == 2 && err.contains("JSON の字でない"), "{err}");
+    assert!(
+        !verbs(&fx)
+            .iter()
+            .any(|v| v == "kill-window" || v == "new-window"),
+        "{:?}",
+        verbs(&fx)
+    );
+}
+
+/// 見張りは、生きている話す窓の印の口座が見張りの環境の口座と違い、会話の印が手すきで、付いてこなかった印が無い時に、口座のずれの
+/// 1 行を出す。会話の印が無い・付いてこなかった印が在る・口座が同じ窓では出さずに上限の 1 行で終わる。付いてこなかった印が
+/// symlink なら印と見ずに出し、会話の印が symlink なら手すきと見ずに出さない。
+#[test]
+fn cwres_watch_names_a_moved_idle_window() {
+    let fx = Fx::new("watch");
+    let ws = fx.window(1, Form::Talk, DEAD);
+    remark(&ws, std::process::id(), Some(Path::new("/old")));
+    let watch =
+        |max: &str| String::from_utf8(fx.tz(&["consult", "watch", "--max", max]).stdout).unwrap();
+    let w = tsuzuri_contract::consult::WindowId::new(1).unwrap();
+    let (drift, timeout) = (
+        notice(&Event::Drift(w), "/x/tzw") + "\n",
+        notice(&Event::Timeout, "/x/tzw") + "\n",
+    );
+    assert_eq!(watch("1"), timeout, "会話の印が無い");
+    stamps(&ws, SID);
+    assert_eq!(watch("3"), drift);
+    let (held, real) = (ws.join(".consult/held-1"), ws.join(".consult/stamps.jsonl"));
+    fs::write(&held, "").unwrap();
+    assert_eq!(watch("1"), timeout, "付いてこなかった印");
+    fs::remove_file(&held).unwrap();
+    std::os::unix::fs::symlink(ws.join(".consult/window.json"), &held).unwrap();
+    assert_eq!(watch("3"), drift, "付いてこなかった印が symlink");
+    fs::remove_file(&held).unwrap();
+    fs::rename(&real, ws.join("kept")).unwrap();
+    std::os::unix::fs::symlink(ws.join("kept"), &real).unwrap();
+    assert_eq!(watch("1"), timeout, "会話の印が symlink");
+    fs::remove_file(&real).unwrap();
+    fs::rename(ws.join("kept"), &real).unwrap();
+    remark(&ws, std::process::id(), Some(&fx.acct));
+    assert_eq!(watch("1"), timeout, "口座が同じ");
 }

@@ -587,6 +587,10 @@ pub enum Event {
     Gone(WindowId),
     /// 見張りが時間の上限で終わった。
     Timeout,
+    /// 生きている話す窓が手すきで、席の今の口座と違う口座で動いている（行 cs-follow）。
+    Drift(WindowId),
+    /// 付いてくる口が待ちの上限までに手すきを見られず、起こし直さなかった（行 cs-follow）。
+    Held(WindowId),
 }
 
 /// 席への固定の 1 行（`tzw` は tz の解き方の命令の字）。見張りの出す行は末に置き直しの命令を足す。
@@ -607,9 +611,13 @@ pub fn notice(event: &Event, tzw: &str) -> String {
             "話す窓 {w} が止まった（開き直しを待つ・持ち主が閉じると言えば {tzw} consult close {w} --by chat）"
         ),
         Event::Timeout => "見張りが上限で終わった".to_string(),
+        Event::Drift(w) => {
+            format!("話す窓 {w} が前の口座で動いている（{tzw} consult launch {w} --follow）")
+        }
+        Event::Held(w) => format!("話す窓 {w} が手すきにならず付いてこなかった（持ち主に問う）"),
     };
     match event {
-        Event::Finding { via: Via::Done, .. } => format!("{NOTICE_HEAD}{body}"),
+        Event::Finding { via: Via::Done, .. } | Event::Held(_) => format!("{NOTICE_HEAD}{body}"),
         _ => format!("{NOTICE_HEAD}{body}{SEP}「{tzw} consult watch」を背景で置き直す"),
     }
 }

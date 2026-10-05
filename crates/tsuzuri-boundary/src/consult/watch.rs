@@ -2,8 +2,9 @@
 //! 席が背景の命令として常に 1 本置く。`TICK` ごとに起草の置き場の窓（退いた窓を除く）を見て、次の事象の最初の 1 つで
 //! 中核の `lines::notice` の固定の 1 行を標準出力に出して終わる（待ちの席を起こす）。順は (1) 受けの行の無い所見
 //! （経路 見張り）、(2) 受けの行の無い頼み、(3) 所見の無いまま最後の process の無い問う窓（閉じの行の無い物）、
-//! (4) 最後の pane の無い話す窓（閉じの行の無い物）。上限（既定 `MAX`・Bash の道具の背景の上限より短く）で
-//! 上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
+//! (4) 最後の pane の無い話す窓（閉じの行の無い物）、(5) 最後の process の印の口座が見張りの環境の口座と違い、
+//! 会話の印が手すきで、付いてこなかった印（`follow::held_rel`）の無い、生きている話す窓（閉じの行の無い物・行 cs-follow）。
+//! 上限（既定 `MAX`・Bash の道具の背景の上限より短く）で上限の 1 行を出して終わる。台帳は始めに読み（読めなければ印を置かずに rc 2）、`Source::mark`（store の印）が
 //! 変わった時だけ読み直す（読み直しが落ちれば前の読みで見る）。
 //! 生きている印 `<起草の置き場>/consult-watch.alive`（pid と始まりの分）を置き、`TOUCH` ごとに書き直し、終わりで消す。
 //! 印の更新時刻が `FRESH` の内なら 2 本目は「相談: 見張りはもう居る」の 1 行を出してすぐ終わる。
@@ -18,10 +19,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use tsuzuri_contract::consult::{Form, Via, WindowId};
+use tsuzuri_core::consult::follow::drifted;
 use tsuzuri_core::consult::lines::{Event, Line, notice, unreceived};
 
+use super::follow::{held_rel, stamped_idle};
+use super::launch::ACCOUNT_ENV;
+use super::plain::plain_file;
 use super::{
-    COMMON, Ctx, FAIL, Refused, ctx, findings, flags, ledger, lines_of, minute_now, procs,
+    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now, procs,
     read_window, refuse, tzw, windows, workspace,
 };
 use crate::out::{emit, emit_err};
@@ -234,7 +239,25 @@ pub fn scan(c: &Ctx, lines: &[Line]) -> Option<Event> {
     if let Some(id) = stalled {
         return Some(Event::Stalled(*id));
     }
+    if let Some(id) = open.iter().find(|id| quiet(id, Form::Talk)) {
+        return Some(Event::Gone(*id));
+    }
+    let now = std::env::var(ACCOUNT_ENV).ok();
     open.iter()
-        .find(|id| quiet(id, Form::Talk))
-        .map(|id| Event::Gone(*id))
+        .find(|id| moved(c, lines, **id, now.as_deref()))
+        .map(|id| Event::Drift(*id))
+}
+
+/// 生きている話す窓（閉じの行の無い物）の最後の process の印の口座が `now` と違い、会話の印が手すきで、付いてこなかった印が無いか。
+fn moved(c: &Ctx, lines: &[Line], id: WindowId, now: Option<&str>) -> bool {
+    let ws = workspace(&c.drafts, id);
+    let Some(mark) = procs(&ws).pop() else {
+        return false;
+    };
+    !closed(lines, id)
+        && read_window(&ws).is_some_and(|w| w.form == Form::Talk)
+        && alive(mark.pid)
+        && drifted(mark.account.as_deref(), now)
+        && stamped_idle(&ws)
+        && !plain_file(&ws, &held_rel(mark.k))
 }
