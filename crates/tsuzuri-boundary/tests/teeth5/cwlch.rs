@@ -98,6 +98,7 @@ impl Fx {
         script(&bin.join("tmux"), &tmux);
         let claude = format!(
             "for a in \"$@\"; do printf '%s\\037' \"$a\"; done > '{r}/claude.args'\n\
+             tr '\\000' '\\n' < /proc/$$/environ > '{r}/claude.environ'\n\
              {{ echo \"id=${{TZ_CONSULT_ID-}}\"; echo \"tmp=${{CLAUDE_CODE_TMPDIR-}}\"; echo \"tmux=${{TMUX-unset}}\"; \
              echo \"pane=${{TMUX_PANE-unset}}\"; echo \"cwd=$(pwd -P)\"; echo \"pid=$$\"; }} > '{r}/claude.env'\n\
              [ -f '{r}/answer' ] && echo '{{}}' > findings/cw1-1.json\necho '{{\"result\":\"ok\"}}'"
@@ -239,13 +240,99 @@ fn open_line(text: &str) -> (bool, bool, String) {
     (opened, again, at)
 }
 
+/// 席の環境の番兵（窓に渡さない名と、窓では中核の値に替わる窓の id と私用の temp・行 cs-env-closed）。
+const SEAT_CANARIES: [(&str, &str); 7] = [
+    ("TERM", "seat-term"),
+    ("CLAUDECODE", "1"),
+    ("CLAUDE_CODE_MESSAGING_TOKEN", "seat-token"),
+    ("SSH_AUTH_SOCK", "/seat/agent"),
+    ("USER", "seat"),
+    ("TZ_CONSULT_ID", "cw9"),
+    ("CLAUDE_CODE_TMPDIR", "/seat/tmp"),
+];
+
+/// 席の環境に番兵と、窓に渡す足しの 3 つ（HOME は歯の置き場・SHELL・LANG）を置いた tz の命令。
+fn seat(fx: &Fx, args: &[&str]) -> Command {
+    let mut c = fx.command(args);
+    c.env("HOME", &fx.root)
+        .env("SHELL", "/bin/seat-sh")
+        .env("LANG", "C.UTF-8")
+        .envs(SEAT_CANARIES);
+    c
+}
+
+/// 偽の claude が受けた環境（名の字の順・名と値）。
+fn environ(fx: &Fx) -> Vec<(String, String)> {
+    let text = fs::read_to_string(fx.root.join("claude.environ")).unwrap();
+    let mut pairs: Vec<(String, String)> = text
+        .lines()
+        .map(|l| l.split_once('=').unwrap())
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    pairs.sort();
+    pairs
+}
+
+/// 偽の claude が受けた環境が `want`（名の字の順）と同じ（落ちた時に席の値を出さないよう、名を先に比べる）。
+fn assert_environ(fx: &Fx, want: &[(String, String)]) {
+    let got = environ(fx);
+    let names = |xs: &[(String, String)]| xs.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&got), names(want));
+    assert_eq!(got, want);
+}
+
+/// 席の PATH（偽の道具の置き場を頭に置いた字）。
+fn seat_path(fx: &Fx) -> String {
+    format!(
+        "{}:{}",
+        fx.root.join("bin").display(),
+        std::env::var("PATH").unwrap()
+    )
+}
+
+/// `seat` の命令で起こした窓 cw1 が持つ閉じた列の名と値（`TALK_ENV` と `BASE_ENV` の順）。
+fn closed(fx: &Fx, l: &Launch) -> Vec<(String, String)> {
+    [
+        ("CLAUDE_CONFIG_DIR", "/cfg/x".to_string()),
+        ("PATH", seat_path(fx)),
+        ("TZ_CONSULT_ID", "cw1".to_string()),
+        ("CLAUDE_CODE_TMPDIR", private_tmp(&l.workspace)),
+        ("HOME", fx.root.display().to_string()),
+        ("SHELL", "/bin/seat-sh".to_string()),
+        ("LANG", "C.UTF-8".to_string()),
+    ]
+    .map(|(k, v)| (k.to_string(), v))
+    .to_vec()
+}
+
+/// 話す窓の new-window の -e の列と、claude を env -S で包む命令の頭（-P から claude まで）。
+fn talk_env_args(fx: &Fx, l: &Launch) -> Vec<String> {
+    let mut a: Vec<String> = closed(fx, l)
+        .into_iter()
+        .flat_map(|(k, v)| ["-e".to_string(), format!("{k}={v}")])
+        .collect();
+    let keep = "-i CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR} PATH=${PATH} TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME} SHELL=${SHELL} LANG=${LANG} TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}";
+    let tail = [
+        "-P",
+        "-F",
+        "#{window_id} #{pane_pid}",
+        "--",
+        "env",
+        "-S",
+        keep,
+        "claude",
+    ];
+    a.extend(tail.map(String::from));
+    a
+}
+
 #[test]
 fn cwlch_talk_argv_and_env() {
     let fx = Fx::new("talk");
     fx.open(&["--by", "seat"]);
     let l = fx.launch(1, Form::Talk, false);
     clear_tmp(&l);
-    let o = fx.tz(&["consult", "launch", "cw1"]);
+    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
     assert_eq!(rc(&o), 0, "{}", err(&o));
     assert_eq!(out(&o), "窓 cw1 を開いた（tmux の窓 consult-cw1）\n");
     let tmp = private_tmp(&l.workspace);
@@ -261,20 +348,7 @@ fn cwlch_talk_argv_and_env() {
     .map(String::from)
     .to_vec();
     want.push(l.workspace.clone());
-    let path = format!(
-        "PATH={}:{}",
-        fx.root.join("bin").display(),
-        std::env::var("PATH").unwrap()
-    );
-    for e in [
-        "CLAUDE_CONFIG_DIR=/cfg/x".to_string(),
-        path,
-        "TZ_CONSULT_ID=cw1".to_string(),
-        format!("CLAUDE_CODE_TMPDIR={tmp}"),
-    ] {
-        want.extend(["-e".to_string(), e]);
-    }
-    want.extend(["-P", "-F", "#{window_id} #{pane_pid}", "--", "claude"].map(String::from));
+    want.extend(talk_env_args(&fx, &l));
     want.extend(argv(&l));
     let display: Vec<String> = ["display-message", "-p", "-t", "%9", "#{session_name}"]
         .map(String::from)
@@ -300,6 +374,56 @@ fn cwlch_talk_argv_and_env() {
     );
     assert_eq!(fx.written(), [("fx-c".to_string(), line)]);
     assert!(!fx.root.join("claude.args").exists());
+    clear_tmp(&l);
+}
+
+/// 話す窓の tmux の new-window の -- の後の命令を、tmux の server の環境（番兵）と tmux の置く TERM と TMUX と -e の値の上で
+/// 撃つと、偽の claude は閉じた列の名と tmux の TERM だけを持ち、argv は中核の argv と同じ（行 cs-env-closed）。
+#[test]
+fn cwlch_talk_env_runs_closed() {
+    let fx = Fx::new("talkenv");
+    fx.open(&["--by", "seat"]);
+    let l = fx.launch(1, Form::Talk, false);
+    clear_tmp(&l);
+    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
+    assert_eq!(rc(&o), 0, "{}", err(&o));
+    let call = fx.calls("tmux.log").pop().unwrap();
+    let at = call.iter().position(|a| a == "--").unwrap();
+    let given: Vec<(&str, &str)> = call[..at]
+        .windows(2)
+        .filter(|w| w[0] == "-e")
+        .map(|w| w[1].split_once('=').unwrap())
+        .collect();
+    let server = [
+        ("SSH_AUTH_SOCK", "/srv/agent"),
+        ("DBUS_SESSION_BUS_ADDRESS", "unix:path=/srv/bus"),
+        ("SERVER_CANARY", "srv"),
+        ("USER", "srv"),
+        ("HOME", "/srv/home"),
+        ("TERM", "tmux-256color"),
+        ("TERM_PROGRAM", "tmux"),
+        ("TERM_PROGRAM_VERSION", "3.6b"),
+        ("TMUX", "/tmp/fake-tmux,1,0"),
+        ("TMUX_PANE", "%3"),
+    ];
+    let status = Command::new(&call[at + 1])
+        .args(&call[at + 2..])
+        .current_dir(&l.workspace)
+        .env_clear()
+        .envs(server)
+        .envs(given)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let mut want = closed(&fx, &l);
+    want.extend(
+        server[5..]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string())),
+    );
+    want.sort();
+    assert_environ(&fx, &want);
+    assert_eq!(fx.calls("claude.args"), [argv(&l)]);
     clear_tmp(&l);
 }
 
@@ -375,6 +499,30 @@ fn cwlch_ask_child_env_and_lines() {
     assert!(fx.mark(1, 2).again);
     assert_chat_opens(&fx, &[(true, false), (true, true)]);
     assert!(fx.calls("tmux.log").is_empty());
+    clear_tmp(&l);
+}
+
+/// 問う窓の子は、席の環境の番兵を持たず、閉じた列の名だけを持ち（窓の id と私用の temp は中核の値）、席に無い名は
+/// 空の値でも置かない（行 cs-env-closed）。
+#[test]
+fn cwlch_ask_env_closed() {
+    let fx = Fx::new("askenv");
+    fx.open(&["--by", "chat", "--said", "20261003T1410Z", "--form", "ask"]);
+    let l = fx.launch(1, Form::Ask, false);
+    clear_tmp(&l);
+    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
+    assert_eq!(rc(&o), 0, "{}", err(&o));
+    let mut want = closed(&fx, &l);
+    want.sort();
+    assert_environ(&fx, &want);
+    let o = seat(&fx, &["consult", "launch", "cw1", "--again"])
+        .env_remove("SHELL")
+        .env_remove("LANG")
+        .output()
+        .unwrap();
+    assert_eq!(rc(&o), 0, "{}", err(&o));
+    want.retain(|(k, _)| k != "SHELL" && k != "LANG");
+    assert_environ(&fx, &want);
     clear_tmp(&l);
 }
 

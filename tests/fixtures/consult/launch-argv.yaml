@@ -40,7 +40,8 @@
     "env": [["TZ_CONSULT_ID", "cw4"], ["CLAUDE_CODE_TMPDIR", "/tmp/tzc-07d671"]]
   },
   "talk_env": ["CLAUDE_CONFIG_DIR", "PATH", "TZ_CONSULT_ID", "CLAUDE_CODE_TMPDIR"],
-  "ask_drop": ["TMUX", "TMUX_PANE"],
+  "base_env": ["HOME", "SHELL", "LANG"],
+  "talk_keep": "-i CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR} PATH=${PATH} TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME} SHELL=${SHELL} LANG=${LANG} TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}",
   "settings": {
     "permissions": {
       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],

@@ -25,8 +25,8 @@ pub const TMPDIR_ENV: &str = "CLAUDE_CODE_TMPDIR";
 /// 話す窓の tmux の `-e` で渡す閉じた 4 つ（口座の置き場・PATH・窓の id・私用の temp）。
 pub const TALK_ENV: [&str; 4] = ["CLAUDE_CONFIG_DIR", "PATH", ID_ENV, TMPDIR_ENV];
 
-/// 問う窓が席の環境から外す 2 つ。
-pub const ASK_DROP: [&str; 2] = ["TMUX", "TMUX_PANE"];
+/// 窓に足して渡す席の環境の 3 つ（home・殻の選び・locale）。窓の環境はこの列と `TALK_ENV` の名だけ（話す窓は tmux の置く `PANE_ENV` も）。
+pub const BASE_ENV: [&str; 3] = ["HOME", "SHELL", "LANG"];
 
 /// 道具の閉じた列。
 pub const TOOLS: &str = "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch";
@@ -246,6 +246,44 @@ pub fn env(l: &Launch) -> [(&'static str, String); 2] {
         (ID_ENV, l.window.to_string()),
         (TMPDIR_ENV, private_tmp(&l.workspace)),
     ]
+}
+
+/// 話す窓で tmux が窓に置く 5 つ（端末の種類と tmux の窓の名乗り・席の値は渡さず tmux の置いた値を残す）。
+pub const PANE_ENV: [&str; 5] = [
+    "TERM",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "TMUX",
+    "TMUX_PANE",
+];
+
+/// 窓の環境の組（`TALK_ENV` と `BASE_ENV` の順・窓の id と私用の temp は `env` の値・ほかは `seat` が返す席の値・値の無い名は置かない）。
+/// 問う窓の子はこの組だけを持ち、話す窓は tmux の `-e` でこの組を渡して `keep_only` で包む。
+pub fn window_env(
+    l: &Launch,
+    seat: impl Fn(&str) -> Option<String>,
+) -> Vec<(&'static str, String)> {
+    let own = env(l);
+    TALK_ENV
+        .into_iter()
+        .chain(BASE_ENV)
+        .filter_map(|name| {
+            own.iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, v)| v.clone())
+                .or_else(|| seat(name))
+                .map(|v| (name, v))
+        })
+        .collect()
+}
+
+/// 話す窓の claude を包む env の `-S` の字（環境を空にし、`-e` で渡した `names` と tmux の置いた `PANE_ENV` だけを
+/// 名で置き直す・tmux の server の環境を継がない）。
+pub fn keep_only(names: &[&str]) -> String {
+    names
+        .iter()
+        .chain(&PANE_ENV)
+        .fold("-i".to_string(), |s, n| format!("{s} {n}=${{{n}}}"))
 }
 
 /// plugin の解き方が置いた版の字が `PLUGIN_VERSION` と同じか。

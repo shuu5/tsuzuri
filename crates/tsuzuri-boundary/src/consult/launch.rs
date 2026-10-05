@@ -1,8 +1,9 @@
 //! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
 //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
 //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
-//! 4 つ（`TALK_ENV`・席の環境に無い名は渡さない）だけを渡す。問う窓は席の背景の子として claude -p を cwd = 作業場で撃ち、
-//! 席の環境から `ASK_DROP` を外して窓の id と私用の temp を置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
+//! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
+//! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
+//! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
 //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
 //! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
 //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
@@ -20,8 +21,8 @@ use std::time::{Duration, Instant};
 use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
 use tsuzuri_contract::wire;
 use tsuzuri_core::consult::launch::{
-    ASK_DROP, Launch, PROGRAM, TALK_ENV, VERSION_ENV, argv, audit, env, private_tmp, read_roots,
-    version_ok,
+    Launch, PROGRAM, VERSION_ENV, argv, audit, keep_only, private_tmp, read_roots, version_ok,
+    window_env,
 };
 use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
 use tsuzuri_core::consult::quota::{admit, count};
@@ -39,6 +40,9 @@ pub const TMUX: &str = "tmux";
 
 /// 新しい tmux の窓の id と pane の pid を出させる形。
 pub const WINDOW_FORMAT: &str = "#{window_id} #{pane_pid}";
+
+/// 話す窓の claude を包む program の名（`-S` の字で環境を閉じた列に絞る）。
+pub const ENV: &str = "env";
 
 /// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
 pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
@@ -307,18 +311,13 @@ fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused
         "-c".to_string(),
         l.workspace.clone(),
     ]);
-    let own = env(l);
-    for name in TALK_ENV {
-        let value = own
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, v)| v.clone())
-            .or_else(|| std::env::var(name).ok());
-        if let Some(value) = value {
-            a.extend(["-e".to_string(), format!("{name}={value}")]);
-        }
+    let pairs = window_env(l, |name| std::env::var(name).ok());
+    for (name, value) in &pairs {
+        a.extend(["-e".to_string(), format!("{name}={value}")]);
     }
-    a.extend(["-P", "-F", WINDOW_FORMAT, "--", PROGRAM].map(String::from));
+    let names: Vec<&str> = pairs.iter().map(|(name, _)| *name).collect();
+    a.extend(["-P", "-F", WINDOW_FORMAT, "--", ENV, "-S"].map(String::from));
+    a.extend([keep_only(&names), PROGRAM.to_string()]);
     a.extend(args.iter().cloned());
     let out = capture(tmux, &a, ws, GIT_TIMEOUT)
         .and_then(|o| String::from_utf8(o).ok())
@@ -345,11 +344,9 @@ fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::C
         .stdin(Stdio::null())
         .stdout(file("json")?)
         .stderr(file("err")?)
-        .process_group(0);
-    for name in ASK_DROP {
-        cmd.env_remove(name);
-    }
-    cmd.envs(env(l));
+        .process_group(0)
+        .env_clear()
+        .envs(window_env(l, |name| std::env::var(name).ok()));
     cmd.spawn()
         .map_err(|e| (FAIL, format!("{PROGRAM} を起こせない: {e}")))
 }

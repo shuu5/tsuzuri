@@ -10,8 +10,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    ASK_DROP, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
-    private_tmp, prompt, read_roots, settings, version_ok,
+    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
+    keep_only, private_tmp, prompt, read_roots, settings, version_ok, window_env,
 };
 
 fn fixture() -> Value {
@@ -95,8 +95,43 @@ fn cwarg_matches_fixture() {
         assert_eq!(Value::from(got), fx[form]["env"], "{form} の環境");
     }
     assert_eq!(Value::from(TALK_ENV.to_vec()), fx["talk_env"]);
-    assert_eq!(Value::from(ASK_DROP.to_vec()), fx["ask_drop"]);
+    assert_eq!(Value::from(BASE_ENV.to_vec()), fx["base_env"]);
+    let all: Vec<&str> = TALK_ENV.into_iter().chain(BASE_ENV).collect();
+    assert_eq!(Value::from(keep_only(&all)), fx["talk_keep"]);
     assert_eq!(read_roots("/R", "/S"), ["/R", "/S/fleet", "/S/pipe"]);
+}
+
+/// 窓の環境の組は、席が何の名を持っていても閉じた列の名だけを列の順で持ち、窓の id と私用の temp は席の値でなく中核の値で、
+/// 席に無い名は置かない。包みの字は渡した名と tmux の置く 5 つだけを名で置き直す（行 cs-env-closed）。
+#[test]
+fn cwarg_window_env_is_closed() {
+    let fx = fixture();
+    let l = launch(&fx["ask"]["inputs"]);
+    let tmp = "/tmp/tzc-07d671";
+    let full = window_env(&l, |name| Some(format!("seat-{name}")));
+    let want = [
+        ("CLAUDE_CONFIG_DIR", "seat-CLAUDE_CONFIG_DIR"),
+        ("PATH", "seat-PATH"),
+        ("TZ_CONSULT_ID", "cw4"),
+        ("CLAUDE_CODE_TMPDIR", tmp),
+        ("HOME", "seat-HOME"),
+        ("SHELL", "seat-SHELL"),
+        ("LANG", "seat-LANG"),
+    ];
+    assert_eq!(full, want.map(|(n, v)| (n, v.to_string())));
+    let own = [("TZ_CONSULT_ID", "cw4"), ("CLAUDE_CODE_TMPDIR", tmp)];
+    assert_eq!(
+        window_env(&l, |_| None),
+        own.map(|(n, v)| (n, v.to_string()))
+    );
+    let home = window_env(&l, |name| (name == "HOME").then(|| "/h".to_string()));
+    let names: Vec<&str> = home.iter().map(|(n, _)| *n).collect();
+    assert_eq!(names, ["TZ_CONSULT_ID", "CLAUDE_CODE_TMPDIR", "HOME"]);
+    let pane = " TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}";
+    let head =
+        "-i TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME}";
+    assert_eq!(keep_only(&names), [head, pane].concat());
+    assert_eq!(keep_only(&[]), ["-i", pane].concat());
 }
 
 #[test]
