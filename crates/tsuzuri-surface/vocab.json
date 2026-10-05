@@ -465,6 +465,11 @@
    "note": "1 つの run を実行する session\n✗ 群の今の口座は使えない\n✓ 空きの口座で動く",
    "internal": "run（便）・§23 便用の候補から群の今の口座を外す"
   },
+  "consult_drift": {
+   "label": "口座ずれ",
+   "plain": "{gi:ng} 窓の口座 ≠ 群の今の口座\n→ 窓が手すきの時に席が新しい口座で開き直す\n・ 会話は続く",
+   "internal": "ProcMark.account の末の名 != current_of(群)（判断の記録 ADR-55 決定 (3)(4)）"
+  },
   "consult_account_unknown": {
    "label": "分からない",
    "plain": "{gi:unknown} 窓の印に口座が無い\n・ 口座の印の前に起こした窓\n✗ 口座が無いとは違う",

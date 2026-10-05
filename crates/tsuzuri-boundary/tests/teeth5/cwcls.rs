@@ -2,14 +2,17 @@
 //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と、偽の bd・bdw と、
 //! 受けた argv を記録して窓の名を tmux.name の字で答える偽の tmux を置き（本物の tmux は撃たない）、
 //! 窓の作業場（控え・process の印・所見）を歯が直に書いて tz consult list と close を撃つ。
+//! 一覧の口座（行 e-acct-consult）の歯は口を撃たず、起草の置き場だけを置いて一覧の組み（`list::board` と `list::text`）を直に撃つ。
 #![cfg(test)]
 
+use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::consult::list::epoch_of;
+use tsuzuri_boundary::consult::Ctx;
+use tsuzuri_boundary::consult::list::{NO_ACCOUNT, board, epoch_of, text};
 use tsuzuri_boundary::server::{events, ruling};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::consult::{
@@ -233,11 +236,11 @@ fn cwcls_list_states_and_text() {
     let o = fx.tz(&["list"]);
     assert_eq!(rc(&o), 0, "{}", err(&o));
     let want = [
-        "窓 cw1・形 問う・題 fx-c.2・状態 生きている・所見 1・未処分 1",
-        "窓 cw2・形 問う・題 題なし・状態 止まった・所見 0・未処分 0",
-        "窓 cw3・形 話す・題 題なし・状態 閉じた・所見 1・未処分 0",
-        "窓 cw4・形 話す・題 題なし・状態 退いた・所見 0・未処分 0",
-        "窓 cw5・形 話す・題 題なし・状態 止まった・所見 0・未処分 0",
+        "窓 cw1・形 問う・題 fx-c.2・状態 生きている・所見 1・未処分 1・口座 分からない",
+        "窓 cw2・形 問う・題 題なし・状態 止まった・所見 0・未処分 0・口座 分からない",
+        "窓 cw3・形 話す・題 題なし・状態 閉じた・所見 1・未処分 0・口座 分からない",
+        "窓 cw4・形 話す・題 題なし・状態 退いた・所見 0・未処分 0・口座 分からない",
+        "窓 cw5・形 話す・題 題なし・状態 止まった・所見 0・未処分 0・口座 分からない",
         "受けの無い頼み rq-20261003T1412Z-1・題 題なし",
         "席の問う窓: 今日 2・今 1（規則の行 R-38 の上限 同時 1・1 日 3）",
     ];
@@ -407,4 +410,93 @@ fn cwcls_close_refusals() {
         bdw[0][2].contains("起こし手 = 持ち主の button・"),
         "{bdw:?}"
     );
+}
+
+/// 口座の歯の在り得ない pid（`/proc` に無い）。
+const ACC_GONE: u32 = u32::MAX;
+
+fn acc_put(drafts: &Path, dir: &str, n: &str, accounts: &[Option<&str>]) {
+    let dot = drafts.join(dir).join(".consult");
+    fs::create_dir_all(&dot).expect(".consult");
+    let control = WindowFile {
+        id: WindowId::parse(n).expect("窓の id"),
+        form: Form::Talk,
+        topic: None,
+        model: "opus".into(),
+        effort: "high".into(),
+        starter: Starter::Seat,
+        uttered: None,
+        request: None,
+        made: "20261005T0100Z".into(),
+    };
+    fs::write(dot.join("window.json"), wire::encode(&control).expect("控えの字")).expect("控え");
+    for (i, a) in accounts.iter().enumerate() {
+        let k = u32::try_from(i).expect("k") + 1;
+        let m = ProcMark {
+            k,
+            form: Form::Talk,
+            pid: ACC_GONE,
+            at: "20261005T0100Z".into(),
+            again: k > 1,
+            tmux_window: Some(format!("@{k}")),
+            account: a.map(str::to_string),
+        };
+        let text = wire::encode(&m).expect("印の字");
+        fs::write(dot.join(format!("proc-{k}.json")), text).expect("印");
+    }
+}
+
+fn acc_ctx(name: &str) -> Ctx {
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("cwcls-acc")
+        .join(name);
+    let _ = fs::remove_dir_all(&root);
+    let drafts = root.join("drafts");
+    acc_put(&drafts, "consult-cw1", "cw1", &[Some("/s/accounts/acct-old"), Some("/s/accounts/acct-new/")]);
+    acc_put(&drafts, "consult-cw2", "cw2", &[]);
+    acc_put(&drafts, "consult-cw3", "cw3", &[None]);
+    acc_put(&drafts, "consult-cw4", "cw4", &[Some("/s/accounts/acct-old"), None]);
+    acc_put(&drafts, "retired-consult-cw5", "cw5", &[Some("/s/accounts/acct-new")]);
+    Ctx {
+        repo: root.clone(),
+        state: root,
+        drafts,
+        bd: OsString::from("bd"),
+        bdw: OsString::from("bdw"),
+    }
+}
+
+/// 行 e-acct-consult（判断の記録 ADR-55 決定 (4)）: 電文の窓の行の口座（窓の id の順・退いた窓も同じ決まり）と、tz consult list の行の末の「口座 <名>」。
+#[test]
+fn cwcls_list_rows_hold_the_account() {
+    let c = acc_ctx("rows");
+    let b = board(&c, &[], "20261005T0300Z");
+    let Reading::Known(wins) = &b.windows else {
+        panic!("窓の段が読めない: {b:?}")
+    };
+    let got: Vec<(String, Option<&str>)> = wins
+        .iter()
+        .map(|w| (w.id.to_string(), w.account.as_deref()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("cw1".to_string(), Some("acct-new")),
+            ("cw2".to_string(), None),
+            ("cw3".to_string(), None),
+            ("cw4".to_string(), None),
+            ("cw5".to_string(), Some("acct-new")),
+        ]
+    );
+    let tails: Vec<String> = text(&b)
+        .into_iter()
+        .filter(|l| l.starts_with("窓 "))
+        .filter_map(|l| l.rsplit('・').next().map(str::to_string))
+        .collect();
+    let none = format!("口座 {NO_ACCOUNT}");
+    assert_eq!(
+        tails,
+        ["口座 acct-new", none.as_str(), none.as_str(), none.as_str(), "口座 acct-new"]
+    );
+    assert_eq!(NO_ACCOUNT, "分からない");
 }

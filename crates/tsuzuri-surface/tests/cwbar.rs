@@ -147,7 +147,28 @@ fn window(n: u32, state: WindowState) -> WindowRow {
         opened: Some(1),
         findings: 2,
         undisposed: 1,
+        account: None,
     }
+}
+
+/// 窓の段の行は口座を並べる（最後の印の口座の置き場の末の名・無ければ分からない・判断の記録 ADR-55 決定 (4)）。
+#[test]
+fn cwbar_window_note_holds_the_account() {
+    let named = WindowRow {
+        account: Some("acct-x".into()),
+        ..window(1, WindowState::Stalled)
+    };
+    assert_eq!(
+        windows(&Reading::Known(vec![named, window(2, WindowState::Live)])),
+        Body::Filled(vec![
+            row("cw1", "題なし", "問う・止まった・所見 2（処分なし 1）・口座 acct-x", false),
+            row("cw2", "題なし", "問う・生きている・所見 2（処分なし 1）・口座 分からない", false),
+        ])
+    );
+    assert_eq!(
+        tsuzuri_surface::vocab::label("consult_account_unknown"),
+        "分からない"
+    );
 }
 
 /// 窓の段は退いた窓を載せず形と状態と所見の数を並べ、所見の段は席の受けを書き、読めない口と段は測れていない。
@@ -162,7 +183,7 @@ fn cwbar_lists_and_unread() {
         Body::Filled(vec![row(
             "cw1",
             "題なし",
-            "問う・生きている・所見 2（処分なし 1）",
+            "問う・生きている・所見 2（処分なし 1）・口座 分からない",
             false
         )])
     );

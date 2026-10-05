@@ -6,11 +6,11 @@
 use std::path::PathBuf;
 
 use tsuzuri_contract::account::AccountDoc;
-use tsuzuri_contract::board::Stage;
+use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_contract::wire;
 use tsuzuri_surface::account::session::{
-    self, CONSULT_SRC, no_account_key, role_key, role_word, sess_card,
+    self, CONSULT_SRC, Move, drift, no_account_key, role_key, role_word, sess_card,
 };
 use tsuzuri_surface::project::state_key;
 use tsuzuri_surface::vocab::{label, vocab};
@@ -84,4 +84,32 @@ fn acctcws_consult_card() {
 
 fn fixture_orch() -> AccountDoc {
     wire::decode(&read("../../tests/fixtures/account/acct-doc.json")).expect("fixture")
+}
+
+/// (3) 行 e-acct-consult: 窓の口座と群の今の口座が両方分かって違う時だけ口座ずれの印（class mvwait・語の鍵 consult_drift・
+/// 語は口座ずれ）。席の退避の残り秒は窓に効かない。同じ口座・口座が無い・群が読めない・群が無い・project が無い行は出さない。
+#[test]
+fn acctcws_consult_drift_mark() {
+    let d = doc();
+    let b = |x: &AccountDoc| drift(x, x.sessions.get(2).expect("3 行目"));
+    assert!(d.projects.get(1).is_some_and(|p| p.move_until.is_some()), "席の残り秒が在る fixture");
+    assert_eq!(b(&d), Some(Move::Drift));
+    assert_eq!(session::row(&d, 2).moving, Some(Move::Drift));
+    assert_eq!((Move::Drift.class(), Move::Drift.key()), ("mvwait", "consult_drift"));
+    assert_eq!(label("consult_drift"), "口座ずれ");
+    let edit = |f: &dyn Fn(&mut AccountDoc)| {
+        let mut x = d.clone();
+        f(&mut x);
+        b(&x)
+    };
+    assert_eq!(edit(&|x| x.sessions[2].account = Some("acct-2".into())), None);
+    assert_eq!(edit(&|x| x.sessions[2].account = None), None);
+    assert_eq!(edit(&|x| x.groups = Reading::Unknown), None);
+    assert_eq!(edit(&|x| x.projects[1].group = None), None);
+    assert_eq!(edit(&|x| x.sessions[2].project = "proj-z".into()), None);
+    // 席の行は今までどおり退避の残り秒（窓の印は席に出さない）。
+    let orch = fixture_orch();
+    assert!(matches!(session::row(&orch, 2).moving, Some(Move::Grace(_))));
+    let src = read("src/account/session.rs");
+    assert!(src.contains("Move::Wait | Move::Drift => {"), "DOM は口座ずれを移動待ちと同じ形で描く");
 }

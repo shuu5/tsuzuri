@@ -4,6 +4,7 @@
 //! 状態は、退いた作業場なら 退いた、閉じの行が在れば 閉じた、最後の process が在れば 生きている、ほかは 止まった。
 //! 一覧の材料は作業場の file と台帳の相談の行だけ（読むだけ・台帳は書かない・席は show --via 一覧 で受ける）。
 //! 時刻は行の分の字を epoch 秒にする（読めない字は None）。
+//! 口座は最後の process の印の口座の置き場の末の名で、印が無いか口座の欄が無ければ 分からない（判断の記録 ADR-55 決定 (4)）。
 
 use std::path::Path;
 
@@ -14,12 +15,13 @@ use tsuzuri_contract::consult::{
     Word,
 };
 use tsuzuri_contract::wire;
+use tsuzuri_core::account::project::account_label;
 use tsuzuri_core::consult::lines::{Line, Subject, unreceived};
 use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, count};
 
 use super::{
-    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, read_window,
-    refuse, retired, windows, workspace,
+    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, procs,
+    read_window, refuse, retired, windows, workspace,
 };
 use crate::out::emit;
 use crate::server::clock::epoch_secs;
@@ -64,6 +66,9 @@ pub fn epoch_of(minute: &str) -> Option<EpochSecs> {
         .then(|| epoch_secs(&rfc))
         .flatten()
 }
+
+/// 口座の無い窓の口座の字。
+pub const NO_ACCOUNT: &str = "分からない";
 
 /// 窓の状態。
 pub fn state_of(c: &Ctx, id: WindowId, gone: bool, lines: &[Line]) -> WindowState {
@@ -129,6 +134,10 @@ fn rows(c: &Ctx, lines: &[Line]) -> (Vec<WindowRow>, Vec<FindingRow>) {
             opened,
             findings: u32::try_from(found.len()).unwrap_or(u32::MAX),
             undisposed: u32::try_from(left.len()).unwrap_or(u32::MAX),
+            account: procs(&ws)
+                .pop()
+                .and_then(|p| p.account)
+                .and_then(|a| account_label(&a)),
         });
         open.extend(left.into_iter().map(|f| finding_row(&ws, f, lines)));
     }
@@ -184,13 +193,14 @@ pub fn text(b: &ConsultBoard) -> Vec<String> {
     if let Reading::Known(wins) = &b.windows {
         for w in wins {
             out.push(format!(
-                "窓 {}・形 {}・題 {}・状態 {}・所見 {}・未処分 {}",
+                "窓 {}・形 {}・題 {}・状態 {}・所見 {}・未処分 {}・口座 {}",
                 w.id,
                 w.form.word(),
                 w.topic.as_deref().unwrap_or("題なし"),
                 w.state.word(),
                 w.findings,
-                w.undisposed
+                w.undisposed,
+                w.account.as_deref().unwrap_or(NO_ACCOUNT)
             ));
         }
     }

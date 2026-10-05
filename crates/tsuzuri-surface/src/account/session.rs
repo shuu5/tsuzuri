@@ -5,7 +5,8 @@
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
 //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
 //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
-//! 相談の窓の行（役 consult）は役の語と窓の card を持つ（判断の記録 ADR-55 決定 (4)）。
+//! 相談の窓の行（役 consult）は役の語と窓の card を持ち、窓の口座が群の今の口座と違えば口座ずれの印を出す
+//! （判断の記録 ADR-55 決定 (4)）。
 //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::EpochSecs;
@@ -243,13 +244,15 @@ pub enum Move {
     Grace(EpochSecs),
     /// 席の口座が群の今の口座と違う。
     Wait,
+    /// 相談の窓の口座が群の今の口座と違う。
+    Drift,
 }
 
 impl Move {
     pub fn class(self) -> &'static str {
         match self {
             Move::Grace(_) => "mvgrace",
-            Move::Wait => "mvwait",
+            Move::Wait | Move::Drift => "mvwait",
         }
     }
 
@@ -258,6 +261,7 @@ impl Move {
         match self {
             Move::Grace(_) => "move_grace",
             Move::Wait => "seat_mismatch",
+            Move::Drift => "consult_drift",
         }
     }
 }
@@ -499,10 +503,10 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
         elapsed: elapsed_at(line.since, doc.at, doc.at),
         spans: line.spans.clone(),
         signs: orchestrator.then(|| signs(doc, line)),
-        moving: if orchestrator {
-            moving(doc, line)
-        } else {
-            None
+        moving: match line.role {
+            SeatRole::Orchestrator => moving(doc, line),
+            SeatRole::Consult => drift(doc, line),
+            SeatRole::Pipeline => None,
         },
         toggle: toggle(doc, line),
         card: sess_card(doc, index),
@@ -548,6 +552,14 @@ pub fn moving(doc: &AccountDoc, line: &SessionLine) -> Option<Move> {
     let account = line.account.as_deref()?;
     let current = current_account(doc, project)?;
     (account != current).then_some(Move::Wait)
+}
+
+/// 相談の窓の行の口座ずれの印（窓の口座と群の今の口座が両方分かって違う時だけ・分からない一致を不一致と出さない）。
+pub fn drift(doc: &AccountDoc, line: &SessionLine) -> Option<Move> {
+    let project = project_of(doc, &line.project)?;
+    let account = line.account.as_deref()?;
+    let current = current_account(doc, project)?;
+    (account != current).then_some(Move::Drift)
 }
 
 /// 稼働の記録の SVG の字（窓の右端は電文の at・session の行は口座の移動を持たないので縦線は無い・区間が読めなければ測れていない）。
@@ -949,7 +961,7 @@ mod dom {
                 }
                 .into_any()
             }
-            Move::Wait => {
+            Move::Wait | Move::Drift => {
                 view! { <span class=m.class()>{term(m.key(), label(m.key()))}</span> }.into_any()
             }
         });

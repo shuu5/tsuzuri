@@ -498,6 +498,9 @@ pub struct WindowRow {
     pub opened: Option<EpochSecs>,
     pub findings: u32,
     pub undisposed: u32,
+    /// 最後の process の印の口座の置き場の末の名（印が無いか口座の欄が無ければ None・判断の記録 ADR-55 決定 (4)）。
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 /// 処分の無い所見の 1 行。

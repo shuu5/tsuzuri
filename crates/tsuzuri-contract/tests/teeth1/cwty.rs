@@ -188,6 +188,7 @@ fn cwty_board_roundtrip() {
             opened: Some(1_790_000_000),
             findings: 1,
             undisposed: 1,
+            account: Some("acct-x".into()),
         }]),
         findings: Reading::Known(vec![FindingRow {
             id: f.id,

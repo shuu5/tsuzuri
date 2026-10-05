@@ -22,6 +22,7 @@ use crate::project::Body;
 use crate::project::ask::FOCUS_KEY;
 use crate::topbar::{Win, win_href};
 use crate::view::Fetched;
+use crate::vocab::label;
 
 pub use tsuzuri_contract::consult::{PATH, REQUEST_PATH};
 
@@ -130,18 +131,22 @@ fn rows<T>(
     }
 }
 
-/// 窓の段（退いた窓は載せない・状態は形と状態の語と所見の数）。
+/// 窓の段（退いた窓は載せない・状態は形と状態の語と所見の数と口座・口座の無い窓は語の鍵 consult_account_unknown の語・
+/// 判断の記録 ADR-55 決定 (4)）。
 pub fn windows(r: &Reading<Vec<WindowRow>>) -> Body<Vec<Row>> {
     rows(r, NONE_LINES[0], |w| {
         (w.state != WindowState::Retired).then(|| Row {
             id: w.id.to_string(),
             topic: topic_of(w.topic.as_ref()),
             note: format!(
-                "{}・{}・所見 {}（処分なし {}）",
+                "{}・{}・所見 {}（処分なし {}）・口座 {}",
                 w.form.word(),
                 w.state.word(),
                 w.findings,
-                w.undisposed
+                w.undisposed,
+                w.account
+                    .clone()
+                    .unwrap_or_else(|| label("consult_account_unknown"))
             ),
             late: false,
         })
