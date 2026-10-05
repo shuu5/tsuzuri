@@ -3,6 +3,9 @@
 //! 応答の id で重ねずに足す。新しく読み書きした量は input・cache_creation・output の和で、文脈の読み直し（cache_read）は別の欄。
 //! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
 //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
+//! 予算を越えた係の呼びの係の門の判じ（`guard`）は行 ag-guard が置く。
+
+pub mod guard;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

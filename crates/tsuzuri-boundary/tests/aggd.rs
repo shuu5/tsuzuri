@@ -1,0 +1,176 @@
+//! 係の門の歯（接頭辞 aggd_・設計ノート surface-wave29b 行 ag-guard・判断の記録 ADR-59 決定 (3)(4)）。
+//! 中核の `open` と `write_path` を直に撃ち、tz の binary の tz hook agent-guard に係の呼びの門の入力の形（会話の id と path は伏せた）を
+//! 標準入力で渡し、歯ごとの置き場（CARGO_TARGET_TMPDIR の下）を --drafts で渡す。
+#![cfg(test)]
+
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+use tsuzuri_core::agent::meter::guard::{open, write_path};
+
+/// 歯ごとの置き場（前の撃ちの残りを消して作る）の drafts/。
+fn place(name: &str) -> PathBuf {
+    let drafts = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("aggd")
+        .join(name)
+        .join("drafts");
+    let _ = fs::remove_dir_all(&drafts);
+    fs::create_dir_all(&drafts).unwrap();
+    drafts
+}
+
+/// 係 w218a の札（予算 1000）と、係の id a77 から名への結びと、使った量 `used` の測りの札（None なら札を置かない）。
+fn bind(drafts: &Path, used: Option<u64>) {
+    let dir = drafts.join("w218a");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("spec.json"),
+        r#"{"name":"w218a","type":"tsuzuri:drafter","budget":1000,"build":"なし","target":"t3-hub.87","outputs":["notes.md"],"spawned":1,"agent_id":"a77","ended":null}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(drafts.join(".agents")).unwrap();
+    fs::write(drafts.join(".agents/a77"), "w218a\n").unwrap();
+    if let Some(used) = used {
+        let meter = format!(
+            r#"{{"offset":0,"used":{used},"cache_read":0,"last_id":null,"last_used":0,"last_cache_read":0,"marks":[50,75,90]}}"#
+        );
+        fs::write(dir.join("meter.json"), meter).unwrap();
+    }
+}
+
+/// 係の id `head`（空なら席の呼び）の道具 `tool` の呼びの前の入力（tool_input は `input` の JSON の字）。
+fn input(head: &str, tool: &str, input: &str) -> String {
+    format!(
+        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"/T/s.jsonl","cwd":"/W","permission_mode":"bypassPermissions",{head}"hook_event_name":"PreToolUse","tool_name":"{tool}","tool_input":{input},"tool_use_id":"toolu_X"}}"#
+    )
+}
+
+/// tz hook agent-guard に `payload` を渡した結果。
+fn guard(drafts: &Path, payload: &str) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
+        .args(["hook", "agent-guard", "--repo"])
+        .arg(drafts)
+        .arg("--drafts")
+        .arg(drafts)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let _ = child.stdin.take().unwrap().write_all(payload.as_bytes());
+    child.wait_with_output().unwrap()
+}
+
+/// 係の呼びの頭の欄（係の id a77）。
+const SUB: &str = r#""agent_id":"a77","agent_type":"tsuzuri:drafter","#;
+
+/// 書きの道具の path の tool_input（`key` は path の鍵）。
+fn at(key: &str, path: &Path) -> String {
+    format!(r#"{{"{key}":"{}","content":"x"}}"#, path.display())
+}
+
+/// 書き終えの段で通すのは、SendMessage と、書きの道具 3 本の出力の dir の下への書きだけ。
+#[test]
+fn aggd_open_passes_send_message_and_writes_under_its_own_w_only() {
+    let out = Path::new("/D/w218a/w");
+    assert!(open("SendMessage", None, out));
+    for tool in ["Write", "Edit", "NotebookEdit"] {
+        assert!(open(tool, Some("/D/w218a/w/notes.md"), out), "{tool}");
+    }
+    assert!(open("Write", Some("/D/w218a/w/patch/a.patch"), out));
+    assert!(!open("Read", Some("/D/w218a/w/notes.md"), out));
+    assert!(!open("Bash", None, out));
+    assert!(!open("Write", None, out));
+    assert!(!open("Write", Some("/D/w219a/w/notes.md"), out));
+    assert!(!open("Write", Some("/D/w218a/notes.md"), out));
+    assert!(!open("Write", Some("/D/w218a/w/../spec.json"), out));
+}
+
+/// 書きの path は Write と Edit が file_path、NotebookEdit が notebook_path の鍵で、ほかの道具は読まない。
+#[test]
+fn aggd_write_path_reads_the_path_key_of_each_write_tool() {
+    let p = Path::new("/D/w218a/w/n.md");
+    let path = |tool: &str, key: &str| write_path(&input(SUB, tool, &at(key, p)));
+    assert_eq!(
+        path("Write", "file_path").as_deref(),
+        Some("/D/w218a/w/n.md")
+    );
+    assert_eq!(
+        path("Edit", "file_path").as_deref(),
+        Some("/D/w218a/w/n.md")
+    );
+    assert_eq!(
+        path("NotebookEdit", "notebook_path").as_deref(),
+        Some("/D/w218a/w/n.md")
+    );
+    assert_eq!(path("NotebookEdit", "file_path"), None);
+    assert_eq!(path("Read", "file_path"), None);
+}
+
+/// 予算に届いた結んだ係の呼びは、SendMessage と自分の w の下への書きのほかを deny の答えで止める。
+#[test]
+fn aggd_hook_denies_a_spent_agent_but_its_own_writes_and_send_message() {
+    let drafts = place("spent");
+    bind(&drafts, Some(1000));
+    let own = drafts.join("w218a/w/notes.md");
+    for (tool, body) in [
+        ("Write", at("file_path", &own)),
+        ("Edit", at("file_path", &own)),
+        ("NotebookEdit", at("notebook_path", &own)),
+        (
+            "SendMessage",
+            r#"{"to":"team-lead","message":"済み"}"#.to_string(),
+        ),
+    ] {
+        let out = guard(&drafts, &input(SUB, tool, &body));
+        assert_eq!(
+            (out.status.code(), out.stdout.len()),
+            (Some(0), 0),
+            "{tool}"
+        );
+    }
+    let other = at("file_path", &drafts.join("w219a/w/notes.md"));
+    let up = at("file_path", &drafts.join("w218a/w/../spec.json"));
+    for (tool, body) in [
+        ("Read", at("file_path", &own)),
+        ("Bash", r#"{"command":"echo"}"#.to_string()),
+        ("Write", other),
+        ("Write", up),
+    ] {
+        let out = guard(&drafts, &input(SUB, tool, &body));
+        assert_eq!(out.status.code(), Some(0));
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            text.starts_with(r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"係の門は止める（使った量 1000 が予算 1000 以上の書き終えの段で、道具 "#),
+            "{tool} {text}"
+        );
+        assert!(text.contains(&format!("道具 {tool} は通さない")), "{text}");
+        let w = drafts.join("w218a/w");
+        assert!(
+            text.contains(&format!("{}/ の下に Write か Edit で書き", w.display())),
+            "{text}"
+        );
+    }
+}
+
+/// 予算の前の係・測りの札の無い係・結びの無い係の id・席の呼びは、何も出さずに通し、門は何も書かない。
+#[test]
+fn aggd_hook_passes_under_budget_the_unbound_and_the_seat() {
+    let read = r#"{"file_path":"/etc/hostname"}"#;
+    let under = place("under");
+    bind(&under, Some(999));
+    let out = guard(&under, &input(SUB, "Read", read));
+    assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
+    let fresh = place("fresh");
+    bind(&fresh, None);
+    let out = guard(&fresh, &input(SUB, "Read", read));
+    assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
+    let loose = place("loose");
+    for head in [SUB, ""] {
+        let out = guard(&loose, &input(head, "Read", read));
+        assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
+    }
+    assert_eq!(fs::read_dir(&loose).unwrap().count(), 0);
+}
