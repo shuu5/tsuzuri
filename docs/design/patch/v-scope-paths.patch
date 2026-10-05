@@ -1,0 +1,403 @@
+diff --git a/scribe2/crates/scribe2/src/pipe/commute.rs b/scribe2/crates/scribe2/src/pipe/commute.rs
+index 49b9e79ab6c7c9f6d52e7c97eaa3ff7d24b5977e..5a92bfd3e6ec67d3fba040cc4520ff144f96a7e8 100644
+--- a/scribe2/crates/scribe2/src/pipe/commute.rs
++++ b/scribe2/crates/scribe2/src/pipe/commute.rs
+@@ -553,6 +553,21 @@ mod tests {
+         assert_eq!(verdict(&place, "c2", &["p"], &files(&[FILE, OTHER])), Verdict::NotCommuting, "相手が OTHER を書かない");
+     }
+ 
++    /// HEAD の宣言の任意 key scope-paths の下の交わりは面の中と読んで差を照らし（交わる path を書かない差は not-commuting）、
++    /// 宣言の無い同じ交わりは outside-face。
++    #[test]
++    fn vscope_commute_reads_the_declared_paths_as_the_face() {
++        let place = place("vscope-commute", &[("c", &[(FILE, 5, "c5")], 3, false), ("p", &[(FILE, 20, "p20")], 3, false)]);
++        let (crossed, own, theirs) = (files(&["vessel/rules/a.toml"]), path("c"), path("p"));
++        let list = [Partner { patch: Some(&theirs), base: &place.base, crossed: &crossed }];
++        assert_eq!(judge(&ask(&place, Some(&own), &list)), Verdict::OutsideFace, "宣言しない面の外");
++        let text = "schema = 1\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\nscope-paths = [\"vessel/rules/\"]\n";
++        assert!(std::fs::write(place.repo.join(crate::pipe::declaration::DECL_FILE), text).is_ok(), "宣言を書けた");
++        assert!(!commit(&place.repo, "declare").is_empty(), "宣言の commit");
++        let declared = RootsAtHead::read(&place.repo);
++        assert_eq!(judge(&Ask { roots: &declared, ..ask(&place, Some(&own), &list) }), Verdict::NotCommuting, "宣言した面の中");
++    }
++
+     /// 候補は main の先端、相手は相手の base から読み、読めない周と時間切れは unreadable。周の dir は消え、repo の物の置き場と
+     /// index には書かない。
+     #[test]
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration.rs b/scribe2/crates/scribe2/src/pipe/declaration.rs
+index fa91c493ed996db6653e7d76af2342ebf1bc64d6..f2cad378252c177ec179c949b3511ab540cf06f4 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration.rs
+@@ -310,8 +310,8 @@ pub struct Declared {
+     close_check: Option<bool>,
+     /// 床の検査の 1 行（任意 key `floor-check`・無ければ `None`・設計 dispatcher.md §34）。
+     floor_check: Option<String>,
+-    /// 足す根（任意 key `crate-roots`・無ければ空・固定の根は含まない・設計 contract-source.md §62）。
+-    crate_roots: Vec<String>,
++    /// 足す根と面の path（任意 key `crate-roots` と `scope-paths`・無ければ空・固定の根と固定の面は含まない・設計 contract-source.md §62）。
++    added: crate_roots::Added,
+     /// 裁定 id の引用の実在を確かめるか（任意 key `ruling-check`・無ければ `None`・設計 dispatcher.md §36）。
+     ruling_check: Option<bool>,
+     /// 引用の見本の一覧（任意 key `ruling-fixtures`・無ければ `None`・空の一覧は `Some` の空）。
+@@ -565,7 +565,7 @@ impl Declared {
+         let question_route = question_route_of(&found, &mut errors);
+         let close_check = close_check_of(&found, &mut errors);
+         let floor_check = floor_check_of(&found, &mut errors);
+-        let crate_roots = crate_roots::declared_of(&found, &mut errors);
++        let added = crate_roots::declared_of(&found, &mut errors);
+         let ruling_check = ruling_check_of(&found, &mut errors);
+         let ruling_fixtures = ruling_fixtures_of(&found, &mut errors);
+         let row_review = row_review_of(&found, &mut errors);
+@@ -597,7 +597,7 @@ impl Declared {
+                 question_route,
+                 close_check,
+                 floor_check,
+-                crate_roots,
++                added,
+                 ruling_check,
+                 ruling_fixtures,
+                 row_review,
+@@ -1295,6 +1295,7 @@ mod tests {
+                 "close-check",
+                 "floor-check",
+                 "crate-roots",
++                "scope-paths",
+                 "ruling-check",
+                 "ruling-fixtures",
+                 "teeth-check",
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration/crate_roots.rs b/scribe2/crates/scribe2/src/pipe/declaration/crate_roots.rs
+index f519d247248396e49fb6f2da79d8f7a1ba7acc8e..a8720f24d154e58ddd27188e916ae00a9451082e 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration/crate_roots.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration/crate_roots.rs
+@@ -5,13 +5,20 @@
+ //! 各項目は repo 相対の dir で末尾が `/`。根の列と path から「根・crate の名・残り」を返す 1 関数（[`crate_of`]）が、
+ //! 検出線の面・受付の上限の余地の読み手の共通の入口である。読むのは HEAD の宣言だけ（[`RootsAtHead`]・作業ツリーは
+ //! 読まない）。
++//!
++//! 任意 key `scope-paths` は、追随の再 gate と着地の後の検出線と差の当たりの面（`land::scope_touched` の 1 本）に足す repo 相対の
++//! path の接頭辞を並べる（末尾 `/` は dir・ほかは file・面の字は器の code に書かず宣言が持つ）。同じ HEAD の口で根と一緒に読む。
+ 
+ use super::{head_declaration, list_of, DeclError, Raw};
++use crate::pipe::land::{detection_needed, in_face};
+ use std::path::Path;
+ 
+ /// 任意 key の名。
+ pub const KEY: &str = "crate-roots";
+ 
++/// 面に足す path の任意 key の名。
++pub const SCOPE_KEY: &str = "scope-paths";
++
+ /// 固定の根（宣言に依らず常に在る）。
+ pub const FIXED_ROOT: &str = "crates/";
+ 
+@@ -46,12 +53,21 @@ pub fn crate_of<'a>(roots: &[String], path: &'a str) -> Option<CrateFile<'a>> {
+     (!name.is_empty() && !rest.is_empty()).then_some(CrateFile { root, name, rest })
+ }
+ 
+-/// HEAD の宣言の根（閉じた 3 値）。
++/// 宣言が足す物（2 key の値・無い key は空）。
++#[derive(Debug, Clone, Default, PartialEq, Eq)]
++pub struct Added {
++    /// 足す根（`crate-roots`・固定の根は含まない）。
++    pub roots: Vec<String>,
++    /// 面に足す path（`scope-paths`・書いた順・固定の面の中の path は持たない）。
++    pub paths: Vec<String>,
++}
++
++/// HEAD の宣言の根と面の足し（閉じた 3 値）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum RootsAtHead {
+-    /// key が足した根（固定の根は含まない）。
+-    Declared(Vec<String>),
+-    /// 固定の根だけ（宣言 file が HEAD に無い・git を撃てない・key が無い）。
++    /// 2 key のどちらかが足した物。
++    Declared(Added),
++    /// 固定の根と固定の面だけ（宣言 file が HEAD に無い・git を撃てない・2 key が無い）。
+     Fixed,
+     /// 読めない（宣言が在って不備）。「固定の根だけ」に倒さない（C10）。
+     Unreadable,
+@@ -63,14 +79,19 @@ impl RootsAtHead {
+         match head_declaration(repo) {
+             None => Self::Fixed,
+             Some(Err(_)) => Self::Unreadable,
+-            Some(Ok(declared)) if declared.crate_roots.is_empty() => Self::Fixed,
+-            Some(Ok(declared)) => Self::Declared(declared.crate_roots),
++            Some(Ok(declared)) if declared.added == Added::default() => Self::Fixed,
++            Some(Ok(declared)) => Self::Declared(declared.added),
+         }
+     }
+ }
+ 
+-/// 宣言の本文から key を読む（無ければ空・項目の不備は key と行番号を名指して積む）。
+-pub(super) fn declared_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Vec<String> {
++/// 宣言の本文から 2 key を読む（無い key は空・項目の不備は key と行番号を名指して積む）。
++pub(super) fn declared_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Added {
++    Added { roots: roots_of(found, errors), paths: paths_of(found, errors) }
++}
++
++/// 根の key を読む（無ければ空）。
++fn roots_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Vec<String> {
+     let (items, line) = list_of(found, KEY, errors);
+     for (at, item) in items.iter().enumerate() {
+         if let Some(why) = item_defect(item) {
+@@ -107,9 +128,44 @@ fn overlaps(left: &str, right: &str) -> bool {
+     left.starts_with(right) || right.starts_with(left)
+ }
+ 
++/// 面の path の key を読む（無ければ空）。面に何も足さない項目（git の path に当たらない字・固定の面の中・ほかの項目と重なる）は
++/// key と行番号を名指す不備。照らしの dir と file の分けは面の照らしと同じ `in_face`。
++fn paths_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Vec<String> {
++    let (items, line) = list_of(found, SCOPE_KEY, errors);
++    for (at, item) in items.iter().enumerate() {
++        if let Some(why) = path_defect(item) {
++            errors.push(DeclError::new(line, format!("{SCOPE_KEY} の項目 {item:?} は{why}")));
++        }
++        for other in items.iter().skip(at.saturating_add(1)).filter(|other| in_face(item, other) || in_face(other, item)) {
++            errors.push(DeclError::new(line, format!("{SCOPE_KEY} の項目 {item:?} と {other:?} は重なる（一方が他方の中で足す物が無い）")));
++        }
++    }
++    items
++}
++
++/// 面の path の項目 1 つの不備（無ければ `None`）。
++fn path_defect(item: &str) -> Option<&'static str> {
++    let parts: Vec<&str> = item.strip_suffix('/').unwrap_or(item).split('/').collect();
++    if item.trim().is_empty() {
++        Some("空である")
++    } else if item.trim() != item {
++        Some("前後に空白を持つ")
++    } else if item.starts_with('/') {
++        Some("絶対 path である")
++    } else if parts.contains(&"..") {
++        Some(".. の段を持つ")
++    } else if parts.iter().any(|part| part.is_empty() || *part == ".") {
++        Some("空の段か . の段を持つ（git の path に当たらない）")
++    } else if detection_needed([item]) {
++        Some("固定の面の中である（足す物が無い）")
++    } else {
++        None
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+-    use super::{crate_of, fixed_roots, with_fixed, CrateFile, RootsAtHead};
++    use super::{crate_of, fixed_roots, with_fixed, Added, CrateFile, RootsAtHead};
+     use crate::pipe::declaration::Declared;
+     use crate::pipe::land::scope_touched;
+ 
+@@ -136,8 +192,8 @@ mod tests {
+     /// (a) key が無い宣言は根が空（＝固定の根だけ）、2 項目は 2 つ・足すだけで固定の根は先頭に残る。不備 7 形は key と行番号（4 行目）を名指す。
+     #[test]
+     fn declaration_crate_roots_reads_the_key_and_names_seven_defects() {
+-        assert_eq!(Declared::parse(&with("")).map(|found| found.crate_roots), Ok(Vec::new()));
+-        let two = Declared::parse(&with("crate-roots = [\"nest/crates/\", \"apps/\"]\n")).map(|found| found.crate_roots);
++        assert_eq!(Declared::parse(&with("")).map(|found| found.added.roots), Ok(Vec::new()));
++        let two = Declared::parse(&with("crate-roots = [\"nest/crates/\", \"apps/\"]\n")).map(|found| found.added.roots);
+         assert_eq!(two, Ok(vec!["nest/crates/".to_owned(), "apps/".to_owned()]));
+         assert_eq!(with_fixed(&two.unwrap_or_default()), ["crates/", "nest/crates/", "apps/"], "足すだけ（固定の根が先頭）");
+         let home = format!("[\"{}\"]", concat!("~", "/x/"));
+@@ -173,7 +229,7 @@ mod tests {
+     /// (c) 面: 宣言した根の下の path だけの列は真、固定の根だけは偽、既存の面の表は根に依らず同じ。空の列は偽。
+     #[test]
+     fn declaration_crate_roots_scope_adds_the_declared_roots_to_the_fixed_face() {
+-        let declared = RootsAtHead::Declared(vec!["nest/crates/".to_owned()]);
++        let declared = RootsAtHead::Declared(Added { roots: vec!["nest/crates/".to_owned()], paths: Vec::new() });
+         let (nested, notes, fixed) = (["nest/crates/toy/src/a.rs"], ["notes/a.md"], ["crates/toy/src/a.rs", "Cargo.lock", "rules/x.toml"]);
+         assert!(scope_touched(&declared, &nested), "宣言した根の下は面");
+         assert!(!scope_touched(&RootsAtHead::Fixed, &nested), "宣言しない列は面の外");
+@@ -193,10 +249,81 @@ mod tests {
+         let plain = repo_declaring("crate-roots-plain", Some(&with("")));
+         assert_eq!(RootsAtHead::read(&plain), RootsAtHead::Fixed);
+         let declared = repo_declaring("crate-roots-declared", Some(&with("crate-roots = [\"nest/crates/\"]\n")));
+-        assert_eq!(RootsAtHead::read(&declared), RootsAtHead::Declared(vec!["nest/crates/".to_owned()]));
++        assert_eq!(RootsAtHead::read(&declared), RootsAtHead::Declared(Added { roots: vec!["nest/crates/".to_owned()], paths: Vec::new() }));
+         let broken = repo_declaring("crate-roots-broken", Some(&with("crate-roots = [\"/abs/\"]\n")));
+         let unreadable = RootsAtHead::read(&broken);
+         assert_eq!(unreadable, RootsAtHead::Unreadable);
+         assert!(scope_touched(&unreadable, &["notes/a.md"]), "読めない周は面の外の列でも撃つ側");
+     }
++
++    /// 面の path（`vessel/` は toy の器の dir）の 3 項目を書いた順に持ち、根の key と並べても両方を持ち、2 key の無い宣言は空。
++    #[test]
++    fn vscope_declaration_reads_the_paths_in_written_order() {
++        let three = ["vessel/rules/", "vessel/Cargo.toml", "vessel/Cargo.lock"].map(str::to_owned).to_vec();
++        let paths = Declared::parse(&with("scope-paths = [\"vessel/rules/\", \"vessel/Cargo.toml\", \"vessel/Cargo.lock\"]\n"));
++        assert_eq!(paths.map(|found| found.added), Ok(Added { roots: Vec::new(), paths: three }));
++        let both = Declared::parse(&with("crate-roots = [\"nest/crates/\"]\nscope-paths = [\"vessel/rules/\"]\n")).map(|found| found.added);
++        assert_eq!(both, Ok(Added { roots: vec!["nest/crates/".to_owned()], paths: vec!["vessel/rules/".to_owned()] }));
++        assert_eq!(Declared::parse(&with("")).map(|found| found.added), Ok(Added::default()));
++    }
++
++    /// 面に何も足さない 13 形は、どれも key の名と項目と不備の字を持つ理由で 4 行目を名指す不備。重ならない 2 項目は不備でない。
++    #[test]
++    fn vscope_declaration_names_the_defects() {
++        let bad = [
++            ("\"vessel/rules/\"", "scope-paths は配列"),
++            ("[]", "scope-paths の 配列が空"),
++            ("[\" \"]", "scope-paths の項目 \" \" は空である"),
++            ("[\" vessel/rules/\"]", "scope-paths の項目 \" vessel/rules/\" は前後に空白を持つ"),
++            ("[\"/vessel/rules/\"]", "scope-paths の項目 \"/vessel/rules/\" は絶対 path である"),
++            ("[\"vessel/../rules/\"]", "scope-paths の項目 \"vessel/../rules/\" は.. の段を持つ"),
++            ("[\"./\"]", "scope-paths の項目 \"./\" は空の段か . の段を持つ"),
++            ("[\"vessel/./rules/\"]", "scope-paths の項目 \"vessel/./rules/\" は空の段か . の段を持つ"),
++            ("[\"vessel//rules/\"]", "scope-paths の項目 \"vessel//rules/\" は空の段か . の段を持つ"),
++            ("[\"rules/x.toml\"]", "scope-paths の項目 \"rules/x.toml\" は固定の面の中である"),
++            ("[\"Cargo.lock\"]", "scope-paths の項目 \"Cargo.lock\" は固定の面の中である"),
++            ("[\"vessel/rules/\", \"vessel/rules/a.toml\"]", "scope-paths の項目 \"vessel/rules/\" と \"vessel/rules/a.toml\" は重なる"),
++            ("[\"vessel/Cargo.toml\", \"vessel/Cargo.toml\"]", "scope-paths の項目 \"vessel/Cargo.toml\" と \"vessel/Cargo.toml\" は重なる"),
++        ];
++        for (value, want) in bad {
++            let errors = Declared::parse(&with(&format!("scope-paths = {value}\n"))).expect_err(value);
++            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains(want)), "{value}: {errors:?}");
++        }
++        let errors = Declared::parse(&with("scope-paths = [\"vessel/rules/\", \"vessel/rulesx/\", \"vessel/Cargo.toml\"]\n")).err();
++        assert_eq!(errors, None, "重ならない項目は不備でない");
++    }
++
++    /// 面の表: 宣言した dir の下と宣言した file そのものは面、字の続く隣・ほかの dir の下・宣言の外は面の外、固定の面は同じ。
++    #[test]
++    fn vscope_scope_adds_the_declared_paths_to_the_face() {
++        let paths = vec!["vessel/rules/".to_owned(), "vessel/Cargo.toml".to_owned()];
++        let declared = RootsAtHead::Declared(Added { roots: Vec::new(), paths: paths.clone() });
++        let table = [
++            ("vessel/rules/manifest.toml", true),
++            ("vessel/rules/deep/a.toml", true),
++            ("vessel/Cargo.toml", true),
++            ("vessel/Cargo.tomlx", false),
++            ("vessel/rulesx/a.toml", false),
++            ("other/vessel/rules/a.toml", false),
++            ("vessel/README.md", false),
++        ];
++        for (path, want) in table {
++            assert_eq!(scope_touched(&declared, &[path]), want, "{path}");
++            assert!(!scope_touched(&RootsAtHead::Fixed, &[path]), "宣言しない列は面の外: {path}");
++        }
++        assert!(!scope_touched(&declared, &[]), "空の列は偽");
++        let both = RootsAtHead::Declared(Added { roots: vec!["nest/crates/".to_owned()], paths });
++        assert!(scope_touched(&both, &["nest/crates/toy/src/a.rs"]) && scope_touched(&both, &["vessel/rules/a.toml"]), "根と面の path の和");
++        assert!(["crates/toy/src/a.rs", "Cargo.lock", "rules/x.toml"].iter().all(|path| scope_touched(&declared, &[path])), "固定の面は同じ");
++    }
++
++    /// HEAD の口: 面の path だけの宣言は面の path を持つ足し、不備の面の path を持つ宣言は読めない。
++    #[test]
++    fn vscope_head_reads_the_paths_and_a_defect_is_unreadable() {
++        let declared = repo_declaring("vscope-declared", Some(&with("scope-paths = [\"vessel/rules/\"]\n")));
++        let want = Added { roots: Vec::new(), paths: vec!["vessel/rules/".to_owned()] };
++        assert_eq!(RootsAtHead::read(&declared), RootsAtHead::Declared(want));
++        let broken = repo_declaring("vscope-broken", Some(&with("scope-paths = [\"rules/\"]\n")));
++        assert_eq!(RootsAtHead::read(&broken), RootsAtHead::Unreadable);
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+index e00e3227339168bec0a0471510a0f7f3f36e645b..dee8d63f9dadb28ea198dc54e74a80527eddc061 100644
+--- a/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
++++ b/scribe2/crates/scribe2/src/pipe/declaration/optional_keys.rs
+@@ -26,6 +26,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
+     CLOSE_CHECK_KEY,
+     FLOOR_CHECK_KEY,
+     crate_roots::KEY,
++    crate_roots::SCOPE_KEY,
+     RULING_CHECK_KEY,
+     RULING_FIXTURES_KEY,
+     TEETH_CHECK_KEY,
+@@ -368,6 +369,7 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
+     CLOSE_CHECK_KEY,
+     FLOOR_CHECK_KEY,
+     crate_roots::KEY,
++    crate_roots::SCOPE_KEY,
+     RULING_CHECK_KEY,
+     RULING_FIXTURES_KEY,
+     TEETH_CHECK_KEY,
+@@ -643,7 +645,7 @@ pub fn table_facts_named(
+     let sourced = Sourced::read(repo, ceiling)?;
+     let requirements = sourced.declared.requirements.clone().unwrap_or_else(|| DEFAULT_REQUIREMENTS.to_owned());
+     let entrance = sourced.declared.entrance_flip;
+-    let crate_roots = crate_roots::with_fixed(&sourced.declared.crate_roots);
++    let crate_roots = crate_roots::with_fixed(&sourced.declared.added.roots);
+     let teeth_check = sourced.declared.teeth_check == Some(true);
+     let effective = sourced.measure(ceiling, &[])?;
+     let denied = ceiling.denied.to_vec();
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/verify.rs b/scribe2/crates/scribe2/src/pipe/gate/verify.rs
+index a378ca474364a86c7de5c6df15fba9155c35d966..f3626ab6eb90fbfc01b4feb00b642a083cdac878 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/verify.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/verify.rs
+@@ -582,7 +582,7 @@ fn done_teeth_sections(file: &Path, at: (&Path, &str), verify: &[String]) -> Res
+     let roots = match RootsAtHead::read(worktree) {
+         RootsAtHead::Unreadable => return Err("便の HEAD の宣言の crate-roots を読めない".to_owned()),
+         RootsAtHead::Fixed => fixed_roots(),
+-        RootsAtHead::Declared(added) => with_fixed(&added),
++        RootsAtHead::Declared(added) => with_fixed(&added.roots),
+     };
+     let head = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: NAME, roots: &roots };
+     let changed = nul_split(&git(&["diff", "--name-only", "-z", &format!("{base}..HEAD")], "diff の path")?);
+diff --git a/scribe2/crates/scribe2/src/pipe/land.rs b/scribe2/crates/scribe2/src/pipe/land.rs
+index ca18a0ad12b11f7ccd44d79bf77ac6b5995f2f24..89a10def9716829088539333d56fdcc2becc9dc7 100644
+--- a/scribe2/crates/scribe2/src/pipe/land.rs
++++ b/scribe2/crates/scribe2/src/pipe/land.rs
+@@ -180,22 +180,23 @@ pub fn detection_needed<'a>(paths: impl IntoIterator<Item = &'a str>) -> bool {
+ 
+ /// path の列が検出線の面に触れるか（追随の再 gate の省きと着地後の検出線が通る 1 本・設計 contract-source.md §62）。
+ ///
+-/// 面は [`DETECTION_SCOPE`] の照らし（[`detection_needed`]・値は変えない）と「宣言した根のどれかの crate の中の path」の
+-/// 和。宣言が在って読めない周（[`declaration::RootsAtHead::Unreadable`]）は path が 1 つでも在れば触れる側（fail-closed・
+-/// 空の列は従来どおり偽）。
++/// 面は [`DETECTION_SCOPE`] の照らし（[`detection_needed`]・値は変えない）と「宣言した根のどれかの crate の中の path」と
++/// 「宣言した面の path（任意 key `scope-paths`・照らしは [`in_face`]）に触れる path」の和。宣言が在って読めない周
++/// （[`declaration::RootsAtHead::Unreadable`]）は path が 1 つでも在れば触れる側（fail-closed・空の列は従来どおり偽）。
+ pub(crate) fn scope_touched(roots: &declaration::RootsAtHead, paths: &[&str]) -> bool {
+     match roots {
+         declaration::RootsAtHead::Unreadable => !paths.is_empty(),
+         declaration::RootsAtHead::Fixed => detection_needed(paths.iter().copied()),
+         declaration::RootsAtHead::Declared(added) => {
+-            let all = declaration::with_fixed(added);
+-            detection_needed(paths.iter().copied()) || paths.iter().any(|path| declaration::crate_of(&all, path).is_some())
++            let all = declaration::with_fixed(&added.roots);
++            let declared = |path: &&str| declaration::crate_of(&all, path).is_some() || added.paths.iter().any(|face| in_face(path, face));
++            detection_needed(paths.iter().copied()) || paths.iter().any(declared)
+         }
+     }
+ }
+ 
+ /// path が面の 1 項目に触れるか（dir は接頭辞・file は完全一致）。`cratesx/a.rs` は `crates/` に触れない。
+-fn in_face(path: &str, face: &str) -> bool {
++pub(crate) fn in_face(path: &str, face: &str) -> bool {
+     if face.ends_with('/') {
+         return path.starts_with(face);
+     }
+@@ -1389,6 +1390,16 @@ mod tests {
+         assert!(regate_skippable(&plain, &first, &second), "key の無い宣言は面の外だけなら省く（対照）");
+     }
+ 
++    /// 宣言した面の path（scope-paths）の dir の下か file そのものだけの main の動きは再 gate を撃ち直し、触れない path だけの宣言は省く。
++    #[test]
++    fn vscope_regate_skippable_reads_the_declared_paths() {
++        let cases = [("[\"notes/\"]", false), ("[\"notes/x.md\"]", false), ("[\"notes/y.md\"]", true)];
++        for (at, (value, want)) in cases.into_iter().enumerate() {
++            let (repo, first, second) = notes_repo(&format!("vscope-regate-{at}"), &format!("scope-paths = {value}\n"));
++            assert_eq!(regate_skippable(&repo, &first, &second), want, "{value}");
++        }
++    }
++
+     /// 本物の git の差分（`core.quotePath=false`）を読む（設計 §62 約束 8・新しい子 module の歯を既存の `mod tests` にも 1 本置く）:
+     /// 便の commit が足した設計 doc の判断の欄は名指され、base に在った欄の行は名指されない。引用符で囲まれた header（`"` を含む path）は
+     /// escape を戻した path で名指し、非 ASCII の path は quotePath=false で引用されないまま同じ字で名指す。
+diff --git a/scribe2/crates/scribe2/src/pipe/land/detection.rs b/scribe2/crates/scribe2/src/pipe/land/detection.rs
+index d7271ac3b2088983212988e33691e4bef04fb050..da842509ca3a3faa6208a3eaf20ad83c12b4e9d2 100644
+--- a/scribe2/crates/scribe2/src/pipe/land/detection.rs
++++ b/scribe2/crates/scribe2/src/pipe/land/detection.rs
+@@ -531,4 +531,14 @@ mod tests {
+         let (plain, parent, sha) = notes_repo("crate-roots-touch-plain", "");
+         assert!(!touches_scope(&plain, &parent, &sha), "key の無い宣言は面の外だけなら撃たない（対照）");
+     }
++
++    /// 宣言した面の path（scope-paths）の dir の下か file そのものだけの着地は検出線の面に触れ、触れない path だけの宣言は触れない。
++    #[test]
++    fn vscope_touches_scope_reads_the_declared_paths() {
++        let cases = [("[\"notes/\"]", true), ("[\"notes/x.md\"]", true), ("[\"notes/y.md\"]", false)];
++        for (at, (value, want)) in cases.into_iter().enumerate() {
++            let (repo, parent, sha) = notes_repo(&format!("vscope-touch-{at}"), &format!("scope-paths = {value}\n"));
++            assert_eq!(touches_scope(&repo, &parent, &sha), want, "{value}");
++        }
++    }
+ }
