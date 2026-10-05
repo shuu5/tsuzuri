@@ -45,7 +45,7 @@ fn forms() -> Vec<Box<dyn Form>> {
         ),
         form(
             "surface::SeatRole",
-            vec![SeatRole::Orchestrator, SeatRole::Pipeline],
+            vec![SeatRole::Orchestrator, SeatRole::Pipeline, SeatRole::Consult],
         ),
         form(
             "surface::SeatHealth",

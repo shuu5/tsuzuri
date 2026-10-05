@@ -622,6 +622,7 @@ impl Acct {
                     tick_last: in_seat(TICK_LAST),
                     events,
                     ledger,
+                    consult: Vec::new(),
                 },
             );
             if let Some(d) = seat_doctor {

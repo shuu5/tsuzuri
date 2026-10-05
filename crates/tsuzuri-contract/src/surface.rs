@@ -59,12 +59,13 @@ impl std::fmt::Display for RulingId {
     }
 }
 
-/// 席の役（orchestrator が上・pipeline が下）。
+/// 席の役（orchestrator が上・pipeline が下・相談の窓は口座の board の session の行だけ・判断の記録 ADR-55 決定 (4)）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SeatRole {
     Orchestrator,
     Pipeline,
+    Consult,
 }
 
 /// 席の稼働（閉じた 5）。応答なしは tick が stale のときだけ・停止は heartbeat-off のとき。

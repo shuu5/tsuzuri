@@ -446,6 +446,7 @@ impl Place {
                     tick_last: in_seat("tick-last"),
                     events: self.file(&dir.join("fleet/events.jsonl")).map(Into::into),
                     ledger: self.file(&self.root.join("bd").join(p)).map(Into::into),
+                    consult: Vec::new(),
                 },
             );
             if let Some(doctor) = doctor {

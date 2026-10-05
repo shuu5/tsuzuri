@@ -8,8 +8,11 @@
 //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
 //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
 //! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
+//! 相談の窓の行は、作業場の材料（`ConsultWindow`）と台帳の notes の相談の開きと閉じの行から組む
+//! （判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -19,11 +22,13 @@ use tsuzuri_contract::account::{
     AccountDoc, AccountRow, DormantSeat, GroupCard, MoveRow, ProjectRow, RunCounts, SessionLine,
 };
 use tsuzuri_contract::board::{Reading, Stage};
+use tsuzuri_contract::consult::{ProcMark, WindowFile, minute_ok};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 
 use super::host::{self, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
 use super::{field, project_name, same_path, value};
+use crate::consult::lines::{Line, scan};
 use crate::graph::build::{read_events, run_bead};
 use crate::ledger::stats::stats_of;
 use crate::ledger::{Bead, DAY, epoch_secs, read};
@@ -80,6 +85,27 @@ pub struct ProjectTexts {
     /// 台帳の一覧。
     #[serde(default, deserialize_with = "super::shared_text")]
     pub ledger: Option<Arc<str>>,
+    /// 相談の窓の退いていない作業場の材料（窓の id の順・起草の置き場が引けなければ空・行 c-acct-consult）。
+    #[serde(default)]
+    pub consult: Vec<ConsultWindow>,
+}
+
+/// 相談の窓の作業場の材料（境が作業場の控えと process の印を読み、`/proc` で process の在る無しを見た値）。
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ConsultWindow {
+    /// 窓の控え（`.consult/window.json`）。
+    pub window: WindowFile,
+    /// 最後の process の印（k の最も大きい物・無ければ None）。
+    pub last: Option<ProcMark>,
+    /// 最後の process の印の pid の process が在るか。
+    pub alive: bool,
+}
+
+/// 台帳の bead の notes だけ（相談の行を拾う読み・ほかの欄は読み飛ばす）。
+#[derive(Deserialize)]
+struct NotesOnly {
+    #[serde(default)]
+    notes: Option<String>,
 }
 
 /// project の台帳の字と event log の字を読み解いた値（台帳の bead の列・event log の値の列・open の問いの読み）。
@@ -92,6 +118,8 @@ pub struct Parsed {
     pub(crate) events: Option<Vec<Value>>,
     /// open の問いの読み（台帳の字が無いか読めなければ「まだ分からない」）。
     pub(crate) questions: Reading<Vec<OpenQuestion>>,
+    /// 台帳の notes の相談の開きと閉じの行（台帳の順・台帳の字が無いか読めなければ None・行 c-acct-consult）。
+    pub(crate) consult: Option<Vec<Line>>,
 }
 
 impl Parsed {
@@ -102,6 +130,7 @@ impl Parsed {
             beads: ledger.and_then(read),
             events: texts.events.as_deref().and_then(read_events),
             questions: ledger.map_or(Reading::Unknown, open_questions),
+            consult: ledger.and_then(consult_lines),
         }
     }
 }
@@ -607,8 +636,8 @@ pub fn dormant(
     out
 }
 
-/// session の行の列（project の宣言の順に、その project の orchestrator の行と、生きていて終わっていない
-/// pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
+/// session の行の列（project の宣言の順に、その project の orchestrator の行と、閉じていない相談の窓の行
+/// 〔`consult_rows`・作業場の材料の順〕と、生きていて終わっていない pipeline の run の行を RunCreated の順に）。席の card が「まだ分からない」の project は席なしの行にする。
 /// 席の card が読めて、その席が休止中（`dormant`）の project は orchestrator の行を出さない（run の行は出す・行 c-dormant）。
 /// pipeline の行の状態は、段を決める最後の event が器の上限の印（RunStage の段 `RATE_LIMITED`）なら limit、
 /// 段が Questioned・Failed・Stopped なら wait、席が立っていれば run、ほかは wait。
@@ -638,10 +667,11 @@ pub fn session_lines_with(
         let texts = texts.unwrap_or(&unknown);
         let name = project_name(&d.anchor);
         out.extend(seat_line(&name, seat(host, &d, texts, now), &resting));
+        let parsed = parsed_of(parsed, &d.anchor, texts);
+        out.extend(consult_rows(&name, &texts.consult, parsed.consult.as_deref()));
         if !texts.state_dir_known {
             continue;
         }
-        let parsed = parsed_of(parsed, &d.anchor, texts);
         let Some(events) = parsed.events.as_deref() else {
             continue;
         };
@@ -688,6 +718,86 @@ fn seat_line(
             spans: Reading::Unknown,
         }),
     }
+}
+
+/// 台帳の字の相談の開きと閉じの行（台帳の順・字が bead の配列として読めなければ None）。
+fn consult_lines(ledger: &str) -> Option<Vec<Line>> {
+    let beads: Vec<NotesOnly> = serde_json::from_str(ledger).ok()?;
+    Some(
+        beads
+            .iter()
+            .filter_map(|b| b.notes.as_deref())
+            .flat_map(scan)
+            .filter(|l| matches!(l, Line::Open { .. } | Line::Close { .. }))
+            .collect(),
+    )
+}
+
+/// 口座の置き場の path の末の名（器の口座の置き場 `<state>/accounts/<名>` の名・空なら None）。
+pub fn account_label(dir: &str) -> Option<String> {
+    Path::new(dir)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+}
+
+/// UTC の分の字（`20261003T1412Z`）の epoch 秒（形が違えば None）。
+fn minute_secs(m: &str) -> Option<EpochSecs> {
+    let d = |a: usize, b: usize| m.get(a..b);
+    let rfc = format!(
+        "{}-{}-{}T{}:{}:00Z",
+        d(0, 4)?,
+        d(4, 6)?,
+        d(6, 8)?,
+        d(9, 11)?,
+        d(11, 13)?
+    );
+    minute_ok(m).then(|| epoch_secs(&rfc)).flatten()
+}
+
+/// project の相談の窓の行（台帳に閉じの行の在る窓は出さない・台帳が読めなければ外さない）。
+/// 名は窓の id・口座は最後の process の印の口座の置き場の末の名（印が無いか口座の欄が無ければ None）・
+/// 状態は process が在れば run・無ければ wait・いつからは台帳の最後の開きの行の時刻（無ければ作業場の控えの用意の時刻）。
+fn consult_rows(name: &str, windows: &[ConsultWindow], lines: Option<&[Line]>) -> Vec<SessionLine> {
+    let lines = lines.unwrap_or_default();
+    windows
+        .iter()
+        .filter(|w| {
+            !lines
+                .iter()
+                .any(|l| matches!(l, Line::Close { window, .. } if *window == w.window.id))
+        })
+        .map(|w| {
+            let opened = lines.iter().rev().find_map(|l| match l {
+                Line::Open {
+                    window,
+                    opened: true,
+                    at,
+                    ..
+                } if *window == w.window.id => minute_secs(at),
+                _ => None,
+            });
+            SessionLine {
+                project: name.to_string(),
+                role: SeatRole::Consult,
+                name: w.window.id.to_string(),
+                account: w
+                    .last
+                    .as_ref()
+                    .and_then(|p| p.account.as_deref())
+                    .and_then(account_label),
+                state: if w.alive {
+                    SeatState::Run
+                } else {
+                    SeatState::Wait
+                },
+                stage: None,
+                since: opened.or_else(|| minute_secs(&w.window.made)),
+                spans: Reading::Unknown,
+            }
+        })
+        .collect()
 }
 
 /// pipeline の run の行（状態は上限の印なら limit・止まる段でなく席が立っていれば run・ほかは wait）。

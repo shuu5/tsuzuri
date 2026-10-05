@@ -175,6 +175,7 @@ pub fn role_word(role: SeatRole) -> &'static str {
     match role {
         SeatRole::Orchestrator => "orchestrator",
         SeatRole::Pipeline => "pipeline",
+        SeatRole::Consult => "consult",
     }
 }
 
@@ -183,6 +184,7 @@ pub fn role_key(role: SeatRole) -> &'static str {
     match role {
         SeatRole::Orchestrator => "role:orchestrator",
         SeatRole::Pipeline => "role:pipeline",
+        SeatRole::Consult => "role:consult",
     }
 }
 

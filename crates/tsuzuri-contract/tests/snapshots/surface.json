@@ -5,7 +5,8 @@
   ],
   "surface::SeatRole": [
     "orchestrator",
-    "pipeline"
+    "pipeline",
+    "consult"
   ],
   "surface::SeatHealth": [
     "waiting",

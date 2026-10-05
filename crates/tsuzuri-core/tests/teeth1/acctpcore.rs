@@ -1,6 +1,7 @@
 //! account board の project の側の部分と組み立ての歯（便 e-acct-proj・接頭辞 acctpcore_）。
 //! fixture: tests/fixtures/account/acct-inputs.json（host の側の字）・acct-doc.json（組み立ての部分）。どちらも読むだけ。
 //! project の側の字（event log・状態の記録・台帳・合図の健康の行の器の欄）は歯の中で組む。今は 2026-09-27T12:00:00Z。
+//! 接頭辞 acctpcore_consult_ の歯は相談の窓の session の行（行 c-acct-consult・判断の記録 ADR-55 決定 (4)・今は `CW_NOW`）。
 #![cfg(test)]
 
 use std::collections::BTreeMap;
@@ -16,10 +17,12 @@ use tsuzuri_contract::board::{Reading, Stage};
 use tsuzuri_contract::seat::{SeatCard, SeatState};
 use tsuzuri_contract::surface::SeatRole;
 use tsuzuri_core::account::host::{CAP_ROWS, HostTexts};
+use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
 use tsuzuri_core::account::project::{
-    Parsed, ParsedMap, ProjectTexts, assemble, doc, doc_with, project_rows, run_counts,
-    session_lines,
+    ConsultWindow, Parsed, ParsedMap, ProjectTexts, account_label, assemble, doc, doc_with,
+    project_rows, run_counts, session_lines,
 };
+use tsuzuri_core::consult::lines::{By, Line, render};
 use tsuzuri_core::ledger::stats::stats;
 use tsuzuri_core::next_step::next_step_seat;
 use tsuzuri_core::seat::{SeatTexts, card};
@@ -186,6 +189,7 @@ fn proj_a() -> ProjectTexts {
         tick_last: None,
         events: Some(events().into()),
         ledger: Some(ledger().into()),
+        consult: Vec::new(),
     }
 }
 
@@ -197,6 +201,7 @@ fn proj_b() -> ProjectTexts {
         tick_last: None,
         events: None,
         ledger: None,
+        consult: Vec::new(),
     }
 }
 
@@ -570,4 +575,206 @@ fn acctpcore_doc_with_parsed_equals_doc() {
     let want = doc(&i.texts, &none, NOW);
     assert_eq!(doc_with(&i.texts, &none, &parsed_of(&none), NOW), want);
     assert_ne!(doc_with(&i.texts, &none, &parsed, NOW), want);
+}
+
+/// 相談の窓の行の歯の今（2026-10-05T03:13:20Z・行 c-acct-consult・判断の記録 ADR-55 決定 (4)）。
+const CW_NOW: u64 = 1_791_170_000;
+
+/// 20261005T0100Z・20261005T0230Z・20261004T2300Z・20261005T0300Z の epoch 秒。
+const T0100: u64 = 1_791_162_000;
+const T0230: u64 = 1_791_167_400;
+const T2300: u64 = 1_791_154_800;
+const T0300: u64 = 1_791_169_200;
+
+fn cw_win(n: &str) -> WindowId {
+    WindowId::parse(n).expect("窓の id")
+}
+
+/// 作業場の材料（`account` は最後の印の口座の置き場・`procs` が偽なら印なし）。
+fn cw_window(n: &str, made: &str, account: Option<&str>, alive: bool, procs: bool) -> ConsultWindow {
+    ConsultWindow {
+        window: WindowFile {
+            id: cw_win(n),
+            form: Form::Talk,
+            topic: None,
+            model: "opus".into(),
+            effort: "high".into(),
+            starter: Starter::Seat,
+            uttered: None,
+            request: None,
+            made: made.into(),
+        },
+        last: procs.then(|| ProcMark {
+            k: 2,
+            form: Form::Talk,
+            pid: 4242,
+            at: made.into(),
+            again: true,
+            tmux_window: Some("@7".into()),
+            account: account.map(str::to_string),
+        }),
+        alive,
+    }
+}
+
+fn cw_open(n: &str, opened: bool, at: &str) -> String {
+    render(&Line::Open {
+        window: cw_win(n),
+        form: Form::Talk,
+        topic: None,
+        by: By::Seat,
+        model: "opus".into(),
+        effort: "high".into(),
+        opened,
+        again: false,
+        at: at.into(),
+    })
+    .expect("開きの行")
+}
+
+fn cw_close(n: &str, at: &str) -> String {
+    render(&Line::Close {
+        window: cw_win(n),
+        by: Starter::Seat,
+        findings: 0,
+        at: at.into(),
+    })
+    .expect("閉じの行")
+}
+
+/// 台帳の字（notes に相談の行を持つ bead と、notes の無い bead）。
+fn cw_ledger(notes: &[String]) -> String {
+    json!([
+        {"id": "t-1", "title": "根", "issue_type": "task", "status": "open", "notes": notes.join("\n")},
+        {"id": "t-2", "title": "ほか", "issue_type": "task", "status": "open"}
+    ])
+    .to_string()
+}
+
+fn cw_projects(
+    known: bool,
+    consult: Vec<ConsultWindow>,
+    ledger: Option<String>,
+) -> BTreeMap<String, ProjectTexts> {
+    BTreeMap::from([(
+        "/work/proj-b".to_string(),
+        ProjectTexts {
+            state_dir_known: known,
+            ledger: ledger.map(Into::into),
+            consult,
+            ..ProjectTexts::default()
+        },
+    )])
+}
+
+/// proj-b の相談の窓の行（席の行の直後に続き、ほかの位置に相談の窓の行が無いことも見る）。
+fn cw_of(lines: &[SessionLine]) -> Vec<SessionLine> {
+    let seat = lines
+        .iter()
+        .position(|l| l.project == "proj-b" && l.role == SeatRole::Orchestrator)
+        .expect("proj-b の席の行");
+    let after: Vec<SessionLine> = lines
+        .iter()
+        .skip(seat + 1)
+        .take_while(|l| l.role == SeatRole::Consult)
+        .cloned()
+        .collect();
+    assert_eq!(
+        after.len(),
+        lines.iter().filter(|l| l.role == SeatRole::Consult).count(),
+        "相談の窓の行は席の行の直後に続く: {lines:?}"
+    );
+    after
+}
+
+fn cw_line(name: &str, account: Option<&str>, state: SeatState, since: Option<u64>) -> SessionLine {
+    SessionLine {
+        project: "proj-b".into(),
+        role: SeatRole::Consult,
+        name: name.into(),
+        account: account.map(str::to_string),
+        state,
+        stage: None,
+        since,
+        spans: Reading::Unknown,
+    }
+}
+
+fn cw_two() -> Vec<ConsultWindow> {
+    vec![
+        cw_window("cw1", "20261005T0100Z", Some("/s/accounts/acct-x"), true, true),
+        cw_window("cw2", "20261005T0230Z", None, false, false),
+    ]
+}
+
+/// (1) 窓ごとに 1 行（役 consult・名は窓の id・口座は印の口座の置き場の末の名・process が在れば run・無ければ wait・
+/// いつからは台帳が無ければ控えの用意の時刻・段と稼働の記録は無い）。印に口座の欄が無い窓の口座は None。
+/// state dir の引けない project でも出す。
+#[test]
+fn acctpcore_consult_windows_follow_the_seat_line() {
+    let host = inputs().texts;
+    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), None), CW_NOW));
+    assert_eq!(
+        got,
+        vec![
+            cw_line("cw1", Some("acct-x"), SeatState::Run, Some(T0100)),
+            cw_line("cw2", None, SeatState::Wait, Some(T0230)),
+        ]
+    );
+    let bare = vec![cw_window("cw3", "20261005T0100Z", None, true, true)];
+    let got = cw_of(&session_lines(&host, &cw_projects(true, bare, None), CW_NOW));
+    assert_eq!(got, vec![cw_line("cw3", None, SeatState::Run, Some(T0100))]);
+    let got = cw_of(&session_lines(&host, &cw_projects(false, cw_two(), None), CW_NOW));
+    assert_eq!(got.len(), 2, "state dir が引けなくても出す");
+    let none = session_lines(&host, &cw_projects(true, Vec::new(), None), CW_NOW);
+    assert!(none.iter().all(|l| l.role != SeatRole::Consult));
+}
+
+/// (2) 台帳に閉じの行の在る窓は出さない。ほかの窓の閉じの行は効かない。台帳の字が読めなければ外さない。
+#[test]
+fn acctpcore_consult_closed_windows_left_out() {
+    let host = inputs().texts;
+    let names = |ledger: Option<String>| -> Vec<String> {
+        cw_of(&session_lines(&host, &cw_projects(true, cw_two(), ledger), CW_NOW))
+            .into_iter()
+            .map(|l| l.name)
+            .collect()
+    };
+    let closed = cw_ledger(&[cw_open("cw2", true, "20261005T0230Z"), cw_close("cw2", "20261005T0300Z")]);
+    assert_eq!(names(Some(closed)), ["cw1"]);
+    let other = cw_ledger(&[cw_close("cw9", "20261005T0300Z")]);
+    assert_eq!(names(Some(other)), ["cw1", "cw2"]);
+    assert_eq!(names(Some("台帳でない字".into())), ["cw1", "cw2"]);
+    assert_eq!(names(None), ["cw1", "cw2"]);
+}
+
+/// (3) いつからは台帳の最後の開きの行（結果 = 開いた）の時刻・開けなかった開きの行は見ない・
+/// 開きの行の無い窓は控えの用意の時刻・用意の時刻の形が違えば None。
+#[test]
+fn acctpcore_consult_since_from_last_open_line() {
+    let host = inputs().texts;
+    let notes = [
+        cw_open("cw1", true, "20261004T2300Z"),
+        cw_open("cw1", true, "20261005T0300Z"),
+        cw_open("cw1", false, "20261005T0330Z"),
+    ];
+    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), Some(cw_ledger(&notes))), CW_NOW));
+    let since: Vec<Option<u64>> = got.iter().map(|l| l.since).collect();
+    assert_eq!(since, [Some(T0300), Some(T0230)]);
+    let first = [cw_open("cw1", true, "20261004T2300Z")];
+    let got = cw_of(&session_lines(&host, &cw_projects(true, cw_two(), Some(cw_ledger(&first))), CW_NOW));
+    assert_eq!(got.first().and_then(|l| l.since), Some(T2300));
+    let bad = vec![cw_window("cw4", "2026-10-05T01:00Z", None, false, false)];
+    let got = cw_of(&session_lines(&host, &cw_projects(true, bad, None), CW_NOW));
+    assert_eq!(got.first().map(|l| l.since), Some(None));
+}
+
+/// (4) 口座は口座の置き場の path の末の名（末の区切りは除く・名の無い path は None）。
+#[test]
+fn acctpcore_consult_account_label_is_the_last_name() {
+    assert_eq!(account_label("/s/accounts/acct-x").as_deref(), Some("acct-x"));
+    assert_eq!(account_label("/s/accounts/acct-x/").as_deref(), Some("acct-x"));
+    assert_eq!(account_label("acct-y").as_deref(), Some("acct-y"));
+    assert_eq!(account_label("/"), None);
+    assert_eq!(account_label(""), None);
 }
