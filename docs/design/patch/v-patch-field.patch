@@ -1,0 +1,424 @@
+diff --git a/contracts/field-schema/schema.toml b/contracts/field-schema/schema.toml
+index 14c01896..5e9504eb 100644
+--- a/contracts/field-schema/schema.toml
++++ b/contracts/field-schema/schema.toml
+@@ -106,6 +106,11 @@ name = "basis"
+ need = "optional"
+ shape = "list"
+ 
++[[field]]
++name = "patch"
++need = "optional"
++shape = "text"
++
+ # 約束の行 [[promise]] の欄（正本は同じ file の PROMISE_FIELDS）
+ 
+ [[promise-field]]
+diff --git a/scribe2/contracts/schema.toml b/scribe2/contracts/schema.toml
+index f82d1ced..f4dd1d8d 100644
+--- a/scribe2/contracts/schema.toml
++++ b/scribe2/contracts/schema.toml
+@@ -106,6 +106,11 @@ name = "basis"
+ need = "optional"
+ shape = "list"
+ 
++[[field]]
++name = "patch"
++need = "optional"
++shape = "text"
++
+ # 約束の行 [[promise]] の欄（正本は同じ file の PROMISE_FIELDS）
+ 
+ [[promise-field]]
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/polarity.rs b/scribe2/crates/scribe2-boundary/tests/e2e/polarity.rs
+index aefd244d..23048fd6 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/polarity.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/polarity.rs
+@@ -163,6 +163,7 @@ fn contract_with(classes: &[&str]) -> Contract {
+         opens: Vec::new(),
+         touches: Vec::new(),
+         growth: Vec::new(),
++        patch: None,
+     }
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/intake.rs b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+index e9fc6691..474637af 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/intake.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+@@ -1389,6 +1389,7 @@ mod tests {
+             opens: Vec::new(),
+             touches: Vec::new(),
+             growth: Vec::new(),
++            patch: None,
+         };
+         let body = "x\n".repeat(usize::try_from(lines).unwrap_or_default());
+         let materials = Materials {
+diff --git a/scribe2/crates/scribe2/src/pipe/contract.rs b/scribe2/crates/scribe2/src/pipe/contract.rs
+index cd246732..35d02e0e 100644
+--- a/scribe2/crates/scribe2/src/pipe/contract.rs
++++ b/scribe2/crates/scribe2/src/pipe/contract.rs
+@@ -26,8 +26,8 @@ const REQUIRED: &[&str] = &[
+ 
+ /// 任意の key。`touches` は契約 (b) の生成物が行から写す欄（型の閉包の宣言・受付は読まないが
+ /// 写しに残す＝run dir の写しだけで行の宣言が読める）。[`TARGETS`] は検出線の的（gate が [`targets_of`] で読む）。
+-/// [`GROWTH`] は file ごとの見込み行数（受付の上限の余地が読む・設計 contract-source.md §46）。
+-const OPTIONAL: &[&str] = &["classes", "opens", "touches", TARGETS, GROWTH, DONE_TEETH];
++/// [`GROWTH`] は file ごとの見込み行数（受付の上限の余地が読む・設計 contract-source.md §46）。[`PATCH`] は差の file の path。
++const OPTIONAL: &[&str] = &["classes", "opens", "touches", TARGETS, GROWTH, DONE_TEETH, PATCH];
+ 
+ /// 歯の欄の key（文字列の列・設計 contract-source.md §67）。形だけ読んで値は捨てる（[`Contract`] の field にしない）。
+ const DONE_TEETH: &str = "done-teeth";
+@@ -40,6 +40,10 @@ pub const GROWTH: &str = "growth";
+ /// 形は [`target_unfit`] の 1 本が決める。[`Contract`] の field にはしない（読むのは gate の検出線だけ・[`targets_of`]）。
+ pub const TARGETS: &str = "targets";
+ 
++/// 契約が名指す差の file の key（`.patch` で終わる repo 相対の file の path・tsuzuri の判断の記録 ADR-60 の決定 (7)・行
++/// v-patch-field）。値の形は [`patch_unfit`] の 1 本が決め、契約表の行の読みと契約 file の読みが同じ 1 本を通る。
++pub const PATCH: &str = "patch";
++
+ /// 3 クラスの自己申告が取れる値（FR15）。受理集合は閉じた型 [`Class`] の名の列（宣言順・字面を 2 面に書かない）。
+ pub const CLASSES: &[&str] = &[Class::Delete.as_str(), Class::Publish.as_str(), Class::Consume.as_str()];
+ 
+@@ -156,6 +160,8 @@ pub struct Contract {
+     pub touches: Vec<String>,
+     /// file ごとの見込み行数（`<path>:<行数>` の列・既定 空＝全 file が `size` の見込み・[`GROWTH`]）。生成の写しが行から運ぶ。
+     pub growth: Vec<String>,
++    /// 差の file の repo 相対 path（既定 `None`＝差の file を名指さない契約・[`PATCH`]）。生成の写しが行から運ぶ。
++    pub patch: Option<String>,
+ }
+ 
+ /// 走査中の 1 key の値。
+@@ -335,6 +341,7 @@ fn build(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Optio
+         }
+     }
+     list_of(found, DONE_TEETH, 0, errors);
++    let patch = patch_of(found, errors);
+     Some(Contract {
+         goal: text_of(found, "goal", errors),
+         done: text_of(found, "done", errors),
+@@ -349,9 +356,24 @@ fn build(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Optio
+         opens,
+         touches: list_of(found, "touches", 0, errors),
+         growth: list_of(found, GROWTH, 0, errors),
++        patch,
+     })
+ }
+ 
++/// 任意 key [`PATCH`] の値（key が無ければ `None`）。配列と形の外れ（[`patch_unfit`]）は行番号つきで積む。
++fn patch_of(found: &[(String, Raw, u64)], errors: &mut Vec<ContractError>) -> Option<String> {
++    let (_, raw, line) = found.iter().find(|(seen, _, _)| seen == PATCH)?;
++    let reason = match raw {
++        Raw::List(_) => "は文字列である（配列でない）".to_owned(),
++        Raw::Text(path) => match patch_unfit(path) {
++            None => return Some(path.clone()),
++            Some(reason) => format!("の値 {path} が差の file の形でない: {reason}"),
++        },
++    };
++    errors.push(ContractError::new(*line, format!("{PATCH} {reason}")));
++    None
++}
++
+ /// **閉じた名の列**を取る任意 key（`classes` / `opens`）。列に無い名は行番号つきで全件積む。
+ fn names_of(
+     found: &[(String, Raw, u64)],
+@@ -410,6 +432,18 @@ pub fn target_unfit(target: &str) -> Option<String> {
+     name.trim().is_empty().then(|| "変異の名が空".to_owned())
+ }
+ 
++/// 差の file の path 1 本の字面が形に合わない理由（合えば `None`・[`PATCH`]）。末が `/` の字面は dir として断り、ほかは
++/// 末が `.patch` でなければ断る。file の在否は読まない。表の検査（受付と CI）と契約 file の読みが同じこの 1 本を通る（C2）。
++pub fn patch_unfit(path: &str) -> Option<String> {
++    if path.ends_with('/') {
++        Some("dir（末が /）は断る".to_owned())
++    } else if !path.ends_with(".patch") {
++        Some("末が .patch でない".to_owned())
++    } else {
++        None
++    }
++}
++
+ /// 契約 file の的の列（key が無ければ空・設計 gate-cost.md §16）。本文は [`Contract::parse`] と同じ読みを通す
+ /// （読めない file は理由を返す＝的を空に倒して従来の経路へ黙って戻さない・C10）。
+ pub fn targets_of(path: &Path) -> Result<Vec<String>, String> {
+@@ -495,6 +529,9 @@ pub fn render(row: &crate::pipe::table::ContractRow, design: &str, write_set: &[
+     if !row.done_teeth.is_empty() {
+         out.push_str(&format!("{DONE_TEETH} = {}\n", list(&row.done_teeth)));
+     }
++    if let Some(patch) = &row.patch {
++        out.push_str(&format!("{PATCH} = \"{patch}\"\n"));
++    }
+     out
+ }
+ 
+@@ -527,8 +564,8 @@ pub fn promised_done(promises: &[&crate::pipe::table::PromiseRow]) -> String {
+ #[cfg(test)]
+ mod tests {
+     use super::{
+-        class_element, done_teeth_of, promised_done, promised_verify, render, target_unfit, Class, ClassElement, Contract, CLASSES,
+-        CLASS_ALL, GENERATED_DISPOSITION, GENERATED_OWNER,
++        class_element, done_teeth_of, patch_unfit, promised_done, promised_verify, render, target_unfit, Class, ClassElement, Contract,
++        CLASSES, CLASS_ALL, GENERATED_DISPOSITION, GENERATED_OWNER,
+     };
+     use crate::order::is_declaration_order;
+     use crate::pipe::declaration::fixed_roots;
+@@ -591,6 +628,7 @@ mod tests {
+             done_teeth: Vec::new(),
+             code_facts: Vec::new(),
+             basis: Vec::new(),
++            patch: None,
+             goal: String::new(),
+         }
+     }
+@@ -642,6 +680,32 @@ mod tests {
+         std::fs::remove_dir_all(&dir).ok();
+     }
+ 
++    /// 欄 `patch`（tsuzuri の行 v-patch-field）: 欄を持つ行だけ契約 file が key を 1 行書き、往復で同じ path を読む。持たない行は
++    /// key を書かず `None` を読む。契約 file の読みは dir（末が /）・末が .patch でない字面・配列を key の行番号の 1 件で断る。
++    #[test]
++    fn vpatch_copy_renders_the_key_only_for_a_row_with_the_field_and_refuses_a_dir_a_suffix_and_a_list() {
++        let plain = render(&row(), "docs/design/contract-source.md#b", &row().write_set);
++        assert!(!plain.contains("patch"), "欄の無い行は key を書かない: {plain}");
++        assert_eq!(Contract::parse(&plain).map(|found| found.patch), Ok(None), "key の無い本文は None");
++        let patched = ContractRow { patch: Some("docs/design/patch/b.patch".to_owned()), ..row() };
++        let body = render(&patched, "docs/design/contract-source.md#b", &patched.write_set);
++        assert_eq!(body.lines().last(), Some("patch = \"docs/design/patch/b.patch\""), "末に 1 行: {body}");
++        assert_eq!(Contract::parse(&body).map(|found| found.patch), Ok(patched.patch.clone()), "往復で同じ path");
++        let at = plain.lines().count() as u64 + 1;
++        for (value, want) in [
++            ("\"docs/design/patch/\"", "dir（末が /）は断る"),
++            ("\"docs/design/b.diff\"", "末が .patch でない"),
++            ("[\"b.patch\"]", "patch は文字列である（配列でない）"),
++        ] {
++            let errors = Contract::parse(&format!("{plain}patch = {value}\n")).expect_err("形の外れは断る");
++            assert!(
++                matches!(errors.as_slice(), [one] if one.line == at && one.reason.contains(want)),
++                "{value} は行 {at} の 1 件: {errors:?}"
++            );
++        }
++        assert_eq!(patch_unfit("a/b.patch"), None, "形の合う path");
++    }
++
+     /// 的の形（設計 gate-cost.md §16）: `<file>:<行>:<変異の名>`（桁 1 つを挟んでよい）は通り、file・行・名のどれかが
+     /// 形を外れた字面は理由を返す。
+     #[test]
+diff --git a/scribe2/crates/scribe2/src/pipe/mod.rs b/scribe2/crates/scribe2/src/pipe/mod.rs
+index a588e989..754b1e7f 100644
+--- a/scribe2/crates/scribe2/src/pipe/mod.rs
++++ b/scribe2/crates/scribe2/src/pipe/mod.rs
+@@ -820,6 +820,7 @@ pub(crate) mod fixture {
+             opens: Vec::new(),
+             touches: Vec::new(),
+             growth: Vec::new(),
++            patch: None,
+         }
+     }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/table.rs b/scribe2/crates/scribe2/src/pipe/table.rs
+index 2210d3d1..9e3584fd 100644
+--- a/scribe2/crates/scribe2/src/pipe/table.rs
++++ b/scribe2/crates/scribe2/src/pipe/table.rs
+@@ -156,6 +156,7 @@ pub const FIELDS: &[Field] = &[
+     Field { name: "done-teeth", need: Need::Optional, shape: Shape::List },
+     Field { name: "code-facts", need: Need::Optional, shape: Shape::List },
+     Field { name: "basis", need: Need::Optional, shape: Shape::List },
++    Field { name: "patch", need: Need::Optional, shape: Shape::Text },
+ ];
+ 
+ /// 約束の行 `[[promise]]` の欄の全体（**正本**・宣言順が `contracts schema` の描く順・設計 §33 の 9 欄）。`place` は
+@@ -245,6 +246,9 @@ pub struct ContractRow {
+     /// 欄 `basis` の要素（行の根拠の条・規範文・規則行・判断の記録の id の列・空 = 欄を持たない行・器は読んで運ぶだけで
+     /// 照らさない〔id の実在は設計の道具の床が数える〕・生成する契約 file には写さない・tsuzuri の行 v-row-basis）。
+     pub basis: Vec<String>,
++    /// 欄 `patch` の値（`.patch` で終わる差の file の repo 相対 path・`None` = 欄を持たない行・形は契約 file の読みと同じ 1 本
++    /// [`crate::pipe::contract::patch_unfit`]・生成する契約 file に写す・tsuzuri の判断の記録 ADR-60 の決定 (7)・行 v-patch-field）。
++    pub patch: Option<String>,
+     /// 節の本文の逐語（導出物の行だけの欄 [`DERIVED_GOAL`]・空 = `section` の節を doc から読む・設計 contract-source.md §47）。
+     pub goal: String,
+ }
+@@ -947,6 +951,7 @@ mod tests {
+             let default = match field.shape {
+                 Shape::Text if field.name == "section" => "\"1\"".to_owned(),
+                 Shape::List if field.name == "targets" => "[\"src/v.rs:1:v\"]".to_owned(),
++                Shape::Text if field.name == "patch" => "\"docs/design/patch/v.patch\"".to_owned(),
+                 Shape::Text => "\"v\"".to_owned(),
+                 Shape::List => "[\"v\"]".to_owned(),
+                 Shape::Number => "1".to_owned(),
+@@ -977,20 +982,21 @@ mod tests {
+         text
+     }
+ 
+-    /// 欄の列は宣言順に 21（必須 5・条件付き 2・任意 14・`targets` は設計 gate-cost.md §16・`growth` は §46・`done-teeth` と `code-facts` は §67・
+-    /// `basis` は tsuzuri の行 v-row-basis）で、
++    /// 欄の列は宣言順に 22（必須 5・条件付き 2・任意 15・`targets` は設計 gate-cost.md §16・`growth` は §46・`done-teeth` と `code-facts` は §67・
++    /// `basis` は tsuzuri の行 v-row-basis・`patch` は行 v-patch-field）で、
+     /// `contracts schema` はその順に描く。欄の形は reader が強制する（文字列の欄に配列・配列の欄に文字列を書くと、その欄を
+     /// 名指して断る）。`write-set` は任意（契約 (h)・§3「write-set の導出」: 無い行は受付が導出値を写す）。約束の行の欄は
+-    /// 別の列 9（必須 7・任意 2）で、生成物は契約の行の欄の後に別の表・別の key で描く（`[[field]]` の母集団は 21）。
++    /// 別の列 9（必須 7・任意 2）で、生成物は契約の行の欄の後に別の表・別の key で描く（`[[field]]` の母集団は 22）。
+     #[test]
+     fn table_fields_pin_the_schema_columns_and_the_reader_enforces_their_shapes() {
+         let names: Vec<&str> = FIELDS.iter().map(|field| field.name).collect();
+         let want = [
+             "id", "title", "req", "section", "touches", "surfaces", "write-set", "creates", "tests", "also", "verify",
+             "size", "done", "depends", "classes", "opens", "targets", "growth", "done-teeth", "code-facts", "basis",
++            "patch",
+         ];
+         assert_eq!(names, want, "欄の宣言順");
+-        assert_eq!(FIELDS.iter().filter(|field| field.need == Need::Required).count(), 5, "必須 5・条件付き 2・任意 14");
++        assert_eq!(FIELDS.iter().filter(|field| field.need == Need::Required).count(), 5, "必須 5・条件付き 2・任意 15");
+         let optional = |name: &str| FIELDS.iter().any(|field| field.name == name && field.need == Need::Optional);
+         assert!(["write-set", "creates", "tests", "also"].iter().all(|name| optional(name)), "導出の 4 欄は任意");
+         assert!(optional("targets"), "的の欄は任意（無い行は従来の経路）");
+@@ -998,7 +1004,7 @@ mod tests {
+         let listed: Vec<&str> =
+             rendered.iter().filter_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"')).collect();
+         assert_eq!(listed, names, "生成物は欄の宣言順");
+-        assert_eq!(FIELDS.len(), 21, "契約の行の欄は 21");
++        assert_eq!(FIELDS.len(), 22, "契約の行の欄は 22");
+         assert_eq!(rendered.get(1).map(String::as_str), Some("schema = 1"), "生成物も schema = 1 を持つ");
+         assert_eq!(read_rows("t.toml", &full_row(&[])).map(|rows| rows.len()), Ok(1), "全欄の行は読める");
+         for field in FIELDS {
+@@ -1017,14 +1023,14 @@ mod tests {
+ 
+     // flip-check: s2-07l.512
+ 
+-    /// §33 (f) の母集団: `FIELDS` の `need` は必須 5・条件付き 2（`verify` と `done`・宣言順）・任意 14 の和 21 で（§46 の
+-    /// `growth` と §67 の 2 欄と tsuzuri の行 v-row-basis の `basis` で任意が増えた）、生成物の `need` の列は `FIELDS` と同じ順に `conditional` を 2 欄（`verify` / `done`）で
++    /// §33 (f) の母集団: `FIELDS` の `need` は必須 5・条件付き 2（`verify` と `done`・宣言順）・任意 15 の和 22 で（§46 の
++    /// `growth` と §67 の 2 欄と tsuzuri の行 v-row-basis の `basis` と行 v-patch-field の `patch` で任意が増えた）、生成物の `need` の列は `FIELDS` と同じ順に `conditional` を 2 欄（`verify` / `done`）で
+     /// 載せる（xtask の contracts-schema は variant の名を小文字にした語で照合する＝同じ語）。
+     #[test]
+     fn contract_promise_need_conditional_is_two_fields_in_the_schema() {
+         let count = |need: Need| FIELDS.iter().filter(|field| field.need == need).count();
+-        assert_eq!((count(Need::Required), count(Need::Conditional), count(Need::Optional)), (5, 2, 14), "必須 5・条件付き 2・任意 14");
+-        assert_eq!(FIELDS.len(), 21, "母集団 21");
++        assert_eq!((count(Need::Required), count(Need::Conditional), count(Need::Optional)), (5, 2, 15), "必須 5・条件付き 2・任意 15");
++        assert_eq!(FIELDS.len(), 22, "母集団 22");
+         let conditional: Vec<&str> =
+             FIELDS.iter().filter(|field| field.need == Need::Conditional).map(|field| field.name).collect();
+         assert_eq!(conditional, ["verify", "done"], "条件付きは verify と done");
+@@ -1038,7 +1044,7 @@ mod tests {
+     }
+ 
+     /// §47 の 1 と 3: 導出物の先頭の版の宣言の字面は folio2 の ADR-3 決定 (4) の `schema = 1` と一致し（drift の歯・台帳
+-    /// `s2-07l.214` の (3)）、rules manifest の版と同じ値である。導出物だけの欄の名は goal で、欄の正本 `FIELDS`（21）と
++    /// `s2-07l.214` の (3)）、rules manifest の版と同じ値である。導出物だけの欄の名は goal で、欄の正本 `FIELDS`（22）と
+     /// 生成物に載らない。
+     #[test]
+     fn contract_whole_goal_head_pins_the_folio2_schema_and_the_goal_stays_off_the_fields() {
+@@ -1046,7 +1052,7 @@ mod tests {
+         assert_eq!(WHOLE_HEAD, format!("schema = {}", crate::rules::manifest::SCHEMA), "rules manifest の版と同じ値");
+         assert_eq!(DERIVED_GOAL, "goal", "導出物だけの欄の名");
+         assert!(FIELDS.iter().all(|field| field.name != DERIVED_GOAL), "FIELDS に goal は無い");
+-        assert_eq!(FIELDS.len(), 21, "欄の正本は 21（goal は載らない）");
++        assert_eq!(FIELDS.len(), 22, "欄の正本は 22（goal は載らない）");
+         let rendered = render_schema();
+         assert!(!rendered.iter().any(|line| line.contains(DERIVED_GOAL)), "生成物に goal は無い: {rendered:?}");
+     }
+diff --git a/scribe2/crates/scribe2/src/pipe/table/check.rs b/scribe2/crates/scribe2/src/pipe/table/check.rs
+index 72ceee45..7e0006b1 100644
+--- a/scribe2/crates/scribe2/src/pipe/table/check.rs
++++ b/scribe2/crates/scribe2/src/pipe/table/check.rs
+@@ -857,6 +857,7 @@ mod tests {
+             done_teeth: Vec::new(),
+             code_facts: Vec::new(),
+             basis: Vec::new(),
++            patch: None,
+             goal: String::new(),
+         }
+     }
+diff --git a/scribe2/crates/scribe2/src/pipe/table/parse.rs b/scribe2/crates/scribe2/src/pipe/table/parse.rs
+index bafb6c04..44403159 100644
+--- a/scribe2/crates/scribe2/src/pipe/table/parse.rs
++++ b/scribe2/crates/scribe2/src/pipe/table/parse.rs
+@@ -10,7 +10,7 @@ use super::{
+     unreadable, ContractRow, Need, PromiseRow, TableError, BEGIN, DERIVED_GOAL, END, FIELDS, PROMISE, PROMISE_FIELDS,
+     WHOLE_HEAD,
+ };
+-use crate::pipe::contract::target_unfit;
++use crate::pipe::contract::{patch_unfit, target_unfit, PATCH};
+ use crate::rules::manifest::{contract_rows, list, scalar, Scalar, TableRow, TableValue};
+ use std::path::Path;
+ 
+@@ -292,6 +292,7 @@ fn typed(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<Co
+         done_teeth: list_of(raw, "done-teeth", offset, errors),
+         code_facts: list_of(raw, "code-facts", offset, errors),
+         basis: list_of(raw, "basis", offset, errors),
++        patch: patch_of(raw, offset, errors),
+         goal: text_of(raw, DERIVED_GOAL, offset, errors),
+     };
+     (errors.len() == before).then_some(row)
+@@ -360,6 +361,20 @@ fn targets_of(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Vec<
+     targets
+ }
+ 
++/// 差の file の欄（`patch`・tsuzuri の判断の記録 ADR-60 の決定 (7)）: 文字列の形は [`text_of`] と同じに読み、値の形は契約 file の
++/// 読みと同じ 1 本（[`patch_unfit`]）で測って、外れた値を欄の行番号の 1 件に積む。欄が無いか空の字面なら `None`。
++fn patch_of(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<String> {
++    let line = shift(offset, raw.value(PATCH)?.1);
++    let path = text_of(raw, PATCH, offset, errors);
++    if path.is_empty() {
++        return None;
++    }
++    if let Some(reason) = patch_unfit(&path) {
++        errors.push(unreadable(line, &format!("{PATCH} {path:?} は差の file の path でない: {reason}")));
++    }
++    Some(path)
++}
++
+ /// 文字列の欄（無ければ空・形が違えば積む）。
+ fn text_of(raw: &TableRow, key: &str, offset: u64, errors: &mut Vec<TableError>) -> String {
+     text_in(raw.value(key).map(|(value, line)| (value, shift(offset, line))), key, errors)
+@@ -540,7 +555,7 @@ mod tests {
+     }
+ 
+     /// 欄 `basis`（tsuzuri の行 v-row-basis）: `.toml` の全文の行は字の配列の basis を宣言の順のまま読み、省いた行は空、
+-    /// 字 1 つを書いた行は欄の行番号で「文字列の配列でなければならない」の 1 件で断る。欄の列の末は basis。
++    /// 字 1 つを書いた行は欄の行番号で「文字列の配列でなければならない」の 1 件で断る。欄の列の 21 番目は basis（末は行 v-patch-field の patch）。
+     #[test]
+     fn vbasis_toml_row_reads_the_basis_list_and_refuses_a_string() {
+         let row = |basis: &str| {
+@@ -560,7 +575,40 @@ mod tests {
+             errors.iter().any(|error| error.line() == at && error.reason().contains("basis は文字列の配列でなければならない")),
+             "basis の行 {at} を名指す: {errors:?}"
+         );
+-        assert_eq!(super::super::FIELDS.last().map(|field| field.name), Some("basis"), "欄の列の末");
++        let at = super::super::FIELDS.get(20).map(|field| field.name);
++        assert_eq!(at, Some("basis"), "欄の列の 21 番目（末は行 v-patch-field の patch）");
++    }
++
++    /// 欄 `patch`（tsuzuri の行 v-patch-field）: `.toml` の全文の行は `.patch` で終わる字の patch を読み、省いた行は `None`。
++    /// dir（末が /）・末が .patch でない字面・配列を書いた行は欄の行番号の 1 件で断る。欄の列の末は patch。
++    #[test]
++    fn vpatch_toml_row_reads_the_patch_path_and_refuses_a_dir_a_suffix_and_a_list() {
++        let row = |patch: &str| {
++            format!(
++                "{WHOLE_HEAD}\n\n[[contract]]\nid = \"a\"\ntitle = \"t\"\nreq = [\"FR1\"]\nsection = \"1\"\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"d\"\n{patch}{DERIVED_GOAL} = \"g\"\n"
++            )
++        };
++        let read = |patch: &str| {
++            read_rows("docs/design/t.toml", &row(patch)).map(|rows| rows.first().and_then(|found| found.patch.clone()))
++        };
++        let path = "docs/design/patch/a.patch";
++        assert_eq!(read(&format!("patch = \"{path}\"\n")), Ok(Some(path.to_owned())), "字の patch は読める");
++        assert_eq!(read(""), Ok(None), "省いた patch は None");
++        for (value, want) in [
++            ("\"docs/design/patch/\"", "は差の file の path でない: dir（末が /）は断る"),
++            ("\"docs/design/a.diff\"", "は差の file の path でない: 末が .patch でない"),
++            ("[\"a.patch\"]", "patch は空でない文字列でなければならない"),
++        ] {
++            let text = row(&format!("patch = {value}\n"));
++            let at = text.lines().position(|line| line.starts_with("patch = ")).map_or(0, |index| index as u64 + 1);
++            let errors = read_rows("docs/design/t.toml", &text).expect_err("形の外れた patch は断る");
++            assert!(
++                matches!(errors.as_slice(), [one] if one.line() == at && one.reason().contains(want)),
++                "{value} は patch の行 {at} の 1 件: {errors:?}"
++            );
++        }
++        let last = super::super::FIELDS.last().map(|field| (field.name, field.shape));
++        assert_eq!(last, Some(("patch", super::super::Shape::Text)), "欄の列の末は文字列の欄 patch");
+     }
+ 
+     /// doc 上で `[[promise]]` の見出しが在る行番号（1 始まり・doc 順）。
