@@ -22,6 +22,8 @@ const RQ_LINE: &str = "相談の頼み = rq-20261003T1412Z-1・題 = 題なし�
 
 const TAIL: &str = "・「/x/tzw consult watch」を背景で置き直す";
 
+const GONE5: &str = "相談: 話す窓 cw5 が止まった（開き直しを待つ・持ち主が閉じると言えば /x/tzw consult close cw5 --by chat）";
+
 fn git(dir: &Path, args: &[&str]) {
     let ok = Command::new("git")
         .arg("-C")
@@ -210,8 +212,7 @@ fn cwwat_request_stalled_gone_order() {
     assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
     let closed4 = "相談の閉じ = cw4・起こし手 = 席・所見 = 0・時刻 = 20261003T1600Z";
     fx.notes(&[RQ_LINE, got2, got7, got_rq, closed4]);
-    let want = "相談: 話す窓 cw5 が閉じられた（/x/tzw consult close cw5 --by chat）";
-    assert_eq!(out(&fx.watch("30")), format!("{want}{TAIL}\n"));
+    assert_eq!(out(&fx.watch("30")), format!("{GONE5}{TAIL}\n"));
     let closed5 = "相談の閉じ = cw5・起こし手 = 持ち主のチャット・所見 = 0・時刻 = 20261003T1601Z";
     fx.notes(&[RQ_LINE, got2, got7, got_rq, closed4, closed5]);
     assert_eq!(
@@ -324,4 +325,85 @@ fn cwwat_refusals() {
     assert_eq!(rc(&o), 2);
     let e = String::from_utf8(o.stderr.clone()).unwrap();
     assert!(e.contains("鍵 tsuzuri.draftsdir が無い"), "{e}");
+}
+
+/// 閉じの行の無い所見の無い問う窓 cw4 と話す窓 cw5（どちらも最後の process の印は番号 1・pid 0 で無い）を置き、cw5 の作業場を返す。
+fn stopped_pair(fx: &Fx) -> PathBuf {
+    fx.window(4, Form::Ask, Some(0));
+    fx.window(5, Form::Talk, Some(0))
+}
+
+/// 窓 cw<n> の知らせ済みの印（起草の置き場の直下）。
+fn told(fx: &Fx, n: u32) -> PathBuf {
+    fx.drafts.join(format!("consult-watch.told-cw{n}"))
+}
+
+fn stalled4() -> String {
+    format!("相談: 問う窓 cw4 が所見なしで止まった（/x/tzw consult launch cw4 --again）{TAIL}\n")
+}
+
+#[test]
+fn cwwat_stopped_window_told_once() {
+    let fx = Fx::new("once");
+    let ws5 = stopped_pair(&fx);
+    let gone = format!("{GONE5}{TAIL}\n");
+    // 同じ process には 1 度だけ出し、作業場の外に印を置いて、次の見張りは飛ばして続ける。
+    assert_eq!(out(&fx.watch("30")), stalled4());
+    assert_eq!(
+        fs::read_to_string(told(&fx, 4)).unwrap(),
+        "k = 1・pid = 0\n"
+    );
+    assert_eq!(out(&fx.watch("30")), gone);
+    assert_eq!(
+        fs::read_to_string(told(&fx, 5)).unwrap(),
+        "k = 1・pid = 0\n"
+    );
+    assert_eq!(
+        out(&fx.watch("1")),
+        format!("相談: 見張りが上限で終わった{TAIL}\n")
+    );
+    // 新しい process（番号だけ違う）がまた止まれば、また 1 度出して印を替える。
+    proc_mark(&ws5, 2, Form::Talk, 0);
+    assert_eq!(out(&fx.watch("30")), gone);
+    assert_eq!(
+        fs::read_to_string(told(&fx, 5)).unwrap(),
+        "k = 2・pid = 0\n"
+    );
+    // pid だけ違う印と、末の改行の欠けた印は、知らせ済みとしない。
+    fs::write(told(&fx, 4), "k = 1・pid = 7\n").unwrap();
+    assert_eq!(out(&fx.watch("30")), stalled4());
+    fs::write(told(&fx, 4), "k = 1・pid = 0").unwrap();
+    assert_eq!(out(&fx.watch("30")), stalled4());
+}
+
+#[test]
+fn cwwat_told_mark_not_followed() {
+    let fx = Fx::new("told-link");
+    stopped_pair(&fx);
+    fs::write(told(&fx, 5), "k = 1・pid = 0\n").unwrap();
+    // symlink の印は辿らない（指す先の字が正しくても知らせ、先を書かずに印を普通の file に置き直す）。
+    let target = fx.root.join("told-target");
+    fs::write(&target, "k = 1・pid = 0\n").unwrap();
+    std::os::unix::fs::symlink(&target, told(&fx, 4)).unwrap();
+    assert_eq!(out(&fx.watch("30")), stalled4());
+    assert!(!fs::symlink_metadata(told(&fx, 4)).unwrap().is_symlink());
+    assert_eq!(
+        fs::read_to_string(told(&fx, 4)).unwrap(),
+        "k = 1・pid = 0\n"
+    );
+    assert_eq!(fs::read_to_string(&target).unwrap(), "k = 1・pid = 0\n");
+    // 書けない印（dir）は置かずに標準エラーへ 1 行を出し、次の見張りがまた知らせる。
+    fs::remove_file(told(&fx, 5)).unwrap();
+    fs::create_dir(told(&fx, 5)).unwrap();
+    let o = fx.watch("30");
+    assert_eq!(out(&o), format!("{GONE5}{TAIL}\n"));
+    let e = String::from_utf8(o.stderr.clone()).unwrap();
+    assert!(e.contains("窓 cw5 の知らせ済みの印を書けない"), "{e}");
+    assert_eq!(out(&fx.watch("30")), format!("{GONE5}{TAIL}\n"));
+    // 閉じの行を持つ窓は、印が無くても出さない。
+    fx.notes(&["相談の閉じ = cw5・起こし手 = 持ち主のチャット・所見 = 0・時刻 = 20261003T1601Z"]);
+    assert_eq!(
+        out(&fx.watch("1")),
+        format!("相談: 見張りが上限で終わった{TAIL}\n")
+    );
 }

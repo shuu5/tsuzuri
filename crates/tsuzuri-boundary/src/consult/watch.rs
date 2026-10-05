@@ -7,8 +7,13 @@
 //! 変わった時だけ読み直す（読み直しが落ちれば前の読みで見る）。
 //! 生きている印 `<起草の置き場>/consult-watch.alive`（pid と始まりの分）を置き、`TOUCH` ごとに書き直し、終わりで消す。
 //! 印の更新時刻が `FRESH` の内なら 2 本目は「相談: 見張りはもう居る」の 1 行を出してすぐ終わる。
+//! (3) と (4) は窓ごとに同じ process（最後の process の印の番号と pid）について 1 度だけ出す（行 cs-gone-once・判断の記録 ADR-55・
+//! 止まった窓は閉じずに開き直しを待つ）。出す時に知らせ済みの印 `<起草の置き場>/consult-watch.told-cw<n>` を置き、印が最後の
+//! process の印と同じ窓は飛ばして見張りを続ける。新しい process が起きてまた止まれば、また 1 度出す。
 
 use std::fs;
+use std::io::{Read, Write};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -39,6 +44,12 @@ pub const MAX: u64 = 7080;
 
 /// 2 本目の見張りが出す 1 行。
 pub const ALREADY: &str = "相談: 見張りはもう居る";
+
+/// 知らせ済みの印の file の名の頭（起草の置き場の直下・窓の名を足す・窓の作業場の外）。
+pub const TOLD: &str = "consult-watch.told-";
+
+/// 知らせ済みの印として読む字の上限（byte）。
+const TOLD_MAX: u64 = 256;
 
 /// tz consult watch の残りの引数を受けて終了 code を返す。
 pub fn run(rest: &[&str]) -> u8 {
@@ -99,6 +110,7 @@ fn watch(c: &Ctx, max: Duration) -> Result<String, Refused> {
     let (start, mut touched) = (Instant::now(), Instant::now());
     let found = loop {
         if let Some(event) = scan(c, &lines) {
+            tell(&c.drafts, &event);
             break notice(&event, &tzw());
         }
         if start.elapsed() >= max {
@@ -131,6 +143,62 @@ fn closed(lines: &[Line], id: WindowId) -> bool {
         .any(|l| matches!(l, Line::Close { window, .. } if *window == id))
 }
 
+/// 窓の知らせ済みの印の path。
+pub fn told_path(drafts: &Path, id: WindowId) -> PathBuf {
+    drafts.join(format!("{TOLD}{id}"))
+}
+
+/// 知らせ済みの印の字（最後の process の印の番号と pid）。
+pub fn told_text(k: u32, pid: u32) -> String {
+    format!("k = {k}・pid = {pid}\n")
+}
+
+/// 窓の知らせ済みの印が最後の process の印の番号 `k` と `pid` を持つか（symlink を辿らない＝lstat で普通の file と見て開き、
+/// 開いた後の fstat で dev と ino が同じかを照らす・普通の file でない印・読めない印・字の違う印は持たないとする＝知らせが多い側）。
+fn told(drafts: &Path, id: WindowId, k: u32, pid: u32) -> bool {
+    let path = told_path(drafts, id);
+    let Some(before) = fs::symlink_metadata(&path)
+        .ok()
+        .filter(fs::Metadata::is_file)
+    else {
+        return false;
+    };
+    let Ok(file) = fs::File::open(&path) else {
+        return false;
+    };
+    let same = file
+        .metadata()
+        .is_ok_and(|m| m.dev() == before.dev() && m.ino() == before.ino());
+    let mut text = String::new();
+    same && file.take(TOLD_MAX).read_to_string(&mut text).is_ok() && text == told_text(k, pid)
+}
+
+/// 止まった窓の事象（問う窓の `Stalled`・話す窓の `Gone`）なら、最後の process がまだ無い時だけ知らせ済みの印を置く
+/// （在る印は消してから新しく作る＝symlink を辿らない・書けなければ置かずに標準エラーへ 1 行＝次の見張りがまた知らせる）。
+fn tell(drafts: &Path, event: &Event) {
+    let (Event::Stalled(id) | Event::Gone(id)) = event else {
+        return;
+    };
+    let Some(last) = procs(&workspace(drafts, *id)).pop() else {
+        return;
+    };
+    if super::alive(last.pid) {
+        return;
+    }
+    let path = told_path(drafts, *id);
+    let _ = fs::remove_file(&path);
+    let put = fs::File::options()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(told_text(last.k, last.pid).as_bytes()));
+    if let Err(e) = put {
+        emit_err(&format!(
+            "tz consult watch: 窓 {id} の知らせ済みの印を書けない: {e}（次の見張りがまた知らせる）"
+        ));
+    }
+}
+
 /// 見張る事象の最初の 1 つ（無ければ None）。
 pub fn scan(c: &Ctx, lines: &[Line]) -> Option<Event> {
     let open: Vec<WindowId> = windows(&c.drafts)
@@ -156,7 +224,9 @@ pub fn scan(c: &Ctx, lines: &[Line]) -> Option<Event> {
         let ws = workspace(&c.drafts, *id);
         !closed(lines, *id)
             && read_window(&ws).is_some_and(|w| w.form == form)
-            && procs(&ws).last().is_some_and(|p| !super::alive(p.pid))
+            && procs(&ws)
+                .last()
+                .is_some_and(|p| !super::alive(p.pid) && !told(&c.drafts, *id, p.k, p.pid))
     };
     let stalled = open
         .iter()

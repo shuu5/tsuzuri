@@ -566,7 +566,9 @@ fn cwlin_notice_fixed_lines() {
         ),
         (
             Event::Gone(win("cw3")),
-            format!("相談: 話す窓 cw3 が閉じられた（/x/tzw consult close cw3 --by chat）{tail}"),
+            format!(
+                "相談: 話す窓 cw3 が止まった（開き直しを待つ・持ち主が閉じると言えば /x/tzw consult close cw3 --by chat）{tail}"
+            ),
         ),
         (
             Event::Timeout,

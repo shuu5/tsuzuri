@@ -583,7 +583,7 @@ pub enum Event {
     Request(RequestId),
     /// 問う窓が所見なしで止まった。
     Stalled(WindowId),
-    /// 話す窓が持ち主に閉じられた。
+    /// 話す窓の最後の process が止まった（閉じの行は無い・閉じずに開き直しを待つ・判断の記録 ADR-55）。
     Gone(WindowId),
     /// 見張りが時間の上限で終わった。
     Timeout,
@@ -603,7 +603,9 @@ pub fn notice(event: &Event, tzw: &str) -> String {
         Event::Stalled(w) => {
             format!("問う窓 {w} が所見なしで止まった（{tzw} consult launch {w} --again）")
         }
-        Event::Gone(w) => format!("話す窓 {w} が閉じられた（{tzw} consult close {w} --by chat）"),
+        Event::Gone(w) => format!(
+            "話す窓 {w} が止まった（開き直しを待つ・持ち主が閉じると言えば {tzw} consult close {w} --by chat）"
+        ),
         Event::Timeout => "見張りが上限で終わった".to_string(),
     };
     match event {
