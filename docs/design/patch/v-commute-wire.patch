@@ -1,0 +1,935 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+index 3ee5ff5e..04e2654d 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+@@ -471,12 +471,13 @@ fn fleet_stages_place_rate_limited_after_questioned() {
+     assert_eq!(Stage::parse("RateLimited"), Some(Stage::RateLimited), "as_str ↔ parse の往復");
+ }
+ 
+-/// `KINDS` の並びが**宣言順**と一致し、母集団は 31 種で末尾の 15 個が `InstallRecorded`（`vessel update` が足した・設計
++/// `KINDS` の並びが**宣言順**と一致し、母集団は 32 種で末尾の 16 個が `InstallRecorded`（`vessel update` が足した・設計
+ /// consumer-sync.md §5 (4)）→ `RunCost`（消費の 1 件・gate-cost.md §26 形 (2)）→ `RulingReceived`（run 無しの裁定・
+ /// fleet-event-log.md §9）→ `GroupPressureNotified`（群の逼迫の通知・account-lifecycle.md §19 形 3）→ `GroupMoved` /
+ /// `GroupMoveRefused` / `GroupMovePending`（群の移動の承認・断り・保留・account-lifecycle.md §20 形 5 / 6）→ `SeatRetired`（席の
+ /// 登録 row の退役・account-lifecycle.md §24 形 4）→ 案件の一生の 5 kind（fleet-event-log.md §12）→ `MemoJudged`（memo の判定・
+-/// dispatcher.md §41）→ `LimitPermitted`（上限の許可の記帳・limit-permit.md §18）。variant を足して列に足し忘れた周・件数だけ合って末尾が違う周はここで赤になる。
++/// dispatcher.md §41）→ `LimitPermitted`（上限の許可の記帳・limit-permit.md §18）→ `OverlapCommuted`（入口の排他を差の当たりで通した
++/// 組・判断の記録 ADR-60 の決定 (4)）。variant を足して列に足し忘れた周・件数だけ合って末尾が違う周はここで赤になる。
+ #[test]
+ fn fleet_kinds_follow_declaration_order() {
+     assert!(
+@@ -484,7 +485,7 @@ fn fleet_kinds_follow_declaration_order() {
+         "KINDS の並びが宣言順と乖離している（母集団 {} 種）",
+         KINDS.len()
+     );
+-    assert_eq!(KINDS.len(), 31, "母集団（列の印までの 16 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1）");
++    assert_eq!(KINDS.len(), 32, "母集団（列の印までの 16 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1）");
+     assert_eq!(
+         KINDS.get(16..),
+         Some(
+@@ -504,9 +505,10 @@ fn fleet_kinds_follow_declaration_order() {
+                 EventKind::LifecycleCutover,
+                 EventKind::MemoJudged,
+                 EventKind::LimitPermitted,
++                EventKind::OverlapCommuted,
+             ][..]
+         ),
+-        "install → 消費 → 裁定 → 群の逼迫の通知 → 群の移動の承認・断り・保留 → 登録 row の退役 → 案件の一生の 5 kind → memo の判定 → 上限の許可が宣言順の末尾"
++        "install → 消費 → 裁定 → 群の逼迫の通知 → 群の移動の承認・断り・保留 → 登録 row の退役 → 案件の一生の 5 kind → memo の判定 → 上限の許可 → 差の当たりが宣言順の末尾"
+     );
+     assert_eq!(EventKind::InstallRecorded.as_str(), "InstallRecorded");
+     assert_eq!(EventKind::parse("InstallRecorded"), Some(EventKind::InstallRecorded), "as_str ↔ parse の往復");
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
+index ed03994d..60f1cea3 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
+@@ -9,8 +9,8 @@ use super::*;
+ fn account_cmd_kinds_are_fifteen_with_retire_and_restore_last() {
+     assert_eq!(
+         KINDS.len(),
+-        31,
+-        "母集団（既存 10 + 口座残量 2 + 席の登録 1 + 口座の退役・戻し 2 + 列の印 1 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1）"
++        32,
++        "母集団（既存 10 + 口座残量 2 + 席の登録 1 + 口座の退役・戻し 2 + 列の印 1 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1）"
+     );
+     assert_eq!(
+         KINDS.get(12..16),
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
+index 2e65aebe..63f89981 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
+@@ -423,14 +423,14 @@ fn fleet_replay_seat_retired_then_registered_resolves_the_last_row() {
+     assert_eq!(before.registrations.len(), 1, "登録より前の退役は後の登録を消さない");
+ }
+ 
+-/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（31 種の末尾は上限の許可の
++/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（32 種の末尾の 1 つ前は上限の許可の
+ /// `LimitPermitted`・limit-permit.md §18）で、`fleet record` からは書けない（書き手は `seat retire` だけ・rc 1・log を作らない）。
+ #[test]
+ fn fleet_replay_seat_retired_kind_is_a_registration_shape_and_record_refuses_it() {
+     use vessel::fleet::Shape;
+-    assert_eq!(KINDS.len(), 31, "母集団");
++    assert_eq!(KINDS.len(), 32, "母集団");
+     assert_eq!(KINDS.get(23), Some(&EventKind::SeatRetired), "宣言順の 24 種目");
+-    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "宣言順の末尾");
++    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "宣言順の末尾の 1 つ前");
+     assert_eq!(EventKind::SeatRetired.shape(), Shape::Registration);
+     assert_eq!(EventKind::SeatRetired.default_actor(), "human", "退役は人由来");
+     assert_eq!(EventKind::parse("SeatRetired"), Some(EventKind::SeatRetired), "as_str ↔ parse の往復");
+@@ -670,19 +670,19 @@ fn fleet_case_kind_utterance_is_not_counted_as_human() {
+     assert_eq!(counted.rulings, 0, "裁定の数えは変わらない");
+ }
+ 
+-/// §12 歯 6: `KINDS` は 31 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）で末尾は
++/// §12 歯 6: `KINDS` は 32 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）でその次が
+ /// `LimitPermitted`（limit-permit.md §18）。既定の actor は 1 つ目だけ human（`MemoJudged` は machine）。5 つも `MemoJudged` も
+ /// `Shape` が Run でなく、互いに同じ値。base は 30 種で RED。
+ #[test]
+ fn fleet_case_kind_kinds_are_appended_in_order() {
+     use vessel::fleet::Shape;
+-    assert_eq!(KINDS.len(), 31, "母集団");
++    assert_eq!(KINDS.len(), 32, "母集団");
+     let tail: Vec<EventKind> = KINDS.iter().copied().skip(24).take(5).collect();
+     assert_eq!(tail.iter().map(|kind| kind.as_str()).collect::<Vec<_>>(), CASE_KIND_NAMES, "25 番目から 5 つの字面");
+     let actors: Vec<&str> = tail.iter().map(|kind| kind.default_actor()).collect();
+     assert_eq!(actors, ["human", "machine", "machine", "machine", "machine"], "既定の actor");
+-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::MemoJudged), "base の末尾の kind は末尾の 1 つ前");
+-    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "宣言順の末尾");
++    assert_eq!(KINDS.get(29), Some(&EventKind::MemoJudged), "base の末尾の kind は 30 種目");
++    assert_eq!(KINDS.get(30), Some(&EventKind::LimitPermitted), "その次は上限の許可");
+     assert_eq!(EventKind::MemoJudged.default_actor(), "machine", "memo の判定は機械由来");
+     let shapes: BTreeSet<String> = tail.iter().chain([&EventKind::MemoJudged]).map(|kind| format!("{:?}", kind.shape())).collect();
+     assert_eq!(shapes.len(), 1, "5 つと MemoJudged は 1 つの形を共有する: {shapes:?}");
+@@ -702,13 +702,13 @@ fn permit_line(bead: Option<&str>, detail: Option<&str>, extra: &str) -> String
+     format!(r#"{{"schema":1,"ts":"2026-10-02T01:00:00Z","kind":"LimitPermitted",{extra}{bead}"host":"h","actor":"machine"{detail}}}"#)
+ }
+ 
+-/// (d) `KINDS` の末尾は `LimitPermitted` でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
++/// (d) `KINDS` の末尾の 1 つ前は `LimitPermitted`（末尾は差の当たりの `OverlapCommuted`）でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
+ /// この kind だけで `SHAPES` の末尾も `Permit`・口座残量の kind でない。
+ #[test]
+ fn fleet_limit_permitted_kind_and_shape_are_appended_last() {
+     use vessel::fleet::{Shape, SHAPES};
+-    assert_eq!(KINDS.last(), Some(&EventKind::LimitPermitted), "KINDS の末尾");
+-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
++    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "KINDS の末尾の 1 つ前");
++    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
+     assert_eq!(EventKind::LimitPermitted.as_str(), "LimitPermitted");
+     assert_eq!(EventKind::parse("LimitPermitted"), Some(EventKind::LimitPermitted), "as_str ↔ parse の往復");
+     assert_eq!(EventKind::LimitPermitted.default_actor(), "machine", "許可は機械の導出");
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+index f1e06722..57fa5e5e 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+@@ -7,11 +7,12 @@
+ //! 歯は族ごとの子 module に置く（設計 docs/design/carry-prep.md §10 行 n・`s2-07l.686`）: `group`（接頭辞
+ //! `pipe_dispatch_group_`）・`waiting`（接頭辞 `pipe_dispatch_waiting_` / `pipe_dispatch_release_` /
+ //! `pipe_dispatch_gated_` / `pipe_dispatch_regated_` / `pipe_dispatch_revive_`）・`terminal`（接頭辞 `pipe_terminal_`）・`closed`（接頭辞
+-//! `vcrun_`・判断の記録 ADR-45 の門 H6）。
++//! `vcrun_`・判断の記録 ADR-45 の門 H6）・`commute`（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)）。
+ //! この file には共有の helper と const・本文に `super::` を持つ歯（この file の頭は名指しの import しか持たず、
+ //! 入れ子の子では `super::` の指す先が変わる）・他の族の歯だけを残す。
+ 
+ mod closed;
++mod commute;
+ mod group;
+ mod terminal;
+ mod waiting;
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/commute.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/commute.rs
+new file mode 100644
+index 00000000..c4e610eb
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/commute.rs
+@@ -0,0 +1,194 @@
++//! 入口と列の差の当たりの判じの配線の歯（接頭辞 `vcwire_`・判断の記録 ADR-60 の決定 (3)(4)・親 `tests/e2e/pipe/dispatch.rs` の
++//! helper を `use super::*` で使う）。
++//!
++//! 面の中の file 1 本を書く live な便（行 a）の下で、同じ file を書く行の受付（`pipe intake`）と列の 1 周（`pipe dispatch ls`）を、
++//! 規則の行 `pipe.overlap_commute` の真偽で外形から測る。差の file は行ごとに 1 本（30 行の file の 1 行を替える）。
++
++use super::super::intake::intake_with_rules;
++use super::super::{events, run_dirs, write_rules};
++use super::*;
++use std::path::PathBuf;
++use vessel::fleet::EventKind;
++
++/// 行が書く面の中の file（固定の根 `crates/` の下・30 行・行 n は `l<n>`）。
++const FILE: &str = "crates/toy/src/lib.rs";
++
++/// 行の id と、差が替える FILE の行（行 d は差の file を持たない）。b は a と離れ、c は a と、f は b と文脈が重なる。
++const ROWS: [(&str, usize); 5] = [("a", 5), ("b", 25), ("c", 6), ("f", 22), ("d", 0)];
++
++/// 規則の行 id。
++const ROW: &str = "pipe.overlap_commute";
++
++/// FILE の行 `at` を `x<at>` に替える差（前後の文脈 3 行）。
++fn patch(at: usize) -> String {
++    let body: Vec<String> =
++        (at - 3..=at + 3).map(|n| if n == at { format!("-l{n}\n+x{n}") } else { format!(" l{n}") }).collect();
++    format!("diff --git a/{FILE} b/{FILE}\n--- a/{FILE}\n+++ b/{FILE}\n@@ -{0},7 +{0},7 @@\n{1}\n", at - 3, body.join("\n"))
++}
++
++/// FILE と行ごとの差の file（`docs/p/<行>.patch`）と行 5 本を 1 回で commit した repo と置き場。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn place() -> (PathBuf, PathBuf) {
++    let (repo, state) = repo_with_state();
++    fs::create_dir_all(repo.join("crates/toy/src")).expect("面の dir を作れる");
++    fs::write(repo.join(FILE), (1..=30).map(|n| format!("l{n}\n")).collect::<String>()).expect("面の file を書ける");
++    fs::create_dir_all(repo.join("docs/p")).expect("差の dir を作れる");
++    let mut rows = Vec::new();
++    for (id, at) in ROWS {
++        let mut add = vec![format!("write-set = [\"{FILE}\"]")];
++        if at > 0 {
++            fs::write(repo.join(format!("docs/p/{id}.patch")), patch(at)).expect("差の file を書ける");
++            add.push(format!("patch = \"docs/p/{id}.patch\""));
++        }
++        rows.push(row_fields(id, &["write-set"], &add.iter().map(String::as_str).collect::<Vec<&str>>()));
++    }
++    commit_rows(&repo, &rows);
++    (repo, state)
++}
++
++/// manifest の写し `base` から規則の行を除き、`value` の行（`None` は行なし）を足した写し。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn rules(state: &Path, base: &str, name: &str, value: Option<bool>) -> String {
++    let text = fs::read_to_string(base).expect("manifest の写しを読める");
++    let kept: Vec<&str> = text.split("[[rule]]").filter(|block| !block.contains(&format!("\"{ROW}\""))).collect();
++    let row = value.map_or_else(String::new, |value| {
++        format!("[[rule]]\nid = \"{ROW}\"\nkind = \"PipeOverlapCommute\"\nvalue = {value}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n")
++    });
++    let path = state.join(name);
++    fs::write(&path, format!("{}\n{row}", kept.join("[[rule]]"))).expect("manifest の写しを書ける");
++    path.display().to_string()
++}
++
++/// 受付の manifest（gate と lock の行の写しに規則の行 `value`）。
++fn intake_rules(state: &Path, value: Option<bool>) -> String {
++    let base = write_rules(state, "rules-vcwire-base.toml", 1, 1_000_000);
++    rules(state, &base.display().to_string(), &format!("rules-vcwire-{value:?}.toml"), value)
++}
++
++/// 行 `row` を bead `s2-<row>` で受付に撃つ（rc を測らない）。
++fn intake_row(repo: &Path, state: &Path, row: &str, rules: &str) -> Output {
++    intake_with_rules(repo, state, &format!("{DESIGN_FILE}#{row}"), &format!("s2-{row}"), rules)
++}
++
++/// 行 a の live な便を起こして run id を返す。
++fn live_a(repo: &Path, state: &Path, rules: &str) -> String {
++    let out = intake_row(repo, state, "a", rules);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "live 0 本の周は通る（{}）", told(&out));
++    run_id_of(&out)
++}
++
++/// 交差の断りの 1 行（結末の無い周は今の字）。
++fn refusal(live: &str, verdict: Option<&str>) -> String {
++    let tail = verdict.map_or_else(String::new, |found| format!("・{found}"));
++    format!("pipe: write-set が live な run {live} と交差する（{FILE}{tail}）")
++}
++
++/// 列の 1 周を規則の行 `value` の manifest で撃つ（台帳は行 c・b・f・d の 4 件・priority はこの順に 1・2・3・4）。
++fn ls_with(repo: &Path, state: &Path, value: Option<bool>) -> Output {
++    let rules = rules(state, &dispatch_rules(state), &format!("rules-vcwire-ls-{value:?}.toml"), value);
++    let issues: Vec<String> = [("s2-c", 1, "c"), ("s2-b", 2, "b"), ("s2-f", 3, "f"), ("s2-d", 4, "d")]
++        .iter()
++        .map(|&(bead, priority, row)| issue(bead, priority, row))
++        .collect();
++    let bd = fake_bd(state, &issues);
++    let (state_dir, repo_dir) = (state.display().to_string(), repo.display().to_string());
++    run_pipe(&["dispatch", "ls", "--state-dir", &state_dir, "--repo", &repo_dir, "--rules", &rules, "--bd", &bd])
++}
++
++/// 受付の記帳の `OverlapCommuted` の行（bead と detail）。
++fn commuted(state: &Path) -> Vec<(String, Option<String>)> {
++    events(state).into_iter().filter(|event| event.kind == EventKind::OverlapCommuted).map(|event| (event.bead, event.detail)).collect()
++}
++
++/// 規則の行が真の周、live な便と同じ file の離れた行を替える差の行は受付が通り、出来事の記録に `OverlapCommuted` を 1 行書く
++/// （bead は候補・detail は受付の run id と相手の run id と交わった項と main の先端）。
++#[test]
++fn vcwire_intake_passes_a_commuting_pair_and_records_it() {
++    let (repo, state) = place();
++    let on = intake_rules(&state, Some(true));
++    let live = live_a(&repo, &state, &on);
++    let out = intake_row(&repo, &state, "b", &on);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "通す組は受け付ける（{}）", told(&out));
++    let id = run_id_of(&out);
++    let head = git(&repo, &["rev-parse", "HEAD"]);
++    let want = vec![("s2-b".to_owned(), Some(format!("run={id} with={live} files={FILE} main={head}")))];
++    assert_eq!(commuted(&state), want, "通した組を 1 行記帳する");
++    clean(&[&repo, &state]);
++}
++
++/// 規則の行が真の周、当たらない差の行と差の file の無い行は受付が断り、断りの 1 行に結末を添える（not-commuting・no-patch）。
++/// run dir も `OverlapCommuted` の行も増えない。
++#[test]
++fn vcwire_intake_refusal_names_the_verdict() {
++    let (repo, state) = place();
++    let on = intake_rules(&state, Some(true));
++    let live = live_a(&repo, &state, &on);
++    let dirs = run_dirs(&state);
++    for (row, verdict) in [("c", "not-commuting"), ("d", "no-patch")] {
++        let out = intake_row(&repo, &state, row, &on);
++        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "行 {row} は断る（{}）", told(&out));
++        let first = stderr_of(&out).lines().next().map(str::to_owned);
++        assert_eq!(first, Some(refusal(&live, Some(verdict))), "行 {row} の断りの 1 行");
++    }
++    assert_eq!(run_dirs(&state), dirs, "run dir を作らない");
++    assert!(commuted(&state).is_empty(), "断った組は記帳しない");
++    clean(&[&repo, &state]);
++}
++
++/// 規則の行が無い周と偽の周は、通す組の行も今の断り（結末を添えない）で、列は今の待ち（`overlap:<run>/1`）のまま。
++#[test]
++fn vcwire_rule_off_keeps_the_refusal_and_the_wait() {
++    let (repo, state) = place();
++    let live = live_a(&repo, &state, &intake_rules(&state, None));
++    for value in [None, Some(false)] {
++        let out = intake_row(&repo, &state, "b", &intake_rules(&state, value));
++        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{value:?} の周は断る（{}）", told(&out));
++        let first = stderr_of(&out).lines().next().map(str::to_owned);
++        assert_eq!(first, Some(refusal(&live, None)), "{value:?} の周の断りの 1 行");
++        let listed = ls_with(&repo, &state, value);
++        assert_eq!(reason_of(&listed, "s2-b"), format!("overlap:{live}/1"), "{value:?} の周の待ち（{}）", told(&listed));
++    }
++    assert!(commuted(&state).is_empty(), "記帳しない");
++    clean(&[&repo, &state]);
++}
++
++/// 規則の行が真の周の列の 1 周: 当たらない行は live な便を名乗って結末で待ち、通す行 b は起こす側に入り、同じ周に起こした b と
++/// 当たらない行 f と差の file の無い行 d は b を名乗って結末で待つ（起こすのは 1 本）。
++#[test]
++fn vcwire_dispatch_starts_the_commuting_bead_and_names_the_verdict() {
++    let (repo, state) = place();
++    let live = live_a(&repo, &state, &intake_rules(&state, Some(true)));
++    let out = ls_with(&repo, &state, Some(true));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "ls は rc 0（{}）", told(&out));
++    let reasons: Vec<String> = ["s2-c", "s2-b", "s2-f", "s2-d"].iter().map(|bead| reason_of(&out, bead)).collect();
++    let after_b = ["overlap:s2-b/1/not-commuting".to_owned(), "overlap:s2-b/1/no-patch".to_owned()];
++    let want = [[format!("overlap:{live}/1/not-commuting"), "-".to_owned()], after_b].concat();
++    assert_eq!(reasons, want, "{}", told(&out));
++    assert_eq!(count_of(&out), format!("{COUNT} total=4 ready=1"), "起こすのは b の 1 本");
++    clean(&[&repo, &state]);
++}
++
++/// 列が通した行も、受付の前に main が動いて当たらなくなれば、受付は自分の周の main で判じ直して断る（入口が勝つ）。その後の列の
++/// 周も同じ main で待つ。
++#[test]
++fn vcwire_intake_judges_again_after_main_moves() {
++    let (repo, state) = place();
++    let on = intake_rules(&state, Some(true));
++    let live = live_a(&repo, &state, &on);
++    assert_eq!(reason_of(&ls_with(&repo, &state, Some(true)), "s2-b"), "-", "動く前の列は通す");
++    let moved: String = (1..=30).map(|n| if n == 25 { "m25\n".to_owned() } else { format!("l{n}\n") }).collect();
++    fs::write(repo.join(FILE), moved).expect("main の file を書ける");
++    git(&repo, &["commit", "-q", "-am", "main moves"]);
++    let out = intake_row(&repo, &state, "b", &on);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "受付は断る（{}）", told(&out));
++    assert_eq!(stderr_of(&out).lines().next().map(str::to_owned), Some(refusal(&live, Some("not-commuting"))), "受付の断り");
++    let after = ls_with(&repo, &state, Some(true));
++    assert_eq!(reason_of(&after, "s2-b"), format!("overlap:{live}/1/not-commuting"), "{}", told(&after));
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index 65cdbdec..16dbd511 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -1440,8 +1440,8 @@ fn pipe_regate_returns_gated_fail_to_implemented_on_the_same_worktree() {
+     assert_eq!(head(), head_before, "再 gate も同じ worktree の同じ commit");
+     // event の種別は account-lifecycle.md §19 形 3 の群の逼迫の通知で 19 → 20・§20 形 5 / 6 の群の移動の 3 種で 20 → 23・
+     // §24 形 4 の登録 row の退役で 23 → 24・fleet-event-log.md §12 の案件の一生の 5 kind で 24 → 29・dispatcher.md §41 の MemoJudged で
+-    // 29 → 30・limit-permit.md §18 の LimitPermitted で 30 → 31（regate は種別を足さない）。
+-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 31), "段と event の種別は増えない");
++    // 29 → 30・limit-permit.md §18 の LimitPermitted で 30 → 31・判断の記録 ADR-60 の OverlapCommuted で 31 → 32（regate は種別を足さない）。
++    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 32), "段と event の種別は増えない");
+     clean(&[&repo, &state]);
+ }
+ 
+@@ -1476,7 +1476,7 @@ fn pipe_follow_step_moves_gated_tree_onto_main_and_returns_to_implemented() {
+     assert_eq!(run.detail.as_deref(), Some(format!("rebase:{base}..{moved}").as_str()), "着地の追随と同じ字面");
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), moved, "main は動かない");
+     assert_eq!(git(&worktree, &["merge-base", "HEAD", &moved]), moved, "木の base は main の先端");
+-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 31), "段と event の種別は増えない");
++    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 32), "段と event の種別は増えない");
+     clean(&[&repo, &state]);
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/fleet/event.rs b/scribe2/crates/scribe2/src/fleet/event.rs
+index 0194636f..ec2422f9 100644
+--- a/scribe2/crates/scribe2/src/fleet/event.rs
++++ b/scribe2/crates/scribe2/src/fleet/event.rs
+@@ -281,6 +281,7 @@ impl Body {
+             EventKind::IntakeRefused => Self::case(pairs, &["bead", "refuse"], refused_of),
+             EventKind::LifecycleCutover => Self::case(pairs, &["version", "main"], cutover_of),
+             EventKind::MemoJudged => Self::case(pairs, &["bead"], judged_of),
++            EventKind::OverlapCommuted => Self::case(pairs, &["bead"], commuted_of),
+             EventKind::LimitPermitted => Self::permit(pairs),
+             EventKind::RunCreated
+             | EventKind::RunStage
+@@ -531,6 +532,11 @@ fn judged_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String
+     Ok((Case::Judged, Some(bead)))
+ }
+ 
++/// OverlapCommuted: `bead`（候補の契約の id）と空でない `detail`（組）が必須（本体の欄は持たない）。
++fn commuted_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
++    judged_of(pairs).map(|(_, bead)| (Case::Commuted, bead))
++}
++
+ /// LifecycleCutover: `version` と `main`（小文字の 16 進）が必須。
+ fn cutover_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
+     let version = word_of(pairs, "version")?;
+diff --git a/scribe2/crates/scribe2/src/fleet/mod.rs b/scribe2/crates/scribe2/src/fleet/mod.rs
+index 4039e69e..a278e1de 100644
+--- a/scribe2/crates/scribe2/src/fleet/mod.rs
++++ b/scribe2/crates/scribe2/src/fleet/mod.rs
+@@ -116,6 +116,9 @@ pub enum EventKind {
+     /// 〔許可 `rule=<行 id> value=<n> until=<ts> ruling=<裁定 id>`・取り消し `rule=<行 id> revoked`〕）。actor は machine（人の言葉は
+     /// 結んだ裁定の event が持つ）。**便に紐づかない**。書き手は許可の口だけ（`fleet record` は断る）。
+     LimitPermitted,
++    /// 受付が入口の排他の交差を差の当たりで通した（判断の記録 ADR-60 の決定 (4)・[`Case::Commuted`]・`bead` = 候補の契約の id・
++    /// `detail` = `run=<受付の run id> with=<相手> files=<交わった項> main=<sha>`）。**便に紐づかない**。
++    OverlapCommuted,
+ }
+ 
+ /// [`EventKind`] の全 variant。
+@@ -151,6 +154,7 @@ pub const KINDS: &[EventKind] = &[
+     EventKind::LifecycleCutover,
+     EventKind::MemoJudged,
+     EventKind::LimitPermitted,
++    EventKind::OverlapCommuted,
+ ];
+ 
+ impl EventKind {
+@@ -188,6 +192,7 @@ impl EventKind {
+             Self::LifecycleCutover => "LifecycleCutover",
+             Self::MemoJudged => "MemoJudged",
+             Self::LimitPermitted => "LimitPermitted",
++            Self::OverlapCommuted => "OverlapCommuted",
+         }
+     }
+ 
+@@ -227,7 +232,8 @@ impl EventKind {
+             | Self::IntakeRefused
+             | Self::LifecycleCutover
+             | Self::MemoJudged
+-            | Self::LimitPermitted => ACTOR_MACHINE,
++            | Self::LimitPermitted
++            | Self::OverlapCommuted => ACTOR_MACHINE,
+         }
+     }
+ 
+@@ -264,7 +270,8 @@ impl EventKind {
+             | Self::TurnEndUnjudged
+             | Self::IntakeRefused
+             | Self::LifecycleCutover
+-            | Self::MemoJudged => Shape::Case,
++            | Self::MemoJudged
++            | Self::OverlapCommuted => Shape::Case,
+             Self::LimitPermitted => Shape::Permit,
+         }
+     }
+@@ -400,6 +407,8 @@ pub enum Case {
+     Cutover { version: String, main: String },
+     /// [`EventKind::MemoJudged`]: 本体の欄を持たない（memo の id は行の `bead`・判定の語は `detail`）。
+     Judged,
++    /// [`EventKind::OverlapCommuted`]: 本体の欄を持たない（候補の契約の id は行の `bead`・組は `detail`）。
++    Commuted,
+     /// [`EventKind::RulingReceived`] の結びの形（設計 §14）: 結んだ裁定 id・発話の ts・経路・問いの起票の時刻と、問いが
+     /// metadata に持つ asked（無ければ `None`）。`bead` は問い id（行の field）。
+     Ruling { ruling: String, utterance: String, channel: Channel, question_ts: String, asked: Option<String> },
+@@ -422,7 +431,7 @@ impl Case {
+             }
+             Self::Refused { refuse } => [bead, Some(text("refuse", refuse))].into_iter().flatten().collect(),
+             Self::Cutover { version, main } => vec![text("version", version), text("main", main)],
+-            Self::Judged => bead.into_iter().collect(),
++            Self::Judged | Self::Commuted => bead.into_iter().collect(),
+             Self::Ruling { ruling, utterance, channel, question_ts, asked } => [
+                 Some(text("ruling", ruling)),
+                 Some(text("utterance", utterance)),
+diff --git a/scribe2/crates/scribe2/src/fleet/replay.rs b/scribe2/crates/scribe2/src/fleet/replay.rs
+index 1d007734..b446d005 100644
+--- a/scribe2/crates/scribe2/src/fleet/replay.rs
++++ b/scribe2/crates/scribe2/src/fleet/replay.rs
+@@ -267,7 +267,8 @@ fn apply_account(state: &mut State, event: &Event) {
+         | EventKind::IntakeRefused
+         | EventKind::LifecycleCutover
+         | EventKind::MemoJudged
+-        | EventKind::LimitPermitted => {}
++        | EventKind::LimitPermitted
++        | EventKind::OverlapCommuted => {}
+     }
+ }
+ 
+@@ -362,7 +363,8 @@ fn apply_seat(state: &mut State, event: &Event) {
+         | EventKind::IntakeRefused
+         | EventKind::LifecycleCutover
+         | EventKind::MemoJudged
+-        | EventKind::LimitPermitted => {}
++        | EventKind::LimitPermitted
++        | EventKind::OverlapCommuted => {}
+     }
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/intake.rs b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+index 474637af..0b959724 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/intake.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/intake.rs
+@@ -44,6 +44,7 @@ use crate::pipe::dispatch::index_build::{status as index_status, Status};
+ use crate::pipe::refuse::{overlaps, Refuse, NEW_FILE};
+ use crate::pipe::review::{self, FindingKind, Judgement, ROW_SAME_KIND_STOP};
+ use crate::pipe::table::{self, ContractRow, TableError};
++use crate::pipe::commute::{self, Crossed};
+ use crate::pipe::{contract_path, current, emit, run_dir, run_id, vessel_path, Emit, CONTRACT_FILE};
+ use crate::rules::manifest::Manifest;
+ use crate::rules::RuleValue;
+@@ -775,7 +776,7 @@ pub(in crate::pipe) fn judge(material: &Material<'_>) -> Judged {
+     }
+     // **入口で排他する**（ADR-0019 §2.1）。live な便と write-set が交差する契約は、
+     // run dir も event も作らずに断る——後段（land の rebase）で衝突を知るより安い。
+-    match exclude_overlap(state_dir, &measured, tracked) {
++    match exclude_overlap(material, state_dir, &measured, tracked) {
+         Ok(found) => judged.overlap = Some(found),
+         Err(denial) => judged.denials.push(denial),
+     }
+@@ -817,7 +818,7 @@ fn create(
+     body: &str,
+     policy: LockPolicy,
+ ) -> Result<Intaken, Outcome> {
+-    let Judged { write_set, denials, derived, effective, run, .. } = judged;
++    let Judged { write_set, denials, derived, effective, run, overlap, .. } = judged;
+     if let Some(first) = denials.into_iter().next() {
+         return Err(first.outcome);
+     }
+@@ -845,7 +846,8 @@ fn create(
+         },
+         policy,
+     );
+-    match emitted {
++    let commuted = overlap.and_then(|found| found.commuted);
++    match emitted.and_then(|()| commute::record(state_dir, &id, material.bead, commuted.as_ref(), policy)) {
+         Err(err) => Err(broken(err.to_string())),
+         Ok(()) => Ok(Intaken {
+             id,
+@@ -1157,9 +1159,10 @@ fn exclude_unaddressed(state_dir: &Path, past: &[Past], today: &Today, materials
+ ///
+ /// 交差した周は**全組を stderr へ並べ**、理由の 1 行は先頭の 1 組を名乗る。dir 項目は base の tracked file に
+ /// 展開してから数える（設計 contract-source.md §3・[`overlaps`]）。通った周は突き合わせた live な run を [`Crossed`]
+-/// で返す（交差は 0・§21 の `overlap=` の材料）。
+-fn exclude_overlap(state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
+-    let found = crossings(state_dir, contract, tracked)?;
++/// で返す（交差は 0 か [`Crossed::settle`] が通した組・§21 の `overlap=` の材料）。
++fn exclude_overlap(material: &Material<'_>, state_dir: &Path, contract: &Contract, tracked: &[String]) -> Result<Crossed, Denial> {
++    let mut found = crossings(state_dir, contract, tracked)?;
++    found.settle(&commute::Scene { repo: material.repo, manifest: material.manifest, state_dir, tracked }, contract);
+     match &found.first {
+         None => Ok(found),
+         Some(reason) => Err(refuse(reason, &found.lines)),
+@@ -1204,25 +1207,14 @@ pub(in crate::pipe) fn crossings(state_dir: &Path, contract: &Contract, tracked:
+         let mut crossed: Vec<String> = Vec::new();
+         for (mine, theirs) in overlaps(&contract.write_set, &live_contract.write_set, tracked) {
+             if first.is_none() {
+-                first = Some(Refuse::WriteSetOverlap { run: id.clone(), path: mine.clone() });
++                first = Some(Refuse::WriteSetOverlap { run: id.clone(), path: mine.clone(), verdict: None });
+             }
+             lines.push(format!("pipe: overlap run={id} contract={mine} live={theirs}"));
+             crossed.push(mine);
+         }
+         runs.push((id.clone(), crossed));
+     }
+-    Ok(Crossed { runs, first, lines })
+-}
+-
+-/// live との交差の事実（§21 の `overlap=` の材料）。[`exclude_overlap`] が通った周は交差が全部空である。
+-pub(in crate::pipe) struct Crossed {
+-    /// 突き合わせた live な run（run id の順）と、その便と交差した契約側の file（[`exclude_overlap`] が
+-    /// 通った周は全部空・列は空でない組を待ちの理由にする）。
+-    pub(in crate::pipe) runs: Vec<(String, Vec<String>)>,
+-    /// 先頭の 1 組の断り（交差 0 なら `None`・受付の理由の 1 行）。
+-    first: Option<Refuse>,
+-    /// 交差の全組の行（受付の stderr・交差 0 なら空）。
+-    lines: Vec<String>,
++    Ok(Crossed { runs, first, lines, commuted: None })
+ }
+ 
+ /// 上限の余地の事実（[`exclude_cap_shortfall`] が通った周・§21 の `headroom=` の材料）。
+diff --git a/scribe2/crates/scribe2/src/pipe/commute.rs b/scribe2/crates/scribe2/src/pipe/commute.rs
+index 8e217870..49b9e79a 100644
+--- a/scribe2/crates/scribe2/src/pipe/commute.rs
++++ b/scribe2/crates/scribe2/src/pipe/commute.rs
+@@ -1,17 +1,20 @@
+-//! 入口の排他を差の当たりで通す判じ（判断の記録 ADR-60 の決定 (1)(2)(4)(5)・要件 FR1039）。
++//! 入口の排他を差の当たりで通す判じ（判断の記録 ADR-60 の決定 (1)(2)(3)(4)(5)・要件 FR1039）。
+ //!
+ //! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
+-//! 関数 [`judge`] と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の読み [`on`] を持つ。判じは交わりの関数の
+-//! 中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を返す段）は子の module [`names`] に置く。入口と
+-//! 起動の列への配線と記帳は後の器の行が足す。
++//! 関数 [`weigh`]（規則の行が真の周だけ [`judge`] を撃つ）と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の
++//! 読み [`on`] を持つ。判じは交わりの関数の中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を
++//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。
+ //!
+ //! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
+ //! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
+ 
++use super::contract::Contract;
+ use super::declaration::RootsAtHead;
+-use super::git_line;
+ use super::land::scope_touched;
+-use super::refuse::normalize;
++use super::refuse::{normalize, overlaps, Refuse};
++use super::{base_of_run, contract_path, git_line, head_of, Base};
++use crate::fleet::store::{self, LockPolicy, StoreError};
++use crate::fleet::{cli, Case, Event, EventKind, SCHEMA};
+ use crate::invocation::Invocation;
+ use crate::rules::manifest::Manifest;
+ use crate::rules::RuleValue;
+@@ -34,6 +37,9 @@ pub const SCRATCH: &str = "commute";
+ /// 子の終わりを見る間隔。
+ const POLL: Duration = Duration::from_millis(5);
+ 
++/// 入口と列の 1 回の判じの時間の上限（[`Ask::deadline`] の幅・越えた周は unreadable）。
++pub const LIMIT: Duration = Duration::from_secs(20);
++
+ /// 判じの結末（閉じた列・判断の記録 ADR-60 の決定 (4)）。通す 1 つと断る 5 つ。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Verdict {
+@@ -125,6 +131,141 @@ pub fn judge(ask: &Ask<'_>) -> Verdict {
+     Round::cut(ask).map_or(Verdict::Unreadable, |round| round.judge(mine))
+ }
+ 
++/// 入口と列が [`weigh`] に渡す周の材料。
++pub(in crate::pipe) struct Scene<'a> {
++    /// repo の根（HEAD が main の先端）。
++    pub(in crate::pipe) repo: &'a Path,
++    /// 規則の表（[`on`] が読む）。
++    pub(in crate::pipe) manifest: &'a Manifest,
++    /// state dir（live な便の写しと base を読み、周の一時の dir を切る）。
++    pub(in crate::pipe) state_dir: &'a Path,
++    /// base の tracked file（交差の dir の展開・[`overlaps`]）。
++    pub(in crate::pipe) tracked: &'a [String],
++}
++
++/// [`weigh`] の結果（結末と記帳の材料）。
++pub(in crate::pipe) struct Weighed {
++    /// 結末。
++    pub(in crate::pipe) verdict: Verdict,
++    /// 判じた main の先端（読めない周は空）。
++    main: String,
++    /// 相手（live な便の run id・列が同じ周に起こした bead・起こした順）。
++    with: Vec<String>,
++    /// 候補の側の交わった項（契約が書いた字面）。
++    files: BTreeSet<String>,
++}
++
++/// 入口と起動の列が交差の照らしの後に呼ぶ 1 本（判断の記録 ADR-60 の決定 (3)）。
++///
++/// 規則の行が偽の周と交差の無い周は `None`（呼び手は今の断りと待ちのまま）。真の周は、交差した live な便（`runs` のうち
++/// 交差が空でない run・run id の末の時刻の順）と、列が同じ周に起こした bead（`started`）を相手に [`judge`] を撃つ。相手の差は
++/// live な便の base（spawn の前の便は main の先端）と、起こした bead は main の先端から読む。live な便の写しか base を
++/// 読めない周と、main の先端を読めない周は judge を撃たずに unreadable。時間の上限は [`LIMIT`]。
++pub(in crate::pipe) fn weigh(
++    scene: &Scene<'_>,
++    contract: &Contract,
++    runs: &[(String, Vec<String>)],
++    started: &[(&str, &Contract)],
++) -> Option<Weighed> {
++    let mut live: Vec<&str> = runs.iter().filter(|(_, files)| !files.is_empty()).map(|(id, _)| id.as_str()).collect();
++    if (live.is_empty() && started.is_empty()) || !on(scene.manifest) {
++        return None;
++    }
++    live.sort_by_key(|id| id.rsplit_once('-').map_or(*id, |(_, stamp)| stamp));
++    let main = head_of(scene.repo).unwrap_or_default();
++    let read = |id: &str| {
++        let theirs = Contract::load(&contract_path(scene.state_dir, id)).ok()?;
++        match base_of_run(scene.state_dir, id) {
++            Base::Known(sha) => Some((id.to_owned(), theirs, sha)),
++            Base::Absent => Some((id.to_owned(), theirs, main.clone())),
++            Base::Unreadable => None,
++        }
++    };
++    let found: Option<Vec<(String, Contract, String)>> = live
++        .into_iter()
++        .map(read)
++        .chain(started.iter().map(|&(bead, theirs)| Some((bead.to_owned(), theirs.clone(), main.clone()))))
++        .collect();
++    let owned = found.filter(|_| !main.is_empty()).unwrap_or_default();
++    let crossed: Vec<Vec<(String, String)>> =
++        owned.iter().map(|(_, theirs, _)| overlaps(&contract.write_set, &theirs.write_set, scene.tracked)).collect();
++    let partners: Vec<Partner<'_>> = owned
++        .iter()
++        .zip(&crossed)
++        .map(|((_, theirs, base), crossed)| Partner { patch: theirs.patch.as_deref(), base, crossed })
++        .collect();
++    let roots = RootsAtHead::read(scene.repo);
++    let deadline = Instant::now().checked_add(LIMIT).unwrap_or_else(Instant::now);
++    let patch = contract.patch.as_deref();
++    let ask = Ask { repo: scene.repo, state_dir: scene.state_dir, main: &main, roots: &roots, patch, partners: &partners, deadline };
++    let verdict = if partners.is_empty() { Verdict::Unreadable } else { judge(&ask) };
++    let files = crossed.iter().flatten().map(|(mine, _)| mine.clone()).collect();
++    Some(Weighed { verdict, main, with: owned.into_iter().map(|(with, ..)| with).collect(), files })
++}
++
++/// live な便との交差の事実（受付の `crossings` が組む・§21 の `overlap=` の材料・file の行の上限のため intake.rs から移した）。
++/// 受付が通した周は交差が全部空か、[`Crossed::settle`] が通した組である。
++pub(in crate::pipe) struct Crossed {
++    /// 突き合わせた live な run（run id の順）と、その便と交差した契約側の file（受付が通した周は全部空か通した組・
++    /// 列は空でない組を待ちの理由にする）。
++    pub(in crate::pipe) runs: Vec<(String, Vec<String>)>,
++    /// 先頭の 1 組の断り（交差 0 なら `None`・受付の理由の 1 行）。
++    pub(in crate::pipe) first: Option<Refuse>,
++    /// 交差の全組の行（受付の stderr・交差 0 なら空）。
++    pub(in crate::pipe) lines: Vec<String>,
++    /// 規則の行が真の周に [`Crossed::settle`] が通した組（受付の create が [`record`] で記帳する・ほかは `None`）。
++    pub(in crate::pipe) commuted: Option<Weighed>,
++}
++
++impl Crossed {
++    /// 受付の交差の後の判じ（[`weigh`]）。通す組は先頭の断りを外して `commuted` に持ち、ほかは先頭の断りに結末を添える
++    /// （規則の行が偽の周と交差の無い周は替えない）。
++    pub(in crate::pipe) fn settle(&mut self, scene: &Scene<'_>, contract: &Contract) {
++        let Some(Refuse::WriteSetOverlap { ref mut verdict, .. }) = self.first else {
++            return;
++        };
++        match weigh(scene, contract, &self.runs, &[]) {
++            Some(found) if found.verdict == Verdict::Commutes => {
++                self.first = None;
++                self.commuted = Some(found);
++            }
++            found => *verdict = found.map(|found| found.verdict),
++        }
++    }
++}
++
++/// 受付が通した組を出来事の記録に 1 行書く（kind `OverlapCommuted`・`bead` は候補・`detail` は受付の run id と相手と交わった項と
++/// main の先端・判断の記録 ADR-60 の決定 (4)・通した組の無い周は書かない）。
++pub(in crate::pipe) fn record(state_dir: &Path, run: &str, bead: &str, weighed: Option<&Weighed>, policy: LockPolicy) -> Result<(), StoreError> {
++    let Some(weighed) = weighed else {
++        return Ok(());
++    };
++    let files: Vec<&str> = weighed.files.iter().map(String::as_str).collect();
++    let detail = format!("run={run} with={} files={} main={}", weighed.with.join(","), files.join(","), weighed.main);
++    let kind = EventKind::OverlapCommuted;
++    let event = Event {
++        schema: SCHEMA,
++        ts: cli::now_utc(),
++        kind,
++        run: String::new(),
++        bead: bead.to_owned(),
++        host: cli::host(),
++        actor: kind.default_actor().to_owned(),
++        stage: None,
++        seat: None,
++        pid: None,
++        detail: Some(detail),
++        allowance: None,
++        registration: None,
++        mark: None,
++        account: None,
++        cost: None,
++        rule: None,
++        case: Some(Case::Commuted),
++    };
++    store::append(state_dir, &event, policy).map(|_| ())
++}
++
+ /// 項が file で、再 gate の面の中か。
+ fn on_face(roots: &RootsAtHead, item: &str) -> bool {
+     let path = normalize(item);
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch.rs b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+index 6f1a9bc9..498650fa 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch.rs
+@@ -11,6 +11,7 @@
+ //! 台帳を読めない周は列を空と読まず [`Unmeasured`] で 1 本も起こさない（`0 件`と融合しない・C10・NFR4）。
+ 
+ use super::cli::{live, Denial, Materials};
++use super::commute::Verdict;
+ use super::contract::Contract;
+ use super::gate::Limits;
+ use super::health;
+@@ -137,6 +138,8 @@ pub enum WaitReason {
+         with: String,
+         /// その相手と交差した契約側の file の列（契約が書いた字面・`render` は本数を書く・設計 §26 形 3）。
+         files: Vec<String>,
++        /// 差の当たりの判じの結末（規則の行が偽の周は `None`＝`render` は本数まで・判断の記録 ADR-60 の決定 (4)）。
++        verdict: Option<Verdict>,
+     },
+     /// 受付（余地・host の memory）を通らない。
+     Admission {
+@@ -218,7 +221,8 @@ impl WaitReason {
+         let name = self.as_str();
+         match *self {
+             Self::Dependency { ref on } => format!("{name}:{}", on.join(",")),
+-            Self::Overlap { ref with, ref files } => format!("{name}:{with}/{}", files.len()),
++            Self::Overlap { ref with, ref files, verdict: None } => format!("{name}:{with}/{}", files.len()),
++            Self::Overlap { ref with, ref files, verdict: Some(found) } => format!("{name}:{with}/{}/{}", files.len(), found.as_str()),
+             Self::Admission { reason, .. } => format!("{name}:{reason}"),
+             Self::Hold { ref since, .. } | Self::Launched { ref since } => format!("{name}:{since}"),
+             Self::UnreflectedRuling { ref id } | Self::Sibling(ref id) => format!("{name}:{id}"),
+@@ -939,7 +943,7 @@ mod tests {
+         review_unmeasured, revive_of, section_keyed, tools, why_of, Advance, Candidate, Handoff, Input, Pointer, WaitReason,
+         DRIVE, HANDOFFS, WAIT_REASONS,
+     };
+-    use super::{floor, reserve};
++    use super::{floor, reserve, Verdict};
+     use crate::fleet::{Event, EventKind, Mark, Stage, SCHEMA, STAGES};
+     use crate::rules::manifest::Manifest;
+     use std::path::Path;
+@@ -1309,7 +1313,8 @@ mod tests {
+     fn pipe_dispatch_wait_reasons_render_the_name_and_the_value() {
+         let listed = vec![
+             WaitReason::Dependency { on: vec!["s2-x".to_owned(), "s2-y".to_owned()] },
+-            WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()] },
++            WaitReason::Overlap { with: "r1".to_owned(), files: vec!["src/a.rs".to_owned(), "src/b/".to_owned()], verdict: None },
++            WaitReason::Overlap { with: "r2".to_owned(), files: vec!["src/a.rs".to_owned()], verdict: Some(Verdict::SameName) },
+             WaitReason::Admission { reason: "cap-headroom", why: Some("x".to_owned()) },
+             WaitReason::HostBusy,
+             WaitReason::Hold { since: "t1".to_owned(), why: Some("x".to_owned()) },
+@@ -1334,6 +1339,7 @@ mod tests {
+             vec![
+                 "dependency:s2-x,s2-y",
+                 "overlap:r1/2",
++                "overlap:r2/1/same-name",
+                 "admission:cap-headroom",
+                 "host-busy",
+                 "hold:t1",
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+index c3486c8f..9edf9edc 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+@@ -13,6 +13,7 @@
+ 
+ use super::super::admission::{self, Sizes};
+ use super::super::cli::{crossings, generated, int_row, judge, live, Denial, Material, Materials};
++use super::super::commute;
+ use super::super::contract::Contract;
+ use super::super::gate::Verdict;
+ use super::super::refuse::{overlaps, Refuse, INDEX_BUILD_TRIGGERS};
+@@ -253,7 +254,7 @@ pub(super) fn settle(
+         sizes: sizes_of(input.manifest),
+         slots: host_slots_dir(input.state_dir),
+     });
+-    let mut started: Vec<(String, Vec<String>)> = Vec::new();
++    let mut started: Vec<(String, &Contract)> = Vec::new();
+     let mut turn =
+         Turn { candidates: Vec::new(), launches: Vec::new(), revives: Vec::new(), unmeasured: None, drive: None, vessel: None, lifecycle: None, triage: None, closed: None };
+     for mut candidate in candidates {
+@@ -263,7 +264,7 @@ pub(super) fn settle(
+             match held.map(WaitReason::Reserved).or_else(|| blocker(input, contract, room, &started)) {
+                 Some(reason) => candidate.reason = Some(reason),
+                 None => {
+-                    started.push((candidate.bead.clone(), contract.write_set.clone()));
++                    started.push((candidate.bead.clone(), contract));
+                     turn.launches.push(launch_of(input, &candidate.bead, pointer));
+                 }
+             }
+@@ -288,22 +289,11 @@ fn blocker(
+     input: &Input<'_>,
+     contract: &Contract,
+     room: &Room<'_>,
+-    started: &[(String, Vec<String>)],
++    started: &[(String, &Contract)],
+ ) -> Option<WaitReason> {
+     let tracked = room.materials.tracked();
+-    for (bead, write_set) in started {
+-        let crossed = overlaps(&contract.write_set, write_set, tracked);
+-        if !crossed.is_empty() {
+-            return Some(WaitReason::Overlap { with: bead.clone(), files: crossed.into_iter().map(|(mine, _)| mine).collect() });
+-        }
+-    }
+-    match crossings(input.state_dir, contract, tracked) {
+-        Ok(found) => {
+-            if let Some((run, files)) = found.runs.into_iter().find(|(_, files)| !files.is_empty()) {
+-                return Some(WaitReason::Overlap { with: run, files });
+-            }
+-        }
+-        Err(denial) => return Some(refused_by(&denial)),
++    if let Some(reason) = overlap(input, contract, tracked, started) {
++        return Some(reason);
+     }
+     // 余地は受付の判定をそのまま撃つ。置き場は渡さない——交差は上で [`crossings`] が測り済みで、
+     // 同じ周に 2 度測ると store を 2 度読むだけになる（重複 run の検査も run を作らない列には要らない）。
+@@ -326,6 +316,27 @@ fn blocker(
+     None
+ }
+ 
++/// 交差の待ち（通れば `None`）。同じ周に起こした bead との交差を先に、live な便との交差を後に測り、先頭の 1 組を名乗る。
++/// 交差の後に [`commute::weigh`] を撃ち、通す組は待たせない（規則の行が偽の周は今のまま待つ・判断の記録 ADR-60 の決定 (3)）。
++fn overlap(input: &Input<'_>, contract: &Contract, tracked: &[String], started: &[(String, &Contract)]) -> Option<WaitReason> {
++    let mine = |theirs: &Contract| -> Vec<String> {
++        overlaps(&contract.write_set, &theirs.write_set, tracked).into_iter().map(|(mine, _)| mine).collect()
++    };
++    let same: Vec<(&str, &Contract, Vec<String>)> =
++        started.iter().map(|(bead, theirs)| (bead.as_str(), *theirs, mine(theirs))).filter(|(_, _, files)| !files.is_empty()).collect();
++    let runs = match (same.is_empty() || commute::on(input.manifest)).then(|| crossings(input.state_dir, contract, tracked)) {
++        Some(Ok(found)) => found.runs,
++        Some(Err(denial)) => return Some(refused_by(&denial)),
++        None => Vec::new(),
++    };
++    let crossed = runs.iter().filter(|(_, files)| !files.is_empty()).cloned();
++    let (with, files) = same.iter().map(|(bead, _, files)| ((*bead).to_owned(), files.clone())).chain(crossed).next()?;
++    let started: Vec<(&str, &Contract)> = same.iter().map(|&(bead, theirs, _)| (bead, theirs)).collect();
++    let scene = commute::Scene { repo: input.repo, manifest: input.manifest, state_dir: input.state_dir, tracked };
++    let verdict = commute::weigh(&scene, contract, &runs, &started).map(|found| found.verdict);
++    (verdict != Some(commute::Verdict::Commutes)).then_some(WaitReason::Overlap { with, files, verdict })
++}
++
+ /// 起動の構築点（`pipe run` の引数を組む・**撃たない**）。
+ pub(super) fn launch_of(input: &Input<'_>, bead: &str, pointer: &Pointer) -> Launch {
+     let mut argv = vec![
+diff --git a/scribe2/crates/scribe2/src/pipe/refuse.rs b/scribe2/crates/scribe2/src/pipe/refuse.rs
+index 07eec807..371725ba 100644
+--- a/scribe2/crates/scribe2/src/pipe/refuse.rs
++++ b/scribe2/crates/scribe2/src/pipe/refuse.rs
+@@ -14,6 +14,7 @@
+ //! （ADR-0009 §2.1 の既知の穴はそのまま）。
+ 
+ use super::closure::ClosureError;
++use super::commute::Verdict;
+ use super::declaration::DECL_FILE;
+ use super::review::{FindingKind, ROW_SAME_KIND_STOP};
+ use super::table::TableError;
+@@ -98,6 +99,8 @@ pub(crate) enum Refuse {
+         run: String,
+         /// 交差した契約側の path（字面は契約が書いたまま）。
+         path: String,
++        /// 差の当たりの判じの結末（規則の行 `pipe.overlap_commute` が偽の周は `None`・判断の記録 ADR-60 の決定 (4)）。
++        verdict: Option<Verdict>,
+     },
+     /// live な便の write-set を読めない（契約の写しが無い / 壊れている / 判定を読めない）。
+     WriteSetUnreadable {
+@@ -337,8 +340,9 @@ impl Refuse {
+         match *self {
+             Self::NotARepo { ref repo } => format!("{repo} は git repo でない"),
+             Self::DuplicateRun { ref run } => format!("run {run} は既に在る（同じ秒の再 intake）"),
+-            Self::WriteSetOverlap { ref run, ref path } => {
+-                format!("write-set が live な run {run} と交差する（{path}）")
++            Self::WriteSetOverlap { ref run, ref path, verdict } => {
++                let tail = verdict.map_or_else(String::new, |found| format!("・{}", found.as_str()));
++                format!("write-set が live な run {run} と交差する（{path}{tail}）")
+             }
+             Self::WriteSetUnreadable { ref run } => {
+                 format!("live な run {run} の write-set を読めない")
+@@ -713,7 +717,7 @@ mod tests {
+         vec![
+             Refuse::NotARepo { repo: "/tmp/x".to_owned() },
+             Refuse::DuplicateRun { run: "r-1".to_owned() },
+-            Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned() },
++            Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned(), verdict: None },
+             Refuse::WriteSetUnreadable { run: "r-1".to_owned() },
+             Refuse::WriteSetIncomplete { missing: vec!["src/a.rs".to_owned(), "src/b.rs".to_owned()] },
+             Refuse::WriteSetDirWithoutSlash { path: "src".to_owned() },
+@@ -1073,7 +1077,7 @@ mod tests {
+             assert_eq!(rc, expected, "{} の rc", found.as_str());
+             assert!(!found.reason().is_empty(), "{} は理由を 1 行で名乗る", found.as_str());
+         }
+-        let overlap = Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned() };
++        let overlap = Refuse::WriteSetOverlap { run: "r-1".to_owned(), path: "src/lib.rs".to_owned(), verdict: None };
+         let line = overlap.reason();
+         assert!(line.contains("r-1"), "相手の run id を名乗る: {line}");
+         assert!(line.contains("src/lib.rs"), "交差した path を名乗る: {line}");
