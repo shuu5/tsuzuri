@@ -1,0 +1,260 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs b/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
+index 92721d1a08f793233bc3fd0cbc088fcb714d8a14..4315973d1754d22c484f05800c31909d66353a29 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/hook/vessel_cli.rs
+@@ -240,6 +240,67 @@ fn vswap_refuses_while_a_vessel_process_lives() {
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "生きた行の無い周は進む: {}", stderr_text(&out));
+ }
+ 
++/// 留めた便の process の行（行 v-pin-swap）: 便 r1 の留めの形の器の語の行（起こし直しの driver と sh の包みの runner）・`--run r1` の
++/// 行・`--bead b-2` の `pipe run` で便 r2 の札の所有者の pid の行（`runs` の置き場に r1 と r2 の留めと r2 の `RunCreated` と札を置く）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn pinned_lines(runs: &Path) -> String {
++    let pin = |run: &str| runs.join("pipe").join(run).join("bin").join(NAME);
++    for run in ["r1", "r2"] {
++        fs::create_dir_all(runs.join("pipe").join(run).join("bin")).expect("bin の dir を作れる");
++        fs::write(pin(run), "").expect("留めを置ける");
++    }
++    fs::write(runs.join("pipe").join("r2").join("driver"), "4304 1\n").expect("札を書ける");
++    fs::create_dir_all(runs.join("fleet")).expect("log の dir を作れる");
++    let created = "{\"schema\":1,\"ts\":\"2026-10-05T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r2\",\"bead\":\"b-2\",\"host\":\"h\",\"actor\":\"machine\",\"stage\":\"Intake\"}\n";
++    fs::write(runs.join("fleet").join("events.jsonl"), created).expect("RunCreated を書ける");
++    let (p1, s) = (pin("r1").display().to_string(), runs.display().to_string());
++    format!(
++        "4301 {p1} pipe resume --run r1 --state-dir {s} --drive\n4302 /usr/bin/sh -c {p1} runner --worktree /w\n\
++         4303 {NAME} pipe land --run r1 --state-dir {s} --terminal-only\n4304 /opt/{NAME} pipe run --design d --bead b-2 --state-dir {s}\n"
++    )
++}
++
++/// 入れ替えの門 (3)（行 v-pin-swap）: 偽 pgrep の行が留めた便の行だけの周は busy で断らず、撃ちの列と `InstallRecorded` 1 件と
++/// stdout の 1 行は成功の見本と同じ。
++#[test]
++fn vpinswap_pinned_processes_do_not_hold_the_swap() {
++    let place = update_place(true, "", 0, 0);
++    let runs = tmp();
++    fs::write(place.bin.join("live"), pinned_lines(&runs)).expect("生きた行を書ける");
++    let out = run_update(&place);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "留めた行だけの周は進む: {}", stderr_text(&out));
++    assert_eq!(place.argv(), update_argv(), "順序固定の argv（数えの後の段へ進む）");
++    assert_eq!(place.installs().len(), 1, "InstallRecorded は 1 件");
++    let sha = UPDATE_HEAD.get(..12).unwrap_or_default();
++    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("vessel: installed sha={sha} path={UPDATE_BIN}\n"), "stdout は 1 行");
++}
++
++/// 入れ替えの門 (4)（行 v-pin-swap）: 留めた行に、留めの無い便の行（`--run r9`）か、どの便にも解けない行（置き場を持たない sh の包み
++/// の runner・札の所有者でない pid の `pipe run`）を 1 本足した周は、今までどおり数えの段より後を撃たず、event 0 件・stdout 空・
++/// stderr の 1 行目が `vessel: busy`・rc 1。
++#[test]
++fn vpinswap_unpinned_or_unresolved_lines_keep_busy() {
++    let argv = update_argv();
++    let runs = tmp();
++    let s = runs.display().to_string();
++    for extra in [
++        format!("4307 {NAME} pipe land --run r9 --state-dir {s}"),
++        format!("4308 /usr/bin/sh -c {NAME} runner --worktree /w"),
++        format!("4399 /opt/{NAME} pipe run --design d --bead b-2 --state-dir {s}"),
++    ] {
++        let place = update_place(true, "", 0, 0);
++        fs::write(place.bin.join("live"), format!("{}{extra}\n", pinned_lines(&runs))).expect("生きた行を書ける");
++        let out = run_update(&place);
++        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{extra}: busy の rc: {}", stderr_text(&out));
++        assert_eq!(stderr_text(&out).lines().next(), Some("vessel: busy"), "{extra}: 断りの語");
++        assert_eq!(place.argv(), argv.get(..2).unwrap_or_default().to_vec(), "{extra}: 数えの段より後は撃たない");
++        assert!(place.installs().is_empty() && out.stdout.is_empty(), "{extra}: event 0 件・stdout 空");
++    }
++}
++
+ /// 入れ替えの門 (2): PATH の器の世代（`--version` の括弧の sha12）と HEAD の差が repo の dir の下で空（`git diff --quiet <sha12>
+ /// HEAD -- .` の rc 0）の周は cargo を撃たず、event 0 件・stderr の 1 行目が `vessel: unchanged`・rc 1。差の在る見本（rc 1）と
+ /// 世代の括弧が `+dirty` の見本は組む（cargo を撃ち event 1 件）。
+diff --git a/scribe2/crates/scribe2/src/hook/vessel.rs b/scribe2/crates/scribe2/src/hook/vessel.rs
+index 3a50fe9d87906f29d2da6d380629427cdd1c96a5..5800e8b5e42d1f8a207bb3482582f7504eb0062f 100644
+--- a/scribe2/crates/scribe2/src/hook/vessel.rs
++++ b/scribe2/crates/scribe2/src/hook/vessel.rs
+@@ -386,7 +386,8 @@ pub enum UpdateError {
+     Undeclared(Vec<String>),
+     /// `status --porcelain --untracked-files=no` が非空か、clean と確かめられない（作業ツリーを動かさない・N1）。
+     Dirty,
+-    /// host のどの置き場かで器の process（自分の外）が生きているか、`pgrep` で測れない（走る便の下で binary を替えない）。
++    /// host のどの置き場かで器の process（自分の外・留めた便の process を除く）が生きているか、`pgrep` で測れない（走る便の下で
++    /// binary を替えない・同じ便の子が留めを撃つ便は数えない＝行 v-pin-swap）。
+     Busy,
+     /// `fetch` が落ちた（rc つき・`None` = 起動できない / signal）。
+     FetchFailed(Option<i32>),
+@@ -523,7 +524,8 @@ fn live_pattern() -> String {
+ }
+ 
+ /// host のどの置き場かで器の process が自分の外に 1 本でも在るか（`pgrep -af` の rc 1 だけが 0 本・起動できない周と
+-/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行は数えない。
++/// 他の rc は在るに倒す＝測れないを 0 本に読み替えない・C10）。自分の pid の行と、留めた便の process の行
++/// （[`crate::pipe::pin::hold`]・行 v-pin-swap）は数えない。留めの無い便の行とどの便にも解けない行は数える。
+ fn busy() -> bool {
+     let pattern = live_pattern();
+     let Ok(out) = Invocation::new("pgrep").args(["-af", pattern.as_str()]).output() else {
+@@ -533,7 +535,10 @@ fn busy() -> bool {
+         Some(1) => false,
+         Some(0) => {
+             let me = std::process::id().to_string();
+-            String::from_utf8_lossy(&out.stdout).lines().any(|line| line.split_whitespace().next() != Some(me.as_str()))
++            String::from_utf8_lossy(&out.stdout)
++                .lines()
++                .filter(|line| line.split_whitespace().next() != Some(me.as_str()))
++                .any(|line| crate::pipe::pin::hold(line) != crate::pipe::pin::Hold::Pinned)
+         }
+         _ => true,
+     }
+diff --git a/scribe2/crates/scribe2/src/pipe/pin.rs b/scribe2/crates/scribe2/src/pipe/pin.rs
+index dff1a9338112a689d6d302b08075377e193f8efa..21d9e9e23491b34531d7c24fb8962ab319216bf3 100644
+--- a/scribe2/crates/scribe2/src/pipe/pin.rs
++++ b/scribe2/crates/scribe2/src/pipe/pin.rs
+@@ -10,11 +10,14 @@
+ //! 留めの読みは 3 つ: 同じ便の実装役と審査役の命令は [`head`] が最初の語を留めに替え、便に結ばれる子（argv に `--run` を持つ
+ //! 起こし直しと着地後の検出）は [`program`] が留めを返し、便に結ばれない子（列が起こす新しい便ほか）は [`launcher`] が留めの
+ //! 形の呼ばれ方を器の名に戻す（新しい便は PATH の器で起きる）。終わった便の留めは器の掃除が消す（[`drop_bin`]）。
++//!
++//! 器の入れ替えの門 busy は、器の process の行を [`hold`] で 3 値に分け、留めた便の行だけの周は断らない（行 v-pin-swap）。
+ 
+ use super::run_dir;
+ use crate::fleet::{store, EventKind, Install};
+ use crate::invocation::Invocation;
+ use crate::name::{version_line, NAME};
++use std::ffi::OsStr;
+ use std::io::ErrorKind;
+ use std::path::{Path, PathBuf};
+ 
+@@ -120,6 +123,59 @@ pub(super) fn run_of(argv: &[String]) -> Option<&str> {
+     argv.windows(2).find(|pair| pair.first().map(String::as_str) == Some("--run")).and_then(|pair| pair.get(1)).map(String::as_str)
+ }
+ 
++/// 器の process の行の分け（閉じた 3 値・器の入れ替えの門 busy が数えるのは留めた以外の 2 つ・行 v-pin-swap）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Hold {
++    /// 留めた便の process（同じ便の子は留めを撃つので、PATH の器を替えても便の中で版が混ざらない）。
++    Pinned,
++    /// 便に解けたが留めの無い process（行 v-pin の前に起きた便・留めを置けなかった便・留めの消えた便）。
++    Unpinned,
++    /// どの便にも解けない process（測れないを 0 本に読まない・C10）。
++    Unresolved,
++}
++
++/// `pgrep -af` の 1 行（`<pid> <command 行>`）を分ける。器の語（名が器の名で始まり、次の語が pipe・runner・lens の語）が留めの
++/// 形ならその file の在否で、器の語の後ろに `--state-dir` と `--run` を持つ行はその便の留めの在否で、`--state-dir` と `--bead` を
++/// 持つ `pipe run` の行はその置き場の event log の最後の `RunCreated` の便の driver の札の所有者がこの行の pid の周だけ、その便の
++/// 留めの在否で分ける。ほかの行（器の語の無い行・`--state-dir` の無い行・解けない `--bead` の行）は解けない。
++pub fn hold(line: &str) -> Hold {
++    let words: Vec<&str> = line.split_whitespace().collect();
++    let Some((pid, rest)) = words.split_first() else {
++        return Hold::Unresolved;
++    };
++    let named = |word: &&str| Path::new(word).file_name().and_then(OsStr::to_str).is_some_and(|name| name.starts_with(NAME));
++    let verb = |word: Option<&&str>| word.is_some_and(|found| matches!(*found, "pipe" | "runner" | "lens"));
++    let Some(at) = rest.windows(2).position(|pair| pair.first().is_some_and(named) && verb(pair.get(1))) else {
++        return Hold::Unresolved;
++    };
++    let pinned = |found: bool| if found { Hold::Pinned } else { Hold::Unpinned };
++    let word = Path::new(rest.get(at).copied().unwrap_or_default());
++    if pinned_form(word) {
++        return pinned(word.is_file());
++    }
++    let args = rest.get(at.saturating_add(1)..).unwrap_or_default();
++    let value = |flag: &str| args.windows(2).find(|pair| pair.first() == Some(&flag)).and_then(|pair| pair.get(1)).copied();
++    let Some(state) = value("--state-dir").map(Path::new) else {
++        return Hold::Unresolved;
++    };
++    if let Some(run) = value("--run") {
++        return pinned(path(state, run).is_file());
++    }
++    match value("--bead").filter(|_| args.starts_with(&["pipe", "run"])).and_then(|bead| driven_run(state, bead, pid)) {
++        Some(run) => pinned(path(state, &run).is_file()),
++        None => Hold::Unresolved,
++    }
++}
++
++/// 置き場の event log の最後の `RunCreated` で `bead` の便を解き、その便の driver の札の所有者が `pid` の周だけ便 id を返す
++/// （log を読めない・`RunCreated` が無い・札が無いか読めない・所有者が違う周は `None`）。
++fn driven_run(state: &Path, bead: &str, pid: &str) -> Option<String> {
++    let events = store::read_all(state).ok()?;
++    let run = events.iter().rev().find(|event| event.kind == EventKind::RunCreated && event.bead == bead)?.run.clone();
++    let body = std::fs::read_to_string(super::driver_path(state, &run)).ok()?;
++    (store::owner_pid(&body)?.to_string() == pid).then_some(run)
++}
++
+ /// 終わった便の bin の dir を消す（在って消せた周だけ真・器の掃除が live でない便に撃つ）。
+ pub(super) fn drop_bin(state_dir: &Path, run: &str) -> bool {
+     let dir = run_dir(state_dir, run).join(BIN_DIR);
+@@ -128,7 +184,9 @@ pub(super) fn drop_bin(state_dir: &Path, run: &str) -> bool {
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{head, launcher, link, link_reason, path, program, BIN_DIR, CROSS_DEVICE, NO_INSTALL, OTHER_VERSION, UNREADABLE};
++    use super::{
++        head, hold, launcher, link, link_reason, path, program, Hold, BIN_DIR, CROSS_DEVICE, NO_INSTALL, OTHER_VERSION, UNREADABLE,
++    };
+     use crate::fleet::{EventKind, Install};
+     use crate::name::{version_line, NAME};
+     use crate::pipe::fixture::{append_all, event, exited, scratch, Stub};
+@@ -230,4 +288,61 @@ mod tests {
+         assert_eq!(launcher(None), NAME, "呼ばれ方の無い周は器の名");
+         let _ = std::fs::remove_dir_all(&state);
+     }
++
++    /// 留めの file を置き、`run` に driver の札（`owner` が在れば）と `bead` の `RunCreated` を積む。
++    fn pinned_run(state: &Path, run: &str, bead: &str, owner: Option<u32>, pin: bool) {
++        let mut created = event(run, EventKind::RunCreated, Some(crate::fleet::Stage::Intake), None, None);
++        created.bead = bead.to_owned();
++        append_all(state, &[created]);
++        let dir = state.join("pipe").join(run);
++        std::fs::create_dir_all(dir.join(BIN_DIR)).expect("bin の dir を作れる");
++        if let Some(pid) = owner {
++            std::fs::write(dir.join("driver"), format!("{pid} 1\n")).expect("札を書ける");
++        }
++        if pin {
++            std::fs::write(path(state, run), "").expect("留めを置ける");
++        }
++    }
++
++    /// 行の分け: 留めの形の器の語で file の在る行・`--run` の便に留めの在る行・`--bead` の `pipe run` で最後の `RunCreated` の便の札の
++    /// 所有者がこの pid でその便に留めの在る行は留めた行（同じ bead の前の便 r0 は読まない）。1 句ずつ外した行（留めの file が無い・
++    /// `--run` の便に留めが無い・`--bead` の便に留めが無い・札の所有者が違う pid・`RunCreated` の無い bead・同じ便の行の後ろに壊れた
++    /// 行を持つ event log の置き場・`--state-dir` の無い行・`pipe run` でない `--bead` の行・器の語が留めの形でない sh の包みの行・
++    /// 空の行）は留めの無い行か解けない行。
++    #[test]
++    fn vpinswap_hold_reads_three_pinned_forms_and_counts_the_rest() {
++        let state = scratch("vpinswap-hold");
++        pinned_run(&state, "r1", "b-1", None, true);
++        pinned_run(&state, "r0", "b-2", Some(4304), false);
++        pinned_run(&state, "r2", "b-2", Some(4304), true);
++        pinned_run(&state, "r3", "b-3", Some(4305), false);
++        let broken = scratch("vpinswap-hold-broken");
++        pinned_run(&broken, "r2", "b-2", Some(4304), true);
++        let log = broken.join("fleet").join("events.jsonl");
++        let text = std::fs::read_to_string(&log).expect("log を読める");
++        std::fs::write(&log, format!("{text}{{\"schema\":1,\"kind\":\"Nonsense\"}}\n")).expect("壊れた行を足せる");
++        let (s, b) = (state.display().to_string(), broken.display().to_string());
++        let (p1, p9) = (path(&state, "r1").display().to_string(), path(&state, "r9").display().to_string());
++        let run = |pid: u32, bead: &str, dir: &str| format!("{pid} /opt/{NAME} pipe run --design d --bead {bead} --state-dir {dir} --drive");
++        for (line, want) in [
++            (format!("4301 {p1} pipe resume --run r1 --state-dir {s}"), Hold::Pinned),
++            (format!("4302 /usr/bin/sh -c {p1} runner --worktree /w"), Hold::Pinned),
++            (format!("4303 {NAME} pipe land --run r1 --state-dir {s} --terminal-only"), Hold::Pinned),
++            (run(4304, "b-2", &s), Hold::Pinned),
++            (format!("4306 {p9} lens --contract c"), Hold::Unpinned),
++            (format!("4307 {NAME} pipe land --run r9 --state-dir {s}"), Hold::Unpinned),
++            (run(4305, "b-3", &s), Hold::Unpinned),
++            (run(4399, "b-2", &s), Hold::Unresolved),
++            (run(4304, "b-9", &s), Hold::Unresolved),
++            (run(4304, "b-2", &b), Hold::Unresolved),
++            (format!("4304 /opt/{NAME} pipe run --design d --bead b-2 --drive"), Hold::Unresolved),
++            (format!("4304 /opt/{NAME} pipe dispatch release --bead b-2 --state-dir {s}"), Hold::Unresolved),
++            (format!("4308 /usr/bin/sh -c {NAME} runner --worktree /w"), Hold::Unresolved),
++            (String::new(), Hold::Unresolved),
++        ] {
++            assert_eq!(hold(&line), want, "{line}");
++        }
++        let _ = std::fs::remove_dir_all(&state);
++        let _ = std::fs::remove_dir_all(&broken);
++    }
+ }
