@@ -1503,3 +1503,26 @@ fn headless_lens_permit_cap_memo_stage_ignores_the_copy() {
     assert!(dir.join("called").exists(), "同じ dir の diff の形は写しの値 100 で claude を呼ぶ");
     clean(&[&dir]);
 }
+
+/// 行 v-review-dedup（接頭辞 `vrdup_`）: 契約の隣の `design.txt` の出所の 1 行の後ろが契約 file の goal と同じ字の周、lens の子が claude に渡す
+/// prompt の `{design}` の穴は出所の 1 行と同じ字の 1 行で、goal の字は契約の goal の行の 1 度だけ載る。本文が goal と違う周
+/// （[`CONTRACT_DESIGN`]）は本文のまま（対）。どちらの周も `design.txt` の中身は替わらない。
+#[test]
+fn vrdup_lens_child_puts_one_line_for_the_same_goal() {
+    let same = format!("docs/design/unlikely.toml#z §4\n{CONTRACT_GOAL}");
+    let line = "docs/design/unlikely.toml#z §4\n（本文は契約の goal と同じ字・上の契約の goal を節の本文として読む）\n\n\n## 契約が満たす要件";
+    for (design, deduped) in [(same.as_str(), true), (CONTRACT_DESIGN, false)] {
+        let dir = tmp();
+        let claude = fake_claude(&dir, "{\"verdict\":\"PASS\",\"evidence\":\"fake\"}\n", false, 0);
+        let contract = contract_in(&dir);
+        material_in(&dir, Some(design), Some(CONTRACT_REQUIREMENTS));
+        let out = run_lens(&contract, 4096, "plan", &claude, CONTRACT_STDIN);
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+        let prompt = slurp(&dir.join("stdin"));
+        assert_eq!(prompt.contains(line), deduped, "{design}: 同じ字の 1 行: {prompt}");
+        assert_eq!(prompt.contains(&format!("\n{design}\n\n\n## 契約が満たす要件")), !deduped, "{design}: 本文のまま: {prompt}");
+        assert_eq!(prompt.matches(CONTRACT_GOAL).count(), 1, "{design}: goal の字は契約の goal の行の 1 度だけ: {prompt}");
+        assert_eq!(slurp(&dir.join("design.txt")), format!("{design}\n"), "{design}: design.txt は替わらない");
+        clean(&[&dir]);
+    }
+}
