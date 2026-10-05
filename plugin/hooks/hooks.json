@@ -21,6 +21,25 @@
             "async": true
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-bind --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-meter --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -33,6 +52,25 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent|Workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-spawn --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-guard --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
@@ -42,6 +80,17 @@
             "type": "command",
             "command": "\"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook stop --repo \"$CLAUDE_PROJECT_DIR\"",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-stop --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 10
           }
         ]
       }

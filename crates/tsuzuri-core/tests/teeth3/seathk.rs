@@ -1,7 +1,7 @@
 //! 席の手元へ要の写しを出した暫定の hook を外した後の守りの歯（接頭辞 seathk_・行 t-hook-drop・判断の記録 ADR-38 決定 (6)(7)）。
 //! workspace の根の plugin/hooks/hooks.json を JSON として読み（境界の crate は serde_json に直に依存しないので中核の crate に置く）、
-//! event の鍵に SessionStart が無く、どの command も要の写しを出す語を持たないことと、runner の印の除きを持つ 4 本の command の頭の
-//! 印の名が器の名の定数から成ることを見る。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
+//! event の鍵に SessionStart が無く、どの command も要の写しを出す語を持たないことと、runner の印の除きを持つ event の全部の command の
+//! 頭の印の名が器の名の定数から成ることを見る（係の口の command も印を持つ・行 ag-plugin）。否定の見本は今の hooks.json から句を 1 つだけ崩して作る。
 #![cfg(test)]
 
 use std::fs;
@@ -20,19 +20,21 @@ const NAME_LINE: &str = "pub const NAME: &str = \"";
 const SUFFIX_LINE: &str = "const RUNNER_MARK_SUFFIX: &str = \"-runner\";";
 
 /// hooks.json の event の鍵（字の順）。
-const EVENTS: [&str; 5] = [
+const EVENTS: [&str; 6] = [
     "PostToolBatch",
     "PostToolUse",
     "PreToolUse",
     "Stop",
+    "SubagentStop",
     "UserPromptSubmit",
 ];
 
 /// runner の印の除きを持つ command の event（Stop は除きを持たない）。
-const MARKED: [&str; 4] = [
+const MARKED: [&str; 5] = [
     "PostToolBatch",
     "PostToolUse",
     "PreToolUse",
+    "SubagentStop",
     "UserPromptSubmit",
 ];
 
@@ -55,14 +57,6 @@ fn hooks() -> Value {
         .unwrap_or_else(|e| panic!("hooks.json は JSON でない: {e}"))
 }
 
-/// 要素 1 つの配列のその要素。
-fn only(v: &Value) -> &Value {
-    match v.as_array().map(Vec::as_slice) {
-        Some([one]) => one,
-        _ => panic!("要素 1 つの配列でない: {v}"),
-    }
-}
-
 /// event の鍵（字の順）。
 fn events(hooks: &Value) -> Vec<&str> {
     let mut keys: Vec<&str> = hooks["hooks"]
@@ -75,18 +69,32 @@ fn events(hooks: &Value) -> Vec<&str> {
     keys
 }
 
-/// event の要素 1 つの hook 1 つの command の字。
-fn command<'a>(hooks: &'a Value, event: &str) -> &'a str {
-    only(&only(&hooks["hooks"][event])["hooks"])["command"]
-        .as_str()
-        .unwrap_or_else(|| panic!("{event} の command は字でない"))
+/// event の全部の要素の全部の hook の command の字（要素の順）。
+fn commands<'a>(hooks: &'a Value, event: &str) -> Vec<&'a str> {
+    let all = |v: &'a Value| v.as_array().map_or(&[][..], Vec::as_slice);
+    let list: Vec<&str> = all(&hooks["hooks"][event])
+        .iter()
+        .flat_map(|entry| all(&entry["hooks"]))
+        .map(|hook| hook["command"].as_str().unwrap_or_default())
+        .collect();
+    assert!(!list.is_empty(), "{event} に command が無い");
+    list
 }
 
-/// 見本を作るために、event の command の字を `edit` で書き替えた写し。
+/// 見本を作るために、event の最初の要素の最初の command の字を `edit` で書き替えた写し。
 fn edited(hooks: &Value, event: &str, edit: impl Fn(&str) -> String) -> Value {
     let mut copy = hooks.clone();
-    let text = edit(command(hooks, event));
+    let text = edit(commands(hooks, event)[0]);
     copy["hooks"][event][0]["hooks"][0]["command"] = Value::String(text);
+    copy
+}
+
+/// 見本を作るために、event の最後の要素の最初の command の字を `edit` で書き替えた写し。
+fn edited_last(hooks: &Value, event: &str, edit: impl Fn(&str) -> String) -> Value {
+    let mut copy = hooks.clone();
+    let last = hooks["hooks"][event].as_array().map_or(0, Vec::len).saturating_sub(1);
+    let text = edit(hooks["hooks"][event][last]["hooks"][0]["command"].as_str().unwrap_or_default());
+    copy["hooks"][event][last]["hooks"][0]["command"] = Value::String(text);
     copy
 }
 
@@ -94,7 +102,7 @@ fn edited(hooks: &Value, event: &str, edit: impl Fn(&str) -> String) -> Value {
 fn copying(hooks: &Value) -> Vec<String> {
     events(hooks)
         .into_iter()
-        .filter(|event| COPY_WORDS.iter().any(|w| command(hooks, event).contains(w)))
+        .filter(|event| commands(hooks, event).iter().any(|c| COPY_WORDS.iter().any(|w| c.contains(w))))
         .map(str::to_owned)
         .collect()
 }
@@ -123,14 +131,15 @@ fn mark_name() -> String {
     format!("{}{MARK_SUFFIX}", vessel_name())
 }
 
-/// 印の除きの頭が `mark` の名で始まらないか、除きを 1 度だけ持たない command の event（MARKED の順）。
+/// 印の除きの頭が `mark` の名で始まらないか、除きを 1 度だけ持たない command を持つ event（MARKED の順）。
 fn unmarked(hooks: &Value, mark: &str) -> Vec<String> {
     let head = format!("{EXCLUDE_HEAD}{mark}\" ] || ");
     MARKED
         .iter()
         .filter(|event| {
-            let text = command(hooks, event);
-            !text.starts_with(&head) || text.matches(EXCLUDE_HEAD).count() != 1
+            commands(hooks, event)
+                .iter()
+                .any(|text| !text.starts_with(&head) || text.matches(EXCLUDE_HEAD).count() != 1)
         })
         .map(|event| (*event).to_owned())
         .collect()
@@ -142,7 +151,7 @@ fn seathk_session_start_is_gone() {
     assert_eq!(
         events(&now),
         EVENTS,
-        "event の鍵は 5 つで SessionStart が無い"
+        "event の鍵は 6 つで SessionStart が無い"
     );
     assert!(
         copying(&now).is_empty(),
@@ -169,7 +178,7 @@ fn seathk_marked_heads_follow_the_vessel_name() {
     assert_eq!(
         unmarked(&now, &mark),
         Vec::<String>::new(),
-        "4 本の頭が印の除き"
+        "印を持つ event の全部の command の頭が印の除き"
     );
     let other = edited(&now, "PreToolUse", |c| c.replacen(&mark, "other-runner", 1));
     assert_eq!(
@@ -183,6 +192,8 @@ fn seathk_marked_heads_follow_the_vessel_name() {
             .expect("除きの後")
     });
     assert_eq!(unmarked(&bare, &mark), ["PostToolUse"], "除きを外した見本");
+    let gate = edited_last(&now, "PreToolUse", |c| c.replacen(&mark, "other-runner", 1));
+    assert_eq!(unmarked(&gate, &mark), ["PreToolUse"], "最後の要素の印の名だけ替えた見本");
     let twice = edited(&now, "UserPromptSubmit", |c| {
         format!("{EXCLUDE_HEAD}{mark}\" ] || {c}")
     });

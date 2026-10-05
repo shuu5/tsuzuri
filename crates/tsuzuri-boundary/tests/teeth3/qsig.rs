@@ -351,17 +351,20 @@ fn qsig_exit_codes() {
     let _ = fs::remove_dir_all(&root);
 }
 
-/// hooks.json の PostToolUse の要素 1 つの hook の object の字。
+/// hooks.json の PostToolUse の matcher が Bash の要素 1 つの hook の object の字（ほかの matcher の要素は係の口）。
 fn post_hook() -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/hooks/hooks.json");
     let text = fs::read_to_string(&path).expect("hooks.json を読む");
     let hooks = json::member(&text, "hooks").expect("鍵 hooks");
     let post = json::member(hooks, "PostToolUse").expect("鍵 PostToolUse");
-    let [entry] = json::items(post).expect("PostToolUse は配列")[..] else {
-        panic!("PostToolUse は要素 1 つの配列でない: {post}");
+    let bash: Vec<&str> = json::items(post)
+        .expect("PostToolUse は配列")
+        .into_iter()
+        .filter(|e| json::member(e, "matcher").and_then(json::unquote).as_deref() == Some("Bash"))
+        .collect();
+    let [entry] = bash[..] else {
+        panic!("PostToolUse の matcher が Bash の要素が 1 つでない: {post}");
     };
-    let matcher = json::member(entry, "matcher").and_then(json::unquote);
-    assert_eq!(matcher.as_deref(), Some("Bash"));
     let inner = json::member(entry, "hooks").expect("要素の hooks");
     let [hook] = json::items(inner).expect("要素の hooks は配列")[..] else {
         panic!("要素の hooks は要素 1 つの配列でない: {inner}");

@@ -100,9 +100,18 @@ fn words(text: &str) -> Vec<String> {
     text.split_whitespace().map(|w| w.replace('"', "")).collect()
 }
 
-/// PreToolUse の要素の hook の command の字。
+/// PreToolUse の matcher が Bash の要素（1 つだけ・ほかの matcher の要素は係の口）。
+fn bash_entry(hooks: &Value) -> &Value {
+    let all = hooks["hooks"]["PreToolUse"].as_array().expect("PreToolUse は配列");
+    match all.iter().filter(|e| e["matcher"] == "Bash").collect::<Vec<_>>().as_slice() {
+        [one] => one,
+        _ => panic!("matcher が Bash の要素が 1 つでない: {all:?}"),
+    }
+}
+
+/// PreToolUse の matcher が Bash の要素の hook の command の字。
 fn gate_command(hooks: &Value) -> String {
-    let entry = only(&hooks["hooks"]["PreToolUse"]);
+    let entry = bash_entry(hooks);
     let hook = only(&entry["hooks"]);
     hook["command"]
         .as_str()
@@ -121,10 +130,11 @@ fn gins_pretool_bash_entry() {
             "PostToolUse",
             "PreToolUse",
             "Stop",
+            "SubagentStop",
             "UserPromptSubmit"
         ]
     );
-    let entry = only(&hooks["hooks"]["PreToolUse"]);
+    let entry = bash_entry(&hooks);
     assert_eq!(keys(entry), ["hooks", "matcher"]);
     assert_eq!(entry["matcher"], "Bash");
     let hook = only(&entry["hooks"]);
