@@ -184,7 +184,7 @@ id = "g-vocab-dupkey"
 title = "面の語彙の読みが、同じ欄に 2 度在る鍵と english と rephrase の両方に在る鍵を、鍵と 2 つの在りかを書いた Err にする（前は黙って後と english が勝った・検証役の名指し・差の file）"
 req = ["FR10"]
 section = "18"
-write-set = ["crates/tsuzuri-surface/src/vocab.rs", "+crates/tsuzuri-surface/tests/vcdup.rs"]
+write-set = ["crates/tsuzuri-surface/src/vocab.rs", "+crates/tsuzuri-surface/tests/vcdup.rs", "=crates/tsuzuri-surface/tests/teeth2/frame.rs"]
 verify = ["git apply --reverse --check docs/design/patch/g-vocab-dupkey.patch", "cargo clippy -p tsuzuri-surface --all-targets --no-deps -- -D warnings", "cargo clippy -p tsuzuri-surface --target wasm32-unknown-unknown --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-surface --test vcdup --no-tests=fail vcdup_", "cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail frame_"]
 size = "S"
 done = "(1) 置き場の vocab.json は読め、表の鍵の数は 2 欄の鍵の頭の行（字下げ 2 の鍵と波括弧の行）の数と同じ（歯 vcdup_source_parses） (2) 同じ欄に 2 度在る鍵は、rephrase の見本と english の見本のどちらも、鍵と 2 つの在りか（file の名と欄）を書いた Err で、見本は重なりの無い見本から鍵の字 1 つだけを替えた物（歯 vcdup_same_column_refused） (3) english と rephrase の両方に在る鍵は Err で english が勝たない（歯 vcdup_cross_column_refused） (4) 対照として、重なりの無い見本は 4 つの鍵の語と注と内部の名（rephrase は原語の行）を返す（歯 vcdup_distinct_keys_read）"
