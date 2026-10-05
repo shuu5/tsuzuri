@@ -447,12 +447,12 @@
   },
   "sessions": {
    "label": "session",
-   "note": "いま在る session の表 = 2 種\n・ orchestrator は 1 つ\n・ pipeline = run ごと",
+   "note": "いま在る session の表 = 3 種\n・ orchestrator は 1 つ\n・ pipeline = run ごと\n・ 相談の窓 = 閉じていない窓ごと",
    "internal": "seat = SeatRegistered + seat/<seat>/account + state.jsonl\n+ run（RunCreated〜RunDone / RunStopped・RunStage の account:）"
   },
   "role": {
    "label": "role",
-   "note": "session の種類\n・ orchestrator = 設計と指示\n・ pipeline = run を実行",
+   "note": "session の種類\n・ orchestrator = 設計と指示\n・ pipeline = run を実行\n・ 相談の窓 = 持ち主と話す・席が問う",
    "internal": "SeatRegistered role / run"
   },
   "role:orchestrator": {
@@ -465,9 +465,19 @@
    "note": "1 つの run を実行する session\n✗ 群の今の口座は使えない\n✓ 空きの口座で動く",
    "internal": "run（便）・§23 便用の候補から群の今の口座を外す"
   },
+  "consult_account_unknown": {
+   "label": "分からない",
+   "plain": "{gi:unknown} 窓の印に口座が無い\n・ 口座の印の前に起こした窓\n✗ 口座が無いとは違う",
+   "internal": "ProcMark.account が None か印が無い（判断の記録 ADR-55 決定 (4)）"
+  },
+  "role:consult": {
+   "label": "相談の窓",
+   "note": "席が開いた相談の窓\n・ 起こした時の口座で動く\n・ 口座 = process の印の口座の置き場の名",
+   "internal": "<起草の置き場>/consult-cw<n>/.consult の window.json と proc-<k>.json（判断の記録 ADR-55 決定 (4)）"
+  },
   "session": {
    "label": "session",
-   "note": "session の名\n・ orchestrator: target\n・ pipeline は run id",
+   "note": "session の名\n・ orchestrator: target\n・ pipeline は run id\n・ 相談の窓は窓の id",
    "internal": "seat target / run id"
   }
  },

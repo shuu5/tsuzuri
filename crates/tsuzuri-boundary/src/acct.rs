@@ -22,7 +22,10 @@
 //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
 //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
 //! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
-//! git の読み（state dir と board の port）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
+//! git の読み（state dir と board の port と起草の置き場）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
+//! 起草の置き場（`-C <anchor> config --get tsuzuri.draftsdir`）の引けた anchor は、退いていない相談の窓の作業場ごとに
+//! 窓の控えと最後の process の印を読み、その pid の process の在る無しを `/proc` で見る（読むだけ・印にしない・
+//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
 //! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
 //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
 //! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を、`--project` の置き場の anchor の台帳は
@@ -39,9 +42,10 @@ use std::time::{Duration, Instant, SystemTime};
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_core::account::host::{CAP_ROWS, HostTexts, ORCHESTRATOR, RECORD_KIND, declaration};
-use tsuzuri_core::account::project::{self, Parsed, ParsedMap, ProjectTexts};
+use tsuzuri_core::account::project::{self, ConsultWindow, Parsed, ParsedMap, ProjectTexts};
 use tsuzuri_core::account::project_name;
 
+use crate::consult::{DRAFTS_ARGS, alive, procs, read_window, windows, workspace};
 use crate::server::events::stamp;
 use crate::server::held::{FAILED_HOLD, Held};
 use crate::server::ledger::{Got, Mark, Source, capture};
@@ -90,8 +94,8 @@ struct Texts {
     stale: Option<Instant>,
 }
 
-/// git の読みの字（宣言の anchor の順に、state dir と board の port の字）。
-type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>);
+/// git の読みの字（宣言の anchor の順に、state dir と board の port の字と起草の置き場）。
+type GitTexts = (Vec<Option<PathBuf>>, Vec<Option<String>>, Vec<Option<PathBuf>>);
 
 /// git の読みを取った時刻と、読んだ宣言の anchor の列と、git の読みの字（一度も読んでいなければ None）。
 type Gits = Option<(Instant, Vec<String>, GitTexts)>;
@@ -220,6 +224,11 @@ impl Acct {
     /// git が落ちる・5 秒で返らない・空なら None）。
     pub fn board(&self, anchor: &Path) -> Option<String> {
         self.git_get(anchor, &BOARD_ARGS)
+    }
+
+    /// anchor の起草の置き場（相談の窓の作業場の親・git が落ちる・5 秒で返らない・空なら None）。
+    pub fn drafts(&self, anchor: &Path) -> Option<PathBuf> {
+        self.git_get(anchor, &DRAFTS_ARGS).map(PathBuf::from)
     }
 
     /// git に `-C <anchor>` と鍵の引数を渡して撃ち、返した字の前後の空白を除いた字（空なら None）。
@@ -412,7 +421,7 @@ impl Acct {
         let host_toml = read(&self.state_dir.join(HOST_TOML));
         let anchors = anchors(host_toml.as_deref());
         let held = self.held_gits(&anchors);
-        let ((dirs, boards), usage, caps, doctor) = self.gather_first(&anchors, held);
+        let ((dirs, boards, drafts), usage, caps, doctor) = self.gather_first(&anchors, held);
         let mut unique: Vec<&PathBuf> = Vec::new();
         for dir in dirs.iter().flatten() {
             if !unique.contains(&dir) {
@@ -429,6 +438,11 @@ impl Acct {
         self.gather_seat_logs(&mut texts, &unique, &outputs);
         let mut read_logs =
             self.gather_projects(&mut texts, &anchors, &dirs, (&unique, &outputs, ledgers));
+        for (anchor, drafts) in anchors.iter().zip(drafts) {
+            if let Some(d) = drafts {
+                texts.projects.entry(anchor.clone()).or_default().consult = consult_windows(&d);
+            }
+        }
         if let Some(groups) = self.groups_dir() {
             if let Some(toml) = host_toml.as_deref() {
                 texts.marks.extend(
@@ -471,7 +485,11 @@ impl Acct {
                     .iter()
                     .map(|a| s.spawn(|| self.board(Path::new(a))))
                     .collect();
-                (dirs, boards)
+                let drafts: Vec<_> = anchors
+                    .iter()
+                    .map(|a| s.spawn(|| self.drafts(Path::new(a))))
+                    .collect();
+                (dirs, boards, drafts)
             });
             let usage =
                 s.spawn(|| self.held_out(&USAGE_ARGS, &self.state_dir));
@@ -480,11 +498,15 @@ impl Acct {
                 .map(|&(_, rule)| (rule, s.spawn(move || self.held_rule(rule))))
                 .collect();
             let doctor = self.held_out(&DOCTOR_ARGS, &self.state_dir);
-            let (dirs, boards) = match git {
-                Some((dirs, boards)) => {
+            let (dirs, boards, drafts) = match git {
+                Some((dirs, boards, drafts)) => {
                     let texts: GitTexts = (
                         dirs.into_iter().map(|h| h.join().ok().flatten()).collect(),
                         boards
+                            .into_iter()
+                            .map(|h| h.join().ok().flatten())
+                            .collect(),
+                        drafts
                             .into_iter()
                             .map(|h| h.join().ok().flatten())
                             .collect(),
@@ -496,7 +518,7 @@ impl Acct {
                 None => held.unwrap_or_default(),
             };
             (
-                (dirs, boards),
+                (dirs, boards, drafts),
                 usage.join().ok().flatten(),
                 caps.into_iter()
                     .filter_map(|(rule, h)| Some((rule.to_string(), h.join().ok().flatten()?)))
@@ -673,6 +695,25 @@ impl Acct {
             .insert(path.to_path_buf(), (mark, text.clone()));
         text
     }
+}
+
+/// 起草の置き場の退いていない相談の窓の作業場の材料（窓の id の順・窓の控えが読めない作業場は飛ばす）。
+pub fn consult_windows(drafts: &Path) -> Vec<ConsultWindow> {
+    windows(drafts)
+        .into_iter()
+        .filter(|(_, gone)| !gone)
+        .filter_map(|(id, _)| {
+            let ws = workspace(drafts, id);
+            let window = read_window(&ws)?;
+            let last = procs(&ws).pop();
+            let live = last.as_ref().is_some_and(|p| alive(p.pid));
+            Some(ConsultWindow {
+                window,
+                last,
+                alive: live,
+            })
+        })
+        .collect()
 }
 
 fn read(path: &Path) -> Option<String> {

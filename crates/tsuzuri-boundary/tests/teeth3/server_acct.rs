@@ -16,6 +16,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD};
+use tsuzuri_boundary::consult::DRAFTS_ARGS;
 use tsuzuri_boundary::server::held::FAILED_HOLD;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::seat::{HOLD, USAGE_ARGS};
@@ -562,11 +563,11 @@ fn server_acct_argv_exact() {
     for separate in [false, true] {
         let place = Place::new(&format!("argv-{separate}"), separate);
         place.acct().doc(NOW);
-        // git は宣言の anchor ごとに state dir と board の port を 1 回ずつ（同じ anchor は 1 回・書かれた字のまま）。
+        // git は宣言の anchor ごとに state dir と board の port と起草の置き場を 1 回ずつ（同じ anchor は 1 回・書かれた字のまま）。
         let mut want: Vec<String> = PROJECTS
             .iter()
             .flat_map(|(p, tail, _, _)| {
-                ["scribe2.statedir", "tsuzuri.boardport"]
+                ["scribe2.statedir", "tsuzuri.boardport", "tsuzuri.draftsdir"]
                     .map(|key| format!("-C {}{tail} config --get {key}", place.anchor(p)))
             })
             .collect();
@@ -574,6 +575,7 @@ fn server_acct_argv_exact() {
         assert_eq!(place.calls("git"), want, "{separate}");
         assert_eq!(GIT_ARGS, ["config", "--get", "scribe2.statedir"]);
         assert_eq!(BOARD_ARGS, ["config", "--get", "tsuzuri.boardport"]);
+        assert_eq!(DRAFTS_ARGS, ["config", "--get", "tsuzuri.draftsdir"]);
         // 器は state dir ごとに tick と doctor を 1 回、口座と閾値の行ごとは 1 回（猶予の rules 行は撃たない）。
         let (sa, sb, sh) = (
             place.state("state-a").display().to_string(),
@@ -728,7 +730,7 @@ fn server_acct_holds_five_seconds() {
         place.calls("bd"),
     );
     assert_eq!(once.0.len(), 8, "5 秒の中の読み: {:?}", once.0);
-    assert_eq!(once.1.len(), 10, "{:?}", once.1);
+    assert_eq!(once.1.len(), 15, "{:?}", once.1);
     assert_eq!(once.2.len(), 3, "{:?}", once.2);
     for calls in [&once.0, &once.1, &once.2] {
         let distinct: BTreeSet<&String> = calls.iter().collect();
@@ -1094,7 +1096,7 @@ fn acchold_card_follows_off_file() {
         let want = if argv.ends_with("state-a") && (argv.starts_with("seat tick") || argv.starts_with("doctor")) { 3 } else { 1 };
         assert_eq!(calls.iter().filter(|c| *c == argv).count(), want, "{argv}");
     }
-    assert_eq!(place.calls("git").len(), 10, "{:?}", place.calls("git"));
+    assert_eq!(place.calls("git").len(), 15, "{:?}", place.calls("git"));
     assert_eq!(place.calls("bd"), ["proj-a", "proj-b", "proj-e"]);
 }
 
@@ -1186,7 +1188,7 @@ fn alean_git_held() {
     let acct = place.acct().with_git_hold(Duration::from_millis(400));
     let first = acct.doc(NOW);
     let once = place.calls("git");
-    assert_eq!(once.len(), 10, "{once:?}");
+    assert_eq!(once.len(), 15, "{once:?}");
     alean_bump(&place.host_state());
     assert_eq!(acct.doc(NOW), first);
     assert_eq!(place.calls("scribe2").len(), 11, "印が動けば usage と tick status と doctor");

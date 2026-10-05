@@ -5,6 +5,7 @@
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
 //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
 //! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
+//! 相談の窓の行（役 consult）は役の語と窓の card を持つ（判断の記録 ADR-55 決定 (4)）。
 //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::EpochSecs;
@@ -188,6 +189,14 @@ pub fn role_key(role: SeatRole) -> &'static str {
     }
 }
 
+/// 口座の無い行の口座の欄の語の鍵（相談の窓は印に口座の無い窓の「分からない」・ほかは測れていない）。
+pub fn no_account_key(role: SeatRole) -> &'static str {
+    match role {
+        SeatRole::Consult => "consult_account_unknown",
+        SeatRole::Orchestrator | SeatRole::Pipeline => "st_unknown",
+    }
+}
+
 /// 段の字（段の名は英語のまま面に出す）。
 pub fn stage_word(stage: Stage) -> &'static str {
     match stage {
@@ -284,6 +293,8 @@ pub struct SessRow {
     /// session の名（席が無い行は None で、語の鍵 seat_none を出す）。
     pub session: Option<String>,
     pub account: Option<String>,
+    /// 口座が無い時の語の鍵（`no_account_key`）。
+    pub no_account: &'static str,
     /// 状態の値（状態の記号に渡す）。
     pub state: &'static str,
     /// 段の字（pipeline で段が在る行だけ・ほかは状態の語を出す）。
@@ -478,6 +489,7 @@ pub fn row(doc: &AccountDoc, index: usize) -> SessRow {
         role_key: role_key(line.role),
         session: (!line.name.is_empty()).then(|| line.name.clone()),
         account: line.account.clone(),
+        no_account: no_account_key(line.role),
         state: state_value(line.state),
         stage: line
             .stage
@@ -577,6 +589,28 @@ pub fn run_card(line: &SessionLine, at: EpochSecs) -> Card {
     }
 }
 
+/// 相談の窓の行の card の出所（作業場の控えと process の印）。
+pub const CONSULT_SRC: &str = "consult-cw<n>/.consult · window.json · proc";
+
+/// 相談の窓の行の session の欄の card（名・役と project・状態・口座といつから）。
+pub fn consult_card(line: &SessionLine, at: EpochSecs) -> Card {
+    let account = line
+        .account
+        .clone()
+        .unwrap_or_else(|| label(no_account_key(line.role)));
+    let mut more = vec![format!("口座 {account}")];
+    if let Some(s) = line.since {
+        more.push(format!("◷ {} から", hmd(s, at)));
+    }
+    Card {
+        title: line.name.clone(),
+        kind: format!("{} · {}", label("role:consult"), line.project),
+        value: label(state_key(state_value(line.state))),
+        src: CONSULT_SRC.to_string(),
+        more,
+    }
+}
+
 /// project の card が詳しくに並べる session の数（見本の proj の枝）。
 pub const PROJ_SHOWN: usize = 5;
 
@@ -618,11 +652,14 @@ pub fn proj_card(doc: &AccountDoc, name: &str) -> Card {
     }
 }
 
-/// 電文の sessions の i 行目の session の欄の card（run の行は run・席の読める orchestrator の行は席・ほかは project）。
+/// 電文の sessions の i 行目の session の欄の card（run の行は run・相談の窓の行は窓・席の読める orchestrator の行は席・
+/// ほかは project）。
 pub fn sess_card(doc: &AccountDoc, index: usize) -> Card {
     let line = doc.sessions.get(index).unwrap_or(&NO_LINE);
-    if line.role == SeatRole::Pipeline {
-        return run_card(line, doc.at);
+    match line.role {
+        SeatRole::Pipeline => return run_card(line, doc.at),
+        SeatRole::Consult => return consult_card(line, doc.at),
+        SeatRole::Orchestrator => {}
     }
     (!line.name.is_empty())
         .then(|| project_of(doc, &line.project))
@@ -864,7 +901,7 @@ mod dom {
         };
         let account = match row.account.clone() {
             Some(a) => a.into_any(),
-            None => view! { {state_icon(UNKNOWN)}<span class="sub">{label("st_unknown")}</span> }
+            None => view! { {state_icon(UNKNOWN)}<span class="sub">{label(row.no_account)}</span> }
                 .into_any(),
         };
         let spans = row.spans.clone();

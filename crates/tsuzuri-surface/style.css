@@ -647,7 +647,7 @@ table.mx th .bchip { margin-right: 4px; }
 .srow.hrow { font-size: 11px; font-weight: 700; color: var(--ink-3); border-bottom: 2px solid var(--line-2); }
 .srow .mono { font: 600 12px ui-monospace, monospace; }
 .srow .sstg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s1); min-width: 0; }
-.srow.r-pipeline .c-role { padding-left: var(--s4); }
+.srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s4); }
 .srow .c-proj { color: var(--ink-2); font-size: 12px; }
 .srow .strip24 svg { display: block; width: 100%; height: 16px; }
 .ghead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2); margin-top: var(--s2); background: var(--panel-2); border-radius: var(--r2) var(--r2) 0 0; font-weight: 700; }
@@ -674,7 +674,7 @@ table.mx th .bchip { margin-right: 4px; }
   .srow.hrow { display: none; }
   .srow > div { padding: 2px var(--s2); }
   .srow > .c-strip { grid-column: 1 / -1; }
-  .srow.r-pipeline .c-role { padding-left: var(--s2); }
+  .srow.r-pipeline .c-role, .srow.r-consult .c-role { padding-left: var(--s2); }
   .sortbar { margin-left: 0; }
   .mv > li { grid-template-columns: 24px 56px minmax(0, 1fr); }
   .gcur { grid-template-columns: minmax(0, 1fr); }
