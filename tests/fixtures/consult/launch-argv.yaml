@@ -45,6 +45,7 @@
     "permissions": {
       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
       "deny": [
+        "Edit(//R/**)", "Edit(//S/fleet/**)", "Edit(//S/pipe/**)",
         "Read(//S/accounts/**)", "Read(//A/one/**)", "Read(//A/old/**)", "Read(//R/.beads/.env)",
         "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
         "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",

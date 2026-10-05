@@ -153,8 +153,11 @@ fn hidden(l: &Launch) -> Vec<String> {
 }
 
 /// 読む道具の断り（accounts とその symlink の先・台帳の鍵・資格の file は file にも dir にも効くよう path と下の全部の 2 つ）。
+/// 頭に読む根の各々への書きの道具の断り Edit(/<根>/**) を置く（Edit の規則は Write と NotebookEdit にも効き、どの許可の形でも効く・
+/// 許可の形を acceptEdits に替えると --add-dir の読む根へ聞かずに書けるので・行 cs-root-edits）。
 fn denied_reads(l: &Launch) -> Vec<String> {
-    let mut rules = vec![format!("Read(/{}/accounts/**)", l.state)];
+    let mut rules: Vec<String> = l.roots.iter().map(|r| format!("Edit(/{r}/**)")).collect();
+    rules.push(format!("Read(/{}/accounts/**)", l.state));
     rules.extend(l.account_dirs.iter().map(|d| format!("Read(/{d}/**)")));
     rules.push(format!("Read(/{}/.beads/.env)", l.repo));
     for c in CREDENTIALS {

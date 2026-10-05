@@ -188,7 +188,7 @@ fn cwarg_audit_refuses_each_missing_key() {
     for (list, n) in [
         ("/sandbox/credentials/files", 11),
         ("/sandbox/filesystem/denyWrite", 3),
-        ("/permissions/deny", 16),
+        ("/permissions/deny", 19),
     ] {
         for i in 0..n {
             let a = with_settings(&l, |set| {
@@ -459,11 +459,67 @@ fn cwarg_hides_account_dirs_and_credential_reads() {
         };
         assert_eq!(
             (n("/sandbox/credentials/files"), n("/permissions/deny")),
-            (9, 14),
+            (9, 17),
             "{form} の実体なし"
         );
         assert!(audit(&argv(&none), &none).is_empty(), "{form} の実体なし");
     }
+}
+
+/// 読む根の各々への書きの道具の断りが読む根の順に 1 つずつ在り、どれを欠いても別の字に替えても検めが断ることを見る（行 cs-root-edits）。
+#[test]
+fn cwarg_denies_edits_under_read_roots() {
+    let fx = fixture();
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let edits = |l: &Launch| -> Vec<String> {
+            strings_of(&settings(l)["permissions"]["deny"])
+                .into_iter()
+                .filter(|r| r.starts_with("Edit("))
+                .collect()
+        };
+        assert_eq!(
+            edits(&l),
+            ["Edit(//R/**)", "Edit(//S/fleet/**)", "Edit(//S/pipe/**)"],
+            "{form}"
+        );
+        assert_eq!(
+            strings_of(&settings(&l)["permissions"]["deny"])[..3],
+            edits(&l)[..],
+            "{form} の頭"
+        );
+        for rule in edits(&l) {
+            let dropped = with_settings(&l, |s| {
+                let xs = s["permissions"]["deny"].as_array_mut().expect("列");
+                xs.retain(|x| *x != json!(rule));
+            });
+            assert_eq!(
+                audit(&dropped, &l),
+                ["/permissions/deny"],
+                "{form} {rule} を除いた"
+            );
+            let write = rule.replacen("Edit(", "Write(", 1);
+            let renamed = with_settings(&l, |s| {
+                let xs = s["permissions"]["deny"].as_array_mut().expect("列");
+                xs.iter_mut()
+                    .filter(|x| **x == json!(rule))
+                    .for_each(|x| *x = json!(write));
+            });
+            assert_eq!(audit(&renamed, &l), ["/permissions/deny"], "{form} {write}");
+        }
+        let mut one = l.clone();
+        one.roots.truncate(1);
+        assert_eq!(edits(&one), ["Edit(//R/**)"], "{form} の在る根だけ");
+        assert!(audit(&argv(&one), &one).is_empty(), "{form} の在る根だけ");
+    }
+}
+
+fn strings_of(v: &Value) -> Vec<String> {
+    v.as_array()
+        .expect("列")
+        .iter()
+        .map(|x| x.as_str().expect("字").to_string())
+        .collect()
 }
 
 #[test]
