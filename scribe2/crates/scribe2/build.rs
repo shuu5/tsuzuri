@@ -7,10 +7,10 @@
 //! rc ≠ 0・出力が sha の形でない周は `unknown`（測れない周を成功に倒さない・C10）。
 //! build は落とさない（panic しない・依存は std だけ）。
 //!
-//! 再走の母集団は git の meta（HEAD / index）と **tracked 全 file**（`git ls-files`・在る物だけ）である
-//! （設計 consumer-sync.md §18・`s2-07l.317`）。unstaged の変更は index を動かさないので、meta だけを
-//! `cargo:rerun-if-changed` に出すと build script が再走せず `+dirty` が古い値で止まる。列挙は
-//! `build/rerun.rs` の 1 関数で、e2e の歯も同じ file を `include!` で読む。git の無い周は meta の在る物だけ。
+//! 再走の母集団は **器の入力の追跡 file**（器の根の下の全部と根の組みの設定・`git ls-files`・在る物だけ）で、git の
+//! meta（HEAD / index）を含まない（設計 consumer-sync.md §18・`s2-07l.317`・tsuzuri の判断の記録 ADR-36 の決定 (8)・
+//! 行 v-buildrs）。器の外の直しと commit では再走しないので、値は最後に再走した時の HEAD と dirty のまま残る。列挙は
+//! `build/rerun.rs` の 1 関数で、e2e の歯も同じ file を `include!` で読む。git の無い周は 0 本。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -60,8 +60,8 @@ fn build_commit(dir: &Path) -> String {
     }
 }
 
-// 再 build の引き金にする path の列挙 `rerun_paths`（git の meta と **tracked 全 file**・在る物だけ・決定的な
-// 並び）。e2e の歯と同じ file を読む＝列挙の実装は 1 か所（設計 consumer-sync.md §18・`s2-07l.317`）。
+// 再 build の引き金にする path の列挙 `rerun_paths`（器の入力の追跡 file・在る物だけ・決定的な並び）。e2e の歯と
+// 同じ file を読む＝列挙の実装は 1 か所（設計 consumer-sync.md §18・`s2-07l.317`・行 v-buildrs）。
 include!("build/rerun.rs");
 
 fn main() {
