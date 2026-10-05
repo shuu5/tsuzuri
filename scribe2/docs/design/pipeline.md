@@ -2277,3 +2277,17 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候�
   - 変異の A/B（判定の順・条件 1 つに歯 1 本）: 揃えを撃たない → (a)(f)(h)。宣言に依らず撃つ → (e)。remote に main が無い周を止める → (d) の 1 本目と (b) の 3 回目。同じ周を止める → (d) の 2 本目。T が L の祖先の周を止める → (d) の 3 本目。fetch を撃たない → (a)（T の object が無く unreadable）。fetch の落ちを「無い」に写す → (b')。揃えを番の前（留めか `--pr-cmd` の前）に撃つ → (i)。揃えを列で着地済みの読みの前に撃つ → (j)。揃えを番を取った周（`order=first` か `waited`）だけに撃つ → (l)（後続が L の上に着地して main が動く）。止めの記帳を語でなく頭だけで比べる → (c)。読みの 3 値の写しを違える → (k)。分かれた周を進める → (c)。CAS が外れた周を進める → (g)。止めの記帳を毎周書く → (b)。fast-forward の後に印を書かない（land の CAS の後に from=T で書かれる）→ (f)。列の戻りに行を前置しない → (h)。
 - base で RED の理由: 歯は base に在る helper と口だけを使い、overlay の上で compile は通って assert が落ちる（機能不在）。(a)(f)(h) は base が L の上に着地して push が non-fast-forward で落ち rc 1。(b)(c) は base が着地して main が動く。(l) は base が先頭を着地させて main が動く（後続を撃つ前の前提の assert で落ちる）。(g) は base が揃えずに squash の CAS で hook に断られて rc 2。(d)(e) は今の向きの回帰の歯で base でも緑、同じ file に base で赤い歯を持つ。
 - ADR を書かない判じ（1 行）: 憲法条の新しい解釈が無く（fast-forward は N1 の消すでなく、fetch は A1 の出すでない）、外部依存の増減も無く（git の 3 手は retire の既存の形）、on-disk の形を決めず（detail の頭 `remote-main:` は §62 の `held:` と同じ自由文の語で、event の schema は動かない）、却下案は本 § に残る。
+
+## 70. 追随の載せ替えで、便の自分の差の file のうち中身の替わらない物の更新の時刻を載せ替えの前の値へ戻す（tsuzuri の判断の記録 ADR-62・器の行 v-follow-mtime）
+
+やさしく言うと: 載せ替えは main の木を取り出してから便の commit を当て直すので、便が直した file を中身が同じのまま書き直す。cargo は file の時刻で新しさを見るので、追随の後の検査が便の直した crate から下を全部組み直す。載せ替えの後に、中身が前と同じ file だけ時刻を前の値へ戻し、main の差の分だけを組み直させる。
+
+- 置き場: 載せ替えの 1 段（`crates/scribe2/src/pipe/follow_step.rs` の `rebase`・§52 形 5）の中。着地の追随（`land.rs` の `rebase_onto`）と口の追随（`pipe follow`）が共有する。本体は `crates/scribe2/src/pipe/follow_mtime.rs`。
+- 形:
+  1. **控え**: 載せ替えの命令の直前に、木が clean な周だけ、便の自分の差（記録した base から `HEAD` まで・`git diff --name-only --no-renames --diff-filter=d`＝改名は消しと足しに割り、消した path は除く）の path ごとに、木の上の型と中身（`ls-tree`）・作業木の byte の指紋（`hash-object --no-filters`）・時刻（ナノ秒）を取る。木の上で普通の file でない path（symlink・中の印の commit の項）と、葉か途中の dir が symlink の path は控えない。
+  2. **戻し**: 載せ替えが通り、後の木も clean な周に、型と中身と作業木の byte の指紋が控えと同じ path だけ時刻を控えの値へ書く。書いた後に byte の指紋を 1 度照らし直し、違えばその file の時刻を今にする。dir の時刻は戻さない（dir の時刻を戻すと dir の中の file の消しを隠しうる）。
+  3. **倒れ**: 控えか照らしで git か file の読みが 1 つでも落ちた周と、前か後の木が clean でない周は 1 file も戻さない。1 file の時刻を書けない時はその file を新しいまま残す。衝突の周は何も戻さず何も書かない（呼び手の後始末と記帳は今のまま・便の dir に file を足さない）。
+  4. **記録**: 載せ替えが通った追随ごとに便の dir の `follow-mtime.jsonl` へ 1 行（`rebase`＝`<base>..<main>`・`restored`・`skipped`・外した種ごとの数 `link`・`kind`・`gone`・`mode`・`blob`・`bytes`・`write`・`changed`・倒した理由 `fell`＝`before:dirty`・`after:unreadable` などか null）。
+- 触らない: 載せ替えの命令と返す値・衝突・rebase-empty・既着地の道・event の種別と段と detail の字・stdout の字・規則の行・子の環境変数。戻しと記録のどの失敗も追随の結末を替えない。名乗りの key は置かない（約束が中身の同じ file に限るので、器を使うほかの project の便にも同じく効く）。
+- 限界: 便の commit の中で直して戻した file（正味の差 0）と、衝突で中止した周に書き直された file は戻さない（取りこぼしで、組み直す側）。dir を合図にする build script は、便の自分の差がその dir の下に在ると今どおり走る。cargo の追わない入力（`rerun-if-changed` の無い build script の読みほか）を main が替えた周は、今は自分の差の書き直しが偶然組み直させていた分を組み直さない。
+- 歯（接頭辞 `vfmtime_`・`crates/scribe2/src/pipe/follow_mtime.rs` の `mod tests`・fixture の repo で共有の `rebase` を撃つ）: 自分の差だけ・main の差だけ・中身が行って戻る差・中身の同じ改名・両方の差・main が元を直した改名・改行の属性・実行の bit・symlink・記録の 1 行と、戻る見本から 1 句ずつ外した控えを読めない周・木が clean でない周・衝突の周（記録も書かない）。`pipe follow` の口の記録の 1 行は `pipe_follow_step_writes_one_rebase_event_and_keeps_main` が見る。

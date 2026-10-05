@@ -9,6 +9,7 @@
 
 use super::cli::{live, refused};
 use super::follow::Ancestry;
+use super::follow_mtime::{self, Log};
 use super::land::{WorktreeCheck, MAIN_REF};
 use super::{base_of_run, driver_ticket, emit, git_line, git_ok, repo_of_run, worktree_path, Base, Emit, Ticket};
 use crate::cli_outcome::{Outcome, RC_BROKEN};
@@ -20,8 +21,14 @@ use std::path::Path;
 ///
 /// **木の branch だけ**が動き、main は動かさない（force 系は使わない・N1）。衝突の後始末は呼び手が持つ（着地は
 /// 起こし直し・この口は中止して断る）＝ここは撃って通ったかだけを返す。
-pub(in crate::pipe) fn rebase(worktree: &Path, base: &str, main: &str) -> bool {
-    git_ok(worktree, &["rebase", "--onto", main, base])
+///
+/// 撃つ前に便の自分の差を控え、通った周に中身の替わらない file の時刻を前の値へ戻し、追随ごとに便の dir の記録へ 1 行を
+/// 書く（[`follow_mtime`]・設計 §70）。戻しのどの失敗も返す値を替えない。
+pub(in crate::pipe) fn rebase(worktree: &Path, base: &str, main: &str, log: &Log<'_>) -> bool {
+    let kept = follow_mtime::snapshot(worktree, base);
+    let passed = git_ok(worktree, &["rebase", "--onto", main, base]);
+    follow_mtime::settle(worktree, kept, passed, &format!("{base}..{main}"), log);
+    passed
 }
 
 /// 受付の材料（設計 §52 形 2 の 5 条件を測った値）。
@@ -100,7 +107,7 @@ pub(in crate::pipe) fn follow(state_dir: &Path, id: &str, policy: LockPolicy) ->
     let Some(before) = git_line(&tree, &["rev-parse", "HEAD"]) else {
         return refused(format!("follow: run {id} の木の先端を読めない"));
     };
-    if !rebase(&tree, &base, &main) {
+    if !rebase(&tree, &base, &main, &Log { state_dir, run: id, policy }) {
         // 中止して撃つ前の先端へ戻す（着地の起こし直しと上限は通らない・設計 §52 形 4）。
         let aborted = git_ok(&tree, &["rebase", "--abort"]);
         let restored = git_line(&tree, &["rev-parse", "HEAD"]).is_some_and(|head| head == before);
@@ -135,6 +142,7 @@ pub(in crate::pipe) fn follow(state_dir: &Path, id: &str, policy: LockPolicy) ->
 #[cfg(test)]
 mod tests {
     use super::super::fixture::{append_all, event, scratch};
+    use super::super::follow_mtime::RECORD_FILE;
     use super::super::land::WorktreeCheck;
     use super::super::{base_of_run, branch_name, repo_path, run_dir, verdict_path, worktree_path, Base, Ticket};
     use super::{admit, follow, Ancestry, Facts};
@@ -243,6 +251,8 @@ mod tests {
         assert_eq!(base_of_run(&state, "r1"), Base::Known(main.clone()), "base の読み手は新しい側を読む");
         assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), main, "main は動かない");
         assert_eq!(git(&tree, &["rev-parse", "HEAD~1"]), main, "木の base は main の先端");
+        let record = std::fs::read_to_string(run_dir(&state, "r1").join(RECORD_FILE)).unwrap_or_default();
+        assert!(record.lines().count() == 1 && record.contains("\"restored\":1,"), "便の dir の記録に 1 行: {record}");
         let _ = std::fs::remove_dir_all(&root);
     }
 

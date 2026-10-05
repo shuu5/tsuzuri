@@ -897,7 +897,8 @@ fn carry_gated_pass(entry: &Land<'_>) -> Option<String> {
 ///   従来どおり撃ち直しの precheck へ流す（fail-closed の向きを変えない・`s2-07l.125`）。
 /// - commit が残った周は、撃ち直しの前に契約表の行が便の消した path を名指すかを見る（[`stale_rows_stop`]・設計 §34）。
 fn rebase_onto(entry: &Land<'_>, worktree: &Path, base: &str, main: &str) -> Result<Rebased, Outcome> {
-    if !super::follow_step::rebase(worktree, base, main) {
+    let log = super::follow_mtime::Log { state_dir: entry.state_dir, run: entry.run, policy: entry.policy };
+    if !super::follow_step::rebase(worktree, base, main, &log) {
         return Err(follow::on_conflict(&Conflict {
             turn: turn_of(entry),
             base,
