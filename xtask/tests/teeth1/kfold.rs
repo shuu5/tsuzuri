@@ -47,31 +47,27 @@ fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読む: {e}", path.display()))
 }
 
-/// 根の Cargo.toml の members の dir。
+/// 群の行の上限（群の dir の直下の .rs の行の和・main.rs を除く・判断の記録 ADR-32 の決定 (2)）。この定数と次の定数の行が 2 つの値の正本で、
+/// xtask の命令 kfold-cap と席の道具は行頭からの字 `const <名>: usize = <数字と _>;` を読む（形を替えない・歯 kfold_caps_read_back_by_kfold_cap）。
+const GROUP_LINES_CAP: usize = 10_000;
+/// 段の file（member の tests/ の直下の .rs）の本数の上限（判断の記録 ADR-63 の決定 (8)・命令 kfold-cap は届いても落とさない）。
+const STAGE_FILES_CAP: usize = 24;
+
+#[expect(
+    dead_code,
+    reason = "上限の行の読みと群の探しだけを使い、命令の測りと判じは使わない"
+)]
+#[path = "../../src/kcap.rs"]
+mod kcap;
+
+/// 根の Cargo.toml の members の dir（命令 kfold-cap と同じ読み）。
 fn members() -> Vec<String> {
-    let text = read(&repo_root().join("Cargo.toml"));
-    let start = text.find("members = [").expect("members の表");
-    let end = start + text[start..].find(']').expect("members の終わり");
-    text[start..end]
-        .split('"')
-        .skip(1)
-        .step_by(2)
-        .map(str::to_string)
-        .collect()
+    kcap::members(&repo_root()).expect("members の表")
 }
 
-/// member の tests/ の直下の、main.rs を持つ dir（群・path の順）。
+/// member の tests/ の直下の、main.rs を持つ dir（群・path の順・命令 kfold-cap と同じ探し）。
 fn groups_of(member: &str) -> Vec<PathBuf> {
-    let tests = repo_root().join(member).join("tests");
-    let Ok(entries) = std::fs::read_dir(&tests) else {
-        return Vec::new();
-    };
-    let mut out: Vec<PathBuf> = entries
-        .map(|e| e.expect("tests の項目").path())
-        .filter(|p| p.join("main.rs").is_file())
-        .collect();
-    out.sort();
-    out
+    kcap::groups(&repo_root(), member)
 }
 
 /// 群の dir の module の名（main.rs を除く .rs の stem と、mod.rs を持つ dir の名）。
@@ -212,4 +208,14 @@ fn kfold_test_names_unique_in_each_crate() {
         total += names.len();
     }
     assert!(total >= 2_500, "数えた歯の名が {total}");
+}
+
+/// 2 つの上限の定数の行を、命令 kfold-cap の読み（src/kcap.rs の caps）でこの file の字から読み直すと、定数の値と同じ。
+#[test]
+fn kfold_caps_read_back_by_kfold_cap() {
+    let caps = kcap::caps(include_str!("kfold.rs")).expect("上限の行を読む");
+    assert_eq!(
+        (caps.group_lines, caps.stage_files),
+        (GROUP_LINES_CAP, STAGE_FILES_CAP)
+    );
 }

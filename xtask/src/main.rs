@@ -8,10 +8,12 @@
 //! check の最後の段は根の直下の入れ子の workspace を数えて 1 行で出し、各々で build・歯・clippy・その workspace の xtask の check を撃つ（行 v-gate・nested の module）。
 //! 割りの在る check は歯でない段を表の役だけで撃ち、歯だけを分ける（行 v-ci-split・spread の module）。
 //! daily は host の timer が撃つ日に 1 度の全部の撃ちで、写しを origin の main に合わせて check を撃ち、記録と memo を書く（行 v-daily・daily の module）。
+//! kfold-cap は歯の群の行と段の file の本数を束ねの表の file の 2 つの定数の上限と比べ、名指した群の越えだけを落とす（判断の記録 ADR-63 の決定 (8)・kcap の module）。
 
 mod accept;
 mod daily;
 mod gz;
+mod kcap;
 mod nested;
 mod pubscan;
 mod size;
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
         Some("surface-build") if args.len() == 1 => exit_code(surface_build(&workspace_root())),
         Some("pub-scan") if args.len() == 1 => exit_code(pubscan::run(&workspace_root())),
         Some("insta-refs") => exit_code(insta_refs(args.get(1..).unwrap_or_default())),
+        Some("kfold-cap") => exit_code(kfold_cap(args.get(1..).unwrap_or_default())),
         Some("daily") => exit_code(daily_task(args.get(1..).unwrap_or_default())),
         Some("accept") => exit_code(accept::run(
             args.get(1..).unwrap_or_default(),
@@ -66,9 +69,10 @@ fn main() -> ExitCode {
         )),
         _ => {
             emit_err(&format!(
-                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan|insta-refs <dir>>\n{}\n{}",
+                "usage: cargo run -q -p xtask -- <check|surface-build|pub-scan|insta-refs <dir>>\n{}\n{}\n{}",
                 accept::USAGE,
-                daily::USAGE
+                daily::USAGE,
+                kcap::USAGE
             ));
             ExitCode::from(2)
         }
@@ -84,6 +88,15 @@ fn insta_refs(rest: &[String]) -> i32 {
     let (rc, lines) = snaprefs::run(&workspace_root(), Path::new(dir));
     for line in lines {
         emit_err(&format!("xtask insta-refs: {line}"));
+    }
+    rc
+}
+
+/// task kfold-cap: 群の行と段の file の本数を上限と比べた行を書き、名指した群の越えで rc 1・引数や木を読めなければ rc 2 を返す。
+fn kfold_cap(named: &[String]) -> i32 {
+    let (rc, lines) = kcap::run(&workspace_root(), named);
+    for line in lines {
+        emit_err(&format!("xtask kfold-cap: {line}"));
     }
     rc
 }
