@@ -13,7 +13,7 @@ use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
 use tsuzuri_contract::project::ProjectName;
 use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
-use tsuzuri_contract::{account, case, project, runs, wire};
+use tsuzuri_contract::{account, case, host, project, runs, wire};
 
 use crate::frame::BRAND;
 use crate::ledgerlist::FACTS_PATH;
@@ -28,12 +28,13 @@ pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT]
 /// 席の card は席の状態の file だけ、次の一手は台帳と event log と席の card、pipeline は台帳と event log と
 /// 台帳の形の行（台帳の種類）、グラフと近傍は設計の索引と台帳と event log、account は account board の印と
 /// 自分の repo の台帳を読む。project の名の口は起動の repo から決まるので種類を持たない（合図では読み直さない）。
-/// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。
+/// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。host の口は host の種類だけ（中身が動いた時だけ・
+/// 持ち主の裁定 t3-hub.77.28）。
 /// bead の事実の口は台帳の一覧の口と同じ台帳の読みから組むので台帳だけ（行 g-ledger-trim）。器の局面の出力
 /// （state dir の fleet/lifecycle.json と lifecycle.stale）は局面の出力の種類の合図が持つ（中身が動いた時だけ・
 /// 行 c-cases-watch）: 局面の出力の口はその種類だけ、それを台帳と一緒に読む指標と未反映の口は台帳とその種類、
 /// pipeline の口は台帳と event log とその種類で読み直す。
-pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
+pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 16] = [
     (seat::PATH, &[ChangeKind::Seat]),
     (
         next::PATH,
@@ -64,6 +65,7 @@ pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
     (account::PATH, &[ChangeKind::Account, ChangeKind::Ledger]),
     (project::PATH, &[]),
     (notice::PATH, &[ChangeKind::Notice]),
+    (host::PATH, &[ChangeKind::Host]),
 ];
 
 /// 口の path の読みが読む変化の種類: 最初の `?` より前の字が、表の path と同じか表の path に `/` を続けた字で

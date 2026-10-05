@@ -30,6 +30,8 @@
 //! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`）。
 //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
 //! （`Cases::watch`）。
+//! host の口は kernel の file と host の面の書きの測りの表を要求のたびに読み（`host`）、受け手が居る周だけ
+//! `host::HOST_POLL` ごとに読んで中身が動いた時だけ host の種類の board-changed を送る（`Host::watch`）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
 //! その字と組で持つ（`form`）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
@@ -46,6 +48,7 @@ pub mod events;
 pub mod files;
 pub mod form;
 pub mod held;
+pub mod host;
 pub mod http;
 pub mod ledger;
 mod others;
@@ -86,6 +89,7 @@ use self::design::Design;
 use self::events::Hub;
 use self::form::Form;
 use self::held::Held;
+use self::host::Host;
 use self::http::{Request, Response};
 use self::ledger::Source;
 use self::others::Others;
@@ -179,6 +183,8 @@ struct Shared {
     stage: Caller,
     /// 相談の窓の口の置き場の材料（行 cs-server）。
     consult: Consult,
+    /// host の負荷と書きの読み（`host`・口 /api/host と host の種類の見張り）。
+    host: Arc<Host>,
 }
 
 /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
@@ -239,6 +245,8 @@ impl Server {
             form.notify(&hub);
         }
         others.watch(&hub);
+        let host = Arc::new(Host::new(config.state_dir.as_deref()));
+        host.watch(&hub, host::HOST_POLL);
         let writer = Server::writer_of(config);
         Ok(Server {
             listener,
@@ -261,6 +269,7 @@ impl Server {
                     repo: config.repo.clone(),
                 },
                 consult: Consult::new(config, git),
+                host,
             }),
         })
     }

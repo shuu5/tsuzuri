@@ -179,6 +179,7 @@
     "design",
     "ledger",
     "account",
+    "host",
     "notice"
   ],
   "surface::BoardChanged": [

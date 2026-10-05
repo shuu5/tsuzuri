@@ -150,19 +150,22 @@ pub enum ChangeKind {
     Ledger,
     /// account board の印。
     Account,
+    /// host の負荷と書き（kernel の file・受け手が居る周だけ読み、中身が動いた時だけ・持ち主の裁定 t3-hub.77.28）。
+    Host,
     /// 席の「見て」の知らせの記録の file（行 i-11）。
     Notice,
 }
 
 impl ChangeKind {
     /// 全部の種類（この順）。
-    pub const ALL: [ChangeKind; 7] = [
+    pub const ALL: [ChangeKind; 8] = [
         ChangeKind::Seat,
         ChangeKind::Runs,
         ChangeKind::Cases,
         ChangeKind::Design,
         ChangeKind::Ledger,
         ChangeKind::Account,
+        ChangeKind::Host,
         ChangeKind::Notice,
     ];
 }

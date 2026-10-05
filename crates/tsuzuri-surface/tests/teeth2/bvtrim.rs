@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind, UnreflectedList};
 use tsuzuri_contract::surface::ChangeKind;
-use tsuzuri_contract::{case, wire};
+use tsuzuri_contract::{case, host, wire};
 use tsuzuri_surface::ledgerlist::{FACTS_PATH, Phases, kpi, kpi_unknown};
 use tsuzuri_surface::project::Body;
 use tsuzuri_surface::project::ledger::{
@@ -286,21 +286,24 @@ fn unref_case_states() {
     }
 }
 
-/// (5) 読み直しの表は 15 行で、bead の事実の口は台帳だけ、器の局面の出力の口は局面の出力の種類の合図だけで読み直す
-/// （表に無い口の全部の種類でない・行 c-cases-watch）。席と設計と account と知らせの合図ではどちらも読み直さない。
+/// (5) 読み直しの表は 16 行で、bead の事実の口は台帳だけ、器の局面の出力の口は局面の出力の種類の合図だけで読み直す
+/// （表に無い口の全部の種類でない・行 c-cases-watch）。席と設計と account と host と知らせの合図ではどちらも読み直さない。
+/// host の口は host の種類の合図だけで読み直す。
 #[test]
 fn bvtrim_reload_beads_and_cases() {
-    assert_eq!(RELOAD_KINDS.len(), 15);
+    assert_eq!(RELOAD_KINDS.len(), 16);
     assert_eq!(FACTS_PATH, "/api/beads");
     assert_eq!(case::PATH, "/api/cases");
     assert_eq!(path_kinds(FACTS_PATH), [ChangeKind::Ledger]);
     assert_eq!(path_kinds(case::PATH), [ChangeKind::Cases]);
+    assert_eq!(path_kinds(host::PATH), [ChangeKind::Host]);
     assert!(reloads(case::PATH, &[ChangeKind::Cases]));
     assert!(!reloads(FACTS_PATH, &[ChangeKind::Runs]));
     for kind in [
         ChangeKind::Seat,
         ChangeKind::Design,
         ChangeKind::Account,
+        ChangeKind::Host,
         ChangeKind::Notice,
     ] {
         assert!(!reloads(FACTS_PATH, &[kind]), "{kind:?}");
