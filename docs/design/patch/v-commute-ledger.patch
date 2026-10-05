@@ -1,0 +1,828 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+index 04e2654d2c92baf7e3810088bbd034572c58eadf..d1c22c4211bdd6ee230a1b49283ff911b30f0878 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet.rs
+@@ -471,13 +471,14 @@ fn fleet_stages_place_rate_limited_after_questioned() {
+     assert_eq!(Stage::parse("RateLimited"), Some(Stage::RateLimited), "as_str ↔ parse の往復");
+ }
+ 
+-/// `KINDS` の並びが**宣言順**と一致し、母集団は 32 種で末尾の 16 個が `InstallRecorded`（`vessel update` が足した・設計
++/// `KINDS` の並びが**宣言順**と一致し、母集団は 33 種で末尾の 17 個が `InstallRecorded`（`vessel update` が足した・設計
+ /// consumer-sync.md §5 (4)）→ `RunCost`（消費の 1 件・gate-cost.md §26 形 (2)）→ `RulingReceived`（run 無しの裁定・
+ /// fleet-event-log.md §9）→ `GroupPressureNotified`（群の逼迫の通知・account-lifecycle.md §19 形 3）→ `GroupMoved` /
+ /// `GroupMoveRefused` / `GroupMovePending`（群の移動の承認・断り・保留・account-lifecycle.md §20 形 5 / 6）→ `SeatRetired`（席の
+ /// 登録 row の退役・account-lifecycle.md §24 形 4）→ 案件の一生の 5 kind（fleet-event-log.md §12）→ `MemoJudged`（memo の判定・
+ /// dispatcher.md §41）→ `LimitPermitted`（上限の許可の記帳・limit-permit.md §18）→ `OverlapCommuted`（入口の排他を差の当たりで通した
+-/// 組・判断の記録 ADR-60 の決定 (4)）。variant を足して列に足し忘れた周・件数だけ合って末尾が違う周はここで赤になる。
++/// 組・判断の記録 ADR-60 の決定 (4)）→ `OverlapFollowed`（通した組の便の後の着地の記帳・同じ決定 (4)）。variant を足して列に足し忘れた
++/// 周・件数だけ合って末尾が違う周はここで赤になる。
+ #[test]
+ fn fleet_kinds_follow_declaration_order() {
+     assert!(
+@@ -485,7 +486,7 @@ fn fleet_kinds_follow_declaration_order() {
+         "KINDS の並びが宣言順と乖離している（母集団 {} 種）",
+         KINDS.len()
+     );
+-    assert_eq!(KINDS.len(), 32, "母集団（列の印までの 16 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1）");
++    assert_eq!(KINDS.len(), 33, "母集団（列の印までの 16 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1 + 組の後の着地 1）");
+     assert_eq!(
+         KINDS.get(16..),
+         Some(
+@@ -506,9 +507,10 @@ fn fleet_kinds_follow_declaration_order() {
+                 EventKind::MemoJudged,
+                 EventKind::LimitPermitted,
+                 EventKind::OverlapCommuted,
++                EventKind::OverlapFollowed,
+             ][..]
+         ),
+-        "install → 消費 → 裁定 → 群の逼迫の通知 → 群の移動の承認・断り・保留 → 登録 row の退役 → 案件の一生の 5 kind → memo の判定 → 上限の許可 → 差の当たりが宣言順の末尾"
++        "install → 消費 → 裁定 → 群の逼迫の通知 → 群の移動の承認・断り・保留 → 登録 row の退役 → 案件の一生の 5 kind → memo の判定 → 上限の許可 → 差の当たり → 組の後の着地が宣言順の末尾"
+     );
+     assert_eq!(EventKind::InstallRecorded.as_str(), "InstallRecorded");
+     assert_eq!(EventKind::parse("InstallRecorded"), Some(EventKind::InstallRecorded), "as_str ↔ parse の往復");
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
+index 60f1cea394ff51b67644bcefbfed0c3271c6b87f..22f9094f7f1817e07829815e850fccf67904bbf4 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/account.rs
+@@ -9,8 +9,8 @@ use super::*;
+ fn account_cmd_kinds_are_fifteen_with_retire_and_restore_last() {
+     assert_eq!(
+         KINDS.len(),
+-        32,
+-        "母集団（既存 10 + 口座残量 2 + 席の登録 1 + 口座の退役・戻し 2 + 列の印 1 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1）"
++        33,
++        "母集団（既存 10 + 口座残量 2 + 席の登録 1 + 口座の退役・戻し 2 + 列の印 1 + install 1 + 消費 1 + 裁定 1 + 群の逼迫の通知 1 + 群の移動 3 + 登録 row の退役 1 + 案件の一生 5 + memo の判定 1 + 上限の許可 1 + 差の当たり 1 + 組の後の着地 1）"
+     );
+     assert_eq!(
+         KINDS.get(12..16),
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
+index 63f8998116f8df70a5d718e511dafec6557329bd..c098673469e2bc39831f96142611ca5b702ffe88 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/fleet/json.rs
+@@ -423,14 +423,14 @@ fn fleet_replay_seat_retired_then_registered_resolves_the_last_row() {
+     assert_eq!(before.registrations.len(), 1, "登録より前の退役は後の登録を消さない");
+ }
+ 
+-/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（32 種の末尾の 1 つ前は上限の許可の
++/// 形 4: `SeatRetired` は `Shape::Registration`・既定の actor は human・`KINDS` の 24 種目（33 種の末尾の 2 つ前は上限の許可の
+ /// `LimitPermitted`・limit-permit.md §18）で、`fleet record` からは書けない（書き手は `seat retire` だけ・rc 1・log を作らない）。
+ #[test]
+ fn fleet_replay_seat_retired_kind_is_a_registration_shape_and_record_refuses_it() {
+     use vessel::fleet::Shape;
+-    assert_eq!(KINDS.len(), 32, "母集団");
++    assert_eq!(KINDS.len(), 33, "母集団");
+     assert_eq!(KINDS.get(23), Some(&EventKind::SeatRetired), "宣言順の 24 種目");
+-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "宣言順の末尾の 1 つ前");
++    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::LimitPermitted), "宣言順の末尾の 2 つ前");
+     assert_eq!(EventKind::SeatRetired.shape(), Shape::Registration);
+     assert_eq!(EventKind::SeatRetired.default_actor(), "human", "退役は人由来");
+     assert_eq!(EventKind::parse("SeatRetired"), Some(EventKind::SeatRetired), "as_str ↔ parse の往復");
+@@ -670,13 +670,13 @@ fn fleet_case_kind_utterance_is_not_counted_as_human() {
+     assert_eq!(counted.rulings, 0, "裁定の数えは変わらない");
+ }
+ 
+-/// §12 歯 6: `KINDS` は 32 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）でその次が
++/// §12 歯 6: `KINDS` は 33 種で、25 番目から 5 つの字面が 5 つの名の順、その次が `MemoJudged`（dispatcher.md §41）でその次が
+ /// `LimitPermitted`（limit-permit.md §18）。既定の actor は 1 つ目だけ human（`MemoJudged` は machine）。5 つも `MemoJudged` も
+ /// `Shape` が Run でなく、互いに同じ値。base は 30 種で RED。
+ #[test]
+ fn fleet_case_kind_kinds_are_appended_in_order() {
+     use vessel::fleet::Shape;
+-    assert_eq!(KINDS.len(), 32, "母集団");
++    assert_eq!(KINDS.len(), 33, "母集団");
+     let tail: Vec<EventKind> = KINDS.iter().copied().skip(24).take(5).collect();
+     assert_eq!(tail.iter().map(|kind| kind.as_str()).collect::<Vec<_>>(), CASE_KIND_NAMES, "25 番目から 5 つの字面");
+     let actors: Vec<&str> = tail.iter().map(|kind| kind.default_actor()).collect();
+@@ -702,13 +702,13 @@ fn permit_line(bead: Option<&str>, detail: Option<&str>, extra: &str) -> String
+     format!(r#"{{"schema":1,"ts":"2026-10-02T01:00:00Z","kind":"LimitPermitted",{extra}{bead}"host":"h","actor":"machine"{detail}}}"#)
+ }
+ 
+-/// (d) `KINDS` の末尾の 1 つ前は `LimitPermitted`（末尾は差の当たりの `OverlapCommuted`）でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
++/// (d) `KINDS` の末尾の 2 つ前は `LimitPermitted`（後は差の当たりの `OverlapCommuted` と組の後の着地の `OverlapFollowed`）でその 1 つ前が base の末尾の `MemoJudged`・字面の往復・既定の actor は machine・形 `Permit` は
+ /// この kind だけで `SHAPES` の末尾も `Permit`・口座残量の kind でない。
+ #[test]
+ fn fleet_limit_permitted_kind_and_shape_are_appended_last() {
+     use vessel::fleet::{Shape, SHAPES};
+-    assert_eq!(KINDS.get(KINDS.len() - 2), Some(&EventKind::LimitPermitted), "KINDS の末尾の 1 つ前");
+-    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
++    assert_eq!(KINDS.get(KINDS.len() - 3), Some(&EventKind::LimitPermitted), "KINDS の末尾の 2 つ前");
++    assert_eq!(KINDS.get(KINDS.len() - 4), Some(&EventKind::MemoJudged), "その 1 つ前は base の末尾の kind");
+     assert_eq!(EventKind::LimitPermitted.as_str(), "LimitPermitted");
+     assert_eq!(EventKind::parse("LimitPermitted"), Some(EventKind::LimitPermitted), "as_str ↔ parse の往復");
+     assert_eq!(EventKind::LimitPermitted.default_actor(), "machine", "許可は機械の導出");
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index 16dbd5114f9ea3e9a94b2b30c69b6ea699b6c4a8..6f6d91950b3223bde827b86e3b63c62b01beb289 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -1440,8 +1440,9 @@ fn pipe_regate_returns_gated_fail_to_implemented_on_the_same_worktree() {
+     assert_eq!(head(), head_before, "再 gate も同じ worktree の同じ commit");
+     // event の種別は account-lifecycle.md §19 形 3 の群の逼迫の通知で 19 → 20・§20 形 5 / 6 の群の移動の 3 種で 20 → 23・
+     // §24 形 4 の登録 row の退役で 23 → 24・fleet-event-log.md §12 の案件の一生の 5 kind で 24 → 29・dispatcher.md §41 の MemoJudged で
+-    // 29 → 30・limit-permit.md §18 の LimitPermitted で 30 → 31・判断の記録 ADR-60 の OverlapCommuted で 31 → 32（regate は種別を足さない）。
+-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 32), "段と event の種別は増えない");
++    // 29 → 30・limit-permit.md §18 の LimitPermitted で 30 → 31・判断の記録 ADR-60 の OverlapCommuted で 31 → 32・同じ記録の OverlapFollowed で
++    // 32 → 33（regate は種別を足さない）。
++    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 33), "段と event の種別は増えない");
+     clean(&[&repo, &state]);
+ }
+ 
+@@ -1476,7 +1477,7 @@ fn pipe_follow_step_moves_gated_tree_onto_main_and_returns_to_implemented() {
+     assert_eq!(run.detail.as_deref(), Some(format!("rebase:{base}..{moved}").as_str()), "着地の追随と同じ字面");
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), moved, "main は動かない");
+     assert_eq!(git(&worktree, &["merge-base", "HEAD", &moved]), moved, "木の base は main の先端");
+-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 32), "段と event の種別は増えない");
++    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 33), "段と event の種別は増えない");
+     clean(&[&repo, &state]);
+ }
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+index 6f6888e3444e5bb4c810c81e3ee014ed0787960e..f6077a8efd444c7cc5ae3b2fc7f34da779041d8c 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+@@ -8,9 +8,11 @@
+ //! 歯は族ごとの子 module にも置く（設計 docs/design/carry-prep.md §10 行 l・`s2-07l.684`）: `follow`（接頭辞 `pipe_follow_`）・
+ //! `retire`（接頭辞 `pipe_retire_` / `pipe_train_`）・`order`（接頭辞 `pipe_terminal_` / `pipe_order_`）・`rebase`（接頭辞
+ //! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）・`cilast`（接頭辞 `vcil_`・
+-//! 終端の CI の照合・器の memo t3-hub.74.49.6）。この file には共有の helper と const・他の族の歯だけを残す。
++//! 終端の CI の照合・器の memo t3-hub.74.49.6）・`commute`（接頭辞 `vcledger_`・差の当たりで通した組の後の着地の記帳・判断の記録
++//! ADR-60 の決定 (4)）。この file には共有の helper と const・他の族の歯だけを残す。
+ 
+ mod cilast;
++mod commute;
+ mod follow;
+ mod order;
+ mod rebase;
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/commute.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/commute.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..520e42ebaab0050daade2c01ba5702daac634741
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/commute.rs
+@@ -0,0 +1,167 @@
++//! 差の当たりで通した組の後の着地の記帳の歯（接頭辞 `vcledger_`・判断の記録 ADR-60 の決定 (4)・親 `tests/e2e/pipe/land.rs` の
++//! helper を `use super::*` で使う）。
++//!
++//! 受付が通した組の行（kind `OverlapCommuted`）を置き場に手で 1 件積み、組が名指す便の着地の経路（積み直しの衝突・stale・追随の
++//! 再 gate の不合格・着地の列の候補の木の赤・着地）が kind `OverlapFollowed` に記す行を、出来事の記録から外形で測る。
++
++use super::*;
++use vessel::fleet::Case;
++
++/// 差の file の置き場（toy repo の根から）。
++const PATCH: &str = "docs/p/x.patch";
++
++/// 便の契約の bead（[`intake`] が起こす便）。
++const BEAD: &str = "s2-2e5";
++
++/// 組の行を 1 件積む（kind `OverlapCommuted`・bead は候補の契約・detail は組）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn pair(state: &Path, detail: &str) {
++    let event = Event {
++        schema: vessel::fleet::SCHEMA,
++        ts: "2026-10-05T00:00:00Z".to_owned(),
++        kind: EventKind::OverlapCommuted,
++        run: String::new(),
++        bead: "s2-zz".to_owned(),
++        host: "h".to_owned(),
++        actor: vessel::fleet::ACTOR_MACHINE.to_owned(),
++        stage: None,
++        seat: None,
++        pid: None,
++        detail: Some(detail.to_owned()),
++        allowance: None,
++        registration: None,
++        mark: None,
++        account: None,
++        cost: None,
++        rule: None,
++        case: Some(Case::Commuted),
++    };
++    let policy = vessel::fleet::store::LockPolicy::embedded().expect("埋め込みの lock 行を読める");
++    vessel::fleet::store::append(state, &event, policy).expect("組の行を積める");
++}
++
++/// 記帳の行（kind `OverlapFollowed` の bead と detail・積んだ順）。
++fn followed(state: &Path) -> Vec<(String, String)> {
++    events(state)
++        .into_iter()
++        .filter(|event| event.kind == EventKind::OverlapFollowed)
++        .map(|event| (event.bead, event.detail.unwrap_or_default()))
++        .collect()
++}
++
++/// 便 `id`（bead [`BEAD`]）の記帳の行 1 つ（`word` は語と尾）。
++fn row(id: &str, word: &str) -> (String, String) {
++    (BEAD.to_owned(), format!("run={id} word={word}"))
++}
++
++/// `+x` と `+y` の 2 行を足す差の file と、それを欄 patch で名指す契約の行を commit して設計 pointer を返す（便の実装は `x` の
++/// 1 行だけを足すので、着地の差の変えた行は 1・差の file は 2・片方にだけ在る行は `+y` の 1）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn patched_contract(repo: &Path) -> String {
++    fs::create_dir_all(repo.join("docs/p")).expect("差の dir を作れる");
++    let text = "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1,3 @@\n // seed\n+x\n+y\n";
++    fs::write(repo.join(PATCH), text).expect("差の file を書ける");
++    write_contract(repo, &[], &[&format!("patch = \"{PATCH}\"")])
++}
++
++/// 欄 patch を持つ便を PASS まで通し、組の行 `detail`（`{id}` を便 id に替える）を積んで着地させ、便 id と記帳の行を返す。
++fn land_paired(detail: &str) -> (String, Vec<(String, String)>) {
++    let (repo, state) = repo_with_state();
++    let path = patched_contract(&repo);
++    let id = gated_pass(&repo, &state, &path, &state.join("lens-ran"));
++    pair(&state, &detail.replace("{id}", &id));
++    let out = land_once(&repo, &state, &id);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "着地する: {}", stderr_of(&out));
++    let found = followed(&state);
++    clean(&[&repo, &state]);
++    (id, found)
++}
++
++/// 組の行の `with=` が名指す便の着地は、語 landed に、着地の差の変えた行の数・差の file の変えた行の数・片方にだけ在る行の数を
++/// 添えて 1 件記す（`diff=1 patch=2 off=1`）。
++#[test]
++fn vcledger_landing_of_a_named_run_records_the_line_counts() {
++    let (id, found) = land_paired("run=s2-zz-1 with=s2-zz-2,{id} files=src/lib.rs main=0");
++    assert_eq!(found, [row(&id, "landed diff=1 patch=2 off=1")]);
++}
++
++/// 組の行が便を名指さない（`with=` の 1 つだけを別の便 id にした）周の着地は何も記さない。
++#[test]
++fn vcledger_landing_of_a_run_the_pair_does_not_name_records_nothing() {
++    let (_, found) = land_paired("run=s2-zz-1 with=s2-zz-2,s2-zz-3 files=src/lib.rs main=0");
++    assert!(found.is_empty(), "記さない: {found:?}");
++}
++
++/// 撃ち直しの間に main がまた動いた周は語 stale を記し、追随し直した後の着地を語 landed で記す（この順・欄 patch の無い契約は
++/// `patch=- off=-`）。
++#[test]
++fn vcledger_stale_and_the_landing_after_it_are_recorded_in_order() {
++    let (repo, state) = repo_with_state();
++    let path = write_contract(&repo, &[], &[]);
++    let id = gated_pass(&repo, &state, &path, &state.join("lens-ran"));
++    pair(&state, &format!("run={id} with=s2-zz-2 files=src/lib.rs main=0"));
++    commit_other_in_scope(&repo);
++    let out = land_extra(&repo, &state, &id, &["--lens", &racing_lens(&repo, &state, false)]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "追随し直して着地する: {}", stderr_of(&out));
++    assert_eq!(followed(&state), [row(&id, "stale"), row(&id, "landed diff=1 patch=- off=-")]);
++    clean(&[&repo, &state]);
++}
++
++/// 追随の積み直しが衝突した周は語 conflict を 1 件記す（着地しない）。
++#[test]
++fn vcledger_a_rebase_conflict_is_recorded() {
++    let (repo, state) = repo_with_state();
++    let runner = stub_runner(&state, KEEP_CONFLICT);
++    let (id, _, _) = conflicting_run(&repo, &state, &state.join("lens-ran"), &runner);
++    pair(&state, &format!("run={id} with=s2-zz-2 files=src/lib.rs main=0"));
++    let out = land_extra(&repo, &state, &id, &["--runner", &runner]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_INCONCLUSIVE)), "起こし直して止まる: {}", stderr_of(&out));
++    assert_eq!(followed(&state), [row(&id, "conflict")]);
++    clean(&[&repo, &state]);
++}
++
++/// 追随の再 gate の判定 `verdict` の周に、組が名指す便が記す行（main を面の内へ 1 つ進めてから着地させる）。
++fn regated(verdict: &str) -> (String, Vec<(String, String)>) {
++    let (repo, state) = repo_with_state();
++    let path = write_contract(&repo, &[], &[]);
++    let marker = state.join("lens-ran");
++    let id = gated_pass(&repo, &state, &path, &marker);
++    pair(&state, &format!("run={id} with=s2-zz-2 files=src/lib.rs main=0"));
++    commit_other_in_scope(&repo);
++    let out = land_extra(&repo, &state, &id, &["--lens", &fake_lens(&marker, &lens_verdict(verdict))]);
++    assert_ne!(out.status.code(), Some(i32::from(RC_OK)), "{verdict} の撃ち直しは着地しない: {}", stdout_of(&out));
++    let found = followed(&state);
++    clean(&[&repo, &state]);
++    (id, found)
++}
++
++/// 追随の再 gate が FAIL の周は語 regate-fail を 1 件記し、INCONCLUSIVE で止まった周は何も記さない。
++#[test]
++fn vcledger_a_failed_regate_is_recorded_and_an_inconclusive_one_is_not() {
++    let (id, found) = regated("FAIL");
++    assert_eq!(found, [row(&id, "regate-fail")]);
++    let (_, found) = regated("INCONCLUSIVE");
++    assert!(found.is_empty(), "INCONCLUSIVE は記さない: {found:?}");
++}
++
++/// 着地の列の候補の木の検査が赤の周は、積んだ便のうち組が名指す便（先頭 a と 3 本目 c）に語 train-red を尾 `train=3` で積んだ
++/// 順に記し、名指さない 2 本目 b には記さない。列を解いた後に既存の経路で着地した先頭は語 landed も記す。
++#[test]
++fn vcledger_a_red_candidate_tree_is_recorded_for_each_named_rider() {
++    let (repo, state) = repo_with_state();
++    let [id_a, _id_b, id_c] = train_runs(&repo, &state, &state.join("lens-ran"), [ALL_GREEN, ALL_GREEN, TRAIN_RED]);
++    pair(&state, &format!("run={id_a} with={id_c} files=crates/toy/a.rs main=0"));
++    let rules = write_rules_train(&state, "rules-train.toml", Some(3));
++    let out = land_extra(&repo, &state, &id_a, &["--rules", &rules]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "先頭は着地する: {}", stderr_of(&out));
++    assert!(stdout_of(&out).contains(&format!("run={id_a} train=3 dissolved why=verify")), "列を解いた: {}", stdout_of(&out));
++    let c = ("s2-4cz".to_owned(), format!("run={id_c} word=train-red train=3"));
++    assert_eq!(followed(&state), [row(&id_a, "train-red train=3"), c, row(&id_a, "landed diff=1 patch=- off=-")]);
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/fleet/event.rs b/scribe2/crates/scribe2/src/fleet/event.rs
+index ec2422f92a180c8b4379d6add2db4f9c90743fe0..03f8cb37684f54496aa2f45cdd31c4f5759d0d1f 100644
+--- a/scribe2/crates/scribe2/src/fleet/event.rs
++++ b/scribe2/crates/scribe2/src/fleet/event.rs
+@@ -282,6 +282,7 @@ impl Body {
+             EventKind::LifecycleCutover => Self::case(pairs, &["version", "main"], cutover_of),
+             EventKind::MemoJudged => Self::case(pairs, &["bead"], judged_of),
+             EventKind::OverlapCommuted => Self::case(pairs, &["bead"], commuted_of),
++            EventKind::OverlapFollowed => Self::case(pairs, &["bead"], followed_of),
+             EventKind::LimitPermitted => Self::permit(pairs),
+             EventKind::RunCreated
+             | EventKind::RunStage
+@@ -537,6 +538,11 @@ fn commuted_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), Stri
+     judged_of(pairs).map(|(_, bead)| (Case::Commuted, bead))
+ }
+ 
++/// OverlapFollowed: `bead`（便の契約の id）と空でない `detail`（便と語）が必須（本体の欄は持たない）。
++fn followed_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
++    judged_of(pairs).map(|(_, bead)| (Case::Followed, bead))
++}
++
+ /// LifecycleCutover: `version` と `main`（小文字の 16 進）が必須。
+ fn cutover_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
+     let version = word_of(pairs, "version")?;
+diff --git a/scribe2/crates/scribe2/src/fleet/mod.rs b/scribe2/crates/scribe2/src/fleet/mod.rs
+index a278e1de3c8fd1ea70cb135ea9c92b2e416c1901..90acd13ec564fcb6e55554bfe1eccec92c6339b1 100644
+--- a/scribe2/crates/scribe2/src/fleet/mod.rs
++++ b/scribe2/crates/scribe2/src/fleet/mod.rs
+@@ -119,6 +119,9 @@ pub enum EventKind {
+     /// 受付が入口の排他の交差を差の当たりで通した（判断の記録 ADR-60 の決定 (4)・[`Case::Commuted`]・`bead` = 候補の契約の id・
+     /// `detail` = `run=<受付の run id> with=<相手> files=<交わった項> main=<sha>`）。**便に紐づかない**。
+     OverlapCommuted,
++    /// 差の当たりで通した組の便の、その後の着地の出来事（判断の記録 ADR-60 の決定 (4)・[`Case::Followed`]・`bead` = 便の契約の id・
++    /// `detail` = `run=<便 id> word=<語>` と語ごとの尾）。**便に紐づかない**（段を動かさない）。
++    OverlapFollowed,
+ }
+ 
+ /// [`EventKind`] の全 variant。
+@@ -155,6 +158,7 @@ pub const KINDS: &[EventKind] = &[
+     EventKind::MemoJudged,
+     EventKind::LimitPermitted,
+     EventKind::OverlapCommuted,
++    EventKind::OverlapFollowed,
+ ];
+ 
+ impl EventKind {
+@@ -193,6 +197,7 @@ impl EventKind {
+             Self::MemoJudged => "MemoJudged",
+             Self::LimitPermitted => "LimitPermitted",
+             Self::OverlapCommuted => "OverlapCommuted",
++            Self::OverlapFollowed => "OverlapFollowed",
+         }
+     }
+ 
+@@ -233,7 +238,8 @@ impl EventKind {
+             | Self::LifecycleCutover
+             | Self::MemoJudged
+             | Self::LimitPermitted
+-            | Self::OverlapCommuted => ACTOR_MACHINE,
++            | Self::OverlapCommuted
++            | Self::OverlapFollowed => ACTOR_MACHINE,
+         }
+     }
+ 
+@@ -271,7 +277,8 @@ impl EventKind {
+             | Self::IntakeRefused
+             | Self::LifecycleCutover
+             | Self::MemoJudged
+-            | Self::OverlapCommuted => Shape::Case,
++            | Self::OverlapCommuted
++            | Self::OverlapFollowed => Shape::Case,
+             Self::LimitPermitted => Shape::Permit,
+         }
+     }
+@@ -409,6 +416,8 @@ pub enum Case {
+     Judged,
+     /// [`EventKind::OverlapCommuted`]: 本体の欄を持たない（候補の契約の id は行の `bead`・組は `detail`）。
+     Commuted,
++    /// [`EventKind::OverlapFollowed`]: 本体の欄を持たない（便の契約の id は行の `bead`・便と語は `detail`）。
++    Followed,
+     /// [`EventKind::RulingReceived`] の結びの形（設計 §14）: 結んだ裁定 id・発話の ts・経路・問いの起票の時刻と、問いが
+     /// metadata に持つ asked（無ければ `None`）。`bead` は問い id（行の field）。
+     Ruling { ruling: String, utterance: String, channel: Channel, question_ts: String, asked: Option<String> },
+@@ -431,7 +440,7 @@ impl Case {
+             }
+             Self::Refused { refuse } => [bead, Some(text("refuse", refuse))].into_iter().flatten().collect(),
+             Self::Cutover { version, main } => vec![text("version", version), text("main", main)],
+-            Self::Judged | Self::Commuted => bead.into_iter().collect(),
++            Self::Judged | Self::Commuted | Self::Followed => bead.into_iter().collect(),
+             Self::Ruling { ruling, utterance, channel, question_ts, asked } => [
+                 Some(text("ruling", ruling)),
+                 Some(text("utterance", utterance)),
+diff --git a/scribe2/crates/scribe2/src/fleet/replay.rs b/scribe2/crates/scribe2/src/fleet/replay.rs
+index b446d0059db02b09802fc94fbbb3b623035f6c1e..bc9330673b3d7ca1ed33c5565c58651d10cf650b 100644
+--- a/scribe2/crates/scribe2/src/fleet/replay.rs
++++ b/scribe2/crates/scribe2/src/fleet/replay.rs
+@@ -268,7 +268,8 @@ fn apply_account(state: &mut State, event: &Event) {
+         | EventKind::LifecycleCutover
+         | EventKind::MemoJudged
+         | EventKind::LimitPermitted
+-        | EventKind::OverlapCommuted => {}
++        | EventKind::OverlapCommuted
++        | EventKind::OverlapFollowed => {}
+     }
+ }
+ 
+@@ -364,7 +365,8 @@ fn apply_seat(state: &mut State, event: &Event) {
+         | EventKind::LifecycleCutover
+         | EventKind::MemoJudged
+         | EventKind::LimitPermitted
+-        | EventKind::OverlapCommuted => {}
++        | EventKind::OverlapCommuted
++        | EventKind::OverlapFollowed => {}
+     }
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/commute.rs b/scribe2/crates/scribe2/src/pipe/commute.rs
+index 49b9e79ab6c7c9f6d52e7c97eaa3ff7d24b5977e..08732fbd0e6429e2f086ee26d1432dbae409a7e7 100644
+--- a/scribe2/crates/scribe2/src/pipe/commute.rs
++++ b/scribe2/crates/scribe2/src/pipe/commute.rs
+@@ -3,7 +3,8 @@
+ //! 交差の照らし（純な交わりの関数 [`super::refuse::overlaps`]）が交差を見つけた組に、入口と起動の列がその後に呼ぶ 1 本の
+ //! 関数 [`weigh`]（規則の行が真の周だけ [`judge`] を撃つ）と、結末の閉じた列 [`Verdict`] と、入り切りの規則の行 [`ROW`] の
+ //! 読み [`on`] を持つ。判じは交わりの関数の中に置かない（決定 (3)）。同じ宣言の名を足す組の拾い（[`Verdict::SameName`] を
+-//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。
++//! 返す段）は子の module [`names`] に置く。受付が通した組は [`record`] が出来事の記録に 1 行書く（決定 (4)）。その組の便の後の
++//! 着地の出来事（積み直しの衝突・stale・再 gate の不合格・候補の木の赤・着地）の記帳は子の module [`ledger`] に置く。
+ //!
+ //! 一時の index と物（object）は state dir の下の [`SCRATCH`] に周ごとの dir を切って置き、周の終わりに dir ごと消す（repo の
+ //! 物の置き場と index には書かない・決定 (2)）。読めない・当たらない・時間切れの周は断る側に倒す（fail-closed）。
+@@ -26,6 +27,7 @@ use std::process::Stdio;
+ use std::sync::atomic::{AtomicU64, Ordering};
+ use std::time::{Duration, Instant};
+ 
++pub(in crate::pipe) mod ledger;
+ mod names;
+ 
+ /// 入り切りの規則の行 id（判断の記録 ADR-60 の決定 (5)）。
+diff --git a/scribe2/crates/scribe2/src/pipe/commute/ledger.rs b/scribe2/crates/scribe2/src/pipe/commute/ledger.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad6592bfdcf9ad96626a89cd9cbbe288592f0e14
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/commute/ledger.rs
+@@ -0,0 +1,223 @@
++//! 差の当たりで通した組の後の着地の記帳（判断の記録 ADR-60 の決定 (4) の着地の側・要件 FR1039）。
++//!
++//! 受付が通した組（kind `OverlapCommuted` の行の detail の `run=` か `with=` に名の在る便）の、その後の着地の出来事を、出来事の
++//! 記録の kind `OverlapFollowed` に 1 件ずつ記す。語は閉じた 5 つ（[`Followed`]）で、積み直しの衝突・撃ち直しの間に main がまた
++//! 動いた周（stale）・追随の再 gate の不合格・着地の列の候補の木の赤・着地。着地の行は、着地の差と差の file の変えた行の数と、
++//! 片方にだけ在る変えた行の数を添える（[`landed`]）。組に名の無い便は何も書かない。
++//!
++//! 記帳は撤退の数えの材料で、着地の判じに使わない。記録を読めない・書けない周も、着地の結末と rc は替えない（着地の後の検出の
++//! 起こしと同じ極性）。
++
++use crate::fleet::store::{self, LockPolicy};
++use crate::fleet::{cli, Case, Event, EventKind, SCHEMA};
++use crate::pipe::git_bytes;
++use std::collections::{BTreeMap, BTreeSet};
++use std::path::Path;
++
++/// 組の後の着地の出来事の語（閉じた 5 つ・判断の記録 ADR-60 の決定 (4)）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(in crate::pipe) enum Followed {
++    /// 追随の積み直し（rebase）が衝突した。
++    Conflict,
++    /// 撃ち直しの間に main がまた動いた（stale）。
++    Stale,
++    /// 追随の再 gate が不合格（FAIL）だった。
++    RegateFail,
++    /// 着地の列の候補の木の検査が赤だった（積んだ便の全部に記す・どの便が赤かは帰属しない）。
++    TrainRed,
++    /// 着地した（[`landed`] が数えを添える）。
++    Landed,
++}
++
++impl Followed {
++    /// detail の `word=` の字。
++    pub(in crate::pipe) fn as_str(self) -> &'static str {
++        match self {
++            Self::Conflict => "conflict",
++            Self::Stale => "stale",
++            Self::RegateFail => "regate-fail",
++            Self::TrainRed => "train-red",
++            Self::Landed => "landed",
++        }
++    }
++}
++
++/// 記す便（置き場・便 id・契約の bead・lock の待ち方）。
++pub(in crate::pipe) struct Mark<'a> {
++    /// 置き場（組の行を読み、記帳を書く）。
++    pub(in crate::pipe) state_dir: &'a Path,
++    /// 便 id。
++    pub(in crate::pipe) run: &'a str,
++    /// 便の契約の bead id（行の `bead`）。
++    pub(in crate::pipe) bead: &'a str,
++    /// lock の待ち方。
++    pub(in crate::pipe) policy: LockPolicy,
++}
++
++/// 便が組に名の在る周だけ、語 `word` を 1 件記す（detail は `run=<便 id> word=<語>` と、空でない `tail` を空白 1 つの後に）。
++pub(in crate::pipe) fn note(mark: &Mark<'_>, word: Followed, tail: &str) {
++    if paired(mark.state_dir, mark.run) {
++        write(mark, word, tail);
++    }
++}
++
++/// 着地した便が組に名の在る周だけ、語 landed を 1 件記す。尾は `diff=<着地の差の変えた行の数> patch=<差の file の変えた行の数>
++/// off=<片方にだけ在る変えた行の数>`。着地の差は着地の commit `sha` とその親の差、差の file は契約が名指す `patch` を `sha` の木から
++/// 読む。読めない側の数と off は字 `-`。
++pub(in crate::pipe) fn landed(mark: &Mark<'_>, repo: &Path, sha: &str, patch: Option<&str>) {
++    if !paired(mark.state_dir, mark.run) {
++        return;
++    }
++    let parent = format!("{sha}^");
++    let read = |args: &[&str]| git_bytes(repo, args).map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
++    let landing = read(&["diff", "--no-color", &parent, sha]);
++    let file = patch.and_then(|path| read(&["show", &format!("{sha}:{path}")]));
++    write(mark, Followed::Landed, &counts(landing.as_deref(), file.as_deref()));
++}
++
++/// 1 件を書く（書けない周は捨てる・着地の結末を替えない）。
++fn write(mark: &Mark<'_>, word: Followed, tail: &str) {
++    let kind = EventKind::OverlapFollowed;
++    let mut detail = format!("run={} word={}", mark.run, word.as_str());
++    if !tail.is_empty() {
++        detail = format!("{detail} {tail}");
++    }
++    let event = Event {
++        schema: SCHEMA,
++        ts: cli::now_utc(),
++        kind,
++        run: String::new(),
++        bead: mark.bead.to_owned(),
++        host: cli::host(),
++        actor: kind.default_actor().to_owned(),
++        stage: None,
++        seat: None,
++        pid: None,
++        detail: Some(detail),
++        allowance: None,
++        registration: None,
++        mark: None,
++        account: None,
++        cost: None,
++        rule: None,
++        case: Some(Case::Followed),
++    };
++    let _ = store::append(mark.state_dir, &event, mark.policy);
++}
++
++/// 便 `run` が受付の通した組に名の在るか（記録を読めない周は偽）。
++fn paired(state_dir: &Path, run: &str) -> bool {
++    store::read_all(state_dir).is_ok_and(|events| {
++        events.iter().filter(|event| event.kind == EventKind::OverlapCommuted).any(|event| names(event.detail.as_deref().unwrap_or_default(), run))
++    })
++}
++
++/// 組の detail（`run=<id> with=<id>,<id> files=… main=…`）の `run=` の値か `with=` の 1 つが空でない `run` と等しいか。
++fn names(detail: &str, run: &str) -> bool {
++    !run.is_empty()
++        && detail.split_whitespace().any(|word| match word.split_once('=') {
++            Some(("run", found)) => found == run,
++            Some(("with", found)) => found.split(',').any(|one| one == run),
++            _ => false,
++        })
++}
++
++/// 差の字の変えた行（hunk の中の `+` と `-` の行・頭の印を含む字）の字ごとの本数。`diff --git` から最初の `@@` までの頭の行
++/// （`---` と `+++` を含む）は数えない。
++fn changed(text: &str) -> BTreeMap<&str, usize> {
++    let mut found = BTreeMap::new();
++    let mut inside = false;
++    for line in text.lines() {
++        if line.starts_with("diff --git ") {
++            inside = false;
++        } else if line.starts_with("@@") {
++            inside = true;
++        } else if inside && (line.starts_with('+') || line.starts_with('-')) {
++            *found.entry(line).or_insert(0) += 1;
++        }
++    }
++    found
++}
++
++/// 着地の尾（`diff=<n> patch=<m> off=<k>`・読めない側の数と off は `-`）。off は字ごとの本数の差の絶対値の和。
++fn counts(landing: Option<&str>, patch: Option<&str>) -> String {
++    let (mine, theirs) = (landing.map(changed), patch.map(changed));
++    let total = |map: &Option<BTreeMap<&str, usize>>| map.as_ref().map_or_else(|| "-".to_owned(), |found| found.values().sum::<usize>().to_string());
++    let off = match (&mine, &theirs) {
++        (Some(mine), Some(theirs)) => {
++            let lines: BTreeSet<&&str> = mine.keys().chain(theirs.keys()).collect();
++            let count = |map: &BTreeMap<&str, usize>, line: &str| map.get(line).copied().unwrap_or(0);
++            lines.into_iter().map(|line| count(mine, line).abs_diff(count(theirs, line))).sum::<usize>().to_string()
++        }
++        _ => "-".to_owned(),
++    };
++    format!("diff={} patch={} off={off}", total(&mine), total(&theirs))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{counts, names, note, Followed, Mark};
++    use crate::fleet::store::{self, LockPolicy};
++    use crate::fleet::{Case, EventKind};
++    use crate::pipe::fixture::{event, scratch};
++
++    /// 語の全部（宣言順）。
++    const FOLLOWED: [Followed; 5] = [Followed::Conflict, Followed::Stale, Followed::RegateFail, Followed::TrainRed, Followed::Landed];
++
++    /// 組の行の detail（候補 `s2-b-2`・相手 `s2-a-1` と `s2-c-3`）。
++    const PAIR: &str = "run=s2-b-2 with=s2-a-1,s2-c-3 files=crates/a.rs main=abc";
++
++    /// 語の列は宣言順に 5 つで、組の detail は `run=` の値と `with=` の 1 つだけを名指し、接頭辞の重なり・ほかの鍵の値・空の字は
++    /// 名指さない。
++    #[test]
++    fn vcledger_words_and_the_names_of_a_pair() {
++        let words: Vec<&str> = FOLLOWED.iter().map(|found| found.as_str()).collect();
++        assert_eq!(words, ["conflict", "stale", "regate-fail", "train-red", "landed"]);
++        for run in ["s2-b-2", "s2-a-1", "s2-c-3"] {
++            assert!(names(PAIR, run), "名指す: {run}");
++        }
++        for run in ["s2-b", "s2-a-12", "s2-c", "crates/a.rs", "abc", ""] {
++            assert!(!names(PAIR, run), "名指さない: {run}");
++        }
++        assert!(!names("run= with=", ""), "空の値も名指さない");
++    }
++
++    /// 変えた行は hunk の中の `+` と `-` の行だけを字ごとに数え（文脈の行・hunk の頭・`---` と `+++` の頭は数えない・hunk の中の
++    /// 字 `-- x` を消した行 `--- x` は数える）、off は片方にだけ在る変えた行の本数。差の file を読めない周は patch と off が `-`。
++    #[test]
++    fn vcledger_counts_changed_lines_inside_hunks() {
++        let head = "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n";
++        let landing = format!("{head}@@ -1,3 +1,3 @@\n c1\n-l2\n+x2\n c3\n@@ -9,2 +9,2 @@\n--- x\n+y\n c10\n");
++        let patch = format!("{head}@@ -2,1 +2,1 @@\n-l2\n+x2\n@@ -8,3 +8,3 @@\n c8\n--- x\n+y\n");
++        assert_eq!(counts(Some(&landing), Some(&patch)), "diff=4 patch=4 off=0", "同じ変えた行は文脈と頭が違っても off 0");
++        let extra = format!("{landing}diff --git a/g b/g\n--- a/g\n+++ b/g\n@@ -1 +1,2 @@\n g1\n+z\n");
++        assert_eq!(counts(Some(&extra), Some(&patch)), "diff=5 patch=4 off=1", "着地にだけ在る 1 行");
++        let twice = format!("{patch}@@ -20,1 +20,1 @@\n-l2\n+x2\n@@ -30,1 +30,1 @@\n-l2\n+x2\n");
++        assert_eq!(counts(Some(&landing), Some(&twice)), "diff=4 patch=8 off=4", "同じ字の本数の差を数える（字の種類の数でない）");
++        assert_eq!(counts(Some(&landing), None), "diff=4 patch=- off=-", "差の file を読めない");
++        assert_eq!(counts(None, Some(&patch)), "diff=- patch=4 off=-", "着地の差を読めない");
++    }
++
++    /// 記帳は、組の行が名指す便だけに kind `OverlapFollowed` の 1 件（bead は便の契約・detail は便 id と語と尾・本体は
++    /// `Followed`）を書き、読み直せる。名指さない便は何も書かない。
++    #[test]
++    fn vcledger_note_writes_only_for_a_named_run() {
++        let dir = scratch("vcledger-note");
++        let policy = LockPolicy::embedded().unwrap_or_else(|err| panic!("{err:?}"));
++        let mut pair = event("", EventKind::OverlapCommuted, None, None, Some(PAIR));
++        pair.case = Some(Case::Commuted);
++        store::append(&dir, &pair, policy).unwrap_or_else(|err| panic!("{err:?}"));
++        let mark = |run: &'static str| Mark { state_dir: &dir, run, bead: "s2-x", policy };
++        note(&mark("s2-a-1"), Followed::Conflict, "");
++        note(&mark("s2-b-2"), Followed::TrainRed, "train=2");
++        note(&mark("s2-b"), Followed::Stale, "");
++        let events = store::read_all(&dir).unwrap_or_else(|err| panic!("{err:?}"));
++        let followed: Vec<(String, Option<String>, Option<Case>)> = events
++            .into_iter()
++            .filter(|found| found.kind == EventKind::OverlapFollowed)
++            .map(|found| (found.bead, found.detail, found.case))
++            .collect();
++        let row = |detail: &str| ("s2-x".to_owned(), Some(detail.to_owned()), Some(Case::Followed));
++        assert_eq!(followed, [row("run=s2-a-1 word=conflict"), row("run=s2-b-2 word=train-red train=2")]);
++    }
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/follow.rs b/scribe2/crates/scribe2/src/pipe/follow.rs
+index 6ea776212962a6e24fcc17cf2b25cde29c6699b0..5933a10581963d1fa17f857ea0de707ae17b832d 100644
+--- a/scribe2/crates/scribe2/src/pipe/follow.rs
++++ b/scribe2/crates/scribe2/src/pipe/follow.rs
+@@ -30,6 +30,7 @@
+ //! 新しい base を記帳できないと、次の gate が**古い base の 2 点 diff**を測り、先着便の file を
+ //! write-set の外と誤る。
+ 
++use super::commute::ledger::{self, Followed, Mark};
+ use super::contract::{Contract, CLASS_ROW};
+ use super::declaration::{is_under, Ceiling, Effective, CEILING_ROW, DENIED_ROW};
+ use super::gate::RC_INCONCLUSIVE;
+@@ -219,6 +220,7 @@ pub(crate) fn on_conflict(entry: &Conflict<'_>) -> Outcome {
+     if let Err(reason) = recorded {
+         return broken(reason);
+     }
++    ledger::note(&mark_of(&entry.turn), Followed::Conflict, "");
+     match FollowCheck::judge(retried(entry.turn.state_dir, entry.turn.run), entry.limit) {
+         FollowCheck::Unreadable => terminate(
+             entry,
+@@ -257,6 +259,7 @@ pub(crate) fn on_stale(entry: &Conflict<'_>) -> Result<(), Outcome> {
+     if let Err(reason) = recorded {
+         return Err(broken(reason));
+     }
++    ledger::note(&mark_of(&entry.turn), Followed::Stale, "");
+     match FollowCheck::judge(retried(entry.turn.state_dir, entry.turn.run), entry.limit) {
+         FollowCheck::Unreadable => Err(terminate(
+             entry,
+@@ -984,6 +987,11 @@ fn terminate(entry: &Conflict<'_>, detail: &str, rc: u8, reason: String) -> Outc
+     }
+ }
+ 
++/// 差の当たりで通した組の後の記帳の宛先（判断の記録 ADR-60 の決定 (4)・組に名の無い便は [`ledger::note`] が書かない）。
++fn mark_of<'a>(entry: &Turn<'a>) -> Mark<'a> {
++    Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy }
++}
++
+ /// 段を 1 件記帳する。
+ fn record(entry: &Turn<'_>, stage: Stage, detail: String) -> Result<(), String> {
+     emit(
+diff --git a/scribe2/crates/scribe2/src/pipe/land.rs b/scribe2/crates/scribe2/src/pipe/land.rs
+index ca18a0ad12b11f7ccd44d79bf77ac6b5995f2f24..9f265f3a1751cb3951c1ab49977d91a1cfd2c82e 100644
+--- a/scribe2/crates/scribe2/src/pipe/land.rs
++++ b/scribe2/crates/scribe2/src/pipe/land.rs
+@@ -51,6 +51,7 @@
+ //! 本当に空の便として従来どおり `rebase-empty`。
+ 
+ use crate::polarity::{OnFailure, Polarity, Timing};
++use super::commute::ledger::{self, Followed, Mark};
+ use super::contract::Contract;
+ use super::follow::{self, Conflict};
+ use super::gate::{gate, next_number, skip_record, Gate, Limits, Skipped, Verdict};
+@@ -823,11 +824,20 @@ fn follow_main(entry: &Land<'_>, worktree: &Path, base: &str, main: &str) -> Fol
+     });
+     lines.extend(regated.out);
+     if regated.rc != RC_OK {
++        regate_failed(entry);
+         return Follow::Stopped(Outcome { out: lines, err: regated.err, rc: regated.rc });
+     }
+     Follow::Ready(lines)
+ }
+ 
++/// 追随の再 gate が FAIL の周、差の当たりで通した組の便に不合格を記す（判断の記録 ADR-60 の決定 (4)・FAIL でない止まりは記さない）。
++fn regate_failed(entry: &Land<'_>) {
++    if verdict_of(entry.state_dir, entry.run) == Some(Verdict::Fail) {
++        let mark = Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy };
++        ledger::note(&mark, Followed::RegateFail, "");
++    }
++}
++
+ /// 追随の再 gate を丸ごと省いて前周の PASS を引き継ぐか（設計 §33 (i)・gate-cost.md §44 形 (10)）。
+ ///
+ /// main が便の base から進んだ差分（`git diff --name-only -z <base>..<main>`）の path が [`DETECTION_SCOPE`] に
+diff --git a/scribe2/crates/scribe2/src/pipe/land/finish.rs b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+index 5ffa143d00905eeb642d167dbb998cc2dc984946..162909741f49c13a443bf509ecbd6eb5ccc0df8e 100644
+--- a/scribe2/crates/scribe2/src/pipe/land/finish.rs
++++ b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+@@ -14,6 +14,7 @@
+ 
+ // flip-check: moved s2-07l.498
+ 
++use super::super::commute::ledger::{self, Mark};
+ use super::super::contract::Contract;
+ use super::super::declaration::Effective;
+ use super::super::dispatch::spawn_self;
+@@ -419,6 +420,9 @@ pub(super) fn finish(entry: &Land<'_>, worktree: &Path, landing: &Landing, ancho
+     if let Err(err) = emitted {
+         return broken(err.to_string());
+     }
++    // 差の当たりで通した組の便の着地を、着地の差と差の file の変えた行の数を添えて記す（判断の記録 ADR-60 の決定 (4)）。
++    let mark = Mark { state_dir: entry.state_dir, run: entry.run, bead: entry.bead, policy: entry.policy };
++    ledger::landed(&mark, entry.repo, new, entry.contract.patch.as_deref());
+     // 着地後の検出を切り離して起こす（設計 gate-cost.md §44 形 (11)・待たない）。起こせなかった周も rc と着地は変えない。
+     err.extend(spawn_detection(entry, new));
+     // 後始末の失敗は land を取り消さない（**rc 0 のまま stderr 1 行**）。anchor の warning も同じ列。
+diff --git a/scribe2/crates/scribe2/src/pipe/train.rs b/scribe2/crates/scribe2/src/pipe/train.rs
+index 7982cc8b7439cfee5903cba57e6c12028aaa88cb..c70ac0b6d261680b40922147bcf08104a80e3eed 100644
+--- a/scribe2/crates/scribe2/src/pipe/train.rs
++++ b/scribe2/crates/scribe2/src/pipe/train.rs
+@@ -15,6 +15,7 @@
+ //! stdout の 1 行に `train=<積んだ本数>`（解いた周は `train=<N> dissolved why=<段>`）。上限 1 と行の不在は現行の経路
+ //! そのもの（[`Train::Solo`]）。
+ 
++use super::commute::ledger::{self, Followed, Mark};
+ use super::contract::Contract;
+ use super::declaration::Effective;
+ use super::gate::{is_unreadable, run_checks, step_record, Check, Checks, Step};
+@@ -132,6 +133,9 @@ pub(super) fn train(entry: &Land<'_>, worktree: &Path, order: Order) -> Train {
+     }
+     let count = stacked.len();
+     if let Err(why) = check {
++        if matches!(why, Why::Verify) {
++            red(entry, &riders, &stacked);
++        }
+         return dissolved(entry, count, why);
+     }
+     let mut cars = Vec::new();
+@@ -296,6 +300,16 @@ fn fold(repo: &Path, candidate: &Path) {
+     let _ = git_ok(repo, &["worktree", "remove", "--force", &path]);
+ }
+ 
++/// 候補の木の検査が赤の周、積んだ便のうち差の当たりで通した組の便に赤を記す（判断の記録 ADR-60 の決定 (4)・尾は `train=<積んだ
++/// 本数>`・どの便が赤かは帰属しない）。
++fn red(entry: &Land<'_>, riders: &[Rider], stacked: &[Stacked]) {
++    let tail = format!("train={}", stacked.len());
++    for rider in stacked.iter().filter_map(|found| riders.get(found.index)) {
++        let mark = Mark { state_dir: entry.state_dir, run: &rider.run, bead: &rider.bead, policy: entry.policy };
++        ledger::note(&mark, Followed::TrainRed, &tail);
++    }
++}
++
+ /// 列を解いた周の 1 行。
+ fn dissolved(entry: &Land<'_>, count: usize, why: Why) -> Train {
+     Train::Dissolved(format!("run={} train={count} dissolved why={}", entry.run, why.as_str()))
