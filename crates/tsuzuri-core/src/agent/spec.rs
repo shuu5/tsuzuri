@@ -1,6 +1,7 @@
 //! 係の起こしの門と結びの口の判じ（行 ag-spec・判断の記録 ADR-59 決定 (1)(2)(4)・要件 FR21）。
 //! 起こしの門は席の Agent の呼び（PreToolUse の入力・係の id `agent_id` の無い呼び）を読み、型が tsuzuri の 3 本か・名が在るか・
 //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
+//! 頭の予算は下限（`BUDGET_MIN`・判断の記録 ADR-63 決定 (3)）より小さければ、直した頭の見本を付けて断る。
 //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
 //! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
 //! 検証の群の起こしの門の判じ（`group`・判断の記録 ADR-61・要件 FR22）は行 ag-gjudge が置く。
@@ -28,6 +29,9 @@ pub const HOLES: [&str; 4] = [
 /// 組みの値。
 pub const BUILDS: [&str; 3] = ["なし", "軽", "重"];
 
+/// 頭の予算の下限（新しい量・全部の起こし）。群の係ごとの上限（`group::MEMBER_NEW`）とは中身が違うので共有しない。
+pub const BUDGET_MIN: u64 = 150_000;
+
 /// 係の dir の頼みの file（prompt の字のまま）。
 pub const BRIEF: &str = "brief.md";
 
@@ -46,11 +50,12 @@ pub struct Head {
     pub outputs: Vec<String>,
 }
 
-/// 頭の読みの断り（欠けた鍵の名の列・予算の値の形・組みの値の形）。
+/// 頭の読みの断り（欠けた鍵の名の列・予算の値の形・下限より小さい予算・組みの値の形）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeadError {
     Missing(Vec<&'static str>),
     Budget(String),
+    Low(u64),
     Build(String),
 }
 
@@ -138,7 +143,7 @@ fn outputs(v: &str) -> Vec<String> {
         .collect()
 }
 
-/// 頼みの頭を読む（欠けた鍵が在れば全部の名・予算と組みの値の形の誤り）。
+/// 頼みの頭を読む（欠けた鍵が在れば全部の名・予算と組みの値の形の誤り・下限より小さい予算）。
 pub fn head(prompt: &str) -> Result<Head, HeadError> {
     let f = fields(prompt);
     let missing: Vec<&'static str> = KEYS
@@ -156,6 +161,9 @@ pub fn head(prompt: &str) -> Result<Head, HeadError> {
         return Err(HeadError::Missing(missing));
     }
     let budget = budget(b).ok_or_else(|| HeadError::Budget(b.to_string()))?;
+    if budget < BUDGET_MIN {
+        return Err(HeadError::Low(budget));
+    }
     if !BUILDS.contains(&build) {
         return Err(HeadError::Build(build.to_string()));
     }
@@ -167,20 +175,28 @@ pub fn head(prompt: &str) -> Result<Head, HeadError> {
     })
 }
 
-/// 直した頭の見本（形の合う値はそのまま・欠けたか形の違う値は書き方）。
+/// 直した頭の見本（形の合う値はそのまま・欠けたか形の違う値は書き方・下限より小さい予算は下限から上の書き方）。
 pub fn fixed(prompt: &str) -> String {
     let f = fields(prompt);
     let ok = |i: usize, v: &str| match i {
-        0 => budget(v).is_some(),
+        0 => budget(v).is_some_and(|n| n >= BUDGET_MIN),
         1 => BUILDS.contains(&v),
         3 => !outputs(v).is_empty(),
         _ => true,
     };
+    let low = format!("token <{BUDGET_MIN} 以上の数>");
     KEYS.iter()
         .zip(HOLES)
         .zip(f)
         .enumerate()
-        .map(|(i, ((k, hole), v))| format!("{k}: {}", v.filter(|v| ok(i, v)).unwrap_or(hole)))
+        .map(|(i, ((k, hole), v))| {
+            let hole = if i == 0 && v.and_then(budget).is_some() {
+                low.as_str()
+            } else {
+                hole
+            };
+            format!("{k}: {}", v.filter(|v| ok(i, v)).unwrap_or(hole))
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -271,6 +287,7 @@ pub fn reason(r: &Refusal, prompt: &str) -> String {
             format!("頼みの頭に {} の行が無い", keys.join("・"))
         }
         Refusal::Head(HeadError::Budget(v)) => format!("予算の値 {v} が token <数> の形でない"),
+        Refusal::Head(HeadError::Low(n)) => format!("予算の値 {n} が下限 {BUDGET_MIN} より小さい"),
         Refusal::Head(HeadError::Build(v)) => {
             format!("組みの値 {v} が {} のどれでもない", BUILDS.join("・"))
         }

@@ -3,15 +3,21 @@
 //! 応答の id で重ねずに足す。新しく読み書きした量は input・cache_creation・output の和で、文脈の読み直し（cache_read）は別の欄。
 //! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
 //! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
+//! 終える前の門が係の dir に書く予算の記録（`Tally`・`usage.json`）は、係の記録の全部を席の道具と同じ数え（`spent`）で数えた
+//! 新しい量と、札の頭の予算と倍率と対象を持ち、日次の物差しが読む（判断の記録 ADR-63 決定 (9)）。
 //! 予算を越えた係の呼びの係の門の判じ（`guard`）は行 ag-guard が置く。
 //! 群の係の読み直しの印と注ぎ・割りの外の読みと入れ子の断り・2 度の読みの記帳の字（`group`）は行 ag-gwatch が置く。
 
 pub mod group;
 pub mod guard;
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tsuzuri_contract::EpochSecs;
+
+use crate::agent::spec::Spec;
 
 /// 係の dir の測りの札。
 pub const METER: &str = "meter.json";
@@ -49,6 +55,61 @@ fn usage(line: &[u8]) -> Option<(Option<String>, u64, u64)> {
         .map(str::to_string);
     let new = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
     Some((id, new, n("cache_read_input_tokens")))
+}
+
+/// 係の記録の全部の新しい量（席の道具と同じ数え・同じ応答の id の行は離れていても最後の行だけを数え、id の無い行は 1 行ずつ数える）。
+pub fn spent(record: &[u8]) -> u64 {
+    let mut last: BTreeMap<String, u64> = BTreeMap::new();
+    let mut bare = 0;
+    for (id, new, _) in record.split(|b| *b == b'\n').filter_map(usage) {
+        match id {
+            Some(id) => {
+                last.insert(id, new);
+            }
+            None => bare += new,
+        }
+    }
+    bare + last.values().sum::<u64>()
+}
+
+/// 係の dir の予算の記録の file（終える前の門が通す時に書く）。
+pub const TALLY: &str = "usage.json";
+
+/// 予算の記録（係の名・型・対象・頭の予算・新しい量・倍率・書いた時刻）。倍率は新しい量を予算で割り、小数 3 桁に丸める。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Tally {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub target: String,
+    pub budget: u64,
+    pub used: u64,
+    pub ratio: f64,
+    pub at: EpochSecs,
+}
+
+impl Tally {
+    /// 札 `spec` と係の記録 `record` の予算の記録（時刻は札の終えの印・無ければ起こしの時刻）。
+    pub fn of(spec: &Spec, record: &[u8]) -> Self {
+        let used = spent(record);
+        let ratio = (used as f64 / spec.budget.max(1) as f64 * 1000.0).round() / 1000.0;
+        Self {
+            name: spec.name.clone(),
+            kind: spec.kind.clone(),
+            target: spec.target.clone(),
+            budget: spec.budget,
+            used,
+            ratio,
+            at: spec.ended.unwrap_or(spec.spawned),
+        }
+    }
+
+    /// 記録の字（整えた JSON と末の改行）。
+    pub fn render(&self) -> String {
+        let mut text = serde_json::to_string_pretty(self).unwrap_or_default();
+        text.push('\n');
+        text
+    }
 }
 
 impl Meter {

@@ -7,6 +7,7 @@
 //! 5. 欠けが在り 1 度目の終わり（stop_hook_active が真でない）なら、理由を標準エラーに書いて 2
 //!    （Claude Code は SubagentStop の rc 2 を係の続けと読み、標準エラーを係に渡す）。
 //! 6. 通す時は、欠けが在れば `<名>/w/STOP-GATE.txt` に欠けを 1 行ずつ書き、札の `ended` に今の時刻を書いて 0（書けなければ標準エラーに書いて通す）。
+//!    0 の前に、4 で読んだ係の記録から中核の `Tally` で組んだ予算の記録を `<名>/usage.json` に書く（記録が空なら書かない・書けなければ標準エラーに書いて通す）。
 //!
 //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
 //! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
@@ -17,7 +18,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use tsuzuri_core::agent::meter::sub_call;
+use tsuzuri_core::agent::meter::{TALLY, Tally, sub_call};
 use tsuzuri_core::agent::spec::group::{SEAT, Seat};
 use tsuzuri_core::agent::spec::{SPEC, Spec};
 use tsuzuri_core::agent::stop::{GATE, OUT, claim_lacks, end, hold, lacks};
@@ -49,6 +50,19 @@ fn claim_holes(agent: &Path, spec: &Spec, out: &Path) -> Vec<String> {
         .filter_map(|o| fs::read_to_string(out.join(o)).ok())
         .collect();
     claim_lacks(&texts, &seat.claims)
+}
+
+/// 係の dir `agent` に、札 `spec` と係の記録 `record` の予算の記録を書く（記録が空なら数えずに書かない・書けなければ標準エラーに書いて通す）。
+fn tally(agent: &Path, spec: &Spec, record: &[u8]) {
+    if record.is_empty() {
+        emit_err("tz hook agent-stop: 係の記録が読めないか空なので予算の記録を書かない（通す）");
+        return;
+    }
+    if let Err(e) = fs::write(agent.join(TALLY), Tally::of(spec, record).render()) {
+        emit_err(&format!(
+            "tz hook agent-stop: 予算の記録を書けない（通す）: {e}"
+        ));
+    }
 }
 
 /// tz hook agent-stop の残りの引数を受けて終了 code を返す（0 か 1 か 2）。
@@ -105,5 +119,6 @@ pub fn run(rest: &[&str]) -> u8 {
             "tz hook agent-stop: 札に終えの印を書けない（通す）: {e}"
         ));
     }
+    tally(&dir.join(&name), &spec, &record);
     0
 }
