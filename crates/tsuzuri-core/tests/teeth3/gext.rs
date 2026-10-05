@@ -481,7 +481,7 @@ fn gext_names_clean() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut names: Vec<String> = Vec::new();
     for file in [
-        dir.join("tests/teeth1/gext.rs"),
+        dir.join("tests/teeth3/gext.rs"),
         dir.join("../tsuzuri-boundary/tests/teeth2/gextw.rs"),
     ] {
         let text = fs::read_to_string(&file)

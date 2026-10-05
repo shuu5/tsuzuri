@@ -17,4 +17,3 @@ mod server_acct;
 mod server_acctwire;
 mod server_ask;
 mod server_batch;
-mod server_coalesce;

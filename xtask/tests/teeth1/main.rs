@@ -14,6 +14,7 @@ mod tlic;
 mod vcij;
 mod vdaily;
 mod vjprep;
+mod vlanes;
 mod vretb;
 mod vskip;
 mod vsplit;
