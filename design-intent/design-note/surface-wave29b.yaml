@@ -1,15 +1,16 @@
-# 設計ノート surface-wave29b — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-55 の承認・承認の列〕・行の拠り = 判断の記録 ADR-55 と ADR-29）第 29 波 b。
+# 設計ノート surface-wave29b — （発効 2026-10-05・持ち主の裁定〔判断の記録 ADR-55 と ADR-57 の承認・承認の列〕・行の拠り = 判断の記録 ADR-55 と ADR-57 と ADR-29）第 29 波 b。
 # 契約表の行は器（scribe2）が読む導出物 contracts/surface-wave29b.toml に写る。便の契約 bead の pointer は design = contracts/surface-wave29b.toml#<行 id>。
 meta:
   id: surface-wave29b
-  title: 第 29 波 b — 相談の窓の立て直し（判断の記録 ADR-55・話す窓が群の口座の移動に付いてくる・窓の記録に口座と会話の id・口座の board に窓を並べる）
-  version: v0.3
+  title: 第 29 波 b — 相談の窓の立て直し（判断の記録 ADR-55 と ADR-57・話す窓が群の口座の移動に付いてくる・窓の記録に口座と会話の id・口座の board に窓を並べる・窓は会話どうしの言付けを断る・話す窓の Remote Control と状態の 1 行）
+  version: v0.4
   status: effective
   generated: 2026-10-05
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.1（裁定 id = t3-hub.88.1.1:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）と t3-hub.88.1.2（裁定 id = t3-hub.88.1.2:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）・束 batch:20261005T0058Z-1〔判断の記録 ADR-55 の承認・ノートの承認〕, verbatim: どちらも推奨で良い, surface: R-8}
-  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。
+    - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.3（裁定 id = t3-hub.88.1.3:20261005T0123Z-1・甲・配達の口・notes に逐語・束 batch:20261005T0123Z-1）と t3-hub.84.3（裁定 id = t3-hub.84.3:20261005T0134Z-1・案 A・配達の口・notes に逐語・条 A-1 の外へ出す確認を兼ねる）〔判断の記録 ADR-57 の承認・ノートの承認〕, verbatim: どちらも推奨で進めて（t3-hub.88.1.3）／推奨で良い（t3-hub.84.3）, surface: R-8}
+  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。 第 0.4 版（2026-10-05）は、判断の記録 ADR-57（持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A・ADR-29 の決定 (3)(7)(8) の部分の置き換え）の承認の行と、その決定 (1)(ケ) の行 cs-inbound-refuse（相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りに送る道具と一覧の道具を足す・差の file・試作と噛みは係 w188a・積みと床は係 w190a）を足し、題と頭の注に ADR-57 を足した。
 
 sections:
   - n: 1
@@ -42,6 +43,15 @@ sections:
         size: M
         done: (1) git apply --reverse --check docs/design/patch/cs-acct-mark.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 中核の定数 STAMP_HOOKS は SessionStart・UserPromptSubmit・Stop の 3 つをこの順に持ち、stamp_command(/T, /W) は字 timeout 4 /T consult stamp /W || true で、設定の hooks は守りの hook の PreToolUse に加えて 3 つの事の各々に、matcher を持たず命令がその字で timeout が 10 の hook を 1 つだけ持つ 1 要素の列を置き、検めは 3 つの事の各々について、列を null にした形・作業場の字を替えた形・末を || exit 2 にした形・timeout を替えた形・命令を足した形・matcher を足した形の 6 つを、欠けの名 /hooks/<その事> の 1 つだけで断る（歯 cwarg_settings_hold_the_stamp_hooks） (3) fixture tests/fixtures/consult/launch-argv.yaml の settings の hooks は PreToolUse の次に SessionStart・UserPromptSubmit・Stop の 3 つを持ち、各々の命令は 字 timeout 4 /T consult stamp /W || true で、話す窓と問う窓の組んだ設定はこの fixture と同じで検めの欠けが 0 で、hooks を除いた設定を検めが断る（歯 cwarg_matches_fixture・cwarg_audit_refuses_each_missing_key） (4) 中核の consult::stamp::is_uuid は 8-4-4-4-12 の 16 進の字（小字と大字）だけを真にし、長さ・区切りの位置と数・16 進でない字・前後の空白の違う字を偽にする（歯 cwstm_uuid_shape） (5) consult::stamp::read は hook の入力の JSON の hook_event_name が SessionStart・UserPromptSubmit・Stop の時に、事 start・prompt・stop と会話の id と 渡した時刻の 1 行を返し、始まりの種類（source）は start の時だけ持ち、PreToolUse と SessionEnd と会話の id が uuid の形でない入力と鍵の欠けた入力とJSON でない字を None にする（歯 cwstm_reads_the_three_events・cwstm_refuses_other_payloads） (6) consult::stamp::lines は印の file の字のうち読める行だけを順に返し（JSON でない行と未知の鍵を持つ行と空の行を飛ばす）、last_sid は最後の行の会話の id を返し、空の列は None（歯 cwstm_lines_and_last_sid） (7) tz consult launch の process の印は欄 account に起こした時の環境の CLAUDE_CONFIG_DIR の字を持つ（話す窓と問う窓の両方）（歯 cwlch_talk_argv_and_env・cwlch_ask_child_env_and_lines） (8) tz consult stamp <作業場> は、標準入力の hook の入力を、作業場の .consult/stamps.jsonl に事の順に 1 行ずつ足し、標準出力と標準エラーは空で rc 0、作業場の .consult の中に足すのはその 1 file だけ（歯 cwstp_appends_one_line_per_event） (9) 対照の作業場 consult-cw1 には 1 行を足して rc 0、.consult・印の file .consult/stamps.jsonl・窓の控え .consult/window.json の 1 つを、外の作業場の同じ物への symlink にした作業場 consult-cw2・consult-cw3・consult-cw4 は、どれも rc 0 と、頭が「tz consult stamp:」の字で末が（書かない）の標準エラーの 1 行を返し、外の印の file は空のまま、consult-cw4 に印の file を作らない（歯 cwstp_does_not_follow_symlinks） (10) 「/」で始まらない path・名が consult-cw<n> でない dir・窓の控え .consult/window.json の無い作業場・引数が 1 つでない呼び・読めない hook の入力では、どれも rc 0 と、頭が「tz consult stamp:」の字で末が（書かない）の標準エラーの 1 行を返し、どの作業場にも印の file を作らない（歯 cwstp_ignores_foreign_paths_and_payloads） (11) xtask の歯の file xtask/tests/teeth1/kfold.rs の表 GROUPS は、中核の歯の束 crates/tsuzuri-core/tests/teeth3 を 5・境の歯の束 crates/tsuzuri-boundary/tests/teeth5 を 16 と数え、2 つの束の main.rs は新しい歯の file の module cwstm と cwstp を含めて群の dir の .rs を全部 1 度だけ mod の行で名指す（歯 kfold_groups_declare_every_module_once） (12) 着地済みと置き済みの起動の口の歯と process の印を組む歯が緑（歯 接頭辞 cwarg_・cwlch_・cwcls_・cwopn_・cwwat_ の全部・ノート surface-wave29a の行 cs-cred-claude から cs-read-roots までの歯を含む）
         depends: ["cs-plain-open"]
+      - id: cs-inbound-refuse
+        title: 相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りの末に送る道具 SendMessage と一覧の道具 ListAgents を名だけで足し、検めが値の違いと断りの欠けを断る（判断の記録 ADR-57 決定 (1)(ケ)・差の file）
+        req: ["FR19"]
+        section: "5"
+        write-set: ["crates/tsuzuri-core/src/consult/launch.rs", "crates/tsuzuri-core/tests/teeth3/cwarg.rs", "tests/fixtures/consult/launch-argv.yaml", "=crates/tsuzuri-boundary/tests/teeth5/cwlch.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-inbound-refuse.patch", "cargo clippy -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test teeth3 --no-tests=fail cwarg_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail cwlch_"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/cs-inbound-refuse.patch が rc 0（verify の 1 行目） (2) 中核の定数 INBOUND は字 refuse、PEER_TOOLS は SendMessage・ListAgents をこの順に持ち、話す窓と問う窓の設定は鍵 crossSessionInbound に字 refuse を持ち、permissions.deny の末の 2 つは字 SendMessage と ListAgents（specifier なし）で、検めは値を accept・hold・Refuse・[refuse]・null に替えた形と鍵を除いた形を欠けの名 /crossSessionInbound の 1 つだけで、道具の 1 つを除いた形と名に (*) を付けた形を欠けの名 /permissions/deny の 1 つだけで断る（歯 cwarg_refuses_cross_session_messages） (3) fixture tests/fixtures/consult/launch-argv.yaml の settings は permissions.deny の末に SendMessage と ListAgents を、末の鍵に crossSessionInbound（値 refuse）を持ち、話す窓と問う窓の組んだ設定はこの fixture と同じで検めの欠けが 0、鍵 crossSessionInbound を除いた設定を検めが断り、permissions.deny の 21 の各々を除いた設定を検めが断る（歯 cwarg_matches_fixture・cwarg_audit_refuses_each_missing_key） (4) 口座の置き場の実体の無い材料の設定は sandbox.credentials.files を 9・permissions.deny を 19 持つ（歯 cwarg_hides_account_dirs_and_credential_reads） (5) cwarg_ と cwlch_ の着地済みと置き済みの歯（ノート surface-wave29a の cs-cred-claude から cs-read-roots と行 cs-acct-mark の歯を含む）が緑
+        depends: ["cs-acct-mark"]
   - n: 3
     type: prose
     title: 行 cs-acct-mark — 窓の記録に起こした時の口座と会話の印を置く（判断の記録 ADR-55 の決定 (2)(6)）
@@ -91,3 +101,22 @@ sections:
       試作と噛み。写し drafts/w188a の 1135283d で verify の 2 行目から最後の行まで rc 0。句ごとに 8 つの変異（dir の symlink を辿る・作業場を照らさない・途中の段を照らさない・fstat の照らしをしない・在るかの見の symlink を辿る・足す file の symlink を辿る・書かずに Ok・無い file を作らない）を当てて全部 rc 100、対照は rc 0。普通でない file を開く変異は、fifo の開きが止まるので撃っていない（file の symlink は同じ見本で fstat の照らしも断る）。
 
       範囲の外。stamp の口の直し（行 cs-acct-mark）・状態の 1 行の口（行 cs-status-verb）・読む助け（行 cs-status-verb の read_plain）。
+  - n: 5
+    type: prose
+    title: 行 cs-inbound-refuse — 窓はほかの session からの言付けを全部断る（判断の記録 ADR-57 決定 (1)(ケ)・言付けの問い t3-hub.88.1.3 の甲）
+    body: |
+      なぜ。Claude Code の session どうしの言付け（cross-session messaging）は、受け方の値を置かない窓に、確かめを飛ばさない送り手（持ち主がほかで開いた session・Remote Control の先の session）の言付けをそのまま届け、手すきの窓に turn を起こす（公式の文書 cross-session-messaging の Control inbound messages）。持ち主の裁定は甲＝窓は Claude Code の言付けを全部断り、席の言付けは tsuzuri の口の箱から渡す形。文書は受け方の鍵 crossSessionInbound の値を accept・hold・refuse の 3 つとし、--settings の旗が鍵を置けば利用者の設定の値は効かないと書き、送りと一覧を止めるには permissions.deny に SendMessage と ListAgents を specifier なしで置くと書く。
+
+      形。中核の launch.rs に定数 INBOUND（字 refuse）と PEER_TOOLS（SendMessage・ListAgents）を足し、設定の末の鍵に crossSessionInbound を置き、読む道具の断りの列の末に PEER_TOOLS の 2 つを足す。検めの audit_permissions は鍵の値が refuse でなければ欠けの名 /crossSessionInbound を足す。permissions.deny の欠けは今の照らし（組んだ断りの全部が設定に在るか）がそのまま見る。fixture は deny の末の 2 字と鍵 1 つを足す。歯 cwarg_audit_refuses_each_missing_key の deny の数 19 を 21 に、歯 cwarg_hides_account_dirs_and_credential_reads の数 17 を 19 に替える（字は差の file）。
+
+      ほかの行との当たり。行 cs-acct-mark の版上げの差を当てた木の上で切った。差は main afe01c84（行 cs-plain-open と cs-acct-mark を置き、29a の cs-read-roots が着地した後）に、行 cs-plain-open と cs-acct-mark の差の後で当たる（係 w190a が一時の index で照らした）。同じ 3 file を書く後の行 cs-remote・cs-status-text はこの差の後に当たる（直列）。境の歯 cwlch_ は tz consult launch の argv を中核の argv と同じ字で比べるので字を替えず、write-set に置き場だけの = で置いた。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。(1) は verify の 1 行目、(2) から (4) は 3 行目（中核の歯の束 teeth3・在りか cwarg.rs）、(5) は 3 行目と 4 行目（境の歯の束 teeth5）で測る。verify の 2 行目（clippy）は done に載せない守り。xtask の check は器の共通 verify が撃つので verify に書かない。欄 done-teeth は書かない。
+
+      入口の赤。歯と fixture だけを試作の字にした木は、verify の 3 行目が rc 101（歯が名指す INBOUND と PEER_TOOLS が無く組めない）。
+
+      試作と噛み。写し drafts/w188a で verify の 2 行目から最後の行まで rc 0。句ごとに 6 つの変異（値 accept・鍵を置かない・値の検めを外す・道具を断りに置かない・道具の順を替える・道具の名に specifier）を当てて全部 rc 100、対照は rc 0。
+
+      範囲の外。席→窓の言付けの箱（行 cs-tell の予定）・窓→席の知らせ（行 cs-note の予定）・Remote Control（行 cs-remote）。
