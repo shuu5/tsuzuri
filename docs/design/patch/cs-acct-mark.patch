@@ -1,0 +1,800 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 12438d5d..78840881 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -5,7 +5,7 @@
+ //! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
+ //! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
+ //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
+-//! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
++//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む・行 cs-acct-mark）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+ //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
+ //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
+ //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
+@@ -47,6 +47,9 @@ pub const ENV: &str = "env";
+ /// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
+ pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
+ 
++/// 起こした時の口座の置き場を読む環境変数（process の印に書く・判断の記録 ADR-55 決定 (2)）。
++pub const ACCOUNT_ENV: &str = "CLAUDE_CONFIG_DIR";
++
+ /// 問う窓の終わりを見る間。
+ const ASK_STEP: Duration = Duration::from_millis(200);
+ 
+@@ -250,6 +253,7 @@ fn start(
+         at: minute_now(),
+         again,
+         tmux_window,
++        account: std::env::var(ACCOUNT_ENV).ok(),
+     };
+     let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
+     fs::write(proc_path(ws, k), text + "\n")
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index b6aba8a1..1dec06e3 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -1,6 +1,6 @@
+ //! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
+ //! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
+-//! show と dispose（行 cs-show）・list と close（行 cs-close）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
++//! show と dispose（行 cs-show）・list と close（行 cs-close）・stamp（行 cs-acct-mark・窓の会話の印の hook）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
+ //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
+ //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
+ //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
+@@ -16,6 +16,7 @@ pub mod launch;
+ pub mod list;
+ pub mod open;
+ pub mod show;
++pub mod stamp;
+ pub mod watch;
+ 
+ use std::ffi::{OsStr, OsString};
+@@ -65,7 +66,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
+ pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
+ 
+ pub const USAGE: &str =
+-    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard> [引数]";
++    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp> [引数]";
+ 
+ /// tz consult の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+@@ -80,6 +81,7 @@ pub fn run(rest: &[&str]) -> u8 {
+         ["list", r @ ..] => list::run(r),
+         ["close", r @ ..] => close::run(r),
+         ["guard", r @ ..] => guard::run(r),
++        ["stamp", r @ ..] => stamp::run(r),
+         _ => {
+             emit_err(&format!("tz consult: 口が無い\n{USAGE}"));
+             FAIL
+diff --git a/crates/tsuzuri-boundary/src/consult/stamp.rs b/crates/tsuzuri-boundary/src/consult/stamp.rs
+new file mode 100644
+index 00000000..0f9d9f5a
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/consult/stamp.rs
+@@ -0,0 +1,56 @@
++//! tz consult stamp <作業場>（行 cs-acct-mark・窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
++//! 標準入力の hook の JSON を中核の `consult::stamp::read` で読み、作業場の `.consult/stamps.jsonl` に印の 1 行を足す。
++//! 書くのは、渡した path が「/」で始まり、名が `consult-cw<n>` で、窓の控え `.consult/window.json` が在る作業場の、その 1 file だけ。
++//! hook は囲いの外で持ち主の権限で走り、turn の終わりの hook の断りは窓の終わりを止めるので、どの周も rc 0 で返す
++//! （書かなかった周は理由を標準エラーに 1 行）。起動の設定は `timeout 4 <tz> consult stamp <作業場> || true` で撃つ。
++
++use std::fs::OpenOptions;
++use std::io::{Read, Write};
++use std::path::Path;
++
++use tsuzuri_contract::consult::WindowId;
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::stamp::read;
++
++use super::WINDOW_FILE;
++use crate::out::emit_err;
++use crate::server::events::now;
++
++/// 印の file（作業場からの相対）。
++pub const STAMPS: &str = ".consult/stamps.jsonl";
++
++/// tz consult stamp の残りの引数を受けて終了 code を返す（いつも 0）。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut payload = String::new();
++    if std::io::stdin().read_to_string(&mut payload).is_err() {
++        payload.clear();
++    }
++    if let Err(why) = stamp(rest, &payload) {
++        emit_err(&format!("tz consult stamp: {why}（書かない）"));
++    }
++    0
++}
++
++/// 作業場を照らして印の 1 行を足す。
++fn stamp(rest: &[&str], payload: &str) -> Result<(), String> {
++    let [ws] = rest else {
++        return Err("作業場の絶対 path を 1 つ渡す".to_string());
++    };
++    let ws = Path::new(ws);
++    let named = ws
++        .file_name()
++        .and_then(|n| n.to_str())
++        .and_then(|n| n.strip_prefix("consult-"))
++        .is_some_and(|id| WindowId::parse(id).is_ok());
++    if !ws.is_absolute() || !named || !ws.join(WINDOW_FILE).is_file() {
++        return Err(format!("{} は窓の作業場でない", ws.display()));
++    }
++    let line = read(payload, now()).ok_or("hook の入力の事か会話の id の形でない")?;
++    let text = wire::encode(&line).map_err(|e| e.to_string())?;
++    OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(ws.join(STAMPS))
++        .and_then(|mut f| f.write_all(format!("{text}\n").as_bytes()))
++        .map_err(|e| format!("印の file を書けない: {e}"))
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+index d8526f1e..3f245782 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwcls.rs
+@@ -172,6 +172,7 @@ fn mark(ws: &Path, k: u32, form: Form, pid: u32, tmux: Option<&str>) {
+         at: "20261003T1401Z".into(),
+         again: false,
+         tmux_window: tmux.map(str::to_string),
++        account: None,
+     };
+     fs::write(
+         ws.join(format!(".consult/proc-{k}.json")),
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index 1fea4146..c048821e 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -3,6 +3,7 @@
+ //! 受けた argv と環境を記録する偽の tmux と偽の claude を置く（本物の tmux と claude は撃たない）。
+ //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
+ //! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
++//! process の印が起こした時の口座の置き場（偽の環境の CLAUDE_CONFIG_DIR）を持つことを見る（行 cs-acct-mark）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -326,6 +327,19 @@ fn talk_env_args(fx: &Fx, l: &Launch) -> Vec<String> {
+     a
+ }
+ 
++/// 話す窓の 1 番目の process の印（偽の tmux の pane の pid と窓・偽の環境の口座の置き場）。
++fn talk_mark(at: String) -> ProcMark {
++    ProcMark {
++        k: 1,
++        form: Form::Talk,
++        pid: 4242,
++        at,
++        again: false,
++        tmux_window: Some("@7".into()),
++        account: Some("/cfg/x".into()),
++    }
++}
++
+ #[test]
+ fn cwlch_talk_argv_and_env() {
+     let fx = Fx::new("talk");
+@@ -356,17 +370,7 @@ fn cwlch_talk_argv_and_env() {
+     assert_eq!(fx.calls("tmux.log"), [display, want]);
+     let mark = fx.mark(1, 1);
+     let at = mark.at.clone();
+-    assert_eq!(
+-        mark,
+-        ProcMark {
+-            k: 1,
+-            form: Form::Talk,
+-            pid: 4242,
+-            at: at.clone(),
+-            again: false,
+-            tmux_window: Some("@7".into())
+-        }
+-    );
++    assert_eq!(mark, talk_mark(at.clone()));
+     let meta = fs::symlink_metadata(&tmp).unwrap();
+     assert!(meta.is_dir() && meta.mode() & 0o777 == 0o700);
+     let line = format!(
+@@ -491,6 +495,7 @@ fn cwlch_ask_child_env_and_lines() {
+         (m.form, m.pid.to_string(), m.again, m.tmux_window),
+         (Form::Ask, pid, false, None)
+     );
++    assert_eq!(m.account.as_deref(), Some("/cfg/x"), "問う窓の印の口座");
+     fs::remove_file(fx.root.join("answer")).unwrap();
+     let o = fx.tz(&["consult", "launch", "cw1", "--again"]);
+     assert_eq!(rc(&o), 0, "{}", err(&o));
+@@ -599,6 +604,7 @@ fn put_mark(fx: &Fx, n: u32, pid: u32) {
+         at: "20200101T0000Z".into(),
+         again: false,
+         tmux_window: None,
++        account: None,
+     };
+     fs::write(dir.join("proc-1.json"), wire::encode(&mark).unwrap()).unwrap();
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs b/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+index 6d55b4ce..ef31b1e0 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwopn.rs
+@@ -605,6 +605,7 @@ fn mark(k: u32, pid: u32) -> ProcMark {
+         at: "20261003T1412Z".to_string(),
+         again: k > 1,
+         tmux_window: None,
++        account: None,
+     }
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs b/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs
+new file mode 100644
+index 00000000..e7a6014b
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwstp.rs
+@@ -0,0 +1,145 @@
++//! 会話の印の口の歯（接頭辞 cwstp_・設計ノート surface-wave29b 行 cs-acct-mark・判断の記録 ADR-55 決定 (2)）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に窓の作業場を置き、tz consult stamp に hook の入力の JSON を渡して、
++//! 作業場の `.consult/stamps.jsonl` に 1 行ずつ足すことと、窓の作業場でない path と読めない入力では書かずに rc 0 で返すことを見る。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++use tsuzuri_contract::consult::StampEvent;
++use tsuzuri_core::consult::stamp::lines;
++
++const SID: &str = "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d21";
++const SID2: &str = "772c5b4c-0000-4000-8000-00000000abcd";
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）。
++fn place(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cwstp-{name}"));
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(&root).unwrap();
++    root
++}
++
++/// 窓の控えを持つ作業場を作る。
++fn workspace(root: &Path, dir: &str) -> PathBuf {
++    let ws = root.join(dir);
++    fs::create_dir_all(ws.join(".consult")).unwrap();
++    fs::write(ws.join(".consult/window.json"), "{}").unwrap();
++    ws
++}
++
++/// 歯の置き場を cwd にして口を撃つ（相対の path が置き場の作業場を指す）。
++fn stamp(cwd: &Path, args: &[&str], payload: &str) -> Output {
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .current_dir(cwd)
++        .args(["consult", "stamp"])
++        .args(args)
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    child
++        .stdin
++        .take()
++        .unwrap()
++        .write_all(payload.as_bytes())
++        .unwrap();
++    child.wait_with_output().unwrap()
++}
++
++fn payload(event: &str, sid: &str) -> String {
++    format!(
++        r#"{{"hook_event_name":"{event}","session_id":"{sid}","source":"startup","cwd":"/elsewhere"}}"#
++    )
++}
++
++fn quiet_ok(o: &Output) {
++    assert_eq!(o.status.code(), Some(0));
++    assert!(o.stdout.is_empty());
++    assert!(
++        o.stderr.is_empty(),
++        "{}",
++        String::from_utf8_lossy(&o.stderr)
++    );
++}
++
++fn refused_ok(o: &Output) {
++    assert_eq!(o.status.code(), Some(0));
++    assert!(o.stdout.is_empty());
++    let err = String::from_utf8_lossy(&o.stderr);
++    assert!(
++        err.starts_with("tz consult stamp: ") && err.ends_with("（書かない）\n"),
++        "{err}"
++    );
++}
++
++#[test]
++fn cwstp_appends_one_line_per_event() {
++    let root = place("append");
++    let ws = workspace(&root, "consult-cw2");
++    let at = ws.display().to_string();
++    for (event, sid) in [
++        ("SessionStart", SID),
++        ("UserPromptSubmit", SID),
++        ("Stop", SID),
++        ("SessionStart", SID2),
++    ] {
++        quiet_ok(&stamp(&root, &[&at], &payload(event, sid)));
++    }
++    let got = lines(&fs::read_to_string(ws.join(".consult/stamps.jsonl")).unwrap());
++    let seen: Vec<(StampEvent, &str, Option<&str>)> = got
++        .iter()
++        .map(|s| (s.event, s.sid.as_str(), s.source.as_deref()))
++        .collect();
++    assert_eq!(
++        seen,
++        [
++            (StampEvent::Start, SID, Some("startup")),
++            (StampEvent::Prompt, SID, None),
++            (StampEvent::Stop, SID, None),
++            (StampEvent::Start, SID2, Some("startup")),
++        ]
++    );
++    assert!(got.windows(2).all(|w| w[0].at <= w[1].at));
++    assert_eq!(fs::read_dir(ws.join(".consult")).unwrap().count(), 2);
++}
++
++#[test]
++fn cwstp_ignores_foreign_paths_and_payloads() {
++    let root = place("foreign");
++    let good = workspace(&root, "consult-cw3");
++    let other = workspace(&root, "work");
++    let named = workspace(&root, "consult-x");
++    let bare = root.join("consult-cw4");
++    fs::create_dir_all(bare.join(".consult")).unwrap();
++    let ok = payload("Stop", SID);
++    let s = |p: &Path| p.display().to_string();
++    for args in [
++        vec![s(&other)],
++        vec![s(&named)],
++        vec![s(&bare)],
++        vec!["consult-cw3".to_string()],
++        vec![],
++        vec![s(&good), s(&good)],
++    ] {
++        let args: Vec<&str> = args.iter().map(String::as_str).collect();
++        refused_ok(&stamp(&root, &args, &ok));
++    }
++    for p in [
++        payload("PreToolUse", SID),
++        payload("Stop", "x"),
++        "{".to_string(),
++    ] {
++        refused_ok(&stamp(&root, &[&s(&good)], &p));
++    }
++    for ws in [&good, &other, &named, &bare] {
++        assert!(
++            !ws.join(".consult/stamps.jsonl").exists(),
++            "{}",
++            ws.display()
++        );
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+index f881a6f2..0e97c0ab 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwwat.rs
+@@ -133,6 +133,7 @@ fn proc_mark(ws: &Path, k: u32, form: Form, pid: u32) {
+         at: "20261003T1401Z".into(),
+         again: k > 1,
+         tmux_window,
++        account: None,
+     };
+     let path = ws.join(format!(".consult/proc-{k}.json"));
+     fs::write(path, wire::encode(&m).unwrap()).unwrap();
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/main.rs b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+index f1b2517b..78bce4c8 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/main.rs
+@@ -7,6 +7,7 @@ mod cwcls;
+ mod cwlch;
+ mod cwopn;
+ mod cwshw;
++mod cwstp;
+ mod cwwat;
+ mod strelay;
+ mod stskill;
+diff --git a/crates/tsuzuri-contract/src/consult.rs b/crates/tsuzuri-contract/src/consult.rs
+index 25fd01b7..454dfb11 100644
+--- a/crates/tsuzuri-contract/src/consult.rs
++++ b/crates/tsuzuri-contract/src/consult.rs
+@@ -560,4 +560,41 @@ pub struct ProcMark {
+     pub again: bool,
+     /// 話す窓の tmux の window id（`@<n>`・問う窓は None）。
+     pub tmux_window: Option<String>,
++    /// 起こした時の口座の置き場（起こし手の環境の `CLAUDE_CONFIG_DIR` の字・無ければ None・判断の記録 ADR-55 決定 (2)）。
++    #[serde(default)]
++    pub account: Option<String>,
++}
++
++/// 会話の印の事（会話の始まり・持ち主の入力・turn の終わり・Claude Code の hook の名と 1 対 1）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++pub enum StampEvent {
++    Start,
++    Prompt,
++    Stop,
++}
++
++impl StampEvent {
++    /// hook の名（`hook_event_name` の字）から読む（ほかの名は None）。
++    pub fn of_hook(name: &str) -> Option<Self> {
++        match name {
++            "SessionStart" => Some(StampEvent::Start),
++            "UserPromptSubmit" => Some(StampEvent::Prompt),
++            "Stop" => Some(StampEvent::Stop),
++            _ => None,
++        }
++    }
++}
++
++/// 会話の印の 1 行（`.consult/stamps.jsonl`・会話の印の口が hook ごとに 1 行足す・未知の鍵を断る・判断の記録 ADR-55 決定 (2)）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Stamp {
++    /// 足した時刻（UTC の epoch 秒）。
++    pub at: EpochSecs,
++    pub event: StampEvent,
++    /// 会話の id（uuid の形）。
++    pub sid: String,
++    /// 会話の始まりの種類（SessionStart の source・ほかの事は None）。
++    pub source: Option<String>,
+ }
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 5dd52e47..5edbdc0a 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -1,6 +1,7 @@
+ //! 起動の口の argv と設定と検め（設計ノート surface-wave27a 行 cs-argv・判断の記録 ADR-29 決定 (5)(6)(7)(10)・受入 AC19）。
+ //! 窓を起こす `claude` の引数と `--settings` の JSON の字と環境の閉じた列と私用の temp の path と最初の手引きの字を組み、
+ //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
++//! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
+ //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
+ 
+ use serde_json::{Value, json};
+@@ -138,6 +139,14 @@ pub fn guard_command(tz: &str) -> String {
+     format!("timeout 4 {tz} consult guard || exit 2")
+ }
+ 
++/// 会話の印の hook を置く事（会話の始まり・持ち主の入力・turn の終わり・判断の記録 ADR-55 決定 (2)）。
++pub const STAMP_HOOKS: [&str; 3] = ["SessionStart", "UserPromptSubmit", "Stop"];
++
++/// 会話の印の hook の命令（作業場の絶対 path を渡す・落ちても時間切れでも窓を止めない）。
++pub fn stamp_command(tz: &str, workspace: &str) -> String {
++    format!("timeout 4 {tz} consult stamp {workspace} || true")
++}
++
+ /// 最初の指示（問う窓は `-p` の問い・話す窓は最後の位置の引数）。
+ pub fn prompt(l: &Launch) -> String {
+     match (l.form, l.question) {
+@@ -214,14 +223,29 @@ pub fn settings(l: &Launch) -> Value {
+             "CARGO_HOME": format!("{w}/target/cargo-home"),
+             "npm_config_cache": format!("{w}/node_modules/.npm-cache"),
+         },
+-        "hooks": {
+-            "PreToolUse": [{"matcher": "*", "hooks": [
+-                {"type": "command", "command": guard_command(&l.tz), "timeout": 10}
+-            ]}]
+-        },
++        "hooks": hooks(l),
+     })
+ }
+ 
++/// 設定の hook（守りの hook と会話の印の hook）。
++fn hooks(l: &Launch) -> Value {
++    let mut h = serde_json::Map::new();
++    h.insert(
++        "PreToolUse".to_string(),
++        json!([{"matcher": "*", "hooks": [
++            {"type": "command", "command": guard_command(&l.tz), "timeout": 10}
++        ]}]),
++    );
++    let stamp = stamp_command(&l.tz, &l.workspace);
++    for event in STAMP_HOOKS {
++        h.insert(
++            event.to_string(),
++            json!([{"hooks": [{"type": "command", "command": stamp, "timeout": 10}]}]),
++        );
++    }
++    Value::Object(h)
++}
++
+ /// `claude` に渡す引数の列（program の名 `PROGRAM` は含めない）。
+ pub fn argv(l: &Launch) -> Vec<String> {
+     let mut a: Vec<String> = Vec::new();
+@@ -445,6 +469,13 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+     {
+         gaps.push("/hooks/PreToolUse".to_string());
+     }
++    let stamp = stamp_command(&l.tz, &l.workspace);
++    let want = json!([{"hooks": [{"type": "command", "command": stamp, "timeout": 10}]}]);
++    for event in STAMP_HOOKS {
++        if set.pointer(&format!("/hooks/{event}")) != Some(&want) {
++            gaps.push(format!("/hooks/{event}"));
++        }
++    }
+ }
+ 
+ /// 設定の読みの断り（作業場と読む根の外の読みを断る鍵が true で、殻の命令に戻す読みが `allowed_reads` と字も順も同じ）。
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index a5843583..6df4d178 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -11,3 +11,4 @@ pub mod launch;
+ pub mod lines;
+ pub mod pickup;
+ pub mod quota;
++pub mod stamp;
+diff --git a/crates/tsuzuri-core/src/consult/stamp.rs b/crates/tsuzuri-core/src/consult/stamp.rs
+new file mode 100644
+index 00000000..1217e8b4
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/stamp.rs
+@@ -0,0 +1,49 @@
++//! 会話の印の読み（設計ノート surface-wave29b 行 cs-acct-mark・判断の記録 ADR-55 決定 (2)）。
++//! 窓の会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）の入力の JSON から、印の 1 行（事と会話の id と始まりの種類）を組み、
++//! 作業場の `.consult/stamps.jsonl` の字から読める行の列と最後の会話の id を引く。会話の id は uuid の形の字だけを受ける。
++
++use serde_json::Value;
++use tsuzuri_contract::EpochSecs;
++use tsuzuri_contract::consult::{Stamp, StampEvent};
++
++/// uuid の形（8-4-4-4-12 の 16 進の小字か大字）。
++pub fn is_uuid(s: &str) -> bool {
++    let parts: Vec<&str> = s.split('-').collect();
++    parts.len() == 5
++        && parts
++            .iter()
++            .zip([8, 4, 4, 4, 12])
++            .all(|(p, n)| p.len() == n && p.bytes().all(|c| c.is_ascii_hexdigit()))
++}
++
++/// hook の入力の JSON から印の 1 行を組む（知らない事・会話の id が uuid の形でない・JSON でない は None）。
++pub fn read(payload: &str, at: EpochSecs) -> Option<Stamp> {
++    let v: Value = serde_json::from_str(payload).ok()?;
++    let event = StampEvent::of_hook(v.get("hook_event_name")?.as_str()?)?;
++    let sid = v.get("session_id")?.as_str()?;
++    if !is_uuid(sid) {
++        return None;
++    }
++    let source = match event {
++        StampEvent::Start => v.get("source").and_then(Value::as_str).map(str::to_string),
++        StampEvent::Prompt | StampEvent::Stop => None,
++    };
++    Some(Stamp {
++        at,
++        event,
++        sid: sid.to_string(),
++        source,
++    })
++}
++
++/// 印の file の字の読める行（読めない行は飛ばす・順はそのまま）。
++pub fn lines(text: &str) -> Vec<Stamp> {
++    text.lines()
++        .filter_map(|l| serde_json::from_str::<Stamp>(l).ok())
++        .collect()
++}
++
++/// 最後の会話の id（読める行の最後の行の id・無ければ None）。
++pub fn last_sid(lines: &[Stamp]) -> Option<&str> {
++    lines.last().map(|s| s.sid.as_str())
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index b76d2f97..2cfba6af 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -3,6 +3,7 @@
+ //! 組みが fixture と同じこと、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形と広い許しを足した形を検めが断ることを見る。
+ //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
+ //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
++//! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+ #![cfg(test)]
+ 
+ use std::path::Path;
+@@ -10,8 +11,9 @@ use std::path::Path;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_core::consult::launch::{
+-    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
+-    keep_only, private_tmp, prompt, read_roots, settings, version_ok, window_env,
++    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, STAMP_HOOKS, TALK_ENV, argv, audit,
++    brief, env, keep_only, private_tmp, prompt, read_roots, settings, stamp_command, version_ok,
++    window_env,
+ };
+ 
+ fn fixture() -> Value {
+@@ -715,3 +717,45 @@ fn cwarg_brief_text() {
+         assert!(!text.contains(&format!("consult {verb}")), "{verb}");
+     }
+ }
++
++/// 会話の印の hook の 1 つを `edit` で替えた設定の検めの欠け。
++fn stamp_gaps(event: &str, edit: impl Fn(&mut Value)) -> Vec<String> {
++    let fx = fixture();
++    let l = launch(&fx["talk"]["inputs"]);
++    let a = with_settings(&l, |set| edit(&mut set["hooks"][event]));
++    audit(&a, &l)
++}
++
++#[test]
++fn cwarg_settings_hold_the_stamp_hooks() {
++    assert_eq!(STAMP_HOOKS, ["SessionStart", "UserPromptSubmit", "Stop"]);
++    assert_eq!(
++        stamp_command("/T", "/W"),
++        "timeout 4 /T consult stamp /W || true"
++    );
++    for event in STAMP_HOOKS {
++        let only = vec![format!("/hooks/{event}")];
++        let edits: [Edit; 6] = [
++            ("除く", |h| *h = Value::Null),
++            ("作業場を替える", |h| {
++                h[0]["hooks"][0]["command"] = "timeout 4 /T consult stamp /X || true".into();
++            }),
++            ("落ちたら断る形", |h| {
++                h[0]["hooks"][0]["command"] = "timeout 4 /T consult stamp /W || exit 2".into();
++            }),
++            ("時間を替える", |h| {
++                h[0]["hooks"][0]["timeout"] = 60.into()
++            }),
++            ("命令を足す", |h| {
++                h[0]["hooks"]
++                    .as_array_mut()
++                    .expect("列")
++                    .push(json!({"type": "command", "command": "true"}));
++            }),
++            ("matcher を足す", |h| h[0]["matcher"] = "startup".into()),
++        ];
++        for (name, edit) in edits {
++            assert_eq!(stamp_gaps(event, edit), only, "{event} を{name}");
++        }
++    }
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwstm.rs b/crates/tsuzuri-core/tests/teeth3/cwstm.rs
+new file mode 100644
+index 00000000..3e85c264
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/teeth3/cwstm.rs
+@@ -0,0 +1,99 @@
++//! 会話の印の読みの歯（接頭辞 cwstm_・設計ノート surface-wave29b 行 cs-acct-mark・判断の記録 ADR-55 決定 (2)）。
++//! hook の入力の JSON から事と会話の id と始まりの種類を読み、知らない事と uuid の形でない id を断り、印の file の字の読める行と最後の id を引くことを見る。
++#![cfg(test)]
++
++use tsuzuri_contract::consult::{Stamp, StampEvent};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::stamp::{is_uuid, last_sid, lines, read};
++
++const SID: &str = "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d21";
++const SID2: &str = "772C5B4C-0000-4000-8000-00000000ABCD";
++
++fn payload(event: &str, sid: &str, source: Option<&str>) -> String {
++    let mut v = serde_json::json!({"hook_event_name": event, "session_id": sid, "cwd": "/W"});
++    if let Some(s) = source {
++        v["source"] = s.into();
++    }
++    v.to_string()
++}
++
++#[test]
++fn cwstm_uuid_shape() {
++    for ok in [SID, SID2, "00000000-0000-0000-0000-000000000000"] {
++        assert!(is_uuid(ok), "{ok}");
++    }
++    for bad in [
++        "",
++        "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d2",
++        "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d218",
++        "5e1d0c2a3b4f4a6e9d8c7b6a5f4e3d21",
++        "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d2g",
++        "5e1d0c2a-3b4f-4a6e-9d8c7-b6a5f4e3d21",
++        "5e1d0c2a-3b4f-4a6e-9d8c-7b6a-5f4e3d21",
++        " 5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d21",
++        "5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d21-0000",
++    ] {
++        assert!(!is_uuid(bad), "{bad:?}");
++    }
++}
++
++#[test]
++fn cwstm_reads_the_three_events() {
++    let start = read(&payload("SessionStart", SID, Some("clear")), 7);
++    let want = Stamp {
++        at: 7,
++        event: StampEvent::Start,
++        sid: SID.into(),
++        source: Some("clear".into()),
++    };
++    assert_eq!(start, Some(want));
++    for (name, event) in [
++        ("UserPromptSubmit", StampEvent::Prompt),
++        ("Stop", StampEvent::Stop),
++    ] {
++        let got = read(&payload(name, SID2, Some("resume")), 9);
++        let want = Stamp {
++            at: 9,
++            event,
++            sid: SID2.into(),
++            source: None,
++        };
++        assert_eq!(got, Some(want), "{name} は始まりの種類を持たない");
++    }
++    let bare = read(&payload("SessionStart", SID, None), 1).expect("source なし");
++    assert_eq!(bare.source, None);
++}
++
++#[test]
++fn cwstm_refuses_other_payloads() {
++    for p in [
++        payload("PreToolUse", SID, None),
++        payload("SessionEnd", SID, None),
++        payload("Stop", "not-a-uuid", None),
++        payload("Stop", "", None),
++        r#"{"hook_event_name":"Stop"}"#.to_string(),
++        r#"{"session_id":"5e1d0c2a-3b4f-4a6e-9d8c-7b6a5f4e3d21"}"#.to_string(),
++        r#"{"hook_event_name":"Stop","session_id":7}"#.to_string(),
++        "not json".to_string(),
++        String::new(),
++    ] {
++        assert_eq!(read(&p, 1), None, "{p}");
++    }
++}
++
++#[test]
++fn cwstm_lines_and_last_sid() {
++    let a = read(&payload("SessionStart", SID, Some("startup")), 1).unwrap();
++    let b = read(&payload("Stop", SID2, None), 2).unwrap();
++    let text = format!(
++        "{}\nnot json\n{{\"at\":3,\"event\":\"stop\",\"sid\":\"x\",\"source\":null,\"extra\":1}}\n\n{}\n",
++        wire::encode(&a).unwrap(),
++        wire::encode(&b).unwrap()
++    );
++    let got = lines(&text);
++    assert_eq!(got, [a.clone(), b]);
++    assert_eq!(last_sid(&got), Some(SID2));
++    assert_eq!(last_sid(&got[..1]), Some(SID));
++    assert_eq!(last_sid(&[]), None);
++    assert_eq!(lines(""), []);
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/main.rs b/crates/tsuzuri-core/tests/teeth3/main.rs
+index c4aa4518..af921c4c 100644
+--- a/crates/tsuzuri-core/tests/teeth3/main.rs
++++ b/crates/tsuzuri-core/tests/teeth3/main.rs
+@@ -6,3 +6,4 @@ mod cwarg;
+ mod cwfnd;
+ mod cwlin;
+ mod cwquo;
++mod cwstm;
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index c8c6d7b1..e9971fbf 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -87,7 +87,10 @@
+     "hooks": {
+       "PreToolUse": [{"matcher": "*", "hooks": [
+         {"type": "command", "command": "timeout 4 /T consult guard || exit 2", "timeout": 10}
+-      ]}]
++      ]}],
++      "SessionStart": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
++      "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
++      "Stop": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}]
+     }
+   }
+ }
+diff --git a/xtask/tests/teeth1/kfold.rs b/xtask/tests/teeth1/kfold.rs
+index e2807f01..62e23605 100644
+--- a/xtask/tests/teeth1/kfold.rs
++++ b/xtask/tests/teeth1/kfold.rs
+@@ -14,11 +14,11 @@ const GROUPS: &[(&str, usize)] = &[
+     ("crates/tsuzuri-boundary/tests/teeth2", 27),
+     ("crates/tsuzuri-boundary/tests/teeth3", 16),
+     ("crates/tsuzuri-boundary/tests/teeth4", 14),
+-    ("crates/tsuzuri-boundary/tests/teeth5", 14),
++    ("crates/tsuzuri-boundary/tests/teeth5", 15),
+     ("crates/tsuzuri-contract/tests/teeth1", 14),
+     ("crates/tsuzuri-core/tests/teeth1", 29),
+     ("crates/tsuzuri-core/tests/teeth2", 25),
+-    ("crates/tsuzuri-core/tests/teeth3", 4),
++    ("crates/tsuzuri-core/tests/teeth3", 5),
+     ("crates/tsuzuri-surface/tests/teeth1", 31),
+     ("crates/tsuzuri-surface/tests/teeth2", 38),
+     ("crates/tsuzuri-surface/tests/teeth3", 30),
