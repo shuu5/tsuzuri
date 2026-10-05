@@ -1,0 +1,2858 @@
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/aown.rs b/crates/tsuzuri-boundary/tests/teeth1/aown.rs
+index 87d7a4624af918c426b88b6218e74f2ba5f8ec26..e8eb40eb6e0237119eda9dd38329b649fe23cc82 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/aown.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/aown.rs
+@@ -8,16 +8,15 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::thread;
+ use std::time::Duration;
+ 
++use crate::common::{TARGET, bead, fixture, script};
+ use tsuzuri_boundary::server::ruling::{self, READ_ONLY, REFUSED_LOG};
+ use tsuzuri_boundary::server::{Config, Server, batch, policy};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::{
+     BatchItem, BatchRequest, PolicyRequest, REVOKE_PATH, RevokeRequest, RulingId, RulingRequest,
+@@ -30,23 +29,6 @@ const OPEN: &str = "fx-ask.3";
+ const CLOSED: &str = "fx-ask.1";
+ const CLOSED_RULING: &str = "fx-ask.1:20260924T0200Z-1";
+ 
+-/// 器の配達の口の target。
+-const TARGET: &str = "tsuzuri:0.1";
+-
+-fn fixture(rel: &str) -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR"))
+-            .join("../../tests/fixtures")
+-            .join(rel),
+-    )
+-    .expect("fixture")
+-}
+-
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回を `<log>/<name>.count` に数え、回ごとに argv を `<log>/<name>.<回>.args` に書いて rc 0 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+     let log = log.display();
+@@ -142,10 +124,6 @@ impl Place {
+     }
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+ /// 中核の問いの一覧で読んだ card の digest（見た版の要約値）。
+ fn digest(id: &str) -> String {
+     let Reading::Known(cards) = tsuzuri_core::question::list(&fixture(ASK)).cards else {
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/areread.rs b/crates/tsuzuri-boundary/tests/teeth1/areread.rs
+index 155bdcdea3e18cc2083a27e144316ea2d7323493..6b52d3dc652edd4701eab97816e17d8559cea5c4 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/areread.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/areread.rs
+@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::time::Duration;
+ 
++use crate::common::fixture;
+ use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, Source};
+ use tsuzuri_boundary::server::ruling::{
+     READ_TIMEOUT, READ_TRIES, RETRY_STEP, UNREAD, reread, unread_line,
+@@ -20,15 +21,6 @@ const LEDGER: &str = "stop/ledger.json";
+ /// 落ちる偽の bd が標準エラーに書く 1 行。
+ const LOCKED: &str = "database is locked";
+ 
+-fn fixture(rel: &str) -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR"))
+-            .join("../../tests/fixtures")
+-            .join(rel),
+-    )
+-    .expect("fixture")
+-}
+-
+ /// 偽の bd の振る舞い。
+ enum Fake {
+     /// 秒だけ寝てから out.json を出す。
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/athr.rs b/crates/tsuzuri-boundary/tests/teeth1/athr.rs
+index 4c379fe17ee51f0cfb22c02e8574a6930b47018a..7e6189db955e1777905ef5ceb29b3e288cc8e7a5 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/athr.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/athr.rs
+@@ -6,29 +6,21 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{NOW, script};
+ use tsuzuri_boundary::acct::{Acct, CAP_ARGS};
+ use tsuzuri_contract::account::GroupNotice;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_core::account::host::CAP_ROWS;
+ 
+-/// 読みの今の時刻（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ const EVENTS_A: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"actor\":\"machine\",\"stage\":\"Intake\"}\n\
+ {\"schema\":1,\"ts\":\"2026-09-27T11:30:00Z\",\"kind\":\"GroupPressureNotified\",\"account\":\"acct-2\",\"actor\":\"machine\",\"detail\":\"group=g-a window=5h used=90 cap=80 sent=1\"}\n\
+ {\"schema\":1,\"ts\":\"2026-09-27T11:40:00Z\",\"kind\":\"GroupMoveRefused\",\"account\":\"acct-3\",\"actor\":\"machine\",\"detail\":\"group=g-b reason=no-candidate\"}\n\
+ {\"schema\":1,\"ts\":\"2026-09-27T11:45:00Z\",\"kind\":\"GroupPressureNotified\",\"account\":\"acct-1\",\"actor\":\"machine\",\"detail\":\"group=g-z window=7d used=99 cap=90 sent=1\"}\n";
+ const EVENTS_C: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:50:00Z\",\"kind\":\"GroupMoveRefused\",\"account\":\"acct-1\",\"actor\":\"machine\",\"detail\":\"group=g-a reason=no-candidate\"}\n";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs b/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
+index 9bf1869fb8b7e9b406b01c704ae613820edd6fa4..cacdb0b92db220232c47bda0c145b8eaeb2b3bde 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bhalf.rs
+@@ -5,16 +5,16 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{bead, now, script};
+ use tsuzuri_boundary::server::batch;
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::ruling::{self, Delivery, Writer};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_contract::ledger::LedgerWrite;
+ use tsuzuri_contract::surface::{
+     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, RulingId,
+ };
+@@ -161,11 +161,6 @@ const VERBATIM: &str = "束の答え";
+ /// 3 つの問い。
+ const QS: [&str; 3] = ["fx-h.1", "fx-h.2", "fx-h.3"];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+     let log = log.display();
+@@ -275,10 +270,6 @@ impl Place {
+     }
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+ fn rid(id: &str) -> RulingId {
+     RulingId::new(id).expect("記帳 id")
+ }
+@@ -371,13 +362,6 @@ fn mark_argv(q: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
+     .argv()
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ fn result(q: &str, outcome: ItemOutcome) -> BatchItemResult {
+     BatchItemResult {
+         question: bead(q),
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bport.rs b/crates/tsuzuri-boundary/tests/teeth1/bport.rs
+index 31399abb1e40b9daedc99bd794b839dd9de569ed..6a795cb1f224a0f65b50b5588beabaf409172caf 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bport.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bport.rs
+@@ -6,26 +6,18 @@
+ 
+ use std::collections::BTreeMap;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{NOW, script};
+ use tsuzuri_boundary::acct::{Acct, board_port};
+ use tsuzuri_contract::account::AccountDoc;
+ use tsuzuri_contract::wire::encode;
+ use tsuzuri_core::account::host::HostTexts;
+ use tsuzuri_core::account::project::{self, ProjectTexts};
+ 
+-/// 読みの今の時刻（2026-09-27T12:00:00Z）。
+-const NOW: u64 = 1_790_510_400;
+-
+ /// 無い program の path。
+ const NO_PROGRAM: &str = "/nonexistent/tz-no-such-program";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/brand.rs b/crates/tsuzuri-boundary/tests/teeth1/brand.rs
+index 19f7c85450a2a81f37c27fb8bf0002fed3e19291..42ca7508fb5ce9546fecd3a6ae7bb047b4e30011 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/brand.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/brand.rs
+@@ -4,13 +4,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
+-use std::net::{SocketAddr, TcpStream};
++use std::net::SocketAddr;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::Duration;
+ 
++use crate::common::{get, manifest};
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::{Config, Route, Server};
+ use tsuzuri_contract::project::{PATH, ProjectName};
+@@ -88,10 +87,6 @@ const FILTERS: [&str; 65] = [
+ /// 名 proj-kiri の電文の字。
+ const KIRI_WIRE: &str = r#"{"name":"proj-kiri"}"#;
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+ fn read(path: &Path) -> String {
+     fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+ }
+@@ -136,25 +131,6 @@ impl Place {
+     }
+ }
+ 
+-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
+-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+-    let mut s = TcpStream::connect(addr).expect("接続");
+-    s.set_read_timeout(Some(Duration::from_secs(20)))
+-        .expect("timeout");
+-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+-        .expect("要求を書く");
+-    let mut out = Vec::new();
+-    s.read_to_end(&mut out).expect("応答を読む");
+-    let text = String::from_utf8(out).expect("応答の字");
+-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
+-    let status = head
+-        .split(' ')
+-        .nth(1)
+-        .and_then(|c| c.parse().ok())
+-        .expect("状態の code");
+-    (status, body.to_string())
+-}
+-
+ /// dir の下の拡張子 rs の file（深さを問わない）。
+ fn rs_files(dir: &Path) -> Vec<PathBuf> {
+     let mut out = Vec::new();
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+index 08ad484751ada28f6450780bb41b234797e9b208..5b95f71a267e74a3655131b5d1b8d85658d8bac9 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvacc.rs
+@@ -5,19 +5,10 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::{read, root};
+ use tsuzuri_boundary::audit::{SCREENS, WIDTHS, facts};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    let path = root().join(rel);
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ /// 字の中の `pub const <name>: &str = "…";` の値。
+ fn constant(text: &str, name: &str) -> String {
+     let head = format!("pub const {name}: &str = \"");
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvafix.rs b/crates/tsuzuri-boundary/tests/teeth1/bvafix.rs
+index 09655115b8449ad88ca6814149122bb57653ab5e..d49037d95de68a444f6fe0c639bf36ed4865dbcd 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvafix.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvafix.rs
+@@ -6,19 +6,10 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::path::{Path, PathBuf};
+ 
++use crate::common::{read, root};
+ use tsuzuri_boundary::audit::{Facts, RULES, Reach, count, facts};
+ 
+-fn root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+-}
+-
+-fn read(rel: &str) -> String {
+-    let path = root().join(rel);
+-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ fn fixture(name: &str) -> String {
+     read(&format!("tests/fixtures/surface/accept-12/{name}"))
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs
+index aa0073a916357c86302c27d81df1597d3797eddf..ca2d69510fb9567f564260c023d85ae581f94765 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvcroute.rs
+@@ -4,13 +4,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
+-use std::net::{SocketAddr, TcpStream};
++use std::net::SocketAddr;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::Duration;
+ 
++use crate::common::{get, manifest};
+ use tsuzuri_boundary::server::cases::Cases;
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::{Config, Route, Server};
+@@ -19,10 +18,6 @@ use tsuzuri_contract::case::{CaseDoc, PATH};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::case::cases_of;
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+ fn fixture(name: &str) -> String {
+     let path = manifest("../../tests/fixtures/case").join(name);
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+@@ -76,25 +71,6 @@ impl Place {
+     }
+ }
+ 
+-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
+-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+-    let mut s = TcpStream::connect(addr).expect("接続");
+-    s.set_read_timeout(Some(Duration::from_secs(20)))
+-        .expect("timeout");
+-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+-        .expect("要求を書く");
+-    let mut out = Vec::new();
+-    s.read_to_end(&mut out).expect("応答を読む");
+-    let text = String::from_utf8(out).expect("応答の字");
+-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
+-    let status = head
+-        .split(' ')
+-        .nth(1)
+-        .and_then(|c| c.parse().ok())
+-        .expect("状態の code");
+-    (status, body.to_string())
+-}
+-
+ /// 口の電文を読む（200 でなければ落ちる）。
+ fn doc_of(addr: SocketAddr) -> CaseDoc {
+     let (status, body) = get(addr, PATH);
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs b/crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs
+index 3f2413737e05e36f37ec4342f3061341a9e5e628..78c9eea6e7ed8dbfc74a65807d1460f86fa56c38 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvdsweep.rs
+@@ -7,12 +7,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{TARGET, record, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::ruling::{
+     Delivery, Pace, SWEEP_FOUND, SWEEP_UNREAD, Writer, id_minute, minute, sweep, sweep_at_start,
+@@ -20,9 +20,6 @@ use tsuzuri_boundary::server::ruling::{
+ use tsuzuri_boundary::server::{Config, events};
+ use tsuzuri_contract::surface::RulingId;
+ 
+-/// 器の配達の口の target。
+-const TARGET: &str = "tsuzuri:0.1";
+-
+ /// 古い裁定の分（今から 2 時間前）。
+ const OLD_SECS: u64 = 7200;
+ 
+@@ -75,21 +72,6 @@ impl Ids {
+     }
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+-/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
+-fn record(log: &Path, name: &str) -> String {
+-    let log = log.display();
+-    format!(
+-        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+-         echo \"$n\" > '{log}/{name}.count'\n\
+-         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
+-    )
+-}
+-
+ /// 歯ごとの作業場（repo・面の file の置き場・state dir・記録の置き場・偽の program）。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+index 267e2bf121c8b83a7248cd61aa2b5fd17b1029c1..e6de534fab1f672f5c05b90d76abd8638aa47452 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvfroute.rs
+@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::manifest;
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId, LedgerList, READ_AGE_HEADER};
+@@ -20,10 +21,6 @@ use tsuzuri_contract::wire;
+ /// fixture の fx-hub.7 の created_at（2026-09-22T01:00:00Z）の epoch 秒。
+ const CREATED_7: u64 = 1_790_038_800;
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+ /// 読める台帳の字（bead 8 本・fx-hub.7 は fx-hub.6 を blocks に持つ）。
+ fn fixture() -> String {
+     fs::read_to_string(manifest("../../tests/fixtures/ledger/bd-list-8.json")).expect("fixture")
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs b/crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs
+index 2772018ce4a741c5e25a48b0bde52a9e3114705e..972a4bad2453e37472cf56ad8168b4623ea6dbf3 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvlcw.rs
+@@ -6,13 +6,13 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ use std::sync::mpsc::Receiver;
+ use std::thread;
+ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+ 
++use crate::common::{manifest, script};
+ use tsuzuri_boundary::server::cases::Cases;
+ use tsuzuri_boundary::server::events::Hub;
+ use tsuzuri_boundary::server::{Config, Server};
+@@ -22,10 +22,6 @@ use tsuzuri_contract::wire;
+ /// 見張りの間隔（`Cases::watch` に直に渡す歯）。
+ const POLL: Duration = Duration::from_millis(20);
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+ /// 歯ごとの作業場（名に process の id と時刻を入れる・put の dir と state dir の fleet の dir を持つ）。
+ fn place(name: &str) -> PathBuf {
+     let nanos = SystemTime::now()
+@@ -173,11 +169,6 @@ fn sight_changes(root: &Path, state: &Path, rx: &Receiver<String>) {
+     one(rx, "出力が無い周から読めない出力");
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// SSE の接続から次の board-changed の frame を `limit` まで待つ（ほかの frame は捨てる）。
+ fn next_board(s: &mut TcpStream, seen: &mut String, limit: Duration) -> Option<String> {
+     let deadline = Instant::now() + limit;
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvrread.rs b/crates/tsuzuri-boundary/tests/teeth1/bvrread.rs
+index 27fe261c9ebc866053b4cd0a7e7cd2d7ee9f46e5..d49a0eee91755953b67fbf924a0c9e457f7cb9f8 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvrread.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvrread.rs
+@@ -8,11 +8,11 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::time::Duration;
+ 
++use crate::common::{fixture, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::policy::{self, Outcome};
+ use tsuzuri_boundary::server::ruling::{READ_TRIES, REFUSED_LOG, UNREAD, Writer};
+@@ -28,15 +28,6 @@ const LOCKED: &str = "database is locked";
+ /// 落ち続ける偽の bd の落ちる回の数。
+ const ALWAYS: u32 = 99;
+ 
+-fn fixture(rel: &str) -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR"))
+-            .join("../../tests/fixtures")
+-            .join(rel),
+-    )
+-    .expect("fixture")
+-}
+-
+ /// 歯ごとの作業場（repo・面の file の置き場・偽の bd と bdw）。
+ struct Place {
+     root: PathBuf,
+@@ -95,11 +86,6 @@ impl Place {
+     }
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// POST を 1 つ撃ち、（状態の code・本文）を返す。
+ fn post(addr: SocketAddr, path: &str, body: &str) -> (u16, String) {
+     let mut s = TcpStream::connect(addr).expect("接続");
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs b/crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs
+index 1f6688ea2ef6bc1697e8e42e1cc2c4cf38e7454d..cf32403b8662474608a28f61dc31b4744e7ad3dd 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/bvvroute.rs
+@@ -4,13 +4,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
+-use std::net::{SocketAddr, TcpStream};
++use std::net::SocketAddr;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::Duration;
+ 
++use crate::common::get;
+ use tsuzuri_boundary::server::runs::{GATE_FILE, PIPE_DIR, REVIEW_FILE, Runs};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::Reading;
+@@ -94,25 +93,6 @@ impl Place {
+     }
+ }
+ 
+-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
+-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+-    let mut s = TcpStream::connect(addr).expect("接続");
+-    s.set_read_timeout(Some(Duration::from_secs(20)))
+-        .expect("timeout");
+-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+-        .expect("要求を書く");
+-    let mut out = Vec::new();
+-    s.read_to_end(&mut out).expect("応答を読む");
+-    let text = String::from_utf8(out).expect("応答の字");
+-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
+-    let status = head
+-        .split(' ')
+-        .nth(1)
+-        .and_then(|c| c.parse().ok())
+-        .expect("状態の code");
+-    (status, body.to_string())
+-}
+-
+ /// 口の走行の列（Known でなければ落とす）。
+ fn lines(addr: SocketAddr) -> Vec<RunLine> {
+     let (status, body) = get(addr, &format!("{PATH}?bead=fx-r.1"));
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/cnote.rs b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+index dfdb89fae9bbfbbfd2fda01020244b6ef26e87e0..37943b3caadcd73ca0c18f2d0e45dfdd4a56862d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/cnote.rs
+@@ -5,10 +5,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{owned, script};
+ use tsuzuri_boundary::cli::graph::{LANDED_HEAD, LANDED_UNKNOWN, landed_line};
+ use tsuzuri_boundary::server::board::{Texts, built, built_floors};
+ use tsuzuri_contract::board::Reading;
+@@ -319,11 +319,6 @@ const FILTERS: [&str; 191] = [
+     "kg9_",
+ ];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -407,10 +402,6 @@ fn stderr(out: &Output) -> String {
+     String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+ }
+ 
+-fn owned(ids: &[&str]) -> Vec<String> {
+-    ids.iter().map(|s| s.to_string()).collect()
+-}
+-
+ /// 台帳の字を節の索引と組んだグラフに渡した名指し。
+ fn named(ledger: &str) -> Reading<Vec<String>> {
+     let g = built(&texts(INDEX, ledger));
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/cnret.rs b/crates/tsuzuri-boundary/tests/teeth1/cnret.rs
+index 44557c04c879028cc4dd8077b9b071245d850519..2900c4f007d826ee332f176ed522b8a46a6c4c62 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/cnret.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/cnret.rs
+@@ -7,10 +7,10 @@
+ use std::collections::BTreeMap;
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{owned, script};
+ use tsuzuri_boundary::cli::graph::{LANDED_HEAD, LANDED_UNKNOWN};
+ use tsuzuri_boundary::server::board::{Texts, built, built_floors};
+ use tsuzuri_contract::board::Reading;
+@@ -353,11 +353,6 @@ const FILTERS: [&str; 220] = [
+     "wstrip_",
+ ];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -426,10 +421,6 @@ fn texts(ledger: &str, summary: &str) -> Texts {
+     }
+ }
+ 
+-fn owned(ids: &[&str]) -> Vec<String> {
+-    ids.iter().map(|s| s.to_string()).collect()
+-}
+-
+ /// 台帳の字と要約の字を渡した名指し。
+ fn named(ledger: &str, summary: &str) -> Reading<Vec<String>> {
+     let g = built(&texts(ledger, summary));
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/common.rs b/crates/tsuzuri-boundary/tests/teeth1/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4ed5b18ec6ad84c704973f64f21d1d744a826287
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth1/common.rs
+@@ -0,0 +1,88 @@
++//! tsuzuri-boundary の歯の群 teeth1 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::time::{Duration, SystemTime, UNIX_EPOCH};
++use tsuzuri_contract::ledger::BeadId;
++
++/// 読みの今の時刻（2026-09-27T12:00:00Z）。
++pub(crate) const NOW: u64 = 1_790_510_400;
++
++/// 器の配達の口の target。
++pub(crate) const TARGET: &str = "tsuzuri:0.1";
++
++pub(crate) fn bead(id: &str) -> BeadId {
++    BeadId::new(id).expect("bead id")
++}
++
++pub(crate) fn fixture(rel: &str) -> String {
++    fs::read_to_string(
++        Path::new(env!("CARGO_MANIFEST_DIR"))
++            .join("../../tests/fixtures")
++            .join(rel),
++    )
++    .expect("fixture")
++}
++
++/// GET を 1 つ撃ち、（状態の code・本文）を返す。
++pub(crate) fn get(addr: SocketAddr, path: &str) -> (u16, String) {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
++        .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    let status = head
++        .split(' ')
++        .nth(1)
++        .and_then(|c| c.parse().ok())
++        .expect("状態の code");
++    (status, body.to_string())
++}
++
++pub(crate) fn manifest(rel: &str) -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
++}
++
++pub(crate) fn now() -> u64 {
++    SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .expect("時計")
++        .as_secs()
++}
++
++pub(crate) fn owned(ids: &[&str]) -> Vec<String> {
++    ids.iter().map(|s| s.to_string()).collect()
++}
++
++pub(crate) fn read(rel: &str) -> String {
++    let path = root().join(rel);
++    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
++pub(crate) fn record(log: &Path, name: &str) -> String {
++    let log = log.display();
++    format!(
++        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
++         echo \"$n\" > '{log}/{name}.count'\n\
++         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
++    )
++}
++
++pub(crate) fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++pub(crate) fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/dretry.rs b/crates/tsuzuri-boundary/tests/teeth1/dretry.rs
+index 3cfea770454ae184e3ac89ba349db3a79b9d4346..b26ed205dbbbf5ac99288d830cfc5220d142c41e 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/dretry.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/dretry.rs
+@@ -6,19 +6,16 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{TARGET, record, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::ruling::{self, Delivery, Pace, Parcel, Round, Writer};
+ use tsuzuri_contract::ledger::BeadId;
+ use tsuzuri_contract::surface::RulingId;
+ use tsuzuri_core::delivery::{Pending, Route, mark_line};
+ 
+-/// 器の配達の口の target。
+-const TARGET: &str = "tsuzuri:0.1";
+-
+ /// 裁定（fixture の fx-s.2 の印の無い裁定）。
+ const QUESTION: &str = "fx-s.2";
+ const RULING: &str = "fx-s.2:20260928T0101Z-1";
+@@ -40,21 +37,6 @@ fn fixture(rel: &str) -> String {
+     fs::read_to_string(manifest().join("../../tests/fixtures").join(rel)).expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+-/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
+-fn record(log: &Path, name: &str) -> String {
+-    let log = log.display();
+-    format!(
+-        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+-         echo \"$n\" > '{log}/{name}.count'\n\
+-         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
+-    )
+-}
+-
+ /// 場ごとの作業場（repo・state dir・記録の置き場・out.json・偽の program）。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/dstg.rs b/crates/tsuzuri-boundary/tests/teeth1/dstg.rs
+index d1739f601bc52468e7f5f70ae0da434899b15e38..0dffa669e292d29f396c85e5c87dc945a2b917b2 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/dstg.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/dstg.rs
+@@ -8,11 +8,11 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Child, ChildStderr, Command as Process, Stdio};
+ use std::time::Duration;
+ 
++use crate::common::script;
+ use tsuzuri_boundary::stage::cli::{self, Setting, parse_target};
+ use tsuzuri_boundary::stage::target::{self, Targets as Setup};
+ use tsuzuri_boundary::stagecall::{
+@@ -63,11 +63,6 @@ const WIRE: &str = r#"{"project":"proj-a","default":"term-a","overrides":[{"proj
+ /// 偽の tz の既定の出力（tz が電文として読める 1 行）。
+ const REPLY_LINE: &str = "project proj-a の表示先を term-b にした（上書き）\n";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ fn src(rel: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(rel);
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/epolq.rs b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+index c66e46bf6726c33063c69279f9a094a440e98e22..3b24b8f2ef4070ab6cd5c68240b9e65758bc2109 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/epolq.rs
+@@ -8,11 +8,11 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{Duration, SystemTime, UNIX_EPOCH};
++use std::time::Duration;
+ 
++use crate::common::{now, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::policy::{self, Outcome};
+ use tsuzuri_boundary::server::ruling::{Delivery, Writer, minute};
+@@ -270,11 +270,6 @@ fn ledger(beads: &[Bead]) -> String {
+     format!("[\n{}\n]\n", lines.join(",\n"))
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv（語ごとに NUL で終える）と cwd を書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ /// 落とさない回で最初の引数が `create` なら `<log>/<name>.created` の字（無ければ `fx-p.7` と改行）を出す。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+@@ -838,13 +833,6 @@ fn epolq_created_id_shapes() {
+     assert_eq!(place.calls("bdw").len(), 1);
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// POST /api/policy を Origin の頭を持たずに撃ち、接続が閉じるまで応答を読む（状態の code と本文）。
+ fn post(addr: SocketAddr, scope: &str, verbatim: &str) -> (u16, String) {
+     let body = wire::encode(&request(scope, verbatim)).expect("要求の電文");
+diff --git a/crates/tsuzuri-boundary/tests/teeth1/main.rs b/crates/tsuzuri-boundary/tests/teeth1/main.rs
+index c918548024882241036fab8904ca1dccf052aa20..a32191f62f838bb1b38a8e816eb800c4d7105459 100644
+--- a/crates/tsuzuri-boundary/tests/teeth1/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth1/main.rs
+@@ -21,6 +21,7 @@ mod bvuroute;
+ mod bvvroute;
+ mod cnote;
+ mod cnret;
++mod common;
+ mod dnskipw;
+ mod dretry;
+ mod dstg;
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/common.rs b/crates/tsuzuri-boundary/tests/teeth2/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..916e2a5038f985d3e3c6dc179fde6ef912d207b2
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth2/common.rs
+@@ -0,0 +1,175 @@
++//! tsuzuri-boundary の歯の群 teeth2 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::process::Output;
++use std::time::{SystemTime, UNIX_EPOCH};
++use tsuzuri_boundary::cli::graph::NEXT;
++use tsuzuri_contract::ledger::BeadId;
++
++/// event log（走行 1 本）。
++pub(crate) const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
++
++/// 着地済みの行とこの文書の行の verify の filter の語。
++pub(crate) const FILTERS: [&str; 49] = [
++    "accept_",
++    "account_",
++    "acctcore_",
++    "acctdoc_",
++    "acctframe_",
++    "accthb_",
++    "accthome_",
++    "acctled_",
++    "acctlook_",
++    "acctpcore_",
++    "acctproj_",
++    "acctsess_",
++    "acctwin_",
++    "acctwire_",
++    "askcard_",
++    "batchpanel_",
++    "board_min_",
++    "contract_form_",
++    "frame_",
++    "gapspage_",
++    "gquestion_",
++    "graph_",
++    "gview_",
++    "hook_",
++    "ledgerblock_",
++    "mapgraph_",
++    "mapview_",
++    "nextstep_",
++    "nodepage_",
++    "parts_",
++    "pipe_",
++    "project_",
++    "question_",
++    "seatblock_",
++    "seatcard_",
++    "server_",
++    "skeleton_",
++    "stage_",
++    "stats_",
++    "steady_",
++    "topbar_",
++    "tz_",
++    "hbproc_",
++    "hbconf_",
++    "hbroute_",
++    "hbpost_",
++    "hsblock_",
++    "hspage_",
++    "hsderive_",
++];
++
++pub(crate) type Run = fn(&[&str]) -> u8;
++
++/// 器の配達の口の target。
++pub(crate) const TARGET: &str = "tsuzuri:0.1";
++
++/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
++pub(crate) struct Tidy(pub(crate) PathBuf);
++
++pub(crate) fn bead(id: &str) -> BeadId {
++    BeadId::new(id).expect("bead id")
++}
++
++/// 偽の bd の記録の file の行の数。
++pub(crate) fn calls(root: &Path) -> usize {
++    fs::read_to_string(root.join("calls"))
++        .unwrap_or_default()
++        .lines()
++        .count()
++}
++
++/// bead 8 本の fixture（bd の読み取りの口の出力の形）。
++pub(crate) fn fixture() -> String {
++    fs::read_to_string(
++        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/bd-list-8.json"),
++    )
++    .expect("fixture")
++}
++
++pub(crate) fn next(id: &str) -> &'static str {
++    NEXT.iter()
++        .find(|(i, _)| *i == id)
++        .map(|(_, n)| *n)
++        .expect("次の 1 手")
++}
++
++pub(crate) fn now() -> u64 {
++    SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .expect("時計")
++        .as_secs()
++}
++
++pub(crate) fn owned(ids: &[&str]) -> Vec<String> {
++    ids.iter().map(|s| s.to_string()).collect()
++}
++
++pub(crate) fn read_fixture(rel: &str) -> String {
++    fs::read_to_string(
++        Path::new(env!("CARGO_MANIFEST_DIR"))
++            .join("../../tests/fixtures")
++            .join(rel),
++    )
++    .unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++pub(crate) fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++pub(crate) fn stderr(out: &Output) -> String {
++    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
++}
++
++pub(crate) fn summary(unknowns: usize) -> String {
++    format!("tz graph --check: まだ分からない（違反 0・まだ分からない {unknowns}）\n")
++}
++
++pub(crate) fn text(bytes: &[u8]) -> String {
++    String::from_utf8(bytes.to_vec()).expect("UTF-8")
++}
++
++/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
++pub(crate) fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
++    let mut out = Vec::new();
++    let mut stack = vec![dir.to_path_buf()];
++    while let Some(d) = stack.pop() {
++        for entry in fs::read_dir(&d).expect("dir を読む") {
++            let path = entry.expect("entry").path();
++            if path.is_dir() {
++                out.push((path.clone(), Vec::new()));
++                stack.push(path);
++            } else {
++                out.push((path.clone(), fs::read(&path).expect("file を読む")));
++            }
++        }
++    }
++    out.sort();
++    out
++}
++
++impl Drop for Tidy {
++    fn drop(&mut self) {
++        match fs::symlink_metadata(&self.0) {
++            Ok(meta) if meta.is_dir() => {
++                let _ = fs::remove_dir_all(&self.0);
++            }
++            _ => {
++                let _ = fs::remove_file(&self.0);
++            }
++        }
++    }
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/eretry.rs b/crates/tsuzuri-boundary/tests/teeth2/eretry.rs
+index ef8daf17b210404fca45e418c4e2a47d580bc381..e3b0290efa2d4fd0a3a44c66e1d2eb0aba4ec6f3 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/eretry.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/eretry.rs
+@@ -10,12 +10,12 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{TARGET, bead, script};
+ use tsuzuri_boundary::server::batch;
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::ruling::{
+@@ -23,7 +23,7 @@ use tsuzuri_boundary::server::ruling::{
+     Writer,
+ };
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_contract::ledger::LedgerWrite;
+ use tsuzuri_contract::surface::{BatchItem, BatchRequest, RevokeRequest, RulingId, RulingRequest};
+ use tsuzuri_contract::wire;
+ 
+@@ -46,9 +46,6 @@ const ROWS: [&str; 2] = ["fx-b.2", "fx-b.3"];
+ /// log に出ない逐語。
+ const SECRET: &str = "秘めた言葉は外へ出さない";
+ 
+-/// 器の配達の口の target。
+-const TARGET: &str = "tsuzuri:0.1";
+-
+ fn fixture(rel: &str) -> String {
+     fs::read_to_string(
+         Path::new(env!("CARGO_MANIFEST_DIR"))
+@@ -58,11 +55,6 @@ fn fixture(rel: &str) -> String {
+     .expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、書き終えたら `<log>/<name>.<回>.done` を置き、
+ /// `then` を撃って rc 0 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str, then: &str) {
+@@ -200,10 +192,6 @@ impl Place {
+     }
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+ fn rid(id: &str) -> RulingId {
+     RulingId::new(id).expect("記帳 id")
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/esig.rs b/crates/tsuzuri-boundary/tests/teeth2/esig.rs
+index ab15d83556908007f4670423b945cbce92cff6f3..2617f16b43812b09fa5adb5108de62f860d8f7ad 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/esig.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/esig.rs
+@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::calls;
+ use tsuzuri_boundary::server::events::{Hub, NUDGE_PATH, NUDGED, Timing};
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::{Config, Route, Server};
+@@ -129,14 +130,6 @@ fn nudge_after_mark_moves(
+     let _ = fs::remove_dir_all(&root);
+ }
+ 
+-/// 偽の bd の記録の file の行の数。
+-fn calls(root: &Path) -> usize {
+-    fs::read_to_string(root.join("calls"))
+-        .unwrap_or_default()
+-        .lines()
+-        .count()
+-}
+-
+ /// 台帳の file の字（bead を `n` 本）。
+ fn ledger(n: u32) -> String {
+     let beads: Vec<String> = (1..=n)
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/evkind.rs b/crates/tsuzuri-boundary/tests/teeth2/evkind.rs
+index 35c9da703f888473482eb083775d1e2b687591c5..9eab3b658494adea1169e526d5aa817941c1dfff 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/evkind.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/evkind.rs
+@@ -6,7 +6,6 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::{AtomicUsize, Ordering};
+ use std::sync::mpsc::Receiver;
+@@ -21,6 +20,7 @@ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
+ use tsuzuri_contract::wire;
+ 
+ use ChangeKind::{Account, Design, Runs, Seat};
++use crate::common::script;
+ 
+ /// 席の target。
+ const TARGET: &str = "proj-1:0.1";
+@@ -159,11 +159,6 @@ fn evkind_frames_exact() {
+     assert!(rx.try_recv().is_err(), "3 件目が在る");
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// SSE の接続から次の board-changed の frame を `limit` まで待つ（ほかの frame は捨てる）。
+ fn next_board(s: &mut TcpStream, seen: &mut String, limit: Duration) -> Option<String> {
+     let deadline = Instant::now() + limit;
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fdlt.rs b/crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
+index c8117a428d6e7a0170bdfef4759e5f8ad3a4a532..75b76d5ebc266a850d3d58b654d6b1d177b2a115 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fdlt.rs
+@@ -7,12 +7,12 @@ use std::ffi::OsString;
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpListener};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ use std::thread::{self, JoinHandle};
+-use std::time::{Duration, SystemTime, UNIX_EPOCH};
++use std::time::Duration;
+ 
++use crate::common::{Run, Tidy, now, script, text};
+ use tsuzuri_boundary::hook::deliver_tool::{
+     self, Args, MARK_BUDGET, UNRECEIVED_PATH, USAGE, fetch, unreceived,
+ };
+@@ -86,11 +86,6 @@ fn marked_ledger() -> String {
+     )
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に、回の数を `<log>/<name>.count` に書き、
+ /// `<log>/<name>.fail` が在れば rc 1 で終わり、無ければ `then` を撃つ script。
+ fn recorder(path: &Path, log: &Path, name: &str, then: &str) {
+@@ -107,22 +102,6 @@ fn recorder(path: &Path, log: &Path, name: &str, then: &str) {
+     );
+ }
+ 
+-/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
+-struct Tidy(PathBuf);
+-
+-impl Drop for Tidy {
+-    fn drop(&mut self) {
+-        match fs::symlink_metadata(&self.0) {
+-            Ok(meta) if meta.is_dir() => {
+-                let _ = fs::remove_dir_all(&self.0);
+-            }
+-            _ => {
+-                let _ = fs::remove_file(&self.0);
+-            }
+-        }
+-    }
+-}
+-
+ /// 歯ごとの作業場（repo・記録の置き場・偽の git と tailnet の道具と hook の bd と bdw・server の bd）。
+ struct Place {
+     root: PathBuf,
+@@ -274,17 +253,6 @@ impl Place {
+     }
+ }
+ 
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
+-}
+-
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// 1 本の要求を受け、頭を返し、`response` を書いて閉じる受け手（別 thread・受けた要求の頭を返す）。
+ fn receiver(response: String) -> (u16, JoinHandle<String>) {
+     let listener = TcpListener::bind("127.0.0.1:0").expect("受け手");
+@@ -327,7 +295,6 @@ fn dead_port() -> u16 {
+ }
+ 
+ type Parse = fn(&[&str]) -> Result<Args, String>;
+-type Run = fn(&[&str]) -> u8;
+ 
+ const PARSE: Parse = deliver_tool::parse;
+ const RUN: Run = deliver_tool::run;
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+index fb00dc7a76871fe048500d3a50660c9ba4135314..f698a7a618c5b5c5b433bb64b4bc310904442827 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fpremhook.rs
+@@ -7,10 +7,10 @@
+ 
+ use std::fs;
+ use std::io::Write;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{read_fixture, script, text};
+ use tsuzuri_boundary::server::policy;
+ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::{BeadId, LedgerWrite, QUESTION_LABEL};
+@@ -183,15 +183,6 @@ const FILTER_WORDS: [&str; 151] = [
+     "wstrip_",
+ ];
+ 
+-fn read_fixture(rel: &str) -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR"))
+-            .join("../../tests/fixtures")
+-            .join(rel),
+-    )
+-    .unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+ fn graph_of(index: &str, ledger: &str) -> Graph {
+     build(&Inputs {
+         design_index: index,
+@@ -299,11 +290,6 @@ fn expected(payload: &str, graph: &Graph) -> String {
+         .unwrap_or_default()
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の dir・偽の bd と偽の設計の道具と、それらが出す字）。drop で作業場ごと消す。
+ struct Place {
+     root: PathBuf,
+@@ -364,10 +350,6 @@ impl Place {
+     }
+ }
+ 
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
+-}
+-
+ #[test]
+ fn fprem_bin_new_policy_refused() {
+     let index = read_fixture(INDEX);
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fserve.rs b/crates/tsuzuri-boundary/tests/teeth2/fserve.rs
+index 6a28241d86b188e43b0d2f6d6d3ee40fd75f797d..df8dc9728dce26c5e112d489ad2d3fbca1898164 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fserve.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fserve.rs
+@@ -7,26 +7,23 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{ChildStderr, Command, Stdio};
+ use std::sync::mpsc;
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{TARGET, bead, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::ruling::{self, Delivery, Writer};
+ use tsuzuri_boundary::server::{batch, events};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_contract::ledger::LedgerWrite;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::{BatchItem, BatchRequest, BatchResponse, RulingId};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::delivery::{Pending, RULING_PREFIX, Route, mark_line};
+ 
+-/// 器の配達の口の target。
+-const TARGET: &str = "tsuzuri:0.1";
+-
+ /// 歯の中の束の id（台帳の字には無い）。
+ const BATCH: &str = "batch:20260928T0110Z-1";
+ 
+@@ -43,11 +40,6 @@ fn fixture(rel: &str) -> String {
+     fs::read_to_string(manifest().join("../../tests/fixtures").join(rel)).expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+     let log = log.display();
+@@ -187,10 +179,6 @@ fn ruling_id(id: &str) -> RulingId {
+     RulingId::new(id).expect("裁定の id")
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+ fn pending(question: &str, ruling: &str) -> Pending {
+     Pending {
+         question: bead(question),
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fstop.rs b/crates/tsuzuri-boundary/tests/teeth2/fstop.rs
+index 59d613f998b1a70951ae915f670d3edc74eb3822..68d2a5c4fc2467ad56e8884dcd7da3e0aaa49db6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fstop.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fstop.rs
+@@ -8,11 +8,11 @@
+ use std::ffi::OsString;
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+-use std::time::{Duration, SystemTime, UNIX_EPOCH};
++use std::time::Duration;
+ 
++use crate::common::{Run, Tidy, now, read_fixture, script, text, tree};
+ use tsuzuri_boundary::hook::stop::{self, Args, MARK_BUDGET, USAGE};
+ use tsuzuri_boundary::server::{ledger, ruling};
+ use tsuzuri_contract::EpochSecs;
+@@ -127,26 +127,11 @@ const FILTER_WORDS: [&str; 92] = [
+ 
+ type Parse = fn(&[&str]) -> Result<Args, String>;
+ type Mark = fn(&Args, &[Pending], EpochSecs, Duration) -> usize;
+-type Run = fn(&[&str]) -> u8;
+ 
+ const PARSE: Parse = stop::parse;
+ const MARK: Mark = stop::mark;
+ const RUN: Run = stop::run;
+ 
+-fn read_fixture(rel: &str) -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR"))
+-            .join("../../tests/fixtures")
+-            .join(rel),
+-    )
+-    .unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
+-}
+-
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script
+ /// （`pause` は記録の前に撃つ字）。
+ fn recorder(path: &Path, log: &Path, name: &str, pause: &str) {
+@@ -300,29 +285,6 @@ impl Place {
+     }
+ }
+ 
+-/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
+-struct Tidy(PathBuf);
+-
+-impl Drop for Tidy {
+-    fn drop(&mut self) {
+-        match fs::symlink_metadata(&self.0) {
+-            Ok(meta) if meta.is_dir() => {
+-                let _ = fs::remove_dir_all(&self.0);
+-            }
+-            _ => {
+-                let _ = fs::remove_file(&self.0);
+-            }
+-        }
+-    }
+-}
+-
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ fn pending(question: &str, id: &str) -> Pending {
+     Pending {
+         question: BeadId::new(question).expect("bead の id"),
+@@ -353,29 +315,6 @@ fn mark_argv(p: &Pending, minute: &str) -> Vec<String> {
+     .argv()
+ }
+ 
+-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
+-}
+-
+ #[test]
+ fn fstop_parse_args() {
+     assert_eq!(
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/fundl.rs b/crates/tsuzuri-boundary/tests/teeth2/fundl.rs
+index 72c3def8823882e9cfdb360d4f0515c21501f8a6..da67161e5baf1aa44adb4799efbffffc39861103 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/fundl.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/fundl.rs
+@@ -6,11 +6,11 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::Duration;
+ 
++use crate::common::script;
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::surface::RulingId;
+@@ -88,11 +88,6 @@ fn mixed() -> String {
+     ])
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo・面の file・偽の bd と bdw）。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+index cd9443a5020e2f395908179b023850271135bf30..58bd007c64e4303666bd9904a45646482ceeef7f 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/g3g7w.rs
+@@ -5,11 +5,11 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT, OUTSIDE_HEAD, UNFIELDED_UNKNOWN};
++use crate::common::{next, script, stderr, stdout};
++use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, OUTSIDE_HEAD, UNFIELDED_UNKNOWN};
+ use tsuzuri_boundary::server::board::{self, Texts};
+ use tsuzuri_boundary::server::design::{Design, RULINGS_ARGS};
+ use tsuzuri_contract::graph::{EdgeType, Verdict};
+@@ -68,11 +68,6 @@ fn plus_adr8(rulings: &str, bead: &str) -> String {
+     )
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の置き場・state dir・台帳と書き出しの字の file・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -140,21 +135,6 @@ impl Place {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+-}
+-
+-fn next(id: &str) -> &'static str {
+-    NEXT.iter()
+-        .find(|(i, _)| *i == id)
+-        .map(|(_, n)| *n)
+-        .expect("次の 1 手")
+-}
+-
+ /// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）と
+ /// 着地の commit の無い着地した契約の行（着地した契約は無い・行 c-commit-node）。
+ fn summary(word: &str, violations: usize, unknowns: usize) -> String {
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/gextw.rs b/crates/tsuzuri-boundary/tests/teeth2/gextw.rs
+index 4bc9d89853c13a8b33b0b50cc8407b2a4804eb7e..ed192b28809b116daae2d8cd7f289127bc49ddba 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/gextw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/gextw.rs
+@@ -10,13 +10,13 @@ use std::ffi::OsString;
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ use std::thread;
+ use std::time::Duration;
+ 
+-use tsuzuri_boundary::cli::graph::{NEXT, OUTSIDE_HEAD};
++use crate::common::{next, script, stderr, stdout};
++use tsuzuri_boundary::cli::graph::OUTSIDE_HEAD;
+ use tsuzuri_boundary::server::board::{self, Texts};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::graph::{GraphDoc, Verdict};
+@@ -52,11 +52,6 @@ fn rulings() -> String {
+     )
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場。
+ struct Place {
+     root: PathBuf,
+@@ -160,21 +155,6 @@ fn pair(dir: &Path) -> Vec<OsString> {
+     vec!["--project".into(), dir.into()]
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+-}
+-
+-fn next(id: &str) -> &'static str {
+-    NEXT.iter()
+-        .find(|(i, _)| *i == id)
+-        .map(|(_, n)| *n)
+-        .expect("次の 1 手")
+-}
+-
+ /// 口 GET /api/graph の電文。
+ fn graph_doc(addr: SocketAddr) -> GraphDoc {
+     let mut s = TcpStream::connect(addr).expect("接続");
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs b/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
+index 4747710902ccb6a9818e932cc23361a5213bcd87..05b7feca8b92a3a9983976a26ff0c363bc6b589f 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/gmretw.rs
+@@ -4,6 +4,7 @@
+ 
+ use std::path::Path;
+ 
++use crate::common::owned;
+ use tsuzuri_boundary::server::board::{Texts, built, doc, graph};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::GraphDoc;
+@@ -72,10 +73,6 @@ fn sum_without(id: &str) -> String {
+     summary(&states)
+ }
+ 
+-fn owned(ids: &[&str]) -> Vec<String> {
+-    ids.iter().map(|s| s.to_string()).collect()
+-}
+-
+ fn texts(design: &str, summary: &str) -> Texts {
+     Texts {
+         design: design.to_string(),
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs b/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
+index 183df457170a12eb393238bdc0858767c32f0bbc..87368a0357047048dfb4161287f7d15908fc1889 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/hbpost.rs
+@@ -6,63 +6,11 @@
+ use std::fs;
+ use std::path::Path;
+ 
++use crate::common::FILTERS;
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::{Route, batch, policy, ruling};
+ use tsuzuri_contract::account::HEARTBEAT_PATH;
+ 
+-/// 着地済みの行とこの文書の行の verify の filter の語。
+-const FILTERS: [&str; 49] = [
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hook_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "hbproc_",
+-    "hbconf_",
+-    "hbroute_",
+-    "hbpost_",
+-    "hsblock_",
+-    "hspage_",
+-    "hsderive_",
+-];
+-
+ fn read(rel: &str) -> String {
+     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs b/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
+index 164eb9df071ed98c684f33702e5f55df27ed90cf..6a1acd60be14f55a043e7dd937ab3e8ee719d6c2 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/hbroute.rs
+@@ -6,62 +6,10 @@
+ use std::fs;
+ use std::path::Path;
+ 
++use crate::common::FILTERS;
+ use tsuzuri_boundary::server::Route;
+ use tsuzuri_boundary::server::route::{Key, Match};
+ 
+-/// 着地済みの行とこの文書の行の verify の filter の語。
+-const FILTERS: [&str; 49] = [
+-    "accept_",
+-    "account_",
+-    "acctcore_",
+-    "acctdoc_",
+-    "acctframe_",
+-    "accthb_",
+-    "accthome_",
+-    "acctled_",
+-    "acctlook_",
+-    "acctpcore_",
+-    "acctproj_",
+-    "acctsess_",
+-    "acctwin_",
+-    "acctwire_",
+-    "askcard_",
+-    "batchpanel_",
+-    "board_min_",
+-    "contract_form_",
+-    "frame_",
+-    "gapspage_",
+-    "gquestion_",
+-    "graph_",
+-    "gview_",
+-    "hook_",
+-    "ledgerblock_",
+-    "mapgraph_",
+-    "mapview_",
+-    "nextstep_",
+-    "nodepage_",
+-    "parts_",
+-    "pipe_",
+-    "project_",
+-    "question_",
+-    "seatblock_",
+-    "seatcard_",
+-    "server_",
+-    "skeleton_",
+-    "stage_",
+-    "stats_",
+-    "steady_",
+-    "topbar_",
+-    "tz_",
+-    "hbproc_",
+-    "hbconf_",
+-    "hbroute_",
+-    "hbpost_",
+-    "hsblock_",
+-    "hspage_",
+-    "hsderive_",
+-];
+-
+ fn manifest(rel: &str) -> std::path::PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/kcli.rs b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+index cc582dc096528ef2efdc2614df8bd272426aefed..96766662b2746eec1f763f5660de0fd3fa6728b6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kcli.rs
+@@ -5,10 +5,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{EVENTS, script, stderr, stdout, tree};
+ use tsuzuri_boundary::cli::graph;
+ use tsuzuri_boundary::server::board::{self, Texts};
+ use tsuzuri_contract::graph::{EdgeType, GraphDoc, GraphSource, InvariantCheck, Verdict};
+@@ -48,9 +48,6 @@ const LEDGER_CUT: &str = r#"[
+ ]
+ "#;
+ 
+-/// event log（走行 1 本）。
+-const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
+-
+ /// 着地済みの行と第 3 波と第 4 波の行の verify の語（歯の名が含んではならない部分の字）。
+ const WORDS: [&str; 69] = [
+     "accept_",
+@@ -131,11 +128,6 @@ struct Place {
+     state: PathBuf,
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃つときの出所の置き方。
+ #[derive(Clone, Copy)]
+ struct Opts {
+@@ -216,38 +208,11 @@ fn texts(ledger: &str) -> Texts {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+-}
+-
+ fn decode(out: &Output) -> GraphDoc {
+     let text = stdout(out);
+     wire::decode(&text).unwrap_or_else(|e| panic!("GraphDoc の形でない {e}: {text}"))
+ }
+ 
+-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ fn check(id: &str, verdict: Verdict) -> InvariantCheck {
+     let ids: Vec<String> = match verdict {
+         Verdict::Violation => vec!["k.1".to_string()],
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/kg9.rs b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+index bf798cbf1ec59c16999d5d3ff19d14d3e1e77bb6..12508e2d7a162b53379fbab0ad3fca6c822dd12b 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/kg9.rs
+@@ -6,10 +6,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{EVENTS, script, stderr, stdout, summary};
+ use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, UNFIELDED_HEAD, UNFIELDED_UNKNOWN, unfielded_line};
+ use tsuzuri_boundary::server::board::{Texts, built, built_floors};
+ use tsuzuri_contract::board::Reading;
+@@ -60,9 +60,6 @@ const SUMMARY: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3
+ {\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"A-1.1 に従う\"}\n\
+ {\"id\":\"nt#r1\",\"file\":\"design-note/nt.yaml\",\"line\":9,\"eng\":\"FR1 を満たす・R-2 を写す\"}\n";
+ 
+-/// event log（走行 1 本）。
+-const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
+-
+ /// 計画の verify の filter の語と同じノートのもう 1 行の接頭辞（歯の名が含んではならない部分の字）。
+ const FILTERS: [&str; 191] = [
+     "aaround_",
+@@ -258,11 +255,6 @@ const FILTERS: [&str; 191] = [
+     "cnote_",
+ ];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -340,18 +332,6 @@ fn texts(summary: &str) -> Texts {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+-}
+-
+-fn summary(unknowns: usize) -> String {
+-    format!("tz graph --check: まだ分からない（違反 0・まだ分からない {unknowns}）\n")
+-}
+-
+ fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+     list.iter()
+         .map(|(a, b)| (a.to_string(), b.to_string()))
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/ksum.rs b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+index 230808e43ab968ca07d07006952962ad65e7b1e2..2b3cf00c36f9c5911b5396777e66dc0485e13e71 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/ksum.rs
+@@ -6,10 +6,10 @@
+ 
+ use std::ffi::OsString;
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{EVENTS, owned, script, stderr, stdout, summary};
+ use tsuzuri_boundary::cli::graph::{BARE_HEAD, BARE_UNKNOWN, bare_line};
+ use tsuzuri_boundary::server::board::{Texts, built, built_bare};
+ use tsuzuri_contract::board::Reading;
+@@ -59,9 +59,6 @@ const SUMMARY_FULL: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"lin
+ {\"id\":\"A-1.1\",\"file\":\"constitution.yaml\",\"line\":5,\"plain\":\"規範文の概要\"}\n\
+ {\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"要件の技術\"}\n";
+ 
+-/// event log（走行 1 本）。
+-const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
+-
+ /// 計画の verify の filter の語と同じノートのほかの 2 行の接頭辞（歯の名が含んではならない部分の字）。
+ const FILTERS: [&str; 179] = [
+     "aaround_",
+@@ -245,11 +242,6 @@ const FILTERS: [&str; 179] = [
+     "tkad_",
+ ];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
+ struct Place {
+     root: PathBuf,
+@@ -327,22 +319,6 @@ fn texts(summary: &str) -> Texts {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
+-}
+-
+-fn summary(unknowns: usize) -> String {
+-    format!("tz graph --check: まだ分からない（違反 0・まだ分からない {unknowns}）\n")
+-}
+-
+-fn owned(ids: &[&str]) -> Vec<String> {
+-    ids.iter().map(|s| s.to_string()).collect()
+-}
+-
+ #[test]
+ fn ksum_line_and_built_bare() {
+     let head: &str = BARE_HEAD;
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/lidle.rs b/crates/tsuzuri-boundary/tests/teeth2/lidle.rs
+index c9707b425fd37d0b5c2b3fcd0a39855334d811b1..668a071ba86b64a83af0357bfed30b9fed701a5d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/lidle.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lidle.rs
+@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::calls;
+ use tsuzuri_boundary::server::events::{Hub, Timing};
+ use tsuzuri_boundary::server::{Config, Server};
+ 
+@@ -264,14 +265,6 @@ fn lidle_watch_idle_then_attach() {
+     let _ = fs::remove_dir_all(&root);
+ }
+ 
+-/// 偽の bd の記録の file の行の数。
+-fn calls(root: &Path) -> usize {
+-    fs::read_to_string(root.join("calls"))
+-        .unwrap_or_default()
+-        .lines()
+-        .count()
+-}
+-
+ #[test]
+ fn lidle_live_reads_on_attach() {
+     let root = place("live");
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+index b52b24583a9cd1b43a42af1fd43ac1c7f5c46c24..71a0f204594b616d48cffea836596b0b0f2e54ed 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lsnap.rs
+@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::fixture;
+ use tsuzuri_boundary::server::coalesce::Coalesce;
+ use tsuzuri_boundary::server::ledger::{
+     Got, JOURNAL, MANIFEST, METADATA, NOMS, STORE_DIR, Source,
+@@ -174,14 +175,6 @@ const ROUTES: [&str; 9] = [
+     "/api/unreflected",
+ ];
+ 
+-/// bead 8 本の fixture（bd の読み取りの口の出力の形）。
+-fn fixture() -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/bd-list-8.json"),
+-    )
+-    .expect("fixture")
+-}
+-
+ /// fixture の 1 本目の bead の object だけを持つ配列の字。
+ fn one() -> String {
+     let all = fixture();
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/lstore.rs b/crates/tsuzuri-boundary/tests/teeth2/lstore.rs
+index 8c5a95212782e1cbfda5aed4da80f762cc36154d..24a5f63f3a02d8e8c9a45b6473162c2f7e42f926 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/lstore.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/lstore.rs
+@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
+ use std::thread;
+ use std::time::{Duration, Instant, SystemTime};
+ 
++use crate::common::fixture;
+ use tsuzuri_boundary::server::events::{Hub, POLL, REREAD, STORE_REREAD, TIMING, Timing, stamp};
+ use tsuzuri_boundary::server::ledger::{
+     JOURNAL, MANIFEST, METADATA, Mark, NOMS, STORE_DIR, Source, TABLE_SUFFIX,
+@@ -379,14 +380,6 @@ fn lstore_watch_intervals() {
+     assert!(n >= 3, "jsonl の印で読み直さない: {n}");
+ }
+ 
+-/// bead 8 本の fixture（bd の読み取りの口の出力の形）。
+-fn fixture() -> String {
+-    fs::read_to_string(
+-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/bd-list-8.json"),
+-    )
+-    .expect("fixture")
+-}
+-
+ /// 偽の bd の出力を置く（別の名で書いてから置き替える）。
+ fn bd_returns(root: &Path, text: &str) {
+     let tmp = root.join("out.json.tmp");
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/main.rs b/crates/tsuzuri-boundary/tests/teeth2/main.rs
+index 5ed3e33a9b1a7c26c5d2f532ae3ebd16d50a3d27..900d24aa5150e193a82d4b61c66b22a52b7f2816 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/teeth2/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod eretry;
+ mod esig;
+ mod evkind;
+diff --git a/crates/tsuzuri-boundary/tests/teeth2/mbig.rs b/crates/tsuzuri-boundary/tests/teeth2/mbig.rs
+index fe9c8b240e0747c38b949f9cfacdba00172c429e..462f2b8fcfeda1947a5e1e9fd5f1db6dd12b4ca6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth2/mbig.rs
++++ b/crates/tsuzuri-boundary/tests/teeth2/mbig.rs
+@@ -4,11 +4,11 @@
+ #![cfg(test)]
+ 
+ use std::fs::{self, File};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ use std::time::Duration;
+ 
++use crate::common::script;
+ use tsuzuri_boundary::acct::Acct;
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_contract::account::RunCounts;
+@@ -25,11 +25,6 @@ const SPAWNED: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:20:00Z\",\"kind\":\"
+ 
+ const LEDGER: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（state-h は引数の state dir・state-a と state-b は git が返す state dir）。
+ struct Work {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/common.rs b/crates/tsuzuri-boundary/tests/teeth3/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..25f2c51567acdf5cdeb9309ade589484653c0568
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/teeth3/common.rs
+@@ -0,0 +1,80 @@
++//! tsuzuri-boundary の歯の群 teeth3 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::io::{Read, Write};
++use std::net::{SocketAddr, TcpStream};
++use std::os::unix::fs::PermissionsExt;
++use std::path::{Path, PathBuf};
++use std::time::{Duration, SystemTime, UNIX_EPOCH};
++use tsuzuri_contract::ledger::BeadId;
++use tsuzuri_contract::surface::RulingId;
++
++pub(crate) const LEDGER_A: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
++
++pub(crate) fn bead(id: &str) -> BeadId {
++    BeadId::new(id).expect("bead id")
++}
++
++/// GET を 1 つ撃ち、（状態の code・本文）を返す。
++pub(crate) fn get(addr: SocketAddr, path: &str) -> (u16, String) {
++    let mut s = TcpStream::connect(addr).expect("接続");
++    s.set_read_timeout(Some(Duration::from_secs(20)))
++        .expect("timeout");
++    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
++        .expect("要求を書く");
++    let mut out = Vec::new();
++    s.read_to_end(&mut out).expect("応答を読む");
++    let text = String::from_utf8(out).expect("応答の字");
++    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
++    let status = head
++        .split(' ')
++        .nth(1)
++        .and_then(|c| c.parse().ok())
++        .expect("状態の code");
++    (status, body.to_string())
++}
++
++pub(crate) fn manifest(rel: &str) -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
++}
++
++pub(crate) fn now() -> u64 {
++    SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .expect("時計")
++        .as_secs()
++}
++
++pub(crate) fn read(path: &Path) -> String {
++    fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
++}
++
++pub(crate) fn rid(id: &str) -> RulingId {
++    RulingId::new(id).expect("裁定の id")
++}
++
++pub(crate) fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
++}
++
++/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
++pub(crate) fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
++    let mut out = Vec::new();
++    let mut stack = vec![dir.to_path_buf()];
++    while let Some(d) = stack.pop() {
++        for entry in fs::read_dir(&d).expect("dir を読む") {
++            let path = entry.expect("entry").path();
++            if path.is_dir() {
++                out.push((path.clone(), Vec::new()));
++                stack.push(path);
++            } else {
++                out.push((path.clone(), fs::read(&path).expect("file を読む")));
++            }
++        }
++    }
++    out.sort();
++    out
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/main.rs b/crates/tsuzuri-boundary/tests/teeth3/main.rs
+index beb7c04d80839efce5cc9455e7a50f7d74e6404c..4c90653c7ba4090244c9df216f1d8f1d6b741c5e 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/main.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/teeth3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod mqask;
+ mod nsumw;
+ mod ntcsrv;
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/mqask.rs b/crates/tsuzuri-boundary/tests/teeth3/mqask.rs
+index 277fba09912cd4d29017a907d2063d0076e5acfd..c00311260d936671aa0cf92705173d21c095cd3d 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/mqask.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/mqask.rs
+@@ -8,12 +8,12 @@
+ use std::fs;
+ use std::io::{ErrorKind, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::script;
+ use tsuzuri_boundary::server::{Config, Server, ruling};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::ledger::BeadId;
+@@ -42,11 +42,6 @@ fn fixture(rel: &str) -> String {
+     .expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 台帳の字を丸ごと替える（隣に書いてから移すので、偽の bd から書きかけは見えない）。
+ fn put(dir: &Path, text: &str) {
+     let tmp = dir.join("ledger.json.tmp");
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs b/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
+index e1651990884020499801c322973fbc10974f2f34..b9c8acc2608cac336d813ec2e7a055e60ccd91e3 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/nsumw.rs
+@@ -8,12 +8,12 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::script;
+ use tsuzuri_boundary::server::design::{DESIGN_DIR, Design, FOLIO_ARGS, FOLIO_TIMEOUT, SUMMARY_ARGS};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_contract::graph::{Fold, GraphDoc, GraphNode};
+@@ -159,11 +159,6 @@ struct Place {
+     state: PathBuf,
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ impl Place {
+     fn new(name: &str, summ: Summ) -> Place {
+         let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs b/crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs
+index 203c5de118fede473d506174ffd0b8034d1e2798..cdd932c4488e225e72ce898f51b80d7024ba8056 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/ntcsrv.rs
+@@ -6,25 +6,17 @@ use std::ffi::OsStr;
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+ 
++use crate::common::{get, manifest, now, read, script};
+ use tsuzuri_boundary::server::{Config, Server};
+ use tsuzuri_boundary::stage::notify::{self, EXT, Record};
+ use tsuzuri_contract::notice::{Notice, Notices, PATH};
+ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
+ use tsuzuri_contract::wire;
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+-fn read(path: &Path) -> String {
+-    fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ /// 歯ごとの作業場（名に process の id と時刻を入れる）。
+ fn place(name: &str) -> PathBuf {
+     let nanos = SystemTime::now()
+@@ -38,13 +30,6 @@ fn place(name: &str) -> PathBuf {
+     dir
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// 記録を 1 つ組む。
+ fn record(at: u64, project: &str, title: &str, url: &str) -> Record {
+     Record {
+@@ -78,11 +63,6 @@ fn names(paths: &[PathBuf]) -> Vec<String> {
+         .collect()
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// repo の dir の名が `project` の server を起こす（台帳の bd は空の一覧を返す偽の program・記録の dir は `notify`）。
+ fn serve(root: &Path, project: &str, notify: Option<PathBuf>) -> SocketAddr {
+     let (repo, files) = (root.join(project), root.join("files"));
+@@ -102,25 +82,6 @@ fn serve(root: &Path, project: &str, notify: Option<PathBuf>) -> SocketAddr {
+     addr
+ }
+ 
+-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
+-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+-    let mut s = TcpStream::connect(addr).expect("接続");
+-    s.set_read_timeout(Some(Duration::from_secs(20)))
+-        .expect("timeout");
+-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+-        .expect("要求を書く");
+-    let mut out = Vec::new();
+-    s.read_to_end(&mut out).expect("応答を読む");
+-    let text = String::from_utf8(out).expect("応答の字");
+-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
+-    let status = head
+-        .split(' ')
+-        .nth(1)
+-        .and_then(|c| c.parse().ok())
+-        .expect("状態の code");
+-    (status, body.to_string())
+-}
+-
+ /// 口を撃って電文に読む（200 でなければ落ちる）。
+ fn notices(addr: SocketAddr) -> Notices {
+     let (status, body) = get(addr, PATH);
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs b/crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs
+index d8275a81213efaca447f84bd0a4ec32fff0c05c6..03c0fed8f2d59d9260255bf56923343a51b0687e 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/pmisroute.rs
+@@ -10,12 +10,12 @@
+ use std::fs;
+ use std::io::{self, ErrorKind, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::script;
+ use tsuzuri_boundary::server::events::{Hub, Subscription};
+ use tsuzuri_boundary::server::form::{
+     FORM_ARGS, FORM_TIMEOUT, Form, Kept, REPO_ARGS, form_lines, misfits,
+@@ -86,11 +86,6 @@ fn pair() -> Kept {
+     }
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo・面の file・state dir・記録の dir）。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/qgate.rs b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+index 9b5decc2eb71ee5336e340626b031d34a3bb86aa..2b9f35e04740e036c19780f42a824eef6daf89ed 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+@@ -7,10 +7,10 @@
+ use std::ffi::OsString;
+ use std::fs;
+ use std::io::Write;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{script, tree};
+ use tsuzuri_boundary::hook::question_gate::{self, Args, USAGE};
+ use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_ARGS};
+ use tsuzuri_boundary::server::ledger::{BD, BD_ARGS};
+@@ -240,11 +240,6 @@ fn others() -> Vec<String> {
+     ]
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// drop で path を消す守り（dir なら中身ごと・file なら file を・誤りは捨てる）。
+ struct Tidy(PathBuf);
+ 
+@@ -339,25 +334,6 @@ impl Place {
+     }
+ }
+ 
+-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ fn text(bytes: &[u8]) -> String {
+     String::from_utf8(bytes.to_vec()).expect("UTF-8")
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/rhold.rs b/crates/tsuzuri-boundary/tests/teeth3/rhold.rs
+index 90668bae94b8961499b528199986e4c4580ac95d..025abed29008fa4c3fef12aaff10016f081e98fb 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/rhold.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rhold.rs
+@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::manifest;
+ use tsuzuri_boundary::acct::Acct;
+ use tsuzuri_boundary::server::ledger::{Got, READ_HOLD, Source, parse_bd};
+ use tsuzuri_boundary::server::seat::HOLD;
+@@ -153,10 +154,6 @@ const WORDS: [&str; 110] = [
+     "flight_",
+ ];
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+ fn read(path: &Path) -> String {
+     fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読めない: {e}", path.display()))
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/rsid.rs b/crates/tsuzuri-boundary/tests/teeth3/rsid.rs
+index 487ae644346d25de7de3918cc8cb3295763087ed..40453bf436e129bc03d9cdea7691b3def249c4e9 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/rsid.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rsid.rs
+@@ -4,9 +4,9 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ 
++use crate::common::{bead, rid, script};
+ use tsuzuri_boundary::server::batch::{self, BATCH_PREFIX};
+ use tsuzuri_boundary::server::ledger::{Source, parse_bd};
+ use tsuzuri_boundary::server::policy;
+@@ -14,9 +14,9 @@ use tsuzuri_boundary::server::ruling::{
+     self, POLICY_MARK, REASON_HEAD, Revoked, Writer, policy_reason, reason,
+ };
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, POLICY_SCOPE_LABEL, QUESTION_LABEL};
++use tsuzuri_contract::ledger::{POLICY_SCOPE_LABEL, QUESTION_LABEL};
+ use tsuzuri_contract::surface::{
+-    BatchItem, BatchRequest, ItemOutcome, RevokeRequest, RevokeResponse, RulingId, RulingRequest,
++    BatchItem, BatchRequest, ItemOutcome, RevokeRequest, RevokeResponse, RulingRequest,
+     latest_ruling, revocable,
+ };
+ use tsuzuri_contract::wire;
+@@ -55,14 +55,6 @@ fn manifest() -> &'static Path {
+     Path::new(env!("CARGO_MANIFEST_DIR"))
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+-fn rid(id: &str) -> RulingId {
+-    RulingId::new(id).expect("裁定の id")
+-}
+-
+ /// 台帳の 1 本。
+ struct Bead {
+     id: &'static str,
+@@ -148,11 +140,6 @@ fn closed_question(id: &'static str, notes: String, close_reason: &str) -> Bead
+     q
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場（repo・偽の bd と bdw・記録の置き場）。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs b/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
+index 5d1e3ba3836aa27d5cb10ef627db5c9945411f68..f7c761dcbb3a0377409a95d2c511936f39507d4b 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/runsdoc.rs
+@@ -4,13 +4,12 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::{Read, Write};
+-use std::net::{SocketAddr, TcpStream};
++use std::net::SocketAddr;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::Duration;
+ 
++use crate::common::{get, manifest, read};
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::{Config, Route, Server};
+ use tsuzuri_contract::board::Reading;
+@@ -88,14 +87,6 @@ const FILTERS: [&str; 65] = [
+     "nbatch_",
+ ];
+ 
+-fn manifest(rel: &str) -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+-}
+-
+-fn read(path: &Path) -> String {
+-    fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+-}
+-
+ fn real_log() -> String {
+     read(&manifest("../../tests/fixtures/graph/real/events.jsonl"))
+ }
+@@ -144,25 +135,6 @@ impl Place {
+     }
+ }
+ 
+-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
+-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
+-    let mut s = TcpStream::connect(addr).expect("接続");
+-    s.set_read_timeout(Some(Duration::from_secs(20)))
+-        .expect("timeout");
+-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
+-        .expect("要求を書く");
+-    let mut out = Vec::new();
+-    s.read_to_end(&mut out).expect("応答を読む");
+-    let text = String::from_utf8(out).expect("応答の字");
+-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
+-    let status = head
+-        .split(' ')
+-        .nth(1)
+-        .and_then(|c| c.parse().ok())
+-        .expect("状態の code");
+-    (status, body.to_string())
+-}
+-
+ #[test]
+ fn runsdoc_get_matches_core() {
+     let place = Place::new("core");
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/rvk.rs b/crates/tsuzuri-boundary/tests/teeth3/rvk.rs
+index 2798366a4b1dc0884a7ebcf140eefc37a721b62a..045503c649acfe5d2da5914dc016b5af44be6952 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/rvk.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/rvk.rs
+@@ -7,11 +7,11 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{bead, rid, script};
+ use tsuzuri_boundary::server::ledger::Source;
+ use tsuzuri_boundary::server::route::{Key, Match};
+ use tsuzuri_boundary::server::ruling::{
+@@ -20,10 +20,10 @@ use tsuzuri_boundary::server::ruling::{
+ use tsuzuri_boundary::server::{Config, Route, Server, events};
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::graph::{EdgeType, NodeKind};
+-use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem, LedgerRow, LedgerWrite};
++use tsuzuri_contract::ledger::{ITEM_PATH, LedgerItem, LedgerRow, LedgerWrite};
+ use tsuzuri_contract::surface::{
+-    CLOSED_STATUS, QUESTION_FIELD, REVOKE_PATH, REVOKES, RULING_LINE, Refusal, RefusalResponse,
+-    RevokeRequest, RevokeResponse, RulingId, VERBATIM, latest_ruling, pending_reopen, revocable,
++    CLOSED_STATUS, QUESTION_FIELD, REVOKES, REVOKE_PATH, RULING_LINE, Refusal, RefusalResponse,
++    RevokeRequest, RevokeResponse, VERBATIM, latest_ruling, pending_reopen, revocable,
+ };
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::delivery::{Pending, RULING_PREFIX, Route as MarkRoute, mark_line, undelivered};
+@@ -43,14 +43,6 @@ fn manifest() -> &'static Path {
+     Path::new(env!("CARGO_MANIFEST_DIR"))
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+-fn rid(id: &str) -> RulingId {
+-    RulingId::new(id).expect("裁定の id")
+-}
+-
+ /// 裁定の行（`裁定 id = <id>・問い = <問い>・逐語 = はい`）。
+ fn rline(id: &str, question: &str) -> String {
+     format!("裁定 id = {id}・問い = {question}・逐語 = はい")
+@@ -78,11 +70,6 @@ fn bd_list(beads: &[String]) -> String {
+     format!("[{}]", beads.join(","))
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+     let log = log.display();
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+index de3397dd0e13171be3c89d5edea7397c75bcd688..e9e84aee9c0807f58f95c1506994f6f255a02ac3 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_acct.rs
+@@ -9,12 +9,12 @@
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::fs::{self, File};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ use std::thread;
+ use std::time::{Duration, Instant};
+ 
++use crate::common::{LEDGER_A, script};
+ use tsuzuri_boundary::acct::{Acct, BOARD_ARGS, CAP_ARGS, GIT_ARGS, GIT_HOLD};
+ use tsuzuri_boundary::consult::DRAFTS_ARGS;
+ use tsuzuri_boundary::server::held::FAILED_HOLD;
+@@ -84,7 +84,6 @@ AllowanceMeasured {not json\n";
+ /// project の state dir の測りの行（線には読まない）。
+ const MEASURED_B: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"AllowanceMeasured\",\"host\":\"host-2\",\"actor\":\"machine\",\"account\":\"acct-3\",\"window\":\"five_hour\",\"endpoint\":\"usage\",\"used_pct\":7}\n";
+ 
+-const LEDGER_A: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
+ const LEDGER_E: &str = "[]\n";
+ 
+ /// 群の記録の dir の file（名・字）。
+@@ -111,11 +110,6 @@ const HISTORY: [(&str, &str); 2] = [
+     ),
+ ];
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場。
+ struct Place {
+     root: PathBuf,
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs b/crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs
+index 2776991df82d57e9290ff19d4bbbce7100e12a29..49c816b68d720dc5d394f28ae9a3f40bba22ecc6 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_acctwire.rs
+@@ -9,11 +9,11 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{LEDGER_A, now, script};
+ use tsuzuri_boundary::acct::Acct;
+ use tsuzuri_boundary::accthb::{self, NO_PROJECT};
+ use tsuzuri_boundary::server::{ACCT_MARKS_EVERY, Config, GIT, Server};
+@@ -35,13 +35,6 @@ const STATE_A: &str =
+ 
+ const EVENTS_A: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"host\":\"host-1\",\"actor\":\"machine\",\"stage\":\"Intake\",\"detail\":\"classes:\"}\n";
+ 
+-const LEDGER_A: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
+-
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 歯ごとの作業場。
+ struct Place {
+     root: PathBuf,
+@@ -214,13 +207,6 @@ impl Place {
+     }
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ /// 応答（状態の code・頭・本文）。
+ struct Reply {
+     status: u16,
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_ask.rs b/crates/tsuzuri-boundary/tests/teeth3/server_ask.rs
+index def1671842afb52dcd073ede1a31fa6c4da1dcc2..cb67f83bc0a39f284197439ad99c600da60c8b79 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_ask.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_ask.rs
+@@ -7,13 +7,13 @@
+ use std::fs;
+ use std::io::{BufRead, BufReader, Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ use std::sync::mpsc;
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{now, script, tree};
+ use tsuzuri_boundary::server::ledger::epoch_secs;
+ use tsuzuri_boundary::server::{Config, Server, ledger, ruling};
+ use tsuzuri_contract::board::Reading;
+@@ -39,11 +39,6 @@ fn read_fixture() -> String {
+     .expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+     let log = log.display();
+@@ -183,13 +178,6 @@ impl Place {
+     }
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ struct Reply {
+     status: u16,
+     head: String,
+@@ -301,25 +289,6 @@ fn split_id(id: &str) -> (&str, &str, u32) {
+     (question, minute, n.parse().expect("数"))
+ }
+ 
+-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ #[test]
+ fn server_ask_questions_route_matches_core() {
+     let place = Place::new("list");
+diff --git a/crates/tsuzuri-boundary/tests/teeth3/server_batch.rs b/crates/tsuzuri-boundary/tests/teeth3/server_batch.rs
+index 94d98e9c90769073a7a3f43300541c8ff848891c..65cd4d97a7203dbf5835af9228b23cc3e565bd5f 100644
+--- a/crates/tsuzuri-boundary/tests/teeth3/server_batch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth3/server_batch.rs
+@@ -8,15 +8,15 @@
+ use std::fs;
+ use std::io::{Read, Write};
+ use std::net::{SocketAddr, TcpStream};
+-use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::thread;
+-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
++use std::time::{Duration, Instant};
+ 
++use crate::common::{bead, now, script, tree};
+ use tsuzuri_boundary::server::ledger::epoch_secs;
+ use tsuzuri_boundary::server::{Config, Server, batch, policy, ruling};
+ use tsuzuri_contract::board::Reading;
+-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
++use tsuzuri_contract::ledger::LedgerWrite;
+ use tsuzuri_contract::question::QuestionList;
+ use tsuzuri_contract::surface::{
+     BatchItem, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest, PolicyResponse, Refusal,
+@@ -46,11 +46,6 @@ fn read_fixture() -> String {
+     .expect("fixture")
+ }
+ 
+-fn script(path: &Path, body: &str) {
+-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
+-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
+-}
+-
+ /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
+ /// 落とさない回で最初の引数が `create` なら作った子の id（`CREATED`）を標準出力へ出す。
+ fn recorder(path: &Path, log: &Path, name: &str) {
+@@ -196,13 +191,6 @@ impl Place {
+     }
+ }
+ 
+-fn now() -> u64 {
+-    SystemTime::now()
+-        .duration_since(UNIX_EPOCH)
+-        .expect("時計")
+-        .as_secs()
+-}
+-
+ struct Reply {
+     status: u16,
+     head: String,
+@@ -253,10 +241,6 @@ fn digest(addr: SocketAddr, id: &str) -> String {
+         .digest
+ }
+ 
+-fn bead(id: &str) -> BeadId {
+-    BeadId::new(id).expect("bead id")
+-}
+-
+ fn item(question: &str, digest: &str, verbatim: Option<&str>) -> BatchItem {
+     BatchItem {
+         question: bead(question),
+@@ -399,25 +383,6 @@ fn mark_argv(question: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
+     .argv()
+ }
+ 
+-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
+-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+-    let mut out = Vec::new();
+-    let mut stack = vec![dir.to_path_buf()];
+-    while let Some(d) = stack.pop() {
+-        for entry in fs::read_dir(&d).expect("dir を読む") {
+-            let path = entry.expect("entry").path();
+-            if path.is_dir() {
+-                out.push((path.clone(), Vec::new()));
+-                stack.push(path);
+-            } else {
+-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
+-            }
+-        }
+-    }
+-    out.sort();
+-    out
+-}
+-
+ #[test]
+ fn server_batch_writes_rows_in_order() {
+     let place = Place::new("write");
