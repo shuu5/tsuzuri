@@ -1,0 +1,436 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index 481d7331a28448143c7c52b75fa6b56177f02824..12438d5d5daf3d9041ae6776dc53c902350d043a 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -1,8 +1,9 @@
+ //! tz consult launch <窓 id> [--again] [--dry-run]（行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+ //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
+ //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
+-//! 4 つ（`TALK_ENV`・席の環境に無い名は渡さない）だけを渡す。問う窓は席の背景の子として claude -p を cwd = 作業場で撃ち、
+-//! 席の環境から `ASK_DROP` を外して窓の id と私用の temp を置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
++//! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
++//! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
++//! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
+ //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
+ //! 起こすごとに process の印 `.consult/proc-<k>.json` を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+ //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
+@@ -20,8 +21,8 @@ use std::time::{Duration, Instant};
+ use tsuzuri_contract::consult::{Form, ProcMark, Starter, WindowFile, WindowId};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::consult::launch::{
+-    ASK_DROP, Launch, PROGRAM, TALK_ENV, VERSION_ENV, argv, audit, env, private_tmp, read_roots,
+-    version_ok,
++    Launch, PROGRAM, VERSION_ENV, argv, audit, keep_only, private_tmp, read_roots, version_ok,
++    window_env,
+ };
+ use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notice};
+ use tsuzuri_core::consult::quota::{admit, count};
+@@ -40,6 +41,9 @@ pub const TMUX: &str = "tmux";
+ /// 新しい tmux の窓の id と pane の pid を出させる形。
+ pub const WINDOW_FORMAT: &str = "#{window_id} #{pane_pid}";
+ 
++/// 話す窓の claude を包む program の名（`-S` の字で環境を閉じた列に絞る）。
++pub const ENV: &str = "env";
++
+ /// 問う窓を待つ上限（Bash の道具の背景の上限より短く）。
+ pub const ASK_LIMIT: Duration = Duration::from_secs(6600);
+ 
+@@ -307,18 +311,13 @@ fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused
+         "-c".to_string(),
+         l.workspace.clone(),
+     ]);
+-    let own = env(l);
+-    for name in TALK_ENV {
+-        let value = own
+-            .iter()
+-            .find(|(n, _)| *n == name)
+-            .map(|(_, v)| v.clone())
+-            .or_else(|| std::env::var(name).ok());
+-        if let Some(value) = value {
+-            a.extend(["-e".to_string(), format!("{name}={value}")]);
+-        }
++    let pairs = window_env(l, |name| std::env::var(name).ok());
++    for (name, value) in &pairs {
++        a.extend(["-e".to_string(), format!("{name}={value}")]);
+     }
+-    a.extend(["-P", "-F", WINDOW_FORMAT, "--", PROGRAM].map(String::from));
++    let names: Vec<&str> = pairs.iter().map(|(name, _)| *name).collect();
++    a.extend(["-P", "-F", WINDOW_FORMAT, "--", ENV, "-S"].map(String::from));
++    a.extend([keep_only(&names), PROGRAM.to_string()]);
+     a.extend(args.iter().cloned());
+     let out = capture(tmux, &a, ws, GIT_TIMEOUT)
+         .and_then(|o| String::from_utf8(o).ok())
+@@ -345,11 +344,9 @@ fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::C
+         .stdin(Stdio::null())
+         .stdout(file("json")?)
+         .stderr(file("err")?)
+-        .process_group(0);
+-    for name in ASK_DROP {
+-        cmd.env_remove(name);
+-    }
+-    cmd.envs(env(l));
++        .process_group(0)
++        .env_clear()
++        .envs(window_env(l, |name| std::env::var(name).ok()));
+     cmd.spawn()
+         .map_err(|e| (FAIL, format!("{PROGRAM} を起こせない: {e}")))
+ }
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index c403e809f851c4ea7ed000727955d20876db47e4..1fea414605cf23313b3dcf8d34238064207bf527 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -98,6 +98,7 @@ impl Fx {
+         script(&bin.join("tmux"), &tmux);
+         let claude = format!(
+             "for a in \"$@\"; do printf '%s\\037' \"$a\"; done > '{r}/claude.args'\n\
++             tr '\\000' '\\n' < /proc/$$/environ > '{r}/claude.environ'\n\
+              {{ echo \"id=${{TZ_CONSULT_ID-}}\"; echo \"tmp=${{CLAUDE_CODE_TMPDIR-}}\"; echo \"tmux=${{TMUX-unset}}\"; \
+              echo \"pane=${{TMUX_PANE-unset}}\"; echo \"cwd=$(pwd -P)\"; echo \"pid=$$\"; }} > '{r}/claude.env'\n\
+              [ -f '{r}/answer' ] && echo '{{}}' > findings/cw1-1.json\necho '{{\"result\":\"ok\"}}'"
+@@ -239,13 +240,99 @@ fn open_line(text: &str) -> (bool, bool, String) {
+     (opened, again, at)
+ }
+ 
++/// 席の環境の番兵（窓に渡さない名と、窓では中核の値に替わる窓の id と私用の temp・行 cs-env-closed）。
++const SEAT_CANARIES: [(&str, &str); 7] = [
++    ("TERM", "seat-term"),
++    ("CLAUDECODE", "1"),
++    ("CLAUDE_CODE_MESSAGING_TOKEN", "seat-token"),
++    ("SSH_AUTH_SOCK", "/seat/agent"),
++    ("USER", "seat"),
++    ("TZ_CONSULT_ID", "cw9"),
++    ("CLAUDE_CODE_TMPDIR", "/seat/tmp"),
++];
++
++/// 席の環境に番兵と、窓に渡す足しの 3 つ（HOME は歯の置き場・SHELL・LANG）を置いた tz の命令。
++fn seat(fx: &Fx, args: &[&str]) -> Command {
++    let mut c = fx.command(args);
++    c.env("HOME", &fx.root)
++        .env("SHELL", "/bin/seat-sh")
++        .env("LANG", "C.UTF-8")
++        .envs(SEAT_CANARIES);
++    c
++}
++
++/// 偽の claude が受けた環境（名の字の順・名と値）。
++fn environ(fx: &Fx) -> Vec<(String, String)> {
++    let text = fs::read_to_string(fx.root.join("claude.environ")).unwrap();
++    let mut pairs: Vec<(String, String)> = text
++        .lines()
++        .map(|l| l.split_once('=').unwrap())
++        .map(|(k, v)| (k.to_string(), v.to_string()))
++        .collect();
++    pairs.sort();
++    pairs
++}
++
++/// 偽の claude が受けた環境が `want`（名の字の順）と同じ（落ちた時に席の値を出さないよう、名を先に比べる）。
++fn assert_environ(fx: &Fx, want: &[(String, String)]) {
++    let got = environ(fx);
++    let names = |xs: &[(String, String)]| xs.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
++    assert_eq!(names(&got), names(want));
++    assert_eq!(got, want);
++}
++
++/// 席の PATH（偽の道具の置き場を頭に置いた字）。
++fn seat_path(fx: &Fx) -> String {
++    format!(
++        "{}:{}",
++        fx.root.join("bin").display(),
++        std::env::var("PATH").unwrap()
++    )
++}
++
++/// `seat` の命令で起こした窓 cw1 が持つ閉じた列の名と値（`TALK_ENV` と `BASE_ENV` の順）。
++fn closed(fx: &Fx, l: &Launch) -> Vec<(String, String)> {
++    [
++        ("CLAUDE_CONFIG_DIR", "/cfg/x".to_string()),
++        ("PATH", seat_path(fx)),
++        ("TZ_CONSULT_ID", "cw1".to_string()),
++        ("CLAUDE_CODE_TMPDIR", private_tmp(&l.workspace)),
++        ("HOME", fx.root.display().to_string()),
++        ("SHELL", "/bin/seat-sh".to_string()),
++        ("LANG", "C.UTF-8".to_string()),
++    ]
++    .map(|(k, v)| (k.to_string(), v))
++    .to_vec()
++}
++
++/// 話す窓の new-window の -e の列と、claude を env -S で包む命令の頭（-P から claude まで）。
++fn talk_env_args(fx: &Fx, l: &Launch) -> Vec<String> {
++    let mut a: Vec<String> = closed(fx, l)
++        .into_iter()
++        .flat_map(|(k, v)| ["-e".to_string(), format!("{k}={v}")])
++        .collect();
++    let keep = "-i CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR} PATH=${PATH} TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME} SHELL=${SHELL} LANG=${LANG} TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}";
++    let tail = [
++        "-P",
++        "-F",
++        "#{window_id} #{pane_pid}",
++        "--",
++        "env",
++        "-S",
++        keep,
++        "claude",
++    ];
++    a.extend(tail.map(String::from));
++    a
++}
++
+ #[test]
+ fn cwlch_talk_argv_and_env() {
+     let fx = Fx::new("talk");
+     fx.open(&["--by", "seat"]);
+     let l = fx.launch(1, Form::Talk, false);
+     clear_tmp(&l);
+-    let o = fx.tz(&["consult", "launch", "cw1"]);
++    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
+     assert_eq!(rc(&o), 0, "{}", err(&o));
+     assert_eq!(out(&o), "窓 cw1 を開いた（tmux の窓 consult-cw1）\n");
+     let tmp = private_tmp(&l.workspace);
+@@ -261,20 +348,7 @@ fn cwlch_talk_argv_and_env() {
+     .map(String::from)
+     .to_vec();
+     want.push(l.workspace.clone());
+-    let path = format!(
+-        "PATH={}:{}",
+-        fx.root.join("bin").display(),
+-        std::env::var("PATH").unwrap()
+-    );
+-    for e in [
+-        "CLAUDE_CONFIG_DIR=/cfg/x".to_string(),
+-        path,
+-        "TZ_CONSULT_ID=cw1".to_string(),
+-        format!("CLAUDE_CODE_TMPDIR={tmp}"),
+-    ] {
+-        want.extend(["-e".to_string(), e]);
+-    }
+-    want.extend(["-P", "-F", "#{window_id} #{pane_pid}", "--", "claude"].map(String::from));
++    want.extend(talk_env_args(&fx, &l));
+     want.extend(argv(&l));
+     let display: Vec<String> = ["display-message", "-p", "-t", "%9", "#{session_name}"]
+         .map(String::from)
+@@ -303,6 +377,56 @@ fn cwlch_talk_argv_and_env() {
+     clear_tmp(&l);
+ }
+ 
++/// 話す窓の tmux の new-window の -- の後の命令を、tmux の server の環境（番兵）と tmux の置く TERM と TMUX と -e の値の上で
++/// 撃つと、偽の claude は閉じた列の名と tmux の TERM だけを持ち、argv は中核の argv と同じ（行 cs-env-closed）。
++#[test]
++fn cwlch_talk_env_runs_closed() {
++    let fx = Fx::new("talkenv");
++    fx.open(&["--by", "seat"]);
++    let l = fx.launch(1, Form::Talk, false);
++    clear_tmp(&l);
++    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let call = fx.calls("tmux.log").pop().unwrap();
++    let at = call.iter().position(|a| a == "--").unwrap();
++    let given: Vec<(&str, &str)> = call[..at]
++        .windows(2)
++        .filter(|w| w[0] == "-e")
++        .map(|w| w[1].split_once('=').unwrap())
++        .collect();
++    let server = [
++        ("SSH_AUTH_SOCK", "/srv/agent"),
++        ("DBUS_SESSION_BUS_ADDRESS", "unix:path=/srv/bus"),
++        ("SERVER_CANARY", "srv"),
++        ("USER", "srv"),
++        ("HOME", "/srv/home"),
++        ("TERM", "tmux-256color"),
++        ("TERM_PROGRAM", "tmux"),
++        ("TERM_PROGRAM_VERSION", "3.6b"),
++        ("TMUX", "/tmp/fake-tmux,1,0"),
++        ("TMUX_PANE", "%3"),
++    ];
++    let status = Command::new(&call[at + 1])
++        .args(&call[at + 2..])
++        .current_dir(&l.workspace)
++        .env_clear()
++        .envs(server)
++        .envs(given)
++        .status()
++        .unwrap();
++    assert!(status.success());
++    let mut want = closed(&fx, &l);
++    want.extend(
++        server[5..]
++            .iter()
++            .map(|(k, v)| (k.to_string(), v.to_string())),
++    );
++    want.sort();
++    assert_environ(&fx, &want);
++    assert_eq!(fx.calls("claude.args"), [argv(&l)]);
++    clear_tmp(&l);
++}
++
+ /// 偽の claude が受けた環境（窓の id・私用の temp・tmux の 2 つが無い・cwd が作業場）と pid。
+ fn ask_env(fx: &Fx, l: &Launch) -> String {
+     let env = fs::read_to_string(fx.root.join("claude.env")).unwrap();
+@@ -378,6 +502,30 @@ fn cwlch_ask_child_env_and_lines() {
+     clear_tmp(&l);
+ }
+ 
++/// 問う窓の子は、席の環境の番兵を持たず、閉じた列の名だけを持ち（窓の id と私用の temp は中核の値）、席に無い名は
++/// 空の値でも置かない（行 cs-env-closed）。
++#[test]
++fn cwlch_ask_env_closed() {
++    let fx = Fx::new("askenv");
++    fx.open(&["--by", "chat", "--said", "20261003T1410Z", "--form", "ask"]);
++    let l = fx.launch(1, Form::Ask, false);
++    clear_tmp(&l);
++    let o = seat(&fx, &["consult", "launch", "cw1"]).output().unwrap();
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    let mut want = closed(&fx, &l);
++    want.sort();
++    assert_environ(&fx, &want);
++    let o = seat(&fx, &["consult", "launch", "cw1", "--again"])
++        .env_remove("SHELL")
++        .env_remove("LANG")
++        .output()
++        .unwrap();
++    assert_eq!(rc(&o), 0, "{}", err(&o));
++    want.retain(|(k, _)| k != "SHELL" && k != "LANG");
++    assert_environ(&fx, &want);
++    clear_tmp(&l);
++}
++
+ /// 起こす前の断り（版のずれ・窓が無い・閉じた窓）は行を書かず tmux を撃たない。
+ fn refusals_before(fx: &Fx) {
+     let launch = |c: &mut Command| c.output().unwrap();
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 6ec709f01a88be1d7a39bccf715694e27bd2e00d..08aaf187e9f0a8bb25529e4f26c44a49907dc637 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -25,8 +25,8 @@ pub const TMPDIR_ENV: &str = "CLAUDE_CODE_TMPDIR";
+ /// 話す窓の tmux の `-e` で渡す閉じた 4 つ（口座の置き場・PATH・窓の id・私用の temp）。
+ pub const TALK_ENV: [&str; 4] = ["CLAUDE_CONFIG_DIR", "PATH", ID_ENV, TMPDIR_ENV];
+ 
+-/// 問う窓が席の環境から外す 2 つ。
+-pub const ASK_DROP: [&str; 2] = ["TMUX", "TMUX_PANE"];
++/// 窓に足して渡す席の環境の 3 つ（home・殻の選び・locale）。窓の環境はこの列と `TALK_ENV` の名だけ（話す窓は tmux の置く `PANE_ENV` も）。
++pub const BASE_ENV: [&str; 3] = ["HOME", "SHELL", "LANG"];
+ 
+ /// 道具の閉じた列。
+ pub const TOOLS: &str = "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch";
+@@ -245,6 +245,44 @@ pub fn env(l: &Launch) -> [(&'static str, String); 2] {
+     ]
+ }
+ 
++/// 話す窓で tmux が窓に置く 5 つ（端末の種類と tmux の窓の名乗り・席の値は渡さず tmux の置いた値を残す）。
++pub const PANE_ENV: [&str; 5] = [
++    "TERM",
++    "TERM_PROGRAM",
++    "TERM_PROGRAM_VERSION",
++    "TMUX",
++    "TMUX_PANE",
++];
++
++/// 窓の環境の組（`TALK_ENV` と `BASE_ENV` の順・窓の id と私用の temp は `env` の値・ほかは `seat` が返す席の値・値の無い名は置かない）。
++/// 問う窓の子はこの組だけを持ち、話す窓は tmux の `-e` でこの組を渡して `keep_only` で包む。
++pub fn window_env(
++    l: &Launch,
++    seat: impl Fn(&str) -> Option<String>,
++) -> Vec<(&'static str, String)> {
++    let own = env(l);
++    TALK_ENV
++        .into_iter()
++        .chain(BASE_ENV)
++        .filter_map(|name| {
++            own.iter()
++                .find(|(n, _)| *n == name)
++                .map(|(_, v)| v.clone())
++                .or_else(|| seat(name))
++                .map(|v| (name, v))
++        })
++        .collect()
++}
++
++/// 話す窓の claude を包む env の `-S` の字（環境を空にし、`-e` で渡した `names` と tmux の置いた `PANE_ENV` だけを
++/// 名で置き直す・tmux の server の環境を継がない）。
++pub fn keep_only(names: &[&str]) -> String {
++    names
++        .iter()
++        .chain(&PANE_ENV)
++        .fold("-i".to_string(), |s, n| format!("{s} {n}=${{{n}}}"))
++}
++
+ /// plugin の解き方が置いた版の字が `PLUGIN_VERSION` と同じか。
+ pub fn version_ok(value: Option<&str>) -> bool {
+     value == Some(PLUGIN_VERSION)
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index f15019a6701bf84a57f3a13d4d03bb6ce838156a..fbf7106d214540e84e1ea8a74f553a0308d97daa 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -10,8 +10,8 @@ use std::path::Path;
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_core::consult::launch::{
+-    ASK_DROP, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
+-    private_tmp, prompt, read_roots, settings, version_ok,
++    BASE_ENV, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
++    keep_only, private_tmp, prompt, read_roots, settings, version_ok, window_env,
+ };
+ 
+ fn fixture() -> Value {
+@@ -95,10 +95,45 @@ fn cwarg_matches_fixture() {
+         assert_eq!(Value::from(got), fx[form]["env"], "{form} の環境");
+     }
+     assert_eq!(Value::from(TALK_ENV.to_vec()), fx["talk_env"]);
+-    assert_eq!(Value::from(ASK_DROP.to_vec()), fx["ask_drop"]);
++    assert_eq!(Value::from(BASE_ENV.to_vec()), fx["base_env"]);
++    let all: Vec<&str> = TALK_ENV.into_iter().chain(BASE_ENV).collect();
++    assert_eq!(Value::from(keep_only(&all)), fx["talk_keep"]);
+     assert_eq!(read_roots("/R", "/S"), ["/R", "/S/fleet", "/S/pipe"]);
+ }
+ 
++/// 窓の環境の組は、席が何の名を持っていても閉じた列の名だけを列の順で持ち、窓の id と私用の temp は席の値でなく中核の値で、
++/// 席に無い名は置かない。包みの字は渡した名と tmux の置く 5 つだけを名で置き直す（行 cs-env-closed）。
++#[test]
++fn cwarg_window_env_is_closed() {
++    let fx = fixture();
++    let l = launch(&fx["ask"]["inputs"]);
++    let tmp = "/tmp/tzc-07d671";
++    let full = window_env(&l, |name| Some(format!("seat-{name}")));
++    let want = [
++        ("CLAUDE_CONFIG_DIR", "seat-CLAUDE_CONFIG_DIR"),
++        ("PATH", "seat-PATH"),
++        ("TZ_CONSULT_ID", "cw4"),
++        ("CLAUDE_CODE_TMPDIR", tmp),
++        ("HOME", "seat-HOME"),
++        ("SHELL", "seat-SHELL"),
++        ("LANG", "seat-LANG"),
++    ];
++    assert_eq!(full, want.map(|(n, v)| (n, v.to_string())));
++    let own = [("TZ_CONSULT_ID", "cw4"), ("CLAUDE_CODE_TMPDIR", tmp)];
++    assert_eq!(
++        window_env(&l, |_| None),
++        own.map(|(n, v)| (n, v.to_string()))
++    );
++    let home = window_env(&l, |name| (name == "HOME").then(|| "/h".to_string()));
++    let names: Vec<&str> = home.iter().map(|(n, _)| *n).collect();
++    assert_eq!(names, ["TZ_CONSULT_ID", "CLAUDE_CODE_TMPDIR", "HOME"]);
++    let pane = " TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}";
++    let head =
++        "-i TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME}";
++    assert_eq!(keep_only(&names), [head, pane].concat());
++    assert_eq!(keep_only(&[]), ["-i", pane].concat());
++}
++
+ #[test]
+ fn cwarg_audit_refuses_flags() {
+     let fx = fixture();
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index a908190d2cbc00d7170b880617223f4c8a554fa1..bcc567eb7a9642426d3e4cd7ba31dac212c5f512 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -40,7 +40,8 @@
+     "env": [["TZ_CONSULT_ID", "cw4"], ["CLAUDE_CODE_TMPDIR", "/tmp/tzc-07d671"]]
+   },
+   "talk_env": ["CLAUDE_CONFIG_DIR", "PATH", "TZ_CONSULT_ID", "CLAUDE_CODE_TMPDIR"],
+-  "ask_drop": ["TMUX", "TMUX_PANE"],
++  "base_env": ["HOME", "SHELL", "LANG"],
++  "talk_keep": "-i CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR} PATH=${PATH} TZ_CONSULT_ID=${TZ_CONSULT_ID} CLAUDE_CODE_TMPDIR=${CLAUDE_CODE_TMPDIR} HOME=${HOME} SHELL=${SHELL} LANG=${LANG} TERM=${TERM} TERM_PROGRAM=${TERM_PROGRAM} TERM_PROGRAM_VERSION=${TERM_PROGRAM_VERSION} TMUX=${TMUX} TMUX_PANE=${TMUX_PANE}",
+   "settings": {
+     "permissions": {
+       "allow": ["WebSearch", "WebFetch", "Edit(//W/**)"],
