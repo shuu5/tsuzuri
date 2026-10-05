@@ -8,6 +8,7 @@
 //! 器の局面の出力の読み（`case`）。
 //! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）。
 //! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）。
+//! host の負荷と書きの読みと注意の線の判じ（`hostload`）。
 //! どの関数も file も子 process も時計も触らない（今の時刻は引数で受ける）。
 
 pub mod account;
@@ -17,6 +18,7 @@ pub mod consult;
 pub mod delivery;
 pub mod gate;
 pub mod graph;
+pub mod hostload;
 pub mod ledger;
 pub mod next_step;
 pub mod pipeline;

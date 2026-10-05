@@ -7,6 +7,7 @@ pub mod board;
 pub mod case;
 pub mod consult;
 pub mod graph;
+pub mod host;
 pub mod ledger;
 pub mod notice;
 pub mod project;
