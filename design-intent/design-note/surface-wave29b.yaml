@@ -3,14 +3,14 @@
 meta:
   id: surface-wave29b
   title: 第 29 波 b — 相談の窓の立て直し（判断の記録 ADR-55 と ADR-57・話す窓が群の口座の移動に付いてくる・窓の記録に口座と会話の id・口座の board に窓を並べる・窓は会話どうしの言付けを断る・話す窓の Remote Control と状態の 1 行）
-  version: v0.5
+  version: v0.6
   status: effective
   generated: 2026-10-05
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.1（裁定 id = t3-hub.88.1.1:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）と t3-hub.88.1.2（裁定 id = t3-hub.88.1.2:20261005T0058Z-1・案 A・tool の呼び・notes に逐語）・束 batch:20261005T0058Z-1〔判断の記録 ADR-55 の承認・ノートの承認〕, verbatim: どちらも推奨で良い, surface: R-8}
     - {who: 持ち主, date: 2026-10-05, ruling: t3-hub.88.1.3（裁定 id = t3-hub.88.1.3:20261005T0123Z-1・甲・配達の口・notes に逐語・束 batch:20261005T0123Z-1）と t3-hub.84.3（裁定 id = t3-hub.84.3:20261005T0134Z-1・案 A・配達の口・notes に逐語・条 A-1 の外へ出す確認を兼ねる）〔判断の記録 ADR-57 の承認・ノートの承認〕, verbatim: どちらも推奨で進めて（t3-hub.88.1.3）／推奨で良い（t3-hub.84.3）, surface: R-8}
-  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。 第 0.4 版（2026-10-05）は、判断の記録 ADR-57（持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A・ADR-29 の決定 (3)(7)(8) の部分の置き換え）の承認の行と、その決定 (1)(ケ) の行 cs-inbound-refuse（相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りに送る道具と一覧の道具を足す・差の file・試作と噛みは係 w188a・積みと床は係 w190a）を足し、題と頭の注に ADR-57 を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-55 の決定 (1)（止まった窓は閉じずに開き直す）の行 cs-gone-once（相談の見張りが止まった窓を同じ process について 1 度だけ知らせ、起草の置き場の知らせ済みの印を置いて見張りを続け、話す窓の知らせの字を止まったに替える・差の file・試作と噛みと床は係 w192a）を足した。
+  note: ノート surface-wave28a（8 行の全部が着地・同じ commit で廃止）の後。承認は判断の記録 ADR-55 の持ち主の裁定（承認の列・逐語は判断の記録 ADR-55 の承認の欄の字）。第 0.1 版（2026-10-05）は骨（目的の節と空の契約表）を置いた。行は係ごとの適用で足す。 第 0.2 版（2026-10-05）は、判断の記録 ADR-55（持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2・案 A・ADR-29 の決定 (5)(7) の部分の置き換え）の決定 (2)(6) の行 cs-acct-mark（相談の窓の起動の口が process の印に起こした時の口座の置き場を書き、起動の設定に会話の印の hook 3 つを置いて検めが欠けと字の違いを断り、新しい口 tz consult stamp が作業場の .consult/stamps.jsonl に事と会話の id の 1 行を足す・起草は係 w183a・土台の載せ直しと噛みと床は係 w184a・差の file の形・depends は空でノート surface-wave29a の相談の窓の行 4 本の後に流す順は便の bead の依存で持つ）を足した。 第 0.3 版（2026-10-05）は、行 cs-acct-mark の前に行 cs-plain-open（作業場の file を symlink を辿らずに見て書く境の助け consult::plain・差の file）を足し、行 cs-acct-mark を版上げした（会話の印の口が窓の作った symlink を辿って作業場の外の file に書けた穴を cs-plain-open の助けで塞ぐ・depends に cs-plain-open・差の file を置き換えた・NFR1002 の見積の上限 550 行に収めるため 2 行に割った・試作と噛みと割りは係 w188a・積みと床は係 w190a）。 第 0.4 版（2026-10-05）は、判断の記録 ADR-57（持ち主の裁定 t3-hub.88.1.3 の甲と t3-hub.84.3 の案 A・ADR-29 の決定 (3)(7)(8) の部分の置き換え）の承認の行と、その決定 (1)(ケ) の行 cs-inbound-refuse（相談の窓の起動の設定にほかの session からの言付けを全部断る crossSessionInbound = refuse を置き、許可の断りに送る道具と一覧の道具を足す・差の file・試作と噛みは係 w188a・積みと床は係 w190a）を足し、題と頭の注に ADR-57 を足した。 第 0.5 版（2026-10-05）は、判断の記録 ADR-55 の決定 (1)（止まった窓は閉じずに開き直す）の行 cs-gone-once（相談の見張りが止まった窓を同じ process について 1 度だけ知らせ、起草の置き場の知らせ済みの印を置いて見張りを続け、話す窓の知らせの字を止まったに替える・差の file・試作と噛みと床は係 w192a）を足した。 第 0.6 版（2026-10-05）は、判断の記録 ADR-57 の決定 (1)(コ)・(4) の行 cs-remote（話す窓を起動で Remote Control に窓の名で繋ぐ）・cs-status-text（状態の 1 行の字と設定）・cs-status-verb（口 tz consult statusline・symlink を辿らず fifo を開かない）を足し、目的の節に歯の置き方（判断の記録 ADR-32 の決定 (3)）と裁定を書いた（差の file・新しい歯は段の file・試作と噛みは係 w188a・積みと段の file への切り直しと床は係 w190a）。
 
 sections:
   - n: 1
@@ -20,7 +20,7 @@ sections:
       判断の記録 ADR-55（相談の話す窓を群の口座の移動に付いて来させ、窓の記録に起こした時の口座と今の会話の id を持たせ、口座の board に窓を口座つきで並べる・ADR-29 の決定 (5)(7) の部分の置き換え・持ち主の裁定 t3-hub.88.1.1 と t3-hub.88.1.2 の案 A）の行を置く。行は 5 本の見込み。窓の記録に起こした時の口座と会話の印を置く行 cs-acct-mark、続きの旗と起こす口座の信頼の印と前の process の照らしの行 cs-resume、付いてくる口と見張りの口座のずれの行 cs-follow、口座の board の電文と中核の行 c-acct-consult、読み手と面の行 e-acct-consult。試作の済んだ行から足す。
       相談の窓の行は中核の consult/launch.rs と fixture と歯の cwarg.rs を書くので直列に流す。ノート surface-wave29a の相談の窓の行（cs-gh-read・cs-env-closed・cs-root-edits・cs-read-roots）の後に流す順は、ノートを跨ぐので depends に書かず、便の bead の依存で持つ（席が付ける）。このノートの中の順（cs-acct-mark の後に cs-resume、その後に cs-follow、cs-acct-mark の後に c-acct-consult、cs-follow と c-acct-consult の後に e-acct-consult）は depends で書く。
       席と窓の言付け（問い t3-hub.88.1.3 の裁定の後）と、Remote Control と状態の 1 行（問いの前）の行も、決まった後にこのノートへ足せる。今の窓 cw1 の開き直し（ADR-55 の決定 (5)）は、行 cs-follow の着地の後に席が持ち主に確かめてから撃つ。
-      行ごとの節は、行を足す適用が節の末に足す。1 本の契約表は 32 行まで（規則の行 R-32）。
+      行ごとの節は、行を足す適用が節の末に足す。1 本の契約表は 32 行まで（規則の行 R-32）。 歯の置き方は判断の記録 ADR-32 の決定 (3) のとおりで、新しい歯は段の file で足し、群の main.rs と kfold.rs は畳みの行だけが書く（持ち主の裁定 t3-hub.77.20:20261005T0258Z-1 で、置く前だった行 cs-status-text・cs-status-verb・cs-trust・cs-resume・e-acct-cwread・e-acct-consult・cs-follow を段の file に切り直した）。先に置いた行 cs-plain-open と cs-acct-mark は群へ直に歯の file を 3 本（cwpln・cwstm・cwstp）足して群の main.rs と kfold.rs を書いたが、3 本は crate の最後の群に名の順で入り、群の数と最後の群の上限の内で、畳みの行が段の file を群へ移した後と同じ形になるので、直す物は残らない。
   - n: 2
     type: contract-table
     title: 契約表
@@ -61,6 +61,33 @@ sections:
         size: S
         done: (1) git apply --reverse --check docs/design/patch/cs-gone-once.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 中核の lines::notice は、話す窓の事象 Gone の本文を字「話す窓 cw3 が止まった（開き直しを待つ・持ち主が閉じると言えば /x/tzw consult close cw3 --by chat）」にし、頭の印と置き直しの命令の末を足した 1 行で出し、ほかの事象の字は替えない（歯 cwlin_notice_fixed_lines） (3) 閉じの行の無い問う窓 cw4（所見なし）と話す窓 cw5 の、最後の process の印が番号 1・pid 0（無い process）の時、tz consult watch は 1 度目に問う窓 cw4 の止まりの 1 行を出して起草の置き場の直下の file consult-watch.told-cw4 に字「k = 1・pid = 0」と改行を置き、2 度目に話す窓 cw5 の止まりの 1 行（本文は 2 番目の項の字の cw3 を cw5 に替えた字）を出して consult-watch.told-cw5 に同じ字を置き、3 度目（上限 1 秒）は上限の 1 行で終わる（歯 cwwat_stopped_window_told_once） (4) 同じ窓と見張りで、話す窓に番号 2 の process の印（pid 0）を足すと、見張りは話す窓 cw5 の止まりの 1 行をまた出して印の字を「k = 2・pid = 0」と改行に替え、問う窓の印を pid だけ違う字（pid = 7）に替えた時と、末の改行の欠けた字に替えた時は、見張りは問う窓 cw4 の止まりの 1 行をまた出す（歯 cwwat_stopped_window_told_once） (5) 同じ問う窓 cw4 と話す窓 cw5 で、話す窓の印が正しい字の普通の file、問う窓の印が正しい字の file への symlink の時、見張りは問う窓 cw4 の止まりの 1 行を出し、問う窓の印を symlink でない普通の file（正しい字）に置き直し、指す先の file の字を替えない（歯 cwwat_told_mark_not_followed） (6) 話す窓の印の path が dir の時、見張りは話す窓 cw5 の止まりの 1 行を出し、標準エラーに字「窓 cw5 の知らせ済みの印を書けない」を含む行を出し、次の見張りも同じ 1 行を出す（歯 cwwat_told_mark_not_followed） (7) 続けて台帳に話す窓 cw5 の閉じの行を足すと、印の path が dir のままでも、見張りは止まりの 1 行を出さずに上限の 1 行で終わる（歯 cwwat_told_mark_not_followed） (8) 着地済みの見張りの歯 cwwat_ の全部（頼み・止まり・閉じの順の歯 cwwat_request_stalled_gone_order は話す窓の字だけを新しい字に替える）と中核の歯 cwlin_ の全部が緑
         depends: []
+      - id: cs-remote
+        title: 相談の話す窓を Remote Control に窓の名で繋いで起こし（--restricted の直後に --remote-control consult-cw<n>）、問う窓は繋がず、検めが話す窓の欠けと名の違いと別名と問う窓の旗を断る（判断の記録 ADR-57 決定 (4)・持ち主の裁定 t3-hub.84.3 の案 A・差の file）
+        req: ["FR19"]
+        section: "7"
+        write-set: ["crates/tsuzuri-core/src/consult/launch.rs", "crates/tsuzuri-core/tests/teeth3/cwarg.rs", "tests/fixtures/consult/launch-argv.yaml", "=crates/tsuzuri-boundary/tests/teeth5/cwlch.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-remote.patch", "cargo clippy -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test teeth3 --no-tests=fail cwarg_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail cwlch_"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/cs-remote.patch が rc 0（verify の 1 行目） (2) 中核の定数 REMOTE_FLAG は字 --remote-control、REMOTE_ALIAS は字 --rc で、話す窓の argv の頭の 3 つは --restricted・--remote-control・consult-cw3、問う窓の argv は --restricted のほかに --r で始まる字を持たず、検めは話す窓の旗の欠け・名の違い（consult-cw9）・名の無い形・= の形・別名 --rc・2 度の旗の 6 つと、問う窓に旗・名の無い旗・別名・別名の = の形を差した 4 つを、欠けの名 --remote-control の 1 つだけで断る（歯 cwarg_talk_window_joins_remote_control） (3) fixture の talk の argv は --restricted の次に --remote-control と consult-cw3 を持ち、ask の argv は持たず、組んだ argv は fixture と同じ（歯 cwarg_matches_fixture） (4) cwarg_ と cwlch_ の着地済みと置き済みの歯（ノート surface-wave29a の cs-cred-claude から cs-read-roots と行 cs-acct-mark の歯を含む）と行 cs-inbound-refuse の歯が緑
+        depends: ["cs-inbound-refuse"]
+      - id: cs-status-text
+        title: 相談の窓の状態の 1 行の字を中核の consult::status に置き（命令の字・session の JSON の context_window.used_percentage からの文脈の割合・制御の字を落とす clean・1 行の組み）、話す窓と問う窓の共通の設定に statusLine を置いて検めが欠けと字の違いを断る（判断の記録 ADR-57 決定 (1)(コ)・(4)・差の file）
+        req: ["FR19"]
+        section: "8"
+        write-set: ["crates/tsuzuri-core/src/consult/launch.rs", "crates/tsuzuri-core/src/consult/mod.rs", "+crates/tsuzuri-core/src/consult/status.rs", "crates/tsuzuri-core/tests/teeth3/cwarg.rs", "+crates/tsuzuri-core/tests/cwsts.rs", "tests/fixtures/consult/launch-argv.yaml", "=crates/tsuzuri-boundary/tests/teeth5/cwlch.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-status-text.patch", "cargo clippy -p tsuzuri-core --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test teeth3 --test cwsts --no-tests=fail cwarg_ cwsts_", "cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail cwlch_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/cs-status-text.patch が rc 0（verify の 1 行目） (2) 中核の status::VERB は字 statusline、command(/T, /W) は字 timeout 2 /T consult statusline /W（歯 cwsts_command_names_the_verb） (3) status::context_percent は session の JSON の context_window.used_percentage を四捨五入した 0〜100 の整数で返し（42.4 は 42・42.5 は 43・99.6 は 100）、空の字・JSON でない字・配列・鍵の欠け・null・字の値・-1・100.1・頂の鍵の used_percentage を None にする（歯 cwsts_context_percent_reads_used_percentage_only） (4) status::render は窓・題・model と念入りさ・所見の数・束の要約値の頭 8 字・文脈の割合を区切り「 ｜ 」で並べ、無い欄は出さず、題の無い窓は「題 なし」、窓の無い時は「窓 ?」（歯 cwsts_render_joins_the_present_fields） (5) status::clean は C0・DEL・C1 の字と向きの上書きの U+202A〜U+202E・U+2066〜U+2069 を落として頭の max 字に切り、render は題・model・念入りさを FIELD_MAX（40）字に、束を 8 字に切って、どの欄にも制御の字を出さない（歯 cwsts_render_drops_control_chars） (6) 話す窓と問う窓の設定は statusLine に type command と command の字 timeout 2 /T consult statusline /W だけを持ち、検めは除いた形・型を替えた形・命令を替えた形・作業場を替えた形・鍵 refreshInterval を足した形を欠けの名 /statusLine の 1 つだけで断る（歯 cwarg_settings_hold_the_status_line） (7) fixture の settings は statusLine を持ち、組んだ設定は fixture と同じで、statusLine を除いた設定を検めが断る（歯 cwarg_matches_fixture・cwarg_audit_refuses_each_missing_key） (8) cwarg_ と cwlch_ の着地済みと置き済みの歯（ノート surface-wave29a の cs-cred-claude から cs-read-roots と行 cs-acct-mark の歯を含む）と行 cs-inbound-refuse・cs-remote の歯が緑
+        depends: ["cs-remote"]
+      - id: cs-status-verb
+        title: 新しい口 tz consult statusline <作業場> が窓の控え・所見の数・束の要約値・標準入力の文脈の割合から状態の 1 行を出し、symlink を辿らず（どの段も lstat と、開いた後の fstat の照らし）、fifo を開かず、読む字に上限を置き、窓の作業場でない path を断る（判断の記録 ADR-57 決定 (1)(コ)・(4)・差の file）
+        req: ["FR19"]
+        section: "9"
+        write-set: ["crates/tsuzuri-boundary/src/consult/mod.rs", "+crates/tsuzuri-boundary/src/consult/statusline.rs", "+crates/tsuzuri-boundary/tests/cwsln.rs", "=crates/tsuzuri-boundary/tests/teeth5/cwlch.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/cs-status-verb.patch", "cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test teeth5 --test cwsln --no-tests=fail cwsln_ cwlch_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/cs-status-verb.patch が rc 0（verify の 1 行目） (2) 作業場 consult-cw3（控えの題 t3-hub.78・model fable・念入りさ xhigh・findings/ に .json の file 2 つと .txt の file 1 つ・bundle/digest の字 3766ac7797cdf78f）で、標準入力の JSON（頂の鍵 context_window の object の鍵 used_percentage が数 42.4・鍵の字は二重引用符で囲む）の tz consult statusline <作業場> は rc 0 で 1 行「窓 cw3 ｜ 題 t3-hub.78 ｜ fable・xhigh ｜ 所見 2 ｜ 束 3766ac77 ｜ 文脈 42%」を出す（歯 cwsln_prints_the_line） (3) 控えの file・束の dir・束の file・所見の dir・所見の file の 1 つをそれぞれ外の物への symlink に替えると、その欄は外の字を出さない（控えは「窓 ?」・束は出ない・所見の dir は出ない・所見の file は 1 と数える）（歯 cwsln_does_not_follow_symlinks） (4) 束の file が fifo なら 2 秒の内に返し、束の欄を出さない（歯 cwsln_skips_fifo） (5) 控えの題に ESC・BEL・C1 の字を書いても、出す字に制御の字は無い（歯 cwsln_drops_control_chars） (6) cwd から在る作業場を指す相対の path・名が consult-cw<n> でない dir・作業場への symlink・引数の無い呼び・2 つの引数の呼びは、どれも標準出力が空で rc 1（歯 cwsln_refuses_non_workspace） (7) 境の歯 cwlch_ が緑
+        depends: ["cs-status-text"]
   - n: 3
     type: prose
     title: 行 cs-acct-mark — 窓の記録に起こした時の口座と会話の印を置く（判断の記録 ADR-55 の決定 (2)(6)）
@@ -152,3 +179,66 @@ sections:
       測らない事。印を置く前の「最後の process がまだ無い」の照らしは、scan と置く間に新しい process が起きる競りでだけ効き、歯で作れない（噛みの変異は生き残る）。lstat と開く間に印を替える競りの fstat の照らしと、印の path の fifo（lstat で普通の file でないので開かない）も歯で測らない。
 
       範囲の外。閉じる口と退く口が印を消す事（閉じた窓は印を見ないので、印は数十 byte の file として残る）・付いてくる口の事象（行 cs-follow の Drift と Held）を1 度だけにする事・手引き plugin/skills/consult/SKILL.md の字（止まりの 1 行の扱いを書いていない）・開き直す口（行 cs-resume）。
+  - n: 7
+    type: prose
+    title: 行 cs-remote — 話す窓を起動で Remote Control に繋ぐ（判断の記録 ADR-57 決定 (4)・Remote Control の問い t3-hub.84.3 の案 A）
+    body: |
+      なぜ。持ち主は相談の話す窓を mobile の app と claude.ai の一覧から見て話したい。窓の中で /rc と打てば今の形でも繋がる（持ち主が窓 cw1 で確かめた）が、外出中に board やチャットから開いた窓と口座の移動で開き直した窓には届かない。裁定は案 A＝起動の時に話す窓を繋ぎ、問う窓（claude -p・画面が無い）は繋がない。公式の文書 remote-control は対話の session を繋ぐ旗を --remote-control（別名 --rc）とし、名を値に取れると書く。名は窓の名 consult-cw<n> を明示する。
+
+      形。中核の launch.rs に定数 REMOTE_FLAG と REMOTE_ALIAS を足し、argv は --restricted を置いた直後に、話す窓だけ REMOTE_FLAG と窓の名を足す。検めの audit_flags は、argv の字のうち = の前が REMOTE_FLAG か REMOTE_ALIAS の物を数え、問う窓で 1 つでも在るか、話す窓で 1 つでなく REMOTE_FLAG の次の字が窓の名でなければ欠けの名 --remote-control を足す。fixture の talk の argv に 2 字を足す。
+
+      確かめた事（V）。起動の旗 --remote-control が --restricted の窓で繋がる。席が使い捨ての作業場で claude --restricted --remote-control rc-probe --model haiku を撃ち、窓の頭に /remote-control is active と session の URL が出た（Claude Code 2.1.289）。
+
+      ほかの行との当たり。行 cs-inbound-refuse の差の後に当たる（main afe01c84（行 cs-plain-open と cs-acct-mark を置き、29a の cs-read-roots が着地した後）に、このノートの前の行の差を順に当てた木・係 w190a）。後の行 cs-status-text は同じ 3 file を書く（直列）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。(1) は verify の 1 行目、(2) と (3) は 3 行目、(4) は 3 行目と 4 行目で測る。clippy は守り。欄 done-teeth は書かない。
+
+      入口の赤。歯と fixture だけを試作の字にした木は、verify の 3 行目が rc 101（REMOTE_FLAG と REMOTE_ALIAS が無く組めない）。
+
+      試作と噛み。写し drafts/w188a で verify の 2 行目から最後の行まで rc 0。句ごとに 11 の変異（問う窓も繋ぐ・話す窓を繋がない・名を置かない・別名で繋ぐ・--restricted の前・問う窓の旗を見ない・話す窓の欠けを見ない・名を照らさない・2 度を見ない・別名を数えない・= の形を数えない）を当てて全部 rc 100、対照は rc 0。
+
+      範囲の外。Remote Control を断る設定 disableRemoteControl（案 C・採らない）・ADR-29 決定 (3) の字の改め（ADR-57 決定 (4)）・状態の 1 行（行 cs-status-text）。
+  - n: 8
+    type: prose
+    title: 行 cs-status-text — 窓の状態の 1 行の字と設定（判断の記録 ADR-57 決定 (1)(コ)・(4)・Remote Control の問い t3-hub.84.3 の状態の 1 行）
+    body: |
+      なぜ。窓は口座の設定を読まない形（--restricted）で起き、起動の口が渡す設定にも状態の 1 行の鍵が無いので、窓の下に何も出ない。裁定はどの案でも状態の 1 行を出す形で、話す窓と問う窓に共通の設定に statusLine を置く（問う窓は画面が無いので出ない）。公式の文書 statusline は、命令の標準入力に session の JSON を渡し、文脈の割合の鍵を context_window.used_percentage（早いうちは null）とし、出力の ANSI の色と OSC 8 の link を描くと書く。窓は作業場の file を書けるので、材料の字に端末を操る字を入れられる。だから字の欄は全部 clean を通す。
+
+      形。新しい中核の module consult::status（純な関数だけ）に VERB・SEP・DIGEST_HEAD（8）・FIELD_MAX（40）・command・clean・context_percent・render を置く。命令は作業場の絶対 path を引数に渡す（cwd に頼らない）。launch.rs の settings は鍵 statusLine に status_line(l) を置き、audit は設定の statusLine が同じ値でなければ欠けの名 /statusLine を足す。fixture は settings に statusLine の 1 行を足す。歯は段の file crates/tsuzuri-core/tests/cwsts.rs（判断の記録 ADR-32 の決定 (3)・群の main.rs と kfold.rs は書かない）。字は差の file。
+
+      確かめた事（V）。使い捨ての作業場で claude を --restricted と --settings の statusLine で起こし、窓の下に「窓 cw9 ｜ 題 probe ｜ haiku・low ｜ 所見 0 ｜ 束 01234567」が出た（文脈の割合は最初の答えの前で null のため出ない）。
+
+      ほかの行との当たり。行 cs-remote の差の後に当たる（main afe01c84（行 cs-plain-open と cs-acct-mark を置き、29a の cs-read-roots が着地した後）に、このノートの前の行の差を順に当てた木・係 w190a）。口 tz consult statusline は次の行 cs-status-verb が置く。間に起こした窓の状態の 1 行は、口が無いので空のまま（窓は止まらない）。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。(1) は verify の 1 行目、(2) から (7) は 3 行目（中核の歯の束 teeth3 の cwarg.rs と段の file cwsts.rs）、(8) は 3 行目と 4 行目で測る。clippy は守り。欄 done-teeth は書かない。
+
+      入口の赤。前の行の木（写し drafts/w190a の branch s2-hei の 7cbe7078）に段の file cwsts.rs だけを足した木で、verify の 3 行目の段の file の歯（--test cwsts）は rc 101（module consult::status が無く組めない）。
+
+      試作と噛み。写し drafts/w188a で verify の 2 行目から最後の行まで rc 0。句ごとに 9 の変異（命令の時間・命令に作業場を渡さない・C0 と C1 を落とさない・向きの上書きを落とさない・長さを切らない・範囲を見ない・題を clean しない・束の頭を切らない・設定の検めを外す）を当てて全部 rc 100、対照は rc 0。
+
+      範囲の外。口 tz consult statusline（行 cs-status-verb）・状態の 1 行に言付けの件数を出す事（行 cs-tell の予定）・refreshInterval。
+  - n: 9
+    type: prose
+    title: 行 cs-status-verb — 口 tz consult statusline（判断の記録 ADR-57 決定 (1)(コ)・(4)・状態の 1 行の口は囲いの外で走る）
+    body: |
+      なぜ。状態の 1 行の命令は設定の hook と同じく囲いの外で持ち主の権限で走り、窓が書ける作業場の file を読む。窓は作業場の中に symlink と fifo を作れるので、辿れば作業場の外の file の字を持ち主の画面に出し、fifo を開けば止まる。裁定は「制御の字を落とし symlink を辿らない」。
+
+      形。境の module consult::statusline に run・read_plain・count と FILE_MAX（16 KiB）・STDIN_MAX（256 KiB）・DIGEST（bundle/digest）を置く。照らしの助けは行 cs-plain-open の境の module consult::plain の plain_dir・plain_path・same_file を使う（この行は plain.rs を書かない・行 cs-acct-mark も同じ助けを使う）。run は渡した path が「/」で始まり、名が consult-cw<n> で、plain_dir（lstat で symlink でない dir）の時だけ読む。read_plain は plain_path で作業場から file までの途中の段を symlink でない dir と見て、file を lstat で普通の file と見て開き、開いた後の same_file（fstat で普通の file で dev と ino が同じか）で照らし、頭の FILE_MAX byte だけを読む。count は symlink でない dir の直下の、名が .json で終わる普通の file を数える（DirEntry の型は辿らない）。控えは wire::decode で読み、1 行は中核の status::render で組む。consult の mod.rs は module の行・USAGE の字・振り分けの 1 行・doc の 1 行を足す。歯は段の file crates/tsuzuri-boundary/tests/cwsln.rs（判断の記録 ADR-32 の決定 (3)・群の main.rs と kfold.rs は書かない）。字は差の file。
+
+      測らない事。lstat と開く間に fifo へ替える競り（開きが止まる）は、設定の命令の timeout 2 で終わる。fstat の照らしは歯で測っていない（競りを歯で作れない）。
+
+      ほかの行との当たり。行 cs-status-text の差の後に当たる（main afe01c84（行 cs-plain-open と cs-acct-mark を置き、29a の cs-read-roots が着地した後）に、このノートの前の行の差を順に当てた木・係 w190a）。境の consult/mod.rs は後の行 cs-tell（予定）も書く。
+
+      実装の約束。便は差の file を git apply で当てるだけで、差の外の字を 1 字も書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。(1) は verify の 1 行目、(2) から (7) は 3 行目（段の file cwsln.rs と境の歯の束 teeth5 の cwlch.rs）で測る。clippy は守り。欄 done-teeth は書かない。
+
+      入口の赤。前の行の木（写し drafts/w190a の branch s2-hei の c830ae8b）に段の file cwsln.rs だけを足した木で、verify の 3 行目の段の file の歯（--test cwsln）は rc 100（cwsln_ の 4 本が落ち、cwsln_refuses_non_workspace は口が無い断りで通る）。
+
+      試作と噛み。写し drafts/w188a で verify の 2 行目から最後の行まで rc 0。句ごとに 5 つの変異（作業場の名を見ない・絶対 path を見ない・dir の symlink を辿る〔共有の plain_dir〕・file の symlink を辿る・所見の symlink を数える）を当てて全部 rc 100、対照は rc 0。
+
+      範囲の外。言付けの件数の欄（行 cs-tell の予定）・refreshInterval・作業場の外の file。

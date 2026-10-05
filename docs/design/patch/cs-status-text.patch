@@ -1,0 +1,344 @@
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index d9f8178f..5ba58c57 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -5,12 +5,16 @@
+ //! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・行 cs-inbound-refuse・判断の記録 ADR-57 決定 (1)(ケ)）。
+ //! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
+ //! 問う窓の旗（別名 `--rc` を含む）を断る（行 cs-remote・判断の記録 ADR-57 決定 (4)）。
++//! 設定には話す窓と問う窓に共通の状態の 1 行（statusLine の命令 `status::command`）を置き、検めは欠けと字の違いを断る
++//! （行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+ //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
+ 
+ use serde_json::{Value, json};
+ use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
+ use tsuzuri_contract::ledger::fnv1a64;
+ 
++use super::status;
++
+ /// 話す窓を Remote Control に繋ぐ旗（値は窓の名・問う窓には付けない）。
+ pub const REMOTE_FLAG: &str = "--remote-control";
+ 
+@@ -241,10 +245,16 @@ pub fn settings(l: &Launch) -> Value {
+             "npm_config_cache": format!("{w}/node_modules/.npm-cache"),
+         },
+         "hooks": hooks(l),
++        "statusLine": status_line(l),
+         "crossSessionInbound": INBOUND,
+     })
+ }
+ 
++/// 設定の状態の 1 行（型 command と `status::command` の字だけ）。
++fn status_line(l: &Launch) -> Value {
++    json!({"type": "command", "command": status::command(&l.tz, &l.workspace)})
++}
++
+ /// 設定の hook（守りの hook と会話の印の hook）。
+ fn hooks(l: &Launch) -> Value {
+     let mut h = serde_json::Map::new();
+@@ -535,6 +545,9 @@ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
+             audit_sandbox(&set, l, &mut gaps);
+             audit_permissions(&set, l, &mut gaps);
+             audit_reads(&set, l, &mut gaps);
++            if set.pointer("/statusLine") != Some(&status_line(l)) {
++                gaps.push("/statusLine".to_string());
++            }
+         }
+         _ => gaps.push("/".to_string()),
+     }
+diff --git a/crates/tsuzuri-core/src/consult/mod.rs b/crates/tsuzuri-core/src/consult/mod.rs
+index 6df4d178..c3f8c995 100644
+--- a/crates/tsuzuri-core/src/consult/mod.rs
++++ b/crates/tsuzuri-core/src/consult/mod.rs
+@@ -2,7 +2,8 @@
+ //! 所見の欄の検め（`finding`）は行 cs-finding、台帳の相談の行の字と置き場（`lines`）は行 cs-lines、
+ //! 席が自分で開く問う窓の数え（`quota`・規則の行 R-38）は行 cs-quota、
+ //! 起動の argv と設定と検め（`launch`）は行 cs-argv、窓の守りの hook の判じ（`guard`）は行 cs-answer、
+-//! 席の hook の相談の拾いの字（`pickup`）は行 cs-hooks（ノート surface-wave27b）が置く。
++//! 席の hook の相談の拾いの字（`pickup`）は行 cs-hooks（ノート surface-wave27b）、窓の状態の 1 行の字（`status`）は
++//! 行 cs-status-text（ノート surface-wave29b）が置く。
+ //! どの関数も file も子 process も時計も触らない（今の時刻は分の字で受ける）。
+ 
+ pub mod finding;
+@@ -12,3 +13,4 @@ pub mod lines;
+ pub mod pickup;
+ pub mod quota;
+ pub mod stamp;
++pub mod status;
+diff --git a/crates/tsuzuri-core/src/consult/status.rs b/crates/tsuzuri-core/src/consult/status.rs
+new file mode 100644
+index 00000000..961d2528
+--- /dev/null
++++ b/crates/tsuzuri-core/src/consult/status.rs
+@@ -0,0 +1,82 @@
++//! 窓の状態の 1 行の字（設計ノート surface-wave29b 行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! 起動の口の設定の statusLine の命令の字と、Claude Code が命令の標準入力に渡す session の JSON からの文脈の割合
++//! （鍵 `context_window.used_percentage`・無いか数でないか範囲の外なら出さない・ほかの鍵は読み飛ばす）と、窓の控え・所見の数・
++//! 束の要約値から組む 1 行の字を持つ。材料は窓が書ける作業場の字なので、どの欄も制御の字を落として長さを切る。
++
++use serde_json::Value;
++use tsuzuri_contract::consult::WindowFile;
++
++/// 状態の 1 行の口の名（席の口でないので窓の守りは通す）。
++pub const VERB: &str = "statusline";
++
++/// 欄の区切り。
++pub const SEP: &str = " ｜ ";
++
++/// 束の要約値の頭の字の数。
++pub const DIGEST_HEAD: usize = 8;
++
++/// 題・model・念入りさの欄の字の数の上限。
++pub const FIELD_MAX: usize = 40;
++
++/// 状態の 1 行の命令の字（作業場の絶対 path を渡す・時間切れで終わる・起動の口の settings と audit が同じ字を持つ）。
++pub fn command(tz: &str, workspace: &str) -> String {
++    format!("timeout 2 {tz} consult {VERB} {workspace}")
++}
++
++/// 字から制御の字（`char::is_control` の C0・DEL・C1 と、向きの上書きの U+202A〜U+202E・U+2066〜U+2069）を落とし、
++/// 頭の `max` 字に切る（端末を操る字を持ち主の画面に出さない）。
++pub fn clean(text: &str, max: usize) -> String {
++    text.chars()
++        .filter(|c| {
++            !c.is_control() && !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
++        })
++        .take(max)
++        .collect()
++}
++
++/// Claude Code が渡す session の JSON から文脈の割合（0〜100 の整数・四捨五入）。鍵が無い・数でない・範囲の外は None。
++pub fn context_percent(text: &str) -> Option<u8> {
++    let value: Value = serde_json::from_str(text).ok()?;
++    let percent = value.pointer("/context_window/used_percentage")?.as_f64()?;
++    if !(0.0..=100.0).contains(&percent) {
++        return None;
++    }
++    (0..=100u8).find(|n| f64::from(*n) >= percent.round())
++}
++
++/// 1 行の字（窓・題・model と念入りさ・所見の数・束の要約値の頭・文脈の割合。無い欄は出さない・字の欄は `clean` を通す）。
++pub fn render(
++    window: Option<&WindowFile>,
++    findings: Option<usize>,
++    digest: Option<&str>,
++    percent: Option<u8>,
++) -> String {
++    let mut parts: Vec<String> = Vec::new();
++    match window {
++        Some(w) => {
++            let topic = w
++                .topic
++                .as_deref()
++                .map_or("なし".to_string(), |t| clean(t, FIELD_MAX));
++            parts.push(format!("窓 {}", w.id));
++            parts.push(format!("題 {topic}"));
++            parts.push(format!(
++                "{}・{}",
++                clean(&w.model, FIELD_MAX),
++                clean(&w.effort, FIELD_MAX)
++            ));
++        }
++        None => parts.push("窓 ?".to_string()),
++    }
++    if let Some(n) = findings {
++        parts.push(format!("所見 {n}"));
++    }
++    let digest = digest.map(|d| clean(d.trim(), DIGEST_HEAD));
++    if let Some(d) = digest.filter(|d| !d.is_empty()) {
++        parts.push(format!("束 {d}"));
++    }
++    if let Some(p) = percent {
++        parts.push(format!("文脈 {p}%"));
++    }
++    parts.join(SEP)
++}
+diff --git a/crates/tsuzuri-core/tests/cwsts.rs b/crates/tsuzuri-core/tests/cwsts.rs
+new file mode 100644
+index 00000000..f368aec3
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/cwsts.rs
+@@ -0,0 +1,114 @@
++//! 窓の状態の 1 行の字の歯（接頭辞 cwsts_・設計ノート surface-wave29b 行 cs-status-text・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! 命令の字・Claude Code の session の JSON からの文脈の割合の読み・1 行の字の組み・制御の字の落としと長さの切りを見る。
++#![cfg(test)]
++
++use tsuzuri_contract::consult::{Form, Starter, WindowFile, WindowId};
++use tsuzuri_core::consult::status::{
++    DIGEST_HEAD, FIELD_MAX, SEP, VERB, clean, command, context_percent, render,
++};
++
++fn window() -> WindowFile {
++    WindowFile {
++        id: WindowId::parse("cw3").expect("窓 id"),
++        form: Form::Talk,
++        topic: Some("t3-hub.78".into()),
++        model: "fable".into(),
++        effort: "xhigh".into(),
++        starter: Starter::Chat,
++        uttered: Some("20261004T2207Z".into()),
++        request: None,
++        made: "20261004T2207Z".into(),
++    }
++}
++
++#[test]
++fn cwsts_command_names_the_verb() {
++    assert_eq!(VERB, "statusline");
++    assert_eq!(command("/T", "/W"), "timeout 2 /T consult statusline /W");
++}
++
++#[test]
++fn cwsts_context_percent_reads_used_percentage_only() {
++    let read = |t: &str| context_percent(t);
++    assert_eq!(
++        read(r#"{"context_window":{"used_percentage":42.4}}"#),
++        Some(42)
++    );
++    assert_eq!(
++        read(r#"{"context_window":{"used_percentage":42.5}}"#),
++        Some(43)
++    );
++    assert_eq!(
++        read(r#"{"model":{"id":"x"},"context_window":{"used_percentage":99.6,"x":1}}"#),
++        Some(100)
++    );
++    assert_eq!(read(r#"{"context_window":{"used_percentage":0}}"#), Some(0));
++    for bad in [
++        "",
++        "not json",
++        "[]",
++        r#"{"context_window":{}}"#,
++        r#"{"context_window":{"used_percentage":null}}"#,
++        r#"{"context_window":{"used_percentage":"42"}}"#,
++        r#"{"context_window":{"used_percentage":-1}}"#,
++        r#"{"context_window":{"used_percentage":100.1}}"#,
++        r#"{"used_percentage":42}"#,
++    ] {
++        assert_eq!(read(bad), None, "{bad}");
++    }
++}
++
++#[test]
++fn cwsts_render_joins_the_present_fields() {
++    let w = window();
++    let line = render(Some(&w), Some(2), Some("3766ac7797cdf78f\n"), Some(42));
++    let want = [
++        "窓 cw3",
++        "題 t3-hub.78",
++        "fable・xhigh",
++        "所見 2",
++        "束 3766ac77",
++        "文脈 42%",
++    ];
++    assert_eq!(line, want.join(SEP));
++    assert_eq!((DIGEST_HEAD, SEP), (8, " ｜ "));
++    let mut no_topic = window();
++    no_topic.topic = None;
++    assert_eq!(
++        render(Some(&no_topic), None, None, None),
++        ["窓 cw3", "題 なし", "fable・xhigh"].join(SEP)
++    );
++    assert_eq!(
++        render(None, Some(0), Some(" \n"), None),
++        ["窓 ?", "所見 0"].join(SEP)
++    );
++    assert!(render(Some(&w), None, Some("abc"), None).ends_with("束 abc"));
++}
++
++/// 制御の字（ESC・BEL・改行・DEL・C1 の CSI・向きの上書き）は題・model・念入りさ・束のどの欄からも落ち、
++/// 題と model と念入りさは頭の `FIELD_MAX` 字に、束は頭の `DIGEST_HEAD` 字に切る。
++#[test]
++fn cwsts_render_drops_control_chars() {
++    let evil = "\u{1b}]52;c;QUFB\u{7}a\nb\u{7f}c\u{9b}d\u{202e}e\u{2066}f";
++    assert_eq!(clean(evil, 99), "]52;c;QUFBabcdef");
++    assert_eq!(clean("あいうえお", 3), "あいう");
++    let mut w = window();
++    w.topic = Some(evil.into());
++    w.model = format!("\u{1b}[2J{}", "m".repeat(50));
++    w.effort = "x\u{1b}high".into();
++    let line = render(Some(&w), None, Some("\u{1b}[31m3766ac77"), None);
++    assert!(!line.chars().any(char::is_control), "{line:?}");
++    let want = [
++        "窓 cw3".to_string(),
++        "題 ]52;c;QUFBabcdef".to_string(),
++        format!("[2J{}・xhigh", "m".repeat(FIELD_MAX - 3)),
++        "束 [31m3766".to_string(),
++    ];
++    assert_eq!(line, want.join(SEP));
++    let mut long = window();
++    long.topic = Some("題".repeat(FIELD_MAX + 5));
++    assert!(
++        render(Some(&long), None, None, None)
++            .contains(&format!("題 {}{SEP}", "題".repeat(FIELD_MAX)))
++    );
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 75aecc64..94bf0ad1 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -4,6 +4,7 @@
+ //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
+ //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
+ //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
++//! 設定に状態の 1 行を置き、欠けと字の違いを検めが断ることを見る（行 cs-status-text）。
+ //! 話す窓だけを Remote Control に窓の名で繋ぎ、欠け・名の違い・別名・問う窓の旗を検めが断ることを見る（行 cs-remote）。
+ //! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
+ #![cfg(test)]
+@@ -212,6 +213,7 @@ fn cwarg_audit_refuses_each_missing_key() {
+         "/env",
+         "/hooks",
+         "/crossSessionInbound",
++        "/statusLine",
+     ];
+     for pointer in leaves {
+         let (parent, key) = pointer.rsplit_once('/').expect("pointer");
+@@ -887,3 +889,36 @@ fn cwarg_talk_window_joins_remote_control() {
+         assert_eq!(remote_gaps(&ask, false, 3, items), only, "問う窓の{name}");
+     }
+ }
++
++/// 話す窓と問う窓の設定は状態の 1 行を型 command と作業場を渡す命令の字だけで持ち、除くか型・命令・作業場を替えるか
++/// 鍵を足した設定を、検めは `/statusLine` だけで断る（行 cs-status-text）。
++#[test]
++fn cwarg_settings_hold_the_status_line() {
++    let fx = fixture();
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let want = json!({"type": "command", "command": "timeout 2 /T consult statusline /W"});
++        assert_eq!(settings(&l)["statusLine"], want, "{form}");
++        let edits: [Edit; 5] = [
++            ("除く", |s| {
++                s.as_object_mut().expect("object").remove("statusLine");
++            }),
++            ("型を替える", |s| {
++                s["statusLine"]["type"] = "static".into()
++            }),
++            ("命令を替える", |s| {
++                s["statusLine"]["command"] = "timeout 2 /T consult list".into();
++            }),
++            ("作業場を替える", |s| {
++                s["statusLine"]["command"] = "timeout 2 /T consult statusline /X".into();
++            }),
++            ("鍵を足す", |s| {
++                s["statusLine"]["refreshInterval"] = 1.into()
++            }),
++        ];
++        for (name, edit) in edits {
++            let gaps = audit(&with_settings(&l, edit), &l);
++            assert_eq!(gaps, ["/statusLine"], "{form} の statusLine を{name}");
++        }
++    }
++}
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index d96472f8..ee5ed5ae 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -94,6 +94,7 @@
+       "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}],
+       "Stop": [{"hooks": [{"type": "command", "command": "timeout 4 /T consult stamp /W || true", "timeout": 10}]}]
+     },
++    "statusLine": {"type": "command", "command": "timeout 2 /T consult statusline /W"},
+     "crossSessionInbound": "refuse"
+   }
+ }
