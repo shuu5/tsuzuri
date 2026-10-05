@@ -1,0 +1,527 @@
+diff --git a/crates/tsuzuri-boundary/src/hook/agent_meter.rs b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+new file mode 100644
+index 00000000..e4543b64
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/hook/agent_meter.rs
+@@ -0,0 +1,108 @@
++//! tz hook agent-meter（行 ag-meter・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の測り。
++//! 撃つのは Claude Code（PostToolUse の hook・matcher なし）。標準入力の hook の入力が係の呼び（係の id の在る呼び）の時だけ測る。順:
++//! 1. 標準入力を全部読む。係の呼びでなければ（席の呼び）何も読まず何も出さずに 0。
++//! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
++//! 3. 置き場の `.agents/<係の id>` の名と、その名の係の札を読む。結びが無ければ `.agents/unbound.jsonl` に 1 行足して通す（fail-open）。
++//! 4. 係の記録（親の記録の dir の下の subagents/agent-<係の id>.jsonl）を測りの札の offset から読み、中核の `feed` で足す。
++//! 5. 測りの札 `<名>/meter.json` を書き、新しく越えた印が在れば残りの注ぎを PostToolUse の答えで 1 行出して 0。
++//!
++//! rc は 0 か 1（使い方の誤り）だけ。結びの名の解きと結びの無い呼びの記帳は、係の門と終える前の門も使う。
++
++use std::fs::{self, File, OpenOptions};
++use std::io::{Read, Seek, SeekFrom, Write};
++use std::path::Path;
++
++use tsuzuri_core::agent::meter::{
++    METER, Meter, SubCall, inject, notice, sub_call, transcript, unbound_line,
++};
++use tsuzuri_core::agent::spec::{AGENTS, SPEC, Spec};
++
++use super::agent_spawn::{drafts, parse};
++use crate::out::{emit, emit_err};
++use crate::server::events::now;
++
++pub const USAGE: &str = "usage: tz hook agent-meter --repo <dir> [--drafts <dir>]";
++
++/// 結びの無い呼びの記帳の file（`.agents` の下）。
++pub const UNBOUND: &str = "unbound.jsonl";
++
++/// 使い方の誤り。
++const FAIL: u8 = 1;
++
++/// 係の id に結んだ名と札（`.agents/<係の id>` の名の係の札が読めなければ None）。
++pub fn resolve(drafts: &Path, agent_id: &str) -> Option<(String, Spec)> {
++    let name = fs::read_to_string(drafts.join(AGENTS).join(agent_id)).ok()?;
++    let name = name.trim();
++    let spec = Spec::parse(&fs::read_to_string(drafts.join(name).join(SPEC)).ok()?)?;
++    (spec.name == name).then(|| (name.to_string(), spec))
++}
++
++/// 結びの無い呼びを `.agents/unbound.jsonl` に 1 行足す（書けなければ標準エラー）。
++pub fn unbound(drafts: &Path, call: &SubCall) {
++    let line = unbound_line(call, now());
++    let wrote = fs::create_dir_all(drafts.join(AGENTS)).and_then(|()| {
++        OpenOptions::new()
++            .create(true)
++            .append(true)
++            .open(drafts.join(AGENTS).join(UNBOUND))
++            .and_then(|mut f| writeln!(f, "{line}"))
++    });
++    if let Err(e) = wrote {
++        emit_err(&format!("tz hook agent: 結びの無い呼びを記帳できない: {e}"));
++    }
++}
++
++/// 係の記録の offset から後の字（読めなければ空）。
++fn tail(path: &str, offset: u64) -> Vec<u8> {
++    let mut bytes = Vec::new();
++    if let Ok(mut f) = File::open(path)
++        && f.seek(SeekFrom::Start(offset)).is_ok()
++        && f.read_to_end(&mut bytes).is_err()
++    {
++        bytes.clear();
++    }
++    bytes
++}
++
++/// tz hook agent-meter の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
++pub fn run(rest: &[&str]) -> u8 {
++    let mut payload = String::new();
++    if std::io::stdin().read_to_string(&mut payload).is_err() {
++        payload.clear();
++    }
++    let Some(call) = sub_call(&payload) else {
++        return 0;
++    };
++    let args = match parse(rest) {
++        Ok(args) => args,
++        Err(e) => {
++            emit_err(&format!("tz hook agent-meter: {e}\n{USAGE}"));
++            return FAIL;
++        }
++    };
++    let Some(dir) = drafts(&args) else {
++        emit_err("tz hook agent-meter: 起草の置き場を解けない（通す）");
++        return 0;
++    };
++    let Some((name, spec)) = resolve(&dir, &call.agent_id) else {
++        unbound(&dir, &call);
++        return 0;
++    };
++    let Some(path) = transcript(&call.parent, &call.agent_id) else {
++        return 0;
++    };
++    let file = dir.join(&name).join(METER);
++    let mut meter = fs::read_to_string(&file)
++        .ok()
++        .and_then(|t| Meter::parse(&t))
++        .unwrap_or_default();
++    meter.feed(&tail(&path, meter.offset));
++    let mark = meter.cross(spec.budget);
++    if let Err(e) = fs::write(&file, meter.render()) {
++        emit_err(&format!("tz hook agent-meter: 測りの札を書けない: {e}"));
++    }
++    if let Some(mark) = mark {
++        emit(&inject(&notice(mark, &meter, spec.budget)));
++    }
++    0
++}
+diff --git a/crates/tsuzuri-boundary/src/hook/mod.rs b/crates/tsuzuri-boundary/src/hook/mod.rs
+index a0f1d6a3..3b539f51 100644
+--- a/crates/tsuzuri-boundary/src/hook/mod.rs
++++ b/crates/tsuzuri-boundary/src/hook/mod.rs
+@@ -5,8 +5,10 @@
+ //! 行 f-deliver-tool で考え中の席への配達の hook（`deliver_tool`・PostToolBatch の hook）を置く。
+ //! 行 cs-hooks で、停止と入力の時と道具の周の hook が見張りの居ない間に足す相談の拾い（`consult`）を置く。
+ //! 行 ag-spec で係の起こしの門（`agent_spawn`・PreToolUse の hook）と結びの口（`agent_bind`・PostToolUse の hook）を置く。
++//! 行 ag-meter で係の測り（`agent_meter`・PostToolUse の hook）を置く。
+ 
+ pub mod agent_bind;
++pub mod agent_meter;
+ pub mod agent_spawn;
+ pub mod consult;
+ pub mod deliver;
+diff --git a/crates/tsuzuri-boundary/src/main.rs b/crates/tsuzuri-boundary/src/main.rs
+index a98f62c1..aa4d039d 100644
+--- a/crates/tsuzuri-boundary/src/main.rs
++++ b/crates/tsuzuri-boundary/src/main.rs
+@@ -22,6 +22,7 @@
+ //! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
+ //! tz hook agent-spawn --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの門・rc は 0 か 1）。
+ //! tz hook agent-bind --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
++//! tz hook agent-meter --repo <dir> [--drafts <dir>]（行 ag-meter・係の記録の使用量を測り、印を越えた時だけ残りを係の文脈に足す・rc は 0 か 1）。
+ //! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
+ //! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
+ //! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
+@@ -69,6 +70,7 @@ fn main() -> ExitCode {
+         ["hook", "question-gate", rest @ ..] => tsuzuri_boundary::hook::question_gate::run(rest),
+         ["hook", "agent-spawn", rest @ ..] => tsuzuri_boundary::hook::agent_spawn::run(rest),
+         ["hook", "agent-bind", rest @ ..] => tsuzuri_boundary::hook::agent_bind::run(rest),
++        ["hook", "agent-meter", rest @ ..] => tsuzuri_boundary::hook::agent_meter::run(rest),
+         ["hook", "question-signal", rest @ ..] => {
+             tsuzuri_boundary::hook::question_signal::run(rest)
+         }
+diff --git a/crates/tsuzuri-boundary/tests/agmt.rs b/crates/tsuzuri-boundary/tests/agmt.rs
+new file mode 100644
+index 00000000..4950ac2e
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agmt.rs
+@@ -0,0 +1,199 @@
++//! 係の測りの歯（接頭辞 agmt_・設計ノート surface-wave29b 行 ag-meter・判断の記録 ADR-59 決定 (3)(4)）。
++//! 中核の `feed` と `cross` に係の記録の行の形（assistant の行の message の id と usage）を渡し、tz の binary の tz hook agent-meter に
++//! 係の呼びの門の入力の形（会話の id と path は伏せた）を標準入力で渡し、歯ごとの置き場（CARGO_TARGET_TMPDIR の下）を --drafts で渡す。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++use tsuzuri_core::agent::meter::Meter;
++
++/// assistant の行（応答の id・input・cache_creation・output・cache_read）。
++fn line(id: &str, usage: [u64; 4]) -> String {
++    let [i, c, o, r] = usage;
++    format!(
++        r#"{{"type":"assistant","message":{{"id":"{id}","usage":{{"input_tokens":{i},"cache_creation_input_tokens":{c},"output_tokens":{o},"cache_read_input_tokens":{r}}}}}}}"#
++    ) + "\n"
++}
++
++/// 歯ごとの置き場（前の撃ちの残りを消して作る）。drafts/ と、係の記録を置く親の記録の dir。
++fn place(name: &str) -> PathBuf {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++        .join("agmt")
++        .join(name);
++    let _ = fs::remove_dir_all(&root);
++    fs::create_dir_all(root.join("drafts")).unwrap();
++    fs::create_dir_all(root.join("s/subagents")).unwrap();
++    root
++}
++
++/// 係 w209a の札（予算 1000）と、係の id a77 から名への結び。
++fn bind(root: &Path) {
++    let dir = root.join("drafts/w209a");
++    fs::create_dir_all(&dir).unwrap();
++    fs::write(
++        dir.join("spec.json"),
++        r#"{"name":"w209a","type":"tsuzuri:drafter","budget":1000,"build":"なし","target":"t3-hub.87","outputs":["notes.md"],"spawned":1,"agent_id":"a77","ended":null}"#,
++    )
++    .unwrap();
++    fs::create_dir_all(root.join("drafts/.agents")).unwrap();
++    fs::write(root.join("drafts/.agents/a77"), "w209a\n").unwrap();
++}
++
++/// 係の記録（親の記録 s.jsonl の dir の下の subagents/agent-a77.jsonl）に行を足す。
++fn append(root: &Path, text: &str) {
++    let mut f = fs::OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(root.join("s/subagents/agent-a77.jsonl"))
++        .unwrap();
++    f.write_all(text.as_bytes()).unwrap();
++}
++
++/// tz hook agent-meter に、係の id `head`（空なら席の呼び）の Bash の呼びの結果の入力を渡した結果。
++fn meter(root: &Path, head: &str) -> Output {
++    let parent = root.join("s.jsonl");
++    let input = format!(
++        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions",{head}"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{{"command":"echo"}},"tool_response":{{"stdout":""}},"tool_use_id":"toolu_X"}}"#,
++        parent.display()
++    );
++    let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(["hook", "agent-meter", "--repo"])
++        .arg(root)
++        .arg("--drafts")
++        .arg(root.join("drafts"))
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped())
++        .spawn()
++        .unwrap();
++    let _ = child.stdin.take().unwrap().write_all(input.as_bytes());
++    child.wait_with_output().unwrap()
++}
++
++/// 係の呼びの頭の欄（係の id a77）。
++const SUB: &str = r#""agent_id":"a77","agent_type":"tsuzuri:drafter","#;
++
++/// 測りの札の字。
++fn read(root: &Path) -> Meter {
++    Meter::parse(&fs::read_to_string(root.join("drafts/w209a/meter.json")).unwrap()).unwrap()
++}
++
++/// 同じ応答の id の続く 2 行は後の行の分だけを 1 度数え、cache の読みは和に入れず別の欄に足し、user の行は数えない。
++#[test]
++fn agmt_feed_counts_one_message_id_once_and_keeps_cache_read_apart() {
++    let user = r#"{"type":"user","message":{"id":"u1","usage":{"input_tokens":7000}}}"#;
++    let text = line("A", [5, 100, 10, 1000])
++        + &line("A", [5, 100, 30, 1000])
++        + user
++        + "\n"
++        + &line("B", [1, 20, 4, 2000]);
++    let mut m = Meter::default();
++    m.feed(text.as_bytes());
++    assert_eq!((m.used, m.cache_read), (135 + 25, 3000));
++    assert_eq!(m.offset, text.len() as u64);
++}
++
++/// 末の書きかけの行は読まずに offset を最後の改行の後に置き、続きを足すと全部を 1 度に読んだ時と同じ和になる（同じ id の行が境を跨いでも）。
++#[test]
++fn agmt_feed_reads_only_whole_lines_from_the_offset() {
++    let whole =
++        line("A", [5, 100, 10, 1000]) + &line("A", [5, 100, 30, 1000]) + &line("B", [1, 20, 4, 0]);
++    let cut = line("A", [5, 100, 10, 1000]).len() + 12;
++    let mut parts = Meter::default();
++    parts.feed(&whole.as_bytes()[..cut]);
++    assert_eq!((parts.offset, parts.used), (cut as u64 - 12, 115));
++    parts.feed(&whole.as_bytes()[parts.offset as usize..]);
++    let mut once = Meter::default();
++    once.feed(whole.as_bytes());
++    assert_eq!(
++        (parts.offset, parts.used, parts.cache_read),
++        (once.offset, once.used, once.cache_read)
++    );
++    assert_eq!(parts.used, 160);
++}
++
++/// 50・75・90% の印は越えた最初の 1 回だけ返し、2 つを 1 度に越えると大きい印を返して両方を札に残す。
++#[test]
++fn agmt_cross_returns_each_mark_once() {
++    let mut m = Meter {
++        used: 499,
++        ..Meter::default()
++    };
++    assert_eq!(m.cross(1000), None);
++    m.used = 500;
++    assert_eq!(m.cross(1000), Some(50));
++    assert_eq!(m.cross(1000), None);
++    m.used = 920;
++    assert_eq!(m.cross(1000), Some(90));
++    assert_eq!(m.marks, vec![50, 75, 90]);
++    m.used = 2000;
++    assert_eq!(m.cross(1000), None);
++}
++
++/// 結んだ係の記録を測りの札の offset から読み、印を越えた周だけ残りの注ぎを 1 行出し、次の周は出さない。
++#[test]
++fn agmt_hook_measures_from_the_offset_and_injects_once_per_mark() {
++    let root = place("measure");
++    bind(&root);
++    let before = line("Z", [0, 0, 900, 0]);
++    append(&root, &before);
++    let start = format!(
++        r#"{{"offset":{},"used":0,"cache_read":0,"last_id":null,"last_used":0,"last_cache_read":0,"marks":[]}}"#,
++        before.len()
++    );
++    fs::write(root.join("drafts/w209a/meter.json"), start).unwrap();
++    append(
++        &root,
++        &(line("A", [5, 100, 400, 7000]) + &line("A", [5, 100, 420, 7000])),
++    );
++    let out = meter(&root, SUB);
++    assert_eq!(out.status.code(), Some(0));
++    let text = String::from_utf8_lossy(&out.stdout);
++    assert!(
++        text.starts_with(
++            r#"{"hookSpecificOutput":{"additionalContext":"係の測り: 予算 1000 の 50% を越えた"#
++        ),
++        "{text}"
++    );
++    assert!(
++        text.ends_with("\",\"hookEventName\":\"PostToolUse\"}}\n"),
++        "{text}"
++    );
++    assert!(
++        text.contains("予算 1000 の 50% を越えた（使った量 525 "),
++        "{text}"
++    );
++    assert!(
++        text.contains("残り 475・cache の読み 7000 は別の欄"),
++        "{text}"
++    );
++    assert_eq!((read(&root).used, read(&root).marks), (525, vec![50]));
++    let again = meter(&root, SUB);
++    assert_eq!((again.status.code(), again.stdout.len()), (Some(0), 0));
++    append(&root, &line("B", [0, 0, 300, 0]));
++    let third = meter(&root, SUB);
++    assert!(String::from_utf8_lossy(&third.stdout).contains("の 75% を越えた（使った量 825 "));
++}
++
++/// 結びの無い係の id の呼びは通して unbound.jsonl に 1 行足し、席の呼びは何も読まず何も書かない。
++#[test]
++fn agmt_hook_records_an_unbound_agent_and_passes_the_seat() {
++    let root = place("unbound");
++    append(&root, &line("A", [0, 0, 900, 0]));
++    let seat = meter(&root, "");
++    assert_eq!((seat.status.code(), seat.stdout.len()), (Some(0), 0));
++    assert!(!root.join("drafts/.agents").exists());
++    let sub = meter(&root, SUB);
++    assert_eq!((sub.status.code(), sub.stdout.len()), (Some(0), 0));
++    let log = fs::read_to_string(root.join("drafts/.agents/unbound.jsonl")).unwrap();
++    assert_eq!(log.lines().count(), 1);
++    assert!(log.starts_with(r#"{"agent_id":"a77","at":"#), "{log}");
++    assert!(
++        log.ends_with("\"event\":\"PostToolUse\",\"tool\":\"Bash\"}\n"),
++        "{log}"
++    );
++    assert!(!root.join("drafts/w209a").exists());
++}
+diff --git a/crates/tsuzuri-core/src/agent/meter.rs b/crates/tsuzuri-core/src/agent/meter.rs
+new file mode 100644
+index 00000000..b0f8ed40
+--- /dev/null
++++ b/crates/tsuzuri-core/src/agent/meter.rs
+@@ -0,0 +1,157 @@
++//! 係の測り（行 ag-meter・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）。
++//! 係の呼びの門の入力（係の id `agent_id` の在る入力）を読み、係の記録の続き（前の offset から後の完全な行）の使用量を
++//! 応答の id で重ねずに足す。新しく読み書きした量は input・cache_creation・output の和で、文脈の読み直し（cache_read）は別の欄。
++//! 同じ応答の id の行は記録の中で続いて並び、後の行ほど output が伸びるので、続く同じ id の行は前の行の分を引いて足し直す。
++//! 50・75・90% を越えた最初の 1 回だけ残りを注ぐ（越えた印は測りの札 `meter.json` に残す）。
++
++use serde::{Deserialize, Serialize};
++use serde_json::{Value, json};
++use tsuzuri_contract::EpochSecs;
++
++/// 係の dir の測りの札。
++pub const METER: &str = "meter.json";
++
++/// 残りを注ぐ印（予算の百分率）。
++pub const MARKS: [u64; 3] = [50, 75, 90];
++
++/// 測りの札（読んだ所・足した量・最後の応答の id とその分・注いだ印）。
++#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Meter {
++    pub offset: u64,
++    pub used: u64,
++    pub cache_read: u64,
++    pub last_id: Option<String>,
++    pub last_used: u64,
++    pub last_cache_read: u64,
++    pub marks: Vec<u64>,
++}
++
++/// 1 行の使用量（応答の id・新しい量・cache の読み）。assistant の行で usage の在る時だけ。
++fn usage(line: &[u8]) -> Option<(Option<String>, u64, u64)> {
++    let row: Value = serde_json::from_slice(line).ok()?;
++    if row.get("type").and_then(Value::as_str) != Some("assistant") {
++        return None;
++    }
++    let message = row.get("message")?;
++    let u = message.get("usage")?;
++    let n = |k: &str| u.get(k).and_then(Value::as_u64).unwrap_or(0);
++    let id = message
++        .get("id")
++        .and_then(Value::as_str)
++        .map(str::to_string);
++    let new = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
++    Some((id, new, n("cache_read_input_tokens")))
++}
++
++impl Meter {
++    /// 札の字を読む（JSON でなければ None）。
++    pub fn parse(text: &str) -> Option<Self> {
++        serde_json::from_str(text).ok()
++    }
++
++    /// 札の字（整えた JSON と末の改行）。
++    pub fn render(&self) -> String {
++        let mut text = serde_json::to_string_pretty(self).unwrap_or_default();
++        text.push('\n');
++        text
++    }
++
++    /// 記録の offset から後の字 `tail` を足し、最後の改行までを読んだ分だけ offset を進める（末の書きかけの行は次に読む）。
++    pub fn feed(&mut self, tail: &[u8]) {
++        let Some(end) = tail.iter().rposition(|b| *b == b'\n') else {
++            return;
++        };
++        for line in tail.get(..end).unwrap_or_default().split(|b| *b == b'\n') {
++            let Some((id, new, cache)) = usage(line) else {
++                continue;
++            };
++            if id.is_some() && id == self.last_id {
++                self.used = self.used.saturating_sub(self.last_used);
++                self.cache_read = self.cache_read.saturating_sub(self.last_cache_read);
++            }
++            self.used += new;
++            self.cache_read += cache;
++            (self.last_id, self.last_used, self.last_cache_read) = (id, new, cache);
++        }
++        self.offset += end as u64 + 1;
++    }
++
++    /// 予算 `budget` の印のうち新しく越えたものを札に足し、その最も大きい印を返す（越えた印が無ければ None）。
++    pub fn cross(&mut self, budget: u64) -> Option<u64> {
++        let fresh: Vec<u64> = MARKS
++            .into_iter()
++            .filter(|m| self.used * 100 >= m * budget && !self.marks.contains(m))
++            .collect();
++        self.marks.extend(&fresh);
++        fresh.last().copied()
++    }
++}
++
++/// 係の呼びの門の入力の欄（係の id・門の事・道具の名・親の記録の path・無い欄は空の字）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct SubCall {
++    pub agent_id: String,
++    pub event: String,
++    pub tool: String,
++    pub parent: String,
++}
++
++/// 係の呼びの入力（JSON の object で、係の id が英数で始まり英数と `-` と `_` だけの 128 字以内の時）の欄。席の呼びは None。
++pub fn sub_call(payload: &str) -> Option<SubCall> {
++    let input: Value = serde_json::from_str(payload).ok()?;
++    let text = |k: &str| {
++        input
++            .get(k)
++            .and_then(Value::as_str)
++            .unwrap_or_default()
++            .to_string()
++    };
++    let agent_id = text("agent_id");
++    let safe = agent_id.len() <= 128
++        && agent_id
++            .bytes()
++            .next()
++            .is_some_and(|c| c.is_ascii_alphanumeric())
++        && agent_id
++            .bytes()
++            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_');
++    safe.then(|| SubCall {
++        event: text("hook_event_name"),
++        tool: text("tool_name"),
++        parent: text("transcript_path"),
++        agent_id,
++    })
++}
++
++/// 結びの無い呼びの記帳の 1 行（時刻・係の id・門の事・道具の名の JSON・改行なし）。
++pub fn unbound_line(call: &SubCall, at: EpochSecs) -> String {
++    json!({"at": at, "agent_id": call.agent_id, "event": call.event, "tool": call.tool}).to_string()
++}
++
++/// 係の記録の path（親の記録 `transcript_path` の .jsonl を除いた dir の下の subagents/agent-<係の id>.jsonl）。
++pub fn transcript(parent: &str, agent_id: &str) -> Option<String> {
++    let stem = parent.strip_suffix(".jsonl")?;
++    Some(format!("{stem}/subagents/agent-{agent_id}.jsonl"))
++}
++
++/// 注ぎの字（越えた印・使った量・予算・残り・別の欄の cache の読み・次の一手）。
++pub fn notice(mark: u64, meter: &Meter, budget: u64) -> String {
++    format!(
++        "係の測り: 予算 {budget} の {mark}% を越えた（使った量 {} = input と cache_creation と output の和・残り {}・cache の読み {} は別の欄で数えない）。\
++         次の一手 = 新しい調べを広げず、分かった所を w/ に書く。100% を越えると、係の門は自分の w/ への書きと SendMessage だけを通す",
++        meter.used,
++        budget.saturating_sub(meter.used),
++        meter.cache_read
++    )
++}
++
++/// PostToolUse の答えの JSON の字（係の文脈に `text` を足す）。
++pub fn inject(text: &str) -> String {
++    json!({
++        "hookSpecificOutput": {
++            "hookEventName": "PostToolUse",
++            "additionalContext": text,
++        }
++    })
++    .to_string()
++}
+diff --git a/crates/tsuzuri-core/src/agent/mod.rs b/crates/tsuzuri-core/src/agent/mod.rs
+index b32eaeed..c53c704e 100644
+--- a/crates/tsuzuri-core/src/agent/mod.rs
++++ b/crates/tsuzuri-core/src/agent/mod.rs
+@@ -1,3 +1,5 @@
+ //! 席が起こす係（判断の記録 ADR-59・要件 FR21）。起こしの門と結びの口の判じと係の札の字（`spec`）は行 ag-spec が置く。
++//! 係の記録の使用量の測りと残りの注ぎ（`meter`）は行 ag-meter が置く。
+ 
++pub mod meter;
+ pub mod spec;
