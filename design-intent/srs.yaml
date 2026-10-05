@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.44 版（2026-10-05）: 判断の記録 ADR-63（持ち主の裁定 t3-hub.87.14〔甲〕・裁定 id = t3-hub.87.14:20261005T1140Z-1）の決定 (6)(7) を写した（要件 FR1009 の shall と plain に、lens が PASS を返して契約との食い違い・歯の空虚・憲法に反する面のどれかを数えた周を判定と数の食い違いの FAIL に読み理由の型 verdict-count-mismatch と数えた数を残す句と、場所の列 at を判定の記録に写し memo の口が PASS のうち消せる面を数えた便からも memo の案を組む句を足し、adrs に ADR-63 を足し、note に ADR-63 の決定 (6)(7) を足した・器の行 v-gate-findings はノート surface-wave29c）。
 # 第 0.43 版（2026-10-05）: 判断の記録 ADR-63（持ち主の裁定 t3-hub.87.14〔甲〕・裁定 id = t3-hub.87.14:20261005T1140Z-1）の決定 (13) を写した（要件 FR1068 の shall と plain に、器への宣言の任意の鍵 run-cap と run-cap-paths が名乗る dir の下を書く契約を、同じ dir の下を書く終端でない段の便と同じ周に起こした便が本数に達した周に起こさず受付も同じ 1 つの判じで断る句と、待ちの理由の閉じた列の run-cap を足し、adrs に ADR-63 を足し、note に ADR-63 の決定 (13) を足した・器の行 v-one-vessel と名乗りの行 t-run-cap-on はノート surface-wave29c）。
 # 第 0.42 版（2026-10-05）: 判断の記録 ADR-61（持ち主の裁定 t3-hub.87.6〔乙〕・裁定 id = t3-hub.87.6:20261005T0818Z-1・前の裁定 t3-hub.87.2〔乙〕）を写した（要件 FR22 と受入 AC22 を足した・席が起こす検証の群を計画の file と攻めの一覧の file と頼みの頭の群の行と係ごとと群の合計の上限で機械が持ち、席の流れの道具の呼びを断り、調べの群は置かない・要件 FR21 の shall に同じ群の係の対象の重なりと読み直しの数えの例外の句を足し adrs と note に ADR-61 を足した・判断の記録 ADR-59 の決定 (2)(3)(4) への例外・行は ADR-59 の行の後に、ノート surface-wave29b か後継のノートに足す）。
 # 第 0.41 版（2026-10-05）: 判断の記録 ADR-60（持ち主の裁定 t3-hub.89.2〔案 C〕・裁定 id = t3-hub.89.2:20261005T0513Z-1）を写した（要件 FR1039 の shall に差の当たりの判じで通す組と判じの結末の閉じた列を足し plain と note を合わせ、要件 FR1068 の shall と plain の交差の判定と待ちの理由の閉じた列に判じの結末を足し、要件 FR1102 の shall と plain の判定を file の交わりのままと字で分け、受入 AC1014 の title と plain と red_test を合わせた・判断の記録 ADR-1019 の §2.1 と §2.3 の部分の置き換え・器の行はノート surface-wave29b に試作の後に足す）。
@@ -31,7 +32,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.43
+  version: v0.44
   status: draft
   generated: 2026-09-28
   approval:
@@ -52,6 +53,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "器の入口の排他を差の当たりで通す形に改め、重なりを避けるためだけの depends を書かない（t3-hub.89.2（裁定 id = t3-hub.89.2:20261005T0513Z-1・案 C・tool の呼び・notes に逐語）・判断の記録 ADR-60・要件 FR1039 の shall と plain と note・FR1068 の shall と plain・FR1102 の shall と plain・受入 AC1014 の title と plain と red_test）", verbatim: "推奨で", version: v0.41}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "席が起こす検証の群を置く前の試しの実の数で直した上限と引き金で置き、調べの群は置かない（t3-hub.87.6（裁定 id = t3-hub.87.6:20261005T0818Z-1・乙・配達の口・notes に逐語）・前の裁定 t3-hub.87.2（裁定 id = t3-hub.87.2:20261005T0639Z-1・乙）・判断の記録 ADR-61・要件 FR21 の shall と adrs と note・要件 FR22 と受入 AC22 を足した）", verbatim: "推奨でよい", version: v0.42}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "器を書く便を同時に 1 本までにする床を器への宣言の 2 鍵で置く（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (13)・要件 FR1068 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.43}
+    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "gate の判定と数の食い違いを不合格に読み、場所の列を判定の記録に写し、合格の質の指摘を memo の口へ返す（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (6)(7)・要件 FR1009 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.44}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -501,13 +503,14 @@ requirements:
     pattern: unwanted
     strength: must
     when: "lens が要るのに lens が無い・diff が効いている予算 cap（manifest の値か、 予算 cap の rules 行への上限の許可〔FR1111〕がその bead の便の gate と gate が起こす lens に効く周はその値）を超える・stdout が parse できない・verdict が 3 値の外のとき"
-    shall: "PASS を名乗らず INCONCLUSIVE とする。 ただし lens は在るが lens の出力が parse できない周だけは、 同じ gate の中で lens を 1 回だけ撃ち直し、 撃ち直した lens の出力もなお parse できないときに INCONCLUSIVE とする（parse できたうえで規則が断った周は lens を撃ち直さない）"
-    plain: "審査役が要るのに居ない、diff が効いている予算（設定の値か、予算の行への上限の許可〔FR1111〕が作業の便の検査〔gate〕とその検査が起こす審査役に効く周はその値・契約の審査などほかの審査役は設定の値のまま）を超える、答えが読めない、答えが 3 値（PASS / FAIL / INCONCLUSIVE）の外、のどれかなら、合格（PASS）とは言わず「判定できなかった（INCONCLUSIVE）」にします。ただし審査役は居るのに答えの形が読めなかったときだけは、同じ審査（gate）の中で審査役を 1 回だけ撃ち直し、それでも読めなければ「判定できなかった」にします（読めたうえで規則が断ったときは、審査役を撃ち直しません）。"
+    shall: "PASS を名乗らず INCONCLUSIVE とする。 ただし lens は在るが lens の出力が parse できない周だけは、 同じ gate の中で lens を 1 回だけ撃ち直し、 撃ち直した lens の出力もなお parse できないときに INCONCLUSIVE とする（parse できたうえで規則が断った周は lens を撃ち直さない）。 lens が PASS を返し、 数える観点のうち契約との食い違い（contract-fit）・歯の空虚（teeth-nonvacuous）・憲法に反する面（constitution）のどれかを 1 以上と数えた周は、 判定と数の食い違いとして PASS を名乗らず FAIL とし、 判定の記録に理由の型（verdict-count-mismatch）と数えた数を残す。 判定の記録は lens が 0 でない観点ごとに書いた場所の列（at）を写し、 台帳を読まず書かない memo の口は、 PASS の判定のうち消せる面（delete）を 1 以上と数えた便からも、 根拠と場所の列を写した memo の案を組む"
+    plain: "審査役が要るのに居ない、diff が効いている予算（設定の値か、予算の行への上限の許可〔FR1111〕が作業の便の検査〔gate〕とその検査が起こす審査役に効く周はその値・契約の審査などほかの審査役は設定の値のまま）を超える、答えが読めない、答えが 3 値（PASS / FAIL / INCONCLUSIVE）の外、のどれかなら、合格（PASS）とは言わず「判定できなかった（INCONCLUSIVE）」にします。ただし審査役は居るのに答えの形が読めなかったときだけは、同じ審査（gate）の中で審査役を 1 回だけ撃ち直し、それでも読めなければ「判定できなかった」にします（読めたうえで規則が断ったときは、審査役を撃ち直しません）。審査役が合格（PASS）と答えても、契約との食い違い・歯の空虚・憲法に反する面のどれかを 1 つ以上数えていれば、判定と数が食い違うので不合格（FAIL）にし、判定の記録に理由の型（verdict-count-mismatch）と数えた数を残します。判定の記録には、審査役が 0 でない観点ごとに書いた場所の列（at）も写し、台帳を読まず書かない memo の口は、合格の判定のうち消せる面（delete）を 1 つ以上数えた便からも、根拠と場所を写した memo の案を作ります。"
     basis: []
     verify: {method: test, how: "器の歯で ac の欄の受入の基準を撃つ（器の確かめ方の字 T・test）", ac: [AC1003, AC1069, AC1085]}
     goals: [GOAL1001]
     figures: []
-    note: "なぜ要るか: 自律安全のニーズ（GOAL1001）から来ています。判定できなかった便を合格と呼ぶと、壊れたものが無人で着地します。"
+    adrs: [ADR-63]
+    note: "なぜ要るか: 自律安全のニーズ（GOAL1001）から来ています。判定できなかった便を合格と呼ぶと、壊れたものが無人で着地します。 審査役が自分で数えた違反を持つ合格を不合格に読む決定と、質の指摘を memo の案へ返す口の決定は tsuzuri の判断の記録 ADR-63 の決定 (6)(7) に在ります。"
   - id: FR1010
     title: "land の前提"
     pattern: unwanted

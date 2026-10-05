@@ -1,0 +1,667 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/ledger_memo.rs b/scribe2/crates/scribe2-boundary/tests/e2e/ledger_memo.rs
+index 33c4358ca2b2bedaeaab97e0dd2c76db381d7961..ed841b16746a67d7741dace76b1a08551e950132 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/ledger_memo.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/ledger_memo.rs
+@@ -1,4 +1,5 @@
+-//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`）。
++//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`・質の原本の歯は接頭辞 `vgfind_`・
++//! tsuzuri の判断の記録 ADR-63 の決定 (7)）。
+ //!
+ //! 置き場は tmp の state dir（event log は固定 ts で積み、run dir に `verdict.json` / `review.json` を置く）で、実 binary の
+ //! `ledger memo` を撃つ。PATH の先頭には argv を記録する偽の `bd` を置き、**1 回も呼ばれない**ことを毎回測る。
+@@ -260,6 +261,76 @@ fn ledger_memo_plan_refuses_non_terminal_and_materialless_runs() {
+     fs::remove_dir_all(&place.dir).ok();
+ }
+ 
++/// 質の原本の歯の `verdict.json`（3 観点は 0・delete は `delete` の字・母集団は 0 でない・at は在る周だけ）。
++fn vgfind_verdict(verdict: &str, delete: &str, evidence: &str, at: Option<&str>) -> String {
++    let at = at.map(|found| format!(",\"at\":\"{found}\"")).unwrap_or_default();
++    let findings = format!("contract-fit:0,teeth-nonvacuous:0,constitution:0,{delete},stdlib:0,native:0,yagni:0,shrink:4");
++    format!("{{\"schema\":1,\"verdict\":\"{verdict}\",\"evidence\":\"{evidence}\",\"findings\":\"{findings}\",\"population\":\"files:2,lines:8\"{at}}}\n")
++}
++
++/// 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）: `Landed` の便の `verdict.json` が PASS で findings の delete を 1 以上と数えた周は、
++/// 題の頭が `質 delete — ` で kind が `PASS delete:<n>` の plan を出し、evidence と at を観測へ写す（at の無い file は `-`）。
++#[test]
++fn vgfind_memo_plans_a_landed_pass_that_counted_delete() {
++    let place = place();
++    stage(&place, "d-land", Stage::Landed, None, "2026-09-20T00:07:00Z");
++    put(&place, "d-land", "verdict.json", &vgfind_verdict("PASS", "delete:3", "消せる枝 m2", Some("delete:src/m2.rs:4;src/m2.rs:9")));
++    stage(&place, "d-bare", Stage::Landed, None, "2026-09-20T00:07:01Z");
++    put(&place, "d-bare", "verdict.json", &vgfind_verdict("PASS", "delete:1", "使われない欄 n5", None));
++    assert_eq!(
++        plan_of(&place, "d-land", &[]),
++        want_run(
++            "[memo] 質 delete — d-land Landed PASS delete:3",
++            &["- run: d-land", "- stage: Landed", "- kind: PASS delete:3"],
++            &["- evidence: 消せる枝 m2", "- at: delete:src/m2.rs:4;src/m2.rs:9"],
++        ),
++        "着地した便の質の原本"
++    );
++    assert_eq!(
++        plan_of(&place, "d-bare", &[]),
++        want_run(
++            "[memo] 質 delete — d-bare Landed PASS delete:1",
++            &["- run: d-bare", "- stage: Landed", "- kind: PASS delete:1"],
++            &["- evidence: 使われない欄 n5", "- at: -"],
++        ),
++        "at の無い file は `-`"
++    );
++    fs::remove_dir_all(&place.dir).ok();
++}
++
++/// 質の原本の断り（正しい file から 1 句だけ外す）: delete が 0 の PASS（`Gated` と `Landed`）・母集団の無い PASS・PASS でない `Landed` の
++/// 判定は終端でない、evidence が空の PASS は原本が無い（閉じた理由の 1 行・rc 1・stdout 0 byte）。
++#[test]
++fn vgfind_memo_refuses_a_pass_without_a_counted_delete() {
++    let place = place();
++    let good = vgfind_verdict("PASS", "delete:2", "消せる枝 m2", Some("delete:src/m2.rs:4"));
++    let files = [
++        ("z-gate", Stage::Gated, good.replace("delete:2", "delete:0")),
++        ("z-land", Stage::Landed, good.replace("delete:2", "delete:0")),
++        ("u-land", Stage::Landed, good.replace(",\"population\":\"files:2,lines:8\"", "")),
++        ("f-land", Stage::Landed, good.replace("\"verdict\":\"PASS\"", "\"verdict\":\"FAIL\"")),
++        ("e-land", Stage::Landed, good.replace("消せる枝 m2", "")),
++    ];
++    for (run, found, body) in &files {
++        assert_ne!(body, &good, "{run}: 1 句を外した file");
++        stage(&place, run, *found, None, "2026-09-20T00:08:00Z");
++        put(&place, run, "verdict.json", body);
++    }
++    let cases = [
++        ("z-gate", "memo: refused reason=not-terminal run=z-gate stage=Gated"),
++        ("z-land", "memo: refused reason=not-terminal run=z-land stage=Landed"),
++        ("u-land", "memo: refused reason=not-terminal run=u-land stage=Landed"),
++        ("f-land", "memo: refused reason=not-terminal run=f-land stage=Landed"),
++        ("e-land", "memo: refused reason=no-material run=e-land stage=Landed"),
++    ];
++    let state = place.state.display().to_string();
++    for (run, want) in cases {
++        let shot = shoot(&place, &["memo", "--run", run, "--state-dir", &state, "--parent", "s2-epic"]);
++        assert_eq!((shot.rc, shot.out.as_str(), shot.err.as_str()), (Some(1), "", format!("{want}\n").as_str()), "{run}");
++    }
++    fs::remove_dir_all(&place.dir).ok();
++}
++
+ /// (3) `--from user` の plan: 出所は逐語の在り処の 1 行と日付（UTC の今日）・観測は空の見出し。
+ #[test]
+ fn ledger_memo_plan_from_user_carries_the_source_line_and_date() {
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index 3f751c943e1c8c4f7bfaf1bf4e7796e29d0fcb76..3ab3f79e14bb5095ad011de65f662c7c400405d6 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -771,7 +771,8 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
+     let (repo, state) = repo_with_state();
+     let path = write_contract(&repo, &[], &[]);
+     let id = implemented(&repo, &state, &path);
+-    let shuffled = "shrink:5,constitution:2,contract-fit:1,yagni:4,stdlib:3,delete:0,native:0,teeth-nonvacuous:0";
++    // 3 観点（contract-fit・teeth-nonvacuous・constitution）は 0 にする（数えた PASS は FAIL に読む・歯 vgfind_）。
++    let shuffled = "shrink:5,constitution:0,contract-fit:0,yagni:4,stdlib:3,delete:2,native:1,teeth-nonvacuous:0";
+     let body = findings_body(&format!(",\"findings\":\"{shuffled}\",\"population\":\"files:7,lines:42\""));
+     // lens の **stdout** の record を歯が読めるように写してから、同じ 1 行を gate へ流す。
+     let record = state.join("lens-stdout.json");
+@@ -788,7 +789,7 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
+     let pairs = verdict_pairs(&state, &id);
+     assert_eq!(
+         value_of(&pairs, "findings"),
+-        "contract-fit:1,teeth-nonvacuous:0,constitution:2,delete:0,stdlib:3,native:0,yagni:4,shrink:5",
++        "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:3,native:1,yagni:4,shrink:5",
+         "8 category を宣言順で（0 件も 0 と）書く: {pairs:?}"
+     );
+     assert_eq!(value_of(&pairs, "population"), "files:7,lines:42", "母集団も同じ record に載る");
+@@ -827,6 +828,72 @@ fn pipe_gate_findings_zero_population_is_inconclusive() {
+     clean(&[&repo, &state]);
+ }
+ 
++// ── 判定と数の食い違いと場所の列（接頭辞 `vgfind_`・tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）──────────
++
++/// 偽 lens の判定の行（PASS・`findings` と `at` を指定・母集団は 0 でない）。
++fn vgfind_body(findings: &str, at: &str) -> String {
++    format!("{{\"verdict\":\"PASS\",\"evidence\":\"lens-saw-k8\",\"findings\":\"{findings}\",\"population\":\"files:1,lines:4\",\"at\":\"{at}\"}}")
++}
++
++/// 便の `ledger memo --run` の plan の title（`arg: --title=` の行の値・rc 0 を要る）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn vgfind_memo_title(state: &Path, id: &str) -> String {
++    let out = bin_cmd()
++        .args(["ledger", "memo", "--run", id, "--state-dir"])
++        .arg(state)
++        .args(["--parent", "s2-epic"])
++        .output()
++        .expect("binary を起動できる");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "memo の plan は rc 0: {}", stderr_of(&out));
++    stdout_of(&out).lines().find_map(|line| line.strip_prefix("arg: --title=")).unwrap_or_default().to_owned()
++}
++
++/// lens が PASS を返して constitution を 2 と数えた便を、gate は FAIL（rc 1・stdout の verdict=FAIL）に読み、`verdict.json` は理由の型
++/// `verdict-count-mismatch` と、3 観点の数と lens の evidence を写した evidence と、数えた findings と場所の列 at を持ち（key は
++/// findings・population・kind・at・ts の順）、`Gated` の detail は verdict:FAIL で、memo の口の plan の題は理由の型を持つ。
++#[test]
++fn vgfind_gate_reads_a_pass_with_fit_counts_as_a_fail() {
++    let (repo, state) = repo_with_state();
++    let path = write_contract(&repo, &[], &[]);
++    let id = implemented(&repo, &state, &path);
++    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:2,delete:1,stdlib:0,native:0,yagni:0,shrink:0";
++    let at = "constitution:src/lib.rs:3,delete:src/lib.rs:9";
++    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "食い違いは FAIL の rc 1: {}", stdout_of(&out));
++    assert!(stdout_of(&out).contains("verdict=FAIL"), "{}", stdout_of(&out));
++    let pairs = verdict_pairs(&state, &id);
++    let want = "verdict-count-mismatch・PASS を返したが contract-fit:0,teeth-nonvacuous:0,constitution:2 を数えた・lens の evidence は lens-saw-k8";
++    assert_eq!((value_of(&pairs, "verdict"), value_of(&pairs, "evidence")), ("FAIL".to_owned(), want.to_owned()), "{pairs:?}");
++    assert_eq!((value_of(&pairs, "kind"), value_of(&pairs, "findings"), value_of(&pairs, "at")), ("verdict-count-mismatch".to_owned(), findings.to_owned(), at.to_owned()));
++    let keys: Vec<&str> = pairs.iter().map(|(key, _)| key.as_str()).collect();
++    assert_eq!(keys.get(keys.len().saturating_sub(5)..), Some(&["findings", "population", "kind", "at", "ts"][..]), "{keys:?}");
++    assert_eq!(gated_details(&state, &id), vec![format!("verdict:FAIL,rules:{}", rules_source(&repo, None))], "Gated の detail");
++    assert_eq!(vgfind_memo_title(&state, &id), format!("[memo] {id} Gated FAIL verdict-count-mismatch"), "memo の口の題");
++    clean(&[&repo, &state]);
++}
++
++/// 対: 3 観点を 0 と数えて delete を 2 と数えた PASS の便は PASS（rc 0）のまま kind を書かず、at を写し、memo の口の plan の題は
++/// 質の頭 `質 delete — ` と `PASS delete:2` を持つ。
++#[test]
++fn vgfind_gate_keeps_a_pass_with_quality_counts_and_copies_the_at() {
++    let (repo, state) = repo_with_state();
++    let path = write_contract(&repo, &[], &[]);
++    let id = implemented(&repo, &state, &path);
++    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:0,native:0,yagni:0,shrink:1";
++    let at = "delete:src/lib.rs:9;src/lib.rs:12,shrink:src/lib.rs:20";
++    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "質の観点だけの PASS は通る: {}", stderr_of(&out));
++    let pairs = verdict_pairs(&state, &id);
++    assert_eq!((value_of(&pairs, "verdict"), value_of(&pairs, "evidence")), ("PASS".to_owned(), "lens-saw-k8".to_owned()), "{pairs:?}");
++    assert_eq!((value_of(&pairs, "kind"), value_of(&pairs, "at")), (String::new(), at.to_owned()), "kind を書かず at を写す: {pairs:?}");
++    assert!(!pairs.iter().any(|(key, _)| key == "kind"), "kind の key を書かない: {pairs:?}");
++    assert_eq!(vgfind_memo_title(&state, &id), format!("[memo] 質 delete — {id} Gated PASS delete:2"), "memo の口の題");
++    clean(&[&repo, &state]);
++}
++
+ // ── lens review（2026-09-09）で「測っていない」と名指しされた経路を塞ぐ歯 ──────
+ 
+ #[test]
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_prompt_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_prompt_external_form.snap
+index be889b447d9d1f26de0c251e8542c53162d9fae3..3e57cafd5f0e8c618e18d31c1d49dfda0c4b6cb9 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_prompt_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_prompt_external_form.snap
+@@ -8,9 +8,10 @@ expression: prompt
+ 最後の 1 行に、次の形の JSON を**ちょうど 1 つ**書く。前置きや説明は JSON の前に書いてよいが、
+ 最終行は JSON だけにする。
+ 
+-{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","findings":"contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>,delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","population":"files:<n>,lines:<n>"}
++{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","findings":"contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>,delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","population":"files:<n>,lines:<n>","at":"<観点>:<場所>;<場所>,<観点>:<場所>"}
+ 
+ **`findings` と `population` は必須である**（8 観点をこの順で全部・**0 件も 0 と書く**・`population` は**実際に読んだ**母集団＝diff の file 数と行数で、取り繕った数を書かない）。
++`at` は 0 でない観点ごとの場所の列である（`<観点>:<場所>` を `findings` と同じ順に `,` で継ぎ、1 つの観点の場所が 2 つ以上なら `;` で継ぐ・場所は path か `path:行` か識別子で自由文にしない・0 の観点は書かない）。
+ 
+ ## 数える観点（8 つ・**件数だけ**を数える。欠け・表に無い名・母集団 0 の周は、器が「判定に届かなかった」＝ INCONCLUSIVE として読む——「見て 0 件だった」と「見ていない」は別のことだからである）
+ - `contract-fit`: 契約（下の goal / done / verify / write-set）と diff の食い違い。
+@@ -24,6 +25,7 @@ expression: prompt
+ 
+ ## 判定の決め方
+ - **PASS**: diff が契約の求めるものを満たし、明らかな欠陥が無い。
++- contract-fit・teeth-nonvacuous・constitution を 1 以上数えたら PASS を返さない。
+ - **FAIL**: 契約に反する、または欠陥を実際に指し示せる。evidence にその場所を書く。
+ - **INCONCLUSIVE**: 材料が足りず判定に届かない。**迷ったらこれを選ぶ**——確信の無い PASS は
+   偽の合格になり、後段がそれを裏書きしてしまう。
+diff --git a/scribe2/crates/scribe2/src/headless/lens.rs b/scribe2/crates/scribe2/src/headless/lens.rs
+index 6ac7d401ca9eaa39ea90a3f021abc42f34c3f5ff..473afcaf9bca3cce22db164a89700a4f4fce4872 100644
+--- a/scribe2/crates/scribe2/src/headless/lens.rs
++++ b/scribe2/crates/scribe2/src/headless/lens.rs
+@@ -775,6 +775,21 @@ mod tests {
+         assert_eq!(super::TEMPLATE.matches(super::CONSTITUTION_PHRASE).count(), 1);
+     }
+ 
++    /// gate の雛形は、判定の決め方の節に 3 観点を数えたら PASS を返さない 1 文をちょうど 1 度持ち（雛形の全体でも 1 度）、出すものの節の
++    /// JSON の形の末に場所の列の key `at` を持ち、同じ節に `at` の形の行を 1 行持つ（tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
++    #[test]
++    fn vgfind_gate_template_names_the_rule_and_the_at() {
++        let section = |head: &str| super::TEMPLATE.split(head).nth(1).and_then(|rest| rest.split("\n## ").next()).unwrap_or_default();
++        let rule = "- contract-fit・teeth-nonvacuous・constitution を 1 以上数えたら PASS を返さない。\n";
++        assert_eq!(section("## 判定の決め方\n").matches(rule).count(), 1, "判定の決め方の節に 1 度");
++        assert_eq!(super::TEMPLATE.matches(rule).count(), 1, "雛形の全体でも 1 度");
++        let out = section("## 出すもの\n");
++        let json = out.lines().find(|line| line.starts_with("{\"verdict\"")).unwrap_or_default();
++        assert!(json.ends_with(",\"at\":\"<観点>:<場所>;<場所>,<観点>:<場所>\"}"), "JSON の形の末に at: {json}");
++        let form = out.lines().filter(|line| line.starts_with("`at` は 0 でない観点ごとの場所の列である")).count();
++        assert_eq!(form, 1, "at の形の行: {out}");
++    }
++
+     /// 契約の審査の周（材料が在る周）だけを撃つ歯なので worktree は測られない（憲法の測りは diff の審査の周だけ）。goal は空で渡す
+     /// （節の本文を 1 行にしない・二重の外しは歯 vrdup_ が撃つ）。
+     fn prompt_of(contract: &Path, stated: &str, rulings: &str, cap: u64) -> Result<String, Outcome> {
+diff --git a/scribe2/crates/scribe2/src/headless/lens.txt b/scribe2/crates/scribe2/src/headless/lens.txt
+index 82c352f332a382597a97d1aff8a4a7647737036a..564fa8a4819c3ec8de6f7b967df33a31516e694f 100644
+--- a/scribe2/crates/scribe2/src/headless/lens.txt
++++ b/scribe2/crates/scribe2/src/headless/lens.txt
+@@ -4,9 +4,10 @@
+ 最後の 1 行に、次の形の JSON を**ちょうど 1 つ**書く。前置きや説明は JSON の前に書いてよいが、
+ 最終行は JSON だけにする。
+ 
+-{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","findings":"contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>,delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","population":"files:<n>,lines:<n>"}
++{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","findings":"contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>,delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","population":"files:<n>,lines:<n>","at":"<観点>:<場所>;<場所>,<観点>:<場所>"}
+ 
+ **`findings` と `population` は必須である**（8 観点をこの順で全部・**0 件も 0 と書く**・`population` は**実際に読んだ**母集団＝diff の file 数と行数で、取り繕った数を書かない）。
++`at` は 0 でない観点ごとの場所の列である（`<観点>:<場所>` を `findings` と同じ順に `,` で継ぎ、1 つの観点の場所が 2 つ以上なら `;` で継ぐ・場所は path か `path:行` か識別子で自由文にしない・0 の観点は書かない）。
+ 
+ ## 数える観点（8 つ・**件数だけ**を数える。欠け・表に無い名・母集団 0 の周は、器が「判定に届かなかった」＝ INCONCLUSIVE として読む——「見て 0 件だった」と「見ていない」は別のことだからである）
+ - `contract-fit`: 契約（下の goal / done / verify / write-set）と diff の食い違い。
+@@ -20,6 +21,7 @@
+ 
+ ## 判定の決め方
+ - **PASS**: diff が契約の求めるものを満たし、明らかな欠陥が無い。
++- contract-fit・teeth-nonvacuous・constitution を 1 以上数えたら PASS を返さない。
+ - **FAIL**: 契約に反する、または欠陥を実際に指し示せる。evidence にその場所を書く。
+ - **INCONCLUSIVE**: 材料が足りず判定に届かない。**迷ったらこれを選ぶ**——確信の無い PASS は
+   偽の合格になり、後段がそれを裏書きしてしまう。
+diff --git a/scribe2/crates/scribe2/src/ledger/memo.rs b/scribe2/crates/scribe2/src/ledger/memo.rs
+index 1280e0c921fda7200ecad02e56ae747057f22d4d..af9a2fd956c1b9106729d09fbd4fa6774a3b7ff1 100644
+--- a/scribe2/crates/scribe2/src/ledger/memo.rs
++++ b/scribe2/crates/scribe2/src/ledger/memo.rs
+@@ -9,12 +9,16 @@
+ //! 質問の逐語と about（既存の読み手 [`crate::pipe::question_of_run`]）／`Failed` = event log の `RunStage(Failed)` の
+ //! detail と ts。どの形にも当たらない終端（file が無い・evidence や detail が空・log を読めない）は写さず、閉じた
+ //! 理由 1 つで断る（fail-closed）。
++//!
++//! 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）: `Gated` か `Landed` の便の `verdict.json` が PASS で findings の delete を
++//! 1 以上と数えた周は、その evidence と at を写し、題の頭を [`QUALITY_HEAD`] にする（質の memo・日次の物差しがこの字で数える）。
++//! delete が 0・数えを読めない PASS と、`verdict.json` の無い・読めない `Landed` は今までどおり終端でない。
+ 
+ use super::form::MEMO_LABEL;
+ use crate::cli_outcome::{Outcome, RC_REFUSED};
+-use crate::fleet::json_lite;
++use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::{replay, store, Event, EventKind, Stage};
+-use crate::pipe::gate::Verdict;
++use crate::pipe::gate::{delete_count, Verdict};
+ use crate::pipe::review::review_path;
+ use crate::pipe::{question_of_run, run_dir, verdict_path};
+ use std::path::Path;
+@@ -28,6 +32,9 @@ pub const USER_SOURCE: &str = "user 逐語は本 bead の notes";
+ /// 値の無い欄の字面（空に潰さない・C10）。
+ const ABSENT: &str = "-";
+ 
++/// 質の memo の題の頭（`[memo] ` の後・型は delete）。
++const QUALITY_HEAD: &str = "質 delete — ";
++
+ /// `ledger` の使い方（1 枚）。
+ pub fn usage() -> String {
+     "usage: ledger memo <--run ID --state-dir S|--from user> --parent EPIC [--relates ID]...".to_owned()
+@@ -40,7 +47,7 @@ pub enum Refusal {
+     NoRunDir,
+     /// event log を読めない。
+     LogUnreadable,
+-    /// 終端でない（段が終端の 4 形の外・verdict が PASS・log に便が無い〔`None`〕）。
++    /// 終端でない（段が終端の 4 形の外・delete を数えない verdict が PASS・log に便が無い〔`None`〕）。
+     NotTerminal(Option<Stage>),
+     /// 終端だが原本が無い（file が無い・壊れている・evidence / 質問 / detail が空）。
+     NoMaterial(Stage),
+@@ -80,6 +87,15 @@ pub enum Material {
+         /// 契約のどの key か（無ければ `None`）。
+         about: Option<String>,
+     },
++    /// gate の PASS のうち findings の delete を 1 以上と数えた判定（`verdict.json`・質の原本）。
++    Quality {
++        /// findings の delete の件数（1 以上）。
++        delete: u64,
++        /// file の `evidence`（空でない）。
++        evidence: String,
++        /// file の `at`（無ければ `None`）。
++        at: Option<String>,
++    },
+     /// `RunStage(Failed)` の detail と ts。
+     Failed {
+         /// 閉じた理由の字面（空でない）。
+@@ -101,11 +117,12 @@ pub struct Terminal {
+ }
+ 
+ impl Terminal {
+-    /// 出所の `kind`（Gated / Reviewed は verdict〔と審査の理由の型〕・Questioned は `question`・Failed は `failed`）。
++    /// 出所の `kind`（Gated / Reviewed は verdict〔と理由の型〕・質は `PASS delete:<n>`・Questioned は `question`・Failed は `failed`）。
+     pub fn kind(&self) -> String {
+         match &self.material {
+             Material::Judged { verdict, finding: Some(found), .. } => format!("{} {found}", verdict.as_str()),
+             Material::Judged { verdict, finding: None, .. } => verdict.as_str().to_owned(),
++            Material::Quality { delete, .. } => format!("{} delete:{delete}", Verdict::Pass.as_str()),
+             Material::Question { .. } => "question".to_owned(),
+             Material::Failed { .. } => "failed".to_owned(),
+         }
+@@ -121,6 +138,10 @@ pub fn terminal_of(state_dir: &Path, run: &str) -> Result<Terminal, Refusal> {
+     let stage = replay(&events).runs.get(run).map(|found| found.stage).ok_or(Refusal::NotTerminal(None))?;
+     let material = match stage {
+         Stage::Gated => judged(&verdict_path(state_dir, run), stage)?,
++        Stage::Landed => {
++            let pairs = pairs_of(&verdict_path(state_dir, run)).ok_or(Refusal::NotTerminal(Some(stage)))?;
++            quality(&pairs, stage)?
++        }
+         Stage::Reviewed => judged(&review_path(state_dir, run), stage)?,
+         Stage::Questioned => question_of_run(state_dir, run)
+             .filter(|found| !found.question.trim().is_empty())
+@@ -132,27 +153,45 @@ pub fn terminal_of(state_dir: &Path, run: &str) -> Result<Terminal, Refusal> {
+         | Stage::Spawned
+         | Stage::RateLimited
+         | Stage::Implemented
+-        | Stage::Landed
+         | Stage::Stopped => return Err(Refusal::NotTerminal(Some(stage))),
+     };
+     Ok(Terminal { run: run.to_owned(), stage, material })
+ }
+ 
+-/// `verdict.json` / `review.json` から FAIL・INCONCLUSIVE の原本を読む。PASS は終端でない。
++/// `verdict.json` / `review.json` の object（file が無い・壊れている周は `None`）。
++fn pairs_of(path: &Path) -> Option<Vec<(String, Value)>> {
++    let text = std::fs::read_to_string(path).ok()?;
++    json_lite::parse_object(text.trim()).ok()
++}
++
++/// object の字の値（無い・字でない key は `None`）。
++fn field(pairs: &[(String, Value)], key: &str) -> Option<String> {
++    pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str()).map(str::to_owned)
++}
++
++/// `verdict.json` / `review.json` から FAIL・INCONCLUSIVE の原本を読む。PASS は [`quality`] が読む。
+ fn judged(path: &Path, stage: Stage) -> Result<Material, Refusal> {
+-    let text = std::fs::read_to_string(path).map_err(|_| Refusal::NoMaterial(stage))?;
+-    let pairs = json_lite::parse_object(text.trim()).map_err(|_| Refusal::NoMaterial(stage))?;
+-    let get = |key: &str| {
+-        pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str()).map(str::to_owned)
+-    };
++    let pairs = pairs_of(path).ok_or(Refusal::NoMaterial(stage))?;
++    let get = |key: &str| field(&pairs, key);
+     let verdict = get("verdict").as_deref().and_then(Verdict::parse).ok_or(Refusal::NoMaterial(stage))?;
+     if verdict == Verdict::Pass {
+-        return Err(Refusal::NotTerminal(Some(stage)));
++        return quality(&pairs, stage);
+     }
+     let evidence = get("evidence").filter(|found| !found.trim().is_empty()).ok_or(Refusal::NoMaterial(stage))?;
+     Ok(Material::Judged { verdict, finding: get("kind"), evidence, at: get("at") })
+ }
+ 
++/// PASS の判定のうち findings の delete を 1 以上と数えた周の質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）。PASS でない・
++/// 数えを読めない（`review.json` は findings を持たない）・delete が 0 の周は終端でない。evidence が空の周は原本が無い。
++fn quality(pairs: &[(String, Value)], stage: Stage) -> Result<Material, Refusal> {
++    let get = |key: &str| field(pairs, key);
++    let passed = get("verdict").as_deref().and_then(Verdict::parse) == Some(Verdict::Pass);
++    let counted = passed.then(|| delete_count(&get("findings")?, &get("population")?)).flatten();
++    let delete = counted.filter(|count| *count > 0).ok_or(Refusal::NotTerminal(Some(stage)))?;
++    let evidence = get("evidence").filter(|found| !found.trim().is_empty()).ok_or(Refusal::NoMaterial(stage))?;
++    Ok(Material::Quality { delete, evidence, at: get("at") })
++}
++
+ /// 便の最後の `RunStage(Failed)` の detail と ts（detail が空なら `None`）。
+ fn failed(events: &[Event], run: &str) -> Option<Material> {
+     let found = events
+@@ -184,10 +223,13 @@ pub struct Plan {
+ }
+ 
+ impl Plan {
+-    /// title（`[memo]` の接頭辞・行 d の門が読む印）。
++    /// title（`[memo]` の接頭辞・行 d の門が読む印・質の原本は続けて [`QUALITY_HEAD`]）。
+     fn title(&self) -> String {
+         match &self.origin {
+-            Origin::Run(found) => format!("[memo] {} {} {}", found.run, found.stage.as_str(), found.kind()),
++            Origin::Run(found) => {
++                let head = if matches!(found.material, Material::Quality { .. }) { QUALITY_HEAD } else { "" };
++                format!("[memo] {head}{} {} {}", found.run, found.stage.as_str(), found.kind())
++            }
+             Origin::User(date) => format!("[memo] user {date}"),
+         }
+     }
+@@ -231,7 +273,7 @@ impl Plan {
+ /// 観測の節（終端の種類ごとの原本の逐語）。
+ fn observation(material: &Material) -> Vec<String> {
+     match material {
+-        Material::Judged { evidence, at, .. } => {
++        Material::Judged { evidence, at, .. } | Material::Quality { evidence, at, .. } => {
+             vec![format!("- evidence: {evidence}"), format!("- at: {}", at.as_deref().unwrap_or(ABSENT))]
+         }
+         Material::Question { question, about } => {
+diff --git a/scribe2/crates/scribe2/src/pipe/gate.rs b/scribe2/crates/scribe2/src/pipe/gate.rs
+index 3be6299380208f42760e8a6afe7f751a54158660..77ae96d005daac56a603d72eca7e5f8560e981b9 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate.rs
+@@ -6,7 +6,8 @@
+ //! INCONCLUSIVE にも数えない＝record の rc 2 のまま・設計 gate-cost.md §44 形 (7)）／ lens に渡す本文の byte が cap 超
+ //! → INCONCLUSIVE（lens を呼ばない）／ lens 側の不備 → INCONCLUSIVE（出力の**形が読めなかった**
+ //! 周だけ同じ gate の中で 1 回撃ち直し、2 回目の戻りで読む・設計 gate-cost.md §29）／ それ以外は
+-//! lens の verdict。lens に渡す本文は閉じた型 [`LensInput`]（diff か、純移動の要約・
++//! lens の verdict（PASS を返して契約適合・歯の非空虚・憲法のどれかを数えた周は FAIL・tsuzuri の判断の記録 ADR-63 の
++//! 決定 (6)）。lens に渡す本文は閉じた型 [`LensInput`]（diff か、純移動の要約・
+ //! [`super::move_proof`]・`s2-07l.266`）で、判定は純関数・file の読みだけをここが担う。
+ //!
+ //! **偽の PASS を作らない**（AC3）。判定に届かなかった周はすべて INCONCLUSIVE へ倒す
+@@ -35,6 +36,7 @@ mod lens;
+ mod record;
+ mod verify;
+ 
++pub(crate) use findings::delete_count;
+ pub(crate) use lens::{last_json_object, lens_usage};
+ pub use record::{
+     detection_copies, next_number, records_of, skip_record, step_record, DetectionCopy, Record, Skipped,
+@@ -432,6 +434,10 @@ struct Decision {
+     tree: Option<String>,
+     /// lens の findings の集計（`s2-07l.188`・読めた周だけ `Some`＝field `findings` / `population`）。
+     tally: Option<Tally>,
++    /// 理由の型（判定と数の食い違いを FAIL に読んだ周だけ `Some`＝field `kind`・tsuzuri の判断の記録 ADR-63 の決定 (6)）。
++    kind: Option<&'static str>,
++    /// lens が 0 でない観点ごとに書いた場所の列（写せた周だけ `Some`＝field `at`・決定 (7)）。
++    at: Option<String>,
+     /// lens の scope を片付けた結果（record に書く周だけ `Some`＝field `scope`・設計 gate-cost.md §4.4 errata）。
+     scope: Option<Released>,
+     /// lens を起こした口座（器が選んだ周だけ `Some`＝`Gated` の detail の `account:<label>`・設計
+@@ -497,6 +503,8 @@ pub fn gate(entry: &Gate<'_>) -> Outcome {
+         diff_bytes: byte_count(&measured.diff),
+         tree,
+         tally: decided.judged.tally,
++        kind: decided.judged.kind,
++        at: decided.judged.at,
+         scope: decided.scope,
+         account: decided.account,
+         rules,
+@@ -679,7 +687,7 @@ fn machine_order(measured: &Measured) -> Option<Judged> {
+     if measured.red > 0 {
+         // 赤い周は lens を呼ばない＝findings は測っていない（`tally` は `None`・C10）。
+         let evidence = format!("verify の {} 行が rc≠0", measured.red);
+-        return Some(Judged { verdict: Verdict::Fail, evidence, tally: None, reread: false, usage: None, provenance: None });
++        return Some(Judged { verdict: Verdict::Fail, ..unjudged(evidence) });
+     }
+     None
+ }
+@@ -804,6 +812,13 @@ fn settle(entry: &Gate<'_>, decision: &Decision) -> Result<(), String> {
+         fields.push(("findings", Value::Str(tally.findings_field())));
+         fields.push(("population", Value::Str(tally.population_field())));
+     }
++    // 理由の型と場所の列は在る周だけ足す（schema は 1 のまま・読み手は未知の field を無視する・tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
++    if let Some(kind) = decision.kind {
++        fields.push(("kind", Value::Str(kind.to_owned())));
++    }
++    if let Some(at) = &decision.at {
++        fields.push(("at", Value::Str(at.clone())));
++    }
+     // 許可で数えた周だけ使用を残す（schema は 1 のまま・許可の無い周の key の列は不変・設計 limit-permit.md §20 約束 3）。
+     if let Some(permit) = &decision.permit {
+         fields.push(("permit", Value::Str(permit.clone())));
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/findings.rs b/scribe2/crates/scribe2/src/pipe/gate/findings.rs
+index b65c759ff3818698152ac7ab6a52b44f96cdeb40..9432b2b00df3b9de7f57664104fb2ff36cf59000 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/findings.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/findings.rs
+@@ -163,6 +163,32 @@ impl Tally {
+     pub(super) fn population_field(&self) -> String {
+         format!("files:{},lines:{}", self.population.files, self.population.lines)
+     }
++
++    /// 観点 `found` の件数（[`Findings::ALL`] と同じ並びの `counts` から引く）。
++    fn count(&self, found: Findings) -> u64 {
++        let at = Findings::ALL.iter().position(|seen| *seen == found);
++        at.and_then(|index| self.counts.get(index)).copied().unwrap_or(0)
++    }
++
++    /// 判定と数の食い違いの材料（tsuzuri の判断の記録 ADR-63 の決定 (6)）。[`FIT`] の 3 観点のどれかを 1 以上と数えた周だけ、
++    /// 3 観点の件数を宣言順の字面（`contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>`）で返す。
++    pub(super) fn mismatch(&self) -> Option<String> {
++        FIT.iter().any(|found| self.count(*found) > 0).then(|| {
++            FIT.iter().map(|found| format!("{}:{}", found.as_str(), self.count(*found))).collect::<Vec<_>>().join(",")
++        })
++    }
++}
++
++/// 数えたら PASS を返さない 3 観点（契約適合・歯の非空虚・憲法・雛形 `lens.txt` の判定の決め方の 1 文と同じ 3 つ）。
++const FIT: [Findings; 3] = [Findings::ContractFit, Findings::TeethNonvacuous, Findings::Constitution];
++
++/// 判定と数の食い違いを FAIL に読んだ周の理由の型（`verdict.json` の `kind`・memo の口が出所の kind に写す）。
++pub(super) const MISMATCH_KIND: &str = "verdict-count-mismatch";
++
++/// `verdict.json` の 2 key から観点 delete の件数を読む（memo の口の質の原本・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
++/// 読みは [`Tally::parse`] の 1 本で、読めない周は `None`。
++pub(crate) fn delete_count(findings: &str, population: &str) -> Option<u64> {
++    Tally::parse(findings, population).ok().map(|tally| tally.count(Findings::Delete))
+ }
+ 
+ /// 表に在る category の名か。
+@@ -259,4 +285,32 @@ mod tests {
+         }
+         assert!(Tally::parse(all, READ).is_ok(), "対: 8 つ揃い母集団が 0 でなければ読める");
+     }
++
++    /// 食い違いの材料は 3 観点のどれか 1 つを 1 以上と数えた周だけ 3 観点の件数を宣言順で返し、3 観点が 0 なら質の 5 観点を
++    /// 数えても返さない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
++    #[test]
++    fn vgfind_tally_names_the_three_fit_counts_only_when_one_is_counted() {
++        let zero = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
++        let quality = "delete:4,stdlib:1,native:1,yagni:1,shrink:3";
++        let cases = [
++            ("contract-fit:2,teeth-nonvacuous:0,constitution:0", Some("contract-fit:2,teeth-nonvacuous:0,constitution:0")),
++            ("contract-fit:0,teeth-nonvacuous:1,constitution:0", Some("contract-fit:0,teeth-nonvacuous:1,constitution:0")),
++            ("contract-fit:0,teeth-nonvacuous:0,constitution:3", Some("contract-fit:0,teeth-nonvacuous:0,constitution:3")),
++            (zero, None),
++        ];
++        for (fit, want) in cases {
++            let tally = Tally::parse(&format!("{quality},{fit}"), READ).expect("8 category と母集団が揃えば読める");
++            assert_eq!(tally.mismatch().as_deref(), want, "{fit}");
++        }
++    }
++
++    /// delete の件数は 2 key の読みの 1 本から引き、読めない 2 key は `None`（memo の口の質の原本・決定 (7)）。
++    #[test]
++    fn vgfind_delete_count_reads_the_delete_of_a_readable_record() {
++        let counted = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:3,stdlib:1,native:0,yagni:0,shrink:2";
++        assert_eq!(super::delete_count(counted, READ), Some(3), "delete の件数");
++        assert_eq!(super::delete_count(&counted.replace("delete:3", "delete:0"), READ), Some(0), "0 は 0");
++        assert_eq!(super::delete_count(&counted.replace(",delete:3", ""), READ), None, "delete の欠けた 2 key は読めない");
++        assert_eq!(super::delete_count(counted, "files:0,lines:4"), None, "母集団 0 は読めない");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/lens.rs b/scribe2/crates/scribe2/src/pipe/gate/lens.rs
+index 612929583b5bb35fb64faffe0f5dc4f043094ea9..d4e5f980736a30269240c1036fc95239d5a0402e 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/lens.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/lens.rs
+@@ -2,7 +2,7 @@
+ //! [`fold_renamed_paths`]・削除の run の畳み [`prune_deletions`]・`--lens` の cmd の穴埋め・起動・stdout の JSON 1 行の読み・`verdict.json` の書き・
+ //! [`super`] から純移動・`s2-07l.286`）。判定の順と終端は親（[`super::gate`]）が持つ。
+ 
+-use super::findings::{Tally, Unread};
++use super::findings::{Tally, Unread, MISMATCH_KIND};
+ use super::{Verdict, JSON_HEAD};
+ use crate::fleet::json_lite::{self, Value};
+ use crate::fleet::Usage;
+@@ -430,6 +430,10 @@ pub(super) struct Judged {
+     pub(super) evidence: String,
+     /// findings の集計（読めた周だけ）。
+     pub(super) tally: Option<Tally>,
++    /// 理由の型（判定と数の食い違いを FAIL に読んだ周だけ [`MISMATCH_KIND`]・`verdict.json` の `kind`）。
++    pub(super) kind: Option<&'static str>,
++    /// lens が 0 でない観点ごとに書いた場所の列（集計を読めた周で、空でない字の時だけ・`verdict.json` の `at`）。
++    pub(super) at: Option<String>,
+     /// lens の**出力は在るが形が読めなかった**か（設計 gate-cost.md §29・`s2-07l.495`）。
+     ///
+     /// 立てるのは [`parse_lens`] の `Err` の分岐だけ——JSON でない・`verdict` が 3 値でない・key が
+@@ -447,7 +451,7 @@ pub(super) struct Judged {
+ 
+ /// 判定に届かなかった周の戻り（集計は無い・撃ち直しの印は伏せた側）。
+ pub(super) fn unjudged(evidence: String) -> Judged {
+-    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, reread: false, usage: None, provenance: None }
++    Judged { verdict: Verdict::Inconclusive, evidence, tally: None, kind: None, at: None, reread: false, usage: None, provenance: None }
+ }
+ 
+ /// 出力の形が読めなかった周の戻り（[`unjudged`] に撃ち直しの印を立てた形・[`parse_lens`] 専用）。
+@@ -576,7 +580,8 @@ fn parse_lens(text: &str) -> Judged {
+     Judged { usage: Usage::from_pairs(&pairs), provenance: provenance::of_pairs(&pairs), ..judge_pairs(&pairs) }
+ }
+ 
+-/// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。
++/// 読めた object から 3 値と集計を読む（[`parse_lens`] の本体・消費の 6 値は呼び手が足す）。集計を読めた周は、PASS と数の食い違いを
++/// FAIL に読み（[`Tally::mismatch`]）、場所の列 `at` は判定を動かさずに写す（tsuzuri の判断の記録 ADR-63 の決定 (6)(7)）。
+ fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
+     let get = |key: &str| {
+         pairs
+@@ -597,7 +602,18 @@ fn judge_pairs(pairs: &[(String, Value)]) -> Judged {
+         (Some(counted), Some(population)) => Tally::parse(counted, population),
+     };
+     match read {
+-        Ok(tally) => Judged { verdict, evidence, tally: Some(tally), reread: false, usage: None, provenance: None },
++        Ok(tally) => {
++            let at = get("at").filter(|found| !found.trim().is_empty()).map(str::to_owned);
++            // **PASS と数の食い違いは FAIL に読む**（tsuzuri の判断の記録 ADR-63 の決定 (6)）。審査役が自分で違反を数えた周なので、
++            // 判じられない周でなく不合格に読み、数を evidence に写して器の FAIL の道（prior_fail・memo の口）に乗せる。
++            let (verdict, evidence, kind) = match (verdict, tally.mismatch()) {
++                (Verdict::Pass, Some(counted)) => {
++                    (Verdict::Fail, format!("{MISMATCH_KIND}・PASS を返したが {counted} を数えた・lens の evidence は {evidence}"), Some(MISMATCH_KIND))
++                }
++                _ => (verdict, evidence, None),
++            };
++            Judged { verdict, evidence, tally: Some(tally), kind, at, reread: false, usage: None, provenance: None }
++        }
+         Err(unread) => {
+             let evidence = format!("lens の{}", unread.reason());
+             match unread {
+@@ -851,4 +867,48 @@ mod tests {
+         assert_eq!(bare.provenance, None, "対が無い");
+         assert_eq!(super::parse_lens(&format!("{head},\"provenance\":\"build:abc\"}}")).provenance, None, "形の違う対");
+     }
++
++    /// PASS で 3 観点のどれかを数えた判定は FAIL（理由の型・3 観点の数・lens の evidence）に読み、FAIL・INCONCLUSIVE の判定と
++    /// 質の観点だけを数えた PASS は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
++    #[test]
++    fn vgfind_parse_reads_a_pass_with_fit_counts_as_a_fail() {
++        let line = |verdict: &str, fit: &str| {
++            format!(r#"{{"verdict":"{verdict}","evidence":"lens-saw-q3","findings":"{fit},delete:2,stdlib:0,native:0,yagni:0,shrink:1","population":"files:2,lines:9"}}"#)
++        };
++        let fits = [
++            "contract-fit:1,teeth-nonvacuous:0,constitution:0",
++            "contract-fit:0,teeth-nonvacuous:2,constitution:0",
++            "contract-fit:0,teeth-nonvacuous:0,constitution:3",
++        ];
++        for fit in fits {
++            let judged = super::parse_lens(&line("PASS", fit));
++            assert_eq!((judged.verdict, judged.kind), (super::Verdict::Fail, Some("verdict-count-mismatch")), "{fit}");
++            let want = format!("verdict-count-mismatch・PASS を返したが {fit} を数えた・lens の evidence は lens-saw-q3");
++            assert_eq!(judged.evidence, want, "数と lens の evidence を写す");
++            assert!(judged.tally.is_some(), "集計は残る: {fit}");
++            for verdict in ["FAIL", "INCONCLUSIVE"] {
++                let kept = super::parse_lens(&line(verdict, fit));
++                assert_eq!((kept.verdict.as_str(), kept.kind, kept.evidence.as_str()), (verdict, None, "lens-saw-q3"), "{verdict} は動かさない");
++            }
++        }
++        let quality = super::parse_lens(&line("PASS", "contract-fit:0,teeth-nonvacuous:0,constitution:0"));
++        assert_eq!((quality.verdict, quality.kind, quality.evidence.as_str()), (super::Verdict::Pass, None, "lens-saw-q3"), "質の観点だけ");
++    }
++
++    /// 集計を読めた周は lens の `at` の字をそのまま写し、無い・字でない・空白だけの `at` と集計を読めない周の `at` は写さず、
++    /// `at` は判定を動かさない（tsuzuri の判断の記録 ADR-63 の決定 (7)）。
++    #[test]
++    fn vgfind_parse_copies_the_at_without_moving_the_verdict() {
++        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:1,stdlib:0,native:0,yagni:0,shrink:2","population":"files:1,lines:1""#;
++        let at = "delete:src/q.rs:12,shrink:src/r.rs;src/s.rs";
++        let read = |tail: &str| super::parse_lens(&format!("{head}{tail}}}"));
++        let (copied, bare) = (read(&format!(",\"at\":\"{at}\"")), read(""));
++        assert_eq!(copied.at.as_deref(), Some(at), "字のまま写す");
++        assert_eq!((copied.verdict, copied.evidence.as_str()), (bare.verdict, bare.evidence.as_str()), "判定は動かさない");
++        for tail in ["", ",\"at\":3", ",\"at\":\" \""] {
++            assert_eq!(read(tail).at, None, "写さない: {tail}");
++        }
++        let unread = super::parse_lens(&format!("{{\"verdict\":\"PASS\",\"evidence\":\"ok\",\"at\":\"{at}\"}}"));
++        assert_eq!(unread.at, None, "集計を読めない周は写さない");
++    }
+ }
