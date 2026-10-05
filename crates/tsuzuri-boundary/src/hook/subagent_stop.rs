@@ -11,8 +11,12 @@
 //!
 //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
 //! （割りの主張ごとの表の行と確かさの印と証拠・行 ag-gstop・判断の記録 ADR-61 決定 (4)(8)）。
+//! 出す物が差の file（.patch）を名指す係は、4 で床の記録の欠けと床の写しの撃ち直しの食い違いも子の `floor` で数え、
+//! 判じを出力の dir の門の記録に足す（判断の記録 ADR-63 決定 (4)・旗 --tz と --scribe2 は撃ち直しの道具）。
 //!
 //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
+
+pub mod floor;
 
 use std::fs;
 use std::io::Read;
@@ -28,7 +32,7 @@ use super::agent_spawn::{drafts, parse};
 use crate::out::emit_err;
 use crate::server::events::now;
 
-pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>]";
+pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]";
 
 /// 使い方の誤り。
 const FAIL: u8 = 1;
@@ -74,7 +78,8 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let args = match parse(rest) {
+    let parsed = floor::tools(rest).and_then(|(left, tools)| Ok((parse(&left)?, tools)));
+    let (args, tools) = match parsed {
         Ok(args) => args,
         Err(e) => {
             emit_err(&format!("tz hook agent-stop: {e}\n{USAGE}"));
@@ -104,6 +109,7 @@ pub fn run(rest: &[&str]) -> u8 {
         &shown,
     );
     holes.extend(claim_holes(&dir.join(&name), &spec, &out));
+    holes.extend(floor::holes(&dir, &spec, &out, stop.again, &tools));
     if !holes.is_empty() && !stop.again {
         emit_err(&hold(&holes, &shown));
         return HOLD;

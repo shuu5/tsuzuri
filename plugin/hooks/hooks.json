@@ -90,7 +90,7 @@
           {
             "type": "command",
             "command": "[ -e \"$CLAUDE_PLUGIN_ROOT/scribe2-runner\" ] || \"$CLAUDE_PLUGIN_ROOT\"/bin/tzw hook agent-stop --repo \"$CLAUDE_PROJECT_DIR\"",
-            "timeout": 10
+            "timeout": 120
           }
         ]
       }

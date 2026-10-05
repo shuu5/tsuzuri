@@ -68,6 +68,9 @@
 - 床は頼みが名指す席の pin の tz で、床の写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
 - 適用の script（python）は前の版を照らし、ノートと計画の版を上げ、書いた字を YAML で読み直す。外れたら何も書かずに止まる。
 - 足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <床の写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
+- 出す物に差の file（.patch）を持つ係は、終える前に出力の dir に床の記録 floor.tsv を置く（判断の記録 ADR-63 の決定 (4)）。差の file ごとに 1 行で、欄はタブで区切った 6 つ（行 id・preflight の rc・tz check の rc・derive --check の rc・器の表の検査の rc・verify の 2 行目から最後の行の rc を , で繋いだ字）。# で始まる行は頭として読まれない。
+- 器の表の検査の rc は、床の写しの根で撃った scribe2 contracts check --repo . --base main の出力のうち、行の頭（contracts/<ノート>.toml の [[contract]] の行）を名指す断りが無ければ 0・在れば 1 と書く（着地済みの行の断りで検査全体の rc は今いつも 1）。床の写しの行は branch に commit し、main を動かさない（preflight は HEAD を読み、--base main は当てる前の木を指す）。
+- 終える前の門は、床の写し <置き場>/try-<名>-fl で安い 4 本（preflight は空の state dir <名>/floor-state）を撃ち直して記録と比べる。記録が無い・行が欠ける・rc が 0 でない・撃ち直しと違う・撃ち直せない時は 1 度目の終わりを止め、判じを出力の dir の floor-gate.tsv に足す。記録の合格は完成でも審査の合格でもない。
 
 ## 8. 出す物と公開
 
@@ -100,4 +103,4 @@
 
 - 着地した段の file（群に入っていない tests/ の直下の .rs）が、未着地の行が名指す file を除いて 12 本に達したら、畳みの行を 1 行置く。
 - 切り方は、置く直前の main の写しで crate ごとに畳みの道具を撃ち、表 GROUPS も書き直す。差は git diff --no-color --full-index -M で切り、130000 byte を目安に、越えれば crate ごとに割る。
-- 確かめは、行の木で verify の行を全部撃ち、xtask の check は全部の畳みを当てた最後の木で 1 回。着地した行の verify の字と差の file は歴史として書き換えない。
+- 確かめは、行の木で verify の行を全部撃ち、xtask の check は全部の畳みを当てた最後の木で 1 回。verify に命令 kfold-cap を、書く範囲に持つ群と作る群を全部名指した 1 行で置く（例 cargo run -q -p xtask -- kfold-cap crates/tsuzuri-surface/tests/teeth6 xtask/tests/teeth1）。着地した行の verify の字と差の file は歴史として書き換えない。
