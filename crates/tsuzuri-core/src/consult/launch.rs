@@ -31,14 +31,17 @@ pub const ASK_DROP: [&str; 2] = ["TMUX", "TMUX_PANE"];
 /// 道具の閉じた列。
 pub const TOOLS: &str = "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch";
 
-/// 殻の命令のネットワークに許す package の配り元。
-pub const DOMAINS: [&str; 6] = [
+/// 殻の命令のネットワークに許すドメイン（package の配り元 6 つと、GitHub の読むだけの配り元 2 つ
+/// = file 1 本ずつの raw と source の tar.gz の codeload・判断の記録 ADR-53）。
+pub const DOMAINS: [&str; 8] = [
     "pypi.org",
     "files.pythonhosted.org",
     "crates.io",
     "index.crates.io",
     "static.crates.io",
     "registry.npmjs.org",
+    "raw.githubusercontent.com",
+    "codeload.github.com",
 ];
 
 /// Claude の口座の資格の file（口座の置き場を替えない時の置き場・読む道具の断りにも置く）。

@@ -70,7 +70,7 @@
         {"path": "/R/.beads/.env", "mode": "deny"},
         {"path": "/tmp/claude-U", "mode": "deny"}
       ]},
-      "network": {"allowedDomains": ["pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "registry.npmjs.org"]}
+      "network": {"allowedDomains": ["pypi.org", "files.pythonhosted.org", "crates.io", "index.crates.io", "static.crates.io", "registry.npmjs.org", "raw.githubusercontent.com", "codeload.github.com"]}
     },
     "env": {
       "UV_CACHE_DIR": "/W/.venv/uv-cache",

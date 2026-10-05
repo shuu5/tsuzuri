@@ -10,8 +10,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    ASK_DROP, CREDENTIALS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env, private_tmp,
-    prompt, read_roots, settings, version_ok,
+    ASK_DROP, CREDENTIALS, DOMAINS, Launch, PLUGIN_VERSION, TALK_ENV, argv, audit, brief, env,
+    private_tmp, prompt, read_roots, settings, version_ok,
 };
 
 fn fixture() -> Value {
@@ -285,6 +285,46 @@ fn cwarg_audit_refuses_wide_sandbox() {
             s["sandbox"]["credentials"]["files"][1]["mode"] = json!("allow")
         }),
     ]);
+}
+
+/// 殻の命令のネットワークに GitHub の読むだけの配り元 2 つだけを足し、ほかの GitHub の host を検めが断ることを見る（行 cs-gh-read）。
+#[test]
+fn cwarg_allows_github_read_only() {
+    let fx = fixture();
+    let read = ["raw.githubusercontent.com", "codeload.github.com"];
+    assert_eq!(DOMAINS[6..], read);
+    assert_eq!(DOMAINS.iter().filter(|d| d.contains("github")).count(), 2);
+    let net_gap = ["/sandbox/network/allowedDomains".to_string()];
+    for form in ["talk", "ask"] {
+        let l = launch(&fx[form]["inputs"]);
+        let set = settings(&l);
+        let net = set["sandbox"]["network"]["allowedDomains"]
+            .as_array()
+            .expect("列");
+        for host in read {
+            assert_eq!(
+                net.iter().filter(|d| **d == json!(host)).count(),
+                1,
+                "{form} {host}"
+            );
+        }
+        for host in [
+            "github.com",
+            "api.github.com",
+            "uploads.github.com",
+            "gist.githubusercontent.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+            "githubusercontent.com",
+            "*.githubusercontent.com",
+            "*.github.com",
+        ] {
+            let a = with_settings(&l, |s| {
+                push(s, "/sandbox/network/allowedDomains", json!(host))
+            });
+            assert_eq!(audit(&a, &l), net_gap, "{form} {host}");
+        }
+    }
 }
 
 #[test]
