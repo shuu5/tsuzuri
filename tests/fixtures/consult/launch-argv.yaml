@@ -4,6 +4,7 @@
     "inputs": {"form": "talk", "window": "cw3", "workspace": "/W", "repo": "/R", "state": "/S", "account_dirs": ["/A/one", "/A/old"], "roots": ["/R", "/S/fleet", "/S/pipe"], "tz": "/T", "uid": "U", "model": "fable", "effort": "xhigh", "question": false},
     "argv": [
       "--restricted",
+      "--remote-control", "consult-cw3",
       "--permission-mode", "dontAsk",
       "--tools", "Read,Grep,Glob,Bash,Edit,Write,WebSearch,WebFetch",
       "--disallowedTools", "mcp__*",

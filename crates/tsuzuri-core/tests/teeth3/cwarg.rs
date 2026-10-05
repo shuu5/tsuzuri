@@ -4,6 +4,7 @@
 //! Claude の口座の資格の file を囲いと読む道具の両方から隠し、どちらを欠いても検めが断ることを見る（行 cs-cred-claude）。
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+//! 話す窓だけを Remote Control に窓の名で繋ぎ、欠け・名の違い・別名・問う窓の旗を検めが断ることを見る（行 cs-remote）。
 //! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
 #![cfg(test)]
 
@@ -12,9 +13,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_core::consult::launch::{
-    BASE_ENV, CREDENTIALS, DOMAINS, INBOUND, Launch, PEER_TOOLS, PLUGIN_VERSION, STAMP_HOOKS,
-    TALK_ENV, argv, audit, brief, env, keep_only, private_tmp, prompt, read_roots, settings,
-    stamp_command, version_ok, window_env,
+    BASE_ENV, CREDENTIALS, DOMAINS, INBOUND, Launch, PEER_TOOLS, PLUGIN_VERSION, REMOTE_ALIAS,
+    REMOTE_FLAG, STAMP_HOOKS, TALK_ENV, argv, audit, brief, env, keep_only, private_tmp, prompt,
+    read_roots, settings, stamp_command, version_ok, window_env,
 };
 
 fn fixture() -> Value {
@@ -832,5 +833,57 @@ fn cwarg_refuses_cross_session_messages() {
                 "{form} の {tool} に specifier"
             );
         }
+    }
+}
+
+/// argv の `at` に字の列 `items` を差した検めの欠け（`drop` の字の旗は先に除く）。
+fn remote_gaps(l: &Launch, drop: bool, at: usize, items: &[&str]) -> Vec<String> {
+    let mut a = argv(l);
+    if drop {
+        a.drain(1..3);
+    }
+    for (i, item) in items.iter().enumerate() {
+        a.insert(at + i, (*item).to_string());
+    }
+    audit(&a, l)
+}
+
+/// 話す窓は `--restricted` の直後に Remote Control の旗と窓の名を置き、問う窓は置かない。話す窓の旗の欠け・名の違い・
+/// 名の無い形・`=` の形・別名・2 度の旗と、問う窓の旗（別名と `=` の形を含む）を、検めは `--remote-control` だけで断る（行 cs-remote）。
+#[test]
+fn cwarg_talk_window_joins_remote_control() {
+    assert_eq!((REMOTE_FLAG, REMOTE_ALIAS), ("--remote-control", "--rc"));
+    let fx = fixture();
+    let talk = launch(&fx["talk"]["inputs"]);
+    let ask = launch(&fx["ask"]["inputs"]);
+    assert_eq!(
+        argv(&talk)[..3],
+        ["--restricted", "--remote-control", "consult-cw3"]
+    );
+    assert!(
+        !argv(&ask)
+            .iter()
+            .any(|a| a.starts_with("--r") && a != "--restricted")
+    );
+    let only = [REMOTE_FLAG];
+    let talk_cases: [(&str, bool, &[&str]); 6] = [
+        ("欠け", true, &[]),
+        ("名の違い", true, &["--remote-control", "consult-cw9"]),
+        ("名の無い形", true, &["--remote-control"]),
+        ("= の形", true, &["--remote-control=consult-cw3"]),
+        ("別名", true, &["--rc", "consult-cw3"]),
+        ("2 度", false, &["--remote-control", "consult-cw3"]),
+    ];
+    for (name, drop, items) in talk_cases {
+        assert_eq!(remote_gaps(&talk, drop, 1, items), only, "話す窓の{name}");
+    }
+    let ask_cases: [(&str, &[&str]); 4] = [
+        ("旗", &["--remote-control", "consult-cw4"]),
+        ("名の無い旗", &["--remote-control"]),
+        ("別名", &["--rc"]),
+        ("= の形", &["--rc=consult-cw4"]),
+    ];
+    for (name, items) in ask_cases {
+        assert_eq!(remote_gaps(&ask, false, 3, items), only, "問う窓の{name}");
     }
 }

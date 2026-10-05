@@ -3,11 +3,19 @@
 //! 組んだ argv を `audit` で検める（欠けや広い許しが 1 つでも在れば起動の口は起こさない）。
 //! 設定には会話の印の hook（会話の始まり・持ち主の入力・turn の終わり）も置き、検めは欠けと字の違いを断る（行 cs-acct-mark・判断の記録 ADR-55）。
 //! 設定はほかの session からの言付けを全部断り、送る道具と一覧の道具を断る（検めは値の違いと断りの欠けを断る・行 cs-inbound-refuse・判断の記録 ADR-57 決定 (1)(ケ)）。
+//! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
+//! 問う窓の旗（別名 `--rc` を含む）を断る（行 cs-remote・判断の記録 ADR-57 決定 (4)）。
 //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
 
 use serde_json::{Value, json};
 use tsuzuri_contract::consult::{DRAFT_FIELDS, Form, WindowId};
 use tsuzuri_contract::ledger::fnv1a64;
+
+/// 話す窓を Remote Control に繋ぐ旗（値は窓の名・問う窓には付けない）。
+pub const REMOTE_FLAG: &str = "--remote-control";
+
+/// Remote Control の旗の別名。
+pub const REMOTE_ALIAS: &str = "--rc";
 
 /// 起こす program。
 pub const PROGRAM: &str = "claude";
@@ -262,9 +270,12 @@ pub fn argv(l: &Launch) -> Vec<String> {
     if l.form == Form::Ask {
         a.extend(["-p".to_string(), prompt(l)]);
     }
+    a.push("--restricted".to_string());
+    if l.form == Form::Talk {
+        a.extend([REMOTE_FLAG.to_string(), l.window.name()]);
+    }
     a.extend(
         [
-            "--restricted",
             "--permission-mode",
             "dontAsk",
             "--tools",
@@ -380,6 +391,18 @@ fn audit_flags(argv: &[String], l: &Launch, gaps: &mut Vec<String>) {
         }
     }
     let ask = l.form == Form::Ask;
+    let remote: Vec<&String> = argv
+        .iter()
+        .filter(|a| {
+            [REMOTE_FLAG, REMOTE_ALIAS]
+                .iter()
+                .any(|f| a.split('=').next() == Some(f))
+        })
+        .collect();
+    let joined = remote.len() == 1 && after(argv, REMOTE_FLAG) == Some(name.as_str());
+    if (ask && !remote.is_empty()) || (!ask && !joined) {
+        gaps.push(REMOTE_FLAG.to_string());
+    }
     if argv.iter().any(|a| a == "-p") != ask
         || (after(argv, "--output-format") == Some("json")) != ask
     {
