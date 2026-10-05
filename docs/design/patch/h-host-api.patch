@@ -1,0 +1,605 @@
+diff --git a/crates/tsuzuri-boundary/src/server/host.rs b/crates/tsuzuri-boundary/src/server/host.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a757e4e542a80082e5ee9fe3ec3b4b8dcfdf8128
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/host.rs
+@@ -0,0 +1,196 @@
++//! host の負荷と書きの読み（file を読むだけ・書かない）。
++//! 読むのは root なしで読める kernel の file（負荷・動いている cpu の範囲・PSI の 3 種・meminfo）と、server 自身の
++//! cgroup の親の dir の下の scope の memory.current と memory.max と、host の面（state dir の host.toml）の
++//! 書きの測りの表が名指す装置の stat と摩耗の記録（smartctl の JSON・root の timer が書く）。装置の path は
++//! code に焼かず表から読む（条 N-7）。値にするのは中核の `hostload` で、ここは字を集めるだけ。
++//! 書きの速さは前の読みとの差で、差の間が `RATE_GAP` に満たない読みは前の速さを返す（口と見張りが続けて読んでも揺れない）。
++//! 見張り（`Host::watch`）は受け手が居る周だけ `HOST_POLL` ごとに読み、面が読む中身（組んだ時刻を除く電文）が
++//! 前と違う時だけ host の種類（`ChangeKind::Host`）の board-changed を送る（受け手が居なければ読まない・規則の行 R-34）。
++
++use std::collections::BTreeMap;
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::sync::{Arc, Mutex};
++use std::thread;
++use std::time::{Duration, Instant};
++
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::HostDoc;
++use tsuzuri_contract::surface::ChangeKind;
++use tsuzuri_core::hostload::{
++    DeviceTexts, HostTexts, ScopeTexts, budget_rows, host_doc, rate, sectors_written,
++};
++
++use super::events::{Hub, now};
++use super::seat::HOST_TOML;
++
++/// 見張りの読みの間隔（受け手が居る周だけ読む）。
++pub const HOST_POLL: Duration = Duration::from_secs(10);
++
++/// 書きの速さを測り直す最短の間（これより短い間の読みは前の速さを返す）。
++pub const RATE_GAP: Duration = Duration::from_secs(5);
++
++/// kernel の file（根からの相対・負荷・cpu の範囲・PSI の cpu と memory と io・meminfo の順）。
++pub const KERNEL: [&str; 6] = [
++    "proc/loadavg",
++    "sys/devices/system/cpu/online",
++    "proc/pressure/cpu",
++    "proc/pressure/memory",
++    "proc/pressure/io",
++    "proc/meminfo",
++];
++
++/// 自分の cgroup の file と cgroup の根（根からの相対）。
++pub const SELF_CGROUP: &str = "proc/self/cgroup";
++pub const CGROUP_ROOT: &str = "sys/fs/cgroup";
++
++/// 装置ごとの前の読み（区の数・読んだ ms・その時の速さ）。
++type Samples = BTreeMap<String, (u64, u64, Reading<u64>)>;
++
++/// host の読みの出所（kernel の file の根・state dir・前の読み）。
++pub struct Host {
++    root: PathBuf,
++    state_dir: Option<PathBuf>,
++    origin: Instant,
++    gap: Duration,
++    samples: Mutex<Samples>,
++}
++
++impl Host {
++    /// 本物の根（/）で読む。
++    pub fn new(state_dir: Option<&Path>) -> Host {
++        Host::with_root(Path::new("/"), state_dir)
++    }
++
++    /// kernel の file を `root` の下で読む（歯は一時の dir に写しの木を置く）。
++    pub fn with_root(root: &Path, state_dir: Option<&Path>) -> Host {
++        Host {
++            root: root.to_path_buf(),
++            state_dir: state_dir.map(Path::to_path_buf),
++            origin: Instant::now(),
++            gap: RATE_GAP,
++            samples: Mutex::new(Samples::new()),
++        }
++    }
++
++    /// 書きの速さを測り直す最短の間を替える（歯が短い間で測る）。
++    #[must_use]
++    pub fn with_gap(mut self, gap: Duration) -> Host {
++        self.gap = gap;
++        self
++    }
++
++    fn read(&self, rel: &str) -> Option<String> {
++        fs::read_to_string(self.root.join(rel)).ok()
++    }
++
++    /// server 自身の cgroup の親の dir の下の子の dir の名と memory の 2 つの字（親が読めなければ None）。
++    fn scopes(&self) -> Option<Vec<ScopeTexts>> {
++        let line = self.read(SELF_CGROUP)?;
++        let own = line.lines().find_map(|l| l.strip_prefix("0::"))?.trim();
++        let parent = Path::new(own).parent()?.strip_prefix("/").ok()?;
++        let dir = self.root.join(CGROUP_ROOT).join(parent);
++        let mut out: Vec<ScopeTexts> = fs::read_dir(&dir)
++            .ok()?
++            .filter_map(Result::ok)
++            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
++            .map(|e| {
++                let path = e.path();
++                let read = |f: &str| fs::read_to_string(path.join(f)).ok();
++                ScopeTexts {
++                    name: e.file_name().to_string_lossy().into_owned(),
++                    current: read("memory.current"),
++                    max: read("memory.max"),
++                }
++            })
++            .collect();
++        out.sort_by(|a, b| a.name.cmp(&b.name));
++        Some(out)
++    }
++
++    /// 装置の速さ（前の読みから間（既定は `RATE_GAP`）以上たてば測り直して控え、満たなければ前の速さ）。
++    fn device_rate(&self, name: &str, stat: &str) -> Reading<u64> {
++        let Some(sectors) = fs::read_to_string(stat)
++            .ok()
++            .and_then(|t| sectors_written(&t))
++        else {
++            return Reading::Unknown;
++        };
++        let at = u64::try_from(self.origin.elapsed().as_millis()).unwrap_or(u64::MAX);
++        let gap = u64::try_from(self.gap.as_millis()).unwrap_or(u64::MAX);
++        let mut samples = self
++            .samples
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let before = samples.get(name).cloned();
++        if let Some((_, was, ref held)) = before
++            && at.saturating_sub(was) < gap
++        {
++            return held.clone();
++        }
++        let now = rate(before.map(|(s, a, _)| (s, a)), (sectors, at));
++        samples.insert(name.to_string(), (sectors, at, now.clone()));
++        now
++    }
++
++    /// 電文の材料の字（host の面が無いか読めなければ装置は空）。
++    pub fn texts(&self) -> HostTexts {
++        let [loadavg, online, psi_cpu, psi_memory, psi_io, meminfo] = KERNEL.map(|k| self.read(k));
++        let face = self
++            .state_dir
++            .as_ref()
++            .and_then(|d| fs::read_to_string(d.join(HOST_TOML)).ok())
++            .unwrap_or_default();
++        let devices = budget_rows(&face)
++            .into_iter()
++            .map(|row| DeviceTexts {
++                rate: self.device_rate(&row.name, &row.stat),
++                wear: row.wear.map(|p| fs::read_to_string(p).ok()),
++                name: row.name,
++            })
++            .collect();
++        HostTexts {
++            loadavg,
++            online,
++            psi_cpu,
++            psi_memory,
++            psi_io,
++            meminfo,
++            scopes: self.scopes(),
++            devices,
++        }
++    }
++
++    /// 口の電文（今の時刻で組む）。
++    pub fn doc(&self) -> HostDoc {
++        host_doc(&self.texts(), now())
++    }
++
++    /// host の見張りを始める（Hub が落ちれば止まる）。`poll` ごとに受け手が居る周だけ読み、組んだ時刻を除く
++    /// 電文が前に送った周と違えば host の種類の board-changed を 1 件送る（受け手が 0 人の周は読まず、前の中身を忘れる）。
++    pub fn watch(self: &Arc<Self>, hub: &Arc<Hub>, poll: Duration) {
++        let host = Arc::clone(self);
++        let weak = Arc::downgrade(hub);
++        thread::spawn(move || {
++            let mut seen: Option<HostDoc> = None;
++            loop {
++                thread::sleep(poll);
++                let Some(hub) = weak.upgrade() else {
++                    return;
++                };
++                if hub.listeners() == 0 {
++                    seen = None;
++                    continue;
++                }
++                let mut doc = host.doc();
++                let at = doc.at;
++                doc.at = 0;
++                if seen.as_ref() == Some(&doc) {
++                    continue;
++                }
++                seen = Some(doc);
++                hub.board_changed(&[ChangeKind::Host], at);
++            }
++        });
++    }
++}
+diff --git a/crates/tsuzuri-boundary/src/server/mod.rs b/crates/tsuzuri-boundary/src/server/mod.rs
+index c2a24660f5533712ef392d1cb43bb74568db4b30..c81c1a74d02713ccea9731d9cb1783099c5a3460 100644
+--- a/crates/tsuzuri-boundary/src/server/mod.rs
++++ b/crates/tsuzuri-boundary/src/server/mod.rs
+@@ -30,6 +30,8 @@
+ //! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`）。
+ //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
+ //! （`Cases::watch`）。
++//! host の口は kernel の file と host の面の書きの測りの表を要求のたびに読み（`host`）、受け手が居る周だけ
++//! `host::HOST_POLL` ごとに読んで中身が動いた時だけ host の種類の board-changed を送る（`Host::watch`）。
+ //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
+ //! その字と組で持つ（`form`）。撃ちは口 /api/pipeline の最初の要求か、
+ //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
+@@ -46,6 +48,7 @@ pub mod events;
+ pub mod files;
+ pub mod form;
+ pub mod held;
++pub mod host;
+ pub mod http;
+ pub mod ledger;
+ mod others;
+@@ -86,6 +89,7 @@ use self::design::Design;
+ use self::events::Hub;
+ use self::form::Form;
+ use self::held::Held;
++use self::host::Host;
+ use self::http::{Request, Response};
+ use self::ledger::Source;
+ use self::others::Others;
+@@ -179,6 +183,8 @@ struct Shared {
+     stage: Caller,
+     /// 相談の窓の口の置き場の材料（行 cs-server）。
+     consult: Consult,
++    /// host の負荷と書きの読み（`host`・口 /api/host と host の種類の見張り）。
++    host: Arc<Host>,
+ }
+ 
+ /// 既定の git の program の名（account board の読みが anchor の state dir を引く）。
+@@ -239,6 +245,8 @@ impl Server {
+             form.notify(&hub);
+         }
+         others.watch(&hub);
++        let host = Arc::new(Host::new(config.state_dir.as_deref()));
++        host.watch(&hub, host::HOST_POLL);
+         let writer = Server::writer_of(config);
+         Ok(Server {
+             listener,
+@@ -261,6 +269,7 @@ impl Server {
+                     repo: config.repo.clone(),
+                 },
+                 consult: Consult::new(config, git),
++                host,
+             }),
+         })
+     }
+diff --git a/crates/tsuzuri-boundary/src/server/routes/host.rs b/crates/tsuzuri-boundary/src/server/routes/host.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..296a26cc98192f4c06fb6cd720d27554e1cfb548
+--- /dev/null
++++ b/crates/tsuzuri-boundary/src/server/routes/host.rs
+@@ -0,0 +1,19 @@
++//! GET /api/host — host の負荷と書き（HostDoc・kernel の file と host の面の書きの測りの表を要求のたびに読む）。
++
++use tsuzuri_contract::{host, wire};
++
++use crate::server::http::{Request, Response};
++use crate::server::route::{Entry, Key, Match};
++use crate::server::{Shared, json};
++
++pub(in crate::server) const ROUTE: Entry = Entry {
++    key: Key {
++        method: "GET",
++        path: Match::Exact(host::PATH),
++    },
++    handle: host_doc,
++};
++
++fn host_doc(_: &Request, shared: &Shared) -> Response {
++    json(200, wire::encode(&shared.host.doc()))
++}
+diff --git a/crates/tsuzuri-boundary/tests/hapi.rs b/crates/tsuzuri-boundary/tests/hapi.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a110048172e8feeef612deee7d32f402177c4640
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/hapi.rs
+@@ -0,0 +1,199 @@
++//! host の口と host の種類の見張りの歯（接頭辞 hapi_・持ち主の裁定 t3-hub.77.28）。
++//! kernel の file の写しの木を一時の dir に置き、根を替えた読み（`Host::with_root`）で字の集めと速さの控えと見張りを測る。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::sync::Arc;
++use std::time::{Duration, Instant};
++
++use tsuzuri_boundary::server::Route;
++use tsuzuri_boundary::server::events::Hub;
++use tsuzuri_boundary::server::host::{HOST_POLL, Host, RATE_GAP};
++use tsuzuri_boundary::server::route::{Key, Match};
++use tsuzuri_contract::board::Reading;
++use tsuzuri_contract::host::{Gauge, PATH};
++use tsuzuri_contract::surface::ChangeKind;
++
++const LOADAVG: &str = "40.00 1.00 1.00 1/2 3\n";
++
++fn tree(name: &str) -> PathBuf {
++    let dir = std::env::temp_dir().join(format!("hapi-{}-{name}", std::process::id()));
++    let _ = fs::remove_dir_all(&dir);
++    fs::create_dir_all(&dir).expect("一時の dir");
++    dir
++}
++
++fn put(root: &Path, rel: &str, text: &str) {
++    let path = root.join(rel);
++    fs::create_dir_all(path.parent().expect("親")).expect("dir");
++    fs::write(path, text).expect("書く");
++}
++
++/// kernel の file と、cgroup の親 a.slice の下の scope 3 つ（上限なし 1 つ）を置いた根。
++fn kernel(root: &Path) {
++    put(root, "proc/loadavg", LOADAVG);
++    put(root, "sys/devices/system/cpu/online", "0-31\n");
++    put(
++        root,
++        "proc/pressure/cpu",
++        "some avg10=1.00 avg60=2.00 avg300=3.00 total=1\n",
++    );
++    put(
++        root,
++        "proc/pressure/memory",
++        "some avg10=0.00 avg60=0.00 avg300=0.00 total=1\nfull avg10=0.00 avg60=0.50 avg300=0.00 total=1\n",
++    );
++    put(
++        root,
++        "proc/pressure/io",
++        "some avg10=0.00 avg60=0.00 avg300=0.00 total=1\nfull avg10=9.00 avg60=6.00 avg300=0.00 total=1\n",
++    );
++    put(
++        root,
++        "proc/meminfo",
++        "MemTotal: 4 kB\nMemAvailable: 2 kB\nSwapTotal: 1 kB\nSwapFree: 1 kB\n",
++    );
++    put(root, "proc/self/cgroup", "0::/a.slice/own.scope\n");
++    for (scope, current, max) in [
++        ("own.scope", "10", "100"),
++        ("seat.scope", "26", "32"),
++        ("free.scope", "5", "max"),
++    ] {
++        put(
++            root,
++            &format!("sys/fs/cgroup/a.slice/{scope}/memory.current"),
++            current,
++        );
++        put(
++            root,
++            &format!("sys/fs/cgroup/a.slice/{scope}/memory.max"),
++            max,
++        );
++    }
++}
++
++fn stat(sectors: u64) -> String {
++    format!("1 2 3 4 5 6 {sectors} 8 9 10 11\n")
++}
++
++/// 書きの測りの表 2 行（摩耗の記録の path を持つ行と持たない行）を host の面に置いた state dir。
++fn face(root: &Path) -> PathBuf {
++    let state = root.join("state");
++    let (dev, wear) = (root.join("dev-stat"), root.join("wear.json"));
++    put(root, "dev-stat", &stat(1_000));
++    put(
++        root,
++        "wear.json",
++        r#"{"local_time":{"time_t":9},"nvme_smart_health_information_log":{"percentage_used":6,"data_units_written":1,"available_spare":100,"media_errors":0}}"#,
++    );
++    let text = format!(
++        "[[device]]\nname = \"pc\"\n\n[[write-budget]]\nname = \"sys\"\nstat = \"{}\"\nwear = \"{}\"\n\n[[write-budget]]\nname = \"bak\"\nstat = \"{}\"\n",
++        dev.display(),
++        wear.display(),
++        root.join("no-stat").display()
++    );
++    put(&state, "host.toml", &text);
++    state
++}
++
++#[test]
++fn hapi_route_and_kind() {
++    assert_eq!(PATH, "/api/host");
++    let key = Key {
++        method: "GET",
++        path: Match::Exact(PATH),
++    };
++    assert_eq!(Route::ALL.iter().filter(|r| r.key() == key).count(), 1);
++    assert_eq!(ChangeKind::ALL.len(), 8);
++    assert_eq!(ChangeKind::ALL[6..], [ChangeKind::Host, ChangeKind::Notice]);
++    assert_eq!(
++        (HOST_POLL, RATE_GAP),
++        (Duration::from_secs(10), Duration::from_secs(5))
++    );
++}
++
++/// 根の下の kernel の file と cgroup の親の下の上限を持つ scope と host の面の表の装置を読む。
++#[test]
++fn hapi_reads_the_kernel_tree() {
++    let root = tree("read");
++    kernel(&root);
++    let state = face(&root);
++    let doc = Host::with_root(&root, Some(&state)).doc();
++    assert!(matches!(doc.load, Reading::Known(l) if l.one == 4_000 && l.cores == 32));
++    assert!(matches!(doc.memory, Reading::Known(m) if m.total == 4_096));
++    assert_eq!(doc.over, [Gauge::Load, Gauge::Io]);
++    let Reading::Known(scopes) = &doc.scopes else {
++        panic!("scope が読めない: {:?}", doc.scopes);
++    };
++    let names: Vec<&str> = scopes.iter().map(|s| s.name.as_str()).collect();
++    assert_eq!(names, ["seat.scope", "own.scope"]);
++    let devices: Vec<(&str, bool)> = doc
++        .devices
++        .iter()
++        .map(|d| (d.name.as_str(), d.wear.is_some()))
++        .collect();
++    assert_eq!(devices, [("sys", true), ("bak", false)]);
++    assert!(matches!(doc.devices[0].wear, Some(Reading::Known(w)) if w.used_pct == 6));
++    assert_eq!(doc.devices[1].rate, Reading::Unknown);
++}
++
++/// 根の下に file が無ければ、測りは全部まだ分からないで、装置は空・注意は無い。
++#[test]
++fn hapi_missing_files_are_unknown() {
++    let bare = Host::with_root(&tree("bare"), None).doc();
++    assert_eq!(
++        (bare.load, bare.scopes),
++        (Reading::Unknown, Reading::Unknown)
++    );
++    assert!(bare.devices.is_empty() && bare.over.is_empty());
++}
++
++/// 速さは前の読みとの差で、間が足りない読みは前の速さを返し、間が足りれば測り直す。
++#[test]
++fn hapi_rate_holds_inside_the_gap() {
++    let root = tree("rate");
++    kernel(&root);
++    let state = face(&root);
++    let held = Host::with_root(&root, Some(&state));
++    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
++    std::thread::sleep(Duration::from_millis(20));
++    put(&root, "dev-stat", &stat(9_000));
++    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
++    let quick = Host::with_root(&root, Some(&state)).with_gap(Duration::ZERO);
++    assert_eq!(quick.doc().devices[0].rate, Reading::Unknown);
++    std::thread::sleep(Duration::from_millis(20));
++    put(&root, "dev-stat", &stat(19_000));
++    assert!(matches!(quick.doc().devices[0].rate, Reading::Known(r) if r > 0));
++}
++
++/// 受け手を待つ。見張りの frame を `window` の間だけ集める。
++fn frames(sub: &std::sync::mpsc::Receiver<String>, window: Duration) -> Vec<String> {
++    let end = Instant::now() + window;
++    let mut out = Vec::new();
++    while let Some(left) = end.checked_duration_since(Instant::now()) {
++        if let Ok(frame) = sub.recv_timeout(left) {
++            out.push(frame);
++        }
++    }
++    out
++}
++
++/// 受け手が居る周だけ読み、中身が動いた時だけ host の種類の board-changed を 1 件送る。
++#[test]
++fn hapi_watch_sends_host_on_change() {
++    let root = tree("watch");
++    kernel(&root);
++    let hub = Arc::new(Hub::default());
++    Arc::new(Host::with_root(&root, None)).watch(&hub, Duration::from_millis(20));
++    let sub = hub.subscribe();
++    let first = frames(&sub, Duration::from_millis(400));
++    assert_eq!(first.len(), 1, "{first:?}");
++    assert!(
++        first[0].contains("event: board-changed") && first[0].contains("\"kinds\":[\"host\"]"),
++        "{first:?}"
++    );
++    put(&root, "proc/loadavg", "1.00 1.00 1.00 1/2 3\n");
++    let moved = frames(&sub, Duration::from_millis(400));
++    assert_eq!(moved.len(), 1, "{moved:?}");
++}
+diff --git a/crates/tsuzuri-contract/src/surface.rs b/crates/tsuzuri-contract/src/surface.rs
+index e530335ec8bdae69a84e9cd53c6cc4d36afade9a..ceee8e6d034e27a8a2bee64010caf38bc1f94c68 100644
+--- a/crates/tsuzuri-contract/src/surface.rs
++++ b/crates/tsuzuri-contract/src/surface.rs
+@@ -150,19 +150,22 @@ pub enum ChangeKind {
+     Ledger,
+     /// account board の印。
+     Account,
++    /// host の負荷と書き（kernel の file・受け手が居る周だけ読み、中身が動いた時だけ・持ち主の裁定 t3-hub.77.28）。
++    Host,
+     /// 席の「見て」の知らせの記録の file（行 i-11）。
+     Notice,
+ }
+ 
+ impl ChangeKind {
+     /// 全部の種類（この順）。
+-    pub const ALL: [ChangeKind; 7] = [
++    pub const ALL: [ChangeKind; 8] = [
+         ChangeKind::Seat,
+         ChangeKind::Runs,
+         ChangeKind::Cases,
+         ChangeKind::Design,
+         ChangeKind::Ledger,
+         ChangeKind::Account,
++        ChangeKind::Host,
+         ChangeKind::Notice,
+     ];
+ }
+diff --git a/crates/tsuzuri-contract/tests/snapshots/surface.json b/crates/tsuzuri-contract/tests/snapshots/surface.json
+index 1c15e63e4a0b00c13f6f60931383e97b7f181eeb..c5982c83d401c7c09bed06b2b47ed6e6d540bb75 100644
+--- a/crates/tsuzuri-contract/tests/snapshots/surface.json
++++ b/crates/tsuzuri-contract/tests/snapshots/surface.json
+@@ -179,6 +179,7 @@
+     "design",
+     "ledger",
+     "account",
++    "host",
+     "notice"
+   ],
+   "surface::BoardChanged": [
+diff --git a/crates/tsuzuri-surface/src/view.rs b/crates/tsuzuri-surface/src/view.rs
+index 539a44c06d782092bc1ab14080cc169e0a45ba70..cc67a410c52b1a5518895fffb3b04d572281328f 100644
+--- a/crates/tsuzuri-surface/src/view.rs
++++ b/crates/tsuzuri-surface/src/view.rs
+@@ -13,7 +13,7 @@ use tsuzuri_contract::graph::NodeKind;
+ use tsuzuri_contract::ledger::{LEDGER_CHANGED_EVENT, LedgerList, LedgerRow};
+ use tsuzuri_contract::project::ProjectName;
+ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
+-use tsuzuri_contract::{account, case, project, runs, wire};
++use tsuzuri_contract::{account, case, host, project, runs, wire};
+ 
+ use crate::frame::BRAND;
+ use crate::ledgerlist::FACTS_PATH;
+@@ -28,12 +28,13 @@ pub const RELOAD_EVENTS: [&str; 2] = [LEDGER_CHANGED_EVENT, BOARD_CHANGED_EVENT]
+ /// 席の card は席の状態の file だけ、次の一手は台帳と event log と席の card、pipeline は台帳と event log と
+ /// 台帳の形の行（台帳の種類）、グラフと近傍は設計の索引と台帳と event log、account は account board の印と
+ /// 自分の repo の台帳を読む。project の名の口は起動の repo から決まるので種類を持たない（合図では読み直さない）。
+-/// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。
++/// 席からの知らせの口は知らせの記録の file だけを読む（行 i-11）。host の口は host の種類だけ（中身が動いた時だけ・
++/// 持ち主の裁定 t3-hub.77.28）。
+ /// bead の事実の口は台帳の一覧の口と同じ台帳の読みから組むので台帳だけ（行 g-ledger-trim）。器の局面の出力
+ /// （state dir の fleet/lifecycle.json と lifecycle.stale）は局面の出力の種類の合図が持つ（中身が動いた時だけ・
+ /// 行 c-cases-watch）: 局面の出力の口はその種類だけ、それを台帳と一緒に読む指標と未反映の口は台帳とその種類、
+ /// pipeline の口は台帳と event log とその種類で読み直す。
+-pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
++pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 16] = [
+     (seat::PATH, &[ChangeKind::Seat]),
+     (
+         next::PATH,
+@@ -64,6 +65,7 @@ pub const RELOAD_KINDS: [(&str, &[ChangeKind]); 15] = [
+     (account::PATH, &[ChangeKind::Account, ChangeKind::Ledger]),
+     (project::PATH, &[]),
+     (notice::PATH, &[ChangeKind::Notice]),
++    (host::PATH, &[ChangeKind::Host]),
+ ];
+ 
+ /// 口の path の読みが読む変化の種類: 最初の `?` より前の字が、表の path と同じか表の path に `/` を続けた字で
+diff --git a/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs b/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+index 3ae2c7a6e61ecb3c56063827e1ea266edd8200bc..619b5e76ee5422f6ec901e9ba47ab7986c0064a2 100644
+--- a/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
++++ b/crates/tsuzuri-surface/tests/teeth2/bvtrim.rs
+@@ -11,7 +11,7 @@ use std::path::PathBuf;
+ use tsuzuri_contract::board::Reading;
+ use tsuzuri_contract::stats::{LedgerStats, UnreflectedKind, UnreflectedList};
+ use tsuzuri_contract::surface::ChangeKind;
+-use tsuzuri_contract::{case, wire};
++use tsuzuri_contract::{case, host, wire};
+ use tsuzuri_surface::ledgerlist::{FACTS_PATH, Phases, kpi, kpi_unknown};
+ use tsuzuri_surface::project::Body;
+ use tsuzuri_surface::project::ledger::{
+@@ -286,21 +286,24 @@ fn unref_case_states() {
+     }
+ }
+ 
+-/// (5) 読み直しの表は 15 行で、bead の事実の口は台帳だけ、器の局面の出力の口は局面の出力の種類の合図だけで読み直す
+-/// （表に無い口の全部の種類でない・行 c-cases-watch）。席と設計と account と知らせの合図ではどちらも読み直さない。
++/// (5) 読み直しの表は 16 行で、bead の事実の口は台帳だけ、器の局面の出力の口は局面の出力の種類の合図だけで読み直す
++/// （表に無い口の全部の種類でない・行 c-cases-watch）。席と設計と account と host と知らせの合図ではどちらも読み直さない。
++/// host の口は host の種類の合図だけで読み直す。
+ #[test]
+ fn bvtrim_reload_beads_and_cases() {
+-    assert_eq!(RELOAD_KINDS.len(), 15);
++    assert_eq!(RELOAD_KINDS.len(), 16);
+     assert_eq!(FACTS_PATH, "/api/beads");
+     assert_eq!(case::PATH, "/api/cases");
+     assert_eq!(path_kinds(FACTS_PATH), [ChangeKind::Ledger]);
+     assert_eq!(path_kinds(case::PATH), [ChangeKind::Cases]);
++    assert_eq!(path_kinds(host::PATH), [ChangeKind::Host]);
+     assert!(reloads(case::PATH, &[ChangeKind::Cases]));
+     assert!(!reloads(FACTS_PATH, &[ChangeKind::Runs]));
+     for kind in [
+         ChangeKind::Seat,
+         ChangeKind::Design,
+         ChangeKind::Account,
++        ChangeKind::Host,
+         ChangeKind::Notice,
+     ] {
+         assert!(!reloads(FACTS_PATH, &[kind]), "{kind:?}");
