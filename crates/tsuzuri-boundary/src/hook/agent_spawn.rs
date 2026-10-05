@@ -1,4 +1,4 @@
-//! tz hook agent-spawn（行 ag-spec・判断の記録 ADR-59 決定 (2)(4)・要件 FR21）: 係の起こしの門。
+//! tz hook agent-spawn（判断の記録 ADR-59 決定 (2)(4)・要件 FR21）: 係の起こしの門。
 //! 撃つのは Claude Code（PreToolUse の hook・matcher Agent）。標準入力の hook の入力が席の Agent の呼び（係の id の無い呼び）の時だけ判じる。順:
 //! 1. 標準入力を全部読む。席の Agent の呼びでなければ（係の呼び・ほかの道具）何も読まず何も出さずに 0。
 //! 2. 起草の置き場を --drafts か、repo の git config の鍵 `tsuzuri.draftsdir` から解く。解けなければ標準エラーに書いて通す（fail-open）。
@@ -7,7 +7,7 @@
 //!
 //! rc は 0 か 1（使い方の誤り）だけ。置き場の解き方と引数の読みは結びの口（`agent_bind`）も使う。
 //! 席の流れの道具（Workflow）の呼びは 1 の前に全部断り、頼みの頭の群の行と計画の file の判じは 3 の前に子の `group` が持つ
-//! （行 ag-gspawn・判断の記録 ADR-61・要件 FR22）。
+//! （判断の記録 ADR-61・要件 FR22）。
 
 pub mod group;
 

@@ -1,14 +1,14 @@
-//! 問いの起票の門（設計ノート surface-wavef 行 f-gate・要件 FR4・受入 AC6）。
+//! 問いの起票の門（要件 FR4・受入 AC6）。
 //! 入力は Claude Code の PreToolUse の hook の入力の字と導出グラフで、関数は file も子 process も時計も触らない。
 //!
 //! 席は問いを bd か bdw の create で置く（label `intake:question`・名指した節点は metadata の touches）。
 //! 門は問いの起票の下書き（`drafts`）ごとに、touches の各節点の 1 段の近傍のうち 4 種（条・規則行・判断の記録・要件）で
 //! hub でない節点（`needs`）の全部に処分（touches か not-relevant）が在り、metadata の digest が
 //! 今の束の要約値（`bundle_digest`）と同じときだけ通す（`judge`）。止める答えは PreToolUse の deny の JSON（`output`）。
-//! 処分より先に方針を読ませる（設計ノート surface-wave13b 行 f-premises・要件 FR8）。metadata の premises は方針の id だけで、
+//! 処分より先に方針を読ませる（要件 FR8）。metadata の premises は方針の id だけで、
 //! 範囲がその問いに及び、まだどの問いの premises にも無い方針（`due_policies`）の全部を premises に持つときだけ先へ進む。
 //! 門は allow を出さない（通すことは止めないことで、ほかの許可の仕組みはそのまま効く）。
-//! 起票の短い題の門（規則の行 R-39・判断の記録 ADR-30 決定 (6)・行 c-short-gate）: bd か bdw の create の全部（label を問わない）の
+//! 起票の短い題の門（規則の行 R-39・判断の記録 ADR-30 決定 (6)）: bd か bdw の create の全部（label を問わない）の
 //! metadata の鍵 short が空でなく `SHORT_MAX` 字以下の字かを見る（`short_gate`）。止める答えは同じ形の deny（`short_output`）。
 
 use std::collections::BTreeSet;

@@ -1,11 +1,11 @@
-//! tz hook deliver-tool（行 f-deliver-tool・要件 FR9・器の要件 FR79）: 席の PostToolBatch の hook。
+//! tz hook deliver-tool（要件 FR9・器の要件 FR79）: 席の PostToolBatch の hook。
 //! 考え中の席へ、tool の呼びの組が終わった後（次の model の呼びの前）に、印の無い裁定の逐語を席の文脈に足し、
 //! 答えを書けた後にだけ、答えが名指した裁定に経路が tool の呼びの印を置く。
 //! 撃つのは Claude Code（plugin の hooks.json の PostToolBatch・matcher なし）。順:
 //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
 //! 2. repo の下の .git が file（git の worktree）なら何もせずに 0。
 //! 3. 標準入力が席の本体の入力（最上位に agent_id も agent_type も無い JSON の object）でなければ、子 process を撃たずに 0。
-//! 4. 相談の拾い（行 cs-hooks・`consult::items`）: 見張りが居ない間、board の相談の未受けの口の受けの無い所見と頼みの行を取る。
+//! 4. 相談の拾い（`consult::items`）: 見張りが居ない間、board の相談の未受けの口の受けの無い所見と頼みの行を取る。
 //! 5. 安い判じ（自分の board の口 GET `UNRECEIVED_PATH`）が Known の空の列なら裁定は無い。読めない・Unknown なら
 //!    標準エラーに 1 行を書く（台帳は読まない・印の無い裁定は停止の hook が拾う）。
 //! 6. 空でなければ台帳を bd で 1 回読み、印の無い裁定の逐語を取る。読めなければ標準エラーに 1 行を書く。

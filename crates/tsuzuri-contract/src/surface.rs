@@ -1,7 +1,7 @@
 //! 面の電文の型: 面の event・面の状態・問いの合図・裁定と束と方針の要求と応答・記帳 id の形
 //! （設計ノート surface §3・§20・判断の記録 ADR-7 決定 (4)）。
-//! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（行 e-revoke・server の受付と面の button が同じ関数で判じる）。
-//! board-changed の data の型 `BoardChanged` と変化の種類 `ChangeKind`（面は種類を読む口だけを読み直す・行 c-ev-kind）。
+//! 決定の取り消しの要求と応答と、取り消せるかを notes から判じる関数（server の受付と面の button が同じ関数で判じる）。
+//! board-changed の data の型 `BoardChanged` と変化の種類 `ChangeKind`（面は種類を読む口だけを読み直す）。
 
 use serde::{Deserialize, Serialize};
 

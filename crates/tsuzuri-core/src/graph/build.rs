@@ -1,9 +1,9 @@
 //! 3 つの字からグラフを組む。読めない字はその出所を `Graph::unread` に挙げ、ほかの出所は組む。
 //! 設計の索引の節点と辺は表の行を写す。種類の読めない節点の行と型の読めない辺の行は、その行だけを組まずに数える
 //! （飛ばした節点の行の id を端に持つ辺の行も組まずに数える）。bead の種類は epic・memo・問い・契約の順に決める。
-//! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く（行 c-g3-bindline）。
+//! 裁定と受けと方針は notes の定型行から導く。裁定は器の結びの口が notes に足す行（`bind_line`）からも導く。
 //! 走行は event log の RunCreated から導く。
-//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む（行 c-commit-node）。
+//! 着地の commit は走行の RunDone の detail の札 `sha:` から導き、commit から走行の bead へ landed の辺を組む。
 //! 設計ノートの行は索引の `NOTE_ROW_KIND` の節点の行から組み、design の辺は pointer の行が指す行の節点へ組む。
 //! ruled_by の辺は build が組まず、build の後に `add_rulings` が裁定の書き出し（folio check --emit-rulings）から組む。
 //! 台帳の bead の 2 つの概要は build が description の定型行（「概要 = 」「技術 = 」）か、無ければ見出しの行（「## 概要」「## 技術」）の下の字から写す（契約の summary の関数・行は無し）。
@@ -11,7 +11,7 @@
 //! 更新の時刻は、bead は台帳の updated_at、走行は event log の読める ts の最後の値を epoch 秒で読む（読めなければ無し）。
 //! 設計の索引の節点と notes の定型行から導く節点は時刻を持たない（無し）。
 //! 索引の表と notes の定型行は時刻の欄を持たず、tsuzuri は設計文書も git も読まないため。
-//! ほかの project の台帳の一覧は節点にせず、`outside` が bead の id と族と notes の裁定の定型行の id だけを読む（行 c-g3-extern）。
+//! ほかの project の台帳の一覧は節点にせず、`outside` が bead の id と族と notes の裁定の定型行の id だけを読む。
 
 use std::collections::{BTreeMap, BTreeSet};
 

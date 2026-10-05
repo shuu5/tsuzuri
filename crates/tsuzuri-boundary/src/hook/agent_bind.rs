@@ -1,4 +1,4 @@
-//! tz hook agent-bind（行 ag-spec・判断の記録 ADR-59 決定 (4)・要件 FR21）: 結びの口。
+//! tz hook agent-bind（判断の記録 ADR-59 決定 (4)・要件 FR21）: 結びの口。
 //! 撃つのは Claude Code（PostToolUse の hook・matcher Agent）。席の Agent の呼びの結果に係の id（`tool_response.agentId`）が在り、
 //! 起こしの名の係の札が在る時だけ、札の `agent_id` に係の id を書き、起草の置き場の `.agents/<係の id>` に名を書く。
 //! それ以外（係の呼び・ほかの道具・係の id の無い結果・札の無い名・置き場を解けない）は何も書かない。出力は無く、rc は 0 か 1（使い方の誤り）だけ。

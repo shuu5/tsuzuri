@@ -1,13 +1,12 @@
-//! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)・設計ノート surface-wave27a 行 cs-open〜cs-close）。
-//! 口は open と bundle（行 cs-open）・launch（行 cs-launch）・answer と guard（行 cs-answer）・watch（行 cs-watch）・
-//! show と dispose（行 cs-show）・list と close（行 cs-close）・stamp（行 cs-acct-mark・窓の会話の印の hook）・statusline（行 cs-status-verb・窓の状態の 1 行）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
+//! tz consult（相談の窓の命令・判断の記録 ADR-29 決定 (2)〜(10)）。
+//! 口は open と bundle・launch・answer と guard・watch・
+//! show と dispose・list と close・stamp（窓の会話の印の hook）・statusline（窓の状態の 1 行）。終了 code は 0 合格・1 断り（使い方の誤り・欄の欠け・
 //! 上限・版のずれ）・2 まだ分からない（台帳か置き場が読めない）。
 //! project の値は repo の git config の鍵から引く（state dir は `scribe2.statedir`・起草の置き場は `tsuzuri.draftsdir`・
 //! host ごとに分岐しない）。鍵が無ければ rc 2。窓の作業場は起草の置き場の下の `consult-cw<n>`、退いた作業場は
 //! `retired-consult-cw<n>`。この module は口の振り分けと、引数の読み・置き場の解き方・作業場の file の読み書き・
 //! 台帳の読みと相談の行の書きの共通の手を持つ（行の字と置き場は中核の `consult::lines`）。
-//! 口座の信頼の印の書き手（`trust`）は行 cs-trust、launch --follow の口（`follow`）は行 cs-follow
-//! （どちらもノート surface-wave29b）が置く。
+//! 口座の信頼の印の書き手（`trust`）と launch --follow の口（`follow`）も持つ。
 
 pub mod answer;
 pub mod bundle;

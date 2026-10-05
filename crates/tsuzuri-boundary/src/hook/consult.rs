@@ -1,4 +1,4 @@
-//! 席の hook の相談の拾い（設計ノート surface-wave27b 行 cs-hooks・判断の記録 ADR-29 決定 (8)）。
+//! 席の hook の相談の拾い（判断の記録 ADR-29 決定 (8)）。
 //! repo の git config の鍵 `tsuzuri.draftsdir` の起草の置き場に見張りの生きている印（`watch::fresh`）が無い間だけ、
 //! 自分の board の未受けの口（GET /api/consult/unreceived・住所の列は裁定の未受けの口と同じ解き方）を撃つ。
 //! 鍵が無いか値が dir でない repo（相談の窓を使わない project）と、見張りの居る間は、鍵の読みのほかに何も撃たない。

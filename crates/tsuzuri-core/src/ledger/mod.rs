@@ -1,4 +1,4 @@
-//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）（設計ノート surface-base 便 d）と bead の事実の一覧（`facts`・行 c-bead-facts）。
+//! 台帳の指標（`stats`）と未反映の一覧（`unreflected`）と bead の事実の一覧（`facts`）。
 //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）と今の時刻（引数）で、
 //! どの関数も file も子 process も時計も触らない。字を読んで口に出す側は境界の crate が持つ。
 //! bead の種類は導出グラフと同じ順（epic・memo・問い・契約）で決め、指標が数える task は契約の bead。

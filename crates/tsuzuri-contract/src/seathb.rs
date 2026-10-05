@@ -1,4 +1,4 @@
-//! project board の停止の切り替えの電文（行 e-seat-hb・裁定 t3-hub.52.29 の案 A）。
+//! project board の停止の切り替えの電文。
 //! 本文は向きだけを持ち、撃つ席は server が自分の --repo から引く（本文の字で席を選ばない）。
 //! 応答は account の `HeartbeatResponse` をそのまま使う。
 

@@ -1,7 +1,7 @@
-//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)・行 c-bead-facts）。
+//! bead の事実の一覧（起票の時刻・短い題・blocks の相手・判断の記録 ADR-27 決定 (9)）。
 //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）だけで、file も子 process も時計も触らない。
 //! 短い題は metadata の鍵 short の字か、無ければ題から機械で作り、どちらも `SHORT_MAX` の字数を越えれば頭の字と `ELLIPSIS` で切る
-//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む・行 c-fact-trim）。
+//! （規則の行 R-19・判断の記録 ADR-30 決定 (5)）。本文の概要は組まない（吹き出しは 1 本の引きの口から読む）。
 
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId};

@@ -1,21 +1,21 @@
-//! pipeline の板（設計ノート surface-base 便 d・判断の記録 ADR-7 決定 (5)）。
+//! pipeline の板（判断の記録 ADR-7 決定 (5)）。
 //! 入力は台帳の一覧の字と器の event log の字と今の時刻で、file も子 process も時計も触らない。
 //! 札は bead ごとに 1 枚で、その bead の走行のうち RunCreated がいちばん新しい 1 つの、最後の event で段を決める
 //! （event log は追記の順なので、後の行ほど新しい）。段を決める event は `STAGE_EVENTS` の 4 種で、
 //! ほかの event（RunCost・SeatSpawned など）は段を変えない。器の event から段への対応は `stage_of` の閉じた表。
 //! 走行を 1 つも持たない open の契約は、acceptance に器の読める設計 pointer の行を持つ task の bead だけを Blocked か Queued の札にする
-//! （読みは器の列の受付と同じ `dispatchable`・pointer の無い task は器が流さないので札にしない・行 c-pipe-queue）。
-//! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする（行 c-pipe-unmapped）。
+//! （読みは器の列の受付と同じ `dispatchable`・pointer の無い task は器が流さないので札にしない）。
+//! 器の RunStage の段 Failed と Stopped は段 Failed と Stopped の札にし、段の理由は detail の字にする。
 //! detail が `RETIRED` の RunStage（器が worktree を畳んだ記帳）は段を決めない。
 //! 台帳で閉じた bead の走行は、段が Landed でなければ（表に無い段も）段 Landed・段の理由 `CLOSED_TAG` と閉じた理由の頭の字の札にする
-//! （閉じた（着地せず）・行 c-pipe-closed）。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
-//! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする（行 c-pipe-questioned）。
-//! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む（行 e-runs）。
-//! 走行ごとの gate と審査の内訳は `with_verdicts` が便の dir の 2 つの file の字から置く（行 c-run-verdict）。
+//! （閉じた（着地せず））。台帳が読めないときと台帳に無い bead は段を決めた最後の event の段のまま。
+//! 問いの後に器が RunStopped で止めた走行は段 Questioned のまま、段の理由を `QUESTION_STOPPED` と about の字にする。
+//! bead の走行ごとの段の列・審査の結び・口座・費用は `runs_of` が同じ event log から読む。
+//! 走行ごとの gate と審査の内訳は `with_verdicts` が便の dir の 2 つの file の字から置く。
 //! 板は札のほかに形の崩れた open の bead の一覧を持ち、器の doctor の台帳の形の行を `form_ids` で写して題を台帳から引く
-//! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)・行 c-pipe-misfit）。
+//! （`board_with_doctor`・tsuzuri は形を判じない・判断の記録 ADR-16 の決定 (6)）。
 //! doctor の字を受けない `board` の一覧は Unknown。
-//! 着地の後の CI の読み（行 c-pipe-ci）: `stage_of` の段が Landed の札だけ、走行の event の行を判定の関数 `ci_reading` に渡す
+//! 着地の後の CI の読み: `stage_of` の段が Landed の札だけ、走行の event の行を判定の関数 `ci_reading` に渡す
 //! （器の終端の RunDone の detail の語を `ci_after` で順に重ねる・判定は `ci_reading` の 1 つに閉じる）。
 //! 段と理由の決め（閉じた bead の札を含む）の後に `with_ci` で重ねる: 読みが無いか、台帳で閉じた bead の読みが Waiting なら
 //! 段と理由のままで ci は None。閉じていない bead（台帳が読めないときと台帳に無い bead も）の読みが `CI_STALLS` に在れば
@@ -23,16 +23,16 @@
 //! 札の since は段を決めた最後の event の ts の時刻で、今を引かない（板の電文は今の時刻に依らない・経過は面が今から引く）。
 //! 器の RunStage の段 Blocked（承認待ち・器の局面 run-blocked）は段 Blocked の札にし、段の理由は detail の字にする。
 //! 走行の無い札の段は、器の局面の出力が読めてその契約の部品の局面が `QUEUED_PHASE` の時はその部品で決める
-//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字・行 c-case-columns）。
+//! （`board_with_cases`・理由が `PARTNER_REASONS` なら Blocked・`HOLD` なら Held・ほかは Queued・since と理由は部品の字）。
 //! 出力が読めないか部品が無いか局面が違う札は、開いた blocker が在れば Blocked・無ければ Queued で、理由と since は None
 //! （`queued_cards`）。
-//! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`・行 c-ledger-lc）:
+//! 局面の出力が読めれば、走行の在る札の段も契約の部品とその最新の便の部品の局面で決める（`phase_of`）:
 //! 契約の待ち（`QUEUED_PHASE` で理由が `SETTLED` でない・`REFUSED_PHASE`）は部品の理由と since、便の局面は `RUN_PHASES` の段で、
 //! 理由と since は event log の読みが段を持てばその字・持たなければ便の部品の字。表に無い局面の語は「まだ分からない」
 //! （札を作らず unmapped に数える・走行の無い札は台帳の blocks の割り）。契約の部品が無いか `CLOSED_PHASE` か便の部品が
 //! 無ければ event log の段のまま。台帳で閉じた bead の札は今までどおり。CI の読みは段が Landed で event log も Landed の時だけ。
 //! 段 Held（留め置き・列は Blocked）は契約の部品の局面が `QUEUED_PHASE` で理由が `HOLD`（席の止め）か `REFUSED_PHASE`（受付の断り）の札
-//! （判断の記録 ADR-42 決定 (1)(2)・行 c-held-stage）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
+//! （判断の記録 ADR-42 決定 (1)(2)）。局面の出力が読めない間は Held を判じず台帳の blocks の割りのまま。
 
 use std::collections::{BTreeMap, BTreeSet};
 

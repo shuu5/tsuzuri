@@ -1,15 +1,15 @@
-//! project の側の部分（project の行・session の行・電文の組み立て・設計ノート surface-base 便 e-acct-proj）。
+//! project の側の部分（project の行・session の行・電文の組み立て）。
 //! 入力は host の側の字（`HostTexts`）と、anchor ごとの project の字（`ProjectTexts`）と今の時刻。
-//! 退避の終わる時刻は席の card の grace_until の写しで、tsuzuri は計算しない（規則の行 R-22・行 c-grace-acct）。
-//! 電文の時点 at は今ではなく材料の時刻の最大（`latest`・行 c-abs-seat）。
+//! 退避の終わる時刻は席の card の grace_until の写しで、tsuzuri は計算しない（規則の行 R-22）。
+//! 電文の時点 at は今ではなく材料の時刻の最大（`latest`）。
 //! project の宣言の順は群の宣言の順で、群の中は anchors の配列の順（同じ anchor は最初の群だけ）。
 //! 席の card・台帳の指標・次の一手は着地済みの関数の値をそのまま写す。run の 4 列の分け方と
 //! 生きている run の境（`ALIVE_S`）は見本の acct.js の runColsAt と runAlive の決め方（設計席の承認で置く値）。
 //! 読めない字の決まり（要件 NFR2）: state dir が引けない project は席と run と台帳と次の一手が「まだ分からない」、
 //! event log の字が無いか読めなければ run の 4 列が、台帳の字が無ければ台帳と次の一手が「まだ分からない」。
-//! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認・行 c-dormant）。
+//! 休止中の席の境（`DORMANT_S`）は規則の行 R-28 の 12 時間（見本 mock v3 の承認）。
 //! 相談の窓の行は、作業場の材料（`ConsultWindow`）と台帳の notes の相談の開きと閉じの行から組む
-//! （判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
+//! （判断の記録 ADR-55 決定 (4)）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

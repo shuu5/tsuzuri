@@ -1,4 +1,4 @@
-//! 話す窓の撃ち直しの会話の続き（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (1)(3)）。
+//! 話す窓の撃ち直しの会話の続き（判断の記録 ADR-55 決定 (1)(3)）。
 //! 撃ち直しで続ける会話の id を、作業場の会話の印の最後の id と席が名指した id から決める（`pick`）。
 
 use tsuzuri_contract::consult::Form;

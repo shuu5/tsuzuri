@@ -1,4 +1,4 @@
-//! 席の card の電文（画面の block「orchestrator と口座」が読む・設計ノート surface-base 便 b-cards）。
+//! 席の card の電文（画面の block「orchestrator と口座」が読む）。
 //! card を組むのは server で、ここは電文の形だけを決める。読めない出所はその欄だけ `Reading::Unknown` にする。
 
 use serde::{Deserialize, Serialize};

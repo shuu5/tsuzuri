@@ -1,4 +1,4 @@
-//! tz consult launch <窓 id> --follow [--session <会話の id>] [--wait <秒>]（行 cs-follow・判断の記録 ADR-55 決定 (3)(5)）。
+//! tz consult launch <窓 id> --follow [--session <会話の id>] [--wait <秒>]（判断の記録 ADR-55 決定 (3)(5)）。
 //! 生きている話す窓を、席の今の口座（環境の CLAUDE_CONFIG_DIR）へ付いて来させる口。印の口座が今の口座と同じなら何もしない。
 //! 会話の印の最後の行が手すき（中核の `follow::idle`）で、tmux の pane の入力欄が空（`follow::input_clear`）になるのを待ち
 //! （会話の印を持たない窓は --session で席が会話の id を名指し、入力欄だけを待つ）、上限 --wait（既定 `WAIT` 秒）を越えたら

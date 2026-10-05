@@ -1,4 +1,4 @@
-//! tz hook question-signal（行 e-signal-send・要件 NFR2・規則の行 R-21）: 問いの合図の送り手。
+//! tz hook question-signal（要件 NFR2・規則の行 R-21）: 問いの合図の送り手。
 //! 撃つのは Claude Code（PostToolUse の hook・matcher Bash・async で席は待たない）。標準入力の hook の入力が
 //! 問いの起票（門と同じ読み）で、tool_response の stdout に起票の行が在るときだけ、自分の board の口
 //! POST /api/surface/questions（`NUDGE_PATH`）へ本文 QuestionNudge を 1 本送る。順:

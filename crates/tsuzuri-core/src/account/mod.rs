@@ -1,6 +1,6 @@
-//! account board の電文を組む純粋な関数（設計ノート surface-base 便 e-acct-host・e-acct-proj・規則の行 R-22）。
+//! account board の電文を組む純粋な関数（規則の行 R-22）。
 //! host の下に口座の列と群の枠と移動の列（`host`）を置く。project の下に project の行と session の行と
-//! 電文の組み立て（`project`）を置く（便 e-acct-proj）。
+//! 電文の組み立て（`project`）を置く。
 //! 入力は字と今の時刻だけで、どの関数も file も子 process も時計も触らない。状態の判定は器の値を写すだけで、
 //! 閾値を持たない。読めない字はその字から組む部分だけを「まだ分からない」にする。
 

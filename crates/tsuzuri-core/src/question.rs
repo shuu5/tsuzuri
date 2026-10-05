@@ -1,4 +1,4 @@
-//! 問いの一覧（設計ノート surface-base 便 e-ask）。
+//! 問いの一覧。
 //! 入力は台帳の一覧の字（bd の読み取りの口が返す JSON の配列）で、関数は file も子 process も触らない。
 //! open の問い（label `intake:question` を持ち、状態が closed でも tombstone でもない bead）を、
 //! 作られた時刻の古い順（同じなら id の順）に card にする。字が読めなければ「まだ分からない」。
@@ -6,7 +6,7 @@
 //! 問いの本文の形: 席は問いを置くとき、本文の行頭に定型の字を書く（1 つの定型は 1 行・同じ定型が 2 行在れば
 //! 最初の行を取る・定型の無い欄は None）。A-1 の印は label のどれかが「A-1」で始まること。
 //! 名指した節点は bead の metadata の touches の欄（字 1 つか字の配列・metadata は object か、object を JSON にした字）。
-//! 止めている task は、台帳の bead のうち種類 blocks の依存の先がその問いの bead（状態で選ばない・便 c-q-blocking）。
+//! 止めている task は、台帳の bead のうち種類 blocks の依存の先がその問いの bead（状態で選ばない）。
 
 use serde_json::Value;
 use tsuzuri_contract::board::Reading;

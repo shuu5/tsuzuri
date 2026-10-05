@@ -1,4 +1,4 @@
-//! account board の電文（口座ごとの窓・群の枠・移動・project の行・session の行・停止の切り替え・設計ノート surface-base 便 b-acct）。
+//! account board の電文（口座ごとの窓・群の枠・移動・project の行・session の行・停止の切り替え）。
 //! 電文を組むのは server で、ここは電文の形と口の path だけを決める。読めない出所はその部分だけ `Reading::Unknown` にする。
 //! 着地済みの `board::AccountBoard` は使わない（窓・席の card・移動・部分ごとの測れていない・停止の切り替えを持たない）。
 

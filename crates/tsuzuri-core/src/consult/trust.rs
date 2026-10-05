@@ -1,4 +1,4 @@
-//! 口座の信頼の印の字（設計ノート surface-wave29b 行 cs-trust・判断の記録 ADR-55 決定 (3)）。
+//! 口座の信頼の印の字（判断の記録 ADR-55 決定 (3)）。
 //! 起こす口座の置き場の設定 file（`TRUST_FILE`）の字に、作業場 1 つだけの信頼の印を置いた字を組む（`trusted`）。
 //! 置く印は `projects.<作業場の絶対 path>.hasTrustDialogAccepted = true` の 1 つだけで、作業場の親と起草の置き場には置かない。
 

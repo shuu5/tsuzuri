@@ -1,4 +1,4 @@
-//! tz hook agent-meter（行 ag-meter・判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の測り。
+//! tz hook agent-meter（判断の記録 ADR-59 決定 (3)(4)・要件 FR21）: 係の測り。
 //! 撃つのは Claude Code（PostToolUse の hook・matcher なし）。標準入力の hook の入力が係の呼び（係の id の在る呼び）の時だけ測る。順:
 //! 1. 標準入力を全部読む。係の呼びでなければ（席の呼び）何も読まず何も出さずに 0。
 //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
@@ -9,7 +9,7 @@
 //!
 //! rc は 0 か 1（使い方の誤り）だけ。結びの名の解きと結びの無い呼びの記帳は、係の門と終える前の門も使う。
 //! 係の dir に群の席の札 `group.json` の在る群の係は、5 で読み直しの欄も上限 `MEMBER_READ` の印で数えて両方の欄の注ぎを出し、
-//! 読みの道具（Read）の path を群の id の dir に記帳する（行 ag-gwatch・判断の記録 ADR-61 決定 (5)(7)）。
+//! 読みの道具（Read）の path を群の id の dir に記帳する（判断の記録 ADR-61 決定 (5)(7)）。
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};

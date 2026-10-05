@@ -1,6 +1,6 @@
-//! bead の走行の時間軸の電文（節点の頁が読む・設計ノート surface-wave3b 行 e-runs・要件 FR10）。
+//! bead の走行の時間軸の電文（節点の頁が読む・要件 FR10）。
 //! 走行ごとに段の列・審査の結び・口座・費用を持つ。器の event log から中核の pipeline の `runs_of` が組む。
-//! 走行ごとの gate と審査の内訳は、便の dir の 2 つの file の字から中核の pipeline の `with_verdicts` が置く（行 c-run-verdict）。
+//! 走行ごとの gate と審査の内訳は、便の dir の 2 つの file の字から中核の pipeline の `with_verdicts` が置く。
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-//! tz consult answer <草稿の file>（行 cs-answer・窓の側の所見の口・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
+//! tz consult answer <草稿の file>（窓の側の所見の口・判断の記録 ADR-10 決定 (3) と ADR-29 決定 (1)(ウ)・(8)・受入 AC16）。
 //! 窓の id は環境の `TZ_CONSULT_ID`、作業場は cwd（窓の控えの id が同じこと）。草稿を中核の `finding::check` で検め、
 //! 断りは理由の字（欠けた欄の名の列など）を標準出力に 1 行出して rc 1（file を作らない）。添え物は作業場の下に実在する
 //! file であること（canonicalize して作業場の下・symlink で外を指す物を断る）。所見は findings/<所見 id>.json に、

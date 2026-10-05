@@ -1,4 +1,4 @@
-//! 相談の窓の守りの hook の判じ（設計ノート surface-wave27a 行 cs-answer・判断の記録 ADR-29 決定 (7)）。
+//! 相談の窓の守りの hook の判じ（判断の記録 ADR-29 決定 (7)）。
 //! 入力は Claude Code の PreToolUse の hook の JSON。道具の名が起動の閉じた列（`TOOLS` の 8 つ）に無ければ断り、
 //! Bash の命令が tz consult の席の口（`SEAT_VERBS`）を含むか、囲いの外で撃ち直す印（dangerouslyDisableSandbox）を
 //! 持てば断る。所見の口 answer と束の口 bundle は通す。JSON の object でない入力と道具の名の無い入力も断る（断る側に倒す）。

@@ -1,4 +1,4 @@
-//! 表示先の設定の電文（行 e-stage-target・要件 FR16・判断の記録 ADR-15 の決定 (2)(6)・持ち主の裁定 t3-hub.59.1 と t3-hub.59.7）。
+//! 表示先の設定の電文（要件 FR16・判断の記録 ADR-15 の決定 (2)(6)）。
 //! 読み（GET `PATH`）は tz stage target show --json の 1 行を `StageTargets` として返す。
 //! 書き（POST）は `OwnTarget`（project board・自分の project だけ）と `Targets`（account board・一括か project ごと）で、
 //! 窓を開く頼み（POST `OPEN_PATH`）は `OpenRequest`。server は設定の file を書かず、tz の口を撃つだけにする。

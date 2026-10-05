@@ -1,10 +1,10 @@
-//! 導出グラフ（設計ノート surface-base 便 c・判断の記録 ADR-7 決定 (2)）。
+//! 導出グラフ（判断の記録 ADR-7 決定 (2)）。
 //! 設計の索引・台帳の一覧・器の event log の 3 つの字から、1 つのグラフを毎回組み直す（`build`）。
 //! 不変条件を 3 値で数え（`check`）、1 つの節点の近傍を返す（`around`）。
 //! どの関数も file も子 process も触らない。字を読んで口に出す側は境界の crate が持つ。
-//! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ（行 c-g3g7）。
-//! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる（行 c-g3-extern）。
-//! 着地の commit は event log の RunDone から組み（行 c-commit-node）、着地の commit の無い着地した契約は床の値で
+//! 裁定の書き出し（folio check --emit-rulings の行）は build の後に `build::add_rulings` が節点へ結ぶ。
+//! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる。
+//! 着地の commit は event log の RunDone から組み、着地の commit の無い着地した契約は床の値で
 //! `check::unlanded_contracts` が名指す。
 
 pub mod around;

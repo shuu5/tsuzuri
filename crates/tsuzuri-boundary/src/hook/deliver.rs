@@ -1,9 +1,9 @@
-//! tz hook deliver（行 f-deliver・要件 FR9・器の要件 FR79）: 席の UserPromptSubmit の hook。
+//! tz hook deliver（要件 FR9・器の要件 FR79）: 席の UserPromptSubmit の hook。
 //! 器の配達の口が待ちの席へ送る指し示しの 1 行（「裁定 <id> が届いた」）が prompt に在るとき、
 //! 名指された裁定の逐語を台帳から写して席の文脈に足す（hookSpecificOutput の additionalContext）。
 //! 撃つのは Claude Code（plugin の hooks.json の UserPromptSubmit）。順:
 //! 1. 使い方の誤りか repo が dir でなければ rc 1（標準入力は読まない）。
-//! 2. 相談の拾い（行 cs-hooks・`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る
+//! 2. 相談の拾い（`consult::nudge`）: 見張りが居ない間、受けの無い所見と頼みの行か、見張りを置かせる 1 行を取る
 //!    （鍵 tsuzuri.draftsdir を git で読む・見張りの居る間と鍵の無い repo では行を取らない）。
 //! 3. 標準入力の prompt に指し示しが無ければ、台帳を読まない。在れば台帳を bd で 1 回読む。読めない・名指された行が無い時は
 //!    標準エラーに 1 行を書く（席には指し示しだけが残り、席が台帳を読む）。

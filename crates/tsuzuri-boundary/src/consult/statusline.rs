@@ -1,8 +1,8 @@
-//! tz consult statusline <作業場>（行 cs-status-verb・窓の状態の 1 行の口・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+//! tz consult statusline <作業場>（窓の状態の 1 行の口・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
 //! Claude Code が設定の statusLine の命令として撃つ（標準入力に session の JSON）。窓の控え `.consult/window.json`・
 //! findings/ の所見の数・束の要約値 bundle/digest・標準入力の文脈の割合を中核の `status::render` で 1 行にして標準出力に出す。
 //! 口は囲いの外で持ち主の権限で走り、材料は窓が書ける作業場の file なので symlink を辿らない（作業場から file までの
-//! どの段も lstat で dir か普通の file かを見て、開いた後の fstat で同じ file かを照らす・助けは行 cs-plain-open の `plain`）。普通の file でない物（fifo など）は
+//! どの段も lstat で dir か普通の file かを見て、開いた後の fstat で同じ file かを照らす・助けは `plain`）。普通の file でない物（fifo など）は
 //! 開かず、読む字に上限を置く。読めない物は欄を出さない。何も書かない。席の口でないので窓の守りは通す。
 //! 渡した path が「/」で始まらないか名が `consult-cw<n>` でないか symlink でない dir でなければ、何も出さずに rc 1。
 

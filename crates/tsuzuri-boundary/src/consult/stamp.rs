@@ -1,4 +1,4 @@
-//! tz consult stamp <作業場>（行 cs-acct-mark・窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
+//! tz consult stamp <作業場>（窓の会話の印の hook・判断の記録 ADR-55 決定 (2)）。
 //! 標準入力の hook の JSON を中核の `consult::stamp::read` で読み、作業場の `.consult/stamps.jsonl` に印の 1 行を足す。
 //! 書くのは、渡した path が「/」で始まり、名が `consult-cw<n>` で、窓の控え `.consult/window.json` が在る作業場の、その 1 file だけ。
 //! hook は囲いの外で持ち主の権限で走り、turn の終わりの hook の断りは窓の終わりを止めるので、どの周も rc 0 で返す

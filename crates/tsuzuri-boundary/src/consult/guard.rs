@@ -1,4 +1,4 @@
-//! tz consult guard（行 cs-answer・窓の PreToolUse の守りの hook・判断の記録 ADR-29 決定 (7)）。
+//! tz consult guard（窓の PreToolUse の守りの hook・判断の記録 ADR-29 決定 (7)）。
 //! 標準入力の hook の JSON を中核の `consult::guard::judge` で判じ、通すなら何も出さずに rc 0、断るなら理由を
 //! 標準エラーに 1 行書いて rc 2（Claude Code は PreToolUse の rc 2 を道具の断りと読み、標準エラーを窓に渡す）。
 //! 引数を取らない（在れば断る）。hook は囲いの外で持ち主の権限で走るので、読むだけで file を書かない。

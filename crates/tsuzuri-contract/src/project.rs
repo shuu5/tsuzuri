@@ -1,4 +1,4 @@
-//! project の名の電文（header の題が読む・設計ノート surface-wave3b 行 g-brand）。
+//! project の名の電文（header の題が読む）。
 //! 名は起動の引数 --repo の dir の名から server が実行の時に取る（tracked な file に名を書かない）。
 
 use serde::{Deserialize, Serialize};

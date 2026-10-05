@@ -1,4 +1,4 @@
-//! 問いの card の電文（画面の block「問いの card」が読む・設計ノート surface-base 便 b-cards）。
+//! 問いの card の電文（画面の block「問いの card」が読む）。
 //! card を組むのは中核の crate で、ここは電文の形だけを決める。見た版の要約値は `LedgerItem::digest` が付ける。
 
 use serde::{Deserialize, Serialize};

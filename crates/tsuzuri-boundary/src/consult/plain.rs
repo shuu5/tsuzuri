@@ -1,4 +1,4 @@
-//! 作業場の file を symlink を辿らずに見て書く助け（行 cs-plain-open・判断の記録 ADR-55）。
+//! 作業場の file を symlink を辿らずに見て書く助け（判断の記録 ADR-55）。
 //! 窓の hook と状態の 1 行の口は囲いの外で持ち主の権限で走り、窓は作業場の中に symlink と fifo を作れるので、作業場から file までの
 //! どの段も lstat で見て、作業場と途中の段は symlink でない dir、file は普通の file だけを受ける。在る file は開いた後の fstat で
 //! lstat と同じ dev と ino かを照らし、無い file は create_new（O_EXCL・symlink を辿らない）で作る。

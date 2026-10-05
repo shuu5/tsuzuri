@@ -1,21 +1,21 @@
 //! tz consult launch <窓 id> [--again [--session <会話の id>]] [--dry-run]
-//! （行 cs-launch・判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
-//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`・行 cs-follow）へ渡す。
+//! （判断の記録 ADR-29 決定 (3)(5)(6)(7)(10)・受入 AC19）。
+//! --follow [--session <会話の id>] [--wait <秒>] は口座の移動に付いて来させる口（`follow`）へ渡す。
 //! 窓を起こす口。中核の `consult::launch` で argv と設定と環境を組み、`audit` の欠けが 1 つでも在れば起こさない。
 //! 話す窓は席の tmux の session に名 consult-cw<n> の窓を -d で開き（持ち主の見ている窓を替えない）、環境は -e の閉じた
 //! 列（`window_env`・`TALK_ENV` と `BASE_ENV`・席の環境に無い名は渡さない）だけを渡し、claude を env -S（`keep_only`）で包んで
 //! tmux の server の環境を切る（残すのは -e の名と tmux の置く `PANE_ENV` だけ）。問う窓は席の背景の子として claude -p を
 //! cwd = 作業場で撃ち、環境を空にして同じ閉じた列だけを置き、終わりまで待って（上限 `ASK_LIMIT`）、新しい所見ごとに
 //! 経路 完了 の固定の 1 行を、無ければ止まった窓の固定の 1 行を標準出力に出す。
-//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む・行 cs-acct-mark）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
+//! 起こすごとに process の印 `.consult/proc-<k>.json`（起こした時の口座の置き場を含む）を書き、台帳の根に相談の開きの行（結果 = 開いた か 落ちた・
 //! --again は撃ち直しの印）を書く。版のずれ・閉じた窓・規則の行 R-38 の上限（起こし手が席の問う窓だけ）は行を書かずに断る。
 //! --dry-run は program の名と argv を 1 行ずつ出して起こさない（台帳も書かない）。
 //! 起こす前に state dir の accounts と accounts/.retired の子の symlink の先（口座の置き場の実体）を解き、囲いと読む道具から隠す
 //! 材料にする（解けない先は link の字の path で隠し、読めない dir と link は起こさずに断る）。
 //! 話す窓の --again は、作業場の会話の印の最後の会話の id を `--resume` で続ける（印を持たない窓は席が --session で名指す・
 //! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
-//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（行 cs-trust の `trust::place_trust`・
-//! 置けなければ起こさずに断る・行 cs-resume・判断の記録 ADR-55 決定 (1)(3)）。
+//! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（`trust::place_trust`・
+//! 置けなければ起こさずに断る・判断の記録 ADR-55 決定 (1)(3)）。
 
 use std::fs::{self, File};
 use std::io::Read;

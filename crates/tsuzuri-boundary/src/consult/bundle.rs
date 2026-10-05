@@ -1,4 +1,4 @@
-//! tz consult bundle <窓 id> [--topic <題>] [--question <file>]（行 cs-open・判断の記録 ADR-29 決定 (1)(イ)・束を機械が組む）。
+//! tz consult bundle <窓 id> [--topic <題>] [--question <file>]（判断の記録 ADR-29 決定 (1)(イ)・束を機械が組む）。
 //! 窓の束 bundle/ に手引き brief.md・問い question.md・読む物の一覧 reads.md・台帳の写し ledger.json・要約値 digest を書き、
 //! 標準出力に「束 <要約値 16 字>」を 1 行出す。席が撃つ時（環境に窓の id が無い時）は台帳を bd で読んで写しを替え、
 //! 窓の中で撃つ時（環境の `TZ_CONSULT_ID` が窓の id で cwd が作業場）は台帳の写しを替えない（囲いの中では bd を撃てない）。

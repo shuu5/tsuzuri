@@ -1,4 +1,4 @@
-//! tz consult open（行 cs-open・判断の記録 ADR-29 決定 (3)(4)(5)(11)）: 窓の作業場を用意する。
+//! tz consult open（判断の記録 ADR-29 決定 (3)(4)(5)(11)）: 窓の作業場を用意する。
 //! 引数: [--topic <題>] [--form talk|ask] [--model <名>] [--effort <段>] --by seat|chat|button [--said <分>]
 //! [--request <頼みの id>] [--via 見張り|hook|一覧] [--question <file>] と共通の --repo・--bd・--bdw。
 //! 環境の `TZ_PLUGIN_VERSION` が中核の `PLUGIN_VERSION` と同じでなければ断る（plugin の解き方を通さない撃ちと版のずれ）。
@@ -7,7 +7,7 @@
 //! （既定 見張り）で頼みの題の置き場に書く（台帳に無い頼みと受けた頼みは断る・受けの行は作業場より先に書く）。
 //! 作業場は起草の置き場の下に `consult-cw<n>` を原子に作り（n は在る窓と退いた窓の最大 + 1）、git init し、
 //! `DIRS` の dir・窓の控え・控えの書き場 notes.md・束を置く。標準出力は「窓 cw<n> を用意した」と作業場の絶対 path の 2 行。
-//! 開きの行は起動の口が書く（行 cs-launch）。
+//! 開きの行は起動の口が書く。
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

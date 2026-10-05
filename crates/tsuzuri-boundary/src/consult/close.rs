@@ -1,4 +1,4 @@
-//! tz consult close <窓 id> --by seat|chat|button（行 cs-close・判断の記録 ADR-29 決定 (3)(5)・持ち主が閉じると言った時）。
+//! tz consult close <窓 id> --by seat|chat|button（判断の記録 ADR-29 決定 (3)(5)・持ち主が閉じると言った時）。
 //! 話す窓は、最後の process の印の tmux の window id の窓の名が consult-cw<n> であることを確かめてから kill-window を
 //! 撃つ（名が違うか窓が無ければ撃たない＝持ち主が先に閉じた窓と、id を使い回したほかの窓を殺さない）。
 //! 私用の temp を消す（持ち主の uid の dir だけ・symlink は辿らない）。台帳の根に相談の閉じの行（起こし手・所見の数）を

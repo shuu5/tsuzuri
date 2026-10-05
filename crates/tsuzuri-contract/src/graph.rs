@@ -1,9 +1,9 @@
 //! 導出グラフの型: 節点の種類（閉じた 20）・辺の型（閉じた 32）・節点と辺（判断の記録 ADR-7 決定 (2)・設計ノート surface §17・§18）。
 //! 設計文書の 11 種と 17 型と設計ノートの行の 2 型は folio の語（graph.yaml の node_kinds と edge_types の写し）をそのまま電文の語にする。
-//! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は便 c で決めるのでここには置かない。
-//! 導出グラフの電文（GraphDoc）は便 e-read で足す（中核の crate の Graph と check の値の写し）。
-//! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）は便 c-view で足す。
-//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）は行 c-commit-node で足す（判断の記録 ADR-46 決定 (2)・ADR-47）。
+//! memo の昇格先の辺（promoted_to）は候補で、型の名と正本は中核の導出グラフで決めるのでここには置かない。
+//! 導出グラフの電文（GraphDoc）は中核の crate の Graph と check の値の写し。
+//! 辺の向き（basis_end）・id の自然な順（natural_cmp）と、グラフの眺めと近傍の電文（GraphView・AroundDoc）も持つ。
+//! 着地の commit の節点（commit）と commit → 契約 bead の辺（landed）も持つ（判断の記録 ADR-46 決定 (2)・ADR-47）。
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
