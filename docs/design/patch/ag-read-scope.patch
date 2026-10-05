@@ -1,0 +1,68 @@
+diff --git a/crates/tsuzuri-boundary/tests/agref.rs b/crates/tsuzuri-boundary/tests/agref.rs
+index 7732e735d515da85cc186f4efb49e770c00cdec1..ceb125194c73d1c8e196d7c22ac64703013c1c92 100644
+--- a/crates/tsuzuri-boundary/tests/agref.rs
++++ b/crates/tsuzuri-boundary/tests/agref.rs
+@@ -1,5 +1,5 @@
+-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
+-//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
++//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
++//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と読む範囲の 5 句と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
+ //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
+ //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
+ #![cfg(test)]
+@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
+ const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
+ 
+ /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
+-const CLAUSES: [(&str, u8, &str); 19] = [
++const CLAUSES: [(&str, u8, &str); 24] = [
+     (
+         "single-home",
+         0,
+@@ -59,6 +59,23 @@ const CLAUSES: [(&str, u8, &str); 19] = [
+         9,
+         "試しは commit せず、git write-tree の木の hash で撃つ",
+     ),
++    ("scope-named", 9, "読む範囲は頼みの文が名指す"),
++    (
++        "scope-items",
++        9,
++        "手本にする前の係の出す物の file と節（1〜2 本）・要件と判断の記録の id と節・読む code の file と fn",
++    ),
++    (
++        "no-cat",
++        9,
++        "file を丸ごと cat しない。grep -n で行を当て、sed -n で当てた範囲だけを読む",
++    ),
++    (
++        "prior-outputs",
++        9,
++        "前の係の出す物は、頼みの文が名指した file と節だけを読む",
++    ),
++    ("id-grep", 9, "要件と判断の記録は、id を grep -A で読む"),
+ ];
+ 
+ /// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字）。
+diff --git a/plugin/skills/agent-discipline/reference.md b/plugin/skills/agent-discipline/reference.md
+index eac604117a5278d56e9723606f618767b6866735..c1065f6e26c1473d707212868cb3c040f4630c4c 100644
+--- a/plugin/skills/agent-discipline/reference.md
++++ b/plugin/skills/agent-discipline/reference.md
+@@ -76,13 +76,17 @@
+ - repo は公開である。host の名・網の住所・口座の名・ほかの project の名・持ち主の逐語を書かない。
+ - 出す物の file の名に findings も使わない（report と同じく harness が断る）。最後の返事（席への知らせ）は 10 行以内の日本語で、要点と出力の path を書く。
+ 
+-## 9. 道具の撃ち方
++## 9. 道具の撃ち方と読む範囲
+ 
+ - gh は頭の語に置き、出力は > か | で受ける。置換・for・heredoc の中の gh と git の字は、読むだけでも器の門が断る。書き換えの script は Write の道具で file に書き、python3 <file> で撃つ。
+ - 背景で撃った物の終わりの知らせは届かないことがある。log の rc の行と ps で自分で見る（pgrep -f の待ちは自分の bash の行に当たって終わらない）。
+ - 門や hook に断られた命令は、別の命令（git commit-tree・branch -f・update-ref ほか）で回り込まない。断りの字と止まった所を notes.md に書いて席に知らせる。
+ - 着地の窓が閉じている間は写しの commit も門が断る。試しは commit せず、git write-tree の木の hash で撃つ。
+ - token を節約する。build・clippy・nextest の出力は file に落とし、tail か grep で落ちた所だけを読む。大きな file は要る範囲だけ読み（offset と limit）、同じ file の全文を何度も読み直さない。
++- 読む範囲は頼みの文が名指す（起草係の新しい量の大きな分は、前の係の出す物と設計文書の読みである）。席は頼みの文に、手本にする前の係の出す物の file と節（1〜2 本）・要件と判断の記録の id と節・読む code の file と fn を書く。
++- 係は file を丸ごと cat しない。grep -n で行を当て、sed -n で当てた範囲だけを読む。
++- 前の係の出す物は、頼みの文が名指した file と節だけを読む。名指しの無い前の係の notes・行の字・命令の列・commit の文の案は、手本にも読まない。
++- 要件と判断の記録は、id を grep -A で読む（要件は要件書の id の行から、判断の記録は名指された決定の番号の行から）。要件書と判断の記録の全文を読まない。
+ 
+ ## 10. 検証の群（判断の記録 ADR-61）
+ 
