@@ -620,12 +620,12 @@ index 2dd998a418c67e6edf1020623e157c4c65da31ac..009b648878e6e6fcb97db4b03fb6673f
  use std::collections::BTreeMap;
  use std::sync::Arc;
 diff --git a/crates/tsuzuri-core/src/account/mod.rs b/crates/tsuzuri-core/src/account/mod.rs
-index ea4ff05ece32c74398aee6b303c57fe495c2dcfa..676a2c2f6863eee1b527ade57236c6c6a6159713 100644
+index ea4ff05ece32c74398aee6b303c57fe495c2dcfa..19bc58ef4b2d0a32e130de07e59164b6c5da0c4b 100644
 --- a/crates/tsuzuri-core/src/account/mod.rs
 +++ b/crates/tsuzuri-core/src/account/mod.rs
 @@ -1,6 +1,6 @@
 -//! account board の電文を組む純粋な関数（設計ノート surface-base 便 e-acct-host・e-acct-proj・規則の行 R-22）。
-+//! account board の電文を組む純粋な関数（e-acct-proj・規則の行 R-22）。
++//! account board の電文を組む純粋な関数（規則の行 R-22）。
  //! host の下に口座の列と群の枠と移動の列（`host`）を置く。project の下に project の行と session の行と
 -//! 電文の組み立て（`project`）を置く（便 e-acct-proj）。
 +//! 電文の組み立て（`project`）を置く。
