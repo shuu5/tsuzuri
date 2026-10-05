@@ -5,10 +5,10 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{owned, script};
 use tsuzuri_boundary::cli::graph::{LANDED_HEAD, LANDED_UNKNOWN, landed_line};
 use tsuzuri_boundary::server::board::{Texts, built, built_floors};
 use tsuzuri_contract::board::Reading;
@@ -319,11 +319,6 @@ const FILTERS: [&str; 191] = [
     "kg9_",
 ];
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
 struct Place {
     root: PathBuf,
@@ -405,10 +400,6 @@ fn stdout(out: &Output) -> String {
 
 fn stderr(out: &Output) -> String {
     String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
-}
-
-fn owned(ids: &[&str]) -> Vec<String> {
-    ids.iter().map(|s| s.to_string()).collect()
 }
 
 /// 台帳の字を節の索引と組んだグラフに渡した名指し。

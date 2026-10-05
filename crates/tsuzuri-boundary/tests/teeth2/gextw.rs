@@ -10,13 +10,13 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::thread;
 use std::time::Duration;
 
-use tsuzuri_boundary::cli::graph::{NEXT, OUTSIDE_HEAD};
+use crate::common::{next, script, stderr, stdout};
+use tsuzuri_boundary::cli::graph::OUTSIDE_HEAD;
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::graph::{GraphDoc, Verdict};
@@ -50,11 +50,6 @@ fn rulings() -> String {
         "{}{{\"ruling\":\"s9-far.2\",\"form\":\"bead\",\"bead\":\"s9-far.2\",\"node\":\"ADR-8\",\"file\":\"adr/ADR-8.yaml\",\"line\":9,\"field\":\"approval.ruling\"}}\n",
         read("rulings.jsonl")
     )
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 歯ごとの作業場。
@@ -158,21 +153,6 @@ fn project(dir: &Path) -> OsString {
 
 fn pair(dir: &Path) -> Vec<OsString> {
     vec!["--project".into(), dir.into()]
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
-}
-
-fn next(id: &str) -> &'static str {
-    NEXT.iter()
-        .find(|(i, _)| *i == id)
-        .map(|(_, n)| *n)
-        .expect("次の 1 手")
 }
 
 /// 口 GET /api/graph の電文。

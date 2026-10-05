@@ -7,25 +7,22 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{ChildStderr, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{TARGET, bead, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{self, Delivery, Writer};
 use tsuzuri_boundary::server::{batch, events};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
+use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::{BatchItem, BatchRequest, BatchResponse, RulingId};
 use tsuzuri_contract::wire;
 use tsuzuri_core::delivery::{Pending, RULING_PREFIX, Route, mark_line};
-
-/// 器の配達の口の target。
-const TARGET: &str = "tsuzuri:0.1";
 
 /// 歯の中の束の id（台帳の字には無い）。
 const BATCH: &str = "batch:20260928T0110Z-1";
@@ -41,11 +38,6 @@ fn manifest() -> &'static Path {
 
 fn fixture(rel: &str) -> String {
     fs::read_to_string(manifest().join("../../tests/fixtures").join(rel)).expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
@@ -185,10 +177,6 @@ impl Place {
 
 fn ruling_id(id: &str) -> RulingId {
     RulingId::new(id).expect("裁定の id")
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
 }
 
 fn pending(question: &str, ruling: &str) -> Pending {

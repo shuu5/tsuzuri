@@ -8,15 +8,15 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
+use crate::common::{bead, now, script, tree};
 use tsuzuri_boundary::server::ledger::epoch_secs;
 use tsuzuri_boundary::server::{Config, Server, batch, policy, ruling};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
+use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::{
     BatchItem, BatchRequest, BatchResponse, ItemOutcome, PolicyRequest, PolicyResponse, Refusal,
@@ -44,11 +44,6 @@ fn read_fixture() -> String {
             .join(FIXTURE),
     )
     .expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
@@ -196,13 +191,6 @@ impl Place {
     }
 }
 
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
-}
-
 struct Reply {
     status: u16,
     head: String,
@@ -251,10 +239,6 @@ fn digest(addr: SocketAddr, id: &str) -> String {
         .find(|c| c.id.as_str() == id)
         .unwrap_or_else(|| panic!("{id} の card"))
         .digest
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
 }
 
 fn item(question: &str, digest: &str, verbatim: Option<&str>) -> BatchItem {
@@ -397,25 +381,6 @@ fn mark_argv(question: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
         line: mark_line(ruling, Route::Deliver, minute),
     }
     .argv()
-}
-
-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 #[test]

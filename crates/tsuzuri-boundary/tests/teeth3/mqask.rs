@@ -8,12 +8,12 @@
 use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::script;
 use tsuzuri_boundary::server::{Config, Server, ruling};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::BeadId;
@@ -40,11 +40,6 @@ fn fixture(rel: &str) -> String {
             .join(rel),
     )
     .expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 台帳の字を丸ごと替える（隣に書いてから移すので、偽の bd から書きかけは見えない）。

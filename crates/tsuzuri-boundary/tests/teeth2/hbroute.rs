@@ -6,61 +6,9 @@
 use std::fs;
 use std::path::Path;
 
+use crate::common::FILTERS;
 use tsuzuri_boundary::server::Route;
 use tsuzuri_boundary::server::route::{Key, Match};
-
-/// 着地済みの行とこの文書の行の verify の filter の語。
-const FILTERS: [&str; 49] = [
-    "accept_",
-    "account_",
-    "acctcore_",
-    "acctdoc_",
-    "acctframe_",
-    "accthb_",
-    "accthome_",
-    "acctled_",
-    "acctlook_",
-    "acctpcore_",
-    "acctproj_",
-    "acctsess_",
-    "acctwin_",
-    "acctwire_",
-    "askcard_",
-    "batchpanel_",
-    "board_min_",
-    "contract_form_",
-    "frame_",
-    "gapspage_",
-    "gquestion_",
-    "graph_",
-    "gview_",
-    "hook_",
-    "ledgerblock_",
-    "mapgraph_",
-    "mapview_",
-    "nextstep_",
-    "nodepage_",
-    "parts_",
-    "pipe_",
-    "project_",
-    "question_",
-    "seatblock_",
-    "seatcard_",
-    "server_",
-    "skeleton_",
-    "stage_",
-    "stats_",
-    "steady_",
-    "topbar_",
-    "tz_",
-    "hbproc_",
-    "hbconf_",
-    "hbroute_",
-    "hbpost_",
-    "hsblock_",
-    "hspage_",
-    "hsderive_",
-];
 
 fn manifest(rel: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)

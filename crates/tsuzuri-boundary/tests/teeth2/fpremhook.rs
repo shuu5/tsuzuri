@@ -7,10 +7,10 @@
 
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{read_fixture, script, text};
 use tsuzuri_boundary::server::policy;
 use tsuzuri_contract::graph::NodeKind;
 use tsuzuri_contract::ledger::{BeadId, LedgerWrite, QUESTION_LABEL};
@@ -183,15 +183,6 @@ const FILTER_WORDS: [&str; 151] = [
     "wstrip_",
 ];
 
-fn read_fixture(rel: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures")
-            .join(rel),
-    )
-    .unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
 fn graph_of(index: &str, ledger: &str) -> Graph {
     build(&Inputs {
         design_index: index,
@@ -299,11 +290,6 @@ fn expected(payload: &str, graph: &Graph) -> String {
         .unwrap_or_default()
 }
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// 歯ごとの作業場（repo の dir・偽の bd と偽の設計の道具と、それらが出す字）。drop で作業場ごと消す。
 struct Place {
     root: PathBuf,
@@ -362,10 +348,6 @@ impl Place {
         drop(stdin);
         child.wait_with_output().expect("tz の終わり")
     }
-}
-
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
 }
 
 #[test]

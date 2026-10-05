@@ -8,11 +8,11 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
+use crate::common::{now, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::policy::{self, Outcome};
 use tsuzuri_boundary::server::ruling::{Delivery, Writer, minute};
@@ -268,11 +268,6 @@ fn base() -> Vec<Bead> {
 fn ledger(beads: &[Bead]) -> String {
     let lines: Vec<String> = beads.iter().map(Bead::json).collect();
     format!("[\n{}\n]\n", lines.join(",\n"))
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv（語ごとに NUL で終える）と cwd を書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
@@ -836,13 +831,6 @@ fn epolq_created_id_shapes() {
         Outcome::IdShape(id(&long48))
     );
     assert_eq!(place.calls("bdw").len(), 1);
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 /// POST /api/policy を Origin の頭を持たずに撃ち、接続が閉じるまで応答を読む（状態の code と本文）。

@@ -8,11 +8,11 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use crate::common::{fixture, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::policy::{self, Outcome};
 use tsuzuri_boundary::server::ruling::{READ_TRIES, REFUSED_LOG, UNREAD, Writer};
@@ -27,15 +27,6 @@ const LOCKED: &str = "database is locked";
 
 /// 落ち続ける偽の bd の落ちる回の数。
 const ALWAYS: u32 = 99;
-
-fn fixture(rel: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures")
-            .join(rel),
-    )
-    .expect("fixture")
-}
 
 /// 歯ごとの作業場（repo・面の file の置き場・偽の bd と bdw）。
 struct Place {
@@ -93,11 +84,6 @@ impl Place {
         fs::read_to_string(self.root.join(format!("{name}.count")))
             .map_or(0, |c| c.trim().parse().expect("回の数"))
     }
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// POST を 1 つ撃ち、（状態の code・本文）を返す。

@@ -4,13 +4,12 @@
 #![cfg(test)]
 
 use std::fs;
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
 
+use crate::common::{get, manifest};
 use tsuzuri_boundary::server::route::{Key, Match};
 use tsuzuri_boundary::server::{Config, Route, Server};
 use tsuzuri_contract::project::{PATH, ProjectName};
@@ -88,10 +87,6 @@ const FILTERS: [&str; 65] = [
 /// 名 proj-kiri の電文の字。
 const KIRI_WIRE: &str = r#"{"name":"proj-kiri"}"#;
 
-fn manifest(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
-}
-
 fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
@@ -134,25 +129,6 @@ impl Place {
         thread::spawn(move || server.run());
         addr
     }
-}
-
-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
-    let mut s = TcpStream::connect(addr).expect("接続");
-    s.set_read_timeout(Some(Duration::from_secs(20)))
-        .expect("timeout");
-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
-        .expect("要求を書く");
-    let mut out = Vec::new();
-    s.read_to_end(&mut out).expect("応答を読む");
-    let text = String::from_utf8(out).expect("応答の字");
-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
-    let status = head
-        .split(' ')
-        .nth(1)
-        .and_then(|c| c.parse().ok())
-        .expect("状態の code");
-    (status, body.to_string())
 }
 
 /// dir の下の拡張子 rs の file（深さを問わない）。

@@ -8,16 +8,15 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::{TARGET, bead, fixture, script};
 use tsuzuri_boundary::server::ruling::{self, READ_ONLY, REFUSED_LOG};
 use tsuzuri_boundary::server::{Config, Server, batch, policy};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::question::QuestionList;
 use tsuzuri_contract::surface::{
     BatchItem, BatchRequest, PolicyRequest, REVOKE_PATH, RevokeRequest, RulingId, RulingRequest,
@@ -29,23 +28,6 @@ const ASK: &str = "surface/question-2.json";
 const OPEN: &str = "fx-ask.3";
 const CLOSED: &str = "fx-ask.1";
 const CLOSED_RULING: &str = "fx-ask.1:20260924T0200Z-1";
-
-/// 器の配達の口の target。
-const TARGET: &str = "tsuzuri:0.1";
-
-fn fixture(rel: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures")
-            .join(rel),
-    )
-    .expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 撃たれた回を `<log>/<name>.count` に数え、回ごとに argv を `<log>/<name>.<回>.args` に書いて rc 0 で終わる script。
 fn recorder(path: &Path, log: &Path, name: &str) {
@@ -140,10 +122,6 @@ impl Place {
         thread::spawn(move || server.run());
         addr
     }
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
 }
 
 /// 中核の問いの一覧で読んだ card の digest（見た版の要約値）。

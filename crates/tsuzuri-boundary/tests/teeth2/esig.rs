@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::calls;
 use tsuzuri_boundary::server::events::{Hub, NUDGE_PATH, NUDGED, Timing};
 use tsuzuri_boundary::server::route::{Key, Match};
 use tsuzuri_boundary::server::{Config, Route, Server};
@@ -127,14 +128,6 @@ fn nudge_after_mark_moves(
     assert_eq!(n(), 3, "印の動いた合図の周の読み");
     assert!(!Hub::default().nudge(), "見張りの無い Hub の合図が真");
     let _ = fs::remove_dir_all(&root);
-}
-
-/// 偽の bd の記録の file の行の数。
-fn calls(root: &Path) -> usize {
-    fs::read_to_string(root.join("calls"))
-        .unwrap_or_default()
-        .lines()
-        .count()
 }
 
 /// 台帳の file の字（bead を `n` 本）。

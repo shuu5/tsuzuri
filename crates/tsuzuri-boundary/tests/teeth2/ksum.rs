@@ -6,10 +6,10 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{EVENTS, owned, script, stderr, stdout, summary};
 use tsuzuri_boundary::cli::graph::{BARE_HEAD, BARE_UNKNOWN, bare_line};
 use tsuzuri_boundary::server::board::{Texts, built, built_bare};
 use tsuzuri_contract::board::Reading;
@@ -58,9 +58,6 @@ const SUMMARY: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3
 const SUMMARY_FULL: &str = "{\"id\":\"A-1\",\"file\":\"constitution.yaml\",\"line\":3,\"plain\":\"条の概要\"}\n\
 {\"id\":\"A-1.1\",\"file\":\"constitution.yaml\",\"line\":5,\"plain\":\"規範文の概要\"}\n\
 {\"id\":\"FR1\",\"file\":\"srs.yaml\",\"line\":7,\"eng\":\"要件の技術\"}\n";
-
-/// event log（走行 1 本）。
-const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
 
 /// 計画の verify の filter の語と同じノートのほかの 2 行の接頭辞（歯の名が含んではならない部分の字）。
 const FILTERS: [&str; 179] = [
@@ -245,11 +242,6 @@ const FILTERS: [&str; 179] = [
     "tkad_",
 ];
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// 歯ごとの作業場（repo の置き場・state dir・字の file・偽の bd と偽の設計の道具）。
 struct Place {
     root: PathBuf,
@@ -325,22 +317,6 @@ fn texts(summary: &str) -> Texts {
         summary: summary.to_string(),
         rulings: String::new(),
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
-}
-
-fn summary(unknowns: usize) -> String {
-    format!("tz graph --check: まだ分からない（違反 0・まだ分からない {unknowns}）\n")
-}
-
-fn owned(ids: &[&str]) -> Vec<String> {
-    ids.iter().map(|s| s.to_string()).collect()
 }
 
 #[test]

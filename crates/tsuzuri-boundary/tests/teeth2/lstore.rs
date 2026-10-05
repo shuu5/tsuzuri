@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::common::fixture;
 use tsuzuri_boundary::server::events::{Hub, POLL, REREAD, STORE_REREAD, TIMING, Timing, stamp};
 use tsuzuri_boundary::server::ledger::{
     JOURNAL, MANIFEST, METADATA, Mark, NOMS, STORE_DIR, Source, TABLE_SUFFIX,
@@ -377,14 +378,6 @@ fn lstore_watch_intervals() {
     assert!(n >= 3, "store の印で落ちた後に読み直さない: {n}");
     let n = reads_in_a_second(files, Reading::Known(1));
     assert!(n >= 3, "jsonl の印で読み直さない: {n}");
-}
-
-/// bead 8 本の fixture（bd の読み取りの口の出力の形）。
-fn fixture() -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/bd-list-8.json"),
-    )
-    .expect("fixture")
 }
 
 /// 偽の bd の出力を置く（別の名で書いてから置き替える）。

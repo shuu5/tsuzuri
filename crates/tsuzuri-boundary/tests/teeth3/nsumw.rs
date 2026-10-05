@@ -8,12 +8,12 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::script;
 use tsuzuri_boundary::server::design::{DESIGN_DIR, Design, FOLIO_ARGS, FOLIO_TIMEOUT, SUMMARY_ARGS};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::graph::{Fold, GraphDoc, GraphNode};
@@ -157,11 +157,6 @@ struct Place {
     repo: PathBuf,
     files: PathBuf,
     state: PathBuf,
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 impl Place {

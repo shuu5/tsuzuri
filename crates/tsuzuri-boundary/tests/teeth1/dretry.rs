@@ -6,18 +6,15 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use crate::common::{TARGET, record, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{self, Delivery, Pace, Parcel, Round, Writer};
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::RulingId;
 use tsuzuri_core::delivery::{Pending, Route, mark_line};
-
-/// 器の配達の口の target。
-const TARGET: &str = "tsuzuri:0.1";
 
 /// 裁定（fixture の fx-s.2 の印の無い裁定）。
 const QUESTION: &str = "fx-s.2";
@@ -38,21 +35,6 @@ fn manifest() -> &'static Path {
 
 fn fixture(rel: &str) -> String {
     fs::read_to_string(manifest().join("../../tests/fixtures").join(rel)).expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
-/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
-fn record(log: &Path, name: &str) -> String {
-    let log = log.display();
-    format!(
-        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
-         echo \"$n\" > '{log}/{name}.count'\n\
-         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
-    )
 }
 
 /// 場ごとの作業場（repo・state dir・記録の置き場・out.json・偽の program）。

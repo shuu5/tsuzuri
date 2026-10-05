@@ -8,11 +8,11 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, Command as Process, Stdio};
 use std::time::Duration;
 
+use crate::common::script;
 use tsuzuri_boundary::stage::cli::{self, Setting, parse_target};
 use tsuzuri_boundary::stage::target::{self, Targets as Setup};
 use tsuzuri_boundary::stagecall::{
@@ -62,11 +62,6 @@ const WIRE: &str = r#"{"project":"proj-a","default":"term-a","overrides":[{"proj
 
 /// 偽の tz の既定の出力（tz が電文として読める 1 行）。
 const REPLY_LINE: &str = "project proj-a の表示先を term-b にした（上書き）\n";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 fn src(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(rel);

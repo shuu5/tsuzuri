@@ -4,9 +4,9 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+use crate::common::{bead, rid, script};
 use tsuzuri_boundary::server::batch::{self, BATCH_PREFIX};
 use tsuzuri_boundary::server::ledger::{Source, parse_bd};
 use tsuzuri_boundary::server::policy;
@@ -14,9 +14,9 @@ use tsuzuri_boundary::server::ruling::{
     self, POLICY_MARK, REASON_HEAD, Revoked, Writer, policy_reason, reason,
 };
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, POLICY_SCOPE_LABEL, QUESTION_LABEL};
+use tsuzuri_contract::ledger::{POLICY_SCOPE_LABEL, QUESTION_LABEL};
 use tsuzuri_contract::surface::{
-    BatchItem, BatchRequest, ItemOutcome, RevokeRequest, RevokeResponse, RulingId, RulingRequest,
+    BatchItem, BatchRequest, ItemOutcome, RevokeRequest, RevokeResponse, RulingRequest,
     latest_ruling, revocable,
 };
 use tsuzuri_contract::wire;
@@ -53,14 +53,6 @@ const AT: u64 = 1_790_570_490;
 
 fn manifest() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
-}
-
-fn rid(id: &str) -> RulingId {
-    RulingId::new(id).expect("裁定の id")
 }
 
 /// 台帳の 1 本。
@@ -146,11 +138,6 @@ fn closed_question(id: &'static str, notes: String, close_reason: &str) -> Bead 
     q.notes = notes;
     q.close_reason = close_reason.to_string();
     q
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 歯ごとの作業場（repo・偽の bd と bdw・記録の置き場）。

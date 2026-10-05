@@ -7,12 +7,12 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
+use crate::common::{Run, Tidy, now, script, text};
 use tsuzuri_boundary::hook::deliver_tool::{
     self, Args, MARK_BUDGET, UNRECEIVED_PATH, USAGE, fetch, unreceived,
 };
@@ -86,11 +86,6 @@ fn marked_ledger() -> String {
     )
 }
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に、回の数を `<log>/<name>.count` に書き、
 /// `<log>/<name>.fail` が在れば rc 1 で終わり、無ければ `then` を撃つ script。
 fn recorder(path: &Path, log: &Path, name: &str, then: &str) {
@@ -105,22 +100,6 @@ fn recorder(path: &Path, log: &Path, name: &str, then: &str) {
              {then}"
         ),
     );
-}
-
-/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
-struct Tidy(PathBuf);
-
-impl Drop for Tidy {
-    fn drop(&mut self) {
-        match fs::symlink_metadata(&self.0) {
-            Ok(meta) if meta.is_dir() => {
-                let _ = fs::remove_dir_all(&self.0);
-            }
-            _ => {
-                let _ = fs::remove_file(&self.0);
-            }
-        }
-    }
 }
 
 /// 歯ごとの作業場（repo・記録の置き場・偽の git と tailnet の道具と hook の bd と bdw・server の bd）。
@@ -274,17 +253,6 @@ impl Place {
     }
 }
 
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
-}
-
 /// 1 本の要求を受け、頭を返し、`response` を書いて閉じる受け手（別 thread・受けた要求の頭を返す）。
 fn receiver(response: String) -> (u16, JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("受け手");
@@ -327,7 +295,6 @@ fn dead_port() -> u16 {
 }
 
 type Parse = fn(&[&str]) -> Result<Args, String>;
-type Run = fn(&[&str]) -> u8;
 
 const PARSE: Parse = deliver_tool::parse;
 const RUN: Run = deliver_tool::run;

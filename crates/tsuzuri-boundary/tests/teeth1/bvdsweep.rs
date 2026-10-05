@@ -7,21 +7,18 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{TARGET, record, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{
     Delivery, Pace, SWEEP_FOUND, SWEEP_UNREAD, Writer, id_minute, minute, sweep, sweep_at_start,
 };
 use tsuzuri_boundary::server::{Config, events};
 use tsuzuri_contract::surface::RulingId;
-
-/// 器の配達の口の target。
-const TARGET: &str = "tsuzuri:0.1";
 
 /// 古い裁定の分（今から 2 時間前）。
 const OLD_SECS: u64 = 7200;
@@ -73,21 +70,6 @@ impl Ids {
         .collect();
         format!("[{}]", beads.join(",\n"))
     }
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
-/// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、回の数を `<log>/<name>.count` に書く字。
-fn record(log: &Path, name: &str) -> String {
-    let log = log.display();
-    format!(
-        "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
-         echo \"$n\" > '{log}/{name}.count'\n\
-         for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'"
-    )
 }
 
 /// 歯ごとの作業場（repo・面の file の置き場・state dir・記録の置き場・偽の program）。

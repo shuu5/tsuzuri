@@ -10,12 +10,12 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{TARGET, bead, script};
 use tsuzuri_boundary::server::batch;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{
@@ -23,7 +23,7 @@ use tsuzuri_boundary::server::ruling::{
     Writer,
 };
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
+use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::surface::{BatchItem, BatchRequest, RevokeRequest, RulingId, RulingRequest};
 use tsuzuri_contract::wire;
 
@@ -46,9 +46,6 @@ const ROWS: [&str; 2] = ["fx-b.2", "fx-b.3"];
 /// log に出ない逐語。
 const SECRET: &str = "秘めた言葉は外へ出さない";
 
-/// 器の配達の口の target。
-const TARGET: &str = "tsuzuri:0.1";
-
 fn fixture(rel: &str) -> String {
     fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -56,11 +53,6 @@ fn fixture(rel: &str) -> String {
             .join(rel),
     )
     .expect("fixture")
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、書き終えたら `<log>/<name>.<回>.done` を置き、
@@ -198,10 +190,6 @@ impl Place {
             }),
         }
     }
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
 }
 
 fn rid(id: &str) -> RulingId {

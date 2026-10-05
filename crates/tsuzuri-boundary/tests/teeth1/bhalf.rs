@@ -5,16 +5,16 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
+use crate::common::{bead, now, script};
 use tsuzuri_boundary::server::batch;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{self, Delivery, Writer};
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
+use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::surface::{
     BatchItem, BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, RulingId,
 };
@@ -161,11 +161,6 @@ const VERBATIM: &str = "束の答え";
 /// 3 つの問い。
 const QS: [&str; 3] = ["fx-h.1", "fx-h.2", "fx-h.3"];
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// 撃たれた回ごとに argv を `<log>/<name>.<回>.args` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。
 fn recorder(path: &Path, log: &Path, name: &str) {
     let log = log.display();
@@ -275,10 +270,6 @@ impl Place {
     }
 }
 
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
-}
-
 fn rid(id: &str) -> RulingId {
     RulingId::new(id).expect("記帳 id")
 }
@@ -369,13 +360,6 @@ fn mark_argv(q: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
         line: mark_line(ruling, Route::Deliver, minute),
     }
     .argv()
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 fn result(q: &str, outcome: ItemOutcome) -> BatchItemResult {

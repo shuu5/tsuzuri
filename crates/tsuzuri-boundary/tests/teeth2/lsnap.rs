@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::fixture;
 use tsuzuri_boundary::server::coalesce::Coalesce;
 use tsuzuri_boundary::server::ledger::{
     Got, JOURNAL, MANIFEST, METADATA, NOMS, STORE_DIR, Source,
@@ -173,14 +174,6 @@ const ROUTES: [&str; 9] = [
     "/api/around?id=fx-hub.3",
     "/api/unreflected",
 ];
-
-/// bead 8 本の fixture（bd の読み取りの口の出力の形）。
-fn fixture() -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ledger/bd-list-8.json"),
-    )
-    .expect("fixture")
-}
 
 /// fixture の 1 本目の bead の object だけを持つ配列の字。
 fn one() -> String {

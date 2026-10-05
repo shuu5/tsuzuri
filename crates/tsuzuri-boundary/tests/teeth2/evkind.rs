@@ -6,7 +6,6 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
@@ -21,6 +20,7 @@ use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
 use tsuzuri_contract::wire;
 
 use ChangeKind::{Account, Design, Runs, Seat};
+use crate::common::script;
 
 /// 席の target。
 const TARGET: &str = "proj-1:0.1";
@@ -157,11 +157,6 @@ fn evkind_frames_exact() {
         "id: 2\nevent: board-changed\ndata: {\"at\":8,\"kinds\":[\"seat\",\"account\"]}\n\n"
     );
     assert!(rx.try_recv().is_err(), "3 件目が在る");
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// SSE の接続から次の board-changed の frame を `limit` まで待つ（ほかの frame は捨てる）。

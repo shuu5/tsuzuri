@@ -5,10 +5,10 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{EVENTS, script, stderr, stdout, tree};
 use tsuzuri_boundary::cli::graph;
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_contract::graph::{EdgeType, GraphDoc, GraphSource, InvariantCheck, Verdict};
@@ -47,9 +47,6 @@ const LEDGER_CUT: &str = r#"[
  "dependencies": [{"issue_id": "k.2", "depends_on_id": "k", "type": "parent-child"}]}
 ]
 "#;
-
-/// event log（走行 1 本）。
-const EVENTS: &str = "{\"schema\":1,\"ts\":\"2026-09-27T00:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"k.1-20260927T000000Z\",\"bead\":\"k.1\",\"stage\":\"Intake\"}\n";
 
 /// 着地済みの行と第 3 波と第 4 波の行の verify の語（歯の名が含んではならない部分の字）。
 const WORDS: [&str; 69] = [
@@ -129,11 +126,6 @@ struct Place {
     root: PathBuf,
     repo: PathBuf,
     state: PathBuf,
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃つときの出所の置き方。
@@ -216,36 +208,9 @@ fn texts(ledger: &str) -> Texts {
     }
 }
 
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
-}
-
 fn decode(out: &Output) -> GraphDoc {
     let text = stdout(out);
     wire::decode(&text).unwrap_or_else(|e| panic!("GraphDoc の形でない {e}: {text}"))
-}
-
-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 fn check(id: &str, verdict: Verdict) -> InvariantCheck {

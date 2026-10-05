@@ -8,11 +8,11 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
+use crate::common::{Run, Tidy, now, read_fixture, script, text, tree};
 use tsuzuri_boundary::hook::stop::{self, Args, MARK_BUDGET, USAGE};
 use tsuzuri_boundary::server::{ledger, ruling};
 use tsuzuri_contract::EpochSecs;
@@ -127,25 +127,10 @@ const FILTER_WORDS: [&str; 92] = [
 
 type Parse = fn(&[&str]) -> Result<Args, String>;
 type Mark = fn(&Args, &[Pending], EpochSecs, Duration) -> usize;
-type Run = fn(&[&str]) -> u8;
 
 const PARSE: Parse = stop::parse;
 const MARK: Mark = stop::mark;
 const RUN: Run = stop::run;
-
-fn read_fixture(rel: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures")
-            .join(rel),
-    )
-    .unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script
 /// （`pause` は記録の前に撃つ字）。
@@ -300,29 +285,6 @@ impl Place {
     }
 }
 
-/// drop で path を消す守り（歯が通っても落ちても、worktree を模した .git を CARGO_TARGET_TMPDIR の下に残さない）。
-struct Tidy(PathBuf);
-
-impl Drop for Tidy {
-    fn drop(&mut self) {
-        match fs::symlink_metadata(&self.0) {
-            Ok(meta) if meta.is_dir() => {
-                let _ = fs::remove_dir_all(&self.0);
-            }
-            _ => {
-                let _ = fs::remove_file(&self.0);
-            }
-        }
-    }
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
-}
-
 fn pending(question: &str, id: &str) -> Pending {
     Pending {
         question: BeadId::new(question).expect("bead の id"),
@@ -351,29 +313,6 @@ fn mark_argv(p: &Pending, minute: &str) -> Vec<String> {
         line: delivery::mark_line(&p.ruling, Route::Stop, minute),
     }
     .argv()
-}
-
-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
-}
-
-fn text(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec()).expect("UTF-8")
 }
 
 #[test]

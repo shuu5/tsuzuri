@@ -5,11 +5,11 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, NEXT, OUTSIDE_HEAD, UNFIELDED_UNKNOWN};
+use crate::common::{next, script, stderr, stdout};
+use tsuzuri_boundary::cli::graph::{BARE_UNKNOWN, OUTSIDE_HEAD, UNFIELDED_UNKNOWN};
 use tsuzuri_boundary::server::board::{self, Texts};
 use tsuzuri_boundary::server::design::{Design, RULINGS_ARGS};
 use tsuzuri_contract::graph::{EdgeType, Verdict};
@@ -66,11 +66,6 @@ fn plus_adr8(rulings: &str, bead: &str) -> String {
     format!(
         "{rulings}{{\"ruling\":\"{bead}\",\"form\":\"bead\",\"bead\":\"{bead}\",\"node\":\"ADR-8\",\"file\":\"adr/ADR-8.yaml\",\"line\":9,\"field\":\"approval.ruling\"}}\n"
     )
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 歯ごとの作業場（repo の置き場・state dir・台帳と書き出しの字の file・偽の bd と偽の設計の道具）。
@@ -138,21 +133,6 @@ impl Place {
             .output()
             .expect("tz を撃つ")
     }
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8(out.stdout.clone()).expect("標準出力の字")
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8(out.stderr.clone()).expect("標準エラーの字")
-}
-
-fn next(id: &str) -> &'static str {
-    NEXT.iter()
-        .find(|(i, _)| *i == id)
-        .map(|(_, n)| *n)
-        .expect("次の 1 手")
 }
 
 /// 要約の行と、その直前の全部の行が着地した設計ノートの行（索引は設計ノートの行を持たない・行 c-note-stale）と

@@ -6,25 +6,17 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+use crate::common::{NOW, script};
 use tsuzuri_boundary::acct::{Acct, board_port};
 use tsuzuri_contract::account::AccountDoc;
 use tsuzuri_contract::wire::encode;
 use tsuzuri_core::account::host::HostTexts;
 use tsuzuri_core::account::project::{self, ProjectTexts};
 
-/// 読みの今の時刻（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
-
 /// 無い program の path。
 const NO_PROGRAM: &str = "/nonexistent/tz-no-such-program";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 歯ごとの作業場。
 struct Place {

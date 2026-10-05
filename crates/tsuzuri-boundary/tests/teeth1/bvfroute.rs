@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::manifest;
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadFact, BeadFacts, BeadId, LedgerList, READ_AGE_HEADER};
@@ -19,10 +20,6 @@ use tsuzuri_contract::wire;
 
 /// fixture の fx-hub.7 の created_at（2026-09-22T01:00:00Z）の epoch 秒。
 const CREATED_7: u64 = 1_790_038_800;
-
-fn manifest(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
-}
 
 /// 読める台帳の字（bead 8 本・fx-hub.7 は fx-hub.6 を blocks に持つ）。
 fn fixture() -> String {

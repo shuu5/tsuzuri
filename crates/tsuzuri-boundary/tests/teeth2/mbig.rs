@@ -4,11 +4,11 @@
 #![cfg(test)]
 
 use std::fs::{self, File};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::common::script;
 use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_contract::account::RunCounts;
@@ -24,11 +24,6 @@ const CREATED: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"
 const SPAWNED: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:20:00Z\",\"kind\":\"RunStage\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"host\":\"host-1\",\"actor\":\"machine\",\"stage\":\"Spawned\"}\n";
 
 const LEDGER: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 歯ごとの作業場（state-h は引数の state dir・state-a と state-b は git が返す state dir）。
 struct Work {

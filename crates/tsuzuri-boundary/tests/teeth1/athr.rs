@@ -6,28 +6,20 @@
 #![cfg(test)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use crate::common::{NOW, script};
 use tsuzuri_boundary::acct::{Acct, CAP_ARGS};
 use tsuzuri_contract::account::GroupNotice;
 use tsuzuri_contract::board::Reading;
 use tsuzuri_core::account::host::CAP_ROWS;
-
-/// 読みの今の時刻（2026-09-27T12:00:00Z）。
-const NOW: u64 = 1_790_510_400;
 
 const EVENTS_A: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"actor\":\"machine\",\"stage\":\"Intake\"}\n\
 {\"schema\":1,\"ts\":\"2026-09-27T11:30:00Z\",\"kind\":\"GroupPressureNotified\",\"account\":\"acct-2\",\"actor\":\"machine\",\"detail\":\"group=g-a window=5h used=90 cap=80 sent=1\"}\n\
 {\"schema\":1,\"ts\":\"2026-09-27T11:40:00Z\",\"kind\":\"GroupMoveRefused\",\"account\":\"acct-3\",\"actor\":\"machine\",\"detail\":\"group=g-b reason=no-candidate\"}\n\
 {\"schema\":1,\"ts\":\"2026-09-27T11:45:00Z\",\"kind\":\"GroupPressureNotified\",\"account\":\"acct-1\",\"actor\":\"machine\",\"detail\":\"group=g-z window=7d used=99 cap=90 sent=1\"}\n";
 const EVENTS_C: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:50:00Z\",\"kind\":\"GroupMoveRefused\",\"account\":\"acct-1\",\"actor\":\"machine\",\"detail\":\"group=g-a reason=no-candidate\"}\n";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 歯ごとの作業場。
 struct Place {

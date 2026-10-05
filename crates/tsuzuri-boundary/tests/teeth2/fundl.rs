@@ -6,11 +6,11 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
+use crate::common::script;
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::surface::RulingId;
@@ -86,11 +86,6 @@ fn mixed() -> String {
             )],
         ),
     ])
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 歯ごとの作業場（repo・面の file・偽の bd と bdw）。

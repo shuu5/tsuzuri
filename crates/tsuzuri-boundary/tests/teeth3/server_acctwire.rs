@@ -9,11 +9,11 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
+use crate::common::{LEDGER_A, now, script};
 use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::accthb::{self, NO_PROJECT};
 use tsuzuri_boundary::server::{ACCT_MARKS_EVERY, Config, GIT, Server};
@@ -34,13 +34,6 @@ const STATE_A: &str =
     "{\"schema\":1,\"state\":\"busy\",\"event\":\"prompt\",\"ts\":1790500000,\"sid\":\"s-1\"}\n";
 
 const EVENTS_A: &str = "{\"schema\":1,\"ts\":\"2026-09-27T11:00:00Z\",\"kind\":\"RunCreated\",\"run\":\"r.1-20260927T110000Z\",\"bead\":\"r.1\",\"host\":\"host-1\",\"actor\":\"machine\",\"stage\":\"Intake\",\"detail\":\"classes:\"}\n";
-
-const LEDGER_A: &str = "[{\"id\":\"r.1\",\"title\":\"t\",\"status\":\"open\",\"issue_type\":\"task\",\"updated_at\":\"2026-09-27T07:39:00Z\"}]\n";
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
 
 /// 歯ごとの作業場。
 struct Place {
@@ -212,13 +205,6 @@ impl Place {
             let _ = fs::remove_file(self.root.join("log").join(program));
         }
     }
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 /// 応答（状態の code・頭・本文）。

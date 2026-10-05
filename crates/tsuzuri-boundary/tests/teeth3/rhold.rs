@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::manifest;
 use tsuzuri_boundary::acct::Acct;
 use tsuzuri_boundary::server::ledger::{Got, READ_HOLD, Source, parse_bd};
 use tsuzuri_boundary::server::seat::HOLD;
@@ -152,10 +153,6 @@ const WORDS: [&str; 110] = [
     "wstrip_",
     "flight_",
 ];
-
-fn manifest(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
-}
 
 fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("{} を読めない: {e}", path.display()))

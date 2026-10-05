@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::common::fixture;
 use tsuzuri_boundary::server::ledger::{BD_TIMEOUT, Source};
 use tsuzuri_boundary::server::ruling::{
     READ_TIMEOUT, READ_TRIES, RETRY_STEP, UNREAD, reread, unread_line,
@@ -19,15 +20,6 @@ const LEDGER: &str = "stop/ledger.json";
 
 /// 落ちる偽の bd が標準エラーに書く 1 行。
 const LOCKED: &str = "database is locked";
-
-fn fixture(rel: &str) -> String {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures")
-            .join(rel),
-    )
-    .expect("fixture")
-}
 
 /// 偽の bd の振る舞い。
 enum Fake {

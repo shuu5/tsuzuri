@@ -6,24 +6,16 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::common::{get, manifest, now, read, script};
 use tsuzuri_boundary::server::{Config, Server};
 use tsuzuri_boundary::stage::notify::{self, EXT, Record};
 use tsuzuri_contract::notice::{Notice, Notices, PATH};
 use tsuzuri_contract::surface::{BOARD_CHANGED_EVENT, BoardChanged, ChangeKind};
 use tsuzuri_contract::wire;
-
-fn manifest(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
-}
-
-fn read(path: &Path) -> String {
-    fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
 
 /// 歯ごとの作業場（名に process の id と時刻を入れる）。
 fn place(name: &str) -> PathBuf {
@@ -36,13 +28,6 @@ fn place(name: &str) -> PathBuf {
         .join(format!("{name}-{}-{nanos}", std::process::id()));
     fs::create_dir_all(&dir).expect("作業場");
     dir
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("時計")
-        .as_secs()
 }
 
 /// 記録を 1 つ組む。
@@ -78,11 +63,6 @@ fn names(paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// repo の dir の名が `project` の server を起こす（台帳の bd は空の一覧を返す偽の program・記録の dir は `notify`）。
 fn serve(root: &Path, project: &str, notify: Option<PathBuf>) -> SocketAddr {
     let (repo, files) = (root.join(project), root.join("files"));
@@ -100,25 +80,6 @@ fn serve(root: &Path, project: &str, notify: Option<PathBuf>) -> SocketAddr {
     let addr = server.local_addr().expect("口の住所");
     thread::spawn(move || server.run());
     addr
-}
-
-/// GET を 1 つ撃ち、（状態の code・本文）を返す。
-fn get(addr: SocketAddr, path: &str) -> (u16, String) {
-    let mut s = TcpStream::connect(addr).expect("接続");
-    s.set_read_timeout(Some(Duration::from_secs(20)))
-        .expect("timeout");
-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n").as_bytes())
-        .expect("要求を書く");
-    let mut out = Vec::new();
-    s.read_to_end(&mut out).expect("応答を読む");
-    let text = String::from_utf8(out).expect("応答の字");
-    let (head, body) = text.split_once("\r\n\r\n").expect("頭と本文");
-    let status = head
-        .split(' ')
-        .nth(1)
-        .and_then(|c| c.parse().ok())
-        .expect("状態の code");
-    (status, body.to_string())
 }
 
 /// 口を撃って電文に読む（200 でなければ落ちる）。

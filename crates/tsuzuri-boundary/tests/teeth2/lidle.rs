@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::calls;
 use tsuzuri_boundary::server::events::{Hub, Timing};
 use tsuzuri_boundary::server::{Config, Server};
 
@@ -262,14 +263,6 @@ fn lidle_watch_idle_then_attach() {
         n()
     );
     let _ = fs::remove_dir_all(&root);
-}
-
-/// 偽の bd の記録の file の行の数。
-fn calls(root: &Path) -> usize {
-    fs::read_to_string(root.join("calls"))
-        .unwrap_or_default()
-        .lines()
-        .count()
 }
 
 #[test]

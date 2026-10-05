@@ -7,11 +7,11 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::{bead, rid, script};
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::route::{Key, Match};
 use tsuzuri_boundary::server::ruling::{
@@ -20,10 +20,10 @@ use tsuzuri_boundary::server::ruling::{
 use tsuzuri_boundary::server::{Config, Route, Server, events};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::{EdgeType, NodeKind};
-use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem, LedgerRow, LedgerWrite};
+use tsuzuri_contract::ledger::{ITEM_PATH, LedgerItem, LedgerRow, LedgerWrite};
 use tsuzuri_contract::surface::{
-    CLOSED_STATUS, QUESTION_FIELD, REVOKE_PATH, REVOKES, RULING_LINE, Refusal, RefusalResponse,
-    RevokeRequest, RevokeResponse, RulingId, VERBATIM, latest_ruling, pending_reopen, revocable,
+    CLOSED_STATUS, QUESTION_FIELD, REVOKES, REVOKE_PATH, RULING_LINE, Refusal, RefusalResponse,
+    RevokeRequest, RevokeResponse, VERBATIM, latest_ruling, pending_reopen, revocable,
 };
 use tsuzuri_contract::wire;
 use tsuzuri_core::delivery::{Pending, RULING_PREFIX, Route as MarkRoute, mark_line, undelivered};
@@ -41,14 +41,6 @@ const AT_RETRY: u64 = 1_790_570_520;
 
 fn manifest() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn bead(id: &str) -> BeadId {
-    BeadId::new(id).expect("bead id")
-}
-
-fn rid(id: &str) -> RulingId {
-    RulingId::new(id).expect("裁定の id")
 }
 
 /// 裁定の行（`裁定 id = <id>・問い = <問い>・逐語 = はい`）。
@@ -76,11 +68,6 @@ fn bd_bead(id: &str, status: &str, question: bool, notes: &[String]) -> String {
 
 fn bd_list(beads: &[String]) -> String {
     format!("[{}]", beads.join(","))
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 撃たれた回ごとに argv と cwd を `<log>/<name>.<回>.args|cwd` に書き、`<log>/<name>.fail` の回なら rc 1 で終わる script。

@@ -6,13 +6,13 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::common::{manifest, script};
 use tsuzuri_boundary::server::cases::Cases;
 use tsuzuri_boundary::server::events::Hub;
 use tsuzuri_boundary::server::{Config, Server};
@@ -21,10 +21,6 @@ use tsuzuri_contract::wire;
 
 /// 見張りの間隔（`Cases::watch` に直に渡す歯）。
 const POLL: Duration = Duration::from_millis(20);
-
-fn manifest(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
-}
 
 /// 歯ごとの作業場（名に process の id と時刻を入れる・put の dir と state dir の fleet の dir を持つ）。
 fn place(name: &str) -> PathBuf {
@@ -171,11 +167,6 @@ fn sight_changes(root: &Path, state: &Path, rx: &Receiver<String>) {
     one(rx, "出力が消える");
     put(root, &json, "not json");
     one(rx, "出力が無い周から読めない出力");
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// SSE の接続から次の board-changed の frame を `limit` まで待つ（ほかの frame は捨てる）。

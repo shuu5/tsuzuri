@@ -7,10 +7,10 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{script, tree};
 use tsuzuri_boundary::hook::question_gate::{self, Args, USAGE};
 use tsuzuri_boundary::server::design::{DESIGN_DIR, FOLIO_ARGS};
 use tsuzuri_boundary::server::ledger::{BD, BD_ARGS};
@@ -240,11 +240,6 @@ fn others() -> Vec<String> {
     ]
 }
 
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
-}
-
 /// drop で path を消す守り（dir なら中身ごと・file なら file を・誤りは捨てる）。
 struct Tidy(PathBuf);
 
@@ -337,25 +332,6 @@ impl Place {
         drop(stdin);
         child.wait_with_output().expect("tz の終わり")
     }
-}
-
-/// dir の中の file の path と byte の一覧（書かれていないことを比べる）。
-fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in fs::read_dir(&d).expect("dir を読む") {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                out.push((path.clone(), Vec::new()));
-                stack.push(path);
-            } else {
-                out.push((path.clone(), fs::read(&path).expect("file を読む")));
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 fn text(bytes: &[u8]) -> String {

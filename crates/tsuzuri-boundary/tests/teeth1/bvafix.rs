@@ -6,18 +6,9 @@
 #![cfg(test)]
 
 use std::fs;
-use std::path::{Path, PathBuf};
 
+use crate::common::{read, root};
 use tsuzuri_boundary::audit::{Facts, RULES, Reach, count, facts};
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(rel: &str) -> String {
-    let path = root().join(rel);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
 
 fn fixture(name: &str) -> String {
     read(&format!("tests/fixtures/surface/accept-12/{name}"))

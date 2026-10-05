@@ -10,12 +10,12 @@
 use std::fs;
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::common::script;
 use tsuzuri_boundary::server::events::{Hub, Subscription};
 use tsuzuri_boundary::server::form::{
     FORM_ARGS, FORM_TIMEOUT, Form, Kept, REPO_ARGS, form_lines, misfits,
@@ -84,11 +84,6 @@ fn pair() -> Kept {
         ledger: LEDGER.to_string(),
         form: FORM_LINE.to_string(),
     }
-}
-
-fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("偽の program");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("偽の program の権限");
 }
 
 /// 歯ごとの作業場（repo・面の file・state dir・記録の dir）。

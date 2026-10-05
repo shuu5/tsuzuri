@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use crate::common::owned;
 use tsuzuri_boundary::server::board::{Texts, built, doc, graph};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::graph::GraphDoc;
@@ -70,10 +71,6 @@ fn sum_without(id: &str) -> String {
     let states: Vec<(&str, Option<&str>)> =
         STATES.into_iter().filter(|(row, _)| *row != id).collect();
     summary(&states)
-}
-
-fn owned(ids: &[&str]) -> Vec<String> {
-    ids.iter().map(|s| s.to_string()).collect()
 }
 
 fn texts(design: &str, summary: &str) -> Texts {
