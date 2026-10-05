@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.37 版（2026-10-05）: 判断の記録 ADR-54（持ち主の裁定 t3-hub.86.1〔裁定 id = t3-hub.86.1:20261005T0043Z-1〕・案 A）を写した（要件 FR19 の shall に作業場と読む根と道具の置き場の外の読みの断りの句を足し、plain に読める範囲の句を足し、adrs と note に ADR-54 を足し、受入 AC19 の title と plain に読めない範囲を足した・ADR-29 決定 (7) の部分の置き換え・ノート surface-wave29a の行 cs-read-roots）。
 # 第 0.36 版（2026-10-05）: 判断の記録 ADR-53（持ち主の裁定 t3-hub.84.1〔裁定 id = t3-hub.84.1:20261005T0002Z-1〕・案 A）を写した（要件 FR19 の shall の殻の命令のネットワークの許しに GitHub の読むだけの配り元 2 つ〔raw.githubusercontent.com・codeload.github.com〕を足し、plain に取り寄せの句を足し、adrs と note に ADR-53 を足した・ADR-29 決定 (7)(エ) の部分の置き換え・受入 AC19 の字は替えない・ノート surface-wave29a の行 cs-gh-read）。
 # 第 0.35 版（2026-10-05）: 持ち主の裁定 t3-hub.80.31:20261004T2239Z-1 を写した（要件 FR1092 の shall と plain に、後の commit の本文の追認の札〔Scribe2-Adopts〕で発端の trailer の無い commit に発端を結ぶ 1 文を足し、受入 AC1062 に札の結びを足した・判断の記録 ADR-1088 の決定 (7) の部分 supersede・ノート surface-wave29a の行 v-adopt）。
 # 第 0.34 版（2026-10-05）: ノート surface-wave29a の行 v-row-basis に合わせ、要件 FR1047 の shall と plain に契約表の行の任意の欄 basis を足した（判断の記録 ADR-39 の決定 (6)）。
@@ -24,7 +25,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.36
+  version: v0.37
   status: draft
   generated: 2026-09-28
   approval:
@@ -38,6 +39,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "tsuzuri の目指す所（t3-hub.80.1（裁定 id = t3-hub.80.1:20261004T1456Z-1・束 batch:20261004T1456Z-1・裁定面・notes に逐語・判断の記録 ADR-44 の決定 (2)・目的 GOAL2 と GOAL5）", verbatim: "すべて推奨で進めて良い", version: v0.31}
     - {role: 承認, who: 持ち主, when: 2026-10-04, stamp: "host の見張りに自分に当たる待ちと止めを断る種類を足す（t3-hub.80.6（裁定 id = t3-hub.80.6:20261004T2037Z-1・束 batch:20261004T2037Z-1・裁定面・notes に逐語・要件 FR1056 の shall と plain））", verbatim: "すべて推奨で承認する", version: v0.33}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "相談の窓の殻の命令のネットワークに GitHub の読むだけの配り元 2 つを足す（t3-hub.84.1（裁定 id = t3-hub.84.1:20261005T0002Z-1・案 A・配達の口・notes に逐語・判断の記録 ADR-53・要件 FR19 の shall と plain））", verbatim: "推奨で進めて", version: v0.36}
+    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "相談の窓が読める範囲を作業場と読む根と道具の置き場だけに絞る（t3-hub.86.1（裁定 id = t3-hub.86.1:20261005T0043Z-1・案 A・tool の呼び・notes に逐語・判断の記録 ADR-54・要件 FR19 の shall と plain・受入 AC19 の title と plain））", verbatim: "推奨で良い", version: v0.37}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -339,15 +341,15 @@ requirements:
     pattern: event
     strength: must
     when: 持ち主か席が相談の窓を開き、窓が所見を出したとき
-    shall: 相談の窓は、持ち主が席の窓の skill（/tsuzuri:consult）か board の上の帯と吹き出しの相談の口から頼み、席が skill で起こす。形は持ち主が直に話す窓（席の tmux の session の別の窓）と、席が背景で起こす非対話の問う窓の 2 つで、どちらも 1 つの議題に限らず、話題を替えても所見を渡しても閉じない。起動の口は席の口座の置き場の環境変数を継ぎ、器と tsuzuri の plugin を渡さず、制限の形・許可を聞かない形・道具の閉じた列（web の調べを含む）・外の道具（MCP）の断り・読む根の足しと書きの断り・私用の一時の置き場・囲い（有効・囲いの外の撃ち直しの断り・起きない時は起動で止める・資格の file の断り・殻の命令のネットワークは package の配り元と GitHub の読むだけの配り元 2 つ（raw.githubusercontent.com・codeload.github.com）だけ）で、窓ごとの作業場（席の drafts の下）を作業の dir にして起こす。所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値・話題・添え物）を検め、欠けていれば受けず、受けた所見を作業場の決まった dir に書く。相談の窓は repo と台帳を書かない。席は相談の見張りを背景に常に置き、見張りは新しい所見と受けの無い相談の頼みで固定の 1 行を出して終わる。席は所見を読む口で読み、台帳に相談の所見と相談の受けの行を置き、所見ごとに処分（採る・一部採る・採らない と理由・添え物ごとの保存する・しない）を宣言する。保存する添え物は席が repo へ写す。処分の無い所見と席に届いていない頼みは board の相談の窓と tz consult の一覧に出す。席が自分で開く問う窓の本数は規則の行 R-38 の上限を越えない。
-    plain: 設計や技術の調べと検証をする別の窓を、席の窓の「/tsuzuri:consult」か board の「相談」で開きます。あなたが直に話す窓と、席が強い model に問う話さない形があり、どちらも話題を替えて使い続けられます。窓ごとの作業場でプログラムを組んで実験でき（部品の配り元と、GitHub の公開の code の取り寄せを含みます）、web も調べられますが、repo と台帳は書けず、作業場の外へは囲いで書けません。結論は決まった形の file に書いて席に渡し、席が自動で気づいて、採るかどうかと、レポートを repo に保存するかを記録します。
+    shall: 相談の窓は、持ち主が席の窓の skill（/tsuzuri:consult）か board の上の帯と吹き出しの相談の口から頼み、席が skill で起こす。形は持ち主が直に話す窓（席の tmux の session の別の窓）と、席が背景で起こす非対話の問う窓の 2 つで、どちらも 1 つの議題に限らず、話題を替えても所見を渡しても閉じない。起動の口は席の口座の置き場の環境変数を継ぎ、器と tsuzuri の plugin を渡さず、制限の形・許可を聞かない形・道具の閉じた列（web の調べを含む）・外の道具（MCP）の断り・読む根の足しと書きの断り・作業場と読む根と道具の置き場の外の読みの断り（読む道具と囲いの中の殻の命令の両方）・私用の一時の置き場・囲い（有効・囲いの外の撃ち直しの断り・起きない時は起動で止める・資格の file の断り・殻の命令のネットワークは package の配り元と GitHub の読むだけの配り元 2 つ（raw.githubusercontent.com・codeload.github.com）だけ）で、窓ごとの作業場（席の drafts の下）を作業の dir にして起こす。所見を出す口は欄（結論・候補と採否・推奨・根拠の id・主張ごとの確かさ・持ち主に問うべき事・触る節点・使った model・読んだ束の要約値・話題・添え物）を検め、欠けていれば受けず、受けた所見を作業場の決まった dir に書く。相談の窓は repo と台帳を書かない。席は相談の見張りを背景に常に置き、見張りは新しい所見と受けの無い相談の頼みで固定の 1 行を出して終わる。席は所見を読む口で読み、台帳に相談の所見と相談の受けの行を置き、所見ごとに処分（採る・一部採る・採らない と理由・添え物ごとの保存する・しない）を宣言する。保存する添え物は席が repo へ写す。処分の無い所見と席に届いていない頼みは board の相談の窓と tz consult の一覧に出す。席が自分で開く問う窓の本数は規則の行 R-38 の上限を越えない。
+    plain: 設計や技術の調べと検証をする別の窓を、席の窓の「/tsuzuri:consult」か board の「相談」で開きます。あなたが直に話す窓と、席が強い model に問う話さない形があり、どちらも話題を替えて使い続けられます。窓ごとの作業場でプログラムを組んで実験でき（部品の配り元と、GitHub の公開の code の取り寄せを含みます）、web も調べられますが、repo と台帳は書けず、作業場の外へは囲いで書けず、読めるのも作業場と repo と器の出力と道具の置き場だけです。結論は決まった形の file に書いて席に渡し、席が自動で気づいて、採るかどうかと、レポートを repo に保存するかを記録します。
     basis: [P-7, P-12, P-14, P-16, P-19, N-2, N-7]
     verify: {method: test, how: 欄の欠けた所見が断られ揃った所見が作業場の決まった dir に書かれることと、見張りの固定の 1 行と、席の読みの口の台帳の 2 行を見て、起動の口の argv と設定を fixture と比べ、囲いの中から作業場の外と repo への書きが断られることを撃つ, ac: [AC16, AC19]}
     goals: [GOAL1, GOAL2]
     figures: []
     rules: [R-38]
-    adrs: [ADR-10, ADR-12, ADR-29, ADR-53]
-    note: 自由な場と作業場と囲いと受け方と保存の選びは判断の記録 ADR-29（持ち主の裁定 t3-hub.75.1 と t3-hub.75.2）。前の字（器の口で 1 行を送る・未反映の一覧に載る）は ADR-29 決定 (1) の (エ)(オ) で替えた。相談の台帳の行は「相談の」で始まる閉じた頭で、memo と根の bead にだけ置く（ADR-29 決定 (4)）。 殻の命令のネットワークの許しに GitHub の読むだけの配り元 2 つ（raw.githubusercontent.com・codeload.github.com）を足したのは判断の記録 ADR-53（持ち主の裁定 t3-hub.84.1・ADR-29 決定 (7)(エ) の部分の置き換え・GitHub の本体と書きの口と release の添え物の配り先は許さない）。
+    adrs: [ADR-10, ADR-12, ADR-29, ADR-53, ADR-54]
+    note: 自由な場と作業場と囲いと受け方と保存の選びは判断の記録 ADR-29（持ち主の裁定 t3-hub.75.1 と t3-hub.75.2）。前の字（器の口で 1 行を送る・未反映の一覧に載る）は ADR-29 決定 (1) の (エ)(オ) で替えた。相談の台帳の行は「相談の」で始まる閉じた頭で、memo と根の bead にだけ置く（ADR-29 決定 (4)）。 殻の命令のネットワークの許しに GitHub の読むだけの配り元 2 つ（raw.githubusercontent.com・codeload.github.com）を足したのは判断の記録 ADR-53（持ち主の裁定 t3-hub.84.1・ADR-29 決定 (7)(エ) の部分の置き換え・GitHub の本体と書きの口と release の添え物の配り先は許さない）。 窓の読みを作業場と読む根と道具の置き場だけに絞ったのは判断の記録 ADR-54（持ち主の裁定 t3-hub.86.1・ADR-29 決定 (7) の部分の置き換え・資格の file の覆いは残す）。
   - id: FR20
     title: 表示面の対象を広げる（中身が web の native・スマホの emulator・純粋な native）
     pattern: ubiquitous
@@ -1864,7 +1866,7 @@ acceptance:
   - {id: AC16, title: 欄の欠けた所見は断られ、揃った所見は作業場の決まった dir に書かれ、見張りは固定の 1 行を出し、席の読みの口は台帳に相談の所見と受けの行を 1 つずつ書く, plain: 形の整っていない結論は受け取らず、整った結論だけが席に届き、席が受けた印が台帳に残る。, verifies: [FR19], red_test: {sentence: 欄を 1 つ欠いた所見と揃った所見の 2 つで、断りと作業場の file と見張りの 1 行と台帳の 2 行を見る, fixture: tests/fixtures/consult/finding-2/}}
   - {id: AC17, title: 対象の種類ごとの端末の行で選ばれる経路が CDP か画面の配信のどちらかになり、知らない種類は断られる, plain: 見せる仕組みが 2 つだけであることを機械が確かめる。, verifies: [FR20], red_test: {sentence: 対象の種類 4 つと知らない種類 1 つの fixture で経路と断りを見る, fixture: tests/fixtures/stage/targets.toml}}
   - {id: AC18, title: 幅 1280・700・390 の 3 つで 2 つの面が横並び・縦積み・スマホの形になり、1280 と 700 で頁の縦 scroll が 0 で、700 で pipeline の 5 列が面の中の横 scroll で保たれ、札の click で吹き出しが開き × と外の click と取り消しの鍵（Esc）で閉じ、Blocked と Queued が別の列に出て、着地の列は R-36 の時間を越えた札を出さず、Queued の札は R-37 の時間を越えると注意の印を持ち、質問の窓は 2 問を続けて答えると 2 問目へ進み全部の後に閉じる, plain: 窓の幅に合わせて並べ方が変わり、画面を分けても 2 つの面が scroll なしで見え、札は押すと吹き出しが出て、待ちの種類と長さが分かる。, verifies: [FR5, FR6, FR10], red_test: {sentence: 見本の台帳と走行の fixture で 3 つの幅の並べ方と頁の scroll と吹き出しの開き閉じと列と注意の印と質問の窓の進みを browser の runner で撃つ, fixture: tests/fixtures/surface/board-v2/}}
-  - {id: AC19, title: 相談の窓の起動の argv と設定は、席の口座の置き場を継ぎ、plugin の置き場を持たず、制限の形と囲いの設定を持ち、囲いの中から作業場の外と repo へ書けない, plain: 相談の窓は席と同じ口座で開き、作業場の外とプロジェクトを書けない。, verifies: [FR19], red_test: {sentence: 起動の口が組む argv と設定を fixture と比べ、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形で落ちることを見る, fixture: tests/fixtures/consult/launch-argv.yaml}}
+  - {id: AC19, title: 相談の窓の起動の argv と設定は、席の口座の置き場を継ぎ、plugin の置き場を持たず、制限の形と囲いの設定を持ち、囲いの中から作業場の外と repo へ書けず、作業場と読む根と道具の置き場の外を読めない, plain: 相談の窓は席と同じ口座で開き、作業場の外とプロジェクトを書けず、作業場とプロジェクトと器の出力と道具の置き場の外を読めない。, verifies: [FR19], red_test: {sentence: 起動の口が組む argv と設定を fixture と比べ、plugin の置き場の旗を足した形と囲いの設定を 1 つ欠いた形で落ちることを見る, fixture: tests/fixtures/consult/launch-argv.yaml}}
   - {id: AC20, title: 初心者と経験者の 2 つの表示の型で、吹き出しと個別の頁と質問の窓の card と hover の card が表示の型の 1 つの概要だけを出し、R-19 の字数を越える吹き出しの概要は畳まれて押すと全文が開き、個別の頁は頭・つながり・本文・記録・走行の時間軸の順で本文と記録は閉じて始まる, plain: 見せ方に合った説明だけが出て、長い説明は畳まれ、個別の頁で本文と記録まで読める。, verifies: [FR5, FR6, FR15], red_test: {sentence: 2 つの概要を違う字にした fixture を 2 つの表示の型で 4 つの面に通してもう一方の字が出ないことを両向きで見て、200 字と 201 字の概要で畳みの境を見て、個別の頁の段の並びを snapshot と比べる, fixture: tests/fixtures/surface/two-summaries/}}
   - {id: AC1001, title: "toy repo で内容の異なる 5 契約（正常 / 改変 / test 追加 / gate FAIL / 承認 Blocked）が実 runner + 実 lens で通り（うち 1 契約は先着の便の land で main が進んだ後に追随して Landed・1 契約は追随で衝突を記帳し終端せずに解いて Landed）、 人由来の event が approval 以外に 0 件", plain: "中身の違う 5 つの作業を練習用の repo で流すと、人の手は承認の 1 回だけで、全部が最後まで通る（先に着地した作業に追いつく形と、ぶつかりを記録して解く形を含む）。", verifies: [FR1004, FR1005, FR1006, FR1011, FR1012, FR1022, FR1034], red_test: {sentence: "便が人手 0 で通るを器の歯で測る（目標の値 5/5）", fixture: "器の要件書は固定の材料の path の欄を持たない（器の歯は code の注に受入の元の番号を書く）"}}
   - {id: AC1002, title: "scribe2 自身で実 bead 1 本（契約は SRS の要件 id と設計 doc の pointer を持つ）を pipeline が PR 作成まで通し、 CI が緑（merge は人が押す）", plain: "scribe2 自身の本物の作業 1 本が PR を作るところまで通り、CI が緑になる（merge は人が押す）。", verifies: [FR1002, FR1005, FR1022, NFR1002], red_test: {sentence: "自己ホストを器の歯で測る（目標の値 1 便）", fixture: "器の要件書は固定の材料の path の欄を持たない（器の歯は code の注に受入の元の番号を書く）"}}

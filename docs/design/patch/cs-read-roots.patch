@@ -1,0 +1,249 @@
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index f3a3850934e0887142343f0cc6f81d1637867637..bfbabe9f3773dd97b96d5ef5f6f60a62bf9f9059 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -54,6 +54,18 @@ pub const CREDENTIALS: [&str; 6] = [
+     CLAUDE_CREDENTIALS,
+ ];
+ 
++/// 作業場と読む根の外の読みの断り（判断の記録 ADR-54）の下で、囲いの中の殻の命令に読みを戻す道具の置き場の閉じた列
++/// （home の下の実行 file と処理系の置き場・ほかに解いた tz を戻す）。
++pub const TOOL_READS: [&str; 7] = [
++    "~/.cargo/bin",
++    "~/.rustup",
++    "~/.local/bin/uv",
++    "~/.local/bin/uvx",
++    "~/.local/bin/claude",
++    "~/.local/share/uv/python",
++    "~/.local/share/claude",
++];
++
+ /// argv に在ってはならない字（plugin の置き場・確かめを飛ばす形・外の道具の設定・指示の足し）。
+ pub const FORBIDDEN: [&str; 5] = [
+     "--plugin-dir",
+@@ -71,12 +83,13 @@ pub const SANDBOX_FIXED: [(&str, bool); 4] = [
+     ("/sandbox/failIfUnavailable", true),
+ ];
+ 
+-/// 設定に置かない鍵（JSON pointer）。
+-pub const ABSENT: [&str; 4] = [
++/// 設定に置かない鍵（JSON pointer・囲いの file の仕切りを外す鍵は読みの断りも殻の命令に届かなくする）。
++pub const ABSENT: [&str; 5] = [
+     "/sandbox/excludedCommands",
+     "/sandbox/network/allowUnixSockets",
+     "/sandbox/network/allowAllUnixSockets",
+     "/permissions/defaultMode",
++    "/sandbox/filesystem/disabled",
+ ];
+ 
+ /// 窓を起こす材料（path は「/」で始まる絶対 path・uid は 10 進の字）。
+@@ -160,6 +173,13 @@ fn denied_reads(l: &Launch) -> Vec<String> {
+     rules
+ }
+ 
++/// 囲いの中の殻の命令に読みを戻す path（道具の置き場の閉じた列 `TOOL_READS` の順に、解いた tz）。
++fn allowed_reads(l: &Launch) -> Vec<String> {
++    let mut paths: Vec<String> = TOOL_READS.iter().map(|t| (*t).to_string()).collect();
++    paths.push(l.tz.clone());
++    paths
++}
++
+ /// `--settings` に渡す設定。
+ pub fn settings(l: &Launch) -> Value {
+     let w = &l.workspace;
+@@ -171,13 +191,14 @@ pub fn settings(l: &Launch) -> Value {
+         "permissions": {
+             "allow": ["WebSearch", "WebFetch", format!("Edit(/{w}/**)")],
+             "deny": denied_reads(l),
++            "blockReadsOutsideWorkingDirectories": true,
+         },
+         "sandbox": {
+             "enabled": true,
+             "autoAllowBashIfSandboxed": true,
+             "allowUnsandboxedCommands": false,
+             "failIfUnavailable": true,
+-            "filesystem": {"denyWrite": l.roots},
++            "filesystem": {"denyWrite": l.roots, "allowRead": allowed_reads(l)},
+             "credentials": {"files": files},
+             "network": {"allowedDomains": DOMAINS},
+         },
+@@ -382,6 +403,18 @@ fn audit_permissions(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
+     }
+ }
+ 
++/// 設定の読みの断り（作業場と読む根の外の読みを断る鍵が true で、殻の命令に戻す読みが `allowed_reads` と字も順も同じ）。
++fn audit_reads(set: &Value, l: &Launch, gaps: &mut Vec<String>) {
++    let block = "/permissions/blockReadsOutsideWorkingDirectories";
++    if set.pointer(block) != Some(&Value::Bool(true)) {
++        gaps.push(block.to_string());
++    }
++    let allow = "/sandbox/filesystem/allowRead";
++    if set.pointer(allow) != Some(&json!(allowed_reads(l))) {
++        gaps.push(allow.to_string());
++    }
++}
++
+ /// 組んだ argv を検める（欠けと広い許しの名の列・空なら起こしてよい）。
+ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
+     let mut gaps = Vec::new();
+@@ -390,6 +423,7 @@ pub fn audit(argv: &[String], l: &Launch) -> Vec<String> {
+         Some(Ok(set)) => {
+             audit_sandbox(&set, l, &mut gaps);
+             audit_permissions(&set, l, &mut gaps);
++            audit_reads(&set, l, &mut gaps);
+         }
+         _ => gaps.push("/".to_string()),
+     }
+@@ -403,7 +437,9 @@ pub fn brief(tz: &str, window: WindowId) -> String {
+         "# 相談の窓 {window} の手引き\n\n\
+          あなたは tsuzuri の相談の窓 {window} です。席（orchestrator）の文脈を汚さないために分けた、自由な調べと検証の場です。\n\n\
+          - 作業場はこの dir（cwd）です。書けるのは作業場の下だけです。repo と器の出力は読むだけで、作業場の外へは基本ソフトの囲いで書けません。\n\
++         - 読めるのは作業場と repo と器の出力（fleet と pipe）と道具の置き場だけです。ほかの project と home の下の file は読めません。要る物は持ち主か所見で頼んでください（席が作業場へ写します）。\n\
+          - 実験と検証のプログラムとレポートは work/ に置いてください。package の cache と入れ先は作業場の下に向けてあります。\n\
++         - 込み入った殻の命令（つないだ 1 行や heredoc など）は、許可を聞かない形で黙って断られることがあります。work/ の script に書いて bash work/<名>.sh で撃ってください。\n\
+          - web の調べ（WebSearch・WebFetch）はいつも使えます。資格と private な project の中身を外へ出さないでください。\n\
+          - 台帳は bundle/ledger.json の写しで読んでください（囲いの中では bd を撃てません）。束は {tz} consult bundle {window} で組み直せます。\n\
+          - 話題ごとの要点は notes.md に書き足してください（開き直した時の続きに使います）。\n\
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 5bd363c12b0312bec5296c297b05155c724624e2..010476fee60b88dfc146fbc0966d7ac36b73692b 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -451,6 +451,113 @@ fn cwarg_tmp_and_version() {
+     );
+ }
+ 
++/// 読みの断りの鍵と戻す読みの列の替えの名と、検めが出す欠けの名と、替え方。
++type ReadEdit = (&'static str, &'static str, fn(&mut Value));
++
++const BLOCK: &str = "/permissions/blockReadsOutsideWorkingDirectories";
++const ALLOW_READ: &str = "/sandbox/filesystem/allowRead";
++
++fn allow_read(s: &mut Value) -> &mut Vec<Value> {
++    s.pointer_mut(ALLOW_READ)
++        .and_then(Value::as_array_mut)
++        .expect("列")
++}
++
++/// 外れた形の 12（鍵の 3・戻す読みの 8・囲いの file の仕切りを外す 1）。
++fn read_edits() -> [ReadEdit; 12] {
++    [
++        ("鍵なし", BLOCK, |s| {
++            s["permissions"]
++                .as_object_mut()
++                .expect("object")
++                .remove("blockReadsOutsideWorkingDirectories");
++        }),
++        ("鍵が false", BLOCK, |s| {
++            s["permissions"]["blockReadsOutsideWorkingDirectories"] = json!(false)
++        }),
++        ("鍵が字の true", BLOCK, |s| {
++            s["permissions"]["blockReadsOutsideWorkingDirectories"] = json!("true")
++        }),
++        ("戻す読みなし", ALLOW_READ, |s| {
++            s["sandbox"]["filesystem"]
++                .as_object_mut()
++                .expect("object")
++                .remove("allowRead");
++        }),
++        ("home の全部", ALLOW_READ, |s| {
++            allow_read(s).push(json!("~/"))
++        }),
++        ("ほかの project", ALLOW_READ, |s| {
++            allow_read(s).push(json!("~/projects"))
++        }),
++        ("bin の dir の全部", ALLOW_READ, |s| {
++            allow_read(s)[2] = json!("~/.local/bin")
++        }),
++        ("rustup を欠く", ALLOW_READ, |s| {
++            allow_read(s).retain(|x| x != "~/.rustup")
++        }),
++        ("tz を欠く", ALLOW_READ, |s| {
++            allow_read(s).retain(|x| x != "/T")
++        }),
++        ("順の替え", ALLOW_READ, |s| allow_read(s).swap(0, 1)),
++        ("同じ path を 2 度", ALLOW_READ, |s| {
++            allow_read(s).push(json!("~/.rustup"))
++        }),
++        (
++            "file の仕切りを外す",
++            "/sandbox/filesystem/disabled",
++            |s| s["sandbox"]["filesystem"]["disabled"] = json!(true),
++        ),
++    ]
++}
++
++/// 作業場と読む根の外の読みを断る鍵を置き、殻の命令に戻す読みを道具の置き場の閉じた列と解いた tz だけにし、外れた形を
++/// 検めが欠けの名 1 つで断ることを見る（行 cs-read-roots・判断の記録 ADR-54）。
++#[test]
++fn cwarg_blocks_reads_outside_roots() {
++    let tools = [
++        "~/.cargo/bin",
++        "~/.rustup",
++        "~/.local/bin/uv",
++        "~/.local/bin/uvx",
++        "~/.local/bin/claude",
++        "~/.local/share/uv/python",
++        "~/.local/share/claude",
++    ];
++    let fx = fixture();
++    for form in ["talk", "ask"] {
++        let l = launch(&fx[form]["inputs"]);
++        let set = settings(&l);
++        let mut want: Vec<Value> = tools.iter().map(|t| json!(t)).collect();
++        want.push(json!("/T"));
++        assert_eq!(set.pointer(BLOCK), Some(&json!(true)), "{form}");
++        assert_eq!(set.pointer(ALLOW_READ), Some(&Value::from(want)), "{form}");
++        assert!(audit(&argv(&l), &l).is_empty(), "{form}");
++        for (name, gap, edit) in read_edits() {
++            assert_eq!(audit(&with_settings(&l, edit), &l), [gap], "{form} {name}");
++        }
++        let mut moved = l.clone();
++        moved.tz = "/T2".into();
++        let last = settings(&moved)
++            .pointer(ALLOW_READ)
++            .and_then(Value::as_array)
++            .and_then(|a| a.last().cloned());
++        assert_eq!(last, Some(json!("/T2")), "{form} の解いた tz");
++    }
++}
++
++/// 束の手引きが読める範囲と込み入った殻の命令の撃ち方をそれぞれ 1 行で書くことを見る（行 cs-read-roots・memo t3-hub.84 の候補 1）。
++#[test]
++fn cwarg_brief_names_reads_and_scripts() {
++    let text = brief("/T", WindowId::parse("cw3").expect("窓 id"));
++    for line in [
++        "- 読めるのは作業場と repo と器の出力（fleet と pipe）と道具の置き場だけです。ほかの project と home の下の file は読めません。要る物は持ち主か所見で頼んでください（席が作業場へ写します）。",
++        "- 込み入った殻の命令（つないだ 1 行や heredoc など）は、許可を聞かない形で黙って断られることがあります。work/ の script に書いて bash work/<名>.sh で撃ってください。",
++    ] {
++        assert_eq!(text.lines().filter(|x| *x == line).count(), 1, "{line}");
++    }
++}
++
+ #[test]
+ fn cwarg_brief_text() {
+     let w = WindowId::parse("cw3").expect("窓 id");
+diff --git a/tests/fixtures/consult/launch-argv.yaml b/tests/fixtures/consult/launch-argv.yaml
+index 08a934f3fa0bfa0059ae36f2aaa56c916ef5e695..88580278e5cc921b864576e8877ef2cac488e0ea 100644
+--- a/tests/fixtures/consult/launch-argv.yaml
++++ b/tests/fixtures/consult/launch-argv.yaml
+@@ -49,14 +49,18 @@
+         "Read(~/.config/gh)", "Read(~/.config/gh/**)", "Read(~/.ssh)", "Read(~/.ssh/**)",
+         "Read(~/.git-credentials)", "Read(~/.git-credentials/**)", "Read(~/.config/git/credentials)", "Read(~/.config/git/credentials/**)",
+         "Read(~/.cld-env)", "Read(~/.cld-env/**)", "Read(~/.claude/.credentials.json)", "Read(~/.claude/.credentials.json/**)"
+-      ]
++      ],
++      "blockReadsOutsideWorkingDirectories": true
+     },
+     "sandbox": {
+       "enabled": true,
+       "autoAllowBashIfSandboxed": true,
+       "allowUnsandboxedCommands": false,
+       "failIfUnavailable": true,
+-      "filesystem": {"denyWrite": ["/R", "/S/fleet", "/S/pipe"]},
++      "filesystem": {
++        "denyWrite": ["/R", "/S/fleet", "/S/pipe"],
++        "allowRead": ["~/.cargo/bin", "~/.rustup", "~/.local/bin/uv", "~/.local/bin/uvx", "~/.local/bin/claude", "~/.local/share/uv/python", "~/.local/share/claude", "/T"]
++      },
+       "credentials": {"files": [
+         {"path": "~/.config/gh", "mode": "deny"},
+         {"path": "~/.ssh", "mode": "deny"},
