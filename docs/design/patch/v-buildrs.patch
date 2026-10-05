@@ -1,0 +1,249 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+index 8b47cf56..acbd50cc 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/seat.rs
+@@ -619,8 +619,19 @@ fn build_rerun_git(dir: &Path, args: &[&str]) -> bool {
+         .is_ok_and(|out| out.status.success())
+ }
+ 
+-/// tmp の git repo（symlink を解いた root）: tracked 3 本（1 本は sub dir）・untracked 1 本・tracked にしてから
+-/// 作業木で消した 1 本。commit は撃たない（`ls-files` は index を読む）。
++/// fixture の commit（名と mail を -c で渡す・全部の直しを載せる）。
++fn build_rerun_commit(dir: &Path, message: &str) -> bool {
++    build_rerun_git(dir, &["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-am", message])
++}
++
++/// fixture の器の crate の dir（器の根は `v/`・`rerun_paths` は `<dir>/../..` を器の根と読む）。
++fn build_rerun_crate(dir: &Path) -> PathBuf {
++    dir.join("v").join("crates").join("pkg")
++}
++
++/// tmp の git repo（symlink を解いた root）: 器の根 `v/` の下の tracked 3 本（1 本は crate の dir）・器の外の
++/// tracked 1 本 `o.txt`・根の組みの設定 4 本（`Cargo.toml`・`Cargo.lock`・`rust-toolchain.toml`・`.cargo/config.toml`）を
++/// 1 つの commit に載せ、untracked 1 本と、commit の後に作業木で消した tracked 1 本 `v/gone.txt` を置く。
+ #[expect(
+     clippy::expect_used,
+     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+@@ -628,70 +639,70 @@ fn build_rerun_git(dir: &Path, args: &[&str]) -> bool {
+ fn build_rerun_repo() -> TmpDir {
+     let dir = tmp().canonical().expect("tmp dir の実 path を解ける");
+     assert!(build_rerun_git(&dir, &["init", "-q"]), "git init が通る");
+-    fs::create_dir_all(dir.join("sub")).expect("sub dir を作れる");
+-    for name in ["a.txt", "b.txt", "sub/c.txt", "gone.txt", "untracked.txt"] {
++    for sub in ["v/sub", "v/crates/pkg", ".cargo"] {
++        fs::create_dir_all(dir.join(sub)).expect("dir を作れる");
++    }
++    let tracked = ["v/a.txt", "v/sub/c.txt", "v/crates/pkg/b.txt", "v/gone.txt", "o.txt"];
++    let config = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo/config.toml"];
++    for name in tracked.iter().chain(&config).chain(&["v/untracked.txt"]) {
+         fs::write(dir.join(name), name).expect("fixture を書ける");
+     }
+-    assert!(
+-        build_rerun_git(&dir, &["add", "--", "a.txt", "b.txt", "sub/c.txt", "gone.txt"]),
+-        "git add が通る"
+-    );
+-    fs::remove_file(dir.join("gone.txt")).expect("tracked の 1 本を作業木から消せる");
++    let add: Vec<&str> = ["add", "--"].iter().chain(&tracked).chain(&config).copied().collect();
++    assert!(build_rerun_git(&dir, &add), "git add が通る");
++    assert!(build_rerun_commit(&dir, "one"), "最初の commit が通る");
++    fs::remove_file(dir.join("v/gone.txt")).expect("tracked の 1 本を作業木から消せる");
+     dir
+ }
+ 
+-/// tmp の git repo で、tracked で在る 3 本の絶対 path と HEAD / index を sort 済みで返し、untracked と消えた
+-/// tracked を含まない（行 i の done (1)）。
++/// 列は器の根の下の tracked で在る 3 本と根の組みの設定 4 本の絶対 path を sort 済みで返し、器の外の tracked・git の
++/// meta（HEAD・index）・untracked・消えた tracked を含まない（行 v-buildrs）。
+ #[test]
+-fn build_rerun_paths_are_existing_tracked_files_and_git_meta() {
++fn build_rerun_paths_are_the_existing_tracked_vessel_inputs() {
+     let dir = build_rerun_repo();
+-    let found = rerun_paths(&dir);
+-    let expected: Vec<PathBuf> = [".git/HEAD", ".git/index", "a.txt", "b.txt", "sub/c.txt"]
+-        .iter()
+-        .map(|name| dir.join(name))
+-        .collect();
+-    assert_eq!(found, expected, "tracked で在る 3 本 + HEAD / index（絶対 path・sort 済み）");
+-    assert!(found.iter().all(|path| path.is_absolute()), "全部が絶対 path: {found:?}");
+-    assert!(!found.contains(&dir.join("untracked.txt")), "untracked は含まない: {found:?}");
+-    assert!(!found.contains(&dir.join("gone.txt")), "消えた tracked は含まない: {found:?}");
++    let found = rerun_paths(&build_rerun_crate(&dir));
++    let expected: Vec<PathBuf> =
++        [".cargo/config.toml", "Cargo.lock", "Cargo.toml", "rust-toolchain.toml", "v/a.txt", "v/crates/pkg/b.txt", "v/sub/c.txt"]
++            .iter()
++            .map(|name| dir.join(name))
++            .collect();
++    assert_eq!(found, expected, "器の入力の tracked で在る 7 本（絶対 path・sort 済み）");
++    for absent in ["o.txt", ".git/HEAD", ".git/index", "v/untracked.txt", "v/gone.txt"] {
++        assert!(!found.contains(&dir.join(absent)), "{absent} は含まない: {found:?}");
++    }
+ }
+ 
+ /// 同じ repo で 2 回撃つと同じ並びを返し、その並びは sort 済みで重複が無い（決定的・行 i の done (1)）。
+ #[test]
+ fn build_rerun_paths_are_deterministic() {
+     let dir = build_rerun_repo();
+-    let first = rerun_paths(&dir);
+-    let second = rerun_paths(&dir);
++    let first = rerun_paths(&build_rerun_crate(&dir));
++    let second = rerun_paths(&build_rerun_crate(&dir));
+     assert_eq!(first, second, "2 回目も同じ並び");
+     let mut sorted = first.clone();
+     sorted.sort();
+     sorted.dedup();
+     assert_eq!(first, sorted, "sort 済みで重複なし");
+-    assert_eq!(first.len(), 5, "数も揃う: {first:?}");
++    assert_eq!(first.len(), 7, "数も揃う: {first:?}");
+ }
+ 
+-/// git repo でない dir では、`<dir>/../../.git` の HEAD / index のうち在る物だけを返す（0 本を含む）。
+-/// `.git` は HEAD だけを置いた素の dir（git は repo と読まない）で、tracked の列挙は 1 本も足されない。
++/// git repo でない dir では、列は 0 本（`.git` に HEAD だけを置いた素の dir も repo と読まない）。
+ #[test]
+-fn build_rerun_paths_outside_a_repo_are_only_existing_git_meta() {
++fn build_rerun_paths_outside_a_repo_are_empty() {
+     let root = tmp().canonical();
+     assert!(root.is_some(), "tmp dir の実 path を解ける");
+     let Some(root) = root else { return };
+-    let dir = root.join("crates").join("pkg");
++    let dir = build_rerun_crate(&root);
+     assert!(fs::create_dir_all(&dir).is_ok(), "dir を作れる");
+-    assert!(!build_rerun_git(&dir, &["rev-parse", "--show-toplevel"]), "前提: git repo でない");
+-    assert_eq!(rerun_paths(&dir), Vec::<PathBuf>::new(), "meta も無い周は 0 本");
+     assert!(fs::create_dir_all(root.join(".git")).is_ok(), ".git dir を作れる");
+     assert!(fs::write(root.join(".git").join("HEAD"), "ref: refs/heads/main\n").is_ok(), "HEAD を書ける");
+     assert!(fs::write(dir.join("stray.txt"), "x").is_ok(), "dir に file を書ける");
+     assert!(!build_rerun_git(&dir, &["rev-parse", "--show-toplevel"]), "前提: HEAD だけの .git は repo でない");
+-    let found = rerun_paths(&dir);
+-    assert_eq!(found, vec![dir.join("..").join("..").join(".git").join("HEAD")], "在る HEAD だけ（index は無い）");
++    assert_eq!(rerun_paths(&dir), Vec::<PathBuf>::new(), "repo でない周は 0 本");
+ }
+ 
+ /// build.rs は列挙を `build/rerun.rs` から `include!` で読み、自分で `rerun_paths` を定義しない＝歯が撃つ関数と
+-/// build script が撃つ関数が同じ 1 つ（行 i の done (2)）。build.rs の doc は再走の母集団を tracked 全 file と名指す
+-/// （done (3)）。
++/// build script が撃つ関数が同じ（行 i の done (2)）。build.rs の doc は再走の母集団を器の入力の
++/// 追跡 file と名指す（行 v-buildrs）。
+ #[test]
+ fn build_rerun_build_script_reads_the_shared_file() {
+     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(NAME);
+@@ -701,7 +712,8 @@ fn build_rerun_build_script_reads_the_shared_file() {
+     assert_eq!(script.matches("fn rerun_paths(").count(), 0, "build.rs は列挙を自分で持たない");
+     assert_eq!(shared.matches("\nfn rerun_paths(").count(), 1, "列挙は共有 file の 1 関数");
+     assert!(script.contains("emit(&format!(\"cargo:rerun-if-changed={}\", path.display()))"), "列挙を rerun-if-changed に出す");
+-    assert!(script.contains("**tracked 全 file**"), "doc が再走の母集団を tracked 全 file と名指す");
++    assert_eq!(script.matches("\n//! 再走の母集団は **器の入力の追跡 file**（").count(), 1, "module の doc が再走の母集団を器の入力の追跡 file と名指す");
++    assert_eq!(script.matches("tracked 全 file").count(), 0, "doc に古い母集団の字が残らない");
+ }
+ 
+ // ─────────────────── 口座の歯の共有 fixture（account-autonomy.md §5・`s2-07l.211`） ───────────────────
+diff --git a/scribe2/crates/scribe2/build.rs b/scribe2/crates/scribe2/build.rs
+index a362822a..36b0a3f6 100644
+--- a/scribe2/crates/scribe2/build.rs
++++ b/scribe2/crates/scribe2/build.rs
+@@ -7,10 +7,10 @@
+ //! rc ≠ 0・出力が sha の形でない周は `unknown`（測れない周を成功に倒さない・C10）。
+ //! build は落とさない（panic しない・依存は std だけ）。
+ //!
+-//! 再走の母集団は git の meta（HEAD / index）と **tracked 全 file**（`git ls-files`・在る物だけ）である
+-//! （設計 consumer-sync.md §18・`s2-07l.317`）。unstaged の変更は index を動かさないので、meta だけを
+-//! `cargo:rerun-if-changed` に出すと build script が再走せず `+dirty` が古い値で止まる。列挙は
+-//! `build/rerun.rs` の 1 関数で、e2e の歯も同じ file を `include!` で読む。git の無い周は meta の在る物だけ。
++//! 再走の母集団は **器の入力の追跡 file**（器の根の下の全部と根の組みの設定・`git ls-files`・在る物だけ）で、git の
++//! meta（HEAD / index）を含まない（設計 consumer-sync.md §18・`s2-07l.317`・tsuzuri の判断の記録 ADR-36 の決定 (8)・
++//! 行 v-buildrs）。器の外の直しと commit では再走しないので、値は最後に再走した時の HEAD と dirty のまま残る。列挙は
++//! `build/rerun.rs` の 1 関数で、e2e の歯も同じ file を `include!` で読む。git の無い周は 0 本。
+ 
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+@@ -60,8 +60,8 @@ fn build_commit(dir: &Path) -> String {
+     }
+ }
+ 
+-// 再 build の引き金にする path の列挙 `rerun_paths`（git の meta と **tracked 全 file**・在る物だけ・決定的な
+-// 並び）。e2e の歯と同じ file を読む＝列挙の実装は 1 か所（設計 consumer-sync.md §18・`s2-07l.317`）。
++// 再 build の引き金にする path の列挙 `rerun_paths`（器の入力の追跡 file・在る物だけ・決定的な並び）。e2e の歯と
++// 同じ file を読む＝列挙の実装は 1 か所（設計 consumer-sync.md §18・`s2-07l.317`・行 v-buildrs）。
+ include!("build/rerun.rs");
+ 
+ fn main() {
+diff --git a/scribe2/crates/scribe2/build/rerun.rs b/scribe2/crates/scribe2/build/rerun.rs
+index 6e3e7dbd..0cfc7140 100644
+--- a/scribe2/crates/scribe2/build/rerun.rs
++++ b/scribe2/crates/scribe2/build/rerun.rs
+@@ -1,45 +1,48 @@
+-// 再 build の引き金にする path の列挙（設計 consumer-sync.md §18・契約表の行 i・`s2-07l.317`）。
++// 再 build の引き金にする path の列挙（設計 consumer-sync.md §18・契約表の行 i・`s2-07l.317`・tsuzuri の行 v-buildrs）。
+ //
+ // `crates/<NAME>/build.rs` と e2e の歯（`crates/<NAME>-boundary/tests/e2e/seat.rs` の `build_rerun_*`）が
+ // 同じこの file を `include!` で読む＝列挙の実装は 1 か所である。`include!` は item を読み手の module へ
+ // そのまま貼るので、inner doc（`//!`）と `use` を持たず、型と関数は full path で書く（読み手の `use` と
+ // 衝突させない）。依存は std だけ（build script は crate の依存を持たない）。
+ 
++/// 器の入力の pathspec（器の根＝`<dir>/../..` から撃つ）。器の根の下の全部と、repo の根の組みの設定（manifest・錠・
++/// toolchain・cargo の設定）。器の根が repo の根の木では repo の追跡の全 file と同じ列になる（tsuzuri の判断の記録
++/// ADR-36 の決定 (8)・行 v-buildrs）。
++const RERUN_PATHSPEC: &[&str] =
++    &[".", ":(top)Cargo.toml", ":(top)Cargo.lock", ":(top)rust-toolchain.toml", ":(top)rust-toolchain", ":(top).cargo"];
++
++/// `git -C <at> <args>` を撃ち、rc 0 なら stdout を返す。git が無い・rc ≠ 0 は `None`。
++fn rerun_git(at: &std::path::Path, args: &[&str]) -> Option<Vec<u8>> {
++    let out = std::process::Command::new("git").arg("-C").arg(at).args(args).output().ok()?;
++    out.status.success().then_some(out.stdout)
++}
++
+ /// 再 build の引き金にする path の列（在る file だけ・sort 済みで重複なし＝決定的な並び）。
+ ///
+-/// 母集団は 3 つ:
+-/// - git の meta: `<dir>/../../.git/HEAD` と `<dir>/../../.git/index`（worktree では `.git` file そのもの）と、
+-///   実体の git dir（`rev-parse --absolute-git-dir`）の `HEAD` / `index`。
+-/// - **tracked 全 file**: repo root（`rev-parse --show-toplevel`）で `git ls-files -z` を撃ち、root に繋いだ
+-///   絶対 path。unstaged の変更は index を動かさないので、git の meta だけでは cargo が build script を
+-///   再走させず `+dirty` が古い値で止まる（§18 の出所）。untracked は列挙しない（`+dirty` は
+-///   `--untracked-files=no` で測る＝母集団を揃える）。
+-/// - 消えた tracked・無い meta は出さない。存在しない path を `rerun-if-changed` に出すと cargo は落ちないが
+-///   「file が無い＝常に stale」と読んで **毎回** build script と crate を作り直す（worktree の `.git` は
+-///   file で `<root>/.git/HEAD` が無い周に実測）。
++/// 母集団は **器の入力の追跡 file** だけ: 器の根（`<dir>/../..`）で [`RERUN_PATHSPEC`] を `git ls-files -z --full-name`
++/// に渡し、repo の根（`rev-parse --show-toplevel`）に繋いだ絶対 path。unstaged の変更も file の時刻が動くので
++/// build script が再走し、`+dirty` が付く（§18 の出所）。untracked は列挙しない（`+dirty` は `--untracked-files=no`
++/// で測る＝母集団を揃える）。git の meta（HEAD・index）は出さない: 出すと器の外の commit や build script の
++/// `git status` が index を書き直すたびに crate を組み直す（tsuzuri の行 v-buildrs の測りで、器の全部の target が
++/// 1 回 約 5 秒・書き 約 1.1 GB）。そのため器の外の commit の後と、器の直しを commit した後に器の入力を直さずに組む時は
++/// 再走せず、build の値（build.rs の `build_commit`）は最後に再走した時の値のまま残る。
++/// - 消えた tracked は出さない。存在しない path を `rerun-if-changed` に出すと cargo は落ちないが「file が無い＝
++///   常に stale」と読んで **毎回** build script と crate を作り直す。
+ ///
+-/// git が無い・repo でない・rc ≠ 0 の周は git の meta の候補のうち在る物だけ（0 本もある）を返す＝build は
+-/// 落とさない（panic しない）。
++/// git が無い・repo でない・rc ≠ 0 の周は 0 本を返す＝build は落とさない（panic しない）。
+ fn rerun_paths(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+-    let git = |at: &std::path::Path, args: &[&str]| -> Option<Vec<u8>> {
+-        let out = std::process::Command::new("git").arg("-C").arg(at).args(args).output().ok()?;
+-        out.status.success().then_some(out.stdout)
+-    };
+     let line = |bytes: Vec<u8>| String::from_utf8(bytes).ok().map(|text| std::path::PathBuf::from(text.trim()));
+-    let dot_git = dir.join("..").join("..").join(".git");
+-    let mut candidates = vec![dot_git.join("HEAD"), dot_git.join("index"), dot_git];
+-    if let Some(git_dir) = git(dir, &["rev-parse", "--absolute-git-dir"]).and_then(line) {
+-        candidates.push(git_dir.join("HEAD"));
+-        candidates.push(git_dir.join("index"));
+-    }
+-    if let Some(top) = git(dir, &["rev-parse", "--show-toplevel"]).and_then(line) {
+-        let listed = git(&top, &["ls-files", "-z"]).unwrap_or_default();
++    let mut paths: Vec<std::path::PathBuf> = Vec::new();
++    if let Some(top) = rerun_git(dir, &["rev-parse", "--show-toplevel"]).and_then(line) {
++        let vessel = dir.join("..").join("..");
++        let listed = rerun_git(&vessel, &[&["ls-files", "-z", "--full-name", "--"][..], RERUN_PATHSPEC].concat())
++            .unwrap_or_default();
+         for name in listed.split(|byte| *byte == 0).filter(|name| !name.is_empty()) {
+             let name: &std::ffi::OsStr = std::os::unix::ffi::OsStrExt::from_bytes(name);
+-            candidates.push(top.join(name));
++            paths.push(top.join(name));
+         }
+     }
+-    let mut paths: Vec<std::path::PathBuf> = candidates.into_iter().filter(|path| path.is_file()).collect();
++    paths.retain(|path| path.is_file());
+     paths.sort();
+     paths.dedup();
+     paths
