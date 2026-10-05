@@ -1,0 +1,2520 @@
+diff --git a/folio2/crates/folio/tests/tz3/common.rs b/folio2/crates/folio/tests/tz3/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8117131dfa1830a07726925c25261b798e986f20
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz3/common.rs
+@@ -0,0 +1,103 @@
++//! folio の歯の群 tz3 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++
++pub(crate) const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
++
++pub(crate) const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
++
++/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
++pub(crate) fn copy_external_schema(root: &Path) {
++    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
++    fs::copy(
++        repo_root().join("contracts/schema.toml"),
++        root.join("contracts/field-schema/schema.toml"),
++    )
++    .unwrap();
++}
++
++pub(crate) fn copy_tree(src: &Path, dst: &Path) {
++    fs::create_dir_all(dst).unwrap();
++    for entry in fs::read_dir(src).unwrap() {
++        let entry = entry.unwrap();
++        let to = dst.join(entry.file_name());
++        if entry.file_type().unwrap().is_dir() {
++            copy_tree(&entry.path(), &to);
++        } else {
++            fs::copy(entry.path(), &to).unwrap();
++        }
++    }
++}
++
++pub(crate) fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
++    let before = fs::read_to_string(path).unwrap();
++    let after = f(&before);
++    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
++    fs::write(path, after).unwrap();
++}
++
++/// git を呼ぶ。環境変数 GIT_* は継承しない。
++pub(crate) fn git(cwd: &Path, args: &[&str]) {
++    let mut cmd = Command::new("git");
++    for (key, _) in std::env::vars_os() {
++        if key.to_string_lossy().starts_with("GIT_") {
++            cmd.env_remove(key);
++        }
++    }
++    let out = cmd
++        .current_dir(cwd)
++        .args([
++            "-c",
++            "user.email=fx@example",
++            "-c",
++            "user.name=fx",
++            "-c",
++            "commit.gpgsign=false",
++        ])
++        .args(args)
++        .output()
++        .expect("git を起動できない");
++    assert!(
++        out.status.success(),
++        "git {args:?}: {}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++}
++
++pub(crate) fn passed(out: Output) -> String {
++    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
++    String::from_utf8(out.stdout).expect("出力が UTF-8 でない")
++}
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
++}
++
++pub(crate) fn show(out: &Output) -> String {
++    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
++}
++
++pub(crate) fn stderr(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stderr).into_owned()
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stdout).into_owned()
++}
++
++pub(crate) fn text(bytes: &[u8]) -> String {
++    String::from_utf8_lossy(bytes).into_owned()
++}
++
++/// 違反の行（`[種類] …`）だけを拾う。
++pub(crate) fn violations(out: &Output) -> Vec<String> {
++    stdout(out)
++        .lines()
++        .filter(|l| l.starts_with('['))
++        .map(str::to_string)
++        .collect()
++}
+diff --git a/folio2/crates/folio/tests/tz3/findings.rs b/folio2/crates/folio/tests/tz3/findings.rs
+index 4bdecd282145b15f5ac414ac562848b922a090f1..0be2aaff72e4bf0b653446bd2658c447bb4a903e 100644
+--- a/folio2/crates/folio/tests/tz3/findings.rs
++++ b/folio2/crates/folio/tests/tz3/findings.rs
+@@ -8,6 +8,7 @@
+ //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{repo_root, stderr, stdout};
+ use std::collections::BTreeMap;
+ use std::fs;
+ use std::io::Write;
+@@ -16,10 +17,6 @@ use std::process::{Command, Output, Stdio};
+ 
+ const VIEWPOINTS: [&str; 4] = ["fidelity", "readability", "coherence", "reality"];
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ /// 便 38 の凍結 fixture（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本）。
+ fn bundle_fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/ceiling/bundle")
+@@ -146,14 +143,6 @@ fn code(out: &Output, what: &str) -> i32 {
+     })
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// 組んだ束の置き場。fixture の写し（src・faces）と `--write` で組んだ束（bundle）を持つ。
+ struct Site {
+     td: PathBuf,
+diff --git a/folio2/crates/folio/tests/tz3/floor_cases.rs b/folio2/crates/folio/tests/tz3/floor_cases.rs
+index 4e35263278ce5dbd8eb859e785662bc61709cbda..6407296852ab1d63cb3b336151901ab3560a6e73 100644
+--- a/folio2/crates/folio/tests/tz3/floor_cases.rs
++++ b/folio2/crates/folio/tests/tz3/floor_cases.rs
+@@ -13,12 +13,9 @@ use std::process::Command;
+ use std::sync::Mutex;
+ use std::sync::atomic::{AtomicUsize, Ordering};
+ 
++use crate::common::repo_root;
+ use yaml::Value;
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ // ── 型付きの木の小道具 ──
+ 
+ /// Python の真偽（None・False・0・空の文字列・空の一覧・空の表は偽）。
+diff --git a/folio2/crates/folio/tests/tz3/floor_faces.rs b/folio2/crates/folio/tests/tz3/floor_faces.rs
+index 965c0d58cfb6ed23addade8cefe4c0eb407074ee..ab486ca3e31b0935ab28f5c6ae5142e292f1e17a 100644
+--- a/folio2/crates/folio/tests/tz3/floor_faces.rs
++++ b/folio2/crates/folio/tests/tz3/floor_faces.rs
+@@ -6,14 +6,11 @@
+ //! 期待の字（面の字）は歯の側の手書き（P-10.1）。版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-floor-faces-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+diff --git a/folio2/crates/folio/tests/tz3/freeze.rs b/folio2/crates/folio/tests/tz3/freeze.rs
+index 9828ffd9db159ca96decc33a8f45288919a65ec5..60f32503119d3a5b2e079bfb22008d2f90951421 100644
+--- a/folio2/crates/folio/tests/tz3/freeze.rs
++++ b/folio2/crates/folio/tests/tz3/freeze.rs
+@@ -6,6 +6,7 @@
+ //! 便 170: 合成した改訂の判断の記録は土台に無い新しい ADR-11 で足し、(4) は `--freeze-anchor` の後に `--freeze-adrs` で封を足す。
+ #![cfg(test)]
+ 
++use crate::common::{copy_external_schema, copy_tree, edit, git, repo_root, text};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -14,61 +15,6 @@ const OLD_TITLE: &str = "判断する道具を作らない";
+ const NEW_TITLE: &str = "判断する道具を作らない（改訂）";
+ const RULING: &str = "f2-648.19 notes 2026-09-17（合成した改訂の承認）";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+-fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+-    fs::copy(
+-        repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/field-schema/schema.toml"),
+-    )
+-    .unwrap();
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -119,17 +65,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8_lossy(bytes).into_owned()
+-}
+-
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+ /// 憲法の P-1 の title を新しい題にし、meta.version を v1.1 にする。
+ fn bump_title(dir: &Path) {
+     edit(&dir.join("constitution.yaml"), |t| {
+diff --git a/folio2/crates/folio/tests/tz3/freeze_root.rs b/folio2/crates/folio/tests/tz3/freeze_root.rs
+index 04e48196982baac31b50490019dc87756366603c..6a151d66497fcb0ff4e0adc6e96db38c21b5e8a3 100644
+--- a/folio2/crates/folio/tests/tz3/freeze_root.rs
++++ b/folio2/crates/folio/tests/tz3/freeze_root.rs
+@@ -19,6 +19,7 @@
+ //! 形に揃える（`abroad_note`・列の根の表を空にする `empty_table` と同じ扱い）。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree, edit, git, repo_root, show, text};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -27,7 +28,6 @@ use std::process::{Command, Output};
+ const ROOT: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
+ /// tests/fixtures/anchor/root-digest-drift/anchors/index.yaml の entries[0].digest（自分自身と一致する別の中身の根）。
+ const DRIFT: &str = "85cbd21b680e0b8d3d2c134f11f8a03926929717a8ab172bc1679106da99a9fe";
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const FOLIO2: &str = "folio2-constitution";
+ /// 表に無い名（歯のための名）。
+ const OTHER: &str = "renamed-constitution";
+@@ -39,51 +39,6 @@ const TSUZURI_ROOT: &str = "35eb6b369f0504167571a27b50c950e1361609d9b19b71e0f1e9
+ const APPROVAL_AT: &str =
+     "[anchor] constitution-v1.0.yaml（凍結で書く承認一覧・憲法 meta.approval の写し）: ";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -156,14 +111,6 @@ fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8_lossy(bytes).into_owned()
+-}
+-
+-fn show(out: &Output) -> String {
+-    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
+-}
+-
+ /// 標準出力の違反の行（「[種別] 」で始まる）。
+ fn violations(out: &Output) -> Vec<String> {
+     text(&out.stdout)
+@@ -173,13 +120,6 @@ fn violations(out: &Output) -> Vec<String> {
+         .collect()
+ }
+ 
+-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
+-    let before = fs::read_to_string(path).unwrap();
+-    let after = f(&before);
+-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
+-    fs::write(path, after).unwrap();
+-}
+-
+ /// 憲法の meta.id を `name` に書き換える。
+ fn rename(dir: &Path, from: &str, name: &str) {
+     edit(&dir.join("constitution.yaml"), |t| {
+diff --git a/folio2/crates/folio/tests/tz3/gate.rs b/folio2/crates/folio/tests/tz3/gate.rs
+index f25cbd86ed13f2ce3ce834af1578d9ef1c58d557..1569a94b18d88dfb2c40acc21b0e11361a9cdfd6 100644
+--- a/folio2/crates/folio/tests/tz3/gate.rs
++++ b/folio2/crates/folio/tests/tz3/gate.rs
+@@ -20,6 +20,7 @@
+ //! 版管理の下の file は書き換えない（`--dir` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{repo_root, stdout};
+ use std::collections::BTreeMap;
+ use std::fs;
+ use std::io::Write;
+@@ -40,10 +41,6 @@ const READ_FILES: [&str; 6] = [
+     "design-note/",
+ ];
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn findings_fixture(name: &str) -> String {
+     fs::read_to_string(
+         repo_root()
+@@ -75,10 +72,6 @@ fn code(out: &Output) -> i32 {
+     })
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+ /// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（tests/tz5/stamp.rs と同じ形）。
+ fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+     let mut child = Command::new("sha256sum")
+diff --git a/folio2/crates/folio/tests/tz3/gitcheck.rs b/folio2/crates/folio/tests/tz3/gitcheck.rs
+index 3718834492cd65995c56ec76f848f06f1708ec96..fee1f875d2c423c74a5b163710afc04f12bb442c 100644
+--- a/folio2/crates/folio/tests/tz3/gitcheck.rs
++++ b/folio2/crates/folio/tests/tz3/gitcheck.rs
+@@ -3,28 +3,12 @@
+ //! 版管理の根はその 1 つ上（写しの design-intent 自体を根にしない）に作る。
+ #![cfg(test)]
+ 
++use crate::common::{copy_tree, repo_root, stderr, stdout, violations};
+ use std::fs;
+ use std::os::unix::fs::PermissionsExt;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// git を呼ぶ。環境変数 GIT_* は継承しない（外の repo へ照合先をすげ替えない）。標準出力の前後の空白を除いて返す。
+ fn git(cwd: &Path, args: &[&str]) -> String {
+     let mut cmd = Command::new("git");
+@@ -86,23 +70,6 @@ fn folio_check(td: &Path) -> Output {
+     out
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ #[test]
+ fn gitcheck_without_git_is_unknown() {
+     let td = copy_fixture("no-git", "no-anchor", false);
+diff --git a/folio2/crates/folio/tests/tz3/graph.rs b/folio2/crates/folio/tests/tz3/graph.rs
+index 91913eb0c622c6f7ef40555698b2315e9715d4ae..ef5ec26b41bb936c057b9a326290d07c5c9a10cd 100644
+--- a/folio2/crates/folio/tests/tz3/graph.rs
++++ b/folio2/crates/folio/tests/tz3/graph.rs
+@@ -16,6 +16,7 @@ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
++use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, repo_root};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+ /// 閉じた一覧の写し（正本は crates/folio/src/graph.rs の NODE_KINDS / EDGE_TYPES・歯は crate の中を読めない）。
+@@ -56,24 +57,6 @@ const EDGE_TYPES: [&str; 19] = [
+ ];
+ 
+ const NODES_HEAD: &str = "# 節点（1 行 = id / 種類 / file / 要約値 8 字 / 題 36 字・タブ区切り）";
+-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+ 
+ /// 置き場の下の file の相対 path → 中身（写しを変えていないことを見る）。
+ fn snapshot(dir: &Path, base: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+@@ -501,7 +484,6 @@ const F99_ANCHOR: &str = "tests/fixtures/schema/node-digest-anchor.txt";
+ /// 便 207: 土台の規則の表に数の上限の行 R-23〜R-25（欄 key）が入り、その 3 節点の行と要約の行だけが動いた値。
+ /// 行 v-field-schema: 土台の設計ノートの欄の決まりの写しの器の導出 file の path が 13 byte 伸び、残差の 2 行だけが動いた値。
+ const F99_ANCHOR_SHA256: &str = "42fe42396f3ecea0ba24afa74b860ec57ca83dc1f4042477adf908f5fad8ee7f";
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ 
+ /// 独立の実装の出力を置き場に当てる。python3 を起動できなければ None（歯は理由を出して落とさない・P-10.3）。
+ fn independent(dir: &Path) -> Option<String> {
+diff --git a/folio2/crates/folio/tests/tz3/graph_notes.rs b/folio2/crates/folio/tests/tz3/graph_notes.rs
+index c7ecc9262a4ac35bf683b6b4ac49f0c51a28fdb9..86d81cfc6a95ebe184b7b741d94c2816fd70bb62 100644
+--- a/folio2/crates/folio/tests/tz3/graph_notes.rs
++++ b/folio2/crates/folio/tests/tz3/graph_notes.rs
+@@ -17,32 +17,14 @@
+ //! 9. 外の置き場（骨格 folio init に外の利用者の形のノートを足した写し）でも同じ形: 判断の記録と設計ノートの行だけが字を持つ。
+ #![cfg(test)]
+ 
++use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, passed, repo_root};
+ use std::fs;
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const KIND: &str = "設計ノートの行";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// 凍結した土台の写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -88,11 +70,6 @@ fn folio(args: &[&str], dir: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn passed(out: Output) -> String {
+-    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+-    String::from_utf8(out.stdout).expect("出力が UTF-8 でない")
+-}
+-
+ fn print(dir: &Path) -> String {
+     passed(folio(&["graph", "--print"], dir))
+ }
+diff --git a/folio2/crates/folio/tests/tz3/graph_summary.rs b/folio2/crates/folio/tests/tz3/graph_summary.rs
+index ee650cc54474bf5240509de1812204431789e54e..5af5f425eaaddf881121a876872a44b91e1ecd7b 100644
+--- a/folio2/crates/folio/tests/tz3/graph_summary.rs
++++ b/folio2/crates/folio/tests/tz3/graph_summary.rs
+@@ -15,36 +15,17 @@
+ //!    null）、ほかの行は 1 字も動かない。
+ #![cfg(test)]
+ 
++use crate::common::{EDGES_HEAD, FLOOR_BASE, copy_tree, passed, repo_root};
+ use std::fs;
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-const EDGES_HEAD: &str = "# 辺（1 行 = 端 / 端 / 型・タブ区切り）";
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+-
+ /// 便 208 の前の組み立て（便 207 の着地の木・土台に行 R-23〜R-25 が在る）が土台 tests/fixtures/floor_base/design-intent に出した
+ /// --print --summary の出力の行の数・byte の数・sha256（起草役が便 207 の見本 72d11f1 の binary で撃って sha256sum で測った・
+ /// 2026-09-29・便 207 の起草役の測りと一致・凍結 anchor・P-10.1）。
+ const BEFORE_208: (usize, usize, &str) = (194, 115_579, "78eab543a65fa0cc38c0e4b5f465705a8d0b411edb4ba8e5e0273050cdc0ac35");
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// 凍結した土台 tests/fixtures/floor_base/design-intent の写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -87,11 +68,6 @@ fn graph(dir: &Path, flags: &[&str]) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn passed(out: Output) -> String {
+-    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+-    String::from_utf8(out.stdout).expect("出力が UTF-8 でない")
+-}
+-
+ fn summary(dir: &Path) -> String {
+     passed(graph(dir, &["--print", "--summary"]))
+ }
+diff --git a/folio2/crates/folio/tests/tz3/hello.rs b/folio2/crates/folio/tests/tz3/hello.rs
+index d6f84066aae96d590e9dc1959559d5da30435cb1..059866c2740dcc9dfa673542663522099a10de02 100644
+--- a/folio2/crates/folio/tests/tz3/hello.rs
++++ b/folio2/crates/folio/tests/tz3/hello.rs
+@@ -4,6 +4,7 @@
+ //! 便 125（docs/design/delivery-125.md §1 (f)）: 未整備の 1 行の行き先を相談窓口の命令から骨格の命令 folio init に替えた。
+ #![cfg(test)]
+ 
++use crate::common::{copy_tree, stderr, stdout};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -86,14 +87,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// 標準出力の行数。
+ fn lines(out: &Output) -> usize {
+     stdout(out).lines().count()
+@@ -125,19 +118,6 @@ fn floor_base() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2/tests/fixtures/floor_base/design-intent")
+ }
+ 
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// 凍結した土台の索引の数（便 94 の凍結 anchor の数え）を持つ 1 行。
+ const BASE_LINE: &str = "folio: 設計文書 194 節点・585 辺。全体像は folio graph --digest";
+ 
+diff --git a/folio2/crates/folio/tests/tz3/ids.rs b/folio2/crates/folio/tests/tz3/ids.rs
+index 03fd892f5112af9ec814b0adbba00ff6949f1659..5724dac49312287687838b307dd8af75ee36c3b0 100644
+--- a/folio2/crates/folio/tests/tz3/ids.rs
++++ b/folio2/crates/folio/tests/tz3/ids.rs
+@@ -5,6 +5,7 @@
+ //! (5) (4) で --freeze-ids → 0・commit して素の床 → 0・二度目は断り／(6) 実の anchor の id 53 本と FR1 の要約値の凍結 literal。
+ #![cfg(test)]
+ 
++use crate::common::{copy_tree, git, repo_root};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -13,51 +14,6 @@ use std::process::{Command, Output};
+ const FR1_SUM: &str = "01391bf27709cf47e6424f5b3f4e363a877c2d1fcc069f6da753b1fab650fa2c";
+ const BASE_IDS: &str = "anchors/ids-v1.8.yaml";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+diff --git a/folio2/crates/folio/tests/tz3/init.rs b/folio2/crates/folio/tests/tz3/init.rs
+index 1a23fb90d22406c0a2b2553ddc35716337e53720..3bd72d128af277714976cd0ea7579dbc1358de8b 100644
+--- a/folio2/crates/folio/tests/tz3/init.rs
++++ b/folio2/crates/folio/tests/tz3/init.rs
+@@ -12,6 +12,7 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{git, repo_root, stderr, stdout};
+ use yaml::Value;
+ 
+ /// 書く file の閉じた一覧（凍結 anchor・置き場からの相対）。
+@@ -47,42 +48,10 @@ const REFUSE: [&str; 11] = [
+ /// 骨格自身の番号。
+ const OWN: [&str; 6] = ["ADR-1", "P-1", "P-1.1", "R-2", "R-8", "R-16"];
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn folio2() -> PathBuf {
+     repo_root().join("design-intent")
+ }
+ 
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ fn folio(args: &[&str], place: &Path) -> Output {
+     Command::new(env!("CARGO_BIN_EXE_tz"))
+         .args(args)
+@@ -92,14 +61,6 @@ fn folio(args: &[&str], place: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ fn both(out: &Output) -> String {
+     format!("{}{}", stdout(out), stderr(out))
+ }
+diff --git a/folio2/crates/folio/tests/tz3/intake.rs b/folio2/crates/folio/tests/tz3/intake.rs
+index f8abf47ccbcdc3d64ee6773754496278b75cc0bf..215c96e5bacfe548cba3246852b78c39830f9f93 100644
+--- a/folio2/crates/folio/tests/tz3/intake.rs
++++ b/folio2/crates/folio/tests/tz3/intake.rs
+@@ -4,65 +4,11 @@
+ //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる（重複 id の歯だけ 2）。
+ #![cfg(test)]
+ 
++use crate::common::{copy_external_schema, copy_tree, git, repo_root, stderr, stdout, violations};
+ use std::fs;
+-use std::path::{Path, PathBuf};
++use std::path::PathBuf;
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
+-fn copy_external_schema(root: &Path) {
+-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
+-    fs::copy(
+-        repo_root().join("contracts/schema.toml"),
+-        root.join("contracts/field-schema/schema.toml"),
+-    )
+-    .unwrap();
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -114,23 +60,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ fn assert_passes(out: &Output) {
+     assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
+     assert!(violations(out).is_empty(), "{:?}", violations(out));
+diff --git a/folio2/crates/folio/tests/tz3/link.rs b/folio2/crates/folio/tests/tz3/link.rs
+index a4986df691b83895a40c843d503fa3fb2a8e49e0..dc7d52324687f3116ef8edbe184c6bf3a72f4e96 100644
+--- a/folio2/crates/folio/tests/tz3/link.rs
++++ b/folio2/crates/folio/tests/tz3/link.rs
+@@ -8,15 +8,12 @@
+ //! 編集時の口のつながりの行（網の中の A-2・N-4）も同じ名札で出す（歯 f203_）。
+ #![cfg(test)]
+ 
++use crate::common::{repo_root, stdout, violations};
+ use std::fs;
+ use std::io::Write;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::process::{Command, Output, Stdio};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn folio_check(dir: &Path) -> Output {
+     Command::new(env!("CARGO_BIN_EXE_tz"))
+         .arg("check")
+@@ -26,19 +23,6 @@ fn folio_check(dir: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+ fn assert_single_violation(name: &str, kind: &str, needle: &str) {
+     let out = folio_check(&repo_root().join("tests/fixtures/link").join(name));
+     assert_eq!(
+diff --git a/folio2/crates/folio/tests/tz3/main.rs b/folio2/crates/folio/tests/tz3/main.rs
+index fa1e945fe63a152de2e974d8ace0478d9d714f78..1132886519fa023d4ab6e878a35dce789749e036 100644
+--- a/folio2/crates/folio/tests/tz3/main.rs
++++ b/folio2/crates/folio/tests/tz3/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/tz3/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod findings;
+ mod floor_cases;
+ mod floor_faces;
+diff --git a/folio2/crates/folio/tests/tz3/mechanism_live.rs b/folio2/crates/folio/tests/tz3/mechanism_live.rs
+index 9433c374f5383a90d084ab344ccdbaab5172dc5e..9866b46c00819fbe69721a58c4fcf6c90331e440 100644
+--- a/folio2/crates/folio/tests/tz3/mechanism_live.rs
++++ b/folio2/crates/folio/tests/tz3/mechanism_live.rs
+@@ -15,11 +15,11 @@
+ //! folio2 にした写しは今の字（f203_ の 1 本）。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree, git, repo_root, show, text};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const HEAD: &str = "# 機構がまだ無い条（床の判定の外・憲法 schema.mechanism_live_rule）: ";
+ const PASS: &str = "folio check: 合格（違反 0・まだ分からない 0）";
+ /// 床の凍結の土台（第 1.0 版）の一覧（delivery-131.md §1 (a) の 4）。
+@@ -33,51 +33,6 @@ const IN_LOOP_OFF: &str = "# 欄 key が in-loop-min の閾値の行が規則の
+ /// 骨格（外の置き場）の同じ知らせ（delivery-202.md §1 (b)・手で書く・folio2 の条の番号の項だけが落ちる）。
+ const IN_LOOP_OFF_ABROAD: &str = "# 欄 key が in-loop-min の閾値の行が規則の表に無い＝編集時の止めの本数の下限は数えていない（床の判定の外）";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -149,14 +104,6 @@ fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn text(bytes: &[u8]) -> String {
+-    String::from_utf8_lossy(bytes).into_owned()
+-}
+-
+-fn show(out: &Output) -> String {
+-    format!("{}\n{}", text(&out.stdout), text(&out.stderr))
+-}
+-
+ fn lines(bytes: &[u8]) -> Vec<String> {
+     text(bytes).lines().map(str::to_string).collect()
+ }
+diff --git a/folio2/crates/folio/tests/tz4/common.rs b/folio2/crates/folio/tests/tz4/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e40434a046f8878e2f44fc9d55629e6e968d2730
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz4/common.rs
+@@ -0,0 +1,206 @@
++//! folio の歯の群 tz4 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++
++pub(crate) const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
++
++pub(crate) const END: &str = "# folio:schema:end";
++
++pub(crate) const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
++
++/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
++/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
++pub(crate) const TARGETS: usize = 9;
++
++/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（`TARGETS` 行）。
++pub(crate) fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
++    let shown = format!("{}{}", stdout(out), stderr(out));
++    assert_eq!(out.status.code(), Some(code), "{shown}");
++    let stream = if code == 0 { stdout(out) } else { stderr(out) };
++    for word in words {
++        assert!(stream.contains(word), "「{word}」が無い: {shown}");
++    }
++    if code != 0 {
++        assert!(stdout(out).is_empty(), "標準出力は空のはず: {shown}");
++        assert!(stderr(out).starts_with("folio schema: "), "{shown}");
++    }
++    assert_eq!(
++        stdout(out).lines().count(),
++        if code == 0 { TARGETS } else { 0 },
++        "{shown}"
++    );
++}
++
++pub(crate) fn assert_passes(out: &Output) {
++    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
++    assert!(violations(out).is_empty(), "{:?}", violations(out));
++    assert!(
++        stdout(out).contains("folio check: 合格（違反 0・"),
++        "{}",
++        stdout(out)
++    );
++}
++
++pub(crate) fn both(out: &Output) -> String {
++    format!(
++        "{}{}",
++        String::from_utf8_lossy(&out.stdout),
++        String::from_utf8_lossy(&out.stderr)
++    )
++}
++
++pub(crate) fn copy_dir(from: &Path, to: &Path) {
++    fs::create_dir_all(to).unwrap();
++    for entry in fs::read_dir(from).unwrap() {
++        let entry = entry.unwrap();
++        let (src, dst) = (entry.path(), to.join(entry.file_name()));
++        if entry.file_type().unwrap().is_dir() {
++            copy_dir(&src, &dst);
++        } else {
++            fs::copy(&src, &dst).unwrap();
++        }
++    }
++}
++
++pub(crate) fn copy_tree(src: &Path, dst: &Path) {
++    fs::create_dir_all(dst).unwrap();
++    for entry in fs::read_dir(src).unwrap() {
++        let entry = entry.unwrap();
++        let to = dst.join(entry.file_name());
++        if entry.file_type().unwrap().is_dir() {
++            copy_tree(&entry.path(), &to);
++        } else {
++            fs::copy(entry.path(), &to).unwrap();
++        }
++    }
++}
++
++pub(crate) fn design_intent() -> PathBuf {
++    repo_root().join("design-intent")
++}
++
++pub(crate) fn fixture() -> PathBuf {
++    repo_root().join("tests/fixtures/face")
++}
++
++pub(crate) fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
++    Command::new(env!("CARGO_BIN_EXE_tz"))
++        .args(head)
++        .arg(dir)
++        .args(tail)
++        .output()
++        .expect("folio を起動できない")
++}
++
++pub(crate) fn folio_check(dir: &Path) -> Output {
++    Command::new(env!("CARGO_BIN_EXE_tz"))
++        .arg("check")
++        .arg("--dir")
++        .arg(dir)
++        .output()
++        .expect("folio を起動できない")
++}
++
++/// git を呼ぶ。環境変数 GIT_* は継承しない。
++pub(crate) fn git(cwd: &Path, args: &[&str]) {
++    let mut cmd = Command::new("git");
++    for (key, _) in std::env::vars_os() {
++        if key.to_string_lossy().starts_with("GIT_") {
++            cmd.env_remove(key);
++        }
++    }
++    let out = cmd
++        .current_dir(cwd)
++        .args([
++            "-c",
++            "user.email=fx@example",
++            "-c",
++            "user.name=fx",
++            "-c",
++            "commit.gpgsign=false",
++        ])
++        .args(args)
++        .output()
++        .expect("git を起動できない");
++    assert!(
++        out.status.success(),
++        "git {args:?}: {}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++}
++
++/// file の字面の変異（当て先は 1 か所だけ）。
++pub(crate) fn mutate_file(path: &Path, from: &str, to: &str) {
++    let before = fs::read_to_string(path).unwrap();
++    assert_eq!(
++        before.matches(from).count(),
++        1,
++        "変異の当て先が 1 か所でない: {from:?}"
++    );
++    fs::write(path, before.replacen(from, to, 1)).unwrap();
++}
++
++/// 生成区間（begin の行の次から end の行の手前まで）。
++pub(crate) fn region(text: &str) -> &str {
++    let b = text.find(&format!("{BEGIN}\n")).expect("begin が無い") + BEGIN.len() + 1;
++    let e = text.find(&format!("\n{END}\n")).expect("end が無い") + 1;
++    &text[b..e]
++}
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
++}
++
++/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
++pub(crate) fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
++    let mut child = Command::new("sha256sum")
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++        .map_err(|e| format!("sha256sum を起動できない: {e}"))?;
++    child
++        .stdin
++        .take()
++        .ok_or_else(|| "sha256sum の標準入力が無い".to_string())?
++        .write_all(bytes)
++        .map_err(|e| format!("sha256sum へ書けない: {e}"))?;
++    let out = child
++        .wait_with_output()
++        .map_err(|e| format!("sha256sum を待てない: {e}"))?;
++    if !out.status.success() {
++        return Err("sha256sum が失敗した".to_string());
++    }
++    let text = String::from_utf8_lossy(&out.stdout).into_owned();
++    let hex = text
++        .split_whitespace()
++        .next()
++        .unwrap_or_default()
++        .to_string();
++    if hex.len() != 64 {
++        return Err(format!("sha256sum の出力が 16 進 64 字でない: {text}"));
++    }
++    Ok(hex)
++}
++
++pub(crate) fn stderr(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stderr).into_owned()
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stdout).into_owned()
++}
++
++/// 違反の行（`[種類] …`）だけを拾う。
++pub(crate) fn violations(out: &Output) -> Vec<String> {
++    stdout(out)
++        .lines()
++        .filter(|l| l.starts_with('['))
++        .map(str::to_string)
++        .collect()
++}
+diff --git a/folio2/crates/folio/tests/tz4/main.rs b/folio2/crates/folio/tests/tz4/main.rs
+index 3b527d5398325a4e901815b920bef3c5761326de..33b8555936756794504021683ef35105cbb304a7 100644
+--- a/folio2/crates/folio/tests/tz4/main.rs
++++ b/folio2/crates/folio/tests/tz4/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/tz4/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod note;
+ mod outside_faces;
+ mod parts;
+diff --git a/folio2/crates/folio/tests/tz4/note.rs b/folio2/crates/folio/tests/tz4/note.rs
+index 909646f4f170b262e784611a3e4da0f4d3b5fd04..e4fc220583ad4b629ae94729b592706f7934ace5 100644
+--- a/folio2/crates/folio/tests/tz4/note.rs
++++ b/folio2/crates/folio/tests/tz4/note.rs
+@@ -15,56 +15,12 @@
+ //! 在って土台に無い id（FR32・ADR-35）を使い、土台の置き場を読むことを確かめる。
+ #![cfg(test)]
+ 
++use crate::common::{assert_passes, copy_tree, git, repo_root, stderr, stdout, violations};
+ use std::fs;
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output, Stdio};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -157,33 +113,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+-fn assert_passes(out: &Output) {
+-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stdout(out).contains("folio check: 合格（違反 0・"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 `kind` で `words` を全部含む。
+ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
+     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
+diff --git a/folio2/crates/folio/tests/tz4/outside_faces.rs b/folio2/crates/folio/tests/tz4/outside_faces.rs
+index 4a53cbe73eb1382466f5288d82d43a18e496f3e3..db5fec2e0d2de171b9f831dc62323db6c1497920 100644
+--- a/folio2/crates/folio/tests/tz4/outside_faces.rs
++++ b/folio2/crates/folio/tests/tz4/outside_faces.rs
+@@ -7,18 +7,11 @@
+ //! 版管理の下の正本と面は書き換えない（写しと配信先は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{both, copy_dir, fixture};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-outside-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+@@ -26,19 +19,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// git を呼ぶ。環境変数 GIT_* は継承しない（tests/tz3/init.rs と同じ形）。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+@@ -76,14 +56,6 @@ fn folio(args: &[&str], place: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn both(out: &Output) -> String {
+-    format!(
+-        "{}{}",
+-        String::from_utf8_lossy(&out.stdout),
+-        String::from_utf8_lossy(&out.stderr)
+-    )
+-}
+-
+ /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
+ fn esc(s: &str) -> String {
+     s.replace('&', "&amp;")
+diff --git a/folio2/crates/folio/tests/tz4/parts.rs b/folio2/crates/folio/tests/tz4/parts.rs
+index 8521f8aec4b8773c59280e62f188b30bac3fc754..5f731f70f16835ca173f61215d55b874007afe2a 100644
+--- a/folio2/crates/folio/tests/tz4/parts.rs
++++ b/folio2/crates/folio/tests/tz4/parts.rs
+@@ -6,18 +6,11 @@
+ //! （行 k-tz-tests・この file は境界の package の歯として tz の binary を撃つ）。
+ #![cfg(test)]
+ 
++use crate::common::{design_intent, repo_root, stderr, stdout};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+ fn floor(name: &str) -> PathBuf {
+     repo_root().join("tests/fixtures/floor").join(name)
+ }
+@@ -43,14 +36,6 @@ fn code(out: &Output) -> i32 {
+     })
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ fn temp_dir(case: &str) -> PathBuf {
+     let td = std::env::temp_dir().join(format!("folio-parts-{case}-{}", std::process::id()));
+     let _ = fs::remove_dir_all(&td);
+diff --git a/folio2/crates/folio/tests/tz4/place_name.rs b/folio2/crates/folio/tests/tz4/place_name.rs
+index 9d1c68b849027d77b63e446013db0547ce5fdafa..e98b05736a91c99c4d5dfd723df9d9ebf192d229 100644
+--- a/folio2/crates/folio/tests/tz4/place_name.rs
++++ b/folio2/crates/folio/tests/tz4/place_name.rs
+@@ -16,6 +16,7 @@
+ //! 版管理の下の file は書き換えない（`--dir` の写しと `--out` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, both, copy_tree, git, repo_root};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -26,52 +27,6 @@ const STYLES: [&str; 3] = ["folio.css", "folio-ui.js", "parts.json"];
+ const FACES: [&str; 4] = ["index.html", "constitution.html", "srs.html", "adr-1.html"];
+ /// 外の置き場の面と支度表に 1 つも在ってはならない字。
+ const FORBIDDEN: [&str; 3] = ["folio2", "f2-", ">f2<"];
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+ 
+ fn folio(args: &[&str], dir: &Path) -> Output {
+     Command::new(env!("CARGO_BIN_EXE_tz"))
+@@ -82,14 +37,6 @@ fn folio(args: &[&str], dir: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn both(out: &Output) -> String {
+-    format!(
+-        "{}{}",
+-        String::from_utf8_lossy(&out.stdout),
+-        String::from_utf8_lossy(&out.stderr)
+-    )
+-}
+-
+ fn edit(path: &Path, from: &str, to: &str) {
+     let text = fs::read_to_string(path).unwrap();
+     assert_eq!(text.matches(from).count(), 1, "{}: 「{from}」が 1 か所でない", path.display());
+diff --git a/folio2/crates/folio/tests/tz4/plan.rs b/folio2/crates/folio/tests/tz4/plan.rs
+index 84b5ecf5da25edc691c0e0ec2e6b3538fc30ed7c..c3ccaf2bed573e1ac4ecf40147203f52a0d58a4f 100644
+--- a/folio2/crates/folio/tests/tz4/plan.rs
++++ b/folio2/crates/folio/tests/tz4/plan.rs
+@@ -7,12 +7,12 @@
+ //! 計画だけの行を置き場の合計で数えることを見る。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::io::Write;
+ use std::process::{Command, Output, Stdio};
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const BEGIN: &str = "# folio:rows:begin — 生成区間・手で直さない・正本は置き場の契約表（folio derive --write が書く）";
+ const END: &str = "# folio:rows:end";
+ const RULING: &str = "f2-648 notes 2026-09-28 10:29 JST";
+@@ -64,19 +64,6 @@ sections:
+     )
+ }
+ 
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ fn repo() -> PathBuf {
+     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+ }
+diff --git a/folio2/crates/folio/tests/tz4/polarity.rs b/folio2/crates/folio/tests/tz4/polarity.rs
+index 6716e2c808ad722f91b0cc9efaee7ed13f16e94d..32b8ee944e072a2fbbb65917d332691899714379 100644
+--- a/folio2/crates/folio/tests/tz4/polarity.rs
++++ b/folio2/crates/folio/tests/tz4/polarity.rs
+@@ -11,11 +11,11 @@
+ //! 土台（folio2 の置き場の名）では今の字のまま（f202_ の 1 本）。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree, repo_root};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ /// 土台の手で数えた本数: 憲法の条の機構の種別が reject か build-check の条 24・規則の表の閾値の行 20（便 207 で数の上限の 3 行を足した）・
+ /// 床の定数の仕掛け 5（post）。
+ const ARTICLES: usize = 24;
+@@ -40,23 +40,6 @@ const SKELETON_RELATIONS: &str = "relations: {rules: [R-2, R-8, R-16]}";
+ /// 骨格の置き場で下限を割った違反の字（手で書く・骨格の段が in-loop の仕掛けは 0 本）。
+ const SHORT_ABROAD: &str = "[polarity] 極性一覧の編集時（in-loop）の仕掛けが 0 本で、行 R-9 の下限 1 本以上を割る";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// git を呼ぶ。環境変数 GIT_* は継承しない。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+diff --git a/folio2/crates/folio/tests/tz4/proposed.rs b/folio2/crates/folio/tests/tz4/proposed.rs
+index dc1c5b00f9d4ab096f425dff064a609cde376359..2a59ef153f4a36673cfeb51c5c7bd9db84d72d64 100644
+--- a/folio2/crates/folio/tests/tz4/proposed.rs
++++ b/folio2/crates/folio/tests/tz4/proposed.rs
+@@ -4,13 +4,13 @@
+ //! 同じ字で在ること（条 P-15.2・編集時の判定 ⊆ 事後の判定）を、同じ写しで撃ち比べて見る。期待の行は歯の側の手書き。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree};
+ use std::collections::BTreeMap;
+ use std::fs;
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Stdio};
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const BOGUS: &str = "[未知の欄] rules.yaml: 行 R-2 の未知の欄「bogus」";
+ const DANGLING: &str = "[参照 id] srs.yaml: requirements[0].basis[1]: id P-99 が実在しない";
+ const LINK_HEAD: &str = "# つながり（編集は止めない・事後の床が数える）: ";
+@@ -24,19 +24,6 @@ const RAIL7: &str = "  - {n: 7, who: folio, what: 組み立てて、見せる, r
+ const RAIL8: &str = "  - {n: 7, who: folio, what: 組み立てて、見せる, reqs: [FR7]}\n  - {n: 8, who: folio, what: 余分の段, reqs: [FR7]}\n";
+ const FACE: &str = "[面] srs.yaml.rail: 段が 8 で上限 7（部品目録の pipeline-rail の max_nodes）を超える";
+ 
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// git を呼ぶ。環境変数 GIT_* は継承しない。
+ fn git(cwd: &Path, args: &[&str]) {
+     let mut cmd = Command::new("git");
+diff --git a/folio2/crates/folio/tests/tz4/prose.rs b/folio2/crates/folio/tests/tz4/prose.rs
+index b7d5a0759ec0e77676fd9268845fe2d972885191..637cd38806a202511dd970e8889f2ccc19e5aff3 100644
+--- a/folio2/crates/folio/tests/tz4/prose.rs
++++ b/folio2/crates/folio/tests/tz4/prose.rs
+@@ -6,6 +6,7 @@
+ //! 式の枝は `clean.yaml` の写しの散文 1 行（「枝の当て先」の文）に変異を 1 つ当てて数える。
+ #![cfg(test)]
+ 
++use crate::common::{assert_passes, copy_tree, git, repo_root, stderr, stdout, violations};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -13,51 +14,6 @@ use std::process::{Command, Output};
+ /// `clean.yaml` の散文の中の、式の枝が変異を当てる行（前後の行は変えない）。
+ const ANCHOR: &str = "      枝の当て先（この文は記述の文）。\n";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。
+ struct Work {
+     root: PathBuf,
+@@ -143,33 +99,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
+-
+-fn assert_passes(out: &Output) {
+-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
+-    assert!(violations(out).is_empty(), "{:?}", violations(out));
+-    assert!(
+-        stdout(out).contains("folio check: 合格（違反 0・"),
+-        "{}",
+-        stdout(out)
+-    );
+-}
+-
+ /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 prose-gate で `words` を全部含む。
+ fn assert_single_gate_violation(out: &Output, words: &[&str]) {
+     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
+diff --git a/folio2/crates/folio/tests/tz4/refs.rs b/folio2/crates/folio/tests/tz4/refs.rs
+index 5e76d962c603418f0835e0e8b519c0904032e0ff..492ecd5f4e0eaf59fe59dc0bab4dde8db6615bc3 100644
+--- a/folio2/crates/folio/tests/tz4/refs.rs
++++ b/folio2/crates/folio/tests/tz4/refs.rs
+@@ -3,34 +3,7 @@
+ //! 各組の違反はちょうど 1 件で、その種類と file まで見る（別の理由で落ちた組を緑にしない）。
+ #![cfg(test)]
+ 
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output};
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn folio_check(dir: &Path) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("check")
+-        .arg("--dir")
+-        .arg(dir)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-/// 違反の行（`[種類] …`）だけを拾う。
+-fn violations(out: &Output) -> Vec<String> {
+-    stdout(out)
+-        .lines()
+-        .filter(|l| l.starts_with('['))
+-        .map(str::to_string)
+-        .collect()
+-}
++use crate::common::{folio_check, repo_root, stdout, violations};
+ 
+ fn assert_single_violation(name: &str, kind: &str, file: &str, needle: &str) {
+     let out = folio_check(&repo_root().join("tests/fixtures/refs").join(name));
+diff --git a/folio2/crates/folio/tests/tz4/resolve.rs b/folio2/crates/folio/tests/tz4/resolve.rs
+index aca7e67ea77c534de3f78752d42202214f48359c..ce0060e2bc601a9e53d727e2f2a445986ce921da 100644
+--- a/folio2/crates/folio/tests/tz4/resolve.rs
++++ b/folio2/crates/folio/tests/tz4/resolve.rs
+@@ -17,6 +17,7 @@
+ //! 10. repo の根の vessel 宣言は key contract-tables で contracts/ を、key constitution で憲法の 2 file を名乗る（各 1 行・2 file は在る）。
+ #![cfg(test)]
+ 
++use crate::common::{copy_tree, repo_root};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+@@ -30,23 +31,6 @@ const UNREADABLE: &str = "器の導出 file が読めない";
+ const NO_GIT: &str = "版管理（git）が無いか読めない";
+ const NESTED: &str = "design-intent 自体が版管理の根";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// git を呼ぶ。環境変数 GIT_* は継承しない。
+ fn git(cwd: &Path, args: &[&str]) -> Output {
+     let mut cmd = Command::new("git");
+diff --git a/folio2/crates/folio/tests/tz4/ruling.rs b/folio2/crates/folio/tests/tz4/ruling.rs
+index d7a1343e6a01a10eed03c222042cf3fa8b49b904..b4fb1fa0d9adc8fd1415e21059086115a9dff4da 100644
+--- a/folio2/crates/folio/tests/tz4/ruling.rs
++++ b/folio2/crates/folio/tests/tz4/ruling.rs
+@@ -7,27 +7,14 @@
+ //! 種別（human-review を置けない）を見る。期待の字は歯の中の手書き。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::Command;
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const NO_ID: &str = "に台帳 id が無い（決定の欄・形は adr/schema.yaml の ruling_pattern）";
+ const MARK: &str = "が 未記入（骨格の印・裁定の前＝条 P-17.3）";
+ 
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ /// 土台の写しの一時 dir（歯の終わりに消す）。
+ struct Work(PathBuf);
+ 
+diff --git a/folio2/crates/folio/tests/tz4/schema.rs b/folio2/crates/folio/tests/tz4/schema.rs
+index 30ab1db53bf0416865a381d4203fade31fc8b805..75110a37d0f058e0555aec0d88abd438d14d1902 100644
+--- a/folio2/crates/folio/tests/tz4/schema.rs
++++ b/folio2/crates/folio/tests/tz4/schema.rs
+@@ -32,10 +32,13 @@
+ //!
+ //! 便 89（docs/design/delivery-89.md §1）: 残る 6 本の正本（天井の正本・規則の表・入口の正本・要件書・語彙・相談窓口）の側の歯は tests/tz4/schema_docs.rs へ移した（字は 1 字も変えていない）。
+ #![cfg(test)]
++use crate::common::{
++    BEGIN, END, TARGETS, assert_outcome, copy_tree, folio, git, mutate_file, region, repo_root,
++    sha256_hex, stderr, stdout,
++};
+ use std::fs;
+-use std::io::Write;
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output, Stdio};
++use std::path::PathBuf;
++use std::process::Output;
+ 
+ /// (d) 凍結 anchor: planner が独立の Python で組んだ生成区間の実測（便 58 (b) で承認者の値域に
+ /// orchestrator 席 を足し、便 69 (b) で注 prose_note の母集団に 語彙 を足し、便 92 (d) で帰結の欄 produced と
+@@ -58,90 +61,6 @@ const NOTE_REGION_LINES: usize = 166;
+ const NOTE_REGION_BYTES: usize = 21439;
+ const NOTE_REGION_SHA256: &str = "ef1da7d14051aef55680d15a60bd9f4a081ac0867774791762e873edb5cc3086";
+ 
+-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
+-/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
+-const TARGETS: usize = 9;
+-
+-const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
+-const END: &str = "# folio:schema:end";
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
+-fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+-    let mut child = Command::new("sha256sum")
+-        .stdin(Stdio::piped())
+-        .stdout(Stdio::piped())
+-        .stderr(Stdio::null())
+-        .spawn()
+-        .map_err(|e| format!("sha256sum を起動できない: {e}"))?;
+-    child
+-        .stdin
+-        .take()
+-        .ok_or_else(|| "sha256sum の標準入力が無い".to_string())?
+-        .write_all(bytes)
+-        .map_err(|e| format!("sha256sum へ書けない: {e}"))?;
+-    let out = child
+-        .wait_with_output()
+-        .map_err(|e| format!("sha256sum を待てない: {e}"))?;
+-    if !out.status.success() {
+-        return Err("sha256sum が失敗した".to_string());
+-    }
+-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+-    let hex = text
+-        .split_whitespace()
+-        .next()
+-        .unwrap_or_default()
+-        .to_string();
+-    if hex.len() != 64 {
+-        return Err(format!("sha256sum の出力が 16 進 64 字でない: {text}"));
+-    }
+-    Ok(hex)
+-}
+-
+ /// design-intent の写しの一時 dir（歯の終わりに消す）。git init + 1 commit 済み（歯 7 の folio check のため）。
+ struct Work {
+     root: PathBuf,
+@@ -212,60 +131,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-/// file の字面の変異（当て先は 1 か所だけ）。
+-fn mutate_file(path: &Path, from: &str, to: &str) {
+-    let before = fs::read_to_string(path).unwrap();
+-    assert_eq!(
+-        before.matches(from).count(),
+-        1,
+-        "変異の当て先が 1 か所でない: {from:?}"
+-    );
+-    fs::write(path, before.replacen(from, to, 1)).unwrap();
+-}
+-
+-fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .args(head)
+-        .arg(dir)
+-        .args(tail)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（`TARGETS` 行）。
+-fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
+-    let shown = format!("{}{}", stdout(out), stderr(out));
+-    assert_eq!(out.status.code(), Some(code), "{shown}");
+-    let stream = if code == 0 { stdout(out) } else { stderr(out) };
+-    for word in words {
+-        assert!(stream.contains(word), "「{word}」が無い: {shown}");
+-    }
+-    if code != 0 {
+-        assert!(stdout(out).is_empty(), "標準出力は空のはず: {shown}");
+-        assert!(stderr(out).starts_with("folio schema: "), "{shown}");
+-    }
+-    assert_eq!(
+-        stdout(out).lines().count(),
+-        if code == 0 { TARGETS } else { 0 },
+-        "{shown}"
+-    );
+-}
+-
+-/// 生成区間（begin の行の次から end の行の手前まで）。
+-fn region(text: &str) -> &str {
+-    let b = text.find(&format!("{BEGIN}\n")).expect("begin が無い") + BEGIN.len() + 1;
+-    let e = text.find(&format!("\n{END}\n")).expect("end が無い") + 1;
+-    &text[b..e]
+-}
+-
+ // ── 1. 実の正本 ──
+ 
+ #[test]
+diff --git a/folio2/crates/folio/tests/tz4/schema_docs.rs b/folio2/crates/folio/tests/tz4/schema_docs.rs
+index 22c5090d5c322989717495ad9883821d8cce66fb..876ac6dcb1741b96fcdd0f6635de9542353fd64b 100644
+--- a/folio2/crates/folio/tests/tz4/schema_docs.rs
++++ b/folio2/crates/folio/tests/tz4/schema_docs.rs
+@@ -69,10 +69,13 @@
+ #![cfg(test)]
+ 
+ use std::fs;
+-use std::io::Write;
+-use std::path::{Path, PathBuf};
+-use std::process::{Command, Output, Stdio};
++use std::path::PathBuf;
++use std::process::Output;
+ 
++use crate::common::{
++    BEGIN, END, TARGETS, assert_outcome, copy_tree, folio, git, mutate_file, region, repo_root,
++    sha256_hex, stderr, stdout,
++};
+ use folio::yaml_rust2::{Yaml, YamlLoader};
+ 
+ /// 便 48 (c) 凍結 anchor: ceiling.yaml の生成区間（設計判断の席が独立の実装で組んだ・tests/fixtures/schema/ceiling-region.txt と同じ byte）。
+@@ -138,90 +141,6 @@ const F77_DRIFTS: [(&str, &str); 3] = [
+     ),
+ ];
+ 
+-/// 命令が見る file の数（合格の標準出力の行数・判断の記録 → 設計ノート → 天井の正本 → 規則の表 → 入口の正本
+-/// → 要件書 → 語彙 → 相談窓口 → 索引の欄の決まり）。
+-const TARGETS: usize = 9;
+-
+-const BEGIN: &str = "# folio:schema:begin — 生成区間・手で直さない・正本は実装の定数（folio schema --write が書く）";
+-const END: &str = "# folio:schema:end";
+-
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+-/// 要約値（sha256）は命令 `sha256sum` を子の処理で撃って測る（歯は crate の中を読めない・tests/tz1/bundle.rs と同じ形）。
+-fn sha256_hex(bytes: &[u8]) -> Result<String, String> {
+-    let mut child = Command::new("sha256sum")
+-        .stdin(Stdio::piped())
+-        .stdout(Stdio::piped())
+-        .stderr(Stdio::null())
+-        .spawn()
+-        .map_err(|e| format!("sha256sum を起動できない: {e}"))?;
+-    child
+-        .stdin
+-        .take()
+-        .ok_or_else(|| "sha256sum の標準入力が無い".to_string())?
+-        .write_all(bytes)
+-        .map_err(|e| format!("sha256sum へ書けない: {e}"))?;
+-    let out = child
+-        .wait_with_output()
+-        .map_err(|e| format!("sha256sum を待てない: {e}"))?;
+-    if !out.status.success() {
+-        return Err("sha256sum が失敗した".to_string());
+-    }
+-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+-    let hex = text
+-        .split_whitespace()
+-        .next()
+-        .unwrap_or_default()
+-        .to_string();
+-    if hex.len() != 64 {
+-        return Err(format!("sha256sum の出力が 16 進 64 字でない: {text}"));
+-    }
+-    Ok(hex)
+-}
+-
+ /// design-intent の写しの一時 dir（歯の終わりに消す）。git init + 1 commit 済み（歯 7 の folio check のため）。
+ struct Work {
+     root: PathBuf,
+@@ -317,60 +236,6 @@ impl Drop for Work {
+     }
+ }
+ 
+-/// file の字面の変異（当て先は 1 か所だけ）。
+-fn mutate_file(path: &Path, from: &str, to: &str) {
+-    let before = fs::read_to_string(path).unwrap();
+-    assert_eq!(
+-        before.matches(from).count(),
+-        1,
+-        "変異の当て先が 1 か所でない: {from:?}"
+-    );
+-    fs::write(path, before.replacen(from, to, 1)).unwrap();
+-}
+-
+-fn folio(head: &[&str], dir: &Path, tail: &[&str]) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .args(head)
+-        .arg(dir)
+-        .args(tail)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+-/// 終了コードと、標準出力（0 のとき）か標準エラー（それ以外）に含む語。合格の標準出力は file ごとの 1 行（`TARGETS` 行）。
+-fn assert_outcome(out: &Output, code: i32, words: &[&str]) {
+-    let shown = format!("{}{}", stdout(out), stderr(out));
+-    assert_eq!(out.status.code(), Some(code), "{shown}");
+-    let stream = if code == 0 { stdout(out) } else { stderr(out) };
+-    for word in words {
+-        assert!(stream.contains(word), "「{word}」が無い: {shown}");
+-    }
+-    if code != 0 {
+-        assert!(stdout(out).is_empty(), "標準出力は空のはず: {shown}");
+-        assert!(stderr(out).starts_with("folio schema: "), "{shown}");
+-    }
+-    assert_eq!(
+-        stdout(out).lines().count(),
+-        if code == 0 { TARGETS } else { 0 },
+-        "{shown}"
+-    );
+-}
+-
+-/// 生成区間（begin の行の次から end の行の手前まで）。
+-fn region(text: &str) -> &str {
+-    let b = text.find(&format!("{BEGIN}\n")).expect("begin が無い") + BEGIN.len() + 1;
+-    let e = text.find(&format!("\n{END}\n")).expect("end が無い") + 1;
+-    &text[b..e]
+-}
+-
+ // ── 便 48: 天井の正本の側 ──
+ 
+ /// 天井の正本の側の生成区間の変異（1 byte・束の要約値の規則の名）。
+diff --git a/folio2/crates/folio/tests/tz4/seal.rs b/folio2/crates/folio/tests/tz4/seal.rs
+index 807bc750c354cf50b387dfc046bdac3a9c3091d0..1a3e50051764276c6e9a539349020fd707294685 100644
+--- a/folio2/crates/folio/tests/tz4/seal.rs
++++ b/folio2/crates/folio/tests/tz4/seal.rs
+@@ -5,12 +5,12 @@
+ //! sha256）は歯が字で持つ。(7) だけは folio2 自身の design-intent/ の写し。
+ #![cfg(test)]
+ 
++use crate::common::{FLOOR_BASE, copy_tree, git, repo_root};
+ use std::fs;
+ use std::io::Write;
+-use std::path::{Path, PathBuf};
++use std::path::PathBuf;
+ use std::process::{Command, Output, Stdio};
+ 
+-const FLOOR_BASE: &str = "tests/fixtures/floor_base/design-intent";
+ const SEALS: &str = "anchors/adr-seals.yaml";
+ /// 手書きの ADR-11（tests/fixtures/adr/seal-ADR-11.yaml）の要約値。
+ const ADR11_SUM: &str = "8f4958791a5a475a20a96640c7d30e5f111dc00f8fe35fbaf6e060ecf2eb802e";
+@@ -20,51 +20,6 @@ const ADR11_SUPERSEDES_SUM: &str = "68b74190d773205be9aebb05db9417d30ea23c1c27c6
+ /// ensure_ascii なし) と同じ形）。`{SUPERSEDES}` の場所に supersedes の欄が入る（retreat と title の間）。
+ const ADR11_JSON: &str = "{\"approval\":{\"date\":\"2026-09-27\",\"ruling\":\"f2-648.254 notes 2026-09-27\",\"surface\":\"R-8\",\"verbatim\":\"承認する\",\"who\":\"持ち主\"},\"basis\":[\"A-2\"],\"context\":\"封の一覧に行の無い発効した判断の記録を足す場合を作る。\",\"date\":\"2026-09-27\",\"decision\":\"封の一覧の末尾に行を足す。\",\"id\":\"ADR-11\",\"options\":[{\"id\":\"a\",\"name\":\"足す\",\"reason\":\"在る行を変えずに済む。\",\"text\":\"封の一覧の末尾に行を足す。\",\"verdict\":\"adopted\"},{\"id\":\"b\",\"name\":\"足さない\",\"reason\":\"発効した記録が封の外に残る。\",\"text\":\"封の一覧をそのままにする。\",\"verdict\":\"rejected\"}],\"plain\":\"封の一覧に新しい行を足します。\",\"retreat\":{\"condition\":\"持ち主が取り消したら元へ戻す。\",\"kind\":\"ruling\"},{SUPERSEDES}\"title\":\"封の歯のための新しい判断\"}";
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+-/// git を呼ぶ。環境変数 GIT_* は継承しない。
+-fn git(cwd: &Path, args: &[&str]) {
+-    let mut cmd = Command::new("git");
+-    for (key, _) in std::env::vars_os() {
+-        if key.to_string_lossy().starts_with("GIT_") {
+-            cmd.env_remove(key);
+-        }
+-    }
+-    let out = cmd
+-        .current_dir(cwd)
+-        .args([
+-            "-c",
+-            "user.email=fx@example",
+-            "-c",
+-            "user.name=fx",
+-            "-c",
+-            "commit.gpgsign=false",
+-        ])
+-        .args(args)
+-        .output()
+-        .expect("git を起動できない");
+-    assert!(
+-        out.status.success(),
+-        "git {args:?}: {}",
+-        String::from_utf8_lossy(&out.stderr)
+-    );
+-}
+-
+ /// 写しの一時 dir（歯の終わりに消す）。器（scribe2）の導出 file は写しの根の contracts/ に置く。
+ struct Work {
+     root: PathBuf,
+diff --git a/folio2/crates/folio/tests/tz4/sheet.rs b/folio2/crates/folio/tests/tz4/sheet.rs
+index ce5815cef744bbd17f9fc1744374d9ec4566607a..638426e58fa8bbc83c959b81f45a6f4a79ab3fb6 100644
+--- a/folio2/crates/folio/tests/tz4/sheet.rs
++++ b/folio2/crates/folio/tests/tz4/sheet.rs
+@@ -16,12 +16,9 @@ use std::ops::Deref;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
++use crate::common::{copy_tree, repo_root, stderr};
+ use folio::yaml_rust2::YamlLoader;
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn fixture(name: &str) -> PathBuf {
+     repo_root().join("tests/fixtures/intake").join(name)
+ }
+@@ -57,19 +54,6 @@ fn work(case: &str) -> Work {
+     Work { root: td }
+ }
+ 
+-fn copy_tree(src: &Path, dst: &Path) {
+-    fs::create_dir_all(dst).unwrap();
+-    for entry in fs::read_dir(src).unwrap() {
+-        let entry = entry.unwrap();
+-        let to = dst.join(entry.file_name());
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_tree(&entry.path(), &to);
+-        } else {
+-            fs::copy(entry.path(), &to).unwrap();
+-        }
+-    }
+-}
+-
+ fn folio_intake(dir: &Path, answers: Option<&Path>, mode: &str) -> Output {
+     let mut cmd = Command::new(env!("CARGO_BIN_EXE_tz"));
+     cmd.arg("intake").arg("--dir").arg(dir);
+@@ -94,10 +78,6 @@ fn lines(out: &Output) -> Vec<String> {
+         .collect()
+ }
+ 
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// 支度表を書き、`code` で終わったことを確かめる。
+ fn write_sheet(dir: &Path, answers: Option<&Path>) -> Output {
+     let out = folio_intake(dir, answers, "--write");
+diff --git a/folio2/crates/folio/tests/tz4/site.rs b/folio2/crates/folio/tests/tz4/site.rs
+index fe96ce4c1b79c94ed5e5eb54fb242bd02669c49c..098f3ae06d6c9785ed5343db93d6f5380157799c 100644
+--- a/folio2/crates/folio/tests/tz4/site.rs
++++ b/folio2/crates/folio/tests/tz4/site.rs
+@@ -10,22 +10,11 @@
+ //! ＝ `--write` は書いて 2。版管理の `design-intent/preview/` は書き換えない（`--out` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{copy_dir, design_intent, fixture, folio_check, repo_root, stderr, stdout};
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+-fn fixture() -> PathBuf {
+-    repo_root().join("tests/fixtures/face")
+-}
+-
+-fn design_intent() -> PathBuf {
+-    repo_root().join("design-intent")
+-}
+-
+ fn vendor() -> PathBuf {
+     repo_root().join("vendor/archify")
+ }
+@@ -37,19 +26,6 @@ fn temp_dir(case: &str) -> PathBuf {
+     td
+ }
+ 
+-fn copy_dir(from: &Path, to: &Path) {
+-    fs::create_dir_all(to).unwrap();
+-    for entry in fs::read_dir(from).unwrap() {
+-        let entry = entry.unwrap();
+-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+-        if entry.file_type().unwrap().is_dir() {
+-            copy_dir(&src, &dst);
+-        } else {
+-            fs::copy(&src, &dst).unwrap();
+-        }
+-    }
+-}
+-
+ /// 凍結 fixture の正本 6 file と adr/・design-note/ を一時 dir の src/ へ写し、src/preview/ に最小の様式 2 本を、
+ /// src/ の親 dir に器の導出 file と図の道具（vendor/archify・便 31 の設計ノートの面が図ごとに撃つ）を置く。
+ /// 戻り値 = (一時 dir, 正本の写し)。支度表 intake-sheet.yaml と期待の面 3 本は写さない。
+@@ -117,14 +93,6 @@ fn code(out: &Output, what: &str) -> i32 {
+     })
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+-fn stderr(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stderr).into_owned()
+-}
+-
+ /// 配信先へ出る 7 本（順もこのとおり・凍結 fixture の写しは判断の記録 1 本と設計ノート 1 本）。
+ const SITE_FILES: [&str; 7] = [
+     "index.html",
+@@ -637,15 +605,6 @@ fn add_prose_violation(td: &Path, dir: &Path) {
+     git(td, &["commit", "-q", "-m", "violation"]);
+ }
+ 
+-fn folio_check(dir: &Path) -> Output {
+-    Command::new(env!("CARGO_BIN_EXE_tz"))
+-        .arg("check")
+-        .arg("--dir")
+-        .arg(dir)
+-        .output()
+-        .expect("folio を起動できない")
+-}
+-
+ /// dir の直下の全 file の名と中身（名の順）。dir が無ければ空。
+ fn site_tree(dir: &Path) -> Vec<(String, Vec<u8>)> {
+     let Ok(entries) = fs::read_dir(dir) else {
+diff --git a/folio2/crates/folio/tests/tz5/common.rs b/folio2/crates/folio/tests/tz5/common.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..df6626f6829a4769d7d6d1b621dc95e1f4102d6b
+--- /dev/null
++++ b/folio2/crates/folio/tests/tz5/common.rs
+@@ -0,0 +1,14 @@
++//! folio の歯の群 tz5 の共通の手（群の 2 つ以上の module が字で同じ写しを持っていた helper を 1 つだけ置く・畳みの道具 fold2.py が寄せる・判断の記録 ADR-63 の決定 (8) の (c)）。
++//! 写しを持っていた module は use crate::common::… で呼ぶ。字が 1 文字でも違う物はここへ寄せない。
++#![cfg(test)]
++
++use std::path::{Path, PathBuf};
++use std::process::Output;
++
++pub(crate) fn repo_root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
++}
++
++pub(crate) fn stdout(out: &Output) -> String {
++    String::from_utf8_lossy(&out.stdout).into_owned()
++}
+diff --git a/folio2/crates/folio/tests/tz5/main.rs b/folio2/crates/folio/tests/tz5/main.rs
+index 61a7acd02ff6c3a19cf0b9a102e38b838fb23c16..8ddf19592a5197d5a0c7e56f40b95be89ecba232 100644
+--- a/folio2/crates/folio/tests/tz5/main.rs
++++ b/folio2/crates/folio/tests/tz5/main.rs
+@@ -2,6 +2,7 @@
+ //! この file は mod の行だけを持つ（tests/tz5/ の下の .rs は全部ここで名指す・xtask の歯 kfold_ が照らす）。
+ #![cfg(test)]
+ 
++mod common;
+ mod stamp;
+ mod unknown_fields;
+ mod vocab;
+diff --git a/folio2/crates/folio/tests/tz5/stamp.rs b/folio2/crates/folio/tests/tz5/stamp.rs
+index 869f6b3f890b90783269008e0ff4271c30c6d705..b53494331c28932d2b0807985ae21c1e0c7f6f25 100644
+--- a/folio2/crates/folio/tests/tz5/stamp.rs
++++ b/folio2/crates/folio/tests/tz5/stamp.rs
+@@ -13,6 +13,7 @@
+ //! 版管理の下の file は書き換えない（`--dir` と `--out` は必ず一時 dir の中）。
+ #![cfg(test)]
+ 
++use crate::common::{repo_root, stdout};
+ use std::collections::BTreeMap;
+ use std::fs;
+ use std::io::Write;
+@@ -30,10 +31,6 @@ const SAME_READS: &str = concat!(
+     "      - {doc: design-note, fields: [sections]}\n",
+ );
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn bundle_fixture() -> PathBuf {
+     repo_root().join("tests/fixtures/ceiling/bundle")
+ }
+@@ -90,10 +87,6 @@ fn code(out: &Output, what: &str) -> i32 {
+     })
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+ fn stderr(out: &Output) -> String {
+     String::from_utf8_lossy(&out.stderr).into_owned()
+ }
+diff --git a/folio2/crates/folio/tests/tz5/unknown_fields.rs b/folio2/crates/folio/tests/tz5/unknown_fields.rs
+index 077550b3653ee54b2fa09e630c1aea3401e66264..1cee084bc8817a4c54a9b4188d1bd65014424b5c 100644
+--- a/folio2/crates/folio/tests/tz5/unknown_fields.rs
++++ b/folio2/crates/folio/tests/tz5/unknown_fields.rs
+@@ -7,14 +7,11 @@
+ //! `folio check` を撃つ。歯は標準出力の違反の行（`[` で始まる行）を全部数える。変異で足す欄の値は id の形を含まない字にする。
+ #![cfg(test)]
+ 
++use crate::common::repo_root;
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn copy_tree(src: &Path, dst: &Path) {
+     fs::create_dir_all(dst).unwrap();
+     for entry in fs::read_dir(src).unwrap() {
+diff --git a/folio2/crates/folio/tests/tz5/vocab.rs b/folio2/crates/folio/tests/tz5/vocab.rs
+index 720ee327df10bff5247593f6d120696fa5c50707..0fe6b437a94cf4dc8facde83ad37625e01d5dc97 100644
+--- a/folio2/crates/folio/tests/tz5/vocab.rs
++++ b/folio2/crates/folio/tests/tz5/vocab.rs
+@@ -5,14 +5,11 @@
+ //! 名の読めない置き場と、名が folio2 の置き場で行 R-9〜R-11 を持たない置き場は外でないので、名札は行 id（便 203・歯 f203_）。
+ #![cfg(test)]
+ 
++use crate::common::{repo_root, stdout};
+ use std::fs;
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ use std::process::{Command, Output};
+ 
+-fn repo_root() -> PathBuf {
+-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
+-}
+-
+ fn folio_check(dir: &Path) -> Output {
+     Command::new(env!("CARGO_BIN_EXE_tz"))
+         .arg("check")
+@@ -22,10 +19,6 @@ fn folio_check(dir: &Path) -> Output {
+         .expect("folio を起動できない")
+ }
+ 
+-fn stdout(out: &Output) -> String {
+-    String::from_utf8_lossy(&out.stdout).into_owned()
+-}
+-
+ /// 違反の行（`[種類] …`）だけを拾う。
+ fn violations(out: &Output) -> Vec<String> {
+     stdout(out)
