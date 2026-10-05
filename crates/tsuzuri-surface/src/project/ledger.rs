@@ -1,14 +1,14 @@
-//! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数・便 g-ledger）:
+//! block「台帳」（見本の `#ledger` と index.html の ledgerBlock・ledger.js の描き方の関数）:
 //! 見出しの横に判定の 1 語を出し、中身は台帳 open の一覧（module ledgerlist の epic ごとの組）だけを描く。
 //! 前の指標の段（上段の 4 数・主な指標の行・burndown・memo の段）は外し、指標は一覧の見出しの小さな数と図に縮めた
-//! （判断の記録 ADR-27 の決定 (8)・行 g-ledger-trim）。未反映の段（数と一覧）は帯の抜けの検査の窓の下へ移した（要件 FR13）。
+//! （判断の記録 ADR-27 の決定 (8)）。未反映の段（数と一覧）は帯の抜けの検査の窓の下へ移した（要件 FR13）。
 //! 指標は口 /api/metrics（本文は契約の型の Reading で包んだ LedgerStats）から読む。数え方と判定は中核の crate が済ませていて、
 //! ここは写すだけ（数え直しと判定の分岐を持たない）。一覧の見出しの図（burndown の座標と svg と card）と純減の字も
 //! この file の関数で、sparkline と判定の表は account board も引く。
 //! 一覧の口（/api/ledger）は問いの一覧（ask）と同じ口で、定数はこの module に 1 本だけ置く。
-//! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く（行 g-kind-label）。
-//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す（行 g-unref-lc）。
-//! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える（行 g-unref-dash）。
+//! 未反映の種類の見出しは語の辞書の鍵 `unref:` と種類の名の label で、account board もここの関数で引く。
+//! 器の局面と手番の語の平易な字も同じ辞書の鍵 `lc:` と `turn:` で引き、知らない語は「まだ分からない」に倒す。
+//! 未反映の数は 3 種とも分からなければ数えない字 ― にし、1 種でも分かれば数に測れていないの印を添える。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 use tsuzuri_contract::EpochSecs;

@@ -1,4 +1,4 @@
-//! block「つながり」（見本の bead.html の近傍と ui.js の aroundBlock・nbK・nbFold・便 g-node）: 節点の頁の 2 つ目の block。
+//! block「つながり」（見本の bead.html の近傍と ui.js の aroundBlock・nbK・nbFold）: 節点の頁の 2 つ目の block。
 //! 口の本文を契約の型の AroundDoc に読み、図と一覧と数の行は mapview の around が組む（ここは写すだけ）。
 //! 口の path は URL の query（id・k・fold）で変わるので、path の字の signal を通信の module の読みの関数に渡す。
 //! 段数と畳みは URL の query の k と fold に残し（履歴に積まない）、変われば新しい query で口を読み直す。

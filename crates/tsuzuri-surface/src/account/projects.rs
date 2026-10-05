@@ -1,14 +1,14 @@
-//! account board の各 project の表の block（便 h-frame の枠・便 h-proj の中身）: 見本の projects の tab の `#ptab`
+//! account board の各 project の表の block: 見本の projects の tab の `#ptab`
 //! （account/index.html の projTable・PSORTS）。
 //! 行は電文の projects の 1 行ずつで 9 列。並べ方は 4 つ（need・group・judge・unref）で URL の query の `psort=` に残し、
-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState）。
 //! 決定待ちは電文の台帳の open の問いの数、未反映は電文の台帳の未反映の数で、読めない種類が在れば
 //! project board の指標の段と同じ Unref の形で測れていないの印を添える（部分の和）。台帳が Unknown の行はどちらも「―」、
 //! 未反映の 3 種とも「まだ分からない」の行の未反映も「―」。
 //! 決定待ちの 2 段目は電文の次の一手の束の承認の件数、未反映の 2 段目は電文の台帳の読めた種類ごとの件数（見本の unrefBreak）。
-//! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ・行 h-acct-rest）。
+//! 未反映の列の見出しは電文の projects の未反映の和（見本の Σ）。
 //! 並べ・行の値・class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
-//! 5 つの欄と群の見出しの chip の hover の card は account の cards の module が組む（行 h-acct-split で割った）。
+//! 5 つの欄と群の見出しの chip の hover の card は account の cards の module が組む。
 
 use std::cmp::Reverse;
 

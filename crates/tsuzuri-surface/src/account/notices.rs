@@ -1,8 +1,8 @@
-//! account board の各 project の席からの知らせの block（見本に無い block・HOME の頭の段・行 i-11・要件 FR16）。
+//! account board の各 project の席からの知らせの block（見本に無い block・HOME の頭の段・要件 FR16）。
 //! project board の block「席からの知らせ」と同じ口と同じ電文を読み（`crate::project::notice`）、project ごとの最新の 1 つを
 //! 電文の順（新しい順）に並べ、記録の読めない project の名を最後の 1 行に出す。
 //! 題の link はその project の名前つきの窓で開く（windows の `win_name`・前に出す命令は撃たない）。
-//! app の窓の中の左の押しは、board の open_named で窓を先に用意して app の窓にする（行 g-popup-app）。
+//! app の窓の中の左の押しは、board の open_named で窓を先に用意して app の窓にする。
 
 use crate::frame::Block;
 use crate::project::Body;

@@ -1,10 +1,10 @@
-//! account board の session の表の block（便 h-frame の枠・便 h-sess の中身）: 見本の session の tab の 1 つ目の panel
+//! account board の session の表の block: 見本の session の tab の 1 つ目の panel
 //! （account/index.html の sessRow・sessTable・stageCell と ui.js の tkhbHTML）。
 //! 行は電文の sessions の 1 行ずつ。並べ方は 4 つ（project・account・stage・elapsed）で URL の query の `sort=` に残し、
-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist・幅の押しは見本の setSpan と同じく置き換える）。
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・幅の押しは見本の setSpan と同じく置き換える）。
 //! 稼働の記録は着地済みの seat の module の幅と矩形と SVG を使い、窓の右端は電文の at。
 //! orchestrator の行の合図（tick の健康・heartbeat・退避の終わる時刻・移動待ち）は電文の projects の同じ名の行から引く。
-//! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める（便 h-hb）。
+//! orchestrator の行の停止の切り替え（button と行の下の確かめの段）は heartbeat の module が決める。
 //! 相談の窓の行（役 consult）は役の語と窓の card を持ち、窓の口座が群の今の口座と違えば口座ずれの印を出す
 //! （判断の記録 ADR-55 決定 (4)）。
 //! 並べ・束・行の値・合図の class は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。

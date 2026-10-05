@@ -1,10 +1,10 @@
-//! 窓の枠（行 g-win-frame・判断の記録 ADR-27 決定 (4)・見本 board-v2 の openModal と drawModal と closeModal と topModal）:
+//! 窓の枠（判断の記録 ADR-27 決定 (4)・見本 board-v2 の openModal と drawModal と closeModal と topModal）:
 //! 帯の印や窓の中の口を押すと開く窓を、頁に 1 枚ずつ出す。窓は × と外の click と取り消しの鍵（Esc）で閉じる。
 //! 窓の中の口から別の窓を開くと前の窓を積んで残し、頭に前の窓へ戻る口（‹ 戻る）を出す。
 //! 幅 600 px 以下（規則の行 R-35 のスマホの形）の窓は全画面（stylesheet の media の規則）。
 //! 閉じる判定（`closes`）と窓の積み（`Stack`）と幅の字は純粋な関数にして host で試し、層の DOM（`layer`）は wasm の target だけ。
-//! 窓の題は語の鍵を持つ見出し（`data-v` と「?」の注釈・行 g-help-sweep）で、題の横の数と点は見出しの外に置く。
-//! 吹き出し（行 g-pop）も同じ閉じる判定を使う。窓の中身は窓を足す行が描き、層を頁に置くのは 1 枚の画面への切り替えの行。
+//! 窓の題は語の鍵を持つ見出し（`data-v` と「?」の注釈）で、題の横の数と点は見出しの外に置く。
+//! 吹き出しも同じ閉じる判定を使う。窓の中身は窓を足す行が描き、層を頁に置くのは 1 枚の画面への切り替えの行。
 
 /// 窓と吹き出しに届いた押し（× の button・外の click・中の click・鍵）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

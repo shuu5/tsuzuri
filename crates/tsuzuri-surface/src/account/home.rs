@@ -1,9 +1,9 @@
-//! account board の HOME の block（便 h-frame の枠・便 h-home の中身）: 各 project の次の一手・群の枠・口座 × 窓・移動。
+//! account board の HOME の block: 各 project の次の一手・群の枠・口座 × 窓・移動。
 //! 見本は account/index.html の render の home の枝（`#nxall` の nxrows・`.gtop` の over・口座 × 窓の arows・`details#moves` の mvli）と
 //! acct.js の nextAll・meter。並べと字と class は純粋な関数（`content`）で組み、DOM は wasm の target のときだけ組む。
 //! 群の列・口座の列・移動の列は電文で別々に Unknown になりうるので、その段だけ測れていないにし、ほかの段は出す（要件 NFR2）。
-//! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（便 h-acct-spark・線の字は面が組み、電文は点だけ）。
-//! 閾値の印と逼迫の強調と断りの理由と移動の段の知らせの行は電文の caps と notices から描き、面は使った割合と閾値を比べない（便 h-thr-home・R-22）。
+//! 口座 × 窓は見本の 7 列（名・占有・3 つの窓・7 日の線・測った時刻）を出す（線の字は面が組み、電文は点だけ）。
+//! 閾値の印と逼迫の強調と断りの理由と移動の段の知らせの行は電文の caps と notices から描き、面は使った割合と閾値を比べない（R-22）。
 //! 候補ごとの門で落ちた理由は器が出さないので、群の断りの理由の語だけを出す。
 
 use tsuzuri_contract::EpochSecs;

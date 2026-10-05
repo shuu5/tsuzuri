@@ -1,10 +1,10 @@
-//! block「全体への指示」（問いの頁の右の列・便 g-batch）: 方針の逐語を、つねに範囲 全体（字 all）で口 /api/policy へ送る。
+//! block「全体への指示」（問いの頁の右の列）: 方針の逐語を、つねに範囲 全体（字 all）で口 /api/policy へ送る。
 //! 見本は docs/design/mock3/ask.html の side の id policy（範囲の切り替えは持ち主の指示で外した・1 つの問いへの答えは問いの card の欄で書く）。
 //! 問いの一覧は読まないので、字の欄と送る button は 1 度だけ組み、書きかけの欄の focus と caret を保つ。
 //! 送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
 //! DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
-//! server の書きの断り（根が無い・作れない・途中で落ちた・閉じる書きだけ落ちた）は、何が起きたかと送り直してよいかを持ち主の語の 1 行にする（行 g-policy-face）。
+//! server の書きの断り（根が無い・作れない・途中で落ちた・閉じる書きだけ落ちた）は、何が起きたかと送り直してよいかを持ち主の語の 1 行にする。
 
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::{PolicyRequest, PolicyResponse, RulingId};

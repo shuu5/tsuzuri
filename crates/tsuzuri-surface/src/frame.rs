@@ -1,13 +1,13 @@
-//! 頁の枠（便 g-frame）: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
+//! 頁の枠: 帯の下の部品・頁ごとの列と block の並び・見出しの語の鍵・class の名・mode と頁の URL。
 //! 純粋な値だけを持ち、block の中身は持たない（中身は project の下の module ごとに置く）。
 //! 並びと鍵と class は見本（docs/design/mock3 の index.html・ask.html・map.html・ui.css）に揃える。
-//! 節点の頁（便 g-node）: query の page=node と id で開く。
-//! 帯の「戻る」（行 h-wire）: account board の窓へ戻る段の列（`back_steps`）。
-//! 閉じられない窓の注記（行 g-back-note）: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
-//! 頁は src/pages の下に 1 頁 1 file（行 hs-pages・判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
+//! 節点の頁: query の page=node と id で開く。
+//! 帯の「戻る」: account board の窓へ戻る段の列（`back_steps`）。
+//! 閉じられない窓の注記: 窓を探した結果（`back_how`）と、close が効かなかったときの注記の字（`back_note`）。
+//! 頁は src/pages の下に 1 頁 1 file（判断の記録 ADR-13）: 列挙 PageId は組み立ての script が生成し、
 //! ここは頁の定義（`PageDef`）から頁の枠・link・snapshot を導く（頁の変種の名を持たない）。
-//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める（行 g-nav）。
-//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した（行 g-dead-sweep-b）。
+//! 頁の link の押し（`Press`）は、新しい窓や tab・保存でない左の押しかを決める。
+//! tab と頁の切り替え・header の部品の並び・頁の定義の nav の欄は 1 枚の画面への切り替えで使われなくなり消した。
 
 use crate::mapview::encode;
 pub use crate::pages::PageId;

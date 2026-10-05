@@ -1,11 +1,10 @@
-//! block「まとめて承認」（問いの頁の右の列・便 g-batch）: 問いの一覧（ask の module の口）の card を 1 行ずつ出し、
+//! block「まとめて承認」（問いの頁の右の列）: 問いの一覧（ask の module の口）の card を 1 行ずつ出し、
 //! 選んだ card を 1 つの束にして口 /api/batch へ送る。見本は docs/design/mock3/ask.html の side の id batch。
 //! A-1 の印を持つ card は選べない（選ぶ box の代わりに印を出す）。ほかの行は初めは選ばれている。
 //! 行の一覧・関わる所の数と重なりの数・送る button の判定・要求の本文・応答の出し方は純粋な関数にして host で試し、
 //! DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
-//! 問いの一覧の電文の answerable が偽（読むだけの server）なら、欄と button の代わりにチャットで答える 1 行を出す
-//! （行 e-ask-own-only）。
+//! 問いの一覧の電文の answerable が偽（読むだけの server）なら、欄と button の代わりにチャットで答える 1 行を出す。
 
 use std::collections::{BTreeMap, BTreeSet};
 

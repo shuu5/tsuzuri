@@ -1,9 +1,9 @@
-//! pipeline の札の段ごとの要の 1 行（行 g-pipe-cards・判断の記録 ADR-27 決定 (6)・見本 board-v2 の cardLine）:
+//! pipeline の札の段ごとの要の 1 行（判断の記録 ADR-27 決定 (6)・見本 board-v2 の cardLine）:
 //! Blocked は待つ相手と待ちの長さ・Queued は列に在る長さと起票からの経過（列に在る長さが `QUEUED_WARN_S`〔30 分・規則の行 R-37〕を
 //! 越えると注意の印と色・列に入った時刻が無ければ付けない）・Running は回と経過と口座・Gated は gate と回と経過と口座・Failed と Stopped は
 //! 20 字に切った理由と経過と回・Questioned は問いと経過と回・着地は着地の時刻と CI の語。待つ相手は吹き出しと同じ読み（`pop::wait_of` と
 //! `pop::wait_on`）。今に依らない材料（`LineSrc`）は板を組む時に置き、字は描く時の今から組む（1 秒の時計で書き直す）。
-//! Held（留め置き）は止めた者の印の語と止めてからの経過（行 g-held-col・判断の記録 ADR-42 決定 (7)）。
+//! Held（留め置き）は止めた者の印の語と止めてからの経過（判断の記録 ADR-42 決定 (7)）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{PipelineCard, Reading, Stage};

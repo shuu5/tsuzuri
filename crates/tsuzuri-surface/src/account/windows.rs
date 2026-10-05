@@ -1,7 +1,7 @@
-//! account board の開いている窓の block（見本の `#winsp`・HOME の 1 段目の右）と、project board を名前つきの窓で開く手順（便 h-win・案 2）。
+//! account board の開いている窓の block（見本の `#winsp`・HOME の 1 段目の右）と、project board を名前つきの窓で開く手順（案 2）。
 //! 見本は account/index.html の openWin・drawWins。窓の名・開く URL・一覧の移り方・button の字は純粋な関数で決め、
 //! window の open と一覧の DOM は wasm の target のときだけ組む。
-//! 一覧は browser の保存（鍵 tz-wins・1 項 1 行の tab 区切り）に残す（行 h-win-store・持ち主の裁定 t3-hub.52.16）。
+//! 一覧は browser の保存（鍵 tz-wins・1 項 1 行の tab 区切り）に残す。
 //! 保存は store の get・set・on_change で撃ち、頁で初めて一覧を撃つときに 1 度だけ読んで生きている handle を重ねる。
 //! 読み直した後の窓は handle を失い、開いたはず（NoHandle）になる。ほかの tab の書き替えは storage の event で置き直し、
 //! project board の戻るが送る閉じの知らせ（message の event・送り手の hostname が同じときだけ）でその窓を閉じたにする。

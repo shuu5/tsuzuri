@@ -1,4 +1,4 @@
-//! block「run の時間軸」（見本の bead.html の時間軸の panel・便 g-node-timeline・要件 FR10）: 節点の頁の 3 つ目の block。
+//! block「run の時間軸」（見本の bead.html の時間軸の panel・要件 FR10）: 節点の頁の 3 つ目の block。
 //! 契約・epic の節点はその bead の走行を 1 行ずつ、走行の節点はその 1 行を、走行の読みの口（契約の型の runs の PATH）から出す。
 //! 近傍の読み（nodearound の module の source）の中心の行から読む bead を決め、段の chip は続く同じ段を 1 つにまとめる。
 //! 口の path・bead の決め方・段の色・chip・経験者の行・中身の 3 値・走行の link の card は純粋な関数にして host で試す。

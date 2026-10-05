@@ -1,4 +1,4 @@
-//! 吹き出しの run の段の流れと run の歴（行 g-pop-flow・判断の記録 ADR-27 決定 (7) と (10)・見本 board-v2 の stepsHTML と histTable）:
+//! 吹き出しの run の段の流れと run の歴（判断の記録 ADR-27 決定 (7) と (10)・見本 board-v2 の stepsHTML と histTable）:
 //! 吹き出しを開いた時に走行の読みの口（`timeline::path` の `/api/runs?bead=`）を読み、最後の走行の段の流れ（審査・実装・gate の
 //! 始まりと長さ・走っている段は「〜」）と、走行ごとの歴（回・終わりの段・結び）と、着地の commit を吹き出しの欄に足す。
 //! 段の語は器の case-lifecycle.md §2.1 の便の段の写しの 11 値を写した閉じた表（`STAGES`）で読み、表に無い語はまだ分からない。

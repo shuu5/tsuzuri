@@ -1,16 +1,16 @@
-//! block「答えを待つ質問」（問いの頁・便 g-ask）: 口 /api/questions の card を電文の順（古い順）に番号つきで出し、
+//! block「答えを待つ質問」（問いの頁）: 口 /api/questions の card を電文の順（古い順）に番号つきで出し、
 //! card ごとに答えの欄から口 /api/ruling へ答えを送る。見本は docs/design/mock3/ask.html の qcard。
 //! 問いの見分けは server の側（label intake:question）が済ませていて、面は bd の種類で選ばず電文を写すだけ。
 //! card の部分の並び（配置の表）・card の中身・送る button の状態・鍵の判定・要求の本文・応答から card の状態を決める関数は
 //! 純粋な関数にして host で試し、DOM と通信は wasm の target のときだけ組み立てる。
 //! 持ち主の字は送る要求の本文の外に書かない（URL にも、画面の外の保存の口にも残さない）。
-//! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる（便 g-ask-focus）。
-//! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない・行 g-card-adopt-b）。
-//! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける（行 g-tick-adopt）。
-//! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す（行 g-ruling-busy）。
-//! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す（行 e-ask-own-only）。
+//! card の題は節点の頁への link で、URL の `?id=` で名指された card は class target を足して画面の上端へ寄せる。
+//! 題の link にはグラフの口の電文から引いた問いの節点の hover の card を付ける（電文に無い問いは付けない）。
+//! 経過の chip は 1 秒の時計（net の ticker）で書き直し、経験者の mode には投稿の時刻の注釈を付ける。
+//! 送っている間は送る button の字を替え、server の台帳の断りは理由と次の手の字にして目立つ 1 行で出す。
+//! 電文の answerable が偽（読むだけの server）なら、送る欄の代わりにチャットで答える 1 行を出す。
 //! 電文の鍵 others のほかの project の問いは札つきで投稿の時刻の順に 1 つの一覧へ混ぜ、題は link にせず、つながりの段を
-//! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す（行 e-multi-ask）。
+//! 出さず、送る欄の代わりにチャットで答える 1 行を出す。台帳が読めない組は札と 1 行を一覧の下に出す。
 //! 束の block（`cards`・`answerable`）は自分の問いだけを読む。
 
 use tsuzuri_contract::EpochSecs;

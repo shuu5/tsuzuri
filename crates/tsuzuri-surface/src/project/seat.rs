@@ -1,12 +1,12 @@
 //! block「orchestrator と口座」（見本の `#orch` と index.html の renderSeat・lowHTML・bandHTML・
-//! ui.js の stripSVG・stIcon・tkhbHTML・acct.js の meter・便 g-seat）。
+//! ui.js の stripSVG・stIcon・tkhbHTML・acct.js の meter）。
 //! 中身は口 /api/seat（契約の型の SeatCard）から読む。状態の判定は server が済ませていて、ここは写すだけ。
 //! 電文の中の「まだ分からない」の欄はその欄だけ測れていないの記号にし、読めた欄は出す（要件 NFR2）。
 //! 字と座標は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 //! 群の chip の card（見本の pa:group）は、同じ server の口 /api/account の群の枠（GroupCard）から写す。
 //! 状態の帯の猶予の内・移り先の無い断り・逼迫の行は、電文の器の移動の 4 つの欄
 //! （move_to・grace_until・refused・pressure）を写すだけで判じない。猶予の残り秒だけは終わる時刻から
-//! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方・行 c-abs-seat）。
+//! 描く card の at を引く。card は描く今で描き直す（`drawn`・at は今と電文の at の大きい方）。
 //! 窓の行の閾値の線と印は、同じ口 /api/account の電文の caps（器の rules 行の写し）を窓の名で写すだけで判じない。
 
 use tsuzuri_contract::EpochSecs;

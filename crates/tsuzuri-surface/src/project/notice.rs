@@ -1,4 +1,4 @@
-//! block「席からの知らせ」（見本に無い block・home の左の列の頭・行 i-11・要件 FR16）: この project の席が「見て」と言った
+//! block「席からの知らせ」（見本に無い block・home の左の列の頭・要件 FR16）: この project の席が「見て」と言った
 //! 最新の 1 つ（題・頁への link・時刻）。端末の知らせを見逃しても board を開けば分かる。
 //! 中身は口 /api/notices（契約の型の Notices）の latest から自分の名の 1 つを写すだけ。材料は tz stage notify の記録だけで、
 //! 題は書き手が検めた字を写す。link にするのは http と https の URL だけで、同じ tab で開く（窓を前に出さない）。

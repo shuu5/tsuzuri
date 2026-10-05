@@ -1,8 +1,8 @@
-//! 語彙（見本の vocab.json を面の crate に写した file・便 g-frame）。見出しの語と「?」の注釈の字はここから引く。
+//! 語彙（見本の vocab.json を面の crate に写した file）。見出しの語と「?」の注釈の字はここから引く。
 //! 2 欄（english = 英語のまま + 注釈・rephrase = 日本語の見出し）の和集合を鍵で引く（見本の ui.js の vt と同じ）。
 //! 面の crate は外の依存を足さないので、JSON は小さな読みで読む（object・array・字・数・真偽・null）。
 //! 基の vocab.json に加え、vocab の dir の部品（新しい鍵だけを足す行の file・名の byte の順）も 1 つの表に読み、
-//! どの file の中でも外でも鍵の重なりは Err にする（行 g-vocab-parts・判断の記録 ADR-58 決定 (1)(3)(4)）。
+//! どの file の中でも外でも鍵の重なりは Err にする（判断の記録 ADR-58 決定 (1)(3)(4)）。
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;

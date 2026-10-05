@@ -1,8 +1,8 @@
-//! 抜けの検査の頁（見本の gaps.html・便 g-gaps）: 不変条件の 12 本の判定を数の札（3 枚）と畳める段の一覧で見せる。
+//! 抜けの検査の頁（見本の gaps.html）: 不変条件の 12 本の判定を数の札（3 枚）と畳める段の一覧で見せる。
 //! 判定は中核の crate が数え済みで、口（/api/graph・定数は map の module に 1 本）の電文 GraphDoc の invariants を写すだけにする。
 //! 札の数・一覧の並び・段が最初に開いているか・名の表・20 件の切り方は純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ、この値を順にたどって組み立てる。
-//! 名指しの項のうち電文の節点に在るものは、節点の頁への link に節点の hover の card を付ける（行 g-card-adopt-c）。
+//! 名指しの項のうち電文の節点に在るものは、節点の頁への link に節点の hover の card を付ける。
 
 use std::collections::BTreeMap;
 

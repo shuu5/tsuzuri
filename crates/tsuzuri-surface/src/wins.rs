@@ -1,11 +1,11 @@
-//! 帯の印が開く窓の中身（行 g-win-parts・判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の stalledModal と noticeModal と
+//! 帯の印が開く窓の中身（判断の記録 ADR-27 決定 (4)(8)・見本 board-v2 の stalledModal と noticeModal と
 //! seatModal と gapsModal と legendModal と destModal）: 止まった run・知らせ・席と口座・抜けの検査の 4 つの窓と、
 //! 設定（⚙）の中の記号の見方と表示先の窓。
 //! 知らせ・席と口座・抜けの検査・記号の見方・表示先は、今の block の中身の関数（各 module の inner）を窓の中で描く
 //! （頁から block を外したのは 1 枚の画面への切り替えの行）。抜けの検査の窓の下に台帳の module の未反映の段を
-//! 描く（要件 FR13・台帳の block から移した・行 g-ledger-trim）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
+//! 描く（要件 FR13・台帳の block から移した）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
 //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
-//! 質問の窓は 1 問ずつの窓（askwin の frame・行 g-ask-win）。相談の窓は頼みの form と一覧（consultwin の body・行 cs-bar）。
+//! 質問の窓は 1 問ずつの窓（askwin の frame）。相談の窓は頼みの form と一覧（consultwin の body）。
 //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
 
 use std::cmp::Reverse;

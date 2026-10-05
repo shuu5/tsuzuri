@@ -1,6 +1,6 @@
 //! account board の各 project の表の hover の card: 5 つの欄と群の見出しの chip の card を組む純粋な関数
 //! （見本の account/index.html の card の nx・ledCard・pcnt・seatCard・gproj・group の枝）。
-//! 行 h-acct-split で account の projects から移した（振る舞いは同じ）。
+//! account の projects から移した（振る舞いは同じ）。
 //! 台帳の欄の card は台帳の処理状況の表が、次の一手と口座の欄の card は HOME が、
 //! orchestrator の欄の card は session の表も使う。
 

@@ -1,4 +1,4 @@
-//! stylesheet の部品（行 g-style-parts・判断の記録 ADR-58）。基の style.css は index.html の link のまま配る。
+//! stylesheet の部品（判断の記録 ADR-58）。基の style.css は index.html の link のまま配る。
 //! style の dir の部品は組み立ての script が名の byte の順の表 PARTS にし、wasm が面を描く前に head の末尾へ
 //! `<style>` 1 つとして入れる（基の後に効く）。selector の字は基と部品の全部の中で 1 つの file だけが持つ。
 

@@ -1,4 +1,4 @@
-//! block「表示先」（HOME の最後の段・行 i-stage-all・要件 FR16・持ち主の答え t3-hub.59.22 の案 A）: 窓の表示先の設定を読み、
+//! block「表示先」（HOME の最後の段・要件 FR16）: 窓の表示先の設定を読み、
 //! 全部の project に一括で置く・project ごとに置く・上書きを外す・窓を開く。口は契約の stage の path
 //! （読みは project board の block と同じ `PATH`・書きは `ALL_PATH`・窓を開く頼みは `OPEN_PATH`）で、この file は口の字を書かない。
 //! 読みは畳んだ block を開いた時と書きの後の 1 回だけ（移動の block と同じく畳める段の記録は持たない）。

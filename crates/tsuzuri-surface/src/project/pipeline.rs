@@ -1,22 +1,22 @@
-//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML・便 g-pipe）: 5 列の板・札・「+n」・0 件の帯。
-//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)・行 c-pipe-five）。
-//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない・行 g-pipe-misfit）。
+//! block「pipeline」（見本の `#pipe` と ui.js の kcardHTML）: 5 列の板・札・「+n」・0 件の帯。
+//! 列は Blocked と Queued を分けた 5 つ（判断の記録 ADR-27 決定 (6)）。
+//! 5 列の下に要修正の行（形の崩れた open の bead・0 本なら出さない）。
 //! 板は口 /api/pipeline（契約の型の PipelineBoard）から、札の題は台帳の一覧の口（block ledger の定数）から読む。
 //! 段から列への対応は契約の型の関数（`Stage::column`）を呼び、ここに対応の表を書かない。
 //! 並べ方・字・札の中身・開いた列の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
-//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ・行 c-pipe-ci）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
+//! 着地の後の CI の読み（札の欄 ci・中核が判じた値を写すだけ）: CI を待つ札は着地の時刻を問わず Landed の列に出し、
 //! 状態の記号を動いている印にする。結果の語は止まった列の札ではいつも、ほかの札では今までの経過が `CI_MARK_S` 以下の間だけ出す（`ci_shown`）。
 //! 語は語の辞書の `CI_KEYS` の鍵から引く。
-//! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く（行 c-abs-time）。札の meta の経過は 1 秒の時計（net の ticker）で
-//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める（行 g-tick-adopt）。
-//! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`・行 c-landed-12h）。
+//! 札の欄 since は段を決めた時刻で、経過は面の時計の今から引く。札の meta の経過は 1 秒の時計（net の ticker）で
+//! `age_at` から書き直し、CI の語と直近の着地は block を組む時の今で決める。
+//! 着地の列は今から `LAND_WINDOW_S`（12 時間・規則の行 R-36）の内の着地を出す（`landed_recent`）。
 //! 札は短い題（bead の事実の short・無ければ 36 字の題・無ければ id）と段ごとの要の 1 行（widgets の keyline・判断の記録 ADR-27 決定 (6)・
-//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（行 g-pipe-cards・
-//! 札の hover の card の値の組みと節点の card への替えと札の link の先は行 g-dead-sweep-a で消した）。
+//! Queued の 30 分越えの注意は規則の行 R-37）を出し、押すと吹き出し（widgets の pop）を開く。hover の card は札に付けない（
+//! 札の hover の card の値の組みと節点の card への替えと札の link の先は消した）。
 //! 見出しの epic の chip（`chips`・見本の renderEchips）と一覧の組の頭の名は epic を選び、選んだ組でない札を薄くし、吹き出しの
-//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`・行 g-select）。
+//! 開いている札に輪の印を付ける（組の鍵は一覧の組と同じ `ledgerlist::key_of`）。
 //! 留め置きの札は Blocked の列に出し、席の止めと受付の断りで別の印（widgets の keyline の `HeldBy`）を札の meta に置く。Blocked の札は印を持たない。
-//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)・行 g-held-col）。
+//! Blocked の列の見出しの数は Blocked と Held の内訳（`count_text`・判断の記録 ADR-42 決定 (3)(7)）。
 
 use std::collections::BTreeMap;
 

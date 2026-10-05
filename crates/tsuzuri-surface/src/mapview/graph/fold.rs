@@ -1,7 +1,7 @@
-//! グラフの組の箱の開き閉じ（行 g-graph-fold・host でも組む）。
+//! グラフの組の箱の開き閉じ（host でも組む）。
 //! 箱の開き閉じの語の鍵と、組の箱の持ち主に読める題（節点の card が引く）。
 //! 選ぶ・畳む・上限で畳み直すのは中核の crate が済ませ、ここは電文の group・fold を写すだけ。
-//! 開いた箱の列と口の path・右下の印・組の箱の 1 行目・開けなかった id の行は行 m-map-graph で消した。
+//! 開いた箱の列と口の path・右下の印・組の箱の 1 行目・開けなかった id の行は消した。
 
 use tsuzuri_contract::graph::{BoxFold, NodeKind, ViewNode};
 

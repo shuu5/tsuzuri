@@ -1,11 +1,11 @@
-//! browser の保存（見本 mock v3 の ui.js の store と同じ口・行 g-mode-store）。
-//! 持ち主の裁定 t3-hub.52.16 と要件 FR1: mode と account board から開いた窓の一覧と最初の案内の済み印の 3 つを
+//! browser の保存（見本 mock v3 の ui.js の store と同じ口）。
+//! 要件 FR1: mode と account board から開いた窓の一覧と最初の案内の済み印の 3 つを
 //! その browser に残す。これは便利のための写しで正本ではなく、保存が消えても面は URL と server の読みから同じ画面を組む。
 //! 決め方（mode_start）は host でも組み立てて試し、保存と URL を撃つ所は wasm の target のときだけ組み立てる。
 //! 保存は origin ごとなので、port の違う account board と各 project board はそれぞれ自分の写しを持つ。
-//! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し・行 h-win-store）。
+//! on_change は同じ origin のほかの tab が鍵の値を書き替えたときに撃つ（窓の一覧の置き直し）。
 //! 個別の頁の本文と記録の 2 つの畳める段の開き閉じも、段の種類ごとの鍵でその browser に残す（節点ごとでない・
-//! 判断の記録 ADR-30 決定 (4)・持ち主の裁定 t3-hub.76.4・行 g-fold-keep）。ほかの畳める段は頁の一生の間だけ持つ。
+//! 判断の記録 ADR-30 決定 (4)）。ほかの畳める段は頁の一生の間だけ持つ。
 
 use crate::frame::{self, Mode};
 

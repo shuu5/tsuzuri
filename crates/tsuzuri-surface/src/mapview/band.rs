@@ -1,4 +1,4 @@
-//! 出所の帯（見本の ui.js の BANDS・BAND_PATH・BEADS_LANES）と、節点の種類から帯と語の鍵への閉じた表（便 g-map）。
+//! 出所の帯（見本の ui.js の BANDS・BAND_PATH・BEADS_LANES）と、節点の種類から帯と語の鍵への閉じた表。
 //! 種類の対応はこの file の表（`KINDS`）の 1 か所だけに置き、ほかの file は関数で引く。
 //! URL の query に残す種類の名は語の鍵の「k:」の後の字（見本の地図の種類の名と同じ）。
 

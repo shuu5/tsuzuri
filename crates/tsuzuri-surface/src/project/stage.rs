@@ -1,11 +1,11 @@
-//! block「表示先」（home の右の列・行 i-stage-own・要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)・
-//! 持ち主の裁定 t3-hub.59.1 と t3-hub.59.7 と t3-hub.52.29）: 窓の表示先の設定を読み、自分の project の分だけ置く・戻す。
+//! block「表示先」（home の右の列・要件 FR16・判断の記録 ADR-15 の決定 (1)(2)(6)）:
+//! 窓の表示先の設定を読み、自分の project の分だけ置く・戻す。
 //! 口は契約の stage の path（読みと書きは `PATH`・窓を開く頼みは `OPEN_PATH`）で、この file は口の字を書かない。
 //! 読みは畳んだ block を開いた時と書きの後の 1 回だけ（GET 1 回で子 process が約 3 本立つ・判断の記録 ADR-23 の軽さの向き）。
 //! だから知らせの登録の読みを使わず、変化の知らせでも読み直さず、上端の帯の最終の記録にも数えない。
 //! 窓を開く button は持ち主が押す口で、席は押さない（server は頭 Origin の無い POST を断る）。
 //! 字と本文と 1 行は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
-//! account board の block（行 i-stage-all）も `Face` と `load` と `send` と純粋な関数を使う。
+//! account board の block も `Face` と `load` と `send` と純粋な関数を使う。
 
 use tsuzuri_contract::stage::{Effective, OpenRequest, Origin, OwnTarget, StageTargets};
 use tsuzuri_contract::wire;

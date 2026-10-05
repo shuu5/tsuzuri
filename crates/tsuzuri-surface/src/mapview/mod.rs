@@ -1,7 +1,7 @@
-//! 地図の面の部品（便 g-map・見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは行 m-map-page で消した。
+//! 地図の面の部品（見本の map.html）と、面に共通の小道具。地図の頁と 6 面の切り替えは消した。
 //! 電文（契約の型の GraphDoc）の読みは kit の下の map（crate::project::map の path）が持ち、ここの関数は読めた電文だけを受ける。
 //! 帯と種類の対応は band・近傍の図は around・近傍と節点の card が引くグラフの部品は graph。
-//! 圧縮の面と一覧の面は行 m-map-compact で、表の面と 2 つの木の面は行 m-map-tree で、グラフの面の DOM は行 m-map-graph で消した。
+//! 圧縮の面・一覧の面・表の面・2 つの木の面・グラフの面の DOM は消した。
 //! 並べ方と絞りと数え方と URL の query は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 
 pub mod around;

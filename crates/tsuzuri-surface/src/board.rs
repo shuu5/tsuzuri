@@ -1,17 +1,17 @@
 //! 頁の描画（wasm の target のときだけ組み立てる・Leptos の csr）: 上の固定の帯と頁の枠を frame の値のとおりに並べる。
 //! block の中身は project の下の module が描く。ここは枠を描き、mode と頁を URL から読んで URL に残すだけ。
-//! 1 枚の画面（行 g-one-screen-a・判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
+//! 1 枚の画面（判断の記録 ADR-27 決定 (3)(4)(5)）: 頁の上は帯（topbar の view）だけで、tab と頁の切り替えは
 //! 持たない。home の頁は台帳 open の一覧と pipeline の 2 つの面で、帯の印が開く窓の層（widgets の modal の layer・中身は wins の
-//! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁（便 g-node）は query の page=node で開く（文書を読み直す）。
+//! draw）を頁に 1 つ置き、窓を開くと吹き出しを閉じる。節点の頁は query の page=node で開く（文書を読み直す）。
 //! 窓を開く link（query の win・topbar の `win_of_href`）は、home の頁では普通の押しで頁を読み直さずに窓を開き、問いの id を
-//! 持てば質問の窓をその問いから出す（行 g-one-screen-b）。URL の win で窓を開いた後は history を置き替えて URL から win と
-//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ・行 g-win-url）。
-//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く（便 g-parts）。札と一覧の行の吹き出しの層も頁に 1 つ置く（行 g-pop）。
-//! 帯の戻る口（行 h-wire）は account board の窓 tz-account へ戻り、自分の窓を閉じる。
-//! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る（行 h-win-store）。
-//! 最終の記録と読みの脈と読み込み不良の印（行 g-fresh・g-pulse）は帯の下の右端の小さな札に置く。
-//! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題（行 g-title）。
-//! 最初の案内（coach mark）の層は home の頁だけに置く（行 g-coach）。
+//! 持てば質問の窓をその問いから出す。URL の win で窓を開いた後は history を置き替えて URL から win と
+//! 問いの id を外す（読み直しても同じ窓は開かない・窓の開け閉めは history を足さないので、戻るは前の頁へ）。
+//! 「?」の注釈の層と hover の card の層は頁に 1 つずつ置く。札と一覧の行の吹き出しの層も頁に 1 つ置く。
+//! 帯の戻る口は account board の窓 tz-account へ戻り、自分の窓を閉じる。
+//! 在った窓へは前面へ出す前に閉じの知らせ（自分の窓の名）を送る。
+//! 最終の記録と読みの脈と読み込み不良の印は帯の下の右端の小さな札に置く。
+//! 頁の題は project の名と頁の見出しの語で、節点の頁では読めた節点の題。
+//! 最初の案内（coach mark）の層は home の頁だけに置く。
 
 use std::time::Duration;
 

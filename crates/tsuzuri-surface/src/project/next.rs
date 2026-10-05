@@ -1,9 +1,9 @@
-//! block「次の一手」（便 g-next）: 口 /api/next（契約の型の NextStep）の読みと、7 種の語の鍵と大きく出す 1 つの箱の字。
+//! block「次の一手」: 口 /api/next（契約の型の NextStep）の読みと、7 種の語の鍵と大きく出す 1 つの箱の字。
 //! 判定は中核の crate が済ませていて、ここは写すだけ（大きく出す 1 つは電文の lead・各種の結果は電文の checks）。
 //! 7 種の順は契約の型の宣言の順（`NextMove::ALL`）を引く。
-//! 頁に block を置かない（1 枚の画面への切り替えの行 g-one-screen-a）。帯の pill（topbar）と account board が
+//! 頁に block を置かない（1 枚の画面への切り替え）。帯の pill（topbar）と account board が
 //! この module の純粋な関数（`step`・`key`・`unjudged`・`big`）を使う。block の DOM と、DOM だけが使った一覧の行・
-//! 次の手の link・窓の探し方は行 g-dead-sweep-a で消した（view は組み立ての script が module ごとに要るので空の中身）。
+//! 次の手の link・窓の探し方は消した（view は組み立ての script が module ごとに要るので空の中身）。
 
 use tsuzuri_contract::board::NextMove;
 use tsuzuri_contract::stats::{CheckResult, NextCheck, NextStep};

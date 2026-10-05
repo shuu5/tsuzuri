@@ -1,12 +1,12 @@
-//! 上の固定の帯（行 g-topbar・判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
+//! 上の固定の帯（判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
 //! 左に account board へ戻る口と project の名、真ん中に次の一手の pill と、やる事の 3 つの数（質問・止まった run・
 //! 抜けの検査・1 以上の物だけ色）と、席からの最新の知らせの 1 行と件数、右に席と口座（状態・直近 3 時間の細い帯・
 //! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
-//! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は行 g-win-parts と行 g-ask-win が描く。
+//! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は wins と askwin の module が描く。
 //! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
 //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
-//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない・行 g-win-url）。
+//! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない）。
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::{NextMove, Reading};

@@ -1,4 +1,4 @@
-//! block に共通の部品（行 hs-blocks で project の mod.rs から字を変えずに移した）: 中身の 3 値・状態の記号・一覧の 1 項・
+//! block に共通の部品（project の mod.rs から字を変えずに移した）: 中身の 3 値・状態の記号・一覧の 1 項・
 //! 読めないときの理由・畳める段の開き閉じの記録。project の mod.rs が glob で再公開するので、crate::project の path でも使える。
 //! DOM の部品は wasm の target のときだけ組み立てる。
 

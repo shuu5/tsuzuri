@@ -1,14 +1,14 @@
-//! account board の台帳の処理状況の block（便 h-frame の枠・便 h-led の中身）: 見本の session の tab の `#ledger`
+//! account board の台帳の処理状況の block: 見本の session の tab の `#ledger`
 //! （account/index.html の ledTable・ledOrder・ledMore・extremes と ledger.js の judge）。
 //! 行は電文の projects の 1 行ずつ（台帳は ProjectRow の ledger）。並べ方は 4 つ（judge・project・net・backlog）で URL の query の `lsort=` に残し、
-//! 並べ方の押しは履歴の 1 歩にする（見本の pushState・行 h-sort-hist）。
+//! 並べ方の押しは履歴の 1 歩にする（見本の pushState）。
 //! 判定の写し・純減の矢印・小数 1 桁・日数の字は着地済みの project の ledger の module の値と関数を使う（その block の DOM は呼ばない）。
 //! 詳しくの段の 14 日の sparkline（見本の ledMore の spark14）も同じ module の spark と spark_svg で組む。
 //! 未反映は電文の台帳の未反映の数で、project board の指標の段と同じ Unref の形にする。1 種か 2 種が読めなければ数（部分の和）に
-//! 測れていないの印を添え、3 種とも分からなければ数えない字「―」で印は添えない（行 g-unref-dash-acct）。台帳が Unknown の行も「―」。
-//! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU・行 h-acct-rest）。
+//! 測れていないの印を添え、3 種とも分からなければ数えない字「―」で印は添えない。台帳が Unknown の行も「―」。
+//! 列の最大と最小の印は open の task・closed/日・未反映の 3 列に付ける（見本の ledTable の eT・eR・eU）。
 //! 未反映の列は unref_of が数を返す行（3 種とも分からない行と台帳が Unknown の行を除く）だけで数え、印もその行だけに付ける。
-//! 行の project の欄は hover の card（便 h-cards-led・見本の ledCard）を持ち、中身は account の cards の led_card で組む。
+//! 行の project の欄は hover の card（見本の ledCard）を持ち、中身は account の cards の led_card で組む。
 //! 行ごとの「詳しく」の開き閉じは頁の一生の間だけ signal に持ち、URL にも画面の外にも書かない。
 //! 並べ・行の値・列の最大と最小は純粋な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
 

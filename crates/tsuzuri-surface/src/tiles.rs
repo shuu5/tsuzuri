@@ -1,4 +1,4 @@
-//! 幅の 3 段とスマホの段の tile（行 g-layout・判断の記録 ADR-27 決定 (5)・規則の行 R-35・見本 board-v2 の applyLayout と
+//! 幅の 3 段とスマホの段の tile（判断の記録 ADR-27 決定 (5)・規則の行 R-35・見本 board-v2 の applyLayout と
 //! renderPipe の mpipe と openTile）: 幅 1200 px 以上は横並び（左に一覧・右に pipeline）、601〜1199 px は縦積み（上に pipeline の
 //! 5 列・下に一覧・pipeline の面の中だけを横に scroll させて 5 列を保つ）、600 px 以下はスマホの形（頁は縦に scroll し、
 //! pipeline は 5 つの段の tile と開いた段の札の並び）。並べ方は stylesheet の media の規則が決め、境の値はここの定数と同じ字。

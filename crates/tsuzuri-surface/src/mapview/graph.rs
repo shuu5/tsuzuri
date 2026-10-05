@@ -1,9 +1,9 @@
-//! グラフの面の部品（見本の ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin・便 g-graph）のうち、
+//! グラフの面の部品（見本の ui.js の nodeBox・edgeSVG・legendHTML・hlCompute・hlPin）のうち、
 //! 近傍の図（around）と節点の頁の近傍（project の nodearound）と節点の card が引く物を置く。
 //! 選ぶ・畳む・数える・段を決めるのは中核の crate が済ませた電文（契約の型の GraphView）で、
 //! ここは電文の値を写すだけ（節点を選ぶ分岐と数え直しを書かない）。
 //! 線の道と形・箱の縁・光らせ方・固定の移り方・凡例は純粋な関数にして host で試す。
-//! グラフの面の DOM と、面だけの配置・拡大・狭い幅の一覧・数の行・眺めの口の読みは行 m-map-graph で消した。
+//! グラフの面の DOM と、面だけの配置・拡大・狭い幅の一覧・数の行・眺めの口の読みは消した。
 
 use std::collections::BTreeMap;
 use std::fmt::Write;

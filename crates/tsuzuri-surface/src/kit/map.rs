@@ -1,4 +1,4 @@
-//! グラフの口（/api/graph）の読み（行 m-map-page で地図の block から移した）: 本文を契約の型の GraphDoc に読む。
+//! グラフの口（/api/graph）の読み（地図の block から移した）: 本文を契約の型の GraphDoc に読む。
 //! 地図の頁は消したが、節点の card（問い・台帳・pipeline・次の一手）と抜けの検査と問いの頁はこの口を読む。
 //! kit の下に置くので block でなく（Module の列に入らない）、project の mod.rs の glob の再公開で crate::project::map の
 //! path のまま使える（読む側の字は替えない）。

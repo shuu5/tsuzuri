@@ -1,10 +1,10 @@
-//! session の表の orchestrator の行の停止の切り替え（便 h-hb・要件 FR12）: 見本は ui.js の tkhbHTML・openHB・hbCmd。
+//! session の表の orchestrator の行の停止の切り替え（要件 FR12）: 見本は ui.js の tkhbHTML・openHB・hbCmd。
 //! button の字は今の heartbeat の逆へ向ける語の鍵（on なら hb_to_off・off なら hb_to_on）。押すと行の下に確かめの段を開き
 //! （dialog の要素は使わない）、撃つと契約の型の HeartbeatRequest を HEARTBEAT_PATH へ送る。
 //! heartbeat は電文の projects の同じ名の行の席の card から引き、読めない行・席の無い行・pipeline の行は button を持たない（要件 NFR2）。
 //! button の字・段の字・要求の本文・応答の出し方・送る間の状態の移り方は純粋な関数にして host で試し、
 //! DOM と送りは wasm の target のときだけ組み立てる。
-//! project board の席の block（行 g-seat-hb・裁定 t3-hub.52.29 の案 A）も同じ button と確かめの段を使う:
+//! project board の席の block も同じ button と確かめの段を使う:
 //! 切り替えは席の card から `seat_toggle` で引き（席の名が在り heartbeat が読めるときだけ）、段は `below_to` に
 //! 送り先 `Dest::Seat` を渡して組む。送りの本文は向きだけの SeatHeartbeatRequest で、SEAT_HEARTBEAT_PATH へ送る
 //! （server が自分の --repo の project の席を引く）。account board の行は `below`（送り先 `Dest::Account`）のまま。

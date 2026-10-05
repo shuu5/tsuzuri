@@ -1,11 +1,11 @@
-//! 節点の card（見本の ui.js の cardContent の節点の枝・行 g-card-node）: 電文の節点 1 つから hover の card の 4 行と詳しくを組む。
+//! 節点の card（見本の ui.js の cardContent の節点の枝）: 電文の節点 1 つから hover の card の 4 行と詳しくを組む。
 //! 題・種類と帯と状態の行・id と要約の行・出所の file の行（36 字の切りは hover の Card の rows に任せる）。
-//! 要約は電文の節点の概要（plain・無ければ eng）を写して切り、無ければ「要約なし」（行 g-summary）。
+//! 要約は電文の節点の概要（plain・無ければ eng）を写して切り、無ければ「要約なし」。
 //! 出所は節点の file と行（無ければ帯の path）を短くし、長い概要を折った行と出所の全部の字は詳しくに置く。
 //! 地図の面の札と行が同じ id と電文から同じ card を引けるように、id から引く `card_of` も置く（host でも組む）。
-//! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く（行 g-card-around）。
+//! card の中身は節点と状態の字から組む `card_for` 1 つで、近傍の図と一覧は眺めの節点から `view_cards` で引く。
 //! 要約は表示の型の 1 つを部品 sumpick で選び、表示の型の側が無ければもう一方を出して詳しくの頭に印の語を置く
-//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)・行 g-card-mode）。表示の型を受けない関数は初心者の包み。
+//! （`card_in`・`view_cards_in`・`card_of_in`・判断の記録 ADR-30 決定 (2)）。表示の型を受けない関数は初心者の包み。
 
 use std::collections::BTreeMap;
 

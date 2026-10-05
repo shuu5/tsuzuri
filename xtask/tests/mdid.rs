@@ -19,8 +19,8 @@ const CAP_CONTRACT: usize = 0;
 /// 中核の crate の上限。
 const CAP_CORE: usize = 0;
 
-/// 面の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
-const CAP_SURFACE: usize = 199;
+/// 面の crate の上限。
+const CAP_SURFACE: usize = 0;
 
 /// crates/ の直下の src を持つ dir の名と上限（名の順・crate を足す行はこの表も足す）。
 const CAPS: [(&str, usize); 4] = [

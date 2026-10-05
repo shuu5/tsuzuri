@@ -1,11 +1,11 @@
-//! account board の頁の枠（便 h-frame）: 入口の振り分け・3 つの tab と URL・header の部品・tab ごとの block の並び・
+//! account board の頁の枠: 入口の振り分け・3 つの tab と URL・header の部品・tab ごとの block の並び・
 //! 数の印・読みの結果から block の中身の有無を決める関数。純粋な値と関数だけを持ち、DOM は board（wasm の target のときだけ）。
 //! 見本は docs/design/mock3/account/index.html と ui.js の topHTML（PAGE_KIND が account の枝）と acctTabHref。
 //! block ごとに 1 つの module（home・windows・session・ledger・projects・notices）が描く。この便は中身を描かず、
 //! 読めたら中身はまだ無いの字を、読めない・まだ読んでいない・本文が電文として読めないときは測れていないと理由の 1 行を出す。
 //! 口は 1 つ（契約の型の crate の account の module の PATH）で、全部の block が net の同じ signal を分け合う。
 //! tab の押しは頁を読み直さず、tab_url の URL を履歴に積む（見本の setTab・戻ると進むは board が popstate で受ける）。
-//! 休止中の chip と card（行 h-dormant）: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
+//! 休止中の chip と card: 休止中の席が 1 つ以上のときだけ最終の記録の chip の後に語と数を出し、
 //! card は席の名と口座と最後の時刻と tick と hb を席ごとに 1 行で出す（見本の dormant:all の枝）。
 
 use tsuzuri_contract::EpochSecs;

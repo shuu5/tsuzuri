@@ -1,4 +1,4 @@
-//! 節点の近傍（見本の ui.js の svgAround・chainAround と aroundBlock の数の行・便 g-node）。
+//! 節点の近傍（見本の ui.js の svgAround・chainAround と aroundBlock の数の行）。
 //! たどる・選ぶ・数えるのは中核の crate が済ませた近傍の電文（契約の型の AroundDoc）で、
 //! ここは電文の値を写して座標を決めるだけ（節点を選ぶ分岐と数え直しを書かない）。
 //! 図の配置・線の端と道・図の字・狭い幅の一覧の並び・数の行の字は純粋な関数にして host で試す。

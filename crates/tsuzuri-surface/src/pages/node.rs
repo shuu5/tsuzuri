@@ -1,5 +1,5 @@
 //! 節点の頁（見本の bead.html・block は頭と概要の node と、つながりの around と、本文と記録の body と、
-//! run の時間軸の timeline の 4 つ・詳細の表示の順は判断の記録 ADR-30 決定 (4)・行 g-node-body）。
+//! run の時間軸の timeline の 4 つ・詳細の表示の順は判断の記録 ADR-30 決定 (4)）。
 //! query の page=node と id で開く。
 
 use crate::frame::{Column, PageDef, STACK};

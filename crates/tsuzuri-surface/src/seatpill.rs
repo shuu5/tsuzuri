@@ -1,4 +1,4 @@
-//! header の席の pill（行 g-seatpill・見本の ui.js の topHTML の `.seatpill` と seatPillHTML と seatCard）:
+//! header の席の pill（見本の ui.js の topHTML の `.seatpill` と seatPillHTML と seatCard）:
 //! 状態の記号と語 orchestrator と、応答なしなら応答なしになった時からの経過を出し、指を置くと席の card を出す。
 //! 中身は口 /api/seat（契約の型の SeatCard・読み手は project の seat）から読み、電文を決めずに写す。
 //! 電文に無い見本の値（管理の tick の最後の時刻からの経過）は出さない。

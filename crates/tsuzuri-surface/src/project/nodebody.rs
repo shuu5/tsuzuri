@@ -1,10 +1,10 @@
-//! block「本文と記録」（行 g-node-body・判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
+//! block「本文と記録」（判断の記録 ADR-30 決定 (4)・要件 FR5）: 節点の頁の 3 つ目の block（つながりの後・
 //! run の時間軸の前）。中心の節点が台帳の bead（契約・epic・memo・問い）の時だけ、その 1 本の引きの口（`ITEM_PATH`）から
 //! 本文と記録（notes）を読み、本文の書式の部品 md で描いて 2 つの畳める段に置く（どちらの表示の型でも、その browser の
 //! 保存に前の開き閉じが無ければ閉じて始め、開き閉じは畳める段の記録とその browser の保存〔段の種類ごとの鍵 2 つ・
-//! store の FOLD_KEYS・行 g-fold-keep〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
+//! store の FOLD_KEYS〕に書き戻す）。設計の節点と走行と決定は段を出さない。読む bead の決め方と中身の 3 値は
 //! 純な関数にして host で試し、DOM は wasm の target のときだけ組み立てる。
-//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る（行 g-node-excerpt）。
+//! 1 本の引きの読みは頁に 1 つ（`item_source`）で、block「節点」の概要の箱も同じ読みから本文の頭の 1 行を取る。
 
 use tsuzuri_contract::graph::{AroundRow, NodeKind};
 use tsuzuri_contract::ledger::{BeadId, ITEM_PATH, LedgerItem};
