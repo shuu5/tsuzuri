@@ -78,8 +78,8 @@ pub enum Completion {
     },
     /// **CI の判定が出ること**（`pipe land` の終端・設計 contract-source.md §5）: forge の CLI を子 process で
     /// 撃ち、着地した commit の run が**終端の判定**（success / failure）に達する。まだ走っている周・
-    /// run が 1 本も無い周・読めない周は満たされない（deadline まで待つ）。判定そのものは呼び手が
-    /// [`ci_now`] で読み直す（`LandTurn` と同型＝待ちは「解けたか」だけを答える）。
+    /// run が 1 本も無い周・読めない周は満たされない（deadline まで待つ）。判定は呼び手が読み直さず、待ちが
+    /// 最後に読んだ答えを [`ci_wait`] から受ける（読み直しの 1 回が測れずに success を落とさない・memo t3-hub.74.49.6）。
     CiResult {
         /// CI の行を撃つ作業 dir（対象 repo）。
         repo: std::path::PathBuf,
@@ -159,8 +159,7 @@ impl Completion {
                     crate::pipe::admission::Cpu::priced(*cores, *cap),
                 )
             }
-            Self::LandTurn { .. } => self.round(None).met,
-            Self::CiResult { repo, sha, cmd, .. } => ci_now(repo, sha, cmd).is_some(),
+            Self::LandTurn { .. } | Self::CiResult { .. } => self.round(None).met,
             Self::LandWindow { state_dir, repo } => crate::pipe::cli::window_now(state_dir, repo).is_open(),
             Self::HostCalm { runnable_per_core, blocked_per_core } => crate::pipe::health::calm_now(
                 crate::pipe::health::PerCore { runnable: *runnable_per_core, blocked: *blocked_per_core },
@@ -186,13 +185,18 @@ impl Completion {
     /// 印を**先に**取り（[`mark_of`]）、前回の観測と印が同じ周は replay を省いて前回の判定を使う
     /// （[`reuse`]）。違う周・印を取れない周は印を [`observe`] へ渡して読み直す。他の variant は印なし
     /// （`None`）で毎周そのまま評価する（meminfo / 実測行 / pid の生存は不変・C3.4 の 1 実装のまま）。
+    /// [`Self::CiResult`] は CI を 1 回だけ読み、答え（[`CiRead`]）を観測に載せる（success か failure で満ちる）。
     fn round(&self, last: Option<Glance>) -> Glance {
+        if let Self::CiResult { repo, sha, cmd, .. } = self {
+            let read = ci_read(repo, sha, cmd);
+            return Glance { mark: None, met: matches!(read, CiRead::Success | CiRead::Failure), ci: Some(read) };
+        }
         let Self::LandTurn { state_dir, run } = self else {
-            return Glance { mark: None, met: self.is_met() };
+            return Glance { mark: None, met: self.is_met(), ci: None };
         };
         let mark = mark_of(state_dir);
         match reuse(last.as_ref(), mark.as_ref()) {
-            Some(met) => Glance { mark, met },
+            Some(met) => Glance { mark, met, ci: None },
             None => observe(mark, state_dir, run),
         }
     }
@@ -398,6 +402,8 @@ struct Glance {
     mark: Option<Mark>,
     /// 満たされたか。
     met: bool,
+    /// [`Completion::CiResult`] の周に読んだ CI の答え（ほかの variant は `None`・[`ci_wait`] が最後の周の値を返す）。
+    ci: Option<CiRead>,
 }
 
 /// file 1 本の印を取る。**無い file は `Ok(None)`**（印の値の 1 つ）・metadata を読めない周は `Err`。
@@ -447,7 +453,7 @@ fn observe(mark: Option<Mark>, state_dir: &Path, run: &str) -> Glance {
     #[cfg(test)]
     tests::REPLAYS.with(|count| count.set(count.get() + 1));
     let met = !matches!(crate::pipe::land::turn_now(state_dir, run), crate::pipe::land::Turn::After(_));
-    Glance { mark, met }
+    Glance { mark, met, ci: None }
 }
 
 /// [`Completion::AccountFree`] の 1 周分の観測。
@@ -526,18 +532,34 @@ const ACCOUNT_POLL: Duration = Duration::from_secs(5);
 /// 前回の観測（[`Glance`]・loop の局所状態）を次の周へ渡し、材料の印が変わらない周は replay を省く。
 ///
 /// 周の間に眠る長さは [`Completion::period`] と上限までの残りの小さい方である（最初の評価は眠る前・上限を
-/// 越えて周期ぶん余計に眠らない・設計 contract-source.md §50）。
+/// 越えて周期ぶん余計に眠らない・設計 contract-source.md §50）。loop は [`ci_wait`] と共有する [`watch`] の 1 本である。
 pub fn wait(completion: Completion, deadline: Duration) -> Result<(), Timeout> {
+    if watch(&completion, deadline).met {
+        Ok(())
+    } else {
+        Err(Timeout)
+    }
+}
+
+/// [`Completion::CiResult`] を [`wait`] と同じ loop で待ち、**最後の周に読んだ答え**を返す（呼び手は読み直さない・設計
+/// contract-source.md §5・memo t3-hub.74.49.6）。満ちた周は success か failure、上限の周は最後の周の pending か unmeasured
+/// （2 つを畳まない）。CI の完了条件でない値は答えを読まないので [`CiRead::Unmeasured`]。
+pub fn ci_wait(completion: Completion, deadline: Duration) -> CiRead {
+    watch(&completion, deadline).ci.unwrap_or(CiRead::Unmeasured)
+}
+
+/// 唯一の待機の loop（[`wait`] と [`ci_wait`] の 2 つの口が共有する）。満ちた周の観測か、上限の周の最後の観測を返す。
+fn watch(completion: &Completion, deadline: Duration) -> Glance {
     let started = Instant::now();
     let period = completion.period();
     let mut last = None;
     loop {
         let now = completion.round(last);
         if now.met {
-            return Ok(());
+            return now;
         }
         let Some(left) = deadline.checked_sub(started.elapsed()).filter(|left| !left.is_zero()) else {
-            return Err(Timeout);
+            return now;
         };
         last = Some(now);
         std::thread::sleep(period.min(left));
@@ -654,16 +676,16 @@ mod tests {
     /// (a) 前回の観測と今の印が両方在って等しい周だけ前回の `met` を返す。
     #[test]
     fn fleet_wait_land_turn_reuses_verdict_when_stamp_unchanged() {
-        let waiting = Glance { mark: Some(mark(1, 2)), met: false };
+        let waiting = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
         assert_eq!(reuse(Some(&waiting), Some(&mark(1, 2))), Some(false), "待ち続ける判定を使い回す");
-        let met = Glance { mark: Some(mark(1, 2)), met: true };
+        let met = Glance { mark: Some(mark(1, 2)), met: true, ci: None };
         assert_eq!(reuse(Some(&met), Some(&mark(1, 2))), Some(true), "前回の met をそのまま返す");
     }
 
     /// (b) len / mtime / inode / verdict の列のどれかが違う周は `None`＝読み直す。
     #[test]
     fn fleet_wait_land_turn_rereads_when_stamp_changes() {
-        let last = Glance { mark: Some(mark(1, 2)), met: false };
+        let last = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
         let mut longer = mark(1, 2);
         longer.log.0 += 1;
         assert_eq!(reuse(Some(&last), Some(&longer)), None, "log の len");
@@ -683,10 +705,10 @@ mod tests {
     /// (c) 前回か今の印が `None` の周は `None`（fail-closed の pin・印を取れない周は必ず読み直す）。
     #[test]
     fn fleet_wait_land_turn_rereads_when_stamp_missing() {
-        let last = Glance { mark: Some(mark(1, 2)), met: false };
+        let last = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
         assert_eq!(reuse(None, Some(&mark(1, 2))), None, "前回の観測が無い");
         assert_eq!(reuse(Some(&last), None), None, "今の印を取れない");
-        let unmarked = Glance { mark: None, met: false };
+        let unmarked = Glance { mark: None, met: false, ci: None };
         assert_eq!(reuse(Some(&unmarked), Some(&mark(1, 2))), None, "前回の印を取れていない");
         assert_eq!(reuse(None, None), None);
     }
@@ -1225,6 +1247,50 @@ mod tests {
             let found = calls.first().map(|call| (call.program.as_str(), call.cwd.as_deref(), call.args.clone()));
             let args = ["pr", "view", "scribe2/s2-x", "--json", "state,mergeCommit"].map(str::to_owned).to_vec();
             assert_eq!(found, Some(("gh", Some(repo), args)), "program は gh・cwd は repo・--repo なし");
+        }
+    }
+
+    /// CI の stub（撃たれた順に `answers` の rc と stdout を返し、尽きた後は最後の答えを返し続ける）を据える。
+    fn answering(answers: Vec<(i32, &'static [u8])>) -> crate::pipe::fixture::Stub {
+        let turn = Cell::new(0_usize);
+        crate::pipe::fixture::Stub::install(move |_| {
+            let at = turn.get();
+            turn.set(at + 1);
+            let (rc, stdout) = answers.get(at).or(answers.last()).copied().unwrap_or((1, b"".as_slice()));
+            crate::pipe::fixture::exited(rc, stdout)
+        })
+    }
+
+    /// 走っている run の答え（pending）。
+    const RUNNING: &[u8] = br#"[{"status":"in_progress","conclusion":""}]"#;
+
+    /// 完了して success の答え。
+    const PASSED: &[u8] = br#"[{"status":"completed","conclusion":"success"}]"#;
+
+    /// 完了して failure の答え。
+    const FAILED: &[u8] = br#"[{"status":"completed","conclusion":"failure"}]"#;
+
+    /// CI の待ちは満ちた周に読んだ答えを返し、読み直さない（memo t3-hub.74.49.6 の道 1）: 走っている → success で success、
+    /// 走っている → failure で failure を返し、どちらも撃つのは 2 回（3 回目に置いた rc 1 の答えは撃たれない）。
+    #[test]
+    fn vcil_wait_returns_the_read_that_met_without_rereading() {
+        use super::{ci_wait, CiRead};
+        for (met, want) in [(PASSED, CiRead::Success), (FAILED, CiRead::Failure)] {
+            let stub = answering(vec![(0, RUNNING), (0, met), (1, PASSED)]);
+            assert_eq!(ci_wait(ci_watch(Duration::ZERO), Duration::from_secs(5)), want, "満ちた周の答え: {want:?}");
+            assert_eq!(stub.calls().len(), 2, "満ちた後に読み直さない: {want:?}");
+        }
+    }
+
+    /// 上限まで満ちない待ちは最後の周に読んだ答えを返し、pending と unmeasured を畳まない: 1 回目が rc 1 で後は走り続ける
+    /// 周は pending、1 回目が走っていて後は rc 1 の周は unmeasured（どちらも最初の答えでない）。
+    #[test]
+    fn vcil_wait_keeps_the_last_read_at_the_limit() {
+        use super::{ci_wait, CiRead};
+        for (first, rest, want) in [((1, PASSED), (0, RUNNING), CiRead::Pending), ((0, RUNNING), (1, PASSED), CiRead::Unmeasured)] {
+            let stub = answering(vec![first, rest]);
+            assert_eq!(ci_wait(ci_watch(Duration::ZERO), Duration::from_millis(120)), want, "上限の周の最後の答え: {want:?}");
+            assert!(stub.calls().len() >= 2, "上限まで 2 回以上撃つ: {}", stub.calls().len());
         }
     }
 }

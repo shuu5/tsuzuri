@@ -7,9 +7,10 @@
 //!
 //! 歯は族ごとの子 module にも置く（設計 docs/design/carry-prep.md §10 行 l・`s2-07l.684`）: `follow`（接頭辞 `pipe_follow_`）・
 //! `retire`（接頭辞 `pipe_retire_` / `pipe_train_`）・`order`（接頭辞 `pipe_terminal_` / `pipe_order_`）・`rebase`（接頭辞
-//! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）。この file には共有の helper と
-//! const・他の族の歯だけを残す。
+//! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）・`cilast`（接頭辞 `vcil_`・
+//! 終端の CI の照合・器の memo t3-hub.74.49.6）。この file には共有の helper と const・他の族の歯だけを残す。
 
+mod cilast;
 mod follow;
 mod order;
 mod rebase;

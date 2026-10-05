@@ -721,7 +721,7 @@ fn land_with_ci_poll(json: &str, ci_wait_s: u64, ci_poll_s: u64) -> (Output, std
 const CI_RUNNING: &str = "[{\"status\":\"in_progress\",\"conclusion\":null}]";
 
 /// (§50 形 2) 照合は rules 行 `pipe.ci_poll_s` の間隔で撃つ: 上限 2 秒・間隔 1 秒の周は `terminal=ci:unmeasurable` で、
-/// 偽 CI の呼び出しは 2 回以上 4 回以下（待ちの中の最初・1 秒・上限と、終端の読み直しの 1 回・20 ms の周期なら数十回）。
+/// 偽 CI の呼び出しは 2 回以上 4 回以下（待ちの中の最初・1 秒・上限の周・終端は読み直さない・20 ms の周期なら数十回）。
 #[test]
 fn pipe_terminal_ci_poll_interval_bounds_the_ci_calls() {
     let (out, _, tools, dirs) = land_with_ci_poll(CI_RUNNING, 2, 1);
@@ -741,7 +741,7 @@ fn pipe_terminal_ci_poll_first_check_is_before_the_sleep() {
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "close まで通った land は rc 0: {}", stderr_of(&out));
     assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
     assert!(took < std::time::Duration::from_secs(10), "間隔ぶん眠ってから照合しない: {took:?}");
-    assert_eq!(tools.ci_call_count(), 2, "待ちの最初の 1 回と終端の読み直しの 1 回");
+    assert_eq!(tools.ci_call_count(), 1, "待ちの最初の 1 回（終端は待ちが読んだ答えで分けて読み直さない）");
     clean(&[&dirs[0], &dirs[1]]);
 }
 

@@ -653,7 +653,7 @@ fn terminal_tail(state: &Path, id: &str) -> Vec<String> {
 }
 
 /// 列の終端（設計 contract-source.md §53・行 be）: 常に success の偽 CI を持つ 3 本の列の着地で、先端でない 2 本（a / b）
-/// も自分を祖先に持つ先端の CI で照合し、3 本とも push → CI → close の 3 段を通す。偽 CI の呼び出しは 3 本 × 2 回＝6 回で、
+/// も自分を祖先に持つ先端の CI で照合し、3 本とも push → CI → close の 3 段を通す。偽 CI の呼び出しは 3 本 × 1 回＝3 回で、
 /// 最後に渡った sha は先端の sha（最後に終端する便は先頭の a＝先端でない便も先端の sha で照合した）。base は先端でない
 /// 便が CI を照合せず `ci:unmeasurable` で止まる（呼び出し 2 回・close 1 本）＝RED。
 #[test]
@@ -674,7 +674,7 @@ fn pipe_train_terminal_every_run_checks_the_tip_ci_and_closes() {
             "stdout の terminal= は closed: {id} {stdout}"
         );
     }
-    assert_eq!(tools.ci_call_count(), 6, "偽 CI は 3 本 × （待ちの最初の 1 回と読み直しの 1 回）");
+    assert_eq!(tools.ci_call_count(), 3, "偽 CI は 3 本 × 待ちの最初の 1 回（終端は読み直さない）");
     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
     assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [tip_sha.as_str()], "最後に渡った sha は先端の sha");
     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip_sha, "偽 remote の main は先端の sha");

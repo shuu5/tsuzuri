@@ -28,7 +28,7 @@ use crate::cli_outcome::{Outcome, RC_OK};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::lifecycle::{self, Place};
 use crate::fleet::store::{self, append_line};
-use crate::fleet::{ci_now, cli::now_utc, CiRun, Completion, EventKind, Stage, SCHEMA};
+use crate::fleet::{ci_wait, cli::now_utc, CiRead, Completion, EventKind, Stage, SCHEMA};
 use crate::name::{BUILD_COMMIT, NAME};
 use std::path::{Path, PathBuf};
 
@@ -263,8 +263,10 @@ pub(in crate::pipe) enum PushTip<'a> {
 /// 3 件並ぶ。止まった段から先は撃たず、記録もそこで終わる（起きていない段の event を積まない）。
 /// remote を持たない repo（宣言を読めた上で `remote` の行が無い）の便は push も CI の照合も撃たず、台帳の close だけを
 /// `landed <sha> ci=none` の理由で撃つ（記すのは `close:ok` の 1 件・結末は [`Terminal::ClosedWithoutCi`]）。
-/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ちも
-/// `ci_now` も）を先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。
+/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ち）を
+/// 先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。push の後の remote の
+/// 追跡の ref が自分の sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、
+/// 渡された側によらずその commit を先端とする（[`pushed_past`]）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
 /// [`PushTip::Adopted`] の周は push を撃たず（記帳もしない）、`Behind` と同じく先端の CI で照合する（先端が自分の sha なら
 /// reason に `tip=` を置かない）。
 pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
@@ -294,6 +296,10 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
         }
         note(entry, &format!("push:{remote}"));
     }
+    // push が押した commit で照合する（forge の CI は push の先端にだけ run を持つ・memo t3-hub.74.49.6 の道 2）。受け入れの周は
+    // 押していないので渡された側のまま。
+    let pushed = (!matches!(tip, PushTip::Adopted(_))).then(|| pushed_past(entry.repo, remote, sha)).flatten();
+    let tip = pushed.as_deref().map_or(tip, PushTip::Behind);
     // 先端でない sha には forge の CI の run が付かない＝自分を祖先に持つ先端の CI で照合する（§53）。祖先でない周と
     // 測れない周（rc 0 以外は区別しない）は照合を撃たない（close しない極性）。
     let checked = match tip {
@@ -304,24 +310,24 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
             return Terminal::CiUnmeasurable;
         }
     };
-    // (2) CI の照合。上限まで rules 行の間隔で撃ち（設計 §50）、**success 以外は close しない**（FailClosed）。
+    // (2) CI の照合。上限まで rules 行の間隔で撃ち（設計 §50）、待ちが最後に読んだ答えで分ける（読み直さない・memo
+    // t3-hub.74.49.6 の道 1）。**success 以外は close しない**（FailClosed）。
     let watch = Completion::CiResult {
         repo: entry.repo.to_path_buf(),
         sha: checked.to_owned(),
         cmd: facts.ci_cmd.clone(),
         every: std::time::Duration::from_secs(entry.ci_poll_s),
     };
-    let _ = crate::fleet::wait(watch, std::time::Duration::from_secs(entry.ci_wait_s));
-    match ci_now(entry.repo, checked, &facts.ci_cmd) {
-        None => {
+    match ci_wait(watch, std::time::Duration::from_secs(entry.ci_wait_s)) {
+        CiRead::Pending | CiRead::Unmeasured => {
             note(entry, "ci:unmeasurable");
             return Terminal::CiUnmeasurable;
         }
-        Some(CiRun::Failure) => {
+        CiRead::Failure => {
             note(entry, "ci:failure");
             return Terminal::CiFailed;
         }
-        Some(CiRun::Success) => note(entry, "ci:success"),
+        CiRead::Success => note(entry, "ci:success"),
     }
     // (3) 台帳の close。閉じられない周も着地は取り消さない（やり直しは `--terminal-only`・冪等）。先端で照合した周は
     // reason に先端の id を後置する（FR50・§53）。
@@ -331,6 +337,14 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
         PushTip::Adopted(head) => CloseTail::CiSuccess((head != sha).then_some(head)),
     };
     close_bead(entry, &close_reason(sha, tail))
+}
+
+/// push の後の remote の追跡の ref（`refs/remotes/<remote>/main`・git が push の押した値に揃える）が自分の sha の子孫で
+/// 自分の sha でない時だけ、その sha を返す（memo t3-hub.74.49.6 の道 2）。読めない周（remote が名でない）・自分の sha の周・
+/// 子孫でない周は `None`（渡された側のまま照合する＝今の終端と同じ）。
+fn pushed_past(repo: &Path, remote: &str, sha: &str) -> Option<String> {
+    let head = git_line(repo, &["rev-parse", "--verify", "-q", &format!("refs/remotes/{remote}/main")])?;
+    (head != sha && git_ok(repo, &["merge-base", "--is-ancestor", sha, &head])).then_some(head)
 }
 
 /// 台帳の close を撃ち、結末（[`Terminal::Closed`] か [`Terminal::CloseFailed`]）を記す（経路 (1) と (2) が共有する 1 本）。
