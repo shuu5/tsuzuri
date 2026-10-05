@@ -1,0 +1,205 @@
+diff --git a/crates/tsuzuri-boundary/tests/agref.rs b/crates/tsuzuri-boundary/tests/agref.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..097e85ee60692b3ab3708b773962c50ff65e233f
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/agref.rs
+@@ -0,0 +1,147 @@
++//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
++//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
++//! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
++//! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
++#![cfg(test)]
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++/// 参照の file の置き場（workspace の根から）。
++const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
++
++/// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
++const CLAUSES: [(&str, u8, &str); 12] = [
++    (
++        "single-home",
++        0,
++        "席の起草の決まりの文はこの file だけに置き",
++    ),
++    ("chain", 3, "行は数珠つなぎにしない"),
++    ("depends-why", 3, "なぜ並べられないかを節に 1 文で書く"),
++    (
++        "placement-order",
++        3,
++        "置き場の物差しの順は、領域（domain）の親に置く",
++    ),
++    (
++        "placement-compromise",
++        3,
++        "節に「置き場の妥協」の 1 文を書く",
++    ),
++    ("goal-count", 3, "歯の本数を書かない"),
++    ("doc-id", 3, "module の頭の doc に行の id を書かない"),
++    ("help-width", 3, "器の入れ子の歯（接頭辞 cli_help_）"),
++    ("source-teeth", 5, "振る舞いで測れない訳を節に 1 文書く"),
++    ("detour", 9, "回り込まない"),
++    ("tokens", 9, "token を節約する"),
++    ("budget", 10, "予算は token ちょうど 150000"),
++];
++
++/// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字）。
++const ABSENT: [(&str, &str); 2] = [("width-copied", "100 字"), ("old-budget", "150000 以下")];
++
++/// 器の案内の幅の歯の fn の頭（手引きが名指す接頭辞）。
++const HELP_FN: &str = "fn cli_help_";
++
++fn root() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
++}
++
++fn reference() -> String {
++    fs::read_to_string(root().join(REFERENCE)).expect("参照の file を読む")
++}
++
++/// 節 n の塊（見出しの行 ## n. から次の ## の行の前まで・0 は最初の見出しの前）。
++fn section(text: &str, n: u8) -> String {
++    let head = format!("## {n}. ");
++    let mut inside = n == 0;
++    let mut out = String::new();
++    for line in text.lines() {
++        if line.starts_with("## ") {
++            inside = line.starts_with(&head);
++        }
++        if inside {
++            out.push_str(line);
++            out.push('\n');
++        }
++    }
++    out
++}
++
++/// 節の塊の中に 1 度だけ在らない句の名と、file に在る無いはずの字の名（表の順）。
++fn faults(text: &str) -> Vec<&'static str> {
++    let mut out: Vec<&'static str> = CLAUSES
++        .iter()
++        .filter(|(_, n, words)| section(text, *n).matches(words).count() != 1)
++        .map(|(name, _, _)| *name)
++        .collect();
++    out.extend(
++        ABSENT
++            .iter()
++            .filter(|(_, words)| text.contains(words))
++            .map(|(name, _)| *name),
++    );
++    out
++}
++
++/// dir の下の .rs の file の、頭の空白を除いて字 fn cli_help_ で始まる行の数。
++fn help_fns(dir: &Path) -> usize {
++    let Ok(entries) = fs::read_dir(dir) else {
++        return 0;
++    };
++    entries
++        .flatten()
++        .map(|entry| entry.path())
++        .map(|path| {
++            if path.is_dir() {
++                help_fns(&path)
++            } else if path.extension().is_some_and(|ext| ext == "rs") {
++                let text = fs::read_to_string(&path).unwrap_or_default();
++                text.lines()
++                    .filter(|line| line.trim_start().starts_with(HELP_FN))
++                    .count()
++            } else {
++                0
++            }
++        })
++        .sum()
++}
++
++#[test]
++fn agref_reference_holds_each_clause_once_in_its_section() {
++    assert_eq!(faults(&reference()), Vec::<&str>::new());
++}
++
++#[test]
++fn agref_one_clause_removed_doubled_or_moved_is_named() {
++    let text = reference();
++    for (name, _, words) in CLAUSES {
++        let removed = text.replacen(words, "", 1);
++        assert_eq!(faults(&removed), vec![name], "外した {name}");
++        let doubled = text.replacen(words, &format!("{words}・{words}"), 1);
++        assert_eq!(faults(&doubled), vec![name], "重ねた {name}");
++        let moved = format!("{removed}\n- {words}\n");
++        assert_eq!(faults(&moved), vec![name], "最後の節へ動かした {name}");
++    }
++}
++
++#[test]
++fn agref_copied_width_and_old_budget_are_named() {
++    let text = reference();
++    let width = format!("{text}\n- 器の案内の行は描いて 100 字以内。\n");
++    assert_eq!(faults(&width), vec!["width-copied"]);
++    let old = text.replacen("ちょうど 150000", "150000 以下", 1);
++    assert_eq!(faults(&old), vec!["budget", "old-budget"]);
++}
++
++#[test]
++fn agref_help_width_tooth_lives_in_the_vessel() {
++    let crates = root().join("scribe2/crates");
++    let found: usize = fs::read_dir(&crates)
++        .expect("器の crates の dir を読む")
++        .flatten()
++        .map(|entry| help_fns(&entry.path().join("tests")))
++        .sum();
++    assert!(found > 0, "器の歯の dir に {HELP_FN} の歯が無い");
++}
+diff --git a/plugin/skills/agent-discipline/reference.md b/plugin/skills/agent-discipline/reference.md
+index f5068d9b5cf415ebf30789a6c32f47578eac27a0..c20764e12b77f7b6d74c9d614f88bc41dffbf04d 100644
+--- a/plugin/skills/agent-discipline/reference.md
++++ b/plugin/skills/agent-discipline/reference.md
+@@ -1,6 +1,6 @@
+ # 係の規律の参照（agent-discipline）
+ 
+-前置きの手引き SKILL.md の決まりの手順と前例である。席の手元の手引き（起草役の共通の守り）の段を、判断の記録 ADR-59 の決定 (6) でここへ移した。検証の群の手順は判断の記録 ADR-61 の決定 (9)。この file も天井で、決まりの正本は門と歯である。
++前置きの手引き SKILL.md の決まりの手順と前例である。席の手元の手引き（起草役の共通の守り）の段を、判断の記録 ADR-59 の決定 (6) でここへ移した。検証の群の手順は判断の記録 ADR-61 の決定 (9)。この file も天井で、決まりの正本は門と歯である。判断の記録 ADR-63 の決定 (2) で、席の起草の決まりの文はこの file だけに置き、頼みの文はこの file を名指す。
+ 
+ 記号: <置き場> は起草の置き場（repo の git config の鍵 tsuzuri.draftsdir）、<名> は起こしの名、<群 id> は群の id。
+ 
+@@ -27,9 +27,14 @@
+ - verify の 1 行目は git apply --reverse --check docs/design/patch/<行>.patch、続けて clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）と、done の歯を撃つ cargo nextest run -p <pkg> --test <file> --no-tests=fail <接頭辞>_ の行。cargo run -q -p xtask -- check は器の共通 verify が撃つので書かない。
+ - verify の filter が当たる歯の file は全部 write-set に入れる。書かない着地済みの file は置き場だけの =<path> で足す（無いと受付が teeth-outside-write-set で断る）。
+ - depends は同じノートの行だけ（ほかのノートの行は folio check が違反にする）。便の順は toml の depends の欄で決まる。
++- 行は数珠つなぎにしない。割る時は、まず互いに depends を持たない切り方（触る file が交わらない・交わっても差が両順で当たる）を探す。depends は、後の行の code が前の行の code を呼ぶか前の行の歯を書き替える時だけに書き、書いた時はなぜ並べられないかを節に 1 文で書く。
++- 置き場の物差しの順は、領域（domain）の親に置く、交わる時は差の塊の文脈を離して両順で当てる（判断の記録 ADR-60）、それでも当たらなければ depends を書く。交わりのために置き場・名・並びを曲げた行は、節に「置き場の妥協」の 1 文を書く。
+ - 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte まで。crate の src の file の 1500 行の上限の余地が見込みより小さい時は growth の欄を足す。
+ - ノートの行は 32 まで（条 P-28）。計画だけの行を契約の行へ移す時は、同じ commit で規則の行 R-33 の値を下げる。
+ - 節が大きい行は、頭の段に done の各項と verify の行の対応を書く。審査役は Read・Grep・Glob だけで読むので、節と done に「審査が撃って確かめる」前提の字を書かない。
++- 行の節（契約表の goal に写る字）に歯の本数を書かない（本数の正本は欄 done-teeth・条 P-2.3）。
++- 根の src の module の頭の doc に行の id を書かない（行の id は契約と commit が持つ）。
++- 器の案内の行（help）の幅は、器の入れ子の歯（接頭辞 cli_help_）が落とす。
+ 
+ ## 4. 差の file の形
+ 
+@@ -44,6 +49,7 @@
+ - 新しい行の歯は tests/<接頭辞>.rs の 1 本（段）で足し、群 tests/<群>/ の main.rs と module を書かない。群に module を足す行は、xtask/tests/teeth1/kfold.rs の表 GROUPS も直す。
+ - 着地した群の module を直す行は、その module の file だけを write-set に置き、verify を -p <pkg> --test <群> --no-tests=fail <接頭辞>_ にする。
+ - 歯の fn の名は crate の中で一意にする。新しい接頭辞は、契約表の verify の filter の語と群の module の名のどれとも部分の字で重ならない。
++- 実装の source の字を照らす歯を足す時は、振る舞いで測れない訳を節に 1 文書く。
+ - 新しい歯の file は、頭の //! の行の続きのすぐ次の行に #![cfg(test)] を置き、間に空の行を挟まない。
+ - 歯の file を path で読む歯は、tests/ の直下に固定せず、名で探すか include_str! で読む。
+ - 歯の fn も clippy の cognitive_complexity と too_many_lines で落ちる。歯を直したら clippy を先に撃つ。
+@@ -70,13 +76,15 @@
+ 
+ - gh は頭の語に置き、出力は > か | で受ける。置換・for・heredoc の中の gh と git の字は、読むだけでも器の門が断る。書き換えの script は Write の道具で file に書き、python3 <file> で撃つ。
+ - 背景で撃った物の終わりの知らせは届かないことがある。log の rc の行と ps で自分で見る（pgrep -f の待ちは自分の bash の行に当たって終わらない）。
++- 門や hook に断られた命令は、別の命令（git commit-tree・branch -f・update-ref ほか）で回り込まない。断りの字と止まった所を notes.md に書いて席に知らせる。
++- token を節約する。build・clippy・nextest の出力は file に落とし、tail か grep で落ちた所だけを読む。大きな file は要る範囲だけ読み（offset と limit）、同じ file の全文を何度も読み直さない。
+ 
+ ## 10. 検証の群（判断の記録 ADR-61）
+ 
+ 1. 全文を読む攻めの係（検証役 1 体・頭の予算だけ・群の上限に入らない）が、分からない（U）の主張の一覧 <置き場>/<群 id>/unknowns.tsv を書く（1 行に id・主張・判じられない訳・資料の path をタブで区切る）。
+ 2. 一覧が 3 行未満なら群を起こさない。18 行を越えたら、下書きを割って攻め直すか 1 体の道に戻る（割った下書きは同じ対象なので、群は 7 日に 1 つの塊だけ）。下書きの種類は 問いの本文・判断の記録・消す行・緩める問い の 4 つだけ。
+ 3. 席は群を起こす前に <置き場>/<群 id>/plan.json を置く。欄は type（tsuzuri:verifier）・target（頭の対象と同じ）・draft・attacker・members（name・model・claims・paths）と、在れば ruling。1 体の割りの主張は 6 まで、係どうしで重ねず、和は一覧の全部。
+-4. 反証役 3 体までを 1 つの返事で並べて起こす。頭は 4 行に 5 行目 群: <群 id> <i>/<k> を足し、予算は token 150000 以下、Agent の呼びの model は計画の値。群の係は続けず、段ごとに新しい係を起こす。
++4. 反証役 3 体までを 1 つの返事で並べて起こす。頭は 4 行に 5 行目 群: <群 id> <i>/<k> を足し、予算は token ちょうど 150000、Agent の呼びの model は計画の値。群の係は続けず、段ごとに新しい係を起こす。
+ 5. 群の合計が止める線（新しい量 405000・読み直し 6750000）に届いたら、新しい群の係を起こさない。同じ対象の群は 7 日に 1 つ（例外は、問いの本文が群の id を名指した裁定の裁定 id を計画の ruling に書く）。
+ 6. 席の流れの道具（Workflow）で係を起こさない（起こしの門が全部断る・使うなら持ち主に問う）。
+ 7. 群の終わりに、問いの本文か判断の記録の概要と推奨が頼る主張の全部と、記録から（D）1 件以上と、確かめた（V）2 件以上を席が照らし直す。外れが 1 件でも在れば群の全部の主張を下げる。
