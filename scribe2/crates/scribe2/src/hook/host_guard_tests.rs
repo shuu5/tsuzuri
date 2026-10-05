@@ -84,14 +84,14 @@ fn bash(command: &str) -> String {
     format!("{{\"cwd\":\"/tmp\",\"tool_name\":\"Bash\",\"tool_input\":{{\"command\":{}}}}}", crate::fleet::json_lite::quote(command))
 }
 
-/// 種類は閉じた 6 値で、const slice は宣言順に 6 本（git → rm → tmux → 台帳 → 自身の設定 → 公開）。行を持たないのは自身の設定だけ。
+/// 種類は閉じた 7 値で、const slice は宣言順に 7 本（git → rm → tmux → 台帳 → 自身の設定 → 公開 → 自分に当たる待ちと止め）。行を持たないのは自身の設定だけ。
 #[test]
-fn host_guard_kind_slice_is_the_six_kinds_in_declaration_order() {
+fn host_guard_kind_slice_is_the_closed_kinds_in_declaration_order() {
     assert!(is_declaration_order(KINDS, |kind| kind as usize), "KINDS は宣言順: {KINDS:?}");
     let words: Vec<&str> = KINDS.iter().map(|kind| kind.as_str()).collect();
-    assert_eq!(words, ["git", "rm", "tmux", "ledger", "self", "publish"], "6 値の語");
+    assert_eq!(words, ["git", "rm", "tmux", "ledger", "self", "publish", "self-match"], "7 値の語");
     let rows: Vec<Option<&str>> = KINDS.iter().map(|kind| kind.row()).collect();
-    assert_eq!(rows, [Some(super::GIT_ROW), Some(RM_ROW), Some(TMUX_ROW), Some(LEDGER_ROW), None, Some(super::PUBLISH_ROW)], "行 id");
+    assert_eq!(rows, [Some(super::GIT_ROW), Some(RM_ROW), Some(TMUX_ROW), Some(LEDGER_ROW), None, Some(super::PUBLISH_ROW), Some(super::SELF_MATCH_ROW)], "行 id");
     assert!(!is_declaration_order(&[Kind::Rm, Kind::Git], |kind| kind as usize), "述語は並べ替えを落とす");
 }
 

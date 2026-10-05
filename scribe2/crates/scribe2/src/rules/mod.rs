@@ -360,7 +360,8 @@ pub enum RuleKind {
     /// （[`crate::ledger::graph`]）が id で引いて整数だけを読み、越えた親を over に名指す。0 は over を数えない。
     LedgerOpenChildrenMax,
     /// host の破壊防止の見張りの語列（設計 vessel-hook.md §11 行 b・ADR-0056）。値は [`Self::RunnerDeniedCommands`] と
-    /// 同じ形の語列の配列で、**1 kind で行が 3 つ**（id は [`crate::hook::host_guard::WORD_ROWS`]・種類ごとに 1 行）。
+    /// 同じ形の語列の配列で、**1 kind で行が 4 つ**（語列の 3 行は id が [`crate::hook::host_guard::WORD_ROWS`]・種類ごとに 1 行。
+    /// 4 つ目は自分に当たる待ちと止めの [`crate::hook::host_guard::SELF_MATCH_ROW`] で、command guard と intake は読まない）。
     HostGuardDeniedCommands,
     /// host の破壊防止の見張りの rm の守る集合（設計 vessel-hook.md §11 行 b / c）。値は守る集合の記号の列（各語を
     /// [`crate::hook::host_guard::Protected`] で引く）。id は `host_guard.rm` の 1 行。

@@ -577,6 +577,31 @@ fn host_guard_kind_command_guard_names_the_tmux_row_from_the_embedded_rules() {
     clean(&[&repo, &state]);
 }
 
+/// 自分に当たる待ちと止めの行の裁定 id（埋め込みの rules の host_guard.self_match・判断の記録 ADR-44 の決定 (3)）。
+const SELF_MATCH_RULING: &str = "user 2026-10-04T20:37Z 問い t3-hub.80.6";
+/// 自分に当たる待ちと止めの断りの経路（SRS FR1056 の次の手）。
+const SELF_MATCH_ROUTE: &str = "待つ相手の pid を取って kill -0 <pid> で待つか、型の 1 字を [] で囲む（例 pgrep -f '[m]erge'）— -f の型は自分の command 行にも当たる";
+
+/// 自分に当たる待ちと止め（判断の記録 ADR-44 の決定 (3)・行 v-self-match・接頭辞 `vselfm_`）: 埋め込みの rules で、型が自分の
+/// command 行に当たる `pgrep -f` の待ちと `pkill -f` を rc 2・1 行（kind=self-match・hit は語列・行 id host_guard.self_match・
+/// 裁定 id・経路）・記録 host-guard-deny self-match で断り、kill -0 の待ち・角括弧の型・丸括弧の型・-f の無い pgrep は 0 byte・
+/// rc 0 で通し、記録は断った 2 本だけ。
+#[test]
+fn vselfm_host_guard_denies_self_matching_waits_and_kills() {
+    let state = tmp();
+    for (command, hit) in [("while pgrep -f 'merge.sh 5'; do sleep 15; done", "pgrep -f"), ("pkill -f 'cargo xtask check'", "pkill -f")] {
+        let text = assert_host_guard_deny(&run_host_guard_in(&state, &bash_payload(&state, command)), command);
+        let want = format!("{NAME}: host-guard deny kind=self-match hit={hit} row=host_guard.self_match ruling={SELF_MATCH_RULING} — {SELF_MATCH_ROUTE}");
+        assert_eq!(text.trim_end(), want, "{command}");
+    }
+    for command in ["while kill -0 123 2>/dev/null; do sleep 15; done", "pgrep -f '[m]erge.sh 5'", "pgrep -fc 'scribe2(.bin)? pipe'", "pgrep merge.sh"] {
+        assert_silent(&run_host_guard_in(&state, &bash_payload(&state, command)), command);
+    }
+    let whats: Vec<String> = host_guard_records(&state).iter().map(|line| what_of(line)).collect();
+    assert_eq!(whats, ["host-guard-deny self-match", "host-guard-deny self-match"], "断った 2 本だけが記録を残す");
+    clean(&[&state]);
+}
+
 /// `rm <tracked>` と `rm -rf <tracked の親 dir>` は kind=rm・hit=repo-tracked:<path> で rc 2。
 #[test]
 fn host_guard_rm_denies_a_tracked_file_and_its_parent_dir() {

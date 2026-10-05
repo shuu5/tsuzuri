@@ -776,6 +776,20 @@ enabled = true
 ruling = "user 2026-09-29T04:37Z"
 ruled_at = "2026-09-29"
 
+# host-guard の 7 つ目の種類 self-match（判断の記録 ADR-44 の決定 (3)・SRS FR1056）の行。値の語列の頭の語と同じ動詞（pgrep か
+# pkill）の full の呼び（--full か f を持つ短い束）のうち、型が撃った shell 自身の command 行にも当たると字だけで決まる形（型の字が
+# command 行に字のまま在り、| で割ったどれかの枝が字と . と .* と .+ だけ）と、変数や置換で型の字が決まらない形だけを断る
+# （角括弧・丸括弧・波括弧・^・逆斜線・名の前でない $ を持つ型は通す）。command guard と intake は語列の 3 行だけを読むので、
+# この行は runner の verify の照合に掛からない。行が無い・列でない周は full の呼びを持つ command だけを断る（fail-closed）。
+
+[[rule]]
+id = "host_guard.self_match"
+kind = "HostGuardDeniedCommands"
+value = ["pgrep -f", "pkill -f"]
+enabled = true
+ruling = "user 2026-10-04T20:37Z 問い t3-hub.80.6"
+ruled_at = "2026-10-04"
+
 # 管理 tick（seat tick・設計 seat-heartbeat.md §2 形 5 / §10 形 5〜7・ADR-0058 §2・ADR-0068）の 3 行。tick_interval_s は
 # timer の周期（秒・unit を書く口が読む）、tick_stale_s は黙りの閾値（settle の基準）・Busy の古さの 2 役（秒）、
 # pointer_ladder_s は合図の梯子の列（秒の文字列・非空・狭義に昇順・段 n の待ちは列の n 番目・列を越えた段は送らない）。

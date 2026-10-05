@@ -3,7 +3,7 @@
 //!
 //! 口座の設定から PreToolUse で呼ばれる器の 1 つの口で、**marker と anchor に依らず**判定する（hook の入口の沈黙
 //! 〔FR24〕は持ち込まない＝`.vessel` の無い repo・他の name の marker・git repo でない cwd でも同じ判定）。種類は閉じた
-//! 6 値 [`Kind`] で、判定は宣言順に 1 種類 1 関数、**先に当たった 1 つだけ**を断る（1 周に deny 1 行）。何を止めるかは
+//! 7 値 [`Kind`] で、判定は宣言順に 1 種類 1 関数、**先に当たった 1 つだけ**を断る（1 周に deny 1 行）。何を止めるかは
 //! 種類ごとの rules 行（[`WORD_ROWS`] と [`RM_ROW`]・裁定 id つき）が持ち、見張り自身の設定の種類は行を持たない。
 //!
 //! 語列の 3 種類（git / tmux / 台帳）は、command 行を起票の門の分割（[`segments`]・引用符と `\` を解く）で切り、
@@ -53,8 +53,11 @@ pub const LEDGER_ROW: &str = "host_guard.ledger";
 pub const RM_ROW: &str = "host_guard.rm";
 /// 公開の見張りの行（識別子の形の記号と除外の digest・設計 vessel-hook.md §16）。
 pub const PUBLISH_ROW: &str = "host_guard.publish";
+/// 自分に当たる待ちと止めの行（語列 pgrep -f と pkill -f・判断の記録 ADR-44 の決定 (3)・SRS FR1056）。
+pub const SELF_MATCH_ROW: &str = "host_guard.self_match";
 
 pub mod publish;
+pub mod self_match;
 
 /// 語列の行の閉じた列（宣言順・command guard も enabled を見ずに読む）。
 pub const WORD_ROWS: [&str; 3] = [GIT_ROW, TMUX_ROW, LEDGER_ROW];
@@ -167,7 +170,7 @@ pub struct Scene<'a> {
     pub host: &'a Manifest,
 }
 
-/// 止める種類（閉じた 6 値・宣言順が判定の順）。
+/// 止める種類（閉じた 7 値・宣言順が判定の順）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// git の履歴破壊。
@@ -182,10 +185,12 @@ pub enum Kind {
     Settings,
     /// 隣の repo の識別子の公開（行 j / k・§16 / §17・行が無い周と、字面で読めない印を持つ公開の segment を断る）。
     Publish,
+    /// 型が撃った shell 自身の command 行にも当たる `pgrep -f` / `pkill -f` の待ちと止め（[`self_match`]・語は self-match）。
+    SelfMatch,
 }
 
 /// [`Kind`] の全 variant（宣言順）。
-pub const KINDS: &[Kind] = &[Kind::Git, Kind::Rm, Kind::Tmux, Kind::Ledger, Kind::Settings, Kind::Publish];
+pub const KINDS: &[Kind] = &[Kind::Git, Kind::Rm, Kind::Tmux, Kind::Ledger, Kind::Settings, Kind::Publish, Kind::SelfMatch];
 
 impl Kind {
     /// 断りの行と記録に出す種類の語。
@@ -197,6 +202,7 @@ impl Kind {
             Self::Ledger => "ledger",
             Self::Settings => "self",
             Self::Publish => "publish",
+            Self::SelfMatch => "self-match",
         }
     }
 
@@ -209,6 +215,7 @@ impl Kind {
             Self::Ledger => Some(LEDGER_ROW),
             Self::Settings => None,
             Self::Publish => Some(PUBLISH_ROW),
+            Self::SelfMatch => Some(SELF_MATCH_ROW),
         }
     }
 
@@ -221,6 +228,7 @@ impl Kind {
             Self::Ledger => "台帳は bdw と --append-notes で書く",
             Self::Settings => "見張り自身の設定は user が編集する",
             Self::Publish => "publish の行を裁定を添えて置く（器の manifest の host_guard.publish）",
+            Self::SelfMatch => "待つ相手の pid を取って kill -0 <pid> で待つか、型の 1 字を [] で囲む（例 pgrep -f '[m]erge'）— -f の型は自分の command 行にも当たる",
         }
     }
 }
@@ -438,6 +446,7 @@ fn judge_kind(kind: Kind, subject: &Subject, manifest: &Manifest) -> Option<Refu
         Kind::Rm => removals(kind, subject, manifest),
         Kind::Settings => own_settings(kind, subject),
         Kind::Publish => publish::judge(kind, subject, manifest),
+        Kind::SelfMatch => self_match::judge(kind, subject, manifest),
     }
 }
 
