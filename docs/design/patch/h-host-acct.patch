@@ -1,0 +1,251 @@
+diff --git a/crates/tsuzuri-surface/src/account/board.rs b/crates/tsuzuri-surface/src/account/board.rs
+index b40dfe47a7897fc6a8cc954e61d25df0e5c6e926..80d1ab2f668ed7f3a1229a64a25601b01e424389 100644
+--- a/crates/tsuzuri-surface/src/account/board.rs
++++ b/crates/tsuzuri-surface/src/account/board.rs
+@@ -7,8 +7,8 @@ use leptos::prelude::*;
+ 
+ use super::{
+     BRAND, DORMANT_CARD, DORMANT_CLASS, DORMANT_STATE, HEADER, PATH, TOP, Tab, UPDATED_CLASS,
+-    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, drawn, home, ledger, notices, page,
+-    page_title, projects, session, stage, tab_href, tab_links, tab_url, windows,
++    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, drawn, home, hostblock, ledger, notices,
++    page, page_title, projects, session, stage, tab_href, tab_links, tab_url, windows,
+ };
+ use crate::frame::{self, Block, Mode};
+ use crate::fresh::{self, Fresh};
+@@ -250,6 +250,7 @@ fn block_view(block: Block) -> AnyView {
+         id if id == projects::BLOCK.id => projects::view(),
+         id if id == notices::BLOCK.id => notices::view(),
+         id if id == stage::BLOCK.id => stage::view(),
++        id if id == hostblock::BLOCK.id => hostblock::view(),
+         _ => ().into_any(),
+     }
+ }
+diff --git a/crates/tsuzuri-surface/src/account/hostblock.rs b/crates/tsuzuri-surface/src/account/hostblock.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9a6c22e15162dc252328824d9f20b49b38fadb53
+--- /dev/null
++++ b/crates/tsuzuri-surface/src/account/hostblock.rs
+@@ -0,0 +1,20 @@
++//! account board の HOME の host の負荷と書きの block（3 段目の口座 × 窓の後）: project board の帯の host の窓と
++//! 同じ中身の関数（hostwin の `content`）を、同じ DOM の本文（hostwin の `body`・口は契約の型の host の PATH）で描く。
++//! account board の口は読まないので、host の口が読めなくてもほかの block は今のまま出る（要件 NFR2）。
++
++use crate::frame::Block;
++use crate::hostwin::HOST_KEY;
++
++/// host の負荷と書き（HOME の 3 段目・口座 × 窓の後）。見出しの語は帯の host の窓の題と同じ鍵。
++pub const BLOCK: Block = Block {
++    id: "hostld",
++    heading: HOST_KEY,
++    class: "panel",
++};
++
++/// block の DOM（見出しと、帯の host の窓と同じ本文）。
++#[cfg(target_arch = "wasm32")]
++pub fn view() -> leptos::prelude::AnyView {
++    use leptos::prelude::IntoAny;
++    crate::project::section(BLOCK, ().into_any(), crate::hostwin::body())
++}
+diff --git a/crates/tsuzuri-surface/src/account/mod.rs b/crates/tsuzuri-surface/src/account/mod.rs
+index d109349627a56b5a6bfa7bc68e34ac32840b595f..78f8a91d55415950808b7622600b43e4ea6c7d99 100644
+--- a/crates/tsuzuri-surface/src/account/mod.rs
++++ b/crates/tsuzuri-surface/src/account/mod.rs
+@@ -26,6 +26,8 @@ use crate::widgets::hover::Card;
+ pub mod cards;
+ pub mod heartbeat;
+ pub mod home;
++/// HOME の host の負荷と書きの block（中身は帯の host の窓と同じ関数）。
++pub mod hostblock;
+ pub mod ledger;
+ pub mod notices;
+ pub mod projects;
+@@ -251,7 +253,7 @@ impl TabPage {
+ pub const HGRID: &str = "hgrid";
+ 
+ /// tab の枠（home: 各 project の席からの知らせ ｜ 次の一手と開いている窓 ｜ 群の枠・口座 × 窓・移動、
+-/// session: session と台帳、projects: 各 project）。席からの知らせは見本に無い block で、home の頭の段に置く（行 i-11）。
++/// session: session と台帳、projects: 各 project）。host の負荷と書きは口座 × 窓の後に置く。席からの知らせは見本に無い block で、home の頭の段に置く（行 i-11）。
+ pub fn page(tab: Tab) -> TabPage {
+     let rows = match tab {
+         Tab::Home => vec![
+@@ -265,7 +267,13 @@ pub fn page(tab: Tab) -> TabPage {
+             },
+             Row {
+                 class: STACK,
+-                blocks: vec![home::GROUPS, home::ALLOWANCE, home::MOVES, stage::BLOCK],
++                blocks: vec![
++                    home::GROUPS,
++                    home::ALLOWANCE,
++                    hostblock::BLOCK,
++                    home::MOVES,
++                    stage::BLOCK,
++                ],
+             },
+         ],
+         Tab::Session => vec![Row {
+diff --git a/crates/tsuzuri-surface/tests/hacct.rs b/crates/tsuzuri-surface/tests/hacct.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f5b2b32ee824ffe648b8838b9ae021d9f1656ab
+--- /dev/null
++++ b/crates/tsuzuri-surface/tests/hacct.rs
+@@ -0,0 +1,73 @@
++//! account board の HOME の host の負荷と書きの block の歯（接頭辞 hacct_）。
++//! 置き場（HOME の 3 段目・口座 × 窓の後）と枠の値と、帯の host の窓と同じ中身の関数と本文を描く配線の字を測る。
++#![cfg(test)]
++
++use std::path::PathBuf;
++
++use tsuzuri_surface::account::{self, Tab, home, hostblock, stage};
++use tsuzuri_surface::frame::STACK;
++use tsuzuri_surface::hostwin::HOST_KEY;
++use tsuzuri_surface::topbar::Win;
++use tsuzuri_surface::vocab::vocab;
++use tsuzuri_surface::wins::frame_of;
++
++fn read(rel: &str) -> String {
++    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
++    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{rel} を読む: {e}"))
++}
++
++/// block の枠は id hostld・見出しの語は帯の host の窓の題と同じ鍵（host_load・語は「host の負荷」）・class panel で、
++/// HOME の 3 段目（STACK）の口座 × 窓のすぐ後・移動の前に 1 度だけ置き、ほかの tab と段には置かない。
++#[test]
++fn hacct_block_after_allowance() {
++    let b = hostblock::BLOCK;
++    assert_eq!((b.id, b.heading, b.class), ("hostld", HOST_KEY, "panel"));
++    assert_eq!(b.heading, frame_of(Win::Host).1);
++    assert_eq!(vocab().label(b.heading), "host の負荷");
++    let home_page = account::page(Tab::Home);
++    let third = &home_page.rows[2];
++    assert_eq!(third.class, STACK);
++    assert_eq!(
++        third.blocks,
++        [home::GROUPS, home::ALLOWANCE, b, home::MOVES, stage::BLOCK]
++    );
++    let all: Vec<&str> = account::pages()
++        .iter()
++        .flat_map(|p| p.block_ids())
++        .filter(|id| *id == b.id)
++        .collect();
++    assert_eq!(all, ["hostld"], "host の block は頁の全部で 1 度だけ");
++    assert!(
++        !home::BLOCKS.contains(&b),
++        "home の module の block に入れない"
++    );
++}
++
++/// block の DOM（wasm の枝・host で組めないので字で測る）は見出しの section に帯の host の窓と同じ本文
++/// （hostwin の body）を置くだけで、account board の口を読まない。account board の block の選びは id で hostblock を描く。
++#[test]
++fn hacct_draws_the_window_body() {
++    let src = read("src/account/hostblock.rs");
++    let at = src.find("pub fn view()").expect("block の DOM");
++    let view = &src[at..];
++    assert_eq!(
++        view.matches("crate::project::section(BLOCK, ().into_any(), crate::hostwin::body())")
++            .count(),
++        1
++    );
++    for word in ["crate::net::read", "account::PATH", "AccountDoc", "view!"] {
++        assert!(!src.contains(word), "hostblock.rs に {word}");
++    }
++    assert!(src.contains("use crate::hostwin::HOST_KEY;"));
++    let board = read("src/account/board.rs");
++    let pick = &board[board
++        .find("fn block_view(block: Block)")
++        .expect("block の選び")..];
++    let pick = &pick[..pick.find("\n}\n").expect("選びの閉じ")];
++    assert_eq!(
++        pick.matches("id if id == hostblock::BLOCK.id => hostblock::view(),")
++            .count(),
++        1
++    );
++    assert!(read("src/account/mod.rs").contains("\npub mod hostblock;\n"));
++}
+diff --git a/crates/tsuzuri-surface/tests/snapshots/acctframe.json b/crates/tsuzuri-surface/tests/snapshots/acctframe.json
+index 35c7068adcc31620db091189d787fabe9137a581..91be71923c60cfa7dbe5277af17a65dba15a2c93 100644
+--- a/crates/tsuzuri-surface/tests/snapshots/acctframe.json
++++ b/crates/tsuzuri-surface/tests/snapshots/acctframe.json
+@@ -29,6 +29,7 @@
+           "blocks": [
+             {"id": "groups", "heading": "group", "class": "gtop"},
+             {"id": "allowance", "heading": "allowance", "class": "panel"},
++            {"id": "hostld", "heading": "host_load", "class": "panel"},
+             {"id": "moves", "heading": "moves", "class": "panel fold mvp"},
+             {"id": "stage", "heading": "stage_target", "class": "panel fold mvp"}
+           ]
+diff --git a/crates/tsuzuri-surface/tests/teeth1/acctframe.rs b/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+index 7afcb40996724598bf2a4fa6f9d2d2cba616c68f..390390d041f06b7128206ce631b3207616f68328 100644
+--- a/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
++++ b/crates/tsuzuri-surface/tests/teeth1/acctframe.rs
+@@ -9,8 +9,8 @@ use tsuzuri_contract::account::{self as contract_account, AccountDoc};
+ use tsuzuri_contract::board::{NextMove, Reading};
+ use tsuzuri_contract::seat::SeatState;
+ use tsuzuri_surface::account::{
+-    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
+-    session, stage, stuck_count, tab_href, tab_links, windows,
++    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, hostblock, ledger, need_count,
++    notices, projects, session, stage, stuck_count, tab_href, tab_links, windows,
+ };
+ use tsuzuri_surface::frame::{Mode, PageId, STACK};
+ use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
+@@ -170,9 +170,8 @@ fn acctframe_snapshot_matches_file() {
+     assert_eq!(account::TOP, "top vessel");
+ }
+ 
+-/// (4) tab ごとの block と段の class・block ごとに 1 つの module。
+-#[test]
+-fn acctframe_blocks_per_tab_and_module() {
++/// tab ごとの段の class と block の id の並び（HOME の 3 段目は口座 × 窓の後に host の負荷と書き）。
++fn rows_per_tab() {
+     let home_page = account::page(Tab::Home);
+     let rows: Vec<(&str, Vec<&str>)> = home_page
+         .rows
+@@ -184,7 +183,10 @@ fn acctframe_blocks_per_tab_and_module() {
+         vec![
+             (STACK, vec!["notices"]),
+             (HGRID, vec!["nxall", "winsp"]),
+-            (STACK, vec!["groups", "allowance", "moves", "stage"])
++            (
++                STACK,
++                vec!["groups", "allowance", "hostld", "moves", "stage"]
++            )
+         ]
+     );
+     assert_eq!(HGRID, "hgrid");
+@@ -196,6 +198,12 @@ fn acctframe_blocks_per_tab_and_module() {
+     for tab in Tab::ALL {
+         assert_eq!(account::page(tab).tab, tab);
+     }
++}
++
++/// (4) tab ごとの block と段の class・block ごとに 1 つの module。
++#[test]
++fn acctframe_blocks_per_tab_and_module() {
++    rows_per_tab();
+ 
+     // block（id・見出しの語の鍵・class・描く module）。
+     let table = [
+@@ -204,6 +212,13 @@ fn acctframe_blocks_per_tab_and_module() {
+         (windows::BLOCK, "winsp", "open_windows", "panel", "windows"),
+         (home::GROUPS, "groups", "group", "gtop", "home"),
+         (home::ALLOWANCE, "allowance", "allowance", "panel", "home"),
++        (
++            hostblock::BLOCK,
++            "hostld",
++            "host_load",
++            "panel",
++            "hostblock",
++        ),
+         (home::MOVES, "moves", "moves", "panel fold mvp", "home"),
+         (
+             stage::BLOCK,
+@@ -249,6 +264,7 @@ fn files_and_pure_mod() {
+             "cards.rs",
+             "heartbeat.rs",
+             "home.rs",
++            "hostblock.rs",
+             "ledger.rs",
+             "mod.rs",
+             "notices.rs",
