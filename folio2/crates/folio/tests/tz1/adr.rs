@@ -7,13 +7,10 @@
 //! 封の違反 1 行を確かめて外した残りを見る。
 #![cfg(test)]
 
+use crate::common::{folio_check, git, repo_root, stdout, violations};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
+use std::process::Output;
 
 fn copy_tree(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();
@@ -26,34 +23,6 @@ fn copy_tree(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &to).unwrap();
         }
     }
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
 }
 
 /// 見本の図 1 枚（型 archify-architecture・欄そろい・refs は要件の id）。実の ADR-1.yaml の末尾に足す。
@@ -135,28 +104,6 @@ impl Drop for Work {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
-}
-
-fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("check")
-        .arg("--dir")
-        .arg(dir)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
 }
 
 fn assert_single_violation(name: &str, kind: &str, at: &str, needle: &str) {

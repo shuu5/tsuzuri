@@ -230,8 +230,28 @@ fn unit_root_and_files(tests_dir: &Path, name: &str) -> (String, Vec<PathBuf>) {
     (format!("tests/{name}/main.rs"), files)
 }
 
+/// tz を撃つ単位: 単位の歯の file（単位の名と file の字の対）のどれか 1 本が字 CARGO_BIN_EXE_tz を持つ単位。単位の粒で読むので、
+/// 群の共通の module（common.rs）へ寄せた helper の字も群の字に数え、字を持たない file が群に在っても単位は tz を撃つ。
+fn units_firing_tz(texts: &[(String, String)]) -> BTreeSet<String> {
+    texts
+        .iter()
+        .filter(|(_, text)| text.contains("CARGO_BIN_EXE_tz"))
+        .map(|(name, _)| name.clone())
+        .collect()
+}
+
 #[test]
 fn f2ret_folio_tests_named_once() {
+    // 見本: 字を common.rs だけが持つ群 g は tz を撃つ単位で、common.rs の字を外して群のどの file も字を持たなくなると落ちる。
+    let sample = |common: &str| {
+        let module = "fn adr_check() { assert!(tz().status().success()); }";
+        vec![("g".to_string(), common.to_string()), ("g".to_string(), module.to_string())]
+    };
+    let g = BTreeSet::from(["g".to_string()]);
+    let fires = r#"fn tz() -> Command { Command::new(env!("CARGO_BIN_EXE_tz")) }"#;
+    assert_eq!(units_firing_tz(&sample(fires)), g, "字を common.rs だけが持つ群の見本");
+    let silent = r#"fn tz() -> Command { Command::new("tz") }"#;
+    assert_ne!(units_firing_tz(&sample(silent)), g, "どの file も字を持たない群の見本");
     let tests_dir = repo_root().join(FOLIO).join("tests");
     let units = folio_units(&tests_dir);
     let folio_tables = test_tables(&format!("{FOLIO}/Cargo.toml"));
@@ -250,23 +270,17 @@ fn f2ret_folio_tests_named_once() {
     assert!(folio.is_disjoint(&boundary), "2 つの manifest が同じ歯を名指す");
     let named: BTreeSet<String> = folio.union(&boundary).cloned().collect();
     assert_eq!(units, named, "tests/ の歯の単位と 2 つの manifest の表の名の和");
-    let mut with_tz: BTreeSet<String> = BTreeSet::new();
-    let mut without_tz: BTreeSet<String> = BTreeSet::new();
+    let mut texts: Vec<(String, String)> = Vec::new();
     for name in &units {
         let files = unit_root_and_files(&tests_dir, name).1;
         assert!(!files.is_empty(), "{name} に歯の file が無い");
         for file in &files {
             let text = std::fs::read_to_string(file).expect("歯の file を読む");
             assert!(!text.contains("CARGO_BIN_EXE_folio"), "{} が folio を撃つ", file.display());
-            if text.contains("CARGO_BIN_EXE_tz") {
-                with_tz.insert(name.clone());
-            } else {
-                without_tz.insert(name.clone());
-            }
+            texts.push((name.clone(), text));
         }
     }
-    assert_eq!(with_tz, boundary, "tz を撃つ file を持つ単位と境界の manifest の表");
-    assert!(without_tz.is_disjoint(&boundary), "境界の単位に tz を撃たない file が在る");
+    assert_eq!(units_firing_tz(&texts), boundary, "tz を撃つ file を 1 本でも持つ単位と境界の manifest の表");
 }
 
 /// 起草の時の main 58c1da55 の契約表の verify の最後の字（この行の語を除く）。

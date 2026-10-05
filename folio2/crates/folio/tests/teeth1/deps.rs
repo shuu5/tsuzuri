@@ -4,12 +4,9 @@
 //! 外の部品を増やす・減らすときの確認は条 A-3.1 が持つ（ここは減らした後の形を数えるだけ）。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
+use std::path::Path;
 
 fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| panic!("{} が読めない: {e}", path.display()))

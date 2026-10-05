@@ -18,42 +18,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{code, copy_dir, design_intent, edit, esc, fixture, stderr, stdout, vendor};
 use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
-
-fn vendor() -> PathBuf {
-    repo_root().join("vendor/archify")
-}
 
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-face-adr-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
 }
 
 /// fixture の正本 4 file と adr/ADR-1.yaml・adr/ADR-2.yaml を一時 dir の下の src/ へ、repo の vendor/archify/
@@ -91,39 +63,6 @@ fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str) 
         .arg(mode)
         .output()
         .expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
-}
-
-/// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
-fn esc(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
 }
 
 /// 写しの ADR-2 に変異を当て、`--write` の結果と面の本文を返す（面が出来ていなければ本文は空）。

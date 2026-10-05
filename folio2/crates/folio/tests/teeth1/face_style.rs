@@ -10,12 +10,8 @@
 //! 凍結の面（tests/fixtures/face/）と正本の様式（design-intent/preview/folio.css）は読むだけで書き換えない。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 // ---- 面の木（開始 tag と終了 tag だけを読む小さな写し）----
 

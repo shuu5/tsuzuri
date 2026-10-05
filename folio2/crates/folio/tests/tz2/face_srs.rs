@@ -18,47 +18,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{
+    adr_mentions, body_outside_svg, code, copy_dir, design_intent, repo_root, vendor,
+};
 use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
-
-fn vendor() -> PathBuf {
-    repo_root().join("vendor/archify")
-}
 
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-face-srs-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
 }
 
 /// 実の置き場 design-intent/ を一時 dir の下の src/ へ、図の道具 vendor/archify/ を親 dir の vendor/archify/ へ写し、
@@ -617,38 +586,6 @@ fn unlink_adr(html: &str) -> String {
         rest = tail;
     }
     out.push_str(rest);
-    out
-}
-
-/// 面の本文（`<body>` から後）のうち `<svg>` の中を除いた字。
-fn body_outside_svg(html: &str) -> String {
-    let mut rest = &html[html.find("<body>").expect("body が無い")..];
-    let mut out = String::new();
-    while let Some(at) = rest.find("<svg") {
-        out.push_str(&rest[..at]);
-        let end = rest[at..].find("</svg>").expect("svg の閉じが無い");
-        rest = &rest[at + end + "</svg>".len()..];
-    }
-    out.push_str(rest);
-    out
-}
-
-/// 判断の記録の番号の出現（byte の位置・番号の数字列）。床の形（前が英数字でも「-」でもない ADR- に 1〜9 で始まる
-/// 数字列が続き、後ろが英数字でない）を歯の側で手で写す。
-fn adr_mentions(text: &str) -> Vec<(usize, String)> {
-    let mut out = Vec::new();
-    for (at, _) in text.match_indices("ADR-") {
-        let before = text[..at].chars().next_back();
-        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '-') {
-            continue;
-        }
-        let n: String = text[at + 4..].chars().take_while(char::is_ascii_digit).collect();
-        let after = text[at + 4 + n.len()..].chars().next();
-        if n.is_empty() || n.starts_with('0') || after.is_some_and(|c| c.is_ascii_alphanumeric()) {
-            continue;
-        }
-        out.push((at, n));
-    }
     out
 }
 

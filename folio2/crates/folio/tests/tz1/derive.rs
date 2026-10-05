@@ -16,6 +16,7 @@
 //!    導出物に要否の字は写さず、--check が 0。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -23,10 +24,6 @@ use std::process::{Command, Output};
 const ANCHOR_NOTE: &str = "tests/fixtures/design-note/derive-anchor.yaml";
 const ANCHOR_TOML: &str = "tests/fixtures/design-note/derive-anchor.toml";
 const OUT_NAME: &str = "derive-anchor.toml";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn copy_tree(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();

@@ -13,42 +13,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::common::{
+    code, copy_dir, cut, cut_line, design_intent, edit, fixture, repo_root, stderr, stdout,
+    svg_bodies, vendor,
+};
 use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
-
-fn vendor() -> PathBuf {
-    repo_root().join("vendor/archify")
-}
 
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-face-note-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
 }
 
 /// fixture の正本 4 file と design-note/full.yaml を一時 dir の下の src/ へ、器の導出 file を親 dir の
@@ -92,30 +67,6 @@ fn folio_face(face: &str, id: Option<&str>, dir: &Path, out: &Path, mode: &str) 
         .arg(mode)
         .output()
         .expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
 }
 
 /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
@@ -453,31 +404,6 @@ fn classes(html: &str) -> Vec<String> {
         rest = &tail[end.min(tail.len())..];
     }
     out
-}
-
-/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
-fn cut(html: &str, a: &str, b: &str) -> String {
-    let Some(start) = html.find(a) else {
-        return html.to_string();
-    };
-    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
-    format!("{}{}", &html[..start], &html[end..])
-}
-
-/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
-fn cut_line(html: &str, a: &str) -> String {
-    let Some(start) = html.find(a) else {
-        return html.to_string();
-    };
-    let end = html[start..]
-        .find('\n')
-        .map_or(html.len(), |e| start + e + 1);
-    format!("{}{}", &html[..start], &html[end..])
-}
-
-/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
-fn svg_bodies(html: &str) -> usize {
-    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
 }
 
 /// 写しの figures を空の一覧にした面。

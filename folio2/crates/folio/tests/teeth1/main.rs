@@ -5,6 +5,7 @@
 #[expect(dead_code, reason = "取り込んだ build.rs の fn main と導出の fn の一部は使わない")]
 #[path = "../../build.rs"]
 mod build;
+mod common;
 mod constitution_enums;
 mod deps;
 mod face_labels;

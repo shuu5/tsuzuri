@@ -10,47 +10,13 @@
 //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{
+    assert_same_bytes, between, code, components, copy_dir, cut, cut_line, edit, fixture,
+    folio_face, load_yaml, real_srs, stderr, svg_bodies, temp_dir, vendor,
+};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-
-use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
-
-fn vendor() -> PathBuf {
-    repo_root().join("vendor/archify")
-}
-
-fn temp_dir(case: &str) -> PathBuf {
-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&td);
-    fs::create_dir_all(&td).unwrap();
-    td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
-}
+use std::path::PathBuf;
+use std::process::Output;
 
 /// fixture の正本 4 file を一時 dir の下の src/ へ、repo の vendor/archify/（図の道具・便 34 の要件書の面は図ごとに
 /// 撃つ）を親 dir の vendor/archify/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
@@ -69,115 +35,6 @@ fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
     }
     copy_dir(&vendor(), &td.join("vendor/archify"));
     (td, work)
-}
-
-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("face")
-        .arg("--face")
-        .arg(face)
-        .arg("--dir")
-        .arg(dir)
-        .arg("--out")
-        .arg(out)
-        .arg(mode)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
-}
-
-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
-    let text = fs::read_to_string(dir.join(name)).unwrap();
-    YamlLoader::load_from_str(&text).unwrap().remove(0)
-}
-
-fn load_yaml(name: &str) -> Yaml {
-    load_yaml_at(&design_intent(), name)
-}
-
-/// 属性 data-component の値を出た順に。
-fn components(html: &str) -> Vec<&str> {
-    let needle = "data-component=\"";
-    html.match_indices(needle)
-        .map(|(i, _)| {
-            let rest = &html[i + needle.len()..];
-            &rest[..rest.find('"').unwrap()]
-        })
-        .collect()
-}
-
-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
-    if written == frozen {
-        return;
-    }
-    let at = written
-        .iter()
-        .zip(frozen)
-        .position(|(a, b)| a != b)
-        .unwrap_or(written.len().min(frozen.len()));
-    let show = |b: &[u8]| {
-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
-            .into_owned()
-    };
-    panic!(
-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
-        written.len(),
-        frozen.len(),
-        show(written),
-        show(frozen)
-    );
-}
-
-/// 実の正本から要件書の面を一時 file へ書く。戻り値 = (一時 dir, 出力先, 面の本文)。
-fn real_srs(case: &str) -> (PathBuf, PathBuf, String) {
-    let td = temp_dir(case);
-    let out = td.join("srs.html");
-    let run = folio_face("srs", &design_intent(), &out, "--write");
-    assert_eq!(
-        code(&run, "folio face --face srs --write"),
-        0,
-        "{}",
-        stderr(&run)
-    );
-    assert!(stdout(&run).contains("書いた"), "{}", stdout(&run));
-    let html = fs::read_to_string(&out).unwrap();
-    (td, out, html)
-}
-
-/// `open` の後の最初の `close` までの字面。
-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
-    let start = html
-        .find(open)
-        .unwrap_or_else(|| panic!("「{open}」が無い"))
-        + open.len();
-    let end = html[start..]
-        .find(close)
-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
-    &html[start..start + end]
 }
 
 #[test]
@@ -261,31 +118,6 @@ fn srs_figureless_html(case: &str) -> String {
     });
     assert_eq!(code(&run, "folio face --write"), 0, "{}", stderr(&run));
     html
-}
-
-/// `a` から `b` の直前までを切り取る（a が無ければそのまま・a の後の最初の b・b が無ければ末尾まで）。
-fn cut(html: &str, a: &str, b: &str) -> String {
-    let Some(start) = html.find(a) else {
-        return html.to_string();
-    };
-    let end = html[start..].find(b).map_or(html.len(), |e| start + e);
-    format!("{}{}", &html[..start], &html[end..])
-}
-
-/// `a` で始まる行を改行ごと切り取る（a が無ければそのまま）。
-fn cut_line(html: &str, a: &str) -> String {
-    let Some(start) = html.find(a) else {
-        return html.to_string();
-    };
-    let end = html[start..]
-        .find('\n')
-        .map_or(html.len(), |e| start + e + 1);
-    format!("{}{}", &html[..start], &html[end..])
-}
-
-/// 図の本体の数（章の帯の kicker の絵記号 `<svg class="ico"` は数えない）。
-fn svg_bodies(html: &str) -> usize {
-    html.matches("<svg").count() - html.matches("<svg class=\"ico\"").count()
 }
 
 #[test]

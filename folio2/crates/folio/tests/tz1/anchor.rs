@@ -8,42 +8,12 @@
 
 use folio::{sha256, yaml};
 
+use crate::common::{folio_check, repo_root, stderr, stdout, violations};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::PathBuf;
 
 /// 床の定数 root_digest（scripts/check_draft.py の ROOT_DIGEST）。
 const ROOT_DIGEST: &str = "acb52acd04b5d3a1feaf9ad5f0138f7614ce31964144b46ead914bde86e866ed";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn folio_check(dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("check")
-        .arg("--dir")
-        .arg(dir)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
-}
 
 fn fixture(name: &str) -> PathBuf {
     repo_root().join("tests/fixtures/anchor").join(name)

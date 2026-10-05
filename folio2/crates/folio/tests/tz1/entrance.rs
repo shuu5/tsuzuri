@@ -4,13 +4,12 @@
 //! 違反の歯は、変異が 1 つなら違反の件数が 1 であること（出力の件数の表示）も確かめる。
 #![cfg(test)]
 
+use crate::common::{
+    assert_passes, assert_unknown, copy_external_schema, git, repo_root, stderr, stdout, violations,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 fn copy_tree(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();
@@ -23,44 +22,6 @@ fn copy_tree(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &to).unwrap();
         }
     }
-}
-
-/// 器（scribe2）の導出 file を写しの根へ写す（設計ノートの契約表の節が読む先・便 23）。
-fn copy_external_schema(root: &Path) {
-    fs::create_dir_all(root.join("contracts/field-schema")).unwrap();
-    fs::copy(
-        repo_root().join("contracts/schema.toml"),
-        root.join("contracts/field-schema/schema.toml"),
-    )
-    .unwrap();
-}
-
-/// git を呼ぶ。環境変数 GIT_* は継承しない。
-fn git(cwd: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            cmd.env_remove(key);
-        }
-    }
-    let out = cmd
-        .current_dir(cwd)
-        .args([
-            "-c",
-            "user.email=fx@example",
-            "-c",
-            "user.name=fx",
-            "-c",
-            "commit.gpgsign=false",
-        ])
-        .args(args)
-        .output()
-        .expect("git を起動できない");
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
 }
 
 /// 写しの一時 dir（歯の終わりに消す）。
@@ -115,33 +76,6 @@ impl Drop for Work {
     }
 }
 
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-/// 違反の行（`[種類] …`）だけを拾う。
-fn violations(out: &Output) -> Vec<String> {
-    stdout(out)
-        .lines()
-        .filter(|l| l.starts_with('['))
-        .map(str::to_string)
-        .collect()
-}
-
-fn assert_passes(out: &Output) {
-    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(out), stderr(out));
-    assert!(violations(out).is_empty(), "{:?}", violations(out));
-    assert!(
-        stdout(out).contains("folio check: 合格（違反 0・"),
-        "{}",
-        stdout(out)
-    );
-}
-
 /// 不合格 1・違反はちょうど 1 件（件数の表示も 1）・その 1 件が種別 `kind` で `words` を全部含む。
 fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
     assert_eq!(out.status.code(), Some(1), "{}{}", stdout(out), stderr(out));
@@ -153,24 +87,6 @@ fn assert_single_violation(out: &Output, kind: &str, words: &[&str]) {
     }
     assert!(
         stdout(out).contains("folio check: 不合格（違反 1・"),
-        "{}",
-        stdout(out)
-    );
-}
-
-/// まだ分からない 2・違反 0・標準エラーに `word` を含む「まだ分からない」の行が在る。
-fn assert_unknown(out: &Output, word: &str) {
-    assert_eq!(out.status.code(), Some(2), "{}{}", stdout(out), stderr(out));
-    assert!(violations(out).is_empty(), "{:?}", violations(out));
-    assert!(
-        stderr(out)
-            .lines()
-            .any(|l| l.starts_with("# まだ分からない: ") && l.contains(word)),
-        "{}",
-        stderr(out)
-    );
-    assert!(
-        !stdout(out).contains("folio check: 合格"),
         "{}",
         stdout(out)
     );

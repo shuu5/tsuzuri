@@ -8,6 +8,7 @@ mod badge;
 mod bundle;
 mod ceiling;
 mod check;
+mod common;
 mod constitution_range;
 mod derive;
 mod emit_rulings;

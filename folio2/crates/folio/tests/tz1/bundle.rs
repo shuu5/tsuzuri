@@ -13,23 +13,16 @@
 //! 版管理の下の file は書き換えない（`--out` は必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{code, design_intent, repo_root, stderr, stdout};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
 /// 凍結 fixture の置き場（source/ = 欠陥を 1 つ仕込んだ最小の正本・faces/ = 面の写しの見本 7 本）。
 fn fixture() -> PathBuf {
     repo_root().join("tests/fixtures/ceiling/bundle")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
 }
 
 fn temp_dir(case: &str) -> PathBuf {
@@ -75,23 +68,6 @@ fn folio_ceiling(dir: &Path, faces: &Path, out: &Path) -> Output {
         .arg("--write")
         .output()
         .expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 /// dir の下の全 file（dir からの相対 path・byte 順）と中身。

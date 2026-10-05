@@ -10,81 +10,11 @@
 //! 版管理の `design-intent/` の正本は書き換えない（`--out` と写しは必ず一時 dir の中）。
 #![cfg(test)]
 
+use crate::common::{
+    adr_card, assert_same_bytes, between, code, edit, fixture, folio_face, index_fixture_copy,
+    index_from, load_yaml_at, note_card, readable_faces, seq, stderr, text,
+};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-
-use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
-fn fixture() -> PathBuf {
-    repo_root().join("tests/fixtures/face")
-}
-
-fn temp_dir(case: &str) -> PathBuf {
-    let td = std::env::temp_dir().join(format!("folio-face-{case}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&td);
-    fs::create_dir_all(&td).unwrap();
-    td
-}
-
-/// fixture の正本 4 file を一時 dir の下の src/ へ写す（expected.html は写さない）。戻り値 = (一時 dir, 写し)。
-fn fixture_copy(case: &str) -> (PathBuf, PathBuf) {
-    let td = temp_dir(case);
-    let work = td.join("src");
-    fs::create_dir_all(&work).unwrap();
-    for name in [
-        "constitution.yaml",
-        "rules.yaml",
-        "vocabulary.yaml",
-        "srs.yaml",
-        "ceiling.yaml",
-    ] {
-        fs::copy(fixture().join(name), work.join(name)).unwrap();
-    }
-    (td, work)
-}
-
-fn folio_face(face: &str, dir: &Path, out: &Path, mode: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_tz"))
-        .arg("face")
-        .arg("--face")
-        .arg(face)
-        .arg("--dir")
-        .arg(dir)
-        .arg("--out")
-        .arg(out)
-        .arg(mode)
-        .output()
-        .expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
-}
-
-fn edit(path: &Path, f: impl FnOnce(&str) -> String) {
-    let before = fs::read_to_string(path).unwrap();
-    let after = f(&before);
-    assert_ne!(before, after, "変異が当たっていない: {}", path.display());
-    fs::write(path, after).unwrap();
-}
 
 /// 5 字の escape（生成側の字面を使わず歯の側で持つ）。
 fn esc(s: &str) -> String {
@@ -95,109 +25,7 @@ fn esc(s: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
-/// 2 つの byte 列が同じでなければ最初の差の前後を見せて落ちる。
-fn assert_same_bytes(written: &[u8], frozen: &[u8], what: &str) {
-    if written == frozen {
-        return;
-    }
-    let at = written
-        .iter()
-        .zip(frozen)
-        .position(|(a, b)| a != b)
-        .unwrap_or(written.len().min(frozen.len()));
-    let show = |b: &[u8]| {
-        String::from_utf8_lossy(&b[at.saturating_sub(120).min(b.len())..(at + 200).min(b.len())])
-            .into_owned()
-    };
-    panic!(
-        "{what} と違う（{} byte ≠ {} byte・最初の差 {at} byte 目）\n--- folio\n{}\n--- 期待\n{}",
-        written.len(),
-        frozen.len(),
-        show(written),
-        show(frozen)
-    );
-}
-
-fn load_yaml_at(dir: &Path, name: &str) -> Yaml {
-    let text = fs::read_to_string(dir.join(name)).unwrap();
-    YamlLoader::load_from_str(&text).unwrap().remove(0)
-}
-
-fn seq<'a>(y: &'a Yaml, what: &str) -> &'a Vec<Yaml> {
-    y.as_vec().unwrap_or_else(|| panic!("{what} が一覧でない"))
-}
-
-fn text<'a>(y: &'a Yaml, key: &str) -> &'a str {
-    y[key]
-        .as_str()
-        .unwrap_or_else(|| panic!("欄 {key} が文字列でない: {y:?}"))
-}
-
-/// `open` の後の最初の `close` までの字面。
-fn between<'a>(html: &'a str, open: &str, close: &str) -> &'a str {
-    let start = html
-        .find(open)
-        .unwrap_or_else(|| panic!("「{open}」が無い"))
-        + open.len();
-    let end = html[start..]
-        .find(close)
-        .unwrap_or_else(|| panic!("「{open}」の後に「{close}」が無い"));
-    &html[start..start + end]
-}
-
-/// fixture の正本 4 file と index.yaml・intake.yaml・adr/ADR-2.yaml・design-note/full.yaml を一時 dir の下の
-/// src/ へ写す（支度表 intake-sheet.yaml と期待の面は写さない）。写す判断の記録は欄の揃った便 25 の 1 本
-/// （便 26 §1 (d)）・写す設計ノートは便 28 の 1 本（便 29 §1 (c)）。入口の面は設計ノートの meta しか読まないので、
-/// 器の導出 file（contracts/field-schema/schema.toml）は写さない。
-fn index_fixture_copy(case: &str) -> (PathBuf, PathBuf) {
-    let (td, work) = fixture_copy(case);
-    for name in ["index.yaml", "intake.yaml"] {
-        fs::copy(fixture().join(name), work.join(name)).unwrap();
-    }
-    fs::create_dir_all(work.join("adr")).unwrap();
-    fs::copy(
-        fixture().join("adr/ADR-2.yaml"),
-        work.join("adr/ADR-2.yaml"),
-    )
-    .unwrap();
-    fs::create_dir_all(work.join("design-note")).unwrap();
-    fs::copy(
-        fixture().join("design-note/full.yaml"),
-        work.join("design-note/full.yaml"),
-    )
-    .unwrap();
-    (td, work)
-}
-
-/// 写しから入口の面を一時 dir へ書く。戻り値 = (出力先, 面の本文)。
-fn index_from(case: &str, work: &Path, td: &Path) -> (PathBuf, String) {
-    let out = td.join("index.html");
-    let run = folio_face("index", work, &out, "--write");
-    assert_eq!(
-        code(&run, "folio face --face index --write"),
-        0,
-        "{case}: {}",
-        stderr(&run)
-    );
-    let html = fs::read_to_string(&out).unwrap();
-    assert_eq!(
-        stdout(&run),
-        format!("folio face: 書いた（{} byte）\n", html.len())
-    );
-    (out, html)
-}
-
 // ── 棚の「判断の記録」の行（便 26・docs/design/delivery-26.md §1 (a)(e)）──
-
-/// 棚の判断の記録の置き場（`shelf-adr` の div の中・上向きの関係の矢印と card）。
-fn adr_card(html: &str) -> &str {
-    between(html, "<div class=\"shelf-adr\">", "\n</div>")
-}
-
-/// 棚の見出しの「いま読めるのは <数> 面」の数。
-fn readable_faces(html: &str) -> &str {
-    between(html, "いま読めるのは <b>", " 面</b>")
-}
 
 /// status-line の「まだ無い」の行の v。
 fn still_absent(html: &str) -> &str {
@@ -320,14 +148,6 @@ fn cut(html: &str, open: &str, close: &str) -> String {
 }
 
 // ── 棚の「設計ノート」の行（便 29・docs/design/delivery-29.md §1 (a)(e)）──
-
-/// 棚の設計ノートの card（class の字から `</article>` まで＝class の残りも見える）。
-fn note_card(html: &str) -> String {
-    format!(
-        "class=\"shelf-d{}",
-        between(html, "class=\"shelf-d", "</article>")
-    )
-}
 
 /// 棚の見出しの型の列挙（「いま読めるのは <数> 面 ＝ このページ（入口）と、」の後）。
 fn readable_types(html: &str) -> &str {

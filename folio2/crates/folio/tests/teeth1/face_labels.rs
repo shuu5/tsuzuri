@@ -4,12 +4,8 @@
 //! 便 109（docs/design/delivery-109.md §1 (e) の 2・ADR-15 決定 (5)）で、棚の一覧の 3 本の置き場の見張りだけを shelf.rs へ直した。
 #![cfg(test)]
 
+use crate::common::repo_root;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn read(rel: &str) -> String {
     let p = repo_root().join(rel);

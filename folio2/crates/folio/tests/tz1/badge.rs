@@ -18,6 +18,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{code, design_intent, repo_root, stderr, stdout};
 use folio::yaml_rust2::YamlLoader;
 
 /// 天井の正本の観点（id・名）。正本の順。
@@ -45,17 +46,9 @@ const HINT_BODY_OPEN: &str = "<span class=\"hint-body\">";
 /// 印の置き場（`--dir` からの相対）。
 const MARK: &str = "preview/ceiling-stamp.yaml";
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
-
 /// 面の凍結 fixture（正本・様式・期待の面 7 本・天井の正本 ceiling.yaml）。
 fn fixture() -> PathBuf {
     repo_root().join("tests/fixtures/face")
-}
-
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
 }
 
 fn temp_dir(case: &str) -> PathBuf {
@@ -85,23 +78,6 @@ fn folio(args: &[&dyn AsRef<std::ffi::OsStr>]) -> Output {
         cmd.arg(a.as_ref());
     }
     cmd.output().expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 fn assert_code(out: &Output, what: &str, want: i32) {

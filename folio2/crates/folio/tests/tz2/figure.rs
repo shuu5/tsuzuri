@@ -16,11 +16,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use crate::common::{code, copy_dir, design_intent, repo_root, stderr, stdout, vendor};
 use folio::yaml_rust2::{Yaml, YamlLoader};
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../folio2")
-}
 
 /// 設計ノートの正本の写しの置き場（便 28 の fixture）。
 fn face_fixture() -> PathBuf {
@@ -32,32 +29,11 @@ fn figure_fixture() -> PathBuf {
     repo_root().join("tests/fixtures/figure")
 }
 
-fn design_intent() -> PathBuf {
-    repo_root().join("design-intent")
-}
-
-fn vendor() -> PathBuf {
-    repo_root().join("vendor/archify")
-}
-
 fn temp_dir(case: &str) -> PathBuf {
     let td = std::env::temp_dir().join(format!("folio-figure-t-{case}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&td);
     fs::create_dir_all(&td).unwrap();
     td
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().unwrap().is_dir() {
-            copy_dir(&src, &dst);
-        } else {
-            fs::copy(&src, &dst).unwrap();
-        }
-    }
 }
 
 /// 凍結 fixture の型付き記述を、設計ノートの figures の 1 行として書く。JSON の本文を 6 字下げて `spec:` の
@@ -131,23 +107,6 @@ fn folio_figure_env(
         cmd.env("PATH", p);
     }
     cmd.output().expect("folio を起動できない")
-}
-
-fn code(out: &Output, what: &str) -> i32 {
-    out.status.code().unwrap_or_else(|| {
-        panic!(
-            "{what} が signal で終わった: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )
-    })
-}
-
-fn stdout(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn stderr(out: &Output) -> String {
-    String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 fn frozen_body() -> Vec<u8> {
