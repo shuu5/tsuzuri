@@ -1,0 +1,903 @@
+diff --git a/crates/tsuzuri-core/src/agent/spec.rs b/crates/tsuzuri-core/src/agent/spec.rs
+index d2f91407..111f4c75 100644
+--- a/crates/tsuzuri-core/src/agent/spec.rs
++++ b/crates/tsuzuri-core/src/agent/spec.rs
+@@ -3,6 +3,9 @@
+ //! 頼みの頭の 4 行（予算・組み・対象・出す物）が在るか・生きた係（終えの印の無い札）と対象が重ならないかを判じて、係の札を組む。
+ //! 結びの口は Agent の呼びの結果（PostToolUse の入力の `tool_response.agentId`）から起こしの名と係の id を読む。
+ //! 置き場の名（起草の置き場の下の `<名>/brief.md`・`<名>/spec.json`・`.agents/<係の id>`）もここに置く。
++//! 検証の群の起こしの門の判じ（`group`・判断の記録 ADR-61・要件 FR22）は行 ag-gjudge が置く。
++
++pub mod group;
+ 
+ use serde::{Deserialize, Serialize};
+ use serde_json::{Map, Value, json};
+diff --git a/crates/tsuzuri-core/src/agent/spec/group.rs b/crates/tsuzuri-core/src/agent/spec/group.rs
+new file mode 100644
+index 00000000..ba75a13f
+--- /dev/null
++++ b/crates/tsuzuri-core/src/agent/spec/group.rs
+@@ -0,0 +1,246 @@
++//! 席が起こす検証の群（行 ag-gjudge・判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
++//! 群の係の起こしは、頼みの頭に `群: <群 id> <i>/<k>` の行（5 行目）を持つ席の Agent の呼びで、起草の置き場の群の id の dir の
++//! 計画の file（`plan.json`）と、攻めの係が書く分からない（U）の主張の一覧の file（`unknowns.tsv`）を持つ。ここは値と file の字の読みを、
++//! 子の `judge` は起こしの門の判じを置く。値は判断の記録 ADR-61 の決定 (2) の字で、規則の表の行にしない（値を替えるのは判断の記録・歯が値を数える）。
++//! file と台帳を読んで字を渡すのは境界の口で、ここは字を読むだけ。
++
++pub mod judge;
++
++use serde::{Deserialize, Serialize};
++use serde_json::Value;
++use tsuzuri_contract::surface::RULING_LINE;
++
++use crate::ledger::DAY;
++
++/// 群の id の dir の計画の file。
++pub const PLAN: &str = "plan.json";
++
++/// 群の id の dir の分からない（U）の主張の一覧の file（1 行に id・主張・判じられない訳・資料の path をタブで区切る）。
++pub const LIST: &str = "unknowns.tsv";
++
++/// 係の dir の群の席の札（通した起こしの群の id と番と割り）。
++pub const SEAT: &str = "group.json";
++
++/// 群の id の dir の割りの読む path の重なりの記帳（断らない・決定 (2)(5)）。
++pub const SHARED: &str = "shared.jsonl";
++
++/// 頼みの頭の群の行の鍵。
++pub const KEY: &str = "群";
++
++/// 群に入れる係の型（検証役だけ・決定 (1)）。
++pub const TYPE: &str = "tsuzuri:verifier";
++
++/// 計画の file の下書きの種類の閉じた列（決定 (2)）。
++pub const DRAFTS: [&str; 4] = ["問いの本文", "判断の記録", "消す行", "緩める問い"];
++
++/// 引き金の一覧の行の下限。
++pub const LIST_MIN: usize = 3;
++
++/// 群を起こさない一覧の行の上限（越えると割って攻め直すか 1 体の道）。
++pub const LIST_MAX: usize = 18;
++
++/// k の上限（反証役 3 体まで）。
++pub const K_MAX: u32 = 3;
++
++/// 同時に生きた群の係の上限。
++pub const LIVE_MAX: usize = 3;
++
++/// 1 体の割りの主張の上限。
++pub const CLAIMS_MAX: usize = 6;
++
++/// 係ごとの上限の新しい量（input と cache_creation と output の和）。
++pub const MEMBER_NEW: u64 = 150_000;
++
++/// 係ごとの上限の文脈の読み直し（cache_read）。
++pub const MEMBER_READ: u64 = 2_500_000;
++
++/// 群の上限の新しい量（止める線はその 9 割）。
++pub const GROUP_NEW: u64 = 450_000;
++
++/// 群の上限の読み直し（止める線はその 9 割）。
++pub const GROUP_READ: u64 = 7_500_000;
++
++/// 同じ対象の群を断る窓（7 日の秒）。
++pub const WINDOW: u64 = 7 * DAY;
++
++/// 7 日の例外に数えない裁定の問い（前の 2 つの問いとこの記録の裁定の問い）。
++pub const UNCOUNTED: [&str; 3] = ["t3-hub.87.1", "t3-hub.87.2", "t3-hub.87.6"];
++
++/// 席の流れの道具の名。
++pub const WORKFLOW: &str = "Workflow";
++
++/// 計画の file の係ごとの割り（名・モデル・主張の id の列・読める path の列）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Member {
++    pub name: String,
++    pub model: String,
++    pub claims: Vec<String>,
++    pub paths: Vec<String>,
++}
++
++/// 計画の file（群の型・対象・下書きの種類・攻めの係の名・係ごとの割り・在れば裁定 id）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct Plan {
++    #[serde(rename = "type")]
++    pub kind: String,
++    pub target: String,
++    pub draft: String,
++    pub attacker: String,
++    pub members: Vec<Member>,
++    #[serde(default)]
++    pub ruling: Option<String>,
++}
++
++impl Plan {
++    /// 計画の file の字を読む（JSON でないか、欄が欠けるか余るか、係の割りが無ければ None）。
++    pub fn parse(text: &str) -> Option<Self> {
++        serde_json::from_str::<Plan>(text)
++            .ok()
++            .filter(|p| !p.members.is_empty())
++    }
++}
++
++/// 群の席の札（`<名>/group.json` の字・群の id と番と割り）。
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct Seat {
++    pub group: String,
++    pub i: u32,
++    pub k: u32,
++    pub claims: Vec<String>,
++    pub paths: Vec<String>,
++}
++
++impl Seat {
++    /// 札の字を読む（JSON でないか欄が欠ければ None）。
++    pub fn parse(text: &str) -> Option<Self> {
++        serde_json::from_str(text).ok()
++    }
++
++    /// 札の字（整えた JSON と末の改行）。
++    pub fn render(&self) -> String {
++        let mut text = serde_json::to_string_pretty(self).unwrap_or_default();
++        text.push('\n');
++        text
++    }
++}
++
++/// 群の行の値（群の id と番 i と数 k）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Line {
++    pub group: String,
++    pub i: u32,
++    pub k: u32,
++}
++
++/// 群の id の字（英数で始まり、英数と `-` と `_` だけで 64 字以内）。起草の置き場の下の dir の名に使う。
++fn id_ok(s: &str) -> bool {
++    s.len() <= 64
++        && s.bytes().next().is_some_and(|c| c.is_ascii_alphanumeric())
++        && s.bytes()
++            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
++}
++
++impl Line {
++    /// `<群 id> <i>/<k>` を読む（i と k は 1 以上の数・群の id の字が安全でなければ None）。
++    pub fn parse(value: &str) -> Option<Self> {
++        let (group, n) = value.trim().split_once(' ')?;
++        let (i, k) = n.trim().split_once('/')?;
++        let (i, k): (u32, u32) = (i.parse().ok()?, k.parse().ok()?);
++        (id_ok(group) && i > 0 && k > 0).then(|| Line {
++            group: group.to_string(),
++            i,
++            k,
++        })
++    }
++}
++
++/// 頼みの頭（prompt の頭の空でない行の塊）の群の行の値（行が無ければ None・空の値は空の字）。
++pub fn group_line(prompt: &str) -> Option<&str> {
++    prompt
++        .trim_start()
++        .lines()
++        .take_while(|l| !l.trim().is_empty())
++        .filter_map(|l| l.split_once(':'))
++        .find(|(k, _)| k.trim() == KEY)
++        .map(|(_, v)| v.trim())
++}
++
++/// 一覧の file の主張の id の列（空の行は数えない・タブで区切った 4 つの空でない欄でない行か、2 度目の id が在れば None）。
++pub fn list_ids(text: &str) -> Option<Vec<String>> {
++    let mut ids: Vec<String> = Vec::new();
++    for line in text.lines().filter(|l| !l.trim().is_empty()) {
++        let fields: Vec<&str> = line.split('\t').map(str::trim).collect();
++        let [id, _, _, _] = fields.as_slice() else {
++            return None;
++        };
++        if fields.iter().any(|f| f.is_empty()) || ids.iter().any(|x| x == id) {
++            return None;
++        }
++        ids.push((*id).to_string());
++    }
++    Some(ids)
++}
++
++/// 群の合計が止める線（どちらかの欄で群の上限の 9 割）に届いたか。
++pub fn reached(new: u64, read: u64) -> bool {
++    new.saturating_mul(10) >= GROUP_NEW * 9 || read.saturating_mul(10) >= GROUP_READ * 9
++}
++
++/// 裁定 id の問いの欄（最初の `:` の前・無ければ全部）。
++pub fn question_of(ruling: &str) -> &str {
++    ruling.split_once(':').map_or(ruling, |(q, _)| q)
++}
++
++/// notes の裁定の定型行（頭 `裁定 id = `）の id に `ruling` が在るか。
++pub fn ruled(notes: &str, ruling: &str) -> bool {
++    notes
++        .lines()
++        .filter_map(|l| l.trim_end_matches('\r').strip_prefix(RULING_LINE))
++        .any(|rest| rest.split('・').next().map(str::trim) == Some(ruling))
++}
++
++/// `text` が群の id を語として（前後が英数字でない所で）名指すか。
++pub fn named(text: &str, group: &str) -> bool {
++    !group.is_empty()
++        && text.match_indices(group).any(|(at, _)| {
++            let before = text.get(..at).and_then(|s| s.chars().next_back());
++            let after = text.get(at + group.len()..).and_then(|s| s.chars().next());
++            !before.is_some_and(|c| c.is_ascii_alphanumeric())
++                && !after.is_some_and(|c| c.is_ascii_alphanumeric())
++        })
++}
++
++/// 割りの読む path のうち、計画のほかの係の割りにも在る path（重なりは記帳し、断らない）。
++pub fn shared(plan: &Plan, name: &str) -> Vec<String> {
++    let Some(me) = plan.members.iter().find(|m| m.name == name) else {
++        return Vec::new();
++    };
++    me.paths
++        .iter()
++        .filter(|p| {
++            plan.members
++                .iter()
++                .any(|m| m.name != name && m.paths.contains(p))
++        })
++        .cloned()
++        .collect()
++}
++
++/// 席の流れの道具の呼びか（JSON の object で、係の id が無く、道具の名が Workflow）。tool_input の中身は見ない。
++pub fn workflow(payload: &str) -> bool {
++    let Ok(Value::Object(input)) = serde_json::from_str::<Value>(payload) else {
++        return false;
++    };
++    input.get("tool_name").and_then(Value::as_str) == Some(WORKFLOW)
++        && input.get("agent_id").is_none_or(Value::is_null)
++}
++
++/// 席の流れの道具の呼びの断りの理由の字（持ち主に問う事を名指す）。
++pub fn workflow_reason() -> String {
++    format!(
++        "群の起こしの門は止める（席の流れの道具 {WORKFLOW} の呼びは計画の file と裁定 id を持っても全部断る・判断の記録 ADR-61 の決定 (4)） \
++         次の一手 = 流れの道具で係を起こすには持ち主に問う（別の問いの裁定と判断の記録で決める）。今は Agent で 1 体ずつか検証の群で起こす"
++    )
++}
+diff --git a/crates/tsuzuri-core/src/agent/spec/group/judge.rs b/crates/tsuzuri-core/src/agent/spec/group/judge.rs
+new file mode 100644
+index 00000000..3157ed07
+--- /dev/null
++++ b/crates/tsuzuri-core/src/agent/spec/group/judge.rs
+@@ -0,0 +1,246 @@
++//! 群の起こしの門の判じ（行 ag-gjudge・判断の記録 ADR-61 決定 (1)(2)(4)(5)・要件 FR22）。
++//! 順は、群の行と 2 つの file・型と下書きの種類と引き金と番と数と 1 体の割り・割りの主張の和・生きた群の係の数と頭の予算とモデルと群の合計・
++//! 同じ対象のほかの群の 7 日。断りは歯が見る短い鍵と理由の字の中身を持つ。通す時は群の席の札を組む。
++//! 同じ群の係どうしの対象の重なりを ADR-59 の重なりの判じから外すのは境界の口（席の札の群の id で外す・決定 (7) の (ア)）。
++
++use tsuzuri_contract::EpochSecs;
++
++use super::{
++    CLAIMS_MAX, DRAFTS, K_MAX, KEY, LIST, LIST_MAX, LIST_MIN, LIVE_MAX, Line, MEMBER_NEW, Member,
++    PLAN, Plan, Seat, TYPE, UNCOUNTED, WINDOW, list_ids, named, question_of, reached, ruled,
++};
++use crate::agent::spec::{Head, Spec};
++
++/// 台帳の問い（裁定 id の問いの欄の bead）の字。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Ledger {
++    Unread,
++    Read { notes: String, description: String },
++}
++
++/// 群の起こしの門の入力（頭は ADR-59 の 4 行を読めた値・file の字は無ければ None・群の合計は読めなければ None・
++/// 台帳は計画の裁定 id の問いを読んだ字で、裁定 id が無ければ None・ほかの群の係は札と群の席の札の組）。
++#[derive(Debug, Clone)]
++pub struct Ask<'a> {
++    pub kind: Option<&'a str>,
++    pub name: &'a str,
++    pub line: &'a str,
++    pub head: &'a Head,
++    pub model: Option<&'a str>,
++    pub plan: Option<&'a str>,
++    pub list: Option<&'a str>,
++    pub peers: &'a [(Spec, Seat)],
++    pub totals: Option<(u64, u64)>,
++    pub ledger: Option<&'a Ledger>,
++    pub now: EpochSecs,
++}
++
++/// 群の起こしの門の断り（歯が見る短い鍵と、理由の字の中身）。
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Refusal {
++    pub key: &'static str,
++    pub what: String,
++}
++
++fn refuse(key: &'static str, what: String) -> Refusal {
++    Refusal { key, what }
++}
++
++/// 群の行の無い起こしの名を割りに持つ計画（群の id と計画の字の組）が在れば、5 行目の欠けの断り。
++pub fn unmarked(name: &str, plans: &[(String, String)]) -> Option<Refusal> {
++    let (group, _) = plans.iter().find(|(_, text)| {
++        Plan::parse(text).is_some_and(|p| p.members.iter().any(|m| m.name == name))
++    })?;
++    let what = format!("群 {group} の計画が割りに持つ係 {name} の頭に {KEY}: の行が無い");
++    Some(refuse("line-missing", what))
++}
++
++/// 群の行と計画の file と一覧の file を読む（欠けと形の誤りと、計画の対象と頭の対象の違いを断る）。
++fn files(ask: &Ask) -> Result<(Line, Plan, Vec<String>), Refusal> {
++    let Some(line) = Line::parse(ask.line) else {
++        let what = format!("{KEY}: の行 {} が <群 id> <i>/<k> の形でない", ask.line);
++        return Err(refuse("line-form", what));
++    };
++    let g = &line.group;
++    let Some(text) = ask.plan else {
++        return Err(refuse("plan-missing", format!("群 {g} の {PLAN} が無い")));
++    };
++    let Some(plan) = Plan::parse(text).filter(|p| p.target == ask.head.target) else {
++        let what = format!("群 {g} の {PLAN} が計画の形でないか対象が頭と違う");
++        return Err(refuse("plan-form", what));
++    };
++    let Some(text) = ask.list else {
++        return Err(refuse("list-missing", format!("群 {g} の {LIST} が無い")));
++    };
++    let Some(ids) = list_ids(text) else {
++        let what = format!("群 {g} の {LIST} の行がタブで区切った 4 欄でないか id が重なる");
++        return Err(refuse("list-form", what));
++    };
++    Ok((line, plan, ids))
++}
++
++/// 型と下書きの種類と引き金と番と数と 1 体の割りを判じる（割りは呼びの名の係）。
++fn shape<'p>(ask: &Ask, line: &Line, plan: &'p Plan, rows: usize) -> Result<&'p Member, Refusal> {
++    let (i, k, draft) = (line.i, line.k, &plan.draft);
++    if ask.kind != Some(TYPE) || plan.kind != TYPE {
++        return Err(refuse("type", format!("群に入れる型は {TYPE} だけ")));
++    }
++    if !DRAFTS.contains(&draft.as_str()) {
++        let what = format!(
++            "下書きの種類 {draft} が {} のどれでもない",
++            DRAFTS.join("・")
++        );
++        return Err(refuse("draft", what));
++    }
++    if rows < LIST_MIN {
++        return Err(refuse(
++            "few",
++            format!("一覧の行 {rows} が {LIST_MIN} に届かない"),
++        ));
++    }
++    if rows > LIST_MAX {
++        return Err(refuse(
++            "many",
++            format!("一覧の行 {rows} が {LIST_MAX} を越える"),
++        ));
++    }
++    if i > k {
++        return Err(refuse("index", format!("番 {i} が数 {k} を越える")));
++    }
++    if k > K_MAX {
++        return Err(refuse("wide", format!("数 {k} が {K_MAX} を越える")));
++    }
++    let Some(me) = plan.members.iter().find(|m| m.name == ask.name) else {
++        let what = format!("群 {} の {PLAN} の割りに係 {} が無い", line.group, ask.name);
++        return Err(refuse("plan-form", what));
++    };
++    if me.claims.len() > CLAIMS_MAX {
++        let what = format!(
++            "係 {} の割りの主張 {} が {CLAIMS_MAX} を越える",
++            me.name,
++            me.claims.len()
++        );
++        return Err(refuse("claims", what));
++    }
++    Ok(me)
++}
++
++/// 割りの主張の id の係どうしの重なりと、割りの和と一覧の行の全部との違い（欠けと余り）を判じる。
++fn claims(plan: &Plan, ids: &[String]) -> Result<(), Refusal> {
++    let all: Vec<&String> = plan.members.iter().flat_map(|m| &m.claims).collect();
++    let twice = all
++        .iter()
++        .enumerate()
++        .find(|(n, c)| all.iter().take(*n).any(|x| x == *c));
++    if let Some((_, c)) = twice {
++        return Err(refuse("overlap", format!("割りの主張 {c} を 2 体が持つ")));
++    }
++    let missing: Vec<&str> = ids
++        .iter()
++        .filter(|i| !all.contains(i))
++        .map(String::as_str)
++        .collect();
++    if !missing.is_empty() {
++        let what = format!("一覧の主張 {} が割りに無い", missing.join("・"));
++        return Err(refuse("missing", what));
++    }
++    let extra: Vec<&str> = all
++        .iter()
++        .filter(|c| !ids.contains(c))
++        .map(|c| c.as_str())
++        .collect();
++    if !extra.is_empty() {
++        let what = format!("割りの主張 {} が一覧に無い", extra.join("・"));
++        return Err(refuse("extra", what));
++    }
++    Ok(())
++}
++
++/// 同時に生きた群の係の数と、頭の予算と、モデルと、群の合計を判じる。
++fn load(ask: &Ask, line: &Line, me: &Member) -> Result<(), Refusal> {
++    let live = ask.peers.iter().filter(|(s, _)| s.ended.is_none()).count();
++    if live >= LIVE_MAX {
++        let what = format!("生きた群の係が {live} 体で、起こすと {LIVE_MAX} を越える");
++        return Err(refuse("live", what));
++    }
++    let budget = ask.head.budget;
++    if budget > MEMBER_NEW {
++        let what = format!("頭の予算 {budget} が係ごとの上限 {MEMBER_NEW} を越える");
++        return Err(refuse("budget", what));
++    }
++    if ask.model != Some(me.model.as_str()) {
++        let got = ask.model.unwrap_or("（無し）");
++        let what = format!("呼びのモデル {got} が計画の値 {} と違う", me.model);
++        return Err(refuse("model", what));
++    }
++    let g = &line.group;
++    let Some((new, read)) = ask.totals else {
++        return Err(refuse("totals-unread", format!("群 {g} の合計が読めない")));
++    };
++    if reached(new, read) {
++        let what = format!("群 {g} の合計（新しい量 {new}・読み直し {read}）が止める線に届いた");
++        return Err(refuse("stop", what));
++    }
++    Ok(())
++}
++
++/// 同じ対象のほかの群が 7 日の内に在れば、計画の裁定 id を台帳の問いの字で照らす（照らせない時は断る）。
++fn window(ask: &Ask, line: &Line, plan: &Plan) -> Result<(), Refusal> {
++    let target = &ask.head.target;
++    let Some((_, other)) = ask.peers.iter().find(|(s, seat)| {
++        seat.group != line.group
++            && s.target == *target
++            && ask.now.saturating_sub(s.spawned) < WINDOW
++    }) else {
++        return Ok(());
++    };
++    let near = format!("同じ対象 {target} の群 {} が 7 日の内に在り", other.group);
++    let Some(ruling) = plan.ruling.as_deref() else {
++        return Err(refuse("window", format!("{near}、計画に裁定 id が無い")));
++    };
++    let q = question_of(ruling);
++    if UNCOUNTED.contains(&q) {
++        let what = format!("{near}、裁定 id {ruling} の問い {q} は数えない");
++        return Err(refuse("uncounted", what));
++    }
++    let Some(Ledger::Read { notes, description }) = ask.ledger else {
++        let what = format!("{near}、台帳の問い {q} が読めない");
++        return Err(refuse("ledger-unread", what));
++    };
++    if !ruled(notes, ruling) {
++        let what = format!("{near}、裁定 id {ruling} が問い {q} の裁定の定型行に無い");
++        return Err(refuse("ruling-absent", what));
++    }
++    if !named(description, &line.group) {
++        let what = format!(
++            "{near}、問い {q} の本文が群 {} を語として名指さない",
++            line.group
++        );
++        return Err(refuse("group-unnamed", what));
++    }
++    Ok(())
++}
++
++/// 群の起こしの門の判じ。通す時は群の席の札（群の id・番・数・呼びの名の係の割り）。
++pub fn judge(ask: &Ask) -> Result<Seat, Refusal> {
++    let (line, plan, ids) = files(ask)?;
++    let me = shape(ask, &line, &plan, ids.len())?;
++    claims(&plan, &ids)?;
++    load(ask, &line, me)?;
++    window(ask, &line, &plan)?;
++    Ok(Seat {
++        group: line.group,
++        i: line.i,
++        k: line.k,
++        claims: me.claims.clone(),
++        paths: me.paths.clone(),
++    })
++}
++
++/// 群の起こしの断りの理由の字（何が違うかと次の一手）。
++pub fn reason(r: &Refusal) -> String {
++    format!(
++        "群の起こしの門は止める（{}） 次の一手 = 計画の file・一覧の file・頼みの頭を直すか、{KEY}: の行の無い 1 体の起こしにする（群の値と形は判断の記録 ADR-61）",
++        r.what
++    )
++}
+diff --git a/crates/tsuzuri-core/tests/aggj.rs b/crates/tsuzuri-core/tests/aggj.rs
+new file mode 100644
+index 00000000..36d54101
+--- /dev/null
++++ b/crates/tsuzuri-core/tests/aggj.rs
+@@ -0,0 +1,379 @@
++//! 群の起こしの門の判じの歯（接頭辞 aggj_・設計ノート surface-wave29b 行 ag-gjudge・判断の記録 ADR-61 決定 (2)(4)(5)）。
++//! 中核の `agent::group` の判じを直に撃つ。見本は群の試し g1 の計画と一覧の形（反証役 3 体・割りの主張 6・5・3・一覧 14 行）を写し、
++//! 断りの見本は正しい見本から 1 句だけ外す。
++#![cfg(test)]
++
++use serde_json::{Value, json};
++use tsuzuri_core::agent::spec::group::judge::{Ask, Ledger, judge, reason, unmarked};
++use tsuzuri_core::agent::spec::group::{Plan, Seat, shared, workflow, workflow_reason};
++use tsuzuri_core::agent::spec::{Head, Spec};
++
++const NOW: u64 = 1_800_000_000;
++const DAY: u64 = 86_400;
++const RULING: &str = "t3-hub.90.1:20261005T0900Z-1";
++
++/// 主張の id U<a>〜U<b>。
++fn ids(a: usize, b: usize) -> Vec<String> {
++    (a..=b).map(|n| format!("U{n}")).collect()
++}
++
++/// g1 の形の計画（qv181 が U1〜U6・qv182 が U7〜U11・qv183 が U12〜U14）。
++fn plan() -> Value {
++    let m = |name: &str, claims: Vec<String>, path: &str| json!({"name": name, "model": "sonnet", "claims": claims, "paths": [path]});
++    json!({"type": "tsuzuri:verifier", "target": "t3-hub.89", "draft": "緩める問い", "attacker": "qv180",
++        "members": [m("qv181", ids(1, 6), "/S/a.md"), m("qv182", ids(7, 11), "/S/b.rs"), m("qv183", ids(12, 14), "/S/c.md")]})
++}
++
++/// 一覧の file の n 行（U1〜U<n>）。
++fn list(n: usize) -> String {
++    (1..=n)
++        .map(|i| format!("U{i}\t主張 {i}\t判じられない訳 {i}\t/S/a.md\n"))
++        .collect()
++}
++
++/// 対象 `target` の生きた検証役の札と群 `group` の席の札。
++fn peer(name: &str, target: &str, spawned: u64, group: &str) -> (Spec, Seat) {
++    let spec = Spec {
++        name: name.into(),
++        kind: "tsuzuri:verifier".into(),
++        budget: 150_000,
++        build: "なし".into(),
++        target: target.into(),
++        outputs: vec!["notes.md".into()],
++        spawned,
++        agent_id: None,
++        ended: None,
++    };
++    let seat = Seat {
++        group: group.into(),
++        i: 2,
++        k: 3,
++        claims: vec![],
++        paths: vec![],
++    };
++    (spec, seat)
++}
++
++/// 判じの入力の持ち物（呼びの名は qv181）。
++struct Case {
++    kind: String,
++    line: String,
++    head: Head,
++    model: Option<String>,
++    plan: Option<String>,
++    list: Option<String>,
++    peers: Vec<(Spec, Seat)>,
++    totals: Option<(u64, u64)>,
++    ledger: Option<Ledger>,
++}
++
++impl Case {
++    /// 通る見本（同じ群の生きた係 2 体・群の合計 0）。
++    fn base() -> Case {
++        Case {
++            kind: "tsuzuri:verifier".into(),
++            line: "g1 1/3".into(),
++            head: Head {
++                budget: 150_000,
++                build: "なし".into(),
++                target: "t3-hub.89".into(),
++                outputs: vec!["notes.md".into()],
++            },
++            model: Some("sonnet".into()),
++            plan: Some(plan().to_string()),
++            list: Some(list(14)),
++            peers: vec![
++                peer("qv182", "t3-hub.89", NOW - 60, "g1"),
++                peer("qv183", "t3-hub.89", NOW - 60, "g1"),
++            ],
++            totals: Some((0, 0)),
++            ledger: None,
++        }
++    }
++
++    fn run(&self) -> Result<Seat, &'static str> {
++        let ask = Ask {
++            kind: Some(&self.kind),
++            name: "qv181",
++            line: &self.line,
++            head: &self.head,
++            model: self.model.as_deref(),
++            plan: self.plan.as_deref(),
++            list: self.list.as_deref(),
++            peers: &self.peers,
++            totals: self.totals,
++            ledger: self.ledger.as_ref(),
++            now: NOW,
++        };
++        judge(&ask).map_err(|r| r.key)
++    }
++}
++
++type Edit = Box<dyn Fn(&mut Case)>;
++
++/// 計画の JSON を 1 か所替える。
++fn plan_edit(f: impl Fn(&mut Value) + 'static) -> Edit {
++    Box::new(move |c| {
++        let mut p = plan();
++        f(&mut p);
++        c.plan = Some(p.to_string());
++    })
++}
++
++/// 見本ごとに、通る見本へ 1 句だけ当てた断りの鍵を比べる。
++fn refuses(cases: Vec<(&str, Edit)>) {
++    for (key, edit) in cases {
++        let mut c = Case::base();
++        edit(&mut c);
++        assert_eq!(c.run().err(), Some(key), "{key}");
++    }
++}
++
++#[test]
++fn aggj_judge_passes_the_g1_plan_and_the_edges_of_each_value() {
++    let seat = Case::base().run().unwrap();
++    let want = Seat {
++        group: "g1".into(),
++        i: 1,
++        k: 3,
++        claims: ids(1, 6),
++        paths: vec!["/S/a.md".into()],
++    };
++    assert_eq!(seat, want);
++    let edges: Vec<Edit> = vec![
++        Box::new(|c| c.totals = Some((404_999, 6_749_999))),
++        Box::new(|c| c.line = "g1 3/3".into()),
++        Box::new(|c| {
++            let mut old = peer("qv170", "t3-hub.70", NOW - DAY, "g0");
++            old.0.ended = Some(NOW - 60);
++            c.peers.push(old);
++        }),
++        Box::new(|c| {
++            c.list = Some(list(18));
++            let mut p = plan();
++            for (n, a) in [(0, 1), (1, 7), (2, 13)] {
++                p["members"][n]["claims"] = json!(ids(a, a + 5));
++            }
++            c.plan = Some(p.to_string());
++        }),
++        Box::new(|c| {
++            c.list = Some(list(3));
++            let mut p = plan();
++            for n in 0..3 {
++                p["members"][n]["claims"] = json!(ids(n + 1, n + 1));
++            }
++            c.plan = Some(p.to_string());
++        }),
++        Box::new(|c| {
++            let mut old = peer("qv170", "t3-hub.89", NOW - 7 * DAY, "g0");
++            old.0.ended = Some(NOW - DAY);
++            c.peers.push(old);
++        }),
++    ];
++    for (n, edit) in edges.into_iter().enumerate() {
++        let mut c = Case::base();
++        edit(&mut c);
++        assert!(c.run().is_ok(), "縁 {n}");
++    }
++}
++
++#[test]
++fn aggj_judge_refuses_a_missing_or_malformed_line_or_file() {
++    refuses(vec![
++        ("line-form", Box::new(|c| c.line = "g1 1-3".into())),
++        ("line-form", Box::new(|c| c.line = "g1 0/3".into())),
++        ("plan-missing", Box::new(|c| c.plan = None)),
++        (
++            "plan-form",
++            Box::new(|c| c.plan = Some("{\"type\": \"tsuzuri:verifier\"".into())),
++        ),
++        ("plan-form", plan_edit(|p| p["target"] = json!("t3-hub.88"))),
++        ("list-missing", Box::new(|c| c.list = None)),
++        (
++            "list-form",
++            Box::new(|c| c.list = Some(list(13) + "U13\t主張 14\t訳 14\t/S/a.md\n")),
++        ),
++        (
++            "list-form",
++            Box::new(|c| c.list = Some(list(13) + "U14\t主張 14\t/S/a.md\n")),
++        ),
++    ]);
++    let plans = [("g1".to_string(), plan().to_string())];
++    assert_eq!(
++        unmarked("qv181", &plans).map(|r| r.key),
++        Some("line-missing")
++    );
++    assert_eq!(unmarked("qv189", &plans), None);
++    assert_eq!(
++        unmarked("qv181", &[("g1".to_string(), "{".to_string())]),
++        None
++    );
++}
++
++#[test]
++fn aggj_judge_refuses_the_type_the_trigger_and_the_counts() {
++    refuses(vec![
++        ("type", Box::new(|c| c.kind = "tsuzuri:drafter".into())),
++        ("draft", plan_edit(|p| p["draft"] = json!("調べ"))),
++        ("few", Box::new(|c| c.list = Some(list(2)))),
++        ("many", Box::new(|c| c.list = Some(list(19)))),
++        ("index", Box::new(|c| c.line = "g1 4/3".into())),
++        ("wide", Box::new(|c| c.line = "g1 1/4".into())),
++        (
++            "claims",
++            plan_edit(|p| {
++                p["members"][0]["claims"] = json!(ids(1, 7));
++                p["members"][1]["claims"] = json!(ids(8, 11));
++            }),
++        ),
++    ]);
++}
++
++#[test]
++fn aggj_judge_refuses_overlapping_missing_and_extra_claims() {
++    refuses(vec![
++        (
++            "overlap",
++            plan_edit(|p| p["members"][1]["claims"] = json!(ids(6, 11))),
++        ),
++        (
++            "missing",
++            plan_edit(|p| p["members"][2]["claims"] = json!(ids(12, 13))),
++        ),
++        (
++            "extra",
++            plan_edit(|p| p["members"][2]["claims"] = json!(["U12", "U13", "U14", "U99"])),
++        ),
++    ]);
++}
++
++#[test]
++fn aggj_judge_refuses_the_live_count_the_budget_the_model_and_the_totals() {
++    refuses(vec![
++        (
++            "live",
++            Box::new(|c| {
++                c.peers
++                    .push(peer("qv190", "t3-hub.70", NOW - 8 * DAY, "g0"))
++            }),
++        ),
++        ("budget", Box::new(|c| c.head.budget = 150_001)),
++        ("model", Box::new(|c| c.model = Some("opus".into()))),
++        ("model", Box::new(|c| c.model = None)),
++        ("stop", Box::new(|c| c.totals = Some((405_000, 0)))),
++        ("stop", Box::new(|c| c.totals = Some((0, 6_750_000)))),
++        ("totals-unread", Box::new(|c| c.totals = None)),
++    ]);
++}
++
++/// 同じ対象のほかの群 g0 の係が 6 日前に在り、計画が裁定 id `ruling` を持ち、台帳の問いの字が `notes` と `desc`。
++fn near(ruling: Option<&str>, ledger: Option<Ledger>) -> Edit {
++    let ruling = ruling.map(str::to_string);
++    Box::new(move |c| {
++        let mut old = peer("qv170", "t3-hub.89", NOW - 6 * DAY, "g0");
++        old.0.ended = Some(NOW - DAY);
++        c.peers.push(old);
++        let mut p = plan();
++        p["ruling"] = json!(ruling);
++        c.plan = Some(p.to_string());
++        c.ledger = ledger.clone();
++    })
++}
++
++fn read(ruling: &str, desc: &str) -> Option<Ledger> {
++    let notes = format!(
++        "前の行\n裁定 id = {ruling}・問い = {}・逐語 = はい",
++        ruling.split(':').next().unwrap()
++    );
++    Some(Ledger::Read {
++        notes,
++        description: desc.into(),
++    })
++}
++
++#[test]
++fn aggj_judge_checks_the_seven_day_window_against_the_ledger() {
++    let mut c = Case::base();
++    near(Some(RULING), read(RULING, "検証の群（g1）を起こす"))(&mut c);
++    assert!(c.run().is_ok());
++    let other = "t3-hub.90.1:20261005T0800Z-1";
++    let mut cases: Vec<(&str, Edit)> = vec![
++        ("window", near(None, None)),
++        (
++            "ruling-absent",
++            near(Some(RULING), read(other, "検証の群（g1）を起こす")),
++        ),
++        (
++            "group-unnamed",
++            near(Some(RULING), read(RULING, "検証の群を起こす")),
++        ),
++        (
++            "group-unnamed",
++            near(Some(RULING), read(RULING, "検証の群（g12）を起こす")),
++        ),
++        ("ledger-unread", near(Some(RULING), Some(Ledger::Unread))),
++        ("ledger-unread", near(Some(RULING), None)),
++    ];
++    for q in ["t3-hub.87.1", "t3-hub.87.2", "t3-hub.87.6"] {
++        let r: &'static str = Box::leak(format!("{q}:20261005T0639Z-1").into_boxed_str());
++        cases.push((
++            "uncounted",
++            near(Some(r), read(r, "検証の群（g1）を起こす")),
++        ));
++    }
++    refuses(cases);
++}
++
++#[test]
++fn aggj_shared_paths_pass_and_the_seat_workflow_call_is_refused() {
++    let mut p = plan();
++    p["members"][1]["paths"] = json!(["/S/b.rs", "/S/a.md"]);
++    let mut c = Case::base();
++    c.plan = Some(p.to_string());
++    assert!(c.run().is_ok());
++    assert_eq!(
++        shared(&Plan::parse(&p.to_string()).unwrap(), "qv181"),
++        vec!["/S/a.md".to_string()]
++    );
++    assert_eq!(
++        shared(&Plan::parse(&plan().to_string()).unwrap(), "qv181"),
++        Vec::<String>::new()
++    );
++    let call = |tool: &str, agent: Option<&str>| {
++        json!({"session_id": "s", "hook_event_name": "PreToolUse", "tool_name": tool, "agent_id": agent,
++            "tool_input": {"script": "x", "plan": "g1/plan.json", "ruling": RULING}})
++        .to_string()
++    };
++    assert!(workflow(&call("Workflow", None)));
++    assert!(!workflow(&call("Agent", None)));
++    assert!(!workflow(&call("Workflow", Some("a77"))));
++    let why = workflow_reason();
++    assert!(
++        why.starts_with("群の起こしの門は止める（席の流れの道具 Workflow の呼び"),
++        "{why}"
++    );
++    assert!(
++        why.contains("次の一手 = 流れの道具で係を起こすには持ち主に問う"),
++        "{why}"
++    );
++    let mut c = Case::base();
++    c.head.budget = 150_001;
++    let r = judge(&Ask {
++        name: "qv181",
++        kind: Some("tsuzuri:verifier"),
++        line: "g1 1/3",
++        head: &c.head,
++        model: Some("sonnet"),
++        plan: c.plan.as_deref(),
++        list: c.list.as_deref(),
++        peers: &[],
++        totals: Some((0, 0)),
++        ledger: None,
++        now: NOW,
++    })
++    .unwrap_err();
++    assert_eq!(
++        reason(&r),
++        "群の起こしの門は止める（頭の予算 150001 が係ごとの上限 150000 を越える） 次の一手 = 計画の file・一覧の file・頼みの頭を直すか、群: の行の無い 1 体の起こしにする（群の値と形は判断の記録 ADR-61）"
++    );
++}
