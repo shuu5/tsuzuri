@@ -1,4 +1,4 @@
-//! GET /api/notices — 席の「見て」の知らせの project ごとの最新の 1 つ（Notices・行 i-11・要件 FR16）。
+//! GET /api/notices — 席の「見て」の知らせの project ごとの最新の 1 つ（Notices・要件 FR16）。
 //! 材料は tz stage notify が書く記録の file だけで、ここは読むだけ（file は書かず、子 process を撃たない）。
 //! 記録の dir は `Config::notify`（無ければ 503 no-notify-dir）、dir が読めなければ 503 notify-unread。
 //! この board の project の名は記録の書き手と同じ `cli::project` で --repo から引く（引けなければ空の字）。

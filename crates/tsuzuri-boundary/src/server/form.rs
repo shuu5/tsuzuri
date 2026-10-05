@@ -1,14 +1,14 @@
-//! 器の doctor の台帳の形の行（行 c-pipe-misfit・判断の記録 ADR-16 の決定 (6)）。
+//! 器の doctor の台帳の形の行（判断の記録 ADR-16 の決定 (6)）。
 //! 器の doctor は引数 --repo を受けた周だけ台帳の形の行（頭 `tsuzuri_core::pipeline::FORM_PREFIX`）を出す。
 //! 撃つ形は `<program> doctor --state-dir <dir> --repo .`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 撃つのは台帳の見張りの読みの周だけ（`Source::read` がその周の台帳の字を渡す）で、口 /api/pipeline の最初の要求か
-//! 知らせの接続（GET /api/surface/events）が撃ちを許した後から撃つ（`Form::arm`・行 c-misfit-pair）。
+//! 知らせの接続（GET /api/surface/events）が撃ちを許した後から撃つ（`Form::arm`）。
 //! 口は持った組を読むだけで器を撃たず、席の card には触らない。
 //! 撃ちは別の thread で同時に 1 本だけで、走っている間の読みは終わった後に最後の周の台帳の字でもう 1 回だけ撃つ。
 //! 持つ組（`Kept`）は最後に終えた撃ちの周の台帳の字と台帳の形の行で、台帳の読みが落ちた周は器を撃たずに None、
 //! 器が落ちるか上限を越えるか台帳の形の行が無い周も None（持ち回さない）。組から写した一覧（`misfits`）が変われば
 //! 台帳の種類（`ChangeKind::Ledger`・台帳の見張りの読みの周の字から撃つ）の board-changed を送る
-//! （台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる・行 c-ev-kind）。
+//! （台帳の字だけが変わった周は見張りの ledger-changed が面に読み直させる）。
 
 use std::ffi::OsString;
 use std::fmt;

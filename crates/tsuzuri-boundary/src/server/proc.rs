@@ -1,5 +1,5 @@
-//! 子 process を撃つ共通の部品（行 hb-proc が台帳の読みから割った）。
-//! 子は新しい process group に入れ、時間切れには孫まで group ごと止める（便 e-reap）。
+//! 子 process を撃つ共通の部品。
+//! 子は新しい process group に入れ、時間切れには孫まで group ごと止める。
 
 use std::ffi::OsStr;
 use std::io::Read;

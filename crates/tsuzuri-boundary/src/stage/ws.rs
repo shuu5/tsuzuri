@@ -1,8 +1,8 @@
-//! websocket の client の側（行 i-3・RFC 6455）。
-//! 行 i-2 が ssh の -L で張る unix socket に繋ぎ、字の message だけを運ぶ（binary と拡張と subprotocol は持たない）。
+//! websocket の client の側（RFC 6455）。
+//! `tunnel` が ssh の -L で張る unix socket に繋ぎ、字の message だけを運ぶ（binary と拡張と subprotocol は持たない）。
 //! 外の部品を足さず、SHA-1 と base64 と乱れた値（std の RandomState）を std だけで書く。
 //! 字を運ぶ `Socket::send` を使うのは cdp の Session だけ（撃てる命令の語彙は cdp の steps が決める・
-//! 窓を足す手は動いている Chrome へ渡す起動の引数で、頁の target を作る命令は撃たない・行 i-board-win）。
+//! 窓を足す手は動いている Chrome へ渡す起動の引数で、頁の target を作る命令は撃たない）。
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

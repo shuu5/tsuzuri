@@ -1,4 +1,4 @@
-//! GET /api/unreceived — 席に届いていない裁定の id の列（Reading<Vec<RulingId>>・行 f-undelivered）。
+//! GET /api/unreceived — 席に届いていない裁定の id の列（Reading<Vec<RulingId>>）。
 //! 印の無い裁定の id を台帳の順に Known で、台帳が読めなければ Unknown で返す（読むだけの server も同じ）。
 
 use tsuzuri_contract::board::Reading;

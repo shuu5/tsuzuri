@@ -1,11 +1,11 @@
-//! ほかの project の問いの読み（起動の引数 --project の置き場ごと・行 e-multi-ask）。
+//! ほかの project の問いの読み（起動の引数 --project の置き場ごと）。
 //! 札は置き場の dir の名（`tsuzuri_core::account::project_name`・account board の project の名と同じ読み）で、
 //! 台帳は読み取りの bd（`ledger::BD_ARGS`・--bd と同じ program）だけで撃つ。見張りは server の Hub に足し
 //! （`Hub::watch_ledger_into`）、印が動いた周と知らせの接続が居る間の読み直しの周だけ読み、open の問いの card が
 //! 前と変わった周だけ ledger-changed を送る。口の読みは、印が見張りの最後の読みの前と同じなら bd を撃たず
-//! その字を返し、違えば自分で読む（`Source::watched`・行 e-ledger-lazy）。
+//! その字を返し、違えば自分で読む（`Source::watched`）。
 //! 答えは受けない（札の組の answerable は偽・ほかの repo の台帳へ書かない）。
-//! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す（行 c-g3-extern）。
+//! 導出グラフの口 /api/graph も同じ最後の読みの字を、要求のたびに `outside` で読んで g-3 に渡す。
 
 use std::ffi::OsStr;
 use std::path::PathBuf;

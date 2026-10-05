@@ -1,7 +1,7 @@
-//! 器の event log の読み（file を 1 つ読むだけ・書かない・便 e-read）。
+//! 器の event log の読み（file を 1 つ読むだけ・書かない）。
 //! file は `<state dir>/fleet/events.jsonl`。state dir を省いたとき・file が無いか読めないときは、
 //! 走行の出所は読めない（None）。file は変化の印（更新時刻と長さ）としても見る。
-//! 便の dir（`<state dir>/pipe/<run id>/`）の gate と審査の判定の file も読む（行 c-run-verdict）。
+//! 便の dir（`<state dir>/pipe/<run id>/`）の gate と審査の判定の file も読む。
 //! 器はその file を書いた後に段の event を足すので、変化の印は event log だけで足りる。
 
 use std::path::{Component, Path, PathBuf};

@@ -1,4 +1,4 @@
-//! POST /api/account/heartbeat — 停止の切り替えの受付（行 h-wire）。
+//! POST /api/account/heartbeat — 停止の切り替えの受付。
 
 use tsuzuri_contract::account::HEARTBEAT_PATH;
 

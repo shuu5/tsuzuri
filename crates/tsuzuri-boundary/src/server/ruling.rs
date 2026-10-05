@@ -1,11 +1,11 @@
-//! 裁定の受付（口 POST /api/ruling・便 e-ask）。server 自身は file を書かない。
+//! 裁定の受付（口 POST /api/ruling）。server 自身は file を書かない。
 //! 台帳に書くのは bdw（契約の型の `LedgerWrite` の argv・cwd は repo）、席へ送るのは器の CLI。
 //! 受付の順:
 //! 1. 逐語が空白だけなら断る（EmptyVerbatim）。
 //! 2. 台帳を bd の読み取りの口で読み直し（持ち回しの値を使わない）、open の問いでなければ断る
-//!    （UnknownQuestion）。走っている読みには合流しない（便 e-coalesce）。1 回の読みの上限は `READ_TIMEOUT`
-//!    （表示の読みの `BD_TIMEOUT` でなく書きの前の読みの上限・行 e-answer-reread）。読みが落ちれば `RETRY_STEP` を空けて
-//!    `READ_TRIES` 回まで撃ち直し（`reread`・行 e-ruling-retry）、どれも読めなければ回ごとの落ちた訳を並べた
+//!    （UnknownQuestion）。走っている読みには合流しない。1 回の読みの上限は `READ_TIMEOUT`
+//!    （表示の読みの `BD_TIMEOUT` でなく書きの前の読みの上限）。読みが落ちれば `RETRY_STEP` を空けて
+//!    `READ_TRIES` 回まで撃ち直し（`reread`）、どれも読めなければ回ごとの落ちた訳を並べた
 //!    `unread_line` の 1 行を標準エラーに書いて 503。
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
 //! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
@@ -16,14 +16,13 @@
 //!
 //! 答えごとの撃ち直しの thread は process の中にだけ在り、server の起こし直しで消える。起動の入口（tz surface serve）は
 //! 口を開いた後に `sweep_at_start` で起動の掃き（`sweep`）を別の thread で 1 度だけ始め、`PACE` の上限の内に記帳した
-//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない・
-//! 行 c-deliver-retry）。
+//! 印の無い裁定を台帳から拾って同じ `redeliver` で撃ち直す（読むだけの server と配達の先の無い server では始めない）。
 //!
 //! 口は 200 でない応答を返す前に `refusal_line` の 1 行を標準エラーに書く（逐語は書かない）。
 //! 読むだけの server（引数 --read-only）は、答えと方針の口を受付の前に 403 の `READ_ONLY` で断り、
-//! 台帳の読みも書きも配達も撃たない（行 e-ask-own-only）。
+//! 台帳の読みも書きも配達も撃たない。
 //!
-//! 取り消し（口 POST /api/revoke・`revoke`・行 e-revoke）も同じ順で受け、問いを閉じる代わりに開き直す。
+//! 取り消し（口 POST /api/revoke・`revoke`）も同じ順で受け、問いを閉じる代わりに開き直す。
 //! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
 //! 開き直しだけが落ちた後に同じ要求を撃ち直すと、行を足さず開き直しだけを撃ち直す。
 

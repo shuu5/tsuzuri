@@ -1,4 +1,4 @@
-//! POST /api/seat/heartbeat — project board の停止の切り替えの受付（行 e-seat-hb）。
+//! POST /api/seat/heartbeat — project board の停止の切り替えの受付。
 //! 本文は向きだけで、撃つ席は server の --repo の anchor から引く。
 
 use tsuzuri_contract::seathb::PATH;

@@ -1,20 +1,20 @@
-//! 台帳の読み（bd の読み取りの口を子 process で 1 本撃つだけ・書かない・便 e-src）。
+//! 台帳の読み（bd の読み取りの口を子 process で 1 本撃つだけ・書かない）。
 //! 撃つ形は `bd --readonly list --all --limit 0 --json`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 起動できない・rc が 0 でない・JSON として読めない・5 秒を超えて返さない、のどれでも
 //! 一覧は 0 件でなく「まだ分からない」（Reading::Unknown）にする。
 //! 変化の印は store（.beads の metadata.json が名指す db の .dolt/noms）の manifest の字と manifest が名指す file の長さで、
-//! store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない・行 e-marks・行 e-mark-meta）。
-//! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
+//! store が無ければ issues.jsonl と interactions.jsonl の更新時刻と長さ（jsonl の中身は読まない）。
+//! 同じ `Source` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`）。
 //! 読めた字（`parse_bd` か中核の台帳の読みが Known の字）は最後に読めた字として持ち、次の読みが落ちたときだけ
-//! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す（行 e-hold）。変化の見張りの `read` は持ち回さない。
+//! 上限（既定 `READ_HOLD`・60 秒）まで `got` と `text` が返す。変化の見張りの `read` は持ち回さない。
 //! `watched` の Source の `got` と `text` は、最後に始めた合流の読みの前に取った印（`read_mark`）が今の印と同じなら
-//! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す
-//! （行 e-snap）。印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す（行 e-ledger-lazy）。
+//! bd を撃たず、最後に終えた読み（変化の見張りの読み）の結果を返し、読みが走っていればその終わりを待って同じ結果を返す。
+//! 印が違えば見張りを待たず自分で読み、`form` が在れば台帳の形の行の撃ちへ渡す。
 //! `watched` の Source は、今の印が最後に読めた読みの前に取った印（`good_mark`）と同じ間は bd を撃たず、最後に読めた字を
 //! 新しい字（stale の無し）として返し、落ちた読みの結果は持たない（次の `got` が読み直す）。変化の見張りの `read` の上限は
-//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)・行 e-hold-mark）。
+//! `WATCH_TIMEOUT`（30 秒）で、口の要求の読みは `BD_TIMEOUT` のまま（判断の記録 ADR-30 決定 (10)）。
 //! `with_form` の Source の `read` は、読んだ台帳の字（読めなければ None）で器の doctor の台帳の形の行の撃ち
-//! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ・行 c-pipe-misfit・行 c-misfit-pair）。
+//! （`Form::kick`）を起こす（待たない・撃ちはその字と台帳の形の行を組で持つ）。
 
 use std::ffi::OsString;
 use std::path::PathBuf;

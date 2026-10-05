@@ -1,9 +1,9 @@
-//! tz の口の folio 由来の 11 subcommand（行 k-tz-entry・要件 FR17・判断の記録 ADR-8 の決定 (1)〜(6)）。
+//! tz の口の folio 由来の 11 subcommand（要件 FR17・判断の記録 ADR-8 の決定 (1)〜(6)）。
 //! 口の名は folio の同じ名の口と同じで、引数と終了 code（合格 0・不合格 1・まだ分からない 2）も folio の口のまま、
 //! folio の lib の入口 `folio::entry::run` を命令の名 tz で撃つだけ。inject と serve は持たない。
 //! 索引の旗（`INDEX_FLAGS`）を 1 つでも持つ tz graph は folio の graph の口へ渡し（吸収・決定 (3)）、持たない tz graph は
 //! 今の口（`cli::graph`）のまま。2 つを混ぜた引数は使い方の誤り 1。
-//! 設計の索引の読みに撃つ program の既定は撃っている tz 自身（`program`・行 k-tz-self）。
+//! 設計の索引の読みに撃つ program の既定は撃っている tz 自身（`program`）。
 
 use std::ffi::OsString;
 use std::io::Write;

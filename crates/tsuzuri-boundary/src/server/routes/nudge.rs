@@ -1,4 +1,4 @@
-//! POST /api/surface/questions — 問いの合図の受付（QuestionNudge・行 e-signal）。
+//! POST /api/surface/questions — 問いの合図の受付（QuestionNudge）。
 //! 席が問いを bdw で置いた後に送り、台帳の見張りの周期の待ちを終わらせる（台帳にも器にも書かない）。
 
 use tsuzuri_contract::surface::QuestionNudge;

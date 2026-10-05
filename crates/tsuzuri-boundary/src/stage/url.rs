@@ -1,13 +1,13 @@
-//! board の URL（行 i-4・要件 FR16・判断の記録 ADR-15 の決定 (5)・持ち主の裁定 t3-hub.59.4 と t3-hub.53.1）。
+//! board の URL（要件 FR16・判断の記録 ADR-15 の決定 (5)）。
 //! ssh で届かない端末には tailnet の中の board の URL を渡すだけにする。host の名は tailnet の道具の status の
 //! Self の DNSName から、port は anchor の追跡されない git config の tsuzuri.boardport から実行の時に読み、
 //! どちらも code と版管理に載る file に書かない（行 D-4）。
 //! 自分の board とみなすのは、port が自分の boardport で、host がこの host のどの形（tailnet の名・その短い名・
-//! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め・i-4 と i-5 の起草の問い Q1）。
-//! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ（行 i-board-ports）、
+//! Self の TailscaleIPs の住所・127.0.0.1・localhost）でもよい頁（席の決め）。
+//! 守りは群の宣言の anchor ごとの project board の port のほかの board にも広げ、
 //! その host の形は自分の board と同じ列（同じ host の board だけ・ほかの host の同じ port は断らない）。
-//! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign（行 i-stage-guard）。
-//! 端末の窓の頁を選ぶ launch の board_page も shows で引く（行 i-board-win）。
+//! 席の自分の board の頁は shows だけで、account board の頁とほかの project の board の頁は foreign。
+//! 端末の窓の頁を選ぶ launch の board_page も shows で引く。
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;

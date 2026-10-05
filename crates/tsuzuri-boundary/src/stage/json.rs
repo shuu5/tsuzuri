@@ -1,6 +1,6 @@
-//! 表示面の小さな JSON の読み書き（行 i-3）。
+//! 表示面の小さな JSON の読み書き。
 //! 境界の crate は serde に直に依存しないので std だけで書く。値の型は組まず、字の切り出しだけを持つ
-//! （CDP の応答と event・行 i-2 の /json/version と /json/list の応答・行 i-5 の写真と DOM と console の応答が使う）。
+//! （CDP の応答と event・`tunnel` の /json/version と /json/list の応答・`cli` の写真と DOM と console の応答が使う）。
 
 /// 字を引用符で囲んだ JSON の字にする。
 pub fn escape(text: &str) -> String {

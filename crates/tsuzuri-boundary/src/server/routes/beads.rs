@@ -1,4 +1,4 @@
-//! GET /api/beads — bead の事実の一覧（BeadFacts・行 c-bead-route）。
+//! GET /api/beads — bead の事実の一覧（BeadFacts）。
 //! 台帳の字は口 /api/ledger と同じ読み（`Source::got`）から中核の `ledger::facts` で組み、古さの印も同じに付ける。
 
 use tsuzuri_contract::wire;

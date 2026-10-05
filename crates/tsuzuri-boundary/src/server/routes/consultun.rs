@@ -1,4 +1,4 @@
-//! GET /api/consult/unreceived — 席に受けられていない所見と頼み（Reading<ConsultUnreceived>・行 cs-server）。
+//! GET /api/consult/unreceived — 席に受けられていない所見と頼み（Reading<ConsultUnreceived>）。
 //! 席の hook の安い判じが撃つ（置き場か台帳が読めなければ Unknown・読むだけの server も同じ）。
 
 use tsuzuri_contract::consult::UNRECEIVED_PATH;

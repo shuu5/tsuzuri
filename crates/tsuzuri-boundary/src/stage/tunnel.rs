@@ -1,9 +1,9 @@
-//! tunnel と窓の頁の選びと窓を 1 回だけ起こすこと（行 i-2・行 i-board-win・要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-24 の決定 (2) と (4)）。
+//! tunnel と窓の頁の選びと窓を 1 回だけ起こすこと（要件 FR16・判断の記録 ADR-5 の決定 (1)・ADR-24 の決定 (2) と (4)）。
 //! 端末の Chrome の remote debugging の口を、この server の 0700 の dir の中の unix socket へ ssh の -L で引く
 //! （見積りの T3・127.0.0.1 の TCP の転送だとほかの口座の process も持ち主の Chrome を操れる）。
 //! tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（見積りの T1・drop で ssh を止めて dir を消す・Chrome は端末に残る）。
-//! 撃つ HTTP の GET は /json/version と /json/list だけで、窓を前に出す・動かす・足す口を撃たない
-//! （持ち主の裁定 t3-hub.59.5 と t3-hub.59.7）。窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけで、
+//! 撃つ HTTP の GET は /json/version と /json/list だけで、窓を前に出す・動かす・足す口を撃たない。
+//! 窓を起こすのは呼ぶ側が起こしてよいと渡した時の 1 回だけで、
 //! 撃つのは起動の引数だけ（動いている Chrome があればその Chrome が app の窓を足す）。
 
 use std::ffi::{OsStr, OsString};

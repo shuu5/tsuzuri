@@ -1,9 +1,9 @@
 //! 面の file の配布（API の口でない GET）。置き場の外の path は断る。
 //! `..` と `.` の区切りを断り、実体の path（symlink を解いた先）が置き場の中に在ることを確かめる。
 //! 名に中身の hash を持つ file（trunk が付ける）は頭 Cache-Control で 1 年持たせ（`IMMUTABLE`）、
-//! index.html とほかの file は毎回確かめさせる（`NO_CACHE`・行 e-cache）。
+//! index.html とほかの file は毎回確かめさせる（`NO_CACHE`）。
 //! 隣に gzip の写し（名に `GZ_SUFFIX`・xtask の surface-build が書く）の在る file には頭 Vary を足し、
-//! 要求の Accept-Encoding が gzip を受ければ写しの中身を頭 Content-Encoding と返す（行 g-gz）。
+//! 要求の Accept-Encoding が gzip を受ければ写しの中身を頭 Content-Encoding と返す。
 //! 写しの無い file の頭は写しの無かった時と同じで、写しを名指す要求はほかの file と同じ配り。
 
 use std::path::{Path, PathBuf};

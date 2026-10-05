@@ -1,7 +1,7 @@
-//! tz context（行 k-ctx-cli・判断の記録 ADR-51 の決定 (4) と帰結）: 設計ノートの行 1 本の近い仕様（設計の層の塊）を
+//! tz context（判断の記録 ADR-51 の決定 (4) と帰結）: 設計ノートの行 1 本の近い仕様（設計の層の塊）を
 //! 標準出力へ出す。書かない。席と係が起草の時に、器が便に渡す前の材料と同じ組みの字を引く口。
 //! tz context --row <ノート>#<行> [--dir <dir>]（--dir は設計の置き場・省けば撃った場所からの design-intent）。
-//! 組みは folio の lib の入口 `folio::entry::context`（行 f-ctx-build）で、塊の字はそのまま出す。
+//! 組みは folio の lib の入口 `folio::entry::context`で、塊の字はそのまま出す。
 //! 終了 code は 組めた 0・使い方の誤りと名指しの誤り（ノートか行が無い）1・正本が読めない 2（まだ分からない）。
 
 use std::path::Path;

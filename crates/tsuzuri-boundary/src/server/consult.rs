@@ -1,4 +1,4 @@
-//! 相談の窓の board の口の材料（設計ノート surface-wave27b 行 cs-server・判断の記録 ADR-29 決定 (4)(8)(9)）。
+//! 相談の窓の board の口の材料（判断の記録 ADR-29 決定 (4)(8)(9)）。
 //! 一覧の口（GET /api/consult）と未受けの口（GET /api/consult/unreceived）は、repo の git config の鍵
 //! `tsuzuri.draftsdir` の起草の置き場の作業場の file と、台帳の見張りの最後の読みの相談の行を読む（読むだけ）。
 //! state dir が無い server・鍵が無いか dir でない置き場・読めない台帳は、一覧の 4 つの段と未受けを Unknown にする。

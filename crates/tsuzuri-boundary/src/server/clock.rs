@@ -1,4 +1,4 @@
-//! 時刻の読み（RFC 3339 の字を UTC の epoch 秒にする・行 hb-proc が台帳の読みから割った）。
+//! 時刻の読み（RFC 3339 の字を UTC の epoch 秒にする）。
 
 use tsuzuri_contract::EpochSecs;
 

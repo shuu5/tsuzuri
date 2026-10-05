@@ -1,4 +1,4 @@
-//! POST /api/ruling — 裁定の受付（RulingRequest・便 e-ask）。
+//! POST /api/ruling — 裁定の受付（RulingRequest）。
 
 use tsuzuri_contract::surface::RulingRequest;
 use tsuzuri_contract::wire;

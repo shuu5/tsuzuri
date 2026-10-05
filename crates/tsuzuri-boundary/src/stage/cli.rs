@@ -1,23 +1,23 @@
-//! tz stage の口（行 i-5・要件 FR16・判断の記録 ADR-15 の決定 (6) と (7)・持ち主の裁定 t3-hub.59.3・t3-hub.59.5・t3-hub.59.7）。
+//! tz stage の口（要件 FR16・判断の記録 ADR-15 の決定 (6) と (7)）。
 //! 席は端末の一覧の名で命令し、命令ごとに決まった旗だけを受ける（端末の値を上書きする旗は持たず、撃つ program の
 //! 差し替えの旗だけを持つ・条 N-3）。board の頁の上では見せるだけにし、click・入力・key を撃つ前に断る。
 //! 窓を起こすのは持ち主の tz stage open だけで、席の中（環境変数 CLAUDECODE が 1）の open は断る（計画の 3 節の席の決め）。
 //! open は端末ごとの錠を持って撃ち、同時の撃ちで窓を 2 つにしない。窓は board ごとに 1 つで、覚えた頁か board の頁が
-//! 動いている Chrome に無い時だけ、持ち主の頼みとして起動の引数を 1 回撃つ（動いている Chrome が app の窓を足す・行 i-board-win）。
+//! 動いている Chrome に無い時だけ、持ち主の頼みとして起動の引数を 1 回撃つ（動いている Chrome が app の窓を足す）。
 //! 窓の頁の path は端末ごとの file に project の名で覚え（`memo`）、選びの前に読み、窓を見つけるか起こした後に書く。
 //! 窓を前に出す・動かす・頁を作る語は持たない。
 //! host の面は器の rules validate --state-dir が rc 0 で返った後にだけ読み、自分の anchor の state dir の host.toml だけを読む。
 //! 標準出力の最後の行は、board の URL を組めた後のどの終わり方でも url の line（持ち主へ渡す URL）。
-//! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く（行 i-7）。
-//! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない・行 i-open-mark）。
+//! --to を省いた撃ちは repo の project の名で表示先の設定（`target`）を引き、初めて見せる端末の時だけ窓を起こしてよいと渡して印を書く。
+//! tz stage open も窓を起こすか頁を 1 つ作った時は、錠の中で同じ印を書く（--to の在る無しによらない）。
 //! 設定に値が無ければ席の目に落ちて URL の行を出し（open は断る）、表示先は board の問いで持ち主に問う。
 //! 設定の端末の名が層 A（器の host の面の [[device]]）に無ければ名指して断り、既定へ落とさない。
 //! tz stage target は show・set --project・set --all・clear --project の 4 つの口で設定を読み書きする（URL の行は出さない）。
-//! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む・行 e-stage-target）。
-//! 席の自分の board の頁でない board の頁（account board の頁とほかの project の board の頁）の上では、見せる操作も含めてどの命令も撃たず断る（行 i-stage-guard）。
+//! show --json は show と同じ読みを電文の 1 行で出す（board の server が行を割らずに読む）。
+//! 席の自分の board の頁でない board の頁（account board の頁とほかの project の board の頁）の上では、見せる操作も含めてどの命令も撃たず断る。
 //! click・入力・key の断りは url の ports のほかの board（群の宣言の anchor ごとの project board）にも広げ、
-//! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない・行 i-board-ports）。
-//! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く（行 i-10）。
+//! port が読めない project は名指して出す（その board の断りは広げず、撃ちは止めない）。
+//! tz stage notify は窓を起こさず表示先の端末へ知らせだけを出し、project の最新の知らせの記録を書く。
 //! notify の rc は記録を書けて端末に知らせが届いた時だけ 0 で、URL を組めた後のどの終わり方でも最後の行は url の line。
 
 use std::env;

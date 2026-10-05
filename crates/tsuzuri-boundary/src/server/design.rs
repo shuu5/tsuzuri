@@ -1,13 +1,13 @@
-//! 設計の索引の読み（設計の道具を子 process で 1 本撃つだけ・書かない・便 e-read）。
+//! 設計の索引の読み（設計の道具を子 process で 1 本撃つだけ・書かない）。
 //! 撃つ形は `<program> graph --print --dir <repo>/design-intent`（cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでも設計の出所は読めない（None）。
 //! 設計文書の dir の下の全 file は変化の印（更新時刻と長さ）として見るだけで、中身は読まない。
-//! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`・便 e-coalesce）。
-//! 要約の読み（行 c-summary-wire）は `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
+//! 同じ `Design` とその clone の読みは、走っている 1 本の子 process を分け合う（`coalesce`）。
+//! 要約の読みは `<program> graph --print --summary --dir <repo>/design-intent` を同じ形で撃ち、
 //! 索引の読みとは別の場で合流する。--summary を知らない folio では要約だけが読めない（索引は読める）。
-//! 裁定の書き出しの読み（行 c-g3g7）は `<program> check --emit-rulings --dir <repo>/design-intent` を同じ形で撃ち、
+//! 裁定の書き出しの読みは `<program> check --emit-rulings --dir <repo>/design-intent` を同じ形で撃ち、
 //! 別の場で合流する。rc が 0 でない書き出しは全数でない（床がまだ分からないか不合格）ので読めない（None）。
-//! 3 つの読みは持ち回しの表（`Held`・行 e-held-design）を通り、設計文書の dir の下の全 file の印が撃つ前と同じで
+//! 3 つの読みは持ち回しの表（`Held`）を通り、設計文書の dir の下の全 file の印が撃つ前と同じで
 //! `DESIGN_HOLD` の内なら撃ち直さない（裁定の書き出しは contracts の dir と git の印も見る・`rulings_marks`）。
 
 use std::ffi::OsString;

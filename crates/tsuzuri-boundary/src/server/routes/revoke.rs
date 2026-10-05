@@ -1,4 +1,4 @@
-//! POST /api/revoke — 答えた決定の取り消しの受付（RevokeRequest・行 e-revoke）。
+//! POST /api/revoke — 答えた決定の取り消しの受付（RevokeRequest）。
 
 use tsuzuri_contract::surface::{REVOKE_PATH, RevokeRequest};
 use tsuzuri_contract::wire;

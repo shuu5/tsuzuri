@@ -1,5 +1,4 @@
-//! 表示先の設定と窓を開く頼みの受付（行 e-stage-target・要件 FR16・判断の記録 ADR-15 の決定 (2)(6)・
-//! 持ち主の裁定 t3-hub.59.1 と t3-hub.59.7 と t3-hub.52.29）。
+//! 表示先の設定と窓を開く頼みの受付（要件 FR16・判断の記録 ADR-15 の決定 (2)(6)）。
 //! 面と server は設定の file を自分で書かず、tz の口（`tz stage target show --json`・`set`・`clear`・`tz stage open`）を
 //! 1 回撃つだけにする（読みの字は tz が組む・名に空白を含められるので server は行を割って読まない）。
 //! 撃ちはどれも引数の後に --repo と --scribe2 を足し、cwd は --repo の dir で、子の環境から席の印を除く

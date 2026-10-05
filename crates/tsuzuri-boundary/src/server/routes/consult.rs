@@ -1,4 +1,4 @@
-//! GET /api/consult — 相談の窓の一覧（ConsultBoard・行 cs-server）。
+//! GET /api/consult — 相談の窓の一覧（ConsultBoard）。
 //! 作業場の file と台帳の見張りの最後の読みの相談の行から tz consult list と同じ組みの電文を返す
 //! （置き場か台帳が読めなければ 4 つの段が Unknown・読むだけの server も同じ）。
 

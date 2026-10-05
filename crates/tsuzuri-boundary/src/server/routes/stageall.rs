@@ -1,4 +1,4 @@
-//! POST /api/stage/targets — account board の表示先の書きの受付（一括と project ごと・行 e-stage-target）。
+//! POST /api/stage/targets — account board の表示先の書きの受付（一括と project ごと）。
 //! 群の宣言は account board の読みの state dir から引き、無ければ --repo の project だけを受ける。
 
 use tsuzuri_contract::stage::ALL_PATH;

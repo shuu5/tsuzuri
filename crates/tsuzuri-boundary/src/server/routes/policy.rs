@@ -1,4 +1,4 @@
-//! POST /api/policy — 方針の受付（PolicyRequest・便 e-batch）。
+//! POST /api/policy — 方針の受付（PolicyRequest）。
 
 use tsuzuri_contract::surface::PolicyRequest;
 use tsuzuri_contract::wire;

@@ -1,5 +1,5 @@
-//! GET /api/runs?bead= — bead の走行の時間軸（RunsDoc・行 e-runs）。
-//! 字は器の event log と便の dir の判定の file だけから読む（台帳の bd は撃たない・行 c-run-verdict）。
+//! GET /api/runs?bead= — bead の走行の時間軸（RunsDoc）。
+//! 字は器の event log と便の dir の判定の file だけから読む（台帳の bd は撃たない）。
 
 use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::runs::PATH;

@@ -1,4 +1,4 @@
-//! POST /api/batch — 束の受付（BatchRequest・便 e-batch）。
+//! POST /api/batch — 束の受付（BatchRequest）。
 
 use tsuzuri_contract::surface::BatchRequest;
 use tsuzuri_contract::wire;

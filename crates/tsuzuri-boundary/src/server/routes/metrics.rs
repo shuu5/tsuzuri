@@ -1,4 +1,4 @@
-//! GET /api/metrics — 台帳の指標（LedgerStats・未反映の 3 欄は state dir の局面の出力から読む・行 c-unref-lc）。
+//! GET /api/metrics — 台帳の指標（LedgerStats・未反映の 3 欄は state dir の局面の出力から読む）。
 
 use tsuzuri_contract::wire;
 

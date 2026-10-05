@@ -1,4 +1,4 @@
-//! GET /api/unreflected — 未反映の一覧（UnreflectedList・便 e-view・state dir の局面の出力から読む・行 c-unref-lc）。
+//! GET /api/unreflected — 未反映の一覧（UnreflectedList・state dir の局面の出力から読む）。
 
 use tsuzuri_contract::wire;
 

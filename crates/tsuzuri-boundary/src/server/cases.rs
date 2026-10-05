@@ -1,10 +1,10 @@
-//! 器の局面の出力の読み（file を 2 つ読むだけ・書かない・行 c-case-read）。
+//! 器の局面の出力の読み（file を 2 つ読むだけ・書かない）。
 //! file は `<state dir>/fleet/lifecycle.json`（出力）と同じ dir の `lifecycle.stale`（古さの印・器の case-lifecycle §5.1）。
 //! 器の読み手と同じく古さの印 → 出力の順に読む。state dir を省いたときは、出力は空の字で古さの印は無い。
 //! 出力が無いか読めなければ空の字、古さの印は無ければ None・在って読めなければ空の字（中核の `cases_of` の入力の形）。
-//! 2 つの file は見張りもする（`Cases::watch`・行 c-cases-watch）: 器は配車の周ごとに出力を書き直し、生成の時刻と
+//! 2 つの file は見張りもする（`Cases::watch`）: 器は配車の周ごとに出力を書き直し、生成の時刻と
 //! 入力の印はそのたびに動くので、更新時刻と長さが動いた周だけ字を読み、面が読む中身（`cases_of` の古さの印の種類と
-//! 読めない版か〔行 c-case-unreadable〕と部品）が前と違う時だけ局面の出力の種類（`ChangeKind::Cases`）の board-changed を送る。
+//! 読めない版かどうかと部品）が前と違う時だけ局面の出力の種類（`ChangeKind::Cases`）の board-changed を送る。
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

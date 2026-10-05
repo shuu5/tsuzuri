@@ -1284,7 +1284,7 @@ fn acchold_events_doc_names_off() {
         .filter(|l| l.starts_with("//!"))
         .collect::<Vec<_>>()
         .join("\n");
-    for word in ["heartbeat-off", "Acct::marks", "e-seat-hbmark"] {
+    for word in ["heartbeat-off", "Acct::marks", "席の card の印"] {
         assert!(doc.contains(word), "module の doc に {word} が無い");
     }
 }

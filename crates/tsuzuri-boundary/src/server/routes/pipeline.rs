@@ -1,8 +1,7 @@
 //! GET /api/pipeline — pipeline の板（PipelineBoard）。
 //! 最初の要求が器の doctor の台帳の形の行の撃ちを許し（`Form::arm`・知らせの接続も許す）、口は持った組を読むだけで器を撃たない。
-//! 札は集めた今の台帳の字から組み、形の崩れの一覧は見張りの読みの周の台帳の字と撃ちを終えた台帳の形の行の組から写す
-//! （行 c-pipe-misfit・行 c-misfit-pair）。
-//! 札の段は、state dir の器の局面の出力を要求のたびに読んで中核の `board_with_cases` が決める（`cases_of`・行 c-case-columns）。
+//! 札は集めた今の台帳の字から組み、形の崩れの一覧は見張りの読みの周の台帳の字と撃ちを終えた台帳の形の行の組から写す。
+//! 札の段は、state dir の器の局面の出力を要求のたびに読んで中核の `board_with_cases` が決める（`cases_of`）。
 
 use tsuzuri_contract::wire;
 use tsuzuri_core::case::cases_of;

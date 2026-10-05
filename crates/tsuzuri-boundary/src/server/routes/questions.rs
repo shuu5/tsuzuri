@@ -1,6 +1,6 @@
 //! GET /api/questions — 問いの一覧（AllQuestions・ほかの project が無ければ字は QuestionList と同じ）。
-//! 読むだけの server は answerable を偽にする（行 e-ask-own-only）。ほかの project の問いは鍵 others に札つきで
-//! 引数の順に載せる（行 e-multi-ask）。
+//! 読むだけの server は answerable を偽にする。ほかの project の問いは鍵 others に札つきで
+//! 引数の順に載せる。
 
 use tsuzuri_contract::question::{AllQuestions, QuestionList};
 use tsuzuri_contract::wire;

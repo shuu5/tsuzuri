@@ -1,4 +1,4 @@
-//! 端末に届かない時の落ちる先（行 i-4・要件 FR16・受入 AC13・判断の記録 ADR-15 の決定 (5)・持ち主の裁定 t3-hub.59.4）。
+//! 端末に届かない時の落ちる先（要件 FR16・受入 AC13・判断の記録 ADR-15 の決定 (5)）。
 //! ssh で届かない端末には board の URL を渡すだけにし、席はその端末の browser を操作しない。
 //! 席の目はこの server の headless の Chrome（screenshot・DOM・console）で、画面を配信する窓は作らない。
 //! 席の目の Chrome の口は --remote-debugging-pipe（子の fd 3 と fd 4 だけで話し、口座の外から届かない・見積りの T3）。

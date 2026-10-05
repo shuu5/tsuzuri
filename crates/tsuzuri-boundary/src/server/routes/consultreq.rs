@@ -1,4 +1,4 @@
-//! POST /api/consult/request — board の button の相談の頼み（ConsultRequest・行 cs-server）。
+//! POST /api/consult/request — board の button の相談の頼み（ConsultRequest）。
 //! 守りは方針の口と同じ `guarded`・読むだけの server は受付の前に `read_only` で断る。
 //! 置き場に相談の頼みの行を 1 行足すだけで、窓を開かず、裁定の配達を撃たない。応答は頼みの id の電文。
 

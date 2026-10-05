@@ -1,11 +1,11 @@
-//! 読む側の口（便 e-read）: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
+//! 読む側の口: 3 つの字を集めて中核の crate の関数に渡し、電文を返す。書かない。
 //! - GET /api/pipeline — pipeline の板（PipelineBoard・札は集めた今の台帳の字から組み、形の崩れは見張りの読みの周の
-//!   台帳の字と器の doctor の台帳の形の行の組から写す・行 c-pipe-misfit・行 c-misfit-pair）
-//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から・行 c-unref-lc）
-//! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける・便 e-seat）
+//!   台帳の字と器の doctor の台帳の形の行の組から写す）
+//! - GET /api/metrics — 台帳の指標（読めなければ「まだ分からない」の LedgerStats・未反映の 3 欄は局面の出力から）
+//! - GET /api/next — 次の一手（NextStep・席の card が読めるときは席の card も受ける）
 //! - GET /api/graph — 導出グラフ（GraphDoc・repo に書かず毎回組み直す）
-//! - GET /api/around — 節点の近傍（AroundDoc・便 e-view）
-//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む・行 c-unref-lc）
+//! - GET /api/around — 節点の近傍（AroundDoc）
+//! - GET /api/unreflected — 未反映の一覧（UnreflectedList・局面の出力の部品と台帳の題を読む）
 //!
 //! 字は要求のたびに集める。台帳は bd の読み（`ledger::Source`）が返した字、設計の索引は設計の道具の
 //! 標準出力（`design::Design`）、走行は器の event log の file（`runs::Runs`）。読めない出所は空の字で渡し、

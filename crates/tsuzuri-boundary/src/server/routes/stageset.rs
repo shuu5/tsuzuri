@@ -1,4 +1,4 @@
-//! POST /api/stage/target — project board の表示先の書きの受付（行 e-stage-target・裁定 t3-hub.52.29）。
+//! POST /api/stage/target — project board の表示先の書きの受付。
 //! 本文は端末の名か null（上書きを外す）だけで、書く project は server の --repo から引く。
 
 use tsuzuri_contract::stage::PATH;

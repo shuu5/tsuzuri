@@ -1,4 +1,4 @@
-//! GET /api/seat — 席の card（SeatCard・便 e-seat）。
+//! GET /api/seat — 席の card（SeatCard）。
 
 use tsuzuri_contract::wire;
 

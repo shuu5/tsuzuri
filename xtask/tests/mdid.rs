@@ -10,8 +10,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// 境界の crate の上限（行の id を外す後の行が下げ、最後に 0 にする）。
-const CAP_BOUNDARY: usize = 232;
+/// 境界の crate の上限。
+const CAP_BOUNDARY: usize = 0;
 
 /// 契約の crate の上限。
 const CAP_CONTRACT: usize = 0;

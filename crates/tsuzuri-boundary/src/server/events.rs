@@ -1,25 +1,24 @@
-//! 変化の知らせ（口 GET /api/surface/events・SSE・便 e-src）。
+//! 変化の知らせ（口 GET /api/surface/events・SSE）。
 //! 変化の印（ledger の `Mark`: store の manifest の字と manifest が名指す file の長さ・store が無ければ jsonl の 2 file の
 //! 更新時刻と長さ）を 500 ミリ秒ごとに見て、動いたら台帳を読み直す（規則の行 R-21: 合図なしは周期の読み 500 ms ごとで 1.5 秒以内・要件 NFR2）。
 //! 印の取りこぼしを拾うために、印が動かなくても、store の印で前の読みが読めていれば 600 秒ごと、ほかは 5 秒ごとに
-//! 読み直す（jsonl の印は器の素の bd close で動かないことがある・行 e-marks）。
-//! 受け手（`Subscription`）が 0 人の間は、印が動いても読まず印も置かず（口の読みが印の遅れを見て自分で読む・
-//! 行 e-ledger-lazy）、0 人から 1 人以上になった周で 1 回読む（行 e-idle）。
+//! 読み直す（jsonl の印は器の素の bd close で動かないことがある）。
+//! 受け手（`Subscription`）が 0 人の間は、印が動いても読まず印も置かず（口の読みが印の遅れを見て自分で読む）、
+//! 0 人から 1 人以上になった周で 1 回読む。
 //! 読みの結果が前と変わったときだけ、接続中の全員に 1 件ずつ送る。
-//! 板の変化（便 e-read）: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
+//! 板の変化: 器の event log の file と設計文書の dir の下の全 file の印を 500 ミリ秒ごとに見て、
 //! 動いたら board-changed を周に 1 件送る（要件 NFR2 の「器の event と台帳の変化は 5 秒以内に面へ届く」）。
-//! 便 e-seat は席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印を板の印に足す。
-//! 席の card の印（行 e-seat-hbmark）と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
-//! heartbeat-off と明示の on の記録 heartbeat-on の印も持つ（停止と明示の on の切り替えで board-changed が出る・
-//! 行 e-hb-on-mark）。
+//! 席の状態の file（`<state dir>/seat/<席の dir>/` の state.jsonl と tick-last）の印も板の印に足す。
+//! 席の card の印と account board の印（`crate::acct` の `Acct::marks`）は同じ dir の停止の記録
+//! heartbeat-off と明示の on の記録 heartbeat-on の印も持つ（停止と明示の on の切り替えで board-changed が出る）。
 //! board-changed の data は契約の `BoardChanged`（`{"at":<epoch 秒>,"kinds":[…]}`・印の動いた種類）で、
 //! ledger-changed の data は `{"at":<epoch 秒>}`。板の印は種類（`ChangeKind`）と file の組で、種類をまたいで
-//! 一覧の並びだけが変わった周は送らない（行 c-ev-kind）。
-//! 問いの合図（口 POST /api/surface/questions・`NUDGE_PATH`・行 e-signal）は `Hub::nudge` で台帳の見張りの周期の待ちを
+//! 一覧の並びだけが変わった周は送らない。
+//! 問いの合図（口 POST /api/surface/questions・`NUDGE_PATH`）は `Hub::nudge` で台帳の見張りの周期の待ちを
 //! 終わらせ、次の周を待たずに印を見る（規則の行 R-21: 問いの合図ありで 200 ms 以内・要件 NFR2）。
 //! 合図は読みを強いず、印が動いていない周では読まない（bd の読みは台帳の store の錠を取るので、合図の数で読みを増やさない）。
 //! 待ちの間に溜まった合図は 1 周にまとめる。
-//! ほかの project の台帳の見張り（`Hub::watch_ledger_into`・行 e-multi-ask）は server の Hub に足し、同じ受け手の数えと
+//! ほかの project の台帳の見張り（`Hub::watch_ledger_into`）は server の Hub に足し、同じ受け手の数えと
 //! 読み直しの間隔で読んで、その Hub の受け手に ledger-changed を送る（問いの合図では起きない）。
 
 use std::io::{self, Write};

@@ -1,4 +1,4 @@
-//! 席の目の Chrome の pipe の運び手（行 i-4・要件 FR16・判断の記録 ADR-15 の決定 (5)）。
+//! 席の目の Chrome の pipe の運び手（要件 FR16・判断の記録 ADR-15 の決定 (5)）。
 //! 子の標準入力と標準出力（子の側では fd 3 と fd 4 に写す）で、NUL で終わる字の message を運ぶ。
 //! 口座の外から届かない（TCP の port も unix socket も開かない・見積りの T3）。
 //! 付いた後の message の頭に鍵 sessionId を足す（browser の段に繋がるので、頁の session へ flatten の形で送る）。

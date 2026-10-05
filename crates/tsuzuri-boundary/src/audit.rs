@@ -1,13 +1,12 @@
-//! 面の受入 12 条の数え（行 j-count・要件 NFR1・規則の行 R-23・受入 AC9）。
+//! 面の受入 12 条の数え（要件 NFR1・規則の行 R-23・受入 AC9）。
 //! 1 つの画面を 1 つの幅と mode で測った事実の JSON の字を読み、12 条ごとの違反の数と report の行を返す。
-//! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式と runner は後の行 j-runner）。
+//! host の純粋な関数だけを持ち、file も browser も触らない（事実を測る式は `crate::stage::cdp` の `measure` が持つ）。
 //! 判定の字数と閾値と origin の比べと語彙表の引きはこの側で持つ（歯が browser 無しで撃てる）。
-//! 行 j-runner で runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
-//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab
-//! （行 g-accept）。
+//! runner（全画面 × 幅 × 2 mode を頁の口 `Page` で開いて測る `case` と `sweep`）を足す。
+//! 幅は規則の行 R-23 の 4 幅で、画面は project board の 1 枚の画面と帯の印が開く窓と account board の tab。
 //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
 //! runner は頁を開いた後、面が描き、どの block も読みの印を出さなくなるまで上限つきで待ち、上限で残る画面を
-//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（行 g-accept-runner・憲法 P-7）。
+//! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（憲法 P-7）。
 
 use std::fmt::Write;
 

@@ -1,4 +1,4 @@
-//! GET /api/project — board の project の名（ProjectName・行 g-brand）。
+//! GET /api/project — board の project の名（ProjectName）。
 //! 名は --repo の path を canonicalize した path の最後の名（できなければ字のままの path の最後の名）。
 
 use tsuzuri_contract::project::{PATH, ProjectName};

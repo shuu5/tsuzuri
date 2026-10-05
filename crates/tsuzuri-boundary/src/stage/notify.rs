@@ -1,9 +1,9 @@
-//! 表示先の端末への知らせ（行 i-10・要件 FR16・判断の記録 ADR-15 の決定 (6)・持ち主の裁定 t3-hub.59.4 と t3-hub.59.5）。
+//! 表示先の端末への知らせ（要件 FR16・判断の記録 ADR-15 の決定 (6)）。
 //! 席が持ち主に見てほしい時、端末の画面に notify-send の知らせだけを出す。窓を起こす・前に出す・動かす語を持たず、
 //! Chrome の口を撃たない。1 回の ssh で notify-send の在る無しと撃ちを済ませ（無ければ遠くの shell が `ABSENT` で終わる）、
 //! ssh の届かない `UNREACHED` と notify-send の rc を分ける。知らせは linux の端末だけで、本文は board の URL。
 //! 記録は project ごとの最新の 1 つを tsuzuri 自前の追跡されない file（XDG の state の dir の下の `DIR` の下）に書く
-//! （行 i-11 の server がこの module の `dir`・`files`・`gather` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて
+//! （server がこの module の `dir`・`files`・`gather` で読む）。書きは同じ dir の一時の file に mode 0600 で書いて
 //! rename で置き換える。
 
 use std::ffi::{OsStr, OsString};

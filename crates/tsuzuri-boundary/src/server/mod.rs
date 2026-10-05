@@ -1,37 +1,37 @@
-//! 面の server の最小の形（設計ノート surface-base §9・便 e-min）。
+//! 面の server の最小の形（設計ノート surface-base §9）。
 //! 標準 library だけで書く同期の server で、1 つの process と 1 つの port で動く。1 接続 1 thread。
-//! 台帳は bd の読み取りの口を子 process で撃って読む（§10・便 e-src）。
-//! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11・便 e-read）。
-//! 問いの一覧の口と裁定の受付の口は便 e-ask が足す（`ruling`）。束と方針の受付の口は便 e-batch が足す（`batch`・`policy`）。
-//! account board の読みの口と停止の切り替えの口は行 h-wire が足す（`crate::acct`・`crate::accthb`）。
+//! 台帳は bd の読み取りの口を子 process で撃って読む（§10）。
+//! 読む側の口の 4 つは、台帳と設計の索引と器の event log の字を集めて中核の関数に渡す（§11）。
+//! 問いの一覧の口と裁定の受付の口は `ruling` が持つ。束と方針の受付の口は `batch` と `policy` が持つ。
+//! account board の読みの口と停止の切り替えの口は `crate::acct` と `crate::accthb` が持つ。
 //! POST を受ける口は /api/ruling・/api/batch・/api/policy・/api/account/heartbeat・/api/seat/heartbeat と、
 //! 表示先の設定と窓を開く 3 つ（/api/stage/target・/api/stage/targets・/api/stage/open・頭 Origin の無い要求は断り、
-//! 読むだけの server も受ける・tz の口を撃つだけ・行 e-stage-target）だけで、
+//! 読むだけの server も受ける・tz の口を撃つだけ）だけで、
 //! ほかの GET でない要求は 405 で何も書かない（問いの合図の口 /api/surface/questions も POST を受けるが、何も書かず
-//! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける・行 e-signal）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
+//! 台帳の見張りの周期の待ちを終わらせるだけで、読むだけの server も受ける）。server 自身は file を書かない（台帳に書くのは bdw・席へ送るのは器の CLI）。
 //! 読むだけの server（`Config::read_only`）は答えと方針の口を受付の前に 403 で断り（`read_only`）、
-//! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける・行 e-ask-own-only）。
+//! 問いの一覧の電文に答えを受けないと書く（心拍の口は受ける）。
 //! 起動の引数 --project の置き場ごとに、その台帳を読み取りの bd で見張り、問いの一覧の電文の鍵 others に札つきで
-//! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`・行 e-multi-ask）。
-//! 席の card の口は便 e-seat が足す（`seat`）。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
-//! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`・便 e-coalesce）。
+//! 載せる（答えは受けず、答えの口はその問いを自分の台帳に無い問いとして断る・`others`）。
+//! 席の card の口は `seat` が持つ。次の一手の口は、席の card が読めるときは席の card も受けて判じる。
+//! 同じ時に届いた要求は、設計の索引の読みを 1 本の子 process で分け合う（`coalesce`）。
 //! 台帳の GET の口は、起動で作る 1 つの `Source`（`Source::watched`）とその clone の印が見張りの最後の読みの前と同じ間は
-//! bd を撃たず、見張りの最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す（行 e-snap）。
-//! 印が違えば（受け手が 0 人の間に印が動いた後）口が自分で読む（行 e-ledger-lazy）。見張りの読みが落ちたときは
+//! bd を撃たず、見張りの最後の読みの字を返し、見張りが読みの途中ならその終わりを待って同じ字を返す。
+//! 印が違えば（受け手が 0 人の間に印が動いた後）口が自分で読む。見張りの読みが落ちたときは
 //! 最後に読めた字を `ledger::READ_HOLD`（60 秒）まで返し、その応答の頭（`READ_AGE_HEADER`）に最後に読めた時からの秒を
-//! 付ける（行 e-hold）。裁定の受付は合流せず、新しい子 process で読み直す。
+//! 付ける。裁定の受付は合流せず、新しい子 process で読み直す。
 //! GET の口と POST の 5 つの口は src/server/routes の下に 1 口 1 file で置き（各 file の doc が自分の path を書く）、
-//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13・行 hb-post）。
+//! 口の列 `Route` は組み立ての script が dir から生成する（`route`・判断の記録 ADR-13）。
 //! 変化の知らせ（SSE）はここに在り、どの口にも当たらない GET は面の file の配布。
 //! 板の印は走行・設計・席・account・席の「見て」の知らせの記録の種類（`ChangeKind`）を付けて見張りに渡す
-//! （知らせが動いた種類を載せる・行 c-ev-kind・知らせの記録は行 i-11）。
-//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は行 cs-server が足す（`consult`・頼みの口は方針の口と同じ守りで、
+//! （知らせが動いた種類を載せる・知らせの記録は `crate::stage::notify` が書く）。
+//! 相談の窓の 3 つの口（一覧・未受け・頼みの POST /api/consult/request）は `consult` が持つ（頼みの口は方針の口と同じ守りで、
 //! 読むだけの server は 403・置き場に相談の頼みの行を 1 行足すだけで窓を開かず配達を撃たない）。
-//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`・行 c-case-read）。
+//! 器の局面の出力の口は state dir の fleet/lifecycle.json と lifecycle.stale を要求のたびに読む（`cases`）。
 //! その 2 つの file は板の印と同じ間隔で見張り、面が読む中身が動いた時だけ局面の出力の種類の board-changed を送る
-//! （`Cases::watch`・行 c-cases-watch）。
+//! （`Cases::watch`）。
 //! 席の target と state dir の両方が在るときだけ、台帳の見張りの読みの周の台帳の字で器の doctor の台帳の形の行を撃ち、
-//! その字と組で持つ（`form`・行 c-pipe-misfit・行 c-misfit-pair）。撃ちは口 /api/pipeline の最初の要求か、
+//! その字と組で持つ（`form`）。撃ちは口 /api/pipeline の最初の要求か、
 //! 知らせの接続が受け手を足す前に許す（受け手の付いた周の見張りの読みが撃つ）。
 
 pub mod batch;

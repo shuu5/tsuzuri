@@ -1,36 +1,36 @@
-//! tz の入口（便 e-min）。終了 code は 合格 0・不合格 1・まだ分からない 2。
+//! tz の入口。終了 code は 合格 0・不合格 1・まだ分からない 2。
 //! tz surface serve --repo <dir> --bind <住所:port> --files <dir> [--bd <program>] [--state-dir <dir>] [--folio <program>]
 //! bind 先は loopback か tailnet の住所だけ（条 N-6）。tailnet の住所はこの引数で受ける（行 D-4）。
-//! --bd は台帳の読みに撃つ program（既定 bd・便 e-src）。
+//! --bd は台帳の読みに撃つ program（既定 bd）。
 //! --state-dir は器の state dir（省けば走行の出所は読めない）・--folio は設計の索引の読みに撃つ program
-//! （省けば server 自身の binary・行 k-tz-self）（便 e-read）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
+//! （省けば server 自身の binary）。host 固有の置き場は code に書かず、この引数で受ける（行 D-4）。
 //! --bdw は台帳の書きに撃つ program（既定 bdw）・--seat は裁定を配達する席の target（--state-dir と両方が
-//! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）（便 e-ask）。
-//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める（行 c-deliver-retry）。
-//! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ・便 e-seat）。
+//! 在るときだけ配達する）・--scribe2 は配達に撃つ器の CLI（既定 scribe2）。
+//! 同じ 2 つが在り --read-only でなければ、口を開いた後に起動の掃きを 1 度だけ始める。
+//! --seat と --state-dir の両方が在るときだけ、口 /api/seat が席の card を組む（器の読みも --scribe2 で撃つ）。
 //! --read-only は値を取らず、答えと方針の口を 403 で断り、問いの一覧に答えを受けないと書く（ほかの project の
-//! board を読むだけで起こす・行 e-ask-own-only）。
+//! board を読むだけで起こす）。
 //! --project はほかの project の repo の置き場で、何度でも受け、その台帳の open の問いを dir の名の札つきで問いの一覧に
-//! 混ぜる（答えは受けない・行 e-multi-ask）。
-//! --tz は表示先の設定と窓を開く頼みに撃つ tz の program（省けば server 自身の binary・行 e-stage-target）。
-//! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く（行 i-11）。
-//! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]（行 k-graph）。
-//! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（行 f-stop・席の停止の hook・rc は 0 か 1）。
-//! tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]（行 ag-stop・係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
-//! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（行 f-gate・問いの起票の門・rc は 0 か 1）。
-//! tz hook question-signal --repo <dir>（行 e-signal-send・問いの合図の送り手・rc は 0 か 1）。
-//! tz hook deliver --repo <dir> [--bd <program>]（行 f-deliver・配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
-//! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（行 f-deliver-tool・tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
-//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの門・rc は 0 か 1）。
-//! tz hook agent-bind --repo <dir> [--drafts <dir>]（行 ag-spec・係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
-//! tz hook agent-meter --repo <dir> [--drafts <dir>]（行 ag-meter・係の記録の使用量を測り、印を越えた時だけ残りを係の文脈に足す・rc は 0 か 1）。
-//! tz hook agent-guard --repo <dir> [--drafts <dir>]（行 ag-guard・係の門・予算を越えた係の呼びは SendMessage と自分の w への書きだけを通す・rc は 0 か 1）。
-//! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（行 i-5・表示面の命令・rc は 0 か 1）。
-//! tz consult <口> [引数]（行 cs-open・相談の窓の命令・rc は 0 か 1 か 2）。
-//! tz context --row <ノート>#<行> [--dir <dir>]（行 k-ctx-cli・設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
-//! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す（行 cs-open）。
+//! 混ぜる（答えは受けない）。
+//! --tz は表示先の設定と窓を開く頼みに撃つ tz の program（省けば server 自身の binary）。
+//! 席の「見て」の知らせの記録の dir は引数でなく環境の XDG_STATE_HOME と HOME から tz stage notify と同じ決めで引く。
+//! tz graph [--check | --design] [--repo <dir>] [--bd <program>] [--folio <program>] [--state-dir <dir>]。
+//! tz hook stop --repo <dir> [--bd <program>] [--bdw <program>]（席の停止の hook・rc は 0 か 1）。
+//! tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]（係の終える前の門・欠けの在る 1 度目の終わりは rc 2・ほかは 0 か 1）。
+//! tz hook question-gate --repo <dir> [--bd <program>] [--folio <program>]（問いの起票の門・rc は 0 か 1）。
+//! tz hook question-signal --repo <dir>（問いの合図の送り手・rc は 0 か 1）。
+//! tz hook deliver --repo <dir> [--bd <program>]（配達の指し示しの逐語を席の文脈に足す・rc は 0 か 1）。
+//! tz hook deliver-tool --repo <dir> [--bd <program>] [--bdw <program>]（tool の呼びの組の後に未読の逐語を席の文脈に足す・rc は 0 か 1）。
+//! tz hook agent-spawn --repo <dir> [--drafts <dir>]（係の起こしの門・rc は 0 か 1）。
+//! tz hook agent-bind --repo <dir> [--drafts <dir>]（係の起こしの結果の係の id を札と結びの置き場に書く・rc は 0 か 1）。
+//! tz hook agent-meter --repo <dir> [--drafts <dir>]（係の記録の使用量を測り、印を越えた時だけ残りを係の文脈に足す・rc は 0 か 1）。
+//! tz hook agent-guard --repo <dir> [--drafts <dir>]（係の門・予算を越えた係の呼びは SendMessage と自分の w への書きだけを通す・rc は 0 か 1）。
+//! tz stage <命令> --to <端末の名> [命令の旗] [--repo <dir>]（表示面の命令・rc は 0 か 1）。
+//! tz consult <口> [引数]（相談の窓の命令・rc は 0 か 1 か 2）。
+//! tz context --row <ノート>#<行> [--dir <dir>]（設計ノートの行の近い仕様の塊・rc は 0 か 1 か 2）。
+//! tz --version は tz の版と相談の窓の plugin の版を 1 行で出す。
 //! tz <口の名> [旗]（口の名は check・schema・derive・ceiling・init・parts・face・figure・build・intake・hello の 11・
-//! folio の同じ名の口と引数・出力・rc が同じ・行 k-tz-entry）。索引の旗（--print・--digest・--summary）を持つ tz graph も
+//! folio の同じ名の口と引数・出力・rc が同じ）。索引の旗（--print・--digest・--summary）を持つ tz graph も
 //! folio の graph の口へ渡す。
 
 use std::net::SocketAddr;

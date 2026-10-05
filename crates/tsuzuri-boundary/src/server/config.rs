@@ -1,4 +1,4 @@
-//! 起動の引数（行 hb-config）。欄を足す行は、この file と main.rs だけを書く。
+//! 起動の引数。欄を足す行は、この file と main.rs だけを書く。
 //! 歯と main.rs は `Config::new` と残りの欄の埋め（struct の更新の形）で組む。
 
 use std::ffi::OsString;

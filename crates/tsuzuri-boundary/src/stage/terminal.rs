@@ -1,4 +1,4 @@
-//! 端末の一覧の読み（行 i-1・要件 FR16・判断の記録 ADR-5 の決定 (2)・行 i-1b で画面を開く env の欄 display-env を足した）。
+//! 端末の一覧の読み（要件 FR16・判断の記録 ADR-5 の決定 (2)・画面を開く env の欄 display-env を持つ）。
 //! 器の host の面（state dir の追跡されない `host.toml`）の表 `[[device]]` の行を読み、端末の名で 1 行を引く。
 //! 端末の値は code に焼かず（条 N-7）、TOML の部品を使わず中核の host.rs の読み手と同じ自前の読み方で読む。
 //! 本文を受ける `lookup` と `names` は file も子の process も環境変数も触らず、file を読むのは `read_face` だけ

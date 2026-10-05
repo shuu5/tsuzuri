@@ -1,36 +1,36 @@
-//! account board の読み（便 e-acct）。群の宣言（引数の state dir の host.toml）の anchor ごとに、git の
+//! account board の読み。群の宣言（引数の state dir の host.toml）の anchor ごとに、git の
 //! `-C <anchor> config --get scribe2.statedir` で state dir を、`-C <anchor> config --get tsuzuri.boardport` で
-//! project board の port を引き（電文の行には port だけを置く・便 h-board-url）、state dir ごとに器の
+//! project board の port を引き（電文の行には port だけを置く）、state dir ごとに器の
 //! `seat tick status --state-dir <dir>` と `doctor --state-dir <dir>` を 1 回だけ撃ち、口座は引数の state dir で
 //! `fleet usage --show --state-dir <dir>` を 1 回、窓ごとの逼迫の閾値は
-//! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ（便 c-acct-thr）。
+//! `rules get <id>`（`CAP_ROWS` の 3 行・`--state-dir` を付けない）を行ごとに 1 回撃つ。
 //! 退避までの残り秒は tick status の席の行の器の欄の写し（中核の席の card）で、rules 行も合図の file も読まない。
 //! 台帳は anchor ごとに着地済みの台帳の読み（`Source`）で読む。子 process はどれも `capture` で撃ち、5 秒で返らなければ読めない。
-//! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す（行 e-hold）。
+//! anchor ごとの `Source` は持ち続けるので、台帳の読みが落ちても最後に読めた字を `READ_HOLD` まで返す。
 //! 読む file は state dir ごとの event log と、doctor の orchestrator の席の dir の state.jsonl・tick-last と
 //! （同じ dir の heartbeat-off・heartbeat-on は読まず、有無と更新時刻を印にだけ使う）、
-//! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない・行 c-dormant）と、
+//! 重ならない state dir ごとの doctor の登録の行の全部の席の dir の state.jsonl（休止中の席の材料・印にしない）と、
 //! 群の記録（`<引数の state dir の親>/scribe2-host/groups` の下と、その下の history の下）と、口座の線の材料の
-//! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる・行 c-acct-spark）。file は書かない。
+//! 引数の state dir の event log（印にしない・窓の棒と同じ周で新しくなる）。file は書かない。
 //! state dir が引けない anchor の project は器の出力と file と台帳を読まない。
-//! 器の出力は持ち回しの表（`Held`・行 e-held-acct と e-held-marks・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
+//! 器の出力は持ち回しの表（`Held`・判断の記録 ADR-23 の決定 (3)）で出力ごとに持つ。
 //! usage と tick status と doctor は席の card の読みと同じ `read_held` で読み（鍵も印も同じ・同じ state dir の器の 3 つの出力は
 //! 表の持ち分を分け合う）、rules get は印の無い鍵で `SLOW_HOLD` 持つ。
 //! file の読みは要求ごと（state dir ごとの event log だけは、更新時刻と長さの印が前の読みの前に取った印と同じなら
-//! 読まず前の字の Arc を返し、その集めで読まなかった state dir の字は集めの終わりに放す・`log`・行 m-big-copies）。
-//! `marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める（行 e-acct-hbmark）。
+//! 読まず前の字の Arc を返し、その集めで読まなかった state dir の字は集めの終わりに放す・`log`）。
+//! `marks` は最後の集めの印の一覧を返し、一度も集めていない時だけ集める。
 //! 集めのあいだは錠（`gate`）で次の要求を待たせる。
 //! 台帳と event log の字の読み解き（`Parsed`）は anchor ごとに、読み解いた時の 2 つの字と値を持ち、
-//! 字が同じ間は前の値を使う（`parsed`・行 c-acct-parse）。
+//! 字が同じ間は前の値を使う（`parsed`）。
 //! git の読み（state dir と board の port と起草の置き場）は `GIT_HOLD` のあいだ持ち回す（宣言の anchor の列が変われば撃ち直す）。
 //! 起草の置き場（`-C <anchor> config --get tsuzuri.draftsdir`）の引けた anchor は、退いていない相談の窓の作業場ごとに
 //! 窓の控えと最後の process の印を読み、その pid の process の在る無しを `/proc` で見る（読むだけ・印にしない・
-//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)・行 c-acct-consult）。
-//! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない（行 a-lean）。
+//! ほかの印と同じ周で新しくなる・判断の記録 ADR-55 決定 (4)）。
+//! 台帳は bd を撃つ前に台帳の印（`Source::mark`）を取り、印が同じで前の読みが読めていれば bd を撃たない。
 //! 読めなかった読みは印が同じでも `FAILED_HOLD` の間は撃ち直さない。
 //! 自分の repo の anchor の台帳は `with_own` の Source（server の見張りの読み）を、`--project` の置き場の anchor の台帳は
 //! `with_watched` の Source を分け合い、印が見張りの最後の読みの前と同じ間は bd を撃たない（違えば `Source::got` が自分で読む）。
-//! 口の登録と変化の知らせへの印の足しは、つなぐ行 h-wire が行う。
+//! 口の登録と変化の知らせへの印の足しは `crate::server` が行う。
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};

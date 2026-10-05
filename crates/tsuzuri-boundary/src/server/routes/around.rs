@@ -1,4 +1,4 @@
-//! GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc・便 e-view）。
+//! GET /api/around?id=&k=&fold= — 節点の近傍（AroundDoc）。
 
 use tsuzuri_contract::graph::Fold;
 use tsuzuri_contract::wire;

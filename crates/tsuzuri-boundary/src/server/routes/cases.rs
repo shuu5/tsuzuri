@@ -1,4 +1,4 @@
-//! GET /api/cases — 器の局面の出力（CaseDoc・行 c-case-read）。
+//! GET /api/cases — 器の局面の出力（CaseDoc）。
 //! 字は state dir の fleet/lifecycle.json と lifecycle.stale だけから読む（台帳の bd も器の CLI も撃たない）。
 
 use tsuzuri_contract::case::PATH;

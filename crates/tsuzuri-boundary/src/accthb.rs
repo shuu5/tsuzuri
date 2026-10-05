@@ -1,11 +1,11 @@
-//! 停止の切り替えの受付（要件 FR12・便 e-acct-hb）。面は state dir の file を書かず、器の CLI
+//! 停止の切り替えの受付（要件 FR12）。面は state dir の file を書かず、器の CLI
 //! `seat heartbeat <on|off> --state-dir <dir> --target <target>` を 1 回撃つだけにする
 //! （off は器が席の置き場に停止の記録を置き、on は器がそれを消す）。
 //! 要求の本文は project の名と向きだけを持つ。state dir と target は本文の字でなく、群の宣言（引数の state dir の
 //! host.toml）の anchor と git config（`Acct::state_dir`）と doctor の席の行（role=orchestrator）から引く。
-//! Origin の検査と本文の大きさの上限と口の登録は、つなぐ行 h-wire が server の `guarded` と一緒に通す。
+//! Origin の検査と本文の大きさの上限と口の登録は、server が `guarded` と一緒に通す。
 //! 子 process は `capture` で撃ち、落ちる・rc が 0 でない・5 秒で返らないは、どれも器が撃てない扱い（502）。
-//! 2 つ目の受付 `accept_own` は project board の口（行 e-seat-hb・裁定 t3-hub.52.29 の案 A）で、本文は向きだけを持ち、
+//! 2 つ目の受付 `accept_own` は project board の口で、本文は向きだけを持ち、
 //! anchor を名でなく server の --repo と同じ dir で引く（最後の名が同じ anchor が 2 つ在っても、この board の席だけを止める）。
 //! anchor を引いた後の順と断りと 200 の電文は `accept` と同じ。
 

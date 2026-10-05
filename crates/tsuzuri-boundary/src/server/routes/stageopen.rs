@@ -1,4 +1,4 @@
-//! POST /api/stage/open — 持ち主の button が表示先の端末の窓を開く頼みの受付（行 e-stage-target・裁定 t3-hub.59.7）。
+//! POST /api/stage/open — 持ち主の button が表示先の端末の窓を開く頼みの受付。
 //! tz stage open を 1 回撃つ（席の印を除いた環境で撃つので、席が撃つ口は頭 Origin の無い要求の断りで閉じる）。
 
 use tsuzuri_contract::stage::OPEN_PATH;

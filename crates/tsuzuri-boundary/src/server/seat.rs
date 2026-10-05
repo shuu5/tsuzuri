@@ -1,11 +1,11 @@
-//! 席の card の読み（口 GET /api/seat・便 e-seat）。器の 3 つの出力を子 process で撃ち、器の state dir の
+//! 席の card の読み（口 GET /api/seat）。器の 3 つの出力を子 process で撃ち、器の state dir の
 //! file を読むだけで、書かない。撃つ形は `<program> seat tick status --state-dir <dir>`・
 //! `<program> doctor --state-dir <dir>`・`<program> fleet usage --show --state-dir <dir>`
 //! （cwd は repo の置き場・標準入力は空・標準エラーは捨てる）。usage は --show を必ず付ける（付けないと器が測り直して記録を書く）。
 //! 起動できない・rc が 0 でない・UTF-8 でない・5 秒を超えて返さない、のどれでもその出力は読めない（None）。
 //! 読む file は `<state dir>/seat/<席の dir>/state.jsonl`・同じ dir の `tick-last`・`<state dir>/host.toml`・
 //! 群の記録（`<state dir の親>/scribe2-host/groups/<群の名>.account` と `history/<群の名>.account.*`）。
-//! 3 つの出力は持ち回しの表（`Held`・行 e-held-seat と e-held-marks・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
+//! 3 つの出力は持ち回しの表（`Held`・判断の記録 ADR-23 の決定 (2)(3)）を通り、器の頭ごとに
 //! 入力の印（`input_marks`・席の target に依らない）が撃つ前と同じで上限（`ceiling`）の内なら撃たない。tick status は `HOLD`（5 秒）、
 //! doctor は `DOCTOR_HOLD`（30 秒）・usage は `SLOW_HOLD`（30 秒）。file の読みは持ち回さず要求のたびに読む。
 //! heartbeat-off と heartbeat-on は読まず印にだけ使う（合図の値は tick status の席の行の欄 heartbeat= の字で読む）。

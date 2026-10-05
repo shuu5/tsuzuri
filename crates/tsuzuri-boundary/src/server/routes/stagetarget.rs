@@ -1,4 +1,4 @@
-//! GET /api/stage/target — 表示先の設定の読み（行 e-stage-target）。
+//! GET /api/stage/target — 表示先の設定の読み。
 //! tz の口 stage target show --json を 1 回撃った 1 行を返す（守りの `guarded` は通らず、頭 Origin の無い GET も通す）。
 
 use tsuzuri_contract::stage::PATH;

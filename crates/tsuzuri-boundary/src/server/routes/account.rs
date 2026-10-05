@@ -1,4 +1,4 @@
-//! GET /api/account — account board の読み（AccountDoc・行 h-wire）。
+//! GET /api/account — account board の読み（AccountDoc）。
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
