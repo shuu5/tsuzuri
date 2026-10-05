@@ -1,0 +1,146 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+index f6077a8efd444c7cc5ae3b2fc7f34da779041d8c..79b5d8907ad4200f97aa3c78931942327000c42f 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs
+@@ -9,7 +9,8 @@
+ //! `retire`（接頭辞 `pipe_retire_` / `pipe_train_`）・`order`（接頭辞 `pipe_terminal_` / `pipe_order_`）・`rebase`（接頭辞
+ //! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）・`cilast`（接頭辞 `vcil_`・
+ //! 終端の CI の照合・器の memo t3-hub.74.49.6）・`commute`（接頭辞 `vcledger_`・差の当たりで通した組の後の着地の記帳・判断の記録
+-//! ADR-60 の決定 (4)）。この file には共有の helper と const・他の族の歯だけを残す。
++//! ADR-60 の決定 (4)）・`wincas`（接頭辞 `vwcas_`・着地列の窓が CAS を過ぎた便を列に数えない・tsuzuri の判断の記録 ADR-65）。
++//! この file には共有の helper と const・他の族の歯だけを残す。
+ 
+ mod cilast;
+ mod commute;
+@@ -18,6 +19,7 @@ mod order;
+ mod rebase;
+ mod redclose;
+ mod retire;
++mod wincas;
+ // flip-check: moved s2-07l.684
+ 
+ use super::*;
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/wincas.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/wincas.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..be493532d386d3d3ec7ff6494509f159d4e05959
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/wincas.rs
+@@ -0,0 +1,56 @@
++//! 着地列の窓が CAS を過ぎた便を列に数えない歯（接頭辞 `vwcas_`・設計 pipeline.md §19 約束 8・tsuzuri の判断の記録 ADR-65・
++//! 親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
++//!
++//! 列の 2 便のうち、自分の trailer（`run: <便 id>` と字が等しい行）を持つ commit が local main の祖先に在る便だけを `queue=` から
++//! 外すことを、`pipe land-window` の rc と 1 行から測る。
++
++use super::*;
++
++/// 本文の末に `trailer` の 1 行を持つ空の commit を `branch` に積む（squash の印だけを置く形）。
++fn commit_with_trailer(repo: &Path, branch: &str, trailer: &str) {
++    git(repo, &["checkout", "-q", branch]);
++    git(repo, &["commit", "-q", "--allow-empty", "-m", &format!("squash\n\n{trailer}")]);
++    git(repo, &["checkout", "-q", "main"]);
++}
++
++/// 列の 2 便のうち、trailer が local main に在る便だけが `queue=` から外れ（rc 1 の busy は残る 1 便を名指す）、両方が在れば
++/// rc 0 の `clear remote=none`。main は窓の口で動かない。
++#[test]
++fn vwcas_runs_whose_squash_is_on_local_main_leave_the_queue() {
++    let (repo, state) = repo_with_state();
++    let (id_a, id_b) = two_gated_runs(&repo, &state, &state.join("lens-ran"));
++    commit_with_trailer(&repo, "main", &format!("run: {id_a}"));
++    let out = land_window_once(&repo, &state);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "1 便が残る窓は rc 1: {}", stderr_of(&out));
++    assert_eq!(
++        stdout_of(&out).trim(),
++        format!("land-window=busy queue={id_b} following=- unpushed=- remote=none"),
++        "CAS を過ぎた {id_a} は列に数えない"
++    );
++    commit_with_trailer(&repo, "main", &format!("run: {id_b}"));
++    let main = git(&repo, &["rev-parse", "refs/heads/main"]);
++    let out = land_window_once(&repo, &state);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "両方が CAS を過ぎた窓は rc 0: {}", stderr_of(&out));
++    assert_eq!(stdout_of(&out).trim(), "land-window=clear remote=none", "列は空");
++    assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), main, "main は動かない");
++    clean(&[&repo, &state]);
++}
++
++/// trailer の字が便 id の後ろに 1 字多い commit（別の便の id が接頭辞で重なる形）と、local main の祖先でない branch だけに在る
++/// 正しい trailer の commit は、どちらも便を列から外さない（rc 1 の busy が 2 便を名指す）。
++#[test]
++fn vwcas_a_longer_trailer_or_a_side_branch_keeps_the_run_queued() {
++    let (repo, state) = repo_with_state();
++    let (id_a, id_b) = two_gated_runs(&repo, &state, &state.join("lens-ran"));
++    let both = format!("land-window=busy queue={id_a},{id_b} following=- unpushed=- remote=none");
++    commit_with_trailer(&repo, "main", &format!("run: {id_a}x"));
++    let out = land_window_once(&repo, &state);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{}", stderr_of(&out));
++    assert_eq!(stdout_of(&out).trim(), both, "1 字多い trailer は {id_a} の squash でない");
++    git(&repo, &["branch", "side"]);
++    commit_with_trailer(&repo, "side", &format!("run: {id_a}"));
++    let out = land_window_once(&repo, &state);
++    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{}", stderr_of(&out));
++    assert_eq!(stdout_of(&out).trim(), both, "main の祖先でない commit は数えない");
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/queue.rs b/scribe2/crates/scribe2/src/pipe/queue.rs
+index 00ee29806f7f2fadbeb91768c4386b88e5a4a4ee..38df542982afb9461664de70a9e1995997674f95 100644
+--- a/scribe2/crates/scribe2/src/pipe/queue.rs
++++ b/scribe2/crates/scribe2/src/pipe/queue.rs
+@@ -4,7 +4,7 @@
+ //! `pub use` が元の path のまま外へ見せる。
+ 
+ use super::gate::Verdict;
+-use super::land::{stale, verdict_of, Land, Staleness, MAIN_REF};
++use super::land::{landed_squash_of, stale, verdict_of, Land, Staleness, MAIN_REF};
+ use super::{driver_ticket, emit, git_line, git_ok, worktree_path, Emit, Ticket};
+ use crate::fleet::store;
+ use crate::fleet::{replay, Completion, Event, EventKind, Run, Stage, State, Timeout};
+@@ -356,10 +356,12 @@ impl Window {
+ /// いまの窓（設計 pipeline.md §19 約束 2・3）。列と追随中の便は log の 1 回の読みから導き、git は
+ /// **local main を先に**読む（読めない周は origin を読まずに閉じる）。列の便は [`turn_in`] と同じ面（終端でない ∧
+ /// `Gated` を通った ∧ worktree が実在）で、判定を読めない便も数える（PASS でないと測れていない便を外さない・C10）。
++/// 列の便のうち CAS を過ぎた便（自分の squash が local main に在る便・[`before_cas`]）は数えない。
+ pub(crate) fn window_now(state_dir: &Path, repo: &Path) -> Window {
++    let local = git_line(repo, &["rev-parse", "--verify", "--quiet", MAIN_REF]);
+     let runs = store::read_all(state_dir).ok().and_then(|events| {
+         let state = replay(&events);
+-        let queued = queue_with(state_dir, &events, &state)?
++        let gated = queue_with(state_dir, &events, &state)?
+             .into_iter()
+             .filter(|found| {
+                 may_queue(found.stage, found.gated_at.is_some())
+@@ -368,11 +370,22 @@ pub(crate) fn window_now(state_dir: &Path, repo: &Path) -> Window {
+             })
+             .map(|found| found.run)
+             .collect();
++        let queued = before_cas(gated, |run| {
++            local.as_deref().is_some_and(|main| landed_squash_of(repo, main, run).is_some())
++        });
+         Some((queued, following_of(&events, &state.runs)))
+     });
+     Window { runs, main: main_read(repo), anchor: stale(repo) }
+ }
+ 
++/// 列の便のうち CAS をまだ過ぎていない便（**pure**・設計 pipeline.md §19 約束 2 (a) の後の約束 8）: `landed` が真の便＝
++/// 自分の trailer を持つ squash が local main の祖先に在る便（CAS の後の主実測と終端の間）を外す。CAS の後の main に
++/// 外の commit が積まれても、便の確かめは自分の squash の木を測り、push は remote の先へ進んだ main を受ける。local main を
++/// 読めない周と探しを読めない周は `landed` が偽＝外さない（閉じる側）。
++fn before_cas(queued: Vec<String>, landed: impl Fn(&str) -> bool) -> Vec<String> {
++    queued.into_iter().filter(|run| !landed(run)).collect()
++}
++
+ /// 追随中の便（**pure**・設計 pipeline.md §47 が §19 約束 2 (b) を supersede）: 最新の `RunStage` が `Implemented`
+ /// ∧ detail が [`FOLLOWING`] で始まる ∧ **replay した段が終端でない**（[`may_queue`] と同じ 3 語 `Landed` / `Failed` /
+ /// `Stopped`）便（run id の辞書順）。`RunStopped` / `RunDone` は kind が `RunStage` でないので最後の `RunStage` は
+diff --git a/scribe2/docs/design/pipeline.md b/scribe2/docs/design/pipeline.md
+index 6eb750fd2c6a0e205d3c1dc856b97103f63e5fa3..340803934acf963ca6e88c6151ad6922187a9102 100644
+--- a/scribe2/docs/design/pipeline.md
++++ b/scribe2/docs/design/pipeline.md
+@@ -331,6 +331,7 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
+   5. 新しい subcommand の口 `pipe land-window` を足す。窓が開いていれば rc 0 で `clear` の 1 行、待ちが切れれば rc 1 で列の便を名指した `busy` の 1 行を返す。pipeline の外で merge を撃つ側はこの口を前置して撃てる＝散文の窓判断が器の rc に変わる。
+   6. `busy` の行は列の便の名指しの隣に `unpushed=<local main の sha|unreadable|->` を持つ（(c) で閉じた周は sha・読めない周は `unreadable`・(a)(b) だけで閉じた周は `-`）＝どの条件で閉じたかが 1 行で読める（C10）。
+   7. verb が 1 つ増えるので usage に 1 行増え、`pipe_external_form` の snapshot がその 1 行だけ動く。
++  8. （行 v-window-cas・tsuzuri の判断の記録 ADR-65・2026-10-06 に足した）(a) の列から、自分の trailer（`run: <便 id>` と字が等しい行）を持つ squash が local main の祖先に在る便（CAS の後の主実測と終端の間の便）を外す。CAS の後に main へ外の commit が積まれても、便の主実測は自分の squash の木を自分の worktree で測り、anchor は CAS の直後に揃え済みで、push は `main:main` を押して remote の先へ進んだ main を受ける（`pushed_past`）ので、器の側に損は無い。(b) と (c) は不変で、主実測の間の squash は (c) の `unpushed=` で窓を閉じたままにする（origin の上の merge が未 push の squash と分岐しない守り・`s2-07l.449`）。local main に積むだけの撃ち手は `queue=- following=-` を読んで進める。local main を読めない周と探しを読めない周は外さない（閉じる側）。探しは便ごとに §29 の `landed_squash_of` を 1 回撃つ。
+ - 着地の形: variant は `Completion::LandWindow { state_dir, repo }`（`CiResult` と `HostCalm` の間に宣言＝census の「宣言順の末尾に HostCalm」は不変）。判定は `crates/scribe2/src/pipe/queue.rs` の `window_now` の 1 本（列の便は `turn_in` と同じ面〔終端でない ∧ `Gated` を通った ∧ worktree が実在〕で、判定を読めない便も数える＝PASS でないと測れていない便を外さない・C10）で、`queue` は `pipe` の外へ見えないので `crates/scribe2/src/pipe/cli.rs` が `window_now` だけを再輸出し、`is_met(` と `pipe land-window` が同じ 1 本を読む。口の待ちの上限は `--wait-s N`（無ければ 0＝1 周だけ観測）で、待ちの後に窓を読み直した 1 行で答える（`after_wake` と同じ再評価）。行は `land-window=clear[ remote=none]` か `land-window=busy queue=<便,…|-|unreadable> following=<便,…|-|unreadable> unpushed=<sha|unreadable|->[ remote=none]`（local main を読めない周は origin を読まないので `remote=` を載せない）。
+ - 触らない: `gh pr merge` 自体（器は merge を撃たない）・列の順序と鍵・`LandTurn` の判定・`turn_in` の本体。
+ - 却下: docs-only PR も器が `gh` を撃って merge する（外部 binary を撃つ面が増える）／運用のまま据え置く（規則が散文のまま・N2）。

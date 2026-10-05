@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.48 版（2026-10-05）: 判断の記録 ADR-65（持ち主の裁定 t3-hub.89.18〔裁定 id = t3-hub.89.18:20261005T2354Z-1〕）の決定 (2) を写した（要件 FR1008 の shall と plain に、同じ便の終わりの門の緑を同じ木と base で持ち越す但し書きを足した）。
 # 第 0.47 版（2026-10-05）: 判断の記録 ADR-60（持ち主の裁定 t3-hub.89.2〔案 C〕・裁定 id = t3-hub.89.2:20261005T0513Z-1）の決定 (4) の着地の側を写した（要件 FR1039 の shall と plain に、通した組の便のその後の着地の出来事〔積み直しの衝突・stale・追随の再 gate の不合格・着地の列の候補の木の赤・着地〕を便ごとに閉じた語で event に記帳し、着地の件に着地の差と差の file の変えた行の数を添える句を足した・器の行 v-commute-ledger と v-commute-on はノート surface-wave29c）。
 # 第 0.46 版（2026-10-05）: 判断の記録 ADR-63（持ち主の裁定 t3-hub.87.14〔甲〕・裁定 id = t3-hub.87.14:20261005T1140Z-1）の決定 (3)(9) を写した（要件 FR21 の shall に、頼みの頭の予算が新しい量 15 万より小さい起こしを直した頭の見本を付けて断る句を足し、adrs の ADR-63 は既に在り、note に ADR-63 の決定 (3)(9) を足した・行 ag-budget-floor はノート surface-wave29c）。
 # 第 0.45 版（2026-10-05）: 判断の記録 ADR-63（持ち主の裁定 t3-hub.87.14〔甲〕・裁定 id = t3-hub.87.14:20261005T1140Z-1）の決定 (4) を写した（要件 FR21 の shall と plain に、差の file を出す係が床の記録を置き、記録が無いか欠けるか 0 でない rc を持つまま・終える前の門が床の写しで撃ち直した rc と記録が違うまま・門が撃ち直せないまま 1 度目には終われない句を足し、adrs に ADR-63 を足し、note に ADR-63 の決定 (4) を足した・行 ag-floor-rec はノート surface-wave29c）。
@@ -35,7 +36,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.47
+  version: v0.48
   status: draft
   generated: 2026-09-28
   approval:
@@ -60,6 +61,7 @@ meta:
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "差の file を出す係の床の記録と終える前の門の撃ち直し（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (4)・要件 FR21 の shall と plain と adrs と note）", verbatim: "推奨で良い", version: v0.45}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "起こしの予算の下限 15 万を起こしの門に置き、終える前の門が予算の記録を書く（t3-hub.87.14（裁定 id = t3-hub.87.14:20261005T1140Z-1・甲・配達の口・notes に逐語）・判断の記録 ADR-63 の決定 (3)(9)・要件 FR21 の shall と note）", verbatim: "推奨で良い", version: v0.46}
     - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "差の当たりで通した組の便の後の着地の記帳（t3-hub.89.2（裁定 id = t3-hub.89.2:20261005T0513Z-1・案 C・tool の呼び・notes に逐語）・判断の記録 ADR-60 の決定 (4)・要件 FR1039 の shall と plain）", verbatim: "推奨で", version: v0.47}
+    - {role: 承認, who: 持ち主, when: 2026-10-05, stamp: "gate の共通 verify の持ち越し（t3-hub.89.18（裁定 id = t3-hub.89.18:20261005T2354Z-1・notes に逐語）・判断の記録 ADR-65 の決定 (2)・要件 FR1008 の shall と plain）", verbatim: "推奨でよい", version: v0.48}
 
 goals:
   - {id: GOAL1, title: 面で決められる, text: 持ち主が席の問いに面で答え、まとめて承認し、全体の方針を書ける。答えは台帳に逐語で残り、席は面越しに起きる。}
@@ -497,8 +499,8 @@ requirements:
     pattern: event
     strength: must
     when: "gate が要求されたとき"
-    shall: "共通 verify と契約の verify の各行を worktree で実走して行ごとの rc を記録し、 1 本でも rc が 0 でなければ FAIL とする。 verify の実走の前の gate の write-set を照らす段は、 便の diff に在る write-set の置き場だけの項目（=）の file を名指して段を落とす（FAIL・done の項目ごとの歯の欄の有無に依らない）"
-    plain: "審査（gate）を頼まれたら、共通 verify と契約に書いた検証コマンドを 1 行ずつ作業用 worktree で実際に走らせ、行ごとの結果を記録します。1 本でも失敗すれば FAIL です。検証コマンドを走らせる前の、触ってよい範囲を照らす段では、置き場だけと印を付けた file（=）が変更に含まれていれば、その file を名指して落とします（done の項目ごとの歯の欄の有無に依りません）。"
+    shall: "共通 verify と契約の verify の各行を worktree で実走して行ごとの rc を記録し、 1 本でも rc が 0 でなければ FAIL とする。 verify の実走の前の gate の write-set を照らす段は、 便の diff に在る write-set の置き場だけの項目（=）の file を名指して段を落とす（FAIL・done の項目ごとの歯の欄の有無に依らない）。 ただし共通 verify の行は、 同じ便の終わりの門が、 撃つ前に clean だった同じ木と同じ base で全行を緑で撃った記録を持つ周に限り撃たずに持ち越し、 行ごとの rc の代わりに、 持ち越した木と記録の在りかを名指す skip の record を 1 本残す（木か base が違う・記録を読めない・緑でない周は撃つ）"
+    plain: "審査（gate）を頼まれたら、共通 verify と契約に書いた検証コマンドを 1 行ずつ作業用 worktree で実際に走らせ、行ごとの結果を記録します。1 本でも失敗すれば FAIL です。検証コマンドを走らせる前の、触ってよい範囲を照らす段では、置き場だけと印を付けた file（=）が変更に含まれていれば、その file を名指して落とします（done の項目ごとの歯の欄の有無に依りません）。ただし共通 verify の行は、同じ便の終わりの門が、撃つ前に片付いていた同じ木と同じ base で全部緑だった記録を持つときだけ撃たずに持ち越し、持ち越した木と記録の在りかを名指す 1 行を残します（木か base が違う・記録が読めない・緑でないときは撃ちます）。"
     basis: []
     verify: {method: test, how: "器の歯で ac の欄の受入の基準を撃つ（器の確かめ方の字 T・test）", ac: [AC1003, AC1020, AC1072, AC1078, AC1079]}
     goals: [GOAL1001]

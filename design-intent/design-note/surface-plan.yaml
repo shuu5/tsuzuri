@@ -643,6 +643,8 @@ sections:
       - {id: h-host-band, doc: surface-wave29d}
       - {id: h-host-acct, doc: surface-wave29d}
       - {id: v-wear-key, doc: surface-wave29d}
+      - {id: v-gate-carry, doc: surface-wave29d}
+      - {id: v-window-cas, doc: surface-wave29d}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}

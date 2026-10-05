@@ -1,0 +1,525 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index d6a37794fa9beb3d9cf93d8ac7ef035b95aef205..682bb2525eae0ddc95e15894efc6fac466f4f9d9 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -469,6 +469,8 @@ fn pipe_gate_ignores_worktree_vessel_declaration() {
+                   && echo x >> src/lib.rs && git add -A && git commit -q -m runner";
+     let spawned = spawn_with(&repo, &state, &id, runner);
+     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&spawned));
++    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
++    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
+     // **repo 側の宣言も intake の後に赤い行へ差し替える**＝写しからしか読まないことを
+     // worktree 面と repo 面の 2 面で縛る（main が進んだ周に凍っていない行を撃たない）。
+     commit_vessel(&repo, VESSEL_ALLOWED, r#"["git cat-file -e HEAD:no-such-file"]"#);
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/confine.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/confine.rs
+index c045b804889e730c51da983b8f73f39d14cb72f2..f62399823b3585e960210b0a776cf6433f78f444 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/confine.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/confine.rs
+@@ -135,6 +135,8 @@ fn pipe_confine_reads_the_peak_from_the_trailing_line() {
+           "--state-dir", &state.display().to_string(), "--runner", TOY_COMMIT],
+     );
+     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "spawn: {}", stderr_of(&spawned));
++    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
++    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
+     let marker = state.join("lens-ran");
+     let gated = run_pipe_with_path(
+         &path,
+@@ -540,6 +542,8 @@ fn pipe_slots_wait_ends_early_when_the_blocking_ticket_goes() {
+           "--state-dir", &state.display().to_string(), "--runner", TOY_COMMIT],
+     );
+     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "spawn: {}", stderr_of(&spawned));
++    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
++    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
+ 
+     let first_dead = plant_ticket(&state, DEAD_PID, 1);
+     let live = plant_ticket(&state, u64::from(std::process::id()), 1_000_000_000_000);
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/follow.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/follow.rs
+index b7f68f1e199a15d23614516201343a1e60f8c472..f77eaa7ff24c0a1a85fbfa59b4f54fe2051b6d1f 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/follow.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/follow.rs
+@@ -555,6 +555,8 @@ fn pipe_follow_self_rebase_advances_the_base_without_a_follow_section() {
+     let id = intake(&repo, &state, &path);
+     let spawned = spawn_with(&repo, &state, &id, &runner);
+     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "turn 1 の spawn: {}", stderr_of(&spawned));
++    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
++    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
+     let moved = git(&repo, &["rev-parse", "refs/heads/main"]);
+     assert_ne!(moved, base, "turn の中で main が進んだ");
+     assert!(!stub_stdin(&state, 1).contains("## 追随"), "spawn 時は main = base ゆえ節は無い: {}", stub_stdin(&state, 1));
+@@ -624,6 +626,8 @@ fn pipe_follow_self_rebase_records_nothing_when_the_runner_does_not_rebase() {
+     let id = intake(&repo, &state, &path);
+     let spawned = spawn_with(&repo, &state, &id, &runner);
+     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "turn 1 の spawn: {}", stderr_of(&spawned));
++    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
++    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
+     assert_ne!(git(&repo, &["rev-parse", "refs/heads/main"]), base, "turn の中で main が進んだ");
+     assert!(rebase_details(&state, &id).is_empty(), "base は進めない: {:?}", stages(&state, &id));
+     assert_eq!(
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn.rs
+index a2e32fc043bf0c3464d7a8abde43d7d29540f799..8ec4a9204f56c0e3d1ce2f959a60ac689cff8c74 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn.rs
+@@ -5,10 +5,12 @@
+ //! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は移しただけ・`s2-07l.264`）。
+ //!
+ //! 歯は族ごとの子 module にも置く（設計 docs/design/carry-prep.md §10 行 o・`s2-07l.687`）: `question`（接頭辞
+-//! `pipe_question_` / `pipe_resume_`）・`approval`（接頭辞 `pipe_approval_` / `run_cost_` / `pipe_report_`）。この file には
++//! `pipe_question_` / `pipe_resume_`）・`approval`（接頭辞 `pipe_approval_` / `run_cost_` / `pipe_report_`）・`carry`（接頭辞 `vgcarry_`・gate が終わりの門の緑を
++//! 持ち越す・tsuzuri の判断の記録 ADR-65）。この file には
+ //! 子の歯が使う helper と const・use の行・他の族の歯だけを残す。
+ 
+ mod approval;
++mod carry;
+ mod question;
+ // flip-check: moved s2-07l.687
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn/carry.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn/carry.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..68af33b8597be25eb6338ce5246365787d0c7dcf
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/spawn/carry.rs
+@@ -0,0 +1,135 @@
++//! gate が終わりの門の緑を持ち越す歯（接頭辞 `vgcarry_`・設計 pipeline.md §66 形 11・tsuzuri の判断の記録 ADR-65・親
++//! `tests/e2e/pipe/spawn.rs` の helper を `use super::*` で使う）。
++//!
++//! 門の最後の要約が緑で、撃った木と base が gate の木と base に等しい便だけ、gate は共通 verify を撃たずに skip record を
++//! 1 本置く。要約の鍵を 1 つだけ崩した便と、門の後に木が動いた便は、gate が共通 verify を撃つ。
++
++use super::*;
++use vessel::fleet::json_lite::Value;
++
++/// verify の record のうち kind が `common` の行（gate の共通 verify の段）。
++fn common_rows(state: &Path, id: &str) -> Vec<Vec<(String, Value)>> {
++    verify_rows(state, id)
++        .into_iter()
++        .filter(|row| field(row, "kind").and_then(Value::as_str) == Some("common"))
++        .collect()
++}
++
++/// record の 1 欄。
++fn field<'a>(row: &'a [(String, Value)], key: &str) -> Option<&'a Value> {
++    row.iter().find(|(name, _)| name == key).map(|(_, value)| value)
++}
++
++/// 便の worktree の `HEAD^{tree}`。
++fn tree_of(repo: &Path, id: &str) -> String {
++    git(&worktree_of(repo, id), &["rev-parse", "HEAD^{tree}"])
++}
++
++/// 緑の中身を 1 回 commit する runner で spawn した便（repo・置き場・便 id）。
++fn green_run() -> (PathBuf, PathBuf, String) {
++    let (repo, state, id) = gate_run_intake();
++    let runner = turn_runner(&state, &[commit_turn("green")]);
++    let out = end_gate_spawn(&repo, &state, &id, &runner, None);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
++    assert_eq!(end_gate_words(&state, &id), ["green"], "門は緑");
++    (repo, state, id)
++}
++
++/// 偽 lens（PASS）で gate を 1 回撃ち、rc 0 を確かめる。
++fn gate_pass(repo: &Path, state: &Path, id: &str) {
++    let lens = fake_lens(&state.join("lens-ran"), &lens_verdict("PASS"));
++    let gated = gate_once(repo, state, id, Some(&lens));
++    assert_eq!(gated.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&gated), stderr_of(&gated));
++}
++
++/// 門の最後の要約の行の字 `from` を `to` に 1 か所だけ替える（ほかの行と欄は替えない）。
++fn rewrite_summary(state: &Path, id: &str, from: &str, to: &str) {
++    let path = state.join("pipe").join(id).join("end-gate.jsonl");
++    let mut lines = end_gate_lines(state, id);
++    let at = lines.iter().rposition(|line| line.starts_with("{\"end_gate\":")).unwrap_or_default();
++    let line = lines.get(at).cloned().unwrap_or_default();
++    assert_eq!(line.matches(from).count(), 1, "替える字は要約の行に 1 つ: {line}");
++    if let Some(slot) = lines.get_mut(at) {
++        *slot = line.replacen(from, to, 1);
++    }
++    fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap_or_default();
++}
++
++/// 便を崩す手（repo・置き場・便 id を受ける）。
++type Break = Box<dyn Fn(&Path, &Path, &str)>;
++
++/// 共通 verify を撃った record の数（`rc` を持つ kind common の行）と、持ち越しの record の数（`skipped` を持つ行）。
++fn fired_and_carried(state: &Path, id: &str) -> (usize, usize) {
++    let rows = common_rows(state, id);
++    let fired = rows.iter().filter(|row| field(row, "rc").is_some()).count();
++    let carried = rows.iter().filter(|row| field(row, "skipped").is_some()).count();
++    (fired, carried)
++}
++
++/// 門が緑の便は、要約が撃った木と base を持ち、gate は共通 verify を撃たず、kind common の record は持ち越しの 1 本だけで、
++/// その欄は skipped common・門と gate の木・reason end-gate-green・from end-gate.jsonl#1。契約の verify は gate が撃つ。
++#[test]
++fn vgcarry_green_end_gate_on_the_same_tree_is_carried_by_the_gate() {
++    let (repo, state, id) = green_run();
++    let tree = tree_of(&repo, &id);
++    let summary = end_gate_lines(&state, &id).into_iter().rfind(|line| line.starts_with("{\"end_gate\":")).unwrap_or_default();
++    assert!(summary.contains(&format!("\"tree\":\"{tree}\"")), "要約は撃った木を持つ: {summary}");
++    assert!(summary.contains("\"base\":\""), "要約は撃った base を持つ: {summary}");
++    gate_pass(&repo, &state, &id);
++    let rows = common_rows(&state, &id);
++    assert_eq!(rows.len(), 1, "kind common の record は 1 本: {rows:?}");
++    let row = rows.first().cloned().unwrap_or_default();
++    assert_eq!(field(&row, "rc"), None, "共通 verify を撃っていない: {row:?}");
++    for (key, want) in [("skipped", "common"), ("tree", tree.as_str()), ("reason", "end-gate-green"), ("from", "end-gate.jsonl#1")] {
++        assert_eq!(field(&row, key).and_then(Value::as_str), Some(want), "欄 {key}: {row:?}");
++    }
++    let contract = verify_rows(&state, &id)
++        .into_iter()
++        .filter(|row| field(row, "kind").and_then(Value::as_str) == Some("contract"))
++        .count();
++    assert_eq!(contract, 1, "契約の verify は gate が撃つ");
++    clean(&[&repo, &state]);
++}
++
++/// 要約の鍵を 1 つだけ崩した便（木を別の sha・base を別の sha・語を exhausted・記録を消す）と、門の後に worktree へ緑の
++/// commit を足した便は、gate が共通 verify を撃ち（kind common の record は rc を持つ 1 本）、持ち越しの record を置かない。
++#[test]
++fn vgcarry_each_broken_key_or_a_moved_tree_makes_the_gate_fire() {
++    let breaks: [(&str, Break); 5] = [
++        ("木", Box::new(|repo, state, id| rewrite_summary(state, id, &tree_of(repo, id), &"0".repeat(40)))),
++        ("base", Box::new(|_, state, id| {
++            let summary = end_gate_lines(state, id).into_iter().rfind(|line| line.starts_with("{\"end_gate\":")).unwrap_or_default();
++            let base = summary.split_once("\"base\":\"").and_then(|(_, rest)| rest.split('"').next()).unwrap_or_default().to_owned();
++            rewrite_summary(state, id, &base, &"0".repeat(40));
++        })),
++        ("語", Box::new(|_, state, id| rewrite_summary(state, id, "\"result\":\"green\"", "\"result\":\"exhausted\""))),
++        ("記録", Box::new(|_, state, id| {
++            let _ = fs::remove_file(state.join("pipe").join(id).join("end-gate.jsonl"));
++        })),
++        ("木の動き", Box::new(|repo, _, id| {
++            let tree = worktree_of(repo, id);
++            fs::write(tree.join("src").join("lib.rs"), "green\ngreen-two\n").unwrap_or_default();
++            git(&tree, &["commit", "-q", "-am", "green-two"]);
++        })),
++    ];
++    for (name, broken) in &breaks {
++        let (repo, state, id) = green_run();
++        broken(&repo, &state, &id);
++        gate_pass(&repo, &state, &id);
++        assert_eq!(fired_and_carried(&state, &id), (1, 0), "{name} を崩した便は gate が共通 verify を撃つ: {:?}", common_rows(&state, &id));
++        clean(&[&repo, &state]);
++    }
++}
++
++/// 門の時に追跡外の file が在った便（runner が緑を commit し、追跡外の file を残した）の要約は、緑でも木と base を持たない。
++#[test]
++fn vgcarry_an_unclean_worktree_at_the_end_gate_writes_no_tree() {
++    let (repo, state, id) = gate_run_intake();
++    let runner = turn_runner(&state, &[format!("printf 'stray\\n' > stray.txt\n{}", commit_turn("green").replace("git add -A", "git add src/lib.rs"))]);
++    let out = end_gate_spawn(&repo, &state, &id, &runner, None);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
++    assert_eq!(end_gate_words(&state, &id), ["green"], "門は緑");
++    let summary = end_gate_lines(&state, &id).into_iter().rfind(|line| line.starts_with("{\"end_gate\":")).unwrap_or_default();
++    assert!(!summary.contains("\"tree\"") && !summary.contains("\"base\""), "clean でない木は名指さない: {summary}");
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/gate/record.rs b/scribe2/crates/scribe2/src/pipe/gate/record.rs
+index a11f13f9a6ed098f531baf2d2b60a6be98818066..adfd1a2ebf83a90d016dc21559a232b475166228 100644
+--- a/scribe2/crates/scribe2/src/pipe/gate/record.rs
++++ b/scribe2/crates/scribe2/src/pipe/gate/record.rs
+@@ -11,7 +11,8 @@ use crate::pipe::confine::{io, Reason};
+ use crate::pipe::contract::Contract;
+ use crate::pipe::declaration::Effective;
+ use crate::pipe::move_proof::{self, LensInput};
+-use crate::pipe::{contract_path, git_bytes, run_dir, verify_log_path, vessel_path};
++use crate::pipe::spawn::{green_round, END_GATE_RECORD};
++use crate::pipe::{contract_path, git_bytes, git_line, run_dir, verify_log_path, vessel_path};
+ use std::path::{Path, PathBuf};
+ 
+ /// 赤い verify 行の stderr を残す診断 file の名（`verify.jsonl` と同じ dir）。
+@@ -149,7 +150,24 @@ pub(super) fn record_verify(entry: &Gate<'_>, worktree: &Path, base: &str) -> Re
+     };
+     let record = verify_log_path(entry.state_dir, entry.run);
+     let tail = record.with_file_name(STDERR_LOG_FILE);
+-    record_checks(&shoot, worktree, base, &Logs { record: &record, tail: &tail })
++    let carry = carried(entry.state_dir, entry.run, worktree, base);
++    record_checks(&shoot, worktree, base, &Logs { record: &record, tail: &tail }, carry.as_ref())
++}
++
++/// gate が撃たずに持ち越す共通 verify の周（同じ便の終わりの門の緑・設計 pipeline.md §66 形 11・tsuzuri の判断の記録 ADR-65）。
++pub(crate) struct Carry {
++    /// 門が撃った木（gate の `HEAD^{tree}` と同じ）。
++    tree: String,
++    /// 持ち越した記録の在りか（`end-gate.jsonl#<周>`）。
++    from: String,
++}
++
++/// 持ち越せる周の材料: 門の最後の要約が緑で、その木が gate の `HEAD^{tree}` と、その base が gate の base と同じ周だけ `Some`。
++/// どれかを読めない・違う周は `None`（今のとおり撃つ＝黙って飛ばさない・C10）。
++fn carried(state_dir: &Path, run: &str, worktree: &Path, base: &str) -> Option<Carry> {
++    let (round, fired) = green_round(state_dir, run)?;
++    let tree = git_line(worktree, &["rev-parse", "HEAD^{tree}"])?;
++    (fired.tree == tree && fired.base == base).then(|| Carry { tree, from: format!("{END_GATE_RECORD}#{round}") })
+ }
+ 
+ /// 撃ちと記録の本体の材料（gate の [`record_verify`] と runner の終わりの門〔設計 pipeline.md §66 形 2〕が同じ 1 本を通る）。
+@@ -175,8 +193,15 @@ pub(crate) struct Logs<'a> {
+ }
+ 
+ /// [`record_verify`] の本体（便の写しの共通 verify の読み・受付の材料と [`Checks`] の組み・撃ち・record と診断の記録・
+-/// 赤と測れなかった行の数え）。gate が書く file の名と record の字は呼び手の [`Logs`] が決める。
+-pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs: &Logs<'_>) -> Result<Counted, String> {
++/// 赤と測れなかった行の数え）。gate が書く file の名と record の字は呼び手の [`Logs`] が決める。`carry` が在る周（gate だけ）は
++/// 共通 verify の段を撃たず、末尾に持ち越しの skip record を 1 本置く（設計 pipeline.md §66 形 11）。
++pub(crate) fn record_checks(
++    shoot: &Shoot<'_>,
++    worktree: &Path,
++    base: &str,
++    logs: &Logs<'_>,
++    carry: Option<&Carry>,
++) -> Result<Counted, String> {
+     let frozen = frozen_copy(shoot.state_dir, shoot.run)?;
+     let admit = Admit { state_dir: shoot.state_dir, run: shoot.run, rules: shoot.limits.admission(shoot.policy) };
+     let file = contract_path(shoot.state_dir, shoot.run);
+@@ -189,7 +214,8 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
+         host: shoot.limits.breaker(),
+         contract_file: Some(&file),
+     };
+-    let steps = run_checks_admitted(&checks, &gate_checks(), Some(&admit));
++    let stages: Vec<Check> = gate_checks().into_iter().filter(|check| carry.is_none() || *check != Check::Common).collect();
++    let steps = run_checks_admitted(&checks, &stages, Some(&admit));
+     let (path, tail_path, policy) = (logs.record, logs.tail, shoot.policy);
+     let mut red = 0;
+     // 遮断器が閉じて撃たなかった最初の行の `n`（設計 gate-cost.md §32 約束 5・検出線の rc 2 と同じ形）。
+@@ -200,7 +226,7 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
+     // ある（rc に依らず「測れなかった」・設計 gate-cost.md §4.2）。
+     let unreadable = steps.iter().any(is_unreadable);
+     let killed = steps.iter().find_map(box_kill);
+-    for record in records_of(&steps, None) {
++    for record in records_of(&steps, carry.map(Skipped::carried)) {
+         if let Some(step) = record.step {
+             if step.is_closed() {
+                 // 撃っていない行は赤でも診断の対象でもない（record だけ残す）。
+@@ -562,8 +588,10 @@ pub struct Skipped<'a> {
+     stage: SkippedStage,
+     /// 省いた理由（record の `reason=` の字面）。
+     reason: &'static str,
+-    /// land した木（主実測の record だけ・gate の再撃ちは木を持たない＝field を書かない）。
++    /// land した木（主実測の record だけ・gate の再撃ちは木を持たない＝field を書かない）。持ち越しの周は門が撃った木。
+     tree: Option<&'a str>,
++    /// 持ち越した記録の在りか（持ち越しの周だけ・record の `from=`）。
++    from: Option<&'a str>,
+ }
+ 
+ impl<'a> Skipped<'a> {
+@@ -572,7 +600,7 @@ impl<'a> Skipped<'a> {
+     /// 理由は面の外（[`DetectionSkip::OutsideScope`]）だけで、木は持たない——撃っていないので「どの木を測ったか」が
+     /// 無い（`tree` を書くと測った形に読める）。
+     pub fn regate() -> Self {
+-        Self { stage: SkippedStage::Regate, reason: DetectionSkip::OutsideScope.as_str(), tree: None }
++        Self { stage: SkippedStage::Regate, reason: DetectionSkip::OutsideScope.as_str(), tree: None, from: None }
+     }
+ 
+     /// land の主実測を**丸ごと**省いた周（`kind=main skipped=main reason=same-tree`・設計 gate-cost.md §27・
+@@ -582,10 +610,20 @@ impl<'a> Skipped<'a> {
+     /// **必ず取る**（`&str`・`Option` にしない）——「どの木を gate が測ったか」が無い skip record は
+     /// 撃っていない緑と読み分けられない。
+     pub fn main(tree: &'a str) -> Self {
+-        Self { stage: SkippedStage::Main, reason: SAME_TREE, tree: Some(tree) }
++        Self { stage: SkippedStage::Main, reason: SAME_TREE, tree: Some(tree), from: None }
++    }
++
++    /// gate が共通 verify を撃たず、同じ便の終わりの門の緑を持ち越した周（`kind=common skipped=common tree=<sha>
++    /// reason=end-gate-green from=<在りか>`・設計 pipeline.md §66 形 11）。木と在りかは**必ず取る**——どの木のどの記録を
++    /// 持ち越したかの無い skip record は、撃っていない緑と読み分けられない。
++    pub(crate) fn carried(carry: &'a Carry) -> Self {
++        Self { stage: SkippedStage::Common, reason: END_GATE_GREEN, tree: Some(&carry.tree), from: Some(&carry.from) }
+     }
+ }
+ 
++/// 共通 verify を持ち越した周の `reason=`（門が同じ木と base で全行を緑で撃った・設計 pipeline.md §66 形 11）。
++const END_GATE_GREEN: &str = "end-gate-green";
++
+ /// 主実測を丸ごと省いた周の `reason=`（gate を撃った木と着地の木が同じ・設計 gate-cost.md §27）。
+ const SAME_TREE: &str = "same-tree";
+ 
+@@ -600,6 +638,8 @@ enum SkippedStage {
+     Regate,
+     /// land の主実測 1 周（設計 gate-cost.md §27・ADR-0043 §2.1）。
+     Main,
++    /// gate の共通 verify の段（門の緑を持ち越した周・設計 pipeline.md §66 形 11）。
++    Common,
+ }
+ 
+ impl SkippedStage {
+@@ -608,6 +648,7 @@ impl SkippedStage {
+         match self {
+             Self::Regate => "regate",
+             Self::Main => KIND_MAIN,
++            Self::Common => Check::Common.as_str(),
+         }
+     }
+ 
+@@ -616,6 +657,7 @@ impl SkippedStage {
+         match self {
+             Self::Regate => KIND_GATE,
+             Self::Main => KIND_MAIN,
++            Self::Common => Check::Common.as_str(),
+         }
+     }
+ }
+@@ -690,6 +732,9 @@ pub fn skip_record(number: u64, skipped: Skipped<'_>) -> String {
+         fields.push(("tree", Value::Str(tree.to_owned())));
+     }
+     fields.push(("reason", Value::Str(skipped.reason.to_owned())));
++    if let Some(from) = skipped.from {
++        fields.push(("from", Value::Str(from.to_owned())));
++    }
+     json_lite::write_object(&fields)
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/spawn.rs b/scribe2/crates/scribe2/src/pipe/spawn.rs
+index f973f416f9adb7f43bcfe0f306f06e48ebe2ebdc..038a6b9a98521dbcdd458d44be9d11f584e3295e 100644
+--- a/scribe2/crates/scribe2/src/pipe/spawn.rs
++++ b/scribe2/crates/scribe2/src/pipe/spawn.rs
+@@ -99,7 +99,10 @@ pub(crate) fn end_gate_mark(state_dir: &Path, id: &str) -> EndGateMark {
+ }
+ 
+ /// 終わりの門の record の file の名（run dir の直下・1 行の形は `verify.jsonl` と同じ・周の終わりに要約の 1 行を足す）。
+-const END_GATE_RECORD: &str = "end-gate.jsonl";
++pub(crate) const END_GATE_RECORD: &str = "end-gate.jsonl";
++
++/// 要約の行の頭（record の行と分ける・[`green_round`] が最後の要約を探す）。
++const SUMMARY_HEAD: &str = "{\"end_gate\":";
+ 
+ /// 終わりの門の赤い行の診断の file の名（`verify.stderr.log` と同じ形・周の頭に [`ROUND_HEAD`] の 1 行を置く）。
+ const END_GATE_STDERR: &str = "end-gate.stderr.log";
+@@ -110,7 +113,7 @@ const ROUND_HEAD: &str = "# end-gate=";
+ /// 門の赤の記帳の detail の頭（`end-gate:red:<周>:<赤い行の数>`・段は `Spawned` のまま）。
+ const RED_DETAIL: &str = "end-gate:red:";
+ 
+-/// 起こし直しの回数の上限を持つ rules 行（設計 pipeline.md §66 形 10）。
++/// 起こし直しの回数の上限を持つ rules 行（設計 pipeline.md §66 形 11）。
+ const ROW_END_GATE_ROUNDS: &str = "runner.end_gate_rounds";
+ 
+ /// 終わりの門の線（**閉じた 2 値**・設計 pipeline.md §66 形 8）: gate の線と起こし直しの回数の上限の対、か、読めない理由の 1 行。
+@@ -319,12 +322,17 @@ impl Round {
+         }
+     }
+ 
+-    /// 要約の 1 行（`{"end_gate":<周>,"result":"<語>"}`・測れなかった周は `reason` を足す）。
+-    fn summary(&self, round: u64) -> String {
++    /// 要約の 1 行（`{"end_gate":<周>,"result":"<語>"}`・測れなかった周は `reason` を足す）。緑の周で撃つ前の木を読めた周だけ、
++    /// 撃った木と base（`tree`・`base`）を足す（gate が持ち越す鍵・設計 pipeline.md §66 形 11）。
++    fn summary(&self, round: u64, fired: Option<&Fired>) -> String {
+         let mut fields = vec![("end_gate", Value::Num(round)), ("result", Value::Str(self.word().to_owned()))];
+         if let Self::Unmeasured(reason) = self {
+             fields.push(("reason", Value::Str(reason.clone())));
+         }
++        if let (Self::Green, Some(found)) = (self, fired) {
++            fields.push(("tree", Value::Str(found.tree.clone())));
++            fields.push(("base", Value::Str(found.base.clone())));
++        }
+         json_lite::write_object(&fields)
+     }
+ 
+@@ -347,8 +355,43 @@ impl Round {
+     }
+ }
+ 
+-/// 門を撃つ（印・base・契約の写しを揃えて gate と同じ 1 本で撃つ・設計 pipeline.md §66 形 2）。`Err` は測れなかった理由の 1 行。
+-fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) -> Result<Counted, String> {
++/// 門が撃った木と base（緑の周の要約の `tree` と `base`・gate の持ち越しの鍵・設計 pipeline.md §66 形 11）。
++pub(crate) struct Fired {
++    /// 撃つ前に clean だった worktree の `HEAD^{tree}`。
++    pub tree: String,
++    /// 撃った base。
++    pub base: String,
++}
++
++/// clean な worktree の `HEAD^{tree}`（状態か木を読めない周と、未 commit の変更か追跡外の file が在る周は `None`＝
++/// 撃った中身を木の sha で名指せない）。
++fn clean_tree(worktree: &Path) -> Option<String> {
++    let status = git_bytes(worktree, &["status", "--porcelain"])?;
++    if !status.is_empty() {
++        return None;
++    }
++    git_line(worktree, &["rev-parse", "HEAD^{tree}"])
++}
++
++/// 便の門の最後の要約が緑で、撃った木と base を持つ周の、周の番号と木と base（gate の持ち越し・設計 pipeline.md §66 形 11）。
++/// 記録を読めない周・要約の行が無い周・最後の要約が緑でない周・木か base を欠く周は `None`（gate は撃つ側へ倒す）。
++pub(crate) fn green_round(state_dir: &Path, run: &str) -> Option<(u64, Fired)> {
++    let text = std::fs::read_to_string(run_dir(state_dir, run).join(END_GATE_RECORD)).ok()?;
++    let last = text.lines().rev().find(|line| line.starts_with(SUMMARY_HEAD))?;
++    let fields = json_lite::parse_object(last).ok()?;
++    let field = |key: &str| fields.iter().find(|(name, _)| name == key).map(|(_, value)| value);
++    if field("result")?.as_str()? != Round::Green.word() {
++        return None;
++    }
++    let round = field("end_gate")?.as_num()?;
++    let tree = field("tree")?.as_str()?.to_owned();
++    let base = field("base")?.as_str()?.to_owned();
++    Some((round, Fired { tree, base }))
++}
++
++/// 門を撃つ（印・base・契約の写しを揃えて gate と同じ 1 本で撃つ・設計 pipeline.md §66 形 2）。`Ok` は数えと撃った base、
++/// `Err` は測れなかった理由の 1 行。
++fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) -> Result<(Counted, String), String> {
+     hold_mark(launch)?;
+     let base = gate_base(launch.state_dir, launch.repo, launch.run)
+         .ok_or_else(|| format!("run {} の base を読めない", launch.run))?;
+@@ -362,7 +405,8 @@ fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64)
+     let (record, tail) = (dir.join(END_GATE_RECORD), dir.join(END_GATE_STDERR));
+     append_line(&tail, &format!("{ROUND_HEAD}{round}"), launch.policy).map_err(|err| err.to_string())?;
+     let shoot = Shoot { state_dir: launch.state_dir, run: launch.run, contract: &contract, limits, policy: launch.policy };
+-    record_checks(&shoot, worktree, &base, &Logs { record: &record, tail: &tail })
++    let counted = record_checks(&shoot, worktree, &base, &Logs { record: &record, tail: &tail }, None)?;
++    Ok((counted, base))
+ }
+ 
+ /// runner が rc 0 で commit を作って終わった周の門（設計 pipeline.md §66 形 1〜5）: 撃って要約を残し、赤で起こし直せる周は
+@@ -370,15 +414,23 @@ fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64)
+ fn end_gate(launch: &Launch<'_>, worktree: &Path) -> Outcome {
+     let prior = red_count(launch.state_dir, launch.run);
+     let round = prior.unwrap_or(0).saturating_add(1);
++    // 撃つ前の木（clean な周だけ・gate の持ち越しの鍵・設計 pipeline.md §66 形 11）。
++    let tree = clean_tree(worktree);
++    let mut fired = None;
+     let result = match (launch.gate, prior) {
+         (EndGate::Unreadable(reason), _) => Round::Unmeasured(reason.clone()),
+         (EndGate::Line { .. }, None) => Round::Unmeasured("便の event を読めない".to_owned()),
+-        (EndGate::Line { limits, rounds }, Some(prior)) => shoot_gate(launch, worktree, *limits, round)
+-            .map_or_else(Round::Unmeasured, |counted| Round::judge(&counted, prior, *rounds)),
++        (EndGate::Line { limits, rounds }, Some(prior)) => match shoot_gate(launch, worktree, *limits, round) {
++            Ok((counted, base)) => {
++                fired = tree.map(|tree| Fired { tree, base });
++                Round::judge(&counted, prior, *rounds)
++            }
++            Err(reason) => Round::Unmeasured(reason),
++        },
+     };
+     // 要約の行も書けない周は書かずに進む（門の結果は段の記帳が持つ）。
+     let record = run_dir(launch.state_dir, launch.run).join(END_GATE_RECORD);
+-    let _ = append_line(&record, &result.summary(round), launch.policy);
++    let _ = append_line(&record, &result.summary(round, fired.as_ref()), launch.policy);
+     match result {
+         Round::Red(red) => record_stage(launch, Stage::Spawned, Some(format!("{RED_DETAIL}{round}:{red}"))),
+         Round::Green | Round::Exhausted | Round::Unmeasured(_) => record_stage(launch, Stage::Implemented, None),
+diff --git a/scribe2/docs/design/pipeline.md b/scribe2/docs/design/pipeline.md
+index 6eb750fd2c6a0e205d3c1dc856b97103f63e5fa3..0fa2fe71564ab705d7ecc9149a582176361f92d2 100644
+--- a/scribe2/docs/design/pipeline.md
++++ b/scribe2/docs/design/pipeline.md
+@@ -1380,6 +1380,7 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
+   10. **rules 行**: `runner.end_gate_rounds`（kind `RunnerEndGateRounds`・Int・値 2・発効・ruling `user 2026-09-30T22:13Z 項 end-gate`・ruled_at `2026-09-30`）を足す。
+      - 値は起こし直しの回数だけを決める。値 0 も門を撃つ（形 1・形 5）。
+      - kind の宣言順は `FollowRetries` の直後に置く（既存の順の歯の窓に入らない）。
++  11. **gate の持ち越し**（行 v-gate-carry・tsuzuri の判断の記録 ADR-65・2026-10-06 に足した・下の却下の 3 項目を決め直した）: 門は撃つ前に worktree が clean（`git status --porcelain` が空）なら `HEAD^{tree}` を読み、緑の周だけ要約の行に撃った木と base を足す（`{"end_gate":<周>,"result":"green","tree":"<sha>","base":"<sha>"}`・clean でない周と木を読めない周は足さない）。gate（`record_verify` だけ）は、門の最後の要約が緑で、その木が gate の `HEAD^{tree}` と、その base が gate の base と同じ周に限り、共通 verify の段を撃たず、`verify.jsonl` の末に skip record `{"kind":"common","skipped":"common","tree":"<sha>","reason":"end-gate-green","from":"end-gate.jsonl#<周>"}` を 1 本置く。write-set の段と契約の verify と lens は今のとおり gate が撃つ。記録が無い・読めない・最後の要約が緑でない・木か base が違う周は今のとおり全部撃つ（黙って飛ばさない・C10）。物差しは門も gate も便の写しの共通 verify（受付が凍らせた行）で、runner の申告を持ち越すのではない。失うのは同じ木の 2 度目の撃ち（揺れる歯を 2 度測る機会と、門の後の host で測り直すこと）で、木の外（無視される file・共有の target・環境）は木の sha で結べない。証は置き場の file に在り、置き場の写しと同じ信頼の境に立つ。着地の主実測と候補の木の検査は替えない。
+ - 行の割り方と順: 行 bi（§67）→ 行 bk（形 9 の読み手と resume の断り）→ 行 bj（形 1〜8・形 9 の書き手・形 10）→ 行 bl（§68）。
+   - 読み手を先に着地させるので、書き手が入った時には手の resume がもう断られる（隙が無い）。
+   - 行 bi と行 bj は、どちらも埋め込み manifest の行数の pin と外形の snapshot `rules_external_form` を 1 つ増やす。行 bj は行 bi の後になる。
+@@ -1424,11 +1425,11 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
+ - 却下（[ADR-0102](../../design-intent/decisions/ADR-0102-lens-reads-with-read-only-tools-and-runner-gets-the-common-verify.html) §4）:
+   - **gate の verify の赤を自動で runner へ戻す**: §49 の却下と同じ（判定の段の後に戻すと、着地の列と終端の数えが動く）。門は判定の前で、runner の turn の延長として置く。
+   - **claude の session を `--resume` で続ける**: session の記録は口座の設定 dir に在り、起こし直しの口座が変わると続けられない。器は起動形を「stdin の契約と節」の 1 つに保つ（途中再開と同じ）。
+-  - **gate が門の緑を持ち越して撃ち直さない**: 節約は common の中央値で約 137 秒で、門と gate を木の sha で結ぶ跨 process の記録が増え、gate が独立に測る性質が弱まる。着地の後に gate の時間が問題になったら測り直して決める。
++  - **gate が門の緑を持ち越して撃ち直さない**: 節約は common の中央値で約 137 秒で、門と gate を木の sha で結ぶ跨 process の記録が増え、gate が独立に測る性質が弱まる。着地の後に gate の時間が問題になったら測り直して決める。（2026-10-06 に測り直して決め直した: 10-05 の 83 便で gate の共通 verify の中央値 177 秒・計 19,905 秒・形 11・行 v-gate-carry・tsuzuri の判断の記録 ADR-65）
+   - **§65 の節だけで止める**: runner が撃ったかは器が測らない（撃った runner は 28 本中 5 本）。
+   - **門で lens も撃つ**: 論理の誤りの審査は gate の lens の役目で、門は機械の検査だけを持つ。
+   - **輪を spawn の中に置く**: spawn は Budget を受ける側で、測り直しの手を持たない。`spawn_turn` は既に回答・追随・途中再開の材料を毎周読み直すので、同じ所に輪を置く。
+-- 限界: 緑の便も門と gate で共通 verify を 2 回撃つ（中央値の和で約 137 秒・p90 で約 450 秒が足される）。runner の論理の誤り（gate の lens の FAIL の型）は塞がない。
++- 限界: 緑の便も門と gate で共通 verify を 2 回撃つ（中央値の和で約 137 秒・p90 で約 450 秒が足される）。形 11 の後は、門が同じ木と base で緑だった便の gate は共通 verify を撃たない。runner の論理の誤り（gate の lens の FAIL の型）は塞がない。
+ 
+ ## 67. lens の turn の上限 — rules 行 `lens.max_turns`（30）を lens の argv に毎回渡し、上限で終わった周の出力は判定を持たない周と読む（契約表の行 bi・SRS FR5・FR9・[ADR-0102](../../design-intent/decisions/ADR-0102-lens-reads-with-read-only-tools-and-runner-gets-the-common-verify.html) §2.1・§64 の限界の後の行）
+ 
