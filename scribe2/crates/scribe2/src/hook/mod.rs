@@ -571,6 +571,7 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
     };
     let state = crate::fleet::replay(&events);
     let Some(row) = crate::seat::role::registration_of_target(&state, &target) else {
+        drift_notice(hooked, outcome, &state, &target, started);
         return false;
     };
     let manifest = hooked.rules.map_or_else(Manifest::embedded, |path| Manifest::load(Path::new(path)));
@@ -619,6 +620,29 @@ fn brief(hooked: &Hooked, outcome: &mut Outcome, payload: &str, started: Instant
     precompact_out(hooked, outcome, payload, &target, started);
     recent(hooked, outcome, started, read.as_deref().map_err(|reason| *reason));
     metered.is_some()
+}
+
+/// 記録の `what`（席の名のずれの 1 行を出した周）。
+const WHAT_DRIFT: &str = "session-start-drift";
+
+/// 席の名のずれの 1 行を名乗りの後ろへ出す（設計 seat-roles.md §5）: 今の target に登録 row が無く、同じ anchor で窓の名が同じ
+/// 登録 row が在る周（tmux の session 名だけが登録とずれた席）だけ、直し方の 1 語列を添えた 1 行と記録 1 行（`what` = [`WHAT_DRIFT`]）
+/// を出す。指示文・圧縮の枠・復帰の DATA は出さない（役割の記録が無い席に注入しない）。ずれの無い周は 0 byte・記録なし。
+fn drift_notice(hooked: &Hooked, outcome: &mut Outcome, state: &crate::fleet::State, target: &str, started: Instant) {
+    let anchor = hooked.root.display().to_string();
+    let Some(found) = crate::seat::role::drifted_row(state, &anchor, target) else {
+        return;
+    };
+    let line = format!(
+        "[{NAME}/SessionStart] seat-drift target={target} registered={} next=tmux rename-session -t {} {}\
+         （tmux の session 名が席の登録とずれている・指示文を出さず書きは権能の門が断る）",
+        found.target,
+        role_guard::session_of(target),
+        role_guard::session_of(&found.target)
+    );
+    let emit = Emit { who: EVENT_SESSION_START, what: WHAT_DRIFT, when: "SessionStart", line: &line };
+    outcome.err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
+    outcome.out.push(line);
 }
 
 /// 記録の `what`（圧縮の直前の 1 枠を出した周）。
@@ -840,6 +864,7 @@ fn role_outcome(hooked: &Hooked, op: &Operation, started: Instant) -> Outcome {
         socket: hooked.socket,
         state_dir: hooked.dir,
         rules: hooked.rules.map(Path::new),
+        anchor: Some(hooked.root),
     };
     match role_guard::decide(&subject, &seat) {
         RoleDecision::Inactive => Outcome::ok(Vec::new()),

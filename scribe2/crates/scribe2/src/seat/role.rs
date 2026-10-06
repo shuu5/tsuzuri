@@ -335,6 +335,20 @@ pub fn registration_of_target<'a>(state: &'a State, target: &str) -> Option<&'a 
     rows.max_by_key(|latest| latest.seq).map(|latest| &latest.registration)
 }
 
+/// 席の名のずれの row（[`registration_of_target`] の隣・設計 seat-roles.md §5）: 今の `target` に登録 row が在れば `None`。無ければ、
+/// 鍵ごとに最新へ畳んだ row のうち `anchor` の字が等しく、target の最初の `:` より後（窓の名）が今の target の窓の名と等しいもの
+/// （＝session 名だけが違う row）を、`seq` が最大の 1 つ返す。窓の名の違う row と anchor の違う row はずれと読まない。
+pub fn drifted_row<'a>(state: &'a State, anchor: &str, target: &str) -> Option<&'a Registration> {
+    if registration_of_target(state, target).is_some() {
+        return None;
+    }
+    let (_, window) = target.split_once(':')?;
+    let rows = state.registrations.values().filter(|latest| {
+        latest.registration.anchor == anchor && latest.registration.target.split_once(':').is_some_and(|(_, found)| found == window)
+    });
+    rows.max_by_key(|latest| latest.seq).map(|latest| &latest.registration)
+}
+
 /// 鍵（役割 × anchor）の登録 row（[`registration_of_target`] の隣・account-lifecycle.md §14 の短い形の既定の出所）: 鍵ごとに
 /// 最新へ畳んだ行をそのまま引く（`target` / `model` はここから運ぶ・無ければ `None`＝呼び手が flag の欠けを名指す）。
 pub fn registration_of_key<'a>(state: &'a State, role: Role, anchor: &str) -> Option<&'a Registration> {

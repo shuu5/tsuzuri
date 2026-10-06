@@ -5,6 +5,7 @@
 use super::*;
 
 mod wipst;
+mod sdrift;
 
 #[test]
 fn hook_session_start_is_noop_without_marker() {

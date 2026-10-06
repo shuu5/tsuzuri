@@ -32,7 +32,7 @@ use crate::pipe::{contract_path, worktrees_dir};
 use crate::polarity::{OnFailure, Polarity, Timing};
 use crate::rules::manifest::Manifest;
 use crate::rules::RuleValue;
-use crate::seat::role::{role_of_target, Capability, Role};
+use crate::seat::role::{drifted_row, role_of_target, Capability, Role};
 use std::path::{Component, Path, PathBuf};
 
 /// この境界の極性: 操作の時点で止め、権能を解けない周は権能付きの操作を通さない。
@@ -270,6 +270,8 @@ pub struct Seat<'a> {
     pub state_dir: &'a Path,
     /// rules manifest の override（`--rules`・無ければ埋め込み）。
     pub rules: Option<&'a Path>,
+    /// anchor（repo root・席の名のずれを登録 row と突き合わせる相手・無ければずれを読まない）。
+    pub anchor: Option<&'a Path>,
 }
 
 /// 操作が権能付きか。権能付きでない Bash / Edit は `None`（通す・記録なし・tmux も event log も撃たない）。
@@ -634,7 +636,13 @@ impl RefuseReason {
     }
 }
 
-/// 権能付きの操作を判定する（解く順 = pane → target → 登録 row → role → 行 → 権能）。
+/// target（`session:window`）の session の名（最初の `:` より前・席の名のずれの 1 行と断りの末が `next=` に載せる）。
+pub fn session_of(target: &str) -> &str {
+    target.split_once(':').map_or(target, |(session, _)| session)
+}
+
+/// 権能付きの操作を判定する（解く順 = pane → target → 登録 row → role → 行 → 権能）。登録の無い席は、同じ anchor で窓の名が同じ
+/// 登録 row が在る周（session 名のずれ）だけ断りの末に登録の target と直し方の 1 語列を足す（理由の字と route は替えない）。
 pub fn decide(subject: &Subject, seat: &Seat) -> RoleDecision {
     let Some(pane) = seat.pane.filter(|found| !found.trim().is_empty()) else {
         return RoleDecision::Inactive;
@@ -646,8 +654,19 @@ pub fn decide(subject: &Subject, seat: &Seat) -> RoleDecision {
     let Ok(events) = store::read_all(seat.state_dir) else {
         return RoleDecision::Deny(refused(subject, RefuseReason::RegistryUnreadable));
     };
-    let Some(role) = role_of_target(&replay(&events), &target) else {
-        return RoleDecision::Deny(refused(subject, RefuseReason::Unregistered));
+    let state = replay(&events);
+    let Some(role) = role_of_target(&state, &target) else {
+        let line = refused(subject, RefuseReason::Unregistered);
+        let drifted = seat.anchor.and_then(|anchor| drifted_row(&state, &anchor.display().to_string(), &target));
+        return RoleDecision::Deny(match drifted {
+            Some(found) => format!(
+                "{line} registered={} next=tmux rename-session -t {} {}",
+                found.target,
+                session_of(&target),
+                session_of(&found.target)
+            ),
+            None => line,
+        });
     };
     let manifest = seat.rules.map_or_else(Manifest::embedded, Manifest::load);
     let Ok(manifest) = manifest else {
