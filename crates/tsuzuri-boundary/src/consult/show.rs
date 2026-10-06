@@ -10,9 +10,10 @@ use tsuzuri_contract::consult::{Finding, FindingId, RequestId, Via, Word};
 use tsuzuri_contract::wire;
 use tsuzuri_core::consult::lines::{Line, Subject, WORD_MAX, cited, free};
 
+use super::plain::{plain_file, read_text};
 use super::{
-    COMMON, Ctx, FAIL, Refused, append, ctx, flags, ledger, lines_of, minute_now, refuse, retired,
-    tzw, workspace,
+    COMMON, Ctx, FAIL, READ_MAX, Refused, append, ctx, flags, ledger, lines_of, minute_now,
+    odd_line, refuse, retired, tzw, workspace,
 };
 use crate::out::emit;
 
@@ -41,21 +42,29 @@ pub fn run(rest: &[&str]) -> u8 {
     }
 }
 
-/// 所見の file の path（作業場か退いた作業場の在る方）。
+/// 所見の file の path（作業場か退いた作業場の、普通の file の在る方・`plain` の照らし）。
 pub fn finding_path(drafts: &Path, id: FindingId) -> Option<PathBuf> {
+    let rel = format!("findings/{id}.json");
     [workspace(drafts, id.window()), retired(drafts, id.window())]
         .into_iter()
-        .map(|ws| ws.join("findings").join(format!("{id}.json")))
-        .find(|p| p.is_file())
+        .find(|ws| plain_file(ws, &rel))
+        .map(|ws| ws.join(rel))
 }
 
-/// 所見を読む（無いか読めなければ rc 1）。
+/// 所見を読む（作業場か退いた作業場の `plain` の照らしで読む・無いか読めないか symlink と fifo の時は rc 1）。
 pub fn read_finding(drafts: &Path, id: FindingId) -> Result<(PathBuf, Finding), Refused> {
-    let path = finding_path(drafts, id).ok_or((FAIL, format!("所見 {id} の file が無い")))?;
-    let text =
-        std::fs::read_to_string(&path).map_err(|e| (FAIL, format!("所見 {id} が読めない: {e}")))?;
-    let finding = wire::decode(&text).map_err(|e| (FAIL, format!("所見 {id} の形が違う: {e}")))?;
-    Ok((path, finding))
+    let rel = format!("findings/{id}.json");
+    for ws in [workspace(drafts, id.window()), retired(drafts, id.window())] {
+        let text = match read_text(&ws, &rel, READ_MAX) {
+            Ok(Some(text)) => text,
+            Ok(None) => continue,
+            Err(e) => return Err((FAIL, odd_line(id.window(), &rel, &e.to_string()))),
+        };
+        let finding =
+            wire::decode(&text).map_err(|e| (FAIL, format!("所見 {id} の形が違う: {e}")))?;
+        return Ok((ws.join(rel), finding));
+    }
+    Err((FAIL, format!("所見 {id} の file が無い")))
 }
 
 /// 所見の題（行に置く字・なし と空と器の引用の形を含む字は None）。

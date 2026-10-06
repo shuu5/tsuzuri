@@ -20,6 +20,7 @@ use tsuzuri_core::consult::launch::{VERSION_ENV, version_ok};
 use tsuzuri_core::consult::lines::{Line, Subject};
 
 use super::bundle::{self, Inputs};
+use super::plain::write_plain;
 use super::{
     COMMON, Ctx, DIRS, FAIL, GIT_TIMEOUT, NOTES, Refused, UNKNOWN, append, ctx, flags, ledger,
     lines_of, minute_now, refuse, windows, write_window,
@@ -217,7 +218,7 @@ fn make(c: &Ctx, want: &Want, inputs: &Inputs) -> Result<(WindowId, PathBuf), Re
         made: minute_now(),
     };
     write_window(&ws, &window).map_err(|e| (UNKNOWN, format!("窓の控えを書けない: {e}")))?;
-    std::fs::write(ws.join(NOTES), format!("# 窓 {id} の控え\n"))
+    write_plain(&ws, NOTES, format!("# 窓 {id} の控え\n").as_bytes())
         .map_err(|e| (UNKNOWN, format!("{NOTES} を書けない: {e}")))?;
     bundle::write(&ws, id, inputs)?;
     let ws = ws.canonicalize().unwrap_or(ws);

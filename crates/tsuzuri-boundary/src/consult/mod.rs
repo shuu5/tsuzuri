@@ -34,6 +34,7 @@ use tsuzuri_contract::ledger::{BDW, BeadId, LedgerItem, LedgerWrite};
 use tsuzuri_contract::wire;
 use tsuzuri_core::consult::lines::{Line, home_of, render, scan};
 
+use self::plain::{NOT_PLAIN, entries, odd_dir, plain_names, read_text, write_plain};
 use crate::acct::{GIT, GIT_ARGS};
 use crate::out::emit_err;
 use crate::server::events::now;
@@ -61,6 +62,12 @@ pub const WINDOW_FILE: &str = ".consult/window.json";
 /// 作業場に用意する dir（控え・束・草稿・所見・実験）。
 pub const DIRS: [&str; 5] = [".consult", "bundle", "drafts", "findings", "work"];
 
+/// 席の口が読み書きする作業場の dir（控え・束・所見・`odd_files` が見る）。
+pub const SEAT_DIRS: [&str; 3] = [".consult", "bundle", "findings"];
+
+/// 作業場の控えと印と所見を読む上限（byte・越える file は読まない）。
+pub const READ_MAX: u64 = 1 << 20;
+
 /// 窓の控えの書き場（作業場からの相対）。
 pub const NOTES: &str = "notes.md";
 
@@ -70,8 +77,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
 /// 共通の値を取る旗（repo の置き場・台帳の読みと書きの program）。
 pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
 
-pub const USAGE: &str =
-    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp|statusline> [引数]";
+pub const USAGE: &str = "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp|statusline> [引数]";
 
 /// tz consult の残りの引数を受けて終了 code を返す。
 pub fn run(rest: &[&str]) -> u8 {
@@ -267,49 +273,86 @@ pub fn windows(drafts: &Path) -> Vec<(WindowId, bool)> {
     out
 }
 
-/// 作業場の窓の控え（読めなければ None）。
+/// 作業場の窓の控え（`plain` の照らしで読む・無いか読めなければ None）。
 pub fn read_window(ws: &Path) -> Option<WindowFile> {
-    let text = std::fs::read_to_string(ws.join(WINDOW_FILE)).ok()?;
+    let text = read_text(ws, WINDOW_FILE, READ_MAX).ok()??;
     wire::decode(&text).ok()
 }
 
-/// 窓の控えを書く。
+/// 窓の控えを書く（`plain` の照らしで書く）。
 pub fn write_window(ws: &Path, window: &WindowFile) -> Result<(), String> {
     let text = wire::encode(window).map_err(|e| e.to_string())?;
-    std::fs::write(ws.join(WINDOW_FILE), text + "\n").map_err(|e| e.to_string())
+    write_plain(ws, WINDOW_FILE, (text + "\n").as_bytes()).map_err(|e| e.to_string())
 }
 
-/// 作業場の findings/ の所見の id（名が `<所見 id>.json` で窓の id が `window` の物・id の順）。
+/// 作業場の findings/ の所見の id（普通の file で名が `<所見 id>.json` で窓の id が `window` の物・id の順）。
 pub fn findings(ws: &Path, window: WindowId) -> Vec<FindingId> {
-    let mut out: Vec<FindingId> = std::fs::read_dir(ws.join("findings"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| {
-            let name = e.file_name().into_string().ok()?;
-            FindingId::parse(name.strip_suffix(".json")?).ok()
-        })
+    let mut out: Vec<FindingId> = plain_names(ws, "findings")
+        .iter()
+        .filter_map(|name| FindingId::parse(name.strip_suffix(".json")?).ok())
         .filter(|id| id.window() == window)
         .collect();
     out.sort();
     out
 }
 
-/// 作業場の process の印（`.consult/proc-<k>.json` の読める物・k の順）。
+/// 作業場の process の印（`.consult/proc-<k>.json` の普通の file の読める物・k の順）。
 pub fn procs(ws: &Path) -> Vec<ProcMark> {
-    let mut out: Vec<ProcMark> = std::fs::read_dir(ws.join(".consult"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .is_some_and(|n| n.starts_with("proc-") && n.ends_with(".json"))
-        })
-        .filter_map(|e| wire::decode::<ProcMark>(&std::fs::read_to_string(e.path()).ok()?).ok())
+    let mut out: Vec<ProcMark> = plain_names(ws, ".consult")
+        .iter()
+        .filter(|n| n.starts_with("proc-") && n.ends_with(".json"))
+        .filter_map(|n| read_text(ws, &format!(".consult/{n}"), READ_MAX).ok()?)
+        .filter_map(|text| wire::decode::<ProcMark>(&text).ok())
         .collect();
     out.sort_by_key(|p| p.k);
     out
+}
+
+/// 作業場で `plain` の読み書きが断る形の物（`SEAT_DIRS` の dir 自身と、その直下の普通の file でない名）の、作業場からの相対と
+/// 断りの字（dir の順・名の順）。席の口はこれを読まず書かず、黙って飛ばさないよう 1 行ずつ名指す。
+pub fn odd_files(ws: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for dir in SEAT_DIRS {
+        if let Some(why) = odd_dir(ws, dir) {
+            out.push((dir.to_string(), why));
+            continue;
+        }
+        let lone = entries(ws, dir).into_iter().filter(|(_, plain)| !plain);
+        out.extend(lone.map(|(name, _)| (format!("{dir}/{name}"), NOT_PLAIN.to_string())));
+    }
+    out
+}
+
+/// 起草の置き場の窓（退いた窓も）の作業場の `odd_files` の 1 行の字（窓の id の順・一覧は読まずに組み、黙って飛ばさない）。
+pub fn odd_lines(drafts: &Path) -> Vec<String> {
+    windows(drafts)
+        .into_iter()
+        .flat_map(|(id, gone)| {
+            let ws = if gone {
+                retired(drafts, id)
+            } else {
+                workspace(drafts, id)
+            };
+            odd_files(&ws)
+                .into_iter()
+                .map(move |(rel, why)| odd_line(id, &rel, &why))
+        })
+        .collect()
+}
+
+/// `plain` が断った作業場の物の 1 行の字（何を断ったかと次の 1 手）。
+pub fn odd_line(id: WindowId, rel: &str, why: &str) -> String {
+    format!(
+        "窓 {id} の作業場の {rel} を読まず書かない（{why}・窓が置いた symlink か fifo を作業場から除いてから撃ち直す）"
+    )
+}
+
+/// 作業場に `odd_files` の物が在れば、最初の 1 つを名指して断る（rc 1）。
+pub fn plain_ws(ws: &Path, id: WindowId) -> Result<(), Refused> {
+    match odd_files(ws).first() {
+        Some((rel, why)) => Err((FAIL, odd_line(id, rel, why))),
+        None => Ok(()),
+    }
 }
 
 /// process の印の file の path。

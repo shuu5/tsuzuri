@@ -4,6 +4,7 @@
 //! 窓の中で撃つ時（環境の `TZ_CONSULT_ID` が窓の id で cwd が作業場）は台帳の写しを替えない（囲いの中では bd を撃てない）。
 //! 問いは --question の file の字、無くて題が在り question.md が無ければ題（台帳の bead なら題名と本文も）から書く。
 
+use std::io::Read;
 use std::path::Path;
 
 use tsuzuri_contract::board::Reading;
@@ -11,8 +12,10 @@ use tsuzuri_contract::consult::{WindowFile, WindowId};
 use tsuzuri_contract::ledger::{LedgerItem, fnv1a64};
 use tsuzuri_core::consult::launch::{ID_ENV, brief, read_roots};
 
+use super::plain::{open_plain, plain_file, read_text, write_plain};
 use super::{
-    COMMON, FAIL, Refused, UNKNOWN, ctx, flags, ledger, read_window, refuse, tz_path, workspace,
+    COMMON, FAIL, READ_MAX, Refused, UNKNOWN, ctx, flags, ledger, plain_ws, read_window, refuse,
+    tz_path, workspace,
 };
 use crate::out::emit;
 use crate::server::ledger::parse_bd;
@@ -122,10 +125,11 @@ fn bead_text(items: &[LedgerItem], topic: &str) -> Option<String> {
     ))
 }
 
-/// 題から組む問いの字。
-fn topic_question(bundle: &Path, topic: &str) -> String {
-    let items = std::fs::read_to_string(bundle.join("ledger.json"))
+/// 題から組む問いの字（台帳の写しは `plain` の照らしで読む）。
+fn topic_question(ws: &Path, topic: &str) -> String {
+    let items = read_text(ws, "bundle/ledger.json", READ_MAX)
         .ok()
+        .flatten()
         .and_then(|t| match parse_bd(&t) {
             Reading::Known(items) => Some(items),
             Reading::Unknown => None,
@@ -148,9 +152,11 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
             format!("作業場の窓の id が {} で {id} でない", window.id),
         ));
     }
+    plain_ws(ws, id)?;
     let dir = ws.join("bundle");
     let put = |name: &str, text: &str| {
-        std::fs::write(dir.join(name), text).map_err(|e| (FAIL, format!("{name} を書けない: {e}")))
+        write_plain(ws, &format!("bundle/{name}"), text.as_bytes())
+            .map_err(|e| (FAIL, format!("{name} を書けない: {e}")))
     };
     put("brief.md", &brief(&tz_path(), id))?;
     if let Some(text) = &inputs.ledger {
@@ -166,8 +172,8 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
                 .map_err(|e| (FAIL, format!("問いの file {file} が読めない: {e}")))?;
             put("question.md", &text)?;
         }
-        (None, Some(t)) if inputs.topic.is_some() || !dir.join("question.md").exists() => {
-            put("question.md", &topic_question(&dir, t))?;
+        (None, Some(t)) if inputs.topic.is_some() || !plain_file(ws, "bundle/question.md") => {
+            put("question.md", &topic_question(ws, t))?;
         }
         _ => {}
     }
@@ -176,11 +182,15 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
     Ok(digest)
 }
 
-/// 束の要約値（`FILES` の在る file の名と字を順に FNV-1a 64 に通した 16 進の 16 字）。
+/// 束の要約値（`FILES` の在る普通の file の名と字を順に FNV-1a 64 に通した 16 進の 16 字・`plain` の照らしで読む）。
 pub fn digest(dir: &Path) -> String {
     let mut bytes = Vec::new();
     for name in FILES {
-        if let Ok(text) = std::fs::read(dir.join(name)) {
+        let read = open_plain(dir, name).and_then(|(mut file, _)| {
+            let mut text = Vec::new();
+            file.read_to_end(&mut text).map(|_| text)
+        });
+        if let Ok(text) = read {
             bytes.extend_from_slice(name.as_bytes());
             bytes.push(0);
             bytes.extend_from_slice(&text);

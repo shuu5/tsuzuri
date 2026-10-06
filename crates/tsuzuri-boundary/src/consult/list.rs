@@ -19,11 +19,12 @@ use tsuzuri_core::account::project::account_label;
 use tsuzuri_core::consult::lines::{Line, Subject, unreceived};
 use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, count};
 
+use super::plain::read_text;
 use super::{
-    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, procs,
-    read_window, refuse, retired, windows, workspace,
+    COMMON, Ctx, FAIL, READ_MAX, ctx, findings, flags, ledger, lines_of, live, minute_now,
+    odd_lines, procs, read_window, refuse, retired, windows, workspace,
 };
-use crate::out::emit;
+use crate::out::{emit, emit_err};
 use crate::server::clock::epoch_secs;
 
 /// tz consult list の残りの引数を受けて終了 code を返す。
@@ -35,6 +36,9 @@ pub fn run(rest: &[&str]) -> u8 {
         let c = ctx(&f)?;
         let (_, items) = ledger(&c)?;
         let b = board(&c, &lines_of(&items), &minute_now());
+        for line in odd_lines(&c.drafts) {
+            emit_err(&format!("tz consult list: {line}"));
+        }
         if f.has("--json") {
             return wire::encode(&b)
                 .map(|t| vec![t])
@@ -146,8 +150,9 @@ fn rows(c: &Ctx, lines: &[Line]) -> (Vec<WindowRow>, Vec<FindingRow>) {
 
 /// 処分の無い所見の 1 行（所見の file が読めなければ題と届いた時刻は None）。
 fn finding_row(ws: &Path, id: tsuzuri_contract::consult::FindingId, lines: &[Line]) -> FindingRow {
-    let read: Option<Finding> = std::fs::read_to_string(ws.join(format!("findings/{id}.json")))
+    let read: Option<Finding> = read_text(ws, &format!("findings/{id}.json"), READ_MAX)
         .ok()
+        .flatten()
         .and_then(|t| wire::decode(&t).ok());
     FindingRow {
         id,

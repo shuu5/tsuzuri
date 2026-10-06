@@ -18,7 +18,7 @@ use super::dispose::retire;
 use super::launch::TMUX;
 use super::{
     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, append, ctx, findings, flags, ledger, lines_of,
-    minute_now, procs, read_window, refuse, workspace,
+    minute_now, odd_files, odd_line, procs, read_window, refuse, workspace,
 };
 use crate::out::{emit, emit_err};
 use crate::server::ledger::capture;
@@ -84,6 +84,9 @@ fn close(c: &Ctx, id: WindowId, by: Starter) -> Result<Vec<String>, Refused> {
         FAIL,
         format!("窓 {id} の作業場が無い（退いた窓か知らない窓）"),
     ))?;
+    for (rel, why) in odd_files(&ws) {
+        emit_err(&format!("tz consult close: {}", odd_line(id, &rel, &why)));
+    }
     let (_, items) = ledger(c)?;
     let mut lines = lines_of(&items);
     if lines

@@ -37,12 +37,12 @@ use tsuzuri_core::consult::resume::pick;
 use tsuzuri_core::consult::stamp::{last_sid, lines};
 
 use super::follow;
-use super::plain::{plain_path, same_file};
+use super::plain::{create_plain, odd_dir, plain_file, plain_path, same_file, write_plain};
 use super::stamp::STAMPS;
 use super::trust::place_trust;
 use super::{
     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
-    lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
+    lines_of, live, minute_now, plain_ws, procs, read_window, refuse, tz_path, tzw, windows,
     workspace,
 };
 use crate::out::{emit, emit_err};
@@ -141,7 +141,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
         uid: uid.to_string(),
         model: w.model.clone(),
         effort: w.effort.clone(),
-        question: ws.join("bundle/question.md").is_file(),
+        question: plain_file(ws, "bundle/question.md"),
         resume: None,
     })
 }
@@ -251,12 +251,25 @@ fn record(
     append(c, items, None, &line).map(|_| ())
 }
 
+/// 窓の控えと会話の印の最後の会話の id（会話の印と控えの dir の断りは会話の印の読みの字・rc 2 で先に出し、残りの symlink と
+/// fifo は `plain_ws` の 1 行・rc 1）。
+fn window_and_last(ws: &Path, id: WindowId) -> Result<(WindowFile, Option<String>), Refused> {
+    let w = read_window(ws);
+    let last = if w.is_some() || odd_dir(ws, ".consult").is_some() {
+        last_conversation(ws)?
+    } else {
+        None
+    };
+    plain_ws(ws, id)?;
+    let w = w.ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
+    Ok((w, last))
+}
+
 /// 起こす（版の照らしの後）。
 pub fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
     let again = shot.again;
     let ws = workspace(&c.drafts, id);
-    let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
-    let last = last_conversation(&ws)?;
+    let (w, last) = window_and_last(&ws, id)?;
     let resume = pick(w.form, again, last.as_deref(), shot.session)
         .map_err(|why| (FAIL, why.to_string()))?;
     let mut l = material(c, &ws, &w)?;
@@ -349,8 +362,12 @@ fn start(
         account: std::env::var(ACCOUNT_ENV).ok(),
     };
     let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
-    fs::write(proc_path(ws, k), text + "\n")
-        .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
+    write_plain(
+        ws,
+        &format!(".consult/proc-{k}.json"),
+        (text + "\n").as_bytes(),
+    )
+    .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
     Ok(Started { before, child })
 }
 
@@ -432,7 +449,7 @@ fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused
 /// 問う窓を席の子として起こす（標準出力は `.consult/ask-<k>.json`・標準エラーは `.consult/ask-<k>.err`）。
 fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::Child, Refused> {
     let file = |ext: &str| {
-        File::create(ws.join(format!(".consult/ask-{k}.{ext}")))
+        create_plain(ws, &format!(".consult/ask-{k}.{ext}"))
             .map_err(|e| (UNKNOWN, format!("ask-{k}.{ext} を作れない: {e}")))
     };
     let mut cmd = Command::new(PROGRAM);

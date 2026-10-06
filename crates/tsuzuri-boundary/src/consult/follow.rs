@@ -20,8 +20,8 @@ use super::launch::{ACCOUNT_ENV, Shot, TMUX, last_conversation, launch, read_sta
 use super::plain::append_plain;
 use super::trust::place_trust;
 use super::{
-    Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, alive, ledger, lines_of, procs, read_window, tzw,
-    workspace,
+    Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, alive, ledger, lines_of, plain_ws, procs,
+    read_window, tzw, workspace,
 };
 use crate::out::emit;
 use crate::server::ledger::capture;
@@ -112,6 +112,7 @@ fn close_old(ws: &Path, id: WindowId, mark: &ProcMark, tmux_window: &str) -> Res
 /// 付いて来させる（版の照らしの後）。
 pub fn follow(c: &Ctx, id: WindowId, session: Option<&str>, wait: Duration) -> Result<(), Refused> {
     let ws = workspace(&c.drafts, id);
+    plain_ws(&ws, id)?;
     let mark = live_talk(c, id, &ws)?;
     let account = std::env::var(ACCOUNT_ENV).map_err(|_| {
         let why = format!("席の環境に {ACCOUNT_ENV} が無い（付いてくる先の口座が分からない）");

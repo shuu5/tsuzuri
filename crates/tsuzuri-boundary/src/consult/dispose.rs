@@ -12,10 +12,11 @@ use std::path::{Path, PathBuf};
 use tsuzuri_contract::consult::{FindingId, Verdict, WindowId, Word, kept_path};
 use tsuzuri_core::consult::lines::{Line, Subject, render};
 
+use super::plain::open_plain;
 use super::show::{read_finding, topic_of};
 use super::{
     COMMON, Ctx, FAIL, Refused, UNKNOWN, append, ctx, findings, flags, ledger, lines_of,
-    minute_now, refuse, retired, workspace,
+    minute_now, odd_line, refuse, retired, workspace,
 };
 use crate::out::emit;
 
@@ -138,13 +139,25 @@ fn copy_kept(
     if let Some(there) = rels.iter().find(|r| into.join(r).exists()) {
         return Err((FAIL, format!("写し先 {there} がもう在る（上書きしない）")));
     }
-    for (p, rel) in keep.iter().zip(&rels) {
+    let mut sources = Vec::new();
+    for p in keep {
+        match open_plain(ws, p) {
+            Ok((file, _)) => sources.push(file),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err((UNKNOWN, format!("{p} を写せない: {e}")));
+            }
+            Err(e) => return Err((FAIL, odd_line(id.window(), p, &e.to_string()))),
+        }
+    }
+    for ((mut from, p), rel) in sources.into_iter().zip(keep).zip(&rels) {
         let to = into.join(rel);
         if let Some(dir) = to.parent() {
             fs::create_dir_all(dir)
                 .map_err(|e| (UNKNOWN, format!("{rel} の dir を作れない: {e}")))?;
         }
-        fs::copy(ws.join(p), &to).map_err(|e| (UNKNOWN, format!("{p} を写せない: {e}")))?;
+        fs::File::create(&to)
+            .and_then(|mut file| std::io::copy(&mut from, &mut file))
+            .map_err(|e| (UNKNOWN, format!("{p} を写せない: {e}")))?;
     }
     Ok(rels)
 }

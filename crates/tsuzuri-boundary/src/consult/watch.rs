@@ -26,8 +26,8 @@ use super::follow::{held_rel, stamped_idle};
 use super::launch::ACCOUNT_ENV;
 use super::plain::plain_file;
 use super::{
-    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now, procs,
-    read_window, refuse, tzw, windows, workspace,
+    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now,
+    odd_lines, procs, read_window, refuse, tzw, windows, workspace,
 };
 use crate::out::{emit, emit_err};
 use crate::server::ledger::{Mark, Source};
@@ -113,7 +113,14 @@ fn watch(c: &Ctx, max: Duration) -> Result<String, Refused> {
         || fs::write(&path, &text).map_err(|e| (FAIL, format!("生きている印を書けない: {e}")));
     put()?;
     let (start, mut touched) = (Instant::now(), Instant::now());
+    let mut named = Vec::new();
     let found = loop {
+        for line in odd_lines(&c.drafts) {
+            if !named.contains(&line) {
+                emit_err(&format!("tz consult watch: {line}"));
+                named.push(line);
+            }
+        }
         if let Some(event) = scan(c, &lines) {
             tell(&c.drafts, &event);
             break notice(&event, &tzw());
