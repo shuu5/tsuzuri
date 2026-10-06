@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29d
   title: 第 29 波 d — 器を書く便の同時 1 本の床を外す行（判断の記録 ADR-64）・係の effort の撃ち比べ・host の負荷を board に出す・書き込みの検出線の器の行・ノート surface-wave29c の続き
-  version: v0.29
+  version: v0.30
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -16,7 +16,7 @@ meta:
     - {who: 持ち主, date: 2026-10-05, ruling: "t3-hub.89.18（裁定 id = t3-hub.89.18:20261005T2354Z-1・notes に逐語）〔行 v-gate-carry の承認〕", verbatim: "推奨でよい", surface: R-8}
     - {who: 持ち主, date: 2026-10-05, ruling: "t3-hub.89.18（裁定 id = t3-hub.89.18:20261005T2354Z-1・notes に逐語）〔行 v-window-cas の承認〕", verbatim: "推奨でよい", surface: R-8}
     - {who: 持ち主, date: 2026-10-05, ruling: "t3-hub.90.2（裁定 id = t3-hub.90.2:20261005T2257Z-1・甲・配達の口・notes に逐語）〔行 v-close-host の拠り〕", verbatim: "推奨で良い というかもしかしてprivateならそもそもCI自体なくてもいいのでは？被ってるんでしょ？", surface: R-8}
-  note: ノート surface-wave29c（契約表の行 32・規則の行 R-32 の上限）の続きで、生きたノートの上限（規則の行 R-31）のため、31 行の全部が着地したノート surface-wave29b を同じ commit で廃止した。承認は 4 つの問いの持ち主の裁定（承認の列・逐語は台帳の問いの notes の字）。第 0.1 版（2026-10-05）は、目的の節と、判断の記録 ADR-64 の行 t-run-cap-off（器への宣言から床の 2 つの鍵とその注を外し、名乗りの行 t-run-cap-on の歯の file を外す・試作と噛みは係 w254a・検証役 qv66 の攻めを映した直しと差の切り直しと床は係 w258a・差の file の形）を置いた。 第 0.2 版（2026-10-05）は、台帳の問い t3-hub.87.37 の裁定（案 1）の行 ag-effort-high（起草係の型 plugin/agents/drafter.md の頭に考える量の段の欄 effort を値 high で足す・調べ役と検証役の型は替えない・次の起草 2〜3 本を xhigh の行と比べ、質が落ちたら戻す行で戻す・新しい段の file tests/ageff.rs・試作と噛みと床は係 w255a・差の file の形）を足した。 第 0.7 版（2026-10-05）は、行 h-host-core の便 t3-hub.77.29 の審査の FAIL（over が負荷を cpu の数で割って切り捨て、core 比 1.00〜1.01 を越えないと判じた）を受け、over を割らない比べに直した差に置き換え、done の 5 つ目の項の縁の値と節 5 と節 6 の在りかを合わせた（試作と噛みと床は係 w262a）。 第 0.10 版（2026-10-05）は、台帳の問い t3-hub.77.28 の裁定（案 1）の器の行 v-wear-key（器の host の面の表 [[write-budget]] に任意の key wear を受け、相対と空の字と空白を含む path を断る・器の e2e の歯 vwear_・試作と噛みと床は係 w260a・差の file の形）を足した。 第 0.13 版（2026-10-05）は、台帳の問い t3-hub.90.2 の裁定（甲）の器の行 v-close-host（器の land の終端の札をこの host の緑で閉じ、GitHub の検査は close の後の子 process の口 pipe land --ci-only が後から読み、赤は席へ知らせる・試作は係 w263a・差の file の形）を足した。 第 0.14 版（2026-10-06）は、行 v-gate-carry の差の file の doc の字 3 つを直した（便 t3-hub.89.19 の契約審査の INCONCLUSIVE・spawn.rs の ROW_END_GATE_ROUNDS の doc は §66 形 10 のまま・record.rs の口と値の数の doc を 3 に・行の欄は替えない）。 第 0.15 版（2026-10-06）は、行 v-gate-carry の verify の 5 行目（filter の語 4 つ）を 1 語ずつの 5〜8 行目に割り、done-teeth の 6 つ目の項を @5〜@8 にした（器の審査の表の読みは filter の語を最後の 1 つだけ読むので、便 t3-hub.89.19 の契約審査が 2 度 INCONCLUSIVE になった・差の file と write-set は替えない）。 第 0.16 版（2026-10-05）は、宣言の行 t-scope-xtask（器の面に設計の 3 つの dir の外の根の項目を全部入れる（行 t-scope-on の値を広げる・差の file）・試作と噛みと床は係 w267a）を足した。 第 0.17 版（2026-10-06）は、行 v-gate-carry の節の在りかの差の file の byte と行の数を、第 0.14 版で置き換えた差の file の現物（37,536 byte・8 file・+268 −23）に合わせた（便 t3-hub.89.19 の契約審査が literal-mismatch で FAIL・差の file と行の欄は替えない）。 第 0.19 版（2026-10-06）は、memo t3-hub.86 の行 cs-plain-rest（作業場の残りの読み書きを consult::plain へ移す・symlink と fifo を見た口は 1 行で断る・試作と噛みは係 w271a・差の file の形）を足した。 第 0.25 版（2026-10-06）は、判断の記録 ADR-63 の決定 (7) の乙' の器の行 v-review-quality（契約の審査が質の 5 観点を数えて review.json に写し判定は動かさない・gate は質を数えない・memo の口の質の原本を review.json へ・測りは係 w276a で対の差の中央 −21,629・試作と噛みは係 w276a・載せ替えと床は係 w284a・差の file の形）を足した。 第 0.29 版（2026-10-06）は、memo t3-hub.87.32 の器の行 v-index-paths（器の code の索引の表の path を木からの相対に揃え、器の workspace を索引に入れる・索引の子の組みの置き場を木の下に固定し箱を 2 job 分にする・試作と噛みと床は係 w285a・差の file の形）を足した。
+  note: ノート surface-wave29c（契約表の行 32・規則の行 R-32 の上限）の続きで、生きたノートの上限（規則の行 R-31）のため、31 行の全部が着地したノート surface-wave29b を同じ commit で廃止した。承認は 4 つの問いの持ち主の裁定（承認の列・逐語は台帳の問いの notes の字）。第 0.1 版（2026-10-05）は、目的の節と、判断の記録 ADR-64 の行 t-run-cap-off（器への宣言から床の 2 つの鍵とその注を外し、名乗りの行 t-run-cap-on の歯の file を外す・試作と噛みは係 w254a・検証役 qv66 の攻めを映した直しと差の切り直しと床は係 w258a・差の file の形）を置いた。 第 0.2 版（2026-10-05）は、台帳の問い t3-hub.87.37 の裁定（案 1）の行 ag-effort-high（起草係の型 plugin/agents/drafter.md の頭に考える量の段の欄 effort を値 high で足す・調べ役と検証役の型は替えない・次の起草 2〜3 本を xhigh の行と比べ、質が落ちたら戻す行で戻す・新しい段の file tests/ageff.rs・試作と噛みと床は係 w255a・差の file の形）を足した。 第 0.7 版（2026-10-05）は、行 h-host-core の便 t3-hub.77.29 の審査の FAIL（over が負荷を cpu の数で割って切り捨て、core 比 1.00〜1.01 を越えないと判じた）を受け、over を割らない比べに直した差に置き換え、done の 5 つ目の項の縁の値と節 5 と節 6 の在りかを合わせた（試作と噛みと床は係 w262a）。 第 0.10 版（2026-10-05）は、台帳の問い t3-hub.77.28 の裁定（案 1）の器の行 v-wear-key（器の host の面の表 [[write-budget]] に任意の key wear を受け、相対と空の字と空白を含む path を断る・器の e2e の歯 vwear_・試作と噛みと床は係 w260a・差の file の形）を足した。 第 0.13 版（2026-10-05）は、台帳の問い t3-hub.90.2 の裁定（甲）の器の行 v-close-host（器の land の終端の札をこの host の緑で閉じ、GitHub の検査は close の後の子 process の口 pipe land --ci-only が後から読み、赤は席へ知らせる・試作は係 w263a・差の file の形）を足した。 第 0.14 版（2026-10-06）は、行 v-gate-carry の差の file の doc の字 3 つを直した（便 t3-hub.89.19 の契約審査の INCONCLUSIVE・spawn.rs の ROW_END_GATE_ROUNDS の doc は §66 形 10 のまま・record.rs の口と値の数の doc を 3 に・行の欄は替えない）。 第 0.15 版（2026-10-06）は、行 v-gate-carry の verify の 5 行目（filter の語 4 つ）を 1 語ずつの 5〜8 行目に割り、done-teeth の 6 つ目の項を @5〜@8 にした（器の審査の表の読みは filter の語を最後の 1 つだけ読むので、便 t3-hub.89.19 の契約審査が 2 度 INCONCLUSIVE になった・差の file と write-set は替えない）。 第 0.16 版（2026-10-05）は、宣言の行 t-scope-xtask（器の面に設計の 3 つの dir の外の根の項目を全部入れる（行 t-scope-on の値を広げる・差の file）・試作と噛みと床は係 w267a）を足した。 第 0.17 版（2026-10-06）は、行 v-gate-carry の節の在りかの差の file の byte と行の数を、第 0.14 版で置き換えた差の file の現物（37,536 byte・8 file・+268 −23）に合わせた（便 t3-hub.89.19 の契約審査が literal-mismatch で FAIL・差の file と行の欄は替えない）。 第 0.19 版（2026-10-06）は、memo t3-hub.86 の行 cs-plain-rest（作業場の残りの読み書きを consult::plain へ移す・symlink と fifo を見た口は 1 行で断る・試作と噛みは係 w271a・差の file の形）を足した。 第 0.25 版（2026-10-06）は、判断の記録 ADR-63 の決定 (7) の乙' の器の行 v-review-quality（契約の審査が質の 5 観点を数えて review.json に写し判定は動かさない・gate は質を数えない・memo の口の質の原本を review.json へ・測りは係 w276a で対の差の中央 −21,629・試作と噛みは係 w276a・載せ替えと床は係 w284a・差の file の形）を足した。 第 0.29 版（2026-10-06）は、memo t3-hub.87.32 の器の行 v-index-paths（器の code の索引の表の path を木からの相対に揃え、器の workspace を索引に入れる・索引の子の組みの置き場を木の下に固定し箱を 2 job 分にする・試作と噛みと床は係 w285a・差の file の形）を足した。 第 0.30 版（2026-10-06）は、memo t3-hub.74.49.10 の tsuzuri の行 t-kcap-gone（task kfold-cap の段の歯 kcap_ の助け shot が撃った後に toy の木を消し、/tmp に歯ごとの dir を残さない・器の 3 つの助けは行 v-scratch-held で済み・試作と噛みと床は係 w289a・差の file の形）を足した。
 
 sections:
   - n: 1
@@ -266,6 +266,17 @@ sections:
         done: (1) git apply --reverse --check docs/design/patch/v-index-paths.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 木の下の絶対 path の役の一致は相対の一致と同じに結ばれて表の字が等しく、木の外の絶対 path（字の頭だけが木と同じ兄弟の dir と別の dir）の一致は結ばれず一致の無い表と等しい（歯 pipe_index_paths_absolute_role_files_join_like_relative_ones） (3) project_root が木の下の dir sub の SCIP は document の path に頭 sub を付けて表に載り、project_root が木そのものの SCIP は頭なしで載る（歯 pipe_index_paths_scip_of_a_subdir_lands_with_its_head） (4) project_root が木そのもの・字の頭だけが木と同じ兄弟の dir・別の dir・URI の印 file の無い字の SCIP は document の path を今のまま載せ、表は根の fixture の表と等しい（歯 pipe_index_paths_project_root_outside_the_tree_keeps_the_paths） (5) 索引の子の env の CARGO_TARGET_DIR は、親の env に在っても無くても子ごとに木の下の target になる（歯 pipe_index_paths_children_build_in_the_tree_target） (6) 索引の子の箱の MemoryMax は子ごとに rules 行 gate.job_memory_mb の 2 倍（歯 pipe_index_paths_children_box_holds_two_jobs_of_memory） (7) 捕えた名が改行・タブ・復帰を含む借りの役の一致は字だけの行にならず表はその一致の無い表と等しく、改行の無い同じ名の一致は字だけの行を 1 行足す（歯 pipe_index_paths_names_with_line_breaks_leave_no_text_row） (8) 根の宣言 .vessel.toml の index-scip は器の宣言の command と、その穴 {tree} を {tree}/scribe2 に替えた 2 本目を 1 行で名乗り、2 本目を外す・頭の dir の字を替える・穴を外す見本を断る（歯 ixon_root_declaration_names_both_index_lines_once・ixon_lines_follow_the_vessel_declaration・ixon_one_clause_changes_are_refused）
         done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@3", "8:@6"]
         depends: ["t-index-on"]
+      - id: t-kcap-gone
+        title: task kfold-cap の段の歯 kcap_ が一時の dir の下に作る toy の木を、助け shot が撃った後で断言の前に消し、/tmp に歯ごとの dir を残さない（器の held と同じ働きを xtask に在る撃った後の remove_dir_all の形で持つ・memo t3-hub.74.49.10・差の file）
+        req: ["NFR1006"]
+        section: "24"
+        patch: docs/design/patch/t-kcap-gone.patch
+        write-set: ["xtask/tests/kcap.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/t-kcap-gone.patch", "cargo clippy -p xtask --all-targets --no-deps -- -D warnings", "cargo nextest run -p xtask --test kcap --no-tests=fail kcap_"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/t-kcap-gone.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 段の歯 kcap_ の助け shot が一時の dir の下に作る toy の木は、撃つ間は在って群 a/tests/g2 を名指した撃ちが rc 1 を返し、shot が返った後は木の置き場（字 tag gone と pid の名）が無い（歯 kcap_toy_is_gone_after_the_shot）
+        done-teeth: ["1:@1", "2:@3"]
+        depends: []
   - n: 3
     type: prose
     title: 行 t-run-cap-off — 器への宣言から器を書く便の同時 1 本の床を外す（判断の記録 ADR-64 の決定 (2)(3)）
@@ -657,3 +668,22 @@ sections:
       器の SRS。FR107 の response の「出力を器自身の読み手で読んで 1 行 1 場所の表にして」に「（表の path は木からの相対に揃える）」の句を足すのが筋だが、srs.html は folio の generator が組むので、この行では書かず、器の次の SRS の round に渡す。
 
       範囲の外。審査の材料 index.txt を組む道（便の HEAD の索引を読むだけ）と、tsuzuri の行の touches（show --row の項目が 0 個）は替えない。役の規則の file の doclink が doc の行を丸ごと捕える形も替えない（この行は表を崩さない所までを直す）。project_root の URI の escape の字は読まない（state dir の path が escape の要る字を持つ置き場では頭が付かない・§13）。
+  - n: 24
+    type: prose
+    title: 行 t-kcap-gone — task kfold-cap の歯 kcap_ が一時の dir の下に作る toy の木を、撃った後に消す（memo t3-hub.74.49.10・差の file）
+    body: |
+      在りか。差の file docs/design/patch/t-kcap-gone.patch（7,025 byte）は、main e909376b と、その上の試作の commit 99faca7c（写しは drafts の try-w289a の branch w289a・係 w289a）の差（1 file・+48 −25）。
+
+      なぜ。tsuzuri の xtask の段の歯 xtask/tests/kcap.rs の助け toy は、一時の dir（std::env::temp_dir）の下に名 tsuzuri-kcap-（字 tag）-（pid）の木を作り、歯の後に消さない。nextest は歯 1 本を 1 つの process で撃つので pid が毎回替わり、行の verify の 3 行目を 1 回撃つごとに木が 10 本残る（main の歯で 10 本・試作の歯で 0 本・係 w289a の測り）。2026-10-06T04:08Z に /tmp の直下の名 tsuzuri-kcap- の dir は 2,630 本で、全部が行 v-scratch-held の着地（f6771a8c・2026-10-05T04:57Z）の後の mtime を持つ。同じ数えで、器の 3 つの助けの名（pipe-mutant- と account-consumers- と account-stage-）の dir のうち着地の後の mtime を持つ物は 0 本で、今在る約 59 万本は着地の前の残りである。memo t3-hub.74.49.10 の 2026-10-06 の観測が挙げた 4 つの作る所のうち、器の 3 つ（account/consumers.rs と account/mod.rs の scratch・pipe/mod.rs の fixture の scratch）は v-scratch-held が既に held に預けているので、この行は kcap.rs の 1 つだけを持つ。
+
+      形。助け place が木の置き場（一時の dir の下・名に pid と字 tag）を返し、toy はそこに木を作る。助け run を助け shot（字 tag・群の行の字・名指し）に替え、shot は toy で木を作って task の本体 kcap::run を撃ち、出力を返す前に木を std::fs::remove_dir_all で消す。歯の断言は shot が返した出力に対して撃つので、断言が落ちた周も木は先に消えている（同じ xtask の段の歯 mdid.rs の歯が、数えた後で断言の前に toy の木を消す形と同じ）。file の中で toy を呼ぶのは shot だけになる。着地済みの歯は、木を作る行と撃つ行の 2 行を shot の 1 行に替えるだけで、rc と出力の断言の字は替えない。歯 kcap_refuses_non_group_and_empty_names は 1 つの木で 2 度撃っていたのを、同じ字 tag の木を 2 度作って 1 度ずつ撃つ形にする（2 度とも同じ toy の木の中身で撃つので断言は同じ）。file の頭の doc の 4 行目に、撃った後に toy の木が一時の dir に残らないことを測る句を足す。
+
+      guard の型を足さない訳（決定はしご・条 P-27.1）。器の held（pipe の fixture の thread_local の包み）は器の crate の cfg(test) の中に在り、tsuzuri の xtask の歯から使えない。tsuzuri に在る drop の包み（tsuzuri-boundary の歯の群の Tidy・xtask の歯の群 teeth1 の vdaily.rs の Fx）は別の歯の binary の群の module の中の型で、段の歯の file から名指して使う口が無い。xtask の歯の後片付けは、撃った後に remove_dir_all を 1 行で撃つ形が既に在る（段の歯 mdid.rs・群 teeth1 の vcij.rs と vskip.rs・src の nested.rs と pubscan.rs の歯）ので、その形に寄せる（はしごの既に在るかと 1 行で書けるかの段）。
+
+      実装の約束。便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      done と verify の対応。1 つ目の項は verify の 1 行目、2 つ目の項は 3 行目（歯 kcap_toy_is_gone_after_the_shot）が測る。2 行目の clippy と、3 行目が一緒に撃つ着地済みの歯 kcap_ は done に載せない守り。
+
+      歯と噛み。歯 kcap_toy_is_gone_after_the_shot は、字 tag gone の木の置き場を place で先に求め、shot で群 a/tests/g2 を名指して撃ち、rc 1（名指した群の越え・木が在る間に撃った証し）と、shot が返った後に置き場が無いことを断言する。噛みは試作の commit の上で句ごとに 1 つの変異を shot に当て、verify の 3 行目を撃って、名指しの歯が 3 つの変異のどれでも rc 100 で落ち、log の panicked の次の行がその句の断言の字だった（片付けの行を外す変異と木の一部 a だけを消す変異は撃った後は無いの断言・撃つ前に消す変異は木が在る間に撃ったの断言・表は係 w289a の bite-w289a.tsv）。
+
+      範囲の外。task の本体 xtask/src/kcap.rs が panic した周は木が残る（本体は誤りを rc 2 の字で返し、panic は歯の断言の外）。撃つたびに一時の dir を残すほかの助け（tsuzuri-boundary の src/server/events.rs と tests/hapi.rs と tests/kcode.rs・folio2 の tests/tz2/figure.rs・器の e2e の木）は、この行で直さない（memo t3-hub.74.49.10 に残す・数は係 w289a の notes）。今在る /tmp の dir は消さない（消すのは持ち主の手）。
