@@ -268,6 +268,10 @@ sections:
       - {id: t-prose-bead, doc: surface-v4a}
       - {id: t-plan-cap, doc: surface-v4a}
       - {id: t-code-bead, doc: surface-v4a}
+      - {id: v-bead-reads, doc: surface-v4a}
+      - {id: v-bead-precheck, doc: surface-v4a}
+      - {id: v-bead-reads-b, doc: surface-v4a}
+      - {id: v-bead-trailer, doc: surface-v4a}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
