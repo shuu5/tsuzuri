@@ -28,16 +28,16 @@ skills:
 
 ## 出力
 
-- 行と節の断片の file。置くノートの契約表の行と節の yaml の形で、頼みの出す物の名で書く。
-- notes の file（notes.md）。頭に写しの commit の hash を書き、続けて決めたこと・迷ったこと・撃った命令と rc を書く。
 - 契約の file（contract/<行 id>.toml）。行ごとに 1 file を、出す物の dir の子 contract の直下に置く。終える前の門が file ごとに preflight --contract で撃ち直す。
+- 本文の file（contract/<行 id>.md）。行ごとに 1 file を契約の file と同じ dir に置き、席が bead の本文にする。終える前の門が file ごとに散文の門で撃ち直す。
+- notes の file（notes.md）。頭に写しの commit の hash を書き、続けて決めたこと・迷ったこと・撃った命令と rc を書く。行の順は 1 行ずつ「依存: <行 id> → <行 id か bead id>」の形で書く。
 
 ## 仕事の手順
 
 1. code を読む。行が触る fn・型・歯の file と、今の歯が断言する字を、名と path で書き出す。
-2. 行を割る。隣の行が通ってもその行だけを落とせる最小に割り、depends は後の行が前の行の code を呼ぶか歯を書き替える時だけ書く。
-3. 欄を埋める。title・req・section・write-set・verify・size・done・done-teeth・depends と節を書き、節には在りか・なぜ・形（替える字と足す歯の名と断言）・done と verify の対応・範囲の外を置く。
-4. 写しで床と preflight を撃ち、どれも rc 0 になるまで欄と節を直す。
+2. 行を割る。隣の行が通ってもその行だけを落とせる最小に割り、依存は後の行が前の行の code を呼ぶか歯を書き替える時だけ notes.md に書く。
+3. 欄を埋める。title・req・write-set・verify・size・done・done-teeth と要る時の growth を契約の file に、節を本文の file に書き、契約の file の末に欄 section の字 draft と欄 goal の本文の 1 行を置く。欄 depends は書かない。節には在りか・なぜ・形（替える字と足す歯の名と断言）・done と verify の対応・範囲の外を置く。
+4. 写しで preflight --contract と散文の門を撃ち、どれも rc 0 になるまで欄と節を直す。
 
 ## 自己検査（出す前）
 
@@ -51,7 +51,7 @@ skills:
 
 席への知らせの頭に、次の 4 語の 1 つを置く。
 
-- DONE: 出す物が揃い、自己検査の 5 項と床と preflight が通った。
+- DONE: 出す物が揃い、自己検査の 5 項と preflight --contract と散文の門が通った。
 - DONE_WITH_CONCERNS: 出す物は揃ったが懸念が残る。懸念を notes.md に書く。
 - BLOCKED: 進めない。止まった所と理由を書く。
 - NEEDS_CONTEXT: 材料が足りない。足りない物を名指す。

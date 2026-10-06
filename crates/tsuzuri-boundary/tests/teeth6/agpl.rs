@@ -1,4 +1,4 @@
-//! 係の型と規律の手引きと門の設定の歯（接頭辞 agpl_・設計ノート surface-wave29b 行 ag-plugin・判断の記録 ADR-59 決定 (1)(2)(5)(6)・ADR-61 決定 (4)(9)・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 決定 (3)）。
+//! 係の型と規律の手引きと門の設定の歯（接頭辞 agpl_・設計ノート surface-wave29b 行 ag-plugin・判断の記録 ADR-59 決定 (1)(2)(5)(6)・ADR-61 決定 (4)(9)・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 決定 (3)・契約の bead 行 ag-bead-draft・判断の記録 ADR-74 決定 (1)(6)）。
 //! workspace の根の plugin/ の file を読むだけで、tz も器も撃たない。hooks.json は stage の json で読み、口の名は境界の hook の
 //! USAGE の字から、型と頭の行は中核の agent の spec の定数から組む。否定の見本は今の file から句を 1 つだけ崩して作る。
 #![cfg(test)]
@@ -51,7 +51,7 @@ const VESSEL_GATE: &str = "（器の門 ";
 const GROUP_HOLE: &str = "<群 id> <i>/<k>";
 
 /// 設計係の型の file が字の中にちょうど 1 度ずつ持つ句の名と字。
-const DESIGNER: [(&str, &str); 20] = [
+const DESIGNER: [(&str, &str); 21] = [
     (
         "description",
         "description: tsuzuri の設計の席が、契約の行と節と判断の記録の下書きを設計だけで書かせる時に使う。",
@@ -59,12 +59,12 @@ const DESIGNER: [(&str, &str); 20] = [
     ("role", "あなたは tsuzuri の設計の席が起こした設計係である"),
     ("code-by-runner", "code と歯は便の実装役が書く"),
     ("input-code", "code の現物"),
-    ("output-rows", "行と節の断片の file"),
+    ("output-body", "本文の file（contract/<行 id>.md）"),
     ("output-notes", "notes の file（notes.md）"),
     ("read-code", "1. code を読む。"),
     ("split", "2. 行を割る。"),
     ("fill", "3. 欄を埋める。"),
-    ("floor", "4. 写しで床と preflight を撃ち"),
+    ("floor", "4. 写しで preflight --contract と散文の門を撃ち"),
     ("coverage", "1. 要件の網羅。"),
     ("decided", "2. 何も決めない欄が無い。"),
     ("measured", "3. done の各項に歯か verify の行。"),
@@ -75,14 +75,19 @@ const DESIGNER: [(&str, &str); 20] = [
     ("blocked", "- BLOCKED: "),
     ("context", "- NEEDS_CONTEXT: "),
     ("refused", "断りの字をそのまま席に知らせる"),
+    ("depends-notes", "依存: <行 id> → <行 id か bead id>"),
 ];
 
 /// 設計係の型の file が持たない古い語の名と字（実装と道具の手順の語）。
-const OLD_WORDS: [(&str, &str); 4] = [
+const OLD_WORDS: [(&str, &str); 8] = [
     ("patch", "差の file"),
     ("bite", "噛み"),
     ("apply-script", "適用の script"),
     ("prototype", "試作"),
+    ("note-fragment", "行と節の断片"),
+    ("note-table", "置くノートの契約表"),
+    ("section-field", "req・section・"),
+    ("depends-field", "done-teeth・depends"),
 ];
 
 type Mouth =(String, Option<String>, String, Option<u64>);
@@ -483,7 +488,7 @@ fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
     );
 }
 
-/// (6) 起草係の型の file は、頭の欄 effort が high の 1 つで、字の中に設計係の句の表の 20 句をどれもちょうど 1 度ずつ持ち、
+/// (6) 起草係の型の file は、頭の欄 effort が high の 1 つで、字の中に設計係の句の表の 21 句をどれもちょうど 1 度ずつ持ち、
 /// 古い語の表の字を持たない。
 #[test]
 fn agpl_drafter_is_the_designer() {

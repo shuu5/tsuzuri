@@ -1,5 +1,5 @@
-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)）。
-//! plugin/skills/agent-discipline/reference.md が、設計係に残す 34 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 8 つの語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。
+//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)・契約の bead 行 ag-bead-draft・判断の記録 ADR-74 の決定 (1)(6)）。
+//! plugin/skills/agent-discipline/reference.md が、設計係に残す 46 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 14 の語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。
 //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
 //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
 #![cfg(test)]
@@ -23,7 +23,7 @@ const HEADS: [&str; 8] = [
 ];
 
 /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 34] = [
+const CLAUSES: [(&str, u8, &str); 46] = [
     (
         "single-home",
         0,
@@ -49,14 +49,9 @@ const CLAUSES: [(&str, u8, &str); 34] = [
     ("tokens", 6, "token を節約する"),
     ("budget", 7, "予算は token ちょうど 150000"),
     (
-        "row-count",
-        2,
-        "行の数は contracts/<ノート>.toml の id = の行で数える",
-    ),
-    (
         "idle-check",
         4,
-        "働きを通らない照らし（足す物が 0 の時に通る等式など）は審査で落ちる",
+        "働きを通らない照らし（足す物が 0 の時に通る等式・実装が作る物を種で先に置く toy など）は審査で落ちる",
     ),
     ("findings", 5, "出す物の file の名に findings も使わない"),
     ("reply", 5, "最後の返事（席への知らせ）は 10 行以内"),
@@ -134,10 +129,67 @@ const CLAUSES: [(&str, u8, &str); 34] = [
         4,
         "指された項だけでなく done の全部の項について",
     ),
+    (
+        "note-fix",
+        2,
+        "生きたノートに在る行の直しは、席が頼みでそのノートを名指した時だけ",
+    ),
+    ("row-fields", 2, "要る時の growth で、欄 depends は書かない"),
+    (
+        "quotes",
+        2,
+        "行の title と done と節に、二重引用符と逆斜線を書かない",
+    ),
+    (
+        "dep-notes",
+        2,
+        "notes.md に「依存: <行 id> → <行 id か bead id>」の 1 行ずつで書き、席が bd dep add で張る",
+    ),
+    (
+        "src-growth",
+        2,
+        "crate の src の file を書く行は、その file ごとに growth を書く",
+    ),
+    (
+        "bead-caps",
+        2,
+        "開いた契約の bead は 40 本まで・本文は 64 KB 以下・acceptance は 24 KB 以下",
+    ),
+    ("args", 2, "引数を 5 つまでにする"),
+    (
+        "filter-words",
+        3,
+        "xtask/tests/filter-words.txt の語と群の module の名のどれとも部分の字で重ならない",
+    ),
+    (
+        "toy-seed",
+        4,
+        "e2e の toy の種に実装が作る file と宣言を置かない",
+    ),
+    (
+        "floor-bead",
+        8,
+        "tz check --dir <写し>/design-intent --prose <本文の file の絶対 path>",
+    ),
+    (
+        "floor-preflight",
+        8,
+        "scribe2 pipe preflight --contract <契約の file の絶対 path> --bead <名>-floor",
+    ),
+    (
+        "floor-doc",
+        8,
+        "設計文書の dir（design-intent）を書く起草（判断の記録・要件・生きたノートの行の直し）だけが",
+    ),
+    (
+        "seat-bead",
+        8,
+        "席は契約の file から欄 section と goal を除いた字を bead の欄 acceptance に",
+    ),
 ];
 
 /// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字と、外した実装と道具の手順の語）。
-const ABSENT: [(&str, &str); 10] = [
+const ABSENT: [(&str, &str); 16] = [
     ("width-copied", "100 字"),
     ("old-budget", "150000 以下"),
     ("patch-path", "docs/design/patch/"),
@@ -148,6 +200,12 @@ const ABSENT: [(&str, &str); 10] = [
     ("apply-script", "適用の script"),
     ("target-dir", "CARGO_TARGET_DIR"),
     ("prototype", "試作"),
+    ("note-fragment", "行と節の断片"),
+    ("note-cap", "ノートの行は 32 まで"),
+    ("note-depends", "depends は同じノートの行だけ"),
+    ("plan-rule", "規則の行 R-33"),
+    ("design-pointer", "--design contracts/"),
+    ("folio-derive", "folio derive"),
 ];
 
 /// 器の案内の幅の歯の fn の頭（手引きが名指す接頭辞）。
@@ -235,13 +293,17 @@ fn agref_reference_heads_are_the_eight_sections() {
 #[test]
 fn agref_one_clause_removed_doubled_or_moved_is_named() {
     let text = reference();
-    for (name, _, words) in CLAUSES {
+    for (name, n, words) in CLAUSES {
         let removed = text.replacen(words, "", 1);
         assert_eq!(faults(&removed), vec![name], "外した {name}");
         let doubled = text.replacen(words, &format!("{words}・{words}"), 1);
         assert_eq!(faults(&doubled), vec![name], "重ねた {name}");
-        let moved = format!("{removed}\n- {words}\n");
-        assert_eq!(faults(&moved), vec![name], "最後の節へ動かした {name}");
+        let moved = if n == 0 {
+            format!("{removed}\n- {words}\n")
+        } else {
+            format!("- {words}\n{removed}")
+        };
+        assert_eq!(faults(&moved), vec![name], "動かした {name}");
     }
 }
 

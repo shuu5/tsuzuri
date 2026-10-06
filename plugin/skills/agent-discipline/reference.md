@@ -1,19 +1,20 @@
 # 係の規律の参照（agent-discipline）
 
-前置きの手引き SKILL.md の決まりの手順と前例である。席の手元の手引き（起草役の共通の守り）の段を、判断の記録 ADR-59 の決定 (6) でここへ移した。検証の群の手順は判断の記録 ADR-61 の決定 (9)。判断の記録 ADR-72 の決定 (3) で、起草係を設計だけを書く設計係にし、実装と道具の手順をこの file から外した。この file も天井で、決まりの正本は門と歯である。判断の記録 ADR-63 の決定 (2) で、席の起草の決まりの文はこの file だけに置き、頼みの文はこの file を名指す。
+前置きの手引き SKILL.md の決まりの手順と前例である。席の手元の手引き（起草役の共通の守り）の段を、判断の記録 ADR-59 の決定 (6) でここへ移した。検証の群の手順は判断の記録 ADR-61 の決定 (9)。判断の記録 ADR-72 の決定 (3) で、起草係を設計だけを書く設計係にし、実装と道具の手順をこの file から外した。判断の記録 ADR-74 の決定 (1)(6) で、行の出す物を契約の bead の形（契約の file と本文の file）にした。この file も天井で、決まりの正本は門と歯である。判断の記録 ADR-63 の決定 (2) で、席の起草の決まりの文はこの file だけに置き、頼みの文はこの file を名指す。
 
 記号: <置き場> は起草の置き場（repo の git config の鍵 tsuzuri.draftsdir）、<名> は起こしの名、<群 id> は群の id。
 
 ## 1. 置き場
 
-- 書くのは自分の dir <置き場>/<名>/ の下だけ。成果（行と節の断片の file・notes.md）は <名>/w/ の下に置く。写しの commit は床と preflight の照らしのためだけにする。
+- 書くのは自分の dir <置き場>/<名>/ の下だけ。成果（契約の file・本文の file・notes.md）は <名>/w/ の下に置く。写しで commit しない。
 - 床と preflight の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。写しから push しない。器の掃除は、直下の写しを書きが 6 時間無くなった後に消す。
 - 本物の repo には一時の物も書かない。
 - 動いている board の server を止めない。測るなら loopback の別の port で写しの tz を起こし、自分の pid だけを kill する。
 
 ## 2. 契約の行の書き方
 
-- 形は置くノートの既存の行に合わせる（title・req・write-set・verify・size・growth・done・depends と節）。
+- 行の欄は id・title・req・write-set・verify・size・done・done-teeth と、要る時の growth で、欄 depends は書かない。節は bead の本文で、在りか・なぜ・形・done と verify の対応・範囲の外を置く。
+- 生きたノートに在る行の直しは、席が頼みでそのノートを名指した時だけ、そのノートの行と節の形で書く。新しい行は bead の形だけで書く（判断の記録 ADR-74 の決定 (6)）。
 - done の各項は、名指す歯が実際に測る字だけを書き、測らない字は節に書く。着地済みの歯の名は歯の file の fn の名と grep で照らす。done の項の中で (n) の印を書かない（ほかの項は「最後の項」などと書く）。
 - 不在を見る歯（見張り）には「無い」だけを、等しさを見る歯には「一致する」だけを言わせ、替え先の一覧・変わらない行・読む順は節に移す。見張りは等しさでなく包み（⊇）で見て、字の残りを見る歯はその歯の file 自身を除くと done と歯の両方に書く。
 - 置き場を「impl X の中」と名指す時は、X を base の宣言と grep で照らす。
@@ -21,17 +22,18 @@
 - done の項が節の字を言う時は、その字を全角の二重鉤括弧『』の印で囲んで書き、同じ字を節の本文に書く（preflight の断り section-literal が照らす）。印を節の字の外に使わない。
 - done に行の番号と行の数を持たせない。後の行の節には、前の行の未着地の字から数えた数を書かず、前の行の着地の後に着地した字で当て直す。字を数える歯は doc と注の行を除いて数える。
 - 名が verify の filter の語を含まないことを測る歯（own_names）を持つ行は、節に語の一覧（main の commit・語の数 N・空白で区切る）を字で置き、done は歯の file がその N 語を字のまま持って数 N を断言する形にする。
-- 行の title と done に、コロンと空白の並び・空白と # の並び・二重引用符・逆斜線・逆引用符を書かない（folio derive が断るか YAML の注で切れる）。JSON は鍵と字の値の囲みを省いた形と、その戻し方を節に書く。
+- 行の title と done と節に、二重引用符と逆斜線を書かない（契約の file の字の囲みが切れ、器は本文に在れば断る）。JSON は鍵と字の値の囲みを省いた形と、その戻し方を節に書く。
 - verify の 1 行目は clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）、続けて done の歯を撃つ cargo nextest run -p <pkg> --test <file> --no-tests=fail <接頭辞>_ の行。cargo run -q -p xtask -- check は器の共通 verify が撃つので書かない。
 - verify の filter が当たる歯の file は全部 write-set に入れる。書かない着地済みの file は置き場だけの =<path> で足す（無いと受付が teeth-outside-write-set で断る）。
 - write-set の印は 6 つ（素の path は在る file・末の / は dir・+ は新しい file・- は縮むが残る file・~ は着地で消える file・= は置き場だけ）。git mv で移す行は、移す元を ~、移す先を + で書く（- の file が無くなると行が永久に解けない）。
-- 前の行が足す file を =<path> で名指す行は、前の行の着地の後に置く（受付は置く時の base で = を解き、depends では足りない）。
-- depends は同じノートの行だけ（ほかのノートの行は folio check が違反にする）。便の順は toml の depends の欄で決まる。
-- 行は数珠つなぎにしない。割る時は、まず互いに depends を持たない切り方（触る file が交わらない）を探す。depends は、後の行の code が前の行の code を呼ぶか前の行の歯を書き替える時だけに書き、書いた時はなぜ並べられないかを節に 1 文で書く。
-- 置き場の物差しの順は、領域（domain）の親に置く、交わる行は器が待ちの理由 overlap で順に流すので、depends は前の項の時だけ書く。交わりのために置き場・名・並びを曲げた行は、節に「置き場の妥協」の 1 文を書く。
-- 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte までなので、替える字の見込みがそれを越える行は割る。crate の src の file の 1500 行の上限の余地が見込みより小さい時は growth の欄を足す。
-- ノートの行は 32 まで（条 P-28）。行の数は contracts/<ノート>.toml の id = の行で数える（節の番号は行の数でない）。計画だけの行を契約の行へ移す時は、同じ commit で規則の行 R-33 の値を下げる。
+- 前の行が足す file を =<path> で名指す行は、前の行の着地の後に置く（preflight と受付は置く時の base で = を解き、依存では足りない）。
+- 便の順は bead の依存で持つ。後の行が前の行に依る時は、notes.md に「依存: <行 id> → <行 id か bead id>」の 1 行ずつで書き、席が bd dep add で張る。
+- 行は数珠つなぎにしない。割る時は、まず互いに依存を持たない切り方（触る file が交わらない）を探す。依存は、後の行の code が前の行の code を呼ぶか前の行の歯を書き替える時だけに書き、書いた時はなぜ並べられないかを節に 1 文で書く。
+- 置き場の物差しの順は、領域（domain）の親に置く、交わる行は器が待ちの理由 overlap で順に流すので、依存は前の項の時だけ書く。交わりのために置き場・名・並びを曲げた行は、節に「置き場の妥協」の 1 文を書く。
+- 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte までなので、替える字の見込みがそれを越える行は割る。preflight は growth に無い write-set の file を size の見込み（M は 300 行）で数え、file の余地と crate の core の合計の余地に比べるので、crate の src の file を書く行は、その file ごとに growth を書く。
+- 開いた契約の bead は 40 本まで・本文は 64 KB 以下・acceptance は 24 KB 以下（規則の行 R-43〜R-45）。
 - 節が大きい行は、頭の段に done の各項と verify の行の対応を書く。審査役は Read・Grep・Glob だけで読むので、節と done に「審査が撃って確かめる」前提の字を書かない。
+- 節で関数の形を決める時は、引数を 5 つまでにする（clippy の too_many_arguments の閾値 5・tsuzuri は deny・器は forbid）。6 つ目が要る時は、引数を組か構造体に束ねた形を節に書く。
 - 行の節（契約表の goal に写る字）に歯の本数を書かない（本数の正本は欄 done-teeth・条 P-2.3）。
 - 根の src の module の頭の doc に行の id を書かない（行の id は契約と commit が持つ）。
 - 器の案内の行（help）の幅は、器の入れ子の歯（接頭辞 cli_help_）が落とす。
@@ -40,7 +42,7 @@
 
 - 新しい行の歯は tests/<接頭辞>.rs の 1 本（段）で足し、群 tests/<群>/ の main.rs と module を書かない。群に module を足す行は、xtask/tests/teeth1/kfold.rs の表 GROUPS も直す。
 - 着地した群の module を直す行は、その module の file だけを write-set に置き、verify を -p <pkg> --test <群> --no-tests=fail <接頭辞>_ にする。
-- 歯の fn の名は crate の中で一意にする。新しい接頭辞は、契約表の verify の filter の語と群の module の名のどれとも部分の字で重ならない。
+- 歯の fn の名は crate の中で一意にする。新しい歯の fn の名と接頭辞は、xtask/tests/filter-words.txt の語と群の module の名のどれとも部分の字で重ならない（grep で照らす・xtask の歯 klint_ が落とす）。
 - 実装の source の字を照らす歯を足す時は、振る舞いで測れない訳を節に 1 文書く。
 - 子の環境を比べる歯は、名の列を先に assert_eq し、名が合った後にだけ値を比べる（値ごとだと、落ちた時に係の環境の値が出力に出る）。
 
@@ -50,12 +52,12 @@
 - 否定の句ごとに、src で最初に断る検めを照らしてから見本を書き、断りの字も照らす。句の型ごとに見本を置く。順は 2 つ以上で入力・数・字・逆の順がどれも違う並び、重ねないは同じ物を 2 度、縁は N と N+1 と値そのもの、「だけ」は外れる物。
 - 判じの呼び（match の式）を字で見る歯は、腕（Ok(false) => continue など）も字で見る（呼びだけだと腕を替える変異が通る）。
 - 置き場の字（の後に・1 度だけ）を file 全体の字で測ると、審査が vacuous-assert で落とす。関数か塊の中で照らし、数を断言する。
-- 働きを通らない照らし（足す物が 0 の時に通る等式など）は審査で落ちる。歯は足す物の在る見本で働きを通す。
+- 働きを通らない照らし（足す物が 0 の時に通る等式・実装が作る物を種で先に置く toy など）は審査で落ちる。歯は足す物の在る見本で働きを通し、e2e の toy の種に実装が作る file と宣言を置かない。
 - 審査の FAIL を直す時は、指された項だけでなく done の全部の項について、外す・替える変異が名指しの歯で落ちるかの表を作る（審査は 1 周で全部の項を指さない）。数の上限・字の切り・既定の値・順・空・読めない時は、fixture がその縁を通るかを見る。
 
 ## 5. 出す物と公開
 
-- 出す物は、頼みが名指す file（行と節の断片・判断の記録の下書き・調べの表など）と notes.md（調べ・実測・未確か・席への問い・印は V 確かめた・D 記録から・I 見立て・U 分からない）。出す物の file の名に report を使わない。
+- 出す物は、頼みが名指す file（契約の file と本文の file・判断の記録の下書き・調べの表など）と notes.md（調べ・実測・未確か・席への問い・印は V 確かめた・D 記録から・I 見立て・U 分からない）。出す物の file の名に report を使わない。
 - 持ち主への問いが要るなら、概要・技術・理由・推奨の閉じた問いにする。数は完全な記録からだけ書く。
 - repo は公開である。host の名・網の住所・口座の名・ほかの project の名・持ち主の逐語を書かない。
 - 出す物の file の名に findings も使わない（report と同じく harness が断る）。最後の返事（席への知らせ）は 10 行以内の日本語で、要点と出力の path を書く。
@@ -86,6 +88,7 @@
 
 ## 8. 床と受付の照らし
 
-- 頼みの頭の組みが なし の係は cargo を撃たない。床は頼みが名指す席の pin の tz で、写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
-- 写しの branch に行を commit し（preflight は HEAD の木を読む・main を動かさない）、足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
-- 契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に <行 id>.toml の名で書く（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・欄 goal に節の本文）。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で撃ち直し、通らない file を名指して 1 度目の終わりを止める。
+- 頼みの頭の組みが なし の係は cargo を撃たない。行の床は写しの根で撃つ 2 つで、tz check --dir <写し>/design-intent --prose <本文の file の絶対 path> と、scribe2 pipe preflight --contract <契約の file の絶対 path> --bead <名>-floor --state-dir <空の state dir> --repo <写し> である。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
+- 設計文書の dir（design-intent）を書く起草（判断の記録・要件・生きたノートの行の直し）だけが、頼みが名指す席の pin の tz で、写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。
+- 契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に、契約の file <行 id>.toml（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・その末に欄 section の字 draft と欄 goal の本文の 1 行）と本文の file <行 id>.md の 2 つで書く。本文の 1 行は本文の各行の前後の空白を除き、空の行を落として空白 1 つで繋いだ字である。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で、.md の file を全部散文の門で撃ち直し、通らない file を名指して 1 度目の終わりを止める。
+- 席は契約の file から欄 section と goal を除いた字を bead の欄 acceptance に、本文の file を本文にして bead を作り、notes.md の依存の行を bd dep add で張る。

@@ -1,4 +1,4 @@
-//! 設計係の型と手引きの参照の file が起草の印と出す物の 4 行を持つことの歯（接頭辞 agmrk_・設計ノート surface-v4b 行 ag-drafter-marks）。型と参照の file が 4 行を決めた塊の決めた行に 1 度ずつ持つことを見る。
+//! 設計係の型と手引きの参照の file が起草の印と出す物の 4 行を持つことの歯（接頭辞 agmrk_・設計ノート surface-v4b 行 ag-drafter-marks・契約の bead 行 ag-bead-draft）。型と参照の file が 4 行を決めた塊の決めた行に 1 度ずつ持つことを見る。
 //! 型と手引きは係を起こす時に読む設定の字で振る舞いを持たないので字を照らす。外の依存を使わない。
 #![cfg(test)]
 
@@ -21,7 +21,7 @@ const OUTPUT_CONTRACT: &str = "契約の file（contract/<行 id>.toml）。行�
 const REF_MARK: &str = "done の項が節の字を言う時は、その字を全角の二重鉤括弧『』の印で囲んで書き、同じ字を節の本文に書く（preflight の断り section-literal が照らす）。印を節の字の外に使わない。";
 
 /// 4 つ目の字（名 ref-contract・参照の file）。
-const REF_CONTRACT: &str = "契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に <行 id>.toml の名で書く（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・欄 goal に節の本文）。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で撃ち直し、通らない file を名指して 1 度目の終わりを止める。";
+const REF_CONTRACT: &str = "契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に、契約の file <行 id>.toml（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・その末に欄 section の字 draft と欄 goal の本文の 1 行）と本文の file <行 id>.md の 2 つで書く。本文の 1 行は本文の各行の前後の空白を除き、空の行を落として空白 1 つで繋いだ字である。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で、.md の file を全部散文の門で撃ち直し、通らない file を名指して 1 度目の終わりを止める。";
 
 /// 名・file・見出しの頭の字・行の頭の字・前の行の頭の字。
 const LINES: [(&str, &str, &str, &str, Option<&str>); 4] = [
