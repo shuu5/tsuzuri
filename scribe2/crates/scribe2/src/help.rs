@@ -253,7 +253,7 @@ pub const TABLE: &[Entry] = &[
             "it on main. Each subcommand moves one run one stage, or shows and steers the queue.",
             "The pipeline has no switch that skips the review stage.",
         ],
-        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]",
+        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]",
         subcommands: &[
             ("intake", "Take one contract row in and create its run."),
             ("preflight", "Review a contract before intake, without creating a run."),

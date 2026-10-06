@@ -8,7 +8,7 @@ use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_o
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::lifecycle::{self, Place};
 use crate::fleet::store::{LockPolicy, StoreError};
-use crate::fleet::{store, CiRead, EventKind, Stage};
+use crate::fleet::{store, EventKind, Stage};
 use crate::pipe::approve::{Approve, RC_BLOCKED};
 use crate::pipe::current;
 use crate::pipe::declaration::{self, Ceiling, CEILING_ROW, DENIED_ROW};
@@ -16,13 +16,13 @@ use crate::pipe::follow::Runner;
 use crate::pipe::gate::{Gate, Limits};
 use crate::pipe::land::detection::Detect;
 use crate::pipe::git_line;
-use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, CI_ONLY, MAIN_REF};
+use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, MAIN_REF};
 use crate::pipe::lens_record::{self, LensSource};
 use crate::pipe::ratelimit::Pool;
 use crate::pipe::review::{review, Review};
 use crate::pipe::spawn::EndGate;
 use crate::pipe::retire::{read_tip, RemoteTip};
-use crate::pipe::{emit, notify, run_dir, Emit};
+use crate::pipe::{emit, run_dir, Emit};
 use crate::rules::manifest::Manifest;
 use std::path::Path;
 
@@ -56,13 +56,12 @@ fn terminal_input<'a>(args: &'a [String], manifest: &Manifest) -> Result<(u64, u
 ///
 /// 前提の段は `Landed`（着地は済んでいる）。着地した sha は記録から読む——HEAD の今の sha に
 /// 読み替えると、その後に別の便が main を進めた周に**別の commit の CI を照合する**（C10）。
-/// 照合の側は anchor の main の今の先端で選ぶ（設計 contract-source.md §58・行 bm）: 着地した sha が先端なら
-/// [`PushTip::Tip`]、先端でなければ先端の sha つきの [`PushTip::Behind`]（祖先かは終端が測る・§53）。main を
-/// 読めない周は先端の側に倒さず、何も書かずに断る。
+/// 終端の側は常に [`PushTip::Tip`]（push とこの host の緑の close だけ・設計 contract-source.md §58・行 v-ci-child-cut）。main を
+/// 読めない周は何も書かずに断る。
 ///
 /// 記録の sha が先端と違う周は、先端の祖先から本文に `run: <run id>` の行を持つ squash を 1 回探し直し
-/// （設計 §65・anchor の main を揃えて着地の commit の sha が変わった便）、見つけた sha を着地の sha として側を選ぶ。
-/// 見つからない周は記録の sha のまま今の分岐へ渡す（fail-closed）。
+/// （設計 §65・anchor の main を揃えて着地の commit の sha が変わった便）、見つけた sha を close の理由の sha とする。
+/// 見つからない周は記録の sha のまま渡す（fail-closed）。
 ///
 /// 前提の段が `Failed` の便は、remote の main に載った自分の squash を受け入れる形（[`adopt`]）だけを通す（判断の記録 ADR-45 の門 H6）。
 fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
@@ -79,14 +78,13 @@ fn terminal_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPol
     let Some(head) = git_line(&resolved.repo, &["rev-parse", MAIN_REF]) else {
         return refused(format!("{MAIN_REF} を読めない"));
     };
-    // 撃ち直しの push が押すのは anchor の main そのもの＝押した先端は main の今の先端（設計 contract-source.md §58）。
+    // close の理由の sha は、記録の sha が先端と違う周だけ写しを探し直して決める（設計 contract-source.md §58）。
     let sha = if head == sha {
         sha
     } else {
         landed_squash_of(&resolved.repo, &head, id).unwrap_or(sha)
     };
-    let tip = if head == sha { PushTip::Tip } else { PushTip::Behind(&head) };
-    settle(args, (id, manifest, policy), &resolved, (&sha, tip, ""), |_| Ok(()))
+    settle(args, (id, manifest, policy), &resolved, (&sha, PushTip::Tip, ""), |_| Ok(()))
 }
 
 /// 終端だけの撃ち直しが受け入れる `Failed` の detail（主実測が赤か測れなかった便・land の `main_red` と `main_unmeasured` の字）。
@@ -187,13 +185,9 @@ const DETECTION_ONLY: &str = "--detection-only";
 /// - `--terminal-only`（設計 contract-source.md §5 手順 3）: 着地は成立しているのに終端が止まった便（push の失敗・
 ///   CI の未確定・台帳を閉じられなかった周）を、着地をやり直さずに継ぐ。
 /// - `--detection-only`（設計 gate-cost.md §44 行 ak）: 着地した便の検出線を人が撃つ（撃ち直す）形。
-/// - `--ci-only <sha>`（設計 contract-source.md §5 手順 3）: 着地した便の GitHub の検査を後から読む形（[`ci_only`]）。
 fn settled_port(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Option<Outcome> {
     if super::present(args, TERMINAL_ONLY) {
         return Some(terminal_only(args, id, manifest, policy));
-    }
-    if let Ok(Some(sha)) = flag(args, CI_ONLY) {
-        return Some(ci_only(args, id, sha, manifest, policy));
     }
     super::present(args, DETECTION_ONLY).then(|| detection_only(args, id, manifest, policy))
 }
@@ -229,8 +223,8 @@ fn detection_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPo
     )
 }
 
-/// 着地をやり直さない口の land の材料（`--terminal-only` の 2 つの形と `--ci-only` が共有する 1 本・CI の上限と間隔と台帳 client は
-/// [`terminal_input`]・`--rules` は land の道と同じ形で持ち、GitHub の検査を読む子へ同じ規則を渡す）。
+/// 着地をやり直さない口の land の材料（`--terminal-only` の 2 つの形が共有する 1 本・CI の上限と間隔と台帳 client は
+/// [`terminal_input`]・`--rules` は land の道と同じ形で持つ）。
 fn settled_entry<'a>(
     args: &'a [String],
     (id, manifest, policy): (&'a str, &Manifest, LockPolicy),
@@ -258,42 +252,6 @@ fn settled_entry<'a>(
         train_max: 1,
         rules: flag(args, "--rules").ok().flatten().map(Path::new),
     })
-}
-
-/// `pipe land --run <id> --ci-only <sha>`（設計 contract-source.md §5 手順 3）: 札も push も替えず、着地した便の `sha` の GitHub の
-/// 検査を上限まで読んで `ci:<語>` を 1 件記し、`run=<id> ci=<success|failure|unmeasurable>` の 1 行を返す（rc 0・終端が close の
-/// 後に子 process で起こす口で、人も撃てる）。赤の周は席へ終端の 1 行（語 `ci:failure`）を送り、送れたかを `notify=` の 1 行で
-/// 添える（札は替えない）。前提の段は `Landed`。値が 40 桁の 16 進でない周は何も撃たず何も書かずに断る。
-fn ci_only(args: &[String], id: &str, sha: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
-    if sha.len() != 40 || !sha.bytes().all(|found| found.is_ascii_hexdigit()) {
-        return refused(format!("{CI_ONLY} の値 {sha} は 40 桁の 16 進でない"));
-    }
-    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
-        Ok(found) => found,
-        Err(outcome) => return outcome,
-    };
-    let entry = match settled_entry(args, (id, manifest, policy), &resolved) {
-        Ok(found) => found,
-        Err(outcome) => return outcome,
-    };
-    let read = super::land::ci_only(&entry, sha);
-    let mut out = vec![format!("run={id} ci={}", super::land::ci_word(read))];
-    if matches!(read, CiRead::Failure) {
-        out.push(red_notice(&resolved, manifest, id));
-    }
-    Outcome::ok(out)
-}
-
-/// 着地の後の GitHub の検査が赤い便を、終端の 1 行（落ちた便の 1 行と同じ形・語 `ci:failure`）で席へ知らせ、`notify=` の行を返す
-/// （宛先と送達は列の終端の知らせと同じ 1 関数・置き場を読めない周も宛先の読みへ進み、送れない事実を `notify=` に残す）。
-fn red_notice(resolved: &Resolved, manifest: &Manifest, id: &str) -> String {
-    let state = store::read_all(&resolved.state_dir).map_or_else(|_| crate::fleet::replay(&[]), |events| crate::fleet::replay(&events));
-    let line = notify::terminal_line(&notify::Terminal { bead: &resolved.bead, run: id, stage: Stage::Landed.as_str(), word: "ci:failure", streak: 0 });
-    let place = crate::seat::StateDir {
-        path: std::path::absolute(&resolved.state_dir).unwrap_or_else(|_| resolved.state_dir.clone()),
-        source: crate::seat::Provenance::Flag,
-    };
-    notify::send(&state, &place, &resolved.repo, manifest, &line)
 }
 
 /// `pipe approve`。**逐語を event へ写すだけ**で、段は動かさない（resume が進める）。

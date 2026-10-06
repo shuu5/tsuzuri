@@ -82,7 +82,7 @@ mod finish;
 use finish::{finish, open_pr, squash};
 pub(crate) use finish::{contract_key, source_key};
 pub(in crate::pipe) use finish::{
-    ci_only, ci_word, close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CI_ONLY, CLOSE_REASON,
+    close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CLOSE_REASON,
 };
 
 /// 着地が anchor を揃えなかった周の印（設計 §57・行 az）。書き手は境界 crate の歯からも呼べ、古さの判定は crate の中

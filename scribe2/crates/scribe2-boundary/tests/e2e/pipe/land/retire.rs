@@ -2,7 +2,7 @@
 //! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_` / `vcioff_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 
 use super::*;
-use super::cilast::{parent_rows, settled_rows, CLOSED, PUSHED, SPAWNED};
+use super::cilast::{CLOSED, PUSHED};
 
 #[test]
 fn pipe_retire_moves_pr_landed_worktree_and_keeps_branch() {
@@ -638,10 +638,6 @@ fn land_train_with_terminal(repo: &Path, state: &Path, conclusion: &str) -> (Fak
     let stdout = stdout_of(&out);
     assert!(stdout.contains(&format!("run={} train=3", ids[0])), "列で着地した: {stdout} / {}", stderr_of(&out));
     let tip_sha = sha_of_landing(state, &ids[2]).expect("先端の便の sha を読める");
-    // 列の便ごとの子（着地の後の CI の口）の答えを待つ（片付けの後に子が置き場を作り直さない）。
-    for id in &ids {
-        settled_rows(state, id, 1);
-    }
     (tools, stdout, ids, tip_sha)
 }
 
@@ -657,33 +653,29 @@ fn terminal_tail(state: &Path, id: &str) -> Vec<String> {
     landed_details(state, id).into_iter().filter(|detail| detail.starts_with("terminal:")).collect()
 }
 
-/// 列の終端（設計 contract-source.md §53・行 be・台帳の問い t3-hub.90.2 の裁定）: 常に success の偽 CI を持つ 3 本の列の着地で、
-/// 3 本とも push → close → 子の起こしの 3 段を通し、先端でない 2 本（a / b）の子も自分を祖先に持つ先端の CI を読む。偽 CI の
-/// 呼び出しは 3 本の子 × 1 回＝3 回で、子の CI の argv は先端の sha（どの子が最後に書いても先端の sha）。
+/// 列の終端（設計 contract-source.md §53・行 be・行 v-ci-child-cut）: 常に success の偽 CI を持つ 3 本の列の着地で、3 本とも
+/// push → close の 2 段だけを通して子を起こさず、偽 CI の呼びは 0 回で、偽 remote の main は先端の sha。
 #[test]
-fn pipe_train_terminal_every_run_checks_the_tip_ci_and_closes() {
+fn pipe_train_terminal_every_run_closes_without_a_ci_child() {
     let (repo, state) = repo_with_state();
     let (tools, stdout, [id_a, id_b, id_c], tip_sha) = land_train_with_terminal(&repo, &state, "success");
     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), tip_sha, "main の先端は c");
     for id in [&id_a, &id_b, &id_c] {
-        let rows = terminal_tail(&state, id);
-        assert_eq!(parent_rows(&rows, "terminal:ci:success"), [PUSHED, CLOSED, SPAWNED], "列の便は push → close → 子: {id} {rows:?}");
+        assert_eq!(terminal_tail(&state, id), [PUSHED, CLOSED], "列の便は push → close だけ: {id}");
         let line = stdout.lines().find(|line| line.starts_with(&format!("run={id} landed="))).map(str::to_owned);
         assert!(
             line.as_deref().is_some_and(|found| found.ends_with("terminal=closed")),
             "stdout の terminal= は closed: {id} {stdout}"
         );
     }
-    assert_eq!(tools.ci_call_count(), 3, "偽 CI は 3 本の子 × 待ちの最初の 1 回（子は読み直さない）");
-    let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
-    assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [tip_sha.as_str()], "子に渡った sha は先端の sha");
+    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip_sha, "偽 remote の main は先端の sha");
     clean(&[&repo, &state]);
 }
 
 /// 列の close の理由（設計 contract-source.md §53・行 be・台帳の問い t3-hub.90.2 の裁定）: 1 周目は常に success の偽 CI の列の
-/// 着地で、偽 bd の最後の close（最後に終端する列の先頭の便 a）の reason が `landed <a の sha> host=green`（先端は子へ渡すだけで
-/// 理由に置かない）。2 周目は偽 CI が failure を返す列の着地で、3 本とも host の緑で閉じ、子の答えだけが `ci:failure` になる。
+/// 着地で、偽 bd の最後の close（最後に終端する列の先頭の便 a）の reason が `landed <a の sha> host=green`（先端を理由に置かない）。
+/// 2 周目は偽 CI が failure を返す列の着地で、3 本とも host の緑で閉じ、終端の行は push と close の 2 件ずつ。
 #[test]
 fn pipe_train_tip_close_reason_is_host_green_and_failure_still_closes() {
     let (repo, state) = repo_with_state();
@@ -703,8 +695,7 @@ fn pipe_train_tip_close_reason_is_host_green_and_failure_still_closes() {
     let (repo, state) = repo_with_state();
     let (tools, stdout, ids, _) = land_train_with_terminal(&repo, &state, "failure");
     for id in &ids {
-        let rows = terminal_tail(&state, id);
-        assert_eq!(parent_rows(&rows, "terminal:ci:failure"), [PUSHED, CLOSED, SPAWNED], "failure でも閉じる: {id} {rows:?}");
+        assert_eq!(terminal_tail(&state, id), [PUSHED, CLOSED], "failure でも閉じる: {id}");
         let line = stdout.lines().find(|line| line.starts_with(&format!("run={id} landed="))).map(str::to_owned);
         assert!(line.as_deref().is_some_and(|found| found.ends_with("terminal=closed")), "stdout: {id} {stdout}");
     }
