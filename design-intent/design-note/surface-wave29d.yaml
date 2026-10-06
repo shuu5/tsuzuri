@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29d
   title: 第 29 波 d — 器を書く便の同時 1 本の床を外す行（判断の記録 ADR-64）・係の effort の撃ち比べ・host の負荷を board に出す・書き込みの検出線の器の行・ノート surface-wave29c の続き
-  version: v0.26
+  version: v0.27
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -155,7 +155,7 @@ sections:
         done-teeth: ["1:@1", "2:@3", "3:@3", "4:@4"]
         depends: []
       - id: v-close-host
-        title: 器の land の終端の順を push → この host の緑で台帳の close（理由 landed と sha と host=green）→ GitHub の検査を子 process の口 pipe land --ci-only で後から読む に替え、赤は席へ知らせて札は替えない（台帳の問い t3-hub.90.2 の裁定・判断の記録 ADR-68・差の file）
+        title: 器の land の終端の順を push → この host の緑で台帳の close（理由 landed と sha と host=green）→ GitHub の検査を子 process の口 pipe land --ci-only で後から読む に替え、赤は席へ知らせ、測れない周は記帳だけを残し、どちらも札は替えない（台帳の問い t3-hub.90.2 の裁定・判断の記録 ADR-68・要件 FR1050 v0.51・差の file）
         req: ["FR1050", "FR1091"]
         section: "14"
         patch: docs/design/patch/v-close-host.patch

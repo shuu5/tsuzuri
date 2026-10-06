@@ -150,7 +150,7 @@ goal = "在りか。差の file docs/design/patch/v-window-cas.patch（12,226 by
 
 [[contract]]
 id = "v-close-host"
-title = "器の land の終端の順を push → この host の緑で台帳の close（理由 landed と sha と host=green）→ GitHub の検査を子 process の口 pipe land --ci-only で後から読む に替え、赤は席へ知らせて札は替えない（台帳の問い t3-hub.90.2 の裁定・判断の記録 ADR-68・差の file）"
+title = "器の land の終端の順を push → この host の緑で台帳の close（理由 landed と sha と host=green）→ GitHub の検査を子 process の口 pipe land --ci-only で後から読む に替え、赤は席へ知らせ、測れない周は記帳だけを残し、どちらも札は替えない（台帳の問い t3-hub.90.2 の裁定・判断の記録 ADR-68・要件 FR1050 v0.51・差の file）"
 req = ["FR1050", "FR1091"]
 section = "14"
 write-set = ["scribe2/crates/scribe2/src/pipe/land/finish.rs", "scribe2/crates/scribe2/src/pipe/land.rs", "scribe2/crates/scribe2/src/pipe/cli/step.rs", "scribe2/crates/scribe2/src/pipe/cli/args.rs", "scribe2/crates/scribe2/src/pipe/cli.rs", "scribe2/crates/scribe2/src/help.rs", "scribe2/crates/scribe2/src/ledger/close_reason.rs", "scribe2/crates/scribe2/src/ledger/phase.rs", "scribe2/crates/scribe2/src/ledger/phase_main.rs", "scribe2/rules/manifest.toml", "scribe2/docs/design/contract-source.md", "scribe2/docs/design/ledger-form.md", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/order.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/cilast.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/retire.rs", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap", "=scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs"]
