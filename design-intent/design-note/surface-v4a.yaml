@@ -3,13 +3,13 @@
 meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
-  version: v0.16
+  version: v0.17
   status: effective
   generated: 2026-10-06
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
-  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。 第 0.8 版（2026-10-06）は、memo t3-hub.92.2（作り直し v4 の段 S2 の 2・持ち主の決め D2・判断の記録 ADR-72 の決定 (3)）の行 ag-designer（plugin の起草係の型 drafter の本文を設計係の本文に置き換え、係の手引きと参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外す・節 7）を足した。起草は係 w313a。参照の file の歯の置き方の句（新しい行の歯は新しい file で足し、群の main.rs と module を書かない）は今の決まりのまま替えない（席の決め・t3-hub.92.2 の notes）。 第 0.9 版（2026-10-06）は、行 v-wip-lines の契約審査の FAIL（done の 4 つ目の項が、偽の bd の作業中の bead 2 本に対して [RECENT-WIP] の行を 1 行と書いていた）を受け、その項を w-1 と w-2 の 1 行ずつの 2 行に直した。 第 0.10 版（2026-10-06）は、memo t3-hub.92.8（作り直し v4 の段 S5・持ち主の決め D6・判断の記録 ADR-72 の決定 (7)）の器の行 v-gate-fix（pipe run と pipe resume で審査役だけの gate の FAIL の便を同じ worktree の runner の起こし直しで最大 2 周直す・節 9 と節 10）を足した。起草は係 w314a。席は調べ係 r316 の数え（輪で振る舞いの変わる e2e の歯は 0 本・行と kind を足すと数の pin 2 本が動く）を受け、kind の母集団の pin の歯を done と verify に足した。決定 (7) の字との差（差の全部を審査し直す・重さで絞らない・新しい process で起こす）は席の決め（t3-hub.92.8 の notes）。 第 0.11 版（2026-10-06）は、行 v-gate-fix の契約審査の FAIL を受け、直しの周に入る条件を「便の最後の RunStage が Gated の FAIL」に直し（直しの周の runner が rc 0 でなく終わった便を起こし直さない）、その歯 gfix_failed_fix_round_stops_without_another_round の項を足し、外形の snapshot の項を行と kind の数の字に直した。 第 0.12 版（2026-10-06）は、起草係 5 体の行を 1 本ずつ足した。段 S3 の行 t-memo-link-gate（memo の起票の繋ぐ門・節 13・係 w317a）、段 S2 の行 ag-floor-off（係の終える前の門の床の照らしと撃ち直しを退ける・節 15・係 w318a）、段 S6 の行 v-ci-child-cut（器の着地の後の CI の子を退ける・節 17・係 w319a）、段 S4 の行 v-pf-contract（preflight に契約の file を直に渡す口・節 19 と 20・係 w320a）、段 S9 の行 t-ruling-gui（配達の読みが器の裁定の行の経路 gui も読む・節 21・係 w321a）。席の決めとして、t-memo-link-gate の候補は閉じた memo も含む（直った問題の再発を古い memo に繋ぐ）。裁定の書き手は器の seat ruling answer の 1 本に寄せる。要件 FR21 から床の記録と撃ち直しの文 3 つを外した（行 ag-floor-off の範囲・行の便は srs.yaml を書かない）。 第 0.13 版（2026-10-06）は、行 ag-floor-off の契約審査の FAIL（歯が境界の main.rs の字 [--tz の不在を見るが、口 tz surface serve の USAGE が範囲の外で [--tz <program>] を持つ）を受け、不在を見る字を消す前の口の doc の行の字 [--drafts <dir>] [--tz に狭めた。 第 0.14 版（2026-10-06）は、行 ag-floor-off の 2 度目の契約審査の FAIL（歯の file agshp.rs の見本が stop.rs の字 pub mod floor; を使う・subagent_stop.rs の床の段は 14 行目と 15 行目の 2 行）を受け、agshp.rs を write-set と verify と done に足し、外す doc の行を直した。 第 0.15 版（2026-10-06）は、行 v-pf-contract の契約審査の FAIL（歯の toy の行 a が差し替え無しだと verify が宣言の共通 verify と同じで断られ、write-set の導出の材料も無い）を受け、toy の行の verify を歯 vpfgap_ の通る見本と同じ nextest の 1 行に差し替える形に直した。 第 0.16 版（2026-10-06）は、行 v-ci-child-cut の契約審査の FAIL（消す助けを残す歯 order.rs の 2 本と retire.rs の助けが使う・要件 FR1050 が close の後の CI の照合を求める）を受け、消す名 23 個と残す名 10 個を節 17 に列挙し、直す歯 4 本の断言を done に足した（起草は係 w323a）。同じ commit で要件 FR1050 と受入 AC1023 から close の後の CI の照合の字を外した。
+  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。 第 0.8 版（2026-10-06）は、memo t3-hub.92.2（作り直し v4 の段 S2 の 2・持ち主の決め D2・判断の記録 ADR-72 の決定 (3)）の行 ag-designer（plugin の起草係の型 drafter の本文を設計係の本文に置き換え、係の手引きと参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外す・節 7）を足した。起草は係 w313a。参照の file の歯の置き方の句（新しい行の歯は新しい file で足し、群の main.rs と module を書かない）は今の決まりのまま替えない（席の決め・t3-hub.92.2 の notes）。 第 0.9 版（2026-10-06）は、行 v-wip-lines の契約審査の FAIL（done の 4 つ目の項が、偽の bd の作業中の bead 2 本に対して [RECENT-WIP] の行を 1 行と書いていた）を受け、その項を w-1 と w-2 の 1 行ずつの 2 行に直した。 第 0.10 版（2026-10-06）は、memo t3-hub.92.8（作り直し v4 の段 S5・持ち主の決め D6・判断の記録 ADR-72 の決定 (7)）の器の行 v-gate-fix（pipe run と pipe resume で審査役だけの gate の FAIL の便を同じ worktree の runner の起こし直しで最大 2 周直す・節 9 と節 10）を足した。起草は係 w314a。席は調べ係 r316 の数え（輪で振る舞いの変わる e2e の歯は 0 本・行と kind を足すと数の pin 2 本が動く）を受け、kind の母集団の pin の歯を done と verify に足した。決定 (7) の字との差（差の全部を審査し直す・重さで絞らない・新しい process で起こす）は席の決め（t3-hub.92.8 の notes）。 第 0.11 版（2026-10-06）は、行 v-gate-fix の契約審査の FAIL を受け、直しの周に入る条件を「便の最後の RunStage が Gated の FAIL」に直し（直しの周の runner が rc 0 でなく終わった便を起こし直さない）、その歯 gfix_failed_fix_round_stops_without_another_round の項を足し、外形の snapshot の項を行と kind の数の字に直した。 第 0.12 版（2026-10-06）は、起草係 5 体の行を 1 本ずつ足した。段 S3 の行 t-memo-link-gate（memo の起票の繋ぐ門・節 13・係 w317a）、段 S2 の行 ag-floor-off（係の終える前の門の床の照らしと撃ち直しを退ける・節 15・係 w318a）、段 S6 の行 v-ci-child-cut（器の着地の後の CI の子を退ける・節 17・係 w319a）、段 S4 の行 v-pf-contract（preflight に契約の file を直に渡す口・節 19 と 20・係 w320a）、段 S9 の行 t-ruling-gui（配達の読みが器の裁定の行の経路 gui も読む・節 21・係 w321a）。席の決めとして、t-memo-link-gate の候補は閉じた memo も含む（直った問題の再発を古い memo に繋ぐ）。裁定の書き手は器の seat ruling answer の 1 本に寄せる。要件 FR21 から床の記録と撃ち直しの文 3 つを外した（行 ag-floor-off の範囲・行の便は srs.yaml を書かない）。 第 0.13 版（2026-10-06）は、行 ag-floor-off の契約審査の FAIL（歯が境界の main.rs の字 [--tz の不在を見るが、口 tz surface serve の USAGE が範囲の外で [--tz <program>] を持つ）を受け、不在を見る字を消す前の口の doc の行の字 [--drafts <dir>] [--tz に狭めた。 第 0.14 版（2026-10-06）は、行 ag-floor-off の 2 度目の契約審査の FAIL（歯の file agshp.rs の見本が stop.rs の字 pub mod floor; を使う・subagent_stop.rs の床の段は 14 行目と 15 行目の 2 行）を受け、agshp.rs を write-set と verify と done に足し、外す doc の行を直した。 第 0.15 版（2026-10-06）は、行 v-pf-contract の契約審査の FAIL（歯の toy の行 a が差し替え無しだと verify が宣言の共通 verify と同じで断られ、write-set の導出の材料も無い）を受け、toy の行の verify を歯 vpfgap_ の通る見本と同じ nextest の 1 行に差し替える形に直した。 第 0.16 版（2026-10-06）は、行 v-ci-child-cut の契約審査の FAIL（消す助けを残す歯 order.rs の 2 本と retire.rs の助けが使う・要件 FR1050 が close の後の CI の照合を求める）を受け、消す名 23 個と残す名 10 個を節 17 に列挙し、直す歯 4 本の断言を done に足した（起草は係 w323a）。同じ commit で要件 FR1050 と受入 AC1023 から close の後の CI の照合の字を外した。 第 0.17 版（2026-10-06）は、起草係 3 体の行を 1 本ずつ足した。段 S3 の行 v-turn-wip-stale（turn の終わりの門で、台帳か設計を書いたのに作業中の bead の定型の行が古い turn を 1 度だけ止める・節 25 と 26・係 w326a）、段 S7 の行 v-lens-ask（審査役の雛形 3 つから迷った時の既定の文と機械で止まる禁止の文と上限の無い外の読みを外す・節 27 と 28・係 w327a）、段 S8 の行 ag-ladder-verifier（検証役の型に決定はしごの段と消す物の名指しを書かせる 1 行・節 29・係 w328a）。席の決めとして、判定の語 INCONCLUSIVE は名を替えず意味だけを絞る（語を読む器の 49 file と記録の語を替えない）。
 
 sections:
   - n: 1
@@ -215,6 +215,36 @@ sections:
         size: S
         done: '(1) 定数 GUI_ROUTE は字 gui である（歯 rgui_gui_route_word） (2) 節の fixture の台帳で、undelivered は Known で、問い a1-g.1 の 2 件（裁定 a1-g.1:20261006T0100Z-1 と a1-g.1:20261006T0200Z-1）をこの順に持つ列だけを返す（歯 rgui_undelivered_reads_gui_bind_lines） (3) 節の fixture の台帳で、said に裁定 a1-g.1:20261006T0200Z-1 と a1-g.1:20261006T0300Z-1 を渡すと、問い a1-g.1・裁定 a1-g.1:20261006T0200Z-1・逐語が字 よい | それで と改行 1 つと字 はい の Said を 1 件だけ持つ列を返す（歯 rgui_said_unquotes_the_gui_verbatim） (4) 節の fixture の台帳で、said に裁定 a1-g.1:20261006T0300Z-1 だけを渡すと空の列を返す（歯 rgui_said_unquotes_the_gui_verbatim） (5) 着地済みの歯 fdlv_ が緑のまま（verify の 3 行目） (6) 着地済みの歯 fdlt_ が緑のまま（verify の 4 行目） (7) 着地済みの歯 fmark_ が緑のまま（verify の 5 行目）'
         done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@3", "6:@4", "7:@5"]
+        depends: []
+      - id: v-turn-wip-stale
+        title: '器の turn の終わりの門（Stop）は、その turn で台帳の書きか設計の置き場の種別の file の編集を通した時、作業中（in_progress）の bead のどれの notes にも、turn の最初の書きの分より後の頭の時刻を持つ段の定型の行（計画・次の手・優先・未決）が無ければ、1 度だけ rc 2 で止める（持ち主の決め D5・memo t3-hub.92.5・設計だけの行）'
+        req: ["FR1088", "FR1042"]
+        section: "25"
+        write-set: ["scribe2/crates/scribe2/src/hook/turn_end.rs", "scribe2/crates/scribe2/src/hook/mod.rs", "scribe2/crates/scribe2/src/hook/ledger_guard.rs", "scribe2/crates/scribe2/src/hook/ledger_guard/notes.rs", "scribe2/crates/scribe2/src/hook/utterance.rs", "scribe2/crates/scribe2-boundary/tests/e2e/hook/session.rs", "+scribe2/crates/scribe2-boundary/tests/e2e/hook/session/wipst.rs", "scribe2/docs/design/dialogue-surface.md"]
+        verify: ["cargo clippy --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail wipst_", "cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail hook_unsorted_stop_", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail hook_unsorted_stop_"]
+        size: M
+        done: '(1) turn_end::REASONS の as_str の列は no-session と no-start と log-unreadable と told-unreadable と told-unwritable と marks-unreadable と ledger-unreadable と ledger-timeout のこの順の 8 語で、keeps_record が真の語は no-start と log-unreadable と ledger-unreadable と ledger-timeout のこの順の 4 語である（歯 hook_unsorted_stop_reasons_are_eight_closed_words_and_four_keep_a_record） (2) turn_end::wrote_of は節 26 の表の 9 行の入力に表の期待（Ledger か Design か None）を返す（歯 wipst_wrote_of_reads_ledger_writes_and_design_kinds_purely） (3) turn_end::stale_of は節 26 の表の 8 行の見本に表の期待（Fresh か、作業中の bead の id の列を持つ Stale）を返す（歯 wipst_stale_of_needs_one_fresh_wip_line_purely） (4) session-start の後に session の id つきの pre-tool-use の Bash の bdw update w-1 --priority 1 を通した session の stop は、偽の bd が古い頭の段の定型の行を持つ in_progress の bead w-1 を返す時、rc 2・stdout 0 byte・stderr は字 turn-end stale と字 wip=w-1 を持つ 1 行で、続く再入でない stop は rc 0・stdout と stderr が 0 byte で、もう 1 度の書きの後の stop は再び rc 2 で止める（歯 wipst_blocks_once_per_written_turn_when_the_lines_are_old） (5) 書きの無い session の stop は rc 0・0 byte で偽の bd の呼びが 0 回であり、書きの後に偽の bd が今の分の頭の段の定型の行を持つ in_progress の bead を返す stop は rc 0・0 byte で偽の bd の呼びが 1 回で、次の stop は偽の bd を呼ばない（歯 wipst_reads_the_ledger_only_after_a_write） (6) 宣言の design-intent-paths が spec/ の repo で、Write の design-intent/x.yaml と repo の外の file と plugin-root が置き場の pipe の dir の下の Write の spec/x.yaml は stop で止めず偽の bd を呼ばず、plugin-root の無い Write の spec/x.yaml の後の stop は作業中の bead 0 本の偽の bd で rc 2 と字 wip=- の 1 行で止める（歯 wipst_marks_follow_the_declared_design_kinds_and_skip_runners） (7) 書きの後の stop は、偽の bd が rc 1 の時と待ち上限 1 秒の rules で 3 秒眠る時に、どちらも rc 0 で、TurnEndUnjudged の reason が ledger-unreadable か ledger-timeout の event を 1 件ずつ足す（歯 wipst_ledger_unreadable_and_timeout_pass_and_are_recorded） (8) 未仕分けの発話と書きを持つ session の 1 度目の stop は未仕分けの止めの行（字 turn-end block）で止め、再入の後の再入でない stop が字 turn-end stale の行で止める（歯 wipst_unsorted_block_comes_first_and_keeps_the_marks） (9) 着地済みの歯 hook_unsorted_stop_ の e2e が緑のまま（verify の 4 行目）'
+        done-teeth: ["1:@3", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2", "7:@2", "8:@2", "9:@4"]
+        depends: []
+      - id: v-lens-ask
+        title: '審査役の雛形 3 つ（gate の lens.txt・契約の lens-contract.txt・memo の lens-memo.txt）から、迷ったら INCONCLUSIVE か keep を選ぶ文と、器の道具の制限で既に止まる禁止の文を消し、INCONCLUSIVE と keep を名指した危険か引き金を書く時だけの語に絞り、外の読みを名指せる危険 1 つにつき 1 度に限る（memo t3-hub.92.9 の候補 1 と 2・作り直し v4 の段 S7・設計だけの行）'
+        req: ["FR1005", "FR1009"]
+        section: "27"
+        write-set: ["scribe2/crates/scribe2/src/headless/lens.txt", "scribe2/crates/scribe2/src/headless/lens-contract.txt", "scribe2/crates/scribe2/src/headless/lens-memo.txt", "scribe2/crates/scribe2/src/headless/lens.rs", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_prompt_external_form.snap", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_contract_prompt_external_form.snap", "scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__headless__lens_promise_prompt_external_form.snap", "=scribe2/crates/scribe2-boundary/tests/e2e/headless.rs", "=scribe2/crates/scribe2-boundary/tests/e2e/headless/lens.rs", "scribe2/docs/design/pipeline.md"]
+        verify: ["cargo clippy --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vlask_", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail headless_lens_prompt_external_form", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail headless_lens_contract_prompt_external_form", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail headless_lens_promise_prompt_external_form", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail headless_lens_scope_prompt_forbids_checks_not_named_by_contract", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vgfind_gate_template_names_the_rule_and_the_at", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vrqual_contract_template_reads_the_quality_part_and_the_gate_template_does_not", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail lens_constitution_phrase_is_in_the_template_exactly_once"]
+        size: S
+        done: '(1) 雛形 lens.txt と lens-contract.txt と lens-memo.txt は、どれも字「迷ったら」と字「試さなくてよい」を持たず、字「1 つにつき 1 度だけ読み」をちょうど 1 度持つ。lens.txt と lens-contract.txt はそれぞれ字「確かめられなかった場所を書く」を判定の決め方の節の中にちょうど 1 度持ち、lens-memo.txt は字「それが揃う引き金を 1 つ書く」をちょうど 1 度持ち、lens.txt は字「契約が渡されていないから」を持たない（歯 vlask_three_templates_drop_the_unsure_default_and_read_outside_once） (2) gate の雛形の外形の snapshot は、節 27 の字の INCONCLUSIVE の行と diff の外の読みの行を持ち、迷ったらの句と試さなくてよいの句を持たない（歯 headless_lens_prompt_external_form） (3) 契約の審査の雛形の外形の snapshot は、節 27 の字の INCONCLUSIVE の行と木の読みの行を持ち、迷ったらの句と試さなくてよいの句を持たない（歯 headless_lens_contract_prompt_external_form） (4) 約束の行を持つ契約の審査の雛形の外形の snapshot も、同じ 2 行を持ち 2 つの句を持たない（歯 headless_lens_promise_prompt_external_form） (5) 着地済みの歯 headless_lens_scope_prompt_forbids_checks_not_named_by_contract が緑のまま（verify の 6 行目） (6) 着地済みの歯 vgfind_gate_template_names_the_rule_and_the_at が緑のまま（verify の 7 行目） (7) 着地済みの歯 vrqual_contract_template_reads_the_quality_part_and_the_gate_template_does_not が緑のまま（verify の 8 行目） (8) 着地済みの歯 lens_constitution_phrase_is_in_the_template_exactly_once が緑のまま（verify の 9 行目）'
+        done-teeth: ["1:@2", "2:@3", "3:@4", "4:@5", "5:@6", "6:@7", "7:@8", "8:@9"]
+        depends: ["v-gate-fix"]
+      - id: ag-ladder-verifier
+        title: 'plugin の検証役の型 verifier の本文の末に、足す提案を攻める時は決定はしごの段 1〜4 のどこで止まれたかと消す物の名指しの有無を所見に書く 1 行を足し、その行を数える歯の段の file を足す（memo t3-hub.92.4・作り直し v4 の段 S8・設計だけの行）'
+        req: ["FR21"]
+        section: "29"
+        write-set: ["plugin/agents/verifier.md", "+crates/tsuzuri-boundary/tests/agldr.rs", "=crates/tsuzuri-boundary/tests/teeth6/agpl.rs", "=crates/tsuzuri-boundary/tests/ageff.rs"]
+        verify: ["cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test agldr --no-tests=fail agldr_", "cargo nextest run -p tsuzuri-boundary --test teeth6 --no-tests=fail agpl_", "cargo nextest run -p tsuzuri-boundary --test ageff --no-tests=fail ageff_"]
+        size: S
+        done: '(1) plugin/agents/verifier.md の頭（最初の --- の行から次の --- の行まで）の後の本文は、節 29 のはしごの行の字をちょうど 1 度持つ（歯 agldr_verifier_body_holds_the_ladder_line） (2) 本文からその行を外した見本は 0 を、その行を 2 度にした見本は 2 を、その行を本文から外して頭の欄 model の行の直後へ動かした見本は 0 を数える（歯 agldr_line_removed_doubled_or_moved_is_counted） (3) 型 3 本の頭の欄と本文の頭の 4 行の塊を見る着地済みの歯 agpl_ は緑のまま（verify の 3 行目） (4) 起草係だけが欄 effort を値 high で持つ着地済みの歯 ageff_ は緑のまま（verify の 4 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@3", "4:@4"]
         depends: []
   - n: 3
     type: prose
@@ -697,3 +727,156 @@ sections:
       done と verify の対応。1 つ目から 4 つ目の項は verify の 2 行目（新しい歯の file rgui の歯）が測る。5 つ目から 7 つ目は着地済みの配達の歯（teeth1 の fdlv・fdlt・fmark の 3 file・書かない・write-set の = の項）が verify の 3 行目から 5 行目で測る。1 行目の clippy は done に載せない守り。xtask の check は共通 verify が撃つので行の verify に書かない。
 
       範囲の外。board の答えの口を器の seat ruling answer に替えること（後の行 t-ruling-one）、器の行に束の欄を足すこと（後の器の行 v-ruling-batch）、server の起動の掃きと配達の撃ち直しの字、導出グラフの読み、席の道具の読み（裁定の逐語を読む script）は替えない。
+  - n: 25
+    type: prose
+    title: 行 v-turn-wip-stale — turn の終わりの門で作業中の bead の定型の行の古さを 1 度だけ止める（memo t3-hub.92.5・作り直し v4 の段 S3・決め D5・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は器の src 5 file と器の e2e の歯 2 file と器の設計の文書 1 file を書く。判定と印と止めは scribe2/crates/scribe2/src/hook/turn_end.rs に足す。呼びは hook/mod.rs の fn dispatch の 2 つの腕（pre-tool-use と stop）を直す。頭の時刻の読みは hook/ledger_guard/notes.rs の fn head_time を pub(crate) にして使い（親 hook/ledger_guard.rs の mod notes を pub(crate) mod notes にする・第 2 の読み手を作らない）、runner の見分けは hook/utterance.rs の fn is_runner を pub(super) にして使う。歯は新しい子 module の file scribe2/crates/scribe2-boundary/tests/e2e/hook/session/wipst.rs（接頭辞 wipst_）に置き、親 tests/e2e/hook/session.rs には mod wipst; の 1 行だけを足す（子は use super::* で親と祖父 hook.rs の助けを使う）。lib の歯は turn_end.rs の tests module の 1 本を直す。群の main.rs と kfold の表は書かない（e2e の群に module を足さない）。depends は空（このノートのほかの行と触る file が交わらない・行 v-wip-lines と v-sort-gist は着地済み）。
+
+      なぜ。持ち主は作り直し v4 で、turn の終わりの門が、その turn で台帳か設計を書いたのに作業中の bead の定型の行が古い時に 1 度だけ止めると決めた（決め D5・判断の記録 ADR-72 の決定 (6)）。行 v-wip-lines は定型の行を圧縮の後に出すが、席が行を足し忘れると古い計画が出る。今の turn_end.rs は event log と控え told だけを読み、台帳を読まない（module の doc）。
+
+      決め（code で照らした・file 行は main 8837a96e）。
+      - 書きの測り。PreToolUse の門が全部通した周（fn dispatch の pre-tool-use の腕で pre_tool_use の戻りの rc が RC_OK の周）に、turn_end::mark が session の置き場（turn_end.rs の fn place・<state>/session/<id>/）の新しい file wrote に 1 行（UTC の秒の時刻・空白・語 ledger か design）を足す。台帳の書きは古さの印の門 stale_gate.rs の fn mark と同じ読み（ledger_guard の segments と write_of の subcommand が WRITES に在る片を持つ command）。設計の書きは編集の道具（guard.rs の GUARDED の 4 つ）の編集先を role_guard::locate で anchor の HEAD の宣言（PathKinds::read_at_head・鍵 design-intent-paths と design-doc-paths）から分けた種別が DesignIntent か DesignDoc の周。器は tsuzuri の path を焼かない。先に PathKinds::Default で locate して Outside の周は宣言を読まずに印を書かない（git の子 process を repo の外の編集で撃たない）。runner（is_runner が真・--plugin-root が置き場の pipe の dir の下）と session の id の無い周は印を書かない。印を書けない周は黙る（門の allow を変えない・fail-open）。
+      - turn の区切り。印は判定の後に空にする。turn の最初の書きの時刻 T は wrote の最初の読める行の時刻。再入の stop（stop_hook_active）は今のまま判定せず、印も消さない。
+      - 古さの定義。定型の行は、行の頭の空白を落とした字が recent::WIP_HEADS の 4 つの頭のどれかで始まり、頭の後の字が空白だけでない行（recent::wip_state と同じ選び）。行の時刻は、notes の中でその行より前の最後の段の頭の行（head_time が Some を返す行・札 [席 <時刻>] の形）の時刻の下の端。T を分に切った値（T から T を 60 で割った余りを引く）以上の時刻を持つ定型の行が、作業中の bead（status が in_progress）のどれか 1 本に在れば新しい。無ければ古い。分に切る訳は、席の段の頭が分の形（date で埋める）で、同じ分の書きを古いと読まないため。10 分と時の形の頭は下の端で読むので、同じ 10 分か同じ時の中でも古い側に倒れる。
+      - 作業中の bead が 0 本の turn。書いた turn は止める（行の wip= の値は字 -）。決め D5 は作業の状態を作業中の bead に置くので、bead が無いと圧縮の後に状態が残らない。止めの行が in_progress にする手を名指す。
+      - 台帳の読み。今の器の口 crate::seat::ledger::read_text（bd --readonly list --all --limit 0 --json・子 process の cwd は hooked.cwd・client は --bd の旗か PATH の bd）を 1 回だけ撃ち、recent::beads_of で読む。待ち上限は今の rules 行 seat.ledger_timeout_s（timeout_of・manifest は --rules か埋め込み）。新しい rules 行は足さない。印の無い turn は台帳を読まない（NFR5）。
+      - 1 度だけ。止めた周は控え told に stale <T の字> と block を 1 回の書きで足して rc 2・stdout 0 byte・stderr 1 行で止める（打刻しない・未仕分けの止めと同じ外形）。印は止める前に空にするので、続く再入でない stop は通し、次の turn は新しい書きの時だけ判じる。再入は今の fn release が控えの最後の block を見て Idle を打つ。
+      - 未仕分けの止めが先。fn stop は今の未仕分けの判定が Block の周はそれだけで止め、印を消さない。Pass と Unjudged の周だけ古さを判じる（1 度の stop で止めは 1 つ）。
+      - 読めない周。Reason に 3 語を足す。marks-unreadable（wrote が在るのに読めないか空にできない・控えを持たない）・ledger-unreadable（rules を読めない・行が無い・子が落ちる・JSON を読めない）・ledger-timeout（待ち上限を越えた）。台帳の 2 語は keeps_record を真にし session ごとに 1 度だけ記帳する。どれも止めず TurnEndUnjudged を記帳して打刻する（POLARITY は今の in-loop・fail-open のまま・極性の一覧と外形の snapshot は替わらない）。
+
+      形（turn_end.rs）。
+      - 定数 WROTE_FILE（字 wrote）。enum Wrote（Ledger と Design・as_str は ledger と design）。
+      - 純関数 wrote_of(tool, command, kind) は Option<Wrote> を返す。tool が Bash なら command の片のどれかが台帳の書きの時 Ledger。tool が GUARDED に在り kind が Some(DesignIntent) か Some(DesignDoc) の時 Design。ほかは None。
+      - 純関数 stale_of(since, beads) は enum Staleness（Fresh と Stale { wip: Vec<String> }・wip は作業中の bead の id の台帳の順）を返す。
+      - TurnEndDecision に腕 Stale { wrote: String, wip: Vec<String> } を足す（型の名は替えない・極性の一覧の boundary の字は今のまま）。Record に腕 Stale(String)（控えの行 stale <ts>）を足す。
+      - pub(super) fn mark(hooked, args, payload) と、fn stop の引数を state_dir から hooked（&Hooked）に替える（dispatch の stop の腕が &hooked を渡す・中の state_dir は hooked.dir）。
+      - 止めの 1 行は次の字（NAME は器の名）: NAME: turn-end stale 作業中の bead の定型の行が古い wrote=<T の字> wip=<id を , で繋いだ字か -> — 作業中の bead の notes に頭 [席 <UTC の時刻>] の段で 計画: 次の手: 優先: 未決: の行を足す（作業中の bead が無ければ手を付けた epic か memo を in_progress にする）。
+      - module の doc の頭の段に、印と古さの判定と台帳の 1 回の読みの 2 文を足し、今の台帳は読まないの字を、印の無い turn は台帳を読まないに直す。
+      - lib の歯 hook_unsorted_stop_reasons_are_five_closed_words_and_two_keep_a_record を名 hook_unsorted_stop_reasons_are_eight_closed_words_and_four_keep_a_record に替え、断言を done の最初の項の 2 つの列に直す。この名の歯を名指す契約の行は無い（main 8837a96e の contracts の grep で 0 件）。
+
+      形（mod.rs）。dispatch の pre-tool-use の腕は pre_tool_use の戻りを受け、rc が RC_OK の時だけ turn_end::mark(&hooked, args, payload) を撃ってから戻りを返す。stop の腕は turn_end::stop(args, payload, &hooked) にする。
+
+      形（dialogue-surface.md）。§12 の約束の末に 1 項を足し、約束 8 の閉じた 5 語を 8 語に直す。足す項: 書いた turn の古さの止め（印の file wrote・最初の書きの分・作業中の bead のどれかに新しい段の定型の行・0 本も止める・台帳の 1 回の読みと待ち上限 seat.ledger_timeout_s・未仕分けの止めが先）。
+
+      done と verify の対応。最初の項は verify の 3 行目（lib の歯）。2 つ目から 8 つ目の項は verify の 2 行目（新しい子 module wipst の歯）。最後の項は verify の 4 行目（着地済みの e2e の歯 hook_unsorted_stop_・session.rs に在る・stop の引数の替えで外形が替わらないこと）。歯の数と見本の字は節 26。
+
+      範囲の外。2 つ目の止め（要望の時刻）は行 v-sort-gist で着地済み。Bash の script や python で書いた設計の file は印に載らない（道具の編集だけを測る・席の設計の書きは台帳の記帳を伴うので台帳の印が拾う）。定型の行の字の中身の良し悪し、子の係（SubagentStop）の turn、頭の無い notes の書きの形の門は扱わない。
+  - n: 26
+    type: prose
+    title: 行 v-turn-wip-stale の歯の見本と表（節 25 の続き）
+    body: |
+      歯の file（wipst.rs）。頭は //! の 2 行（接頭辞 wipst_ と、turn の終わりの古さの止めの歯である事）。e2e の群の子 module なので #![cfg(test)] は書かず、//! の段の次の空の行の後に use super::*; を置く（着地済みの子 module tests/e2e/pipe/land/cilast.rs と同じ形）。use super::* で git_repo・linked・run_hook_args・start_session・stop_hook・stop_payload・say_in・unjudged_in・tool_payload・bash_payload・paths_declaration・fake_bd の形を使う。payload に session の id を足す助けは、tool_payload か bash_payload の字の頭の波括弧の後に鍵 session_id と値と区切りの読点を差す。偽の bd は fake_bd と同じ組み方（JSON の file を cat する sh の script）に、撃たれるたびに同じ dir の file calls へ 1 行を足す行と、在れば exit の行か sleep の行を足した助けで、呼びの数は calls の行の数で測る。台帳の JSON は鍵 id・status・title・notes の要素の配列（作り方は hook_session_recent_wip_lines_follow_their_bead と同じ json_lite::quote）。
+
+      wrote_of の表（done の 2 つ目の項・9 行・tool と command と kind と期待）。
+      - Bash・bdw update w-1 --priority 1・None・Ledger
+      - Bash・bd --readonly list --json・None・None
+      - Bash・git status && bdw close x --reason r・None・Ledger
+      - Bash・echo bdw update w-1・None・None
+      - Bash・scripts/bdw note w-1 x・None・Ledger
+      - Edit・None・Some(DesignDoc)・Design
+      - Write・None・Some(DesignIntent)・Design
+      - Write・None・Some(Code)・None
+      - Read・None・Some(DesignIntent)・None
+
+      stale_of の表（done の 3 つ目の項・8 行）。since は 2026-10-06T11:21:10Z の秒。段の頭の字は [席 <時刻>] の形で、定型の行は頭の次の行に置く。
+      - 作業中の bead が 0 本（open の bead の notes は [席 2026-10-06T11:22Z] と 計画: x）→ Stale で wip は空
+      - in_progress の w-1 が [席 2026-10-06T11:21Z] と 計画: x → Fresh
+      - in_progress の w-1 が [席 2026-10-06T11:20Z] と 計画: x だけ → Stale で wip は w-1
+      - in_progress の w-1 が [席 2026-10-06T11:20Z] と 計画: x の後に [席 2026-10-06T11:22Z] と 定型でない行 着地した → Stale で wip は w-1
+      - in_progress の w-1（[席 2026-10-06T11:20Z] と 計画: x）と w-2（[席 2026-10-06T11:22Z] と 次の手: y）→ Fresh
+      - in_progress の w-1 が [席 2026-10-06T11:22Z] と 字 計画: の後が空白だけの行 → Stale で wip は w-1
+      - in_progress の w-1 が [席 2026-10-06T11:2xZ] と 計画: x → Stale で wip は w-1
+      - in_progress の w-1 の notes が 計画: x だけ（段の頭の行が無い）→ Stale で wip は w-1
+
+      e2e の見本（done の 4 つ目から 8 つ目の項）。repo は git_repo、置き場は linked、旗は --state-dir と --bd（偽の bd の path）。古い頭は [席 2000-01-01T00:00Z]。今の分の頭は fleet::cli::format_utc で今の秒を字にして、秒の 3 字（:SS）を落とした字を札に入れる（分を跨ぐ揺れを避けるため、撃つ前と後の分が違えば撃ち直す）。
+      - 4 つ目の項の歯は、1 度目の止めの後に session.rs の stop_hook の active を真にした再入の stop が rc 0 であることも見る。
+      - 6 つ目の項の歯は、宣言を paths_declaration の形で design-intent-paths = [spec/] の字（spec/ は二重引用符で囲む）にして .vessel.toml に書き git add と commit をしてから撃つ。repo の外の file は置き場の dir の下の x.yaml。runner の周は --plugin-root に <置き場>/pipe/x を渡す。
+      - 7 つ目の項の歯の rules は、session.rs の hook_utterance_record_never_stops_the_prompt_when_it_cannot_write と同じ row の助けで schema = 1 と行 seat.ledger_timeout_s（kind LedgerTimeoutS・値 1）だけを持つ file を書き、stop にだけ --rules で渡す（pre-tool-use の起票の門は埋め込みの ledger.denied_writes を読むので渡さない）。event は unjudged_in で数える。
+      - 8 つ目の項の歯は、say_in で発話 1 つを記帳し、書きの印を足してから stop を撃つ。
+  - n: 27
+    type: prose
+    title: 行 v-lens-ask — 審査役の雛形 3 つから迷ったらの既定と道具で止まる禁止を消し、外の読みを名指せる危険 1 つにつき 1 度に限る（memo t3-hub.92.9・作り直し v4 の段 S7 の 1 本目・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は器の雛形 3 file（scribe2/crates/scribe2/src/headless/ の lens.txt・lens-contract.txt・lens-memo.txt）と、同じ dir の lens.rs の tests module の lib の歯 1 本と、外形の snapshot 3 file（tests/e2e/snapshots/ の e2e__headless__lens_prompt_external_form.snap・e2e__headless__lens_contract_prompt_external_form.snap・e2e__headless__lens_promise_prompt_external_form.snap）と、器の設計の文書 scribe2/docs/design/pipeline.md を書く。snapshot の歯の file tests/e2e/headless.rs と、着地済みの範囲の歯の file tests/e2e/headless/lens.rs は verify の歯の在りかとして置き場だけの項（=）に置き、中身は替えない。depends は v-gate-fix（同じノート）。v-gate-fix は pipeline.md の末に節を足し、tests/e2e/headless.rs を write-set に持つので、その着地の後に流す。器の code（判定の読み・kind の語・verdict の 3 値）は替えない。
+
+      なぜ。審査役 3 つは、どれも迷ったら INCONCLUSIVE か keep を選べと書く（lens.txt の 21〜22 行目・lens-contract.txt の 22〜23 行目・lens-memo.txt の 14 行目）。判断の迷いと、確かめられない事実が同じ語になり、席が手で stop と release で流してきた（memo t3-hub.92.9 の観測）。また、木の外の読みに上限が無い（lens-contract.txt の 40〜41 行目は関数の呼び手と struct を組み立てる全ての場所と match の全ての場所を確かめよと書き、lens.txt の 34 行目も上限を持たない）。道具の制限の文（shell・cargo・git・書きの道具は無い——試さなくてよい）は、器が lens に読みの道具だけを渡すので機械で既に止まっている。lens.txt の 24 行目の、契約が渡されていないから判定できないは理由にならないの句も、器は契約の無い周に claude を起こさず rc 1 で断る（headless/lens.rs の module の doc の 4〜7 行目）ので機械で止まっている。決定はしご。要るか: 要る（上）。既に在るか: 判定の 3 値と kind の語と範囲の外の検査を根拠にしない文（lens.txt の 39 行目）は在り、替えない。新しく足すのは、INCONCLUSIVE と keep の定義の 1 文ずつと、外の読みの 1 文ずつだけである。
+
+      形（lens.txt）。字を次のとおり替える。
+      - 21〜22 行目の INCONCLUSIVE の 2 行を、1 行 - **INCONCLUSIVE**: 名指せる危険を diff と木で確かめられない。evidence にその危険と、確かめられなかった場所を書く。 に替える。
+      - 24 行目の頭の **契約は下に在る**。「契約が渡されていないから判定できない」は理由にならない——goal と done が を、**契約は下に在る**。goal と done が に替える（行の残りと 25〜27 行目は替えない）。
+      - 33 行目の 1 行（2 字の字下げの後の shell・cargo・git・書きの道具は無い——試さなくてよい。）を消す。
+      - 34 行目の - diff の外の事実（呼び手・既存の歯・憲法の生成 file）は、判定の前に木の現物で確かめる。 を、- diff は 1 度読む。diff の外は、名指せる危険（呼び手・既存の歯・憲法の生成 file のどれか）1 つにつき 1 度だけ読み、読んだ場所を evidence か at に書く。 に替える。
+      - ほかの行は替えない。範囲の外の検査を根拠にしない行（39 行目）・判定に届かない周の行（41 行目）・verify を自分で撃てなかったの行（35 行目）・判定の決め方の 1 以上数えたら PASS を返さない行（19 行目）・憲法の句の行（15 行目）は、着地済みの歯が字で測る。
+
+      形（lens-contract.txt）。
+      - 22〜23 行目の INCONCLUSIVE の 2 行を、1 行 - **INCONCLUSIVE**: 名指せる危険を材料と木で確かめられない。evidence にその危険と、確かめられなかった場所を書く。 に替える。
+      - 39 行目の末の 1 文 shell・cargo・git・書きの道具は無い——試さなくてよい。 を消す（その前の文 その外の file は読めない。 で行を終える）。
+      - 40〜41 行目の 2 行を、1 行 - 契約と設計の節と要件は 1 度読む。木は、名指せる危険（契約が消す名か替える名の使い手・struct を組み立てる場所・match の場所・名や字を含む既存の歯・可視性の連鎖・file の置き場のどれか）1 つにつき 1 度だけ読み、読んだ場所を at に書く。 に替える。
+      - 42〜44 行目（穴を 1 つ見つけても止めない行と、材料の欠けの行）と、質の数の節は替えない。材料の欠けの行は、器が審査の前に断る後の行（節 28 の 2 本目）で消す。
+
+      形（lens-memo.txt）。
+      - 14 行目の keep の行の末の **迷ったらこれを選ぶ**——確信の無い promote は実装役の消費を捨てる。 を、evidence に揃わない条件と、それが揃う引き金を 1 つ書く。 に替える。
+      - 17 行目の末の 1 文 shell・cargo・git・書きの道具は無い——試さなくてよい。 を消す。
+      - 18 行目の - 材料に無い code の事実は、判定の前に repo の現物で確かめる。 を、- repo は、名指せる危険（課題が今も在るか・既に直ったか）1 つにつき 1 度だけ読み、読んだ場所を evidence に書く。 に替える。
+      - 判定の語（promote・close・keep）と出力の JSON の形は替えない（merge-into の語と keep の理由の型は後の行・節 28 の 4 本目）。
+
+      形（snapshot）。外形の snapshot 3 file は、雛形の上の替えた行の字だけが替わる（器の fill が雛形の字をそのまま写す）。ほかの行は替えない。
+
+      形（器の設計の文書）。pipeline.md の末に § を 1 つ（置く時の末の番号 + 1）足し、上の 3 file の替えと、§64 の形 4 の (ii) と lens.txt の審査の前提の行の字を、この § の字で置き換えたことを書く。§64 の本文は替えない。
+
+      歯。lib の歯 vlask_three_templates_drop_the_unsure_default_and_read_outside_once を headless/lens.rs の tests module の末（歯 vrqual_ の後）に置く。super::TEMPLATE・super::CONTRACT_TEMPLATE・super::MEMO_TEMPLATE を path で読み（use の行は替えない）、3 つの雛形ごとに、字 迷ったら と字 試さなくてよい の数が 0、字 1 つにつき 1 度だけ読み の数が 1 であることを断言し、TEMPLATE と CONTRACT_TEMPLATE の判定の決め方の節（見出しの行 ## 判定の決め方 の次から、次の ## の見出しの前まで・歯 vgfind_ と同じ切り方）で字 確かめられなかった場所を書く の数が 1、MEMO_TEMPLATE で字 それが揃う引き金を 1 つ書く の数が 1、TEMPLATE で字 契約が渡されていないから の数が 0 であることを断言する。接頭辞 vlask_ は crate の中のほかの歯の名と verify の filter の語に部分の字で重ならない。噛みは撃たない（決め D2・設計だけの行）。
+
+      done と verify の対応。1 つ目の項は verify の 2 行目（新しい lib の歯）、2〜4 つ目は 3〜5 行目（外形の snapshot の歯 3 本・1 行に 1 本の名）、5 つ目は 6 行目（e2e の着地済みの範囲の歯）、6〜8 つ目は 7〜9 行目（lib の着地済みの雛形の歯 3 本）が測る。1 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので verify に書かない。入口の赤は、main に歯 vlask_ が無いので 2 行目が落ち（no-tests=fail）、snapshot の 3 行は雛形を替えると snapshot を直さなければ落ちる。
+
+      数えと大きさ。headless/lens.rs は 1140 行（main 8837a96e）で見込み +20 行。雛形 3 file は行を減らす。size は S。
+
+      測り（候補 5）。この行の前と後で、席が記録の材料を写して審査役を撃ち直す（節 28 の測り）。着地の前の測りは、今の器の binary で同じ材料を 2 度撃ち、揺れの幅を数えてから取る。
+
+      範囲の外。判定の語の名を CANNOT-VERIFY に替えること・重さの 3 段・出力の 2 層・材料の欠けを器が断ること・memo の merge-into と keep の理由の型・質の数の重ねの整理は、この行で決めない（節 28 の後の行）。消す物: 迷ったらの既定の文 3 つ・道具で止まる禁止の文 3 つ・契約が渡されていないからの句 1 つ・上限の無い外の読みの文 3 つ。
+  - n: 28
+    type: prose
+    title: 段 S7 の割り方の要点 — 審査役の prompt の行の順と、測りを先に置く理由（memo t3-hub.92.9・行はこのノートに 1 本だけ置く）
+    body: |
+      在りか。割り方の正本は段の memo t3-hub.92.9 の notes と、そこから辺を張る行の bead である。このノートには、先に流せる行 v-lens-ask（節 27）だけを置く。
+
+      測りを先に置く。審査役の雛形を替える前に、席が記録の材料で今の判定を撃ち直して基準を取る。契約の審査の run の dir は、材料の dir review（契約の写しと design.txt・requirements.txt ほか）と、review.json の key tree（審査の木の sha）を残す。器の口 scribe2 lens --contract と --worktree に、写した材料と、その tree を写した木を渡せば、同じ審査を撃ち直せる（新しい code は要らない）。材料は、2026-10-06 の契約の審査の FAIL 13 件と、PASS で着地した行から 13 件の、計 26 件とする（FAIL のうち 9 件はこのノートの版の直しで本物の漏れと確かめた物・残り 4 件はほかのノートの行で、直しの有無を測りの前に照らす）。今の binary で 2 度撃って揺れの幅を数え、各行の着地の後に新しい binary で 1 度撃ち、FAIL を捕まえた数と PASS を通した数を比べる。わざと欠陥を植えた便は作らない（本物の漏れの記録が在るので）。
+
+      契約の審査役は残す。2026-10-06 の契約の審査は 88 件のうち FAIL 13 件で、そのうち 9 件はこのノートの版 0.3〜0.16 の直しに 1 件ずつ当たる本物の漏れだった。消すと、この 13 件は実装役の周の後の gate か着地の後で見つかる。測りで捕まえる数が落ちた時だけ、消すか絞るかを改めて問う。
+
+      順（小さい行から）。
+      - 1 本目 v-lens-ask（器・雛形 3 つ・節 27）。迷ったらの既定と道具で止まる禁止を消し、外の読みを名指せる危険 1 つにつき 1 度に限る。v-gate-fix の着地の後。
+      - 2 本目 v-review-material-refuse（器・pipe/review.rs）。契約の審査の材料に欠けの印（要件面に無い・本文が無い・読めない）が在る周は、lens を起こさず INCONCLUSIVE と kind section-material-missing を器が書く。lens-contract.txt の材料の欠けの行を消す。2026-10-01 からの欠けは 0 件なので、効くのは費えでなく雛形の字を減らす事である。review.rs は 1463 行で上限 1500 に近く、growth の欄が要る。
+      - 3 本目 v-lens-severity（器・lens.txt・pipe/gate/lens.rs・pipe/gate/findings.rs・pipe/follow.rs）。gate の出力を所見の表（場所・何・なぜ・直し方・重さ）と最終行の JSON の 2 層にし、重さ Critical・Important・Minor を足し、FAIL を Critical か Important の所見を持つ周に限る。Minor だけの周は PASS で、所見は memo の材料に送る。判断の記録 ADR-63 の決定 (6)（PASS と数の食い違いを FAIL に読む）は、Critical と Important の数だけで照らす形に改める（記録の改めが要る）。v-gate-fix の直しの周の節は、所見の表を写す。
+      - 4 本目 v-gate-refix（器・行 v-gate-fix の節 10 の 2 本目）。直しの周の再審査を、前の周の所見の表と直した差だけを渡す雛形にする。3 本目の後。
+      - 5 本目 v-memo-merge（器・lens-memo.txt・pipe/dispatch/memo.rs・pipe/dispatch/memo_lens.rs・fleet/lifecycle_mark.rs）。memo の判定の語に merge（key into に相手の memo の id）を足し、keep に理由の型 3 つ（no-material・wait-row・wait-owner）と引き金の key を足す。merge は promote と close と同じく席の手番の memo に数える。
+      - 6 本目 v-review-quality-cut（器・lens-contract.txt・lens-quality.txt・pipe/review/quality.rs ほか）。契約の審査の質の 5 観点の数を、gate の重さの Minor の所見に寄せて消す。3 本目の着地と測りの後に決める。
+
+      重さと直しの周。今の行 v-gate-fix は、gate の lens の FAIL の全部で直しの周に入る（節 9）。3 本目の後は FAIL が Critical か Important の所見を持つ周だけになるので、直しの周の条件はそのまま Critical と Important の所見だけになる（v-gate-fix の code は替えない）。Minor だけの便は PASS で着地し、直しの周を使わない。
+
+      判定の語の名。INCONCLUSIVE を CANNOT-VERIFY に名を替えるのは、この段では行にしない。器の記録の語（review.json・verdict.json・event の detail・report の数え）が字 INCONCLUSIVE を持ち、器の src と歯の .rs の 49 file がその字を持ち、古い記録を読む口も要る。替えるのは意味で、1 本目が INCONCLUSIVE を名指せる危険を確かめられない時だけの語に絞る。名を替えるかは席が決める（memo の notes に問いとして残す）。
+
+      消す物（段 S7 の全部）。迷ったらの既定の文 3 つ・道具で止まる禁止の文 3 つ・契約が渡されていないからの句・上限の無い外の読みの文 3 つ（1 本目）・材料の欠けの行（2 本目）・質の数の重ね（6 本目）。
+  - n: 29
+    type: prose
+    title: 行 ag-ladder-verifier — 検証役の型に、足す提案の決定はしごの段と消す物の名指しを所見に書く 1 行を足す（memo t3-hub.92.4・作り直し v4 の段 S8・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 2 file を書く。型の file plugin/agents/verifier.md の本文の末に 1 行を足し、新しい歯の段の file crates/tsuzuri-boundary/tests/agldr.rs（接頭辞 agldr_）を足す。群の main.rs と module と kfold の表は書かない。型の file を読む着地済みの歯 2 file（群 teeth6 の module agpl.rs・段の file ageff.rs）は書かず、write-set の = の項で名指して verify で撃つ。depends は空。
+
+      なぜ。決定はしごは憲法の条 P-27（P-27.1 は段の順・P-27.2 は足す提案が先に消す物を名指す）に在り、器の席の指示文の 1 行（器の orchestrator.txt の 11 行目）も同じ順を言うが、条の mechanism は人の審査で、機械の縛りは無い（constitution.yaml の P-27 の mechanism の note）。直近 7 日に足した物 20 件のうち、はしごを守ったのは 9 件だった（memo t3-hub.92.4 の観測）。code の過剰は gate の質の観点（delete・stdlib・native・yagni・shrink）が既に見るが、席が足す問いの本文・判断の記録・規則の行・道具の案は検証役の攻めだけが読む。検証役の型の本文は頭の 4 行の案内だけで、何を攻めるかを持たない（verifier.md の 9 行目から 21 行目）。攻めの所見に段と消す物の有無が載れば、席は足す前にそれを読む。決定はしご。要るか: 要る（観測の 11 件）。既に在るか: 条 P-27 と指示文の 1 行は書く側の決まりで、攻める側の型には無い。新しい係・新しい観点・新しい門は足さず（条 N-5.1）、今の型の本文に 1 行を足すだけにする。例外の口は作らない（条 N-3.1）。
+
+      消す物（条 P-27.2）。この行は指示の 1 行で、走査・記録・規則の行・仕掛けを足さないので消す物を名指す要は無い。対として、同じ段 S8 で席は席の道具の置き場の歯の動きの門 teeth-moved.py（読む差の file の置き場 docs/design/patch/ が空）と器の穴の門 gate-scribe2-crates.py（設計の commit の門から外れ済み）と係の量の数え usage.py と線の見張り watch.sh（どれも境界の測りの札 meter.json と予算の記録 usage.json と重なる）を退ける（計画の file の席が退ける物の節・repo の外）。
+
+      形（verifier.md）。今の file の末の行（頼みの全文は起草の置き場の <名>/brief.md に在る、で始まる行）の後に、空の行 1 つと次のはしごの行 1 つを足す。file は改行で終える。ほかの字は替えない（頭の欄と頭の 4 行の塊と群の行を替えない）。はしごの行の字（字下げの 2 字を除く・末は句点）:
+
+        足す提案（走査・記録・規則の表の行・仕掛け・道具）を攻める時は、所見に、決定はしご（条 P-27.1）の段 1〜4 のどこで止まれたかと、消す物の名指し（条 P-27.2）の有無を書く。
+
+      歯の file（agldr.rs）。頭は //! の 2 行（接頭辞 agldr_ と、検証役の型の本文がはしごの行を 1 度持つことを見る歯である事・型の定義は Claude Code が係を起こす時に読む設定の字で、歯から係を起こして所見を測れないので字を照らす訳）の次の行に #![cfg(test)] を置く。外の依存を使わない。組み方は着地済みの段の file ageff.rs に合わせる（fn root は CARGO_MANIFEST_DIR から ../.. の path・file の読みは fs::read_to_string と unwrap_or_else の panic）。
+      - 定数 LINE は上のはしごの行の字（改行を含まない）。
+      - 純関数 ladder_count（file の字を受け、usize か None を返す）は、字の頭の字 --- と改行 1 つを外し、残りを最初の改行と字 --- と改行の並びで割り、後ろの本文の中の LINE の数を返す。頭が読めなければ None。
+      - 歯 agldr_verifier_body_holds_the_ladder_line は plugin/agents/verifier.md の今の字で ladder_count が Some(1) を返すことを見る。
+      - 歯 agldr_line_removed_doubled_or_moved_is_counted は今の字から作る 3 つの見本を見る。外した見本（LINE を空の字に 1 度だけ替える）は Some(0)、2 度にした見本（LINE を LINE と改行と LINE の字に 1 度だけ替える）は Some(2)、動かした見本（外した見本の、字 model: opus と改行の後に LINE と改行を 1 度だけ差し込む）は Some(0)。動かした見本は LINE の字を 1 度持つことも assert する（空振りでないこと）。
+
+      done と verify の対応。1 つ目と 2 つ目の項は verify の 2 行目（新しい歯の file agldr の歯）が測る。3 つ目の項は群 teeth6 の module agpl.rs の歯（頭の欄の型の欠けと本文の頭の 4 行の塊と群の行の欠けを見る・verifier.md の頭と塊を読む）が verify の 3 行目で、4 つ目の項は段の file ageff.rs の歯（頭の欄 effort を見る・verifier.md の頭の model の行に欄を差し込む見本を作る）が verify の 4 行目で測る。どちらも本文の末の行の数と字を数えないので、この行で落ちない（agpl.rs の type_faults と head_faults・ageff.rs の efforts と faults）。1 行目の clippy は done に載せない守り。xtask の check は共通 verify が撃つので行の verify に書かない。
+
+      範囲の外。起草係と調べ役の型（drafter.md・researcher.md）と手引き（SKILL.md と reference.md）は替えない。判断の記録の欄と契約の行の欄に段の欄を足すこと（計画の file の後の行の候補）、週 1 の束ねの bead の対の表（台帳の書き・席）、席の道具の退け（repo の外・席）は、この行で書かない。
