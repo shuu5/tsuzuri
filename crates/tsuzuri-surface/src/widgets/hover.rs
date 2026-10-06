@@ -79,6 +79,11 @@ pub fn keeps(exit: Point, now: Point, card: Rect, elapsed_ms: f64) -> bool {
     (0.0..=f64::from(GRACE_MS)).contains(&elapsed_ms) && card.distance(now) < card.distance(exit)
 }
 
+/// 猶予の間の pointer の動きで card を消すか: 出た点と同じ点の動きは判じに数えず（本物の Chrome は pointerleave の直後に同じ点の pointermove を撃つ）、ほかの点は `keeps` が偽なら消す。
+pub fn move_hides(exit: Point, now: Point, card: Rect, elapsed_ms: f64) -> bool {
+    now != exit && !keeps(exit, now, card, elapsed_ms)
+}
+
 /// 行の切り方: 36 字を超える行は 35 字と「…」にする（字は Unicode の scalar で数える）。
 pub fn clip(line: &str) -> String {
     if line.chars().count() <= ROW_CHARS {
@@ -150,7 +155,8 @@ mod dom {
     use web_sys::wasm_bindgen::closure::Closure;
 
     use super::{
-        Card, GRACE_MS, Point, Rect, Size, card_class, keeps, over_shows, place, unmount_hides,
+        Card, GRACE_MS, Point, Rect, Size, card_class, move_hides, over_shows, place,
+        unmount_hides,
     };
     use crate::vocab::label;
 
@@ -267,7 +273,7 @@ mod dom {
             let Some(rect) = self.rect() else {
                 return;
             };
-            if !keeps(l.from, now, rect, Date::now() - l.at_ms) {
+            if move_hides(l.from, now, rect, Date::now() - l.at_ms) {
                 self.hide();
             }
         }
