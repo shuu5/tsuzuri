@@ -28,6 +28,7 @@
 
 use crate::ledger::close_reason::{self, Defect, Form, Head};
 use crate::ledger::form::{pointer_text, MEMO_LABEL, MEMO_SECTIONS, QUESTION_LABEL};
+use crate::pipe::bead::{form_of, Form as BeadForm};
 use crate::ledger::question::{self, Gap, Metadata};
 use crate::ledger::trigger;
 use crate::name::NAME;
@@ -312,9 +313,9 @@ impl Create {
         self.labels.iter().any(|label| label == MEMO_LABEL)
     }
 
-    /// 契約の create か（acceptance に設計 pointer 行）。
+    /// 契約の create か（acceptance に設計 pointer 行か bead の形の行）。
     pub fn is_contract(&self) -> bool {
-        pointer_text(&self.acceptance).is_some()
+        pointer_text(&self.acceptance).is_some() || matches!(form_of(&self.acceptance), BeadForm::Bead | BeadForm::Both)
     }
 }
 

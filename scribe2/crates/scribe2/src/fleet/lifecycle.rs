@@ -15,12 +15,12 @@
 use super::json_tree::{self, Tree};
 use super::lifecycle_line::{book_lines, read_lines, Lines as EventLines};
 use super::lifecycle_mark::{
-    self as mark, bindings_of, census_anchors, events_of, events_order, events_tree, fleet_dir, hold, is_open_contract, ledger_is_newer, ledger_of, ledger_order,
-    ledger_tree, latest_runs, main_is_descendant, main_of, main_order, num, num_of, open_write_set, publish, read_commits, read_marks, read_rows,
+    self as mark, bindings_of, census_anchors, events_of, events_order, events_tree, fleet_dir, hold, ledger_is_newer, ledger_of, ledger_order,
+    ledger_tree, latest_runs, main_is_descendant, main_of, main_order, num, num_of, open_contracts, open_write_set, publish, read_commits, read_marks, read_rows,
     read_srs, read_stale, refusals_of, secs_of, unreflected_questions, verdict_unhandled, Face, Kind as MarkKind, Ledger, Marks, Stale,
     AnchorCensus, JSON_FILE, JSON_LOCK, MULTI_ANCHOR_PARTS, UNMEASURED_MULTI_ANCHOR, UNMEASURED_UNREFLECTED,
 };
-use super::phase::{self as run_phase, Judged, OpenContract};
+use super::phase::{self as run_phase, Judged};
 use super::store::{self, LockPolicy};
 use super::{cli::format_utc, epoch_of, replay, Event};
 use crate::cli_outcome::{Outcome, RC_REFUSED};
@@ -29,7 +29,6 @@ use crate::case::{
 };
 use crate::ledger::citation::prefix_of;
 use crate::ledger::{close_due_memos, Autoclose};
-use crate::ledger::form::pointer_text;
 use crate::ledger::phase::{self as ledger_phase, Lines as LineTimes};
 use crate::ledger::phase_main::{self, Commit, Row};
 use crate::ledger::phase_ruling;
@@ -785,12 +784,7 @@ fn replace_with_misfits(parts: &mut [Part], misfits: &[(String, Misfit)]) {
 /// 開いた契約・その最新の便・線より後の発話の部品（行 b の関数・列の判定は材料が持つ）。
 fn run_parts(place: &Place<'_>, world: &World, conf: &Conf<'_>, generated_at: &str) -> Vec<Part> {
     let state = replay(&world.events);
-    let open: Vec<OpenContract> = world
-        .issues
-        .iter()
-        .filter(|issue| is_open_contract(issue))
-        .map(|issue| OpenContract { bead: issue.id.clone(), pointer: pointer_text(&issue.acceptance).map(str::to_owned) })
-        .collect();
+    let open = open_contracts(&world.issues);
     let run_beads: BTreeMap<String, String> = state.runs.iter().map(|(id, run)| (id.clone(), run.bead.clone())).collect();
     run_phase::phases(&run_phase::Input {
         queue: &world.judged,

@@ -52,6 +52,19 @@ fn hook_memo_guard_judge_orders_reasons() {
     assert_eq!(judged("bd create x --acceptance 'design = d#a'", None), None, "label の無い契約");
 }
 
+/// 行の形（`[[contract]]` の行）の acceptance を持つ create は契約で、label intake:memo と並ぶと memo-on-contract で断り、label の無い同じ create は通す。
+#[test]
+fn vbled_guard_refuses_a_memo_label_on_a_bead_contract() {
+    let row = "[[contract]]\nid = \"b\"\ntitle = \"t\"\nreq = [\"FR1\"]\nwrite-set = [\"src/a.rs\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"d\"\n";
+    let words = |labels: &[&str]| -> Vec<String> {
+        let head = ["bd", "create", "題"].map(str::to_owned);
+        head.into_iter().chain(labels.iter().map(|word| (*word).to_owned())).chain(["--acceptance".to_owned(), row.to_owned()]).collect()
+    };
+    let judged = |labels: &[&str]| judge(&create_of(&words(labels)).unwrap_or_default(), |_| None);
+    assert_eq!(judged(&["--labels", "intake:memo"]), Some(Refusal::MemoOnContract));
+    assert_eq!(judged(&[]), None);
+}
+
 /// segment 1 つを 4 形の全部に掛ける（`None` は bd / bdw でない）。
 fn formed(line: &str) -> Option<Option<Refusal>> {
     let words = segments(line).into_iter().next().unwrap_or_default();

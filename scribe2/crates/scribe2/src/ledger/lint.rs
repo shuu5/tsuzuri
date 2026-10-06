@@ -12,6 +12,7 @@
 
 use super::form::is_memo;
 use crate::fleet::lifecycle_read;
+use crate::pipe::bead::{form_of, row_of, Form};
 use crate::pipe::table;
 use crate::rules::int_row;
 use crate::rules::manifest::Manifest;
@@ -86,13 +87,16 @@ fn ids<'i>(issues: impl Iterator<Item = &'i Issue>) -> Vec<String> {
 /// `memo.notes_max_bytes` の値（行を読めない周は `None`）。
 pub fn judge(issues: &[Issue], resolved: &BTreeSet<String>, notes_max: Option<u64>) -> Report {
     let open: Vec<&Issue> = issues.iter().filter(|issue| issue.status != CLOSED).collect();
-    let contracts: Vec<&Issue> = open.iter().copied().filter(|issue| pointer_of(issue).is_some()).collect();
+    let pointed: Vec<&Issue> = open.iter().copied().filter(|issue| pointer_of(issue).is_some()).collect();
+    let is_bead_form = |issue: &Issue| matches!(form_of(&issue.acceptance), Form::Bead | Form::Both);
+    let beaded: Vec<&Issue> = open.iter().copied().filter(|issue| pointer_of(issue).is_none() && is_bead_form(issue)).collect();
     let memos: Vec<&Issue> = open.iter().copied().filter(|issue| is_memo(issue)).collect();
+    let unread = |issue: &&&Issue| row_of(&issue.id, &issue.acceptance, &issue.description).is_err();
     Report {
         open: open.len(),
-        contracts: contracts.len(),
-        unresolved: ids(contracts.iter().copied().filter(|issue| pointer_of(issue).is_none_or(|text| !resolved.contains(text)))),
-        bodied: ids(contracts.iter().copied().filter(|issue| is_bodied(issue))),
+        contracts: pointed.len() + beaded.len(),
+        unresolved: ids(pointed.iter().copied().filter(|issue| pointer_of(issue).is_none_or(|text| !resolved.contains(text))).chain(beaded.iter().filter(unread).copied())),
+        bodied: ids(pointed.iter().copied().filter(|issue| is_bodied(issue))),
         memos: memos.len(),
         unpointed: ids(memos.iter().copied().filter(|memo| is_unpointed(memo))),
         oversized: notes_max.map(|max| ids(memos.iter().copied().filter(|memo| u64::try_from(memo.notes.len()).is_ok_and(|bytes| bytes > max)))),
@@ -192,6 +196,7 @@ fn resolves(repo: &Path, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{judge, render, render_unreadable};
+    use crate::fleet::json_lite::quote;
     use crate::seat::ledger::issues_of;
     use std::collections::BTreeSet;
 
@@ -225,5 +230,23 @@ mod tests {
         let unruled = render(&judge(&issues, &resolved, None));
         assert!(unruled.contains(" oversized=no-rule ") && !unruled.contains("oversized:"), "行の無い周は no-rule: {unruled}");
         assert_eq!(render_unreadable("ledger-unreadable"), "ledger: unreadable reason=ledger-unreadable");
+    }
+
+    /// 行の形の bead は契約に数え、読めない行の形は unresolved に名指し、design の行で始まり行の形が続く bead は bodied に数える。
+    #[test]
+    fn vbled_lint_counts_bead_contracts_and_names_unreadable_rows() {
+        let row = "[[contract]]\nid = \"b\"\ntitle = \"t\"\nreq = [\"FR1\"]\nwrite-set = [\"src/a.rs\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"d\"\n";
+        let item = |id: &str, acceptance: &str| format!("{{\"id\":{},\"status\":\"open\",\"acceptance_criteria\":{},\"description\":\"本文。\"}}", quote(id), quote(acceptance));
+        let items = [
+            item("ok", row),
+            item("bad", "[[contract]]\nid = a\n"),
+            item("both", &format!("design = docs/design/x.md#a\n{row}")),
+        ];
+        let issues = issues_of(&format!("[{}]", items.join(","))).unwrap_or_default();
+        let resolved: BTreeSet<String> = ["docs/design/x.md#a".to_owned()].into();
+        assert_eq!(
+            render(&judge(&issues, &resolved, Some(8192))),
+            "ledger: open=3 contracts=3 unresolved=1 bodied=1 memos=0 unpointed=0 oversized=0 unresolved:bad bodied:both"
+        );
     }
 }

@@ -12,7 +12,8 @@ use crate::case::{turn_of, Extra, Kind, Links, Misfit, Part, Phase, Turn};
 use crate::fleet::cli::format_utc;
 use crate::fleet::epoch_of;
 use crate::ledger::close_reason::{self, Form, LandedTail};
-use crate::ledger::form::pointer_text;
+use crate::ledger::form::{contract_key, is_memo};
+use crate::pipe::bead::row_of;
 use crate::seat::ledger::Issue;
 use std::collections::BTreeMap;
 
@@ -91,16 +92,25 @@ pub struct Output {
 pub fn derive(input: &Input<'_>) -> Output {
     let mut parts: Vec<Part> = input.commits.iter().filter_map(|commit| commit_part(input, commit)).collect();
     let mut unmeasured = Vec::new();
-    match input.rows {
+    let rows: Option<Vec<Row>> = input.rows.map(|rows| rows.iter().cloned().chain(bead_rows(input)).collect());
+    match &rows {
         Some(rows) => parts.extend(rows.iter().map(|row| row_part(input, row))),
         None => unmeasured.push((Kind::Row, UNMEASURED_TABLE)),
     }
-    match (input.requirements, input.rows) {
+    match (input.requirements, &rows) {
         (None, _) => unmeasured.push((Kind::Requirement, UNMEASURED_SRS)),
         (Some(_), None) => unmeasured.push((Kind::Requirement, UNMEASURED_TABLE)),
         (Some(ids), Some(rows)) => parts.extend(ids.iter().map(|id| requirement_part(id, rows))),
     }
     Output { parts, ties: ties_of(input), unmeasured }
+}
+
+/// bead の契約の行（行の形の bead のうち開いた bead と閉じて着地と読める bead・台帳の順・pointer は bead の id・req は行の req）。
+fn bead_rows(input: &Input<'_>) -> Vec<Row> {
+    let beaded = |issue: &&Issue| !is_memo(issue) && contract_key(issue).as_deref() == Some(issue.id.as_str());
+    let live = |issue: &&Issue| !is_closed(issue) || landed_close(issue, input.cutover);
+    let row = |issue: &Issue| row_of(&issue.id, &issue.acceptance, &issue.description).ok().map(|found| Row { pointer: issue.id.clone(), req: found.req });
+    input.issues.iter().filter(beaded).filter(live).filter_map(row).collect()
 }
 
 /// 器の便の commit（`run:` が event log に在る）の結び。
@@ -143,7 +153,7 @@ fn commit_part(input: &Input<'_>, commit: &Commit) -> Option<Part> {
 
 /// row の部品（開いた bead が在れば beaded・着地が在れば landed・どちらも無ければ unbeaded）。
 fn row_part(input: &Input<'_>, row: &Row) -> Part {
-    let beads: Vec<&Issue> = input.issues.iter().filter(|issue| pointer_text(&issue.acceptance) == Some(row.pointer.as_str())).collect();
+    let beads: Vec<&Issue> = input.issues.iter().filter(|issue| contract_key(issue).as_deref() == Some(row.pointer.as_str())).collect();
     let mut open = beads.iter().filter(|issue| !is_closed(issue)).peekable();
     let (phase, since) = if open.peek().is_some() {
         (Phase::RowBeaded, open.filter_map(|issue| time_of(issue.created_at.as_deref())).max())
@@ -207,6 +217,7 @@ mod tests {
     use super::{derive, Commit, Input, Output, Row, UNMEASURED_SRS, UNMEASURED_TABLE};
     use crate::case::Kind;
     use crate::fleet::epoch_of;
+    use crate::fleet::json_lite::quote;
     use crate::seat::ledger::{issues_of, Issue};
 
     /// 切り替えの線（09-20）と、線より後の時刻。
@@ -416,5 +427,41 @@ mod tests {
         let out = run(&issues, &[], Some(&rows), Some(&[]));
         let phases: Vec<&str> = out.parts.iter().map(|part| part.phase.as_str()).collect();
         assert_eq!(phases, ["row-landed", "row-unbeaded"]);
+    }
+
+    /// bead の契約の行（`[[contract]]` の行の形・req 1 つ）の JSON。
+    fn bead_row(id: &str, status: &str, req: &str, extra: &str) -> String {
+        let acceptance = format!("[[contract]]\nid = \"b\"\ntitle = \"t\"\nreq = [\"{req}\"]\nwrite-set = [\"src/a.rs\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"d\"\n");
+        format!(r#"{{"id":"{id}","status":"{status}","acceptance_criteria":{},"description":"本文。"{extra}}}"#, quote(&acceptance))
+    }
+
+    /// 契約表の行の後に、開いた bead の契約は row-beaded・着地で閉じた bead の契約は row-landed で足し、着地でなく閉じた bead の契約は足さない。
+    /// 要件は契約表と bead の契約の req で rowed になり、契約表の行が無い周は bead の行も出さない。
+    #[test]
+    fn vbled_phase_main_bead_contract_rows() {
+        let landed = r#","close_reason":"landed 0123456789abcdef0123456789abcdef01234567 ci=success","closed_at":"2026-09-28T00:00:00Z""#;
+        let withdrawn = r#","close_reason":"取り下げ 不要","closed_at":"2026-09-28T00:00:00Z""#;
+        let issues = ledger(&[
+            bead_row("s2-b", "open", "FR2", r#","created_at":"2026-09-27T01:02:03Z""#),
+            bead_row("s2-c", "closed", "FR3", landed),
+            bead_row("s2-d", "closed", "FR4", withdrawn),
+        ]);
+        let rows = [row("docs/design/x.md#a", &["FR1"])];
+        let out = run(&issues, &[], Some(&rows), Some(&["FR1", "FR2", "FR3", "FR4", "FR5"]));
+        let expected = want(&[
+            ("docs/design/x.md#a", "row-unbeaded", None, "seat"),
+            ("s2-b", "row-beaded", None, "none"),
+            ("s2-c", "row-landed", None, "none"),
+            ("FR1", "requirement-rowed", None, "none"),
+            ("FR2", "requirement-rowed", None, "none"),
+            ("FR3", "requirement-rowed", None, "none"),
+            ("FR4", "requirement-unrowed", None, "seat"),
+            ("FR5", "requirement-unrowed", None, "seat"),
+        ]);
+        assert_eq!(shape(&out), expected);
+        assert_eq!(out.parts[1].since.as_deref(), Some("2026-09-27T01:02:03Z"), "row-beaded の since は bead の created_at");
+        let unread = run(&issues, &[], None, Some(&["FR1"]));
+        assert_eq!(unread.unmeasured, [(Kind::Row, UNMEASURED_TABLE), (Kind::Requirement, UNMEASURED_TABLE)]);
+        assert!(unread.parts.is_empty(), "表が読めない周は bead の行も出さない: {:?}", unread.parts);
     }
 }

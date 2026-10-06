@@ -22,7 +22,7 @@ use super::{replay, Case, Event, Registration, State};
 use crate::case::Kind as Part;
 use crate::hook::vessel::digest::fnv1a_64;
 use crate::hook::vessel::state_dir as named_state_dir;
-use crate::ledger::form::{is_memo, is_question, pointer_text};
+use crate::ledger::form::{contract_key, is_memo, is_question};
 use crate::ledger::phase_main::Row;
 use crate::pipe::declaration::{requirements_at_sha, TablePlaces};
 use crate::pipe::dispatch::memo::Word;
@@ -39,6 +39,8 @@ use std::path::{Path, PathBuf};
 
 mod commits;
 pub use commits::read_commits;
+mod contracts;
+pub use contracts::open_contracts;
 
 /// 出力の file 名（読み手が見る 2 つの名の 1 つ）。
 pub const JSON_FILE: &str = "lifecycle.json";
@@ -687,10 +689,11 @@ pub fn is_open_contract(issue: &Issue) -> bool {
     issue.status != "closed" && !is_question(issue) && issue.kind != "decision" && !is_memo(issue) && issue.kind != "epic"
 }
 
-/// 開いた契約の設計 pointer が指す行の write-set の項目（`+` `-` `=` の印つきの字のまま）。
+/// 開いた契約の設計 pointer が指す行の write-set の項目（`+` `-` `=` の印つきの字のまま）の後ろに、開いた bead の契約の項目を足す。
 pub fn open_write_set(issues: &[Issue], write_sets: &[(String, Vec<String>)]) -> Vec<String> {
-    let pointers: Vec<&str> = issues.iter().filter(|issue| is_open_contract(issue)).filter_map(|issue| pointer_text(&issue.acceptance)).collect();
-    write_sets.iter().filter(|(pointer, _)| pointers.contains(&pointer.as_str())).flat_map(|(_, items)| items.clone()).collect()
+    let pointers: Vec<String> = issues.iter().filter(|issue| is_open_contract(issue)).filter_map(contract_key).collect();
+    let tabled = write_sets.iter().filter(|(pointer, _)| pointers.contains(pointer)).flat_map(|(_, items)| items.clone());
+    tabled.chain(contracts::bead_write_set(issues)).collect()
 }
 
 /// `verdict:<語>` の語（`,account:<label>` などの後ろは読まない）。

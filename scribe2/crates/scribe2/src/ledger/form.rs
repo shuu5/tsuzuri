@@ -12,6 +12,7 @@
 //! 増えない**（書きは親 module の `close` の 1 種のまま・C15）。読めない周は件数 0 に倒さず測れていない形の行を
 //! 出す（[`render_unreadable`]・C10 / NFR4）。極性は増やさない（doctor は読むだけで判定しない）。
 
+use crate::pipe::bead::{form_of, Form};
 use crate::pipe::declaration::TablePlaces;
 use crate::pipe::table;
 use crate::rules::manifest::Manifest;
@@ -100,6 +101,13 @@ pub fn pointer_text(acceptance: &str) -> Option<&str> {
     acceptance.lines().map(str::trim).find_map(|line| line.strip_prefix(DESIGN_KEY)).map(str::trim)
 }
 
+/// 契約の鍵（pointer の行が在ればその字・無く acceptance が bead の形〔[`Form::Bead`] か [`Form::Both`]〕なら bead の id・どちらも無ければ `None`）。
+pub fn contract_key(issue: &Issue) -> Option<String> {
+    pointer_text(&issue.acceptance)
+        .map(str::to_owned)
+        .or_else(|| matches!(form_of(&issue.acceptance), Form::Bead | Form::Both).then(|| issue.id.clone()))
+}
+
 /// memo か（label `intake:memo` を持つ）。
 pub fn is_memo(issue: &Issue) -> bool {
     issue.labels.iter().any(|label| label == MEMO_LABEL)
@@ -121,7 +129,7 @@ pub fn is_bead_id(text: &str, prefix: &str) -> bool {
 
 /// 契約か（label を持たず pointer 行を持つ＝4 象限の契約）。
 fn is_contract(issue: &Issue) -> bool {
-    !is_memo(issue) && pointer_text(&issue.acceptance).is_some()
+    !is_memo(issue) && contract_key(issue).is_some()
 }
 
 /// 本文（description と notes）に見出し `heading` の行が在るか。
@@ -181,7 +189,7 @@ fn points_at(issue: &Issue, row: &Row) -> bool {
 fn is_settled(memo: &Issue, issues: &[Issue]) -> bool {
     let mut reached = issues
         .iter()
-        .filter(|issue| pointer_text(&issue.acceptance).is_some() && !is_memo(issue))
+        .filter(|issue| contract_key(issue).is_some() && !is_memo(issue))
         .filter(|issue| issue.deps.iter().any(|dep| dep.kind == DISCOVERED_FROM && dep.on == memo.id))
         .peekable();
     reached.peek().is_some() && reached.all(|issue| issue.status == CLOSED)
@@ -214,8 +222,8 @@ pub fn judge(issues: &[Issue], docs: &Docs) -> Report {
         memos: memos.len(),
         missing: MEMO_SECTIONS.map(|heading| ids(memos.iter().copied().filter(|memo| !has_heading(memo, heading)))),
         shaped: shaped.len(),
-        both: ids(shaped.iter().copied().filter(|issue| is_memo(issue) && pointer_text(&issue.acceptance).is_some())),
-        neither: ids(shaped.iter().copied().filter(|issue| !is_memo(issue) && pointer_text(&issue.acceptance).is_none())),
+        both: ids(shaped.iter().copied().filter(|issue| is_memo(issue) && contract_key(issue).is_some())),
+        neither: ids(shaped.iter().copied().filter(|issue| !is_memo(issue) && contract_key(issue).is_none())),
         contracts: contracts.len(),
         undiscovered: ids(contracts.iter().copied().filter(|issue| undiscovered(issue, &memo_ids, docs))),
         unlanded: unlanded.len(),
@@ -349,7 +357,47 @@ fn section_number(title: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{docs_of, judge, names, render, render_unreadable, section_text, Docs, Issue, MEMO_LABEL, QUESTION_LABEL};
+    use super::{contract_key, docs_of, judge, names, render, render_unreadable, section_text, Docs, Issue, MEMO_LABEL, QUESTION_LABEL};
+    use crate::fleet::json_lite::quote;
+    use crate::seat::ledger::issues_of;
+
+    /// 契約表の導出の形の行（bead の契約の acceptance）。
+    const ROW: &str = "[[contract]]\nid = \"b\"\ntitle = \"t\"\nreq = [\"FR1\"]\nwrite-set = [\"src/a.rs\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"d\"\n";
+
+    /// bead 1 本の JSON（`from` は `discovered-from` の先）。
+    fn bead_json(id: &str, status: &str, labels: &[&str], acceptance: &str, from: Option<&str>) -> String {
+        let labels: Vec<String> = labels.iter().map(|label| quote(label)).collect();
+        let deps: Vec<String> = from.map(|on| format!("{{\"depends_on_id\":{},\"type\":\"discovered-from\"}}", quote(on))).into_iter().collect();
+        format!(
+            "{{\"id\":{},\"status\":{},\"issue_type\":\"task\",\"labels\":[{}],\"acceptance_criteria\":{},\"description\":\"本文。\",\"dependencies\":[{}]}}",
+            quote(id),
+            quote(status),
+            labels.join(","),
+            quote(acceptance),
+            deps.join(",")
+        )
+    }
+
+    /// 行の形の bead は label が無ければ契約・label intake:memo が付けば both・label も acceptance も無い bead は neither・閉じた行の形の契約だけが辿れる memo は settled。
+    #[test]
+    fn vbled_form_counts_a_bead_contract_as_a_contract() {
+        let items = [
+            bead_json("c1", "open", &[], ROW, None),
+            bead_json("m1", "open", &["intake:memo"], ROW, None),
+            bead_json("n1", "open", &[], "", None),
+            bead_json("s1", "open", &["intake:memo"], "", None),
+            bead_json("cc", "closed", &[], ROW, Some("s1")),
+        ];
+        let issues = issues_of(&format!("[{}]", items.join(","))).unwrap_or_default();
+        let report = judge(&issues, &Docs::default());
+        let found = (report.contracts, report.both, report.neither, report.settled);
+        assert_eq!(found, (1, vec!["m1".to_owned()], vec!["n1".to_owned()], vec!["s1".to_owned()]));
+        let key = |id: &str, acceptance: &str| contract_key(&open_task(id, &[], acceptance));
+        assert_eq!(key("c1", ROW), Some("c1".to_owned()), "行の形は bead の id");
+        assert_eq!(key("d1", "design = docs/design/x.md#a"), Some("docs/design/x.md#a".to_owned()), "design の行は pointer の字");
+        assert_eq!(key("n1", ""), None);
+        assert_eq!(key("b1", &format!("design = docs/design/x.md#a\n{ROW}")), Some("docs/design/x.md#a".to_owned()), "両方の形は pointer の字");
+    }
 
     /// 型 task の open の bead（label と acceptance だけを与える）。
     fn open_task(id: &str, labels: &[&str], acceptance: &str) -> Issue {

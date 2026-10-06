@@ -19,7 +19,7 @@ use crate::case::{turn_of, Extra, Kind, Links, Misfit, Part, Phase, Turn, Trigge
 use crate::fleet::cli::format_utc;
 use crate::fleet::epoch_of;
 use crate::ledger::close_reason::{self, Defect, Form, Head, LandedTail};
-use crate::ledger::form::{is_memo, is_question, pointer_text};
+use crate::ledger::form::{contract_key, is_memo, is_question, pointer_text};
 use crate::ledger::promotion::{self, Scope};
 use crate::ledger::trigger::{self, Trigger};
 use crate::pipe::table::{parse_pointer, Pointer};
@@ -339,7 +339,7 @@ impl<'a> Ctx<'a> {
             Kind::Question => Some(self.question_open(issue)),
             Kind::Memo => Some(self.memo_draft(issue)),
             Kind::Epic => Some(self.epic_open(issue)),
-            _ => pointer_text(&issue.acceptance).is_none().then(|| Draft::new(issue, kind, Phase::Misfit).misfit(Misfit::FormNeither)),
+            _ => contract_key(issue).is_none().then(|| Draft::new(issue, kind, Phase::Misfit).misfit(Misfit::FormNeither)),
         }
     }
 
@@ -389,7 +389,7 @@ impl<'a> Ctx<'a> {
                 Draft { links, extra: Extra::Memo { due: None, triggers: None, keep: None }, ..closed(Phase::MemoClosed) }
             }
             Kind::Epic => Draft { since: closed_at(issue), ..closed(Phase::EpicClosed) },
-            _ => Draft { extra: Extra::Contract { pointer: pointer_text(&issue.acceptance).map(str::to_owned), why: None }, ..closed(Phase::ContractClosed) },
+            _ => Draft { extra: Extra::Contract { pointer: contract_key(issue), why: None }, ..closed(Phase::ContractClosed) },
         }
     }
 
@@ -1258,5 +1258,16 @@ mod tests {
         assert_eq!(shape(&out, "s2-hx"), misfit("close-kind-mismatch"), "尾に語を足した閉じは読めない尾");
         let due = due_closes(&ledger(&specs), Some("s2"), &[]);
         assert_eq!(due, vec![("s2-mg".to_owned(), "昇格済み s2-mg1 s2-mg2".to_owned())], "host=green の契約だけを辿る memo を閉じる");
+    }
+
+    /// 行の形の bead の契約: 開いた契約は部品に出ず form-neither にも当たらず、着地で閉じた契約の extra の pointer は bead の id。
+    #[test]
+    fn vbled_phase_bead_contract_parts() {
+        let row = "[[contract]]\nid = \"b\"\ntitle = \"t\"\nreq = [\"FR1\"]\nwrite-set = [\"src/a.rs\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"d\"\n";
+        let specs = [open("s2-b").design(row), closed("s2-c", &landed(), LATE).design(row)];
+        let out = probe().run(&specs);
+        assert!(!listed(&out, "s2-b"), "開いた行の形の契約は部品に出さない（form-neither にも当たらない）: {:?}", out.parts);
+        assert_eq!(shape(&out, "s2-c"), ("contract-closed", "none", None));
+        assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("s2-c".to_owned()), why: None });
     }
 }
