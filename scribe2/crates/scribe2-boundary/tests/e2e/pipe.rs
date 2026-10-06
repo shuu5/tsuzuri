@@ -25,6 +25,7 @@ use vessel::rules::RuleValue;
 mod contracts;
 mod dispatch;
 mod gate;
+mod index_paths;
 mod intake;
 mod land;
 mod launch_failure;

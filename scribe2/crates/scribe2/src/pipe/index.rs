@@ -301,11 +301,12 @@ fn borrow_symbol<'a>(file: &'a File<'_>, found: &RoleMatch, name: &str) -> Optio
     scoped.or_else(|| file.placed.iter().find(same)).map(|item| item.occ.symbol.as_str())
 }
 
-/// occurrence の無い doc の link・取り込み・`Self` の literal の行（借りられなければ字だけの行）。
+/// occurrence の無い doc の link・取り込み・`Self` の literal の行（借りられなければ字だけの行）。捕えた名が改行かタブを含む一致
+/// （doc の行を丸ごと捕えた規則の一致）は行にしない（表は 1 行 1 occurrence・tab 区切りなので、名の字が形を崩す）。
 fn orphan_rows(file: &File<'_>, in_test_file: bool) -> Vec<Row> {
     let mut rows = Vec::new();
     for found in file.matches.iter().filter(|found| BORROWING.contains(&found.role)) {
-        let Some(name) = found.name.as_deref().filter(|name| !name.is_empty()) else {
+        let Some(name) = found.name.as_deref().filter(|name| !name.is_empty() && !name.contains(['\n', '\r', '\t'])) else {
             continue;
         };
         let seen = file.placed.iter().any(|item| {

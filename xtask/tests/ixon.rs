@@ -1,14 +1,15 @@
 //! 行 t-index-on の歯（接頭辞 ixon_・設計ノート surface-wave29d・器の設計 reverse-index.md の 4 節 形 1・器の判断の記録 ADR-0105）: 根の器の宣言
-//! .vessel.toml が器の任意 key index-scip と index-roles をそれぞれ 1 行だけで名乗り、字が器の宣言 scribe2/.vessel.toml に倣い（規則の file の path の頭
-//! scribe2/ だけが違う）、名指す規則の file が追跡されて役の 9 語の規則を順に持ち、index-scip の 1 本が scribe2/ の外の全部の manifest を覆い、
+//! .vessel.toml が器の任意 key index-scip と index-roles をそれぞれ 1 行だけで名乗り、字が器の宣言 scribe2/.vessel.toml に倣い（index-scip は器の command に
+//! 穴 {tree} を {tree}/scribe2 に替えた 2 本目を足し・行 v-index-paths、index-roles は規則の file の path の頭 scribe2/ だけが違う）、名指す規則の file が
+//! 追跡されて役の 9 語の規則を順に持ち、index-scip の 1 本目が scribe2/ の外の全部の manifest を覆い、
 //! rust-toolchain.toml が component rust-analyzer を 1 度だけ名乗ること。注の行を除いて key の字の行を数える。否定の見本は正しい見本から 1 句だけ替える。
 #![cfg(test)]
 
 use std::path::PathBuf;
 use std::process::Command;
 
-/// 索引を作る command の名乗りの行の字（器の宣言と同じ字）。
-const SCIP_ON: &str = "index-scip = [\"rust-analyzer scip {tree} --output {out}\"]";
+/// 索引を作る command の名乗りの行の字（器の宣言の command と、その穴 {tree} を器の workspace の {tree}/scribe2 に替えた 2 本目）。
+const SCIP_ON: &str = "index-scip = [\"rust-analyzer scip {tree} --output {out}\", \"rust-analyzer scip {tree}/scribe2 --output {out}\"]";
 
 /// 構文の役の一致を出す command の名乗りの行の字（器の宣言の規則の file の path に頭 scribe2/ を足した字）。
 const ROLES_ON: &str =
@@ -62,13 +63,30 @@ fn key_lines<'a>(text: &'a str, key: &str) -> Vec<&'a str> {
         .collect()
 }
 
-/// 根の 2 行が器の宣言の 2 key の行に倣うか（index-scip は同じ字・index-roles は規則の file の頭だけを scribe2/ に替えた字）。
+/// 器の宣言の index-scip の行から根の行の字を作る（器の command の列に、穴 {tree} を {tree}/scribe2 に替えた列を続ける）。
+fn root_scip(line: &str) -> String {
+    let body = line
+        .strip_prefix("index-scip = [")
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or_default();
+    format!(
+        "index-scip = [{body}, {}]",
+        body.replace("{tree}", "{tree}/scribe2")
+    )
+}
+
+/// 根の 2 行が器の宣言の 2 key の行に倣うか（index-scip は器の command に 2 本目を足した字・index-roles は規則の file の頭だけを
+/// scribe2/ に替えた字）。
 fn follows(vessel: &str) -> bool {
     let roles: Vec<String> = key_lines(vessel, "index-roles")
         .iter()
         .map(|line| line.replace(VESSEL_RULE, ROOT_RULE))
         .collect();
-    key_lines(vessel, "index-scip") == vec![SCIP_ON] && roles == vec![ROLES_ON.to_owned()]
+    let scip: Vec<String> = key_lines(vessel, "index-scip")
+        .iter()
+        .map(|line| root_scip(line))
+        .collect();
+    scip == vec![SCIP_ON.to_owned()] && roles == vec![ROLES_ON.to_owned()]
 }
 
 /// 規則の file の頭の段の rule id（行頭の字 id: の後ろ・file の順）。
@@ -235,6 +253,15 @@ fn ixon_one_clause_changes_are_refused() {
             good.replace("index-scip = ", "# index-scip = "),
         ),
         ("index-scip", good.replace("index-scip = ", "index_scip = ")),
+        (
+            "index-scip",
+            good.replace(", \"rust-analyzer scip {tree}/scribe2 --output {out}\"", ""),
+        ),
+        (
+            "index-scip",
+            good.replace("{tree}/scribe2", "{tree}/scribe"),
+        ),
+        ("index-scip", good.replace("{tree}/scribe2", "scribe2")),
         ("index-scip", format!("{good}{SCIP_ON}\n")),
         (
             "index-roles",

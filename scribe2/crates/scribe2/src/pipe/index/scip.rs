@@ -3,7 +3,8 @@
 //! 器は外の道具の library を持たない（NFR3）ので、必要な欄（document の相対 path と position_encoding・
 //! occurrence の範囲と symbol と定義の印と囲む範囲・symbol の情報の名と種類）だけを読み、知らない欄は wire の型で
 //! 飛ばす。外の crate の symbol（repo のどの document にも定義が無い）と関数の中の local は返さない。壊れた wire
-//! （途中で切れた varint・長さが本体を越える欄）は [`ScipError`] にする（部分の結果を返さない）。
+//! （途中で切れた varint・長さが本体を越える欄）は [`ScipError`] にする（部分の結果を返さない）。document の path は
+//! metadata の project_root からの相対なので、project_root の字も別の口（[`project_root`]）で読む。
 
 use std::collections::BTreeSet;
 
@@ -284,6 +285,23 @@ fn keep_in_repo(docs: &mut [Document]) {
         doc.occurrences.retain(|occ| inside(&occ.symbol));
         doc.infos.retain(|info| inside(&info.symbol));
     }
+}
+
+/// metadata の project_root の字（document の path の基の URI・欄が無い・壊れた wire・UTF-8 でない周は `None`）。
+pub fn project_root(bytes: &[u8]) -> Option<String> {
+    let mut cursor = Cursor::new(bytes, 0);
+    while let Ok(Some((number, value))) = cursor.field() {
+        let (1, Value::Bytes(meta)) = (number, value) else {
+            continue;
+        };
+        let mut inner = Cursor::new(meta, 0);
+        while let Ok(Some((field, found))) = inner.field() {
+            if let (3, Value::Bytes(text)) = (field, found) {
+                return std::str::from_utf8(text).ok().map(str::to_owned);
+            }
+        }
+    }
+    None
 }
 
 /// SCIP の index の bytes を読む。返すのは document の列（外の crate の symbol と local を落とした後）。

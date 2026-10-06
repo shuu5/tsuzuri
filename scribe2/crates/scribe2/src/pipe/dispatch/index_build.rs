@@ -18,7 +18,7 @@ use crate::pipe::declaration::{index_at, DeclError, IndexLines};
 use crate::pipe::gate::Limits;
 use crate::pipe::git_line;
 use crate::pipe::index::flat::{read_table, render, Row};
-use crate::pipe::index::scip::read_scip;
+use crate::pipe::index::scip::{project_root, read_scip};
 use crate::pipe::index::{join, key_digest, read_roles};
 use crate::pipe::row_review::tree_key;
 use crate::rules::int_row;
@@ -43,6 +43,17 @@ const SCHEMA_LINE: &str = "schema=1";
 
 /// 既定の ref。
 const HEAD: &str = "HEAD";
+
+/// 子の cargo の組みの置き場の env の名。子は木の下の [`TARGET_DIR`] で組み、木と一緒に外す（親の置き場を継ぐと、木の path で組んだ
+/// 印が親の置き場に残り、消えた木を後の組みが読みに行く）。
+const TARGET_ENV: &str = "CARGO_TARGET_DIR";
+
+/// 木の下の子の組みの置き場の名。
+const TARGET_DIR: &str = "target";
+
+/// 組み立ての受付札と封じ込めの箱の job の数（箱の memory は job ごとの上限の倍数。rust-analyzer の SCIP は 1 本で 1 job の上限
+/// 〔rules 行 `gate.job_memory_mb`〕を越える workspace が在る）。
+const INDEX_JOBS: u64 = 2;
 
 /// 状態の読み（閉じた 6 値・設計 reverse-index.md §4 形 9）。
 #[derive(Debug, Clone, PartialEq)]
@@ -312,7 +323,7 @@ impl Ctx<'_> {
     /// 受付札 1 枚を取り、木を detach して宣言の行を順に撃ち、結ぶ。外の道具の出力と木は結んだ後に外す。
     fn shoot(&self, timeout: u64) -> Result<Shot, Fail> {
         let limits = Limits::of(self.manifest).map_err(|reason| fail("no-rule", reason))?;
-        let _grant = admission::admit(self.state_dir, &format!("index-{}", self.key), 1, &limits.admission(self.policy));
+        let _grant = admission::admit(self.state_dir, &format!("index-{}", self.key), INDEX_JOBS, &limits.admission(self.policy));
         let tree = Worktree::make(self.repo, &self.dir, self.sha).ok_or_else(|| fail("tree", "commit の木を作れない"))?;
         let outs = |ext: &str, count: usize| (0..count).map(|n| file(&self.dir, &self.key, &format!("{n}.{ext}"))).collect::<Vec<_>>();
         let (scips, roles) = (outs("scip", self.lines.scip.len()), outs("roles", self.lines.roles.len()));
@@ -338,7 +349,7 @@ impl Ctx<'_> {
     }
 
     /// 行 1 本を撃つ（行を空白で割り穴を語ごとに埋め・頭の語は床の検査の resolve で解く・封じ込めの箱の中・cwd は木・
-    /// 役の行は stdout を file へ受ける）。
+    /// 子の組みの置き場は木の下・役の行は stdout を file へ受ける）。
     fn run_row(&self, row: &str, place: (&Path, &Path, bool), n: usize, timeout: u64) -> Result<String, Fail> {
         let (tree, out, to_file) = place;
         let (tree_text, out_text) = (tree.display().to_string(), out.display().to_string());
@@ -348,7 +359,7 @@ impl Ctx<'_> {
         let mut cmd = Invocation::new(program);
         cmd.args(words.iter().skip(1));
         let unit = unit_name(&format!("{}.tree", self.sha), "index", n);
-        let wrap = Wrap { unit: &unit, limit: Limit::PerJob(1), caps: Caps::embedded(), width: None };
+        let wrap = Wrap { unit: &unit, limit: Limit::PerJob(INDEX_JOBS), caps: Caps::embedded(), width: None };
         let (mut cmd, confinement) = wrap_command(cmd, &wrap);
         if !confinement.confined() {
             return Err(fail("confine", format!("{row}: 封じ込めの箱で包めない")));
@@ -358,7 +369,7 @@ impl Ctx<'_> {
         } else {
             Stdio::piped()
         };
-        cmd.current_dir(tree).process_group(0).stdin(Stdio::null()).stdout(stdout).stderr(Stdio::piped());
+        cmd.current_dir(tree).env(TARGET_ENV, tree.join(TARGET_DIR)).process_group(0).stdin(Stdio::null()).stdout(stdout).stderr(Stdio::piped());
         let ran = run(&mut cmd, Duration::from_secs(timeout));
         let _ = release_scope(&confinement);
         match ran {
@@ -417,18 +428,35 @@ impl Ctx<'_> {
     }
 }
 
+/// 木の下の path の、木からの相対の字（木の外・木そのもの・UTF-8 でない周は `None`・比べは path の要素ごと）。
+fn below<'a>(tree: &Path, path: &'a str) -> Option<&'a str> {
+    Path::new(path).strip_prefix(tree).ok().and_then(Path::to_str).filter(|rest| !rest.is_empty())
+}
+
 /// 撃ち終えた SCIP の file と役の一致の file を読み、木の本文で結んで表の行にする（読めない物は `unreadable`）。
+/// 表の path は木からの相対に揃える: SCIP の project_root（`file://` の URI）が木の下の dir なら、その相対を document の
+/// path の頭に足し、役の一致の file が木の下の絶対 path なら木の頭を外す（木の外の project_root と file は今のまま）。
 fn flatten(tree: &Path, outs: (&[PathBuf], &[PathBuf]), stderr: String) -> Result<Shot, Fail> {
     let unreadable = |reason: String| fail("unreadable", reason);
     let mut docs = Vec::new();
     for path in outs.0 {
         let bytes = fs::read(path).map_err(|err| unreadable(format!("{}: {err}", path.display())))?;
-        docs.extend(read_scip(&bytes).map_err(|err| unreadable(err.to_string()))?);
+        let mut read = read_scip(&bytes).map_err(|err| unreadable(err.to_string()))?;
+        let root = project_root(&bytes);
+        if let Some(head) = root.as_deref().and_then(|uri| uri.strip_prefix("file://")).and_then(|at| below(tree, at)) {
+            read.iter_mut().for_each(|doc| doc.path = format!("{head}/{}", doc.path));
+        }
+        docs.extend(read);
     }
     let (mut matches, mut dropped) = (Vec::new(), 0_usize);
     for path in outs.1 {
         let text = fs::read_to_string(path).map_err(|err| unreadable(format!("{}: {err}", path.display())))?;
-        let read = read_roles(&text).map_err(|err| unreadable(err.to_string()))?;
+        let mut read = read_roles(&text).map_err(|err| unreadable(err.to_string()))?;
+        for found in &mut read.matches {
+            if let Some(rest) = below(tree, &found.file) {
+                found.file = rest.to_owned();
+            }
+        }
         matches.extend(read.matches);
         dropped = dropped.saturating_add(read.dropped);
     }

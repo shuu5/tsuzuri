@@ -38,7 +38,8 @@ seat-constitution = "contracts/seat/brief.txt"
 build-lanes = true
 # code の索引（器の任意の key index-scip と index-roles・器の設計 reverse-index.md の 4 節 形 1・器の判断の記録 ADR-0105・行 t-index-on）。2 key を揃えた repo だけ、
 # 器は口 pipe index build と show・審査の材料 index.txt・受付の欄 code-facts の照らしで、外の道具の索引から code の事実を読む。字は器の宣言 scribe2/.vessel.toml に倣う。
-# index-scip の 1 本は根の workspace（folio2/crates/folio を member に持つ）を索引にする。scribe2/ は別の workspace で、器が SCIP の path を木からの相対に直すまで足さない。
+# index-scip の 1 本目は根の workspace（folio2/crates/folio を member に持つ）を、2 本目は別の workspace の器 scribe2/ を索引にする（行 v-index-paths）。
+# 器は SCIP の project_root が木の下の dir なら、その相対を document の path の頭に足す（2 本目の path は scribe2/ から始まる）。
 # index-roles の規則の file は器の scribe2/.config/index-roles.yml を名指す（写さない・同じ Rust の役の 9 語の規則を 1 本に保つ・決定はしごの「既に在るか」の段）。
-index-scip = ["rust-analyzer scip {tree} --output {out}"]
+index-scip = ["rust-analyzer scip {tree} --output {out}", "rust-analyzer scip {tree}/scribe2 --output {out}"]
 index-roles = ["ast-grep scan --rule scribe2/.config/index-roles.yml --json=stream {tree}"]
