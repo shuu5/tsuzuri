@@ -1,6 +1,6 @@
 //! 席の手元の 2 つの写しを tz derive が導く歯（接頭辞 seatcp_・設計ノート surface-wave27b 行 t-seatcopy・判断の記録 ADR-38 決定 (3)(4)）。
 //! 置き場は CARGO_TARGET_TMPDIR の下に歯ごとに作り、根で git init する（版管理の根が置き場の親になる）。正本は手で書いた小さな憲法と
-//! 規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
+//! 規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行と作法の行 2 本）と空の design-note/ で、tz derive --dir design-intent --out ../contracts を撃つ。
 #![cfg(test)]
 
 use crate::common::RULES;
@@ -35,7 +35,12 @@ articles:
     title: 題よん
 ";
 
-/// 要の写しの字（頭の行・順位・段の名と規範文・段「いつも守る」の条の id と題・在りか）。
+/// 規則の表の作法の行（D-1 の字は空白の続きを持つ）。
+const DISCIPLINE: &str = "discipline:
+  - {id: D-1, article: P-1, what: 係を  並べる}
+  - {id: D-2, article: N-1, what: 決めを書く}";
+
+/// 要の写しの字（頭の行・順位・段の名と規範文・在りか・作法の段の名と作法の行）。
 const BRIEF: &str = "生成物・手で直さない・design-intent/constitution.yaml v9.9
 順位 段の順 で解く。
 絶対にやらない
@@ -43,10 +48,10 @@ N-1.1 消さない。
 N-1.2 移す だけ。
 確認してから
 A-1.1 問う。
-いつも守る
-P-1 題 いち
-P-2 題よん
 全文 contracts/seat/constitution.txt
+席の作法
+D-1 係を 並べる
+D-2 決めを書く
 ";
 
 /// 全文の写しの字（頭の行・順位・全部の規範文を正本の順に）。
@@ -80,6 +85,7 @@ impl Place {
         let p = Place { root };
         p.put("constitution.yaml", CONSTITUTION);
         p.put("rules.yaml", RULES);
+        p.swap("rules.yaml", "discipline: []", DISCIPLINE);
         p
     }
 
@@ -277,6 +283,71 @@ fn seatcp_check_drift() {
         out.contains("DRIFT: seat/constitution.txt（導出と byte で違う）"),
         "{out}"
     );
+}
+
+#[test]
+fn seatcp_no_discipline_rows_no_manners() {
+    let p = Place::new("no-manners");
+    p.swap("rules.yaml", DISCIPLINE, "discipline: []");
+    let (rc, out) = p.derive("--write");
+    assert_eq!(rc, 0, "{out}");
+    let brief = p.seat("brief.txt").expect("要の写し");
+    assert_eq!(
+        Some(brief.as_str()),
+        BRIEF.strip_suffix("席の作法\nD-1 係を 並べる\nD-2 決めを書く\n"),
+        "末の 3 行を除いた 8 行"
+    );
+    assert!(!brief.contains("席の作法"), "{brief}");
+}
+
+#[test]
+fn seatcp_refuses_manners_without_what() {
+    let p = Place::new("no-what");
+    p.swap("rules.yaml", "what: 決めを書く", "why: 決めを書く");
+    for flag in ["--write", "--check"] {
+        let (rc, out) = p.derive(flag);
+        assert_eq!(rc, 2, "{flag}: {out}");
+        assert!(
+            out.contains("まだ分からない") && out.contains("D-2: what が字でない"),
+            "{flag}: {out}"
+        );
+    }
+    assert!(p.contracts().is_empty(), "何も書かない");
+}
+
+#[test]
+fn seatcp_check_drift_follows_manners() {
+    let p = Place::new("manners-drift");
+    assert_eq!(p.derive("--write").0, 0);
+    p.swap("rules.yaml", "決めを書く", "決めを残す");
+    let (rc, out) = p.derive("--check");
+    assert_eq!(rc, 1, "{out}");
+    assert!(out.contains("DRIFT: seat/brief.txt"), "{out}");
+    assert!(!out.contains("DRIFT: seat/constitution.txt"), "{out}");
+}
+
+#[test]
+fn seatcp_repo_copies_match_the_sources() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let out = Command::new(env!("CARGO_BIN_EXE_tz"))
+        .args([
+            "derive",
+            "--check",
+            "--dir",
+            "design-intent",
+            "--out",
+            "../contracts",
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("tz を撃つ");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(text.contains("差分 0"), "{text}");
 }
 
 #[test]

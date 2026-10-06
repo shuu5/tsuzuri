@@ -1,8 +1,8 @@
 //! 席の手元の写し（行 t-seatcopy・判断の記録 ADR-38 決定 (3)(4)・条 P-13・P-2）。憲法の正本から、要の写し（順位・段
-//! 「絶対にやらない」と段「確認してから」の規範文の全文・段「いつも守る」の条の id と題・全文の写しの在りか）と、全文の写し
+//! 「絶対にやらない」と段「確認してから」の規範文の全文・全文の写しの在りか・規則の表の作法の行の id と字）と、全文の写し
 //! （順位と全部の規範文の 1 行 1 文）の 2 つの file の字を導く。`derive.rs` が導出物の置き場の下の dir `seat` に書き・比べる
 //! （置き場の直下に置かないのは、器の契約表の宣言が直下の .md と .toml を契約表と読むため）。
-//! 形は中身を削らない最短の形: 頭の 1 行・順位の行・段の名だけの行・「id 字」の行・「条の id 題」の行・在りかの行を改行 1 つで
+//! 形は中身を削らない最短の形: 頭の 1 行・順位の行・段の名だけの行・「id 字」の行・在りかの行・作法の段の名の行・作法の「id 字」の行を改行 1 つで
 //! 区切り、区切りに「: 」を使わず、字は空白を 1 つに畳むだけで逐語。規則の表に欄 key が seat-bytes と seat-role-bytes の行が
 //! 2 本とも無い置き場は写しを導かない。強さが規範の値でない文・「。」で終わらない文・文 0 本は Err（まだ分からない・退いた
 //! folio inject の導き方を引き継ぐ）。
@@ -40,11 +40,13 @@ const PRECEDENCE: &str = "順位";
 const LOCATION: &str = "全文";
 
 /// 要の写しの段の順と段の名の行（条 P-13.1 の字）。
-const TIERS: [(Tier, &str); 3] = [
+const TIERS: [(Tier, &str); 2] = [
     (Tier::Never, "絶対にやらない"),
     (Tier::AskFirst, "確認してから"),
-    (Tier::Always, "いつも守る"),
 ];
+
+/// 作法の行の段の名の行（規則の表の節 discipline・条 P-13.1 の字）。
+const MANNERS: &str = "席の作法";
 
 /// 憲法の正本の file の名（正本の置き場の直下）。
 const CONSTITUTION: &str = "constitution.yaml";
@@ -61,11 +63,9 @@ pub(crate) struct Copies {
     pub(crate) cap: usize,
 }
 
-/// 条 1 つ（段・題と、規範文の「id 字」の行）。
-struct Article<'a> {
-    id: &'a str,
+/// 条 1 つ（段と、規範文の「id 字」の行）。
+struct Article {
     tier: Tier,
-    title: &'a str,
     lines: Vec<String>,
 }
 
@@ -98,13 +98,14 @@ pub(crate) fn derive(dir: &Path, out_dir: &Path) -> Result<Option<Copies>, Strin
     let head = format!("{HEAD}{} {version}", rel(&root, &path)?);
     let full_at = under(rel(&root, out_dir)?, &format!("{DIR}/{FULL}"));
     let arts = articles(&c)?;
+    let manners = discipline(&rules)?;
     let pre = format!("{PRECEDENCE} {pre}");
     let role_max = format!(
         "{HEAD}{} {SEAT_ROLE_BYTES}\n{role}\n",
         rel(&root, &dir.join(RULES))?
     );
     Ok(Some(Copies {
-        brief: brief(&[&head, &pre], &arts, &full_at),
+        brief: brief(&[&head, &pre], &arts, &full_at, &manners),
         full: full(&[&head, &pre], &arts),
         role_max,
         cap,
@@ -126,7 +127,7 @@ fn cap(rules: &Node) -> Result<Option<(usize, usize)>, String> {
 }
 
 /// 憲法の条の全部（正本の順）。規範文が 1 本も無ければ Err。
-fn articles(c: &Node) -> Result<Vec<Article<'_>>, String> {
+fn articles(c: &Node) -> Result<Vec<Article>, String> {
     let list = c
         .get("articles")
         .and_then(Node::as_seq)
@@ -139,10 +140,6 @@ fn articles(c: &Node) -> Result<Vec<Article<'_>>, String> {
             .and_then(Node::as_str)
             .and_then(Tier::from_name)
             .ok_or_else(|| format!("{id}: tier が段の値でない"))?;
-        let title = a
-            .get("title")
-            .and_then(Node::as_str)
-            .ok_or_else(|| format!("{id}: title が無い"))?;
         let statements = match a.get("statements") {
             None => &[][..],
             Some(s) => s
@@ -153,12 +150,7 @@ fn articles(c: &Node) -> Result<Vec<Article<'_>>, String> {
             .iter()
             .map(statement)
             .collect::<Result<Vec<_>, _>>()?;
-        out.push(Article {
-            id,
-            tier,
-            title,
-            lines,
-        });
+        out.push(Article { tier, lines });
     }
     if out.iter().all(|a| a.lines.is_empty()) {
         return Err("規範文が 0 本（母集団が空 = 正本が壊れている）".to_string());
@@ -187,20 +179,41 @@ fn statement(s: &Node) -> Result<String, String> {
     Ok(format!("{id} {text}"))
 }
 
-/// 要の写し: 頭の行と順位の行・段ごとに段の名の行と、段「いつも守る」は条の「id 題」・ほかの段は規範文の行・在りかの行。
-fn brief(top: &[&str], arts: &[Article], full_at: &str) -> String {
+/// 規則の表の作法の行（節 discipline）の「id 字」の行（規則の表の順）。節が無ければ空・一覧でなければ Err・行に欄 id か欄 what の字が無ければ Err。
+fn discipline(rules: &Node) -> Result<Vec<String>, String> {
+    let Some(rows) = rules.get("discipline") else {
+        return Ok(Vec::new());
+    };
+    let rows = rows.as_seq().ok_or("discipline が一覧でない")?;
+    rows.iter()
+        .map(|row| {
+            let id = row
+                .get("id")
+                .and_then(Node::as_str)
+                .ok_or("作法の行に id が無い")?;
+            let what = row
+                .get("what")
+                .and_then(Node::as_str)
+                .ok_or_else(|| format!("{id}: what が字でない"))?;
+            Ok(format!("{id} {}", squash(what)))
+        })
+        .collect()
+}
+
+/// 要の写し: 頭の行と順位の行・段ごとに段の名の行と規範文の行・在りかの行・作法の行が在れば作法の段の名の行と作法の行。
+fn brief(top: &[&str], arts: &[Article], full_at: &str, manners: &[String]) -> String {
     let mut lines: Vec<String> = top.iter().map(|s| (*s).to_string()).collect();
     for (tier, name) in TIERS {
         lines.push(name.to_string());
         for a in arts.iter().filter(|a| a.tier == tier) {
-            if tier == Tier::Always {
-                lines.push(format!("{} {}", a.id, squash(a.title)));
-            } else {
-                lines.extend(a.lines.iter().cloned());
-            }
+            lines.extend(a.lines.iter().cloned());
         }
     }
     lines.push(format!("{LOCATION} {full_at}"));
+    if !manners.is_empty() {
+        lines.push(MANNERS.to_string());
+        lines.extend(manners.iter().cloned());
+    }
     lines.join("\n") + "\n"
 }
 
