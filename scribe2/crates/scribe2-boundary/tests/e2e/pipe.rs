@@ -218,7 +218,7 @@ pub(super) fn repo_with_state_configured(state: &Path, config: &[(&str, &str)]) 
     fs::create_dir_all(repo.join("src")).expect("src dir を作れる");
     fs::write(repo.join("src").join("lib.rs"), "// seed\n").expect("seed を書ける");
     // 要件面（契約表の `req` の id の出所・`.md` の見出し形・`requirement_ids` が読む）。
-    fs::write(repo.join(REQS_FILE), "# toy の要件\n\n## FR4\n\n## FR5\n").expect("要件面を書ける");
+    fs::write(repo.join(REQS_FILE), "# toy の要件\n\n## FR4\n\n縦 1 本を通す。\n\n## FR5\n").expect("要件面を書ける");
     // 設計 doc（契約の正本・intake は **HEAD の tree** の行を読む）。
     write_design(&repo, &design_doc(&[]));
     // **宣言も marker と一緒に commit する**（intake は HEAD の tree から読む＝作業ツリー

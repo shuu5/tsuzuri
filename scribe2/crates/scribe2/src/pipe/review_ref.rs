@@ -15,7 +15,7 @@ use super::gate::{Limits, Verdict};
 use super::ratelimit::{select_lens_account, LensAccount, Pool};
 use super::refuse::Certainty;
 use super::review::tree::{digest, materialize, requirements_of};
-use super::review::{design_material, lens_version, read_lens, stage, FindingKind, REVIEW_DIR};
+use super::review::{design_material, lens_version, missing_reason, read_lens, stage, FindingKind, REVIEW_DIR};
 use super::row_review::{judgement, mark_path, ref_path, root_of, row_digest, tree_key, Basis, Parts, REF_DIR, SCHEMA_LINE};
 use super::table::{form_of, parse_pointer, read_rows, tracked_files, Pointer, BEGIN, END};
 use super::{git_line, git_ok};
@@ -436,8 +436,12 @@ fn lens_row(ctx: &Ctx<'_>, at: (usize, &Row), known: &Known, staging: (&[Ancesto
         Ok(found) => found,
         Err(reason) => return Judged::unmeasured(reason),
     };
-    let line = crate::headless::fill(&ctx.inputs.lens, &[("{contract}", &staged.contract.display().to_string()), ("{worktree}", &staged.tree.path.display().to_string())]);
     let mut base = Judged { materials: staged.materials.clone(), ..Judged::stopped(Verdict::Pass, None, None) };
+    // 材料の欠けは器が字で知っている事実（Reviewed と同じ字）: lens の版を求めず撃たず、材料の dir の判定を返す。
+    if !staged.missing.is_empty() {
+        return Judged { kind: Some(FindingKind::SectionMaterialMissing), ..base.unfired(missing_reason(&staged.missing), &staged) };
+    }
+    let line = crate::headless::fill(&ctx.inputs.lens, &[("{contract}", &staged.contract.display().to_string()), ("{worktree}", &staged.tree.path.display().to_string())]);
     match lens_version(&line) {
         Ok(found) => base.version = found,
         Err(reason) => return base.unfired(reason, &staged),
@@ -463,6 +467,8 @@ struct Staged {
     done: String,
     /// 約束の行を持つか。
     promised: bool,
+    /// 材料の欠けの印の行（[`stage`] の 3 つ目・空でなければ lens を撃たない）。
+    missing: Vec<String>,
 }
 
 /// 審査の木を置き、実物の祖先の差分を重ね、Reviewed と同じ組み手で材料を組む。
@@ -480,8 +486,8 @@ fn stage_row(ctx: &Ctx<'_>, at: (usize, &Row), staging: (&[Ancestor], Option<(Co
     std::fs::write(&source, &body).map_err(|err| format!("{} を書けない: {err}", source.display()))?;
     let dir = slot.join(REVIEW_DIR);
     let note = note_of(ctx, &design_material(&tree.path, &contract.design), layers, findings);
-    let (copy, promised) = stage(&tree.path, (&contract, &source), &requirements, &dir, &note)?;
-    Ok(Staged { tree, materials: digest(&dir)?, dir, contract: copy, done: contract.done, promised })
+    let (copy, promised, missing) = stage(&tree.path, (&contract, &source), &requirements, &dir, &note)?;
+    Ok(Staged { tree, materials: digest(&dir)?, dir, contract: copy, done: contract.done, promised, missing })
 }
 
 /// 設計の材料の末尾に足す字: 宣言の祖先ごとに「未着地の祖先」の 1 行・祖先の行の TOML の写し・祖先の節の本文、続けて確定でない

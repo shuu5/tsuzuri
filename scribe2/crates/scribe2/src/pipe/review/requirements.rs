@@ -1,7 +1,7 @@
 //! 要件本文の読み手の群（設計 docs/design/contract-source.md §37・契約表の行 al・`s2-07l.541`）。
 //!
 //! 要件面（`.html` / `.yaml` / `.md`）から `req` の各 id の本文を読み、審査の材料の `{requirements}` の本文に組む
-//! 群である（[`requirements_text`]）。`pipe/review.rs` からの**純移動**で、歯は 1 本も足していない（親に残る
+//! 群である（[`requirements_read`]）。`pipe/review.rs` からの**純移動**で、歯は 1 本も足していない（親に残る
 //! in-file の歯が従来どおり測る）。外の呼び手は 0 で、親の材料の組み立てからだけ入る。親の私有 item は
 //! `super::` でそのまま見えるので、**親側の可視性は 1 語も上げていない**。親の本体と歯が名指す 6 名だけが
 //! `pub(super)` で、残りはこの module に閉じる。
@@ -27,26 +27,34 @@ pub(super) enum Found {
 /// 字面〕・`.yaml` / `.yml` = [`requirement_yaml`]〔id と同じ mapping の `text:` → 無ければ `shall:`〕・`.md` =
 /// [`requirement_md`]〔見出しの
 /// 下の本文〕・設計 contract-source.md §4・C2）。要件面を読めない周・形を読めない周は理由の 1 行・id が無い周と本文の
-/// 無い id はその id の行に明示する（黙って落とさない・NFR4）。
-pub(super) fn requirements_text(repo: &Path, path: &str, req: &[String]) -> String {
+/// 無い id はその id の行に明示する（黙って落とさない・NFR4）。返りは本文の字と欠けの印の行の列の対で、欠けの印の行は
+/// 要件面・形を読めない周はその 1 行、id ごとの本文の空と不在は id と空白とその字を繋いだ行（器が lens を撃たずに判じる材料）。
+pub(super) fn requirements_read(repo: &Path, path: &str, req: &[String]) -> (String, Vec<String>) {
+    let whole = |line: String| (line.clone(), vec![line]);
     let text = match table::read(repo, path) {
         Ok(found) => found,
-        Err(reason) => return format!("（要件面を読めない: {reason}）"),
+        Err(reason) => return whole(format!("（要件面を読めない: {reason}）")),
     };
     let reader: fn(&str, &str) -> Found = match Path::new(path).extension().and_then(|ext| ext.to_str()) {
         Some("html") => |text, id| requirement_row(text, id).map_or(Found::Absent, Found::Body),
         Some("yaml" | "yml") => requirement_yaml,
         Some("md") => requirement_md,
-        _ => return format!("（要件面 {path} の形を読めない: .html の anchor / .yaml の id + text / .md の見出しだけ）"),
+        _ => return whole(format!("（要件面 {path} の形を読めない: .html の anchor / .yaml の id + text / .md の見出しだけ）")),
     };
-    req.iter()
-        .map(|id| match reader(&text, id) {
-            Found::Body(body) => format!("{id}: {body}"),
-            Found::Empty => format!("{id}: （要件面 {path} の {id} に本文が無い）"),
-            Found::Absent => format!("{id}: （要件面 {path} に無い）"),
-        })
-        .collect::<Vec<String>>()
-        .join("\n")
+    let (mut lines, mut missing) = (Vec::new(), Vec::new());
+    for id in req {
+        let reason = match reader(&text, id) {
+            Found::Body(body) => {
+                lines.push(format!("{id}: {body}"));
+                continue;
+            }
+            Found::Empty => format!("（要件面 {path} の {id} に本文が無い）"),
+            Found::Absent => format!("（要件面 {path} に無い）"),
+        };
+        lines.push(format!("{id}: {reason}"));
+        missing.push(format!("{id} {reason}"));
+    }
+    (lines.join("\n"), missing)
 }
 
 /// 要件面の中で `id="<id>"` / `id='<id>'` を持つ最初の行の本文（tag を剥がし空白を畳む）。無ければ `None`。

@@ -8,6 +8,7 @@ use super::intake::{lens_finding, review_has, review_pairs, reviewed_detail, tee
 
 /// 欄 `patch` の差が替える定義の項目の歯（`pipe index show --row`）。
 mod vpdefs;
+mod vrmiss;
 
 // ───── 契約の審査の段（`s2-07l.241`・設計 contract-source.md §4・SRS FR49 / FR9 / AC22・接頭辞 `pipe_review_`） ─────
 
@@ -653,26 +654,6 @@ fn pipe_review_reads_requirements_text_from_md() {
     let requirements = reviewed_requirements(&repo, &state);
     assert_eq!(requirements, "FR1: 便を 起こす MD-TEXT-MARK。", "{requirements}");
     assert!(!requirements.contains("審査する"), "次の見出しの下は写さない: {requirements}");
-    clean(&[&repo, &state]);
-}
-
-/// (d) 裸の `- FR1` の yaml は id の検査は通るが本文が無い＝「（要件面 <path> の FR1 に本文が無い）」の理由が材料に
-/// 載る（黙って空にしない・NFR4）。
-#[test]
-fn pipe_review_reads_requirements_reason_for_bare_yaml_id() {
-    let (repo, state) = faced_repo_with_req("spec/reqs.yaml", "requirements:\n  - FR1\n  - FR2\n", &["FR1"]);
-    let requirements = reviewed_requirements(&repo, &state);
-    assert_eq!(requirements, "FR1: （要件面 spec/reqs.yaml の FR1 に本文が無い）", "{requirements}");
-    clean(&[&repo, &state]);
-}
-
-/// (e) `## FR1` の直下が空行だけで次の見出しに続く md は (d) と同じ形の理由が載る（本文の無い id の理由は形を問わない）。
-#[test]
-fn pipe_review_reads_requirements_reason_for_empty_md_heading() {
-    let (repo, state) =
-        faced_repo_with_req("spec/reqs.md", "# 要件\n\n## FR1\n\n\n## FR2 審査\n\n審査する。\n", &["FR1", "FR2"]);
-    let requirements = reviewed_requirements(&repo, &state);
-    assert_eq!(requirements, "FR1: （要件面 spec/reqs.md の FR1 に本文が無い）\nFR2: 審査する。", "{requirements}");
     clean(&[&repo, &state]);
 }
 

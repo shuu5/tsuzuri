@@ -14,7 +14,8 @@
 //!
 //! **偽の PASS を作らない**（AC3 / FR9）。lens が無い・起動できない・出力を読めない・3 値の外はすべて
 //! INCONCLUSIVE（終端）。材料の欠け（設計 pointer でない `design`・読めない要件面・要件面に無い id）は
-//! 材料の本文に**明示の 1 行**として載せ（C10・空を黙らせない）、判定は lens が持つ。
+//! 材料の本文に**明示の 1 行**として載せ（C10・空を黙らせない）、器が欠けの印を読んで lens を起こさず
+//! INCONCLUSIVE（`section-material-missing`）にする。
 //!
 //! PASS でない判定は**理由の型**（[`FindingKind`]・設計 contract-source.md §22）を持つ。lens が最終行の JSON の
 //! `kind` に書く閉じた 6 語を読み、`review.json` に `kind` と `at`（指した場所の列）を任意 field で足し、event の
@@ -50,6 +51,7 @@
 
 mod base;
 mod copied;
+mod design;
 pub(in crate::pipe) mod index;
 mod items;
 mod judgement;
@@ -58,6 +60,8 @@ mod quality;
 mod requirements;
 pub(in crate::pipe) mod tree;
 pub use base::base_block;
+use design::{design_read, design_text};
+pub(in crate::pipe) use design::section_text;
 pub use index::index_block;
 pub(crate) use items::done_items;
 pub use outside::outside_block;
@@ -67,7 +71,7 @@ pub(crate) use quality::NAMES as QUALITY_NAMES;
 use quality::Quality;
 pub use judgement::{judgement_of, review_dir, review_path, unaddressed, verdict_of};
 pub use judgement::{Judgement, Rework, ROW_SAME_KIND_STOP};
-use requirements::requirements_text;
+use requirements::requirements_read;
 use super::contract::{done_teeth_of, Contract};
 use super::gate::{last_json_object, lens_usage, Verdict};
 use super::lens_record::LensSource;
@@ -299,6 +303,8 @@ struct Material {
     outside: String,
     /// done の番号つき項目（項目 0 個か Promised の行は空・§64）。
     items: String,
+    /// 材料の欠けの印の行の列（設計の側の 1 行が先・要件の側が id の順に続く・予想の印は入れない）。
+    missing: Vec<String>,
 }
 
 /// 審査の判定 1 件（verdict と根拠と、PASS でない周の理由の型と場所）。
@@ -321,6 +327,16 @@ impl Finding {
     fn inconclusive(evidence: String) -> Self {
         Self { verdict: Verdict::Inconclusive, evidence, kind: Some(FindingKind::Unparsed), at: None, quality: None }
     }
+
+    /// 材料の欠けの印を器が読んで倒す INCONCLUSIVE（lens の判定に届かない周・`at` は書かない）。
+    fn material_missing(missing: &[String]) -> Self {
+        Self { kind: Some(FindingKind::SectionMaterialMissing), ..Self::inconclusive(missing_reason(missing)) }
+    }
+}
+
+/// 欠けの印の行（[`Material::missing`]）から組む判定の根拠の字（契約の審査と行の審査が同じ 1 本を通る）。
+pub(in crate::pipe) fn missing_reason(missing: &[String]) -> String {
+    format!("審査の材料が欠ける：{}", missing.join("・"))
 }
 
 /// 審査を 1 回通す。
@@ -328,13 +344,18 @@ pub fn review(entry: &Review<'_>) -> Outcome {
     let (source, dir) = (contract_path(entry.state_dir, entry.run), review_dir(entry.state_dir, entry.run));
     // 審査の木の sha は**材料を組む前に** 1 回だけ読む（受付の base の木と同じ・設計 pipeline.md §64 形 3）。使い回しの鍵も同じ値。
     let head = git_line(entry.repo, &["rev-parse", "HEAD"]);
-    let (contract, promised) = match stage(entry.repo, (entry.contract, &source), entry.requirements, &dir, "") {
+    let (contract, promised, missing) = match stage(entry.repo, (entry.contract, &source), entry.requirements, &dir, "") {
         Ok(found) => found,
         Err(reason) => return broken(reason),
     };
     // 逆引きの表は既存の材料を置いた後に置く（undeclared の repo は file を置かない・§7 (a)）。
     if let Err(reason) = index::keep(&dir, entry, head.as_deref()) {
         return broken(reason);
+    }
+    // 材料の欠けは器が字で知っている事実（lens に判じさせない）: 使い回しも lens も撃たず INCONCLUSIVE を書く（材料は lens の口より前に決まる）。
+    if !missing.is_empty() {
+        let finding = Finding::material_missing(&missing);
+        return reviewed(entry, &finding, settle(entry, &finding, None, None, None), Vec::new());
     }
     // 行の審査の記録を写せる周（行の digest・材料の鍵・code の木の鍵・lens の版が同じ actual の PASS・設計 row-review.md §5）は lens を撃たない（木も作らない）。
     let reused = match (entry.lens, head.as_deref()) {
@@ -353,41 +374,51 @@ pub fn review(entry: &Review<'_>) -> Outcome {
         None => decide(entry, &contract, items, head.as_deref()),
     };
     let finding = narrow(finding, promised);
-    let verdict = finding.verdict;
     // **審査の lens の消費は判定を書く周に 1 件**（`Reviewed` の前・設計 gate-cost.md §26 形 (2)）。揃わない周は書かず、
     // 書けない周も判定と rc は変えない。使い回した周は lens を撃っていないので書かない（形 ac 2）。detail は lens の版の 4 語（行 xp-prov-review）。
     let (cost, words) = review_cost(spent);
     let noted = record_cost_with(entry.state_dir, (entry.run, entry.bead), cost, words, entry.policy);
-    match settle(entry, &finding, scope, reused.as_ref().map(|_| ROW_REUSED), tree.as_deref()) {
+    let settled = settle(entry, &finding, scope, reused.as_ref().map(|_| ROW_REUSED), tree.as_deref());
+    reviewed(entry, &finding, settled, noted.into_iter().collect())
+}
+
+/// 判定を書いた後の rc と stdout の行（書けなかった周は壊れた対象）。`err` は消費の event を書けなかった理由。
+fn reviewed(entry: &Review<'_>, finding: &Finding, settled: Result<(), String>, err: Vec<String>) -> Outcome {
+    match settled {
         Err(reason) => broken(reason),
         Ok(()) => Outcome {
-            out: vec![format!("run={} stage={} verdict={}", entry.run, Stage::Reviewed.as_str(), verdict.as_str())],
-            err: noted.into_iter().collect(),
-            rc: verdict.rc(),
+            out: vec![format!("run={} stage={} verdict={}", entry.run, Stage::Reviewed.as_str(), finding.verdict.as_str())],
+            err,
+            rc: finding.verdict.rc(),
         },
     }
 }
 
 /// 審査の材料を `dir` に組む口（**Reviewed の段と行の審査の 1 つ**・組み手を 2 本にしない・C2）:
-/// [`materials`] を `repo` から読み、[`keep`] で `dir` に置き、lens に渡す契約の写しの path と約束の行を持つかを返す。`contract` は
-/// 読み込んだ契約とその file（写しの元）の対。`note` が空でない周は設計の材料の末尾に足す（予想の印）。
+/// [`materials`] を `repo` から読み、[`keep`] で `dir` に置き、lens に渡す契約の写しの path と約束の行を持つかと材料の欠けの印の行の列を返す。
+/// `contract` は読み込んだ契約とその file（写しの元）の対。`note` が空でない周は設計の材料の末尾に足す（予想の印・欠けの印の行には入れない）。
 pub(in crate::pipe) fn stage(
     repo: &Path,
     contract: (&Contract, &Path),
     requirements: &str,
     dir: &Path,
     note: &str,
-) -> Result<(PathBuf, bool), String> {
+) -> Result<(PathBuf, bool, Vec<String>), String> {
     let mut material = materials(repo, contract.0, requirements, &done_teeth_of(contract.1)?);
     if !note.is_empty() {
         material.design = format!("{}\n{note}", material.design);
     }
-    keep(dir, contract.1, &material).map(|path| (path, !material.promises.is_empty()))
+    keep(dir, contract.1, &material).map(|path| (path, !material.promises.is_empty(), material.missing))
 }
 
 /// 材料を base から読む（読めなさは本文の明示の 1 行にする・C10）。`teeth` は契約 file の key `done-teeth` の要素（done の項目に添える・§66 形 6）。
 fn materials(repo: &Path, contract: &Contract, requirements: &str, teeth: &[String]) -> Material {
-    let design = design_text(repo, &contract.design);
+    let (design, mut missing) = match design_read(repo, &contract.design) {
+        Ok(body) => (body, Vec::new()),
+        Err(line) => (line.clone(), vec![line]),
+    };
+    let (requirements, lacking) = requirements_read(repo, requirements, &contract.req);
+    missing.extend(lacking);
     let promised = promise_rows(repo, &contract.design);
     // 外の材料の本文は節の本文（導出物の行は goal）・done・約束の行の text（§51 形 2）。
     let mut bodies = vec![design.as_str(), contract.done.as_str()];
@@ -396,7 +427,8 @@ fn materials(repo: &Path, contract: &Contract, requirements: &str, teeth: &[Stri
     // Promised の行の done は器が約束の行から組む字なので項目に割らない（項目 0 個として扱う・§64 形 5）。
     let items = if promised.is_empty() { items::items_text(&contract.done, teeth) } else { String::new() };
     Material {
-        requirements: requirements_text(repo, requirements, &contract.req),
+        requirements,
+        missing,
         promises: render_promises(&promised.iter().collect::<Vec<&table::PromiseRow>>()),
         items,
         base: base::base_text(repo, &contract.write_set),
@@ -460,68 +492,6 @@ fn material_file(body: &str) -> String {
 /// 違う周は列外にしない。読み手は審査が材料を作る [`design_text`] そのもの（site を 2 つにしない・C2）。
 pub(in crate::pipe) fn design_material(repo: &Path, design: &str) -> String {
     material_file(&design_text(repo, design))
-}
-
-/// 契約の `design` が設計 pointer（`<doc>#<id>`）なら、base の設計 doc からその行の `section` の節の本文を読む
-/// （§4「順序」: 生成 (b) の前後で穴の出所は変わらない）。pointer でない周・解けない周は理由の 1 行。
-fn design_text(repo: &Path, design: &str) -> String {
-    let pointer = match table::parse_pointer(design) {
-        Ok(found) => found,
-        Err(error) => return format!("（設計の節なし: design={design} は設計 pointer でない・{}）", error.reason()),
-    };
-    let text = match table::read(repo, &pointer.path) {
-        Ok(found) => found,
-        Err(reason) => return format!("（設計の節を読めない: {reason}）"),
-    };
-    let row = match table::find_row(&pointer.path, &text, &pointer.id) {
-        Ok(found) => found,
-        Err(errors) => {
-            let reasons: Vec<String> = errors.iter().map(|error| error.reason()).collect();
-            return format!("（契約表の行 {} を読めない: {}）", pointer.id, reasons.join(" / "));
-        }
-    };
-    // goal を持つ行（導出物の行）は goal が節の本文（出所の 1 行は不変・設計 contract-source.md §47 の 6）。
-    let body = if row.goal.is_empty() { section_text(&text, &row.section) } else { row.goal };
-    if body.trim().is_empty() {
-        return format!("（設計 doc {} の節 {} が無いか空）", pointer.path, row.section);
-    }
-    format!("{}#{} §{}\n{body}", pointer.path, pointer.id, row.section)
-}
-
-/// 節 `number` の本文（`## N.` の見出しの次の行から次の `## ` 見出しの前まで・契約表の区間と fence の中の
-/// `## ` は見出しに数えない・`pipe::table` の節の読みと同じ形）。無ければ空。
-pub(in crate::pipe) fn section_text(doc: &str, number: &str) -> String {
-    let mut found: Vec<&str> = Vec::new();
-    let (mut fenced, mut inside, mut open) = (false, false, false);
-    for line in doc.lines() {
-        let trimmed = line.trim();
-        if trimmed == table::BEGIN {
-            inside = true;
-            continue;
-        }
-        if trimmed == table::END {
-            inside = false;
-            continue;
-        }
-        if inside {
-            continue;
-        }
-        if trimmed.starts_with("```") {
-            fenced = !fenced;
-        }
-        match line.strip_prefix("## ").filter(|_| !fenced) {
-            Some(title) => open = section_number(title).as_deref() == Some(number),
-            None if open => found.push(line),
-            None => {}
-        }
-    }
-    found.join("\n")
-}
-
-/// `## N. …` の N（数字の列だけ・それ以外は `None`）。
-fn section_number(title: &str) -> Option<String> {
-    let (head, _) = title.split_once('.')?;
-    (!head.is_empty() && head.chars().all(|found| found.is_ascii_digit())).then(|| head.to_owned())
 }
 
 /// 材料を `dir`（run dir の [`REVIEW_DIR`] か行の審査の置き場）へ置き、lens に渡す契約の写しの path を返す。`source` は契約 file。
@@ -899,7 +869,7 @@ mod tests {
     // flip-check: moved s2-07l.545
     use super::{
         detail_of, judgement_of, lens_cmd, lens_spent, lens_version, narrow, parse_lens, read_detail, render_promises, requirement_md,
-        requirement_row, requirement_yaml, requirements_text, section_text, split_at, strip_tags, unaddressed, verdict_of,
+        requirement_row, requirement_yaml, requirements_read, section_text, split_at, strip_tags, unaddressed, verdict_of,
         review_cost, write_review, Finding, FindingKind, Found, Judgement, ReviewCheck, Rework, FINDING_KINDS,
     };
     use super::items::{done_items, holes, items_text};
@@ -910,6 +880,11 @@ mod tests {
     use crate::pipe::run_dir;
     use crate::pipe::table::PromiseRow;
     use std::path::{Path, PathBuf};
+
+    /// 要件本文の字（[`requirements_read`] の対の 1 つ目）。
+    fn requirements_text(repo: &Path, path: &str, req: &[String]) -> String {
+        requirements_read(repo, path, req).0
+    }
 
     /// 歯ごとの空の tmp dir。
     fn scratch(name: &str) -> PathBuf {
