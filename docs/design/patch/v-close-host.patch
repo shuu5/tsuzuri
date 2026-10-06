@@ -1,0 +1,1472 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/cilast.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/cilast.rs
+index 8e70f0d5..647640d8 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/cilast.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/cilast.rs
+@@ -1,9 +1,10 @@
+-//! 着地の終端の CI の照合の歯（接頭辞 `vcil_`・器の memo t3-hub.74.49.6・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の
+-//! helper を `use super::*` で使う）。
++//! 着地の終端の CI の照合の歯（接頭辞 `vcil_` と `vclhost_`・器の memo t3-hub.74.49.6・判断の記録 ADR-45 の門 H6・台帳の問い
++//! t3-hub.90.2 の裁定・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+ //!
+-//! 終端は CI の待ちが最後に読んだ答えで分けて読み直さないこと（道 1）と、push が押した commit（remote の追跡の ref）が自分の
+-//! sha の子孫で自分の sha でない周はその commit の CI で照合すること（道 2）を、偽 remote・偽 CI・偽 bd と、push の前後で
+-//! main を動かす偽 git の外形から測る。
++//! 終端は push の後にこの host の緑で台帳を閉じ、GitHub の検査は着地の後の CI の口（`pipe land --ci-only`）の子 process が後から
++//! 読む。子は待ちが最後に読んだ答えで記して読み直さないこと（道 1）と、push が押した commit（remote の追跡の ref）が自分の sha の
++//! 子孫で自分の sha でない周はその commit が子へ渡ること（道 2）を、偽 remote・偽 CI・偽 bd と、push の前後で main を動かす偽 git
++//! の外形から測る。子 process は誰も待たないので、歯は片付けの前に子の答えの行を待つ（[`settled_rows`]）。
+ 
+ use super::*;
+ 
+@@ -91,9 +92,73 @@ fn raced(state: &Path) -> String {
+     fs::read_to_string(state.join("raced.txt")).expect("偽 git が main を動かした").trim().to_owned()
+ }
+ 
+-/// (道 1) 待ちが満ちた周に読んだ success で閉じ、読み直さない: 1 回目は success・2 回目から rc 1 を返す偽 CI の着地は
+-/// `terminal=closed`（rc 0）で、終端の行は push・ci:success・close:ok、偽 CI の呼び出しは 1 回、台帳の close の理由は
+-/// `landed <sha> ci=success`。base は待ちの後の読み直しが rc 1 で `ci:unmeasurable` に止まる＝RED。
++/// 終端の親が記す行（push・close・着地の後の CI の口の子 process を起こした印）。
++pub(super) const PUSHED: &str = "terminal:push:fake";
++/// 台帳の close が通った行。
++pub(super) const CLOSED: &str = "terminal:close:ok";
++/// 子 process を起こした行。
++pub(super) const SPAWNED: &str = "terminal:ci:spawned";
++
++/// CI の答えの行（閉じた 3 値・子 process が記すか、照合する commit の無い周に親が記す）。
++const CI_ANSWERS: [&str; 3] = ["terminal:ci:success", "terminal:ci:failure", "terminal:ci:unmeasurable"];
++
++/// 子 process の終わりを待つ上限（秒）。
++const CHILD_WAIT_S: u64 = 60;
++
++/// 便の終端の行のうち CI の答えの行が `n` 件に届くまで待ち（上限 [`CHILD_WAIT_S`]）、終端の行を返す。子 process は誰も待たない
++/// ので、歯は片付けの前にここで子の答えを待つ（片付けの後に子が置き場を作り直さない）。
++pub(super) fn settled_rows(state: &Path, id: &str, n: usize) -> Vec<String> {
++    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(CHILD_WAIT_S);
++    loop {
++        let rows = terminal_rows(state, id);
++        if rows.iter().filter(|row| CI_ANSWERS.contains(&row.as_str())).count() >= n || std::time::Instant::now() >= deadline {
++            return rows;
++        }
++        std::thread::sleep(std::time::Duration::from_millis(20));
++    }
++}
++
++/// 終端の行から子の答え `answer` の最後の 1 件を外した列（親の記帳の順）。子の追記は親の `ci:spawned` の記帳と競うので、答えの
++/// 位置は最後の close の後であることだけを断言する。
++pub(super) fn parent_rows(rows: &[String], answer: &str) -> Vec<String> {
++    let at = rows.iter().rposition(|row| row == answer);
++    let closed = rows.iter().rposition(|row| row == CLOSED);
++    assert!(at.is_some_and(|found| closed.is_some_and(|close| close < found)), "子の答え {answer} は最後の close の後: {rows:?}");
++    rows.iter().enumerate().filter(|(index, _)| Some(*index) != at).map(|(_, row)| row.clone()).collect()
++}
++
++/// 着地の後の CI の口を直に撃つ（`pipe land --run <id> --ci-only <sha>`・`--bd` は偽 bd・`--rules` は呼び手の値）。
++pub(super) fn ci_only(repo: &Path, state: &Path, id: &str, sha: &str, rules: &str) -> Output {
++    let bd = state.join("fake-bd.sh").display().to_string();
++    land_extra(repo, state, id, &["--bd", &bd, "--rules", rules, "--ci-only", sha])
++}
++
++/// 口の stdout の 1 行目の `ci=` の値（無ければ空）。
++pub(super) fn answer_of(out: &Output) -> String {
++    let stdout = stdout_of(out);
++    stdout.lines().next().and_then(|line| line.split_whitespace().find_map(|word| word.strip_prefix("ci="))).unwrap_or_default().to_owned()
++}
++
++/// 着地の後の CI の口の歯の fixture: success の偽 CI の便を着地させ（終端は閉じて子を起こす）、子の答えを待ってから偽 CI を
++/// `json` の答えに差し替え、呼ばれた回数の file と偽 bd の log を消す。返すのは道具・便 id・着地した sha。
++pub(super) fn landed_for_ci(repo: &Path, state: &Path, json: &str) -> (FakeTerminal, String, String) {
++    let tools = fake_terminal_json(repo, state, PASSED);
++    let design = write_contract(repo, &[], &[]);
++    let id = gated_pass(repo, state, &design, &state.join("lens-ran"));
++    let (bd, rules) = (state.join("fake-bd.sh").display().to_string(), ceiling_rules(state));
++    let out = land_extra(repo, state, &id, &["--bd", &bd, "--rules", &rules]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "前提: 着地して閉じた: {} {}", stdout_of(&out), stderr_of(&out));
++    settled_rows(state, &id, 1);
++    ci_answer(&tools, state, &format!("printf '%s\\n' '{json}'"));
++    fs::remove_file(&tools.ci_calls).ok();
++    fs::remove_file(&tools.bd_log).ok();
++    let sha = landed_sha(state, &id);
++    (tools, id, sha)
++}
++
++/// (道 1) 待ちが満ちた周に読んだ success で答え、読み直さない: 1 回目は success・2 回目から rc 1 を返す偽 CI の着地は
++/// `terminal=closed`（rc 0）で、親の終端の行は push・close:ok・ci:spawned、子の答えは ci:success、偽 CI の呼び出しは 1 回、
++/// 台帳の close の理由は `landed <sha> host=green`。読み直す実装は 2 回目の rc 1 で `ci:unmeasurable` を答える。
+ #[test]
+ fn vcil_terminal_closes_on_the_read_the_wait_saw() {
+     let (repo, state) = repo_with_state();
+@@ -106,46 +171,49 @@ fn vcil_terminal_closes_on_the_read_the_wait_saw() {
+     let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "閉じた終端は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
+     assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
+-    assert_eq!(terminal_rows(&state, &id), ["terminal:push:fake", "terminal:ci:success", "terminal:close:ok"]);
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, "terminal:ci:success"), [PUSHED, CLOSED, SPAWNED], "子は満ちた答えを記す: {rows:?}");
+     assert_eq!(tools.ci_call_count(), 1, "満ちた後に CI を読み直さない");
+     let sha = landed_sha(&state, &id);
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), sha, "main は着地の sha");
+     let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
+-    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} ci=success").as_str()), "理由: {argv}");
++    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} host=green").as_str()), "理由: {argv}");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (道 2) push の前に別の commit が main を進め、push がその commit を押した周は、その commit の CI で照合して閉じる:
+-/// `terminal=closed`（rc 0）・終端の行は push・ci:success・close:ok・偽 remote の main と CI の argv は進めた commit・close の
+-/// 理由は `landed <自分の sha> ci=success tip=<進めた commit>`。base は自分の sha（run の無い commit）を待って
+-/// `ci:unmeasurable` に止まる＝RED。
++/// (道 2) push の前に別の commit が main を進め、push がその commit を押した周は、子がその commit の CI を読む:
++/// `terminal=closed`（rc 0）・偽 remote の main と子の CI の argv は進めた commit・子の答えは ci:success・close の理由は
++/// `landed <自分の sha> host=green`（先端は子へ渡すだけで理由に置かない）。自分の sha（run の無い commit）を渡す実装は子が
++/// `ci:unmeasurable` を答える。
+ #[test]
+ fn vcil_terminal_checks_the_commit_the_push_carried() {
+     let (repo, state) = repo_with_state();
+     let (out, id, tools) = land_with_push_race(&repo, &state, "\"$sha\"", true);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "閉じた終端は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
+     assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
+-    assert_eq!(terminal_rows(&state, &id), ["terminal:push:fake", "terminal:ci:success", "terminal:close:ok"]);
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, "terminal:ci:success"), [PUSHED, CLOSED, SPAWNED], "子は進めた commit の success: {rows:?}");
+     let (next, sha) = (raced(&state), landed_sha(&state, &id));
+     assert_eq!(git(&repo, &["rev-parse", &format!("{next}^")]), sha, "前提: main は着地の sha の子へ進んだ");
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), next, "push は進めた commit を押した");
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [next.as_str()], "照合は push が押した commit");
+     let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
+-    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} ci=success tip={next}").as_str()), "理由: {argv}");
++    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} host=green").as_str()), "理由: {argv}");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (道 2 の裏) push の後に main が動いた周は、push が押した自分の sha で照合する（追跡の ref を読み、local の main を読まない）:
+-/// `terminal=closed`（rc 0）・偽 remote の main は自分の sha・local の main は進めた commit・CI の argv は自分の sha・close の
+-/// 理由は `tip=` を持たない `landed <sha> ci=success`。
++/// (道 2 の裏) push の後に main が動いた周は、子が push の押した自分の sha の CI を読む（追跡の ref を読み、local の main を
++/// 読まない）: `terminal=closed`（rc 0）・偽 remote の main は自分の sha・local の main は進めた commit・子の CI の argv は自分の
++/// sha・子の答えは ci:success・close の理由は `landed <sha> host=green`。
+ #[test]
+ fn vcil_terminal_ignores_a_main_moved_after_the_push() {
+     let (repo, state) = repo_with_state();
+     let (out, id, tools) = land_with_push_race(&repo, &state, "\"$sha\"", false);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "閉じた終端は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
+     assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
+-    assert_eq!(terminal_rows(&state, &id), ["terminal:push:fake", "terminal:ci:success", "terminal:close:ok"]);
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, "terminal:ci:success"), [PUSHED, CLOSED, SPAWNED], "子は自分の sha の success: {rows:?}");
+     let (next, sha) = (raced(&state), landed_sha(&state, &id));
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), next, "前提: local の main は push の後に進んだ");
+     assert_eq!(git(&repo, &["rev-parse", &format!("{next}^")]), sha, "前提: 進めた commit は着地の sha の子");
+@@ -153,26 +221,113 @@ fn vcil_terminal_ignores_a_main_moved_after_the_push() {
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [sha.as_str()], "照合は push が押した自分の sha");
+     let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
+-    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} ci=success").as_str()), "理由に tip= を置かない: {argv}");
++    assert_eq!(argv.lines().nth(3), Some(format!("landed {sha} host=green").as_str()), "理由: {argv}");
+     clean(&[&repo, &state]);
+ }
+ 
+ /// (道 2 の否定) push が押した commit が自分の sha の子孫でない周（push の前に main を自分の sha の兄弟へ動かした）は、その
+-/// commit で照合せず、自分の sha で照合して閉じない: rc 1・`terminal=ci:unmeasurable`・終端の行は push と ci:unmeasurable・
+-/// CI の argv は自分の sha だけ・台帳を撃たない。
++/// commit を子へ渡さず、自分の sha を渡す: 終端は host の緑で閉じ（rc 0）、子の CI の argv は自分の sha だけで、run の無い自分の
++/// sha の答えは上限で ci:unmeasurable。
+ #[test]
+ fn vcil_terminal_keeps_its_own_sha_when_the_pushed_commit_is_not_a_descendant() {
+     let (repo, state) = repo_with_state();
+     let (out, id, tools) = land_with_push_race(&repo, &state, "\"$sha^\"", true);
+-    assert_eq!(out.status.code(), Some(1), "閉じない終端は rc 1: {} {}", stdout_of(&out), stderr_of(&out));
+-    assert!(stdout_of(&out).contains("terminal=ci:unmeasurable"), "終端の token: {}", stdout_of(&out));
+-    assert_eq!(terminal_rows(&state, &id), ["terminal:push:fake", "terminal:ci:unmeasurable"]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "閉じた終端は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
++    assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, "terminal:ci:unmeasurable"), [PUSHED, CLOSED, SPAWNED], "子は自分の sha を測れない: {rows:?}");
+     let (next, sha) = (raced(&state), landed_sha(&state, &id));
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), next, "push は兄弟の commit を押した");
+     let ancestor = Command::new("git").arg("-C").arg(&repo).args(["merge-base", "--is-ancestor", &sha, &next]).status();
+     assert!(ancestor.is_ok_and(|status| status.code() == Some(1)), "前提: 兄弟の commit は自分の sha の子孫でない");
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     assert!(ci_argv.lines().all(|line| line == sha), "照合は自分の sha だけ（兄弟を照合しない）: {ci_argv}");
+-    assert!(!tools.bd_log.exists(), "閉じない周は台帳を撃たない");
++    clean(&[&repo, &state]);
++}
++
++/// 赤を返す偽 CI の答え（完了して failure）。
++const FAILED: &str = r#"[{"status":"completed","conclusion":"failure"}]"#;
++
++/// この host の緑で閉じる（台帳の問い t3-hub.90.2 の裁定）: 赤を返す偽 CI の便の land は rc 0 で `terminal=closed`、偽の台帳
++/// client の argv は close と便の bead と `--reason` と `landed <着地した sha> host=green`、`Landed` の後ろの親の行は
++/// push・close・子の起こしの順で、子の答え `ci:failure` は close の後に 1 件だけ並ぶ（GitHub の検査の答えを待たずに閉じる）。
++#[test]
++fn vclhost_land_closes_on_host_green_before_a_red_ci_answer() {
++    let (repo, state) = repo_with_state();
++    let tools = fake_terminal_json(&repo, &state, FAILED);
++    let design = write_contract(&repo, &[], &[]);
++    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
++    let (bd, rules) = (state.join("fake-bd.sh").display().to_string(), ceiling_rules(&state));
++    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "赤の CI でも閉じた land は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
++    assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
++    let sha = landed_sha(&state, &id);
++    let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
++    let reason = format!("landed {sha} host=green");
++    assert_eq!(argv.lines().collect::<Vec<&str>>(), ["close", "s2-2e5", "--reason", reason.as_str()], "台帳の argv: {argv}");
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, "terminal:ci:failure"), [PUSHED, CLOSED, SPAWNED], "親の 3 件の順: {rows:?}");
++    assert_eq!(rows.iter().filter(|row| row.as_str() == "terminal:ci:failure").count(), 1, "子の答えは 1 件: {rows:?}");
++    clean(&[&repo, &state]);
++}
++
++/// 便の終端の行 `row` の数。
++fn count_of(state: &Path, id: &str, row: &str) -> usize {
++    terminal_rows(state, id).iter().filter(|found| found.as_str() == row).count()
++}
++
++/// 着地の後の CI の口の赤（設計 contract-source.md §5 手順 3）: 赤を返す偽 CI の周の口は rc 0 で、stdout の 1 行目が
++/// `run=<id> ci=failure`・続く行が `notify=` の行で、終端の行 `terminal:ci:failure` が 1 件増え、偽の台帳 client は撃たれない。
++#[test]
++fn vclhost_ci_only_red_notifies_and_leaves_the_bead() {
++    let (repo, state) = repo_with_state();
++    let (tools, id, sha) = landed_for_ci(&repo, &state, FAILED);
++    let before = count_of(&state, &id, "terminal:ci:failure");
++    let out = ci_only(&repo, &state, &id, &sha, &ceiling_rules(&state));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
++    let stdout = stdout_of(&out);
++    let lines: Vec<&str> = stdout.lines().collect();
++    assert_eq!(lines.first().copied(), Some(format!("run={id} ci=failure").as_str()), "1 行目: {stdout}");
++    assert!(lines.get(1).is_some_and(|line| line.starts_with("notify=")), "赤は席へ知らせる: {stdout}");
++    assert_eq!(count_of(&state, &id, "terminal:ci:failure"), before + 1, "赤の答えは 1 件増える");
++    assert!(!tools.bd_log.exists(), "札は替えない（台帳 client を撃たない）");
++    clean(&[&repo, &state]);
++}
++
++/// 着地の後の CI の口の緑: success を返す偽 CI の周の口は rc 0 で stdout は `run=<id> ci=success` の 1 行だけ（`notify=` の行を
++/// 持たない）、終端の行 `terminal:ci:success` が 1 件増え、偽の台帳 client は撃たれない。
++#[test]
++fn vclhost_ci_only_green_reads_success_without_a_notice() {
++    let (repo, state) = repo_with_state();
++    let (tools, id, sha) = landed_for_ci(&repo, &state, PASSED);
++    let before = count_of(&state, &id, "terminal:ci:success");
++    let out = ci_only(&repo, &state, &id, &sha, &ceiling_rules(&state));
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
++    assert_eq!(stdout_of(&out).lines().collect::<Vec<&str>>(), [format!("run={id} ci=success").as_str()], "緑は 1 行だけ");
++    assert_eq!(count_of(&state, &id, "terminal:ci:success"), before + 1, "緑の答えは 1 件増える");
++    assert!(!tools.bd_log.exists(), "札は替えない（台帳 client を撃たない）");
++    clean(&[&repo, &state]);
++}
++
++/// 着地の後の CI の口の値の断り: 12 桁の 16 進（短縮 sha）と、40 桁で 1 字だけ 16 進でない値は rc 1 で、event を 1 件も書かず
++/// 偽 CI も撃たない。対照に、同じ便に 40 桁の sha を渡した口は rc 0 で偽 CI を 1 回撃つ。
++#[test]
++fn vclhost_ci_only_refuses_a_value_that_is_not_40_hex_digits() {
++    let (repo, state) = repo_with_state();
++    let (tools, id, sha) = landed_for_ci(&repo, &state, PASSED);
++    let rules = ceiling_rules(&state);
++    let short = sha.chars().take(12).collect::<String>();
++    let bent = format!("g{}", sha.chars().skip(1).collect::<String>());
++    assert_eq!((short.len(), bent.len()), (12, 40), "前提: 短縮と 40 桁");
++    for value in [short, bent] {
++        let before = event_count(&state);
++        let out = ci_only(&repo, &state, &id, &value, &rules);
++        assert_eq!(out.status.code(), Some(1), "40 桁の 16 進でない値は断る: {value} {}", stderr_of(&out));
++        assert_eq!(event_count(&state), before, "event を 1 件も書かない: {value}");
++        assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない: {value}");
++    }
++    let out = ci_only(&repo, &state, &id, &sha, &rules);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "対照の 40 桁の sha は読む: {}", stderr_of(&out));
++    assert_eq!(tools.ci_call_count(), 1, "対照の口は偽 CI を 1 回撃つ");
+     clean(&[&repo, &state]);
+ }
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/order.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/order.rs
+index 1264edad..14733af9 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/order.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/order.rs
+@@ -2,6 +2,7 @@
+ //! terminal と order の族の歯（接頭辞 `pipe_terminal_` / `pipe_order_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+ 
+ use super::*;
++use super::cilast::{answer_of, ci_only, landed_for_ci, parent_rows, settled_rows, CLOSED, PUSHED, SPAWNED};
+ 
+ /// 着地の順番（設計 gate-cost.md §6）: 後から Gated になった便は前の便が列に居る間は待ち、上限
+ /// （fixture 1 秒）で**待たずに進む**（`order=degraded`・断らない・止めない）。main は動いていないので
+@@ -253,34 +254,28 @@ fn pipe_order_missing_land_wait_row_moves_nothing() {
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (§5 land の終端) 偽 remote + 偽 CI（success）+ 偽 adapter で、`Landed` の後ろに **push → CI → close の
+-/// 3 event**が並び、bead が閉じられる。押した先の main は着地した sha を指す。
++/// (§5 land の終端) 偽 remote + 偽 CI（success）+ 偽 adapter で、`Landed` の後ろに **push → close → 子の起こし** の 3 件が
++/// 並び、bead はこの host の緑（`host=green`）で閉じられる。押した先の main は着地した sha を指し、子（着地の後の CI の口）は
++/// 着地した 40 桁の sha で CI を読んで答えを 1 件足す。
+ #[test]
+-fn pipe_terminal_land_pushes_checks_ci_and_closes_the_bead() {
++fn pipe_terminal_land_pushes_closes_and_hands_ci_to_the_child() {
+     let (repo, state) = repo_with_state();
+     let tools = fake_terminal(&repo, &state, "success");
+-    let marker = state.join("lens-ran");
+     let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &marker);
++    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+     let bd = state.join("fake-bd.sh").display().to_string();
+-    // **上限は fixture の manifest から渡す**（埋め込みの 900 s を待たない）: CI を測れなくする変異は
+-    // ここで速やかに落ちる側に倒れる＝timeout でなく撃墜として数えられる。
++    // **上限は fixture の manifest から渡す**（埋め込みの 900 s を待たない）。
+     let rules = ceiling_rules(&state);
+     let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端まで通った land は rc 0: {}", stderr_of(&out));
+     assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
+     let landed = git(&repo, &["rev-parse", "refs/heads/main"]);
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec!["terminal:push:fake".to_owned(), "terminal:ci:success".to_owned(), "terminal:close:ok".to_owned()],
+-        "Landed の後ろに段ごとの 3 件（母集団 {} 件）: {details:?}",
+-        details.len()
+-    );
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, ANSWERED), [PUSHED, CLOSED, SPAWNED], "Landed の後ろの親の 3 件: {rows:?}");
+     // **押した先が動いている**（数えただけでは撃ったと言えない）。
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), landed, "偽 remote の main は着地した sha");
+-    // **`{sha}` の穴が埋まっている**: CI の行は着地した **40 桁の** sha を名指して撃たれる（短縮 sha だと
+-    // forge の CLI は完了済みの run でも空を返し続ける）。
++    // **`{sha}` の穴が埋まっている**: 子の CI の行は着地した **40 桁の** sha を名指して撃たれる（短縮 sha だと forge の CLI は
++    // 完了済みの run でも空を返し続ける）。
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     let words: Vec<&str> = ci_argv.lines().collect();
+     assert!(words.contains(&landed.as_str()), "argv に着地した sha が入る: {words:?}");
+@@ -291,7 +286,7 @@ fn pipe_terminal_land_pushes_checks_ci_and_closes_the_bead() {
+     let words: Vec<&str> = argv.lines().collect();
+     assert_eq!(words.first().copied(), Some("close"), "subcommand は close: {words:?}");
+     assert_eq!(words.get(2).copied(), Some("--reason"), "理由を渡す: {words:?}");
+-    assert!(words.get(3).is_some_and(|line| line.contains(&landed) && line.ends_with("ci=success")), "理由の中身: {words:?}");
++    assert_eq!(words.get(3).copied(), Some(format!("landed {landed} host=green").as_str()), "理由の中身: {words:?}");
+     clean(&[&repo, &state]);
+ }
+ 
+@@ -330,62 +325,36 @@ fn pipe_terminal_land_close_cwd_survives_a_vanished_driver_cwd() {
+     assert!(!gone.exists(), "fixture: 子の cwd は消えている");
+     let out = child.wait_with_output().expect("子の終わりを待てる");
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "終端まで通った land は rc 0: {}", stderr_of(&out));
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec!["terminal:push:fake".to_owned(), "terminal:ci:success".to_owned(), "terminal:close:ok".to_owned()],
+-        "消えた cwd からでも close まで進む（母集団 {} 件）: {details:?}",
+-        details.len()
+-    );
++    let rows = settled_rows(&state, &id, 1);
++    assert_eq!(parent_rows(&rows, ANSWERED), [PUSHED, CLOSED, SPAWNED], "消えた cwd からでも close まで進む: {rows:?}");
+     let written = fs::read_to_string(&cwd_log).expect("偽 bd が撃たれた");
+     assert_eq!(written.trim_end(), repo.display().to_string(), "偽 bd の cwd は repo");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (§5 land の終端) CI が **failure** の周は**台帳を閉じない**（rc 1・記録は `ci:failure` で終わる）。
+-///
+-/// 着地そのものは取り消さない（main は進んだまま）——止めるのは close であって着地ではない。
+-#[test]
+-fn pipe_terminal_land_ci_failure_does_not_close_the_bead() {
+-    let (repo, state) = repo_with_state();
+-    let tools = fake_terminal(&repo, &state, "failure");
+-    let marker = state.join("lens-ran");
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &marker);
+-    let before = git(&repo, &["rev-parse", "refs/heads/main"]);
+-    let bd = state.join("fake-bd.sh").display().to_string();
+-    let rules = ceiling_rules(&state);
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+-    assert_eq!(out.status.code(), Some(1), "close しなかった周は rc 1: {}", stderr_of(&out));
+-    assert!(stdout_of(&out).contains("terminal=ci:failure"), "終端の token: {}", stdout_of(&out));
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec!["terminal:push:fake".to_owned(), "terminal:ci:failure".to_owned()],
+-        "close の段は記さない（母集団 {} 件）: {details:?}",
+-        details.len()
+-    );
+-    assert!(!tools.bd_log.exists(), "台帳 client は 1 度も撃たれない");
+-    // 着地は取り消さない（main は進んだまま・押した先も動いている）。
+-    assert_ne!(git(&repo, &["rev-parse", "refs/heads/main"]), before, "main は進んだまま");
+-    clean(&[&repo, &state]);
+-}
++/// 子の success の答えの行。
++const ANSWERED: &str = "terminal:ci:success";
+ 
+-/// 撃ち直しの歯の fixture（設計 contract-source.md §58・行 bm）: CI が failure の着地（close しない）の後に CI を直す
+-/// （直した偽 CI も argv を写し、呼ばれた回数を数える）。返すのは道具・便・`--bd` と `--rules` の値・着地した sha。
++/// 台帳 client が rc 1 で断った close の行。
++const CLOSE_REFUSED: &str = "terminal:close:failed:rc=1";
++
++/// 照合する commit が無く子を起こさなかった周の行。
++const UNMEASURABLE: &str = "terminal:ci:unmeasurable";
++
++/// 撃ち直しの歯の fixture（設計 contract-source.md §58・行 bm）: 台帳 client が断る着地（push の後の close で止まり、子を
++/// 起こさない）の後に台帳 client を直す（直した偽 bd は argv を写す）。返すのは道具・便・`--bd` と `--rules` の値・着地した sha。
+ fn replay_fixture(repo: &Path, state: &Path) -> (FakeTerminal, String, [String; 2], String) {
+-    let tools = fake_terminal(repo, state, "failure");
++    let tools = fake_terminal(repo, state, "success");
+     let design = write_contract(repo, &[], &[]);
+     let id = gated_pass(repo, state, &design, &state.join("lens-ran"));
+-    let flags = [state.join("fake-bd.sh").display().to_string(), ceiling_rules(state)];
++    let flags = [exec_script(&state.join("fake-bd.sh"), "exit 1\n"), ceiling_rules(state)];
+     let first = land_extra(repo, state, &id, &["--bd", &flags[0], "--rules", &flags[1]]);
+     assert_eq!(first.status.code(), Some(1), "1 周目は close しない: {}", stderr_of(&first));
+-    assert!(!tools.bd_log.exists(), "前提: 台帳はまだ閉じていない");
++    assert_eq!(terminal_lines(state, &id), [PUSHED, CLOSE_REFUSED], "前提: close で止まり子を起こさない");
++    assert_eq!(tools.ci_call_count(), 0, "前提: 偽 CI はまだ撃たれていない");
+     let landed = git(repo, &["rev-parse", "refs/heads/main"]);
+-    // CI を直す（宣言は同じ path を指したまま・行は 1 byte も変えない）。
+-    let (log, calls) = (tools.ci_log.display(), tools.ci_calls.display());
+-    let body = format!("printf '%s\\n' \"$@\" > '{log}'\necho call >> '{calls}'\nprintf '[{{\"status\":\"completed\",\"conclusion\":\"success\"}}]\\n'\n");
+-    exec_script(&state.join("fake-ci.sh"), &body);
++    // 台帳 client を直す（宣言は同じ path を指したまま）。
++    exec_script(&state.join("fake-bd.sh"), &format!("printf '%s\\n' \"$@\" > '{}'\n", tools.bd_log.display()));
+     (tools, id, flags, landed)
+ }
+ 
+@@ -400,10 +369,11 @@ fn point_main(repo: &Path, tools: &FakeTerminal, sha: &str) {
+     git(repo, &["update-ref", "refs/heads/main", sha]);
+ }
+ 
+-/// (§58 形 3) 着地した sha が main の今の先端の祖先の撃ち直しは、**先端の CI** で照合して close する（着地をやり直さない）。
++/// (§58 形 3) 着地した sha が main の今の先端の祖先の撃ち直しは、着地をやり直さずにこの host の緑で close し、子は **先端の
++/// CI** を読む。
+ ///
+-/// CI が failure の便の後に別の commit が main を進め、CI を直して撃ち直す。main は器が動かさず、CI の argv は main の今の
+-/// sha（着地した sha ではない）、reason は `landed <着地した sha> ci=success tip=<今の sha>`。base は着地した sha を照合する＝RED。
++/// close で止まった便の後に別の commit が main を進め、台帳 client を直して撃ち直す。main は器が動かさず、reason は
++/// `landed <着地した sha> host=green`（先端を持たない）、子の CI の argv は main の今の sha（着地した sha ではない）。
+ #[test]
+ fn pipe_replay_tip_behind_checks_the_current_main_tip_and_closes() {
+     let (repo, state) = repo_with_state();
+@@ -419,36 +389,25 @@ fn pipe_replay_tip_behind_checks_the_current_main_tip_and_closes() {
+     // **着地はやり直さない**: main は別の便が進めた位置のままで、器は 1 mm も動かさない。
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), moved, "main は器が動かさない");
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), moved, "偽 remote の main は今の sha");
+-    // **照合したのは main の今の先端である**（着地した sha には forge の CI の run が付かない）。
++    let rows = settled_rows(&state, &id, 1);
++    // **子が読んだのは main の今の先端である**（着地した sha には forge の CI の run が付かない）。
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     let words: Vec<&str> = ci_argv.lines().collect();
+     assert!(words.contains(&moved.as_str()), "CI の argv は main の今の sha: {words:?}");
+     assert!(!words.contains(&landed.as_str()), "着地した sha では照合しない: {words:?}");
+-    // 記録は 1 周目の 2 件に 2 周目の 3 件が続く（段ごとに 1 件・やり直した段も残る）。
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec![
+-            "terminal:push:fake".to_owned(),
+-            "terminal:ci:failure".to_owned(),
+-            "terminal:push:fake".to_owned(),
+-            "terminal:ci:success".to_owned(),
+-            "terminal:close:ok".to_owned(),
+-        ],
+-        "母集団 {} 件: {details:?}",
+-        details.len()
+-    );
++    // 記録は 1 周目の 2 件に 2 周目の親の 3 件が続く（段ごとに 1 件・やり直した段も残る）。
++    assert_eq!(parent_rows(&rows, ANSWERED), [PUSHED, CLOSE_REFUSED, PUSHED, CLOSED, SPAWNED], "親の 5 件: {rows:?}");
+     let argv = fs::read_to_string(&tools.bd_log).expect("2 周目で台帳が閉じられた");
+-    let reason = format!("landed {landed} ci=success tip={moved}");
+-    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "理由は着地した sha と先端の sha を名指す: {argv}");
++    let reason = format!("landed {landed} host=green");
++    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "理由は着地した sha と host の緑: {argv}");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (§58 形 2 / 3) 1 本の fn の撃ち直し 2 周: main を着地した commit を祖先に持たない commit（同じ木・同じ親）へ動かした
+-/// 周は CI を撃たず close しない（rc 1・`ci:unmeasurable`）。着地した commit へ戻した周は自分の sha の CI で照合して
+-/// `tip=` の無い reason で close する。base は 1 周目で着地した sha を照合して close する＝RED。
++/// (§58 形 2 / 3) 1 本の fn の撃ち直し 2 周: main を着地した commit を祖先に持たない commit（同じ木・同じ親）へ動かした周は
++/// この host の緑で close し、照合する commit が無いので子を起こさず `ci:unmeasurable` を記す（偽 CI は撃たれない）。着地した
++/// commit へ戻した周は close して子が自分の sha の CI を読む。理由はどちらも `tip=` の無い `landed <sha> host=green`。
+ #[test]
+-fn pipe_replay_tip_non_ancestor_stays_open_and_own_tip_closes_without_tip() {
++fn pipe_replay_tip_non_ancestor_closes_without_a_read_and_own_tip_reads_its_sha() {
+     let (repo, state) = repo_with_state();
+     let (tools, id, flags, landed) = replay_fixture(&repo, &state);
+     let tree = format!("{landed}^{{tree}}");
+@@ -456,24 +415,21 @@ fn pipe_replay_tip_non_ancestor_stays_open_and_own_tip_closes_without_tip() {
+     assert_ne!(sibling, landed, "前提: 着地した commit と別の commit");
+     git(&repo, &["push", "-q", "fake", &format!("{sibling}:refs/heads/sibling")]);
+     point_main(&repo, &tools, &sibling);
+-    let calls = tools.ci_call_count();
+     let off = replay(&repo, &state, &id, &flags);
+-    assert_eq!(off.status.code(), Some(1), "祖先でない周は close しない: {}", stderr_of(&off));
+-    assert_eq!(stdout_of(&off).trim(), format!("run={id} terminal=ci:unmeasurable"), "終端の 1 行");
+-    assert_eq!(tools.ci_call_count(), calls, "偽 CI は撃たれない");
+-    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
++    assert_eq!(off.status.code(), Some(i32::from(RC_OK)), "祖先でない周も close する: {}", stderr_of(&off));
++    assert_eq!(stdout_of(&off).trim(), format!("run={id} terminal=closed"), "終端の 1 行");
++    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
++    let reason = format!("landed {landed} host=green");
++    let argv = fs::read_to_string(&tools.bd_log).expect("祖先でない周も台帳を閉じる");
++    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "reason は tip= を持たない: {argv}");
+     point_main(&repo, &tools, &landed);
+     let own = replay(&repo, &state, &id, &flags);
+     assert_eq!(own.status.code(), Some(i32::from(RC_OK)), "先端そのものの周は close する: {}", stderr_of(&own));
++    let rows = settled_rows(&state, &id, 2);
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     assert!(ci_argv.lines().any(|word| word == landed), "CI の argv は着地した sha: {ci_argv}");
+-    let argv = fs::read_to_string(&tools.bd_log).expect("2 周目で台帳が閉じられた");
+-    let reason = format!("landed {landed} ci=success");
+-    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "reason は tip= を持たない: {argv}");
+-    let tail: Vec<String> = landed_details(&state, &id).into_iter().skip(1).collect();
+-    let push = "terminal:push:fake";
+-    let expected = [push, "terminal:ci:failure", push, "terminal:ci:unmeasurable", push, "terminal:ci:success", "terminal:close:ok"];
+-    assert_eq!(tail, expected, "Landed の後ろの 7 件");
++    let expected = [PUSHED, CLOSE_REFUSED, PUSHED, CLOSED, UNMEASURABLE, PUSHED, CLOSED, SPAWNED];
++    assert_eq!(parent_rows(&rows, ANSWERED), expected, "Landed の後ろの親の 8 件: {rows:?}");
+     clean(&[&repo, &state]);
+ }
+ 
+@@ -507,8 +463,9 @@ fn relocated(repo: &Path, landed: &str, other: &str, body: &str) -> (String, Str
+ }
+ 
+ /// (§65 形 1〜3) 1 本の fn の撃ち直し 2 周: main を、着地した commit の写し（本文の run の行だけ別の字）の上の commit へ
+-/// 付け替えた周は見つからず CI も台帳も撃たない（rc 1・`ci:unmeasurable`）。本文を字のまま写した写しの上の commit へ付け替えた周は
+-/// 写しを着地の commit と読み、先端の CI で照合して `tip=` つきの reason で close する。base は 2 周目も記録の sha で測る＝RED。
++/// 付け替えた周は見つからず、記録の sha の host の緑で close して照合する commit が無いので子を起こさない（`ci:unmeasurable`・偽 CI
++/// は撃たれない）。本文を字のまま写した写しの上の commit へ付け替えた周は写しを着地の commit と読み、`landed <写しの sha>
++/// host=green` で close して子が先端の CI を読む。
+ #[test]
+ fn pipe_replay_relocate_finds_the_copy_by_run_line_and_checks_the_tip() {
+     let (repo, state) = repo_with_state();
+@@ -520,36 +477,32 @@ fn pipe_replay_relocate_finds_the_copy_by_run_line_and_checks_the_tip() {
+     assert_ne!(altered, body, "前提: 本文に run の行が在る: {body}");
+     let (_, top_x) = relocated(&repo, &landed, &other, &altered);
+     point_main(&repo, &tools, &top_x);
+-    let calls = tools.ci_call_count();
+     let off = replay(&repo, &state, &id, &flags);
+-    assert_eq!(off.status.code(), Some(1), "run の行が字面で合わない周は close しない: {}", stderr_of(&off));
+-    assert_eq!(stdout_of(&off).trim(), format!("run={id} terminal=ci:unmeasurable"), "終端の 1 行");
+-    assert_eq!(tools.ci_call_count(), calls, "偽 CI は撃たれない");
+-    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
++    assert_eq!(off.status.code(), Some(i32::from(RC_OK)), "run の行が字面で合わない周も close する: {}", stderr_of(&off));
++    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
+     let (copy, top) = relocated(&repo, &landed, &other, &body);
+     assert_ne!(copy, landed, "前提: 写しは着地した commit と別の sha");
+     point_main(&repo, &tools, &top);
+     let own = replay(&repo, &state, &id, &flags);
+     assert_eq!(own.status.code(), Some(i32::from(RC_OK)), "写しを見つけた周は close する: {}", stderr_of(&own));
+     assert_eq!(stdout_of(&own).trim(), format!("run={id} terminal=closed"), "終端の 1 行");
++    let rows = settled_rows(&state, &id, 2);
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     let words: Vec<&str> = ci_argv.lines().collect();
+     let hit = |sha: &String| words.contains(&sha.as_str());
+     assert_eq!([hit(&top), hit(&landed), hit(&copy)], [true, false, false], "CI の argv は先端の sha だけ: {words:?}");
+     let argv = fs::read_to_string(&tools.bd_log).expect("2 周目で台帳が閉じられた");
+-    let reason = format!("landed {copy} ci=success tip={top}");
+-    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "理由は写しの sha と先端の sha を名指す: {argv}");
++    let reason = format!("landed {copy} host=green");
++    assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "理由は写しの sha と host の緑: {argv}");
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), top, "main は器が動かさない");
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), top, "偽 remote の main は先端のまま");
+-    let tail: Vec<String> = landed_details(&state, &id).into_iter().skip(1).collect();
+-    let push = "terminal:push:fake";
+-    let expected = [push, "terminal:ci:failure", push, "terminal:ci:unmeasurable", push, "terminal:ci:success", "terminal:close:ok"];
+-    assert_eq!(tail, expected, "Landed の後ろの 7 件");
++    let expected = [PUSHED, CLOSE_REFUSED, PUSHED, CLOSED, UNMEASURABLE, PUSHED, CLOSED, SPAWNED];
++    assert_eq!(parent_rows(&rows, ANSWERED), expected, "Landed の後ろの親の 8 件: {rows:?}");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (§65 形 2) 本文を字のまま写した写しそのものが main の先端の撃ち直しは、写しの側（`PushTip::Tip`）を渡し、写しの sha の
+-/// CI で照合して `tip=` の無い reason で close する。base は記録の sha が先端の祖先でないので close しない＝RED。
++/// (§65 形 2) 本文を字のまま写した写しそのものが main の先端の撃ち直しは、写しの側（`PushTip::Tip`）を渡し、`landed <写しの
++/// sha> host=green` で close して子が写しの sha の CI を読む。
+ #[test]
+ fn pipe_replay_relocate_copy_at_the_tip_closes_without_tip() {
+     let (repo, state) = repo_with_state();
+@@ -563,16 +516,15 @@ fn pipe_replay_relocate_copy_at_the_tip_closes_without_tip() {
+     point_main(&repo, &tools, &copy);
+     let out = replay(&repo, &state, &id, &flags);
+     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "写しが先端の周は close する: {}", stderr_of(&out));
++    let rows = settled_rows(&state, &id, 1);
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+     let words: Vec<&str> = ci_argv.lines().collect();
+     assert!(words.contains(&copy.as_str()), "CI の argv は写しの sha: {words:?}");
+     assert!(!words.contains(&landed.as_str()), "着地した sha では照合しない: {words:?}");
+     let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
+-    let reason = format!("landed {copy} ci=success");
++    let reason = format!("landed {copy} host=green");
+     assert_eq!(argv.lines().nth(3), Some(reason.as_str()), "reason は tip= を持たない: {argv}");
+-    let tail: Vec<String> = landed_details(&state, &id).into_iter().skip(1).collect();
+-    let push = "terminal:push:fake";
+-    assert_eq!(tail, [push, "terminal:ci:failure", push, "terminal:ci:success", "terminal:close:ok"], "Landed の後ろの 5 件");
++    assert_eq!(parent_rows(&rows, ANSWERED), [PUSHED, CLOSE_REFUSED, PUSHED, CLOSED, SPAWNED], "親の 5 件: {rows:?}");
+     clean(&[&repo, &state]);
+ }
+ 
+@@ -606,152 +558,98 @@ fn pipe_terminal_land_generation_is_the_binary_build_commit_not_the_landed_sha()
+     clean(&[&repo, &state]);
+ }
+ 
+-/// (§5 手順 2) **落ちた run が 1 本在れば、別の run が走っていても `ci:failure`** である。
++/// (§5 手順 3) 着地の後の CI の口は、**落ちた run が 1 本在れば、別の run が走っていても `ci=failure`** と答える。
+ ///
+ /// 実 CI では複数の workflow が並ぶので「1 本が落ちた後も別の 1 本が走っている」が常態である。
+-/// 未完了を先に見る実装は、**測って落ちた事実**を上限いっぱい待った末の `ci:unmeasurable` に化けさせる
++/// 未完了を先に見る実装は、**測って落ちた事実**を上限いっぱい待った末の `ci=unmeasurable` に化けさせる
+ /// （C10 の反転）。落ちたと分かった時点で待つ理由は無い。
+ #[test]
+ fn pipe_terminal_land_ci_failure_wins_over_a_still_running_workflow() {
+-    let (repo, state) = repo_with_state();
+     let json = "[{\"status\":\"completed\",\"conclusion\":\"failure\"},{\"status\":\"in_progress\",\"conclusion\":null}]";
+-    let tools = fake_terminal_json(&repo, &state, json);
+-    let marker = state.join("lens-ran");
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &marker);
+-    let bd = state.join("fake-bd.sh").display().to_string();
+-    // **上限は fixture の manifest から渡す**（埋め込みの 900 s を待たない）。落ちた run を先に見ない
+-    // 実装はここで上限まで待ってから `ci:unmeasurable` を名乗る＝この歯はその差で落ちる。
+-    let rules = ceiling_rules(&state);
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+-    assert_eq!(out.status.code(), Some(1), "close しなかった周は rc 1: {}", stderr_of(&out));
+-    assert!(
+-        stdout_of(&out).contains("terminal=ci:failure"),
+-        "走っている run が同居しても **failure** を名乗る（unmeasurable に化けない）: {}",
+-        stdout_of(&out)
+-    );
++    let (out, _, tools, dirs) = ci_with_poll(json, CI_WAIT_S, CI_POLL_S);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {}", stderr_of(&out));
++    assert_eq!(answer_of(&out), "failure", "走っている run が同居しても **failure** を名乗る: {}", stdout_of(&out));
+     assert!(!tools.bd_log.exists(), "台帳 client は 1 度も撃たれない");
++    clean(&[&dirs[0], &dirs[1]]);
+     // 負例の対: 同じ形で落ちた run を外すと（走っている run だけ）測れない側へ倒れる。
+     // **上限は fixture の manifest から渡す**（埋め込みの 900 s を待たない＝測れない周だけが待つ側である）。
+-    clean(&[&repo, &state]);
+-    let (repo, state) = repo_with_state();
+-    let running = "[{\"status\":\"in_progress\",\"conclusion\":null}]";
+-    let tools = fake_terminal_json(&repo, &state, running);
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+-    let bd = state.join("fake-bd.sh").display().to_string();
+-    let rules = ceiling_rules(&state);
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+-    assert!(
+-        stdout_of(&out).contains("terminal=ci:unmeasurable"),
+-        "走っている run だけの周は測れない側: {}",
+-        stdout_of(&out)
+-    );
+-    assert!(!tools.bd_log.exists(), "測れない周も台帳は閉じない");
+-    clean(&[&repo, &state]);
++    let (out, _, tools, dirs) = ci_with_poll(CI_RUNNING, CI_WAIT_S, CI_POLL_S);
++    assert_eq!(answer_of(&out), "unmeasurable", "走っている run だけの周は測れない側: {}", stdout_of(&out));
++    assert!(!tools.bd_log.exists(), "測れない周も台帳を撃たない");
++    clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+-/// (pipeline.md §46) 同じ sha で cron の run（`event=schedule`）が走っていても、**それを待たずに**
+-/// push の run の success で終端が close まで進む。
++/// (pipeline.md §46) 同じ sha で cron の run（`event=schedule`）が走っていても、口は**それを待たずに** push の run の success
++/// を答える。
+ ///
+-/// cron の run を数える実装は、走っている schedule の run の完了を上限いっぱい待って `ci:unmeasurable` に倒れる。
++/// cron の run を数える実装は、走っている schedule の run の完了を上限いっぱい待って `ci=unmeasurable` に倒れる。
+ #[test]
+ fn pipe_terminal_land_ci_ignores_scheduled_runs() {
+-    let (repo, state) = repo_with_state();
+     let json = "[{\"status\":\"completed\",\"conclusion\":\"success\",\"event\":\"push\"},{\"status\":\"in_progress\",\"conclusion\":null,\"event\":\"schedule\"}]";
+-    let tools = fake_terminal_json(&repo, &state, json);
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+-    let bd = state.join("fake-bd.sh").display().to_string();
+-    // **上限は fixture の manifest から渡す**（埋め込みの 900 s を待たない）。
+-    let rules = ceiling_rules(&state);
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "close まで通った land は rc 0: {}", stderr_of(&out));
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec!["terminal:push:fake".to_owned(), "terminal:ci:success".to_owned(), "terminal:close:ok".to_owned()],
+-        "schedule の run を待たない（母集団 {} 件）: {details:?}",
+-        details.len()
+-    );
+-    assert!(tools.bd_log.exists(), "bead が閉じられた");
+-    clean(&[&repo, &state]);
++    let (out, _, _, dirs) = ci_with_poll(json, CI_WAIT_S, CI_POLL_S);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {}", stderr_of(&out));
++    assert_eq!(answer_of(&out), "success", "schedule の run を待たない: {}", stdout_of(&out));
++    clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+-/// (pipeline.md §46) run が cron（`event=schedule`）だけの周は、外した後に 0 本＝**測れない**。
++/// (pipeline.md §46) run が cron（`event=schedule`）だけの周は、外した後に 0 本＝口は**測れない**と答える。
+ ///
+-/// 外した後の空を success に倒すと、着地した commit の CI を 1 本も見ずに bead を閉じる（C10 の反転）。
++/// 外した後の空を success に倒すと、着地した commit の CI を 1 本も見ずに緑と読む（C10 の反転）。
+ #[test]
+ fn pipe_terminal_land_ci_only_scheduled_runs_is_unmeasurable() {
+-    let (repo, state) = repo_with_state();
+     let json = "[{\"status\":\"completed\",\"conclusion\":\"success\",\"event\":\"schedule\"}]";
+-    let tools = fake_terminal_json(&repo, &state, json);
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+-    let bd = state.join("fake-bd.sh").display().to_string();
+-    let rules = ceiling_rules(&state);
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+-    assert_eq!(out.status.code(), Some(1), "close しなかった周は rc 1: {}", stderr_of(&out));
+-    let details = landed_details(&state, &id);
+-    assert_eq!(
+-        details.iter().skip(1).cloned().collect::<Vec<String>>(),
+-        vec!["terminal:push:fake".to_owned(), "terminal:ci:unmeasurable".to_owned()],
+-        "schedule の run だけでは測れない（母集団 {} 件）: {details:?}",
+-        details.len()
+-    );
+-    assert!(!tools.bd_log.exists(), "測れない周は台帳を閉じない");
+-    clean(&[&repo, &state]);
++    let (out, _, _, dirs) = ci_with_poll(json, CI_WAIT_S, CI_POLL_S);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {}", stderr_of(&out));
++    assert_eq!(answer_of(&out), "unmeasurable", "schedule の run だけでは測れない: {}", stdout_of(&out));
++    clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+-/// 終端の CI の照合の歯の fixture（偽 CI が `json` を返す便を Gated(PASS) まで進め、CI の 2 行を差し替えた manifest で
+-/// land を撃つ）。land の出力・撃ってから返るまでの時間・道具一式を返す。
+-fn land_with_ci_poll(json: &str, ci_wait_s: u64, ci_poll_s: u64) -> (Output, std::time::Duration, FakeTerminal, [PathBuf; 2]) {
++/// 着地の後の CI の口の歯の fixture（偽 CI が `json` を返す着地した便に、CI の 2 行を差し替えた manifest で口を撃つ）。口の出力・
++/// 撃ってから返るまでの時間・道具一式を返す。
++fn ci_with_poll(json: &str, ci_wait_s: u64, ci_poll_s: u64) -> (Output, std::time::Duration, FakeTerminal, [PathBuf; 2]) {
+     let (repo, state) = repo_with_state();
+-    let tools = fake_terminal_json(&repo, &state, json);
+-    let design = write_contract(&repo, &[], &[]);
+-    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+-    let bd = state.join("fake-bd.sh").display().to_string();
++    let (tools, id, sha) = landed_for_ci(&repo, &state, json);
+     let rules = write_rules_ci(&state, ci_wait_s, Some(ci_poll_s));
+     let started = std::time::Instant::now();
+-    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
++    let out = ci_only(&repo, &state, &id, &sha, &rules);
+     (out, started.elapsed(), tools, [repo, state])
+ }
+ 
+ /// 走り続ける CI の JSON（照合は満たされない＝上限まで待つ）。
+ const CI_RUNNING: &str = "[{\"status\":\"in_progress\",\"conclusion\":null}]";
+ 
+-/// (§50 形 2) 照合は rules 行 `pipe.ci_poll_s` の間隔で撃つ: 上限 2 秒・間隔 1 秒の周は `terminal=ci:unmeasurable` で、
+-/// 偽 CI の呼び出しは 2 回以上 4 回以下（待ちの中の最初・1 秒・上限の周・終端は読み直さない・20 ms の周期なら数十回）。
++/// (§50 形 2) 照合は rules 行 `pipe.ci_poll_s` の間隔で撃つ: 上限 2 秒・間隔 1 秒の口は `ci=unmeasurable` で、
++/// 偽 CI の呼び出しは 2 回以上 4 回以下（待ちの中の最初・1 秒・上限の周・読み直さない・20 ms の周期なら数十回）。
+ #[test]
+ fn pipe_terminal_ci_poll_interval_bounds_the_ci_calls() {
+-    let (out, _, tools, dirs) = land_with_ci_poll(CI_RUNNING, 2, 1);
+-    assert!(stdout_of(&out).contains("terminal=ci:unmeasurable"), "走り続ける CI は測れない: {}", stdout_of(&out));
++    let (out, _, tools, dirs) = ci_with_poll(CI_RUNNING, 2, 1);
++    assert_eq!(answer_of(&out), "unmeasurable", "走り続ける CI は測れない: {}", stdout_of(&out));
+     let calls = tools.ci_call_count();
+     assert!((2..=4).contains(&calls), "照合は間隔 1 秒で撃つ（20 ms で撃たない）: {calls} 回");
+-    assert!(!tools.bd_log.exists(), "測れない周は台帳を閉じない");
++    assert!(!tools.bd_log.exists(), "口は台帳を撃たない");
+     clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+-/// (§50 形 3) 最初の評価は眠る前: 最初から success の CI は間隔 30 秒（上限 60 秒）でも待たずに `terminal=closed`
+-/// まで 10 秒未満で進み、照合は 1 回。
++/// (§50 形 3) 最初の評価は眠る前: 最初から success の CI は間隔 30 秒（上限 60 秒）でも待たずに `ci=success` まで 10 秒未満で
++/// 答え、照合は 1 回。
+ #[test]
+ fn pipe_terminal_ci_poll_first_check_is_before_the_sleep() {
+     let json = "[{\"status\":\"completed\",\"conclusion\":\"success\"}]";
+-    let (out, took, tools, dirs) = land_with_ci_poll(json, 60, 30);
+-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "close まで通った land は rc 0: {}", stderr_of(&out));
+-    assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
++    let (out, took, tools, dirs) = ci_with_poll(json, 60, 30);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "口は rc 0: {}", stderr_of(&out));
++    assert_eq!(answer_of(&out), "success", "答えの token: {}", stdout_of(&out));
+     assert!(took < std::time::Duration::from_secs(10), "間隔ぶん眠ってから照合しない: {took:?}");
+-    assert_eq!(tools.ci_call_count(), 1, "待ちの最初の 1 回（終端は待ちが読んだ答えで分けて読み直さない）");
++    assert_eq!(tools.ci_call_count(), 1, "待ちの最初の 1 回（待ちが読んだ答えで分けて読み直さない）");
+     clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+-/// (§50 形 4) 上限を越えて眠らない: 走り続ける CI・上限 1 秒・間隔 30 秒の周は `terminal=ci:unmeasurable` まで 10 秒未満。
++/// (§50 形 4) 上限を越えて眠らない: 走り続ける CI・上限 1 秒・間隔 30 秒の口は `ci=unmeasurable` まで 10 秒未満。
+ #[test]
+ fn pipe_terminal_ci_poll_sleep_never_overruns_the_limit() {
+-    let (out, took, tools, dirs) = land_with_ci_poll(CI_RUNNING, 1, 30);
+-    assert!(stdout_of(&out).contains("terminal=ci:unmeasurable"), "上限で測れない側: {}", stdout_of(&out));
++    let (out, took, tools, dirs) = ci_with_poll(CI_RUNNING, 1, 30);
++    assert_eq!(answer_of(&out), "unmeasurable", "上限で測れない側: {}", stdout_of(&out));
+     assert!(took < std::time::Duration::from_secs(10), "上限の後に間隔ぶん眠らない: {took:?}");
+-    assert!(!tools.bd_log.exists(), "測れない周は台帳を閉じない");
++    assert!(!tools.bd_log.exists(), "口は台帳を撃たない");
+     clean(&[&dirs[0], &dirs[1]]);
+ }
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/retire.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/retire.rs
+index 7cee0afe..86426cd2 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/retire.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/land/retire.rs
+@@ -2,6 +2,7 @@
+ //! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+ 
+ use super::*;
++use super::cilast::{parent_rows, settled_rows, CLOSED, PUSHED, SPAWNED};
+ 
+ #[test]
+ fn pipe_retire_moves_pr_landed_worktree_and_keeps_branch() {
+@@ -637,6 +638,10 @@ fn land_train_with_terminal(repo: &Path, state: &Path, conclusion: &str) -> (Fak
+     let stdout = stdout_of(&out);
+     assert!(stdout.contains(&format!("run={} train=3", ids[0])), "列で着地した: {stdout} / {}", stderr_of(&out));
+     let tip_sha = sha_of_landing(state, &ids[2]).expect("先端の便の sha を読める");
++    // 列の便ごとの子（着地の後の CI の口）の答えを待つ（片付けの後に子が置き場を作り直さない）。
++    for id in &ids {
++        settled_rows(state, id, 1);
++    }
+     (tools, stdout, ids, tip_sha)
+ }
+ 
+@@ -652,40 +657,35 @@ fn terminal_tail(state: &Path, id: &str) -> Vec<String> {
+     landed_details(state, id).into_iter().filter(|detail| detail.starts_with("terminal:")).collect()
+ }
+ 
+-/// 列の終端（設計 contract-source.md §53・行 be）: 常に success の偽 CI を持つ 3 本の列の着地で、先端でない 2 本（a / b）
+-/// も自分を祖先に持つ先端の CI で照合し、3 本とも push → CI → close の 3 段を通す。偽 CI の呼び出しは 3 本 × 1 回＝3 回で、
+-/// 最後に渡った sha は先端の sha（最後に終端する便は先頭の a＝先端でない便も先端の sha で照合した）。base は先端でない
+-/// 便が CI を照合せず `ci:unmeasurable` で止まる（呼び出し 2 回・close 1 本）＝RED。
++/// 列の終端（設計 contract-source.md §53・行 be・台帳の問い t3-hub.90.2 の裁定）: 常に success の偽 CI を持つ 3 本の列の着地で、
++/// 3 本とも push → close → 子の起こしの 3 段を通し、先端でない 2 本（a / b）の子も自分を祖先に持つ先端の CI を読む。偽 CI の
++/// 呼び出しは 3 本の子 × 1 回＝3 回で、子の CI の argv は先端の sha（どの子が最後に書いても先端の sha）。
+ #[test]
+ fn pipe_train_terminal_every_run_checks_the_tip_ci_and_closes() {
+     let (repo, state) = repo_with_state();
+     let (tools, stdout, [id_a, id_b, id_c], tip_sha) = land_train_with_terminal(&repo, &state, "success");
+     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), tip_sha, "main の先端は c");
+     for id in [&id_a, &id_b, &id_c] {
+-        assert_eq!(
+-            terminal_tail(&state, id),
+-            ["terminal:push:fake", "terminal:ci:success", "terminal:close:ok"],
+-            "列の便は push → CI → close: {id} {:?}",
+-            landed_details(&state, id)
+-        );
++        let rows = terminal_tail(&state, id);
++        assert_eq!(parent_rows(&rows, "terminal:ci:success"), [PUSHED, CLOSED, SPAWNED], "列の便は push → close → 子: {id} {rows:?}");
+         let line = stdout.lines().find(|line| line.starts_with(&format!("run={id} landed="))).map(str::to_owned);
+         assert!(
+             line.as_deref().is_some_and(|found| found.ends_with("terminal=closed")),
+             "stdout の terminal= は closed: {id} {stdout}"
+         );
+     }
+-    assert_eq!(tools.ci_call_count(), 3, "偽 CI は 3 本 × 待ちの最初の 1 回（終端は読み直さない）");
++    assert_eq!(tools.ci_call_count(), 3, "偽 CI は 3 本の子 × 待ちの最初の 1 回（子は読み直さない）");
+     let ci_argv = fs::read_to_string(&tools.ci_log).expect("偽 CI が撃たれた");
+-    assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [tip_sha.as_str()], "最後に渡った sha は先端の sha");
++    assert_eq!(ci_argv.lines().collect::<Vec<&str>>(), [tip_sha.as_str()], "子に渡った sha は先端の sha");
+     assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip_sha, "偽 remote の main は先端の sha");
+     clean(&[&repo, &state]);
+ }
+ 
+-/// 先端の CI で照合した close（設計 contract-source.md §53・行 be）: 1 周目は常に success の偽 CI の列の着地で、偽 bd の
+-/// 最後の close（最後に終端する列の先頭の便 a）の reason が `landed <a の sha> ci=success tip=<先端の sha>`。2 周目は偽 CI が
+-/// failure を返す列の着地で、3 本とも `ci:failure` で止まり台帳を 1 度も閉じない。base は a が close せず止まる＝RED。
++/// 列の close の理由（設計 contract-source.md §53・行 be・台帳の問い t3-hub.90.2 の裁定）: 1 周目は常に success の偽 CI の列の
++/// 着地で、偽 bd の最後の close（最後に終端する列の先頭の便 a）の reason が `landed <a の sha> host=green`（先端は子へ渡すだけで
++/// 理由に置かない）。2 周目は偽 CI が failure を返す列の着地で、3 本とも host の緑で閉じ、子の答えだけが `ci:failure` になる。
+ #[test]
+-fn pipe_train_tip_close_reason_names_the_tip_and_failure_closes_none() {
++fn pipe_train_tip_close_reason_is_host_green_and_failure_still_closes() {
+     let (repo, state) = repo_with_state();
+     let (tools, _, [id_a, _, _], tip_sha) = land_train_with_terminal(&repo, &state, "success");
+     let sha_a = sha_of_landing(&state, &id_a).expect("先頭の便の sha を読める");
+@@ -697,26 +697,18 @@ fn pipe_train_tip_close_reason_names_the_tip_and_failure_closes_none() {
+         Some(["close", "s2-2e5", "--reason"].as_slice()),
+         "最後の close は先頭の便の bead（train_runs の a）: {words:?}"
+     );
+-    assert_eq!(
+-        words.get(3).copied(),
+-        Some(format!("landed {sha_a} ci=success tip={tip_sha}").as_str()),
+-        "reason は先端の id を持つ: {words:?}"
+-    );
++    assert_eq!(words.get(3).copied(), Some(format!("landed {sha_a} host=green").as_str()), "reason は host の緑: {words:?}");
+     clean(&[&repo, &state]);
+ 
+     let (repo, state) = repo_with_state();
+     let (tools, stdout, ids, _) = land_train_with_terminal(&repo, &state, "failure");
+     for id in &ids {
+-        assert_eq!(
+-            terminal_tail(&state, id),
+-            ["terminal:push:fake", "terminal:ci:failure"],
+-            "failure は close しない: {id} {:?}",
+-            landed_details(&state, id)
+-        );
++        let rows = terminal_tail(&state, id);
++        assert_eq!(parent_rows(&rows, "terminal:ci:failure"), [PUSHED, CLOSED, SPAWNED], "failure でも閉じる: {id} {rows:?}");
+         let line = stdout.lines().find(|line| line.starts_with(&format!("run={id} landed="))).map(str::to_owned);
+-        assert!(line.as_deref().is_some_and(|found| found.ends_with("terminal=ci:failure")), "stdout: {id} {stdout}");
++        assert!(line.as_deref().is_some_and(|found| found.ends_with("terminal=closed")), "stdout: {id} {stdout}");
+     }
+-    assert!(!tools.bd_log.exists(), "台帳は 1 度も閉じない");
++    assert!(tools.bd_log.exists(), "台帳は閉じた");
+     clean(&[&repo, &state]);
+ }
+ 
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
+index 85996da1..71eb49e7 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__pipe__pipe_external_form.snap
+@@ -2,7 +2,7 @@
+ source: crates/scribe2-boundary/tests/e2e/pipe.rs
+ expression: form
+ ---
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+@@ -13,7 +13,7 @@ usage: scribe2 pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH]
+ usage: scribe2 pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）
+ pipe: --run が要る
+ pipe: --all が要る
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+@@ -23,7 +23,7 @@ usage: scribe2 pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH
+ usage: scribe2 pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）
+ usage: scribe2 pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）
+ pipe: 未知の引数 --no-review（審査の段を飛ばす口は無い）
+-usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]
++usage: scribe2 pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]
+ usage: scribe2 pipe land-window [--state-dir D] --repo R [--wait-s N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）
+ usage: scribe2 pipe regate --run ID --reason WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）
+ usage: scribe2 pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）
+diff --git a/scribe2/crates/scribe2/src/help.rs b/scribe2/crates/scribe2/src/help.rs
+index 609187df..517bd235 100644
+--- a/scribe2/crates/scribe2/src/help.rs
++++ b/scribe2/crates/scribe2/src/help.rs
+@@ -253,7 +253,7 @@ pub const TABLE: &[Entry] = &[
+             "it on main. Each subcommand moves one run one stage, or shows and steers the queue.",
+             "The pipeline has no switch that skips the review stage.",
+         ],
+-        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]",
++        form: "{NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [--reason WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: --reason WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]",
+         subcommands: &[
+             ("intake", "Take one contract row in and create its run."),
+             ("preflight", "Review a contract before intake, without creating a run."),
+diff --git a/scribe2/crates/scribe2/src/ledger/close_reason.rs b/scribe2/crates/scribe2/src/ledger/close_reason.rs
+index 18740663..d1d45110 100644
+--- a/scribe2/crates/scribe2/src/ledger/close_reason.rs
++++ b/scribe2/crates/scribe2/src/ledger/close_reason.rs
+@@ -18,6 +18,9 @@ const CI_SUCCESS: &str = "ci=success";
+ /// 尾の語 `ci=none`。
+ const CI_NONE: &str = "ci=none";
+ 
++/// 尾の語 `host=green`（この host の確かめの緑で閉じた・GitHub の検査は後から読む）。
++const HOST_GREEN: &str = "host=green";
++
+ /// 尾の先端の語の頭 `tip=`。
+ const TIP_KEY: &str = "tip=";
+ 
+@@ -80,16 +83,18 @@ impl Head {
+     }
+ }
+ 
+-/// landed の尾（閉じた 3 形か読めない尾）。
++/// landed の尾（閉じた 4 形か読めない尾）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum LandedTail {
++    /// `host=green`。
++    HostGreen,
+     /// `ci=success`。
+     Success,
+     /// `ci=success tip=<40 桁の 16 進>`（先端の commit id を運ぶ）。
+     SuccessTip(String),
+     /// `ci=none`。
+     None,
+-    /// 3 形のどれでもない尾（空白を 1 つに揃えた字・尾が無いなら空）。
++    /// 4 形のどれでもない尾（空白を 1 つに揃えた字・尾が無いなら空）。
+     Unreadable(String),
+ }
+ 
+@@ -227,9 +232,10 @@ fn landed(values: &[&str]) -> Option<Form> {
+     is_commit_id(commit).then(|| Form::Landed { commit: (*commit).to_owned(), tail: tail_of(tail) })
+ }
+ 
+-/// 尾の閉じた 3 形（ほかは読めない尾）。
++/// 尾の閉じた 4 形（ほかは読めない尾）。
+ fn tail_of(words: &[&str]) -> LandedTail {
+     match words {
++        [HOST_GREEN] => LandedTail::HostGreen,
+         [CI_SUCCESS] => LandedTail::Success,
+         [CI_NONE] => LandedTail::None,
+         [CI_SUCCESS, tip] => match tip.strip_prefix(TIP_KEY).filter(|id| is_commit_id(id)) {
+diff --git a/scribe2/crates/scribe2/src/pipe/cli.rs b/scribe2/crates/scribe2/src/pipe/cli.rs
+index de5efd52..9e874ad7 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli.rs
+@@ -178,7 +178,7 @@ impl PipeCommand {
+ /// `pipe` の使い方。
+ pub fn usage() -> String {
+     format!(
+-        "usage: {NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [{REASON_FLAG} WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: {REASON_FLAG} WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only] [--runner CMD] [flags]\nusage: {NAME} pipe land-window [--state-dir D] --repo R [{WINDOW_WAIT_FLAG} N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）\nusage: {NAME} pipe regate --run ID {REASON_FLAG} WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）\nusage: {NAME} pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）\nusage: {NAME} pipe anchor-sync --repo R [--state-dir D] [--rules PATH]（着地が揃えなかった anchor の index と作業の木のうち着地前の中身のままの path だけを main の先端へ戻して印を外す・利用者の編集は触らない）\nusage: {NAME} pipe review --ref SHA --repo R --state-dir S --lens CMD [--rules PATH]（設計の PR の head の commit で変わった契約表の行ごとに機械の検査と lens を撃ち、行ごとの記録と ref の記録を置き場に書いて [ROW-REVIEW] の行を返す・pass は rc 0・fail と pending と stale は rc 1・組めない周は rc 2）\nusage: {NAME} pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH]（ref〔既定は HEAD〕の commit の code の索引を、宣言の 2 key の command で組んで置き場へ置き、[INDEX] の 1 行を返す・built と cached は rc 0・failed は rc 1・宣言の不備と組めない周は rc 2・宣言の無い repo は undeclared で rc 0）\nusage: {NAME} pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）\nusage: {NAME} pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）"
++        "usage: {NAME} pipe <intake|preflight|spawn|approve|answer|gate|land|retire|run|show|resume|stop|report|dispatch> [--state-dir D] [--repo R（cwd は読まない＝--state-dir の無い周と便の写し面の無い周は要る）] [--rules PATH] [stop: --all [{REASON_FLAG} WORDS（live な便が 2 本以上の周は要る）]|--run ID] [dispatch: (1 周)|ls|first|hold|release BEAD|memo-lens MEMO] [dispatch hold: {REASON_FLAG} WORDS（要る）] [run|resume: --drive] [land: --terminal-only|--detection-only|--ci-only SHA] [--runner CMD] [flags]\nusage: {NAME} pipe land-window [--state-dir D] --repo R [{WINDOW_WAIT_FLAG} N]（pipeline 外の merge の前置: 開けば rc 0 の clear・待ちが切れれば rc 1 の busy）\nusage: {NAME} pipe regate --run ID {REASON_FLAG} WORDS [--state-dir D] [--repo R]（判定 FAIL の Gated を裁定の逐語つきで同じ worktree の Implemented へ 1 段戻す・最新の Gated につき 1 回）\nusage: {NAME} pipe follow --run ID [--state-dir D] [--repo R]（終端でない便の木だけを main の先端へ載せ替えて段を Implemented へ戻す・gate は撃たない・衝突は木を戻して断る）\nusage: {NAME} pipe anchor-sync --repo R [--state-dir D] [--rules PATH]（着地が揃えなかった anchor の index と作業の木のうち着地前の中身のままの path だけを main の先端へ戻して印を外す・利用者の編集は触らない）\nusage: {NAME} pipe review --ref SHA --repo R --state-dir S --lens CMD [--rules PATH]（設計の PR の head の commit で変わった契約表の行ごとに機械の検査と lens を撃ち、行ごとの記録と ref の記録を置き場に書いて [ROW-REVIEW] の行を返す・pass は rc 0・fail と pending と stale は rc 1・組めない周は rc 2）\nusage: {NAME} pipe index build --repo R --state-dir S [--ref SHA] [--rules PATH]（ref〔既定は HEAD〕の commit の code の索引を、宣言の 2 key の command で組んで置き場へ置き、[INDEX] の 1 行を返す・built と cached は rc 0・failed は rc 1・宣言の不備と組めない周は rc 2・宣言の無い repo は undeclared で rc 0）\nusage: {NAME} pipe index show --repo R --state-dir S [--ref SHA] [--rules PATH] (--row DOC#ID | --item PATH)…（ref〔既定は HEAD〕の commit の索引から、行の touches と節の名指し・名を項目に 7 列の件数と site と write-set の外の印と母集団を出す・組めない周は index=unavailable:<語>・宣言の無い repo は index=unavailable:undeclared で rc 0・宣言の不備と引けない行と解けない ref は rc 2）\nusage: {NAME} pipe permit --bead B --rule ID (--value N --until YYYY-MM-DDTHH:MMZ --ruling ID|--revoke) [--state-dir D] [--repo R（記帳の周は要る）] [--rules PATH] [--bd CMD]（bead 1 つの上限の行を、user の裁定に結んだ値へ期限つきで上げる記帳か、その取り消しを 1 件書く・列は撃たない・断りは rc 1・読めない周は rc 2）"
+     )
+ }
+ 
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/args.rs b/scribe2/crates/scribe2/src/pipe/cli/args.rs
+index 820f1c73..6cb8f0ed 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/args.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/args.rs
+@@ -149,7 +149,7 @@ const ALLOWED_GATE: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], value
+ const ALLOWED_LAND: &[cli_args::Allowed] = &[
+     PLACE[0], PLACE[1], PLACE[2],
+     value("--run"), TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3], value("--pr-cmd"), Allowed::switch("--terminal-only"),
+-    Allowed::switch("--detection-only"),
++    Allowed::switch("--detection-only"), value("--ci-only"),
+ ];
+ /// `pipe retire`。
+ const ALLOWED_RETIRE: &[cli_args::Allowed] = &[
+diff --git a/scribe2/crates/scribe2/src/pipe/cli/step.rs b/scribe2/crates/scribe2/src/pipe/cli/step.rs
+index 38e09557..7bdfd283 100644
+--- a/scribe2/crates/scribe2/src/pipe/cli/step.rs
++++ b/scribe2/crates/scribe2/src/pipe/cli/step.rs
+@@ -8,7 +8,7 @@ use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_o
+ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+ use crate::fleet::lifecycle::{self, Place};
+ use crate::fleet::store::{LockPolicy, StoreError};
+-use crate::fleet::{store, EventKind, Stage};
++use crate::fleet::{store, CiRead, EventKind, Stage};
+ use crate::pipe::approve::{Approve, RC_BLOCKED};
+ use crate::pipe::current;
+ use crate::pipe::declaration::{self, Ceiling, CEILING_ROW, DENIED_ROW};
+@@ -16,13 +16,13 @@ use crate::pipe::follow::Runner;
+ use crate::pipe::gate::{Gate, Limits};
+ use crate::pipe::land::detection::Detect;
+ use crate::pipe::git_line;
+-use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, MAIN_REF};
++use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, CI_ONLY, MAIN_REF};
+ use crate::pipe::lens_record::{self, LensSource};
+ use crate::pipe::ratelimit::Pool;
+ use crate::pipe::review::{review, Review};
+ use crate::pipe::spawn::EndGate;
+ use crate::pipe::retire::{read_tip, RemoteTip};
+-use crate::pipe::{emit, run_dir, Emit};
++use crate::pipe::{emit, notify, run_dir, Emit};
+ use crate::rules::manifest::Manifest;
+ use std::path::Path;
+ 
+@@ -41,7 +41,7 @@ const ROW_CI_WAIT: &str = "pipe.ci_wait_s";
+ /// 終端が CI の判定を照合する間隔を宣言する rules 行の id（設計 contract-source.md §50・上の行と同じ極性で読む）。
+ const ROW_CI_POLL: &str = "pipe.ci_poll_s";
+ 
+-/// 終端だけを撃ち直す flag（値なし・設計 contract-source.md §5 手順 3）。
++/// 終端だけを撃ち直す flag（値なし・設計 contract-source.md §5 手順 2）。
+ const TERMINAL_ONLY: &str = "--terminal-only";
+ 
+ /// 終端の材料（CI の上限・照合の間隔・台帳 client）を引数と規則から解く（**land と `--terminal-only` が共有**）。
+@@ -157,34 +157,10 @@ fn settle(
+     (sha, tip, label): (&str, PushTip<'_>, &str),
+     record: impl FnOnce(&Land<'_>) -> Result<(), Outcome>,
+ ) -> Outcome {
+-    let (ci_wait_s, ci_poll_s, bd) = match terminal_input(args, manifest) {
++    let entry = match settled_entry(args, (id, manifest, policy), resolved) {
+         Ok(found) => found,
+         Err(outcome) => return outcome,
+     };
+-    let limits = match Limits::of(manifest) {
+-        Ok(found) => found,
+-        Err(reason) => return broken(reason),
+-    };
+-    let entry = Land {
+-        run: id,
+-        bead: &resolved.bead,
+-        repo: &resolved.repo,
+-        state_dir: &resolved.state_dir,
+-        contract: &resolved.contract,
+-        pr_cmd: None,
+-        lens: &LensSource::Absent,
+-        limits,
+-        runner: None,
+-        retries: 0,
+-        land_wait_s: 0,
+-        ci_wait_s,
+-        ci_poll_s,
+-        bd,
+-        approved: resolved.approved,
+-        policy,
+-        train_max: 1,
+-        rules: None,
+-    };
+     if let Err(outcome) = record(&entry) {
+         return outcome;
+     }
+@@ -207,10 +183,14 @@ const DETECTION_ONLY: &str = "--detection-only";
+ /// - `--terminal-only`（設計 contract-source.md §5 手順 3）: 着地は成立しているのに終端が止まった便（push の失敗・
+ ///   CI の未確定・台帳を閉じられなかった周）を、着地をやり直さずに継ぐ。
+ /// - `--detection-only`（設計 gate-cost.md §44 行 ak）: 着地した便の検出線を人が撃つ（撃ち直す）形。
++/// - `--ci-only <sha>`（設計 contract-source.md §5 手順 3）: 着地した便の GitHub の検査を後から読む形（[`ci_only`]）。
+ fn settled_port(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Option<Outcome> {
+     if super::present(args, TERMINAL_ONLY) {
+         return Some(terminal_only(args, id, manifest, policy));
+     }
++    if let Ok(Some(sha)) = flag(args, CI_ONLY) {
++        return Some(ci_only(args, id, sha, manifest, policy));
++    }
+     super::present(args, DETECTION_ONLY).then(|| detection_only(args, id, manifest, policy))
+ }
+ 
+@@ -245,6 +225,78 @@ fn detection_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPo
+     )
+ }
+ 
++/// 着地をやり直さない口の land の材料（`--terminal-only` の 2 つの形と `--ci-only` が共有する 1 本・CI の上限と間隔と台帳 client は
++/// [`terminal_input`]）。
++fn settled_entry<'a>(
++    args: &'a [String],
++    (id, manifest, policy): (&'a str, &Manifest, LockPolicy),
++    resolved: &'a Resolved,
++) -> Result<Land<'a>, Outcome> {
++    let (ci_wait_s, ci_poll_s, bd) = terminal_input(args, manifest)?;
++    let limits = Limits::of(manifest).map_err(broken)?;
++    Ok(Land {
++        run: id,
++        bead: &resolved.bead,
++        repo: &resolved.repo,
++        state_dir: &resolved.state_dir,
++        contract: &resolved.contract,
++        pr_cmd: None,
++        lens: &LensSource::Absent,
++        limits,
++        runner: None,
++        retries: 0,
++        land_wait_s: 0,
++        ci_wait_s,
++        ci_poll_s,
++        bd,
++        approved: resolved.approved,
++        policy,
++        train_max: 1,
++        rules: None,
++    })
++}
++
++/// `pipe land --run <id> --ci-only <sha>`（設計 contract-source.md §5 手順 3）: 札も push も替えず、着地した便の `sha` の GitHub の
++/// 検査を上限まで読んで `ci:<語>` を 1 件記し、`run=<id> ci=<success|failure|unmeasurable>` の 1 行を返す（rc 0・終端が close の
++/// 後に子 process で起こす口で、人も撃てる）。赤の周は席へ終端の 1 行（語 `ci:failure`）を送り、送れたかを `notify=` の 1 行で
++/// 添える（札は替えない）。前提の段は `Landed`。値が 40 桁の 16 進でない周は何も撃たず何も書かずに断る。
++fn ci_only(args: &[String], id: &str, sha: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
++    if sha.len() != 40 || !sha.bytes().all(|found| found.is_ascii_hexdigit()) {
++        return refused(format!("{CI_ONLY} の値 {sha} は 40 桁の 16 進でない"));
++    }
++    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
++        Ok(found) => found,
++        Err(outcome) => return outcome,
++    };
++    let entry = match settled_entry(args, (id, manifest, policy), &resolved) {
++        Ok(found) => found,
++        Err(outcome) => return outcome,
++    };
++    let read = super::land::ci_only(&entry, sha);
++    let word = match read {
++        CiRead::Success => "success",
++        CiRead::Failure => "failure",
++        CiRead::Pending | CiRead::Unmeasured => "unmeasurable",
++    };
++    let mut out = vec![format!("run={id} ci={word}")];
++    if matches!(read, CiRead::Failure) {
++        out.push(red_notice(&resolved, manifest, id));
++    }
++    Outcome::ok(out)
++}
++
++/// 着地の後の GitHub の検査が赤い便を、終端の 1 行（落ちた便の 1 行と同じ形・語 `ci:failure`）で席へ知らせ、`notify=` の行を返す
++/// （宛先と送達は列の終端の知らせと同じ 1 関数・置き場を読めない周も宛先の読みへ進み、送れない事実を `notify=` に残す）。
++fn red_notice(resolved: &Resolved, manifest: &Manifest, id: &str) -> String {
++    let state = store::read_all(&resolved.state_dir).map_or_else(|_| crate::fleet::replay(&[]), |events| crate::fleet::replay(&events));
++    let line = notify::terminal_line(&notify::Terminal { bead: &resolved.bead, run: id, stage: Stage::Landed.as_str(), word: "ci:failure", streak: 0 });
++    let place = crate::seat::StateDir {
++        path: std::path::absolute(&resolved.state_dir).unwrap_or_else(|_| resolved.state_dir.clone()),
++        source: crate::seat::Provenance::Flag,
++    };
++    notify::send(&state, &place, &resolved.repo, manifest, &line)
++}
++
+ /// `pipe approve`。**逐語を event へ写すだけ**で、段は動かさない（resume が進める）。
+ pub(super) fn approve_run(args: &[String], id: &str, policy: LockPolicy) -> Outcome {
+     let words = match need(args, "--words") {
+diff --git a/scribe2/crates/scribe2/src/pipe/land.rs b/scribe2/crates/scribe2/src/pipe/land.rs
+index a86c395c..d108389a 100644
+--- a/scribe2/crates/scribe2/src/pipe/land.rs
++++ b/scribe2/crates/scribe2/src/pipe/land.rs
+@@ -82,7 +82,7 @@ mod finish;
+ use finish::{finish, open_pr, squash};
+ pub(crate) use finish::{contract_key, source_key};
+ pub(in crate::pipe) use finish::{
+-    close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CLOSE_REASON,
++    ci_only, close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CI_ONLY, CLOSE_REASON,
+ };
+ 
+ /// 着地が anchor を揃えなかった周の印（設計 §57・行 az）。書き手は境界 crate の歯からも呼べ、古さの判定は crate の中
+@@ -1015,7 +1015,8 @@ fn follow_failed(entry: &Land<'_>, detail: &str, reason: String) -> Outcome {
+ /// `pipe land --terminal-only` で終端だけを撃ち直す（冪等）。
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub enum Terminal {
+-    /// push → CI success → close まで通った。
++    /// push → この host の緑で close まで通った（GitHub の検査は子 process が後から読む）か、受け入れの周が push を撃たず
++    /// 先端の CI の success で close した。
+     Closed,
+     /// remote を持たない repo の便を **CI の照合なしで close した**（宣言を読めた上で `remote` の行が無い・理由は
+     /// `landed <sha> ci=none`）。
+@@ -1324,6 +1325,18 @@ mod tests {
+         assert!(!none.contains("tip="), "ci=none の周に先端は無い: {none}");
+     }
+ 
++    /// この host の緑で閉じる周の理由は `landed <sha> host=green` の 1 形で、先端（`tip=`）も CI の語（`ci=`）も持たず、台帳の
++    /// 閉じた理由の読み手が着地の読める尾（[`LandedTail::HostGreen`]）として読む（読めない尾にしない）。
++    #[test]
++    fn vclhost_reason_is_host_green_and_the_ledger_reads_it() {
++        use crate::ledger::close_reason::{read, Form, LandedTail};
++        let sha = "c".repeat(40);
++        let reason = close_reason(&sha, CloseTail::HostGreen);
++        assert_eq!(reason, format!("landed {sha} host=green"));
++        assert!(!reason.contains("tip=") && !reason.contains("ci="), "host の緑の理由は先端も CI の語も持たない: {reason}");
++        assert_eq!(read(&reason, None), Ok(Form::Landed { commit: sha, tail: LandedTail::HostGreen }));
++    }
++
+     /// **契約と要件の trailer**（設計 contract-source.md §5 手順 5）は `run:` の後ろに並び、key は器の名から
+     /// 導く（他の道具の trailer と衝突しない）。**欄が空の周は行ごと書かない**——空の trailer は「無い」と
+     /// 読めず、RTM が「まだ分からない」と言えなくなる。
+diff --git a/scribe2/crates/scribe2/src/pipe/land/finish.rs b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+index 16290974..70f047a2 100644
+--- a/scribe2/crates/scribe2/src/pipe/land/finish.rs
++++ b/scribe2/crates/scribe2/src/pipe/land/finish.rs
+@@ -199,22 +199,27 @@ fn gist_of(goal: &str) -> String {
+ /// `--version` の括弧の中身と**同じ 1 つの値**である（3 形: `<sha12>` / `<sha12>+dirty` / `unknown`）。
+ const GENERATION: &str = BUILD_COMMIT;
+ 
+-/// 台帳の close に書く理由の書き出し（`landed <sha> ci=success` / `landed <sha> ci=none`）。
++/// 台帳の close に書く理由の書き出し（`landed <sha> host=green` / `landed <sha> ci=success` / `landed <sha> ci=none`）。
+ pub(in crate::pipe) const CLOSE_REASON: &str = "landed";
+ 
+-/// close の理由の尾（**閉じた 2 値**・設計 contract-source.md §5・FR50）。書き手は [`close_reason`] の 1 本で、
+-/// 経路 (1)（push → CI の照合 → close）と経路 (2)（remote を持たない repo の close）が同じ関数を通る。
++/// close の理由の尾（**閉じた 3 値**・設計 contract-source.md §5・FR50）。書き手は [`close_reason`] の 1 本で、
++/// 経路 (1)（push → この host の緑で close → GitHub の検査は後から読む）と、主実測が赤か測れなかった便を受け入れる周
++/// （先端の CI の success で close）と、経路 (2)（remote を持たない repo の close）が同じ関数を通る。
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub(in crate::pipe) enum CloseTail<'a> {
+-    /// CI が success だった（先端で照合した周だけ先端の sha を持つ・§53）。
++    /// この host の確かめ（着地の前の gate と着地の後の主実測）が緑だった（GitHub の検査を待たない・先端は持たない）。
++    HostGreen,
++    /// CI が success だった（受け入れの周と retire・先端で照合した周だけ先端の sha を持つ・§53）。
+     CiSuccess(Option<&'a str>),
+     /// CI の照合をしていない（remote を持たない repo・先端は持たない）。
+     NoCi,
+ }
+ 
+-/// 台帳の close の理由（`landed <sha> ci=success` / `landed <sha> ci=success tip=<先端>` / `landed <sha> ci=none` の 3 形）。
++/// 台帳の close の理由（`landed <sha> host=green` / `landed <sha> ci=success` / `landed <sha> ci=success tip=<先端>` /
++/// `landed <sha> ci=none` の 4 形）。
+ pub(in crate::pipe) fn close_reason(sha: &str, tail: CloseTail<'_>) -> String {
+     match tail {
++        CloseTail::HostGreen => format!("{CLOSE_REASON} {sha} host=green"),
+         CloseTail::CiSuccess(None) => format!("{CLOSE_REASON} {sha} ci=success"),
+         CloseTail::CiSuccess(Some(head)) => format!("{CLOSE_REASON} {sha} ci=success tip={head}"),
+         CloseTail::NoCi => format!("{CLOSE_REASON} {sha} ci=none"),
+@@ -258,18 +263,21 @@ pub(in crate::pipe) enum PushTip<'a> {
+     Adopted(&'a str),
+ }
+ 
+-/// land の終端（設計 contract-source.md §5）: push → CI の照合 → 台帳の close。
++/// land の終端（設計 contract-source.md §5）: push → この host の緑で台帳の close → GitHub の検査を子 process で後から読む。
+ ///
+-/// **各段が typed な event を 1 件ずつ記す**（`RunDone` の detail で弁別）＝通った周は `Landed` の後ろに
+-/// 3 件並ぶ。止まった段から先は撃たず、記録もそこで終わる（起きていない段の event を積まない）。
++/// **各段が typed な event を 1 件ずつ記す**（`RunDone` の detail で弁別）。止まった段から先は撃たず、記録もそこで終わる
++/// （起きていない段の event を積まない）。終端に来る便は着地の前の gate と着地の後の主実測がこの host で緑なので、close は
++/// GitHub の検査を待たず `landed <sha> host=green` の理由で撃つ。GitHub の検査は close の後に着地の後の CI の口
++/// （`pipe land --run <id> --ci-only <sha>`）の子 process（[`spawn_ci`]）が上限まで読む。子を待たないので、呼び手は close の
++/// 直後に戻り、列の 1 周が後の便を起こす。閉じられなかった周は子を起こさない（やり直しは `--terminal-only`）。
+ /// remote を持たない repo（宣言を読めた上で `remote` の行が無い）の便は push も CI の照合も撃たず、台帳の close だけを
+ /// `landed <sha> ci=none` の理由で撃つ（記すのは `close:ok` の 1 件・結末は [`Terminal::ClosedWithoutCi`]）。
+-/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ち）を
+-/// 先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。push の後の remote の
+-/// 追跡の ref が自分の sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、
+-/// 渡された側によらずその commit を先端とする（[`pushed_past`]）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
+-/// [`PushTip::Adopted`] の周は push を撃たず（記帳もしない）、`Behind` と同じく先端の CI で照合する（先端が自分の sha なら
+-/// reason に `tip=` を置かない）。
++/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ先端の sha を子へ渡す。祖先で
++/// ない周と測れない周は子を起こさず `ci:unmeasurable` を記す（close は替えない・§53）。push の後の remote の追跡の ref が自分の
++/// sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、渡された側によらず
++/// その commit を先端とする（[`pushed_past`]）。[`PushTip::Adopted`] の周（主実測が赤か測れなかった便を受け入れる周＝この host の
++/// 緑が無い）は push を撃たず（記帳もしない）、今までどおり先端の CI の success を待ってから close する（先端が自分の sha なら
++/// reason に `tip=` を置かない）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
+ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
+     let facts = match super::declaration::terminal_facts(entry.repo) {
+         Ok(found) => found,
+@@ -302,42 +310,90 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
+     let pushed = (!matches!(tip, PushTip::Adopted(_))).then(|| pushed_past(entry.repo, remote, sha)).flatten();
+     let tip = pushed.as_deref().map_or(tip, PushTip::Behind);
+     // 先端でない sha には forge の CI の run が付かない＝自分を祖先に持つ先端の CI で照合する（§53）。祖先でない周と
+-    // 測れない周（rc 0 以外は区別しない）は照合を撃たない（close しない極性）。
++    // 測れない周（rc 0 以外は区別しない）は照合する commit を持たない。
+     let checked = match tip {
+-        PushTip::Tip => sha,
+-        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
+-        PushTip::Behind(_) | PushTip::Adopted(_) => {
+-            note(entry, "ci:unmeasurable");
+-            return Terminal::CiUnmeasurable;
+-        }
++        PushTip::Tip => Some(sha),
++        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => Some(head),
++        PushTip::Behind(_) | PushTip::Adopted(_) => None,
+     };
+-    // (2) CI の照合。上限まで rules 行の間隔で撃ち（設計 §50）、待ちが最後に読んだ答えで分ける（読み直さない・memo
+-    // t3-hub.74.49.6 の道 1）。**success 以外は close しない**（FailClosed）。
++    // 受け入れの周は host の緑が無いので、先端の CI の success を待ってから閉じる（**success 以外は close しない**・FailClosed）。
++    if let PushTip::Adopted(head) = tip {
++        let Some(checked) = checked else {
++            note(entry, CI_UNMEASURABLE);
++            return Terminal::CiUnmeasurable;
++        };
++        return match read_ci(entry, &facts.ci_cmd, checked) {
++            CiRead::Success => close_bead(entry, &close_reason(sha, CloseTail::CiSuccess((head != sha).then_some(head)))),
++            CiRead::Failure => Terminal::CiFailed,
++            CiRead::Pending | CiRead::Unmeasured => Terminal::CiUnmeasurable,
++        };
++    }
++    // (2) 台帳の close。この host の緑で閉じる（GitHub の検査を待たない）。閉じられない周も着地は取り消さない（やり直しは
++    // `--terminal-only`・冪等）。
++    let closed = close_bead(entry, &close_reason(sha, CloseTail::HostGreen));
++    if !matches!(closed, Terminal::Closed) {
++        return closed;
++    }
++    // (3) GitHub の検査は子 process が後から読む（待たない）。照合する commit が無い周は子を起こさず記すだけ（札は替えない）。
++    match checked {
++        Some(found) => spawn_ci(entry, found),
++        None => note(entry, CI_UNMEASURABLE),
++    }
++    closed
++}
++
++/// GitHub の検査の読みが測れなかった周の語（終端の detail・[`Terminal::CiUnmeasurable`] の字面と同じ）。
++const CI_UNMEASURABLE: &str = "ci:unmeasurable";
++
++/// 着地の後の CI の口の flag（値は照合する commit の 40 桁の sha・`pipe land --run <id> --ci-only <sha>`）。
++pub(in crate::pipe) const CI_ONLY: &str = "--ci-only";
++
++/// GitHub の検査を上限まで rules 行の間隔で読み（設計 §50）、待ちが最後に読んだ答えを `ci:<語>` の 1 件で記して返す
++/// （読み直さない・memo t3-hub.74.49.6 の道 1）。受け入れの周の close の前と、着地の後の CI の口（[`ci_only`]）が共有する 1 本。
++fn read_ci(entry: &Land<'_>, cmd: &str, sha: &str) -> CiRead {
+     let watch = Completion::CiResult {
+         repo: entry.repo.to_path_buf(),
+-        sha: checked.to_owned(),
+-        cmd: facts.ci_cmd.clone(),
++        sha: sha.to_owned(),
++        cmd: cmd.to_owned(),
+         every: std::time::Duration::from_secs(entry.ci_poll_s),
+     };
+-    match ci_wait(watch, std::time::Duration::from_secs(entry.ci_wait_s)) {
+-        CiRead::Pending | CiRead::Unmeasured => {
+-            note(entry, "ci:unmeasurable");
+-            return Terminal::CiUnmeasurable;
+-        }
+-        CiRead::Failure => {
+-            note(entry, "ci:failure");
+-            return Terminal::CiFailed;
++    let read = ci_wait(watch, std::time::Duration::from_secs(entry.ci_wait_s));
++    note(
++        entry,
++        match read {
++            CiRead::Success => "ci:success",
++            CiRead::Failure => "ci:failure",
++            CiRead::Pending | CiRead::Unmeasured => CI_UNMEASURABLE,
++        },
++    );
++    read
++}
++
++/// 着地の後の CI の口（[`CI_ONLY`]）を子 process で起こし、終わりを待たない（起こすのは着地後の検出と同じ 1 本 [`spawn_self`]）。
++///
++/// 子は列の道具（`--runner` ほか）を受けないので、子の終わりの列の 1 周は便を起こさない。起こせた周は `ci:spawned`、
++/// 起こせなかった周は `ci:unspawned` を 1 件記す（札は閉じたまま・読み直しは同じ口を人が撃つ）。
++fn spawn_ci(entry: &Land<'_>, sha: &str) {
++    let mut argv: Vec<String> = ["land", "--run", entry.run, CI_ONLY, sha, "--state-dir"].into_iter().map(str::to_owned).collect();
++    argv.extend([entry.state_dir.display().to_string(), "--repo".to_owned(), entry.repo.display().to_string()]);
++    argv.extend(["--bd".to_owned(), entry.bd.to_owned()]);
++    if let Some(rules) = entry.rules {
++        argv.extend(["--rules".to_owned(), rules.display().to_string()]);
++    }
++    note(entry, if spawn_self(entry.state_dir, &argv) { "ci:spawned" } else { "ci:unspawned" });
++}
++
++/// 着地の後の CI の口の本体（`pipe land --run <id> --ci-only <sha>`・設計 contract-source.md §5 手順 3）: 札も push も替えず、
++/// `sha` の GitHub の検査を [`read_ci`] で読んで `ci:<語>` を 1 件記す。宣言を読めない周は `ci:unmeasurable` を記す（読めないを
++/// 赤にも緑にも読み替えない・C10）。返すのは待ちが最後に読んだ答え（赤の知らせは呼び手が送る）。
++pub(in crate::pipe) fn ci_only(entry: &Land<'_>, sha: &str) -> CiRead {
++    match super::declaration::terminal_facts(entry.repo) {
++        Ok(facts) => read_ci(entry, &facts.ci_cmd, sha),
++        Err(_) => {
++            note(entry, CI_UNMEASURABLE);
++            CiRead::Unmeasured
+         }
+-        CiRead::Success => note(entry, "ci:success"),
+-    }
+-    // (3) 台帳の close。閉じられない周も着地は取り消さない（やり直しは `--terminal-only`・冪等）。先端で照合した周は
+-    // reason に先端の id を後置する（FR50・§53）。
+-    let tail = match tip {
+-        PushTip::Tip => CloseTail::CiSuccess(None),
+-        PushTip::Behind(head) => CloseTail::CiSuccess(Some(head)),
+-        PushTip::Adopted(head) => CloseTail::CiSuccess((head != sha).then_some(head)),
+-    };
+-    close_bead(entry, &close_reason(sha, tail))
++    }
+ }
+ 
+ /// push の後の remote の追跡の ref（`refs/remotes/<remote>/main`・git が push の押した値に揃える）が自分の sha の子孫で
+diff --git a/scribe2/docs/design/contract-source.md b/scribe2/docs/design/contract-source.md
+index fdcee851..d1b91a23 100644
+--- a/scribe2/docs/design/contract-source.md
++++ b/scribe2/docs/design/contract-source.md
+@@ -49,11 +49,11 @@
+ 
+ ## 5. land の終端（FR50）
+ 
+-Landed（gate-cost.md §6 の CAS の後）に続けて器が行う。各段は typed な event を **1 件ずつ**記す（`RunDone` の `detail` で弁別・schema 1 のまま・push / ci / close の 3 段）。止まった段から先は撃たず、記録もそこで終わる。終端の結末は閉じた 7 値（Closed / Undeclared / Unreadable / PushFailed / CiFailed / CiUnmeasurable / CloseFailed）で、CI の「測れない」を failure に畳まず、宣言を読めない周（Unreadable）を「押す先が無い」（Undeclared）にも「push の失敗」にも畳まない（push を 1 度も撃っていない＝測れていない・C10）。rc 0 は Closed と Undeclared の 2 値だけである。CI の照合は**落ちた run を先に見る**（複数の workflow が並ぶ repo では 1 本が落ちた後も別の 1 本が走っているのが常態で、未完了を先に見ると deadline を空費した末に failure が「測れない」に化ける・`s2-07l.382` の lens の指摘）。
++Landed（gate-cost.md §6 の CAS の後）に続けて器が行う。各段は typed な event を **1 件ずつ**記す（`RunDone` の `detail` で弁別・schema 1 のまま・push / ci / close の 3 段）。止まった段から先は撃たず、記録もそこで終わる。順は push → この host の緑で close → GitHub の検査を子 process で後から読む（手順 2・3）。終端の結末は閉じた 7 値（Closed / Undeclared / Unreadable / PushFailed / CiFailed / CiUnmeasurable / CloseFailed）で、CI の「測れない」を failure に畳まず、宣言を読めない周（Unreadable）を「押す先が無い」（Undeclared）にも「push の失敗」にも畳まない（push を 1 度も撃っていない＝測れていない・C10）。rc 0 は Closed と Undeclared の 2 値だけである。CI の照合は**落ちた run を先に見る**（複数の workflow が並ぶ repo では 1 本が落ちた後も別の 1 本が走っているのが常態で、未完了を先に見ると deadline を空費した末に failure が「測れない」に化ける・`s2-07l.382` の lens の指摘）。
+ 
+ 1. **push**: `git push <remote> main:main`（子 process・remote 名は `.vessel.toml` の宣言 `remote`）。**既定の remote は持たない**: push は repo の外へ出す行為（A1「出す」）なので、押す先を宣言していない repo の便は終端を持たない（`terminal=undeclared`・rc 0・event 0 件・`--pr-cmd` 形と同じ極性・既存の toy repo の歯は動かない）。失敗は `RunDone detail=push:failed:<reason>` で止める（close しない・rc 1）。
+-2. **CI の照合**: 唯一の wait 実装に `Completion::CiResult { repo, sha }` を足し、forge の CLI（`.vessel.toml` の `ci-cmd`〔optional・無ければ既定の 1 行 = `gh run list --commit {sha} --json status,conclusion`〕）を deadline（rules 行 `pipe.ci_wait_s`・Int・裁定 id）まで待つ。`ci-cmd` は **argv 1 本として撃つ**（shell を通さない・宣言は対象 repo の tracked file から来るので shell に渡すと 1 行が別の command を継ぎ足せる）。`{sha}` の穴は**必須**で、穴の無い行は断る（別の commit の判定を読んで success と言いうる）。`{sha}` には full の sha を入れる（短縮 sha は forge の CLI が一致させない）。結果は 3 値（success / failure / unmeasurable）。**success 以外は close しない**（FailClosed）・記帳して rc 1。
+-3. **台帳の close**: 台帳 adapter（§6）で `close <bead> --reason "landed <sha> ci=success"`。adapter が撃てない・rc ≠ 0 なら `RunDone detail=close:failed` で止める（着地は成立している＝やり直しは `pipe land --terminal-only <run>` で終端だけ再実行・冪等）。
++2. **台帳の close（この host の緑）**: 終端に来る便は、着地の前の gate と着地の後の主実測（pipeline.md §5.4）がこの host で緑である。台帳 adapter（§6）で `close <bead> --reason "landed <sha> host=green"` を撃ち、GitHub の検査を待たない（裁定 2026-10-05T22:57Z・依存の鎖の 1 段ごとの待ちと、GitHub の障害で札が残る形を消す）。adapter が撃てない・rc ≠ 0 なら `RunDone detail=close:failed` で止める（着地は成立している＝やり直しは `pipe land --terminal-only <run>` で終端だけ再実行・冪等）。閉じた理由は先端（`tip=`）も CI の語も持たず、台帳の閉じた理由の読み手は着地の読める尾 `host=green` として読む。**主実測が赤か測れなかった便を受け入れる周**（`--terminal-only` の受け入れの形・判断の記録 ADR-45 の門 H6）はこの host の緑が無いので、今までどおり先端の CI の success を待ってから `landed <sha> ci=success [tip=<先端>]` で閉じる（success 以外は close しない・FailClosed・rc 1）。
++3. **GitHub の検査を後から読む**: close の後に、着地の後の CI の口 `pipe land --run <id> --ci-only <sha>` を子 process で起こし、終わりを待たない（起こせた周は `ci:spawned`・起こせなかった周は `ci:unspawned` を 1 件）。呼び手は close の直後に戻るので、列の 1 周が後の便を GitHub の検査を待たずに起こす。子は唯一の wait 実装の `Completion::CiResult { repo, sha }` で、forge の CLI（`.vessel.toml` の `ci-cmd`〔optional・無ければ既定の 1 行 = `gh run list --commit {sha} --json status,conclusion`〕）を deadline（rules 行 `pipe.ci_wait_s`・後から読む上限）まで rules 行 `pipe.ci_poll_s` の間隔で読み、待ちが最後に読んだ答えを `ci:success` / `ci:failure` / `ci:unmeasurable` の 1 件で記す。`ci-cmd` は **argv 1 本として撃つ**（shell を通さない・宣言は対象 repo の tracked file から来るので shell に渡すと 1 行が別の command を継ぎ足せる）。`{sha}` の穴は**必須**で、穴の無い行は断る（別の commit の判定を読んで success と言いうる）。`{sha}` には full の sha を入れる（短縮 sha は forge の CLI が一致させない）。**札は替えない**: 赤の周は席へ終端の 1 行（落ちた便の 1 行と同じ形・語 `ci:failure`）を送り、測れない周は記録だけを残す。照合する先端が無い周（列の先端でない便で、自分が先端の祖先でない・測れない・§53）は子を起こさず `ci:unmeasurable` だけを記す。子は列の道具を受けないので、子の終わりの列の 1 周は便を起こさない。
+ 4. **binary の世代**: record（verdicts.jsonl の行）に `generation=<build 元 commit>` を足す（§2・`--version` の括弧の中身と同じ 1 本）。同じ行の `sha` が着地した commit を持つので、値を landed sha にすると同値の欄が 2 つ並び、§12 の版の比較にどちらを使うか読み手が判じられない（C10）。自分の版が landed sha より古い周に起動を断るかは後続（§12）。
+ 5. **commit の trailer**: squash commit の本文末尾に `<Name>-Contract: <doc id>#<row id>` と `<Name>-Requirements: <req の列>` の trailer を書く（名は NAME 定数から導出・C2.2・他の道具の trailer と衝突しない）（既存の `run:` trailer と 1 組に統合・**着地の正本は record〔面 5・event log〕で、trailer は器が squash message に同時に書く導出面**・folio2 の RTM は trailer だけを読み、無ければ「まだ分からない」と出す〔「未着地」とは言わない〕・`--pr-cmd` 形は trailer も record も無い恒久の穴として RTM に出る）。
+ 
+@@ -1573,6 +1573,8 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
+   - 既存の歯の数の pin: 埋め込みの manifest の行数と kind の数（`rules/embedded.rs` の 2 か所）と `rules_external_form` の snapshot が 1 ずつ増える。e2e の共有の fixture manifest（`tests/e2e/pipe.rs` の `write_rules`）に行を 1 本足し、値は 0（既存の終端の歯の挙動を変えない）。
+ - 却下: 断られた周（403・rate limit）だけ間隔を延ばす backoff（断られるまで 20 ms で撃つ形が残る・断りの字面を読む読み手が要る）／CI の 1 行を `gh run watch` に替える（`ci-cmd` の宣言は repo ごとの任意の 1 行で、forge の CLI の待ちの口に依存させない・判定の形〔落ちた run を先に見る〕が CLI の側へ移る）／`POLL` そのものを延ばす（pid・meminfo・札の待ちまで遅くなる・周期は完了条件の性質）。
+ 
++- 追記（終端の順の入れ替え・§5 手順 2・3・裁定 2026-10-05T22:57Z）: 照合を撃つのは close の後の子 process（`pipe land --run <id> --ci-only <sha>`）で、受け入れの周だけが close の前に撃つ。間隔と上限の値・待ちの周期・最初の評価は替えない。`pipe.ci_wait_s` は「close を待つ上限」でなく「後から読む上限」になる（値と裁定 id は替えない）。
++
+ ## 51. 審査の材料に、契約が名指す write-set の外の物を器が束ねる（契約表の行 bc・非公開の隣の project の契約の審査の section-material-missing 20 件・memo `s2-07l.430`）
+ 
+ - 何が起きているか（実測 2026-09-27T13:45Z・verified）: 同じ器を使う非公開の隣の project（以下「隣の project」・件数だけを書く）の契約の審査は 90 回のうち 20 回が `section-material-missing`（INCONCLUSIVE 18・FAIL 2）で、PASS 以外の理由の型で最も多い。lens の evidence が指す物は大半が write-set の外に在る（件は重なる）: write-set の外の型・fn・field の着地と形 8 件・data file の鍵（json の鍵・stylesheet の class・yaml の id の行）6 件・別の便が置いた fixture の在りかと中身 6 件・crate の Cargo.toml の依存 3 件・依存の相手の行 3 件・親 module の公開の宣言 1 件。残りは別の設計ノートの節 1 件・repo の外の file の形 1 件・節そのものの欠け 4 件。本 repo の置き場でも審査 732 回のうち 71 回（INCONCLUSIVE 65・FAIL 6）が同じ型で、`at` に並んだ識別子 63 個のうち 24 個は材料のどこにも backtick で書かれていない。2026-09-17 の調べ（台帳 `s2-07l.430` の notes）も同じ提案（名指した fn の宣言 file と可視性を材料に足す）を残したまま未着手である。
+diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
+index db723cee..83ebb49c 100644
+--- a/scribe2/rules/manifest.toml
++++ b/scribe2/rules/manifest.toml
+@@ -560,8 +560,9 @@ enabled = true
+ ruling = "user 2026-09-16T11:14Z"
+ ruled_at = "2026-09-16"
+ 
+-# land の終端の CI の照合（設計 contract-source.md §5）。push の後、この上限まで forge の判定を待つ。
+-# 超えた周は unmeasurable で止め、**台帳を close しない**（FailClosed・やり直しは pipe land --terminal-only）。
++# land の終端の後から読む GitHub の検査の上限（設計 contract-source.md §5 手順 3）。札は push の後にこの host の緑で
++# 閉じ、close の後の子 process（pipe land --ci-only）がこの上限まで forge の判定を読み、超えた周は ci:unmeasurable を記す
++# （札は替えない）。主実測が赤か測れなかった便を受け入れる周だけは success を待って閉じる（FailClosed）。
+ 
+ [[rule]]
+ id = "pipe.ci_wait_s"
+@@ -571,7 +572,7 @@ enabled = true
+ ruling = "user 2026-09-16T03:31Z"
+ ruled_at = "2026-09-16"
+ 
+-# 終端の CI の照合を撃つ間隔（秒・設計 contract-source.md §50）。1 回の照合が forge の API の 1 回なので、
++# 後から読む GitHub の検査の照合を撃つ間隔（秒・設計 contract-source.md §50）。1 回の照合が forge の API の 1 回なので、
+ # 上の上限の内側をこの間隔で撃つ（最初の評価は待たない・上限を越えて眠らない）。0 は唯一の待ちの既定の周期に戻る。
+ 
+ [[rule]]
