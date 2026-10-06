@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29d
   title: 第 29 波 d — 器を書く便の同時 1 本の床を外す行（判断の記録 ADR-64）・係の effort の撃ち比べ・host の負荷を board に出す・書き込みの検出線の器の行・ノート surface-wave29c の続き
-  version: v0.22
+  version: v0.23
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -209,6 +209,17 @@ sections:
         size: S
         done: (1) git apply --reverse --check docs/design/patch/ag-guide-fold.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) plugin/skills/agent-discipline/reference.md の、番号 1 の見出しの節の塊が字「席が頼みの文で同じ写しと target を名指した、別々の tests/<file>.rs を割る係どうし」を、番号 2 の見出しの節の塊が字「木の間で違う file（git diff --name-only）と git ls-files の build.rs を全部 touch してから撃つ」・字「器の入れ子の binary（<target>/nested/scribe2）は、別の写しで xtask を組むと上書きされる」・字「形でない file には掛けず、足す行だけを rustfmt の形で手で書く」を、番号 3 の見出しの節の塊が字「不在を見る歯（見張り）には「無い」だけを、等しさを見る歯には「一致する」だけを言わせ」・字「置き場を「impl X の中」と名指す時は、X を base の宣言と grep で照らす」・字「歯が比べる字そのもの（値の具体）と、数を決める着地済みの fn の数え方を節に書く」・字「done に行の番号と行の数を持たせない」・字「節に語の一覧（main の commit・語の数 N・空白で区切る）を字で置き」・字「git mv で移す行は、移す元を ~、移す先を + で書く」・字「前の行が足す file を =<path> で名指す行は、前の行の着地の後に置く」・字「git diff を --no-renames を付けずに測る」を、番号 5 の見出しの節の塊が字「名の列を先に assert_eq し、名が合った後にだけ値を比べる」を、番号 6 の見出しの節の塊が字「src で最初に断る検めを照らしてから見本を書き」・字「順は 2 つ以上で入力・数・字・逆の順がどれも違う並び」・字「判じの呼び（match の式）を字で見る歯は」・字「log の panicked の行でその句の断言で落ちたことを照らす」・字「指された項だけでなく done の全部の項について」・字「変異を当てた関数を歯の撃ちの入口から呼びの鎖で通るかを読む」・字「噛みの script には main の守り（__name__ の照らし）を置き」を、番号 7 の見出しの節の塊が字「節の番号と版をその時の字から +1 で決め、固い字で照らさない」・字「srs.yaml は PyYAML の safe_load で読めない」を、それぞれちょうど 1 度ずつ持ち、行 ag-ref と ag-ref2 と ag-read-scope の句も今のまま 1 度ずつ在り、file のどこにも字「100 字」と字「150000 以下」が無い（歯 agref_reference_holds_each_clause_once_in_its_section） (3) 同じ file から前の項の句の字を 1 つだけ外した見本・その字を 2 度にした見本・その字を外して file の末（最後の節）へ動かした見本は、どの句でも、外れとして名指されるのがその句だけになる（歯 agref_one_clause_removed_doubled_or_moved_is_named）
         done-teeth: ["1:@1", "2:@3", "3:@3"]
+        depends: []
+      - id: c-code-nodes
+        title: code の層の口 tz code を足す。構文で探す道具 ast-grep の規則の file .config/code-defs.yml で関数と型の定義の節点を組み（名前は path と入れ子と名と種類）、git の file の一覧の file の節点と、契約表の write-set の項から 行 → file の辺を組み、行の触る定義と file の定義と数を出す（判断の記録 ADR-46 の決定 (2)(3)(4)・差の file）
+        req: ["FR2"]
+        section: "19"
+        patch: docs/design/patch/c-code-nodes.patch
+        write-set: ["+.config/code-defs.yml", "+crates/tsuzuri-core/src/graph/code.rs", "crates/tsuzuri-core/src/graph/mod.rs", "+crates/tsuzuri-core/tests/cdnode.rs", "+crates/tsuzuri-boundary/src/cli/code.rs", "crates/tsuzuri-boundary/src/cli/mod.rs", "crates/tsuzuri-boundary/src/main.rs", "+crates/tsuzuri-boundary/tests/kcode.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/c-code-nodes.patch", "cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-core --test cdnode --no-tests=fail cdnode_", "cargo nextest run -p tsuzuri-boundary --test kcode --no-tests=fail kcode_"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/c-code-nodes.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 見本の file の一覧 4 本と stream の定義の行 5 つと契約表の行 2 本から、file の節点 4 と定義の節点 5 を組み、定義の名前は a.rs#impl S/fn new の形（file の path の後に段を / で繋いだ字・段は種類の語と名・impl の塊の中の関数は段 impl S の下）、行 a の辺は write-set の 2 項の file への 2 本、行 a の触る定義は a.rs の 4 つ、行 b は b.rs の 1 つで、定義の範囲は 1 から数える行（歯 cdnode_toy_repo_builds_file_and_def_nodes_and_row_edges） (3) 同じ file の同じ名の struct と fn は種類の違う 2 つの節点で、種類も名も同じ 2 行は範囲を 2 つ持つ 1 つの節点（歯 cdnode_same_name_fn_and_struct_are_two_nodes） (4) write-set の項に無い file は行からの辺を持たず、その file の定義は行の触る定義に入らず、どの行の write-set にも無い file は辺を持たない（歯 cdnode_files_outside_write_set_have_no_edge） (5) 入れ子の段は同じ file の byte の範囲の包みで決め、mod の中の関数は段 mod tests の下、trait の impl の塊の名は trait の名と for と型の名、塊の後の関数は段を持たない（歯 cdnode_nest_names_container_and_kind） (6) write-set の項の印は、+ の在らない file を file に当たらない項に数え、~ と - と素の path は在る file へ印つきの辺を組み、= は辺も数えもせず、末が / の項は dir の下の file の全部へ辺を組む（歯 cdnode_marks_bind_new_gone_place_and_dir） (7) stream に欄の欠けた行か JSON でない行が 1 つでも在れば読めず、空の行だけの stream は定義 0 で読め、write-set の値が字の配列でない行か id の無い行の在る導出物は読めない（歯 cdnode_unreadable_stream_or_write_set_is_none） (8) 言語が表に無い行・種類に無い rule の id の行・捕えた名の無い行・trait の名の無い impl-for の行は、どれも定義を組まず 1 と数え、言語の表は Rust の 1 行だけで、file の一覧に無い file の定義も組まずに数える（歯 cdnode_skipped_lines_are_counted） (9) 根の規則の file の rule の id の集まりは定義の種類の 11 語と impl-for で、どの rule も言語 Rust と捕える名 $NAME を持ち、impl-for は $TRAIT も捕える（歯 cdnode_rule_file_names_every_kind） (10) tz code --row n1#a は、辺ごとに字 file と path と項と定義の数の行とその file の字 def と名前と範囲の行を出し、file に当たらない項に字 none の行を出して rc 0 で、置き場だけの項と write-set の外の file の行を出さず、道具に渡す引数は scan と --rule と .config/code-defs.yml と --json=stream の 4 つ（歯 kcode_row_lists_defs_of_write_set_files_only） (11) 規則の file の無い repo では、道具を撃たず、標準エラーに規則の file の path と字「が無い」を持つ 1 行だけを出し、標準出力は空で rc 1（歯 kcode_missing_rule_file_refuses_in_one_line） (12) 旗なしは数の行（files・defs・種類ごとの kind・rows・writes・unbound・skipped）を、--file は file の定義の行を出して rc 0（歯 kcode_counts_and_file_lines） (13) 道具の rc が 0 でない時は rc 2 で、無い行・git の一覧に無い file・--row と --file の両方・知らない引数は標準出力を空にして rc 1（歯 kcode_unreadable_and_named_errors）
+        done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@3", "8:@3", "9:@3", "10:@4", "11:@4", "12:@4", "13:@4"]
         depends: []
   - n: 3
     type: prose
@@ -484,3 +495,27 @@ sections:
       依存と順。depends は書かない。main の差の file のうち参照の file か agref.rs を書く物は全部着地済みで、同じ file を書く未着地の行は無い。
 
       範囲の外。門で止められる項（床の語彙の断りの直し方・preflight の名指しの断り・trailer の並び・走る便の行の書き換え・節の差の file の byte の照らし ほか）は、門へ上げる候補として係の notes に表で残し、この行は持たない。SKILL.md は替えない（本文の字数と決まりの行の数を着地済みの歯 agpl_ が断言する）。
+  - n: 19
+    type: prose
+    title: 行 c-code-nodes — code の層の file と定義の節点と 行 → file の辺と口 tz code（判断の記録 ADR-46 の決定 (2)(3)(4)・差の file）
+    body: |
+      在りか。差の file docs/design/patch/c-code-nodes.patch は、main 9f2b47b4 と、その上の試作の commit 54f8d92f（tree 02830e79・写しは drafts の try-w282a の branch w282a・係 w282a・2026-10-06）の差（8 file・うち新しい file 5）。便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      なぜ。持ち主の診断（memo t3-hub.80）は、設計（席と起草係）が行を書く時に、その行が触る code をグラフから引けず、契約が code と食い違って審査と gate で落ちることである。導出グラフは設計の節点と着地の commit の節点だけを持ち、file と定義の節点を持たない。判断の記録 ADR-46 は code のグラフを tsuzuri の専用の機能として作ると決め（決定 (1)）、節点に file と定義を足し（決定 (2)）、定義の名前を path と入れ子と名と種類で決め（決定 (3)）、関数と型の範囲を構文で探す道具の言語ごとの規則の file で読む（決定 (4)）。この行はその最初の段で、行の write-set の file の関数と型を引く口までを置く。呼び手と参照の目・commit → 定義・歯の節点は後の行に置く。
+
+      形。
+      - 規則の file .config/code-defs.yml（新しい file）。ast-grep の Rust の rule 12 本で、rule の id は定義の種類の語 fn・struct・enum・union・trait・type・const・static・macro・mod・impl と、trait の impl の impl-for。どの rule も名を meta 変数 NAME に捕え、impl-for は trait の名を TRAIT にも捕える。fn は本体の在る関数と trait の中の宣言を、type は型の別名と関連型を、mod は本体の在る module と file の module の宣言を拾う。
+      - 中核 crates/tsuzuri-core/src/graph/code.rs（新しい file・graph/mod.rs に pub mod code と module の doc の 1 行）。file も子 process も触らない純粋な関数で、ast-grep の scan の stream（1 行 1 つの JSON）から欄 ruleId・file・language・range（byteOffset と行）・metaVariables の single だけを読む read_defs、契約表の導出物の toml の [[contract]] の塊の id と write-set を読む read_write_sets、git ls-files -z の字と定義と行の write-set から code の層 CodeGraph を組む build、問いの関数 file_defs・row_writes・row_defs を持つ。定義の種類は閉じた 11（DefKind）で、言語の表 LANGS は Rust の 1 行。入れ子は同じ file の byte の範囲の包みで決め、名前は file の path の後に記号 # と段を / で繋いだ字（段は種類の語と空白と名・例 scribe2/crates/scribe2/src/ledger/close_reason.rs#enum LandedTail）。種類も名も同じ 2 行は 1 つの節点に範囲を足す。write-set の印は + 新しい file・- 縮むが残る・~ 着地で消える・= 置き場だけ・末の / は dir で、= は辺を組まず、file に当たらない項は unbound に数える。
+      - 境界 crates/tsuzuri-boundary/src/cli/code.rs（新しい file・cli/mod.rs に pub mod code と doc の 1 行・main.rs に subcommand code の腕と doc の 1 行）。口は tz code [--repo <dir>] [--sg <program>] [--row <ノート>#<行> | --file <path>]。規則の file が無ければ道具を撃たずに標準エラーへ 1 行で断り rc 1。在れば repo で git ls-files -z と <sg> scan --rule .config/code-defs.yml --json=stream を撃ち（--sg の既定は ast-grep・上限 120 秒）、contracts/ の直下の .toml を読み、行の id を file の名の .toml の前と # と行にして組む。出力はタブで区切った行で、旗なしは数（files・defs・種類ごとの kind・rows・writes・unbound・skipped）、--row は辺ごとの file の行（path・項・定義の数）とその file の def の行（名前・範囲）と file に当たらない項の none の行、--file は def の行。字が読めない時（道具か git の rc が 0 でない・stream に読めない行・導出物に読めない行）は rc 2、無い行と git の一覧に無い file と使い方の誤りは rc 1。
+      - 面の server と口 /api/graph と tz graph は替えない。code の層を導出グラフの既定の組みに入れると、毎回 ast-grep を撃って数万の節点を電文に載せ、面の server の軽さ（規則の行 R-34）に効くため。電文と面へ載せるかは後の行で決める。
+      - 要件 FR2 の when と shall と plain に code の層を足す（適用の script が srs.yaml を直す）。
+
+      done と verify の対応。1 番目の項は verify の 1 行目、2 番目から 9 番目の項は 3 行目（新しい歯の file crates/tsuzuri-core/tests/cdnode.rs・項の順と歯の順は同じ）、10 番目から最後の 13 番目の項は 4 行目（新しい歯の file crates/tsuzuri-boundary/tests/kcode.rs）で測る。2 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので書かない。入口の赤は、main には 2 本の歯の file が無いので 3 行目と 4 行目が --no-tests=fail で落ちる。
+
+      歯と噛み。中核の歯は見本の stream の行を JSON で組み（ast-grep 0.45 の scan の行のうち中核が読む欄）、境界の歯は一時の git の repo と、撃たれた引数を file に書いて見本の stream を出す偽の道具（shell の script）で tz の binary を撃つ。CI の job は ast-grep を入れないので本物の道具は撃たない。規則の file は外の道具の data で振る舞いで測れないので、歯 cdnode_rule_file_names_every_kind は rule の id の集まりと言語と捕える名の字を照らす。否定の見本は 1 句ずつ外す（種類も名も同じ 2 行・write-set の外の file・置き場だけの項・欄の欠けた行・JSON でない行・言語・rule の id・名・trait の名を 1 つずつ）。噛みは係が撃ち、15 の変異が全部 rc 100 で名指しの歯の断言で落ちた（表は係 w282a の notes.md）。
+
+      実物の測り（係 w282a・2026-10-06・試作の木 02830e79・debug の tz・host の 1 分の負荷 5〜16）。全木（根の crates・xtask・folio2・scribe2）の tz code は 1.5〜5.7 秒・RSS 約 124 MB で、時間の大きな分は ast-grep の scan（stream は定義の本文の字も持ち約 100 MB）。file 2,897・定義 34,815（fn 24,338・const 5,812・struct 1,456・mod 1,386・impl 967・enum 648・type 165・static 28・macro 10・trait 5・union 0）・行 522・行 → file の辺 4,260・file に当たらない項 1,940・組まずに数えた行 0。行 v-close-host（未着地）は write-set の 13 file に辺を組み定義 405、行 v-gate-carry（着地済み）は 8 file で定義 784。
+
+      依存と順。depends は書かない。差の file が書く着地済みの file は graph/mod.rs・cli/mod.rs・main.rs の 3 本で、どれも 2 行を足すだけ。置く直前に席が main で当たりを撃ち直す。器の行 t-index-on（係 w281a）は根の .vessel.toml と .config/index-roles.yml を書き、この行の file と交わらない。
+
+      範囲の外。呼び手と参照の目（器の索引の読み・後の行 c-code-refs）・commit → 定義と git の記録からの一括の入れと結びの無い定義の数（後の行 c-code-commits）・歯の節点（後の行 c-code-teeth）・TypeScript と Python の rule（後の行 c-code-langs）・電文 GraphDoc と面と近傍への載せ。未着地の行の差の file の hunk で触る定義を絞ること（着地の後は commit → 定義が持つ）。

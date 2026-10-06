@@ -1,4 +1,5 @@
 # 要件書 — 正本（folio init の雛形・要件は利用者が書く）
+# 第 0.50 版（2026-10-06）: ノート surface-wave29d の行 c-code-nodes に合わせ、要件 FR2 の when と shall と plain に code の層（口 tz code・file と定義の節点と 行 → file の辺）を足した（判断の記録 ADR-46 の決定 (2)(3)(4)）。
 # 第 0.49 版（2026-10-06）: 判断の記録 ADR-68（持ち主の裁定 t3-hub.90.2〔裁定 id = t3-hub.90.2:20261005T2257Z-1〕）の決定 (5) を写した（要件 FR1091 の shall と plain の着地の形の尾の正本に ADR-68 の尾 host=green を足し、要件 FR1050 の shall と plain と受入 AC1023 の title と plain に、この host の確かめが緑の便は CI を待たずに host=green で閉じ CI は後から読む但し書きを足した・器の行 v-close-host はノート surface-wave29d）。
 # 第 0.48 版（2026-10-05）: 判断の記録 ADR-65（持ち主の裁定 t3-hub.89.18〔裁定 id = t3-hub.89.18:20261005T2354Z-1〕）の決定 (2) を写した（要件 FR1008 の shall と plain に、同じ便の終わりの門の緑を同じ木と base で持ち越す但し書きを足した）。
 # 第 0.47 版（2026-10-05）: 判断の記録 ADR-60（持ち主の裁定 t3-hub.89.2〔案 C〕・裁定 id = t3-hub.89.2:20261005T0513Z-1）の決定 (4) の着地の側を写した（要件 FR1039 の shall と plain に、通した組の便のその後の着地の出来事〔積み直しの衝突・stale・追随の再 gate の不合格・着地の列の候補の木の赤・着地〕を便ごとに閉じた語で event に記帳し、着地の件に着地の差と差の file の変えた行の数を添える句を足した・器の行 v-commute-ledger と v-commute-on はノート surface-wave29c）。
@@ -37,7 +38,7 @@
 meta:
   id: srs
   title: 要件書
-  version: v0.49
+  version: v0.50
   status: draft
   generated: 2026-09-28
   approval:
@@ -142,9 +143,9 @@ requirements:
     title: 導出グラフ（設計文書と設計ノートと台帳と走行を 1 つに結ぶ）
     pattern: event
     strength: must
-    when: 面の server か tz graph が呼ばれたとき
-    shall: 設計文書の節点（11 種と設計ノートの行）と台帳の節点（epic・task・memo・question と notes から導く あなたの決定・orchestrator の受け・全体への指示）と走行（run）と着地の commit（器の event log の走行の終わりの札 sha の 40 字の名）を 1 つのグラフに毎回組み直す。辺は設計文書の型と台帳の型と結びの型（design・ruled_by・answers・touches・premises・source）と走行の型（run_of・raised・ran_by）と着地の型（landed・commit → 契約）で、repo に書かない。読めない出所は、その種類だけ「まだ分からない」とし、他の種類は組む。
-    plain: 台帳と設計の文書と作業の走行と、作業を取り込んだ commit を、毎回 1 つの図に組み直します。file には書きません。読めない元があれば、その種類だけ「まだ分からない」と出し、ほかは組みます。
+    when: 面の server か tz graph か tz code が呼ばれたとき
+    shall: 設計文書の節点（11 種と設計ノートの行）と台帳の節点（epic・task・memo・question と notes から導く あなたの決定・orchestrator の受け・全体への指示）と走行（run）と着地の commit（器の event log の走行の終わりの札 sha の 40 字の名）を 1 つのグラフに毎回組み直す。辺は設計文書の型と台帳の型と結びの型（design・ruled_by・answers・touches・premises・source）と走行の型（run_of・raised・ran_by）と着地の型（landed・commit → 契約）で、repo に書かない。読めない出所は、その種類だけ「まだ分からない」とし、他の種類は組む。tz code が呼ばれたときは、git の file の一覧と、構文で探す道具の規則の file（.config/code-defs.yml）で読んだ関数と型の定義（名前は path と入れ子と名と種類）から file と定義の節点を、契約表の導出物の write-set の項から 行 → file の辺を毎回組み、数と行の触る定義と file の定義を出す。規則の file が無ければ道具を撃たずに 1 行で断り、字が読めなければ まだ分からない とする。
+    plain: 台帳と設計の文書と作業の走行と、作業を取り込んだ commit を、毎回 1 つの図に組み直します。file には書きません。読めない元があれば、その種類だけ「まだ分からない」と出し、ほかは組みます。code の関数と型も読み、契約の行がどの file のどの関数と型に触るかを引けます。
     basis: [P-6, P-19, N-2]
     verify: {method: test, how: 小さな design-intent と一時の台帳と偽の state dir の fixture で節点と辺の数と種類を snapshot と比べる, ac: [AC4, AC8]}
     goals: [GOAL2]
