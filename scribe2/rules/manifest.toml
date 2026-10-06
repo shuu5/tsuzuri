@@ -408,6 +408,17 @@ enabled = true
 ruling = "user 2026-09-30T22:13Z 項 end-gate"
 ruled_at = "2026-09-30"
 
+# gate の審査役の FAIL（設計 pipeline.md §73）で、同じ worktree の runner を所見の節つきで起こし直す回数の上限。
+# 値 0 も数えて exhausted を名乗る（起こし直さないだけ）。
+
+[[rule]]
+id = "runner.gate_fix_rounds"
+kind = "RunnerGateFixRounds"
+value = 2
+enabled = true
+ruling = "user 2026-10-06T08:08:35.348Z 項 D6"
+ruled_at = "2026-10-06"
+
 # gate の費用（設計 gate-cost.md §3.1・ADR-0021）。並列度は宣言値であって実効値ではない
 # （C10）——実効値は受付（同 §3.2）が host の空きと突き合わせて導く。
 

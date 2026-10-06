@@ -5,10 +5,10 @@
 //! （[`follow_pending`]）もここに置く。
 
 use super::intake::{regenerated, run_repo, unloadable};
-use super::run::{chain, launch};
-use super::step::{gate_run, land_run, review_run};
-use super::{broken, need, refused, stage_of, state_dir_of};
-use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
+use super::run::{chain, chain_noting, fix_rounds, gate_fixing, launch};
+use super::step::{land_run, review_run};
+use super::{broken, flag, need, refused, stage_of, state_dir_of};
+use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::store::{self, LockPolicy, StoreError};
 use crate::fleet::{self, Completion, EventKind, Stage, State, Timeout};
 use crate::pipe::approve::RC_BLOCKED;
@@ -76,7 +76,7 @@ pub(super) fn resume(
         // `rebase-stale-rows:` で始まり、runner が起きていない）は**起こし直しの続き**で、`--runner` を要る。
         // それ以外の `Implemented` は従来どおり gate。
         Stage::Implemented => match follow_pending(&state_dir, &id) {
-            false => gate_run(args, &id, manifest, policy),
+            false => gate_or_finish_fix(args, &id, &state_dir, manifest, policy),
             true => relaunch(args, &id, policy, Stage::Implemented),
         },
         // Gated の先は判定で分かれる。**INCONCLUSIVE は land を試さない**——測れて
@@ -308,6 +308,34 @@ pub(super) fn review_then_launch(
     }
     let spawned = launch(args, id, runner, policy, &[Stage::Reviewed]);
     chain(&mut lines, spawned).unwrap_or_else(|| Outcome::ok(lines))
+}
+
+/// 追随の起こし直しの続きでない `Implemented` の便を gate へ流す（設計 pipeline.md §73）。gate の FAIL の直しの周は [`gate_fixing`] が輪で持つ。
+///
+/// 直しの印の記帳の後に runner が起きる前に driver が死んだ便（最後の `RunStage` が直しの印で、runner が起きていない）は、先に runner を起こし直して
+/// 上限の周の待ちまで済ませてから [`gate_fixing`] へ入る（`--runner` を要る）。ほかの周は [`gate_fixing`] だけを撃つ（`--runner` の無い周は
+/// runner の字が無く、直しの周に入らない＝今の 1 回の gate と同じ）。
+fn gate_or_finish_fix(args: &[String], id: &str, state_dir: &Path, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let runner = flag(args, "--runner").ok().flatten();
+    let marked = store::read_all(state_dir).is_ok_and(|events| fix_rounds(&events, id).1);
+    if !(marked && runner_is_idle(state_dir, id) == Some(true)) {
+        return gate_fixing(args, id, runner, manifest, policy);
+    }
+    let cmd = match need(args, "--runner") {
+        Ok(found) => found,
+        Err(reason) => return refused(reason),
+    };
+    let (mut lines, mut notes) = (Vec::new(), Vec::new());
+    let launched = launch(args, id, cmd, policy, &[Stage::Implemented]);
+    if let Some(stopped) = chain_noting(&mut lines, &mut notes, launched) {
+        return stopped;
+    }
+    let ridden = ride_out_rate_limit(args, id, cmd, manifest, policy);
+    if let Some(stopped) = chain_noting(&mut lines, &mut notes, ridden) {
+        return stopped;
+    }
+    let gated = gate_fixing(args, id, Some(cmd), manifest, policy);
+    chain_noting(&mut lines, &mut notes, gated).unwrap_or(Outcome { out: lines, err: notes, rc: RC_OK })
 }
 
 /// `Implemented` の便が**起こし直しの続き**か（設計 pipeline-conflict.md §3 の `resume`）。

@@ -2708,6 +2708,202 @@ fn end_gate_mark_stands_while_the_gate_fires_and_refuses_a_resume() {
     clean(&[&repo, &state]);
 }
 
+// ───── gate の FAIL の直しの周（設計 pipeline.md §73・行 v-gate-fix・接頭辞 `gfix_`） ─────
+//
+// gate の lens が FAIL を返した便を `pipe resume` で撃つと、同じ worktree の runner が所見の節つきで起こし直され、直した後に gate が
+// 撃ち直される。便は `gate_run_intake` で受け、偽 runner の 1 回目（spawn）で緑の commit をして Implemented にしてから resume する。
+// 偽 lens は呼びの印の file に 1 行ずつ足して数える。
+
+/// 行 `runner.gate_fix_rounds` を値で足した tmp manifest（`rounds` が `None` の周は行を足さない）。行 `runner.end_gate_rounds` は
+/// 足さない＝直しの周の runner の終わりの門は測れない周で、Implemented へそのまま進む。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn gate_fix_rules(state: &Path, name: &str, rounds: Option<u64>) -> PathBuf {
+    let path = write_rules_full(state, name, (1, 1_000_000), FOLLOW_RETRIES, default_slots());
+    if let Some(rounds) = rounds {
+        let body = fs::read_to_string(&path).expect("tmp manifest を読める");
+        let row = format!(
+            "\n[[rule]]\nid = \"runner.gate_fix_rounds\"\nkind = \"RunnerGateFixRounds\"\nvalue = {rounds}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n"
+        );
+        fs::write(&path, format!("{body}{row}")).expect("tmp manifest を書ける");
+    }
+    path
+}
+
+/// 偽 lens: 呼びごとに `calls` へ 1 行足す。印の file が無い最初の呼びは FAIL を返し、在る周は `again_fails` が偽なら PASS・真なら FAIL
+/// （`fake_lens` と同じく末を `; :` で閉じる）。
+fn counting_lens(calls: &Path, again_fails: bool) -> String {
+    let again = if again_fails { "false" } else { "true" };
+    format!(
+        "cat >/dev/null; if test -e '{c}' && {again}; then echo '{pass}'; else echo '{fail}'; fi; echo x >> '{c}'; :",
+        c = calls.display(),
+        pass = lens_verdict("PASS"),
+        fail = lens_verdict("FAIL")
+    )
+}
+
+/// lens の呼びの数（印の file の行数・無ければ 0）。
+fn lens_calls(calls: &Path) -> usize {
+    fs::read_to_string(calls).map(|text| text.lines().count()).unwrap_or(0)
+}
+
+/// stub の verify を持つ便を受け、`turns` の偽 runner の 1 回目（緑の commit）で spawn して Implemented にする（repo・置き場・便 id・runner）。
+fn gate_fix_ready(rules: Option<&Path>, turns: &[String]) -> (PathBuf, PathBuf, String, String) {
+    let (repo, state, id) = gate_run_intake();
+    let runner = turn_runner(&state, turns);
+    let out = end_gate_spawn(&repo, &state, &id, &runner, rules);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
+    assert_eq!(stages(&state, &id).last().map(|(stage, _)| *stage), Some(Some(Stage::Implemented)), "{:?}", stages(&state, &id));
+    (repo, state, id, runner)
+}
+
+/// 便を `pipe resume` で撃つ（`--runner` と `--rules` と `--lens` を渡す・`dirs` は repo と置き場）。
+fn gate_fix_resume(dirs: (&Path, &Path), id: &str, runner: &str, rules: &Path, lens: &str) -> Output {
+    let (repo_arg, state_arg, rules_arg) = (dirs.0.display().to_string(), dirs.1.display().to_string(), rules.display().to_string());
+    run_pipe(&[
+        "resume", "--run", id, "--repo", &repo_arg, "--state-dir", &state_arg, "--runner", runner, "--rules", &rules_arg, "--lens", lens,
+    ])
+}
+
+/// 便の段の記帳のうち、段と detail が一致する件数。
+fn stage_marks(state: &Path, id: &str, stage: Stage, detail: &str) -> usize {
+    stages(state, id).iter().filter(|(found, text)| *found == Some(stage) && text.as_deref() == Some(detail)).count()
+}
+
+/// 便の段 `Gated` の記帳の件数。
+fn gated_count(state: &Path, id: &str) -> usize {
+    stages(state, id).iter().filter(|(stage, _)| *stage == Some(Stage::Gated)).count()
+}
+
+/// `out` の stdout の行の中で、`needle` を含む最初の行の番号。
+fn line_at(out: &Output, needle: &str) -> Option<usize> {
+    stdout_of(out).lines().position(|line| line.contains(needle))
+}
+
+/// (a) 最初の gate の lens だけが FAIL を返す便は、resume の rc 0 で、stdout が verdict=FAIL → `gate-fix=1/2` → verdict=PASS の順に行を持つ。
+/// runner は resume の中で 1 回だけ起き、その stdin は「## gate の FAIL（周 1）」節と `evidence: fake` を持つ。event は段 Implemented の
+/// `gate-fix:1` を 1 件・Gated を 2 件持ち、直しの周の Spawned の detail は `gate-fix:1` で始まり、便の branch の先端の親は直しの前の先端。
+#[test]
+fn gfix_lens_fail_restarts_the_runner_in_the_same_worktree_with_the_findings() {
+    let (repo, state, id, runner) = gate_fix_ready(None, &[commit_turn("green"), commit_turn("fix-one")]);
+    let rules = gate_fix_rules(&state, "rules-gate-fix-2.toml", Some(2));
+    let (worktree, calls) = (worktree_of(&repo, &id), state.join("lens-calls"));
+    let before = git(&worktree, &["rev-parse", "HEAD"]);
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, false));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
+    let positions = (line_at(&out, "verdict=FAIL"), line_at(&out, &format!("run={id} gate-fix=1/2")), line_at(&out, "verdict=PASS"));
+    assert!(matches!(positions, (Some(fail), Some(fix), Some(pass)) if fail < fix && fix < pass), "FAIL → gate-fix=1/2 → PASS の順: {}", stdout_of(&out));
+    assert_eq!(stub_calls(&state), 2, "resume の中の runner は 1 回だけ起きる");
+    let stdin = stub_stdin(&state, 2);
+    assert!(stdin.contains("\n## gate の FAIL（周 1）\n"), "節の見出し: {stdin}");
+    assert!(stdin.contains("- evidence: fake\n"), "evidence の行: {stdin}");
+    let (touches_at, section_at) = (stdin.find("\n## ほかの行の touches\n"), stdin.find("\n## gate の FAIL（周 1）\n"));
+    assert!(matches!((touches_at, section_at), (Some(t), Some(s)) if t < s), "touches → gate の FAIL の順: {stdin}");
+    assert_fix_trail(&state, &id);
+    assert_eq!(git(&worktree, &["rev-parse", "HEAD~1"]), before, "先端の親は直しの前の先端");
+    assert_eq!(lens_calls(&calls), 2, "lens は 2 回");
+    clean(&[&repo, &state]);
+}
+
+/// 直しの周が 1 回通った便の段の記帳: 直しの印は 1 件・Gated は 2 件・直しの周の Spawned の detail は `gate-fix:1` で始まる。
+fn assert_fix_trail(state: &Path, id: &str) {
+    let trail = stages(state, id);
+    assert_eq!(stage_marks(state, id, Stage::Implemented, "gate-fix:1"), 1, "直しの印は 1 件: {trail:?}");
+    assert_eq!(gated_count(state, id), 2, "Gated は 2 件: {trail:?}");
+    let spawned = trail.iter().any(|(stage, detail)| *stage == Some(Stage::Spawned) && detail.as_deref().is_some_and(|found| found.starts_with("gate-fix:1")));
+    assert!(spawned, "直しの周の Spawned の detail は gate-fix:1 で始まる: {trail:?}");
+}
+
+/// (b) lens がいつも FAIL を返す便は、rc 1 で、`gate-fix:1` と `gate-fix:2` の記帳を 1 件ずつ持ち、resume の中の runner は 2 回・lens は 3 回
+/// 起き、stdout の最後の行は `gate-fix=exhausted:2` で、最後の段は Gated・verdict.json の verdict は FAIL。
+#[test]
+fn gfix_unfixed_run_stops_as_gated_fail_after_two_rounds() {
+    let (repo, state, id, runner) = gate_fix_ready(None, &[commit_turn("green"), commit_turn("fix-one"), commit_turn("fix-two")]);
+    let rules = gate_fix_rules(&state, "rules-gate-fix-2.toml", Some(2));
+    let calls = state.join("lens-calls");
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, true));
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{} / {}", stdout_of(&out), stderr_of(&out));
+    for round in ["gate-fix:1", "gate-fix:2"] {
+        assert_eq!(stage_marks(&state, &id, Stage::Implemented, round), 1, "{round} は 1 件: {:?}", stages(&state, &id));
+    }
+    assert_eq!(stub_calls(&state), 3, "resume の中の runner は 2 回");
+    assert_eq!(lens_calls(&calls), 3, "lens は 3 回");
+    assert_eq!(stdout_of(&out).lines().last(), Some(format!("run={id} gate-fix=exhausted:2").as_str()), "{}", stdout_of(&out));
+    assert_eq!(stages(&state, &id).last().map(|(stage, _)| *stage), Some(Some(Stage::Gated)), "{:?}", stages(&state, &id));
+    let verdict = verdict_pairs(&state, &id);
+    let word = verdict.iter().find(|(key, _)| key == "verdict").and_then(|(_, value)| value.as_str().map(str::to_owned));
+    assert_eq!(word.as_deref(), Some("FAIL"), "verdict.json の verdict");
+    clean(&[&repo, &state]);
+}
+
+/// (c) 値 0 の行の便は、rc 1 で、`gate-fix:` の記帳が無く、resume の中の runner は起きず、stdout の最後の行は `gate-fix=exhausted:0`。
+#[test]
+fn gfix_zero_value_records_exhausted_without_a_restart() {
+    let (repo, state, id, runner) = gate_fix_ready(None, &[commit_turn("green"), commit_turn("fix-one")]);
+    let rules = gate_fix_rules(&state, "rules-gate-fix-0.toml", Some(0));
+    let calls = state.join("lens-calls");
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, true));
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{} / {}", stdout_of(&out), stderr_of(&out));
+    assert_eq!(fix_marks(&state, &id), 0, "gate-fix: の記帳は無い: {:?}", stages(&state, &id));
+    assert_eq!(stub_calls(&state), 1, "resume の中の runner は起きない");
+    assert_eq!(stdout_of(&out).lines().last(), Some(format!("run={id} gate-fix=exhausted:0").as_str()), "{}", stdout_of(&out));
+    clean(&[&repo, &state]);
+}
+
+/// 便の段の記帳のうち、detail が `gate-fix:` で始まる件数。
+fn fix_marks(state: &Path, id: &str) -> usize {
+    stages(state, id).iter().filter(|(_, detail)| detail.as_deref().is_some_and(|found| found.starts_with("gate-fix:"))).count()
+}
+
+/// (d) 行 `runner.gate_fix_rounds` を持たない manifest の便と、契約の verify の行が赤い便は、gate の FAIL で rc 1 のまま、stdout に
+/// `gate-fix=` の字が無く、`gate-fix:` の記帳が無く、resume の中の runner は起きない。
+#[test]
+fn gfix_absent_row_and_verify_red_keep_the_fail_terminal() {
+    let (repo, state, id, runner) = gate_fix_ready(None, &[commit_turn("green"), commit_turn("fix-one")]);
+    let rules = gate_fix_rules(&state, "rules-gate-fix-absent.toml", None);
+    let calls = state.join("lens-calls");
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, true));
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "行の無い便は gate の FAIL: {} / {}", stdout_of(&out), stderr_of(&out));
+    assert!(line_at(&out, "verdict=FAIL").is_some(), "gate の FAIL の行: {}", stdout_of(&out));
+    assert!(!stdout_of(&out).contains("gate-fix="), "stdout に gate-fix= が無い: {}", stdout_of(&out));
+    assert_eq!(fix_marks(&state, &id), 0, "gate-fix: の記帳は無い");
+    assert_eq!(stub_calls(&state), 1, "runner は起きない");
+    clean(&[&repo, &state]);
+
+    // 契約の verify が赤い便（`green` を commit しない）は、行が在っても verify_red が 0 でなく直しの周に入らない。
+    let (repo, state, id) = gate_run_intake();
+    let rules = gate_fix_rules(&state, "rules-gate-fix-red.toml", Some(2));
+    let runner = turn_runner(&state, &[commit_turn("red-one")]);
+    let spawned = end_gate_spawn(&repo, &state, &id, &runner, Some(&rules));
+    assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&spawned), stderr_of(&spawned));
+    let calls = state.join("lens-calls");
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, false));
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "赤い verify の便は gate の FAIL: {} / {}", stdout_of(&out), stderr_of(&out));
+    assert!(!stdout_of(&out).contains("gate-fix="), "stdout に gate-fix= が無い: {}", stdout_of(&out));
+    assert_eq!(fix_marks(&state, &id), 0, "gate-fix: の記帳は無い");
+    assert_eq!(stub_calls(&state), 1, "runner は起きない");
+    clean(&[&repo, &state]);
+}
+
+/// (e) 直しの周の runner が rc 1 で終わる便は、rc が 0 でなく、`gate-fix:1` の記帳を 1 件だけ持って `gate-fix:2` を持たず、resume の中の
+/// runner は 1 回・lens は 1 回だけ起き、便の最後の RunStage は段 Failed（続く gate は段違いで lens を起こさずに断る）。
+#[test]
+fn gfix_failed_fix_round_stops_without_another_round() {
+    let (repo, state, id, runner) = gate_fix_ready(None, &[commit_turn("green"), "exit 1".to_owned()]);
+    let rules = gate_fix_rules(&state, "rules-gate-fix-2.toml", Some(2));
+    let calls = state.join("lens-calls");
+    let out = gate_fix_resume((&repo, &state), &id, &runner, &rules, &counting_lens(&calls, true));
+    assert_ne!(out.status.code(), Some(i32::from(RC_OK)), "{} / {}", stdout_of(&out), stderr_of(&out));
+    assert_eq!(stage_marks(&state, &id, Stage::Implemented, "gate-fix:1"), 1, "{:?}", stages(&state, &id));
+    assert_eq!(stage_marks(&state, &id, Stage::Implemented, "gate-fix:2"), 0, "{:?}", stages(&state, &id));
+    assert_eq!(stub_calls(&state), 2, "resume の中の runner は 1 回");
+    assert_eq!(lens_calls(&calls), 1, "lens は 1 回");
+    assert_eq!(stages(&state, &id).last().map(|(stage, _)| *stage), Some(Some(Stage::Failed)), "{:?}", stages(&state, &id));
+    clean(&[&repo, &state]);
+}
+
 // ───── runner の stdin に前の便の gate の FAIL の節（設計 pipeline.md §68・行 bl・接頭辞 `prior_fail_`） ─────
 //
 // 同じ bead の 1 本目が gate の FAIL で終端した後に、同じ bead で受付を撃ち直して 2 本目を作る（release の後の受付と同じ形）。

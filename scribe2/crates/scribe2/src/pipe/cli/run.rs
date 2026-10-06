@@ -7,14 +7,20 @@
 
 use super::intake::{intake_id, intake_line};
 use super::step::{gate_run, land_run};
-use super::{manifest_of, need, refused, resolve, review_then_launch, Extra, Resolved};
-use crate::cli_outcome::{Outcome, RC_OK};
-use crate::fleet::store::LockPolicy;
-use crate::fleet::Stage;
-use crate::pipe::follow::{self, Runner, Turn};
+use super::{broken, int_row, manifest_of, need, refused, resolve, review_then_launch, state_dir_of, Extra, Resolved};
+use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+use crate::fleet::json_lite;
+use crate::fleet::store::{self, LockPolicy};
+use crate::fleet::{Event, EventKind, Stage};
+use crate::pipe::follow::{self, Runner, Turn, FAIL_DETAIL, FIX_DETAIL};
 use crate::pipe::ratelimit::{ride_out_rate_limit, Pool};
 use crate::pipe::spawn::EndGate;
+use crate::pipe::{current, emit, verdict_path, Emit};
 use crate::rules::manifest::Manifest;
+use std::path::Path;
+
+/// gate の FAIL の直しの周の回数の上限を持つ rules 行（設計 pipeline.md §73）。
+const ROW_GATE_FIX_ROUNDS: &str = "runner.gate_fix_rounds";
 
 /// `pipe spawn`。前提 stage = `Reviewed`（verdict PASS）。
 pub(super) fn start(args: &[String], policy: LockPolicy) -> Outcome {
@@ -122,7 +128,7 @@ pub(super) fn run_all(
     if let Some(stopped) = chain_noting(&mut lines, &mut notes, ridden) {
         return stopped;
     }
-    let gated = gate_run(args, &id, manifest, policy);
+    let gated = gate_fixing(args, &id, Some(runner.as_str()), manifest, policy);
     if let Some(stopped) = chain_noting(&mut lines, &mut notes, gated) {
         return stopped;
     }
@@ -131,6 +137,126 @@ pub(super) fn run_all(
         return stopped;
     }
     Outcome { out: lines, err: notes, rc: RC_OK }
+}
+
+/// gate の FAIL の直しの周の数え（設計 pipeline.md §73）: 便の `RunStage` のうち段 `Implemented` で detail が [`FIX_DETAIL`] で始まる
+/// 記帳（直しの印）の数と、便の最後の `RunStage` がその印か（印の後に runner が起きる前に driver が死んだ便の判じ）。
+///
+/// 周の数は便の event から数え、process の記憶に持たない（FR1003 と同じ）。段 `Spawned` の `gate-fix:` の記帳（直しの周の起動）は数えない。
+pub(super) fn fix_rounds(events: &[Event], run: &str) -> (u64, bool) {
+    let is_mark = |event: &&Event| {
+        event.stage == Some(Stage::Implemented) && event.detail.as_deref().is_some_and(|detail| detail.starts_with(FIX_DETAIL))
+    };
+    let mut own = events.iter().filter(|event| event.run == run && event.kind == EventKind::RunStage);
+    let count = own.clone().filter(is_mark).count();
+    (u64::try_from(count).unwrap_or(u64::MAX), own.next_back().is_some_and(|event| is_mark(&event)))
+}
+
+/// gate を撃った後の便の閉じた 3 値（[`fix_due`]）。
+enum Due {
+    /// 直しの周に入る（値は周の番号・1 始まり）。
+    Round(u64),
+    /// 上限に届いた（値は上限）。
+    Exhausted(u64),
+    /// 直しの周の対象でない。
+    Off,
+}
+
+/// gate を撃った後の便が直しの周に入るか。`Off` は、runner の字が無い・行 `runner.gate_fix_rounds` を読めない（行の無い・不発効・型違いの
+/// manifest）・event を読めない・便の最後の `RunStage` が段 `Gated` でないか detail が `verdict:FAIL` で始まらない（前の周の `Gated` の FAIL を
+/// 読み直さない）・`verdict.json` の `verify_red` が 0 でないか読めない（verify の赤は審査役の所見が無い）の周である。
+fn fix_due(args: &[String], id: &str, runner: Option<&str>, manifest: &Manifest) -> Due {
+    let (Some(_), Ok(limit), Ok(state_dir)) = (runner, int_row(manifest, ROW_GATE_FIX_ROUNDS), state_dir_of(args)) else {
+        return Due::Off;
+    };
+    let Ok(events) = store::read_all(&state_dir) else {
+        return Due::Off;
+    };
+    let last = events.iter().rev().find(|event| event.run == id && event.kind == EventKind::RunStage);
+    let failed = last.is_some_and(|event| {
+        event.stage == Some(Stage::Gated) && event.detail.as_deref().is_some_and(|detail| detail.starts_with(FAIL_DETAIL))
+    });
+    if !failed || !verify_green(&state_dir, id) {
+        return Due::Off;
+    }
+    match fix_rounds(&events, id).0 {
+        done if done < limit => Due::Round(done + 1),
+        _ => Due::Exhausted(limit),
+    }
+}
+
+/// `verdict.json` の `verify_red` が 0 か（読めない・欄が無い周は偽）。
+fn verify_green(state_dir: &Path, id: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(verdict_path(state_dir, id)) else {
+        return false;
+    };
+    let Ok(pairs) = json_lite::parse_object(text.trim()) else {
+        return false;
+    };
+    pairs.iter().find(|(key, _)| key == "verify_red").and_then(|(_, value)| value.as_num()) == Some(0)
+}
+
+/// 直しの印（段 `Implemented`・detail `gate-fix:<周>`）を 1 件記帳する（書けない周は rc 2）。記帳の門は [`emit`] の `NotStopped`。
+fn mark_fix(args: &[String], id: &str, round: u64, policy: LockPolicy) -> Result<(), Outcome> {
+    let state_dir = state_dir_of(args).map_err(refused)?;
+    let state = current(&state_dir)
+        .map_err(|errors| Outcome::failed(RC_BROKEN, errors.iter().map(ToString::to_string).collect()))?;
+    let bead = state.runs.get(id).map(|run| run.bead.as_str()).unwrap_or_default();
+    let entry = Emit {
+        kind: EventKind::RunStage,
+        run: id,
+        bead,
+        stage: Some(Stage::Implemented),
+        seat: None,
+        pid: None,
+        detail: Some(format!("{FIX_DETAIL}{round}")),
+    };
+    emit(&state_dir, &entry, policy).map_err(|err| broken(err.to_string()))
+}
+
+/// 段の出力の前に、それまでの行と通知を積んだ形で返す（段の順・[`chain_noting`] と同じ畳み方で rc は後ろの段のもの）。
+fn closing(mut lines: Vec<String>, mut notes: Vec<String>, last: Outcome) -> Outcome {
+    lines.extend(last.out);
+    notes.extend(last.err);
+    Outcome { out: lines, err: notes, rc: last.rc }
+}
+
+/// gate を撃ち、審査役の FAIL の便は同じ worktree の runner を所見の節つきで起こし直してから gate を撃ち直す輪（設計 pipeline.md §73）。
+///
+/// gate の rc が [`RC_REFUSED`] で [`fix_due`] が `Round(n)` の周は、直しの印を記帳し、stdout に `run=<id> gate-fix=<n>/<上限>` を足し、runner を
+/// 起こして上限の周の待ち（[`ride_out_rate_limit`]）まで済ませ、どちらかが rc 0 でなければそこまでの行とその rc で返る。`Exhausted(v)` の周は
+/// 行の末に `run=<id> gate-fix=exhausted:<v>` を足して gate の rc のまま返る。`Off` の周と rc が [`RC_REFUSED`] でない周は gate の戻りのまま返る。
+/// **輪は回数を数えない**——止めるのは [`fix_due`] の数え（便の event）である。
+pub(super) fn gate_fixing(args: &[String], id: &str, runner: Option<&str>, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let (mut lines, mut notes) = (Vec::new(), Vec::new());
+    loop {
+        let mut gated = gate_run(args, id, manifest, policy);
+        let due = if gated.rc == RC_REFUSED { fix_due(args, id, runner, manifest) } else { Due::Off };
+        let (cmd, round) = match (runner, due) {
+            (Some(cmd), Due::Round(round)) => (cmd, round),
+            (Some(_), Due::Exhausted(limit)) => {
+                gated.out.push(format!("run={id} gate-fix=exhausted:{limit}"));
+                return closing(lines, notes, gated);
+            }
+            _ => return closing(lines, notes, gated),
+        };
+        lines.append(&mut gated.out);
+        notes.append(&mut gated.err);
+        // 行 `runner.gate_fix_rounds` は `fix_due` が読めた周だけここへ来る。
+        let limit = int_row(manifest, ROW_GATE_FIX_ROUNDS).unwrap_or_default();
+        if let Err(outcome) = mark_fix(args, id, round, policy) {
+            return closing(lines, notes, outcome);
+        }
+        lines.push(format!("run={id} gate-fix={round}/{limit}"));
+        let launched = launch(args, id, cmd, policy, &[Stage::Implemented]);
+        if let Some(stopped) = chain_noting(&mut lines, &mut notes, launched) {
+            return stopped;
+        }
+        let ridden = ride_out_rate_limit(args, id, cmd, manifest, policy);
+        if let Some(stopped) = chain_noting(&mut lines, &mut notes, ridden) {
+            return stopped;
+        }
+    }
 }
 
 /// 段の結果を畳む。rc≠0 ならそこまでの行を載せて**止める形**を返す。
@@ -165,4 +291,42 @@ pub(super) fn chain_noting(
 pub(super) fn chain(lines: &mut Vec<String>, outcome: Outcome) -> Option<Outcome> {
     let mut notes = Vec::new();
     chain_noting(lines, &mut notes, outcome)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fix_rounds;
+    use crate::fleet::{EventKind, Stage};
+    use crate::pipe::fixture::event;
+
+    /// 便 `run` の `RunStage`（段と detail）の 1 件。
+    fn stage(run: &str, stage: Stage, detail: &str) -> crate::fleet::Event {
+        event(run, EventKind::RunStage, Some(stage), None, Some(detail))
+    }
+
+    /// 段 `Implemented` の直しの印の数と、便の最後の `RunStage` が印かを返す。ほかの便の記帳・段 `Spawned` の `gate-fix:` の記帳・
+    /// 印の後の `Gated` は数えず、最後の `RunStage` が印でなくなる。
+    #[test]
+    fn gate_fix_rounds_count_the_markers_and_see_a_pending_one() {
+        assert_eq!(fix_rounds(&[], "r1"), (0, false), "記帳が無い便は 0 と偽");
+        let mut events = vec![
+            stage("r1", Stage::Gated, "verdict:FAIL,rules:embedded"),
+            stage("r1", Stage::Implemented, "gate-fix:1"),
+        ];
+        assert_eq!(fix_rounds(&events, "r1"), (1, true), "印の直後は 1 と真");
+        events.push(stage("r2", Stage::Implemented, "gate-fix:1"));
+        events.push(stage("r2", Stage::Implemented, "gate-fix:2"));
+        assert_eq!(fix_rounds(&events, "r1"), (1, true), "ほかの便の記帳は数えず、最後の RunStage の判じにも入らない");
+        assert_eq!(fix_rounds(&events, "r2"), (2, true), "ほかの便の側から見ても同じ");
+        events.push(stage("r1", Stage::Spawned, "gate-fix:1"));
+        assert_eq!(fix_rounds(&events, "r1"), (1, false), "段 Spawned の gate-fix: の記帳は数えず、最後の RunStage は印でない");
+        events.push(stage("r1", Stage::Implemented, "gate-fix:2"));
+        assert_eq!(fix_rounds(&events, "r1"), (2, true), "2 つ目の印");
+        events.push(stage("r1", Stage::Gated, "verdict:FAIL,rules:embedded"));
+        assert_eq!(fix_rounds(&events, "r1"), (2, false), "印の後の Gated は数えず、最後の RunStage は印でない");
+        events.push(event("r1", EventKind::SeatSpawned, None, Some("r1"), None));
+        assert_eq!(fix_rounds(&events, "r1"), (2, false), "RunStage でない event は最後の RunStage に入らない");
+        events.push(stage("r1", Stage::Implemented, "rebase:a..b"));
+        assert_eq!(fix_rounds(&events, "r1"), (2, false), "detail が gate-fix: で始まらない Implemented は印でない");
+    }
 }

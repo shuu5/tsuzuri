@@ -23,6 +23,7 @@
 - 「## 共通 verify」節の行は、gate が契約の verify 行の前に撃つ行である。commit の後に 1 本ずつ撃つ（commit を読む行が在る）。長い行は Bash の timeout を上限の 600000 ms まで明示して撃つ。
 - 「## ほかの行の touches」節の名は、ほかの行が守る名である。write-set の file のうち今その名を名指していない file で新しく名指さない。名指さずに作れない周は質問 record で止まる。
 - 「## 前の便の gate の FAIL」節と「## 門の赤」節は、前の便か前の周が落ちた理由である。同じ穴を作らず、門の赤の行は直して commit してから終える。
+- 「## gate の FAIL」節は、この便の gate の審査役が落とした所見である。所見が名指す場所を直して commit してから終える。所見の外を作り直さない。所見が契約と食い違う時は直さずに質問 record で止まる。
 - 「## 回答」節は前の質問への回答である。その前提で進む（同じ質問を繰り返さない）。
 - 「## 追随」節: `git rebase --onto <main> <base>` を撃ち（素の `git rebase <main>` は撃たない）、write-set の中の衝突だけを解いて `git rebase --continue` で終える。解けなければ `git rebase --abort` で木を戻し、commit を作らずに質問 record で止まる。追随の commit は便の commit に含め、追随だけで turn を終えてよい。
 - 「## 途中再開」節: 前の turn は途中で止まった（口座の上限・runner の死亡・API に届かない）。節が挙げる commit と未 commit の変更は worktree に在る。やり直さず消さず、続きから実装して commit に含める。追随の節も在れば先に追随する。

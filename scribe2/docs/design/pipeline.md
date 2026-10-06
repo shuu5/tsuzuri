@@ -1364,6 +1364,7 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
      - `spawn` が rc 0 で返り、便の最新の `RunStage` が門の赤なら（event log から読む・spawn の戻りの字は読まない）、`Precheck::measure` で Budget を測り直し、`Launch` に門の赤の節を足して `spawn` を呼び直す。口座は同じ turn の値のまま。
      - 輪は回数を数えない（止めるのは形 4 と形 5 の数え）。追随の後始末（`follow.rs` の `settle`）は、輪を抜けた後に 1 回だけ撃つ。
      - 輪が返すのは最後の周の `spawn` の戻り（rc と行）だけで、門の赤の周の戻りの行は足さない（stdout の字は 1 周の便と同じ形）。
+     - gate の直しの周（§73）の輪は、この輪とは別で、`crates/scribe2/src/pipe/cli/run.rs` の `gate_fixing` が持つ。
   8. **門の線と Launch**:
      - 門の線は、gate の線と周の上限の値の対で、読めない周は理由の 1 行を持つ（閉じた 2 値の型を `spawn.rs` に新しく置く）。manifest から組む 1 本は、gate と同じ `Limits::of`（8 行）と、rules 行 `runner.end_gate_rounds` の `int_row` を読む。
      - 線は `Runner` に参照の field で載せる。`Runner` を組む 5 か所が、組む周の manifest から同じ 1 本で組む。`Turn` と `Land` には field を足さない（組む場所が多く、門が要るのは `--runner` の在る周だけ）。
@@ -2317,3 +2318,20 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候�
   3. **memo の口**: `ledger memo --run` の質の原本は、`Landed` の便と gate が PASS の `Gated` の便の `review.json` の PASS で quality の delete を 1 以上と数えた周に替わる（evidence と `quality_at` を写す・題の頭 `質 delete — ` は不変）。`Reviewed` の PASS（便は先へ進む）と `review.json` の無い周は終端でない。
 - 触らない: 契約の審査の 3 観点と判定の決め方・理由の型の 6 語・gate の判定と数の食い違いの読み（3 観点）と場所の列 `at`・`verdict.json` の key 列。
 - 歯（接頭辞 `vrqual_`）: 器の lib（`pipe/review/quality.rs`・`pipe/gate/findings.rs`・`headless/lens.rs`）と e2e（`tests/e2e/pipe/review.rs`・`tests/e2e/pipe/gate.rs`・`tests/e2e/ledger_memo.rs`）。
+
+## 73. gate の審査役の FAIL の便を、同じ worktree の runner が所見の節つきで 2 周まで直す — 数えと輪は `pipe run` と `pipe resume` が持つ（tsuzuri の契約表の行 v-gate-fix・判断の記録 ADR-72 の決定 (7)・持ち主の決め D6）
+
+やさしく言うと: gate の審査役が落とした便は、今はそこで終わり、席が設計を替えるまで次の便が起きず、起きた次の便は受付から全部やり直す（1 周 約 17 万 token）。終わりの門が赤い時に同じ worktree の runner を起こし直すのと同じ口で、gate が落とした時にも、所見を渡して直させ、直した後に gate を撃ち直す。
+
+- 置き場: 数えと輪は `crates/scribe2/src/pipe/cli/run.rs`、resume の入口の分岐は `crates/scribe2/src/pipe/cli/resume.rs`、節の値の読みは `crates/scribe2/src/pipe/follow.rs`、節の型と stdin の組みと worktree の使い回しと `Spawned` の detail は `crates/scribe2/src/pipe/spawn.rs`。
+- 形:
+  1. **数えと印**: 純関数 `fix_rounds(events, run)` は、その便の `RunStage` のうち段 `Implemented` で detail が `gate-fix:` で始まる記帳（直しの印）の数と、便の最後の `RunStage` が印かを返す。周の数は便の event から数え、process の記憶に持たない。段 `Spawned` の `gate-fix:` の記帳（直しの周の起動）は数えない。
+  2. **入口の判定**: `fix_due` は gate を撃った後の便を閉じた 3 値（`Round(周)`・`Exhausted(上限)`・`Off`）に分ける。`Off` は、runner の字が無い・行 `runner.gate_fix_rounds` を `int_row` で読めない（行の無い・不発効・型違いの manifest）・event を読めない・便の最後の `RunStage` が段 `Gated` でないか detail が `verdict:FAIL` で始まらない・`verdict.json` の `verify_red` が 0 でないか読めない。それ以外は、数えが上限より小さければ `Round(数え + 1)`、届いていれば `Exhausted(上限)`。値 0 の便は最初の FAIL で `Exhausted(0)`（終わりの門の値 0 と同じ読み）。verify の赤の FAIL を `Off` にするのは、verify の赤は終わりの門が `runner.end_gate_rounds` の周を使い切った後の赤で、審査役の所見が無いから。直しの周の runner が rc 0 でなく終わって `spawn` が段 `Failed` を書いた便と、gate の前の照らしが段 `Failed` を書いた便は、最後の `RunStage` が `Gated` でないので `Off` になる。
+  3. **輪**: `gate_fixing` は `gate_run` を撃ち、rc が `RC_REFUSED` で `fix_due` が `Round(n)` の周は、段 `Implemented`・detail `gate-fix:<n>` の記帳を 1 件置き（記帳の門は `NotStopped`・書けない周は rc 2）、stdout に `run=<id> gate-fix=<n>/<上限>` を足し、`launch` と `ride_out_rate_limit` を順に撃ち、どちらかが rc 0 でなければそこまでの行とその rc で返り、rc 0 なら `gate_run` から繰り返す。`Exhausted(v)` の周は stdout の末に `run=<id> gate-fix=exhausted:<v>` を足し、gate の rc のまま返る。`Off` の周と rc が `RC_REFUSED` でない周は gate の戻りのまま返る。各段の stdout と stderr は段の順で積む。輪は回数を数えず、止めるのは `fix_due` の数え。`pipe run` は `gate_run` の代わりに `gate_fixing` を撃つ。
+  4. **resume**: `Implemented` の枝は、追随の起こし直しの続きの周は今のまま。そうでなく、最後の `RunStage` が直しの印（印の後に runner が起きる前に driver が死んだ便）で runner が起きていない周は、`--runner` を読んで `launch` と `ride_out_rate_limit` を撃ってから `gate_fixing` へ入る。ほかの周は `gate_fixing` を撃つ（`--runner` の無い周は runner の字が無く `Off`＝今の 1 回の gate と同じ）。driver の札と列の起こし直しは替えない（輪は 1 process の中で、札を握ったまま回る）。
+  5. **節**: stdin の節の順は 契約 → 共通 verify → ほかの行の touches → 前の便の gate の FAIL → gate の FAIL → 門の赤 → 回答 → 途中再開 → 追随。「## gate の FAIL（周 <n>）」節は、1 行目に「この便の gate の審査役は次の所見で落とした。所見が名指す場所を直して commit してから終える」、続けて `verdict.json` の evidence と findings の行（§68 と同じ読み手）と、欄 `at` が在れば `at: <字>`（改行と tab を空白に畳み 2000 字まで）の行を並べる。節を持つのは、便の最後の `Gated` より後ろに直しの印が在る周で、直しの周の門の起こし直しと runner の死の途中再開も同じ節を持つ。`prepare_worktree` は直しの周も同じ worktree と記録済みの base を使い、直しの周の `Spawned` の detail は `gate-fix:<n>`（器が選んだ口座の在る周は `,account:<label>`・`base:` で始めない）。口座は起こし直しの選定で選び直す。実装役は新しい process で起こす（会話の記録の `--resume` は使わない）。
+  6. **rules 行**: `runner.gate_fix_rounds`（kind `RunnerGateFixRounds`・Int・値 2・発効・ruling `user 2026-10-06T08:08:35.348Z 項 D6`・ruled_at `2026-10-06`）。値は起こし直しの回数の上限（最大 N 回・0 は起こさず `exhausted` を名乗る）。kind の宣言順は `RunnerEndGateRounds` の直後。
+  7. **雛形**: `headless/runner.txt` の器の取り扱いの節に「## gate の FAIL」節の読み方の 1 行を足す。
+- 触らない: 直した差だけの再審査（gate は直しの周も base..HEAD の全部の差を lens に渡す）・`pipe gate` の 1 段だけの口と land の追随の再 gate（輪を持たない）・`pipe regate` と dispatch の release（verify の赤の FAIL と揺れる歯の FAIL を測り直す口として残る）・契約の審査の FAIL（`Reviewed`）の扱い・列の hold の既定。
+- 限界: 直しの周の条件は今の lens の FAIL の全部である（今の lens は重さを出さない）。審査役が重さ Critical と Important だけを FAIL にすれば、この行の条件はそのまま決定 (7) の字になる。上限を越えた便は今の `Gated` の FAIL の終端（列の予約・席への知らせ・節を替えて次の便）に入る。
+- 歯: lib の `gate_fix_rounds_count_the_markers_and_see_a_pending_one`（`pipe/cli/run.rs`）と、e2e の接頭辞 `gfix_`（`tests/e2e/pipe/spawn.rs`）5 本、rules 行の `gate_fix_rounds_row_is_declared_right_after_end_gate_rounds`（`tests/e2e/rules/embedded.rs`）。

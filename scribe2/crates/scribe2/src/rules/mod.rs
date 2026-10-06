@@ -274,6 +274,9 @@ pub enum RuleKind {
     /// **起こし直す回数の上限**（回）。値 N = 最大 N 回起こし直す（runner の turn は最大 N+1 回）。0 は門を撃って記録するだけで
     /// 起こし直さない。
     RunnerEndGateRounds,
+    /// gate の審査役の FAIL（設計 pipeline.md §73）で同じ worktree の runner を所見の節つきで**起こし直す回数の上限**（回）。
+    /// 値 N = 最大 N 回起こし直す。0 は起こし直さず `exhausted` を名乗る。
+    RunnerGateFixRounds,
     /// 変異検査の並列度の**上限**（宣言値）。実効値は受付（設計 gate-cost.md §3.3）が導く。
     GateMutantsJobs,
     /// job 1 つが要る memory の宣言値（MiB）。受付の分母と封じ込めの箱に使う。
@@ -488,6 +491,7 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::GroupPressureModelPct,
     RuleKind::FollowRetries,
     RuleKind::RunnerEndGateRounds,
+    RuleKind::RunnerGateFixRounds,
     RuleKind::GateMutantsJobs,
     RuleKind::GateJobMemoryMb,
     RuleKind::HostReserveMemoryMb,
@@ -585,6 +589,7 @@ impl RuleKind {
             Self::GroupPressure5hPct => "GroupPressure5hPct", Self::GroupPressure7dPct => "GroupPressure7dPct",
             Self::GroupPressureModelPct => "GroupPressureModelPct",
             Self::FollowRetries => "FollowRetries", Self::RunnerEndGateRounds => "RunnerEndGateRounds",
+            Self::RunnerGateFixRounds => "RunnerGateFixRounds",
             Self::GateMutantsJobs => "GateMutantsJobs", Self::GateJobMemoryMb => "GateJobMemoryMb",
             Self::HostReserveMemoryMb => "HostReserveMemoryMb", Self::GateSlotWaitS => "GateSlotWaitS",
             Self::GateTmuxTestThreads => "GateTmuxTestThreads", Self::GateCpuWeight => "GateCpuWeight",
@@ -640,7 +645,7 @@ impl RuleKind {
             | Self::UsageTimeoutS
             | Self::UsageFreshS
             | Self::GroupPressure5hPct | Self::GroupPressure7dPct | Self::GroupPressureModelPct
-            | Self::FollowRetries | Self::RunnerEndGateRounds
+            | Self::FollowRetries | Self::RunnerEndGateRounds | Self::RunnerGateFixRounds
             | Self::GateMutantsJobs | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS
             | Self::GateTmuxTestThreads | Self::GateCpuWeight | Self::HostRunnablePerCore | Self::HostBlockedPerCore
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
@@ -690,8 +695,8 @@ impl RuleKind {
             | Self::LockStaleMs | Self::HookTimeoutS | Self::RunnerAllowedCommands | Self::RunnerDeniedCommands
             | Self::RepoNonRustExecAllow | Self::SeatCycleSettleS | Self::SeatCyclePollMs | Self::UsageTimeoutS
             | Self::UsageFreshS | Self::GroupPressure5hPct | Self::GroupPressure7dPct | Self::GroupPressureModelPct
-            | Self::FollowRetries | Self::RunnerEndGateRounds | Self::GateMutantsJobs | Self::GateJobMemoryMb
-            | Self::HostReserveMemoryMb | Self::GateSlotWaitS | Self::GateTmuxTestThreads | Self::GateCpuWeight
+            | Self::FollowRetries | Self::RunnerEndGateRounds | Self::RunnerGateFixRounds | Self::GateMutantsJobs
+            | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS | Self::GateTmuxTestThreads | Self::GateCpuWeight
             | Self::HostRunnablePerCore | Self::HostBlockedPerCore | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
             | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::LedgerTimeoutS | Self::RoleCapabilities

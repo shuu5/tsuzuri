@@ -9,7 +9,7 @@
 use super::approve::{block, Approval, Approve, RC_BLOCKED};
 use super::cli::int_row;
 use super::confine;
-use super::follow::{gate_base, Halt, Resumption, Section, RUNNER_UNREACHABLE};
+use super::follow::{gate_base, Halt, Resumption, Section, FIX_DETAIL, RUNNER_UNREACHABLE};
 use super::declaration::{Effective, TablePlaces, DECL_FILE};
 use super::gate::{fill_holes, last_json_object, record_checks, teeth_of, Counted, Limits, Logs, Shoot};
 use super::land::MAIN_REF;
@@ -459,6 +459,28 @@ impl PriorFail {
     }
 }
 
+/// gate の FAIL の直しの周の材料（設計 pipeline.md §73）: 周の番号と、節の本文の行（器は分類せず写すだけ）。
+pub struct GateFix {
+    /// 直しの周の番号（1 始まり・段 `Implemented` の直しの印 `gate-fix:<周>` と同じ値）。
+    pub round: u64,
+    /// 本文の行（`verdict.json` の evidence と findings、`at` が在れば場所の列）。
+    pub lines: Vec<String>,
+}
+
+impl GateFix {
+    /// 「gate の FAIL」節（stdin に足す字・見出しは周の番号）。
+    fn section(&self) -> String {
+        let mut body = format!(
+            "\n## gate の FAIL（周 {}）\n- この便の gate の審査役は次の所見で落とした。所見が名指す場所を直して commit してから終える\n",
+            self.round
+        );
+        for line in &self.lines {
+            body.push_str(&format!("- {line}\n"));
+        }
+        body
+    }
+}
+
 /// 起動 1 回の材料。
 pub struct Launch<'a> {
     /// 便 id。
@@ -499,6 +521,9 @@ pub struct Launch<'a> {
     /// **直前の便の gate の FAIL**（同じ bead の直前の便が gate の FAIL で終端し契約 file の字が同じ周だけ・設計 pipeline.md §68）。
     /// runner の stdin に「前の便の gate の FAIL」節を付ける。値の出所は [`super::follow::prior_fail`] ただ 1 本である。
     pub prior_fail: Option<PriorFail>,
+    /// **この便の gate の FAIL の所見**（gate の FAIL の直しの周だけ持つ・設計 pipeline.md §73）。在る周は同じ run の worktree と base を使い、
+    /// runner の stdin に「gate の FAIL」節を付ける。値の出所は [`super::follow::gate_fix`] ただ 1 本である。
+    pub fix: Option<GateFix>,
     /// lock の待ち方。
     pub policy: LockPolicy,
 }
@@ -609,11 +634,15 @@ pub fn spawn(budget: Budget, launch: &Launch<'_>) -> Outcome {
 }
 
 /// `Spawned` の記帳の detail（**閉じた形**）: 門の赤の周は `end-gate:<周>`（口座が在れば `,account:<label>`・`base:` で始めない＝
-/// base の読み手が飛ばす形・設計 pipeline.md §66 形 8）、ほかは口座の 3 値で分かれる。理由を読めない途中再開は `Err`。
+/// base の読み手が飛ばす形・設計 pipeline.md §66 形 8）、gate の FAIL の直しの周（途中再開でない周）は `gate-fix:<周>`（口座の足し方と
+/// 読み手の扱いは門の赤の周と同じ・設計 pipeline.md §73）、ほかは口座の 3 値で分かれる。理由を読めない途中再開は `Err`。
 fn spawned_detail(launch: &Launch<'_>, base: &str) -> Result<String, String> {
+    let account = launch.account.label().map(|label| format!(",account:{label}")).unwrap_or_default();
     if let Some(red) = &launch.red {
-        let account = launch.account.label().map(|label| format!(",account:{label}")).unwrap_or_default();
         return Ok(format!("end-gate:{}{account}", red.round));
+    }
+    if let (Some(fix), None) = (&launch.fix, &launch.resumed) {
+        return Ok(format!("{FIX_DETAIL}{}{account}", fix.round));
     }
     match (launch.account, launch.resumed.as_ref()) {
         (Account::Inherit, _) => Ok(format!("base:{base}")),
@@ -943,9 +972,10 @@ pub fn touches_lines(rows: &[(String, Vec<String>)], own: &str) -> String {
     by_item.iter().map(|(item, pointers)| format!("- {item} ← {}\n", pointers.join(", "))).collect()
 }
 
-/// runner の stdin に流す本文 = 契約の写し（再読）+ 「共通 verify」節 + 「ほかの行の touches」節 + 直前の便の gate の FAIL が在れば「前の便の gate の FAIL」節 + 門の赤が在れば「門の赤」節 +
+/// runner の stdin に流す本文 = 契約の写し（再読）+ 「共通 verify」節 + 「ほかの行の touches」節 + 直前の便の gate の FAIL が在れば「前の便の gate の FAIL」節 +
+/// gate の FAIL の直しの周なら「gate の FAIL」節 + 門の赤が在れば「門の赤」節 +
 /// 回答済みの質問が在れば「回答」節 + 途中再開なら「途中再開」節 + 追随の相手が在れば「追随」節。**順序は 契約 → 共通 verify →
-/// ほかの行の touches → 前の便の gate の FAIL → 門の赤 → 回答 → 途中再開 → 追随**である（節の読み方は `headless/runner.txt` の雛形が持ち、ここは run ごとの値だけを
+/// ほかの行の touches → 前の便の gate の FAIL → gate の FAIL → 門の赤 → 回答 → 途中再開 → 追随**である（節の読み方は `headless/runner.txt` の雛形が持ち、ここは run ごとの値だけを
 /// 載せる）。
 fn prompt(launch: &Launch<'_>, base: &str) -> String {
     let mut body = std::fs::read_to_string(contract_path(launch.state_dir, launch.run)).unwrap_or_default();
@@ -953,6 +983,9 @@ fn prompt(launch: &Launch<'_>, base: &str) -> String {
     body.push_str(&format!("\n## ほかの行の touches\n{}", touches_section(launch, base)));
     if let Some(prior) = &launch.prior_fail {
         body.push_str(&prior.section());
+    }
+    if let Some(fix) = &launch.fix {
+        body.push_str(&fix.section());
     }
     if let Some(red) = &launch.red {
         body.push_str(&red.section());
@@ -1309,13 +1342,13 @@ fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
 /// 便の worktree と base を用意する。
 ///
 /// 初回は repo の HEAD を base にして worktree を**切る**。**再開の turn**——回答済みの質問
-/// （[`Launch::answered`]）か追随（[`Launch::follow`]）か途中再開（[`Launch::resumed`]）か門の赤（[`Launch::red`]）を持つ周
-/// ——は**同じ run の worktree と記録済みの base を使う**（設計 pipeline-question.md §5 /
+/// （[`Launch::answered`]）か追随（[`Launch::follow`]）か途中再開（[`Launch::resumed`]）か門の赤（[`Launch::red`]）か gate の FAIL の直し
+/// （[`Launch::fix`]）を持つ周——は**同じ run の worktree と記録済みの base を使う**（設計 pipeline-question.md §5 /
 /// pipeline-conflict.md §3 / account-autonomy.md §4: 再開は同じ便・worktree が無い / 別 branch に
 /// 居る周は断る）。
 fn prepare_worktree(launch: &Launch<'_>) -> Result<(PathBuf, String), String> {
     let worktree = worktree_path(launch.repo, launch.run);
-    if launch.answered.is_none() && launch.follow.is_none() && launch.resumed.is_none() && launch.red.is_none() {
+    if launch.answered.is_none() && launch.follow.is_none() && launch.resumed.is_none() && launch.red.is_none() && launch.fix.is_none() {
         let base = super::head_of(launch.repo)
             .ok_or_else(|| format!("{} の HEAD を読めない", launch.repo.display()))?;
         // 宣言 `build-lanes = true` の repo は並びの木を使い回す（判断の記録 ADR-35・便の path は並びを指す symlink）。
