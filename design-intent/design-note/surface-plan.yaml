@@ -272,6 +272,12 @@ sections:
       - {id: v-bead-precheck, doc: surface-v4a}
       - {id: v-bead-reads-b, doc: surface-v4a}
       - {id: v-bead-trailer, doc: surface-v4a}
+      - {id: v-ruling-batch, doc: surface-v4b}
+      - {id: t-ruling-one, doc: surface-v4b}
+      - {id: v-after-land, doc: surface-v4b}
+      - {id: t-after-land-decl, doc: surface-v4b}
+      - {id: ag-drafter-marks, doc: surface-v4b}
+      - {id: t-memo-similar, doc: surface-v4b}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
