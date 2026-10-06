@@ -215,7 +215,7 @@ index 0000000000000000000000000000000000000000..68af33b8597be25eb6338ce524636578
 +    clean(&[&repo, &state]);
 +}
 diff --git a/scribe2/crates/scribe2/src/pipe/gate/record.rs b/scribe2/crates/scribe2/src/pipe/gate/record.rs
-index a11f13f9a6ed098f531baf2d2b60a6be98818066..adfd1a2ebf83a90d016dc21559a232b475166228 100644
+index a11f13f9a6ed098f531baf2d2b60a6be98818066..66b040e1cacae44941d0d4fef89a195dc58fc1e3 100644
 --- a/scribe2/crates/scribe2/src/pipe/gate/record.rs
 +++ b/scribe2/crates/scribe2/src/pipe/gate/record.rs
 @@ -11,7 +11,8 @@ use crate::pipe::confine::{io, Reason};
@@ -291,6 +291,15 @@ index a11f13f9a6ed098f531baf2d2b60a6be98818066..adfd1a2ebf83a90d016dc21559a232b4
          if let Some(step) = record.step {
              if step.is_closed() {
                  // 撃っていない行は赤でも診断の対象でもない（record だけ残す）。
+@@ -554,7 +580,7 @@ fn append_diagnosis(path: &Path, policy: LockPolicy, n: u64, step: &Step) -> Res
+ 
+ /// 撃たなかった周の材料（record の `skipped=` の段と `reason=`、主実測だけが持つ `tree=`）。
+ ///
+-/// **構築は下の 2 つの口だけ**である（field は本 file に閉じる）——段と理由は別の軸で、
++/// **構築は下の 3 つの口だけ**である（field は本 file に閉じる）——段と理由は別の軸で、
+ /// 呼び手が任意の組を書けると `kind=gate skipped=main` のような無い形が生まれる。
+ #[derive(Debug, Clone, Copy)]
+ pub struct Skipped<'a> {
 @@ -562,8 +588,10 @@ pub struct Skipped<'a> {
      stage: SkippedStage,
      /// 省いた理由（record の `reason=` の字面）。
@@ -334,7 +343,15 @@ index a11f13f9a6ed098f531baf2d2b60a6be98818066..adfd1a2ebf83a90d016dc21559a232b4
  /// 主実測を丸ごと省いた周の `reason=`（gate を撃った木と着地の木が同じ・設計 gate-cost.md §27）。
  const SAME_TREE: &str = "same-tree";
  
-@@ -600,6 +638,8 @@ enum SkippedStage {
+@@ -593,13 +631,15 @@ const SAME_TREE: &str = "same-tree";
+ ///
+ /// **理由（[`Skipped`] の `reason`）とは別の軸**である（run 2 の裁定 2026-09-16）——`outside-scope` は
+ /// 再 gate を省く周にも着地後の検出が面の外で撃たない周にも同じ意味で立つので、理由の enum に段を足すと
+-/// 2 つの軸が 1 つの列に潰れる。値は 2 つで、本 file の外へは出ない。
++/// 2 つの軸が 1 つの列に潰れる。値は 3 つで、本 file の外へは出ない。
+ #[derive(Debug, Clone, Copy)]
+ enum SkippedStage {
+     /// 追随の再 gate 1 周（設計 §33 (i)）。
      Regate,
      /// land の主実測 1 周（設計 gate-cost.md §27・ADR-0043 §2.1）。
      Main,
@@ -370,7 +387,7 @@ index a11f13f9a6ed098f531baf2d2b60a6be98818066..adfd1a2ebf83a90d016dc21559a232b4
  }
  
 diff --git a/scribe2/crates/scribe2/src/pipe/spawn.rs b/scribe2/crates/scribe2/src/pipe/spawn.rs
-index f973f416f9adb7f43bcfe0f306f06e48ebe2ebdc..038a6b9a98521dbcdd458d44be9d11f584e3295e 100644
+index f973f416f9adb7f43bcfe0f306f06e48ebe2ebdc..885117d75f200fc11961ef5ed0def04104470552 100644
 --- a/scribe2/crates/scribe2/src/pipe/spawn.rs
 +++ b/scribe2/crates/scribe2/src/pipe/spawn.rs
 @@ -99,7 +99,10 @@ pub(crate) fn end_gate_mark(state_dir: &Path, id: &str) -> EndGateMark {
@@ -385,15 +402,6 @@ index f973f416f9adb7f43bcfe0f306f06e48ebe2ebdc..038a6b9a98521dbcdd458d44be9d11f5
  
  /// 終わりの門の赤い行の診断の file の名（`verify.stderr.log` と同じ形・周の頭に [`ROUND_HEAD`] の 1 行を置く）。
  const END_GATE_STDERR: &str = "end-gate.stderr.log";
-@@ -110,7 +113,7 @@ const ROUND_HEAD: &str = "# end-gate=";
- /// 門の赤の記帳の detail の頭（`end-gate:red:<周>:<赤い行の数>`・段は `Spawned` のまま）。
- const RED_DETAIL: &str = "end-gate:red:";
- 
--/// 起こし直しの回数の上限を持つ rules 行（設計 pipeline.md §66 形 10）。
-+/// 起こし直しの回数の上限を持つ rules 行（設計 pipeline.md §66 形 11）。
- const ROW_END_GATE_ROUNDS: &str = "runner.end_gate_rounds";
- 
- /// 終わりの門の線（**閉じた 2 値**・設計 pipeline.md §66 形 8）: gate の線と起こし直しの回数の上限の対、か、読めない理由の 1 行。
 @@ -319,12 +322,17 @@ impl Round {
          }
      }
