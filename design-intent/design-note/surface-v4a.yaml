@@ -3,13 +3,13 @@
 meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
-  version: v0.2
+  version: v0.3
   status: effective
   generated: 2026-10-06
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
-  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。
+  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。
 
 sections:
   - n: 1
@@ -30,7 +30,7 @@ sections:
         write-set: ["xtask/src/daily.rs", "xtask/tests/teeth1/vdaily.rs"]
         verify: ["cargo clippy -p xtask --all-targets --no-deps -- -D warnings", "cargo nextest run -p xtask --test teeth1 --no-tests=fail vdaily_"]
         size: M
-        done: '(1) 定数 AFTER は 3 段をこの順に持ち（段 insta-refs は cargo の引数 run -q -p xtask -- insta-refs と cwd 写しの根・段 deny は引数 deny check -D unmatched-skip -D advisory-not-detected と cwd 写しの根・段 deny-scribe2 は引数 deny check と cwd scribe2）、定数 REFS_ENV は字 INSTA_SNAPSHOT_REFERENCES_FILE で src/snaprefs.rs の同じ名の定数の行と一致し、fn refs_dir は出力の file の拡張子を insta-refs に替えた path を返す（歯 vdaily_consts_fixed） (2) 全部の段が通る周は、偽の cargo がこの順に 4 度撃たれ（check は cwd 写しの根で FORCE の環境変数と、値が refs_dir の下の insta-refs.txt の REFS_ENV を持つ・insta-refs は引数の末に refs_dir の path を持ち 2 つの環境変数を持たない・deny は cwd 写しの根・deny-scribe2 は cwd 写しの scribe2）、出力の file は 4 度の撃ちの出力をこの順に持ち、記録の行は step=check rc=0 memo=- で台帳に書かない（歯 vdaily_pass_records_no_memo） (3) check の後の 3 段のどれか 1 段の偽の cargo が rc 0 でない周は、記録の行が step=その段の名 rc=その rc memo=fx-9 で、その段より後の段を撃たない（歯 vdaily_after_step_failure_names_the_step） (4) check が落ちた周は check の後の段を 1 つも撃たない（歯 vdaily_after_step_failure_names_the_step） (5) check を撃つ前に refs_dir の下の前の file を消し、dir を空で置く（歯 vdaily_refs_dir_emptied_before_check） (6) 着地済みの歯 vdaily_fail_memo_then_recur と vdaily_fetch_and_bdw_failures と vdaily_units_template と vdaily_main_wiring が緑のまま（verify の 2 行目）'
+        done: '(1) 定数 AFTER は 3 段をこの順に持ち（段 insta-refs は cargo の引数 run -q -p xtask -- insta-refs と cwd 写しの根・段 deny は引数 deny check -D unmatched-skip -D advisory-not-detected と cwd 写しの根・段 deny-scribe2 は引数 deny check と cwd scribe2）、定数 REFS_ENV は字 INSTA_SNAPSHOT_REFERENCES_FILE で src/snaprefs.rs の同じ名の定数の行と一致し、fn refs_dir は出力の file の拡張子を insta-refs に替えた path を返す（歯 vdaily_consts_fixed） (2) 全部の段が通る周は、偽の cargo がこの順に 4 度撃たれ（check は cwd 写しの根で FORCE の環境変数と、値が refs_dir の下の insta-refs.txt の REFS_ENV を持つ・insta-refs は引数の末に refs_dir の path を持ち、歯を撃つ process が 2 つの環境変数を持つ周も持たない周も 2 つを持たない・deny は cwd 写しの根で 2 つを持たない・deny-scribe2 は cwd 写しの scribe2）、出力の file は 4 度の撃ちの出力をこの順に持ち、記録の行は step=check rc=0 memo=- で台帳に書かない（歯 vdaily_pass_records_no_memo） (3) check の後の 3 段のどれか 1 段の偽の cargo が rc 0 でない周は、記録の行が step=その段の名 rc=その rc memo=fx-9 で、その段より後の段を撃たない（歯 vdaily_after_step_failure_names_the_step） (4) check が落ちた周は check の後の段を 1 つも撃たない（歯 vdaily_after_step_failure_names_the_step） (5) check を撃つ前に refs_dir の下の前の file を消し、dir を空で置く（歯 vdaily_refs_dir_emptied_before_check） (6) 着地済みの歯 vdaily_fail_memo_then_recur と vdaily_fetch_and_bdw_failures と vdaily_units_template と vdaily_main_wiring が緑のまま（verify の 2 行目）'
         done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2"]
         depends: []
       - id: v-ci-watch-off
@@ -81,7 +81,7 @@ sections:
 
       AFTER の 1 つ目の段の空の cwd の字は二重引用符 2 つ（空の字）で、ほかの 2 段も同じく 3 つ目の項を持つ（deny は空の字・deny-scribe2 は scribe2）。
 
-      形（段の撃ち・fn shoot）。段の順は fetch → checkout → 出力の file を作る（落ちれば段 out と rc 1・今のまま）→ refs_dir を空で置く（前の dir を消して作り直す・落ちれば段 refs と rc 1）→ check → AFTER の 3 段。check の撃ちは今の argv と cwd と FORCE の環境変数に、環境変数 REFS_ENV（値は refs_dir の下の file insta-refs.txt の path）を足す。AFTER の段は、NICE の program と引数・cargo の program・段の引数（insta-refs の段は末に refs_dir の path）を、cwd を写しの根（cwd の字が空）か写しの根の下の dir（scribe2）にして撃ち、FORCE と REFS_ENV を置かない。AFTER の段の stdout と stderr は出力の file の末に足す（追記で開き、開けなければ段 out と rc 1）。最初に rc 0 でない段の名と rc を返し、後の段は撃たない。全部の段が通れば今のまま段 check と rc 0 を返す（記録の行の形と open_memo の読みは替えない）。check の出力の file は今のまま撃つたびに作り直す。
+      形（段の撃ち・fn shoot）。段の順は fetch → checkout → 出力の file を作る（落ちれば段 out と rc 1・今のまま）→ refs_dir を空で置く（前の dir を消して作り直す・落ちれば段 refs と rc 1）→ check → AFTER の 3 段。check の撃ちは今の argv と cwd と FORCE の環境変数に、環境変数 REFS_ENV（値は refs_dir の下の file insta-refs.txt の path）を足す。AFTER の段は、NICE の program と引数・cargo の program・段の引数（insta-refs の段は末に refs_dir の path）を、cwd を写しの根（cwd の字が空）か写しの根の下の dir（scribe2）にして撃ち、FORCE と REFS_ENV の 2 つの環境変数を子の環境から外す（Command の env_remove で外し、親の process がどちらかを持っていても子に渡さない。daily 自身の check と CI の job check は入れ子の段の歯を撃つ時に 2 つを置くので、外さないと歯 vdaily_ を撃つ process から子へ継がれる・便 t3-hub.92.3.1 の契約審査の見つけ）。AFTER の段の stdout と stderr は出力の file の末に足す（追記で開き、開けなければ段 out と rc 1）。最初に rc 0 でない段の名と rc を返し、後の段は撃たない。全部の段が通れば今のまま段 check と rc 0 を返す（記録の行の形と open_memo の読みは替えない）。check の出力の file は今のまま撃つたびに作り直す。
 
       形（memo の本文・fn memo_body）。観測の 1 行の「xtask の check を撃ち、段 X が」の所を「xtask の check と、check の後の段（insta-refs・deny・deny-scribe2）を順に撃ち、段 X が」に替える。ほかの字（origin/main と sha の木・出力は file と記録は file の句・4 つの節の見出し・引き金）は替えない。module の頭の doc は、撃つ物に check の後の 3 段を足した字に直す。
 
