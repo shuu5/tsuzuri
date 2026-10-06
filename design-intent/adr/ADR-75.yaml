@@ -1,0 +1,58 @@
+# 判断の記録 ADR-75 — 主実測が赤か測れなかった便を受け入れる口と PR の便の retire の照合を退け、受け皿を席へ返す形にする（ADR-72 の決定 (9) の部分の置き換え（D3）が段（S6）に委ねた受け皿の答え）
+# 判断の記録 ADR-45 の門（H6） の測りの 3 つ目・ADR-68 の決定 (3)・器の判断の記録 ADR-1094 の経路 (3) の照合と close の部分を置き換える。どの本文も替えない（封・tz check --freeze-adrs）。
+# 起草は係 w353a（2026-10-06）。材料は係 w349a の案（drafts/w349a/w/adr-draft.md）と行（v-ci-proof-cut） の計画（drafts/w349a/w/plan.md・notes.md・ノート（surface-v4b） の節 9）。
+id: ADR-75
+title: 主実測が赤か測れなかった便を受け入れる口（pipe land --terminal-only の Failed の形）と PR の便の retire の照合を退け、Failed の便は段の前提で断って新しい便で撃ち直し、PR の便は台帳で閉じた契約と --fold-only だけを畳む（ADR-45 の門（H6） の測りの 3 つ目・ADR-68 の決定 (3)・器の ADR-1094 の経路 (3) の照合と close の部分の置き換え）
+status: accepted
+date: 2026-10-06
+context: |
+  持ち主の決め D3（判断の記録 ADR-72 の決定 (4)）で、tsuzuri の push ごとの CI を止め、着地の終端から CI の見張りを外した。tsuzuri の宣言の鍵（ci-watch）を偽で持つ（.vessel.toml:8）。
+  器にはまだ、先端の CI の success を close の証拠に読む口が 2 つ在る。1 つは終端だけの撃ち直し（pipe land --terminal-only）の Failed の形で、主実測が赤か測れなかった便（最後の Failed の detail が main-red か main-unmeasured）を、先端の CI の success を待って受け入れて閉じる（scribe2/crates/scribe2/src/pipe/cli/step.rs:67-72・91・110-145・ADR-45 の門（H6） の口）。もう 1 つは PR で着地した便の pipe retire で、merge の commit が先端の祖先であることと先端の CI を照合してから close する（pipe/retire.rs:199-221・236・314・器の ADR-1094 の経路 (3)・要件 FR1096）。どちらも宣言の鍵（ci-watch）が偽の repo では語（ci-off） で断る（step.rs:121-122・retire.rs:238）ので、tsuzuri では今も開かない。
+  ADR-68 の決定 (3) は、この 2 つを「今までどおり先端の CI の success を待って閉じる」経路として残した。ADR-72 の部分の置き換え（D3）は、CI を待つ代わりの受け皿（次の日次の撃ちの緑を待つか席へ返すか・どちらも host の緑の無い便を黙って閉じない・条 P-7）を段（S6）の器の行の起草で決めると委ねた（ADR-72.yaml:33）。行（v-ci-proof-cut）（ノート（surface-v4b） の節 9）はその起草で、席へ返す形を選んだ。
+  ADR-45 の門（H6） の測りの 3 つ目は「main を赤にした便の束ねた commit を閉じる口が在る」（ADR-45.yaml:20）で、行が消す口を在ると測る。受け入れた記録の字は替えられない（tz check --freeze-adrs）ので、測りを外すには新しい記録が要る。
+decision: |
+  (1) Failed の便は席へ返す。pipe land --terminal-only の前提の段を Landed だけにし、Failed の便は段の前提の断り（scribe2/crates/scribe2/src/pipe/cli/state.rs:131-132 の字「run 便の id の段は Failed である」・rc 1・何も書かず何も撃たない）で返す。主実測が赤か測れなかった便の成果は、席が新しい便で撃ち直す。host の緑の無い便を黙って閉じない（条 P-7）。
+  (2) PR の便の retire は、台帳で着地の形で閉じた契約と --fold-only だけを畳む。閉じていない契約は新しい語（not-closed） 1 つで断る（rc 1・event も台帳も書かない）。merge の commit・先端の祖先・先端の CI の照合と close は持たない。断られた便の始末（撃ち直すか、閉じ方を問うか）は席が決める。
+  (3) 置き換え。ADR-45 の門（H6） の測りの 3 つ目（main を赤にした便の束ねた commit を閉じる口が在る）は、この記録の後は「Failed の便の終端だけの撃ち直しが段の前提で断られ、席が新しい便で撃ち直す」と読む。門（H6） のほかの 2 つの測りは替えない。ADR-68 の決定 (3) の、受け入れの周と PR の便の retire が先端の CI の success を待って閉じる経路は無くなる。器の ADR-1094 の経路 (3) の照合と close の部分も無くなり、閉じ済みの契約を畳む部分は残る。ADR-45・ADR-68・ADR-1094 の本文は替えない。
+  (4) 尾の読み手は残す。close の理由の尾 ci=success（tip= つきを含む）は新しい便で生じなくなる。台帳の閉じた理由の読み手（器の ledger/close_reason.rs）は過去の bead のために ci=success を読める尾として残す（ADR-68 の決定 (4) の尾の文法は替えない）。
+  (5) 要件。要件書の FR1050 の shall と plain の受け入れの周の但し書き（srs.yaml:1021-1022 の「主実測が赤か測れなかった便を受け入れる周を除く」の括弧と「今までどおり CI の緑を待ちます」の句）を外し、FR1096 の shall（srs.yaml:1576）の照合と close を、閉じた契約と --fold-only だけを畳み、閉じていない契約を語（not-closed）で断る形に直す（要件書の版を上げる・席の設計の commit でこの記録と一緒に置く）。
+  (6) 範囲。code の直しは器の行（v-ci-proof-cut）（ノート（surface-v4b） の節 9・便で入れる）がする。CI の読み手（fleet の ci_read・ci_wait・pr_merge）・宣言の鍵（ci-watch）と ci-cmd・規則の行 pipe.ci_wait_s と pipe.ci_poll_s は、この記録で替えず、後の行（v-ci-read-cut） が外す。旗 --terminal-only と --fold-only の名と、Landed の便への終端だけの撃ち直しは替えない。
+options:
+  - id: a
+    name: 甲 — 受け皿を席へ返す（Failed の便は段の前提で断り、PR の便は閉じた契約だけを畳む）
+    text: 決定 (1) から (6)。
+    verdict: adopted
+    reason: D3（CI の見張りを外す）を範囲を削らずに終え、host の緑の無い便を黙って閉じない（条 P-7）。新しい道を作らず、在る道（段の前提の断り・閉じ済みの畳み）に寄せる。失う物は、宣言の鍵（ci-watch）が真の repo で主実測が赤だった便の成果を CI の緑で受け入れる道と、PR の便を器が照合して閉じる道で、どちらも席が新しい便で撃ち直すか閉じ方を決める手間（便 1 本）に替わる。tsuzuri では 2 つの口は今も語（ci-off） で断るだけなので、tsuzuri の今の働きは失わない。
+  - id: b
+    name: 乙 — 次の日次の撃ちの緑を待って受け入れる
+    text: Failed の便を受け入れる口を残し、先端の CI の success の代わりに、次の日次の撃ち（ADR-34 の決定 (6)）の緑を待って閉じる。PR の便の retire も同じ緑で照合する。
+    verdict: rejected
+    reason: 受け入れの道は残るが、器に日次の撃ちの結果を便ごとに読む口と待ちの道が新しく要る（今の日次の撃ちは落ちたら memo を起こすだけ・ADR-72 の決定 (4)）。日次の撃ちは main の先端を撃つので、緑がその便の成果を確かめたかを便ごとに切り分けにくい（I）。便の作業木と札が最大 1 日開いたままになる。
+  - id: c
+    name: 丙 — 口を残す（code も記録も替えない）
+    text: 器の file（step.rs）の受け入れの形と file（retire.rs）の照合を残し、ADR-45 と ADR-68 をそのまま読む。
+    verdict: rejected
+    reason: 宣言の鍵（ci-watch）が真の repo では受け入れが今のまま働く。しかし tsuzuri では口は語（ci-off） で断るだけで開かず（.vessel.toml:8・step.rs:121-122・retire.rs:238）、開かない口と歯が器に残る。ADR-45 の門（H6） の測りの 3 つ目は tsuzuri で開かない口を在ると数え、段（S6）で消す物（条 P-27.2）を名指せない。
+basis: [ADR-45, ADR-68, ADR-72, ADR-1094, ADR-34, P-7, P-27, FR1050, FR1096]
+retreat:
+  kind: measure
+  condition: |
+    数えるのは tsuzuri の設計の席で、memo（t3-hub.92.3）か後継の memo の notes に記帳する。問う相手は持ち主。窓の始まりは行（v-ci-proof-cut） の着地の commit の時刻。
+    (1) 窓の 30 日で、主実測が赤か測れなかった Failed の便を新しい便で撃ち直した数が 3 本以上か、撃ち直しの便が 7 日着地しない Failed の便が 1 本でも在れば、受け入れの道（乙）を足すかを問う。
+    (2) 窓の 30 日で、PR の便の retire が語（not-closed） で断った便のうち、席が閉じ方を決められず 7 日開いたままの便が 1 本でも在れば、PR の便の閉じ方を問い直す。
+    (3) ADR-72 の撤退の条件 (3) で push ごとの CI を戻すと決まったら、この記録の 2 つの口を戻すかを同じ問いで問う。
+plain: |
+  CI（GitHub の上の検査）を止めたので、「この host の確かめでは赤だったが CI が緑なら受け入れる」口と、「PR で入った作業を CI と照らしてから閉じる」口は、もう働く根拠がありません。tsuzuri ではどちらも今は開かずに断るだけです。
+  この記録で 2 つの口を外します。赤だった作業は、席が新しい作業として出し直します。PR の作業は、台帳で閉じ済みの物だけを片付け、閉じていない物は 1 語で席へ返します。
+  失うのは、CI の緑で赤の作業を拾う道です。代わりに作業 1 本を出し直す手間がかかります。古い記録（ADR-45・ADR-68）の本文は替えず、この記録が読み替えを持ちます。
+approval:
+  who: 持ち主
+  date: 2026-10-06
+  ruling: "t3-hub.92.3.6（裁定 id = t3-hub.92.3.6:20261006T2021Z-1・notes に逐語）"
+  verbatim: "承認する"
+  surface: R-8
+consequences:
+  - 器の行（v-ci-proof-cut）（ノート（surface-v4b） の節 9・設計だけの行）が、器の 4 file（step.rs・finish.rs・land.rs・retire.rs）と e2e の歯 3 file と器の設計の文書 2 file を便で直す。終端の結末の語は 7 語から 5 語に、retire の断りの語は 7 語から 3 語（worktree-unready・unmeasured・not-closed）になる。
+  - 席の設計の commit は、この記録と要件書の FR1050 と FR1096 の直し（決定 (5)）を 1 つにする。行の便はこの記録の承認の後に流す。
+  - 合流の完了の門（H6） の測りの 3 つ目は、行の着地の後に歯（Failed の便の撃ち直しが断られる）で満ちたと数える。
+note: 起草 w353a（2026-10-06）。番号は置き場の判断の記録と起草の置き場の下書きを照らし、ADR-75 を名乗る物は係 w349a の案だけと確かめた。行番号は起草の時の main（0da12ada）の字。承認の欄は持ち主の答え（2026-10-06T20:21Z・席とのチャット）の後に席が書き、決定 (5) の要件の直しと同じ commit で置いた（要件書 第 0.60 版・同じ口を測る受入の基準 2 つの字も合わせた）。床の英字の語の決まり（日本語（原語）の形）に合わせ、承認の後に語の囲みだけを直した（決定の意味は替えない）。
