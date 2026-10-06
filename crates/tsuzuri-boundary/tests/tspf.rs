@@ -10,6 +10,42 @@ use std::process::{Command, Output, Stdio};
 
 use tsuzuri_core::agent::spec::Spec;
 
+/// toy の設計文書の規則の表（節 thresholds に行 R-16 の value を main の rules.yaml と同じ字で写した行）。
+const RULES: &str = r#"thresholds:
+  - id: R-16
+    article: "N-2"
+    what: "設計ノートの散文の門（規範の印の一覧と、印を持つ文に許さない「数と単位」の単位の一覧）"
+    value:
+      marks:
+        - "しなければならない"
+        - "してはならない"
+        - "してはいけない"
+        - "SHALL"
+        - "MUST"
+      prohibition:
+        word: "禁止"
+        clause_ends:
+          - "。"
+          - "）"
+          - "・"
+          - "、"
+          - null
+      units:
+        - "秒"
+        - "分"
+        - "時間"
+        - "日"
+        - "件"
+        - "本"
+        - "行"
+        - "byte"
+        - "KB"
+        - "MB"
+        - "%"
+        - "s"
+        - "ms"
+"#;
+
 /// 係の記録の assistant の行（道具 `tool` の tool_use で、input の宛先 `to`）。
 fn call(tool: &str, to: &str) -> String {
     format!(
@@ -191,6 +227,15 @@ fn tspf_no_contract_file_fires_nothing() {
     let none = whole("none");
     let memo = whole("memo");
     contracts(&memo, &["memo.md"]);
+    // 本文 memo.md は散文の門が撃たれる（規則の表を置き、字は印を持つ文が参照 id を持つ 1 行で門を通す）。
+    let design = memo.join("design-intent");
+    fs::create_dir_all(&design).unwrap();
+    fs::write(design.join("rules.yaml"), RULES).unwrap();
+    fs::write(
+        w(&memo).join("contract/memo.md"),
+        "条 P-28.2 のとおり席は記帳しなければならない。\n",
+    )
+    .unwrap();
     for root in [&none, &memo] {
         let out = stop(root, SUB, false, &said(root), &with_fake(root));
         assert_eq!(out.status.code(), Some(0));

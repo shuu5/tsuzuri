@@ -12,7 +12,7 @@ use crate::{
     bundle, ceiling_src, derive, face, figure, findings, floor_note, freeze, gate, graph, hello,
     init, mentions, parts,
     phase::{After, Flag},
-    polarity, proposed, rules, schema, sheet, site, stamp,
+    polarity, proposed, prose, rules, schema, sheet, site, stamp,
     verdict::Verdict,
 };
 
@@ -61,6 +61,9 @@ enum Command {
         /// 止める仕掛けの一覧（極性一覧）を 1 仕掛け 1 行（名 · 段 · 極性 · 出所）と集計の 1 行で標準出力へ書く（正本が読めなければ まだ分からない 2）
         #[arg(long, conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings", "proposed"])]
         polarity: bool,
+        /// 1 つの file の字に散文の門（規則の行 R-16）だけを撃つ口（規則の表 1 file と名指した file だけを読む・印を持つ文のうち理由の在る文ごとに 1 行と要約の 1 行を標準出力へ書く・合格 0 / 不合格 1 / まだ分からない 2）
+        #[arg(long, value_name = "PATH", conflicts_with_all = ["emit_amends", "freeze_anchor", "freeze_ids", "freeze_start", "freeze_adrs", "emit_rulings", "proposed", "polarity"])]
+        prose: Option<PathBuf>,
     },
     /// 部品目録から組み立て時に導出した一覧を出す（--print）・面の class と部品の名札と行内の様式を部品目録と突き合わせる（--check）
     #[command(group(ArgGroup::new("mode").required(true).args(["check", "print"])))]
@@ -339,6 +342,33 @@ fn proposed_check(dir: &std::path::Path, rel: &std::path::Path, out: &mut dyn Wr
     code(judged.verdict())
 }
 
+/// 散文の門の口（`folio check --prose`）。違反の行（`<file>: 行 <行番号>: <理由> <文の頭>`）と要約の行の順に標準出力へ書く。
+/// 規則の表か file が読めなければ、理由の 1 行と要約の 1 行を書いて まだ分からない。
+fn prose_check(dir: &std::path::Path, file: &std::path::Path, out: &mut dyn Write) -> u8 {
+    let marked = match prose::file_gate(dir, file) {
+        Ok(marked) => marked,
+        Err(why) => {
+            say!(out, "{UNKNOWN_HEAD}{why}");
+            say!(out, "folio check --prose: まだ分からない");
+            return code(Verdict::Unknown);
+        }
+    };
+    let mut holes = 0;
+    for m in &marked {
+        if let Some(reason) = m.reason {
+            holes += 1;
+            say!(out, "{}: 行 {}: {reason} {}", file.display(), m.line, m.head);
+        }
+    }
+    let (word, verdict) = if holes == 0 {
+        ("合格", Verdict::Pass)
+    } else {
+        ("不合格", Verdict::Fail)
+    };
+    say!(out, "folio check --prose: {word}（印を持つ文 {}・違反 {holes}）", marked.len());
+    code(verdict)
+}
+
 /// 床の口の 1 行の書き先。--emit-amends では標準出力を貼れる差分だけに、--emit-rulings では JSON の行だけにするので
 /// 違反と要約の行は標準エラーへ、ほかは標準出力へ。
 fn emit(flag: Flag, out: &mut dyn Write, err: &mut dyn Write, line: &str) {
@@ -356,6 +386,7 @@ fn dispatch(cli: Cli, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
             proposed: Some(rel),
             ..
         } => proposed_check(&dir, &rel, out),
+        Command::Check { dir, prose: Some(file), .. } => prose_check(&dir, &file, out),
         Command::Check { dir, polarity: true, .. } => polarity_list(&dir, out),
         Command::Check { dir, emit_amends: true, .. } => {
             floor_check(Flag::EmitAmends, dir, out, err)

@@ -14,9 +14,12 @@
 //!
 //! 出す物の dir の子 contract の .toml の file ごとに、4 で器の preflight --contract を撃ち直し、通らない file を欠けに数える（判断の記録 ADR-72 の決定 (2)）。
 //!
+//! 出す物の dir の子 contract の .md の file（bead の本文）ごとに、4 で散文の門を撃ち、落ちる file と まだ分からない file を欠けに数える（判断の記録 ADR-72 の決定 (2)）。
+//!
 //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
 
 pub mod contract;
+pub mod prose;
 
 use std::fs;
 use std::io::Read;
@@ -104,6 +107,7 @@ pub fn run(rest: &[&str]) -> u8 {
         &args.repo,
         &spec.target,
     ));
+    holes.extend(prose::holes(&out, &args.repo));
     if !holes.is_empty() && !stop.again {
         emit_err(&hold(&holes, &shown));
         return HOLD;

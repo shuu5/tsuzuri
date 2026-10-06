@@ -6,8 +6,11 @@
 //! 参照 id は形だけを取り、実在の解決は呼び手（便 23 の `note.rs` の参照の解決の母集団）が行う。
 //! 正規表現は使わない（字の走査だけ・便 23 と同じ作り）。
 
+use std::fs;
+use std::path::Path;
+
 use crate::refs;
-use crate::yaml::Node;
+use crate::yaml::{self, Node};
 
 /// 一覧を持つ rules 行の id（行が在る節は refs.rs の RULE_SECTIONS）。
 const ROW_ID: &str = "R-16";
@@ -120,6 +123,23 @@ fn strings(value: &Node, key: &str) -> Result<Vec<String>, String> {
         return Err(format!("value.{key} が空"));
     }
     Ok(out)
+}
+
+/// 置き場 `dir` の規則の表だけから門を組み、file `path` の字を走って印を持つ文を返す（`folio check --prose`）。
+/// 憲法・要件書・設計ノートは読まず、参照 id の実在は見ない。規則の表が読めない・行 R-16 の value が読めない・
+/// file が無いか file でないか UTF-8 でないは Err（理由の 1 行・呼び手は「まだ分からない」にする）。
+pub fn file_gate(dir: &Path, path: &Path) -> Result<Vec<Marked>, String> {
+    let text = fs::read_to_string(dir.join("rules.yaml"))
+        .map_err(|e| format!("rules.yaml: 読めない: {e}"))?;
+    let doc = yaml::parse(&text).map_err(|e| format!("rules.yaml: parse できない: {e}"))?;
+    let table = gate(&doc.root)
+        .map_err(|e| format!("rules.yaml: {ROW_ID} の value が読めない: {e}"))?;
+    if !path.is_file() {
+        return Err(format!("{}: file でない（無いか dir）", path.display()));
+    }
+    let body = fs::read_to_string(path)
+        .map_err(|e| format!("{}: 字（UTF-8）として読めない: {e}", path.display()))?;
+    Ok(scan(&body, &table))
 }
 
 // ── (a) 母集団と文の区切り ──

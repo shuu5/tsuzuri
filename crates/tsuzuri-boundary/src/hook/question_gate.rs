@@ -4,6 +4,8 @@
 //! 1. 標準入力を全部読む（読めなければ空の字）。
 //! 2. 使い方の誤りか repo が dir でなければ、下書き（問いか memo）が無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
 //! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39）。
+//!    続けて契約の書き（bd か bdw の create か update で、欄 acceptance が [[contract]] の行を持つか、契約の bead の本文だけの直し）を判じ、
+//!    本文の file の散文の門（folio の入口の check --prose）で止める（判断の記録 ADR-72 の決定 (2)）。台帳は本文だけの直しが在る時だけ 1 度読む。
 //! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、グラフを 1 度だけ組んで
 //!    判じて 0（問いの下書きが在れば問いの門の答えが先で、問いの門が通す時に memo の門の答えを書く）。
 //!    memo の下書きは --body-file の file を payload の cwd（無ければ --repo）から読んで本文を足し、本文が code の語を持つ時だけ
@@ -11,10 +13,11 @@
 //!
 //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use tsuzuri_core::contract_gate::{self, ContractWrite};
 use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::code::{self as layer, CodeGraph};
 use tsuzuri_core::graph::{Graph, Inputs, build};
@@ -22,7 +25,7 @@ use tsuzuri_core::memo_gate::{self, MemoDraft, MemoGate, MemoWhy, Seen};
 
 use crate::cli::code;
 use crate::out::emit_err;
-use crate::server::design::Design;
+use crate::server::design::{DESIGN_DIR, Design};
 use crate::server::ledger::{BD, Source};
 
 pub const USAGE: &str =
@@ -119,11 +122,48 @@ fn code_layer(args: &Args) -> Option<CodeGraph> {
     Some(layer::build(&files, defs, &[]))
 }
 
-/// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None・
+/// 散文の門を file `file` に撃つ（folio の入口を命令の名 tz と引数 check --dir <repo の設計文書の dir> --prose <file> で撃ち、
+/// 標準出力と標準エラーを buffer に受ける・子 process は撃たない）。戻りは rc と標準出力の字。
+pub fn shoot(repo: &Path, file: &OsStr) -> (u8, String) {
+    let design = repo.join(DESIGN_DIR);
+    let args: [&OsStr; 6] = [
+        OsStr::new("tz"),
+        OsStr::new("check"),
+        OsStr::new("--dir"),
+        design.as_os_str(),
+        OsStr::new("--prose"),
+        file,
+    ];
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let rc = ::folio::entry::run(args, &mut out, &mut err);
+    (rc, String::from_utf8_lossy(&out).into_owned())
+}
+
+/// 契約の書きの答えの字（契約の書きが無いか通すときは None・台帳は本文だけの直しが在る時だけ 1 度読む）。
+fn contract_answer(args: &Args, payload: &str) -> Option<String> {
+    let writes = contract_gate::writes(payload);
+    let body_only = writes
+        .iter()
+        .any(|w| matches!(w, ContractWrite::BodyOnly { .. }));
+    let ledger = if body_only {
+        Source::new(&args.repo, &args.bd)
+            .text_alone()
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let fire = |file: &str| shoot(&args.repo, OsStr::new(file));
+    contract_gate::output(&contract_gate::judge(&writes, fire, &ledger))
+}
+
+/// 答えの字（短い題の断りが先・次に契約の書きの断り・下書きが無ければ子 process を撃たずに None・通すときも None・
 /// 問いの下書きと memo の下書きが在れば台帳を 1 度だけ読んでグラフと memo の写しを組み、問いの門の答えを先に返す）。
 pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if let Some(why) = gate::short_gate(payload) {
         return Some(gate::short_output(why));
+    }
+    if let Some(text) = contract_answer(args, payload) {
+        return Some(text);
     }
     let questions = gate::drafts(payload);
     let memos = memo_gate::drafts(payload);

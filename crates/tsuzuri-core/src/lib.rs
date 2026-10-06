@@ -16,6 +16,7 @@ pub mod account;
 pub mod agent;
 pub mod case;
 pub mod consult;
+pub mod contract_gate;
 pub mod delivery;
 pub mod gate;
 pub mod graph;
