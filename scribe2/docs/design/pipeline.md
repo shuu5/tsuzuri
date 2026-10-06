@@ -2335,3 +2335,15 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候�
 - 触らない: 直した差だけの再審査（gate は直しの周も base..HEAD の全部の差を lens に渡す）・`pipe gate` の 1 段だけの口と land の追随の再 gate（輪を持たない）・`pipe regate` と dispatch の release（verify の赤の FAIL と揺れる歯の FAIL を測り直す口として残る）・契約の審査の FAIL（`Reviewed`）の扱い・列の hold の既定。
 - 限界: 直しの周の条件は今の lens の FAIL の全部である（今の lens は重さを出さない）。審査役が重さ Critical と Important だけを FAIL にすれば、この行の条件はそのまま決定 (7) の字になる。上限を越えた便は今の `Gated` の FAIL の終端（列の予約・席への知らせ・節を替えて次の便）に入る。
 - 歯: lib の `gate_fix_rounds_count_the_markers_and_see_a_pending_one`（`pipe/cli/run.rs`）と、e2e の接頭辞 `gfix_`（`tests/e2e/pipe/spawn.rs`）5 本、rules 行の `gate_fix_rounds_row_is_declared_right_after_end_gate_rounds`（`tests/e2e/rules/embedded.rs`）。
+
+## 74. 審査役の 3 つの雛形から「迷ったらこれを選ぶ」と道具の制限の文と上限の無い外の読みを消す — INCONCLUSIVE と keep は確かめられなかった物を書かせ、木の外の読みは危険 1 つにつき 1 度にする（tsuzuri の契約表の行 v-lens-ask・決め D2・設計だけの行）
+
+- なぜ: 審査役 3 つは迷ったら INCONCLUSIVE か keep を選べと書き、判断の迷いと確かめられない事実が同じ語になって席が手で stop と release で流してきた。木の外の読みには上限が無かった。道具の制限の文（shell・cargo・git・書きの道具は無い）は、器が lens に読みの道具だけを渡すので機械で既に止まっている。契約が渡されていないから判定できないの句も、器は契約の無い周に claude を起こさず rc 1 で断る（`headless/lens.rs` の module の doc）ので機械で止まっている。判定の 3 値・kind の語・範囲の外の検査を根拠にしない文は既に在り、替えない。
+- 形:
+  1. **`lens.txt`**: INCONCLUSIVE の 2 行を「名指せる危険を diff と木で確かめられない。evidence にその危険と、確かめられなかった場所を書く。」の 1 行にする。「契約は下に在る」の行の頭から「契約が渡されていないから判定できない」は理由にならないの句を消す。審査の前提の節の道具の制限の行を消し、diff の外の事実の行を「diff は 1 度読む。diff の外は、名指せる危険（呼び手・既存の歯・憲法の生成 file のどれか）1 つにつき 1 度だけ読み、読んだ場所を evidence か at に書く。」にする。
+  2. **`lens-contract.txt`**: INCONCLUSIVE の 2 行を「名指せる危険を材料と木で確かめられない。evidence にその危険と、確かめられなかった場所を書く。」の 1 行にする。審査の前提の節の道具の制限の文を消し、木の外の読みの 2 行を「契約と設計の節と要件は 1 度読む。木は、名指せる危険（…）1 つにつき 1 度だけ読み、読んだ場所を at に書く。」の 1 行にする。穴を 1 つ見つけても止めない行と材料の欠けの行と質の数の節は替えない。
+  3. **`lens-memo.txt`**: keep の行の末の「迷ったらこれを選ぶ」の文を「evidence に揃わない条件と、それが揃う引き金を 1 つ書く。」にする。道具の制限の文を消し、repo の現物の行を「repo は、名指せる危険（課題が今も在るか・既に直ったか）1 つにつき 1 度だけ読み、読んだ場所を evidence に書く。」にする。判定の語（promote・close・keep）と出力の JSON の形は替えない。
+  4. **外形の snapshot**: `e2e__headless__lens_prompt_external_form.snap`・`e2e__headless__lens_contract_prompt_external_form.snap`・`e2e__headless__lens_promise_prompt_external_form.snap` は、雛形の上の替えた行の字だけが替わる（器の fill が雛形の字をそのまま写す）。
+  5. **置き換え**: §64 の形 4 の (ii)（材料に無い code の事実は判定の前に木の現物で確かめる）と `lens.txt` の審査の前提の行の字は、この § の字で置き換える。§64 の本文は替えない。
+- 触らない: 判定の語の名（CANNOT-VERIFY への替え）・重さの 3 段・出力の 2 層・材料の欠けを器が断ること・memo の merge-into と keep の理由の型・質の数の重ねの整理。器の code（判定の読み・kind の語・verdict の 3 値）。
+- 歯（接頭辞 `vlask_`）: lib の `vlask_three_templates_drop_the_unsure_default_and_read_outside_once`（`headless/lens.rs`）が 3 つの雛形の字を数える。外形は e2e の `headless_lens_prompt_external_form`・`headless_lens_contract_prompt_external_form`・`headless_lens_promise_prompt_external_form`（`tests/e2e/headless.rs`）の snapshot。噛みは撃たない（設計だけの行）。

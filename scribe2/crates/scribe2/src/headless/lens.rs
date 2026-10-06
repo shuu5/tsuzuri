@@ -1137,4 +1137,21 @@ mod tests {
             assert!(!TEMPLATE.contains(&format!("`{name}`")) && !TEMPLATE.contains(&format!("{name}:<n>")), "gate の雛形は {name} を持たない");
         }
     }
+
+    /// 3 つの雛形は迷った時の既定の文と道具の制限の文を持たず、木の外の読みの上限の 1 文をちょうど 1 度持つ。INCONCLUSIVE と keep の定義は
+    /// 確かめられなかった場所・揃う引き金を書かせ、gate の雛形は契約が渡されていないからの句を持たない（行 v-lens-ask）。
+    #[test]
+    fn vlask_three_templates_drop_the_unsure_default_and_read_outside_once() {
+        for (name, template) in [("lens.txt", super::TEMPLATE), ("lens-contract.txt", super::CONTRACT_TEMPLATE), ("lens-memo.txt", super::MEMO_TEMPLATE)] {
+            assert_eq!(template.matches("迷ったら").count(), 0, "{name} は迷ったらの既定を持たない");
+            assert_eq!(template.matches("試さなくてよい").count(), 0, "{name} は道具の制限の文を持たない");
+            assert_eq!(template.matches("1 つにつき 1 度だけ読み").count(), 1, "{name} は外の読みの上限を 1 度持つ");
+        }
+        let section = |template: &'static str| template.split("## 判定の決め方\n").nth(1).and_then(|rest| rest.split("\n## ").next()).unwrap_or_default();
+        for (name, template) in [("lens.txt", super::TEMPLATE), ("lens-contract.txt", super::CONTRACT_TEMPLATE)] {
+            assert_eq!(section(template).matches("確かめられなかった場所を書く").count(), 1, "{name} の判定の決め方の節に 1 度");
+        }
+        assert_eq!(super::MEMO_TEMPLATE.matches("それが揃う引き金を 1 つ書く").count(), 1, "keep の定義に 1 度");
+        assert_eq!(super::TEMPLATE.matches("契約が渡されていないから").count(), 0, "gate の雛形は契約が渡されていないからの句を持たない");
+    }
 }
