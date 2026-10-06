@@ -1,6 +1,6 @@
 //! 歯の写し（insta の snapshot）の孤児の照らし（task insta-refs・行 v-ci・判断の記録 ADR-33 の決定 (5) と (14)）。
-//! CI の job check の役は、入れ子の段の歯が読んだ snapshot の file の path を、環境変数 INSTA_SNAPSHOT_REFERENCES_FILE が名指す
-//! file に 1 行ずつ残す（insta 1.48.0 の memoize_snapshot_file）。job insta-refs は役ごとの file を 1 つの dir に下ろし、この module が
+//! daily の段（行 t-daily-deny）では、check が入れ子の段の歯が読んだ snapshot の file の path を、環境変数 INSTA_SNAPSHOT_REFERENCES_FILE が
+//! 名指す file に 1 行ずつ残し（insta 1.48.0 の memoize_snapshot_file）、段 insta-refs が役ごとの file を 1 つの dir から読む。この module が
 //! 和を取って、追跡される scribe2/ の下の .snap のどれかが読まれていないか、追跡される .snap.new か .pending-snap が在れば落とす
 //! （器の CI の job insta の --unreferenced reject と --check の残り・写しの食い違いは入れ子の段の nextest が落とす）。
 //! crate:: の名を使わない（歯の file が #[path] で読む）。
@@ -15,7 +15,7 @@ pub const TREE: &str = "scribe2/";
 pub const SNAP: &str = ".snap";
 /// 受け入れていない写しの名の終わり（追跡されていれば落とす）。
 pub const PENDING: [&str; 2] = [".snap.new", ".pending-snap"];
-/// insta が読んだ写しの path を足す file を名指す環境変数（ci.yml の job check の字と照らす）。
+/// insta が読んだ写しの path を足す file を名指す環境変数（daily の段では check が file に残し、段 insta-refs が照らす・行 t-daily-deny）。
 pub const REFS_ENV: &str = "INSTA_SNAPSHOT_REFERENCES_FILE";
 
 /// path の字の節 . を除き、節 .. を 1 つ前の節と打ち消す（insta は snapshot の置き場の設定の字 ../ をそのまま書く）。

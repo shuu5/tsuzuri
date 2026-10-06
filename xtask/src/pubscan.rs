@@ -650,20 +650,5 @@ mod tests {
             MAIN.contains(r#"Some("pub-scan") if args.len() == 1 =>"#),
             "task pub-scan の腕"
         );
-        let ci = std::fs::read_to_string(root().join(".github/workflows/ci.yml")).expect("ci.yml");
-        let step: Vec<&str> = ci
-            .lines()
-            .skip_while(|l| !l.contains("actions/checkout@"))
-            .enumerate()
-            .take_while(|(i, l)| *i == 0 || !l.trim_start().starts_with("- "))
-            .map(|(_, l)| l)
-            .collect();
-        assert!(!step.is_empty(), "checkout の step");
-        assert!(
-            step.iter().any(|l| l
-                .split_once(':')
-                .is_some_and(|(k, v)| k.trim() == "fetch-depth" && v.trim() == "0")),
-            "{step:?}"
-        );
     }
 }

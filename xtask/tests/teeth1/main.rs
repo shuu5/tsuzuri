@@ -3,7 +3,6 @@
 #![cfg(test)]
 
 mod carry;
-mod cishard;
 mod common;
 mod deny;
 mod kfold;

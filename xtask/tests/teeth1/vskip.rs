@@ -1,5 +1,5 @@
 //! 行 v-skip の歯: 入れ子の段を省くかの判じ（xtask の src/nested/skip.rs・判断の記録 ADR-34）を一時の git の repo の fixture で撃ち、
-//! 入力の path の一覧と環境変数の名と行の字を固定し、nested の段の呼びと ci.yml の env を字で読む。
+//! 入力の path の一覧と環境変数の名と行の字を固定し、nested の段の呼びを字で読む。
 #![cfg(test)]
 
 #[path = "../../src/nested/skip.rs"]
@@ -342,29 +342,5 @@ fn vskip_run_wiring() {
     assert!(
         !main.contains(FORCE_ENV),
         "main.rs は {FORCE_ENV} を持たない"
-    );
-}
-
-#[test]
-fn vskip_ci_forces_all() {
-    let ci = read_root(".github/workflows/ci.yml");
-    let job: Vec<&str> = ci
-        .lines()
-        .skip_while(|l| *l != "  check:")
-        .skip(1)
-        .take_while(|l| l.starts_with("    ") || l.trim_start().starts_with('#'))
-        .collect();
-    let env: Vec<&str> = job
-        .iter()
-        .map(|l| l.trim())
-        .filter(|l| !l.starts_with('#'))
-        .filter_map(|l| l.strip_prefix(FORCE_ENV)?.strip_prefix(':'))
-        .map(str::trim)
-        .collect();
-    assert_eq!(env, ["\"1\""], "job check の env");
-    assert_eq!(ci.matches(FORCE_ENV).count(), 1, "ci.yml の中で 1 度だけ");
-    assert!(
-        !read_root(".vessel.toml").contains(FORCE_ENV),
-        ".vessel.toml は {FORCE_ENV} を持たない"
     );
 }

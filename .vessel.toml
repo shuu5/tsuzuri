@@ -2,9 +2,10 @@
 # 値は器の上限（rules 行 runner.allowed_commands）の内側。common-verify は便 a（workspace の骨格）で cargo run -q -p xtask -- check へ改めた（build・歯の全部・clippy を xtask の下で撃つ・xtask の歯 skeleton_ が 1 行であることを測る）。
 schema = 1
 allowed-commands = ["cargo", "git"]
-# push 先の remote（CI は .github/workflows/ci.yml・持ち主の裁定 user 2026-09-27T07:30Z）。器は着地を push し、終端で CI の判定を読む。
-# 2026-09-27T09:3xZ に一度外し（器が CI の判定を 20 ミリ秒ごとに読んだ・scribe2 の memo s2-07l.689）、器の直し（scribe2 8f6072d・30 秒ごと・上限 900 秒）の着地の後に戻した。
+# push 先の remote（持ち主の決め D3 で push ごとの GitHub の CI は止めた・daily の写しは origin の main を fetch する）。器は着地を push する。
+# 器の CI の見張り（器の任意 key ci-watch・器の行 v-ci-watch-off）を切る。終端は push とこの host の緑の close だけで、GitHub の検査を読まない。
 remote = "origin"
+ci-watch = false
 common-verify = ["cargo run -q -p xtask -- check"]
 requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"

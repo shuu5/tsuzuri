@@ -1,11 +1,9 @@
 //! 依存の監査の歯（行 k-deny・条 P-26.5）: 根の deny.toml の節と鍵が閉じていること、licenses の allow が規則の行 R-2 の
-//! 値の許可一覧の写しであること、ci.yml の job deny が全面の 1 行を撃つこと、この file の歯の名が filter の語と重ならないこと。
+//! 値の許可一覧の写しであること、daily の段 deny（行 t-daily-deny の定数 AFTER・歯 vdaily_consts_fixed が字を固定）が全面の 1 行を撃つこと、この file の歯の名が filter の語と重ならないこと。
 //! 外の依存を使わず、repo の根からの相対の path で file の字を読む。
 #![cfg(test)]
 
 use std::path::PathBuf;
-
-const RUN_LINE: &str = "cargo deny check -D unmatched-skip -D advisory-not-detected";
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -178,46 +176,6 @@ fn kdeny_config_closed() {
             assert!(item.contains(want), "ignore の reason に {want} が無い: {item}");
         }
     }
-}
-
-/// job deny の行（見出し `  deny:` の次から、4 つの空白で始まる行が続く間）。
-fn job_deny(ci: &str) -> Vec<&str> {
-    ci.lines()
-        .skip_while(|l| *l != "  deny:")
-        .skip(1)
-        .take_while(|l| l.starts_with("    "))
-        .collect()
-}
-
-#[test]
-fn kdeny_ci_job_runs_full_check() {
-    let ci = read(".github/workflows/ci.yml");
-    let job = job_deny(&ci);
-    assert!(!job.is_empty(), "ci.yml に job deny が在る");
-    let lines: Vec<&str> = job.iter().map(|l| l.trim()).collect();
-
-    let pinned = lines.iter().any(|l| {
-        l.strip_prefix("- uses: actions/checkout@")
-            .is_some_and(|r| r.split_whitespace().next().is_some_and(is_sha))
-    });
-    assert!(pinned, "actions/checkout は SHA で pin する: {lines:?}");
-    assert!(
-        lines.contains(&"tool: cargo-deny@0.20.2"),
-        "install-action の tool: {lines:?}"
-    );
-
-    let runs: Vec<&&str> = lines.iter().filter(|l| l.starts_with("- run:")).collect();
-    assert_eq!(runs, [&format!("- run: {RUN_LINE}").as_str()], "run の行は 1 つ");
-
-    let with_words = ci.lines().filter(|l| l.contains("cargo deny")).count();
-    assert_eq!(
-        with_words, 2,
-        "ci.yml の中で字 cargo deny を持つ行は job deny と器の job scribe2-deny の 2 つ（行 v-ci）"
-    );
-}
-
-fn is_sha(s: &str) -> bool {
-    s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// 起草の時の main a2a39947 の契約表の verify の最後の字（この行の語を除く）。
@@ -558,7 +516,7 @@ fn kdeny_own_names_clean() {
             &rest[..rest.find('(').expect("fn の名の後に (")]
         })
         .collect();
-    assert_eq!(names.len(), 4, "{names:?}");
+    assert_eq!(names.len(), 3, "{names:?}");
     for name in names {
         let rest = name
             .strip_prefix("kdeny_")

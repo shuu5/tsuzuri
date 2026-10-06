@@ -32,7 +32,7 @@ const GROUPS: &[(&str, usize)] = &[
     ("folio2/crates/folio/tests/tz3", 17),
     ("folio2/crates/folio/tests/tz4", 16),
     ("folio2/crates/folio/tests/tz5", 3),
-    ("xtask/tests/teeth1", 16),
+    ("xtask/tests/teeth1", 15),
     // kfold-groups-end
 ];
 
