@@ -1,0 +1,57 @@
+# 判断の記録 ADR-76 — 引数の無い長い形の seat launch の既定の target を、鍵（役割と anchor）の登録 row から先に引く（ADR-1063 の決定の (2) の target の字の部分の読み替え）
+# 器の判断の記録 ADR-1063（器の ADR-0063 の写し）の決定の (2) のうち、target を repo の dir 名から解く既定の字だけを読み替える。ADR-1063 の本文は替えない（取り込みの決め・ADR-1063.yaml:119）。
+# 起草は係 w356a（2026-10-06）。材料は行 v-launch-row-target（ノート surface-v4b の節 13・起草は係 w352a）と係 w350a の計画（drafts/w350a/w/plan.md）。
+id: ADR-76
+title: 引数の無い長い形の seat launch は、既定の target を短い形と同じく鍵（役割と anchor）の登録 row の target から先に引き、row が無い時だけ repo の dir 名と役割名にする（器の ADR-1063 の決定の (2) の target の字の部分の読み替え・行（v-launch-row-target））
+status: proposed
+date: 2026-10-06
+context: |
+  持ち主の席を起こし直す口は今 2 つに割れている。短い形（scribe2 seat <label>）は、明示の --target が無い時に event log を読み、同じ鍵（役割と anchor）の登録 row の target へ起こす（scribe2/crates/scribe2/src/seat/cli.rs:677-690 の fn short_defaults・row が無い時は呼び手の tmux の session 名と役割名）。引数の無い長い形（scribe2 seat launch）は口座を自分で解くが、target を repo の dir 名と役割名で作り、登録 row を読まない（cli.rs:576 と fn default_target の cli.rs:597-600）。登録の target の session 名が repo の dir 名と違う席では、引数の無い形は登録と違う窓へ起こし、登録 row の target を書き替える（ノート（surface-v4b） の節 13）。
+  器の判断の記録 ADR-1063 の決定の (2) は、ADR-1026 の構文の文の --state-dir と --target の必須を、引数の無い形に限り「置き場を cwd の repo の local 設定から、target を repo の dir 名から解く既定に読み替える」と書く（design-intent/adr/ADR-1063.yaml:41）。行（v-launch-row-target）を入れると、登録 row が在って session 名が repo の dir 名と違う時に、引数の無い形の働きがこの字と食い違う。取り込みの決めで、器の判断を替える時は ADR-1063 の本文を直さず後継の記録を立てる（ADR-1063.yaml:119）。
+  ADR-1063 は tsuzuri の置き場でも器でも status が proposed である（ADR-1063.yaml:4・器の表紙の状態 proposed・ADR-1063.yaml:136）。取り込みの記録 ADR-39 は器の proposed の 22 本を proposed のまま置いた（ADR-39.yaml:24）。引数の無い形は既に code に在り（cli.rs:543-593）、器の設計の文書（scribe2/docs/design/host-init.md の 5 節）もその字で書く。
+  短い形が登録 row を先に読む決まりを持つ判断の記録は無い（席の起動の判断の記録の字「短い形」の当たりは起動の呼び手の列挙か相談の窓の起こし方で、row の読みの決まりを持たない）。決まりの在りかは器の設計の文書（host-init.md の 5 節の短い形との切り分けの段）と code（cli.rs:677-690）である。
+  実例。2026-10-06 06:32〜06:41Z（15:32〜15:41 JST）に、tsuzuri の席は登録の session 名 t3 と違う session 名で約 9 分走った。席の置き場の打刻は 9 行（SessionStart 1・UserPromptSubmit 6・Stop 2）、器の注入の記録でその名の席の名乗りは 1 行・指示文は 0 行で、書きは全部 理由（reason=unregistered） で断られた（drafts/w350a/w/plan.md の 1.4 節）。その名の登録 row は event log に 0 行で、この起こしは引数の無い形ではない（同じ節）。ずれを知らせる行は行（v-seat-drift）（ノート（surface-v4b） の節 10）が足す。
+decision: |
+  (1) 引数の無い長い形の seat launch（--state-dir・--role・--target のどれかが無く、長い形の既定へ渡る形・cli.rs:545-546）は、明示の --target が無い時、置き場と anchor を解いた後に同じ鍵（役割と anchor）の登録 row を引き、row が在ればその target を使い、row が無い時だけ repo の dir 名と役割名（fn default_target）を使う。row の読みは短い形と同じ 1 本の読みに寄せ、短い形の判定と字は替えない。
+  (2) 明示の --target は既定にも登録 row にも勝ち、その時は event log を読まない。dir 名から target を作れない時（repo の外・dir 名が : を含む等）は、row が在っても今の 断り（defaults-unresolved・missing=--target）のままにする。長い形の 3 つが全部在る時の判定と断りの字、置き場と役割の既定、口座の解き方は替えない。
+  (3) event log を読めない時は、tmux を撃たず row も書かずに、今の断りの語（log-unreadable）で断る（短い形と同じ fail-closed・「row が無い」と混ぜない）。断りの行は default_target の字を載せる。
+  (4) 読み替え。ADR-1063 の決定の (2) の「target を repo の dir 名から解く既定」は、この記録の後は「target を同じ鍵（役割と anchor）の登録 row の target から先に引き、row が無い時だけ repo の dir 名と役割名から解く既定」と読む。同じ文の置き場の字と、長い形は不変の字と、ADR-1063 のほかの決定（init の段の列・9 段目は同じ鍵の row が在れば子を撃たない・doctor の名指し）は替えない。ADR-1063 の本文は替えない。init の 9 段目の子は row の無い時にだけ走るので、init が撃つ形の target は今と同じ dir 名になる。
+  (5) 範囲。code と歯と器の設計の文書（host-init.md の 5 節の既定の字）の直しは器の行（v-launch-row-target）（ノート（surface-v4b） の節 13・便で入れる）がする。行の便はこの記録を置いた後に流す（読み替える器の記録 ADR-1063 が proposed のままなので、この記録も proposed で持つ）。新しい口・新しい旗・無効化の旗は足さない（条 N-3.1）。session 名のずれを知らせる 1 行は行（v-seat-drift） が持ち、この記録は替えない。
+options:
+  - id: a
+    name: 甲 — 引数の無い形も登録 row の target を先に引き、読み替えをこの記録に持たせる
+    text: 決定 (1) から (5)。
+    verdict: adopted
+    reason: 持ち主の起こし直しの口が引数の無い seat launch の 1 語に寄り、登録の窓へ起こすので登録 row の target を書き替えない（ADR-1063 の原則・入口の 1 語・残りは器が既に在る置き場から導く）。新しい口と旗を足さず、在る読み（短い形の row の読み）を 1 本に寄せる。row の無い時の働き（init が子を撃つ唯一の時）は替えない。失う物は 3 つ。持ち主が登録と違う窓へ起こしたい時は --target を明示する手が要る。event log を読めない置き場では、今は起きる引数の無い形が断りの語（log-unreadable）で断るようになる。ADR-1063 の字と働きの間に読み替えが 1 つ挟まり、読み手はこの記録も読む要る。
+  - id: b
+    name: 乙 — 行（v-launch-row-target）を入れるが記録を立てず、ADR-1063 の原則の内と読む
+    text: code と歯と設計の文書は甲と同じに直し、判断の記録は立てない（行の起草の係の照らしの読み・ノート（surface-v4b） の節 13 の末）。
+    verdict: rejected
+    reason: 働きは甲と同じで、承認の問い 1 つの手間が省ける。しかし ADR-1063 の決定の (2) の字（target を repo の dir 名から解く）が、登録 row が在る時の働きと食い違ったまま残る。取り込みの決めは器の判断を替える時に後継の記録を立てると書く（ADR-1063.yaml:119）ので、記録を立てない形はその決めを破る。読み手が ADR-1063 の字から今の働きを引けない。
+  - id: c
+    name: 丙 — 引数の無い形は dir 名の既定のまま残し、起こし直しは短い形か --target の明示に任せる
+    text: 行（v-launch-row-target）を流さず、code・歯・記録を替えない。
+    verdict: rejected
+    reason: ADR-1063 の字と働きは一致したままで、event log を読めない置き場でも引数の無い形は起きる。しかし起こし直しの口は 2 つに割れたままで、短い形は口座の label を名指す要り、引数の無い形は登録の session 名が dir 名と違う席を別の窓へ起こし、登録 row の target を書き替える。席の名のずれ（実例は約 9 分・指示文 0 行）を持ち主の手で戻す道が 1 語にならない。
+  - id: d
+    name: 丁 — 登録 row の target と dir 名の既定が違う時、引数の無い形は起こさずに断る
+    text: 引数の無い形は row を読み、row の target が dir 名の既定と違えば新しい断りの語で返し、--target の明示を求める。
+    verdict: rejected
+    reason: 登録 row の target を黙って書き替える事は防げる。しかし起こし直しは --target の明示か短い形が要り、口は 1 語にならない。新しい断りの語が 1 つ増え、持ち主は断りの後にもう 1 手を打つ。
+basis: [ADR-1063, ADR-1026, ADR-39, FR1059, N-3.1]
+retreat:
+  kind: measure
+  condition: |
+    数えるのは tsuzuri の設計の席で、memo（t3-hub.92.1）か後継の memo の notes に記帳する。問う相手は持ち主。窓の始まりは行（v-launch-row-target） の着地の commit の時刻で、窓は 30 日。
+    (1) 引数の無い seat launch が登録 row の target へ起こしたが、持ち主か席がその窓を誤りと見て --target を明示して起こし直した例が、記帳か持ち主の指摘で 2 件出たら、row を先に引く読み替え（決定 (1)）を戻すかを問う。
+    (2) 引数の無い seat launch が断りの語（log-unreadable）で断り、持ち主が --target の明示か短い形で起こした例が 1 件でも出たら、読めない時の扱い（決定 (3)）を問い直す。
+    (3) 器の ADR-1063 が受け入れられるか、器が引数の無い形の target の既定を別の字に替える記録を立てたら、この読み替えを器の記録へ寄せるか残すかを問う。
+plain: |
+  席（設計の AI）を起こし直す時、持ち主は今、口座の名を添える短い形か、引数の無い形のどちらかを打ちます。短い形は「前にその席を立てた窓」へ起こしますが、引数の無い形は「repo の dir 名の窓」へ起こすので、窓の名が dir 名と違う席では別の窓に立ち、登録も書き替えます。
+  この記録で、引数の無い形も先に登録を見て、前の窓へ起こすようにします。登録が無い時だけ今までどおり dir 名の窓です。これで起こし直しは引数の無い 1 語で済みます。古い記録（ADR-1063）の「dir 名から解く」の字は本文を替えず、この記録が読み替えを持ちます。
+  失うのは、登録と違う窓へ起こしたい時に窓の名を書く手間と、器の記録の file が読めない時に引数の無い形が起きずに断るようになる事です。
+consequences:
+  - 器の行（v-launch-row-target）（ノート（surface-v4b） の節 13・設計だけの行）が、器の席の口の file（scribe2/crates/scribe2/src/seat/cli.rs）と e2e の歯（scribe2/crates/scribe2-boundary/tests/e2e/seat/launch.rs と子 module の rowtgt.rs）と器の設計の文書（scribe2/docs/design/host-init.md）の 5 節を便で直す。着地済みの歯（seat_launch_default_explicit_flags_win_over_the_defaults）は 2 つの起こしの順を入れ替える。
+  - 席の設計の commit はこの記録 1 file にする。行の便はこの記録を置いた後に流す。
+  - 要件書の FR1059 の字は替えない（FR1059 は target の既定の字を持たない）。
+note: 起草 w356a（2026-10-06）。番号の照らしは係の notes に在る。行番号は main d2bbeab0 の字。読み替える ADR-1063 が proposed なので、この記録も proposed で置き、持ち主の承認の問いは立てない（席の決め・memo t3-hub.92.1 の notes）。
