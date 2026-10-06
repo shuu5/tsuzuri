@@ -44,6 +44,9 @@ pub const MODELS: [&str; 3] = ["fable", "opus", "sonnet"];
 /// 一覧の口が読めない時の理由。
 pub const UNREAD: &str = "相談の一覧が読めない";
 
+/// 3 つの段の見出しの語の鍵（段の順は窓・所見・頼み）。
+pub const PART_KEYS: [&str; 3] = ["cs_windows", "cs_findings", "cs_requests"];
+
 /// 3 つの段の 0 件の 1 行（窓・所見・頼み）。
 pub const NONE_LINES: [&str; 3] = [
     "開いている相談の窓は無い",
@@ -194,10 +197,12 @@ mod dom {
     use tsuzuri_contract::consult::{Form, Word};
 
     use super::{
-        MODELS, PATH, REQUEST_PATH, Row, board, findings, request, requests, sent_line, windows,
+        MODELS, PART_KEYS, PATH, REQUEST_PATH, Row, board, findings, request, requests, sent_line,
+        windows,
     };
     use crate::askwin::AskFocus;
     use crate::project::{Body, body_view, unmeasured};
+    use crate::vocab::label;
 
     fn rows_view(body: Body<Vec<Row>>) -> AnyView {
         match body {
@@ -265,9 +270,9 @@ mod dom {
         let lists = move || match doc.with(board) {
             Err(reason) => unmeasured(reason),
             Ok(b) => view! {
-                <h4>"開いている相談の窓"</h4>{rows_view(windows(&b.windows))}
-                <h4>"処分の無い所見"</h4>{rows_view(findings(&b.findings))}
-                <h4>"受けの無い頼み"</h4>{rows_view(requests(&b.requests, now.get()))}
+                <h4 data-v=PART_KEYS[0]>{label(PART_KEYS[0])}</h4>{rows_view(windows(&b.windows))}
+                <h4 data-v=PART_KEYS[1]>{label(PART_KEYS[1])}</h4>{rows_view(findings(&b.findings))}
+                <h4 data-v=PART_KEYS[2]>{label(PART_KEYS[2])}</h4>{rows_view(requests(&b.requests, now.get()))}
             }
             .into_any(),
         };

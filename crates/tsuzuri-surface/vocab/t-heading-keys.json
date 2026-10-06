@@ -1,0 +1,20 @@
+{
+ "english": {},
+ "rephrase": {
+  "cs_windows": {
+   "label": "開いている相談の窓",
+   "plain": "退いていない相談の窓の一覧\n・ 行は窓の id と題と状態",
+   "internal": "GET /api/consult の電文 ConsultBoard の windows"
+  },
+  "cs_findings": {
+   "label": "処分の無い所見",
+   "plain": "相談の窓が出し、席がまだ処分していない所見\n・ 処分は席の手番",
+   "internal": "電文 ConsultBoard の findings"
+  },
+  "cs_requests": {
+   "label": "受けの無い頼み",
+   "plain": "送ったが席がまだ受けていない相談の頼み\n・ 1800 秒を越えると 席に届いていない を添える",
+   "internal": "電文 ConsultBoard の requests（DELIVER_SPAN）"
+  }
+ }
+}

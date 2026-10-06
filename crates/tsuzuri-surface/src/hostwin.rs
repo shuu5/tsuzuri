@@ -318,7 +318,8 @@ mod dom {
         let none = p
             .none
             .map(|n| view! { <div class="hw-l"><span class="hw-v muted">{n}</span></div> });
-        view! { <div class="hw-p"><h4>{label(p.key)}</h4>{lines}{none}</div> }.into_any()
+        view! { <div class="hw-p"><h4 data-v=p.key>{label(p.key)}</h4>{lines}{none}</div> }
+            .into_any()
     }
 
     /// 窓と block の本文（host の口を読む）。
