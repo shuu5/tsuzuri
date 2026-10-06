@@ -6,6 +6,9 @@ allowed-commands = ["cargo", "git"]
 # 器の CI の見張り（器の任意 key ci-watch・器の行 v-ci-watch-off）を切る。終端は push とこの host の緑の close だけで、GitHub の検査を読まない。
 remote = "origin"
 ci-watch = false
+# 着地の後に anchor で撃つ命令（器の任意 key after-land・器の行 v-after-land）。hook の tz（plugin/bin/tzw が解く target/debug/tz）を着地のたびに main の先端に組み直す。
+# board の serve の tz は host の置き場なので書かない（席の手順で入れ替える・条 N-7.1）。
+after-land = ["cargo build -q -p tsuzuri-boundary --bin tz"]
 common-verify = ["cargo run -q -p xtask -- check"]
 requirements = "design-intent/srs.yaml"
 entrance-flip = "unmeasured"
