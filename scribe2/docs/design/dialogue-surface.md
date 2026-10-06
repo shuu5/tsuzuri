@@ -120,10 +120,11 @@ user の裁定を受けた turn の中で対話面の席の口（seat ruling add
      - IO を持たない。turn の終わりの判定（行 lc-e1b）と局面の出力（W4）はこの関数だけを呼ぶ。
   3. **`utterance sort --repo R --state-dir S --ts TS --as request --memo ID [--bd B]`**: 名指した memo が開いた memo のとき、`UtteranceSorted`（request・bead）を 1 件書く。台帳は書かない。同じ ts と同じ memo の request が在れば、何も書かず rc 0 で `already` を出す。1 つの発話を複数の memo へ仕分けられる。
   4. **`utterance sort --state-dir S --ts TS --as chat`**: 台帳を読まずに `UtteranceSorted`（chat）を 1 件書く。会話の札がすでに在れば `already`。
-  5. **断り（閉じた 4 語・const slice）**: 当たった周は何も書かずに rc 1・stdout 0 byte で、stderr に `utterance: refused reason=<語> ts=<ts>` の 1 行を出す。調べる順は no-utterance → linked → ledger-unreadable → not-memo（event log の判定を台帳の読みより先に行い、台帳を読むのは request の周だけ）。
+  5. **断り（閉じた 5 語・const slice）**: 当たった周は何も書かずに rc 1・stdout 0 byte で、stderr に `utterance: refused reason=<語> ts=<ts>` の 1 行を出す。調べる順は no-utterance → linked → ledger-unreadable → not-memo → no-gist（event log の判定を台帳の読みより先に行い、台帳を読むのは request の周だけ）。
      - `no-utterance`: その ts の発話 event が無い。
      - `linked`: 要望か答えを持つ発話へ会話を付けようとした。
      - `not-memo`: 名指しが開いた memo でない（無い・閉じた・label intake:memo が無い）。
+     - `no-gist`: 名指した開いた memo の notes が発話の ts の字を含まない（要望の要旨と時刻を先に memo の notes へ書く・tsuzuri の memo t3-hub.92.5・持ち主の決め D5）。
      - `ledger-unreadable`: 台帳を読めない。
   6. **`utterance show --state-dir S --ts TS`**:
      - 1 件の逐語だけを stdout に返す（末尾に改行 1 つ）。

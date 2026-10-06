@@ -668,9 +668,9 @@ fn utterance(args: &[&str]) -> Output {
     Command::new(bin()).arg("utterance").args(args).output().expect("binary を起動できる")
 }
 
-/// 開いた memo（label intake:memo）の show。
+/// 開いた memo（label intake:memo）の show。notes は TS_A・TS_B・TS_C の字を含む（要望の断り no-gist に当たらない）。
 fn open_memo() -> String {
-    show_json("open", &["intake:memo"], "2026-09-30T06:00:00Z", None, "")
+    show_json("open", &["intake:memo"], "2026-09-30T06:00:00Z", None, &format!("[席] 要旨 {TS_A} {TS_B} {TS_C}"))
 }
 
 /// 断りの 1 行（設計 §10 約束 5）。
@@ -800,6 +800,33 @@ fn utterance_sort_refuses_the_seven_forms_without_writing() {
         let out = call(&fake);
         assert_refused_sort(&fake, &out, &refused_sort(reason, ts), &before, label);
     }
+}
+
+/// (c3) 開いた memo の notes が発話の ts の字を含まない要望（notes が空・同じ秒の別の発話の ts だけ・ts を秒までに切った字だけ）は
+/// no-gist の 1 行で断られて何も書かず、閉じた memo は notes が ts を含まなくても not-memo、notes の 2 行目の途中に ts を含む開いた memo は通る。
+/// 断りの語の列も見る。
+#[test]
+fn utterance_sort_refuses_a_request_whose_memo_notes_lack_the_ts() {
+    let words: Vec<&str> = vessel::utterance::REFUSALS.iter().map(|refusal| refusal.as_str()).collect();
+    assert_eq!(words, ["no-utterance", "linked", "ledger-unreadable", "not-memo", "no-gist"], "断りの閉じた 5 語");
+    let fake = Fake::new();
+    fake.say(TS_A, Channel::Chat, WORDS);
+    fake.say(TS_B, Channel::Chat, WORDS);
+    let memo = |status: &str, notes: &str| show_json(status, &["intake:memo"], "2026-09-30T06:00:00Z", None, notes);
+    fake.show("s2-n0", &memo("open", ""));
+    fake.show("s2-n1", &memo("open", TS_B));
+    fake.show("s2-n2", &memo("open", "2026-09-30T07:05:09Z"));
+    fake.show("s2-n3", &memo("closed", ""));
+    fake.show("s2-ok", &memo("open", &format!("[席] 記帳\n要旨 {TS_A} から")));
+    for (label, name, reason) in [("notes が空", "s2-n0", "no-gist"), ("別の発話の ts だけ", "s2-n1", "no-gist"), ("秒までに切った ts だけ", "s2-n2", "no-gist"), ("閉じた memo", "s2-n3", "not-memo")] {
+        let before = fake.log();
+        let out = fake.request(TS_A, name);
+        assert_refused_sort(&fake, &out, &refused_sort(reason, TS_A), &before, label);
+    }
+    let before = fake.log();
+    assert_ok_line(&fake.request(TS_A, "s2-ok"), &format!("utterance: sorted ts={TS_A} as=request memo=s2-ok\n"), "notes の 2 行目の途中に ts");
+    assert_eq!(fake.log().lines().count(), before.lines().count() + 1, "log は 1 行だけ増える");
+    assert_eq!(fake.sorted(), [("s2-ok".to_owned(), sorted_case(TS_A, Sorting::Request))], "仕分けの 1 件");
 }
 
 /// (c2) 断りの順: 無い ts ∧ 読めない JSON の request と、無い ts ∧ 開いた memo でない名指しの request が、どちらも no-utterance だけを出し、

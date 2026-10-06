@@ -49,7 +49,7 @@ pub fn sorted_of(ts: &str, events: &[Event]) -> Standing {
     Standing::Linked { memos: memos.into_iter().collect(), rulings: rulings.into_iter().collect() }
 }
 
-/// 断る理由（**閉じた 4 語**・判定の順・断る周は何も書かない）。
+/// 断る理由（**閉じた 5 語**・判定の順・断る周は何も書かない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     /// その ts の発話 event が無い。
@@ -60,10 +60,12 @@ pub enum Refusal {
     LedgerUnreadable,
     /// 名指しが開いた memo でない（無い・閉じた・label `intake:memo` が無い）。
     NotMemo,
+    /// 名指した memo の notes が発話の ts の字を含まない。
+    NoGist,
 }
 
 /// [`Refusal`] の全 variant（判定の順・`enum-slices` が集合完全性を測る）。
-pub const REFUSALS: &[Refusal] = &[Refusal::NoUtterance, Refusal::Linked, Refusal::LedgerUnreadable, Refusal::NotMemo];
+pub const REFUSALS: &[Refusal] = &[Refusal::NoUtterance, Refusal::Linked, Refusal::LedgerUnreadable, Refusal::NotMemo, Refusal::NoGist];
 
 impl Refusal {
     /// 行に出す理由の 1 語。
@@ -73,6 +75,7 @@ impl Refusal {
             Self::Linked => "linked",
             Self::LedgerUnreadable => "ledger-unreadable",
             Self::NotMemo => "not-memo",
+            Self::NoGist => "no-gist",
         }
     }
 }
@@ -80,7 +83,7 @@ impl Refusal {
 /// 仕分けの口が通らなかった形（rc と行は呼び手が決める）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Failure {
-    /// 閉じた 4 語の断り（何も書いていない）。
+    /// 閉じた 5 語の断り（何も書いていない）。
     Refused(Refusal),
     /// event log を読めない（何も書いていない・理由の本文）。
     LogUnreadable(Vec<String>),
@@ -108,7 +111,7 @@ pub enum Sort<'a> {
 /// 開いた bead の status。
 const OPEN: &str = "open";
 
-/// 発話 `ts` を仕分ける。断りは no-utterance → linked → ledger-unreadable → not-memo の順で、台帳を読むのは要望の周だけ。
+/// 発話 `ts` を仕分ける。断りは no-utterance → linked → ledger-unreadable → not-memo → no-gist の順で、台帳を読むのは要望の周だけ。
 /// 同じ発話と同じ memo の要望・会話の札が在る発話への会話は何も書かず [`Done::Already`]（要望の周は台帳より先に見る）。
 pub fn sort(state_dir: &Path, ts: &str, how: &Sort<'_>) -> Result<Done, Failure> {
     let events = read(state_dir)?;
@@ -124,8 +127,11 @@ pub fn sort(state_dir: &Path, ts: &str, how: &Sort<'_>) -> Result<Done, Failure>
     }
     if let Sort::Request { repo, memo, bd } = how {
         let bead = ledger::show(bd, repo, memo).map_err(|_| Failure::Refused(Refusal::LedgerUnreadable))?;
-        if !bead.is_some_and(|found| found.status == OPEN && found.labels.iter().any(|label| label == MEMO_LABEL)) {
+        let Some(found) = bead.filter(|found| found.status == OPEN && found.labels.iter().any(|label| label == MEMO_LABEL)) else {
             return Err(Failure::Refused(Refusal::NotMemo));
+        };
+        if !found.notes.contains(ts) {
+            return Err(Failure::Refused(Refusal::NoGist));
         }
     }
     let sorting = if memo.is_some() { Sorting::Request } else { Sorting::Chat };
