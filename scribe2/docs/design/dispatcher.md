@@ -658,6 +658,15 @@ dispatcher は「起こす」側で行為を止める判定を持たない（起
 - base で RED の理由: (a)(b)(d) は base の掃除が起草の置き場を見ないので古い dir が残る（機能不在）。(c) は base が行を出さない（sweep: の行が空）。(e) は base に行も kind も無い（`RuleKind::parse` が None）。直す既存の歯は base の本数で落ちる。
 - 順: ADR-0096 と本 § と seat-roles.md §31 と行 ah / y を同じ docs PR で land → 行 ah の便 → 行 y の便（行 y の雛形の pointer が本行の rules 行を名指すので、台帳で行 y の bead を行 ah の bead の blocks に置く）。束 E の核の後に置く（memo の昇格条件・priority は束 E の行より下）。
 - 着地の後: 掃除の振る舞いが変わるので PATH の binary を `swap-binary.sh` で入れ替える（走行中の運転手が在れば断られる）。入れ替えの前の運転手は起草の置き場を掃かない。消費側の席への知らせは行 y の着地の後に 1 回（置き場の path は指示文が渡す）。
+- 続き・形 8（置き場の写しの下の印の dir・tsuzuri の判断の記録 ADR-70・行 v-drafts-cache-sweep・memo `t3-hub.77.36`・2026-10-06）:
+  - 出所: 起草の係の dir（`<置き場>/w<n>/`）は `.git` を持たないので、形 2 は中を見ず、係の組みの置き場（`w<n>/target`）と終わった係の target を移した `w<n>/w/retired/` の下が残り続ける。古い試しの木の中の組みの置き場は名が `target-steps`・`target-p2` などで、形 1 の名の列に当たらず残る。host の disk が 2 度満ちた（量は台帳の memo にだけ在る）。
+  - 印の dir: 直下に `CACHEDIR.TAG`（symlink でない file）を持ち、その頭の 43 byte が Cache Directory Tagging の署名 `Signature: 8a477f597d28d172789f06886806bc55`（cargo の target が直下に置く印）と一致する dir。印は組み立て中かの判じに使わず、消してよい物かの名の代わりに使う（組み立て中かは形 3 の書きの線で判じる）。
+  - 形 8: 書きの線（形 3 と同じ rules 行）が読める周に、ADR-0096 の起草の木の名の列の dir に加えて、起草の置き場の直下の子（`.git` を持つ起草の木と、`.git` を持たない写しの両方）の下の印の dir のうち、追跡される file を持たず、その dir 自身と下の全 entry の mtime の最新が線より前の dir を消す。追跡の判じは、木の中は形 1 と同じ `git ls-files` の 1 回で、写しは追跡を持たない。
+  - 消さない物: 写しそのもの（印を持っていても作業場所は消さない）・`.git`・追跡される file を持つ印の dir・印の無い dir・署名の違う印か短い印の dir・symlink の先。印を探す歩きは、印の dir の下と、`.git` を持つ入れ子の dir の下へ降りない（写しの中はそこで歩きを止め、木の中は形 1 の名の列の掃きだけを今のまま続ける）。symlink は dir として辿らない。線以後の entry を持つ印の dir は残す。写しの中で読めない dir と、測れないか消せない印の dir は残し、写しか木の名 `<潰した target>/<子の dir 名>` を失敗の列に足す（木の中の印の dir の失敗は、木の量の線の候補を外さない）。
+  - 記録: 印で消した dir の数は `removed` に足し、印で消した dir を持つ木は `drafts=` の木の数に数える。印で 1 つ以上消した周は stderr の行の末に ` cache=<印で消した dir の数> cache_mb=<消す前に測った大きさ（lstat の st_blocks × 512 の和）の合計を MiB に切り上げた数>` を足す（§39 の `over` と同じ単位・木の中の名の列の dir は数えない）。行を読めない周の語 `no-rule` は、木か写しが 1 つ以上在る周に言う。ほかの周の字と stdout・event・rc は変えない。
+  - 変えないもの: 起草の木の名の列の掃き（名の列・追跡の判じ・書きの線）・量の線の候補（起草の木の名の列の dir だけ・印の dir は残しても量に数えない・ADR-0101）・lock・撃つ周・便の木の掃き（便の木の中の印の dir は見ない）。
+  - 置き換える字: ADR-0096 の「`.git` を持たない写しは消さずに数える」は「写しそのものは消さずに数え、その下の印の dir は形 8 で消す」と読み、形 2 と限界の行の元の字は歴史として替えない。
+  - 歯（`tests/e2e/pipe/stop/vcache.rs`・接頭辞 `vcache_`）: 写しの古い印の dir が直下と深い所で消え行が `cache=2 cache_mb=2` を持つ・新しい書きを持つ印の dir は残る・印の無い dir と印の dir の親と symlink と写しそのものは残る・署名の違う印と短い印は残る・木の名が列に無い古い印の dir が直下と深い所で消え行が `drafts=1 nogit=0 cache=2 cache_mb=2` を持つ・木の中の新しい書きを持つ印の dir は残り量の記録は `used=0` のまま・木の追跡される印の dir と入れ子の clone の中の印の dir は残る・便の木の印の dir は残る・行を読めない周は消さず `no-rule` を言う。
 
 ## 34. 床の検査を撃つ — vessel 宣言の任意 key floor-check の 1 行を、main の先端の sha の木で封じ込めの内側で 1 回撃ち、rc を sha ごとに置き場へ残す（契約表の行 ai・[FR85](../../design-intent/spec/srs.html#FR85) / AC55・ADR-0084・rules 行 floor.timeout_s・裁定 user 2026-09-30T04:25Z）
 

@@ -12,6 +12,7 @@ use crate::rules::manifest::Manifest;
 use crate::seat::{drafts_dir, seats_root, write_drafts_cap, DraftsCap};
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -39,6 +40,10 @@ const ROW_DRAFTS_STALE: &str = "seat.drafts_stale_h";
 /// 量の線の上限（MiB）と組み立て中の窓（秒）の rules 行の id（設計 dispatcher.md §39 形 8）。
 const ROW_DRAFTS_CAP: &str = "seat.drafts_cap_mb";
 const ROW_DRAFTS_BUSY: &str = "seat.drafts_busy_s";
+
+/// 組みの置き場の印の file の名と、その頭に在るべき署名の字（Cache Directory Tagging・cargo の target が直下に置く）。
+const TAG: &str = "CACHEDIR.TAG";
+const SIGNATURE: &[u8] = b"Signature: 8a477f597d28d172789f06886806bc55";
 
 /// 便の木の並びの合計の上限（MiB・repo ごと）の rules 行の id（判断の記録 ADR-35 の決定 (5)）。
 const ROW_LANES_CAP: &str = "pipe.lanes_cap_mb";
@@ -73,21 +78,61 @@ impl Totals {
     }
 }
 
-/// 木 1 本の掃きの結果（消した dir の数・失敗したか・書きの線が線以後の entry を持つので残した dir の木から相対の path）。
+/// 木 1 本の掃きの結果（名の列の dir を消した数・失敗したか・書きの線が線以後の entry を持つので残した名の列の dir の
+/// 木から相対の path・印の dir の掃きの結果）。
 struct Swept {
     removed: usize,
     broken: bool,
     kept: Vec<PathBuf>,
+    cache: Cache,
+}
+
+/// 印の dir の掃きの結果（消した dir の数・消す前に測った byte の和・測れないか消せないか読めない印の dir が在ったか・§33 形 8）。
+#[derive(Default)]
+struct Cache {
+    removed: usize,
+    bytes: u64,
+    broken: bool,
+}
+
+impl Cache {
+    /// 印の dir 1 つを、その dir 自身と下の全 entry の mtime の最新が線より前なら測ってから消す（測れないか消せない dir は
+    /// 残して失敗に数える）。返すのは [`quiet_since`] の判じ（`Some(true)` の dir は消したか失敗に数えた）。
+    fn sweep(&mut self, dir: &Path, line: SystemTime) -> Option<bool> {
+        let quiet = quiet_since(dir, line);
+        if quiet == Some(true) {
+            match measure(dir) {
+                Some((size, _)) if std::fs::remove_dir_all(dir).is_ok() => {
+                    (self.removed, self.bytes) = (self.removed.saturating_add(1), self.bytes.saturating_add(size));
+                }
+                _ => self.broken = true,
+            }
+        }
+        quiet
+    }
 }
 
 /// 起草の置き場の周の集計（dir を消した起草の木の数・`.git` を持たない写しの数・行を読めなかったか・
-/// 量の線が消した dir の数と越えたままの MiB）。
+/// 量の線が消した dir の数と越えたままの MiB・起草の木と `.git` を持たない写しの下から印で消した dir の数と byte）。
 struct Drafts {
     swept: usize,
     nogit: usize,
     no_rule: bool,
     shed: usize,
     over: u64,
+    cache: usize,
+    cache_bytes: u64,
+}
+
+impl Drafts {
+    /// 木か写し `name` の印の dir の掃きの結果を足す（消した数は `removed` にも足し、失敗が在れば名を失敗の列に足す）。
+    fn add_cache(&mut self, cache: &Cache, name: &str, totals: &mut Totals) {
+        (self.cache, self.cache_bytes) = (self.cache.saturating_add(cache.removed), self.cache_bytes.saturating_add(cache.bytes));
+        totals.removed = totals.removed.saturating_add(cache.removed);
+        if cache.broken {
+            totals.fail(name);
+        }
+    }
 }
 
 /// 量の線の候補 1 つ（木の名・path・字の順の鍵 `<木の名>/<木から相対の path>`・大きさ〔byte〕・新しさ）。
@@ -129,7 +174,9 @@ pub(super) fn sweep(state_dir: &Path, policy: LockPolicy, manifest: &Manifest) -
     let tail = drafts.map_or_else(String::new, |found| {
         let swept = if found.no_rule { "no-rule".to_owned() } else { found.swept.to_string() };
         let cap = if found.shed > 0 || found.over > 0 { format!(" cap={} over={}", found.shed, found.over) } else { String::new() };
-        format!(" drafts={swept} nogit={}{cap}", found.nogit)
+        let cache =
+            if found.cache > 0 { format!(" cache={} cache_mb={}", found.cache, found.cache_bytes.div_ceil(MIB)) } else { String::new() };
+        format!(" drafts={swept} nogit={}{cap}{cache}", found.nogit)
     });
     Some(format!("sweep: removed={} runs={} failed={}{named}{shed}{pins}{tail}", totals.removed, totals.runs, totals.failed.len()))
 }
@@ -166,20 +213,25 @@ fn sweep_lanes(state_dir: &Path, manifest: &Manifest, policy: LockPolicy, totals
     shed
 }
 
-/// 席の起草の木を掃く（起草の置き場が 1 つも無い周は `None`・書きの線の行は木が 1 本以上在る周だけ `no_rule` に読む・
-/// §33 形 4・形 5）。書きの線の後に、3 行が読める周だけ量の線を撃ち（§39 形 9）、起草の置き場が在る周は量の記録を書く。
+/// 席の起草の木を掃く（起草の置き場が 1 つも無い周は `None`・書きの線の行は木か `.git` を持たない写しが 1 つ以上在る周だけ
+/// `no_rule` に読む・§33 形 4・形 5）。同じ書きの線で `.git` を持たない写しの下と木の中の印の dir も消し（§33 形 8）、
+/// その後に、3 行が読める周だけ量の線を撃ち（§39 形 9）、起草の置き場が在る周は量の記録を書く。
 fn sweep_drafts(state_dir: &Path, manifest: &Manifest, totals: &mut Totals) -> Option<Drafts> {
-    let (trees, nogit) = drafts_of(state_dir)?;
-    let mut found = Drafts { swept: 0, nogit, no_rule: false, shed: 0, over: 0 };
+    let (trees, copies) = drafts_of(state_dir)?;
+    let mut found = Drafts { swept: 0, nogit: copies.len(), no_rule: false, shed: 0, over: 0, cache: 0, cache_bytes: 0 };
     let Some(line) = stale_line(manifest) else {
-        found.no_rule = !trees.is_empty();
+        found.no_rule = !trees.is_empty() || !copies.is_empty();
         write_drafts_cap(state_dir, None);
         return Some(found);
     };
+    for (name, copy) in &copies {
+        found.add_cache(&swept_caches(copy, line), name, totals);
+    }
     let (mut shed_trees, mut unmeasured, mut kept) = (BTreeSet::new(), 0_usize, Vec::new());
     for (name, tree) in &trees {
         let result = swept(tree, Some(line));
-        if totals.add(&result, name) {
+        found.add_cache(&result.cache, name, totals);
+        if totals.add(&result, name) || result.cache.removed > 0 {
             shed_trees.insert(name.clone());
         }
         if result.broken {
@@ -278,12 +330,14 @@ fn stale_line(manifest: &Manifest) -> Option<SystemTime> {
     SystemTime::now().checked_sub(Duration::from_secs(secs))
 }
 
-/// 置き場の根の直下の席ごとの起草の置き場から、起草の木（`.git` を持つ dir）と `.git` を持たない写しの数を集める。
+/// 起草の木と `.git` を持たない写し（どちらも名と path・名は `<潰した target>/<子の dir 名>`）。
+type Children = Vec<(String, PathBuf)>;
+
+/// 置き場の根の直下の席ごとの起草の置き場から、起草の木（`.git` を持つ dir）と `.git` を持たない写しを集める。
 ///
-/// symlink は席の dir も起草の置き場も子も辿らない。起草の置き場が 1 つも無ければ `None`。木は名の順に並べる
-/// （名は `<潰した target>/<木の dir 名>`）。
-fn drafts_of(state_dir: &Path) -> Option<(Vec<(String, PathBuf)>, usize)> {
-    let (mut trees, mut nogit, mut any) = (Vec::new(), 0_usize, false);
+/// symlink は席の dir も起草の置き場も子も辿らない。起草の置き場が 1 つも無ければ `None`。どちらも名の順に並べる。
+fn drafts_of(state_dir: &Path) -> Option<(Children, Children)> {
+    let (mut trees, mut copies, mut any) = (Vec::new(), Vec::new(), false);
     for seat in std::fs::read_dir(seats_root(state_dir)).ok()?.flatten() {
         let name = seat.file_name();
         let drafts = drafts_dir(state_dir, &name.to_string_lossy());
@@ -297,16 +351,56 @@ fn drafts_of(state_dir: &Path) -> Option<(Vec<(String, PathBuf)>, usize)> {
                 continue;
             }
             let git = std::fs::symlink_metadata(child.path().join(".git"));
+            let label = format!("{}/{}", name.to_string_lossy(), child.file_name().to_string_lossy());
             if git.is_ok_and(|meta| meta.is_dir() || meta.is_file()) {
-                let label = format!("{}/{}", name.to_string_lossy(), child.file_name().to_string_lossy());
                 trees.push((label, child.path()));
             } else {
-                nogit = nogit.saturating_add(1);
+                copies.push((label, child.path()));
             }
         }
     }
     trees.sort();
-    any.then_some((trees, nogit))
+    copies.sort();
+    any.then_some((trees, copies))
+}
+
+/// `.git` を持たない写しの下を歩き、印の dir を [`Cache::sweep`] で書きの線の判じに掛ける（§33 形 8）。
+///
+/// 写しそのものは印を持っていても消さない（作業場所は消さない）。`.git` を持つ dir と印の dir の下へは降りず、symlink は
+/// dir として辿らない。線以後の entry を持つ印の dir は残し、読めない dir と読めない印の dir は残して失敗に数える。
+fn swept_caches(copy: &Path, line: SystemTime) -> Cache {
+    let (mut cache, mut pending) = (Cache::default(), vec![copy.to_path_buf()]);
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            cache.broken = true;
+            continue;
+        };
+        for entry in entries {
+            let Ok(entry) = entry else {
+                cache.broken = true;
+                continue;
+            };
+            let path = entry.path();
+            if !entry.file_type().is_ok_and(|kind| kind.is_dir()) || std::fs::symlink_metadata(path.join(".git")).is_ok() {
+                continue;
+            }
+            if !tagged(&path) {
+                pending.push(path);
+            } else if cache.sweep(&path, line).is_none() {
+                cache.broken = true;
+            }
+        }
+    }
+    cache
+}
+
+/// dir が直下に印の file（symlink でない file）を持ち、その頭の字が署名と一致するか。
+fn tagged(dir: &Path) -> bool {
+    let path = dir.join(TAG);
+    let mut head = [0_u8; SIGNATURE.len()];
+    std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_file())
+        && std::fs::File::open(&path).and_then(|mut file| file.read_exact(&mut head)).is_ok()
+        && head == SIGNATURE
 }
 
 /// 便の木（元の場所と退役先のうち在る方・repo を解けない便と木の無い便は `None`）。便の path が並びの木を指す symlink の
@@ -326,10 +420,15 @@ fn tree_of(state_dir: &Path, id: &str) -> Option<PathBuf> {
 /// `line` を持つ木（席の起草の木・§33 形 3）は、その dir 自身と下の全 entry の mtime の最新が線より前の dir だけを消す。
 /// 線以後の entry が 1 つでも在る dir は残して `kept` に返し（量の線の候補・§39 形 1）、mtime か dir を読めない dir は
 /// 残して失敗に数える。
+///
+/// `line` を持つ木は、名が列に無くても直下に署名の合う印を持ち追跡されている file を持たない dir を、同じ線で
+/// [`Cache::sweep`] に掛ける（§33 形 8）。印を探すのは、入れ子の `.git` を持つ dir と印の dir の下を除く所だけで、
+/// 残した印の dir は `kept` に返さない（量の線の候補にしない）。名の列の掃きは印の dir と入れ子の木の下でも今のまま続ける。
 fn swept(tree: &Path, line: Option<SystemTime>) -> Swept {
-    let mut kept = Vec::new();
+    let mut found = Swept { removed: 0, broken: false, kept: Vec::new(), cache: Cache::default() };
     let Some(listed) = git_bytes(tree, &["ls-files", "-z"]) else {
-        return Swept { removed: 0, broken: true, kept };
+        found.broken = true;
+        return found;
     };
     // 追跡されている path とその祖先の dir（木から相対）。gitlink の名そのものも残す側に数える。
     let tracked: BTreeSet<PathBuf> = listed
@@ -337,34 +436,47 @@ fn swept(tree: &Path, line: Option<SystemTime>) -> Swept {
         .filter(|found| !found.is_empty())
         .flat_map(|found| Path::new(OsStr::from_bytes(found)).ancestors().map(Path::to_path_buf).collect::<Vec<_>>())
         .collect();
-    let (mut removed, mut broken, mut pending) = (0_usize, false, vec![PathBuf::new()]);
-    while let Some(rel) = pending.pop() {
+    let mut pending = vec![(PathBuf::new(), line)];
+    while let Some((rel, tags)) = pending.pop() {
         let Ok(entries) = std::fs::read_dir(tree.join(&rel)) else {
-            broken = true;
+            found.broken = true;
             continue;
         };
         for entry in entries {
             let Ok(entry) = entry else {
-                broken = true;
+                found.broken = true;
                 continue;
             };
             let name = entry.file_name();
             if name == ".git" || !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
                 continue;
             }
-            let path = rel.join(&name);
-            if !NAMES.iter().any(|found| OsStr::new(found) == name) || tracked.contains(&path) {
-                pending.push(path);
-            } else {
-                match line.map_or(Some(true), |line| quiet_since(&entry.path(), line)) {
-                    Some(false) => kept.push(path),
-                    Some(true) if std::fs::remove_dir_all(entry.path()).is_ok() => removed = removed.saturating_add(1),
-                    _ => broken = true,
-                }
+            let (dir, path) = (entry.path(), rel.join(&name));
+            if NAMES.iter().any(|found| OsStr::new(found) == name) && !tracked.contains(&path) {
+                found.named(&dir, path, line);
+                continue;
             }
+            let tags = tags.filter(|_| std::fs::symlink_metadata(dir.join(".git")).is_err());
+            let mark = tags.filter(|_| tagged(&dir));
+            if mark.is_some_and(|line| !tracked.contains(&path) && found.cache.sweep(&dir, line) == Some(true)) {
+                continue;
+            }
+            pending.push((path, if mark.is_some() { None } else { tags }));
         }
     }
-    Swept { removed, broken, kept }
+    found
+}
+
+impl Swept {
+    /// 名が列に在り追跡されていない dir 1 つを、線を持つ木は線の判じで消すか `kept` に残し、線の無い木は消す
+    /// （mtime か dir を読めないか消せない dir は残して失敗に数える）。
+    fn named(&mut self, dir: &Path, rel: PathBuf, line: Option<SystemTime>) {
+        match line.map_or(Some(true), |line| quiet_since(dir, line)) {
+            Some(false) => self.kept.push(rel),
+            Some(true) if std::fs::remove_dir_all(dir).is_ok() => self.removed = self.removed.saturating_add(1),
+            _ => self.broken = true,
+        }
+    }
 }
 
 /// dir 自身と下の全 entry の mtime がどれも線より前か（線以後を 1 つ見つけたら打ち切って `Some(false)`・

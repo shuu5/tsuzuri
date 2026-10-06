@@ -2,7 +2,9 @@
 //! 便を止める歯: `pipe_stop_`（`--all` / `--run` / process group 宛て）。
 //!
 //! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は `lifecycle.rs` から移しただけ・
-//! `s2-07l.349`）。
+//! `s2-07l.349`）。起草の置き場の写しの下の組みの置き場の掃除の歯は子 module `vcache`（接頭辞 `vcache_`）。
+
+mod vcache;
 
 use super::*;
 
