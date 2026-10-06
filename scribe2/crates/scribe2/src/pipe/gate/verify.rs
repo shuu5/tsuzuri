@@ -15,7 +15,8 @@ use crate::pipe::health;
 use crate::pipe::refuse::{self, DELETE_FILE, NEW_FILE};
 use crate::pipe::table::{self, parse_element, Tooth};
 use crate::seat::RuleRead;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 受付を通らない行（land の main 実測・受付の無い呼び手）の `{threads}` の実値（設計 gate-cost.md §31 約束 6）。
 ///
@@ -754,9 +755,17 @@ impl Fired {
 /// 出力の要る側と要らない側で `Command` を 2 本に割ると、gate が通した行と land が
 /// main で撃った行が別の実装になり、意味が静かにずれる。包む口も同じ理由で 1 本である。
 ///
+/// 行は**行ごとの一時 dir**を TMPDIR として受け取り、行の終わり（scope の孤児を殺した後）に中ごと消える
+/// （設計 gate-cost.md §52）。
+///
 /// stdout を読むのは**包みの終端行と record の `line=` のため**だけで、判定には使わない（判定は rc である）。
 pub fn run_line_captured(worktree: &Path, line: &str, wrap: &confine::Wrap<'_>) -> Fired {
     let (mut command, confinement) = confine::wrap_line(line, wrap);
+    // 行ごとの一時 dir（設計 gate-cost.md §52）。作れない周は TMPDIR を渡さず素のまま撃つ。
+    let temp = line_temp_dir();
+    if let Some(dir) = &temp {
+        command.env(TMPDIR, dir);
+    }
     // 壁時計は**起動の直前から終了の直後まで**の 1 対で取る（設計 gate-cost.md §26 形 (1)）。
     // 秒は起動できた周も起動できなかった周も同じこの 1 つを運ぶ（下の 2 つの返り口）。
     let started = std::time::Instant::now();
@@ -765,6 +774,10 @@ pub fn run_line_captured(worktree: &Path, line: &str, wrap: &confine::Wrap<'_>) 
     // **行の終端で scope を片付ける**（設計 gate-cost.md §4.4 errata・`s2-07l.234`）。行が孤児の
     // process を残すと scope は active のまま残り、同じ名の次の周の相手になる。判定は変えない。
     let scope = confine::release_scope(&confinement);
+    // 孤児は上で殺したので、消した後に作り直す書き手は残らない（起動できなかった周も同じ）。
+    if let Some(dir) = &temp {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     let Ok(out) = spawned else {
         // 起動できなかった周は rc も stderr も**器の外に無い**。空を「何も言わなかった」
         // として返し、極性は従来どおり RED 側（-1）へ倒す。
@@ -798,6 +811,25 @@ pub fn run_line_captured(worktree: &Path, line: &str, wrap: &confine::Wrap<'_>) 
         scope,
         stdout_tail: last_line(&stdout),
     }
+}
+
+/// 行の子に渡す一時 dir の env の名（器が渡す env はこの 1 つだけ・器に固有の env ではない）。
+const TMPDIR: &str = "TMPDIR";
+
+/// 行ごとの一時 dir の根。state dir や worktree から導かず字で置く: 導くと path が 80 字を越え、e2e の歯が
+/// 一時 dir の下に置く tmux の socket の path が上限 107 字を越える（設計 gate-cost.md §52）。
+const LINE_TEMP_ROOT: &str = "/tmp";
+
+/// 行ごとの一時 dir の通し番号（process の起動ごとに 0 から）。
+static LINE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// 行ごとの新しい一時 dir を作る（`/tmp/<NAME>-line-<pid>-<seq>`・作れない周は `None`）。
+///
+/// 器は TMPDIR を読まない（[`std::env::temp_dir`] を使わない・憲法 C2.2）。名は短く保つ（40 byte 以下）。
+fn line_temp_dir() -> Option<PathBuf> {
+    let seq = LINE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let dir = Path::new(LINE_TEMP_ROOT).join(format!("{NAME}-line-{}-{seq}", std::process::id()));
+    std::fs::create_dir(&dir).ok().map(|()| dir)
 }
 
 /// stdout の**末尾の非空 1 行**（record の `line=`・設計 gate-cost.md §5.1・pure）。
@@ -1008,6 +1040,54 @@ pub(crate) mod tests {
         assert!(unspawnable.secs <= outer, "起動失敗までの壁時計（外から測った秒を超えない）: {}", unspawnable.secs);
         let matched = unwrapped(WRITE_SET_CMD.to_owned(), 0, String::new());
         assert_eq!(matched.secs, None, "撃つ process を持たない段は秒を持たない（0 と書かない）");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 包めない `Wrap`（systemd-run も systemctl も起こさない）。
+    fn unwrappable(unit: &'static str) -> Wrap<'static> {
+        Wrap { unit, limit: Limit::HostReserve, caps: Err(RuleRead::Missing), width: None }
+    }
+
+    /// 行が自分の TMPDIR の値を worktree の file `out` に書く行を撃ち、rc と書かれた値を返す。
+    fn tmpdir_seen(root: &Path, line: &str, out: &str) -> (i32, String) {
+        let fired = run_line_captured(root, line, &unwrappable("scribe2-vltr-unit"));
+        (fired.rc, std::fs::read_to_string(root.join(out)).unwrap_or_default())
+    }
+
+    /// 行ごとに自分の一時 dir を持つ: 2 行の TMPDIR の値は空でなく互いに異なり、どちらも `/tmp/scribe2-line-` で始まる（設計 gate-cost.md §52）。
+    #[test]
+    fn vltr_each_line_gets_its_own_temp_root() {
+        let root = scratch("vltr-each");
+        let line = "printf %s \"$TMPDIR\" > seen";
+        let (first_rc, first) = tmpdir_seen(&root, line, "seen");
+        let (second_rc, second) = tmpdir_seen(&root, line, "seen");
+        assert_eq!((first_rc, second_rc), (0, 0), "2 行とも完走した");
+        assert!(!first.is_empty() && !second.is_empty(), "値は空でない: {first:?} {second:?}");
+        assert_ne!(first, second, "行ごとに別の dir");
+        for value in [&first, &second] {
+            assert!(value.starts_with("/tmp/scribe2-line-"), "根は字 /tmp・名は NAME と line で始まる: {value}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 行の終わりに一時 dir は中ごと消える（行が 2 段の dir を作っても戻った後にその path は無い）。
+    #[test]
+    fn vltr_temp_root_is_gone_after_the_line() {
+        let root = scratch("vltr-gone");
+        let (rc, value) = tmpdir_seen(&root, "mkdir -p \"$TMPDIR/a/b\" && printf %s \"$TMPDIR\" > seen", "seen");
+        assert_eq!(rc, 0, "行は完走した");
+        assert!(value.starts_with("/tmp/scribe2-line-"), "値を読めた: {value:?}");
+        assert!(!Path::new(&value).exists(), "行が戻った後に一時 dir は無い: {value}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 渡る値は短い（e2e の歯が一時 dir の下に置く tmux の socket の path が上限 107 字を越えない・40 byte 以下）。
+    #[test]
+    fn vltr_root_is_short_enough_for_a_socket() {
+        let root = scratch("vltr-short");
+        let (rc, value) = tmpdir_seen(&root, "printf %s \"$TMPDIR\" > seen", "seen");
+        assert_eq!(rc, 0, "行は完走した");
+        assert!(!value.is_empty() && value.len() <= 40, "空でなく 40 byte 以下: {value:?} ({})", value.len());
         let _ = std::fs::remove_dir_all(&root);
     }
 

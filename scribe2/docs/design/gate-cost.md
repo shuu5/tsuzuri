@@ -1183,6 +1183,20 @@ e2e は binary を spawn し外部 command は PATH 先頭の stub で差し替�
   - event を起点の lock の内で書く: event log の書き手は別の lock を持ち、lock を入れ子にすると取る順の約束が増える。
 - 限界: 起点の lock を他の process が持つ周は、lock の待ち（rules 行 `fleet.lock_retry_ms`）の分だけ event が遅れ、その間は待ち手が子を終えていないと読む。
 
+## 52. 行ごとの一時 dir — 行の子に新しい TMPDIR を渡し、行の終わりに中ごと消す（契約表の行 v-line-tmp・NFR1006 / FR1008）
+
+やさしく言うと: 歯の一時 dir は歯の Drop で根ごと消えるが、歯の後も生きる子（待たずに起こした pipe run の子）が、根の消えた後に fleet の store の append で根の下の dir を作り直す。2026-10-07 の数えで /tmp の直下の e2e の dir 12,714 個のうち、2026-10-06T04:08 の後の 1,591 個の 98.6 パーセント（1,569 個）がこの作り直しの形だった。歯の側を 1 本ずつ直すと子を起こす歯の数だけ待ちを足すことになるので、行を撃つ 1 本の側で 1 か所だけ直す。
+
+- 現物: 器が verify の行を撃つ口は `gate/verify.rs` の `run_line_captured` の 1 本で、gate と終わりの門・land の主実測・着地後の検出・base の測り・train の行が全部ここへ来る。行は confine の `wrap_line` で scope に包まれ、行の終わりに `release_scope` が scope に残った process を SIGKILL で殺す。
+- 形:
+  1. `run_line_captured` は行ごとに新しい一時 dir を 1 つ作る。根は字 `/tmp`、名は `NAME` と字 `line` と pid と通し番号を `-` で繋ぐ。作れない周は TMPDIR を渡さず素のまま撃つ（縮退）。
+  2. 行の子に env `TMPDIR` としてその path を渡す。渡す env はこの 1 つだけで、器に固有の env ではなく器の構成を読む口でもない（ADR-0004 の D-4）。器は TMPDIR を読まない（`std::env::temp_dir` を使わない・憲法 C2.2）。
+  3. 行の終わり（`release_scope` の後・起動できない周も同じ）にその dir を中ごと消す。scope の中の孤児は `release_scope` が先に殺しているので、消した後に作り直す書き手は残らない。
+  4. 根を字 `/tmp` に置くのは、state dir や worktree から導くと path が 80 字を越え、e2e の歯が一時 dir の下に置く tmux の socket の path が上限 107 字を越えるからである。渡す値は 40 byte 以下に保つ。`confine.rs` は替えない。
+- 歯（`gate/verify.rs` の mod tests・接頭辞 `vltr_`・包めない Wrap で撃つので systemd-run も systemctl も起こさない）: `vltr_each_line_gets_its_own_temp_root`（2 行の TMPDIR の値が空でなく互いに異なり、どちらも `/tmp/scribe2-line-` で始まる）・`vltr_temp_root_is_gone_after_the_line`（行が 2 段の dir を作った後、戻ってその path が無い）・`vltr_root_is_short_enough_for_a_socket`（値が空でなく 40 byte 以下）。
+- 却下: 歯の側で pipe dispatch の子を歯の終わりに待つ（子を起こす歯の数だけ待ちを足し、言語と歯の助けに依らない 1 か所の直しにならない）。
+- 限界: 包めない host（systemd-run の無い host）では孤児が殺されず、消した後に孤児が作り直す dir が残りうる。gate の外の撃ち（席と係の写しの check・CI）は覆わない。歯が kill されて Drop が走らない周の dir は行の一時 dir の中に在るので行の終わりの消しで閉じるが、この行の歯は測らない。今 /tmp の直下に在る e2e の dir の片付けと OS の tmpfiles の 30 日には触らない。
+
 <!-- contracts:begin -->
 schema = 1
 
