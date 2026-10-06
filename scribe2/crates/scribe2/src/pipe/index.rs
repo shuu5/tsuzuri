@@ -78,18 +78,44 @@ fn read_match(tree: &Tree) -> Result<Option<RoleMatch>, String> {
     Ok(Some(RoleMatch { role, file: file.trim_start_matches("./").to_owned(), start, end, name }))
 }
 
-/// 役の一致の stream（1 行 1 件の JSON）を読む。9 語の外の ruleId の行は捨てて数え、JSON でない行は読めない理由にする。
-pub fn read_roles(text: &str) -> Result<RoleRead, RoleError> {
-    let mut read = RoleRead { matches: Vec::new(), dropped: 0 };
-    for (at, line) in text.lines().enumerate().filter(|(_, line)| !line.trim().is_empty()) {
-        let fail = |reason: String| RoleError { line: at.saturating_add(1), reason };
+/// 役の一致の stream を 1 行ずつ読む読み手（[`read_roles`] と、組み立てが子の stdout を流れのまま読む口が共に使う）。
+#[derive(Debug, Default)]
+pub struct RoleLines {
+    /// 読んだ一致と捨てた数。
+    read: RoleRead,
+    /// 渡された行の数（空白だけの行も数える）。
+    at: usize,
+}
+
+impl RoleLines {
+    /// 1 行（行の終わりの字を除いた字）を読む。空白だけの行は数えるだけで、9 語の外の ruleId の行は捨てて数え、JSON でない行は
+    /// 読めない理由にする（行は 1 始まり）。
+    pub fn line(&mut self, line: &str) -> Result<(), RoleError> {
+        self.at = self.at.saturating_add(1);
+        if line.trim().is_empty() {
+            return Ok(());
+        }
+        let at = self.at;
+        let fail = |reason: String| RoleError { line: at, reason };
         let tree = json_tree::parse(line).map_err(|err| fail(err.to_string()))?;
         match read_match(&tree).map_err(fail)? {
-            Some(found) => read.matches.push(found),
-            None => read.dropped = read.dropped.saturating_add(1),
+            Some(found) => self.read.matches.push(found),
+            None => self.read.dropped = self.read.dropped.saturating_add(1),
         }
+        Ok(())
     }
-    Ok(read)
+
+    /// 読み終えた結果。
+    pub fn finish(self) -> RoleRead {
+        self.read
+    }
+}
+
+/// 役の一致の stream（1 行 1 件の JSON）を読む。9 語の外の ruleId の行は捨てて数え、JSON でない行は読めない理由にする。
+pub fn read_roles(text: &str) -> Result<RoleRead, RoleError> {
+    let mut lines = RoleLines::default();
+    text.lines().try_for_each(|line| lines.line(line))?;
+    Ok(lines.finish())
 }
 
 /// 結べない入力の理由。

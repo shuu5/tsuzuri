@@ -19,14 +19,16 @@ use crate::pipe::gate::Limits;
 use crate::pipe::git_line;
 use crate::pipe::index::flat::{read_table, render, Row};
 use crate::pipe::index::scip::{project_root, read_scip};
-use crate::pipe::index::{join, key_digest, read_roles};
+use crate::pipe::index::{join, key_digest, RoleLines, RoleRead};
 use crate::pipe::row_review::tree_key;
 use crate::rules::int_row;
 use crate::rules::manifest::Manifest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{BufRead, BufReader, PipeReader};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 /// 置き場の下の dir（`<state>/pipe/index`）。
@@ -186,6 +188,9 @@ fn fail(word: &'static str, stderr: impl Into<String>) -> Fail {
     Fail { word, stderr: stderr.into() }
 }
 
+/// 役の行 1 本の stdout を流れのまま読んだ結果（読めない周は記録の `stderr=` に残る理由）。
+type Streamed = Result<RoleRead, String>;
+
 /// 撃ち終えて結んだ表。
 struct Shot {
     /// 表の行。
@@ -320,41 +325,46 @@ impl Ctx<'_> {
         self.result(How::Built, shot.rows.len(), files)
     }
 
-    /// 受付札 1 枚を取り、木を detach して宣言の行を順に撃ち、結ぶ。外の道具の出力と木は結んだ後に外す。
+    /// 受付札 1 枚を取り、木を detach して宣言の行を順に撃ち、結ぶ。SCIP の file と木は結んだ後に外す（役の一致は file に書かない）。
     fn shoot(&self, timeout: u64) -> Result<Shot, Fail> {
         let limits = Limits::of(self.manifest).map_err(|reason| fail("no-rule", reason))?;
         let _grant = admission::admit(self.state_dir, &format!("index-{}", self.key), INDEX_JOBS, &limits.admission(self.policy));
         let tree = Worktree::make(self.repo, &self.dir, self.sha).ok_or_else(|| fail("tree", "commit の木を作れない"))?;
-        let outs = |ext: &str, count: usize| (0..count).map(|n| file(&self.dir, &self.key, &format!("{n}.{ext}"))).collect::<Vec<_>>();
-        let (scips, roles) = (outs("scip", self.lines.scip.len()), outs("roles", self.lines.roles.len()));
-        let shot = self.run_rows(&tree.path, (&scips, &roles), timeout).and_then(|stderr| flatten(&tree.path, (&scips, &roles), stderr));
-        for path in scips.iter().chain(&roles) {
+        let scips = (0..self.lines.scip.len()).map(|n| file(&self.dir, &self.key, &format!("{n}.scip"))).collect::<Vec<_>>();
+        let shot = self.run_rows(&tree.path, &scips, timeout).and_then(|(stderr, roles)| flatten(&tree.path, (&scips, roles), stderr));
+        for path in &scips {
             let _ = fs::remove_file(path);
         }
         shot
     }
 
-    /// 宣言の順（SCIP の行 → 役の行）に撃つ。最後に stderr を持った行の末尾を返す。
-    fn run_rows(&self, tree: &Path, outs: (&[PathBuf], &[PathBuf]), timeout: u64) -> Result<String, Fail> {
-        let scip = self.lines.scip.iter().zip(outs.0).map(|(row, out)| (row, out, false));
-        let roles = self.lines.roles.iter().zip(outs.1).map(|(row, out)| (row, out, true));
-        let mut stderr = String::new();
-        for (n, (row, out, to_file)) in scip.chain(roles).enumerate() {
-            let tail = self.run_row(row, (tree, out, to_file), n, timeout)?;
+    /// 宣言の順（SCIP の行 → 役の行）に撃つ。最後に stderr を持った行の末尾と、役の行ごとに流れのまま読んだ結果を返す（読めない
+    /// 結果も、後の行を撃ち終えてから結びで名指す）。
+    fn run_rows(&self, tree: &Path, scips: &[PathBuf], timeout: u64) -> Result<(String, Vec<Streamed>), Fail> {
+        let scip = self.lines.scip.iter().zip(scips).map(|(row, out)| (row, Some(out.as_path())));
+        let roles = self.lines.roles.iter().map(|row| (row, None));
+        let (mut stderr, mut streamed) = (String::new(), Vec::new());
+        for (n, (row, out)) in scip.chain(roles).enumerate() {
+            let (tail, read) = self.run_row(row, (tree, out), n, timeout)?;
             if !tail.is_empty() {
                 stderr = tail;
             }
+            streamed.extend(read);
         }
-        Ok(stderr)
+        Ok((stderr, streamed))
     }
 
     /// 行 1 本を撃つ（行を空白で割り穴を語ごとに埋め・頭の語は床の検査の resolve で解く・封じ込めの箱の中・cwd は木・
-    /// 子の組みの置き場は木の下・役の行は stdout を file へ受ける）。
-    fn run_row(&self, row: &str, place: (&Path, &Path, bool), n: usize, timeout: u64) -> Result<String, Fail> {
-        let (tree, out, to_file) = place;
-        let (tree_text, out_text) = (tree.display().to_string(), out.display().to_string());
-        let words: Vec<String> =
-            row.split_whitespace().map(|word| word.replace("{tree}", &tree_text).replace("{out}", &out_text)).collect();
+    /// 子の組みの置き場は木の下）。SCIP の行（`out` が在る）は `{out}` を埋め、役の行は stdout を pipe で受けて撃つ間に別の
+    /// thread が読み、rc 0 の周に読んだ結果を返す。
+    fn run_row(&self, row: &str, place: (&Path, Option<&Path>), n: usize, timeout: u64) -> Result<(String, Option<Streamed>), Fail> {
+        let (tree, out) = place;
+        let (tree_text, out_text) = (tree.display().to_string(), out.map(|path| path.display().to_string()));
+        let fill = |word: &str| {
+            let word = word.replace("{tree}", &tree_text);
+            out_text.as_ref().map_or_else(|| word.clone(), |text| word.replace("{out}", text))
+        };
+        let words: Vec<String> = row.split_whitespace().map(fill).collect();
         let program = words.first().and_then(|head| resolve(head)).ok_or_else(|| fail("path", format!("{row}: 頭の語を PATH に解けない")))?;
         let mut cmd = Invocation::new(program);
         cmd.args(words.iter().skip(1));
@@ -364,10 +374,11 @@ impl Ctx<'_> {
         if !confinement.confined() {
             return Err(fail("confine", format!("{row}: 封じ込めの箱で包めない")));
         }
-        let stdout = if to_file {
-            fs::File::create(out).map(Stdio::from).map_err(|err| fail("path", format!("{}: {err}", out.display())))?
+        let (stdout, reader) = if out.is_some() {
+            (Stdio::piped(), None)
         } else {
-            Stdio::piped()
+            let (pipe, writer) = std::io::pipe().map_err(|err| fail("path", format!("{row}: {err}")))?;
+            (Stdio::from(writer), Some(stream_roles(pipe, row)))
         };
         cmd.current_dir(tree).env(TARGET_ENV, tree.join(TARGET_DIR)).process_group(0).stdin(Stdio::null()).stdout(stdout).stderr(Stdio::piped());
         let ran = run(&mut cmd, Duration::from_secs(timeout));
@@ -375,7 +386,10 @@ impl Ctx<'_> {
         match ran {
             None => Err(fail("path", format!("{row}: 起こせない"))),
             Some(Ran::Timeout) => Err(fail("timeout", format!("{row}: {timeout} 秒を越えた"))),
-            Some(Ran::Done { rc: 0, summary }) => Ok(summary),
+            Some(Ran::Done { rc: 0, summary }) => {
+                let read = reader.map(|handle| handle.join().unwrap_or_else(|_| Err(format!("{row}: 役の一致の読み手が止まった"))));
+                Ok((summary, read))
+            }
             Some(Ran::Done { rc, summary }) => Err(fail("rc", format!("{row}: rc {rc} {summary}"))),
         }
     }
@@ -433,10 +447,39 @@ fn below<'a>(tree: &Path, path: &'a str) -> Option<&'a str> {
     Path::new(path).strip_prefix(tree).ok().and_then(Path::to_str).filter(|rest| !rest.is_empty())
 }
 
-/// 撃ち終えた SCIP の file と役の一致の file を読み、木の本文で結んで表の行にする（読めない物は `unreadable`）。
-/// 表の path は木からの相対に揃える: SCIP の project_root（`file://` の URI）が木の下の dir なら、その相対を document の
-/// path の頭に足し、役の一致の file が木の下の絶対 path なら木の頭を外す（木の外の project_root と file は今のまま）。
-fn flatten(tree: &Path, outs: (&[PathBuf], &[PathBuf]), stderr: String) -> Result<Shot, Fail> {
+/// 役の行の stdout を流れのまま読む thread（`\n` までの塊ごとに 1 行として読み手へ渡す・塊の `lines` は全文の `lines` と同じ
+/// 行に割れる）。読めない行の後も終わりまで読み切り（子を pipe の詰まりで止めない）、UTF-8 でない byte が在れば読めない行より
+/// 先に名指す（全文を file から読んでいた形と同じ順）。
+fn stream_roles(pipe: PipeReader, row: &str) -> JoinHandle<Streamed> {
+    let row = row.to_owned();
+    std::thread::spawn(move || {
+        let (mut reader, mut chunk) = (BufReader::new(pipe), Vec::new());
+        let (mut lines, mut first, mut utf8) = (RoleLines::default(), None, true);
+        loop {
+            chunk.clear();
+            match reader.read_until(b'\n', &mut chunk) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(err) => return Err(format!("{row}: {err}")),
+            }
+            match std::str::from_utf8(&chunk) {
+                Ok(text) if utf8 && first.is_none() => first = lines.line(text.lines().next().unwrap_or_default()).err(),
+                Ok(_) => {}
+                Err(_) => utf8 = false,
+            }
+        }
+        if !utf8 {
+            return Err(format!("{row}: stream did not contain valid UTF-8"));
+        }
+        first.map_or_else(|| Ok(lines.finish()), |err| Err(err.to_string()))
+    })
+}
+
+/// 撃ち終えた SCIP の file を読み、役の行の流れから読んだ一致と木の本文で結んで表の行にする（読めない物は `unreadable`・SCIP の
+/// file を役の一致より先に名指す）。表の path は木からの相対に揃える: SCIP の project_root（`file://` の URI）が木の下の dir
+/// なら、その相対を document の path の頭に足し、役の一致の file が木の下の絶対 path なら木の頭を外す（木の外の
+/// project_root と file は今のまま）。
+fn flatten(tree: &Path, outs: (&[PathBuf], Vec<Streamed>), stderr: String) -> Result<Shot, Fail> {
     let unreadable = |reason: String| fail("unreadable", reason);
     let mut docs = Vec::new();
     for path in outs.0 {
@@ -449,9 +492,8 @@ fn flatten(tree: &Path, outs: (&[PathBuf], &[PathBuf]), stderr: String) -> Resul
         docs.extend(read);
     }
     let (mut matches, mut dropped) = (Vec::new(), 0_usize);
-    for path in outs.1 {
-        let text = fs::read_to_string(path).map_err(|err| unreadable(format!("{}: {err}", path.display())))?;
-        let mut read = read_roles(&text).map_err(|err| unreadable(err.to_string()))?;
+    for read in outs.1 {
+        let mut read = read.map_err(unreadable)?;
         for found in &mut read.matches {
             if let Some(rest) = below(tree, &found.file) {
                 found.file = rest.to_owned();

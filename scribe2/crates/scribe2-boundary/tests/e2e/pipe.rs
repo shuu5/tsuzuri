@@ -26,6 +26,7 @@ mod contracts;
 mod dispatch;
 mod gate;
 mod index_paths;
+mod index_stream;
 mod intake;
 mod land;
 mod launch_failure;
