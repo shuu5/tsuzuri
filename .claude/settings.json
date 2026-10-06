@@ -2,17 +2,5 @@
   "claudeMdExcludes": [
     "**/scribe2/CLAUDE.md"
   ],
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "command": "bd prime --hook-json",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ]
-  }
+  "autoMemoryEnabled": false
 }
