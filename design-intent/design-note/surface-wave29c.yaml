@@ -4,7 +4,8 @@ meta:
   id: surface-wave29c
   title: 第 29 波 c — 席が起こす係の型と規律の手引きと門の設定（判断の記録 ADR-59）・検証の群の係の門（判断の記録 ADR-61）・器の入口の排他の差の当たりの配線（判断の記録 ADR-60）・追随の載せ替えの時刻の戻し（判断の記録 ADR-62）・段の file の畳み（判断の記録 ADR-32）・群の行と段の file の上限の命令（判断の記録 ADR-63）・起草の決まりの正本（判断の記録 ADR-63）・歯の検査の名乗り（判断の記録 ADR-63）・器を書く便の同時の数（判断の記録 ADR-63）・gate の判定と数の食い違いと質の指摘の返し（判断の記録 ADR-63）・差の file を出す係の床の記録（判断の記録 ADR-63）・頼みの共通の文の残りの項（判断の記録 ADR-63）・起こしの予算の下限と予算の記録（判断の記録 ADR-63）・差の当たりの後の着地の記帳と入り（判断の記録 ADR-60）・器の crate の根の宣言（判断の記録 ADR-33）・器の xtask の根の workspace の読み（判断の記録 ADR-33）・係の札の結びの道と出す物の字の形（判断の記録 ADR-59）・係の読む範囲（判断の記録 ADR-63）・器の面に足す宣言の path（判断の記録 ADR-63 と ADR-33）・凍結 anchor の列の検査の段の並べ呼び（判断の記録 ADR-63）・根の src の module の頭の doc の行の id の lint（判断の記録 ADR-63）・境界の src の module の頭の doc の行の id の外し（判断の記録 ADR-63）・係の起こしと門の形の畳み（判断の記録 ADR-63）・群の helper の写しの寄せ（判断の記録 ADR-63）・ノート surface-wave29b の続き
   version: v0.42
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-10-05
   profile: design-note
   approval:

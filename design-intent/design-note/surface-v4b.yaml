@@ -1,0 +1,25 @@
+# 設計ノート surface-v4b — （発効 2026-10-06・持ち主の決め D1〜D6〔作り直し v4・台帳の memo t3-hub.91.4 の notes 2026-10-06 08:11〕・作業中の計画の正本は台帳の epic t3-hub.92）
+# 契約表の行は器（scribe2）が読む導出物 contracts/surface-v4b.toml に写る。便の契約 bead の pointer は design = contracts/surface-v4b.toml#<行 id>。
+meta:
+  id: surface-v4b
+  title: 作り直し v4 の行の続き — ノート surface-v4a が 32 行に近づいた後の、段 S1〜S9 の行の置き場（持ち主の決め D1〜D6）
+  version: v0.1
+  status: effective
+  generated: 2026-10-06
+  profile: design-note
+  approval:
+    - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
+  note: 作り直し v4 の行の置き場の続き（ノート surface-v4a は 29 行で上限 32 行に近い）。全部の行が着地したノート surface-wave29c（32 行）と surface-wave29d（30 行）を同じ commit で廃止し、生きたノートは 5 本になったので、規則の行 R-31 の値を実数の 5 本に下げた。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。
+
+sections:
+  - n: 1
+    type: prose
+    title: 目的
+    body: |
+      持ち主は 2026-10-06 に、tsuzuri のワークフローを作り直すと決めた（決め D1〜D6 は全部推奨・memo t3-hub.91.4 の notes 2026-10-06 08:11・発話 2026-10-06T08:08:35.348Z の逐語の頭「D1-6はすべて推奨で」）。D1 は契約の正本を台帳の bead に移して設計ノートを退ける。D2 は起草係を設計だけにし、差の file・噛み・適用の script を止める。D3 は main への push ごとの CI を止め、日に 1 度の全部の撃ち（xtask daily）に寄せる。D4 は memo の起票に繋ぐ門を置く。D5 は作業の状態を台帳の作業中の bead に置き、turn の終わりの門で古さを止める。D6 は gate の FAIL を終端にせず、便の中で 2 周まで直す。
+
+      置き場。作業中の計画の正本は台帳の epic t3-hub.92 と、子の段の memo（S1〜S9）である。このノートはノート surface-v4a の続きで、その段の行を D1 の着地まで置く仮の置き場で、D1 の着地の後に廃止する。行は差の file を持たない設計だけの行で、便の実装役が契約の節の字から書く（D2）。
+  - n: 2
+    type: contract-table
+    title: 契約表
+    rows: []
