@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use tsuzuri_core::graph::code::{self, CodeGraph, Def, DefKind};
+use tsuzuri_core::graph::code::{self, CodeGraph, Def, DefKind, Defs};
 
 use crate::out::{emit, emit_err};
 use crate::server::proc;
@@ -81,8 +81,8 @@ pub fn run(rest: &[&str]) -> u8 {
     }
 }
 
-/// 3 つの字を読んで code の層を組む（子は repo で撃つ・読めない字はその訳）。
-fn gather(repo: &Path, sg: &str) -> Result<CodeGraph, String> {
+/// file の一覧と定義の stream の 2 つの撃ちを読む（子は repo で撃つ・file の一覧の字と読んだ定義・読めない字はその訳）。
+pub(crate) fn read_layer(repo: &Path, sg: &str) -> Result<(String, Defs), String> {
     let files = proc::run(OsStr::new("git"), ["ls-files", "-z"], repo, TIMEOUT)
         .map_err(|f| format!("git ls-files が読めない（{}）", f.word()))?;
     let args = ["scan", "--rule", RULES, "--json=stream"];
@@ -90,8 +90,14 @@ fn gather(repo: &Path, sg: &str) -> Result<CodeGraph, String> {
         .map_err(|f| format!("{sg} の scan が読めない（{}）", f.word()))?;
     let defs = code::read_defs(&String::from_utf8_lossy(&stream))
         .ok_or_else(|| format!("{sg} の scan の stream に読めない行が在る"))?;
+    Ok((String::from_utf8_lossy(&files).into_owned(), defs))
+}
+
+/// 3 つの字を読んで code の層を組む（file の一覧と定義は `read_layer`・読めない字はその訳）。
+fn gather(repo: &Path, sg: &str) -> Result<CodeGraph, String> {
+    let (files, defs) = read_layer(repo, sg)?;
     let rows = write_sets(&repo.join(CONTRACTS))?;
-    Ok(code::build(&String::from_utf8_lossy(&files), defs, &rows))
+    Ok(code::build(&files, defs, &rows))
 }
 
 /// contracts/ の直下の .toml の行の id（`<file の名の .toml の前>#<行>`）と write-set（file の名の順）。

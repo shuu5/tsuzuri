@@ -15,7 +15,7 @@ use tsuzuri_boundary::server::ledger::BD_ARGS;
 use tsuzuri_core::gate;
 use tsuzuri_core::graph::{Graph, Inputs, build};
 use tsuzuri_core::memo_gate::{
-    self, CANDIDATE_KINDS, MemoDraft, MemoGate, MemoWhy, memo_digest, memo_needs,
+    self, CANDIDATE_KINDS, MemoDraft, MemoGate, MemoWhy, Seen, memo_digest, memo_needs,
 };
 
 /// 索引の字（節点は id・種類・file・要約値・題、辺は端・端・型のタブ区切り）。
@@ -135,7 +135,14 @@ fn draft(metadata: &str, links: &[&str]) -> MemoDraft {
     MemoDraft {
         metadata: Some(metadata.to_string()),
         links: ids(links),
+        text: Some(String::new()),
+        body_file: None,
     }
+}
+
+/// 下書きを材料がグラフだけの `Seen` で判じる。
+fn judged(drafts: &[MemoDraft], g: &Graph) -> MemoGate {
+    memo_gate::judge(drafts, &Seen::of(g))
 }
 
 /// JSON の字の中身（二重引用符と逆斜線に逆斜線を付ける）。
@@ -169,6 +176,8 @@ fn mlnk_drafts_pick_memo_creates() {
         vec![MemoDraft {
             metadata: Some(m.clone()),
             links: ids(&["fx-m.1", "fx-m.4"]),
+            text: Some("題".to_string()),
+            body_file: None,
         }]
     );
     // 最後の --metadata の値・前後の空白と型の無い項と空の id は数えない・label はコンマ区切りと短い旗も読む。
@@ -178,6 +187,8 @@ fn mlnk_drafts_pick_memo_creates() {
         vec![MemoDraft {
             metadata: Some("{\"b\":2}".to_string()),
             links: ids(&["fx-m.9"]),
+            text: Some(String::new()),
+            body_file: None,
         }]
     );
     // 2 つの create は command の順に拾い、deps の無い memo は links が空。
@@ -185,7 +196,15 @@ fn mlnk_drafts_pick_memo_creates() {
     let found = memo_gate::drafts(&payload(&pair));
     assert_eq!(found.len(), 2);
     assert_eq!(found[0].links, ids(&["fx-m.1"]));
-    assert_eq!(found[1], MemoDraft { metadata: None, links: Vec::new() });
+    assert_eq!(
+        found[1],
+        MemoDraft {
+            metadata: None,
+            links: Vec::new(),
+            text: Some("別の".to_string()),
+            body_file: None,
+        }
+    );
 
     let edit = format!(
         r#"{{"tool_name":"Edit","tool_input":{{"command":"{}"}}}}"#,
@@ -238,25 +257,15 @@ fn mlnk_judge_refuses_bad_drafts() {
         digest: None,
     };
     for text in ["[1]", "not json", "\"s\""] {
-        assert_eq!(
-            memo_gate::judge(&[draft(text, &[])], &g),
-            deny(MemoWhy::Metadata, &[]),
-            "{text}"
-        );
+        assert_eq!(judged(&[draft(text, &[])], &g), deny(MemoWhy::Metadata, &[]), "{text}");
     }
     for text in [r#"{"short":"門の歯"}"#, r#"{"touches":[]}"#] {
-        assert_eq!(
-            memo_gate::judge(&[draft(text, &[])], &g),
-            deny(MemoWhy::NoTouches, &[]),
-            "{text}"
-        );
+        assert_eq!(judged(&[draft(text, &[])], &g), deny(MemoWhy::NoTouches, &[]), "{text}");
     }
-    assert_eq!(
-        memo_gate::judge(&[MemoDraft { metadata: None, links: Vec::new() }], &g),
-        deny(MemoWhy::NoTouches, &[])
-    );
+    let bare = MemoDraft { metadata: None, ..draft("", &[]) };
+    assert_eq!(judged(&[bare], &g), deny(MemoWhy::NoTouches, &[]));
     let unknown = draft(&meta(&["FR9", "FR77"], &[], None), &[]);
-    assert_eq!(memo_gate::judge(&[unknown], &g), deny(MemoWhy::UnknownId, &["FR77"]));
+    assert_eq!(judged(&[unknown], &g), deny(MemoWhy::UnknownId, &["FR77"]));
 
     // 読めない出所は まだ分からない（台帳が空・索引が空）。
     let fr9 = draft(&meta(&["FR9"], &[], None), &[]);
@@ -265,7 +274,7 @@ fn mlnk_judge_refuses_bad_drafts() {
         (graph_of("", &ledger("題 3", "題 4", 0)), "design"),
     ] {
         assert_eq!(
-            memo_gate::judge(std::slice::from_ref(&fr9), &g),
+            judged(std::slice::from_ref(&fr9), &g),
             MemoGate::Unknown { why: MemoWhy::Unread, ids: ids(&[id]), digest: None },
             "{id}"
         );
@@ -280,7 +289,7 @@ fn mlnk_judge_refuses_bad_drafts() {
     };
     assert_eq!(memo_needs(&crowded, &fr7), want);
     assert_eq!(
-        memo_gate::judge(&[draft(&meta(&["FR7"], &[], None), &[])], &crowded),
+        judged(&[draft(&meta(&["FR7"], &[], None), &[])], &crowded),
         MemoGate::Unknown {
             why: MemoWhy::TooMany,
             ids: want,
@@ -290,7 +299,7 @@ fn mlnk_judge_refuses_bad_drafts() {
     // 30 本ちょうどは数の上限を越えない。
     let edge = graph_of(&index(), &ledger("題 3", "題 4", 30));
     assert!(matches!(
-        memo_gate::judge(&[draft(&meta(&["FR7"], &[], None), &[])], &edge),
+        judged(&[draft(&meta(&["FR7"], &[], None), &[])], &edge),
         MemoGate::Deny { why: MemoWhy::Undisposed, .. }
     ));
 }
@@ -308,23 +317,14 @@ fn mlnk_judge_names_the_undisposed() {
         digest: Some(digest.clone()),
     };
     let first = draft(&meta(&["FR9"], &reasons, None), &links);
-    assert_eq!(
-        memo_gate::judge(&[first], &g),
-        undisposed(&["fx-m.2", "fx-m.5", "nx#r1"])
-    );
+    assert_eq!(judged(&[first], &g), undisposed(&["fx-m.2", "fx-m.5", "nx#r1"]));
     // 理由が空白だけの not-relevant は処分でない。
     let blank = draft(&meta(&["FR9"], &[("P-9", "  "), reasons[1]], None), &links);
-    assert_eq!(
-        memo_gate::judge(&[blank], &g),
-        undisposed(&["P-9", "fx-m.2", "fx-m.5", "nx#r1"])
-    );
+    assert_eq!(judged(&[blank], &g), undisposed(&["P-9", "fx-m.2", "fx-m.5", "nx#r1"]));
     // relates-to と discovered-from のほかの型の辺は処分でない（型の無い項と同じく links に入らない）。
-    let blocks = MemoDraft {
-        metadata: Some(meta(&["FR9"], &reasons, None)),
-        links: ids(&["fx-m.4"]),
-    };
+    let blocks = draft(&meta(&["FR9"], &reasons, None), &["fx-m.4"]);
     assert_eq!(
-        memo_gate::judge(&[blocks], &g),
+        judged(&[blocks], &g),
         undisposed(&["fx-m.1", "fx-m.2", "fx-m.5", "nx#r1"])
     );
 
@@ -337,10 +337,10 @@ fn mlnk_judge_names_the_undisposed() {
         ("nx#r1", "別の行"),
     ];
     let allow = draft(&meta(&["FR9"], &all, Some(&digest)), &links);
-    assert_eq!(memo_gate::judge(std::slice::from_ref(&allow), &g), MemoGate::Allow);
+    assert_eq!(judged(std::slice::from_ref(&allow), &g), MemoGate::Allow);
     for stale in [Some("0000000000000000"), None] {
         assert_eq!(
-            memo_gate::judge(&[draft(&meta(&["FR9"], &all, stale), &links)], &g),
+            judged(&[draft(&meta(&["FR9"], &all, stale), &links)], &g),
             MemoGate::Deny {
                 why: MemoWhy::Stale,
                 ids: Vec::new(),
@@ -351,14 +351,14 @@ fn mlnk_judge_names_the_undisposed() {
     // 最初に通さなかった下書きの答えを返し、下書きが 0 なら通す。
     let bad = draft("[1]", &[]);
     assert_eq!(
-        memo_gate::judge(&[allow.clone(), bad, draft(&meta(&[], &[], None), &[])], &g),
+        judged(&[allow.clone(), bad, draft(&meta(&[], &[], None), &[])], &g),
         MemoGate::Deny { why: MemoWhy::Metadata, ids: Vec::new(), digest: None }
     );
-    assert_eq!(memo_gate::judge(&[], &g), MemoGate::Allow);
+    assert_eq!(judged(&[], &g), MemoGate::Allow);
     // 候補の題が変われば、写した digest は古くなる。
     let moved = graph_of(&index(), &ledger("題 3", "別の題 4", 0));
     assert!(matches!(
-        memo_gate::judge(&[allow], &moved),
+        judged(&[allow], &moved),
         MemoGate::Deny { why: MemoWhy::Stale, .. }
     ));
 }
@@ -514,7 +514,7 @@ fn mlnk_bin_memo_draft_is_judged() {
     let p = payload(&memo_command(deps, &meta(&["FR9"], &reasons, None)));
     let out = place.tz(&place.repo, &p);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    let want = memo_gate::output(&memo_gate::judge(&memo_gate::drafts(&p), &graph()))
+    let want = memo_gate::output(&memo_gate::judge(&memo_gate::drafts(&p), &Seen::of(&graph())))
         .map(|t| format!("{t}\n"))
         .expect("止める答え");
     assert!(want.contains("undisposed") && want.contains("id = fx-m.2 fx-m.5 nx#r1"), "{want}");
@@ -558,7 +558,8 @@ fn mlnk_bin_question_answer_comes_first() {
     let want = gate::output(&gate::judge(&gate::drafts(&p), &g)).expect("問いの答え");
     assert!(want.contains("問いの起票の門は止める（undisposed）"), "{want}");
     assert_eq!(text(&out.stdout), format!("{want}\n"));
-    let memo_answer = memo_gate::output(&memo_gate::judge(&memo_gate::drafts(&p), &g)).expect("memo の答え");
+    let memo_answer = memo_gate::output(&memo_gate::judge(&memo_gate::drafts(&p), &Seen::of(&g)))
+        .expect("memo の答え");
     assert!(!text(&out.stdout).contains("memo の起票の門"), "{memo_answer}");
     assert_eq!(place.calls("bd").len(), 1);
     assert_eq!(place.calls("folio").len(), 1);

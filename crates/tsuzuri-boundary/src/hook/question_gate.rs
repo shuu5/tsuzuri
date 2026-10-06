@@ -6,6 +6,8 @@
 //! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39）。
 //! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、グラフを 1 度だけ組んで
 //!    判じて 0（問いの下書きが在れば問いの門の答えが先で、問いの門が通す時に memo の門の答えを書く）。
+//!    memo の下書きは --body-file の file を payload の cwd（無ければ --repo）から読んで本文を足し、本文が code の語を持つ時だけ
+//!    code の層（git ls-files と ast-grep の scan）を 1 度組んで、台帳の memo の字と共に判じの材料にする。
 //!
 //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
 
@@ -14,9 +16,11 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use tsuzuri_core::gate::{self, Gate, Why};
+use tsuzuri_core::graph::code::{self as layer, CodeGraph};
 use tsuzuri_core::graph::{Graph, Inputs, build};
-use tsuzuri_core::memo_gate::{self, MemoGate, MemoWhy};
+use tsuzuri_core::memo_gate::{self, MemoDraft, MemoGate, MemoWhy, Seen};
 
+use crate::cli::code;
 use crate::out::emit_err;
 use crate::server::design::Design;
 use crate::server::ledger::{BD, Source};
@@ -67,22 +71,56 @@ pub fn parse(rest: &[&str]) -> Result<Args, String> {
     })
 }
 
-/// 台帳と設計の索引を並べて読み（待ちは 1 本分の上限まで）、読めない方を空の字にしてグラフを組む（event log は空の字）。
-pub fn graph(args: &Args) -> Graph {
-    let (ledger, design) = std::thread::scope(|s| {
+/// 台帳と設計の索引を並べて読む（待ちは 1 本分の上限まで・読めない方は None・順は台帳・設計の索引）。
+fn sources(args: &Args) -> (Option<String>, Option<String>) {
+    std::thread::scope(|s| {
         let ledger = s.spawn(|| Source::new(&args.repo, &args.bd).text_alone());
         let design = Design::new(&args.repo, &args.folio).text();
         (ledger.join().ok().flatten(), design)
-    });
+    })
+}
+
+/// 読んだ 2 つの字からグラフを組む（読めない方は空の字・event log は空の字）。
+fn graph_from(ledger: Option<&str>, design: Option<&str>) -> Graph {
     build(&Inputs {
-        design_index: design.as_deref().unwrap_or_default(),
-        ledger: ledger.as_deref().unwrap_or_default(),
+        design_index: design.unwrap_or_default(),
+        ledger: ledger.unwrap_or_default(),
         events: "",
     })
 }
 
+/// 台帳と設計の索引を並べて読み、読めない方を空の字にしてグラフを組む。
+pub fn graph(args: &Args) -> Graph {
+    let (ledger, design) = sources(args);
+    graph_from(ledger.as_deref(), design.as_deref())
+}
+
+/// memo の下書きの本文の file を読んで欄 text の末に改行と本文を足す（読めなければ欄 text を None にする・
+/// 根は payload の cwd か --repo・絶対 path はそのまま）。
+fn read_bodies(args: &Args, payload: &str, drafts: Vec<MemoDraft>) -> Vec<MemoDraft> {
+    let root = memo_gate::payload_cwd(payload).map_or_else(|| args.repo.clone(), PathBuf::from);
+    drafts
+        .into_iter()
+        .map(|mut d| {
+            if let Some(file) = &d.body_file {
+                d.text = d
+                    .text
+                    .zip(std::fs::read_to_string(root.join(file)).ok())
+                    .map(|(text, body)| format!("{text}\n{body}"));
+            }
+            d
+        })
+        .collect()
+}
+
+/// code の層を組む（file の一覧と定義だけ・失敗は None）。
+fn code_layer(args: &Args) -> Option<CodeGraph> {
+    let (files, defs) = code::read_layer(&args.repo, code::SG).ok()?;
+    Some(layer::build(&files, defs, &[]))
+}
+
 /// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None・
-/// 問いの下書きと memo の下書きが在ればグラフを 1 度だけ組み、問いの門の答えを先に返す）。
+/// 問いの下書きと memo の下書きが在れば台帳を 1 度だけ読んでグラフと memo の写しを組み、問いの門の答えを先に返す）。
 pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if let Some(why) = gate::short_gate(payload) {
         return Some(gate::short_output(why));
@@ -92,11 +130,21 @@ pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if questions.is_empty() && memos.is_empty() {
         return None;
     }
-    let graph = graph(args);
+    let (ledger, design) = sources(args);
+    let graph = graph_from(ledger.as_deref(), design.as_deref());
     if let Some(text) = gate::output(&gate::judge(&questions, &graph)) {
         return Some(text);
     }
-    memo_gate::output(&memo_gate::judge(&memos, &graph))
+    let memos = read_bodies(args, payload, memos);
+    let named = memos
+        .iter()
+        .any(|d| d.text.as_deref().is_some_and(|t| !memo_gate::code_words(t).is_empty()));
+    let seen = Seen {
+        graph: &graph,
+        memos: memo_gate::memo_texts(ledger.as_deref().unwrap_or_default()),
+        code: if named { code_layer(args) } else { None },
+    };
+    memo_gate::output(&memo_gate::judge(&memos, &seen))
 }
 
 /// tz hook question-gate の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
