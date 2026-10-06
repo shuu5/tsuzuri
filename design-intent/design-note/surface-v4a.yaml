@@ -3,13 +3,13 @@
 meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
-  version: v0.20
+  version: v0.21
   status: effective
   generated: 2026-10-06
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
-  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。 第 0.8 版（2026-10-06）は、memo t3-hub.92.2（作り直し v4 の段 S2 の 2・持ち主の決め D2・判断の記録 ADR-72 の決定 (3)）の行 ag-designer（plugin の起草係の型 drafter の本文を設計係の本文に置き換え、係の手引きと参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外す・節 7）を足した。起草は係 w313a。参照の file の歯の置き方の句（新しい行の歯は新しい file で足し、群の main.rs と module を書かない）は今の決まりのまま替えない（席の決め・t3-hub.92.2 の notes）。 第 0.9 版（2026-10-06）は、行 v-wip-lines の契約審査の FAIL（done の 4 つ目の項が、偽の bd の作業中の bead 2 本に対して [RECENT-WIP] の行を 1 行と書いていた）を受け、その項を w-1 と w-2 の 1 行ずつの 2 行に直した。 第 0.10 版（2026-10-06）は、memo t3-hub.92.8（作り直し v4 の段 S5・持ち主の決め D6・判断の記録 ADR-72 の決定 (7)）の器の行 v-gate-fix（pipe run と pipe resume で審査役だけの gate の FAIL の便を同じ worktree の runner の起こし直しで最大 2 周直す・節 9 と節 10）を足した。起草は係 w314a。席は調べ係 r316 の数え（輪で振る舞いの変わる e2e の歯は 0 本・行と kind を足すと数の pin 2 本が動く）を受け、kind の母集団の pin の歯を done と verify に足した。決定 (7) の字との差（差の全部を審査し直す・重さで絞らない・新しい process で起こす）は席の決め（t3-hub.92.8 の notes）。 第 0.11 版（2026-10-06）は、行 v-gate-fix の契約審査の FAIL を受け、直しの周に入る条件を「便の最後の RunStage が Gated の FAIL」に直し（直しの周の runner が rc 0 でなく終わった便を起こし直さない）、その歯 gfix_failed_fix_round_stops_without_another_round の項を足し、外形の snapshot の項を行と kind の数の字に直した。 第 0.12 版（2026-10-06）は、起草係 5 体の行を 1 本ずつ足した。段 S3 の行 t-memo-link-gate（memo の起票の繋ぐ門・節 13・係 w317a）、段 S2 の行 ag-floor-off（係の終える前の門の床の照らしと撃ち直しを退ける・節 15・係 w318a）、段 S6 の行 v-ci-child-cut（器の着地の後の CI の子を退ける・節 17・係 w319a）、段 S4 の行 v-pf-contract（preflight に契約の file を直に渡す口・節 19 と 20・係 w320a）、段 S9 の行 t-ruling-gui（配達の読みが器の裁定の行の経路 gui も読む・節 21・係 w321a）。席の決めとして、t-memo-link-gate の候補は閉じた memo も含む（直った問題の再発を古い memo に繋ぐ）。裁定の書き手は器の seat ruling answer の 1 本に寄せる。要件 FR21 から床の記録と撃ち直しの文 3 つを外した（行 ag-floor-off の範囲・行の便は srs.yaml を書かない）。 第 0.13 版（2026-10-06）は、行 ag-floor-off の契約審査の FAIL（歯が境界の main.rs の字 [--tz の不在を見るが、口 tz surface serve の USAGE が範囲の外で [--tz <program>] を持つ）を受け、不在を見る字を消す前の口の doc の行の字 [--drafts <dir>] [--tz に狭めた。 第 0.14 版（2026-10-06）は、行 ag-floor-off の 2 度目の契約審査の FAIL（歯の file agshp.rs の見本が stop.rs の字 pub mod floor; を使う・subagent_stop.rs の床の段は 14 行目と 15 行目の 2 行）を受け、agshp.rs を write-set と verify と done に足し、外す doc の行を直した。 第 0.15 版（2026-10-06）は、行 v-pf-contract の契約審査の FAIL（歯の toy の行 a が差し替え無しだと verify が宣言の共通 verify と同じで断られ、write-set の導出の材料も無い）を受け、toy の行の verify を歯 vpfgap_ の通る見本と同じ nextest の 1 行に差し替える形に直した。 第 0.16 版（2026-10-06）は、行 v-ci-child-cut の契約審査の FAIL（消す助けを残す歯 order.rs の 2 本と retire.rs の助けが使う・要件 FR1050 が close の後の CI の照合を求める）を受け、消す名 23 個と残す名 10 個を節 17 に列挙し、直す歯 4 本の断言を done に足した（起草は係 w323a）。同じ commit で要件 FR1050 と受入 AC1023 から close の後の CI の照合の字を外した。 第 0.17 版（2026-10-06）は、起草係 3 体の行を 1 本ずつ足した。段 S3 の行 v-turn-wip-stale（turn の終わりの門で、台帳か設計を書いたのに作業中の bead の定型の行が古い turn を 1 度だけ止める・節 25 と 26・係 w326a）、段 S7 の行 v-lens-ask（審査役の雛形 3 つから迷った時の既定の文と機械で止まる禁止の文と上限の無い外の読みを外す・節 27 と 28・係 w327a）、段 S8 の行 ag-ladder-verifier（検証役の型に決定はしごの段と消す物の名指しを書かせる 1 行・節 29・係 w328a）。席の決めとして、判定の語 INCONCLUSIVE は名を替えず意味だけを絞る（語を読む器の 49 file と記録の語を替えない）。 第 0.18 版（2026-10-06）は、段 S4 の条 P-28 の改めの前に流せる 2 行を足した。行 v-pf-literal（preflight だけの断りで、done の項が二重鉤括弧で名指す字が節の本文に無い項を名指す・節 23）と行 t-stop-preflight（係の終える前の門が、係の出した契約の file ごとに preflight を撃ち直して 1 度止める・節 24・depends は ag-floor-off と v-pf-contract）。起草は係 w325a。 第 0.19 版（2026-10-06）は、行 v-turn-wip-stale の契約審査の FAIL（要件 FR1088 が turn の終わりの判定で台帳を読まないと書く）を受け、同じ commit で要件 FR1088 の字を決め D5 に合わせて直し、節 25 の末にその 1 文を足した。 第 0.20 版（2026-10-06）は、行 v-pf-contract の便の gate の FAIL（便 t3-hub.92.7.1-20261006T111631Z・節 19 の各歯が置き場の run dir の空を見る字を、done の項が測っていなかった）を受け、done の 2 つ目から 4 つ目の項に、撃ちが置き場に run dir を作らない句を足した。
+  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。 第 0.8 版（2026-10-06）は、memo t3-hub.92.2（作り直し v4 の段 S2 の 2・持ち主の決め D2・判断の記録 ADR-72 の決定 (3)）の行 ag-designer（plugin の起草係の型 drafter の本文を設計係の本文に置き換え、係の手引きと参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外す・節 7）を足した。起草は係 w313a。参照の file の歯の置き方の句（新しい行の歯は新しい file で足し、群の main.rs と module を書かない）は今の決まりのまま替えない（席の決め・t3-hub.92.2 の notes）。 第 0.9 版（2026-10-06）は、行 v-wip-lines の契約審査の FAIL（done の 4 つ目の項が、偽の bd の作業中の bead 2 本に対して [RECENT-WIP] の行を 1 行と書いていた）を受け、その項を w-1 と w-2 の 1 行ずつの 2 行に直した。 第 0.10 版（2026-10-06）は、memo t3-hub.92.8（作り直し v4 の段 S5・持ち主の決め D6・判断の記録 ADR-72 の決定 (7)）の器の行 v-gate-fix（pipe run と pipe resume で審査役だけの gate の FAIL の便を同じ worktree の runner の起こし直しで最大 2 周直す・節 9 と節 10）を足した。起草は係 w314a。席は調べ係 r316 の数え（輪で振る舞いの変わる e2e の歯は 0 本・行と kind を足すと数の pin 2 本が動く）を受け、kind の母集団の pin の歯を done と verify に足した。決定 (7) の字との差（差の全部を審査し直す・重さで絞らない・新しい process で起こす）は席の決め（t3-hub.92.8 の notes）。 第 0.11 版（2026-10-06）は、行 v-gate-fix の契約審査の FAIL を受け、直しの周に入る条件を「便の最後の RunStage が Gated の FAIL」に直し（直しの周の runner が rc 0 でなく終わった便を起こし直さない）、その歯 gfix_failed_fix_round_stops_without_another_round の項を足し、外形の snapshot の項を行と kind の数の字に直した。 第 0.12 版（2026-10-06）は、起草係 5 体の行を 1 本ずつ足した。段 S3 の行 t-memo-link-gate（memo の起票の繋ぐ門・節 13・係 w317a）、段 S2 の行 ag-floor-off（係の終える前の門の床の照らしと撃ち直しを退ける・節 15・係 w318a）、段 S6 の行 v-ci-child-cut（器の着地の後の CI の子を退ける・節 17・係 w319a）、段 S4 の行 v-pf-contract（preflight に契約の file を直に渡す口・節 19 と 20・係 w320a）、段 S9 の行 t-ruling-gui（配達の読みが器の裁定の行の経路 gui も読む・節 21・係 w321a）。席の決めとして、t-memo-link-gate の候補は閉じた memo も含む（直った問題の再発を古い memo に繋ぐ）。裁定の書き手は器の seat ruling answer の 1 本に寄せる。要件 FR21 から床の記録と撃ち直しの文 3 つを外した（行 ag-floor-off の範囲・行の便は srs.yaml を書かない）。 第 0.13 版（2026-10-06）は、行 ag-floor-off の契約審査の FAIL（歯が境界の main.rs の字 [--tz の不在を見るが、口 tz surface serve の USAGE が範囲の外で [--tz <program>] を持つ）を受け、不在を見る字を消す前の口の doc の行の字 [--drafts <dir>] [--tz に狭めた。 第 0.14 版（2026-10-06）は、行 ag-floor-off の 2 度目の契約審査の FAIL（歯の file agshp.rs の見本が stop.rs の字 pub mod floor; を使う・subagent_stop.rs の床の段は 14 行目と 15 行目の 2 行）を受け、agshp.rs を write-set と verify と done に足し、外す doc の行を直した。 第 0.15 版（2026-10-06）は、行 v-pf-contract の契約審査の FAIL（歯の toy の行 a が差し替え無しだと verify が宣言の共通 verify と同じで断られ、write-set の導出の材料も無い）を受け、toy の行の verify を歯 vpfgap_ の通る見本と同じ nextest の 1 行に差し替える形に直した。 第 0.16 版（2026-10-06）は、行 v-ci-child-cut の契約審査の FAIL（消す助けを残す歯 order.rs の 2 本と retire.rs の助けが使う・要件 FR1050 が close の後の CI の照合を求める）を受け、消す名 23 個と残す名 10 個を節 17 に列挙し、直す歯 4 本の断言を done に足した（起草は係 w323a）。同じ commit で要件 FR1050 と受入 AC1023 から close の後の CI の照合の字を外した。 第 0.17 版（2026-10-06）は、起草係 3 体の行を 1 本ずつ足した。段 S3 の行 v-turn-wip-stale（turn の終わりの門で、台帳か設計を書いたのに作業中の bead の定型の行が古い turn を 1 度だけ止める・節 25 と 26・係 w326a）、段 S7 の行 v-lens-ask（審査役の雛形 3 つから迷った時の既定の文と機械で止まる禁止の文と上限の無い外の読みを外す・節 27 と 28・係 w327a）、段 S8 の行 ag-ladder-verifier（検証役の型に決定はしごの段と消す物の名指しを書かせる 1 行・節 29・係 w328a）。席の決めとして、判定の語 INCONCLUSIVE は名を替えず意味だけを絞る（語を読む器の 49 file と記録の語を替えない）。 第 0.18 版（2026-10-06）は、段 S4 の条 P-28 の改めの前に流せる 2 行を足した。行 v-pf-literal（preflight だけの断りで、done の項が二重鉤括弧で名指す字が節の本文に無い項を名指す・節 23）と行 t-stop-preflight（係の終える前の門が、係の出した契約の file ごとに preflight を撃ち直して 1 度止める・節 24・depends は ag-floor-off と v-pf-contract）。起草は係 w325a。 第 0.19 版（2026-10-06）は、行 v-turn-wip-stale の契約審査の FAIL（要件 FR1088 が turn の終わりの判定で台帳を読まないと書く）を受け、同じ commit で要件 FR1088 の字を決め D5 に合わせて直し、節 25 の末にその 1 文を足した。 第 0.20 版（2026-10-06）は、行 v-pf-contract の便の gate の FAIL（便 t3-hub.92.7.1-20261006T111631Z・節 19 の各歯が置き場の run dir の空を見る字を、done の項が測っていなかった）を受け、done の 2 つ目から 4 つ目の項に、撃ちが置き場に run dir を作らない句を足した。 第 0.21 版（2026-10-06）は、段 S4 の契約を bead に置く移しの行 7 本を足した（持ち主の裁定 t3-hub.92.7.2 の承認の後に流し、全部の着地と器の binary の入れ替えの後に切り替えの設計の commit を置く）。器の行 v-bead-intake（受付と preflight が契約の bead を読み写しを置く・節 30・係 w331a）・v-bead-dispatch（列の候補と列外の鍵・節 31・係 w332a）・v-bead-ledger（台帳の形の判じと局面の出力・節 32・係 w333a）と、tsuzuri の行 t-graph-bead（導出グラフと板の札・節 33・係 w334a）・t-prose-bead（契約の bead の本文に散文の門・節 34）・t-plan-cap（計画の memo の本数の上限・節 35・係 w335a と w338a）・t-code-bead（tz code が台帳の契約を読む・節 38・係 w336a）。
 
 sections:
   - n: 1
@@ -285,6 +285,204 @@ sections:
         done: '(1) 出力の dir の子 contract に a.toml と bad.toml と memo.md と子の dir sub を置き、偽の scribe2 を PATH の頭に置いた係の 1 度目の終わりを、tz hook agent-stop は rc 2 で止め、標準エラーは bad.toml の file を名指す節 24 の通らない欠けの字を持ち a.toml の file の名を持たず、偽の scribe2 の撃ちの記録はちょうど 2 行で、a.toml と bad.toml の順に、字 pipe preflight --contract と file の path と字 --bead と札の対象と字 --repo と口の --repo の値と字 --state-dir と係の dir の子 pf-state の path を空白で繋いだ字であり、札に終えの印を書かず、pf-state は空の dir として在る（歯 tspf_contract_files_are_preflighted_in_name_order） (2) 同じ置き場の 2 度目の終わりは rc 0 で通し、出力の dir の STOP-GATE.txt の字は節 24 の通らない欠けの字の 1 行と改行 1 つと一致し、札に終えの印を書く（歯 tspf_second_end_records_the_hole_and_passes） (3) 子 contract の無い置き場と、子 contract に memo.md だけを置いた置き場は、偽の scribe2 を撃たずに 1 度目の終わりを rc 0 で通し、子 contract に a.toml だけを置いた置き場は偽の scribe2 を 1 度だけ撃って rc 0 で通し標準エラーを空にし、どれも札に終えの印を書く（歯 tspf_no_contract_file_fires_nothing） (4) PATH に scribe2 の無い置き場で a.toml を置いた 1 度目の終わりは rc 2 で止め、標準エラーは a.toml の file を名指す節 24 の起動できない欠けの字を持つ（歯 tspf_missing_scribe2_holds_once） (5) 係の dir の子 pf-state に file を 1 つ置いた置き場で a.toml を置いた 1 度目の終わりは、偽の scribe2 を撃たずに rc 2 で止め、標準エラーは節 24 の state dir の欠けの字に pf-state の path を入れた字を持つ（歯 tspf_state_dir_must_be_empty） (6) 着地済みの終える前の門の歯が字を替えずに緑のまま（群 teeth6 の歯 agsg_hook_passes_a_whole_stop_and_marks_it_ended ほか接頭辞 agsg_ の歯） (7) 着地済みの係の口の形の歯が字を替えずに緑のまま（歯 agshp_five_mouths_keep_the_usage_and_the_drafts_lines ほか接頭辞 agshp_ の歯）'
         done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@3", "7:@4"]
         depends: ["ag-floor-off", "v-pf-contract"]
+      - id: v-bead-intake
+        title: '器の受付 pipe intake と pipe preflight が、--design も --contract も無く --bead だけで撃たれた周に、台帳を 1 回読んで bead の欄 acceptance の契約の行と本文を取り、本文を goal に足した 1 行の toml を置き場に写し、pointer をその写しの絶対 path にして今の判定の 1 本に渡す。bead の側の上限と照らし（両方の形・読めない bead・開いた本数・byte・契約 id の重なり）を断りの語 5 つと rules 行 3 本で足す（持ち主の決め D1・判断の記録 ADR-72 の決定 (2)・裁定 t3-hub.92.7.2・memo t3-hub.92.7・設計だけの行）'
+        req: [FR1105]
+        section: "30"
+        write-set:
+          - scribe2/crates/scribe2/src/pipe/mod.rs
+          - +scribe2/crates/scribe2/src/pipe/bead.rs
+          - scribe2/crates/scribe2/src/pipe/cli/intake.rs
+          - +scribe2/crates/scribe2/src/pipe/cli/intake/bead.rs
+          - scribe2/crates/scribe2/src/pipe/cli/preflight.rs
+          - scribe2/crates/scribe2/src/pipe/refuse.rs
+          - scribe2/crates/scribe2/src/rules/mod.rs
+          - scribe2/rules/manifest.toml
+          - scribe2/crates/scribe2-boundary/tests/e2e/pipe/intake.rs
+          - +scribe2/crates/scribe2-boundary/tests/e2e/pipe/intake/vbin.rs
+          - scribe2/crates/scribe2-boundary/tests/e2e/rules/embedded.rs
+          - scribe2/crates/scribe2-boundary/tests/e2e/snapshots/e2e__rules__rules_external_form.snap
+          - =scribe2/crates/scribe2-boundary/tests/e2e/rules.rs
+        verify:
+          - cargo clippy --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vbin_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vbin_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_preflight_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_intake_design_refuses_a_hand_written_contract_file
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail rules_embedded_manifest_is_valid_and_covers_all_kinds
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail rules_embedded_manifest_declares_one_capability_row_per_role
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail rules_external_form
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail refuse_names_are_pinned_in_declaration_order
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words
+        size: M
+        growth:
+          - scribe2/crates/scribe2/src/pipe/mod.rs:2
+          - scribe2/crates/scribe2/src/pipe/cli/intake.rs:3
+          - scribe2/crates/scribe2/src/pipe/refuse.rs:90
+        done: '(1) 関数 form_of は、pointer の解ける design = の行だけを持つ acceptance を Design（その pointer）、行『[[contract]]』だけを持つ acceptance を Bead、両方を持つ acceptance を Both、どちらも持たない字と pointer の解けない design = の行だけを持つ字を Neither と返す（歯 vbin_form_of_names_the_four_forms） (2) 関数 copy_text は、節 30 の見本の acceptance と見本の本文から節 30 の写しの形の字を返し、その goal の値は『第一の段。 - 二つ目 ab 末』で、関数 row_of はその字から行 id b と section s2-b と同じ goal の行を返し、関数 digest は row_digest に acceptance と本文をこの順に渡した値と一致し、本文か acceptance の 1 byte を替えると値が替わる（歯 vbin_copy_text_joins_the_body_like_derive） (3) copy_text は、本文に二重引用符か逆斜線を持つ周・空白と改行だけの本文・acceptance が欄 section か goal か depends を持つ周・[[contract]] の行を 0 本か 2 本持つ周を、それぞれ節 30 の理由の句を持つ Err で返す（歯 vbin_copy_text_refuses_what_it_cannot_write） (4) 本文 65536 byte と acceptance 24576 byte の見本（節 30 の字の組み）を JSON の escape で書いた台帳の字を関数 issues_of で読むと、description と acceptance の字は書いた字と byte で一致し、digest も一致する（歯 vbin_cap_sized_bead_reads_back_byte_equal） (5) 行 a の表を持つ toy の repo と、開いた bead s2-b（acceptance は行 b の導出の形から欄 section の行を除いた字・本文は字 本文。）を返す偽の bd で、pipe preflight に --design も --contract も渡さず --bead s2-b と --bd を渡すと、rc 0 で、design= で始まる行は 1 行で字 design= と写しの絶対 path と井桁の記号 1 つと字 b と空白 1 つと字 section=s2-b を繋いだ字であり、写しは置き場の子『bead-contracts』の子 s2-b の下の digest の 16 桁の名の .toml で、その字は節 30 の写しの形と一致し、design= で始まる行を除いた stdout の行の列は、行 b だけの表を持つ別の toy の repo で --design docs/design/toy.md#b を渡した撃ちの同じ行の列と一致し、末尾の判定行は ok で、置き場に run dir を作らない（歯 vbin_preflight_reads_the_bead_like_the_table_row） (6) 同じ台帳で pipe intake に --bead s2-b を渡し --design を渡さない撃ちは rc 0 で、便の契約 file の design は写しの絶対 path と井桁の記号と字 b を繋いだ字で、その後に台帳の s2-b の本文を替えて pipe preflight --bead s2-b を撃つと別の名の写しができ、前の写しの字と便の契約 file の字は替わらない（歯 vbin_intake_points_the_run_at_the_copy） (7) acceptance に design = の行と [[contract]] の行を両方持つ bead の pipe intake --bead は rc 1 で stderr の 1 行目が字 pipe とコロンと空白に『contract-bead-both-forms bead=s2-b』を繋いだ字で、台帳に無い bead・rc 1 で終わる偽の bd・acceptance が空の bead・本文に二重引用符を持つ bead の撃ちは、どれも rc 1 で stderr の 1 行目が字 pipe とコロンと空白に『contract-bead-unreadable bead=s2-b』を繋いだ字で始まり節 30 の理由の句を持ち、どの撃ちも置き場に run dir も子『bead-contracts』も作らない（歯 vbin_both_forms_and_unreadable_beads_are_refused） (8) rules 行の値を差し替えた manifest で、本文の byte の数と同じ値の行では pipe preflight --bead は rc 0 で、1 小さい値の行では pipe intake --bead が rc 1 で stderr の 1 行目が字 pipe とコロンと空白に『contract-bytes-cap field=description』と bytes と cap の 2 値を繋いだ 1 行になり、acceptance も同じ形で field=acceptance になり、s2-b を含む開いた契約の bead 3 本と閉じた契約の bead 1 本と design = の行だけの開いた bead 1 本の台帳で、値 3 の行は通り、値 2 の行は stderr の 1 行目が字 pipe とコロンと空白に『contract-open-cap open=3 cap=2』を繋いだ字になる（歯 vbin_caps_refuse_one_over_the_value） (9) bead の行の id が表の行 a と同じなら stderr の 1 行目は字 pipe とコロンと空白に『contract-id-taken id=a by=docs/design/toy.md#a』を繋いだ字、repo のもう 1 つの doc docs/design/old.md の行 c と同じなら by=docs/design/old.md#c、閉じた契約の bead s2-c の行 d と同じなら by=s2-c で、どれも rc 1 で run dir を作らず、ほかに同じ id の無い行 e の s2-b は通る（歯 vbin_contract_id_taken_names_the_holder） (10) 埋め込みの manifest は行 contract.open_max を値 40、行 contract.body_max_bytes を値 65536、行 contract.acceptance_max_bytes を値 24576 で持ち、3 行は形 Int で効き、裁定は『user 2026-10-06T11:44Z 裁定 t3-hub.92.7.2』、裁定日は 2026-10-06 で、kind は ALL の RunnerGateFixRounds の直後に ContractOpenMax・ContractBodyMaxBytes・ContractAcceptanceMaxBytes の順に並ぶ（歯 vbin_rules_rows_hold_the_caps_after_gate_fix_rounds） (11) 着地済みの preflight の歯が字を替えずに緑のまま（歯 pipe_preflight_lists_one_refusal_per_judgement_without_creating_a_run ほか接頭辞 pipe_preflight_ の歯） (12) 受付の pipe intake に --contract を渡す撃ちは今のまま hand-written-contract で断る（歯 pipe_intake_design_refuses_a_hand_written_contract_file） (13) 埋め込みの manifest の行の数は 120、kind の数は 105 で、rules validate の外形の 2 行は『rows=120 kinds=105』を持つ（歯 rules_embedded_manifest_is_valid_and_covers_all_kinds と rules_embedded_manifest_declares_one_capability_row_per_role と rules_external_form） (14) 断りの名の列 REFUSALS は 33 値で、末の 5 つは contract-bead-unreadable・contract-bead-both-forms・contract-bytes-cap・contract-id-taken・contract-open-cap の順、run-cap は末から 6 つ目で、足した 5 語の在り処は節 30 の表のとおり（歯 refuse_names_are_pinned_in_declaration_order と pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@3", "6:@3", "7:@3", "8:@3", "9:@3", "10:@3", "11:@4", "12:@5", "13:@6", "13:@7", "13:@8", "14:@9", "14:@10"]
+        depends: ["v-pf-contract"]
+      - id: v-bead-dispatch
+        title: '器の列（pipe dispatch）が、acceptance に契約表の導出の形の [[contract]] の行を持つ bead を候補に数え、列外の鍵を bead の acceptance と本文の digest で比べ、兄弟の待ちを持たず、起こす便に --design を渡さない。審査の event の detail に、審査が読んだ材料の digest と写しの digest を足す（持ち主の決め D1・判断の記録 ADR-72 の決定 (2)・裁定 t3-hub.92.7.2・memo t3-hub.92.7・設計だけの行）'
+        req: [FR1105]
+        section: "31"
+        write-set:
+          - scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs
+          - scribe2/crates/scribe2/src/pipe/dispatch.rs
+          - scribe2/crates/scribe2/src/pipe/review.rs
+          - +scribe2/crates/scribe2/src/pipe/review/copied.rs
+          - scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs
+          - +scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/vbdisp.rs
+        verify:
+          - cargo clippy --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vbdisp_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vbdisp_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_dispatch_section_key_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail pipe_review_kind_detail_
+        size: M
+        growth:
+          - scribe2/crates/scribe2/src/pipe/dispatch.rs:1
+          - scribe2/crates/scribe2/src/pipe/review.rs:1
+        done: '(1) 偽の台帳に、acceptance が節 31 の見本の契約の行 c の bead 形で本文が字 本文。の open な bead と、acceptance が設計 pointer の行も契約の行も持たない字の open な bead の 2 本を置いて dispatch ls を撃つと、rc 0 で、1 本目の理由の欄は字 - で、2 本目の理由の欄は字 no-design-pointer で、数の行は total=2 ready=1 である（歯 vbdisp_bead_contract_is_a_candidate） (2) acceptance に設計 pointer の行と契約の行 c の bead 形の両方を持つ bead は、理由の欄が字 admission と半角のコロンと字 contract-bead-both-forms で始まり、数の行は total=1 ready=0 である（歯 vbdisp_both_forms_wait_as_refused） (3) 契約の行 c の bead 形の bead 1 本を持つ偽の台帳で pipe dispatch を撃つと、その bead の便がちょうど 1 本でき、その便の契約 file の欄 design の値は、置き場の dir と字 /bead-contracts/ と bead の id と字 / と bead の acceptance と本文の digest の 16 桁と字 .toml#c を繋いだ字である（歯 vbdisp_fired_bead_contract_runs_without_design） (4) 受付 pipe intake --bead で起こし判定 file を FAIL に書き替えた便を持つ bead は、dispatch ls の理由の欄が字 settled で始まり字 /Reviewed で終わり、何も替えない 2 度目の撃ちでも同じ字であり、本文の 1 字を替えた周は字 - と ready=1 で、本文を戻して acceptance の title の 1 字を替えた周も字 - と ready=1 で、両方を戻した周は 1 度目と同じ字である（歯 vbdisp_settled_key_is_the_bead_digest） (5) 契約の行 c の bead B を受付 pipe intake --bead で起こし判定 file を FAIL に書き替え、節 31 の見本の契約の行 d の bead 形の bead C を open で置くと、C の理由の欄は字 - である（歯 vbdisp_bead_contracts_have_no_siblings） (6) 契約の行 d の bead C が、契約の行 c の open な bead B に blocks で依る周は、C の理由の欄が字 dependency と半角のコロンと B の id であり、B を closed にした周は字 - である（歯 vbdisp_blocks_order_bead_contracts） (7) 関数 copied::words は、同じ材料と写しの字の対に、節 31 の『 material:』と 16 桁と『 copy:』と同じ 16 桁を繋いだ字を返し、16 桁は row_review::row_digest の値であり、写しの字を 1 字替えると 2 つの 16 桁が違い、detail_of の字にこの字を足した detail を read_detail が detail_of と同じ判定と理由の型に読む（歯 vbdisp_copy_words_name_both_digests） (8) 契約の bead を偽 PASS の lens で受付 pipe intake --bead に通すと、置き場の event log の段 Reviewed の event の detail は字 verdict:PASS に続けて material と copy の 2 語を持ち、2 つの値は同じ 16 桁であり、同じ置き場で --design の行 a を通した便の段 Reviewed の event の detail は字 verdict:PASS だけである（歯 vbdisp_review_detail_carries_material_and_copy_digests） (9) 着地済みの列外の鍵の歯（接頭辞 pipe_dispatch_section_key_ の 6 本）は字を替えずに緑のまま（歯 pipe_dispatch_section_key_requeues_an_inconclusive_review_after_the_section_changes） (10) 着地済みの審査の detail の往復の歯は字を替えずに緑のまま（歯 pipe_review_kind_detail_round_trips_and_reads_legacy_as_unparsed）'
+        done-teeth: ["1:@3", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@2", "8:@3", "9:@4", "10:@5"]
+        depends: ["v-bead-intake"]
+      - id: v-bead-ledger
+        title: '器の台帳の形の判じと局面の出力と同梱の引き金の write-set が、欄 acceptance に契約表の導出の形の [[contract]] の行を持つ bead も契約に数え、行と要件の部品の母集団に足す（持ち主の決め D1・判断の記録 ADR-72 の決定 (2)・裁定 t3-hub.92.7.2・memo t3-hub.92.7・設計だけの行）'
+        req: [FR1105]
+        section: "32"
+        write-set:
+          - scribe2/crates/scribe2/src/ledger/form.rs
+          - scribe2/crates/scribe2/src/ledger/lint.rs
+          - scribe2/crates/scribe2/src/ledger/phase.rs
+          - scribe2/crates/scribe2/src/ledger/phase_main.rs
+          - scribe2/crates/scribe2/src/fleet/lifecycle.rs
+          - scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs
+          - +scribe2/crates/scribe2/src/fleet/lifecycle_mark/contracts.rs
+          - scribe2/crates/scribe2/src/hook/ledger_guard.rs
+          - scribe2/crates/scribe2/src/hook/ledger_guard_tests.rs
+        verify:
+          - cargo clippy --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --all-targets --no-deps -- -D warnings
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail vbled_
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail ledger::form::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail ledger::lint::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail ledger::phase::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail ledger::phase_main::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail fleet::lifecycle_mark::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail fleet::lifecycle::tests
+          - cargo nextest run --manifest-path scribe2/crates/scribe2/Cargo.toml -p scribe2 --lib --no-tests=fail hook::ledger_guard::tests
+        size: M
+        growth:
+          - scribe2/crates/scribe2/src/ledger/phase.rs:50
+          - scribe2/crates/scribe2/src/fleet/lifecycle.rs:2
+          - scribe2/crates/scribe2/src/fleet/lifecycle_mark.rs:6
+        done: '(1) 台帳の形の判じは、label の無い行の形の bead を契約に、label intake:memo と行の形を持つ memo を both に、label も acceptance も無い bead を neither に数え、閉じた行の形の契約だけが discovered-from で辿れる memo を settled に数え、contract_key は行の形の bead に bead の id を、design の行の bead に pointer の字を、どちらも無い bead に None を返す（歯 vbled_form_counts_a_bead_contract_as_a_contract） (2) 台帳の lint は、行の形の bead と読めない行の形の bead と 1 行目が design の行で続けて行の形を持つ bead の 3 本を契約に数え、render の字は節 32 の lint の見本の行と一致して末は 『unresolved:bad bodied:both』 である（歯 vbled_lint_counts_bead_contracts_and_names_unreadable_rows） (3) 局面の台帳の側は、開いた行の形の契約を部品に出さず、着地で閉じた行の形の契約の extra の pointer を bead の id にする（歯 vbled_phase_bead_contract_parts） (4) 局面の main の側は、契約表の行の後に開いた行の形の契約を 『row-beaded』 で、着地で閉じた行の形の契約を 『row-landed』 で足し、着地でなく閉じた行の形の契約の row を出さず、契約表と bead の契約の req の要件を 『requirement-rowed』 に、どちらにも無い要件を requirement-unrowed にし、契約表の行が無い周は bead の行も出さない（歯 vbled_phase_main_bead_contract_rows） (5) open_contracts は開いた契約ごとに bead の id と contract_key の pointer を台帳の順に返し、open_write_set は契約表の pointer の write-set の項目の後に開いた行の形の契約の write-set の項目を台帳の順に足し、閉じた契約と読めない行の形の契約と memo の項目を足さない（歯 vbled_open_contracts_and_write_set_read_bead_contracts） (6) 起票の門は label intake:memo と行の形の acceptance を持つ create を memo-on-contract で断り、label の無い同じ create を通す（歯 vbled_guard_refuses_a_memo_label_on_a_bead_contract） (7) 着地済みの lib の歯（module ledger::form と ledger::lint と ledger::phase と ledger::phase_main と fleet::lifecycle_mark と fleet::lifecycle と hook::ledger_guard の tests の歯）が字を替えずに緑のまま（歯 ledger_lint_judge_counts_each_defect_apart ほか）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2", "7:@3", "7:@4", "7:@5", "7:@6", "7:@7", "7:@8", "7:@9"]
+        depends: ["v-bead-intake"]
+      - id: t-graph-bead
+        title: '導出グラフが契約の行を acceptance に持つ契約の bead を節点のまま読み、欄 req から要件への req の辺を張り、設計ノートの行への design の辺を張らず、不変条件 g-2 と g-8 と pipeline の板と吹き出しの設計の行が bead の契約も数えて描く（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）'
+        req: ["FR2"]
+        section: "33"
+        write-set:
+          - crates/tsuzuri-core/src/graph/build.rs
+          - crates/tsuzuri-core/src/graph/mod.rs
+          - crates/tsuzuri-core/src/graph/check.rs
+          - crates/tsuzuri-core/src/pipeline.rs
+          - crates/tsuzuri-contract/src/graph.rs
+          - crates/tsuzuri-boundary/src/server/board.rs
+          - crates/tsuzuri-surface/src/widgets/pop.rs
+          - +crates/tsuzuri-core/tests/gbead.rs
+          - +crates/tsuzuri-surface/tests/gbpop.rs
+          - crates/tsuzuri-core/tests/teeth2/gview.rs
+          - crates/tsuzuri-contract/tests/teeth1/cform_graph.rs
+          - crates/tsuzuri-surface/tests/teeth4/itemlink.rs
+          - crates/tsuzuri-surface/tests/teeth2/bvpop.rs
+          - crates/tsuzuri-surface/tests/teeth2/cadl.rs
+          - =crates/tsuzuri-core/tests/teeth1/dnrow.rs
+        verify:
+          - cargo clippy -p tsuzuri-contract -p tsuzuri-core -p tsuzuri-boundary -p tsuzuri-surface --all-targets --no-deps -- -D warnings
+          - cargo nextest run -p tsuzuri-core --test gbead --no-tests=fail gbead_
+          - cargo nextest run -p tsuzuri-surface --test gbpop --no-tests=fail gbpop_
+          - cargo nextest run -p tsuzuri-core --test teeth1 --no-tests=fail dnrow_
+          - cargo nextest run -p tsuzuri-core --test teeth2 --no-tests=fail gview_
+          - cargo nextest run -p tsuzuri-contract --test teeth1 --no-tests=fail contract_form_graph_
+          - cargo nextest run -p tsuzuri-surface --test teeth4 --no-tests=fail ilink_
+          - cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail bvpop_
+          - cargo nextest run -p tsuzuri-surface --test teeth2 --no-tests=fail cadl_
+        size: M
+        done: '(1) 定数 CONTRACT_HEAD は字『[[contract]]』である（歯 gbead_contract_head_word） (2) contract_rows は節の 2 塊の見本の字に、id が t-one で req が FR1 の塊と、id が読めず req が空の塊の 2 つをこの順に返す（歯 gbead_contract_rows_read_id_and_req） (3) 節の fixture の台帳で、bead gb.1 は種類 task の節点で、属性の contracts は t-one の 1 つ、pointers は空である（歯 gbead_contract_bead_is_a_node） (4) 節の fixture の台帳で、gb.1 から出る辺は FR1 への req の辺の 1 本だけで、gb.1 と gb.3 から出る design の辺は 0 本である（歯 gbead_req_edges_and_no_design_edge） (5) 節の fixture の台帳で、gb.3 から出る req の辺は FR1 への 1 本だけで、gb.3 から gb.1 への blocks の辺が在る（歯 gbead_req_edges_and_no_design_edge） (6) 節の fixture の台帳で、pointer の形の gb.2 から nx#a への design の辺が在り、gb.2 の属性の contracts は空である（歯 gbead_pointer_form_keeps_design_edge） (7) 節の fixture の台帳で g-2 は合格で、両方の形の gb.4 と 2 塊の gb.5 を足すと g-2 は gb.4 と gb.5 の違反である（歯 gbead_g2_counts_both_forms） (8) 節の fixture の台帳に契約の行を持つ memo の gb.6 を足すと g-8 は gb.6 の違反である（歯 gbead_g8_counts_contract_memo） (9) 節の fixture の台帳と event log の板の札は、gb.1 の Queued の札と gb.3 の Blocked の札を持ち、gb.4 の札を持たない（歯 gbead_pipeline_cards_bead_contracts） (10) 契約の型の BeadAttr は contracts が空なら字 contracts を持たない JSON に、t-one の 1 つなら contracts の配列を持つ JSON にし、どちらも同じ値に読み戻る（歯 gbead_wire_contracts_skip_empty） (11) 吹き出しの設計の行 row_pointer は、pointer の行を持つ bead にはその pointer の字を、pointers が空で contracts が t-one の 1 つの bead には t-one を、contracts が 2 つの bead には無しを返す（歯 gbpop_row_pointer_reads_bead_contract） (12) 着地済みの歯 dnrow_ が緑のまま（verify の 4 行目） (13) 着地済みの歯 gview_ が緑のまま（verify の 5 行目） (14) 着地済みの歯 contract_form_graph_ が緑のまま（verify の 6 行目） (15) 着地済みの歯 ilink_ と bvpop_ と cadl_ が緑のまま（verify の 7 行目から 9 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2", "7:@2", "8:@2", "9:@2", "10:@2", "11:@3", "12:@4", "13:@5", "14:@6", "15:@7", "15:@8", "15:@9"]
+        depends: ["v-bead-ledger"]
+      - id: t-prose-bead
+        title: 'tz check に旗 --prose（1 つの file の字に規則の行 R-16 の散文の門を撃つ口）を足し、起票の門 tz hook question-gate が欄 acceptance に [[contract]] の行を持つ bd か bdw の create と update の --body-file の file に、係の終える前の門 tz hook agent-stop が出力の dir の子 contract の直下の .md の file に、それを撃って落ちたら止める（裁定 t3-hub.92.7.2・memo t3-hub.92.7・設計だけの行）'
+        req: [FR12, FR4, FR21]
+        section: "34"
+        write-set:
+          - folio2/crates/folio/src/entry.rs
+          - folio2/crates/folio/src/prose.rs
+          - crates/tsuzuri-core/src/lib.rs
+          - +crates/tsuzuri-core/src/contract_gate.rs
+          - crates/tsuzuri-boundary/src/hook/question_gate.rs
+          - crates/tsuzuri-boundary/src/hook/subagent_stop.rs
+          - +crates/tsuzuri-boundary/src/hook/subagent_stop/prose.rs
+          - +crates/tsuzuri-boundary/tests/tprsb.rs
+          - =crates/tsuzuri-boundary/tests/mlnk.rs
+          - =crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+          - =crates/tsuzuri-boundary/tests/teeth6/agsg.rs
+          - =folio2/crates/folio/tests/tz4/prose.rs
+        verify:
+          - cargo clippy -p folio -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings
+          - cargo nextest run -p tsuzuri-boundary --test tprsb --no-tests=fail tprsb_
+          - cargo nextest run -p tsuzuri-boundary --test mlnk --no-tests=fail mlnk_
+          - cargo nextest run -p tsuzuri-boundary --test teeth3 --no-tests=fail qgate_
+          - cargo nextest run -p tsuzuri-boundary --test teeth6 --no-tests=fail agsg_
+          - cargo nextest run -p tsuzuri-boundary --test tz4 --no-tests=fail prose_gate_
+        size: M
+        done: '(1) toy の設計文書の dir と節 34 の見本の 7 行の file で、tz check --dir <dir> --prose <file> は rc 1 で、標準出力はちょうど 3 行で、2 行目を名指す理由 no-pointer の行、3 行目を名指す理由 number-with-unit の行、要約の行の順で、要約の行は字『不合格（』と印を持つ文 3・違反 2） を持つ（歯 tprsb_check_prose_names_each_hole） (2) 見本の 1 行目だけの file では rc 0 で標準出力は字『合格（』と印を持つ文 1・違反 0） を持つ要約の 1 行だけ、印を持つ文の無い file では rc 0 で印を持つ文 0・違反 0 の要約の 1 行だけ（歯 tprsb_check_prose_passes_clean_text） (3) 行 R-16 の無い規則の表の dir・在らない file・UTF-8 でない byte の file のそれぞれで rc 2 で、標準出力の 1 行目は entry.rs の UNKNOWN_HEAD の字で始まり、最後の行は字 --prose と字『まだ分からない』を持つ（歯 tprsb_check_prose_unknowns） (4) contract_gate の関数 writes は、bdw update fx-c.1 に 1 行目が [[contract]] の --acceptance の値と --body-file の絶対 path を持つ一続きを本文が file の甲で、--body-file の相対 path か -d か --stdin を持つ甲を本文が file でない形の甲で、本文の旗の無い甲を本文が無しの甲で、--acceptance の無い bd update fx-c.1 --body-file の一続きを名指しの id が fx-c.1 の乙で拾い、acceptance の行が design = で始まる一続き・bd list の一続き・頭の語が echo の一続き・Bash でない道具の入力からは 0 件を返す（歯 tprsb_writes_pick_contract_writes） (5) 関数 judge は、本文が file でない形の甲と無しの甲を止める contract-body-form、撃ちの関数が rc 1 と違反の行を返す甲を止める contract-prose で答えの字はその違反の行を持ち、rc 2 を返す甲を まだ分からない contract-prose-unknown、rc 0 を返す甲を通す。乙は、台帳の字で名指しの id の acceptance が [[contract]] の行を持てば止める contract-body-form、持たなければ通し、台帳の字が空なら まだ分からない contract-ledger-unread（歯 tprsb_judge_answers） (6) ContractWhy の ALL の word の列は contract-body-form・contract-prose・contract-prose-unknown・contract-ledger-unread のこの順の 4 語で、関数 output は通す時に None、止める答えは字『契約の本文の散文の門は止める（』で、まだ分からない答えは字『契約の本文の散文の門は まだ分からない（』で reason が始まる PreToolUse の deny の JSON（歯 tprsb_output_words） (7) tz hook question-gate に toy の repo と、見本の 7 行の file を --body-file の絶対 path に持つ甲の payload を渡すと、rc 0 で標準出力は改行 1 つで終わる 1 行の deny の JSON で字 contract-prose と字 行 2 と字 no-pointer を持ち、偽の bd と偽の設計の道具は撃たれず、repo の byte は変わらない。見本の 1 行目だけの file では rc 0 で標準出力は空（歯 tprsb_bin_contract_body_is_gated） (8) 偽の bd の台帳で fx-c.1 の acceptance が [[contract]] の行を、fx-c.2 の acceptance が design = の行を持つ時、本文だけの直しの乙の payload は fx-c.1 で contract-body-form の答えの 1 行を、fx-c.2 で空の標準出力を返し、どちらも偽の bd は BD_ARGS の字で 1 度だけ撃たれる（歯 tprsb_bin_body_only_update） (9) 係の出力の dir の子 contract に見本の 7 行の a.md と見本の 1 行目だけの b.md と見本の 7 行の c.txt を置いた係の 1 度目の終わりを、tz hook agent-stop は rc 2 で止め、標準エラーは a.md の path と字『が散文の門で落ちる（』を持ち、字 b.md と字 c.txt を持たない。2 度目の終わりは rc 0 で通し、出力の dir の STOP-GATE.txt は a.md の path と同じ字を持つ（歯 tprsb_stop_holds_a_failing_body） (10) 着地済みの memo の起票の門の歯 mlnk_ が字を替えずに緑のまま（verify の 3 行目） (11) 着地済みの問いの起票の門の歯 qgate_（群 teeth3）が字を替えずに緑のまま（verify の 4 行目） (12) 着地済みの終える前の門の歯 agsg_ が字を替えずに緑のまま（verify の 5 行目） (13) 着地済みの folio の散文の門の歯 prose_gate_（群 tz4）が字を替えずに緑のまま（verify の 6 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2", "7:@2", "8:@2", "9:@2", "10:@3", "11:@4", "12:@5", "13:@6"]
+        depends: ["t-stop-preflight"]
+      - id: t-plan-cap
+        title: '起票の門 tz hook question-gate が、label memo:plan を持つ開いた bead（計画の memo）の本数を数え、印の起票と継ぐ起票と起こし直しで上限を越える命令と、後から印を足す命令を止め、値は規則の表の上限の行から読み、その行が無い間は印の在る書きを まだ分からない で止める（裁定 t3-hub.92.7.2・memo t3-hub.92.7・設計だけの行）'
+        req: [FR4]
+        section: "35"
+        write-set:
+          - crates/tsuzuri-core/src/lib.rs
+          - +crates/tsuzuri-core/src/plan_cap.rs
+          - crates/tsuzuri-boundary/src/hook/question_gate.rs
+          - +crates/tsuzuri-boundary/tests/tplcap.rs
+          - =crates/tsuzuri-boundary/tests/mlnk.rs
+          - =crates/tsuzuri-boundary/tests/teeth3/qgate.rs
+          - =crates/tsuzuri-boundary/tests/teeth5/shrtb.rs
+        verify:
+          - cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings
+          - cargo nextest run -p tsuzuri-boundary --test tplcap --no-tests=fail tplcap_
+          - cargo nextest run -p tsuzuri-boundary --test mlnk --no-tests=fail mlnk_
+          - cargo nextest run -p tsuzuri-boundary --test teeth3 --no-tests=fail qgate_
+          - cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail shrtb_
+        size: M
+        done: '(1) 関数 cap は、CAP_ROW の 1 行（value が 4 本 以下）を持つ字で 4 を返し、その行の無い字・その行が 2 本の字・value が 4 行 以下 の字・規則の行 R-33 の行の写しだけの字で Err を返し、定数 CAP_ROW は字 R と字 - と数 45 を繋いだ 4 字（歯 tplcap_cap_reads_the_row） (2) 関数 opens は、label に intake:memo と memo:plan を持つ bdw create を印の起票、印の無い bd create --parent fx-p.1 を親 fx-p.1 の継ぐ起票、その一続きに --no-inherit-labels を足した物を継がない起票、bd reopen fx-p.5 と bd update fx-p.5 --status open を起こし直し、bdw update fx-p.6 --add-label memo:plan と bdw update fx-p.6 --set-labels=intake:memo,memo:plan と bd label add fx-p.6 memo:plan と bd tag fx-p.6 memo:plan を後からの印として拾い、bd list -l memo:plan・bd update fx-p.5 --status closed・頭の語が echo の一続き・Bash でない道具の入力からは 0 件を返す（歯 tplcap_opens_pick_plan_writes） (3) 関数 judge は、印の開いた bead 4 本の台帳で印の起票 1 つを止める plan-cap、3 本の台帳で同じ起票を通し、3 本の台帳で印の起票 2 つを並べた command を止める plan-cap（歯 tplcap_judge_counts_at_the_edge） (4) 4 本の台帳で、親 fx-p.1 の継ぐ起票を止める plan-cap、継がない起票と親 fx-p.6 の起票を通す（歯 tplcap_judge_counts_inherited_labels） (5) 4 本の台帳で fx-p.5 の reopen と --status open を止める plan-cap、3 本の台帳で同じ 2 つを通し、4 本の台帳で閉じた task fx-p.7 の reopen を通す（歯 tplcap_judge_counts_revived_plans） (6) 印の開いた bead 0 本の台帳でも、後からの印の 4 形をどれも止める plan-late-label（歯 tplcap_judge_refuses_late_labels） (7) cap が Err の時、印の起票は まだ分からない plan-cap-unread で、印の無い bd create は通し、台帳の字が空のグラフでは印の起票が plan-cap-unread（歯 tplcap_judge_unread_is_not_a_pass） (8) PlanWhy の ALL の word の列は plan-cap・plan-late-label・plan-cap-unread のこの順の 3 語で、関数 output は通す時に None、止める答えは字『計画の memo の上限の門は止める（』で、まだ分からない答えは字『計画の memo の上限の門は まだ分からない（』で reason が始まる PreToolUse の deny の JSON で、4 本の台帳の印の起票の答えは字『開いた計画の memo 4・足す 1・上限 4』を持つ（歯 tplcap_output_words） (9) tz hook question-gate に、CAP_ROW の 1 行を持つ toy の repo と 4 本の台帳の偽の bd と偽の設計の道具で、印の起票の payload を渡すと、rc 0 で標準出力は同じ台帳の judge の output の字と改行 1 つで、偽の bd は 1 度撃たれ、repo の byte は変わらない（歯 tplcap_bin_plan_create_is_counted） (10) CAP_ROW の行が無く規則の行 R-33 の行の写しだけを持つ toy の repo では、印の起票の payload に rc 0 で plan-cap-unread の答えの 1 行を返し、印も --parent も無い bd create の payload に rc 0 で空の標準出力を返して偽の bd を撃たない（歯 tplcap_bin_without_the_row） (11) 着地済みの memo の起票の門の歯 mlnk_ が字を替えずに緑のまま（verify の 3 行目） (12) 着地済みの問いの起票の門の歯 qgate_（群 teeth3）が字を替えずに緑のまま（verify の 4 行目） (13) 着地済みの短い題の門の歯 shrtb_ が字を替えずに緑のまま（verify の 5 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2", "6:@2", "7:@2", "8:@2", "9:@2", "10:@2", "11:@3", "12:@4", "13:@5"]
+      - id: t-code-bead
+        title: 'tz code が台帳を読み、acceptance に契約の行を持つ契約の bead の write-set からも行 → file の辺を組み、台帳が読めない時はまだ分からないで返し、memo の繋ぐ門が契約の bead を 1 段目で拾うことを歯で留める（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）'
+        req: ["FR2"]
+        section: "38"
+        write-set:
+          - crates/tsuzuri-core/src/graph/code.rs
+          - crates/tsuzuri-boundary/src/cli/code.rs
+          - crates/tsuzuri-boundary/src/main.rs
+          - +crates/tsuzuri-core/tests/cdbead.rs
+          - +crates/tsuzuri-boundary/tests/kcbead.rs
+          - crates/tsuzuri-boundary/tests/kcode.rs
+          - =crates/tsuzuri-core/tests/cdnode.rs
+        verify:
+          - cargo clippy -p tsuzuri-core -p tsuzuri-boundary --all-targets --no-deps -- -D warnings
+          - cargo nextest run -p tsuzuri-core --test cdbead --no-tests=fail cdbead_
+          - cargo nextest run -p tsuzuri-boundary --test kcbead --no-tests=fail kcbead_
+          - cargo nextest run -p tsuzuri-boundary --test kcode --no-tests=fail kcode_
+          - cargo nextest run -p tsuzuri-core --test cdnode --no-tests=fail cdnode_
+        size: M
+        done: '(1) bead_write_sets は節の見本の台帳の字に、kb.1#t-one の行（b.rs と +d.rs）と kb.3#t-three の行（a.rs）の 2 つをこの順に返す（歯 cdbead_bead_write_sets_reads_contract_beads） (2) bead_write_sets は空の字と JSON の配列でない字と、write-set の値が字の配列でない契約の行を持つ bead の在る台帳の字に None を、空の配列の字に空の列を返す（歯 cdbead_bead_write_sets_unreadable_is_none） (3) 節の見本の索引と台帳で組んだグラフで、memo_needs は FR1 の名指しに、集合として A-1 と mb.1 と mb.2 と mb.4 と nx#a と nx#b を返す（歯 cdbead_memo_needs_reach_bead_contracts） (4) 同じグラフで、memo_needs は mb.2 の名指しに、集合として FR1 と mb.1 を返す（歯 cdbead_memo_needs_reach_bead_contracts） (5) 節の見本の repo で tz code --row kb.1#t-one は rc 0 で、標準出力は節の『3 行』とちょうど同じで、偽の bd の撃たれた引数は節の『6 語』である（歯 kcbead_row_reads_bead_contract_write_set） (6) 節の見本の repo で旗なしの tz code は rc 0 で、標準出力に節の『rows 3 と writes 3 と unbound 2 の行』を持つ（歯 kcbead_counts_add_bead_rows） (7) 偽の bd が rc 1 を返す見本の repo で、旗なしの tz code は rc 2 で、標準出力に節の『rows 2 の行』を持ち、標準エラーは字『台帳が読めない』を持つ 1 行である（歯 kcbead_unreadable_ledger_is_unknown） (8) 同じ repo で、tz code --row kb.1#t-one は rc 2 で、tz code --file b.rs は rc 0 で標準出力は節の『def の 1 行』とちょうど同じである（歯 kcbead_unreadable_ledger_is_unknown） (9) write-set の値が字の配列でない契約の行を持つ bead を偽の bd の台帳に足した見本の repo で、旗なしの tz code は rc 2 で、標準エラーは字『台帳が読めない』を持つ（歯 kcbead_malformed_bead_is_unknown） (10) 着地済みの歯 kcode_ が緑のまま（verify の 4 行目） (11) 着地済みの歯 cdnode_ が緑のまま（verify の 5 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@3", "6:@3", "7:@3", "8:@3", "9:@3", "10:@4", "11:@5"]
+        depends: ["t-graph-bead"]
   - n: 3
     type: prose
     title: 行 t-daily-deny — 日に 1 度の全部の撃ちに写しの孤児の照らしと依存の監査 2 本を足す（memo t3-hub.92.3・設計だけの行）
@@ -986,3 +1184,251 @@ sections:
       done と verify の対応。1 つ目と 2 つ目の項は verify の 2 行目（新しい歯の file agldr の歯）が測る。3 つ目の項は群 teeth6 の module agpl.rs の歯（頭の欄の型の欠けと本文の頭の 4 行の塊と群の行の欠けを見る・verifier.md の頭と塊を読む）が verify の 3 行目で、4 つ目の項は段の file ageff.rs の歯（頭の欄 effort を見る・verifier.md の頭の model の行に欄を差し込む見本を作る）が verify の 4 行目で測る。どちらも本文の末の行の数と字を数えないので、この行で落ちない（agpl.rs の type_faults と head_faults・ageff.rs の efforts と faults）。1 行目の clippy は done に載せない守り。xtask の check は共通 verify が撃つので行の verify に書かない。
 
       範囲の外。起草係と調べ役の型（drafter.md・researcher.md）と手引き（SKILL.md と reference.md）は替えない。判断の記録の欄と契約の行の欄に段の欄を足すこと（計画の file の後の行の候補）、週 1 の束ねの bead の対の表（台帳の書き・席）、席の道具の退け（repo の外・席）は、この行で書かない。
+  - n: 30
+    type: prose
+    title: 行 v-bead-intake — 受付と preflight が契約を bead から読む（memo t3-hub.92.7・作り直し v4 の段 S4 の移しの口の 1 本目・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 13 項を書く。器の lib に新しい module pipe/bead.rs（判じと写しと digest の共有の口）と、受付の子 module pipe/cli/intake/bead.rs（bead の周の引数と台帳の読みと照らし）を足し、pipe/mod.rs に行 pub mod bead; を、pipe/cli/intake.rs に子 module の宣言と呼び替えを、pipe/cli/preflight.rs に bead の周を、pipe/refuse.rs に断りの語 5 つを、rules/mod.rs と scribe2/rules/manifest.toml に rules 行 3 本を足す。器の e2e の受付の子 module scribe2/crates/scribe2-boundary/tests/e2e/pipe/intake/vbin.rs に歯 6 本を足し、親 scribe2/crates/scribe2-boundary/tests/e2e/pipe/intake.rs の mod の行の並びの末に行 mod vbin; を足す。数を pin する着地済みの歯の file rules/embedded.rs と snapshot e2e__rules__rules_external_form.snap の数を直す。歯 rules_external_form の file rules.rs は書かない（置き場だけの = の項）。depends は v-pf-contract（その行が足す後段 generated_from を呼び、preflight.rs の --contract の周の分けに bead の周を足す）。v-pf-literal とは preflight.rs が交わるが、呼びも歯の書き替えも無いので depends を書かない。
+
+      なぜ。持ち主は判断の記録 ADR-72 の決定 (2)（決め D1）で契約の正本を台帳の bead に移すと決め、裁定 t3-hub.92.7.2 で、便の契約を bead 1 本に置く形（欄 acceptance に契約表の導出の形の [[contract]] の 1 行・本文に設計の節）と上限の値（開いた契約の bead 40 本・本文 64 KB・acceptance 24 KB）を承認した（逐語は台帳の notes）。今の受付は acceptance の design = の pointer で base の木の契約表の行を読む（pipe/cli/intake.rs の generated が show_head で読む・V）。この行は受付と preflight に bead の周を足し、行の本文の出所だけを替えて、判定の 1 本 judge と表の検査と写しの読み（table::read の 1 本）を替えない。決定はしご。要るか: bead に置いた契約を読む口が無ければ切り替えられない。既に在るか: 台帳の 1 回の読み（seat::ledger::read_ledger・bd list --all の 1 撃ちで acceptance と description を持つ Issue の列・V）、行の読み（table::read_rows）、行の digest（pipe/row_review.rs の row_digest・FNV-1a 64・V）、置き場の全部の行の読み（pipe/spawn.rs の table_rows・V）、後段 generated_from（行 v-pf-contract）を使い、新しい判定の関数を足さない。器の crate は依存を持たない（Cargo.toml の dependencies が空・V）ので digest は既存の FNV の 1 本にする。
+
+      並ぶ間の決まり（この行の着地から退けの行まで）。器は acceptance に design = の行が在れば今の契約表を、行 [[contract]] が在れば bead を読み、両方を持つ bead は断りの語 contract-bead-both-forms で断る。受付は --design を渡された周は今のまま台帳を読まない（両方の形の断りは、列が候補を組む周に行 v-bead-dispatch が撃つ）。
+
+      形（pipe/bead.rs・pub の名）。
+      - 定数 CONTRACT_HEAD（字 [[contract]]）と COPY_DIR（字 bead-contracts）。
+      - enum Form（Design は pointer を持つ・Bead・Both・Neither）と関数 form_of(acceptance)。前後の空白を除いた行がちょうど [[contract]] の行が在れば bead の形、行頭が字 design と空白と等号と空白の行（dispatch/candidates.rs の pointer_of と同じ鍵）が在れば design の形。両方は Both（design の行の pointer が解けなくても Both）。design の行だけで pointer が解ければ Design、解けなければ Neither（今の pointer_of と同じ極性）。どちらも無ければ Neither。
+      - 関数 digest(acceptance, description)。row_review::row_digest(acceptance, description) をそのまま呼ぶ（2 つの字を整えずに NUL で区切った byte の FNV-1a 64 の 16 桁）。
+      - 関数 copy_text(bead, acceptance, description)。写しの字は 5 つの部分を改行 1 つで繋いで末に改行を 1 つ足した字。部分は、字 schema = 1、空の字、acceptance の末の空白と改行を除いた字、字 section と空白と等号と空白と二重引用符で囲んだ bead の id、字 goal と空白と等号と空白と二重引用符で囲んだ本文の 1 行。本文の 1 行は description の各行（str::lines の行・CR と LF の区切りの CR も落ちる）の前後の空白を除き、空の行を落とし、空白 1 つで繋いだ字（tz derive の goal と同じ・folio2/crates/folio/src/derive.rs の関数 goal）。Err の理由の句は次の 5 つ。本文に二重引用符か逆斜線が在る。本文が空。acceptance に欄 <名> が在る（名は section か goal か depends・書かれた最初の名）。[[contract]] の行が <数> 本。行を読めない（<read_rows の最初の理由>）。句の順は、本文の字の照らし、本文の空、欄の照らし、行の読み、行の数。
+      - 関数 row_of(bead, acceptance, description)。copy_text の字を table::read_rows に写しの名（字 bead.toml）で渡し、行がちょうど 1 本ならその ContractRow を返す（欄 goal に本文の 1 行・欄 section に bead の id）。
+      - 関数 copy_path(state_dir, bead, digest)。置き場の子 bead-contracts の子 <bead> の下の <digest>.toml。中身で名が決まるので、bead が後で替わっても前の写しは替わらない。関数 digest_of_design(design)。契約の design の path がこの形なら 16 桁を返し、ほかは None（列外の鍵が便の写しから digest を引く口・行 v-bead-dispatch が使う）。
+
+      見本（歯 vbin_copy_text_joins_the_body_like_derive）。acceptance は e2e の toy の derive_row の行 b（欄 verify を字 cargo nextest run -p toy --no-tests=fail derive_ の 1 行の配列に差し替えた形）から欄 section の行を除いた字。本文は 4 行で、1 行目は空白 2 つと字 第一の段。、2 行目は空、3 行目はタブ 1 つと字 - 二つ目 ab、4 行目は字 末 で、行の区切りは CR と LF の 2 字、末に改行は無い。goal の値は 第一の段。 - 二つ目 ab 末 で、bead の id は s2-b。
+
+      大きさの見本（歯 vbin_cap_sized_bead_reads_back_byte_equal）。本文は、字 あ（3 byte）と ASCII の a と二重引用符と逆斜線とタブと CR と LF の 9 byte の組みを繰り返して 65536 byte に切りそろえた字、acceptance は同じ組みで 24576 byte の字。JSON の字の escape（二重引用符・逆斜線・タブ・CR・LF）で書いた bead 1 本の配列を seat::ledger::issues_of で読む。この歯は台帳の client を撃たない（bd の書きと読みが字を替えないことは係 w331a の U の照らし・notes）。
+
+      形（pipe/cli/intake/bead.rs・pub(in crate::pipe) の名）。
+      - 関数 source_of(args)。--design も --contract も無い周は bead の周で、--bead と --repo を read_args と同じ need と repo_flag で読む。ほかの周は今の read_args をそのまま呼ぶ（--contract の hand-written-contract の断りと --design の読みは替えない）。返りは enum Source（Design は pointer を持つ・Bead）と bead と repo。
+      - 関数 bead_contract(repo, state_dir, manifest, bead, issues, materials)。issues は台帳の全部の Issue（受付と preflight は read_ledger を 1 回撃って渡し、列は周の頭に読んだ列を渡す）。順は次のとおりで、最初の断りで返る（judge の前・run dir も event も作らない）。
+        1. bead の id が空か区切りの字（斜線）か .. を持てば、また issues に B が無ければ contract-bead-unreadable。
+        2. form_of が Both なら contract-bead-both-forms、Neither なら contract-bead-unreadable、Design なら今の generated をその pointer で呼んで返す（並ぶ間の 2 形）。
+        3. byte。本文の byte の数（str::len）が rules 行 contract.body_max_bytes の値より大きければ field=description、acceptance が contract.acceptance_max_bytes より大きければ field=acceptance の contract-bytes-cap（本文を先に見る）。
+        4. row_of が Err なら contract-bead-unreadable（理由はその句）。
+        5. 行の id が pipe::spawn::table_rows(repo, HEAD) の全部の行（置き場の宣言の全部の doc・廃止のノートの導出物も含む）のどれかの id と同じなら by=<doc>#<id>、B のほかの bead（閉じた物も）のうち form_of が Bead か Both で row_of が Ok の行の id と同じなら by=<その bead の id> の contract-id-taken（表を先に・bead は id の順）。table_rows が Err の周は今の断り contract-table（TableError の Unreadable・理由はその字）で断る。
+        6. status が closed でない bead のうち form_of が Bead か Both の本数（B を含む）が rules 行 contract.open_max の値より大きければ contract-open-cap。
+        7. 写しの file を copy_path に書く（在れば書かない・dir は作る・書けない周は broken）。pointer は table::parse_pointer に写しの絶対 path と井桁と行の id を繋いだ字を渡して作り、後段 generated_from(repo, pointer, 写しの字, materials) で契約を組む。
+      - 台帳を読めない周（read_ledger の Err・rules 行 seat.ledger_timeout_s が無い周）は contract-bead-unreadable で、理由の句は 台帳を読めない。3 本の rules 行が無いか Int でない周は今の rules の断り（DENIAL_RULES）。
+
+      形（intake.rs・preflight.rs）。intake.rs は子 module の宣言（mod bead; と doc の 1 行）を足し、intake_run の read_args の呼びを bead::source_of に、generated の呼びを Source で分ける 1 行に替える（足すのは 3 行まで・欄 growth・行 v-pf-contract の後の余地の残り）。preflight.rs の関数 checked は、--contract の周（行 v-pf-contract）の次に、--design も --contract も無い周を bead の周にし、台帳を 1 回読んで bead_contract で契約を組む。widen_lines に渡す本文は写しの字。--placed は bead の周でも v-pf-contract の placed の断り（字 pipe: --placed は --design と使う）で断る。
+
+      断りの語（pipe/refuse.rs の Refuse に 5 つの variant・REFUSALS の末にこの順・rc はどれも 1）。stderr の 1 行は字 pipe: と空白の後に次の字。
+      - contract-bead-unreadable bead=<B> <理由の句>（在り処 Row）
+      - contract-bead-both-forms bead=<B>（在り処 Row）
+      - contract-bytes-cap field=<description か acceptance> bytes=<数> cap=<数>（在り処 Row）
+      - contract-id-taken id=<行の id> by=<doc と井桁と id か bead の id>（在り処 Row）
+      - contract-open-cap open=<数> cap=<数>（在り処 Place）
+      e2e の見本の行（字 pipe とコロンと空白の後の字）。contract-bead-both-forms bead=s2-b。contract-bead-unreadable bead=s2-b と空白と理由の句。contract-bytes-cap field=description bytes=<数> cap=<数>。contract-open-cap open=3 cap=2。contract-id-taken id=a by=docs/design/toy.md#a。
+      理由の句は上の copy_text の 5 つと、台帳を読めない、台帳に無い、acceptance に [[contract]] の行も design の行も無い、の 3 つ。受付の CLI は今のまま断った周に event を書かない。器の event log の受付の断り IntakeRefused は、列が候補を断った周に pipe/dispatch/refused.rs の record が書く（行 v-bead-dispatch が bead の候補をこの関数で組み、Refuse のまま渡す）。
+
+      rules 行（値の正本・持ち主の裁定 t3-hub.92.7.2 の値）。scribe2/rules/manifest.toml の行 runner.gate_fix_rounds の直後に、id contract.open_max（kind ContractOpenMax・値 40）、id contract.body_max_bytes（kind ContractBodyMaxBytes・値 65536）、id contract.acceptance_max_bytes（kind ContractAcceptanceMaxBytes・値 24576）の 3 行を、enabled true・ruling user 2026-10-06T11:44Z 裁定 t3-hub.92.7.2・ruled_at 2026-10-06 で足す。rules/mod.rs は 3 つの variant と ALL の RunnerGateFixRounds の直後の 3 項と、as_str と parse と shape（Int）の腕を足す。KB は 1024 byte で数える（器の行 memo.notes_max_bytes の 8192 と行 host_guard.publish_read_bytes の 8388608 と同じ数え方・値ちょうどは通す）。tsuzuri の規則の表の写しの行は切り替えの設計の commit が足す（この行は書かない）。
+
+      数を pin する着地済みの歯（直す）。rules/embedded.rs の歯 rules_embedded_manifest_is_valid_and_covers_all_kinds の行の数を 117 から 120 に、歯 rules_embedded_manifest_declares_one_capability_row_per_role の kind の数を 102 から 105 に（どちらも注の母集団の列に、この行で +3 を足す）。snapshot e2e__rules__rules_external_form.snap の 2 行の rows=117 kinds=102 を rows=120 kinds=105 に。refuse.rs の歯 refuse_names_are_pinned_in_declaration_order の母集団 28 を 33 に、末の語の断言を contract-open-cap に、末の前の 3 語の断言を、末の 5 語の列と run-cap が末から 6 つ目の断言に。歯 pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words の見本と在り処の表に 5 語を足す。kind の並びを pin するほかの歯（gate_fix_rounds_row_is_declared_right_after_end_gate_rounds は RunnerEndGateRounds の次だけ・rules.rs の PipeMaxLive の後の 4 kind・末尾の memo と索引と並びの kind）は、足す位置が RunnerGateFixRounds の直後で manifest の末から遠いので替わらない（V・grep）。
+
+      歯の file（vbin.rs）。頭の //! の行に接頭辞 vbin_ と親の helper を use super::*; で使うことを書き、続けて use super::*; を置く（vpfgap.rs と同じ形）。toy は derive_repo（行 id id-taken の歯だけ derive_repo_with で docs/design/old.md に行 c の表を足す）と table_doc と table_region と derive_row（欄 verify を字 cargo nextest run -p toy --no-tests=fail derive_ の 1 行の配列に差し替えた形・歯 vpfgap_ の通る見本と同じ差し替え）で組む。偽の bd は e2e の pipe/dispatch.rs の fake_bd と同じ形（置き場の ledger.json を cat する /bin/sh の script・引数は読み飛ばす）を vbin.rs の中に置き、JSON の各 bead は欄 id・status・labels・acceptance_criteria・description・dependencies を持ち、字は JSON の escape で書く。rules は ceiling_rules の写しに、行 seat.ledger_timeout_s（pipe/dispatch.rs の with_ledger_row と同じ字）と 3 本の rules 行（値は歯ごとに替える・既定は埋め込みと同じ値）を足した file を --rules に渡す。撃ちは pipe_cmd に引数の列（preflight か intake・--bead・--repo・--rules・--state-dir・--bd）を渡し、intake は審査の偽の lens（review_lens_pass）を足す。各歯は run_dirs(&state) を見て、終わりに clean で畳む。lib の歯 4 本（vbin_form_of_names_the_four_forms・vbin_copy_text_joins_the_body_like_derive・vbin_copy_text_refuses_what_it_cannot_write・vbin_cap_sized_bead_reads_back_byte_equal）は pipe/bead.rs の末の cfg(test) の module に置く。
+
+      done と verify の対応。1 つ目から 4 つ目の項は verify の 2 行目（lib の歯 vbin_）、5 つ目から 10 個目の項は 3 行目（e2e の歯 vbin_）、11 個目は 4 行目、12 個目は 5 行目、13 個目は 6 行目から 8 行目、14 個目は 9 行目と 10 行目が測る。1 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので行の verify に書かない。
+
+      範囲の外。列の候補と列外の鍵と兄弟と依存（行 v-bead-dispatch）。台帳の形の判じと局面の出力と行の生き死にの読み（行 v-bead-ledger）。グラフと board（行 t-graph-bead）。散文の門（行 t-prose-bead）。契約表の置き場の読みの退け（退けの行）。設計文書 contract-source.md（凍ったまま・この節が新しい振る舞いを書く）。
+  - n: 31
+    type: prose
+    title: 行 v-bead-dispatch — 列が契約の bead を候補に数え、列外の鍵を bead の digest で比べる（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 6 file を書く。器の scribe2/crates/scribe2/src/pipe/dispatch/candidates.rs（列の 1 件の解き・列外の鍵・兄弟・起こす argv）を直し、scribe2/crates/scribe2/src/pipe/dispatch.rs の準備の表の型の 1 行を替え、scribe2/crates/scribe2/src/pipe/review.rs に子 module の宣言の 1 行を足して detail の 1 行に呼びを足し、新しい子 module scribe2/crates/scribe2/src/pipe/review/copied.rs（2 つの digest の語の純関数と、その lib の歯）を足し、器の e2e の列の親 scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch.rs に行 mod vbdisp; の 1 行を足し（今の行 mod waiting; の次）、新しい子 module scribe2/crates/scribe2-boundary/tests/e2e/pipe/dispatch/vbdisp.rs に e2e の歯を足す。precheck.rs・bundle.rs・memo.rs・row_review.rs・受付の intake.rs と preflight.rs と refuse.rs は替えない。
+
+      なぜ。持ち主は判断の記録 ADR-72 の決定 (2)（決め D1）で契約の正本を台帳の bead に移すと決め、裁定 t3-hub.92.7.2 で、契約の行を bead の欄 acceptance に契約表の導出の形の [[contract]] の 1 行で置き、設計の節の本文を bead の本文（description）に置き、便の順を bead の blocks で持つ形を承認した。今の列は acceptance の design = の行だけを読み（candidates.rs の pointer_of・401 行）、その行の無い bead を no-design-pointer で待たせる（74 行）ので、bead に置いた契約は永久に起きない。列外の鍵（審査の FAIL の後に起こし直すかの鍵）は、便の写しの契約 file の字が今の生成と同じか（settled・424 行）と、審査の材料の節の写しが今の base の節と違うか（section_moved・477 行）で決まり、どちらも base の設計 doc の行と節を読むので bead の契約には当たらない。兄弟の待ち（same_section・213 行）は同じ doc の同じ節の行を兄弟に数えるが、bead の契約には doc も節も無い。決定はしご。要るか: 列が数えなければ受付の行 v-bead-intake が着地しても便が起きない。既に在るか: bead の blocks の待ち（entry_of の頭・58〜63 行の is_blocking）と交差・枠・受付の判定（settle と blocker）は bead の契約の生成した Contract をそのまま使え、替えるのは pointer の読みと鍵と兄弟と argv だけ。新しい待ちの理由と断りの名と event kind は足さない。
+
+      共有の読み（行 v-bead-intake が持つ・この行は呼ぶだけ）。器の module scribe2/crates/scribe2/src/pipe/bead.rs の pub の名を使う: form_of(acceptance) と Form（Design・Bead・Both・Neither の 4 つ）、digest(acceptance, description)（row_review::row_digest で 2 つの字を整えずに繋いだ 16 桁）、copy_path(state_dir, bead, digest)（置き場の bead-contracts/<bead>/<16 桁>.toml・COPY_DIR は字 bead-contracts）、digest_of_design(design)（契約の design の path がその形なら 16 桁）。受付の bead の周の照らし（形・本文と acceptance の byte・写しの字と行・契約 id の重なり・開いた本数を受付と同じ順で撃ち、写しの pointer と写しの字か Denial を返す）は行 v-bead-intake の子 module pipe/cli/intake/bead.rs の 1 本を呼ぶ（その関数の名は v-bead-intake の着地の字に合わせる）。断りの語 contract-bead-both-forms と contract-bead-unreadable ほかは Refuse の型のまま Denial に入るので、今の refused_by と列の受付の断りの記録（pipe/dispatch/refused.rs）がそのまま名を運ぶ。
+
+      形（candidates.rs の entry_of）。
+      - 依存・印・起こした事実の待ちは今のまま先に見る（bead の契約も blocks で順を持つ・欄 depends は無い）。
+      - pointer_of が設計 pointer を返す bead は今の道のまま（2 形を読む期間の表の側）。返さない bead は form_of を撃ち、Bead か Both の bead は受付の bead の周の照らしを撃ち、Err は今の refused_by で受付の断りの待ち（理由の欄は admission と断りの名）にする。Ok の bead は、写しの pointer（copy_path の絶対 path と字 # と行 id）と写しの字で intake の generated_from（行 v-pf-contract が足す後段）を撃って Contract を組む（写しの file はまだ無くてよい・generated_from は字を受ける）。Neither の bead は今のまま no-design-pointer。
+      - 生成が通った bead の契約は、列外の鍵の判じ（下の settled_bead）の後、兄弟の判じ sibling_of を撃たずに準備の表へ入れる（bead の契約は兄弟を持たない）。
+      - 準備の表の値は（設計 pointer か無し・契約）の対にし、dispatch.rs の let mut ready の型の 1 行を Option の pointer に替える。settle は Option の pointer を受け、Some の便は今の launch_of を、無しの便は新しい関数 launch_bead を撃つ。launch_bead の argv は run と --bead と bead の id と --repo と --state-dir と道具（tools）と DRIVE で、--design を持たない（受付が bead を読み写しの pointer を作る）。launch_of の字は替えない（dispatch.rs の in-file の歯が 1130 行で呼ぶ）。
+
+      形（列外の鍵・settled_bead）。新しい関数 settled_bead は、今の settled の 2 つ目の段から先（live の生死・requeues と released_after の戻し・審査を測れない Reviewed の印の戻し・hash-object の sha）を同じ順で使い、直前の便の選びだけを替える。選ぶのは、同じ bead の run を id の逆順に見て、run の dir の契約 file（Contract::load）の欄 design に digest_of_design を撃った 16 桁が、今の bead の digest（bead::digest に acceptance と description を渡した値）と同じ最初の 1 本。digest は acceptance と本文の両方を持つので、どちらかの 1 字が替われば同じ digest の便が無く列に戻り、戻せば前の便がまた選ばれる（今の節を直すと起きるのと同じ意味）。節の写しの比べ section_moved は bead の便には撃たない（本文は digest に入る）。契約 file を読めない便と digest_of_design が None の便（表の側の便）は選ばない。今の settled と section_moved と section_keyed と requeues は替えない。
+
+      形（兄弟）。kin_of は pointer_of が設計 pointer を返さない B を今のまま None にする（bead の契約は兄弟の待ちの元にならない）。same_section と siblings_of と sibling_of は替えない。
+
+      形（審査の event の detail・撤退の測る口）。新しい子 module review/copied.rs の純関数 words(material, copy) は、字『 material:』と row_review::row_digest の材料の値と字『 copy:』と写しの値を繋いだ字を返す。材料は審査の材料の dir の契約の写しと設計の材料の file design.txt の字の対（lens が読んだ字）、写しは run の dir の契約 file と、review::design_material が今の写しの pointer から読み直した字の対で、どちらも末の改行 1 つを除いて渡す（candidates.rs の kin_of と同じ整え方）。review.rs の settle の Reviewed の detail の 1 行（今は detail_of の字と ROW_REUSED を繋ぐ format の 1 行）を、その間に copied の関数 words_of(entry) の字を挟む形に同じ 1 行のまま替える。words_of は、契約の design に digest_of_design が Some を返す時（受付が bead の写しを置いた便）だけ words の字を返し、ほかは空の字を返す（材料と写しを読めない周も空の字）。表の側の便の detail は 1 字も替えない。read_detail は語で読むので判定と理由の型の読みは替わらない。この 2 つの値が食い違う event が、判断の記録の撤退の窓 C の数える材料になる。
+
+      歯（vbdisp.rs・接頭辞 vbdisp_）。頭の //! の行に接頭辞と、親の helper を use super::*; で使うことを書き、続けて use super::*; を置く（兄弟の子 module と同じ形）。toy は repo_with_state と two_rows（表の行 a と b）で作り、見本の契約の行 c の bead 形は、row_fields に id の字 c と drop の字 write-set と section を渡し、add に write-set を src/lib.rs の 1 つにする行を渡した欄の列を、字 [[contract]] の行の後に改行で繋いだ字とする。見本の契約の行 d の bead 形は、id の字を d にし、write-set を新しい file の印つきの +src/d.rs の 1 つにした同じ形とする（行 c と交わらず、表の行 a と b の id とも重ならない）。本文は字 本文。とする。偽の台帳は fake_bd と同じ script の形で、各 bead の JSON に欄 description を足し、acceptance と本文の二重引用符と改行は JSON の escape にして書く helper を vbdisp.rs に置く（listed は欄 description を持たないので使わない）。受付 pipe intake --bead（--design も --contract も渡さない）は台帳を bd list --all の 1 撃ちで読む（行 v-bead-intake）ので、偽の bd は fake_bd と同じく引数を読み飛ばして台帳の全部を返し、受付には旗 --bd でその path を渡す。審査の lens は review_lens_pass、判定 file の書き替えは reviewed_run と同じ形。各歯は終わりに clean で畳む。
+
+      lib の歯（copied.rs の中の cfg(test) の module・接頭辞 vbdisp_）。words の返りを、同じ字の対と写しの 1 字を替えた対で比べ、detail_of(Verdict::Fail, Some(FindingKind::Other)) の字に words の字を足した detail の read_detail が detail_of の対と同じ値であることを見る。
+
+      done と verify の対応。1 つ目から 6 つ目と 8 つ目の項は verify の 3 行目（e2e の歯 vbdisp_）、7 つ目は 2 行目（lib の歯 vbdisp_）、9 つ目は 4 行目（着地済みの歯 pipe_dispatch_section_key_ の 6 本・1 本を代表に名指す）、10 個目は 5 行目が測る。1 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので行の verify に書かない。
+
+      大きさ。器の上限の余地（preflight の cap-headroom の数え）は dispatch.rs が 20 行、review.rs が 1 行なので、dispatch.rs は準備の表の型の 1 行をその場で替えるだけ、review.rs は mod copied; の 1 行を足し detail の 1 行をその場で替えるだけにし（欄 growth に各 1 行）、本体は candidates.rs（626 行）と新しい copied.rs に置く。
+
+      順。行 v-bead-intake の後に置く。この行は v-bead-intake の共有の読みと受付 pipe intake --bead（歯の 3 つ目から 5 つ目と 8 つ目の項が撃つ）を呼ぶので並べられない。
+
+      範囲の外。事前審査（precheck.rs の母集団と祖先の walk・束 bundle.rs）と memo の引き金（memo.rs）と行の審査（row_review.rs と review_ref.rs）は、今のまま設計 pointer を持つ bead だけを数える。bead の契約を事前審査と束と memo の引き金に数えるのは行 v-bead-precheck（この行は数えない事を替えない）。台帳の形の判じと局面の出力は行 v-bead-ledger、受付と preflight の bead の読みと断りの語は行 v-bead-intake。
+  - n: 32
+    type: prose
+    title: 行 v-bead-ledger — 台帳の形の判じと局面の出力が契約の bead も数える（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は器の 9 file を書く。scribe2/crates/scribe2/src/ の下の ledger/form.rs・ledger/lint.rs・ledger/phase.rs・ledger/phase_main.rs・fleet/lifecycle.rs・fleet/lifecycle_mark.rs・hook/ledger_guard.rs・hook/ledger_guard_tests.rs と、新しい子 module の fleet/lifecycle_mark/contracts.rs である。歯は全部 lib の歯で、各 file の tests の module（hook/ledger_guard.rs の歯は子の file ledger_guard_tests.rs）に接頭辞 vbled_ で足す。新しい e2e の歯の file・群の module・規則の行・断りの語・局面の語・部品の kind・引き金の形は足さないので、数を pin する着地済みの歯（群の表 xtask/tests/teeth1/kfold.rs の GROUPS ほか）は動かない。
+
+      なぜ。持ち主は裁定 t3-hub.92.7.2 で、便の契約を台帳の bead に置く形を決めた（決め D1・判断の記録 ADR-72 の決定 (2)）。契約の bead は欄 acceptance に契約表の導出の形の [[contract]] の行を持ち、設計 pointer の行（design = の行）を持たない。今の器の台帳の読みは、契約かを design = の行の有無だけで判じる（ledger/form.rs の 99 行 pointer_text・ledger/lint.rs の 60 行 pointer_of）。このままだと契約の bead は、台帳の形の lint で label も pointer も無い neither に数わり（form.rs の 218 行）、局面の出力で開いた契約の form-neither の misfit になり（phase.rs の 342 行）、便の局面の部品が出ず（fleet/phase.rs の 109 行が pointer の無い開いた契約を飛ばし、その pointer は fleet/lifecycle.rs の 792 行が pointer_text で組む）、要件の部品は bead の契約の req を見ずに requirement-unrowed に数え（phase_main.rs の 98〜101 行）、同梱の引き金は bead の契約の write-set を見ない（fleet/lifecycle_mark.rs の 691 行 open_write_set）。並ぶ間（両方の形を読む期間）の台帳の側の読みを、この行で 2 形にする。置き場の全部の行を読む口の残り（便の起こしの touches の節・審査の索引）は節 37 の行が持つ。
+
+      共有の読み（行 v-bead-intake の節 30 の口・この行は書かない）。acceptance の 2 形の判じ form_of（返りは enum Form の Design・Bead・Both・Neither）と、bead の契約の行を契約表の行の型 ContractRow に読む row_of（引数は bead の id と acceptance と本文 description・本文を goal に）を、行 v-bead-intake の module crate::pipe::bead から呼ぶ。以下、form_of が Form::Bead か Form::Both を返すことを is_bead_form と書き、row_of(bead の id, acceptance, description) を bead_row と書く（どちらも新しい関数を足さない呼びの略で、実装は 2 つを直に呼ぶ）。この行は判じと parse を自前で持たない。depends を v-bead-intake に置くのは、この行の code がその 2 つの関数を呼ぶからである。
+
+      形。
+      - 契約の鍵（ledger/form.rs）。pub fn contract_key(issue: &Issue) -> Option<String> を足す。pointer_text が値を返せばその字、返さず is_bead_form が真なら bead の id、どちらでもなければ None を返す。両方の形を持つ bead は pointer の字を返す（受付が断りの語 contract-bead-both-forms で断り、台帳の lint は bodied に数える）。is_contract と is_settled の契約の判じと、Report の both と neither の判じを、pointer_text(…).is_some() から contract_key(issue).is_some() に替える。undiscovered の節の字は pointer の無い bead では空のままで、本文と notes を今のまま見る。drift（契約表の未着地の行）は替えない。
+      - 台帳の lint（ledger/lint.rs）。judge の契約の母集団を、pointer_of が値を返す bead と、pointer_of が None で is_bead_form が真の bead（以下 bead の契約）の和にする。unresolved は、今の pointer の解けない契約に、bead_row が Err を返す bead の契約を入力の順で足す。bodied は pointer_of が値を返す契約だけを見る（bead の契約の acceptance は形として複数の行を持つ）。render の字の形と語は替えない。
+      - 局面の台帳の側（ledger/phase.rs）。open_draft の form-neither の判じを contract_key(issue).is_none() に替え、closed_base の Extra::Contract の pointer を contract_key(issue) にする。
+      - 着地の引き金（ledger/trigger.rs）は替えない。bead の契約の着地は今の引き金 依存 <bead id> で書く（値の bead が閉じた時に満ちる・trigger.rs の 95 行）。着地の引き金の値に bead の id の形を足す案は、満ちる条件が依存の引き金と同じなので採らない（決定はしごの既に在るか・席の決め）。
+      - 局面の main の側（ledger/phase_main.rs）。derive は input.rows が Some の周に、契約表の行の後ろへ bead の契約の行を足した列で row と requirement の部品を組む。bead の契約の行は、input.issues のうち memo でなく contract_key が自分の id と同じで bead_row が Ok の bead のうち、開いた bead と、閉じて landed_close が真の bead だけを、台帳の順に Row（pointer は bead の id・req は行の req）にした物である。閉じて着地でない bead の契約は、行の部品にも要件の母集団にもしない。row_part の bead の引きを pointer_text(…) == Some(row.pointer) から contract_key(issue).as_deref() == Some(row.pointer) に替える。input.rows が None の周は今のまま row と requirement を unmeasured に名指し、bead の行を足さない。
+      - 局面の書き手（fleet/lifecycle_mark.rs と子 module の fleet/lifecycle_mark/contracts.rs と fleet/lifecycle.rs）。新しい子 module contracts.rs（lifecycle_mark.rs の 40 行の mod commits; と同じ形で mod contracts; を置き、open_contracts を pub use で出す）に、pub fn open_contracts(issues: &[Issue]) -> Vec<OpenContract>（is_open_contract の bead ごとに、bead の id と pointer に contract_key を入れた OpenContract を台帳の順に返す）と、pub(super) fn bead_write_set(issues: &[Issue]) -> Vec<String>（開いた bead の契約＝is_open_contract で contract_key が自分の id の bead の、bead_row の write_set を台帳の順に繋ぐ・bead_row が Err の bead は足さない）と、その歯を置く。lifecycle.rs の run_parts の open の組み（788〜793 行）を open_contracts の呼び 1 本に替える。lifecycle_mark.rs の open_write_set は pointer の照らしを contract_key で行い、今の契約表の pointer の write-set の項目の後ろに bead_write_set の列を足す。置き場の妥協。子 module に置くのは、preflight の上限の余地の照らしが lifecycle_mark.rs に 40 行・lifecycle.rs に 32 行の余地しか数えないからである。
+      - 起票の門（hook/ledger_guard.rs）。Create::is_contract を、pointer_text(&self.acceptance).is_some() か is_bead_form(&self.acceptance) が真の時に真にする（label intake:memo を持つ契約の create を memo-on-contract で断る 4 象限の判じが bead の形にも効く）。
+
+      歯（lib・接頭辞 vbled_）。見本の台帳は着地済みの lib の歯と同じく crate::seat::ledger::issues_of に JSON の字を渡して組む（lint.rs と phase.rs と phase_main.rs の tests の組み方・偽の bd は要らない）。bead の契約の acceptance は、[[contract]] の行の後に欄 id・title・req・write-set・verify・size・done を toml の値で持つ行（節 30 の共有の読みが通す形・verify の値は filter 語 1 つの nextest の 1 行）を改行で繋いだ字で、以下では行の形と呼ぶ。読めない行の形は、[[contract]] の行の後に欄 id の値を字の囲み無しで a と書いた 1 行だけを置いた字である。
+      - vbled_form_counts_a_bead_contract_as_a_contract（form.rs）。開いた bead c1（label 無し・行の形）・開いた memo m1（label intake:memo・行の形）・開いた bead n1（label も acceptance も無い）・開いた memo s1 と、閉じた bead の契約 cc（行の形・s1 へ discovered-from）を judge に渡すと、contracts は 1・both は m1 だけ・neither は n1 だけ・settled は s1 だけである。contract_key は c1 に c1 を、acceptance が design = docs/design/x.md#a の bead に docs/design/x.md#a を、n1 に None を返す。
+      - vbled_lint_counts_bead_contracts_and_names_unreadable_rows（lint.rs）。開いた bead ok（行の形）・bad（読めない行の形）・both（1 行目が design = docs/design/x.md#a で、続けて行の形）を、解けた pointer の集合 docs/design/x.md#a と notes の上限 8192 で judge して render した字は、次の lint の見本の行と一致する。
+        ledger: open=3 contracts=3 unresolved=1 bodied=1 memos=0 unpointed=0 oversized=0 unresolved:bad bodied:both
+      - vbled_phase_bead_contract_parts（phase.rs）。着地済みの歯と同じ probe（prefix s2）に、開いた bead の契約 s2-b（行の形）・着地で閉じた bead の契約 s2-c（行の形・閉じの理由は着地済みの歯の landed の字・閉じた時刻は LATE）を渡すと、s2-b は部品に出ず（開いた契約の部品は返さず、form-neither にも当たらない）、s2-c の extra は Extra::Contract の pointer が s2-c で why が None である。
+      - vbled_phase_main_bead_contract_rows（phase_main.rs）。契約表の行 docs/design/x.md#a（req FR1）と、開いた bead の契約 s2-b（行の形・req FR2・created_at 2026-09-27T01:02:03Z）・着地で閉じた bead の契約 s2-c（req FR3）・閉じの理由が着地の形でなく閉じた時刻が線より後の bead の契約 s2-d（req FR4）を、要件 FR1 から FR5 で derive すると、部品の形の列は、row docs/design/x.md#a が row-unbeaded、row s2-b が 『row-beaded』（since は s2-b の created_at）、row s2-c が 『row-landed』、FR1 と FR2 と FR3 が 『requirement-rowed』、FR4 と FR5 が requirement-unrowed で、s2-d の row の部品は無い。rows が None の同じ周は row と requirement を unmeasured の table-unreadable に名指し、bead の行の部品を出さない。
+      - vbled_open_contracts_and_write_set_read_bead_contracts（fleet/lifecycle_mark/contracts.rs）。開いた契約 t1（design = docs/design/x.md#a）・開いた bead の契約 b1（行の形・write-set は +src/a.rs と src/b.rs）・閉じた bead の契約 b2（write-set は src/c.rs）・開いた bead の契約 bad（読めない行の形）・開いた bead n1（acceptance 無し）・開いた memo m1（行の形）の台帳で、open_contracts は t1 と pointer docs/design/x.md#a・b1 と pointer b1・bad と pointer bad・n1 と None の 4 つをこの順に返す。write_sets が docs/design/x.md#a に src/t.rs を持つ周の open_write_set は、src/t.rs と +src/a.rs と src/b.rs の 3 つをこの順に返す。
+      - vbled_guard_refuses_a_memo_label_on_a_bead_contract（ledger_guard_tests.rs）。create_of に bd create と題と旗 --labels と値 intake:memo と旗 --acceptance と行の形の字を渡した create を judge すると Refusal::MemoOnContract を返し、旗 --labels と値を除いた同じ create は None を返す。
+
+      done と verify の対応。1 つ目から 6 つ目の項は verify の 2 行目（lib の歯 vbled_）が測る。最後の項は 3 行目から 9 行目（着地済みの lib の歯を module の path で 1 行に 1 語ずつ絞る行・ledger::form::tests と ledger::lint::tests と ledger::phase::tests と ledger::phase_main::tests と fleet::lifecycle_mark::tests と fleet::lifecycle::tests と hook::ledger_guard::tests）が測る。1 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので行の verify に書かない。
+
+      大きさ。替える字の見込みは src が約 120 行・歯が約 180 行で M。preflight の上限の余地は ledger/phase.rs が 193 行・fleet/lifecycle.rs が 32 行・fleet/lifecycle_mark.rs が 40 行で、size M の見込み 300 行に足りないので、growth の欄に見込み（phase.rs は src 約 4 行と歯 約 40 行で 50・lifecycle.rs は 6 行を 1 行に替えて use の 1 行を替えるので 2・lifecycle_mark.rs は mod と pub use と open_write_set の足しで 6）を書く。
+
+      depends と置き場の交わり。depends は v-bead-intake だけ（上の共有の読みを呼ぶ）。この行の file は段 S4 のほかの行（v-bead-intake・v-bead-dispatch・節 37 の行）の write-set と交わらない見込みで、交われば器が待ちの理由 overlap で順に流す。
+
+      範囲の外。置き場の全部の行を読む口のうち、便の起こしの touches の節と preflight の閉包の広がり（pipe/spawn.rs の table_rows）・審査の索引の rows の列（pipe/review/index.rs の Tables::load）は節 37 の行が持つ。行の門（hook/live_row.rs）は、bead の契約の便が受付の写しを読み、bead の書き換えが走っている便の契約を替えないので、bead の読みを足さない（席の決め）。列の側の同梱の引き金の write-set（pipe/dispatch/memo.rs の open_write_set）は行 v-bead-precheck が持つ。main の commit の契約の trailer から bead を引く読み（fleet/lifecycle_mark/commits.rs の bead_of）は、bead の契約の便の trailer の値が受付の写しの path になるので bead を引かないが、着地は閉じの理由で読むので行の部品は替わらない（trailer の値の形は行 v-bead-intake の決め）。台帳の lint の pointer の解け（ledger/lint.rs の resolves）と契約表の drift は契約表の側の読みで、退けの行が外す。
+  - n: 33
+    type: prose
+    title: 行 t-graph-bead — 契約の bead を導出グラフと板が描く（memo t3-hub.92.7・作り直し v4 の段 S4・判断の記録 ADR-72 の決定 D1 の分・裁定 t3-hub.92.7.2・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は src 7 file と歯の file 7 本を書く。読みと辺は tsuzuri-core の graph/build.rs、属性は graph/mod.rs の BeadAttr、不変条件は graph/check.rs、板の札は pipeline.rs、電文の属性は tsuzuri-contract の graph.rs の BeadAttr、電文への写しは境界の server/board.rs の fn doc、吹き出しは面の widgets/pop.rs の fn row_pointer に置く。新しい歯の段の file は crates/tsuzuri-core/tests/gbead.rs（接頭辞 gbead_）と crates/tsuzuri-surface/tests/gbpop.rs（接頭辞 gbpop_）。属性の欄を足すと構造体の字で BeadAttr を組む着地済みの歯 5 file（gview.rs・cform_graph.rs・itemlink.rs・bvpop.rs・cadl.rs）が組めなくなるので、各 file の BeadAttr の字に欄 contracts の空の列を 1 行ずつ足す（ほかの字は替えない）。群の main.rs と kfold の表は書かない（module を足さない）。depends は同じノートの行 v-bead-ledger（器が台帳の形の判じで契約の行を持つ bead を契約に数える前に、tsuzuri の g-2 だけが数えると器の doctor と食い違う）。
+
+      なぜ。持ち主は裁定 t3-hub.92.7.2 で、便の契約を台帳の bead に置く形を承認した（判断の記録 ADR-72 の決定 D1 の分）。決めの字のうちこの行が頼る物。契約の行は契約表の導出の形の [[contract]] の 1 行（欄 id・title・req・write-set・verify・size・done ほか・section と depends と goal は持たない）で bead の欄 acceptance に置き、設計の節の本文は bead の本文に置く。便の順は bead の依存（blocks）で持つ。並ぶ間（移しの行の着地から退けまで）は、acceptance に design の pointer の行を持つ bead と、[[contract]] の行を持つ bead の 2 形が在り、両方を持つ bead は器が断る。folio の頁の契約の表は退けで消えるので、board が台帳の bead の契約を描く期間を切らさないよう、この行は切り替えの前に着地させる。今の導出グラフは acceptance の design の pointer の行だけを読む（build.rs の fn pointer_lines と fn pointer_row・300 行目から 305 行目と 535 行目から 543 行目）。契約の行の bead は種類 task の節点にはなる（tsuzuri-contract の ledger.rs の fn bead_kind）が、pointers が空なので、不変条件 g-2（check.rs の fn g2_one_pointer・open の契約は pointer の行をちょうど 1 つ持つ）が全部の bead の契約を違反と名指し、pipeline の板は札を作らず（pipeline.rs の fn dispatchable・320 行目）、吹き出しの設計の行は空になる（pop.rs の fn row_pointer・439 行目）。
+
+      読みの在りか（依存の向き）。tsuzuri の crate は器の crate を使えない。tsuzuri-core の直接依存は serde・serde_json・tsuzuri-contract だけで、xtask の歯の一覧 DIRECT_DEPS（xtask/src/main.rs の 540 行目）が manifest と照らし、器は別の workspace に在る。toml の crate も無い。そこで tsuzuri の側の読みは、着地済みの tsuzuri-core の graph/code.rs の fn read_write_sets（契約表の導出物の字から [[contract]] の行ごとに id の行と write-set の行の値を JSON として読む・288 行目）と同じ形の読みにする。導出の形の id と req の値は二重引用符で囲んだ字と字の配列で、節と題は逆斜線を持てないので、値の字は JSON の字としても読める。
+
+      形（build.rs）。
+      - 定数 CONTRACT_HEAD は字 [[contract]]。
+      - 公開の関数 contract_rows（acceptance の字を受け、Option の字と字の列の対の列を返す）。行ごとに行末の CR を除き、行末の空白を除いた字が CONTRACT_HEAD の行で新しい塊を始める。塊の中で、頭が字 id と空白と等号と空白の行は残りを JSON の字として読み（読めなければ None のまま）、頭が字 req と空白と等号と空白の行は残りを JSON の字の配列として読む（読めなければ空の列）。最初の CONTRACT_HEAD より前の行は読まない。塊を出る順に返す。
+      - fn add_ledger は pointer の行を今のまま読み、続けて contract_rows を読む。塊ごとの req の字を、bead から req の辺として、同じ bead の中で同じ先を 1 度だけ、塊の順と配列の順に足す。先の節点が在るかは見ない（台帳の blocks の辺と同じ・先の無い辺は g-1 が名指す）。契約の行の bead から design の辺は張らない（design の辺は今のまま pointer の行だけから組む）。属性の contracts に塊ごとの id を入れる（読めない id は空の字）。
+      形（mod.rs と graph.rs と board.rs）。中核の BeadAttr と電文の BeadAttr に欄 contracts（字の列・acceptance の [[contract]] の行ごとの欄 id）を足す。電文の欄は serde の default と、空の時に書かない skip_serializing_if を持つ（tests/snapshots/graph.json の字は替わらない）。board.rs の fn doc は中核の値を写す。
+      形（check.rs）。g-2 は open の task のうち pointers の数と contracts の数の和がちょうど 1 でない bead を名指す（両方の形の bead と、2 塊の bead も名指す）。g-8 は memo の label を持ち、pointers か contracts のどちらかが空でない bead を名指す。doc の行の字を合わせる。
+      形（pipeline.rs）。fn dispatchable は、行の前後の空白を除いた字が CONTRACT_HEAD の行が在る時、design の pointer の行が 1 つも無ければ真、在れば偽（器が両方の形を断る）を返す。無い時は今の読みのまま。module の doc の 6 行目の字を合わせる。
+      形（pop.rs）。fn row_pointer は pointer の行が在れば今のまま。無ければ contracts がちょうど 1 つで空の字でない時にその id を返し、ほかは None。
+
+      歯の見本（gbead.rs）。組み方は着地済みの tsuzuri-core/tests/teeth1/dnrow.rs に倣う（folio の索引の形の表の字 IDX と、serde_json の json の配列で組む偽の台帳と、器の event log の 1 行）。IDX は dnrow.rs の IDX と同じ 5 節点と 5 辺（要件 FR1・設計ノートの行 nx#a・nx#b・ny#c ほか）。event log は RunCreated の 1 行（bead zz.1・台帳に無い bead）。台帳の bead。
+      - gb は種類 epic の open。
+      - gb.1 は種類 task の open・親 gb・acceptance は 3 行（[[contract]] の行、id の行で値は t-one の JSON の字、req の行で値は FR1 だけの JSON の配列）。
+      - gb.2 は種類 task の open・親 gb・acceptance は design の pointer の 1 行（contracts/nx.toml の後に井桁と a）。
+      - gb.3 は種類 task の open・親 gb・dependencies に gb.1 への blocks・acceptance は [[contract]] の行と、id の行で値は t-three、req の行で値は FR1 を 2 度持つ JSON の配列。
+      - g-2 の見本は gb.4（acceptance に design の pointer の行で nx.toml の後に井桁と b、続けて [[contract]] の行と id の行で値は t-four）と gb.5（[[contract]] の塊が 2 つで id は t-five と t-six）を足した台帳。
+      - g-8 の見本は gb.6（label intake:memo・種類 task・acceptance は gb.1 と同じ形で id は t-seven）を足した台帳。
+      - contract_rows の見本の字は 2 塊（1 つ目は [[contract]] の行・id の行で値は t-one の JSON の字・req の行で値は FR1 だけの配列、2 つ目は [[contract]] の行・id の行で値が引用符の無い字 bare）。
+      板の札の歯は pipeline::board に台帳の字と event log の字と時刻を渡し、札の列の contract の id で gb.1・gb.3・gb.4 を引く（gb.4 は g-2 の見本の台帳で撃つ）。電文の歯は tsuzuri_contract の BeadAttr を serde_json で字にして読み戻す。
+      歯の見本（gbpop.rs）。組み方は着地済みの bvpop.rs の fn graph に倣い、GraphDoc を契約の型で組んで tsuzuri_surface::widgets::pop::row_pointer を撃つ。bead は 3 本（pointer の行が design の頭と contracts/nx.toml の後に井桁と a の bead、pointers が空で contracts が t-one の bead、contracts が t-one と t-two の bead）。
+
+      done と verify の対応。1 つ目から 10 個目の項は verify の 2 行目（gbead.rs）、11 個目の項は 3 行目（gbpop.rs）が測る。12 個目の項は着地済みの dnrow_（pointer の行から design の辺を組む読みが替わらない）、13 個目から最後の項は BeadAttr の字を直した歯の file の歯が緑のままを測る。1 行目の clippy は書く 4 crate（tsuzuri-contract・tsuzuri-core・境界・面）の all-targets を名指す（no-deps は名指さない依存の lint を外すだけなので、書く crate を全部 -p で名指す）。xtask の check は共通 verify が撃つので行の verify に書かない。
+
+      照らした事（起草の時の main）。消す物と名を替える物は無い（足すだけ・pointer の読みは替えない）。BeadAttr を構造体の字で組む所は src に 3 つ（build.rs・board.rs と、電文の型の定義）、歯に 5 file。g-2 と g-8 の判定を測る着地済みの歯（tsuzuri-core の teeth2 の graph.rs・境界の teeth2 の kcli.rs）の見本は acceptance に [[contract]] の行を持たないので判定は替わらない。数を pin する歯（節点の種類 21・辺の型・不変条件 12 本）は動かない（種類も型も不変条件も足さない）。src の file の大きさは build.rs 817 行・check.rs 842 行・pipeline.rs 909 行・pop.rs 1125 行で、上限 1500 行の余地に収まる。
+
+      範囲の外。設計ノートの行の節点を消すこと（退けの行の後）。tz code の行 → file の辺（cli/code.rs が contracts の dir の導出物から write-set を読む）に bead の契約を足すこと。memo の繋ぐ門（memo_gate.rs）が設計ノートの行への design の辺で小さい契約を引く読み。節点の頁の本文の block に契約の欄の表（write-set・verify・done）を描くこと（1 本の引きの口の電文 LedgerItem に acceptance が無い・本文は今の block が描く）。server/design.rs の contracts の dir は裁定の書き出しの読み直しの印だけで、描きには使わない。
+  - n: 34
+    type: prose
+    title: 行 t-prose-bead — 1 つの file に散文の門を撃つ口と、契約の bead の本文に撃つ起票の門と係の終える前の門（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 8 file を書き、4 file を置き場だけで名指す。folio の folio2/crates/folio/src/entry.rs と src/prose.rs、中核の crates/tsuzuri-core/src/lib.rs（pub mod の 1 行）と新しい src/contract_gate.rs、境界の crates/tsuzuri-boundary/src/hook/question_gate.rs と hook/subagent_stop.rs（子 module の宣言と呼びの 2 行と doc の 1 行）と新しい子 module hook/subagent_stop/prose.rs、新しい歯の段の file crates/tsuzuri-boundary/tests/tprsb.rs（接頭辞 tprsb_）。着地済みの歯の file mlnk.rs・teeth3/qgate.rs・teeth6/agsg.rs・folio の tests/tz4/prose.rs は書かず、verify の 3 行目から 6 行目が撃つので置き場だけで名指す。規則の表・plugin/hooks/hooks.json・群の main.rs・kfold の表・tz の口の名の表（crates/tsuzuri-boundary/src/cli/folio.rs の NAMES・11 の名）は書かない。
+
+      なぜ。判断の記録 ADR-72 の決定 (2) と裁定 t3-hub.92.7.2（memo t3-hub.92.7）は、便の契約を台帳の bead に置き、欄 acceptance に契約表の導出の形の [[contract]] の行を、本文 description に設計の節の本文を置くと決めた。今の散文の門（規則の行 R-16）は folio の床が設計ノートの型 prose の節の body にだけ撃つ（folio2/crates/folio/src/note.rs の 103 行から 106 行で規則の表から門を組み、822 行から 836 行で節ごとに prose::scan を撃つ）ので、bead の本文には誰も撃たない。この行は 1 つの file の字に同じ門を撃つ口を足し、契約の bead を書く台帳の書きの門（起票の門・規則の行 R-39 と同じ hook）と係の終える前の門がその口を撃つ。決定はしご。要るか: 切り替えの後は設計ノートの節が無くなり、散文の門の母集団が bead の本文へ移る。既に在るか: 門の読みと走査は prose.rs の gate と scan が持ち、hook の入力の分け方は中核の gate.rs の segments・PROGRAMS・deny_json が持つので、足すのは file を読む口と契約の書きの見分けと答えの字だけ。
+
+      1 口。folio の口 check に旗 --prose（値は file の path）を足す。tz check は folio の口を同じ引数で撃つので tz の口の名の数は替わらない。旗は check の今の 8 つの旗（emit_amends・freeze_anchor・freeze_ids・freeze_start・freeze_adrs・emit_rulings・proposed・polarity）と conflicts_with_all で混ぜない。撃つ形は tz check --dir <設計文書の dir> --prose <file>。prose.rs に関数 file_gate（dir と path を受け、dir の rules.yaml を crate の yaml::parse で読んで prose::gate で門を組み、file の字を prose::scan に渡して印を持つ文の列を返す・読めなければ Err）を足し、entry.rs の dispatch の Check の腕に 1 つ足す。読むのは規則の表 1 file と名指した file だけで、憲法・要件書・設計ノートは読まない（参照 id の実在は見ず、行 R-16 の 2 つの理由だけを数える）。
+      出力は標準出力。印を持つ文のうち理由の在る文ごとに 1 行で、字は <file の path（引数の字のまま）>: 行 <1 始まりの行番号>: <理由の語> <文の頭 60 字>（理由の語は prose.rs の no-pointer か number-with-unit）。最後に要約の 1 行で、違反 0 なら字『folio check --prose: 合格（』、1 つ以上なら字『folio check --prose: 不合格（』に、印を持つ文 <M>・違反 <N>） を続ける。rc は違反 0 で 0、1 つ以上で 1。
+      まだ分からない（rc 2）。規則の表が読めない・行 R-16 の value が読めない（prose::gate の Err）・file が無いか file でないか UTF-8 でない時は、entry.rs の UNKNOWN_HEAD の字に理由を続けた 1 行と、要約の 1 行の字『folio check --prose: まだ分からない』を書いて 2。
+
+      2 契約の書きの見分け（中核の contract_gate.rs・file も子 process も時計も触らない）。関数 writes は PreToolUse の hook の入力（Bash の command）を gate.rs の segments で一続きに分け、頭の代入の語の後の program が bd か bdw（gate.rs の PROGRAMS）で語 create か update を持つ一続きのうち、次の 2 つを command の順に拾う。
+      甲（契約の書き）。欄 acceptance の値（--acceptance 値 か --acceptance=値・何度在っても最後の値）の行のうち、前後の空白を落とした字が [[contract]] の行を 1 つ以上持つ一続き。
+      乙（本文だけの直し）。語 update を持ち、--acceptance を持たず、本文の旗（--body-file・--description・-d・--stdin とその =値 の形）を 1 つ以上持つ一続き。語 update の後の - で始まらない語を名指しの id として持つ。
+      本文の形。--body-file の値（最後の値）が / で始まる絶対 path なら file、--body-file の値が - か相対 path の時と --description・-d・--stdin の時は file でない形、本文の旗が無ければ無し。
+      契約の bead の見分け。台帳の bead のうち、欄 acceptance の行に前後の空白を落とした字が [[contract]] の行を持つもの（甲の字と同じ判じ・台帳の字は graph::build の read_ledger で読む）。
+
+      3 判じ（関数 judge・下書きを command の順に判じて最初に通さない答え）。甲で本文が file でない形か無しなら止める（contract-body-form）。甲で本文が file なら、呼び手が渡す撃ちの関数（file の path を受けて rc と標準出力の字を返す）を撃ち、rc 1 なら止める（contract-prose・標準出力の違反の行を答えに写す）、rc 0 と 1 のほかは まだ分からない（contract-prose-unknown）、rc 0 なら次へ。乙は、名指しの id のどれかが台帳の契約の bead なら止め（contract-body-form・acceptance と本文を 1 つの命令で書き直させる）、台帳の字が空か読めなければ まだ分からない（contract-ledger-unread）、契約の bead が無ければ通す。
+      理由の閉じた 4 語は ContractWhy の ALL の順に contract-body-form・contract-prose・contract-prose-unknown・contract-ledger-unread。関数 output は通す時に None、止める時は字『契約の本文の散文の門は止める（』、まだ分からない時は字『契約の本文の散文の門は まだ分からない（』に、理由の語と閉じ括弧と、在れば違反の行を「 / 」で繋いだ字と、字 次の一手 = と次の一手の 1 文を続け、gate.rs の deny_json で PreToolUse の deny の JSON にする。次の一手は contract-body-form で、契約の行の --acceptance と本文の --body-file の絶対 path を 1 つの bd update に並べて書き直す。contract-prose で、本文の印を持つ文に参照 id を足すか参照 id の外の数と単位を外して書き直す。ほかの 2 語で、規則の表と台帳が読めるようになってから書き直す。
+
+      4 起票の門（境界の hook/question_gate.rs）。関数 answer は短い題の門（gate::short_gate）の後、問いと memo の下書きの前に、contract_gate::writes が拾った一続きを判じる。撃ちの関数は folio の入口 ::folio::entry::run を命令の名 tz と引数 check --dir <repo>/design-intent --prose <file> で、標準出力と標準エラーを Vec の buffer に受けて撃つ（cli/folio.rs の run と同じ入口・子 process は撃たない）。台帳は乙の一続きが在る時だけ server::ledger の Source で 1 度読む（甲だけなら bd を撃たない・設計の索引は読まない）。止める答えと まだ分からない答えは 1 行を標準出力に書いて rc 0（今の門と同じ）。契約の書きの無い payload の答えは今のまま。行 t-plan-cap が着地済みなら、その判じの前に置く（どちらも answer の中の別の呼びの塊・交わりは器が順に流す）。
+
+      5 係の終える前の門（境界の hook/subagent_stop.rs と子 module hook/subagent_stop/prose.rs）。関数 run は、行 t-stop-preflight の契約の file の欠けの足しの後に、子 module の関数 holes の欠けを足す。holes は出力の dir の子 contract の直下の名の末が .md の file（設計係が bead の本文として bd update --body-file に渡す file・子の dir と .md でない file は見ない）を名の順に、4 と同じ入口で撃ち、rc 1 の file に欠けの字『契約の本文 <path> が散文の門で落ちる（<違反の行を「 / 」で繋いだ字>）』を、rc 0 と 1 のほかの file に欠けの字『契約の本文 <path> の散文の門が まだ分からない（<標準出力の字>）』を足す。設計文書の dir は口の --repo の値の下の design-intent。.md の file が無ければ規則の表を読まない。欠けの止め（1 度目の終わりは rc 2・2 度目は STOP-GATE.txt に書いて通す）は今の lacks と hold と GATE の道のまま。
+
+      depends。行 t-stop-preflight は subagent_stop.rs の関数 run に契約の file の欠けの呼びと子 module の宣言を足すので、この行はその着地の後の run に呼びを足す（並べると同じ行が当たる）。
+
+      歯（tprsb.rs・作業場は CARGO_TARGET_TMPDIR の下の tprsb/<歯の名>）。toy の設計文書の dir は rules.yaml の 1 file で、節 thresholds に行 R-16 の value を main の rules.yaml と同じ字で写した行を置く。見本の本文の file は 7 行で、印 M は規則の行 R-16 の value の marks の 1 つ目の字。1 行目は 条 P-28.2 のとおり席は記帳 と M と句点。2 行目は 席は記帳 と M と句点。3 行目は 条 P-28.2 のとおり席は 3 本を記帳 と M と句点。4 行目と 6 行目は code fence の印の行で、5 行目は 2 行目と同じ文。7 行目は頭が縦線の表の行で、中身は 2 行目と同じ文。口の歯の偽の bd と偽の設計の道具は mlnk.rs の Place と同じ組み方（撃たれた引数を記録の file に 1 行足して作業場の字を出す script）で、payload の create には短い題の門を通す metadata の short を持たせる。係の終える前の門の歯は teeth6/agsg.rs の whole と同じ組み方（札・係の記録・出力の dir・--drafts）に、出力の dir の子 contract と口の --repo の toy の repo を足す。振る舞いで測れる口だけなので、source の字を照らす歯は足さない。
+  - n: 35
+    type: prose
+    title: 行 t-plan-cap — 起票の門が開いた計画の memo の本数を数えて上限を越える書きを止める（memo t3-hub.92.7・作り直し v4 の段 S4・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 4 file を書き、3 file を置き場だけで名指す。中核の crates/tsuzuri-core/src/lib.rs（pub mod の 1 行）と新しい src/plan_cap.rs、境界の crates/tsuzuri-boundary/src/hook/question_gate.rs、新しい歯の段の file crates/tsuzuri-boundary/tests/tplcap.rs（接頭辞 tplcap_）。着地済みの歯の file mlnk.rs・teeth3/qgate.rs・teeth5/shrtb.rs は書かず、verify の 3 行目から 5 行目が撃つので置き場だけで名指す。規則の表・folio・graph の module・群の main.rs・kfold の表は書かない。
+
+      なぜ。裁定 t3-hub.92.7.2（memo t3-hub.92.7）で、契約になる前の計画は、切り替えの後に設計ノートの計画だけの行（規則の行 R-33 の上限）でなく memo の bead に置き、開いた計画の memo の本数の上限（推奨の値 4 本）を起票の門が数えると決まった。今の起票の門（tz hook question-gate・規則の行 R-39）は短い題と問いと memo の繋ぐ門を持つが、本数は数えない（crates/tsuzuri-boundary/src/hook/question_gate.rs の関数 answer）。決定はしご。要るか: 計画だけの行の上限が守っていた積もりの止めを、ノートの退けの後も残す。既に在るか: 台帳の読みとグラフの組みと bead の label と開きの判じ（graph の BeadAttr の labels と is_open・crates/tsuzuri-core/src/graph/mod.rs の 85 行から 100 行）と hook の入力の分け方（gate.rs の segments・PROGRAMS・label_values・deny_json）が在るので、足すのは印の数えと値の読みと答えの字だけ。
+
+      1 計画の印（この行が決める形）。計画の memo は label memo:plan を持つ bead で、席は label intake:memo と並べて起票の時に置く。数えるのは台帳の bead のうち label memo:plan を持ち、BeadAttr の is_open が真の物（状態が closed でも tombstone でもない・種類を問わない）。印を label にしたのは、今の BeadAttr が label を持ち、bd の一覧の読みで数えられ、新しい欄の読みを足さないため。metadata に置く形は BeadAttr に欄を足すので、行 t-graph-bead が書く graph の file と交わり、採らない。
+
+      2 値の読み。境界は口の --repo の値の下の design-intent/rules.yaml の字を読み（読めなければ Err）、中核の関数 cap に渡す。cap は字の行のうち、前後の空白を落とした頭が、字 - と空白と字 {id: と空白と定数 CAP_ROW と読点の , を繋いだ字の行がちょうど 1 本の時だけ、その行の欄 value の引用符の中の字を読み、<0 以上の整数> 本 以下 の形ならその整数を返し、ほかは Err（行が無い・2 本以上・value が無い・形が違う）。定数 CAP_ROW の字は、切り替えの設計の commit が規則の表に足す開いた計画の memo の本数の上限の行の id で、頭の字 R と字 - と数 45 を繋いだ 4 字。その行は 1 行の流れの形で、value に 4 本 以下 を持つ（切り替えの commit の差の字）。
+
+      3 値の行が無い間（切り替えの前）の振る舞い。cap が Err の時、印の在る書き（4 の足す一続き）は まだ分からない（plan-cap-unread）で止まり、印の無い書きと、短い題・問い・memo の門の答えは替わらない。規則の行 R-33 は読まない。R-33 は設計ノートの計画だけの行という別の母集団を単位 行 で数え、計画の行を契約の行へ移すたびに値を下げる行なので、読むと memo の上限が設計ノートの直しで黙って動く。切り替えの前の計画は設計ノートの計画だけの行に置くので、印の在る memo を止めても失う仕事は無い。この振る舞いは数えを外す旗でも一度だけの口でもなく、値が読めない間は止める側に倒れる常の口で、条 N-3.1 の例外の機構に当たらない。切り替えの commit が上限の行を足した時から、同じ code が値を読んで数える。
+
+      4 数える一続き（関数 opens・gate.rs の segments と PROGRAMS で bd か bdw の一続きを command の順に拾う）。
+      印の起票。語 create を持ち、label の旗（gate.rs の label_values の 7 形）の値のコンマの項に memo:plan を持つ一続きは 1 本足す。
+      継ぐ起票。語 create を持ち、label に印が無く、--parent の値（--parent 値 か --parent=値）が台帳で label memo:plan を持つ bead の id で、語 --no-inherit-labels を持たない一続きは、bd が親の label を子に継ぐので 1 本足す。
+      起こし直し。語 reopen を持つ一続きと、語 update を持ち --status の値（--status 値 か --status=値）が closed でない一続きは、語のうち台帳で label memo:plan を持ち開いていない bead の id ごとに 1 本足す（同じ id は 1 度）。
+      後からの印。語 update の --add-label か --set-labels の値（=値 の形も）のコンマの項、語 label と語 add を持つ一続きの語、語 tag を持つ一続きの語に memo:plan が在れば、本数を問わず止める（plan-late-label・印は起票の時だけ置く）。
+      語 list・show ほかの読みの一続きと、label を外す旗は数えない。
+
+      5 判じ（関数 judge）。後からの印が 1 つでも在れば止める（plan-late-label）。足す本数が 0 なら通す（値を読まない）。足す本数が 1 以上で、cap が Err か台帳が読めない（gate.rs の unread_sources が ledger を持つ）なら まだ分からない（plan-cap-unread）。開いた計画の memo の本数と足す本数の和が値を越えれば止め（plan-cap）、値以下なら通す。
+      理由の閉じた 3 語は PlanWhy の ALL の順に plan-cap・plan-late-label・plan-cap-unread。関数 output は通す時に None、止める時は字『計画の memo の上限の門は止める（』、まだ分からない時は字『計画の memo の上限の門は まだ分からない（』に、理由の語と閉じ括弧を続け、plan-cap では空白と字『開いた計画の memo 4・足す 1・上限 4』と同じ形の数の字（開いた本数・足す本数・値）を続け、字 次の一手 = と次の一手の 1 文を続けて gate.rs の deny_json で PreToolUse の deny の JSON にする。次の一手は plan-cap で、済んだ計画の memo を閉じるか契約の bead へ移してから置き直す。plan-late-label で、印 memo:plan は起票の時に label で置き、後から足さない。plan-cap-unread で、規則の表の上限の行と台帳が読めるようになってから置き直す。
+
+      6 起票の門。question_gate.rs の関数 answer は、短い題の門の後で、問いと memo の下書きの前に plan_cap::opens を拾い、在ればグラフを 1 度だけ組み（問いと memo の門と同じグラフを分け合う）、規則の表の字を読んで judge を撃つ。止める答えと まだ分からない答えは 1 行を標準出力に書いて rc 0。opens が空の payload の答えは今のまま。行 t-prose-bead が着地済みなら、その契約の書きの判じの後に置く（どちらも answer の中の別の呼びの塊・交わりは器が順に流すので depends は書かない）。
+
+      歯（tplcap.rs・作業場は CARGO_TARGET_TMPDIR の下の tplcap/<歯の名>）。純関数の歯は fixture の字から中核の graph::build でグラフを組んで plan_cap の関数を直に撃つ（mlnk.rs と同じ組み方）。台帳の fixture は label memo:plan を持つ開いた bead 4 本（fx-p.1 から fx-p.4）、同じ label の閉じた bead fx-p.5、印の無い開いた memo fx-p.6、閉じた task fx-p.7 で、3 本の台帳は fx-p.4 を閉じた物。口の歯の toy の repo は design-intent/rules.yaml に節 thresholds と CAP_ROW の 1 行（value 4 本 以下）を置き、偽の bd と偽の設計の道具は mlnk.rs の Place と同じ組み方で、payload の create には短い題の門を通す metadata の short を持たせる。振る舞いで測れる口だけなので、source の字を照らす歯は足さない。
+  - n: 38
+    type: prose
+    title: 行 t-code-bead — tz code と memo の繋ぐ門が契約の bead も読む（memo t3-hub.92.7・作り直し v4 の段 S4・判断の記録 ADR-72 の決定 D1 の分・裁定 t3-hub.92.7.2・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は src 3 file と歯の file 3 本を書く。台帳の字から契約の bead の write-set を読む関数は中核の graph/code.rs に、台帳の読みと旗 --bd は境界の cli/code.rs に置き、境界の main.rs の module の doc の tz code の 1 行（31 行目）の字を合わせる。新しい歯の段の file は crates/tsuzuri-core/tests/cdbead.rs（接頭辞 cdbead_）と crates/tsuzuri-boundary/tests/kcbead.rs（接頭辞 kcbead_）。着地済みの tz code の歯 kcode.rs は見本に偽の bd を足す（下の段）。群の main.rs と kfold の表は書かない（module を足さない）。
+
+      なぜ。持ち主は裁定 t3-hub.92.7.2 で、便の契約を台帳の bead に置く形を承認した（判断の記録 ADR-72 の決定 D1 の分）。決めの字のうちこの行が頼る物。契約の行は契約表の導出の形の [[contract]] の行（欄 id・title・req・write-set・verify・size・done ほか）で bead の欄 acceptance に置き、設計の節の本文は bead の本文に置く。切り替えの commit の日から新しい契約は bead にだけ置き、設計ノートに行を足さない。契約の id は契約表の全部の行とほかの全部の契約の bead の id に重ならない（器の受付が照らす）。並ぶ間（切り替えから退けまで）は契約表の行と契約の bead の 2 形が在る。今の tz code は契約表の導出物だけを読む。境界の cli/code.rs の fn gather（85 行目・行の読みは 93 行目）が fn write_sets（98 行目から 123 行目）で repo の contracts の直下の .toml の字を読み、中核の graph/code.rs の fn read_write_sets（288 行目）が [[contract]] の行ごとに id と write-set を読む。台帳は読まない。そのため切り替えの後の契約は tz code の数にも --row の引きにも出ず、席と係が bead の契約の write-set の file の定義を tz code で引けない。
+
+      memo の繋ぐ門（照らした結果・src は替えない）。中核の memo_gate.rs の fn memo_needs（111 行目から 149 行目）は、1 段目で memo の touches の各節点の隣のうち候補の種類（契約の bead は種類 task）で次数が 30 以下で、bead なら開いた物を拾い、2 段目で 1 段目の設計ノートの行へ design の辺を持つ開いた契約の bead を拾う。契約の bead は設計ノートの行を持たず design の辺も持たない（行 t-graph-bead が design の辺を pointer の行だけから組む）ので、2 段目は契約の bead を拾わない。一方で行 t-graph-bead は契約の bead から欄 req の要件への req の辺を張り、bead の依存（blocks）は今も辺になる。そのため、要件を名指す memo は 1 段目で契約の bead を直に拾い（pointer の形では要件 → 行 → 契約の 2 段で拾う）、契約の bead を名指す memo は blocks の隣の開いた契約の bead を 1 段目で拾う（pointer の形では行の depends の隣の行の契約を 2 段目で拾う）。閉じた契約の bead は 1 段目の開いた物の決めで拾わない（pointer の形も 2 段目で開いた物だけ）。見落としと誤った断りは src の替えで直す物が無いので、この行は memo の門の src を替えず、上の拾いを歯で留める（行 t-graph-bead の req の辺や blocks の辺の読みを後で替えると、この歯が落ちる）。違いは 1 つ在る。契約の bead を名指す memo の 1 段目は、次数が 30 以下の要件も拾う（pointer の形では設計ノートの行を拾う）。行が無いので、近い設計の節点として要件を処分させるのは正しい。
+
+      形（中核の graph/code.rs）。公開の関数 bead_write_sets（台帳の字を受け、Option の、行の id と write-set の項の列の対の列を返す）を fn read_write_sets の後に足す。台帳の字は bd の読み取りの口の JSON の配列（境界の BD_ARGS の撃ちの出力）で、中核の graph/build.rs の fn read_ledger（397 行目・pub(crate)）で読む（読めなければ None）。bead を台帳の順に見て、欄 acceptance の字（無ければ空の字）を fn read_write_sets で読む（読めなければ全体を None・壊れた台帳の一部だけを見せない）。読んだ行ごとに、行の id を bead の id と井桁と契約の id をつないだ字にして列に足す。契約の行を持たない bead（pointer の行だけの bead・acceptance の無い bead ほか）は read_write_sets が空の列を返すので何も足さない。開閉は問わない（契約表の導出物も着地した行を持つのと同じ）。module の doc の 1 行目から 2 行目の 3 つの字の段に、台帳の契約の bead の write-set の字を足す。
+
+      形（境界の cli/code.rs）。旗 --bd（値は台帳の読みの program・既定は server の ledger の定数 BD・空の値と 2 度は今の fn parse の断りのまま）を足し、USAGE を usage: tz code [--repo <dir>] [--sg <program>] [--bd <program>] [--row <ノート>#<行> | --file <path>] にする。fn gather は contracts の行を今のまま読んだ後に、server の ledger の Source を repo と bd で作って text_alone で台帳の字を読み、bead_write_sets の行を contracts の行の後に足す。台帳の字が無いか bead_write_sets が None なら、bead の行を足さずに組み、読めない印を持つ。fn run は旗なしと --row の時、読めない印が在れば、今の出力を出した後に標準エラーに tz code の頭と字 台帳が読めない を持つ 1 行（bead の契約の行を含まない・まだ分からない）を書き rc 2 を返す（--row の名指しの誤りの rc 1 も 2 にする・名指した行が bead の契約かもしれない）。--file は行を使わないので rc を替えない。module の doc の旗の段と終了 code の行に --bd と台帳が読めない時の rc 2 を書く。--row の行の id は、契約表の行は文書 id と井桁と行 id（今のまま）、契約の bead は bead の id と井桁と契約の id。終了 code の決めは tz graph（旗なしは読めない出所が在れば出した上で 2）と同じ形にした（切り替えの前の写しのように台帳の無い置き場でも、契約表の行は引ける）。境界の main.rs の 31 行目の字を USAGE と同じ旗の並びにする。
+
+      歯の見本（cdbead.rs）。台帳の字は serde_json の json の配列で組む（着地済みの tsuzuri-core の teeth1/dnrow.rs の偽の台帳と同じ組み方）。
+      - bead_write_sets の見本の台帳は 4 本。kb.1 は open で acceptance は [[contract]] の行と、id の行で値は t-one の JSON の字と、write-set の行で値は b.rs と +d.rs の JSON の配列。kb.2 は open で acceptance は design の pointer の 1 行（contracts/nx.toml の後に井桁と a）。kb.3 は closed で acceptance は [[contract]] の行と、id の行で値は t-three と、write-set の行で値は a.rs だけの配列。kb.4 は acceptance を持たない。
+      - None の見本は空の字と、字 not json と、kb.1 の write-set の行の値を配列でなく b.rs の JSON の字にした bead の台帳。空の列の見本は空の配列の字。
+      - memo の門の見本の索引は dnrow.rs の IDX と同じ 5 節点と 5 辺（要件 FR1・条 A-1・設計ノートの行 nx#a・nx#b・ny#c）。台帳は 5 本。mb は種類 epic の open。mb.1 は種類 task の open・親 mb・acceptance は [[contract]] の行と id の行で値は t-one と req の行で値は FR1 だけの配列。mb.2 は mb.1 と同じ形で id は t-two・dependencies に mb.1 への blocks。mb.3 は mb.1 と同じ形で id は t-three・status は closed。mb.4 は種類 task の open・親 mb・acceptance は design の pointer の 1 行（contracts/nx.toml の後に井桁と a）。グラフは tsuzuri_core::graph::build に索引と台帳と空の event log を渡して組み、memo_gate::memo_needs を FR1 と mb.2 の名指しで撃って集合で比べる。FR1 の名指しの集合の内訳は、索引の隣の A-1 と nx#a と nx#b、req の辺の隣の開いた mb.1 と mb.2（閉じた mb.3 は入らない）、2 段目の pointer の形の mb.4。mb.2 の名指しの集合は req の辺の隣の FR1（次数 6）と blocks の辺の隣の mb.1。
+
+      歯の見本（kcbead.rs）。組み方は着地済みの kcode.rs に倣う（歯ごとの一時の根・git の一時の repo に a.rs と b.rs と規則の file と contracts/n1.toml・偽の構文で探す道具・fn shot で撃った後に根を消す）。n1.toml と stream は kcode.rs の TOML と STREAM と同じ字（行 a は a.rs と +c.rs と =b.rs・行 b は b.rs）。偽の bd は根の shell の script で、撃たれた引数を 1 行ずつ根の bd-args.txt に書き、根の ledger.json を出して rc を返す。ledger.json は cdbead.rs の kb.1 と kb.2 と同じ 2 本。tz code は --repo と --sg と --bd で撃つ。
+      - 3 行は、file と b.rs と b.rs と 1 をタブで区切った行、def と b.rs#fn g と 1-1 をタブで区切った行、none と +d.rs をタブで区切った行。
+      - 6 語は、--readonly と list と --all と --limit と 0 と --json（境界の BD_ARGS と同じ並び）。
+      - rows 3 と writes 3 と unbound 2 の行は、語と数をタブで区切った行で、行は n1#a と n1#b と kb.1#t-one、辺は a.rs と b.rs と b.rs、file に当たらない項は +c.rs と +d.rs。
+      - rows 2 の行は、偽の bd が rc 1 を返す時の rows と 2 をタブで区切った行（契約表の行だけ）。
+      - def の 1 行は、def と b.rs#fn g と 1-1 をタブで区切った行。
+      - 壊れた bead の見本は ledger.json の kb.1 の write-set の行の値を b.rs の JSON の字にした台帳。
+
+      着地済みの kcode.rs の直し。tz code が台帳を読むので、偽の bd の無い見本の repo では台帳が読めず rc 2 になる（kcode_row_lists_defs_of_write_set_files_only と kcode_counts_and_file_lines と kcode_scratch_is_gone_after_the_shot の rc 0 の断言が落ちる）。fn place で根に空の配列の字を出す偽の bd を書き、fn tz で --bd にその path を渡す。断言の字は替えない（空の台帳は行を足さない）。kcode_unreadable_and_named_errors の 4 つの撃ちは引数の誤りと名指しの誤りのまま rc 1（台帳は読める）。
+
+      done と verify の対応。1 つ目から 4 つ目の項は verify の 2 行目（cdbead.rs）、5 つ目から 9 つ目の項は 3 行目（kcbead.rs）が測る。10 個目の項は偽の bd を足した kcode.rs の歯が緑のまま、最後の項は read_write_sets を替えないことを着地済みの cdnode_ で測る。1 行目の clippy は書く 2 crate を -p で名指す。xtask の check は共通 verify が撃つので行の verify に書かない。
+
+      照らした事（起草の時の main）。消す物と名を替える物は無い（足すだけ・read_write_sets と fn write_sets の契約表の読みは替えない）。fn gather の字を読む着地済みの歯は kcode.rs だけ（crates と xtask の .rs を tz code の口と graph::code の名で grep した 3 file のうち、ほかは中核の cdnode.rs と src）。tz code の USAGE を字で持つ歯は無い。数を pin する歯は動かない（定義の種類 11・kfold の群の表は module を足さないので替えない・段の file は中核 3 本と境界 12 本で、命令 kfold-cap は段の本数では落とさない）。src の file の大きさは graph/code.rs 368 行・cli/code.rs 224 行で、上限 1500 行の余地に収まる。接頭辞 cdbead_ と kcbead_ は契約表の verify の filter の語と部分の字で重ならない。
+
+      依存。歯 cdbead_memo_needs_reach_bead_contracts の FR1 から mb.1 と mb.2 への拾いは、行 t-graph-bead の足す req の辺に頼るので、この行は行 t-graph-bead の着地の後に流す。graph/code.rs と cli/code.rs は行 t-graph-bead の write-set に無く、行 t-graph-bead の関数 contract_rows は使わない（write-set の字は着地済みの read_write_sets が [[contract]] の塊ごとに読む）。
+
+      範囲の外。設計ノートの行の節点と契約表の導出物を読むのをやめること（退けの行）。memo の繋ぐ門の src（上の照らし）。tz context と board の契約の欄の表。
