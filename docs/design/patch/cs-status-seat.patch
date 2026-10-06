@@ -1,0 +1,773 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index e1060ab8dbe8d54e50f8f0919a5787f9d01eb8e6..7b03a14075d04c5e95297c5808f7bfcdf91a53ca 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -16,6 +16,8 @@
+ //! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
+ //! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（`trust::place_trust`・
+ //! 置けなければ起こさずに断る・判断の記録 ADR-55 決定 (1)(3)）。
++//! 状態の行の再描画の間は、環境の口座の置き場の設定 file の statusLine の値を材料に写す（`statusline::account_settings`・
++//! 判断の記録 ADR-67）。
+ 
+ use std::fs::{self, File};
+ use std::io::Read;
+@@ -35,10 +37,12 @@ use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notic
+ use tsuzuri_core::consult::quota::{admit, count};
+ use tsuzuri_core::consult::resume::pick;
+ use tsuzuri_core::consult::stamp::{last_sid, lines};
++use tsuzuri_core::consult::status::account_refresh;
+ 
+ use super::follow;
+ use super::plain::{create_plain, odd_dir, plain_file, plain_path, same_file, write_plain};
+ use super::stamp::STAMPS;
++use super::statusline::account_settings;
+ use super::trust::place_trust;
+ use super::{
+     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
+@@ -143,6 +147,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+         effort: w.effort.clone(),
+         question: plain_file(ws, "bundle/question.md"),
+         resume: None,
++        refresh: account_settings().and_then(|t| account_refresh(&t)),
+     })
+ }
+ 
+diff --git a/crates/tsuzuri-boundary/src/consult/statusline.rs b/crates/tsuzuri-boundary/src/consult/statusline.rs
+index 27a609756ef5bde328269e7788efe72a37fd407d..507a4c03d3123ac84d35879a54941f1080c3fcdc 100644
+--- a/crates/tsuzuri-boundary/src/consult/statusline.rs
++++ b/crates/tsuzuri-boundary/src/consult/statusline.rs
+@@ -3,20 +3,33 @@
+ //! findings/ の所見の数・束の要約値 bundle/digest・標準入力の文脈の割合を中核の `status::render` で 1 行にして標準出力に出す。
+ //! 口は囲いの外で持ち主の権限で走り、材料は窓が書ける作業場の file なので symlink を辿らない（作業場から file までの
+ //! どの段も lstat で dir か普通の file かを見て、開いた後の fstat で同じ file かを照らす・助けは `plain`）。普通の file でない物（fifo など）は
+-//! 開かず、読む字に上限を置く。読めない物は欄を出さない。何も書かない。席の口でないので窓の守りは通す。
++//! 開かず、読む字に上限を置く。読めない物は欄を出さない。口は file を書かない（口座の命令の書きは命令のまま）。席の口でないので窓の守りは通す。
+ //! 渡した path が「/」で始まらないか名が `consult-cw<n>` でないか symlink でない dir でなければ、何も出さずに rc 1。
++//! 1 行の前に、窓を起こした口座（環境の CLAUDE_CONFIG_DIR・起動の口が窓に渡す）の設定 file の statusLine の命令を、同じ標準入力を
++//! 渡して作業場で殻に撃った出力の行を出す（中核の `status::stanza`・判断の記録 ADR-67）。命令は新しい process group で撃ち、上限
++//! `ACCOUNT_WAIT` を越えたら group ごと止める。設定が無い・読めない・鍵が無い・落ちた・時間切れ・入れ子の周は、1 行の末に訳の語を添える。
+ 
++use std::ffi::OsStr;
+ use std::fs::{self, File};
+-use std::io::Read;
++use std::io::{Read, Write};
++use std::os::unix::process::CommandExt;
+ use std::path::Path;
++use std::process::{Command, Stdio};
++use std::sync::mpsc;
++use std::thread;
++use std::time::{Duration, Instant};
+ 
+ use tsuzuri_contract::consult::{WindowFile, WindowId};
+ use tsuzuri_contract::wire;
+-use tsuzuri_core::consult::status::{context_percent, render};
++use tsuzuri_core::consult::status::{
++    Miss, account_command, account_lines, context_percent, render, stanza,
++};
+ 
++use super::launch::ACCOUNT_ENV;
+ use super::plain::{plain_dir, plain_path, same_file};
+ use super::{FAIL, WINDOW_FILE};
+ use crate::out::{emit, emit_err};
++use crate::server::proc::{KILL, stop_with};
+ 
+ /// 作業場の file から読む字の上限（byte）。
+ pub const FILE_MAX: u64 = 16 * 1024;
+@@ -27,6 +40,27 @@ pub const STDIN_MAX: u64 = 256 * 1024;
+ /// 束の要約値の file（作業場からの相対）。
+ pub const DIGEST: &str = "bundle/digest";
+ 
++/// 口座の設定 file（口座の置き場からの相対）。
++pub const SETTINGS: &str = "settings.json";
++
++/// 口座の設定 file から読む字の上限（byte）。
++pub const SETTINGS_MAX: u64 = 1 << 20;
++
++/// 口座の命令を撃つ殻。
++pub const SHELL: &str = "sh";
++
++/// 口座の命令を待つ上限（命令の字の `timeout 2` の内に 1 行を出す）。
++pub const ACCOUNT_WAIT: Duration = Duration::from_millis(1500);
++
++/// 口座の命令の出力から読む字の上限（byte）。
++pub const ACCOUNT_OUT_MAX: u64 = 64 * 1024;
++
++/// 口座の命令の子に置く印の環境変数（印の在る口は口座の命令を撃たない）。
++pub const NESTED_ENV: &str = "TZ_CONSULT_STATUSLINE";
++
++/// 口座の命令の終わりを見る間。
++const STEP: Duration = Duration::from_millis(5);
++
+ /// tz consult statusline の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+     let [ws] = rest else {
+@@ -62,10 +96,81 @@ pub fn run(rest: &[&str]) -> u8 {
+         digest.as_deref(),
+         context_percent(&input),
+     );
+-    emit(&line);
++    emit(&stanza(account(ws, &input), &line));
+     0
+ }
+ 
++/// 環境の口座の置き場の設定 file の字（置き場が無い・読めない・UTF-8 でなければ None・頭の `SETTINGS_MAX` byte まで）。
++pub fn account_settings() -> Option<String> {
++    let dir = std::env::var_os(ACCOUNT_ENV)?;
++    let file = File::open(Path::new(&dir).join(SETTINGS)).ok()?;
++    let mut text = String::new();
++    file.take(SETTINGS_MAX).read_to_string(&mut text).ok()?;
++    Some(text)
++}
++
++/// 口座の設定の statusLine の命令を作業場で撃った出力の行（出せなければ訳）。
++fn account(ws: &Path, input: &str) -> Result<Vec<String>, Miss> {
++    if std::env::var_os(NESTED_ENV).is_some() {
++        return Err(Miss::Nested);
++    }
++    let command = account_command(&account_settings().ok_or(Miss::Unread)?)?;
++    let out = shoot(&command, ws, input)?;
++    Ok(account_lines(&String::from_utf8_lossy(&out)))
++}
++
++/// 命令を殻で撃ち（cwd は作業場・標準入力に `input`・標準エラーは捨てる・子に `NESTED_ENV`）、rc 0 で上限の内に返した
++/// 標準出力（頭の `ACCOUNT_OUT_MAX` byte）を返す。子は新しい process group に入れ、時間切れには group ごと止める。
++fn shoot(command: &str, ws: &Path, input: &str) -> Result<Vec<u8>, Miss> {
++    let deadline = Instant::now() + ACCOUNT_WAIT;
++    let mut child = Command::new(SHELL)
++        .args(["-c", command])
++        .current_dir(ws)
++        .env(NESTED_ENV, "1")
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .process_group(0)
++        .spawn()
++        .map_err(|_| Miss::Failed)?;
++    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
++        stop_with(child, OsStr::new(KILL));
++        return Err(Miss::Failed);
++    };
++    let input = input.as_bytes().to_vec();
++    thread::spawn(move || {
++        let _ = stdin.write_all(&input);
++    });
++    let (tx, rx) = mpsc::channel();
++    thread::spawn(move || {
++        let mut out = Vec::new();
++        let read = stdout.take(ACCOUNT_OUT_MAX).read_to_end(&mut out);
++        let _ = tx.send(read.map(|_| out));
++    });
++    let out = match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
++        Ok(Ok(out)) => out,
++        Ok(Err(_)) => {
++            stop_with(child, OsStr::new(KILL));
++            return Err(Miss::Failed);
++        }
++        Err(_) => {
++            stop_with(child, OsStr::new(KILL));
++            return Err(Miss::TimedOut);
++        }
++    };
++    loop {
++        match child.try_wait() {
++            Ok(Some(status)) if status.success() => return Ok(out),
++            Ok(Some(_)) => return Err(Miss::Failed),
++            Ok(None) if Instant::now() < deadline => thread::sleep(STEP),
++            _ => {
++                stop_with(child, OsStr::new(KILL));
++                return Err(Miss::TimedOut);
++            }
++        }
++    }
++}
++
+ /// 作業場からの相対 `rel` の普通の file の字（`plain` の照らし・頭の `FILE_MAX` byte まで・UTF-8 でなければ None）。
+ pub fn read_plain(ws: &Path, rel: &str) -> Option<String> {
+     let path = plain_path(ws, rel)?;
+diff --git a/crates/tsuzuri-boundary/tests/cwsla.rs b/crates/tsuzuri-boundary/tests/cwsla.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c580c4f0f96991bb0e93b09916ef9d9028cd5609
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwsla.rs
+@@ -0,0 +1,216 @@
++//! 窓の状態の行に口座のふだんの statusline を出す歯（接頭辞 cwsla_・行 cs-status-seat・判断の記録 ADR-67）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に窓の作業場と偽の口座の置き場（設定 file の statusLine の命令は殻の 1 行）を置き、
++//! tz consult statusline に session の JSON を渡して、口座の命令の出力の行が先で窓の 1 行が次の行に出ることと、出せない周は
++//! 窓の 1 行の末に訳の語だけを添えることと、口座の行の色の制御の並びだけを通してほかの制御の並びと字を落とし切ることを見る。否定の見本は正しい見本から 1 つだけを替える。
++#![cfg(test)]
++
++use std::fs;
++use std::io::Write;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++use std::time::{Duration, Instant};
++
++use tsuzuri_contract::consult::{Form, Starter, WindowFile, WindowId};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::status::SEP;
++
++const INPUT: &str = r#"{"context_window":{"used_percentage":42.4}}"#;
++
++/// 正しい見本の命令（環境の CWSLA_TAG と標準入力を写して 1 行を出す）。
++const ECHO: &str = r#"printf '%s:' "$CWSLA_TAG"; cat"#;
++
++/// 窓の 1 行（控えだけを持つ作業場・所見の dir と束は置かない）。
++fn window_line() -> String {
++    ["窓 cw3", "題 t3-hub.88", "fable・xhigh", "文脈 42%"].join(SEP)
++}
++
++/// 歯ごとの置き場に作業場 `consult-cw3` と口座の置き場 `acct` を作る（前の撃ちの残りを消す）。
++fn place(name: &str) -> (PathBuf, PathBuf) {
++    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cwsla-{name}"));
++    let _ = fs::remove_dir_all(&root);
++    let ws = root.join("consult-cw3");
++    fs::create_dir_all(ws.join(".consult")).unwrap();
++    let w = WindowFile {
++        id: WindowId::parse("cw3").unwrap(),
++        form: Form::Talk,
++        topic: Some("t3-hub.88".into()),
++        model: "fable".into(),
++        effort: "xhigh".into(),
++        starter: Starter::Chat,
++        uttered: Some("20261006T0204Z".into()),
++        request: None,
++        made: "20261006T0204Z".into(),
++    };
++    fs::write(ws.join(".consult/window.json"), wire::encode(&w).unwrap()).unwrap();
++    let acct = root.join("acct");
++    fs::create_dir_all(&acct).unwrap();
++    (ws, acct)
++}
++
++/// 命令 `command` を statusLine に持つ設定の字（JSON の字の囲みと逆斜線と二重引用符だけを逃がす）。
++fn settings_with(command: &str) -> String {
++    let quoted = command.replace('\\', "\\\\").replace('"', "\\\"");
++    format!(r#"{{"statusLine":{{"type":"command","command":"{quoted}","refreshInterval":10}}}}"#)
++}
++
++/// 口座の置き場を環境に置いて口を撃つ（`edit` で環境を足すか除く）。
++fn shoot(ws: &Path, acct: &Path, edit: impl Fn(&mut Command)) -> Output {
++    let mut c = Command::new(env!("CARGO_BIN_EXE_tz"));
++    c.current_dir(ws)
++        .args(["consult", "statusline", ws.to_str().unwrap()])
++        .env("CLAUDE_CONFIG_DIR", acct)
++        .env("CWSLA_TAG", "acct")
++        .env_remove("TZ_CONSULT_STATUSLINE")
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::piped());
++    edit(&mut c);
++    let mut child = c.spawn().unwrap();
++    child
++        .stdin
++        .take()
++        .unwrap()
++        .write_all(INPUT.as_bytes())
++        .unwrap();
++    let out = child.wait_with_output().unwrap();
++    assert_eq!(
++        out.status.code(),
++        Some(0),
++        "{}",
++        String::from_utf8_lossy(&out.stderr)
++    );
++    out
++}
++
++fn text(out: &Output) -> String {
++    String::from_utf8(out.stdout.clone())
++        .unwrap()
++        .trim_end_matches('\n')
++        .to_string()
++}
++
++/// 口座の設定の statusLine の命令を、同じ標準入力と環境で殻に撃った出力が 1 行目、窓の 1 行が 2 行目に出る。
++#[test]
++fn cwsla_account_line_comes_first() {
++    let (ws, acct) = place("first");
++    fs::write(acct.join("settings.json"), settings_with(ECHO)).unwrap();
++    let got = text(&shoot(&ws, &acct, |_| {}));
++    let want = [format!("acct:{INPUT}"), window_line()];
++    assert_eq!(got.lines().collect::<Vec<_>>(), want);
++}
++
++/// 設定 file が無い・JSON でない・置き場の環境が無い・鍵が無い・命令が rc 1・時間切れ・入れ子の各々で、窓の 1 行の末に
++/// 欄 `口座 <訳の語>` だけを足した 1 行を出し、落ちた命令の出力は出さず、入れ子では命令を撃たない。
++#[test]
++fn cwsla_misses_add_only_the_word() {
++    type Case = (&'static str, Option<String>, fn(&mut Command), &'static str);
++    let mark = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cwsla-nested-ran");
++    let _ = fs::remove_file(&mark);
++    let nested = settings_with(&format!("touch {}; echo ran", mark.display()));
++    let cases: [Case; 7] = [
++        ("設定 file が無い", None, |_| {}, "読めない"),
++        ("JSON でない", Some("{".into()), |_| {}, "読めない"),
++        (
++            "置き場の環境が無い",
++            Some(settings_with(ECHO)),
++            |c| {
++                c.env_remove("CLAUDE_CONFIG_DIR");
++            },
++            "読めない",
++        ),
++        (
++            "鍵が無い",
++            Some(r#"{"statusLine":{"type":"command","refreshInterval":10}}"#.into()),
++            |_| {},
++            "鍵なし",
++        ),
++        (
++            "命令が rc 1",
++            Some(settings_with("echo leak; exit 1")),
++            |_| {},
++            "落ちた",
++        ),
++        (
++            "時間切れ",
++            Some(settings_with("echo late; sleep 5")),
++            |_| {},
++            "時間切れ",
++        ),
++        (
++            "入れ子",
++            Some(nested),
++            |c| {
++                c.env("TZ_CONSULT_STATUSLINE", "1");
++            },
++            "入れ子",
++        ),
++    ];
++    for (name, settings, edit, word) in cases {
++        let (ws, acct) = place("miss");
++        if let Some(s) = settings {
++            fs::write(acct.join("settings.json"), s).unwrap();
++        }
++        let start = Instant::now();
++        let got = text(&shoot(&ws, &acct, edit));
++        assert!(start.elapsed() < Duration::from_secs(2), "{name}");
++        assert_eq!(got, format!("{}{SEP}口座 {word}", window_line()), "{name}");
++    }
++    assert!(!mark.exists(), "入れ子で命令を撃った");
++}
++
++/// 口座の行の色の制御の並び（SGR）は通して行の末に色の戻しを足し、ほかの ESC の並び（m 以外で終わる ESC [ の並び・
++/// 数と ; でない字を持つ m の並び・ESC ] の並び・単独の ESC）は丸ごと落として残骸を出さず、制御の字を落とす。見本は句ごとに 1 つ。
++#[test]
++fn cwsla_keeps_colors_and_drops_other_controls() {
++    let cases: [(&str, &str, &str); 6] = [
++        (
++            "色",
++            r"\033[01;32mgreen\033[0m",
++            "\u{1b}[01;32mgreen\u{1b}[0m\u{1b}[0m",
++        ),
++        ("画面の消し", r"a\033[2Jb", "ab"),
++        ("数でない m の並び", r"a\033[1:2mb", "ab"),
++        ("題の書き換え", r"a\033]0;title\007b", "ab"),
++        ("単独の ESC", r"a\033", "a"),
++        ("制御の字", r"a\001b", "ab"),
++    ];
++    for (name, body, want) in cases {
++        let (ws, acct) = place("ctl");
++        let command = format!("printf '{body}'");
++        fs::write(acct.join("settings.json"), settings_with(&command)).unwrap();
++        let got = text(&shoot(&ws, &acct, |_| {}));
++        assert_eq!(got, format!("{want}\n{}", window_line()), "{name}");
++    }
++}
++
++/// 口座の行の間の空の行は残し、末の空の行を除く。
++#[test]
++fn cwsla_keeps_inner_empty_lines() {
++    let (ws, acct) = place("empty");
++    let command = r"printf 'first\r\n\nsecond\n\n'";
++    fs::write(acct.join("settings.json"), settings_with(command)).unwrap();
++    let got = text(&shoot(&ws, &acct, |_| {}));
++    let want = [
++        "first".to_string(),
++        String::new(),
++        "second".to_string(),
++        window_line(),
++    ];
++    assert_eq!(got.split('\n').collect::<Vec<_>>(), want);
++}
++
++/// 口座の行は頭の 8 行だけを、1 行は頭の 400 字だけを出す（縁の 8 行と 9 行目・400 字と 401 字目）。
++#[test]
++fn cwsla_cuts_lines_and_length() {
++    let (ws, acct) = place("cut");
++    let long = "あ".repeat(400) + "い";
++    let command = format!("printf '{long}\\n'; for i in 2 3 4 5 6 7 8 9; do echo line$i; done");
++    fs::write(acct.join("settings.json"), settings_with(&command)).unwrap();
++    let got = text(&shoot(&ws, &acct, |_| {}));
++    let lines: Vec<&str> = got.lines().collect();
++    assert_eq!(lines.len(), 9, "{got}");
++    assert_eq!(lines[0], "あ".repeat(400));
++    assert_eq!(lines[7], "line8");
++    assert!(!got.contains("line9"), "{got}");
++    assert_eq!(lines[8], window_line());
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+index 228dfe1605d8b112659aeca5bf6e1e42794d94f6..476a3512e6442da5ff06d8e2f40ec748350dc323 100644
+--- a/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
++++ b/crates/tsuzuri-boundary/tests/teeth5/cwlch.rs
+@@ -4,6 +4,7 @@
+ //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
+ //! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
+ //! process の印が起こした時の口座の置き場（偽の環境の CLAUDE_CONFIG_DIR）を持つことを見る（行 cs-acct-mark）。
++//! 偽の口座の設定 file の再描画の間を話す窓の設定にだけ写すことを見る（行 cs-status-seat）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -187,6 +188,7 @@ impl Fx {
+             effort: "xhigh".to_string(),
+             question,
+             resume: None,
++            refresh: None,
+         }
+     }
+ 
+@@ -641,6 +643,35 @@ fn cwlch_dry_run() {
+     assert!(!fx.ws(1).join(".consult/proc-1.json").exists());
+ }
+ 
++/// 環境の口座の置き場の設定 file の statusLine の refreshInterval を、話す窓の --dry-run の argv の設定にだけ写す
++/// （問う窓は写さない・行 cs-status-seat）。
++#[test]
++fn cwlch_dry_run_copies_the_account_refresh() {
++    let fx = Fx::new("refresh");
++    fx.open(&["--by", "seat"]);
++    fx.open(&["--by", "seat", "--form", "ask"]);
++    fs::remove_file(fx.root.join("ledger.json")).unwrap();
++    let acct = fx.root.join("acct");
++    fs::create_dir_all(&acct).unwrap();
++    let set = r#"{"statusLine":{"type":"command","command":"x","refreshInterval":7}}"#;
++    fs::write(acct.join("settings.json"), set).unwrap();
++    for (n, form, refresh) in [(1, Form::Talk, Some(7)), (2, Form::Ask, None)] {
++        let mut l = fx.launch(n, form, false);
++        l.refresh = refresh;
++        clear_tmp(&l);
++        let o = fx
++            .command(&["consult", "launch", &format!("cw{n}"), "--dry-run"])
++            .env("CLAUDE_CONFIG_DIR", &acct)
++            .output()
++            .unwrap();
++        assert_eq!(rc(&o), 0, "{}", err(&o));
++        let want: Vec<String> = std::iter::once("claude".to_string())
++            .chain(argv(&l))
++            .collect();
++        assert_eq!(out(&o).lines().collect::<Vec<_>>(), want, "cw{n}");
++    }
++}
++
+ #[test]
+ fn cwlch_private_tmp_guard() {
+     let fx = Fx::new("tmp");
+diff --git a/crates/tsuzuri-boundary/tests/teeth6/cwsln.rs b/crates/tsuzuri-boundary/tests/teeth6/cwsln.rs
+index 188ca884fec61461d4decc888f9c1a2383472121..f7bd767487caa76ea903c4592606fd8aa32057f3 100644
+--- a/crates/tsuzuri-boundary/tests/teeth6/cwsln.rs
++++ b/crates/tsuzuri-boundary/tests/teeth6/cwsln.rs
+@@ -1,6 +1,7 @@
+ //! 窓の状態の 1 行の口の歯（接頭辞 cwsln_・設計ノート surface-wave29b 行 cs-status-verb・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+ //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に窓の作業場を置き、tz consult statusline に session の JSON を渡して、
+ //! 1 行の字と、symlink を辿らないこと・fifo を開かないこと・制御の字を出さないこと・窓の作業場でない path を断ることを見る。
++//! 口座は statusLine の命令が何も出さない偽の置き場にする（口座の行は出ず 1 行だけ・行 cs-status-seat）。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -53,9 +54,25 @@ fn workspace(root: &Path) -> PathBuf {
+     ws
+ }
+ 
++/// statusLine の命令が何も出さない口座の置き場（歯の process ごとの名で書いて rename で置く・並んだ歯が半端な字を読まない）。
++fn quiet_account() -> PathBuf {
++    let acct = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cwsln-quiet");
++    fs::create_dir_all(&acct).unwrap();
++    let staged = acct.join(format!("settings.{}", std::process::id()));
++    fs::write(
++        &staged,
++        r#"{"statusLine":{"type":"command","command":"true"}}"#,
++    )
++    .unwrap();
++    fs::rename(&staged, acct.join("settings.json")).unwrap();
++    acct
++}
++
+ fn statusline(args: &[&str], input: &str) -> Output {
+     let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
+         .current_dir(env!("CARGO_TARGET_TMPDIR"))
++        .env("CLAUDE_CONFIG_DIR", quiet_account())
++        .env_remove("TZ_CONSULT_STATUSLINE")
+         .args(["consult", "statusline"])
+         .args(args)
+         .stdin(Stdio::piped())
+diff --git a/crates/tsuzuri-core/src/consult/launch.rs b/crates/tsuzuri-core/src/consult/launch.rs
+index 9ce1a22ffa1455f1e11753d3551ded19c7201451..5be3f7694fac9573f447df1d41fa4c9222b59031 100644
+--- a/crates/tsuzuri-core/src/consult/launch.rs
++++ b/crates/tsuzuri-core/src/consult/launch.rs
+@@ -7,7 +7,7 @@
+ //! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
+ //! 問う窓の旗（別名 `--rc` を含む）を断る（判断の記録 ADR-57 決定 (4)）。
+ //! 設定には話す窓と問う窓に共通の状態の 1 行（statusLine の命令 `status::command`）を置き、検めは欠けと字の違いを断る
+-//! （判断の記録 ADR-57 決定 (1)(コ)・(4)）。
++//! （判断の記録 ADR-57 決定 (1)(コ)・(4)）。話す窓の状態の行には起こした口座の再描画の間を写す（判断の記録 ADR-67）。
+ //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
+ 
+ use serde_json::{Value, json};
+@@ -139,6 +139,8 @@ pub struct Launch {
+     pub question: bool,
+     /// 話す窓の撃ち直しで続ける会話の id（uuid の形・在れば最初の指示の代わりに続きの旗で渡す・判断の記録 ADR-55）。
+     pub resume: Option<String>,
++    /// 起こした口座の設定の状態の行の再描画の間（話す窓の状態の行にだけ写す・無ければ置かない・判断の記録 ADR-67）。
++    pub refresh: Option<u64>,
+ }
+ 
+ /// 読む根の 3 つ（repo・state dir の fleet・pipe）。
+@@ -253,9 +255,15 @@ pub fn settings(l: &Launch) -> Value {
+     })
+ }
+ 
+-/// 設定の状態の 1 行（型 command と `status::command` の字だけ）。
++/// 設定の状態の 1 行（型 command と `status::command` の字と、話す窓だけ口座の再描画の間 `Launch::refresh`）。
+ fn status_line(l: &Launch) -> Value {
+-    json!({"type": "command", "command": status::command(&l.tz, &l.workspace)})
++    let command = status::command(&l.tz, &l.workspace);
++    match (l.form, l.refresh) {
++        (Form::Talk, Some(r)) => {
++            json!({"type": "command", "command": command, "refreshInterval": r})
++        }
++        _ => json!({"type": "command", "command": command}),
++    }
+ }
+ 
+ /// 設定の hook（守りの hook と会話の印の hook）。
+diff --git a/crates/tsuzuri-core/src/consult/status.rs b/crates/tsuzuri-core/src/consult/status.rs
+index 66940741f2ce047760c6c69868ee11ac798cb367..3a445976d1591d8fe4548aa7cdff34311e8ded7e 100644
+--- a/crates/tsuzuri-core/src/consult/status.rs
++++ b/crates/tsuzuri-core/src/consult/status.rs
+@@ -2,6 +2,9 @@
+ //! 起動の口の設定の statusLine の命令の字と、Claude Code が命令の標準入力に渡す session の JSON からの文脈の割合
+ //! （鍵 `context_window.used_percentage`・無いか数でないか範囲の外なら出さない・ほかの鍵は読み飛ばす）と、窓の控え・所見の数・
+ //! 束の要約値から組む 1 行の字を持つ。材料は窓が書ける作業場の字なので、どの欄も制御の字を落として長さを切る。
++//! 窓を起こした口座の設定の statusLine の命令の字と再描画の間を設定の字から読み、命令の出力を行ごとに色の制御の並びだけを通して
++//! ほかの制御の並びと制御の字を落として切り、その行の後に窓の 1 行を置く（出せなかった周は窓の 1 行の末に訳の語を添える・
++//! 判断の記録 ADR-67）。
+ 
+ use serde_json::Value;
+ use tsuzuri_contract::consult::WindowFile;
+@@ -26,12 +29,12 @@ pub fn command(tz: &str, workspace: &str) -> String {
+ /// 字から制御の字（`char::is_control` の C0・DEL・C1 と、向きの上書きの U+202A〜U+202E・U+2066〜U+2069）を落とし、
+ /// 頭の `max` 字に切る（端末を操る字を持ち主の画面に出さない）。
+ pub fn clean(text: &str, max: usize) -> String {
+-    text.chars()
+-        .filter(|c| {
+-            !c.is_control() && !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+-        })
+-        .take(max)
+-        .collect()
++    text.chars().filter(|c| shown(*c)).take(max).collect()
++}
++
++/// 端末に出してよい字か（制御の字と向きの上書きの字でない）。
++fn shown(c: char) -> bool {
++    !c.is_control() && !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+ }
+ 
+ /// Claude Code が渡す session の JSON から文脈の割合（0〜100 の整数・四捨五入）。鍵が無い・数でない・範囲の外は None。
+@@ -80,3 +83,132 @@ pub fn render(
+     }
+     parts.join(SEP)
+ }
++
++/// 口座の命令の出力から出す行の数の上限。
++pub const ACCOUNT_LINES: usize = 8;
++
++/// 口座の命令の出力の 1 行の字の数の上限。
++pub const ACCOUNT_LINE_MAX: usize = 400;
++
++/// 口座の命令の行を出せなかった訳（窓の 1 行の末の欄 `口座 <語>` の語）。
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Miss {
++    /// 口座の置き場が無いか、設定 file が読めないか JSON でない。
++    Unread,
++    /// 設定に statusLine の命令の字が無い。
++    NoKey,
++    /// 命令を起こせないか、rc が 0 でない。
++    Failed,
++    /// 命令が上限の内に終わらない。
++    TimedOut,
++    /// 口座の命令の中から撃たれた（入れ子では撃たない）。
++    Nested,
++}
++
++impl Miss {
++    /// 訳の語。
++    pub fn word(self) -> &'static str {
++        match self {
++            Miss::Unread => "読めない",
++            Miss::NoKey => "鍵なし",
++            Miss::Failed => "落ちた",
++            Miss::TimedOut => "時間切れ",
++            Miss::Nested => "入れ子",
++        }
++    }
++}
++
++/// 口座の設定 file の字から statusLine の命令の字（鍵 `statusLine.command` の空でない字・型は見ない）。
++/// JSON でなければ `Miss::Unread`、鍵が無いか字でないか空なら `Miss::NoKey`。
++pub fn account_command(settings: &str) -> Result<String, Miss> {
++    let value: Value = serde_json::from_str(settings).map_err(|_| Miss::Unread)?;
++    value
++        .pointer("/statusLine/command")
++        .and_then(Value::as_str)
++        .filter(|c| !c.trim().is_empty())
++        .map(String::from)
++        .ok_or(Miss::NoKey)
++}
++
++/// 口座の設定 file の字から statusLine の再描画の間（鍵 `statusLine.refreshInterval` の 0 以上の整数・無い・読めない・整数でなければ None）。
++pub fn account_refresh(settings: &str) -> Option<u64> {
++    let value: Value = serde_json::from_str(settings).ok()?;
++    value.pointer("/statusLine/refreshInterval")?.as_u64()
++}
++
++/// 色の戻しの並び（色を通した口座の行の末に足す）。
++pub const SGR_RESET: &str = "\u{1b}[0m";
++
++/// 口座の命令の出力の 1 行から、色の制御の並び（SGR・ESC [ の後が数と ; だけで m で終わる）だけを通し、ほかの ESC の並び
++/// （m 以外で終わるか数と ; でない字を持つ ESC [ の並びは終わりの字 @〜~ まで・ESC ] と ESC P の並びは BEL か ESC \ まで・
++/// ほかの ESC は次の 1 字まで）を丸ごと落とし、制御の字と向きの上書きの字（`clean` と同じ）を落として、見える字を頭の `max` 字に
++/// 切る。色を通した行は末に `SGR_RESET` を足す（次の行に色を持ち越さない）。
++pub fn keep_colors(line: &str, max: usize) -> String {
++    let mut out = String::new();
++    let (mut seen, mut colored) = (0, false);
++    let mut chars = line.chars();
++    while let Some(c) = chars.next() {
++        if c != '\u{1b}' {
++            if shown(c) && seen < max {
++                out.push(c);
++                seen += 1;
++            }
++            continue;
++        }
++        match chars.next() {
++            Some('[') => {
++                let mut params = String::new();
++                let end = chars.by_ref().find(|c| {
++                    let done = ('@'..='~').contains(c);
++                    if !done {
++                        params.push(*c);
++                    }
++                    done
++                });
++                let sgr = params.chars().all(|p| p.is_ascii_digit() || p == ';');
++                if end == Some('m') && sgr && seen < max {
++                    out.push_str(&format!("\u{1b}[{params}m"));
++                    colored = true;
++                }
++            }
++            Some(']' | 'P') => {
++                let mut esc = false;
++                for c in chars.by_ref() {
++                    if c == '\u{7}' || (esc && c == '\\') {
++                        break;
++                    }
++                    esc = c == '\u{1b}';
++                }
++            }
++            _ => {}
++        }
++    }
++    if colored {
++        out.push_str(SGR_RESET);
++    }
++    out
++}
++
++/// 口座の命令の出力を行に割り、頭の `ACCOUNT_LINES` 行の各々を `keep_colors` で `ACCOUNT_LINE_MAX` 字に切る（末の空の行は除く）。
++pub fn account_lines(out: &str) -> Vec<String> {
++    let mut lines: Vec<String> = out
++        .lines()
++        .take(ACCOUNT_LINES)
++        .map(|l| keep_colors(l, ACCOUNT_LINE_MAX))
++        .collect();
++    while lines.last().is_some_and(String::is_empty) {
++        lines.pop();
++    }
++    lines
++}
++
++/// 状態の行の全体（口座の命令の行の後に窓の 1 行・出せなかった周は窓の 1 行の末に欄 `口座 <訳の語>` を足した 1 行だけ）。
++pub fn stanza(account: Result<Vec<String>, Miss>, window: &str) -> String {
++    match account {
++        Ok(mut lines) => {
++            lines.push(window.to_string());
++            lines.join("\n")
++        }
++        Err(miss) => format!("{window}{SEP}口座 {}", miss.word()),
++    }
++}
+diff --git a/crates/tsuzuri-core/tests/teeth3/cwarg.rs b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+index 3a2ede4fff9b28202af6d2a32e84340188e3424f..97a05434d3842a5dbfd4d13256290daa7be2db5e 100644
+--- a/crates/tsuzuri-core/tests/teeth3/cwarg.rs
++++ b/crates/tsuzuri-core/tests/teeth3/cwarg.rs
+@@ -6,6 +6,7 @@
+ //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
+ //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
+ //! 設定に状態の 1 行を置き、欠けと字の違いを検めが断ることを見る（行 cs-status-text）。
++//! 話す窓の状態の行だけに口座の再描画の間を写し、値の違いと欠けを検めが断ることを見る（行 cs-status-seat）。
+ //! 話す窓だけを Remote Control に窓の名で繋ぎ、欠け・名の違い・別名・問う窓の旗を検めが断ることを見る（行 cs-remote）。
+ //! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
+ #![cfg(test)]
+@@ -58,6 +59,7 @@ fn launch(inputs: &Value) -> Launch {
+         effort: s("effort"),
+         question: inputs["question"].as_bool().expect("question"),
+         resume: inputs["resume"].as_str().map(String::from),
++        refresh: inputs["refresh"].as_u64(),
+     }
+ }
+ 
+@@ -975,3 +977,44 @@ fn cwarg_settings_hold_the_status_line() {
+         }
+     }
+ }
++
++/// 口座の再描画の間を持つ材料では、話す窓の状態の行だけが命令の字の後に refreshInterval をその値で持ち、問う窓は持たない。
++/// 話す窓の値を替えるか除くか、問う窓に足した設定を、検めは `/statusLine` だけで断る（行 cs-status-seat）。
++#[test]
++fn cwarg_talk_status_line_copies_the_refresh() {
++    let fx = fixture();
++    let mut talk = launch(&fx["talk"]["inputs"]);
++    talk.refresh = Some(10);
++    let want = json!({
++        "type": "command",
++        "command": "timeout 2 /T consult statusline /W",
++        "refreshInterval": 10,
++    });
++    assert_eq!(settings(&talk)["statusLine"], want);
++    assert!(audit(&argv(&talk), &talk).is_empty());
++    let mut ask = launch(&fx["ask"]["inputs"]);
++    ask.refresh = Some(10);
++    let plain = json!({"type": "command", "command": "timeout 2 /T consult statusline /W"});
++    assert_eq!(settings(&ask)["statusLine"], plain);
++    assert!(audit(&argv(&ask), &ask).is_empty());
++    let edits: [Edit; 2] = [
++        ("値を替える", |s| {
++            s["statusLine"]["refreshInterval"] = 11.into()
++        }),
++        ("除く", |s| {
++            s["statusLine"]
++                .as_object_mut()
++                .expect("object")
++                .remove("refreshInterval");
++        }),
++    ];
++    for (name, edit) in edits {
++        assert_eq!(
++            audit(&with_settings(&talk, edit), &talk),
++            ["/statusLine"],
++            "話す窓の refreshInterval を{name}"
++        );
++    }
++    let added = with_settings(&ask, |s| s["statusLine"]["refreshInterval"] = 10.into());
++    assert_eq!(audit(&added, &ask), ["/statusLine"], "問う窓に足す");
++}
