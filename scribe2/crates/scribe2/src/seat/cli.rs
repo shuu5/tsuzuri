@@ -573,8 +573,9 @@ fn launch_of(args: &[String]) -> Outcome {
 }
 
 /// 長い形の既定（設計 host-init.md §5・SRS FR59 / FR36）: `--state-dir` は cwd の repo の local 設定（[`super::state_dir_of`]）、
-/// `--role` は [`role::Role::Orchestrator`]、`--target` は `<repo の dir 名>:<役割名>`（[`default_target`]・repo は `--anchor` か
-/// cwd の repo root＝登録 row の anchor と同じ 1 つ）。口座は従来の [`cycle::launch`] が解く（群の置き場は群の今の口座・それ以外は
+/// `--role` は [`role::Role::Orchestrator`]、`--target` は同じ鍵（役割 × anchor）の登録 row の target（[`key_row`]・
+/// log を読めない周は `log-unreadable` で断る）、row が無い周だけ `<repo の dir 名>:<役割名>`（[`default_target`]・repo は
+/// `--anchor` か cwd の repo root＝登録 row の anchor と同じ 1 つ）。口座は従来の [`cycle::launch`] が解く（群の置き場は群の今の口座・それ以外は
 /// 選定）。明示の flag は既定に勝ち、値欠け・空文字・未知の `--role`・`S:W` でない `--target` は従来どおり使い方で断る。既定を
 /// 解けない名は宣言順（`--state-dir` → `--target`）で `missing=` に載せて `defaults-unresolved` で断る（1 key も送らず row も書かない）。
 fn launch_defaults(args: &[String]) -> Outcome {
@@ -591,6 +592,7 @@ fn launch_defaults(args: &[String]) -> Outcome {
     if target.is_some_and(|found| !target_well_formed(found)) {
         return refused_usage();
     }
+    let explicit = target.is_some();
     let target = target.map(str::to_owned).or_else(|| role::anchor_of(anchor.map(Path::new)).and_then(|root| default_target(&root, role)));
     let missing: Vec<&str> = [("--state-dir", state_dir.is_none() && super::state_dir_of(None).is_none()), ("--target", target.is_none())]
         .into_iter()
@@ -606,11 +608,28 @@ fn launch_defaults(args: &[String]) -> Outcome {
         Ok(found) => found,
         Err(refused) => return refused,
     };
+    let target = if explicit {
+        target
+    } else {
+        match key_row(&place, role, Some(&target)) {
+            Ok(row) => row.map_or(target, |found| found.target),
+            Err(refused) => return refused,
+        }
+    };
     let flags = LaunchFlags { target: &target, role, account, model, restore, socket, carry: &[], rules };
     launch_with(&flags, &place)
 }
 
-/// 長い形の既定の target（`<repo の dir 名>:<役割名>`・短い形の `#S:<役割名>` と同じ形）。dir 名が無い・UTF-8 でない・空・
+/// 同じ鍵（役割 × anchor）の登録 row を引く 1 本の道（短い形 [`short_defaults`] と長い形 [`launch_defaults`] の同じ読み）:
+/// event log を読んで replay し [`role::registration_of_key`] の row を返す（無ければ `None`）。log を読めない周は `log-unreadable`
+/// で断る（「row が無い」と混ぜない・fail-closed）。`target` は断りの行に載せる target（呼び手が既に持つ値）。
+fn key_row(place: &LaunchPlace, role: role::Role, target: Option<&str>) -> Result<Option<crate::fleet::Registration>, Outcome> {
+    let events = crate::fleet::store::read_all(&place.state.path).map_err(|_| refused_before_launch(cycle::REASON_LOG_UNREADABLE, target, Some(&place.state)))?;
+    let state = crate::fleet::replay(&events);
+    Ok(role::registration_of_key(&state, role, &place.anchor.display().to_string()).cloned())
+}
+
+/// 長い形の既定の target（登録 row が無い周の `<repo の dir 名>:<役割名>`・短い形の `#S:<役割名>` と同じ形）。dir 名が無い・UTF-8 でない・空・
 /// `:` を含む（`S:W` に読めない）周は解けない。
 fn default_target(root: &Path, role: role::Role) -> Option<String> {
     let name = root.file_name()?.to_str().filter(|found| !found.is_empty() && !found.contains(':'))?;
@@ -695,12 +714,7 @@ fn short_role_of(args: &[String]) -> Option<role::Role> {
 fn short_defaults(place: &LaunchPlace, role: role::Role, target: Option<&str>, model: Option<&str>, socket: Option<&str>) -> Result<(String, String), Outcome> {
     let row = match (target, model) {
         (Some(_), Some(_)) => None,
-        _ => {
-            let events = crate::fleet::store::read_all(&place.state.path)
-                .map_err(|_| refused_before_launch(cycle::REASON_LOG_UNREADABLE, target, Some(&place.state)))?;
-            let state = crate::fleet::replay(&events);
-            role::registration_of_key(&state, role, &place.anchor.display().to_string()).cloned()
-        }
+        _ => key_row(place, role, target)?,
     };
     let target = target
         .map(str::to_owned)

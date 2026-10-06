@@ -7,6 +7,7 @@
 // flip-check: moved s2-07l.361
 
 use super::*;
+mod rowtgt;
 
 // ─────────────────── Enter 落ちの修復と記録の席の列（`s2-07l.150`・接頭辞 `seat_attrib_`） ───────────────────
 
@@ -1837,11 +1838,11 @@ fn seat_launch_default_resolves_the_place_the_role_and_the_target_from_the_cwd_r
 fn seat_launch_default_explicit_flags_win_over_the_defaults() {
     let (place, path) = launch_default_place();
     let repo = place.dir.join(DEFAULT_REPO);
-    let out = launch_default_run(&repo, &path, &["--target", "other:win"]);
-    launch_default_assert_launched(&place, &out, "other:win", "git-config", "--target");
     let state = place.state.display().to_string();
     let out = launch_default_run(&repo, &path, &["--state-dir", &state]);
     launch_default_assert_launched(&place, &out, &format!("{DEFAULT_REPO}:orchestrator"), "flag", "--state-dir");
+    let out = launch_default_run(&repo, &path, &["--target", "other:win"]);
+    launch_default_assert_launched(&place, &out, "other:win", "git-config", "--target");
     fs::remove_dir_all(&place.dir).ok();
 }
 
