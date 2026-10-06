@@ -1066,33 +1066,37 @@ fn rules_prelens_retired_rows_and_kinds_are_gone() {
     }
 }
 
-/// 終端の CI の照合の間隔の行（設計 contract-source.md §50 形 1・`s2-07l.694`）が埋め込み manifest に id / kind / 形 Int /
-/// 値 30 / enabled / 裁定 id / 裁定日で 1 本在り、行は `pipe.ci_wait_s` の直後・kind は `ALL` の `PipeCiWaitS` の直後で字面から
-/// 引け、形は Int だけ（base では行も kind も無い ＝ RED）。
+/// 終端の CI の 2 行（`pipe.ci_wait_s`・`pipe.ci_poll_s`）と 2 つの kind（`PipeCiWaitS`・`PipeCiPollS`）は**もう無い**（行 v-ci-rule-cut・
+/// 判断の記録 ADR-75 の決定 (6)）: (a) `rules get` は無い id と同じ断り（rc が 0 でなく stderr が `rules: no such id` の 1 行）で、
+/// (b) その kind の行を持つ写しは、行の id と kind の字を名指す未知の kind の断りで読めず、(c) kind は字面から引けず `ALL` にも無く、
+/// (d) 埋め込み manifest にその id の行は無い。base では 2 行とも在り kind も引けるので RED。
 #[test]
-fn rules_ci_poll_row_follows_the_ci_wait() {
+fn vcrr_ci_rows_and_kinds_are_gone() {
+    let bin = env!("CARGO_BIN_EXE_scribe2");
+    let cut = [("pipe.ci_wait_s", "PipeCiWaitS", "900"), ("pipe.ci_poll_s", "PipeCiPollS", "30")];
+    for (id, kind, value) in cut {
+        let out = Command::new(bin).args(["rules", "get", id]).output().expect("binary を起動できる");
+        assert_ne!(out.status.code(), Some(0), "{id}: 無い id は rc 0 でない");
+        assert_eq!(String::from_utf8_lossy(&out.stderr).trim_end(), "rules: no such id", "{id}: 断りの 1 行");
+        assert!(out.stdout.is_empty(), "{id}: stdout は空");
+        let text = format!(
+            "schema = 1\n\n[[rule]]\nid = \"{id}\"\nkind = \"{kind}\"\nvalue = {value}\nenabled = true\nruling = \"r\"\nruled_at = \"2026-09-09\"\n"
+        );
+        let errors = rejected(&text).expect("外した kind の行を持つ写しが受理された");
+        let joined = errors.join("\n");
+        assert!(joined.contains(&format!("{id} の kind {kind} は未知である")), "{id}: 未知の kind の断りが id と kind を名指す: {joined}");
+        assert_eq!(RuleKind::parse(kind), None, "{kind} は字面から引けない");
+        assert!(!ALL.iter().any(|found| found.as_str() == kind), "{kind} は ALL に無い");
+    }
     let manifest = Manifest::embedded().unwrap_or_else(|errors| panic!("埋め込み manifest が拒まれた: {errors:?}"));
-    let id = "pipe.ci_poll_s";
-    let row = manifest.get(id).unwrap_or_else(|| panic!("{id} の行が在る"));
-    assert_eq!((row.kind, row.kind.shape()), (RuleKind::PipeCiPollS, ValueShape::Int), "{id} の kind と形");
-    assert_eq!(row.value, RuleValue::Int(30), "{id} の値（30 秒）");
-    assert!(row.enabled, "{id} は既定で効く");
-    assert_eq!((row.ruling.as_str(), row.ruled_at.as_str()), ("user 2026-09-27T11:14Z", "2026-09-27"), "{id} の裁定 id と裁定日");
-    assert_eq!(int_row(&manifest, id), Ok(30), "{id} を整数の読み手で引ける");
-    assert_eq!(manifest.rows().iter().filter(|found| found.kind == RuleKind::PipeCiPollS).count(), 1, "kind の行は 1 本");
-    let at = ALL.iter().position(|kind| *kind == RuleKind::PipeCiWaitS).expect("PipeCiWaitS は ALL に在る");
-    assert_eq!(ALL.get(at + 1), Some(&RuleKind::PipeCiPollS), "kind は PipeCiWaitS の直後");
-    let rows: Vec<&str> = manifest.rows().iter().map(|found| found.id.as_str()).collect();
-    let wait = rows.iter().position(|found| *found == "pipe.ci_wait_s").expect("pipe.ci_wait_s の行が在る");
-    assert_eq!(rows.get(wait + 1).copied(), Some(id), "行も pipe.ci_wait_s の直後（母集団 {} 行）", rows.len());
-    assert_eq!(RuleKind::parse("PipeCiPollS"), Some(RuleKind::PipeCiPollS), "字面から引ける");
-    let errors = rejected(&one_row(RuleKind::PipeCiPollS, "\"30\"")).expect("文字列の値の fixture が受理された");
-    assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");
+    for (id, _, _) in cut {
+        assert!(manifest.get(id).is_none(), "{id} の行は残らない");
+    }
 }
 
 /// 検出線を起こす間隔の下限の行（設計 gate-cost.md §50 形 1・`s2-07l.736.36`）が埋め込み manifest に id / kind / 形 Int /
 /// 値 86400 / enabled / 裁定 id / 裁定日で 1 本在り、行は `pipe.land_wait_s` の直後（`land.train_max` の前）・kind は `ALL` の
-/// `PipeLandWaitS` の直後（`PipeCiWaitS` の前）で字面から引け、上限の許可の読み手を持たず、形は Int だけ（裁定の字は
+/// `PipeLandWaitS` の直後（`SeatDraftsStaleH` の前）で字面から引け、上限の許可の読み手を持たず、形は Int だけ（裁定の字は
 /// `pipe.land_wait_s` の行と違う・base では行も kind も無い ＝ RED）。
 #[test]
 fn rules_detection_daily_min_s_row_follows_the_land_wait_row() {
@@ -1110,7 +1114,7 @@ fn rules_detection_daily_min_s_row_follows_the_land_wait_row() {
     assert_eq!(manifest.rows().iter().filter(|found| found.kind == RuleKind::DetectionDailyMinS).count(), 1, "kind の行は 1 本");
     let at = ALL.iter().position(|kind| *kind == RuleKind::PipeLandWaitS).expect("PipeLandWaitS は ALL に在る");
     let after: Vec<RuleKind> = ALL.iter().skip(at + 1).take(2).copied().collect();
-    assert_eq!(after, [RuleKind::DetectionDailyMinS, RuleKind::PipeCiWaitS], "kind は PipeLandWaitS の直後で PipeCiWaitS の前");
+    assert_eq!(after, [RuleKind::DetectionDailyMinS, RuleKind::SeatDraftsStaleH], "kind は PipeLandWaitS の直後で SeatDraftsStaleH の前");
     let rows: Vec<&str> = manifest.rows().iter().map(|found| found.id.as_str()).collect();
     let wait = rows.iter().position(|found| *found == "pipe.land_wait_s").expect("pipe.land_wait_s の行が在る");
     assert_eq!(rows.get(wait + 1).copied(), Some(id), "行も pipe.land_wait_s の直後（母集団 {} 行）", rows.len());
@@ -1121,10 +1125,10 @@ fn rules_detection_daily_min_s_row_follows_the_land_wait_row() {
 }
 
 /// 席の起草の置き場の書きの線の行（設計 dispatcher.md §33 形 5・`s2-07l.736.25`）が埋め込み manifest に id / kind / 形 Int /
-/// 値 6 / enabled / 裁定 id / 裁定日で 1 本在り、行は `pipe.ci_poll_s` の直後・kind は `ALL` の `PipeCiPollS` の直後で字面から
-/// 引け、形は Int だけ（base では行も kind も無い ＝ RED）。
+/// 値 6 / enabled / 裁定 id / 裁定日で 1 本在り、行は `pipe.max_live` の直後・kind は `ALL` の `DetectionDailyMinS` の直後で字面から
+/// 引け、形は Int だけ（base では行は `pipe.ci_poll_s` の直後・kind は `PipeCiPollS` の直後 ＝ RED）。
 #[test]
-fn rules_drafts_stale_row_follows_the_ci_poll() {
+fn rules_drafts_stale_row_follows_the_max_live() {
     let manifest = Manifest::embedded().unwrap_or_else(|errors| panic!("埋め込み manifest が拒まれた: {errors:?}"));
     let id = "seat.drafts_stale_h";
     let row = manifest.get(id).unwrap_or_else(|| panic!("{id} の行が在る"));
@@ -1134,11 +1138,11 @@ fn rules_drafts_stale_row_follows_the_ci_poll() {
     assert_eq!((row.ruling.as_str(), row.ruled_at.as_str()), ("user 2026-09-29T11:43Z", "2026-09-29"), "{id} の裁定 id と裁定日");
     assert_eq!(int_row(&manifest, id), Ok(6), "{id} を整数の読み手で引ける");
     assert_eq!(manifest.rows().iter().filter(|found| found.kind == RuleKind::SeatDraftsStaleH).count(), 1, "kind の行は 1 本");
-    let at = ALL.iter().position(|kind| *kind == RuleKind::PipeCiPollS).expect("PipeCiPollS は ALL に在る");
-    assert_eq!(ALL.get(at + 1), Some(&RuleKind::SeatDraftsStaleH), "kind は PipeCiPollS の直後");
+    let at = ALL.iter().position(|kind| *kind == RuleKind::DetectionDailyMinS).expect("DetectionDailyMinS は ALL に在る");
+    assert_eq!(ALL.get(at + 1), Some(&RuleKind::SeatDraftsStaleH), "kind は DetectionDailyMinS の直後");
     let rows: Vec<&str> = manifest.rows().iter().map(|found| found.id.as_str()).collect();
-    let poll = rows.iter().position(|found| *found == "pipe.ci_poll_s").expect("pipe.ci_poll_s の行が在る");
-    assert_eq!(rows.get(poll + 1).copied(), Some(id), "行も pipe.ci_poll_s の直後（母集団 {} 行）", rows.len());
+    let max_live = rows.iter().position(|found| *found == "pipe.max_live").expect("pipe.max_live の行が在る");
+    assert_eq!(rows.get(max_live + 1).copied(), Some(id), "行も pipe.max_live の直後（母集団 {} 行）", rows.len());
     assert_eq!(RuleKind::parse("SeatDraftsStaleH"), Some(RuleKind::SeatDraftsStaleH), "字面から引ける");
     let errors = rejected(&one_row(RuleKind::SeatDraftsStaleH, "\"6\"")).expect("文字列の値の fixture が受理された");
     assert!(errors.join("\n").contains("形と合わない"), "形は Int だけ: {errors:?}");

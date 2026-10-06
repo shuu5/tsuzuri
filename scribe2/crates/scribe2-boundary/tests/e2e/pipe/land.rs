@@ -732,27 +732,6 @@ fn write_rules_land_wait(dir: &Path, name: &str, land_wait_s: Option<u64>) -> St
     path.display().to_string()
 }
 
-/// [`ceiling_rules`] と同じ値の tmp manifest で、終端の CI の 2 行（`pipe.ci_wait_s` / `pipe.ci_poll_s`）だけを
-/// 差し替えた別の file（`ci_poll_s` が `None` = 間隔の行を落とす・設計 contract-source.md §50）。
-#[expect(
-    clippy::expect_used,
-    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
-)]
-fn write_rules_ci(state: &Path, ci_wait_s: u64, ci_poll_s: Option<u64>) -> String {
-    let path = write_rules(state, "rules-ci.toml", 1, 1_000_000);
-    let text = fs::read_to_string(&path).expect("tmp manifest を読める");
-    let block = |id: &str, kind: &str, value: u64| {
-        format!("[[rule]]\nid = \"{id}\"\nkind = \"{kind}\"\nvalue = {value}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n")
-    };
-    let (wait, poll) = (block("pipe.ci_wait_s", "PipeCiWaitS", CI_WAIT_S), block("pipe.ci_poll_s", "PipeCiPollS", CI_POLL_S));
-    assert!(text.contains(&wait) && text.contains(&poll), "既定の 2 行が在る（差し替えが空振りしない）: {text}");
-    let replaced = text
-        .replace(&wait, &block("pipe.ci_wait_s", "PipeCiWaitS", ci_wait_s))
-        .replace(&poll, &ci_poll_s.map(|value| block("pipe.ci_poll_s", "PipeCiPollS", value)).unwrap_or_default());
-    fs::write(&path, replaced).expect("tmp manifest を書ける");
-    path.display().to_string()
-}
-
 /// land の stdout の `order=` の値（無ければ空）。
 fn order_token(out: &Output) -> String {
     stdout_of(out)

@@ -316,12 +316,6 @@ pub enum RuleKind {
     /// 検出線を起こす間隔の下限（秒・設計 gate-cost.md §50）。land の終端は前に口を起こしてからこの秒が過ぎた周だけ
     /// 着地後の検出の口を起こし、内の周は起こさず deferred を記す（日次の検出）。
     DetectionDailyMinS,
-    /// land の終端が CI の判定を待つ上限（秒・設計 contract-source.md §5）。超えた周は **close しない**
-    /// （`unmeasurable` で止める・FailClosed）。
-    PipeCiWaitS,
-    /// land の終端が CI の判定を照合する間隔（秒・設計 contract-source.md §50）。[`Self::PipeCiWaitS`] の上限の内側を
-    /// この間隔で撃つ（1 回が forge の API の 1 回）。0 は唯一の待ちの既定の周期に戻る。
-    PipeCiPollS,
     /// 席の起草の置き場の写しの中間生成物を器が消す**書きの線**（時間・設計 dispatcher.md §33・ADR-0096）。
     /// 起草の木の名が閉じた列の dir は、自身と下の全 entry の最新の書きがこの時間より前のときだけ消える。0 は線 = 今。
     SeatDraftsStaleH,
@@ -515,8 +509,6 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::HostWriteOwnerDays,
     RuleKind::PipeLandWaitS,
     RuleKind::DetectionDailyMinS,
-    RuleKind::PipeCiWaitS,
-    RuleKind::PipeCiPollS,
     RuleKind::SeatDraftsStaleH,
     RuleKind::LedgerTimeoutS,
     RuleKind::RoleCapabilities,
@@ -606,7 +598,6 @@ impl RuleKind {
             Self::HostWriteAvgGb => "HostWriteAvgGb", Self::HostWriteDayGb => "HostWriteDayGb",
             Self::HostWriteAvgDays => "HostWriteAvgDays", Self::HostWriteOwnerDays => "HostWriteOwnerDays",
             Self::PipeLandWaitS => "PipeLandWaitS", Self::DetectionDailyMinS => "DetectionDailyMinS",
-            Self::PipeCiWaitS => "PipeCiWaitS", Self::PipeCiPollS => "PipeCiPollS",
             Self::SeatDraftsStaleH => "SeatDraftsStaleH", Self::SeatDraftsCapMb => "SeatDraftsCapMb", Self::SeatDraftsBusyS => "SeatDraftsBusyS",
             Self::LedgerTimeoutS => "LedgerTimeoutS",
             Self::RoleCapabilities => "RoleCapabilities",
@@ -660,7 +651,7 @@ impl RuleKind {
             | Self::GateTmuxTestThreads | Self::GateCpuWeight | Self::HostRunnablePerCore | Self::HostBlockedPerCore
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
             | Self::PipeLandWaitS | Self::DetectionDailyMinS
-            | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
+            | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
             | Self::LedgerTimeoutS | Self::PipeLanesCapMb
             | Self::PipeSizeSLines
             | Self::PipeSizeMLines
@@ -710,7 +701,7 @@ impl RuleKind {
             | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS | Self::GateTmuxTestThreads | Self::GateCpuWeight
             | Self::HostRunnablePerCore | Self::HostBlockedPerCore | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
-            | Self::PipeCiWaitS | Self::PipeCiPollS | Self::SeatDraftsStaleH | Self::LedgerTimeoutS | Self::RoleCapabilities
+            | Self::SeatDraftsStaleH | Self::LedgerTimeoutS | Self::RoleCapabilities
             | Self::PipeSizeSLines | Self::PipeSizeMLines | Self::PipeSizeLLines | Self::RunnerModel | Self::RunnerEffort
             | Self::LensModel | Self::RoleModel | Self::RoleEffort | Self::ReviewSameKindStop
             | Self::LandTrainMax | Self::PipeMaxLive | Self::FlipDocsOnlyFaces | Self::FlipMarksPerPr

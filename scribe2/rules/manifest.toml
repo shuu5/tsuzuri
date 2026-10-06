@@ -598,29 +598,6 @@ enabled = true
 ruling = "user 2026-09-16T11:14Z"
 ruled_at = "2026-09-16"
 
-# land の終端の後から読む GitHub の検査の上限（設計 contract-source.md §5 手順 3）。札は push の後にこの host の緑で
-# 閉じ、close の後の子 process（pipe land --ci-only）がこの上限まで forge の判定を読み、超えた周は ci:unmeasurable を記す
-# （札は替えない）。主実測が赤か測れなかった便を受け入れる周だけは success を待って閉じる（FailClosed）。
-
-[[rule]]
-id = "pipe.ci_wait_s"
-kind = "PipeCiWaitS"
-value = 900
-enabled = true
-ruling = "user 2026-09-16T03:31Z"
-ruled_at = "2026-09-16"
-
-# 後から読む GitHub の検査の照合を撃つ間隔（秒・設計 contract-source.md §50）。1 回の照合が forge の API の 1 回なので、
-# 上の上限の内側をこの間隔で撃つ（最初の評価は待たない・上限を越えて眠らない）。0 は唯一の待ちの既定の周期に戻る。
-
-[[rule]]
-id = "pipe.ci_poll_s"
-kind = "PipeCiPollS"
-value = 30
-enabled = true
-ruling = "user 2026-09-27T11:14Z"
-ruled_at = "2026-09-27"
-
 # 席の起草の置き場の写しの中間生成物を器が消す書きの線（時間・設計 dispatcher.md §33・ADR-0096）。置き場の写しの
 # 名が閉じた列に在る dir のうち、自身と下の全 entry の最新の書きがこの時間より前のものだけを終端の周の掃除が消す。
 # 0 は「線 = 今」（書きの有無を問わず掃く）。行を読めない周は起草の木を 1 本も掃かない。

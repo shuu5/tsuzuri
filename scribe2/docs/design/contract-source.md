@@ -61,6 +61,7 @@ Landed（gate-cost.md §6 の CAS の後）に続けて器が行う。各段は 
 `--pr-cmd` の形（自 repo への PR）は終端を持たない（従来どおり）。
 
 追記: 行 v-ci-key-cut が宣言の鍵 `ci-cmd` と `ci-watch` を外した（判断の記録 ADR-75 の決定 (6)）。この 2 つの鍵を書いた宣言は、ほかの知らない鍵と同じ断り（`未知の key ci-cmd`・`未知の key ci-watch`）で宣言ごと断る。
+追記: 行 v-ci-rule-cut が rules 行 `pipe.ci_wait_s` と `pipe.ci_poll_s` と `Land` の欄 `ci_wait_s`・`ci_poll_s` を外した（判断の記録 ADR-75 の決定 (6)）。この 2 つの id は `rules get` が無い id として断り、kind `PipeCiWaitS`・`PipeCiPollS` は未知の kind として断る。
 
 ## 6. 台帳 adapter（FR50 / FR51）
 
@@ -1579,6 +1580,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
 
 - 追記（終端の順の入れ替え・§5 手順 2・3・裁定 2026-10-05T22:57Z・tsuzuri の判断の記録 ADR-68・close の理由の尾 `host=green` の文法は ledger-form.md §16）: 照合を撃つのは close の後の子 process（`pipe land --run <id> --ci-only <sha>`）で、受け入れの周だけが close の前に撃つ。間隔と上限の値・待ちの周期・最初の評価は替えない。`pipe.ci_wait_s` は「close を待つ上限」でなく「後から読む上限」になる（値と裁定 id は替えない）。この子は行 v-ci-child-cut（持ち主の決め D3）で退けた: 終端は close の後に何も起こさず、`--ci-only` の口も `ci:spawned` の記しも無い（§5 手順 3）。
 - 追記（行 v-ci-wait-cut・判断の記録 ADR-75 の決定 (6)）: この行が CI の読み手 `ci_read`・`ci_now`・`ci_wait`・`pr_merge` と完了条件 `Completion::CiResult`（欄 `every` と周期の腕）を外した。`wait` の口は 1 つになり、周期は `AccountFree` が [`ACCOUNT_POLL`]・ほかの全 variant が `POLL`。
+- 追記（行 v-ci-rule-cut・判断の記録 ADR-75 の決定 (6)）: この行が rules 行 `pipe.ci_wait_s` と `pipe.ci_poll_s` と `Land` の欄 `ci_wait_s`・`ci_poll_s` を外した。上の形 1 の行と読み手 `terminal_input` はもう無く、終端の材料は台帳 client の bd だけである。
 
 ## 51. 審査の材料に、契約が名指す write-set の外の物を器が束ねる（契約表の行 bc・非公開の隣の project の契約の審査の section-material-missing 20 件・memo `s2-07l.430`）
 

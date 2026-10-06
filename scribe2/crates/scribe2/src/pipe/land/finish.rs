@@ -640,8 +640,6 @@ mod tests {
             runner: None,
             retries: 0,
             land_wait_s: 0,
-            ci_wait_s: 0,
-            ci_poll_s: 0,
             bd: crate::ledger::DEFAULT_BD,
             approved: false,
             policy,

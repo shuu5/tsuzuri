@@ -36,21 +36,12 @@ const ROW_LAND_WAIT: &str = "pipe.land_wait_s";
 /// 着地の列を候補の木 1 つに積む本数の上限（先頭を含む）を持つ rules 行（設計 pipeline.md §40・ADR-0039）。
 const ROW_TRAIN_MAX: &str = "land.train_max";
 
-/// 終端が CI の判定を待つ上限を宣言する rules 行の id（**値は code に焼かない**・憲法 C5）。
-const ROW_CI_WAIT: &str = "pipe.ci_wait_s";
-
-/// 終端が CI の判定を照合する間隔を宣言する rules 行の id（設計 contract-source.md §50・上の行と同じ極性で読む）。
-const ROW_CI_POLL: &str = "pipe.ci_poll_s";
-
 /// 終端だけを撃ち直す flag（値なし・設計 contract-source.md §5 手順 2）。
 const TERMINAL_ONLY: &str = "--terminal-only";
 
-/// 終端の材料（CI の上限・照合の間隔・台帳 client）を引数と規則から解く（**land と `--terminal-only` が共有**）。
-fn terminal_input<'a>(args: &'a [String], manifest: &Manifest) -> Result<(u64, u64, &'a str), Outcome> {
-    let ci_wait_s = int_row(manifest, ROW_CI_WAIT).map_err(broken)?;
-    let ci_poll_s = int_row(manifest, ROW_CI_POLL).map_err(broken)?;
-    let bd = flag(args, "--bd").map_err(refused)?.unwrap_or(crate::ledger::DEFAULT_BD);
-    Ok((ci_wait_s, ci_poll_s, bd))
+/// 終端の材料（台帳 client の bd）を引数から解く（**land と `--terminal-only` が共有**）。
+fn terminal_bd(args: &[String]) -> Result<&str, Outcome> {
+    Ok(flag(args, "--bd").map_err(refused)?.unwrap_or(crate::ledger::DEFAULT_BD))
 }
 
 /// `pipe land --run <id> --terminal-only`: **着地をやり直さず終端だけ**を撃つ（冪等）。
@@ -168,14 +159,14 @@ fn detection_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPo
     )
 }
 
-/// 着地をやり直さない口の land の材料（`--terminal-only` と `--after-land` が共有する 1 本・CI の上限と間隔と台帳 client は
-/// [`terminal_input`]・`--rules` は land の道と同じ形で持つ）。
+/// 着地をやり直さない口の land の材料（`--terminal-only` と `--after-land` が共有する 1 本・台帳 client は
+/// [`terminal_bd`]・`--rules` は land の道と同じ形で持つ）。
 fn settled_entry<'a>(
     args: &'a [String],
     (id, manifest, policy): (&'a str, &Manifest, LockPolicy),
     resolved: &'a Resolved,
 ) -> Result<Land<'a>, Outcome> {
-    let (ci_wait_s, ci_poll_s, bd) = terminal_input(args, manifest)?;
+    let bd = terminal_bd(args)?;
     let limits = Limits::of(manifest).map_err(broken)?;
     Ok(Land {
         run: id,
@@ -189,8 +180,6 @@ fn settled_entry<'a>(
         runner: None,
         retries: 0,
         land_wait_s: 0,
-        ci_wait_s,
-        ci_poll_s,
         bd,
         approved: resolved.approved,
         policy,
@@ -419,8 +408,8 @@ pub(super) fn land_run(args: &[String], id: &str, manifest: &Manifest, policy: L
         Ok(found) => found,
         Err(reason) => return broken(reason),
     };
-    // 終端の材料（CI の上限と台帳 client）は `--terminal-only` と**同じ 1 本**で解く。
-    let (ci_wait_s, ci_poll_s, bd) = match terminal_input(args, manifest) {
+    // 終端の材料（台帳 client）は `--terminal-only` と**同じ 1 本**で解く。
+    let bd = match terminal_bd(args) {
         Ok(found) => found,
         Err(outcome) => return outcome,
     };
@@ -436,7 +425,6 @@ pub(super) fn land_run(args: &[String], id: &str, manifest: &Manifest, policy: L
         runner: runner.map(|cmd| Runner { cmd, pool: pool.as_ref(), gate: &gate, ledger: LedgerRead { bd, timeout: timeout_of(manifest) } }),
         retries,
         land_wait_s,
-        ci_wait_s, ci_poll_s,
         bd,
         approved: resolved.approved,
         policy,

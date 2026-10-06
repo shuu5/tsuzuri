@@ -451,21 +451,3 @@ fn pipe_terminal_land_generation_is_the_binary_build_commit_not_the_landed_sha()
     assert_ne!(value_of(&pairs, "generation"), value_of(&pairs, "sha"), "同値の欄を 2 つ並べない: {pairs:?}");
     clean(&[&repo, &state]);
 }
-
-/// (§50 形 1) `pipe.ci_poll_s` の行が無い manifest は `pipe.ci_wait_s` と同じ極性で断る（rc 2・行を名指す・event 0 増・
-/// main 不変）。
-#[test]
-fn pipe_terminal_ci_poll_missing_row_moves_nothing() {
-    let (repo, state) = repo_with_state();
-    let design = write_contract(&repo, &[], &[]);
-    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
-    let rules = write_rules_ci(&state, CI_WAIT_S, None);
-    let main = git(&repo, &["rev-parse", "refs/heads/main"]);
-    let before = event_count(&state);
-    let out = land_extra(&repo, &state, &id, &["--rules", &rules]);
-    assert_eq!(out.status.code(), Some(i32::from(RC_BROKEN)), "行の欠落は rc 2: {}", stdout_of(&out));
-    assert!(stderr_of(&out).contains("pipe.ci_poll_s が無い"), "行を名指す: {}", stderr_of(&out));
-    assert_eq!(event_count(&state), before, "event を 1 件も書かない");
-    assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), main, "main は動かない");
-    clean(&[&repo, &state]);
-}
