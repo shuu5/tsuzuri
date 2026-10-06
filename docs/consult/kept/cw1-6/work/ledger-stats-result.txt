@@ -1,0 +1,73 @@
+# beads in the ledger copy: 700
+
+# item keys seen: id, title, description, status, priority, issue_type, owner, created_at, created_by, updated_at, dependency_count, dependent_count, comment_count, dependencies, parent, closed_at, close_reason, acceptance_criteria, metadata, notes
+
+# kinds by title head
+  441  便
+  142  問い
+   82  memo
+   35  other
+
+# status by kind
+   33  memo  closed
+   49  memo  open
+   23  other closed
+    2  other deferred
+   10  other open
+  430  便     closed
+   11  便     open
+  142  問い    closed
+
+# created per day (all) / 問い per day
+2026-09-25  created   2  問い   0  closed   0
+2026-09-26  created   1  問い   0  closed   0
+2026-09-27  created 104  問い   9  closed  98
+2026-09-28  created 132  問い  27  closed 125
+2026-09-29  created 129  問い  41  closed 115
+2026-09-30  created  48  問い   6  closed  46
+2026-10-01  created  45  問い   1  closed  33
+2026-10-02  created  21  問い   3  closed  45
+2026-10-03  created 113  問い  25  closed  75
+2026-10-04  created 105  問い  30  closed  91
+
+# close reasons by kind (top 15)
+    5  other 完了（子の行が全部閉じて done が満ちた・着地の名指しは設計の commit
+    3  memo  まとめた t3-hub.70
+    3  memo  まとめた t3-hub.74.49.12
+    2  memo  見送り t3-hub.74.58.1:20261004T0013Z-1
+    2  memo  まとめた t3-hub.74.48.1
+    2  memo  まとめた t3-hub.67.34
+    1  問い    裁定 t3-hub.67.5:20260929T0109Z-1
+    1  問い    裁定 t3-hub.55.7:20260928T0052Z-1
+    1  便     landed 41099bd21f9ce385467f3b7ddd96f9bf6
+    1  便     landed c05405004a6a3e97eddba46718bb4862e
+    1  便     landed e079d3cad4a148b8f706e0cdacc90e94c
+    1  便     landed 6d88194d5d1d7ca64d2b3add29d37aae4
+    1  便     landed 21cb093d19cf5a38ace0ccf002b2d1f2b
+    1  便     landed 9a5671d6391bb1bab366b6b32889da964
+    1  問い    裁定 t3-hub.80.10:20261004T2037Z-1 束 batch
+
+# memos and questions whose title mentions the pain words (latest 40)
+2026-09-28 t3-hub.55.7      closed  問い: 便 f-stop（t3-hub.55.5）の最終チェックを同じ作業場で撃ち直してよいか（落ちたのは f-stop と関係の無い既存のテストの揺れ）
+2026-09-28 t3-hub.52.38     closed  問い: 読みが一時的に失敗しても、最後に読めた中身を何秒まで出し続けてよいか（行 e-hold・画面が一瞬消える直し）
+2026-09-29 t3-hub.66.1      closed  問い: 地図の節点と設計ノートの増殖を、器と folio の検査が落ちる形で整える案（A・B・C）を一括で進めてよいか
+2026-09-29 t3-hub.67.10     closed  問い 同じ失敗をくり返した時の止め方の、器と tsuzuri のずれをどう読むか
+2026-09-29 t3-hub.67.12     closed  問い 変更は落ちる歯（テスト）から始まったかを検査で確かめる条を足すか
+2026-09-29 t3-hub.67.22     closed  問い 失敗を境界ごとの列挙で持つ条を足すか
+2026-09-29 t3-hub.72        closed  memo 答えた裁定が席に届かない時がある — 配達の口が断ると、席が待っている間は誰も撃ち直さない
+2026-09-29 t3-hub.67.43     closed  memo folio2 から移した項 f2-648.201 — 面の名札「機構がまだ無い」と一覧の条件の食い違い（便 132 (i) 2）
+2026-09-30 t3-hub.52.156    closed  問い — 画面の server が器の健康診断（doctor）を撃ち直す間隔を 30 秒から 60 秒に延ばしてよいか（規則の行 R-34 の越えの直し）
+2026-10-03 t3-hub.74.49.3   open    memo 器 scribe2 から移した項 s2-07l.738.43.8 — 列の先頭が着地させた便の driver が気づかずに主実測を撃ち直し、Landed の後に Failed main-red を記帳する
+2026-10-03 t3-hub.74.47.2   open    memo 器 scribe2 から移した項 s2-07l.691 — lens の本文の上限 150000 byte は fixture や写しの asset の byte も数え、大きい fixture を足す便が毎回 INCONCLUS
+2026-10-03 t3-hub.74.47.4   open    memo 器 scribe2 から移した項 s2-07l.715 — 口座に由来する gate の INCONCLUSIVE を実装を活かして撃ち直す口が無い — dispatcher は触らず regate は FAIL だけ・resum
+2026-10-03 t3-hub.74.47.7   open    memo 器 scribe2 から移した項 s2-07l.736.33.7 — 試作の差を runner に渡す口が無い — 関数を割るだけの行を runner が散文から書き直し、検証の行が緑のまま contract-fit で何度も落ち
+2026-10-03 t3-hub.74.47.8   closed  memo 器 scribe2 から移した項 s2-07l.736.33.8 — 見積の和が NFR2 の線を越える行が便になり、実装の後に gate の diff の cap で INCONCLUSIVE になる
+2026-10-03 t3-hub.74.50.7   open    memo 器 scribe2 から移した項 s2-07l.747 — land の列の順の歯 pipe_order_three_runs_follow_once_each_and_land_in_gated_order が、c の起動の遅れ
+2026-10-03 t3-hub.74.47.10  open    memo 器 scribe2 から移した項 s2-07l.716 — dispatch ls の事前審査の行の base= は結果の新しさを言うが、判定に使った base の種類と読まれる — 隣の project の席が current 
+2026-10-03 t3-hub.74.48.8   open    memo 器 scribe2 から移した項 s2-07l.725 — 群の自動移動の候補ごとの判定（口座・落ちた窓・used/cap）を doctor の行に出す — 今は reason=no-candidate の 1 語だけで隣の pr
+2026-10-03 t3-hub.74.48.9   open    memo 器 scribe2 から移した項 s2-07l.727 — 持ち主が起こす端末の書きの口（scribe2 host device set / rm）と、host 全体の事実の表を host 全体の 1 つの面へ移すこと — 今の 
+2026-10-03 t3-hub.74.47.15  open    memo 器 scribe2 から移した項 s2-07l.736.35 — nextest の TIMEOUT で落ちた歯が gate の記録の failed= と flip-check の base 段の名指しに出ない（FAIL [ の行
+2026-10-03 t3-hub.74.49.8   closed  memo 器 scribe2 から移した項 s2-07l.738.21 — help の説明の旗が口の受ける旗と食い違っても測る歯が無い — fleet usage の --show が help に無い
+2026-10-03 t3-hub.74.49.10  open    memo 器 scribe2 から移した項 s2-07l.738.43.9 — gate の歯が /tmp に一時 dir を残し続け、直下が 35 万 entry になった — 一過性の No space left で gate が落ちた
+2026-10-03 t3-hub.74.49.13  open    memo 器 scribe2 から移した項 s2-07l.738.21 — help の説明の旗が口の受ける旗と食い違っても測る歯が無い — fleet usage の --show が help に無い
+2026-10-04 t3-hub.82        open    memo 器の口ごとに契約と memo の結びの読みが食い違う — 子の契約は辿れる契約に数えず bd は子から親への discovered-from を断る・列の入力は epic を契約に数える

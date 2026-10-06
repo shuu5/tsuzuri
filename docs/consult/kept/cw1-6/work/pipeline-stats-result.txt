@@ -1,0 +1,97 @@
+# since 2026-09-22: runs created 749, runs ended 554
+
+# per day: created / landed / stopped-or-other
+2026-09-27  created 182  landed  84  other   8
+2026-09-28  created 123  landed  95  other   4
+2026-09-29  created  92  landed  71  other   1
+2026-09-30  created  58  landed  40  other   0
+2026-10-01  created  38  landed  31  other   4
+2026-10-02  created  39  landed  28  other   3
+2026-10-03  created  41  landed  31  other   0
+2026-10-04  created  61  landed  54  other   1
+2026-10-05  created 102  landed  87  other   3
+2026-10-06  created  13  landed   9  other   0
+
+# how runs ended (first RunDone/RunStopped stage)
+  530  Landed
+   24  Stopped
+
+# RunStage counts
+ 1441  Gated
+  907  Implemented
+  746  Reviewed
+  615  Spawned
+   13  Stopped
+    6  Questioned
+    6  Failed
+
+# verdicts by stage (stage, verdict, kind)
+  850  Gated        PASS          -
+  597  Reviewed     PASS          -
+   59  Reviewed     INCONCLUSIVE  section-material-missing
+   45  Gated        FAIL          -
+   27  Reviewed     FAIL          literal-mismatch
+   20  Reviewed     FAIL          vacuous-assert
+   18  Reviewed     FAIL          goal-done-contradiction
+    9  Gated        INCONCLUSIVE  -
+    9  Reviewed     INCONCLUSIVE  unparsed
+    5  Reviewed     FAIL          other
+    4  Reviewed     INCONCLUSIVE  literal-mismatch
+    3  Reviewed     FAIL          section-material-missing
+    2  Reviewed     FAIL          teeth-outside-write-set
+    1  Reviewed     INCONCLUSIVE  goal-done-contradiction
+    1  Reviewed     INCONCLUSIVE  other
+
+# dispatch marks
+  753  launched
+  152  release
+  115  hold
+# hold reasons (head 70 chars, top 12)
+   79  
+    6  reason:xtask-check-pending
+    4  reason:器の binary の入れ替えの待ち・v-pin-swap 着地の後に driver 0 本の周を作る
+    3  reason:器の入れ替え（80.21 の着地の後）を先に済ませる
+    2  reason:行の審査 Reviewed=FAIL の理由を見て直すまで
+    1  reason:器の入れ替えの窓: 80.21（v-drafts-env）が閉じて走る便 0 本の間に、着地済みの 80.19・80.20・8
+    1  reason:ADR-53 の決定 (4): 窓の囲いの続きの直し（口座の置き場の実体と資格の読む道具の断り・係 w170a 試作中）の着地
+    1  reason:stamp の追記が symlink を辿る穴を行の版上げで直すまで流さない
+    1  reason:器を書く便は同時に 1 本・v-adopt の着地と器の binary の入れ替えの後に流す
+    1  reason:置く前の行の審査（pipe review）の結果を見るまで
+    1  reason:器を書く便は同時に 1 本・器の行 80.27.7 の着地の後に流す
+    1  reason:器を書く便は同時に 1 本・v-patch-field を先に流し、その着地の後に流す
+
+# beads with runs: 534; runs-per-bead distribution
+  1 run(s): 409 beads
+  2 run(s): 81 beads
+  3 run(s): 24 beads
+  4 run(s): 7 beads
+  5 run(s): 6 beads
+  6 run(s): 3 beads
+  7 run(s): 2 beads
+  8 run(s): 2 beads
+# beads with the most runs
+    8  t3-hub.37
+    8  t3-hub.44
+    7  t3-hub.8
+    7  t3-hub.13
+    6  t3-hub.19
+    6  t3-hub.52.54
+    6  t3-hub.74.17
+    5  t3-hub.20
+    5  t3-hub.41
+    5  t3-hub.39
+
+# run duration minutes: n=554 median=17.5 p90=50.8 max=445
+# landed runs minutes: n=530 median=17.9 p90=50.8
+
+# per day: peak concurrent runs / minutes with >=1 run live
+2026-09-27  peak 11  busy    585 min
+2026-09-28  peak 6  busy   1101 min
+2026-09-29  peak 6  busy    615 min
+2026-09-30  peak 5  busy    668 min
+2026-10-01  peak 5  busy    487 min
+2026-10-02  peak 3  busy    768 min
+2026-10-03  peak 4  busy    606 min
+2026-10-04  peak 8  busy   1145 min
+2026-10-05  peak 5  busy   1252 min
+2026-10-06  peak 3  busy    126 min
