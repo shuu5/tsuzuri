@@ -1,6 +1,7 @@
 # toolchain の版の正本（手元と CI で同じ版を使う）。版を上げるときはこの 1 行を変える。
 [toolchain]
 channel = "1.98.1"
-components = ["clippy", "rustfmt"]
+# rust-analyzer は器の code の索引の宣言 index-scip が撃つ（.vessel.toml・版は channel が固定する）
+components = ["clippy", "rustfmt", "rust-analyzer"]
 # 面の crate（Leptos の csr）を trunk で組み立てる先
 targets = ["wasm32-unknown-unknown"]
