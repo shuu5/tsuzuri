@@ -194,6 +194,7 @@ pub fn rule_status_class(s: rules::RuleStatus) -> &'static str {
         rules::RuleStatus::Provisional => "state warn",
         rules::RuleStatus::Frozen => "state ok",
         rules::RuleStatus::Undecided => "state",
+        rules::RuleStatus::Retired => "state",
     }
 }
 

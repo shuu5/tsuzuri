@@ -13,7 +13,7 @@ schema:
   ruled_at_note: 行の裁定の時刻の欄 ruled_at の形（ruled_at_format）。年-月-日か、UTC の分（年-月-日T時:分Z）。床（folio check）は全行で、裁定の欄 ruling と同じ歩き手で数え（条 P-17.1）、欄が無い・空・字でない（一覧・表）・形の違う は違反とする。裁定の欄が骨格の印（未記入）の行は裁定の前として時刻を数えず（条 P-17.3）、裁定の欄が埋まった行の時刻が骨格の印なら違反とする。暦に在る日かと、裁定の欄の日時との一致は見ない
   enums:
     kind: [deny, build-check, detect, human-review]
-    status: [仮, 凍結, 未定]
+    status: [仮, 凍結, 未定, 廃止]
     stage: [in-loop, post]
     key:
       - note-chapters

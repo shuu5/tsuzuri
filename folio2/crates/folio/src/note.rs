@@ -105,9 +105,10 @@ pub fn check_note(
         .inspect_err(|e| report.unknown(format!("rules.yaml: R-16 の value が読めない: {e}")))
         .ok();
     // 章の上限は検査のたびに規則の表の欄 key が note-chapters の閾値の行から読む（面の生成器と同じ関数・便 179）
-    let cap = rules::cap(rules, rules::NOTE_CHAPTERS)
-        .inspect_err(|e| report.unknown(format!("rules.yaml: 設計ノートの章の上限が読めない: {e}")))
-        .ok();
+    // 行が廃止なら読む口を閉じて章を数えない
+    let cap = (!rules::retired(rules, rules::NOTE_CHAPTERS))
+        .then(|| rules::cap(rules, rules::NOTE_CHAPTERS))
+        .and_then(|r| r.inspect_err(|e| report.unknown(format!("rules.yaml: 設計ノートの章の上限が読めない: {e}"))).ok());
     let known = base_known_ids(constitution, rules, srs, adr);
     let requirements = requirement_ids(srs, &refs::SRS_ID_SECTIONS);
     let targets = Targets {
@@ -186,6 +187,9 @@ fn check_growth(notes: &[NoteDoc], rules: &Node, report: &mut Report) {
     counted.extend(g.rows.iter().map(|(file, n)| (rules::NOTE_ROWS, format!("{DIR}/{file}"), *n)));
     counted.push((rules::PLAN_ROWS, dir, g.plan));
     for key in [rules::LIVE_NOTES, rules::NOTE_ROWS, rules::PLAN_ROWS] {
+        if rules::retired(rules, key) {
+            continue;
+        }
         let cap = match rules::cap(rules, key) {
             Ok(c) => c,
             Err(e) => {

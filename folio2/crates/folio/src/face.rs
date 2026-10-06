@@ -947,7 +947,7 @@ mod face_tests {
         );
     }
 
-    /// 凍結の針（P-10.1・便 54 §1 (c) 1）: 規則の表の種別の名札 4 対と状態の class 3 対を、便 54 の前の表の字面と
+    /// 凍結の針（P-10.1・便 54 §1 (c) 1）: 規則の表の種別の名札 4 対と状態の class 4 対を、便 54 の前の表の字面と
     /// 正本（生成区間）の順で固定する。
     #[test]
     fn face_rule_labels_are_frozen_needles_for_kind_and_status() {
@@ -973,7 +973,8 @@ mod face_tests {
             [
                 ("仮", "state warn"),
                 ("凍結", "state ok"),
-                ("未定", "state")
+                ("未定", "state"),
+                ("廃止", "state")
             ]
         );
     }

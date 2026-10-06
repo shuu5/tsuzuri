@@ -180,6 +180,13 @@ fn keyed_rows<'a>(rules: &'a Node, key: &str) -> Vec<&'a Node> {
         .collect()
 }
 
+/// 欄 key が `key` の閾値の行がちょうど 1 本で、その行の欄 status が 廃止 のとき true（退けた行は読む口を閉じた印・ADR-74 決定 (5)）。
+/// 行が無い・2 本以上・ほかの状態・欄 status が無いは false。呼ぶのは退ける 5 つの口だけで、ほかの規則の行の状態は読まない（条 N-3.1）。
+pub fn retired(rules: &Node, key: &str) -> bool {
+    let rows = keyed_rows(rules, key);
+    matches!(rows[..], [row] if row.get("status").and_then(Node::as_str).and_then(RuleStatus::from_name) == Some(RuleStatus::Retired))
+}
+
 /// 計画のノートの文書 id（欄 key が plan-note の閾値の行の value・判断の記録 ADR-31 決定 (2)(ア)・便 183）。行が無ければ None
 /// （計画のノートの床を掛けない）。2 本以上か値が文書 id の形でなければ Err（呼び手は まだ分からない にする・行 R-19 の欄と同じ）。
 pub fn plan_note(rules: &Node) -> Result<Option<&str>, String> {
@@ -377,22 +384,26 @@ pub enum RuleStatus {
     Frozen,
     /// 未定
     Undecided,
+    /// 廃止（退けた行・読む口を閉じた印）
+    Retired,
 }
 impl RuleStatus {
     /// 全部（生成区間の順）
-    pub const ALL: [RuleStatus; 3] = [
+    pub const ALL: [RuleStatus; 4] = [
         RuleStatus::Provisional,
         RuleStatus::Frozen,
         RuleStatus::Undecided,
+        RuleStatus::Retired,
     ];
     /// 名の字面（生成区間の順・長さは値の数）
-    pub const NAMES: [&str; 3] = ["仮", "凍結", "未定"];
+    pub const NAMES: [&str; 4] = ["仮", "凍結", "未定", "廃止"];
     /// 規則の表の名
     pub const fn name(self) -> &'static str {
         match self {
             RuleStatus::Provisional => "仮",
             RuleStatus::Frozen => "凍結",
             RuleStatus::Undecided => "未定",
+            RuleStatus::Retired => "廃止",
         }
     }
     /// 規則の表の名から引く（無ければ None）
@@ -401,6 +412,7 @@ impl RuleStatus {
             "仮" => Some(RuleStatus::Provisional),
             "凍結" => Some(RuleStatus::Frozen),
             "未定" => Some(RuleStatus::Undecided),
+            "廃止" => Some(RuleStatus::Retired),
             _ => None,
         }
     }
@@ -674,6 +686,29 @@ mod tests {
         assert!(plan_note(&two).unwrap_err().contains("2 本ある"));
         let discipline = "thresholds: []\ndiscipline:\n  - {id: D-1, value: surface-plan, key: plan-note}\n";
         assert_eq!(plan_note(&crate::yaml::parse(discipline).unwrap().root), Ok(None));
+    }
+
+    /// 状態の値域は 廃止 を末に持つ（退けた行の印・ADR-74 決定 (5)）: 名の列は 4 つ、名から引くと Retired、Retired の名は 廃止。
+    #[test]
+    fn ruleoff_status_has_retired() {
+        assert_eq!(RuleStatus::NAMES.len(), 4);
+        assert_eq!(RuleStatus::NAMES.last(), Some(&"廃止"));
+        assert_eq!(RuleStatus::from_name("廃止"), Some(RuleStatus::Retired));
+        assert_eq!(RuleStatus::Retired.name(), "廃止");
+        assert_eq!(RuleStatus::ALL.map(RuleStatus::name), RuleStatus::NAMES);
+    }
+
+    /// 退けた行は、欄 key の行がちょうど 1 本で欄 status が 廃止 のときだけ true。仮の行・行の無い表・同じ key の行が 2 本は false。
+    #[test]
+    fn ruleoff_retired_reads_one_row() {
+        let doc = |rows: &str| crate::yaml::parse(&format!("thresholds:\n{rows}discipline: []\n")).unwrap().root;
+        let row = |id: &str, status: &str| format!("  - {{id: {id}, key: plan-note, status: {status}}}\n");
+        assert!(retired(&doc(&row("R-9", "廃止")), PLAN_NOTE));
+        assert!(!retired(&doc(&row("R-9", "仮")), PLAN_NOTE));
+        assert!(!retired(&doc(""), PLAN_NOTE));
+        assert!(!retired(&doc(&format!("{}{}", row("R-9", "廃止"), row("R-10", "廃止"))), PLAN_NOTE));
+        assert!(!retired(&doc("  - {id: R-9, key: plan-note}\n"), PLAN_NOTE));
+        assert!(!retired(&doc(&row("R-9", "廃止")), NOTE_CHAPTERS));
     }
 
     /// 便 204 (c): 裁定の時刻は年-月-日か UTC の分だけを通し、字面の写しと欄の名は手書きの字と同じ（ASCII でない字の位置でも

@@ -109,6 +109,9 @@ fn plan_index(dir: &Path, notes: &[NoteDoc]) -> Result<Option<PlanIndex>, String
     let Some(rules) = plan::load_rules(dir)? else {
         return Ok(None);
     };
+    if rules::retired(&rules, rules::PLAN_NOTE) {
+        return Ok(None);
+    }
     let Some(id) = rules::plan_note(&rules)
         .map_err(|e| format!("rules.yaml: 計画のノートの名札の行が読めない: {e}"))?
     else {

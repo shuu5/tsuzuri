@@ -120,6 +120,10 @@ pub(crate) fn rewrite(text: &str, rows: &[IndexRow]) -> Result<String, String> {
 
 /// 床（`note.rs` の `check_note` が読めた設計ノート全部を渡す）。名札の行の読みが割れれば まだ分からない 1 つで止める。
 pub(crate) fn check_plan(nd: &Path, notes: &[NoteDoc], rules: &Node, report: &mut Report) {
+    // 名札の行が退けられていれば（状態が廃止）置き場の決まりも計画の床も数えない
+    if rules::retired(rules, rules::PLAN_NOTE) {
+        return;
+    }
     let plan = match rules::plan_note(rules) {
         Ok(p) => p,
         Err(e) => {
