@@ -4,7 +4,7 @@
 //! `pub use` が元の path のまま外へ見せる。
 
 use super::gate::Verdict;
-use super::land::{stale, verdict_of, Land, Staleness, MAIN_REF};
+use super::land::{landed_squash_of, stale, verdict_of, Land, Staleness, MAIN_REF};
 use super::{driver_ticket, emit, git_line, git_ok, worktree_path, Emit, Ticket};
 use crate::fleet::store;
 use crate::fleet::{replay, Completion, Event, EventKind, Run, Stage, State, Timeout};
@@ -356,10 +356,12 @@ impl Window {
 /// いまの窓（設計 pipeline.md §19 約束 2・3）。列と追随中の便は log の 1 回の読みから導き、git は
 /// **local main を先に**読む（読めない周は origin を読まずに閉じる）。列の便は [`turn_in`] と同じ面（終端でない ∧
 /// `Gated` を通った ∧ worktree が実在）で、判定を読めない便も数える（PASS でないと測れていない便を外さない・C10）。
+/// 列の便のうち CAS を過ぎた便（自分の squash が local main に在る便・[`before_cas`]）は数えない。
 pub(crate) fn window_now(state_dir: &Path, repo: &Path) -> Window {
+    let local = git_line(repo, &["rev-parse", "--verify", "--quiet", MAIN_REF]);
     let runs = store::read_all(state_dir).ok().and_then(|events| {
         let state = replay(&events);
-        let queued = queue_with(state_dir, &events, &state)?
+        let gated = queue_with(state_dir, &events, &state)?
             .into_iter()
             .filter(|found| {
                 may_queue(found.stage, found.gated_at.is_some())
@@ -368,9 +370,20 @@ pub(crate) fn window_now(state_dir: &Path, repo: &Path) -> Window {
             })
             .map(|found| found.run)
             .collect();
+        let queued = before_cas(gated, |run| {
+            local.as_deref().is_some_and(|main| landed_squash_of(repo, main, run).is_some())
+        });
         Some((queued, following_of(&events, &state.runs)))
     });
     Window { runs, main: main_read(repo), anchor: stale(repo) }
+}
+
+/// 列の便のうち CAS をまだ過ぎていない便（**pure**・設計 pipeline.md §19 約束 2 (a) の後の約束 8）: `landed` が真の便＝
+/// 自分の trailer を持つ squash が local main の祖先に在る便（CAS の後の主実測と終端の間）を外す。CAS の後の main に
+/// 外の commit が積まれても、便の確かめは自分の squash の木を測り、push は remote の先へ進んだ main を受ける。local main を
+/// 読めない周と探しを読めない周は `landed` が偽＝外さない（閉じる側）。
+fn before_cas(queued: Vec<String>, landed: impl Fn(&str) -> bool) -> Vec<String> {
+    queued.into_iter().filter(|run| !landed(run)).collect()
 }
 
 /// 追随中の便（**pure**・設計 pipeline.md §47 が §19 約束 2 (b) を supersede）: 最新の `RunStage` が `Implemented`

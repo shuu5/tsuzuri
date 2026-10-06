@@ -9,7 +9,8 @@
 //! `retire`（接頭辞 `pipe_retire_` / `pipe_train_`）・`order`（接頭辞 `pipe_terminal_` / `pipe_order_`）・`rebase`（接頭辞
 //! `pipe_land_rebase_` / `pipe_land_onto_`）・`redclose`（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6）・`cilast`（接頭辞 `vcil_`・
 //! 終端の CI の照合・器の memo t3-hub.74.49.6）・`commute`（接頭辞 `vcledger_`・差の当たりで通した組の後の着地の記帳・判断の記録
-//! ADR-60 の決定 (4)）。この file には共有の helper と const・他の族の歯だけを残す。
+//! ADR-60 の決定 (4)）・`wincas`（接頭辞 `vwcas_`・着地列の窓が CAS を過ぎた便を列に数えない・tsuzuri の判断の記録 ADR-65）。
+//! この file には共有の helper と const・他の族の歯だけを残す。
 
 mod cilast;
 mod commute;
@@ -18,6 +19,7 @@ mod order;
 mod rebase;
 mod redclose;
 mod retire;
+mod wincas;
 // flip-check: moved s2-07l.684
 
 use super::*;
