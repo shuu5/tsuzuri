@@ -49,6 +49,7 @@
 //! か building の周に組み立ての 1 本で索引を得てから組み（項目の無い行は撃たない）、lens は `{index}` の穴を [`index_block`] で outside の後ろの残りに項目ごとに収める。
 
 mod base;
+mod copied;
 pub(in crate::pipe) mod index;
 mod items;
 mod judgement;
@@ -561,8 +562,8 @@ fn lens_cmd(source: &LensSource) -> Result<&str, Finding> {
 /// lens を 1 回撃って判定を得る（**wildcard 無し・判定に届かない周は INCONCLUSIVE**）。
 ///
 /// 2 つ目は lens の scope を片付けた結果（record に書く周だけ `Some`）・3 つ目は lens の claude の消費の 6 値と版の 4 語（lens が
-/// rc 0 で終わり判定 object が 6 値を運んだ周だけ `Some`＝gate の lens と同じ読み [`lens_usage`] に版を足す [`lens_spent`]）。4 つ目は lens が読んだ審査の木の sha
-/// （木を作って lens を撃った周だけ `Some`）。
+/// rc 0 で終わり判定 object が 6 値を運んだ周だけ `Some`＝gate の lens と同じ読み [`lens_usage`] に版を足す [`lens_spent`]）。
+/// 4 つ目は lens が読んだ審査の木の sha（木を作って lens を撃った周だけ `Some`）。
 ///
 /// **lens の cwd と `{worktree}` は審査の木**（run dir の直下の `<sha>.tree`・`head` は審査の前に読んだ repo の HEAD の sha に detach
 /// した worktree・設計 pipeline.md §64 形 3）。作れない周は lens を撃たず INCONCLUSIVE（anchor の作業木へは倒さない）で、木は判定を
@@ -821,7 +822,7 @@ fn row_reused(entry: &Review<'_>, at: (&Path, &Path), cmd: &str, sha: &str) -> O
 }
 
 /// 判定を `review.json` へ atomic に書き、`Reviewed` を 1 件追記する。`kind` と `at` は任意 field（schema 1 のまま・
-/// 古い読み手は無視・PASS の周は無い）。`quality` と `quality_at` も任意 field で、質を読めた周だけ（どの判定の周も）。使い回した周は detail の末尾に [`ROW_REUSED`] を足す。
+/// 古い読み手は無視・PASS の周は無い）。`quality` と `quality_at` も任意 field（質を読めた周だけ）。detail は判定・[`copied`] の語・[`ROW_REUSED`] の順。
 fn settle(
     entry: &Review<'_>,
     finding: &Finding,
@@ -864,7 +865,7 @@ fn settle(
             stage: Some(Stage::Reviewed),
             seat: None,
             pid: None,
-            detail: Some(format!("{}{}", detail_of(finding.verdict, finding.kind), reused.unwrap_or_default())),
+            detail: Some(format!("{}{}{}", detail_of(finding.verdict, finding.kind), copied::words_of(entry), reused.unwrap_or_default())),
         },
         entry.policy,
     )

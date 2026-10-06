@@ -568,11 +568,11 @@ fn measure(input: &Input<'_>) -> (Turn, Option<Read>) {
         // 行の予約は周の 1 回の導き（読み済みの台帳と event log を借りる・記帳しない・設計 row-review.md §7）。兄弟の待ちの元の列も同じ導きから組む（§8）。
         let reserved = reserve::derive(input, &issues, &ledger.marks, &ledger.events, crate::seat::state::now_secs());
         let kins = siblings_of(input, &issues, &reserved, &ledger);
-        let mut ready: BTreeMap<String, (Pointer, Contract)> = BTreeMap::new();
+        let mut ready: BTreeMap<String, (Option<Pointer>, Contract)> = BTreeMap::new();
         let mut candidates: Vec<Candidate> = Vec::new();
         let floor = sha.as_deref().and_then(|sha| floor::judgement(input.state_dir, sha)).filter(|found| found.word != floor::Word::Pass);
         for issue in issues.iter().filter(|issue| is_input(issue)) {
-            let (mut candidate, mut found) = entry_of(input, issue, &ledger, &kins);
+            let (mut candidate, mut found) = entry_of(input, issue, &issues, &ledger, &kins);
             // 床の検査が不合格の周は、`first` の印・起こした事実・終端の記録のどれも持たない候補を準備の表から外して待たせる（設計 §35 約束 2）。
             let kept = matches!(candidate.reason, Some(WaitReason::Launched { .. } | WaitReason::Settled { .. }));
             if let (Some(judged), false, false) = (&floor, kept, candidate.mark == Some(Mark::First)) {

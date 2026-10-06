@@ -12,7 +12,8 @@
 // flip-check: moved s2-07l.531
 
 use super::super::admission::{self, Sizes};
-use super::super::cli::{capped, crossings, generated, int_row, judge, live, Denial, Material, Materials};
+use super::super::bead::{self, digest_of_design, form_of, Form};
+use super::super::cli::{bead_contract, capped, crossings, generated, int_row, judge, live, Denial, Material, Materials};
 use super::super::commute;
 use super::super::contract::Contract;
 use super::super::declaration::RunCap;
@@ -44,11 +45,18 @@ pub(super) fn is_input(issue: &Issue) -> bool {
     issue.status == OPEN && !issue.acceptance.trim().is_empty() && !is_memo(issue) && !is_question(issue)
 }
 
-/// 台帳の 1 件を列の 1 件に解く（依存 → 印 → 設計 pointer → 審査 FAIL → 契約の生成の順）。
+/// 台帳の 1 件を列の 1 件に解く（依存 → 印 → 契約の形 → 審査 FAIL → 契約の生成の順）。
 ///
 /// 交差と枠は**順序の後**に測る（§3「1 周で起こした便は次の候補の交差の相手」）ので、ここでは決めない。
-/// 理由の付かなかった候補だけが設計 pointer と契約を持って返る。
-pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, kins: &[Kin]) -> (Candidate, Option<(Pointer, Contract)>) {
+/// 理由の付かなかった候補だけが（設計 pointer か無し・契約）の対を持って返る。pointer が無いのは bead に契約を置いた形（行 v-bead-dispatch・
+/// 台帳の全部の列 `issues` から [`bead_contract`] が照らして組む）で、列外の鍵は acceptance と本文の digest（[`settled_bead`]）・兄弟は持たない。
+pub(super) fn entry_of(
+    input: &Input<'_>,
+    issue: &Issue,
+    issues: &[Issue],
+    ledger: &Ledger<'_>,
+    kins: &[Kin],
+) -> (Candidate, Option<(Option<Pointer>, Contract)>) {
     let marked = ledger.marks.get(&issue.id);
     let at = |reason: Option<WaitReason>| Candidate {
         bead: issue.id.clone(),
@@ -71,25 +79,37 @@ pub(super) fn entry_of(input: &Input<'_>, issue: &Issue, ledger: &Ledger<'_>, ki
         Some(Some(since)) => return wait(WaitReason::Launched { since: since.clone() }),
         Some(None) => {}
     }
-    let Some(pointer) = pointer_of(&issue.acceptance) else {
-        return wait(WaitReason::NoDesignPointer);
+    // 形は先に判じる（pointer_of は両方の形の bead にも設計 pointer を返すので、先に撃つと両方の形の断りが立たない）。
+    let pointer = match form_of(&issue.acceptance) {
+        Form::Design(pointer) => Some(pointer),
+        Form::Bead | Form::Both => None,
+        Form::Neither => return wait(WaitReason::NoDesignPointer),
     };
     let materials = match &ledger.materials {
         Ok(found) => found,
         Err(denial) => return wait(refused_by(denial)),
     };
-    let contract = match generated(input.repo, &pointer, materials) {
-        Ok((found, body)) => match settled(input, &issue.id, &body, &found.design, &ledger.events) {
-            Some((sha, stage)) => return wait(WaitReason::Settled { sha, stage }),
-            None => {
-                // 兄弟の待ちは settled の後・床の上書きの前（設計 row-review.md §8）。介入 `first` の印を持つ候補は待たせない。
-                let first = matches!(marked, Some((Mark::First, _)));
-                if let Some(by) = (!first).then(|| sibling_of(input, &issue.id, &pointer, (&found, &body), kins)).flatten() {
-                    return wait(WaitReason::Sibling(by));
-                }
-                found
+    let made = match &pointer {
+        Some(pointer) => generated(input.repo, pointer, materials),
+        None => bead_contract((input.repo, input.state_dir), input.manifest, &issue.id, issues, materials),
+    };
+    let contract = match made {
+        Ok((found, body)) => {
+            let kept = match &pointer {
+                Some(_) => settled(input, &issue.id, &body, &found.design, &ledger.events),
+                None => settled_bead(input, &issue.id, &bead::digest(&issue.acceptance, &issue.description), &ledger.events),
+            };
+            if let Some((sha, stage)) = kept {
+                return wait(WaitReason::Settled { sha, stage });
             }
-        },
+            // 兄弟の待ちは settled の後・床の上書きの前（設計 row-review.md §8）。介入 `first` の印を持つ候補は待たせない。bead の契約は兄弟を持たない。
+            let first = matches!(marked, Some((Mark::First, _)));
+            let sibling = pointer.as_ref().filter(|_| !first).and_then(|pointer| sibling_of(input, &issue.id, pointer, (&found, &body), kins));
+            if let Some(by) = sibling {
+                return wait(WaitReason::Sibling(by));
+            }
+            found
+        }
         Err(denial) => return wait(refused_by(&denial)),
     };
     (at(None), Some((pointer, contract)))
@@ -246,7 +266,7 @@ fn sibling_of(input: &Input<'_>, bead: &str, pointer: &Pointer, made: (&Contract
 pub(super) fn settle(
     input: &Input<'_>,
     candidates: Vec<Candidate>,
-    ready: &BTreeMap<String, (Pointer, Contract)>,
+    ready: &BTreeMap<String, (Option<Pointer>, Contract)>,
     reserved: &[reserve::Reservation],
     materials: Option<&Materials>,
 ) -> Turn {
@@ -268,7 +288,10 @@ pub(super) fn settle(
                 Some(reason) => candidate.reason = Some(reason),
                 None => {
                     started.push((candidate.bead.clone(), contract));
-                    turn.launches.push(launch_of(input, &candidate.bead, pointer));
+                    turn.launches.push(match pointer {
+                        Some(pointer) => launch_of(input, &candidate.bead, pointer),
+                        None => launch_bead(input, &candidate.bead),
+                    });
                 }
             }
         }
@@ -369,6 +392,23 @@ pub(super) fn launch_of(input: &Input<'_>, bead: &str, pointer: &Pointer) -> Lau
     Launch { bead: bead.to_owned(), argv }
 }
 
+/// 契約を台帳の bead に置いた便の起動の構築点（`pipe run` の引数を組む・**撃たない**）。`--design` を持たない: 受付が `--bead` の bead を台帳から
+/// 読み、写しの pointer を作る。
+pub(super) fn launch_bead(input: &Input<'_>, bead: &str) -> Launch {
+    let mut argv = vec![
+        "run".to_owned(),
+        "--bead".to_owned(),
+        bead.to_owned(),
+        "--repo".to_owned(),
+        input.repo.display().to_string(),
+        "--state-dir".to_owned(),
+        input.state_dir.display().to_string(),
+    ];
+    argv.extend(tools(input));
+    argv.push(DRIVE.to_owned());
+    Launch { bead: bead.to_owned(), argv }
+}
+
 /// 列に渡された道具（起こす便と起こし直す便へ**そのまま全部**渡す＝列と便が同じ道具で動く）。
 ///
 /// 渡されていない道具は何も足さない（既定は便の側が持つ）。**台帳 client（`--bd`）も渡す**: 起こした子
@@ -443,6 +483,34 @@ pub(super) fn settled(input: &Input<'_>, bead: &str, body: &str, design: &str, e
         return None;
     }
     if section_keyed(stage) && section_moved(input, id, design) {
+        return None;
+    }
+    let sha = git_bytes(input.repo, &["hash-object", "--", &path.display().to_string()])?;
+    String::from_utf8(sha).ok().map(|found| (found.trim().to_owned(), stage))
+}
+
+/// 契約を台帳の bead に置いた便の列外の鍵（[`settled`] の bead 版・行 v-bead-dispatch）。直前の便の選びだけが違い、生死・戻し・sha は同じ順で測る。
+///
+/// 選ぶのは、同じ bead の便を id の逆順に見て、run の dir の契約 file の欄 design が写しの path の形で、その 16 桁（[`digest_of_design`]）が
+/// 今の bead の digest（`digest`・acceptance と本文の両方の値）と同じ最初の 1 本。どちらかの 1 字が替われば同じ digest の便が無く列に戻り、
+/// 戻せば前の便がまた選ばれる。契約 file を読めない便と表の側の便（design が写しの形でない）は選ばない。節の写しの比べは撃たない（本文は digest に入る）。
+pub(super) fn settled_bead(input: &Input<'_>, bead: &str, digest: &str, events: &[Event]) -> Option<(String, Stage)> {
+    let state = current(input.state_dir).ok()?;
+    let (id, stage, path) = state.runs.iter().rev().filter(|(_, run)| run.bead == bead).find_map(|(id, run)| {
+        let path = contract_path(input.state_dir, id);
+        let design = Contract::load(&path).ok()?.design;
+        (digest_of_design(&design).as_deref() == Some(digest)).then_some((id, run.stage, path))
+    })?;
+    if live(input.state_dir, id, stage) != Some(false) {
+        return None;
+    }
+    if requeues(stage) && released_after(events, id, bead) {
+        return None;
+    }
+    if stage == Stage::Reviewed
+        && released_after(events, id, bead)
+        && review::judgement_of(input.state_dir, id).is_some_and(|found| review_unmeasured(&found))
+    {
         return None;
     }
     let sha = git_bytes(input.repo, &["hash-object", "--", &path.display().to_string()])?;
