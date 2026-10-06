@@ -1,0 +1,449 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+index 655577275eec6055f448d8185b7ce3bfb439f77e..a83ac34be9bc896cd64125d44d366a28c2571b21 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+@@ -6,6 +6,9 @@
+ use super::*;
+ use super::intake::{lens_finding, review_has, review_pairs, reviewed_detail, teeth_doc, TEETH_FILES};
+ 
++/// 欄 `patch` の差が替える定義の項目の歯（`pipe index show --row`）。
++mod vpdefs;
++
+ // ───── 契約の審査の段（`s2-07l.241`・設計 contract-source.md §4・SRS FR49 / FR9 / AC22・接頭辞 `pipe_review_`） ─────
+ 
+ /// (a) 偽 lens が FAIL を返す契約は `Reviewed(FAIL)` で止まり **runner は 1 度も起きない**（構築点の呼出 0・AC22）:
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review/vpdefs.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review/vpdefs.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8c1bdb430e50a1b7f4295707d979647af943c9a6
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review/vpdefs.rs
+@@ -0,0 +1,144 @@
++//! `pipe index show --row` の欄 `patch` の項目（設計 docs/design/reverse-index.md §6 の項目 (iii)）。
++//!
++//! 親（`tests/e2e/pipe/review.rs`）の逆引きの toy（`gx_place`）に、欄 `patch` を持つ行と差の file と、field と注を持つ file kit.rs
++//! （SCIP の document を toy の index の bytes の後ろに足す・repeated の document は bytes の連結で足せる）を足して撃つ。
++
++use super::*;
++
++/// toy の差（shape.rs の 2・9 行の置き換え・5 行の後の足し・1 と 12 行の注と属性・test の file・索引の外の toml・新しい file）。
++const VPDEFS_PATCH: &str = "diff --git a/crates/toy/src/shape.rs b/crates/toy/src/shape.rs
++--- a/crates/toy/src/shape.rs
+++++ b/crates/toy/src/shape.rs
++@@ -1,13 +1,14 @@
++-/// 見る: [`Gadget`] の話
+++/// 見る: [`Gadget`] の話（改）
++-pub struct Gadget { pub x: u8 }
+++pub struct Gadget { pub x: u16 }
++ impl Gadget {
++     pub fn new() -> Self {
++         Self { x: 0 }
+++        // 足す
++     }
++ }
++ pub fn make() -> Gadget {
++-    Gadget { x: 1 }
+++    Gadget { x: 9 }
++ }
++ fn describe() -> String { format!(\"{Gadget}\") }
++-#[cfg(test)]
+++#[cfg(all(test))]
++ mod tests;
++diff --git a/crates/toy/src/kit.rs b/crates/toy/src/kit.rs
++--- a/crates/toy/src/kit.rs
+++++ b/crates/toy/src/kit.rs
++@@ -1,9 +1,9 @@
++ pub struct Kit {
++-    pub size: u8,
+++    pub size: u16,
++     pub name: u8,
++ }
++ pub fn pack(k: Kit) -> u8 {
++-    // 注
+++    // 注を直す
++     let a = k.size;
++     a
++ }
++diff --git a/crates/toy/src/shape/tests.rs b/crates/toy/src/shape/tests.rs
++--- a/crates/toy/src/shape/tests.rs
+++++ b/crates/toy/src/shape/tests.rs
++@@ -1 +1 @@
++-fn builds() { let _ = crate::shape::make(); let _ = crate::shape::Gadget { x: 2 }; }
+++fn builds() { let _ = crate::shape::make(); let _ = crate::shape::Gadget { x: 3 }; }
++diff --git a/config/gadget.toml b/config/gadget.toml
++--- a/config/gadget.toml
+++++ b/config/gadget.toml
++@@ -1,2 +1,2 @@
++ [shape]
++-kind = \"Gadget\"
+++kind = \"Gizmo\"
++diff --git a/crates/toy/src/fresh.rs b/crates/toy/src/fresh.rs
++new file mode 100644
++--- /dev/null
+++++ b/crates/toy/src/fresh.rs
++@@ -0,0 +1 @@
+++pub fn fresh() {}
++";
++
++/// kit.rs の path。
++const VPDEFS_KIT_RS: &str = "crates/toy/src/kit.rs";
++
++/// kit.rs の本文（struct の field は行ごと・関数の本文の注は occurrence の間）。
++const VPDEFS_KIT: &str = "pub struct Kit {\n    pub size: u8,\n    pub name: u8,\n}\npub fn pack(k: Kit) -> u8 {\n    // 注\n    let a = k.size;\n    a\n}\n";
++
++/// kit.rs の SCIP の document（struct・field 2 つ・関数・関数の中の型と field の参照）。
++fn vpdefs_kit_document() -> Vec<u8> {
++    let kit = "rust-analyzer cargo toy 0.1.0 kit/Kit#";
++    let occs = vec![
++        gx_occ(VPDEFS_KIT, ("struct Kit", "Kit"), kit, Some("pub struct Kit {\n    pub size: u8,\n    pub name: u8,\n}")),
++        gx_occ(VPDEFS_KIT, ("pub size", "size"), "rust-analyzer cargo toy 0.1.0 kit/Kit#size.", Some("pub size: u8")),
++        gx_occ(VPDEFS_KIT, ("pub name", "name"), "rust-analyzer cargo toy 0.1.0 kit/Kit#name.", Some("pub name: u8")),
++        gx_occ(VPDEFS_KIT, ("fn pack", "pack"), "rust-analyzer cargo toy 0.1.0 kit/pack().", Some("pub fn pack(k: Kit) -> u8 {\n    // 注\n    let a = k.size;\n    a\n}")),
++        gx_occ(VPDEFS_KIT, ("k: Kit", "Kit"), kit, None),
++        gx_occ(VPDEFS_KIT, ("k.size", "size"), "rust-analyzer cargo toy 0.1.0 kit/Kit#size.", None),
++    ];
++    scip_document(VPDEFS_KIT_RS, 1, &occs, &[])
++}
++
++/// toy に欄 `patch` を持つ行 t2（write-set は shape.rs・差は在る）と t3（差の file が無い）を足して commit する。
++fn vpdefs_place() -> IdxPlace {
++    let place = gx_place(true);
++    let rows = [
++        row_fields("t2", &["write-set"], &[r#"write-set = ["crates/toy/src/shape.rs"]"#, r#"patch = "docs/design/patch/p.patch""#]),
++        row_fields("t3", &["write-set"], &[r#"write-set = ["crates/toy/src/shape.rs"]"#, r#"patch = "docs/design/patch/none.patch""#]),
++    ];
++    let toml = place.repo.join("contracts/t.toml");
++    let mut body = fs::read_to_string(&toml).unwrap_or_default();
++    for row in rows {
++        body.push_str(&format!("\n[[contract]]\n{}\n", row.join("\n")));
++    }
++    assert!(fs::write(&toml, body).is_ok(), "t.toml を書ける");
++    assert!(fs::create_dir_all(place.repo.join("docs/design/patch")).is_ok(), "差の dir を作れる");
++    assert!(fs::write(place.repo.join("docs/design/patch/p.patch"), VPDEFS_PATCH).is_ok(), "差の file を書ける");
++    assert!(fs::write(place.repo.join(VPDEFS_KIT_RS), VPDEFS_KIT).is_ok(), "kit.rs を書ける");
++    let scip = [gx_scip_bytes(), scip_index(&[vpdefs_kit_document()], &[])].concat();
++    assert!(fs::write(place.state.join("idx.scip"), scip).is_ok(), "kit.rs を足した SCIP を書ける");
++    git(&place.repo, &["add", "-A"]);
++    git(&place.repo, &["commit", "-q", "-m", "patch rows"]);
++    place
++}
++
++/// 差の行は、項目の前に 1 行（定義の数・test の中の定義の数・引けない `-` 行の数・新しい file の数・索引の外の file）を置き、差が替える定義
++/// を差の file の順と行の順に項目にする: `-` 行の定義（struct・field）・`-` 行の occurrence を囲む定義（make・field を持つ struct）・
++/// occurrence の無い `-` 行を含む定義の広がり（注の行の pack）・`+` 行の塊の前の行を含む定義の広がり（new）。test の中の定義（builds）は
++/// 項目にせず数え、どの定義にも引けない注と属性の行は引けない行に数え、toml は索引の外・fresh.rs は新しい file に数える。
++#[test]
++fn vpdefs_row_items_are_the_definitions_the_patch_changes() {
++    let place = vpdefs_place();
++    let shown = gx_shown(&place, &["--row", "contracts/t.toml#t2"]);
++    assert_eq!(
++        shown.lines().next(),
++        Some("patch=docs/design/patch/p.patch defs=6 tests=1 unmapped=2 fresh=1 outside-index=1 config/gadget.toml"),
++        "項目の前の 1 行: {shown}"
++    );
++    let items = ["shape::Gadget", "shape::Gadget::new", "shape::make", "kit::Kit::size", "kit::Kit", "kit::pack"];
++    assert_eq!(gx_items(&shown), items, "差が替える定義を差の file の順と行の順に: {shown}");
++    let make = gx_block(&shown, "shape::make");
++    assert!(make.iter().any(|line| line == &format!("  symbol: {GX_MAKE}")), "名でなく symbol で解く: {make:?}");
++    assert_eq!(gx_field(&make, "callers"), "2(外2)", "行の write-set の外の呼び手に印: {make:?}");
++    assert_eq!(gx_sites(&make, "callers"), [format!("{GX_TESTS_RS}:1 test builds 外"), format!("{GX_USER_RS}:3 assemble 外")], "{make:?}");
++    let gadget = gx_block(&shown, "shape::Gadget");
++    assert_eq!(gx_field(&gadget, "literals"), "4(外2)", "struct の literal の site と外の印: {gadget:?}");
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 差の file を ref の木から読めない行は `patch=<path> unreadable` の 1 行だけで項目を足さず、欄 `patch` を持たない行は 1 行を持たない。
++#[test]
++fn vpdefs_unreadable_patch_and_rows_without_the_field() {
++    let place = vpdefs_place();
++    let missing = gx_shown(&place, &["--row", "contracts/t.toml#t3"]);
++    assert_eq!(missing.trim_end(), "patch=docs/design/patch/none.patch unreadable", "読めない差の 1 行だけ: {missing}");
++    let plain = gx_shown(&place, &["--row", "contracts/t.toml#t1"]);
++    assert!(!plain.lines().any(|line| line.starts_with("patch=")), "欄の無い行は差の 1 行を持たない: {plain}");
++    assert_eq!(gx_items(&plain), ["crate::shape::Gadget"], "欄の無い行の項目は touches のまま: {plain}");
++    clean(&[&place.repo, &place.state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/review/index.rs b/scribe2/crates/scribe2/src/pipe/review/index.rs
+index 970da5c25f279ebbccf43e88b4b6d55374f47e54..bbda9c7848a684abfd5b6947ac386254bd7c79df 100644
+--- a/scribe2/crates/scribe2/src/pipe/review/index.rs
++++ b/scribe2/crates/scribe2/src/pipe/review/index.rs
+@@ -6,6 +6,8 @@
+ //! この 2 本を共用する（2 本目の数えを作らない）。項目は symbol へ a1 の問い（`flat::query`）で解き、解けない（0 件）・複数
+ //! （`ambiguous:<n>`）を名指す。行の節の名指しは名指しの読み手の口 [`section_symbols`] の 1 本で読む（読み手を写さない）。
+ //!
++//! 行を名指した周は、行の欄 `patch` の差が替える定義も項目にする（[`patch`]・§6 の項目 (iii)）。
++//!
+ //! 契約表の行・表の検査の断り・審査の材料の型は組まない: 表の行は `read_table` の返りを field で読む。
+ 
+ use super::base::ITEM_HEAD;
+@@ -24,6 +26,8 @@ use crate::rules::manifest::Manifest;
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::path::Path;
+ 
++mod patch;
++
+ /// `{index}` の穴の見出し（項目を落とした周も見出しは残す）。
+ const HEADING: &str = "\n## 逆引きの表（index.txt・器が外の道具の索引から組んだ事実）\n";
+ 
+@@ -47,6 +51,8 @@ struct Line {
+     section: String,
+     /// 導出物の行の節の逐語（無ければ空）。
+     goal: String,
++    /// 欄 `patch`（差の file の repo 相対 path・無い行は `None`）。
++    patch: Option<String>,
+ }
+ 
+ /// ref の木の契約表の全行（置き場の宣言と列挙の 1 関数 `design_docs` で絞った doc の行・doc の本文つき・既定は行 0 本＝rows 列が
+@@ -75,7 +81,7 @@ impl Tables {
+             })?;
+             for row in found {
+                 let pointer = format!("{doc}#{}", row.id);
+-                lines.push(Line { pointer, doc: doc.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal });
++                lines.push(Line { pointer, doc: doc.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal, patch: row.patch });
+             }
+             docs.insert(doc.clone(), shown);
+         }
+@@ -279,7 +285,23 @@ fn population(ctx: &Ctx<'_>, item: &str, symbols: &BTreeSet<&str>) -> Option<Pop
+ 
+ /// 項目 1 つの 7 列の件数と site と write-set の外の印と母集団を数える（show・index.txt・行 e の測りが同じこの 1 本を撃つ）。
+ pub(in crate::pipe) fn count(ctx: &Ctx<'_>, item: &str, scope: &Scope<'_>) -> Counted {
+-    let (state, sites) = match query(ctx.rows, item) {
++    counted_of(ctx, item, query(ctx.rows, item), scope)
++}
++
++/// 差が替える定義 1 つを数える（項目の字は symbol の descriptor の名を `::` で結んだ字・名の問いの答えから同じ symbol だけを選ぶ）。
++fn count_changed(ctx: &Ctx<'_>, symbol: &str, scope: &Scope<'_>) -> Counted {
++    let item = descriptor_names(symbol).join("::");
++    let found = match query(ctx.rows, &item) {
++        Resolution::One(one) if one.symbol == symbol => Resolution::One(one),
++        Resolution::Ambiguous(many) => many.into_iter().find(|one| one.symbol == symbol).map_or(Resolution::Unresolved, Resolution::One),
++        Resolution::One(_) | Resolution::Unresolved => Resolution::Unresolved,
++    };
++    counted_of(ctx, &item, found, scope)
++}
++
++/// 解けた形 `found` から 7 列と母集団を数える（[`count`] と [`count_changed`] の共通の本体）。
++fn counted_of(ctx: &Ctx<'_>, item: &str, found: Resolution, scope: &Scope<'_>) -> Counted {
++    let (state, sites) = match found {
+         Resolution::Unresolved => (State::Unresolved, Vec::new()),
+         Resolution::One(found) => (State::One(found.symbol), found.sites),
+         Resolution::Ambiguous(found) => {
+@@ -412,10 +434,35 @@ pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String
+     let marks = (!line.write_set.is_empty()).then_some(line.write_set.as_slice());
+     let scope = Scope { own: pointer, marks };
+     let mut blocks: Vec<String> = marks.is_none().then(|| "write-set=derived".to_owned()).into_iter().collect();
++    let (head, symbols) = line.patch.as_deref().map(|path| patch_items(ctx, path)).unwrap_or_default();
++    blocks.extend((!head.is_empty()).then_some(head));
+     blocks.extend(items.iter().map(|item| render(&count(ctx, item, &scope))));
++    blocks.extend(symbols.iter().map(|symbol| render(&count_changed(ctx, symbol, &scope))));
+     Ok(blocks.join("\n"))
+ }
+ 
++/// 欄 `patch` の差が替える定義（項目の前に置く 1 行と symbol の列・差を ref の木から読めないか見出しを読めない周は
++/// `patch=<path> unreadable` の 1 行と空の列）。1 行は `patch=<path> defs=<n> tests=<n> unmapped=<n> fresh=<n> outside-index=<n>` で、
++/// 索引の外の file が在れば path を `, ` で結んで続ける。
++fn patch_items(ctx: &Ctx<'_>, path: &str) -> (String, Vec<String>) {
++    let text = git_bytes(ctx.repo, &["show", &format!("{}:{path}", ctx.sha)]).and_then(|bytes| String::from_utf8(bytes).ok());
++    let Some(found) = text.as_deref().and_then(|diff| patch::changed(ctx.rows, diff)) else {
++        return (format!("patch={path} unreadable"), Vec::new());
++    };
++    let mut head = format!(
++        "patch={path} defs={} tests={} unmapped={} fresh={} outside-index={}",
++        found.defs.len(),
++        found.tests,
++        found.unmapped,
++        found.fresh,
++        found.outside.len()
++    );
++    if !found.outside.is_empty() {
++        head.push_str(&format!(" {}", found.outside.join(", ")));
++    }
++    (head, found.defs)
++}
++
+ /// 索引の状態の語（ready と undeclared は語を持たない）。
+ fn word_of(state: &Status) -> Option<String> {
+     match state {
+diff --git a/scribe2/crates/scribe2/src/pipe/review/index/patch.rs b/scribe2/crates/scribe2/src/pipe/review/index/patch.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6cd2d609cbad64839f2bb2c8483bc27d5785d03d
+--- /dev/null
++++ b/scribe2/crates/scribe2/src/pipe/review/index/patch.rs
+@@ -0,0 +1,166 @@
++//! 欄 `patch` の差が替える定義（設計 docs/design/reverse-index.md §6 の項目 (iii)）。
++//!
++//! 差の file の替える base の行を、索引の表の occurrence で定義の symbol へ引く。`-` 行は、その行の定義と、行の occurrence を囲む
++//! 定義を取り、どちらも無い行は行を含む定義の広がりで引く。`+` 行の塊（`-` 行の直後でない物）は、塊の前の行を含む定義の広がりで
++//! 引く。定義の広がりは、file の最初の定義の行から、その定義に直に囲まれた occurrence の最後の行までである。module の symbol と
++//! 字だけの行は項目にしない（局所の symbol は SCIP の読みが落とす）。test の中の定義は項目にせず数え、どの定義にも引けない `-` 行・表に 1 行も無い
++//! 既存の file・新しい file を数える。I/O は持たない（差の字は呼び手が ref の木から読む）。
++
++use crate::pipe::index::flat::Row;
++use std::collections::{BTreeMap, BTreeSet};
++
++/// 差が替える定義と数え。
++#[derive(Debug, Default, PartialEq, Eq)]
++pub(in crate::pipe) struct Changed {
++    /// 替える定義の symbol（差の file の順と行の順・重ねない・test の中の定義を除く）。
++    pub defs: Vec<String>,
++    /// 替える定義のうち test の中の定義の数。
++    pub tests: usize,
++    /// 表に在る file の `-` 行のうち、どの定義にも引けない行の数（module の注・空の行・item の間の括弧など）。
++    pub unmapped: usize,
++    /// 表に 1 行も無い既存の file（差の順）。
++    pub outside: Vec<String>,
++    /// 新しい file の数。
++    pub fresh: usize,
++}
++
++/// 差の file 1 本の替える base の行。
++#[derive(Debug, Default)]
++struct Touched {
++    /// base 側の path。
++    path: String,
++    /// 新しい file か。
++    fresh: bool,
++    /// `-` 行の行番号。
++    removed: Vec<usize>,
++    /// `+` 行の塊（`-` 行の直後でない物）の前の行の行番号。
++    before: Vec<usize>,
++}
++
++/// hunk 見出し `-l[,n] +l[,n] @@ …` の base の開始行。
++fn hunk_base(rest: &str) -> Option<usize> {
++    let (range, _) = rest.split_once(" @@")?;
++    range.split(' ').next()?.strip_prefix('-')?.split(',').next()?.parse().ok()
++}
++
++/// `git diff` の本文を file ごとの替える base の行に読む（見出しの読めない hunk か file の外の hunk は `None`）。
++fn touched(diff: &str) -> Option<Vec<Touched>> {
++    let mut files: Vec<Touched> = Vec::new();
++    let (mut at, mut last) = (None::<usize>, ' ');
++    for line in diff.lines() {
++        if let Some(rest) = line.strip_prefix("diff --git a/") {
++            let path = rest.split_once(" b/").map_or(rest, |(base, _)| base);
++            files.push(Touched { path: path.to_owned(), ..Touched::default() });
++            at = None;
++            continue;
++        }
++        let file = files.last_mut()?;
++        if let Some(rest) = line.strip_prefix("@@ ") {
++            at = Some(hunk_base(rest)?);
++            last = ' ';
++            continue;
++        }
++        let Some(cursor) = at.as_mut() else {
++            file.fresh |= line.starts_with("new file mode ");
++            continue;
++        };
++        match line.chars().next() {
++            Some('-') => {
++                file.removed.push(*cursor);
++                *cursor = cursor.saturating_add(1);
++            }
++            Some('+') if last == ' ' => file.before.push(cursor.saturating_sub(1)),
++            Some('\\') => continue,
++            Some('+') => {}
++            _ => *cursor = cursor.saturating_add(1),
++        }
++        last = line.chars().next().unwrap_or(' ');
++    }
++    Some(files)
++}
++
++/// 項目にできる定義の symbol か（空・module・字だけの行でない・局所の symbol は SCIP の読みが落とす）。
++fn definable(symbol: &str) -> bool {
++    !symbol.is_empty() && !symbol.ends_with('/') && !symbol.starts_with(crate::pipe::index::flat::TEXT_ONLY_PREFIX)
++}
++
++/// file 1 本の定義の広がり（symbol → (最初の定義の行・直に囲まれた occurrence の最後の行)・表の行は位置の順）。
++fn extents(rows: &[&Row]) -> BTreeMap<String, (usize, usize)> {
++    let mut found: BTreeMap<String, (usize, usize)> = BTreeMap::new();
++    for row in rows.iter().filter(|row| row.definition && definable(&row.symbol)) {
++        found.entry(row.symbol.clone()).or_insert((row.line, row.line));
++    }
++    for row in rows {
++        if let Some(span) = found.get_mut(&row.enclosing) {
++            span.1 = span.1.max(row.line);
++        }
++    }
++    found
++}
++
++/// 行を含む最も狭い広がりの定義。
++fn within(spans: &BTreeMap<String, (usize, usize)>, line: usize) -> Option<&str> {
++    spans
++        .iter()
++        .filter(|(_, (from, to))| *from <= line && line <= *to)
++        .min_by_key(|(_, (from, to))| (to - from, usize::MAX - from))
++        .map(|(symbol, _)| symbol.as_str())
++}
++
++/// `-` 行 1 本の定義（行の定義と行の occurrence を囲む定義・無ければ行を含む広がりの定義）。
++fn removed_defs<'a>(rows: &[&'a Row], spans: &'a BTreeMap<String, (usize, usize)>, line: usize) -> Vec<&'a str> {
++    let mut found: Vec<&str> = Vec::new();
++    for row in rows.iter().filter(|row| row.line == line) {
++        let own = (row.definition && definable(&row.symbol)).then_some(row.symbol.as_str());
++        for symbol in own.into_iter().chain(definable(&row.enclosing).then_some(row.enclosing.as_str())) {
++            if !found.contains(&symbol) {
++                found.push(symbol);
++            }
++        }
++    }
++    if found.is_empty() {
++        found.extend(within(spans, line));
++    }
++    found
++}
++
++/// 差 `diff` が替える定義を、索引の表 `rows` で引く（差の見出しが読めない周は `None`）。
++pub(in crate::pipe) fn changed(rows: &[Row], diff: &str) -> Option<Changed> {
++    let mut by_path: BTreeMap<&str, Vec<&Row>> = BTreeMap::new();
++    for row in rows {
++        by_path.entry(row.path.as_str()).or_default().push(row);
++    }
++    let tested: BTreeSet<&str> = rows.iter().filter(|row| row.definition && row.test).map(|row| row.symbol.as_str()).collect();
++    let mut out = Changed::default();
++    let mut seen: BTreeSet<String> = BTreeSet::new();
++    for file in touched(diff)? {
++        if file.fresh {
++            out.fresh += 1;
++            continue;
++        }
++        let Some(own) = by_path.get(file.path.as_str()) else {
++            out.outside.push(file.path);
++            continue;
++        };
++        let spans = extents(own);
++        let mut picked: Vec<(usize, &str)> = Vec::new();
++        for line in &file.removed {
++            let defs = removed_defs(own, &spans, *line);
++            out.unmapped += usize::from(defs.is_empty());
++            picked.extend(defs.into_iter().map(|symbol| (*line, symbol)));
++        }
++        picked.extend(file.before.iter().filter_map(|line| within(&spans, *line).map(|symbol| (*line, symbol))));
++        picked.sort_by_key(|(line, _)| *line);
++        for (_, symbol) in picked {
++            if !seen.insert(symbol.to_owned()) {
++                continue;
++            }
++            if tested.contains(symbol) {
++                out.tests += 1;
++            } else {
++                out.defs.push(symbol.to_owned());
++            }
++        }
++    }
++    Some(out)
++}
+diff --git a/scribe2/docs/design/reverse-index.md b/scribe2/docs/design/reverse-index.md
+index 6fa873fbfc7e1fb694922e60ff9cfc1bdb5d71b6..dc2b7ac4d9639f067035b43aa07eecbe5785a111 100644
+--- a/scribe2/docs/design/reverse-index.md
++++ b/scribe2/docs/design/reverse-index.md
+@@ -103,6 +103,7 @@
+ ## 6. 逆引きの表（項目・列・母集団）
+ 
+ - 項目: 契約表の行ごとに、(i) touches の項目と、(ii) 行が実装する § の散文の名指しのうち型の path 形と fn 形（`unresolved_names` と同じ読み・下の行 c の形 4 の口の 1 本で読む）。項目ごとに symbol へ解き、解けない（0）・1 つ・複数（`ambiguous:<n>` と候補の定義の site）を名指す。`--item` は同じ解き方で名を 1 つ受ける。
++- 項目 (iii)（tsuzuri の行 v-patch-items）: 行が欄 `patch`（差の file）を持てば、ref の木の差の file を読み、差が替える base の定義も項目にする。`-` 行はその行の定義と行の occurrence を囲む定義を、どちらも無い行は行を含む定義の広がり（定義の行から、直に囲まれた occurrence の最後の行まで・最も狭い物）を、`+` 行の塊（`-` 行の直後でない物）は塊の前の行を含む定義の広がりを取る。局所・module・字だけの symbol は項目にせず、test の中の定義は数えるだけにする。項目の字は symbol の descriptor の名を `::` で結んだ字で、名でなく symbol で解く（同じ名の別の定義に解けない）。項目の前に 1 行 `patch=<path> defs=<n> tests=<n> unmapped=<n> fresh=<n> outside-index=<n>`（索引の外の file が在れば path を続ける・unmapped はどの定義にも引けない `-` 行の数・fresh は新しい file の数）を置き、差を読めない周は `patch=<path> unreadable` の 1 行だけを置く。項目は (i)・(ii) の後に差の行の順に並べる。設計者は行を置く前に、行と差の file を commit した木で `pipe index show --row` を撃てば、審査の材料 index.txt と同じ字を見る。受付の閉包・欄 `code-facts` の測り・起動の列は (iii) を読まない（表と材料の字だけ）。
+ - 列（7 つ・どれも件数と site の列）:
+   1. refs: 参照の site（定義を除く）。本体と test に分け、file の数を添える。
+   2. callers: 関数の項目の、call の役の site を囲む定義。本体と test に分ける。
