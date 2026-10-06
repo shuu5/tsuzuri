@@ -4,7 +4,8 @@ meta:
   id: surface-base
   title: 面の便（土台）— workspace の骨格・契約の型・導出グラフ・台帳の指標・面の server・席の hook
   version: v0.23
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-09-27
   profile: design-note
   approval:
