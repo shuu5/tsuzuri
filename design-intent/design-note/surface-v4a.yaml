@@ -3,13 +3,13 @@
 meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
-  version: v0.7
+  version: v0.8
   status: effective
   generated: 2026-10-06
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
-  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。
+  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。 第 0.7 版（2026-10-06）は、memo t3-hub.92.5（作り直し v4 の段 S3・持ち主の決め D5）の器の行 2 本を足した。行 v-wip-lines（圧縮の後の文脈で作業中の bead の定型の行を [RECENT-WIP-LINE] で出す・節 11）と行 v-sort-gist（要望の仕分けは結び先の memo の notes が発話の時刻を引く時だけ通す・節 12）で、起草は係 w315a。turn の終わりの門の 2 つ目の止め（要望の時刻の行が無い時）は、Stop で台帳を読まず、仕分けの口の断り no-gist と今の未仕分けの発話の門の 1 度の止めで作る（席の決め・t3-hub.92.5 の notes）。 第 0.8 版（2026-10-06）は、memo t3-hub.92.2（作り直し v4 の段 S2 の 2・持ち主の決め D2・判断の記録 ADR-72 の決定 (3)）の行 ag-designer（plugin の起草係の型 drafter の本文を設計係の本文に置き換え、係の手引きと参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外す・節 7）を足した。起草は係 w313a。参照の file の歯の置き方の句（新しい行の歯は新しい file で足し、群の main.rs と module を書かない）は今の決まりのまま替えない（席の決め・t3-hub.92.2 の notes）。
 
 sections:
   - n: 1
@@ -64,6 +64,15 @@ sections:
         done: '(1) 作法の行 2 本（D-1 の字は空白の続きを持つ）の規則の表の置き場で tz derive --write が書く要の写しは、節 6 の形の 11 行と字が同じで、段の名 いつも守る の行と条の id と題の行を持たず、全文の在りかの行の次に段の名 席の作法 の行と作法の行の id と空白 1 つと空白を 1 つに畳んだ字の行を規則の表の順に持ち、全文の写しは前の形のままで、続く --check は一致 3・差分 0 で rc 0（歯 seatcp_two_files_shape） (2) 作法の行が 0 本（discipline の値が空の一覧）の置き場の要の写しは、全文の在りかの行で終わり、字 席の作法 を持たない（歯 seatcp_no_discipline_rows_no_manners） (3) 作法の行に欄 what の字が無い置き場では --write と --check がどちらも rc 2 で、出力は字 まだ分からない と字 D-2: what が字でない を持ち、導出物の置き場に何も書かない（歯 seatcp_refuses_manners_without_what） (4) 書いた後に作法の行の字だけを替えた置き場の --check は rc 1 で、出力は字 DRIFT: seat/brief.txt を持ち、字 DRIFT: seat/constitution.txt を持たない（歯 seatcp_check_drift_follows_manners） (5) 根（歯の crate の 2 つ上の dir）で撃つ tz derive --check --dir design-intent --out ../contracts が rc 0 で、出力は字 差分 0 を持つ（根の要の写しを含む導出物の全部が正本と一致・歯 seatcp_repo_copies_match_the_sources）'
         done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2"]
         depends: []
+      - id: ag-designer
+        title: 'plugin の起草係の型 drafter の本文を、設計だけを書く設計係の本文（入力・出力・仕事の手順・自己検査 5 項・状態 4 語・止まる時）に置き換え、係の手引き agent-discipline の SKILL.md と参照の file から組み・差の file・噛み・床の記録・畳み・適用の script の手順を外し、型と手引きと参照の字を照らす歯を直す（持ち主の決め D2・判断の記録 ADR-72 の決定 (3)・memo t3-hub.92.2・設計だけの行）'
+        req: ["FR21"]
+        section: "7"
+        write-set: ["plugin/agents/drafter.md", "plugin/skills/agent-discipline/SKILL.md", "-plugin/skills/agent-discipline/reference.md", "crates/tsuzuri-boundary/tests/teeth6/agpl.rs", "crates/tsuzuri-boundary/tests/agref.rs", "-crates/tsuzuri-boundary/tests/agflr.rs", "=crates/tsuzuri-boundary/tests/ageff.rs"]
+        verify: ["cargo clippy -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test teeth6 --no-tests=fail agpl_", "cargo nextest run -p tsuzuri-boundary --test agref --no-tests=fail agref_", "cargo nextest run -p tsuzuri-boundary --test agflr --no-tests=fail agflr_", "cargo nextest run -p tsuzuri-boundary --test ageff --no-tests=fail ageff_"]
+        size: M
+        done: '(1) plugin/agents/drafter.md は頭の欄が name drafter・description 節 7 の字・model opus・effort high・skills tsuzuri:agent-discipline で、file の字は節 7 の設計係の句の表の 20 句をどれもちょうど 1 度ずつ持ち、節 7 の古い語の表の 4 つの字のどれも持たない（歯 agpl_drafter_is_the_designer） (2) その file から設計係の句を 1 つだけ外した見本と、その句を 2 度にした見本は、どの句でもその句の名だけを名指し、file の末に古い語の表の字を 1 つ足した見本は、どの字でもその字の名だけを名指す（歯 agpl_drafter_clause_removed_doubled_or_old_word_added_is_named） (3) plugin/skills/agent-discipline/SKILL.md の本文の、字 - と空白で始まる決まりの行は 15 行で、どの行も末が字（天井だけ）か境界の口の名の（門 名）か器の hook の src に file の在る（器の門 名）で、形ごとの数は天井だけ 7・門 6・器の門 2 で、器の門の名を drafts_ward に替えた見本・門の名を agent-end に替えた見本・字 で見る（天井だけ） の末に句点を足した見本・字 門 を外した見本は、どれも 1 行を名指す（歯 agpl_skill_rules_end_with_a_gate_or_the_ceiling） (4) 型 3 本の頭の欄と本文の頭の 4 行の塊と手引きの字数と参照の file の名指しと hooks.json の係の口を見る着地済みの歯 agpl_types_are_the_spec_types_with_the_discipline・agpl_type_bodies_carry_the_head_lines・agpl_skill_is_short_and_names_its_reference・agpl_hooks_bind_the_five_agent_mouths_once は緑のまま（verify の 2 行目） (5) plugin/skills/agent-discipline/reference.md の、字 ## と空白で始まる行の列は、節 7 の見出しの 8 行と字と順が一致する（歯 agref_reference_heads_are_the_eight_sections） (6) reference.md は節 7 の句の表の 34 句を、それぞれ表の番号の見出しの節の塊（0 は最初の見出しの前）の中にちょうど 1 度ずつ持ち、file のどこにも節 7 の無い字の表の 10 の字を持たない（歯 agref_reference_holds_each_clause_once_in_its_section） (7) 句を 1 つだけ外した見本・その句を 2 度にした見本・外して file の末（8 節の塊）へ動かした見本は、どの句でもその句の名だけを名指し、file の末に無い字の表の、節 7 で足す 8 つの字の 1 つを足した見本は、どの字でもその字の名だけを名指す（歯 agref_one_clause_removed_doubled_or_moved_is_named と歯 agref_old_procedure_words_are_named） (8) 終える前の門の床の着地済みの歯 agflr_ は緑のまま（verify の 4 行目） (9) 起草係だけが欄 effort を値 high で持つ着地済みの歯 ageff_ は緑のまま（verify の 5 行目）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@3", "6:@3", "7:@3", "8:@4", "9:@5"]
       - id: v-wip-lines
         title: '器の復帰の DATA で、作業中（in_progress）の bead の [RECENT-WIP] の行の直後に、その bead の notes の定型の行（頭 計画: ・次の手: ・優先: ・未決: ごとに最後の 1 行）を行頭の印 [RECENT-WIP-LINE] で出す（持ち主の決め D5・memo t3-hub.92.5・設計だけの行）'
         req: ["FR1042"]
@@ -213,6 +222,100 @@ sections:
       順と前提。この行は条 P-13.1（要の写しに段「いつも守る」の条の id と題の一覧を書く）を、作法の行を書く字に改めた後に流す。条の改めと作法の行 D-5〜D-13 の足しは、席の設計の commit（判断の記録・反対側からの検証・持ち主の承認の逐語と裁定 id・憲法の版 v1.5）で先に入れる（条 A-2）。その commit は main ebdfbc33 で着地した（判断の記録 ADR-73・憲法 第 1.5 版・作法の行 D-5〜D-13）。作法の行が main に在る前に流れても、導き直した写しは main の正本と一致し、床は落ちない。
 
       範囲の外。器の雛形 scribe2/crates/scribe2/src/seat/brief/orchestrator.txt と役割の行（7 行・決定はしごと対話面の作法と起草の置き場の行を含む）は替えない。全文の写しの形・byte の上限の行 R-1 と R-41 の値・器の SessionStart の出し方は替えない。作法の行の字そのもの（規則の表）はこの行で書かない（席の設計の commit）。
+  - n: 7
+    type: prose
+    title: 行 ag-designer — 起草係の型を設計係の本文に置き換え、係の手引きから実装と道具の手順を外す（memo t3-hub.92.2・作り直し v4 の段 S2 の 2・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 6 file を書く。型の file plugin/agents/drafter.md の本文を下の字に置き換え、手引き plugin/skills/agent-discipline/SKILL.md から決まりの行を 2 本外して 1 本を替え、参照の file plugin/skills/agent-discipline/reference.md から節と項を外して節を並べ替え、その字を照らす歯の file 3 本（群 teeth6 の module agpl.rs・段の file agref.rs・段の file agflr.rs）を直す。新しい歯の file と群の module は足さない（今の歯の file に足す）。群の main.rs と kfold の表は書かない。depends は空。
+
+      なぜ。持ち主の決め D2（判断の記録 ADR-72 の決定 (3)）は、起草係に設計だけを書かせ、型 drafter の本文を設計係の本文（入力・出力・自己検査 5 項・状態 4 語）に置き換え、差の file・噛み・適用の script・床の写しを止めると決めた。型の数 3 と名と門は替えない（条 N-5.1・ADR-59 の決定 (1) の部分の置き換え）。今の型の本文は頭の 4 行の案内だけで、仕事・止まる時・自己検査・知らせの形を持たず、手引きの参照の file の大半（組み・差の file・歯の書き方の細部・噛み・床の記録・畳み）は設計係に要らない実装と道具の手順である（見直しの記録 prompts-review.md の 2.2 と 2.5 と 4b）。自己検査の 5 つ目の項は、設計だけの行 t-daily-deny の契約審査が 2 度拾った穴（子の process が親の環境を継ぐ振る舞いを歯が測れない）から足す（台帳 t3-hub.92.2 の notes）。
+
+      外す物（条 P-27.2）。SKILL.md の決まり 2 本（組みの置き場と tmpfs の決まり・xtask の check の落ちの決まり）と、決まり 1 本の組みの句（cargo fmt と重い組み）。参照の file の節 2（組み）・節 4（差の file の形）・節 11（畳みの行）の全部、節 7 の適用の script の 2 項と床の記録 floor.tsv と器の表の検査と終える前の門の 3 項、節 1 の TMPDIR と CARGO_TARGET_DIR の 2 項、節 5 の歯の file の形と path の読みと clippy の 3 項、節 6 の噛みの 3 項と噛みの文 2 つ、ほかの項の試作と差の file と噛みの句。agflr.rs の参照の file の句の歯 2 本と句の表。agref.rs の句の表の 12 句。
+
+      形（drafter.md）。file の全文を次の字にする（字下げの 2 字を除く・末は改行で終える）。下の囲みの印の 1 行の所には、今の file の頭の 4 行の塊を、前後の逆引用符 3 つの囲みの行ごと、今の字のまま 6 行で置く（今の file の 14 行目から 19 行目）。
+
+        ---
+        name: drafter
+        description: tsuzuri の設計の席が、契約の行と節と判断の記録の下書きを設計だけで書かせる時に使う。
+        model: opus
+        effort: high
+        skills:
+          - tsuzuri:agent-discipline
+        ---
+
+        あなたは tsuzuri の設計の席が起こした設計係である。頼みの対象の要件を、便の実装役が節の字から実装できる契約の行と節に書く。書くのは設計の字で、code と歯は便の実装役が書く。出す物は起草の置き場の自分の dir の w/ の下に書く。
+
+        頼みの頭は次の 4 行で、起こしの門（tz hook agent-spawn）が見る。係の名は起こしの名である。
+
+        （囲みの印・今の file の頭の 4 行の塊を囲みの行ごと 6 行で置く）
+
+        頼みの全文は起草の置き場の <名>/brief.md に在る。決まりは前置きの手引き agent-discipline に在り、行の書き方はその参照の file に在る。
+
+        ## 入力
+
+        - 席の頼み（brief.md の訳・材料・仕事・置き場）。
+        - 頼みが名指す memo と台帳の bead（bd --readonly show）と、要件と条と判断の記録の id の行。
+        - code の現物。行が触る fn と型と歯の file を、写しの木で grep と範囲の読みで読む。
+
+        ## 出力
+
+        - 行と節の断片の file。置くノートの契約表の行と節の yaml の形で、頼みの出す物の名で書く。
+        - notes の file（notes.md）。頭に写しの commit の hash を書き、続けて決めたこと・迷ったこと・撃った命令と rc を書く。
+
+        ## 仕事の手順
+
+        1. code を読む。行が触る fn・型・歯の file と、今の歯が断言する字を、名と path で書き出す。
+        2. 行を割る。隣の行が通ってもその行だけを落とせる最小に割り、depends は後の行が前の行の code を呼ぶか歯を書き替える時だけ書く。
+        3. 欄を埋める。title・req・section・write-set・verify・size・done・done-teeth・depends と節を書き、節には在りか・なぜ・形（替える字と足す歯の名と断言）・done と verify の対応・範囲の外を置く。
+        4. 写しで床と preflight を撃ち、どれも rc 0 になるまで欄と節を直す。
+
+        ## 自己検査（出す前）
+
+        1. 要件の網羅。頼みと memo の要件ごとに、応える done の項を名指せる。
+        2. 何も決めない欄が無い。どの欄と節の句も、実装役が選ぶ余地を残さず 1 つに決めている。
+        3. done の各項に歯か verify の行。項ごとに、名指す歯か verify の行がその字を測る。
+        4. 節と done の字の一致。done の字と節の字と歯の断言の字が、同じ値を言う。
+        5. 環境や時刻に依る振る舞いは値で測る。環境・時刻・網など process の外に依る振る舞いは、それを組む関数を分けて、その返す値で測る形にする。
+
+        ## 状態
+
+        席への知らせの頭に、次の 4 語の 1 つを置く。
+
+        - DONE: 出す物が揃い、自己検査の 5 項と床と preflight が通った。
+        - DONE_WITH_CONCERNS: 出す物は揃ったが懸念が残る。懸念を notes.md に書く。
+        - BLOCKED: 進めない。止まった所と理由を書く。
+        - NEEDS_CONTEXT: 材料が足りない。足りない物を名指す。
+
+        ## 止まる時
+
+        - 門や hook に断られた時は、その場で止まり、断りの字をそのまま席に知らせる。
+        - 要件や条を替えないと行が書けない時は、問いの案を notes.md に書いて BLOCKED で知らせる。
+        - 行の数が頼みの上限を越える時は、割り方の案だけを書いて知らせる。
+
+      設計係の句の表（agpl.rs の定数 DESIGNER・名と字の組 20・この順）。字は『』の中（『』は含まない・字の頭と末の空白も字に含む）。description『description: tsuzuri の設計の席が、契約の行と節と判断の記録の下書きを設計だけで書かせる時に使う。』・role『あなたは tsuzuri の設計の席が起こした設計係である』・code-by-runner『code と歯は便の実装役が書く』・input-code『code の現物』・output-rows『行と節の断片の file』・output-notes『notes の file（notes.md）』・read-code『1. code を読む。』・split『2. 行を割る。』・fill『3. 欄を埋める。』・floor『4. 写しで床と preflight を撃ち』・coverage『1. 要件の網羅。』・decided『2. 何も決めない欄が無い。』・measured『3. done の各項に歯か verify の行。』・agree『4. 節と done の字の一致。』・by-value『5. 環境や時刻に依る振る舞いは値で測る。』・done『- DONE: 』・concerns『- DONE_WITH_CONCERNS: 』・blocked『- BLOCKED: 』・context『- NEEDS_CONTEXT: 』・refused『断りの字をそのまま席に知らせる』。古い語の表（定数 OLD_WORDS・名と字の組 4）。patch『差の file』・bite『噛み』・apply-script『適用の script』・prototype『試作』。
+
+      歯（agpl.rs）。module の doc の 1 行目の括弧の中の末に、字『・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 決定 (3)』を足す。定数 DESIGNER と OLD_WORDS と、関数 designer_faults（型の file の全文の字を受け、DESIGNER のうち字の数がちょうど 1 でない句の名を表の順に並べ、続けて OLD_WORDS のうち字を持つ語の名を表の順に並べた Vec を返す）を足し、file の末に歯 2 本を足す。歯 agpl_drafter_is_the_designer は、今の read の助けで plugin/agents/drafter.md を読み、designer_faults が空で、front の欄 effort が high の 1 つであることを断言する。歯 agpl_drafter_clause_removed_doubled_or_old_word_added_is_named は、DESIGNER の句ごとに、字を空に 1 度だけ替えた見本と、字を字と中点と字に 1 度だけ替えた見本の designer_faults がその句の名 1 つだけで、OLD_WORDS の語ごとに、file の末に改行と字 - と空白とその字と改行を足した見本の designer_faults がその語の名 1 つだけであることを断言する。歯 agpl_skill_rules_end_with_a_gate_or_the_ceiling と、その doc の (5) の行は、決まりの行の数 17 を 15 に、形ごとの数 [8, 6, 3] と字 天井だけ 8・門 6・器の門 3 を [7, 6, 2] と字 天井だけ 7・門 6・器の門 2 に、末の句点の見本の字 を見る（天井だけ） を で見る（天井だけ） に替える（字 を見る（天井だけ） の決まりは外れる）。ほかの歯と助けは替えない。
+
+      形（SKILL.md）。見出しの行『## 置き場と組み』を『## 置き場』に替える。決まりの行『- 組みの置き場は自分の dir の target の絶対 path にし、tmpfs で組まない（器の門 drafts_guard）』と、字『- xtask の check は最初の落ちで止まる。』で始まる決まりの行を外す。決まりの行『- cargo fmt -p と pkill -f を撃たない。重い組みは同時に 1 つ（天井だけ）』を『- pkill -f を撃たない。止めるのは自分が起こした pid だけ（天井だけ）』に替える。ほかの行は替えない（本文は 1,023 字・決まりは 15 行）。
+
+      形（reference.md）。次の替えを今の file に当て、節を並べ替える。字は『』の中。外す項は、字 - と空白の後にその字で始まる 1 行を外す。
+      - 節 2（組み）・節 4（差の file の形）・節 11（畳みの行）を、見出しの行から次の見出しの行の前まで外す。
+      - 頭の段。『検証の群の手順は判断の記録 ADR-61 の決定 (9)。』の後に『判断の記録 ADR-72 の決定 (3) で、起草係を設計だけを書く設計係にし、実装と道具の手順をこの file から外した。』を足す。
+      - 節 1。『成果（notes.md・script・差の file）は <名>/w/ の下に置き、写しで commit しない。』を『成果（行と節の断片の file・notes.md）は <名>/w/ の下に置く。写しの commit は床と preflight の照らしのためだけにする。』に替える。『- 試作の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。床の確かめの写しは <置き場>/try-<名>-fl。写しから push しない。器の掃除は、直下の写しの target などを書きが 6 時間無くなった後に消す。』を『- 床と preflight の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。写しから push しない。器の掃除は、直下の写しを書きが 6 時間無くなった後に消す。』に替える。『一時の index（GIT_INDEX_FILE）の照らしも写しの中で撃つ。』を外す（前の文の句点の後の空白も残さない）。項『TMPDIR は』と項『CARGO_TARGET_DIR は』を外す。
+      - 節 3。『歯の名は試作の fn の名と grep で照らす。』を『着地済みの歯の名は歯の file の fn の名と grep で照らす。』に替える。『欄の名を一括で置き換えた後は、git diff <base> の - と + の fn の行で歯の名が壊れていないかを見る。』を外す。『節に今の字の段と試作と噛みの段を置く。』を『節に今の字の段を置く。』に替える。『前の行の試作の行の数・行の番号・試作と同じという断言・前の行の fixture から計算した数を書かず』を『前の行の未着地の字から数えた数を書かず』に替える。『- verify の 1 行目は git apply --reverse --check docs/design/patch/<行>.patch、続けて clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）と、done の歯を撃つ』を『- verify の 1 行目は clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）、続けて done の歯を撃つ』に替える。『床と preflight は、前の行の差を着地の形で commit した branch で撃つ。』を外す。『（触る file が交わらない・交わっても差が両順で当たる）』を『（触る file が交わらない）』に替える。『交わる時は差の塊の文脈を離して両順で当てる（判断の記録 ADR-60）、それでも当たらなければ depends を書く。』を『交わる行は器が待ちの理由 overlap で順に流すので、depends は前の項の時だけ書く。』に替える。『gate に渡す diff は 150000 byte まで（gate は移動を畳むので、git diff を --no-renames を付けずに測る）。』を『gate に渡す diff は 150000 byte までなので、替える字の見込みがそれを越える行は割る。』に替える。『（適用の script の節の番号は行の数でない）』を『（節の番号は行の数でない）』に替える。
+      - 節 5。項『新しい歯の file は、頭の //! の行』と項『歯の file を path で読む歯は』と項『歯の fn も clippy の』を外す。『噛みの log は left と right の行を伏せる。』を外す。
+      - 節 6。見出しの行『## 6. 否定の見本と噛み』を『## 6. 否定の見本』に替える。『噛みは、log の panicked の行でその句の断言で落ちたことを照らす（歯の名が落ちただけでは足りない）。』を外す。項『噛みは句ごとに撃つ』と項『噛みで rc 0 が出たら』と項『噛みの script には』を外す。
+      - 節 7。『- 床は頼みが名指す席の pin の tz で、床の写しの根で』を『- 頼みの頭の組みが なし の係は cargo を撃たない。床は頼みが名指す席の pin の tz で、写しの根で』に替える。項『適用の script（python）は』と項『適用の script は、節の番号と版』と項『出す物に差の file（.patch）を持つ係は』と項『器の表の検査の rc は』と項『終える前の門は、床の写し』を外す。『- 足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <床の写し> --design』を『- 写しの branch に行を commit し（preflight は HEAD の木を読む・main を動かさない）、足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <写し> --design』に替える。
+      - 節 8。項の頭の『- 出す物は、notes.md（』から『席が撃つ命令の列。』までを『- 出す物は、頼みが名指す file（行と節の断片・判断の記録の下書き・調べの表など）と notes.md（調べ・実測・未確か・席への問い・印は V 確かめた・D 記録から・I 見立て・U 分からない）。』に替える（続く『出す物の file の名に report を使わない。』は残す）。
+      - 並べ替え。残る節を今の番号 1・3・5・6・8・9・10・7 の順に並べ、見出しの番号を 1 から 8 に付け直す。見出しの 8 行は、この順に『## 1. 置き場』『## 2. 契約の行の書き方』『## 3. 歯の置き方（段の束ね・判断の記録 ADR-32）』『## 4. 否定の見本』『## 5. 出す物と公開』『## 6. 道具の撃ち方と読む範囲』『## 7. 検証の群（判断の記録 ADR-61）』『## 8. 床と受付の照らし』。節と節の間は空の行 1 つ。床の節を最後に置くのは、句の歯の動かした見本が file の末（最後の節）に句を足すので、最後の節が句の表の句を持たないためである（今の検証の群の節は句 budget を持つ）。替えた後の file は 89 行。
+
+      歯（agref.rs）。module の doc の 1 行目の括弧の中の末に字『・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)』を足し、2 行目の句の数の説明を『… reference.md が、設計係に残す 34 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 8 つの語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。』の形に直す（3 行目と 4 行目は替えない）。句の表 CLAUSES は、句 tmp-index・tmpdir・target-share・touch-trees・nested-binary・fmt-shape・diff-renames・panicked-line・bite-path・bite-guard・plus-one・srs-regex の 12 項を外し（長さ 46 を 34 に）、残る句の節の番号を 3 は 2・5 は 3・6 は 4・8 は 5・9 は 6・10 は 7 に替える（0 は替えない・句の字と名と並びは替えない）。表 ABSENT の末に 8 項を足す（長さ 2 を 10 に・この順）。patch-path『docs/design/patch/』・patch『差の file』・floor-record『floor.tsv』・bite『噛み』・fold『畳み』・apply-script『適用の script』・target-dir『CARGO_TARGET_DIR』・prototype『試作』。定数 HEADS（上の見出しの 8 行の字・この順）と、関数 heads（字 ## と空白で始まる行を順に返す）を足す。歯 agref_reference_heads_are_the_eight_sections は、heads の列が HEADS と一致することを断言する。歯 agref_old_procedure_words_are_named は、ABSENT の 3 項目から末までの項ごとに、file の末に改行と字 - と空白とその字と改行を足した見本の faults がその名 1 つだけであることを断言する。今の歯 4 本の本文は替えない。
+
+      歯（agflr.rs）。file の末の、doc の行『/// 参照の file の置き場（workspace の根から）。』から file の末まで（定数 REFERENCE と CLAUSES・関数 reference と section と faults・歯 agflr_reference_holds_the_floor_clauses_once_in_their_sections と agflr_reference_clause_removed_doubled_or_moved_is_named）を外し、直前の空の行も外して、file を前の歯の閉じ括弧の行と改行で終える。module の doc の 4 行目の『参照の file の 7 節と 11 節の句は、手引きが天井の文で振る舞いを持たないので、節の塊の中の字を照らす。』を外す（4 行目は『//! --scribe2 で渡す。』になる）。使われなくなった use の項は外す。ほかの歯は替えない。
+
+      done と verify の対応。1 番目から 4 番目の項は verify の 2 行目（群 teeth6 の歯 agpl_）、5 番目から 7 番目は 3 行目（段の file の歯 agref_）、8 番目は 4 行目（agflr_）、9 番目は 5 行目（ageff_）が測る。型と手引きと参照の file は Claude Code が係を起こす時に読む設定と天井の文で、歯から係を起こして振る舞いを測れないので、字を照らす。1 行目の clippy は done に載せない守り（外した助けの残りを dead_code で落とす）。xtask の check は器の共通 verify が撃つので verify に書かない。ageff.rs は書かず、5 行目の filter が当たるので置き場だけの = で名指す。入口の赤は、main の drafter.md が設計係の句を持たず、参照の file が外す語と 11 節の見出しを持つので、2 行目と 3 行目が rc 100 で落ちる。噛みは撃たない（決め D2）。
+
+      範囲の外。調べ係と検証役の型の本文は替えない。終える前の門の床の撃ち直しの code（境界の hook subagent_stop の床の段と中核の agent::stop::floor）と agflr.rs のその歯は、この行では消さない（差の file を出す物に持つ係が居なくなると門は撃たれず、消すのは後の段の行）。席の頼みの雛形と器の雛形と審査役の prompt は替えない。字の形の規則を雛形の検査器へ移すこと（決め D4）と、参照の file を役ごとに割ることは後の段の行。SKILL.md と参照の file のほかの句の字は替えない。
   - n: 11
     type: prose
     title: 行 v-wip-lines — 作業中の bead の定型の行を圧縮の後の文脈に出す（memo t3-hub.92.5・作り直し v4 の段 S3・設計だけの行）
