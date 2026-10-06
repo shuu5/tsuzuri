@@ -1,0 +1,583 @@
+diff --git a/crates/tsuzuri-boundary/src/server/events.rs b/crates/tsuzuri-boundary/src/server/events.rs
+index 915ad8cf4c5d7a7b8fe9e7b46034b6296d2bb99c..59408256ba024af25d5b4874f960ca282520ba76 100644
+--- a/crates/tsuzuri-boundary/src/server/events.rs
++++ b/crates/tsuzuri-boundary/src/server/events.rs
+@@ -445,9 +445,14 @@ mod tests {
+     use std::thread;
+     use std::time::{Duration, Instant};
+ 
++    /// 印の dir の置き場（一時の dir の下・名に pid と字 name）。
++    fn place(name: &str) -> PathBuf {
++        std::env::temp_dir().join(format!("tz-events-{}-{name}", std::process::id()))
++    }
++
+     /// 印の 2 つの file の置き場（2 つめは初めは無い）。
+     fn marks(name: &str) -> Vec<PathBuf> {
+-        let dir = std::env::temp_dir().join(format!("tz-events-{}-{name}", std::process::id()));
++        let dir = place(name);
+         let _ = std::fs::remove_dir_all(&dir);
+         std::fs::create_dir_all(&dir).expect("置き場");
+         std::fs::write(dir.join("a"), "1").expect("印 a");
+@@ -470,6 +475,16 @@ mod tests {
+         std::fs::rename(&tmp, mark).expect("印を移す");
+     }
+ 
++    /// 印の 2 つの file を作って `body` を撃ち、終わりに印の dir と隣の移しの dir を消す（歯ごとの dir を一時の dir に
++    /// 残さない・memo t3-hub.74.49.10）。
++    fn with_marks<T>(name: &str, body: impl FnOnce(&[PathBuf]) -> T) -> T {
++        let marks = marks(name);
++        let got = body(&marks);
++        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
++        let _ = std::fs::remove_dir_all(place(name));
++        got
++    }
++
+     /// 中身を替えられる読み（読んだ回数を数える）。
+     fn reader() -> (
+         Arc<Mutex<u32>>,
+@@ -488,110 +503,120 @@ mod tests {
+ 
+     #[test]
+     fn server_src_watch_marks_trigger_reread() {
+-        let marks = marks("marks");
+-        let (content, reads, read) = reader();
+-        let timing = Timing {
+-            poll: Duration::from_millis(20),
+-            reread: Duration::from_secs(60),
+-            store_reread: Duration::from_secs(60),
+-        };
+-        let hub = Hub::watch(marks.clone(), read, timing);
+-        assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
+-        // 受け手が付いた周で 1 回読む。
+-        let rx = hub.subscribe();
+-        thread::sleep(Duration::from_millis(200));
+-        assert_eq!(reads.load(Ordering::SeqCst), 2, "受け手が付いた周の読み");
+-        // 印が動かなければ読み直さない（中身が変わっても知らせない）。
+-        *content.lock().expect("lock") = 1;
+-        thread::sleep(Duration::from_millis(200));
+-        assert!(rx.try_recv().is_err());
+-        assert_eq!(reads.load(Ordering::SeqCst), 2);
+-        // 後の印（初めは無い file）ができると読み直して 1 件。
+-        put(&marks[1], "x");
+-        let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
+-        assert!(frame.contains("event: ledger-changed\n"), "{frame}");
+-        thread::sleep(Duration::from_millis(200));
+-        assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+-        assert_eq!(reads.load(Ordering::SeqCst), 3);
+-        // 前の印の長さが動いても、読みの結果が同じなら知らせない。
+-        put(&marks[0], "22");
+-        let until = Instant::now() + Duration::from_secs(5);
+-        while reads.load(Ordering::SeqCst) < 4 {
+-            assert!(
+-                Instant::now() < until,
+-                "印 a の変化で 5 秒以内に読み直さない"
+-            );
+-            thread::sleep(Duration::from_millis(10));
+-        }
+-        thread::sleep(Duration::from_millis(200));
+-        assert_eq!(reads.load(Ordering::SeqCst), 4);
+-        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+-        let dir = marks[0].parent().expect("置き場").to_path_buf();
+-        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
+-        let _ = std::fs::remove_dir_all(&dir);
++        with_marks("marks", |marks| {
++            let (content, reads, read) = reader();
++            let timing = Timing {
++                poll: Duration::from_millis(20),
++                reread: Duration::from_secs(60),
++                store_reread: Duration::from_secs(60),
++            };
++            let hub = Hub::watch(marks.to_vec(), read, timing);
++            assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
++            // 受け手が付いた周で 1 回読む。
++            let rx = hub.subscribe();
++            thread::sleep(Duration::from_millis(200));
++            assert_eq!(reads.load(Ordering::SeqCst), 2, "受け手が付いた周の読み");
++            // 印が動かなければ読み直さない（中身が変わっても知らせない）。
++            *content.lock().expect("lock") = 1;
++            thread::sleep(Duration::from_millis(200));
++            assert!(rx.try_recv().is_err());
++            assert_eq!(reads.load(Ordering::SeqCst), 2);
++            // 後の印（初めは無い file）ができると読み直して 1 件。
++            put(&marks[1], "x");
++            let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
++            assert!(frame.contains("event: ledger-changed\n"), "{frame}");
++            thread::sleep(Duration::from_millis(200));
++            assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
++            assert_eq!(reads.load(Ordering::SeqCst), 3);
++            // 前の印の長さが動いても、読みの結果が同じなら知らせない。
++            put(&marks[0], "22");
++            let until = Instant::now() + Duration::from_secs(5);
++            while reads.load(Ordering::SeqCst) < 4 {
++                assert!(
++                    Instant::now() < until,
++                    "印 a の変化で 5 秒以内に読み直さない"
++                );
++                thread::sleep(Duration::from_millis(10));
++            }
++            thread::sleep(Duration::from_millis(200));
++            assert_eq!(reads.load(Ordering::SeqCst), 4);
++            assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
++        });
+     }
+ 
+     #[test]
+     fn server_src_watch_rereads_without_marks() {
+-        let marks = marks("reread");
+-        let (content, reads, read) = reader();
+-        let timing = Timing {
+-            poll: Duration::from_millis(20),
+-            reread: Duration::from_millis(150),
+-            store_reread: Duration::from_secs(60),
+-        };
+-        let hub = Hub::watch(marks, read, timing);
+-        let rx = hub.subscribe();
+-        *content.lock().expect("lock") = 1;
+-        rx.recv_timeout(Duration::from_secs(1))
+-            .expect("印なしの読み直しで 1 件");
+-        // 同じ中身の読み直しは続くが知らせない。
+-        let before = reads.load(Ordering::SeqCst);
+-        thread::sleep(Duration::from_millis(500));
+-        assert!(reads.load(Ordering::SeqCst) >= before + 2);
+-        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+-        // Hub が落ちれば読みも止まる。
+-        drop(rx);
+-        drop(hub);
+-        thread::sleep(Duration::from_millis(100));
+-        let after = reads.load(Ordering::SeqCst);
+-        thread::sleep(Duration::from_millis(400));
+-        assert_eq!(reads.load(Ordering::SeqCst), after);
++        with_marks("reread", |marks| {
++            let (content, reads, read) = reader();
++            let timing = Timing {
++                poll: Duration::from_millis(20),
++                reread: Duration::from_millis(150),
++                store_reread: Duration::from_secs(60),
++            };
++            let hub = Hub::watch(marks.to_vec(), read, timing);
++            let rx = hub.subscribe();
++            *content.lock().expect("lock") = 1;
++            rx.recv_timeout(Duration::from_secs(1))
++                .expect("印なしの読み直しで 1 件");
++            // 同じ中身の読み直しは続くが知らせない。
++            let before = reads.load(Ordering::SeqCst);
++            thread::sleep(Duration::from_millis(500));
++            assert!(reads.load(Ordering::SeqCst) >= before + 2);
++            assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
++            // Hub が落ちれば読みも止まる。
++            drop(rx);
++            drop(hub);
++            thread::sleep(Duration::from_millis(100));
++            let after = reads.load(Ordering::SeqCst);
++            thread::sleep(Duration::from_millis(400));
++            assert_eq!(reads.load(Ordering::SeqCst), after);
++        });
+     }
+ 
+     #[test]
+     fn server_read_watch_board_sends_on_marks() {
+-        let marks = marks("board");
+-        let dir = marks[0].parent().expect("置き場").to_path_buf();
+-        let hub = Arc::new(Hub::default());
+-        let d = dir.clone();
+-        let files = move || {
+-            let mut f: Vec<PathBuf> = std::fs::read_dir(&d)
+-                .expect("置き場")
+-                .map(|e| e.expect("entry").path())
+-                .collect();
+-            f.sort();
+-            f.into_iter().map(|p| (super::ChangeKind::Design, p)).collect::<Vec<_>>()
+-        };
+-        Hub::watch_board(&hub, files, Duration::from_millis(20));
+-        let rx = hub.subscribe();
+-        thread::sleep(Duration::from_millis(100));
+-        assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
+-        // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
+-        for change in [
+-            Box::new(|| put(&marks[0], "22")) as Box<dyn Fn()>,
+-            Box::new(|| put(&marks[1], "x")),
+-            Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
+-        ] {
+-            change();
+-            let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
+-            assert!(frame.contains("event: board-changed\n"), "{frame}");
+-            assert!(frame.contains("data: {\"at\":"), "{frame}");
++        with_marks("board", |marks| {
++            let hub = Arc::new(Hub::default());
++            let d = marks[0].parent().expect("置き場").to_path_buf();
++            let files = move || {
++                let mut f: Vec<PathBuf> = std::fs::read_dir(&d)
++                    .expect("置き場")
++                    .map(|e| e.expect("entry").path())
++                    .collect();
++                f.sort();
++                f.into_iter().map(|p| (super::ChangeKind::Design, p)).collect::<Vec<_>>()
++            };
++            Hub::watch_board(&hub, files, Duration::from_millis(20));
++            let rx = hub.subscribe();
+             thread::sleep(Duration::from_millis(100));
+-            assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+-        }
+-        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
+-        let _ = std::fs::remove_dir_all(&dir);
++            assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
++            // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
++            for change in [
++                Box::new(|| put(&marks[0], "22")) as Box<dyn Fn()>,
++                Box::new(|| put(&marks[1], "x")),
++                Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
++            ] {
++                change();
++                let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
++                assert!(frame.contains("event: board-changed\n"), "{frame}");
++                assert!(frame.contains("data: {\"at\":"), "{frame}");
++                thread::sleep(Duration::from_millis(100));
++                assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
++            }
++        });
++    }
++
++    /// 撃つ間は印の dir が在り（印 a が在る）、撃った後は印の dir と隣の移しの dir が無い。
++    #[test]
++    fn server_src_watch_marks_dir_is_gone_after_the_body() {
++        let seen = with_marks("gone", |marks| {
++            let moving = put_dir(&marks[0]);
++            std::fs::create_dir_all(&moving).expect("移しの dir");
++            (marks[0].is_file(), moving)
++        });
++        assert!(seen.0, "印の dir が在る間に撃った");
++        assert!(!place("gone").exists(), "撃った後は印の dir が無い");
++        assert!(!seen.1.exists(), "撃った後は移しの dir が無い");
+     }
+ 
+     #[test]
+diff --git a/crates/tsuzuri-boundary/tests/hapi.rs b/crates/tsuzuri-boundary/tests/hapi.rs
+index a110048172e8feeef612deee7d32f402177c4640..da2459f7b94e02e9c1d9e60d3be75ec0f5648d56 100644
+--- a/crates/tsuzuri-boundary/tests/hapi.rs
++++ b/crates/tsuzuri-boundary/tests/hapi.rs
+@@ -1,5 +1,6 @@
+ //! host の口と host の種類の見張りの歯（接頭辞 hapi_・持ち主の裁定 t3-hub.77.28）。
+ //! kernel の file の写しの木を一時の dir に置き、根を替えた読み（`Host::with_root`）で字の集めと速さの控えと見張りを測る。
++//! 撃った後に歯ごとの木が一時の dir に残らないことも測る。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -17,11 +18,19 @@ use tsuzuri_contract::surface::ChangeKind;
+ 
+ const LOADAVG: &str = "40.00 1.00 1.00 1/2 3\n";
+ 
+-fn tree(name: &str) -> PathBuf {
+-    let dir = std::env::temp_dir().join(format!("hapi-{}-{name}", std::process::id()));
++/// 木の置き場（一時の dir の下・名に pid と字 name）。
++fn place(name: &str) -> PathBuf {
++    std::env::temp_dir().join(format!("hapi-{}-{name}", std::process::id()))
++}
++
++/// 木を作って `body` を撃ち、断言の前に木を消す（歯ごとの dir を一時の dir に残さない・memo t3-hub.74.49.10）。
++fn shot<T>(name: &str, body: impl FnOnce(&Path) -> T) -> T {
++    let dir = place(name);
+     let _ = fs::remove_dir_all(&dir);
+     fs::create_dir_all(&dir).expect("一時の dir");
+-    dir
++    let got = body(&dir);
++    let _ = fs::remove_dir_all(&dir);
++    got
+ }
+ 
+ fn put(root: &Path, rel: &str, text: &str) {
+@@ -116,10 +125,11 @@ fn hapi_route_and_kind() {
+ /// 根の下の kernel の file と cgroup の親の下の上限を持つ scope と host の面の表の装置を読む。
+ #[test]
+ fn hapi_reads_the_kernel_tree() {
+-    let root = tree("read");
+-    kernel(&root);
+-    let state = face(&root);
+-    let doc = Host::with_root(&root, Some(&state)).doc();
++    let doc = shot("read", |root| {
++        kernel(root);
++        let state = face(root);
++        Host::with_root(root, Some(&state)).doc()
++    });
+     assert!(matches!(doc.load, Reading::Known(l) if l.one == 4_000 && l.cores == 32));
+     assert!(matches!(doc.memory, Reading::Known(m) if m.total == 4_096));
+     assert_eq!(doc.over, [Gauge::Load, Gauge::Io]);
+@@ -141,7 +151,7 @@ fn hapi_reads_the_kernel_tree() {
+ /// 根の下に file が無ければ、測りは全部まだ分からないで、装置は空・注意は無い。
+ #[test]
+ fn hapi_missing_files_are_unknown() {
+-    let bare = Host::with_root(&tree("bare"), None).doc();
++    let bare = shot("bare", |root| Host::with_root(root, None).doc());
+     assert_eq!(
+         (bare.load, bare.scopes),
+         (Reading::Unknown, Reading::Unknown)
+@@ -152,19 +162,25 @@ fn hapi_missing_files_are_unknown() {
+ /// 速さは前の読みとの差で、間が足りない読みは前の速さを返し、間が足りれば測り直す。
+ #[test]
+ fn hapi_rate_holds_inside_the_gap() {
+-    let root = tree("rate");
+-    kernel(&root);
+-    let state = face(&root);
+-    let held = Host::with_root(&root, Some(&state));
+-    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
+-    std::thread::sleep(Duration::from_millis(20));
+-    put(&root, "dev-stat", &stat(9_000));
+-    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
+-    let quick = Host::with_root(&root, Some(&state)).with_gap(Duration::ZERO);
+-    assert_eq!(quick.doc().devices[0].rate, Reading::Unknown);
+-    std::thread::sleep(Duration::from_millis(20));
+-    put(&root, "dev-stat", &stat(19_000));
+-    assert!(matches!(quick.doc().devices[0].rate, Reading::Known(r) if r > 0));
++    let rate = |host: &Host| host.doc().devices[0].rate.clone();
++    let [first, inside, fresh, moved] = shot("rate", |root| {
++        kernel(root);
++        let state = face(root);
++        let held = Host::with_root(root, Some(&state));
++        let first = rate(&held);
++        std::thread::sleep(Duration::from_millis(20));
++        put(root, "dev-stat", &stat(9_000));
++        let inside = rate(&held);
++        let quick = Host::with_root(root, Some(&state)).with_gap(Duration::ZERO);
++        let fresh = rate(&quick);
++        std::thread::sleep(Duration::from_millis(20));
++        put(root, "dev-stat", &stat(19_000));
++        [first, inside, fresh, rate(&quick)]
++    });
++    assert_eq!(first, Reading::Unknown);
++    assert_eq!(inside, Reading::Unknown);
++    assert_eq!(fresh, Reading::Unknown);
++    assert!(matches!(moved, Reading::Known(r) if r > 0));
+ }
+ 
+ /// 受け手を待つ。見張りの frame を `window` の間だけ集める。
+@@ -182,18 +198,34 @@ fn frames(sub: &std::sync::mpsc::Receiver<String>, window: Duration) -> Vec<Stri
+ /// 受け手が居る周だけ読み、中身が動いた時だけ host の種類の board-changed を 1 件送る。
+ #[test]
+ fn hapi_watch_sends_host_on_change() {
+-    let root = tree("watch");
+-    kernel(&root);
+-    let hub = Arc::new(Hub::default());
+-    Arc::new(Host::with_root(&root, None)).watch(&hub, Duration::from_millis(20));
+-    let sub = hub.subscribe();
+-    let first = frames(&sub, Duration::from_millis(400));
++    let (first, moved) = shot("watch", |root| {
++        kernel(root);
++        let hub = Arc::new(Hub::default());
++        Arc::new(Host::with_root(root, None)).watch(&hub, Duration::from_millis(20));
++        let sub = hub.subscribe();
++        let first = frames(&sub, Duration::from_millis(400));
++        put(root, "proc/loadavg", "1.00 1.00 1.00 1/2 3\n");
++        (first, frames(&sub, Duration::from_millis(400)))
++    });
+     assert_eq!(first.len(), 1, "{first:?}");
+     assert!(
+         first[0].contains("event: board-changed") && first[0].contains("\"kinds\":[\"host\"]"),
+         "{first:?}"
+     );
+-    put(&root, "proc/loadavg", "1.00 1.00 1.00 1/2 3\n");
+-    let moved = frames(&sub, Duration::from_millis(400));
+     assert_eq!(moved.len(), 1, "{moved:?}");
+ }
++
++/// 撃つ間は木が在り（kernel の file の負荷が読める）、撃った後は木の dir が無い。
++#[test]
++fn hapi_tree_is_gone_after_the_shot() {
++    let load = shot("gone", |root| {
++        kernel(root);
++        Host::with_root(root, None).doc().load
++    });
++    assert!(
++        matches!(load, Reading::Known(l) if l.one == 4_000),
++        "木が在る間に読んだ: {load:?}"
++    );
++    let root = place("gone");
++    assert!(!root.exists(), "撃った後は無い: {}", root.display());
++}
+diff --git a/crates/tsuzuri-boundary/tests/kcode.rs b/crates/tsuzuri-boundary/tests/kcode.rs
+index 12f9ea401b434a879f0d6ea6523a24b23508c8b1..d2abb23257a11d359826e3febcb40b71ad81ea94 100644
+--- a/crates/tsuzuri-boundary/tests/kcode.rs
++++ b/crates/tsuzuri-boundary/tests/kcode.rs
+@@ -1,7 +1,7 @@
+ //! tz の口 code の歯（接頭辞 kcode_・判断の記録 ADR-46 の決定 (1)〜(4)）。
+ //! tz code が一時の git の repo の file の一覧と、偽の構文で探す道具（--sg・撃たれた引数を file に書き見本の stream を出す
+ //! shell の script）の stream と、contracts/ の toml から、数と行の触る定義と file の定義を出し、規則の file の無い repo を
+-//! 道具を撃たずに 1 行で断る。
++//! 道具を撃たずに 1 行で断る。撃った後に歯ごとの一時の根が一時の dir に残らないことも測る。
+ #![cfg(test)]
+ use std::fs;
+ use std::os::unix::fs::PermissionsExt;
+@@ -88,10 +88,29 @@ fn tz(root: &Path, sg: &Path, args: &[&str]) -> (i32, String, String) {
+     )
+ }
+ 
++/// 撃ちの結果（rc・標準出力・標準エラー）。
++type Shot = (i32, String, String);
++
++/// 一時の根を作って `prep` で手を入れ、`runs` の引数ごとに tz code を撃ち、撃たれた引数の file を読んでから根を消す
++/// （断言は返した物に撃つので、断言が落ちた周も根は先に消えている・歯ごとの dir を一時の dir に残さない・memo t3-hub.74.49.10）。
++/// 根の path と撃ちの結果の列と撃たれた引数（道具が撃たれなければ無い）を返す。
++fn shot<const N: usize>(
++    test: &str,
++    rc: u8,
++    prep: fn(&Path),
++    runs: [&[&str]; N],
++) -> (PathBuf, [Shot; N], Option<String>) {
++    let (root, sg) = place(test, rc);
++    prep(&root);
++    let outs = runs.map(|args| tz(&root, &sg, args));
++    let args = fs::read_to_string(root.join("args.txt")).ok();
++    let _ = fs::remove_dir_all(&root);
++    (root, outs, args)
++}
++
+ #[test]
+ fn kcode_row_lists_defs_of_write_set_files_only() {
+-    let (root, sg) = place("row", 0);
+-    let (rc, out, err) = tz(&root, &sg, &["--row", "n1#a"]);
++    let (_, [(rc, out, err)], args) = shot("row", 0, |_| {}, [&["--row", "n1#a"]]);
+     assert_eq!(rc, 0, "{err}");
+     let lines: Vec<&str> = out.lines().collect();
+     assert_eq!(
+@@ -103,15 +122,16 @@ fn kcode_row_lists_defs_of_write_set_files_only() {
+             "none\t+c.rs"
+         ]
+     );
+-    let args = fs::read_to_string(root.join("args.txt")).unwrap();
+-    assert_eq!(args, "scan\n--rule\n.config/code-defs.yml\n--json=stream\n");
++    assert_eq!(
++        args.as_deref(),
++        Some("scan\n--rule\n.config/code-defs.yml\n--json=stream\n")
++    );
+ }
+ 
+ #[test]
+ fn kcode_missing_rule_file_refuses_in_one_line() {
+-    let (root, sg) = place("norule", 0);
+-    fs::remove_file(root.join("repo/.config/code-defs.yml")).unwrap();
+-    let (rc, out, err) = tz(&root, &sg, &["--row", "n1#a"]);
++    let norule = |root: &Path| fs::remove_file(root.join("repo/.config/code-defs.yml")).unwrap();
++    let (_, [(rc, out, err)], args) = shot("norule", 0, norule, [&["--row", "n1#a"]]);
+     assert_eq!(rc, 1);
+     assert_eq!(err.lines().count(), 1, "{err}");
+     assert!(
+@@ -119,16 +139,12 @@ fn kcode_missing_rule_file_refuses_in_one_line() {
+         "{err}"
+     );
+     assert!(out.is_empty());
+-    assert!(
+-        !root.join("args.txt").exists(),
+-        "規則の file が無い時に道具を撃った"
+-    );
++    assert!(args.is_none(), "規則の file が無い時に道具を撃った");
+ }
+ 
+ #[test]
+ fn kcode_counts_and_file_lines() {
+-    let (root, sg) = place("counts", 0);
+-    let (rc, out, _) = tz(&root, &sg, &[]);
++    let (_, [(rc, out, _), file], _) = shot("counts", 0, |_| {}, [&[], &["--file", "b.rs"]]);
+     assert_eq!(rc, 0);
+     for want in [
+         "files\t4",
+@@ -142,26 +158,30 @@ fn kcode_counts_and_file_lines() {
+     ] {
+         assert!(out.lines().any(|l| l == want), "{want}: {out}");
+     }
+-    let (rc, out, _) = tz(&root, &sg, &["--file", "b.rs"]);
+-    assert_eq!((rc, out.as_str()), (0, "def\tb.rs#fn g\t1-1\n"));
++    assert_eq!((file.0, file.1.as_str()), (0, "def\tb.rs#fn g\t1-1\n"));
+ }
+ 
+ #[test]
+ fn kcode_unreadable_and_named_errors() {
+-    let (root, sg) = place("errs", 1);
+-    assert_eq!(
+-        tz(&root, &sg, &[]).0,
+-        2,
+-        "道具の rc が 0 でない時はまだ分からない"
+-    );
+-    let (root, sg) = place("named", 0);
+-    for args in [
++    let (_, [errs], _) = shot("errs", 1, |_| {}, [&[]]);
++    assert_eq!(errs.0, 2, "道具の rc が 0 でない時はまだ分からない");
++    let runs = [
+         &["--row", "n1#zz"][..],
+         &["--file", "zz.rs"],
+         &["--row", "n1#a", "--file", "a.rs"],
+         &["--what"],
+-    ] {
+-        let (rc, out, err) = tz(&root, &sg, args);
++    ];
++    let (_, outs, _) = shot("named", 0, |_| {}, runs);
++    for (args, (rc, out, err)) in runs.iter().zip(outs) {
+         assert_eq!((rc, out.as_str()), (1, ""), "{args:?}: {err}");
+     }
+ }
++
++/// 撃つ間は根が在り（tz code が rc 0 を返し、撃たれた引数の file が読める）、撃った後は根の dir が無い。
++#[test]
++fn kcode_scratch_is_gone_after_the_shot() {
++    let (root, [(rc, _, err)], args) = shot("gone", 0, |_| {}, [&["--row", "n1#a"]]);
++    assert_eq!(rc, 0, "根が在る間に撃った: {err}");
++    assert!(args.is_some(), "根が在る間に道具が引数の file を書いた");
++    assert!(!root.exists(), "撃った後は無い: {}", root.display());
++}
+diff --git a/crates/tsuzuri-boundary/tests/teeth6/cwres.rs b/crates/tsuzuri-boundary/tests/teeth6/cwres.rs
+index 47f99ab36a8f8234bf3b98ef458bc89886ee0e47..088d6b8ab49eef3fe90d7af953c8ffc38909c9ab 100644
+--- a/crates/tsuzuri-boundary/tests/teeth6/cwres.rs
++++ b/crates/tsuzuri-boundary/tests/teeth6/cwres.rs
+@@ -2,6 +2,7 @@
+ //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と口座の置き場と、偽の bd・bdw と
+ //! 受けた argv を記録する偽の tmux を置く（本物の tmux と claude は撃たず、本物の口座の置き場は読まない）。
+ //! 偽の tmux は pane の字（置き場の file pane）を出し、kill-window で置き場の file victim の pid を少し後に止める（行 cs-follow）。
++//! 撃った後に、窓の起こしが /tmp の直下に作る私用の temp が残らないことも測る。
+ #![cfg(test)]
+ 
+ use std::fs;
+@@ -99,8 +100,21 @@ impl Fx {
+         c
+     }
+ 
++    /// 撃って、撃ちの後に窓ごとの私用の temp を消す（起こしが /tmp の直下に作る dir を歯の後に残さない・memo t3-hub.74.49.10）。
+     fn tz(&self, args: &[&str]) -> Output {
+-        self.command(args).output().unwrap()
++        let o = self.command(args).output().unwrap();
++        self.clear_tmp();
++        o
++    }
++
++    /// 作業場 drafts/consult-cw<n> ごとの私用の temp（作業場の実の path から求める）を消す。
++    fn clear_tmp(&self) {
++        for e in fs::read_dir(self.root.join("drafts")).unwrap().flatten() {
++            if e.file_name().to_string_lossy().starts_with("consult-cw") {
++                let ws = fs::canonicalize(e.path()).unwrap();
++                let _ = fs::remove_dir_all(private_tmp(&ws.display().to_string()));
++            }
++        }
+     }
+ 
+     /// 窓 cw<n> を用意し、process の印 proc-1（pid・話す窓は tmux の窓 @7）を置く。
+@@ -121,7 +135,6 @@ impl Fx {
+         };
+         let text = wire::encode(&mark).unwrap();
+         fs::write(ws.join(".consult/proc-1.json"), text).unwrap();
+-        let _ = fs::remove_dir_all(private_tmp(&ws.display().to_string()));
+         ws
+     }
+ 
+@@ -515,3 +528,16 @@ fn cwres_watch_names_a_moved_idle_window() {
+     remark(&ws, std::process::id(), Some(&fx.acct));
+     assert_eq!(watch("1"), timeout, "口座が同じ");
+ }
++
++/// 撃つ間は私用の temp が在り（--again の起こしが rc 0 で続きの旗を置く）、撃った後は窓の私用の temp の dir が無い。
++#[test]
++fn cwres_private_tmp_is_gone_after_the_launch() {
++    let fx = Fx::new("gone");
++    let ws = fx.window(1, Form::Talk, DEAD);
++    stamps(&ws, SID);
++    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--again"]));
++    assert_eq!(rc, 0, "私用の temp を作って起こした: {err}");
++    assert_eq!(fx.opened(), [["--resume", SID]]);
++    let tmp = private_tmp(&ws.display().to_string());
++    assert!(!Path::new(&tmp).exists(), "撃った後は無い: {tmp}");
++}
