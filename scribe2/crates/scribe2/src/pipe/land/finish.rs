@@ -21,6 +21,7 @@ use super::super::dispatch::spawn_self;
 use super::super::gate::{LandedMark, Unfired, Verdict};
 use super::super::queue::{Order, Turned};
 use super::super::{emit, git_bytes, git_line, git_ok, size, verdict_path, vessel_path, Emit};
+use super::after_land;
 use super::anchor::Anchored;
 use super::detection::{daily_floor, deferred, unfired, wake, Detect, Wake, DEFERRED, DETAIL_HEAD, SPAWNED, UNSPAWNED};
 use super::verify::{main_red, main_unmeasured, measure_main, verify_train_main, MAIN_UNKNOWN};
@@ -425,6 +426,8 @@ pub(super) fn finish(entry: &Land<'_>, worktree: &Path, landing: &Landing, ancho
     // **終端**（設計 contract-source.md §5）: push → 台帳の close。着地は既に成立している
     // ので、終端が止まっても取り消さない——止まった事実を typed な event と token で残し rc を 1 にする。
     let terminal = terminal(entry, new, PushTip::Tip);
+    // 宣言の `after-land` の行を撃つ子を切り離して起こす（待たない・終端の結末と rc と stdout は替えない）。
+    err.extend(after_land::spawn(entry, new, &anchor.sync));
     // **局面の出力の書き直し（契機 (d)）は終端が close した周（rc 0）に**（設計 case-lifecycle.md §12 約束 8）: 呼び手の rc と stdout は変えず、
     // `Written`・`Unchanged`・`Coalesced` の外の語だけ stderr の 1 行にする。
     if let (RC_OK, Ok(rules)) = (terminal.rc(), crate::rules::read(entry.rules, Some(entry.state_dir))) {

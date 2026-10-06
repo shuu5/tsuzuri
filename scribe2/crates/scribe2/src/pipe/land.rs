@@ -101,6 +101,9 @@ use remote_main::Aligned;
 /// 着地後の検出の口（`pipe land --detection-only`・設計 gate-cost.md §44 行 ak）。
 pub(in crate::pipe) mod detection;
 
+/// 着地の後の撃ち（宣言の鍵 `after-land`・`pipe land --after-land`・設計 contract-source.md §5）。
+pub(in crate::pipe) mod after_land;
+
 /// 着地の留めの判定（設計 §62・行 be）。素の値だけを受けて名指しの列を返す（記帳は [`hold`] が書く）。
 mod ruling_hold;
 

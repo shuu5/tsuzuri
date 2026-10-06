@@ -5,7 +5,7 @@
 //! 外へ渡す口をこの file へ、`Declared` の欄と `parse` の読みの 1 行を親へ足す。
 
 use super::{crate_roots, path_kinds, run_cap};
-use super::{declared_at_head, head_declaration, Ceiling, DeclError, Declared, EntranceFlip, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
+use super::{declared_at_head, head_declaration, unfit, Basis, Ceiling, DeclError, Declared, EntranceFlip, Holes, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
 use std::path::Path;
 
 /// 宣言が持つ key（この順で報告する）。path の種別の任意 key 3 本（[`path_kinds::KEYS`]・ADR-0047）は
@@ -40,7 +40,12 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     SEAT_CONSTITUTION_KEY,
     run_cap::CAP_KEY,
     run_cap::PATHS_KEY,
+    AFTER_LAND_KEY,
 ];
+
+/// **着地の後に anchor で撃つ行の列**の key（任意・設計 contract-source.md §5 の after-land）。文字列の配列で、1 行ごとに
+/// 共通 verify と同じ 1 行 1 command の照らし（穴なし）を掛ける（書かない宣言は何も撃たない）。
+const AFTER_LAND_KEY: &str = "after-land";
 
 /// **歯の検査を撃つか**の key（任意・設計 contract-source.md §66 形 3・§67）。真偽だけを受け、`contracts check --base` の周に
 /// 変わった行へ番号つきの項目と欄 done-teeth を求める（無ければ false と同じ）。
@@ -390,7 +395,38 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     SEAT_CONSTITUTION_KEY,
     run_cap::CAP_KEY,
     run_cap::PATHS_KEY,
+    AFTER_LAND_KEY,
 ];
+
+/// 着地の後に撃つ行の列と key の行番号（任意・無ければ `None`）。配列でない値は key と行番号を名指す不備（[`contract_tables_of`] と同じ読み）。
+pub(super) fn after_land_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<(Vec<String>, u64)> {
+    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == AFTER_LAND_KEY)?;
+    let Raw::List(items) = value else {
+        errors.push(DeclError::new(*line, format!("{AFTER_LAND_KEY} は着地の後に撃つ行の文字列の配列である")));
+        return None;
+    };
+    Some((items.clone(), *line))
+}
+
+/// 着地の後に撃つ行を 1 行ずつ穴なしで照らす（契約の verify と同じ [`Holes::None`]）。当たった行は key の名と行と理由の不備にする。
+pub(super) fn check_after_land(declared: &Declared, basis: &Basis<'_>, errors: &mut Vec<DeclError>) {
+    let Some((lines, at)) = &declared.after_land else {
+        return;
+    };
+    for line in lines {
+        if let Some(found) = unfit(line, basis, Holes::None) {
+            errors.push(DeclError::new(*at, format!("{AFTER_LAND_KEY} {line:?}: {}", found.reason(basis.allowed))));
+        }
+    }
+}
+
+/// HEAD の宣言が着地の後に撃つ行の列（[`Sourced::read`] と `measure` で上限と突き合わせ、通った周だけ書いた順で返す・鍵の無い宣言は空の列・
+/// 不備は全件）。
+pub fn after_land_at(repo: &Path, ceiling: &Ceiling<'_>) -> Result<Vec<String>, Vec<DeclError>> {
+    let sourced = Sourced::read(repo, ceiling)?;
+    let lines = sourced.declared.after_land.clone().map_or_else(Vec::new, |(items, _)| items);
+    sourced.measure(ceiling, &[]).map(|_| lines)
+}
 
 /// 便の木を並びで使い回すか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
 pub(super) fn build_lanes_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
@@ -681,6 +717,8 @@ pub struct TerminalFacts {
     pub ci_cmd: String,
     /// 着地の後の CI を見張るか（宣言 `ci-watch`・false の時だけ偽・[`ci_watch_on`]）。
     pub ci_watch: bool,
+    /// 着地の後に撃つ行（宣言 `after-land`・照らす前の列・空なら起こさない印・[`after_land_at`] が上限と突き合わせる）。
+    pub after_land: Vec<String>,
 }
 
 /// HEAD の宣言から終端の事実を解く（上限は読まない＝終端は allowlist と突き合わせない）。
@@ -694,12 +732,13 @@ pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
         remote: declared.remote,
         ci_cmd: declared.ci_cmd.unwrap_or_else(|| DEFAULT_CI_CMD.to_owned()),
         ci_watch,
+        after_land: declared.after_land.map_or_else(Vec::new, |(items, _)| items),
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::Declared;
+    use super::super::{Ceiling, DeclError, Declared, Sourced, CEILING_ROW, DECL_FILE};
     use super::{check_of, ci_watch_on, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
     use super::{seat_of, SeatConstitution};
 
@@ -1130,5 +1169,57 @@ mod tests {
         let text = "schema = true\nallowed-commands = [\"git\"]\ncommon-verify = [\"git diff --quiet\"]\n";
         let errors = Declared::parse(text).expect_err("schema");
         assert!(errors.iter().any(|error| error.line == 1 && error.reason.contains("schema")), "{errors:?}");
+    }
+
+    /// after-land: key の無い宣言は値なし、2 項の配列は 2 項と key の行番号（4 行目）、字・真偽・整数の値は key の名と行番号（4 行目）を持つ不備。
+    #[test]
+    fn declaration_after_land_reads_a_list_and_refuses_other_values() {
+        let read = |extra: &str| Declared::parse(&with(extra)).map(|found| found.after_land);
+        assert_eq!(read(""), Ok(None), "key の無い宣言は値なし");
+        assert_eq!(read("after-land = [\"git tag a\", \"git tag b\"]\n"), Ok(Some((vec!["git tag a".to_owned(), "git tag b".to_owned()], 4))));
+        for value in ["\"git tag a\"", "true", "1"] {
+            let errors = read(&format!("after-land = {value}\n")).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("after-land")), "{value}: {errors:?}");
+        }
+    }
+
+    /// allowed-commands が git と cargo の 2 語で common-verify が 1 行の宣言の本文に after-land の 1 行を足した字（4 行目が after-land）。
+    fn after_land_body(lines: &str) -> String {
+        format!("schema = 1\nallowed-commands = [\"git\", \"cargo\"]\ncommon-verify = [\"git diff --quiet\"]\nafter-land = {lines}\n")
+    }
+
+    /// 宣言を上限（git と cargo・禁じる語列 cargo publish）と突き合わせ、通れば after-land の列を返す（HEAD の宣言を読む代わりに
+    /// `Declared::parse` と `Sourced::measure` を撃つ・[`super::after_land_at`] の本体と同じ 2 呼び）。
+    fn after_land_measured(lines: &str) -> Result<Vec<String>, Vec<DeclError>> {
+        let declared = Declared::parse(&after_land_body(lines)).unwrap_or_else(|errors| panic!("宣言を読める: {errors:?}"));
+        let rows = declared.after_land.clone().map_or_else(Vec::new, |(items, _)| items);
+        let (commands, denied) = (vec!["git".to_owned(), "cargo".to_owned()], vec!["cargo publish".to_owned()]);
+        let ceiling = Ceiling { row: CEILING_ROW, commands: &commands, denied: &denied, classes: &[] };
+        Sourced { declared, commit: "c0ffee".to_owned(), source: DECL_FILE.to_owned(), ceiling: CEILING_ROW.to_owned() }
+            .measure(&ceiling, &[])
+            .map(|_| rows)
+    }
+
+    /// after-land の行は共通 verify と同じ 1 行 1 command の照らし（穴なし）を通る: git の 2 行は通って列が順のまま返り、頭の語 sh・
+    /// 記号 ;・穴 {base}・禁じる語列 cargo publish の行は key の名 after-land を含む不備で断られ、cargo publish の不備は理由の字を持つ。
+    #[test]
+    fn declaration_after_land_lines_must_fit_the_allowlist() {
+        assert_eq!(
+            after_land_measured("[\"git tag a\", \"git tag b\"]"),
+            Ok(vec!["git tag a".to_owned(), "git tag b".to_owned()]),
+            "git の 2 行は通って列は書いた順"
+        );
+        for (row, reason) in [
+            ("sh run.sh", "sh"),
+            ("git tag a; git tag b", ";"),
+            ("git tag {base}", "{base}"),
+            ("cargo publish", "禁じる語列 cargo publish に当たる"),
+        ] {
+            let errors = after_land_measured(&format!("[\"{row}\"]")).expect_err(row);
+            assert!(
+                errors.iter().any(|error| error.line == 4 && error.reason.contains("after-land") && error.reason.contains(reason)),
+                "{row}: {errors:?}"
+            );
+        }
     }
 }

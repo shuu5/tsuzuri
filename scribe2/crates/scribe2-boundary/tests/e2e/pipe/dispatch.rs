@@ -2903,7 +2903,7 @@ fn floor_place(row: Option<&str>, body: &str) -> FloorPlace {
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
 )]
-fn floor_rules(state: &Path, timeout: Option<u64>) -> String {
+pub(super) fn floor_rules(state: &Path, timeout: Option<u64>) -> String {
     let base = fs::read_to_string(dispatch_rules(state)).expect("列の写しを読める");
     let row = timeout.map_or_else(String::new, |secs| {
         format!("\n[[rule]]\nid = \"floor.timeout_s\"\nkind = \"FloorTimeoutS\"\nvalue = {secs}\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n")

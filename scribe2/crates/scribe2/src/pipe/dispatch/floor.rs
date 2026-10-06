@@ -21,8 +21,8 @@ use std::process::{Child, ExitStatus, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-/// 待つ上限の rules 行の id。
-const ROW: &str = "floor.timeout_s";
+/// 待つ上限の rules 行の id（着地の後の撃ち `pipe::land::after_land` も同じ上限を読む）。
+pub(in crate::pipe) const ROW: &str = "floor.timeout_s";
 
 /// 置き場の下の dir（`<state>/pipe/floor`）。
 const DIR: [&str; 2] = ["pipe", "floor"];
@@ -298,7 +298,7 @@ pub(super) fn fault(manifest: &Manifest, row: &str) -> Option<&'static str> {
 }
 
 /// 頭の語を PATH の絶対 path の dir から実行できる file に解く（包みの中で解かせない・解けなければ `None`）。
-pub(super) fn resolve(head: &str) -> Option<String> {
+pub(in crate::pipe) fn resolve(head: &str) -> Option<String> {
     let out = Invocation::new("sh").args(["-c", LOOK, "sh", head]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     let path = String::from_utf8(out.stdout).ok()?.trim().to_owned();
     (out.status.success() && !path.is_empty()).then_some(path)
@@ -340,7 +340,7 @@ fn judge(input: &Input<'_>, dir: &Path, sha: &str, row: &str) -> Judged {
 }
 
 /// 子の終わり方。
-pub(super) enum Ran {
+pub(in crate::pipe) enum Ran {
     /// 上限までに終わった（rc は signal で死んだ周が -1）。
     Done { rc: i32, summary: String },
     /// 上限を越えた（group ごと止めた）。
@@ -348,7 +348,7 @@ pub(super) enum Ran {
 }
 
 /// 子を撃って上限まで待つ（起こせない周は `None`）。stdout と stderr は別 thread で末尾だけ読む。
-pub(super) fn run(cmd: &mut Invocation, limit: Duration) -> Option<Ran> {
+pub(in crate::pipe) fn run(cmd: &mut Invocation, limit: Duration) -> Option<Ran> {
     let mut child = cmd.spawn().ok()?;
     let readers = (child.stdout.take().map(tail), child.stderr.take().map(tail));
     let deadline = Instant::now().checked_add(limit);

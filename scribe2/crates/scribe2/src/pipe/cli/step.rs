@@ -185,11 +185,33 @@ const DETECTION_ONLY: &str = "--detection-only";
 /// - `--terminal-only`（設計 contract-source.md §5 手順 3）: 着地は成立しているのに終端が止まった便（push の失敗・
 ///   CI の未確定・台帳を閉じられなかった周）を、着地をやり直さずに継ぐ。
 /// - `--detection-only`（設計 gate-cost.md §44 行 ak）: 着地した便の検出線を人が撃つ（撃ち直す）形。
+/// - `--after-land`（設計 contract-source.md §5）: 着地した便の宣言の `after-land` の行を anchor で撃つ（land の終端の後に子として起こす口・人も撃てる）。
 fn settled_port(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Option<Outcome> {
     if super::present(args, TERMINAL_ONLY) {
         return Some(terminal_only(args, id, manifest, policy));
     }
-    super::present(args, DETECTION_ONLY).then(|| detection_only(args, id, manifest, policy))
+    if super::present(args, DETECTION_ONLY) {
+        return Some(detection_only(args, id, manifest, policy));
+    }
+    super::present(args, super::land::after_land::FLAG).then(|| after_land(args, id, manifest, policy))
+}
+
+/// `pipe land --run <id> --after-land`: **着地をやり直さず**、着地した commit の anchor で宣言の `after-land` の行を順に撃つ。
+///
+/// 前提の段は `Landed`（他の段は何も書かずに rc 1）。着地した sha は [`super::land::landed_sha`] で記録から読み、読めない周は断る
+/// （HEAD の今の sha に読み替えない・[`detection_only`] と同じ断り）。行の撃ち方と記録は [`super::land::after_land::fire`]。
+fn after_land(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let Some(sha) = super::land::landed_sha(&resolved.state_dir, id) else {
+        return refused(format!("run {id} の着地した sha を記録から読めない"));
+    };
+    match settled_entry(args, (id, manifest, policy), &resolved) {
+        Ok(entry) => super::land::after_land::fire(&entry, &sha),
+        Err(outcome) => outcome,
+    }
 }
 
 /// `pipe land --run <id> --detection-only`: **着地をやり直さず**、着地した commit に検出線を 1 回撃つ（人が撃つ口）。

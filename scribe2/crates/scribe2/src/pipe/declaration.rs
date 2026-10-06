@@ -28,9 +28,9 @@ pub use entrance_flip::{measure_named, EntranceFlip};
 use entrance_flip::{entrance_of, KEY as ENTRANCE_KEY};
 pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, requirements_at_sha, floor_check_at, question_route, table_facts, table_facts_named, terminal_facts, CloseCheck, QuestionRoute, TableFacts, TerminalFacts};
 pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
-pub use optional_keys::{seat_constitution, SeatConstitution};
+pub use optional_keys::{after_land_at, seat_constitution, SeatConstitution};
 pub use run_cap::RunCap;
-use optional_keys::{build_lanes_of, ci_cmd_of, ci_watch_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
+use optional_keys::{after_land_of, build_lanes_of, check_after_land, ci_cmd_of, ci_watch_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
 pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
 pub(crate) use write_set::is_under;
 
@@ -336,6 +336,8 @@ pub struct Declared {
     seat_constitution: Option<String>,
     /// 便の同時の数の上限（任意 key `run-cap` と `run-cap-paths`・無ければ `None`・tsuzuri の判断の記録 ADR-63 の決定 (13)）。
     run_cap: Option<RunCap>,
+    /// 着地の後に撃つ行の列と key の行番号（任意 key `after-land`・無ければ `None`・設計 contract-source.md §5）。
+    after_land: Option<(Vec<String>, u64)>,
 }
 
 /// 出所つきの宣言。**[`Effective`] はこれを消費してしか作れない**（C10）。
@@ -454,6 +456,7 @@ impl Sourced {
         // **検出線の行にも同じ検査を掛ける**（ADR-0010 §2.3 (2)・ADR-0021 §2.6・lens-132d H1）。
         // 掛けないと、共通 verify で断った迂回行を検出線の側へ置くだけで撃たせられる。
         check_lines(DETECTION_KEY, &declared.detection_verify, declared.detection_line, &basis, &mut errors);
+        check_after_land(declared, &basis, &mut errors);
         check_contract(contract_verify, &basis, &mut errors);
         if !errors.is_empty() {
             return Err(errors);
@@ -582,6 +585,7 @@ impl Declared {
         let index = index_keys_of(&found, &mut errors);
         let contract_tables = contract_tables_of(&found, &mut errors);
         let constitution = constitution_of(&found, &mut errors);
+        let after_land = after_land_of(&found, &mut errors);
         if schema != Some(SCHEMA_VERSION) {
             errors.push(DeclError::new(0, format!("schema は {SCHEMA_VERSION} である（実 {schema:?}）")));
         }
@@ -590,13 +594,10 @@ impl Declared {
                 allowed,
                 common_verify,
                 detection_verify,
-                allowed_line,
-                common_line,
-                detection_line,
+                allowed_line, common_line, detection_line,
                 requirements,
                 remote,
-                ci_cmd,
-                ci_watch,
+                ci_cmd, ci_watch,
                 path_kinds,
                 entrance_flip,
                 question_route,
@@ -613,6 +614,7 @@ impl Declared {
                 build_lanes,
                 seat_constitution,
                 run_cap,
+                after_land,
             })
         } else {
             Err(errors)
@@ -1276,7 +1278,7 @@ mod tests {
     }
 
     /// 先頭語 `cargo` の行を持たない宣言（`sh` / `git` だけの toy repo）は分類だけで断らない（§7「Rust 固有の検査を
-    /// 内蔵しない」のまま）。宣言 file の schema は不変（版 1・key の列は 10 本に §54 と vessel-hook.md §20 と ledger-form.md §16 と dispatcher.md §34 と contract-source.md §62 の任意 key 各 1 本と dispatcher.md §36 の任意 key 2 本と contract-source.md §67 の任意 key 3 本と row-review.md §4 の任意 key 1 本と contract-source.md §69 の任意 key 1 本と gate-cost.md §48 の任意 key 1 本と contract-source.md §5 の任意 key 1 本を足した 24 本）。
+    /// 内蔵しない」のまま）。宣言 file の schema は不変（版 1・key の列は 10 本に §54 と vessel-hook.md §20 と ledger-form.md §16 と dispatcher.md §34 と contract-source.md §62 の任意 key 各 1 本と dispatcher.md §36 の任意 key 2 本と contract-source.md §67 の任意 key 3 本と row-review.md §4 の任意 key 1 本と contract-source.md §69 の任意 key 1 本と gate-cost.md §48 の任意 key 1 本と contract-source.md §5 の任意 key 1 本と after-land の任意 key 1 本を足した 25 本）。
     // flip-check: retroactive s2-07l.738.43.10
     #[test]
     fn declaration_kind_passes_declarations_without_cargo_and_keeps_the_schema() {
@@ -1315,8 +1317,9 @@ mod tests {
                 "seat-constitution",
                 "run-cap",
                 "run-cap-paths",
+                "after-land",
             ],
-            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本と ADR-63 の run-cap と run-cap-paths の 2 本）"
+            "宣言 file の key の列は動かない（末尾の任意 key は §54・ADR-0054 と vessel-hook.md §20・ADR-0084 と ledger-form.md §16・ADR-0097 と dispatcher.md §34 と contract-source.md §62 と dispatcher.md §36・ADR-0083 と contract-source.md §67 の 3 本と row-review.md §4 の 1 本と contract-source.md §69 の 1 本と gate-cost.md §48・ADR-0110 の 1 本と tsuzuri の判断の記録 ADR-35 の build-lanes の 1 本と ADR-38 の seat-constitution の 1 本と ADR-63 の run-cap と run-cap-paths の 2 本と contract-source.md §5 の after-land の 1 本）"
         );
     }
 
