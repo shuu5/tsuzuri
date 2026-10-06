@@ -11,6 +11,7 @@ use super::*;
 mod vpfgap;
 mod vpfcon;
 mod vpflit;
+mod vbin;
 
 /// 契約 (b) 以後、1 行に収まらない配列は**行**の側の欠陥である（契約 file は器が作る）。
 #[test]

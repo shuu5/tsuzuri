@@ -419,6 +419,33 @@ enabled = true
 ruling = "user 2026-10-06T08:08:35.348Z 項 D6"
 ruled_at = "2026-10-06"
 
+# 契約を台帳の bead に置く形（受付が acceptance の [[contract]] の行と本文から読む・裁定 t3-hub.92.7.2）の上限。開いた契約の
+# bead の本数と、本文と acceptance の byte（KB は 1024 byte で数え、値ちょうどは通す）。
+
+[[rule]]
+id = "contract.open_max"
+kind = "ContractOpenMax"
+value = 40
+enabled = true
+ruling = "user 2026-10-06T11:44Z 裁定 t3-hub.92.7.2"
+ruled_at = "2026-10-06"
+
+[[rule]]
+id = "contract.body_max_bytes"
+kind = "ContractBodyMaxBytes"
+value = 65536
+enabled = true
+ruling = "user 2026-10-06T11:44Z 裁定 t3-hub.92.7.2"
+ruled_at = "2026-10-06"
+
+[[rule]]
+id = "contract.acceptance_max_bytes"
+kind = "ContractAcceptanceMaxBytes"
+value = 24576
+enabled = true
+ruling = "user 2026-10-06T11:44Z 裁定 t3-hub.92.7.2"
+ruled_at = "2026-10-06"
+
 # gate の費用（設計 gate-cost.md §3.1・ADR-0021）。並列度は宣言値であって実効値ではない
 # （C10）——実効値は受付（同 §3.2）が host の空きと突き合わせて導く。
 

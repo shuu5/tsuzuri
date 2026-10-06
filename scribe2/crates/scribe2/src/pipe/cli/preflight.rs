@@ -5,6 +5,9 @@
 //! **同じ 1 本**（C2・2 本目を作らない）で、断りを最初の 1 件で止めず**全部**（判定関数 1 本につき高々 1 件）並べる。
 //! run dir・写し・event は一切書かず、宣言の写しは読むだけ・置き場は交差の読みにだけ使う。
 //!
+//! `--design` も `--contract` も渡さない周は bead の周で、台帳を 1 回読み、受付と同じ 1 本 [`super::intake::bead::bead_contract`] で
+//! `--bead` の bead の契約を組む（`--placed` は断り・置き場を解けない周は受付と同じ理由で断る・契約の写しは置き場の `bead-contracts` に書く）。
+//!
 //! stdout は **1 行 1 事実**: `design=<doc>#<id> section=<n>` / `done-teeth=<present|absent>`（行が欄 done-teeth を持つか）/ `write-set=<declared|derived> files=<n>` /
 //! `teeth=<filter>:<本数>@<file,…>`（verify の nextest 行ごと）/ `headroom=<file>:<余地>/<file の見込み>`（余地の小さい順・
 //! 見込みは行の growth に在ればその値・無ければ size の見積・設計 contract-source.md §46）/
@@ -26,10 +29,13 @@
 //! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
 
 use super::base_run::BaseRun;
-use super::intake::{ceiling_of, early, generated, generated_from, judge, read_args, Denial, Judged, Material, Materials};
+use super::intake::bead::{bead_contract, ledger_of, source_of, Source};
+use super::intake::{ceiling_of, early, generated, generated_from, judge, Denial, Judged, Material, Materials};
 use super::{flag, need, present, refused, repo_flag, state_dir_of, REPO_FLAG};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+use crate::pipe::bead::{copy_text, form_of, Form};
 use crate::pipe::closure::filter_words;
+use crate::pipe::contract::Contract;
 use crate::pipe::dispatch::pointer_of;
 use crate::pipe::refuse::{covered, Refuse};
 use crate::pipe::review::{design_material, done_items, section_text};
@@ -215,14 +221,65 @@ fn read_contract_args(args: &[String], given: &str) -> Result<(table::Pointer, S
     Ok((pointer, bead, repo, text))
 }
 
+/// 契約の出所（引数の読みの結果）。
+enum Given {
+    /// 設計 pointer（`--design`・`--contract` の file の字を持つ周はその字・pointer の path は file の絶対 path）。
+    Pointer(table::Pointer, Option<String>),
+    /// bead の周（`--design` も `--contract` も無い周）で、写しを書く置き場。
+    Bead(PathBuf),
+}
+
+/// bead の周の引数の照らし: `--placed` は断り（`--contract` の周と同じ字）、置き場は写しを書くので解けない周は受付と同じ `state_dir_of` の
+/// 理由の字で断る（台帳を読まず写しを書かない）。
+fn given_of(args: &[String], source: Source) -> Result<Given, Outcome> {
+    match source {
+        Source::Design(pointer) => Ok(Given::Pointer(pointer, None)),
+        Source::Bead if present(args, PLACED) => Err(refused(format!("{PLACED} は --design と使う"))),
+        Source::Bead => state_dir_of(args).map(Given::Bead).map_err(refused),
+    }
+}
+
+/// 組んだ契約と本文（組めない周は断り）。
+type Built = Result<(Contract, String), Denial>;
+
+/// 引数の読み（契約の出所・bead・repo）。`--contract` の周と bead の周と `--design` の周を分ける。
+fn read_given(args: &[String]) -> Result<(Given, String, PathBuf), Outcome> {
+    match flag(args, CONTRACT) {
+        Ok(Some(given)) => read_contract_args(args, given).map(|(pointer, bead, repo, text)| (Given::Pointer(pointer, Some(text)), bead, repo)),
+        Ok(None) => source_of(args)
+            .map_err(|denial| denial.outcome)
+            .and_then(|(source, bead, repo)| given_of(args, source).map(|given| (given, bead, repo))),
+        Err(reason) => Err(refused(reason)),
+    }
+}
+
+/// 受付と**同じ 1 本**で契約を組む（C2）。戻りは契約・pointer（bead の周は `None`）・widen の本文の字（`--contract` の周と bead の形の bead だけ）。
+fn build(given: Given, (repo, bd): (&Path, &str), manifest: &Manifest, bead: &str, materials: &Materials) -> (Built, Option<table::Pointer>, Option<String>) {
+    match given {
+        Given::Pointer(pointer, Some(text)) => (generated_from(repo, &pointer, &text, materials), Some(pointer), Some(text)),
+        Given::Pointer(pointer, None) => (generated(repo, &pointer, materials), Some(pointer), None),
+        Given::Bead(dir) => {
+            let (built, text) = from_ledger(bd, (repo, &dir), manifest, bead, materials);
+            (built, None, text)
+        }
+    }
+}
+
+/// bead の周: 台帳を 1 回読み、受付と同じ 1 本 [`bead_contract`] で契約を組む。widen の本文の字は、bead の形の bead では写しの字・
+/// Design の形の bead では `None`（呼び手が `--design` の周と同じく base の木の doc を読む）。
+fn from_ledger(bd: &str, (repo, state_dir): (&Path, &Path), manifest: &Manifest, bead: &str, materials: &Materials) -> (Built, Option<String>) {
+    let issues = match ledger_of(bd, repo, manifest, bead) {
+        Ok(found) => found,
+        Err(denial) => return (Err(denial), None),
+    };
+    let held = issues.iter().find(|issue| issue.id == bead).filter(|issue| matches!(form_of(&issue.acceptance), Form::Bead));
+    let text = held.and_then(|issue| copy_text(bead, &issue.acceptance, &issue.description).ok());
+    (bead_contract((repo, state_dir), manifest, bead, &issues, materials), text)
+}
+
 /// preflight の本体。
 fn checked(args: &[String], manifest: &Manifest) -> Outcome {
-    let read = match flag(args, CONTRACT) {
-        Ok(Some(given)) => read_contract_args(args, given).map(|(pointer, bead, repo, text)| (pointer, bead, repo, Some(text))),
-        Ok(None) => read_args(args).map(|(pointer, bead, repo)| (pointer, bead, repo, None)).map_err(|denial| denial.outcome),
-        Err(reason) => Err(refused(reason)),
-    };
-    let (pointer, bead, repo, file) = match read {
+    let (given, bead, repo) = match read_given(args) {
         Ok(found) => found,
         Err(outcome) => return outcome,
     };
@@ -244,7 +301,10 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     };
     // 置き場は交差と重複 run の 2 検査と base の木の置き場と索引の状態の読みにだけ要る。解けない周は断りでなく `overlap=unmeasured`
     // （base の木を撃つ名乗りの周は全行が測れない）で、索引の状態は載せない（状態なし＝字面の閉包だけ）。
-    let state_dir = state_dir_of(args).ok();
+    let state_dir = match &given {
+        Given::Bead(dir) => Some(dir.clone()),
+        Given::Pointer(..) => state_dir_of(args).ok(),
+    };
     let materials = match Materials::read(&repo, &ceiling.borrow(), bd) {
         Ok(found) => match state_dir.as_deref() {
             Some(dir) => found.indexed(dir, &repo, &sha),
@@ -252,10 +312,7 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
         },
         Err(denial) => return tailed(denial),
     };
-    let built = match file.as_deref() {
-        Some(text) => generated_from(&repo, &pointer, text, &materials),
-        None => generated(&repo, &pointer, &materials),
-    };
+    let (built, pointer, file) = build(given, (&repo, bd), manifest, &bead, &materials);
     let (contract, teeth) = match built {
         Ok((found, body)) => (found, !crate::pipe::contract::done_teeth_in(&body).is_empty()),
         Err(denial) => return tailed(denial),
@@ -273,11 +330,16 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     };
     let entrance = early.base.as_ref().map(BaseRun::fact);
     let judged = judge(&material);
-    let doc = file.or_else(|| show_head(&repo, &pointer.path));
-    let widen = widen_lines(&repo, &sha, &pointer, doc, &contract.write_set);
-    let placed = present(args, PLACED).then(|| acceptance_of(bd, &repo, manifest, &bead, &pointer));
+    // bead の周の pointer は組んだ契約の design（bead の形は写しの path・Design の形は表の pointer）から読む。
+    let own = pointer.or_else(|| table::parse_pointer(&contract.design).ok());
+    let doc = file.or_else(|| own.as_ref().and_then(|found| show_head(&repo, &found.path)));
+    let widen = own.as_ref().map_or_else(
+        || vec![format!("{WIDEN}unmeasured:{} を読めない", contract.design)],
+        |found| widen_lines(&repo, &sha, found, doc, &contract.write_set),
+    );
+    let placed = own.as_ref().filter(|_| present(args, PLACED)).map(|found| acceptance_of(bd, &repo, manifest, &bead, found));
     let common = early.frozen.as_ref().map_or(&[][..], |(found, _)| found.common_verify());
-    let design = format!("{}#{}", pointer.path, pointer.id);
+    let design = contract.design.clone();
     let mut gaps = verify_gaps(&design, &contract.verify, common);
     gaps.extend(literal_gaps(&design, &contract.done, &design_material(&repo, &design)));
     render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth), (placed.as_ref(), &gaps))

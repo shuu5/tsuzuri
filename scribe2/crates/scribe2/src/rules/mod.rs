@@ -277,6 +277,12 @@ pub enum RuleKind {
     /// gate の審査役の FAIL（設計 pipeline.md §73）で同じ worktree の runner を所見の節つきで**起こし直す回数の上限**（回）。
     /// 値 N = 最大 N 回起こし直す。0 は起こし直さず `exhausted` を名乗る。
     RunnerGateFixRounds,
+    /// 開いた契約の bead（受付が読む bead の形の契約・閉じていない物）の本数の上限（本・裁定 t3-hub.92.7.2）。
+    ContractOpenMax,
+    /// 契約の bead の本文（description）の上限（byte・KB は 1024 byte で数える・値ちょうどは通す）。
+    ContractBodyMaxBytes,
+    /// 契約の bead の欄 acceptance の上限（byte・数え方は本文と同じ）。
+    ContractAcceptanceMaxBytes,
     /// 変異検査の並列度の**上限**（宣言値）。実効値は受付（設計 gate-cost.md §3.3）が導く。
     GateMutantsJobs,
     /// job 1 つが要る memory の宣言値（MiB）。受付の分母と封じ込めの箱に使う。
@@ -492,6 +498,9 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::FollowRetries,
     RuleKind::RunnerEndGateRounds,
     RuleKind::RunnerGateFixRounds,
+    RuleKind::ContractOpenMax,
+    RuleKind::ContractBodyMaxBytes,
+    RuleKind::ContractAcceptanceMaxBytes,
     RuleKind::GateMutantsJobs,
     RuleKind::GateJobMemoryMb,
     RuleKind::HostReserveMemoryMb,
@@ -589,7 +598,7 @@ impl RuleKind {
             Self::GroupPressure5hPct => "GroupPressure5hPct", Self::GroupPressure7dPct => "GroupPressure7dPct",
             Self::GroupPressureModelPct => "GroupPressureModelPct",
             Self::FollowRetries => "FollowRetries", Self::RunnerEndGateRounds => "RunnerEndGateRounds",
-            Self::RunnerGateFixRounds => "RunnerGateFixRounds",
+            Self::RunnerGateFixRounds => "RunnerGateFixRounds", Self::ContractOpenMax => "ContractOpenMax", Self::ContractBodyMaxBytes => "ContractBodyMaxBytes", Self::ContractAcceptanceMaxBytes => "ContractAcceptanceMaxBytes",
             Self::GateMutantsJobs => "GateMutantsJobs", Self::GateJobMemoryMb => "GateJobMemoryMb",
             Self::HostReserveMemoryMb => "HostReserveMemoryMb", Self::GateSlotWaitS => "GateSlotWaitS",
             Self::GateTmuxTestThreads => "GateTmuxTestThreads", Self::GateCpuWeight => "GateCpuWeight",
@@ -646,6 +655,7 @@ impl RuleKind {
             | Self::UsageFreshS
             | Self::GroupPressure5hPct | Self::GroupPressure7dPct | Self::GroupPressureModelPct
             | Self::FollowRetries | Self::RunnerEndGateRounds | Self::RunnerGateFixRounds
+            | Self::ContractOpenMax | Self::ContractBodyMaxBytes | Self::ContractAcceptanceMaxBytes
             | Self::GateMutantsJobs | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS
             | Self::GateTmuxTestThreads | Self::GateCpuWeight | Self::HostRunnablePerCore | Self::HostBlockedPerCore
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
@@ -695,7 +705,8 @@ impl RuleKind {
             | Self::LockStaleMs | Self::HookTimeoutS | Self::RunnerAllowedCommands | Self::RunnerDeniedCommands
             | Self::RepoNonRustExecAllow | Self::SeatCycleSettleS | Self::SeatCyclePollMs | Self::UsageTimeoutS
             | Self::UsageFreshS | Self::GroupPressure5hPct | Self::GroupPressure7dPct | Self::GroupPressureModelPct
-            | Self::FollowRetries | Self::RunnerEndGateRounds | Self::RunnerGateFixRounds | Self::GateMutantsJobs
+            | Self::FollowRetries | Self::RunnerEndGateRounds | Self::RunnerGateFixRounds | Self::ContractOpenMax
+            | Self::ContractBodyMaxBytes | Self::ContractAcceptanceMaxBytes | Self::GateMutantsJobs
             | Self::GateJobMemoryMb | Self::HostReserveMemoryMb | Self::GateSlotWaitS | Self::GateTmuxTestThreads | Self::GateCpuWeight
             | Self::HostRunnablePerCore | Self::HostBlockedPerCore | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays

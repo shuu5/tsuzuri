@@ -58,6 +58,9 @@ mod refusal;
 use refusal::{denied, exclude_cap_shortfall, not_a_repo, refuse, refuse_of};
 use refusal::{DENIAL_ARGS, DENIAL_DECLARATION, DENIAL_GENERATED, DENIAL_RULES, DENIAL_STORE};
 
+/// 契約を台帳の bead に置く形の周（引数の読みと台帳の読みと照らし・契約表の行 v-bead-intake）。
+pub(super) mod bead;
+
 /// 裁定 id の引用の判定（設計 dispatcher.md §37・契約表の行 al）。断りの組み立ては [`exclude_unresolved_rulings`] が書く。
 mod ruling;
 use ruling::Ruled;
@@ -161,7 +164,7 @@ pub(super) fn intake_id(args: &[String], manifest: &Manifest, policy: LockPolicy
 
 /// 受付の 1 周（id と write-set の弁別）= [`judge`] → [`create`]。
 fn intake_run(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Result<Intaken, Outcome> {
-    let (pointer, bead, repo) = read_args(args).map_err(|denial| denial.outcome)?;
+    let (source, bead, repo) = bead::source_of(args).map_err(|denial| denial.outcome)?;
     // repo は spawn まで使わないが、**intake の時点で** git repo かを確かめる（judge も先頭で同じ検査を撃つが、intake は
     // 置き場と行を読む前に断る＝従来の順）。後段で初めて落ちると、契約は受理されたのに進めない run が残る。
     // HEAD の sha は名乗りに依らず材料の読みの前に読む（base の木で撃った後に読み直して比べる・§56 形 2）。
@@ -174,7 +177,7 @@ fn intake_run(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Resul
     let ceiling = ceiling_of(manifest).map_err(|denial| denial.outcome)?;
     let bd = flag(args, "--bd").map_err(refused)?.unwrap_or(DEFAULT_BD);
     let materials = Materials::read(&repo, &ceiling.borrow(), bd).map_err(|denial| denial.outcome)?.indexed(&state_dir, &repo, &sha);
-    let (contract, body) = generated(&repo, &pointer, &materials).map_err(|denial| denial.outcome)?;
+    let (contract, body) = bead::contract_of(&source, (&repo, &state_dir), (manifest, bd), &bead, &materials).map_err(|denial| denial.outcome)?;
     let early = early(&repo, manifest, &contract, Some(&state_dir), &sha);
     // **入口の排他はここから**（ADR-0019 §2.1・設計 pipeline-conflict.md §2）: [`judge`] と [`create`] を
     // 1 つの周として閉じる。持たないと、同時に来た 2 つの受付がどちらも「live な便は無い」と読んでから

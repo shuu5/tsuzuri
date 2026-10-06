@@ -71,6 +71,11 @@ pub(crate) const REFUSALS: &[&str] = &[
     "code-facts",
     "code-facts-unmeasured",
     "run-cap",
+    "contract-bead-unreadable",
+    "contract-bead-both-forms",
+    "contract-bytes-cap",
+    "contract-id-taken",
+    "contract-open-cap",
 ];
 
 /// 起動の列の起こす側の 1 周が、受付の理由にこの語で待つ候補が在るとき、HEAD の code の索引の組み立てを裏で起こす契機の語
@@ -283,6 +288,42 @@ pub(crate) enum Refuse {
         /// 宣言の本数。
         cap: u64,
     },
+    /// 契約を台帳の bead に置く形（欄 acceptance の `[[contract]]` の行と本文・設計 contract-source.md の切り替えの行 v-bead-intake）の
+    /// bead が読めない（台帳に無い・形が無い・写しの字を組めない）。理由は句 1 つ。
+    ContractBeadUnreadable {
+        /// bead の id。
+        bead: String,
+        /// 読めない理由の句。
+        reason: String,
+    },
+    /// bead の欄 acceptance が契約表の pointer の行（`design = `）と bead の形の行（`[[contract]]`）を両方持つ。
+    ContractBeadBothForms {
+        /// bead の id。
+        bead: String,
+    },
+    /// bead の本文か欄 acceptance が rules 行の byte の上限を超える（値ちょうどは通す）。
+    ContractBytesCap {
+        /// 超えた欄（`description` か `acceptance`）。
+        field: &'static str,
+        /// 欄の byte の数。
+        bytes: u64,
+        /// rules 行の値（byte）。
+        cap: u64,
+    },
+    /// bead の契約の行の id が、契約表の行か、ほかの bead の契約の行の id と同じ。
+    ContractIdTaken {
+        /// 行の id。
+        id: String,
+        /// 先に持つ側（`<doc>#<id>` か bead の id）。
+        by: String,
+    },
+    /// 開いた契約の bead の本数が rules 行の値を超える。
+    ContractOpenCap {
+        /// 数えた開いた契約の bead の本数。
+        open: u64,
+        /// rules 行の値（本）。
+        cap: u64,
+    },
 }
 
 /// 欄 `code-facts` の名乗りと実測が違う要素 1 つ（[`Refuse::CodeFacts`] の中身・断りの型を小さく保つために箱に入れる）。
@@ -334,6 +375,11 @@ impl Refuse {
             Self::CodeFacts(_) => "code-facts",
             Self::CodeFactsUnmeasured { .. } => "code-facts-unmeasured",
             Self::RunCap { .. } => "run-cap",
+            Self::ContractBeadUnreadable { .. } => "contract-bead-unreadable",
+            Self::ContractBeadBothForms { .. } => "contract-bead-both-forms",
+            Self::ContractBytesCap { .. } => "contract-bytes-cap",
+            Self::ContractIdTaken { .. } => "contract-id-taken",
+            Self::ContractOpenCap { .. } => "contract-open-cap",
         }
     }
 
@@ -357,19 +403,13 @@ impl Refuse {
             Self::WriteSetUnreadable { ref run } => {
                 format!("live な run {run} の write-set を読めない")
             }
-            Self::WriteSetIncomplete { ref missing } => {
-                format!("touches の閉包の file が write-set に無い（{}）", missing.join(", "))
-            }
-            Self::WriteSetDirWithoutSlash { ref path } => {
-                format!("write-set の {path} は既存の dir を末尾 / 無しで指す（配下を書くなら {path}/）")
-            }
+            Self::WriteSetIncomplete { ref missing } => format!("touches の閉包の file が write-set に無い（{}）", missing.join(", ")),
+            Self::WriteSetDirWithoutSlash { ref path } => format!("write-set の {path} は既存の dir を末尾 / 無しで指す（配下を書くなら {path}/）"),
             Self::ContractTable(ref found) => found.reason(),
             Self::WriteSetItemUnresolved { ref item } => {
                 format!("write-set の {item} は base に解けない（実在する file・末尾 / の dir・+ 接頭辞の新規 file・- 接頭辞の縮む file のどれでもない）")
             }
-            Self::CapHeadroom { ref file, headroom, ref size, estimate } => {
-                format!("{file} の上限の余地が {headroom} 行で見込み {estimate} 行（size {size}・growth で上書き可）に足りない")
-            }
+            Self::CapHeadroom { ref file, headroom, ref size, estimate } => format!("{file} の上限の余地が {headroom} 行で見込み {estimate} 行（size {size}・growth で上書き可）に足りない"),
             Self::NameUnresolved { ref name, ref at } => format!("名指し {name} が base に無い（{at}）"),
             // 8 理由の字面は導出の側（`ClosureError`）と同じ 1 本（受付が写すだけ・2 面に書かない）。
             Self::WriteSetDrift { ref missing, ref extra } => {
@@ -408,6 +448,12 @@ impl Refuse {
             Self::CodeFactsUnmeasured { ref element, ref state } => unmeasured_reason(self.as_str(), element, state),
             // stderr の 1 行は `pipe: run-cap run=<id> cap=<n>`（max-live と同じ名と 2 値の形）。
             Self::RunCap { ref run, cap } => format!("{} run={run} cap={cap}", self.as_str()),
+            // 契約の bead の 5 断りの stderr の 1 行は名と key=値の並び（unreadable だけ末に理由の句）。
+            Self::ContractBeadUnreadable { ref bead, ref reason } => format!("{} bead={bead} {reason}", self.as_str()),
+            Self::ContractBeadBothForms { ref bead } => format!("{} bead={bead}", self.as_str()),
+            Self::ContractBytesCap { field, bytes, cap } => format!("{} field={field} bytes={bytes} cap={cap}", self.as_str()),
+            Self::ContractIdTaken { ref id, ref by } => format!("{} id={id} by={by}", self.as_str()),
+            Self::ContractOpenCap { open, cap } => format!("{} open={open} cap={cap}", self.as_str()),
         }
     }
 
@@ -415,7 +461,13 @@ impl Refuse {
     /// （[`TableError::evidence`]）。variant が増えた便は compile が止めて、その断りが何に依るかを決めさせる。
     pub(crate) fn evidence(&self) -> Evidence {
         match *self {
-            Self::AlsoNamesRust { .. } | Self::HandWrittenContract { .. } | Self::PromisedFieldWritten { .. } => Evidence::Row,
+            Self::AlsoNamesRust { .. }
+            | Self::HandWrittenContract { .. }
+            | Self::PromisedFieldWritten { .. }
+            | Self::ContractBeadUnreadable { .. }
+            | Self::ContractBeadBothForms { .. }
+            | Self::ContractBytesCap { .. }
+            | Self::ContractIdTaken { .. } => Evidence::Row,
             Self::WriteSetDirWithoutSlash { path: ref file }
             | Self::WriteSetItemUnresolved { item: ref file }
             | Self::CapHeadroom { ref file, .. }
@@ -440,7 +492,8 @@ impl Refuse {
             | Self::RulingUnresolved { .. }
             | Self::IndexBuilding { .. }
             | Self::CodeFactsUnmeasured { .. }
-            | Self::RunCap { .. } => Evidence::Place,
+            | Self::RunCap { .. }
+            | Self::ContractOpenCap { .. } => Evidence::Place,
             Self::ContractTable(ref found) => found.evidence(),
         }
     }
@@ -473,7 +526,12 @@ impl Refuse {
             | Self::IndexBuilding { .. }
             | Self::CodeFacts(_)
             | Self::CodeFactsUnmeasured { .. }
-            | Self::RunCap { .. } => RC_REFUSED,
+            | Self::RunCap { .. }
+            | Self::ContractBeadUnreadable { .. }
+            | Self::ContractBeadBothForms { .. }
+            | Self::ContractBytesCap { .. }
+            | Self::ContractIdTaken { .. }
+            | Self::ContractOpenCap { .. } => RC_REFUSED,
             Self::RulingUnresolved { ref unmeasured, .. } if unmeasured.is_some() => RC_BROKEN,
             Self::RulingUnresolved { .. } => RC_REFUSED,
             Self::WriteSetUnreadable { .. } => RC_BROKEN,
@@ -774,6 +832,11 @@ mod tests {
             })),
             Refuse::CodeFactsUnmeasured { element: "refs:crate::pipe::refuse::Refuse=3".to_owned(), state: "absent".to_owned() },
             Refuse::RunCap { run: "r-1".to_owned(), cap: 1 },
+            Refuse::ContractBeadUnreadable { bead: "s2-b".to_owned(), reason: "台帳を読めない".to_owned() },
+            Refuse::ContractBeadBothForms { bead: "s2-b".to_owned() },
+            Refuse::ContractBytesCap { field: "description", bytes: 65537, cap: 65536 },
+            Refuse::ContractIdTaken { id: "a".to_owned(), by: "docs/design/toy.md#a".to_owned() },
+            Refuse::ContractOpenCap { open: 3, cap: 2 },
         ]
     }
 
@@ -890,6 +953,23 @@ mod tests {
         assert!(!covered(&["src".to_owned()], "src/x.rs"), "末尾 / 無しは dir として配下を含まない");
     }
 
+    /// 名の列の末尾の語（末は契約を台帳の bead に置く形の 5 語・run-cap は末から 6 つ目・その前に code-facts の 2 語と索引の組み立て中・
+    /// その前に裁定 id の引用・base の木の断り・同時本数・約束の行の語）。
+    fn assert_tail_words(names: &[&str]) {
+        assert_eq!(names.last().copied(), Some("contract-open-cap"), "末尾は開いた契約の bead の本数の上限");
+        assert_eq!(
+            names.iter().rev().take(5).rev().copied().collect::<Vec<&str>>(),
+            ["contract-bead-unreadable", "contract-bead-both-forms", "contract-bytes-cap", "contract-id-taken", "contract-open-cap"],
+            "末の 5 語"
+        );
+        assert_eq!(names.iter().rev().nth(5).copied(), Some("run-cap"), "run-cap は末から 6 つ目");
+        assert_eq!(names.iter().rev().skip(6).take(3).copied().collect::<Vec<&str>>(), ["code-facts-unmeasured", "code-facts", "index-building"]);
+        assert_eq!(
+            names.iter().rev().skip(9).take(4).copied().collect::<Vec<&str>>(),
+            ["ruling-unresolved", "entrance-not-red", "max-live", "promise-symbol-unresolved"]
+        );
+    }
+
     // flip-check: retroactive s2-07l.738.37.4
     // flip-check: retroactive s2-07l.736.33.21.5
     // flip-check: retroactive s2-07l.736.33.21.6
@@ -908,14 +988,10 @@ mod tests {
         // 約束の行の 2 理由（設計 contract-source.md §33・`s2-07l.512`）が同時本数の上限（gate-cost.md §24・`s2-07l.398`）の
         // 手前に並び、base の木で撃った入口の断り（pipeline.md §56・`s2-07l.557`）がその次で、裁定 id の引用の断り（dispatcher.md
         // §37・行 al）がその次で、索引の組み立て中の断り（reverse-index.md §7 (b)・行 d）がその次で、欄 code-facts の違いと測れない周の
-        // 2 断り（§7 (c)・行 e）がその次で、宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）が末尾で、母集団は 28 値。
-        assert_eq!(REFUSALS.len(), 28, "母集団 28 値");
-        assert_eq!(names.last().copied(), Some("run-cap"), "末尾は宣言の同時の数の上限");
-        assert_eq!(names.iter().rev().skip(1).take(3).copied().collect::<Vec<&str>>(), ["code-facts-unmeasured", "code-facts", "index-building"]);
-        assert_eq!(
-            names.iter().rev().skip(4).take(4).copied().collect::<Vec<&str>>(),
-            ["ruling-unresolved", "entrance-not-red", "max-live", "promise-symbol-unresolved"]
-        );
+        // 2 断り（§7 (c)・行 e）がその次で、宣言の同時の数の上限（tsuzuri の判断の記録 ADR-63 の決定 (13)）がその次で、契約を台帳の bead に
+        // 置く形の 5 断り（行 v-bead-intake）が末尾で、母集団は 33 値。
+        assert_eq!(REFUSALS.len(), 33, "母集団 33 値");
+        assert_tail_words(&names);
         let entrance = samples().get(22).map(|found| (found.reason(), found.rc()));
         let want = "entrance-not-red base で緑か測れない契約の検証行が 1 本在る（deny の名乗り・行ごと green-on-base,absent）".to_owned();
         assert_eq!(entrance, Some((want, RC_REFUSED)), "本数と行ごとの 4 値を名乗る 1 行・rc 1");
@@ -939,7 +1015,8 @@ mod tests {
     /// 欠陥は理由の側（samples の `section-missing` は行）。名の 23 は歯を置いた時の語数で、行 al が置き場と host に 1 語足し（24 語）、
     /// 行 d が置き場と host に索引の組み立て中の 1 語を足し（25 語）、行 e が本文の読み手に 1 語（code-facts）・置き場と host に 1 語
     /// （code-facts-unmeasured・宣言を名乗らない周だけ vessel 宣言の file）を足した（27 語）。tsuzuri の判断の記録 ADR-63 の決定 (13) の
-    /// 行 v-one-vessel が置き場と host に宣言の同時の数の上限の 1 語（run-cap）を足した（28 語）。
+    /// 行 v-one-vessel が置き場と host に宣言の同時の数の上限の 1 語（run-cap）を足し（28 語）、行 v-bead-intake が行の字だけで決まる 4 語
+    /// （contract-bead-unreadable・contract-bead-both-forms・contract-bytes-cap・contract-id-taken）と置き場と host に 1 語（contract-open-cap）を足した（33 語）。
     #[test]
     fn pipe_refuse_evidence_is_decided_once_for_each_of_the_23_words() {
         let found: Vec<(&str, String)> = samples().iter().map(|refuse| (refuse.as_str(), refuse.evidence().render())).collect();
@@ -972,6 +1049,11 @@ mod tests {
             ("code-facts", "name"),
             ("code-facts-unmeasured", "place"),
             ("run-cap", "place"),
+            ("contract-bead-unreadable", "row"),
+            ("contract-bead-both-forms", "row"),
+            ("contract-bytes-cap", "row"),
+            ("contract-id-taken", "row"),
+            ("contract-open-cap", "place"),
         ];
         let want: Vec<(&str, String)> = want.iter().map(|(name, at)| (*name, (*at).to_owned())).collect();
         assert_eq!(found, want, "母集団 {} 語の在り処", REFUSALS.len());
@@ -1056,13 +1138,13 @@ mod tests {
         assert!(INDEX_BUILD_TRIGGERS.iter().all(|word| REFUSALS.contains(word)), "契機の語は断りの語");
     }
 
-    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の末尾の run-cap の前が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
+    /// 欄 `code-facts` の 2 断り（設計 reverse-index.md §7 (c)・行 e）: 語は REFUSALS の run-cap の前が code-facts・code-facts-unmeasured の順で、rc 1・1 行。
     /// 違いの断りは要素・名乗り・実測・site の先頭 3 つと残りの件数・母集団を名指し、在り処は本文の読み手。測れない周の断りは要素と状態の語を名指し、
     /// 在り処は置き場（undeclared だけ vessel 宣言の file）で、確からしさは absent が unmeasured・undeclared が firm。
     #[test]
     fn refuse_code_facts_names_the_difference_and_the_unmeasured_state() {
-        let tail: Vec<&str> = REFUSALS.iter().rev().skip(1).take(2).copied().collect();
-        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "末尾の run-cap の前の 2 語は code-facts・code-facts-unmeasured の順");
+        let tail: Vec<&str> = REFUSALS.iter().rev().skip(6).take(2).copied().collect();
+        assert_eq!(tail, ["code-facts-unmeasured", "code-facts"], "run-cap の前の 2 語は code-facts・code-facts-unmeasured の順");
         let differ = Refuse::CodeFacts(Box::new(Difference {
             element: "literals:crate::x::Y=2".to_owned(),
             claimed: "2".to_owned(),

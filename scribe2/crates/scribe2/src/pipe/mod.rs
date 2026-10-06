@@ -12,6 +12,7 @@
 
 pub mod admission;
 pub mod approve;
+pub mod bead;
 pub mod cli;
 pub mod closure;
 pub mod commute;
