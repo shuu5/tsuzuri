@@ -662,6 +662,7 @@ sections:
       - {id: t-tmp-tidy, doc: surface-wave29d}
       - {id: v-index-roles-pipe, doc: surface-wave29d}
       - {id: v-drafts-cache-sweep, doc: surface-wave29d}
+      - {id: t-prime-own, doc: surface-wave29d}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
