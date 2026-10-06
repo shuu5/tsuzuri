@@ -122,12 +122,7 @@
       "ruling": "fx-c.7:20260926T1437Z-1"
     },
     {
-      "outcome": "skipped",
-      "ruling": "fx-c.8:20260926T1437Z-1"
-    },
-    {
-      "outcome": "refused",
-      "reason": "stale-version"
+      "outcome": "unwritten"
     }
   ],
   "surface::BatchResponse": [
@@ -141,8 +136,7 @@
         },
         {
           "question": "t3-hub.9",
-          "outcome": "refused",
-          "reason": "a1-in-batch"
+          "outcome": "unwritten"
         }
       ]
     }

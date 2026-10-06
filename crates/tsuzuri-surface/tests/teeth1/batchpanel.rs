@@ -223,30 +223,15 @@ fn batchpanel_batch_request_body() {
     assert_eq!(req.items[0].question, bead("qa.10"));
 }
 
-fn batch_reply(written: usize, refused: usize) -> BatchResponse {
-    let mut items = Vec::new();
-    for i in 0..written {
-        items.push(BatchItemResult {
+fn batch_reply(written: usize) -> BatchResponse {
+    let items = (0..written)
+        .map(|i| BatchItemResult {
             question: bead(&format!("w.{i}")),
             outcome: ItemOutcome::Written {
                 ruling: ruling(&format!("w.{i}:20260927T1105Z-1")),
             },
-        });
-    }
-    items.push(BatchItemResult {
-        question: bead("s.1"),
-        outcome: ItemOutcome::Skipped {
-            ruling: ruling("s.1:20260927T1000Z-1"),
-        },
-    });
-    for i in 0..refused {
-        items.push(BatchItemResult {
-            question: bead(&format!("r.{i}")),
-            outcome: ItemOutcome::Refused {
-                reason: Refusal::StaleVersion,
-            },
-        });
-    }
+        })
+        .collect();
     BatchResponse {
         batch: ruling("batch:20260927T1105Z-1"),
         items,
@@ -256,7 +241,7 @@ fn batch_reply(written: usize, refused: usize) -> BatchResponse {
 /// (6) 束の応答の出し方: 200・409・502 の束の応答・ほかの 4xx と 5xx・届かない。
 #[test]
 fn batchpanel_batch_outcome() {
-    let ok = wire::encode(&batch_reply(2, 0)).expect("電文");
+    let ok = wire::encode(&batch_reply(2)).expect("電文");
     let recorded = batch::outcome(Some((200, &ok)), &[]);
     assert_eq!(
         recorded,
@@ -282,7 +267,7 @@ fn batchpanel_batch_outcome() {
     assert!(stale.keeps_text());
     assert!(stale.reloads());
 
-    let partial_body = wire::encode(&batch_reply(1, 2)).expect("電文");
+    let partial_body = wire::encode(&batch_reply(1)).expect("電文");
     let partial = batch::outcome(Some((502, &partial_body)), &[]);
     assert_eq!(
         partial,
@@ -326,7 +311,7 @@ fn refused_batches() {
         assert!(!o.reloads(), "{o:?}");
         assert!(o.line().starts_with(ask::REFUSED), "{o:?}");
     }
-    assert_eq!(batch::written(&batch_reply(3, 1)), 3);
+    assert_eq!(batch::written(&batch_reply(3)), 3);
 }
 
 /// (8) 指示を送る button と要求の本文（範囲はつねに all）と応答の出し方。

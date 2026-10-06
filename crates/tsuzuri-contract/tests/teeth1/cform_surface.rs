@@ -166,12 +166,7 @@ fn batch_forms() -> Vec<Box<dyn Form>> {
                 ItemOutcome::Written {
                     ruling: ruling("fx-c.7:20260926T1437Z-1"),
                 },
-                ItemOutcome::Skipped {
-                    ruling: ruling("fx-c.8:20260926T1437Z-1"),
-                },
-                ItemOutcome::Refused {
-                    reason: Refusal::StaleVersion,
-                },
+                ItemOutcome::Unwritten,
             ],
         ),
         form(
@@ -187,9 +182,7 @@ fn batch_forms() -> Vec<Box<dyn Form>> {
                     },
                     BatchItemResult {
                         question: bead("t3-hub.9"),
-                        outcome: ItemOutcome::Refused {
-                            reason: Refusal::A1InBatch,
-                        },
+                        outcome: ItemOutcome::Unwritten,
                     },
                 ],
             }],

@@ -42,9 +42,6 @@ pub const WRITTEN: &str = "書いた行";
 /// 502 で残った行の数の前の字。
 pub const LEFT: &str = "残り";
 
-/// 追記は済み閉じる書きが落ちた行の題の後に括弧で包む字。
-pub const UNCLOSED: &str = "記録したが閉じていない";
-
 /// 重なりの chip の経験者だけの注釈（見本の id bo の chip の `data-tip-expert` の字）。
 pub const OVERLAP_TIP: &str = "選んだ質問の touches の重なり（衝突の兆し）";
 
@@ -174,23 +171,11 @@ pub fn request_body(chosen: &[&Row], verbatim: &str) -> String {
     .unwrap_or_default()
 }
 
-/// 502 で残った 1 行（問いの id・送った行の題〔無ければ問いの id の字〕・閉じていない行の裁定の id）。
+/// 502 で残った 1 行（問いの id・送った行の題〔無ければ問いの id の字〕）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Left {
     pub question: BeadId,
     pub title: String,
-    /// 閉じていない行は notes に残った裁定の id・書いていない行は None。
-    pub ruling: Option<RulingId>,
-}
-
-impl Left {
-    /// 残りの名（閉じていない行は題の後に括弧で包んだ字）。
-    fn name(&self) -> String {
-        match self.ruling {
-            Some(_) => format!("{}（{UNCLOSED}）", self.title),
-            None => self.title.clone(),
-        }
-    }
 }
 
 /// 送った後の block の状態。
@@ -218,7 +203,7 @@ impl Outcome {
                 format!("{REFUSED}（502） · {WRITTEN} {written}")
             }
             Outcome::Partial { written, left } => {
-                let names: Vec<String> = left.iter().map(Left::name).collect();
+                let names: Vec<&str> = left.iter().map(|l| l.title.as_str()).collect();
                 format!(
                     "{REFUSED}（502） · {WRITTEN} {written} · {LEFT} {} · {}",
                     left.len(),
@@ -257,26 +242,21 @@ pub fn refused_text(status: u16, text: &str) -> String {
     }
 }
 
-/// 502 の束の応答の残った行（閉じていないと書いていないの行を応答の順に・題は `sent` の同じ id の行の題）。
+/// 502 の束の応答の残った行（書いていないの行を応答の順に・題は `sent` の同じ id の行の題）。
 fn left(reply: &BatchResponse, sent: &[Row]) -> Vec<Left> {
     reply
         .items
         .iter()
-        .filter_map(|i| {
-            let ruling = match &i.outcome {
-                ItemOutcome::Unclosed { ruling } => Some(ruling.clone()),
-                ItemOutcome::Unwritten => None,
-                _ => return None,
-            };
+        .filter(|i| matches!(i.outcome, ItemOutcome::Unwritten))
+        .map(|i| {
             let title = sent
                 .iter()
                 .find(|r| r.id == i.question)
                 .map_or_else(|| i.question.to_string(), |r| r.title.clone());
-            Some(Left {
+            Left {
                 question: i.question.clone(),
                 title,
-                ruling,
-            })
+            }
         })
         .collect()
 }

@@ -1,5 +1,5 @@
 //! 束の書きが途中で落ちた 502 の出し方の歯（接頭辞 bhalf_・設計ノート surface-wave12e の行 e-batch-partial）:
-//! 残った行を送った行の題で名指す・閉じていない行は括弧で包んだ字を足す・送る所は送った行を応答と一緒に読む。
+//! 残った行を送った行の題で名指す・送る所は送った行を応答と一緒に読む。
 #![cfg(test)]
 
 use std::path::PathBuf;
@@ -179,7 +179,7 @@ fn reply(items: Vec<BatchItemResult>) -> String {
     .expect("電文")
 }
 
-/// 書いた・閉じていない・書いていないの 3 行。
+/// 書いた・書いていない・書いていないの 3 行。
 fn half() -> Vec<BatchItemResult> {
     vec![
         item(
@@ -188,12 +188,7 @@ fn half() -> Vec<BatchItemResult> {
                 ruling: rid("fx-h.1:20260928T0441Z-1"),
             },
         ),
-        item(
-            "fx-h.2",
-            ItemOutcome::Unclosed {
-                ruling: rid("fx-h.2:20260928T0441Z-1"),
-            },
-        ),
+        item("fx-h.2", ItemOutcome::Unwritten),
         item("fx-h.3", ItemOutcome::Unwritten),
     ]
 }
@@ -213,7 +208,6 @@ fn test_names(text: &str) -> Vec<String> {
 #[test]
 fn bhalf_outcome_names_left() {
     assert_eq!(batch::LEFT, "残り");
-    assert_eq!(batch::UNCLOSED, "記録したが閉じていない");
     let rows = sent();
     let body = reply(half());
     let got = batch::outcome(Some((502, &body)), &rows);
@@ -225,12 +219,10 @@ fn bhalf_outcome_names_left() {
                 Left {
                     question: bead("fx-h.2"),
                     title: "字の大きさ".to_string(),
-                    ruling: Some(rid("fx-h.2:20260928T0441Z-1")),
                 },
                 Left {
                     question: bead("fx-h.3"),
                     title: "余白".to_string(),
-                    ruling: None,
                 },
             ],
         }
@@ -238,16 +230,15 @@ fn bhalf_outcome_names_left() {
     assert_eq!(
         got.line(),
         format!(
-            "{}（502） · {} 1 · {} 2 · 字の大きさ（{}）、余白",
+            "{}（502） · {} 1 · {} 2 · 字の大きさ、余白",
             ask::REFUSED,
             batch::WRITTEN,
-            batch::LEFT,
-            batch::UNCLOSED
+            batch::LEFT
         )
     );
     assert_eq!(
         got.line(),
-        "送れなかった（502） · 書いた行 1 · 残り 2 · 字の大きさ（記録したが閉じていない）、余白"
+        "送れなかった（502） · 書いた行 1 · 残り 2 · 字の大きさ、余白"
     );
     assert!(got.keeps_text());
     assert!(got.reloads());
@@ -261,11 +252,10 @@ fn other_replies(rows: Vec<Row>, body: String) {
     assert_eq!(
         only.line(),
         format!(
-            "{}（502） · {} 1 · {} 2 · fx-h.2（{}）、fx-h.3",
+            "{}（502） · {} 1 · {} 2 · fx-h.2、fx-h.3",
             ask::REFUSED,
             batch::WRITTEN,
-            batch::LEFT,
-            batch::UNCLOSED
+            batch::LEFT
         )
     );
 

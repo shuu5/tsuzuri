@@ -419,7 +419,7 @@ fn test_names(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// (1) 閉じていないと書いていないの電文の字（書いたは今のまま・知らない outcome の字は読めない）。
+/// (1) 書いたと書いていないの電文の字（知らない outcome の字は読めない）。
 #[test]
 fn bhalf_wire_words() {
     for (value, text) in [
@@ -433,15 +433,6 @@ fn bhalf_wire_words() {
             "{\"question\":\"fx-h.1\",\"outcome\":\"written\",\"ruling\":\"fx-h.1:20260928T0441Z-1\"}",
         ),
         (
-            result(
-                "fx-h.2",
-                ItemOutcome::Unclosed {
-                    ruling: ruling_of("fx-h.2", 1),
-                },
-            ),
-            "{\"question\":\"fx-h.2\",\"outcome\":\"unclosed\",\"ruling\":\"fx-h.2:20260928T0441Z-1\"}",
-        ),
-        (
             result("fx-h.3", ItemOutcome::Unwritten),
             "{\"question\":\"fx-h.3\",\"outcome\":\"unwritten\"}",
         ),
@@ -453,10 +444,14 @@ fn bhalf_wire_words() {
             "{text}"
         );
     }
-    assert!(
-        wire::decode::<BatchItemResult>("{\"question\":\"fx-h.3\",\"outcome\":\"unsent\"}")
-            .is_err()
-    );
+    for text in [
+        "{\"question\":\"fx-h.2\",\"outcome\":\"unclosed\",\"ruling\":\"fx-h.2:20260928T0441Z-1\"}",
+        "{\"question\":\"fx-h.2\",\"outcome\":\"skipped\",\"ruling\":\"fx-h.2:20260928T0441Z-1\"}",
+        "{\"question\":\"fx-h.2\",\"outcome\":\"refused\",\"reason\":\"stale-version\"}",
+        "{\"question\":\"fx-h.3\",\"outcome\":\"unsent\"}",
+    ] {
+        assert!(wire::decode::<BatchItemResult>(text).is_err(), "{text}");
+    }
 }
 
 /// (2) 3 回の答えの口の s 回目が落ちると、502 の本文は要求の 3 行を要求の順に持ち、後の答えも配達も印も撃たない。
