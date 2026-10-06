@@ -259,6 +259,8 @@ sections:
       - {id: v-turn-wip-stale, doc: surface-v4a}
       - {id: v-lens-ask, doc: surface-v4a}
       - {id: ag-ladder-verifier, doc: surface-v4a}
+      - {id: v-pf-literal, doc: surface-v4a}
+      - {id: t-stop-preflight, doc: surface-v4a}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
