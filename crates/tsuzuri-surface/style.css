@@ -83,7 +83,7 @@ h3 { font-size: var(--fs-2); }
 #bar .b-left { display: flex; align-items: center; gap: 10px; flex: none; }
 #bar .ab { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--ink-2); font-size: 11.5px; }
 #bar .pname { font-size: 16px; letter-spacing: .02em; }
-#bar .todo { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#bar .todo { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 #bar .pill { flex: none; padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 #bar .pill.go { background: #ea580c; color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
 #bar .pill.go:hover { background: #c2410c; }
@@ -141,7 +141,6 @@ h3 { font-size: var(--fs-2); }
   #bar .ashort { display: inline; }
   #bar .notice { flex: none; min-width: 0; padding: 0 8px; }
   #bar .notice time, #bar .notice .nt { display: none; }
-  #bar .todo { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
   #bar .todo > * { flex: none; }
 }
 @media (max-width: 760px) {
@@ -158,7 +157,8 @@ h3 { font-size: var(--fs-2); }
   #bar .gearw { grid-area: 1 / 5; justify-self: end; }
   #bar .gearb { width: 40px; height: 40px; }
   #bar .todo { grid-area: 2 / 1 / 3 / 4; height: 50px; gap: 6px; }
-  #bar .gp { grid-area: 2 / 4 / 3 / 6; justify-self: end; }
+  #bar .gp { grid-area: 2 / 5; justify-self: end; }
+  #bar .cslt { grid-area: 2 / 4; justify-self: end; }
 }
 @media (max-width: 600px) {
   #bar .pill, #bar .chip, #bar .gp, #bar .notice, #bar .gm-r { min-height: 40px; display: inline-flex; align-items: center; }
