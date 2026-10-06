@@ -469,6 +469,8 @@ fn pipe_gate_ignores_worktree_vessel_declaration() {
                   && echo x >> src/lib.rs && git add -A && git commit -q -m runner";
     let spawned = spawn_with(&repo, &state, &id, runner);
     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&spawned));
+    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
+    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
     // **repo 側の宣言も intake の後に赤い行へ差し替える**＝写しからしか読まないことを
     // worktree 面と repo 面の 2 面で縛る（main が進んだ周に凍っていない行を撃たない）。
     commit_vessel(&repo, VESSEL_ALLOWED, r#"["git cat-file -e HEAD:no-such-file"]"#);

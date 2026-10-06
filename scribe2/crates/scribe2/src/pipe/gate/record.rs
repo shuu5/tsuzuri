@@ -11,7 +11,8 @@ use crate::pipe::confine::{io, Reason};
 use crate::pipe::contract::Contract;
 use crate::pipe::declaration::Effective;
 use crate::pipe::move_proof::{self, LensInput};
-use crate::pipe::{contract_path, git_bytes, run_dir, verify_log_path, vessel_path};
+use crate::pipe::spawn::{green_round, END_GATE_RECORD};
+use crate::pipe::{contract_path, git_bytes, git_line, run_dir, verify_log_path, vessel_path};
 use std::path::{Path, PathBuf};
 
 /// 赤い verify 行の stderr を残す診断 file の名（`verify.jsonl` と同じ dir）。
@@ -149,7 +150,24 @@ pub(super) fn record_verify(entry: &Gate<'_>, worktree: &Path, base: &str) -> Re
     };
     let record = verify_log_path(entry.state_dir, entry.run);
     let tail = record.with_file_name(STDERR_LOG_FILE);
-    record_checks(&shoot, worktree, base, &Logs { record: &record, tail: &tail })
+    let carry = carried(entry.state_dir, entry.run, worktree, base);
+    record_checks(&shoot, worktree, base, &Logs { record: &record, tail: &tail }, carry.as_ref())
+}
+
+/// gate が撃たずに持ち越す共通 verify の周（同じ便の終わりの門の緑・設計 pipeline.md §66 形 11・tsuzuri の判断の記録 ADR-65）。
+pub(crate) struct Carry {
+    /// 門が撃った木（gate の `HEAD^{tree}` と同じ）。
+    tree: String,
+    /// 持ち越した記録の在りか（`end-gate.jsonl#<周>`）。
+    from: String,
+}
+
+/// 持ち越せる周の材料: 門の最後の要約が緑で、その木が gate の `HEAD^{tree}` と、その base が gate の base と同じ周だけ `Some`。
+/// どれかを読めない・違う周は `None`（今のとおり撃つ＝黙って飛ばさない・C10）。
+fn carried(state_dir: &Path, run: &str, worktree: &Path, base: &str) -> Option<Carry> {
+    let (round, fired) = green_round(state_dir, run)?;
+    let tree = git_line(worktree, &["rev-parse", "HEAD^{tree}"])?;
+    (fired.tree == tree && fired.base == base).then(|| Carry { tree, from: format!("{END_GATE_RECORD}#{round}") })
 }
 
 /// 撃ちと記録の本体の材料（gate の [`record_verify`] と runner の終わりの門〔設計 pipeline.md §66 形 2〕が同じ 1 本を通る）。
@@ -175,8 +193,15 @@ pub(crate) struct Logs<'a> {
 }
 
 /// [`record_verify`] の本体（便の写しの共通 verify の読み・受付の材料と [`Checks`] の組み・撃ち・record と診断の記録・
-/// 赤と測れなかった行の数え）。gate が書く file の名と record の字は呼び手の [`Logs`] が決める。
-pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs: &Logs<'_>) -> Result<Counted, String> {
+/// 赤と測れなかった行の数え）。gate が書く file の名と record の字は呼び手の [`Logs`] が決める。`carry` が在る周（gate だけ）は
+/// 共通 verify の段を撃たず、末尾に持ち越しの skip record を 1 本置く（設計 pipeline.md §66 形 11）。
+pub(crate) fn record_checks(
+    shoot: &Shoot<'_>,
+    worktree: &Path,
+    base: &str,
+    logs: &Logs<'_>,
+    carry: Option<&Carry>,
+) -> Result<Counted, String> {
     let frozen = frozen_copy(shoot.state_dir, shoot.run)?;
     let admit = Admit { state_dir: shoot.state_dir, run: shoot.run, rules: shoot.limits.admission(shoot.policy) };
     let file = contract_path(shoot.state_dir, shoot.run);
@@ -189,7 +214,8 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
         host: shoot.limits.breaker(),
         contract_file: Some(&file),
     };
-    let steps = run_checks_admitted(&checks, &gate_checks(), Some(&admit));
+    let stages: Vec<Check> = gate_checks().into_iter().filter(|check| carry.is_none() || *check != Check::Common).collect();
+    let steps = run_checks_admitted(&checks, &stages, Some(&admit));
     let (path, tail_path, policy) = (logs.record, logs.tail, shoot.policy);
     let mut red = 0;
     // 遮断器が閉じて撃たなかった最初の行の `n`（設計 gate-cost.md §32 約束 5・検出線の rc 2 と同じ形）。
@@ -200,7 +226,7 @@ pub(crate) fn record_checks(shoot: &Shoot<'_>, worktree: &Path, base: &str, logs
     // ある（rc に依らず「測れなかった」・設計 gate-cost.md §4.2）。
     let unreadable = steps.iter().any(is_unreadable);
     let killed = steps.iter().find_map(box_kill);
-    for record in records_of(&steps, None) {
+    for record in records_of(&steps, carry.map(Skipped::carried)) {
         if let Some(step) = record.step {
             if step.is_closed() {
                 // 撃っていない行は赤でも診断の対象でもない（record だけ残す）。
@@ -554,7 +580,7 @@ fn append_diagnosis(path: &Path, policy: LockPolicy, n: u64, step: &Step) -> Res
 
 /// 撃たなかった周の材料（record の `skipped=` の段と `reason=`、主実測だけが持つ `tree=`）。
 ///
-/// **構築は下の 2 つの口だけ**である（field は本 file に閉じる）——段と理由は別の軸で、
+/// **構築は下の 3 つの口だけ**である（field は本 file に閉じる）——段と理由は別の軸で、
 /// 呼び手が任意の組を書けると `kind=gate skipped=main` のような無い形が生まれる。
 #[derive(Debug, Clone, Copy)]
 pub struct Skipped<'a> {
@@ -562,8 +588,10 @@ pub struct Skipped<'a> {
     stage: SkippedStage,
     /// 省いた理由（record の `reason=` の字面）。
     reason: &'static str,
-    /// land した木（主実測の record だけ・gate の再撃ちは木を持たない＝field を書かない）。
+    /// land した木（主実測の record だけ・gate の再撃ちは木を持たない＝field を書かない）。持ち越しの周は門が撃った木。
     tree: Option<&'a str>,
+    /// 持ち越した記録の在りか（持ち越しの周だけ・record の `from=`）。
+    from: Option<&'a str>,
 }
 
 impl<'a> Skipped<'a> {
@@ -572,7 +600,7 @@ impl<'a> Skipped<'a> {
     /// 理由は面の外（[`DetectionSkip::OutsideScope`]）だけで、木は持たない——撃っていないので「どの木を測ったか」が
     /// 無い（`tree` を書くと測った形に読める）。
     pub fn regate() -> Self {
-        Self { stage: SkippedStage::Regate, reason: DetectionSkip::OutsideScope.as_str(), tree: None }
+        Self { stage: SkippedStage::Regate, reason: DetectionSkip::OutsideScope.as_str(), tree: None, from: None }
     }
 
     /// land の主実測を**丸ごと**省いた周（`kind=main skipped=main reason=same-tree`・設計 gate-cost.md §27・
@@ -582,9 +610,19 @@ impl<'a> Skipped<'a> {
     /// **必ず取る**（`&str`・`Option` にしない）——「どの木を gate が測ったか」が無い skip record は
     /// 撃っていない緑と読み分けられない。
     pub fn main(tree: &'a str) -> Self {
-        Self { stage: SkippedStage::Main, reason: SAME_TREE, tree: Some(tree) }
+        Self { stage: SkippedStage::Main, reason: SAME_TREE, tree: Some(tree), from: None }
+    }
+
+    /// gate が共通 verify を撃たず、同じ便の終わりの門の緑を持ち越した周（`kind=common skipped=common tree=<sha>
+    /// reason=end-gate-green from=<在りか>`・設計 pipeline.md §66 形 11）。木と在りかは**必ず取る**——どの木のどの記録を
+    /// 持ち越したかの無い skip record は、撃っていない緑と読み分けられない。
+    pub(crate) fn carried(carry: &'a Carry) -> Self {
+        Self { stage: SkippedStage::Common, reason: END_GATE_GREEN, tree: Some(&carry.tree), from: Some(&carry.from) }
     }
 }
+
+/// 共通 verify を持ち越した周の `reason=`（門が同じ木と base で全行を緑で撃った・設計 pipeline.md §66 形 11）。
+const END_GATE_GREEN: &str = "end-gate-green";
 
 /// 主実測を丸ごと省いた周の `reason=`（gate を撃った木と着地の木が同じ・設計 gate-cost.md §27）。
 const SAME_TREE: &str = "same-tree";
@@ -593,13 +631,15 @@ const SAME_TREE: &str = "same-tree";
 ///
 /// **理由（[`Skipped`] の `reason`）とは別の軸**である（run 2 の裁定 2026-09-16）——`outside-scope` は
 /// 再 gate を省く周にも着地後の検出が面の外で撃たない周にも同じ意味で立つので、理由の enum に段を足すと
-/// 2 つの軸が 1 つの列に潰れる。値は 2 つで、本 file の外へは出ない。
+/// 2 つの軸が 1 つの列に潰れる。値は 3 つで、本 file の外へは出ない。
 #[derive(Debug, Clone, Copy)]
 enum SkippedStage {
     /// 追随の再 gate 1 周（設計 §33 (i)）。
     Regate,
     /// land の主実測 1 周（設計 gate-cost.md §27・ADR-0043 §2.1）。
     Main,
+    /// gate の共通 verify の段（門の緑を持ち越した周・設計 pipeline.md §66 形 11）。
+    Common,
 }
 
 impl SkippedStage {
@@ -608,6 +648,7 @@ impl SkippedStage {
         match self {
             Self::Regate => "regate",
             Self::Main => KIND_MAIN,
+            Self::Common => Check::Common.as_str(),
         }
     }
 
@@ -616,6 +657,7 @@ impl SkippedStage {
         match self {
             Self::Regate => KIND_GATE,
             Self::Main => KIND_MAIN,
+            Self::Common => Check::Common.as_str(),
         }
     }
 }
@@ -690,6 +732,9 @@ pub fn skip_record(number: u64, skipped: Skipped<'_>) -> String {
         fields.push(("tree", Value::Str(tree.to_owned())));
     }
     fields.push(("reason", Value::Str(skipped.reason.to_owned())));
+    if let Some(from) = skipped.from {
+        fields.push(("from", Value::Str(from.to_owned())));
+    }
     json_lite::write_object(&fields)
 }
 

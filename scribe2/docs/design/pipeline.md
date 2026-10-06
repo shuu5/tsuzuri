@@ -1381,6 +1381,7 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
   10. **rules 行**: `runner.end_gate_rounds`（kind `RunnerEndGateRounds`・Int・値 2・発効・ruling `user 2026-09-30T22:13Z 項 end-gate`・ruled_at `2026-09-30`）を足す。
      - 値は起こし直しの回数だけを決める。値 0 も門を撃つ（形 1・形 5）。
      - kind の宣言順は `FollowRetries` の直後に置く（既存の順の歯の窓に入らない）。
+  11. **gate の持ち越し**（行 v-gate-carry・tsuzuri の判断の記録 ADR-65・2026-10-06 に足した・下の却下の 3 項目を決め直した）: 門は撃つ前に worktree が clean（`git status --porcelain` が空）なら `HEAD^{tree}` を読み、緑の周だけ要約の行に撃った木と base を足す（`{"end_gate":<周>,"result":"green","tree":"<sha>","base":"<sha>"}`・clean でない周と木を読めない周は足さない）。gate（`record_verify` だけ）は、門の最後の要約が緑で、その木が gate の `HEAD^{tree}` と、その base が gate の base と同じ周に限り、共通 verify の段を撃たず、`verify.jsonl` の末に skip record `{"kind":"common","skipped":"common","tree":"<sha>","reason":"end-gate-green","from":"end-gate.jsonl#<周>"}` を 1 本置く。write-set の段と契約の verify と lens は今のとおり gate が撃つ。記録が無い・読めない・最後の要約が緑でない・木か base が違う周は今のとおり全部撃つ（黙って飛ばさない・C10）。物差しは門も gate も便の写しの共通 verify（受付が凍らせた行）で、runner の申告を持ち越すのではない。失うのは同じ木の 2 度目の撃ち（揺れる歯を 2 度測る機会と、門の後の host で測り直すこと）で、木の外（無視される file・共有の target・環境）は木の sha で結べない。証は置き場の file に在り、置き場の写しと同じ信頼の境に立つ。着地の主実測と候補の木の検査は替えない。
 - 行の割り方と順: 行 bi（§67）→ 行 bk（形 9 の読み手と resume の断り）→ 行 bj（形 1〜8・形 9 の書き手・形 10）→ 行 bl（§68）。
   - 読み手を先に着地させるので、書き手が入った時には手の resume がもう断られる（隙が無い）。
   - 行 bi と行 bj は、どちらも埋め込み manifest の行数の pin と外形の snapshot `rules_external_form` を 1 つ増やす。行 bj は行 bi の後になる。
@@ -1425,11 +1426,11 @@ AC1 の条件文は「実 runner + 実 lens」なので、CI の歯（fake）は
 - 却下（[ADR-0102](../../design-intent/decisions/ADR-0102-lens-reads-with-read-only-tools-and-runner-gets-the-common-verify.html) §4）:
   - **gate の verify の赤を自動で runner へ戻す**: §49 の却下と同じ（判定の段の後に戻すと、着地の列と終端の数えが動く）。門は判定の前で、runner の turn の延長として置く。
   - **claude の session を `--resume` で続ける**: session の記録は口座の設定 dir に在り、起こし直しの口座が変わると続けられない。器は起動形を「stdin の契約と節」の 1 つに保つ（途中再開と同じ）。
-  - **gate が門の緑を持ち越して撃ち直さない**: 節約は common の中央値で約 137 秒で、門と gate を木の sha で結ぶ跨 process の記録が増え、gate が独立に測る性質が弱まる。着地の後に gate の時間が問題になったら測り直して決める。
+  - **gate が門の緑を持ち越して撃ち直さない**: 節約は common の中央値で約 137 秒で、門と gate を木の sha で結ぶ跨 process の記録が増え、gate が独立に測る性質が弱まる。着地の後に gate の時間が問題になったら測り直して決める。（2026-10-06 に測り直して決め直した: 10-05 の 83 便で gate の共通 verify の中央値 177 秒・計 19,905 秒・形 11・行 v-gate-carry・tsuzuri の判断の記録 ADR-65）
   - **§65 の節だけで止める**: runner が撃ったかは器が測らない（撃った runner は 28 本中 5 本）。
   - **門で lens も撃つ**: 論理の誤りの審査は gate の lens の役目で、門は機械の検査だけを持つ。
   - **輪を spawn の中に置く**: spawn は Budget を受ける側で、測り直しの手を持たない。`spawn_turn` は既に回答・追随・途中再開の材料を毎周読み直すので、同じ所に輪を置く。
-- 限界: 緑の便も門と gate で共通 verify を 2 回撃つ（中央値の和で約 137 秒・p90 で約 450 秒が足される）。runner の論理の誤り（gate の lens の FAIL の型）は塞がない。
+- 限界: 緑の便も門と gate で共通 verify を 2 回撃つ（中央値の和で約 137 秒・p90 で約 450 秒が足される）。形 11 の後は、門が同じ木と base で緑だった便の gate は共通 verify を撃たない。runner の論理の誤り（gate の lens の FAIL の型）は塞がない。
 
 ## 67. lens の turn の上限 — rules 行 `lens.max_turns`（30）を lens の argv に毎回渡し、上限で終わった周の出力は判定を持たない周と読む（契約表の行 bi・SRS FR5・FR9・[ADR-0102](../../design-intent/decisions/ADR-0102-lens-reads-with-read-only-tools-and-runner-gets-the-common-verify.html) §2.1・§64 の限界の後の行）
 

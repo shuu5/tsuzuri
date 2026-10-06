@@ -99,7 +99,10 @@ pub(crate) fn end_gate_mark(state_dir: &Path, id: &str) -> EndGateMark {
 }
 
 /// 終わりの門の record の file の名（run dir の直下・1 行の形は `verify.jsonl` と同じ・周の終わりに要約の 1 行を足す）。
-const END_GATE_RECORD: &str = "end-gate.jsonl";
+pub(crate) const END_GATE_RECORD: &str = "end-gate.jsonl";
+
+/// 要約の行の頭（record の行と分ける・[`green_round`] が最後の要約を探す）。
+const SUMMARY_HEAD: &str = "{\"end_gate\":";
 
 /// 終わりの門の赤い行の診断の file の名（`verify.stderr.log` と同じ形・周の頭に [`ROUND_HEAD`] の 1 行を置く）。
 const END_GATE_STDERR: &str = "end-gate.stderr.log";
@@ -319,11 +322,16 @@ impl Round {
         }
     }
 
-    /// 要約の 1 行（`{"end_gate":<周>,"result":"<語>"}`・測れなかった周は `reason` を足す）。
-    fn summary(&self, round: u64) -> String {
+    /// 要約の 1 行（`{"end_gate":<周>,"result":"<語>"}`・測れなかった周は `reason` を足す）。緑の周で撃つ前の木を読めた周だけ、
+    /// 撃った木と base（`tree`・`base`）を足す（gate が持ち越す鍵・設計 pipeline.md §66 形 11）。
+    fn summary(&self, round: u64, fired: Option<&Fired>) -> String {
         let mut fields = vec![("end_gate", Value::Num(round)), ("result", Value::Str(self.word().to_owned()))];
         if let Self::Unmeasured(reason) = self {
             fields.push(("reason", Value::Str(reason.clone())));
+        }
+        if let (Self::Green, Some(found)) = (self, fired) {
+            fields.push(("tree", Value::Str(found.tree.clone())));
+            fields.push(("base", Value::Str(found.base.clone())));
         }
         json_lite::write_object(&fields)
     }
@@ -347,8 +355,43 @@ impl Round {
     }
 }
 
-/// 門を撃つ（印・base・契約の写しを揃えて gate と同じ 1 本で撃つ・設計 pipeline.md §66 形 2）。`Err` は測れなかった理由の 1 行。
-fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) -> Result<Counted, String> {
+/// 門が撃った木と base（緑の周の要約の `tree` と `base`・gate の持ち越しの鍵・設計 pipeline.md §66 形 11）。
+pub(crate) struct Fired {
+    /// 撃つ前に clean だった worktree の `HEAD^{tree}`。
+    pub tree: String,
+    /// 撃った base。
+    pub base: String,
+}
+
+/// clean な worktree の `HEAD^{tree}`（状態か木を読めない周と、未 commit の変更か追跡外の file が在る周は `None`＝
+/// 撃った中身を木の sha で名指せない）。
+fn clean_tree(worktree: &Path) -> Option<String> {
+    let status = git_bytes(worktree, &["status", "--porcelain"])?;
+    if !status.is_empty() {
+        return None;
+    }
+    git_line(worktree, &["rev-parse", "HEAD^{tree}"])
+}
+
+/// 便の門の最後の要約が緑で、撃った木と base を持つ周の、周の番号と木と base（gate の持ち越し・設計 pipeline.md §66 形 11）。
+/// 記録を読めない周・要約の行が無い周・最後の要約が緑でない周・木か base を欠く周は `None`（gate は撃つ側へ倒す）。
+pub(crate) fn green_round(state_dir: &Path, run: &str) -> Option<(u64, Fired)> {
+    let text = std::fs::read_to_string(run_dir(state_dir, run).join(END_GATE_RECORD)).ok()?;
+    let last = text.lines().rev().find(|line| line.starts_with(SUMMARY_HEAD))?;
+    let fields = json_lite::parse_object(last).ok()?;
+    let field = |key: &str| fields.iter().find(|(name, _)| name == key).map(|(_, value)| value);
+    if field("result")?.as_str()? != Round::Green.word() {
+        return None;
+    }
+    let round = field("end_gate")?.as_num()?;
+    let tree = field("tree")?.as_str()?.to_owned();
+    let base = field("base")?.as_str()?.to_owned();
+    Some((round, Fired { tree, base }))
+}
+
+/// 門を撃つ（印・base・契約の写しを揃えて gate と同じ 1 本で撃つ・設計 pipeline.md §66 形 2）。`Ok` は数えと撃った base、
+/// `Err` は測れなかった理由の 1 行。
+fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) -> Result<(Counted, String), String> {
     hold_mark(launch)?;
     let base = gate_base(launch.state_dir, launch.repo, launch.run)
         .ok_or_else(|| format!("run {} の base を読めない", launch.run))?;
@@ -362,7 +405,8 @@ fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) 
     let (record, tail) = (dir.join(END_GATE_RECORD), dir.join(END_GATE_STDERR));
     append_line(&tail, &format!("{ROUND_HEAD}{round}"), launch.policy).map_err(|err| err.to_string())?;
     let shoot = Shoot { state_dir: launch.state_dir, run: launch.run, contract: &contract, limits, policy: launch.policy };
-    record_checks(&shoot, worktree, &base, &Logs { record: &record, tail: &tail })
+    let counted = record_checks(&shoot, worktree, &base, &Logs { record: &record, tail: &tail }, None)?;
+    Ok((counted, base))
 }
 
 /// runner が rc 0 で commit を作って終わった周の門（設計 pipeline.md §66 形 1〜5）: 撃って要約を残し、赤で起こし直せる周は
@@ -370,15 +414,23 @@ fn shoot_gate(launch: &Launch<'_>, worktree: &Path, limits: Limits, round: u64) 
 fn end_gate(launch: &Launch<'_>, worktree: &Path) -> Outcome {
     let prior = red_count(launch.state_dir, launch.run);
     let round = prior.unwrap_or(0).saturating_add(1);
+    // 撃つ前の木（clean な周だけ・gate の持ち越しの鍵・設計 pipeline.md §66 形 11）。
+    let tree = clean_tree(worktree);
+    let mut fired = None;
     let result = match (launch.gate, prior) {
         (EndGate::Unreadable(reason), _) => Round::Unmeasured(reason.clone()),
         (EndGate::Line { .. }, None) => Round::Unmeasured("便の event を読めない".to_owned()),
-        (EndGate::Line { limits, rounds }, Some(prior)) => shoot_gate(launch, worktree, *limits, round)
-            .map_or_else(Round::Unmeasured, |counted| Round::judge(&counted, prior, *rounds)),
+        (EndGate::Line { limits, rounds }, Some(prior)) => match shoot_gate(launch, worktree, *limits, round) {
+            Ok((counted, base)) => {
+                fired = tree.map(|tree| Fired { tree, base });
+                Round::judge(&counted, prior, *rounds)
+            }
+            Err(reason) => Round::Unmeasured(reason),
+        },
     };
     // 要約の行も書けない周は書かずに進む（門の結果は段の記帳が持つ）。
     let record = run_dir(launch.state_dir, launch.run).join(END_GATE_RECORD);
-    let _ = append_line(&record, &result.summary(round), launch.policy);
+    let _ = append_line(&record, &result.summary(round, fired.as_ref()), launch.policy);
     match result {
         Round::Red(red) => record_stage(launch, Stage::Spawned, Some(format!("{RED_DETAIL}{round}:{red}"))),
         Round::Green | Round::Exhausted | Round::Unmeasured(_) => record_stage(launch, Stage::Implemented, None),

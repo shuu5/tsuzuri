@@ -5,10 +5,12 @@
 //! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は移しただけ・`s2-07l.264`）。
 //!
 //! 歯は族ごとの子 module にも置く（設計 docs/design/carry-prep.md §10 行 o・`s2-07l.687`）: `question`（接頭辞
-//! `pipe_question_` / `pipe_resume_`）・`approval`（接頭辞 `pipe_approval_` / `run_cost_` / `pipe_report_`）。この file には
+//! `pipe_question_` / `pipe_resume_`）・`approval`（接頭辞 `pipe_approval_` / `run_cost_` / `pipe_report_`）・`carry`（接頭辞 `vgcarry_`・gate が終わりの門の緑を
+//! 持ち越す・tsuzuri の判断の記録 ADR-65）。この file には
 //! 子の歯が使う helper と const・use の行・他の族の歯だけを残す。
 
 mod approval;
+mod carry;
 mod question;
 // flip-check: moved s2-07l.687
 

@@ -135,6 +135,8 @@ fn pipe_confine_reads_the_peak_from_the_trailing_line() {
           "--state-dir", &state.display().to_string(), "--runner", TOY_COMMIT],
     );
     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "spawn: {}", stderr_of(&spawned));
+    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
+    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
     let marker = state.join("lens-ran");
     let gated = run_pipe_with_path(
         &path,
@@ -540,6 +542,8 @@ fn pipe_slots_wait_ends_early_when_the_blocking_ticket_goes() {
           "--state-dir", &state.display().to_string(), "--runner", TOY_COMMIT],
     );
     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "spawn: {}", stderr_of(&spawned));
+    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
+    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
 
     let first_dead = plant_ticket(&state, DEAD_PID, 1);
     let live = plant_ticket(&state, u64::from(std::process::id()), 1_000_000_000_000);

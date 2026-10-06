@@ -555,6 +555,8 @@ fn pipe_follow_self_rebase_advances_the_base_without_a_follow_section() {
     let id = intake(&repo, &state, &path);
     let spawned = spawn_with(&repo, &state, &id, &runner);
     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "turn 1 の spawn: {}", stderr_of(&spawned));
+    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
+    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
     let moved = git(&repo, &["rev-parse", "refs/heads/main"]);
     assert_ne!(moved, base, "turn の中で main が進んだ");
     assert!(!stub_stdin(&state, 1).contains("## 追随"), "spawn 時は main = base ゆえ節は無い: {}", stub_stdin(&state, 1));
@@ -624,6 +626,8 @@ fn pipe_follow_self_rebase_records_nothing_when_the_runner_does_not_rebase() {
     let id = intake(&repo, &state, &path);
     let spawned = spawn_with(&repo, &state, &id, &runner);
     assert_eq!(spawned.status.code(), Some(i32::from(RC_OK)), "turn 1 の spawn: {}", stderr_of(&spawned));
+    // 門の緑の記録を退け、gate が共通 verify を撃つ形を測る（持ち越しは設計 pipeline.md §66 形 11・歯 vgcarry_ が測る）。
+    let _ = fs::remove_file(state.join("pipe").join(&id).join("end-gate.jsonl"));
     assert_ne!(git(&repo, &["rev-parse", "refs/heads/main"]), base, "turn の中で main が進んだ");
     assert!(rebase_details(&state, &id).is_empty(), "base は進めない: {:?}", stages(&state, &id));
     assert_eq!(
