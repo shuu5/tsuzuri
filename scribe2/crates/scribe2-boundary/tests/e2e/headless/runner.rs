@@ -1497,3 +1497,123 @@ fn headless_runner_box_claude_is_one_job_and_the_prompt_names_the_detector() {
     assert!(section.lines().any(|line| line == DETECTOR_LINE), "行は「実行してよい command」節に在る: {section}");
     clean(&[&dir, &worktree]);
 }
+
+/// 実装者の雛形（`## 仕事` の 6 段）の字。正本は雛形 `runner.txt`（行 v-runner-impl の形）。
+const IMPLEMENTER_STEPS: [&str; 6] = [
+    "1. 契約を読む。goal（行の節の本文・作る物の形の字）と done（番号つきの項・各項の末の括弧がそれを測る歯か verify の行を名指す）と verify と write-set を読み、write-set の file の今の中身を読んでから書く。",
+    "2. 入口の赤: done の項を測る歯のうち今の木に無い歯を先に書いて撃ち、落ちるのを見る。落ちない歯は項を測っていないので、落ちるまで直す。",
+    "3. goal の形の字のとおりに実装する。goal と done が名指さない機能・名・file を足さない。",
+    "4. 契約の verify の行を上から 1 本ずつ全部撃ち、全部の緑を見る。赤なら直して撃ち直す。",
+    "5. commit する。commit の後に「## 共通 verify」節の行を全部撃ち、全部の緑を見る。",
+    "6. 自己検査（turn を閉じる前に 4 つを見る）: 網羅（done の全部の項に、その項の字を断言する歯が在る）・質（名と形が周りの code に合い、goal の字と食い違わない）・規律（write-set の中だけを書き、足した物は goal が名指す物だけ）・歯（実装を戻すと落ち、振る舞いを断言する）。直したら 4 と 5 を撃ち直す。",
+];
+
+/// 差の行（契約に patch の鍵が在る行）の扱いの行。`## 仕事` の節の末に 1 度だけ在る。
+const IMPLEMENTER_PATCH_LINE: &str = "- 契約に patch の鍵が在る行（差の行）は、2 と 3 の代わりに patch の差の file を git apply で当てる。差の外の字を書かず、差の file も書き替えない。当たらなければ手で書かずに質問 record で止まる。";
+
+/// 確かでない物の行。`## できない時` の節に 1 度だけ在る。
+const IMPLEMENTER_UNSURE_LINE: &str = "- 確かでない物を黙って出さない。verify か共通 verify の行を緑にできないまま終える周と、疑いが残る周は、最後の出力に何が赤いか・何が疑わしいかを 1 行で書く。";
+
+/// touches の行。`## 器の取り扱い` の節に 1 度だけ在る。
+const IMPLEMENTER_TOUCHES_LINE: &str = "- 「## ほかの行の touches」節の名は、ほかの行が守る名である。write-set の file のうち今その名を名指していない file で新しく名指さない。名指さずに作れない周は質問 record で止まる。";
+
+/// 実装者の雛形の 7 つの節の見出し（この順に 1 度ずつ）。
+const IMPLEMENTER_HEADINGS: [&str; 7] = [
+    "## 仕事",
+    "## 守ること",
+    "## できない時",
+    "## 器の取り扱い",
+    "## 実行してよい command",
+    "## 契約",
+    "## write-set（この path だけを触ってよい）",
+];
+
+/// 実装者の雛形で組んだ prompt（write-set は `src/lib.rs` の 1 行・契約は `goal = x` の 1 行）。
+fn implementer_prompt() -> String {
+    let dir = tmp();
+    let worktree = tmp();
+    let write_set = dir.join("write-set.txt");
+    assert!(fs::write(&write_set, "src/lib.rs\n").is_ok(), "write-set を書ける");
+    let claude = fake_claude(&dir, "", false, 0);
+    let vessel = write_vessel_copy(&dir, r#"["cargo", "git"]"#);
+    let out = run_runner(
+        &RunnerCall { dir: &dir, worktree: &worktree, write_set: &write_set, vessel: &vessel, claude: &claude, mode: "acceptEdits", account: None },
+        b"goal = \"x\"\n",
+    );
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+    let prompt = slurp(&dir.join("stdin"));
+    clean(&[&dir, &worktree]);
+    prompt
+}
+
+/// 見出しの行の次の行から、次に頭が `## ` の行の前までの行。
+fn section_lines<'a>(prompt: &'a str, heading: &str) -> Vec<&'a str> {
+    let rest = prompt.lines().skip_while(|line| *line != heading).skip(1);
+    rest.take_while(|line| !line.starts_with("## ")).collect()
+}
+
+#[test]
+fn runner_prompt_implementer_orders_the_sections() {
+    let prompt = implementer_prompt();
+    let headings: Vec<&str> = prompt.lines().filter(|line| line.starts_with("## ")).collect();
+    assert_eq!(headings, IMPLEMENTER_HEADINGS, "見出しの行は 7 本がこの順に 1 度ずつ: {prompt}");
+}
+
+#[test]
+fn runner_prompt_implementer_carries_the_six_steps() {
+    let prompt = implementer_prompt();
+    let work = section_lines(&prompt, "## 仕事");
+    let steps: Vec<&str> = work
+        .iter()
+        .copied()
+        .filter(|line| line.split_once(". ").is_some_and(|(number, _)| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit())))
+        .collect();
+    assert_eq!(steps, IMPLEMENTER_STEPS, "「## 仕事」の番号の行は 6 段がこの順: {prompt}");
+    assert_eq!(
+        work.iter().filter(|line| **line == IMPLEMENTER_PATCH_LINE).count(),
+        1,
+        "差の行の扱いの行が「## 仕事」に 1 度だけ在る: {prompt}"
+    );
+    assert_eq!(
+        work.iter().filter(|line| line.starts_with("- 契約に patch の鍵が在る行（差の行）は")).count(),
+        1,
+        "差の行の扱いの行は 1 本だけ: {prompt}"
+    );
+}
+
+#[test]
+fn runner_prompt_implementer_says_how_to_stop() {
+    let prompt = implementer_prompt();
+    let stop = section_lines(&prompt, "## できない時");
+    let records: Vec<&&str> = stop.iter().filter(|line| line.contains("{\"question\":\"<") && line.contains("commit を作らない")).collect();
+    assert_eq!(records.len(), 1, "質問の record の頭と「commit を作らない」を持つ行が 1 つ: {prompt}");
+    assert_eq!(
+        stop.iter().filter(|line| **line == IMPLEMENTER_UNSURE_LINE).count(),
+        1,
+        "確かでない物の行が「## できない時」に 1 度だけ在る: {prompt}"
+    );
+    assert_eq!(
+        stop.iter().filter(|line| line.starts_with("- 確かでない物を黙って出さない。")).count(),
+        1,
+        "確かでない物の行は 1 本だけ: {prompt}"
+    );
+}
+
+#[test]
+fn runner_prompt_implementer_drops_the_incident_quotes() {
+    let prompt = implementer_prompt();
+    for quote in ["Contains shell syntax", "実測:", "struct の literal"] {
+        assert!(!prompt.contains(quote), "事故の逐語 {quote} は載せない: {prompt}");
+    }
+    let handling = section_lines(&prompt, "## 器の取り扱い");
+    assert_eq!(
+        handling.iter().filter(|line| **line == IMPLEMENTER_TOUCHES_LINE).count(),
+        1,
+        "touches の行が「## 器の取り扱い」に 1 度だけ在る: {prompt}"
+    );
+    assert_eq!(
+        handling.iter().filter(|line| line.starts_with("- 「## ほかの行の touches」節の名は")).count(),
+        1,
+        "touches の行は 1 本だけ: {prompt}"
+    );
+}
