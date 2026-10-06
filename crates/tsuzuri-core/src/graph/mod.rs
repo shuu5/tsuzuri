@@ -6,10 +6,12 @@
 //! ほかの project の台帳（外の台帳）は節点にも辺にもせず、`Graph::outside` に読みだけを置いて g-3 が族で確かめる。
 //! 着地の commit は event log の RunDone から組み、着地の commit の無い着地した契約は床の値で
 //! `check::unlanded_contracts` が名指す。
+//! code の層（file と定義の節点と、行 → file の辺）は `code` が、git の file の一覧と規則の file で読んだ定義の字から組む。
 
 pub mod around;
 pub mod build;
 pub mod check;
+pub mod code;
 
 use std::collections::{BTreeMap, BTreeSet};
 

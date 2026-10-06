@@ -1,0 +1,136 @@
+# 定義の規則（判断の記録 ADR-46 の決定 (3)(4)）。tz code が構文で探す道具（ast-grep）の scan に渡し、file と定義の節点を組む。
+# rule の id は定義の種類の語（中核の code の層の閉じた 11 語・trait の impl は id impl-for）と同じ字。どの rule も名を meta 変数 NAME に捕え、
+# impl-for は trait の名を TRAIT にも捕える。中核は stream の JSON の ruleId・file・language・range・metaVariables の single だけを読む。
+# 言語を足す時は、この file にその言語の rule を足し、中核の言語の表 LANGS に行を足す。
+id: fn
+language: Rust
+severity: hint
+message: 関数（本体の在る関数と trait の中の宣言）
+rule:
+  any:
+    - kind: function_item
+    - kind: function_signature_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: struct
+language: Rust
+severity: hint
+message: struct
+rule:
+  kind: struct_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: enum
+language: Rust
+severity: hint
+message: enum
+rule:
+  kind: enum_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: union
+language: Rust
+severity: hint
+message: union
+rule:
+  kind: union_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: trait
+language: Rust
+severity: hint
+message: trait
+rule:
+  kind: trait_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: type
+language: Rust
+severity: hint
+message: 型の別名と trait の中の関連型
+rule:
+  any:
+    - kind: type_item
+    - kind: associated_type
+  has:
+    field: name
+    pattern: $NAME
+---
+id: const
+language: Rust
+severity: hint
+message: const
+rule:
+  kind: const_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: static
+language: Rust
+severity: hint
+message: static
+rule:
+  kind: static_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: macro
+language: Rust
+severity: hint
+message: macro_rules! の macro
+rule:
+  kind: macro_definition
+  has:
+    field: name
+    pattern: $NAME
+---
+id: mod
+language: Rust
+severity: hint
+message: module（本体の在る module と file の module の宣言）
+rule:
+  kind: mod_item
+  has:
+    field: name
+    pattern: $NAME
+---
+id: impl
+language: Rust
+severity: hint
+message: trait の無い impl の塊（捕える名は型）
+rule:
+  all:
+    - kind: impl_item
+    - has:
+        field: type
+        pattern: $NAME
+    - not:
+        has:
+          field: trait
+          regex: "."
+---
+id: impl-for
+language: Rust
+severity: hint
+message: trait の impl の塊（捕える名は型と trait）
+rule:
+  all:
+    - kind: impl_item
+    - has:
+        field: type
+        pattern: $NAME
+    - has:
+        field: trait
+        pattern: $TRAIT
