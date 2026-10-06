@@ -1,0 +1,483 @@
+diff --git a/.vessel.toml b/.vessel.toml
+index 0381c1c3e7aff550e8f26801522bc8267eb36ce4..2e2239e829fb3a865a3c310304512eb75d5800cc 100644
+--- a/.vessel.toml
++++ b/.vessel.toml
+@@ -38,7 +38,8 @@ seat-constitution = "contracts/seat/brief.txt"
+ build-lanes = true
+ # code の索引（器の任意の key index-scip と index-roles・器の設計 reverse-index.md の 4 節 形 1・器の判断の記録 ADR-0105・行 t-index-on）。2 key を揃えた repo だけ、
+ # 器は口 pipe index build と show・審査の材料 index.txt・受付の欄 code-facts の照らしで、外の道具の索引から code の事実を読む。字は器の宣言 scribe2/.vessel.toml に倣う。
+-# index-scip の 1 本は根の workspace（folio2/crates/folio を member に持つ）を索引にする。scribe2/ は別の workspace で、器が SCIP の path を木からの相対に直すまで足さない。
++# index-scip の 1 本目は根の workspace（folio2/crates/folio を member に持つ）を、2 本目は別の workspace の器 scribe2/ を索引にする（行 v-index-paths）。
++# 器は SCIP の project_root が木の下の dir なら、その相対を document の path の頭に足す（2 本目の path は scribe2/ から始まる）。
+ # index-roles の規則の file は器の scribe2/.config/index-roles.yml を名指す（写さない・同じ Rust の役の 9 語の規則を 1 本に保つ・決定はしごの「既に在るか」の段）。
+-index-scip = ["rust-analyzer scip {tree} --output {out}"]
++index-scip = ["rust-analyzer scip {tree} --output {out}", "rust-analyzer scip {tree}/scribe2 --output {out}"]
+ index-roles = ["ast-grep scan --rule scribe2/.config/index-roles.yml --json=stream {tree}"]
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
+index ed3ce6acc8ef6901c988e5cf2321779aa5263cc7..01b1d8fb02925b0dba3e4379dea1ecd0443fc1a4 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe.rs
+@@ -25,6 +25,7 @@ use vessel::rules::RuleValue;
+ mod contracts;
+ mod dispatch;
+ mod gate;
++mod index_paths;
+ mod intake;
+ mod land;
+ mod launch_failure;
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/index_paths.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/index_paths.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..003e966e602e0f3677cc51e3ed55a0cfa8e0b790
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/index_paths.rs
+@@ -0,0 +1,188 @@
++//! 索引の表の path を木からの相対に揃える歯（設計 docs/design/reverse-index.md §4 形 2・形 4・接頭辞 `pipe_index_paths_`）。
++//!
++//! 撃つ口は実 binary の `pipe index build` で、toy repo と偽の宣言の command は親の索引の組み立ての歯の置き場（`idxb_place`）を
++//! 使う。期待の表は a1 の読み手と結び（`read_scip`・`read_roles`・`join`・`render`）で fixture から組み、器が置いた表の字と比べる。
++//! 撃ち中の木（置き場の下の `<commit の sha>.tree`）の path は commit の後に決まるので、一致の絶対 path と SCIP の project_root
++//! はその字から作る。同じ鍵の表は cached で返るので、見本ごとに表と記録を外してから撃ち直す。
++
++use super::*;
++use vessel::pipe::index::{flat, join, read_roles, scip};
++
++/// 撃ち中の木の path の字（置き場の下の `<HEAD の sha>.tree`）。
++fn ixp_tree(place: &IdxPlace) -> String {
++    place.dir().join(format!("{}.tree", place.sha())).display().to_string()
++}
++
++/// fixture の SCIP の metadata の project_root を `root` に替えた bytes（fixture の頭 `file:///repo` を外して付け直す）。
++fn ixp_scip_at(root: &str) -> Vec<u8> {
++    let meta = |uri: &[u8]| pb_len(1, &[pb_int(1, 0), pb_len(3, uri)].concat());
++    let bytes = idx_scip_bytes();
++    let rest = bytes.strip_prefix(meta(b"file:///repo").as_slice()).unwrap_or_default();
++    [meta(root.as_bytes()), rest.to_vec()].concat()
++}
++
++/// fixture の役の一致の file を頭 `lead` の下に置いた stream（頭の `./` は外してから付ける）。
++fn ixp_roles_under(lead: &str) -> String {
++    idx_roles_text().replace("\"file\":\"./", "\"file\":\"").replace("\"file\":\"", &format!("\"file\":\"{lead}/"))
++}
++
++/// fixture を頭 `heads` の下に 1 組ずつ置いた形で、a1 の読み手と結びで組んだ表の字（空の頭は repo の根・`roles` が偽なら一致なし）。
++fn ixp_table(heads: &[&str], roles: bool) -> String {
++    let (mut docs, mut matches, mut bodies) = (Vec::new(), Vec::new(), BTreeMap::new());
++    for head in heads {
++        let lead = |path: &str| if head.is_empty() { path.to_owned() } else { format!("{head}/{path}") };
++        let mut read = scip::read_scip(&idx_scip_bytes()).unwrap_or_default();
++        read.iter_mut().for_each(|doc| doc.path = lead(&doc.path));
++        docs.extend(read);
++        if roles {
++            let mut found = read_roles(&idx_roles_text()).map(|read| read.matches).unwrap_or_default();
++            found.iter_mut().for_each(|one| one.file = lead(&one.file));
++            matches.extend(found);
++        }
++        bodies.extend(idx_bodies().into_iter().map(|(path, body)| (lead(&path), body)));
++    }
++    flat::render(&join(&docs, &matches, &bodies).unwrap_or_default())
++}
++
++/// 偽の SCIP の indexer が置き場の `ixp-<名>.scip`（名は撃つ行の 1 つ目の引数の末の dir の名）を `{out}` へ写し、偽の役の検出が
++/// `roles` を stdout へ出す置き場で `pipe index build` を撃ち、置いた表の字を返す（built でなければ結末の行・撃った後は表と記録を外す）。
++fn ixp_built(place: &IdxPlace, scips: &[(&str, &[u8])], roles: &str) -> String {
++    for (name, bytes) in scips {
++        assert!(fs::write(place.state.join(format!("ixp-{name}.scip")), bytes).is_ok(), "SCIP の見本を書ける");
++    }
++    assert!(fs::write(place.state.join("ixp.roles"), roles).is_ok(), "一致の見本を書ける");
++    idxb_script(place, (IDXB_SCIP, "scip"), &format!("cp '{}/ixp-'\"$(basename \"$1\")\".scip \"$2\"\n", place.state.display()));
++    idxb_script(place, (IDXB_ROLES, "roles"), &format!("cat '{}'\n", place.state.join("ixp.roles").display()));
++    let line = idxb_line(&place.build(None, &[]));
++    let key = idxb_field(&line, "key");
++    let table = if idxb_word(&line) == "built" { fs::read_to_string(place.dir().join(format!("{key}.tsv"))).unwrap_or_default() } else { line };
++    for ext in ["tsv", "rec"] {
++        let _ = fs::remove_file(place.dir().join(format!("{key}.{ext}")));
++    }
++    table
++}
++
++/// 木の下の絶対 path の役の一致は、相対の一致と同じに結ばれる（表の字が等しい）。否定の見本は木の外の絶対 path で、字の頭だけが
++/// 木と同じ兄弟の dir と、別の dir の 2 形（どちらも結ばれず、一致の無い表と等しい）。
++#[test]
++fn pipe_index_paths_absolute_role_files_join_like_relative_ones() {
++    let place = idxb_place(IDXB_DECL, "", "");
++    let (tree, root) = (ixp_tree(&place), idx_scip_bytes());
++    let name = Path::new(&tree).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
++    let (want, bare) = (ixp_table(&[""], true), ixp_table(&[""], false));
++    assert_ne!(want, bare, "fixture の役の一致は表を替える");
++    assert_eq!(ixp_built(&place, &[(&name, &root)], &ixp_roles_under(&tree)), want, "木の下の絶対 path の一致は結ばれる");
++    for lead in [format!("{tree}x"), "/elsewhere".to_owned()] {
++        assert_eq!(ixp_built(&place, &[(&name, &root)], &ixp_roles_under(&lead)), bare, "{lead}: 木の外の一致は結ばない");
++    }
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 捕えた名が改行かタブを含む借りの役の一致（doc の行を丸ごと捕えた doclink）は字だけの行にならず、置いた表は読める（表は
++/// その一致の無い fixture の表と等しい）。否定の見本は同じ一致の名から改行とタブを外した字で、字だけの行が 1 行足される。
++#[test]
++fn pipe_index_paths_names_with_line_breaks_leave_no_text_row() {
++    let place = idxb_place(IDXB_DECL, "", "");
++    let tree = ixp_tree(&place);
++    let name = Path::new(&tree).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
++    let root = idx_scip_bytes();
++    let want = ixp_table(&[""], true);
++    let line = |text: &str| idx_role_line("doclink", "src/a.rs", span_of(IDX_A, "/// 見る: [`Row`] の話", 0), Some(text));
++    for broken in ["見る\\n続き", "見る\\t続き", "見る\\r続き"] {
++        let roles = format!("{}{}\n", idx_roles_text(), line(broken));
++        assert_eq!(ixp_built(&place, &[(&name, &root)], &roles), want, "{broken}: 字だけの行にしない");
++    }
++    let whole = format!("{}{}\n", idx_roles_text(), line("見る続き"));
++    let table = ixp_built(&place, &[(&name, &root)], &whole);
++    assert_eq!(table.lines().count(), want.lines().count() + 1, "1 行の名は字だけの行になる");
++    assert!(table.lines().any(|row| row.contains("\ttext:見る続き\t")), "{table}");
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 下の dir を project_root に持つ SCIP（2 本目の行）は、木からの相対の頭を document の path に付けて表に載り、根の SCIP（1 本目の
++/// 行・project_root は木そのもの）は頭なしで載る（表は 2 組の fixture を頭 `sub` と根に置いて組んだ字と等しい）。
++#[test]
++fn pipe_index_paths_scip_of_a_subdir_lands_with_its_head() {
++    let decl = "index-scip = [\"index-fake-scip {tree} {out}\", \"index-fake-scip {tree}/sub {out}\"]\nindex-roles = [\"index-fake-roles {tree}\"]\n";
++    let place = idxb_place(decl, "", "");
++    for (path, body) in idx_bodies() {
++        let target = place.repo.join("sub").join(path);
++        assert!(target.parent().is_some_and(|dir| fs::create_dir_all(dir).is_ok()) && fs::write(&target, body).is_ok(), "sub の fixture を書ける");
++    }
++    git(&place.repo, &["add", "-A"]);
++    git(&place.repo, &["commit", "-q", "-m", "sub"]);
++    let tree = ixp_tree(&place);
++    let name = Path::new(&tree).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
++    let (root, sub) = (ixp_scip_at(&format!("file://{tree}")), ixp_scip_at(&format!("file://{tree}/sub")));
++    let roles = [idx_roles_text(), ixp_roles_under("sub")].concat();
++    let want = ixp_table(&["", "sub"], true);
++    assert_ne!(want, ixp_table(&[""], true), "sub の組は表に行を足す");
++    assert_eq!(ixp_built(&place, &[(&name, &root), ("sub", &sub)], &roles), want, "sub の document は頭つきで載る");
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 木の下の dir でない project_root（木そのもの・字の頭だけが木と同じ兄弟の dir・別の dir・`file://` の無い字）の SCIP は、document
++/// の path を今のまま（頭なし）で表に載せる（表は根の fixture の表と等しい）。
++#[test]
++fn pipe_index_paths_project_root_outside_the_tree_keeps_the_paths() {
++    let place = idxb_place(IDXB_DECL, "", "");
++    let tree = ixp_tree(&place);
++    let name = Path::new(&tree).file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
++    let want = ixp_table(&[""], true);
++    for root in [format!("file://{tree}"), format!("file://{tree}x/sub"), "file:///elsewhere/sub".to_owned(), format!("{tree}/sub")] {
++        assert_eq!(ixp_built(&place, &[(&name, &ixp_scip_at(&root))], &idx_roles_text()), want, "{root}: 頭を付けない");
++    }
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 索引の子の箱の memory の上限（偽 systemd-run の argv の `MemoryMax`）は、子ごとに rules 行 `gate.job_memory_mb` の 2 倍。
++#[test]
++fn pipe_index_paths_children_box_holds_two_jobs_of_memory() {
++    let place = idxb_with_fixtures();
++    let line = idxb_line(&place.build(None, &[]));
++    assert_eq!(idxb_word(&line), "built", "{line}");
++    let job = Manifest::embedded().ok().and_then(|manifest| manifest.get("gate.job_memory_mb").map(|row| row.value.clone()));
++    let job = match job {
++        Some(RuleValue::Int(found)) => found,
++        _ => 0,
++    };
++    assert!(job > 0, "rules 行 gate.job_memory_mb を読める");
++    let want = format!("MemoryMax={}M", job * 2);
++    for unit in ["-index-0-", "-index-1-"] {
++        let record = crate::toolbox_record(&place.state, unit);
++        assert!(record.lines().any(|row| row == want), "{unit}: {want}: {record}");
++    }
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 索引の子（SCIP の行と役の行）の env の `CARGO_TARGET_DIR` は、親の env に在っても無くても木の下の `target` に固定される
++/// （記録は子ごとに 1 行・親の値は子に渡らない）。
++#[test]
++fn pipe_index_paths_children_build_in_the_tree_target() {
++    let place = idxb_place(IDXB_DECL, "", "");
++    let tree = ixp_tree(&place);
++    let seen = place.state.join("ixp-target");
++    let record = format!("printf '%s\\n' \"${{CARGO_TARGET_DIR-unset}}\" >> '{}'\n", seen.display());
++    idxb_script(&place, (IDXB_SCIP, "scip"), &format!("{record}cp '{}' \"$2\"\n", place.state.join("idx.scip").display()));
++    idxb_script(&place, (IDXB_ROLES, "roles"), &format!("{record}cat '{}'\n", place.state.join("idx.roles").display()));
++    let (state, repo) = (place.state.display().to_string(), place.repo.display().to_string());
++    let outside = place.state.join("outside-target").display().to_string();
++    for parent in [Some(outside.as_str()), None] {
++        let mut cmd = bin_cmd();
++        cmd.args(["pipe", "index", "build", "--state-dir", state.as_str(), "--repo", repo.as_str()]).env("PATH", place.path());
++        match parent {
++            Some(value) => cmd.env("CARGO_TARGET_DIR", value),
++            None => cmd.env_remove("CARGO_TARGET_DIR"),
++        };
++        let out = cmd.output();
++        let line = out.as_ref().map(idxb_line).unwrap_or_default();
++        assert_eq!(idxb_word(&line), "built", "{parent:?}: {line}");
++        let key = idxb_field(&line, "key");
++        let lines = fs::read_to_string(&seen).unwrap_or_default();
++        assert_eq!(lines.lines().collect::<Vec<_>>(), [format!("{tree}/target"), format!("{tree}/target")], "{parent:?}: 子ごとに木の下の target");
++        for path in [seen.clone(), place.dir().join(format!("{key}.tsv")), place.dir().join(format!("{key}.rec"))] {
++            assert!(fs::remove_file(path).is_ok(), "{parent:?}: 記録と表を外す");
++        }
++    }
++    clean(&[&place.repo, &place.state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/dispatch/index_build.rs b/scribe2/crates/scribe2/src/pipe/dispatch/index_build.rs
+index c59a86336a4179bc7c3d4190b7886230e0c09679..2970bd04402e5ffef2186fdf204b088f81e1025d 100644
+--- a/scribe2/crates/scribe2/src/pipe/dispatch/index_build.rs
++++ b/scribe2/crates/scribe2/src/pipe/dispatch/index_build.rs
+@@ -18,7 +18,7 @@ use crate::pipe::declaration::{index_at, DeclError, IndexLines};
+ use crate::pipe::gate::Limits;
+ use crate::pipe::git_line;
+ use crate::pipe::index::flat::{read_table, render, Row};
+-use crate::pipe::index::scip::read_scip;
++use crate::pipe::index::scip::{project_root, read_scip};
+ use crate::pipe::index::{join, key_digest, read_roles};
+ use crate::pipe::row_review::tree_key;
+ use crate::rules::int_row;
+@@ -44,6 +44,17 @@ const SCHEMA_LINE: &str = "schema=1";
+ /// 既定の ref。
+ const HEAD: &str = "HEAD";
+ 
++/// 子の cargo の組みの置き場の env の名。子は木の下の [`TARGET_DIR`] で組み、木と一緒に外す（親の置き場を継ぐと、木の path で組んだ
++/// 印が親の置き場に残り、消えた木を後の組みが読みに行く）。
++const TARGET_ENV: &str = "CARGO_TARGET_DIR";
++
++/// 木の下の子の組みの置き場の名。
++const TARGET_DIR: &str = "target";
++
++/// 組み立ての受付札と封じ込めの箱の job の数（箱の memory は job ごとの上限の倍数。rust-analyzer の SCIP は 1 本で 1 job の上限
++/// 〔rules 行 `gate.job_memory_mb`〕を越える workspace が在る）。
++const INDEX_JOBS: u64 = 2;
++
+ /// 状態の読み（閉じた 6 値・設計 reverse-index.md §4 形 9）。
+ #[derive(Debug, Clone, PartialEq)]
+ pub enum Status {
+@@ -312,7 +323,7 @@ impl Ctx<'_> {
+     /// 受付札 1 枚を取り、木を detach して宣言の行を順に撃ち、結ぶ。外の道具の出力と木は結んだ後に外す。
+     fn shoot(&self, timeout: u64) -> Result<Shot, Fail> {
+         let limits = Limits::of(self.manifest).map_err(|reason| fail("no-rule", reason))?;
+-        let _grant = admission::admit(self.state_dir, &format!("index-{}", self.key), 1, &limits.admission(self.policy));
++        let _grant = admission::admit(self.state_dir, &format!("index-{}", self.key), INDEX_JOBS, &limits.admission(self.policy));
+         let tree = Worktree::make(self.repo, &self.dir, self.sha).ok_or_else(|| fail("tree", "commit の木を作れない"))?;
+         let outs = |ext: &str, count: usize| (0..count).map(|n| file(&self.dir, &self.key, &format!("{n}.{ext}"))).collect::<Vec<_>>();
+         let (scips, roles) = (outs("scip", self.lines.scip.len()), outs("roles", self.lines.roles.len()));
+@@ -338,7 +349,7 @@ impl Ctx<'_> {
+     }
+ 
+     /// 行 1 本を撃つ（行を空白で割り穴を語ごとに埋め・頭の語は床の検査の resolve で解く・封じ込めの箱の中・cwd は木・
+-    /// 役の行は stdout を file へ受ける）。
++    /// 子の組みの置き場は木の下・役の行は stdout を file へ受ける）。
+     fn run_row(&self, row: &str, place: (&Path, &Path, bool), n: usize, timeout: u64) -> Result<String, Fail> {
+         let (tree, out, to_file) = place;
+         let (tree_text, out_text) = (tree.display().to_string(), out.display().to_string());
+@@ -348,7 +359,7 @@ impl Ctx<'_> {
+         let mut cmd = Invocation::new(program);
+         cmd.args(words.iter().skip(1));
+         let unit = unit_name(&format!("{}.tree", self.sha), "index", n);
+-        let wrap = Wrap { unit: &unit, limit: Limit::PerJob(1), caps: Caps::embedded(), width: None };
++        let wrap = Wrap { unit: &unit, limit: Limit::PerJob(INDEX_JOBS), caps: Caps::embedded(), width: None };
+         let (mut cmd, confinement) = wrap_command(cmd, &wrap);
+         if !confinement.confined() {
+             return Err(fail("confine", format!("{row}: 封じ込めの箱で包めない")));
+@@ -358,7 +369,7 @@ impl Ctx<'_> {
+         } else {
+             Stdio::piped()
+         };
+-        cmd.current_dir(tree).process_group(0).stdin(Stdio::null()).stdout(stdout).stderr(Stdio::piped());
++        cmd.current_dir(tree).env(TARGET_ENV, tree.join(TARGET_DIR)).process_group(0).stdin(Stdio::null()).stdout(stdout).stderr(Stdio::piped());
+         let ran = run(&mut cmd, Duration::from_secs(timeout));
+         let _ = release_scope(&confinement);
+         match ran {
+@@ -417,18 +428,35 @@ impl Ctx<'_> {
+     }
+ }
+ 
++/// 木の下の path の、木からの相対の字（木の外・木そのもの・UTF-8 でない周は `None`・比べは path の要素ごと）。
++fn below<'a>(tree: &Path, path: &'a str) -> Option<&'a str> {
++    Path::new(path).strip_prefix(tree).ok().and_then(Path::to_str).filter(|rest| !rest.is_empty())
++}
++
+ /// 撃ち終えた SCIP の file と役の一致の file を読み、木の本文で結んで表の行にする（読めない物は `unreadable`）。
++/// 表の path は木からの相対に揃える: SCIP の project_root（`file://` の URI）が木の下の dir なら、その相対を document の
++/// path の頭に足し、役の一致の file が木の下の絶対 path なら木の頭を外す（木の外の project_root と file は今のまま）。
+ fn flatten(tree: &Path, outs: (&[PathBuf], &[PathBuf]), stderr: String) -> Result<Shot, Fail> {
+     let unreadable = |reason: String| fail("unreadable", reason);
+     let mut docs = Vec::new();
+     for path in outs.0 {
+         let bytes = fs::read(path).map_err(|err| unreadable(format!("{}: {err}", path.display())))?;
+-        docs.extend(read_scip(&bytes).map_err(|err| unreadable(err.to_string()))?);
++        let mut read = read_scip(&bytes).map_err(|err| unreadable(err.to_string()))?;
++        let root = project_root(&bytes);
++        if let Some(head) = root.as_deref().and_then(|uri| uri.strip_prefix("file://")).and_then(|at| below(tree, at)) {
++            read.iter_mut().for_each(|doc| doc.path = format!("{head}/{}", doc.path));
++        }
++        docs.extend(read);
+     }
+     let (mut matches, mut dropped) = (Vec::new(), 0_usize);
+     for path in outs.1 {
+         let text = fs::read_to_string(path).map_err(|err| unreadable(format!("{}: {err}", path.display())))?;
+-        let read = read_roles(&text).map_err(|err| unreadable(err.to_string()))?;
++        let mut read = read_roles(&text).map_err(|err| unreadable(err.to_string()))?;
++        for found in &mut read.matches {
++            if let Some(rest) = below(tree, &found.file) {
++                found.file = rest.to_owned();
++            }
++        }
+         matches.extend(read.matches);
+         dropped = dropped.saturating_add(read.dropped);
+     }
+diff --git a/scribe2/crates/scribe2/src/pipe/index.rs b/scribe2/crates/scribe2/src/pipe/index.rs
+index 282863639178485397a179697848140502e87141..a07e7304ef3e73748a3f9f095965873dd8f48fdf 100644
+--- a/scribe2/crates/scribe2/src/pipe/index.rs
++++ b/scribe2/crates/scribe2/src/pipe/index.rs
+@@ -301,11 +301,12 @@ fn borrow_symbol<'a>(file: &'a File<'_>, found: &RoleMatch, name: &str) -> Optio
+     scoped.or_else(|| file.placed.iter().find(same)).map(|item| item.occ.symbol.as_str())
+ }
+ 
+-/// occurrence の無い doc の link・取り込み・`Self` の literal の行（借りられなければ字だけの行）。
++/// occurrence の無い doc の link・取り込み・`Self` の literal の行（借りられなければ字だけの行）。捕えた名が改行かタブを含む一致
++/// （doc の行を丸ごと捕えた規則の一致）は行にしない（表は 1 行 1 occurrence・tab 区切りなので、名の字が形を崩す）。
+ fn orphan_rows(file: &File<'_>, in_test_file: bool) -> Vec<Row> {
+     let mut rows = Vec::new();
+     for found in file.matches.iter().filter(|found| BORROWING.contains(&found.role)) {
+-        let Some(name) = found.name.as_deref().filter(|name| !name.is_empty()) else {
++        let Some(name) = found.name.as_deref().filter(|name| !name.is_empty() && !name.contains(['\n', '\r', '\t'])) else {
+             continue;
+         };
+         let seen = file.placed.iter().any(|item| {
+diff --git a/scribe2/crates/scribe2/src/pipe/index/scip.rs b/scribe2/crates/scribe2/src/pipe/index/scip.rs
+index db5e1057eae8514110590397110108af0c416f4d..a42a87330d2e0e4deded6c0bfd07b1913a62761c 100644
+--- a/scribe2/crates/scribe2/src/pipe/index/scip.rs
++++ b/scribe2/crates/scribe2/src/pipe/index/scip.rs
+@@ -3,7 +3,8 @@
+ //! 器は外の道具の library を持たない（NFR3）ので、必要な欄（document の相対 path と position_encoding・
+ //! occurrence の範囲と symbol と定義の印と囲む範囲・symbol の情報の名と種類）だけを読み、知らない欄は wire の型で
+ //! 飛ばす。外の crate の symbol（repo のどの document にも定義が無い）と関数の中の local は返さない。壊れた wire
+-//! （途中で切れた varint・長さが本体を越える欄）は [`ScipError`] にする（部分の結果を返さない）。
++//! （途中で切れた varint・長さが本体を越える欄）は [`ScipError`] にする（部分の結果を返さない）。document の path は
++//! metadata の project_root からの相対なので、project_root の字も別の口（[`project_root`]）で読む。
+ 
+ use std::collections::BTreeSet;
+ 
+@@ -286,6 +287,23 @@ fn keep_in_repo(docs: &mut [Document]) {
+     }
+ }
+ 
++/// metadata の project_root の字（document の path の基の URI・欄が無い・壊れた wire・UTF-8 でない周は `None`）。
++pub fn project_root(bytes: &[u8]) -> Option<String> {
++    let mut cursor = Cursor::new(bytes, 0);
++    while let Ok(Some((number, value))) = cursor.field() {
++        let (1, Value::Bytes(meta)) = (number, value) else {
++            continue;
++        };
++        let mut inner = Cursor::new(meta, 0);
++        while let Ok(Some((field, found))) = inner.field() {
++            if let (3, Value::Bytes(text)) = (field, found) {
++                return std::str::from_utf8(text).ok().map(str::to_owned);
++            }
++        }
++    }
++    None
++}
++
+ /// SCIP の index の bytes を読む。返すのは document の列（外の crate の symbol と local を落とした後）。
+ pub fn read_scip(bytes: &[u8]) -> Result<Vec<Document>, ScipError> {
+     let mut docs = Vec::new();
+diff --git a/scribe2/docs/design/reverse-index.md b/scribe2/docs/design/reverse-index.md
+index 6fa873fbfc7e1fb694922e60ff9cfc1bdb5d71b6..7d46c029b031dbe81ecf711f33e8c06516205cff 100644
+--- a/scribe2/docs/design/reverse-index.md
++++ b/scribe2/docs/design/reverse-index.md
+@@ -73,11 +73,11 @@
+      - 索引の宣言の読み（vessel 宣言の parse とは別の 1 関数）は、2 key の片方だけの宣言と、穴の欠けた行（`index-scip` の行に `{tree}` か `{out}` が無い・`index-roles` の行に `{tree}` が無い）を、key の名と行番号を名指す不備にする（状態は half）。この読みを撃つのは索引を要する周（touches に型を持つ契約・欄 `code-facts` を持つ行・行の審査・表を出す口）だけで、vessel 宣言の parse・ほかの key の読み・索引を要しない契約の受付・contracts check・FR101 の merge の門の宣言の読みは、片方だけの宣言でも今のまま読む（SRS FR107）。
+      - どちらも無い repo は索引を持たない（状態は undeclared・§7 の判定は欄 `code-facts` を持つ行のほかは撃たない）。
+      - command の許しは床の検査の 1 行（`floor-check`）と同じく allowlist で見ない（宣言は tracked で行の審査と merge を通り、撃つのは封じ込めの箱の中）。
+-  2. **撃つ所**（行 a2）: 床の検査と同じ撃ち方（§2）を共用する。索引を作る commit を detach した木（床の検査の Worktree の make・make は sha を木の名と detach する commit の両方に使うので、置き場は索引の dir の下の `<commit の sha>.tree`）の上で、cwd をその木にして宣言の順に撃つ（行を空白で割り、穴を語ごとに埋め、program は床の検査の resolve で解く・rustup の proxy は cwd の toolchain の宣言で版を選ぶ）。撃つ子は封じ込めの箱の中で走り（NFR6）、受付札を 1 枚（jobs 1・job の memory は `gate.job_memory_mb`・`crates/scribe2/src/pipe/admission.rs` の admit と release・rules は gate の Limits から組む）取る。時間の上限は rules 行 `index.timeout_s`（600 秒・user 2026-09-30T22:13Z 項 index-timeout）で、越えた子は床の検査の run と同じく process group ごと止める。床の検査の印・run・resolve は同じ親の兄弟の module から呼べる可視性に開いて共用する（2 本目の撃ち方を作らない・C6）。
++  2. **撃つ所**（行 a2）: 床の検査と同じ撃ち方（§2）を共用する。索引を作る commit を detach した木（床の検査の Worktree の make・make は sha を木の名と detach する commit の両方に使うので、置き場は索引の dir の下の `<commit の sha>.tree`）の上で、cwd をその木にして宣言の順に撃つ（行を空白で割り、穴を語ごとに埋め、program は床の検査の resolve で解く・rustup の proxy は cwd の toolchain の宣言で版を選ぶ）。撃つ子は封じ込めの箱の中で走り（NFR6）、受付札を 1 枚（jobs 2・箱の memory は `gate.job_memory_mb` の 2 倍・器の workspace の rust-analyzer の SCIP は 1 job の上限を越えるため・行 v-index-paths・`crates/scribe2/src/pipe/admission.rs` の admit と release・rules は gate の Limits から組む）取る。時間の上限は rules 行 `index.timeout_s`（600 秒・user 2026-09-30T22:13Z 項 index-timeout）で、越えた子は床の検査の run と同じく process group ごと止める。床の検査の印・run・resolve は同じ親の兄弟の module から呼べる可視性に開いて共用する（2 本目の撃ち方を作らない・C6）。撃つ子の env の `CARGO_TARGET_DIR` は木の下の `target` に固定する（rust-analyzer が build script と proc-macro のために撃つ cargo の出力を木と一緒に外す・親の env の置き場を継ぐと、木の path で組んだ印が親の置き場に残り、木が消えた後の同じ置き場の組みが消えた path を読みに行って落ちる・契約表の行 v-index-paths）。
+   3. **読む**（行 a1）: 器は外の道具の library を持たない（NFR3）。
+-     - SCIP は protobuf の wire の形のうち、document の相対 path と position_encoding・occurrence の範囲と symbol と役の印（定義か）と囲む範囲・symbol の情報の名と種類だけを std の読み手で読む。知らない欄は wire の型で読み飛ばす。外の crate の symbol（package が repo の外）と関数の中の local は落とす。壊れた wire（途中で切れた varint・長さが本体を越える欄）は読めない理由にする。
++     - SCIP は protobuf の wire の形のうち、document の相対 path と position_encoding・occurrence の範囲と symbol と役の印（定義か）と囲む範囲・symbol の情報の名と種類だけを std の読み手で読む。document の path は metadata の project_root（`file://` の URI・rust-analyzer では撃った dir）からの相対なので、project_root の字も別の口で読む（行 v-index-paths）。知らない欄は wire の型で読み飛ばす。外の crate の symbol（package が repo の外）と関数の中の local は落とす。壊れた wire（途中で切れた varint・長さが本体を越える欄）は読めない理由にする。
+      - 役の一致は JSON の 1 行ずつを `crates/scribe2/src/fleet/json_tree.rs` の parse（2 本目の JSON の読み手を作らない）で読み、key は ast-grep の stream の JSON の 1 行の部分集合（ruleId・file・range の byteOffset の start と end・metaVariables の single の NAME の text）だけを読む。ruleId が §5 の 9 語の外の行は捨て、捨てた数を返す。JSON でない行は読めない理由にする。
+-  4. **結び**（行 a1）: occurrence と役の一致を、file の先頭からの byte の位置に直して比べる（SCIP の列は document の position_encoding の単位で読み、呼び手が渡す file の本文で byte に直す）。occurrence ごとに、範囲を含む最も内側の役を付ける。役の一致のうち SCIP の occurrence を持たない物（doc の link・文字列の取り込み・`Self` の literal）は、捕えた名の字と同じ字の occurrence を、囲む定義 → 同じ file の順に探して symbol を借りる。借りられない物は字だけの行として残し、印を付ける。module を宣言する occurrence が test の役の中に在る module の file は、全体を test にする。
++  4. **結び**（行 a1）: 結びに渡す前に、組み立て（行 a2）が表の path を木からの相対に揃える（行 v-index-paths）。SCIP の project_root が木の下の dir なら、その木からの相対を document の path の頭に足す（木の下の別の workspace を撃つ 2 本目の行の path も repo の根からの相対になる）。役の一致の file が木の下の絶対 path なら木の頭を外す（ast-grep は絶対 path の `{tree}` を受けると一致の file を絶対 path で出す）。比べは path の要素ごとで、木そのもの・木の外の project_root と file は今のまま。occurrence と役の一致を、file の先頭からの byte の位置に直して比べる（SCIP の列は document の position_encoding の単位で読み、呼び手が渡す file の本文で byte に直す）。occurrence ごとに、範囲を含む最も内側の役を付ける。役の一致のうち SCIP の occurrence を持たない物（doc の link・文字列の取り込み・`Self` の literal）は、捕えた名の字と同じ字の occurrence を、囲む定義 → 同じ file の順に探して symbol を借りる。借りられない物は字だけの行として残し、印を付ける（捕えた名が改行かタブを含む一致は行にしない・表の 1 行 1 欄の形を崩すため・行 v-index-paths）。module を宣言する occurrence が test の役の中に在る module の file は、全体を test にする。
+   5. **平らな表**（行 a1・器が書き器が読む on-disk の形・schema 1）: 1 行 1 occurrence で、path・行・列・symbol・定義か・役の列・test か・囲む定義の symbol・source の可視性の字を tab で区切る。頭の行は `schema=1`。描きと読みは 1 対で、読みは描きの逆（往復で等しい）。schema の違う表は「無い」と読み、形の崩れた行は読めない理由にする。書きは一時 file → rename（行 a2）。形を変える版は schema を上げ、古い表を読まない（作り直せる）。
+   6. **鍵と置き場**: 索引の鍵は、code の木の鍵（[row-review.md](./row-review.md) §5 と同じ定義・commit の tracked から契約表を持つ file を除いた全 file の path と blob の hash の列の digest・役の規則の file も tracked なのでここに入る・行の審査の行 a が置く 1 本を行 a2 が呼ぶ）と、宣言 2 key の字を並べた字の FNV-1a 64（16 桁・行 a1 の digest の関数・`crates/scribe2/src/hook/vessel/digest.rs` の FNV-1a 64 を呼ぶ・2 本目の hash を作らない）。置き場（行 a2）は state dir の pipe の下の index の dir で、鍵ごとに平らな表と記録（1 行 1 key の `key=value`・1 行目は `schema=1`・key は key・commit・宣言の digest・rows・files・dropped・secs・at・stderr の末尾）。撃ち中の印は床の検査の印（`<鍵>.lock`）。外の道具の出力（SCIP の file と一致の列）と木は平らにした後に外す。
+   7. **量の上限と消し**（行 a2）: 置き場の合計が rules 行 `index.cap_mb`（2048 MiB・user 2026-09-30T22:13Z 項 index-cap）を越える周は、撃ち中の鍵と、anchor の HEAD の鍵を除いて、記録の at の古い順に上限まで消す（[ADR-0101](../../design-intent/decisions/ADR-0101-seat-draft-build-dirs-are-capped-per-state-dir-and-shed-oldest-first.html) と同じ形・消すのは器が作った導出値だけ・A1 は項 index-timeout の裁定で済み）。撃つのは組み立てが表を書いた直後の同じ印の中（2 つ目の掃除を足さない）。rules 行 2 本のどちらかを読めない周は組み立ても消しも撃たず、記録に `failed:no-rule` を書く（既定値に倒さない）。
+@@ -255,6 +255,7 @@ SRS 0.33 の round（FR107〜FR109 を足し、FR47・FR48・FR55 の字を直
+ - 行の審査への接続（索引の閉包の確定の FAIL・code の事実の FAIL と名指し・材料の index.txt）は行 i まで無い。AC81・AC82・AC83 のうち行の審査の部分は行 i が満たし、行 c・d・e は契約の審査・受付・`pipe preflight`・起動の列の部分を満たす。
+ - 欄 `code-facts` は生成する契約 file に写さないので、着地の列の settled の鍵（契約 file の sha）は欄だけの変化を見ない。live な行の書き換えを止める guard は契約表の行の型の等しさで比べるので、行 e の後は欄の変化も見る。
+ - ast-grep の規則で 9 つの役（特に doc の link と文字列の取り込み）を書き切れるかは未実測（試しは tree-sitter の Python の binding で役を付けた）。書き切れない役は行 b の規則の file から外し、§3 の数字をその役の分だけ割り引いて読む。
++- path の揃え（行 v-index-paths）: project_root は URI の字のまま木の path と比べるので、空白などの escape の要る字を木の path が持つ置き場では頭が付かず、下の dir の document の本文を読めずに failed:unreadable になる（state dir の path は escape の要る字を持たない前提）。どの行も、封じ込めの箱の memory の上限（`gate.job_memory_mb` の 2 倍）に入る必要がある（器の workspace の rust-analyzer の SCIP は RSS の山 約 3.1 GiB で 1 倍の 3072 MiB を越えた）。
+ - 列の揃え: SCIP の列の単位（position_encoding）と役の一致の byte の位置を木の本文で揃える。非 ASCII の字を持つ行（日本語の doc と文字列）の結びは行 a1 の fixture で測る。
+ 
+ ## 14. 却下
+diff --git a/xtask/tests/ixon.rs b/xtask/tests/ixon.rs
+index 605ec6da178021276df385c11dc8c470d0176c6e..faa1f0f727e6393524e2f801037cebadb68805c1 100644
+--- a/xtask/tests/ixon.rs
++++ b/xtask/tests/ixon.rs
+@@ -1,14 +1,15 @@
+ //! 行 t-index-on の歯（接頭辞 ixon_・設計ノート surface-wave29d・器の設計 reverse-index.md の 4 節 形 1・器の判断の記録 ADR-0105）: 根の器の宣言
+-//! .vessel.toml が器の任意 key index-scip と index-roles をそれぞれ 1 行だけで名乗り、字が器の宣言 scribe2/.vessel.toml に倣い（規則の file の path の頭
+-//! scribe2/ だけが違う）、名指す規則の file が追跡されて役の 9 語の規則を順に持ち、index-scip の 1 本が scribe2/ の外の全部の manifest を覆い、
++//! .vessel.toml が器の任意 key index-scip と index-roles をそれぞれ 1 行だけで名乗り、字が器の宣言 scribe2/.vessel.toml に倣い（index-scip は器の command に
++//! 穴 {tree} を {tree}/scribe2 に替えた 2 本目を足し・行 v-index-paths、index-roles は規則の file の path の頭 scribe2/ だけが違う）、名指す規則の file が
++//! 追跡されて役の 9 語の規則を順に持ち、index-scip の 1 本目が scribe2/ の外の全部の manifest を覆い、
+ //! rust-toolchain.toml が component rust-analyzer を 1 度だけ名乗ること。注の行を除いて key の字の行を数える。否定の見本は正しい見本から 1 句だけ替える。
+ #![cfg(test)]
+ 
+ use std::path::PathBuf;
+ use std::process::Command;
+ 
+-/// 索引を作る command の名乗りの行の字（器の宣言と同じ字）。
+-const SCIP_ON: &str = "index-scip = [\"rust-analyzer scip {tree} --output {out}\"]";
++/// 索引を作る command の名乗りの行の字（器の宣言の command と、その穴 {tree} を器の workspace の {tree}/scribe2 に替えた 2 本目）。
++const SCIP_ON: &str = "index-scip = [\"rust-analyzer scip {tree} --output {out}\", \"rust-analyzer scip {tree}/scribe2 --output {out}\"]";
+ 
+ /// 構文の役の一致を出す command の名乗りの行の字（器の宣言の規則の file の path に頭 scribe2/ を足した字）。
+ const ROLES_ON: &str =
+@@ -62,13 +63,30 @@ fn key_lines<'a>(text: &'a str, key: &str) -> Vec<&'a str> {
+         .collect()
+ }
+ 
+-/// 根の 2 行が器の宣言の 2 key の行に倣うか（index-scip は同じ字・index-roles は規則の file の頭だけを scribe2/ に替えた字）。
++/// 器の宣言の index-scip の行から根の行の字を作る（器の command の列に、穴 {tree} を {tree}/scribe2 に替えた列を続ける）。
++fn root_scip(line: &str) -> String {
++    let body = line
++        .strip_prefix("index-scip = [")
++        .and_then(|rest| rest.strip_suffix(']'))
++        .unwrap_or_default();
++    format!(
++        "index-scip = [{body}, {}]",
++        body.replace("{tree}", "{tree}/scribe2")
++    )
++}
++
++/// 根の 2 行が器の宣言の 2 key の行に倣うか（index-scip は器の command に 2 本目を足した字・index-roles は規則の file の頭だけを
++/// scribe2/ に替えた字）。
+ fn follows(vessel: &str) -> bool {
+     let roles: Vec<String> = key_lines(vessel, "index-roles")
+         .iter()
+         .map(|line| line.replace(VESSEL_RULE, ROOT_RULE))
+         .collect();
+-    key_lines(vessel, "index-scip") == vec![SCIP_ON] && roles == vec![ROLES_ON.to_owned()]
++    let scip: Vec<String> = key_lines(vessel, "index-scip")
++        .iter()
++        .map(|line| root_scip(line))
++        .collect();
++    scip == vec![SCIP_ON.to_owned()] && roles == vec![ROLES_ON.to_owned()]
+ }
+ 
+ /// 規則の file の頭の段の rule id（行頭の字 id: の後ろ・file の順）。
+@@ -235,6 +253,15 @@ fn ixon_one_clause_changes_are_refused() {
+             good.replace("index-scip = ", "# index-scip = "),
+         ),
+         ("index-scip", good.replace("index-scip = ", "index_scip = ")),
++        (
++            "index-scip",
++            good.replace(", \"rust-analyzer scip {tree}/scribe2 --output {out}\"", ""),
++        ),
++        (
++            "index-scip",
++            good.replace("{tree}/scribe2", "{tree}/scribe"),
++        ),
++        ("index-scip", good.replace("{tree}/scribe2", "scribe2")),
+         ("index-scip", format!("{good}{SCIP_ON}\n")),
+         (
+             "index-roles",
