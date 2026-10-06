@@ -20,10 +20,12 @@ use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, MAIN_REF};
 use crate::pipe::lens_record::{self, LensSource};
 use crate::pipe::ratelimit::Pool;
 use crate::pipe::review::{review, Review};
+use crate::pipe::spawn::bead_rows::LedgerRead;
 use crate::pipe::spawn::EndGate;
 use crate::pipe::retire::{read_tip, RemoteTip};
 use crate::pipe::{emit, run_dir, Emit};
 use crate::rules::manifest::Manifest;
+use crate::seat::ledger::timeout_of;
 use std::path::Path;
 
 /// 追随が衝突した便を起こし直す回数の上限を持つ rules 行。
@@ -510,7 +512,7 @@ pub(super) fn land_run(args: &[String], id: &str, manifest: &Manifest, policy: L
         pr_cmd,
         lens: &lens,
         limits,
-        runner: runner.map(|cmd| Runner { cmd, pool: pool.as_ref(), gate: &gate }),
+        runner: runner.map(|cmd| Runner { cmd, pool: pool.as_ref(), gate: &gate, ledger: LedgerRead { bd, timeout: timeout_of(manifest) } }),
         retries,
         land_wait_s,
         ci_wait_s, ci_poll_s,

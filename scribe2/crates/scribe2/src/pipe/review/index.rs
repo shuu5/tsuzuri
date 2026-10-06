@@ -22,8 +22,11 @@ use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Made,
 use crate::pipe::git_bytes;
 use crate::pipe::index::flat::{descriptor_names, query, Resolution, Row, Site};
 use crate::pipe::bead::digest_of_design;
+use crate::pipe::spawn::bead_rows::{ledger_rows, merged, LedgerRead};
+use crate::pipe::spawn::RowFacts;
 use crate::pipe::table::{self, design_docs, parse_pointer, read_table};
 use crate::rules::manifest::Manifest;
+use crate::seat::ledger::{timeout_of, DEFAULT_BD};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -37,6 +40,9 @@ const PREAMBLE: &str = "index.txt は器が外の道具の索引から組んだ�
 
 /// 外の印。
 const OUTSIDE: &str = "外";
+
+/// 台帳を読めず契約の bead の行を表に足せなかった周の、本文の頭の 1 行。
+const PARTIAL_LEDGER: &str = "index=partial:ledger";
 
 /// 契約表の 1 行（touches・write-set・節だけを読む）。
 struct Line {
@@ -108,6 +114,13 @@ impl Tables {
         let line = Line { pointer: design.to_owned(), doc: pointer.path.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal, patch: row.patch };
         self.lines.push(line);
         self.docs.insert(pointer.path, shown);
+        self
+    }
+
+    /// 台帳の契約の bead の行（鍵は bead の id・doc と節と goal は空・欄 patch は無い）を末に足す（[`merged`] が自分の bead の行を除いた列）。
+    pub(in crate::pipe) fn with_beads(mut self, rows: Vec<RowFacts>) -> Self {
+        let line = |(pointer, touches, write_set): RowFacts| Line { pointer, doc: String::new(), touches, write_set, section: String::new(), goal: String::new(), patch: None };
+        self.lines.extend(rows.into_iter().map(line));
         self
     }
 
@@ -504,6 +517,14 @@ fn word_of(state: &Status) -> Option<String> {
     }
 }
 
+/// 表に台帳の契約の bead の行を足す（台帳は既定の client で読み、待ちの上限は `manifest` の行から読む・自分の bead の行は除く）。戻りは表と、
+/// 台帳を読めない周の本文の頭の 1 行（[`PARTIAL_LEDGER`]）。
+fn with_ledger(tables: Tables, place: (&Path, &Path), design: &str, manifest: Option<&Manifest>) -> (Tables, Option<&'static str>) {
+    let read = LedgerRead { bd: DEFAULT_BD, timeout: manifest.and_then(timeout_of) };
+    let (rows, unread) = merged(Vec::new(), &ledger_rows(place.0, place.1, read), design);
+    (tables.with_beads(rows), unread.map(|_| PARTIAL_LEDGER))
+}
+
 /// 審査の材料 index.txt の本文（undeclared の repo は `None`＝file を置かない・ready でない周は `index=unavailable:<語>` の 1 行）。
 /// 項目（欄 `patch` の差が替える定義を含む）を持つ行は、状態が absent か building の周に組み立ての 1 本（[`assembled`]）で索引を得てから描く。項目を持たない行は撃たず、
 /// 表を空の列にして同じ描きの 1 本で描く（ready の周と同じ本文）。half と failed の周は撃たない（failed の鍵を審査ごとに撃ち直さない）。
@@ -522,6 +543,7 @@ fn material(place: (&Path, &Path), head: Option<&str>, design: &str, policy: Loc
     let Ok(tables) = Tables::load(repo, sha).map(|loaded| loaded.with_copy(repo, design)) else {
         return Some("index=unavailable:table".to_owned());
     };
+    let (tables, partial) = with_ledger(tables, place, design, Manifest::embedded().ok().as_ref());
     let Ok((line, items)) = row_items(&tables, design) else {
         return Some("index=unavailable:row".to_owned());
     };
@@ -534,7 +556,11 @@ fn material(place: (&Path, &Path), head: Option<&str>, design: &str, policy: Loc
         },
     };
     let ctx = Ctx { rows: &rows, repo, sha, tables: &tables };
-    Some(row_report(&ctx, design).unwrap_or_else(|_| "index=unavailable:row".to_owned()))
+    let report = row_report(&ctx, design).unwrap_or_else(|_| "index=unavailable:row".to_owned());
+    Some(match partial {
+        Some(head) => format!("{head}\n{report}"),
+        None => report,
+    })
 }
 
 /// 組み立ての 1 本で索引を得て（撃つか撃ち中の持ち主の終わりを待つ）状態を読み直す。rules は埋め込みの値（裏の起こしの子と同じ・
@@ -672,7 +698,14 @@ pub(in crate::pipe) fn show(args: &[String], manifest: &Manifest, policy: LockPo
         Assembled::Made(made) => match (&made.how, status(&state_dir, &repo, &sha)) {
             (How::Failed(word), _) => unavailable(word),
             (_, Status::Ready(rows)) => match Tables::load(&repo, &sha) {
-                Ok(tables) => tables_of(&Ctx { rows: &rows, repo: &repo, sha: &sha, tables: &tables }, &asks),
+                Ok(loaded) => {
+                    let (tables, partial) = with_ledger(loaded, (&state_dir, &repo), "", Some(manifest));
+                    let mut shown = tables_of(&Ctx { rows: &rows, repo: &repo, sha: &sha, tables: &tables }, &asks);
+                    if shown.rc == RC_OK {
+                        shown.out.splice(0..0, partial.map(str::to_owned));
+                    }
+                    shown
+                }
                 Err(reason) => broken(reason),
             },
             (_, other) => unavailable(&word_of(&other).unwrap_or_default()),
@@ -682,7 +715,7 @@ pub(in crate::pipe) fn show(args: &[String], manifest: &Manifest, policy: LockPo
 
 #[cfg(test)]
 mod tests {
-    use super::{row_items, Tables};
+    use super::{other_rows, row_items, Tables};
     use crate::pipe::bead::copy_text;
     use crate::pipe::fixture::scratch;
     use std::path::{Path, PathBuf};
@@ -717,5 +750,15 @@ mod tests {
         let absent = dir.join("bead-contracts").join("s2-b").join("fedcba9876543210.toml");
         let missing = format!("{}#b", absent.display());
         assert!(row_items(&Tables::default().with_copy(&dir, &missing), &missing).is_err(), "在らない写しは引かない");
+    }
+
+    /// 空の表に bead の行（鍵 s2-c・touches の項目 crate::x::T・write-set src/a.rs）を足すと、項目 crate::x::T の `other_rows` は鍵 s2-c と空の
+    /// file の列の組 1 つだけを返す（write-set が在る行なので site が無ければ広げる file は空）。
+    #[test]
+    fn vbrb_index_other_rows_name_the_bead_row() {
+        let row = ("s2-c".to_owned(), vec!["crate::x::T".to_owned()], vec!["src/a.rs".to_owned()]);
+        let tables = Tables::default().with_beads(vec![row]);
+        assert_eq!(other_rows(&tables, "crate::x::T", "", &[]), [("s2-c".to_owned(), Some(Vec::new()))], "bead の行 1 つ");
+        assert!(other_rows(&tables, "crate::x::U", "", &[]).is_empty(), "touches に無い項目は引かない");
     }
 }

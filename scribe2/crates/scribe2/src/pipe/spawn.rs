@@ -34,6 +34,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+pub(crate) mod bead_rows;
+
+use bead_rows::{ledger_rows, merged, LedgerRead};
+
 /// policy file の名前（guard が読む形・vessel-hook.md §5）。
 const WRITE_SET_FILE: &str = "write-set.txt";
 
@@ -524,6 +528,8 @@ pub struct Launch<'a> {
     /// **この便の gate の FAIL の所見**（gate の FAIL の直しの周だけ持つ・設計 pipeline.md §73）。在る周は同じ run の worktree と base を使い、
     /// runner の stdin に「gate の FAIL」節を付ける。値の出所は [`super::follow::gate_fix`] ただ 1 本である。
     pub fix: Option<GateFix>,
+    /// 台帳を読む材料（「ほかの行の touches」節が契約の bead の行を読む・[`bead_rows::ledger_rows`]）。
+    pub ledger: LedgerRead<'a>,
     /// lock の待ち方。
     pub policy: LockPolicy,
 }
@@ -913,25 +919,28 @@ pub fn common_lines(common: &[String], base: &str, verify: &[String]) -> String 
 
 /// 「ほかの行の touches」節の本文（設計 reverse-index.md §15）: 便の **base の木**の契約表（[`design_docs`] の母集団）の
 /// 行の touches の項目を、契約 file の design（自分の行の pointer）の行を除いて並べる。anchor の作業木は読まない。
-/// 読めない周は理由の 1 行（runner は止めない）。
+/// 読めない周は理由の 1 行（runner は止めない）。置き場の契約の bead の行（[`ledger_rows`]・自分の bead の行は除く）も表の行の後に足し、
+/// 台帳を読めない周は本文の後に理由の 1 行を足す。
 fn touches_section(launch: &Launch<'_>, base: &str) -> String {
-    match touches_rows(launch.repo, base) {
-        Ok(rows) => touches_lines(&rows, &launch.contract.design),
-        Err(reason) => format!("（ほかの行の touches を読めない: {reason}）\n"),
+    let rows = match table_rows(launch.repo, base) {
+        Ok(found) => found,
+        Err(reason) => return format!("（ほかの行の touches を読めない: {reason}）\n"),
+    };
+    let beads = ledger_rows(launch.state_dir, launch.repo, launch.ledger);
+    let (rows, unread) = merged(rows, &beads, &launch.contract.design);
+    let pairs: Vec<(String, Vec<String>)> = rows.into_iter().map(|(pointer, touches, _)| (pointer, touches)).collect();
+    let mut body = touches_lines(&pairs, &launch.contract.design);
+    if let Some(reason) = unread {
+        body.push_str(&format!("（契約の bead の行を読めない: {reason}）\n"));
     }
-}
-
-/// 便の base の木の契約表の行ごとの（pointer `<doc>#<id>`・touches の列）。doc の順と行の順（読めない周は doc の path を
-/// 持つ理由）。
-fn touches_rows(repo: &Path, base: &str) -> Result<Vec<(String, Vec<String>)>, String> {
-    Ok(table_rows(repo, base)?.into_iter().map(|(pointer, touches, _)| (pointer, touches)).collect())
+    body
 }
 
 /// 行ごとの（pointer `<doc>#<id>`・touches の列・write-set の列）。
 pub(crate) type RowFacts = (String, Vec<String>, Vec<String>);
 
-/// [`touches_rows`] の読みに write-set の列を足したもの（行ごとの pointer・touches・write-set・pipe preflight の閉包の広がりの予想が
-/// 同じ 1 本の読みを借りる）。
+/// 便の base の木の契約表の行ごとの pointer・touches・write-set（doc の順と行の順・読めない周は doc の path を持つ理由・
+/// 「ほかの行の touches」節と pipe preflight の閉包の広がりの予想が同じ 1 本の読みを借りる）。
 pub(crate) fn table_rows(repo: &Path, base: &str) -> Result<Vec<RowFacts>, String> {
     let listed = git_bytes(repo, &["ls-tree", "-r", "-z", "--name-only", base])
         .ok_or_else(|| format!("base {base} の木を読めない"))?;

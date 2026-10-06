@@ -37,6 +37,7 @@ use super::gate::RC_INCONCLUSIVE;
 use super::land::MAIN_REF;
 use super::ratelimit::{choose_account, Pool};
 use super::refuse::SHRINK_FILE;
+use super::spawn::bead_rows::LedgerRead;
 use super::spawn::{red_round, spawn, Account, EndGate, EndGateHold, GateFix, GateRed, Launch, PriorFail};
 use super::table::{repo_findings, Located};
 use super::{
@@ -183,6 +184,8 @@ pub struct Runner<'a> {
     /// 終わりの門の線（gate の線と起こし直しの回数の上限・組む周の manifest から [`EndGate::of`] の 1 本で組む・設計
     /// pipeline.md §66 形 8）。
     pub gate: &'a EndGate,
+    /// 台帳を読む材料（契約の bead の行を「ほかの行の touches」節が読む・[`LedgerRead::of`] の 1 本で組む）。
+    pub ledger: LedgerRead<'a>,
 }
 
 /// 追随が止まった 1 回分の材料（land の追随が渡す・衝突 [`on_conflict`] と stale [`on_stale`] で同じ形）。
@@ -685,6 +688,7 @@ fn spawn_rounds(entry: &Turn<'_>, runner: Runner<'_>, account: Account<'_>) -> O
                 red: red.take(),
                 prior_fail,
                 fix,
+                ledger: runner.ledger,
                 policy: entry.policy,
             },
         );
@@ -1071,7 +1075,9 @@ mod tests {
     use crate::fleet::{EventKind, Stage};
     use crate::pipe::approve::RC_BLOCKED;
     use crate::pipe::fixture::{append_all, contract, event, scratch};
+    use crate::pipe::spawn::bead_rows::LedgerRead;
     use crate::pipe::spawn::Account;
+    use crate::seat::ledger::DEFAULT_BD;
     use crate::invocation::Invocation;
     use std::path::{Path, PathBuf};
 
@@ -1127,7 +1133,7 @@ mod tests {
                 repo: &repo,
                 state_dir: &state,
                 contract: &gated,
-                runner: Some(Runner { cmd: "true", pool: None, gate: &gate }),
+                runner: Some(Runner { cmd: "true", pool: None, gate: &gate, ledger: LedgerRead { bd: DEFAULT_BD, timeout: None } }),
                 approved: false,
                 policy,
             },
@@ -1145,7 +1151,7 @@ mod tests {
                 repo: &repo,
                 state_dir: &state,
                 contract: &open,
-                runner: Some(Runner { cmd: runner, pool: None, gate: &gate }),
+                runner: Some(Runner { cmd: runner, pool: None, gate: &gate, ledger: LedgerRead { bd: DEFAULT_BD, timeout: None } }),
                 approved: false,
                 policy,
             },

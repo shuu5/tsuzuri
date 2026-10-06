@@ -137,7 +137,7 @@ const ALLOWED_INTAKE: &[cli_args::Allowed] =
 const ALLOWED_PREFLIGHT: &[cli_args::Allowed] =
     &[PLACE[0], PLACE[1], PLACE[2], value("--design"), value("--bead"), value("--contract"), TOOLS[0], Allowed::switch(super::preflight::PLACED)];
 /// `pipe spawn`。
-const ALLOWED_SPAWN: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], value("--run"), value("--runner"), value("--curl")];
+const ALLOWED_SPAWN: &[cli_args::Allowed] = &[PLACE[0], PLACE[1], PLACE[2], value("--run"), value("--runner"), value("--curl"), TOOLS[0]];
 /// `pipe approve`（記帳が成った周は列を 1 周撃つ＝道具も受ける）。
 const ALLOWED_APPROVE: &[cli_args::Allowed] =
     &[PLACE[0], PLACE[1], PLACE[2], value("--run"), value("--words"), TOOLS[0], TOOLS[1], TOOLS[2], TOOLS[3]];

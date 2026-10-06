@@ -10,6 +10,7 @@
 use super::approve::RC_BLOCKED;
 use super::cli::{broken, flag, refused, resolve, stage_of, state_dir_of, turn_of, Extra};
 use super::follow::{self, Runner, Turn};
+use super::spawn::bead_rows::LedgerRead;
 use super::spawn::{Account, EndGate};
 use super::{current, runner_is_idle};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK};
@@ -100,6 +101,11 @@ pub(super) fn ride_out_rate_limit(
         Err(reason) => return refused(reason),
     };
     let gate = EndGate::of(manifest);
+    let bd = match flag(args, "--bd") {
+        Ok(found) => found,
+        Err(reason) => return refused(reason),
+    };
+    let ledger = LedgerRead::of(bd, manifest);
     let mut outcome = Outcome::ok(Vec::new());
     loop {
         // 置き場を読めない周は rc 2（読めなさを「上限ではない」に読み替えて gate へ流さない）。
@@ -128,7 +134,7 @@ pub(super) fn ride_out_rate_limit(
             Ok(found) => found,
             Err(reason) => return refused(reason),
         };
-        let turn = resume_rate_limited(args, id, Runner { cmd: runner, pool: Some(&pool), gate: &gate }, policy, expected);
+        let turn = resume_rate_limited(args, id, Runner { cmd: runner, pool: Some(&pool), gate: &gate, ledger }, policy, expected);
         outcome.out.extend(turn.out);
         outcome.err.extend(turn.err);
         if turn.rc != RC_OK {

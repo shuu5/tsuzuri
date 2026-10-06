@@ -39,6 +39,7 @@ use crate::pipe::contract::Contract;
 use crate::pipe::dispatch::pointer_of;
 use crate::pipe::refuse::{covered, Refuse};
 use crate::pipe::review::{design_material, done_items, section_text};
+use crate::pipe::spawn::bead_rows::{ledger_rows, merged, Beads, LedgerRead};
 use crate::pipe::spawn::table_rows;
 use crate::pipe::table::TableError;
 use crate::pipe::{show_head, table};
@@ -333,9 +334,10 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     // bead の周の pointer は組んだ契約の design（bead の形は写しの path・Design の形は表の pointer）から読む。
     let own = pointer.or_else(|| table::parse_pointer(&contract.design).ok());
     let doc = file.or_else(|| own.as_ref().and_then(|found| show_head(&repo, &found.path)));
+    let beads = state_dir.as_deref().map_or(Beads::Off, |dir| ledger_rows(dir, &repo, LedgerRead { bd, timeout: timeout_of(manifest) }));
     let widen = own.as_ref().map_or_else(
         || vec![format!("{WIDEN}unmeasured:{} を読めない", contract.design)],
-        |found| widen_lines(&repo, &sha, found, doc, &contract.write_set),
+        |found| widen_lines(&repo, &sha, found, doc, (&contract.write_set, &beads)),
     );
     let placed = own.as_ref().filter(|_| present(args, PLACED)).map(|found| acceptance_of(bd, &repo, manifest, &bead, found));
     let common = early.frozen.as_ref().map_or(&[][..], |(found, _)| found.common_verify());
@@ -348,13 +350,17 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
 /// `widen=<項目>@<doc>#<行 id>:<file,…>`（設計 reverse-index.md の閉包の広がりの予想）: 自分の行の § の本文が語として名指す型形の項目を
 /// touches に持つほかの行で、write-set が自分の write-set の .rs の候補〔接頭辞が無いか `+`・`+` は剥がす〕を覆わない組。HEAD の木の
 /// 契約表を読めない周は `widen=unmeasured:<理由>` の 1 行（理由は「ほかの行の touches」節と同じ字）。`doc` は自分の行を持つ doc の字
-/// （`--design` の周は base の読み・`--contract` の周は file の字）で、本文は行が goal を持てば goal・無ければ節の本文。
-fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, doc: Option<String>, own: &[String]) -> Vec<String> {
+/// （`--design` の周は base の読み・`--contract` の周は file の字）で、本文は行が goal を持てば goal・無ければ節の本文。`own` は自分の
+/// write-set と台帳の契約の bead の行（[`merged`] が表の行の後に足す・台帳を読めない周は並べた行の後に
+/// `widen=unmeasured:契約の bead の行を読めない（<理由>）` の 1 行を足す）。
+fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, doc: Option<String>, own: (&[String], &Beads)) -> Vec<String> {
+    let (own, beads) = own;
     let unmeasured = |reason: String| vec![format!("{WIDEN}unmeasured:{reason}")];
     let rows = match table_rows(repo, sha) {
         Ok(found) => found,
         Err(reason) => return unmeasured(reason),
     };
+    let (rows, unread) = merged(rows, beads, &format!("{}#{}", pointer.path, pointer.id));
     let body = doc.and_then(|text| {
         let row = table::find_row(&pointer.path, &text, &pointer.id).ok()?;
         Some(if row.goal.is_empty() { section_text(&text, &row.section) } else { row.goal })
@@ -378,7 +384,9 @@ fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, doc: Option<Str
         }
     }
     found.sort_by(|left, right| left.0.cmp(right.0));
-    found.into_iter().map(|(_, line)| line).collect()
+    let mut lines: Vec<String> = found.into_iter().map(|(_, line)| line).collect();
+    lines.extend(unread.map(|reason| format!("{WIDEN}unmeasured:契約の bead の行を読めない（{reason}）")));
+    lines
 }
 
 /// write-set の項目が .rs の候補か（接頭辞が無いか `+`・`+` は剥がす・dir と .rs でない file は候補でない）。

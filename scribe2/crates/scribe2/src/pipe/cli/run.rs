@@ -7,7 +7,7 @@
 
 use super::intake::{intake_id, intake_line};
 use super::step::{gate_run, land_run};
-use super::{broken, int_row, manifest_of, need, refused, resolve, review_then_launch, state_dir_of, Extra, Resolved};
+use super::{broken, flag, int_row, manifest_of, need, refused, resolve, review_then_launch, state_dir_of, Extra, Resolved};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::json_lite;
 use crate::fleet::store::{self, LockPolicy};
@@ -16,6 +16,7 @@ use crate::pipe::follow::{self, Runner, Turn, FAIL_DETAIL, FIX_DETAIL};
 use crate::pipe::gate::Verdict;
 use crate::pipe::land::verdict_of;
 use crate::pipe::ratelimit::{ride_out_rate_limit, Pool};
+use crate::pipe::spawn::bead_rows::LedgerRead;
 use crate::pipe::spawn::EndGate;
 use crate::pipe::{current, emit, verdict_path, Emit};
 use crate::rules::manifest::Manifest;
@@ -65,7 +66,11 @@ pub(super) fn launch(
         Err(reason) => return refused(reason),
     };
     let gate = EndGate::of(&manifest);
-    let runner = Runner { cmd: runner, pool: pool.as_ref(), gate: &gate };
+    let bd = match flag(args, "--bd") {
+        Ok(found) => found,
+        Err(reason) => return refused(reason),
+    };
+    let runner = Runner { cmd: runner, pool: pool.as_ref(), gate: &gate, ledger: LedgerRead::of(bd, &manifest) };
     follow::spawn_selected(&turn_of(id, &resolved, runner, policy), resolved.stage)
 }
 

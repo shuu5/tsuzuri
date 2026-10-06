@@ -2158,12 +2158,17 @@ fn touches_intake() -> (PathBuf, PathBuf, String) {
 
 /// runner が stdin を写して commit を 1 本作る周の stdin（runner は止まらず rc 0）。
 fn touches_spawn_stdin(repo: &Path, state: &Path, id: &str) -> String {
+    touches_spawn_stdin_with(repo, state, id, &[])
+}
+
+/// [`touches_spawn_stdin`] に引数 `extra`（`--bd` など）を足して撃つ。
+fn touches_spawn_stdin_with(repo: &Path, state: &Path, id: &str, extra: &[&str]) -> String {
     let copied = state.join("got-stdin.txt");
     let runner = format!("cat > '{}' && {TOY_COMMIT}", copied.display());
-    let out = run_pipe(&[
-        "spawn", "--run", id, "--repo", &repo.display().to_string(),
-        "--state-dir", &state.display().to_string(), "--runner", &runner,
-    ]);
+    let (repo_arg, state_arg) = (repo.display().to_string(), state.display().to_string());
+    let mut args = vec!["spawn", "--run", id, "--repo", &repo_arg, "--state-dir", &state_arg, "--runner", &runner];
+    args.extend_from_slice(extra);
+    let out = run_pipe(&args);
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "runner は止まらない: {}", stderr_of(&out));
     fs::read_to_string(&copied).unwrap_or_default()
 }
@@ -2246,6 +2251,57 @@ fn runner_touches_section_lines_skip_own_row_and_bundle_pointers() {
     assert_eq!(vessel::pipe::spawn::touches_lines(rows.get(..1).unwrap_or_default(), "d#a"), "なし\n", "自分の行だけなら項目 0");
 }
 
+// ───── 台帳の契約の bead の行を置き場の全部の行を読む口へ（契約表の行 v-bead-reads-b・接頭辞 `vbrb_`） ─────
+
+/// bead の形の acceptance（`[[contract]]` の 1 行・行 `id`・touches は項目 1 つ・write-set は 1 つ・欄 section は持たない）。
+fn bead_acceptance(id: &str, touches: &str, write_set: &str) -> String {
+    let (touches, write_set) = (format!("touches = [\"{touches}\"]"), format!("write-set = [\"{write_set}\"]"));
+    format!("[[contract]]\n{}\n", row_fields(id, &["section", "write-set"], &[touches.as_str(), write_set.as_str()]).join("\n"))
+}
+
+/// 偽の台帳 client（置き場の json を cat する実行権つきの sh）の絶対 path と、置き場の子 bead-contracts の dir を作る。要素は（bead の id・
+/// acceptance）で、本文は `本文。`・status は open。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn bead_ledger_client(state: &Path, beads: &[(&str, &str)]) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let quoted = |text: &str| text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+    let items: Vec<String> = beads
+        .iter()
+        .map(|(id, acceptance)| {
+            format!("{{\"id\":\"{id}\",\"status\":\"open\",\"acceptance_criteria\":\"{}\",\"description\":\"本文。\",\"dependencies\":[]}}", quoted(acceptance))
+        })
+        .collect();
+    let json = state.join("ledger-vbrb.json");
+    fs::write(&json, format!("[{}]\n", items.join(","))).expect("偽の台帳を書ける");
+    let client = state.join("bd-vbrb");
+    fs::write(&client, format!("#!/bin/sh\ncat '{}'\n", json.display())).expect("偽 client を書ける");
+    fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).expect("偽 client に実行権を付ける");
+    fs::create_dir_all(state.join("bead-contracts")).expect("写しの dir を作れる");
+    client.display().to_string()
+}
+
+/// (5) 置き場に子 bead-contracts の dir と偽の台帳 client（bead s2-c は touches が crate::other::Shared の 1 つ・bead s2-e は design の行だけ）を
+/// 足して `--bd` 付きで撃つ spawn の「ほかの行の touches」節は、項目 crate::other::Shared の行が pointer の列の末に鍵 s2-c を持ち、項目
+/// crate::other::helper の行は替わらず、字 s2-e を持たない。
+#[test]
+fn vbrb_spawn_touches_list_the_contract_bead_row() {
+    let (repo, state, id) = touches_intake();
+    let client = bead_ledger_client(
+        &state,
+        &[("s2-c", &bead_acceptance("c", "crate::other::Shared", "src/lib.rs")), ("s2-e", "design = docs/design/other.md#b1\n")],
+    );
+    let stdin = touches_spawn_stdin_with(&repo, &state, &id, &["--bd", &client]);
+    let body = touches_body(&stdin);
+    let want = "- crate::other::Shared ← docs/design/other.md#b1, docs/design/other.md#b2, s2-c\n\
+                - crate::other::helper ← docs/design/other.md#b1\n";
+    assert_eq!(body, want, "bead の行が pointer の列の末に付く: {stdin}");
+    assert!(!body.contains("s2-e"), "design の行だけの bead は載らない: {body}");
+    clean(&[&repo, &state]);
+}
+
 // ───── pipe preflight の閉包の広がりの予想（設計 contract-source.md §71・接頭辞 `preflight_widen_`） ─────
 //
 // 自分の行 a の § 2 の本文が語として名指す型形の項目をほかの行が touches に持ち、その行の write-set が a の .rs の候補を覆わない組を
@@ -2281,11 +2337,18 @@ fn widen_h() -> String {
 
 /// 行 a の preflight を 1 回撃つ。
 fn widen_preflight(repo: &Path, state: &Path) -> Output {
-    run_pipe(&[
+    widen_preflight_with(repo, state, &ceiling_rules(state), &[])
+}
+
+/// 行 a の preflight を規則の写し `rules` と引数 `extra`（`--bd` など）つきで 1 回撃つ。
+fn widen_preflight_with(repo: &Path, state: &Path, rules: &str, extra: &[&str]) -> Output {
+    let (repo_arg, state_arg) = (repo.display().to_string(), state.display().to_string());
+    let mut args = vec![
         "preflight", "--design", "docs/design/toy.md#a", "--bead", "s2-a",
-        "--repo", &repo.display().to_string(), "--state-dir", &state.display().to_string(),
-        "--rules", &ceiling_rules(state),
-    ])
+        "--repo", &repo_arg, "--state-dir", &state_arg, "--rules", rules,
+    ];
+    args.extend_from_slice(extra);
+    run_pipe(&args)
 }
 
 /// HEAD の doc の § 2 の本文が語 Tint を持つ前提（撃つ前に歯の中で assert する）。
@@ -2409,6 +2472,35 @@ fn preflight_widen_stays_out_of_the_refusal_count() {
     let at = lines.iter().position(|line| line.starts_with("refuse=")).unwrap_or_default();
     assert_eq!(widen_of(&out), [widen_h_line()], "h の 1 本: {stdout}");
     assert_eq!(lines.get(at.saturating_sub(1)).copied(), Some(widen_h_line().as_str()), "h の 1 本が refuse の行の直前: {stdout}");
+    clean(&[&repo, &state]);
+}
+
+/// 規則の写し `ceiling_rules` の末に台帳の待ちの上限の行を足した file の path（台帳を読む口が要る行）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn ledger_wait_rules(state: &Path) -> String {
+    let body = fs::read_to_string(ceiling_rules(state)).expect("受付の写しを読める");
+    let row = "[[rule]]\nid = \"seat.ledger_timeout_s\"\nkind = \"LedgerTimeoutS\"\nvalue = 60\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
+    let path = state.join("rules-widen-ledger.toml");
+    fs::write(&path, format!("{body}\n{row}")).expect("写しを書ける");
+    path.display().to_string()
+}
+
+/// (6) 置き場に子 bead-contracts の dir と偽の台帳 client（bead s2-k は touches が crate::tint::Tint・write-set が crates/toy/src/other.rs）と台帳の
+/// 待ちの上限の行を足して `--bd` 付きで撃つ preflight は rc 0 で、`widen=` の行は行 h の行と、項目 crate::tint::Tint と字 `@s2-k` と
+/// 字 crates/toy/src/paint.rs を持つ行の 2 本がこの順である。
+#[test]
+fn vbrb_preflight_widen_names_the_contract_bead_row() {
+    let (repo, state) = derive_repo_with(&widen_doc(&[widen_own(&[]), widen_h()]), &[]);
+    assert_head_names_tint(&repo);
+    let client = bead_ledger_client(&state, &[("s2-k", &bead_acceptance("k", "crate::tint::Tint", "crates/toy/src/other.rs"))]);
+    let out = widen_preflight_with(&repo, &state, &ledger_wait_rules(&state), &["--bd", &client]);
+    let stdout = stdout_of(&out);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "rc 0: {stdout} {}", stderr_of(&out));
+    let want = [widen_h_line(), "widen=crate::tint::Tint@s2-k:crates/toy/src/paint.rs".to_owned()];
+    assert_eq!(widen_of(&out), want, "行 h の後に bead の行: {stdout}");
     clean(&[&repo, &state]);
 }
 
