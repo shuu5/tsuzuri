@@ -1,6 +1,7 @@
 //! 行 v-retire の歯: 持ち込んだ器 scribe2 の中で tsuzuri の作業中に働く 2 つの file を止めたこと（判断の記録 ADR-33 の決定 (9)・(10)）。
 //! 台帳の置き場の印 scribe2/.beads の 5 本は退役の置き場 scribe2/retired/beads/ へ移り、AI への指示の file scribe2/CLAUDE.md は
 //! 元の path に残って、根の Claude Code の設定 .claude/settings.json の claudeMdExcludes が読ませない。外の依存を使わず repo の根からの相対の path で読む。
+//! 行 t-prime-own の歯（名の頭 vretb_prime_）: 根の .beads/PRIME.md が bd prime の既定の手引きを差し替える。
 #![cfg(test)]
 
 use crate::common::root;
@@ -150,5 +151,22 @@ fn vretb_claude_md_excluded() {
         ),
     ] {
         assert!(judge(&text).is_err(), "{label} を通す");
+    }
+}
+
+#[test]
+fn vretb_prime_replaces_the_default_guide() {
+    let rel = ".beads/PRIME.md";
+    assert!(root().join(rel).is_file(), "{rel} が file として無い");
+    let text = read(rel);
+    assert!(text.lines().count() <= 8, "{rel} は 8 行以下");
+    for want in ["bd --readonly", "bdw", "in_progress"] {
+        assert!(text.contains(want), "{rel} に字 {want} が無い");
+    }
+    for command in ["bd create", "bd close", "bd remember", "bd dolt push"] {
+        assert!(!text.contains(command), "{rel} が命令の字 {command} を持つ");
+    }
+    for mark in MARKS {
+        assert!(!text.contains(mark), "{rel} が private な path の形を持つ");
     }
 }
