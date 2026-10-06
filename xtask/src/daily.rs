@@ -1,6 +1,7 @@
 //! 日に 1 度の全部の撃ち（行 v-daily・判断の記録 ADR-34 の決定 (6)）。host の利用者の timer が、作業木の外の固定の置き場の写しで
 //! `cargo run -q -p xtask -- daily` を撃つ。写しの origin の main を fetch して detach で checkout し、入れ子の段に全部を撃たせる
-//! 環境変数を置いて xtask の check を nice -n 10 で撃ち、記録の file に 1 行足す。落ちた時は席への memo を台帳に起こし
+//! 環境変数を置いて xtask の check を nice -n 10 で撃ち、続けて check の後の 3 段（写しの孤児の照らし insta-refs・根の依存の監査 deny・
+//! 器の依存の監査 deny-scribe2）を順に撃ち、記録の file に 1 行足す。落ちた時は席への memo を台帳に起こし
 //! （落ちが続く間は同じ memo の notes に [再発] の行を足す・その memo が open か in_progress でないか読めないか notes が満ちる時は、足さずに
 //! 前の memo の id を本文に書いた新しい memo を起こす）、通った時は memo を書かない。host の値（記録の file・出力の file・
 //! 台帳の作業木・memo の親・bdw の program）は引数で受け、code を分けない（条 N-2）。組みの置き場は撃つ側の CARGO_TARGET_DIR。
@@ -31,6 +32,54 @@ pub const CHECKOUT: &[&str] = &["checkout", "-q", "--detach", "refs/remotes/orig
 /// check を撃つ argv の頭（nice の program と引数・その後に cargo の program を置く）と cargo の引数。
 pub const NICE: (&str, &[&str]) = ("nice", &["-n", "10"]);
 pub const CHECK: &[&str] = &["run", "-q", "-p", "xtask", "--", "check"];
+
+/// check の後の段（段の名・cargo の引数・写しの根からの cwd〔空の字は根〕）。最初の段 insta-refs だけ、引数の末に refs_dir の path を足す。
+pub const AFTER: &[(&str, &[&str], &str)] = &[
+    (
+        "insta-refs",
+        &["run", "-q", "-p", "xtask", "--", "insta-refs"],
+        "",
+    ),
+    (
+        "deny",
+        &[
+            "deny",
+            "check",
+            "-D",
+            "unmatched-skip",
+            "-D",
+            "advisory-not-detected",
+        ],
+        "",
+    ),
+    ("deny-scribe2", &["deny", "check"], "scribe2"),
+];
+
+/// 入れ子の段の歯が読んだ写しの path を足す file を名指す環境変数（src/snaprefs.rs の REFS_ENV と同じ名）。
+pub const REFS_ENV: &str = "INSTA_SNAPSHOT_REFERENCES_FILE";
+
+/// 読んだ写しの file を置く dir（出力の file の拡張子を insta-refs に替えた path）。
+pub fn refs_dir(out: &Path) -> PathBuf {
+    out.with_extension("insta-refs")
+}
+
+/// check の後の段の Command（program・引数・cwd・FORCE と REFS_ENV の env_remove まで・stdout と stderr は持たない）。
+pub fn after_command(d: &Daily, step: (&str, &[&str], &str), refs: &Path) -> Command {
+    let (name, args, cwd) = step;
+    let mut cmd = Command::new(NICE.0);
+    cmd.args(NICE.1).arg(&d.cargo).args(args);
+    if AFTER.first().is_some_and(|first| first.0 == name) {
+        cmd.arg(refs);
+    }
+    cmd.current_dir(if cwd.is_empty() {
+        d.root.clone()
+    } else {
+        d.root.join(cwd)
+    })
+    .env_remove(FORCE.0)
+    .env_remove(REFS_ENV);
+    cmd
+}
 
 /// 続く落ちの前に memo の状態を読む bdw の引数の頭（bd の READ の素通し・台帳を書かない・その後に id と --json）。
 pub const SHOW: &[&str] = &["--readonly", "show"];
@@ -160,6 +209,11 @@ fn shoot(d: &Daily) -> (&'static str, i32) {
         Ok(f) => f,
         Err(_) => return ("out", 1),
     };
+    let refs = refs_dir(&d.out);
+    let _ = std::fs::remove_dir_all(&refs);
+    if std::fs::create_dir_all(&refs).is_err() {
+        return ("refs", 1);
+    }
     let rc = status(
         Command::new(NICE.0)
             .args(NICE.1)
@@ -167,10 +221,30 @@ fn shoot(d: &Daily) -> (&'static str, i32) {
             .args(CHECK)
             .current_dir(&d.root)
             .env(FORCE.0, FORCE.1)
+            .env(REFS_ENV, refs.join("insta-refs.txt"))
             .stdout(out)
             .stderr(err),
     );
-    ("check", rc)
+    if rc != 0 {
+        return ("check", rc);
+    }
+    for &step in AFTER {
+        let Some((out, err)) = append_out(&d.out) else {
+            return ("out", 1);
+        };
+        let rc = status(after_command(d, step, &refs).stdout(out).stderr(err));
+        if rc != 0 {
+            return (step.0, rc);
+        }
+    }
+    ("check", 0)
+}
+
+/// 出力の file を追記で開いた stdout と stderr の対（開けなければ None）。
+fn append_out(path: &Path) -> Option<(std::fs::File, std::fs::File)> {
+    let out = std::fs::OpenOptions::new().append(true).open(path).ok()?;
+    let err = out.try_clone().ok()?;
+    Some((out, err))
 }
 
 /// 撃って rc（起動できなければ 127・signal で止まれば 1）。
@@ -323,7 +397,7 @@ fn memo_body(seen: &Seen, out: &Path, log: &Path, before: Option<&str>) -> Strin
     });
     format!(
         "### 出所\nxtask の daily（判断の記録 ADR-34 の決定 (6)・行 v-daily・host の利用者の timer）。\n{}\n\
-         ### 観測\n{} に origin/main {} の木で、環境変数 {}={} を置いた xtask の check を撃ち、段 {} が rc {} で落ちた（{} 秒）。出力は file {}、記録は file {}（どちらも撃つ写しの置き場の側）。\n\n\
+         ### 観測\n{} に origin/main {} の木で、環境変数 {}={} を置いた xtask の check と、check の後の段（insta-refs・deny・deny-scribe2）を順に撃ち、段 {} が rc {} で落ちた（{} 秒）。出力は file {}、記録は file {}（どちらも撃つ写しの置き場の側）。\n\n\
          ### 候補\n出力の末で落ちた段と歯を見る。host の道具と設定のずれ（git・tmux・nextest・rustup の版・$CARGO_HOME と祖先の .cargo の設定）か、時刻で落ちる型か、混んだ時だけ揺れる歯かを見分ける。\n\n\
          ### 昇格条件\n引き金: 再発 2\n",
         before,

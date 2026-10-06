@@ -1,5 +1,6 @@
 //! 行 v-daily の歯: 日に 1 度の全部の撃ち（xtask の src/daily.rs・判断の記録 ADR-34 の決定 (6)）を、一時の git の repo の fixture と
 //! 偽の cargo と偽の bdw（shell の script）で撃ち、記録の行と memo の書きを照らし、systemd の雛形と main.rs の呼びを字で読む。
+//! check の後の 3 段（insta-refs・deny・deny-scribe2）は、偽の cargo の撃たれた回数（2 度目から 4 度目）と cwd と引数で照らす。
 #![cfg(test)]
 
 #[path = "../../src/daily.rs"]
@@ -10,7 +11,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::common::{read_root, strings};
-use daily::{CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, NOTES_MAX, Outcome, SHOW, Seen, USAGE};
+use daily::{
+    AFTER, CHECK, CHECKOUT, Daily, FETCH, FORCE, NICE, NOTES_MAX, Outcome, REFS_ENV, SHOW, Seen,
+    USAGE,
+};
 
 /// 2026-10-03T09:00Z の epoch 秒。
 const NOW: u64 = 1_791_018_000;
@@ -70,7 +74,8 @@ impl Fx {
         let origin = dir.join("origin");
         std::fs::create_dir_all(&origin).expect("origin");
         git(&origin, &["init", "-q", "-b", "main"]);
-        commit(&origin, "a.txt", "a\n");
+        std::fs::create_dir_all(origin.join("scribe2")).expect("scribe2");
+        commit(&origin, "scribe2/a.txt", "a\n");
         let place = dir.join("place");
         git(
             &dir,
@@ -83,7 +88,7 @@ impl Fx {
         script(
             &dir.join("cargo"),
             &format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$(pwd -P)\" \"$TSUZURI_CHECK_NESTED_ALL\" \"$*\" > {d}/cargo.seen\necho check-output\nexit $(cat {d}/cargo.rc)\n"
+                "#!/bin/sh\nn=$(( $(cat {d}/cargo.n 2>/dev/null || echo 0) + 1 ))\necho $n > {d}/cargo.n\nprintf '%s\\n' \"$(pwd -P)\" \"$TSUZURI_CHECK_NESTED_ALL\" \"$INSTA_SNAPSHOT_REFERENCES_FILE\" \"$*\" >> {d}/cargo.seen\nif [ -n \"$INSTA_SNAPSHOT_REFERENCES_FILE\" ]; then echo refs-entries=$(ls -A \"$(dirname \"$INSTA_SNAPSHOT_REFERENCES_FILE\")\" | wc -l) >> {d}/cargo.seen; fi\necho --- >> {d}/cargo.seen\necho out-$n\nexit $(cat {d}/cargo.rc.$n 2>/dev/null || echo 0)\n"
             ),
         );
         script(
@@ -108,10 +113,26 @@ impl Fx {
         Fx { dir, origin, daily }
     }
 
-    /// 偽の cargo の rc を置いて撃つ。
-    fn shoot(&self, rc: i32) -> Outcome {
-        std::fs::write(self.dir.join("cargo.rc"), rc.to_string()).expect("cargo.rc");
+    /// 偽の cargo の撃たれた回数と記録と rc の file を消し、回数 n の撃ちの rc を置いて撃つ（ほかの回は rc 0）。
+    fn shoot_nth(&self, n: usize, rc: i32) -> Outcome {
+        for name in ["cargo.n", "cargo.seen"] {
+            let _ = std::fs::remove_file(self.dir.join(name));
+        }
+        for i in 1..=4 {
+            let _ = std::fs::remove_file(self.dir.join(format!("cargo.rc.{i}")));
+        }
+        std::fs::write(self.dir.join(format!("cargo.rc.{n}")), rc.to_string()).expect("cargo.rc");
         daily::run(&self.daily, NOW)
+    }
+
+    /// 偽の cargo の 1 度目（check）の rc を置いて撃つ。
+    fn shoot(&self, rc: i32) -> Outcome {
+        self.shoot_nth(1, rc)
+    }
+
+    /// 出力の file の写しの根（正規化した path）。
+    fn place(&self) -> PathBuf {
+        self.daily.root.canonicalize().expect("place")
     }
 
     fn read(&self, name: &str) -> String {
@@ -124,6 +145,17 @@ impl Fx {
             .expect("sha")
             .to_string()
     }
+}
+
+/// 偽の cargo の撃ちの記録の 1 度分（cwd・環境変数 2 つの値〔FORCE・REFS_ENV〕・引数・refs-entries=0 の行が在れば・区切り）。
+fn record(cwd: &Path, envs: [&str; 2], args: &str, entries: bool) -> String {
+    let tail = if entries { "refs-entries=0\n" } else { "" };
+    format!(
+        "{}\n{}\n{}\n{args}\n{tail}---\n",
+        cwd.display(),
+        envs[0],
+        envs[1]
+    )
 }
 
 impl Drop for Fx {
@@ -157,6 +189,48 @@ fn assert_line(line: &str, sha: &str, step: &str, rc: i32, memo: &str) {
     assert!(line.ends_with(&format!(" memo={memo}")), "{line}");
 }
 
+/// check の後の 3 段の字と REFS_ENV と refs_dir の値（vdaily_consts_fixed の一部）。
+fn assert_after_consts() {
+    let after: Vec<(&str, Vec<&str>, &str)> = AFTER
+        .iter()
+        .map(|(name, args, cwd)| (*name, args.to_vec(), *cwd))
+        .collect();
+    assert_eq!(
+        after,
+        vec![
+            (
+                "insta-refs",
+                vec!["run", "-q", "-p", "xtask", "--", "insta-refs"],
+                ""
+            ),
+            (
+                "deny",
+                vec![
+                    "deny",
+                    "check",
+                    "-D",
+                    "unmatched-skip",
+                    "-D",
+                    "advisory-not-detected"
+                ],
+                ""
+            ),
+            ("deny-scribe2", vec!["deny", "check"], "scribe2"),
+        ]
+    );
+    assert_eq!(REFS_ENV, "INSTA_SNAPSHOT_REFERENCES_FILE");
+    assert!(
+        read_root("xtask/src/snaprefs.rs")
+            .lines()
+            .any(|l| l == "pub const REFS_ENV: &str = \"INSTA_SNAPSHOT_REFERENCES_FILE\";"),
+        "src/snaprefs.rs の REFS_ENV と同じ名"
+    );
+    assert_eq!(
+        daily::refs_dir(Path::new("/x/daily.out")),
+        PathBuf::from("/x/daily.insta-refs")
+    );
+}
+
 #[test]
 fn vdaily_consts_fixed() {
     assert_eq!(FORCE, ("TSUZURI_CHECK_NESTED_ALL", "1"));
@@ -180,6 +254,7 @@ fn vdaily_consts_fixed() {
     );
     assert_eq!(NICE, ("nice", &["-n", "10"][..]));
     assert_eq!(CHECK, ["run", "-q", "-p", "xtask", "--", "check"]);
+    assert_after_consts();
     assert_eq!(SHOW, ["--readonly", "show"]);
     assert_eq!(NOTES_MAX, 8192);
     assert_eq!(
@@ -284,13 +359,116 @@ fn vdaily_pass_records_no_memo() {
         git(&fx.daily.root, &["status", "--porcelain", "--branch"]),
         "## HEAD (no branch)"
     );
-    let place = fx.daily.root.canonicalize().expect("place");
-    assert_eq!(
-        fx.read("cargo.seen"),
-        format!("{}\n1\nrun -q -p xtask -- check\n", place.display())
-    );
-    assert_eq!(fx.read("daily.out"), "check-output\n");
+    let place = fx.place();
+    let refs = daily::refs_dir(&fx.daily.out);
+    let refs = refs.display();
+    let none = ["", ""];
+    let want = [
+        record(
+            &place,
+            ["1", &format!("{refs}/insta-refs.txt")],
+            "run -q -p xtask -- check",
+            true,
+        ),
+        record(
+            &place,
+            none,
+            &format!("run -q -p xtask -- insta-refs {refs}"),
+            false,
+        ),
+        record(
+            &place,
+            none,
+            "deny check -D unmatched-skip -D advisory-not-detected",
+            false,
+        ),
+        record(&place.join("scribe2"), none, "deny check", false),
+    ];
+    assert_eq!(fx.read("cargo.seen"), want.concat());
+    assert_eq!(fx.read("cargo.n"), "4\n");
+    assert_eq!(fx.read("daily.out"), "out-1\nout-2\nout-3\nout-4\n");
     assert_eq!(fx.read("bdw.seen"), "", "通った時は台帳に書かない");
+}
+
+#[test]
+fn vdaily_after_step_failure_names_the_step() {
+    for (n, step) in [(2, "insta-refs"), (3, "deny"), (4, "deny-scribe2")] {
+        let fx = Fx::new(&format!("after{n}"));
+        let out = fx.shoot_nth(n, 3);
+        assert_eq!(out.rc, 3, "{step}");
+        assert_line(&out.line, &fx.sha12(), step, 3, "fx-9");
+        assert_eq!(
+            fx.read("cargo.n"),
+            format!("{n}\n"),
+            "{step}: 後の段を撃たない"
+        );
+    }
+    let fx = Fx::new("after1");
+    let out = fx.shoot(3);
+    assert_eq!(out.rc, 3);
+    assert_line(&out.line, &fx.sha12(), "check", 3, "fx-9");
+    assert_eq!(
+        fx.read("cargo.n"),
+        "1\n",
+        "check が落ちたら後の段を撃たない"
+    );
+}
+
+#[test]
+fn vdaily_after_steps_drop_the_check_env() {
+    let fx = Fx::new("env");
+    let refs = fx.dir.join("refs-fx");
+    for &step in AFTER {
+        let cmd = daily::after_command(&fx.daily, step, &refs);
+        assert_eq!(cmd.get_program(), NICE.0, "{}", step.0);
+        let mut want: Vec<String> = NICE.1.iter().map(|a| (*a).to_string()).collect();
+        want.push(fx.daily.cargo.clone());
+        want.extend(step.1.iter().map(|a| (*a).to_string()));
+        if step.0 == "insta-refs" {
+            want.push(refs.display().to_string());
+        }
+        let got: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(got, want, "{}", step.0);
+        let cwd = if step.2.is_empty() {
+            fx.daily.root.clone()
+        } else {
+            fx.daily.root.join(step.2)
+        };
+        assert_eq!(cmd.get_current_dir(), Some(cwd.as_path()), "{}", step.0);
+        let envs: Vec<_> = cmd.get_envs().collect();
+        for name in [FORCE.0, REFS_ENV] {
+            assert!(
+                envs.iter()
+                    .any(|(k, v)| *k == std::ffi::OsStr::new(name) && v.is_none()),
+                "{}: {name} を子の環境から外す",
+                step.0
+            );
+        }
+    }
+}
+
+#[test]
+fn vdaily_refs_dir_emptied_before_check() {
+    let fx = Fx::new("refs");
+    let refs = daily::refs_dir(&fx.daily.out);
+    std::fs::create_dir_all(&refs).expect("refs");
+    std::fs::write(refs.join("old.txt"), "old\n").expect("old");
+    let out = fx.shoot(0);
+    assert_eq!(out.rc, 0);
+    let seen = fx.read("cargo.seen");
+    let first = seen.split("---\n").next().expect("check の撃ち");
+    assert!(first.lines().any(|l| l == "refs-entries=0"), "{first}");
+    assert!(
+        first
+            .lines()
+            .any(|l| l == format!("{}/insta-refs.txt", refs.display())),
+        "{first}"
+    );
+    assert!(!refs.join("old.txt").exists(), "古い file は消える");
+    assert!(refs.is_dir(), "dir は在る");
 }
 
 #[test]
