@@ -11,6 +11,7 @@
 
 mod approval;
 mod carry;
+mod qpatch;
 mod question;
 // flip-check: moved s2-07l.687
 

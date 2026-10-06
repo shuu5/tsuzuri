@@ -1045,12 +1045,31 @@ fn item_list(items: &[String]) -> String {
 /// 数えられない周は 0（**commit 0 は完了ではない**側へ倒れる）。
 fn commit_count(worktree: &Path, from: &str) -> u64 {
     let range = format!("{from}..HEAD");
-    let main = git_line(worktree, &["rev-parse", "--verify", "-q", MAIN_REF]).map(|sha| format!("^{sha}"));
+    let main = main_exclusion(worktree);
     let mut args = vec!["rev-list", "--count", range.as_str()];
     args.extend(main.as_deref());
     git_line(worktree, &args)
         .and_then(|text| text.parse().ok())
         .unwrap_or(0)
+}
+
+/// turn で増えた**新しい変更**の commit 数: HEAD にあり `tip` に無い commit のうち、`tip` にあり HEAD に無い commit と
+/// patch-id が等しい物（載せ替えで sha だけが替わった便自身の commit）は数えない。main に在る commit は
+/// [`commit_count`] と同じ除外で数えない。数えられない周は 0。
+fn turn_commits(worktree: &Path, tip: &str) -> u64 {
+    let range = format!("{tip}...HEAD");
+    let main = main_exclusion(worktree);
+    let mut args = vec!["rev-list", "--count", "--cherry-pick", "--right-only", range.as_str()];
+    args.extend(main.as_deref());
+    git_line(worktree, &args)
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(0)
+}
+
+/// rev-list の末に足す除外の相手 `^<main の sha>`（追随の相手と同じ [`MAIN_REF`] を turn の終わりに読む・
+/// 読めない周は `None`＝除外なし）。
+fn main_exclusion(worktree: &Path) -> Option<String> {
+    git_line(worktree, &["rev-parse", "--verify", "-q", MAIN_REF]).map(|sha| format!("^{sha}"))
 }
 
 /// commit の有無まで見て段を決める。**commit 0 は完了ではない**。
@@ -1108,9 +1127,10 @@ const UNKNOWN_STATUS: &str = "unknown";
 ///
 /// 数えるのは **turn で増えた commit**（`tip` 基準・ADR-0019 §2.6）である。初回の turn では
 /// tip = base ゆえ `.115` の判定と同値で、起こし直しの turn では「便が base から持つ commit」を
-/// 数えない——数えると、追随を解けずに質問へ倒れた turn が必ず実装の失敗に化ける。
+/// 数えない——数えると、追随を解けずに質問へ倒れた turn が必ず実装の失敗に化ける。数えるのは turn で増えた
+/// 新しい変更で、載せ替えで sha だけが替わった commit は数えない（[`turn_commits`]・設計 pipeline-conflict.md §11）。
 fn settle_question(launch: &Launch<'_>, worktree: &Path, tip: &str, stdout: &str) -> Outcome {
-    let commits = commit_count(worktree, tip);
+    let commits = turn_commits(worktree, tip);
     let (question, about) = match question_record(stdout) {
         Ok(found) if commits == 0 => found,
         Ok(_) => {
