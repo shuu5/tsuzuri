@@ -3,7 +3,7 @@
 meta:
   id: surface-plan
   title: 見本 mock v3 に揃える残りの仕事の計画 — 現在地・決定・残りの行・並べ方・他の席待ち・運び方
-  version: v1.143
+  version: v1.144
   status: effective
   generated: 2026-09-28
   profile: design-note
@@ -649,6 +649,7 @@ sections:
       - {id: t-scope-xtask, doc: surface-wave29d}
       - {id: v-verify-warm, doc: surface-wave29d}
       - {id: cs-plain-rest, doc: surface-wave29d}
+      - {id: ag-guide-fold, doc: surface-wave29d}
       - {id: g-link-map, doc: surface-wave3a}
       - {id: g-link-graph, doc: surface-wave3a}
       - {id: g-map-keys, doc: surface-wave3a}
