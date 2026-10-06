@@ -12,7 +12,11 @@
 //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
 //! （割りの主張ごとの表の行と確かさの印と証拠・判断の記録 ADR-61 決定 (4)(8)）。
 //!
+//! 出す物の dir の子 contract の .toml の file ごとに、4 で器の preflight --contract を撃ち直し、通らない file を欠けに数える（判断の記録 ADR-72 の決定 (2)）。
+//!
 //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
+
+pub mod contract;
 
 use std::fs;
 use std::io::Read;
@@ -71,7 +75,7 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let (_, dir) = match begin(USAGE, "通す", rest) {
+    let (args, dir) = match begin(USAGE, "通す", rest) {
         Ok(found) => found,
         Err(rc) => return rc,
     };
@@ -94,6 +98,12 @@ pub fn run(rest: &[&str]) -> u8 {
         &shown,
     );
     holes.extend(claim_holes(&dir.join(&name), &spec, &out));
+    holes.extend(contract::holes(
+        &dir.join(&name),
+        &out,
+        &args.repo,
+        &spec.target,
+    ));
     if !holes.is_empty() && !stop.again {
         emit_err(&hold(&holes, &shown));
         return HOLD;
