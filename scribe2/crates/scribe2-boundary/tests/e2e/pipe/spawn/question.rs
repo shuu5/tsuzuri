@@ -509,6 +509,35 @@ fn pipe_question_refresh_missing_row_refuses_without_touching() {
     clean(&[&repo, &state]);
 }
 
+/// (d) bead の写し（置き場の `bead-contracts/s2-b/<digest>.toml`）を指す契約の便は、行を広げて commit した後の resume が取り直しを撃たない:
+/// rc 0・判定行に `contract=refreshed` が無く・契約 file は byte 不変・記帳 0 件（走っている便の契約は受付の写しから替わらない）。
+#[test]
+fn vbrd_resume_keeps_the_copy_contract() {
+    let (repo, state) = repo_with_state();
+    let id = answered(&repo, &state);
+    let copy = state.join("bead-contracts").join("s2-b").join("0123456789abcdef.toml");
+    let fields: Vec<String> = contract_body()
+        .into_iter()
+        .map(|line| if line.starts_with("section") { r#"section = "s2-b""#.to_owned() } else { line })
+        .collect();
+    let text = format!("schema = 1\n\n[[contract]]\n{}\ngoal = \"本文。\"\n", fields.join("\n"));
+    fs::create_dir_all(copy.parent().expect("写しの dir")).expect("写しの dir を作れる");
+    fs::write(&copy, text).expect("写しを書ける");
+    let snapshot = vessel::pipe::contract_path(&state, &id);
+    let held = fs::read_to_string(&snapshot).unwrap_or_default();
+    let pointed = held.replace(&format!("design = \"{}\"", design_pointer()), &format!("design = \"{}#{DESIGN_ROW}\"", copy.display()));
+    assert_ne!(pointed, held, "前提: 契約 file の design が写しの pointer に替わる: {held}");
+    fs::write(&snapshot, &pointed).expect("契約 file を書ける");
+    let before = fs::read(&snapshot).unwrap_or_default();
+    write_contract(&repo, &["write-set"], &[r#"write-set = ["src/lib.rs", "src/extra.rs"]"#]);
+    let out = resume_copying(&repo, &state, &id, &state.join("got-stdin.txt"));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", stderr_of(&out));
+    assert!(!stdout_of(&out).contains("contract=refreshed"), "{}", stdout_of(&out));
+    assert_eq!(fs::read(&snapshot).unwrap_or_default(), before, "契約 file は byte 不変");
+    assert_eq!(refreshed_count(&state, &id), 0, "記帳 0 件: {:?}", trail(&state, &id));
+    clean(&[&repo, &state]);
+}
+
 #[test]
 fn pipe_question_run_stops_with_question_token() {
     let (repo, state) = repo_with_state();

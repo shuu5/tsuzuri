@@ -21,7 +21,8 @@ use crate::pipe::declaration::{TablePlaces, DECL_FILE};
 use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Made, Status};
 use crate::pipe::git_bytes;
 use crate::pipe::index::flat::{descriptor_names, query, Resolution, Row, Site};
-use crate::pipe::table::{design_docs, read_table};
+use crate::pipe::bead::digest_of_design;
+use crate::pipe::table::{self, design_docs, parse_pointer, read_table};
 use crate::rules::manifest::Manifest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -86,6 +87,28 @@ impl Tables {
             docs.insert(doc.clone(), shown);
         }
         Ok(Self { lines, docs })
+    }
+
+    /// 契約の design が bead の写しを指す周は、写しの行（pointer の行 id の行）を末に足す（置き場の絶対 path の写しは ref の木に無い・
+    /// 写しは [`table::read`] で直に読む・行の `pointer` は design の字・`doc` は写しの path）。ほかの周と写しを読めない周は表を替えない
+    /// （行を引けない事は [`row_items`] の Err が字 `index=unavailable:row` にする）。
+    pub(in crate::pipe) fn with_copy(mut self, repo: &Path, design: &str) -> Self {
+        let Some(pointer) = digest_of_design(design).and_then(|_| parse_pointer(design).ok()) else {
+            return self;
+        };
+        let Ok(shown) = table::read(repo, &pointer.path) else {
+            return self;
+        };
+        let Ok((found, _)) = read_table(&pointer.path, &shown) else {
+            return self;
+        };
+        let Some(row) = found.into_iter().find(|row| row.id == pointer.id) else {
+            return self;
+        };
+        let line = Line { pointer: design.to_owned(), doc: pointer.path.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal, patch: row.patch };
+        self.lines.push(line);
+        self.docs.insert(pointer.path, shown);
+        self
     }
 
     /// 行 `pointer` の節の散文（導出物の行は goal・無ければ節の番号の本文）。
@@ -496,7 +519,7 @@ fn material(place: (&Path, &Path), head: Option<&str>, design: &str, policy: Loc
         Status::Half(_) | Status::Failed(_) => return unavailable(&found),
         Status::Absent | Status::Building | Status::Ready(_) => {}
     }
-    let Ok(tables) = Tables::load(repo, sha) else {
+    let Ok(tables) = Tables::load(repo, sha).map(|loaded| loaded.with_copy(repo, design)) else {
         return Some("index=unavailable:table".to_owned());
     };
     let Ok((line, items)) = row_items(&tables, design) else {
@@ -654,5 +677,45 @@ pub(in crate::pipe) fn show(args: &[String], manifest: &Manifest, policy: LockPo
             },
             (_, other) => unavailable(&word_of(&other).unwrap_or_default()),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{row_items, Tables};
+    use crate::pipe::bead::copy_text;
+    use crate::pipe::fixture::scratch;
+    use std::path::{Path, PathBuf};
+
+    /// 行 b の acceptance（touches の項目は 1 つ）。
+    const ROW_B: &str = "[[contract]]\nid = \"b\"\ntitle = \"行 b\"\nreq = [\"FR1\"]\ntouches = [\"crate::pipe::refuse::Refuse\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"b が通る\"\n";
+
+    /// 置き場の下の `<dir>/<parent>/s2-b/<name>` に `text` を書き、その path を返す。
+    fn put(dir: &Path, parent: &str, name: &str, text: &str) -> PathBuf {
+        let path = dir.join(parent).join("s2-b").join(name);
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(dir));
+        let _ = std::fs::write(&path, text);
+        path
+    }
+
+    /// 空の表に写しの pointer を渡すと、行 design の字を pointer に持ち写しの行の touches の項目を項目に持つ行が引ける。写しの dir の名でない
+    /// 同じ字の file と在らない写しの pointer では表が空のままで `row_items` が Err を返す。
+    #[test]
+    fn vbrd_index_tables_take_the_copy_row() {
+        let dir = scratch("vbrd-index");
+        let text = copy_text("s2-b", ROW_B, "本文。").unwrap_or_default();
+        let copy = put(&dir, "bead-contracts", "0123456789abcdef.toml", &text);
+        let design = format!("{}#b", copy.display());
+        let tables = Tables::default().with_copy(&dir, &design);
+        let found = row_items(&tables, &design).map(|(line, items)| (line.pointer.clone(), line.doc.clone(), items));
+        let (pointer, doc, items) = found.unwrap_or_default();
+        assert_eq!((pointer, doc), (design.clone(), copy.display().to_string()), "design の字と写しの path");
+        assert!(items.iter().any(|item| item == "crate::pipe::refuse::Refuse"), "写しの行の touches の項目: {items:?}");
+        let other = put(&dir, "other", "b.toml", &text);
+        let outside = format!("{}#b", other.display());
+        assert!(row_items(&Tables::default().with_copy(&dir, &outside), &outside).is_err(), "写しの dir の名でない file は引かない");
+        let absent = dir.join("bead-contracts").join("s2-b").join("fedcba9876543210.toml");
+        let missing = format!("{}#b", absent.display());
+        assert!(row_items(&Tables::default().with_copy(&dir, &missing), &missing).is_err(), "在らない写しは引かない");
     }
 }

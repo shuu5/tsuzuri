@@ -4,6 +4,7 @@
 use super::record::{excerpt_of, Failed, USAGE_HEAD};
 use super::{UNADMITTED_JOBS, WRITE_SET_CMD};
 use crate::pipe::admission::{self, Grant};
+use crate::pipe::bead::digest_of_design;
 use crate::name::NAME;
 use crate::pipe::closure::{self, selects, tooth_sites, Base, ClosureError, Source};
 use crate::pipe::confine::{self, Confinement, Reason, Released, Usage};
@@ -479,12 +480,22 @@ fn head_tree(checks: &Checks<'_>) -> Result<HeadTree, String> {
 
 /// 設計 pointer の行の約束の行の `symbols` の `+` の名（`design` が pointer でない契約・約束の行の無い行は空）。
 fn promised_names(checks: &Checks<'_>) -> Result<Vec<String>, String> {
-    let Ok(pointer) = table::parse_pointer(&checks.contract.design) else {
+    promised_in(checks.worktree, checks.base, &checks.contract.design)
+}
+
+/// [`promised_names`] の本体（`design` の pointer の行の約束の名）。bead の写しを指す pointer（[`digest_of_design`]・置き場の絶対 path で、
+/// git は repo の外の path を断る）は写しを [`table::read`] で直に読む（中身で名が決まる写しは base の木の代わりに足りる）。ほかは base の木から読む。
+fn promised_in(worktree: &Path, base: &str, design: &str) -> Result<Vec<String>, String> {
+    let Ok(pointer) = table::parse_pointer(design) else {
         return Ok(Vec::new());
     };
-    let shown = git_bytes(checks.worktree, &["show", &format!("{}:{}", checks.base, pointer.path)])
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-        .ok_or_else(|| format!("{} を便の base から読めない", pointer.path))?;
+    let shown = if digest_of_design(design).is_some() {
+        table::read(worktree, &pointer.path)?
+    } else {
+        git_bytes(worktree, &["show", &format!("{base}:{}", pointer.path)])
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .ok_or_else(|| format!("{} を便の base から読めない", pointer.path))?
+    };
     let (_, promises) = table::read_table(&pointer.path, &shown).unwrap_or_default();
     Ok(table::promises_of(&promises, &pointer.id)
         .iter()
@@ -821,10 +832,12 @@ pub(crate) mod tests {
     // flip-check: moved s2-07l.286
     use super::super::record::USAGE_HEAD;
     use super::{
-        broken_promises, done_teeth_sections, fill_holes, gate_checks, last_line, listed, run_line_captured, teeth_of, unwrapped,
-        Broken, Check, Source, NO_SOURCES, NO_TEETH, TEETH_HOLE, WRITE_SET_CMD,
+        broken_promises, done_teeth_sections, fill_holes, gate_checks, last_line, listed, promised_in, run_line_captured, teeth_of,
+        unwrapped, Broken, Check, Source, NO_SOURCES, NO_TEETH, TEETH_HOLE, WRITE_SET_CMD,
     };
+    use crate::pipe::bead::copy_text;
     use crate::pipe::confine::{read_usage, Limit, Reason, Wrap};
+    use crate::pipe::table::read_table;
     use crate::seat::RuleRead;
     use std::path::{Path, PathBuf};
 
@@ -1066,6 +1079,37 @@ pub(crate) mod tests {
         let found = done_teeth_sections(&missing, (&root, "abc"), &[]);
         assert!(found.as_ref().is_err_and(|reason| reason.contains("absent-contract.toml")), "読めない理由は path を名乗る: {found:?}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 約束の行 1 つ（`+fresh_name` と `old`）を足した行 b の acceptance（約束の行は契約の行の前に置く＝器が足す欄は最後の行に付く）。
+    const ROW_B_PROMISED: &str = "[[promise]]\nof = \"b\"\nn = 1\ntext = \"t\"\nfiles = [\"src/lib.rs\"]\nsymbols = [\"+fresh_name\", \"old\"]\nteeth = [\"vbrd_t\"]\nfixture = \"f\"\nexpect = \"e\"\n\n[[contract]]\nid = \"b\"\ntitle = \"行 b\"\nreq = [\"FR1\"]\nverify = [\"cargo nextest run -p toy --no-tests=fail derive_\"]\nsize = \"S\"\ndone = \"b が通る\"\n";
+
+    /// 写しの置き場の下の名 `<digest>.toml`（`<dir>/bead-contracts/s2-b/`）に `text` を書き、その path を返す。
+    fn put_copy(dir: &Path, digest: &str, text: &str) -> PathBuf {
+        let path = dir.join("bead-contracts").join("s2-b").join(format!("{digest}.toml"));
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(dir));
+        let _ = std::fs::write(&path, text);
+        path
+    }
+
+    /// 約束の測りは bead の写しを絶対 path で直に読む（git の repo でない dir・git show は repo の外の path を断る）: 写しの `+` の名が
+    /// 返り、写しの dir の名でない同じ字の file の pointer は base から読めない Err・在らない写しは Err。
+    #[test]
+    fn vbrd_promised_names_read_the_copy_directly() {
+        let dir = crate::pipe::fixture::scratch("vbrd-promised");
+        let text = copy_text("s2-b", ROW_B_PROMISED, "本文。").unwrap_or_default();
+        let (rows, promises) = read_table("copy.toml", &text).unwrap_or_default();
+        assert_eq!((rows.len(), promises.len()), (1, 1), "対照: 写しは欠陥なしで読め、約束の行が 1 つ");
+        let copy = put_copy(&dir, "0123456789abcdef", &text);
+        let found = promised_in(&dir, "abc", &format!("{}#b", copy.display()));
+        assert_eq!(found, Ok(owned(&["fresh_name"])), "写しの + の名");
+        let other = dir.join("other").join("b.toml");
+        let _ = std::fs::create_dir_all(other.parent().unwrap_or(&dir));
+        let _ = std::fs::write(&other, &text);
+        let refused = promised_in(&dir, "abc", &format!("{}#b", other.display()));
+        assert!(refused.as_ref().is_err_and(|reason| reason.contains("を便の base から読めない")), "写しの dir の外は base から読む: {refused:?}");
+        let absent = dir.join("bead-contracts").join("s2-b").join("fedcba9876543210.toml");
+        assert!(promised_in(&dir, "abc", &format!("{}#b", absent.display())).is_err(), "在らない写しは Err");
     }
 
     /// 歯ごとの空の tmp dir（in-file の歯の置き場・env を読まないのは器の本体の規律〔C2.2〕）。

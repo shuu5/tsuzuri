@@ -12,6 +12,7 @@ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::store::{self, LockPolicy, StoreError};
 use crate::fleet::{self, Completion, EventKind, Stage, State, Timeout};
 use crate::pipe::approve::RC_BLOCKED;
+use crate::pipe::bead::digest_of_design;
 use crate::pipe::contract::Contract;
 use crate::pipe::follow;
 use crate::pipe::gate::{Verdict, RC_INCONCLUSIVE};
@@ -255,6 +256,7 @@ fn refresh_then_relaunch(args: &[String], id: &str, state: &State, manifest: &Ma
 }
 
 /// 写しを受付と同じ導出で組み直して byte 比較する（同じなら何も書かず `false`・違えば写しを書き替えて記帳し `true`）。
+/// 契約の design が bead の写しを指す便は組み直さず `false`（[`digest_of_design`]）。
 fn refresh_contract(
     args: &[String],
     id: &str,
@@ -267,6 +269,10 @@ fn refresh_contract(
     let path = contract_path(state_dir, id);
     let held = std::fs::read_to_string(&path).map_err(|err| broken(format!("{} を読めない: {err}", path.display())))?;
     let contract = Contract::parse(&held).map_err(unloadable)?;
+    // bead の写しは中身で名が決まり、走っている便の契約は受付の写しから替わらない（取り直しを撃たず写しも記帳も触らない）。
+    if digest_of_design(&contract.design).is_some() {
+        return Ok(false);
+    }
     let Some(body) = regenerated(&repo, state_dir, id, manifest, &contract.design)? else {
         return Ok(false);
     };
