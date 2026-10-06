@@ -1,4 +1,4 @@
-//! 係の型と規律の手引きと門の設定の歯（接頭辞 agpl_・設計ノート surface-wave29b 行 ag-plugin・判断の記録 ADR-59 決定 (1)(2)(5)(6)・ADR-61 決定 (4)(9)）。
+//! 係の型と規律の手引きと門の設定の歯（接頭辞 agpl_・設計ノート surface-wave29b 行 ag-plugin・判断の記録 ADR-59 決定 (1)(2)(5)(6)・ADR-61 決定 (4)(9)・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 決定 (3)）。
 //! workspace の根の plugin/ の file を読むだけで、tz も器も撃たない。hooks.json は stage の json で読み、口の名は境界の hook の
 //! USAGE の字から、型と頭の行は中核の agent の spec の定数から組む。否定の見本は今の file から句を 1 つだけ崩して作る。
 #![cfg(test)]
@@ -50,7 +50,42 @@ const VESSEL_GATE: &str = "（器の門 ";
 /// 群の行の値の書き方。
 const GROUP_HOLE: &str = "<群 id> <i>/<k>";
 
-type Mouth = (String, Option<String>, String, Option<u64>);
+/// 設計係の型の file が字の中にちょうど 1 度ずつ持つ句の名と字。
+const DESIGNER: [(&str, &str); 20] = [
+    (
+        "description",
+        "description: tsuzuri の設計の席が、契約の行と節と判断の記録の下書きを設計だけで書かせる時に使う。",
+    ),
+    ("role", "あなたは tsuzuri の設計の席が起こした設計係である"),
+    ("code-by-runner", "code と歯は便の実装役が書く"),
+    ("input-code", "code の現物"),
+    ("output-rows", "行と節の断片の file"),
+    ("output-notes", "notes の file（notes.md）"),
+    ("read-code", "1. code を読む。"),
+    ("split", "2. 行を割る。"),
+    ("fill", "3. 欄を埋める。"),
+    ("floor", "4. 写しで床と preflight を撃ち"),
+    ("coverage", "1. 要件の網羅。"),
+    ("decided", "2. 何も決めない欄が無い。"),
+    ("measured", "3. done の各項に歯か verify の行。"),
+    ("agree", "4. 節と done の字の一致。"),
+    ("by-value", "5. 環境や時刻に依る振る舞いは値で測る。"),
+    ("done", "- DONE: "),
+    ("concerns", "- DONE_WITH_CONCERNS: "),
+    ("blocked", "- BLOCKED: "),
+    ("context", "- NEEDS_CONTEXT: "),
+    ("refused", "断りの字をそのまま席に知らせる"),
+];
+
+/// 設計係の型の file が持たない古い語の名と字（実装と道具の手順の語）。
+const OLD_WORDS: [(&str, &str); 4] = [
+    ("patch", "差の file"),
+    ("bite", "噛み"),
+    ("apply-script", "適用の script"),
+    ("prototype", "試作"),
+];
+
+type Mouth =(String, Option<String>, String, Option<u64>);
 
 /// 頭の --- の間の欄（鍵と値の列）。
 type Fields = Vec<(String, Vec<String>)>;
@@ -242,6 +277,22 @@ fn skill_faults(text: &str) -> Vec<&'static str> {
     faults
 }
 
+/// 設計係の型の file の欠け（字の数がちょうど 1 でない DESIGNER の句の名を表の順に、続けて字を持つ OLD_WORDS の語の名を表の順に）。
+fn designer_faults(text: &str) -> Vec<&'static str> {
+    let mut faults: Vec<&'static str> = DESIGNER
+        .iter()
+        .filter(|(_, words)| text.matches(words).count() != 1)
+        .map(|(name, _)| *name)
+        .collect();
+    faults.extend(
+        OLD_WORDS
+            .iter()
+            .filter(|(_, words)| text.contains(words))
+            .map(|(name, _)| *name),
+    );
+    faults
+}
+
 /// 本文の決まり（字 - で始まる行）のうち、末が天井だけでも、門の名でも、在る器の門の名でもない行。
 fn rule_faults(body: &str, gates: &[&str], vessel: impl Fn(&str) -> bool) -> Vec<String> {
     let ok = |rule: &str| {
@@ -397,16 +448,16 @@ fn agpl_skill_is_short_and_names_its_reference() {
     assert_eq!(skill_faults(&format!("{edge}字")), ["size"], "2,001 字");
 }
 
-/// (5) 規律の手引きの本文の決まり 17 行は、どれも末が字（天井だけ）か、境界の係の口の名の（門 <名>）か、器の hook の src に
-/// file の在る（器の門 <名>）で、数は天井だけ 8・門 6・器の門 3。
+/// (5) 規律の手引きの本文の決まり 15 行は、どれも末が字（天井だけ）か、境界の係の口の名の（門 <名>）か、器の hook の src に
+/// file の在る（器の門 <名>）で、数は天井だけ 7・門 6・器の門 2。
 #[test]
 fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
     let text = read(&format!("{SKILL}/SKILL.md"));
     let (_, body) = front(&text).expect("頭と本文");
     let gates = gate_names();
     assert_eq!(rule_faults(body, &gates, vessel_gate), Vec::<String>::new());
-    assert_eq!(body.lines().filter(|l| l.starts_with("- ")).count(), 17);
-    assert_eq!(rule_kinds(body), [8, 6, 3]);
+    assert_eq!(body.lines().filter(|l| l.starts_with("- ")).count(), 15);
+    assert_eq!(rule_kinds(body), [7, 6, 2]);
     let cut = |from: &str, to: &str| rule_faults(&body.replacen(from, to, 1), &gates, vessel_gate);
     let rule = "- 写しは起草の置き場の直下にだけ作る（器の門 drafts_guard）";
     assert!(body.contains(rule), "器の門の決まり");
@@ -421,7 +472,7 @@ fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
         "無い口の名"
     );
     assert_eq!(
-        cut("を見る（天井だけ）", "を見る（天井だけ）。").len(),
+        cut("で見る（天井だけ）", "で見る（天井だけ）。").len(),
         1,
         "末の句点"
     );
@@ -430,4 +481,31 @@ fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
         1,
         "門の字の欠け"
     );
+}
+
+/// (6) 起草係の型の file は、頭の欄 effort が high の 1 つで、字の中に設計係の句の表の 20 句をどれもちょうど 1 度ずつ持ち、
+/// 古い語の表の字を持たない。
+#[test]
+fn agpl_drafter_is_the_designer() {
+    let text = read("plugin/agents/drafter.md");
+    assert_eq!(designer_faults(&text), Vec::<&str>::new());
+    let (fields, _) = front(&text).expect("頭と本文");
+    assert_eq!(field(&fields, "effort"), ["high"]);
+}
+
+/// (7) 設計係の句を 1 つだけ外した見本と 2 度にした見本は、その句の名だけを名指し、古い語を file の末に 1 つ足した見本は、その語の
+/// 名だけを名指す。
+#[test]
+fn agpl_drafter_clause_removed_doubled_or_old_word_added_is_named() {
+    let text = read("plugin/agents/drafter.md");
+    for (name, words) in DESIGNER {
+        let removed = text.replacen(words, "", 1);
+        assert_eq!(designer_faults(&removed), vec![name], "外した {name}");
+        let doubled = text.replacen(words, &format!("{words}・{words}"), 1);
+        assert_eq!(designer_faults(&doubled), vec![name], "重ねた {name}");
+    }
+    for (name, words) in OLD_WORDS {
+        let added = format!("{text}\n- {words}\n");
+        assert_eq!(designer_faults(&added), vec![name], "足した {name}");
+    }
 }

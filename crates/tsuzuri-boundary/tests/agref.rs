@@ -1,5 +1,5 @@
-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項）。
-//! plugin/skills/agent-discipline/reference.md が、頼みの共通の文から移した 3 項と残りの 7 項と読む範囲の 5 句と席の記憶から上げた 22 句と天井の (a)〜(d) と案内の幅の歯の名と群の頭の予算の字を、
+//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)）。
+//! plugin/skills/agent-discipline/reference.md が、設計係に残す 34 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 8 つの語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。
 //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
 //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
 #![cfg(test)]
@@ -10,170 +10,145 @@ use std::path::{Path, PathBuf};
 /// 参照の file の置き場（workspace の根から）。
 const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
 
+/// 参照の file の見出しの行（字 ## と空白で始まる行・この順）。
+const HEADS: [&str; 8] = [
+    "## 1. 置き場",
+    "## 2. 契約の行の書き方",
+    "## 3. 歯の置き方（段の束ね・判断の記録 ADR-32）",
+    "## 4. 否定の見本",
+    "## 5. 出す物と公開",
+    "## 6. 道具の撃ち方と読む範囲",
+    "## 7. 検証の群（判断の記録 ADR-61）",
+    "## 8. 床と受付の照らし",
+];
+
 /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 46] = [
+const CLAUSES: [(&str, u8, &str); 34] = [
     (
         "single-home",
         0,
         "席の起草の決まりの文はこの file だけに置き",
     ),
-    ("chain", 3, "行は数珠つなぎにしない"),
-    ("depends-why", 3, "なぜ並べられないかを節に 1 文で書く"),
+    ("chain", 2, "行は数珠つなぎにしない"),
+    ("depends-why", 2, "なぜ並べられないかを節に 1 文で書く"),
     (
         "placement-order",
-        3,
+        2,
         "置き場の物差しの順は、領域（domain）の親に置く",
     ),
     (
         "placement-compromise",
-        3,
+        2,
         "節に「置き場の妥協」の 1 文を書く",
     ),
-    ("goal-count", 3, "歯の本数を書かない"),
-    ("doc-id", 3, "module の頭の doc に行の id を書かない"),
-    ("help-width", 3, "器の入れ子の歯（接頭辞 cli_help_）"),
-    ("source-teeth", 5, "振る舞いで測れない訳を節に 1 文書く"),
-    ("detour", 9, "回り込まない"),
-    ("tokens", 9, "token を節約する"),
-    ("budget", 10, "予算は token ちょうど 150000"),
-    (
-        "tmp-index",
-        1,
-        "一時の index（GIT_INDEX_FILE）の照らしも写しの中で撃つ",
-    ),
-    ("tmpdir", 1, "TMPDIR は /tmp/<名>-t にする"),
+    ("goal-count", 2, "歯の本数を書かない"),
+    ("doc-id", 2, "module の頭の doc に行の id を書かない"),
+    ("help-width", 2, "器の入れ子の歯（接頭辞 cli_help_）"),
+    ("source-teeth", 3, "振る舞いで測れない訳を節に 1 文書く"),
+    ("detour", 6, "回り込まない"),
+    ("tokens", 6, "token を節約する"),
+    ("budget", 7, "予算は token ちょうど 150000"),
     (
         "row-count",
-        3,
+        2,
         "行の数は contracts/<ノート>.toml の id = の行で数える",
     ),
     (
         "idle-check",
-        6,
+        4,
         "働きを通らない照らし（足す物が 0 の時に通る等式など）は審査で落ちる",
     ),
-    ("findings", 8, "出す物の file の名に findings も使わない"),
-    ("reply", 8, "最後の返事（席への知らせ）は 10 行以内"),
+    ("findings", 5, "出す物の file の名に findings も使わない"),
+    ("reply", 5, "最後の返事（席への知らせ）は 10 行以内"),
     (
         "write-tree",
-        9,
+        6,
         "試しは commit せず、git write-tree の木の hash で撃つ",
     ),
-    ("scope-named", 9, "読む範囲は頼みの文が名指す"),
+    ("scope-named", 6, "読む範囲は頼みの文が名指す"),
     (
         "scope-items",
-        9,
+        6,
         "手本にする前の係の出す物の file と節（1〜2 本）・要件と判断の記録の id と節・読む code の file と fn",
     ),
     (
         "no-cat",
-        9,
+        6,
         "file を丸ごと cat しない。grep -n で行を当て、sed -n で当てた範囲だけを読む",
     ),
     (
         "prior-outputs",
-        9,
+        6,
         "前の係の出す物は、頼みの文が名指した file と節だけを読む",
     ),
-    ("id-grep", 9, "要件と判断の記録は、id を grep -A で読む"),
-    (
-        "target-share",
-        1,
-        "席が頼みの文で同じ写しと target を名指した、別々の tests/<file>.rs を割る係どうし",
-    ),
-    (
-        "touch-trees",
-        2,
-        "木の間で違う file（git diff --name-only）と git ls-files の build.rs を全部 touch してから撃つ",
-    ),
-    (
-        "nested-binary",
-        2,
-        "器の入れ子の binary（<target>/nested/scribe2）は、別の写しで xtask を組むと上書きされる",
-    ),
-    (
-        "fmt-shape",
-        2,
-        "形でない file には掛けず、足す行だけを rustfmt の形で手で書く",
-    ),
+    ("id-grep", 6, "要件と判断の記録は、id を grep -A で読む"),
     (
         "watch-only",
-        3,
+        2,
         "不在を見る歯（見張り）には「無い」だけを、等しさを見る歯には「一致する」だけを言わせ",
     ),
     (
         "impl-name",
-        3,
+        2,
         "置き場を「impl X の中」と名指す時は、X を base の宣言と grep で照らす",
     ),
     (
         "section-material",
-        3,
+        2,
         "歯が比べる字そのもの（値の具体）と、数を決める着地済みの fn の数え方を節に書く",
     ),
-    ("row-numbers", 3, "done に行の番号と行の数を持たせない"),
+    ("row-numbers", 2, "done に行の番号と行の数を持たせない"),
     (
         "own-names",
-        3,
+        2,
         "節に語の一覧（main の commit・語の数 N・空白で区切る）を字で置き",
     ),
     (
         "move-marks",
-        3,
+        2,
         "git mv で移す行は、移す元を ~、移す先を + で書く",
     ),
     (
         "eq-after-landing",
-        3,
+        2,
         "前の行が足す file を =<path> で名指す行は、前の行の着地の後に置く",
     ),
-    ("diff-renames", 3, "git diff を --no-renames を付けずに測る"),
     (
         "env-names",
-        5,
+        3,
         "名の列を先に assert_eq し、名が合った後にだけ値を比べる",
     ),
     (
         "first-refusal",
-        6,
+        4,
         "src で最初に断る検めを照らしてから見本を書き",
     ),
     (
         "clause-kinds",
-        6,
+        4,
         "順は 2 つ以上で入力・数・字・逆の順がどれも違う並び",
     ),
-    ("arm-text", 6, "判じの呼び（match の式）を字で見る歯は"),
-    (
-        "panicked-line",
-        6,
-        "log の panicked の行でその句の断言で落ちたことを照らす",
-    ),
+    ("arm-text", 4, "判じの呼び（match の式）を字で見る歯は"),
     (
         "all-items",
-        6,
+        4,
         "指された項だけでなく done の全部の項について",
     ),
-    (
-        "bite-path",
-        6,
-        "変異を当てた関数を歯の撃ちの入口から呼びの鎖で通るかを読む",
-    ),
-    (
-        "bite-guard",
-        6,
-        "噛みの script には main の守り（__name__ の照らし）を置き",
-    ),
-    (
-        "plus-one",
-        7,
-        "節の番号と版をその時の字から +1 で決め、固い字で照らさない",
-    ),
-    ("srs-regex", 7, "srs.yaml は PyYAML の safe_load で読めない"),
 ];
 
-/// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字）。
-const ABSENT: [(&str, &str); 2] = [("width-copied", "100 字"), ("old-budget", "150000 以下")];
+/// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字と、外した実装と道具の手順の語）。
+const ABSENT: [(&str, &str); 10] = [
+    ("width-copied", "100 字"),
+    ("old-budget", "150000 以下"),
+    ("patch-path", "docs/design/patch/"),
+    ("patch", "差の file"),
+    ("floor-record", "floor.tsv"),
+    ("bite", "噛み"),
+    ("fold", "畳み"),
+    ("apply-script", "適用の script"),
+    ("target-dir", "CARGO_TARGET_DIR"),
+    ("prototype", "試作"),
+];
 
 /// 器の案内の幅の歯の fn の頭（手引きが名指す接頭辞）。
 const HELP_FN: &str = "fn cli_help_";
@@ -184,6 +159,11 @@ fn root() -> PathBuf {
 
 fn reference() -> String {
     fs::read_to_string(root().join(REFERENCE)).expect("参照の file を読む")
+}
+
+/// 字 ## と空白で始まる行（見出しの行）を順に。
+fn heads(text: &str) -> Vec<&str> {
+    text.lines().filter(|l| l.starts_with("## ")).collect()
 }
 
 /// 節 n の塊（見出しの行 ## n. から次の ## の行の前まで・0 は最初の見出しの前）。
@@ -248,6 +228,11 @@ fn agref_reference_holds_each_clause_once_in_its_section() {
 }
 
 #[test]
+fn agref_reference_heads_are_the_eight_sections() {
+    assert_eq!(heads(&reference()), HEADS);
+}
+
+#[test]
 fn agref_one_clause_removed_doubled_or_moved_is_named() {
     let text = reference();
     for (name, _, words) in CLAUSES {
@@ -267,6 +252,15 @@ fn agref_copied_width_and_old_budget_are_named() {
     assert_eq!(faults(&width), vec!["width-copied"]);
     let old = text.replacen("ちょうど 150000", "150000 以下", 1);
     assert_eq!(faults(&old), vec!["budget", "old-budget"]);
+}
+
+#[test]
+fn agref_old_procedure_words_are_named() {
+    let text = reference();
+    for (name, words) in ABSENT.into_iter().skip(2) {
+        let added = format!("{text}\n- {words}\n");
+        assert_eq!(faults(&added), vec![name], "足した {name}");
+    }
 }
 
 #[test]

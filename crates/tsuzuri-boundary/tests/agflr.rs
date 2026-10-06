@@ -1,7 +1,7 @@
 //! 終える前の門の床の記録と撃ち直しの歯（接頭辞 agflr_・設計ノート surface-wave29c 行 ag-floor-rec・判断の記録 ADR-63 の決定 (4)）。
 //! 中核の `floor` の純関数を直に撃ち、tz の binary の tz hook agent-stop に係の終わりの入力を標準入力で渡して、歯ごとの置き場
 //! （CARGO_TARGET_TMPDIR の下）を --drafts で、偽の道具（tz と scribe2 の殻の script・撃たれた cwd と引数を log に足す）を --tz と
-//! --scribe2 で渡す。参照の file の 7 節と 11 節の句は、手引きが天井の文で振る舞いを持たないので、節の塊の中の字を照らす。
+//! --scribe2 で渡す。
 #![cfg(test)]
 
 use std::fs;
@@ -595,83 +595,4 @@ fn agflr_hook_stops_the_table_group_when_another_rerun_fails() {
         !left,
         "tz check が signal で止まった周の器の表の検査の group {group} が残る"
     );
-}
-
-/// 参照の file の置き場（workspace の根から）。
-const REFERENCE: &str = "plugin/skills/agent-discipline/reference.md";
-
-/// 句の名と、句を置く節の番号と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 7] = [
-    ("record", 7, "出力の dir に床の記録 floor.tsv を置く"),
-    (
-        "fields",
-        7,
-        "欄はタブで区切った 6 つ（行 id・preflight の rc・tz check の rc・derive --check の rc・器の表の検査の rc・verify の 2 行目から最後の行の rc を , で繋いだ字）",
-    ),
-    (
-        "table",
-        7,
-        "行の頭（contracts/<ノート>.toml の [[contract]] の行）を名指す断りが無ければ 0・在れば 1",
-    ),
-    (
-        "branch",
-        7,
-        "床の写しの行は branch に commit し、main を動かさない",
-    ),
-    ("gate", 7, "床の写し <置き場>/try-<名>-fl で安い 4 本"),
-    ("not-pass", 7, "記録の合格は完成でも審査の合格でもない"),
-    (
-        "kfold-cap",
-        11,
-        "verify に命令 kfold-cap を、書く範囲に持つ群と作る群を全部名指した 1 行で置く",
-    ),
-];
-
-fn reference() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    fs::read_to_string(root.join(REFERENCE)).expect("参照の file を読む")
-}
-
-/// 節 n の塊（見出しの行 ## n. から次の ## の行の前まで・0 は最初の見出しの前）。
-fn section(text: &str, n: u8) -> String {
-    let head = format!("## {n}. ");
-    let mut inside = n == 0;
-    let mut out = String::new();
-    for line in text.lines() {
-        if line.starts_with("## ") {
-            inside = line.starts_with(&head);
-        }
-        if inside {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out
-}
-
-/// 節の塊の中に 1 度だけ在らない句の名（表の順）。
-fn faults(text: &str) -> Vec<&'static str> {
-    CLAUSES
-        .iter()
-        .filter(|(_, n, words)| section(text, *n).matches(words).count() != 1)
-        .map(|(name, _, _)| *name)
-        .collect()
-}
-
-#[test]
-fn agflr_reference_holds_the_floor_clauses_once_in_their_sections() {
-    assert_eq!(faults(&reference()), Vec::<&str>::new());
-}
-
-#[test]
-fn agflr_reference_clause_removed_doubled_or_moved_is_named() {
-    let text = reference();
-    for (name, _, words) in CLAUSES {
-        let removed = text.replacen(words, "", 1);
-        assert_eq!(faults(&removed), vec![name], "外した {name}");
-        let doubled = text.replacen(words, &format!("{words}・{words}"), 1);
-        assert_eq!(faults(&doubled), vec![name], "重ねた {name}");
-        let moved = format!("- {words}\n{removed}");
-        assert_eq!(faults(&moved), vec![name], "頭の塊へ動かした {name}");
-    }
 }
