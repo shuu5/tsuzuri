@@ -999,7 +999,7 @@ index 609187df080722b913d4df611fc98838e3a78f49..517bd2354725c6716f76b323c91518de
              ("intake", "Take one contract row in and create its run."),
              ("preflight", "Review a contract before intake, without creating a run."),
 diff --git a/scribe2/crates/scribe2/src/ledger/close_reason.rs b/scribe2/crates/scribe2/src/ledger/close_reason.rs
-index 187406635118ef13b43bb8892379b53e8bfcb748..d1d45110e7ab7ade6ce49e450452098b5deb6780 100644
+index 187406635118ef13b43bb8892379b53e8bfcb748..3196481d4fa44d9cf2944346083e23ff253fe8fe 100644
 --- a/scribe2/crates/scribe2/src/ledger/close_reason.rs
 +++ b/scribe2/crates/scribe2/src/ledger/close_reason.rs
 @@ -18,6 +18,9 @@ const CI_SUCCESS: &str = "ci=success";
@@ -1045,6 +1045,85 @@ index 187406635118ef13b43bb8892379b53e8bfcb748..d1d45110e7ab7ade6ce49e450452098b
          [CI_SUCCESS] => LandedTail::Success,
          [CI_NONE] => LandedTail::None,
          [CI_SUCCESS, tip] => match tip.strip_prefix(TIP_KEY).filter(|id| is_commit_id(id)) {
+@@ -573,4 +579,24 @@ mod tests {
+         assert!(!is_ruling_line(id, None), "接頭辞が解けない周は問い id の形を読めない");
+         assert!(is_ruling_line("a | batch:x", None), "batch: は接頭辞に依らない");
+     }
++
++    /// 尾 `host=green`（tsuzuri の判断の記録 ADR-68・設計 ledger-form.md §16）は 1 語だけの尾で読め（大文字の 16 進の id と全角の
++    /// 空白の区切りでも）、語を足す・前に置く・字を替える尾は読めない尾になる。
++    #[test]
++    fn vclhost_ledger_close_reason_reads_host_green_as_the_fourth_tail() {
++        let landed = |commit: &str, tail| Ok(Form::Landed { commit: commit.to_owned(), tail });
++        assert_eq!(ok(&format!("landed {SHA} host=green")), landed(SHA, LandedTail::HostGreen));
++        assert_eq!(ok(&format!("landed {UPPER}\u{3000}host=green ")), landed(UPPER, LandedTail::HostGreen));
++        for tail in [
++            format!("host=green tip={SHA}"),
++            "host=green ci=success".to_owned(),
++            "ci=success host=green".to_owned(),
++            "Host=green".to_owned(),
++            "host=greens".to_owned(),
++            "host=red".to_owned(),
++        ] {
++            let reason = format!("landed {SHA} {tail}");
++            assert_eq!(ok(&reason), landed(SHA, LandedTail::Unreadable(tail)), "{reason}");
++        }
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/ledger/phase.rs b/scribe2/crates/scribe2/src/ledger/phase.rs
+index c00fdc05e4fd3c5d2e3bc8da8ea8216a6f21852b..e5b4c5bdc18f2f5da8564217e6c895f146516099 100644
+--- a/scribe2/crates/scribe2/src/ledger/phase.rs
++++ b/scribe2/crates/scribe2/src/ledger/phase.rs
+@@ -1237,4 +1237,26 @@ mod tests {
+         assert_eq!(part(&out, "s2-n").extra, only_met, "期日が全部満ちていれば due は無い");
+         assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()), why: None }, "閉じた契約の pointer");
+     }
++
++    /// 尾 `host=green`（tsuzuri の判断の記録 ADR-68）で閉じた契約は着地の形: 局面の出力は contract-closed で、辿れる契約が全部その
++    /// 理由で閉じた昇格済みの memo を器が閉じる memo に並べる（FR93）。尾に語を 1 つ足した閉じは close-kind-mismatch で、FR93 に数えない。
++    #[test]
++    fn vclhost_phase_reads_host_green_closes_as_landed() {
++        use super::due_closes;
++        let green = format!("landed {SHA} host=green");
++        let extra = format!("{green} tip={SHA}");
++        let promoted = |memo_id: &str, reason: &str| {
++            let (first, second) = (format!("{memo_id}1"), format!("{memo_id}2"));
++            let traced = |id: &str| closed(id, reason, "2026-09-27T00:00:00Z").design(POINTER).dep(memo_id, "discovered-from");
++            vec![memo(memo_id, &[]).notes(&format!("昇格: 全部 {first} {second}")), traced(&first), traced(&second)]
++        };
++        let mut specs = vec![closed("s2-hg", &green, LATE).design(POINTER), closed("s2-hx", &extra, LATE).design(POINTER)];
++        specs.extend(promoted("s2-mg", &green));
++        specs.extend(promoted("s2-mx", &extra));
++        let out = probe().run(&specs);
++        assert_eq!(shape(&out, "s2-hg"), ("contract-closed", "none", None), "host=green の閉じは読める着地");
++        assert_eq!(shape(&out, "s2-hx"), misfit("close-kind-mismatch"), "尾に語を足した閉じは読めない尾");
++        let due = due_closes(&ledger(&specs), Some("s2"), &[]);
++        assert_eq!(due, vec![("s2-mg".to_owned(), "昇格済み s2-mg1 s2-mg2".to_owned())], "host=green の契約だけを辿る memo を閉じる");
++    }
+ }
+diff --git a/scribe2/crates/scribe2/src/ledger/phase_main.rs b/scribe2/crates/scribe2/src/ledger/phase_main.rs
+index 071da2c1d287b345b078b81ce934aacafefc56e0..37affc1ce9e228035a0d0ddc8f7b775ec74b27e7 100644
+--- a/scribe2/crates/scribe2/src/ledger/phase_main.rs
++++ b/scribe2/crates/scribe2/src/ledger/phase_main.rs
+@@ -403,4 +403,18 @@ mod tests {
+         ];
+         assert_eq!(flags, expected);
+     }
++
++    /// 線より後に尾 `host=green`（tsuzuri の判断の記録 ADR-68）で閉じた行は row-landed、尾に語を 1 つ足した同じ閉じは row-unbeaded。
++    #[test]
++    fn vclhost_phase_main_row_lands_on_a_host_green_close() {
++        let green = "landed 0123456789abcdef0123456789abcdef01234567 host=green";
++        let issues = ledger(&[
++            closed("s2-hg", "docs/design/x.md#hg", green, LATE),
++            closed("s2-hx", "docs/design/x.md#hx", &format!("{green} tip=0123456789abcdef0123456789abcdef01234567"), LATE),
++        ]);
++        let rows = ["hg", "hx"].map(|id| row(&format!("docs/design/x.md#{id}"), &[]));
++        let out = run(&issues, &[], Some(&rows), Some(&[]));
++        let phases: Vec<&str> = out.parts.iter().map(|part| part.phase.as_str()).collect();
++        assert_eq!(phases, ["row-landed", "row-unbeaded"]);
++    }
+ }
 diff --git a/scribe2/crates/scribe2/src/pipe/cli.rs b/scribe2/crates/scribe2/src/pipe/cli.rs
 index de5efd52252805f3614489780b4e0be71dadd188..9e874ad76b5900260fa027e62a4edff55be03b84 100644
 --- a/scribe2/crates/scribe2/src/pipe/cli.rs
@@ -1478,7 +1557,7 @@ index 162909741f49c13a443bf509ecbd6eb5ccc0df8e..989470da55b78e3570c62c660cad7cd4
  
  /// push の後の remote の追跡の ref（`refs/remotes/<remote>/main`・git が push の押した値に揃える）が自分の sha の子孫で
 diff --git a/scribe2/docs/design/contract-source.md b/scribe2/docs/design/contract-source.md
-index fdcee851410b3ffc28ca62f561d6608b9eb16b43..d1b91a237b3aa0553c52b7f34804668a8fb9e561 100644
+index fdcee851410b3ffc28ca62f561d6608b9eb16b43..285be874f0f2e230676ee607658dc4a892622b9c 100644
 --- a/scribe2/docs/design/contract-source.md
 +++ b/scribe2/docs/design/contract-source.md
 @@ -49,11 +49,11 @@
@@ -1500,11 +1579,42 @@ index fdcee851410b3ffc28ca62f561d6608b9eb16b43..d1b91a237b3aa0553c52b7f34804668a
    - 既存の歯の数の pin: 埋め込みの manifest の行数と kind の数（`rules/embedded.rs` の 2 か所）と `rules_external_form` の snapshot が 1 ずつ増える。e2e の共有の fixture manifest（`tests/e2e/pipe.rs` の `write_rules`）に行を 1 本足し、値は 0（既存の終端の歯の挙動を変えない）。
  - 却下: 断られた周（403・rate limit）だけ間隔を延ばす backoff（断られるまで 20 ms で撃つ形が残る・断りの字面を読む読み手が要る）／CI の 1 行を `gh run watch` に替える（`ci-cmd` の宣言は repo ごとの任意の 1 行で、forge の CLI の待ちの口に依存させない・判定の形〔落ちた run を先に見る〕が CLI の側へ移る）／`POLL` そのものを延ばす（pid・meminfo・札の待ちまで遅くなる・周期は完了条件の性質）。
  
-+- 追記（終端の順の入れ替え・§5 手順 2・3・裁定 2026-10-05T22:57Z）: 照合を撃つのは close の後の子 process（`pipe land --run <id> --ci-only <sha>`）で、受け入れの周だけが close の前に撃つ。間隔と上限の値・待ちの周期・最初の評価は替えない。`pipe.ci_wait_s` は「close を待つ上限」でなく「後から読む上限」になる（値と裁定 id は替えない）。
++- 追記（終端の順の入れ替え・§5 手順 2・3・裁定 2026-10-05T22:57Z・tsuzuri の判断の記録 ADR-68・close の理由の尾 `host=green` の文法は ledger-form.md §16）: 照合を撃つのは close の後の子 process（`pipe land --run <id> --ci-only <sha>`）で、受け入れの周だけが close の前に撃つ。間隔と上限の値・待ちの周期・最初の評価は替えない。`pipe.ci_wait_s` は「close を待つ上限」でなく「後から読む上限」になる（値と裁定 id は替えない）。
 +
  ## 51. 審査の材料に、契約が名指す write-set の外の物を器が束ねる（契約表の行 bc・非公開の隣の project の契約の審査の section-material-missing 20 件・memo `s2-07l.430`）
  
  - 何が起きているか（実測 2026-09-27T13:45Z・verified）: 同じ器を使う非公開の隣の project（以下「隣の project」・件数だけを書く）の契約の審査は 90 回のうち 20 回が `section-material-missing`（INCONCLUSIVE 18・FAIL 2）で、PASS 以外の理由の型で最も多い。lens の evidence が指す物は大半が write-set の外に在る（件は重なる）: write-set の外の型・fn・field の着地と形 8 件・data file の鍵（json の鍵・stylesheet の class・yaml の id の行）6 件・別の便が置いた fixture の在りかと中身 6 件・crate の Cargo.toml の依存 3 件・依存の相手の行 3 件・親 module の公開の宣言 1 件。残りは別の設計ノートの節 1 件・repo の外の file の形 1 件・節そのものの欠け 4 件。本 repo の置き場でも審査 732 回のうち 71 回（INCONCLUSIVE 65・FAIL 6）が同じ型で、`at` に並んだ識別子 63 個のうち 24 個は材料のどこにも backtick で書かれていない。2026-09-17 の調べ（台帳 `s2-07l.430` の notes）も同じ提案（名指した fn の宣言 file と可視性を材料に足す）を残したまま未着手である。
+diff --git a/scribe2/docs/design/ledger-form.md b/scribe2/docs/design/ledger-form.md
+index c05aa46310ccb880b5adb37d7fdcc0fab950d398..1373a9bba0966be2e405f11a128633577b7110aa 100644
+--- a/scribe2/docs/design/ledger-form.md
++++ b/scribe2/docs/design/ledger-form.md
+@@ -259,7 +259,7 @@ memo か契約かを「label が在るか」と「受入条件に設計の 1 行
+ 
+     | 頭 | 字面 | 値の形 | 書く者 | 種類 |
+     |---|---|---|---|---|
+-    | landed | `landed <着地 commit id> <尾>` | 着地 commit id は 40 桁の 16 進（大文字小文字を問わない）。尾は閉じた 3 形 `ci=success`・`ci=success tip=<40 桁の 16 進>`・`ci=none`（ほかの尾は読めない尾として返し、着地の形かは頭と id で決まる・ADR-0089） | land の終端（経路 1・2）と `pipe retire`（経路 3）だけ（席の close は断る） | 契約 |
++    | landed | `landed <着地 commit id> <尾>` | 着地 commit id は 40 桁の 16 進（大文字小文字を問わない）。尾は閉じた 4 形 `host=green`（tsuzuri の判断の記録 ADR-68）・`ci=success`・`ci=success tip=<40 桁の 16 進>`・`ci=none`（ほかの尾は読めない尾として返し、着地の形かは頭と id で決まる・ADR-0089） | land の終端（経路 1・2）と `pipe retire`（経路 3）だけ（席の close は断る） | 契約 |
+     | 重複 | `重複 <bead id>` | 同じ台帳の bead id（§15 の形・`is_bead_id`） | 席 | 契約 |
+     | 後継 | `後継 <bead id>` | 同上 | 席 | 契約 |
+     | 取り下げ | `取り下げ <理由>` | 頭の後ろの字の全部（空白でない字が 1 つ以上） | 席 | 契約・epic |
+@@ -280,7 +280,7 @@ memo か契約かを「label が在るか」と「受入条件に設計の 1 行
+     - **読めない**: 宣言が在って不備（close-check の値の型違いと、古い binary の読み手が知らない key を含む）。本 § と同じ判定を掛け、断る周は語 **close-declaration-unreadable** で、当たった形の語（下の 6 語のどれか）と宣言を直す次の一手を断り文に名指す。形に合う閉じは通す（C10: 読めないを「無い」に倒さない・C11.2: 起票の門は FailClosed・加わりを名乗っていない repo の形に合う閉じまでは止めない）。
+   - key は、その key を知る binary に PATH を入れ替えた後でだけ宣言に書く（古い読み手は未知の key を宣言ごとの不備にし、受付・path の種別・land の終端が止まる）。本 repo は行 l3 で書く。
+ - 形（行 l・番号は行 l の done の (1)〜(4) と 1:1・(5) は歯）:
+-  1. **close の理由の読み手は行 l の write-set の + の file の純関数 1 本**: 入力は理由の字と台帳の接頭辞（解けない周も渡せる）だけで、I/O も時計も持たない。上の文法で、頭と値（landed は着地 commit id と尾の閉じた 3 値か読めない尾・昇格済みは id の列・取り下げは理由の字）か、閉じた欠陥（空・頭の外・値の形の外〔値の欠けを含む〕・接頭辞が無く id を読めない）を返す。bead id は `is_bead_id`、裁定 id の時刻は `epoch_of` に `-`・`:`・秒 `:00` を足した字で読む（自前の読みを持たない・C2）。裁定 id の形の判定を外へ見せる。land の終端と `pipe retire` が書く 3 形（ci=success・tip つき・ci=none）は着地の形と読める。
++  1. **close の理由の読み手は行 l の write-set の + の file の純関数 1 本**: 入力は理由の字と台帳の接頭辞（解けない周も渡せる）だけで、I/O も時計も持たない。上の文法で、頭と値（landed は着地 commit id と尾の閉じた 4 値か読めない尾・昇格済みは id の列・取り下げは理由の字）か、閉じた欠陥（空・頭の外・値の形の外〔値の欠けを含む〕・接頭辞が無く id を読めない）を返す。bead id は `is_bead_id`、裁定 id の時刻は `epoch_of` に `-`・`:`・秒 `:00` を足した字で読む（自前の読みを持たない・C2）。裁定 id の形の判定を外へ見せる。land の終端と `pipe retire` が書く 4 形（host=green・ci=success・tip つき・ci=none）は着地の形と読める。
+   2. **宣言の値に真偽を足す**: `Raw` に真偽の variant を 1 つ足し、`value_of` は manifest の読み `scalar` が返す真偽をその variant にする（新しい読みを書かない）。`entrance_of` の網羅の match は真偽を閉じた 3 語の外として不備にする（今の整数・列と同じ・entrance-flip = true は key と行番号を名指す不備）。真偽の値を書いた他の key は、今の「value を読めない」から key ごとの型の不備（「は整数である」等・既存の文）に変わる（どちらも不備で、宣言を読めない扱いは変わらない）。
+   3. **key close-check と閉じた 3 値の読み口**: `crates/scribe2/src/pipe/declaration/optional_keys.rs` に key の名・読み手（真偽だけを受け、他の値は key と行番号を名指す不備）・`DECLARED_KEYS` と `OPTIONAL_KEYS` の末尾の 1 行ずつと、HEAD の宣言から加わる・加わらない・読めないの閉じた 3 値を返す口を足し（`QuestionRoute` と同じ形・親の再輸出で外へ見せる）、親の `Declared` に欄を 1 つと `parse` の読みの 1 行を足す。
+   4. **門の判定は変えない**: `crates/scribe2/src/hook/ledger_guard.rs` を触らず、本 repo の `.vessel.toml` に key を書かない（読み手だけが先に着地し、binary を入れ替えても誰の閉じも変わらない）。
+@@ -298,7 +298,7 @@ memo か契約かを「label が在るか」と「受入条件に設計の 1 行
+   2. **手順の字を同じ PR で直す**: `CLAUDE.md` の作業の流れの 5 と done の定義の見出し・`.beads/PRIME.md` の前提と R0 と Essential Commands（字は同じ束の c-edits の草稿・path の種別が code の file なので docs PR でなく本行の write-set に置く）。
+ - 触らない: land の終端と `pipe retire` の close の字と撃ち方（`close_reason`・`CloseTail`・`CLOSE_REASON`・子 process）・6 形（`FORMS`）と rules 行 `ledger.denied_writes`・`Refusal` と `Write` と `Create`（変種も field も足さない）・§14 と §15 の段と語（全部の repo のまま）・極性一覧（同じ guard の中の段）・`crates/scribe2/src/hook/mod.rs`・`crates/scribe2/src/hook/role_guard.rs` と rules 行 `role.orchestrator`（seat-roles.md §32 の行 z が持つ）・reopen・台帳の読み（NFR5）・他の任意 key の読み手と `QuestionRoute`。閉包: 行 l の + の file は `Refusal`・`Write`・`Create` を名指さず、ledger_guard の型の中括弧の literal をどの file にも足さない（行 g・h・j と vessel-hook 行 a の閉包を広げない）。行 l1・l2 は行 l の + の file を write-set に名指さない（同じ docs PR では base に無く、着地の後は + を持つ行が受付で断られる）。
+ - 締め出しと手順の字（行 l3 の着地の後・本 repo）:
+-  - **席は契約を着地の形で閉じない**（close-landed）。契約の close は器の 3 つの経路が書く: remote を宣言する repo の便は land の終端が push の後の CI の照合で `ci=success`、remote を宣言しない repo の便は land の終端が照合なしで `ci=none`、`--pr-cmd` の便は merge の後に `pipe retire --run <run>` が照合して閉じる。
++  - **席は契約を着地の形で閉じない**（close-landed）。契約の close は器の 3 つの経路が書く: remote を宣言する repo の便は land の終端が push の後にこの host の緑で `host=green`（GitHub の検査は close の後に読む・主実測が赤か測れなかった便を受け入れる周だけ CI の照合で `ci=success`・tsuzuri の判断の記録 ADR-68）、remote を宣言しない repo の便は land の終端が照合なしで `ci=none`、`--pr-cmd` の便は merge の後に `pipe retire --run <run>` が照合して閉じる。
+   - **終端が止まった便**（`terminal:ci:failure`・`terminal:ci:unmeasurable`・`terminal:push:failed:…`・`terminal:close:failed:…`・`terminal:unreadable`）は、原因を直して（main の CI の撃ち直し等）から `pipe land --run <run> --terminal-only` で終端だけを撃ち直す（冪等・撃った時点の宣言で経路を選び直す・先端でない便は行 bm の先端の照合）。2026-09-25 以後に手で閉じた契約 7 本はどれもこの口で閉じる形。
+   - **名指しの 1 行なら orchestrator の席が撃てる**（決着の権能 settle・seat-roles.md §32）: 撃ち直しは `--run <run> --terminal-only` に、置き場か repo の値の対（hook が解いた席の置き場と anchor と同じ字だけ・rules は足さない）だけを足した 1 行、PR の便の閉じは `pipe retire --run <run>` に同じ対だけを足した 1 行（照合の道が unmeasured になる PR の便を畳むだけなら `--fold-only` を 1 つ足してよい・契約は開いたまま残る）。後ろに redirect や pipe を付けた形・道具の flag を持つ形は merge か launch に落ちて断られる。
+ - 却下（ADR-0097 が持つ）: 門を全部の repo に掛ける（器の便でない着地で閉じる消費側の席の閉じがほぼ全部断られる）／消費側の閉じの形が決まるまで門を起こさない（本 repo の外れが止まらない）／掛ける repo を rules 行か host の面で選ぶ（repo の名乗りを tracked でない面か裁定の要る面に置く）／宣言を読めない repo の close を全部断る（加わりを名乗っていない repo の形に合う閉じまで止める）／宣言を読めない repo を宣言の無い repo と同じに通す（C10・C11.2）。本 § の中の却下: 着地の形を「席が CI を確かめた周だけ」通す（門は台帳も CI も読まない・ADR-0094 は席の申告から着地の印を書く案を退けた）／`Landed`・`着地` を着地の形と読む（閉じた字面は 1 つ・大文字小文字を区別する）／値の語を空白の外の字でも切る（§15 の「空白で割った 1 語」と読み手が 2 通りになる）／`昇格済み` の列を `,` でも区切る（区切りが 2 通りになる）／`update --status closed` を通して局面の出力で数える（FR81 (d) は理由の無い close を編集の時点で止める）／id の数と理由の数の食い違いを門が断る（bd が断る）／台帳を読んで種類と形の食い違いを断る（NFR5・ADR-0089 が退けた）／`-h` と `--help` を免じる（今の門も create の `--help` を断る・help は `bd help <sub>` で読める）／`$` を含む理由を字のまま読む（展開の後の字を門は知らない）／close-check を文字列の `"on"` 等で書かせる（真偽の key の前例 ruling-check と揃えない・値の読みが 2 通りになる）。
 diff --git a/scribe2/rules/manifest.toml b/scribe2/rules/manifest.toml
 index db723ceee68d3b5b60c5344df4485a1908e90304..83ebb49ca6cbdda6fd0d5a2f6e3489b282ef12d7 100644
 --- a/scribe2/rules/manifest.toml
