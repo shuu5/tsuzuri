@@ -279,6 +279,7 @@ sections:
       - {id: ag-drafter-marks, doc: surface-v4b}
       - {id: t-memo-similar, doc: surface-v4b}
       - {id: v-seat-drift, doc: surface-v4b}
+      - {id: v-ci-proof-cut, doc: surface-v4b}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
