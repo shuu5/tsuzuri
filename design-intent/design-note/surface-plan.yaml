@@ -284,6 +284,7 @@ sections:
       - {id: v-memo-merge, doc: surface-v4b}
       - {id: v-launch-row-target, doc: surface-v4b}
       - {id: v-follow-fix, doc: surface-v4b}
+      - {id: t-outcome-shrink, doc: surface-v4b}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
