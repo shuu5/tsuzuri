@@ -19,7 +19,8 @@
 //! 列と同じ読み手で読み `--design` と照らす・`done-teeth=` の行の次・判断の記録 ADR-44 の決定 (3)）/
 //! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]・`--placed` の周の照らしの断りは judge の断りの後に
 //! preflight だけの名 `acceptance-pointer` の 1 行・verify の欄の照らしの断りはその後に preflight だけの名 `verify-filters`〔filter 語の候補が 2 つ
-//! 以上の nextest の行〕と `verify-common`〔宣言の common-verify と同じ行〕の 1 行ずつ）/ 末尾に
+//! 以上の nextest の行〕と `verify-common`〔宣言の common-verify と同じ行〕の 1 行ずつ・その後に名 `section-literal`〔done の項の印の字が審査の材料の
+//! 節に無い項ごとの 1 行〕）/ 末尾に
 //! `preflight: <ok|refused n=<件数>|broken>`。rc = 0（断り 0）/ 1（断り ≥ 1）/ 2（読めない = `RC_BROKEN` の周）。
 //! `--state-dir` が無く git 設定からも解けない周は `overlap=unmeasured` を出し、rc は他の断りで決める（測れないを 0 に
 //! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
@@ -31,7 +32,7 @@ use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::pipe::closure::filter_words;
 use crate::pipe::dispatch::pointer_of;
 use crate::pipe::refuse::{covered, Refuse};
-use crate::pipe::review::section_text;
+use crate::pipe::review::{design_material, done_items, section_text};
 use crate::pipe::spawn::table_rows;
 use crate::pipe::table::TableError;
 use crate::pipe::{show_head, table};
@@ -62,6 +63,15 @@ const FILTERS: &str = "verify-filters";
 
 /// verify の欄の照らしの断りの名（preflight だけの名）: 行が宣言の common-verify の行と同じ。
 const COMMON: &str = "verify-common";
+
+/// 照らしの断りの名（preflight だけの名）: done の項の印の字が審査の材料の節に無い。
+const LITERAL: &str = "section-literal";
+
+/// done の項が節の字を囲む印の始まり（全角の二重鉤括弧の始まり）。
+const MARK_OPEN: char = '『';
+
+/// 印の終わり（全角の二重鉤括弧の終わり）。
+const MARK_CLOSE: char = '』';
 
 /// 置いた bead の acceptance の照らし（閉じた 3 値）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,6 +143,34 @@ fn verify_gaps(design: &str, verify: &[String], common: &[String]) -> Vec<String
             found.push(format!(
                 "refuse={COMMON}:行 {design} の verify {line:?} は宣言の common-verify の行と同じ — gate は共通 verify を verify の行の前に撃つので同じ木で 2 度撃つ。行の verify から外す"
             ));
+        }
+    }
+    found
+}
+
+/// done の項の印の照らし（受付の judge の外）: 項（[`done_items`]・列が空なら done の全体）を前から番号 1, 2, … で見て、各項の印 `『…』` の字が審査の
+/// 材料 `material` の部分の字に無い印と、空の印と、閉じない印を、断りの 1 行（`refuse=section-literal:<理由>`）ずつにする。行は項の順と項の中の出る順。
+/// `design` は行の pointer の字。
+fn literal_gaps(design: &str, done: &str, material: &str) -> Vec<String> {
+    let mut items = done_items(done);
+    if items.is_empty() {
+        items.push(done.trim().to_owned());
+    }
+    let mut found = Vec::new();
+    for (at, item) in items.iter().enumerate() {
+        let head = format!("refuse={LITERAL}:行 {design} の done の項 {} の", at.saturating_add(1));
+        let mut rest = item.as_str();
+        while let Some((_, after)) = rest.split_once(MARK_OPEN) {
+            let Some((literal, next)) = after.split_once(MARK_CLOSE) else {
+                found.push(format!("{head}印 {MARK_OPEN} が閉じない — {MARK_CLOSE} で閉じる"));
+                break;
+            };
+            if literal.is_empty() {
+                found.push(format!("{head}印 {MARK_OPEN}{MARK_CLOSE} が空 — 印の中に節の字を書く"));
+            } else if !material.contains(literal) {
+                found.push(format!("{head}字 {MARK_OPEN}{literal}{MARK_CLOSE} が審査の材料の節に無い — 節の本文に同じ字を書くか印を外す"));
+            }
+            rest = next;
         }
     }
     found
@@ -239,7 +277,9 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     let widen = widen_lines(&repo, &sha, &pointer, doc, &contract.write_set);
     let placed = present(args, PLACED).then(|| acceptance_of(bd, &repo, manifest, &bead, &pointer));
     let common = early.frozen.as_ref().map_or(&[][..], |(found, _)| found.common_verify());
-    let gaps = verify_gaps(&format!("{}#{}", pointer.path, pointer.id), &contract.verify, common);
+    let design = format!("{}#{}", pointer.path, pointer.id);
+    let mut gaps = verify_gaps(&design, &contract.verify, common);
+    gaps.extend(literal_gaps(&design, &contract.done, &design_material(&repo, &design)));
     render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth), (placed.as_ref(), &gaps))
 }
 
@@ -375,7 +415,7 @@ fn listed(files: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{acceptance_lines, accepted, verify_gaps, Accepted};
+    use super::{acceptance_lines, accepted, literal_gaps, verify_gaps, Accepted};
     use crate::pipe::closure::filter_words;
     use crate::pipe::table::parse_pointer;
     use crate::seat::ledger::Issue;
@@ -485,5 +525,32 @@ mod tests {
         let both = gaps(&["cargo run -q -p xtask -- check", "cargo nextest run -p b --no-tests=fail vx_ vy_"]);
         let names: Vec<&str> = both.iter().map(|line| line.split(':').next().unwrap_or_default()).collect();
         assert_eq!(names, ["refuse=verify-common", "refuse=verify-filters"], "verify の行の順");
+    }
+
+    /// 材料を字 `docs/design/toy.md#a §1` と `本文。` と `型` の 3 行・行の pointer を `docs/design/toy.md#a` として、done `done` の印の照らしの断りの行。
+    fn literal(done: &str) -> Vec<String> {
+        literal_gaps("docs/design/toy.md#a", done, "docs/design/toy.md#a §1\n本文。\n型\n")
+    }
+
+    /// 通る見本: 材料に在る字を囲んだ項だけの番号つきの done・印の無い done・番号の無い done の印の字が材料に在る周は、どれも空の列。
+    #[test]
+    fn vpflit_marked_literals_in_the_material_pass() {
+        assert_eq!(literal("(1) 字 『本文。』 を出す (2) 『型』 と 『本文。』 を出す"), Vec::<String>::new());
+        assert_eq!(literal("a が通る"), Vec::<String>::new());
+        assert_eq!(literal("『本文。』 を出す"), Vec::<String>::new());
+    }
+
+    /// 断る見本（通る見本から 1 句ずつ外す）: 材料に無い字・空の印・閉じない印は項の番号と字を名指す 1 行ずつで、項の順に並ぶ。番号の無い done は項 1。
+    #[test]
+    fn vpflit_missing_unclosed_and_empty_marks_are_named() {
+        let head = "refuse=section-literal:行 docs/design/toy.md#a の done の項";
+        let want = [
+            format!("{head} 2 の字 『無い字』 が審査の材料の節に無い — 節の本文に同じ字を書くか印を外す"),
+            format!("{head} 3 の印 『』 が空 — 印の中に節の字を書く"),
+            format!("{head} 4 の印 『 が閉じない — 』 で閉じる"),
+        ];
+        assert_eq!(literal("(1) 『本文。』 (2) 『無い字』 と 『本文。』 (3) 『』 (4) 『閉じない"), want);
+        let one = format!("{head} 1 の字 『無い字』 が審査の材料の節に無い — 節の本文に同じ字を書くか印を外す");
+        assert_eq!(literal("『無い字』 を出す"), [one]);
     }
 }

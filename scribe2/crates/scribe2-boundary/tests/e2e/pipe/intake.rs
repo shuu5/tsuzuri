@@ -4,12 +4,13 @@
 //! `contracts.rs`・断りは `refuse.rs`・`s2-07l.351`）。
 //!
 //! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は移しただけ・`s2-07l.264`）。
-//! 子 module `vpfgap`（接頭辞 `vpfgap_`）は preflight の verify の欄の照らしの歯を置く。
+//! 子 module `vpfgap`（接頭辞 `vpfgap_`）は preflight の verify の欄の照らしの歯を、`vpflit`（接頭辞 `vpflit_`）は done の項の印の照らしの歯を置く。
 
 use super::*;
 
 mod vpfgap;
 mod vpfcon;
+mod vpflit;
 
 /// 契約 (b) 以後、1 行に収まらない配列は**行**の側の欠陥である（契約 file は器が作る）。
 #[test]
