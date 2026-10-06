@@ -20,6 +20,7 @@ fn bead_attr() -> BeadAttr {
         status: "open".into(),
         labels: vec!["surface".into()],
         pointers: vec!["design = contracts/surface-base.toml#b".into()],
+        contracts: vec![],
         touches: vec![],
     }
 }

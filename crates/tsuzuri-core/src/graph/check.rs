@@ -351,12 +351,14 @@ fn g1_edge_ends(g: &Graph) -> Verdict {
     }
 }
 
-/// g-2 open の契約は pointer の行をちょうど 1 つ持つ（closed の契約は数えない）。
+/// g-2 open の契約は pointer の行と契約の行の塊の和をちょうど 1 つ持つ（closed の契約は数えない・両方の形と 2 塊は違反）。
 fn g2_one_pointer(g: &Graph) -> Verdict {
     let bad = g
         .beads
         .iter()
-        .filter(|(_, b)| b.kind == NodeKind::Task && b.is_open() && b.pointers.len() != 1)
+        .filter(|(_, b)| {
+            b.kind == NodeKind::Task && b.is_open() && b.pointers.len() + b.contracts.len() != 1
+        })
         .map(|(id, _)| id.clone())
         .collect();
     judge(g, &[Source::Ledger], bad)
@@ -451,12 +453,15 @@ fn g6_no_loop(g: &Graph) -> Verdict {
     judge(g, &[Source::Ledger], bad)
 }
 
-/// g-8 memo の label と pointer の行の両方を持つ bead が無い。
+/// g-8 memo の label と、pointer の行か契約の行のどちらかとの両方を持つ bead が無い。
 fn g8_memo_or_contract(g: &Graph) -> Verdict {
     let bad = g
         .beads
         .iter()
-        .filter(|(_, b)| b.labels.iter().any(|l| l == MEMO_LABEL) && !b.pointers.is_empty())
+        .filter(|(_, b)| {
+            b.labels.iter().any(|l| l == MEMO_LABEL)
+                && !(b.pointers.is_empty() && b.contracts.is_empty())
+        })
         .map(|(id, _)| id.clone())
         .collect();
     judge(g, &[Source::Ledger], bad)

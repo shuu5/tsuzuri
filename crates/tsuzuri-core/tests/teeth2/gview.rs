@@ -78,6 +78,7 @@ fn bead(kind: NodeKind, status: &str) -> BeadAttr {
         status: status.into(),
         labels: vec![],
         pointers: vec![],
+        contracts: vec![],
         touches: vec![],
     }
 }

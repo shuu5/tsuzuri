@@ -50,6 +50,9 @@ pub const LEDGER_EDGE_TYPES: [EdgeType; 4] = [
 /// 契約の pointer の行の頭（acceptance の中）。
 pub const POINTER_PREFIX: &str = "design = ";
 
+/// 契約の行の塊の頭（acceptance の中・契約表の導出の形の `[[contract]]` の行）。
+pub const CONTRACT_HEAD: &str = "[[contract]]";
+
 /// notes の定型行の頭と、導く節点の種類（裁定・受け・方針）。
 pub const TYPED_LINES: [(&str, NodeKind); 3] = [
     ("裁定 id = ", NodeKind::Ruling),
@@ -542,7 +545,28 @@ fn pointer_lines(acceptance: Option<&str>) -> Vec<String> {
         .collect()
 }
 
+/// 受入の条件の字の契約の行（`CONTRACT_HEAD` の行ごとの塊の欄 id と req）。行ごとに行末の CR と行末の空白を除き、
+/// `CONTRACT_HEAD` の行で新しい塊を始める。塊の中で頭が `id = ` の行は残りを JSON の字として読み（読めなければ None のまま）、
+/// 頭が `req = ` の行は残りを JSON の字の配列として読む（読めなければ空の列）。最初の `CONTRACT_HEAD` より前の行は読まない。
+pub fn contract_rows(acceptance: &str) -> Vec<(Option<String>, Vec<String>)> {
+    let mut rows: Vec<(Option<String>, Vec<String>)> = Vec::new();
+    for line in acceptance.lines() {
+        let line = line.trim_end_matches('\r').trim_end();
+        if line == CONTRACT_HEAD {
+            rows.push((None, Vec::new()));
+        } else if let Some(row) = rows.last_mut() {
+            if let Some(v) = line.strip_prefix("id = ") {
+                row.0 = serde_json::from_str(v).ok();
+            } else if let Some(v) = line.strip_prefix("req = ") {
+                row.1 = serde_json::from_str(v).unwrap_or_default();
+            }
+        }
+    }
+    rows
+}
+
 /// 台帳の bead から節点と辺を組む。design の辺は pointer の行が指す設計ノートの行の節点が在るときだけ組む。
+/// 契約の行の塊の req の字は bead から req の辺にする（先の節点が在るかは見ない・契約の行から design の辺は組まない）。
 /// 方針の属性（範囲）は同じ方針の id の最初の行から読む。
 fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
     let rows: BTreeSet<String> = g
@@ -583,6 +607,13 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                 g.edges.push(edge(&bead.id, &row, EdgeType::Design));
             }
         }
+        let contracts = contract_rows(bead.acceptance_criteria.as_deref().unwrap_or_default());
+        let mut required: BTreeSet<&str> = BTreeSet::new();
+        for req in contracts.iter().flat_map(|(_, reqs)| reqs) {
+            if required.insert(req) {
+                g.edges.push(edge(&bead.id, req, EdgeType::Req));
+            }
+        }
         g.beads.insert(
             bead.id,
             BeadAttr {
@@ -590,6 +621,10 @@ fn add_ledger(g: &mut Graph, beads: Vec<BdBead>) {
                 status: bead.status.unwrap_or_default(),
                 labels,
                 pointers,
+                contracts: contracts
+                    .into_iter()
+                    .map(|(id, _)| id.unwrap_or_default())
+                    .collect(),
                 touches,
             },
         );

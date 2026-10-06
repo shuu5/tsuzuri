@@ -247,6 +247,7 @@ pub fn doc(g: &Graph, invariants: &[Invariant], summary: &str) -> GraphDoc {
                     status: b.status.clone(),
                     labels: b.labels.clone(),
                     pointers: b.pointers.clone(),
+                    contracts: b.contracts.clone(),
                     touches: b.touches.clone(),
                 };
                 (id.clone(), attr)

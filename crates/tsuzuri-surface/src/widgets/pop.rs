@@ -436,9 +436,16 @@ pub fn epic_of(src: &Src<'_>, id: &str) -> Option<String> {
 }
 
 /// 設計の行（グラフの bead の pointers の最初の行から頭の `POINTER_HEAD` を外した字）。
+/// pointer の行が無ければ、contracts がちょうど 1 つで空の字でない時にその id（ほかは None）。
 pub fn row_pointer(doc: &GraphDoc, id: &str) -> Option<String> {
-    let p = doc.beads.get(id)?.pointers.first()?;
-    Some(p.strip_prefix(POINTER_HEAD).unwrap_or(p).trim().to_string())
+    let bead = doc.beads.get(id)?;
+    if let Some(p) = bead.pointers.first() {
+        return Some(p.strip_prefix(POINTER_HEAD).unwrap_or(p).trim().to_string());
+    }
+    match bead.contracts.as_slice() {
+        [contract] if !contract.is_empty() => Some(contract.clone()),
+        _ => None,
+    }
 }
 
 /// 時刻の字（日本時間の短い字と今からの経過）。

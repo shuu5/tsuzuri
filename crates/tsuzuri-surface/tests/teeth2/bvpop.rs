@@ -92,6 +92,7 @@ fn graph(pointers: &[(&str, &str)]) -> GraphDoc {
                 status: "open".to_string(),
                 labels: Vec::new(),
                 pointers: vec![p.to_string()],
+                contracts: Vec::new(),
                 touches: Vec::new(),
             };
             (x.to_string(), attr)

@@ -38,6 +38,7 @@ fn bead(kind: NodeKind, status: &str) -> BeadAttr {
         status: status.to_string(),
         labels: Vec::new(),
         pointers: Vec::new(),
+        contracts: Vec::new(),
         touches: Vec::new(),
     }
 }

@@ -80,7 +80,7 @@ impl Source {
     }
 }
 
-/// bead の属性（辺にしない欄: 種類・状態・label・pointer の行・metadata の touches）。
+/// bead の属性（辺にしない欄: 種類・状態・label・pointer の行・契約の行の欄 id・metadata の touches）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BeadAttr {
     pub kind: NodeKind,
@@ -88,6 +88,8 @@ pub struct BeadAttr {
     pub labels: Vec<String>,
     /// acceptance の中の「design = 」で始まる行（契約の pointer の行）。
     pub pointers: Vec<String>,
+    /// acceptance の中の `[[contract]]` の行ごとの欄 id（読めない id は空の字）。
+    pub contracts: Vec<String>,
     /// metadata の touches の欄の id。
     pub touches: Vec<String>,
 }

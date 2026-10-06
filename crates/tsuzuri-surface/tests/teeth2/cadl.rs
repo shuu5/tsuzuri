@@ -40,6 +40,7 @@ fn verdicts(node: bool) -> Fetched {
                 status: "open".to_string(),
                 labels: Vec::new(),
                 pointers: Vec::new(),
+                contracts: Vec::new(),
                 touches: Vec::new(),
             },
         );

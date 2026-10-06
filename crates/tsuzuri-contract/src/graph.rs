@@ -288,6 +288,9 @@ pub struct BeadAttr {
     pub labels: Vec<String>,
     /// acceptance の中の「design = 」で始まる行（契約の pointer の行）。
     pub pointers: Vec<String>,
+    /// acceptance の中の `[[contract]]` の行ごとの欄 id。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contracts: Vec<String>,
     /// metadata の touches の欄の id。
     pub touches: Vec<String>,
 }
