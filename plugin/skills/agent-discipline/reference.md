@@ -18,6 +18,7 @@
 - 不在を見る歯（見張り）には「無い」だけを、等しさを見る歯には「一致する」だけを言わせ、替え先の一覧・変わらない行・読む順は節に移す。見張りは等しさでなく包み（⊇）で見て、字の残りを見る歯はその歯の file 自身を除くと done と歯の両方に書く。
 - 置き場を「impl X の中」と名指す時は、X を base の宣言と grep で照らす。
 - done が節の字や値を言う時は、歯が比べる字そのもの（値の具体）と、数を決める着地済みの fn の数え方を節に書く（材料が節に無いと審査が section-material-missing で落とす）。write-set が 30 項を越える行は審査の材料から file の字が落ちるので、節に今の字の段を置く。
+- done の項が節の字を言う時は、その字を全角の二重鉤括弧『』の印で囲んで書き、同じ字を節の本文に書く（preflight の断り section-literal が照らす）。印を節の字の外に使わない。
 - done に行の番号と行の数を持たせない。後の行の節には、前の行の未着地の字から数えた数を書かず、前の行の着地の後に着地した字で当て直す。字を数える歯は doc と注の行を除いて数える。
 - 名が verify の filter の語を含まないことを測る歯（own_names）を持つ行は、節に語の一覧（main の commit・語の数 N・空白で区切る）を字で置き、done は歯の file がその N 語を字のまま持って数 N を断言する形にする。
 - 行の title と done に、コロンと空白の並び・空白と # の並び・二重引用符・逆斜線・逆引用符を書かない（folio derive が断るか YAML の注で切れる）。JSON は鍵と字の値の囲みを省いた形と、その戻し方を節に書く。
@@ -87,3 +88,4 @@
 
 - 頼みの頭の組みが なし の係は cargo を撃たない。床は頼みが名指す席の pin の tz で、写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
 - 写しの branch に行を commit し（preflight は HEAD の木を読む・main を動かさない）、足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
+- 契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に <行 id>.toml の名で書く（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・欄 goal に節の本文）。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で撃ち直し、通らない file を名指して 1 度目の終わりを止める。
