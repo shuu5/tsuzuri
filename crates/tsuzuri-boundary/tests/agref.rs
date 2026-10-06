@@ -1,5 +1,5 @@
-//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)・契約の bead 行 ag-bead-draft・判断の記録 ADR-74 の決定 (1)(6)）。
-//! plugin/skills/agent-discipline/reference.md が、設計係に残す 46 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 14 の語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。
+//! 規律の手引きの参照の file の歯（接頭辞 agref_・設計ノート surface-wave29c 行 ag-ref と ag-ref2 と ag-read-scope・surface-wave29d 行 ag-guide-fold・判断の記録 ADR-63 の決定 (2) と帰結の 9 番目の項・設計ノート surface-v4a 行 ag-designer・判断の記録 ADR-72 の決定 (3)・契約の bead 行 ag-bead-draft・判断の記録 ADR-74 の決定 (1)(6)・契約の bead 行 ag-draft-types）。
+//! plugin/skills/agent-discipline/reference.md が、設計係に残す 48 句を決めた節の塊の中に 1 度ずつ持ち、外した実装と道具の手順の 14 の語と写さない案内の幅の値と直す前の群の頭の予算の字を持たず、見出しが 8 節であることを見る。
 //! 決めた節の塊の中に 1 度ずつ持つことを見る。手引きは天井の文で振る舞いを持たないので字を照らす。器の歯の名は scribe2/crates の
 //! 歯の dir を名で探して照らす。否定の見本は今の file から句を 1 つだけ外すか動かして作る。外の依存を使わない。
 #![cfg(test)]
@@ -23,7 +23,7 @@ const HEADS: [&str; 8] = [
 ];
 
 /// 句の名と、句を置く節の番号（0 は最初の見出しの前の頭）と、節の塊の中に 1 度だけ在る字。
-const CLAUSES: [(&str, u8, &str); 46] = [
+const CLAUSES: [(&str, u8, &str); 48] = [
     (
         "single-home",
         0,
@@ -185,6 +185,16 @@ const CLAUSES: [(&str, u8, &str); 46] = [
         "seat-bead",
         8,
         "席は契約の file から欄 section と goal を除いた字を bead の欄 acceptance に",
+    ),
+    (
+        "kept-teeth",
+        2,
+        "本文を替えない着地済みの歯は = を付けて =<名> で書く",
+    ),
+    (
+        "test-cut",
+        3,
+        "行頭（字下げの無い）の #[cfg(test)] で直後の行が mod tests の行を切りの印にし",
     ),
 ];
 
