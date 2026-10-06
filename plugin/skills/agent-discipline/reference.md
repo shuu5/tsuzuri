@@ -10,7 +10,7 @@
 - 試作の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。床の確かめの写しは <置き場>/try-<名>-fl。写しから push しない。器の掃除は、直下の写しの target などを書きが 6 時間無くなった後に消す。
 - 本物の repo には一時の物も書かない。一時の index（GIT_INDEX_FILE）の照らしも写しの中で撃つ。
 - TMPDIR は /tmp/<名>-t にする（係の dir の下は repo の中で歯が落ち、長い path は tmux の socket の path の上限で落ちる）。
-- CARGO_TARGET_DIR は <置き場>/<名>/target の絶対 path にする（相対だと xtask の面の組み立てが crates/target に書き、git add -A で commit に混ざる）。ほかの係の target を使わない（古い rmeta で clippy が偽の赤を出す）。済んだ係の target は消さず、w/retired/ の下へ mv する。
+- CARGO_TARGET_DIR は <置き場>/<名>/target の絶対 path にする（相対だと xtask の面の組み立てが crates/target に書き、git add -A で commit に混ざる）。ほかの係の target を使わない（古い rmeta で clippy が偽の赤を出す）。例外は、席が頼みの文で同じ写しと target を名指した、別々の tests/<file>.rs を割る係どうしで、git の書きの命令を撃たず、撃つ cargo は自分の file の --test だけにする（src を割る行は共有しない）。済んだ係の target は消さず、w/retired/ の下へ mv する。
 - 動いている board の server を止めない。測るなら loopback の別の port で写しの tz を起こし、自分の pid だけを kill する。
 
 ## 2. 組み（SSD の書きを抑える）
@@ -18,20 +18,29 @@
 - /dev/shm などの tmpfs で組まない（頁が席の cgroup に数えられ、席ごと OOM で落ちる）。
 - 床の写しは最初の組みから CARGO_INCREMENTAL=0 で撃ち、同じ target で途中から切り替えない（別の hash で組み直し、実行 file が 2 重になる）。編集を繰り返す試作の写しは incremental のまま。
 - 試作の途中は cargo nextest run -p <pkg> --test <自分の歯の file> の範囲で撃つ。workspace の全部の組み（cargo run -q -p xtask -- check・nextest --workspace）は行ごとに終わりの 1 回にする。噛みも --test 1 本の範囲で撃つ。
-- 撃つ前に自分が触った file を touch する（在る file だけ）。cargo fmt -p は約 150 file を書き替えるので、rustfmt <自分の file> だけを撃つ。
+- 撃つ前に自分が触った file を touch する（在る file だけ）。同じ target で 2 つの木（写し・worktree）を撃ったら、木の間で違う file（git diff --name-only）と git ls-files の build.rs を全部 touch してから撃つ（cargo は path の crate を相対の path で見分け、build.rs は path の字を焼くので、別の木の組みを新しいと見る）。clippy だけが落ちて nextest が通る時と、変異が噛まない時は、まずこれを疑う。
+- 器の入れ子の binary（<target>/nested/scribe2）は、別の写しで xtask を組むと上書きされる。試作の binary で撃つ前に strings <binary> | grep -c <足した字> で中身を照らし、0 なら試作の写しで組み直す。
+- cargo fmt -p は約 150 file を書き替えるので、rustfmt <自分の file> だけを撃つ。着地済みの file は、main の字を一時の file に写して rustfmt --edition 2024 --check <一時の file> の rc で形かを見る（stdin の --check は常に rc 0）。形でない file には掛けず、足す行だけを rustfmt の形で手で書く。
 - Rust を書かない係は cargo を撃たず、床は席の pin の tz で確かめる。
 
 ## 3. 契約の行の書き方
 
 - 形は置くノートの既存の行に合わせる（title・req・write-set・verify・size・growth・done・depends と節）。
 - done の各項は、名指す歯が実際に測る字だけを書き、測らない字は節に書く。歯の名は試作の fn の名と grep で照らす。done の項の中で (n) の印を書かない（ほかの項は「最後の項」などと書く）。
+- 不在を見る歯（見張り）には「無い」だけを、等しさを見る歯には「一致する」だけを言わせ、替え先の一覧・変わらない行・読む順は節に移す。見張りは等しさでなく包み（⊇）で見て、字の残りを見る歯はその歯の file 自身を除くと done と歯の両方に書く。
+- 置き場を「impl X の中」と名指す時は、X を base の宣言と grep で照らす。欄の名を一括で置き換えた後は、git diff <base> の - と + の fn の行で歯の名が壊れていないかを見る。
+- done が節の字や値を言う時は、歯が比べる字そのもの（値の具体）と、数を決める着地済みの fn の数え方を節に書く（材料が節に無いと審査が section-material-missing で落とす）。write-set が 30 項を越える行は審査の材料から file の字が落ちるので、節に今の字の段と試作と噛みの段を置く。
+- done に行の番号と行の数を持たせない。後の行の節には、前の行の試作の行の数・行の番号・試作と同じという断言・前の行の fixture から計算した数を書かず、前の行の着地の後に着地した字で当て直す。字を数える歯は doc と注の行を除いて数える。
+- 名が verify の filter の語を含まないことを測る歯（own_names）を持つ行は、節に語の一覧（main の commit・語の数 N・空白で区切る）を字で置き、done は歯の file がその N 語を字のまま持って数 N を断言する形にする。
 - 行の title と done に、コロンと空白の並び・空白と # の並び・二重引用符・逆斜線・逆引用符を書かない（folio derive が断るか YAML の注で切れる）。JSON は鍵と字の値の囲みを省いた形と、その戻し方を節に書く。
 - verify の 1 行目は git apply --reverse --check docs/design/patch/<行>.patch、続けて clippy（-p <歯の crate> --all-targets --no-deps -- -D warnings）と、done の歯を撃つ cargo nextest run -p <pkg> --test <file> --no-tests=fail <接頭辞>_ の行。cargo run -q -p xtask -- check は器の共通 verify が撃つので書かない。
 - verify の filter が当たる歯の file は全部 write-set に入れる。書かない着地済みの file は置き場だけの =<path> で足す（無いと受付が teeth-outside-write-set で断る）。
+- write-set の印は 6 つ（素の path は在る file・末の / は dir・+ は新しい file・- は縮むが残る file・~ は着地で消える file・= は置き場だけ）。git mv で移す行は、移す元を ~、移す先を + で書く（- の file が無くなると行が永久に解けない）。
+- 前の行が足す file を =<path> で名指す行は、前の行の着地の後に置く（受付は置く時の base で = を解き、depends では足りない）。床と preflight は、前の行の差を着地の形で commit した branch で撃つ。
 - depends は同じノートの行だけ（ほかのノートの行は folio check が違反にする）。便の順は toml の depends の欄で決まる。
 - 行は数珠つなぎにしない。割る時は、まず互いに depends を持たない切り方（触る file が交わらない・交わっても差が両順で当たる）を探す。depends は、後の行の code が前の行の code を呼ぶか前の行の歯を書き替える時だけに書き、書いた時はなぜ並べられないかを節に 1 文で書く。
 - 置き場の物差しの順は、領域（domain）の親に置く、交わる時は差の塊の文脈を離して両順で当てる（判断の記録 ADR-60）、それでも当たらなければ depends を書く。交わりのために置き場・名・並びを曲げた行は、節に「置き場の妥協」の 1 文を書く。
-- 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte まで。crate の src の file の 1500 行の上限の余地が見込みより小さい時は growth の欄を足す。
+- 大きさは 1 行 M を目安にし、少し越えても M のまま。gate に渡す diff は 150000 byte まで（gate は移動を畳むので、git diff を --no-renames を付けずに測る）。crate の src の file の 1500 行の上限の余地が見込みより小さい時は growth の欄を足す。
 - ノートの行は 32 まで（条 P-28）。行の数は contracts/<ノート>.toml の id = の行で数える（適用の script の節の番号は行の数でない）。計画だけの行を契約の行へ移す時は、同じ commit で規則の行 R-33 の値を下げる。
 - 節が大きい行は、頭の段に done の各項と verify の行の対応を書く。審査役は Read・Grep・Glob だけで読むので、節と done に「審査が撃って確かめる」前提の字を書かない。
 - 行の節（契約表の goal に写る字）に歯の本数を書かない（本数の正本は欄 done-teeth・条 P-2.3）。
@@ -55,18 +64,25 @@
 - 新しい歯の file は、頭の //! の行の続きのすぐ次の行に #![cfg(test)] を置き、間に空の行を挟まない。
 - 歯の file を path で読む歯は、tests/ の直下に固定せず、名で探すか include_str! で読む。
 - 歯の fn も clippy の cognitive_complexity と too_many_lines で落ちる。歯を直したら clippy を先に撃つ。
+- 子の環境を比べる歯は、名の列を先に assert_eq し、名が合った後にだけ値を比べる（値ごとだと、落ちた時に係の環境の値が出力に出る）。噛みの log は left と right の行を伏せる。
 
 ## 6. 否定の見本と噛み
 
 - 「読まない・断る」を言う done の項の否定の見本は、正しい見本から測る句を 1 つだけ外す（ほかの欄は全部正しくする）。別の理由で先に断られる見本は空振りである。
+- 否定の句ごとに、src で最初に断る検めを照らしてから見本を書き、断りの字も照らす。句の型ごとに見本を置く。順は 2 つ以上で入力・数・字・逆の順がどれも違う並び、重ねないは同じ物を 2 度、縁は N と N+1 と値そのもの、「だけ」は外れる物。
+- 判じの呼び（match の式）を字で見る歯は、腕（Ok(false) => continue など）も字で見る（呼びだけだと腕を替える変異が通る）。噛みは、log の panicked の行でその句の断言で落ちたことを照らす（歯の名が落ちただけでは足りない）。
 - 置き場の字（の後に・1 度だけ）を file 全体の字で測ると、審査が vacuous-assert で落とす。関数か塊の中で照らし、数を断言する。
 - 働きを通らない照らし（足す物が 0 の時に通る等式など）は審査で落ちる。歯は足す物の在る見本で働きを通す。
+- 審査の FAIL を直す時は、指された項だけでなく done の全部の項について、外す・替える変異が名指しの歯で落ちるかの表を作る（審査は 1 周で全部の項を指さない）。数の上限・字の切り・既定の値・順・空・読めない時は、fixture がその縁を通るかを見る。
 - 噛みは句ごとに撃つ。その句を見ない変異で、名指しの歯が rc 100 で落ちる（nextest の rc 101 は組み立ての失敗で噛みでない）。表（句・歯・変異・rc）を notes.md に置く。噛みの道具は終わりに書き戻すので、噛みの前に試作を commit する。
+- 噛みで rc 0 が出たら、歯を足す前に、変異を当てた関数を歯の撃ちの入口から呼びの鎖で通るかを読む。表には当てた関数と入口を並べ、生き残りも消さずに残す。
+- 噛みの script には main の守り（__name__ の照らし）を置き、変異の一覧は script を撃たずに字から読む（runpy などで読むと噛みが頭から走る）。
 
 ## 7. 床と受付の照らし
 
 - 床は頼みが名指す席の pin の tz で、床の写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
 - 適用の script（python）は前の版を照らし、ノートと計画の版を上げ、書いた字を YAML で読み直す。外れたら何も書かずに止まる。
+- 適用の script は、節の番号と版をその時の字から +1 で決め、固い字で照らさない（同じノートに並ぶ行が先に置かれる）。srs.yaml は PyYAML の safe_load で読めないので、版は見出しの version の行を正規表現で読む。
 - 足した行ごとに scribe2 pipe preflight --state-dir <空の state dir> --repo <床の写し> --design contracts/<ノート>.toml#<行> --bead <在る bead> を撃ち、断りの理由を 0 にする。
 - 出す物に差の file（.patch）を持つ係は、終える前に出力の dir に床の記録 floor.tsv を置く（判断の記録 ADR-63 の決定 (4)）。差の file ごとに 1 行で、欄はタブで区切った 6 つ（行 id・preflight の rc・tz check の rc・derive --check の rc・器の表の検査の rc・verify の 2 行目から最後の行の rc を , で繋いだ字）。# で始まる行は頭として読まれない。
 - 器の表の検査の rc は、床の写しの根で撃った scribe2 contracts check --repo . --base main の出力のうち、行の頭（contracts/<ノート>.toml の [[contract]] の行）を名指す断りが無ければ 0・在れば 1 と書く（着地済みの行の断りで検査全体の rc は今いつも 1）。床の写しの行は branch に commit し、main を動かさない（preflight は HEAD を読み、--base main は当てる前の木を指す）。
