@@ -234,7 +234,7 @@ fn others() -> Vec<String> {
         format!(r#"{{"tool_name":"Edit","tool_input":{{"command":"{command}"}}}}"#),
         "not json".to_string(),
         payload("ls -la"),
-        payload(r#"bdw create --parent=fx-q --labels=intake:memo --metadata='{"short":"門の歯"}' 門の歯の問い"#),
+        payload(r#"bdw create --parent=fx-q --metadata='{"short":"門の歯"}' 門の歯の問い"#),
         payload("bdw update fx-q.1 --add-label=intake:question"),
         payload("echo bdw create --labels=intake:question"),
     ]

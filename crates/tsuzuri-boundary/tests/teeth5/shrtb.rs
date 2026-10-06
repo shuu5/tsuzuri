@@ -86,11 +86,11 @@ fn shrtb_deny_without_short() {
 #[test]
 fn shrtb_pass_with_short() {
     let root = place("pass");
-    let memo = format!(
-        "bdw create --parent=fx-q --labels=intake:memo --metadata='{{\"short\":\"{}\"}}' 門の歯のメモ",
+    let created = format!(
+        "bdw create --parent=fx-q --metadata='{{\"short\":\"{}\"}}' 門の歯のメモ",
         "短".repeat(20)
     );
-    assert_eq!(gate(&root, &memo), (Some(0), String::new(), 0));
+    assert_eq!(gate(&root, &created), (Some(0), String::new(), 0));
     assert_eq!(
         gate(&root, "bd update fx-q.1 --notes x"),
         (Some(0), String::new(), 0)

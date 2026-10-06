@@ -1,10 +1,11 @@
-//! tz hook question-gate（要件 FR4・受入 AC6）: 問いの起票の門。
-//! 撃つのは Claude Code（PreToolUse の hook・matcher Bash）。標準入力の hook の入力から問いの起票の下書きを拾い、
+//! tz hook question-gate（要件 FR4・受入 AC6）: 問いの起票の門と memo の起票の門（判断の記録 ADR-72 の決定 (5)）。
+//! 撃つのは Claude Code（PreToolUse の hook・matcher Bash）。標準入力の hook の入力から問いの起票の下書きと memo の起票の下書きを拾い、
 //! 導出グラフで判じて、通さないときだけ deny の答えを標準出力に 1 行で書く（通すときは何も出さない）。順:
 //! 1. 標準入力を全部読む（読めなければ空の字）。
-//! 2. 使い方の誤りか repo が dir でなければ、下書きが無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
+//! 2. 使い方の誤りか repo が dir でなければ、下書き（問いか memo）が無ければ rc 1（止めない誤り）、在れば deny の args を書いて 0。
 //! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39）。
-//! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、判じて 0。
+//! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、グラフを 1 度だけ組んで
+//!    判じて 0（問いの下書きが在れば問いの門の答えが先で、問いの門が通す時に memo の門の答えを書く）。
 //!
 //! rc 2 は使わない。停止の hook と違い、repo が git の worktree でも黙らない。hook は file を書かない。
 
@@ -14,6 +15,7 @@ use std::path::PathBuf;
 
 use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::{Graph, Inputs, build};
+use tsuzuri_core::memo_gate::{self, MemoGate, MemoWhy};
 
 use crate::out::emit_err;
 use crate::server::design::Design;
@@ -79,16 +81,22 @@ pub fn graph(args: &Args) -> Graph {
     })
 }
 
-/// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None）。
+/// 答えの字（短い題の断りが先・下書きが無ければ子 process を撃たずに None・通すときも None・
+/// 問いの下書きと memo の下書きが在ればグラフを 1 度だけ組み、問いの門の答えを先に返す）。
 pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if let Some(why) = gate::short_gate(payload) {
         return Some(gate::short_output(why));
     }
-    let drafts = gate::drafts(payload);
-    if drafts.is_empty() {
+    let questions = gate::drafts(payload);
+    let memos = memo_gate::drafts(payload);
+    if questions.is_empty() && memos.is_empty() {
         return None;
     }
-    gate::output(&gate::judge(&drafts, &graph(args)))
+    let graph = graph(args);
+    if let Some(text) = gate::output(&gate::judge(&questions, &graph)) {
+        return Some(text);
+    }
+    memo_gate::output(&memo_gate::judge(&memos, &graph))
 }
 
 /// tz hook question-gate の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
@@ -114,18 +122,26 @@ pub fn run(rest: &[&str]) -> u8 {
     0
 }
 
-/// 引数の誤り: 問いの起票だけを deny の args で断り（rc 0）、ほかの呼び出しは止めない誤りの rc 1。子 process は撃たない。
+/// 引数の誤り: 問いの起票と memo の起票だけを deny の args で断り（rc 0・問いの下書きが在れば問いの門の答え）、
+/// ほかの呼び出しは止めない誤りの rc 1。子 process は撃たない。
 fn refuse(payload: &str, what: &str) -> u8 {
     emit_err(&format!("tz hook question-gate: {what}\n{USAGE}"));
-    if gate::drafts(payload).is_empty() {
+    let text = if !gate::drafts(payload).is_empty() {
+        gate::output(&Gate::Deny {
+            why: Why::Args,
+            ids: Vec::new(),
+            digest: None,
+        })
+    } else if !memo_gate::drafts(payload).is_empty() {
+        memo_gate::output(&MemoGate::Deny {
+            why: MemoWhy::Args,
+            ids: Vec::new(),
+            digest: None,
+        })
+    } else {
         return FAIL;
-    }
-    let deny = Gate::Deny {
-        why: Why::Args,
-        ids: Vec::new(),
-        digest: None,
     };
-    if let Some(text) = gate::output(&deny) {
+    if let Some(text) = text {
         write_line(&text);
     }
     0

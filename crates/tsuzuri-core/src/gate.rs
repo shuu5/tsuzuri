@@ -38,10 +38,10 @@ pub const NOT_RELEVANT: &str = "not-relevant";
 pub const DIGEST: &str = "digest";
 
 /// 台帳の program の名（呼び出しの最初の語の最後の斜線の後の字）。
-const PROGRAMS: [&str; 2] = ["bd", "bdw"];
+pub(crate) const PROGRAMS: [&str; 2] = ["bd", "bdw"];
 
 /// 起票の語。
-const CREATE: &str = "create";
+pub(crate) const CREATE: &str = "create";
 
 /// 問いの起票の下書き（呼び出しの 1 続きの create のうち label に `intake:question` を持つもの）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,14 +248,14 @@ pub fn segments(command: &str) -> Vec<Vec<String>> {
 }
 
 /// 頭の代入の語か（等号を持ち、等号の前が空でなく英数字と下線だけ）。
-fn is_assignment(word: &str) -> bool {
+pub(crate) fn is_assignment(word: &str) -> bool {
     word.split_once('=').is_some_and(|(name, _)| {
         !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
 }
 
 /// label の旗の値（`--labels 値`・`--label 値`・`-l 値`・`--labels=値`・`--label=値`・`-l=値`・`-l値`）。
-fn label_values(words: &[String]) -> Vec<&str> {
+pub(crate) fn label_values(words: &[String]) -> Vec<&str> {
     let mut out = Vec::new();
     for (i, w) in words.iter().enumerate() {
         let w = w.as_str();
@@ -274,7 +274,7 @@ fn label_values(words: &[String]) -> Vec<&str> {
 }
 
 /// --metadata の値（`--metadata 値` か `--metadata=値`・何度在っても最後の値）。
-fn metadata_value(words: &[String]) -> Option<String> {
+pub(crate) fn metadata_value(words: &[String]) -> Option<String> {
     let mut last = None;
     for (i, w) in words.iter().enumerate() {
         if w == "--metadata" {
@@ -372,7 +372,7 @@ fn create_segments(payload: &str) -> Vec<(bool, Option<String>)> {
 }
 
 /// 重ねずに natural_cmp の順に並べる。
-fn sorted(ids: impl IntoIterator<Item = String>) -> Vec<String> {
+pub(crate) fn sorted(ids: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut out: Vec<String> = ids.into_iter().collect::<BTreeSet<_>>().into_iter().collect();
     out.sort_by(|a, b| natural_cmp(a, b));
     out
@@ -414,6 +414,12 @@ pub fn bundle_digest(graph: &Graph, touches: &[String]) -> String {
             .cloned()
             .chain(needs(graph, touches)),
     );
+    digest_of(graph, &bundle)
+}
+
+/// 並べた束の節点（グラフに在る id だけ）の要約値（1 節点 1 行で「id・要約値・状態・題」をタブでつなぎ、
+/// 行を改行でつないだ字の FNV-1a 64 bit・16 字の 16 進の小文字・問いの門と memo の門が共に使う）。
+pub(crate) fn digest_of(graph: &Graph, bundle: &[String]) -> String {
     let text = bundle
         .iter()
         .filter_map(|id| graph.node(id))
@@ -464,7 +470,7 @@ fn deny(why: Why, ids: Vec<String>, digest: Option<String>) -> Gate {
 }
 
 /// 読めていない出所の名（設計と台帳だけ）。
-fn unread_sources(graph: &Graph) -> Vec<String> {
+pub(crate) fn unread_sources(graph: &Graph) -> Vec<String> {
     // 走行の出所は読まない（走行の節点は 4 種の外で、走行の辺は設計の節点の次数に入らない）。
     graph
         .unread
@@ -500,7 +506,7 @@ fn premises_gate(graph: &Graph, touches: &[String], object: &Map<String, Value>)
 }
 
 /// 処分した id（touches と、関わらない理由の欄の空でない理由を持つ id）。
-fn disposed_of(touches: &[String], object: &Map<String, Value>) -> BTreeSet<String> {
+pub(crate) fn disposed_of(touches: &[String], object: &Map<String, Value>) -> BTreeSet<String> {
     let mut disposed: BTreeSet<String> = touches.iter().cloned().collect();
     if let Some(Value::Object(nr)) = object.get(NOT_RELEVANT) {
         disposed.extend(

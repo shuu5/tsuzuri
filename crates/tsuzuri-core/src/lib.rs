@@ -5,6 +5,7 @@
 //! account board の電文を組む関数（`account`）。
 //! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）。
 //! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）。
+//! memo の起票の門の下書きの読みと判じと答えの JSON（`memo_gate`）。
 //! 器の局面の出力の読み（`case`）。
 //! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）。
 //! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）。
@@ -20,6 +21,7 @@ pub mod gate;
 pub mod graph;
 pub mod hostload;
 pub mod ledger;
+pub mod memo_gate;
 pub mod next_step;
 pub mod pipeline;
 pub mod question;
