@@ -3,13 +3,13 @@
 meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
-  version: v0.5
+  version: v0.6
   status: effective
   generated: 2026-10-06
   profile: design-note
   approval:
     - {who: 持ち主, date: 2026-10-06, ruling: "t3-hub.91.4 notes 2026-10-06 08:11（作り直し v4 の決め D1〜D6・発話 2026-10-06T08:08:35.348Z・10 の指摘は発話 2026-10-06T07:51:34.606Z）", verbatim: "D1-6はすべて推奨で", surface: R-8}
-  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。
+  note: 作り直し v4 の行の置き場。生きたノートの上限（規則の行 R-31）のため、32 行の全部が着地したノート surface-wave29a を同じ commit で廃止した（生きたノートは 6 本のまま）。第 0.1 版（2026-10-06）は目的の節と空の契約表を置いた。行は段ごとの係の起草（設計だけ・差の file と噛みは無い）で足す。 第 0.2 版（2026-10-06）は、memo t3-hub.92.3（作り直し v4 の段 S6・持ち主の決め D3）の行 3 本を足した。tsuzuri の行 t-daily-deny（日に 1 度の全部の撃ちが check の後に写しの孤児の照らしと依存の監査 2 本を撃つ）、器の行 v-ci-watch-off（器の宣言の任意の鍵 ci-watch・値 false の repo は終端で GitHub の検査を読まず、main-red の便の取り込みと PR の便の retire を語 ci-off で断る）、tsuzuri の行 t-ci-stop（ci.yml を撃たれない置き場へ移し、根の宣言で鍵を切り、ci.yml を読む歯を消すか直す・前の 2 行に依る）。3 本とも係 w309a の設計だけの行（差の file と噛みは無い）。 第 0.3 版（2026-10-06）は、便 t3-hub.92.3.1 の契約審査の FAIL（check の後の段は Command が親の環境を継ぐので、daily 自身の check と CI の check が置く 2 つの環境変数が子に渡り、done の 2 つ目の項と食い違う）を受け、行 t-daily-deny の節 3 に 2 つの環境変数を子の環境から外す字を足し、done の 2 つ目の項の字を合わせた。 第 0.4 版（2026-10-06）は、便 t3-hub.92.3.1 の 2 度目の契約審査の FAIL（vacuous-assert・歯は process の環境変数を置けず、gate の verify も置かないので、env_remove の無い実装が通る）を受け、行 t-daily-deny に AFTER の段の Command を組む関数 after_command と、その get_envs で外すことを測る done の 7 つ目の項と歯 vdaily_after_steps_drop_the_check_env を足した。 第 0.5 版（2026-10-06）は、便 t3-hub.92.3.1 の 3 度目の契約審査の FAIL（節の頭の足す歯の数が 2 本のまま・done の 5 つ目の項の時機を歯が測らない）を受け、行 t-daily-deny の節 3 の頭を歯 3 本の名指しに直し、偽の cargo が check の撃ちで refs_dir の項目の数を記録して done の 5 つ目の項が時機を測る形にした。 第 0.6 版（2026-10-06）は、判断の記録 ADR-73（憲法 第 1.5 版・条 P-13.1 の改め・持ち主の裁定 t3-hub.92.1.2〔逐語 推奨で良い〕）の行 t-seat-manners（tz derive の要の写しから条の題の行を外し、規則の表の作法の行を段 席の作法 の下に写す・起草は係 w308a・節 6）を足した。
 
 sections:
   - n: 1
@@ -54,6 +54,16 @@ sections:
         done: '(1) 根の .github/workflows/ の下に名が .yml か .yaml で終わる file が無く、.github/retired/ci.yml は file で在り、字 cargo run -q -p xtask -- check と字 cargo deny check -D unmatched-skip -D advisory-not-detected を持ち、根の .vessel.toml は鍵 ci-watch の値 false の行をちょうど 1 つと鍵 remote の値 origin の行をちょうど 1 つ持つ（歯 cistop_push_ci_is_retired） (2) xtask/src と xtask/tests の下の .rs のうちこの歯の file の vcij.rs を除く全部が、二重引用符に続く字 .github/workflows/ci.yml を持たない（歯 cistop_no_file_reads_the_workflow） (3) 着地済みの歯 vcij_refs_judge と vcij_refs_run と vcij_refs_wiring が緑のまま（verify の 3 行目） (4) 依存の監査の歯の file の名の照らし kdeny_own_names_clean が 3 本の名で緑（verify の 4 行目） (5) 着地済みの歯 vskip_ が緑のまま（verify の 5 行目） (6) 歯の群の表 GROUPS の xtask/tests/teeth1 の数が 15 で、着地済みの歯 kfold_ が緑のまま（verify の 6 行目） (7) 着地済みの歯 pubscan_wiring が緑のまま（verify の 7 行目）'
         done-teeth: ["1:@2", "2:@2", "3:@3", "4:@4", "5:@5", "6:@6", "7:@7"]
         depends: ["t-daily-deny", "v-ci-watch-off"]
+      - id: t-seat-manners
+        title: tz derive の要の写し contracts/seat/brief.txt から段「いつも守る」の条の id と題の行を外し、全文の在りかの行の後に規則の表の作法の行（D 行）を段の名 席の作法 の下に id と字で写す（memo t3-hub.92.1・作り直し v4 の段 S1 の 3・条 P-13.1 の改めの後・設計だけの行）
+        req: ["FR1042"]
+        section: "6"
+        write-set: ["folio2/crates/folio/src/seat.rs", "crates/tsuzuri-boundary/tests/teeth5/seatcp.rs", "contracts/seat/brief.txt"]
+        verify: ["cargo clippy -p folio -p tsuzuri-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run -p tsuzuri-boundary --test teeth5 --no-tests=fail seatcp_"]
+        size: M
+        done: '(1) 作法の行 2 本（D-1 の字は空白の続きを持つ）の規則の表の置き場で tz derive --write が書く要の写しは、節 6 の形の 11 行と字が同じで、段の名 いつも守る の行と条の id と題の行を持たず、全文の在りかの行の次に段の名 席の作法 の行と作法の行の id と空白 1 つと空白を 1 つに畳んだ字の行を規則の表の順に持ち、全文の写しは前の形のままで、続く --check は一致 3・差分 0 で rc 0（歯 seatcp_two_files_shape） (2) 作法の行が 0 本（discipline の値が空の一覧）の置き場の要の写しは、全文の在りかの行で終わり、字 席の作法 を持たない（歯 seatcp_no_discipline_rows_no_manners） (3) 作法の行に欄 what の字が無い置き場では --write と --check がどちらも rc 2 で、出力は字 まだ分からない と字 D-2: what が字でない を持ち、導出物の置き場に何も書かない（歯 seatcp_refuses_manners_without_what） (4) 書いた後に作法の行の字だけを替えた置き場の --check は rc 1 で、出力は字 DRIFT: seat/brief.txt を持ち、字 DRIFT: seat/constitution.txt を持たない（歯 seatcp_check_drift_follows_manners） (5) 根（歯の crate の 2 つ上の dir）で撃つ tz derive --check --dir design-intent --out ../contracts が rc 0 で、出力は字 差分 0 を持つ（根の要の写しを含む導出物の全部が正本と一致・歯 seatcp_repo_copies_match_the_sources）'
+        done-teeth: ["1:@2", "2:@2", "3:@2", "4:@2", "5:@2"]
+        depends: []
   - n: 3
     type: prose
     title: 行 t-daily-deny — 日に 1 度の全部の撃ちに写しの孤児の照らしと依存の監査 2 本を足す（memo t3-hub.92.3・設計だけの行）
@@ -144,3 +154,42 @@ sections:
       持ち主の承認の字。条 P-26.5 の字は替えない（行 t-daily-deny の節 3 の読み）。規則の行 R-5（CI 5 分以下）は検出線なので替えない。判断の記録の置き換え（判断の記録 ADR-34 の CI の決めほか）は、持ち主の決め D1〜D6 の記録を起草する別の係の記録が持ち、この行は持ち主の決め D3 と memo t3-hub.92.3 を拠りにする。
 
       範囲の外。持ち込んだ器の .github/（scribe2/.github/workflows/ の ci.yml と mutants.yml）は GitHub が撃たず、器の xtask の歯が器の根の字として読むので替えない。器の見張りの code の削除と tsuzuri の board の CI の語（crates/tsuzuri-core/src/pipeline.rs の CI_WORDS ほか・過去の event log の札を読む）の整理は後の段の行。退けた ci.yml の中の注（器の終端が判定をここから読む）は byte のまま残す（撃たれない置き場の履歴）。
+  - n: 6
+    type: prose
+    title: 行 t-seat-manners — 席の手元の要の写しを、条の題の一覧から規則の表の作法の行へ替える（memo t3-hub.92.1・作り直し v4 の段 S1 の 3・設計だけの行）
+    body: |
+      在りか。差の file は無い（設計だけの行・決め D2）。便は 3 file を書く。folio2/crates/folio/src/seat.rs の要の写しの導き方を下の形に替え、crates/tsuzuri-boundary/tests/teeth5/seatcp.rs の fixture と歯を替えて歯 4 本を足し、組んだ tz で根の写しを導き直す（cargo run -q -p tsuzuri-boundary --bin tz -- derive --write --dir design-intent --out ../contracts・書くのは contracts/seat/brief.txt だけで、全文の写しと上限の file は替わらない）。群の main.rs と kfold の表は書かない（module を足さない）。depends は空。
+
+      なぜ。持ち主は作り直し v4 で、席の起こしの文脈を席の役に効く物だけにすると決め（決め D1〜D6 と発話 2026-10-06T08:16:48.774Z・epic t3-hub.92・段の memo t3-hub.92.1）、席の自動の記憶を切る。記憶にだけ在った席の振る舞いの決まりは、型付きの置き場に 1 つ置き（条 N-2.1・P-1・P-2）、席の手元へ導いて写す（条 P-13）。その置き場は規則の表 design-intent/rules.yaml の節 discipline（作法の行・D 行・種別 human-review・欄 article と ruling を持つ）で、今の D-1〜D-4 も席の作法である。今の要の写しは、段「いつも守る」の条の id と題の 28 行（1,654 byte）を持つが、題だけでは今何をするかが決まらず（見直しの記録 prompts-review.md の §2.1）、全文は全文の写しの在りかの行が名指す。この 28 行を外し、空いた byte に作法の行を写す。
+
+      形。要の写しの行は、頭の 1 行・順位の行・段の名 絶対にやらない の行とその段の規範文の行・段の名 確認してから の行とその段の規範文の行・全文の在りかの行・段の名 席の作法 の行と作法の行の行、をこの順に持つ。作法の行の行は、規則の表の discipline の行の欄 id と空白 1 つと欄 what の字（前後の空白を落とし続く空白を 1 つに畳む・今の squash）で、規則の表の順に並ぶ。discipline の行が 0 本（節が無いか空の一覧）なら、段の名 席の作法 の行も書かず、全文の在りかの行で終える。全文の写し（constitution.txt）と上限の file（role-max-bytes.txt）と byte の上限の数え方は替えない。
+
+      seat.rs の替え。(ア) 段の表 TIERS から段 いつも守る の項を外し 2 項にする（型は [(Tier, &str); 2]）。(イ) 定数 MANNERS（字 席の作法・doc は「作法の行の段の名の行（規則の表の節 discipline・条 P-13.1 の字）。」）を足す。(ウ) 関数 discipline（規則の表の Node を受けて作法の行の行の Vec を返す）を足す。節 discipline が無ければ空の Vec、一覧でなければ Err（字 discipline が一覧でない）、行に欄 id の字が無ければ Err（字 作法の行に id が無い）、欄 what の字が無ければ Err（字 <id>: what が字でない）。(エ) derive は、読んだ規則の表から discipline を撃ち、brief に渡す。brief は段ごとの規範文の後に全文の在りかの行を足し、作法の行の行が 1 本以上在れば段の名の行とその行を足す。(オ) 条の構造体 Article の欄 title と、articles の中の title の読みを外す（使う所が無くなる・clippy の死んだ欄を残さない）。(カ) module の doc の 1〜2 行目の「要の写し（順位・段「絶対にやらない」と段「確認してから」の規範文の全文・段「いつも守る」の条の id と題・全文の写しの在りか）」の括弧の中を「順位・段「絶対にやらない」と段「確認してから」の規範文の全文・全文の写しの在りか・規則の表の作法の行の id と字」に替え、5 行目の「段の名だけの行・「id 字」の行・「条の id 題」の行・在りかの行」を「段の名だけの行・「id 字」の行・在りかの行・作法の段の名の行・作法の「id 字」の行」に替え、brief の doc を「要の写し: 頭の行と順位の行・段ごとに段の名の行と規範文の行・在りかの行・作法の行が在れば作法の段の名の行と作法の行。」に替える。Err は今の Err と同じく、導出の まだ分からない（rc 2）として出る。
+
+      歯の file の替え。module の doc の 2 行目の「規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行）」を「規則の表（欄 key が seat-bytes と seat-role-bytes の 2 行と作法の行 2 本）」に替える。Place::new は common の RULES を書いた後に、その字の discipline: [] を次の 3 行に 1 度だけ替える（swap を使う）。
+
+        discipline:
+          - {id: D-1, article: P-1, what: 係を  並べる}
+          - {id: D-2, article: N-1, what: 決めを書く}
+
+      定数 BRIEF は次の 11 行に替える（字下げの 2 字を除く・末は改行で終える）。定数 FULL は替えない。
+
+        生成物・手で直さない・design-intent/constitution.yaml v9.9
+        順位 段の順 で解く。
+        絶対にやらない
+        N-1.1 消さない。
+        N-1.2 移す だけ。
+        確認してから
+        A-1.1 問う。
+        全文 contracts/seat/constitution.txt
+        席の作法
+        D-1 係を 並べる
+        D-2 決めを書く
+
+      足す歯 4 本（名の頭 seatcp_・今の Place と derive と seat の助けを使い、新しい助けの関数を足さない）。歯 seatcp_no_discipline_rows_no_manners は、Place の作法の 3 行を discipline: [] に戻して --write を撃ち、rc 0 と、要の写しが BRIEF の末の 3 行（席の作法 と D-1 と D-2 の行）を除いた 8 行と等しいことと、字 席の作法 を持たないことを断言する。歯 seatcp_refuses_manners_without_what は、字 what: 決めを書く を why: 決めを書く に替え、--write と --check がどちらも rc 2 で、出力が字 まだ分からない と字 D-2: what が字でない を持ち、導出物の置き場が空であることを断言する。歯 seatcp_check_drift_follows_manners は、--write の後に字 決めを書く を 決めを残す に替え、--check が rc 1 で、出力が字 DRIFT: seat/brief.txt を持ち、字 DRIFT: seat/constitution.txt を持たないことを断言する。歯 seatcp_repo_copies_match_the_sources は、tz を根（歯の crate の dir の 2 つ上・CARGO_MANIFEST_DIR に ../.. を足した path）を cwd にして derive --check --dir design-intent --out ../contracts で撃ち、rc 0 と出力の字 差分 0 を断言する（根の要の写しの導き直しを測る・今の床と CI は根の写しの差を見ない）。今の歯（seatcp_two_files_shape・seatcp_refuses_three・seatcp_needs_both_keys・seatcp_byte_value_form・seatcp_check_drift・seatcp_cap_edge）は新しい BRIEF のまま緑で、断言は替えない。
+
+      done と verify の対応。全部の項は verify の 2 行目（群 teeth5 の歯 seatcp_）が測る。verify に根の derive --check を直に書かないのは、器の受付が repo の外を指す語 ../contracts を verify に断るため（preflight の contract-table:verify-form）。1 行目の clippy は done に載せない守り。xtask の check は器の共通 verify が撃つので verify に書かない。入口の赤は、今の導き方が段 いつも守る の行を書き作法の行を書かないので、新しい BRIEF の歯 seatcp_two_files_shape と新しい歯 4 本のうち 3 本（作法の行の無い置き場の歯を除く）が落ちる（2 行目が rc 100）。根の写しを導き直さずに commit すると歯 seatcp_repo_copies_match_the_sources が落ちる。噛みは撃たない（決め D2）。
+
+      順と前提。この行は条 P-13.1（要の写しに段「いつも守る」の条の id と題の一覧を書く）を、作法の行を書く字に改めた後に流す。条の改めと作法の行 D-5〜D-13 の足しは、席の設計の commit（判断の記録・反対側からの検証・持ち主の承認の逐語と裁定 id・憲法の版 v1.5）で先に入れる（条 A-2）。その commit は main ebdfbc33 で着地した（判断の記録 ADR-73・憲法 第 1.5 版・作法の行 D-5〜D-13）。作法の行が main に在る前に流れても、導き直した写しは main の正本と一致し、床は落ちない。
+
+      範囲の外。器の雛形 scribe2/crates/scribe2/src/seat/brief/orchestrator.txt と役割の行（7 行・決定はしごと対話面の作法と起草の置き場の行を含む）は替えない。全文の写しの形・byte の上限の行 R-1 と R-41 の値・器の SessionStart の出し方は替えない。作法の行の字そのもの（規則の表）はこの行で書かない（席の設計の commit）。

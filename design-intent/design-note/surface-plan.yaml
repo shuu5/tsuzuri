@@ -246,6 +246,7 @@ sections:
       - {id: t-daily-deny, doc: surface-v4a}
       - {id: v-ci-watch-off, doc: surface-v4a}
       - {id: t-ci-stop, doc: surface-v4a}
+      - {id: t-seat-manners, doc: surface-v4a}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
