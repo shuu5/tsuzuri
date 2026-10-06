@@ -1,0 +1,130 @@
+# 判断の記録 ADR-74 — 便の契約を台帳の bead に置き、条 P-28 の上限と照らしを bead の側へ移し、設計ノートは新しく作らず退けまで縛る（条 P-28 と条 P-5.1 の改め・決め D1 の段 S4）
+# 判断の記録 ADR-20 を丸ごと置き換える（ADR-72 の決定 (9)）。部分の置き換えは決定 (8)。前の記録の本文は替えない。
+# 起草は係 w320a・直しは係 w324a（2026-10-06・検証役 v322g の grill の所見による直し）。検証役 v322g の所見と直しの対応は docs/grill/2026-10-06-ADR-74-grill.md。
+# 持ち主の裁定 t3-hub.92.7.2 で発効（2026-10-06・案 甲と推奨の上限の値の全部）。ADR-20 は status を retired・superseded_by を ADR-74 にした（決定 (8)）。
+id: ADR-74
+title: 便の契約の正本を台帳の bead（欄 acceptance に契約の行・本文に設計の節）に置き、条 P-28 の上限と照らし（数・大きさ・散文の門・id の重なり）を bead の側の機械の縛りへ移し、器は便を起こす時に bead から読んで写し、設計ノートは新しく作らず退けまで今の上限で縛る（条 P-28 と条 P-5.1 の改め・規則の行 R-26・R-27・R-31・R-32・R-33 は退けの行の着地で廃止）
+status: accepted
+date: 2026-10-06
+supersedes: ADR-20
+context: |
+  持ち主は 2026-10-06 に決め D1（契約の正本を台帳の bead に移し、設計ノートを退ける）を推奨のとおり決めた（判断の記録 ADR-72 の決定 (2)・記帳 t3-hub.91.4 notes 2026-10-06 08:11）。ADR-72 の決定 (10) は、条 P-28 の改めと規則の行 R-26・R-27・R-31・R-32・R-33 の退けを段（S4）で条 A-2 の手続きで行い、条 P-2.1 と P-5.1 の読みも同じ記録で照らすと書く。この記録がそれである。
+  今の流れ（V・code の現物）。席が設計ノートの契約表の行を書き、tz derive が contracts/<ノート>.toml を導き、席の設計の commit が main へ入れる。器の受付と preflight は bead の acceptance の pointer（design = <doc>#<id>）で base の木の行を読み、契約 file を便の置き場に書く（pipe/cli/intake.rs）。器は main が動けば中身を問わず走っている便を載せ替える（pipe/follow_step.rs・pipe/follow.rs）。tsuzuri は folio の床が設計ノートの数を上限の行 R-31〜R-33 で数え（folio2 の note.rs）、散文の門（行 R-16）を設計ノートの節に撃つ（folio2 の prose.rs）。
+  測った数（V は係 w324a が 2026-10-06 に origin/main 8a7f32a7 と器の event log と台帳で数えた・D は前の記録の値の写し・I は見立て）。
+  ・main の first-parent の 09-27 からの commit 1,237 本のうち、触る file が設計ノートと contracts と差の file（docs/design/patch）だけの commit は 495 本（40%・V）。うち差の file を含む物 140 本（段 S2 で止まる）・件名に直しを持つ物 112 本（V）。差の file を含まない 355 本が段（S4） で main から消える分で、仕事としては台帳の書き（日に約 36 件）へ移る（V と I）。
+  ・器の載せ替え（event の RunStage・detail rebase:）は 09-27 から 339 回。各回の範囲（rebase:<base>..<main>）を命令（git rev-list --first-parent）で開くと、範囲の commit が全部「設計ノート・contracts・差の file だけ」だった回は 81 回（24%）、ほかの commit を 1 本でも含む回は 258 回（76%・V）。範囲に別の commit が在れば main はどのみち動くので、設計の commit が無ければ消える載せ替えは最大 81 回（24%）である。載せ替えの率（rebase の回 ÷ 初回の実装＝stage Implemented で detail の無い event 604 回）は今 56%（339/604・V）で、81 回が消えても約 43%（258/604・I＝時刻のずれを無視した数え）までしか下がらない。前の下書きの「同じ割合（4 割）で減る」と ADR-72 の「約半分」はこの測りで否定される。撃ち直しを本当に減らす梃子は段（S5）（main の差が便の write-set の閉包に触れない時の撃ち直しを省く・ADR-72 決定 (7)）である（I）。
+  ・載せ替え 1 回は約 5 分・0.5〜2.1 GB（D・ADR-72）。消える 81 回は 10 日で約 6.8 時間・約 41〜170 GB の書きに当たる（I＝D の 1 回の値を掛けた数）。
+  ・契約の bead は 567 本で closed 559・open 6・deferred 2（V・bd list --all --json）。同時に開いていた契約の bead の数の最大は 29 本（2026-10-04・V・created_at と closed_at から数えた）。今の上限（生きたノート 6 本以下×1 本 32 行以下）は開いた数を直に数えないが、置く前に効いて積もりを止めている（I）。生きた設計ノートは今 6 本で上限ちょうど（V）。
+  ・契約表の行 566 本で、bead の本文に移る節の本文（goal）は中央 8.9 KB・9 割 21.7 KB・最大 49.3 KB、欄 acceptance に移る部分（goal・section・depends を除いた欄）は中央 4.0 KB・9 割 7.5 KB・最大 19.2 KB（V・tomllib で読んだ値を字にした長さの近似）。今の台帳で最も大きい本文は 17.8 KB（V）で、49 KB を bd が持てるかは試していない（U）。
+  ・席の設計の commit の道具（commit-design.sh）は 2026-09-30 から 2026-10-06 までに 9 回書き直された（V・席の道具の置き場の退けた写しの数）。適用の script は 35 本在る（V・同じ置き場）。
+  ・契約の審査の非 PASS 150 回のうち 64 回は字の照らしで決まる型（D・ADR-72）。これを減らすのは行（v-pf-literal）（器）で、どの案でも改めの前に流すので、この記録の改めの理由には数えない。置く前の preflight に commit と写しが要らなくなる利益も行（v-pf-contract） で改めの前に得られるので、改めの理由に数えない。
+  条との食い違い。条 P-28 は設計ノートを中間の文書として上限で縛り、契約表の行をノートに置く前提で書かれている。条 P-5.1 は開発を拘束するのを設計文書（design-intent）だけと書く。契約を bead に置くと、拘束する契約が design-intent の外に在り、条 P-28 の上限（R-31〜R-33）と章の上限（R-26）と散文の門（R-16）と契約 id の照らしが届かない所に契約が置かれる。前文の「増殖の防止」に機構を付けたのが ADR-20 で、上限を捨てて移すとその機構が契約については 0 になる。条 P-2.1（設計文書の正本は YAML の 1 file）は設計文書の決まりで、契約を設計文書と呼ばない形にすれば字は替えずに合う（決定 (4)）。
+decision: |
+  (1) 契約の置き場。新しい便の契約は台帳の bead 1 本に置く。契約の行（欄 id・title・req・write-set・verify・size・growth・done・done-teeth・touches ほか、今の契約表の行の欄から section と depends と goal を除いた物）は、契約表の導出の形の [[contract]] の 1 行の字で、bead の欄 acceptance に置く。設計の節の本文は bead の本文（description）に置く。便の順は bead の依存（blocks）で持ち、欄 depends は使わない。器は acceptance に design = <doc>#<id> の行が在れば今の契約表を、[[contract]] の行が在れば bead を読み、両方を持つ bead は断りの語（contract-bead-both-forms） で断る。acceptance と本文は 1 回の bd update（--acceptance と --body-file を同じ命令に渡す）で書き、器は 1 回の bd show の読みから両方を取る。
+  (2) 器の読み。器の受付は便を起こす時に bead を 1 回読み、契約の行に本文を goal として足した 1 行の toml を便の置き場に写し、契約の pointer をその写しの絶対 path にする（審査の材料・裁定の照らし・行の読み直しは今の table::read の 1 本で写しを読む）。写しの後に bead が替わっても走っている便の契約は替わらない。列外の鍵（審査の FAIL の後に起こし直すかの鍵）は、bd show の返す acceptance の字と本文の字を、字を整えずにそのまま繋いだ物の digest で、どちらかが替われば起き直る。器は審査の時に、審査が読んだ材料の digest と写しの digest を審査の event の detail に書く（撤退 (3) の測る口）。名が base に解けるか・大きさの上限の余地・ほかの便との交わりは、器が便を起こす時に撃ち直し、外れたら便を作らず設計係へ返す。bead を読めない時（toml として読めない・欄が欠ける・bd が答えない）は断りの語（contract-bead-unreadable） で断り、器の event log に受付の断り（IntakeRefused）として残す。
+  (3) 上限と照らしの移し（削らない形）。条 P-28 の上限が守っていた物を、次の機械の縛りで bead の側に置く。値は規則の表の行に置き、持ち主が値を決める（この記録の問いで値を問う）。
+  ・開いた契約の bead の本数（R-31 と R-32 が積もりを止めていた分）: 上限 40 本（推奨・今の最大 29 本の上）。器の受付と preflight が数え、越える置きは断りの語（contract-open-cap） で断る。値の正本は器の rules の行で、tsuzuri の規則の表に写しの行を足す（行 R-29 と同じ形）。持つ行は器の行（v-bead-intake）。
+  ・bead ごとの本文と欄 acceptance の byte（R-26 の章の上限の分）: 本文 64 KB 以下・acceptance 24 KB 以下（推奨・今の最大 49.3 KB と 19.2 KB の上）。器の受付と preflight が数え、越える物は断りの語（contract-bytes-cap） で断る。持つ行は器の行（v-bead-intake）。本数と byte の 2 つで、毎周の台帳の読みの量も最大 40×88 KB に縛られる（I）。
+  ・散文の門（R-16）: tz に散文の門を 1 つの file の字へ撃つ口を足し、契約の bead を作る・直す台帳の書きの門（起票の門・行 R-39 と同じ hook）と係の終えの門（行 t-stop-preflight）が、bead の本文の file に撃って落ちたら断る。持つ行は tsuzuri の行（t-prose-bead）。条 N-2 の機構の注は、第 1.6 版で「設計ノートの散文の門と、契約の bead の本文に撃つ散文の門（行 R-16）」に書き直す。
+  ・契約 id の重なり（条 P-3.1）: 器の受付と preflight が、bead の契約の id が、契約表の全部の行（廃止のノートも含む）とほかの全部の契約の bead（閉じた物も含む）の id に無いことを照らし、在れば断りの語（contract-id-taken） で断る。持つ行は器の行（v-bead-intake）。退けの行（v-table-retire・t-derive-retire）は契約表の行の id の一覧を 1 file に凍結して残し、この照らしの母集団にする。
+  ・計画だけの行（R-33）: 切り替えの後、契約になる前の計画は契約の bead でなく memo の bead に置く。開いた計画の memo の本数の上限 4（今の値のまま）を起票の門が数える。持つ行は tsuzuri の行（t-plan-cap）（memo の計画の印の形はその行の起草で決める・U）。
+  ・計画のノートの名札（R-27）は、計画のノートが退けで無くなるので移す先が無い。退けの行で廃止にする。
+  この縛りはどれも常の口で、「今回だけ」の口や無効化の旗を持たない（条 N-3.1）。値を緩める時は条 P-28.3 と P-17.4 に従う。
+  (4) 条の改め（憲法 第 1.6 版）。条 P-28 は改めの欄（amends） のとおり、見出しを替え、規範文 P-28.2 を「設計ノートを退ける行が着地するまでのあいだ」の上限に、P-28.4 を bead の逃げ道も塞ぐ字に改め、P-28.6〜P-28.9（置き場・写し・bead の上限・置く前と起こす時の機械の照らし）を新設する。P-28.1・P-28.3・P-28.5 は字も段も強さ（strength） も替えない（残るノートの廃止の決まりと、上限を緩める手続きと、済んだノートの名指しは、そのまま bead の上限にも残るノートにも効く）。規範文の id の意味は替えない（条 P-3.1）。条 P-5.1 の字に、それに従って台帳の bead に置いた便の契約を足す。条 P-2.1 は替えない。契約は設計文書でなく台帳の記録で、正本は bead の 1 つ、便の置き場の写しは導出（条 P-2.3）と読む。この読みは条 P-5.1 の改めの字が持つ（条 N-2.1）。
+  (5) 規則の行。R-31・R-32・R-33（ノートの数の上限）と R-26（ノートの章の上限）は、切り替えから退けまで今の値のまま deny で効き、条 P-28.2 の改めた字（退けの行が着地するまでのあいだ）がそれを名指す。退けの行（t-derive-retire）の着地の commit で R-26・R-27・R-31・R-32・R-33 を廃止の状態にする。切り替えの後はノートに行を足さないので、値は下げるだけで上げない。決定 (3) の上限の写しの行は、切り替えの設計の commit で持ち主の値の答えを裁定にして足す。
+  (6) 段取り。改めの前に流す行は（v-pf-contract）（器）・t-stop-preflight（tsuzuri）・行（v-pf-literal）（器）で、どの案でも要り、契約の正本を替えない。承認の後に流す行は（v-bead-intake）・行（v-bead-dispatch）・行（v-bead-ledger）（器）と行（t-graph-bead）・行（t-prose-bead）・行（t-plan-cap）（tsuzuri）。切り替えの設計の commit は、この 6 本の着地と器の binary の入れ替えの後に、この記録（accepted・承認と grill の欄つき）・憲法 第 1.6 版・ADR-20 の status と superseded_by・決定 (3) の写しの規則の行を 1 つにする。条 P-28 の機構の注（mechanism）は、P-28.6〜P-28.9 を数える口が全部着地した後に版を上げるので、live: now のまま書ける。その日から新しい行は bead にだけ置き、ノートに行を足さない。生きたノートの行は着地まで今の形で流し、全部が着地したノートは条 P-28.1 で廃止にする。最後のノートの廃止の後に退けの行（v-table-retire・t-derive-retire）を流す。席の道具の commit-design.sh と適用の script と床の 6 本のうち契約のための物は、退けの行の着地の後に席の置き場で退ける（repo の外・N-1.1 に従い mv で残す）。
+  (7) 移しの間の守りの時点。置き場の全部の行を読む口（審査の索引・table_rows ほか）は行（v-bead-ledger） の着地で bead の契約も読む。着地の時の rebase-stale-rows は main に入った行しか見ないので、bead の契約が着地で消えた path を名指しても着地の時には拾わず、便を起こす時の名の撃ち直し（決定 (2)）で拾う。守りの時点が着地から起こしへ移る。
+  (8) 置き換える前の決定。ADR-20 を丸ごと置き換える（承認の時に ADR-20 の status を retired・superseded_by を ADR-74、この記録の supersedes を ADR-20 にする）。部分の置き換えは、ADR-16 の決定 (1) の「設計の参照だけなら契約」（acceptance に [[contract]] の行を持つ bead も契約に数える）と決定 (2) の「設計ノートに契約の行を置いた時に契約の bead を作る」（契約は bead に置く時に作る）、ADR-51 の決定 (1) の tz derive が契約表の導出物に近い仕様を束ねる出所（設計係の束〔段（S3）〕へ移す）、ADR-17 の設計ノートの行の辺（req は bead の契約の行、depends は bead の依存）、ADR-63 の決定 (1) の「設計の commit と受付」の段と決定 (5) の門の在りか（commit-design.sh）、器の ADR-1023 の「契約の正本は設計 doc の契約表 1 行」の字（審査と着地を器が持つ部分は残す）と ADR-1109 の契約表の置き場（退けの行 v-table-retire で外す）。ADR-60 の決定 (5) の規則の行（pipe.overlap_commute） は値も行も替えずに残す。前の記録の本文は替えない。
+  (9) 承認の前に照らす事（v-bead-intake の起草の前・U）。bd が 64 KB の本文と 24 KB の acceptance を持てるか、1 回の bd update で acceptance と本文が 1 つの書きになるか、bd show が字を整えて返さないか（書いて読んで digest が同じか）、契約の書きを台帳の書きの包みに通す時の錠と順（問いを出した直後の書きの順）。行（v-bead-intake） の verify は、上限の大きさの bead を書いて読み、digest が同じことを歯で照らす。
+options:
+  - id: a
+    name: 甲 — 条 P-28 を改めて契約を bead に置き、上限と照らしを bead の側の機械の縛りへ移す（削らない形）
+    text: 決定 (1) から (9)。条 P-28 の上限・章の上限・散文の門・契約 id の照らし・計画だけの行の上限を、開いた契約の bead の本数・bead の本文と acceptance の byte・本文に撃つ散文の門・受付の id の照らし・計画の memo の本数へ移す。
+    verdict: adopted
+    reason: 得る物（測った数）。差の file を含まない設計の commit 355 本（10 日）が main から消え、その分の載せ替え 81 回（全部の 24%・10 日で約 6.8 時間・約 41〜170 GB の書き〔I〕）が消える。席の設計の commit の道（commit-design.sh は 7 日で 9 回書き直した・適用の script 35 本）が退く。撃ち直しの率は 56% から約 43% で、4 割減るのではない。失う物。契約の git の履歴（台帳の Dolt の履歴が代わる・欄ごとの差を読む命令は U）・folio の頁の契約の表（board が台帳から描く・t-graph-bead）・器の行 3 本と tsuzuri の行 2 本の追加の費え（v-bead-intake に断りの語 5 つ・t-prose-bead・t-plan-cap）・着地の時の rebase-stale-rows の守りが便を起こす時の撃ち直しへ移る（決定 (7)）・台帳の書きが日に約 36 件増え、毎周の台帳の読みが最大 40×88 KB 増える（I）。守りの機構は 0 にならない。
+  - id: b
+    name: 甲の素の形 — 条 P-28 を改めて契約を bead に置き、上限は捨てる
+    text: 甲の決定 (3) を置かず、開いた契約の bead の数と本文の大きさの上限、bead の本文の散文の門、契約 id の重なりの照らし、計画の上限を持たない。
+    verdict: rejected
+    reason: 甲より行が 2〜3 本少ない（t-prose-bead・t-plan-cap と v-bead-intake の断りの語 3 つが要らない）。しかし前文の「増殖の防止」の機構（ADR-20）が契約については 0 になり、「済めば bead が閉じるので積もらない」は今は正しい（開いた 6 本・最大 29 本）が、それを今保つのは置く前に効く上限で、外した後に先へ何十本も置くのを止める物が無い（I）。散文の門は設計ノートにしか撃たないので、契約の節は条 N-2 の機構の外へ出る（V・folio2 の prose.rs）。契約 id の重なりは 1 つの doc の中しか見ない（V・器の table/check.rs の duplicate-id）。どれも条 N-2.1 の向きで散文の見込みに頼る形になる。
+  - id: c
+    name: 乙 — 条 P-28 を廃止の状態にし、P-28 の次の番号の新しい条に契約の置き場を立てる
+    text: 条 P-28 は status を廃止にして番号を空け、次の番号の新しい条に決定 (1)〜(3) の規範文を置く。条 P-5.1 は甲と同じに改める。
+    verdict: rejected
+    reason: 条の id の意味は 1 つのまま保てる。しかし残りのノートの廃止の決まり（P-28.1）と逃げ道の禁止（P-28.4）と上限（P-28.2）が条 P-28 の廃止と同時に消え、退けまでの間に R-31〜R-33 が規範文の無い規則として残る。塞ぐには新しい条に同じ字を写すことになり、甲の量に番号の替えが足される。甲は旧規範文の id の意味を替えずに字だけを改め、新しい字を P-28.6 以降に足すので、条 P-3.1 にも当たらない。
+  - id: d
+    name: 丙 — 条を改めず、契約を bead に置くのを読みで済ませる
+    text: 条 P-28 と P-5.1 の字を替えず、この記録の決定で契約の置き場を bead と読む。
+    verdict: rejected
+    reason: 条 P-28.2 の上限と P-5.1 の「拘束するのは設計文書」が字のまま残り、契約が字の外に在ることを記録の散文だけが言う形になる（条 N-2.1）。条 A-2.2 は字の替わらない変更を改訂と扱わない。
+  - id: e
+    name: 丁 — 契約を bead にも置き、設計ノートも残して両方を書く
+    text: 設計ノートの行を残し、bead にも同じ契約を写して器は bead を読む。
+    verdict: rejected
+    reason: 同じ契約を 2 つの面が持ち、人が両方を書く（条 P-2.4）。ノートの commit が残るので載せ替えの 81 回も設計の commit の 355 本も減らない。
+  - id: f
+    name: 戊 — 承認の前に移しの口まで流し、切り替えも急ぐ
+    text: 器の移しの口の行を承認より先に流し、承認の日に切り替える。
+    verdict: rejected
+    reason: 移しの口は契約の正本を替えないので先に流すこともできるが、持ち主が乙か別の形を選ぶか、上限の値を替えると器の行が無駄になるか直しが要る。改めの前に流すのは、どの案でも要る preflight の口と終えの門と字の照らしの 3 本に限る。承認を待つ費えは移しの口の 6 本の便の待ちである（日数は測っていない・U）。
+basis: [ADR-72, ADR-20, ADR-16, ADR-17, ADR-51, ADR-60, ADR-63, ADR-1023, ADR-1109, P-28, P-5, P-2, P-3, P-4, P-17, P-27, A-2, A-2.3, N-1, N-2, N-3, R-16, R-18, R-26, R-27, R-29, R-31, R-32, R-33, R-39]
+produced: [R-43, R-44, R-45]
+grill:
+  when: 2026-10-06
+  who: 検証役 v322g（AI・起草者と別の独立の文脈・読み取りだけ）
+  where: docs/grill/2026-10-06-ADR-74-grill.md
+  summary: 検証役 v322g が係 w320a の下書き（この記録・計画・持ち主への問い）を 1 巡攻めた。判じは直してから問う（番号つきの所見 27 件・重いと印した物 3 件・直す字 9 つ）。commit の数は合ったが、撃ち直しが同じ割合（4 割）で減るという主張は測りで否定され（範囲が設計の commit だけの載せ替えは 339 回のうち 81 回・24%）、撤退 (1) は初日に当たり、amends が P-28.4 の strength を落とし、失う物に散文の門（R-16）・章の上限（R-26）・計画だけの行の上限（R-33）・契約 id の重なりの照らしが無く、上限を bead の側へ移す削らない案が無い、と見た。係 w324a が数を測り直し、上限と照らしを bead の側の機械の縛りへ移す形を案 甲にして先に置き、旧 P-28.1〜P-28.5 の主題を同じ id に残して新しい字を P-28.6〜P-28.9 に新設し、撤退 (1) を物差し m1 と m2 に替え、断りの語と digest の測る口を字で名指した。直す字 9 つのうち 8 つを直し、残る 1 つ（bd の大きさ・1 回の書き・整形・錠）は決定 (9) に U として残した。ほかの所見で映さなかったのは 4-6（本文の字の escape は行 v-bead-dispatch の起草へ送る）。直した字は席が所見と照らした（D-10・2 巡目の検証役は置かない）。
+retreat:
+  kind: measure
+  condition: |
+    数えるのは tsuzuri の設計の席で、memo（t3-hub.92.7）か後継の memo の notes に、撃った命令と数を記帳する。問う相手は持ち主。数は器の event log（fleet の events.jsonl）・台帳・main の git の log の完全な記録から出し、途中の記録を丸めない。窓は条件ごとに書く。今の数（2026-09-27 から 2026-10-06 の 10 日）を並べる。
+    物差し（m1）（設計だけの載せ替え）: 窓の中の event の RunStage で detail が rebase: か stale: の物の範囲（<base>..<main>）を命令（git rev-list --first-parent <main> ^<base>）で開き、範囲の commit が全部、触る file が 設計ノートの dir（design-intent/design-note/）・contracts/・docs/design/patch/ だけの回を数える。今 83 回（rebase 81・stale 2）＝7 日あたり約 58 回。
+    物差し（m2）（設計だけの commit）: 窓の中の main の first-parent の commit のうち、触る file が同じ 3 つの dir だけの本数。今 495 本＝7 日あたり約 346 本。
+    物差し m3（載せ替えの率・記帳だけ）: stage Implemented で detail が rebase: の event の数 ÷ stage Implemented で detail の無い event の数。今 339/604（56%）。段（S4） が動かすのは（m1） の分だけで、着地の数に引きずられるので、撤退の閾値には使わない。
+    (1) 窓 A＝最後の生きた設計ノートを廃止にした commit の時刻から 7 日。移しの間（切り替えから最後の廃止まで）の（m1） と（m2） は記帳するが、残りのノートの行の直しと廃止の commit を含み設計どおりなので数えに入れない。窓 A で（m1） が 6 回以上（今の 7 日あたりの約 1 割）か、名（m2） が 10 本以上（今の約 3%）なら、契約を bead に置く形がまだ main を動かしているので、形を問い直す（ADR-72 の撤退 (1) の D1 の部分を、数え方を名指して引き継ぐ）。
+    (2) 窓 B＝切り替えの設計の commit の時刻から 14 日。器の event log の IntakeRefused で refuse が（contract-bead-unreadable） の event を、bead の id で重ねずに数える。3 本以上の bead に在ったら、bead の欄の形（決定 (1)）を問い直す。同じ窓で（contract-bead-both-forms） が 1 本でも在れば、移しの手順を問い直す。
+    (3) 窓 C＝切り替えから退けの行の着地の後 7 日まで。審査の event の detail に器が書く「審査が読んだ材料の digest」と「写しの digest」が食い違う event が 1 件でも在ったら、写しの形（決定 (2)）を問い直す。
+    (4) 切り替えから 21 日を過ぎても生きた設計ノートが残っていれば（folio の床の数え live-notes が 1 以上）、残りの行を bead へ移すか（契約 id が替わり条 P-3.1 に当たる）を問う。
+    (5) 窓 B で（contract-open-cap） か（contract-bytes-cap） の断りが 5 回以上在ったら、条 P-28.3 と P-17.4 に従って上限の値を問い直す（形は問い直さない）。
+plain: |
+  便（AI が code を直す 1 回の仕事）ごとの約束（契約）を、git の設計ノートでなく台帳（bead の記録）に置くと、2026-10-06 に決めています（決め D1）。この記録は、そのために憲法の 2 か所を直す提案です。
+  1. 設計ノートの増え方を上限で縛る条（P-28）を書き替えます。約束は台帳の bead に置き、設計ノートは新しく作りません。今の上限が守っていた事（数・大きさ・文の検査・番号の重なり）は、台帳の側の機械の検査に移して残します。残るノートは、全部済んで廃止するまで今の上限で縛ります。
+  2. 「開発を縛るのは設計文書」という条（P-5.1）に、「それに従って台帳に置いた便の約束」を足します。
+  器（便を流す道具）は、便を起こす時に台帳から約束を読んで便の置き場に写します。写した後に台帳が直されても、走っている便の約束は替わりません。
+  得る物は、約束を書くだけの git の記録（10 日で 355 本）が main から無くなり、それだけが原因の便の載せ替え（10 日で 81 回・全部の約 4 分の 1）が無くなることと、席の設計の記録の道具を退けられることです。撃ち直しが 4 割減るわけではありません。
+  失う物は、約束の git の履歴（台帳の履歴が代わります）・folio の頁の約束の表（board が台帳から描きます）・道具の行 6 本の手間・台帳の書きと読みが増えることです。
+approval:
+  who: 持ち主
+  date: 2026-10-06
+  ruling: "t3-hub.92.7.2（裁定 id = t3-hub.92.7.2:20261006T1144Z-1・notes に逐語）"
+  verbatim: "推奨で良い"
+  surface: R-8
+consequences:
+  - 置く行は 12 本（承認の時の数え・切り替えの前の行が下の項の 11 本になり、数えは 17 本）。改めの前の 3 本（v-pf-contract・t-stop-preflight・v-pf-literal）、承認の後で切り替えの前の 6 本（v-bead-intake・v-bead-dispatch・v-bead-ledger・t-graph-bead・t-prose-bead・t-plan-cap）、最後のノートの廃止の後の退けの 2 本（v-table-retire・t-derive-retire）と、切り替えの設計の commit。
+  - 決定 (6) が名指す承認の後に流す行は 6 本だが、移しの起草で足りない読みの口が見つかり、切り替えの前に着地させた行は 11 本（v-bead-intake・v-bead-dispatch・v-bead-ledger・t-graph-bead・t-prose-bead・t-plan-cap・t-code-bead・v-bead-reads・v-bead-precheck・v-bead-reads-b・v-bead-trailer）である（ノート（surface-v4a） の第 0.21 版と第 0.23 版・決定 (6) の字は替えない）。
+  - 契約の git の履歴を失い、台帳（Dolt）の履歴が代わる。欄ごとの差を読む命令は U。folio の頁の契約の表は退けで消え、board が台帳から描く（t-graph-bead・切り替えの前に着地させ、board が bead の契約を描かない期間を作らない）。
+  - 並ぶ間（移しの口の着地から退けまで）、器は契約表と bead の 2 形を読む。2 形を読む口は退けの行で 1 形に戻す。
+  - 増殖の防止の機構は、設計ノートの数の床から、開いた契約の bead の本数・本文と acceptance の byte・計画の memo の本数の deny に移る。値は持ち主が決め、緩める時は条 P-28.3 と P-17.4 に従う。
+  - 散文の門（R-16）の母集団は、設計ノートの節から契約の bead の本文へ移る。条 N-2 の機構の注は第 1.6 版で書き直す（amends の差の照らしの外・席が確かめる）。
+  - 台帳の書きが日に約 36 件増える（I）。契約の書きは台帳の書きの包みを通し、錠と順は行（v-bead-intake） の起草の前に決める（決定 (9)）。
+  - 反対側からの検証（条 A-2.3）は検証役（v322g）の 1 巡で、欄 grill に書いた（docs/grill/2026-10-06-ADR-74-grill.md）。
+  - 上限の写しの規則の行は R-43（開いた契約の bead の本数・40 本）・R-44（bead の本文 64 KB と欄 acceptance 24 KB）・R-45（開いた計画の memo の本数・4 本）。値は持ち主の裁定（t3-hub.92.7.2）の推奨の値で、R-43 と R-44 の値の正本は行（v-bead-intake）が足す器の rules の行（決定 (3)）。
+amends:
+  - {"target": "P-28", "field": "title", "version": "v1.6", "previous_text": "設計ノートは中間の文書とし、増え方を上限で縛り、済んだものは廃止にする", "new_text": "便の契約の正本は台帳の bead に置いて上限と照らしを bead に移し、設計ノートは新しく作らず、残りは退けるまで上限で縛って済んだら廃止にする"}
+  - {"target": "P-28", "field": "statements.P-28.2.pattern", "version": "v1.6", "previous_text": "ubiquitous", "new_text": "state"}
+  - {"target": "P-28", "field": "statements.P-28.2.text", "version": "v1.6", "previous_text": "下書きか発効の状態の設計ノートの本数と、ノートごとの契約表の行の数と、それらの計画だけの行の数の合計に、規則の表の行で上限を置き、床が数えて越えたら落とす。", "new_text": "設計ノートを退ける行が着地するまでのあいだ、下書きか発効の状態の設計ノートの本数と、ノートごとの契約表の行の数と、それらの計画だけの行の数の合計に、規則の表の行で上限を置き、床が数えて越えたら落とす。"}
+  - {"target": "P-28", "field": "statements.P-28.4.text", "version": "v1.6", "previous_text": "契約表の行を持つ設計ノートを、見本の状態に置いて、または設計ノートの置き場の直下から動かして、上限の数えから外さず、開いた契約表の行を持つ設計ノートを廃止の状態にしない。", "new_text": "契約表の行を持つ設計ノートを、見本の状態に置いて、または設計ノートの置き場の直下から動かして、上限の数えから外さず、開いた契約表の行を持つ設計ノートを廃止の状態にせず、契約の bead を、契約の行を欄 acceptance の外に置いて、上限の数えと機械の照らしから外さない。"}
+  - {"target": "P-28", "field": "statements.P-28.6.pattern", "version": "v1.6", "previous_text": "（新設）", "new_text": "event"}
+  - {"target": "P-28", "field": "statements.P-28.6.strength", "version": "v1.6", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-28", "field": "statements.P-28.6.text", "version": "v1.6", "previous_text": "（新設）", "new_text": "便の契約を置くとき、設計ノートに契約表の行を足さず、新しい設計ノートを作らず、契約の行を台帳の bead 1 本の欄 acceptance に、設計の節の本文をその bead の本文に置く。"}
+  - {"target": "P-28", "field": "statements.P-28.7.pattern", "version": "v1.6", "previous_text": "（新設）", "new_text": "event"}
+  - {"target": "P-28", "field": "statements.P-28.7.strength", "version": "v1.6", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-28", "field": "statements.P-28.7.text", "version": "v1.6", "previous_text": "（新設）", "new_text": "器は便を起こすとき、契約を bead から読んで便の置き場に写し、写しの後に bead が替わっても、走っている便の契約を写した物のまま保つ。"}
+  - {"target": "P-28", "field": "statements.P-28.8.pattern", "version": "v1.6", "previous_text": "（新設）", "new_text": "ubiquitous"}
+  - {"target": "P-28", "field": "statements.P-28.8.strength", "version": "v1.6", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-28", "field": "statements.P-28.8.text", "version": "v1.6", "previous_text": "（新設）", "new_text": "開いた契約の bead の本数と、bead ごとの本文と欄 acceptance の byte に、規則の表の行で上限を置き、契約を置く前の検査と器の受付が数えて越えたら断る。"}
+  - {"target": "P-28", "field": "statements.P-28.9.pattern", "version": "v1.6", "previous_text": "（新設）", "new_text": "event"}
+  - {"target": "P-28", "field": "statements.P-28.9.strength", "version": "v1.6", "previous_text": "（新設）", "new_text": "must"}
+  - {"target": "P-28", "field": "statements.P-28.9.text", "version": "v1.6", "previous_text": "（新設）", "new_text": "契約を置くとき、散文の門と、受付と同じ判定と、契約の id がほかの契約表の行と契約の bead に無いことの照らしを機械で撃って通った契約だけを置き、器は便を起こすときに受付の判定と id の照らしを撃ち直して通った便だけを起こす。"}
+  - {"target": "P-5", "field": "statements.P-5.1.text", "version": "v1.6", "previous_text": "v3 の開発を拘束するのは設計文書（design-intent）である。", "new_text": "v3 の開発を拘束するのは設計文書（design-intent）と、それに従って台帳の bead に置いた便の契約である。"}
+note: 起草は係 w320a・直しは係 w324a（2026-10-06）。改めの欄（amends） は憲法の写しの欄（条の title・tier・binds・statements.order と、規範文ごとの text・pattern・strength）の差と 1 対 1 に並べた。替えない欄は、P-28 の tier（always）・binds（both）・statements.order（共通の id P-28.1〜P-28.5 の並びは替わらない）、P-28.1・P-28.3・P-28.5 の 3 欄、P-28.2 の強さ（strength）（must）、P-28.4 の pattern（ubiquitous）と強さ（strength）（must-not）、P-5 の tier・binds と P-5.1 の pattern・強さ（strength）。P-28 の mechanism と plain と relations.rules（新しい写しの規則の行を足す）と、条 N-2 の mechanism の注は、第 1.6 版で席が書き直す（amends の差の照らしの外）。数は係 w324a が origin/main 8a7f32a7・器の event log（2026-10-06 20:11 まで）・台帳（bd list --all --json）で数えた値で、332・597 は ADR-72 の時点の値、5 分と 0.5〜2.1 GB と 64/150 は ADR-72 の値を測り直していない。上限の推奨値 40 本・64 KB・24 KB は、今の最大 29 本・49.3 KB・19.2 KB に余地を足した見立て。
