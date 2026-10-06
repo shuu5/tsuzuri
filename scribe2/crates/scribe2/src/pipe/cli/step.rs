@@ -8,7 +8,7 @@ use super::{broken, flag, int_row, list_row, need, refused, resolve, state_dir_o
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::lifecycle::{self, Place};
 use crate::fleet::store::{LockPolicy, StoreError};
-use crate::fleet::{store, EventKind, Stage};
+use crate::fleet::{store, CiRead, EventKind, Stage};
 use crate::pipe::approve::{Approve, RC_BLOCKED};
 use crate::pipe::current;
 use crate::pipe::declaration::{self, Ceiling, CEILING_ROW, DENIED_ROW};
@@ -16,13 +16,13 @@ use crate::pipe::follow::Runner;
 use crate::pipe::gate::{Gate, Limits};
 use crate::pipe::land::detection::Detect;
 use crate::pipe::git_line;
-use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, MAIN_REF};
+use crate::pipe::land::{landed_squash_of, Land, PushTip, Retire, CI_ONLY, MAIN_REF};
 use crate::pipe::lens_record::{self, LensSource};
 use crate::pipe::ratelimit::Pool;
 use crate::pipe::review::{review, Review};
 use crate::pipe::spawn::EndGate;
 use crate::pipe::retire::{read_tip, RemoteTip};
-use crate::pipe::{emit, run_dir, Emit};
+use crate::pipe::{emit, notify, run_dir, Emit};
 use crate::rules::manifest::Manifest;
 use std::path::Path;
 
@@ -41,7 +41,7 @@ const ROW_CI_WAIT: &str = "pipe.ci_wait_s";
 /// 終端が CI の判定を照合する間隔を宣言する rules 行の id（設計 contract-source.md §50・上の行と同じ極性で読む）。
 const ROW_CI_POLL: &str = "pipe.ci_poll_s";
 
-/// 終端だけを撃ち直す flag（値なし・設計 contract-source.md §5 手順 3）。
+/// 終端だけを撃ち直す flag（値なし・設計 contract-source.md §5 手順 2）。
 const TERMINAL_ONLY: &str = "--terminal-only";
 
 /// 終端の材料（CI の上限・照合の間隔・台帳 client）を引数と規則から解く（**land と `--terminal-only` が共有**）。
@@ -157,33 +157,9 @@ fn settle(
     (sha, tip, label): (&str, PushTip<'_>, &str),
     record: impl FnOnce(&Land<'_>) -> Result<(), Outcome>,
 ) -> Outcome {
-    let (ci_wait_s, ci_poll_s, bd) = match terminal_input(args, manifest) {
+    let entry = match settled_entry(args, (id, manifest, policy), resolved) {
         Ok(found) => found,
         Err(outcome) => return outcome,
-    };
-    let limits = match Limits::of(manifest) {
-        Ok(found) => found,
-        Err(reason) => return broken(reason),
-    };
-    let entry = Land {
-        run: id,
-        bead: &resolved.bead,
-        repo: &resolved.repo,
-        state_dir: &resolved.state_dir,
-        contract: &resolved.contract,
-        pr_cmd: None,
-        lens: &LensSource::Absent,
-        limits,
-        runner: None,
-        retries: 0,
-        land_wait_s: 0,
-        ci_wait_s,
-        ci_poll_s,
-        bd,
-        approved: resolved.approved,
-        policy,
-        train_max: 1,
-        rules: None,
     };
     if let Err(outcome) = record(&entry) {
         return outcome;
@@ -207,9 +183,13 @@ const DETECTION_ONLY: &str = "--detection-only";
 /// - `--terminal-only`（設計 contract-source.md §5 手順 3）: 着地は成立しているのに終端が止まった便（push の失敗・
 ///   CI の未確定・台帳を閉じられなかった周）を、着地をやり直さずに継ぐ。
 /// - `--detection-only`（設計 gate-cost.md §44 行 ak）: 着地した便の検出線を人が撃つ（撃ち直す）形。
+/// - `--ci-only <sha>`（設計 contract-source.md §5 手順 3）: 着地した便の GitHub の検査を後から読む形（[`ci_only`]）。
 fn settled_port(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Option<Outcome> {
     if super::present(args, TERMINAL_ONLY) {
         return Some(terminal_only(args, id, manifest, policy));
+    }
+    if let Ok(Some(sha)) = flag(args, CI_ONLY) {
+        return Some(ci_only(args, id, sha, manifest, policy));
     }
     super::present(args, DETECTION_ONLY).then(|| detection_only(args, id, manifest, policy))
 }
@@ -243,6 +223,73 @@ fn detection_only(args: &[String], id: &str, manifest: &Manifest, policy: LockPo
         },
         &sha,
     )
+}
+
+/// 着地をやり直さない口の land の材料（`--terminal-only` の 2 つの形と `--ci-only` が共有する 1 本・CI の上限と間隔と台帳 client は
+/// [`terminal_input`]・`--rules` は land の道と同じ形で持ち、GitHub の検査を読む子へ同じ規則を渡す）。
+fn settled_entry<'a>(
+    args: &'a [String],
+    (id, manifest, policy): (&'a str, &Manifest, LockPolicy),
+    resolved: &'a Resolved,
+) -> Result<Land<'a>, Outcome> {
+    let (ci_wait_s, ci_poll_s, bd) = terminal_input(args, manifest)?;
+    let limits = Limits::of(manifest).map_err(broken)?;
+    Ok(Land {
+        run: id,
+        bead: &resolved.bead,
+        repo: &resolved.repo,
+        state_dir: &resolved.state_dir,
+        contract: &resolved.contract,
+        pr_cmd: None,
+        lens: &LensSource::Absent,
+        limits,
+        runner: None,
+        retries: 0,
+        land_wait_s: 0,
+        ci_wait_s,
+        ci_poll_s,
+        bd,
+        approved: resolved.approved,
+        policy,
+        train_max: 1,
+        rules: flag(args, "--rules").ok().flatten().map(Path::new),
+    })
+}
+
+/// `pipe land --run <id> --ci-only <sha>`（設計 contract-source.md §5 手順 3）: 札も push も替えず、着地した便の `sha` の GitHub の
+/// 検査を上限まで読んで `ci:<語>` を 1 件記し、`run=<id> ci=<success|failure|unmeasurable>` の 1 行を返す（rc 0・終端が close の
+/// 後に子 process で起こす口で、人も撃てる）。赤の周は席へ終端の 1 行（語 `ci:failure`）を送り、送れたかを `notify=` の 1 行で
+/// 添える（札は替えない）。前提の段は `Landed`。値が 40 桁の 16 進でない周は何も撃たず何も書かずに断る。
+fn ci_only(args: &[String], id: &str, sha: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    if sha.len() != 40 || !sha.bytes().all(|found| found.is_ascii_hexdigit()) {
+        return refused(format!("{CI_ONLY} の値 {sha} は 40 桁の 16 進でない"));
+    }
+    let resolved = match resolve(args, id, &[Stage::Landed], &Extra::Nothing) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let entry = match settled_entry(args, (id, manifest, policy), &resolved) {
+        Ok(found) => found,
+        Err(outcome) => return outcome,
+    };
+    let read = super::land::ci_only(&entry, sha);
+    let mut out = vec![format!("run={id} ci={}", super::land::ci_word(read))];
+    if matches!(read, CiRead::Failure) {
+        out.push(red_notice(&resolved, manifest, id));
+    }
+    Outcome::ok(out)
+}
+
+/// 着地の後の GitHub の検査が赤い便を、終端の 1 行（落ちた便の 1 行と同じ形・語 `ci:failure`）で席へ知らせ、`notify=` の行を返す
+/// （宛先と送達は列の終端の知らせと同じ 1 関数・置き場を読めない周も宛先の読みへ進み、送れない事実を `notify=` に残す）。
+fn red_notice(resolved: &Resolved, manifest: &Manifest, id: &str) -> String {
+    let state = store::read_all(&resolved.state_dir).map_or_else(|_| crate::fleet::replay(&[]), |events| crate::fleet::replay(&events));
+    let line = notify::terminal_line(&notify::Terminal { bead: &resolved.bead, run: id, stage: Stage::Landed.as_str(), word: "ci:failure", streak: 0 });
+    let place = crate::seat::StateDir {
+        path: std::path::absolute(&resolved.state_dir).unwrap_or_else(|_| resolved.state_dir.clone()),
+        source: crate::seat::Provenance::Flag,
+    };
+    notify::send(&state, &place, &resolved.repo, manifest, &line)
 }
 
 /// `pipe approve`。**逐語を event へ写すだけ**で、段は動かさない（resume が進める）。

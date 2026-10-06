@@ -403,4 +403,18 @@ mod tests {
         ];
         assert_eq!(flags, expected);
     }
+
+    /// 線より後に尾 `host=green`（tsuzuri の判断の記録 ADR-68）で閉じた行は row-landed、尾に語を 1 つ足した同じ閉じは row-unbeaded。
+    #[test]
+    fn vclhost_phase_main_row_lands_on_a_host_green_close() {
+        let green = "landed 0123456789abcdef0123456789abcdef01234567 host=green";
+        let issues = ledger(&[
+            closed("s2-hg", "docs/design/x.md#hg", green, LATE),
+            closed("s2-hx", "docs/design/x.md#hx", &format!("{green} tip=0123456789abcdef0123456789abcdef01234567"), LATE),
+        ]);
+        let rows = ["hg", "hx"].map(|id| row(&format!("docs/design/x.md#{id}"), &[]));
+        let out = run(&issues, &[], Some(&rows), Some(&[]));
+        let phases: Vec<&str> = out.parts.iter().map(|part| part.phase.as_str()).collect();
+        assert_eq!(phases, ["row-landed", "row-unbeaded"]);
+    }
 }

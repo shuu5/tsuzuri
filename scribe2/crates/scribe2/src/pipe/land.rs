@@ -82,7 +82,7 @@ mod finish;
 use finish::{finish, open_pr, squash};
 pub(crate) use finish::{contract_key, source_key};
 pub(in crate::pipe) use finish::{
-    close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CLOSE_REASON,
+    ci_only, ci_word, close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CI_ONLY, CLOSE_REASON,
 };
 
 /// 着地が anchor を揃えなかった周の印（設計 §57・行 az）。書き手は境界 crate の歯からも呼べ、古さの判定は crate の中
@@ -272,8 +272,8 @@ pub struct Land<'a> {
     /// 着地の列を候補の木 1 つに積む本数の上限（先頭を含む・rules 行 `land.train_max`・行が無い / 読めない周は 1
     /// ＝先頭だけ・設計 §40）。land 自身は数値を見ず [`super::train`] へ渡す。
     pub train_max: u64,
-    /// land が受けた `--rules` の path（着地後の検出の子へ同じ値を渡す・受けていない周は `None`＝子も埋め込みを読む・
-    /// 設計 gate-cost.md §44 形 (11)）。
+    /// land と着地をやり直さない口が受けた `--rules` の path（着地後の検出と GitHub の検査を読む子へ同じ値を渡す・受けていない
+    /// 周は `None`＝子も埋め込みを読む・設計 gate-cost.md §44 形 (11)）。
     pub rules: Option<&'a Path>,
 }
 
@@ -1015,7 +1015,8 @@ fn follow_failed(entry: &Land<'_>, detail: &str, reason: String) -> Outcome {
 /// `pipe land --terminal-only` で終端だけを撃ち直す（冪等）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Terminal {
-    /// push → CI success → close まで通った。
+    /// push → この host の緑で close まで通った（GitHub の検査は子 process が後から読む）か、受け入れの周が push を撃たず
+    /// 先端の CI の success で close した。
     Closed,
     /// remote を持たない repo の便を **CI の照合なしで close した**（宣言を読めた上で `remote` の行が無い・理由は
     /// `landed <sha> ci=none`）。
@@ -1322,6 +1323,18 @@ mod tests {
         let none = close_reason(&sha, CloseTail::NoCi);
         assert_eq!(none, format!("landed {sha} ci=none"));
         assert!(!none.contains("tip="), "ci=none の周に先端は無い: {none}");
+    }
+
+    /// この host の緑で閉じる周の理由は `landed <sha> host=green` の 1 形で、先端（`tip=`）も CI の語（`ci=`）も持たず、台帳の
+    /// 閉じた理由の読み手が着地の読める尾（[`LandedTail::HostGreen`]）として読む（読めない尾にしない）。
+    #[test]
+    fn vclhost_reason_is_host_green_and_the_ledger_reads_it() {
+        use crate::ledger::close_reason::{read, Form, LandedTail};
+        let sha = "c".repeat(40);
+        let reason = close_reason(&sha, CloseTail::HostGreen);
+        assert_eq!(reason, format!("landed {sha} host=green"));
+        assert!(!reason.contains("tip=") && !reason.contains("ci="), "host の緑の理由は先端も CI の語も持たない: {reason}");
+        assert_eq!(read(&reason, None), Ok(Form::Landed { commit: sha, tail: LandedTail::HostGreen }));
     }
 
     /// **契約と要件の trailer**（設計 contract-source.md §5 手順 5）は `run:` の後ろに並び、key は器の名から

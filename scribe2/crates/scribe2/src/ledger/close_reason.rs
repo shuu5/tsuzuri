@@ -18,6 +18,9 @@ const CI_SUCCESS: &str = "ci=success";
 /// 尾の語 `ci=none`。
 const CI_NONE: &str = "ci=none";
 
+/// 尾の語 `host=green`（この host の確かめの緑で閉じた・GitHub の検査は後から読む）。
+const HOST_GREEN: &str = "host=green";
+
 /// 尾の先端の語の頭 `tip=`。
 const TIP_KEY: &str = "tip=";
 
@@ -80,16 +83,18 @@ impl Head {
     }
 }
 
-/// landed の尾（閉じた 3 形か読めない尾）。
+/// landed の尾（閉じた 4 形か読めない尾）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LandedTail {
+    /// `host=green`。
+    HostGreen,
     /// `ci=success`。
     Success,
     /// `ci=success tip=<40 桁の 16 進>`（先端の commit id を運ぶ）。
     SuccessTip(String),
     /// `ci=none`。
     None,
-    /// 3 形のどれでもない尾（空白を 1 つに揃えた字・尾が無いなら空）。
+    /// 4 形のどれでもない尾（空白を 1 つに揃えた字・尾が無いなら空）。
     Unreadable(String),
 }
 
@@ -227,9 +232,10 @@ fn landed(values: &[&str]) -> Option<Form> {
     is_commit_id(commit).then(|| Form::Landed { commit: (*commit).to_owned(), tail: tail_of(tail) })
 }
 
-/// 尾の閉じた 3 形（ほかは読めない尾）。
+/// 尾の閉じた 4 形（ほかは読めない尾）。
 fn tail_of(words: &[&str]) -> LandedTail {
     match words {
+        [HOST_GREEN] => LandedTail::HostGreen,
         [CI_SUCCESS] => LandedTail::Success,
         [CI_NONE] => LandedTail::None,
         [CI_SUCCESS, tip] => match tip.strip_prefix(TIP_KEY).filter(|id| is_commit_id(id)) {
@@ -572,5 +578,25 @@ mod tests {
         assert!(is_ruling_line("x | tz-1:20260930T0000Z-1", Some("tz")), "接頭辞が合えば真");
         assert!(!is_ruling_line(id, None), "接頭辞が解けない周は問い id の形を読めない");
         assert!(is_ruling_line("a | batch:x", None), "batch: は接頭辞に依らない");
+    }
+
+    /// 尾 `host=green`（tsuzuri の判断の記録 ADR-68・設計 ledger-form.md §16）は 1 語だけの尾で読め（大文字の 16 進の id と全角の
+    /// 空白の区切りでも）、語を足す・前に置く・字を替える尾は読めない尾になる。
+    #[test]
+    fn vclhost_ledger_close_reason_reads_host_green_as_the_fourth_tail() {
+        let landed = |commit: &str, tail| Ok(Form::Landed { commit: commit.to_owned(), tail });
+        assert_eq!(ok(&format!("landed {SHA} host=green")), landed(SHA, LandedTail::HostGreen));
+        assert_eq!(ok(&format!("landed {UPPER}\u{3000}host=green ")), landed(UPPER, LandedTail::HostGreen));
+        for tail in [
+            format!("host=green tip={SHA}"),
+            "host=green ci=success".to_owned(),
+            "ci=success host=green".to_owned(),
+            "Host=green".to_owned(),
+            "host=greens".to_owned(),
+            "host=red".to_owned(),
+        ] {
+            let reason = format!("landed {SHA} {tail}");
+            assert_eq!(ok(&reason), landed(SHA, LandedTail::Unreadable(tail)), "{reason}");
+        }
     }
 }

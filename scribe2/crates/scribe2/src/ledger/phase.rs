@@ -1237,4 +1237,26 @@ mod tests {
         assert_eq!(part(&out, "s2-n").extra, only_met, "期日が全部満ちていれば due は無い");
         assert_eq!(part(&out, "s2-c").extra, Extra::Contract { pointer: Some("docs/design/x.md#a".to_owned()), why: None }, "閉じた契約の pointer");
     }
+
+    /// 尾 `host=green`（tsuzuri の判断の記録 ADR-68）で閉じた契約は着地の形: 局面の出力は contract-closed で、辿れる契約が全部その
+    /// 理由で閉じた昇格済みの memo を器が閉じる memo に並べる（FR93）。尾に語を 1 つ足した閉じは close-kind-mismatch で、FR93 に数えない。
+    #[test]
+    fn vclhost_phase_reads_host_green_closes_as_landed() {
+        use super::due_closes;
+        let green = format!("landed {SHA} host=green");
+        let extra = format!("{green} tip={SHA}");
+        let promoted = |memo_id: &str, reason: &str| {
+            let (first, second) = (format!("{memo_id}1"), format!("{memo_id}2"));
+            let traced = |id: &str| closed(id, reason, "2026-09-27T00:00:00Z").design(POINTER).dep(memo_id, "discovered-from");
+            vec![memo(memo_id, &[]).notes(&format!("昇格: 全部 {first} {second}")), traced(&first), traced(&second)]
+        };
+        let mut specs = vec![closed("s2-hg", &green, LATE).design(POINTER), closed("s2-hx", &extra, LATE).design(POINTER)];
+        specs.extend(promoted("s2-mg", &green));
+        specs.extend(promoted("s2-mx", &extra));
+        let out = probe().run(&specs);
+        assert_eq!(shape(&out, "s2-hg"), ("contract-closed", "none", None), "host=green の閉じは読める着地");
+        assert_eq!(shape(&out, "s2-hx"), misfit("close-kind-mismatch"), "尾に語を足した閉じは読めない尾");
+        let due = due_closes(&ledger(&specs), Some("s2"), &[]);
+        assert_eq!(due, vec![("s2-mg".to_owned(), "昇格済み s2-mg1 s2-mg2".to_owned())], "host=green の契約だけを辿る memo を閉じる");
+    }
 }

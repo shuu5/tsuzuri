@@ -199,22 +199,27 @@ fn gist_of(goal: &str) -> String {
 /// `--version` の括弧の中身と**同じ 1 つの値**である（3 形: `<sha12>` / `<sha12>+dirty` / `unknown`）。
 const GENERATION: &str = BUILD_COMMIT;
 
-/// 台帳の close に書く理由の書き出し（`landed <sha> ci=success` / `landed <sha> ci=none`）。
+/// 台帳の close に書く理由の書き出し（`landed <sha> host=green` / `landed <sha> ci=success` / `landed <sha> ci=none`）。
 pub(in crate::pipe) const CLOSE_REASON: &str = "landed";
 
-/// close の理由の尾（**閉じた 2 値**・設計 contract-source.md §5・FR50）。書き手は [`close_reason`] の 1 本で、
-/// 経路 (1)（push → CI の照合 → close）と経路 (2)（remote を持たない repo の close）が同じ関数を通る。
+/// close の理由の尾（**閉じた 3 値**・設計 contract-source.md §5・FR50）。書き手は [`close_reason`] の 1 本で、
+/// 経路 (1)（push → この host の緑で close → GitHub の検査は後から読む）と、主実測が赤か測れなかった便を受け入れる周
+/// （先端の CI の success で close）と、経路 (2)（remote を持たない repo の close）が同じ関数を通る。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::pipe) enum CloseTail<'a> {
-    /// CI が success だった（先端で照合した周だけ先端の sha を持つ・§53）。
+    /// この host の確かめ（着地の前の gate と着地の後の主実測）が緑だった（GitHub の検査を待たない・先端は持たない）。
+    HostGreen,
+    /// CI が success だった（受け入れの周と retire・先端で照合した周だけ先端の sha を持つ・§53）。
     CiSuccess(Option<&'a str>),
     /// CI の照合をしていない（remote を持たない repo・先端は持たない）。
     NoCi,
 }
 
-/// 台帳の close の理由（`landed <sha> ci=success` / `landed <sha> ci=success tip=<先端>` / `landed <sha> ci=none` の 3 形）。
+/// 台帳の close の理由（`landed <sha> host=green` / `landed <sha> ci=success` / `landed <sha> ci=success tip=<先端>` /
+/// `landed <sha> ci=none` の 4 形）。
 pub(in crate::pipe) fn close_reason(sha: &str, tail: CloseTail<'_>) -> String {
     match tail {
+        CloseTail::HostGreen => format!("{CLOSE_REASON} {sha} host=green"),
         CloseTail::CiSuccess(None) => format!("{CLOSE_REASON} {sha} ci=success"),
         CloseTail::CiSuccess(Some(head)) => format!("{CLOSE_REASON} {sha} ci=success tip={head}"),
         CloseTail::NoCi => format!("{CLOSE_REASON} {sha} ci=none"),
@@ -258,18 +263,21 @@ pub(in crate::pipe) enum PushTip<'a> {
     Adopted(&'a str),
 }
 
-/// land の終端（設計 contract-source.md §5）: push → CI の照合 → 台帳の close。
+/// land の終端（設計 contract-source.md §5）: push → この host の緑で台帳の close → GitHub の検査を子 process で後から読む。
 ///
-/// **各段が typed な event を 1 件ずつ記す**（`RunDone` の detail で弁別）＝通った周は `Landed` の後ろに
-/// 3 件並ぶ。止まった段から先は撃たず、記録もそこで終わる（起きていない段の event を積まない）。
+/// **各段が typed な event を 1 件ずつ記す**（`RunDone` の detail で弁別）。止まった段から先は撃たず、記録もそこで終わる
+/// （起きていない段の event を積まない）。終端に来る便は着地の前の gate と着地の後の主実測がこの host で緑なので、close は
+/// GitHub の検査を待たず `landed <sha> host=green` の理由で撃つ。GitHub の検査は close の後に着地の後の CI の口
+/// （`pipe land --run <id> --ci-only <sha>`）の子 process（[`spawn_ci`]）が上限まで読む。子を待たないので、呼び手は close の
+/// 直後に戻り、列の 1 周が後の便を起こす。閉じられなかった周は子を起こさない（やり直しは `--terminal-only`）。
 /// remote を持たない repo（宣言を読めた上で `remote` の行が無い）の便は push も CI の照合も撃たず、台帳の close だけを
 /// `landed <sha> ci=none` の理由で撃つ（記すのは `close:ok` の 1 件・結末は [`Terminal::ClosedWithoutCi`]）。
-/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ CI の照合（待ち）を
-/// 先端の sha で撃つ。祖先でない周と測れない周は照合を撃たず `ci:unmeasurable` で止まる（§53）。push の後の remote の
-/// 追跡の ref が自分の sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、
-/// 渡された側によらずその commit を先端とする（[`pushed_past`]）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
-/// [`PushTip::Adopted`] の周は push を撃たず（記帳もしない）、`Behind` と同じく先端の CI で照合する（先端が自分の sha なら
-/// reason に `tip=` を置かない）。
+/// `tip` が [`PushTip::Behind`] の周は push の後に自分の sha が先端の祖先かを測り、祖先の周だけ先端の sha を子へ渡す。祖先で
+/// ない周と測れない周は子を起こさず `ci:unmeasurable` を記す（close は替えない・§53）。push の後の remote の追跡の ref が自分の
+/// sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、渡された側によらず
+/// その commit を先端とする（[`pushed_past`]）。[`PushTip::Adopted`] の周（主実測が赤か測れなかった便を受け入れる周＝この host の
+/// 緑が無い）は push を撃たず（記帳もしない）、今までどおり先端の CI の success を待ってから close する（先端が自分の sha なら
+/// reason に `tip=` を置かない）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
 pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
     let facts = match super::declaration::terminal_facts(entry.repo) {
         Ok(found) => found,
@@ -302,42 +310,92 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
     let pushed = (!matches!(tip, PushTip::Adopted(_))).then(|| pushed_past(entry.repo, remote, sha)).flatten();
     let tip = pushed.as_deref().map_or(tip, PushTip::Behind);
     // 先端でない sha には forge の CI の run が付かない＝自分を祖先に持つ先端の CI で照合する（§53）。祖先でない周と
-    // 測れない周（rc 0 以外は区別しない）は照合を撃たない（close しない極性）。
+    // 測れない周（rc 0 以外は区別しない）は照合する commit を持たない。
     let checked = match tip {
-        PushTip::Tip => sha,
-        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => head,
-        PushTip::Behind(_) | PushTip::Adopted(_) => {
-            note(entry, "ci:unmeasurable");
-            return Terminal::CiUnmeasurable;
-        }
+        PushTip::Tip => Some(sha),
+        PushTip::Behind(head) | PushTip::Adopted(head) if git_ok(entry.repo, &["merge-base", "--is-ancestor", sha, head]) => Some(head),
+        PushTip::Behind(_) | PushTip::Adopted(_) => None,
     };
-    // (2) CI の照合。上限まで rules 行の間隔で撃ち（設計 §50）、待ちが最後に読んだ答えで分ける（読み直さない・memo
-    // t3-hub.74.49.6 の道 1）。**success 以外は close しない**（FailClosed）。
+    // 受け入れの周は host の緑が無いので、先端の CI の success を待ってから閉じる（**success 以外は close しない**・FailClosed）。
+    if let PushTip::Adopted(head) = tip {
+        let Some(checked) = checked else {
+            note(entry, CI_UNMEASURABLE);
+            return Terminal::CiUnmeasurable;
+        };
+        return match read_ci(entry, &facts.ci_cmd, checked) {
+            CiRead::Success => close_bead(entry, &close_reason(sha, CloseTail::CiSuccess((head != sha).then_some(head)))),
+            CiRead::Failure => Terminal::CiFailed,
+            CiRead::Pending | CiRead::Unmeasured => Terminal::CiUnmeasurable,
+        };
+    }
+    // (2) 台帳の close。この host の緑で閉じる（GitHub の検査を待たない）。閉じられない周も着地は取り消さない（やり直しは
+    // `--terminal-only`・冪等）。
+    let closed = close_bead(entry, &close_reason(sha, CloseTail::HostGreen));
+    if !matches!(closed, Terminal::Closed) {
+        return closed;
+    }
+    // (3) GitHub の検査は子 process が後から読む（待たない）。照合する commit が無い周は子を起こさず記すだけ（札は替えない）。
+    match checked {
+        Some(found) => spawn_ci(entry, found),
+        None => note(entry, CI_UNMEASURABLE),
+    }
+    closed
+}
+
+/// GitHub の検査の読みが測れなかった周の語（終端の detail・[`Terminal::CiUnmeasurable`] の字面と同じ）。
+const CI_UNMEASURABLE: &str = "ci:unmeasurable";
+
+/// 着地の後の CI の口の flag（値は照合する commit の 40 桁の sha・`pipe land --run <id> --ci-only <sha>`）。
+pub(in crate::pipe) const CI_ONLY: &str = "--ci-only";
+
+/// GitHub の検査を上限まで rules 行の間隔で読み（設計 §50）、待ちが最後に読んだ答えを `ci:<語>` の 1 件で記して返す
+/// （読み直さない・memo t3-hub.74.49.6 の道 1）。受け入れの周の close の前と、着地の後の CI の口（[`ci_only`]）が共有する 1 本。
+fn read_ci(entry: &Land<'_>, cmd: &str, sha: &str) -> CiRead {
     let watch = Completion::CiResult {
         repo: entry.repo.to_path_buf(),
-        sha: checked.to_owned(),
-        cmd: facts.ci_cmd.clone(),
+        sha: sha.to_owned(),
+        cmd: cmd.to_owned(),
         every: std::time::Duration::from_secs(entry.ci_poll_s),
     };
-    match ci_wait(watch, std::time::Duration::from_secs(entry.ci_wait_s)) {
-        CiRead::Pending | CiRead::Unmeasured => {
-            note(entry, "ci:unmeasurable");
-            return Terminal::CiUnmeasurable;
-        }
-        CiRead::Failure => {
-            note(entry, "ci:failure");
-            return Terminal::CiFailed;
-        }
-        CiRead::Success => note(entry, "ci:success"),
+    let read = ci_wait(watch, std::time::Duration::from_secs(entry.ci_wait_s));
+    note(entry, &format!("ci:{}", ci_word(read)));
+    read
+}
+
+/// GitHub の検査の答えの語（閉じた 3 値・終端の行 `ci:<語>` と口の stdout の `ci=<語>` が共有する 1 本）。
+pub(in crate::pipe) const fn ci_word(read: CiRead) -> &'static str {
+    match read {
+        CiRead::Success => "success",
+        CiRead::Failure => "failure",
+        CiRead::Pending | CiRead::Unmeasured => "unmeasurable",
     }
-    // (3) 台帳の close。閉じられない周も着地は取り消さない（やり直しは `--terminal-only`・冪等）。先端で照合した周は
-    // reason に先端の id を後置する（FR50・§53）。
-    let tail = match tip {
-        PushTip::Tip => CloseTail::CiSuccess(None),
-        PushTip::Behind(head) => CloseTail::CiSuccess(Some(head)),
-        PushTip::Adopted(head) => CloseTail::CiSuccess((head != sha).then_some(head)),
-    };
-    close_bead(entry, &close_reason(sha, tail))
+}
+
+/// 着地の後の CI の口（[`CI_ONLY`]）を子 process で起こし、終わりを待たない（起こすのは着地後の検出と同じ 1 本 [`spawn_self`]）。
+///
+/// 子は列の道具（`--runner` ほか）を受けないので、子の終わりの列の 1 周は便を起こさない。起こせた周は `ci:spawned`、
+/// 起こせなかった周は `ci:unspawned` を 1 件記す（札は閉じたまま・読み直しは同じ口を人が撃つ）。
+fn spawn_ci(entry: &Land<'_>, sha: &str) {
+    let mut argv: Vec<String> = ["land", "--run", entry.run, CI_ONLY, sha, "--state-dir"].into_iter().map(str::to_owned).collect();
+    argv.extend([entry.state_dir.display().to_string(), "--repo".to_owned(), entry.repo.display().to_string()]);
+    argv.extend(["--bd".to_owned(), entry.bd.to_owned()]);
+    if let Some(rules) = entry.rules {
+        argv.extend(["--rules".to_owned(), rules.display().to_string()]);
+    }
+    note(entry, if spawn_self(entry.state_dir, &argv) { "ci:spawned" } else { "ci:unspawned" });
+}
+
+/// 着地の後の CI の口の本体（`pipe land --run <id> --ci-only <sha>`・設計 contract-source.md §5 手順 3）: 札も push も替えず、
+/// `sha` の GitHub の検査を [`read_ci`] で読んで `ci:<語>` を 1 件記す。宣言を読めない周は `ci:unmeasurable` を記す（読めないを
+/// 赤にも緑にも読み替えない・C10）。返すのは待ちが最後に読んだ答え（赤の知らせは呼び手が送る）。
+pub(in crate::pipe) fn ci_only(entry: &Land<'_>, sha: &str) -> CiRead {
+    match super::declaration::terminal_facts(entry.repo) {
+        Ok(facts) => read_ci(entry, &facts.ci_cmd, sha),
+        Err(_) => {
+            note(entry, CI_UNMEASURABLE);
+            CiRead::Unmeasured
+        }
+    }
 }
 
 /// push の後の remote の追跡の ref（`refs/remotes/<remote>/main`・git が push の押した値に揃える）が自分の sha の子孫で
