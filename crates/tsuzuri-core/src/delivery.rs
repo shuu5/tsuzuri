@@ -6,19 +6,23 @@
 //! 「配達 = <裁定の id>・経路 = <経路の語>・時刻 = <UTC の分>」。
 //! 裁定が配達済みとは、同じ bead の notes に、行頭が `MARK_PREFIX` で頭の後から最初の「・」までの字
 //! （前後の空白を除く）がその裁定の id と同じ行が 1 つ以上在ること（経路と時刻は判じに使わない）。
+//! 器の結びの口の経路 gui の行（欄の区切り ` | ` の 5 欄）も裁定の行として読み、経路 chat の行は読まない。
 
 use serde_json::{Map, Value};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BeadId, QUESTION_LABEL};
 use tsuzuri_contract::surface::RulingId;
 
-use crate::graph::build::{BdBead, read_ledger};
+use crate::graph::build::{BIND_FIELDS, BIND_SEP, BdBead, bind_line, read_ledger};
 
 /// 裁定の行の頭（導出グラフの `TYPED_LINES` の先頭の頭と同じ字）。
 pub const RULING_PREFIX: &str = "裁定 id = ";
 
 /// 配達済みの印の行の頭。
 pub const MARK_PREFIX: &str = "配達 = ";
+
+/// 器の答えの口（seat ruling answer）が書く裁定の行の経路の欄の字。
+pub const GUI_ROUTE: &str = "gui";
 
 /// 行の id の終わりの字。
 const ID_END: char = '・';
@@ -68,6 +72,17 @@ fn line_ids<'a>(notes: &'a str, prefix: &'a str) -> impl Iterator<Item = &'a str
     })
 }
 
+/// 器の結びの口の経路 gui の裁定の行の裁定 id と逐語の欄の字（5 つ目の欄は逐語の全部で `BIND_SEP` を含みうる）。
+/// `bind_line` が `bead` で Some を返し、4 つ目の欄の前後の空白を除いた字が `GUI_ROUTE` の時だけ Some。
+fn gui_line<'a>(line: &'a str, bead: &str) -> Option<(&'a str, &'a str)> {
+    let line = line.trim_end_matches('\r');
+    let id = bind_line(line, bead)?;
+    let mut fields = line.splitn(BIND_FIELDS, BIND_SEP).skip(3);
+    let route = fields.next()?;
+    let verbatim = fields.next()?;
+    (route.trim() == GUI_ROUTE).then_some((id, verbatim))
+}
+
 /// notes にその裁定の印が在るか。
 fn has_mark(notes: &str, ruling: &RulingId) -> bool {
     line_ids(notes, MARK_PREFIX).any(|id| id == ruling.as_str())
@@ -79,7 +94,8 @@ fn is_question(bead: &BdBead) -> bool {
 }
 
 /// 席に届いていない裁定を台帳の配列の順（同じ bead の中は notes の行の順）に返す。
-/// 問い（label `intake:question`・状態が tombstone でない・id が bead の id の形）の notes の裁定の行のうち、
+/// 問い（label `intake:question`・状態が tombstone でない・id が bead の id の形）の notes の裁定の行
+/// （頭 `RULING_PREFIX` の行と器の結びの口の経路 gui の行）のうち、
 /// 同じ bead の notes に印の無いものを出す（状態が open の問いも出す）。字が読めなければ Unknown。
 pub fn undelivered(ledger: &str) -> Reading<Vec<Pending>> {
     let Some(beads) = read_ledger(ledger) else {
@@ -92,7 +108,15 @@ pub fn undelivered(ledger: &str) -> Reading<Vec<Pending>> {
         };
         let notes = bead.notes.as_deref().unwrap_or_default();
         let mut seen: Vec<RulingId> = Vec::new();
-        for id in line_ids(notes, RULING_PREFIX) {
+        for line in notes.lines() {
+            let line = line.trim_end_matches('\r');
+            let id = match line.strip_prefix(RULING_PREFIX) {
+                Some(rest) => rest.split(ID_END).next().unwrap_or(rest).trim(),
+                None => match gui_line(line, bead.id.as_str()) {
+                    Some((id, _)) => id,
+                    None => continue,
+                },
+            };
             let Ok(ruling) = RulingId::new(id) else {
                 continue;
             };
@@ -191,7 +215,9 @@ fn unescape(text: &str) -> String {
 }
 
 /// 名指された裁定の逐語を台帳の順に返す。問い（label `intake:question`・状態が tombstone でない）の notes の
-/// 裁定の行のうち、行の id か束の欄の id が `ids` に在り、逐語の欄の在る行を出す（印は見ない）。字が読めなければ Unknown。
+/// 裁定の行のうち、行の id か束の欄の id が `ids` に在り、逐語の欄の在る行を出す（印は見ない）。
+/// 経路 gui の行は裁定 id が `ids` に在れば、逐語の欄を JSON の字として戻した字を出す（戻せない行は飛ばす・束の欄は読まない）。
+/// 字が読めなければ Unknown。
 pub fn said(ledger: &str, ids: &[RulingId]) -> Reading<Vec<Said>> {
     let Some(beads) = read_ledger(ledger) else {
         return Reading::Unknown;
@@ -203,22 +229,32 @@ pub fn said(ledger: &str, ids: &[RulingId]) -> Reading<Vec<Said>> {
             continue;
         };
         for line in bead.notes.as_deref().unwrap_or_default().lines() {
-            let Some(rest) = line.trim_end_matches('\r').strip_prefix(RULING_PREFIX) else {
-                continue;
-            };
-            let Some((head, verbatim)) = rest.split_once(VERBATIM_FIELD) else {
-                continue;
-            };
-            let mut fields = head.split(ID_END);
-            let Ok(ruling) = RulingId::new(fields.next().unwrap_or_default().trim()) else {
-                continue;
-            };
-            let batch = fields.find_map(|f| f.strip_prefix(BATCH_FIELD)).map(str::trim);
-            if named(ruling.as_str()) || batch.is_some_and(named) {
+            let line = line.trim_end_matches('\r');
+            if let Some(rest) = line.strip_prefix(RULING_PREFIX) {
+                let Some((head, verbatim)) = rest.split_once(VERBATIM_FIELD) else {
+                    continue;
+                };
+                let mut fields = head.split(ID_END);
+                let Ok(ruling) = RulingId::new(fields.next().unwrap_or_default().trim()) else {
+                    continue;
+                };
+                let batch = fields.find_map(|f| f.strip_prefix(BATCH_FIELD)).map(str::trim);
+                if named(ruling.as_str()) || batch.is_some_and(named) {
+                    out.push(Said {
+                        question: question.clone(),
+                        ruling,
+                        verbatim: unescape(verbatim),
+                    });
+                }
+            } else if let Some((id, raw)) = gui_line(line, bead.id.as_str())
+                && named(id)
+                && let Ok(verbatim) = serde_json::from_str::<String>(raw)
+                && let Ok(ruling) = RulingId::new(id)
+            {
                 out.push(Said {
                     question: question.clone(),
                     ruling,
-                    verbatim: unescape(verbatim),
+                    verbatim,
                 });
             }
         }
