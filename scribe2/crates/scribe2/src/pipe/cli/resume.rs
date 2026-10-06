@@ -5,8 +5,8 @@
 //! （[`follow_pending`]）もここに置く。
 
 use super::intake::{regenerated, run_repo, unloadable};
-use super::run::{chain, chain_noting, fix_rounds, gate_fixing, launch};
-use super::step::{land_run, review_run};
+use super::run::{chain, chain_noting, fix_rounds, gate_fixing, land_fixing, launch};
+use super::step::review_run;
 use super::{broken, flag, need, refused, stage_of, state_dir_of};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::fleet::store::{self, LockPolicy, StoreError};
@@ -83,14 +83,15 @@ pub(super) fn resume(
         // いない便に land の「PASS でない」を返すのは、吸収状態を言い換えただけである。
         // 次に撃つ段だけを名乗って rc 3 で止まる（**自動では測り直さない**＝道具の
         // 不足は人が直す）。PASS / FAIL の弁別は land 側が持ち、読む関数は
-        // [`verdict_of`] の 1 本で共有する（判定の読み手は増やさない）。
+        // [`verdict_of`] の 1 本で共有する（判定の読み手は増やさない）。land は [`land_fixing`] が包み、
+        // 追随の再 gate の FAIL は gate の段と同じ直しの周に入る（`--runner` の無い周は今の 1 回の land）。
         Stage::Gated => match verdict_of(&state_dir, &id) {
             Some(Verdict::Inconclusive) => Outcome {
                 out: vec![format!("run={id} next=gate")],
                 err: Vec::new(),
                 rc: RC_INCONCLUSIVE,
             },
-            _ => land_run(args, &id, manifest, policy),
+            _ => land_fixing(args, &id, flag(args, "--runner").ok().flatten(), manifest, policy),
         },
         // 審査を通っていない便（`RunCreated` の直後に process が落ちた周）は**先に審査**し、PASS の周だけ
         // 起こす（FR49・設計 contract-source.md §4「効き方」）。審査の段の event と `review.json` はここで残る。

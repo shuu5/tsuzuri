@@ -13,6 +13,8 @@ use crate::fleet::json_lite;
 use crate::fleet::store::{self, LockPolicy};
 use crate::fleet::{Event, EventKind, Stage};
 use crate::pipe::follow::{self, Runner, Turn, FAIL_DETAIL, FIX_DETAIL};
+use crate::pipe::gate::Verdict;
+use crate::pipe::land::verdict_of;
 use crate::pipe::ratelimit::{ride_out_rate_limit, Pool};
 use crate::pipe::spawn::EndGate;
 use crate::pipe::{current, emit, verdict_path, Emit};
@@ -132,7 +134,7 @@ pub(super) fn run_all(
     if let Some(stopped) = chain_noting(&mut lines, &mut notes, gated) {
         return stopped;
     }
-    let landed = land_run(args, &id, manifest, policy);
+    let landed = land_fixing(args, &id, Some(runner.as_str()), manifest, policy);
     if let Some(stopped) = chain_noting(&mut lines, &mut notes, landed) {
         return stopped;
     }
@@ -242,18 +244,59 @@ pub(super) fn gate_fixing(args: &[String], id: &str, runner: Option<&str>, manif
         };
         lines.append(&mut gated.out);
         notes.append(&mut gated.err);
-        // 行 `runner.gate_fix_rounds` は `fix_due` が読めた周だけここへ来る。
-        let limit = int_row(manifest, ROW_GATE_FIX_ROUNDS).unwrap_or_default();
-        if let Err(outcome) = mark_fix(args, id, round, policy) {
-            return closing(lines, notes, outcome);
-        }
-        lines.push(format!("run={id} gate-fix={round}/{limit}"));
-        let launched = launch(args, id, cmd, policy, &[Stage::Implemented]);
-        if let Some(stopped) = chain_noting(&mut lines, &mut notes, launched) {
+        let fixed = fix_round(args, id, (cmd, round), manifest, policy);
+        if let Some(stopped) = chain_noting(&mut lines, &mut notes, fixed) {
             return stopped;
         }
-        let ridden = ride_out_rate_limit(args, id, cmd, manifest, policy);
-        if let Some(stopped) = chain_noting(&mut lines, &mut notes, ridden) {
+    }
+}
+
+/// 直しの周 1 回: 直しの印を記帳し、stdout に `run=<id> gate-fix=<周>/<上限>` を足し、runner を起こして上限の周の待ち（[`ride_out_rate_limit`]）まで
+/// 済ませる（[`gate_fixing`] と [`land_fixing`] が共有する）。どれかが rc 0 でなければそこまでの行とその rc で返る。`runner` は `(cmd, 周の番号)`。
+fn fix_round(args: &[String], id: &str, (cmd, round): (&str, u64), manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let (mut lines, mut notes) = (Vec::new(), Vec::new());
+    // 行 `runner.gate_fix_rounds` は `fix_due` が読めた周だけここへ来る。
+    let limit = int_row(manifest, ROW_GATE_FIX_ROUNDS).unwrap_or_default();
+    if let Err(outcome) = mark_fix(args, id, round, policy) {
+        return outcome;
+    }
+    lines.push(format!("run={id} gate-fix={round}/{limit}"));
+    let launched = launch(args, id, cmd, policy, &[Stage::Implemented]);
+    if let Some(stopped) = chain_noting(&mut lines, &mut notes, launched) {
+        return stopped;
+    }
+    let ridden = ride_out_rate_limit(args, id, cmd, manifest, policy);
+    chain_noting(&mut lines, &mut notes, ridden).unwrap_or(Outcome { out: lines, err: notes, rc: RC_OK })
+}
+
+/// land を撃ち、追随の再 gate が審査役の FAIL を返した便は gate の段と同じ直しの周に入れる輪（設計 pipeline.md §73・[`gate_fixing`] の land 版）。
+///
+/// land の前に便の verdict が PASS かを読み、PASS でない周は land の戻りのまま返る（Gated の FAIL の便に直しの周へ入らない）。PASS の周は land の rc が
+/// [`RC_REFUSED`] で [`fix_due`] が `Round(n)` なら直しの周（[`fix_round`]）と直した後の gate（[`gate_fixing`]）を撃ってから land を撃ち直し、`Exhausted(v)` なら行の末に
+/// `run=<id> gate-fix=exhausted:<v>` を足して land の rc のまま返る。`Off` の周と rc が [`RC_REFUSED`] でない周は land の戻りのまま返る。
+/// 周の数えは gate の段と共有する（[`fix_rounds`]・段と再 gate を分けない）。**輪は回数を数えない**——止めるのは [`fix_due`] の数えである。
+pub(super) fn land_fixing(args: &[String], id: &str, runner: Option<&str>, manifest: &Manifest, policy: LockPolicy) -> Outcome {
+    let (mut lines, mut notes) = (Vec::new(), Vec::new());
+    loop {
+        let passing = state_dir_of(args).is_ok_and(|state_dir| verdict_of(&state_dir, id) == Some(Verdict::Pass));
+        let mut landed = land_run(args, id, manifest, policy);
+        let due = if passing && landed.rc == RC_REFUSED { fix_due(args, id, runner, manifest) } else { Due::Off };
+        let (cmd, round) = match (runner, due) {
+            (Some(cmd), Due::Round(round)) => (cmd, round),
+            (Some(_), Due::Exhausted(limit)) => {
+                landed.out.push(format!("run={id} gate-fix=exhausted:{limit}"));
+                return closing(lines, notes, landed);
+            }
+            _ => return closing(lines, notes, landed),
+        };
+        lines.append(&mut landed.out);
+        notes.append(&mut landed.err);
+        let fixed = fix_round(args, id, (cmd, round), manifest, policy);
+        if let Some(stopped) = chain_noting(&mut lines, &mut notes, fixed) {
+            return stopped;
+        }
+        let gated = gate_fixing(args, id, Some(cmd), manifest, policy);
+        if let Some(stopped) = chain_noting(&mut lines, &mut notes, gated) {
             return stopped;
         }
     }

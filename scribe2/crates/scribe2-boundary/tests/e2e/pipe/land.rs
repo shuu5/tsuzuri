@@ -14,6 +14,7 @@
 
 mod cilast;
 mod commute;
+mod flfix;
 mod follow;
 mod order;
 mod rebase;
