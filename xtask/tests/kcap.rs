@@ -1,7 +1,7 @@
 //! task kfold-cap（xtask の src/kcap.rs・判断の記録 ADR-63 の決定 (8) の (a)）の歯（接頭辞 kcap_）: 一時の dir の toy の木
 //! （member 2 つ・群 3 つ・main.rs を持たない dir 1 つ・段 3 本）で、名指した群の越えだけが rc 1 になり、ほかの群の越えと段の本数は
 //! 出力に名指すだけで、群の行が群の dir の直下の .rs（main.rs を除く）の行の和で、上限が束ねの表の file の定数の行の字から読まれることを測り、
-//! xtask の binary の task kfold-cap の撃ちの rc と出力を測る。
+//! xtask の binary の task kfold-cap の撃ちの rc と出力と、撃った後に toy の木が一時の dir に残らないことを測る。
 #![cfg(test)]
 
 #[path = "../src/kcap.rs"]
@@ -29,12 +29,17 @@ fn lines(n: usize) -> String {
     "//\n".repeat(n)
 }
 
+/// toy の木の置き場（一時の dir の下・名に pid と字 tag）。
+fn place(tag: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("tsuzuri-kcap-{tag}-{}", std::process::id()))
+}
+
 /// toy の木（名に pid と字 tag）。members は a と xtask。群 a/tests/g1 は main.rs 50 行と x.rs 6 行、
 /// 群 a/tests/g2 は main.rs 2 行と y.rs 11 行（最後の行は改行で終わらない）と common/mod.rs 30 行と notes.txt 30 行、
 /// 群 xtask/tests/teeth1 は main.rs と kfold.rs 3 行（頭の 1 行と group_line と STAGE_LINE）。a/tests/plain は main.rs を持たず z.rs 4 行。
 /// 段は a/tests/s1.rs・s2.rs・s3.rs。
 fn toy(tag: &str, group_line: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("tsuzuri-kcap-{tag}-{}", std::process::id()));
+    let root = place(tag);
     let _ = std::fs::remove_dir_all(&root);
     put(
         &root,
@@ -60,9 +65,13 @@ fn toy(tag: &str, group_line: &str) -> PathBuf {
     root
 }
 
-fn run(root: &Path, named: &[&str]) -> (i32, Vec<String>) {
+/// toy の木を作って task を撃ち、断言の前に木を消す（歯ごとの dir を一時の dir に残さない・mdid.rs の toy の歯と同じ形・memo t3-hub.74.49.10）。
+fn shot(tag: &str, group_line: &str, named: &[&str]) -> (i32, Vec<String>) {
+    let root = toy(tag, group_line);
     let named: Vec<String> = named.iter().map(|s| (*s).to_string()).collect();
-    kcap::run(root, &named)
+    let got = kcap::run(&root, &named);
+    let _ = std::fs::remove_dir_all(&root);
+    got
 }
 
 fn has(out: &[String], line: &str) -> bool {
@@ -71,8 +80,7 @@ fn has(out: &[String], line: &str) -> bool {
 
 #[test]
 fn kcap_named_group_over_cap_fails() {
-    let root = toy("over", GROUP_LINE);
-    let (rc, out) = run(&root, &["a/tests/g2"]);
+    let (rc, out) = shot("over", GROUP_LINE, &["a/tests/g2"]);
     assert_eq!(rc, 1, "{out:?}");
     assert!(
         has(&out, "群 a/tests/g2 11 行・名指し・越え（落とす）"),
@@ -86,8 +94,7 @@ fn kcap_named_group_over_cap_fails() {
 
 #[test]
 fn kcap_unnamed_group_over_cap_is_named_only() {
-    let root = toy("unnamed", GROUP_LINE);
-    let (rc, out) = run(&root, &["a/tests/g1"]);
+    let (rc, out) = shot("unnamed", GROUP_LINE, &["a/tests/g1"]);
     assert_eq!(rc, 0, "{out:?}");
     assert_eq!(
         out,
@@ -105,16 +112,14 @@ fn kcap_unnamed_group_over_cap_is_named_only() {
 
 #[test]
 fn kcap_group_lines_skip_main_rs() {
-    let root = toy("main", GROUP_LINE);
-    let (rc, out) = run(&root, &["a/tests/g1"]);
+    let (rc, out) = shot("main", GROUP_LINE, &["a/tests/g1"]);
     assert_eq!(rc, 0, "{out:?}");
     assert!(has(&out, "群 a/tests/g1 6 行・名指し"), "{out:?}");
 }
 
 #[test]
 fn kcap_group_lines_count_direct_rs_only() {
-    let root = toy("direct", GROUP_LINE);
-    let (_, out) = run(&root, &["a/tests/g1"]);
+    let (_, out) = shot("direct", GROUP_LINE, &["a/tests/g1"]);
     assert!(
         has(
             &out,
@@ -128,10 +133,12 @@ fn kcap_group_lines_count_direct_rs_only() {
 
 #[test]
 fn kcap_caps_read_from_table_lines() {
-    let narrow = toy("narrow", GROUP_LINE);
-    assert_eq!(run(&narrow, &["a/tests/g2"]).0, 1);
-    let wide = toy("wide", "const GROUP_LINES_CAP: usize = 11;");
-    let (rc, out) = run(&wide, &["a/tests/g2"]);
+    assert_eq!(shot("narrow", GROUP_LINE, &["a/tests/g2"]).0, 1);
+    let (rc, out) = shot(
+        "wide",
+        "const GROUP_LINES_CAP: usize = 11;",
+        &["a/tests/g2"],
+    );
     assert_eq!(rc, 0, "{out:?}");
     assert_eq!(
         out.first().map(String::as_str),
@@ -139,9 +146,12 @@ fn kcap_caps_read_from_table_lines() {
     );
     assert!(has(&out, "群 a/tests/g2 11 行・名指し"), "{out:?}");
 
-    let public = toy("public", "pub const GROUP_LINES_CAP: usize = 11;");
     assert_eq!(
-        run(&public, &["a/tests/g2"]),
+        shot(
+            "public",
+            "pub const GROUP_LINES_CAP: usize = 11;",
+            &["a/tests/g2"]
+        ),
         (
             2,
             vec![
@@ -150,9 +160,12 @@ fn kcap_caps_read_from_table_lines() {
             ]
         )
     );
-    let sum = toy("sum", "const GROUP_LINES_CAP: usize = 5 + 6;");
     assert_eq!(
-        run(&sum, &["a/tests/g2"]),
+        shot(
+            "sum",
+            "const GROUP_LINES_CAP: usize = 5 + 6;",
+            &["a/tests/g2"]
+        ),
         (
             2,
             vec!["kfold.rs の GROUP_LINES_CAP の値 5 + 6 が数字と _ だけの字でない".to_string()]
@@ -162,8 +175,7 @@ fn kcap_caps_read_from_table_lines() {
 
 #[test]
 fn kcap_stage_files_are_named_only() {
-    let root = toy("stage", GROUP_LINE);
-    let (rc, out) = run(&root, &["a/tests/g1"]);
+    let (rc, out) = shot("stage", GROUP_LINE, &["a/tests/g1"]);
     assert_eq!(rc, 0, "{out:?}");
     assert!(has(&out, "段 a/tests 3 本"), "{out:?}");
     assert!(
@@ -177,12 +189,23 @@ fn kcap_stage_files_are_named_only() {
 
 #[test]
 fn kcap_refuses_non_group_and_empty_names() {
-    let root = toy("refuse", GROUP_LINE);
     assert_eq!(
-        run(&root, &["a/tests/g1", "a/tests/plain"]),
+        shot("refuse", GROUP_LINE, &["a/tests/g1", "a/tests/plain"]),
         (2, vec![format!("a/tests/plain{NOT_GROUP}")])
     );
-    assert_eq!(run(&root, &[]), (2, vec![kcap::USAGE.to_string()]));
+    assert_eq!(
+        shot("refuse", GROUP_LINE, &[]),
+        (2, vec![kcap::USAGE.to_string()])
+    );
+}
+
+/// 撃つ間は toy の木が在り（名指した群の越えで rc 1）、撃った後は木の dir が無い。
+#[test]
+fn kcap_toy_is_gone_after_the_shot() {
+    let root = place("gone");
+    let (rc, out) = shot("gone", GROUP_LINE, &["a/tests/g2"]);
+    assert_eq!(rc, 1, "木が在る間に撃った: {out:?}");
+    assert!(!root.exists(), "撃った後は無い: {}", root.display());
 }
 
 #[test]
