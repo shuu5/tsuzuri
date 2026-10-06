@@ -438,12 +438,22 @@ pub(in crate::pipe) fn generated(
         let reason = format!("{} を base（HEAD）から読めない", pointer.path);
         return Err(refuse(&Refuse::ContractTable(TableError::Unreadable { line: 0, reason }), &[]));
     };
-    let row = table::find_row(&pointer.path, &text, &pointer.id).map_err(|errors| {
+    generated_from(repo, pointer, &text, materials)
+}
+
+/// 行の本文 text から契約を組む。text は base の doc か preflight の --contract の file。
+pub(in crate::pipe) fn generated_from(
+    repo: &Path,
+    pointer: &table::Pointer,
+    text: &str,
+    materials: &Materials,
+) -> Result<(Contract, String), Denial> {
+    let row = table::find_row(&pointer.path, text, &pointer.id).map_err(|errors| {
         let rest: Vec<String> = errors.iter().skip(1).map(|error| format!("pipe: {}", error.reason())).collect();
         let first = errors.into_iter().next().unwrap_or(TableError::RowMissing { line: 0, id: pointer.id.clone() });
         refuse(&Refuse::ContractTable(first), &rest)
     })?;
-    let findings = check_row(&pointer.path, &text, &row, materials);
+    let findings = check_row(&pointer.path, text, &row, materials);
     if !findings.is_empty() {
         return Err(finding_denial(&pointer.path, &findings));
     }
@@ -454,7 +464,7 @@ pub(in crate::pipe) fn generated(
     // 契約 file は write-set を 1 本以上要るので、空のまま書くと器が自分の生成物を読めない。
     // 導出は行と base だけで決まるので、後段の [`settle_write_set`] と同じ 1 実装をここで撃つ（C2）。
     // Promised の行（§33）は約束の行からの生成値（write-set / verify / done）を行の値の代わりに渡す。
-    let (row, write_set) = match promised(&pointer.path, &text, &row, materials)? {
+    let (row, write_set) = match promised(&pointer.path, text, &row, materials)? {
         Some(found) => (generated_row(&row, &found), found.write_set),
         None if row.write_set.is_empty() => {
             let derived = derived_write_set(&row, materials)?;

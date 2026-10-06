@@ -25,18 +25,19 @@
 //! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
 
 use super::base_run::BaseRun;
-use super::intake::{ceiling_of, early, generated, judge, read_args, Denial, Judged, Material, Materials};
-use super::{flag, present, refused, state_dir_of};
+use super::intake::{ceiling_of, early, generated, generated_from, judge, read_args, Denial, Judged, Material, Materials};
+use super::{flag, need, present, refused, repo_flag, state_dir_of, REPO_FLAG};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
 use crate::pipe::closure::filter_words;
 use crate::pipe::dispatch::pointer_of;
-use crate::pipe::refuse::covered;
+use crate::pipe::refuse::{covered, Refuse};
 use crate::pipe::review::section_text;
 use crate::pipe::spawn::table_rows;
+use crate::pipe::table::TableError;
 use crate::pipe::{show_head, table};
 use crate::rules::manifest::Manifest;
 use crate::seat::ledger::{one_read, read_ledger, timeout_of, Issue, DEFAULT_BD};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// 末尾の判定行の書き出し。
 const TAIL: &str = "preflight:";
@@ -142,11 +143,50 @@ pub(super) fn preflight(args: &[String], manifest: &Manifest) -> Outcome {
     one_read(|| checked(args, manifest))
 }
 
+/// 契約の file を直に渡す flag（`--design` と同時には渡せない・値は `.toml` の 1 行の file）。
+const CONTRACT: &str = "--contract";
+
+/// `--contract` の周の引数の読み（`--design` と `--contract` は 1 つ・`--placed` は `--design` と・`.toml`・読めること・行が 1 つ、の順で断る）。
+/// 戻りは pointer（path は file の絶対 path）・bead・repo・file の字。行の読めない周は後段の [`generated_from`] の断りに任せる。
+fn read_contract_args(args: &[String], given: &str) -> Result<(table::Pointer, String, PathBuf, String), Outcome> {
+    if present(args, "--design") {
+        return Err(refused(format!("--design と {CONTRACT} は 1 つだけ渡す")));
+    }
+    if present(args, PLACED) {
+        return Err(refused(format!("{PLACED} は --design と使う")));
+    }
+    let not_toml = || refused(format!("{CONTRACT} {given} は .toml の file でない"));
+    if !given.ends_with(".toml") {
+        return Err(not_toml());
+    }
+    let bead = need(args, "--bead").map_err(refused)?.to_owned();
+    let repo = repo_flag(args).and_then(|found| found.ok_or(format!("{REPO_FLAG} が要る"))).map_err(refused)?;
+    let cwd = std::env::current_dir().map_err(|err| refused(format!("作業 dir を読めない: {err}")))?;
+    let path = cwd.join(given).display().to_string();
+    let text = std::fs::read_to_string(&path).map_err(|err| {
+        let found = Refuse::ContractTable(TableError::Unreadable { line: 0, reason: format!("{path} を読めない: {err}") });
+        let outcome = Outcome::failed(found.rc(), vec![format!("pipe: {}", found.reason())]);
+        tailed(Denial { name: found.as_str(), outcome, refusals: vec![found] })
+    })?;
+    let rows = table::read_rows(&path, &text).ok();
+    if let Some(found) = rows.as_deref().filter(|found| found.len() != 1) {
+        return Err(refused(format!("契約の file は [[contract]] の行を 1 つだけ持つ（{} 行）", found.len())));
+    }
+    let id = rows.and_then(|found| found.into_iter().next()).map_or_else(|| "-".to_owned(), |row| row.id);
+    let pointer = table::parse_pointer(&format!("{path}#{id}")).map_err(|_| not_toml())?;
+    Ok((pointer, bead, repo, text))
+}
+
 /// preflight の本体。
 fn checked(args: &[String], manifest: &Manifest) -> Outcome {
-    let (pointer, bead, repo) = match read_args(args) {
+    let read = match flag(args, CONTRACT) {
+        Ok(Some(given)) => read_contract_args(args, given).map(|(pointer, bead, repo, text)| (pointer, bead, repo, Some(text))),
+        Ok(None) => read_args(args).map(|(pointer, bead, repo)| (pointer, bead, repo, None)).map_err(|denial| denial.outcome),
+        Err(reason) => Err(refused(reason)),
+    };
+    let (pointer, bead, repo, file) = match read {
         Ok(found) => found,
-        Err(denial) => return denial.outcome,
+        Err(outcome) => return outcome,
     };
     // 受付と同じ順（§56 形 2）: HEAD の sha を材料の読みの前に読む。読めない repo は judge が `not-a-repo` で断る。
     let sha = super::head_of(&repo).unwrap_or_default();
@@ -174,7 +214,11 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
         },
         Err(denial) => return tailed(denial),
     };
-    let (contract, teeth) = match generated(&repo, &pointer, &materials) {
+    let built = match file.as_deref() {
+        Some(text) => generated_from(&repo, &pointer, text, &materials),
+        None => generated(&repo, &pointer, &materials),
+    };
+    let (contract, teeth) = match built {
         Ok((found, body)) => (found, !crate::pipe::contract::done_teeth_in(&body).is_empty()),
         Err(denial) => return tailed(denial),
     };
@@ -191,7 +235,8 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     };
     let entrance = early.base.as_ref().map(BaseRun::fact);
     let judged = judge(&material);
-    let widen = widen_lines(&repo, &sha, &pointer, &contract.write_set);
+    let doc = file.or_else(|| show_head(&repo, &pointer.path));
+    let widen = widen_lines(&repo, &sha, &pointer, doc, &contract.write_set);
     let placed = present(args, PLACED).then(|| acceptance_of(bd, &repo, manifest, &bead, &pointer));
     let common = early.frozen.as_ref().map_or(&[][..], |(found, _)| found.common_verify());
     let gaps = verify_gaps(&format!("{}#{}", pointer.path, pointer.id), &contract.verify, common);
@@ -200,15 +245,18 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
 
 /// `widen=<項目>@<doc>#<行 id>:<file,…>`（設計 reverse-index.md の閉包の広がりの予想）: 自分の行の § の本文が語として名指す型形の項目を
 /// touches に持つほかの行で、write-set が自分の write-set の .rs の候補〔接頭辞が無いか `+`・`+` は剥がす〕を覆わない組。HEAD の木の
-/// 契約表を読めない周は `widen=unmeasured:<理由>` の 1 行（理由は「ほかの行の touches」節と同じ字）。
-fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, own: &[String]) -> Vec<String> {
+/// 契約表を読めない周は `widen=unmeasured:<理由>` の 1 行（理由は「ほかの行の touches」節と同じ字）。`doc` は自分の行を持つ doc の字
+/// （`--design` の周は base の読み・`--contract` の周は file の字）で、本文は行が goal を持てば goal・無ければ節の本文。
+fn widen_lines(repo: &Path, sha: &str, pointer: &table::Pointer, doc: Option<String>, own: &[String]) -> Vec<String> {
     let unmeasured = |reason: String| vec![format!("{WIDEN}unmeasured:{reason}")];
     let rows = match table_rows(repo, sha) {
         Ok(found) => found,
         Err(reason) => return unmeasured(reason),
     };
-    let body = show_head(repo, &pointer.path)
-        .and_then(|text| table::find_row(&pointer.path, &text, &pointer.id).ok().map(|row| section_text(&text, &row.section)));
+    let body = doc.and_then(|text| {
+        let row = table::find_row(&pointer.path, &text, &pointer.id).ok()?;
+        Some(if row.goal.is_empty() { section_text(&text, &row.section) } else { row.goal })
+    });
     let Some(body) = body else {
         return unmeasured(format!("{} の節を base から読めない", pointer.path));
     };
