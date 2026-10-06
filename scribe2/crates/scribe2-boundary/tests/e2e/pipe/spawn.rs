@@ -2262,9 +2262,9 @@ fn widen_doc(rows: &[String]) -> String {
     format!("# 設計: toy\n\n## 1. 何を解くか\n\n本文。\n\n## 2. 型\n\n{WIDEN_SECTION}\n\n## 3. 空の節\n\n{}", table_region(rows))
 }
 
-/// 自分の行 a（§ 2・write-set は [`WIDEN_OWN`]・`extra` は足す欄）。
+/// 自分の行 a（§ 2・write-set は [`WIDEN_OWN`]・verify は宣言の共通 verify `git status` と違う行・`extra` は足す欄）。
 fn widen_own(extra: &[(&str, &str)]) -> String {
-    let mut over = vec![("section", "\"2\""), ("write-set", WIDEN_OWN)];
+    let mut over = vec![("section", "\"2\""), ("write-set", WIDEN_OWN), ("verify", r#"["git diff --stat"]"#)];
     over.extend_from_slice(extra);
     table_row("a", &over)
 }

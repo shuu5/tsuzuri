@@ -56,7 +56,7 @@ mod names;
 
 pub use derive::{check_drift, derive_promised, derive_write_set, promised_inputs, weighted_lines, Base, Fields, Promised};
 pub use names::{impl_line, mentioned_names, named_items, section_symbols, symbols_in_base, unresolved_names, Mentioned, Named};
-pub(crate) use derive::{declared_teeth, nextest_line, selects, teeth_places, teeth_words, tooth_sites};
+pub(crate) use derive::{declared_teeth, filter_words, nextest_line, selects, teeth_places, teeth_words, tooth_sites};
 pub(crate) use names::holds_word;
 use names::declares_fn;
 
@@ -78,6 +78,9 @@ const UNREAD_ARG_TARGET_FLAGS: &[&str] = &["--bin", "--bench", "--example", "-E"
 
 /// nextest の行で target を選ぶが scope に読まない旗のうち引数を取らない旗（§28・crate 全体へ倒す・fail-closed）。
 const UNREAD_BARE_TARGET_FLAGS: &[&str] = &["--bins", "--benches", "--examples", "--tests", "--all-targets"];
+
+/// nextest の行で引数を取り、target も scope も選ばない cargo の旗（次の 1 語が旗の引数で filter 語に数えない・scope は替えない）。
+const CARGO_ARG_FLAGS: &[&str] = &["--manifest-path"];
 
 /// nextest の行で libtest の引数へ切り替える境（§43 (2)・この後ろの語は [`LIBTEST_ARG_FLAGS`] / [`LIBTEST_BARE_FLAGS`] で読む）。
 const LIBTEST_SEPARATOR: &str = "--";

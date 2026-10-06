@@ -18,7 +18,8 @@
 //! `acceptance=<matched|unmeasured:ledger>`（`--placed` を渡した周だけ・`--bead` の bead の acceptance の `design = ` の行を dispatch の
 //! 列と同じ読み手で読み `--design` と照らす・`done-teeth=` の行の次・判断の記録 ADR-44 の決定 (3)）/
 //! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]・`--placed` の周の照らしの断りは judge の断りの後に
-//! preflight だけの名 `acceptance-pointer` の 1 行）/ 末尾に
+//! preflight だけの名 `acceptance-pointer` の 1 行・verify の欄の照らしの断りはその後に preflight だけの名 `verify-filters`〔filter 語の候補が 2 つ
+//! 以上の nextest の行〕と `verify-common`〔宣言の common-verify と同じ行〕の 1 行ずつ）/ 末尾に
 //! `preflight: <ok|refused n=<件数>|broken>`。rc = 0（断り 0）/ 1（断り ≥ 1）/ 2（読めない = `RC_BROKEN` の周）。
 //! `--state-dir` が無く git 設定からも解けない周は `overlap=unmeasured` を出し、rc は他の断りで決める（測れないを 0 に
 //! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
@@ -27,6 +28,7 @@ use super::base_run::BaseRun;
 use super::intake::{ceiling_of, early, generated, judge, read_args, Denial, Judged, Material, Materials};
 use super::{flag, present, refused, state_dir_of};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK, RC_REFUSED};
+use crate::pipe::closure::filter_words;
 use crate::pipe::dispatch::pointer_of;
 use crate::pipe::refuse::covered;
 use crate::pipe::review::section_text;
@@ -53,6 +55,12 @@ pub(super) const PLACED: &str = "--placed";
 
 /// 照らしの断りの名（preflight だけの名・受付の [`crate::pipe::refuse::Refuse`] の外）。
 const ACCEPTANCE: &str = "acceptance-pointer";
+
+/// verify の欄の照らしの断りの名（preflight だけの名）: nextest の行が filter 語の候補を 2 つ以上持つ。
+const FILTERS: &str = "verify-filters";
+
+/// verify の欄の照らしの断りの名（preflight だけの名）: 行が宣言の common-verify の行と同じ。
+const COMMON: &str = "verify-common";
 
 /// 置いた bead の acceptance の照らし（閉じた 3 値）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +108,33 @@ fn acceptance_lines(found: Option<&Accepted>) -> (Option<String>, Option<String>
         Some(Accepted::Unmeasured(word)) => (Some(format!("acceptance=unmeasured:{word}")), None),
         Some(Accepted::Refused(why)) => (None, Some(format!("refuse={ACCEPTANCE}:{why}"))),
     }
+}
+
+/// verify の欄の照らし（受付の judge の外・契約の verify を 1 行ずつ）: 読み手 [`filter_words`] が filter 語の候補を 2 つ以上返す nextest の
+/// 行（読み手の [`crate::pipe::closure`] は最後の 1 語だけを filter 語に読み、前の語の歯を置き場と審査の対応の表に数えない）と、宣言の共通
+/// verify `common` の行と空白の並びの外で同じ行（gate は共通 verify を verify の行の前に撃つので同じ木で 2 度撃つ）を、断りの 1 行
+/// （`refuse=<名>:<理由>`）ずつにする。`design` は行の pointer の字。
+fn verify_gaps(design: &str, verify: &[String], common: &[String]) -> Vec<String> {
+    let same = |line: &str, other: &str| line.split_whitespace().eq(other.split_whitespace());
+    let mut found = Vec::new();
+    for line in verify {
+        let words = filter_words(line);
+        if let [.., last] = words.as_slice() {
+            if words.len() > 1 {
+                found.push(format!(
+                    "refuse={FILTERS}:行 {design} の verify {line:?} は nextest の filter の語を {} つ持つ（{}）— 器は最後の語 {last} だけを filter に読み、前の語の歯を置き場と審査の対応の表に数えない。1 行に filter の語を 1 つずつ割る",
+                    words.len(),
+                    words.join(" ")
+                ));
+            }
+        }
+        if common.iter().any(|other| same(line, other)) {
+            found.push(format!(
+                "refuse={COMMON}:行 {design} の verify {line:?} は宣言の common-verify の行と同じ — gate は共通 verify を verify の行の前に撃つので同じ木で 2 度撃つ。行の verify から外す"
+            ));
+        }
+    }
+    found
 }
 
 /// `pipe preflight`: judge だけを撃ち、事実と断りを stdout に並べる（台帳の読みは 1 回の出力を分ける区間の中）。
@@ -158,7 +193,9 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
     let judged = judge(&material);
     let widen = widen_lines(&repo, &sha, &pointer, &contract.write_set);
     let placed = present(args, PLACED).then(|| acceptance_of(bd, &repo, manifest, &bead, &pointer));
-    render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth), placed.as_ref())
+    let common = early.frozen.as_ref().map_or(&[][..], |(found, _)| found.common_verify());
+    let gaps = verify_gaps(&format!("{}#{}", pointer.path, pointer.id), &contract.verify, common);
+    render(&judged, state_dir.is_some(), (entrance, index), (widen, teeth), (placed.as_ref(), &gaps))
 }
 
 /// `widen=<項目>@<doc>#<行 id>:<file,…>`（設計 reverse-index.md の閉包の広がりの予想）: 自分の行の § の本文が語として名指す型形の項目を
@@ -227,10 +264,12 @@ fn tailed(denial: Denial) -> Outcome {
 /// judge の結果を 1 行 1 事実に描く。`measured` は置き場が在った（交差を撃った）か。`facts` は base の木で撃った周の欄 `entrance` と、
 /// 索引を作れない周の尾 `index=unavailable:<語>`（設計 reverse-index.md §7 (b)）。`tail` は閉包の広がりの行と、行が欄 `done-teeth` を持つか
 /// （`done-teeth=present|absent`・`design=` の行の次・設計 contract-source.md §66 行 bx）。`placed` は `--placed` の周の照らし（事実の行は
-/// `done-teeth=` の次・断りは judge の断りの後に 1 行で末尾の件数と rc に数える）。
-fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String>), tail: (Vec<String>, bool), placed: Option<&Accepted>) -> Outcome {
+/// `done-teeth=` の次・断りは judge の断りの後に 1 行で末尾の件数と rc に数える）と、verify の欄の照らしの断りの行（[`verify_gaps`]・
+/// acceptance の断りの後に並べ、末尾の件数と rc に数える）。
+fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String>), tail: (Vec<String>, bool), own: (Option<&Accepted>, &[String])) -> Outcome {
     let (entrance, index) = facts;
     let (widen, teeth) = tail;
+    let (placed, gaps) = own;
     let (accepted, refused) = acceptance_lines(placed);
     let mut out: Vec<String> = Vec::new();
     if let Some((design, section)) = &judged.design {
@@ -257,8 +296,9 @@ fn render(judged: &Judged, measured: bool, facts: (Option<String>, Option<String
     out.extend(index);
     out.extend(widen);
     out.extend(judged.denials.iter().map(refuse_line));
-    let count = judged.denials.len().saturating_add(usize::from(refused.is_some()));
+    let count = judged.denials.len().saturating_add(usize::from(refused.is_some())).saturating_add(gaps.len());
     out.extend(refused);
+    out.extend(gaps.iter().cloned());
     let broken = judged.denials.iter().any(|denial| denial.outcome.rc == RC_BROKEN);
     let (rc, tail) = match (count, broken) {
         (0, _) => (RC_OK, "ok".to_owned()),
@@ -287,7 +327,8 @@ fn listed(files: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{acceptance_lines, accepted, Accepted};
+    use super::{acceptance_lines, accepted, verify_gaps, Accepted};
+    use crate::pipe::closure::filter_words;
     use crate::pipe::table::parse_pointer;
     use crate::seat::ledger::Issue;
 
@@ -346,5 +387,55 @@ mod tests {
         }
         let (_, other) = acceptance_lines(Some(&judged(&[issue("s2-a", "design = docs/design/toy.md#b")], "s2-a")));
         assert!(other.unwrap_or_default().contains("design = docs/design/toy.md#b で --design docs/design/toy.md#a と違う"));
+    }
+
+    /// 共通 verify を `cargo run -q -p xtask -- check` の 1 行とした宣言で、行 `contracts/t.toml#a` の verify の列 `lines` を照らした断りの行。
+    fn gaps(lines: &[&str]) -> Vec<String> {
+        let verify: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
+        verify_gaps("contracts/t.toml#a", &verify, &["cargo run -q -p xtask -- check".to_owned()])
+    }
+
+    /// 通る見本: filter 語が 1 つの nextest の行（--manifest-path と -p と --test の引数・--no-tests=fail の旗は語に数えない・`--` の後ろの
+    /// 1 語も 1 つ）と nextest でない行は断らず、読み手は manifest の path を filter 語の候補に数えない。
+    #[test]
+    fn vpfgap_one_filter_lines_and_other_lines_pass() {
+        let one = "cargo nextest run --manifest-path s/crates/b/Cargo.toml -p b --test e2e --no-tests=fail vx_";
+        assert_eq!(filter_words(one), ["vx_"]);
+        assert_eq!(filter_words("cargo nextest run -p b --lib --no-tests=fail -- --exact vx_a"), ["vx_a"]);
+        assert!(filter_words("git apply --reverse --check p.patch").is_empty());
+        let lines = [
+            "git apply --reverse --check p.patch",
+            "cargo clippy --manifest-path s/crates/b/Cargo.toml -p b --all-targets --no-deps -- -D warnings",
+            one,
+            "cargo nextest run -p b --lib --no-tests=fail -- --exact vx_a",
+            "cargo nextest run -p b --test e2e --no-tests=fail",
+            "cargo run -q -p xtask -- check --fast",
+        ];
+        assert_eq!(gaps(&lines), Vec::<String>::new());
+    }
+
+    /// 断る見本（通る見本から 1 句ずつ外す）: filter 語が 2 つの行（`--` の前に 2 つ・前と後ろに 1 つずつ・後ろに 2 つ）は verify-filters の
+    /// 1 行で、行の pointer と verify の字と語の数と語の列と最後の語と直し方を名指す。共通 verify と同じ行（空白の並びの違いも同じ）は
+    /// verify-common の 1 行。断りは verify の行の順に並ぶ。
+    #[test]
+    fn vpfgap_two_filter_lines_and_the_common_line_are_refused_one_line_each() {
+        for (line, words) in [
+            ("cargo nextest run -p b --test e2e --no-tests=fail vx_ vy_", "vx_ vy_"),
+            ("cargo nextest run -p b --no-tests=fail vx_ -- --exact vy_a", "vx_ vy_a"),
+            ("cargo nextest run -p b --no-tests=fail -- --exact vx_a vy_b", "vx_a vy_b"),
+        ] {
+            let found = gaps(&[line]);
+            assert_eq!(found.len(), 1, "{line}: {found:?}");
+            let last = words.rsplit(' ').next().unwrap_or_default();
+            let want = format!("refuse=verify-filters:行 contracts/t.toml#a の verify {line:?} は nextest の filter の語を 2 つ持つ（{words}）— 器は最後の語 {last} だけ");
+            assert!(found.first().is_some_and(|got| got.starts_with(&want) && got.ends_with("1 行に filter の語を 1 つずつ割る")), "{found:?}");
+        }
+        for line in ["cargo run -q -p xtask -- check", "cargo  run -q -p xtask --  check"] {
+            let want = format!("refuse=verify-common:行 contracts/t.toml#a の verify {line:?} は宣言の common-verify の行と同じ — gate は共通 verify を verify の行の前に撃つので同じ木で 2 度撃つ。行の verify から外す");
+            assert_eq!(gaps(&[line]), [want]);
+        }
+        let both = gaps(&["cargo run -q -p xtask -- check", "cargo nextest run -p b --no-tests=fail vx_ vy_"]);
+        let names: Vec<&str> = both.iter().map(|line| line.split(':').next().unwrap_or_default()).collect();
+        assert_eq!(names, ["refuse=verify-common", "refuse=verify-filters"], "verify の行の順");
     }
 }

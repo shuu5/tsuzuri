@@ -19,7 +19,7 @@ use super::super::table::PromiseRow;
 use super::names::closed_type;
 use super::{closure, is_ident, is_ident_char, snapshot_name, surface_closure, test_region};
 use super::{texts_of, ClosureError, Source};
-use super::{CRATE_ROOT_STEMS, LIB_FLAG, MOD_STEM, NEXTEST_HEAD, PACKAGE_FLAGS, RS, SRC_DIR, TESTS_DIR, TEST_ATTR};
+use super::{CARGO_ARG_FLAGS, CRATE_ROOT_STEMS, LIB_FLAG, MOD_STEM, NEXTEST_HEAD, PACKAGE_FLAGS, RS, SRC_DIR, TESTS_DIR, TEST_ATTR};
 use super::{EXACT_FLAG, LIBTEST_ARG_FLAGS, LIBTEST_BARE_FLAGS, LIBTEST_SEPARATOR, PATH_SEPARATOR};
 use super::{TEST_FLAG, UNREAD_ARG_TARGET_FLAGS, UNREAD_BARE_TARGET_FLAGS};
 use std::collections::{BTreeMap, BTreeSet};
@@ -265,25 +265,40 @@ fn nextest_filter<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'
 /// nextest の行から (crate, filter 語, scope, 一致の型) を読む。書き出しが `cargo nextest run` でない行・filter 語（`-` で
 /// 始まらない末尾の語）の無い行は `None`。crate は `-p` / `--package` の次の語・無ければ core の crate。scope の旗
 /// （`--lib` / `--test <name>`）が丁度 1 つで読めない旗が無い行だけ狭く読み、他は [`Scope::Crate`]。引数を取る旗
-/// （`--test` と [`UNREAD_ARG_TARGET_FLAGS`]）は次の 1 語を消費し（filter 語に数えない）、行末なら `None`。`--` の後ろは
+/// （`--test` と [`UNREAD_ARG_TARGET_FLAGS`] と [`CARGO_ARG_FLAGS`]）は次の 1 語を消費し（filter 語に数えない）、行末なら `None`。`--` の後ろは
 /// libtest の引数で（§43 (2)）、[`LIBTEST_ARG_FLAGS`] は次の 1 語も消費し（行末なら `None`）、[`LIBTEST_BARE_FLAGS`] と
 /// 他の `-` の語は読み飛ばし、裸の語を filter 語にする（後ろが正本）。`--exact` が在れば [`Match::Exact`] で、filter 語は
 /// `::` で割った末尾の段になる。
 fn nextest_read<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'l str, Scope<'l>, Match)> {
+    let (krate, words, scope, kind) = nextest_words(line, core_crate)?;
+    Some((krate, kind.word(words.last()?), scope, kind))
+}
+
+/// 検証行 `line` の nextest の filter 語の候補の全部（出た順・[`nextest_read`] はこの最後の 1 語だけを filter 語に読む・nextest の形でない行と
+/// 読めない行は空）。preflight が 2 語以上の行を断る材料（`pipe/cli/preflight.rs` の verify の欄の照らし）。
+pub(crate) fn filter_words(line: &str) -> Vec<&str> {
+    nextest_words(line, "").map(|(_, words, _, _)| words).unwrap_or_default()
+}
+
+/// [`nextest_read`] の読みの本体: (crate, filter 語の候補の全部, scope, 一致の型)。[`CARGO_ARG_FLAGS`] は次の 1 語を消費する（scope は
+/// 替えない）。`--` の後ろの裸の語は前の語の後ろに続ける。
+fn nextest_words<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, Vec<&'l str>, Scope<'l>, Match)> {
     let mut words = line.split_whitespace();
     for head in NEXTEST_HEAD {
         if words.next() != Some(*head) {
             return None;
         }
     }
-    let (mut krate, mut filter, mut scopes, mut kind) = (core_crate, None, Vec::new(), Match::Substring);
+    let (mut krate, mut filters, mut scopes, mut kind) = (core_crate, Vec::new(), Vec::new(), Match::Substring);
     while let Some(word) = words.next() {
         if word == LIBTEST_SEPARATOR {
             let (after, exact) = libtest_filter(&mut words)?;
-            filter = after.or(filter);
+            filters.extend(after);
             kind = exact;
         } else if PACKAGE_FLAGS.contains(&word) {
             krate = words.next()?;
+        } else if CARGO_ARG_FLAGS.contains(&word) {
+            words.next()?;
         } else if word == LIB_FLAG {
             scopes.push(Scope::Lib);
         } else if word == TEST_FLAG {
@@ -296,30 +311,30 @@ fn nextest_read<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'l 
             // 読めない旗は「広い側の旗」として数える＝単独でも scope の旗と並んでも Crate へ倒れる。
             scopes.push(Scope::Crate);
         } else if !word.starts_with('-') {
-            filter = Some(word);
+            filters.push(word);
         }
     }
     let scope = match scopes.as_slice() {
         [one] => *one,
         _ => Scope::Crate,
     };
-    Some((krate, kind.word(filter?), scope, kind))
+    Some((krate, filters, scope, kind))
 }
 
-/// `--` の後ろの libtest の引数を行末まで読む（§43 (2)）: 末尾の裸の語（無ければ `None`）と一致の型。[`LIBTEST_ARG_FLAGS`]
+/// `--` の後ろの libtest の引数を行末まで読む（§43 (2)）: 裸の語の全部（出た順）と一致の型。[`LIBTEST_ARG_FLAGS`]
 /// は次の 1 語も消費し（行末なら読めない＝`None`）、[`LIBTEST_BARE_FLAGS`] と他の `-` の語は filter 語に数えない。
-fn libtest_filter<'l>(words: &mut impl Iterator<Item = &'l str>) -> Option<(Option<&'l str>, Match)> {
-    let (mut filter, mut kind) = (None, Match::Substring);
+fn libtest_filter<'l>(words: &mut impl Iterator<Item = &'l str>) -> Option<(Vec<&'l str>, Match)> {
+    let (mut filters, mut kind) = (Vec::new(), Match::Substring);
     while let Some(word) = words.next() {
         if LIBTEST_ARG_FLAGS.contains(&word) {
             words.next()?;
         } else if word == EXACT_FLAG {
             kind = Match::Exact;
         } else if !LIBTEST_BARE_FLAGS.contains(&word) && !word.starts_with('-') {
-            filter = Some(word);
+            filters.push(word);
         }
     }
-    Some((filter, kind))
+    Some((filters, kind))
 }
 
 /// `path` が crate `name` の file か（根のどれかの `<根><name>/` 配下）。

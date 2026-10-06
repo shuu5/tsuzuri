@@ -4,8 +4,11 @@
 //! `contracts.rs`・断りは `refuse.rs`・`s2-07l.351`）。
 //!
 //! 共有 helper は親（`tests/e2e/pipe.rs`）に在り `use super::*` で引く（歯の本文は移しただけ・`s2-07l.264`）。
+//! 子 module `vpfgap`（接頭辞 `vpfgap_`）は preflight の verify の欄の照らしの歯を置く。
 
 use super::*;
+
+mod vpfgap;
 
 /// 契約 (b) 以後、1 行に収まらない配列は**行**の側の欠陥である（契約 file は器が作る）。
 #[test]
@@ -3178,10 +3181,13 @@ pub(super) fn ixc_place(rows: &[String], decl: &str) -> IdxPlace {
     place
 }
 
-/// touches に型を持つ行（write-set は `write_set`）。
+/// 索引の toy の行の verify（宣言の共通 verify `git status` と違う行・preflight は共通 verify と同じ行を `verify-common` で断る）。
+const IXC_VERIFY: &str = r#"["git diff --stat"]"#;
+
+/// touches に型を持つ行（write-set は `write_set`・verify は [`IXC_VERIFY`]）。
 pub(super) fn ixc_row(id: &str, touches: &str, write_set: &[&str]) -> String {
     let quoted: Vec<String> = write_set.iter().map(|item| format!("\"{item}\"")).collect();
-    table_row(id, &[("touches", &format!("[\"{touches}\"]")), ("write-set", &format!("[{}]", quoted.join(", ")))])
+    table_row(id, &[("touches", &format!("[\"{touches}\"]")), ("write-set", &format!("[{}]", quoted.join(", "))), ("verify", IXC_VERIFY)])
 }
 
 /// touches を持たない行（索引を要しない行）。
@@ -3437,11 +3443,11 @@ pub(super) fn cf_place(rows: &[String], decl: &str) -> IdxPlace {
     place
 }
 
-/// 欄 code-facts を持つ行（write-set は型を宣言する file・`touches` は型を持つ行だけ）。
+/// 欄 code-facts を持つ行（write-set は型を宣言する file・`touches` は型を持つ行だけ・verify は [`IXC_VERIFY`]）。
 pub(super) fn cf_row(id: &str, claims: &[&str], touches: Option<&str>) -> String {
     let list = format!("[{}]", claims.iter().map(|claim| format!("\"{claim}\"")).collect::<Vec<_>>().join(", "));
     let typed = touches.map(|item| format!("[\"{item}\"]"));
-    let mut over = vec![("write-set", "[\"crates/toy/src/swatch.rs\"]"), ("code-facts", list.as_str())];
+    let mut over = vec![("write-set", "[\"crates/toy/src/swatch.rs\"]"), ("code-facts", list.as_str()), ("verify", IXC_VERIFY)];
     over.extend(typed.as_deref().map(|value| ("touches", value)));
     table_row(id, &over)
 }
