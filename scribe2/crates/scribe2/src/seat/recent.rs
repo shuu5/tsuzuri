@@ -67,7 +67,7 @@ impl Unmeasured {
 /// 行の種類（行頭の marker で弁別・**宣言順が出す順**）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
-    /// status が `in_progress` の bead の全件。
+    /// status が `in_progress` の bead の全件（各行の直後にその bead の定型の行〔[`MARKER_WIP_LINE`]〕）。
     Wip,
     /// 直近 [`WINDOW_SECS`] に更新された bead（新しい順・上位 [`BEAD_LIMIT`]・Wip に出た id は除く）。
     Bead,
@@ -116,6 +116,12 @@ pub const MARKER_CUT: &str = "[RECENT-CUT]";
 pub const MARKER_NONE: &str = "[RECENT-NONE]";
 /// 測れなかった種類の行の marker。
 pub const MARKER_UNMEASURED: &str = "[RECENT-UNMEASURED]";
+/// 作業中の bead の定型の行の行頭の印。
+pub const MARKER_WIP_LINE: &str = "[RECENT-WIP-LINE]";
+/// 定型の行の頭（出す順）。
+pub const WIP_HEADS: [&str; 4] = ["計画:", "次の手:", "優先:", "未決:"];
+/// 定型の行の字を切る幅（文字）。
+pub const WIP_LINE_WIDTH: usize = 200;
 
 /// 直近更新の窓（秒・表示の幅であって閾値ではない＝rules 行を足さない）。
 pub const WINDOW_SECS: u64 = 24 * 60 * 60;
@@ -141,9 +147,11 @@ pub struct Bead {
     pub title: String,
     /// 更新時刻（`updated_at` を UNIX 秒に読んだ値・読めない・無い周は `None`）。
     pub updated: Option<u64>,
+    /// notes の字（無いか字でなければ空）。
+    pub notes: String,
 }
 
-/// 台帳の JSON（`bd list --json` の配列）から id / status / title / updated_at だけを読む。配列でない・要素に
+/// 台帳の JSON（`bd list --json` の配列）から id / status / title / updated_at / notes だけを読む。配列でない・要素に
 /// `id` / `status` の文字列が無い → `None`（`ledger::issues_of` と同じ 2 key の必須・欠けた要素を読み飛ばさない）。
 pub fn beads_of(text: &str) -> Option<Vec<Bead>> {
     let tree = json_tree::parse(text).ok()?;
@@ -156,6 +164,7 @@ pub fn beads_of(text: &str) -> Option<Vec<Bead>> {
                 status: text_of("status")?,
                 title: text_of("title").unwrap_or_default(),
                 updated: node.get("updated_at").and_then(Tree::as_str).and_then(epoch_of_rfc3339),
+                notes: text_of("notes").unwrap_or_default(),
             })
         })
         .collect()
@@ -191,14 +200,32 @@ fn epoch_of_rfc3339(text: &str) -> Option<u64> {
 /// 自由文を 1 行に畳み（改行と制御文字を空白へ）幅で切る（切ったら末尾に `…`）。行頭の marker を題が
 /// 偽装しても行の種類は行頭の 1 語で決まる（題は 3 語目以降にしか現れない）。
 pub fn fold(text: &str) -> String {
+    fold_to(text, TITLE_WIDTH)
+}
+
+/// [`fold`] の幅を呼び手が渡す形。
+fn fold_to(text: &str, width: usize) -> String {
     let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
     let trimmed = flat.trim();
-    if trimmed.chars().count() <= TITLE_WIDTH {
+    if trimmed.chars().count() <= width {
         return trimmed.to_owned();
     }
-    let mut cut: String = trimmed.chars().take(TITLE_WIDTH).collect();
+    let mut cut: String = trimmed.chars().take(width).collect();
     cut.push('…');
     cut
+}
+
+/// notes の定型の行（pure）: [`WIP_HEADS`] の順に、頭の空白を落とした行がその頭で始まる最後の 1 行を選び、頭の後の字を
+/// [`WIP_LINE_WIDTH`] で畳んで `(頭, 字)` にする（字が空なら出さない・4 つの頭の外の行は読まない）。
+pub fn wip_state(notes: &str) -> Vec<(&'static str, String)> {
+    WIP_HEADS
+        .iter()
+        .filter_map(|head| {
+            let rest = notes.lines().filter_map(|line| line.trim_start().strip_prefix(head)).next_back()?;
+            let text = fold_to(rest, WIP_LINE_WIDTH);
+            (!text.is_empty()).then_some((*head, text))
+        })
+        .collect()
 }
 
 /// 時刻の字面（読めた周は UTC の `YYYY-MM-DDTHH:MM:SSZ`・読めない周は [`ABSENT`]）。
@@ -251,8 +278,13 @@ pub fn ledger_lines(beads: Result<&[Bead], Unmeasured>, now: u64) -> Vec<String>
     recent.sort_by(|a, b| b.updated.cmp(&a.updated).then_with(|| a.id.cmp(&b.id)));
     let wip_lines = wip
         .iter()
-        .map(|bead| format!("{} {} {} {}", Kind::Wip.marker(), bead.id, time_of(bead.updated), fold(&bead.title)))
-        .map(|line| line.trim_end().to_owned())
+        .flat_map(|bead| {
+            let head = format!("{} {} {} {}", Kind::Wip.marker(), bead.id, time_of(bead.updated), fold(&bead.title));
+            let state = wip_state(&bead.notes)
+                .into_iter()
+                .map(|(label, text)| format!("{MARKER_WIP_LINE} {} {label} {text}", bead.id));
+            std::iter::once(head.trim_end().to_owned()).chain(state)
+        })
         .collect();
     let bead_lines = recent
         .iter()

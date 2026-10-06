@@ -279,12 +279,12 @@ fn hook_session_recent_windows_and_orders_purely() {
     let midnight = vessel::fleet::epoch_of("2026-09-20T00:00:00Z").unwrap_or_default();
     let now = midnight + WINDOW_SECS;
     let beads = vec![
-        recent::Bead { id: "edge".into(), status: "open".into(), title: "端".into(), updated: Some(midnight) },
-        recent::Bead { id: "out".into(), status: "open".into(), title: "外".into(), updated: Some(midnight - 1) },
-        recent::Bead { id: "future".into(), status: "open".into(), title: "未来".into(), updated: Some(now + 1) },
-        recent::Bead { id: "b-now".into(), status: "closed".into(), title: "同時刻 b".into(), updated: Some(now) },
-        recent::Bead { id: "a-now".into(), status: "open".into(), title: "同時刻 a".into(), updated: Some(now) },
-        recent::Bead { id: "wip".into(), status: "in_progress".into(), title: "仕掛かり".into(), updated: None },
+        recent::Bead { id: "edge".into(), status: "open".into(), title: "端".into(), updated: Some(midnight), notes: String::new() },
+        recent::Bead { id: "out".into(), status: "open".into(), title: "外".into(), updated: Some(midnight - 1), notes: String::new() },
+        recent::Bead { id: "future".into(), status: "open".into(), title: "未来".into(), updated: Some(now + 1), notes: String::new() },
+        recent::Bead { id: "b-now".into(), status: "closed".into(), title: "同時刻 b".into(), updated: Some(now), notes: String::new() },
+        recent::Bead { id: "a-now".into(), status: "open".into(), title: "同時刻 a".into(), updated: Some(now), notes: String::new() },
+        recent::Bead { id: "wip".into(), status: "in_progress".into(), title: "仕掛かり".into(), updated: None, notes: String::new() },
     ];
     let lines = recent::ledger_lines(Ok(&beads), now);
     let expected = [
@@ -299,6 +299,79 @@ fn hook_session_recent_windows_and_orders_purely() {
         recent::ledger_lines(Err(Unmeasured::LedgerTimeout), now),
         ["[RECENT-UNMEASURED] kind=wip reason=ledger-timeout", "[RECENT-UNMEASURED] kind=bead reason=ledger-timeout"]
     );
+}
+
+/// 純関数の面（tmux を立てない）: in_progress の bead の `[RECENT-WIP]` の直後に、notes の定型の行（頭ごとに最後の 1 行・
+/// 頭の順・字が空の頭は出さない・200 字で畳む）が `[RECENT-WIP-LINE]` で付く。open の bead の notes は出ない。`beads_of` は
+/// 鍵 notes を読み、無い・字でない要素も読み飛ばさず空の字にする。
+#[test]
+fn hook_session_recent_wip_lines_carry_the_last_state_lines_purely() {
+    assert_eq!(recent::MARKER_WIP_LINE, "[RECENT-WIP-LINE]");
+    assert_eq!(recent::WIP_HEADS, ["計画:", "次の手:", "優先:", "未決:"]);
+    assert_eq!(recent::WIP_LINE_WIDTH, 200);
+    assert_eq!(recent::KINDS.len(), 6, "定型の行は新しい種類でない");
+    let parsed = recent::beads_of(
+        "[{\"id\":\"p\",\"status\":\"open\",\"notes\":\"計画: x\"},{\"id\":\"q\",\"status\":\"open\"},{\"id\":\"r\",\"status\":\"open\",\"notes\":3}]",
+    )
+    .unwrap_or_else(|| panic!("3 つとも読める"));
+    let notes: Vec<&str> = parsed.iter().map(|bead| bead.notes.as_str()).collect();
+    assert_eq!(notes, ["計画: x", "", ""], "鍵 notes の字・無い・字でない");
+    let now = vessel::fleet::epoch_of("2026-09-21T00:00:00Z").unwrap_or_default();
+    let long = "い".repeat(recent::WIP_LINE_WIDTH + 1);
+    let beads = vec![
+        recent::Bead {
+            id: "w-a".into(),
+            status: "in_progress".into(),
+            title: "作業 A".into(),
+            updated: None,
+            notes: "[席 2026-09-20T09:00Z 記帳]\n計画: 古い計画\n次の手: 手 1\n  計画: 新しい計画  \n未決:   \n優先: P-1\nメモ: 外".into(),
+        },
+        recent::Bead {
+            id: "w-b".into(),
+            status: "in_progress".into(),
+            title: "作業 B".into(),
+            updated: None,
+            notes: format!("次の手: {long}"),
+        },
+        recent::Bead { id: "o-1".into(), status: "open".into(), title: "開".into(), updated: None, notes: "計画: 出ない".into() },
+    ];
+    let expected = vec![
+        "[RECENT-WIP] w-a - 作業 A".to_owned(),
+        "[RECENT-WIP-LINE] w-a 計画: 新しい計画".to_owned(),
+        "[RECENT-WIP-LINE] w-a 次の手: 手 1".to_owned(),
+        "[RECENT-WIP-LINE] w-a 優先: P-1".to_owned(),
+        "[RECENT-WIP] w-b - 作業 B".to_owned(),
+        format!("[RECENT-WIP-LINE] w-b 次の手: {}…", "い".repeat(recent::WIP_LINE_WIDTH)),
+        "[RECENT-NONE] kind=bead".to_owned(),
+    ];
+    assert_eq!(recent::ledger_lines(Ok(&beads), now), expected);
+}
+
+/// 偽の bd が notes つきの in_progress の bead を返す周は、その `[RECENT-WIP]` の行の直後に `[RECENT-WIP-LINE]` が notes の
+/// 行の順に付き、`[RECENT-WIP]` の行に数えない。notes の無い in_progress の bead の直後には付かない。
+#[test]
+fn hook_session_recent_wip_lines_follow_their_bead() {
+    let place = role_place();
+    let path = stub_seat(&place, "recentwipline", Some("orchestrator"));
+    let with_notes = format!(
+        "{{\"id\":\"w-1\",\"status\":\"in_progress\",\"title\":\"作業 1\",\"notes\":{}}}",
+        json_lite::quote("計画: 段 S3 から\n次の手: 行を置く")
+    );
+    let without = "{\"id\":\"w-2\",\"status\":\"in_progress\",\"title\":\"作業 2\"}";
+    let bd = fake_bd_in(&place, "ledger-notes", &format!("[{with_notes},{without}]"));
+    let (_, recent) = brief_and_recent(&place, &path, &bd);
+    let first = recent.iter().position(|line| line.starts_with("[RECENT-WIP] w-1 ")).unwrap_or_else(|| panic!("w-1 の行: {recent:?}"));
+    assert_eq!(recent[first + 1], "[RECENT-WIP-LINE] w-1 計画: 段 S3 から", "{recent:?}");
+    assert_eq!(recent[first + 2], "[RECENT-WIP-LINE] w-1 次の手: 行を置く", "{recent:?}");
+    let wip = lines_of(&recent, Kind::Wip);
+    assert_eq!(wip.len(), 2, "[RECENT-WIP] の行は bead ごとの 1 行ずつ: {recent:?}");
+    assert!(wip[0].starts_with("[RECENT-WIP] w-1 ") && wip[1].starts_with("[RECENT-WIP] w-2 "), "{wip:?}");
+    let second = recent.iter().position(|line| line.starts_with("[RECENT-WIP] w-2 ")).unwrap_or_else(|| panic!("w-2 の行: {recent:?}"));
+    assert!(
+        recent.get(second + 1).is_none_or(|line| !line.starts_with(recent::MARKER_WIP_LINE)),
+        "notes の無い bead の直後に定型の行は無い: {recent:?}"
+    );
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
 }
 
 /// dirty の走査は worktree の上位 `DIRTY_SCAN_LIMIT` 本（anchor が先頭・残りは HEAD の commit が新しい順）に限り、

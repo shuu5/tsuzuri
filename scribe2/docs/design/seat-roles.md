@@ -219,6 +219,7 @@ C1 / C5（権能の値は行・裁定 id）・C1.2（生成文に手書きの規
 - 形: SessionStart の hook は §5 の指示文（11 行・**変えない**）の後ろに、事実の行だけの区間を 1 つ出す。指示文の行ではない（規範を持たない＝N2 に当たらない・穴も pointer も持たない typed な行）ので、§5 の雛形・xtask の検査・ADR-0045 §2 (3) の行数は動かない。登録の無い席・仕えない周（FR24）は今と同じく 0 byte。
 - 行の種類（行頭の marker で弁別・この順）:
   1. `[RECENT-WIP] <id> <更新時刻> <題>` — status が in_progress の bead の全件。
+     続く行 `[RECENT-WIP-LINE] <id> <頭> <字>` — その bead の notes の行のうち、頭の空白を除いた字が `計画:`・`次の手:`・`優先:`・`未決:` で始まる行を頭ごとに最後の 1 行だけこの頭の順に出す（字は 200 字で畳み、字が空の行は出さない・tsuzuri の memo t3-hub.92.5・持ち主の決め D5）。
   2. `[RECENT-BEAD] <id> <status> <更新時刻> <題>` — 直近 24 時間に更新された bead を更新の新しい順に上位 N 本（1. に出た id は除く）。
   3. `[RECENT-GIT] head=<短い sha> branch=<名> ahead=<n> behind=<n>` の 1 行と、`[RECENT-COMMIT] <短い sha> <subject>` を直近 N 本。
   4. `[RECENT-DIRTY] <worktree の repo 相対 path>` — 未 commit の変更を持つ worktree（anchor を含む）。
