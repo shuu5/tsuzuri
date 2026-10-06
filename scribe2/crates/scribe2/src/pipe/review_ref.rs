@@ -333,7 +333,7 @@ fn read_issues(repo: &Path, manifest: &Manifest) -> Result<Vec<Issue>, String> {
 /// 変わった行の全部の祖先の層を、lens より先に組んでから行ごとに審査する（祖先を組めない行が 1 本でも在れば何も撃たない）。
 fn judge_rows(ctx: &Ctx<'_>, rows: &[Row]) -> Result<(Vec<Decided>, Vec<String>), String> {
     let trees = (ctx.inputs.repo.as_path(), ctx.table);
-    let found: Vec<Result<Ancestry, String>> = rows.iter().map(|row| ancestry(trees, &ctx.inputs.state, ctx.issues, ctx.base, &row.key())).collect();
+    let found: Vec<Result<Ancestry, String>> = rows.iter().map(|row| ancestry(trees, (&ctx.inputs.state, ctx.manifest), ctx.issues, ctx.base, &row.key())).collect();
     let failed: Vec<String> = rows.iter().zip(&found).filter_map(|(row, found)| Some(format!("{}: {}", row.key(), found.as_ref().err()?))).collect();
     if !failed.is_empty() {
         return Err(format!("祖先の層を組めない（{}）", failed.join(" / ")));

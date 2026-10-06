@@ -30,7 +30,7 @@ mod step;
 pub(super) use args::{broken, flag, int_row, present, refused, repo_of, state_dir_of};
 // 列（`pipe::dispatch`）は受付の判定を**記帳せずに**撃つ（設計 dispatcher.md §3・C2 の 1 実装）。
 // 可視性を上げるだけで本文は不変——2 本目の判定を作らないための再輸出である。
-pub(in crate::pipe) use intake::{bead::bead_contract, capped, crossings, generated, judge, Denial, Material, Materials};
+pub(in crate::pipe) use intake::{bead::bead_contract, capped, crossings, generated, generated_from, judge, Denial, Material, Materials};
 pub(super) use run::turn_of;
 // 着地列の窓の判定（`fleet::wait` の `Completion::LandWindow` の観測と `pipe land-window` の 1 行が同じ 1 本を読む・
 // 設計 pipeline.md §19）。列の module は `pipe` の外へ見えないので、窓の口だけをここから見せる。

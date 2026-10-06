@@ -9,6 +9,7 @@
 //! 歯は e2e（`crates/scribe2-boundary/tests/e2e/notify.rs` の `pipe_notify_precheck_` と `seat/tick.rs` の
 //! `seat_tick_precheck_`）が外形で測る——新設の module に in-file の歯を置くと、base に `mod` 宣言ごと無く flip-check が断る。
 
+use super::super::bead::digest_of_design;
 use super::super::review::design_material;
 use super::super::table::{self, find_row, Pointer, END};
 use super::facts::Precheck;
@@ -105,7 +106,13 @@ fn body_of(input: &Input<'_>, (id, name, at): (&str, &str, &str), first: u64, hi
         let design = format!("{}#{}", hit.pointer.path, hit.pointer.id);
         let (bead, repo) = (hit.bead, input.repo.display());
         head.push_str(&format!("row={bead} pointer={design}\nfinding={bead} name={name} at={at} reason={}\n", hit.reason));
-        head.push_str(&format!("remeasure={bead} argv={NAME} pipe preflight --design {design} --bead {bead} --repo {repo}\n"));
+        // bead の契約の行は写しの path を --design に渡すと base の木を読み断られるので、bead の周で測り直す。
+        let argv = if digest_of_design(&design).is_some() {
+            format!("{NAME} pipe preflight --bead {bead} --repo {repo}")
+        } else {
+            format!("{NAME} pipe preflight --design {design} --bead {bead} --repo {repo}")
+        };
+        head.push_str(&format!("remeasure={bead} argv={argv}\n"));
         parts.push_str(&format!("{PART}toml {bead}\n{}\n", toml_of(input.repo, hit.pointer)));
         parts.push_str(&format!("{PART}section {bead}\n{}", design_material(input.repo, &design)));
     }

@@ -7,12 +7,13 @@
 
 use super::candidates::pointer_of;
 use super::{Input, Read, CLOSED};
+use crate::pipe::bead::{copy_pointer, copy_text, form_of, Form};
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::epoch_of;
 use crate::ledger::form::{is_memo, is_question};
 use crate::ledger::promotion::{self, Promotion, Scope};
 use crate::ledger::trigger::{self, Kind, Reason, Reading, Trigger, World};
-use crate::pipe::cli::generated;
+use crate::pipe::cli::{generated, generated_from};
 use crate::pipe::table::Pointer;
 use crate::seat::brief::pointer::Anchor;
 use std::io::ErrorKind;
@@ -213,7 +214,7 @@ fn triggers<'a>(
         read.issues.iter().filter(|issue| issue.status == CLOSED).filter_map(|issue| pointer_of(&issue.acceptance)).collect();
     // 開いた契約の write-set は同梱の引き金が 1 本でも在る周だけ導く（生成は候補と同じ材料の 1 回の読みを借りる）。
     let bundled = rows.iter().any(|(_, reading, _)| reading.readable().any(|found| matches!(found, Trigger::Bundle(_))));
-    let write_set = if bundled { open_write_set(input.repo, read) } else { Vec::new() };
+    let write_set = if bundled { open_write_set(input, read) } else { Vec::new() };
     let world = World { recurrences: 0, write_set: &write_set, closed: &closed, closed_pointers: &closed_pointers, now };
     rows.iter().map(|(id, reading, created)| (*id, trigger_of(reading, &World { recurrences: reading.recurrences, ..world }), *created)).collect()
 }
@@ -252,24 +253,32 @@ fn reason_word(reason: Reason) -> &'static str {
     }
 }
 
-/// 閉じていない契約（acceptance の設計 pointer が行を指す bead）の write-set の項目（材料を読めない行は数えない）。
-fn open_write_set(repo: &Path, read: &Read) -> Vec<String> {
+/// 閉じていない契約（acceptance の設計 pointer が行を指す bead か、bead の形の bead）の write-set の項目（材料を読めない行は数えない）。
+fn open_write_set(input: &Input<'_>, read: &Read) -> Vec<String> {
     let Ok(materials) = read.materials.as_ref() else {
         return Vec::new();
     };
+    let open = || read.issues.iter().filter(|issue| issue.status != CLOSED && !is_memo(issue) && !is_question(issue));
     let mut pointers: Vec<Pointer> = Vec::new();
-    for pointer in read
-        .issues
-        .iter()
-        .filter(|issue| issue.status != CLOSED && !is_memo(issue) && !is_question(issue))
-        .filter_map(|issue| pointer_of(&issue.acceptance))
-    {
+    for pointer in open().filter_map(|issue| pointer_of(&issue.acceptance)) {
         if !pointers.contains(&pointer) {
             pointers.push(pointer);
         }
     }
     // 契約の生成は受付と同じ 1 本（読めない行は write-set を持たない側に倒す）。
-    pointers.iter().filter_map(|pointer| generated(repo, pointer, materials).ok()).flat_map(|(contract, _)| contract.write_set).collect()
+    let mut items: Vec<String> =
+        pointers.iter().filter_map(|pointer| generated(input.repo, pointer, materials).ok()).flat_map(|(contract, _)| contract.write_set).collect();
+    // bead の契約は写しを置かない純な道で組む（`dispatch ls` も組むので、見る側は置き場に書かない）。
+    for issue in open().filter(|issue| form_of(&issue.acceptance) == Form::Bead) {
+        let (acceptance, body) = (issue.acceptance.as_str(), issue.description.as_str());
+        let (Ok(pointer), Ok(text)) = (copy_pointer(input.state_dir, &issue.id, acceptance, body), copy_text(&issue.id, acceptance, body)) else {
+            continue;
+        };
+        if let Ok((contract, _)) = generated_from(input.repo, &pointer, &text, materials) {
+            items.extend(contract.write_set);
+        }
+    }
+    items
 }
 
 /// 台帳の時刻の字（秒の小数を持つ形も許す）を UNIX 秒へ。

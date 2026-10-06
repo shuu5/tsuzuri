@@ -19,6 +19,7 @@ mod run_cap;
 mod terminal;
 mod waiting;
 mod vbdisp;
+mod vbpre;
 // flip-check: moved s2-07l.686
 
 use super::{

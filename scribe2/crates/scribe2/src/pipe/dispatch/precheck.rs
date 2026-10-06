@@ -6,7 +6,8 @@
 //! 1 回を借りる（形 4）。結果は `WaitReason`・起こす判定・受付のどれも読まない（**予想は通行証にしない**・形 6）。見る側
 //! （`dispatch ls`）は file を読むだけで、母集団の 1 関数も呼ばない（[`lines`]）。event kind は足さない（形 5）。
 
-use super::super::cli::{generated, judge, live, Denial, Material, Materials};
+use super::super::bead::{copy_pointer, digest_of_design, form_of, Form};
+use super::super::cli::{bead_contract, generated, judge, live, Denial, Material, Materials};
 use super::super::closure::Source;
 use super::super::contract::Contract;
 use super::super::gate::Verdict;
@@ -33,7 +34,7 @@ const LINE: &str = "[DISPATCH-PRECHECK]";
 
 /// 閉じていない契約の行 1 つ（形 1 (a)）。
 pub(super) struct Row {
-    /// 設計 pointer（列と同じ読み [`pointer_of`]）。
+    /// 契約の行の鍵の pointer（設計 pointer か bead の契約の写しの pointer・[`contract_of`]）。
     pub(super) pointer: Pointer,
     /// live な便（id・段・run dir の契約の写しの write-set〔読めない周は `None`〕）。
     pub(super) live: Option<(String, Stage, Option<Vec<String>>)>,
@@ -47,8 +48,20 @@ pub(super) struct Population {
     pub(super) reach: BTreeMap<String, Vec<String>>,
 }
 
+/// 契約の行の鍵の pointer: 設計 pointer が解ける bead はその pointer（[`pointer_of`]・両方の形を持つ bead もこの道）、解けず acceptance が
+/// bead の形の bead は受付の写しの pointer（[`copy_pointer`]・写しは書かない）。ほかは `None`。
+fn contract_of(state_dir: &Path, issue: &Issue) -> Option<Pointer> {
+    if let Some(pointer) = pointer_of(&issue.acceptance) {
+        return Some(pointer);
+    }
+    match form_of(&issue.acceptance) {
+        Form::Bead => copy_pointer(state_dir, &issue.id, &issue.acceptance, &issue.description).ok(),
+        _ => None,
+    }
+}
+
 /// 母集団と到達の 1 関数（形 1）: 同じ周の台帳の全件と置き場の run の列から、(a) 閉じていない契約の行（closed でない ∧ memo でも
-/// 台帳の問いでもない〔§31〕 ∧ acceptance の設計 pointer が列と同じ [`pointer_of`] で解ける bead・live な便の在る bead はその run dir の契約の
+/// 台帳の問いでもない〔§31〕 ∧ 設計 pointer が列と同じ [`pointer_of`] で解けるか bead の形の bead〔[`contract_of`]〕・live な便の在る bead はその run dir の契約の
 /// 写しの write-set つき）と、(b) blocks の推移の到達（[`is_blocking`] の依存だけ＝`parent-child` は数えず closed で止まる・
 /// 1 度訪ねた bead で止まり循環で回らない）を返す。live でない行の write-set は呼び手が自分の材料で [`generated`] を撃って決める。
 pub(super) fn population(issues: &[Issue], state_dir: &Path, state: &State) -> Population {
@@ -57,7 +70,7 @@ pub(super) fn population(issues: &[Issue], state_dir: &Path, state: &State) -> P
         .iter()
         .filter(|issue| issue.status != CLOSED && !is_memo(issue) && !is_question(issue))
         .filter_map(|issue| {
-            let row = Row { pointer: pointer_of(&issue.acceptance)?, live: live_of(state_dir, state, &issue.id) };
+            let row = Row { pointer: contract_of(state_dir, issue)?, live: live_of(state_dir, state, &issue.id) };
             Some((issue.id.clone(), row))
         })
         .collect();
@@ -175,6 +188,10 @@ struct Walk<'a> {
     table: &'a Path,
     /// 置き場。
     state_dir: &'a Path,
+    /// 規則（bead の契約の生成の上限を読む）。
+    manifest: &'a Manifest,
+    /// 同じ周に読んだ台帳の全件。
+    issues: &'a [Issue],
     /// 母集団と到達。
     population: Population,
     /// 設計 pointer の行ごとの bead（memo でも台帳の問いでもない全件）。
@@ -185,14 +202,16 @@ struct Walk<'a> {
 
 impl<'a> Walk<'a> {
     /// 台帳と置き場の状態から読む。
-    fn new(repo: &'a Path, table: &'a Path, state_dir: &'a Path, issues: &'a [Issue], state: &State) -> Self {
+    fn new(trees: (&'a Path, &'a Path), state_dir: &'a Path, manifest: &'a Manifest, issues: &'a [Issue], state: &State) -> Self {
         let mut beads: BTreeMap<String, Vec<&Issue>> = BTreeMap::new();
         for issue in issues.iter().filter(|issue| !is_memo(issue) && !is_question(issue)) {
-            if let Some(pointer) = pointer_of(&issue.acceptance) {
+            let pointer = if issue.status == CLOSED { pointer_of(&issue.acceptance) } else { contract_of(state_dir, issue) };
+            if let Some(pointer) = pointer {
                 beads.entry(row_key(&pointer)).or_default().push(issue);
             }
         }
-        Self { repo, table, state_dir, population: population(issues, state_dir, state), beads, docs: RefCell::default() }
+        let population = population(issues, state_dir, state);
+        Self { repo: trees.0, table: trees.1, state_dir, manifest, issues, population, beads, docs: RefCell::default() }
     }
 
     /// 行を指す bead が全部 closed か（bead が 1 本以上在る行だけ）。
@@ -210,6 +229,9 @@ impl<'a> Walk<'a> {
 
     /// 行の表の depends（同じ doc の行・読めない周は理由）。
     fn depends_of(&self, row: &str) -> Result<Vec<String>, String> {
+        if digest_of_design(row).is_some() {
+            return Ok(Vec::new());
+        }
         let pointer = parse_pointer(row).map_err(|err| format!("{row} は設計 pointer の形でない（{}）", err.reason()))?;
         let mut docs = self.docs.borrow_mut();
         let table = docs.entry(pointer.path.clone()).or_insert_with(|| {
@@ -255,18 +277,23 @@ impl<'a> Walk<'a> {
         Ok(())
     }
 
-    /// 祖先ごとの鍵の語（`<bead>=<状態の語>`・bead の無い祖先は行の字・着地済みは書かない＝base の HEAD が鍵に入る）。
+    /// 祖先ごとの鍵の語（`<bead>=<状態の語>`・bead の契約の祖先は `<bead>@<16 桁>=<状態の語>`・bead の無い祖先は行の字・着地済みは書かない
+    /// ＝base の HEAD が鍵に入る）。
     fn words(&self, row: &str) -> Vec<String> {
         let ancestors = self.closure(row).unwrap_or_default();
         let word = |id: &String| match self.rep(id) {
-            Some((bead, found)) => format!("{bead}={}", state_word(self.repo, self.state_dir, found)),
+            Some((bead, found)) => {
+                let head = digest_of_design(id).map_or_else(|| bead.to_owned(), |digest| format!("{bead}@{digest}"));
+                format!("{head}={}", state_word(self.repo, self.state_dir, found))
+            }
             None => format!("{id}=declared"),
         };
         ancestors.iter().filter(|id| !self.landed(id)).map(word).collect()
     }
 
     /// 祖先 1 つの状態と層を決めて memo に置く（決まらない周は `None`）。着地済みは空の層。live な便は写しの write-set か、Gated
-    /// PASS なら実物。便の無い行は自分の祖先を重ねた予想の base で [`generated`] を撃った契約の write-set。先に `None` を置くので
+    /// PASS なら実物。便の無い行は自分の祖先を重ねた予想の base で契約を組んだ write-set（bead の在る行は [`bead_contract`]・表の行は
+    /// [`generated`]）。先に `None` を置くので
     /// 循環は決まらない側に倒れて回らない。
     fn resolve(&self, base: &Materials, row: &str, memo: &mut BTreeMap<String, Option<(Standing, Layer)>>) {
         if memo.contains_key(row) {
@@ -292,7 +319,11 @@ impl<'a> Walk<'a> {
         }
         let found: Option<Vec<&Layer>> = ancestors.iter().map(|id| memo.get(id)?.as_ref().map(|(_, layer)| layer)).collect();
         let (materials, _) = overlay(base, &found?);
-        generated(self.table, &pointer, &materials).ok().map(|(contract, _)| (Standing::Declared, Layer::Declared(contract.write_set)))
+        let made = match self.rep(row) {
+            Some((bead, _)) => bead_contract((self.table, self.state_dir), self.manifest, bead, self.issues, &materials),
+            None => generated(self.table, &pointer, &materials),
+        };
+        made.ok().map(|(contract, _)| (Standing::Declared, Layer::Declared(contract.write_set)))
     }
 
     /// 行の祖先ごとの（行・状態・当てる層）と basis（依存の順・祖先の層か契約の生成が決まらない周は理由）。
@@ -321,11 +352,17 @@ impl<'a> Walk<'a> {
 /// 祖先の層の口（設計 row-review.md §3 の口 (G)・事前審査の予想はこの口の上に載る）: 行 `row`（`<doc>#<行 id>`）の祖先ごとの
 /// （行・状態・当てる層）の列と basis。祖先は表の depends を推移でたどった同じ doc の行と、行を指す bead が在ればその台帳の blocks の
 /// 祖先。`repo` は Gated PASS の便の worktree を引く anchor、`table` は表の depends と便の無い祖先の契約の生成が HEAD から読む木
-/// （事前審査は 2 つに同じ path を渡す）。`base` は 1 周に 1 回読んだ材料で、口の中で読み直さない。表か bead の pointer を読めない周・
+/// （事前審査は 2 つに同じ path を渡す）。`manifest` は bead の契約の祖先を組む上限の rules。`base` は 1 周に 1 回読んだ材料で、口の中で読み直さない。表か bead の pointer を読めない周・
 /// 祖先の層を決められない周は理由。
-pub(in crate::pipe) fn ancestry(trees: (&Path, &Path), state_dir: &Path, issues: &[Issue], base: &Materials, row: &str) -> Result<Ancestry, String> {
+pub(in crate::pipe) fn ancestry(
+    trees: (&Path, &Path),
+    (state_dir, manifest): (&Path, &Manifest),
+    issues: &[Issue],
+    base: &Materials,
+    row: &str,
+) -> Result<Ancestry, String> {
     let state = current(state_dir).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / "))?;
-    Walk::new(trees.0, trees.1, state_dir, issues, &state).ancestry(base, row)
+    Walk::new(trees, state_dir, manifest, issues, &state).ancestry(base, row)
 }
 
 /// 予想に重ねる層（着地済みの祖先は base に在るので重ねない）。
@@ -411,15 +448,17 @@ pub(in crate::pipe) struct Finding {
 fn layers_of(ctx: &Ctx<'_, '_>, row: &Row) -> Option<Vec<Ancestor>> {
     let key = row_key(&row.pointer);
     let repo = ctx.input.repo;
-    ancestry((repo, repo), ctx.input.state_dir, ctx.issues, ctx.base, &key).ok().map(|(found, _)| found)
+    ancestry((repo, repo), (ctx.input.state_dir, ctx.input.manifest), ctx.issues, ctx.base, &key).ok().map(|(found, _)| found)
 }
 
 /// 待ち行 1 つを予想の base で撃つ（形 2）: 祖先の重ね方が 1 つでも決まらなければ `None`（`unmeasured:forecast`）。
-/// 撃つのは [`generated`] と [`judge`]（置き場なし・lock の前の読みなし＝列の候補の `blocker` と同じ形）だけで、置き場の要る
+/// 撃つのは [`bead_contract`] と [`judge`]（lock の前の読みなし＝列の候補の `blocker` と同じ形）だけで、置き場の要る
 /// 判定と base の木の実走は撃たない。
-fn judged(ctx: &Ctx<'_, '_>, row: &Row) -> Option<Vec<Finding>> {
+fn judged(ctx: &Ctx<'_, '_>, bead: &str, row: &Row) -> Option<Vec<Finding>> {
     let found = layers_of(ctx, row)?;
-    Some(forecast_findings(ctx.input.repo, ctx.input.manifest, ctx.base, &row.pointer, &found).1)
+    let (repo, state_dir) = (ctx.input.repo, ctx.input.state_dir);
+    let make = |materials: &Materials| bead_contract((repo, state_dir), ctx.input.manifest, bead, ctx.issues, materials);
+    Some(forecast_by(repo, ctx.input.manifest, ctx.base, &found, make).1)
 }
 
 /// 予想の上の機械の検査の口（設計 row-review.md §3 の口 (I)・事前審査の待ち行の判定はこの口の上に載る）: 着地でない祖先の層を
@@ -433,8 +472,19 @@ pub(in crate::pipe) fn forecast_findings(
     pointer: &Pointer,
     ancestors: &[Ancestor],
 ) -> (Option<(Contract, String)>, Vec<Finding>) {
+    forecast_by(table, manifest, base, ancestors, |materials| generated(table, pointer, materials))
+}
+
+/// [`forecast_findings`] の本文: 契約の生成を引数 `make`（予想の材料から契約と契約の file の字か断りを返す）にした形。
+fn forecast_by(
+    table: &Path,
+    manifest: &Manifest,
+    base: &Materials,
+    ancestors: &[Ancestor],
+    make: impl FnOnce(&Materials) -> Result<(Contract, String), Denial>,
+) -> (Option<(Contract, String)>, Vec<Finding>) {
     let (materials, moving) = overlay(base, &applied(ancestors));
-    let (made, denials) = match generated(table, pointer, &materials) {
+    let (made, denials) = match make(&materials) {
         Err(denial) => (None, vec![denial]),
         Ok(made) => {
             let material = Material { repo: table, manifest, contract: &made.0, state_dir: None, bead: "", materials: &materials, early: None };
@@ -543,7 +593,7 @@ pub(super) fn round(input: &Input<'_>, turn: &Turn, issues: &[Issue], base: Opti
     let (Some(base), Ok(state), Some(head)) = (base, current(input.state_dir), head_of(input.repo)) else {
         return;
     };
-    let walk = Walk::new(input.repo, input.repo, input.state_dir, issues, &state);
+    let walk = Walk::new((input.repo, input.repo), input.state_dir, input.manifest, issues, &state);
     let population = &walk.population;
     let waiting: Vec<&str> = waiting_of(turn).into_iter().filter(|bead| population.rows.contains_key(*bead)).collect();
     let dir = dir_of(input.state_dir);
@@ -560,12 +610,13 @@ pub(super) fn round(input: &Input<'_>, turn: &Turn, issues: &[Issue], base: Opti
             continue;
         };
         let words = walk.words(&row_key(&row.pointer));
-        let key = format!("head:{head} rules:{rules} ancestors:{}", words.join(","));
+        let copy = digest_of_design(&row_key(&row.pointer)).map(|digest| format!(" copy:{digest}")).unwrap_or_default();
+        let key = format!("head:{head} rules:{rules} ancestors:{}{copy}", words.join(","));
         let previous = read(&dir.join(bead));
         if previous.as_ref().is_some_and(|kept| kept.key == key) {
             continue;
         }
-        let findings = judged(&ctx, row);
+        let findings = judged(&ctx, bead, row);
         write(&dir, bead, &key, findings.as_deref(), previous.as_ref());
     }
     // 周の終わりに確定の finding を根で束ねる（行 y・設計 §27 形 1）。
@@ -590,13 +641,14 @@ pub(super) fn lines(input: &Input<'_>, turn: &Turn) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ancestry, forecast_findings, population, Layer, Path, Standing, State};
+    use super::{ancestry, contract_of, forecast_findings, population, Layer, Path, Standing, State};
     use crate::ledger::form::{MEMO_LABEL, QUESTION_LABEL};
+    use crate::pipe::bead::{copy_path, digest};
     use crate::pipe::cli::Materials;
     use crate::pipe::fixture::scratch;
     use crate::pipe::refuse::Certainty;
     use crate::pipe::row_review::Basis;
-    use crate::pipe::table::parse_pointer;
+    use crate::pipe::table::{parse_pointer, Pointer};
     use crate::pipe::{git_line, git_ok};
     use crate::rules::manifest::Manifest;
     use crate::seat::ledger::{Dep, Issue};
@@ -630,6 +682,27 @@ mod tests {
     #[test]
     fn precheck_intake_label_memo_is_not_a_row() {
         assert_eq!(rows_and_reach(MEMO_LABEL).0, ["c", "p"]);
+    }
+
+    /// bead の契約の見本（行 c・欄 section と goal と depends を持たない導出の形）。
+    const ROW_C: &str = "[[contract]]\nid = \"c\"\ntitle = \"行 c\"\nreq = [\"FR1\"]\nwrite-set = [\"src/fresh.rs\"]\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"c が通る\"\n";
+
+    /// 節 39 の見本の bead の形の bead と設計 pointer の行の bead を読み分ける: 設計 pointer の行はその pointer・bead の形は path が
+    /// copy_path の値で id が c の pointer・両方の形は設計 pointer・どちらも無い bead と欄 depends を持つ bead の形は None。
+    #[test]
+    fn vbpre_contract_of_reads_the_two_forms() {
+        let state = Path::new("/state");
+        let body = "本文。";
+        let with_body = |acceptance: &str| Issue { description: body.to_owned(), ..open("s2-vb.c", &[], acceptance, &[]) };
+        let design = Pointer { path: "docs/design/x.md".to_owned(), id: "a".to_owned() };
+        assert_eq!(contract_of(state, &with_body("design = docs/design/x.md#a")), Some(design.clone()));
+        let path = copy_path(state, "s2-vb.c", &digest(ROW_C, body)).display().to_string();
+        assert_eq!(contract_of(state, &with_body(ROW_C)), Some(Pointer { path, id: "c".to_owned() }), "bead の形は写しの pointer");
+        let both = format!("{ROW_C}design = docs/design/x.md#a\n");
+        assert_eq!(contract_of(state, &with_body(&both)), Some(design), "両方の形は設計 pointer");
+        assert_eq!(contract_of(state, &with_body("字だけの受け入れ")), None, "どちらの形も無い");
+        let depends = format!("{ROW_C}depends = [\"a\"]\n");
+        assert_eq!(contract_of(state, &with_body(&depends)), None, "欄 depends を持つ bead の形は写しを組めない");
     }
 
     /// 設計 doc の 1 行（`y` は `+src/fresh.rs` を宣言し、`x` はその file を素で持って表の depends で `y` に繋がる）。
@@ -682,7 +755,7 @@ mod tests {
         };
         let (anchor, table) = toy_repo("mouths-g");
         let (base, state) = (toy_base(&table, &manifest), scratch("mouths-g-state"));
-        let found = ancestry((&anchor, &table), &state, &[], &base, "docs/design/toy.md#x");
+        let found = ancestry((&anchor, &table), (&state, &manifest), &[], &base, "docs/design/toy.md#x");
         let Ok((layers, basis)) = found else {
             panic!("表の木に行 x と y が在る: {:?}", found.err());
         };
@@ -692,7 +765,7 @@ mod tests {
         };
         assert_eq!((id.as_str(), write_set.as_slice()), ("docs/design/toy.md#y", ["+src/fresh.rs".to_owned()].as_slice()));
         assert!(*standing == Standing::Declared, "未着地の祖先は declared");
-        let blind = ancestry((&anchor, &anchor), &state, &[], &base, "docs/design/toy.md#x");
+        let blind = ancestry((&anchor, &anchor), (&state, &manifest), &[], &base, "docs/design/toy.md#x");
         assert!(blind.as_ref().is_err_and(|reason| reason.contains("行 x が無い")), "表の木に C1 を渡すと組めない: {:?}", blind.err());
     }
 
@@ -707,7 +780,7 @@ mod tests {
         let Ok(pointer) = parse_pointer("docs/design/toy.md#x") else {
             panic!("設計 pointer");
         };
-        let Ok((layers, _)) = ancestry((&anchor, &table), &state, &[], &base, "docs/design/toy.md#x") else {
+        let Ok((layers, _)) = ancestry((&anchor, &table), (&state, &manifest), &[], &base, "docs/design/toy.md#x") else {
             panic!("祖先を組める");
         };
         let (made, with) = forecast_findings(&table, &manifest, &base, &pointer, &layers);
