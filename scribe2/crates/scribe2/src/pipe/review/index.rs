@@ -11,14 +11,14 @@
 //! 契約表の行・表の検査の断り・審査の材料の型は組まない: 表の行は `read_table` の返りを field で読む。
 
 use super::base::ITEM_HEAD;
-use super::{material_file, section_text, INDEX_FILE};
+use super::{material_file, section_text, Review, INDEX_FILE};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_OK};
 use crate::fleet::store::LockPolicy;
 use crate::invocation::Invocation;
 use crate::pipe::cli::{broken, flag, refused, repo_of, state_dir_of};
 use crate::pipe::closure::section_symbols;
 use crate::pipe::declaration::{TablePlaces, DECL_FILE};
-use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Status};
+use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Made, Status};
 use crate::pipe::git_bytes;
 use crate::pipe::index::flat::{descriptor_names, query, Resolution, Row, Site};
 use crate::pipe::table::{design_docs, read_table};
@@ -421,16 +421,23 @@ pub(in crate::pipe) fn render(found: &Counted) -> String {
     lines.join("\n")
 }
 
-/// 行 `pointer` の表（touches と節の名指しを項目にし・欄 write-set で外の印を付ける・欄の無い行は項目の前に `write-set=derived`）。
-pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String, String> {
-    let line = ctx.tables.lines.iter().find(|line| line.pointer == pointer).ok_or_else(|| format!("行 {pointer} を契約表から引けない"))?;
-    let prose = ctx.tables.prose(line);
+/// 行 `pointer` の契約表の行と項目（touches と節の名指し・重複を除いた順）。表の描きと審査の材料の組みの要否が同じこの 1 本で行と
+/// 項目を読む（欄 `patch` の差が替える定義は索引の表で引くので、組みの要否は欄を持つ行を項目を持つ行と読む）。
+fn row_items<'t>(tables: &'t Tables, pointer: &str) -> Result<(&'t Line, Vec<String>), String> {
+    let line = tables.lines.iter().find(|line| line.pointer == pointer).ok_or_else(|| format!("行 {pointer} を契約表から引けない"))?;
+    let prose = tables.prose(line);
     let mut items = line.touches.clone();
     for name in section_symbols(&[prose.as_str()], &line.touches) {
         if !items.contains(&name) {
             items.push(name);
         }
     }
+    Ok((line, items))
+}
+
+/// 行 `pointer` の表（touches と節の名指しを項目にし・欄 write-set で外の印を付ける・欄の無い行は項目の前に `write-set=derived`）。
+pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String, String> {
+    let (line, items) = row_items(ctx.tables, pointer)?;
     let marks = (!line.write_set.is_empty()).then_some(line.write_set.as_slice());
     let scope = Scope { own: pointer, marks };
     let mut blocks: Vec<String> = marks.is_none().then(|| "write-set=derived".to_owned()).into_iter().collect();
@@ -475,25 +482,53 @@ fn word_of(state: &Status) -> Option<String> {
 }
 
 /// 審査の材料 index.txt の本文（undeclared の repo は `None`＝file を置かない・ready でない周は `index=unavailable:<語>` の 1 行）。
-fn material(state_dir: &Path, repo: &Path, head: Option<&str>, design: &str) -> Option<String> {
+/// 項目（欄 `patch` の差が替える定義を含む）を持つ行は、状態が absent か building の周に組み立ての 1 本（[`assembled`]）で索引を得てから描く。項目を持たない行は撃たず、
+/// 表を空の列にして同じ描きの 1 本で描く（ready の周と同じ本文）。half と failed の周は撃たない（failed の鍵を審査ごとに撃ち直さない）。
+fn material(place: (&Path, &Path), head: Option<&str>, design: &str, policy: LockPolicy) -> Option<String> {
+    let (state_dir, repo) = place;
     let Some(sha) = head else {
         return Some("index=unavailable:tree".to_owned());
     };
-    let rows = match status(state_dir, repo, sha) {
+    let found = status(state_dir, repo, sha);
+    let unavailable = |state: &Status| Some(format!("index=unavailable:{}", word_of(state).unwrap_or_default()));
+    match &found {
         Status::Undeclared => return None,
-        Status::Ready(rows) => rows,
-        other => return Some(format!("index=unavailable:{}", word_of(&other).unwrap_or_default())),
-    };
+        Status::Half(_) | Status::Failed(_) => return unavailable(&found),
+        Status::Absent | Status::Building | Status::Ready(_) => {}
+    }
     let Ok(tables) = Tables::load(repo, sha) else {
         return Some("index=unavailable:table".to_owned());
+    };
+    let Ok((line, items)) = row_items(&tables, design) else {
+        return Some("index=unavailable:row".to_owned());
+    };
+    let rows = match found {
+        Status::Ready(rows) => rows,
+        _ if items.is_empty() && line.patch.is_none() => Vec::new(),
+        _ => match assembled(place, sha, policy) {
+            Status::Ready(rows) => rows,
+            other => return unavailable(&other),
+        },
     };
     let ctx = Ctx { rows: &rows, repo, sha, tables: &tables };
     Some(row_report(&ctx, design).unwrap_or_else(|_| "index=unavailable:row".to_owned()))
 }
 
-/// 契約の審査が材料の dir に index.txt を置く（既存の材料を置いた後・`design` は契約の design の pointer・`head` は審査の木の commit）。
-pub(in crate::pipe) fn keep(dir: &Path, place: (&Path, &Path), head: Option<&str>, design: &str) -> Result<(), String> {
-    let Some(body) = material(place.0, place.1, head, design) else {
+/// 組み立ての 1 本で索引を得て（撃つか撃ち中の持ち主の終わりを待つ）状態を読み直す。rules は埋め込みの値（裏の起こしの子と同じ・
+/// 列の写し `--rules` は gate の上限の差し替え口で、組み立てが読む 2 行を持たない）。
+fn assembled(place: (&Path, &Path), sha: &str, policy: LockPolicy) -> Status {
+    let Ok(manifest) = Manifest::embedded() else {
+        return Status::Failed("no-rule".to_owned());
+    };
+    if let Assembled::Made(Made { how: How::Failed(word), .. }) = assemble(place.0, place.1, sha, &manifest, policy) {
+        return Status::Failed(word);
+    }
+    status(place.0, place.1, sha)
+}
+
+/// 契約の審査が材料の dir に index.txt を置く（既存の材料を置いた後・`head` は審査の木の commit）。
+pub(in crate::pipe) fn keep(dir: &Path, entry: &Review<'_>, head: Option<&str>) -> Result<(), String> {
+    let Some(body) = material((entry.state_dir, entry.repo), head, &entry.contract.design, entry.policy) else {
         return Ok(());
     };
     let path = dir.join(INDEX_FILE);

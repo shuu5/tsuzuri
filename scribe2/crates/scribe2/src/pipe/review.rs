@@ -45,8 +45,8 @@
 //! [`OUTSIDE_FILE`] として置く（約束の行と同じ形）。lens は `{outside}` の穴を名ごとに cap の残りで埋める（[`outside_block`]）。
 //!
 //! **逆引きの表**（設計 reverse-index.md §6・§7 (a)・行 c）: 子 module `index` が審査の木の commit の索引から契約の design の行の表を組み、
-//! 状態が ready でない周は 1 行で、材料の [`INDEX_FILE`] として既存の材料の後に置く（undeclared の repo は置かない）。lens は
-//! `{index}` の穴を [`index_block`] で outside の後ろの残りに項目ごとに収める。
+//! 状態が ready でない周は 1 行で、材料の [`INDEX_FILE`] として既存の材料の後に置く（undeclared の repo は置かない）。項目を持つ行は索引が absent
+//! か building の周に組み立ての 1 本で索引を得てから組み（項目の無い行は撃たない）、lens は `{index}` の穴を [`index_block`] で outside の後ろの残りに項目ごとに収める。
 
 mod base;
 pub(in crate::pipe) mod index;
@@ -332,11 +332,10 @@ pub fn review(entry: &Review<'_>) -> Outcome {
         Err(reason) => return broken(reason),
     };
     // 逆引きの表は既存の材料を置いた後に置く（undeclared の repo は file を置かない・§7 (a)）。
-    if let Err(reason) = index::keep(&dir, (entry.state_dir, entry.repo), head.as_deref(), &entry.contract.design) {
+    if let Err(reason) = index::keep(&dir, entry, head.as_deref()) {
         return broken(reason);
     }
-    // 行の審査の記録を写せる周（行の digest・材料の鍵・code の木の鍵・lens の版が同じ actual の PASS・設計 row-review.md §5）は
-    // lens を撃たない（木も作らない）。
+    // 行の審査の記録を写せる周（行の digest・材料の鍵・code の木の鍵・lens の版が同じ actual の PASS・設計 row-review.md §5）は lens を撃たない（木も作らない）。
     let reused = match (entry.lens, head.as_deref()) {
         (LensSource::Cmd(cmd), Some(sha)) => row_reused(entry, (&source, &dir), cmd, sha),
         _ => None,

@@ -2693,8 +2693,8 @@ fn gx_others(dir: &Path) -> Vec<String> {
 }
 
 /// (d) 偽の lens で受付から審査まで通した便の材料の dir の index.txt は、同じ ref の `show --row` の出力と byte で等しい（write-set は表の行の欄から
-/// 読む＝欄を持たず tests の欄で導く行は契約の写しが導出値の write-set を持っても `write-set=derived` の 1 行）。索引を作らない周は
-/// `index=unavailable:absent` の 1 行・撃ち中の持ち主が生きている周は `building`・宣言の無い repo は file を置かず、材料の file の列は今のまま。
+/// 読む＝欄を持たず tests の欄で導く行は契約の写しが導出値の write-set を持っても `write-set=derived` の 1 行）。宣言の無い repo は file を置かず、
+/// 材料の file の列は今のまま。索引が absent か building の周の審査は接頭辞 `vixrev_` の歯が測る。
 #[test]
 fn pipe_index_show_material_equals_the_show_row_output_and_says_why_when_unavailable() {
     let place = gx_place(true);
@@ -2715,32 +2715,139 @@ fn pipe_index_show_material_equals_the_show_row_output_and_says_why_when_unavail
     gx_check_material_unavailable(&names);
 }
 
-/// (d) の索引を作らない周（absent）・撃ち中の持ち主が生きている周（building）・宣言の無い repo（file を置かず材料の列は今のまま）。
+/// (d) の宣言の無い repo（file を置かず材料の列は今のまま）。
 fn gx_check_material_unavailable(names: &[String]) {
-    let absent = gx_place(true);
-    let dir_absent = gx_review_dir(&absent, "e");
-    assert_eq!(fs::read_to_string(dir_absent.join("index.txt")).unwrap_or_default(), "index=unavailable:absent\n", "索引を作らない周");
-    assert_eq!(absent.calls("scip"), 0, "審査は索引を撃たない");
-    assert_eq!(gx_others(&dir_absent), names, "索引を名乗る周も index.txt のほかの列は同じ");
-    clean(&[&absent.repo, &absent.state]);
-    let busy = gx_place(true);
-    let key = idxb_field(&idxb_line(&busy.build(None, &[])), "key");
-    for suffix in ["tsv", "rec"] {
-        assert!(fs::remove_file(busy.dir().join(format!("{key}.{suffix}"))).is_ok(), "{suffix} を外す");
-    }
-    let spawned = Command::new("sleep").arg("20").spawn();
-    assert!(spawned.is_ok(), "sleep を起こせる");
-    let Ok(mut child) = spawned else {
-        return;
-    };
-    assert!(fs::write(busy.dir().join(format!("{key}.lock")), format!("{}\n", child.id())).is_ok(), "生きた持ち主の印を置く");
-    let dir_busy = gx_review_dir(&busy, "e");
-    assert!(child.kill().is_ok() && child.wait().is_ok(), "子を止める");
-    assert_eq!(fs::read_to_string(dir_busy.join("index.txt")).unwrap_or_default(), "index=unavailable:building\n", "作り中の周");
-    clean(&[&busy.repo, &busy.state]);
     let plain = gx_place(false);
     let dir_plain = gx_review_dir(&plain, "e");
     assert!(!dir_plain.join("index.txt").exists(), "宣言の無い repo は file を置かない");
     assert_eq!(dir_names(&dir_plain), names, "材料の file の列は今のまま");
     clean(&[&plain.repo, &plain.state]);
+}
+
+// ───── 項目を持つ行の審査が base の索引を組み立ての 1 本で得る（設計 reverse-index.md §7 (a)・接頭辞 `vixrev_`） ─────
+
+/// 偽の宣言の command を PATH に積み、受付の上限の写し（`ceiling_rules`）と偽 PASS の lens で受付から審査まで通した便の材料の dir。
+fn vixrev_review(place: &IdxPlace, pointer: &str, bead: &str) -> PathBuf {
+    let (repo, state) = (place.repo.display().to_string(), place.state.display().to_string());
+    let (rules, lens) = (ceiling_rules(&place.state), review_lens_pass(&place.state));
+    let args = ["intake", "--design", pointer, "--bead", bead, "--repo", &repo, "--state-dir", &state, "--rules", &rules, "--lens", &lens];
+    let out = run_pipe_with_path(&place.path(), &args);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "受付から審査まで通る: {}", told_index(&out));
+    review_dir(&place.state, &run_id_of(&out))
+}
+
+/// 材料の dir の index.txt の本文（無ければ空）。
+fn vixrev_text(dir: &Path) -> String {
+    fs::read_to_string(dir.join("index.txt")).unwrap_or_default()
+}
+
+/// 設計 doc に名指しの無い節 3 と、節 3 を実装する項目を持たない行 g と h（write-set は互いにもほかの行とも交わらない）と、項目が欄 `patch`
+/// の差（other.rs の 1 行目の定義を替える）の定義だけの行 p を足して commit する。
+fn vixrev_plain_rows(place: &IdxPlace) {
+    let path = place.repo.join(DESIGN_FILE);
+    let body = fs::read_to_string(&path).unwrap_or_default();
+    let patch = r#"patch = "docs/design/patch/q.patch""#;
+    let rows: Vec<String> = [("g", "crates/toy/src/other.rs", ""), ("h", "config/gadget.toml", ""), ("p", "crates/toy/src/other.rs", patch)]
+        .iter()
+        .map(|(id, file, more)| {
+            let set = format!("write-set = [\"{file}\"]");
+            let add: Vec<&str> = [r#"section = "3""#, set.as_str(), more].into_iter().filter(|field| !field.is_empty()).collect();
+            format!("[[contract]]\n{}", row_fields(id, &["write-set", "section"], &add).join("\n"))
+        })
+        .collect();
+    let diff = format!("diff --git a/{GX_OTHER_RS} b/{GX_OTHER_RS}\n--- a/{GX_OTHER_RS}\n+++ b/{GX_OTHER_RS}\n@@ -1 +1 @@\n-pub struct Gadget;\n+pub struct Gadget(u8);\n");
+    assert!(fs::create_dir_all(place.repo.join("docs/design/patch")).is_ok() && fs::write(place.repo.join("docs/design/patch/q.patch"), diff).is_ok(), "差を置く");
+    let section = format!("## 3. 名指しの無い節\n\n散文だけの節。\n\n{}", table_begin());
+    let end = format!("\n\n{}\n{}", rows.join("\n\n"), table_end());
+    let next = body.replacen(table_begin(), &section, 1).replacen(&format!("\n{}", table_end()), &end, 1);
+    assert!(next.contains("## 3.") && next.contains("id = \"p\"") && fs::write(&path, next).is_ok(), "節 3 と行 g と h と p を足せる");
+    git(&place.repo, &["add", "-A"]);
+    git(&place.repo, &["commit", "-q", "-m", "plain-rows"]);
+}
+
+/// 項目を持つ行の審査は、base の索引が absent の周に組み立てを 1 回撃ち（偽の scip と roles が 1 回ずつ・受付の規則の写しは索引の 2 行を
+/// 持たない）、index.txt は同じ ref の `show --row` の出力と byte で等しい。同じ base の 2 本目の審査（write-set の交わらない別の行）は撃たず、
+/// その行の `show --row` の出力と byte で等しい本文を置き、index.txt のほかの材料の file の列は宣言の無い repo の審査と同じ。
+#[test]
+fn vixrev_review_builds_the_absent_index_once_for_a_row_with_items() {
+    let place = gx_place(true);
+    assert!(!fs::read_to_string(ceiling_rules(&place.state)).unwrap_or_default().contains("index.cap_mb"), "受付の規則の写しは索引の行を持たない");
+    let dir = vixrev_review(&place, "docs/design/toy.md#e", "s2-vb1");
+    assert_eq!((place.calls("scip"), place.calls("roles")), (1, 1), "審査が組み立てを 1 回撃つ");
+    let written = vixrev_text(&dir);
+    assert!(written.starts_with("- crate::shape::Gadget: resolved "), "表を持つ: {written}");
+    let shown = place.show(&["--row", "docs/design/toy.md#e"]);
+    assert_eq!(written.as_bytes(), shown.stdout.as_slice(), "index.txt は show --row と byte で等しい: {written}");
+    let again = vixrev_review(&place, "docs/design/toy.md#f", "s2-vb2");
+    assert_eq!(vixrev_text(&again).as_bytes(), place.show(&["--row", "docs/design/toy.md#f"]).stdout.as_slice(), "同じ base の 2 本目の表");
+    assert_eq!(place.calls("scip"), 1, "同じ鍵は撃たない");
+    let plain = gx_place(false);
+    let dir_plain = vixrev_review(&plain, "docs/design/toy.md#e", "s2-vb3");
+    assert_eq!(gx_others(&dir), dir_names(&dir_plain), "index.txt のほかの材料の列は今のまま");
+    clean(&[&place.repo, &place.state, &plain.repo, &plain.state]);
+}
+
+/// 項目を持たない行（touches も節の名指しも無い契約表の行）の審査は、base の索引が absent の周も撃たず（偽の scip が 0 回・置き場に表が
+/// 無い）、index.txt は改行 1 つ。同じ base で項目を持つ行の審査は撃ち、その後（ready）の項目を持たない別の行の審査の index.txt と byte で等しい。
+#[test]
+fn vixrev_review_of_a_row_without_items_does_not_build() {
+    let place = gx_place(true);
+    vixrev_plain_rows(&place);
+    let dir = vixrev_review(&place, "docs/design/toy.md#g", "s2-vn1");
+    assert_eq!((place.calls("scip"), place.calls("roles")), (0, 0), "項目を持たない行は撃たない");
+    assert!(!place.names().iter().any(|name| name.ends_with(".tsv")), "表を置かない: {:?}", place.names());
+    let written = vixrev_text(&dir);
+    assert_eq!(written, "\n", "項目 0 の表");
+    let touched = vixrev_review(&place, "docs/design/toy.md#e", "s2-vn2");
+    assert_eq!(place.calls("scip"), 1, "同じ base で項目を持つ行は撃つ");
+    assert!(vixrev_text(&touched).starts_with("- crate::shape::Gadget: resolved "), "{}", vixrev_text(&touched));
+    let ready = vixrev_review(&place, "docs/design/toy.md#h", "s2-vn3");
+    assert_eq!(vixrev_text(&ready), written, "ready の周と同じ本文");
+    clean(&[&place.repo, &place.state]);
+}
+
+/// 項目が欄 `patch` の差の替える定義だけの行（touches も節の名指しも無い）の審査も、base の索引が absent の周に組み立てを 1 回撃ち、
+/// index.txt は差の 1 行で始まり、同じ ref の `show --row` の出力と byte で等しい。
+#[test]
+fn vixrev_review_builds_for_a_row_whose_items_are_the_patch_definitions() {
+    let place = gx_place(true);
+    vixrev_plain_rows(&place);
+    let dir = vixrev_review(&place, "docs/design/toy.md#p", "s2-vp1");
+    assert_eq!((place.calls("scip"), place.calls("roles")), (1, 1), "欄 patch の行は撃つ");
+    let written = vixrev_text(&dir);
+    assert!(written.starts_with("patch=docs/design/patch/q.patch defs=1 "), "差の定義を項目に持つ: {written}");
+    assert_eq!(written.as_bytes(), place.show(&["--row", "docs/design/toy.md#p"]).stdout.as_slice(), "show --row と byte で等しい");
+    clean(&[&place.repo, &place.state]);
+}
+
+/// 項目を持つ行の審査は、撃ち中の持ち主が生きている周に撃たずに持ち主の終わりまで待ち（経過が子の sleep 以上・偽の scip の回数は増えない）、
+/// 持ち主が残した失敗の記録を読み直して `index=unavailable:rc` の 1 行を置く（`index=unavailable:building` を置かない）。
+#[test]
+fn vixrev_review_waits_for_a_live_owner_instead_of_writing_building() {
+    let place = gx_place(true);
+    let key = idxb_field(&idxb_line(&place.build(None, &[])), "key");
+    for suffix in ["tsv", "rec"] {
+        assert!(fs::remove_file(place.dir().join(format!("{key}.{suffix}"))).is_ok(), "{suffix} を外す");
+    }
+    assert!(fs::write(place.dir().join(format!("{key}.rec")), "schema=1\nfailed=rc\n").is_ok(), "失敗の記録を置く");
+    let started = Instant::now();
+    assert!(fs::write(place.dir().join(format!("{key}.lock")), format!("{}\n", idxb_sleeper())).is_ok(), "生きた持ち主の印を置く");
+    let dir = vixrev_review(&place, "docs/design/toy.md#e", "s2-vw1");
+    assert!(started.elapsed() >= Duration::from_secs(1), "持ち主の終わりまで待つ: {:?}", started.elapsed());
+    assert_eq!(vixrev_text(&dir), "index=unavailable:rc\n", "読み直した失敗の語");
+    assert_eq!(place.calls("scip"), 1, "待つ周は撃たない");
+    clean(&[&place.repo, &place.state]);
+}
+
+/// 項目を持つ行の審査は、組めない周（rc 1 の偽の scip）に 1 回撃って `index=unavailable:rc` の 1 行を置き（審査は PASS で進む）、失敗の記録の
+/// 在る同じ鍵の 2 本目の審査（write-set の交わらない別の行）は撃ち直さない（偽の scip の回数が増えない）。
+#[test]
+fn vixrev_review_does_not_refire_a_failed_key() {
+    let failing = gx_place(true);
+    idxb_script(&failing, (IDXB_SCIP, "scip"), "exit 1\n");
+    let first = vixrev_review(&failing, "docs/design/toy.md#e", "s2-vf1");
+    assert_eq!((vixrev_text(&first), failing.calls("scip")), ("index=unavailable:rc\n".to_owned(), 1), "組めない周は 1 回撃つ");
+    let second = vixrev_review(&failing, "docs/design/toy.md#f", "s2-vf2");
+    assert_eq!((vixrev_text(&second), failing.calls("scip")), ("index=unavailable:rc\n".to_owned(), 1), "failed の鍵は撃ち直さない");
+    clean(&[&failing.repo, &failing.state]);
 }
