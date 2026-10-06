@@ -1,0 +1,310 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+index 655577275eec6055f448d8185b7ce3bfb439f77e..ee7db65d7bebc658414d9f5b763f535cb98e0984 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/review.rs
+@@ -2635,8 +2635,8 @@ fn gx_others(dir: &Path) -> Vec<String> {
+ }
+ 
+ /// (d) 偽の lens で受付から審査まで通した便の材料の dir の index.txt は、同じ ref の `show --row` の出力と byte で等しい（write-set は表の行の欄から
+-/// 読む＝欄を持たず tests の欄で導く行は契約の写しが導出値の write-set を持っても `write-set=derived` の 1 行）。索引を作らない周は
+-/// `index=unavailable:absent` の 1 行・撃ち中の持ち主が生きている周は `building`・宣言の無い repo は file を置かず、材料の file の列は今のまま。
++/// 読む＝欄を持たず tests の欄で導く行は契約の写しが導出値の write-set を持っても `write-set=derived` の 1 行）。宣言の無い repo は file を置かず、
++/// 材料の file の列は今のまま。索引が absent か building の周の審査は接頭辞 `vixrev_` の歯が測る。
+ #[test]
+ fn pipe_index_show_material_equals_the_show_row_output_and_says_why_when_unavailable() {
+     let place = gx_place(true);
+@@ -2657,32 +2657,120 @@ fn pipe_index_show_material_equals_the_show_row_output_and_says_why_when_unavail
+     gx_check_material_unavailable(&names);
+ }
+ 
+-/// (d) の索引を作らない周（absent）・撃ち中の持ち主が生きている周（building）・宣言の無い repo（file を置かず材料の列は今のまま）。
++/// (d) の宣言の無い repo（file を置かず材料の列は今のまま）。
+ fn gx_check_material_unavailable(names: &[String]) {
+-    let absent = gx_place(true);
+-    let dir_absent = gx_review_dir(&absent, "e");
+-    assert_eq!(fs::read_to_string(dir_absent.join("index.txt")).unwrap_or_default(), "index=unavailable:absent\n", "索引を作らない周");
+-    assert_eq!(absent.calls("scip"), 0, "審査は索引を撃たない");
+-    assert_eq!(gx_others(&dir_absent), names, "索引を名乗る周も index.txt のほかの列は同じ");
+-    clean(&[&absent.repo, &absent.state]);
+-    let busy = gx_place(true);
+-    let key = idxb_field(&idxb_line(&busy.build(None, &[])), "key");
+-    for suffix in ["tsv", "rec"] {
+-        assert!(fs::remove_file(busy.dir().join(format!("{key}.{suffix}"))).is_ok(), "{suffix} を外す");
+-    }
+-    let spawned = Command::new("sleep").arg("20").spawn();
+-    assert!(spawned.is_ok(), "sleep を起こせる");
+-    let Ok(mut child) = spawned else {
+-        return;
+-    };
+-    assert!(fs::write(busy.dir().join(format!("{key}.lock")), format!("{}\n", child.id())).is_ok(), "生きた持ち主の印を置く");
+-    let dir_busy = gx_review_dir(&busy, "e");
+-    assert!(child.kill().is_ok() && child.wait().is_ok(), "子を止める");
+-    assert_eq!(fs::read_to_string(dir_busy.join("index.txt")).unwrap_or_default(), "index=unavailable:building\n", "作り中の周");
+-    clean(&[&busy.repo, &busy.state]);
+     let plain = gx_place(false);
+     let dir_plain = gx_review_dir(&plain, "e");
+     assert!(!dir_plain.join("index.txt").exists(), "宣言の無い repo は file を置かない");
+     assert_eq!(dir_names(&dir_plain), names, "材料の file の列は今のまま");
+     clean(&[&plain.repo, &plain.state]);
+ }
++
++// ───── 項目を持つ行の審査が base の索引を組み立ての 1 本で得る（設計 reverse-index.md §7 (a)・接頭辞 `vixrev_`） ─────
++
++/// 偽の宣言の command を PATH に積み、受付の上限の写し（`ceiling_rules`）と偽 PASS の lens で受付から審査まで通した便の材料の dir。
++fn vixrev_review(place: &IdxPlace, pointer: &str, bead: &str) -> PathBuf {
++    let (repo, state) = (place.repo.display().to_string(), place.state.display().to_string());
++    let (rules, lens) = (ceiling_rules(&place.state), review_lens_pass(&place.state));
++    let args = ["intake", "--design", pointer, "--bead", bead, "--repo", &repo, "--state-dir", &state, "--rules", &rules, "--lens", &lens];
++    let out = run_pipe_with_path(&place.path(), &args);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "受付から審査まで通る: {}", told_index(&out));
++    review_dir(&place.state, &run_id_of(&out))
++}
++
++/// 材料の dir の index.txt の本文（無ければ空）。
++fn vixrev_text(dir: &Path) -> String {
++    fs::read_to_string(dir.join("index.txt")).unwrap_or_default()
++}
++
++/// 設計 doc に名指しの無い節 3 と、節 3 を実装する項目を持たない行 g と h（write-set は互いにもほかの行とも交わらない）を足して commit する。
++fn vixrev_plain_rows(place: &IdxPlace) {
++    let path = place.repo.join(DESIGN_FILE);
++    let body = fs::read_to_string(&path).unwrap_or_default();
++    let rows: Vec<String> = [("g", "crates/toy/src/other.rs"), ("h", "config/gadget.toml")]
++        .iter()
++        .map(|(id, file)| {
++            let set = format!("write-set = [\"{file}\"]");
++            format!("[[contract]]\n{}", row_fields(id, &["write-set", "section"], &[r#"section = "3""#, set.as_str()]).join("\n"))
++        })
++        .collect();
++    let section = format!("## 3. 名指しの無い節\n\n散文だけの節。\n\n{}", table_begin());
++    let end = format!("\n\n{}\n{}", rows.join("\n\n"), table_end());
++    let next = body.replacen(table_begin(), &section, 1).replacen(&format!("\n{}", table_end()), &end, 1);
++    assert!(next.contains("## 3.") && next.contains("id = \"h\"") && fs::write(&path, next).is_ok(), "節 3 と行 g と h を足せる");
++    git(&place.repo, &["add", "-A"]);
++    git(&place.repo, &["commit", "-q", "-m", "plain-rows"]);
++}
++
++/// 項目を持つ行の審査は、base の索引が absent の周に組み立てを 1 回撃ち（偽の scip と roles が 1 回ずつ・受付の規則の写しは索引の 2 行を
++/// 持たない）、index.txt は同じ ref の `show --row` の出力と byte で等しい。同じ base の 2 本目の審査（write-set の交わらない別の行）は撃たず、
++/// その行の `show --row` の出力と byte で等しい本文を置き、index.txt のほかの材料の file の列は宣言の無い repo の審査と同じ。
++#[test]
++fn vixrev_review_builds_the_absent_index_once_for_a_row_with_items() {
++    let place = gx_place(true);
++    assert!(!fs::read_to_string(ceiling_rules(&place.state)).unwrap_or_default().contains("index.cap_mb"), "受付の規則の写しは索引の行を持たない");
++    let dir = vixrev_review(&place, "docs/design/toy.md#e", "s2-vb1");
++    assert_eq!((place.calls("scip"), place.calls("roles")), (1, 1), "審査が組み立てを 1 回撃つ");
++    let written = vixrev_text(&dir);
++    assert!(written.starts_with("- crate::shape::Gadget: resolved "), "表を持つ: {written}");
++    let shown = place.show(&["--row", "docs/design/toy.md#e"]);
++    assert_eq!(written.as_bytes(), shown.stdout.as_slice(), "index.txt は show --row と byte で等しい: {written}");
++    let again = vixrev_review(&place, "docs/design/toy.md#f", "s2-vb2");
++    assert_eq!(vixrev_text(&again).as_bytes(), place.show(&["--row", "docs/design/toy.md#f"]).stdout.as_slice(), "同じ base の 2 本目の表");
++    assert_eq!(place.calls("scip"), 1, "同じ鍵は撃たない");
++    let plain = gx_place(false);
++    let dir_plain = vixrev_review(&plain, "docs/design/toy.md#e", "s2-vb3");
++    assert_eq!(gx_others(&dir), dir_names(&dir_plain), "index.txt のほかの材料の列は今のまま");
++    clean(&[&place.repo, &place.state, &plain.repo, &plain.state]);
++}
++
++/// 項目を持たない行（touches も節の名指しも無い契約表の行）の審査は、base の索引が absent の周も撃たず（偽の scip が 0 回・置き場に表が
++/// 無い）、index.txt は改行 1 つ。同じ base で項目を持つ行の審査は撃ち、その後（ready）の項目を持たない別の行の審査の index.txt と byte で等しい。
++#[test]
++fn vixrev_review_of_a_row_without_items_does_not_build() {
++    let place = gx_place(true);
++    vixrev_plain_rows(&place);
++    let dir = vixrev_review(&place, "docs/design/toy.md#g", "s2-vn1");
++    assert_eq!((place.calls("scip"), place.calls("roles")), (0, 0), "項目を持たない行は撃たない");
++    assert!(!place.names().iter().any(|name| name.ends_with(".tsv")), "表を置かない: {:?}", place.names());
++    let written = vixrev_text(&dir);
++    assert_eq!(written, "\n", "項目 0 の表");
++    let touched = vixrev_review(&place, "docs/design/toy.md#e", "s2-vn2");
++    assert_eq!(place.calls("scip"), 1, "同じ base で項目を持つ行は撃つ");
++    assert!(vixrev_text(&touched).starts_with("- crate::shape::Gadget: resolved "), "{}", vixrev_text(&touched));
++    let ready = vixrev_review(&place, "docs/design/toy.md#h", "s2-vn3");
++    assert_eq!(vixrev_text(&ready), written, "ready の周と同じ本文");
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 項目を持つ行の審査は、撃ち中の持ち主が生きている周に撃たずに持ち主の終わりまで待ち（経過が子の sleep 以上・偽の scip の回数は増えない）、
++/// 持ち主が残した失敗の記録を読み直して `index=unavailable:rc` の 1 行を置く（`index=unavailable:building` を置かない）。
++#[test]
++fn vixrev_review_waits_for_a_live_owner_instead_of_writing_building() {
++    let place = gx_place(true);
++    let key = idxb_field(&idxb_line(&place.build(None, &[])), "key");
++    for suffix in ["tsv", "rec"] {
++        assert!(fs::remove_file(place.dir().join(format!("{key}.{suffix}"))).is_ok(), "{suffix} を外す");
++    }
++    assert!(fs::write(place.dir().join(format!("{key}.rec")), "schema=1\nfailed=rc\n").is_ok(), "失敗の記録を置く");
++    let started = Instant::now();
++    assert!(fs::write(place.dir().join(format!("{key}.lock")), format!("{}\n", idxb_sleeper())).is_ok(), "生きた持ち主の印を置く");
++    let dir = vixrev_review(&place, "docs/design/toy.md#e", "s2-vw1");
++    assert!(started.elapsed() >= Duration::from_secs(1), "持ち主の終わりまで待つ: {:?}", started.elapsed());
++    assert_eq!(vixrev_text(&dir), "index=unavailable:rc\n", "読み直した失敗の語");
++    assert_eq!(place.calls("scip"), 1, "待つ周は撃たない");
++    clean(&[&place.repo, &place.state]);
++}
++
++/// 項目を持つ行の審査は、組めない周（rc 1 の偽の scip）に 1 回撃って `index=unavailable:rc` の 1 行を置き（審査は PASS で進む）、失敗の記録の
++/// 在る同じ鍵の 2 本目の審査（write-set の交わらない別の行）は撃ち直さない（偽の scip の回数が増えない）。
++#[test]
++fn vixrev_review_does_not_refire_a_failed_key() {
++    let failing = gx_place(true);
++    idxb_script(&failing, (IDXB_SCIP, "scip"), "exit 1\n");
++    let first = vixrev_review(&failing, "docs/design/toy.md#e", "s2-vf1");
++    assert_eq!((vixrev_text(&first), failing.calls("scip")), ("index=unavailable:rc\n".to_owned(), 1), "組めない周は 1 回撃つ");
++    let second = vixrev_review(&failing, "docs/design/toy.md#f", "s2-vf2");
++    assert_eq!((vixrev_text(&second), failing.calls("scip")), ("index=unavailable:rc\n".to_owned(), 1), "failed の鍵は撃ち直さない");
++    clean(&[&failing.repo, &failing.state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/review.rs b/scribe2/crates/scribe2/src/pipe/review.rs
+index 4799cb2937397d323a60e79d2503c411b1cd83c1..24b3f310fdae654767d463cfbba1854397370d35 100644
+--- a/scribe2/crates/scribe2/src/pipe/review.rs
++++ b/scribe2/crates/scribe2/src/pipe/review.rs
+@@ -44,7 +44,8 @@
+ //! [`OUTSIDE_FILE`] として置く（約束の行と同じ形）。lens は `{outside}` の穴を名ごとに cap の残りで埋める（[`outside_block`]）。
+ //!
+ //! **逆引きの表**（設計 reverse-index.md §6・§7 (a)・行 c）: 子 module `index` が審査の木の commit の索引から契約の design の行の表を組み、
+-//! 状態が ready でない周は 1 行で、材料の [`INDEX_FILE`] として既存の材料の後に置く（undeclared の repo は置かない）。lens は
++//! 状態が ready でない周は 1 行で、材料の [`INDEX_FILE`] として既存の材料の後に置く（undeclared の repo は置かない）。項目を持つ行は、
++//! 索引が absent か building の周に組み立ての 1 本で索引を得てから組む（項目を持たない行は撃たない）。lens は
+ //! `{index}` の穴を [`index_block`] で outside の後ろの残りに項目ごとに収める。
+ 
+ mod base;
+@@ -324,7 +325,7 @@ pub fn review(entry: &Review<'_>) -> Outcome {
+         Err(reason) => return broken(reason),
+     };
+     // 逆引きの表は既存の材料を置いた後に置く（undeclared の repo は file を置かない・§7 (a)）。
+-    if let Err(reason) = index::keep(&dir, (entry.state_dir, entry.repo), head.as_deref(), &entry.contract.design) {
++    if let Err(reason) = index::keep(&dir, (entry.state_dir, entry.repo), head.as_deref(), &entry.contract.design, entry.policy) {
+         return broken(reason);
+     }
+     // 行の審査の記録を写せる周（行の digest・材料の鍵・code の木の鍵・lens の版が同じ actual の PASS・設計 row-review.md §5）は
+diff --git a/scribe2/crates/scribe2/src/pipe/review/index.rs b/scribe2/crates/scribe2/src/pipe/review/index.rs
+index 970da5c25f279ebbccf43e88b4b6d55374f47e54..1d63504c7d032fd1f95f936d7ad47dbda393cf8e 100644
+--- a/scribe2/crates/scribe2/src/pipe/review/index.rs
++++ b/scribe2/crates/scribe2/src/pipe/review/index.rs
+@@ -16,7 +16,7 @@ use crate::invocation::Invocation;
+ use crate::pipe::cli::{broken, flag, refused, repo_of, state_dir_of};
+ use crate::pipe::closure::section_symbols;
+ use crate::pipe::declaration::{TablePlaces, DECL_FILE};
+-use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Status};
++use crate::pipe::dispatch::index_build::{assemble, status, Assembled, How, Made, Status};
+ use crate::pipe::git_bytes;
+ use crate::pipe::index::flat::{descriptor_names, query, Resolution, Row, Site};
+ use crate::pipe::table::{design_docs, read_table};
+@@ -399,17 +399,23 @@ pub(in crate::pipe) fn render(found: &Counted) -> String {
+     lines.join("\n")
+ }
+ 
+-/// 行 `pointer` の表（touches と節の名指しを項目にし・欄 write-set で外の印を付ける・欄の無い行は項目の前に `write-set=derived`）。
+-pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String, String> {
+-    let line = ctx.tables.lines.iter().find(|line| line.pointer == pointer).ok_or_else(|| format!("行 {pointer} を契約表から引けない"))?;
+-    let prose = ctx.tables.prose(line);
++/// 行 `pointer` の項目（touches と節の名指し・重複を除いた順）と外の印（欄 write-set・欄の無い行は `None`）。表の描きと審査の材料の
++/// 組みの要否が同じこの 1 本で項目を読む。
++fn row_items<'t>(tables: &'t Tables, pointer: &str) -> Result<(Vec<String>, Option<&'t [String]>), String> {
++    let line = tables.lines.iter().find(|line| line.pointer == pointer).ok_or_else(|| format!("行 {pointer} を契約表から引けない"))?;
++    let prose = tables.prose(line);
+     let mut items = line.touches.clone();
+     for name in section_symbols(&[prose.as_str()], &line.touches) {
+         if !items.contains(&name) {
+             items.push(name);
+         }
+     }
+-    let marks = (!line.write_set.is_empty()).then_some(line.write_set.as_slice());
++    Ok((items, (!line.write_set.is_empty()).then_some(line.write_set.as_slice())))
++}
++
++/// 行 `pointer` の表（touches と節の名指しを項目にし・欄 write-set で外の印を付ける・欄の無い行は項目の前に `write-set=derived`）。
++pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String, String> {
++    let (items, marks) = row_items(ctx.tables, pointer)?;
+     let scope = Scope { own: pointer, marks };
+     let mut blocks: Vec<String> = marks.is_none().then(|| "write-set=derived".to_owned()).into_iter().collect();
+     blocks.extend(items.iter().map(|item| render(&count(ctx, item, &scope))));
+@@ -428,25 +434,53 @@ fn word_of(state: &Status) -> Option<String> {
+ }
+ 
+ /// 審査の材料 index.txt の本文（undeclared の repo は `None`＝file を置かない・ready でない周は `index=unavailable:<語>` の 1 行）。
+-fn material(state_dir: &Path, repo: &Path, head: Option<&str>, design: &str) -> Option<String> {
++/// 項目を持つ行は、状態が absent か building の周に組み立ての 1 本（[`assembled`]）で索引を得てから描く。項目を持たない行は撃たず、
++/// 表を空の列にして同じ描きの 1 本で描く（ready の周と同じ本文）。half と failed の周は撃たない（failed の鍵を審査ごとに撃ち直さない）。
++fn material(place: (&Path, &Path), head: Option<&str>, design: &str, policy: LockPolicy) -> Option<String> {
++    let (state_dir, repo) = place;
+     let Some(sha) = head else {
+         return Some("index=unavailable:tree".to_owned());
+     };
+-    let rows = match status(state_dir, repo, sha) {
++    let found = status(state_dir, repo, sha);
++    let unavailable = |state: &Status| Some(format!("index=unavailable:{}", word_of(state).unwrap_or_default()));
++    match &found {
+         Status::Undeclared => return None,
+-        Status::Ready(rows) => rows,
+-        other => return Some(format!("index=unavailable:{}", word_of(&other).unwrap_or_default())),
+-    };
++        Status::Half(_) | Status::Failed(_) => return unavailable(&found),
++        Status::Absent | Status::Building | Status::Ready(_) => {}
++    }
+     let Ok(tables) = Tables::load(repo, sha) else {
+         return Some("index=unavailable:table".to_owned());
+     };
++    let Ok((items, _)) = row_items(&tables, design) else {
++        return Some("index=unavailable:row".to_owned());
++    };
++    let rows = match found {
++        Status::Ready(rows) => rows,
++        _ if items.is_empty() => Vec::new(),
++        _ => match assembled(place, sha, policy) {
++            Status::Ready(rows) => rows,
++            other => return unavailable(&other),
++        },
++    };
+     let ctx = Ctx { rows: &rows, repo, sha, tables: &tables };
+     Some(row_report(&ctx, design).unwrap_or_else(|_| "index=unavailable:row".to_owned()))
+ }
+ 
++/// 組み立ての 1 本で索引を得て（撃つか撃ち中の持ち主の終わりを待つ）状態を読み直す。rules は埋め込みの値（裏の起こしの子と同じ・
++/// 列の写し `--rules` は gate の上限の差し替え口で、組み立てが読む 2 行を持たない）。
++fn assembled(place: (&Path, &Path), sha: &str, policy: LockPolicy) -> Status {
++    let Ok(manifest) = Manifest::embedded() else {
++        return Status::Failed("no-rule".to_owned());
++    };
++    if let Assembled::Made(Made { how: How::Failed(word), .. }) = assemble(place.0, place.1, sha, &manifest, policy) {
++        return Status::Failed(word);
++    }
++    status(place.0, place.1, sha)
++}
++
+ /// 契約の審査が材料の dir に index.txt を置く（既存の材料を置いた後・`design` は契約の design の pointer・`head` は審査の木の commit）。
+-pub(in crate::pipe) fn keep(dir: &Path, place: (&Path, &Path), head: Option<&str>, design: &str) -> Result<(), String> {
+-    let Some(body) = material(place.0, place.1, head, design) else {
++pub(in crate::pipe) fn keep(dir: &Path, place: (&Path, &Path), head: Option<&str>, design: &str, policy: LockPolicy) -> Result<(), String> {
++    let Some(body) = material(place, head, design, policy) else {
+         return Ok(());
+     };
+     let path = dir.join(INDEX_FILE);
+diff --git a/scribe2/docs/design/reverse-index.md b/scribe2/docs/design/reverse-index.md
+index 6fa873fbfc7e1fb694922e60ff9cfc1bdb5d71b6..43f0cff7a50cdc850ce36c61b2b790ab4ddaab5a 100644
+--- a/scribe2/docs/design/reverse-index.md
++++ b/scribe2/docs/design/reverse-index.md
+@@ -125,10 +125,10 @@
+ 
+ ## 7. 使う場所
+ 
+-索引を要する行は、touches に型の項目（fn 形でない項目）を持つ行と、欄 `code-facts` を持つ行だけである。どちらも持たない行は、索引のどの状態でも今のまま（待たない・断らない・出力の字も変えない）。状態の語は §4 形 9 の 6 値（undeclared・half・absent・building・failed・ready）で、absent と building を合わせて「作り中」、failed を「作れない周」と呼ぶ。half（片方の key だけか穴の欠け）は索引を要する周の索引の宣言の読みの断りで、索引を要しない周は half を読まない（§4 形 1）。行の審査（行 i）と `pipe index show` は §4 形 9 の組み立ての 1 本で索引を得て、撃ち中の持ち主の終わりを待つので、作り中に出会うのは受付と起動の列だけである。判定は受付の括弧（FR68）の「契約表の行の閉包と code の索引と code の事実の判定」の内に在る。
++索引を要する行は、touches に型の項目（fn 形でない項目）を持つ行と、欄 `code-facts` を持つ行だけである。どちらも持たない行は、索引のどの状態でも今のまま（待たない・断らない・出力の字も変えない）。状態の語は §4 形 9 の 6 値（undeclared・half・absent・building・failed・ready）で、absent と building を合わせて「作り中」、failed を「作れない周」と呼ぶ。half（片方の key だけか穴の欠け）は索引を要する周の索引の宣言の読みの断りで、索引を要しない周は half を読まない（§4 形 1）。行の審査（行 i）と `pipe index show` と、項目を持つ行の契約の審査（(a)）は §4 形 9 の組み立ての 1 本で索引を得て、撃ち中の持ち主の終わりを待つので、作り中に出会うのは受付と起動の列だけである。判定は受付の括弧（FR68）の「契約表の行の閉包と code の索引と code の事実の判定」の内に在る。
+ 
+ ### (a) 審査の材料（行 c・行の審査の材料は行 i）
+-- 契約の審査（Reviewed）の材料の dir に index.txt を足す。中身は §6 の表（審査の木の commit〔Reviewed が材料を組む前に 1 回読む HEAD〕の索引・行を名指す形・行の write-set で外の印を付ける）。状態が ready でない周は `index=unavailable:<状態の語>` の 1 行だけを置く。undeclared の repo は file を置かない（今の材料のまま）。置くのは既存の材料を置いた後で、state dir を持つ Reviewed だけが置く。
++- 契約の審査（Reviewed）の材料の dir に index.txt を足す。中身は §6 の表（審査の木の commit〔Reviewed が材料を組む前に 1 回読む HEAD〕の索引・行を名指す形・行の write-set で外の印を付ける）。項目（§6 の行を名指す形の touches と節の名指し）を持つ行は、状態が absent か building の周に §4 形 9 の組み立ての 1 本で索引を得る（撃つか撃ち中の持ち主の終わりを待つ・rules は埋め込みの値で、受付に渡した規則の写しは読まない）。項目を持たない行は撃たず、ready の周と同じ本文（項目 0 の表）を置く。組み立てが失敗した周・failed の鍵（審査ごとに撃ち直さない）・half の周は `index=unavailable:<状態の語>` の 1 行だけを置く。undeclared の repo は file を置かない（今の材料のまま）。置くのは既存の材料を置いた後で、state dir を持つ Reviewed だけが置く。
+ - 先撃ちは index.txt を置かない（先撃ちは行の審査の行 e で退役する）。索引を名乗る repo では、先撃ちの判定の使い回し（材料の鍵の一致）が外れる。
+ - lens は index.txt を雛形の末尾の穴（outside の穴の後ろ）に、outside.txt と同じく `gate.token_cap` の残り（outside を足した後）に項目ごとに収めて埋める（収まらない項目は件数だけの 1 行・落とした項目の数を最後の 1 行）。収める 1 関数は行 c の審査の子 module に pub で置き、外の材料の `outside_block`（`crates/scribe2/src/pipe/review/outside.rs`）と同じく lens が撃つ。見出しの下の 1 文で「index.txt は器が外の道具の索引から組んだ事実で、件数の横の母集団を合わせて読む・site は読みの道具で開ける（[pipeline.md](./pipeline.md) §64）」と告げる。file が無い周は穴が空で、雛形の出力は 1 字も変わらない。
+ - 行の審査の材料（[row-review.md](./row-review.md) §3 形 5）の index.txt は、行 i が同じ 1 本で置く。index.txt は材料の dir の file なので、材料の鍵に自然に入る。
+@@ -173,7 +173,7 @@
+ 
+ ## 9. 費用と、足す物・消す物（C17.2）
+ 
+-- 費用（見積り）: 索引 1 本は code を変える着地 1 本ごとに 1 回（設計の PR は code の木の鍵が main と同じなので作り直さない）。1 回 30〜105 秒・peak RSS 約 2.5 GB・受付札 1 枚。平らな表の大きさは試しの base で自前の package の occurrence 111113 行で、数 MB と見込む（未実測）。
++- 費用（見積り）: 索引 1 本は code を変える着地 1 本ごとに 1 回（設計の PR は code の木の鍵が main と同じなので作り直さない）。契約の審査が組むのは項目を持つ行の審査の base ごとに 1 回で、同じ鍵は使い回し、項目を持たない行は撃たない。1 回 30〜105 秒・peak RSS 約 2.5 GB・受付札 1 枚。平らな表の大きさは試しの base で自前の package の occurrence 111113 行で、数 MB と見込む（未実測）。
+ - 足す物と消す物:
+ 
+ | 足す | 消す |
