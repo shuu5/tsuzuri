@@ -9,8 +9,8 @@ use tsuzuri_contract::account::{self as contract_account, AccountDoc};
 use tsuzuri_contract::board::{NextMove, Reading};
 use tsuzuri_contract::seat::SeatState;
 use tsuzuri_surface::account::{
-    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, ledger, need_count, notices, projects,
-    session, stage, stuck_count, tab_href, tab_links, windows,
+    self, BADGE, HEADER, HGRID, NEED_MARK, Tab, badge, home, hostblock, ledger, need_count,
+    notices, projects, session, stage, stuck_count, tab_href, tab_links, windows,
 };
 use tsuzuri_surface::frame::{Mode, PageId, STACK};
 use tsuzuri_surface::project::{Body, NO_CONTENT, NOT_READ};
@@ -170,9 +170,8 @@ fn acctframe_snapshot_matches_file() {
     assert_eq!(account::TOP, "top vessel");
 }
 
-/// (4) tab ごとの block と段の class・block ごとに 1 つの module。
-#[test]
-fn acctframe_blocks_per_tab_and_module() {
+/// tab ごとの段の class と block の id の並び（HOME の 3 段目は口座 × 窓の後に host の負荷と書き）。
+fn rows_per_tab() {
     let home_page = account::page(Tab::Home);
     let rows: Vec<(&str, Vec<&str>)> = home_page
         .rows
@@ -184,7 +183,10 @@ fn acctframe_blocks_per_tab_and_module() {
         vec![
             (STACK, vec!["notices"]),
             (HGRID, vec!["nxall", "winsp"]),
-            (STACK, vec!["groups", "allowance", "moves", "stage"])
+            (
+                STACK,
+                vec!["groups", "allowance", "hostld", "moves", "stage"]
+            )
         ]
     );
     assert_eq!(HGRID, "hgrid");
@@ -196,6 +198,12 @@ fn acctframe_blocks_per_tab_and_module() {
     for tab in Tab::ALL {
         assert_eq!(account::page(tab).tab, tab);
     }
+}
+
+/// (4) tab ごとの block と段の class・block ごとに 1 つの module。
+#[test]
+fn acctframe_blocks_per_tab_and_module() {
+    rows_per_tab();
 
     // block（id・見出しの語の鍵・class・描く module）。
     let table = [
@@ -204,6 +212,13 @@ fn acctframe_blocks_per_tab_and_module() {
         (windows::BLOCK, "winsp", "open_windows", "panel", "windows"),
         (home::GROUPS, "groups", "group", "gtop", "home"),
         (home::ALLOWANCE, "allowance", "allowance", "panel", "home"),
+        (
+            hostblock::BLOCK,
+            "hostld",
+            "host_load",
+            "panel",
+            "hostblock",
+        ),
         (home::MOVES, "moves", "moves", "panel fold mvp", "home"),
         (
             stage::BLOCK,
@@ -249,6 +264,7 @@ fn files_and_pure_mod() {
             "cards.rs",
             "heartbeat.rs",
             "home.rs",
+            "hostblock.rs",
             "ledger.rs",
             "mod.rs",
             "notices.rs",

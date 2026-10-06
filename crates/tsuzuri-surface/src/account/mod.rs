@@ -26,6 +26,8 @@ use crate::widgets::hover::Card;
 pub mod cards;
 pub mod heartbeat;
 pub mod home;
+/// HOME の host の負荷と書きの block（中身は帯の host の窓と同じ関数）。
+pub mod hostblock;
 pub mod ledger;
 pub mod notices;
 pub mod projects;
@@ -251,7 +253,7 @@ impl TabPage {
 pub const HGRID: &str = "hgrid";
 
 /// tab の枠（home: 各 project の席からの知らせ ｜ 次の一手と開いている窓 ｜ 群の枠・口座 × 窓・移動、
-/// session: session と台帳、projects: 各 project）。席からの知らせは見本に無い block で、home の頭の段に置く（行 i-11）。
+/// session: session と台帳、projects: 各 project）。host の負荷と書きは口座 × 窓の後に置く。席からの知らせは見本に無い block で、home の頭の段に置く（行 i-11）。
 pub fn page(tab: Tab) -> TabPage {
     let rows = match tab {
         Tab::Home => vec![
@@ -265,7 +267,13 @@ pub fn page(tab: Tab) -> TabPage {
             },
             Row {
                 class: STACK,
-                blocks: vec![home::GROUPS, home::ALLOWANCE, home::MOVES, stage::BLOCK],
+                blocks: vec![
+                    home::GROUPS,
+                    home::ALLOWANCE,
+                    hostblock::BLOCK,
+                    home::MOVES,
+                    stage::BLOCK,
+                ],
             },
         ],
         Tab::Session => vec![Row {

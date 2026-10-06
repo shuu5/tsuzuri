@@ -7,8 +7,8 @@ use leptos::prelude::*;
 
 use super::{
     BRAND, DORMANT_CARD, DORMANT_CLASS, DORMANT_STATE, HEADER, PATH, TOP, Tab, UPDATED_CLASS,
-    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, drawn, home, ledger, notices, page,
-    page_title, projects, session, stage, tab_href, tab_links, tab_url, windows,
+    UPDATED_KEY, badge, doc, dormant_card, dormant_chip, drawn, home, hostblock, ledger, notices,
+    page, page_title, projects, session, stage, tab_href, tab_links, tab_url, windows,
 };
 use crate::frame::{self, Block, Mode};
 use crate::fresh::{self, Fresh};
@@ -250,6 +250,7 @@ fn block_view(block: Block) -> AnyView {
         id if id == projects::BLOCK.id => projects::view(),
         id if id == notices::BLOCK.id => notices::view(),
         id if id == stage::BLOCK.id => stage::view(),
+        id if id == hostblock::BLOCK.id => hostblock::view(),
         _ => ().into_any(),
     }
 }
