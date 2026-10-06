@@ -296,7 +296,7 @@ C3 は「1 つの DB file（host 列）」と言う。MVP はそれを **append-
     - 設計: dialogue-surface §4 と fleet-event-log §9。
     - 消費側の code はこの口を撃たない（実測 0 件）。
 - 約束（番号は done と 1:1）:
-  1. **口の形**: `seat ruling bind --repo R --state-dir S --question ID --utterance TS [--bd B]`。`--bd` は歯の seam で、無い周は既定の bd。
+  1. **口の形**: `seat ruling bind --repo R --state-dir S --question ID --utterance TS [--batch B] [--bd B]`。`--bd` は歯の seam で、無い周は既定の bd。`--batch B` は任意の束の id（字 `batch:` の後に 1 字以上の ASCII の英数字か `-` か `.` か `_`）で、受けた周は notes の行を経路と逐語の間に束の欄を挟んだ 6 欄（裁定 id ｜ 問い id ｜ 発話の ts ｜ 経路 ｜ 束の id ｜ 逐語の JSON の字）で組む。
   2. **断りの順と語**: 次の順で調べ、当たった周は何も書かずに rc 1 で `seat ruling: refused reason=<語> question=<id> utterance=<ts>` の 1 行を出す。語は閉じた 4 つで、const slice を持つ。
      - (a) `no-utterance`: その ts の `UtteranceReceived` が無い。
      - (b) `bound`: 同じ発話と同じ問いの組の `RulingReceived` が在る。1 つの発話を別の問いへ結ぶのは通す。

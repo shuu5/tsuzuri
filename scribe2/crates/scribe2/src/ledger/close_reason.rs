@@ -194,7 +194,7 @@ pub fn is_ruling_line(line: &str, prefix: Option<&str>) -> bool {
     line.split('|').map(str::trim).any(|field| is_ruling_id(field, prefix))
 }
 
-/// 裁定の行（bead の notes の 1 行）の 5 欄（設計 dispatcher.md §36 約束 4・fleet-event-log.md 行 h が書く行）。
+/// 裁定の行（bead の notes の 1 行）の 5 欄（設計 dispatcher.md §36 約束 4・fleet-event-log.md 行 h が書く行・束の欄を持つ 6 欄の行は束の欄を除いた 5 欄）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RulingRow {
     /// 裁定 id（先頭の欄）。
@@ -213,13 +213,15 @@ pub struct RulingRow {
 pub const ROUTE_CHAT: &str = "chat";
 
 /// notes の 1 行を裁定の行として読む（`|` で割り、欄ごとに前後の空白を剥ぐ）。先頭の欄が [`is_ruling_id`] で真なら 5 欄
-/// （4 欄の古い行は経路を [`ROUTE_CHAT`] と読む）を返し、ほかの行（先頭の欄が裁定 id でない・欄が 4 でも 5 でもない）は
-/// `None`。`prefix` は台帳の接頭辞（解けない周は `None`＝問い id の形の裁定 id は読めない）。
+/// （4 欄の古い行は経路を [`ROUTE_CHAT`] と読み、5 つ目の欄が `batch:` で始まる 6 欄の行は束の欄を飛ばして読む）を返し、ほかの行
+/// （先頭の欄が裁定 id でない・欄が 4 でも 5 でもなく 5 つ目が `batch:` の 6 欄でもない）は `None`。`prefix` は台帳の接頭辞
+/// （解けない周は `None`＝問い id の形の裁定 id は読めない）。
 pub fn ruling_row(line: &str, prefix: Option<&str>) -> Option<RulingRow> {
     let fields: Vec<&str> = line.split('|').map(str::trim).collect();
     let own = |text: &str| text.to_owned();
     let (id, question, ts, route, verbatim) = match fields.as_slice() {
         [id, question, ts, route, verbatim] => (id, question, ts, *route, verbatim),
+        [id, question, ts, route, batch, verbatim] if batch.starts_with(RULING_BATCH) => (id, question, ts, *route, verbatim),
         [id, question, ts, verbatim] => (id, question, ts, ROUTE_CHAT, verbatim),
         _ => return None,
     };

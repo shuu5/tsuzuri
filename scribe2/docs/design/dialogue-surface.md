@@ -177,7 +177,7 @@ user の裁定を受けた turn の中で対話面の席の口（seat ruling add
   - 権能の表（`CAPABILITY_COMMANDS`）は役割の権能に写すだけで、pane の無い session では撃たれない。
   - 承認 event を書くのは `pipe approve` だけ。
 - 約束（番号は done と 1:1）:
-  1. **口の形**: `seat ruling answer --repo R --state-dir S --question ID [--bd B]`。逐語は標準入力の全部で、末尾の改行も 1 byte も変えずに持つ。使い方の字は `(stdin: WORDS)` で標準入力を示す。
+  1. **口の形**: `seat ruling answer --repo R --state-dir S --question ID [--batch B] [--bd B]`。逐語は標準入力の全部で、末尾の改行も 1 byte も変えずに持つ。使い方の字は `(stdin: WORDS)` で標準入力を示す。`--batch B` は任意の束の id（字 `batch:` の後に 1 字以上の ASCII の英数字か `-` か `.` か `_`・外れた値は使い方の誤り）で、受けた周は notes の行が経路と逐語の間に束の欄を挟んだ 6 欄（裁定 id ｜ 問い id ｜ 発話の ts ｜ 経路 ｜ 束の id ｜ 逐語の JSON の字）になる。受けない周の行は 5 欄のまま。
      - `< WORDS` は使わない。seat の使い方は 1 行の `<…|…>` の群で、群の中の `<` は入れ子の開きと読まれる。help の既存の歯の helper（`crates/scribe2-boundary/tests/e2e/main.rs` の `help_group_words`・write-set では `=`）が群を切り出せなくなる（便 s2-07l.738.36-20260930T161031Z の gate の審査が、helper を書き換えた diff を `=` の宣言の外と名指した）。
   2. **断り（何も書かない・rc 1）**: 次の順で調べ、`seat ruling: refused reason=<語> question=<id>` を出す。語は閉じた 4 語。closed と not-question は行 h の結びの断りの語、ledger-unreadable は行 h の台帳を読めない周の断りの語と同じ字で、words-empty だけが答えの口の新しい語。行 h の結びの閉じた 4 語の断り（no-utterance・bound・closed・not-question の const slice）は変えない（結びは words-empty を返さない）。
      - `words-empty`: 逐語が空白だけ。
@@ -188,7 +188,7 @@ user の裁定を受けた turn の中で対話面の席の口（seat ruling add
   3. **通る周**: 次の順に書く。
      - (a) 経路 gui の `UtteranceReceived` を 1 件書く（session 無し・逐語の detail）。行 g が `crates/scribe2/src/fleet/store.rs` に足す追記の 1 本（lock の中で一意の ms の ts を振る・fleet-event-log §13 約束 5）を呼ぶ。
      - (b) 行 h の結びの 1 関数を、その ts で呼ぶ（裁定 id・5 欄の行・close・裁定 event）。経路は結びが発話 event の gui を読む（結びの関数は経路を引数に持たない）。
-     - (b) が落ちた周（結びの断り・台帳を読めない・notes の追記の失敗・close か裁定 event の途中の止まりのどれでも）は rc 1 で `partial utterance=<ts>` を出す。発話は残るので、`seat ruling bind` で同じ ts を結び直せる。
+     - (b) が落ちた周（結びの断り・台帳を読めない・notes の追記の失敗・close か裁定 event の途中の止まりのどれでも）は rc 1 で `partial utterance=<ts>` を出す。発話は残るので、`seat ruling bind` で同じ ts を結び直せる。束の id を受けた周は `partial utterance=<ts> batch=<束の id>` を出し、結び直しは同じ束の id を `--batch` に渡す（束の欄を含む行の字の一致で書き済みを判じるので、束の無い結び直しは別の行を書く）。
   4. **返す 1 行**: rc 0 で stdout に裁定 id だけを 1 行。逐語は載せない。
   5. **承認でない**: `ApprovalReceived` を書かない。承認の口と権能には触れない（C7）。
   6. **hook の門**: hook の子 module 1 つ（行 j の write-set の `+` の file）。`pre_tool_use` で choice の門の直後に撃ち、Bash の周だけ command を `segments` で読む。次のどちらかで deny する（rc 2・stderr 1 行・inject.jsonl に what が `answer-mouth-deny` の 1 行）。

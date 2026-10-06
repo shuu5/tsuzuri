@@ -145,8 +145,16 @@ impl Fake {
 
     /// `seat ruling bind` を撃つ。
     fn bind(&self, question: &str, utterance: &str) -> Output {
+        self.bind_with(question, utterance, &[])
+    }
+
+    /// `seat ruling bind` を足す引数の列つきで撃つ（足す列は `--bd` の前に置く）。
+    fn bind_with(&self, question: &str, utterance: &str, extra: &[&str]) -> Output {
         let (repo, state) = (self.repo.display().to_string(), self.state.display().to_string());
-        run_seat(&["ruling", "bind", "--repo", &repo, "--state-dir", &state, "--question", question, "--utterance", utterance, "--bd", &self.bd])
+        let mut args = vec!["ruling", "bind", "--repo", &repo, "--state-dir", &state, "--question", question, "--utterance", utterance];
+        args.extend_from_slice(extra);
+        args.extend_from_slice(&["--bd", &self.bd]);
+        run_seat(&args)
     }
 
     /// log の裁定の event（物理順）。
@@ -474,10 +482,10 @@ fn seat_ruling_bind_finishes_a_question_whose_close_failed_without_a_second_note
 #[test]
 fn seat_ruling_bind_is_in_the_usage_and_the_help_page_and_add_is_not() {
     let usage = stderr_of(&run_seat(&[]));
-    assert!(usage.contains("|ruling bind --repo R --state-dir S --question ID --utterance TS [--bd B]|"), "使い方: {usage}");
+    assert!(usage.contains("|ruling bind --repo R --state-dir S --question ID --utterance TS [--batch B] [--bd B]|"), "使い方: {usage}");
     assert!(!usage.contains("ruling add"), "使い方に add は無い: {usage}");
     let page = Command::new(bin()).args(["help", "seat"]).output().map(|out| stdout_of(&out)).unwrap_or_default();
-    assert!(page.contains("|ruling bind --repo R --state-dir S --question ID --utterance TS [--bd B]|"), "頁の FORM: {page}");
+    assert!(page.contains("|ruling bind --repo R --state-dir S --question ID --utterance TS [--batch B] [--bd B]|"), "頁の FORM: {page}");
     assert!(page.lines().any(|line| line.trim_start().starts_with("ruling bind ")), "頁の SUBCOMMANDS: {page}");
     assert!(!page.contains("ruling add"), "頁に add は無い: {page}");
 }
@@ -980,11 +988,18 @@ const STDIN_MARK: &str = "(stdin: WORDS)";
 
 impl Fake {
     /// `seat ruling answer` を撃つ（逐語は標準入力へ書いて閉じる）。
-    #[expect(clippy::expect_used, reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く")]
     fn answer(&self, question: &str, words: &str) -> Output {
+        self.answer_with(question, words, &[])
+    }
+
+    /// `seat ruling answer` を足す引数の列つきで撃つ（足す列は `--bd` の前に置く・逐語は標準入力へ書いて閉じる）。
+    #[expect(clippy::expect_used, reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く")]
+    fn answer_with(&self, question: &str, words: &str, extra: &[&str]) -> Output {
         let (repo, state) = (self.repo.display().to_string(), self.state.display().to_string());
         let mut child = Command::new(bin())
-            .args(["seat", "ruling", "answer", "--repo", &repo, "--state-dir", &state, "--question", question, "--bd", &self.bd])
+            .args(["seat", "ruling", "answer", "--repo", &repo, "--state-dir", &state, "--question", question])
+            .args(extra)
+            .args(["--bd", &self.bd])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -2095,3 +2110,5 @@ fn pipe_permit_mouth_h1_the_usage_the_help_page_and_the_form_errors() {
         assert_eq!(place.fake.log(), before, "event 0 件");
     }
 }
+
+mod vrbatch;

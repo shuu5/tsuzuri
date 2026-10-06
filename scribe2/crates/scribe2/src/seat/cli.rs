@@ -19,7 +19,7 @@ use std::process::Stdio;
 
 /// `seat` の使い方。
 pub fn usage() -> String {
-    "usage: seat <register --state-dir S --target T --role R --account L --launch FILE [--anchor DIR]|launch --state-dir S --role R --target S:W [--account L] [--anchor DIR] [--model M] [--restore CMD] [--rules F]|ruling bind --repo R --state-dir S --question ID --utterance TS [--bd B]|ruling answer --repo R --state-dir S --question ID [--bd B] (stdin: WORDS)|ruling ls --state-dir S|tick --state-dir S --target S:W [--rules F] [--bd B]|tick install --state-dir S --target S:W --unit-dir U --binary PATH [--rules F] [--bd B]|tick uninstall --state-dir S --target S:W --unit-dir U --binary PATH [--rules F] [--bd B]|tick status --state-dir S [--target S:W] [--rules F]|retire --state-dir S --target S:W [--reason WORDS]|heartbeat off --state-dir S --target S:W|heartbeat on --state-dir S --target S:W|heartbeat default --state-dir S --target S:W|heartbeat status --state-dir S --target S:W|deliver --state-dir S --target S:W --ruling ID|<label> [--orchestrator] [-c|-r ID] [--target S:W] [--model M] [--anchor DIR] [--restore CMD] [--state-dir S]> [--tmux-socket PATH] [--capture-file PATH] [--state-dir PATH]".to_owned()
+    "usage: seat <register --state-dir S --target T --role R --account L --launch FILE [--anchor DIR]|launch --state-dir S --role R --target S:W [--account L] [--anchor DIR] [--model M] [--restore CMD] [--rules F]|ruling bind --repo R --state-dir S --question ID --utterance TS [--batch B] [--bd B]|ruling answer --repo R --state-dir S --question ID [--batch B] [--bd B] (stdin: WORDS)|ruling ls --state-dir S|tick --state-dir S --target S:W [--rules F] [--bd B]|tick install --state-dir S --target S:W --unit-dir U --binary PATH [--rules F] [--bd B]|tick uninstall --state-dir S --target S:W --unit-dir U --binary PATH [--rules F] [--bd B]|tick status --state-dir S [--target S:W] [--rules F]|retire --state-dir S --target S:W [--reason WORDS]|heartbeat off --state-dir S --target S:W|heartbeat on --state-dir S --target S:W|heartbeat default --state-dir S --target S:W|heartbeat status --state-dir S --target S:W|deliver --state-dir S --target S:W --ruling ID|<label> [--orchestrator] [-c|-r ID] [--target S:W] [--model M] [--anchor DIR] [--restore CMD] [--state-dir S]> [--tmux-socket PATH] [--capture-file PATH] [--state-dir PATH]".to_owned()
 }
 
 /// `seat` の既知の verb（閉じた語・宣言順・設計 contract-source.md §17 の形 (vii)）。短い形の第 1 token（口座 label）は
@@ -104,12 +104,13 @@ const ALLOWED_LAUNCH: &[cli_args::Allowed] = &[
     value("--tmux-socket"),
     value("--capture-file"),
 ];
-/// `seat ruling`（`bind` / `ls` の 2 語は positional・`ls` は `--state-dir` だけを読む・`--bd` は bind の歯の seam）。
+/// `seat ruling`（`bind` / `ls` の 2 語は positional・`ls` は `--state-dir` だけを読む・`--batch` は bind と answer の束の id・`--bd` は bind の歯の seam）。
 const ALLOWED_RULING: &[cli_args::Allowed] = &[
     value("--repo"),
     value("--state-dir"),
     value("--question"),
     value("--utterance"),
+    value("--batch"),
     value("--bd"),
 ];
 /// `seat tick`（席の口で `--rules` を受けるのはこの口だけ・歯の seam＝行の写しを差し替える）。
@@ -397,14 +398,27 @@ fn tick_unit_of(verb: Verb, args: &[String]) -> Outcome {
     super::tick::install::run(verb, &flags, crate::rules::cli::open(args))
 }
 
+/// 束の id の旗 `--batch`（任意）。値は字 `batch:` で始まり、その後が 1 字以上で、どの字も ASCII の英数字か `-` か `.` か `_`
+/// でなければ使い方の誤り（答えの口と結びの口が同じ 1 本で照らす）。
+fn batch_of(args: &[String]) -> Result<Option<&str>, ()> {
+    let well_formed = |word: &str| {
+        word.strip_prefix("batch:").is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_')))
+    };
+    match nonempty(args, "--batch")? {
+        Some(word) if !well_formed(word) => Err(()),
+        other => Ok(other),
+    }
+}
+
 /// `seat ruling bind`（設計 fleet-event-log.md §14 約束 1）: `--repo` / `--question` / `--utterance` は必須で値欠けと空文字は使い方の
-/// 誤り・`--bd` は歯の seam（無い周は既定の client）。結びと断りは [`super::ruling::bind`] が持ち、rc 0 の 1 行に逐語を載せない。
+/// 誤り・`--batch` は任意の束の id（[`batch_of`]）・`--bd` は歯の seam（無い周は既定の client）。結びと断りは [`super::ruling::bind`] が持ち、
+/// rc 0 の 1 行に逐語を載せない。
 fn ruling_bind(rest: &[String], state_dir: &Path) -> Outcome {
     let [repo, question, utterance] = ["--repo", "--question", "--utterance"].map(|name| required_nonempty(rest, name));
-    let (Ok(repo), Ok(question), Ok(utterance), Ok(bd)) = (repo, question, utterance, nonempty(rest, "--bd")) else {
+    let (Ok(repo), Ok(question), Ok(utterance), Ok(batch), Ok(bd)) = (repo, question, utterance, batch_of(rest), nonempty(rest, "--bd")) else {
         return refused_usage();
     };
-    let bind = super::ruling::Bind { repo: Path::new(repo), state_dir, question, utterance, bd: bd.unwrap_or(crate::ledger::DEFAULT_BD) };
+    let bind = super::ruling::Bind { repo: Path::new(repo), state_dir, question, utterance, batch, bd: bd.unwrap_or(crate::ledger::DEFAULT_BD) };
     let named = |head: &str, tail: &str| format!("seat ruling: {head} {tail}question={question} utterance={utterance}");
     let before = read_ledger(bind.repo);
     match super::ruling::bind(&bind) {
@@ -424,10 +438,11 @@ fn ruling_bind(rest: &[String], state_dir: &Path) -> Outcome {
 
 /// `seat ruling answer`（設計 dialogue-surface.md §11）: `--repo` / `--question` は必須で値欠けと空文字は使い方の誤り・逐語は標準入力の
 /// 全部（1 byte も変えない・UTF-8 でない入力は使い方の誤り）。通る周の stdout は裁定 id の 1 行だけ。断りと書きの途中の止まりは
-/// [`super::ruling::answer`] が持ち、途中の止まりは `partial utterance=<ts>`（`seat ruling bind` で結び直せる）。
+/// [`super::ruling::answer`] が持ち、途中の止まりは `partial utterance=<ts>`（束の id を受けた周は `utterance=<ts> batch=<束の id>`・
+/// `seat ruling bind` で同じ ts と同じ `--batch` を渡して結び直せる）。`--batch` は任意の束の id（[`batch_of`]）。
 fn ruling_answer(rest: &[String], state_dir: &Path) -> Outcome {
     let [repo, question] = ["--repo", "--question"].map(|name| required_nonempty(rest, name));
-    let (Ok(repo), Ok(question), Ok(bd)) = (repo, question, nonempty(rest, "--bd")) else {
+    let (Ok(repo), Ok(question), Ok(batch), Ok(bd)) = (repo, question, batch_of(rest), nonempty(rest, "--bd")) else {
         return refused_usage();
     };
     let mut bytes = Vec::new();
@@ -435,7 +450,7 @@ fn ruling_answer(rest: &[String], state_dir: &Path) -> Outcome {
     let Some(words) = words else {
         return refused_usage();
     };
-    let bind = super::ruling::Bind { repo: Path::new(repo), state_dir, question, utterance: "", bd: bd.unwrap_or(crate::ledger::DEFAULT_BD) };
+    let bind = super::ruling::Bind { repo: Path::new(repo), state_dir, question, utterance: "", batch, bd: bd.unwrap_or(crate::ledger::DEFAULT_BD) };
     let named = |head: &str, tail: &str| format!("seat ruling: {head} {tail}question={question}");
     let before = read_ledger(bind.repo);
     match super::ruling::answer(&bind, &words) {
@@ -445,7 +460,10 @@ fn ruling_answer(rest: &[String], state_dir: &Path) -> Outcome {
         }
         Err(AnswerError::Refused(reason)) => Outcome::failed_line(RC_REFUSED, named("refused", &format!("reason={reason} "))),
         Err(AnswerError::Unwritten) => Outcome::failed_line(RC_BROKEN, named("failed", "stage=utterance ")),
-        Err(AnswerError::Partial(ts)) => Outcome::failed_line(RC_REFUSED, named("partial", &format!("utterance={ts} "))),
+        Err(AnswerError::Partial(ts)) => {
+            let batch = batch.map_or_else(String::new, |found| format!("batch={found} "));
+            Outcome::failed_line(RC_REFUSED, named("partial", &format!("utterance={ts} {batch}")))
+        }
     }
 }
 

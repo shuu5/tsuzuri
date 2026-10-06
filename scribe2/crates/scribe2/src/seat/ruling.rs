@@ -2,7 +2,7 @@
 //! FR22 / FR89・憲法 C7.2）。
 //!
 //! 書き手は `seat ruling bind` の 1 本だけで、記帳された発話（[`EventKind::UtteranceReceived`]）と開いた台帳の問いを結び、
-//! 裁定 id を発行して notes に 5 欄の行を書き、`裁定 <id>` で close し、[`EventKind::RulingReceived`]（actor = `human`・
+//! 裁定 id を発行して notes に 5 欄の行（束の id を受けた周は 6 欄）を書き、`裁定 <id>` で close し、[`EventKind::RulingReceived`]（actor = `human`・
 //! `run` 無し・本体は [`Case::Ruling`]）を 1 件書く（[`bind`]）。逐語は発話 event から写す（席が逐語を渡す口は無い・ADR-0087）。
 //! 逐語を受ける口は `seat ruling answer` の 1 本だけで、経路 gui の発話を書いてから同じ [`bind`] を呼ぶ（[`answer`]・hook が席の撃ちを止める）。
 //! 読み手は `seat ruling ls`（1 件 1 行）と doctor の突合の 1 行（[`doctor_lines`]・manifest の `user <ts>` の行ごとに
@@ -90,6 +90,8 @@ pub struct Bind<'a> {
     pub question: &'a str,
     /// 発話の ts（[`EventKind::UtteranceReceived`] の ts の字面）。
     pub utterance: &'a str,
+    /// 束の id（`--batch`・受けた周だけ notes の行が経路と逐語の間に束の欄を持つ 6 欄になる）。
+    pub batch: Option<&'a str>,
     /// 台帳 client。
     pub bd: &'a str,
 }
@@ -106,28 +108,43 @@ pub struct Bound {
 /// 問いの status（open の間だけ新しく結べる）。
 const OPEN: &str = "open";
 
-/// 裁定 id の末尾の番号（1 問 1 裁定なので常に 1）。
-const COUNT: u32 = 1;
-
-/// 裁定 id `<問い id>:<発話の年月日と時分 YYYYMMDDTHHMMZ>-1`（pure）。発話の時刻から作るので、撃ち直しても同じ id になる。
-/// ts の形が読めない・問い id が同じ台帳の bead id の形でない周は `None`（[`is_ruling_id`] が真の字だけを返す）。
+/// 裁定 id `<問い id>:<発話の年月日と時分 YYYYMMDDTHHMMZ>-1`（pure・番号 1 の id）。発話の時刻から作るので、撃ち直しても同じ id になる。
+/// ts の形が読めない・問い id が同じ台帳の bead id の形でない周は `None`（[`is_ruling_id`] が真の字だけを返す）。結びは同じ分の別の
+/// 裁定が notes に在る周に、この id の幹（末の `1` を除いた字）へ別の番号を付ける（[`bind`]）。
 pub fn ruling_id(question: &str, utterance: &str) -> Option<String> {
     let part = |range: std::ops::Range<usize>| utterance.get(range).filter(|found| found.bytes().all(|byte| byte.is_ascii_digit()));
     let (year, month, day, hour, minute) = (part(0..4)?, part(5..7)?, part(8..10)?, part(11..13)?, part(14..16)?);
-    let id = format!("{question}:{year}{month}{day}T{hour}{minute}Z-{COUNT}");
+    let id = format!("{question}:{year}{month}{day}T{hour}{minute}Z-1");
     let prefix = question.split_once('-')?.0;
     is_ruling_id(&id, Some(prefix)).then_some(id)
 }
 
-/// notes に足す裁定の 1 行 `<裁定 id> | <問い id> | <発話の ts> | <経路> | <逐語>`（pure）。逐語は JSON の文字列の字面で最後の欄に置く
-/// ＝改行を含んでも 1 行で、戻すと 1 byte も違わない。
-fn row_of(id: &str, question: &str, utterance: &str, channel: Channel, words: &str) -> String {
-    format!("{id} | {question} | {utterance} | {} | {}", channel.as_str(), json_lite::quote(words))
+/// notes に足す裁定の 1 行 `<裁定 id> | <問い id> | <発話の ts> | <経路> | <逐語>`（pure）。束の id を受けた周は経路と逐語の間に束の欄を
+/// 挟んだ 6 欄。逐語は JSON の文字列の字面で最後の欄に置く＝改行を含んでも 1 行で、戻すと 1 byte も違わない。
+fn row_of(id: &str, args: &Bind<'_>, channel: Channel, words: &str) -> String {
+    let (question, utterance, route, words) = (args.question, args.utterance, channel.as_str(), json_lite::quote(words));
+    match args.batch {
+        Some(batch) => format!("{id} | {question} | {utterance} | {route} | {batch} | {words}"),
+        None => format!("{id} | {question} | {utterance} | {route} | {words}"),
+    }
+}
+
+/// notes の字の中で `stem` の直後に続く ASCII の数字の最長の並びを 10 進で読んだ番号の集まり（読めない並びは数えない）。
+fn taken_numbers(notes: &str, stem: &str) -> BTreeSet<u64> {
+    notes
+        .match_indices(stem)
+        .filter_map(|(at, found)| {
+            let tail = notes.get(at.saturating_add(found.len())..)?;
+            let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
+            tail.get(..digits)?.parse().ok()
+        })
+        .collect()
 }
 
 /// 記帳された発話と開いた台帳の問いを結ぶ（設計 §14）。断りは (a) 発話が無い (b) 結び済み (c) 閉じた問い (d) 問いでない の順で、
 /// 台帳は (b) の後に 1 回だけ読む。書きは notes → close → 裁定 event の順（途中で止まった周は [`BindError::Partial`]・同じ組の
-/// 撃ち直しが続きだけを書く）。
+/// 撃ち直しが続きだけを書く）。裁定 id の番号は 1 から、notes に取られている番号を飛ばして最初の空きを使う（同じ分の開き直した問いの
+/// 答え直しが前の裁定と同じ id にならない）。
 pub fn bind(args: &Bind<'_>) -> Result<Bound, BindError> {
     let events =
         store::read_all(args.state_dir).map_err(|errors| BindError::LogUnreadable(errors.iter().map(ToString::to_string).collect()))?;
@@ -145,12 +162,23 @@ pub fn bind(args: &Bind<'_>) -> Result<Bound, BindError> {
     }
     let bead = ledger::show(args.bd, args.repo, args.question).map_err(|_| BindError::LedgerUnreadable)?;
     let not_question = BindError::Refused(Refusal::NotQuestion);
-    let (Some(bead), Some(id)) = (bead, ruling_id(args.question, &said.ts)) else {
+    let stem = ruling_id(args.question, &said.ts).and_then(|first| first.strip_suffix('1').map(str::to_owned));
+    let (Some(bead), Some(stem)) = (bead, stem) else {
         return Err(not_question);
     };
     let words = said.detail.clone().unwrap_or_default();
-    let row = row_of(&id, args.question, &said.ts, channel, &words);
-    let written = bead.notes.lines().any(|line| line == row);
+    // 番号は 1 から: その番号の行が notes に在れば書き済み（撃ち直しで同じ id）・無くて notes が取っている番号なら次へ進む。
+    let taken = taken_numbers(&bead.notes, &stem);
+    let mut number = 1_u64;
+    let (id, row, written) = loop {
+        let id = format!("{stem}{number}");
+        let row = row_of(&id, args, channel, &words);
+        let written = bead.notes.lines().any(|line| line == row);
+        if written || !taken.contains(&number) {
+            break (id, row, written);
+        }
+        number = number.saturating_add(1);
+    };
     if bead.status != OPEN && !written {
         return Err(BindError::Refused(Refusal::Closed));
     }
@@ -183,7 +211,7 @@ pub enum AnswerError {
     Refused(&'static str),
     /// 発話を書けなかった（何も書いていない）。
     Unwritten,
-    /// 発話は書いた後で結びが落ちた（発話の ts・`seat ruling bind` で同じ ts を結び直せる）。
+    /// 発話は書いた後で結びが落ちた（発話の ts・`seat ruling bind` で同じ ts を結び直せる・束の周は同じ束の id を `--batch` に渡す）。
     Partial(String),
 }
 
