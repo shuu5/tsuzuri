@@ -482,7 +482,7 @@ lifecycle.stale
        - stderr の 1 行の置き場: lib は stderr に書かない（Cargo.toml の lint `print_stderr` が deny）。`fire`（dispatch.rs）は書き手の返りのうち `Written`・`Unchanged`・`Coalesced` の外の語を `Turn` の新しい欄 1 つ（`Option` の語・ほかの周は `None`）に載せ、`crates/scribe2/src/pipe/cli.rs` の列の 1 周の組み立て（`turn_lines` と終端の周の同じ組み立て）がその語を Outcome の stderr の `lifecycle=<語>` の 1 行にする。
        - `Turn` の literal の構築点は dispatch.rs の外に 2 か所（`crates/scribe2/src/pipe/dispatch/candidates.rs` と `crates/scribe2/src/hook/utterance.rs` の歯の区間）在り、欄を足すと compile できないので、どちらにも `None` の欄を足す。cli.rs と 2 つの file を write-set に置く（main be490f8 で `Turn {` を grep した・便 s2-07l.738.38.7-20260930T195514Z の契約の審査が、この置き場が write-set の外だと名指した）。
      - (b)(c) bind の口の記帳の後と答えの口の記帳の後の契機は、本行に持たない（本行の write-set を広げない）。2 つの口（fleet-event-log.md 行 h・dialogue-surface.md 行 j・どちらも `crates/scribe2/src/seat/ruling.rs`）は着地済みで、2 つの口の契機は本行の着地の後に本 § へ足す行が持つ。
-     - (d) land の終端の close の Ok の後（`close_bead` と retire.rs の close）。置き場は終端の周の知らせより前とする（知らせの語が出力を読むのは §15 の読み手の行で、順の歯はその行が持つ）。
+     - (d) land の終端の close の Ok の後（着地の本体と `--terminal-only` の 2 経路・`close_bead`。`pipe retire` は PR の便の close を持たなくなった・契約表の行 v-ci-proof-cut）。置き場は終端の周の知らせより前とする（知らせの語が出力を読むのは §15 の読み手の行で、順の歯はその行が持つ）。
        - stderr の 1 行の置き場: `close_bead` は閉じた 7 値の `Terminal` を返すだけで、Outcome を組むのは finish.rs の `terminal` の呼び手の 2 か所（finish.rs の着地の本体と、`pipe land --terminal-only` の `crates/scribe2/src/pipe/cli/step.rs` の `terminal_only`）。書き直しは `close_bead` の中でなく、2 か所の呼び手が `terminal` の返りの `rc` が 0 の周（close した 2 値だけが 0）に、行 c の書き手の file の 1 本の関数（全部の書き直しを撃ち、`Written`・`Unchanged`・`Coalesced` の外の語だけを返す・crate の中から呼べる可視性）を呼び、その語を Outcome の stderr に足す。`Terminal` に欄を足さず、変種も名指さない。step.rs を write-set と growth に置く（main a32953b4 で確かめた・便 s2-07l.738.38.7-20260930T203430Z の契約の審査が、`terminal_only` の Outcome の組み立てが write-set の外だと名指した）。retire.rs の close は retire.rs の中で Outcome を組み、同じ 1 本の関数を呼ぶ。
        - 契機 (d) の中継の関数を finish.rs に置かない: `finish` は `crates/scribe2/src/pipe/land.rs` の私有の module で、step.rs からは land.rs の再輸出の列（`terminal` を含む）越しにしか見えない（main d5e407cd で確かめた・便 s2-07l.738.38.7-20260930T204910Z の契約の審査が名指した）。2 か所の呼び手は行 c の書き手の file の関数を直に呼ぶ。
      - (e) 書き直しの口（約束 9）。
@@ -1053,7 +1053,7 @@ done-teeth = ["1:lifecycle_writer_ties_commits_and_sources_onto_contracts_and_me
 - 出所: memo s2-07l.739 の穴の 1 つ（FR90 の「直後」の 4 つの契機のうち、結びと答えの口に行が無い）。SRS の字は直さない。
 - 何が起きているか（main be838e18・verified）:
   - FR90 は「器が台帳を書いた直後（bind・裁定面の答えの口・land の終端の close・memo の自動の close）」に全部を書き直すと言い、AC60 は 6 つの契機で全部が書き直されることを求める。
-  - §12 約束 8 の契機は (a) dispatch の `fire`・(d) land の終端の close の後（着地の本体・`--terminal-only`・`pipe retire` の 3 経路が `after_close` を呼ぶ）・(e) 口（`fleet lifecycle write`）の 3 つ。行 i（§19・未着地）の管理 tick は、最長で下限 300 秒と tick の周期の和の後に書き直すので、「直後」には当たらない。
+  - §12 約束 8 の契機は (a) dispatch の `fire`・(d) land の終端の close の後（着地の本体と `--terminal-only` の 2 経路が `after_close` を呼ぶ）・(e) 口（`fleet lifecycle write`）の 3 つ。行 i（§19・未着地）の管理 tick は、最長で下限 300 秒と tick の周期の和の後に書き直すので、「直後」には当たらない。
   - 結びの 1 本（`crates/scribe2/src/seat/ruling.rs` の `bind`）は notes → close（理由 `裁定 <id>`）→ 裁定 event の順に書き、答えの口（同じ file の `answer`）は発話を書いてから同じ `bind` を呼ぶ。どちらの後にも局面の出力の書き直しは無い。呼び手は `crates/scribe2/src/seat/cli.rs` の `ruling_bind` と `ruling_answer`。
   - 全部の書き直し 1 回は wall 4〜14 秒（§19 の実測）で、同じ process で撃つと答えの口の待ち時間がその分延びる。
   - 自分の binary を子として切り離して起こす形は 2 つ在る: `crates/scribe2/src/pipe/dispatch.rs` の `spawn_self`（頭の語が `pipe` に固定・可視性は pipe の中だけ・子の stderr を置き場の `launch.log` へ）と、`crates/scribe2/src/hook/group.rs` の `measure_later`（`fleet usage` の子・`myself` の program・新しい process group の leader・入出力は全部捨てる・待たない・起こせたかの真偽だけを返す）。

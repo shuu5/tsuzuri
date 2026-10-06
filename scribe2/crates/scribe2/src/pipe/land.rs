@@ -81,9 +81,7 @@ mod finish;
 
 use finish::{finish, open_pr, squash};
 pub(crate) use finish::{contract_key, source_key};
-pub(in crate::pipe) use finish::{
-    close_reason, land_train, landed_sha, terminal, Car, CloseTail, PushTip, CLOSE_REASON,
-};
+pub(in crate::pipe) use finish::{land_train, landed_sha, terminal, Car, CLOSE_REASON};
 
 /// 着地が anchor を揃えなかった周の印（設計 §57・行 az）。書き手は境界 crate の歯からも呼べ、古さの判定は crate の中
 /// （land-window と行 h の hook）から呼べる。
@@ -1012,14 +1010,13 @@ fn follow_failed(entry: &Land<'_>, detail: &str, reason: String) -> Outcome {
     }
 }
 
-/// land の終端の結末（**閉じた 7 値**・設計 contract-source.md §5）。
+/// land の終端の結末（**閉じた 5 値**・設計 contract-source.md §5）。
 ///
 /// `Closed` と `ClosedWithoutCi` 以外はどれも**台帳を閉じない**（着地は取り消さない）。やり直しは
 /// `pipe land --terminal-only` で終端だけを撃ち直す（冪等）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Terminal {
-    /// push → この host の緑で close まで通った（GitHub の検査は子 process が後から読む）か、受け入れの周が push を撃たず
-    /// 先端の CI の success で close した。
+    /// push → この host の緑で close まで通った（GitHub の検査は子 process が後から読む）。
     Closed,
     /// remote を持たない repo の便を **CI の照合なしで close した**（宣言を読めた上で `remote` の行が無い・理由は
     /// `landed <sha> ci=none`）。
@@ -1035,19 +1032,12 @@ pub enum Terminal {
     Unreadable,
     /// push が撃てなかった / 失敗した（理由の語）。
     PushFailed(String),
-    /// CI が **failure** だった。
-    CiFailed,
-    /// CI の判定を**測れなかった**（上限超過・run が 0 本・行を撃てない・JSON を読めない）。
-    ///
-    /// `CiFailed` と融合しない（C10）——failure は「測って落ちた」で、こちらは「測れていない」である。
-    CiUnmeasurable,
     /// 台帳を閉じられなかった（着地は成立・[`crate::ledger::CloseError`] の 1 行）。
     CloseFailed(String),
 }
 
 /// [`Terminal`] の全 variant の字面（`terminal=` の値・宣言順）。
-pub const TERMINAL_TOKENS: &[&str] =
-    &["closed", "closed:no-ci", "unreadable", "push:failed:", "ci:failure", "ci:unmeasurable", "close:failed:"];
+pub const TERMINAL_TOKENS: &[&str] = &["closed", "closed:no-ci", "unreadable", "push:failed:", "close:failed:"];
 
 /// 終端の境界の極性（[`Terminal`]）: **success 以外は close しない側へ倒す**（FailClosed）。
 ///
@@ -1066,8 +1056,6 @@ impl Terminal {
             Self::ClosedWithoutCi => "closed:no-ci".to_owned(),
             Self::Unreadable => "unreadable".to_owned(),
             Self::PushFailed(reason) => format!("push:failed:{reason}"),
-            Self::CiFailed => "ci:failure".to_owned(),
-            Self::CiUnmeasurable => "ci:unmeasurable".to_owned(),
             Self::CloseFailed(reason) => reason.clone(),
         }
     }
@@ -1076,9 +1064,7 @@ impl Terminal {
     pub fn rc(&self) -> u8 {
         match self {
             Self::Closed | Self::ClosedWithoutCi => RC_OK,
-            Self::Unreadable | Self::PushFailed(_) | Self::CiFailed | Self::CiUnmeasurable | Self::CloseFailed(_) => {
-                crate::cli_outcome::RC_REFUSED
-            }
+            Self::Unreadable | Self::PushFailed(_) | Self::CloseFailed(_) => crate::cli_outcome::RC_REFUSED,
         }
     }
 }
@@ -1200,9 +1186,10 @@ mod tests {
     // flip-check: moved s2-07l.498
     use super::super::contract::Contract;
     use super::super::gate::{next_number, skip_record, Skipped};
+    use super::finish::{close_reason, CloseTail};
     use super::{
-        close_reason, detection_needed, landed_sha, regate_skippable, squash_message, subject_of, trailer_key, CloseTail, Terminal,
-        CONTRACT_TRAILER, REQUIREMENTS_TRAILER, SHA_PREFIX, SUBJECT_CHARS, TERMINAL_TOKENS,
+        detection_needed, landed_sha, regate_skippable, squash_message, subject_of, trailer_key, Terminal, CONTRACT_TRAILER,
+        REQUIREMENTS_TRAILER, SHA_PREFIX, SUBJECT_CHARS, TERMINAL_TOKENS,
     };
     use super::{declaration, git_line, git_ok, PathBuf};
     use crate::cli_outcome::RC_OK;
@@ -1308,20 +1295,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// 終端の結末は**閉じた 7 値**で、字面は [`TERMINAL_TOKENS`] と 1 対 1（宣言順）。
+    /// 終端の結末は**閉じた 5 値**で、字面は [`TERMINAL_TOKENS`] と 1 対 1（宣言順）。
     ///
     /// **close する側は 2 値だけ**である: 通った周（`Closed`）と、remote を持たない repo の便を CI の照合なしで
-    /// close した周（`ClosedWithoutCi`・rc 0）。残る 5 値はどれも close せず rc 1 で止まる——`Unreadable` を
+    /// close した周（`ClosedWithoutCi`・rc 0）。残る 3 値はどれも close せず rc 1 で止まる——`Unreadable` を
     /// `ClosedWithoutCi` と同じ側に倒すと「測れていない」が「終端が無い」に化ける（C10）。
     #[test]
-    fn pipe_terminal_land_outcomes_are_the_closed_seven() {
+    fn pipe_terminal_land_outcomes_are_the_closed_five() {
         let listed = [
             Terminal::Closed,
             Terminal::ClosedWithoutCi,
             Terminal::Unreadable,
             Terminal::PushFailed("git".to_owned()),
-            Terminal::CiFailed,
-            Terminal::CiUnmeasurable,
             // **前置きの字面は produce する側から採る**（fixture の literal で満たすと対の assert が空虚）。
             Terminal::CloseFailed(crate::ledger::CloseError::Unlaunchable.render()),
         ];
@@ -1334,16 +1319,11 @@ mod tests {
         assert_eq!(ok, vec!["closed", "closed:no-ci"], "rc 0 は 2 値だけ（母集団 {} 値）", listed.len());
     }
 
-    /// close の理由の尾は**書き手 1 本**（[`close_reason`]）が閉じた 2 値から 3 形を返す（設計 contract-source.md §5・FR50）:
-    /// CI が success の周は先端の有無で 2 形、CI の照合なしの周は `ci=none` で先端（`tip=`）を持たない。
+    /// close の理由の尾は**書き手 1 本**（[`close_reason`]）が閉じた 2 値から 2 形を返す（設計 contract-source.md §5・FR50）:
+    /// CI の照合なしの周は `ci=none` で先端（`tip=`）を持たない（この host の緑の形は下の `vclhost_` の歯が測る）。
     #[test]
     fn pipe_terminal_no_remote_reason_tails_come_from_one_writer() {
-        let (sha, head) = ("a".repeat(40), "b".repeat(40));
-        assert_eq!(close_reason(&sha, CloseTail::CiSuccess(None)), format!("landed {sha} ci=success"));
-        assert_eq!(
-            close_reason(&sha, CloseTail::CiSuccess(Some(&head))),
-            format!("landed {sha} ci=success tip={head}")
-        );
+        let sha = "a".repeat(40);
         let none = close_reason(&sha, CloseTail::NoCi);
         assert_eq!(none, format!("landed {sha} ci=none"));
         assert!(!none.contains("tip="), "ci=none の周に先端は無い: {none}");

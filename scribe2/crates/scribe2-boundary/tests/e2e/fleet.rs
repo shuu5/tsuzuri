@@ -3459,53 +3459,13 @@ impl Life {
         super::pipe::run_pipe(&self.pipe_args(&["land"], &tail))
     }
 
-    /// PR の形で着地した便を、偽 remote・偽 gh・偽 CI つきで `pipe retire` が通る形にする（返すのは PATH の値）。
-    #[expect(
-        clippy::expect_used,
-        reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
-    )]
-    fn prepared_pr(&self, id: &str) -> String {
-        let (repo, state) = (&self.repo, &self.state);
-        let landed = super::pipe::run_pipe(&[
-            "land", "--run", id, "--repo", &repo.display().to_string(), "--state-dir", &state.display().to_string(), "--pr-cmd", "true",
-        ]);
-        assert_eq!(landed.status.code(), Some(i32::from(RC_OK)), "PR 形の land は rc 0: {}", super::pipe::stderr_of(&landed));
-        let remote = state.join("remote.git");
-        super::pipe::git(state, &["init", "--bare", "-q", &remote.display().to_string()]);
-        super::pipe::git(repo, &["remote", "add", "fake", &remote.display().to_string()]);
-        let ci = state.join("life-ci.sh");
-        fs::write(&ci, "#!/bin/sh\nprintf '[{\"status\":\"completed\",\"conclusion\":\"success\"}]\\n'\n").expect("偽 CI を書ける");
-        let declaration = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
-        fs::write(repo.join(".vessel.toml"), format!("{declaration}remote = \"fake\"\nci-cmd = \"{} {{sha}}\"\n", ci.display())).expect("宣言を書ける");
-        super::pipe::git(repo, &["add", "-f", ".vessel.toml"]);
-        super::pipe::git(repo, &["commit", "-q", "-m", "terminal-decl"]);
-        let (main, branch) = (super::pipe::git(repo, &["rev-parse", "refs/heads/main"]), format!("scribe2/{id}"));
-        let tree = super::pipe::git(repo, &["rev-parse", &format!("{branch}^{{tree}}")]);
-        let merge = super::pipe::git(repo, &["commit-tree", &tree, "-p", &main, "-p", &branch, "-m", "merge"]);
-        super::pipe::git(repo, &["push", "-q", "-f", &remote.display().to_string(), &format!("{merge}:refs/heads/main")]);
-        let bin = state.join("life-bin");
-        fs::create_dir_all(&bin).expect("道具の dir を作れる");
-        let gh = bin.join("gh");
-        fs::write(&gh, format!("#!/bin/sh\nprintf '{{\"state\":\"MERGED\",\"mergeCommit\":{{\"oid\":\"{merge}\"}}}}\\n'\n")).expect("偽 gh を書ける");
-        fs::set_permissions(&gh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).expect("実行権を付ける");
-        fs::set_permissions(&ci, std::os::unix::fs::PermissionsExt::from_mode(0o755)).expect("実行権を付ける");
-        format!("{}:{}", bin.display(), crate::toolbox_path(state))
-    }
-
-    /// `pipe retire --run ID`（偽 gh を PATH の先頭に）。
-    fn retire(&self, id: &str, path: &str, extra: &[&str]) -> Output {
-        let mut tail = vec!["--run", id];
-        tail.extend(extra);
-        super::pipe::run_pipe_with_path(path, &self.pipe_args(&["retire"], &tail))
-    }
-
     /// 台帳 client の close を呼んだ回数。
     fn closes(&self) -> usize {
         fs::read_to_string(self.dir.join("close-log")).map(|text| text.lines().count()).unwrap_or(0)
     }
 }
 
-/// (d) 着地の本体の close と `--terminal-only` の終端の close と `pipe retire` の close で出力が書かれ、close が落ちた周は書かれない
+/// (d) 着地の本体の close と `--terminal-only` の終端の close で出力が書かれ、close が落ちた周は書かれない
 /// （同じ歯の中の肯定と組）。呼び手の rc と stdout は変わらず stderr に `lifecycle=` も出ない。
 #[test]
 fn fleet_lifecycle_close_paths_advance_generated_and_a_failed_close_does_not() {
@@ -3531,20 +3491,6 @@ fn fleet_lifecycle_close_paths_advance_generated_and_a_failed_close_does_not() {
     assert_eq!(body.closes(), 1, "close は 1 回");
     assert_queued(&body.shown(), "d");
     super::pipe::clean(&[&body.repo, &body.state]);
-
-    let retired = Life::new();
-    let id = retired.gated();
-    let path = retired.prepared_pr(&id);
-    retired.put("close-rc", "3\n");
-    let declined = retired.retire(&id, &path, &[]);
-    assert_eq!(declined.status.code(), Some(i32::from(RC_REFUSED)), "close が落ちた retire は rc 1: {}", super::pipe::stderr_of(&declined));
-    assert_eq!(retired.generated(), None, "落ちた close の周は出力を書かない");
-    retired.put("close-rc", "0\n");
-    let out = retired.retire(&id, &path, &[]);
-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "retire は rc 0: {} / {}", super::pipe::stdout_of(&out), super::pipe::stderr_of(&out));
-    assert!(retired.generated().is_some(), "retire の close の後に書く");
-    assert!(!super::pipe::stderr_of(&out).contains("lifecycle="), "Written の周は stderr に出さない");
-    super::pipe::clean(&[&retired.repo, &retired.state]);
 }
 
 /// lock の待ちを短くした rules の写し（埋め込みの manifest の `fleet.lock_retry_ms` だけを 100 ms にする）。
@@ -3567,7 +3513,7 @@ fn life_told(out: &Output, life: &Life, id: &str) -> (Option<i32>, String) {
     (out.status.code(), text)
 }
 
-/// 契機 (a) の `pipe dispatch` と (d) の `--terminal-only` と `pipe retire` の周で、Written の周と lock を生きた pid で持たせた周の
+/// 契機 (a) の `pipe dispatch` と (d) の `--terminal-only` の周で、Written の周と lock を生きた pid で持たせた周の
 /// 呼び手の rc と stdout の字が等しく `lifecycle=` を持たず、stderr の `lifecycle=` の行は busy の周の `lifecycle=busy` の 1 行だけ。
 #[test]
 fn fleet_lifecycle_caller_rc_and_stdout_are_the_same_for_a_written_and_a_busy_round() {
@@ -3588,28 +3534,22 @@ fn fleet_lifecycle_caller_rc_and_stdout_are_the_same_for_a_written_and_a_busy_ro
     assert_eq!(busy.generated(), None, "busy の周は書かない");
     super::pipe::clean(&[&written.repo, &written.state, &busy.repo, &busy.state]);
 
-    assert_eq!(life_close_round(false, false), life_close_round(true, false), "(d) terminal-only の rc と stdout は等しい");
-    assert_eq!(life_close_round(false, true), life_close_round(true, true), "(d) retire の rc と stdout は等しい");
+    assert_eq!(life_close_round(false), life_close_round(true), "(d) terminal-only の rc と stdout は等しい");
 }
 
-/// (d) の 1 周（`retire` が偽なら 1 周目の close を落としてから `--terminal-only`・真なら PR の便の retire）を撃ち、呼び手の字を返す。
+/// (d) の 1 周（1 周目の close を落としてから `--terminal-only`）を撃ち、呼び手の字を返す。
 /// `locked` の周は lock を生きた pid で持たせる（stderr の `lifecycle=` の行は busy の周の 1 行だけ）。
-fn life_close_round(locked: bool, retire: bool) -> (Option<i32>, String) {
+fn life_close_round(locked: bool) -> (Option<i32>, String) {
     let life = Life::new();
     let id = life.gated();
-    let path = if retire {
-        life.prepared_pr(&id)
-    } else {
-        life.put("close-rc", "3\n");
-        assert_eq!(life.land(&id, &[]).status.code(), Some(i32::from(RC_REFUSED)), "前提: 1 周目の close は落ちる");
-        life.put("close-rc", "0\n");
-        String::new()
-    };
+    life.put("close-rc", "3\n");
+    assert_eq!(life.land(&id, &[]).status.code(), Some(i32::from(RC_REFUSED)), "前提: 1 周目の close は落ちる");
+    life.put("close-rc", "0\n");
     if locked {
         life.lock_by_a_live_process();
     }
     let rules = life_fast_rules(&life);
-    let out = if retire { life.retire(&id, &path, &["--rules", &rules]) } else { life.land(&id, &["--terminal-only", "--rules", &rules]) };
+    let out = life.land(&id, &["--terminal-only", "--rules", &rules]);
     let err = super::pipe::stderr_of(&out);
     let lines: Vec<&str> = err.lines().filter(|line| line.contains("lifecycle=")).collect();
     assert_eq!(lines, if locked { vec!["lifecycle=busy"] } else { Vec::new() }, "stderr の lifecycle= の行: {err}");
@@ -3864,7 +3804,7 @@ fn memo_masked(text: &str) -> String {
     out
 }
 
-/// 契機 (d) の 3 経路（`body` 着地の本体・`terminal` 1 周目の close を落とした後の `--terminal-only`・`retire`）の 1 本を撃つ（`memo` が偽なら memo を足さない `Life`）。
+/// 契機 (d) の 2 経路（`body` 着地の本体・`terminal` 1 周目の close を落とした後の `--terminal-only`）の 1 本を撃つ（`memo` が偽なら memo を足さない `Life`）。
 fn memo_autoclose_path(path: &str, memo: bool) -> (Life, String, Output) {
     let life = Life::new();
     if memo {
@@ -3872,10 +3812,6 @@ fn memo_autoclose_path(path: &str, memo: bool) -> (Life, String, Output) {
     }
     let id = life.gated();
     let out = match path {
-        "retire" => {
-            let place = life.prepared_pr(&id);
-            life.retire(&id, &place, &[])
-        }
         "terminal" => {
             life.put("close-rc", "3\n");
             life.land(&id, &[]);
@@ -3893,11 +3829,11 @@ fn memo_told(out: &Output, life: &Life, id: &str) -> (Option<i32>, String) {
     (rc, memo_masked(&text))
 }
 
-/// 3 経路の close の記録の最後の行が memo の close で、その前に land の close が在り toy-m8 の close は無い。呼び手の rc と stdout は memo を足さない周と等しく、
+/// 2 経路の close の記録の最後の行が memo の close で、その前に land の close が在り toy-m8 の close は無い。呼び手の rc と stdout は memo を足さない周と等しく、
 /// 出力が書かれ、stderr に `memo-close=` が無い（同じ歯の中の対: memo を足さない周に memo の close は無い）。
 #[test]
 fn memo_autoclose_terminal_paths_close_the_due_memo_after_the_land_close() {
-    for path in ["body", "terminal", "retire"] {
+    for path in ["body", "terminal"] {
         let ((life, id, out), (plain, plain_id, plain_out)) = (memo_autoclose_path(path, true), memo_autoclose_path(path, false));
         let (err, log) = (super::pipe::stderr_of(&out), life.close_log());
         assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{path}: rc 0: {err}");

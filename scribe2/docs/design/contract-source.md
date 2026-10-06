@@ -1969,6 +1969,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
   - (c) CI が failure の着地の後に `refs/heads/main` を消して撃ち直す。rc 1・stdout が空・stderr が `refs/heads/main を読めない` を持ち、event の数が変わらず、偽 bd が撃たれない。
   - 変異の A/B（判定の順・条件 1 つに歯 1 本）: 形 1 の断りを外して先端の側に倒す → (c) が落ちる（終端が `terminal:unreadable` を記す）。形 2 / 3 の選びを常に先端の側にする（base の形）→ (a)（照合が着地した sha）と (b) の 1 周目（close する）が落ちる。常に `Behind` を渡す → (b) の 2 周目が落ちる（reason に `tip=`）。記録の sha の代わりに main の今の sha を着地した sha として渡す → (a)（reason が着地した sha を名指さない）と (b) の 1 周目（close する）が落ちる。
   - base で RED の理由: 3 本とも base に在る helper だけを使い、overlay の上で compile は通って assert が落ちる（機能不在）。base は (a) で着地した sha を照合し、(b) の 1 周目で close し、(c) で `terminal:unreadable` を記す。(a) は期待が動く既存の歯なので base で赤い普通の flip で、札は置かない。order.rs は 1 file で flip-check は 1 turn（1 行目の base から持ち越した純移動の札は効かず、stale-marker の 1 行が出るだけ）。
+- 退けた形（行 v-ci-proof-cut）: `Failed` の便の撃ち直しが remote の main に載った自分の squash を受け入れる形は退けた。`Failed` の便は終端だけの撃ち直しの段の前提で断る（rc 1・`run <id> の段は Failed である`・何も書かず何も撃たない）。
 
 ## 59. remote を持たない repo の便は、走査も push も CI の照合も撃たずに「landed <着地 commit id> ci=none」で close する — 終端の 7 値の `Undeclared` を close する値に替え、close の理由の尾を 1 つの書き手に寄せる（契約表の行 bn・FR50・[ADR-0094](../../design-intent/decisions/ADR-0094-the-land-terminal-closes-landed-runs-by-three-routes.html) の経路 (2)・裁定 user 2026-09-29T05:46Z）
 
@@ -2090,6 +2091,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
   - (c) `pr_retire_fold_only_and_closed_contracts_fold_without_checks`: not-merged の fixture に `--fold-only` を付けた撃ちが rc 0・畳む・close 0・偽 gh の呼び出し 0。`retired/<id>` に先に dir を置いた success の fixture の撃ちが rc 1 の `worktree-unready`・close 1 回（偽の台帳が closed・landed）・worktree が元の場所に在る。dir を退けて撃ち直すと rc 0 で畳み、close も偽 gh も増えない。
   - 変異の A/B（判定の順・条件 1 つに歯 1 本）: worktree の確かめを forge の後ろへ移す → (b) の worktree-unready の周で偽 gh が撃たれる。閉じ済みの確かめを外す → (c) の撃ち直しで close が 2 回。祖先の照合を外す → (b) の not-ancestor の周で close する。pending を success に倒す → (b) の空の結果の周で close する。先端の違いを見ずに `tip=` を付けない → (a) の 2 周目が落ちる。close の前に畳む → (b) の unwritten の周で worktree が消える。
   - base で RED の理由: (a)(c) は base の retire が forge に問わず close を撃たず `--fold-only` を未知の flag として断るので assert で RED、(b) は base が PR の便を畳んで rc 0 を返すので RED（機能不在）。書き直す既存の 2 本は `--fold-only` を base が断るので base で赤い。
+- 退けた形（行 v-ci-proof-cut）: 本 § の照合（merge の commit・先端の祖先・先端の CI）と close は退けた。PR の便の retire は、閉じた契約（台帳で closed で理由の頭の語が `landed`）と `--fold-only` だけを畳み、閉じていない契約（開いている・理由の頭の語が `landed` でない）は語 `not-closed` の 1 行と rc 1 で断る。断る語は閉じた 3 語（宣言順 worktree-unready・unmeasured・not-closed）で、forge・git・CI にも台帳の close にも問わない。
 
 ## 62. 入れ子の source の根を vessel 宣言の任意 key crate-roots で足し、追随の再 gate の要否・着地後の検出線の面・受付の上限の余地が、宣言した根の下の crate を crates/ の直下の crate と同じに読む（契約表の行 bq・FR34・FR48・NFR4）
 
@@ -2290,6 +2292,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
   - 変わらない既存の歯（本文は変えない）: `pipe_replay_tip_` の 3 本（記録の sha が先端の祖先の周は探し直しで記録の sha そのものが見つかり reason が今と同じ・trailer を持たない兄弟の commit の周は見つからず close しない・main を読めない周は探す前に断る）と `pipe_land_already_landed_` の 3 本（既着地の便の読み）。
   - 変異の A/B（判定の順・条件 1 つに歯 1 本）: 探し直しを撃たない（base の形）→ (a) の 2 周目と (b) が落ちる。字面の等しい行を確かめず `--grep` の当たりをそのまま使う → (a) の 1 周目が落ちる（close する）。見つけた sha でなく記録の sha と先端を比べて側を選ぶ（常に `PushTip::Behind`）→ (b) が落ちる（reason に `tip=`）。close の reason に記録の sha を書く → (a) の 2 周目と (b) が落ちる。`PushTip::Behind` の周に見つけた sha で CI を照合する → (a) の 2 周目が落ちる（argv が写しの sha）。祖先の周にも見つけた sha で記録を上書きする形の誤り（等しい周も探して記録を捨てる）は、祖先の周に見つかるのが記録の sha そのものなので観測が変わらない（歯を置かない）。
   - base で RED の理由: 2 本とも base に在る helper だけを使い、overlay の上で compile は通って assert が落ちる（機能不在）。base は (a) の 2 周目と (b) で記録の sha が先端の祖先でないので CI を撃たず close しない（rc 1・`terminal=ci:unmeasurable`）。(a) の 1 周目は base でも同じ観測（1 本の fn の中の対）。
+- 退けた形（行 v-ci-proof-cut）: `Failed` の便の撃ち直しが remote の main に載った自分の squash を受け入れる形は退けた。終端だけの撃ち直しの前提の段は `Landed` だけで、`Failed` の便は段の前提（`run <id> の段は Failed である`・rc 1）で断り、何も書かず何も撃たない。host の緑の無い便は新しい便で撃ち直す。
 
 ## 66. 契約表の行が done の番号つき項目ごとの歯を欄 done-teeth で名指し、器が表の検査・受付・gate の段 ① で対応を照らす — 欄を読むだけの行 (0) を先に着地させて binary を入れ替えてから欄を書き、欄の要否は vessel 宣言の任意 key teeth-check と、base から足された行・done の字が変わった行で決め、着地済みの行は書き換えない（epic `s2-07l.736.33` の打ち手 5・[ADR-0104](../../design-intent/decisions/ADR-0104-contract-rows-name-a-tooth-for-each-numbered-done-item.html)・行 (1)〜(4) は SRS の round の後に起こす）
 

@@ -1,7 +1,7 @@
-//! 便の終わりの段を 1 つに定める歯（接頭辞 `vredc_` と `vcioff_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+//! 便の終わりの段を 1 つに定める歯（接頭辞 `vredc_` と `vcipf_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 //!
-//! 着地の口が squash の前に段を読み直すこと（列の先頭が着地させた便の撃ち直しを止める）と、終端だけの撃ち直しが main-red の便の
-//! squash を remote の main の上で受け入れて着地の形で閉じることを外形から測る。
+//! 着地の口が squash の前に段を読み直すこと（列の先頭が着地させた便の撃ち直しを止める）と、終端だけの撃ち直しが `Failed` の便を
+//! 段の前提で断って何も撃たないことを外形から測る。
 
 use super::*;
 
@@ -81,16 +81,16 @@ fn vredc_land_rereads_the_stage_before_the_squash() {
     }
 }
 
-/// main-red の便の fixture: 偽 remote と偽 CI（`conclusion`）を宣言した toy で、主実測だけが赤い便を land して `Failed main-red`
+/// main-red の便の fixture: 偽 remote と success を答える偽 CI を宣言した toy で、主実測だけが赤い便を land して `Failed main-red`
 /// で終わらせ（squash は local の main に残る）、後の便の commit を 1 つ積んで偽 remote の main へ押す。返すのは道具・便・`--bd` と
 /// `--rules` の値・squash・押した先端。
 #[expect(
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
 )]
-fn red_run(repo: &Path, state: &Path, declared: bool) -> (FakeTerminal, String, [String; 2], String, String) {
+fn red_run(repo: &Path, state: &Path) -> (FakeTerminal, String, [String; 2], String, String) {
     let json = "[{\"status\":\"completed\",\"conclusion\":\"success\"}]";
-    let tools = fake_terminal_decl(repo, state, json, declared);
+    let tools = fake_terminal_json(repo, state, json);
     let design = write_contract(repo, &["verify"], &[r#"verify = ["sh verify-once.sh"]"#]);
     let id = gated_pass(repo, state, &design, &state.join("lens-ran"));
     make_tree_differ(repo, state, &id, "refs/heads/main");
@@ -103,7 +103,7 @@ fn red_run(repo: &Path, state: &Path, declared: bool) -> (FakeTerminal, String, 
     git(repo, &["commit", "-q", "-m", "later-run"]);
     let tip = git(repo, &["rev-parse", "refs/heads/main"]);
     git(repo, &["push", "-q", "fake", "main:main"]);
-    // 押していない local だけの commit（受け入れの周に push を撃てば偽 remote の main が動く形）。
+    // 押していない local だけの commit（終端の撃ち直しが push を撃てば偽 remote の main が動く形）。
     fs::write(repo.join("local.md"), "local だけ\n").expect("local の file を書ける");
     git(repo, &["add", "-A"]);
     git(repo, &["commit", "-q", "-m", "local-only"]);
@@ -116,83 +116,28 @@ fn terminal_only(repo: &Path, state: &Path, id: &str, flags: &[String; 2]) -> Ou
     land_extra(repo, state, id, &["--bd", &flags[0], "--rules", &flags[1], "--terminal-only"])
 }
 
-/// `Failed main-red` の便（木を retire で畳んだ後・retire の記帳は読み飛ばす）の squash が偽 remote の main の先端の祖先に在る周の
-/// 終端だけの撃ち直しは、push を撃たず、`RunDone stage=Landed detail=sha:<squash> main:<先端> adopted` を 1 件積み、先端の CI
-/// （success）で照合して `landed <squash> ci=success tip=<先端>` で bead を閉じ、rc 0 と `run=<id> adopted=<squash> terminal=closed` を返す。
+/// `Failed main-red` の便（squash が偽 remote の main の先端の祖先に在り、偽 CI は success を答える）の終端だけの撃ち直しは、retire で
+/// 木を畳む前も後も段の前提で断る（行 v-ci-proof-cut・host の緑の無い便を黙って閉じない）: rc 1 と stderr の `run <id> の段は Failed である`、
+/// stdout は空で、event の数は不変・偽 CI と偽 bd は撃たれず、偽 remote の main は押した先端のまま。
 #[test]
-fn vredc_terminal_only_adopts_a_red_squash_on_remote() {
-    let (repo, state) = repo_with_state();
-    let (tools, id, flags, squash, tip) = red_run(&repo, &state, true);
-    let folded = retire_once(&repo, &state, &id);
-    assert_eq!(folded.status.code(), Some(i32::from(RC_OK)), "前提: main-red の便の木を畳める: {}", stderr_of(&folded));
-    assert_eq!(stages(&state, &id).last().cloned(), Some((Some(Stage::Failed), Some("retired".to_owned()))), "前提: retire の記帳が最後");
-    let out = terminal_only(&repo, &state, &id, &flags);
-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "受け入れた周は rc 0: {}", stderr_of(&out));
-    assert_eq!(stdout_of(&out).trim(), format!("run={id} adopted={squash} terminal=closed"), "1 行");
-    assert_eq!(
-        landed_details(&state, &id),
-        [format!("sha:{squash} main:{tip} adopted"), "terminal:ci:success".to_owned(), "terminal:close:ok".to_owned()],
-        "Landed の記帳と終端の 2 件（push の記帳は無い）"
-    );
-    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は押さない（local だけの commit は載らない）");
-    let ci_argv = fs::read_to_string(&tools.ci_log).unwrap_or_default();
-    assert!(ci_argv.lines().any(|word| word == tip), "CI は先端の sha で照合する: {ci_argv}");
-    let argv = fs::read_to_string(&tools.bd_log).unwrap_or_default();
-    assert_eq!(argv.lines().nth(3), Some(format!("landed {squash} ci=success tip={tip}").as_str()), "着地の形の理由: {argv}");
-    assert!(show_line(&repo, &state, &id).contains("stage=Landed"), "段は Landed");
-    clean(&[&repo, &state]);
-}
-
-/// 宣言が `ci-watch = false` の repo は main-red の便を受け入れない（行 v-ci-watch-off・この host の緑が無く CI の success だけが
-/// 証拠なので）: 終端だけの撃ち直しは stdout の 1 行 `run=<id> adopt=ci-off` と rc 1 で、event を積まず、偽 CI と偽 bd を撃たず、
-/// 偽 remote の main を動かさない。
-#[test]
-fn vcioff_terminal_only_refuses_to_adopt_without_ci() {
-    let (repo, state) = repo_with_state();
-    let (tools, id, flags, _, tip) = red_run(&repo, &state, true);
-    ci_watch_off(&repo);
-    let before = event_count(&state);
-    let out = terminal_only(&repo, &state, &id, &flags);
-    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "rc 1: {}", stderr_of(&out));
-    assert_eq!(stdout_of(&out).trim_end(), format!("run={id} adopt=ci-off"), "1 行");
-    assert_eq!(event_count(&state), before, "何も積まない");
-    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
-    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
-    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
-    clean(&[&repo, &state]);
-}
-
-/// 受け入れの見本から 1 句ずつ外した周は何も積まず何も撃たず、rc 1 と `run=<id> adopt=<語>` を返す: 偽 remote の main の祖先に
-/// squash が無い（`not-on-remote`）・最後の `Failed` の detail が main-red でも main-unmeasured でもない（`not-red`）・宣言に
-/// remote が無い（`no-remote`）。
-#[test]
-fn vredc_terminal_only_refuses_without_a_red_squash_on_remote() {
-    let (repo, state) = repo_with_state();
-    let (tools, id, flags, squash, tip) = red_run(&repo, &state, true);
-    let refused_with = |word: &str, state: &Path, id: &str, out: &Output, events: usize| {
-        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{word}: rc 1: {}", stderr_of(out));
-        assert_eq!(stdout_of(out).trim(), format!("run={id} adopt={word}"), "{word}: 1 行");
-        assert_eq!(event_count(state), events, "{word}: 何も積まない");
-    };
-    let before = event_count(&state);
-    git(&tools.remote, &["update-ref", "refs/heads/main", &format!("{squash}^")]);
-    refused_with("not-on-remote", &state, &id, &terminal_only(&repo, &state, &id, &flags), before);
-    git(&tools.remote, &["update-ref", "refs/heads/main", &tip]);
-    let red = events(&state).into_iter().rfind(|event| event.run == id).unwrap_or_else(|| panic!("便の event が在る"));
-    let other = vessel::fleet::Event { detail: Some("precheck".to_owned()), ..red };
-    fs::write(state.join("fleet").join("events.jsonl"), format!("{}{}\n", String::from_utf8_lossy(&events_bytes(&state)), other.to_line()))
-        .unwrap_or_else(|err| panic!("Failed の detail を替えた行を足せる: {err}"));
-    let swapped = event_count(&state);
-    refused_with("not-red", &state, &id, &terminal_only(&repo, &state, &id, &flags), swapped);
-    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
-    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
-    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
-    clean(&[&repo, &state]);
-    let (repo, state) = repo_with_state();
-    let (tools, id, flags, _, tip) = red_run(&repo, &state, false);
-    let before = event_count(&state);
-    refused_with("no-remote", &state, &id, &terminal_only(&repo, &state, &id, &flags), before);
-    assert!(!tools.bd_log.exists(), "宣言に remote の無い周も偽 bd は撃たれない");
-    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
-    clean(&[&repo, &state]);
+fn vcipf_terminal_only_refuses_a_failed_run() {
+    for folded in [false, true] {
+        let (repo, state) = repo_with_state();
+        let (tools, id, flags, _, tip) = red_run(&repo, &state);
+        if folded {
+            let out = retire_once(&repo, &state, &id);
+            assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "前提: main-red の便の木を畳める: {}", stderr_of(&out));
+        }
+        let before = event_count(&state);
+        let out = terminal_only(&repo, &state, &id, &flags);
+        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "folded={folded}: rc 1: {}", stderr_of(&out));
+        assert!(stderr_of(&out).contains(&format!("run {id} の段は Failed である")), "folded={folded}: 段の断り: {}", stderr_of(&out));
+        assert_eq!(stdout_of(&out), "", "folded={folded}: stdout は空");
+        assert_eq!(event_count(&state), before, "folded={folded}: 何も積まない");
+        assert_eq!(tools.ci_call_count(), 0, "folded={folded}: 偽 CI は撃たれない");
+        assert!(!tools.ci_log.exists(), "folded={folded}: 偽 CI の argv の記録も無い");
+        assert!(!tools.bd_log.exists(), "folded={folded}: 偽 bd は撃たれない");
+        assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "folded={folded}: 偽 remote の main は動かない");
+        clean(&[&repo, &state]);
+    }
 }

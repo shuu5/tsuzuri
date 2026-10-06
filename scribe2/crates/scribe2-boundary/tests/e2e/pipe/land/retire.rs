@@ -1,5 +1,5 @@
 // flip-check: moved s2-07l.684
-//! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_` / `vcioff_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+//! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_` / `vcipf_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 
 use super::*;
 use super::cilast::{CLOSED, PUSHED};
@@ -728,11 +728,10 @@ fn pipe_train_red_main_fails_every_run_and_keeps_main_advanced() {
     clean(&[&repo, &state]);
 }
 
-// ───── PR で着地した便を照合してから close し、worktree を畳む（設計 contract-source.md §61・接頭辞 `pr_retire_`） ─────
+// ───── PR で着地した便は閉じた契約と `--fold-only` だけを畳む（設計 contract-source.md §61・接頭辞 `pr_retire_` と `vcipf_`） ─────
 //
-// fixture: PR の便（`landed_pr`）・偽 remote（bare repo・宣言の `remote`）・宣言の `ci-cmd` の偽 CI・PATH の先頭の偽 gh・
-// `--bd` の偽 client。答えは file で替える。merge の commit は便の branch と main から `commit-tree` で作り、偽 remote の
-// main へ path の URL で押す（先端でない fixture はその上に 1 commit 足して押す）。
+// fixture: PR の便（`landed_pr`）・PATH の先頭の偽 gh（撃たれないことを測る）・`--bd` の偽 client（台帳の JSON を答え、close は
+// 撃たれないことを測る）。答えは file で替える。
 
 /// retire に `--fold-only` を足して撃つ（親 `land.rs` の `retire_once` は他の畳みの歯が使うので変えない）。
 fn retire_fold_only(repo: &Path, state: &Path, id: &str) -> Output {
@@ -742,7 +741,7 @@ fn retire_fold_only(repo: &Path, state: &Path, id: &str) -> Output {
     ])
 }
 
-/// PR の便の照合の道具一式（答えは `dir` の file）。
+/// PR の便の retire の道具一式（答えは `dir` の file）。
 struct PrTools {
     repo: PathBuf,
     state: PathBuf,
@@ -750,14 +749,10 @@ struct PrTools {
     bead: String,
     /// 答えの file と記録の file を置く dir。
     dir: PathBuf,
-    /// 偽 remote（bare repo）。
-    remote: PathBuf,
     /// 偽 gh を先頭に積んだ PATH。
     path: String,
     /// 偽の台帳 client。
     bd: String,
-    /// merge の commit（偽 remote の main へ押した）。
-    merge: String,
 }
 
 impl PrTools {
@@ -785,15 +780,9 @@ impl PrTools {
         self.repo.join(".worktrees").join("scribe2").join("retired").join(&self.id)
     }
 
-    /// 偽 remote の main を `sha` にする（強制）。
-    fn push_main(&self, sha: &str) {
-        git(&self.repo, &["push", "-q", "-f", &self.remote.display().to_string(), &format!("{sha}:refs/heads/main")]);
-    }
-
-    /// `parent` の木に 1 commit を足した commit（main は動かさない）。
-    fn commit_on(&self, parent: &str, message: &str) -> String {
-        let tree = git(&self.repo, &["rev-parse", &format!("{parent}^{{tree}}")]);
-        git(&self.repo, &["commit-tree", &tree, "-p", parent, "-m", message])
+    /// 台帳の契約を closed にして理由を `reason` にする。
+    fn close_in_ledger(&self, reason: &str) {
+        self.put("ledger", &format!("[{{\"id\":\"{}\",\"status\":\"closed\",\"close_reason\":\"{reason}\"}}]\n", self.bead));
     }
 
     /// retire を撃つ（偽 gh を PATH の先頭に・`--bd` は偽 client）。
@@ -810,13 +799,12 @@ impl PrTools {
     }
 }
 
-/// PR の便・偽 remote・宣言・偽の道具を用意する（`declared` が偽なら宣言に `remote` を書かない）。
-/// 答えの初期値は merged・CI success・台帳 open・close rc 0・merge の commit が偽 remote の先端。
+/// PR の便と偽の道具を用意する。答えの初期値は台帳の契約が open・台帳の list rc 0。
 #[expect(
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
 )]
-fn pr_tools(declared: bool) -> PrTools {
+fn pr_tools() -> PrTools {
     let (repo, state) = repo_with_state();
     let design = write_contract(&repo, &[], &[]);
     let id = landed_pr(&repo, &state, &design, &state.join("lens-ran"));
@@ -824,172 +812,103 @@ fn pr_tools(declared: bool) -> PrTools {
     let dir = state.join("pr-tools");
     let bin = dir.join("bin");
     fs::create_dir_all(&bin).expect("道具の dir を作れる");
-    let remote = state.join("remote.git");
-    git(&state, &["init", "--bare", "-q", &remote.display().to_string()]);
-    git(&repo, &["remote", "add", "fake", &remote.display().to_string()]);
-    let ci = exec_script(&dir.join("fake-ci.sh"), "printf '%s\\n' \"$@\" >> \"$0.argv\"\ncat \"$0.answer\"\n");
-    exec_script(&bin.join("gh"), &format!("echo \"$*\" >> '{0}/gh-calls'\ncat '{0}/gh-answer'\nexit $(cat '{0}/gh-rc')\n", dir.display()));
+    exec_script(&bin.join("gh"), &format!("echo \"$*\" >> '{0}/gh-calls'\n", dir.display()));
     let bd = exec_script(
         &dir.join("fake-bd.sh"),
-        &format!(
-            "d='{0}'\nif [ \"$1\" = close ]; then\n  echo \"$*\" >> \"$d/close-log\"\n  rc=$(cat \"$d/close-rc\")\n  \
-             if [ \"$rc\" = 0 ]; then printf '[{{\"id\":\"%s\",\"status\":\"closed\",\"close_reason\":\"%s\"}}]\\n' \"$2\" \"$4\" > \"$d/ledger\"; fi\n  \
-             exit \"$rc\"\nfi\ncat \"$d/ledger\"\nexit $(cat \"$d/list-rc\")\n",
-            dir.display()
-        ),
+        &format!("d='{0}'\nif [ \"$1\" = close ]; then\n  echo \"$*\" >> \"$d/close-log\"\n  exit 0\nfi\ncat \"$d/ledger\"\nexit $(cat \"$d/list-rc\")\n", dir.display()),
     );
-    let remote_line = if declared { "remote = \"fake\"\n" } else { "" };
-    let body = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
-    fs::write(repo.join(".vessel.toml"), format!("{body}{remote_line}ci-cmd = \"{ci} {{sha}}\"\n")).expect("宣言を書ける");
-    git(&repo, &["add", "-f", ".vessel.toml"]);
-    git(&repo, &["commit", "-q", "-m", "terminal-decl"]);
-    let (main, branch) = (git(&repo, &["rev-parse", "refs/heads/main"]), format!("scribe2/{id}"));
-    let tree = git(&repo, &["rev-parse", &format!("{branch}^{{tree}}")]);
-    let merge = git(&repo, &["commit-tree", &tree, "-p", &main, "-p", &branch, "-m", "merge"]);
     let path = format!("{}:{}", bin.display(), crate::toolbox_path(&state));
-    let tools = PrTools { repo, state, id, bead, dir, remote, path, bd, merge };
-    tools.push_main(&tools.merge);
-    tools.put("gh-answer", &format!("{{\"state\":\"MERGED\",\"mergeCommit\":{{\"oid\":\"{}\"}}}}\n", tools.merge));
-    tools.put("gh-rc", "0\n");
-    tools.put("fake-ci.sh.answer", "[{\"status\":\"completed\",\"conclusion\":\"success\"}]\n");
+    let tools = PrTools { repo, state, id, bead, dir, path, bd };
     tools.put("ledger", &format!("[{{\"id\":\"{}\",\"status\":\"open\",\"close_reason\":\"\"}}]\n", tools.bead));
-    tools.put("close-rc", "0\n");
     tools.put("list-rc", "0\n");
     tools
 }
 
-/// 通った周の後の面を測る（rc 0・stdout・close の理由・畳んだ先・branch・event の 2 件・偽 gh と偽 CI の argv）。
-fn assert_closed_then_folded(tools: &PrTools, out: &Output, tip: &str) {
-    let (id, merge) = (&tools.id, &tools.merge);
-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "通った周は rc 0: {} / {}", stdout_of(out), stderr_of(out));
+/// 断った周の後の面を測る（rc 1・stdout の閉じた語の 1 行・偽 gh と close の記録が空・worktree は元の場所・event の数と台帳の JSON は不変）。
+fn assert_refused_untouched(tools: &PrTools, name: &str, word: &str, (events_before, ledger_before): (usize, String)) {
+    let out = tools.retire(&[]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{name}: rc 1: {} / {}", stdout_of(&out), stderr_of(&out));
+    assert_eq!(stdout_of(&out).trim_end(), tools.refusal_line(word), "{name}: stdout は閉じた語の 1 行");
+    assert!(tools.lines("gh-calls").is_empty(), "{name}: 偽 gh は撃たれない");
+    assert!(tools.lines("close-log").is_empty(), "{name}: close は撃たれない");
+    assert!(worktree_of(&tools.repo, &tools.id).exists(), "{name}: worktree は元の場所");
+    assert!(!tools.retired().exists(), "{name}: 畳まない");
+    assert_eq!(event_count(&tools.state), events_before, "{name}: event を書かない");
+    assert_eq!(tools.ledger(), ledger_before, "{name}: 台帳の JSON は不変");
+}
+
+/// PR の便の retire が畳んだ周の後の面を測る（rc 0・stdout は畳んだ先の 1 行で `close=ok` を持たない・偽 gh と close の記録が空・
+/// 中身ごと畳む・元の場所は空く・branch は残る・最後の event は段 Landed の RunStage で detail retired）。
+fn assert_folded_without_close(tools: &PrTools, out: &Output) {
+    let id = &tools.id;
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "畳んだ周は rc 0: {} / {}", stdout_of(out), stderr_of(out));
     let retired = tools.retired();
-    assert_eq!(stdout_of(out).trim(), format!("run={id} retired={} close=ok", retired.display()), "stdout");
-    let tail = if tip == merge { String::new() } else { format!(" tip={tip}") };
-    assert_eq!(
-        tools.lines("close-log"),
-        vec![format!("close {} --reason landed {merge} ci=success{tail}", tools.bead)],
-        "close はちょうど 1 回・理由は merge の commit と CI"
-    );
+    assert_eq!(stdout_of(out).trim(), format!("run={id} retired={}", retired.display()), "stdout は畳んだ先の 1 行");
+    assert!(tools.lines("gh-calls").is_empty(), "偽 gh は撃たれない");
+    assert!(tools.lines("close-log").is_empty(), "close は撃たれない");
     assert!(retired.join("src").join("lib.rs").exists(), "中身ごと畳む");
     assert!(!worktree_of(&tools.repo, id).exists(), "元の場所は空く");
     assert!(!git(&tools.repo, &["branch", "--list", &format!("scribe2/{id}")]).is_empty(), "branch は残る");
-    let events = trail(&tools.state, id);
-    let last_two: Vec<_> = events.iter().rev().take(2).rev().cloned().collect();
     assert_eq!(
-        last_two,
-        vec![
-            (EventKind::RunDone, Some(Stage::Landed), Some("terminal:close:ok".to_owned())),
-            (EventKind::RunStage, Some(Stage::Landed), Some("retired".to_owned())),
-        ],
-        "Landed の後ろは close:ok と retired（段は Landed のまま）"
+        trail(&tools.state, id).last().cloned(),
+        Some((EventKind::RunStage, Some(Stage::Landed), Some("retired".to_owned()))),
+        "最後の event は Landed の RunStage で detail は retired"
     );
-    assert_eq!(tools.lines("gh-calls"), vec![format!("pr view scribe2/{id} --json state,mergeCommit")], "偽 gh の argv");
-    assert_eq!(tools.lines("fake-ci.sh.argv"), vec![tip.to_owned()], "偽 CI は先端の commit id で 1 回");
 }
 
-/// (a) merge の commit が先端そのものの周と、先端がその上に在る周: どちらも close 1 回で畳む。先端が違う周だけ理由に `tip=`。
-#[test]
-fn pr_retire_closes_then_folds_when_the_merge_is_under_a_green_tip() {
-    let same = pr_tools(true);
-    let out = same.retire(&[]);
-    assert_closed_then_folded(&same, &out, &same.merge);
-    clean(&[&same.repo, &same.state]);
-
-    let behind = pr_tools(true);
-    let tip = behind.commit_on(&behind.merge, "tip");
-    behind.push_main(&tip);
-    let out = behind.retire(&[]);
-    assert_closed_then_folded(&behind, &out, &tip);
-    clean(&[&behind.repo, &behind.state]);
+/// 閉じた契約の理由（頭の語が `landed` の見本・host の緑の尾）。
+fn landed_reason() -> String {
+    format!("landed {} host=green", "0".repeat(40))
 }
 
-/// (b) 通らない 9 周: 閉じた 6 語のどれか 1 行・rc 1・worktree は元の場所・event と偽の台帳は不変。
+/// (b) 通らない 3 周: worktree が clean でない（`worktree-unready`）・台帳を読めない（`unmeasured`）・契約が開いている（`not-closed`）。
+/// どれも閉じた語の 1 行・rc 1・worktree は元の場所・event と偽の台帳は不変。汚れを拭って台帳を閉じた見本にした撃ち直しは畳む。
 #[test]
 fn pr_retire_refuses_with_one_closed_word_and_writes_nothing() {
     type Break = fn(&PrTools);
-    let cases: [(&str, bool, Break, &str); 9] = [
-        ("dirty", true, write_dirty, "worktree-unready"),
-        ("not-merged", true, |t| t.put("gh-answer", "{\"state\":\"OPEN\",\"mergeCommit\":null}\n"), "not-merged"),
-        ("not-ancestor", true, |t| {
-            let other = t.commit_on(&git(&t.repo, &["rev-parse", "refs/heads/main"]), "other");
-            t.push_main(&other);
-        }, "not-ancestor"),
-        ("ci-failure", true, |t| t.put("fake-ci.sh.answer", "[{\"status\":\"completed\",\"conclusion\":\"failure\"}]\n"), "ci-not-success"),
-        ("ci-empty", true, |t| t.put("fake-ci.sh.answer", "[]\n"), "ci-not-success"),
-        ("no-remote", false, |_| {}, "unmeasured"),
-        ("gh-rc", true, |t| t.put("gh-rc", "1\n"), "unmeasured"),
-        ("close-rc", true, |t| t.put("close-rc", "3\n"), "unwritten"),
-        ("ledger-rc", true, |t| t.put("list-rc", "1\n"), "unmeasured"),
+    let cases: [(&str, Break, &str); 3] = [
+        ("dirty", write_dirty, "worktree-unready"),
+        ("ledger-rc", |t| t.put("list-rc", "1\n"), "unmeasured"),
+        ("open", |_| {}, "not-closed"),
     ];
-    for (name, declared, breakage, word) in cases {
-        let tools = pr_tools(declared);
+    for (name, breakage, word) in cases {
+        let tools = pr_tools();
         breakage(&tools);
-        let (events_before, ledger_before) = (event_count(&tools.state), tools.ledger());
-        let out = tools.retire(&[]);
-        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{name}: rc 1: {} / {}", stdout_of(&out), stderr_of(&out));
-        assert_eq!(stdout_of(&out).trim_end(), tools.refusal_line(word), "{name}: stdout は閉じた語の 1 行");
-        assert!(worktree_of(&tools.repo, &tools.id).exists(), "{name}: worktree は元の場所");
-        assert!(!tools.retired().exists(), "{name}: 畳まない");
-        assert_eq!(event_count(&tools.state), events_before, "{name}: event を書かない");
-        assert_eq!(tools.ledger(), ledger_before, "{name}: 台帳の JSON は不変");
-        if matches!(name, "dirty" | "no-remote") {
-            assert!(tools.lines("gh-calls").is_empty(), "{name}: 偽 gh は撃たれない");
-        }
+        assert_refused_untouched(&tools, name, word, (event_count(&tools.state), tools.ledger()));
         if name == "dirty" {
-            // 汚れを拭って success の答えにすると、同じ撃ちが close して畳む。
+            // 汚れを拭って台帳を閉じた見本にすると、同じ撃ちが畳む（close も照合も撃たない）。
             fs::remove_file(worktree_of(&tools.repo, &tools.id).join("dirty.txt")).ok();
+            tools.close_in_ledger(&landed_reason());
             let again = tools.retire(&[]);
-            assert_closed_then_folded(&tools, &again, &tools.merge);
+            assert_folded_without_close(&tools, &again);
         }
         clean(&[&tools.repo, &tools.state]);
     }
 }
 
-/// 宣言が `ci-watch = false` の repo の PR の便の retire は照合せず断る（行 v-ci-watch-off・先端の CI の success を close の証拠に
-/// できない）: stdout の 1 行 `run=<id> retire=ci-off` と rc 1・偽 CI と偽 gh は撃たれず、worktree は元の場所・event と偽の台帳は不変。
+/// 台帳の契約が開いた周と、閉じていて理由の頭の語が `landed` でない周（`superseded`）の PR の便の retire は、語 `not-closed` の 1 行と rc 1 で
+/// 断る（行 v-ci-proof-cut・閉じていない便を照合して close しない）: 偽 gh と close は撃たれず、worktree は元の場所・event の数と台帳の JSON は不変。
 #[test]
-fn vcioff_pr_retire_refuses_without_ci() {
-    let tools = pr_tools(true);
-    ci_watch_off(&tools.repo);
-    let (events_before, ledger_before) = (event_count(&tools.state), tools.ledger());
-    let out = tools.retire(&[]);
-    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "rc 1: {} / {}", stdout_of(&out), stderr_of(&out));
-    assert_eq!(stdout_of(&out).trim_end(), tools.refusal_line("ci-off"), "stdout は閉じた語の 1 行");
-    assert!(tools.lines("fake-ci.sh.argv").is_empty(), "偽 CI は撃たれない");
-    assert!(tools.lines("gh-calls").is_empty(), "偽 gh は撃たれない");
-    assert!(worktree_of(&tools.repo, &tools.id).exists() && !tools.retired().exists(), "畳まない");
-    assert_eq!(event_count(&tools.state), events_before, "event を書かない");
-    assert_eq!(tools.ledger(), ledger_before, "台帳の JSON は不変");
-    clean(&[&tools.repo, &tools.state]);
-}
-
-/// (k) 先端の読みを 3 値に割った後の回帰（設計 pipeline.md §69 形 2）: main の無い remote と、dir の名を変えた remote の 2 つの脚で、
-/// 照合は今と同じ `unmeasured` の語 1 行で断り、event も台帳も書かない。
-// flip-check: retroactive s2-07l.736.31.2.3
-#[test]
-fn pr_retire_remote_without_main_or_unreachable_refuses_as_unmeasured() {
-    type Break = fn(&PrTools);
-    let legs: [(&str, Break); 2] = [
-        ("no-main", |t| {
-            git(&t.remote, &["update-ref", "-d", "refs/heads/main"]);
-        }),
-        ("renamed-dir", |t| {
-            fs::rename(&t.remote, t.state.join("remote-moved.git")).expect("偽 remote の dir の名を変えられる");
-        }),
-    ];
-    for (name, breakage) in legs {
-        let tools = pr_tools(true);
-        breakage(&tools);
-        let (events_before, ledger_before) = (event_count(&tools.state), tools.ledger());
-        let out = tools.retire(&[]);
-        assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "{name}: rc 1: {} / {}", stdout_of(&out), stderr_of(&out));
-        assert_eq!(stdout_of(&out).trim_end(), tools.refusal_line("unmeasured"), "{name}: 今と同じ unmeasured の語");
-        assert!(worktree_of(&tools.repo, &tools.id).exists() && !tools.retired().exists(), "{name}: 畳まない");
-        assert_eq!(event_count(&tools.state), events_before, "{name}: event を書かない");
-        assert_eq!(tools.ledger(), ledger_before, "{name}: 台帳の JSON は不変");
-        assert!(tools.lines("close-log").is_empty(), "{name}: close は撃たない");
+fn vcipf_pr_retire_refuses_an_open_contract_with_one_word() {
+    for (name, closed_reason) in [("open", None), ("superseded", Some("superseded 別の便が着地した"))] {
+        let tools = pr_tools();
+        if let Some(reason) = closed_reason {
+            tools.close_in_ledger(reason);
+        }
+        assert_refused_untouched(&tools, name, "not-closed", (event_count(&tools.state), tools.ledger()));
         clean(&[&tools.repo, &tools.state]);
     }
+}
+
+/// 台帳で契約が閉じていて理由が `landed` と 40 桁の sha と `host=green` の PR の便の retire は、照合も close もせず畳む（行 v-ci-proof-cut）:
+/// rc 0 と `run=<id> retired=<畳んだ先>`（`close=ok` を持たない）・偽 gh と close は撃たれず、最後の event は段 Landed の RunStage の `retired`。
+#[test]
+fn vcipf_pr_retire_folds_a_closed_contract_without_checks() {
+    let tools = pr_tools();
+    tools.close_in_ledger(&landed_reason());
+    let out = tools.retire(&[]);
+    assert_folded_without_close(&tools, &out);
+    clean(&[&tools.repo, &tools.state]);
 }
 
 /// worktree を汚す。
@@ -1001,48 +920,21 @@ fn write_dirty(tools: &PrTools) {
     fs::write(worktree_of(&tools.repo, &tools.id).join("dirty.txt"), "x\n").expect("worktree を汚せる");
 }
 
-/// (c) `--fold-only` は照合も close もせず畳む。閉じ済みの契約は照合せず畳む（close の後の move が落ちた周の撃ち直し）。
+/// (c) `--fold-only` は台帳も forge も読まず畳み、契約は開いたまま残す。
 #[test]
 fn pr_retire_fold_only_and_closed_contracts_fold_without_checks() {
     fold_only_folds_and_leaves_the_contract_open();
-    closed_contract_folds_after_a_failed_move_without_checks();
 }
 
-/// (c) の前半: not-merged の fixture に `--fold-only` を付けた撃ち。
+/// (c) の本体: 契約が開いた fixture に `--fold-only` を付けた撃ち。
 fn fold_only_folds_and_leaves_the_contract_open() {
-    let open = pr_tools(true);
-    open.put("gh-answer", "{\"state\":\"OPEN\",\"mergeCommit\":null}\n");
+    let open = pr_tools();
     let out = open.retire(&["--fold-only"]);
-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "--fold-only は not-merged でも畳む: {}", stderr_of(&out));
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "--fold-only は契約が開いていても畳む: {}", stderr_of(&out));
     assert_eq!(stdout_of(&out).trim(), format!("run={} retired={}", open.id, open.retired().display()), "close=ok を名乗らない");
     assert!(open.retired().exists() && !worktree_of(&open.repo, &open.id).exists(), "畳んだ");
     assert!(open.lines("close-log").is_empty(), "close は撃たない");
     assert!(open.lines("gh-calls").is_empty(), "偽 gh は撃たれない");
     assert_eq!(open.ledger().matches("\"open\"").count(), 1, "契約は開いたまま");
     clean(&[&open.repo, &open.state]);
-}
-
-/// (c) の後半: `retired/<id>` を先に塞いだ success の fixture（close の後の move が落ちる）と、退けた撃ち直し。
-#[expect(
-    clippy::expect_used,
-    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
-)]
-fn closed_contract_folds_after_a_failed_move_without_checks() {
-    let closed = pr_tools(true);
-    fs::create_dir_all(closed.retired()).expect("畳む先を塞げる");
-    let out = closed.retire(&[]);
-    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "move が落ちた周は rc 1: {}", stdout_of(&out));
-    assert_eq!(stdout_of(&out).trim_end(), closed.refusal_line("worktree-unready"), "worktree-unready");
-    assert_eq!(closed.lines("close-log").len(), 1, "close は残る");
-    assert!(closed.ledger().contains("\"closed\"") && closed.ledger().contains("landed "), "台帳は closed・landed");
-    assert!(worktree_of(&closed.repo, &closed.id).exists(), "worktree は元の場所");
-    fs::remove_dir(closed.retired()).expect("塞いだ dir を退けられる");
-    let (gh_before, ci_before) = (closed.lines("gh-calls").len(), closed.lines("fake-ci.sh.argv").len());
-    let again = closed.retire(&[]);
-    assert_eq!(again.status.code(), Some(i32::from(RC_OK)), "退けた撃ち直しは畳む: {} / {}", stdout_of(&again), stderr_of(&again));
-    assert_eq!(stdout_of(&again).trim(), format!("run={} retired={}", closed.id, closed.retired().display()), "畳むだけの形");
-    assert_eq!(closed.lines("close-log").len(), 1, "close は増えない");
-    assert_eq!(closed.lines("gh-calls").len(), gh_before, "偽 gh は増えない");
-    assert_eq!(closed.lines("fake-ci.sh.argv").len(), ci_before, "偽 CI は増えない");
-    clean(&[&closed.repo, &closed.state]);
 }
