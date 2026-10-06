@@ -161,13 +161,17 @@ fn undo(repo: &Path, run: &str, n: usize, policy: LockPolicy) {
     }
 }
 
-/// 並びの木の中身を base に替える（git は中身の替わる file だけを書く・未追跡と無視の file は target の外を全部消す）。
-/// clean の周だけ branch `<NAME>/<run>` を付けて真。
+/// 並びの木の中身を base に替え（[`renew`]）、clean の周だけ branch `<NAME>/<run>` を付けて真。
 fn switch(lane: &Path, run: &str, base: &str) -> bool {
-    git_ok(lane, &["checkout", "-q", "-f", "--detach", base])
-        && git_ok(lane, &["clean", "-q", "-ffdx", "-e", KEEP])
-        && WorktreeCheck::judge(lane).is_clean()
-        && git_ok(lane, &["checkout", "-q", "-B", &branch_name(run)])
+    renew(lane, base) && git_ok(lane, &["checkout", "-q", "-B", &branch_name(run)])
+}
+
+/// path を固定した木の中身を `sha` に替える（branch は付けない・git は中身の替わる file だけを書く・未追跡と無視の file は
+/// target の外を全部消す）。替えた木が clean の周だけ真（並びの [`switch`] と、着地の後の主実測の温かい木が使う）。
+pub(super) fn renew(tree: &Path, sha: &str) -> bool {
+    git_ok(tree, &["checkout", "-q", "-f", "--detach", sha])
+        && git_ok(tree, &["clean", "-q", "-ffdx", "-e", KEEP])
+        && WorktreeCheck::judge(tree).is_clean()
 }
 
 /// 便が並びを返す（退役の move の代わり・判断の記録 ADR-35）。並びを持たない便は `None`（呼び手が今の形で move する）。

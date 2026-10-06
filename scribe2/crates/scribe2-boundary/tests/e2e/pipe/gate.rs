@@ -5,13 +5,15 @@
 //!
 //! 歯の一部は族ごとの子 module に置く（設計 docs/design/carry-prep.md §10 行 m・`s2-07l.685`）: `confine`（接頭辞
 //! `pipe_confine_` / `pipe_slots_`）・`detection`（接頭辞 `pipe_detection_` / `pipe_landed_`）・`pure_move`（接頭辞
-//! `pipe_gate_move_` / `pipe_gate_elide_`）・`written`（接頭辞 `vrunw_`・`pipe show --write`・行 v-run-write）。この file には
+//! `pipe_gate_move_` / `pipe_gate_elide_`）・`written`（接頭辞 `vrunw_`・`pipe show --write`・行 v-run-write）・`warm`（接頭辞
+//! `vwarm_`・着地の後の主実測の温かい木・設計 pipeline.md §71）。この file には
 //! 共有の helper と const・外形 snapshot の歯（snapshot 名が module path を含むので動かさない）・他の族の歯だけを残す。
 
 mod confine;
 mod detection;
 mod promised;
 mod pure_move;
+mod warm;
 mod written;
 // flip-check: moved s2-07l.685
 // flip-check: retroactive s2-07l.736.23

@@ -2293,3 +2293,17 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候�
 - 触らない: 載せ替えの命令と返す値・衝突・rebase-empty・既着地の道・event の種別と段と detail の字・stdout の字・規則の行・子の環境変数。戻しと記録のどの失敗も追随の結末を替えない。名乗りの key は置かない（約束が中身の同じ file に限るので、器を使うほかの project の便にも同じく効く）。
 - 限界: 便の commit の中で直して戻した file（正味の差 0）と、衝突で中止した周に書き直された file は戻さない（取りこぼしで、組み直す側）。dir を合図にする build script は、便の自分の差がその dir の下に在ると今どおり走る。cargo の追わない入力（`rerun-if-changed` の無い build script の読みほか）を main が替えた周は、今は自分の差の書き直しが偶然組み直させていた分を組み直さない。
 - 歯（接頭辞 `vfmtime_`・`crates/scribe2/src/pipe/follow_mtime.rs` の `mod tests`・fixture の repo で共有の `rebase` を撃つ）: 自分の差だけ・main の差だけ・中身が行って戻る差・中身の同じ改名・両方の差・main が元を直した改名・改行の属性・実行の bit・symlink・記録の 1 行と、戻る見本から 1 句ずつ外した控えを読めない周・木が clean でない周・衝突の周（記録も書かない）。`pipe follow` の口の記録の 1 行は `pipe_follow_step_writes_one_rebase_event_and_keeps_main` が見る。
+
+## 71. 宣言 build-lanes を名乗った repo は、着地の後の主実測を path 固定の温かい木 `verify/warm` で撃ち、撃った後も畳まない（tsuzuri の契約表の行 v-verify-warm）
+
+やさしく言うと: 着地の後の確かめ（主実測・§5.4）は、着地ごとに新しい木を切って依存から全部を組み、撃った後に木ごと畳む。名乗った repo では木を 1 本だけ同じ場所に残し、中身だけを着地した木に替えて撃つので、cargo は替わった crate だけを組み直す。
+
+- 置き場: `crates/scribe2/src/pipe/land/verify.rs` の `verify_main_from`（単独の着地 `verify_main` と列の着地 `verify_train_main` が共有する本体）の木の選び（`place`・`warm`）。中身の替えは並びの木（`crates/scribe2/src/pipe/lane.rs`）と同じ関数 `renew`。
+- 形:
+  1. **名乗り**: 着地した木（`new`）の宣言が `build-lanes = true` の周だけ温かい木を使う（宣言の読みは並びの `build_lanes_at` と同じ 1 本）。名乗らない repo は今のまま `verify/<run>` を切って撃ち、撃った後に畳む。
+  2. **lock**: 温かい木は `verify/warm.lock`（`fleet::lifecycle_mark::hold`・死んだ所有者だけを外す・待ちの上限は rules 行 `fleet.lock_retry_ms`）を持つ 1 本の主実測だけが使う。取れない周（着地の番待ちを越えて主実測が並んだ周）は今の形（`verify/<run>`）で撃つ。
+  3. **中身の替え**: 木が在り（`.git` の file が在る）、`renew`（`git checkout -q -f --detach <new>`・`git clean -q -ffdx -e /target`・clean の照らし）が通る周はそのまま撃つ。替えられない周と木の無い周は `worktree remove --force` で外してから `worktree add --detach` で切り直し、切り直せない周は今の形へ倒す。`.git` の file が無い dir では替えを撃たない（dir の上の repo の作業木を替えない）。
+  4. **畳まない**: 撃った後と材料が揃わない周は、温かい木を畳まずに lock だけを外す（木の中の target を次の主実測が使う）。
+- 触らない: 撃つ行・段の順・`verify-main.jsonl` の record の字と並び・赤と測れないの極性・同じ木の省き（§27 の gate-cost）・着地の後の検出の木（`verify/<run>-place`）・便の木と並び。記録は木の置き場の別を残さない。
+- 限界: 温かい木は掃除（器の ADR-0081）と並びの上限（rules 行 `pipe.lanes_cap_mb`）に数えず、1 本の target の大きさを持ち続ける。木の中の古い成果で偽の緑が出る形は並びと同じで、冷えた所から撃つ確かめは CI に残る。
+- 歯（接頭辞 `vwarm_`・`crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs`・toy の便の verdict の `tree` を base の木へ替えて主実測を撃つ周にする）: 名乗った repo の 2 本の着地が同じ木で撃ち 2 本目が target の印を見る・名乗らない repo は便ごとの木・生きた所有者の lock の周は便ごとの木・置いた stray と替えた追跡の file は撃つ前に消える・作業木でない dir の周は触らず便ごとの木。
