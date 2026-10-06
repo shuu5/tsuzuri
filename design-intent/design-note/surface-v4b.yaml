@@ -4,7 +4,8 @@ meta:
   id: surface-v4b
   title: 作り直し v4 の行の続き — ノート surface-v4a が 32 行に近づいた後の、段 S1〜S9 の行の置き場（持ち主の決め D1〜D6）
   version: v0.18
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-10-06
   profile: design-note
   approval:
