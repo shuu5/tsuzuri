@@ -251,6 +251,11 @@ sections:
       - {id: v-wip-lines, doc: surface-v4a}
       - {id: v-sort-gist, doc: surface-v4a}
       - {id: v-gate-fix, doc: surface-v4a}
+      - {id: t-memo-link-gate, doc: surface-v4a}
+      - {id: ag-floor-off, doc: surface-v4a}
+      - {id: v-ci-child-cut, doc: surface-v4a}
+      - {id: v-pf-contract, doc: surface-v4a}
+      - {id: t-ruling-gui, doc: surface-v4a}
       - {id: c-graph-fold, doc: surface-wave10a}
       - {id: g-graph-fold, doc: surface-wave10a}
       - {id: e-idle-close, doc: surface-wave10b}
