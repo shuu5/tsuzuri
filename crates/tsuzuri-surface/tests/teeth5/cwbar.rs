@@ -155,8 +155,8 @@ fn cwbar_window_note_holds_the_account() {
     assert_eq!(
         windows(&Reading::Known(vec![named, window(2, WindowState::Live)])),
         Body::Filled(vec![
-            row("cw1", "題なし", "問う・止まった・所見 2（処分なし 1）・口座 acct-x", false),
-            row("cw2", "題なし", "問う・生きている・所見 2（処分なし 1）・口座 分からない", false),
+            row("cw1", "題なし", "問う・止まった／所見 2（処分なし 1）／口座 acct-x", false),
+            row("cw2", "題なし", "問う・生きている／所見 2（処分なし 1）／口座 分からない", false),
         ])
     );
     assert_eq!(
@@ -177,7 +177,7 @@ fn cwbar_lists_and_unread() {
         Body::Filled(vec![row(
             "cw1",
             "題なし",
-            "問う・生きている・所見 2（処分なし 1）・口座 分からない",
+            "問う・生きている／所見 2（処分なし 1）／口座 分からない",
             false
         )])
     );

@@ -142,7 +142,7 @@ pub fn windows(r: &Reading<Vec<WindowRow>>) -> Body<Vec<Row>> {
             id: w.id.to_string(),
             topic: topic_of(w.topic.as_ref()),
             note: format!(
-                "{}・{}・所見 {}（処分なし {}）・口座 {}",
+                "{}・{}／所見 {}（処分なし {}）／口座 {}",
                 w.form.word(),
                 w.state.word(),
                 w.findings,
