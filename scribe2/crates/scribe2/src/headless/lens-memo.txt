@@ -4,13 +4,16 @@
 ## 出すもの
 最後の 1 行に、次の形の JSON を**ちょうど 1 つ**書く。前置きや説明は JSON の前に書いてよいが、最終行は JSON だけにする。
 
-{"verdict":"promote|close|keep","evidence":"<根拠を 1 行で>","sketch":"<契約の素描を 1 行で>"}
+{"verdict":"promote|close|merge|keep","evidence":"<根拠を 1 行で>","sketch":"<契約の素描を 1 行で>","into":"<merge の行き先の memo の id>","why":"<keep の理由の型>"}
 
-- `sketch` は promote の周だけ書く（契約にするなら何をどの file に作るかの素描）。close と keep の周は空文字にする。
+- `sketch` は promote の周だけ書く（契約にするなら何をどの file に作るかの素描）。close と merge と keep の周は空文字にする。
+- `into` は merge の周だけ書く（「ほかの開いた memo」の列にある id を 1 つ）。ほかの周は key ごと書かない。
+- `why` は keep の周だけ、no-material（材料が足りない）・wait-row（契約表の行か便の着地を待つ）・wait-owner（持ち主の決めを待つ）から 1 つ書く。ほかの周は key ごと書かない。
 
 ## 判定の決め方
 - **promote**: memo が言う課題が現物（repo）に今も在り、契約にして実装役へ渡せる形に絞れる。evidence に課題が今も在る根拠（file と事実）を書く。
 - **close**: memo が言う課題が既に解けている（辿れる契約が着地している・現物が直っている）か、もう要らない。evidence にその根拠を書く。
+- **merge**: memo が言う課題が、材料の「ほかの開いた memo」の別の memo と同じで 1 本に寄せられる。`into` にその memo の id を書き、evidence に同じと言える根拠を書く。
 - **keep**: 課題は在るが、まだ契約にする条件が揃わない・材料が足りない。evidence に揃わない条件と、それが揃う引き金を 1 つ書く。
 
 ## 審査の前提

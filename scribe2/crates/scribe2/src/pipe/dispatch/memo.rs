@@ -45,13 +45,15 @@ const MET: &str = "met:";
 /// 値を持たない欄の字面。
 const DASH: &str = "-";
 
-/// 判定の語（閉じた 4 値）。
+/// 判定の語（閉じた 5 値）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Word {
     /// 契約へ上げる。
     Promote,
     /// 閉じる。
     Close,
+    /// 同じ課題のほかの開いた memo へ寄せる。
+    Merge,
     /// 残す。
     Keep,
     /// 出力を読めなかった。
@@ -59,19 +61,23 @@ pub enum Word {
 }
 
 impl Word {
-    /// 4 値（宣言順）。
-    pub const ALL: [Self; 4] = [Self::Promote, Self::Close, Self::Keep, Self::Unparsed];
+    /// 5 値（宣言順）。
+    pub const ALL: [Self; 5] = [Self::Promote, Self::Close, Self::Merge, Self::Keep, Self::Unparsed];
 
     /// file と行に書く字面。
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Promote => "promote",
             Self::Close => "close",
+            Self::Merge => "merge",
             Self::Keep => "keep",
             Self::Unparsed => "unparsed",
         }
     }
 }
+
+/// keep の理由の型（この順・no-material は材料が足りない・wait-row は契約表の行か便の着地を待つ・wait-owner は持ち主の決めを待つ）。
+pub const KEEP_WHY: [&str; 3] = ["no-material", "wait-row", "wait-owner"];
 
 /// `verdict` の 1 行の中身。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,25 +90,36 @@ pub struct Verdict {
     pub evidence: String,
     /// 契約の素描。
     pub sketch: String,
+    /// merge の行き先の memo の id（使わない語の時は空）。
+    pub into: String,
+    /// keep の理由の型（使わない語の時は空）。
+    pub why: String,
 }
 
 impl Verdict {
-    /// file に書く 1 行（`{"verdict":…,"at":…,"evidence":…,"sketch":…}`）。
+    /// file に書く 1 行（`{"verdict":…,"at":…,"evidence":…,"sketch":…}` の後に、空でない時だけ `into`・`why`）。
     pub fn to_line(&self) -> String {
-        json_lite::write_object(&[
+        let mut pairs = vec![
             ("verdict", Value::Str(self.word.as_str().to_owned())),
             ("at", Value::Str(self.at.clone())),
             ("evidence", Value::Str(self.evidence.clone())),
             ("sketch", Value::Str(self.sketch.clone())),
-        ])
+        ];
+        for (key, value) in [("into", &self.into), ("why", &self.why)] {
+            if !value.is_empty() {
+                pairs.push((key, Value::Str(value.clone())));
+            }
+        }
+        json_lite::write_object(&pairs)
     }
 
-    /// file の字を読む（4 key が文字列で揃い、語が閉じた 4 値の内なら `Some`）。
+    /// file の字を読む（4 key が文字列で揃い、語が閉じた 5 値の内なら `Some`・`into` と `why` は在れば読み、無ければ空）。
     pub fn parse(text: &str) -> Option<Self> {
         let pairs = json_lite::parse_object(text.trim()).ok()?;
         let get = |key: &str| pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str());
         let word = Word::ALL.into_iter().find(|found| Some(found.as_str()) == get("verdict"))?;
-        Some(Self { word, at: get("at")?.to_owned(), evidence: get("evidence")?.to_owned(), sketch: get("sketch")?.to_owned() })
+        let opt = |key: &str| get(key).unwrap_or_default().to_owned();
+        Some(Self { word, at: get("at")?.to_owned(), evidence: get("evidence")?.to_owned(), sketch: get("sketch")?.to_owned(), into: opt("into"), why: opt("why") })
     }
 }
 
@@ -262,4 +279,27 @@ fn epoch_at(text: &str) -> Option<u64> {
         let digits = tail.strip_suffix('Z')?;
         (!digits.is_empty() && digits.bytes().all(|found| found.is_ascii_digit())).then(|| epoch_of(&format!("{head}Z")))?
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Verdict, Word};
+
+    /// 4 key の行は into と why を空にして読め、into を持つ merge の行と why を持つ keep の行はその字を読み、4 key が欠ける行は読めない。
+    #[test]
+    fn vmmerge_parse_reads_the_four_key_line() {
+        let four = "{\"verdict\":\"keep\",\"at\":\"2026-10-01T00:00:00Z\",\"evidence\":\"e\",\"sketch\":\"\"}";
+        let old = Verdict::parse(four);
+        assert_eq!(
+            old,
+            Some(Verdict { word: Word::Keep, at: "2026-10-01T00:00:00Z".to_owned(), evidence: "e".to_owned(), sketch: String::new(), into: String::new(), why: String::new() })
+        );
+        let merge = Verdict { word: Word::Merge, at: "t".to_owned(), evidence: "e".to_owned(), sketch: String::new(), into: "s2-m.2".to_owned(), why: String::new() };
+        assert!(merge.to_line().contains("\"into\":\"s2-m.2\"") && !merge.to_line().contains("\"why\""), "{}", merge.to_line());
+        assert_eq!(Verdict::parse(&merge.to_line()), Some(merge));
+        let keep = Verdict { word: Word::Keep, at: "t".to_owned(), evidence: "e".to_owned(), sketch: String::new(), into: String::new(), why: "wait-row".to_owned() };
+        assert!(keep.to_line().contains("\"why\":\"wait-row\"") && !keep.to_line().contains("\"into\""), "{}", keep.to_line());
+        assert_eq!(Verdict::parse(&keep.to_line()), Some(keep));
+        assert_eq!(Verdict::parse("{\"verdict\":\"merge\",\"at\":\"t\",\"evidence\":\"e\"}"), None, "sketch の欠ける行は読めない");
+    }
 }

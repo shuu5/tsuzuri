@@ -6,8 +6,8 @@
 //! 台帳は読むだけで書かず、memo を閉じない（ADR-0085）。口座の候補が無い周と測れない周は lens を撃たず、`rc` に理由の 1 語を
 //! 書いて `verdict` を書かない（前の判定の時刻は動かない）。
 
-use super::memo::{self, Verdict, Word};
-use super::{Input, Materials, Read};
+use super::memo::{self, Verdict, Word, KEEP_WHY};
+use super::{Input, Materials, Read, CLOSED};
 use crate::cli_outcome::{Outcome, RC_BROKEN, RC_REFUSED};
 use crate::fleet::store::{self, lock_owner, started_ms, LockPolicy, Owner};
 use crate::fleet::{Case, Event, EventKind, SCHEMA};
@@ -121,7 +121,7 @@ fn judge(input: &Input<'_>, args: &[String], (memo, lens): (&str, &str), place: 
         Ok(output) => {
             let text = String::from_utf8_lossy(&output.stdout).into_owned();
             let _ = std::fs::write(place.join(memo::OUT), &text);
-            (output.status.code().map_or_else(|| "signal".to_owned(), |code| code.to_string()), verdict_of(output.status.code(), &text))
+            (output.status.code().map_or_else(|| "signal".to_owned(), |code| code.to_string()), verdict_of(output.status.code(), &text, memo))
         }
         Err(err) => ("spawn".to_owned(), unparsed(format!("lens を起こせない: {err}"))),
     };
@@ -145,7 +145,7 @@ fn account_line(input: &Input<'_>, args: &[String], line: String) -> Result<Stri
 }
 
 /// lens の出力の最後の JSON の 1 行から判定を読む（JSON が無い・語の外・lens の rc が 0 でない周は unparsed）。
-fn verdict_of(code: Option<i32>, text: &str) -> Verdict {
+fn verdict_of(code: Option<i32>, text: &str, memo: &str) -> Verdict {
     if code != Some(0) {
         return unparsed(format!("lens の rc が 0 でない（{}）", code.map_or_else(|| "signal".to_owned(), |found| found.to_string())));
     }
@@ -156,16 +156,36 @@ fn verdict_of(code: Option<i32>, text: &str) -> Verdict {
         return unparsed("lens の出力の最後の JSON を読めない".to_owned());
     };
     let get = |key: &str| pairs.iter().find(|(found, _)| found == key).and_then(|(_, value)| value.as_str()).unwrap_or_default().to_owned();
-    let Some(word) = [Word::Promote, Word::Close, Word::Keep].into_iter().find(|found| found.as_str() == get("verdict")) else {
-        return unparsed(format!("verdict {:?} は promote・close・keep のどれでもない", get("verdict")));
+    let Some(word) = [Word::Promote, Word::Close, Word::Merge, Word::Keep].into_iter().find(|found| found.as_str() == get("verdict")) else {
+        return unparsed(format!("verdict {:?} は promote・close・merge・keep のどれでもない", get("verdict")));
     };
+    let into = get("into");
+    if word == Word::Merge && !(is_memo_id(&into) && into != memo) {
+        return unparsed(format!("merge の into {into:?} が行き先の memo の id の形でない（1 字以上の英数字・-・.・_ で自分以外）"));
+    }
+    let why = get("why");
+    if word == Word::Keep && !KEEP_WHY.contains(&why.as_str()) {
+        return unparsed(format!("keep の why {why:?} は {} のどの型でもない", KEEP_WHY.join("・")));
+    }
     let sketch = if word == Word::Promote { get("sketch") } else { String::new() };
-    Verdict { word, at: crate::fleet::cli::now_utc(), evidence: get("evidence"), sketch }
+    Verdict {
+        word,
+        at: crate::fleet::cli::now_utc(),
+        evidence: get("evidence"),
+        sketch,
+        into: if word == Word::Merge { into } else { String::new() },
+        why: if word == Word::Keep { why } else { String::new() },
+    }
+}
+
+/// memo の id の形か（1 字以上で、どの字も ASCII の英数字か `-` か `.` か `_`）。
+fn is_memo_id(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|found| found.is_ascii_alphanumeric() || matches!(found, '-' | '.' | '_'))
 }
 
 /// 読めなかった周の判定（理由は evidence）。
 fn unparsed(reason: String) -> Verdict {
-    Verdict { word: Word::Unparsed, at: crate::fleet::cli::now_utc(), evidence: reason, sketch: String::new() }
+    Verdict { word: Word::Unparsed, at: crate::fleet::cli::now_utc(), evidence: reason, sketch: String::new(), into: String::new(), why: String::new() }
 }
 
 /// `verdict` を一時 file から rename で書き、`MemoJudged` を 1 行足し、stdout の 1 行を返す。
@@ -212,8 +232,15 @@ fn material_of(read: &Read, memo: &str, trigger: &str) -> String {
         .map(|found| format!("- {} status={}", found.id, found.status))
         .collect();
     let listed = if contracts.is_empty() { "（無い）".to_owned() } else { contracts.join("\n") };
+    let others: Vec<String> = read
+        .issues
+        .iter()
+        .filter(|found| is_memo(found) && found.status != CLOSED && found.id != memo)
+        .map(|found| format!("- {} {}", found.id, found.description.lines().next().unwrap_or_default()))
+        .collect();
+    let others = if others.is_empty() { "（無い）".to_owned() } else { others.join("\n") };
     format!(
-        "# memo {memo}\n\n## description\n{}\n\n## notes\n{}\n\n## 引き金の読み\n{trigger}\n\n## discovered-from で辿れる契約\n{listed}\n",
+        "# memo {memo}\n\n## description\n{}\n\n## notes\n{}\n\n## 引き金の読み\n{trigger}\n\n## discovered-from で辿れる契約\n{listed}\n\n## ほかの開いた memo\n{others}\n",
         own.map_or("", |found| found.description.as_str()),
         own.map_or("", |found| found.notes.as_str()),
     )

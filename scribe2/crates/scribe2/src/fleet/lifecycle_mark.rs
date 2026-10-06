@@ -836,7 +836,7 @@ pub(crate) fn unreflected_questions(state_dir: &Path, prefix: Option<&str>, issu
     asked(state_dir, prefix, &closed)
 }
 
-/// 処置の無い判定を持つ memo の bead id（台帳の順）: 開いた memo のうち、event log の最後の判定の語が promote か close で、
+/// 処置の無い判定を持つ memo の bead id（台帳の順）: 開いた memo のうち、event log の最後の判定の語が promote・close・merge で、
 /// 台帳の updated_at がその判定の ts より後でないもの（updated_at か ts が読めない memo は渡す）。
 pub(crate) fn verdict_unhandled(issues: &[Issue], events: &[Event]) -> Vec<String> {
     let mut last: BTreeMap<&str, (&str, &str)> = BTreeMap::new();
@@ -850,7 +850,7 @@ pub(crate) fn verdict_unhandled(issues: &[Issue], events: &[Event]) -> Vec<Strin
     issues
         .iter()
         .filter(|issue| issue.status != "closed" && is_memo(issue))
-        .filter(|issue| last.get(issue.id.as_str()).is_some_and(|(word, ts)| [Word::Promote, Word::Close].iter().any(|actionable| actionable.as_str() == *word) && !handled(issue, ts)))
+        .filter(|issue| last.get(issue.id.as_str()).is_some_and(|(word, ts)| [Word::Promote, Word::Close, Word::Merge].iter().any(|actionable| actionable.as_str() == *word) && !handled(issue, ts)))
         .map(|issue| issue.id.clone())
         .collect()
 }
@@ -1268,6 +1268,16 @@ mod tests {
         let events: Vec<Event> = ["m-same", "m-after", "m-before", "m-absent", "m-garbled"].iter().map(|bead| judged_line(ts, bead, "close")).collect();
         let expected = ["m-same", "m-before", "m-absent", "m-garbled"].map(str::to_owned);
         assert_eq!(verdict_unhandled(&issues, &events), expected);
+    }
+
+    /// 最後の判定の語が merge の開いた memo は載り（席が 2 本を寄せる手番）、keep の memo は載らない。
+    #[test]
+    fn vmmerge_unhandled_counts_a_merge() {
+        let memo = "intake:memo";
+        let issues = ledger_json(&[bead_json("m-merge", "open", memo, "", None), bead_json("m-keep", "open", memo, "", None)]);
+        let ts = "2026-10-01T00:00:00Z";
+        let events = [judged_line(ts, "m-merge", "merge"), judged_line(ts, "m-keep", "keep")];
+        assert_eq!(verdict_unhandled(&issues, &events), ["m-merge".to_owned()]);
     }
 
     /// git の repo（`stateDir` を名乗る設定は `named` の字・無ければ設定しない）。

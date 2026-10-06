@@ -1161,7 +1161,7 @@ fn pipe_dispatch_memo_lens_writes_the_last_json_line_as_the_verdict_and_one_even
     assert!(!memo_place(&state, "s2-m.1").join("pid").exists(), "pid は消える");
     assert_eq!(place_file(&state, "s2-m.1", "rc").trim(), "0", "rc が在る");
     assert!(place_file(&state, "s2-m.1", "out").contains("ev-zq"), "lens の出力は out に残る");
-    let keep = memo_lens_cmd(&state, "keep", "{\"verdict\":\"keep\",\"evidence\":\"ev-keep\",\"sketch\":\"捨てる\"}\n", 0);
+    let keep = memo_lens_cmd(&state, "keep", "{\"verdict\":\"keep\",\"evidence\":\"ev-keep\",\"why\":\"no-material\",\"sketch\":\"捨てる\"}\n", 0);
     let kept = memo_lens(&repo, &state, &bd, "s2-m.2", (&keep, &rules));
     assert_eq!(stdout_of(&kept), "memo-lens memo=s2-m.2 verdict=keep\n", "{}", told(&kept));
     let verdict = string_pairs(&place_file(&state, "s2-m.2", "verdict"));
@@ -1245,7 +1245,7 @@ fn pipe_dispatch_memo_lens_argv_ends_with_stage_memo_and_material_carries_the_me
     let reverse = listed("s2-c.3", "open", 2, "", &[("s2-m.1", "discovered-from")]);
     let bd = fake_bd(&state, &[memo, listed("s2-c.1", "closed", 2, "", &[]), listed("s2-c.2", "open", 2, "", &[]), reverse]);
     let rules = dispatch_rules(&state);
-    let lens = memo_lens_cmd(&state, "argv", "{\"verdict\":\"keep\",\"evidence\":\"e\",\"sketch\":\"\"}\n", 0);
+    let lens = memo_lens_cmd(&state, "argv", "{\"verdict\":\"keep\",\"evidence\":\"e\",\"why\":\"no-material\",\"sketch\":\"\"}\n", 0);
     let out = memo_lens(&repo, &state, &bd, "s2-m.1", (&lens, &rules));
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{}", told(&out));
     let argv = memo_lens_argv(&state, "argv");
@@ -1269,7 +1269,7 @@ fn pipe_dispatch_memo_lens_live_owner_blocks_and_dead_owner_fires() {
     let (repo, state) = memo_repo();
     let bd = fake_bd(&state, &unmet_memos(&["s2-m.1"]));
     let rules = dispatch_rules(&state);
-    let lens = memo_lens_cmd(&state, "owner", "{\"verdict\":\"keep\",\"evidence\":\"e\",\"sketch\":\"\"}\n", 0);
+    let lens = memo_lens_cmd(&state, "owner", "{\"verdict\":\"keep\",\"evidence\":\"e\",\"why\":\"no-material\",\"sketch\":\"\"}\n", 0);
     let mut owner = Command::new("sleep").arg("30").spawn().expect("持ち主の process を起こせる");
     fs::create_dir_all(memo_place(&state, "s2-m.1")).expect("置き場を作れる");
     let pid_file = memo_place(&state, "s2-m.1").join("pid");
@@ -1317,7 +1317,7 @@ fn account_rules(state: &Path, labels: &[&str], measured: bool) -> String {
 fn pipe_dispatch_memo_lens_chooses_the_account_or_stops_without_a_verdict() {
     let (repo, state) = memo_repo();
     let bd = fake_bd(&state, &unmet_memos(&["s2-m.1", "s2-m.2", "s2-m.3", "s2-m.4"]));
-    let ok = "{\"verdict\":\"keep\",\"evidence\":\"e\",\"sketch\":\"\"}\n";
+    let ok = "{\"verdict\":\"keep\",\"evidence\":\"e\",\"why\":\"no-material\",\"sketch\":\"\"}\n";
     let curl = lifecycle::fake_usage_curl(&state);
     lifecycle::put_account(&state, "a1", &[lifecycle::windows(100, 10)]);
     lifecycle::put_account(&state, "a2", &[lifecycle::windows(100, 10)]);
@@ -1960,7 +1960,7 @@ fn triage_lens(state: &Path, name: &str, open: bool) -> (String, std::path::Path
     }
     let body = format!(
         "printf '%s\\n' \"$2\" >> '{d}/calls'\nn=0\nwhile [ ! -e '{d}/gate' ] && [ \"$n\" -lt {tries} ]; do sleep 0.05; n=$((n + 1)); done\n\
-         printf '%s\\n' '{{\"verdict\":\"keep\",\"evidence\":\"e\",\"sketch\":\"\"}}'\n",
+         printf '%s\\n' '{{\"verdict\":\"keep\",\"evidence\":\"e\",\"why\":\"no-material\",\"sketch\":\"\"}}'\n",
         d = spy.display(),
         tries = TRIAGE_DEADLINE_S * 20
     );
@@ -2293,3 +2293,5 @@ fn pipe_dispatch_memo_triage_leaves_met_and_fully_promoted_memos_out() {
     assert_eq!(triage_called(&state, "g", 2), ["s2-m.3", "s2-m.4"]);
     clean(&[&repo, &state]);
 }
+
+mod vmmerge;
