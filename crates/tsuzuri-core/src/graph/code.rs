@@ -1,12 +1,14 @@
 //! code の層（判断の記録 ADR-46 の決定 (1)〜(4)）。git の file の一覧と、構文で探す道具（ast-grep）が規則の file で
-//! 読んだ定義の stream と、契約表の導出物の write-set の 3 つの字から、file と定義の節点と、行 → file の辺（宣言・
-//! write-set の項）を組む。file → 定義は定義の file の欄（測り・構文の範囲）で、行の触る定義は 2 つを辿って引く。
+//! 読んだ定義の stream と、契約表の導出物の write-set と、台帳の契約の bead の write-set の 4 つの字から、file と定義の
+//! 節点と、行 → file の辺（宣言・write-set の項）を組む。file → 定義は定義の file の欄（測り・構文の範囲）で、行の触る定義は 2 つを辿って引く。
 //! 定義の名前は path と入れ子と名と種類（`Def::id`）で、同じ名の関数と型を 1 つに潰さない。
 //! 呼び手と参照の目と、commit と歯の節点はまだ持たない。字を読んで子 process を撃つ側は境界の crate が持つ。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
+
+use super::build::read_ledger;
 
 /// 定義の種類（閉じた 11・規則の file の rule の id の語と同じ字）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -301,6 +303,21 @@ pub fn read_write_sets(toml: &str) -> Option<Vec<(String, Vec<String>)>> {
     rows.into_iter()
         .map(|(id, items)| Some((id?, items)))
         .collect()
+}
+
+/// 台帳の字（bd の読み取りの口の JSON の配列）から、契約の bead の行の id（`<bead の id>#<契約の id>`）と write-set の項を
+/// 台帳の順に読む。bead の欄 acceptance の字（無ければ空の字）を `read_write_sets` で読み、契約の行を持たない bead は
+/// 何も足さない。開閉は問わない。台帳が読めないか、読めない契約の行が 1 つでも在れば None。
+pub fn bead_write_sets(ledger: &str) -> Option<Vec<(String, Vec<String>)>> {
+    let mut out = Vec::new();
+    for bead in read_ledger(ledger)? {
+        let rows = read_write_sets(bead.acceptance_criteria.as_deref().unwrap_or(""))?;
+        out.extend(
+            rows.into_iter()
+                .map(|(id, items)| (format!("{}{PATH_SEP}{id}", bead.id), items)),
+        );
+    }
+    Some(out)
 }
 
 /// write-set の項の印と path（頭の 1 字が印の字なら印・ほかは素の path）。

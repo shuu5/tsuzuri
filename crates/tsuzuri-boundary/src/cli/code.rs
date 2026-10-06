@@ -1,13 +1,18 @@
 //! tz code（判断の記録 ADR-46 の決定 (1)〜(4)・要件 FR2）: code の層を組み直し、数か行の触る定義か file の定義を
 //! 標準出力へ出す。書かない。席と係が行を書く前に、write-set の file の関数と型を引く口。
-//! tz code [--repo <dir>] [--sg <program>] [--row <ノート>#<行> | --file <path>]
+//! tz code [--repo <dir>] [--sg <program>] [--bd <program>] [--row <ノート>#<行> | --file <path>]
 //! - 旗なし — 数の行（`files`・`defs`・種類ごとの `kind`・`rows`・`writes`・`unbound`・`skipped`）
 //! - --row — 行の辺ごとの `file` の行とその file の `def` の行、file に当たらない項の `none` の行
 //! - --file — file の `def` の行
+//! - --bd — 台帳の読みに撃つ program（既定 bd）。行の id は 契約表の行が `<文書の id>#<行の id>`・台帳の契約の bead が
+//!   `<bead の id>#<契約の id>`
 //!
 //! 組みは repo の git ls-files -z と、構文で探す道具（--sg・既定 ast-grep）の scan --rule <repo>/.config/code-defs.yml
-//! --json=stream と、repo の contracts/ の直下の .toml の字から `tsuzuri_core::graph::code` が組む。
+//! --json=stream と、repo の contracts/ の直下の .toml の字と、台帳の契約の bead の write-set の字から
+//! `tsuzuri_core::graph::code` が組む。
 //! 終了 code は 組めた 0・使い方の誤りと名指しの誤り（規則の file・行・file が無い）1・字が読めない 2（まだ分からない）。
+//! 台帳が読めない時、旗なしと --row は今の出力を出した後に標準エラーへ 1 行書き 2 を返す（--row の名指しの誤りも 2・
+//! 名指した行が bead の契約かもしれない）。--file は行を使わないので rc を替えない。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -17,10 +22,11 @@ use std::time::Duration;
 use tsuzuri_core::graph::code::{self, CodeGraph, Def, DefKind, Defs};
 
 use crate::out::{emit, emit_err};
+use crate::server::ledger::{BD, Source};
 use crate::server::proc;
 
 pub const USAGE: &str =
-    "usage: tz code [--repo <dir>] [--sg <program>] [--row <ノート>#<行> | --file <path>]";
+    "usage: tz code [--repo <dir>] [--sg <program>] [--bd <program>] [--row <ノート>#<行> | --file <path>]";
 
 /// 規則の file（repo の根からの path）。
 pub const RULES: &str = ".config/code-defs.yml";
@@ -51,7 +57,14 @@ enum Ask<'a> {
 struct Args<'a> {
     repo: PathBuf,
     sg: &'a str,
+    bd: &'a str,
     ask: Ask<'a>,
+}
+
+/// 組んだ code の層と、台帳が読めたか。
+struct Gathered {
+    graph: CodeGraph,
+    ledger_known: bool,
 }
 
 pub fn run(rest: &[&str]) -> u8 {
@@ -67,18 +80,26 @@ pub fn run(rest: &[&str]) -> u8 {
         emit_err(&format!("tz code: 規則の file {} が無い", rules.display()));
         return FAIL;
     }
-    let g = match gather(&args.repo, args.sg) {
+    let Gathered {
+        graph: g,
+        ledger_known,
+    } = match gather(&args.repo, args.sg, args.bd) {
         Ok(g) => g,
         Err(why) => {
             emit_err(&format!("tz code: {why}"));
             return UNKNOWN;
         }
     };
-    match args.ask {
+    let rc = match args.ask {
         Ask::Counts => counts(&g),
         Ask::Row(row) => row_lines(&g, row),
         Ask::File(file) => file_lines(&g, file),
+    };
+    if !ledger_known && !matches!(args.ask, Ask::File(_)) {
+        emit_err("tz code: 台帳が読めない（bead の契約の行を含まない・まだ分からない）");
+        return UNKNOWN;
     }
+    rc
 }
 
 /// file の一覧と定義の stream の 2 つの撃ちを読む（子は repo で撃つ・file の一覧の字と読んだ定義・読めない字はその訳）。
@@ -93,11 +114,20 @@ pub(crate) fn read_layer(repo: &Path, sg: &str) -> Result<(String, Defs), String
     Ok((String::from_utf8_lossy(&files).into_owned(), defs))
 }
 
-/// 3 つの字を読んで code の層を組む（file の一覧と定義は `read_layer`・読めない字はその訳）。
-fn gather(repo: &Path, sg: &str) -> Result<CodeGraph, String> {
+/// 4 つの字を読んで code の層を組む（file の一覧と定義は `read_layer`・読めない字はその訳）。台帳が読めなければ
+/// bead の行を足さず、読めない印を持つ。
+fn gather(repo: &Path, sg: &str, bd: &str) -> Result<Gathered, String> {
     let (files, defs) = read_layer(repo, sg)?;
-    let rows = write_sets(&repo.join(CONTRACTS))?;
-    Ok(code::build(&files, defs, &rows))
+    let mut rows = write_sets(&repo.join(CONTRACTS))?;
+    let beads = Source::new(repo, bd)
+        .text_alone()
+        .and_then(|text| code::bead_write_sets(&text));
+    let ledger_known = beads.is_some();
+    rows.extend(beads.unwrap_or_default());
+    Ok(Gathered {
+        graph: code::build(&files, defs, &rows),
+        ledger_known,
+    })
 }
 
 /// contracts/ の直下の .toml の行の id（`<file の名の .toml の前>#<行>`）と write-set（file の名の順）。
@@ -188,10 +218,10 @@ fn file_lines(g: &CodeGraph, file: &str) -> u8 {
     0
 }
 
-/// `--名 値` か `--名=値` の --repo・--sg・--row・--file を読む（空の値と 2 度の引数と知らない引数と、
+/// `--名 値` か `--名=値` の --repo・--sg・--bd・--row・--file を読む（空の値と 2 度の引数と知らない引数と、
 /// --row と --file の両方を断る）。
 fn parse<'a>(rest: &[&'a str]) -> Result<Args<'a>, String> {
-    let (mut repo, mut sg, mut row, mut file) = (None, None, None, None);
+    let (mut repo, mut sg, mut bd, mut row, mut file) = (None, None, None, None, None);
     let mut it = rest.iter();
     while let Some(arg) = it.next() {
         let (name, value) = match arg.split_once('=') {
@@ -201,6 +231,7 @@ fn parse<'a>(rest: &[&'a str]) -> Result<Args<'a>, String> {
         let slot = match name {
             "--repo" => &mut repo,
             "--sg" => &mut sg,
+            "--bd" => &mut bd,
             "--row" => &mut row,
             "--file" => &mut file,
             _ => return Err(format!("知らない引数 {arg}")),
@@ -225,6 +256,7 @@ fn parse<'a>(rest: &[&'a str]) -> Result<Args<'a>, String> {
     Ok(Args {
         repo: PathBuf::from(repo.unwrap_or(".")),
         sg: sg.unwrap_or(SG),
+        bd: bd.unwrap_or(BD),
         ask,
     })
 }

@@ -28,7 +28,8 @@ fn scratch(test: &str) -> PathBuf {
     root
 }
 
-/// 一時の git の repo（a.rs・b.rs・規則の file・contracts/n1.toml を index に置く）と、rc を `rc` で返す偽の道具。
+/// 一時の git の repo（a.rs・b.rs・規則の file・contracts/n1.toml を index に置く）と、rc を `rc` で返す偽の道具と、
+/// 空の台帳（空の配列の字）を出す偽の bd（根の fake-bd）。
 fn place(test: &str, rc: u8) -> (PathBuf, PathBuf) {
     let root = scratch(test);
     let repo = root.join("repo");
@@ -62,18 +63,24 @@ fn place(test: &str, rc: u8) -> (PathBuf, PathBuf) {
     );
     fs::write(&sg, script).unwrap();
     fs::set_permissions(&sg, fs::Permissions::from_mode(0o755)).unwrap();
+    let bd = root.join("fake-bd");
+    fs::write(&bd, "#!/bin/sh\nprintf '[]'\n").unwrap();
+    fs::set_permissions(&bd, fs::Permissions::from_mode(0o755)).unwrap();
     (root, sg)
 }
 
-/// tz code を repo の置き場と偽の道具で撃つ（rc・標準出力・標準エラー）。
+/// tz code を repo の置き場と偽の道具と偽の bd で撃つ（rc・標準出力・標準エラー）。
 fn tz(root: &Path, sg: &Path, args: &[&str]) -> (i32, String, String) {
     let repo = root.join("repo");
+    let bd = root.join("fake-bd");
     let mut all = vec![
         "code",
         "--repo",
         repo.to_str().unwrap(),
         "--sg",
         sg.to_str().unwrap(),
+        "--bd",
+        bd.to_str().unwrap(),
     ];
     all.extend_from_slice(args);
     let out = Command::new(env!("CARGO_BIN_EXE_tz"))
