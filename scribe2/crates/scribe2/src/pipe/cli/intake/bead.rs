@@ -1,7 +1,7 @@
 //! 受付の bead の周（契約を台帳の bead に置く形・tsuzuri の判断の記録 ADR-72 の決定 (2)・契約表の行 v-bead-intake）。
 //!
 //! `--design` も `--contract` も渡されない周は bead の周で、`--bead` の bead の acceptance（`[[contract]]` の 1 行）と本文から契約を組む。
-//! 組む順は [`bead_contract`] の 7 段で、最初の断りで返る（judge の前・run dir も event も作らない）。行の本文の出所だけを替え、
+//! 組む順は [`bead_contract`] の 7 段（（5）は表・凍結の file・ほかの bead の順に id を見る）で、最初の断りで返る（judge の前・run dir も event も作らない）。行の本文の出所だけを替え、
 //! 判定の 1 本 [`super::judge`] と表の検査と写しの読み（[`crate::pipe::table::read_rows`]）は替えない（C2）。形の判じと写しの字は
 //! [`crate::pipe::bead`] が持つ。acceptance が `design = ` の行を持つ bead（並ぶ間の 2 形）は今の [`super::generated`] で組む。
 
@@ -10,6 +10,7 @@ use super::{Denial, Materials, DENIAL_ARGS, DENIAL_RULES, DENIAL_STORE, FLAG_CON
 use crate::pipe::bead::{copy_pointer, copy_text, form_of, row_of, Form};
 use crate::pipe::cli::present;
 use crate::pipe::contract::Contract;
+use crate::pipe::git_bytes;
 use crate::pipe::refuse::Refuse;
 use crate::pipe::spawn::table_rows;
 use crate::pipe::table::{self, TableError};
@@ -85,7 +86,7 @@ pub(in crate::pipe) fn ledger_of(bd: &str, repo: &Path, manifest: &Manifest, bea
 ///
 /// （1）bead の id が空か区切りの字（斜線）か `..` を持つか、`issues` に無い。（2）形: 両方は `contract-bead-both-forms`・どちらも無いは
 /// `contract-bead-unreadable`・`design = ` の行だけは今の [`generated`]。（3）byte の上限（本文を先に見る）。（4）写しの行を読む。
-/// （5）行の id が契約表の行かほかの bead の行と同じ。（6）開いた契約の bead の本数の上限。（7）写しを置き場に書き（在れば書かない）、
+/// （5）行の id が契約表の行か凍結の file の id かほかの bead の行と同じ（順は表・凍結の file・ほかの bead）。（6）開いた契約の bead の本数の上限。（7）写しを置き場に書き（在れば書かない）、
 /// [`generated_from`] で契約を組む。
 pub(in crate::pipe) fn bead_contract(
     (repo, state_dir): (&Path, &Path),
@@ -135,13 +136,25 @@ fn exclude_oversized(manifest: &Manifest, acceptance: &str, description: &str) -
     Ok(())
 }
 
-/// 行の id が置き場の全部の行（契約表）か、ほかの bead の契約の行（閉じた物も・bead の id の順）と同じ周の断り（表を先に見る）。
-/// 置き場の読めない周は今の `contract-table` で断る。
+/// 退けた行の id を凍結した file の repo の根からの path（1 行に id 1 つ・字の昇順）。
+const FROZEN_IDS: &str = "docs/design/contract-ids.txt";
+
+/// HEAD の木の凍結の file の id の列（前後の空白を除き空の行を落とす）。file が HEAD に無い周と git を撃てない周は空の列。
+fn frozen_ids(repo: &Path) -> Vec<String> {
+    let shown = git_bytes(repo, &["show", &format!("HEAD:{FROZEN_IDS}")]).and_then(|bytes| String::from_utf8(bytes).ok());
+    shown.unwrap_or_default().lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_owned).collect()
+}
+
+/// 行の id が置き場の全部の行（契約表）か、凍結の file の id か、ほかの bead の契約の行（閉じた物も・bead の id の順）と同じ周の断り
+/// （順は表・凍結の file・ほかの bead）。凍結の file の周の `by` は [`FROZEN_IDS`] の path。置き場の読めない周は今の `contract-table` で断る。
 fn exclude_id_taken(repo: &Path, bead: &str, id: &str, issues: &[Issue]) -> Result<(), Denial> {
     let rows = table_rows(repo, "HEAD").map_err(|reason| refuse(&Refuse::ContractTable(TableError::Unreadable { line: 0, reason }), &[]))?;
     let taken = |by: &str| refuse(&Refuse::ContractIdTaken { id: id.to_owned(), by: by.to_owned() }, &[]);
     if let Some((pointer, ..)) = rows.iter().find(|(pointer, ..)| pointer.rsplit_once('#').is_some_and(|(_, found)| found == id)) {
         return Err(taken(pointer));
+    }
+    if frozen_ids(repo).iter().any(|frozen| frozen == id) {
+        return Err(taken(FROZEN_IDS));
     }
     let mut others: Vec<&Issue> = issues.iter().filter(|issue| issue.id != bead).collect();
     others.sort_by(|left, right| left.id.cmp(&right.id));

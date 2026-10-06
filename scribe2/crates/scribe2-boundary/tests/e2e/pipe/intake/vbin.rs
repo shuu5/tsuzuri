@@ -3,6 +3,7 @@
 //! `--design` も `--contract` も渡さず `--bead` だけを渡す周は、台帳の bead（欄 acceptance に契約表の導出の形の `[[contract]]` の 1 行・本文に
 //! 設計の節）から契約を組む。toy の導出の行 b の字を bead に置き、偽の `bd`（置き場の `ledger.json` を `cat` する script）で台帳を読ませて、
 //! 同じ行を表に置いた撃ちと同じ判定になること・断りの字・上限・写しの置き場を、rc と stdout と stderr と置き場の file から測る。
+//! 退けた行の id を凍結した file docs/design/contract-ids.txt を持つ repo は、表に無い凍結の id の bead も断る（表を先に見る）。
 
 use super::*;
 use std::os::unix::fs::PermissionsExt;
@@ -268,6 +269,23 @@ fn vbin_contract_id_taken_names_the_holder() {
     let bd = fake_bd(&state, &[listed_bead("s2-b", "open", &acceptance_of("e"), BODY), closed]);
     let ok = bead_run("preflight", &repo, &state, (&bd, &bead_rules(&state, default_caps())));
     assert_eq!(ok.status.code(), Some(i32::from(RC_OK)), "ほかに同じ id の無い行は通る: {} {}", stdout_of(&ok), stderr_of(&ok));
+    clean(&[&repo, &state]);
+}
+
+/// 凍結の file docs/design/contract-ids.txt（行 a と y）を持つ repo で、表に無く凍結の file に在る id y の bead は by=docs/design/contract-ids.txt で断り、
+/// 表と凍結の file の両方に在る id a は表を先に見て by=<doc>#<id> で断り、どれも rc 1 で run dir を作らない。どこにも無い id e の preflight は通る。
+#[test]
+fn vbin_frozen_ids_refuse_the_retired_rows() {
+    let doc = table_doc(&table_region(&[derive_row("a", &[("verify", VERIFY)])]));
+    let (repo, state) = derive_repo_with(&doc, &[("docs/design/contract-ids.txt", "a\ny\n")]);
+    for (id, by) in [("y", "docs/design/contract-ids.txt"), ("a", "docs/design/toy.md#a")] {
+        let bd = fake_bd(&state, &[listed_bead("s2-b", "open", &acceptance_of(id), BODY)]);
+        let out = bead_run("intake", &repo, &state, (&bd, &bead_rules(&state, default_caps())));
+        assert_refused_untouched(&out, &state, &format!("contract-id-taken id={id} by={by}"));
+    }
+    let bd = fake_bd(&state, &[listed_bead("s2-b", "open", &acceptance_of("e"), BODY)]);
+    let ok = bead_run("preflight", &repo, &state, (&bd, &bead_rules(&state, default_caps())));
+    assert_eq!(ok.status.code(), Some(i32::from(RC_OK)), "どこにも無い id は通る: {} {}", stdout_of(&ok), stderr_of(&ok));
     clean(&[&repo, &state]);
 }
 
