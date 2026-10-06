@@ -14,12 +14,14 @@
 
 // flip-check: moved s2-07l.498
 
+use super::super::bead::digest_of_design;
 use super::super::commute::ledger::{self, Mark};
 use super::super::contract::Contract;
 use super::super::declaration::Effective;
 use super::super::dispatch::spawn_self;
 use super::super::gate::{LandedMark, Unfired, Verdict};
 use super::super::queue::{Order, Turned};
+use super::super::table::parse_pointer;
 use super::super::{emit, git_bytes, git_line, git_ok, size, verdict_path, vessel_path, Emit};
 use super::after_land;
 use super::anchor::Anchored;
@@ -134,12 +136,22 @@ pub(super) fn squash_message(bead: &str, goal: &str, run: &str, contract: &Contr
     // squash message に同時に書く**導出面**で、RTM（別 repo）は trailer だけを読み、無ければ「まだ分からない」
     // と出す（「未着地」とは言わない）。空の欄は行ごと書かない——空の trailer は「無い」と読めない。
     if !contract.design.trim().is_empty() {
-        trailers.push_str(&format!("{}{}\n", trailer_key(CONTRACT_TRAILER), contract.design.trim()));
+        trailers.push_str(&format!("{}{}\n", trailer_key(CONTRACT_TRAILER), contract_value(contract.design.trim())));
     }
     if !contract.req.is_empty() {
         trailers.push_str(&format!("{}{}\n", trailer_key(REQUIREMENTS_TRAILER), contract.req.join(" ")));
     }
     format!("{}\n\n{goal}\n\n{trailers}", subject_of(bead, goal))
+}
+
+/// 契約の trailer の値。写しの pointer（置き場の絶対 path）は公開の履歴に置き場の path を書かない決まりに当たるので、
+/// bead の id と井桁と行の id（`<bead>#<行 id>`）に替える。ほかの design は字のまま。
+fn contract_value(design: &str) -> String {
+    let named = digest_of_design(design).and_then(|_| parse_pointer(design).ok()).and_then(|pointer| {
+        let bead = Path::new(&pointer.path).parent()?.file_name()?.to_str()?.to_owned();
+        Some(format!("{bead}#{}", pointer.id))
+    });
+    named.unwrap_or_else(|| design.to_owned())
 }
 
 /// 契約を名指す trailer の語幹。

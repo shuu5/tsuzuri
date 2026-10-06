@@ -8,6 +8,7 @@
 
 use crate::ledger::form::pointer_text;
 use crate::ledger::phase_main::Commit;
+use crate::pipe::bead::{form_of, Form};
 use crate::pipe::git_bytes;
 use crate::pipe::land::{adopts_key, contract_key, source_key, RUN_TRAILER};
 use crate::seat::ledger::Issue;
@@ -16,8 +17,16 @@ use std::path::Path;
 /// 追認の札 1 行（名指す sha と、結ぶ id の列）。
 type Adoption = (String, Vec<String>);
 
-/// 設計 pointer から bead を引く（開いた bead が先・無ければ閉じた時刻が最も新しい bead）。
+/// 契約の trailer の値から bead を引く。値が `<bead の id>#<行 id>` で、その id の bead が行 `[[contract]]` を持つ形（Bead か Both）ならその
+/// bead（表の pointer の前の字は doc の path で、bead の id と同じ字にならない）。ほかは acceptance の design の行の字と値を比べ、
+/// 開いた bead が先・無ければ閉じた時刻が最も新しい bead。
 fn bead_of<'i>(issues: &'i [Issue], pointer: &str) -> Option<&'i Issue> {
+    let by_id = pointer.rsplit_once('#').and_then(|(id, _)| {
+        issues.iter().find(|issue| issue.id == id && matches!(form_of(&issue.acceptance), Form::Bead | Form::Both))
+    });
+    if by_id.is_some() {
+        return by_id;
+    }
     let mut named: Vec<&Issue> = issues.iter().filter(|issue| pointer_text(&issue.acceptance) == Some(pointer)).collect();
     named.sort_by_key(|issue| (issue.status == "closed", std::cmp::Reverse(issue.closed_at.clone())));
     named.first().copied()
@@ -68,7 +77,8 @@ fn commit_of(record: &str, issues: &[Issue]) -> Option<(Commit, Vec<Adoption>)> 
 
 #[cfg(test)]
 mod tests {
-    use super::{adopts_key, commits_of, source_key};
+    use super::{adopts_key, commits_of, contract_key, source_key};
+    use crate::seat::ledger::{issues_of, Issue};
 
     /// 40 字の toy の sha（`n` の 16 進を 0 で埋める）。
     fn sha(n: u32) -> String {
@@ -108,5 +118,28 @@ mod tests {
         let want: [&[&str]; 9] = [&["toy-a"], &[], &["s-3"], &[], &[], &["toy-e", "toy-h", "toy-i"], &["s-p1"], &[], &["s-p3"]];
         assert_eq!(sources, want, "札は発端の trailer を持つ commit から・trailer の無い commit にだけ・40 字の sha で結ぶ");
         assert_eq!(commits.get(3).and_then(|commit| commit.run.as_deref()), Some("r-4"), "器の便の trailer は残る");
+    }
+
+    /// 台帳の Issue 1 本（acceptance だけを呼び手が選ぶ・台帳の JSON を読み手に通す）。
+    fn issue(id: &str, acceptance: &str) -> Issue {
+        let json = format!("[{{\"id\":\"{id}\",\"status\":\"open\",\"acceptance_criteria\":\"{}\"}}]", acceptance.replace('"', "\\\"").replace('\n', "\\n"));
+        issues_of(&json).and_then(|mut found| found.pop()).unwrap_or_else(|| panic!("台帳の字を読めない: {json}"))
+    }
+
+    /// 契約の trailer の値が `<bead>#<行 id>` の commit は、acceptance が行 `[[contract]]` を持つ bead を引き、design の行だけの bead は引かない。
+    /// 表の pointer の値は従来どおり acceptance の design の行の字と比べる。
+    #[test]
+    fn vbtr_commit_reads_the_bead_trailer() {
+        let key = contract_key();
+        let contracts = |value: &str, issues: &[Issue]| -> Vec<String> {
+            let log = record(1, &format!("要旨\n\n{key}{value}"));
+            commits_of(&log, issues).into_iter().flat_map(|commit| commit.contracts).collect()
+        };
+        let bead = issue("s2-b", "[[contract]]\nid = \"b\"\n");
+        let design_only = issue("s2-b", "design = docs/design/b.md#b\n");
+        let table = issue("s2-x", "design = docs/design/x.md#a\n");
+        assert_eq!(contracts("s2-b#b", &[bead]), vec!["s2-b".to_owned()], "行 [[contract]] を持つ bead");
+        assert_eq!(contracts("s2-b#b", &[design_only]), Vec::<String>::new(), "design の行だけの bead は引かない");
+        assert_eq!(contracts("docs/design/x.md#a", &[table]), vec!["s2-x".to_owned()], "表の pointer は design の行の字と比べる");
     }
 }

@@ -1198,6 +1198,7 @@ mod tests {
     // flip-check: moved s2-07l.253
     // flip-check: moved s2-07l.457
     // flip-check: moved s2-07l.498
+    use super::super::contract::Contract;
     use super::super::gate::{next_number, skip_record, Skipped};
     use super::{
         close_reason, detection_needed, landed_sha, regate_skippable, squash_message, subject_of, trailer_key, CloseTail, Terminal,
@@ -1258,6 +1259,26 @@ mod tests {
             message.lines().any(|line| line == "run: s2-07l.130-1757600000"),
             "run trailer が在る: {message}"
         );
+    }
+
+    /// 写しの契約（design が置き場の写しの絶対 path）の trailer の値は bead の id と井桁と行の id で、置き場の path を持たない。
+    /// 表の pointer の契約は design の字のまま。
+    #[test]
+    fn vbtr_squash_message_names_the_bead_for_a_copy_contract() {
+        let root = crate::pipe::fixture::scratch("vbtr");
+        let copy = root.join("bead-contracts").join("s2-b").join("0123456789abcdef.toml");
+        let key = trailer_key(CONTRACT_TRAILER);
+        let message_of = |design: String| {
+            let made = Contract { design, ..crate::pipe::fixture::contract(&[], &[]) };
+            squash_message("s2-b", "g", "s2-b-1", &made)
+        };
+        let message = message_of(format!("{}#b", copy.display()));
+        let trailers: Vec<&str> = message.lines().filter(|line| line.starts_with(key.as_str())).collect();
+        assert_eq!(trailers, vec![format!("{key}s2-b#b").as_str()], "bead の字と井桁と行の id: {message}");
+        assert!(!message.contains("bead-contracts"), "置き場の path を持たない: {message}");
+        let table = message_of("docs/design/toy.md#a".to_owned());
+        let trailers: Vec<&str> = table.lines().filter(|line| line.starts_with(key.as_str())).collect();
+        assert_eq!(trailers, vec![format!("{key}docs/design/toy.md#a").as_str()], "表の pointer は字のまま: {table}");
     }
 
     /// `landed_sha` は **自分の便の `RunDone`** だけを読む（設計 contract-source.md §5 手順 3）。
