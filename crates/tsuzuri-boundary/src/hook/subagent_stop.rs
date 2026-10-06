@@ -11,12 +11,8 @@
 //!
 //! 係の dir に群の席の札 `group.json` の在る群の係は、4 で出す物の主張の表の欠けも中核の `claim_lacks` で数える
 //! （割りの主張ごとの表の行と確かさの印と証拠・判断の記録 ADR-61 決定 (4)(8)）。
-//! 出す物が差の file（.patch）を名指す係は、4 で床の記録の欠けと床の写しの撃ち直しの食い違いも子の `floor` で数え、
-//! 判じを出力の dir の門の記録に足す（判断の記録 ADR-63 決定 (4)・旗 --tz と --scribe2 は撃ち直しの道具）。
 //!
 //! rc は 0 か 1（使い方の誤り）か 2（1 度目の終わりの止め）。
-
-pub mod floor;
 
 use std::fs;
 use std::io::Read;
@@ -27,12 +23,12 @@ use tsuzuri_core::agent::spec::group::{SEAT, Seat};
 use tsuzuri_core::agent::spec::{OUT, SPEC, Spec};
 use tsuzuri_core::agent::stop::{GATE, claim_lacks, end, hold, lacks};
 
-use super::agent_args::{begin, misuse};
+use super::agent_args::begin;
 use super::agent_meter::{resolve, unbound};
 use crate::out::emit_err;
 use crate::server::events::now;
 
-pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>] [--tz <program>] [--scribe2 <program>]";
+pub const USAGE: &str = "usage: tz hook agent-stop --repo <dir> [--drafts <dir>]";
 
 /// 1 度目の終わりの止め（Claude Code は係を続けさせる）。
 const HOLD: u8 = 2;
@@ -75,11 +71,7 @@ pub fn run(rest: &[&str]) -> u8 {
     let Some(call) = sub_call(&payload) else {
         return 0;
     };
-    let (left, tools) = match floor::tools(rest) {
-        Ok(found) => found,
-        Err(e) => return misuse(USAGE, &e),
-    };
-    let (_, dir) = match begin(USAGE, "通す", &left) {
+    let (_, dir) = match begin(USAGE, "通す", rest) {
         Ok(found) => found,
         Err(rc) => return rc,
     };
@@ -102,7 +94,6 @@ pub fn run(rest: &[&str]) -> u8 {
         &shown,
     );
     holes.extend(claim_holes(&dir.join(&name), &spec, &out));
-    holes.extend(floor::holes(&dir, &spec, &out, stop.again, &tools));
     if !holes.is_empty() && !stop.again {
         emit_err(&hold(&holes, &shown));
         return HOLD;

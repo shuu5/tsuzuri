@@ -269,8 +269,8 @@ fn core_mutants() -> [(&'static str, Edit); 6] {
             swap(
                 f,
                 STOP,
-                "\npub mod floor;\n",
-                &format!("\npub mod floor;\n{OUT_LINE}\n"),
+                "\nuse serde_json::Value;\n",
+                &format!("\nuse serde_json::Value;\n{OUT_LINE}\n"),
             );
         }),
         ("out", |f| {

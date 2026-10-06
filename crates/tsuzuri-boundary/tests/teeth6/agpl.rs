@@ -127,7 +127,7 @@ fn wanted() -> Vec<Mouth> {
         ("PostToolUse", Some("Agent"), bind, 10),
         ("PostToolUse", None, meter, 10),
         ("PreToolUse", None, guard, 10),
-        ("SubagentStop", None, stop, 120),
+        ("SubagentStop", None, stop, 10),
     ]
     .into_iter()
     .map(|(event, matcher, name, timeout)| {

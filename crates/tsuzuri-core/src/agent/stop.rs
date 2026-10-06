@@ -3,9 +3,6 @@
 //! 欠けは 3 つで、この順に並べる: 係の記録に席（team-lead）への SendMessage の呼びが無い・札の出す物の file が出力の dir に無い・
 //! 最後の文に出力の dir の path が無い。止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
 //! 群の係の出す物の主張の表の欠けは `claim_lacks` が持つ（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
-//! 差の file を名指す係の床の記録と門の撃ち直しの判じ（`floor`）は判断の記録 ADR-63 決定 (4)。
-
-pub mod floor;
 
 use serde_json::Value;
 
