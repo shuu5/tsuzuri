@@ -1,9 +1,10 @@
 //! 上の固定の帯（判断の記録 ADR-27 決定 (3)・見本 board-v2 の `#bar` と renderTodo と renderClock）:
 //! 左に account board へ戻る口と project の名、真ん中に次の一手の pill と、やる事の 3 つの数（質問・止まった run・
 //! 抜けの検査・1 以上の物だけ色）と、席からの最新の知らせの 1 行と件数、右に席と口座（状態・直近 3 時間の細い帯・
-//! 口座と 5 時間と 7 日の窓の使った割合）と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と記号の見方と表示先）。
+//! 口座と 5 時間と 7 日の窓の使った割合）と、host の負荷と書きの印と、抜けの検査の印と、時計と、設定（⚙ の中に表示の型と
+//! 記号の見方と表示先）。
 //! 印を押すと窓（widgets の modal）を開く。窓の名は `Win` で、中身は wins と askwin の module が描く。
-//! 読む口は今のまま（/api/next・/api/notices・/api/seat・/api/graph）。字と並びは純粋な関数にして host で試し、
+//! 読む口は /api/next・/api/notices・/api/seat・/api/graph と host の口（印の字は hostwin が組む）。字と並びは純粋な関数にして host で試し、
 //! DOM は wasm の target のときだけ組む。帯は 1 枚の画面への切り替えの行が頁の上に置き、今の header と tab を外した。
 //! 窓は名の字（`Win::key`）を home の頁の URL の query の win に置いて開ける（`win_href`・消した頁への link の替わり）。
 //! URL で窓を開いた後は、頁の URL から win と問いの id を外す（`settled_query`・読み直しても同じ窓は開かない）。
@@ -19,7 +20,8 @@ use crate::project::{Body, UNKNOWN, next, notice, state_key};
 use crate::view::{Fetched, hhmm};
 use crate::vocab::label;
 
-/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕）。
+/// 帯の印が開く窓の名（質問・止まった run・知らせ・席と口座・抜けの検査・記号の見方・表示先・相談〔行 cs-bar〕・
+/// host の負荷と書き）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Win {
     Ask,
@@ -30,11 +32,12 @@ pub enum Win {
     Legend,
     Dest,
     Consult,
+    Host,
 }
 
 impl Win {
     /// 全部の窓（宣言の順）。
-    pub const ALL: [Win; 8] = [
+    pub const ALL: [Win; 9] = [
         Win::Ask,
         Win::Stalled,
         Win::Notices,
@@ -43,6 +46,7 @@ impl Win {
         Win::Legend,
         Win::Dest,
         Win::Consult,
+        Win::Host,
     ];
 
     /// URL の query の win の値の名。
@@ -56,6 +60,7 @@ impl Win {
             Win::Legend => "legend",
             Win::Dest => "dest",
             Win::Consult => "consult",
+            Win::Host => "host",
         }
     }
 
@@ -416,6 +421,7 @@ mod dom {
     };
     use crate::consultwin::CONSULT_KEY;
     use crate::frame::Mode;
+    use crate::hostwin::{self, HOST_KEY, HostMark};
     use crate::project::{Body, map, next, notice, seat, state_icon};
     use crate::view::hhmm;
     use crate::vocab::label;
@@ -491,6 +497,14 @@ mod dom {
         .into_any()
     }
 
+    /// host の負荷と書きの印（押すと host の窓）。
+    fn host_view(m: HostMark, wins: WinCtx<Win>) -> AnyView {
+        view! {
+            <button type="button" class=m.class aria-label=label(HOST_KEY) on:click=move |_| wins.open(Win::Host, false)>{m.text}</button>
+        }
+        .into_any()
+    }
+
     /// 設定（⚙）の button と中身（表示の型の 2 つと、記号の見方と表示先の窓の口）。外の click と取り消しの鍵で畳む。
     fn gear_view(bar: Bar) -> AnyView {
         let open = RwSignal::new(false);
@@ -560,6 +574,7 @@ mod dom {
         let notices = crate::net::read(notice::PATH);
         let seat_doc = crate::net::read(seat::PATH);
         let graph = crate::net::read(map::PATH);
+        let host_doc = crate::net::read(hostwin::PATH);
         let now = crate::net::ticker();
         let wins = bar.wins;
         let pill = move || {
@@ -576,6 +591,7 @@ mod dom {
             Body::Empty(_) | Body::Unmeasured(_) => None,
         };
         let seat_part = move || seat_doc.with(|s| seat_view(seat_bar(s, now.get()), wins));
+        let host_part = move || host_doc.with(|h| host_view(hostwin::mark(h), wins));
         let gp = move || {
             let g = graph.with(gaps_mark);
             view! { <button type="button" class=g.class on:click=move |_| wins.open(Win::Gaps, false)>{g.text}</button> }
@@ -591,6 +607,7 @@ mod dom {
                 <div class="todo">{pill}{chips}{line}</div>
                 <div class="clock">
                     {seat_part}
+                    {host_part}
                     {gp}
                     <button type="button" class="cslt" aria-label=label(CONSULT_KEY) on:click=move |_| wins.open(Win::Consult, false)>{label(CONSULT_KEY)}</button>
                     <span class="tm">{move || hhmm(now.get())}" "<small>"JST"</small></span>

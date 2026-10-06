@@ -160,7 +160,7 @@ fn jrun_screens_cover_surface() {
     // 帯の印が開く窓は home の頁の query の win で開く（行 g-accept）。
     let topbar = fs::read_to_string(src.join("topbar.rs")).expect("topbar.rs を読む");
     let wins = arms(&topbar, "pub fn key(self) -> &'static str {");
-    assert_eq!(wins.len(), 8, "{wins:?}");
+    assert_eq!(wins.len(), 9, "{wins:?}");
     want.extend(wins.iter().map(|w| format!("?win={w}&")));
     let account = fs::read_to_string(src.join("account/mod.rs")).expect("account/mod.rs を読む");
     let tabs = arms(&account, "pub fn id(self) -> &'static str {");
@@ -169,7 +169,7 @@ fn jrun_screens_cover_surface() {
     let mut got: Vec<String> = SCREENS.iter().map(ToString::to_string).collect();
     got.sort();
     got.dedup();
-    assert_eq!(got.len(), 12, "SCREENS に重なりが無い");
+    assert_eq!(got.len(), 13, "SCREENS に重なりが無い");
     want.sort();
     assert_eq!(got, want);
 }
@@ -335,7 +335,7 @@ fn jrun_sweep_all_cases() {
             urls.extend(group.into_iter().map(|u| (width, mode, u)));
         }
     }
-    assert_eq!(urls.len(), 104);
+    assert_eq!(urls.len(), 112);
     let navigated: Vec<String> = urls.iter().map(|(_, _, u)| u.clone()).collect();
     assert_eq!(page.navigated(), navigated);
     let mut want = vec![head()];

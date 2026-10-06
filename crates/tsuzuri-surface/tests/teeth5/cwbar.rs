@@ -40,11 +40,11 @@ fn rid(s: &str) -> RequestId {
     RequestId::parse(s).expect("頼みの id")
 }
 
-/// 窓の名は 8 つ目に consult を足し、URL の query に読み戻り、幅は 720 で、題の語は語彙の「相談」と空でない注釈。
+/// 窓の名は 8 つ目に consult を足し（9 つ目は host の窓）、URL の query に読み戻り、幅は 720 で、題の語は語彙の「相談」と空でない注釈。
 #[test]
 fn cwbar_window_named_consult() {
-    assert_eq!(Win::ALL.len(), 8);
-    assert_eq!(Win::ALL.last(), Some(&Win::Consult));
+    assert_eq!(Win::ALL.len(), 9);
+    assert_eq!(Win::ALL.get(7), Some(&Win::Consult));
     assert_eq!(Win::Consult.key(), "consult");
     for mode in Mode::ALL {
         assert_eq!(

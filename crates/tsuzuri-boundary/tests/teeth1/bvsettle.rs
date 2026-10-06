@@ -220,7 +220,7 @@ fn bvsettle_sweep_counts_unknown() {
         report.contains("\n違反 計 0\nまだ分からない 計 4\n"),
         "{report}"
     );
-    assert_eq!(report.lines().count(), 1 + 104 + 3);
+    assert_eq!(report.lines().count(), 1 + 112 + 3);
 
     assert_eq!(SCREENS[0], "?");
     let mut page = stuck_at(format!("{BOARD}?mode=expert"));
@@ -238,7 +238,7 @@ fn bvsettle_sweep_counts_unknown() {
     );
     let blind = format!(" expert {BOARD}?page=node&mode=expert {UNSETTLED}");
     assert_eq!(report.lines().filter(|l| l.ends_with(&blind)).count(), 4);
-    assert_eq!(page.navigated().len(), 104 - 4);
+    assert_eq!(page.navigated().len(), 112 - 4);
     accept_unknown_rc();
 }
 

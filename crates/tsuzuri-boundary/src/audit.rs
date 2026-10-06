@@ -463,10 +463,10 @@ pub const WIDTHS: [u32; 4] = [1280, 960, 700, 390];
 pub const MODES: [&str; 2] = ["beginner", "expert"];
 
 /// 測る画面の query の頭（board の URL の後に続け、その後に mode= と mode の値を足す）。
-/// project board の 1 枚の画面と、その上に帯の印が開く 8 つの窓（query の win・行 g-accept・相談の窓は行 cs-bar）と account board の
+/// project board の 1 枚の画面と、その上に帯の印が開く 9 つの窓（query の win・行 g-accept・相談の窓は行 cs-bar・末は host の窓）と account board の
 /// 3 つの tab（節点の頁は sweep が組ごとに足す・地図の頁と 6 つの面は行 m-map-page で、質問の頁と抜けの検査の頁は
 /// 行 g-one-screen-a で消した）。
-pub const SCREENS: [&str; 12] = [
+pub const SCREENS: [&str; 13] = [
     "?",
     "?win=ask&",
     "?win=stalled&",
@@ -476,6 +476,7 @@ pub const SCREENS: [&str; 12] = [
     "?win=legend&",
     "?win=dest&",
     "?win=consult&",
+    "?win=host&",
     "?board=account&tab=home&",
     "?board=account&tab=session&",
     "?board=account&tab=projects&",

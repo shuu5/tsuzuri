@@ -6,6 +6,7 @@
 //! 描く（要件 FR13・台帳の block から移した）。席と口座の窓の稼働の記録は 24 時間の幅だけ。
 //! 止まった run の窓は pipeline の口の止まりの列の札を、題の全体と段と経過と理由の全文と個別の頁への口で並べる。
 //! 質問の窓は 1 問ずつの窓（askwin の frame）。相談の窓は頼みの form と一覧（consultwin の body）。
+//! host の窓は負荷と書きの段（hostwin の body・account board の HOME の block と同じ中身）。
 //! 字と並びは純粋な関数にして host で試し、窓の DOM（`draw`）は wasm の target のときだけ組む。
 
 use std::cmp::Reverse;
@@ -16,6 +17,7 @@ use tsuzuri_contract::graph::{GraphNode, NodeKind};
 
 use crate::consultwin::CONSULT_KEY;
 use crate::frame::{Mode, node_href};
+use crate::hostwin::{self, HOST_KEY};
 use crate::project::Body;
 use crate::project::pipeline::{self, age_at, stage_word};
 use crate::topbar::{SEAT_KEY, STALL_KEY, Win};
@@ -34,6 +36,7 @@ pub fn frame_of(win: Win) -> (u32, &'static str) {
         Win::Legend => (560, "status"),
         Win::Dest => (520, "stage_target"),
         Win::Consult => (720, CONSULT_KEY),
+        Win::Host => (hostwin::WIDTH, HOST_KEY),
     }
 }
 
@@ -178,6 +181,7 @@ mod dom {
             Win::Legend => legend::inner(),
             Win::Dest => stage::inner(),
             Win::Consult => crate::consultwin::body(),
+            Win::Host => crate::hostwin::body(),
         };
         Frame {
             width,

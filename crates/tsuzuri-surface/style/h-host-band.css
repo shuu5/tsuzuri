@@ -1,0 +1,15 @@
+/* 帯の host の負荷と書きの印と、host の窓と account board の HOME の block の段（線を越えた測りは注意の色）。
+ * 760 px 以下の 2 段の帯には置き場の格子が無いので印を出さない（中身は account board の HOME の block と URL の win=host で見る）。 */
+#bar .hostb { height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#bar .hostb:hover { background: var(--panel-2); }
+#bar .hostb.w { color: #92400e; border-color: #fbbf24; background: #fffbeb; }
+#bar .hostb.u { color: var(--ink-3); border-style: dashed; }
+@media (max-width: 760px) {
+  #bar .hostb { display: none; }
+}
+.hw { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 4px 24px; }
+.hw-p h4 { margin: 8px 0 4px; color: var(--ink-3); font-size: var(--fs-1); font-weight: 600; }
+.hw-l { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; padding: 2px 6px; border-radius: 6px; font-size: 12.5px; }
+.hw-n { min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.hw-v { min-width: 0; margin-left: auto; text-align: right; overflow-wrap: anywhere; }
+.hw-l.w { color: #92400e; background: #fffbeb; }

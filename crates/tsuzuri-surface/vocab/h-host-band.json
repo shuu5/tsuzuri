@@ -1,0 +1,35 @@
+{
+ "english": {},
+ "rephrase": {
+  "host_load": {
+   "label": "host の負荷",
+   "plain": "この host の負荷と SSD の書き\n・ 負荷 = 1 分の load ÷ core の数\n・ 書き = 装置の書きの速さの和\n・ 線を越えた測りが在れば注意の色\n→ 押すと host の負荷の窓",
+   "internal": "GET /api/host の電文 HostDoc（色は電文の over・線は規則の行 R-42）"
+  },
+  "hw_load": {
+   "label": "負荷",
+   "plain": "1 分の load を core の数で割った値\n・ 1.00 を越えると注意の色",
+   "internal": "/proc/loadavg と cpu の online（HostDoc の load）"
+  },
+  "hw_stall": {
+   "label": "詰まり",
+   "plain": "資源を待って止まった時間の割合\n・ io と memory の full の avg60 が線を越えると注意の色",
+   "internal": "PSI（/proc/pressure の cpu・memory・io）"
+  },
+  "hw_memory": {
+   "label": "メモリ",
+   "plain": "使っている量と全体\n・ 下は上限を持つ scope（埋まりの多い順）",
+   "internal": "/proc/meminfo と cgroup の memory.current・memory.max"
+  },
+  "hw_write": {
+   "label": "書きの速さ",
+   "plain": "装置ごとの今の書きの速さ\n・ 装置は host の面の書きの測りの表の順",
+   "internal": "装置の stat の書いた区の数の差（host.toml の [[write-budget]]）"
+  },
+  "hw_wear": {
+   "label": "SSD の摩耗",
+   "plain": "使った割合・書いた量・予備・誤りと記録の時刻\n・ 記録は 1 日 1 度 root が書く",
+   "internal": "smartctl の JSON（host.toml の [[write-budget]] の wear）"
+  }
+ }
+}

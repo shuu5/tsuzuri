@@ -8,14 +8,14 @@ use tsuzuri_surface::frame::{self, Mode, PageId};
 use tsuzuri_surface::project::{ledger, pipeline};
 use tsuzuri_surface::topbar::{WIN_PARAM, Win, win_href};
 
-/// 窓の名は 8 つ（相談の窓 consult は行 cs-bar）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
+/// 窓の名は 9 つ（相談の窓 consult は行 cs-bar・9 つ目は host の窓）で query の値は重ならず、窓を開く URL は home の頁で mode と窓の名に読み戻る・無い値と知らない値は None。
 #[test]
 fn bvnav_win_query_round_trip() {
     let keys: Vec<&str> = Win::ALL.iter().map(|w| w.key()).collect();
     assert_eq!(
         keys,
         [
-            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult"
+            "ask", "stalled", "notices", "seat", "gaps", "legend", "dest", "consult", "host"
         ]
     );
     assert_eq!(WIN_PARAM, "win");
