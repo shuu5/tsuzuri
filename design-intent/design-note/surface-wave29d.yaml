@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29d
   title: 第 29 波 d — 器を書く便の同時 1 本の床を外す行（判断の記録 ADR-64）・係の effort の撃ち比べ・host の負荷を board に出す・書き込みの検出線の器の行・ノート surface-wave29c の続き
-  version: v0.23
+  version: v0.24
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -220,6 +220,17 @@ sections:
         size: M
         done: (1) git apply --reverse --check docs/design/patch/c-code-nodes.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 見本の file の一覧 4 本と stream の定義の行 5 つと契約表の行 2 本から、file の節点 4 と定義の節点 5 を組み、定義の名前は a.rs#impl S/fn new の形（file の path の後に段を / で繋いだ字・段は種類の語と名・impl の塊の中の関数は段 impl S の下）、行 a の辺は write-set の 2 項の file への 2 本、行 a の触る定義は a.rs の 4 つ、行 b は b.rs の 1 つで、定義の範囲は 1 から数える行（歯 cdnode_toy_repo_builds_file_and_def_nodes_and_row_edges） (3) 同じ file の同じ名の struct と fn は種類の違う 2 つの節点で、種類も名も同じ 2 行は範囲を 2 つ持つ 1 つの節点（歯 cdnode_same_name_fn_and_struct_are_two_nodes） (4) write-set の項に無い file は行からの辺を持たず、その file の定義は行の触る定義に入らず、どの行の write-set にも無い file は辺を持たない（歯 cdnode_files_outside_write_set_have_no_edge） (5) 入れ子の段は同じ file の byte の範囲の包みで決め、mod の中の関数は段 mod tests の下、trait の impl の塊の名は trait の名と for と型の名、塊の後の関数は段を持たない（歯 cdnode_nest_names_container_and_kind） (6) write-set の項の印は、+ の在らない file を file に当たらない項に数え、~ と - と素の path は在る file へ印つきの辺を組み、= は辺も数えもせず、末が / の項は dir の下の file の全部へ辺を組む（歯 cdnode_marks_bind_new_gone_place_and_dir） (7) stream に欄の欠けた行か JSON でない行が 1 つでも在れば読めず、空の行だけの stream は定義 0 で読め、write-set の値が字の配列でない行か id の無い行の在る導出物は読めない（歯 cdnode_unreadable_stream_or_write_set_is_none） (8) 言語が表に無い行・種類に無い rule の id の行・捕えた名の無い行・trait の名の無い impl-for の行は、どれも定義を組まず 1 と数え、言語の表は Rust の 1 行だけで、file の一覧に無い file の定義も組まずに数える（歯 cdnode_skipped_lines_are_counted） (9) 根の規則の file の rule の id の集まりは定義の種類の 11 語と impl-for で、どの rule も言語 Rust と捕える名 $NAME を持ち、impl-for は $TRAIT も捕える（歯 cdnode_rule_file_names_every_kind） (10) tz code --row n1#a は、辺ごとに字 file と path と項と定義の数の行とその file の字 def と名前と範囲の行を出し、file に当たらない項に字 none の行を出して rc 0 で、置き場だけの項と write-set の外の file の行を出さず、道具に渡す引数は scan と --rule と .config/code-defs.yml と --json=stream の 4 つ（歯 kcode_row_lists_defs_of_write_set_files_only） (11) 規則の file の無い repo では、道具を撃たず、標準エラーに規則の file の path と字「が無い」を持つ 1 行だけを出し、標準出力は空で rc 1（歯 kcode_missing_rule_file_refuses_in_one_line） (12) 旗なしは数の行（files・defs・種類ごとの kind・rows・writes・unbound・skipped）を、--file は file の定義の行を出して rc 0（歯 kcode_counts_and_file_lines） (13) 道具の rc が 0 でない時は rc 2 で、無い行・git の一覧に無い file・--row と --file の両方・知らない引数は標準出力を空にして rc 1（歯 kcode_unreadable_and_named_errors）
         done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@3", "8:@3", "9:@3", "10:@4", "11:@4", "12:@4", "13:@4"]
+        depends: []
+      - id: t-index-on
+        title: tsuzuri の器への宣言 .vessel.toml に器の code の索引の 2 key（index-scip と index-roles）を名乗り、規則の file は器の scribe2/.config/index-roles.yml を名指して写さず、rust-toolchain.toml の components に rust-analyzer を足す（memo t3-hub.87.32・差の file）
+        req: ["FR1107"]
+        section: "20"
+        patch: docs/design/patch/t-index-on.patch
+        write-set: [".vessel.toml", "rust-toolchain.toml", "+xtask/tests/ixon.rs"]
+        verify: ["git apply --reverse --check docs/design/patch/t-index-on.patch", "cargo clippy -p xtask --all-targets --no-deps -- -D warnings", "cargo nextest run -p xtask --test ixon --no-tests=fail ixon_"]
+        size: S
+        done: (1) git apply --reverse --check docs/design/patch/t-index-on.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 根の .vessel.toml の注でない key index-scip の行は 1 本だけで、角括弧の中に 1 項目 rust-analyzer scip {tree} --output {out} を持つ字で、key index-roles の行も 1 本だけで、角括弧の中に 1 項目 ast-grep scan --rule scribe2/.config/index-roles.yml --json=stream {tree} を持つ字（歯 ixon_root_declaration_names_both_index_lines_once） (3) 根の 2 行は器の宣言 scribe2/.vessel.toml の 2 key の行に倣い（index-scip は同じ字・index-roles は規則の file の頭 .config/ を scribe2/.config/ に替えた字）、器の宣言の scip の行に旗を 1 つ足す・roles の出力の形を替える・規則の file の名を替える・scip の行を注にする、のどれか 1 つの替えで倣わなくなる（歯 ixon_lines_follow_the_vessel_declaration） (4) 名指す規則の file scribe2/.config/index-roles.yml は repo に追跡され、行頭が字 id とコロンと空白で始まる行の rule id は literal・pattern・call・use・reexport・test・doclink・capture・vis の 9 語をこの順に持ち、字下げした id の行は数えず、同じ id の 2 度は 2 度と数える（歯 ixon_rule_file_is_tracked_with_the_nine_roles） (5) repo の追跡する Cargo.toml のうち scribe2/ の外の物は、根の manifest か根の workspace の members の dir の物だけで、members から folio2/crates/folio を外した見本と 1 字欠けた見本は folio2/crates/folio を覆われない dir と名指す（歯 ixon_one_scip_line_covers_every_manifest_outside_the_vessel） (6) rust-toolchain.toml の注でない components の行は項目 rust-analyzer を 1 度だけ持ち、無い見本・注の行だけの見本・別の名 rust-analyzer-preview の見本・2 度の見本はどれも 1 度でない（歯 ixon_toolchain_names_rust_analyzer_once） (7) 名乗りの 2 行の見本から 1 句だけ外した見本（--output {out} を外す・scip の {tree} を . に替える・道具の名を 1 字替える・scip の行を注にする・key の - を _ に替える・scip の行を 2 度・規則の file の頭 scribe2/ を外す・--json=stream を外す・roles の {tree} を . に替える・roles の行を注にする）は、どれも名乗りの行と等しくない（歯 ixon_one_clause_changes_are_refused）
+        done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@3"]
         depends: []
   - n: 3
     type: prose
@@ -519,3 +530,22 @@ sections:
       依存と順。depends は書かない。差の file が書く着地済みの file は graph/mod.rs・cli/mod.rs・main.rs の 3 本で、どれも 2 行を足すだけ。置く直前に席が main で当たりを撃ち直す。器の行 t-index-on（係 w281a）は根の .vessel.toml と .config/index-roles.yml を書き、この行の file と交わらない。
 
       範囲の外。呼び手と参照の目（器の索引の読み・後の行 c-code-refs）・commit → 定義と git の記録からの一括の入れと結びの無い定義の数（後の行 c-code-commits）・歯の節点（後の行 c-code-teeth）・TypeScript と Python の rule（後の行 c-code-langs）・電文 GraphDoc と面と近傍への載せ。未着地の行の差の file の hunk で触る定義を絞ること（着地の後は commit → 定義が持つ）。
+  - n: 20
+    type: prose
+    title: 行 t-index-on — 器の code の索引を tsuzuri の宣言で名乗る（memo t3-hub.87.32・差の file）
+    body: |
+      在りか。差の file docs/design/patch/t-index-on.patch は、main 87623125 と、その上の試作の commit efa3dbf0（写しは drafts の try-w281a の branch w281a・係 w281a・2026-10-06）の差で、根の .vessel.toml と rust-toolchain.toml と新しい段の file xtask/tests/ixon.rs の 3 file。土台の木で git apply --check、試作の木で git apply --reverse --check がどちらも rc 0。便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      なぜ。持ち主は、設計と実装が既存の code を読まずに行を書くことを落ちの元と何度も言ってきた（台帳 t3-hub.77.17・memo t3-hub.91）。器は手当として code の索引（外の道具 rust-analyzer の SCIP と ast-grep の構文の役で組む逆引きの表・口 pipe index build と show・審査の材料 index.txt・受付の欄 code-facts の照らし・器の設計 reverse-index.md・器の判断の記録 ADR-0105・要件 FR1107）を持つ。器はそれを宣言の 2 key index-scip と index-roles を揃えた repo だけに効かせ、tsuzuri の根の宣言はどちらも名乗っていなかった（台帳 t3-hub.80.4）。この行は名乗りだけを置き、索引を tsuzuri の行の設計と審査で使う最初の段にする。
+
+      形。.vessel.toml の末に注 4 行と 2 行を足す。index-scip の行は、key index-scip と空白と = と空白の後に、角括弧の中に二重引用符で囲んだ 1 項目 rust-analyzer scip {tree} --output {out} を持つ。index-roles の行は同じ形で 1 項目 ast-grep scan --rule scribe2/.config/index-roles.yml --json=stream {tree} を持つ。字は器の宣言 scribe2/.vessel.toml の 2 行に倣い、違うのは規則の file の頭 scribe2/ だけ。規則の file は器の file を名指して写さない（決定はしごの既に在るかの段・同じ Rust の役の 9 語の規則を 1 本に保つ）。index-scip の 1 本は根の workspace を索引にし、根の workspace は folio2/crates/folio を member に持つので folio2 も入る。rust-toolchain.toml の components に rust-analyzer を足し、注 1 行を添える（版は channel が固定する・channel を上げた時に component が無くて索引の組みが落ちるのを防ぐ）。
+
+      done と verify の対応。1 つ目の項は verify の 1 行目、2 つ目から最後の 7 つ目の項は 3 行目（新しい段の歯 ixon_）が測る。2 行目の clippy は歯の file の lint で done に載せない守り。xtask の check は器の共通 verify が撃つので書かない。欄 done-teeth は verify の行の番号（@k）で書く。
+
+      歯と噛み。歯は新しい段の file xtask/tests/ixon.rs に置く。名乗りの 2 行の字、器の宣言に倣うこと、規則の file の追跡と役の 9 語の順（literal・pattern・call・use・reexport・test・doclink・capture・vis）、scribe2/ の外の manifest が根の workspace に覆われること、component の 1 度を、外の依存なしに字で照らす。宣言の値は器が読む字で、器の振る舞いは器の歯が測るので、この行の歯は字で照らす。否定の見本は正しい見本から 1 句だけ外す。噛みの表は係 w281a の notes。
+
+      測りと限り。係 w281a の測り（試作の写し・器 777aad43）で、根の宣言の索引の組みは 70 秒・RSS の山 2.8 GB・正味の書き 0.65 GB・表 156,758 行（844 file）。器の索引の鍵は契約表の置き場 contracts/ の外の追跡する全 file の blob で決まるので、tsuzuri では設計の commit でも鍵が替わる。器は、touches に型を持つ行か欄 code-facts を持つ行が受付で待つ周にだけ裏で組むので、この行の後の tsuzuri の便では裏の組みは起きず、組むのは席が口 pipe index build か show を撃つ時だけ。今の器では、構文の役の列が空（ast-grep の絶対 path が結ばれない）、scribe2/ の workspace は索引に入らない（SCIP の path が scip を撃った dir からの相対）、tsuzuri の行は touches も節の逆引用符の名も持たないので show --row の項目が 0、審査の材料 index.txt は便の HEAD の索引を組まず absent になる。この 4 つは器の行と席の手順で別に塞ぐ（係 w281a の notes）。
+
+      依存と順。depends は書かない。.vessel.toml を書く行 t-scope-xtask は着地済みで、同じ file を書く未着地の行はこのノートに無い。器は宣言を base の木から読むので、着地の後の便と席の撃ちから効く。器の code を書かないので、器を書く便の数に入らない。
+
+      範囲の外。器の直し（役の一致の path・SCIP の path の頭・審査の材料の組み）と scribe2/ の workspace を索引に入れる 2 本目の scip の行、欄 code-facts を要る欄にする門、行に touches を書く手順は、この行に入れない。
