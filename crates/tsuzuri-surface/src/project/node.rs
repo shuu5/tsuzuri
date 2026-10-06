@@ -145,6 +145,11 @@ pub fn excerpt_of(item: &Fetched, bead: Option<&BeadId>) -> Excerpt {
     }
 }
 
+/// 箱が台帳の bead の本文の頭の 1 行を写したものか（真なら台帳の字の置き場の印を付ける・受入は散文と文の予算に数えない）。
+pub fn ledger_box(b: &SumBox) -> bool {
+    b.key == sumpick::BODY_KEY
+}
+
 /// 概要の箱（本文の頭の 1 行を渡さない形・`summary_in` に `Excerpt::Never` を渡す）。
 pub fn summary(center: &AroundRow, mode: Mode) -> SumBox {
     summary_in(center, mode, &Excerpt::Never)
@@ -282,7 +287,7 @@ mod dom {
     use super::{
         BLOCK, Excerpt, Fact, HELD_CLASS, HELD_HEAD, Head, PageState, Revoke, SUMBOX_OTHER,
         SUMMARY_NONE, Src, SumBox, answer_href, center, excerpt_of, head, held_rows, held_text,
-        item_path, kept_subject, revoke_body, revoke_target, shows_revoke, summary_in,
+        item_path, kept_subject, ledger_box, revoke_body, revoke_target, shows_revoke, summary_in,
     };
     use crate::mapview::band_chip;
     use crate::project::ask::{Outcome, can_send, outcome};
@@ -404,6 +409,7 @@ mod dom {
     /// 概要の箱と、その下に畳んだもう一方の概要（押すと開く）。
     fn sum_view(b: SumBox) -> AnyView {
         let t = (b.class != SUMMARY_NONE).then_some("");
+        let led = ledger_box(&b).then_some("");
         let other = b.other.map(|o| {
             let (open, toggle) = fold("node:other".to_string(), || false);
             view! {
@@ -411,7 +417,7 @@ mod dom {
             }
         });
         view! {
-            <section class=b.class><header><span inner_html=icon_of(b.key)></span>{h2(b.key)}</header><p data-t=t>{b.text}</p></section>
+            <section class=b.class><header><span inner_html=icon_of(b.key)></span>{h2(b.key)}</header><p data-t=t data-ledger-text=led>{b.text}</p></section>
             {other}
         }
         .into_any()
