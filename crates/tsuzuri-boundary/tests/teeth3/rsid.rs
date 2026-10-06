@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::common::{bead, rid, script};
-use tsuzuri_boundary::server::batch::{self, BATCH_PREFIX};
+use tsuzuri_boundary::server::batch::BATCH_PREFIX;
 use tsuzuri_boundary::server::ledger::{Source, parse_bd};
 use tsuzuri_boundary::server::policy;
 use tsuzuri_boundary::server::ruling::{
@@ -15,13 +15,9 @@ use tsuzuri_boundary::server::ruling::{
 };
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{POLICY_SCOPE_LABEL, QUESTION_LABEL};
-use tsuzuri_contract::surface::{
-    BatchItem, BatchRequest, ItemOutcome, RevokeRequest, RevokeResponse, RulingRequest,
-    latest_ruling, revocable,
-};
+use tsuzuri_contract::surface::{RevokeRequest, RevokeResponse, latest_ruling, revocable};
 use tsuzuri_contract::wire;
 use tsuzuri_core::delivery::{Pending, undelivered};
-use tsuzuri_core::question::open_questions;
 
 /// 起草の時の main 4ad0b18f の契約表の verify の filter の語を畳んだ 247 語（字のまま・空白で区切る）。
 const FILTER_WORDS: &str = concat!(
@@ -124,13 +120,6 @@ fn root() -> Bead {
     root
 }
 
-/// open の問い。
-fn open_question(id: &'static str) -> Bead {
-    let mut q = bead_of(id, "task", "open", &[QUESTION_LABEL]);
-    q.description = "概要 = 画面の色を 2 つに減らしてよいか";
-    q
-}
-
 /// 閉じた問い（notes の定型行と close の理由つき）。
 fn closed_question(id: &'static str, notes: String, close_reason: &str) -> Bead {
     let mut q = bead_of(id, "task", "closed", &[QUESTION_LABEL]);
@@ -213,19 +202,6 @@ fn reason_words(argv: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// open の問いの見た版の要約値（server が照らす値）。
-fn digest_of(text: &str, id: &str) -> String {
-    let Reading::Known(questions) = open_questions(text) else {
-        panic!("読める台帳が Unknown");
-    };
-    questions
-        .into_iter()
-        .find(|q| q.card.id.as_str() == id)
-        .unwrap_or_else(|| panic!("{id} は open の問いでない"))
-        .card
-        .digest
-}
-
 #[test]
 fn rsid_reason_forms() {
     assert_eq!(REASON_HEAD, "裁定");
@@ -253,65 +229,6 @@ fn rsid_reason_forms() {
         assert!(second.contains('・'), "{old}");
         assert_ne!(second, id, "{old}");
         assert_ne!(second, one, "{old}");
-    }
-}
-
-#[test]
-fn rsid_writes_split_id() {
-    let mut beads = vec![root()];
-    beads.extend(["fx-r.1", "fx-r.2", "fx-r.3"].map(open_question));
-    let text = ledger(&beads);
-
-    // 1 問の裁定の受付。
-    let place = Place::new("ruling", &text);
-    let req = RulingRequest {
-        question: bead("fx-r.1"),
-        seen_digest: digest_of(&text, "fx-r.1"),
-        verbatim: "はい".into(),
-    };
-    let got = ruling::accept(&req, &place.source(), &place.writer(), AT);
-    let ruling::Outcome::Recorded(res) = got else {
-        panic!("Recorded でない: {got:?}");
-    };
-    assert_eq!(res.ruling.as_str(), "fx-r.1:20260928T0441Z-1");
-    let argvs = place.argvs();
-    assert_eq!(argvs.len(), 2, "{argvs:?}");
-    assert_eq!(
-        argvs[1],
-        ["close", "fx-r.1", "--reason=裁定 fx-r.1:20260928T0441Z-1"]
-    );
-
-    // 束の受付。
-    let place = Place::new("batch", &text);
-    let item = |q: &str| BatchItem {
-        question: bead(q),
-        seen_digest: digest_of(&text, q),
-        verbatim: None,
-    };
-    let req = BatchRequest {
-        items: vec![item("fx-r.2"), item("fx-r.3")],
-        verbatim: "まとめてはい".into(),
-    };
-    let got = batch::accept(&req, &place.source(), &place.writer(), AT);
-    let batch::Outcome::Recorded(res) = got else {
-        panic!("Recorded でない: {got:?}");
-    };
-    let batch_id = "batch:20260928T0441Z-1";
-    assert_eq!(res.batch.as_str(), batch_id);
-    let argvs = place.argvs();
-    assert_eq!(argvs.len(), 4, "{argvs:?}");
-    for (n, question) in ["fx-r.2", "fx-r.3"].into_iter().enumerate() {
-        let want = format!("{question}:20260928T0441Z-1");
-        let row = &res.items[n];
-        assert_eq!(row.question.as_str(), question);
-        assert_eq!(row.outcome, ItemOutcome::Written { ruling: rid(&want) });
-        assert_eq!(argvs[2 * n + 1][..2], ["close", question]);
-        assert_eq!(
-            argvs[2 * n + 1][2],
-            format!("--reason=裁定 {want} 束 {batch_id}")
-        );
-        let words = reason_words(&argvs[2 * n + 1]);
-        assert_eq!(words, ["裁定", &want, "束", batch_id]);
     }
 }
 
@@ -404,7 +321,7 @@ fn rsid_policy_not_ruling() {
     policy_bead.close_reason = policy_reason(&rid(policy_id));
     let ruling_bead = closed_question(
         "fx-r.1",
-        ruling::line(&rid(ruling_id), &bead("fx-r.1"), "はい"),
+        "裁定 id = fx-r.1:20260928T0441Z-1・問い = fx-r.1・逐語 = はい".to_string(),
         &reason(&rid(ruling_id), None),
     );
     let text = ledger(&[root(), policy_bead, ruling_bead]);
@@ -455,8 +372,8 @@ fn rsid_src_text() {
     };
     let (ruling_src, batch_src, policy_src) =
         (read("ruling.rs"), read("batch.rs"), read("policy.rs"));
-    assert_eq!(count(&ruling_src, "reason(&id,"), 2);
-    assert_eq!(count(&batch_src, "reason(id,"), 1);
+    assert_eq!(count(&ruling_src, "reason(&id,"), 1);
+    assert_eq!(count(&batch_src, "reason(id,"), 0);
     assert_eq!(count(&policy_src, "policy_reason(&id)"), 1);
     for (name, src) in [("ruling.rs", &ruling_src), ("batch.rs", &batch_src)] {
         assert_eq!(count(src, "{id}{ID_END}束"), 0, "{name}");
@@ -479,7 +396,7 @@ fn rsid_own_names_clean() {
             rest.split('(').next().unwrap_or(rest)
         })
         .collect();
-    assert_eq!(names.len(), 7, "歯の数");
+    assert_eq!(names.len(), 6, "歯の数");
     for name in names {
         assert!(name.starts_with("rsid_"), "{name} は rsid_ で始まらない");
         for word in &words {

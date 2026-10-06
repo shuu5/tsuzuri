@@ -30,12 +30,19 @@ fn post_batch(req: &Request, shared: &Shared) -> Response {
         let questions: Vec<_> = body.items.iter().map(|i| &i.question).collect();
         return read_only(batch::PATH, &questions);
     }
-    let response = match batch::accept(&body, &shared.sources.ledger, &shared.writer, events::now())
-    {
+    let outcome = batch::accept(
+        &body,
+        &shared.sources.ledger,
+        &shared.writer,
+        (shared.scribe2.as_os_str(), shared.state_dir.as_deref()),
+        events::now(),
+    );
+    let response = match outcome {
         batch::Outcome::Recorded(response) => json(200, wire::encode(&response)),
         batch::Outcome::Refused(reason) => refusal(reason),
         batch::Outcome::Duplicate => Response::text(400, "duplicate"),
         batch::Outcome::LedgerUnknown => Response::text(503, "ledger-unknown"),
+        batch::Outcome::NoStateDir => Response::text(503, "ruling-state-dir"),
         batch::Outcome::IdShape => Response::text(500, "ruling-id-shape"),
         batch::Outcome::WriteFailed(response) => json(502, wire::encode(&response)),
     };

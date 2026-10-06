@@ -7,31 +7,36 @@
 //! 4. 台帳を合流しない読みで読み直す（裁定の受付の `reread` で撃ち直し、どれも読めなければ 503）。
 //! 5. 行を要求の順に確かめ、最初に当たった行の理由で、何も書かずに断る
 //!    （open の問いでなければ UnknownQuestion・A-1 の印は A1InBatch・版が違えば StaleVersion）。
-//! 6. 束の id を発行する（`batch:<分>-<数>`・台帳の字に「束 = <id>・」が在れば数を増やす）。
-//! 7. 行ごとの裁定の id を裁定の受付と同じ決め方で発行する。
-//! 8. 要求の順に、行ごとに notes の末尾へ 1 行を足し、問いを閉じる。落ちたらそこで止めて 502 で、
-//!    本文は要求の全部の行の結果を要求の順に持つ（2 回とも書き終えた行は Written・追記が落ちた行は Unwritten・
-//!    閉じる書きが落ちた行は Unclosed・落ちた行より後の行は撃たずに Unwritten・何も消さず配達も撃たない）。
+//! 6. 置き場（state dir）が無ければ断る（NoStateDir・何も撃たない）。
+//! 7. 束の id を発行する（`batch:<分>-<数>`・台帳の字に「束 = <id>・」か縦線の欄の「 | <id> | 」が在れば数を増やす）。
+//! 8. 要求の順に、行ごとに器の答えの口を束の id つきで撃つ（逐語は標準入力・器が裁定 id を作り notes の行と問いの閉じを書く）。
+//!    落ちたらそこで止めて 502 で、本文は要求の全部の行の結果を要求の順に持つ（rc 0 で裁定 id に読めた行は Written・
+//!    落ちた行と落ちた行より後の撃たない行は Unwritten・配達も撃たない）。落ちた行の器の 1 行は標準エラーに写す。
 //! 9. 席の target と state dir の両方が在るときだけ、別の thread で裁定の受付の `redeliver` に束の id と
 //!    行の順の裁定を `PACE` で渡し、待たずに応答する（周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を
 //!    束の id で撃ち、rc 0 なら行の順に印を置く。受けなければ間を空けて上限まで撃ち直す・結果で応答は変えない）。
 
 use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::path::Path;
 
 use tsuzuri_contract::EpochSecs;
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::{BeadId, LedgerWrite};
+use tsuzuri_contract::ledger::BeadId;
 use tsuzuri_contract::surface::{
     BatchItemResult, BatchRequest, BatchResponse, ItemOutcome, Refusal, RulingId,
 };
 use tsuzuri_core::delivery::Pending;
+use tsuzuri_core::graph::build::BIND_SEP;
 use tsuzuri_core::question::{OpenQuestion, open_questions};
 
-use super::ledger::{Source, capture};
+use super::ledger::Source;
+use super::proc::run_input;
 use super::ruling::{
-    LINE_PREFIX, PACE, Parcel, WRITE_TIMEOUT, Writer, escape, minute, next_id, reason, redeliver,
-    reread,
+    PACE, Parcel, Vessel, WRITE_TIMEOUT, Writer, answer_argv, answer_failed_line, answered_id,
+    minute, redeliver, reread,
 };
+use crate::out::emit_err;
 
 /// 口の path。
 pub const PATH: &str = "/api/batch";
@@ -53,22 +58,29 @@ pub enum Outcome {
     Duplicate,
     /// 台帳が読めない（503・書きの前）。
     LedgerUnknown,
+    /// 置き場が無く器の答えの口を撃てない（503・何も撃っていない）。
+    NoStateDir,
     /// 発行した id が記帳 id の形に収まらない（500・書きの前）。
     IdShape,
-    /// どこかの書きが落ちた（502・行は要求の全部の行を要求の順に・2 回とも書き終えた行は Written・
-    /// 追記が落ちた行は Unwritten・閉じる書きが落ちた行は Unclosed・落ちた行より後の撃っていない行は Unwritten）。
+    /// どこかの行の器の答えの口が落ちた（502・行は要求の全部の行を要求の順に・
+    /// 書き終えた行は Written・落ちた行と落ちた行より後の撃っていない行は Unwritten）。
     WriteFailed(BatchResponse),
 }
 
-/// 書く前に決めた 1 行（問いの id・逐語・notes）。
+/// 書く前に決めた 1 行（問いの id・逐語）。
 struct Row<'a> {
     question: &'a BeadId,
     verbatim: &'a str,
-    notes: String,
 }
 
 /// 束を受ける（`now` は受付の時刻）。
-pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSecs) -> Outcome {
+pub fn accept(
+    req: &BatchRequest,
+    ledger: &Source,
+    writer: &Writer,
+    vessel: Vessel<'_>,
+    now: EpochSecs,
+) -> Outcome {
     if req.items.is_empty() {
         return Outcome::Refused(Refusal::EmptyBatch);
     }
@@ -96,28 +108,25 @@ pub fn accept(req: &BatchRequest, ledger: &Source, writer: &Writer, now: EpochSe
         Ok(rows) => rows,
         Err(refusal) => return Outcome::Refused(refusal),
     };
-    let minute = minute(now);
-    let Ok(batch) = next_batch_id(&text, &minute) else {
+    let (program, Some(state_dir)) = vessel else {
+        return Outcome::NoStateDir;
+    };
+    let Ok(batch) = next_batch_id(&text, &minute(now)) else {
         return Outcome::IdShape;
     };
-    let Ok(ids) = rows
-        .iter()
-        .map(|r| next_id(r.question, &r.notes, &minute))
-        .collect::<Result<Vec<_>, _>>()
-    else {
-        return Outcome::IdShape;
-    };
-    let (items, failed) = write_rows(writer, &rows, &ids, &batch);
+    let (items, failed) = answer_rows(writer, (program, state_dir), &rows, &batch);
     if failed {
         return Outcome::WriteFailed(BatchResponse { batch, items });
     }
     if let Some(d) = writer.delivery.clone() {
-        let pending: Vec<Pending> = rows
+        let pending: Vec<Pending> = items
             .iter()
-            .zip(ids)
-            .map(|(row, ruling)| Pending {
-                question: row.question.clone(),
-                ruling,
+            .filter_map(|item| match &item.outcome {
+                ItemOutcome::Written { ruling } => Some(Pending {
+                    question: item.question.clone(),
+                    ruling: ruling.clone(),
+                }),
+                _ => None,
             })
             .collect();
         let (writer, ledger) = (writer.clone(), ledger.clone());
@@ -151,41 +160,45 @@ fn rows_of<'a>(
         rows.push(Row {
             question: &item.question,
             verbatim,
-            notes: question.notes,
         });
     }
     Ok(rows)
 }
 
-/// 要求の順に行ごとに追記して閉じ、行ごとの結果と落ちたかを返す（落ちた行より後の行は撃たずに Unwritten）。
-fn write_rows(
+/// 要求の順に行ごとに器の答えの口を束の id つきで撃ち、行ごとの結果と落ちたかを返す
+/// （落ちた行より後の行は撃たずに Unwritten・落ちた行の器の 1 行は標準エラーに写す）。
+fn answer_rows(
     writer: &Writer,
+    (program, state_dir): (&OsStr, &Path),
     rows: &[Row<'_>],
-    ids: &[RulingId],
     batch: &RulingId,
 ) -> (Vec<BatchItemResult>, bool) {
     let mut items = Vec::with_capacity(rows.len());
     let mut failed = false;
-    for (row, id) in rows.iter().zip(ids) {
+    for row in rows {
         let outcome = if failed {
             ItemOutcome::Unwritten
         } else {
-            let append = LedgerWrite::AppendNotes {
-                id: row.question.clone(),
-                line: line(id, row.question, batch, row.verbatim),
-            };
-            let close = LedgerWrite::CloseItem {
-                id: row.question.clone(),
-                reason: reason(id, Some(&format!("束 {batch}"))),
-            };
-            if !write(writer, &append) {
-                failed = true;
-                ItemOutcome::Unwritten
-            } else if !write(writer, &close) {
-                failed = true;
-                ItemOutcome::Unclosed { ruling: id.clone() }
-            } else {
-                ItemOutcome::Written { ruling: id.clone() }
+            let argv = answer_argv(state_dir, &writer.repo, row.question, Some(batch));
+            match run_input(
+                program,
+                argv,
+                &writer.repo,
+                row.verbatim.as_bytes(),
+                WRITE_TIMEOUT,
+            ) {
+                Ok(out) => match answered_id(row.question, &out) {
+                    Some(ruling) => ItemOutcome::Written { ruling },
+                    None => {
+                        failed = true;
+                        ItemOutcome::Unwritten
+                    }
+                },
+                Err(f) => {
+                    emit_err(&answer_failed_line(row.question, &f));
+                    failed = true;
+                    ItemOutcome::Unwritten
+                }
             }
         };
         items.push(BatchItemResult {
@@ -196,27 +209,16 @@ fn write_rows(
     (items, failed)
 }
 
-/// bdw を 1 回撃つ（rc 0 で上限の内に返せば true）。
-fn write(writer: &Writer, w: &LedgerWrite) -> bool {
-    capture(&writer.bdw, w.argv(), &writer.repo, WRITE_TIMEOUT).is_some()
-}
-
-/// 次の束の id（数は 1 から始め、台帳の字に「束 = <id>・」が在れば 1 つずつ増やす）。
+/// 次の束の id（数は 1 から始め、台帳の字に「束 = <id>・」か縦線の欄の「 | <id> | 」が在れば 1 つずつ増やす）。
 pub fn next_batch_id(ledger: &str, minute: &str) -> Result<RulingId, tsuzuri_contract::IdError> {
     let mut n = 1;
     loop {
         let id = RulingId::for_batch(minute, n)?;
-        if !ledger.contains(&format!("{BATCH_PREFIX}{id}{ID_END}")) {
+        let taken = ledger.contains(&format!("{BATCH_PREFIX}{id}{ID_END}"))
+            || ledger.contains(&format!("{BIND_SEP}{id}{BIND_SEP}"));
+        if !taken {
             return Ok(id);
         }
         n += 1;
     }
-}
-
-/// notes に足す 1 行（`裁定 id = <id>・問い = <問いの id>・束 = <束の id>・逐語 = <字>`）。
-pub fn line(id: &RulingId, question: &BeadId, batch: &RulingId, verbatim: &str) -> String {
-    format!(
-        "{LINE_PREFIX}{id}{ID_END}問い = {question}{ID_END}{BATCH_PREFIX}{batch}{ID_END}逐語 = {}",
-        escape(verbatim)
-    )
 }

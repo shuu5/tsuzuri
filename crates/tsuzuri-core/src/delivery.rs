@@ -7,6 +7,7 @@
 //! 裁定が配達済みとは、同じ bead の notes に、行頭が `MARK_PREFIX` で頭の後から最初の「・」までの字
 //! （前後の空白を除く）がその裁定の id と同じ行が 1 つ以上在ること（経路と時刻は判じに使わない）。
 //! 器の結びの口の経路 gui の行（欄の区切り ` | ` の 5 欄）も裁定の行として読み、経路 chat の行は読まない。
+//! 器の答えの口が束の旗つきで書く 6 欄の行（5 つ目の欄が束の id）は、束の id でも名指せる。
 
 use serde_json::{Map, Value};
 use tsuzuri_contract::board::Reading;
@@ -23,6 +24,9 @@ pub const MARK_PREFIX: &str = "配達 = ";
 
 /// 器の答えの口（seat ruling answer）が書く裁定の行の経路の欄の字。
 pub const GUI_ROUTE: &str = "gui";
+
+/// 6 欄の束の行の 5 つ目の欄（束の id）の頭。
+const BATCH_ID_HEAD: &str = "batch:";
 
 /// 行の id の終わりの字。
 const ID_END: char = '・';
@@ -72,15 +76,25 @@ fn line_ids<'a>(notes: &'a str, prefix: &'a str) -> impl Iterator<Item = &'a str
     })
 }
 
-/// 器の結びの口の経路 gui の裁定の行の裁定 id と逐語の欄の字（5 つ目の欄は逐語の全部で `BIND_SEP` を含みうる）。
+/// 器の結びの口の経路 gui の裁定の行の裁定 id と束の id と逐語の欄の字（5 つ目の欄は逐語の全部で `BIND_SEP` を含みうる）。
 /// `bind_line` が `bead` で Some を返し、4 つ目の欄の前後の空白を除いた字が `GUI_ROUTE` の時だけ Some。
-fn gui_line<'a>(line: &'a str, bead: &str) -> Option<(&'a str, &'a str)> {
+/// 5 つ目の欄が `BATCH_ID_HEAD` で始まり `BIND_SEP` を持つ時は、区切りの前が束の id・後が逐語の欄
+/// （6 欄の束の行）。そうでなければ束の id は無し。
+fn gui_line<'a>(line: &'a str, bead: &str) -> Option<(&'a str, Option<&'a str>, &'a str)> {
     let line = line.trim_end_matches('\r');
     let id = bind_line(line, bead)?;
     let mut fields = line.splitn(BIND_FIELDS, BIND_SEP).skip(3);
     let route = fields.next()?;
-    let verbatim = fields.next()?;
-    (route.trim() == GUI_ROUTE).then_some((id, verbatim))
+    let last = fields.next()?;
+    if route.trim() != GUI_ROUTE {
+        return None;
+    }
+    if last.starts_with(BATCH_ID_HEAD)
+        && let Some((batch, verbatim)) = last.split_once(BIND_SEP)
+    {
+        return Some((id, Some(batch), verbatim));
+    }
+    Some((id, None, last))
 }
 
 /// notes にその裁定の印が在るか。
@@ -113,7 +127,7 @@ pub fn undelivered(ledger: &str) -> Reading<Vec<Pending>> {
             let id = match line.strip_prefix(RULING_PREFIX) {
                 Some(rest) => rest.split(ID_END).next().unwrap_or(rest).trim(),
                 None => match gui_line(line, bead.id.as_str()) {
-                    Some((id, _)) => id,
+                    Some((id, _, _)) => id,
                     None => continue,
                 },
             };
@@ -246,8 +260,8 @@ pub fn said(ledger: &str, ids: &[RulingId]) -> Reading<Vec<Said>> {
                         verbatim: unescape(verbatim),
                     });
                 }
-            } else if let Some((id, raw)) = gui_line(line, bead.id.as_str())
-                && named(id)
+            } else if let Some((id, batch, raw)) = gui_line(line, bead.id.as_str())
+                && (named(id) || batch.is_some_and(named))
                 && let Ok(verbatim) = serde_json::from_str::<String>(raw)
                 && let Ok(ruling) = RulingId::new(id)
             {

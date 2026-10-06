@@ -243,32 +243,62 @@ struct Line<'a> {
     revokes: Option<&'a str>,
 }
 
+/// 器の結びの口の行の欄の区切り（`<裁定 id> | <問い id> | <発話の ts> | <経路> | <逐語>`・中核の導出グラフの区切りと同じ字）。
+const BIND_SEP: &str = " | ";
+
+/// 器の結びの口の行の欄の数の下限。
+const BIND_FIELDS: usize = 5;
+
 /// notes の裁定の行を notes の順に読む（行の末の復帰を除いてから頭を見る・id が空の行は数えない）。
+/// 定型行に加えて、器の結びの行（`BIND_SEP` で割った欄が `BIND_FIELDS` 以上で、1 つ目の欄のコロンの前の字が 2 つ目の欄と同じ行）も
+/// id は 1 つ目の欄・question は 2 つ目の欄・revokes は無しの行として読む。
 fn ruling_lines(notes: &str) -> Vec<Line<'_>> {
     notes
         .lines()
-        .filter_map(|l| l.trim_end_matches('\r').strip_prefix(RULING_LINE))
-        .filter_map(|rest| {
-            let mut fields = rest.split(FIELD_END);
-            let id = fields.next().unwrap_or_default().trim();
-            if id.is_empty() {
-                return None;
-            }
-            let mut line = Line {
-                id,
-                question: None,
-                revokes: None,
-            };
-            for field in fields.take_while(|f| !f.starts_with(VERBATIM)) {
-                if let Some(q) = field.strip_prefix(QUESTION_FIELD) {
-                    line.question = Some(q.trim());
-                } else if let Some(r) = field.strip_prefix(REVOKES) {
-                    line.revokes = Some(r.trim());
-                }
-            }
-            Some(line)
+        .map(|l| l.trim_end_matches('\r'))
+        .filter_map(|l| match l.strip_prefix(RULING_LINE) {
+            Some(rest) => typed_line(rest),
+            None => bind_row(l),
         })
         .collect()
+}
+
+/// 定型行（頭 `RULING_LINE` の後の字）の裁定の行。
+fn typed_line(rest: &str) -> Option<Line<'_>> {
+    let mut fields = rest.split(FIELD_END);
+    let id = fields.next().unwrap_or_default().trim();
+    if id.is_empty() {
+        return None;
+    }
+    let mut line = Line {
+        id,
+        question: None,
+        revokes: None,
+    };
+    for field in fields.take_while(|f| !f.starts_with(VERBATIM)) {
+        if let Some(q) = field.strip_prefix(QUESTION_FIELD) {
+            line.question = Some(q.trim());
+        } else if let Some(r) = field.strip_prefix(REVOKES) {
+            line.revokes = Some(r.trim());
+        }
+    }
+    Some(line)
+}
+
+/// 器の結びの行の裁定の行（形でなければ None）。
+fn bind_row(line: &str) -> Option<Line<'_>> {
+    let mut fields = line.split(BIND_SEP);
+    let id = fields.next()?;
+    let question = fields.next()?;
+    if fields.count() + 2 < BIND_FIELDS {
+        return None;
+    }
+    let (front, _) = id.split_once(':')?;
+    (!question.is_empty() && front == question).then_some(Line {
+        id,
+        question: Some(question),
+        revokes: None,
+    })
 }
 
 /// 効いている最後の裁定の id（取り消しの行でも取り消された行でもない裁定の行のうち notes の順で最後）。

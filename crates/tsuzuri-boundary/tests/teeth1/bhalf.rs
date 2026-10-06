@@ -176,6 +176,27 @@ fn recorder(path: &Path, log: &Path, name: &str) {
     );
 }
 
+/// `recorder` と同じ記録に加え、引数の頭の 3 語が seat と ruling と answer の回は標準入力を `<log>/<name>.<回>.stdin` に書き、
+/// `--question` の値（9 番目の引数）に字 `:20260928T0441Z-1` を足した字を 1 行出す（`<log>/junk` が在れば字 not-an-id を出す）。
+fn vessel(path: &Path, log: &Path, name: &str) {
+    let log = log.display();
+    script(
+        path,
+        &format!(
+            "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+             echo \"$n\" > '{log}/{name}.count'\n\
+             for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'\n\
+             answer=no\n\
+             if [ \"$1 $2 $3\" = 'seat ruling answer' ]; then answer=yes; cat > '{log}/{name}.'\"$n\"'.stdin'; fi\n\
+             if [ \"$n\" = \"$(cat '{log}/{name}.fail' 2>/dev/null)\" ]; then echo 落ちた >&2; exit 1; fi\n\
+             if [ \"$answer\" = yes ]; then\n\
+               if [ -e '{log}/junk' ]; then echo not-an-id; else echo \"$9:{MINUTE}-1\"; fi\n\
+             fi\n\
+             exit 0"
+        ),
+    );
+}
+
 /// 歯ごとの作業場（repo・state dir・記録の置き場・偽の program）。
 struct Place {
     root: PathBuf,
@@ -199,7 +220,7 @@ impl Place {
             &format!("exec cat '{}'", root.join("out.json").display()),
         );
         recorder(&root.join("bdw"), &log, "bdw");
-        recorder(&root.join("scribe2"), &log, "scribe2");
+        vessel(&root.join("scribe2"), &log, "scribe2");
         Place {
             root,
             repo,
@@ -266,7 +287,29 @@ impl Place {
     }
 
     fn accept(&self, req: &BatchRequest) -> batch::Outcome {
-        batch::accept(req, &self.source(), &self.writer(), NOW)
+        let program = self.root.join("scribe2");
+        let vessel = (program.as_os_str(), Some(self.state.as_path()));
+        batch::accept(req, &self.source(), &self.writer(), vessel, NOW)
+    }
+
+    /// 偽の器の答えの口の 1 回の argv（束の旗つきの 11 語）。
+    fn answer_words(&self, q: &str, batch_id: &RulingId) -> Vec<String> {
+        let (repo, state) = (self.repo.display().to_string(), self.state.display().to_string());
+        [
+            "seat",
+            "ruling",
+            "answer",
+            "--repo",
+            repo.as_str(),
+            "--state-dir",
+            state.as_str(),
+            "--question",
+            q,
+            "--batch",
+            batch_id.as_str(),
+        ]
+        .map(str::to_string)
+        .to_vec()
     }
 }
 
@@ -338,20 +381,16 @@ fn request(text: &str, questions: &[&str]) -> BatchRequest {
     }
 }
 
-/// 束の 1 行の 2 回の書き（notes への追記と閉じる）の argv。
-fn row_argvs(q: &str, ruling: &RulingId, batch_id: &RulingId) -> [Vec<String>; 2] {
-    [
-        LedgerWrite::AppendNotes {
-            id: bead(q),
-            line: batch::line(ruling, &bead(q), batch_id, VERBATIM),
-        }
-        .argv(),
-        LedgerWrite::CloseItem {
-            id: bead(q),
-            reason: format!("裁定 {ruling} 束 {batch_id}"),
-        }
-        .argv(),
-    ]
+/// 器の束の行（裁定 id・問い id・発話の ts・経路 gui・束の id・逐語の JSON の字を縦線の欄で繋いだ 6 欄）。
+/// 台帳の JSON の字の中に置くので、逐語の JSON の字の二重引用符は逆斜線で逃がす。
+fn vessel_row(q: &str, batch_id: &RulingId) -> String {
+    let verbatim = wire::encode(&VERBATIM)
+        .expect("逐語の JSON の字")
+        .replace('"', "\\\"");
+    format!(
+        "{} | {q} | 2026-09-28T04:41:30.000Z | gui | {batch_id} | {verbatim}",
+        ruling_of(q, 1)
+    )
 }
 
 fn mark_argv(q: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
@@ -420,32 +459,22 @@ fn bhalf_wire_words() {
     );
 }
 
-/// (2) 6 回の書きの s 回目が落ちると、502 の本文は要求の 3 行を要求の順に持ち、後の書きも配達も撃たない。
+/// (2) 3 回の答えの口の s 回目が落ちると、502 の本文は要求の 3 行を要求の順に持ち、後の答えも配達も印も撃たない。
 #[test]
 fn bhalf_step_k_of_n() {
     let text = ledger([OPEN, OPEN, OPEN]);
     let req = request(&text, &QS);
     let b1 = batch_id(1);
-    let full: Vec<Vec<String>> = QS
-        .iter()
-        .flat_map(|q| row_argvs(q, &ruling_of(q, 1), &b1))
-        .collect();
-    assert_eq!(full.len(), 6);
-    for s in 1..=6usize {
+    for s in 1..=3usize {
         let place = Place::new(&format!("step-{s}"));
         place.bd_returns(&text);
-        place.fail_at("bdw", s);
-        let fell = (s - 1) / 2;
+        place.fail_at("scribe2", s);
         let items: Vec<BatchItemResult> = QS
             .iter()
             .enumerate()
             .map(|(i, q)| {
-                let outcome = if i < fell {
+                let outcome = if i < s - 1 {
                     ItemOutcome::Written {
-                        ruling: ruling_of(q, 1),
-                    }
-                } else if i == fell && s % 2 == 0 {
-                    ItemOutcome::Unclosed {
                         ruling: ruling_of(q, 1),
                     }
                 } else {
@@ -462,45 +491,41 @@ fn bhalf_step_k_of_n() {
             }),
             "{s} 回目で落ちた"
         );
-        assert_eq!(place.argvs("bdw"), full[..s], "{s} 回目で止める");
-        assert!(place.argvs("scribe2").is_empty(), "{s}: 落ちた束を配達する");
+        let want: Vec<Vec<String>> = QS[..s].iter().map(|q| place.answer_words(q, &b1)).collect();
+        assert_eq!(place.argvs("scribe2"), want, "{s} 回目で止める");
+        assert!(place.argvs("bdw").is_empty(), "{s}: 落ちた束に偽の bdw を撃つ");
     }
 }
 
-/// (3) 2 行目の閉じる書きで落ちた束の後に、残りの 2 行を送り直す（新しい裁定の id で足して閉じ、何も消さない）。
+/// (3) 2 行目の答えで落ちた束の後に、残りの 2 行を送り直す（束の id は次の番号・行は偽の器の出した裁定 id・何も消さない）。
 #[test]
 fn bhalf_resend_rest() {
     let place = Place::new("resend");
     let text = ledger([OPEN, OPEN, OPEN]);
     place.bd_returns(&text);
-    place.fail_at("bdw", 4);
+    place.fail_at("scribe2", 2);
     let b1 = batch_id(1);
-    let old = ruling_of("fx-h.2", 1);
     assert!(matches!(
         place.accept(&request(&text, &QS)),
         batch::Outcome::WriteFailed(_)
     ));
-    assert_eq!(place.argvs("bdw").len(), 4);
-    // 1 つ目の束の書きを台帳に映す（fx-h.1 は閉じ、fx-h.2 は open のまま裁定の行が残る）。
-    let kept = |q: &str| Some(batch::line(&ruling_of(q, 1), &bead(q), &b1, VERBATIM));
+    assert_eq!(place.argvs("scribe2").len(), 2);
+    // 1 つ目の束の器の書きを台帳に映す（fx-h.1 は閉じて器の束の行を持ち、fx-h.2 と fx-h.3 は open のまま）。
     let after = ledger([
         Q {
             status: "closed",
-            extra: kept("fx-h.1"),
+            extra: Some(vessel_row("fx-h.1", &b1)),
         },
-        Q {
-            status: "open",
-            extra: kept("fx-h.2"),
-        },
+        OPEN,
         OPEN,
     ]);
     place.bd_returns(&after);
-    place.fail_never("bdw");
+    place.fail_never("scribe2");
     let from = now();
     let got = place.accept(&request(&after, &QS[1..]));
     let to = now();
     let b2 = batch_id(2);
-    let (r2, r3) = (ruling_of("fx-h.2", 2), ruling_of("fx-h.3", 1));
+    let (r2, r3) = (ruling_of("fx-h.2", 1), ruling_of("fx-h.3", 1));
     assert_eq!(
         got,
         batch::Outcome::Recorded(BatchResponse {
@@ -511,14 +536,11 @@ fn bhalf_resend_rest() {
             ],
         })
     );
-    place.wait("bdw", 10);
+    place.wait("bdw", 2);
     let argvs = place.argvs("bdw");
-    assert_eq!(argvs.len(), 10, "{argvs:?}");
-    let [a2, c2] = row_argvs("fx-h.2", &r2, &b2);
-    let [a3, c3] = row_argvs("fx-h.3", &r3, &b2);
-    assert_eq!(argvs[4..8], [a2, c2, a3, c3], "追記・閉じる・追記・閉じる");
+    assert_eq!(argvs.len(), 2, "{argvs:?}");
     let minutes = [ruling::minute(from), ruling::minute(to)];
-    for (at, q, r) in [(8, "fx-h.2", &r2), (9, "fx-h.3", &r3)] {
+    for (at, q, r) in [(0, "fx-h.2", &r2), (1, "fx-h.3", &r3)] {
         let marks: Vec<Vec<String>> = minutes.iter().map(|m| mark_argv(q, r, m)).collect();
         assert!(
             marks.contains(&argvs[at]),
@@ -527,52 +549,57 @@ fn bhalf_resend_rest() {
             argvs[at]
         );
     }
-    deliver_and_writes(place, b2, argvs, minutes, old);
+    deliver_and_writes(&place, &b1, &b2, &argvs, &minutes);
 }
 
-/// 送り直しの束の配達が 1 度だけで、書きが追記か閉じるだけで前の裁定に触れないことを見る。
+/// 送り直しの束の答えが残りの行だけで、配達が 1 度だけで、偽の bdw の書きが印だけで前の裁定に触れないことを見る。
 fn deliver_and_writes(
-    place: Place,
-    b2: RulingId,
-    argvs: Vec<Vec<String>>,
-    minutes: [String; 2],
-    old: RulingId,
+    place: &Place,
+    b1: &RulingId,
+    b2: &RulingId,
+    argvs: &[Vec<String>],
+    minutes: &[String; 2],
 ) {
     let state = place.state.display().to_string();
     assert_eq!(
         place.argvs("scribe2"),
-        [[
-            "seat",
-            "deliver",
-            "--state-dir",
-            state.as_str(),
-            "--target",
-            "tsuzuri:0.1",
-            "--ruling",
-            b2.as_str(),
-        ]
-        .map(str::to_string)
-        .to_vec()],
-        "送り直しの束の id で 1 度だけ"
+        [
+            place.answer_words("fx-h.1", b1),
+            place.answer_words("fx-h.2", b1),
+            place.answer_words("fx-h.2", b2),
+            place.answer_words("fx-h.3", b2),
+            [
+                "seat",
+                "deliver",
+                "--state-dir",
+                state.as_str(),
+                "--target",
+                "tsuzuri:0.1",
+                "--ruling",
+                b2.as_str(),
+            ]
+            .map(str::to_string)
+            .to_vec()
+        ],
+        "落ちた束の 2 回・送り直しの 2 行の答え・送り直しの束の id の配達 1 度だけ"
     );
-    // 書きは追記か閉じるだけ（notes の置き換えも開き直しも無い）。
-    for argv in &argvs {
+    // 書きは印の追記だけ（notes の置き換えも閉じも開き直しも無い）。
+    for argv in argvs {
         assert_eq!(argv.len(), 3, "{argv:?}");
-        let append = argv[0] == "update" && argv[2].starts_with("--append-notes=");
-        let close = argv[0] == "close" && argv[2].starts_with("--reason=");
-        assert!(append || close, "{argv:?}");
+        assert!(
+            argv[0] == "update" && argv[2].starts_with("--append-notes=配達 = "),
+            "{argv:?}"
+        );
     }
-    // 前の裁定の行を消す書きも、その裁定の印を置く書きも無い。
-    for argv in &argvs {
+    // 前の束で書いた裁定の行を消す書きも、その裁定の印を置く書きも無い。
+    let old = ruling_of("fx-h.1", 1);
+    for argv in argvs {
         for route in [Route::Deliver, Route::Stop] {
-            for m in &minutes {
+            for m in minutes {
                 let mark = mark_line(&old, route, m);
                 assert!(!argv[2].contains(&mark), "{argv:?}");
             }
         }
-        assert!(!argv[2].contains(&format!("配達 = {old}")), "{argv:?}");
-    }
-    for argv in &argvs[4..] {
         assert!(!argv.join(" ").contains(old.as_str()), "{argv:?}");
     }
 }

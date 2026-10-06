@@ -8,8 +8,10 @@
 //!    `READ_TRIES` 回まで撃ち直し（`reread`）、どれも読めなければ回ごとの落ちた訳を並べた
 //!    `unread_line` の 1 行を標準エラーに書いて 503。
 //! 3. 今の版の要約値が要求の値と違えば断る（StaleVersion）。
-//! 4. id を発行する（`<問いの id>:<UTC の年月日 T 時分 Z>-<数>`・notes に同じ id の定型行が在れば数を増やす）。
-//! 5. notes の末尾に 1 行を足し、問いを閉じる（1 回目が落ちたら 2 回目を撃たない・書きは撃ち直さない）。
+//! 4. 置き場（state dir）が無ければ断る（NoStateDir・何も撃たない）。
+//! 5. 器の答えの口（`answer_argv`）を逐語を標準入力にして 1 回だけ撃つ（器が発話の分から id を作り、notes の行と
+//!    問いの閉じを書く・書きは撃ち直さない）。rc が 0 でなければ AnswerFailed、rc 0 でも標準出力が答えた問いの id の形
+//!    （`answered_id`）でなければ IdShape。裁定 id は器が返した字。
 //! 6. 席の target と state dir の両方が在るときだけ、別の thread で `redeliver` を `PACE` で呼び、待たずに応答する
 //!    （周ごとに台帳を読み直し、印の無い裁定が在れば器の配達の口を撃ち、rc 0 なら印を置く。
 //!    受けなければ `DELIVER_STEP` を空けて `DELIVER_SPAN` まで撃ち直す・結果で応答は変えない）。
@@ -26,8 +28,8 @@
 //! 取り消せるのは閉じた問いの効いている最後の裁定だけで、notes の末尾に取り消しの行を足してから開き直し、何も消さない。
 //! 開き直しだけが落ちた後に同じ要求を撃ち直すと、行を足さず開き直しだけを撃ち直す。
 
-use std::ffi::OsString;
-use std::path::PathBuf;
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use tsuzuri_contract::EpochSecs;
@@ -38,12 +40,13 @@ use tsuzuri_contract::surface::{
     RulingResponse, VERBATIM, pending_reopen, revocable,
 };
 use tsuzuri_core::delivery::{Pending, Route, mark_line, marked, undelivered};
+use tsuzuri_core::graph::build::bind_line;
 use tsuzuri_core::question::open_questions;
 
 use super::Config;
 use super::events;
 use super::ledger::{Source, capture, parse_bd};
-use super::proc::run;
+use super::proc::{Failed, run, run_input};
 use crate::out::emit_err;
 
 /// 口の path。
@@ -140,6 +143,9 @@ pub struct Writer {
     pub delivery: Option<Delivery>,
 }
 
+/// 器の答えの口の撃ち先（器の program と置き場・置き場が無ければ None）。
+pub type Vessel<'a> = (&'a OsStr, Option<&'a Path>);
+
 /// 受付の結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -149,16 +155,22 @@ pub enum Outcome {
     Refused(Refusal),
     /// 台帳が読めない（503・書きの前）。
     LedgerUnknown,
-    /// 発行した id が記帳 id の形に収まらない（500・書きの前）。
+    /// 置き場が無く器の答えの口を撃てない（503・何も撃っていない）。
+    NoStateDir,
+    /// 器の答えの口が返した字が答えた問いの id の形でない（500）。
     IdShape,
-    /// notes への追記が落ちた（502・閉じる書きは撃っていない）。
-    AppendFailed,
-    /// 問いを閉じる書きが落ちた（502・notes には発行した id の行が在る）。
-    CloseFailed(RulingId),
+    /// 器の答えの口が落ちた（502）。
+    AnswerFailed,
 }
 
 /// 1 問の裁定を受ける（`now` は受付の時刻）。
-pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochSecs) -> Outcome {
+pub fn accept(
+    req: &RulingRequest,
+    ledger: &Source,
+    writer: &Writer,
+    vessel: Vessel<'_>,
+    now: EpochSecs,
+) -> Outcome {
     if req.verbatim.trim().is_empty() {
         return Outcome::Refused(Refusal::EmptyVerbatim);
     }
@@ -172,23 +184,26 @@ pub fn accept(req: &RulingRequest, ledger: &Source, writer: &Writer, now: EpochS
     if question.card.digest != req.seen_digest {
         return Outcome::Refused(Refusal::StaleVersion);
     }
-    let Ok(id) = next_id(&req.question, &question.notes, &minute(now)) else {
+    let (program, Some(state_dir)) = vessel else {
+        return Outcome::NoStateDir;
+    };
+    let argv = answer_argv(state_dir, &writer.repo, &req.question, None);
+    let out = match run_input(
+        program,
+        argv,
+        &writer.repo,
+        req.verbatim.as_bytes(),
+        WRITE_TIMEOUT,
+    ) {
+        Ok(out) => out,
+        Err(failed) => {
+            emit_err(&answer_failed_line(&req.question, &failed));
+            return Outcome::AnswerFailed;
+        }
+    };
+    let Some(id) = answered_id(&req.question, &out) else {
         return Outcome::IdShape;
     };
-    let append = LedgerWrite::AppendNotes {
-        id: req.question.clone(),
-        line: line(&id, &req.question, &req.verbatim),
-    };
-    if !write(writer, &append) {
-        return Outcome::AppendFailed;
-    }
-    let close = LedgerWrite::CloseItem {
-        id: req.question.clone(),
-        reason: reason(&id, None),
-    };
-    if !write(writer, &close) {
-        return Outcome::CloseFailed(id);
-    }
     if let Some(d) = writer.delivery.clone() {
         let (writer, ledger) = (writer.clone(), ledger.clone());
         let parcel = Parcel {
@@ -508,6 +523,11 @@ pub fn sweep(d: &Delivery, writer: &Writer, ledger: &Source, pace: Pace, now: Ep
 /// 字の順は時刻の順と同じ。
 pub fn id_minute(id: &RulingId) -> Option<&str> {
     let (_, tail) = id.as_str().rsplit_once(':')?;
+    tail_minute(tail)
+}
+
+/// 裁定の id の最後のコロンより後の字（`<UTC の年月日 T 時分 Z>-<数>`）の分の字（形が違えば None）。
+fn tail_minute(tail: &str) -> Option<&str> {
     let (at, n) = tail.rsplit_once('-')?;
     let shaped = at.len() == 14
         && at.bytes().enumerate().all(|(i, c)| match i {
@@ -547,7 +567,52 @@ pub fn sweep_at_start(config: &Config) -> bool {
     true
 }
 
-/// 次の id（数は 1 から始め、notes に同じ id の定型行が在れば 1 つずつ増やす）。
+/// 器の答えの口の引数の列（program の名は含めない・束の id が在れば末に `--batch <束>`）。
+pub fn answer_argv(
+    state_dir: &Path,
+    repo: &Path,
+    question: &BeadId,
+    batch: Option<&RulingId>,
+) -> Vec<OsString> {
+    let mut argv: Vec<OsString> = vec![
+        "seat".into(),
+        "ruling".into(),
+        "answer".into(),
+        "--repo".into(),
+        repo.into(),
+        "--state-dir".into(),
+        state_dir.into(),
+        "--question".into(),
+        question.as_str().into(),
+    ];
+    if let Some(batch) = batch {
+        argv.push("--batch".into());
+        argv.push(batch.as_str().into());
+    }
+    argv
+}
+
+/// 器の答えの口が落ちたときの log の字（`answer_failed_line` の頭）。
+pub const ANSWER_FAILED: &str = "器の答えの口が落ちた";
+
+/// 器の答えの口が落ちたときの log の 1 行（`tz surface serve: <ANSWER_FAILED>: 問い <問いの id>・器 <落ちた訳>`・逐語は書かない）。
+pub fn answer_failed_line(question: &BeadId, failed: &Failed) -> String {
+    format!(
+        "tz surface serve: {ANSWER_FAILED}: 問い {question}・器 {}",
+        failed.word()
+    )
+}
+
+/// 器の答えの口の標準出力の裁定 id（前後の空白を除いた字が `<答えた問いの id>:<分の字>-<1 字以上の数字>` の形の時だけ Some）。
+/// 形の照らしは `RulingId::new` に頼らず、ここで撃つ。
+pub fn answered_id(question: &BeadId, stdout: &[u8]) -> Option<RulingId> {
+    let text = std::str::from_utf8(stdout).ok()?.trim();
+    let tail = text.strip_prefix(question.as_str())?.strip_prefix(':')?;
+    tail_minute(tail)?;
+    RulingId::new(text).ok()
+}
+
+/// 次の id（数は 1 から始め、notes に同じ id の定型行か器の結びの行が在れば 1 つずつ増やす）。
 pub fn next_id(
     question: &BeadId,
     notes: &str,
@@ -555,8 +620,12 @@ pub fn next_id(
 ) -> Result<RulingId, tsuzuri_contract::IdError> {
     let taken: Vec<&str> = notes
         .lines()
-        .filter_map(|l| l.trim_end_matches('\r').strip_prefix(LINE_PREFIX))
-        .map(|rest| rest.split(ID_END).next().unwrap_or(rest).trim())
+        .map(|l| l.trim_end_matches('\r'))
+        .filter_map(|l| {
+            l.strip_prefix(LINE_PREFIX)
+                .map(|rest| rest.split(ID_END).next().unwrap_or(rest).trim())
+                .or_else(|| bind_line(l, question.as_str()))
+        })
         .collect();
     let mut n = 1;
     loop {
@@ -566,14 +635,6 @@ pub fn next_id(
         }
         n += 1;
     }
-}
-
-/// notes に足す 1 行（`裁定 id = <id>・問い = <問いの id>・逐語 = <字>`）。
-pub fn line(id: &RulingId, question: &BeadId, verbatim: &str) -> String {
-    format!(
-        "{LINE_PREFIX}{id}{ID_END}問い = {question}{ID_END}逐語 = {}",
-        escape(verbatim)
-    )
 }
 
 /// notes に足す取り消しの行（`裁定 id = <id>・問い = <問いの id>・取り消す = <前の id>・逐語 = <字>`）。
@@ -626,7 +687,7 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{LINE_PREFIX, escape, line, minute, next_id};
+    use super::{LINE_PREFIX, escape, minute, next_id, revoke_line};
     use tsuzuri_contract::graph::NodeKind;
     use tsuzuri_contract::ledger::BeadId;
     use tsuzuri_contract::surface::RulingId;
@@ -656,21 +717,9 @@ mod tests {
             next_id(&q, "", m).expect("id").as_str(),
             "fx.1:20260927T1034Z-1"
         );
-        let notes = format!(
-            "前置き\n{}\n{}\r\n裁定 id = fx.1:20260927T1033Z-3・古い分",
-            line(
-                &RulingId::new("fx.1:20260927T1034Z-1").expect("id"),
-                &q,
-                "x"
-            ),
-            line(
-                &RulingId::new("fx.1:20260927T1034Z-2").expect("id"),
-                &q,
-                "y"
-            ),
-        );
+        let notes = "前置き\n裁定 id = fx.1:20260927T1034Z-1・問い = fx.1・逐語 = x\n裁定 id = fx.1:20260927T1034Z-2・問い = fx.1・逐語 = y\r\n裁定 id = fx.1:20260927T1033Z-3・古い分";
         assert_eq!(
-            next_id(&q, &notes, m).expect("id").as_str(),
+            next_id(&q, notes, m).expect("id").as_str(),
             "fx.1:20260927T1034Z-3"
         );
         let long = BeadId::new("a".repeat(60)).expect("id");
@@ -681,10 +730,15 @@ mod tests {
     fn server_ask_line_prefix_is_graph_ruling() {
         assert_eq!(TYPED_LINES[0], (LINE_PREFIX, NodeKind::Ruling));
         let q = BeadId::new("fx.1").expect("id");
-        let id = RulingId::new("fx.1:20260927T1034Z-1").expect("id");
-        assert_eq!(
-            line(&id, &q, "はい\nそれで"),
-            "裁定 id = fx.1:20260927T1034Z-1・問い = fx.1・逐語 = はい\\nそれで"
+        let id = RulingId::new("fx.1:20260927T1034Z-2").expect("id");
+        let revokes = RulingId::new("fx.1:20260927T1034Z-1").expect("id");
+        let got = revoke_line(&id, &q, &revokes, "はい\nそれで");
+        assert!(
+            got.starts_with(
+                "裁定 id = fx.1:20260927T1034Z-2・問い = fx.1・取り消す = fx.1:20260927T1034Z-1・逐語 = "
+            ),
+            "{got}"
         );
+        assert!(got.ends_with("はい\\nそれで"), "{got}");
     }
 }

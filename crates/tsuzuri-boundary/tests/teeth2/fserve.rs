@@ -56,6 +56,28 @@ fn recorder(path: &Path, log: &Path, name: &str) {
     );
 }
 
+/// `recorder` と同じ記録に加え、引数の頭の 3 語が seat と ruling と answer の回は標準入力を `<log>/<name>.<回>.stdin` に書き、
+/// `--question` の値（9 番目の引数）に字 `:20260928T0441Z-1` を足した字を 1 行出す（`<log>/junk` が在れば字 not-an-id を出す）。
+fn vessel(path: &Path, log: &Path, name: &str) {
+    let log = log.display();
+    script(
+        path,
+        &format!(
+            "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+             echo \"$n\" > '{log}/{name}.count'\n\
+             for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'\n\
+             pwd -P > '{log}/{name}.'\"$n\"'.cwd'\n\
+             answer=no\n\
+             if [ \"$1 $2 $3\" = 'seat ruling answer' ]; then answer=yes; cat > '{log}/{name}.'\"$n\"'.stdin'; fi\n\
+             if [ \"$n\" = \"$(cat '{log}/{name}.fail' 2>/dev/null)\" ]; then echo refused busy >&2; exit 1; fi\n\
+             if [ \"$answer\" = yes ]; then\n\
+               if [ -e '{log}/junk' ]; then echo not-an-id; else echo \"$9:20260928T0441Z-1\"; fi\n\
+             fi\n\
+             exit 0"
+        ),
+    );
+}
+
 /// 場ごとの作業場（repo・state dir・面の file・記録の置き場・out.json・偽の program）。
 struct Place {
     root: PathBuf,
@@ -89,7 +111,7 @@ impl Place {
             &format!("exec cat '{}'", root.join("out.json").display()),
         );
         recorder(&root.join("bdw"), &log, "bdw");
-        recorder(&root.join("scribe2"), &log, "scribe2");
+        vessel(&root.join("scribe2"), &log, "scribe2");
         Place {
             root,
             repo,
@@ -402,7 +424,7 @@ fn fserve_batch_refusal_logs_once() {
         "refused",
         Some(&fixture("surface/question-batch.json")),
     );
-    place.fail_at("scribe2", 1);
+    place.fail_at("scribe2", 3);
     let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
         .args(["surface", "serve", "--bind", "127.0.0.1:0", "--repo"])
         .arg(&place.repo)
@@ -457,15 +479,36 @@ fn fserve_batch_refusal_logs_once() {
     delivered_once_refused_once(place, rest, got);
 }
 
-/// 束の id での配達が 1 度だけで、受けない行が標準 error に 1 行だけ在る。
+/// 行ごとの答えの後の束の id での配達が 1 度だけで、受けない行が標準 error に 1 行だけ在る。
 fn delivered_once_refused_once(place: Place, rest: String, got: BatchResponse) {
+    let answer = |q: &str| -> Vec<String> {
+        [
+            "seat",
+            "ruling",
+            "answer",
+            "--repo",
+            &place.repo.display().to_string(),
+            "--state-dir",
+            &place.state.display().to_string(),
+            "--question",
+            q,
+            "--batch",
+            got.batch.as_str(),
+        ]
+        .map(str::to_string)
+        .to_vec()
+    };
     assert_eq!(
         place.argvs("scribe2"),
-        [deliver_argv(&place, got.batch.as_str())],
-        "束の id で 1 度だけ"
+        [
+            answer("fx-b.2"),
+            answer("fx-b.3"),
+            deliver_argv(&place, got.batch.as_str())
+        ],
+        "行ごとの答えの後に束の id で 1 度だけ"
     );
     let bdw = place.argvs("bdw");
-    assert_eq!(bdw.len(), 4, "行ごとの追記と閉じるだけ: {bdw:?}");
+    assert!(bdw.is_empty(), "受けないのに偽の bdw を撃つ: {bdw:?}");
     let lines: Vec<&str> = rest
         .lines()
         .filter(|l| l.contains(ruling::NOT_TAKEN))

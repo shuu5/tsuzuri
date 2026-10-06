@@ -64,6 +64,31 @@ fn recorder(path: &Path, log: &Path, name: &str) {
     );
 }
 
+/// 偽の器の答えの口が出す分の字（裁定 id は問い id の後にこの字を足す）。
+const VESSEL_TAIL: &str = ":20260928T0441Z-1";
+
+/// `recorder` と同じ記録に加え、引数の頭の 3 語が seat と ruling と answer の回は標準入力を `<log>/<name>.<回>.stdin` に書き、
+/// `--question` の値（9 番目の引数）に `VESSEL_TAIL` を足した字を 1 行出す（`<log>/junk` が在れば字 not-an-id を出す）。
+fn vessel(path: &Path, log: &Path, name: &str) {
+    let log = log.display();
+    script(
+        path,
+        &format!(
+            "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+             echo \"$n\" > '{log}/{name}.count'\n\
+             for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'\n\
+             pwd -P > '{log}/{name}.'\"$n\"'.cwd'\n\
+             answer=no\n\
+             if [ \"$1 $2 $3\" = 'seat ruling answer' ]; then answer=yes; cat > '{log}/{name}.'\"$n\"'.stdin'; fi\n\
+             if [ \"$n\" = \"$(cat '{log}/{name}.fail' 2>/dev/null)\" ]; then echo 落ちた >&2; exit 1; fi\n\
+             if [ \"$answer\" = yes ]; then\n\
+               if [ -e '{log}/junk' ]; then echo not-an-id; else echo \"$9{VESSEL_TAIL}\"; fi\n\
+             fi\n\
+             exit 0"
+        ),
+    );
+}
+
 /// 歯ごとの作業場（repo・面の file・state dir・偽の program・記録の置き場）。
 struct Place {
     root: PathBuf,
@@ -99,7 +124,7 @@ impl Place {
             &format!("exec cat '{}'", root.join("out.json").display()),
         );
         recorder(&root.join("bdw"), &log, "bdw");
-        recorder(&root.join("scribe2"), &log, "scribe2");
+        vessel(&root.join("scribe2"), &log, "scribe2");
         let place = Place {
             root,
             repo,
@@ -145,6 +170,48 @@ impl Place {
 
     fn argvs(&self, name: &str) -> Vec<Vec<String>> {
         self.calls(name).into_iter().map(|(argv, _)| argv).collect()
+    }
+
+    /// 偽の器の `n` 回目（答えの回）の標準入力の byte。
+    fn stdin(&self, n: u32) -> Vec<u8> {
+        fs::read(self.log.join(format!("scribe2.{n}.stdin"))).expect("標準入力の記録")
+    }
+
+    /// 偽の器の答えの回の argv（束の旗つきの 11 語）。
+    fn answer_argv(&self, question: &str, batch: &RulingId) -> Vec<String> {
+        let (repo, state) = (self.repo.display().to_string(), self.state.display().to_string());
+        [
+            "seat",
+            "ruling",
+            "answer",
+            "--repo",
+            repo.as_str(),
+            "--state-dir",
+            state.as_str(),
+            "--question",
+            question,
+            "--batch",
+            batch.as_str(),
+        ]
+        .map(str::to_string)
+        .to_vec()
+    }
+
+    /// 偽の器の配達の回の argv（8 語）。
+    fn deliver_argv(&self, id: &RulingId) -> Vec<String> {
+        let state = self.state.display().to_string();
+        [
+            "seat",
+            "deliver",
+            "--state-dir",
+            state.as_str(),
+            "--target",
+            "tsuzuri:0.1",
+            "--ruling",
+            id.as_str(),
+        ]
+        .map(str::to_string)
+        .to_vec()
     }
 
     /// 偽の program の `n` 回目の cwd の記録が空でなくなるまで 10 秒まで待つ（配達は応答の後の thread）。
@@ -353,27 +420,6 @@ fn written(got: &BatchResponse, questions: &[&str]) -> Vec<RulingId> {
         .collect()
 }
 
-/// 束の 1 行の 2 回の書き（notes への追記と閉じる）の argv。
-fn row_argvs(
-    question: &str,
-    ruling: &RulingId,
-    batch: &RulingId,
-    verbatim: &str,
-) -> [Vec<String>; 2] {
-    [
-        LedgerWrite::AppendNotes {
-            id: bead(question),
-            line: format!("裁定 id = {ruling}・問い = {question}・束 = {batch}・逐語 = {verbatim}"),
-        }
-        .argv(),
-        LedgerWrite::CloseItem {
-            id: bead(question),
-            reason: format!("裁定 {ruling} 束 {batch}"),
-        }
-        .argv(),
-    ]
-}
-
 /// 問いの notes に配達の口の印を足す書きの argv。
 fn mark_argv(question: &str, ruling: &RulingId, minute: &str) -> Vec<String> {
     LedgerWrite::AppendNotes {
@@ -405,36 +451,39 @@ fn server_batch_writes_rows_in_order() {
     for (ruling, q) in rulings.iter().zip([Q2, Q3]) {
         assert_eq!(
             ruling.as_str(),
-            format!("{q}:{minute}-1"),
-            "裁定の id は束と同じ分"
+            format!("{q}{VESSEL_TAIL}"),
+            "裁定の id は偽の器の出した字"
         );
     }
 
-    place.wait("bdw", 6);
-    let calls = place.calls("bdw");
-    let [a2, c2] = row_argvs(
-        Q2,
-        &rulings[0],
-        &got.batch,
-        "減らしてよい\\n2 行目 \\\\ 逆斜線",
+    place.wait("bdw", 2);
+    let calls = place.calls("scribe2");
+    assert_eq!(calls.len(), 3, "偽の器は行の数の答えと配達の 1 回: {calls:?}");
+    assert_eq!(calls[0].0, place.answer_argv(Q2, &got.batch), "1 回目は 1 行目の答え");
+    assert_eq!(calls[1].0, place.answer_argv(Q3, &got.batch), "2 回目は 2 行目の答え");
+    assert_eq!(
+        place.stdin(1),
+        "減らしてよい\n2 行目 \\ 逆斜線".as_bytes(),
+        "標準入力は行の逐語"
     );
-    let [a3, c3] = row_argvs(Q3, &rulings[1], &got.batch, "束の答え");
-    let argvs: Vec<Vec<String>> = calls.iter().map(|(a, _)| a.clone()).collect();
-    assert_eq!(argvs.len(), 6, "{argvs:?}");
-    assert_eq!(argvs[..4], [a2, c2, a3, c3], "追記・閉じる・追記・閉じるの順");
-    for (at, (q, ruling)) in [(4, (Q2, &rulings[0])), (5, (Q3, &rulings[1]))] {
-        let marks: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
+    assert_eq!(place.stdin(2), "束の答え".as_bytes());
+    assert_eq!(calls[2].0, place.deliver_argv(&got.batch), "3 回目は束の id の配達");
+    for (_, cwd) in &calls {
+        assert_eq!(cwd, &place.repo_real(), "cwd は repo の置き場");
+    }
+    marks_in_row_order(&place, (from, to), &rulings);
+}
+
+/// 偽の bdw は行の順の配達の口の印だけ（印の分は受付の前後の時刻の分のどちらか）。
+fn marks_in_row_order(place: &Place, (from, to): (u64, u64), rulings: &[RulingId]) {
+    let marks = place.calls("bdw");
+    assert_eq!(marks.len(), 2, "偽の bdw は行ごとの印だけ: {marks:?}");
+    for ((argv, cwd), (q, ruling)) in marks.iter().zip([(Q2, &rulings[0]), (Q3, &rulings[1])]) {
+        let want: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
             .iter()
             .map(|m| mark_argv(q, ruling, m))
             .collect();
-        assert!(
-            marks.contains(&argvs[at]),
-            "{} 回目は {q} の配達の口の印: {:?}",
-            at + 1,
-            argvs[at]
-        );
-    }
-    for (_, cwd) in &calls {
+        assert!(want.contains(argv), "{q} の配達の口の印: {argv:?}");
         assert_eq!(cwd, &place.repo_real(), "cwd は repo の置き場");
     }
 }
@@ -453,13 +502,25 @@ fn server_batch_own_verbatim_or_batch_verbatim() {
         ],
         "束の字",
     ));
-    let rulings = written(&got, &[Q2, Q3]);
-    let [a2, _] = row_argvs(Q2, &rulings[0], &got.batch, "束の字");
-    let [a3, _] = row_argvs(Q3, &rulings[1], &got.batch, "個別の字");
-    place.wait("bdw", 6);
-    let argvs = place.argvs("bdw");
-    assert_eq!(argvs.len(), 6);
-    assert_eq!((&argvs[0], &argvs[2]), (&a2, &a3));
+    written(&got, &[Q2, Q3]);
+    place.wait("bdw", 2);
+    let calls = place.calls("scribe2");
+    assert_eq!(calls.len(), 3, "答え 2 回と配達 1 回");
+    assert_eq!(
+        calls[0].0,
+        place.answer_argv(Q2, &got.batch),
+        "argv の末は --batch と束の id"
+    );
+    assert_eq!(
+        calls[1].0,
+        place.answer_argv(Q3, &got.batch),
+        "argv の末は --batch と束の id"
+    );
+    assert_eq!(place.calls("bdw").len(), 2, "偽の bdw は印の行の数");
+    assert_eq!(
+        (place.stdin(1), place.stdin(2)),
+        ("束の字".as_bytes().to_vec(), "個別の字".as_bytes().to_vec())
+    );
     // 個別の逐語が在れば束の逐語は空白だけでよい。
     let place = Place::new("verbatim-own");
     let addr = place.serve();
@@ -468,16 +529,24 @@ fn server_batch_own_verbatim_or_batch_verbatim() {
         vec![item(Q2, &d2, Some("こちら")), item(Q3, &d3, Some("あちら"))],
         "  ",
     ));
-    let rulings = written(&got, &[Q2, Q3]);
-    place.wait("bdw", 6);
-    let argvs = place.argvs("bdw");
+    written(&got, &[Q2, Q3]);
+    place.wait("bdw", 2);
+    let calls = place.calls("scribe2");
+    assert_eq!(calls.len(), 3, "答え 2 回と配達 1 回");
     assert_eq!(
-        argvs[0],
-        row_argvs(Q2, &rulings[0], &got.batch, "こちら")[0]
+        calls[0].0,
+        place.answer_argv(Q2, &got.batch),
+        "argv の末は --batch と束の id"
     );
     assert_eq!(
-        argvs[2],
-        row_argvs(Q3, &rulings[1], &got.batch, "あちら")[0]
+        calls[1].0,
+        place.answer_argv(Q3, &got.batch),
+        "argv の末は --batch と束の id"
+    );
+    assert_eq!(place.calls("bdw").len(), 2, "偽の bdw は印の行の数");
+    assert_eq!(
+        (place.stdin(1), place.stdin(2)),
+        ("こちら".as_bytes().to_vec(), "あちら".as_bytes().to_vec())
     );
 }
 
@@ -601,19 +670,24 @@ fn server_batch_id_counts_up_in_same_minute() {
         let addr = place.serve();
         let d2 = digest(addr, Q2);
         let first = batched(&post_batch(addr, vec![item(Q2, &d2, None)], "はい"));
-        place.wait("bdw", 3);
-        // 1 つ目の束の追記を台帳に映す（偽の bd は書きを映さないので字を置き直す）。
-        let appended = place.argvs("bdw")[0][2]
-            .strip_prefix("--append-notes=")
-            .expect("追記の旗")
-            .to_string();
+        place.wait("bdw", 1);
+        // 1 つ目の束の器の行を台帳に映す（偽の bd は器の書きを映さないので、器の束の行の 6 欄を組んで字を置き直す）。
+        let written_id = written(&first, &[Q2])[0].clone();
+        let verbatim = wire::encode(&"はい").expect("逐語の JSON の字");
+        let row = [
+            written_id.as_str(),
+            Q2,
+            "2026-09-28T04:41:30.000Z",
+            "gui",
+            first.batch.as_str(),
+            verbatim.as_str(),
+        ]
+        .join(" | ");
         let old = format!("\"notes\":\"{Q2} の notes の 1 行\"");
         let fixture = read_fixture();
         assert!(fixture.contains(&old), "{old}");
-        place.bd_returns(&fixture.replace(
-            &old,
-            &format!("\"notes\":\"{Q2} の notes の 1 行\\n{appended}\""),
-        ));
+        let notes = wire::encode(&format!("{Q2} の notes の 1 行\n{row}")).expect("notes の字");
+        place.bd_returns(&fixture.replace(&old, &format!("\"notes\":{notes}")));
         let d3 = digest(addr, Q3);
         let second = batched(&post_batch(addr, vec![item(Q3, &d3, None)], "はい"));
         let (_, m1, n1) = split_id(first.batch.as_str());
@@ -629,46 +703,43 @@ fn server_batch_id_counts_up_in_same_minute() {
 
 #[test]
 fn server_batch_write_failure_is_502_with_done_rows() {
-    let place = Place::new("fail-3");
-    place.fail_at("bdw", 3);
+    let place = Place::new("fail-2");
+    place.fail_at("scribe2", 2);
     let addr = place.serve();
     let (d2, d3) = (digest(addr, Q2), digest(addr, Q3));
     let reply = post_batch(addr, vec![item(Q2, &d2, None), item(Q3, &d3, None)], "はい");
     assert_eq!(reply.status, 502, "{}", reply.body);
     json_body(&reply);
     let got: BatchResponse = wire::decode(&reply.body).expect("束の応答の形");
-    let rulings = written(
-        &BatchResponse {
-            batch: got.batch.clone(),
-            items: got.items[..1].to_vec(),
-        },
-        &[Q2],
-    );
     assert_eq!(got.items.len(), 2, "要求の全部の行: {:?}", got.items);
+    assert_eq!(
+        (got.items[0].question.as_str(), &got.items[0].outcome),
+        (
+            Q2,
+            &ItemOutcome::Written {
+                ruling: RulingId::new(format!("{Q2}{VESSEL_TAIL}")).expect("記帳 id")
+            }
+        ),
+        "答えが済んだ行は書いた"
+    );
     assert_eq!(
         (got.items[1].question.as_str(), &got.items[1].outcome),
         (Q3, &ItemOutcome::Unwritten),
-        "追記が落ちた行は書いていない"
+        "答えが落ちた行は書いていない"
     );
-    let argvs = place.argvs("bdw");
+    let argvs = place.argvs("scribe2");
     assert_eq!(
-        argvs.len(),
-        3,
-        "2 つ目の問いの閉じる書きは撃たない: {argvs:?}"
+        argvs,
+        [
+            place.answer_argv(Q2, &got.batch),
+            place.answer_argv(Q3, &got.batch)
+        ],
+        "落ちた行で止めて配達しない"
     );
-    assert_eq!(argvs[..2], row_argvs(Q2, &rulings[0], &got.batch, "はい"));
-    assert_eq!(
-        argvs[2][0..2],
-        ["update", Q3],
-        "3 回目は 2 つ目の問いの追記"
-    );
-    assert!(
-        place.calls("scribe2").is_empty(),
-        "落ちた書きの後に配達する"
-    );
+    assert!(place.calls("bdw").is_empty(), "落ちた束の後に印を置く");
     // 1 回目が落ちれば 2 行とも書いていない。
     let place = Place::new("fail-1");
-    place.fail_at("bdw", 1);
+    place.fail_at("scribe2", 1);
     let addr = place.serve();
     let reply = post_batch(addr, vec![item(Q2, &d2, None), item(Q3, &d3, None)], "はい");
     assert_eq!(reply.status, 502, "{}", reply.body);
@@ -682,7 +753,8 @@ fn server_batch_write_failure_is_502_with_done_rows() {
         rows,
         [(Q2, &ItemOutcome::Unwritten), (Q3, &ItemOutcome::Unwritten)]
     );
-    assert_eq!(place.calls("bdw").len(), 1);
+    assert_eq!(place.calls("scribe2").len(), 1, "落ちた行より後を撃たない");
+    assert!(place.calls("bdw").is_empty());
 }
 
 #[test]
@@ -696,50 +768,55 @@ fn server_batch_delivers_once_per_batch() {
         "はい",
     ));
     written(&got, &[Q2, Q3]);
-    place.wait("bdw", 6);
-    let state = place.state.display().to_string();
-    let want: Vec<Vec<String>> = vec![
-        [
-            "seat",
-            "deliver",
-            "--state-dir",
-            state.as_str(),
-            "--target",
-            "tsuzuri:0.1",
-            "--ruling",
-            got.batch.as_str(),
-        ]
-        .map(str::to_string)
-        .to_vec(),
+    place.wait("bdw", 2);
+    let want = vec![
+        place.answer_argv(Q2, &got.batch),
+        place.answer_argv(Q3, &got.batch),
+        place.deliver_argv(&got.batch),
     ];
-    assert_eq!(place.argvs("scribe2"), want, "束の id で 1 度だけ");
-    // 片方でも無ければ撃たない。
-    for (name, seat, state_dir) in [
-        ("no-seat", None, true),
-        ("no-state", Some("tsuzuri:0.1"), false),
-    ] {
-        let place = Place::new(name);
-        let addr = place.serve_with(&place.config(seat, state_dir));
-        batched(&post_batch(
-            addr,
-            vec![item(Q2, &d2, None), item(Q3, &d3, None)],
-            "はい",
-        ));
-        assert_eq!(place.calls("bdw").len(), 4, "{name}");
-        assert!(place.calls("scribe2").is_empty(), "{name}: 偽の器を撃つ");
-    }
-    // 配達が落ちても 200。
+    assert_eq!(place.argvs("scribe2"), want, "行ごとの答えの後に束の id で 1 度だけ配達");
+    assert_eq!(place.calls("bdw").len(), 2, "印は行ごとの 2 回");
+    // 席の target だけ無ければ答えは撃つが配達も印も無い。
+    let place = Place::new("no-seat");
+    let addr = place.serve_with(&place.config(None, true));
+    let got = batched(&post_batch(
+        addr,
+        vec![item(Q2, &d2, None), item(Q3, &d3, None)],
+        "はい",
+    ));
+    assert_eq!(
+        place.argvs("scribe2"),
+        [
+            place.answer_argv(Q2, &got.batch),
+            place.answer_argv(Q3, &got.batch)
+        ],
+        "no-seat: 答えだけ"
+    );
+    assert!(place.calls("bdw").is_empty(), "no-seat: 偽の bdw を撃つ");
+    // state dir が無ければ答えの口を撃てず 503 で、何も撃たない。
+    let place = Place::new("no-state");
+    let addr = place.serve_with(&place.config(Some("tsuzuri:0.1"), false));
+    let reply = post_batch(
+        addr,
+        vec![item(Q2, &d2, None), item(Q3, &d3, None)],
+        "はい",
+    );
+    assert_eq!(reply.status, 503, "{}", reply.body);
+    assert!(reply.body.contains("ruling-state-dir"), "{}", reply.body);
+    assert!(place.calls("scribe2").is_empty(), "no-state: 偽の器を撃つ");
+    assert!(place.calls("bdw").is_empty(), "no-state: 偽の bdw を撃つ");
+    // 配達が落ちても 200（落とす回は行の数 + 1 回目）。
     let place = Place::new("deliver-fail");
-    place.fail_at("scribe2", 1);
+    place.fail_at("scribe2", 3);
     let addr = place.serve();
     batched(&post_batch(
         addr,
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
-    place.wait("scribe2", 1);
-    assert_eq!(place.calls("scribe2").len(), 1);
-    assert_eq!(place.calls("bdw").len(), 4, "受けなければ印を置かない");
+    place.wait("scribe2", 3);
+    assert_eq!(place.calls("scribe2").len(), 3, "答え 2 回と落ちた配達");
+    assert!(place.calls("bdw").is_empty(), "受けなければ印を置かない");
 }
 
 #[test]
@@ -804,11 +881,12 @@ fn guards_pass_same_origin(place: Place, addr: SocketAddr, bodies: [(&str, Strin
         );
         assert_eq!(reply.status, 200, "{path}: {}", reply.body);
         if *path == batch::PATH {
-            place.wait("bdw", 3);
+            place.wait("bdw", 1);
         }
     }
-    // 束は追記と閉じるの 2 回と印の 1 回・方針は作る・足す・閉じるの 3 回。
-    assert_eq!(place.calls("bdw").len(), 6);
+    // 束は印の 1 回と器の答えと配達の 2 回・方針は作る・足す・閉じるの 3 回。
+    assert_eq!(place.calls("bdw").len(), 4);
+    assert_eq!(place.calls("scribe2").len(), 2);
     // GET でない要求を受ける口は 3 つだけ（ほかの POST は 405）。
     for path in ["/api/batch/x", "/api/policy/x", "/api/batches"] {
         assert_eq!(send(addr, "POST", path, "", "{}").status, 405, "{path}");
@@ -835,11 +913,11 @@ fn server_batch_repo_and_state_bytes_unchanged() {
         vec![item(Q2, &d2, None), item(Q3, &d3, None)],
         "はい",
     ));
-    place.wait("bdw", 6);
+    place.wait("bdw", 2);
     policied(&post_policy(addr, "all", "はい"));
-    // 束 6 回（2 行の追記と閉じるの 4 回と印の 2 回）・方針 3 回（作る・足す・閉じる）。
-    assert_eq!(place.calls("bdw").len(), 9);
-    assert_eq!(place.calls("scribe2").len(), 1);
+    // 束の印 2 回・方針 3 回（作る・足す・閉じる）。器は束の答え 2 回と配達 1 回。
+    assert_eq!(place.calls("bdw").len(), 5);
+    assert_eq!(place.calls("scribe2").len(), 3);
     assert!(
         before == (tree(&place.repo), tree(&place.state)),
         "受付の後に repo か state dir の byte が変わる"
@@ -872,11 +950,4 @@ fn server_batch_fixture_shape_and_no_new_dependencies() {
         }
     }
     assert_eq!(names, ["folio", "tsuzuri-contract", "tsuzuri-core"]);
-    // 束の定型行の形（裁定の定型行の頭のまま・束 = を挟む）。
-    let id = RulingId::new("fx-b.2:20260927T1034Z-1").expect("id");
-    let b = RulingId::new("batch:20260927T1034Z-1").expect("id");
-    assert_eq!(
-        batch::line(&id, &bead(Q2), &b, "a\nb"),
-        "裁定 id = fx-b.2:20260927T1034Z-1・問い = fx-b.2・束 = batch:20260927T1034Z-1・逐語 = a\\nb"
-    );
 }

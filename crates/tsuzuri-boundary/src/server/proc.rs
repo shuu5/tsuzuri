@@ -2,7 +2,7 @@
 //! 子は新しい process group に入れ、時間切れには孫まで group ごと止める。
 
 use std::ffi::OsStr;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -109,16 +109,56 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    run_with(program, args, cwd, None, timeout)
+}
+
+/// `run` と同じ撃ちで、標準入力に `input` の byte を渡す（別の thread で書き切って閉じる・子が読まずに終われば書きの落ちは捨てる）。
+pub fn run_input<I, S>(
+    program: &OsStr,
+    args: I,
+    cwd: &Path,
+    input: &[u8],
+    timeout: Duration,
+) -> Result<Vec<u8>, Failed>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_with(program, args, cwd, Some(input), timeout)
+}
+
+/// `run` と `run_input` の共通の撃ち（`input` が None なら標準入力は空）。
+fn run_with<I, S>(
+    program: &OsStr,
+    args: I,
+    cwd: &Path,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<Vec<u8>, Failed>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let deadline = Instant::now() + timeout;
     let mut child = Command::new(program)
         .args(args)
         .current_dir(cwd)
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
         .spawn()
         .map_err(|_| Failed::Unstartable)?;
+    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+        let input = input.to_vec();
+        thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        });
+    }
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         stop(child);
         return Err(Failed::Unstartable);

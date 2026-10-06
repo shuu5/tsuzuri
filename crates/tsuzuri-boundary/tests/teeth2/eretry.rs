@@ -3,7 +3,8 @@
 //! （server の台帳の見張りの読みが偽の bd の回を数えに混ぜないように）。
 //! 偽の bd は作業場の bd.fails の数の回までは rc 1 で落ち、その後は out.json を出す script。
 //! 偽の bdw と偽の器は回ごとに argv を記録し、argv を書き終えたら回ごとの done の file を置く script で、
-//! 偽の器は門の file gate を 9 秒まで待ってから終わりの印 scribe2.end を置く。
+//! 偽の器は答えの口の回（引数の頭が seat と ruling と answer）に標準入力を記録して裁定 id を出し、
+//! 配達の回（引数の頭が seat と deliver）に門の file gate を 9 秒まで待ってから終わりの印 scribe2.end を置く。
 //! log の歯だけ tz を撃つ（127.0.0.1 の空き port・tz を止めてから標準 error を読む）。
 #![cfg(test)]
 
@@ -19,11 +20,10 @@ use crate::common::{TARGET, bead, script};
 use tsuzuri_boundary::server::batch;
 use tsuzuri_boundary::server::ledger::Source;
 use tsuzuri_boundary::server::ruling::{
-    self, Delivery, Outcome, PATH, READ_TRIES, REFUSED_LOG, RETRY_STEP, Revoked, WRITE_TIMEOUT,
-    Writer,
+    self, Delivery, Outcome, PATH, READ_TRIES, REFUSED_LOG, RETRY_STEP, Revoked, Vessel,
+    WRITE_TIMEOUT, Writer,
 };
 use tsuzuri_contract::board::Reading;
-use tsuzuri_contract::ledger::LedgerWrite;
 use tsuzuri_contract::surface::{BatchItem, BatchRequest, RevokeRequest, RulingId, RulingRequest};
 use tsuzuri_contract::wire;
 
@@ -79,6 +79,8 @@ struct Place {
     files: PathBuf,
     state: PathBuf,
     log: PathBuf,
+    /// 偽の器の program。
+    vessel: PathBuf,
 }
 
 impl Place {
@@ -115,17 +117,26 @@ impl Place {
             &log,
             "scribe2",
             &format!(
-                "i=0\n\
-                 while [ ! -e '{r}/gate' ] && [ \"$i\" -lt 90 ]; do sleep 0.1; i=$((i + 1)); done\n\
-                 : > '{r}/scribe2.end'"
+                "if [ \"$1 $2 $3\" = 'seat ruling answer' ]; then\n\
+                   cat > '{log}/scribe2.'\"$n\"'.stdin'\n\
+                   if [ -e '{log}/junk' ]; then echo not-an-id; else echo \"$9:{MINUTE}-1\"; fi\n\
+                 fi\n\
+                 if [ \"$1 $2\" = 'seat deliver' ]; then\n\
+                   i=0\n\
+                   while [ ! -e '{r}/gate' ] && [ \"$i\" -lt 90 ]; do sleep 0.1; i=$((i + 1)); done\n\
+                   : > '{r}/scribe2.end'\n\
+                 fi",
+                log = log.display()
             ),
         );
+        let vessel = root.join("scribe2");
         Place {
             root,
             repo,
             files,
             state,
             log,
+            vessel,
         }
     }
 
@@ -176,6 +187,32 @@ impl Place {
 
     fn source(&self) -> Source {
         Source::new(self.repo.clone(), self.root.join("bd"))
+    }
+
+    /// 答えの口の撃ち先（偽の器の program と置き場）。
+    fn vessel(&self) -> Vessel<'_> {
+        (self.vessel.as_os_str(), Some(self.state.as_path()))
+    }
+
+    /// 偽の器の答えの口の 1 回の argv（束の id が在れば末に旗つき）。
+    fn answer_words(&self, question: &str, batch: Option<&str>) -> Vec<String> {
+        let mut words: Vec<String> = [
+            "seat",
+            "ruling",
+            "answer",
+            "--repo",
+            &self.repo.display().to_string(),
+            "--state-dir",
+            &self.state.display().to_string(),
+            "--question",
+            question,
+        ]
+        .map(str::to_string)
+        .to_vec();
+        if let Some(batch) = batch {
+            words.extend(["--batch".to_string(), batch.to_string()]);
+        }
+        words
     }
 
     /// 配達の先つきの Writer（`deliver` が false なら配達の先は無し）。
@@ -237,7 +274,7 @@ fn eretry_read_retries_then_writes() {
     assert_eq!(RETRY_STEP, Duration::from_secs(1));
     assert_eq!(WRITE_TIMEOUT, Duration::from_secs(120));
 
-    // 2 回落ちて 3 回目に読めれば記録し、追記と閉じるを 1 回ずつ撃つ。
+    // 2 回落ちて 3 回目に読めれば記録し、器の答えの口を 1 回だけ撃つ（偽の bdw は撃たない）。
     let ledger = fixture(ASK);
     let place = Place::new("accept", &ledger);
     place.bd_fails(2);
@@ -245,6 +282,7 @@ fn eretry_read_retries_then_writes() {
         &ruling_request(&ledger, "はい"),
         &place.source(),
         &place.writer(false),
+        place.vessel(),
         NOW,
     );
     let id = rid(&format!("{OPEN}:{MINUTE}-1"));
@@ -253,28 +291,23 @@ fn eretry_read_retries_then_writes() {
     };
     assert_eq!(response.ruling, id);
     assert_eq!(place.bd_count(), 3, "偽の bd は 3 回");
-    let append = LedgerWrite::AppendNotes {
-        id: bead(OPEN),
-        line: ruling::line(&id, &bead(OPEN), "はい"),
-    };
-    let close = LedgerWrite::CloseItem {
-        id: bead(OPEN),
-        reason: format!("裁定 {id}"),
-    };
-    assert_eq!(place.argvs("bdw"), [append.argv(), close.argv()]);
+    assert!(place.argvs("bdw").is_empty(), "偽の bdw は撃たれない");
+    assert_eq!(place.argvs("scribe2"), [place.answer_words(OPEN, None)]);
 
-    // 3 回とも落ちれば LedgerUnknown で、書きを撃たない。
+    // 3 回とも落ちれば LedgerUnknown で、書きも器も撃たない。
     let place = Place::new("accept-down", &ledger);
     place.bd_fails(3);
     let got = ruling::accept(
         &ruling_request(&ledger, "はい"),
         &place.source(),
         &place.writer(false),
+        place.vessel(),
         NOW,
     );
     assert_eq!(got, Outcome::LedgerUnknown);
     assert_eq!(place.bd_count(), 3, "偽の bd は 3 回");
     assert!(place.argvs("bdw").is_empty(), "読めないのに偽の bdw を撃つ");
+    assert!(place.argvs("scribe2").is_empty(), "読めないのに偽の器を撃つ");
     revoke_and_batch_retry(ledger);
 }
 
@@ -304,6 +337,7 @@ fn revoke_and_batch_retry(ledger: String) {
         &batch_request(&ledger),
         &place.source(),
         &place.writer(false),
+        place.vessel(),
         NOW,
     );
     assert!(matches!(got, batch::Outcome::Recorded(_)), "{got:?}");
@@ -320,25 +354,27 @@ fn eretry_deliver_after_reply() {
         &ruling_request(&ledger, "はい"),
         &place.source(),
         &place.writer(true),
+        place.vessel(),
         NOW,
     );
     let Outcome::Recorded(response) = &got else {
         panic!("記録しない: {got:?}");
     };
     assert!(!place.ended(), "偽の器が終わってから返す");
-    assert_eq!(place.argvs("bdw").len(), 2, "追記と閉じるだけ");
-    assert!(place.wait_done("scribe2", 1), "偽の器を撃たない");
+    assert!(place.argvs("bdw").is_empty(), "応答の時に偽の bdw を撃つ");
+    assert!(place.wait_done("scribe2", 2), "配達を撃たない");
     assert!(!place.ended(), "門の前に偽の器が終わる");
-    assert_eq!(place.argvs("bdw").len(), 2, "配達の前に印を置く");
+    assert!(place.argvs("bdw").is_empty(), "配達の前に印を置く");
     place.open_gate();
-    assert!(place.wait_done("bdw", 3), "門の後に印を置かない");
+    assert!(place.wait_done("bdw", 1), "門の後に印を置かない");
     let scribe2 = place.argvs("scribe2");
-    assert_eq!(scribe2.len(), 1, "{scribe2:?}");
+    assert_eq!(scribe2.len(), 2, "答えと配達: {scribe2:?}");
+    assert_eq!(scribe2[0], place.answer_words(OPEN, None));
     assert_eq!(
-        scribe2[0].last().map(String::as_str),
+        scribe2[1].last().map(String::as_str),
         Some(response.ruling.as_str())
     );
-    assert_eq!(place.argvs("bdw").len(), 3);
+    assert_eq!(place.argvs("bdw").len(), 1, "印の 1 回だけ");
     deliver_batch_after_reply();
 }
 
@@ -351,25 +387,32 @@ fn deliver_batch_after_reply() {
         &batch_request(&ledger),
         &place.source(),
         &place.writer(true),
+        place.vessel(),
         NOW,
     );
     let batch::Outcome::Recorded(response) = &got else {
         panic!("記録しない: {got:?}");
     };
     assert!(!place.ended(), "偽の器が終わってから返す");
-    assert_eq!(place.argvs("bdw").len(), 4, "行ごとの追記と閉じるだけ");
-    assert!(place.wait_done("scribe2", 1), "偽の器を撃たない");
+    assert!(place.argvs("bdw").is_empty(), "応答の時に偽の bdw を撃つ");
+    assert!(place.wait_done("scribe2", 3), "配達を撃たない");
     assert!(!place.ended(), "門の前に偽の器が終わる");
-    assert_eq!(place.argvs("bdw").len(), 4, "配達の前に印を置く");
+    assert!(place.argvs("bdw").is_empty(), "配達の前に印を置く");
     place.open_gate();
-    assert!(place.wait_done("bdw", 6), "門の後に印を置かない");
+    assert!(place.wait_done("bdw", 2), "門の後に印を置かない");
     let scribe2 = place.argvs("scribe2");
-    assert_eq!(scribe2.len(), 1, "{scribe2:?}");
+    assert_eq!(scribe2.len(), 3, "行ごとの答えと配達: {scribe2:?}");
+    for (row, question) in ROWS.iter().enumerate() {
+        assert_eq!(
+            scribe2[row],
+            place.answer_words(question, Some(response.batch.as_str()))
+        );
+    }
     assert_eq!(
-        scribe2[0].last().map(String::as_str),
+        scribe2[2].last().map(String::as_str),
         Some(response.batch.as_str())
     );
-    assert_eq!(place.argvs("bdw").len(), 6);
+    assert_eq!(place.argvs("bdw").len(), 2, "印は行ごとの 2 回");
 }
 
 /// 要求を 1 つ撃ち、接続が閉じるまで応答を読む（状態の code と本文）。

@@ -14,7 +14,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::common::{now, script, tree};
-use tsuzuri_boundary::server::ledger::epoch_secs;
 use tsuzuri_boundary::server::{Config, Server, ledger, ruling};
 use tsuzuri_contract::board::Reading;
 use tsuzuri_contract::ledger::{BDW, BeadId, LedgerWrite};
@@ -55,6 +54,31 @@ fn recorder(path: &Path, log: &Path, name: &str) {
     );
 }
 
+/// 偽の器の答えの口が出す分の字（裁定 id は問い id の後にこの字を足す）。
+const VESSEL_TAIL: &str = ":20260928T0441Z-1";
+
+/// `recorder` と同じ記録に加え、引数の頭の 3 語が seat と ruling と answer の回は標準入力を `<log>/<name>.<回>.stdin` に書き、
+/// `--question` の値（9 番目の引数）に `VESSEL_TAIL` を足した字を 1 行出す（`<log>/junk` が在れば字 not-an-id を出す）。
+fn vessel(path: &Path, log: &Path, name: &str) {
+    let log = log.display();
+    script(
+        path,
+        &format!(
+            "n=$(( $(cat '{log}/{name}.count' 2>/dev/null || echo 0) + 1 ))\n\
+             echo \"$n\" > '{log}/{name}.count'\n\
+             for a in \"$@\"; do printf '%s\\n' \"$a\"; done > '{log}/{name}.'\"$n\"'.args'\n\
+             pwd -P > '{log}/{name}.'\"$n\"'.cwd'\n\
+             answer=no\n\
+             if [ \"$1 $2 $3\" = 'seat ruling answer' ]; then answer=yes; cat > '{log}/{name}.'\"$n\"'.stdin'; fi\n\
+             if [ \"$n\" = \"$(cat '{log}/{name}.fail' 2>/dev/null)\" ]; then echo 落ちた >&2; exit 1; fi\n\
+             if [ \"$answer\" = yes ]; then\n\
+               if [ -e '{log}/junk' ]; then echo not-an-id; else echo \"$9{VESSEL_TAIL}\"; fi\n\
+             fi\n\
+             exit 0"
+        ),
+    );
+}
+
 /// 歯ごとの作業場（repo・面の file・state dir・偽の program・記録の置き場）。
 struct Place {
     root: PathBuf,
@@ -90,7 +114,7 @@ impl Place {
             &format!("exec cat '{}'", root.join("out.json").display()),
         );
         recorder(&root.join("bdw"), &log, "bdw");
-        recorder(&root.join("scribe2"), &log, "scribe2");
+        vessel(&root.join("scribe2"), &log, "scribe2");
         let place = Place {
             root,
             repo,
@@ -132,6 +156,16 @@ impl Place {
                 )
             })
             .collect()
+    }
+
+    /// 偽の器の `n` 回目（答えの回）の標準入力の byte。
+    fn stdin(&self, n: u32) -> Vec<u8> {
+        fs::read(self.log.join(format!("scribe2.{n}.stdin"))).expect("標準入力の記録")
+    }
+
+    /// 偽の器が字 not-an-id を出す回にする。
+    fn vessel_junk(&self) {
+        fs::write(self.log.join("junk"), "").expect("junk の印");
     }
 
     /// 偽の program の `n` 回目の cwd の記録が空でなくなるまで 10 秒まで待つ（配達は応答の後の thread）。
@@ -264,31 +298,6 @@ fn refused(reply: &Reply) -> Refusal {
         .reason
 }
 
-/// id の分（`<問いの id>:<分>-<数>` の分）を epoch 秒にする（歯の側で独立に読む）。
-fn minute_secs(minute: &str) -> u64 {
-    let b = minute.as_bytes();
-    assert!(
-        b.len() == 14 && b[8] == b'T' && b[13] == b'Z',
-        "分の形でない: {minute}"
-    );
-    let rfc = format!(
-        "{}-{}-{}T{}:{}:00Z",
-        &minute[0..4],
-        &minute[4..6],
-        &minute[6..8],
-        &minute[9..11],
-        &minute[11..13]
-    );
-    epoch_secs(&rfc).unwrap_or_else(|| panic!("分の形でない: {minute}"))
-}
-
-/// id を（問いの id・分・数）に分ける。
-fn split_id(id: &str) -> (&str, &str, u32) {
-    let (question, rest) = id.split_once(':').expect("id の「:」");
-    let (minute, n) = rest.rsplit_once('-').expect("id の「-」");
-    (question, minute, n.parse().expect("数"))
-}
-
 #[test]
 fn server_ask_questions_route_matches_core() {
     let place = Place::new("list");
@@ -354,57 +363,48 @@ fn server_ask_ruling_writes_twice() {
         got.recorded_at
     );
     let id = got.ruling.as_str();
-    let (question, minute, n) = split_id(id);
-    assert_eq!((question, n), (WITH_LINES, 1), "{id}");
-    let at = minute_secs(minute);
-    assert!(
-        at <= got.recorded_at && got.recorded_at < at + 60,
-        "分は受付の時刻の UTC の分: {id} {}",
-        got.recorded_at
+    assert_eq!(id, format!("{WITH_LINES}{VESSEL_TAIL}"), "裁定 id は偽の器の出した字");
+
+    place.wait("bdw", 1);
+    let vessel = place.calls("scribe2");
+    assert_eq!(vessel.len(), 2, "偽の器は答えと配達の 2 回: {vessel:?}");
+    let (repo, state) = (
+        place.repo.display().to_string(),
+        place.state.display().to_string(),
     );
-
-    place.wait("bdw", 3);
-    let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 3, "偽の bdw は 3 回だけ（追記・閉じる・印）: {calls:?}");
+    assert_eq!(
+        vessel[0].0,
+        [
+            "seat",
+            "ruling",
+            "answer",
+            "--repo",
+            repo.as_str(),
+            "--state-dir",
+            state.as_str(),
+            "--question",
+            WITH_LINES
+        ],
+        "1 回目は器の答えの口の 9 語"
+    );
+    assert_eq!(place.stdin(1), "減らしてよい".as_bytes(), "標準入力は逐語");
+    assert_eq!(vessel[0].1, place.repo_real(), "cwd は repo の置き場");
+    let bdw = place.calls("bdw");
+    assert_eq!(bdw.len(), 1, "偽の bdw は配達の印の 1 回だけ: {bdw:?}");
     let q = BeadId::new(WITH_LINES).expect("bead id");
-    let append = LedgerWrite::AppendNotes {
-        id: q.clone(),
-        line: format!("裁定 id = {id}・問い = {WITH_LINES}・逐語 = 減らしてよい"),
-    };
-    let close = LedgerWrite::CloseItem {
-        id: q,
-        reason: format!("裁定 {id}"),
-    };
-    assert_eq!(calls[0].0, append.argv(), "1 回目は notes への追記");
-    assert_eq!(calls[1].0, close.argv(), "2 回目は問いを閉じる");
-    for (_, cwd) in &calls {
-        assert_eq!(cwd, &place.repo_real(), "cwd は repo の置き場");
-    }
+    let marks: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
+        .iter()
+        .map(|m| {
+            LedgerWrite::AppendNotes {
+                id: q.clone(),
+                line: mark_line(&got.ruling, Route::Deliver, m),
+            }
+            .argv()
+        })
+        .collect();
+    assert!(marks.contains(&bdw[0].0), "配達の口の印: {:?}", bdw[0].0);
+    assert_eq!(bdw[0].1, place.repo_real(), "cwd は repo の置き場");
     assert_eq!(BDW, "bdw", "program の名の既定");
-}
-
-#[test]
-fn server_ask_id_counts_up_in_same_minute() {
-    for _ in 0..3 {
-        let place = Place::new("count");
-        let minute = ruling::minute(now());
-        let taken = format!(
-            "見本の notes の 1 行\\n裁定 id = {WITH_LINES}:{minute}-1・問い = {WITH_LINES}・逐語 = 前\\n裁定 id = {WITH_LINES}:{minute}-2・問い = {WITH_LINES}・逐語 = 前の前"
-        );
-        let ledger = read_fixture().replace("見本の notes の 1 行", &taken);
-        assert_ne!(ledger, read_fixture(), "notes を書き換えた");
-        place.bd_returns(&ledger);
-        let addr = place.serve();
-        let digest = card(&ledger, WITH_LINES).digest;
-        let got = recorded(&post(addr, WITH_LINES, &digest, "はい"));
-        let (_, got_minute, n) = split_id(got.ruling.as_str());
-        if got_minute != minute {
-            continue; // 分を跨いだ（撃ち直す）。
-        }
-        assert_eq!(n, 3, "同じ分の id の定型行が 2 つ在れば 3: {}", got.ruling);
-        return;
-    }
-    panic!("3 回とも分を跨いだ");
 }
 
 #[test]
@@ -465,40 +465,24 @@ fn server_ask_refusals_write_nothing() {
 #[test]
 fn server_ask_write_failures_are_502() {
     let digest = card(&read_fixture(), WITH_LINES).digest;
-    // 1 回目が落ちれば 2 回目を撃たない。
+    // 偽の器の 1 回目が落ちれば 502 と ruling-answer で、配達も印も無い。
     let place = Place::new("fail-1");
-    place.fail_at("bdw", 1);
+    place.fail_at("scribe2", 1);
     let addr = place.serve();
     let reply = post(addr, WITH_LINES, &digest, "はい");
     assert_eq!(reply.status, 502, "{}", reply.body);
-    assert_eq!(place.calls("bdw").len(), 1);
-    assert!(
-        place.calls("scribe2").is_empty(),
-        "落ちた書きの後に配達する"
-    );
-    // 2 回目が落ちれば 502 で、応答の字に発行した id。
-    let place = Place::new("fail-2");
-    place.fail_at("bdw", 2);
+    assert!(reply.body.contains("ruling-answer"), "{}", reply.body);
+    assert_eq!(place.calls("scribe2").len(), 1, "落ちた答えの後に配達する");
+    assert!(place.calls("bdw").is_empty(), "落ちた答えの後に偽の bdw を撃つ");
+    // 偽の器が字 not-an-id を出せば 500 と ruling-id-shape で、配達も印も無い。
+    let place = Place::new("junk");
+    place.vessel_junk();
     let addr = place.serve();
     let reply = post(addr, WITH_LINES, &digest, "はい");
-    assert_eq!(reply.status, 502, "{}", reply.body);
-    let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 2);
-    let line = calls[0].0.last().expect("追記の行");
-    let id = line
-        .strip_prefix("--append-notes=裁定 id = ")
-        .and_then(|r| r.split('・').next())
-        .unwrap_or_else(|| panic!("追記の行の形でない: {line}"));
-    assert!(id.starts_with("fx-ask.3:"), "{id}");
-    assert!(
-        reply.body.contains(id),
-        "応答の字に id が無い: {}",
-        reply.body
-    );
-    assert!(
-        place.calls("scribe2").is_empty(),
-        "落ちた書きの後に配達する"
-    );
+    assert_eq!(reply.status, 500, "{}", reply.body);
+    assert!(reply.body.contains("ruling-id-shape"), "{}", reply.body);
+    assert_eq!(place.calls("scribe2").len(), 1, "形でない id の後に配達する");
+    assert!(place.calls("bdw").is_empty(), "形でない id の後に偽の bdw を撃つ");
 }
 
 #[test]
@@ -506,27 +490,26 @@ fn server_ask_verbatim_is_one_line() {
     let place = Place::new("escape");
     let addr = place.serve();
     let digest = card(&read_fixture(), WITH_LINES).digest;
-    let got = recorded(&post(
-        addr,
-        WITH_LINES,
-        &digest,
-        "一行目\n二行目 \\ 逆斜線\n",
-    ));
-    place.wait("bdw", 3);
-    let calls = place.calls("bdw");
-    assert_eq!(calls.len(), 3);
+    let verbatim = "一行目\n二行目 \\ 逆斜線\n";
+    recorded(&post(addr, WITH_LINES, &digest, verbatim));
+    place.wait("bdw", 1);
+    let calls = place.calls("scribe2");
+    assert_eq!(calls.len(), 2);
     assert_eq!(
         calls[0].0.len(),
-        3,
+        9,
+        "argv の字に逐語が混ざる: {:?}",
+        calls[0].0
+    );
+    assert!(
+        calls[0].0.iter().all(|word| !word.contains('\n')),
         "argv の字に改行が残る: {:?}",
         calls[0].0
     );
     assert_eq!(
-        calls[0].0[2],
-        format!(
-            "--append-notes=裁定 id = {}・問い = {WITH_LINES}・逐語 = 一行目\\n二行目 \\\\ 逆斜線\\n",
-            got.ruling
-        )
+        place.stdin(1),
+        verbatim.as_bytes(),
+        "標準入力の byte は要求の逐語"
     );
 }
 
@@ -569,6 +552,7 @@ fn server_ask_guards_write_nothing() {
     // 読めない本文は 400。
     assert_eq!(send(addr, "POST", ruling::PATH, "", "{").status, 400);
     assert!(place.calls("bdw").is_empty(), "守りで偽の bdw を撃つ");
+    assert!(place.calls("scribe2").is_empty(), "守りで偽の器を撃つ");
     // 同じ Origin は通る。
     let reply = send(
         addr,
@@ -578,8 +562,9 @@ fn server_ask_guards_write_nothing() {
         &body,
     );
     recorded(&reply);
-    place.wait("bdw", 3);
-    assert_eq!(place.calls("bdw").len(), 3);
+    place.wait("bdw", 1);
+    assert_eq!(place.calls("scribe2").len(), 2, "答えと配達");
+    assert_eq!(place.calls("bdw").len(), 1, "配達の印だけ");
 }
 
 #[test]
@@ -590,12 +575,12 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
     let from = now();
     let got = recorded(&post(addr, WITH_LINES, &digest, "はい"));
     let to = now();
-    place.wait("bdw", 3);
+    place.wait("bdw", 1);
     let calls = place.calls("scribe2");
-    assert_eq!(calls.len(), 1, "偽の器は 1 回: {calls:?}");
+    assert_eq!(calls.len(), 2, "偽の器は答えと配達の 2 回: {calls:?}");
     let state = place.state.display().to_string();
     assert_eq!(
-        calls[0].0,
+        calls[1].0,
         [
             "seat",
             "deliver",
@@ -608,7 +593,7 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
         ]
     );
     let bdw = place.calls("bdw");
-    assert_eq!(bdw.len(), 3, "配達は書きの後・印は配達の後: {bdw:?}");
+    assert_eq!(bdw.len(), 1, "印は配達の後の 1 回だけ: {bdw:?}");
     let marks: Vec<Vec<String>> = [ruling::minute(from), ruling::minute(to)]
         .iter()
         .map(|m| {
@@ -620,21 +605,25 @@ fn server_ask_delivers_only_with_seat_and_state_dir() {
         })
         .collect();
     assert!(
-        marks.contains(&bdw[2].0),
-        "3 回目は配達の口の印: {:?}",
-        bdw[2].0
+        marks.contains(&bdw[0].0),
+        "1 回目は配達の口の印: {:?}",
+        bdw[0].0
     );
-    // 片方でも無ければ撃たない。
-    for (name, seat, state_dir) in [
-        ("no-seat", None, true),
-        ("no-state", Some("tsuzuri:0.1"), false),
-        ("neither", None, false),
-    ] {
+    // 席の target だけ無ければ答えは撃つが配達も印も無い。
+    let place = Place::new("no-seat");
+    let addr = place.serve_with(&place.config(None, true));
+    recorded(&post(addr, WITH_LINES, &digest, "はい"));
+    assert_eq!(place.calls("scribe2").len(), 1, "no-seat: 答えだけ");
+    assert!(place.calls("bdw").is_empty(), "no-seat: 偽の bdw を撃つ");
+    // state dir が無ければ答えの口を撃てず 503 で、何も撃たない。
+    for (name, seat) in [("no-state", Some("tsuzuri:0.1")), ("neither", None)] {
         let place = Place::new(name);
-        let addr = place.serve_with(&place.config(seat, state_dir));
-        recorded(&post(addr, WITH_LINES, &digest, "はい"));
-        assert_eq!(place.calls("bdw").len(), 2, "{name}");
+        let addr = place.serve_with(&place.config(seat, false));
+        let reply = post(addr, WITH_LINES, &digest, "はい");
+        assert_eq!(reply.status, 503, "{name}: {}", reply.body);
+        assert!(reply.body.contains("ruling-state-dir"), "{}", reply.body);
         assert!(place.calls("scribe2").is_empty(), "{name}: 偽の器を撃つ");
+        assert!(place.calls("bdw").is_empty(), "{name}: 偽の bdw を撃つ");
     }
     assert_eq!(ruling::SCRIBE2, "scribe2", "program の名の既定");
 }
@@ -703,7 +692,7 @@ fn wait_line(rx: &mpsc::Receiver<String>, word: &str, out: &mut String) {
 #[test]
 fn server_ask_failed_delivery_stays_200_with_stderr_line() {
     let place = Place::new("deliver-fail");
-    place.fail_at("scribe2", 1);
+    place.fail_at("scribe2", 2);
     let digest = card(&read_fixture(), WITH_LINES).digest;
     let (mut child, addr, err) = spawn_tz(
         &place,
@@ -727,7 +716,7 @@ fn server_ask_failed_delivery_stays_200_with_stderr_line() {
     rest.extend(rx.iter());
     let reply = reply.expect("応答を読めない");
     let got = recorded(&reply);
-    assert_eq!(place.calls("scribe2").len(), 1);
+    assert_eq!(place.calls("scribe2").len(), 2, "答えと落ちた配達");
     let lines: Vec<&str> = rest
         .lines()
         .filter(|l| l.contains(got.ruling.as_str()))
@@ -735,7 +724,7 @@ fn server_ask_failed_delivery_stays_200_with_stderr_line() {
     assert_eq!(lines.len(), 1, "受けない配達の行が 1 行でない: {rest}");
     assert!(lines[0].contains(ruling::NOT_TAKEN), "{rest}");
     assert!(!rest.contains("配達が落ちた"), "{rest}");
-    assert_eq!(place.calls("bdw").len(), 2, "受けなければ印を置かない");
+    assert!(place.calls("bdw").is_empty(), "受けなければ印を置かない");
 
     // 空の値は使い方の誤りで rc 1。
     for bad in ["--bdw=", "--seat=", "--scribe2="] {
@@ -764,9 +753,9 @@ fn server_ask_repo_and_state_bytes_unchanged() {
     );
     assert_eq!(post(addr, CLOSED, &digest, "はい").status, 404);
     recorded(&post(addr, WITH_LINES, &digest, "はい"));
-    place.wait("bdw", 3);
-    assert_eq!(place.calls("bdw").len(), 3);
-    assert_eq!(place.calls("scribe2").len(), 1);
+    place.wait("bdw", 1);
+    assert_eq!(place.calls("bdw").len(), 1);
+    assert_eq!(place.calls("scribe2").len(), 2);
     assert!(
         before == (tree(&place.repo), tree(&place.state)),
         "受付と一覧の後に repo か state dir の byte が変わる"

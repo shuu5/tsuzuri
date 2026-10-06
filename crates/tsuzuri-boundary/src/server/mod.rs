@@ -64,7 +64,7 @@ mod routes {
     include!(concat!(env!("OUT_DIR"), "/routes.rs"));
 }
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -166,6 +166,10 @@ struct Shared {
     files: PathBuf,
     hub: Arc<Hub>,
     writer: Writer,
+    /// 器の答えの口の program（`Config::scribe2`）。
+    scribe2: OsString,
+    /// 器の答えの口の置き場（`Config::state_dir`・無ければ答えの口は 503）。
+    state_dir: Option<PathBuf>,
     seats: Seats,
     /// account board の読み（state dir が無ければ None）。
     acct: Option<Arc<Acct>>,
@@ -214,10 +218,7 @@ impl Server {
     pub fn bind_with(config: &Config, git: &OsStr) -> Result<Server, StartError> {
         let files = Server::checked_files(config)?;
         let listener = TcpListener::bind(config.bind).map_err(StartError::Io)?;
-        let form = match (&config.seat, &config.state_dir) {
-            (Some(_), Some(state_dir)) => Some(Form::new(&config.scribe2, state_dir, &config.repo)),
-            _ => None,
-        };
+        let form = Server::form_of(config);
         let sources = Sources {
             ledger: Source::new(&config.repo, &config.bd)
                 .watched()
@@ -256,6 +257,8 @@ impl Server {
                 files,
                 hub,
                 writer,
+                scribe2: config.scribe2.clone(),
+                state_dir: config.state_dir.clone(),
                 seats,
                 acct,
                 acct_marks,
@@ -272,6 +275,14 @@ impl Server {
                 host,
             }),
         })
+    }
+
+    /// 席の target と state dir の両方が在るときだけ、器の doctor の台帳の形の撃ち（`form`）を作る。
+    fn form_of(config: &Config) -> Option<Form> {
+        match (&config.seat, &config.state_dir) {
+            (Some(_), Some(state_dir)) => Some(Form::new(&config.scribe2, state_dir, &config.repo)),
+            _ => None,
+        }
     }
 
     /// bind 先と repo と面の file の置き場を確かめ、面の file の置き場の正しい path を返す。
