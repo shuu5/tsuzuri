@@ -6,8 +6,10 @@
 //! 3. bd か bdw の create の全部の metadata の短い題を先に見て、断れば子 process を撃たずに deny を書いて 0（規則の行 R-39）。
 //!    続けて契約の書き（bd か bdw の create か update で、欄 acceptance が [[contract]] の行を持つか、契約の bead の本文だけの直し）を判じ、
 //!    本文の file の散文の門（folio の入口の check --prose）で止める（判断の記録 ADR-72 の決定 (2)）。台帳は本文だけの直しが在る時だけ 1 度読む。
-//! 4. 下書きが無ければ子 process を撃たずに 0。在れば台帳を bd で、設計の索引を設計の道具で並べて読み、グラフを 1 度だけ組んで
-//!    判じて 0（問いの下書きが在れば問いの門の答えが先で、問いの門が通す時に memo の門の答えを書く）。
+//! 4. 下書きも計画の memo を増やす書き（bd か bdw の create・reopen・update ほか・規則の行 R-45 の上限）も無ければ子 process を撃たずに 0。
+//!    在れば台帳を bd で、設計の索引を設計の道具で並べて読み、グラフを 1 度だけ組んで判じて 0
+//!    （計画の memo の上限の門の答えが先で、次に問いの門の答え、問いの門が通す時に memo の門の答えを書く。
+//!    上限は --repo の下の設計文書の dir の rules.yaml の字から読み、読めなければ上限の門は まだ分からない）。
 //!    memo の下書きは --body-file の file を payload の cwd（無ければ --repo）から読んで本文を足し、本文が code の語を持つ時だけ
 //!    code の層（git ls-files と ast-grep の scan）を 1 度組んで、台帳の memo の字と共に判じの材料にする。
 //!
@@ -22,6 +24,7 @@ use tsuzuri_core::gate::{self, Gate, Why};
 use tsuzuri_core::graph::code::{self as layer, CodeGraph};
 use tsuzuri_core::graph::{Graph, Inputs, build};
 use tsuzuri_core::memo_gate::{self, MemoDraft, MemoGate, MemoWhy, Seen};
+use tsuzuri_core::plan_cap;
 
 use crate::cli::code;
 use crate::out::emit_err;
@@ -33,6 +36,9 @@ pub const USAGE: &str =
 
 /// 使い方の誤り（下書きの無い呼び出しだけ）。
 const FAIL: u8 = 1;
+
+/// 計画の memo の上限の行を読む規則の表の file 名（設計文書の dir の下）。
+const RULES_FILE: &str = "rules.yaml";
 
 /// 読んだ引数（repo の置き場・台帳の読みの program・設計の索引の読みの program）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,8 +162,9 @@ fn contract_answer(args: &Args, payload: &str) -> Option<String> {
     contract_gate::output(&contract_gate::judge(&writes, fire, &ledger))
 }
 
-/// 答えの字（短い題の断りが先・次に契約の書きの断り・下書きが無ければ子 process を撃たずに None・通すときも None・
-/// 問いの下書きと memo の下書きが在れば台帳を 1 度だけ読んでグラフと memo の写しを組み、問いの門の答えを先に返す）。
+/// 答えの字（短い題の断りが先・次に契約の書きの断り・下書きも計画の memo を増やす書きも無ければ子 process を撃たずに None・
+/// 通すときも None・在れば台帳を 1 度だけ読んでグラフと memo の写しを組み、計画の memo の上限の門の答えを先に、
+/// 次に問いの門の答えを返す）。
 pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if let Some(why) = gate::short_gate(payload) {
         return Some(gate::short_output(why));
@@ -165,13 +172,21 @@ pub fn answer(args: &Args, payload: &str) -> Option<String> {
     if let Some(text) = contract_answer(args, payload) {
         return Some(text);
     }
+    let planned = plan_cap::opens(payload);
     let questions = gate::drafts(payload);
     let memos = memo_gate::drafts(payload);
-    if questions.is_empty() && memos.is_empty() {
+    if planned.is_empty() && questions.is_empty() && memos.is_empty() {
         return None;
     }
     let (ledger, design) = sources(args);
     let graph = graph_from(ledger.as_deref(), design.as_deref());
+    if !planned.is_empty() {
+        let rules = std::fs::read_to_string(args.repo.join(DESIGN_DIR).join(RULES_FILE));
+        let cap = rules.map_err(|e| e.to_string()).and_then(|t| plan_cap::cap(&t));
+        if let Some(text) = plan_cap::output(&plan_cap::judge(&planned, &graph, cap.ok())) {
+            return Some(text);
+        }
+    }
     if let Some(text) = gate::output(&gate::judge(&questions, &graph)) {
         return Some(text);
     }

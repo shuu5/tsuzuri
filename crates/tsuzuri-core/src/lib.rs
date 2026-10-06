@@ -6,6 +6,7 @@
 //! 配達済みの印と未配達の裁定と停止の hook の入出力の JSON（`delivery`）。
 //! 問いの起票の門の下書きの読みと判じと答えの JSON（`gate`）。
 //! memo の起票の門の下書きの読みと判じと答えの JSON（`memo_gate`）。
+//! 計画の memo の上限の門の書きの読みと判じと答えの JSON（`plan_cap`）。
 //! 器の局面の出力の読み（`case`）。
 //! 相談の窓の所見の検めと台帳の行と数えと起動の組み（`consult`）。
 //! 席が起こす係の起こしの門と結びの口の判じと係の札（`agent`）。
@@ -25,5 +26,6 @@ pub mod ledger;
 pub mod memo_gate;
 pub mod next_step;
 pub mod pipeline;
+pub mod plan_cap;
 pub mod question;
 pub mod seat;

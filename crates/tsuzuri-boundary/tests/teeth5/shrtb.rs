@@ -87,7 +87,7 @@ fn shrtb_deny_without_short() {
 fn shrtb_pass_with_short() {
     let root = place("pass");
     let created = format!(
-        "bdw create --parent=fx-q --metadata='{{\"short\":\"{}\"}}' 門の歯のメモ",
+        "bdw create --parent=fx-q --no-inherit-labels --metadata='{{\"short\":\"{}\"}}' 門の歯のメモ",
         "短".repeat(20)
     );
     assert_eq!(gate(&root, &created), (Some(0), String::new(), 0));
