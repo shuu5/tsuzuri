@@ -6,6 +6,9 @@
 use super::*;
 use super::intake::{lens_finding, review_has, review_pairs, reviewed_detail, teeth_doc, TEETH_FILES};
 
+/// 欄 `patch` の差が替える定義の項目の歯（`pipe index show --row`）。
+mod vpdefs;
+
 // ───── 契約の審査の段（`s2-07l.241`・設計 contract-source.md §4・SRS FR49 / FR9 / AC22・接頭辞 `pipe_review_`） ─────
 
 /// (a) 偽 lens が FAIL を返す契約は `Reviewed(FAIL)` で止まり **runner は 1 度も起きない**（構築点の呼出 0・AC22）:

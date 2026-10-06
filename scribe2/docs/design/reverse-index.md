@@ -103,6 +103,7 @@
 ## 6. 逆引きの表（項目・列・母集団）
 
 - 項目: 契約表の行ごとに、(i) touches の項目と、(ii) 行が実装する § の散文の名指しのうち型の path 形と fn 形（`unresolved_names` と同じ読み・下の行 c の形 4 の口の 1 本で読む）。項目ごとに symbol へ解き、解けない（0）・1 つ・複数（`ambiguous:<n>` と候補の定義の site）を名指す。`--item` は同じ解き方で名を 1 つ受ける。
+- 項目 (iii)（tsuzuri の行 v-patch-items）: 行が欄 `patch`（差の file）を持てば、ref の木の差の file を読み、差が替える base の定義も項目にする。`-` 行はその行の定義と行の occurrence を囲む定義を、どちらも無い行は行を含む定義の広がり（定義の行から、直に囲まれた occurrence の最後の行まで・最も狭い物）を、`+` 行の塊（`-` 行の直後でない物）は塊の前の行を含む定義の広がりを取る。局所・module・字だけの symbol は項目にせず、test の中の定義は数えるだけにする。項目の字は symbol の descriptor の名を `::` で結んだ字で、名でなく symbol で解く（同じ名の別の定義に解けない）。項目の前に 1 行 `patch=<path> defs=<n> tests=<n> unmapped=<n> fresh=<n> outside-index=<n>`（索引の外の file が在れば path を続ける・unmapped はどの定義にも引けない `-` 行の数・fresh は新しい file の数）を置き、差を読めない周は `patch=<path> unreadable` の 1 行だけを置く。項目は (i)・(ii) の後に差の行の順に並べる。設計者は行を置く前に、行と差の file を commit した木で `pipe index show --row` を撃てば、審査の材料 index.txt と同じ字を見る。受付の閉包・欄 `code-facts` の測り・起動の列は (iii) を読まない（表と材料の字だけ）。
 - 列（7 つ・どれも件数と site の列）:
   1. refs: 参照の site（定義を除く）。本体と test に分け、file の数を添える。
   2. callers: 関数の項目の、call の役の site を囲む定義。本体と test に分ける。

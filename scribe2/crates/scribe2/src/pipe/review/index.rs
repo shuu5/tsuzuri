@@ -6,6 +6,8 @@
 //! この 2 本を共用する（2 本目の数えを作らない）。項目は symbol へ a1 の問い（`flat::query`）で解き、解けない（0 件）・複数
 //! （`ambiguous:<n>`）を名指す。行の節の名指しは名指しの読み手の口 [`section_symbols`] の 1 本で読む（読み手を写さない）。
 //!
+//! 行を名指した周は、行の欄 `patch` の差が替える定義も項目にする（[`patch`]・§6 の項目 (iii)）。
+//!
 //! 契約表の行・表の検査の断り・審査の材料の型は組まない: 表の行は `read_table` の返りを field で読む。
 
 use super::base::ITEM_HEAD;
@@ -23,6 +25,8 @@ use crate::pipe::table::{design_docs, read_table};
 use crate::rules::manifest::Manifest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+mod patch;
 
 /// `{index}` の穴の見出し（項目を落とした周も見出しは残す）。
 const HEADING: &str = "\n## 逆引きの表（index.txt・器が外の道具の索引から組んだ事実）\n";
@@ -47,6 +51,8 @@ struct Line {
     section: String,
     /// 導出物の行の節の逐語（無ければ空）。
     goal: String,
+    /// 欄 `patch`（差の file の repo 相対 path・無い行は `None`）。
+    patch: Option<String>,
 }
 
 /// ref の木の契約表の全行（置き場の宣言と列挙の 1 関数 `design_docs` で絞った doc の行・doc の本文つき・既定は行 0 本＝rows 列が
@@ -75,7 +81,7 @@ impl Tables {
             })?;
             for row in found {
                 let pointer = format!("{doc}#{}", row.id);
-                lines.push(Line { pointer, doc: doc.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal });
+                lines.push(Line { pointer, doc: doc.clone(), touches: row.touches, write_set: row.write_set, section: row.section, goal: row.goal, patch: row.patch });
             }
             docs.insert(doc.clone(), shown);
         }
@@ -279,7 +285,23 @@ fn population(ctx: &Ctx<'_>, item: &str, symbols: &BTreeSet<&str>) -> Option<Pop
 
 /// 項目 1 つの 7 列の件数と site と write-set の外の印と母集団を数える（show・index.txt・行 e の測りが同じこの 1 本を撃つ）。
 pub(in crate::pipe) fn count(ctx: &Ctx<'_>, item: &str, scope: &Scope<'_>) -> Counted {
-    let (state, sites) = match query(ctx.rows, item) {
+    counted_of(ctx, item, query(ctx.rows, item), scope)
+}
+
+/// 差が替える定義 1 つを数える（項目の字は symbol の descriptor の名を `::` で結んだ字・名の問いの答えから同じ symbol だけを選ぶ）。
+fn count_changed(ctx: &Ctx<'_>, symbol: &str, scope: &Scope<'_>) -> Counted {
+    let item = descriptor_names(symbol).join("::");
+    let found = match query(ctx.rows, &item) {
+        Resolution::One(one) if one.symbol == symbol => Resolution::One(one),
+        Resolution::Ambiguous(many) => many.into_iter().find(|one| one.symbol == symbol).map_or(Resolution::Unresolved, Resolution::One),
+        Resolution::One(_) | Resolution::Unresolved => Resolution::Unresolved,
+    };
+    counted_of(ctx, &item, found, scope)
+}
+
+/// 解けた形 `found` から 7 列と母集団を数える（[`count`] と [`count_changed`] の共通の本体）。
+fn counted_of(ctx: &Ctx<'_>, item: &str, found: Resolution, scope: &Scope<'_>) -> Counted {
+    let (state, sites) = match found {
         Resolution::Unresolved => (State::Unresolved, Vec::new()),
         Resolution::One(found) => (State::One(found.symbol), found.sites),
         Resolution::Ambiguous(found) => {
@@ -412,8 +434,33 @@ pub(in crate::pipe) fn row_report(ctx: &Ctx<'_>, pointer: &str) -> Result<String
     let marks = (!line.write_set.is_empty()).then_some(line.write_set.as_slice());
     let scope = Scope { own: pointer, marks };
     let mut blocks: Vec<String> = marks.is_none().then(|| "write-set=derived".to_owned()).into_iter().collect();
+    let (head, symbols) = line.patch.as_deref().map(|path| patch_items(ctx, path)).unwrap_or_default();
+    blocks.extend((!head.is_empty()).then_some(head));
     blocks.extend(items.iter().map(|item| render(&count(ctx, item, &scope))));
+    blocks.extend(symbols.iter().map(|symbol| render(&count_changed(ctx, symbol, &scope))));
     Ok(blocks.join("\n"))
+}
+
+/// 欄 `patch` の差が替える定義（項目の前に置く 1 行と symbol の列・差を ref の木から読めないか見出しを読めない周は
+/// `patch=<path> unreadable` の 1 行と空の列）。1 行は `patch=<path> defs=<n> tests=<n> unmapped=<n> fresh=<n> outside-index=<n>` で、
+/// 索引の外の file が在れば path を `, ` で結んで続ける。
+fn patch_items(ctx: &Ctx<'_>, path: &str) -> (String, Vec<String>) {
+    let text = git_bytes(ctx.repo, &["show", &format!("{}:{path}", ctx.sha)]).and_then(|bytes| String::from_utf8(bytes).ok());
+    let Some(found) = text.as_deref().and_then(|diff| patch::changed(ctx.rows, diff)) else {
+        return (format!("patch={path} unreadable"), Vec::new());
+    };
+    let mut head = format!(
+        "patch={path} defs={} tests={} unmapped={} fresh={} outside-index={}",
+        found.defs.len(),
+        found.tests,
+        found.unmapped,
+        found.fresh,
+        found.outside.len()
+    );
+    if !found.outside.is_empty() {
+        head.push_str(&format!(" {}", found.outside.join(", ")));
+    }
+    (head, found.defs)
 }
 
 /// 索引の状態の語（ready と undeclared は語を持たない）。
