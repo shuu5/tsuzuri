@@ -14,7 +14,7 @@
 //! 8. repo の根の器の導出 file は EXTERNAL に在り、契約表の dir contracts/ の直下の .toml は契約の表の見出しだけを持つ
 //!    （器の vessel 宣言の key contract-tables の dir の項目は直下の .toml を全部契約表と読む）。
 //! 9. 前の置き場 contracts/schema.toml にだけ写しの在る根は読めず（床 2）、新しい置き場を名指す（前の置き場へ黙って倒れない）。
-//! 10. repo の根の vessel 宣言は key contract-tables で contracts/ を、key constitution で憲法の 2 file を名乗る（各 1 行・2 file は在る）。
+//! 10. repo の根の vessel 宣言は契約表の dir を名乗らず（字 contract-tables を含む行 0）、key constitution で憲法の 2 file を名乗る（1 行・2 file は在る）。
 #![cfg(test)]
 
 use crate::common::{copy_tree, repo_root};
@@ -336,16 +336,16 @@ fn fsch_copy_only_at_the_old_place_is_not_read() {
     assert_rc(&w.check(), 0, "folio check（新しい置き場にも写し）");
 }
 
-// ── 10. vessel 宣言は契約表の dir と憲法の 2 file を名乗る ──
+// ── 10. vessel 宣言は契約表の dir を名乗らず憲法の 2 file を名乗る ──
 
 #[test]
-fn fsch_vessel_declares_the_table_dir_and_the_constitution() {
+fn fsch_vessel_declares_no_table_dir_and_the_constitution() {
     let root = fs::canonicalize(repo_root().join("..")).unwrap();
     let decl = fs::read_to_string(root.join(".vessel.toml")).unwrap();
     let lines = |key: &str| -> Vec<&str> {
         decl.lines().filter(|l| l.split_once(" = ").is_some_and(|(k, _)| k == key)).collect()
     };
-    assert_eq!(lines("contract-tables"), ["contract-tables = [\"contracts/\"]"], "key contract-tables の行");
+    assert_eq!(decl.lines().filter(|l| l.contains("contract-tables")).count(), 0, "字 contract-tables を含む行（注の行も数える）");
     assert_eq!(
         lines("constitution"),
         ["constitution = [\"design-intent/constitution.yaml\", \"design-intent/rules.yaml\"]"],
