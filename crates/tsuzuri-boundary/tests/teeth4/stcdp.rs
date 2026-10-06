@@ -1027,7 +1027,8 @@ fn stage_cdp_no_script_port() {
     assert_eq!(
         names,
         [
-            "attach", "close", "events", "measure", "message", "open", "run", "steps", "url"
+            "attach", "card", "close", "events", "measure", "message", "moved", "open", "point",
+            "run", "steps", "url"
         ]
     );
 }

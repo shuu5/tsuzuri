@@ -109,6 +109,17 @@
     .map((e) => ({ label: words(e.textContent), now: e.matches(current), r: e.getBoundingClientRect() }))
     .map(({ label, now, r }) => ({ label, now, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))
     .filter(({ x, y }) => x >= 0 && y >= 0 && x < vw && y < vh);
+  // hover を測る札（行 g の hover の runner）: 吹き出しの口と card の外で、自分が pointerenter の受け手を持つ要素（attach の札）か、
+  // 節点の札の選びに当たり段のどれかが mouseover と mouseout を対で持つ要素（委ねの札）。矩形の中心と下端を文書の順に返す。
+  const hover_at = seen.filter((e) => !e.closest(mouth) && !e.closest(".hcard"))
+    .filter((e) => (getEventListeners(e).pointerenter || []).length > 0 || (
+      ((e.matches("a[href]") && e.getAttribute("href").includes("page=node")) || e.matches(".node")) &&
+      kinds(e).up.some((l) => l.split(" ").includes("mouseover") && l.split(" ").includes("mouseout"))))
+    .map((e) => {
+      const r = e.getBoundingClientRect();
+      return { name: name(e), x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), bottom: Math.ceil(r.bottom) };
+    })
+    .filter(({ x, y }) => x >= 0 && y >= 0 && x < vw && y < vh);
   const libraries = Array.from(document.querySelectorAll("script[src], link[rel~=stylesheet][href], link[rel~=preload][href], link[rel~=modulepreload][href]"))
     .map((e) => e.getAttribute("src") || e.getAttribute("href"));
   return JSON.stringify({
@@ -128,5 +139,6 @@
     text: document.body.innerText,
     libraries,
     switch_at,
+    hover_at,
   });
 })()

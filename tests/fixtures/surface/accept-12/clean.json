@@ -45,5 +45,6 @@
   "http://127.0.0.1:4801/tsuzuri_bg.wasm",
   "data:text/css,body{}"
  ],
- "switch_at": []
+ "switch_at": [],
+ "hover_at": []
 }

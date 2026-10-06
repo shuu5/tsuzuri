@@ -7,8 +7,10 @@
 //! 頁の口は CDP の Session が実装し、歯は偽の頁で撃つ。
 //! runner は頁を開いた後、面が描き、どの block も読みの印を出さなくなるまで上限つきで待ち、上限で残る画面を
 //! 違反 0 と数えずまだ分からないとし、今の選びの切り替えは押さない（憲法 P-7）。
+//! 広い幅の画面は札の 1 つへ指を動かして card の置き場と猶予を測る（`probe`・値は規則の行 R-20 の写し）。
 
 use std::fmt::Write;
+use std::time::Instant;
 
 use crate::stage::cdp::{Command, Session};
 use crate::stage::json::{items, member, unquote};
@@ -110,6 +112,10 @@ pub struct Facts {
     pub text: String,
     /// 読み先（script と stylesheet と preload）。
     pub libraries: Vec<String>,
+    /// hover の違反（`probe` が数える・字は `show <名>` `place <名> …` `grace <名>` `gone <名>`）。
+    pub hovered: Vec<String>,
+    /// hover の測りの report の字（測った・未測・違反でなく数えない）。
+    pub probes: Vec<String>,
 }
 
 /// 事実の JSON の object の字を読む。鍵の欠けと形の違いは鍵の名を含む Err・余る鍵は読み捨てる。
@@ -162,7 +168,62 @@ pub fn facts(text: &str) -> Result<Facts, String> {
         })?,
         text: string(text, "text")?,
         libraries: strings(text, "libraries")?,
+        hovered: Vec::new(),
+        probes: Vec::new(),
     })
+}
+
+/// hover を測る札 1 つ（札の名と、矩形の中心の x と y と下端・窓の中の px）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoverTarget {
+    pub name: String,
+    pub x: u32,
+    pub y: u32,
+    pub bottom: u32,
+}
+
+/// 出ている card の矩形と窓の大きさ（px）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct HoverCard {
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub height: f64,
+    pub vw: f64,
+    pub vh: f64,
+}
+
+/// 事実の字（測りの式の返した字）から鍵 hover_at の札の列を読む。鍵の欠けと形の違いは鍵の名を含む Err。
+pub fn hover_targets(text: &str) -> Result<Vec<HoverTarget>, String> {
+    objects(text, "hover_at", |o| {
+        let px = |key| member(o, key)?.parse::<u32>().ok();
+        Some(HoverTarget {
+            name: unquote(member(o, "name")?)?,
+            x: px("x")?,
+            y: px("y")?,
+            bottom: px("bottom")?,
+        })
+    })
+}
+
+/// card の式の返した字を読む（字 null は card が出ていないので None・形の違いは鍵の名を含む Err）。
+pub fn hover_card(text: &str) -> Result<Option<HoverCard>, String> {
+    if text.trim() == "null" {
+        return Ok(None);
+    }
+    let num = |key: &str| {
+        field(text, key)?
+            .parse::<f64>()
+            .map_err(|_| format!("card の鍵 {key} が数でない"))
+    };
+    Ok(Some(HoverCard {
+        left: num("left")?,
+        top: num("top")?,
+        width: num("width")?,
+        height: num("height")?,
+        vw: num("vw")?,
+        vh: num("vh")?,
+    }))
 }
 
 /// 外した置き場の種類（台帳の字の印・表の行を開いた中の語と値の対・描かれない要素・report の字は SKIP_WORDS の同じ順）。
@@ -256,7 +317,9 @@ pub fn count(facts: &Facts, vocab: &str) -> [usize; 12] {
         facts.overflow.len(),
         facts.overlap.len(),
         usize::from(facts.hscroll > 0),
-        facts.nocard.len() + facts.reach.iter().filter(|r| !r.has_card()).count(),
+        facts.nocard.len()
+            + facts.reach.iter().filter(|r| !r.has_card()).count()
+            + facts.hovered.len(),
         facts
             .headings
             .iter()
@@ -304,6 +367,7 @@ fn found(facts: &Facts, vocab: &str) -> [Vec<String>; 12] {
             .filter(|r| !r.has_card())
             .map(|r| r.name.clone()),
     );
+    let hover = hover.chain(facts.hovered.iter().cloned());
     let heading = facts
         .headings
         .iter()
@@ -518,6 +582,10 @@ pub trait Page {
     fn url(&mut self) -> Result<String, String>;
     /// 受けた event の字（受けた順）。
     fn events(&self) -> &[String];
+    /// 指を点へ動かす（押しも離しもしない）。
+    fn point(&mut self, x: u32, y: u32) -> Result<(), String>;
+    /// 出ている card の矩形の字を読む（card の式の返す字）。
+    fn card(&mut self) -> Result<String, String>;
 }
 
 impl Page for Session {
@@ -535,6 +603,14 @@ impl Page for Session {
 
     fn events(&self) -> &[String] {
         Session::events(self)
+    }
+
+    fn point(&mut self, x: u32, y: u32) -> Result<(), String> {
+        Session::point(self, x, y)
+    }
+
+    fn card(&mut self) -> Result<String, String> {
+        Session::card(self)
     }
 }
 
@@ -585,7 +661,13 @@ fn settled(page: &mut impl Page, url: &str, width: u32) -> Result<Option<Facts>,
     };
     facts.url = url.to_string();
     facts.errors = errors(page.events().get(from..).unwrap_or_default());
-    let at = objects(&text, "switch_at", |o| {
+    if !narrow {
+        let targets = hover_targets(&text).map_err(|e| format!("{url}: {e}"))?;
+        if let Some(target) = targets.first() {
+            (facts.hovered, facts.probes) = probe(page, target)?;
+        }
+    }
+    let at =objects(&text, "switch_at", |o| {
         let spot = |key| member(o, key)?.parse::<u32>().ok();
         let now = match member(o, "now")? {
             "true" => true,
@@ -633,6 +715,139 @@ fn open(page: &mut impl Page, url: &str) -> Result<Option<(Facts, String)>, Stri
     Ok(None)
 }
 
+/// card を右へずらす幅（px・hover の OFFSET_X と同じ値・規則の行 R-20）。
+pub const HOVER_DX: f64 = 16.0;
+
+/// card を上へずらす高さ（px・hover の OFFSET_Y と同じ値・規則の行 R-20）。
+pub const HOVER_DY: f64 = 20.0;
+
+/// 要素を出てから card を残せる猶予（ms・hover の GRACE_MS と同じ値・規則の行 R-20）。
+pub const HOVER_GRACE_MS: u64 = 150;
+
+/// 札へ動かしてから card を読むまでの待ち（ms）。
+pub const HOVER_SHOW_MS: u64 = 100;
+
+/// 札を出てから card が消えたかを読むまでの間（ms・猶予の 2 倍で、browser の timer の遅れ 150 ms までを許す）。
+pub const HOVER_GONE_MS: u64 = 300;
+
+/// card の置き場の差の許し（px・小数の丸め）。
+pub const PLACE_SLACK_PX: f64 = 1.0;
+
+/// card の左上の置き場（pointer の点と card の幅と高さと窓の幅と高さから・hover の place と同じ式）。
+pub fn spot(pointer: (f64, f64), card: (f64, f64), window: (f64, f64)) -> (f64, f64) {
+    let right = pointer.0 + HOVER_DX;
+    let x = if right + card.0 > window.0 {
+        (pointer.0 - HOVER_DX - card.0).max(0.0)
+    } else {
+        right
+    };
+    let y = (pointer.1 - HOVER_DY).min(window.1 - card.1).max(0.0);
+    (x, y)
+}
+
+/// 点が card の矩形の中（縁を含む）か。
+fn inside(card: &HoverCard, (x, y): (f64, f64)) -> bool {
+    (card.left..=card.left + card.width).contains(&x)
+        && (card.top..=card.top + card.height).contains(&y)
+}
+
+/// 札を出る点 e（札の下 2 px）と、card へ 8 px 近づく点 p2（card が札の右なら右へ・左なら左へ）。
+/// e の y が窓の外か、e か p2 が card の中なら None（出る動きで猶予を測れない）。
+pub fn exit_path(target: &HoverTarget, card: &HoverCard) -> Option<((u32, u32), (u32, u32))> {
+    let e = (target.x, target.bottom + 2);
+    let p2 = (
+        if card.left >= f64::from(target.x) {
+            target.x + 8
+        } else {
+            target.x.saturating_sub(8)
+        },
+        e.1,
+    );
+    let point = |(x, y): (u32, u32)| (f64::from(x), f64::from(y));
+    (f64::from(e.1) < card.vh && !inside(card, point(e)) && !inside(card, point(p2)))
+        .then_some((e, p2))
+}
+
+/// 猶予の判じ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grace {
+    /// 猶予の内で同じ置き場に残った。
+    Kept,
+    /// 猶予の内で消えたか動いた。
+    Lost,
+    /// 読み終えるまでに猶予が尽きた（測れない）。
+    Late,
+}
+
+/// 同じ置き場か（左上が PLACE_SLACK_PX 以内）。
+fn same_place(a: &HoverCard, b: &HoverCard) -> bool {
+    (a.left - b.left).abs() <= PLACE_SLACK_PX && (a.top - b.top).abs() <= PLACE_SLACK_PX
+}
+
+/// 最初の card と、出た後の card（無ければ None）と、出てからの経過 ms から猶予を判じる。
+pub fn grace(first: &HoverCard, after: Option<&HoverCard>, elapsed_ms: u64) -> Grace {
+    if elapsed_ms >= HOVER_GRACE_MS {
+        Grace::Late
+    } else if after.is_some_and(|c| same_place(first, c)) {
+        Grace::Kept
+    } else {
+        Grace::Lost
+    }
+}
+
+/// 1 つの札で card の置き場と猶予を測り、違反の字の列と report の字の列を返す。
+/// 札へ動かして待ち、card の置き場を spot と比べ、札の下へ出て card へ近づいて猶予の内の card を読み、
+/// 猶予の後に消えたかを読む。経過の時計を取る所だけが時刻に依り、判じは grace の値で測る。
+pub fn probe(
+    page: &mut impl Page,
+    target: &HoverTarget,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    let (mut found, mut said) = (Vec::new(), Vec::new());
+    let name = &target.name;
+    page.point(target.x, target.y)?;
+    page.run(&Command::Wait { ms: HOVER_SHOW_MS })?;
+    let Some(first) = hover_card(&page.card()?)? else {
+        found.push(format!("show {name}"));
+        return Ok((found, said));
+    };
+    let (want_x, want_y) = spot(
+        (f64::from(target.x), f64::from(target.y)),
+        (first.width, first.height),
+        (first.vw, first.vh),
+    );
+    if (first.left - want_x).abs() > PLACE_SLACK_PX || (first.top - want_y).abs() > PLACE_SLACK_PX {
+        found.push(format!(
+            "place {name} {:.1},{:.1} {want_x:.1},{want_y:.1}",
+            first.left, first.top
+        ));
+    }
+    let Some((e, p2)) = exit_path(target, &first) else {
+        said.push(format!("未測 hover path {name}"));
+        return Ok((found, said));
+    };
+    let start = Instant::now();
+    page.point(e.0, e.1)?;
+    page.point(p2.0, p2.1)?;
+    let after = hover_card(&page.card()?)?;
+    let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let verdict = grace(&first, after.as_ref(), elapsed);
+    match verdict {
+        Grace::Lost => found.push(format!("grace {name}")),
+        Grace::Late => said.push(format!("未測 hover late {name} {elapsed}")),
+        Grace::Kept => {}
+    }
+    page.run(&Command::Wait {
+        ms: HOVER_GONE_MS.saturating_sub(elapsed),
+    })?;
+    if hover_card(&page.card()?)?.is_some_and(|c| same_place(&first, &c)) {
+        found.push(format!("gone {name}"));
+    }
+    if verdict != Grace::Late {
+        said.push(format!("測った hover {name}"));
+    }
+    Ok((found, said))
+}
+
 /// sweep の数え（report の字・違反の和・まだ分からない画面の数）。
 struct Tally<'a> {
     vocab: &'a str,
@@ -660,6 +875,9 @@ impl Tally<'_> {
                 }
                 // 違反の中身は画面の行の下に 1 つずつ（2 つの空白で字下げ・撃つ時刻で出る違反を追う）。
                 for item in details(facts, self.vocab) {
+                    let _ = write!(self.report, "\n  {item}");
+                }
+                for item in &facts.probes {
                     let _ = write!(self.report, "\n  {item}");
                 }
             }

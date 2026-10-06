@@ -118,6 +118,16 @@ impl Page for Fake {
     fn events(&self) -> &[String] {
         &self.events
     }
+
+    fn point(&mut self, x: u32, y: u32) -> Result<(), String> {
+        self.log.push(format!("Point {x} {y}"));
+        Ok(())
+    }
+
+    fn card(&mut self) -> Result<String, String> {
+        self.log.push("card".to_string());
+        Ok("null".to_string())
+    }
 }
 
 /// 鍵 `key` の条だけが `n` の数の列を足した列。
@@ -451,6 +461,7 @@ fn returned_object_keys(text: String) {
             "text",
             "libraries",
             "switch_at",
+            "hover_at",
         ]
     );
     for fixed in [

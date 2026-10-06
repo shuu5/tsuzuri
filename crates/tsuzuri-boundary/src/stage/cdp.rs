@@ -1,13 +1,14 @@
 //! CDP の口と命令の列（要件 FR16・判断の記録 ADR-5 の決定 (1)）。
 //! 命令の語彙 `Command` を CDP の method の列 `Step` に写す純粋な `steps` と、列を撃って応答を待つ `Session` を持つ。
 //! 任意の式を撃つ口を持たない（見積りの T6・条 P-12.1）: Command は式を運ぶ欄を持たず、Runtime.evaluate は
-//! Dom の決まった式と受入の測りの決まった式だけで、Session は method と params を直に受ける口を持たない
-//! （撃てるのは steps の列と measure だけ）。
+//! Dom の決まった式と受入の測りの決まった式と card の決まった式だけで、Session は method と params を直に受ける口を持たない
+//! （撃てるのは steps の列と measure と point と card だけ）。
 //! 窓の置き場は持ち主に任せ（判断の記録 ADR-15 の決定 (6)）、語彙は同じ窓の中の操作だけを持つ。
 //! session は tz の 1 回の撃ちごとに繋いで閉じ、常駐しない（繋ぐ先は `tunnel` が張る 0700 の dir の中の unix socket）。
 //! 2 つ目の運び手（席の目の headless の Chrome の pipe に付く `attach`・ws の上の振る舞いは変えない）を足す。
 //! 頁の今の URL の読み `url` と、それが撃つ script でない決まった 1 つの method `HISTORY` を足す。
 //! 受入 12 条の測り `measure`（決まった式 `MEASURE_EXPRESSION` を 1 度撃つ・Command に枝を足さない）を足す。
+//! 指の動かし `moved`（押しと離しの無い 1 歩）と、card の決まった式 `CARD_EXPRESSION` を足す。
 
 use std::path::Path;
 use std::thread;
@@ -22,6 +23,9 @@ pub const DOM_EXPRESSION: &str = "document.documentElement.outerHTML";
 
 /// 受入 12 条の測りの式（measure だけが撃つ・頁を書き換えない 1 つの式・事実の JSON の字を返す）。
 pub const MEASURE_EXPRESSION: &str = include_str!("measure.js");
+
+/// hover の card を測る式（card だけが撃つ・頁を書き換えない 1 つの式・出ている card の矩形と窓の大きさの JSON の字か null を返す）。
+pub const CARD_EXPRESSION: &str = "(() => { const c = Array.from(document.querySelectorAll('.hcard.on')).find((e) => e.checkVisibility({ visibilityProperty: true })); if (!c) return 'null'; const r = c.getBoundingClientRect(); return JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height, vw: window.innerWidth, vh: window.innerHeight }); })()";
 
 /// 頁の読み込みの終わりの event。
 pub const LOAD_EVENT: &str = "Page.loadEventFired";
@@ -203,6 +207,19 @@ fn click(x: u32, y: u32) -> Vec<Step> {
     ]
 }
 
+/// 指の動かしの歩（点へ動かすだけで、押しと離しは撃たない・click の歩は吹き出しを開くので使えない）。
+pub fn moved(x: u32, y: u32) -> Step {
+    use Value::{Int, Text};
+    call(
+        "Input.dispatchMouseEvent",
+        &[
+            ("type", Text("mouseMoved")),
+            ("x", Int(i64::from(x))),
+            ("y", Int(i64::from(y))),
+        ],
+    )
+}
+
 /// CDP の 1 つの message の字（鍵 id・method・params の順・空白を挟まない）。
 pub fn message(id: u64, method: &str, params: &str) -> String {
     format!(
@@ -320,6 +337,29 @@ impl Session {
             .and_then(|r| json::member(r, "value"))
             .and_then(json::unquote)
             .ok_or_else(|| format!("{METHOD}: 測りの式の応答に字の値が無い"))
+    }
+
+    /// 指を点 (x, y) へ動かす（moved の歩を 1 度撃ち、応答は捨てる）。
+    pub fn point(&mut self, x: u32, y: u32) -> Result<(), String> {
+        if let Step::Call { method, params } = moved(x, y) {
+            self.call(method, &params)?;
+        }
+        Ok(())
+    }
+
+    /// card の決まった式を 1 度撃ち、返った字の値をそのまま返す（字の値が無ければ Err）。
+    pub fn card(&mut self) -> Result<String, String> {
+        const METHOD: &str = "Runtime.evaluate";
+        let params = object(&[
+            ("expression", Value::Text(CARD_EXPRESSION)),
+            ("returnByValue", Value::Bool(true)),
+        ]);
+        let reply = self.call(METHOD, &params)?;
+        json::member(&reply, "result")
+            .and_then(|r| json::member(r, "result"))
+            .and_then(|r| json::member(r, "value"))
+            .and_then(json::unquote)
+            .ok_or_else(|| format!("{METHOD}: card の式の応答に字の値が無い"))
     }
 
     /// session で貯めた event の字（受けた順）。
