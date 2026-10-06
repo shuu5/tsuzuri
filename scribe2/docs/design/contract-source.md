@@ -1576,6 +1576,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
 - 却下: 断られた周（403・rate limit）だけ間隔を延ばす backoff（断られるまで 20 ms で撃つ形が残る・断りの字面を読む読み手が要る）／CI の 1 行を `gh run watch` に替える（`ci-cmd` の宣言は repo ごとの任意の 1 行で、forge の CLI の待ちの口に依存させない・判定の形〔落ちた run を先に見る〕が CLI の側へ移る）／`POLL` そのものを延ばす（pid・meminfo・札の待ちまで遅くなる・周期は完了条件の性質）。
 
 - 追記（終端の順の入れ替え・§5 手順 2・3・裁定 2026-10-05T22:57Z・tsuzuri の判断の記録 ADR-68・close の理由の尾 `host=green` の文法は ledger-form.md §16）: 照合を撃つのは close の後の子 process（`pipe land --run <id> --ci-only <sha>`）で、受け入れの周だけが close の前に撃つ。間隔と上限の値・待ちの周期・最初の評価は替えない。`pipe.ci_wait_s` は「close を待つ上限」でなく「後から読む上限」になる（値と裁定 id は替えない）。この子は行 v-ci-child-cut（持ち主の決め D3）で退けた: 終端は close の後に何も起こさず、`--ci-only` の口も `ci:spawned` の記しも無い（§5 手順 3）。
+- 追記（行 v-ci-wait-cut・判断の記録 ADR-75 の決定 (6)）: この行が CI の読み手 `ci_read`・`ci_now`・`ci_wait`・`pr_merge` と完了条件 `Completion::CiResult`（欄 `every` と周期の腕）を外した。`wait` の口は 1 つになり、周期は `AccountFree` が [`ACCOUNT_POLL`]・ほかの全 variant が `POLL`。
 
 ## 51. 審査の材料に、契約が名指す write-set の外の物を器が束ねる（契約表の行 bc・非公開の隣の project の契約の審査の section-material-missing 20 件・memo `s2-07l.430`）
 
@@ -2042,6 +2043,7 @@ done-teeth = ["1:!write-set", "2:=done_teeth_base_teeth_check_names_changed_rows
     - (b) `retire_parts_pr_merge_reads_the_state_and_the_merge_commit`: `MERGED` と 40 桁の oid は merged、`OPEN` と `CLOSED` は not-merged、`MERGED` で `mergeCommit` が null・oid が 39 桁・rc 1・JSON でない の 4 つは unmeasured。stub の呼び出しは 1 回で、program は `gh`・引数は `pr view <branch> --json state,mergeCommit`・cwd は repo。
   - lib（seat/ledger.rs の歯の区間）: (c) `retire_parts_issue_reads_the_close_reason`: `close_reason` を持つ要素はその字面、持たない要素は空。
   - base で RED の理由: 3 本とも base に無い関数と欄を引く compile error（wait.rs と seat/ledger.rs は base に在る file の歯の区間）。
+- 追記（行 v-ci-wait-cut・判断の記録 ADR-75 の決定 (6)）: この行が CI の読み手 `ci_read`・`ci_now` と `pr_merge`（と型 `CiRead`・`CiRun`・`PrMerge`・歯 (a)(b)）を wait.rs と fleet の再輸出から外した。呼び手は wait.rs と mod.rs の外に 0 だった。台帳の `close_reason`（歯 (c)）は残る。
 
 ## 61. PR で着地した便を pipe retire が照合してから close し、worktree を畳む — worktree の確かめ・畳むだけの指定・閉じ済みの契約・merge の commit・remote の main の先端の祖先・先端の CI の順に問い、閉じた 6 語で断る（契約表の行 bp・FR96・AC65 (c)〜(e)・ADR-0094 の経路 (3)）
 

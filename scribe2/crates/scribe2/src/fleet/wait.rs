@@ -6,7 +6,6 @@
 use super::{cli, replay, select, select_for_run, store, RunSelect, Stage};
 use std::collections::{BTreeMap, BTreeSet};
 use std::os::unix::fs::MetadataExt;
-use crate::invocation::Invocation;
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -76,22 +75,6 @@ pub enum Completion {
         /// 観測と選定が**同じ除外**を組むために運ぶ（C3.4）。
         park: BTreeSet<String>,
     },
-    /// **CI の判定が出ること**（`pipe land` の終端・設計 contract-source.md §5）: forge の CLI を子 process で
-    /// 撃ち、着地した commit の run が**終端の判定**（success / failure）に達する。まだ走っている周・
-    /// run が 1 本も無い周・読めない周は満たされない（deadline まで待つ）。判定は呼び手が読み直さず、待ちが
-    /// 最後に読んだ答えを [`ci_wait`] から受ける（読み直しの 1 回が測れずに success を落とさない・memo t3-hub.74.49.6）。
-    CiResult {
-        /// CI の行を撃つ作業 dir（対象 repo）。
-        repo: std::path::PathBuf,
-        /// **着地した commit の 40 桁の sha**（行の `{sha}` の穴に入る）。短縮 sha を渡すと forge の CLI は
-        /// 完了済みの run でも空を返し続け、待ちが上限まで空回りする（実測の罠）。
-        sha: String,
-        /// 判定を読む 1 行（宣言 `ci-cmd` か既定・`{sha}` の穴を持つ）。
-        cmd: String,
-        /// 照合を撃つ間隔（rules 行 `pipe.ci_poll_s`・設計 contract-source.md §50）。1 回の照合が forge の API の
-        /// 1 回なので、周期は [`POLL`] でなくこの値で眠る（[`Completion::period`]・0 は [`POLL`] に戻る）。
-        every: Duration,
-    },
     /// **着地の列の窓が開くこと**（pipeline 外の merge の待ち口・`pipe land-window`・設計 pipeline.md §19）: 列の PASS の便が
     /// 0 本 ∧ 追随中の便が 0 本 ∧ local main が origin main の祖先（origin の無い周は数えない）。local main を読めない周・
     /// 置き場を読めない周は満たされない（fail-closed・deadline まで待つ）。判定は [`crate::pipe::cli::window_now`] の 1 本。
@@ -113,7 +96,7 @@ pub enum Completion {
 
 impl Completion {
     /// 見張る pid。**pid を見張らない variant（[`Self::SlotFree`] / [`Self::LandTurn`] /
-    /// [`Self::AccountFree`] / [`Self::CiResult`] / [`Self::LandWindow`] / [`Self::HostCalm`]）は 0**——pid 0 は `/proc/0` を持たない（user の
+    /// [`Self::AccountFree`] / [`Self::LandWindow`] / [`Self::HostCalm`]）は 0**——pid 0 は `/proc/0` を持たない（user の
     /// process に振られない）ので、生きている pid と取り違えない。[`Self::GroupGone`] は group id（= group leader の pid）を返す。
     pub fn pid(&self) -> u32 {
         match *self {
@@ -121,7 +104,6 @@ impl Completion {
             Self::SlotFree { .. }
             | Self::LandTurn { .. }
             | Self::AccountFree { .. }
-            | Self::CiResult { .. }
             | Self::LandWindow { .. }
             | Self::HostCalm { .. } => 0,
         }
@@ -129,12 +111,10 @@ impl Completion {
 
     /// [`wait`] が周の間に眠る長さ（**周期は完了条件の性質**・設計 contract-source.md §50）。
     ///
-    /// [`Self::CiResult`] は外の API を撃つので欄 `every` と [`POLL`] の大きい方（0 の行で hot loop にしない）。
     /// [`Self::AccountFree`] は口座の待ち（reset まで分〜時間）なので [`ACCOUNT_POLL`]（設計 account-lifecycle.md §39 行 ae）。
     /// 他の全 variant は pid の生存・meminfo・札の読みで、周期は [`POLL`] のまま。
     fn period(&self) -> Duration {
         match self {
-            Self::CiResult { every, .. } => (*every).max(POLL),
             Self::AccountFree { .. } => ACCOUNT_POLL,
             Self::RunnerExited(_)
             | Self::SeatGone(_)
@@ -159,7 +139,7 @@ impl Completion {
                     crate::pipe::admission::Cpu::priced(*cores, *cap),
                 )
             }
-            Self::LandTurn { .. } | Self::CiResult { .. } => self.round(None).met,
+            Self::LandTurn { .. } => self.round(None).met,
             Self::LandWindow { state_dir, repo } => crate::pipe::cli::window_now(state_dir, repo).is_open(),
             Self::HostCalm { runnable_per_core, blocked_per_core } => crate::pipe::health::calm_now(
                 crate::pipe::health::PerCore { runnable: *runnable_per_core, blocked: *blocked_per_core },
@@ -185,196 +165,15 @@ impl Completion {
     /// 印を**先に**取り（[`mark_of`]）、前回の観測と印が同じ周は replay を省いて前回の判定を使う
     /// （[`reuse`]）。違う周・印を取れない周は印を [`observe`] へ渡して読み直す。他の variant は印なし
     /// （`None`）で毎周そのまま評価する（meminfo / 実測行 / pid の生存は不変・C3.4 の 1 実装のまま）。
-    /// [`Self::CiResult`] は CI を 1 回だけ読み、答え（[`CiRead`]）を観測に載せる（success か failure で満ちる）。
     fn round(&self, last: Option<Glance>) -> Glance {
-        if let Self::CiResult { repo, sha, cmd, .. } = self {
-            let read = ci_read(repo, sha, cmd);
-            return Glance { mark: None, met: matches!(read, CiRead::Success | CiRead::Failure), ci: Some(read) };
-        }
         let Self::LandTurn { state_dir, run } = self else {
-            return Glance { mark: None, met: self.is_met(), ci: None };
+            return Glance { mark: None, met: self.is_met() };
         };
         let mark = mark_of(state_dir);
         match reuse(last.as_ref(), mark.as_ref()) {
-            Some(met) => Glance { mark, met, ci: None },
+            Some(met) => Glance { mark, met },
             None => observe(mark, state_dir, run),
         }
-    }
-}
-
-/// CI の run 1 本が着いた**終端の判定**（**閉じた 2 値**・設計 contract-source.md §5）。
-///
-/// 「まだ出ていない」はこの型に入れない（[`ci_now`] が `None` で返す）——走っている run を
-/// `Failure` に畳むと、待つ前に close しない側へ倒れて上限の意味が消える（C10）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CiRun {
-    /// 完了して success。
-    Success,
-    /// 完了して success でない（failure / cancelled / timed_out …）。
-    Failure,
-}
-
-/// forge の CLI が `--json status,conclusion` で返す key（字面は forge のもの）。
-const CI_STATUS: &str = "status";
-
-/// 同上（判定の key）。
-const CI_CONCLUSION: &str = "conclusion";
-
-/// 完了した run の `status` の字面。
-const CI_COMPLETED: &str = "completed";
-
-/// 成功した run の `conclusion` の字面。
-const CI_SUCCESS: &str = "success";
-
-/// run を起こした契機の key（既定の行が `--json …,event` で読む・字面は forge のもの）。
-const CI_EVENT: &str = "event";
-
-/// 母集団から外す `event` の字面（cron の run・着地した commit の判定ではない・設計 pipeline.md §46）。
-const CI_SCHEDULED: &str = "schedule";
-
-/// 判定の母集団（`event` が [`CI_SCHEDULED`] の run を外した列）。
-///
-/// **`event` の欄が無い run は外さない**（宣言の `ci-cmd` が `event` を返さない周＝従来と同じ判定）。
-/// workflow の名では絞らない（名は repo 固有の値）。
-fn counted_runs(runs: &[crate::fleet::json_tree::Tree]) -> Vec<&crate::fleet::json_tree::Tree> {
-    runs.iter()
-        .filter(|run| run.get(CI_EVENT).and_then(crate::fleet::json_tree::Tree::as_str) != Some(CI_SCHEDULED))
-        .collect()
-}
-
-/// CI の結果の**閉じた 4 値**（[`ci_read`] の答え・設計 contract-source.md §60）。
-///
-/// [`ci_now`] の `None` を「結果がまだ無い」と「問いを撃てない」に割った形である（FR96 の ci-not-success と
-/// unmeasured を分ける読み手のため）。`ci_now` はこれの写しで外形を変えない。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CiRead {
-    /// run が 1 本以上在り、落ちた run が無く全部が完了している。
-    Success,
-    /// 完了した run に success でないものが 1 本以上在る（他の run がまだ走っていても）。
-    Failure,
-    /// run が 0 本（schedule を外した後）か、落ちた run が無く走っている run が在る。
-    Pending,
-    /// 行を撃てない・rc が 0 でない・JSON を読めない。
-    Unmeasured,
-}
-
-/// CI の判定を**1 回だけ**読む（子 process 1 回・設計 contract-source.md §5）。
-///
-/// 返すのは 3 形である: `Some(Failure)`（**完了した run に success でないものが 1 本以上在る**・他の run が
-/// まだ走っていても待たない）・`Some(Success)`（run が 1 本以上在り、落ちた run が無く全部が完了している）・
-/// `None`（run が 0 本・落ちた run は無いがまだ走っている run が在る・行を撃てない・JSON を読めない）。**`None` を「成功していない」と読まない**のは
-/// 呼び手の側で、`None` は「まだ測れていない」である（C10）。判定は [`ci_read`] の 1 本で、これはその写し
-/// （[`CiRead::Pending`] と [`CiRead::Unmeasured`] を `None` に畳む・設計 contract-source.md §60）。
-///
-/// 行は **argv 1 本として撃つ**（shell を通さない）。宣言 `ci-cmd` は対象 repo の tracked file から来るので、
-/// shell に渡すと宣言 1 行が別の command を継ぎ足せる（契約の verify 行と同じ線）。
-pub fn ci_now(repo: &Path, sha: &str, cmd: &str) -> Option<CiRun> {
-    match ci_read(repo, sha, cmd) {
-        CiRead::Success => Some(CiRun::Success),
-        CiRead::Failure => Some(CiRun::Failure),
-        CiRead::Pending | CiRead::Unmeasured => None,
-    }
-}
-
-/// CI の結果を**1 回だけ**読み、[`CiRead`] の 4 値で返す（子 process 1 回・引数は [`ci_now`] と同じ）。
-///
-/// 判定の順は [`ci_now`] が持っていた順のまま: schedule の run を外す → 落ちた run を先に見る → 全部が完了
-/// なら success。行を撃てない（空の行・起動の失敗）・rc が 0 でない・JSON の配列として読めない周は
-/// [`CiRead::Unmeasured`]、run が 0 本か走っている run が在る周は [`CiRead::Pending`]（C10: 2 つを畳まない）。
-pub fn ci_read(repo: &Path, sha: &str, cmd: &str) -> CiRead {
-    let line = cmd.replace(crate::pipe::declaration::CI_SHA_HOLE, sha);
-    let mut words = line.split_whitespace();
-    let Some(head) = words.next() else {
-        return CiRead::Unmeasured;
-    };
-    let Ok(out) = Invocation::new(head).args(words).current_dir(repo).output() else {
-        return CiRead::Unmeasured;
-    };
-    if !out.status.success() {
-        return CiRead::Unmeasured;
-    }
-    let Ok(tree) = crate::fleet::json_tree::parse(&String::from_utf8_lossy(&out.stdout)) else {
-        return CiRead::Unmeasured;
-    };
-    let Some(all) = tree.as_array() else {
-        return CiRead::Unmeasured;
-    };
-    // cron の run を**先に**外す（外した後に 0 本なら結果はまだ無い）。
-    let runs = counted_runs(all);
-    if runs.is_empty() {
-        return CiRead::Pending;
-    }
-    let status_of = |run: &crate::fleet::json_tree::Tree| {
-        run.get(CI_STATUS).and_then(crate::fleet::json_tree::Tree::as_str).map(str::to_owned)
-    };
-    let failed = |run: &crate::fleet::json_tree::Tree| {
-        status_of(run).as_deref() == Some(CI_COMPLETED)
-            && run.get(CI_CONCLUSION).and_then(crate::fleet::json_tree::Tree::as_str) != Some(CI_SUCCESS)
-    };
-    // **落ちた run を先に見る**。実 CI では複数の workflow が並ぶので、1 本が落ちた後も別の 1 本が
-    // 走っていることが常態である。未完了を先に見ると、**測って落ちた事実**が上限いっぱい待った末の
-    // 「測れていない」に化ける（C10 の反転）。落ちたと分かった時点で待つ理由は無い。
-    if runs.iter().copied().any(failed) {
-        return CiRead::Failure;
-    }
-    // 落ちた run が 1 本も無い周は、**全部が完了している**ときだけ success と言える
-    // （走っている run を成功に数えない）。
-    if runs.iter().copied().any(|run| status_of(run).as_deref() != Some(CI_COMPLETED)) {
-        return CiRead::Pending;
-    }
-    CiRead::Success
-}
-
-/// PR の merge の問いの**閉じた 3 値**（[`pr_merge`] の答え・設計 contract-source.md §60）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PrMerge {
-    /// `state` が `MERGED` で、merge の commit id（40 桁の 16 進）を持つ。
-    Merged(String),
-    /// `state` が `MERGED` でない文字列（`OPEN` / `CLOSED` …）。
-    NotMerged,
-    /// 起動の失敗・rc が 0 でない・JSON を読めない・`MERGED` なのに oid が無いか形が違う。
-    Unmeasured,
-}
-
-/// PR を問う forge の CLI（`--pr-cmd` の gh と同じ解き方・宣言で替えない・設計 contract-source.md §60 の限界）。
-const PR_PROGRAM: &str = "gh";
-
-/// PR の `state` が merge 済みの字面（字面は forge のもの）。
-const PR_MERGED: &str = "MERGED";
-
-/// commit id の桁数（40 桁の 16 進）。
-const OID_LEN: usize = 40;
-
-/// branch の PR が merge されたかとその commit を forge に**1 回だけ**問う（子 process 1 回・設計 contract-source.md §60）。
-///
-/// 撃つのは `gh pr view <branch> --json state,mergeCommit`（cwd は repo・shell を通さない・`--repo` を渡さない＝
-/// forge の既定の repo の選び方は gh に任せる）。
-pub fn pr_merge(repo: &Path, branch: &str) -> PrMerge {
-    let Ok(out) = Invocation::new(PR_PROGRAM)
-        .args(["pr", "view", branch, "--json", "state,mergeCommit"])
-        .current_dir(repo)
-        .output()
-    else {
-        return PrMerge::Unmeasured;
-    };
-    if !out.status.success() {
-        return PrMerge::Unmeasured;
-    }
-    let Ok(tree) = crate::fleet::json_tree::parse(&String::from_utf8_lossy(&out.stdout)) else {
-        return PrMerge::Unmeasured;
-    };
-    let Some(state) = tree.get("state").and_then(crate::fleet::json_tree::Tree::as_str) else {
-        return PrMerge::Unmeasured;
-    };
-    if state != PR_MERGED {
-        return PrMerge::NotMerged;
-    }
-    let oid = tree.get("mergeCommit").and_then(|found| found.get("oid")).and_then(crate::fleet::json_tree::Tree::as_str);
-    match oid {
-        Some(found) if found.len() == OID_LEN && found.bytes().all(|byte| byte.is_ascii_hexdigit()) => {
-            PrMerge::Merged(found.to_owned())
-        }
-        _ => PrMerge::Unmeasured,
     }
 }
 
@@ -402,8 +201,6 @@ struct Glance {
     mark: Option<Mark>,
     /// 満たされたか。
     met: bool,
-    /// [`Completion::CiResult`] の周に読んだ CI の答え（ほかの variant は `None`・[`ci_wait`] が最後の周の値を返す）。
-    ci: Option<CiRead>,
 }
 
 /// file 1 本の印を取る。**無い file は `Ok(None)`**（印の値の 1 つ）・metadata を読めない周は `Err`。
@@ -453,7 +250,7 @@ fn observe(mark: Option<Mark>, state_dir: &Path, run: &str) -> Glance {
     #[cfg(test)]
     tests::REPLAYS.with(|count| count.set(count.get() + 1));
     let met = !matches!(crate::pipe::land::turn_now(state_dir, run), crate::pipe::land::Turn::After(_));
-    Glance { mark, met, ci: None }
+    Glance { mark, met }
 }
 
 /// [`Completion::AccountFree`] の 1 周分の観測。
@@ -532,7 +329,7 @@ const ACCOUNT_POLL: Duration = Duration::from_secs(5);
 /// 前回の観測（[`Glance`]・loop の局所状態）を次の周へ渡し、材料の印が変わらない周は replay を省く。
 ///
 /// 周の間に眠る長さは [`Completion::period`] と上限までの残りの小さい方である（最初の評価は眠る前・上限を
-/// 越えて周期ぶん余計に眠らない・設計 contract-source.md §50）。loop は [`ci_wait`] と共有する [`watch`] の 1 本である。
+/// 越えて周期ぶん余計に眠らない・設計 contract-source.md §50）。loop は [`watch`] の 1 本である。
 pub fn wait(completion: Completion, deadline: Duration) -> Result<(), Timeout> {
     if watch(&completion, deadline).met {
         Ok(())
@@ -541,14 +338,7 @@ pub fn wait(completion: Completion, deadline: Duration) -> Result<(), Timeout> {
     }
 }
 
-/// [`Completion::CiResult`] を [`wait`] と同じ loop で待ち、**最後の周に読んだ答え**を返す（呼び手は読み直さない・設計
-/// contract-source.md §5・memo t3-hub.74.49.6）。満ちた周は success か failure、上限の周は最後の周の pending か unmeasured
-/// （2 つを畳まない）。CI の完了条件でない値は答えを読まないので [`CiRead::Unmeasured`]。
-pub fn ci_wait(completion: Completion, deadline: Duration) -> CiRead {
-    watch(&completion, deadline).ci.unwrap_or(CiRead::Unmeasured)
-}
-
-/// 唯一の待機の loop（[`wait`] と [`ci_wait`] の 2 つの口が共有する）。満ちた周の観測か、上限の周の最後の観測を返す。
+/// 唯一の待機の loop（口は [`wait`] の 1 つ）。満ちた周の観測か、上限の周の最後の観測を返す。
 fn watch(completion: &Completion, deadline: Duration) -> Glance {
     let started = Instant::now();
     let period = completion.period();
@@ -608,7 +398,7 @@ fn pgid_of(stat_text: &str) -> Option<u32> {
 mod tests {
     // flip-check: moved s2-07l.260
     use super::{
-        cli::format_utc, counted_runs, epoch_of, mark_of, pgid_of, reuse, store, wait, BTreeSet, Completion, Glance, Mark,
+        cli::format_utc, epoch_of, mark_of, pgid_of, reuse, store, wait, BTreeSet, Completion, Glance, Mark,
         Timeout,
     };
     use crate::fleet::{EventKind, Stage};
@@ -649,43 +439,19 @@ mod tests {
         Completion::LandTurn { state_dir: state.to_path_buf(), run: "b-me".to_owned() }
     }
 
-    /// (§46 約束 3) `event` の欄が無い run と `event=push` の run は残り、`event=schedule` の run だけが外れる。
-    #[test]
-    fn fleet_wait_ci_runs_without_event_are_kept_and_scheduled_are_dropped() {
-        let text = concat!(
-            "[{\"status\":\"completed\",\"conclusion\":\"success\"},",
-            "{\"status\":\"in_progress\",\"conclusion\":null,\"event\":\"schedule\"},",
-            "{\"status\":\"completed\",\"conclusion\":\"failure\",\"event\":\"push\"}]"
-        );
-        let tree = crate::fleet::json_tree::parse(text).expect("fixture の JSON を読める");
-        let runs = tree.as_array().expect("配列");
-        let kept = counted_runs(runs);
-        assert_eq!(kept.len(), 2, "残るのは 2 本（母集団 {} 本）: {kept:?}", runs.len());
-        assert!(kept.first().is_some_and(|run| run.get("event").is_none()), "欄の無い run は外さない: {kept:?}");
-        assert_eq!(
-            kept.get(1).and_then(|run| run.get("event")).and_then(crate::fleet::json_tree::Tree::as_str),
-            Some("push"),
-            "push の run は残る: {kept:?}"
-        );
-        assert!(
-            kept.iter().all(|run| run.get("event").and_then(crate::fleet::json_tree::Tree::as_str) != Some("schedule")),
-            "schedule の run だけが外れる: {kept:?}"
-        );
-    }
-
     /// (a) 前回の観測と今の印が両方在って等しい周だけ前回の `met` を返す。
     #[test]
     fn fleet_wait_land_turn_reuses_verdict_when_stamp_unchanged() {
-        let waiting = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
+        let waiting = Glance { mark: Some(mark(1, 2)), met: false };
         assert_eq!(reuse(Some(&waiting), Some(&mark(1, 2))), Some(false), "待ち続ける判定を使い回す");
-        let met = Glance { mark: Some(mark(1, 2)), met: true, ci: None };
+        let met = Glance { mark: Some(mark(1, 2)), met: true };
         assert_eq!(reuse(Some(&met), Some(&mark(1, 2))), Some(true), "前回の met をそのまま返す");
     }
 
     /// (b) len / mtime / inode / verdict の列のどれかが違う周は `None`＝読み直す。
     #[test]
     fn fleet_wait_land_turn_rereads_when_stamp_changes() {
-        let last = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
+        let last = Glance { mark: Some(mark(1, 2)), met: false };
         let mut longer = mark(1, 2);
         longer.log.0 += 1;
         assert_eq!(reuse(Some(&last), Some(&longer)), None, "log の len");
@@ -705,10 +471,10 @@ mod tests {
     /// (c) 前回か今の印が `None` の周は `None`（fail-closed の pin・印を取れない周は必ず読み直す）。
     #[test]
     fn fleet_wait_land_turn_rereads_when_stamp_missing() {
-        let last = Glance { mark: Some(mark(1, 2)), met: false, ci: None };
+        let last = Glance { mark: Some(mark(1, 2)), met: false };
         assert_eq!(reuse(None, Some(&mark(1, 2))), None, "前回の観測が無い");
         assert_eq!(reuse(Some(&last), None), None, "今の印を取れない");
-        let unmarked = Glance { mark: None, met: false, ci: None };
+        let unmarked = Glance { mark: None, met: false };
         assert_eq!(reuse(Some(&unmarked), Some(&mark(1, 2))), None, "前回の印を取れていない");
         assert_eq!(reuse(None, None), None);
     }
@@ -916,12 +682,6 @@ mod tests {
                 grouped: BTreeSet::new(),
                 park: BTreeSet::new(),
             },
-            Completion::CiResult {
-                repo: std::path::PathBuf::from("repo"),
-                sha: "0".repeat(40),
-                cmd: "true {sha}".to_owned(),
-                every: Duration::ZERO,
-            },
             Completion::LandWindow { state_dir: std::path::PathBuf::from("state"), repo: std::path::PathBuf::from("repo") },
             Completion::HostCalm { runnable_per_core: 4, blocked_per_core: 1 },
         ];
@@ -934,45 +694,15 @@ mod tests {
                 Completion::GroupGone(_) => "GroupGone",
                 Completion::LandTurn { .. } => "LandTurn",
                 Completion::AccountFree { .. } => "AccountFree",
-                Completion::CiResult { .. } => "CiResult",
                 Completion::LandWindow { .. } => "LandWindow",
                 Completion::HostCalm { .. } => "HostCalm",
             })
             .collect();
         assert_eq!(
             names,
-            ["RunnerExited", "SeatGone", "SlotFree", "GroupGone", "LandTurn", "AccountFree", "CiResult", "LandWindow", "HostCalm"],
+            ["RunnerExited", "SeatGone", "SlotFree", "GroupGone", "LandTurn", "AccountFree", "LandWindow", "HostCalm"],
             "宣言順の末尾に HostCalm"
         );
-    }
-
-    /// 間隔の歯の CI の待ち（repo は実在しない dir・起動は stub が受ける）。
-    fn ci_watch(every: Duration) -> Completion {
-        Completion::CiResult {
-            repo: PathBuf::from("/nonexistent-fleet-wait-ci-interval"),
-            sha: "0".repeat(40),
-            cmd: "ci-interval-stub run list --commit {sha}".to_owned(),
-            every,
-        }
-    }
-
-    /// (§50 形 2) `CiResult` の周期は欄 `every`、`every` が 0（と `POLL` 未満）なら `POLL`、他の全 variant は `POLL`。
-    #[test]
-    fn fleet_wait_ci_interval_period_is_every_only_for_ci_result() {
-        let poll = super::POLL;
-        assert_eq!(ci_watch(Duration::from_secs(30)).period(), Duration::from_secs(30), "CiResult は every");
-        assert_eq!(ci_watch(Duration::ZERO).period(), poll, "every 0 は POLL に戻る");
-        assert_eq!(ci_watch(Duration::from_millis(1)).period(), poll, "POLL 未満は POLL（大きい方）");
-        let others = [
-            Completion::RunnerExited(7),
-            Completion::SeatGone(8),
-            Completion::SlotFree { slots_dir: PathBuf::from("slots"), want: 1, job_mb: 1, reserve_mb: 1, cap: 1, cores: 1 },
-            Completion::GroupGone(9),
-            Completion::LandTurn { state_dir: PathBuf::from("state"), run: "r".to_owned() },
-            Completion::LandWindow { state_dir: PathBuf::from("state"), repo: PathBuf::from("repo") },
-            Completion::HostCalm { runnable_per_core: 4, blocked_per_core: 1 },
-        ];
-        assert!(others.iter().all(|found| found.period() == poll), "AccountFree の外の全 variant は POLL: {others:?}");
     }
 
     /// 行 ae: `AccountFree` の周期は 5 秒（`POLL` の 20 ms で口座を読み直さない）。
@@ -992,31 +722,8 @@ mod tests {
         assert_eq!(found.period(), Duration::from_secs(5));
     }
 
-    /// (§50 形 3) 最初の評価は眠る前: 最初から success の CI は間隔 30 秒でも待たずに満たされ、照会は 1 回。
-    #[test]
-    fn fleet_wait_ci_interval_first_round_is_before_the_sleep() {
-        use crate::pipe::fixture::{exited, Stub};
-        let stub = Stub::install(|_| exited(0, br#"[{"status":"completed","conclusion":"success"}]"#));
-        let started = std::time::Instant::now();
-        assert_eq!(wait(ci_watch(Duration::from_secs(30)), Duration::from_secs(60)), Ok(()), "success は満たされる");
-        assert!(started.elapsed() < Duration::from_secs(10), "眠らずに返る: {:?}", started.elapsed());
-        assert_eq!(stub.calls().len(), 1, "照会は 1 回");
-    }
-
-    /// (§50 形 4) 上限を越えて眠らない: 走り続ける CI・間隔 30 秒・上限 200 ms は 10 秒未満で Timeout、照会は
-    /// 最初と上限の 2 回（20 ms の周期なら 10 回を越える＝RED）。
-    #[test]
-    fn fleet_wait_ci_interval_sleep_is_capped_by_the_deadline() {
-        use crate::pipe::fixture::{exited, Stub};
-        let stub = Stub::install(|_| exited(0, br#"[{"status":"in_progress","conclusion":null}]"#));
-        let started = std::time::Instant::now();
-        assert_eq!(wait(ci_watch(Duration::from_secs(30)), Duration::from_millis(200)), Err(Timeout), "走り続ける");
-        assert!(started.elapsed() < Duration::from_secs(10), "上限の後に周期ぶん眠らない: {:?}", started.elapsed());
-        assert_eq!(stub.calls().len(), 2, "照会は最初と上限の 2 回");
-    }
-
     /// 遮断器の待ち（`HostCalm`・設計 gate-cost.md §32 約束 3）は **pid を見張らない側**で `pid()` が 0 を返し、閾値の
-    /// 倍率 2 つを運ぶ。既存の見張らない 4 つ（`SlotFree` / `LandTurn` / `AccountFree` / `CiResult`）と同じ側に並ぶ。
+    /// 倍率 2 つを運ぶ。既存の見張らない 3 つ（`SlotFree` / `LandTurn` / `AccountFree`）と同じ側に並ぶ。
     #[test]
     fn fleet_wait_health_variant_watches_no_pid_and_carries_both_multipliers() {
         let calm = Completion::HostCalm { runnable_per_core: 4, blocked_per_core: 1 };
@@ -1035,12 +742,6 @@ mod tests {
                 cores: 1,
             },
             Completion::LandTurn { state_dir: std::path::PathBuf::from("state"), run: "r".to_owned() },
-            Completion::CiResult {
-                repo: std::path::PathBuf::from("repo"),
-                sha: "0".repeat(40),
-                cmd: "true".to_owned(),
-                every: Duration::ZERO,
-            },
             Completion::HostCalm { runnable_per_core: 0, blocked_per_core: 0 },
         ];
         assert!(unwatched.iter().all(|found| found.pid() == 0), "見張らない側に並ぶ: {unwatched:?}");
@@ -1176,121 +877,42 @@ mod tests {
         assert_eq!(wait(busy, Duration::from_millis(60)), Err(Timeout), "倍率 0 は走行可能 1（自分）で混み、上限で Timeout");
     }
 
-    /// CI の照会は起動の記述を通る（設計 core-boundary.md §9 行 g）: 宣言の 1 語目が program・残りが引数（sha の穴は
-    /// 埋めた後）・cwd は repo。結果の読みは不変（stub の返す JSON を従来どおり判定する）。
+    /// 器の CI の読み手は wait.rs に無い（行 v-ci-wait-cut・判断の記録 ADR-75 の決定 (6)）。名の不在は振る舞いで測れない
+    /// （呼び手が無い名の消えは型の検査だけが知る）ので、実装部（行頭の `#[cfg(test)]` の前）の字を照らす。
     #[test]
-    fn invocation_fleet_ci_query_names_the_program_and_cwd() {
-        use crate::pipe::fixture::{exited, Stub};
-        let repo = Path::new("/nonexistent-invocation-fleet-ci");
-        let stub = Stub::install(|_| exited(0, br#"[{"status":"completed","conclusion":"success"}]"#));
-        let cmd = "ci-query-stub run list --commit {sha} --json status,conclusion";
-        assert_eq!(super::ci_now(repo, "abc123", cmd), Some(super::CiRun::Success), "stub の JSON を読む");
-        let calls = stub.calls();
-        assert_eq!(calls.len(), 1, "照会は 1 回: {calls:?}");
-        let found = calls.first().map(|call| (call.program.as_str(), call.cwd.as_deref()));
-        assert_eq!(found, Some(("ci-query-stub", Some(repo))), "program は 1 語目・cwd は repo");
-        let args: Vec<&str> = calls.iter().flat_map(|call| call.args.iter().map(String::as_str)).collect();
-        assert_eq!(args, ["run", "list", "--commit", "abc123", "--json", "status,conclusion"], "残りの語が引数");
-    }
-
-    /// CI の 7 つの答えが 4 値に分かれ、`ci_now` はその写し（設計 contract-source.md §60 の歯 (a)）。
-    #[test]
-    fn retire_parts_ci_read_splits_pending_from_unmeasured() {
-        use super::CiRead::{Failure, Pending, Success, Unmeasured};
-        use crate::pipe::fixture::{exited, Stub};
-        let repo = Path::new("/nonexistent-retire-parts-ci");
-        let cmd = "ci-query-stub run list --commit {sha} --json status,conclusion,event";
-        let cases: [(i32, &[u8], super::CiRead, Option<super::CiRun>); 7] = [
-            (0, br#"[{"status":"completed","conclusion":"success"}]"#, Success, Some(super::CiRun::Success)),
-            (0, br#"[{"status":"completed","conclusion":"failure"}]"#, Failure, Some(super::CiRun::Failure)),
-            (0, br#"[{"status":"in_progress","conclusion":""}]"#, Pending, None),
-            (0, b"[]", Pending, None),
-            (0, br#"[{"status":"completed","conclusion":"success","event":"schedule"}]"#, Pending, None),
-            (1, br#"[{"status":"completed","conclusion":"success"}]"#, Unmeasured, None),
-            (0, b"not json", Unmeasured, None),
+    fn vcrw_wait_has_no_ci_reader() {
+        let text = include_str!("wait.rs");
+        let cut = concat!("\n#[cfg", "(test)]");
+        let body = text.split(cut).next().expect("split は 1 片は返す");
+        assert!(body.len() < text.len(), "行頭の #[cfg(test)] で実装部を切れる");
+        let names = [
+            concat!("fn ci", "_read"),
+            concat!("fn ci", "_now"),
+            concat!("fn ci", "_wait"),
+            concat!("fn pr", "_merge"),
+            concat!("enum Ci", "Read"),
+            concat!("enum Ci", "Run"),
+            concat!("enum Pr", "Merge"),
+            concat!("fn counted", "_runs"),
         ];
-        for (rc, stdout, read, now) in cases {
-            let body = stdout.to_vec();
-            let stub = Stub::install(move |_| exited(rc, &body));
-            assert_eq!(super::ci_read(repo, "abc123", cmd), read, "ci_read: rc {rc} {stdout:?}");
-            assert_eq!(super::ci_now(repo, "abc123", cmd), now, "ci_now: rc {rc} {stdout:?}");
-            assert_eq!(stub.calls().len(), 2, "1 回の読みにつき子 process 1 回");
-        }
+        let found: Vec<&str> = names.iter().copied().filter(|name| body.contains(name)).collect();
+        assert!(found.is_empty(), "CI の読み手の名が残っている: {found:?}");
     }
 
-    /// PR の state と merge の commit が 3 値に分かれ、撃つ行は `gh pr view <branch> --json state,mergeCommit`
-    /// （cwd は repo・`--repo` なし）（設計 contract-source.md §60 の歯 (b)）。
+    /// fleet の再 export に CI の読み手の名が無い（`mod.rs` の字を照らす）。
     #[test]
-    fn retire_parts_pr_merge_reads_the_state_and_the_merge_commit() {
-        use super::PrMerge::{Merged, NotMerged, Unmeasured};
-        use crate::pipe::fixture::{exited, Stub};
-        let repo = Path::new("/nonexistent-retire-parts-pr");
-        let oid = "0123456789abcdef0123456789abcdef01234567";
-        let merged = format!(r#"{{"state":"MERGED","mergeCommit":{{"oid":"{oid}"}}}}"#);
-        let short = format!(r#"{{"state":"MERGED","mergeCommit":{{"oid":"{}"}}}}"#, &oid[..39]);
-        let cases: [(i32, String, super::PrMerge); 8] = [
-            (0, merged.clone(), Merged(oid.to_owned())),
-            (0, r#"{"state":"OPEN","mergeCommit":null}"#.to_owned(), NotMerged),
-            (0, r#"{"state":"CLOSED","mergeCommit":null}"#.to_owned(), NotMerged),
-            (0, r#"{"state":"MERGED","mergeCommit":null}"#.to_owned(), Unmeasured),
-            (0, short, Unmeasured),
-            (1, merged, Unmeasured),
-            (0, "not json".to_owned(), Unmeasured),
-            (0, r#"{"mergeCommit":null}"#.to_owned(), Unmeasured),
+    fn vcrw_fleet_reexports_no_ci_reader() {
+        let text = include_str!("mod.rs");
+        let names = [
+            concat!("ci", "_read"),
+            concat!("ci", "_now"),
+            concat!("ci", "_wait"),
+            concat!("pr", "_merge"),
+            concat!("Ci", "Read"),
+            concat!("Ci", "Run"),
+            concat!("Pr", "Merge"),
         ];
-        for (rc, stdout, want) in cases {
-            let body = stdout.clone().into_bytes();
-            let stub = Stub::install(move |_| exited(rc, &body));
-            assert_eq!(super::pr_merge(repo, "scribe2/s2-x"), want, "rc {rc} {stdout}");
-            let calls = stub.calls();
-            assert_eq!(calls.len(), 1, "問いは 1 回: {calls:?}");
-            let found = calls.first().map(|call| (call.program.as_str(), call.cwd.as_deref(), call.args.clone()));
-            let args = ["pr", "view", "scribe2/s2-x", "--json", "state,mergeCommit"].map(str::to_owned).to_vec();
-            assert_eq!(found, Some(("gh", Some(repo), args)), "program は gh・cwd は repo・--repo なし");
-        }
-    }
-
-    /// CI の stub（撃たれた順に `answers` の rc と stdout を返し、尽きた後は最後の答えを返し続ける）を据える。
-    fn answering(answers: Vec<(i32, &'static [u8])>) -> crate::pipe::fixture::Stub {
-        let turn = Cell::new(0_usize);
-        crate::pipe::fixture::Stub::install(move |_| {
-            let at = turn.get();
-            turn.set(at + 1);
-            let (rc, stdout) = answers.get(at).or(answers.last()).copied().unwrap_or((1, b"".as_slice()));
-            crate::pipe::fixture::exited(rc, stdout)
-        })
-    }
-
-    /// 走っている run の答え（pending）。
-    const RUNNING: &[u8] = br#"[{"status":"in_progress","conclusion":""}]"#;
-
-    /// 完了して success の答え。
-    const PASSED: &[u8] = br#"[{"status":"completed","conclusion":"success"}]"#;
-
-    /// 完了して failure の答え。
-    const FAILED: &[u8] = br#"[{"status":"completed","conclusion":"failure"}]"#;
-
-    /// CI の待ちは満ちた周に読んだ答えを返し、読み直さない（memo t3-hub.74.49.6 の道 1）: 走っている → success で success、
-    /// 走っている → failure で failure を返し、どちらも撃つのは 2 回（3 回目に置いた rc 1 の答えは撃たれない）。
-    #[test]
-    fn vcil_wait_returns_the_read_that_met_without_rereading() {
-        use super::{ci_wait, CiRead};
-        for (met, want) in [(PASSED, CiRead::Success), (FAILED, CiRead::Failure)] {
-            let stub = answering(vec![(0, RUNNING), (0, met), (1, PASSED)]);
-            assert_eq!(ci_wait(ci_watch(Duration::ZERO), Duration::from_secs(5)), want, "満ちた周の答え: {want:?}");
-            assert_eq!(stub.calls().len(), 2, "満ちた後に読み直さない: {want:?}");
-        }
-    }
-
-    /// 上限まで満ちない待ちは最後の周に読んだ答えを返し、pending と unmeasured を畳まない: 1 回目が rc 1 で後は走り続ける
-    /// 周は pending、1 回目が走っていて後は rc 1 の周は unmeasured（どちらも最初の答えでない）。
-    #[test]
-    fn vcil_wait_keeps_the_last_read_at_the_limit() {
-        use super::{ci_wait, CiRead};
-        for (first, rest, want) in [((1, PASSED), (0, RUNNING), CiRead::Pending), ((0, RUNNING), (1, PASSED), CiRead::Unmeasured)] {
-            let stub = answering(vec![first, rest]);
-            assert_eq!(ci_wait(ci_watch(Duration::ZERO), Duration::from_millis(120)), want, "上限の周の最後の答え: {want:?}");
-            assert!(stub.calls().len() >= 2, "上限まで 2 回以上撃つ: {}", stub.calls().len());
-        }
+        let found: Vec<&str> = names.iter().copied().filter(|name| text.contains(name)).collect();
+        assert!(found.is_empty(), "再 export に CI の読み手の名が残っている: {found:?}");
     }
 }
