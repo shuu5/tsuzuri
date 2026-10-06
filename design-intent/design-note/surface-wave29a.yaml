@@ -4,7 +4,8 @@ meta:
   id: surface-wave29a
   title: 第 29 波 a — 目指す所の段 0〜2 の行（判断の記録 ADR-44・ADR-45・ADR-46）
   version: v0.27
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-10-05
   profile: design-note
   approval:
