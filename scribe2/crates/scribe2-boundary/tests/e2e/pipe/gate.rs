@@ -722,11 +722,11 @@ fn findings_body(extra: &str) -> String {
     format!("{{\"verdict\":\"PASS\",\"evidence\":\"fake\"{extra}}}")
 }
 
-/// 8 category を 0 件で並べた字面（宣言順）。
+/// 3 category を 0 件で並べた字面（宣言順）。
 ///
 /// **歯の側で字面を持つ**（共有 helper の [`FAKE_FINDINGS`] を引かない）——引くと base の木では
 /// この file が compile できず、機能の不在が rc でなく compile error で「赤い」ことになる。
-const ZERO_FINDINGS: &str = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:0,stdlib:0,native:0,yagni:0,shrink:0";
+const ZERO_FINDINGS: &str = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
 
 /// 0 でない母集団（lens が読んだ周・[`ZERO_FINDINGS`] と同じ理由で歯の側に持つ）。
 const READ_POPULATION: &str = "files:1,lines:1";
@@ -741,7 +741,7 @@ fn pipe_gate_findings_missing_population_is_inconclusive() {
     let path = write_contract(&repo, &[], &[]);
     let id = implemented(&repo, &state, &path);
     let marker = state.join("lens-ran");
-    // 母集団だけが無い（findings の 8 category は在る）。
+    // 母集団だけが無い（findings の 3 category は在る）。
     let body = findings_body(&format!(",\"findings\":\"{ZERO_FINDINGS}\""));
     let out = gate_once(&repo, &state, &id, Some(&fake_lens(&marker, &body)));
     assert_eq!(out.status.code(), Some(i32::from(RC_INCONCLUSIVE)), "母集団の無い PASS は rc 3: {}", stdout_of(&out));
@@ -765,7 +765,7 @@ fn pipe_gate_findings_missing_population_is_inconclusive() {
     clean(&[&repo, &state]);
 }
 
-/// **8 category の件数と母集団が判定の record に載る**（0 件も 0 と書く・`s2-07l.188`）。
+/// **3 category の件数と母集団が判定の record に載る**（0 件も 0 と書く・`s2-07l.188`）。
 ///
 /// lens の stdout の verdict record（`parse_lens` の入力）が**宣言順でない並び**で出しても、
 /// `verdict.json` の字面は宣言順 1 つに正規化される（集計の順は器の表が持つ・C2）。`Gated` の
@@ -776,7 +776,7 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
     let path = write_contract(&repo, &[], &[]);
     let id = implemented(&repo, &state, &path);
     // 3 観点（contract-fit・teeth-nonvacuous・constitution）は 0 にする（数えた PASS は FAIL に読む・歯 vgfind_）。
-    let shuffled = "shrink:5,constitution:0,contract-fit:0,yagni:4,stdlib:3,delete:2,native:1,teeth-nonvacuous:0";
+    let shuffled = "constitution:0,teeth-nonvacuous:0,contract-fit:0";
     let body = findings_body(&format!(",\"findings\":\"{shuffled}\",\"population\":\"files:7,lines:42\""));
     // lens の **stdout** の record を歯が読めるように写してから、同じ 1 行を gate へ流す。
     let record = state.join("lens-stdout.json");
@@ -788,13 +788,13 @@ fn pipe_gate_findings_counts_are_recorded_per_category() {
     let out = gate_once(&repo, &state, &id, Some(&lens));
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "2 key が揃えば通る: {}", stderr_of(&out));
     let written = fs::read_to_string(&record).expect("lens の stdout を読める");
-    assert!(written.contains(shuffled), "lens の record が 8 category の件数を持つ: {written}");
+    assert!(written.contains(shuffled), "lens の record が 3 category の件数を持つ: {written}");
     assert!(written.contains("\"population\":\"files:7,lines:42\""), "母集団も持つ: {written}");
     let pairs = verdict_pairs(&state, &id);
     assert_eq!(
         value_of(&pairs, "findings"),
-        "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:3,native:1,yagni:4,shrink:5",
-        "8 category を宣言順で（0 件も 0 と）書く: {pairs:?}"
+        ZERO_FINDINGS,
+        "3 category を宣言順で（0 件も 0 と）書く: {pairs:?}"
     );
     assert_eq!(value_of(&pairs, "population"), "files:7,lines:42", "母集団も同じ record に載る");
     assert_eq!(value_of(&pairs, "verdict"), "PASS", "3 値は動かない");
@@ -863,8 +863,8 @@ fn vgfind_gate_reads_a_pass_with_fit_counts_as_a_fail() {
     let (repo, state) = repo_with_state();
     let path = write_contract(&repo, &[], &[]);
     let id = implemented(&repo, &state, &path);
-    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:2,delete:1,stdlib:0,native:0,yagni:0,shrink:0";
-    let at = "constitution:src/lib.rs:3,delete:src/lib.rs:9";
+    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:2";
+    let at = "constitution:src/lib.rs:3;src/lib.rs:9";
     let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
     assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "食い違いは FAIL の rc 1: {}", stdout_of(&out));
     assert!(stdout_of(&out).contains("verdict=FAIL"), "{}", stdout_of(&out));
@@ -879,22 +879,27 @@ fn vgfind_gate_reads_a_pass_with_fit_counts_as_a_fail() {
     clean(&[&repo, &state]);
 }
 
-/// 対: 3 観点を 0 と数えて delete を 2 と数えた PASS の便は PASS（rc 0）のまま kind を書かず、at を写し、memo の口の plan の題は
-/// 質の頭 `質 delete — ` と `PASS delete:2` を持つ。
+/// gate は質を数えない（tsuzuri の判断の記録 ADR-63 の決定 (7)・乙'）: 3 観点を 0 と数えて質の 5 観点も並べた PASS の判定は、findings の
+/// 形が読めない周として INCONCLUSIVE（rc 3）で、evidence が表に無い名 delete を名指し、`verdict.json` は findings を持たない。3 観点だけを
+/// 並べ at を持つ同じ便の PASS は rc 0 で at を写す。
 #[test]
-fn vgfind_gate_keeps_a_pass_with_quality_counts_and_copies_the_at() {
+fn vrqual_gate_reads_quality_names_as_unreadable_findings() {
     let (repo, state) = repo_with_state();
     let path = write_contract(&repo, &[], &[]);
     let id = implemented(&repo, &state, &path);
-    let findings = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:2,stdlib:0,native:0,yagni:0,shrink:1";
-    let at = "delete:src/lib.rs:9;src/lib.rs:12,shrink:src/lib.rs:20";
-    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&state.join("lens-ran"), &vgfind_body(findings, at))));
-    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "質の観点だけの PASS は通る: {}", stderr_of(&out));
+    let marker = state.join("lens-ran");
+    let at = "contract-fit:src/lib.rs:9";
+    let eight = format!("{ZERO_FINDINGS},delete:2,stdlib:0,native:0,yagni:0,shrink:1");
+    let out = gate_once(&repo, &state, &id, Some(&fake_lens(&marker, &vgfind_body(&eight, at))));
+    assert_eq!(out.status.code(), Some(i32::from(RC_INCONCLUSIVE)), "質の名を持つ findings は rc 3: {}", stdout_of(&out));
     let pairs = verdict_pairs(&state, &id);
-    assert_eq!((value_of(&pairs, "verdict"), value_of(&pairs, "evidence")), ("PASS".to_owned(), "lens-saw-k8".to_owned()), "{pairs:?}");
-    assert_eq!((value_of(&pairs, "kind"), value_of(&pairs, "at")), (String::new(), at.to_owned()), "kind を書かず at を写す: {pairs:?}");
-    assert!(!pairs.iter().any(|(key, _)| key == "kind"), "kind の key を書かない: {pairs:?}");
-    assert_eq!(vgfind_memo_title(&state, &id), format!("[memo] 質 delete — {id} Gated PASS delete:2"), "memo の口の題");
+    assert_eq!(value_of(&pairs, "verdict"), "INCONCLUSIVE", "{pairs:?}");
+    assert!(value_of(&pairs, "evidence").contains("findings の category delete は表に無い"), "{pairs:?}");
+    assert!(!pairs.iter().any(|(key, _)| key == "findings"), "findings を書かない: {pairs:?}");
+    let ok = gate_once(&repo, &state, &id, Some(&fake_lens(&marker, &vgfind_body(ZERO_FINDINGS, at))));
+    assert_eq!(ok.status.code(), Some(i32::from(RC_OK)), "対: 3 観点だけなら通る: {}", stderr_of(&ok));
+    let pairs = verdict_pairs(&state, &id);
+    assert_eq!((value_of(&pairs, "findings"), value_of(&pairs, "at")), (ZERO_FINDINGS.to_owned(), at.to_owned()), "{pairs:?}");
     clean(&[&repo, &state]);
 }
 

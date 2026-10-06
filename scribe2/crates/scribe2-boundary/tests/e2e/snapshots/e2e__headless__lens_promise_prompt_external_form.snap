@@ -9,13 +9,16 @@ expression: prompt
 最後の 1 行に、次の形の JSON を**ちょうど 1 つ**書く。前置きや説明は JSON の前に書いてよいが、
 最終行は JSON だけにする。
 
-{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","kind":"<理由の型>","at":"<指した場所>"}
+{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","kind":"<理由の型>","at":"<指した場所>","quality":"delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","quality_at":"<観点>:<場所>;<場所>,<観点>:<場所>"}
 
 - `kind` は FAIL と INCONCLUSIVE の周に**必須**で、次の 6 語のちょうど 1 つ（PASS の周は書かない）:
   `teeth-outside-write-set`（verify の歯が write-set の外の file に在る）/ `goal-done-contradiction`（goal と done が
   矛盾する）/ `vacuous-assert`（歯が空虚で done を測れない）/ `literal-mismatch`（契約の字面が設計の節・要件の
   現物と合わない）/ `section-material-missing`（設計の節や要件の材料が欠けている）/ `other`（上のどれでもない）。
 - `at` は指した場所の列——path か識別子か §（`,` 区切りの語・自由文にしない・PASS の周は書かない）。
+- `quality` は**どの周も必須**で、下の数える質の観点の 5 つをこの順で全部書く（**0 件も 0 と書く**）。`quality_at` は 0 でない
+  観点ごとの場所の列（`<観点>:<場所>` を `quality` と同じ順に `,` で継ぎ、1 つの観点の場所が 2 つ以上なら `;` で継ぐ・
+  場所は path か `path:行` か識別子で自由文にしない・0 の観点は書かない）。
 
 ## 判定の決め方
 - **PASS**: 契約がそのまま実装役に渡せる。設計の節と食い違わず、歯で測れ、write-set が足りている。
@@ -30,6 +33,15 @@ expression: prompt
    契約の write-set の中で 1 周閉じている（段を足すのに列を触らない契約は不備）。
 3. **write-set の連鎖**: 節が名指す構造（型・module・snapshot・hook の生成物）のうち、契約の write-set に無い
    file が触られなければ実装できないものを名指す（閉包の外の落ち）。
+
+## 数える質の観点（5 つ・**件数だけ**を数える・判定の根拠にしない）
+契約が作る・変える code（契約と設計の節が名指す変更と、木に在ればその変更の写し〔差の file など〕）の中で、次の 5 つを
+数える。数は判定を動かさない——PASS / FAIL / INCONCLUSIVE は上の 3 観点だけで決め、質の数を理由に FAIL や INCONCLUSIVE を選ばない。
+- `delete`: 消せる面（重複・到達しない経路・使われない field）。
+- `stdlib`: 標準 library で足りる自作。
+- `native`: 言語・道具の既存機能で足りる作り込み。
+- `yagni`: この便が要らない一般化（将来のための引数・設定・抽象）。
+- `shrink`: 同じ意味のまま縮む面（分岐の重複・冗長な中間値）。
 
 ## 審査の前提
 - あなたには読みの道具（Read・Grep・Glob）だけが在る。cwd は審査の木（この契約を当てる前の repo の写し。未着地の祖先を

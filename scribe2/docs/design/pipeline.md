@@ -2307,3 +2307,13 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候�
 - 触らない: 撃つ行・段の順・`verify-main.jsonl` の record の字と並び・赤と測れないの極性・同じ木の省き（§27 の gate-cost）・着地の後の検出の木（`verify/<run>-place`）・便の木と並び。記録は木の置き場の別を残さない。
 - 限界: 温かい木は掃除（器の ADR-0081）と並びの上限（rules 行 `pipe.lanes_cap_mb`）に数えず、1 本の target の大きさを持ち続ける。木の中の古い成果で偽の緑が出る形は並びと同じで、冷えた所から撃つ確かめは CI に残る。
 - 歯（接頭辞 `vwarm_`・`crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs`・toy の便の verdict の `tree` を base の木へ替えて主実測を撃つ周にする）: 名乗った repo の 2 本の着地が同じ木で撃ち 2 本目が target の印を見る・名乗らない repo は便ごとの木・生きた所有者の lock の周は便ごとの木・置いた stray と替えた追跡の file は撃つ前に消える・作業木でない dir の周は触らず便ごとの木。
+
+## 72. 質の 5 観点は契約の審査が数えて `review.json` に写し、gate は数えない — 判定は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (7)・乙'）
+
+- なぜ: gate の PASS の 4 割が質の指摘（delete・stdlib・native・yagni・shrink）を持つが、数えるのが実装の後なので直しが起草へ戻らない。観点の置き場を契約の審査へ移し、観点の数は流れ全体で 8 つのまま増やさない。
+- 形:
+  1. **部品**: 5 観点の字は雛形の部品 `headless/lens-quality.txt` の 1 本に在り、契約の審査の雛形 `lens-contract.txt` の穴 `{quality}` が読む（1 走査の埋め・`--print-version` は部品の指紋 `lens-quality.txt=` も出す）。gate の雛形 `lens.txt` と findings の閉じた表（§17）は 3 観点（contract-fit・teeth-nonvacuous・constitution）だけになり、質の名を持つ findings は表に無い名として形が読めない周に倒れる。
+  2. **写し**: 契約の審査の lens は最終行の JSON に `quality`（5 観点を 1 度ずつ・0 も書く）と `quality_at`（0 でない観点の場所の列）を書く。器は 5 観点を 1 度ずつ持つ周だけ宣言の順の字に読み直して `review.json` の任意 field `quality` に、空白だけでない `quality_at` を `quality_at` に写す（どの判定の周も・schema 1 のまま・event の detail には載せない）。読めない周は写さないだけで、判定・理由の型・rc は動かさない。
+  3. **memo の口**: `ledger memo --run` の質の原本は、`Landed` の便と gate が PASS の `Gated` の便の `review.json` の PASS で quality の delete を 1 以上と数えた周に替わる（evidence と `quality_at` を写す・題の頭 `質 delete — ` は不変）。`Reviewed` の PASS（便は先へ進む）と `review.json` の無い周は終端でない。
+- 触らない: 契約の審査の 3 観点と判定の決め方・理由の型の 6 語・gate の判定と数の食い違いの読み（3 観点）と場所の列 `at`・`verdict.json` の key 列。
+- 歯（接頭辞 `vrqual_`）: 器の lib（`pipe/review/quality.rs`・`pipe/gate/findings.rs`・`headless/lens.rs`）と e2e（`tests/e2e/pipe/review.rs`・`tests/e2e/pipe/gate.rs`・`tests/e2e/ledger_memo.rs`）。

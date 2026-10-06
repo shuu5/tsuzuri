@@ -36,7 +36,7 @@ mod lens;
 mod record;
 mod verify;
 
-pub(crate) use findings::delete_count;
+pub(crate) use findings::counts_of;
 pub(crate) use lens::{last_json_object, lens_usage};
 pub use record::{
     detection_copies, next_number, records_of, skip_record, step_record, DetectionCopy, Record, Skipped,

@@ -359,6 +359,61 @@ fn pipe_review_kind_missing_or_unknown_or_unreadable_falls_to_unparsed_without_m
     clean(&[&repo, &state]);
 }
 
+// ───── 契約の審査が数える質（tsuzuri の判断の記録 ADR-63 の決定 (7)・乙'・接頭辞 `vrqual_`） ─────
+
+/// 質の 5 観点と場所の列を持つ偽 lens の最終行（PASS でない周は `kind` を other で書く）。
+fn vrqual_line(verdict: &str, quality: &str, at: &str) -> String {
+    let head = lens_finding(verdict, (verdict != "PASS").then_some("other"), None);
+    format!("{},\"quality\":\"{quality}\",\"quality_at\":\"{at}\"}}", head.trim_end_matches('}'))
+}
+
+/// 並べ替えた 5 観点（delete 2・shrink 1）。
+const VRQUAL_SHUFFLED: &str = "shrink:1,yagni:0,native:0,stdlib:0,delete:2";
+
+/// 質の場所の列。
+const VRQUAL_AT: &str = "delete:src/a.rs:3;src/b.rs,shrink:src/c.rs";
+
+/// lens が PASS で質の 5 観点を並べ替えて数えた便は rc 0 の PASS のまま、`review.json` の quality が宣言の順の 5 観点で quality_at が字のまま
+/// 残り、kind と at を持たず detail は verdict:PASS。FAIL の便は rc 1 の FAIL のまま kind と並んで同じ quality と quality_at を持つ。
+#[test]
+fn vrqual_review_copies_the_quality_without_moving_the_verdict() {
+    let want = "delete:2,stdlib:0,native:0,yagni:0,shrink:1";
+    for (bead, verdict, rc, detail) in [("s2-q1", "PASS", RC_OK, "verdict:PASS"), ("s2-q2", "FAIL", RC_REFUSED, "verdict:FAIL kind:other")] {
+        let (repo, state) = repo_with_state();
+        let out = intake_with_lens(&repo, &state, bead, &vrqual_line(verdict, VRQUAL_SHUFFLED, VRQUAL_AT));
+        assert_eq!(out.status.code(), Some(i32::from(rc)), "{bead}: 判定は動かない: {}", stderr_of(&out));
+        let id = run_id_of(&out);
+        let pairs = review_pairs(&state, &id);
+        assert_eq!(value_of(&pairs, "verdict"), verdict, "{bead}: {pairs:?}");
+        assert_eq!((value_of(&pairs, "quality"), value_of(&pairs, "quality_at")), (want.to_owned(), VRQUAL_AT.to_owned()), "{bead}: {pairs:?}");
+        assert_eq!(review_has(&state, &id, "kind"), verdict != "PASS", "{bead}: kind は PASS でない周だけ: {pairs:?}");
+        assert_eq!(reviewed_detail(&state, &id), detail, "{bead}: detail は質を載せない");
+        clean(&[&repo, &state]);
+    }
+}
+
+/// 読めない質は写さず判定を動かさない（正しい行から 1 句だけ外す）: 4 観点だけの quality・quality の key の無い行は quality も quality_at も
+/// 持たず、空白だけの quality_at は quality だけを持ち、どれも rc 0 の PASS。
+#[test]
+fn vrqual_review_drops_an_unreadable_quality() {
+    let good = vrqual_line("PASS", VRQUAL_SHUFFLED, VRQUAL_AT);
+    for (bead, line, quality, at) in [
+        ("s2-q3", good.replace("shrink:1,", ""), false, false),
+        ("s2-q4", good.replace("\"quality\":", "\"qualities\":"), false, false),
+        ("s2-q5", good.replace(VRQUAL_AT, " "), true, false),
+        ("s2-q6", good.clone(), true, true),
+    ] {
+        // PASS の便は live のまま write-set を持つので、便ごとに repo と置き場を分ける。
+        let (repo, state) = repo_with_state();
+        let out = intake_with_lens(&repo, &state, bead, &line);
+        assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{bead}: PASS のまま: {}", stderr_of(&out));
+        let id = run_id_of(&out);
+        assert_eq!(value_of(&review_pairs(&state, &id), "verdict"), "PASS", "{bead}");
+        assert_eq!((review_has(&state, &id, "quality"), review_has(&state, &id, "quality_at")), (quality, at), "{bead}: {:?}", review_pairs(&state, &id));
+        clean(&[&repo, &state]);
+    }
+}
+
 // ───── done の項目ごとの歯の対応の表（設計 contract-source.md §64・行 bs・接頭辞 `pipe_review_done_items_`） ─────
 
 /// (c)〜(f) が撃つ同じ done（順の外の印 (2) を 1 つ持つ 3 項目・書き手と読みの数え方が違うと (d)〜(f) が落ちる）。

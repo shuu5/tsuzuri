@@ -869,9 +869,9 @@ pub(super) fn gate_with_rules(repo: &Path, state: &Path, id: &str, rules: &Path,
     ])
 }
 
-/// 偽 lens が出す findings の 8 category（宣言順・**0 件も 0 と書く**・`s2-07l.188`）。
+/// 偽 lens が出す findings の 3 category（宣言順・**0 件も 0 と書く**・`s2-07l.188`）。
 pub(super) const FAKE_FINDINGS: &str =
-    "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:0,stdlib:0,native:0,yagni:0,shrink:0";
+    "contract-fit:0,teeth-nonvacuous:0,constitution:0";
 
 /// 偽 lens が出す母集団（**0 でない**＝読んだ・0 は「見ていない」で INCONCLUSIVE へ倒る）。
 pub(super) const FAKE_POPULATION: &str = "files:1,lines:1";
@@ -898,7 +898,7 @@ fn pipe_gate_findings_fake_lens_keys_reach_the_verdict_record() {
     assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "偽 lens の 2 key で通る: {}", stderr_of(&out));
     assert!(marker.exists(), "lens を起動した周（判定に届いている）");
     let pairs = verdict_pairs(&state, &id);
-    assert_eq!(value_of(&pairs, "findings"), FAKE_FINDINGS, "8 category の件数が record に載る: {pairs:?}");
+    assert_eq!(value_of(&pairs, "findings"), FAKE_FINDINGS, "3 category の件数が record に載る: {pairs:?}");
     assert_eq!(value_of(&pairs, "population"), FAKE_POPULATION, "母集団も同じ record に載る: {pairs:?}");
     clean(&[&repo, &state]);
 }

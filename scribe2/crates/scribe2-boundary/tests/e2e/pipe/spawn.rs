@@ -2733,9 +2733,9 @@ fn fail_verdict(evidence: &str, findings: &str) -> String {
     )
 }
 
-/// 1 本目の gate の FAIL の findings（`teeth-nonvacuous` だけ 2・他の 7 観点は 0）。
+/// 1 本目の gate の FAIL の findings（`teeth-nonvacuous` だけ 2・他の 2 観点は 0）。
 const PRIOR_FINDINGS: &str =
-    "contract-fit:0,teeth-nonvacuous:2,constitution:0,delete:0,stdlib:0,native:0,yagni:0,shrink:0";
+    "contract-fit:0,teeth-nonvacuous:2,constitution:0";
 
 /// 1 本目を緑で Implemented まで通し、`evidence` と `findings` を返す偽 lens で gate の FAIL（rc 1）にして終端させる。
 /// `second` は偽 runner の 2 回目の turn の本文（3 回目は緑の commit）。

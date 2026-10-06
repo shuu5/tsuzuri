@@ -869,11 +869,11 @@ mod tests {
     }
 
     /// PASS で 3 観点のどれかを数えた判定は FAIL（理由の型・3 観点の数・lens の evidence）に読み、FAIL・INCONCLUSIVE の判定と
-    /// 質の観点だけを数えた PASS は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
+    /// 3 観点を 0 と数えた PASS は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
     #[test]
     fn vgfind_parse_reads_a_pass_with_fit_counts_as_a_fail() {
         let line = |verdict: &str, fit: &str| {
-            format!(r#"{{"verdict":"{verdict}","evidence":"lens-saw-q3","findings":"{fit},delete:2,stdlib:0,native:0,yagni:0,shrink:1","population":"files:2,lines:9"}}"#)
+            format!(r#"{{"verdict":"{verdict}","evidence":"lens-saw-q3","findings":"{fit}","population":"files:2,lines:9"}}"#)
         };
         let fits = [
             "contract-fit:1,teeth-nonvacuous:0,constitution:0",
@@ -891,16 +891,16 @@ mod tests {
                 assert_eq!((kept.verdict.as_str(), kept.kind, kept.evidence.as_str()), (verdict, None, "lens-saw-q3"), "{verdict} は動かさない");
             }
         }
-        let quality = super::parse_lens(&line("PASS", "contract-fit:0,teeth-nonvacuous:0,constitution:0"));
-        assert_eq!((quality.verdict, quality.kind, quality.evidence.as_str()), (super::Verdict::Pass, None, "lens-saw-q3"), "質の観点だけ");
+        let zero = super::parse_lens(&line("PASS", "contract-fit:0,teeth-nonvacuous:0,constitution:0"));
+        assert_eq!((zero.verdict, zero.kind, zero.evidence.as_str()), (super::Verdict::Pass, None, "lens-saw-q3"), "3 観点が 0");
     }
 
     /// 集計を読めた周は lens の `at` の字をそのまま写し、無い・字でない・空白だけの `at` と集計を読めない周の `at` は写さず、
     /// `at` は判定を動かさない（tsuzuri の判断の記録 ADR-63 の決定 (7)）。
     #[test]
     fn vgfind_parse_copies_the_at_without_moving_the_verdict() {
-        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:1,stdlib:0,native:0,yagni:0,shrink:2","population":"files:1,lines:1""#;
-        let at = "delete:src/q.rs:12,shrink:src/r.rs;src/s.rs";
+        let head = r#"{"verdict":"PASS","evidence":"ok","findings":"contract-fit:0,teeth-nonvacuous:0,constitution:0","population":"files:1,lines:1""#;
+        let at = "contract-fit:src/q.rs:12,constitution:src/r.rs;src/s.rs";
         let read = |tail: &str| super::parse_lens(&format!("{head}{tail}}}"));
         let (copied, bare) = (read(&format!(",\"at\":\"{at}\"")), read(""));
         assert_eq!(copied.at.as_deref(), Some(at), "字のまま写す");

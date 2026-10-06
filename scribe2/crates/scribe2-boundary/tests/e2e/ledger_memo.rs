@@ -1,4 +1,4 @@
-//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`・質の原本の歯は接頭辞 `vgfind_`・
+//! memo の入口（設計 docs/design/ledger-form.md §3 の 8・§6 行 c・接頭辞 `ledger_memo_plan_`・質の原本の歯は接頭辞 `vrqual_`・
 //! tsuzuri の判断の記録 ADR-63 の決定 (7)）。
 //!
 //! 置き場は tmp の state dir（event log は固定 ts で積み、run dir に `verdict.json` / `review.json` を置く）で、実 binary の
@@ -261,22 +261,27 @@ fn ledger_memo_plan_refuses_non_terminal_and_materialless_runs() {
     fs::remove_dir_all(&place.dir).ok();
 }
 
-/// 質の原本の歯の `verdict.json`（3 観点は 0・delete は `delete` の字・母集団は 0 でない・at は在る周だけ）。
-fn vgfind_verdict(verdict: &str, delete: &str, evidence: &str, at: Option<&str>) -> String {
-    let at = at.map(|found| format!(",\"at\":\"{found}\"")).unwrap_or_default();
-    let findings = format!("contract-fit:0,teeth-nonvacuous:0,constitution:0,{delete},stdlib:0,native:0,yagni:0,shrink:4");
-    format!("{{\"schema\":1,\"verdict\":\"{verdict}\",\"evidence\":\"{evidence}\",\"findings\":\"{findings}\",\"population\":\"files:2,lines:8\"{at}}}\n")
+/// 質の原本の歯の `review.json`（契約の審査の記録・delete は `delete` の字・quality_at は在る周だけ）。
+fn vrqual_review(verdict: &str, delete: &str, evidence: &str, at: Option<&str>) -> String {
+    let at = at.map(|found| format!(",\"quality_at\":\"{found}\"")).unwrap_or_default();
+    let quality = format!("{delete},stdlib:0,native:0,yagni:0,shrink:4");
+    format!("{{\"schema\":1,\"verdict\":\"{verdict}\",\"evidence\":\"{evidence}\",\"quality\":\"{quality}\"{at}}}\n")
 }
 
-/// 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)）: `Landed` の便の `verdict.json` が PASS で findings の delete を 1 以上と数えた周は、
-/// 題の頭が `質 delete — ` で kind が `PASS delete:<n>` の plan を出し、evidence と at を観測へ写す（at の無い file は `-`）。
+/// gate の PASS の `verdict.json`（3 観点は 0・質を持たない）。
+const VRQUAL_GATE_PASS: &str = "{\"schema\":1,\"verdict\":\"PASS\",\"evidence\":\"gate-ok\",\"findings\":\"contract-fit:0,teeth-nonvacuous:0,constitution:0\",\"population\":\"files:2,lines:8\"}\n";
+
+/// 質の原本（tsuzuri の判断の記録 ADR-63 の決定 (7)・乙'）: `Landed` の便と、gate が PASS の `Gated` の便の `review.json` が PASS で
+/// quality の delete を 1 以上と数えた周は、題の頭が `質 delete — ` で kind が `PASS delete:<n>` の plan を出し、`review.json` の evidence と
+/// quality_at を観測へ写す（quality_at の無い file は `-`）。
 #[test]
-fn vgfind_memo_plans_a_landed_pass_that_counted_delete() {
+fn vrqual_memo_plans_from_the_review_quality() {
     let place = place();
     stage(&place, "d-land", Stage::Landed, None, "2026-09-20T00:07:00Z");
-    put(&place, "d-land", "verdict.json", &vgfind_verdict("PASS", "delete:3", "消せる枝 m2", Some("delete:src/m2.rs:4;src/m2.rs:9")));
-    stage(&place, "d-bare", Stage::Landed, None, "2026-09-20T00:07:01Z");
-    put(&place, "d-bare", "verdict.json", &vgfind_verdict("PASS", "delete:1", "使われない欄 n5", None));
+    put(&place, "d-land", "review.json", &vrqual_review("PASS", "delete:3", "消せる枝 m2", Some("delete:src/m2.rs:4;src/m2.rs:9")));
+    stage(&place, "d-gate", Stage::Gated, None, "2026-09-20T00:07:01Z");
+    put(&place, "d-gate", "verdict.json", VRQUAL_GATE_PASS);
+    put(&place, "d-gate", "review.json", &vrqual_review("PASS", "delete:1", "使われない欄 n5", None));
     assert_eq!(
         plan_of(&place, "d-land", &[]),
         want_run(
@@ -287,41 +292,52 @@ fn vgfind_memo_plans_a_landed_pass_that_counted_delete() {
         "着地した便の質の原本"
     );
     assert_eq!(
-        plan_of(&place, "d-bare", &[]),
+        plan_of(&place, "d-gate", &[]),
         want_run(
-            "[memo] 質 delete — d-bare Landed PASS delete:1",
-            &["- run: d-bare", "- stage: Landed", "- kind: PASS delete:1"],
+            "[memo] 質 delete — d-gate Gated PASS delete:1",
+            &["- run: d-gate", "- stage: Gated", "- kind: PASS delete:1"],
             &["- evidence: 使われない欄 n5", "- at: -"],
         ),
-        "at の無い file は `-`"
+        "gate の PASS の便も契約の審査の記録から・quality_at の無い file は `-`"
     );
     fs::remove_dir_all(&place.dir).ok();
 }
 
-/// 質の原本の断り（正しい file から 1 句だけ外す）: delete が 0 の PASS（`Gated` と `Landed`）・母集団の無い PASS・PASS でない `Landed` の
-/// 判定は終端でない、evidence が空の PASS は原本が無い（閉じた理由の 1 行・rc 1・stdout 0 byte）。
+/// 質の原本の断り（正しい file から 1 句だけ外す）: delete が 0・quality の無い・PASS でない `review.json` と、`review.json` の無い
+/// `Landed`、gate の `verdict.json` の findings に delete を数えても `review.json` の delete が 0 の `Gated`、`review.json` が数えた
+/// `Reviewed` の PASS は終端でなく、evidence が空の PASS は原本が無い（閉じた理由の 1 行・rc 1・stdout 0 byte）。
 #[test]
-fn vgfind_memo_refuses_a_pass_without_a_counted_delete() {
+fn vrqual_memo_refuses_a_review_without_a_counted_delete() {
     let place = place();
-    let good = vgfind_verdict("PASS", "delete:2", "消せる枝 m2", Some("delete:src/m2.rs:4"));
+    let good = vrqual_review("PASS", "delete:2", "消せる枝 m2", Some("delete:src/m2.rs:4"));
+    let zero = good.replace("delete:2", "delete:0");
     let files = [
-        ("z-gate", Stage::Gated, good.replace("delete:2", "delete:0")),
-        ("z-land", Stage::Landed, good.replace("delete:2", "delete:0")),
-        ("u-land", Stage::Landed, good.replace(",\"population\":\"files:2,lines:8\"", "")),
-        ("f-land", Stage::Landed, good.replace("\"verdict\":\"PASS\"", "\"verdict\":\"FAIL\"")),
-        ("e-land", Stage::Landed, good.replace("消せる枝 m2", "")),
+        ("z-land", Stage::Landed, Some(zero.clone())),
+        ("u-land", Stage::Landed, Some(good.replace("\"quality\"", "\"findings\""))),
+        ("f-land", Stage::Landed, Some(good.replace("\"verdict\":\"PASS\"", "\"verdict\":\"FAIL\""))),
+        ("e-land", Stage::Landed, Some(good.replace("消せる枝 m2", ""))),
+        ("n-land", Stage::Landed, None),
+        ("z-gate", Stage::Gated, Some(zero)),
+        ("p-rev", Stage::Reviewed, None),
     ];
     for (run, found, body) in &files {
-        assert_ne!(body, &good, "{run}: 1 句を外した file");
         stage(&place, run, *found, None, "2026-09-20T00:08:00Z");
-        put(&place, run, "verdict.json", body);
+        if let Some(text) = body {
+            assert_ne!(text, &good, "{run}: 1 句を外した file");
+            put(&place, run, "review.json", text);
+        }
     }
+    put(&place, "z-gate", "verdict.json", &VRQUAL_GATE_PASS.replace("constitution:0", "constitution:0,delete:3"));
+    put(&place, "n-land", "verdict.json", VRQUAL_GATE_PASS);
+    put(&place, "p-rev", "review.json", &good);
     let cases = [
-        ("z-gate", "memo: refused reason=not-terminal run=z-gate stage=Gated"),
         ("z-land", "memo: refused reason=not-terminal run=z-land stage=Landed"),
         ("u-land", "memo: refused reason=not-terminal run=u-land stage=Landed"),
         ("f-land", "memo: refused reason=not-terminal run=f-land stage=Landed"),
         ("e-land", "memo: refused reason=no-material run=e-land stage=Landed"),
+        ("n-land", "memo: refused reason=not-terminal run=n-land stage=Landed"),
+        ("z-gate", "memo: refused reason=not-terminal run=z-gate stage=Gated"),
+        ("p-rev", "memo: refused reason=not-terminal run=p-rev stage=Reviewed"),
     ];
     let state = place.state.display().to_string();
     for (run, want) in cases {

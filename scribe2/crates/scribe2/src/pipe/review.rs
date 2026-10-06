@@ -21,7 +21,8 @@
 //! detail を `verdict:<V> kind:<k>` の 2 語にする（`at` は event に載せない・PASS は `verdict:PASS` のまま）。lens の
 //! JSON が無い周（器が作る INCONCLUSIVE）と `kind` が無い・語でない周は 7 語目 [`FindingKind::Unparsed`] に倒し、
 //! **verdict は lens の値のまま**（理由の欠けを INCONCLUSIVE や `other` に化けさせない・C10）。`pipe report` は
-//! event の detail からこの型を数える（[`read_detail`]）。
+//! event の detail からこの型を数える（[`read_detail`]）。lens が数えた質の 5 観点の数と場所の列（子 module `quality`）は、
+//! どの判定の周も読めた時だけ `review.json` の `quality` と `quality_at` に写し、判定は動かさない（tsuzuri の判断の記録 ADR-63 の決定 (7)）。
 //!
 //! 受付の 2 門（設計 contract-source.md §23・`s2-07l.396`）はこの型と `at` を入力にする: 同型の停止は `review.json` の
 //! 判定を [`judgement_of`] で読み（`kind` の無い古い便は `unparsed`）、焼き直しの門は直前の便の指摘に「対応する差分」が
@@ -52,12 +53,17 @@ pub(in crate::pipe) mod index;
 mod items;
 mod judgement;
 mod outside;
+mod quality;
 mod requirements;
 pub(in crate::pipe) mod tree;
 pub use base::base_block;
 pub use index::index_block;
 pub(crate) use items::done_items;
 pub use outside::outside_block;
+pub(crate) use quality::delete_count;
+#[cfg(test)]
+pub(crate) use quality::NAMES as QUALITY_NAMES;
+use quality::Quality;
 pub use judgement::{judgement_of, review_dir, review_path, unaddressed, verdict_of};
 pub use judgement::{Judgement, Rework, ROW_SAME_KIND_STOP};
 use requirements::requirements_text;
@@ -305,12 +311,14 @@ struct Finding {
     kind: Option<FindingKind>,
     /// lens が `at` に書いた指した場所の列（`,` 区切りの語・書いた周だけ・PASS の周は `None`）。
     at: Option<String>,
+    /// lens が数えた質の 5 観点と場所の列（読めた周だけ・どの判定の周も持ちうる・判定は動かさない）。
+    quality: Option<Quality>,
 }
 
 impl Finding {
     /// 器が作る INCONCLUSIVE（lens の判定に届かなかった周・理由の型は [`FindingKind::Unparsed`]）。
     fn inconclusive(evidence: String) -> Self {
-        Self { verdict: Verdict::Inconclusive, evidence, kind: Some(FindingKind::Unparsed), at: None }
+        Self { verdict: Verdict::Inconclusive, evidence, kind: Some(FindingKind::Unparsed), at: None, quality: None }
     }
 }
 
@@ -674,6 +682,7 @@ fn tip(found: Finding, text: &str, items: Items<'_>) -> Finding {
             evidence: format!("done の対応の表が欠ける（{reason}）: {evidence}"),
             kind: Some(FindingKind::Unparsed),
             at: found.at.clone().filter(|_| verdict != Verdict::Pass),
+            quality: found.quality.clone(),
         },
         (Ok(none), _) if none.is_empty() => found,
         (Ok(none), Verdict::Pass) => Finding {
@@ -681,6 +690,7 @@ fn tip(found: Finding, text: &str, items: Items<'_>) -> Finding {
             evidence: format!("歯の無い done の項目 {}（lens の対応の表）: {evidence}", items::listed(&none)),
             kind: Some(FindingKind::VacuousAssert),
             at: items::named_at(None, &none),
+            quality: found.quality.clone(),
         },
         (Ok(none), _) => Finding {
             evidence: format!("{evidence}・歯の無い done の項目 {}", items::listed(&none)),
@@ -770,13 +780,15 @@ fn parse_lens(text: &str) -> Finding {
     let Some(verdict) = get("verdict").and_then(Verdict::parse) else {
         return Finding::inconclusive("lens の verdict が 3 値でない".to_owned());
     };
+    let quality = Quality::read(get("quality"), get("quality_at"));
     match verdict {
-        Verdict::Pass => Finding { verdict, evidence, kind: None, at: None },
+        Verdict::Pass => Finding { verdict, evidence, kind: None, at: None, quality },
         Verdict::Fail | Verdict::Inconclusive => Finding {
             verdict,
             evidence,
             kind: Some(get("kind").and_then(FindingKind::parse).unwrap_or(FindingKind::Unparsed)),
             at: get("at").map(str::to_owned),
+            quality,
         },
     }
 }
@@ -810,7 +822,7 @@ fn row_reused(entry: &Review<'_>, at: (&Path, &Path), cmd: &str, sha: &str) -> O
 }
 
 /// 判定を `review.json` へ atomic に書き、`Reviewed` を 1 件追記する。`kind` と `at` は任意 field（schema 1 のまま・
-/// 古い読み手は無視・PASS の周は無い）。使い回した周は detail の末尾に [`ROW_REUSED`] を足す。
+/// 古い読み手は無視・PASS の周は無い）。`quality` と `quality_at` も任意 field で、質を読めた周だけ（どの判定の周も）。使い回した周は detail の末尾に [`ROW_REUSED`] を足す。
 fn settle(
     entry: &Review<'_>,
     finding: &Finding,
@@ -829,6 +841,10 @@ fn settle(
     }
     if let Some(at) = &finding.at {
         fields.push(("at", Value::Str(at.clone())));
+    }
+    if let Some(quality) = &finding.quality {
+        fields.push(("quality", Value::Str(quality.field())));
+        fields.extend(quality.at().map(|at| ("quality_at", Value::Str(at.to_owned()))));
     }
     if let Some(released) = scope {
         fields.push(("scope", Value::Str(released.as_str().to_owned())));
@@ -1154,6 +1170,7 @@ mod tests {
                 evidence: "e".to_owned(),
                 kind: Some(FindingKind::LiteralMismatch),
                 at: Some("a.rs,§2".to_owned()),
+                quality: None,
             }
         );
         let missing = parse_lens(r#"{"verdict":"FAIL","evidence":"e"}"#);
@@ -1359,7 +1376,7 @@ mod tests {
             [FindingKind::GoalDoneContradiction, FindingKind::VacuousAssert, FindingKind::Other],
             "母集団 3 語（宣言順）"
         );
-        let fail = |kind: FindingKind| Finding { verdict: Verdict::Fail, evidence: "e".to_owned(), kind: Some(kind), at: Some("x".to_owned()) };
+        let fail = |kind: FindingKind| Finding { verdict: Verdict::Fail, evidence: "e".to_owned(), kind: Some(kind), at: Some("x".to_owned()), quality: None };
         let mut fallen = 0;
         for kind in FINDING_KINDS {
             let found = narrow(fail(*kind), true);
@@ -1376,7 +1393,7 @@ mod tests {
             assert_eq!(narrow(unsure.clone(), true), unsure, "INCONCLUSIVE は不変");
         }
         assert_eq!(fallen, 4, "3 語の外は 7 語のうち 4 語");
-        let passed = Finding { verdict: Verdict::Pass, evidence: "e".to_owned(), kind: None, at: None };
+        let passed = Finding { verdict: Verdict::Pass, evidence: "e".to_owned(), kind: None, at: None, quality: None };
         assert_eq!(narrow(passed.clone(), true), passed, "PASS は不変");
     }
 

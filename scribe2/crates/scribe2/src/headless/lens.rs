@@ -111,6 +111,9 @@ const TEMPLATE: &str = include_str!("lens.txt");
 /// 契約の審査の prompt の文面（穴 = `{contract}` / `{design}` / `{requirements}`・diff は無い）。
 const CONTRACT_TEMPLATE: &str = include_str!("lens-contract.txt");
 
+/// 質の 5 観点の字（契約の審査の雛形の穴 `{quality}` に入る部品・gate の雛形は持たない・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
+const QUALITY_PART: &str = include_str!("lens-quality.txt");
+
 /// 設計の節の本文が契約の goal と同じ字の周に、`{design}` の穴で本文の代わりに置く 1 行（[`design_hole`]）。
 const SAME_GOAL: &str = "（本文は契約の goal と同じ字・上の契約の goal を節の本文として読む）";
 
@@ -350,7 +353,7 @@ pub fn dispatch(args: &[String]) -> Outcome {
 }
 
 /// `--print-version` の 1 回（設計 row-review.md §5 行 h）: claude を起こさず、lens の子が claude を起こす時と同じ組み立て
-/// （[`rows_of`] の cap と [`call_of`] が組む [`Call`] の欄のうち prompt の本文と path の値を除いた全部）と組み込みの雛形 3 本の
+/// （[`rows_of`] の cap と [`call_of`] が組む [`Call`] の欄のうち prompt の本文と path の値を除いた全部）と組み込みの雛形 3 本と質の部品の
 /// 本文の FNV-1a 64 を `key=value` で並べた 1 行を stdout に出す。`--contract` / `--worktree` は読まない。rules 行が解けない周は
 /// claude を起こす周と同じ rc と断りの 1 行で、stdout は空。
 fn version(args: &[String], row: &str) -> Outcome {
@@ -373,6 +376,7 @@ fn version(args: &[String], row: &str) -> Outcome {
         ("lens.txt", fnv1a_64(TEMPLATE.as_bytes())),
         ("lens-contract.txt", fnv1a_64(CONTRACT_TEMPLATE.as_bytes())),
         ("lens-memo.txt", fnv1a_64(MEMO_TEMPLATE.as_bytes())),
+        ("lens-quality.txt", fnv1a_64(QUALITY_PART.as_bytes())),
     ];
     let body: Vec<String> = pairs.iter().map(|(key, value)| format!("{key}={value}")).collect();
     Outcome::ok_line(format!("{VERSION_HEAD} {}", body.join(" ")))
@@ -519,6 +523,7 @@ fn contract_prompt(contract: &Path, stated: &str, (design, requirements): (&str,
             ("{base}", &base),
             ("{outside}", &outside),
             ("{index}", &index),
+            ("{quality}", QUALITY_PART),
         ],
     ))
 }
@@ -750,7 +755,7 @@ fn with_usage(verdict: &str, usage: Option<&Usage>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::CONTRACT_TEMPLATE;
+    use super::{CONTRACT_TEMPLATE, QUALITY_PART, TEMPLATE};
     use crate::cli_outcome::Outcome;
     use crate::pipe::review::{BASE_FILE, DESIGN_FILE, INDEX_FILE, ITEMS_FILE, OUTSIDE_FILE, REQUIREMENTS_FILE};
     use std::path::{Path, PathBuf};
@@ -835,6 +840,7 @@ mod tests {
         let expected = CONTRACT_TEMPLATE
             .replacen("{contract}", STATED, 1)
             .replacen("{design}", "節の本文\n", 1)
+            .replacen("{quality}", QUALITY_PART, 1)
             .replacen("{requirements}{promises}{base}{outside}{index}", "FR1: 要件の本文\n", 1);
         assert_eq!(bare, expected, "写しが無い周の prompt は穴を足す前の雛形と同じ");
         let _ = std::fs::remove_dir_all(&dir);
@@ -1113,5 +1119,22 @@ mod tests {
         assert!(costed.ends_with(&format!(",\"provenance\":\"{good}\"}}")), "{costed}");
         let plain = super::read_verdict(out("{\"verdict\":\"PASS\"}"), good).out.join("\n");
         assert_eq!(plain, "{\"verdict\":\"PASS\"}", "消費の 6 値が無い判定は変えない");
+    }
+
+    /// 質の部品は 5 観点の行を器の名の表（`pipe::review` の質の名）の順に 1 行ずつだけ持ち、契約の審査の雛形はその穴 `{quality}` を
+    /// 1 つだけ持って出すものの形に `quality` と `quality_at` を書き、gate の雛形は質の名を 1 つも持たない（tsuzuri の判断の記録 ADR-63 の決定 (7)）。
+    #[test]
+    fn vrqual_contract_template_reads_the_quality_part_and_the_gate_template_does_not() {
+        let heads: Vec<String> = QUALITY_PART.lines().map(|line| line.split(':').next().unwrap_or_default().to_owned()).collect();
+        let names: Vec<String> = crate::pipe::review::QUALITY_NAMES.iter().map(|name| format!("- `{name}`")).collect();
+        assert_eq!(heads, names, "部品の行の頭は名の表の順: {QUALITY_PART}");
+        assert_eq!(CONTRACT_TEMPLATE.matches("{quality}").count(), 1, "穴は 1 つ");
+        let form = r#""quality":"delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","quality_at":"<観点>:<場所>;<場所>,<観点>:<場所>"}"#;
+        assert_eq!(CONTRACT_TEMPLATE.lines().filter(|line| line.ends_with(form)).count(), 1, "出すものの形の末");
+        let rule = "数は判定を動かさない——PASS / FAIL / INCONCLUSIVE は上の 3 観点だけで決め、質の数を理由に FAIL や INCONCLUSIVE を選ばない。";
+        assert_eq!(CONTRACT_TEMPLATE.matches(rule).count(), 1, "判定を動かさない 1 文");
+        for name in crate::pipe::review::QUALITY_NAMES {
+            assert!(!TEMPLATE.contains(&format!("`{name}`")) && !TEMPLATE.contains(&format!("{name}:<n>")), "gate の雛形は {name} を持たない");
+        }
     }
 }

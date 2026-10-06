@@ -9,8 +9,8 @@
 
 /// lens が数える findings の観点（**閉じた enum**・宣言順が verdict の字面の順・憲法 C2）。
 ///
-/// 既存の観点 3 つ（契約適合 / 歯の非空虚 / 憲法）と過剰設計の 5 種で閉じる。自由文の名を
-/// 許すと同じ欠陥が別名で数えられ、件数が集計できない（却下案・設計 §17）。
+/// 観点 3 つ（契約適合 / 歯の非空虚 / 憲法）で閉じる。自由文の名を許すと同じ欠陥が別名で数えられ、件数が集計できない
+/// （却下案・設計 §17）。過剰設計の 5 種は gate が数えず、契約の審査が数える（`pipe::review` の質・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Findings {
     /// 契約（goal / done / write-set）と diff の食い違い。
@@ -19,30 +19,11 @@ pub(super) enum Findings {
     TeethNonvacuous,
     /// 憲法（生成 file `docs/constitution.md`）の条項に反する面。
     Constitution,
-    /// 消せる面（重複・到達しない経路・使われない field）。
-    Delete,
-    /// 標準 library で足りる自作。
-    Stdlib,
-    /// 言語・道具の既存機能で足りる作り込み。
-    Native,
-    /// この便が要らない一般化（将来のための引数・設定・抽象）。
-    Yagni,
-    /// 同じ意味のまま縮む面（分岐の重複・冗長な中間値）。
-    Shrink,
 }
 
 impl Findings {
     /// 全 variant（**宣言順**＝`findings` の字面の並び順）。
-    pub(super) const ALL: [Self; 8] = [
-        Self::ContractFit,
-        Self::TeethNonvacuous,
-        Self::Constitution,
-        Self::Delete,
-        Self::Stdlib,
-        Self::Native,
-        Self::Yagni,
-        Self::Shrink,
-    ];
+    pub(super) const ALL: [Self; 3] = [Self::ContractFit, Self::TeethNonvacuous, Self::Constitution];
 
     /// verdict と雛形に書く字面（**網羅 match**・表に無い名は読む側が断る）。
     pub(super) fn as_str(self) -> &'static str {
@@ -50,11 +31,6 @@ impl Findings {
             Self::ContractFit => "contract-fit",
             Self::TeethNonvacuous => "teeth-nonvacuous",
             Self::Constitution => "constitution",
-            Self::Delete => "delete",
-            Self::Stdlib => "stdlib",
-            Self::Native => "native",
-            Self::Yagni => "yagni",
-            Self::Shrink => "shrink",
         }
     }
 }
@@ -109,7 +85,7 @@ impl Population {
     }
 }
 
-/// verdict の findings の集計（8 category の件数 + 母集団）。**件数は 0 も持つ**。
+/// verdict の findings の集計（3 category の件数 + 母集団）。**件数は 0 も持つ**。
 #[derive(Debug)]
 pub(super) struct Tally {
     /// [`Findings::ALL`] と同じ並びの件数。
@@ -121,33 +97,15 @@ pub(super) struct Tally {
 impl Tally {
     /// verdict の 2 key を読む。
     ///
-    /// **8 category を全部**（0 も）要る＝欠け・重複・表に無い名・母集団の不備は `Err` で、
+    /// **3 category を全部**（0 も）要る＝欠け・重複・表に無い名・母集団の不備は `Err` で、
     /// 呼び手（`super::lens::parse_lens`）が INCONCLUSIVE へ倒す（測り直せる側・FR14）。
     /// `Err` は 2 値（[`Unread`]）——母集団 0 だけが「読めたが規則で断った」側で、残りは「形が読めない」側。
     pub(super) fn parse(findings: &str, population: &str) -> Result<Self, Unread> {
-        let pairs = findings
-            .split(',')
-            .map(count_pair)
-            .collect::<Result<Vec<_>, String>>()
-            .map_err(Unread::Malformed)?;
-        if let Some((name, _)) = pairs.iter().find(|(name, _)| !known(name)) {
-            return Err(Unread::Malformed(format!("findings の category {name} は表に無い")));
-        }
-        let mut counts = Vec::with_capacity(Findings::ALL.len());
-        for found in Findings::ALL {
-            let mut hits = pairs.iter().filter(|(name, _)| name == &found.as_str());
-            let (_, count) = hits
-                .next()
-                .ok_or_else(|| Unread::Malformed(format!("findings に {} が無い", found.as_str())))?;
-            if hits.next().is_some() {
-                return Err(Unread::Malformed(format!("findings の {} が 2 度出た", found.as_str())));
-            }
-            counts.push(*count);
-        }
+        let counts = counts_of(findings, &Findings::ALL.map(Findings::as_str)).map_err(Unread::Malformed)?;
         Ok(Self { counts, population: Population::parse(population)? })
     }
 
-    /// `verdict.json` に書く `findings` の字面（**宣言順・8 category を 0 も含めて全部**）。
+    /// `verdict.json` に書く `findings` の字面（**宣言順・3 category を 0 も含めて全部**）。
     ///
     /// lens が並べ替えて出した周も記帳の順は 1 つである（集計する側が順を持つ・C2）。
     pub(super) fn findings_field(&self) -> String {
@@ -164,36 +122,33 @@ impl Tally {
         format!("files:{},lines:{}", self.population.files, self.population.lines)
     }
 
-    /// 観点 `found` の件数（[`Findings::ALL`] と同じ並びの `counts` から引く）。
-    fn count(&self, found: Findings) -> u64 {
-        let at = Findings::ALL.iter().position(|seen| *seen == found);
-        at.and_then(|index| self.counts.get(index)).copied().unwrap_or(0)
-    }
-
-    /// 判定と数の食い違いの材料（tsuzuri の判断の記録 ADR-63 の決定 (6)）。[`FIT`] の 3 観点のどれかを 1 以上と数えた周だけ、
-    /// 3 観点の件数を宣言順の字面（`contract-fit:<n>,teeth-nonvacuous:<n>,constitution:<n>`）で返す。
+    /// 判定と数の食い違いの材料（tsuzuri の判断の記録 ADR-63 の決定 (6)）。3 観点（数えたら PASS を返さない 3 つ・雛形 `lens.txt` の
+    /// 判定の決め方の 1 文と同じ）のどれかを 1 以上と数えた周だけ、[`Self::findings_field`] の字面を返す。
     pub(super) fn mismatch(&self) -> Option<String> {
-        FIT.iter().any(|found| self.count(*found) > 0).then(|| {
-            FIT.iter().map(|found| format!("{}:{}", found.as_str(), self.count(*found))).collect::<Vec<_>>().join(",")
-        })
+        self.counts.iter().any(|count| *count > 0).then(|| self.findings_field())
     }
 }
-
-/// 数えたら PASS を返さない 3 観点（契約適合・歯の非空虚・憲法・雛形 `lens.txt` の判定の決め方の 1 文と同じ 3 つ）。
-const FIT: [Findings; 3] = [Findings::ContractFit, Findings::TeethNonvacuous, Findings::Constitution];
 
 /// 判定と数の食い違いを FAIL に読んだ周の理由の型（`verdict.json` の `kind`・memo の口が出所の kind に写す）。
 pub(super) const MISMATCH_KIND: &str = "verdict-count-mismatch";
 
-/// `verdict.json` の 2 key から観点 delete の件数を読む（memo の口の質の原本・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
-/// 読みは [`Tally::parse`] の 1 本で、読めない周は `None`。
-pub(crate) fn delete_count(findings: &str, population: &str) -> Option<u64> {
-    Tally::parse(findings, population).ok().map(|tally| tally.count(Findings::Delete))
-}
-
-/// 表に在る category の名か。
-fn known(name: &str) -> bool {
-    Findings::ALL.iter().any(|found| found.as_str() == name)
+/// `<名>:<件数>` を `,` で継いだ字を、`names` の名をちょうど 1 度ずつ持つ周だけ `names` の順の件数に読む（lens の並びは問わない・
+/// gate の findings と契約の審査の質〔`pipe::review`〕の読みの 1 本）。欠け・重複・表に無い名・件数が数でない周は理由の 1 行。
+pub(crate) fn counts_of(text: &str, names: &[&str]) -> Result<Vec<u64>, String> {
+    let pairs = text.split(',').map(count_pair).collect::<Result<Vec<_>, String>>()?;
+    if let Some((name, _)) = pairs.iter().find(|(name, _)| !names.contains(name)) {
+        return Err(format!("findings の category {name} は表に無い"));
+    }
+    let mut counts = Vec::with_capacity(names.len());
+    for name in names {
+        let mut hits = pairs.iter().filter(|(found, _)| found == name);
+        let (_, count) = hits.next().ok_or_else(|| format!("findings に {name} が無い"))?;
+        if hits.next().is_some() {
+            return Err(format!("findings の {name} が 2 度出た"));
+        }
+        counts.push(*count);
+    }
+    Ok(counts)
 }
 
 /// `findings` の 1 項目（`<category>:<件数>`）を読む。件数は 10 進の非負整数だけ。
@@ -215,39 +170,26 @@ fn number_of(text: &str, name: &str) -> Result<u64, String> {
 mod tests {
     use super::{Findings, Tally, Unread};
 
-    /// 8 category の字面（宣言順）。
-    const NAMES: [&str; 8] = [
-        "contract-fit",
-        "teeth-nonvacuous",
-        "constitution",
-        "delete",
-        "stdlib",
-        "native",
-        "yagni",
-        "shrink",
-    ];
+    /// 3 category の字面（宣言順）。
+    const NAMES: [&str; 3] = ["contract-fit", "teeth-nonvacuous", "constitution"];
 
     /// 母集団の在る周の `population` の字面。
     const READ: &str = "files:7,lines:42";
 
-    /// 観点は **8 つで閉じ**、[`Findings::ALL`] は宣言順そのままである（順が動けば verdict の
+    /// 観点は **3 つで閉じ**、[`Findings::ALL`] は宣言順そのままである（順が動けば verdict の
     /// 字面が動く＝集計の並びは表 1 つが持つ）。
     #[test]
-    fn pipe_gate_findings_all_lists_the_eight_categories_in_declaration_order() {
+    fn pipe_gate_findings_all_lists_the_three_categories_in_declaration_order() {
         let shown: Vec<&str> = Findings::ALL.iter().map(|found| found.as_str()).collect();
-        assert_eq!(shown, NAMES, "8 variant の宣言順");
+        assert_eq!(shown, NAMES, "3 variant の宣言順");
     }
 
     /// 読んだ 2 key は**宣言順の字面へ正規化**される（lens が並べ替えても記帳の順は 1 つ・0 も書く）。
     #[test]
     fn pipe_gate_findings_tally_renders_every_category_in_declaration_order() {
-        let shuffled = "shrink:5,constitution:2,contract-fit:1,yagni:4,stdlib:3,delete:0,native:0,teeth-nonvacuous:0";
-        let tally = Tally::parse(shuffled, READ).expect("8 category と母集団が揃えば読める");
-        assert_eq!(
-            tally.findings_field(),
-            "contract-fit:1,teeth-nonvacuous:0,constitution:2,delete:0,stdlib:3,native:0,yagni:4,shrink:5",
-            "宣言順で 8 つとも（0 件も 0 と）書く"
-        );
+        let shuffled = "constitution:2,contract-fit:1,teeth-nonvacuous:0";
+        let tally = Tally::parse(shuffled, READ).expect("3 category と母集団が揃えば読める");
+        assert_eq!(tally.findings_field(), "contract-fit:1,teeth-nonvacuous:0,constitution:2", "宣言順で 3 つとも（0 件も 0 と）書く");
         assert_eq!(tally.population_field(), READ, "母集団はそのまま載る");
     }
 
@@ -257,12 +199,12 @@ mod tests {
     /// （[`Unread::Refused`]・撃ち直さない側）で、残りは全部「形が読めない」（[`Unread::Malformed`]）。
     #[test]
     fn pipe_gate_findings_tally_refuses_incomplete_categories_and_zero_population() {
-        let all = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:0,stdlib:0,native:0,yagni:0,shrink:0";
-        let short = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:0,stdlib:0,native:0,yagni:0";
+        let all = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
+        let short = "contract-fit:0,teeth-nonvacuous:0";
         let unknown = format!("{all},typo:1");
-        let not_a_number = all.replace("shrink:0", "shrink:x");
+        let not_a_number = all.replace("constitution:0", "constitution:x");
         let cases = [
-            (short, READ, "shrink", true),
+            (short, READ, "constitution", true),
             ("contract-fit:0,contract-fit:0", READ, "2 度", true),
             (unknown.as_str(), READ, "表に無い", true),
             ("contract-fit", READ, "<category>:<件数> でない", true),
@@ -283,34 +225,34 @@ mod tests {
                 "形が読めない側は母集団 0 以外の全部: {findings} / {population} → {err:?}"
             );
         }
-        assert!(Tally::parse(all, READ).is_ok(), "対: 8 つ揃い母集団が 0 でなければ読める");
+        assert!(Tally::parse(all, READ).is_ok(), "対: 3 つ揃い母集団が 0 でなければ読める");
     }
 
-    /// 食い違いの材料は 3 観点のどれか 1 つを 1 以上と数えた周だけ 3 観点の件数を宣言順で返し、3 観点が 0 なら質の 5 観点を
-    /// 数えても返さない（tsuzuri の判断の記録 ADR-63 の決定 (6)）。
+    /// 食い違いの材料は 3 観点のどれか 1 つを 1 以上と数えた周だけ 3 観点の件数を宣言順で返し、3 観点が 0 なら返さない
+    /// （tsuzuri の判断の記録 ADR-63 の決定 (6)）。
     #[test]
     fn vgfind_tally_names_the_three_fit_counts_only_when_one_is_counted() {
-        let zero = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
-        let quality = "delete:4,stdlib:1,native:1,yagni:1,shrink:3";
         let cases = [
             ("contract-fit:2,teeth-nonvacuous:0,constitution:0", Some("contract-fit:2,teeth-nonvacuous:0,constitution:0")),
-            ("contract-fit:0,teeth-nonvacuous:1,constitution:0", Some("contract-fit:0,teeth-nonvacuous:1,constitution:0")),
+            ("teeth-nonvacuous:1,contract-fit:0,constitution:0", Some("contract-fit:0,teeth-nonvacuous:1,constitution:0")),
             ("contract-fit:0,teeth-nonvacuous:0,constitution:3", Some("contract-fit:0,teeth-nonvacuous:0,constitution:3")),
-            (zero, None),
+            ("contract-fit:0,teeth-nonvacuous:0,constitution:0", None),
         ];
         for (fit, want) in cases {
-            let tally = Tally::parse(&format!("{quality},{fit}"), READ).expect("8 category と母集団が揃えば読める");
+            let tally = Tally::parse(fit, READ).expect("3 category と母集団が揃えば読める");
             assert_eq!(tally.mismatch().as_deref(), want, "{fit}");
         }
     }
 
-    /// delete の件数は 2 key の読みの 1 本から引き、読めない 2 key は `None`（memo の口の質の原本・決定 (7)）。
+    /// gate は質を数えない（tsuzuri の判断の記録 ADR-63 の決定 (7)・乙'）: 3 観点に質の 5 観点のどれか 1 つを 0 件で足した findings は、
+    /// その名を表に無い名として読めず（形の誤りの側）、3 観点だけの findings は読める。
     #[test]
-    fn vgfind_delete_count_reads_the_delete_of_a_readable_record() {
-        let counted = "contract-fit:0,teeth-nonvacuous:0,constitution:0,delete:3,stdlib:1,native:0,yagni:0,shrink:2";
-        assert_eq!(super::delete_count(counted, READ), Some(3), "delete の件数");
-        assert_eq!(super::delete_count(&counted.replace("delete:3", "delete:0"), READ), Some(0), "0 は 0");
-        assert_eq!(super::delete_count(&counted.replace(",delete:3", ""), READ), None, "delete の欠けた 2 key は読めない");
-        assert_eq!(super::delete_count(counted, "files:0,lines:4"), None, "母集団 0 は読めない");
+    fn vrqual_gate_findings_refuse_every_quality_name() {
+        let fit = "contract-fit:0,teeth-nonvacuous:0,constitution:0";
+        for name in ["delete", "stdlib", "native", "yagni", "shrink"] {
+            let err = Tally::parse(&format!("{fit},{name}:0"), READ).expect_err(name);
+            assert_eq!(err, Unread::Malformed(format!("findings の category {name} は表に無い")), "{name}");
+        }
+        assert!(Tally::parse(fit, READ).is_ok(), "対: 3 観点だけなら読める");
     }
 }

@@ -560,7 +560,8 @@ fn headless_lens_scope_prompt_forbids_checks_not_named_by_contract() {
 
 /// 契約の隣に材料の 2 file が在る周は雛形が契約の審査（`lens-contract.txt`）に切り替わる: 契約の各面と設計の節と
 /// 要件本文がそれぞれの見出しの下に載り（順は 契約 → 設計の節 → 要件）、観点は 3 つで出力の形は diff の審査の
-/// 2 key に理由の型 `kind` と場所 `at` の穴を足したもの（設計 contract-source.md §22・`s2-07l.395`）。
+/// 2 key に理由の型 `kind` と場所 `at` の穴と質の数 `quality` と場所 `quality_at` の穴を足したもの（設計 contract-source.md §22・
+/// `s2-07l.395`・tsuzuri の判断の記録 ADR-63 の決定 (7)）。
 #[test]
 fn headless_lens_contract_prompt_places_material_under_its_headings() {
     let prompt = lens_contract_prompt_of_fixed_fixture();
@@ -580,8 +581,8 @@ fn headless_lens_contract_prompt_places_material_under_its_headings() {
         assert_eq!(prompt.matches(point).count(), 1, "観点 {point} がちょうど 1 回: {prompt}");
     }
     assert!(
-        prompt.contains(r#"{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","kind":"<理由の型>","at":"<指した場所>"}"#),
-        "出力の形は diff の審査の 2 key に kind と at の穴を足したもの: {prompt}"
+        prompt.contains(r#"{"verdict":"PASS|FAIL|INCONCLUSIVE","evidence":"<根拠を 1 行で>","kind":"<理由の型>","at":"<指した場所>","quality":"delete:<n>,stdlib:<n>,native:<n>,yagni:<n>,shrink:<n>","quality_at":"<観点>:<場所>;<場所>,<観点>:<場所>"}"#),
+        "出力の形は diff の審査の 2 key に kind と at と quality と quality_at の穴を足したもの: {prompt}"
     );
     for word in ["teeth-outside-write-set", "goal-done-contradiction", "vacuous-assert", "literal-mismatch", "section-material-missing", "other"] {
         assert_eq!(prompt.matches(&format!("`{word}`")).count(), 1, "kind の語 {word} がちょうど 1 回: {prompt}");
