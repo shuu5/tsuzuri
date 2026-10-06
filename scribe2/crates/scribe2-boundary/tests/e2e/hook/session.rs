@@ -4,6 +4,8 @@
 
 use super::*;
 
+mod wipst;
+
 #[test]
 fn hook_session_start_is_noop_without_marker() {
     let repo = git_repo();

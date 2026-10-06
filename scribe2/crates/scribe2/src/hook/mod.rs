@@ -211,7 +211,14 @@ pub fn dispatch(args: &[String], payload: &str) -> Outcome {
             outcome.err.extend(plugin_record(args, payload, &dir));
             outcome
         }
-        Some(EVENT_PRE_TOOL_USE) => pre_tool_use(&hooked, payload, started),
+        Some(EVENT_PRE_TOOL_USE) => {
+            let outcome = pre_tool_use(&hooked, payload, started);
+            // 門が全部通した周だけ turn の書きの印（設計 dialogue-surface.md §12・書けない周は黙る・allow は変えない）。
+            if outcome.rc == RC_OK {
+                turn_end::mark(&hooked, args, payload);
+            }
+            outcome
+        }
         Some(EVENT_PERMISSION_REQUEST) => permission_request(&hooked, payload, started),
         Some(EVENT_USER_PROMPT_SUBMIT) => {
             let mut outcome = stamped(args, payload, Event::UserPromptSubmit, &dir);
@@ -229,7 +236,7 @@ pub fn dispatch(args: &[String], payload: &str) -> Outcome {
             outcome.err.extend(err);
             outcome
         }
-        Some(EVENT_STOP) => turn_end::stop(args, payload, &dir),
+        Some(EVENT_STOP) => turn_end::stop(args, payload, &hooked),
         Some(EVENT_PRE_COMPACT) => pre_compact(&hooked, payload, started),
         _ => Outcome::ok(Vec::new()),
     }

@@ -102,7 +102,7 @@ fn is_injected(prompt: &str) -> bool {
 }
 
 /// runner か（`--plugin-root` が置き場の `pipe` の dir の下・便の plugin の写しを積む起動）。
-fn is_runner(state_dir: &Path, plugin_root: Option<&str>) -> bool {
+pub(super) fn is_runner(state_dir: &Path, plugin_root: Option<&str>) -> bool {
     plugin_root.is_some_and(|root| Path::new(root).starts_with(state_dir.join(crate::pipe::DIR)))
 }
 

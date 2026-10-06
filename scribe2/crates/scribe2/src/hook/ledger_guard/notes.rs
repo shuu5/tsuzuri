@@ -135,7 +135,7 @@ fn file_text(path: &str, read: &impl Fn(&str) -> Option<String>) -> Text {
 
 /// 本文の頭の行（最初の空でない行の頭の空白を除いた字が `[` で始まり `]` を持つ時だけ）の、札の中で最初に現れる時刻の字か、
 /// 札に無ければ `]` の直後の空白を除いた頭の時刻の字と、その下の端の UNIX 秒（[`token_at`]）。
-fn head_time(text: &str) -> Option<(&str, u64)> {
+pub(crate) fn head_time(text: &str) -> Option<(&str, u64)> {
     let head = text.lines().map(str::trim_start).find(|line| !line.is_empty())?;
     let (tag, after) = head.strip_prefix('[')?.split_once(']')?;
     let inner = tag.char_indices().find_map(|(at, _)| {

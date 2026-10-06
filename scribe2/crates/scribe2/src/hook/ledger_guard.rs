@@ -38,7 +38,7 @@ use crate::rules::RuleValue;
 use crate::seat::brief::pointer::Anchor;
 use std::path::Path;
 
-mod notes;
+pub(crate) mod notes;
 
 /// この境界の極性: 起票の時点で止め、memo の本文を読めない周は create を通さない。
 pub const POLARITY: Polarity = Polarity {
