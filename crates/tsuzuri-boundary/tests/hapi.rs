@@ -1,5 +1,6 @@
 //! host の口と host の種類の見張りの歯（接頭辞 hapi_・持ち主の裁定 t3-hub.77.28）。
 //! kernel の file の写しの木を一時の dir に置き、根を替えた読み（`Host::with_root`）で字の集めと速さの控えと見張りを測る。
+//! 撃った後に歯ごとの木が一時の dir に残らないことも測る。
 #![cfg(test)]
 
 use std::fs;
@@ -17,11 +18,19 @@ use tsuzuri_contract::surface::ChangeKind;
 
 const LOADAVG: &str = "40.00 1.00 1.00 1/2 3\n";
 
-fn tree(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("hapi-{}-{name}", std::process::id()));
+/// 木の置き場（一時の dir の下・名に pid と字 name）。
+fn place(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("hapi-{}-{name}", std::process::id()))
+}
+
+/// 木を作って `body` を撃ち、断言の前に木を消す（歯ごとの dir を一時の dir に残さない・memo t3-hub.74.49.10）。
+fn shot<T>(name: &str, body: impl FnOnce(&Path) -> T) -> T {
+    let dir = place(name);
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("一時の dir");
-    dir
+    let got = body(&dir);
+    let _ = fs::remove_dir_all(&dir);
+    got
 }
 
 fn put(root: &Path, rel: &str, text: &str) {
@@ -116,10 +125,11 @@ fn hapi_route_and_kind() {
 /// 根の下の kernel の file と cgroup の親の下の上限を持つ scope と host の面の表の装置を読む。
 #[test]
 fn hapi_reads_the_kernel_tree() {
-    let root = tree("read");
-    kernel(&root);
-    let state = face(&root);
-    let doc = Host::with_root(&root, Some(&state)).doc();
+    let doc = shot("read", |root| {
+        kernel(root);
+        let state = face(root);
+        Host::with_root(root, Some(&state)).doc()
+    });
     assert!(matches!(doc.load, Reading::Known(l) if l.one == 4_000 && l.cores == 32));
     assert!(matches!(doc.memory, Reading::Known(m) if m.total == 4_096));
     assert_eq!(doc.over, [Gauge::Load, Gauge::Io]);
@@ -141,7 +151,7 @@ fn hapi_reads_the_kernel_tree() {
 /// 根の下に file が無ければ、測りは全部まだ分からないで、装置は空・注意は無い。
 #[test]
 fn hapi_missing_files_are_unknown() {
-    let bare = Host::with_root(&tree("bare"), None).doc();
+    let bare = shot("bare", |root| Host::with_root(root, None).doc());
     assert_eq!(
         (bare.load, bare.scopes),
         (Reading::Unknown, Reading::Unknown)
@@ -152,19 +162,25 @@ fn hapi_missing_files_are_unknown() {
 /// 速さは前の読みとの差で、間が足りない読みは前の速さを返し、間が足りれば測り直す。
 #[test]
 fn hapi_rate_holds_inside_the_gap() {
-    let root = tree("rate");
-    kernel(&root);
-    let state = face(&root);
-    let held = Host::with_root(&root, Some(&state));
-    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
-    std::thread::sleep(Duration::from_millis(20));
-    put(&root, "dev-stat", &stat(9_000));
-    assert_eq!(held.doc().devices[0].rate, Reading::Unknown);
-    let quick = Host::with_root(&root, Some(&state)).with_gap(Duration::ZERO);
-    assert_eq!(quick.doc().devices[0].rate, Reading::Unknown);
-    std::thread::sleep(Duration::from_millis(20));
-    put(&root, "dev-stat", &stat(19_000));
-    assert!(matches!(quick.doc().devices[0].rate, Reading::Known(r) if r > 0));
+    let rate = |host: &Host| host.doc().devices[0].rate.clone();
+    let [first, inside, fresh, moved] = shot("rate", |root| {
+        kernel(root);
+        let state = face(root);
+        let held = Host::with_root(root, Some(&state));
+        let first = rate(&held);
+        std::thread::sleep(Duration::from_millis(20));
+        put(root, "dev-stat", &stat(9_000));
+        let inside = rate(&held);
+        let quick = Host::with_root(root, Some(&state)).with_gap(Duration::ZERO);
+        let fresh = rate(&quick);
+        std::thread::sleep(Duration::from_millis(20));
+        put(root, "dev-stat", &stat(19_000));
+        [first, inside, fresh, rate(&quick)]
+    });
+    assert_eq!(first, Reading::Unknown);
+    assert_eq!(inside, Reading::Unknown);
+    assert_eq!(fresh, Reading::Unknown);
+    assert!(matches!(moved, Reading::Known(r) if r > 0));
 }
 
 /// 受け手を待つ。見張りの frame を `window` の間だけ集める。
@@ -182,18 +198,34 @@ fn frames(sub: &std::sync::mpsc::Receiver<String>, window: Duration) -> Vec<Stri
 /// 受け手が居る周だけ読み、中身が動いた時だけ host の種類の board-changed を 1 件送る。
 #[test]
 fn hapi_watch_sends_host_on_change() {
-    let root = tree("watch");
-    kernel(&root);
-    let hub = Arc::new(Hub::default());
-    Arc::new(Host::with_root(&root, None)).watch(&hub, Duration::from_millis(20));
-    let sub = hub.subscribe();
-    let first = frames(&sub, Duration::from_millis(400));
+    let (first, moved) = shot("watch", |root| {
+        kernel(root);
+        let hub = Arc::new(Hub::default());
+        Arc::new(Host::with_root(root, None)).watch(&hub, Duration::from_millis(20));
+        let sub = hub.subscribe();
+        let first = frames(&sub, Duration::from_millis(400));
+        put(root, "proc/loadavg", "1.00 1.00 1.00 1/2 3\n");
+        (first, frames(&sub, Duration::from_millis(400)))
+    });
     assert_eq!(first.len(), 1, "{first:?}");
     assert!(
         first[0].contains("event: board-changed") && first[0].contains("\"kinds\":[\"host\"]"),
         "{first:?}"
     );
-    put(&root, "proc/loadavg", "1.00 1.00 1.00 1/2 3\n");
-    let moved = frames(&sub, Duration::from_millis(400));
     assert_eq!(moved.len(), 1, "{moved:?}");
+}
+
+/// 撃つ間は木が在り（kernel の file の負荷が読める）、撃った後は木の dir が無い。
+#[test]
+fn hapi_tree_is_gone_after_the_shot() {
+    let load = shot("gone", |root| {
+        kernel(root);
+        Host::with_root(root, None).doc().load
+    });
+    assert!(
+        matches!(load, Reading::Known(l) if l.one == 4_000),
+        "木が在る間に読んだ: {load:?}"
+    );
+    let root = place("gone");
+    assert!(!root.exists(), "撃った後は無い: {}", root.display());
 }

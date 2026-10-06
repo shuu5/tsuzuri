@@ -1,7 +1,7 @@
 //! tz の口 code の歯（接頭辞 kcode_・判断の記録 ADR-46 の決定 (1)〜(4)）。
 //! tz code が一時の git の repo の file の一覧と、偽の構文で探す道具（--sg・撃たれた引数を file に書き見本の stream を出す
 //! shell の script）の stream と、contracts/ の toml から、数と行の触る定義と file の定義を出し、規則の file の無い repo を
-//! 道具を撃たずに 1 行で断る。
+//! 道具を撃たずに 1 行で断る。撃った後に歯ごとの一時の根が一時の dir に残らないことも測る。
 #![cfg(test)]
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -88,10 +88,29 @@ fn tz(root: &Path, sg: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+/// 撃ちの結果（rc・標準出力・標準エラー）。
+type Shot = (i32, String, String);
+
+/// 一時の根を作って `prep` で手を入れ、`runs` の引数ごとに tz code を撃ち、撃たれた引数の file を読んでから根を消す
+/// （断言は返した物に撃つので、断言が落ちた周も根は先に消えている・歯ごとの dir を一時の dir に残さない・memo t3-hub.74.49.10）。
+/// 根の path と撃ちの結果の列と撃たれた引数（道具が撃たれなければ無い）を返す。
+fn shot<const N: usize>(
+    test: &str,
+    rc: u8,
+    prep: fn(&Path),
+    runs: [&[&str]; N],
+) -> (PathBuf, [Shot; N], Option<String>) {
+    let (root, sg) = place(test, rc);
+    prep(&root);
+    let outs = runs.map(|args| tz(&root, &sg, args));
+    let args = fs::read_to_string(root.join("args.txt")).ok();
+    let _ = fs::remove_dir_all(&root);
+    (root, outs, args)
+}
+
 #[test]
 fn kcode_row_lists_defs_of_write_set_files_only() {
-    let (root, sg) = place("row", 0);
-    let (rc, out, err) = tz(&root, &sg, &["--row", "n1#a"]);
+    let (_, [(rc, out, err)], args) = shot("row", 0, |_| {}, [&["--row", "n1#a"]]);
     assert_eq!(rc, 0, "{err}");
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(
@@ -103,15 +122,16 @@ fn kcode_row_lists_defs_of_write_set_files_only() {
             "none\t+c.rs"
         ]
     );
-    let args = fs::read_to_string(root.join("args.txt")).unwrap();
-    assert_eq!(args, "scan\n--rule\n.config/code-defs.yml\n--json=stream\n");
+    assert_eq!(
+        args.as_deref(),
+        Some("scan\n--rule\n.config/code-defs.yml\n--json=stream\n")
+    );
 }
 
 #[test]
 fn kcode_missing_rule_file_refuses_in_one_line() {
-    let (root, sg) = place("norule", 0);
-    fs::remove_file(root.join("repo/.config/code-defs.yml")).unwrap();
-    let (rc, out, err) = tz(&root, &sg, &["--row", "n1#a"]);
+    let norule = |root: &Path| fs::remove_file(root.join("repo/.config/code-defs.yml")).unwrap();
+    let (_, [(rc, out, err)], args) = shot("norule", 0, norule, [&["--row", "n1#a"]]);
     assert_eq!(rc, 1);
     assert_eq!(err.lines().count(), 1, "{err}");
     assert!(
@@ -119,16 +139,12 @@ fn kcode_missing_rule_file_refuses_in_one_line() {
         "{err}"
     );
     assert!(out.is_empty());
-    assert!(
-        !root.join("args.txt").exists(),
-        "規則の file が無い時に道具を撃った"
-    );
+    assert!(args.is_none(), "規則の file が無い時に道具を撃った");
 }
 
 #[test]
 fn kcode_counts_and_file_lines() {
-    let (root, sg) = place("counts", 0);
-    let (rc, out, _) = tz(&root, &sg, &[]);
+    let (_, [(rc, out, _), file], _) = shot("counts", 0, |_| {}, [&[], &["--file", "b.rs"]]);
     assert_eq!(rc, 0);
     for want in [
         "files\t4",
@@ -142,26 +158,30 @@ fn kcode_counts_and_file_lines() {
     ] {
         assert!(out.lines().any(|l| l == want), "{want}: {out}");
     }
-    let (rc, out, _) = tz(&root, &sg, &["--file", "b.rs"]);
-    assert_eq!((rc, out.as_str()), (0, "def\tb.rs#fn g\t1-1\n"));
+    assert_eq!((file.0, file.1.as_str()), (0, "def\tb.rs#fn g\t1-1\n"));
 }
 
 #[test]
 fn kcode_unreadable_and_named_errors() {
-    let (root, sg) = place("errs", 1);
-    assert_eq!(
-        tz(&root, &sg, &[]).0,
-        2,
-        "道具の rc が 0 でない時はまだ分からない"
-    );
-    let (root, sg) = place("named", 0);
-    for args in [
+    let (_, [errs], _) = shot("errs", 1, |_| {}, [&[]]);
+    assert_eq!(errs.0, 2, "道具の rc が 0 でない時はまだ分からない");
+    let runs = [
         &["--row", "n1#zz"][..],
         &["--file", "zz.rs"],
         &["--row", "n1#a", "--file", "a.rs"],
         &["--what"],
-    ] {
-        let (rc, out, err) = tz(&root, &sg, args);
+    ];
+    let (_, outs, _) = shot("named", 0, |_| {}, runs);
+    for (args, (rc, out, err)) in runs.iter().zip(outs) {
         assert_eq!((rc, out.as_str()), (1, ""), "{args:?}: {err}");
     }
+}
+
+/// 撃つ間は根が在り（tz code が rc 0 を返し、撃たれた引数の file が読める）、撃った後は根の dir が無い。
+#[test]
+fn kcode_scratch_is_gone_after_the_shot() {
+    let (root, [(rc, _, err)], args) = shot("gone", 0, |_| {}, [&["--row", "n1#a"]]);
+    assert_eq!(rc, 0, "根が在る間に撃った: {err}");
+    assert!(args.is_some(), "根が在る間に道具が引数の file を書いた");
+    assert!(!root.exists(), "撃った後は無い: {}", root.display());
 }

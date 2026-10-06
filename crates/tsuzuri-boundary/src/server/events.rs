@@ -445,9 +445,14 @@ mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
+    /// 印の dir の置き場（一時の dir の下・名に pid と字 name）。
+    fn place(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("tz-events-{}-{name}", std::process::id()))
+    }
+
     /// 印の 2 つの file の置き場（2 つめは初めは無い）。
     fn marks(name: &str) -> Vec<PathBuf> {
-        let dir = std::env::temp_dir().join(format!("tz-events-{}-{name}", std::process::id()));
+        let dir = place(name);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("置き場");
         std::fs::write(dir.join("a"), "1").expect("印 a");
@@ -470,6 +475,16 @@ mod tests {
         std::fs::rename(&tmp, mark).expect("印を移す");
     }
 
+    /// 印の 2 つの file を作って `body` を撃ち、終わりに印の dir と隣の移しの dir を消す（歯ごとの dir を一時の dir に
+    /// 残さない・memo t3-hub.74.49.10）。
+    fn with_marks<T>(name: &str, body: impl FnOnce(&[PathBuf]) -> T) -> T {
+        let marks = marks(name);
+        let got = body(&marks);
+        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
+        let _ = std::fs::remove_dir_all(place(name));
+        got
+    }
+
     /// 中身を替えられる読み（読んだ回数を数える）。
     fn reader() -> (
         Arc<Mutex<u32>>,
@@ -488,110 +503,120 @@ mod tests {
 
     #[test]
     fn server_src_watch_marks_trigger_reread() {
-        let marks = marks("marks");
-        let (content, reads, read) = reader();
-        let timing = Timing {
-            poll: Duration::from_millis(20),
-            reread: Duration::from_secs(60),
-            store_reread: Duration::from_secs(60),
-        };
-        let hub = Hub::watch(marks.clone(), read, timing);
-        assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
-        // 受け手が付いた周で 1 回読む。
-        let rx = hub.subscribe();
-        thread::sleep(Duration::from_millis(200));
-        assert_eq!(reads.load(Ordering::SeqCst), 2, "受け手が付いた周の読み");
-        // 印が動かなければ読み直さない（中身が変わっても知らせない）。
-        *content.lock().expect("lock") = 1;
-        thread::sleep(Duration::from_millis(200));
-        assert!(rx.try_recv().is_err());
-        assert_eq!(reads.load(Ordering::SeqCst), 2);
-        // 後の印（初めは無い file）ができると読み直して 1 件。
-        put(&marks[1], "x");
-        let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
-        assert!(frame.contains("event: ledger-changed\n"), "{frame}");
-        thread::sleep(Duration::from_millis(200));
-        assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
-        assert_eq!(reads.load(Ordering::SeqCst), 3);
-        // 前の印の長さが動いても、読みの結果が同じなら知らせない。
-        put(&marks[0], "22");
-        let until = Instant::now() + Duration::from_secs(5);
-        while reads.load(Ordering::SeqCst) < 4 {
-            assert!(
-                Instant::now() < until,
-                "印 a の変化で 5 秒以内に読み直さない"
-            );
-            thread::sleep(Duration::from_millis(10));
-        }
-        thread::sleep(Duration::from_millis(200));
-        assert_eq!(reads.load(Ordering::SeqCst), 4);
-        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
-        let dir = marks[0].parent().expect("置き場").to_path_buf();
-        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
-        let _ = std::fs::remove_dir_all(&dir);
+        with_marks("marks", |marks| {
+            let (content, reads, read) = reader();
+            let timing = Timing {
+                poll: Duration::from_millis(20),
+                reread: Duration::from_secs(60),
+                store_reread: Duration::from_secs(60),
+            };
+            let hub = Hub::watch(marks.to_vec(), read, timing);
+            assert_eq!(reads.load(Ordering::SeqCst), 1, "最初の読みは戻る前");
+            // 受け手が付いた周で 1 回読む。
+            let rx = hub.subscribe();
+            thread::sleep(Duration::from_millis(200));
+            assert_eq!(reads.load(Ordering::SeqCst), 2, "受け手が付いた周の読み");
+            // 印が動かなければ読み直さない（中身が変わっても知らせない）。
+            *content.lock().expect("lock") = 1;
+            thread::sleep(Duration::from_millis(200));
+            assert!(rx.try_recv().is_err());
+            assert_eq!(reads.load(Ordering::SeqCst), 2);
+            // 後の印（初めは無い file）ができると読み直して 1 件。
+            put(&marks[1], "x");
+            let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
+            assert!(frame.contains("event: ledger-changed\n"), "{frame}");
+            thread::sleep(Duration::from_millis(200));
+            assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+            assert_eq!(reads.load(Ordering::SeqCst), 3);
+            // 前の印の長さが動いても、読みの結果が同じなら知らせない。
+            put(&marks[0], "22");
+            let until = Instant::now() + Duration::from_secs(5);
+            while reads.load(Ordering::SeqCst) < 4 {
+                assert!(
+                    Instant::now() < until,
+                    "印 a の変化で 5 秒以内に読み直さない"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            thread::sleep(Duration::from_millis(200));
+            assert_eq!(reads.load(Ordering::SeqCst), 4);
+            assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+        });
     }
 
     #[test]
     fn server_src_watch_rereads_without_marks() {
-        let marks = marks("reread");
-        let (content, reads, read) = reader();
-        let timing = Timing {
-            poll: Duration::from_millis(20),
-            reread: Duration::from_millis(150),
-            store_reread: Duration::from_secs(60),
-        };
-        let hub = Hub::watch(marks, read, timing);
-        let rx = hub.subscribe();
-        *content.lock().expect("lock") = 1;
-        rx.recv_timeout(Duration::from_secs(1))
-            .expect("印なしの読み直しで 1 件");
-        // 同じ中身の読み直しは続くが知らせない。
-        let before = reads.load(Ordering::SeqCst);
-        thread::sleep(Duration::from_millis(500));
-        assert!(reads.load(Ordering::SeqCst) >= before + 2);
-        assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
-        // Hub が落ちれば読みも止まる。
-        drop(rx);
-        drop(hub);
-        thread::sleep(Duration::from_millis(100));
-        let after = reads.load(Ordering::SeqCst);
-        thread::sleep(Duration::from_millis(400));
-        assert_eq!(reads.load(Ordering::SeqCst), after);
+        with_marks("reread", |marks| {
+            let (content, reads, read) = reader();
+            let timing = Timing {
+                poll: Duration::from_millis(20),
+                reread: Duration::from_millis(150),
+                store_reread: Duration::from_secs(60),
+            };
+            let hub = Hub::watch(marks.to_vec(), read, timing);
+            let rx = hub.subscribe();
+            *content.lock().expect("lock") = 1;
+            rx.recv_timeout(Duration::from_secs(1))
+                .expect("印なしの読み直しで 1 件");
+            // 同じ中身の読み直しは続くが知らせない。
+            let before = reads.load(Ordering::SeqCst);
+            thread::sleep(Duration::from_millis(500));
+            assert!(reads.load(Ordering::SeqCst) >= before + 2);
+            assert!(rx.try_recv().is_err(), "同じ読みで知らせる");
+            // Hub が落ちれば読みも止まる。
+            drop(rx);
+            drop(hub);
+            thread::sleep(Duration::from_millis(100));
+            let after = reads.load(Ordering::SeqCst);
+            thread::sleep(Duration::from_millis(400));
+            assert_eq!(reads.load(Ordering::SeqCst), after);
+        });
     }
 
     #[test]
     fn server_read_watch_board_sends_on_marks() {
-        let marks = marks("board");
-        let dir = marks[0].parent().expect("置き場").to_path_buf();
-        let hub = Arc::new(Hub::default());
-        let d = dir.clone();
-        let files = move || {
-            let mut f: Vec<PathBuf> = std::fs::read_dir(&d)
-                .expect("置き場")
-                .map(|e| e.expect("entry").path())
-                .collect();
-            f.sort();
-            f.into_iter().map(|p| (super::ChangeKind::Design, p)).collect::<Vec<_>>()
-        };
-        Hub::watch_board(&hub, files, Duration::from_millis(20));
-        let rx = hub.subscribe();
-        thread::sleep(Duration::from_millis(100));
-        assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
-        // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
-        for change in [
-            Box::new(|| put(&marks[0], "22")) as Box<dyn Fn()>,
-            Box::new(|| put(&marks[1], "x")),
-            Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
-        ] {
-            change();
-            let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
-            assert!(frame.contains("event: board-changed\n"), "{frame}");
-            assert!(frame.contains("data: {\"at\":"), "{frame}");
+        with_marks("board", |marks| {
+            let hub = Arc::new(Hub::default());
+            let d = marks[0].parent().expect("置き場").to_path_buf();
+            let files = move || {
+                let mut f: Vec<PathBuf> = std::fs::read_dir(&d)
+                    .expect("置き場")
+                    .map(|e| e.expect("entry").path())
+                    .collect();
+                f.sort();
+                f.into_iter().map(|p| (super::ChangeKind::Design, p)).collect::<Vec<_>>()
+            };
+            Hub::watch_board(&hub, files, Duration::from_millis(20));
+            let rx = hub.subscribe();
             thread::sleep(Duration::from_millis(100));
-            assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
-        }
-        let _ = std::fs::remove_dir_all(put_dir(&marks[0]));
-        let _ = std::fs::remove_dir_all(&dir);
+            assert!(rx.try_recv().is_err(), "印が動かないのに知らせる");
+            // 在る file の長さが動く・file が増える・file が消える、のどれも 1 件。
+            for change in [
+                Box::new(|| put(&marks[0], "22")) as Box<dyn Fn()>,
+                Box::new(|| put(&marks[1], "x")),
+                Box::new(|| std::fs::remove_file(&marks[1]).expect("印 b を消す")),
+            ] {
+                change();
+                let frame = rx.recv_timeout(Duration::from_secs(5)).expect("1 件");
+                assert!(frame.contains("event: board-changed\n"), "{frame}");
+                assert!(frame.contains("data: {\"at\":"), "{frame}");
+                thread::sleep(Duration::from_millis(100));
+                assert!(rx.try_recv().is_err(), "印 1 回に 2 件");
+            }
+        });
+    }
+
+    /// 撃つ間は印の dir が在り（印 a が在る）、撃った後は印の dir と隣の移しの dir が無い。
+    #[test]
+    fn server_src_watch_marks_dir_is_gone_after_the_body() {
+        let seen = with_marks("gone", |marks| {
+            let moving = put_dir(&marks[0]);
+            std::fs::create_dir_all(&moving).expect("移しの dir");
+            (marks[0].is_file(), moving)
+        });
+        assert!(seen.0, "印の dir が在る間に撃った");
+        assert!(!place("gone").exists(), "撃った後は印の dir が無い");
+        assert!(!seen.1.exists(), "撃った後は移しの dir が無い");
     }
 
     #[test]

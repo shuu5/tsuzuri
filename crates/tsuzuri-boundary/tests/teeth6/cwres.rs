@@ -2,6 +2,7 @@
 //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と口座の置き場と、偽の bd・bdw と
 //! 受けた argv を記録する偽の tmux を置く（本物の tmux と claude は撃たず、本物の口座の置き場は読まない）。
 //! 偽の tmux は pane の字（置き場の file pane）を出し、kill-window で置き場の file victim の pid を少し後に止める（行 cs-follow）。
+//! 撃った後に、窓の起こしが /tmp の直下に作る私用の temp が残らないことも測る。
 #![cfg(test)]
 
 use std::fs;
@@ -99,8 +100,21 @@ impl Fx {
         c
     }
 
+    /// 撃って、撃ちの後に窓ごとの私用の temp を消す（起こしが /tmp の直下に作る dir を歯の後に残さない・memo t3-hub.74.49.10）。
     fn tz(&self, args: &[&str]) -> Output {
-        self.command(args).output().unwrap()
+        let o = self.command(args).output().unwrap();
+        self.clear_tmp();
+        o
+    }
+
+    /// 作業場 drafts/consult-cw<n> ごとの私用の temp（作業場の実の path から求める）を消す。
+    fn clear_tmp(&self) {
+        for e in fs::read_dir(self.root.join("drafts")).unwrap().flatten() {
+            if e.file_name().to_string_lossy().starts_with("consult-cw") {
+                let ws = fs::canonicalize(e.path()).unwrap();
+                let _ = fs::remove_dir_all(private_tmp(&ws.display().to_string()));
+            }
+        }
     }
 
     /// 窓 cw<n> を用意し、process の印 proc-1（pid・話す窓は tmux の窓 @7）を置く。
@@ -121,7 +135,6 @@ impl Fx {
         };
         let text = wire::encode(&mark).unwrap();
         fs::write(ws.join(".consult/proc-1.json"), text).unwrap();
-        let _ = fs::remove_dir_all(private_tmp(&ws.display().to_string()));
         ws
     }
 
@@ -514,4 +527,17 @@ fn cwres_watch_names_a_moved_idle_window() {
     fs::rename(ws.join("kept"), &real).unwrap();
     remark(&ws, std::process::id(), Some(&fx.acct));
     assert_eq!(watch("1"), timeout, "口座が同じ");
+}
+
+/// 撃つ間は私用の temp が在り（--again の起こしが rc 0 で続きの旗を置く）、撃った後は窓の私用の temp の dir が無い。
+#[test]
+fn cwres_private_tmp_is_gone_after_the_launch() {
+    let fx = Fx::new("gone");
+    let ws = fx.window(1, Form::Talk, DEAD);
+    stamps(&ws, SID);
+    let (rc, err) = rc_err(&fx.tz(&["consult", "launch", "cw1", "--again"]));
+    assert_eq!(rc, 0, "私用の temp を作って起こした: {err}");
+    assert_eq!(fx.opened(), [["--resume", SID]]);
+    let tmp = private_tmp(&ws.display().to_string());
+    assert!(!Path::new(&tmp).exists(), "撃った後は無い: {tmp}");
 }
