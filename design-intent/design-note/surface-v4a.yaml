@@ -4,7 +4,8 @@ meta:
   id: surface-v4a
   title: 作り直し v4 の行 — 持ち主の決め D1〜D6（契約を台帳へ・起草は設計だけ・push ごとの CI を止める・memo の繋ぐ門・作業の状態を台帳へ・便の中の直しの周）の段 S1〜S9 の行の置き場
   version: v0.36
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-10-06
   profile: design-note
   approval:
