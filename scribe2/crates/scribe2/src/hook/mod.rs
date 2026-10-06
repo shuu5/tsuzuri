@@ -223,6 +223,10 @@ pub fn dispatch(args: &[String], payload: &str) -> Outcome {
             let (out, err) = group::lines(&hooked, (EVENT_USER_PROMPT_SUBMIT, "UserPromptSubmit"), started);
             outcome.out.extend(out);
             outcome.err.extend(err);
+            // 群の行の後ろに書き込みの検出線の知らせ（席の周だけ・越えた表の行ごとに 1 行・設計 write-budget.md §7）。
+            let (out, err) = write_budget_lines(&hooked, started);
+            outcome.out.extend(out);
+            outcome.err.extend(err);
             outcome
         }
         Some(EVENT_STOP) => turn_end::stop(args, payload, &dir),
@@ -483,6 +487,30 @@ fn record_lines(dir: &Path, entry: &InjectionRecord) -> Vec<String> {
         Ok(warnings) => warnings.iter().map(|w| w.as_str().to_owned()).collect(),
         Err(err) => vec![err.to_string()],
     }
+}
+
+/// 書き込みの検出線の席の 1 行（設計 write-budget.md §7）: `--pane` が空でない周だけ判定の 1 本を置き場・`--rules`・今で撃ち、over が
+/// `-` でない表の行ごとに追加文脈の 1 行（宣言順）と注入の記録 1 行を返す。越えない周・表の無い置き場・読めず越えの値が無い周は
+/// 0 byte で、入力欄へは送らない（FR44）。
+fn write_budget_lines(hooked: &Hooked, started: Instant) -> (Vec<String>, Vec<String>) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    if hooked.pane.is_none_or(|pane| pane.trim().is_empty()) {
+        return (out, err);
+    }
+    for found in crate::fleet::write_detection::judge(hooked.dir, hooked.rules, crate::seat::state::now_secs()) {
+        if found.over == "-" {
+            continue;
+        }
+        let line = format!(
+            "write-budget: name={} over={} today={} yesterday={} avg={} streak={} owner={} — 書き込みの検出線の知らせ（器は作業を止めない・\
+             持ち主への札は owner=yes の周に消費側の板が出す）",
+            found.name, found.over, found.today, found.yesterday, found.avg, found.streak, found.owner
+        );
+        let emit = Emit { who: EVENT_USER_PROMPT_SUBMIT, what: "write-budget", when: "UserPromptSubmit", line: &line };
+        err.extend(record_lines(hooked.dir, &record(&emit, hooked, started)));
+        out.push(line);
+    }
+    (out, err)
 }
 
 /// 名乗りの 1 行を出し、その 1 行についての記録を 1 件書く。

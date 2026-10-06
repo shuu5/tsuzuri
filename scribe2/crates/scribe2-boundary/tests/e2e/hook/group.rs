@@ -1,5 +1,6 @@
 // flip-check: moved s2-07l.679
-//! group の族の歯（接頭辞 `hook_group_` / `hook_permission_`・設計 docs/design/carry-prep.md §9 行 g）。
+//! group の族の歯（接頭辞 `hook_group_` / `hook_permission_`・設計 docs/design/carry-prep.md §9 行 g）と、席の追加文脈の
+//! 書き込みの検出線の 1 行の歯（接頭辞 `prompt_write_budget_`・設計 write-budget.md §7・群の歯と同じ fixture）。
 
 use super::*;
 
@@ -490,4 +491,205 @@ fn hook_park_missing_or_stale_measurement_prints_nothing_and_measures_nothing() 
         assert_eq!(park_groups_files(&place), Vec::<String>::new(), "{why}: file 0");
         clean(&[&place.repo, &place.state, &place.sock_dir]);
     }
+}
+
+// ─────── 書き込みの検出線の席の 1 行（設計 write-budget.md §7・接頭辞 `prompt_write_budget_`・群の歯と同じ fixture） ───────
+//
+// 表 `[[write-budget]]` は host の面（`<state>/host.toml`）に群の面の後ろへ足し、記録は host の根（`<state の親>/<NAME>-host/
+// write-budget/<name>/`）に設計 §4 の形の `open` と `days.log` を歯が組んで置く（日付は撃つ前の今から組む・器の判定の口を使わない）。
+
+/// 1 TB（10^12 byte）。
+const WB_TB: u64 = 1_000_000_000_000;
+
+/// 1 日の秒数。
+const WB_DAY: u64 = 86_400;
+
+/// 席の 1 行の定型の文（行の末）。
+const WB_TAIL: &str = "— 書き込みの検出線の知らせ（器は作業を止めない・持ち主への札は owner=yes の周に消費側の板が出す）";
+
+/// 撃つ前の今日の 0 時（UNIX 秒）。
+fn wb_today0() -> u64 {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_secs());
+    now - now % WB_DAY
+}
+
+/// 記録の dir（契約の字面から組む）。
+fn wb_dir(place: &RolePlace, name: &str) -> PathBuf {
+    place.state.parent().unwrap_or(&place.state).join(format!("{NAME}-host")).join("write-budget").join(name)
+}
+
+/// 群の面（`anchor` の群）を書き、`table` なら表の行 nvme-a を足す。
+fn wb_face(place: &RolePlace, anchor: &str, table: bool) {
+    put_group(place, anchor);
+    if table {
+        let path = place.state.join(vessel::rules::HOST_MANIFEST);
+        let mut host = fs::read_to_string(&path).unwrap_or_default();
+        host.push_str(&format!("\n[[write-budget]]\nname = \"nvme-a\"\nstat = \"{}\"\n", place.sock_dir.join("stat-nvme-a").display()));
+        fs::write(path, host).ok();
+    }
+}
+
+/// nvme-a の `days.log` を書く（`high` 日前までの閉じた日が 3.5 TB・その後ろ 7 日前までが 1 TB の measured）。
+fn wb_days(place: &RolePlace, high: u64) {
+    let today0 = wb_today0();
+    let text: String = (1..=7)
+        .map(|back| {
+            let written = if back <= high { 35 * WB_TB / 10 } else { WB_TB };
+            let date: String = vessel::fleet::cli::format_utc(today0 - back * WB_DAY).chars().take(10).collect();
+            format!("schema=1 date={date} written={written} state=measured reboots=0 tail=-\n")
+        })
+        .collect();
+    fs::create_dir_all(wb_dir(place, "nvme-a")).ok();
+    fs::write(wb_dir(place, "nvme-a").join("days.log"), text).ok();
+}
+
+/// 注入の記録のうち what が `write-budget` の行。
+fn wb_records(place: &RolePlace) -> Vec<String> {
+    let what = Some(json_lite::Value::Str("write-budget".to_owned()));
+    inject_lines(&place.state).into_iter().filter(|line| value_of(line, "what") == what).collect()
+}
+
+/// 呼び出しを 1 行ずつ `log` に残す偽 tmux の席（target `<name>:<name>`・口座 a1・anchor = repo）。PATH の値を返す。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn wb_seat(place: &RolePlace, name: &str) -> (String, PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let path = group_seat(place, name, "a1");
+    let log = place.sock_dir.join(format!("tmux-{name}.log"));
+    let stub = place.sock_dir.join(format!("tmux-{name}")).join("tmux");
+    fs::write(&stub, format!("#!/bin/sh\necho \"$*\" >> '{}'\necho '{name}:{name}'\n", log.display())).expect("偽 tmux を書ける");
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).expect("偽 tmux に実行権を付ける");
+    (path, log)
+}
+
+/// UserPromptSubmit を撃つ（`args` は event の後ろの引数）。
+fn wb_prompt(place: &RolePlace, path: &str, args: &[&str]) -> Output {
+    let mut all = vec!["user-prompt-submit"];
+    all.extend_from_slice(args);
+    run_stub_hook(path, &all, &stamp_payload(&place.repo, "sid-group"))
+}
+
+/// 席の 1 行の字（契約の字面から組む）。
+fn wb_line(over: &str, (yesterday, avg): (&str, &str), (streak, owner): (&str, &str)) -> String {
+    format!("write-budget: name=nvme-a over={over} today=unmeasured yesterday={yesterday} avg={avg} streak={streak} owner={owner} {WB_TAIL}")
+}
+
+/// (a) 群に属さない anchor の席で昨日 3.5 TB（ほか 6 日 1 TB）の記録 → stdout がちょうど 1 行で、what が `write-budget` の記録が
+/// 1 本増え（who と when も契約の字）、偽 tmux に send-keys が 0 回。逼迫の群の席で同じ記録 → 1 行目が群の行・2 行目が書き込みの行。
+/// 7 日とも 1 TB の記録を `host.write_owner_days` の行を欠く `--rules` の写しで撃つ → over=no-rule の 1 行。
+#[test]
+fn prompt_write_budget_over_round_adds_one_line_after_the_group_line() {
+    let over = wb_line("day", ("3500000000000", "1357142857142"), ("1", "no"));
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", true);
+    wb_days(&place, 1);
+    let (path, log) = wb_seat(&place, "wbover");
+    let before = wb_records(&place).len();
+    assert_eq!(group_prompt_lines(&place, &path), vec![over.clone()], "越えた周は 1 行");
+    let records = wb_records(&place);
+    assert_eq!(records.len(), before + 1, "記録は 1 本増える: {records:?}");
+    for (key, want) in [("who", "hook:user-prompt-submit"), ("when", "UserPromptSubmit")] {
+        assert_eq!(value_of(&records[before], key), Some(json_lite::Value::Str(want.to_owned())), "記録の {key}");
+    }
+    let calls = fs::read_to_string(&log).unwrap_or_default();
+    assert!(!calls.contains("send-keys"), "入力欄へ送らない: {calls}");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+
+    let place = group_role_place();
+    wb_face(&place, &place.repo.display().to_string(), true);
+    wb_days(&place, 1);
+    let path = group_seat(&place, "wbgroup", "a1");
+    put_group_round(&place.state, &group_now(), "a1", &group_windows(90, 10, 10));
+    assert_eq!(group_prompt_lines(&place, &path), vec![group_line("a1", "5h", 90, 85), over], "群の行の後ろ");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", true);
+    wb_days(&place, 0);
+    let embedded = include_str!("../../../../../rules/manifest.toml");
+    let copy = embedded.replace("id = \"host.write_owner_days\"", "id = \"host.write_owner_dayz\"");
+    assert_ne!(copy, embedded, "写しの字が替わる");
+    let rules = place.sock_dir.join("no-owner.toml");
+    fs::write(&rules, copy).ok();
+    let path = group_seat(&place, "wbnorule", "a1");
+    let out = wb_prompt(&place, &path, &["--pane", STUB_PANE, "--rules", &rules.display().to_string()]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "rc 0: {}", stderr_text(&out));
+    let lines: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().map(str::to_owned).collect();
+    assert_eq!(lines, vec![wb_line("no-rule", ("1000000000000", "no-rule"), ("no-rule", "no-rule"))], "線を読めない周も 1 行");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}
+
+/// 置き場を 1 つ作り、`days` の記録（`None` は記録なし）と `table` の面で UserPromptSubmit を `args` で撃ち、stdout と注入の記録の行数と
+/// what が `write-budget` の記録の数を返す。
+fn wb_quiet_round(days: Option<u64>, table: bool, args: &[&str]) -> (String, usize, usize) {
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", table);
+    if let Some(high) = days {
+        wb_days(&place, high);
+    }
+    let path = group_seat(&place, "wbquiet", "a1");
+    let out = wb_prompt(&place, &path, args);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "rc 0: {}", stderr_text(&out));
+    let found = (String::from_utf8_lossy(&out.stdout).into_owned(), inject_lines(&place.state).len(), wb_records(&place).len());
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+    found
+}
+
+/// (b) 7 日とも 1 TB で `--pane` あり・表が無く昨日 3.5 TB の記録だけが在る置き場で `--pane` あり・表を持ち昨日 3.5 TB で `--pane` の
+/// 無い呼び出しの 3 形は stdout 0 byte で、what が `write-budget` の記録が 0 本で、記録の行数が表と記録の無い同じ形の置き場の周と
+/// 等しい。表を持ち昨日 3.5 TB の置き場の SessionStart の出力に `write-budget` の字が無い。同じ置き場で `--pane` ありは 1 行（対照）。
+#[test]
+fn prompt_write_budget_quiet_tableless_or_paneless_rounds_print_nothing() {
+    let pane = ["--pane", STUB_PANE];
+    for (why, days, table, args) in [("越えない", Some(0), true, &pane[..]), ("表が無い", Some(1), false, &pane[..]), ("pane が無い", Some(1), true, &[][..])] {
+        let (out, records, budget) = wb_quiet_round(days, table, args);
+        let (_, plain, _) = wb_quiet_round(None, false, args);
+        assert_eq!((out.as_str(), budget, records), ("", 0, plain), "{why}: stdout 0 byte・記録を足さない");
+    }
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", true);
+    wb_days(&place, 1);
+    let path = group_seat(&place, "wbsession", "a1");
+    let args = ["session-start", "--pane", STUB_PANE, "--bd", &place.bd];
+    let session = run_stub_hook(&path, &args, &stamp_payload(&place.repo, "sid-group"));
+    let text = String::from_utf8_lossy(&session.stdout).into_owned();
+    assert!(!text.contains("write-budget"), "SessionStart には足さない: {text}");
+    let out = String::from_utf8_lossy(&wb_prompt(&place, &path, &pane).stdout).into_owned();
+    assert_eq!((out.lines().count(), wb_records(&place).len()), (1, 1), "対照: 越えた表の席は 1 行: {out}");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}
+
+/// (c) 昨日から 3 日前まで 3.5 TB（ほか 1 TB）の記録 → 行が streak=3 owner=yes を持つ。
+#[test]
+fn prompt_write_budget_owner_round_carries_owner_yes() {
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", true);
+    wb_days(&place, 3);
+    let path = group_seat(&place, "wbowner", "a1");
+    assert_eq!(group_prompt_lines(&place, &path), vec![wb_line("day,avg", ("3500000000000", "2071428571428"), ("3", "yes"))]);
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
+}
+
+/// (d) open を dir にし days.log の無い置き場と、壊れた host の面（表の行の stat の欠け）は rc 0・stdout 0 byte・stderr 0 byte。同じ
+/// 置き場で days.log に越えの記録を置くと 1 行（対照）。
+#[test]
+fn prompt_write_budget_unreadable_round_prints_nothing_and_keeps_rc() {
+    let place = group_role_place();
+    wb_face(&place, "/repo/not-this-one", true);
+    fs::create_dir_all(wb_dir(&place, "nvme-a").join("open")).ok();
+    let path = group_seat(&place, "wbunread", "a1");
+    assert_eq!(group_prompt_lines(&place, &path), Vec::<String>::new(), "open が dir で days.log が無い周は 0 行");
+    let host = place.state.join(vessel::rules::HOST_MANIFEST);
+    let good = fs::read_to_string(&host).unwrap_or_default();
+    fs::write(&host, "schema = 1\n\n[[write-budget]]\nname = \"nvme-a\"\n").ok();
+    wb_days(&place, 1);
+    assert_eq!(group_prompt_lines(&place, &path), Vec::<String>::new(), "壊れた host の面は 0 行");
+    fs::write(&host, good).ok();
+    let want = format!(
+        "write-budget: name=nvme-a over=day today=unreadable yesterday=3500000000000 avg=1357142857142 streak=1 owner=no {WB_TAIL}"
+    );
+    assert_eq!(group_prompt_lines(&place, &path), vec![want], "対照: 越えの記録を置くと 1 行");
+    clean(&[&place.repo, &place.state, &place.sock_dir]);
 }
