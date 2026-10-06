@@ -4,7 +4,8 @@ meta:
   id: surface-board
   title: 面の便（画面と端末と口）— project board・account board・表示面・受入 12 条の測定・tz の口
   version: v0.22
-  status: effective
+  status: retired
+  superseded_by: surface-plan
   generated: 2026-09-28
   profile: design-note
   approval:
