@@ -1,4 +1,4 @@
-//! 便の終わりの段を 1 つに定める歯（接頭辞 `vredc_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+//! 便の終わりの段を 1 つに定める歯（接頭辞 `vredc_` と `vcioff_`・判断の記録 ADR-45 の門 H6・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 //!
 //! 着地の口が squash の前に段を読み直すこと（列の先頭が着地させた便の撃ち直しを止める）と、終端だけの撃ち直しが main-red の便の
 //! squash を remote の main の上で受け入れて着地の形で閉じることを外形から測る。
@@ -140,6 +140,25 @@ fn vredc_terminal_only_adopts_a_red_squash_on_remote() {
     let argv = fs::read_to_string(&tools.bd_log).unwrap_or_default();
     assert_eq!(argv.lines().nth(3), Some(format!("landed {squash} ci=success tip={tip}").as_str()), "着地の形の理由: {argv}");
     assert!(show_line(&repo, &state, &id).contains("stage=Landed"), "段は Landed");
+    clean(&[&repo, &state]);
+}
+
+/// 宣言が `ci-watch = false` の repo は main-red の便を受け入れない（行 v-ci-watch-off・この host の緑が無く CI の success だけが
+/// 証拠なので）: 終端だけの撃ち直しは stdout の 1 行 `run=<id> adopt=ci-off` と rc 1 で、event を積まず、偽 CI と偽 bd を撃たず、
+/// 偽 remote の main を動かさない。
+#[test]
+fn vcioff_terminal_only_refuses_to_adopt_without_ci() {
+    let (repo, state) = repo_with_state();
+    let (tools, id, flags, _, tip) = red_run(&repo, &state, true);
+    ci_watch_off(&repo);
+    let before = event_count(&state);
+    let out = terminal_only(&repo, &state, &id, &flags);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "rc 1: {}", stderr_of(&out));
+    assert_eq!(stdout_of(&out).trim_end(), format!("run={id} adopt=ci-off"), "1 行");
+    assert_eq!(event_count(&state), before, "何も積まない");
+    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
+    assert!(!tools.bd_log.exists(), "偽 bd は撃たれない");
+    assert_eq!(git(&tools.remote, &["rev-parse", "refs/heads/main"]), tip, "偽 remote の main は動かない");
     clean(&[&repo, &state]);
 }
 

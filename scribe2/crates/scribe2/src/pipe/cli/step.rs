@@ -95,9 +95,10 @@ const ADOPTABLE: [&str; 2] = ["main-red", "main-unmeasured"];
 /// 畳んだ事実の detail（retire が段のまま積む字・受け入れの判定は読み飛ばす）。
 const RETIRED: &str = "retired";
 
-/// 受け入れない周の `adopt=` の語（最後の `Failed` の detail が [`ADOPTABLE`] でない・宣言に remote が無い・remote の main の祖先に
-/// 自分の squash が無い）。
+/// 受け入れない周の `adopt=` の語（最後の `Failed` の detail が [`ADOPTABLE`] でない・宣言が `ci-watch = false`・宣言に remote が無い・
+/// remote の main の祖先に自分の squash が無い）。
 const NOT_RED: &str = "not-red";
+const CI_OFF: &str = "ci-off";
 const NO_REMOTE: &str = "no-remote";
 const NOT_ON_REMOTE: &str = "not-on-remote";
 
@@ -119,6 +120,9 @@ fn adopt(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy, res
         Ok(found) => found,
         Err(errors) => return broken(errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / ")),
     };
+    if !facts.ci_watch {
+        return declined(CI_OFF);
+    }
     let Some(remote) = facts.remote else {
         return declined(NO_REMOTE);
     };

@@ -1,4 +1,4 @@
-//! 着地の終端の CI の照合の歯（接頭辞 `vcil_` と `vclhost_`・器の memo t3-hub.74.49.6・判断の記録 ADR-45 の門 H6・台帳の問い
+//! 着地の終端の CI の照合の歯（接頭辞 `vcil_` と `vclhost_` と `vcioff_`・器の memo t3-hub.74.49.6・判断の記録 ADR-45 の門 H6・台帳の問い
 //! t3-hub.90.2 の裁定・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 //!
 //! 終端は push の後にこの host の緑で台帳を閉じ、GitHub の検査は着地の後の CI の口（`pipe land --ci-only`）の子 process が後から
@@ -268,6 +268,29 @@ fn vclhost_land_closes_on_host_green_before_a_red_ci_answer() {
     let rows = settled_rows(&state, &id, 1);
     assert_eq!(parent_rows(&rows, "terminal:ci:failure"), [PUSHED, CLOSED, SPAWNED], "親の 3 件の順: {rows:?}");
     assert_eq!(rows.iter().filter(|row| row.as_str() == "terminal:ci:failure").count(), 1, "子の答えは 1 件: {rows:?}");
+    clean(&[&repo, &state]);
+}
+
+/// 宣言が `ci-watch = false` の repo の land は CI を見張らない（行 v-ci-watch-off）: [`vclhost_land_closes_on_host_green_before_a_red_ci_answer`]
+/// と同じ fixture（赤を返す偽 CI）で、rc 0・`terminal=closed`・台帳の argv は close と便の bead と `--reason` と
+/// `landed <sha> host=green`、便の終端の行は push と close の 2 件だけで、偽 CI は 1 度も撃たれない（子を起こさないので待たない）。
+#[test]
+fn vcioff_land_closes_without_watching_ci() {
+    let (repo, state) = repo_with_state();
+    let tools = fake_terminal_json(&repo, &state, FAILED);
+    ci_watch_off(&repo);
+    let design = write_contract(&repo, &[], &[]);
+    let id = gated_pass(&repo, &state, &design, &state.join("lens-ran"));
+    let (bd, rules) = (state.join("fake-bd.sh").display().to_string(), ceiling_rules(&state));
+    let out = land_extra(&repo, &state, &id, &["--bd", &bd, "--rules", &rules]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "見張らない周の land は rc 0: {} {}", stdout_of(&out), stderr_of(&out));
+    assert!(stdout_of(&out).contains("terminal=closed"), "終端の token: {}", stdout_of(&out));
+    let sha = landed_sha(&state, &id);
+    let argv = fs::read_to_string(&tools.bd_log).expect("台帳が閉じられた");
+    let reason = format!("landed {sha} host=green");
+    assert_eq!(argv.lines().collect::<Vec<&str>>(), ["close", "s2-2e5", "--reason", reason.as_str()], "台帳の argv: {argv}");
+    assert_eq!(terminal_rows(&state, &id), [PUSHED, CLOSED], "終端の行は push と close の 2 件だけ");
+    assert_eq!(tools.ci_call_count(), 0, "偽 CI は撃たれない");
     clean(&[&repo, &state]);
 }
 

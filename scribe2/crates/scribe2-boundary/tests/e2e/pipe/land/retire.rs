@@ -1,5 +1,5 @@
 // flip-check: moved s2-07l.684
-//! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
+//! retire と train の族の歯（接頭辞 `pipe_retire_` / `pipe_train_` / `vcioff_`・設計 docs/design/carry-prep.md §10 行 l・親 `tests/e2e/pipe/land.rs` の helper を `use super::*` で使う）。
 
 use super::*;
 use super::cilast::{parent_rows, settled_rows, CLOSED, PUSHED, SPAWNED};
@@ -952,6 +952,24 @@ fn pr_retire_refuses_with_one_closed_word_and_writes_nothing() {
         }
         clean(&[&tools.repo, &tools.state]);
     }
+}
+
+/// 宣言が `ci-watch = false` の repo の PR の便の retire は照合せず断る（行 v-ci-watch-off・先端の CI の success を close の証拠に
+/// できない）: stdout の 1 行 `run=<id> retire=ci-off` と rc 1・偽 CI と偽 gh は撃たれず、worktree は元の場所・event と偽の台帳は不変。
+#[test]
+fn vcioff_pr_retire_refuses_without_ci() {
+    let tools = pr_tools(true);
+    ci_watch_off(&tools.repo);
+    let (events_before, ledger_before) = (event_count(&tools.state), tools.ledger());
+    let out = tools.retire(&[]);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "rc 1: {} / {}", stdout_of(&out), stderr_of(&out));
+    assert_eq!(stdout_of(&out).trim_end(), tools.refusal_line("ci-off"), "stdout は閉じた語の 1 行");
+    assert!(tools.lines("fake-ci.sh.argv").is_empty(), "偽 CI は撃たれない");
+    assert!(tools.lines("gh-calls").is_empty(), "偽 gh は撃たれない");
+    assert!(worktree_of(&tools.repo, &tools.id).exists() && !tools.retired().exists(), "畳まない");
+    assert_eq!(event_count(&tools.state), events_before, "event を書かない");
+    assert_eq!(tools.ledger(), ledger_before, "台帳の JSON は不変");
+    clean(&[&tools.repo, &tools.state]);
 }
 
 /// (k) 先端の読みを 3 値に割った後の回帰（設計 pipeline.md §69 形 2）: main の無い remote と、dir の名を変えた remote の 2 つの脚で、

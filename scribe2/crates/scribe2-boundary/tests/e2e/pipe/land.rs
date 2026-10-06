@@ -2619,6 +2619,18 @@ fn fake_terminal_decl(repo: &Path, state: &Path, json: &str, declared: bool) -> 
     FakeTerminal { remote, bd_log, ci_log, ci_calls }
 }
 
+/// 宣言の file の末に `ci-watch = false` を足して add と commit する（着地の後の CI を見張らない repo・[`fake_terminal_decl`] と同じ書き）。
+#[expect(
+    clippy::expect_used,
+    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
+)]
+fn ci_watch_off(repo: &Path) {
+    let body = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
+    fs::write(repo.join(".vessel.toml"), format!("{body}ci-watch = false\n")).expect("宣言を書ける");
+    git(repo, &["add", "-f", ".vessel.toml"]);
+    git(repo, &["commit", "-q", "-m", "ci-watch-off"]);
+}
+
 /// 便の `RunDone stage=Landed` の detail を**宣言順に**並べる（終端は段ごとに 1 件記す）。
 fn landed_details(state: &Path, id: &str) -> Vec<String> {
     trail(state, id)

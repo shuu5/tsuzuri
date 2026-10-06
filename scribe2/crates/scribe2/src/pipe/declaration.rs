@@ -30,7 +30,7 @@ pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, require
 pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
 pub use optional_keys::{seat_constitution, SeatConstitution};
 pub use run_cap::RunCap;
-use optional_keys::{build_lanes_of, ci_cmd_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
+use optional_keys::{build_lanes_of, ci_cmd_of, ci_watch_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
 pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
 pub(crate) use write_set::is_under;
 
@@ -302,6 +302,8 @@ pub struct Declared {
     remote: Option<String>,
     /// CI の判定を読む 1 行（任意・無ければ `None`）。
     ci_cmd: Option<String>,
+    /// 着地の後の CI を見張るか（任意 key `ci-watch`・無ければ `None`＝true と同じ・設計 contract-source.md §5）。
+    ci_watch: Option<bool>,
     /// path の種別の prefix（任意 key 3 本・無い key は `None`・設計 seat-roles.md §24）。
     path_kinds: path_kinds::DeclaredPaths,
     /// 入口の flip の名乗り（任意 key `entrance-flip`・無ければ `None`＝現行の要求）。
@@ -563,7 +565,7 @@ impl Declared {
         let (detection_verify, detection_line) = list_of(&found, DETECTION_KEY, &mut errors);
         let requirements = requirements_of(&found, &mut errors);
         let remote = remote_of(&found, &mut errors);
-        let ci_cmd = ci_cmd_of(&found, &mut errors);
+        let (ci_cmd, ci_watch) = (ci_cmd_of(&found, &mut errors), ci_watch_of(&found, &mut errors));
         let path_kinds = path_kinds::declared_of(&found, &mut errors);
         let entrance_flip = entrance_of(&found, &mut errors);
         let question_route = question_route_of(&found, &mut errors);
@@ -594,6 +596,7 @@ impl Declared {
                 requirements,
                 remote,
                 ci_cmd,
+                ci_watch,
                 path_kinds,
                 entrance_flip,
                 question_route,
@@ -1273,7 +1276,7 @@ mod tests {
     }
 
     /// 先頭語 `cargo` の行を持たない宣言（`sh` / `git` だけの toy repo）は分類だけで断らない（§7「Rust 固有の検査を
-    /// 内蔵しない」のまま）。宣言 file の schema は不変（版 1・key の列は 10 本に §54 と vessel-hook.md §20 と ledger-form.md §16 と dispatcher.md §34 と contract-source.md §62 の任意 key 各 1 本と dispatcher.md §36 の任意 key 2 本と contract-source.md §67 の任意 key 3 本と row-review.md §4 の任意 key 1 本と contract-source.md §69 の任意 key 1 本と gate-cost.md §48 の任意 key 1 本を足した 23 本）。
+    /// 内蔵しない」のまま）。宣言 file の schema は不変（版 1・key の列は 10 本に §54 と vessel-hook.md §20 と ledger-form.md §16 と dispatcher.md §34 と contract-source.md §62 の任意 key 各 1 本と dispatcher.md §36 の任意 key 2 本と contract-source.md §67 の任意 key 3 本と row-review.md §4 の任意 key 1 本と contract-source.md §69 の任意 key 1 本と gate-cost.md §48 の任意 key 1 本と contract-source.md §5 の任意 key 1 本を足した 24 本）。
     // flip-check: retroactive s2-07l.738.43.10
     #[test]
     fn declaration_kind_passes_declarations_without_cargo_and_keeps_the_schema() {
@@ -1290,6 +1293,7 @@ mod tests {
                 "requirements",
                 "remote",
                 "ci-cmd",
+                "ci-watch",
                 "design-intent-paths",
                 "design-doc-paths",
                 "tests-paths",

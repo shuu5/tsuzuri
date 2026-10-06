@@ -277,7 +277,8 @@ pub(in crate::pipe) enum PushTip<'a> {
 /// sha の子孫で自分の sha でない周（着地の後に別の便が main を進め、push がその commit を押した周）は、渡された側によらず
 /// その commit を先端とする（[`pushed_past`]）。[`PushTip::Adopted`] の周（主実測が赤か測れなかった便を受け入れる周＝この host の
 /// 緑が無い）は push を撃たず（記帳もしない）、今までどおり先端の CI の success を待ってから close する（先端が自分の sha なら
-/// reason に `tip=` を置かない）。CI の答えは待ちが最後に読んだ答えで、読み直さない。
+/// reason に `tip=` を置かない）。CI の答えは待ちが最後に読んだ答えで、読み直さない。宣言の `ci-watch` が false の周は push と
+/// この host の緑の close だけを撃ち、先端の読みも子も撃たない（受け入れの周に来たら CI を読まずに [`Terminal::CiUnmeasurable`]）。
 pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -> Terminal {
     let facts = match super::declaration::terminal_facts(entry.repo) {
         Ok(found) => found,
@@ -304,6 +305,15 @@ pub(in crate::pipe) fn terminal(entry: &Land<'_>, sha: &str, tip: PushTip<'_>) -
             return Terminal::PushFailed("git".to_owned());
         }
         note(entry, &format!("push:{remote}"));
+    }
+    // 宣言が着地の後の CI を見張らない（`ci-watch = false`）repo は CI を読まない: 先端の読みも子も撃たず、host の緑で close する。
+    // 受け入れの周は host の緑が無く CI の success だけが証拠なので、読まずに閉じない（取り込みの口が先に断るので来ない）。
+    if !facts.ci_watch {
+        if matches!(tip, PushTip::Adopted(_)) {
+            note(entry, CI_UNMEASURABLE);
+            return Terminal::CiUnmeasurable;
+        }
+        return close_bead(entry, &close_reason(sha, CloseTail::HostGreen));
     }
     // push が押した commit で照合する（forge の CI は push の先端にだけ run を持つ・memo t3-hub.74.49.6 の道 2）。受け入れの周は
     // 押していないので渡された側のまま。

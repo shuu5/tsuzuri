@@ -18,6 +18,7 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     REQUIREMENTS_KEY,
     REMOTE_KEY,
     CI_CMD_KEY,
+    CI_WATCH_KEY,
     path_kinds::DESIGN_INTENT_KEY,
     path_kinds::DESIGN_DOC_KEY,
     path_kinds::TESTS_KEY,
@@ -341,6 +342,10 @@ const REMOTE_KEY: &str = "remote";
 /// **CI の判定を読む 1 行**の key（任意・設計 contract-source.md §5）。書かない宣言は [`DEFAULT_CI_CMD`] を撃つ。
 const CI_CMD_KEY: &str = "ci-cmd";
 
+/// **着地の後の CI を見張るか**の key（任意・設計 contract-source.md §5 の手順 3）。値は真偽だけで、false の repo は land の終端が
+/// 着地の後の CI を読まない（書かない宣言は true と同じ＝今の形）。
+const CI_WATCH_KEY: &str = "ci-watch";
+
 /// CI の判定を読む行の既定（forge の CLI・`{sha}` に着地した sha が入る）。`event` は読み手が
 /// `schedule` の run を母集団から外すための欄（設計 pipeline.md §46）。
 pub const DEFAULT_CI_CMD: &str = "gh run list --commit {sha} --json status,conclusion,event";
@@ -363,6 +368,7 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     REQUIREMENTS_KEY,
     REMOTE_KEY,
     CI_CMD_KEY,
+    CI_WATCH_KEY,
     path_kinds::DESIGN_INTENT_KEY,
     path_kinds::DESIGN_DOC_KEY,
     path_kinds::TESTS_KEY,
@@ -616,6 +622,16 @@ pub(super) fn ci_cmd_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError
     }
 }
 
+/// 着地の後の CI を見張るか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
+pub(super) fn ci_watch_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
+    bool_key(found, CI_WATCH_KEY, errors)
+}
+
+/// 宣言が着地の後の CI を見張るか（欄が `Some(false)` の時だけ偽・key の無い宣言と true は真）。
+pub fn ci_watch_on(declared: &Declared) -> bool {
+    declared.ci_watch != Some(false)
+}
+
 /// repo 相対の path か（空でない・絶対 path でない・home の短縮記号も `..` の段も持たない）。
 fn repo_relative(path: &str) -> bool {
     !path.trim().is_empty() && !path.starts_with('/') && !path.contains('~') && !path.split('/').any(|part| part == "..")
@@ -663,6 +679,8 @@ pub struct TerminalFacts {
     pub remote: Option<String>,
     /// CI の判定を読む 1 行（宣言 `ci-cmd`・無ければ [`DEFAULT_CI_CMD`]・`{sha}` の穴を持つ）。
     pub ci_cmd: String,
+    /// 着地の後の CI を見張るか（宣言 `ci-watch`・false の時だけ偽・[`ci_watch_on`]）。
+    pub ci_watch: bool,
 }
 
 /// HEAD の宣言から終端の事実を解く（上限は読まない＝終端は allowlist と突き合わせない）。
@@ -671,16 +689,18 @@ pub struct TerminalFacts {
 /// 宣言そのものが無い repo に既定で push するのは「測っていない先へ出す」ことになる（A1 の「出す」・C10）。
 pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
     let declared = declared_at_head(repo)?;
+    let ci_watch = ci_watch_on(&declared);
     Ok(TerminalFacts {
         remote: declared.remote,
         ci_cmd: declared.ci_cmd.unwrap_or_else(|| DEFAULT_CI_CMD.to_owned()),
+        ci_watch,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::Declared;
-    use super::{check_of, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
+    use super::{check_of, ci_watch_on, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
     use super::{seat_of, SeatConstitution};
 
     /// 必須 key だけの宣言の本文（3 行）の後ろに `extra` を足す。
@@ -765,6 +785,17 @@ mod tests {
         for value in ["\"true\"", "1", "[\"true\"]"] {
             let errors = read(&format!("row-review = {value}\n")).expect_err(value);
             assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("row-review")), "{value}: {errors:?}");
+        }
+    }
+
+    /// ci-watch は真偽だけ: key の無い宣言と true は真、false だけが偽（[`ci_watch_on`]）、真偽でない値は key と行番号（4 行目）を名指す不備。
+    #[test]
+    fn declaration_ci_watch_reads_a_bool_and_refuses_other_values() {
+        let on = |extra: &str| Declared::parse(&with(extra)).map(|found| ci_watch_on(&found));
+        assert_eq!((on(""), on("ci-watch = true\n"), on("ci-watch = false\n")), (Ok(true), Ok(true), Ok(false)));
+        for value in ["\"false\"", "1", "[\"false\"]"] {
+            let errors = on(&format!("ci-watch = {value}\n")).expect_err(value);
+            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("ci-watch")), "{value}: {errors:?}");
         }
     }
 

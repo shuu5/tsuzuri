@@ -57,11 +57,11 @@ const CLOSE_OK: &str = "terminal:close:ok";
 /// commit id の桁数（40 桁の 16 進）。
 const OID_LEN: usize = 40;
 
-/// 照合が通らない周の閉じた 6 語の字面（[`Refusal`] の宣言順・stdout の `retire=` の値）。
+/// 照合が通らない周の閉じた 7 語の字面（[`Refusal`] の宣言順・stdout の `retire=` の値）。
 pub const REFUSAL_WORDS: &[&str] =
-    &["worktree-unready", "not-merged", "not-ancestor", "ci-not-success", "unmeasured", "unwritten"];
+    &["worktree-unready", "not-merged", "not-ancestor", "ci-not-success", "unmeasured", "unwritten", "ci-off"];
 
-/// PR の便を畳まない理由（**閉じた 6 値**・設計 contract-source.md §61 形 11・字面は [`REFUSAL_WORDS`]）。
+/// PR の便を畳まない理由（**閉じた 7 値**・設計 contract-source.md §61 形 11・字面は [`REFUSAL_WORDS`]）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Refusal {
     /// worktree が無いか clean でない、または close の後の move が落ちた。
@@ -76,6 +76,8 @@ enum Refusal {
     Unmeasured,
     /// 台帳を閉じられなかった。
     Unwritten,
+    /// 宣言が `ci-watch = false`（先端の CI の success を close の証拠にできない）。
+    CiOff,
 }
 
 impl Refusal {
@@ -233,6 +235,9 @@ fn already_closed(entry: &Retire<'_>) -> Result<bool, Refusal> {
 /// 宣言の remote・forge・git・先端の CI の順に問う（1 つでも通らなければ理由 1 つ）。
 fn prove(entry: &Retire<'_>) -> Result<Proof, Refusal> {
     let facts = terminal_facts(entry.repo).map_err(|_| Refusal::Unmeasured)?;
+    if !facts.ci_watch {
+        return Err(Refusal::CiOff);
+    }
     let remote = facts.remote.ok_or(Refusal::Unmeasured)?;
     let merge = match pr_merge(entry.repo, &branch_name(entry.run)) {
         PrMerge::Merged(found) => found,
