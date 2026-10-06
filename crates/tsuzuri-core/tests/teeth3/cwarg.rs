@@ -6,6 +6,7 @@
 //! 口座の置き場の実体と資格の file の全部を読む道具からも隠し、材料の実体の全部を検めが求めることを見る（行 cs-cred-links）。
 //! 会話の印の hook 3 つを設定に置き、どれかを欠くか字を替えた設定を検めがその hook の名だけで断ることを見る（行 cs-acct-mark）。
 //! 設定に状態の 1 行を置き、欠けと字の違いを検めが断ることを見る（行 cs-status-text）。
+//! 話す窓の状態の行だけに口座の再描画の間を写し、値の違いと欠けを検めが断ることを見る（行 cs-status-seat）。
 //! 話す窓だけを Remote Control に窓の名で繋ぎ、欠け・名の違い・別名・問う窓の旗を検めが断ることを見る（行 cs-remote）。
 //! 設定がほかの session からの言付けを全部断り、言付けの道具 2 つを断り、どれかを欠く設定を検めが断ることを見る（行 cs-inbound-refuse）。
 #![cfg(test)]
@@ -58,6 +59,7 @@ fn launch(inputs: &Value) -> Launch {
         effort: s("effort"),
         question: inputs["question"].as_bool().expect("question"),
         resume: inputs["resume"].as_str().map(String::from),
+        refresh: inputs["refresh"].as_u64(),
     }
 }
 
@@ -974,4 +976,45 @@ fn cwarg_settings_hold_the_status_line() {
             assert_eq!(gaps, ["/statusLine"], "{form} の statusLine を{name}");
         }
     }
+}
+
+/// 口座の再描画の間を持つ材料では、話す窓の状態の行だけが命令の字の後に refreshInterval をその値で持ち、問う窓は持たない。
+/// 話す窓の値を替えるか除くか、問う窓に足した設定を、検めは `/statusLine` だけで断る（行 cs-status-seat）。
+#[test]
+fn cwarg_talk_status_line_copies_the_refresh() {
+    let fx = fixture();
+    let mut talk = launch(&fx["talk"]["inputs"]);
+    talk.refresh = Some(10);
+    let want = json!({
+        "type": "command",
+        "command": "timeout 2 /T consult statusline /W",
+        "refreshInterval": 10,
+    });
+    assert_eq!(settings(&talk)["statusLine"], want);
+    assert!(audit(&argv(&talk), &talk).is_empty());
+    let mut ask = launch(&fx["ask"]["inputs"]);
+    ask.refresh = Some(10);
+    let plain = json!({"type": "command", "command": "timeout 2 /T consult statusline /W"});
+    assert_eq!(settings(&ask)["statusLine"], plain);
+    assert!(audit(&argv(&ask), &ask).is_empty());
+    let edits: [Edit; 2] = [
+        ("値を替える", |s| {
+            s["statusLine"]["refreshInterval"] = 11.into()
+        }),
+        ("除く", |s| {
+            s["statusLine"]
+                .as_object_mut()
+                .expect("object")
+                .remove("refreshInterval");
+        }),
+    ];
+    for (name, edit) in edits {
+        assert_eq!(
+            audit(&with_settings(&talk, edit), &talk),
+            ["/statusLine"],
+            "話す窓の refreshInterval を{name}"
+        );
+    }
+    let added = with_settings(&ask, |s| s["statusLine"]["refreshInterval"] = 10.into());
+    assert_eq!(audit(&added, &ask), ["/statusLine"], "問う窓に足す");
 }

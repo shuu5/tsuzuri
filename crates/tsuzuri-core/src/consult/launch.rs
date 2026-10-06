@@ -7,7 +7,7 @@
 //! 話す窓は Remote Control に窓の名で繋いで起こし（`--restricted` の直後）、問う窓は繋がない。検めは話す窓の欠けと名の違いと、
 //! 問う窓の旗（別名 `--rc` を含む）を断る（判断の記録 ADR-57 決定 (4)）。
 //! 設定には話す窓と問う窓に共通の状態の 1 行（statusLine の命令 `status::command`）を置き、検めは欠けと字の違いを断る
-//! （判断の記録 ADR-57 決定 (1)(コ)・(4)）。
+//! （判断の記録 ADR-57 決定 (1)(コ)・(4)）。話す窓の状態の行には起こした口座の再描画の間を写す（判断の記録 ADR-67）。
 //! 旗と鍵の名は Claude Code の字のまま置く。path は呼ぶ側が「/」で始まる絶対 path で渡す（読む根は在る dir だけ）。
 
 use serde_json::{Value, json};
@@ -139,6 +139,8 @@ pub struct Launch {
     pub question: bool,
     /// 話す窓の撃ち直しで続ける会話の id（uuid の形・在れば最初の指示の代わりに続きの旗で渡す・判断の記録 ADR-55）。
     pub resume: Option<String>,
+    /// 起こした口座の設定の状態の行の再描画の間（話す窓の状態の行にだけ写す・無ければ置かない・判断の記録 ADR-67）。
+    pub refresh: Option<u64>,
 }
 
 /// 読む根の 3 つ（repo・state dir の fleet・pipe）。
@@ -253,9 +255,15 @@ pub fn settings(l: &Launch) -> Value {
     })
 }
 
-/// 設定の状態の 1 行（型 command と `status::command` の字だけ）。
+/// 設定の状態の 1 行（型 command と `status::command` の字と、話す窓だけ口座の再描画の間 `Launch::refresh`）。
 fn status_line(l: &Launch) -> Value {
-    json!({"type": "command", "command": status::command(&l.tz, &l.workspace)})
+    let command = status::command(&l.tz, &l.workspace);
+    match (l.form, l.refresh) {
+        (Form::Talk, Some(r)) => {
+            json!({"type": "command", "command": command, "refreshInterval": r})
+        }
+        _ => json!({"type": "command", "command": command}),
+    }
 }
 
 /// 設定の hook（守りの hook と会話の印の hook）。

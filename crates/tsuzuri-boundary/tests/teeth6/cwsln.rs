@@ -1,6 +1,7 @@
 //! 窓の状態の 1 行の口の歯（接頭辞 cwsln_・設計ノート surface-wave29b 行 cs-status-verb・判断の記録 ADR-57 決定 (1)(コ)・(4)）。
 //! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に窓の作業場を置き、tz consult statusline に session の JSON を渡して、
 //! 1 行の字と、symlink を辿らないこと・fifo を開かないこと・制御の字を出さないこと・窓の作業場でない path を断ることを見る。
+//! 口座は statusLine の命令が何も出さない偽の置き場にする（口座の行は出ず 1 行だけ・行 cs-status-seat）。
 #![cfg(test)]
 
 use std::fs;
@@ -53,9 +54,25 @@ fn workspace(root: &Path) -> PathBuf {
     ws
 }
 
+/// statusLine の命令が何も出さない口座の置き場（歯の process ごとの名で書いて rename で置く・並んだ歯が半端な字を読まない）。
+fn quiet_account() -> PathBuf {
+    let acct = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cwsln-quiet");
+    fs::create_dir_all(&acct).unwrap();
+    let staged = acct.join(format!("settings.{}", std::process::id()));
+    fs::write(
+        &staged,
+        r#"{"statusLine":{"type":"command","command":"true"}}"#,
+    )
+    .unwrap();
+    fs::rename(&staged, acct.join("settings.json")).unwrap();
+    acct
+}
+
 fn statusline(args: &[&str], input: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_tz"))
         .current_dir(env!("CARGO_TARGET_TMPDIR"))
+        .env("CLAUDE_CONFIG_DIR", quiet_account())
+        .env_remove("TZ_CONSULT_STATUSLINE")
         .args(["consult", "statusline"])
         .args(args)
         .stdin(Stdio::piped())

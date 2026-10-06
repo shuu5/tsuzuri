@@ -16,6 +16,8 @@
 //! 中核の `resume::pick`）。前の process が生きている話す窓の --again は断る（同じ会話を 2 つが書くと枝が割れる）。
 //! 会話を続ける時は、起こす前に環境の口座の置き場の設定 file に作業場 1 つだけの信頼の印を置く（`trust::place_trust`・
 //! 置けなければ起こさずに断る・判断の記録 ADR-55 決定 (1)(3)）。
+//! 状態の行の再描画の間は、環境の口座の置き場の設定 file の statusLine の値を材料に写す（`statusline::account_settings`・
+//! 判断の記録 ADR-67）。
 
 use std::fs::{self, File};
 use std::io::Read;
@@ -35,10 +37,12 @@ use tsuzuri_core::consult::lines::{By, Event, Line, WORD_MAX, cited, free, notic
 use tsuzuri_core::consult::quota::{admit, count};
 use tsuzuri_core::consult::resume::pick;
 use tsuzuri_core::consult::stamp::{last_sid, lines};
+use tsuzuri_core::consult::status::account_refresh;
 
 use super::follow;
 use super::plain::{create_plain, odd_dir, plain_file, plain_path, same_file, write_plain};
 use super::stamp::STAMPS;
+use super::statusline::account_settings;
 use super::trust::place_trust;
 use super::{
     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
@@ -143,6 +147,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
         effort: w.effort.clone(),
         question: plain_file(ws, "bundle/question.md"),
         resume: None,
+        refresh: account_settings().and_then(|t| account_refresh(&t)),
     })
 }
 

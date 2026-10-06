@@ -4,6 +4,7 @@
 //! 偽の tmux の記録と偽の claude の記録を、中核の `consult::launch` が同じ材料で組んだ argv と比べる。
 //! 口座の置き場の symlink の先を解いて隠すことと、読めない置き場で起こさないことを見る（行 cs-cred-links）。
 //! process の印が起こした時の口座の置き場（偽の環境の CLAUDE_CONFIG_DIR）を持つことを見る（行 cs-acct-mark）。
+//! 偽の口座の設定 file の再描画の間を話す窓の設定にだけ写すことを見る（行 cs-status-seat）。
 #![cfg(test)]
 
 use std::fs;
@@ -187,6 +188,7 @@ impl Fx {
             effort: "xhigh".to_string(),
             question,
             resume: None,
+            refresh: None,
         }
     }
 
@@ -639,6 +641,35 @@ fn cwlch_dry_run() {
     assert!(fx.written().is_empty() && fx.calls("tmux.log").is_empty());
     assert!(!Path::new(&private_tmp(&l.workspace)).exists());
     assert!(!fx.ws(1).join(".consult/proc-1.json").exists());
+}
+
+/// 環境の口座の置き場の設定 file の statusLine の refreshInterval を、話す窓の --dry-run の argv の設定にだけ写す
+/// （問う窓は写さない・行 cs-status-seat）。
+#[test]
+fn cwlch_dry_run_copies_the_account_refresh() {
+    let fx = Fx::new("refresh");
+    fx.open(&["--by", "seat"]);
+    fx.open(&["--by", "seat", "--form", "ask"]);
+    fs::remove_file(fx.root.join("ledger.json")).unwrap();
+    let acct = fx.root.join("acct");
+    fs::create_dir_all(&acct).unwrap();
+    let set = r#"{"statusLine":{"type":"command","command":"x","refreshInterval":7}}"#;
+    fs::write(acct.join("settings.json"), set).unwrap();
+    for (n, form, refresh) in [(1, Form::Talk, Some(7)), (2, Form::Ask, None)] {
+        let mut l = fx.launch(n, form, false);
+        l.refresh = refresh;
+        clear_tmp(&l);
+        let o = fx
+            .command(&["consult", "launch", &format!("cw{n}"), "--dry-run"])
+            .env("CLAUDE_CONFIG_DIR", &acct)
+            .output()
+            .unwrap();
+        assert_eq!(rc(&o), 0, "{}", err(&o));
+        let want: Vec<String> = std::iter::once("claude".to_string())
+            .chain(argv(&l))
+            .collect();
+        assert_eq!(out(&o).lines().collect::<Vec<_>>(), want, "cw{n}");
+    }
 }
 
 #[test]
