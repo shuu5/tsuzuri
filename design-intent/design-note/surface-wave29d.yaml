@@ -3,7 +3,7 @@
 meta:
   id: surface-wave29d
   title: 第 29 波 d — 器を書く便の同時 1 本の床を外す行（判断の記録 ADR-64）・係の effort の撃ち比べ・host の負荷を board に出す・書き込みの検出線の器の行・ノート surface-wave29c の続き
-  version: v0.17
+  version: v0.18
   status: effective
   generated: 2026-10-05
   profile: design-note
@@ -176,6 +176,17 @@ sections:
         size: S
         done: (1) git apply --reverse --check docs/design/patch/t-scope-xtask.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 根の .vessel.toml の注でない key scope-paths の行は 1 本だけで、その字は 20 項目を byte の順に持つ 1 行で、先頭の項目が .agents/、末尾が xtask/ で、xtask/・tests/・plugin/・folio2/・scribe2/・.config/・rust-toolchain.toml を含む（歯 scopeon_root_declaration_names_the_vessel_scope_paths） (3) 宣言の 20 項目は全部が repo の追跡する path を名指し、1 字外れた dir・dir の印の無い dir・字の続く隣の dir・1 字外れた file はどれも名指しの外れに出る（歯 scopeon_declared_paths_are_tracked_in_the_repo） (4) 名乗りの行から xtask/ の末尾の / だけを外す・xtask/ の項目だけを外す・行を注にする・key の字 scope-paths の - を _ にする、の 4 形は、どれも名乗りの行と同じ字に読まれない（歯 scopeon_one_clause_changes_are_refused） (5) repo の追跡する file のうち、設計の 3 つの dir・器の固定の面の写し・宣言の crate-roots・宣言の scope-paths のどれにも入らない file は 0 本で、6 つの見本の path（docs/a.md・xtask/src/x.rs・folio2/vendor/a.js・new.toml・newdir/a.rs・crates/a/src/lib.rs）からは new.toml と newdir/a.rs の 2 本だけを名指し、宣言から xtask/ の 1 項目だけを外すと xtask/Cargo.toml を含み xtask/ の下の file だけが漏れに出る（歯 scopeon_tracked_paths_outside_the_design_dirs_are_all_in_the_face） (6) 歯の固定の面の写し（crates/・Cargo.toml・Cargo.lock・rules/・.vessel.toml の順）は、器の scribe2/crates/scribe2/src/pipe/land.rs の DETECTION_SCOPE の 1 行の字と同じ（歯 scopeon_fixed_face_copy_matches_the_vessel）
         done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3"]
+        depends: []
+      - id: v-verify-warm
+        title: 器の着地の後の主実測を、宣言 build-lanes を名乗った repo では path 固定の温かい木 verify/warm で lock の中で撃って畳まず、名乗らない repo と lock を取れない周は今の便ごとの木で撃つ（差の file）
+        req: ["FR1011"]
+        section: "16"
+        patch: docs/design/patch/v-verify-warm.patch
+        write-set: ["scribe2/crates/scribe2/src/pipe/land/verify.rs", "scribe2/crates/scribe2/src/pipe/lane.rs", "scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs", "+scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs", "=scribe2/crates/scribe2-boundary/tests/e2e/pipe/land.rs", "scribe2/docs/design/pipeline.md"]
+        verify: ["git apply --reverse --check docs/design/patch/v-verify-warm.patch", "cargo clippy --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 -p scribe2-boundary --all-targets --no-deps -- -D warnings", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail vwarm_", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2 --lib --no-tests=fail vlane_", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_main_same_tree_", "cargo nextest run --manifest-path scribe2/crates/scribe2-boundary/Cargo.toml -p scribe2-boundary --test e2e --no-tests=fail pipe_land_removes_dirty_tmp_worktree"]
+        size: M
+        done: (1) git apply --reverse --check docs/design/patch/v-verify-warm.patch が rc 0（差の file の hunk が全部木に在る・verify の 1 行目） (2) 宣言 build-lanes = true の toy で木の違う周の着地を 2 本続けると、共通 verify の stub は主実測を 2 本とも同じ path の木 .worktrees/scribe2/verify/warm で撃たれ、1 本目は target の印を見ず、2 本目は 1 本目が置いた target の印を見て、撃たれた木の HEAD の木は各々の着地した木で、着地の後も木の中の target の印と worktree の登録が残り、便ごとの木 verify/便 id は無い（歯 vwarm_declared_repo_shoots_main_in_one_fixed_tree_and_keeps_its_target） (3) 宣言の 1 行だけが無い toy の着地は、主実測を便ごとの木 verify/便 id で 1 度撃って畳み、verify/warm を作らない（歯 vwarm_undeclared_repo_cuts_and_folds_a_tree_per_landing） (4) verify/warm.lock を生きた process の pid で塞いだ名乗った toy の着地は rc 0 で、主実測を便ごとの木で撃って畳み、verify/warm を作らず、lock の中身を替えない（歯 vwarm_held_lock_falls_back_to_a_per_landing_tree） (5) 1 本目の着地の後に温かい木へ追跡の外の file を置き追跡の file を書き替えると、2 本目の主実測の stub は追跡の外の file を見ず target の印を見て、撃たれた木は着地した木で、着地の後に追跡の外の file は無く、書き替えた file は main の中身に戻る（歯 vwarm_renew_drops_stray_files_before_the_check_and_keeps_the_target） (6) verify/warm に .git の file の無い dir と file を置いた名乗った toy の着地は rc 0 で、主実測を便ごとの木で撃ち、置いた file は残り、repo の作業木の HEAD は refs/heads/main のまま（歯 vwarm_plain_dir_at_the_warm_path_is_left_and_the_anchor_stays_on_main） (7) 着地済みの歯 vlane_ と pipe_main_same_tree_ と pipe_land_removes_dirty_tmp_worktree は緑（verify の 4 行目から 6 行目）
+        done-teeth: ["1:@1", "2:@3", "3:@3", "4:@3", "5:@3", "6:@3", "7:@4", "7:@5", "7:@6"]
         depends: []
   - n: 3
     type: prose
@@ -398,3 +409,20 @@ sections:
       歯と噛み。着地済みの段の file xtask/tests/scopeon.rs（行 t-scope-on）は名乗りの行の字を断言するので、同じ file を直す。新しい歯は 2 本。漏れの歯は、設計の 3 dir・固定の面の写し・宣言の crate-roots と scope-paths のどれにも入らない追跡する file を数え、上の段に新しい file や dir を足した行が宣言を直さないと落ちる。写しの歯は、xtask が器の crate に依らないので、器の land.rs の DETECTION_SCOPE の 1 行の字を読んで写しと比べる（器の面の値は振る舞いで測る口が xtask に無いので、source の字で照らす）。噛みは係 w267a が句ごとに撃った（表は係の notes）。
 
       依存と順。depends は書かない。器の code を書かないので、器を書く便の数に入らない。器は宣言を base の木から読むので、着地の後の便から効く。範囲の外。設計の 3 dir だけが動いた周の main の確かめの省き（調べ係 rs4 の §6 の 1 番・係 w267a の notes の §2 で起草しない訳）と、確かめの置き場の温め（行 v-verify-warm の案）。
+  - n: 16
+    type: prose
+    title: 行 v-verify-warm — 名乗った repo の着地の後の主実測を path 固定の温かい木で撃つ（持ち主の求め 台帳 t3-hub.89・差の file）
+    body: |
+      在りか。差の file docs/design/patch/v-verify-warm.patch（29,320 byte）は、main 3958f98b と、その上の試作の commit 6d8b4948（写しは drafts の try-w268a の branch w268a・係 w268a）の差（5 file・+294 −24）。器の land の主実測の module scribe2/crates/scribe2/src/pipe/land/verify.rs に木の選び（関数 place と warm と型 Place）を足し、並びの module scribe2/crates/scribe2/src/pipe/lane.rs の中身の替えの 3 手を関数 renew に切り出して共有し、器の e2e の gate の子 module tests/e2e/pipe/gate/warm.rs に歯を置き（親 gate.rs の mod の列と頭の doc に足す）、器の設計 scribe2/docs/design/pipeline.md の末に 71 節を足す。便は差を git apply で当てるだけで、差の外の字を書かず、差の file も書き替えない。当たらない時は手で書かずに止まる。
+
+      なぜ。持ち主の求め（2026-10-05・台帳 t3-hub.89）はローカルの検査を速くすることで、優先は速さ。着地の後の主実測は着地ごとに新しい木を切って依存から全部を組み、撃った後に木ごと畳む。係 w267a の写しの測り（xtask の check・入れ子の前まで）で、冷えた木は 362 秒、同じ path の木で中身を替えて撃ち直すと 187 秒（−48%）。木の中の target は約 5 ギガバイトで、冷えた主実測は着地ごとにそれを書き直す。判断の記録 ADR-35 の決定 (6) は着地の確かめの木を並びを使わず今のまま組むと決めており、この行は判断の記録 ADR-66（持ち主の裁定 t3-hub.89.21）でその着地の確かめの分を 1 本の温かい木に替える。
+
+      形。名乗りは着地した木の宣言（並びと同じ build_lanes_at）。lock は verify/warm.lock（fleet の lifecycle_mark の hold・死んだ所有者だけを外す・待ちの上限は rules 行 fleet.lock_retry_ms）。木が在り .git の file を持ち、renew（checkout -f --detach と clean -ffdx -e /target と clean の照らし）が通る周はそのまま撃ち、ほかは worktree remove --force の後に worktree add --detach で切り直す。切り直せない周と lock を取れない周と名乗らない repo は今の形（verify/便 id を切って撃ち、撃った後に畳む）。撃った後と材料が揃わない周は温かい木を畳まずに lock だけを外す。.git の file の無い dir では替えを撃たない（dir の上の repo の作業木を替えない）。単独の着地と列の着地（verify_train_main）は同じ本体を通る。撃つ行・段の順・記録の字・極性・同じ木の省きは替えない。
+
+      done と verify の対応。1 つ目の項は verify の 1 行目、2 つ目から 6 つ目の項は 3 行目（器の e2e の歯 vwarm_）、最後の項は 4 行目（器の lib の並びの歯 vlane_）と 5 行目（着地済みの e2e の歯 pipe_main_same_tree_）と 6 行目（着地済みの e2e の歯 pipe_land_removes_dirty_tmp_worktree）が測る。2 行目の clippy は done に載せない守り。欄 done-teeth は器の歯を器が名で解けないので verify の行の番号（@k）で書く。入口の赤は、main の器が名乗った repo でも便ごとの木で撃って畳むので 2 つ目と 5 つ目の項の歯が落ちる（3 行目が rc 100・噛みの表の 2 つ目の変異が main の形に近い）。
+
+      歯と噛み。歯は toy の便の verdict の tree を base の木へ替えて主実測を撃つ周にし、共通 verify の stub が撃たれた木の path・target の印・追跡の外の file の有無・HEAD の木を git の共通 dir の 1 file に足す。否定の見本は名乗った見本から 1 句だけ外す（宣言の 1 行・lock を塞ぐ・温かい木の path を作業木でない dir で塞ぐ）。噛みは係 w268a の bite-v-verify-warm.tsv（7 変異・名指しの歯は全部 rc 100）。
+
+      依存と順。depends は書かない。行 v-gate-carry と e2e の gate.rs と pipeline.md を共に書くが hunk は 450 行より離れ、行 v-window-cas と行 v-close-host の差とも一時の index で両順に当たる（3 行の差と重ねても両順で rc 0）。
+
+      範囲の外。温かい木は器の掃除（器の ADR-0081）と並びの上限（rules 行 pipe.lanes_cap_mb）に数えず、1 本の target（約 5 ギガバイト）を持ち続ける。着地の後の検出の木・便の木・並び・床・審査の木は替えない。冷えた所から撃つ確かめは CI に残る。

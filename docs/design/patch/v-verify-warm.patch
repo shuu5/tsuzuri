@@ -1,0 +1,423 @@
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+index d6a37794fa9beb3d9cf93d8ac7ef035b95aef205..ada15ddebf281e80ea9e85ce539f1eb4c88fbb4a 100644
+--- a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate.rs
+@@ -5,13 +5,15 @@
+ //!
+ //! 歯の一部は族ごとの子 module に置く（設計 docs/design/carry-prep.md §10 行 m・`s2-07l.685`）: `confine`（接頭辞
+ //! `pipe_confine_` / `pipe_slots_`）・`detection`（接頭辞 `pipe_detection_` / `pipe_landed_`）・`pure_move`（接頭辞
+-//! `pipe_gate_move_` / `pipe_gate_elide_`）・`written`（接頭辞 `vrunw_`・`pipe show --write`・行 v-run-write）。この file には
++//! `pipe_gate_move_` / `pipe_gate_elide_`）・`written`（接頭辞 `vrunw_`・`pipe show --write`・行 v-run-write）・`warm`（接頭辞
++//! `vwarm_`・着地の後の主実測の温かい木・設計 pipeline.md §71）。この file には
+ //! 共有の helper と const・外形 snapshot の歯（snapshot 名が module path を含むので動かさない）・他の族の歯だけを残す。
+ 
+ mod confine;
+ mod detection;
+ mod promised;
+ mod pure_move;
++mod warm;
+ mod written;
+ // flip-check: moved s2-07l.685
+ // flip-check: retroactive s2-07l.736.23
+diff --git a/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..34956b2320ca34c7b31ce313b3bbb6779bd0a118
+--- /dev/null
++++ b/scribe2/crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs
+@@ -0,0 +1,188 @@
++//! 主実測の温かい木の歯（接頭辞 `vwarm_`・設計 pipeline.md §71）: 宣言 `build-lanes` を名乗った repo は、着地の後の主実測を
++//! path 固定の木 `.worktrees/scribe2/verify/warm` で撃ち、撃った後も畳まずに木の中の target を次の主実測へ残す。
++//!
++//! 共有の helper は親 module（`tests/e2e/pipe/gate.rs`）と `tests/e2e/pipe.rs` に在り、`use super::*` で使う。toy の便は
++//! verdict の `tree` を便の base の木へ差し替えて主実測を撃つ周にし、共通 verify の stub が撃たれた木の path・target の印・
++//! 置いた stray の file の有無・HEAD の木を git の共通 dir の 1 file へ 1 行ずつ足す（gate の便の木の行も同じ file に入る）。
++
++use super::*;
++
++/// 撃たれた木を記す共通 verify の stub（撃った後に `target/mark` を置く＝次の撃ちが同じ木なら `kept` を記す）。
++const WARM_SCRIPT: &str = "top=\"$(pwd -P)\"\nmark=cold\ntest -f target/mark && mark=kept\nstray=none\n\
++test -e stray.txt && stray=stray\n\
++printf '%s %s %s %s\\n' \"$top\" \"$mark\" \"$stray\" \"$(git rev-parse 'HEAD^{tree}')\" >> \"$(git rev-parse --git-common-dir)/warm-shots\"\n\
++mkdir -p target && touch target/mark\n";
++
++/// 主実測の木を集める dir（repo 相対）。
++const VERIFY_DIR: &str = ".worktrees/scribe2/verify";
++
++/// stub を共通 verify に置き、`/target/` を無視する toy の repo（`declared` の周だけ宣言に `build-lanes = true` を足す）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn warm_repo(declared: bool) -> (PathBuf, PathBuf) {
++    let (repo, state) = repo_with_state();
++    fs::write(repo.join("verify-warm.sh"), WARM_SCRIPT).expect("stub を書ける");
++    fs::write(repo.join(".gitignore"), "/target/\n").expect("無視の規則を書ける");
++    write_vessel(&repo, VESSEL_ALLOWED, r#"["sh verify-warm.sh"]"#);
++    if declared {
++        let path = repo.join(".vessel.toml");
++        let body = fs::read_to_string(&path).expect("宣言を読める");
++        fs::write(&path, format!("{body}build-lanes = true\n")).expect("宣言を書ける");
++    }
++    git(&repo, &["add", "-A"]);
++    git(&repo, &["commit", "-q", "-m", "warm"]);
++    (repo, state)
++}
++
++/// 便を 1 本 PASS まで通し、verdict の `tree` を便の base の木へ差し替えて（主実測を撃つ周）land する。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn land_shot(repo: &Path, state: &Path, bead: &str) -> (String, Output) {
++    let design = write_contract(repo, &[], &[]);
++    let base_tree = git(repo, &["rev-parse", "HEAD^{tree}"]);
++    let id = intake_bead(repo, state, &design, bead);
++    let out = run_pipe(&[
++        "spawn", "--run", &id, "--repo", &repo.display().to_string(),
++        "--state-dir", &state.display().to_string(), "--rules", &ceiling_rules(state),
++        "--runner", "echo x >> src/lib.rs && git add -A && git commit -q -m runner",
++    ]);
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "spawn は rc 0: {}", stderr_of(&out));
++    let lens = fake_lens(&state.join("lens-ran"), &lens_verdict("PASS"));
++    let gated = gate_once(repo, state, &id, Some(&lens));
++    assert_eq!(gated.status.code(), Some(i32::from(RC_OK)), "PASS の gate は rc 0: {}", stderr_of(&gated));
++    let verdict = state.join("pipe").join(&id).join("verdict.json");
++    let text = fs::read_to_string(&verdict).expect("verdict.json を読める");
++    let tree = value_of(&verdict_pairs(state, &id), "tree");
++    fs::write(&verdict, verdict_tree_to_base(&text, &tree, &base_tree)).expect("verdict.json を差し替えられる");
++    let landed = land_once(repo, state, &id);
++    (id, landed)
++}
++
++/// 主実測の木で撃たれた stub の行（`<木の path> <target の印> <stray の印> <HEAD の木>`・gate の便の木の行は除く）。
++fn main_shots(repo: &Path) -> Vec<Vec<String>> {
++    let log = fs::read_to_string(repo.join(".git").join("warm-shots")).unwrap_or_default();
++    log.lines()
++        .filter(|line| line.contains("/.worktrees/scribe2/verify/"))
++        .map(|line| line.split(' ').map(str::to_owned).collect())
++        .collect()
++}
++
++/// 主実測の木の dir の下の `leaf`（symlink を解いた path・stub の `pwd -P` と比べる）。
++#[expect(
++    clippy::expect_used,
++    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
++)]
++fn verify_leaf(repo: &Path, leaf: &str) -> String {
++    let root = fs::canonicalize(repo).expect("repo の path を解ける");
++    root.join(VERIFY_DIR).join(leaf).display().to_string()
++}
++
++/// 名乗った repo の 2 本の着地は、主実測をどちらも同じ path の木 `verify/warm` で撃ち、2 本目は 1 本目が木の中に置いた
++/// target の印を見つけ、木の中身は 2 本目の着地した木に替わり、着地の後も木と登録と印が残り、便ごとの木は切らない。
++#[test]
++fn vwarm_declared_repo_shoots_main_in_one_fixed_tree_and_keeps_its_target() {
++    let (repo, state) = warm_repo(true);
++    let (first, out) = land_shot(&repo, &state, "s2-warm1");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "1 本目の land は rc 0: {}", stderr_of(&out));
++    let first_tree = git(&repo, &["rev-parse", "refs/heads/main^{tree}"]);
++    let (second, out) = land_shot(&repo, &state, "s2-warm2");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "2 本目の land は rc 0: {}", stderr_of(&out));
++    let second_tree = git(&repo, &["rev-parse", "refs/heads/main^{tree}"]);
++    assert_ne!(first_tree, second_tree, "fixture: 2 本の着地の木は違う");
++    let warm = verify_leaf(&repo, "warm");
++    let shots = main_shots(&repo);
++    assert_eq!(
++        shots,
++        [
++            vec![warm.clone(), "cold".to_owned(), "none".to_owned(), first_tree],
++            vec![warm, "kept".to_owned(), "none".to_owned(), second_tree],
++        ],
++        "主実測は 2 本とも verify/warm で撃ち、2 本目は target の印を見つけ、木の中身は着地した木"
++    );
++    let dir = repo.join(VERIFY_DIR);
++    assert!(dir.join("warm").join("target").join("mark").is_file(), "着地の後も木の中の target は残る");
++    assert!(!dir.join(&first).exists() && !dir.join(&second).exists(), "便ごとの木は切らない");
++    assert!(git(&repo, &["worktree", "list"]).contains("/verify/warm"), "温かい木の登録は残る");
++    clean(&[&repo, &state]);
++}
++
++/// 名乗らない repo（宣言の 1 行だけが違う対）は、主実測を便ごとの木 `verify/<run>` で撃って畳み、温かい木を作らない。
++#[test]
++fn vwarm_undeclared_repo_cuts_and_folds_a_tree_per_landing() {
++    let (repo, state) = warm_repo(false);
++    let (id, out) = land_shot(&repo, &state, "s2-warm1");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "land は rc 0: {}", stderr_of(&out));
++    let shots = main_shots(&repo);
++    let paths: Vec<&str> = shots.iter().filter_map(|shot| shot.first().map(String::as_str)).collect();
++    assert_eq!(paths, [verify_leaf(&repo, &id)], "主実測は便ごとの木で 1 度撃つ: {shots:?}");
++    let dir = repo.join(VERIFY_DIR);
++    assert!(!dir.join(&id).exists(), "便ごとの木は撃った後に畳む");
++    assert!(!dir.join("warm").exists(), "温かい木を作らない");
++    clean(&[&repo, &state]);
++}
++
++/// 名乗った repo でも、温かい木の lock を生きた所有者（この歯の process）が持つ周は、待ちの上限の後に便ごとの木で撃って
++/// 畳み、温かい木を作らず、lock に触れない（land は緑）。
++#[test]
++fn vwarm_held_lock_falls_back_to_a_per_landing_tree() {
++    let (repo, state) = warm_repo(true);
++    let dir = repo.join(VERIFY_DIR);
++    fs::create_dir_all(&dir).expect("置き場を作れる");
++    let owner = format!("{}\n", std::process::id());
++    fs::write(dir.join("warm.lock"), &owner).expect("lock を塞げる");
++    let (id, out) = land_shot(&repo, &state, "s2-warm1");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "land は rc 0: {}", stderr_of(&out));
++    let shots = main_shots(&repo);
++    let paths: Vec<&str> = shots.iter().filter_map(|shot| shot.first().map(String::as_str)).collect();
++    assert_eq!(paths, [verify_leaf(&repo, &id)], "lock を取れない周は便ごとの木で撃つ: {shots:?}");
++    assert!(!dir.join(&id).exists(), "便ごとの木は撃った後に畳む");
++    assert!(!dir.join("warm").exists(), "温かい木を作らない");
++    assert_eq!(fs::read_to_string(dir.join("warm.lock")).ok(), Some(owner), "生きた所有者の lock に触れない");
++    clean(&[&repo, &state]);
++}
++
++/// 温かい木に置いた追跡の外の file と、替えた追跡の file は、次の主実測の前に消えて着地した中身に戻り、target の印は残る。
++#[test]
++fn vwarm_renew_drops_stray_files_before_the_check_and_keeps_the_target() {
++    let (repo, state) = warm_repo(true);
++    let (_, out) = land_shot(&repo, &state, "s2-warm1");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "1 本目の land は rc 0: {}", stderr_of(&out));
++    let warm = repo.join(VERIFY_DIR).join("warm");
++    fs::write(warm.join("stray.txt"), "x\n").expect("追跡の外の file を置ける");
++    fs::write(warm.join("src").join("lib.rs"), "// edited\n").expect("追跡の file を替えられる");
++    let (_, out) = land_shot(&repo, &state, "s2-warm2");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "2 本目の land は rc 0: {}", stderr_of(&out));
++    let second = main_shots(&repo).get(1).cloned().unwrap_or_default();
++    let marks: Vec<&str> = second.iter().skip(1).take(2).map(String::as_str).collect();
++    assert_eq!(marks, ["kept", "none"], "撃つ前に stray は消え、target の印は残る: {second:?}");
++    assert_eq!(second.last().cloned(), Some(git(&repo, &["rev-parse", "refs/heads/main^{tree}"])), "木は着地した木");
++    assert!(!warm.join("stray.txt").exists(), "stray は消えたまま");
++    assert_eq!(
++        fs::read_to_string(warm.join("src").join("lib.rs")).ok(),
++        Some(format!("{}\n", git(&repo, &["show", "refs/heads/main:src/lib.rs"]))),
++        "替えた追跡の file は着地した中身に戻る"
++    );
++    clean(&[&repo, &state]);
++}
++
++/// 温かい木の path に作業木でない dir（`.git` の file が無い）が在る周は、その dir の中身を替えず、repo の作業木の HEAD も
++/// main から外さず、便ごとの木で撃って畳む（land は緑）。
++#[test]
++fn vwarm_plain_dir_at_the_warm_path_is_left_and_the_anchor_stays_on_main() {
++    let (repo, state) = warm_repo(true);
++    let warm = repo.join(VERIFY_DIR).join("warm");
++    fs::create_dir_all(&warm).expect("置き場を塞げる");
++    fs::write(warm.join("keep.txt"), "x\n").expect("塞げる");
++    let (id, out) = land_shot(&repo, &state, "s2-warm1");
++    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "land は rc 0: {}", stderr_of(&out));
++    let shots = main_shots(&repo);
++    let paths: Vec<&str> = shots.iter().filter_map(|shot| shot.first().map(String::as_str)).collect();
++    assert_eq!(paths, [verify_leaf(&repo, &id)], "作業木でない dir の周は便ごとの木で撃つ: {shots:?}");
++    assert!(warm.join("keep.txt").is_file(), "作業木でない dir の中身に触れない");
++    assert_eq!(git(&repo, &["symbolic-ref", "HEAD"]), "refs/heads/main", "repo の作業木は main のまま");
++    clean(&[&repo, &state]);
++}
+diff --git a/scribe2/crates/scribe2/src/pipe/land/verify.rs b/scribe2/crates/scribe2/src/pipe/land/verify.rs
+index 2d230270c1dd732ad9a9cc830e90645d1fec808d..df0e1d62933acf2ab5aca053121279e8f6206555 100644
+--- a/scribe2/crates/scribe2/src/pipe/land/verify.rs
++++ b/scribe2/crates/scribe2/src/pipe/land/verify.rs
+@@ -14,12 +14,14 @@
+ 
+ // flip-check: moved s2-07l.457
+ 
+-use super::super::declaration::Effective;
++use super::super::declaration::{build_lanes_at, Effective};
+ use super::super::gate::{is_unreadable, records_of, run_checks, Checks, Skipped, Step};
++use super::super::lane::renew;
+ use super::super::retire::verdict_field;
+ use super::super::{emit, git_line, git_ok, worktrees_dir, Emit};
+ use super::{broken, refused, AnchorSync, Land, MainCheck, MAIN_REF};
+ use crate::cli_outcome::Outcome;
++use crate::fleet::lifecycle_mark::{hold, Held};
+ use crate::fleet::store::append_line;
+ use crate::fleet::{EventKind, Stage};
+ use std::path::{Path, PathBuf};
+@@ -31,6 +33,13 @@ use std::path::{Path, PathBuf};
+ /// 衝突しない。
+ const CHECK_DIR: &str = "verify";
+ 
++/// 宣言 `build-lanes` を名乗った repo の主実測の温かい木の名（[`CHECK_DIR`] の直下・path を固定して中身だけを替える・
++/// 設計 pipeline.md §71）。run id は `<bead>-<stamp>` なのでこの名と衝突しない。
++const WARM: &str = "warm";
++
++/// 温かい木を 1 本の主実測だけが使う lock の名（[`CHECK_DIR`] の直下・死んだ所有者だけを外す・`Drop` で外す）。
++const WARM_LOCK: &str = "warm.lock";
++
+ /// main 実測用の tmp worktree（着地後の検出も同じ置き場に別名で出す・[`super::detection`]）。
+ pub(super) fn check_path(repo: &Path, id: &str) -> PathBuf {
+     worktrees_dir(repo).join(CHECK_DIR).join(id)
+@@ -42,6 +51,7 @@ pub(super) fn check_path(repo: &Path, id: &str) -> PathBuf {
+ /// 着地の木が同じなら、主実測は同じ木を同じ verify で撃ち直すだけ＝worktree も材料も要らない。撃たなかった事実は
+ /// `verify-main.jsonl` の skip record 1 本（[`Skipped::main`]・木を必ず持つ）に残し、**書けない周は緑を名乗らない**
+ /// （撃たずに緑と読める形を残さない・C10）。木が違う周・`tree` の無い周・比べられない周は従来どおり全段へ倒す。
++/// 撃つ木は [`place`] が選ぶ（宣言 `build-lanes` を名乗った repo は path 固定の温かい木・設計 pipeline.md §71）。
+ pub(super) fn verify_main(entry: &Land<'_>, new: &str) -> MainCheck {
+     verify_main_from(entry, new, None)
+ }
+@@ -61,17 +71,10 @@ fn verify_main_from(entry: &Land<'_>, new: &str, base: Option<&str>) -> MainChec
+             Err(reason) => MainCheck::Unmeasurable(reason),
+         };
+     }
+-    let tmp = check_path(entry.repo, entry.run);
+-    if let Some(parent) = tmp.parent() {
+-        if let Err(err) = std::fs::create_dir_all(parent) {
+-            return MainCheck::Unmeasurable(format!("{} を作れない: {err}", parent.display()));
+-        }
+-    }
+-    let path = tmp.display().to_string();
+-    if !git_ok(entry.repo, &["worktree", "add", "--detach", &path, new]) {
+-        // **ここで赤を名乗らない**: verify 行を 1 本も撃てていない。
+-        return MainCheck::Unmeasurable(format!("{} を切れない", tmp.display()));
+-    }
++    let place = match place(entry, new) {
++        Ok(place) => place,
++        Err(reason) => return MainCheck::Unmeasurable(reason),
++    };
+     // **gate と同じ順序を同じ関数で撃つ**（write-set 照合 → 写しの共通 verify → 契約 verify・検出線は撃たない＝
+     // 着地後の検出の口だけ・設計 gate-cost.md §44 形 (9)）。
+     // 材料が揃わない周は**赤を名乗らない**——読めなかったを落ちたに化けさせない。
+@@ -79,12 +82,12 @@ fn verify_main_from(entry: &Land<'_>, new: &str, base: Option<&str>) -> MainChec
+     let (base, frozen) = match materials {
+         Ok((recorded, frozen)) => (base.map_or(recorded, str::to_owned), frozen),
+         Err(reason) => {
+-            let _ = git_ok(entry.repo, &["worktree", "remove", "--force", &path]);
++            place.fold(entry.repo);
+             return MainCheck::Unmeasurable(reason);
+         }
+     };
+     let steps = run_checks(&Checks {
+-        worktree: &tmp,
++        worktree: place.tree(),
+         base: &base,
+         contract: entry.contract,
+         common: frozen.common_verify(),
+@@ -93,9 +96,7 @@ fn verify_main_from(entry: &Land<'_>, new: &str, base: Option<&str>) -> MainChec
+         host: entry.limits.breaker(),
+         contract_file: None,
+     });
+-    // 成果は `new` に載っているので、この tmp だけは remove してよい（設計 §5.4）。
+-    // `--force` は verify が tmp に生んだ中間物ごと畳むためで、履歴・データは触らない。
+-    let _ = git_ok(entry.repo, &["worktree", "remove", "--force", &path]);
++    place.fold(entry.repo);
+     if let Err(reason) = record_main(entry, &steps, None) {
+         return MainCheck::Unmeasurable(reason);
+     }
+@@ -124,6 +125,67 @@ fn verify_main_from(entry: &Land<'_>, new: &str, base: Option<&str>) -> MainChec
+     MainCheck::Green
+ }
+ 
++/// 主実測を撃つ木。
++enum Place {
++    /// 名乗った repo の path 固定の温かい木（lock を持つ間だけ使う・撃った後も畳まない＝木の中の target を次の主実測が使う）。
++    Warm { tree: PathBuf, _held: Held },
++    /// 便ごとに切る木（`verify/<run>`・撃った後に畳む）。
++    Cut(PathBuf),
++}
++
++impl Place {
++    /// verify を撃つ木。
++    fn tree(&self) -> &Path {
++        match self {
++            Self::Warm { tree, .. } | Self::Cut(tree) => tree,
++        }
++    }
++
++    /// 撃った後の片付け: 便ごとの木だけを畳み、温かい木は畳まずに lock だけを外す。成果は `new` に載っているので、
++    /// 便ごとの木は remove してよい（設計 §5.4）。`--force` は verify が木に生んだ中間物ごと畳むためで、履歴・データは触らない。
++    fn fold(self, repo: &Path) {
++        if let Self::Cut(tree) = self {
++            let _ = git_ok(repo, &["worktree", "remove", "--force", &tree.display().to_string()]);
++        }
++    }
++}
++
++/// 主実測を撃つ木を `new` で用意する。名乗った repo は [`warm`] の温かい木を使い、名乗らない repo・lock を取れない周・
++/// 温かい木を用意できない周は便ごとの木 `verify/<run>` を切る（今の形）。どちらでも撃つ行と記録の字は同じ。
++fn place(entry: &Land<'_>, new: &str) -> Result<Place, String> {
++    let dir = worktrees_dir(entry.repo).join(CHECK_DIR);
++    if let Err(err) = std::fs::create_dir_all(&dir) {
++        return Err(format!("{} を作れない: {err}", dir.display()));
++    }
++    if let Some(place) = warm(entry, &dir, new) {
++        return Ok(place);
++    }
++    let tmp = check_path(entry.repo, entry.run);
++    if !git_ok(entry.repo, &["worktree", "add", "--detach", &tmp.display().to_string(), new]) {
++        // **ここで赤を名乗らない**: verify 行を 1 本も撃てていない。
++        return Err(format!("{} を切れない", tmp.display()));
++    }
++    Ok(Place::Cut(tmp))
++}
++
++/// 名乗った repo（`new` の木の宣言 `build-lanes = true`）の温かい木 `verify/warm` を lock の中で `new` に替える。木が在れば
++/// 中身だけを替え（並びと同じ [`renew`]・target は残す）、替えられない周と木の無い周は外して切り直す。名乗らない repo・
++/// lock を取れない周（ほかの主実測が使っている）・切り直せない周は `None`。木と判じる `.git` の file が無い dir では
++/// 中身の替えを撃たない（dir の上の repo の作業木を替えない）。
++fn warm(entry: &Land<'_>, dir: &Path, new: &str) -> Option<Place> {
++    if !build_lanes_at(entry.repo, new) {
++        return None;
++    }
++    let held = hold(dir, WARM_LOCK, entry.policy)?;
++    let tree = dir.join(WARM);
++    if tree.join(".git").is_file() && renew(&tree, new) {
++        return Some(Place::Warm { tree, _held: held });
++    }
++    let path = tree.display().to_string();
++    let _ = git_ok(entry.repo, &["worktree", "remove", "--force", &path]);
++    git_ok(entry.repo, &["worktree", "add", "--detach", &path, new]).then_some(Place::Warm { tree, _held: held })
++}
++
+ /// main の実測に要る材料（便の base と、写しの共通 verify・検出線）を揃える。
+ ///
+ /// **写しからしか読まない**（repo / worktree の `.vessel.toml` は読み直さない・ADR-0010 §2.4）。
+diff --git a/scribe2/crates/scribe2/src/pipe/lane.rs b/scribe2/crates/scribe2/src/pipe/lane.rs
+index 378383df92303f04412eb8c2be86adf8d68b3aca..e6b4964b6b7cb297b4b7cf263374b918b8d7271e 100644
+--- a/scribe2/crates/scribe2/src/pipe/lane.rs
++++ b/scribe2/crates/scribe2/src/pipe/lane.rs
+@@ -161,13 +161,17 @@ fn undo(repo: &Path, run: &str, n: usize, policy: LockPolicy) {
+     }
+ }
+ 
+-/// 並びの木の中身を base に替える（git は中身の替わる file だけを書く・未追跡と無視の file は target の外を全部消す）。
+-/// clean の周だけ branch `<NAME>/<run>` を付けて真。
++/// 並びの木の中身を base に替え（[`renew`]）、clean の周だけ branch `<NAME>/<run>` を付けて真。
+ fn switch(lane: &Path, run: &str, base: &str) -> bool {
+-    git_ok(lane, &["checkout", "-q", "-f", "--detach", base])
+-        && git_ok(lane, &["clean", "-q", "-ffdx", "-e", KEEP])
+-        && WorktreeCheck::judge(lane).is_clean()
+-        && git_ok(lane, &["checkout", "-q", "-B", &branch_name(run)])
++    renew(lane, base) && git_ok(lane, &["checkout", "-q", "-B", &branch_name(run)])
++}
++
++/// path を固定した木の中身を `sha` に替える（branch は付けない・git は中身の替わる file だけを書く・未追跡と無視の file は
++/// target の外を全部消す）。替えた木が clean の周だけ真（並びの [`switch`] と、着地の後の主実測の温かい木が使う）。
++pub(super) fn renew(tree: &Path, sha: &str) -> bool {
++    git_ok(tree, &["checkout", "-q", "-f", "--detach", sha])
++        && git_ok(tree, &["clean", "-q", "-ffdx", "-e", KEEP])
++        && WorktreeCheck::judge(tree).is_clean()
+ }
+ 
+ /// 便が並びを返す（退役の move の代わり・判断の記録 ADR-35）。並びを持たない便は `None`（呼び手が今の形で move する）。
+diff --git a/scribe2/docs/design/pipeline.md b/scribe2/docs/design/pipeline.md
+index 6eb750fd2c6a0e205d3c1dc856b97103f63e5fa3..72d000bdee274e7c877c15661063317337af5f56 100644
+--- a/scribe2/docs/design/pipeline.md
++++ b/scribe2/docs/design/pipeline.md
+@@ -2291,3 +2291,17 @@ done = "(1) 揃えは番待ちと番待ちの間の着地の読みの後・候
+ - 触らない: 載せ替えの命令と返す値・衝突・rebase-empty・既着地の道・event の種別と段と detail の字・stdout の字・規則の行・子の環境変数。戻しと記録のどの失敗も追随の結末を替えない。名乗りの key は置かない（約束が中身の同じ file に限るので、器を使うほかの project の便にも同じく効く）。
+ - 限界: 便の commit の中で直して戻した file（正味の差 0）と、衝突で中止した周に書き直された file は戻さない（取りこぼしで、組み直す側）。dir を合図にする build script は、便の自分の差がその dir の下に在ると今どおり走る。cargo の追わない入力（`rerun-if-changed` の無い build script の読みほか）を main が替えた周は、今は自分の差の書き直しが偶然組み直させていた分を組み直さない。
+ - 歯（接頭辞 `vfmtime_`・`crates/scribe2/src/pipe/follow_mtime.rs` の `mod tests`・fixture の repo で共有の `rebase` を撃つ）: 自分の差だけ・main の差だけ・中身が行って戻る差・中身の同じ改名・両方の差・main が元を直した改名・改行の属性・実行の bit・symlink・記録の 1 行と、戻る見本から 1 句ずつ外した控えを読めない周・木が clean でない周・衝突の周（記録も書かない）。`pipe follow` の口の記録の 1 行は `pipe_follow_step_writes_one_rebase_event_and_keeps_main` が見る。
++
++## 71. 宣言 build-lanes を名乗った repo は、着地の後の主実測を path 固定の温かい木 `verify/warm` で撃ち、撃った後も畳まない（tsuzuri の契約表の行 v-verify-warm）
++
++やさしく言うと: 着地の後の確かめ（主実測・§5.4）は、着地ごとに新しい木を切って依存から全部を組み、撃った後に木ごと畳む。名乗った repo では木を 1 本だけ同じ場所に残し、中身だけを着地した木に替えて撃つので、cargo は替わった crate だけを組み直す。
++
++- 置き場: `crates/scribe2/src/pipe/land/verify.rs` の `verify_main_from`（単独の着地 `verify_main` と列の着地 `verify_train_main` が共有する本体）の木の選び（`place`・`warm`）。中身の替えは並びの木（`crates/scribe2/src/pipe/lane.rs`）と同じ関数 `renew`。
++- 形:
++  1. **名乗り**: 着地した木（`new`）の宣言が `build-lanes = true` の周だけ温かい木を使う（宣言の読みは並びの `build_lanes_at` と同じ 1 本）。名乗らない repo は今のまま `verify/<run>` を切って撃ち、撃った後に畳む。
++  2. **lock**: 温かい木は `verify/warm.lock`（`fleet::lifecycle_mark::hold`・死んだ所有者だけを外す・待ちの上限は rules 行 `fleet.lock_retry_ms`）を持つ 1 本の主実測だけが使う。取れない周（着地の番待ちを越えて主実測が並んだ周）は今の形（`verify/<run>`）で撃つ。
++  3. **中身の替え**: 木が在り（`.git` の file が在る）、`renew`（`git checkout -q -f --detach <new>`・`git clean -q -ffdx -e /target`・clean の照らし）が通る周はそのまま撃つ。替えられない周と木の無い周は `worktree remove --force` で外してから `worktree add --detach` で切り直し、切り直せない周は今の形へ倒す。`.git` の file が無い dir では替えを撃たない（dir の上の repo の作業木を替えない）。
++  4. **畳まない**: 撃った後と材料が揃わない周は、温かい木を畳まずに lock だけを外す（木の中の target を次の主実測が使う）。
++- 触らない: 撃つ行・段の順・`verify-main.jsonl` の record の字と並び・赤と測れないの極性・同じ木の省き（§27 の gate-cost）・着地の後の検出の木（`verify/<run>-place`）・便の木と並び。記録は木の置き場の別を残さない。
++- 限界: 温かい木は掃除（器の ADR-0081）と並びの上限（rules 行 `pipe.lanes_cap_mb`）に数えず、1 本の target の大きさを持ち続ける。木の中の古い成果で偽の緑が出る形は並びと同じで、冷えた所から撃つ確かめは CI に残る。
++- 歯（接頭辞 `vwarm_`・`crates/scribe2-boundary/tests/e2e/pipe/gate/warm.rs`・toy の便の verdict の `tree` を base の木へ替えて主実測を撃つ周にする）: 名乗った repo の 2 本の着地が同じ木で撃ち 2 本目が target の印を見る・名乗らない repo は便ごとの木・生きた所有者の lock の周は便ごとの木・置いた stray と替えた追跡の file は撃つ前に消える・作業木でない dir の周は触らず便ごとの木。
