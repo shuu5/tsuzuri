@@ -202,8 +202,7 @@ fn cistop_push_ci_is_retired() {
     ] {
         assert!(retired.contains(want), "退けた ci.yml に字 {want} が無い");
     }
-    assert_eq!(vessel_lines("ci-watch = false"), 1, "鍵 ci-watch の行");
-    assert_eq!(vessel_keys("ci-watch"), 1, "鍵 ci-watch の行は 1 つだけ");
+    assert_eq!(vessel_keys("ci-watch"), 0, "鍵 ci-watch の行は無い");
     assert_eq!(vessel_lines("remote = \"origin\""), 1, "鍵 remote の行");
     assert_eq!(vessel_keys("remote"), 1, "鍵 remote の行は 1 つだけ");
 }

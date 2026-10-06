@@ -60,6 +60,8 @@ Landed（gate-cost.md §6 の CAS の後）に続けて器が行う。各段は 
 
 `--pr-cmd` の形（自 repo への PR）は終端を持たない（従来どおり）。
 
+追記: 行 v-ci-key-cut が宣言の鍵 `ci-cmd` と `ci-watch` を外した（判断の記録 ADR-75 の決定 (6)）。この 2 つの鍵を書いた宣言は、ほかの知らない鍵と同じ断り（`未知の key ci-cmd`・`未知の key ci-watch`）で宣言ごと断る。
+
 ## 6. 台帳 adapter（FR50 / FR51）
 
 - **置き場**: 新 module `ledger/`（core）。読み = `bd --readonly show <id> --json` / `bd --readonly list --status open --limit 0 --json`（子 process・git / tmux と同型・crate 依存なし・出力は既存の `json_lite` で読む）。書き = `bd close <id> --reason <text>` の **1 種だけ**（起票・acceptance・裁定は席）。binary の名は const・path は PATH 解決（env を読まない・C2.2）。

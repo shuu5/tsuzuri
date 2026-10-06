@@ -27,10 +27,10 @@ pub use crate_roots::{crate_of, fixed_roots, with_fixed, CrateFile, RootsAtHead}
 pub use entrance_flip::{measure_named, EntranceFlip};
 use entrance_flip::{entrance_of, KEY as ENTRANCE_KEY};
 pub use optional_keys::{build_lanes_at, close_check, close_check_at_sha, requirements_at_sha, floor_check_at, question_route, table_facts, table_facts_named, terminal_facts, CloseCheck, QuestionRoute, TableFacts, TerminalFacts};
-pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, CI_SHA_HOLE, DEFAULT_CI_CMD, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
+pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFiles, IndexLines, RulingKeys, TablePlaces, DEFAULT_CONSTITUTION, DEFAULT_REQUIREMENTS};
 pub use optional_keys::{after_land_at, seat_constitution, SeatConstitution};
 pub use run_cap::RunCap;
-use optional_keys::{after_land_of, build_lanes_of, check_after_land, ci_cmd_of, ci_watch_of, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
+use optional_keys::{after_land_of, build_lanes_of, check_after_land, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
 pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
 pub(crate) use write_set::is_under;
 
@@ -300,10 +300,6 @@ pub struct Declared {
     requirements: Option<String>,
     /// push 先の remote の名（任意・無ければ `None`）。
     remote: Option<String>,
-    /// CI の判定を読む 1 行（任意・無ければ `None`）。
-    ci_cmd: Option<String>,
-    /// 着地の後の CI を見張るか（任意 key `ci-watch`・無ければ `None`＝true と同じ・設計 contract-source.md §5）。
-    ci_watch: Option<bool>,
     /// path の種別の prefix（任意 key 3 本・無い key は `None`・設計 seat-roles.md §24）。
     path_kinds: path_kinds::DeclaredPaths,
     /// 入口の flip の名乗り（任意 key `entrance-flip`・無ければ `None`＝現行の要求）。
@@ -568,7 +564,6 @@ impl Declared {
         let (detection_verify, detection_line) = list_of(&found, DETECTION_KEY, &mut errors);
         let requirements = requirements_of(&found, &mut errors);
         let remote = remote_of(&found, &mut errors);
-        let (ci_cmd, ci_watch) = (ci_cmd_of(&found, &mut errors), ci_watch_of(&found, &mut errors));
         let path_kinds = path_kinds::declared_of(&found, &mut errors);
         let entrance_flip = entrance_of(&found, &mut errors);
         let question_route = question_route_of(&found, &mut errors);
@@ -597,7 +592,6 @@ impl Declared {
                 allowed_line, common_line, detection_line,
                 requirements,
                 remote,
-                ci_cmd, ci_watch,
                 path_kinds,
                 entrance_flip,
                 question_route,
@@ -827,7 +821,7 @@ mod tests {
 
     use super::{
         kind_gap, kind_gap_named, unfit, Basis, Ceiling, Declared, Effective, EntranceFlip, Holes, KindGap, Sourced, Unfit, VerifyKind, BASE_HOLES,
-        BASE_HOLE, CEILING_ROW, DECLARED_KEYS, DECL_FILE, DEFAULT_CI_CMD, DENIED_ROW, CI_SHA_HOLE, JOBS_HOLE,
+        BASE_HOLE, CEILING_ROW, DECLARED_KEYS, DECL_FILE, DENIED_ROW, JOBS_HOLE,
         SCHEMA_VERSION, TEETH_HOLE, THREADS_HOLE,
     };
     use crate::order::is_declaration_order;
@@ -1070,39 +1064,6 @@ mod tests {
         }
     }
 
-    /// `ci-cmd` は**任意 key**で、書いた周は **`{sha}` の穴を持つ 1 行**だけを受ける（同 §5）。
-    ///
-    /// 穴の無い行は着地した commit を名指さず、**別の commit の判定を読んで success と言いうる**（C10）。
-    #[test]
-    fn pipe_terminal_land_ci_cmd_must_carry_the_sha_hole() {
-        let base = body(r#"["cargo"]"#, r#"["cargo xtask check"]"#);
-        assert_eq!(Declared::parse(&base).expect("key 無しは通る").ci_cmd, None, "無い key は None（既定は呼び手が埋める）");
-        let line = format!("forge runs --commit {CI_SHA_HOLE} --json status");
-        let set = Declared::parse(&format!("{base}ci-cmd = \"{line}\"\n")).expect("穴を持つ行は通る");
-        assert_eq!(set.ci_cmd.as_deref(), Some(line.as_str()), "書いた行");
-        for bad in ["\"\"", "\"forge runs --commit HEAD\"", "\"forge runs --commit {run}\"", "[\"a\"]", "1"] {
-            let errors = Declared::parse(&format!("{base}ci-cmd = {bad}\n")).expect_err("穴が無い");
-            assert!(errors.iter().any(|error| error.reason.contains("ci-cmd") && error.line == 4), "{bad}: {errors:?}");
-        }
-        // 既定の 1 行も同じ条件を満たす（器が埋める既定が自分の規則を破らない）。
-        assert!(DEFAULT_CI_CMD.contains(CI_SHA_HOLE), "既定の行も穴を持つ: {DEFAULT_CI_CMD}");
-    }
-
-    /// (§46) 既定の 1 行は `--json` の欄の列に `event` を持ち、`{sha}` の穴は 1 つのまま。
-    #[test]
-    fn pipe_declaration_default_ci_cmd_carries_the_event_field() {
-        let words: Vec<&str> = DEFAULT_CI_CMD.split_whitespace().collect();
-        let fields = words
-            .iter()
-            .position(|word| *word == "--json")
-            .and_then(|at| words.get(at + 1))
-            .expect("既定の行は --json の欄の列を持つ");
-        let fields: Vec<&str> = fields.split(',').collect();
-        assert!(fields.contains(&"event"), "欄の列に event が在る: {fields:?}");
-        assert!(fields.contains(&"status") && fields.contains(&"conclusion"), "従来の欄は残る: {fields:?}");
-        assert_eq!(DEFAULT_CI_CMD.matches(CI_SHA_HOLE).count(), 1, "穴は 1 つのまま: {DEFAULT_CI_CMD}");
-    }
-
     /// schema は 1 だけ。**整数でない schema も断る**（型の取り違えを黙って通さない）。
     #[test]
     fn declaration_refuses_other_schema_versions() {
@@ -1294,8 +1255,6 @@ mod tests {
                 "detection-verify",
                 "requirements",
                 "remote",
-                "ci-cmd",
-                "ci-watch",
                 "design-intent-paths",
                 "design-doc-paths",
                 "tests-paths",

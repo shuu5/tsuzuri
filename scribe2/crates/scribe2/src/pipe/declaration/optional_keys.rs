@@ -17,8 +17,6 @@ pub(super) const DECLARED_KEYS: &[&str] = &[
     DETECTION_KEY,
     REQUIREMENTS_KEY,
     REMOTE_KEY,
-    CI_CMD_KEY,
-    CI_WATCH_KEY,
     path_kinds::DESIGN_INTENT_KEY,
     path_kinds::DESIGN_DOC_KEY,
     path_kinds::TESTS_KEY,
@@ -344,20 +342,6 @@ const QUESTION_ROUTE_KEY: &str = "question-route";
 /// repo に器が勝手な既定で押すことはしない——宣言の無い repo の便は終端を持たない（`--pr-cmd` 形と同じ）。
 const REMOTE_KEY: &str = "remote";
 
-/// **CI の判定を読む 1 行**の key（任意・設計 contract-source.md §5）。書かない宣言は [`DEFAULT_CI_CMD`] を撃つ。
-const CI_CMD_KEY: &str = "ci-cmd";
-
-/// **着地の後の CI を見張るか**の key（任意・設計 contract-source.md §5 の手順 3）。値は真偽だけで、false の repo は land の終端が
-/// 着地の後の CI を読まない（書かない宣言は true と同じ＝今の形）。
-const CI_WATCH_KEY: &str = "ci-watch";
-
-/// CI の判定を読む行の既定（forge の CLI・`{sha}` に着地した sha が入る）。`event` は読み手が
-/// `schedule` の run を母集団から外すための欄（設計 pipeline.md §46）。
-pub const DEFAULT_CI_CMD: &str = "gh run list --commit {sha} --json status,conclusion,event";
-
-/// CI の行が必ず持つ穴（**着地した commit を名指さない行は撃てない**・別の commit の判定を読むことになる）。
-pub const CI_SHA_HOLE: &str = "{sha}";
-
 /// **要件面の path** の key（任意・設計 contract-source.md §2「表の検査」）。契約表の `req` の id をこの file で
 /// 測る。書かない宣言は [`DEFAULT_REQUIREMENTS`] を読む（既存の宣言を 1 行も変えさせない）。
 const REQUIREMENTS_KEY: &str = "requirements";
@@ -372,8 +356,6 @@ pub(super) const OPTIONAL_KEYS: &[&str] = &[
     DETECTION_KEY,
     REQUIREMENTS_KEY,
     REMOTE_KEY,
-    CI_CMD_KEY,
-    CI_WATCH_KEY,
     path_kinds::DESIGN_INTENT_KEY,
     path_kinds::DESIGN_DOC_KEY,
     path_kinds::TESTS_KEY,
@@ -642,32 +624,6 @@ pub(super) fn remote_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError
     }
 }
 
-/// CI の判定を読む 1 行（任意）。**`{sha}` の穴を必ず持つ**——穴の無い行は着地した commit を名指さず、
-/// 別の commit の判定を読んで success と言いうる（測っていないものを測ったことにしない・C10）。
-pub(super) fn ci_cmd_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<String> {
-    let (_, value, line) = found.iter().find(|(seen, _, _)| seen == CI_CMD_KEY)?;
-    match value {
-        Raw::Text(cmd) if !cmd.trim().is_empty() && cmd.contains(CI_SHA_HOLE) => Some(cmd.trim().to_owned()),
-        _ => {
-            errors.push(DeclError::new(
-                *line,
-                format!("{CI_CMD_KEY} は {CI_SHA_HOLE} の穴を持つ 1 行である（着地した commit を名指さない行は撃てない）"),
-            ));
-            None
-        }
-    }
-}
-
-/// 着地の後の CI を見張るか（任意・[`bool_key`] と同じ読み・型違いは key と行番号を名指す不備）。
-pub(super) fn ci_watch_of(found: &[(String, Raw, u64)], errors: &mut Vec<DeclError>) -> Option<bool> {
-    bool_key(found, CI_WATCH_KEY, errors)
-}
-
-/// 宣言が着地の後の CI を見張るか（欄が `Some(false)` の時だけ偽・key の無い宣言と true は真）。
-pub fn ci_watch_on(declared: &Declared) -> bool {
-    declared.ci_watch != Some(false)
-}
-
 /// repo 相対の path か（空でない・絶対 path でない・home の短縮記号も `..` の段も持たない）。
 fn repo_relative(path: &str) -> bool {
     !path.trim().is_empty() && !path.starts_with('/') && !path.contains('~') && !path.split('/').any(|part| part == "..")
@@ -713,10 +669,6 @@ pub fn table_facts_named(
 pub struct TerminalFacts {
     /// push 先の remote の名（宣言 `remote`・**無ければ `None`＝終端を持たない**）。
     pub remote: Option<String>,
-    /// CI の判定を読む 1 行（宣言 `ci-cmd`・無ければ [`DEFAULT_CI_CMD`]・`{sha}` の穴を持つ）。
-    pub ci_cmd: String,
-    /// 着地の後の CI を見張るか（宣言 `ci-watch`・false の時だけ偽・[`ci_watch_on`]）。
-    pub ci_watch: bool,
     /// 着地の後に撃つ行（宣言 `after-land`・照らす前の列・空なら起こさない印・[`after_land_at`] が上限と突き合わせる）。
     pub after_land: Vec<String>,
 }
@@ -727,11 +679,8 @@ pub struct TerminalFacts {
 /// 宣言そのものが無い repo に既定で push するのは「測っていない先へ出す」ことになる（A1 の「出す」・C10）。
 pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
     let declared = declared_at_head(repo)?;
-    let ci_watch = ci_watch_on(&declared);
     Ok(TerminalFacts {
         remote: declared.remote,
-        ci_cmd: declared.ci_cmd.unwrap_or_else(|| DEFAULT_CI_CMD.to_owned()),
-        ci_watch,
         after_land: declared.after_land.map_or_else(Vec::new, |(items, _)| items),
     })
 }
@@ -739,7 +688,8 @@ pub fn terminal_facts(repo: &Path) -> Result<TerminalFacts, Vec<DeclError>> {
 #[cfg(test)]
 mod tests {
     use super::super::{Ceiling, DeclError, Declared, Sourced, CEILING_ROW, DECL_FILE};
-    use super::{check_of, ci_watch_on, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
+    use super::DECLARED_KEYS;
+    use super::{check_of, close_check, close_check_at_sha, floor_check_at, index_at, index_lines, route_of, ruling_keys_at, CloseCheck, ConstitutionFiles, IndexLines, QuestionRoute, RulingKeys, TablePlaces};
     use super::{seat_of, SeatConstitution};
 
     /// 必須 key だけの宣言の本文（3 行）の後ろに `extra` を足す。
@@ -827,15 +777,20 @@ mod tests {
         }
     }
 
-    /// ci-watch は真偽だけ: key の無い宣言と true は真、false だけが偽（[`ci_watch_on`]）、真偽でない値は key と行番号（4 行目）を名指す不備。
+    /// 外した鍵 ci-watch と ci-cmd は知らない鍵と同じ断りで宣言ごと断られる（鍵の無い同じ宣言は通る・ADR-75 の決定 (6)）。
     #[test]
-    fn declaration_ci_watch_reads_a_bool_and_refuses_other_values() {
-        let on = |extra: &str| Declared::parse(&with(extra)).map(|found| ci_watch_on(&found));
-        assert_eq!((on(""), on("ci-watch = true\n"), on("ci-watch = false\n")), (Ok(true), Ok(true), Ok(false)));
-        for value in ["\"false\"", "1", "[\"false\"]"] {
-            let errors = on(&format!("ci-watch = {value}\n")).expect_err(value);
-            assert!(errors.iter().any(|error| error.line == 4 && error.reason.contains("ci-watch")), "{value}: {errors:?}");
+    fn vcrk_retired_keys_are_unknown() {
+        assert!(Declared::parse(&with("")).is_ok(), "鍵の無い宣言は通る");
+        for (extra, want) in [("ci-watch = false\n", "未知の key ci-watch"), ("ci-cmd = \"gh run list --commit {sha}\"\n", "未知の key ci-cmd")] {
+            let errors = Declared::parse(&with(extra)).expect_err(extra);
+            assert!(errors.iter().any(|error| error.reason.contains(want)), "{extra}: {errors:?}");
         }
+    }
+
+    /// 宣言の鍵の列は ci-cmd も ci-watch も持たない。
+    #[test]
+    fn vcrk_declared_keys_drop_the_ci_keys() {
+        assert!(!DECLARED_KEYS.contains(&"ci-cmd") && !DECLARED_KEYS.contains(&"ci-watch"), "{DECLARED_KEYS:?}");
     }
 
     /// HEAD の読みの結果（無い / 不備 / 値）から閉じた 3 値への写し。true だけが加わり、型違いの宣言は読めない。

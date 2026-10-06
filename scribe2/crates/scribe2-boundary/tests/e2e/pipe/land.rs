@@ -2575,8 +2575,8 @@ fn exec_script(path: &Path, body: &str) -> String {
     path.display().to_string()
 }
 
-/// 偽 remote（bare repo）・偽 CI（`conclusion` を返す 1 行）・偽 bd を用意し、宣言に `remote` と
-/// `ci-cmd` を足して commit する。**`.vessel.toml` は HEAD の tree が読み面**なので commit まで行う。
+/// 偽 remote（bare repo）・偽 CI（`conclusion` を返す 1 行）・偽 bd を用意し、宣言に `remote` を
+/// 足して commit する。**`.vessel.toml` は HEAD の tree が読み面**なので commit まで行う。
 fn fake_terminal(repo: &Path, state: &Path, conclusion: &str) -> FakeTerminal {
     let body = format!("[{{\"status\":\"completed\",\"conclusion\":\"{conclusion}\"}}]");
     fake_terminal_json(repo, state, &body)
@@ -2587,7 +2587,7 @@ fn fake_terminal_json(repo: &Path, state: &Path, json: &str) -> FakeTerminal {
     fake_terminal_decl(repo, state, json, true)
 }
 
-/// [`fake_terminal_json`] の本体。`declared` が偽の周は git の remote と偽 CI の宣言（`ci-cmd`）だけを足し、宣言に `remote` の行を
+/// [`fake_terminal_json`] の本体。`declared` が偽の周は git の remote だけを足し、宣言に `remote` の行を
 /// 書かない＝押す先を宣言していない repo（撃たれれば偽 remote の ref と偽 CI の呼び出しが動く形）を作る。
 #[expect(
     clippy::expect_used,
@@ -2600,7 +2600,7 @@ fn fake_terminal_decl(repo: &Path, state: &Path, json: &str, declared: bool) -> 
     // 偽 CI: **渡された argv を log へ写し、呼ばれた回数の file に 1 行を足してから** JSON 1 行を返す
     // （`{sha}` の穴に何が入ったか・照合を何回撃ったかを測る）。
     let (ci_log, ci_calls) = (state.join("ci-argv.txt"), state.join("ci-calls.txt"));
-    let ci = exec_script(
+    exec_script(
         &state.join("fake-ci.sh"),
         &format!(
             "printf '%s\\n' \"$@\" > '{}'\necho call >> '{}'\ncat <<'JSON'\n{json}\nJSON\n",
@@ -2613,23 +2613,10 @@ fn fake_terminal_decl(repo: &Path, state: &Path, json: &str, declared: bool) -> 
     exec_script(&state.join("fake-bd.sh"), &format!("printf '%s\\n' \"$@\" > '{}'\n", bd_log.display()));
     let body = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
     let remote_line = if declared { "remote = \"fake\"\n" } else { "" };
-    let added = format!("{body}{remote_line}ci-cmd = \"{ci} {{sha}}\"\n");
-    fs::write(repo.join(".vessel.toml"), added).expect("宣言を書ける");
+    fs::write(repo.join(".vessel.toml"), format!("{body}{remote_line}")).expect("宣言を書ける");
     git(repo, &["add", "-f", ".vessel.toml"]);
-    git(repo, &["commit", "-q", "-m", "terminal-decl"]);
+    git(repo, &["commit", "-q", "--allow-empty", "-m", "terminal-decl"]);
     FakeTerminal { remote, bd_log, ci_log, ci_calls }
-}
-
-/// 宣言の file の末に `ci-watch = false` を足して add と commit する（着地の後の CI を見張らない repo・[`fake_terminal_decl`] と同じ書き）。
-#[expect(
-    clippy::expect_used,
-    reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
-)]
-fn ci_watch_off(repo: &Path) {
-    let body = fs::read_to_string(repo.join(".vessel.toml")).expect("宣言を読める");
-    fs::write(repo.join(".vessel.toml"), format!("{body}ci-watch = false\n")).expect("宣言を書ける");
-    git(repo, &["add", "-f", ".vessel.toml"]);
-    git(repo, &["commit", "-q", "-m", "ci-watch-off"]);
 }
 
 /// 便の `RunDone stage=Landed` の detail を**宣言順に**並べる（終端は段ごとに 1 件記す）。
@@ -3115,7 +3102,7 @@ fn pipe_verify_failed_main_red_records_the_tooth_and_keeps_the_stderr_log() {
 // ───── remote を持たない repo の終端（設計 contract-source.md §5・FR50・ADR-0094 の経路 (2)・接頭辞 `pipe_terminal_no_remote_`） ─────
 //
 // 宣言に `remote` の行が無い repo の便は push も CI の照合も撃たず、台帳の close を `landed <sha> ci=none` で撃つ（`terminal=closed:no-ci`・rc 0）。
-// fixture は **git の remote と `ci-cmd` は在るが宣言に `remote` を書かない** toy（撃たれれば偽 remote の ref と偽 CI の回数が動く）。
+// fixture は **git の remote と偽 CI は在るが宣言に `remote` を書かない** toy（撃たれれば偽 remote の ref と偽 CI の回数が動く）。
 // 台帳 client は既定名（道具箱の見張りが PATH で受ける）＝見張りの記録が close の呼び出しの母集団である。
 
 /// 常に success の偽 CI と偽 remote を持つが宣言に `remote` を書かない toy（[`fake_terminal_decl`]）。
