@@ -1,0 +1,1171 @@
+diff --git a/crates/tsuzuri-boundary/src/consult/bundle.rs b/crates/tsuzuri-boundary/src/consult/bundle.rs
+index 2f5c2b0d0e4553939283178f59691771cfdf0ffc..0a175fb36b23644445ee770809ee41af2c9cc471 100644
+--- a/crates/tsuzuri-boundary/src/consult/bundle.rs
++++ b/crates/tsuzuri-boundary/src/consult/bundle.rs
+@@ -4,6 +4,7 @@
+ //! 窓の中で撃つ時（環境の `TZ_CONSULT_ID` が窓の id で cwd が作業場）は台帳の写しを替えない（囲いの中では bd を撃てない）。
+ //! 問いは --question の file の字、無くて題が在り question.md が無ければ題（台帳の bead なら題名と本文も）から書く。
+ 
++use std::io::Read;
+ use std::path::Path;
+ 
+ use tsuzuri_contract::board::Reading;
+@@ -11,8 +12,10 @@ use tsuzuri_contract::consult::{WindowFile, WindowId};
+ use tsuzuri_contract::ledger::{LedgerItem, fnv1a64};
+ use tsuzuri_core::consult::launch::{ID_ENV, brief, read_roots};
+ 
++use super::plain::{open_plain, plain_file, read_text, write_plain};
+ use super::{
+-    COMMON, FAIL, Refused, UNKNOWN, ctx, flags, ledger, read_window, refuse, tz_path, workspace,
++    COMMON, FAIL, READ_MAX, Refused, UNKNOWN, ctx, flags, ledger, plain_ws, read_window, refuse,
++    tz_path, workspace,
+ };
+ use crate::out::emit;
+ use crate::server::ledger::parse_bd;
+@@ -122,10 +125,11 @@ fn bead_text(items: &[LedgerItem], topic: &str) -> Option<String> {
+     ))
+ }
+ 
+-/// 題から組む問いの字。
+-fn topic_question(bundle: &Path, topic: &str) -> String {
+-    let items = std::fs::read_to_string(bundle.join("ledger.json"))
++/// 題から組む問いの字（台帳の写しは `plain` の照らしで読む）。
++fn topic_question(ws: &Path, topic: &str) -> String {
++    let items = read_text(ws, "bundle/ledger.json", READ_MAX)
+         .ok()
++        .flatten()
+         .and_then(|t| match parse_bd(&t) {
+             Reading::Known(items) => Some(items),
+             Reading::Unknown => None,
+@@ -148,9 +152,11 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
+             format!("作業場の窓の id が {} で {id} でない", window.id),
+         ));
+     }
++    plain_ws(ws, id)?;
+     let dir = ws.join("bundle");
+     let put = |name: &str, text: &str| {
+-        std::fs::write(dir.join(name), text).map_err(|e| (FAIL, format!("{name} を書けない: {e}")))
++        write_plain(ws, &format!("bundle/{name}"), text.as_bytes())
++            .map_err(|e| (FAIL, format!("{name} を書けない: {e}")))
+     };
+     put("brief.md", &brief(&tz_path(), id))?;
+     if let Some(text) = &inputs.ledger {
+@@ -166,8 +172,8 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
+                 .map_err(|e| (FAIL, format!("問いの file {file} が読めない: {e}")))?;
+             put("question.md", &text)?;
+         }
+-        (None, Some(t)) if inputs.topic.is_some() || !dir.join("question.md").exists() => {
+-            put("question.md", &topic_question(&dir, t))?;
++        (None, Some(t)) if inputs.topic.is_some() || !plain_file(ws, "bundle/question.md") => {
++            put("question.md", &topic_question(ws, t))?;
+         }
+         _ => {}
+     }
+@@ -176,11 +182,15 @@ pub fn write(ws: &Path, id: WindowId, inputs: &Inputs) -> Result<String, Refused
+     Ok(digest)
+ }
+ 
+-/// 束の要約値（`FILES` の在る file の名と字を順に FNV-1a 64 に通した 16 進の 16 字）。
++/// 束の要約値（`FILES` の在る普通の file の名と字を順に FNV-1a 64 に通した 16 進の 16 字・`plain` の照らしで読む）。
+ pub fn digest(dir: &Path) -> String {
+     let mut bytes = Vec::new();
+     for name in FILES {
+-        if let Ok(text) = std::fs::read(dir.join(name)) {
++        let read = open_plain(dir, name).and_then(|(mut file, _)| {
++            let mut text = Vec::new();
++            file.read_to_end(&mut text).map(|_| text)
++        });
++        if let Ok(text) = read {
+             bytes.extend_from_slice(name.as_bytes());
+             bytes.push(0);
+             bytes.extend_from_slice(&text);
+diff --git a/crates/tsuzuri-boundary/src/consult/close.rs b/crates/tsuzuri-boundary/src/consult/close.rs
+index 18580c76b2cf44f811d0a716b151f37a89fbbcad..e4347ac11a8d4ab7971a5cbbf054ea454c8c456c 100644
+--- a/crates/tsuzuri-boundary/src/consult/close.rs
++++ b/crates/tsuzuri-boundary/src/consult/close.rs
+@@ -18,7 +18,7 @@ use super::dispose::retire;
+ use super::launch::TMUX;
+ use super::{
+     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, append, ctx, findings, flags, ledger, lines_of,
+-    minute_now, procs, read_window, refuse, workspace,
++    minute_now, odd_files, odd_line, procs, read_window, refuse, workspace,
+ };
+ use crate::out::{emit, emit_err};
+ use crate::server::ledger::capture;
+@@ -84,6 +84,9 @@ fn close(c: &Ctx, id: WindowId, by: Starter) -> Result<Vec<String>, Refused> {
+         FAIL,
+         format!("窓 {id} の作業場が無い（退いた窓か知らない窓）"),
+     ))?;
++    for (rel, why) in odd_files(&ws) {
++        emit_err(&format!("tz consult close: {}", odd_line(id, &rel, &why)));
++    }
+     let (_, items) = ledger(c)?;
+     let mut lines = lines_of(&items);
+     if lines
+diff --git a/crates/tsuzuri-boundary/src/consult/dispose.rs b/crates/tsuzuri-boundary/src/consult/dispose.rs
+index ea3a84de5e0d093dc9977993bfd29753a5db0149..4b1be1d9d4dae2dcbbfc812ada2bd75abd546e25 100644
+--- a/crates/tsuzuri-boundary/src/consult/dispose.rs
++++ b/crates/tsuzuri-boundary/src/consult/dispose.rs
+@@ -12,10 +12,11 @@ use std::path::{Path, PathBuf};
+ use tsuzuri_contract::consult::{FindingId, Verdict, WindowId, Word, kept_path};
+ use tsuzuri_core::consult::lines::{Line, Subject, render};
+ 
++use super::plain::open_plain;
+ use super::show::{read_finding, topic_of};
+ use super::{
+     COMMON, Ctx, FAIL, Refused, UNKNOWN, append, ctx, findings, flags, ledger, lines_of,
+-    minute_now, refuse, retired, workspace,
++    minute_now, odd_line, refuse, retired, workspace,
+ };
+ use crate::out::emit;
+ 
+@@ -138,13 +139,25 @@ fn copy_kept(
+     if let Some(there) = rels.iter().find(|r| into.join(r).exists()) {
+         return Err((FAIL, format!("写し先 {there} がもう在る（上書きしない）")));
+     }
+-    for (p, rel) in keep.iter().zip(&rels) {
++    let mut sources = Vec::new();
++    for p in keep {
++        match open_plain(ws, p) {
++            Ok((file, _)) => sources.push(file),
++            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
++                return Err((UNKNOWN, format!("{p} を写せない: {e}")));
++            }
++            Err(e) => return Err((FAIL, odd_line(id.window(), p, &e.to_string()))),
++        }
++    }
++    for ((mut from, p), rel) in sources.into_iter().zip(keep).zip(&rels) {
+         let to = into.join(rel);
+         if let Some(dir) = to.parent() {
+             fs::create_dir_all(dir)
+                 .map_err(|e| (UNKNOWN, format!("{rel} の dir を作れない: {e}")))?;
+         }
+-        fs::copy(ws.join(p), &to).map_err(|e| (UNKNOWN, format!("{p} を写せない: {e}")))?;
++        fs::File::create(&to)
++            .and_then(|mut file| std::io::copy(&mut from, &mut file))
++            .map_err(|e| (UNKNOWN, format!("{p} を写せない: {e}")))?;
+     }
+     Ok(rels)
+ }
+diff --git a/crates/tsuzuri-boundary/src/consult/follow.rs b/crates/tsuzuri-boundary/src/consult/follow.rs
+index 808346c8d09c4f67884178871e46f05cb89f5471..e4aa48d5f24a983367330ed8e917ec4a40e0737f 100644
+--- a/crates/tsuzuri-boundary/src/consult/follow.rs
++++ b/crates/tsuzuri-boundary/src/consult/follow.rs
+@@ -20,8 +20,8 @@ use super::launch::{ACCOUNT_ENV, Shot, TMUX, last_conversation, launch, read_sta
+ use super::plain::append_plain;
+ use super::trust::place_trust;
+ use super::{
+-    Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, alive, ledger, lines_of, procs, read_window, tzw,
+-    workspace,
++    Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, alive, ledger, lines_of, plain_ws, procs,
++    read_window, tzw, workspace,
+ };
+ use crate::out::emit;
+ use crate::server::ledger::capture;
+@@ -112,6 +112,7 @@ fn close_old(ws: &Path, id: WindowId, mark: &ProcMark, tmux_window: &str) -> Res
+ /// 付いて来させる（版の照らしの後）。
+ pub fn follow(c: &Ctx, id: WindowId, session: Option<&str>, wait: Duration) -> Result<(), Refused> {
+     let ws = workspace(&c.drafts, id);
++    plain_ws(&ws, id)?;
+     let mark = live_talk(c, id, &ws)?;
+     let account = std::env::var(ACCOUNT_ENV).map_err(|_| {
+         let why = format!("席の環境に {ACCOUNT_ENV} が無い（付いてくる先の口座が分からない）");
+diff --git a/crates/tsuzuri-boundary/src/consult/launch.rs b/crates/tsuzuri-boundary/src/consult/launch.rs
+index d9757bbb49c03da398eaee0fff2612880900e21d..e1060ab8dbe8d54e50f8f0919a5787f9d01eb8e6 100644
+--- a/crates/tsuzuri-boundary/src/consult/launch.rs
++++ b/crates/tsuzuri-boundary/src/consult/launch.rs
+@@ -37,12 +37,12 @@ use tsuzuri_core::consult::resume::pick;
+ use tsuzuri_core::consult::stamp::{last_sid, lines};
+ 
+ use super::follow;
+-use super::plain::{plain_path, same_file};
++use super::plain::{create_plain, odd_dir, plain_file, plain_path, same_file, write_plain};
+ use super::stamp::STAMPS;
+ use super::trust::place_trust;
+ use super::{
+     COMMON, Ctx, FAIL, GIT_TIMEOUT, Refused, UNKNOWN, append, ctx, findings, flags, ledger,
+-    lines_of, live, minute_now, proc_path, procs, read_window, refuse, tz_path, tzw, windows,
++    lines_of, live, minute_now, plain_ws, procs, read_window, refuse, tz_path, tzw, windows,
+     workspace,
+ };
+ use crate::out::{emit, emit_err};
+@@ -141,7 +141,7 @@ pub fn material(c: &Ctx, ws: &Path, w: &WindowFile) -> Result<Launch, Refused> {
+         uid: uid.to_string(),
+         model: w.model.clone(),
+         effort: w.effort.clone(),
+-        question: ws.join("bundle/question.md").is_file(),
++        question: plain_file(ws, "bundle/question.md"),
+         resume: None,
+     })
+ }
+@@ -251,12 +251,25 @@ fn record(
+     append(c, items, None, &line).map(|_| ())
+ }
+ 
++/// 窓の控えと会話の印の最後の会話の id（会話の印と控えの dir の断りは会話の印の読みの字・rc 2 で先に出し、残りの symlink と
++/// fifo は `plain_ws` の 1 行・rc 1）。
++fn window_and_last(ws: &Path, id: WindowId) -> Result<(WindowFile, Option<String>), Refused> {
++    let w = read_window(ws);
++    let last = if w.is_some() || odd_dir(ws, ".consult").is_some() {
++        last_conversation(ws)?
++    } else {
++        None
++    };
++    plain_ws(ws, id)?;
++    let w = w.ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
++    Ok((w, last))
++}
++
+ /// 起こす（版の照らしの後）。
+ pub fn launch(c: &Ctx, id: WindowId, shot: &Shot) -> Result<(), Refused> {
+     let again = shot.again;
+     let ws = workspace(&c.drafts, id);
+-    let w = read_window(&ws).ok_or((FAIL, format!("窓 {id} の作業場が無い: {}", ws.display())))?;
+-    let last = last_conversation(&ws)?;
++    let (w, last) = window_and_last(&ws, id)?;
+     let resume = pick(w.form, again, last.as_deref(), shot.session)
+         .map_err(|why| (FAIL, why.to_string()))?;
+     let mut l = material(c, &ws, &w)?;
+@@ -349,8 +362,12 @@ fn start(
+         account: std::env::var(ACCOUNT_ENV).ok(),
+     };
+     let text = wire::encode(&mark).map_err(|e| (UNKNOWN, e.to_string()))?;
+-    fs::write(proc_path(ws, k), text + "\n")
+-        .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
++    write_plain(
++        ws,
++        &format!(".consult/proc-{k}.json"),
++        (text + "\n").as_bytes(),
++    )
++    .map_err(|e| (UNKNOWN, format!("process の印を書けない: {e}")))?;
+     Ok(Started { before, child })
+ }
+ 
+@@ -432,7 +449,7 @@ fn talk(ws: &Path, l: &Launch, args: &[String]) -> Result<(String, u32), Refused
+ /// 問う窓を席の子として起こす（標準出力は `.consult/ask-<k>.json`・標準エラーは `.consult/ask-<k>.err`）。
+ fn ask(ws: &Path, l: &Launch, args: &[String], k: u32) -> Result<std::process::Child, Refused> {
+     let file = |ext: &str| {
+-        File::create(ws.join(format!(".consult/ask-{k}.{ext}")))
++        create_plain(ws, &format!(".consult/ask-{k}.{ext}"))
+             .map_err(|e| (UNKNOWN, format!("ask-{k}.{ext} を作れない: {e}")))
+     };
+     let mut cmd = Command::new(PROGRAM);
+diff --git a/crates/tsuzuri-boundary/src/consult/list.rs b/crates/tsuzuri-boundary/src/consult/list.rs
+index e6fbe21caca998aa6b421c97e1700305e1a596c0..fe48132489a69f77c624572beb276f8f6ca17f87 100644
+--- a/crates/tsuzuri-boundary/src/consult/list.rs
++++ b/crates/tsuzuri-boundary/src/consult/list.rs
+@@ -19,11 +19,12 @@ use tsuzuri_core::account::project::account_label;
+ use tsuzuri_core::consult::lines::{Line, Subject, unreceived};
+ use tsuzuri_core::consult::quota::{DAY_MAX, LIVE_MAX, count};
+ 
++use super::plain::read_text;
+ use super::{
+-    COMMON, Ctx, FAIL, ctx, findings, flags, ledger, lines_of, live, minute_now, procs,
+-    read_window, refuse, retired, windows, workspace,
++    COMMON, Ctx, FAIL, READ_MAX, ctx, findings, flags, ledger, lines_of, live, minute_now,
++    odd_lines, procs, read_window, refuse, retired, windows, workspace,
+ };
+-use crate::out::emit;
++use crate::out::{emit, emit_err};
+ use crate::server::clock::epoch_secs;
+ 
+ /// tz consult list の残りの引数を受けて終了 code を返す。
+@@ -35,6 +36,9 @@ pub fn run(rest: &[&str]) -> u8 {
+         let c = ctx(&f)?;
+         let (_, items) = ledger(&c)?;
+         let b = board(&c, &lines_of(&items), &minute_now());
++        for line in odd_lines(&c.drafts) {
++            emit_err(&format!("tz consult list: {line}"));
++        }
+         if f.has("--json") {
+             return wire::encode(&b)
+                 .map(|t| vec![t])
+@@ -146,8 +150,9 @@ fn rows(c: &Ctx, lines: &[Line]) -> (Vec<WindowRow>, Vec<FindingRow>) {
+ 
+ /// 処分の無い所見の 1 行（所見の file が読めなければ題と届いた時刻は None）。
+ fn finding_row(ws: &Path, id: tsuzuri_contract::consult::FindingId, lines: &[Line]) -> FindingRow {
+-    let read: Option<Finding> = std::fs::read_to_string(ws.join(format!("findings/{id}.json")))
++    let read: Option<Finding> = read_text(ws, &format!("findings/{id}.json"), READ_MAX)
+         .ok()
++        .flatten()
+         .and_then(|t| wire::decode(&t).ok());
+     FindingRow {
+         id,
+diff --git a/crates/tsuzuri-boundary/src/consult/mod.rs b/crates/tsuzuri-boundary/src/consult/mod.rs
+index 3aa3715d60156e946977f24846901ed7261c6b0d..adcd9a53f8ed8192b8d25046e14320d3de73b1ff 100644
+--- a/crates/tsuzuri-boundary/src/consult/mod.rs
++++ b/crates/tsuzuri-boundary/src/consult/mod.rs
+@@ -34,6 +34,7 @@ use tsuzuri_contract::ledger::{BDW, BeadId, LedgerItem, LedgerWrite};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::consult::lines::{Line, home_of, render, scan};
+ 
++use self::plain::{NOT_PLAIN, entries, odd_dir, plain_names, read_text, write_plain};
+ use crate::acct::{GIT, GIT_ARGS};
+ use crate::out::emit_err;
+ use crate::server::events::now;
+@@ -61,6 +62,12 @@ pub const WINDOW_FILE: &str = ".consult/window.json";
+ /// 作業場に用意する dir（控え・束・草稿・所見・実験）。
+ pub const DIRS: [&str; 5] = [".consult", "bundle", "drafts", "findings", "work"];
+ 
++/// 席の口が読み書きする作業場の dir（控え・束・所見・`odd_files` が見る）。
++pub const SEAT_DIRS: [&str; 3] = [".consult", "bundle", "findings"];
++
++/// 作業場の控えと印と所見を読む上限（byte・越える file は読まない）。
++pub const READ_MAX: u64 = 1 << 20;
++
+ /// 窓の控えの書き場（作業場からの相対）。
+ pub const NOTES: &str = "notes.md";
+ 
+@@ -70,8 +77,7 @@ pub const WRAPPER_ENV: &str = "TZ_WRAPPER";
+ /// 共通の値を取る旗（repo の置き場・台帳の読みと書きの program）。
+ pub const COMMON: [&str; 3] = ["--repo", "--bd", "--bdw"];
+ 
+-pub const USAGE: &str =
+-    "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp|statusline> [引数]";
++pub const USAGE: &str = "usage: tz consult <open|bundle|launch|answer|watch|show|dispose|list|close|guard|stamp|statusline> [引数]";
+ 
+ /// tz consult の残りの引数を受けて終了 code を返す。
+ pub fn run(rest: &[&str]) -> u8 {
+@@ -267,51 +273,88 @@ pub fn windows(drafts: &Path) -> Vec<(WindowId, bool)> {
+     out
+ }
+ 
+-/// 作業場の窓の控え（読めなければ None）。
++/// 作業場の窓の控え（`plain` の照らしで読む・無いか読めなければ None）。
+ pub fn read_window(ws: &Path) -> Option<WindowFile> {
+-    let text = std::fs::read_to_string(ws.join(WINDOW_FILE)).ok()?;
++    let text = read_text(ws, WINDOW_FILE, READ_MAX).ok()??;
+     wire::decode(&text).ok()
+ }
+ 
+-/// 窓の控えを書く。
++/// 窓の控えを書く（`plain` の照らしで書く）。
+ pub fn write_window(ws: &Path, window: &WindowFile) -> Result<(), String> {
+     let text = wire::encode(window).map_err(|e| e.to_string())?;
+-    std::fs::write(ws.join(WINDOW_FILE), text + "\n").map_err(|e| e.to_string())
++    write_plain(ws, WINDOW_FILE, (text + "\n").as_bytes()).map_err(|e| e.to_string())
+ }
+ 
+-/// 作業場の findings/ の所見の id（名が `<所見 id>.json` で窓の id が `window` の物・id の順）。
++/// 作業場の findings/ の所見の id（普通の file で名が `<所見 id>.json` で窓の id が `window` の物・id の順）。
+ pub fn findings(ws: &Path, window: WindowId) -> Vec<FindingId> {
+-    let mut out: Vec<FindingId> = std::fs::read_dir(ws.join("findings"))
+-        .into_iter()
+-        .flatten()
+-        .flatten()
+-        .filter_map(|e| {
+-            let name = e.file_name().into_string().ok()?;
+-            FindingId::parse(name.strip_suffix(".json")?).ok()
+-        })
++    let mut out: Vec<FindingId> = plain_names(ws, "findings")
++        .iter()
++        .filter_map(|name| FindingId::parse(name.strip_suffix(".json")?).ok())
+         .filter(|id| id.window() == window)
+         .collect();
+     out.sort();
+     out
+ }
+ 
+-/// 作業場の process の印（`.consult/proc-<k>.json` の読める物・k の順）。
++/// 作業場の process の印（`.consult/proc-<k>.json` の普通の file の読める物・k の順）。
+ pub fn procs(ws: &Path) -> Vec<ProcMark> {
+-    let mut out: Vec<ProcMark> = std::fs::read_dir(ws.join(".consult"))
+-        .into_iter()
+-        .flatten()
+-        .flatten()
+-        .filter(|e| {
+-            e.file_name()
+-                .to_str()
+-                .is_some_and(|n| n.starts_with("proc-") && n.ends_with(".json"))
+-        })
+-        .filter_map(|e| wire::decode::<ProcMark>(&std::fs::read_to_string(e.path()).ok()?).ok())
++    let mut out: Vec<ProcMark> = plain_names(ws, ".consult")
++        .iter()
++        .filter(|n| n.starts_with("proc-") && n.ends_with(".json"))
++        .filter_map(|n| read_text(ws, &format!(".consult/{n}"), READ_MAX).ok()?)
++        .filter_map(|text| wire::decode::<ProcMark>(&text).ok())
+         .collect();
+     out.sort_by_key(|p| p.k);
+     out
+ }
+ 
++/// 作業場で `plain` の読み書きが断る形の物（`SEAT_DIRS` の dir 自身と、その直下の普通の file でない名）の、作業場からの相対と
++/// 断りの字（dir の順・名の順）。席の口はこれを読まず書かず、黙って飛ばさないよう 1 行ずつ名指す。
++pub fn odd_files(ws: &Path) -> Vec<(String, String)> {
++    let mut out = Vec::new();
++    for dir in SEAT_DIRS {
++        if let Some(why) = odd_dir(ws, dir) {
++            out.push((dir.to_string(), why));
++            continue;
++        }
++        let lone = entries(ws, dir).into_iter().filter(|(_, plain)| !plain);
++        out.extend(lone.map(|(name, _)| (format!("{dir}/{name}"), NOT_PLAIN.to_string())));
++    }
++    out
++}
++
++/// 起草の置き場の窓（退いた窓も）の作業場の `odd_files` の 1 行の字（窓の id の順・一覧は読まずに組み、黙って飛ばさない）。
++pub fn odd_lines(drafts: &Path) -> Vec<String> {
++    windows(drafts)
++        .into_iter()
++        .flat_map(|(id, gone)| {
++            let ws = if gone {
++                retired(drafts, id)
++            } else {
++                workspace(drafts, id)
++            };
++            odd_files(&ws)
++                .into_iter()
++                .map(move |(rel, why)| odd_line(id, &rel, &why))
++        })
++        .collect()
++}
++
++/// `plain` が断った作業場の物の 1 行の字（何を断ったかと次の 1 手）。
++pub fn odd_line(id: WindowId, rel: &str, why: &str) -> String {
++    format!(
++        "窓 {id} の作業場の {rel} を読まず書かない（{why}・窓が置いた symlink か fifo を作業場から除いてから撃ち直す）"
++    )
++}
++
++/// 作業場に `odd_files` の物が在れば、最初の 1 つを名指して断る（rc 1）。
++pub fn plain_ws(ws: &Path, id: WindowId) -> Result<(), Refused> {
++    match odd_files(ws).first() {
++        Some((rel, why)) => Err((FAIL, odd_line(id, rel, why))),
++        None => Ok(()),
++    }
++}
++
+ /// process の印の file の path。
+ pub fn proc_path(ws: &Path, k: u32) -> PathBuf {
+     ws.join(format!(".consult/proc-{k}.json"))
+diff --git a/crates/tsuzuri-boundary/src/consult/open.rs b/crates/tsuzuri-boundary/src/consult/open.rs
+index 0bf6a3ee9c8cdab626b4ed5b287712cb715f37b8..5bd74e64713a195bfbee620cde1067e994ca7178 100644
+--- a/crates/tsuzuri-boundary/src/consult/open.rs
++++ b/crates/tsuzuri-boundary/src/consult/open.rs
+@@ -20,6 +20,7 @@ use tsuzuri_core::consult::launch::{VERSION_ENV, version_ok};
+ use tsuzuri_core::consult::lines::{Line, Subject};
+ 
+ use super::bundle::{self, Inputs};
++use super::plain::write_plain;
+ use super::{
+     COMMON, Ctx, DIRS, FAIL, GIT_TIMEOUT, NOTES, Refused, UNKNOWN, append, ctx, flags, ledger,
+     lines_of, minute_now, refuse, windows, write_window,
+@@ -217,7 +218,7 @@ fn make(c: &Ctx, want: &Want, inputs: &Inputs) -> Result<(WindowId, PathBuf), Re
+         made: minute_now(),
+     };
+     write_window(&ws, &window).map_err(|e| (UNKNOWN, format!("窓の控えを書けない: {e}")))?;
+-    std::fs::write(ws.join(NOTES), format!("# 窓 {id} の控え\n"))
++    write_plain(&ws, NOTES, format!("# 窓 {id} の控え\n").as_bytes())
+         .map_err(|e| (UNKNOWN, format!("{NOTES} を書けない: {e}")))?;
+     bundle::write(&ws, id, inputs)?;
+     let ws = ws.canonicalize().unwrap_or(ws);
+diff --git a/crates/tsuzuri-boundary/src/consult/plain.rs b/crates/tsuzuri-boundary/src/consult/plain.rs
+index 2e7f7ca062fd9a1d11500247437aff7484371b80..2fccc1d4da1f50b0d90b0c96dd4f613dbd2372d9 100644
+--- a/crates/tsuzuri-boundary/src/consult/plain.rs
++++ b/crates/tsuzuri-boundary/src/consult/plain.rs
+@@ -5,7 +5,7 @@
+ //! lstat と開く間に途中の dir を替える競りは残る（std に段ごとの O_NOFOLLOW の開きが無い）。
+ 
+ use std::fs::{self, File, Metadata, OpenOptions};
+-use std::io::{self, Write};
++use std::io::{self, Read, Write};
+ use std::os::unix::fs::MetadataExt;
+ use std::path::{Path, PathBuf};
+ 
+@@ -67,3 +67,164 @@ pub fn append_plain(ws: &Path, rel: &str, bytes: &[u8]) -> io::Result<()> {
+     };
+     file.write_all(bytes)
+ }
++
++/// 途中の段の断りの字。
++pub const MID: &str = "途中の段が symlink でない dir でない";
++
++/// 普通でない file の断りの字。
++pub const NOT_PLAIN: &str = "普通の file でない";
++
++/// 開いた後の照らしの違いの断りの字。
++pub const NOT_SAME: &str = "開いた file が照らした file と違う";
++
++/// 上限を越える file の断りの字。
++pub const TOO_BIG: &str = "上限を越える";
++
++/// hard link の在る file の断りの字（書けば作業場の外の名の file の字も替わる）。
++pub const LINKED: &str = "link の数が 1 でない";
++
++/// 作業場の下の相対 path でない字（空の段・`.`・`..`・「/」で始まる字）の断りの字。
++pub const NOT_UNDER: &str = "作業場の下の相対 path でない";
++
++/// 相対 path `rel` の段の列（空の段・`.`・`..` を断る＝作業場の外へ出ない）。
++fn steps(rel: &str) -> io::Result<Vec<&str>> {
++    let parts: Vec<&str> = rel.split('/').collect();
++    if parts
++        .iter()
++        .any(|p| p.is_empty() || *p == "." || *p == "..")
++    {
++        return Err(io::Error::other(NOT_UNDER));
++    }
++    Ok(parts)
++}
++
++/// 作業場 `ws` の下の dir の段 `dirs` の path（作業場と各段を lstat で見る・無い段は NotFound・symlink でない dir でない段は断る）。
++fn dir_path(ws: &Path, dirs: &[&str]) -> io::Result<PathBuf> {
++    let mut path = ws.to_path_buf();
++    for dir in std::iter::once("").chain(dirs.iter().copied()) {
++        if !dir.is_empty() {
++            path.push(dir);
++        }
++        if !fs::symlink_metadata(&path)?.file_type().is_dir() {
++            return Err(io::Error::other(MID));
++        }
++    }
++    Ok(path)
++}
++
++/// 作業場 `ws` からの相対 `rel` の path（`steps` と `dir_path` の照らしの後・file 自身は見ない）。
++fn walk(ws: &Path, rel: &str) -> io::Result<PathBuf> {
++    let parts = steps(rel)?;
++    let (name, dirs) = parts
++        .split_last()
++        .ok_or_else(|| io::Error::other(NOT_UNDER))?;
++    Ok(dir_path(ws, dirs)?.join(name))
++}
++
++/// 作業場からの相対 `rel` が在るのに `plain` の読み書きが断る形（途中の段の symlink・file の symlink・fifo・dir）なら、その断りの字
++/// （無い file と無い段は None）。
++pub fn odd(ws: &Path, rel: &str) -> Option<String> {
++    match walk(ws, rel).map(fs::symlink_metadata) {
++        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
++        Err(e) => Some(e.to_string()),
++        Ok(Err(_)) => None,
++        Ok(Ok(m)) => (!m.file_type().is_file()).then(|| NOT_PLAIN.to_string()),
++    }
++}
++
++/// 作業場の dir `rel` が在るのに作業場か途中の段か dir 自身が symlink でない dir でなければ、その断りの字（無い dir は None）。
++pub fn odd_dir(ws: &Path, rel: &str) -> Option<String> {
++    match steps(rel).and_then(|dirs| dir_path(ws, &dirs)) {
++        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
++        Err(e) => Some(e.to_string()),
++        Ok(_) => None,
++    }
++}
++
++/// 作業場からの相対 `rel` の在る普通の file を読む形で開き、開く前の lstat の値と返す（無ければ NotFound）。途中の段の symlink・
++/// 普通でない file・開いた後の照らしの違いは開かずに誤りを返す（fifo は開く前に断るので止まらない）。
++pub fn open_plain(ws: &Path, rel: &str) -> io::Result<(File, Metadata)> {
++    let path = walk(ws, rel)?;
++    let before = fs::symlink_metadata(&path)?;
++    if !before.file_type().is_file() {
++        return Err(io::Error::other(NOT_PLAIN));
++    }
++    let file = File::open(&path)?;
++    if !same_file(&file, &before) {
++        return Err(io::Error::other(NOT_SAME));
++    }
++    Ok((file, before))
++}
++
++/// 作業場からの相対 `rel` の普通の file の字（無い file と無い段は None）。`open_plain` の断りと、上限 `max` byte を越える file と
++/// UTF-8 でない字は誤りを返す。
++pub fn read_text(ws: &Path, rel: &str, max: u64) -> io::Result<Option<String>> {
++    let (file, before) = match open_plain(ws, rel) {
++        Ok(opened) => opened,
++        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
++        Err(e) => return Err(e),
++    };
++    if before.len() > max {
++        return Err(io::Error::other(TOO_BIG));
++    }
++    let mut text = String::new();
++    file.take(max).read_to_string(&mut text)?;
++    Ok(Some(text))
++}
++
++/// 作業場からの相対 `rel` に、中身を空にした普通の file を書く形で開く（無ければ create_new で作る・在る普通の file は開いた後の
++/// 照らしの後に切り詰める）。途中の段の symlink・file の symlink・普通でない file・link の数が 1 でない file・開いた後の照らしの
++/// 違いは開かずに誤りを返す（作業場の外の file を切り詰めない・fifo は開く前に断るので止まらない）。
++pub fn create_plain(ws: &Path, rel: &str) -> io::Result<File> {
++    let path = walk(ws, rel)?;
++    match fs::symlink_metadata(&path) {
++        Ok(m) if m.file_type().is_file() => {
++            if m.nlink() != 1 {
++                return Err(io::Error::other(LINKED));
++            }
++            let file = OpenOptions::new().write(true).open(&path)?;
++            if !same_file(&file, &m) {
++                return Err(io::Error::other(NOT_SAME));
++            }
++            file.set_len(0)?;
++            Ok(file)
++        }
++        Ok(_) => Err(io::Error::other(NOT_PLAIN)),
++        Err(e) if e.kind() == io::ErrorKind::NotFound => {
++            OpenOptions::new().write(true).create_new(true).open(&path)
++        }
++        Err(e) => Err(e),
++    }
++}
++
++/// 作業場からの相対 `rel` の普通の file を `bytes` に書き替える（`create_plain` で開いて全部を書く）。
++pub fn write_plain(ws: &Path, rel: &str, bytes: &[u8]) -> io::Result<()> {
++    create_plain(ws, rel)?.write_all(bytes)
++}
++
++/// 作業場の dir `rel`（作業場と途中の段と dir 自身が symlink でない dir）の直下の普通の file の名（名の順・dir が無いか
++/// 断る形なら空）。
++pub fn plain_names(ws: &Path, rel: &str) -> Vec<String> {
++    entries(ws, rel)
++        .into_iter()
++        .filter_map(|(name, plain)| plain.then_some(name))
++        .collect()
++}
++
++/// 作業場の dir `rel` の直下の名と、普通の file か（lstat の型・名の順・dir が無いか断る形なら空）。
++pub fn entries(ws: &Path, rel: &str) -> Vec<(String, bool)> {
++    let Ok(dir) = steps(rel).and_then(|dirs| dir_path(ws, &dirs)) else {
++        return Vec::new();
++    };
++    let mut out: Vec<(String, bool)> = fs::read_dir(dir)
++        .into_iter()
++        .flatten()
++        .flatten()
++        .filter_map(|e| {
++            let plain = e.file_type().is_ok_and(|t| t.is_file());
++            Some((e.file_name().into_string().ok()?, plain))
++        })
++        .collect();
++    out.sort();
++    out
++}
+diff --git a/crates/tsuzuri-boundary/src/consult/show.rs b/crates/tsuzuri-boundary/src/consult/show.rs
+index e11d616dc8870583992866a526976f9ebcd2e7c0..4b112d0dbf2d47308761c2b944f665c8227fddfc 100644
+--- a/crates/tsuzuri-boundary/src/consult/show.rs
++++ b/crates/tsuzuri-boundary/src/consult/show.rs
+@@ -10,9 +10,10 @@ use tsuzuri_contract::consult::{Finding, FindingId, RequestId, Via, Word};
+ use tsuzuri_contract::wire;
+ use tsuzuri_core::consult::lines::{Line, Subject, WORD_MAX, cited, free};
+ 
++use super::plain::{plain_file, read_text};
+ use super::{
+-    COMMON, Ctx, FAIL, Refused, append, ctx, flags, ledger, lines_of, minute_now, refuse, retired,
+-    tzw, workspace,
++    COMMON, Ctx, FAIL, READ_MAX, Refused, append, ctx, flags, ledger, lines_of, minute_now,
++    odd_line, refuse, retired, tzw, workspace,
+ };
+ use crate::out::emit;
+ 
+@@ -41,21 +42,29 @@ pub fn run(rest: &[&str]) -> u8 {
+     }
+ }
+ 
+-/// 所見の file の path（作業場か退いた作業場の在る方）。
++/// 所見の file の path（作業場か退いた作業場の、普通の file の在る方・`plain` の照らし）。
+ pub fn finding_path(drafts: &Path, id: FindingId) -> Option<PathBuf> {
++    let rel = format!("findings/{id}.json");
+     [workspace(drafts, id.window()), retired(drafts, id.window())]
+         .into_iter()
+-        .map(|ws| ws.join("findings").join(format!("{id}.json")))
+-        .find(|p| p.is_file())
++        .find(|ws| plain_file(ws, &rel))
++        .map(|ws| ws.join(rel))
+ }
+ 
+-/// 所見を読む（無いか読めなければ rc 1）。
++/// 所見を読む（作業場か退いた作業場の `plain` の照らしで読む・無いか読めないか symlink と fifo の時は rc 1）。
+ pub fn read_finding(drafts: &Path, id: FindingId) -> Result<(PathBuf, Finding), Refused> {
+-    let path = finding_path(drafts, id).ok_or((FAIL, format!("所見 {id} の file が無い")))?;
+-    let text =
+-        std::fs::read_to_string(&path).map_err(|e| (FAIL, format!("所見 {id} が読めない: {e}")))?;
+-    let finding = wire::decode(&text).map_err(|e| (FAIL, format!("所見 {id} の形が違う: {e}")))?;
+-    Ok((path, finding))
++    let rel = format!("findings/{id}.json");
++    for ws in [workspace(drafts, id.window()), retired(drafts, id.window())] {
++        let text = match read_text(&ws, &rel, READ_MAX) {
++            Ok(Some(text)) => text,
++            Ok(None) => continue,
++            Err(e) => return Err((FAIL, odd_line(id.window(), &rel, &e.to_string()))),
++        };
++        let finding =
++            wire::decode(&text).map_err(|e| (FAIL, format!("所見 {id} の形が違う: {e}")))?;
++        return Ok((ws.join(rel), finding));
++    }
++    Err((FAIL, format!("所見 {id} の file が無い")))
+ }
+ 
+ /// 所見の題（行に置く字・なし と空と器の引用の形を含む字は None）。
+diff --git a/crates/tsuzuri-boundary/src/consult/watch.rs b/crates/tsuzuri-boundary/src/consult/watch.rs
+index 8f222b971fdf5d7ab5b31174bfd7a922a0d573f2..1feeaea2d97118476787f2de9b413a8e159a8e9f 100644
+--- a/crates/tsuzuri-boundary/src/consult/watch.rs
++++ b/crates/tsuzuri-boundary/src/consult/watch.rs
+@@ -26,8 +26,8 @@ use super::follow::{held_rel, stamped_idle};
+ use super::launch::ACCOUNT_ENV;
+ use super::plain::plain_file;
+ use super::{
+-    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now, procs,
+-    read_window, refuse, tzw, windows, workspace,
++    COMMON, Ctx, FAIL, Refused, alive, ctx, findings, flags, ledger, lines_of, minute_now,
++    odd_lines, procs, read_window, refuse, tzw, windows, workspace,
+ };
+ use crate::out::{emit, emit_err};
+ use crate::server::ledger::{Mark, Source};
+@@ -113,7 +113,14 @@ fn watch(c: &Ctx, max: Duration) -> Result<String, Refused> {
+         || fs::write(&path, &text).map_err(|e| (FAIL, format!("生きている印を書けない: {e}")));
+     put()?;
+     let (start, mut touched) = (Instant::now(), Instant::now());
++    let mut named = Vec::new();
+     let found = loop {
++        for line in odd_lines(&c.drafts) {
++            if !named.contains(&line) {
++                emit_err(&format!("tz consult watch: {line}"));
++                named.push(line);
++            }
++        }
+         if let Some(event) = scan(c, &lines) {
+             tell(&c.drafts, &event);
+             break notice(&event, &tzw());
+diff --git a/crates/tsuzuri-boundary/tests/cwrst.rs b/crates/tsuzuri-boundary/tests/cwrst.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..da6d1c9ce3adfd55f248536481d6695aa633a657
+--- /dev/null
++++ b/crates/tsuzuri-boundary/tests/cwrst.rs
+@@ -0,0 +1,439 @@
++//! 相談の窓の作業場の残りの読み書きを `plain` へ移した歯（接頭辞 cwrst_・行 cs-plain-rest・判断の記録 ADR-55）。
++//! 歯ごとの置き場（CARGO_TARGET_TMPDIR の下）に、git init した repo と state dir と起草の置き場と偽の bd・bdw と、
++//! 作業場の外の file（窓の symlink の指す先）を置く。作業場の file を symlink（外の file を指す）か fifo か途中の段の symlink に
++//! 替えた見本で、移した口が外の file を書き替えず、fifo で止まらず（口は timeout 10 で包み rc 124 を落ちにする）、1 行で名指して
++//! 断ることを見る。否定の見本は正しい見本から 1 つの file だけを替える。
++#![cfg(test)]
++
++use std::os::unix::fs::{PermissionsExt, symlink};
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output};
++use std::sync::mpsc;
++use std::time::Duration;
++use std::{fs, thread};
++
++use tsuzuri_boundary::consult::plain::{
++    LINKED, MID, NOT_PLAIN, NOT_UNDER, TOO_BIG, create_plain, odd, odd_dir, plain_names, read_text,
++    write_plain,
++};
++use tsuzuri_boundary::consult::{
++    findings, odd_files, odd_line, odd_lines, plain_ws, procs, read_window,
++};
++use tsuzuri_contract::consult::{
++    Finding, FindingId, Form, ProcMark, Starter, WindowFile, WindowId,
++};
++use tsuzuri_contract::wire;
++use tsuzuri_core::consult::finding::check;
++use tsuzuri_core::consult::launch::{PLUGIN_VERSION, VERSION_ENV};
++
++const LEDGER: &str = r#"[{"id":"fx-c","title":"根","status":"open","issue_type":"epic","updated_at":"2026-10-03T00:00:00Z","notes":"NOTES"}]"#;
++
++/// 外の file の字（どの口の後も替わらないこと）。
++const OUTSIDE: &str = "外の字\n";
++
++fn w(n: u32) -> WindowId {
++    WindowId::new(n).unwrap()
++}
++
++fn err(o: &Output) -> String {
++    String::from_utf8(o.stderr.clone()).unwrap()
++}
++
++fn out(o: &Output) -> String {
++    String::from_utf8(o.stdout.clone()).unwrap()
++}
++
++fn git(dir: &Path, args: &[&str]) {
++    let ok = Command::new("git").arg("-C").arg(dir).args(args).status();
++    assert!(ok.unwrap().success(), "git {args:?}");
++}
++
++fn script(path: &Path, body: &str) {
++    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
++    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
++}
++
++fn fifo(path: &Path) {
++    let made = Command::new("mkfifo").arg(path).status().unwrap();
++    assert!(made.success());
++}
++
++/// `f` を別の thread で撃ち、5 秒の内に返した値（fifo で止まれば落ちる）。
++fn within<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
++    let (tx, rx) = mpsc::channel();
++    thread::spawn(move || tx.send(f()).unwrap());
++    rx.recv_timeout(Duration::from_secs(5))
++        .expect("5 秒の内に返らない")
++}
++
++/// 歯ごとの置き場。
++struct Fx {
++    root: PathBuf,
++    repo: PathBuf,
++    ws: PathBuf,
++    outside: PathBuf,
++}
++
++impl Fx {
++    /// 置き場と、窓 cw1（問う窓・process の印 1・所見 cw1-1）の作業場と外の file を作る。
++    fn new(name: &str) -> Fx {
++        let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
++            .join("cwrst")
++            .join(name);
++        let _ = fs::remove_dir_all(&root);
++        let (repo, state, drafts) = (root.join("repo"), root.join("state"), root.join("drafts"));
++        for d in [&repo, &state, &drafts, &root.join("bin"), &root.join("out")] {
++            fs::create_dir_all(d).unwrap();
++        }
++        git(&repo, &["init", "-q"]);
++        git(
++            &repo,
++            &["config", "scribe2.statedir", state.to_str().unwrap()],
++        );
++        git(
++            &repo,
++            &["config", "tsuzuri.draftsdir", drafts.to_str().unwrap()],
++        );
++        let r = root.display().to_string();
++        script(&root.join("bin/bd"), &format!("exec cat '{r}/ledger.json'"));
++        script(
++            &root.join("bin/bdw"),
++            &format!("echo \"$@\" >> '{r}/bdw.log'"),
++        );
++        script(&root.join("bin/tmux"), "exit 0");
++        let ws = drafts.join("consult-cw1");
++        for d in [".consult", "bundle", "findings", "work"] {
++            fs::create_dir_all(ws.join(d)).unwrap();
++        }
++        let outside = root.join("out/f");
++        fs::write(&outside, OUTSIDE).unwrap();
++        let fx = Fx {
++            root,
++            repo,
++            ws,
++            outside,
++        };
++        fx.notes(&[]);
++        fx.put(".consult/window.json", &wire::encode(&window()).unwrap());
++        fx.put(".consult/proc-1.json", &wire::encode(&mark(1)).unwrap());
++        fx.put("findings/cw1-1.json", &wire::encode(&finding()).unwrap());
++        fx.put("work/report.md", "調べのレポート\n");
++        fx.put("work/probe.py", "print(1)\n");
++        fx
++    }
++
++    fn notes(&self, lines: &[&str]) {
++        let text = LEDGER.replace("NOTES", &lines.join("\\n"));
++        fs::write(self.root.join("ledger.json"), text).unwrap();
++    }
++
++    fn put(&self, rel: &str, text: &str) {
++        fs::write(self.ws.join(rel), text).unwrap();
++    }
++
++    /// 作業場の `rel` を外の file への symlink に替える（外の file に `text` を書く）。
++    fn link(&self, rel: &str, text: &str) {
++        fs::write(&self.outside, text).unwrap();
++        let _ = fs::remove_file(self.ws.join(rel));
++        symlink(&self.outside, self.ws.join(rel)).unwrap();
++    }
++
++    /// 作業場の `rel` を fifo に替える。
++    fn pipe(&self, rel: &str) {
++        let _ = fs::remove_file(self.ws.join(rel));
++        fifo(&self.ws.join(rel));
++    }
++
++    fn outside(&self) -> String {
++        fs::read_to_string(&self.outside).unwrap()
++    }
++
++    /// tz consult を timeout 10 で包んで撃つ（fifo で止まれば rc 124）。
++    fn tz(&self, args: &[&str]) -> Output {
++        let path = format!(
++            "{}:{}",
++            self.root.join("bin").display(),
++            std::env::var("PATH").unwrap()
++        );
++        Command::new("timeout")
++            .arg("10")
++            .arg(env!("CARGO_BIN_EXE_tz"))
++            .arg("consult")
++            .args(args)
++            .current_dir(&self.repo)
++            .env("PATH", path)
++            .env_remove("TZ_CONSULT_ID")
++            .env(VERSION_ENV, PLUGIN_VERSION)
++            .output()
++            .unwrap()
++    }
++
++    fn written(&self) -> String {
++        fs::read_to_string(self.root.join("bdw.log")).unwrap_or_default()
++    }
++}
++
++fn window() -> WindowFile {
++    WindowFile {
++        id: w(1),
++        form: Form::Ask,
++        topic: None,
++        model: "fable".into(),
++        effort: "xhigh".into(),
++        starter: Starter::Seat,
++        uttered: None,
++        request: None,
++        made: "20261003T1400Z".into(),
++    }
++}
++
++fn mark(k: u32) -> ProcMark {
++    ProcMark {
++        k,
++        form: Form::Ask,
++        pid: 0,
++        at: "20261003T1401Z".into(),
++        again: false,
++        tmux_window: None,
++        account: None,
++    }
++}
++
++/// 所見 cw1-1（fixture complete.json の草稿・添え物 work/report.md と work/probe.py）。
++fn finding() -> Finding {
++    let text = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../tests/fixtures/consult/finding-2/complete.json");
++    let draft = check(&fs::read_to_string(text).unwrap()).unwrap();
++    Finding::new(FindingId::new(w(1), 1).unwrap(), "20261003T1500Z", draft)
++}
++
++/// 断りの 1 行（口の名と `odd_line` の字）だけを標準エラーに持つか。
++fn refused_once(o: &Output, verb: &str, rel: &str, why: &str) {
++    let want = format!("tz consult {verb}: {}\n", odd_line(w(1), rel, why));
++    assert_eq!(err(o), want);
++}
++
++#[test]
++fn cwrst_read_text_reads_only_plain_files() {
++    let fx = Fx::new("read");
++    let ws = fx.ws.clone();
++    fx.put(".consult/a", "あ\n");
++    assert_eq!(
++        read_text(&ws, ".consult/a", 64).unwrap().as_deref(),
++        Some("あ\n")
++    );
++    assert_eq!(read_text(&ws, ".consult/none", 64).unwrap(), None);
++    assert_eq!(read_text(&ws, "none/a", 64).unwrap(), None);
++    let why = |rel: &str, max: u64| read_text(&ws, rel, max).unwrap_err().to_string();
++    assert_eq!(why(".consult/a", 3), TOO_BIG);
++    assert_eq!(why("../consult-cw1/.consult/a", 64), NOT_UNDER);
++    fx.link(".consult/a", "外の控え\n");
++    assert_eq!(why(".consult/a", 64), NOT_PLAIN);
++    symlink(ws.join(".consult"), ws.join("dl")).unwrap();
++    fx.put("findings/a", "あ\n");
++    assert_eq!(
++        read_text(&ws, "findings/a", 64).unwrap().as_deref(),
++        Some("あ\n")
++    );
++    assert_eq!(why("dl/proc-1.json", 64), MID);
++    fx.pipe("findings/a");
++    let ws2 = ws.clone();
++    let got = within(move || read_text(&ws2, "findings/a", 64).map_err(|e| e.to_string()));
++    assert_eq!(got, Err(NOT_PLAIN.to_string()));
++}
++
++#[test]
++fn cwrst_write_plain_never_writes_outside() {
++    let fx = Fx::new("write");
++    let ws = fx.ws.clone();
++    write_plain(&ws, "bundle/x", b"long text\n").unwrap();
++    write_plain(&ws, "bundle/x", b"s\n").unwrap();
++    assert_eq!(fs::read_to_string(ws.join("bundle/x")).unwrap(), "s\n");
++    let why = |rel: &str| write_plain(&ws, rel, b"w\n").unwrap_err().to_string();
++    fx.link("bundle/l", OUTSIDE);
++    assert_eq!(why("bundle/l"), NOT_PLAIN);
++    fs::hard_link(&fx.outside, ws.join("bundle/h")).unwrap();
++    assert_eq!(why("bundle/h"), LINKED);
++    symlink(fx.root.join("out"), ws.join("bl")).unwrap();
++    assert_eq!(why("bl/f"), MID);
++    assert_eq!(why("../../out/f"), NOT_UNDER);
++    fx.pipe("bundle/p");
++    let ws2 = ws.clone();
++    let got = within(move || {
++        create_plain(&ws2, "bundle/p")
++            .map(|_| ())
++            .map_err(|e| e.to_string())
++    });
++    assert_eq!(got, Err(NOT_PLAIN.to_string()));
++    assert_eq!(fx.outside(), OUTSIDE);
++    fs::remove_file(ws.join("bundle/h")).unwrap();
++    fs::hard_link(ws.join("bundle/x"), ws.join("bundle/h")).unwrap();
++    fs::remove_file(ws.join("bundle/x")).unwrap();
++    write_plain(&ws, "bundle/h", b"one\n").unwrap();
++    assert_eq!(fs::read_to_string(ws.join("bundle/h")).unwrap(), "one\n");
++}
++
++#[test]
++fn cwrst_odd_names_links_fifos_and_dirs() {
++    let fx = Fx::new("odd");
++    let ws = fx.ws.clone();
++    assert_eq!(odd(&ws, ".consult/window.json"), None);
++    assert_eq!(odd(&ws, ".consult/none"), None);
++    assert_eq!(odd(&ws, "none/x"), None);
++    assert_eq!(odd(&ws, "findings").as_deref(), Some(NOT_PLAIN));
++    fx.link(".consult/l", OUTSIDE);
++    fx.pipe(".consult/p");
++    assert_eq!(odd(&ws, ".consult/l").as_deref(), Some(NOT_PLAIN));
++    assert_eq!(odd(&ws, ".consult/p").as_deref(), Some(NOT_PLAIN));
++    assert_eq!(odd_dir(&ws, "bundle"), None);
++    assert_eq!(odd_dir(&ws, "none"), None);
++    fs::remove_dir(ws.join("bundle")).unwrap();
++    symlink(fx.root.join("out"), ws.join("bundle")).unwrap();
++    assert_eq!(odd_dir(&ws, "bundle").as_deref(), Some(MID));
++    assert_eq!(odd(&ws, "bundle/f").as_deref(), Some(MID));
++    assert_eq!(plain_names(&ws, ".consult"), ["proc-1.json", "window.json"]);
++    assert!(plain_names(&ws, "bundle").is_empty());
++}
++
++#[test]
++fn cwrst_readers_skip_links_and_fifos() {
++    let fx = Fx::new("readers");
++    let ws = fx.ws.clone();
++    assert_eq!(read_window(&ws), Some(window()));
++    fx.put(".consult/proc-2.json", &wire::encode(&mark(2)).unwrap());
++    assert_eq!(procs(&ws).iter().map(|p| p.k).collect::<Vec<_>>(), [1, 2]);
++    fx.link(".consult/proc-2.json", &wire::encode(&mark(2)).unwrap());
++    fx.pipe(".consult/proc-3.json");
++    let ws2 = ws.clone();
++    let ks = within(move || procs(&ws2).iter().map(|p| p.k).collect::<Vec<_>>());
++    assert_eq!(ks, [1]);
++    let id = FindingId::new(w(1), 2).unwrap();
++    symlink(
++        ws.join("findings/cw1-1.json"),
++        ws.join(format!("findings/{id}.json")),
++    )
++    .unwrap();
++    assert_eq!(findings(&ws, w(1)), [FindingId::new(w(1), 1).unwrap()]);
++    let odd = [
++        ".consult/proc-2.json",
++        ".consult/proc-3.json",
++        "findings/cw1-2.json",
++    ];
++    let want: Vec<(String, String)> = odd.map(|r| (r.to_string(), NOT_PLAIN.to_string())).to_vec();
++    assert_eq!(odd_files(&ws), want);
++    let line = odd_line(w(1), ".consult/proc-2.json", NOT_PLAIN);
++    assert_eq!(plain_ws(&ws, w(1)), Err((1, line)));
++    assert_eq!(odd_lines(ws.parent().unwrap()).len(), 3);
++    fx.link(".consult/window.json", &wire::encode(&window()).unwrap());
++    assert_eq!(read_window(&ws), None);
++    assert_eq!(fx.outside(), wire::encode(&window()).unwrap());
++}
++
++#[test]
++fn cwrst_found_dir_link_is_not_listed() {
++    let fx = Fx::new("fdir");
++    let ws = fx.ws.clone();
++    assert_eq!(plain_ws(&ws, w(1)), Ok(()));
++    let out = fx.root.join("out/findings");
++    fs::create_dir_all(&out).unwrap();
++    fs::rename(ws.join("findings/cw1-1.json"), out.join("cw1-1.json")).unwrap();
++    fs::remove_dir(ws.join("findings")).unwrap();
++    symlink(&out, ws.join("findings")).unwrap();
++    assert!(findings(&ws, w(1)).is_empty());
++    assert_eq!(odd_files(&ws), [("findings".to_string(), MID.to_string())]);
++}
++
++#[test]
++fn cwrst_launch_refuses_an_odd_workspace() {
++    let fx = Fx::new("launch");
++    let o = fx.tz(&["launch", "cw1", "--dry-run"]);
++    assert!(!err(&o).contains("読まず書かない"), "{}", err(&o));
++    fx.link(".consult/ask-2.json", OUTSIDE);
++    let o = fx.tz(&["launch", "cw1"]);
++    assert_eq!(o.status.code(), Some(1));
++    refused_once(&o, "launch", ".consult/ask-2.json", NOT_PLAIN);
++    assert_eq!(
++        (fx.outside(), fx.written()),
++        (OUTSIDE.to_string(), String::new())
++    );
++    fs::remove_file(fx.ws.join(".consult/ask-2.json")).unwrap();
++    fx.pipe(".consult/proc-2.json");
++    let o = fx.tz(&["launch", "cw1", "--dry-run"]);
++    assert_eq!(o.status.code(), Some(1));
++    refused_once(&o, "launch", ".consult/proc-2.json", NOT_PLAIN);
++    assert!(out(&o).is_empty());
++}
++
++#[test]
++fn cwrst_bundle_refuses_and_keeps_outside() {
++    let fx = Fx::new("bundle");
++    let o = fx.tz(&["bundle", "cw1"]);
++    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
++    assert!(out(&o).starts_with("束 "));
++    fx.link("bundle/ledger.json", OUTSIDE);
++    let o = fx.tz(&["bundle", "cw1"]);
++    assert_eq!(o.status.code(), Some(1));
++    refused_once(&o, "bundle", "bundle/ledger.json", NOT_PLAIN);
++    assert_eq!(fx.outside(), OUTSIDE);
++    fs::remove_file(fx.ws.join("bundle/ledger.json")).unwrap();
++    fx.pipe("bundle/digest");
++    let o = fx.tz(&["bundle", "cw1"]);
++    assert_eq!(o.status.code(), Some(1));
++    refused_once(&o, "bundle", "bundle/digest", NOT_PLAIN);
++}
++
++#[test]
++fn cwrst_show_and_dispose_refuse_links() {
++    let fx = Fx::new("show");
++    fx.notes(&["相談の受け = cw1-1・経路 = 見張り・時刻 = 20261003T1500Z"]);
++    fx.link("work/report.md", OUTSIDE);
++    let into = fx.root.join("into");
++    fs::create_dir_all(&into).unwrap();
++    let args = [
++        "dispose",
++        "cw1-1",
++        "--verdict",
++        "一部採る",
++        "--reason",
++        "理由",
++        "--keep",
++        "work/report.md",
++        "--drop",
++        "work/probe.py",
++        "--into",
++        into.to_str().unwrap(),
++    ];
++    let o = fx.tz(&args);
++    assert_eq!(o.status.code(), Some(1));
++    let line = odd_line(w(1), "work/report.md", NOT_PLAIN);
++    assert_eq!(err(&o), format!("tz consult dispose: {line}\n"));
++    assert!(!into.join("docs").exists() && fx.written().is_empty());
++    fs::remove_file(fx.ws.join("work/report.md")).unwrap();
++    fx.put("work/report.md", "調べのレポート\n");
++    let o = fx.tz(&args);
++    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
++    let kept = into.join("docs/consult/kept/cw1-1/work/report.md");
++    assert_eq!(fs::read_to_string(kept).unwrap(), "調べのレポート\n");
++    let text = fs::read_to_string(fx.ws.join("findings/cw1-1.json")).unwrap();
++    fx.link("findings/cw1-1.json", &text);
++    let o = fx.tz(&["show", "cw1-1", "--via", "見張り"]);
++    assert_eq!(o.status.code(), Some(1));
++    refused_once(&o, "show", "findings/cw1-1.json", NOT_PLAIN);
++}
++
++#[test]
++fn cwrst_list_close_watch_name_and_go_on() {
++    let fx = Fx::new("scan");
++    fx.pipe(".consult/proc-2.json");
++    let o = fx.tz(&["list"]);
++    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
++    refused_once(&o, "list", ".consult/proc-2.json", NOT_PLAIN);
++    assert!(out(&o).contains("cw1"));
++    let o = fx.tz(&["watch", "--max", "1"]);
++    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
++    refused_once(&o, "watch", ".consult/proc-2.json", NOT_PLAIN);
++    let o = fx.tz(&["close", "cw1", "--by", "seat"]);
++    assert_eq!(o.status.code(), Some(0), "{}", err(&o));
++    refused_once(&o, "close", ".consult/proc-2.json", NOT_PLAIN);
++    assert!(fx.written().contains("相談の閉じ"));
++}
