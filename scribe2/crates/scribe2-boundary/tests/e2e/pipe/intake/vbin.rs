@@ -47,6 +47,12 @@ fn listed_bead(id: &str, status: &str, acceptance: &str, description: &str) -> S
     )
 }
 
+/// 起票と閉じた時刻を持つ台帳の bead 1 本（[`listed_bead`] の字に欄 created_at と、閉じた bead だけ欄 closed_at を足す・本文は [`BODY`]）。
+fn dated_bead(id: &str, status: &str, acceptance: &str, (created, closed): (&str, Option<&str>)) -> String {
+    let closed = closed.map(|at| format!(",\"closed_at\":\"{at}\"")).unwrap_or_default();
+    format!("{},\"created_at\":\"{created}\"{closed}}}", listed_bead(id, status, acceptance, BODY).trim_end_matches('}'))
+}
+
 /// 置き場の `ledger.json` を cat する偽の `bd`（引数は読み飛ばす）を置き、その path を返す。
 #[expect(
     clippy::expect_used,
@@ -310,4 +316,52 @@ fn vbin_rules_rows_hold_the_caps_after_gate_fix_rounds() {
     let at = ALL.iter().position(|kind| *kind == RuleKind::RunnerGateFixRounds).expect("RunnerGateFixRounds は ALL に在る");
     let after: Vec<RuleKind> = ALL.iter().skip(at + 1).take(3).copied().collect();
     assert_eq!(after, rows.map(|(_, kind, _)| kind), "kind は RunnerGateFixRounds の直後に順に並ぶ");
+}
+
+/// 着地せずに閉じた bead s2-a（行 c）の 2 便の review-literal-mismatch の落ちの後に、その閉じた時刻の 4 日後に起票した write-set の同じ bead s2-b（行 b）の受付は、
+/// rules 行 fall.window_days の値 7 の下で same-kind-repeated で断られて理由が s2-a の 2 便の id を新しい順に名乗る。s2-a が s2-b の起票の 7 日と 1 秒前に閉じた台帳と、
+/// 行 fall.window_days の無い rules では通る（行の系譜は窓と行の値に依る）。
+#[test]
+fn vbin_lineage_counts_the_falls_of_an_unlanded_closed_bead_within_the_window() {
+    let (repo, state) = toy(&[derive_row("a", &[("verify", VERIFY)])]);
+    let acceptance = |id: &str| -> String {
+        let row = derive_row(id, &[("verify", "[\"git log\"]"), ("write-set", "[\"src/lib.rs\"]")]);
+        row.lines().filter(|line| !line.starts_with("section")).map(|line| format!("{line}\n")).collect()
+    };
+    let ledger = |closed: &str, created: &str| {
+        [
+            dated_bead("s2-b", "open", &acceptance("b"), ("2026-10-05T00:00:00Z", None)),
+            dated_bead("s2-a", "closed", &acceptance("c"), (created, Some(closed))),
+        ]
+    };
+    let log = state.join("fleet").join("events.jsonl");
+    fs::create_dir_all(log.parent().expect("event log の親 dir が在る")).expect("fleet dir を作れる");
+    fs::write(&log, "").expect("空の event log を置ける");
+    for run in ["s2-a-1", "s2-a-2"] {
+        fell(&state, run, "s2-a", "review-literal-mismatch");
+    }
+    let plain = bead_rules(&state, default_caps());
+    let row = "[[rule]]\nid = \"fall.window_days\"\nkind = \"FallWindowDays\"\nvalue = 7\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
+    let windowed = state.join("rules-fall-window.toml");
+    fs::write(&windowed, format!("{}\n{row}", fs::read_to_string(&plain).expect("写しを読める"))).expect("写しを書ける");
+    let windowed = windowed.display().to_string();
+    let near = fake_bd(&state, &ledger("2026-10-01T00:00:00Z", "2026-09-30T00:00:00Z"));
+    let out = bead_run("intake", &repo, &state, (&near, &windowed));
+    let err = stderr_of(&out);
+    assert_eq!(out.status.code(), Some(i32::from(RC_REFUSED)), "窓の内: {err}");
+    for want in ["同じ種類の落ち review-literal-mismatch が 2 件", "review.same_kind_stop の 2", "（s2-a-2, s2-a-1）"] {
+        assert!(err.contains(want), "{want} を名乗る: {err}");
+    }
+    assert_eq!(run_dirs(&state), Vec::<String>::new(), "断った周は run dir を作らない");
+    let flight = bead_run("preflight", &repo, &state, (&near, &windowed));
+    let refuses = fact_lines(&flight, "refuse=");
+    assert!(refuses.len() == 1 && refuses.iter().all(|line| line.starts_with("refuse=same-kind-repeated:")), "same-kind-repeated の 1 件: {}", stdout_of(&flight));
+    let far = fake_bd(&state, &ledger("2026-09-27T23:59:59Z", "2026-09-20T00:00:00Z"));
+    let late = bead_run("preflight", &repo, &state, (&far, &windowed));
+    assert_eq!(late.status.code(), Some(i32::from(RC_OK)), "7 日と 1 秒前に閉じた s2-a は辿らない: {} {}", stdout_of(&late), stderr_of(&late));
+    assert_eq!(tail_line(&late), "preflight: ok", "{}", stdout_of(&late));
+    let near = fake_bd(&state, &ledger("2026-10-01T00:00:00Z", "2026-09-30T00:00:00Z"));
+    let unwindowed = bead_run("intake", &repo, &state, (&near, &plain));
+    assert_eq!(unwindowed.status.code(), Some(i32::from(RC_OK)), "行 fall.window_days の無い rules は今の bead だけを数える: {}", stderr_of(&unwindowed));
+    clean(&[&repo, &state]);
 }

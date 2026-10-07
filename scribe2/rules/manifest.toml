@@ -1132,6 +1132,17 @@ enabled = true
 ruling = "user 2026-10-03T22:11Z 問い t3-hub.77.15"
 ruled_at = "2026-10-03"
 
+# 行の系譜の窓（日・判断の記録 ADR-77 の決定 (2) と規則の表の行 R-47）。受付の同型の停止が、着地せずに閉じた bead の後にこの日数のうちに write-set の交わる契約を
+# 持って起きた bead を前の bead と同じ行に数える。値の正本はこの行（規則の表の行 R-47 は写し）で、読めない周は系譜を広げず今の bead だけを数える。
+
+[[rule]]
+id = "fall.window_days"
+kind = "FallWindowDays"
+value = 7
+enabled = true
+ruling = "t3-hub.92.10.1:20261007T0224Z-1"
+ruled_at = "2026-10-07"
+
 # 口座の宣言（設計 fleet-usage.md §2・account-lifecycle.md §2・ADR-0026 §2.1）は host の manifest（state dir
 # の host.toml）にだけ置く。この file に口座の表は置かない（文法は残る・足す変更は A1 の対話面で聞く・本 repo
 # は PUBLIC・SRS CON2）。器は credential の置き場を走査せず、宣言だけを真実として読む（C3）。

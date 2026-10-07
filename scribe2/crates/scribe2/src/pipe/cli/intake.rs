@@ -15,6 +15,7 @@ use crate::pipe::closure::{self, Source};
 use crate::pipe::contract::{Contract, ContractError, CLASS_ROW};
 use crate::pipe::declaration::{self, Ceiling, Effective, EntranceFlip, CEILING_ROW, DENIED_ROW};
 use crate::pipe::dispatch::index_build::{status as index_status, Status};
+use crate::pipe::fall::Strands;
 use crate::pipe::refuse::Refuse;
 use crate::pipe::table::{self, ContractRow, TableError};
 use crate::pipe::commute::{self, Crossed};
@@ -162,7 +163,7 @@ fn intake_run(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Resul
     let ceiling = ceiling_of(manifest).map_err(|denial| denial.outcome)?;
     let bd = flag(args, "--bd").map_err(refused)?.unwrap_or(DEFAULT_BD);
     let materials = Materials::read(&repo, &ceiling.borrow(), bd).map_err(|denial| denial.outcome)?.indexed(&state_dir, &repo, &sha);
-    let (contract, body) = bead::contract_of(&source, (&repo, &state_dir), (manifest, bd), &bead, &materials).map_err(|denial| denial.outcome)?;
+    let (contract, body, strands) = bead::contract_of(&source, (&repo, &state_dir), (manifest, bd), &bead, &materials).map_err(|denial| denial.outcome)?;
     let early = early(&repo, manifest, &contract, Some(&state_dir), &sha);
     // **入口の排他はここから**（ADR-0019 §2.1・設計 pipeline-conflict.md §2）: [`judge`] と [`create`] を
     // 1 つの周として閉じる。持たないと、同時に来た 2 つの受付がどちらも「live な便は無い」と読んでから
@@ -170,7 +171,7 @@ fn intake_run(args: &[String], manifest: &Manifest, policy: LockPolicy) -> Resul
     let _entrance = Entrance::hold(&state_dir, policy)?;
     let material = Material {
         repo: &repo, manifest, contract: &contract, state_dir: Some(&state_dir), bead: &bead, materials: &materials,
-        early: Some(&early),
+        early: Some(&early), strands: strands.as_ref(),
     };
     create(judge(&material), &material, &state_dir, &body, policy)
 }
@@ -472,6 +473,8 @@ pub(in crate::pipe) struct Material<'a> {
     pub(in crate::pipe) bead: &'a str,
     /// lock の前に撃った freeze と base の木の実走（§56 形 2・`None` = 列の候補＝judge が freeze を撃ち base は撃たない）。
     pub(in crate::pipe) early: Option<&'a Early>,
+    /// 行の系譜の材料（bead の形の受付と preflight だけが `Some`・pointer の形と列は `None`＝今の bead だけを数える・設計 contract-source.md §23 の同型の停止が読む）。
+    pub(in crate::pipe) strands: Option<&'a Strands>,
 }
 
 /// [`judge`] の結果: 事実（§21 の 1 行 1 事実の材料・関数が Err の周はその関数の事実が無い）と断りの列（判定関数 1 本
@@ -503,7 +506,7 @@ pub(in crate::pipe) struct Judged {
 /// （Declared 行は元々置き換えが無い＝前段と後段の断りが同時に載る）。git repo でない対象は他の関数が撃てないので
 /// `not-a-repo` の 1 件で止まる。
 pub(in crate::pipe) fn judge(material: &Material<'_>) -> Judged {
-    let Material { repo, manifest, contract, state_dir, bead, materials, early } = *material;
+    let Material { repo, manifest, contract, state_dir, bead, materials, early, .. } = *material;
     let mut judged = Judged {
         design: None,
         write_set: None,

@@ -441,6 +441,9 @@ pub enum RuleKind {
     /// 便の木の並びの合計の上限（MiB・repo ごと・判断の記録 ADR-35 の決定 (5)）。並びの木の大きさの合計がこれを越える周に、live な便が
     /// 持たない並びを印の新しさの古い順に丸ごと退かせる。行を読めない周は退かせない。読み手は `pipe::sweep` の 1 本。
     PipeLanesCapMb,
+    /// 行の系譜の窓（日・判断の記録 ADR-77 の決定 (2)・規則の表の行 R-47 の写し）。着地せずに閉じた bead の後にこの日数のうちに write-set の交わる契約を持って起きた
+    /// bead を、前の bead と同じ行に数える。読み手は受付の同型の停止の 1 本で、行を読めない周は系譜を広げず今の bead だけを数える。
+    FallWindowDays,
 }
 
 /// [`RuleKind`] の全 variant。parity test の母集団である。
@@ -546,6 +549,7 @@ pub const ALL: &[RuleKind] = &[
     RuleKind::IndexCapMb,
     RuleKind::IndexTimeoutS,
     RuleKind::PipeLanesCapMb,
+    RuleKind::FallWindowDays,
 ];
 
 impl RuleKind {
@@ -609,7 +613,7 @@ impl RuleKind {
             Self::SeatPrecheckAlarmS => "SeatPrecheckAlarmS", Self::FloorTimeoutS => "FloorTimeoutS", Self::PipeReserveH => "PipeReserveH",
             Self::LifecycleClosedWindowH => "LifecycleClosedWindowH", Self::LifecycleAgeH => "LifecycleAgeH", Self::LifecycleFullMinS => "LifecycleFullMinS", Self::MemoNotesMaxBytes => "MemoNotesMaxBytes",
             Self::MemoTriageIntervalH => "MemoTriageIntervalH", Self::MemoTriagePerRound => "MemoTriagePerRound", Self::IndexCapMb => "IndexCapMb", Self::IndexTimeoutS => "IndexTimeoutS", Self::SeatPointerLadderS => "SeatPointerLadderS",
-            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb",
+            Self::SeatMoveGraceS => "SeatMoveGraceS", Self::SeatIdleAlarmS => "SeatIdleAlarmS", Self::PipeLanesCapMb => "PipeLanesCapMb", Self::FallWindowDays => "FallWindowDays",
             Self::PipeOverlapCommute => "PipeOverlapCommute",
         }
     }
@@ -644,7 +648,7 @@ impl RuleKind {
             | Self::HostWriteAvgGb | Self::HostWriteDayGb | Self::HostWriteAvgDays | Self::HostWriteOwnerDays
             | Self::PipeLandWaitS | Self::DetectionDailyMinS
             | Self::SeatDraftsStaleH | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS
-            | Self::LedgerTimeoutS | Self::PipeLanesCapMb
+            | Self::LedgerTimeoutS | Self::PipeLanesCapMb | Self::FallWindowDays
             | Self::PipeSizeSLines
             | Self::PipeSizeMLines
             | Self::PipeSizeLLines
@@ -703,7 +707,7 @@ impl RuleKind {
             | Self::RunnerClassCommands | Self::HostGuardPublish | Self::FloorTimeoutS | Self::PipeReserveH
             | Self::SeatDraftsCapMb | Self::SeatDraftsBusyS | Self::LifecycleClosedWindowH | Self::LifecycleAgeH
             | Self::LifecycleFullMinS | Self::MemoNotesMaxBytes | Self::MemoTriageIntervalH | Self::MemoTriagePerRound
-            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb | Self::PipeOverlapCommute => false,
+            | Self::IndexCapMb | Self::IndexTimeoutS | Self::PipeLanesCapMb | Self::FallWindowDays | Self::PipeOverlapCommute => false,
         }
     }
 

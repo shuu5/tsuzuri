@@ -12,6 +12,7 @@ use crate::pipe::refuse::Refuse;
 use crate::pipe::review::{self, Judgement, ROW_SAME_KIND_STOP};
 use crate::pipe::table::ContractRow;
 use crate::pipe::contract_path;
+use std::collections::BTreeSet;
 use std::path::Path;
 
 /// 同じ bead の直前までの便 1 つ（新しい順の列の要素・§23）。
@@ -65,12 +66,27 @@ pub(super) fn exclude_repeats(material: &Material<'_>, measured: &Contract, judg
         Ok(found) => found,
         Err(denial) => return judged.denials.push(denial),
     };
-    if let Err(denial) = exclude_same_kind(state_dir, (&events, &state), bead, stop, &today) {
+    let beads = lineage_of(material, &state);
+    if let Err(denial) = exclude_same_kind(state_dir, (&events, &state), &beads, stop, &today) {
         judged.denials.push(denial);
     }
     if let Err(denial) = exclude_unaddressed(state_dir, &past, &today, materials) {
         judged.denials.push(denial);
     }
+}
+
+/// 1 日の秒（rules 行 [`fall::ROW_FALL_WINDOW`] の日を窓の秒にする）。
+const SECONDS_PER_DAY: u64 = 86_400;
+
+/// 同型の停止が数える bead の列（先頭が今の bead）。材料の系譜の材料が在り rules 行 [`fall::ROW_FALL_WINDOW`] を読める周は行の系譜（[`fall::lineage`]・着地した bead は
+/// 同じ周に読む replay の便のうち段が `Landed` の便の bead）、ほかの周は今の bead の 1 つ（行を読めない周は断らず、系譜を広げないだけ）。
+fn lineage_of(material: &Material<'_>, state: &State) -> Vec<String> {
+    let Material { manifest, bead, materials, strands, .. } = *material;
+    let (Some(strands), Ok(days)) = (strands, int_row(manifest, fall::ROW_FALL_WINDOW)) else {
+        return vec![bead.to_owned()];
+    };
+    let landed: BTreeSet<String> = state.runs.values().filter(|run| run.stage == Stage::Landed).map(|run| run.bead.clone()).collect();
+    fall::lineage(&strands.origin, &strands.closed, &landed, materials.tracked(), days.saturating_mul(SECONDS_PER_DAY))
 }
 
 /// 今回の材料を組む（行の無い pointer は `Ok(None)`・行の解けない周は [`pointed_row`] の断り）。
@@ -117,19 +133,20 @@ fn reviewed_stage(state_dir: &Path, id: &str, stage: Stage) -> bool {
     }
 }
 
-/// 同型の停止（§23 (2)・判断の記録 ADR-77 の決定 (7) の行 77-4・条 P-10.2）: 同じ bead の落ちを型の語ごとに累計し
-/// （[`fall::counted`]・便の落ちの型と受付の断り）、止めて書き直しの便（[`rewritten_runs`]）を型の語 `rewritten` の証に足して、
+/// 同型の停止（§23 (2)・判断の記録 ADR-77 の決定 (7) の行 77-4・条 P-10.2）: 数える bead の列 `beads`（先頭が今の bead・[`lineage_of`]）の落ちを型の語ごとに累計し
+/// （[`fall::counted`]・便の落ちの型と受付の断り）、今の bead の止めて書き直しの便（[`rewritten_runs`]）を型の語 `rewritten` の証に足して、
 /// 証の数が行の値に達した最初の型（型の語の順）を [`Refuse::SameKindRepeated`] で断る。数えは累計で、PASS の便も契約か節の字の
 /// 替えも別の型の落ちを挟むことも戻さない。
 fn exclude_same_kind(
     state_dir: &Path,
     (events, state): (&[Event], &State),
-    bead: &str,
+    beads: &[String],
     stop: u64,
     today: &Today,
 ) -> Result<(), Denial> {
-    let mut tallies = fall::counted(events, &[bead], fall::UNCOUNTED_FOR_BEAD);
-    let proofs = rewritten_runs(state_dir, (events, state), bead, today)?;
+    let counted: Vec<&str> = beads.iter().map(String::as_str).collect();
+    let mut tallies = fall::counted(events, &counted, fall::UNCOUNTED_FOR_BEAD);
+    let proofs = rewritten_runs(state_dir, (events, state), counted.first().copied().unwrap_or_default(), today)?;
     if !proofs.is_empty() {
         let word = Fall::Rewritten.as_str();
         match tallies.iter_mut().find(|found| found.kind == word) {

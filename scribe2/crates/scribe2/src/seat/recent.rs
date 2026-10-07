@@ -173,7 +173,7 @@ pub fn beads_of(text: &str) -> Option<Vec<Bead>> {
 /// RFC 3339 の時刻を UNIX 秒にする（`YYYY-MM-DDTHH:MM:SS` + 任意の小数秒 + `Z` か `±HH:MM`）。
 /// `bd` は Go の `time.Time` の形（RFC3339Nano・offset 付き）で書くので、`fleet::epoch_of` の
 /// `Z` ちょうどの形へ畳んでから読む。それ以外の形は `None`（0 秒に化けさせない）。
-fn epoch_of_rfc3339(text: &str) -> Option<u64> {
+pub(crate) fn epoch_of_rfc3339(text: &str) -> Option<u64> {
     let (head, rest) = text.split_at_checked(19)?;
     let rest = match rest.strip_prefix('.') {
         Some(fraction) => fraction.trim_start_matches(|c: char| c.is_ascii_digit()),

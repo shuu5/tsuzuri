@@ -487,7 +487,7 @@ fn forecast_by(
     let (made, denials) = match make(&materials) {
         Err(denial) => (None, vec![denial]),
         Ok(made) => {
-            let material = Material { repo: table, manifest, contract: &made.0, state_dir: None, bead: "", materials: &materials, early: None };
+            let material = Material { repo: table, manifest, contract: &made.0, state_dir: None, bead: "", materials: &materials, early: None, strands: None };
             let denials = judge(&material).denials;
             (Some(made), denials)
         }

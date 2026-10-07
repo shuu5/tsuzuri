@@ -10,6 +10,7 @@ use super::{Denial, Materials, DENIAL_ARGS, DENIAL_RULES, DENIAL_STORE, FLAG_CON
 use crate::pipe::bead::{copy_pointer, copy_text, form_of, row_of, Form};
 use crate::pipe::cli::present;
 use crate::pipe::contract::Contract;
+use crate::pipe::fall::{strands_of, Strands};
 use crate::pipe::git_bytes;
 use crate::pipe::refuse::Refuse;
 use crate::pipe::spawn::table_rows;
@@ -57,19 +58,20 @@ pub(in crate::pipe) fn source_of(args: &[String]) -> Result<(Source, String, Pat
 }
 
 /// 受付が契約を組む口: `Design` は今の [`generated`]・`Bead` は台帳を 1 回読んで [`bead_contract`]。`place` は repo と置き場、`tools` は
-/// 規則と台帳の client（`--bd`）。
+/// 規則と台帳の client（`--bd`）。3 つ目の値は行の系譜の材料（[`strands_of`]）で、`Bead` の周だけが台帳を読んだ後に組む（`Design` は台帳を読まないので `None`）。
 pub(in crate::pipe) fn contract_of(
     source: &Source,
     place: (&Path, &Path),
     tools: (&Manifest, &str),
     bead: &str,
     materials: &Materials,
-) -> Result<(Contract, String), Denial> {
+) -> Result<(Contract, String, Option<Strands>), Denial> {
     match source {
-        Source::Design(pointer) => generated(place.0, pointer, materials),
+        Source::Design(pointer) => generated(place.0, pointer, materials).map(|(contract, text)| (contract, text, None)),
         Source::Bead => {
             let issues = ledger_of(tools.1, place.0, tools.0, bead)?;
-            bead_contract(place, tools.0, bead, &issues, materials)
+            let strands = strands_of(bead, &issues);
+            bead_contract(place, tools.0, bead, &issues, materials).map(|(contract, text)| (contract, text, strands))
         }
     }
 }

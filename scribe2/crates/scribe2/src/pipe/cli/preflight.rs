@@ -13,6 +13,7 @@ use crate::pipe::bead::{copy_text, form_of, Form};
 use crate::pipe::closure::filter_words;
 use crate::pipe::contract::Contract;
 use crate::pipe::dispatch::pointer_of;
+use crate::pipe::fall::{strands_of, Strands};
 use crate::pipe::refuse::{covered, Refuse};
 use crate::pipe::review::{design_material, done_items, section_text};
 use crate::pipe::spawn::bead_rows::{ledger_rows, merged, Beads, LedgerRead};
@@ -230,28 +231,41 @@ fn read_given(args: &[String]) -> Result<(Given, String, PathBuf), Outcome> {
     }
 }
 
-/// 受付と**同じ 1 本**で契約を組む（C2）。戻りは契約・pointer（bead の周は `None`）・widen の本文の字（`--contract` の周と bead の形の bead だけ）。
-fn build(given: Given, (repo, bd): (&Path, &str), manifest: &Manifest, bead: &str, materials: &Materials) -> (Built, Option<table::Pointer>, Option<String>) {
+/// 受付と**同じ 1 本**で契約を組む（C2）。戻りは契約・pointer（bead の周は `None`）・widen の本文の字（`--contract` の周と bead の形の bead だけ）・
+/// 行の系譜の材料（bead の周だけ・pointer の 2 つの周は `None`）。
+fn build(
+    given: Given,
+    (repo, bd): (&Path, &str),
+    manifest: &Manifest,
+    bead: &str,
+    materials: &Materials,
+) -> (Built, Option<table::Pointer>, Option<String>, Option<Strands>) {
     match given {
-        Given::Pointer(pointer, Some(text)) => (generated_from(repo, &pointer, &text, materials), Some(pointer), Some(text)),
-        Given::Pointer(pointer, None) => (generated(repo, &pointer, materials), Some(pointer), None),
+        Given::Pointer(pointer, Some(text)) => (generated_from(repo, &pointer, &text, materials), Some(pointer), Some(text), None),
+        Given::Pointer(pointer, None) => (generated(repo, &pointer, materials), Some(pointer), None, None),
         Given::Bead(dir) => {
-            let (built, text) = from_ledger(bd, (repo, &dir), manifest, bead, materials);
-            (built, None, text)
+            let (built, text, strands) = from_ledger(bd, (repo, &dir), manifest, bead, materials);
+            (built, None, text, strands)
         }
     }
 }
 
 /// bead の周: 台帳を 1 回読み、受付と同じ 1 本 [`bead_contract`] で契約を組む。widen の本文の字は、bead の形の bead では写しの字・
-/// Design の形の bead では `None`（呼び手が `--design` の周と同じく base の木の doc を読む）。
-fn from_ledger(bd: &str, (repo, state_dir): (&Path, &Path), manifest: &Manifest, bead: &str, materials: &Materials) -> (Built, Option<String>) {
+/// Design の形の bead では `None`（呼び手が `--design` の周と同じく base の木の doc を読む）。3 つ目は同じ台帳から組む行の系譜の材料（受付と同じ [`strands_of`]）。
+fn from_ledger(
+    bd: &str,
+    (repo, state_dir): (&Path, &Path),
+    manifest: &Manifest,
+    bead: &str,
+    materials: &Materials,
+) -> (Built, Option<String>, Option<Strands>) {
     let issues = match ledger_of(bd, repo, manifest, bead) {
         Ok(found) => found,
-        Err(denial) => return (Err(denial), None),
+        Err(denial) => return (Err(denial), None, None),
     };
     let held = issues.iter().find(|issue| issue.id == bead).filter(|issue| matches!(form_of(&issue.acceptance), Form::Bead));
     let text = held.and_then(|issue| copy_text(bead, &issue.acceptance, &issue.description).ok());
-    (bead_contract((repo, state_dir), manifest, bead, &issues, materials), text)
+    (bead_contract((repo, state_dir), manifest, bead, &issues, materials), text, strands_of(bead, &issues))
 }
 
 /// preflight の本体。
@@ -289,7 +303,7 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
         },
         Err(denial) => return tailed(denial),
     };
-    let (built, pointer, file) = build(given, (&repo, bd), manifest, &bead, &materials);
+    let (built, pointer, file, strands) = build(given, (&repo, bd), manifest, &bead, &materials);
     let (contract, teeth) = match built {
         Ok((found, body)) => (found, !crate::pipe::contract::done_teeth_in(&body).is_empty()),
         Err(denial) => return tailed(denial),
@@ -304,6 +318,7 @@ fn checked(args: &[String], manifest: &Manifest) -> Outcome {
         bead: &bead,
         materials: &materials,
         early: Some(&early),
+        strands: strands.as_ref(),
     };
     let entrance = early.base.as_ref().map(BaseRun::fact);
     let judged = judge(&material);

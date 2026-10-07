@@ -4,10 +4,16 @@
 //! 本 file は落ちを**閉じた型の 1 語**に決める 1 本（[`fall_of`]・pure）と、その語の往復（[`Fall::as_str`] / [`Fall::parse`]）を持つ。
 //! 書き手は器の列の周（[`super::dispatch`] の `fell`）だけで、記録の kind は [`crate::fleet::EventKind::RunFell`]。
 //! 数えの側（条 P-10.2・行 77-4 の後半）は event の列から型の語ごとに累計する [`counted`] と、止めて書き直しの便を選ぶ [`rewritten`]。
+//! 数える bead の列は行の系譜（[`lineage`]・台帳の材料は [`strands_of`]）で、着地せずに閉じた bead の後に窓のうちに write-set の交わる契約を持って起きた bead を前の bead と同じ行に数える。
 
+use super::bead::{form_of, row_of, Form};
 use super::gate::{Check, Verdict, CHECKS};
+use super::refuse::overlaps;
 use super::review::{read_detail, FindingKind};
 use crate::fleet::{Case, Event, EventKind, Stage};
+use crate::seat::ledger::Issue;
+use crate::seat::recent::epoch_of_rfc3339;
+use std::collections::BTreeSet;
 
 /// gate の FAIL の周に、verify の記録の赤い段が無く lens が落とした段の名（呼び手が [`fall_of`] へ渡す字）。
 pub const LENS_STEP: &str = "lens";
@@ -258,11 +264,93 @@ pub fn rewritten(runs: &[Attempt], today: (&str, &str)) -> Vec<String> {
         .collect()
 }
 
+/// 行の系譜の窓（日）の rules 行（判断の記録 ADR-77 の決定 (2)・規則の表の行 R-47 の写し・値の正本はこの行）。
+pub(in crate::pipe) const ROW_FALL_WINDOW: &str = "fall.window_days";
+
+/// 系譜の材料の bead 1 つ（[`strands_of`] が台帳から読む）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Strand {
+    /// bead の id。
+    pub id: String,
+    /// 行の write-set（契約の行の欄 `write-set` の項目）。
+    pub write_set: Vec<String>,
+    /// 起票の UNIX 秒。
+    pub created: u64,
+    /// 閉じた UNIX 秒（閉じていない bead は `None`）。
+    pub closed: Option<u64>,
+}
+
+/// 系譜の材料（[`lineage`] の引数の元）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Strands {
+    /// 今の bead（`closed` は `None`）。
+    pub origin: Strand,
+    /// 候補（台帳の順・閉じた bead の形の bead で起票と閉じた時刻を UNIX 秒にできる物だけ）。
+    pub closed: Vec<Strand>,
+}
+
+/// bead の形の台帳の 1 件を材料にする（bead の形でない・行を読めない・起票の時刻を読めない周は `None`・`closed` は呼び手が渡す）。
+fn strand_of(issue: &Issue, closed: Option<u64>) -> Option<Strand> {
+    if !matches!(form_of(&issue.acceptance), Form::Bead) {
+        return None;
+    }
+    let row = row_of(&issue.id, &issue.acceptance, &issue.description).ok()?;
+    let created = epoch_of_rfc3339(issue.created_at.as_deref()?)?;
+    Some(Strand { id: issue.id.clone(), write_set: row.write_set, created, closed })
+}
+
+/// 台帳の Issue の列から系譜の材料を読む（**pure**）。今の bead の Issue が無いか、bead の形でないか、行を読めないか、起票の時刻を UNIX 秒にできない周は
+/// `None`。候補は id が今の bead と違い、status が `closed` で、bead の形の行を読め、起票と閉じた時刻の両方を UNIX 秒にできる Issue（台帳の順）。
+pub fn strands_of(bead: &str, issues: &[Issue]) -> Option<Strands> {
+    let own = issues.iter().find(|issue| issue.id == bead)?;
+    let origin = strand_of(own, None)?;
+    let closed = issues
+        .iter()
+        .filter(|issue| issue.id != bead && issue.status == "closed")
+        .filter_map(|issue| strand_of(issue, Some(epoch_of_rfc3339(issue.closed_at.as_deref()?)?)))
+        .collect();
+    Some(Strands { origin, closed })
+}
+
+/// 候補 `found` が `from` の前の bead か（閉じた時刻が `from` の起票の時刻以前で差が `window` 秒以下・着地しておらず・write-set が交わる）。
+fn follows(from: &Strand, found: &Strand, (landed, tracked, window): (&BTreeSet<String>, &[String], u64)) -> bool {
+    let Some(closed) = found.closed else {
+        return false;
+    };
+    closed <= from.created
+        && from.created.saturating_sub(closed) <= window
+        && !landed.contains(&found.id)
+        && !overlaps(&found.write_set, &from.write_set, tracked).is_empty()
+}
+
+/// 行の系譜（**pure**・判断の記録 ADR-77 の決定 (2) の条 P-10.2 の後半）: 今の bead `origin` から始め、辿った bead ごとに、`candidates` のうち未だ辿っていない
+/// bead で [`follows`] が成り立つ物を辿る（辿った bead から更に辿る）。時刻と台帳の値は全部引数で受ける（壁の時計を読まない）。返りは bead の id の列で、
+/// 先頭は今の bead、続きは辿った bead を閉じた時刻の新しい順（同じ時刻は id の昇順）。
+pub fn lineage(origin: &Strand, candidates: &[Strand], landed: &BTreeSet<String>, tracked: &[String], window: u64) -> Vec<String> {
+    let mut walked: Vec<&Strand> = vec![origin];
+    let mut at = 0;
+    while let Some(from) = walked.get(at).copied() {
+        at = at.saturating_add(1);
+        for found in candidates {
+            if !walked.iter().any(|seen| seen.id == found.id) && follows(from, found, (landed, tracked, window)) {
+                walked.push(found);
+            }
+        }
+    }
+    let mut rest: Vec<&Strand> = walked.into_iter().skip(1).collect();
+    rest.sort_by(|left, right| right.closed.cmp(&left.closed).then_with(|| left.id.cmp(&right.id)));
+    std::iter::once(origin.id.clone()).chain(rest.into_iter().map(|found| found.id.clone())).collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{counted, fall_of, rewritten, Attempt, Fall, Tally, FALLS, LENS_STEP, UNCOUNTED_FOR_BEAD, UNCOUNTED_REFUSALS};
+    use super::{
+        counted, fall_of, lineage, rewritten, strands_of, Attempt, Fall, Strand, Tally, FALLS, LENS_STEP, UNCOUNTED_FOR_BEAD, UNCOUNTED_REFUSALS,
+    };
     use crate::fleet::Event;
     use crate::order::is_declaration_order;
+    use crate::seat::ledger::Issue;
+    use std::collections::BTreeSet;
 
     /// 便の段の記帳 1 行（stage と detail だけを歯が選ぶ）。
     fn staged(stage: &str, detail: Option<&str>) -> Event {
@@ -476,5 +564,114 @@ mod tests {
         assert_eq!(rewritten(&runs, ("c3", "d2")), ["e", "a"], "今回の契約 file が違えば最後の便も書き直し");
         assert_eq!(rewritten(&[attempt("x", true, "c1", None)], ("c1", "d")), Vec::<String>::new(), "設計の写しの無い側は違うと読まない");
         assert!(rewritten(&[], ("c1", "d")).is_empty(), "便の無い列は空");
+    }
+
+    /// 1 日の秒。
+    const DAY: u64 = 86_400;
+
+    /// 窓 7 日の秒。
+    const WINDOW: u64 = 7 * DAY;
+
+    /// 今の bead の起票の秒（歯の基準）。
+    const NOW: u64 = 1_800_000_000;
+
+    /// 系譜の材料の bead 1 つ。
+    fn strand(id: &str, write_set: &[&str], created: u64, closed: Option<u64>) -> Strand {
+        Strand { id: id.to_owned(), write_set: write_set.iter().map(|item| (*item).to_owned()).collect(), created, closed }
+    }
+
+    /// 系譜の返り値（今の bead と候補・着地した bead の id・窓 7 日）。tracked は歯が使う file の 3 本。
+    fn followed(origin: &Strand, candidates: &[Strand], landed: &[&str]) -> Vec<String> {
+        let landed: BTreeSet<String> = landed.iter().map(|id| (*id).to_owned()).collect();
+        let tracked = ["src/a.rs", "src/b.rs", "src/z.rs"].map(str::to_owned);
+        lineage(origin, candidates, &landed, &tracked, WINDOW)
+    }
+
+    /// 系譜は今の bead から、閉じた時刻が起票の時刻以前で窓の内の着地しておらず write-set の交わる候補を辿り、辿った bead から更に辿る（B は今の bead と交わらず A と交わる）。
+    /// 返りは今の bead が先頭で、続きは閉じた時刻の新しい順（同じ時刻は id の昇順）。
+    #[test]
+    fn fallen_lineage_follows_unlanded_closed_overlapping_beads_within_the_window() {
+        let origin = strand("o", &["src/a.rs"], NOW, None);
+        let first = strand("a", &["src/a.rs", "src/b.rs"], NOW - 5 * DAY, Some(NOW - DAY));
+        let second = strand("b", &["src/b.rs"], NOW - 20 * DAY, Some(NOW - 5 * DAY - 2 * DAY));
+        assert_eq!(followed(&origin, &[second.clone(), first.clone()], &[]), ["o", "a", "b"], "o から a・a から b を辿り、閉じた時刻の新しい順");
+        assert_eq!(followed(&origin, std::slice::from_ref(&first), &[]), ["o", "a"], "b を候補に置かなければ辿らない");
+        let (late, tie_y, tie_x) = (
+            strand("late", &["src/a.rs"], NOW, Some(NOW - 3 * DAY)),
+            strand("y", &["src/a.rs"], NOW, Some(NOW - 2 * DAY)),
+            strand("x", &["src/a.rs"], NOW, Some(NOW - 2 * DAY)),
+        );
+        assert_eq!(followed(&origin, &[late, tie_y, tie_x, first], &[]), ["o", "a", "x", "y", "late"], "同じ時刻は id の昇順");
+    }
+
+    /// 系譜は閉じた時刻がちょうど窓の秒だけ前の候補を辿り（両端を含む）、着地した bead・閉じていない bead・write-set の交わらない bead・今の bead の起票の後に閉じた bead・
+    /// 窓の秒と 1 秒だけ前に閉じた bead を辿らない（起票の秒は全員同じ値に置き、辿った bead から更に辿る道を塞ぐ）。
+    #[test]
+    fn fallen_lineage_skips_landed_open_disjoint_late_and_out_of_window_beads() {
+        let origin = strand("o", &["src/a.rs"], NOW, None);
+        let edge = strand("e", &["src/a.rs"], NOW, Some(NOW - WINDOW));
+        let candidates = [
+            strand("l", &["src/a.rs"], NOW, Some(NOW - DAY)),
+            strand("n", &["src/a.rs"], NOW, None),
+            strand("d", &["src/z.rs"], NOW, Some(NOW - DAY)),
+            strand("t", &["src/a.rs"], NOW, Some(NOW + 1)),
+            strand("w", &["src/a.rs"], NOW, Some(NOW - WINDOW - 1)),
+            edge,
+        ];
+        assert_eq!(followed(&origin, &candidates, &["l"]), ["o", "e"], "窓の端は辿り、句を 1 つ外した 5 本は辿らない");
+    }
+
+    /// 台帳の 1 件（status と acceptance と起票・閉じた時刻の字だけを歯が選ぶ）。
+    fn issue(id: &str, status: &str, acceptance: &str, (created, closed): (Option<&str>, Option<&str>)) -> Issue {
+        Issue {
+            id: id.to_owned(),
+            status: status.to_owned(),
+            priority: None,
+            labels: Vec::new(),
+            acceptance: acceptance.to_owned(),
+            deps: Vec::new(),
+            kind: String::new(),
+            description: "本文。".to_owned(),
+            notes: String::new(),
+            close_reason: String::new(),
+            created_at: created.map(str::to_owned),
+            closed_at: closed.map(str::to_owned),
+            updated_at: None,
+            effect: String::new(),
+        }
+    }
+
+    /// bead の形の acceptance（write-set を 1 つ持つ `[[contract]]` の 1 行）。
+    fn bead_form(file: &str) -> String {
+        format!("[[contract]]\nid = \"row\"\ntitle = \"行\"\nreq = [\"FR1\"]\nwrite-set = [\"{file}\"]\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"通る\"\n")
+    }
+
+    /// 系譜の材料は今の bead を起票の秒で origin に置き（閉じた時刻は無い）、候補は status が closed で bead の形の行を読め、起票と閉じた時刻の両方を UNIX 秒にできる bead だけ
+    /// （台帳の順・offset と小数秒つきの時刻は UNIX 秒に直る）。今の bead が無いか起票の時刻を読めないか bead の形でない台帳は `None`。
+    #[test]
+    fn fallen_lineage_strands_take_closed_bead_form_beads_with_readable_times() {
+        let (created, closed) = ("2026-10-05T00:00:00Z", Some("2026-10-01T00:00:00Z"));
+        let own = issue("s2-o", "open", &bead_form("src/o.rs"), (Some(created), None));
+        let ledger = [
+            own.clone(),
+            issue("s2-a", "closed", &bead_form("src/a.rs"), (Some("2026-09-30T00:00:00Z"), closed)),
+            issue("s2-b", "open", &bead_form("src/b.rs"), (Some("2026-09-30T00:00:00Z"), None)),
+            issue("s2-d", "closed", "design = docs/design/toy.md#a", (Some("2026-09-30T00:00:00Z"), closed)),
+            issue("s2-n", "closed", &bead_form("src/n.rs"), (Some("2026-09-30T00:00:00Z"), None)),
+            issue("s2-f", "closed", &bead_form("src/f.rs"), (Some("2026-09-30T09:00:00+09:00"), Some("2026-10-01T09:00:00.5+09:00"))),
+            issue("s2-u", "closed", &bead_form("src/u.rs"), (None, closed)),
+        ];
+        let found = strands_of("s2-o", &ledger).expect("今の bead は読める");
+        assert_eq!(found.origin, strand("s2-o", &["src/o.rs"], 1_791_158_400, None), "origin は今の bead・起票は 2026-10-05T00:00:00Z の UNIX 秒");
+        let want = [
+            strand("s2-a", &["src/a.rs"], 1_790_726_400, Some(1_790_812_800)),
+            strand("s2-f", &["src/f.rs"], 1_790_726_400, Some(1_790_812_800)),
+        ];
+        assert_eq!(found.closed, want, "候補は閉じた bead の形で時刻の読める 2 つだけ・offset は UNIX 秒に直る・小数秒は落ちる");
+        assert_eq!(strands_of("s2-o", &[issue("s2-o", "open", &bead_form("src/o.rs"), (None, None))]), None, "起票の時刻の無い今の bead");
+        assert_eq!(strands_of("s2-o", &[issue("s2-o", "open", &bead_form("src/o.rs"), (Some("昨日"), None))]), None, "起票の時刻を読めない今の bead");
+        assert_eq!(strands_of("s2-o", &ledger[1..]), None, "今の bead が無い台帳");
+        assert_eq!(strands_of("s2-o", &[issue("s2-o", "open", "design = docs/design/toy.md#a", (Some(created), None))]), None, "bead の形でない今の bead");
+        assert_eq!(strands_of("s2-o", &[issue("s2-o", "open", "[[contract]]\n", (Some(created), None))]), None, "行を読めない今の bead");
     }
 }

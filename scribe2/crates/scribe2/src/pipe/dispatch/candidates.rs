@@ -342,6 +342,7 @@ fn blocker(
         bead: "",
         materials: room.materials,
         early: None,
+        strands: None,
     };
     if let Some(denial) = judge(&material).denials.first() {
         return Some(refused_by(denial));
