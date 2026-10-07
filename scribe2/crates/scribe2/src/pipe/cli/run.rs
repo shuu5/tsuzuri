@@ -36,16 +36,7 @@ pub(super) fn start(args: &[String], policy: LockPolicy) -> Outcome {
 }
 
 /// 段を確かめてから turn の口を通す。
-///
-/// **runner を起こす経路はここ 1 本**で、材料を解いた後は `pipe::follow` の turn へ渡す
-/// （Precheck → spawn → 追随の後始末が 1 本に収まる＝起こし直しと通常の起動で後始末が
-/// 分かれない）。`Reviewed` の便は verdict が PASS の周だけ通る（[`Extra::Spawn`]・他の段は段の一致だけ）。
-///
-/// 口座は器が選ぶ（設計 account-autonomy.md §4「初回の起動も同じ選定を通す」・FR36）: 口座の宣言（`--rules` の
-/// tracked の面 + 置き場の host の面・[`Pool::declared`]）が 1 つ以上在る周は `RateLimited` の再開と同じ 1 関数で
-/// label を選び、0 の周は親の環境を継承する。操作役に口座を選ばせる flag は無い。待ちの間に便が居るはずの段は
-/// 解いた現在の段（[`Resolved::stage`]）。manifest は `resume` の各段の口（`cli.rs` の `relaunch`）が渡さないので、
-/// `--rules`（無ければ埋め込み）から同じ 1 本（[`manifest_of`]）で読み直す。
+/// 出所: account-autonomy.md §4
 pub(super) fn launch(
     args: &[String],
     id: &str,

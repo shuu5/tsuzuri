@@ -1,52 +1,8 @@
-//! write-set の閉包（設計 docs/design/contract-source.md §3・ADR-0023 §2.3・ADR-0013 §2.2・SRS FR48）。
-//!
-//! 契約表の行が `touches` に宣言した閉じた型（`crate::module::Type`）について、その型を**構造として
-//! 持つ file** を字面走査で集める。**pure**（I/O は呼び手）で、入力は型名の列と読み込んだ `.rs` の
-//! (path, 本文) の列だけである。型の閉包が拾う形は 5 つ（番号は §3 / §16 / §19 の呼び名・第 5 形は外形 pin）:
-//!
-//! 1. **literal 構築** `Type {`（直前が `struct` / `enum` / `impl` / `for` 等の語か `->` の行は宣言・実装・
-//!    戻り型なので除く）
-//! 2. **match の arm**（`Type::` を `=>` の左に持つ行）
-//! 3. **件数 pin**（その型の const slice `NAME` の `NAME.len()` が整数 literal と `,` / `==` / `!=` で突き合わ
-//!    される箇所）。件数を文言へ写すだけの `.len()` は型を足しても壊れないので pin に数えない。`NAME` の出現は
-//!    `<module>::NAME` の修飾か、`use` で `<module>::` から同名で取り込んだ file でだけ解く（別の module の同名
-//!    const を拾わない）
-//! 4. **const slice の宣言 file**（`const NAME: &[Type]`）
-//! 6. **variant 構築**（§19・行 s）: 行を最初の `=>` で割った**右側**（`=>` の無い行は全部）に `Type::Variant {` か
-//!    `Type::Variant(` を持つ行（`Variant` は大文字始まりの識別子・`{` / `(` の前の空白は任意）。`=>` の右辺で
-//!    同名の variant を組み直す file と `Err(…)` の中で組む file が当たる。`=>` の左のパターン側は 2 の面で数えない。
-//!    `Self::Variant {` は型名でないので当たらず、小文字始まりの項目（`Type::assoc_fn(`）は呼出しで構築でない。
-//!
-//! どの形も、先に**その file から `touches` の型が見えているか**（[`sees`]・§3「閉包の同名衝突」）を 1 関数で
-//! 判定してから数える: (a) file が型を宣言し path が `touches` の module に当たる (b) `use <module>::Name` で取り込む
-//! (c) 本文に `<module>::Name` の修飾が在る。裸の型名だけで照合すると、別 module の同名の型（`hook::vessel::Marker` と
-//! `seat::rebrief::Marker`）の file へ閉包が広がり、導出値の偽の交差が並列度を下げる。
-//!
-//! **下界である**（§3「限界」）: 型の名が別名で現れる形（`use … as`・generic の中）と `Self { … }` の構築、glob
-//! （`use m::*` / `use super::*`）越しの取り込みは見ない。上界は構文木が要り A3 の依存になる（却下・§11）。読めない
-//! file と型名の形の違いは `Err`（fail-closed・NFR4）。第 6 形は文字列 literal の中や複数行に跨る pattern の 2 行目の
-//! 字面にも当たる（上界側へ広がる雑音・§19「着地済み行への波及」）。
-//!
-//! 閉包の拡張（契約 (g)・§3）も同じ pure な字面走査で持つ: (v) **外形 pin** [`surface_closure`]（`surfaces` の名が
-//! 指す外形 snapshot の file と、その名か subcommand の usage 文字列を歯の区間に literal で持つ `.rs`）と
-//! **名指しの実在** [`unresolved_names`]（backtick の中身のうち path 形 / 型の path 形 / fn 形だけを名指しと読み、
-//! base に解けないものを全件返す）。
-//!
-//! **write-set の導出**（契約 (h)・§3「write-set の導出」）[`derive_write_set`] は行の欄（`touches` / `verify` /
-//! `surfaces` / `creates` / `tests` / `also`）から write-set を**導出値**として作る = 閉包 ∪ 歯の置き場（verify の nextest
-//! 行の scope〔旗なし / `--lib` / `--test <name>`・§28〕の中で base の `#[test]` の fn 名が filter 語を含む file）∪ 外形 pin
-//! ∪ 新規 file ∪ Rust の外の file。手書きの
-//! write-set は [`check_drift`] で導出値との集合一致だけを認める（接頭辞 `+` は剥がして比べる）。
-//!
-//! **fn 形の touches**（§18・行 r）: `touches` の項目の末尾が小文字始まりの識別子（`crate::pipe::cli::resume`）なら
-//! 型でなく fn の名指しで、閉包はその module の段（[`in_module`]）で `fn <識別子>` を宣言する file（[`declares_fn`]・
-//! 下界・呼び手は数えない）。宣言する file が 0 の周は [`ClosureError::FnUndeclared`]（空集合に潰さない・C10）。型形の
-//! 4 形の判定は不変。
-//!
-//! **約束の行の導出**（§33・行 ag）[`derive_promised`] は契約表の行の約束の行（`[[promise]]`）から [`Fields`] の 6 欄を
-//! 組み（`symbols` の閉じた型 → `touches`・`+` の file → `creates`・`.rs` でない file → `also`・`place` → `tests`・外形の
-//! 歯 → `surfaces`・歯 1 本 1 行の nextest 行 → `verify`）、同じ [`derive_write_set`] を撃つ（導出の 1 本は増やさない）。
-//! `symbols` の名の実在は [`symbols_in_base`]（[`unresolved_names`] と同じ読み手）。
+//! write-set の閉包。
+//! `=>` の右辺で 同名の variant を組み直す file と `Err(…)` の中で組む file が当たる。
+//! 読めない file と型名の形の違いは `Err`。
+//! 宣言する file が 0 の周は [`ClosureError::FnUndeclared`]。
+//! 出所: contract-source.md §3 ADR-0023 §2.3 ADR-0013 §2.2 設計 §3 §16 §19 §11 §28 §18 §33
 
 use crate::pipe::index::flat::{query, Resolution, Resolved, Row, Site};
 use std::collections::BTreeSet;

@@ -1,15 +1,7 @@
-//! 名乗った消費側の契約の nextest の検証行を、受付で base の木でも撃つ（設計 pipeline.md §56・契約表の行 ay・ADR-0059）。
-//!
-//! 受付（[`super::intake`]）と preflight（[`super::preflight`]）は、入口の lock の前に 1 周に 1 回だけ宣言を凍結し
-//! （[`Early`]）、宣言が `entrance-flip = "detect"` か `"deny"` を名乗る周だけ [`run`] を撃つ。撃つのは契約の検証行のうち
-//! 既存の nextest の行の読み手（[`closure::teeth_words`] が通る 1 本）が読み、1 語 `--no-tests=fail` を持つ行だけで、
-//! 撃つ木は HEAD の sha を置き場の直下に detach した一時の worktree（撃ち終えたら登録ごと畳む）。行ごとに gate と同じ
-//! 遮断器（[`health::pass`]）・撃つ口（[`gate::run_line_captured`]）・箱（host の memory の予備）を通し、rc を 4 値
-//! （[`Value`]）へ写す。
-//!
-//! 読み切れる行（[`readable`]）で、members の逐語の crate の dir に `--test` の target が無いと決まる行だけは撃たずに
-//! 「不在」とする（[`absent`]）。この事前判定が守るのは「base で緑の行を不在にしない」ことだけで、読めない形は全部撃つ側。
-//! 分け方と写しは純関数（[`plan_of`] / [`settle`] / [`value_of`]）で、断り（`Refuse`）を組むのは受付の側である。
+//! 名乗った消費側の契約の nextest の検証行を、受付で base の木でも撃つ。
+//! 撃つのは契約の検証行のうち 既存の nextest の行の読み手が読み、1 語 `--no-tests=fail` を持つ行だけで、 撃つ木は HEAD の sha を置き場の直下に detach した一時の worktree。
+//! 分け方と写しは純関数で、断りを組むのは受付の側である。
+//! 出所: pipeline.md §56 ADR-0059
 
 use super::super::cargo_toml::{cargo_toml, CargoToml};
 use super::super::closure;

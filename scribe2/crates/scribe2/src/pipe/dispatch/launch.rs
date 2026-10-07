@@ -11,18 +11,9 @@ use std::process::Stdio;
 /// 子の stderr を append する診断 file の置き場（`<state_dir>/pipe/launch.log`・設計 §17・機械は読まない）。
 const LAUNCH_LOG: [&str; 2] = ["pipe", "launch.log"];
 
-/// 起こす（通る便だけ `pipe run` を**子 process で**起こす・設計 §3・§5・契約表の行 b）。
-///
-/// **待たない**: 子の完了を待つと終端が次の便の全行程を待つことになる（`pipe run` は intake → 審査 →
-/// spawn → gate → land の driver である）。新しい process group の leader にするのは [`super::spawn`] と
-/// 同じ理由で、終端の process が畳まれても起こした便が道連れにならないためである。
-///
-/// 起こせなかった周は理由の名（[`MARK`] か [`SPAWN`]）を返して**その便を起こさなかった事実だけ**を残す
-/// （終端の rc は呼び手が変えない・次の契機で拾う・§5）。判定は turn の 1 回だが、`pipe run` 側の受付は
-/// 外さない（二重に守る・planner 裁定 2026-09-19 の条件 (2)）。
-///
-/// **起こす前に印を書く**（設計 §17）: bead 名義の [`Mark::Launched`] を記帳してから子を起こす＝印は子の
-/// `RunCreated` より前の行に並ぶ。書けない周は起こさない（fail-closed・記帳できない起動を数えない）。
+/// 起こす。
+/// 書けない周は起こさない。
+/// 出所: 設計 §3・§5 §5 §17
 pub(super) fn start(input: &Input<'_>, launch: &Launch) -> Result<(), &'static str> {
     if !launched(input, launch) {
         return Err(MARK);

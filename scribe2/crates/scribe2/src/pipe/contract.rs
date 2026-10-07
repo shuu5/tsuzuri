@@ -482,18 +482,9 @@ pub const GENERATED_OWNER: &str = "generated";
 /// 生成の写しの `disposition`（同じく導出値・受付の判定は `classes` が持ち、この語は判定に使われない）。
 pub const GENERATED_DISPOSITION: &str = "A-now";
 
-/// 契約表の行 1 つから契約 file の本文を組む（契約 (b)・設計 §2「生成」）。
-///
-/// **手で書く口は無い**（§7: 写しは生成物）。`owner` / `disposition` は固定の導出値（C10）で、残りは行の欄と
-/// pointer の逐語をそのまま写す。`goal` は**行の `title`**である（planner 裁定 2026-09-19）: 節の本文は
-/// `design` pointer が指しており、写しに複製しない——契約 file の値は 1 行 1 key の TOML subset で `"` を
-/// 表せず（[`quoted_once`]）、実測で設計 doc の 276 節のうち 41 節が `"` を含み最大の節は 27 KB である。
-/// key の順は [`REQUIRED`] の宣言順 + 任意 key で、配列は 1 行に収める。導出物（`.toml`）の行が節の本文の逐語 goal を
-/// 運ぶ周だけは `goal` がその逐語である（空の行は `title` のまま・設計 contract-source.md §47 の 7）。
-///
-/// **値は逃がさない**（escape の仕組みが TOML subset に無い）。行の値と契約 file の値は**同じ 1 つの
-/// scalar の読み**（[`scalar`]）を通るので、行が持てた字面は写しでも同じ字面として読み戻る。
-/// 読み戻せない本文を書いた周は [`Contract::parse`] が Err にし、受付は rc 2 で断る（fail-closed）。
+/// 契約表の行 1 つから契約 file の本文を組む。
+/// 読み戻せない本文を書いた周は [`Contract::parse`] が Err にし、受付は rc 2 で断る。
+/// 出所: 設計 §2 §7 contract-source.md §47
 pub fn render(row: &crate::pipe::table::ContractRow, design: &str, write_set: &[String]) -> String {
     let list = |items: &[String]| {
         let quoted: Vec<String> = items.iter().map(|item| format!("\"{}\"", item)).collect();

@@ -1,30 +1,5 @@
-//! 器が起こす子 process を cgroup の transient scope で封じ込める（設計
-//! docs/design/gate-cost.md §4・ADR-0021 §2.2）。
-//!
-//! **止めない、縮退する**（設計 §2）。`systemd-run` の無い host・scope を作れない host・
-//! 箱を作れない host では包まずに素のまま撃ち、record に `confined=false reason=<閉じた
-//! enum の名>` を残す。ゆえにこの境界は**行為を止めうる判定を返さない**——ADR-0014 §2.1 の
-//! guard の定義に当たらないので、**極性一覧には載せない**（設計 §4.5・受付と同じ）。
-//!
-//! 現物と設計の差（unit 名の pid と通し番号・probe・箱を作れない host・終端行の固定形・行の終端の
-//! [`release`]）は設計 §4.4 の
-//! errata に写してある。
-//!
-//! **値をこの file に焼かない**（憲法 C1 / C5）。箱の大きさと CPU の重みは [`Caps`] が
-//! manifest の 3 行から読む（読めない周は理由付き＝manifest そのものが読めない周は
-//! `reason=manifest-unreadable`・行が欠ける周は `no-rules`）。`MemoryHigh` は付けない
-//! （係数を持たない・設計 §4.2）。
-//!
-//! peak の読みは **scope の内側**で行う（設計 §4.3）。transient scope は最後の process の
-//! 終了で cgroup dir ごと消えるので、外から終了後に読む形は成立しない。包みの `sh -c` が
-//! 自分の `/proc/self/cgroup` から数を読み、stdout の終端に固定形 1 行で出す。器はその行を
-//! [`read_usage`]（pure・in-file の歯が fixture 文字列で測る）で剥がす。
-//!
-//! argv で包む起動（runner / lens が起こす claude・[`wrap_command`]）は epilogue を持てないので、
-//! 器が**走行中に** `memory.peak` を sample する（設計 §13・`s2-07l.273`）: scope の cgroup dir は
-//! `systemctl show` で 1 回解き（[`control_group_of`]）、[`Sampler`] が周期ごとに読んで最後に読めた
-//! 値を保つ（high-water mark ゆえそれが peak）。終端で 1 回読む形は、最後の process の終了で dir が
-//! 消えた正常系を測れない。
+//! 器が起こす子 process を cgroup の transient scope で封じ込める。
+//! 出所: gate-cost.md §4 ADR-0021 §2.2 設計 §2 §4.5 §4.4 §4.2 §4.3 §13 ADR-0014 §2.1 s2-07l.273
 
 use crate::invocation::Invocation;
 use crate::name::NAME;
@@ -791,18 +766,9 @@ fn scope(inner: Invocation, mb: u64, entry: &Wrap<'_>, caps: &Caps) -> Invocatio
     outer
 }
 
-/// scope の引数（`--` の手前まで）。**`MemoryHigh` は付けない**（設計 §4.2）。
-///
-/// `OOMPolicy=continue` は包みを systemd の OOM 停止から外すためである——既定の `stop` では
-/// kernel が箱の中の 1 process を殺した直後に unit ごと止められ、包みが終端行を出す前に
-/// SIGTERM で死ぬ（設計 §4.2・lens-132c M1）。
-///
-/// `--collect` は終了後の unit を failed の周も含めて unload させる（設計 §25・`s2-07l.421`）——無いと
-/// 正常終了した scope が `failed` で host に残り、同じ host の他の観察を汚す。probe の scope もこれで消える。
-///
-/// `cpu_weight` は便だけが持つ（`None` は `CPUWeight` の 2 語を置かない＝席の箱・他の語と順は同じ・設計 account-lifecycle.md
-/// §30 形 2＝対話の席を便より軽くしない）。`cpu_quota` は上限の % で、`None` は `CPUQuota` の 2 語を置かない（語の順は
-/// `MemoryMax` → `CPUWeight` → `CPUQuota` → `OOMPolicy`・設計 gate-cost.md §45 形 4）。
+/// scope の引数。
+/// `--collect` は終了後の unit を failed の周も含めて unload させる——無いと 正常終了した scope が `failed` で host に残り、同じ host の他の観察を汚す。
+/// 出所: 設計 §4.2 §25 s2-07l.421 account-lifecycle.md §30 gate-cost.md §45
 fn scope_args(unit: &str, mb: u64, cpu_weight: Option<u64>, cpu_quota: Option<u64>) -> Vec<String> {
     let mut args = vec![
         "--user".to_owned(),

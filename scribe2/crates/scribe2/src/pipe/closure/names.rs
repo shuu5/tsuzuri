@@ -1,35 +1,12 @@
-//! 名指しの実在（設計 docs/design/contract-source.md §3「名指しの実在」・§26・SRS FR48）。
-//!
-//! 型の閉包の 4 形（[`super::sees`] と親 module `closure.rs`）と外形 pin（[`super::surface_closure`]）に依らない閉じた
-//! 群で、契約の散文（`title` / `done` / § の本文）の backtick の中身のうち **path 形 / 型の path 形 / fn 形**だけを名指しと
-//! 読み、base に解けないものを [`unresolved_names`] が全件返す。呼び手は `pipe::table::check` の 1 か所で、親の
-//! `pub use` を通るので import は不変である。
-//!
-//! 親の私有 item（[`super::texts_of`] / [`super::heads`] / [`super::is_ident`] / [`super::is_ident_char`] と const 群）は
-//! 子孫として `super::` でそのまま引く（可視性を上げない）。逆向きに、親の 4 形の判定が使う [`holds_word`]（審査の外の
-//! 材料も引くので `pub(crate)`）/ [`declares_fn`] と、`closure::derive` が引く [`backticked`] / [`closed_type`] は `pub(super)`（＝`pipe::closure` の中だけ）に留める。
-//!
-//! 審査の材料の名指し（設計 §51 形 2・行 bc）は同じ読み手の 2 本目の口 [`mentioned_names`] で、backtick の中身の先頭の
-//! token と、backtick の外の識別子の形の語と、`/` か拡張子を持つ path 形の連なりを拾う（[`unresolved_names`] の判定は不変）。
-//! 本文の塊を渡す名指しの 3 形（§56・行 bi）は 3 本目の口 [`named_items`] で、impl は [`impl_line`] で読む。
-//! 逆引きの表の項目（reverse-index.md §6 形 4・行 c）は 4 本目の口 [`section_symbols`] で、同じ [`form_of`] の型の path 形と fn 形だけを返す。
+//! 名指しの実在。
+//! 出所: contract-source.md §3 設計 §26 §51 §56 reverse-index.md §6
 
 use super::{declares_type, heads, in_module, is_ident, is_ident_char, texts_of, touched, ClosureError, Source};
 use super::{IMPL_HEAD, KEYWORDS, PATH_CHARS, RS};
 use std::collections::BTreeSet;
 
-/// 名指しの実在（§3）: `texts` の各 (在り処, 本文) の backtick の中身のうち **path 形 / 型の path 形 / fn 形**だけを
-/// 名指しと読み、base に解けないものを (名, 在り処) で**全件**返す（書かれていた順）。
-///
-/// (1) path 形（英数字と `_ . / -` だけ・拡張子 `.rs`）は `tracked` の path と等しいか `/` 区切りの末尾一致、または
-/// その行の write-set の `+`（新規 file）/ `~`（着地で消える file・§24 (3)）の項目（接頭辞を剥がした path）と同じ
-/// 照合で解ける（`~` の除外が無いと、着地で消した file を名指す本文が着地の後に全部赤くなる）。(2) 型の path 形（`::` で結んだ識別子の
-/// 列）は末尾 2 節の「型」と「項目」を [`resolves_type`] の 2 経路（字面 / impl）で解く（§26）。**`touches` に宣言した
-/// 型の variant は名指しと読まない**
-/// （未来の variant は `touches` が説明する）。(3) fn 形（識別子 + `(`〔`)` は任意〕）は `fn 識別子` の宣言が在れば
-/// 解ける。(2) と (3) は中身の**先頭の token**（[`head_of`]・§25）で読む＝field 付き variant の literal と引数付きの呼出しも
-/// 名指しである。一致しない字面（大文字始まりの tuple variant の構築・予約語・末尾 `::` の module path・glob・属性・散文）は
-/// 名指しではない。別名・generic は下界の外。
+/// 名指しの実在: `texts` の各 (在り処, 本文) の backtick の中身のうち **path 形 / 型の path 形 / fn 形**だけを 名指しと読み。
+/// 出所: 設計 §3 §24 §26 §25
 pub fn unresolved_names(
     texts: &[(String, String)],
     touches: &[String],

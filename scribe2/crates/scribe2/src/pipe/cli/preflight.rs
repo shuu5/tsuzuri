@@ -1,32 +1,8 @@
-//! `pipe preflight` — 受付と同じ判定を run を作らず撃ち、契約の実態突合を planner が edit time に測る口（契約表の行 u・
-//! 設計 contract-source.md §21・SRS FR48・C16「逸脱は edit time に止める」）。
-//!
-//! 引数は `intake` と同じ（`--design <doc>#<id> --bead B --repo R [--state-dir S]`）。判定は受付の [`super::intake::judge`] の
-//! **同じ 1 本**（C2・2 本目を作らない）で、断りを最初の 1 件で止めず**全部**（判定関数 1 本につき高々 1 件）並べる。
-//! run dir・写し・event は一切書かず、宣言の写しは読むだけ・置き場は交差の読みにだけ使う。
-//!
-//! `--design` も `--contract` も渡さない周は bead の周で、台帳を 1 回読み、受付と同じ 1 本 [`super::intake::bead::bead_contract`] で
-//! `--bead` の bead の契約を組む（`--placed` は断り・置き場を解けない周は受付と同じ理由で断る・契約の写しは置き場の `bead-contracts` に書く）。
-//!
-//! stdout は **1 行 1 事実**: `design=<doc>#<id> section=<n>` / `done-teeth=<present|absent>`（行が欄 done-teeth を持つか）/ `write-set=<declared|derived> files=<n>` /
-//! `teeth=<filter>:<本数>@<file,…>`（verify の nextest 行ごと）/ `headroom=<file>:<余地>/<file の見込み>`（余地の小さい順・
-//! 見込みは行の growth に在ればその値・無ければ size の見積・設計 contract-source.md §46）/
-//! `overlap=<live run>:<file,…>`（突き合わせた live な run ごと・交差 0 は `-`・置き場が無ければ `overlap=unmeasured`）/
-//! `entrance=green-on-base:<本数>/<行数>[ unmeasurable:<本数>]`（宣言が `detect` / `deny` を名乗る周だけ・契約の検証行を base
-//! の木で撃った結果・木は置き場の直下の一時の worktree で撃ち終えたら畳む・設計 pipeline.md §56）/
-//! `widen=<項目>@<doc>#<行 id>:<file,…>`（自分の行の § の本文が語として名指す型形の項目をほかの行が touches に持ち、その行の write-set が
-//! 自分の write-set の .rs の候補を覆わない組・項目の辞書順・読めない周は `widen=unmeasured:<理由>` の 1 行・rc と判定は変えない）/
-//! `index=unavailable:<語>`（索引を作れない周〔状態が failed〕で touches に型の項目を持つ行だけ・字面の閉包に縮退して通す・rc と判定は
-//! 変えない）/
-//! `acceptance=<matched|unmeasured:ledger>`（`--placed` を渡した周だけ・`--bead` の bead の acceptance の `design = ` の行を dispatch の
-//! 列と同じ読み手で読み `--design` と照らす・`done-teeth=` の行の次・判断の記録 ADR-44 の決定 (3)）/
-//! `refuse=<名>:<理由>`（judge の断り・全部・名は [`crate::pipe::refuse::Refuse::as_str`]・`--placed` の周の照らしの断りは judge の断りの後に
-//! preflight だけの名 `acceptance-pointer` の 1 行・verify の欄の照らしの断りはその後に preflight だけの名 `verify-filters`〔filter 語の候補が 2 つ
-//! 以上の nextest の行〕と `verify-common`〔宣言の common-verify と同じ行〕の 1 行ずつ・その後に名 `section-literal`〔done の項の印の字が審査の材料の
-//! 節に無い項ごとの 1 行〕）/ 末尾に
-//! `preflight: <ok|refused n=<件数>|broken>`。rc = 0（断り 0）/ 1（断り ≥ 1）/ 2（読めない = `RC_BROKEN` の周）。
-//! `--state-dir` が無く git 設定からも解けない周は `overlap=unmeasured` を出し、rc は他の断りで決める（測れないを 0 に
-//! 潰さない・C10・`intake` は従来どおり置き場が無い旨で断る）。
+//! `pipe preflight` — 受付と同じ判定を run を作らず撃ち、契約の実態突合を planner が edit time に測る口。
+//! 判定は受付の [`super::intake::judge`] の **同じ 1 本**で、断りを最初の 1 件で止めず**全部**並べる。
+//! `--design` も `--contract` も渡さない周は bead の周で、台帳を 1 回読み。
+//! stdout は **1 行 1 事実**: `design=<doc>#<id> section=<n>` / `done-teeth=<present|absent>`。
+//! 出所: contract-source.md §21 §46 pipeline.md §56 判断の記録 ADR-44
 
 use super::base_run::BaseRun;
 use super::intake::bead::{bead_contract, ledger_of, source_of, Source};

@@ -438,24 +438,10 @@ pub(super) fn land_run(args: &[String], id: &str, manifest: &Manifest, policy: L
 /// 台帳を読まずに畳むだけの flag（値なし・PR の便にだけ効く・設計 contract-source.md §61 形 3）。
 const FOLD_ONLY: &str = "--fold-only";
 
-/// `pipe retire`。前提 stage = `Landed` ∨ (`Failed` ∧ 最後の `RunStage` の detail が
-/// `rebase-empty` / `rebase-conflict`) ∨ (`Gated` ∧ verdict が FAIL) ∨ `Stopped` ∨
-/// (`Reviewed` ∧ 審査の verdict が PASS でない)（worktree 在り・clean の検査は retire 側が持つ）。
-///
-/// **段を動かさない口である**。`--pr-cmd` 形の便は main を動かさず worktree も残して
-/// `Landed` で終端するので、merge の後に入れ物だけを畳む段が要る。同一変更の便が
-/// `rebase-empty` で終端した周も**成果は既に main に在る**ので入れ物だけが残る形は同じで、
-/// 畳める側に数える（`s2-07l.128`）。起こし直しの上限に達した便（`rebase-conflict`）と
-/// 判定に届いた `Gated(FAIL)` も、終端して入れ物だけが残る形は同じである（設計
-/// pipeline-conflict.md §5）。`pipe stop --run` で終端した `Stopped` も同じ——stop は畳まない
-/// （C2・段の関数は 1 つずつ）ので、commit 0 の clean な worktree が残る唯一の畳み口が
-/// ここである（`s2-07l.284`・理由の弁別は持たず `Landed` と同じ扱い）。審査の段で終端した
-/// `Reviewed`（verdict が FAIL / INCONCLUSIVE）も同じ形で、前の周が残した worktree を畳める側に
-/// 数える（`s2-07l.353`・設計 pipeline.md §12）——畳めないままだと再開（FR14）の続きの段が
-/// 別の worktree に割れる。走っている便・他の理由で落ちた便を通すと「まだ読まれていない現物を
-/// 動かす」経路になるため、段違いは一般則どおり rc 1。
-///
-/// 残す event の段は [`super::Resolved::stage`] のまま＝**`Landed` に決め打ちしない**（終端を動かさない）。
+/// `pipe retire`。
+/// 審査の段で終端した `Reviewed`も同じ形で、前の周が残した worktree を畳める側に 数える——畳めないままだと再開の続きの段が 別の worktree に割れる。
+/// 走っている便・他の理由で落ちた便を通すと「まだ読まれていない現物を 動かす」経路になるため、段違いは一般則どおり rc 1。
+/// 出所: s2-07l.128 pipeline-conflict.md §5 s2-07l.284 s2-07l.353 pipeline.md §12
 pub(super) fn retire_run(args: &[String], id: &str, manifest: &Manifest, policy: LockPolicy) -> Outcome {
     let allowed = [Stage::Landed, Stage::Failed, Stage::Gated, Stage::Stopped, Stage::Reviewed];
     let resolved = match resolve(args, id, &allowed, &Extra::Retire) {

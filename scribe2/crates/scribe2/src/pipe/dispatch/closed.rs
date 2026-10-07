@@ -1,14 +1,5 @@
-//! 閉じた bead の便の段（判断の記録 ADR-45 の門 H6）: 列の起こす側の 1 周（[`super::fire`]）が、同じ周の台帳の読みと event の
-//! 列を借りて、台帳で閉じた bead の便を 2 つに分ける。
-//!
-//! - 終端の便（[`live`] が `Some(false)`・`Intake` を除く＝`pipe retire` の入口と同じ段の列）で作業木が在る便は、`pipe retire` の
-//!   畳みと同じ 1 本（[`retire`] の `fold_only`）で畳む。clean の確かめ・並びの木の返し・記帳（段はそのまま・detail `retired`）は
-//!   retire が持つ（第 2 の畳みを作らない・C2）。clean でない木は retire が断って残す（未 commit の仕事を運ばない）。
-//! - live に数わるのに driver の居ない便（`Gated` の verdict PASS か `Reviewed` の審査 PASS で、札が無いか所有者が死んでいる）は
-//!   亡骸と名指す。止めず畳まず、同じ周の起こし直しと終端の周の軸の idle の数えから外す（閉じた契約を着地させない・driver の居ない便の
-//!   下で binary を替えても版は混ざらない）。止めるかは人か席が決める。
-//!
-//! 観測の口（[`super::turn`]・`dispatch ls`）は撃たない。台帳を読めない周は [`super::fire`] がこの段の前に返る（1 本も畳まない）。
+//! 閉じた bead の便の段: 列の起こす側の 1 周が、同じ周の台帳の読みと event の 列を借りて、台帳で閉じた bead の便を 2 つに分ける。
+//! 出所: 判断の記録 ADR-45
 
 use crate::cli_outcome::{RC_OK, RC_REFUSED};
 use crate::fleet::store::LockPolicy;

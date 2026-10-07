@@ -1,14 +1,5 @@
-//! `pipe dispatch` — 審査を通った契約を器が自動で起こす列（設計 docs/design/dispatcher.md §2〜§4・§6）。
-//!
-//! 起動に要る判定は**器が既に持っている**（台帳の依存・live 便との write-set の交差・受付の余地と host の
-//! memory・審査の verdict）。本 module はそれを読み直して並べるだけで、**判定を 2 本目に実装しない**
-//! （憲法 C2）: 交差は受付の [`crate::pipe::cli::crossings`]、余地は受付の [`crate::pipe::cli::judge`]、
-//! 枠は [`super::admission::has_room`] を**記帳せずに**撃つ。
-//!
-//! 順序は 1 関数 [`order`] だけが持つ（散文の順序を持たない・設計 §2）: (1) 介入 `first` (2) 台帳の
-//! `priority`（P0 → P4）(3) 起票順（id の数字）。
-//!
-//! 台帳を読めない周は列を空と読まず [`Unmeasured`] で 1 本も起こさない（`0 件`と融合しない・C10・NFR4）。
+//! `pipe dispatch` — 審査を通った契約を器が自動で起こす列。
+//! 出所: dispatcher.md §2〜§4・§6 設計 §2
 
 use super::cli::{live, Denial, Materials};
 use super::commute::Verdict;

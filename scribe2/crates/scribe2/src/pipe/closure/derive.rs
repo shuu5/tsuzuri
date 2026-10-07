@@ -1,17 +1,6 @@
-//! write-set の導出（設計 docs/design/contract-source.md §3「write-set の導出」・契約 (h)・SRS FR48 / FR39）。
-//!
-//! 型の閉包（[`super::closure`]）・外形 pin（[`super::surface_closure`]）と同じ **pure** な字面走査で、契約表の行の
-//! 欄（`touches` / `verify` / `surfaces` / `creates` / `tests` / `also`）から write-set を**導出値**として作る
-//! [`derive_write_set`] = 閉包 ∪ 歯の置き場（verify の nextest 行の scope〔[`Scope`]・§28・`--test <名>` は crate の manifest の
-//! `[[test]]` の path を読む＝[`super::region`]〕の中で base の `#[test]` の fn 名が filter 語を含む file）∪ 外形 pin ∪ 新規 file とその親の宣言 file（§17 の形 (vi)・[`parents`]）∪ Rust の外の file。手書きの write-set は [`check_drift`] で
-//! 導出値との集合一致だけを認める（接頭辞 `+` は剥がして比べる）。行の数え方 [`weighted_lines`] も上限の余地の式として
-//! ここに置く。
-//!
-//! **Declared 行の歯の置き場の門**（§20・行 t）[`declared_teeth`]: 導出も drift も撃たない Declared 行でも、`verify` の
-//! nextest 行の歯の file は同じ [`teeth_places`] で解き、行の write-set に無い file を全部名指して断る
-//! （[`check_teeth_cover`]・照合は [`check_drift`] と同じ正規化・dir 項目は配下）。
-//!
-//! 型の閉包の字面走査（4 形と [`super::sees`]）は親 module `closure.rs` に置いたまま（1 関数の判定で結ばれる）。
+//! write-set の導出。
+//! **Declared 行の歯の置き場の門**[`declared_teeth`]: 導出も drift も撃たない Declared 行でも。
+//! 出所: contract-source.md §3 設計 §28 §17 §20
 
 use super::super::refuse::{covered, normalize, NEW_FILE};
 use super::super::declaration::crate_of;

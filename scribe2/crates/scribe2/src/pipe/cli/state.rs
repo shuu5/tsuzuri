@@ -70,17 +70,10 @@ fn tag_of(design: &str) -> Tag {
     parse_pointer(design).map_or(Tag::Unread, Tag::Row)
 }
 
-/// 便が live（終端でない）か。**段の網羅 match で書く**（段が増えたら compile で気付く）。
-///
-/// 終端 = `Landed` / `Failed` / `Stopped`、または `Gated` で verdict が FAIL（pipeline.md §4
-/// 「FAIL は終端」）、または `Reviewed` で verdict が PASS でない（contract-source.md §4「FAIL / INCONCLUSIVE は
-/// 終端」）。`RateLimited` は終端でない（口座の窓の都合で止まっただけ・ADR-0020 §2.1）。`Gated` / `Reviewed` の
-/// 判定を読めない周は `None`＝**測れなかった**で、呼び手が断る側へ倒す（読めない判定を「終端でない」にも
-/// 「終端」にも読み替えない）。
-///
-/// `Intake` は運転手の札（[`Ticket`] の 4 値）で読む（設計 dispatcher.md §18・契約表の行 o）: 札の所有者が生きている
-/// 周だけ live で、札が無い・所有者が死んでいる周は受付の途中で運転手を失った亡骸＝live に数えない（同じ write-set の
-/// 便を塞ぎ続けない）。札が在るのに読めない周は `None`（測れないを「居ない」にも「居る」にも読み替えない）。
+/// 便が live か。
+/// 終端 = `Landed` / `Failed` / `Stopped`、または `Gated` で verdict が FAIL、または `Reviewed` で verdict が PASS でない。
+/// `Gated` / `Reviewed` の 判定を読めない周は `None`＝**測れなかった**で、呼び手が断る側へ倒す。
+/// 出所: pipeline.md §4 contract-source.md §4 ADR-0020 §2.1 dispatcher.md §18
 pub(in crate::pipe) fn live(state_dir: &Path, id: &str, stage: Stage) -> Option<bool> {
     match stage {
         Stage::Landed | Stage::Failed | Stage::Stopped => Some(false),
@@ -149,24 +142,11 @@ pub(in crate::pipe) fn resolve(
     })
 }
 
-/// 段の中の弁別。外れは**段違いと同じ扱い**＝rc 1 で何も書かない（event も contract も触らない）。
-///
-/// - `Gated`: **測り直せるのは「測れなかった」周だけ**。PASS / FAIL は判定に届いた終端で、
-///   判定が読めない周（file 不在 / 壊れ / 3 値の外）も測り直さない（fail-closed・C11.2）。
-/// - `Failed`: **detail を問わず畳める**（`Failed` は `Stage` の終端で、入れ物だけが残る形は
-///   どの理由でも同じ・設計 pipeline.md §24）。「人が現物を読む前に入れ物が動く」懸念は
-///   可逆 move（N1.2）と `detail=retired` の event が持つ＝読む物は消えない。理由を読む必要が
-///   無いので、読めない周の弁別も持たない。
-/// - `Gated`: **畳めるのは verdict が FAIL の周だけ**（判定に届いた終端・`.132` の memo）。
-///   PASS はまだ land が残っており、INCONCLUSIVE は測り直せる側ゆえ断る。
-/// - `Reviewed`: **起こせるのは verdict が PASS の周だけ**（FR49・設計 contract-source.md §4「効き方」）。
-///   FAIL / INCONCLUSIVE は終端で、判定を読めない周も起こさない（fail-closed・[`ReviewCheck`]）。
-/// - `Reviewed`: **畳めるのは verdict が PASS でない周だけ**（判定に届いた終端・`s2-07l.353`・設計
-///   pipeline.md §12）。PASS はこれから起こす側で、判定を読めない周は終端に読み替えない
-///   （fail-closed）——起こす側と畳む側は同じ 3 値の**裏表**である。
-///
-/// **理由も名乗る**: 段違いの一般則で断っている事実と、その便が通らない理由は別の情報で、
-/// 片方だけだと読み手に届かない。
+/// 段の中の弁別。
+/// PASS / FAIL は判定に届いた終端で、 判定が読めない周も測り直さない。
+/// PASS はまだ land が残っており、INCONCLUSIVE は測り直せる側ゆえ断る。
+/// FAIL / INCONCLUSIVE は終端で、判定を読めない周も起こさない。
+/// 出所: pipeline.md §24 §12 contract-source.md §4 s2-07l.353
 fn discriminate(extra: &Extra, state_dir: &Path, id: &str, stage: Stage) -> Result<(), Outcome> {
     match (extra, stage) {
         (&Extra::Regate, Stage::Gated) => gated_is(state_dir, id, Verdict::Inconclusive),

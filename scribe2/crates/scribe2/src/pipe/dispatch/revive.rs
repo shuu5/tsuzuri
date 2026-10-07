@@ -92,22 +92,10 @@ pub fn admits_gated(driver: Option<Advance>) -> bool {
 /// 手順が戻る（planner 裁定 2026-09-19）。関門が開いた便（[`super::gate_is_open`]）は [`gated`] が候補に戻す。
 const WAITING: [Stage; 2] = [Stage::Blocked, Stage::Questioned];
 
-/// 起こし直す便（run id の順・設計 §5「driver の死亡」+ §13「関門が開いた待ちの便」+ §15「PASS の `Gated`」）。
-///
-/// 待ちの段でない live 便は **driver の札の所有者が死んでいる**ものだけ（§5 の規則・1 字も変えない）:
-/// 札が無い・読めない便は触らない（測れないを「死んだ」に読み替えない・fail-closed）。別の process が
-/// 生きて持っている札の便も、`pid` の再利用で生きて見える便も触らない（判定は lock の所有者と同じ 1 本）。
-/// **`Gated` の便だけ**は、これに加えて [`passed_gate`]（verdict が PASS ∧ 札が無いか所有者が死んでいる）
-/// でも候補にする（§15・FR68 の 3 種目）。足す側だけで既存の枝は変えない＝gate の途中で driver が死んだ
-/// 便は verdict に依らず今までどおり候補である。
-///
-/// 待ちの段（[`WAITING`]）の live 便は `gated` の周だけ [`gated`] で判じる（関門が開いていて driver が
-/// 居ないと測れた便）。閉じたままの便は今までどおり候補にしない。PASS の `Gated` の枝も同じ `gated` の絞りを
-/// 受ける（§15「§13 の絞りをそのまま受ける」）——この候補の札は起こす前も後も無いので、§5 の止め金
-/// （resume が抜けると札が消えて候補から落ちる）が効かない。
-///
-/// **regate で `Implemented` へ戻された便**も同じ `gated` の絞りで候補にする（[`regated`]・§23・FR68 の 4 種目）。
-/// event の列は置き場から 1 回だけ読み、便の表と regate の記帳の読みに同じ列を渡す（表と列を食い違わせない）。
+/// 起こし直す便。
+/// 待ちの段でない live 便は **driver の札の所有者が死んでいる**ものだけ: 札が無い・読めない便は触らない。
+/// PASS の `Gated` の枝も同じ `gated` の絞りを 受ける——この候補の札は起こす前も後も無いので、§5 の止め金 が効かない。
+/// 出所: 設計 §5 §13 §15 §23
 pub(super) fn revivals(input: &Input<'_>, gated: bool) -> Vec<Revive> {
     let Ok(events) = store::read_all(input.state_dir) else {
         return Vec::new();
@@ -153,17 +141,10 @@ fn followed(state_dir: &Path, events: &[Event], id: &str, stage: Stage) -> bool 
         && matches!(super::driver_ticket(state_dir, id), Ticket::Absent | Ticket::Dead)
 }
 
-/// 席が測り直して PASS になった `Gated` の便か（`Gated` ∧ verdict が PASS ∧ 札が無いか所有者が死んでいる・
-/// 設計 §15・FR68 の 3 種目）。
-///
-/// verdict の読みは着地の段が持つ既存の 1 本（[`verdict_of`]・site を 2 つにしない・C2）。**PASS 以外は候補に
-/// しない**: INCONCLUSIVE を候補にすると `pipe resume` が `next=gate` で止まる空撃ちになる（測り直しは席の
-/// `pipe gate`＝器が勝手に 1 周ぶんの費用を払い直さない）。読めない周（`None`）も候補にしない（測れないを
-/// 「通った」に読み替えない・fail-closed・NFR4）。札は §13 と同じ 4 値で読み、`Live` / `Unreadable` は触らない。
-///
-/// **呼び手が自分で段を進めた便（[`Input::driven`]）は外す**（§15「flag の無い driver は自分の便をこの候補に
-/// しない」）: flag の無い driver は「その process が進める段は 1 つ」の約束を持つ。別の契機（手動の 1 周・
-/// 他の便の driver の終端の 1 周）は、その driver が置いていった PASS の `Gated` の便を拾う。
+/// 席が測り直して PASS になった `Gated` の便か。
+/// **PASS 以外は候補に しない**: INCONCLUSIVE を候補にすると `pipe resume` が `next=gate` で止まる空撃ちになる。
+/// 読めない周も候補にしない。
+/// 出所: 設計 §15 §13
 fn passed_gate(input: &Input<'_>, id: &str, stage: Stage) -> bool {
     stage == Stage::Gated
         && input.driven != Some(id)

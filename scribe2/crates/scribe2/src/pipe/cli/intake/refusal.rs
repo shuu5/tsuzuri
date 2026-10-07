@@ -108,20 +108,9 @@ fn headrooms_of(
     Headrooms { rooms, caps, growth }
 }
 
-/// 上限の余地（設計 contract-source.md §3・受付だけ）: write-set の各 `.rs` の base の行数と R-C4-2 の差、core の
-/// 合計と R-C4-1 の差に、契約の `size` の見積（rules 行 `pipe.size_<s|m|l>_lines`・数は manifest が持つ・C1）を
-/// 当て、入らない file を名指して断る（file と core の 2 形・先頭の 1 件が理由の 1 行・残りは stderr に並ぶ）。
-/// core の合計は各 file の**本体**（行頭 `#[cfg(test)]` より前）だけ＝xtask check の core-lines と同じ母集団
-/// （[`declaration::FileLines`]・設計 core-boundary.md §2）で、file の余地は全体の行数から。
-///
-/// dir 項目は base の配下に展開し、`+` の新規 file は 0 行として数え、`-` の縮む面と `~` の消える file は余地も
-/// 本数も数えない（弁別は [`declaration::headroom_shortfalls_under`] の中）。base に無い項目は数えない（項目の実在は
-/// 契約表の行の検査〔`contracts check` / 設計 pointer の intake〕が名指す）——ただし **接頭辞付きで解けない項目は
-/// 受付で断る**（`write-set-item-unresolved`）: `-` / `~` の先が base に無い項目を落として測ると「余地を求めない」
-/// 宣言が静かに消え、無い file を減らす / 消す便が通る（`~` は §24）。`+` の先が base に在る項目
-/// （[`NewFilePolicy::MustBeAbsent`]）も同じ＝契約表の検査は
-/// land 済みの `+` を実在 file と読む（`MayBeLanded`・`s2-07l.346`）ので、入口で止めないと満杯の file を `+` で
-/// 書いた便が余地を測られずに通る。通った周は file ごとの余地を [`Headrooms`] で返す（§21 の `headroom=` の材料）。
+/// 上限の余地: write-set の各 `.rs` の base の行数と R-C4-2 の差、core の 合計と R-C4-1 の差に、契約の `size` の見積を 当て、入らない file を名指して断る。
+/// base に無い項目は数えない——ただし **接頭辞付きで解けない項目は 受付で断る**: `-` / `~` の先が base に無い項目を落として測ると「余地を求めない」 宣言が静かに消え。
+/// 出所: contract-source.md §3 core-boundary.md §2 設計 §24 §21 s2-07l.346
 pub(super) fn exclude_cap_shortfall(manifest: &Manifest, contract: &Contract, materials: &Materials) -> Result<Headrooms, Denial> {
     let (tracked, sources) = (materials.tracked.as_slice(), materials.sources.as_slice());
     let rules = |id: &str| int_row(manifest, id).map_err(|reason| denied(DENIAL_RULES, broken(reason)));

@@ -1,34 +1,8 @@
-//! `pipe intake` の受付（設計 §5「subcommand」・pipeline-conflict.md §2「入口の排他」・contract-source.md §3）。
-//!
-//! 契約 file を読み、宣言を上限と突き合わせ、上限の余地と write-set の交差で断り、置き場へ写して run を
-//! 起こす。`s2-07l.295` で `cli.rs` から純移動した（本文は不変・外から呼ぶ path は `cli` が持つ）。
-//! 親の共通の材料（`need` / `refused` / `broken` / `state_dir_of` / `live` 等）は `super::` で引く。
-//!
-//! **write-set の弁別**（契約 (h)・contract-source.md §3「write-set の導出」「手書きの write-set の扱いと撃つ場所」）:
-//! 契約の `design` が設計 pointer（`<doc>#<id>`）なら base の契約表の行を引き、行が `creates` / `tests` / `also` を
-//! 1 つも持たず `write-set` を持てば [`WriteSet::Declared`]（(g) までの検査だけ）・それ以外は [`WriteSet::Derived`]
-//! （導出値を作り、行に `write-set` が在れば集合一致を要り、無ければ導出値を契約の写しの write-set に書く）。
-//! pointer でない `design`（(b) の前の契約 file）は従来どおり導出しない。**撃つのは受付だけ**（CI は撃たない）。
-//!
-//! **Promised の行**（契約表の行 ag・contract-source.md §33）: 行が約束の行（`[[promise]]`）を 1 つでも持てば
-//! [`WriteSet::Promised`]。器は約束の行から write-set（[`closure::derive_promised`]＝§3 の導出の 1 本）と契約 file の
-//! `verify` / `done`（[`crate::pipe::contract::promised_verify`] / [`crate::pipe::contract::promised_done`]）を生成し、
-//! 行の値の代わりに写しへ載せる（設計 doc には書き戻さない）。行が導く欄を手で書いた周は `promised-field-written`・
-//! `symbols` の名が base と合わない周は `promise-symbol-unresolved`・行の `verify` が生成値と集合で違う周は
-//! `write-set-drift`（§3 と同じ照合）で断る。
-//!
-//! **judge と create**（契約表の行 u・contract-source.md §21・C2「判定関数は 1 本」）: 受付の判定は [`judge`]（run を作らない・
-//! 断りを判定関数 1 本につき高々 1 件で**全部**集める）と [`create`]（run dir・写し・event）の 2 段で、`intake` = judge →
-//! create（列の先頭の 1 件で断る＝従来の外形）・`pipe preflight`（[`super::preflight`]）= judge だけ。各判定関数
-//! （[`freeze`] / [`settle_write_set`] / [`exclude_same_kind`] / [`exclude_unaddressed`] / [`exclude_cap_shortfall`] /
-//! [`exclude_max_live`] / [`exclude_overlap`] / 重複 run）の中身と「先頭の 1 件で返す」形は不変で、Ok 値だけを事実（[`Headrooms`] / [`Crossed`]）へ
-//! 広げる。
-//!
-//! **同型の停止と焼き直しの門**（契約表の行 w・contract-source.md §23・`s2-07l.396`）: 受付は置き場の event の列から同じ bead
-//! の落ちを型の語ごとに累計し（便の落ちの型 `RunFell` と受付の断り `IntakeRefused`・PASS の便も契約か節の字の替えも別の型の落ちを
-//! 挟むことも数えを戻さない・器の容量の断りと受け皿の型は数えない）、同じ型の落ちが rules 行 `review.same_kind_stop` の本数に
-//! 達した周を `same-kind-repeated` で、置き場の replay から読む直前の便（[`history`]）の指摘（`at`）に対応する差分の無い周を
-//! `finding-unaddressed` で断る。どちらも run dir も event も作らず、write-set の弁別の後・余地と交差の前に撃つ。
+//! `pipe intake` の受付。
+//! 契約 file を読み、宣言を上限と突き合わせ、上限の余地と write-set の交差で断り、置き場へ写して run を 起こす。
+//! 親の共通の材料は `super::` で引く。
+//! 行が導く欄を手で書いた周は `promised-field-written`・ `symbols` の名が base と合わない周は `promise-symbol-unresolved`。
+//! 出所: 設計 §5 §3 pipeline-conflict.md §2 contract-source.md §3 §33 §21 §23 s2-07l.295 s2-07l.396
 
 use super::base_run::{self, BaseRun, Early};
 use super::{broken, flag, int_row, list_row, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};

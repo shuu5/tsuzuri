@@ -1,20 +1,5 @@
-//! `pipe` subcommand の面（設計 §5）。
-//!
-//! **env も HOME も読まない**（憲法 C2.2）。置き場は `--state-dir` か、repo に紐づいた
-//! git 設定（`vessel init` が書いたもの）から解く。規則の値は `--rules` か埋め込みの
-//! manifest から読み、数値をこの file に焼かない（C1 / C5）。
-//!
-//! 前提違反は **rc 1 + stderr 1 行で何もしない**（event も追記しない・設計 §4）。
-//! 契約 file が読めない周は「対象そのものが壊れている」ので rc 2 で、理由を全件出す。
-//!
-//! 本 file は入口（[`dispatch`] / [`contracts`] / [`usage`]）と材料の型（[`Resolved`] / [`Extra`]）と `mod` 宣言、
-//! および再輸出の shim だけを持つ（`pipe/cli/` は subcommand と helper の責務ごとに 1 file・設計 §5）。引数と規則の
-//! 行の helper は [`args`]、便の状態の helper は [`state`]、表示は [`show`]、再開は [`resume`]（`s2-07l.349` の
-//! 純移動）。受付は [`intake`]、段の手は [`step`]、起動と連鎖は [`run`]（`s2-07l.295` の純移動）、受付と同じ判定を
-//! run を作らず撃つ口は [`preflight`]（契約表の行 u・contract-source.md §21）、名乗った消費側の契約の検証行を受付で base の
-//! 木でも撃つ口は [`base_run`]（契約表の行 ay・pipeline.md §56）。外から呼ぶ path
-//! は本 file の再輸出で不変（子 module は helper を `super::` で引き、兄弟 module を `super::approve` /
-//! `super::gate` / `super::land` の path で呼ぶので、その名は本 file の `use` が親として持つ）。
+//! `pipe` subcommand の面。
+//! 出所: 設計 §5 §4 s2-07l.349 s2-07l.295 contract-source.md §21 pipeline.md §56
 
 mod args;
 mod base_run;

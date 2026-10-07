@@ -1,17 +1,6 @@
-//! path の種別に属する prefix の集合を対象 repo の vessel 宣言が名乗る（設計 docs/design/seat-roles.md §24・
-//! ADR-0047・SRS FR45 / FR41 / NFR4）。
-//!
-//! 宣言の任意 key 3 本（[`KEYS`]）は repo 相対の prefix の**配列**で、末尾が `/` の項目はその dir の下の全 file、
-//! `/` で終わらない項目はその path と完全一致の 1 file。書かれた key はその種別の固定の判定を**置き換え**
-//! （足し合わせない）、書かれていない key の種別は固定の判定のまま＝3 本とも無い宣言と宣言 file を持たない
-//! repo は今と 1 行も変わらない（[`PathKinds::Default`]）。
-//!
-//! 不正な項目（`..` の段・絶対 path・空文字・種別の間で重なる項目）が 1 件でも在る周と、宣言 file が在るのに
-//! 読めない周は [`PathKinds::Invalid`]（理由は閉じた enum [`Invalid`]・宣言順 = 検査順）で、guard は repo 内の
-//! 全 file を code の種別として扱う（fail-closed・黙って固定値へ戻さない・憲法 C10）。
-//!
-//! 読むのは anchor の **HEAD の tree**（親 module の読み手と同じ 1 本・作業ツリーは読まない＝commit されていない
-//! 宣言は無いのと同じ）。値の受理集合と配列の層は既存の key と共有する（第 2 の parser を作らない）。
+//! path の種別に属する prefix の集合を対象 repo の vessel 宣言が名乗る。
+//! 不正な項目が 1 件でも在る周と、宣言 file が在るのに 読めない周は [`PathKinds::Invalid`]で、guard は repo 内の 全 file を code の種別として扱う。
+//! 出所: seat-roles.md §24 ADR-0047
 
 use super::{head_declaration, list_of, DeclError, Raw};
 use std::path::Path;

@@ -443,24 +443,10 @@ pub(in crate::pipe) fn pointer_of(acceptance: &str) -> Option<Pointer> {
     table::parse_pointer(line.trim()).ok()
 }
 
-/// 同じ契約 file の sha で**終端に着いた**便が在れば、その便の sha と段（設計 §2「終端の便は列外」）。
-///
-/// 突き合わせるのは**便の写しの中身**である（sha は名札）。終端かは受付と同じ 1 本（[`live`]）で判じ、
-/// 測れない周（`None`）はここで外さない——その便は交差の検査が `WriteSetUnreadable` で断る側に倒す。
-/// `git hash-object` を撃てない周は sha を測れないので列外にしない（`generated` が base を読めている＝
-/// git は撃てているので、実際には到達しない）。
-///
-/// **列へ戻す印**（設計 §12・`s2-07l.495`）: 直前の便が終端でも、その便の最後の記帳より**後**に同じ bead
-/// への `release` が在る周は列外にしない（[`released_after`]・材料は event log の並びだけ・新しい event kind
-/// も field も足さない・C17.1）。起こし直した便は新しい run id を持ち、その記帳は `release` より後に並ぶ
-/// ので、同じ sha でまた終端に着けば再び列外になる＝**印 1 回で起き直るのは 1 回**（§2 の無限再起動を
-/// 開け直さない）。戻す段は [`requeues`] が段の型の網羅の match 1 本で決める。
-///
-/// **審査役へ渡る材料も鍵に入る**（設計 §16・`s2-07l.495`）: `Reviewed` で終端した便（審査 FAIL / INCONCLUSIVE）
-/// は、行の `section` が指す § の本文を審査役が読んだ。直前の便の材料の dir に在る § の写しと、いま base から
-/// 読んだ § の本文（読みは審査と同じ 1 本・[`review::design_material`]）が違う周は列外にしない＝**同じ材料 →
-/// 同じ判定**が鍵の意味である。写しが無い / 読めない周は契約 file だけの鍵に倒す（[`section_moved`]）。
-/// § を鍵に入れる段は [`section_keyed`] が段の型の網羅の match 1 本で決める。
+/// 同じ契約 file の sha で**終端に着いた**便が在れば、その便の sha と段。
+/// 終端かは受付と同じ 1 本で判じ、 測れない周はここで外さない——その便は交差の検査が `WriteSetUnreadable` で断る側に倒す。
+/// **審査役へ渡る材料も鍵に入る**: `Reviewed` で終端した便 は、行の `section` が指す § の本文を審査役が読んだ。
+/// 出所: 設計 §2 §12 §16 s2-07l.495
 pub(super) fn settled(input: &Input<'_>, bead: &str, body: &str, design: &str, events: &[Event]) -> Option<(String, Stage)> {
     let state = current(input.state_dir).ok()?;
     // **直前の便から見る**（run id は `<bead>-<UTC の秒>` ＝ id の昇順が時系列なので、逆順が新しい側）。

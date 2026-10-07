@@ -1,28 +1,6 @@
-//! host 単位の受付（設計 docs/design/gate-cost.md §3.2・ADR-0021 §2.3）。
-//!
-//! `{jobs}` を持つ verify 行を撃つ前に、host の空き memory と core 数と**生きている受付札**の
-//! 合計から配れる枠を測り、枠 1 組 = 札 file 1 つを置いてから撃つ。project をまたいで 1 つの置き場
-//! （[`crate::seat::host_slots_dir`]）を見るので、別 project の gate と同時に満額を取らない。
-//!
-//! 枠は **memory の 2 項と core の 1 項の min**（設計 §31・ADR-0050）。job 1 つの thread の
-//! 値段（[`Cpu::price`]）は器がここで決め、受け付けた枠は jobs と thread を**対で**運ぶ
-//! （[`Grant`]）。縮退の周と測れない周はどちらも jobs 1 かつ thread 1 である（`cores / 1` を
-//! 渡して 1 本の行に core 数ぶんの thread を許す形＝速い側へ倒さない）。
-//!
-//! **止めない、縮退する**（設計 §2）。枠が空かない周は [`Completion::SlotFree`] を唯一の待機
-//! 実装（[`fleet::wait`]）で待ち、上限（rules 行 `gate.slot_wait_s`）を超えたら並列度 1 で進む
-//! （`slot=degraded`）。測れない周も並列度 1 で進む（`slot=unmeasured`）。**0 で返さない**。
-//! ゆえにこの境界は行為を止めうる判定を持たず、ADR-0014 §2.1 の guard ではない——**極性一覧に
-//! 載せない**（設計 §3.2・封じ込めと同じ）。
-//!
-//! 語の衝突を避けるため、code の識別子は **admission / Ticket** 系で持つ（hook の注入計測の
-//! slot〔FR21〕と、intake の「受付」とは別の実体）。file 名の `.slot` と record の `slot=` は
-//! ADR-0021 §2.3 の字面のままである。
-//!
-//! 札は器が管理する「物」ではなく受付の一時的な印で、死んだ札・読めない札は削除して回収する
-//! （憲法 N1 の対象外・ADR-0021 §5 (D)）。回収は黙って落とさず record の `slot=` に数を残す
-//! （NFR4）。札の持ち主の生存判定（pid + 起動時刻）は lock の所有者の判定と**同じ 1 本**
-//! （[`crate::fleet::store::started_ms`]）で、ここには置かない（C6.3）。
+//! host 単位の受付。
+//! 回収は黙って落とさず record の `slot=` に数を残す。
+//! 出所: gate-cost.md §3.2 ADR-0021 §2.3 §5 設計 §31 §2 §3.2 ADR-0050 ADR-0014 §2.1
 
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::store::{acquire, started_ms, LockPolicy};
@@ -562,6 +540,7 @@ fn write_ticket(dir: &Path, run: &str, jobs: u64) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+// flip-check: moved t3-hub.92.10.19
     use super::{
         by_cpu, capacity, cpu_of, judge, now_ms, room, slot_detail, ticket_started_ms, Cpu, Free, Judged, Sizes,
         Slot, Ticket, Unreadable,
