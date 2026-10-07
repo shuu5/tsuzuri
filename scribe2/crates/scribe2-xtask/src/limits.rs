@@ -12,9 +12,7 @@ use crate::toml_lite::{quoted, sections};
 /// `sections` は `[` を 1 つだけ剥がすので、array-of-tables は `[rule` になる。
 const RULE_HEADER: &str = "[rule";
 
-/// manifest の行 id ↔ [`Limits`] の field と境界 crate の上限。`read` が要求する 12 本（欠けは Err）。
-const CORE_LINES: &str = "R-C4-1";
-const BOUNDARY_LINES: &str = "R-C4-5";
+/// manifest の行 id ↔ [`Limits`] の field。`read` が要求する 10 本（欠けは Err）。
 const FILE_LINES: &str = "R-C4-2";
 const TEST_SRC_RATIO_PCT: &str = "R-C4-3";
 const FN_LINES: &str = "R-C4-4.fn-lines";
@@ -34,8 +32,6 @@ const MARKS_PER_PR: &str = "flip.marks_per_pr";
 /// 行の読み出し）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Limits {
-    /// core crate の `src` 配下 `.rs` の総行数の上限（R-C4-1）。
-    pub(crate) core_lines: u64,
     /// `crates/*/src` 配下 `.rs` 1 file あたりの物理行数の上限（R-C4-2）。
     pub(crate) file_lines: u64,
     /// test 行 / src 行 の比の上限（百分率・R-C4-3）。
@@ -46,7 +42,7 @@ pub(crate) struct Limits {
     pub(crate) fn_complexity: u64,
     /// 関数 1 本の引数の上限（R-C4-4.args・clippy `too-many-arguments-threshold`）。
     pub(crate) fn_args: u64,
-    /// 行の数え方の幅（文字・R-C4.line-width）。R-C4-1〜3 の行数はこの幅で正規化して数える。
+    /// 行の数え方の幅（文字・R-C4.line-width）。R-C4-2・R-C4-3 の行数はこの幅で正規化して数える。
     pub(crate) line_width: u64,
     /// 直接依存の本数の上限（R-C13-1）。
     pub(crate) dep_budget: u64,
@@ -59,19 +55,13 @@ pub(crate) struct Limits {
 }
 
 impl Limits {
-    /// manifest の本文から 12 値を読み、[`Limits`] の 11 値を返す（R-C4-5 も必須の行として読む＝[`Self::read_with_boundary_lines`]）。
-    pub(crate) fn read(manifest_text: &str) -> Result<Self, String> {
-        Self::read_with_boundary_lines(manifest_text).map(|(limits, _)| limits)
-    }
-
-    /// manifest の本文から 12 値を読み、[`Limits`] と境界 crate の src の本体の上限（R-C4-5・boundary-lines が読む）を返す。
+    /// manifest の本文から必須の 10 値を読み、[`Limits`] を返す。
     ///
-    /// R-C4-5 を field に持たないのは、[`Limits`] を literal で組む歯（deps-delta）を動かさないためである（読み手が要求する
-    /// 行は 12 本で同じ）。12 本のどれかが無い / `value` が整数でない / `enabled = true` でない周は `Err`
+    /// 10 本のどれかが無い / `value` が整数でない / `enabled = true` でない周は `Err`
     /// （測れないを緑にしない・SRS FR18）。不備は**全件**を集めて 1 つの reason に畳み、
     /// 各件が行 id と（本文に在る行なら）行番号を名指す。`enabled` の省略も `false` と
     /// 同じく拒む——省略を true に埋めると書き忘れた行が黙って効く側へ倒れる。
-    pub(crate) fn read_with_boundary_lines(manifest_text: &str) -> Result<(Self, u64), String> {
+    pub(crate) fn read(manifest_text: &str) -> Result<Self, String> {
         let mut problems = Vec::new();
         let mut value_of = |id: &str| -> u64 {
             match int_rule(manifest_text, id) {
@@ -83,7 +73,6 @@ impl Limits {
             }
         };
         let limits = Self {
-            core_lines: value_of(CORE_LINES),
             file_lines: value_of(FILE_LINES),
             test_src_ratio_pct: value_of(TEST_SRC_RATIO_PCT),
             fn_lines: value_of(FN_LINES),
@@ -95,9 +84,8 @@ impl Limits {
             check_delta_ms: value_of(CHECK_DELTA_MS),
             tmux_test_threads: value_of(TMUX_TEST_THREADS),
         };
-        let boundary_lines = value_of(BOUNDARY_LINES);
         if problems.is_empty() {
-            Ok((limits, boundary_lines))
+            Ok(limits)
         } else {
             Err(format!("rules manifest の閾値を読めない: {}", problems.join("・")))
         }
@@ -106,7 +94,7 @@ impl Limits {
 
 /// `cargo xtask flip-check` が読む免除経路の上限（manifest の `flip.*` 行・設計 pipeline.md §7・`s2-07l.170`）。
 ///
-/// [`Limits`] と別の型に置くのは、[`Limits::read`] の 12 本を要求する読み手（check / deps-delta と、その歯の
+/// [`Limits`] と別の型に置くのは、[`Limits::read`] の 10 本を要求する読み手（check / deps-delta と、その歯の
 /// fixture）を動かさずに、flip-check だけが要る 2 本を同じ極性（欠け・不発効・形違いは `Err`）で読むためである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FlipLimits {
@@ -277,18 +265,16 @@ mod tests {
         raw_field(text, id, "ruling").and_then(|value| quoted(&value))
     }
 
-    /// 現物の manifest で [`Limits::read_with_boundary_lines`] が 12 値を返し、`core_lines` / `file_lines` が
-    /// R-C4-1 / R-C4-2 の行の値と等しい（憲法 C14.2・const を消して読み手 1 本にした形）。
+    /// 現物の manifest で [`Limits::read`] が 10 値を返し、`file_lines` が R-C4-2 の行の値と等しい
+    /// （憲法 C14.2・const を消して読み手 1 本にした形）。行 R-C4-1 と R-C4-5 は manifest に無い（総行数の上限は止めた）。
     /// flip-check の 2 行（`flip.docs_only_faces` / `flip.marks_per_pr`・`s2-07l.170`）も [`FlipLimits::read`] で
     /// 欠け無く読め、値は行の現物と等しい（読み手が要求する本数は行の本数に追随する）。
     #[test]
     fn limits_match_rules_manifest() {
         let text = manifest_text();
-        let (limits, boundary_lines) = Limits::read_with_boundary_lines(&text).unwrap_or_else(|reason| panic!("{reason}"));
-        // 値 ↔ 行 id の 12 対（`read` の const と同じ対応・field 名の取り違えを行 id で名指す）。
+        let limits = Limits::read(&text).unwrap_or_else(|reason| panic!("{reason}"));
+        // 値 ↔ 行 id の 10 対（`read` の const と同じ対応・field 名の取り違えを行 id で名指す）。
         let pairs = [
-            (boundary_lines, "R-C4-5"),
-            (limits.core_lines, "R-C4-1"),
             (limits.file_lines, "R-C4-2"),
             (limits.test_src_ratio_pct, "R-C4-3"),
             (limits.fn_lines, "R-C4-4.fn-lines"),
@@ -300,13 +286,14 @@ mod tests {
             (limits.check_delta_ms, "R-C13-1.check-delta-ms"),
             (limits.tmux_test_threads, "gate.tmux_test_threads"),
         ];
-        assert_eq!(pairs.len(), 12, "読む値の個数（`.600` で +1〔R-C4-5〕）");
+        assert_eq!(pairs.len(), 10, "読む値の個数（行 v-cap-stop で -2〔R-C4-1 と R-C4-5〕）");
         for (field, id) in pairs {
             assert_eq!(Some(field), int_value(&text, id), "{id} の行と field");
         }
-        // 12 値はどれも 0 ではない（`read` が不備を 0 で埋めて Ok に化けていない）。
-        assert!(boundary_lines > 0, "上限 0 は境界 crate の本体を 1 行も許さない");
-        assert!(limits.core_lines > 0 && limits.file_lines > 0 && limits.dep_budget > 0, "{limits:?}");
+        let gone = (int_value(&text, "R-C4-1"), int_value(&text, "R-C4-5"));
+        assert_eq!(gone, (None, None), "行 R-C4-1 と R-C4-5 は manifest に無い");
+        // 10 値はどれも 0 ではない（`read` が不備を 0 で埋めて Ok に化けていない）。
+        assert!(limits.file_lines > 0 && limits.dep_budget > 0, "{limits:?}");
         assert!(limits.dep_per_pr > 0 && limits.check_delta_ms > 0, "0 は依存を 1 本も足せない: {limits:?}");
         assert!(limits.line_width > 0, "幅 0 は数え方を縮退させる: {limits:?}");
         assert!(limits.tmux_test_threads > 0, "同時本数 0 は tmux の歯を 1 本も走らせない: {limits:?}");
@@ -324,12 +311,10 @@ mod tests {
         assert!(FlipLimits::read(&empty).err().is_some_and(|reason| reason.contains("flip.docs_only_faces")), "空の列");
     }
 
-    /// 12 行の読み手用 fixture。`drop` に与えた行だけ `value` を落とし、`disabled` の行は
+    /// 10 行の読み手用 fixture。`drop` に与えた行だけ `value` を落とし、`disabled` の行は
     /// `enabled = false` にする。
     fn limits_fixture(drop: Option<&str>, disabled: Option<&str>) -> String {
         let rows = [
-            ("R-C4-1", 40_000),
-            ("R-C4-5", 316),
             ("R-C4-2", 1_500),
             ("R-C4-3", 100),
             ("R-C4-4.fn-lines", 60),
@@ -353,27 +338,20 @@ mod tests {
         text
     }
 
-    /// 現物の manifest の R-C4-5（境界 crate の src の本体の上限・kind `BoundaryLines`・設計 core-boundary.md §9 行 i）を
-    /// [`Limits::read_with_boundary_lines`] が行の値のまま返し、行を欠いた・不発効にした manifest は [`Limits::read`] も
-    /// `Err` で R-C4-5 を名指す（12 本目の必須の行・他の 11 本と同じ極性）。
+    /// 総行数の上限の行（R-C4-1・R-C4-5）は必須でない。10 行の fixture に、不発効の行 R-C4-1 と値の無い行 R-C4-5 を
+    /// 足しても [`Limits::read`] は `Ok` を返す（止めた上限の行が残っていても読み手は断らない）。
     #[test]
-    fn limits_read_carries_the_boundary_lines_row() {
-        let text = manifest_text();
-        let (_, boundary_lines) = Limits::read_with_boundary_lines(&text).unwrap_or_else(|reason| panic!("{reason}"));
-        assert_eq!(Some(boundary_lines), int_value(&text, "R-C4-5"), "R-C4-5 の行の値");
-        assert_eq!(raw_field(&text, "R-C4-5", "kind").and_then(|kind| quoted(&kind)).as_deref(), Some("BoundaryLines"), "kind");
-        let dropped = text.replace("id = \"R-C4-5\"", "id = \"R-C4-9\"");
-        assert!(Limits::read(&dropped).err().is_some_and(|reason| reason.contains("R-C4-5")), "行の欠けは Err");
-        let fixture = limits_fixture(None, Some("R-C4-5"));
-        assert!(
-            Limits::read(&fixture).err().is_some_and(|reason| reason.contains("R-C4-5") && reason.contains("enabled")),
-            "不発効は Err"
+    fn limits_read_needs_no_total_line_rows() {
+        let extra = concat!(
+            "\n[[rule]]\nid = \"R-C4-1\"\nkind = \"X\"\nvalue = 90000\nenabled = false\nruling = \"fixture\"\nruled_at = \"2026-09-14\"\n",
+            "\n[[rule]]\nid = \"R-C4-5\"\nkind = \"X\"\nenabled = true\nruling = \"fixture\"\nruled_at = \"2026-09-14\"\n",
         );
-        let whole = Limits::read_with_boundary_lines(&limits_fixture(None, None)).map(|(_, value)| value);
-        assert_eq!(whole, Ok(316), "fixture の値");
+        let text = format!("{}{extra}", limits_fixture(None, None));
+        let limits = Limits::read(&text).unwrap_or_else(|reason| panic!("{reason}"));
+        assert_eq!(limits.file_lines, 1_500, "10 本は今のまま読む");
     }
 
-    /// 12 行そろった fixture は読め、`value = 60` を欠いた fixture は `Err` が行 id を名指す。
+    /// 10 行そろった fixture は読め、`value = 60` を欠いた fixture は `Err` が行 id を名指す。
     #[test]
     fn limits_read_names_the_row_missing_its_value() {
         let whole = Limits::read(&limits_fixture(None, None)).unwrap_or_else(|reason| panic!("{reason}"));
@@ -385,7 +363,7 @@ mod tests {
         let reason = missing.err().unwrap_or_default();
         assert!(reason.contains("R-C4-4.fn-lines"), "欠いた行 id を名指す: {reason}");
         assert!(!reason.contains("R-C4-1"), "他の行は名指さない: {reason}");
-        // 行そのものが無い形も同じ（12 本のどれかが無いは Err）。
+        // 行そのものが無い形も同じ（10 本のどれかが無いは Err）。
         let dropped = limits_fixture(None, None).replace("id = \"R-C13-1\"", "id = \"R-C13-9\"");
         assert!(Limits::read(&dropped).err().is_some_and(|reason| reason.contains("R-C13-1")));
     }
@@ -397,7 +375,7 @@ mod tests {
         let reason = disabled.err().unwrap_or_default();
         assert!(reason.contains("R-C4-3") && reason.contains("enabled"), "{reason}");
         let omitted = limits_fixture(None, None).replacen("enabled = true\n", "", 1);
-        assert!(Limits::read(&omitted).err().is_some_and(|reason| reason.contains("R-C4-1")), "省略も Err");
+        assert!(Limits::read(&omitted).err().is_some_and(|reason| reason.contains("R-C4-2")), "省略も Err");
         let text = limits_fixture(None, None).replace("value = 1500", "value = \"1500\"");
         assert!(Limits::read(&text).err().is_some_and(|reason| reason.contains("R-C4-2")), "整数でない value");
     }
@@ -542,8 +520,7 @@ mod tests {
     const INITIAL_RULING: &str = "RULING-v2-p1-exit-bundle";
 
     /// §3 の閾値セルと突合する manifest の行（セルから拾う数値の出現順）。
-    const THRESHOLD_ROWS: [&str; 6] = [
-        "R-C4-1",
+    const THRESHOLD_ROWS: [&str; 5] = [
         "R-C4-2",
         "R-C4-3",
         "R-C4-4.fn-lines",
@@ -558,7 +535,6 @@ mod tests {
     /// 値を変えて ruling を初期のまま残した行（手編集）は差として返す。
     fn unruled_drift(html: &str, text: &str) -> Vec<String> {
         let mut cells: Vec<u64> = Vec::new();
-        cells.extend(ints(&initial_cell(html, "r-c4-1")));
         cells.extend(ints(&initial_cell(html, "r-c4-2")));
         cells.push(pct(&initial_cell(html, "r-c4-3")));
         cells.extend(ints(&initial_cell(html, "r-c4-4")));
@@ -588,7 +564,7 @@ mod tests {
         assert!(drift.is_empty(), "憲法 §3 の閾値セルと rules manifest の値: {drift:?}");
     }
 
-    /// §3 の 4 行の fixture（初期値 = 20,000 / 1,500 / 1.0 / 60・15・5）。
+    /// §3 の 4 行の fixture（初期値 = 20,000 / 1,500 / 1.0 / 60・15・5）。行 r-c4-1 は凍った頁の写しとして残るが突合は拾わない。
     const HTML_FIXTURE: &str = concat!(
         "<tr id=\"r-c4-1\"><td>R-C4-1</td><td>C4</td><td>core</td><td>20,000 行 以下</td></tr>\n",
         "<tr id=\"r-c4-2\"><td>R-C4-2</td><td>C4</td><td>module</td><td>1,500 行 以下</td></tr>\n",
@@ -596,11 +572,10 @@ mod tests {
         "<tr id=\"r-c4-4\"><td>R-C4-4</td><td>C4</td><td>fn</td><td>関数 60 行・複雑度 15・引数 5</td></tr>\n",
     );
 
-    /// 6 行の manifest fixture。R-C4-1 だけ値と ruling を差し替える。
-    fn manifest_fixture(core_lines: u64, core_ruling: &str) -> String {
+    /// 5 行の manifest fixture。R-C4-2 だけ値と ruling を差し替える。
+    fn manifest_fixture(file_lines: u64, file_ruling: &str) -> String {
         let rows = [
-            ("R-C4-1", core_lines, core_ruling),
-            ("R-C4-2", 1500, "RULING-v2-p1-exit-bundle 論点 2"),
+            ("R-C4-2", file_lines, file_ruling),
             ("R-C4-3", 100, "RULING-v2-p1-exit-bundle 論点 2"),
             ("R-C4-4.fn-lines", 60, "RULING-v2-p1-exit-bundle 論点 2"),
             ("R-C4-4.complexity", 15, "RULING-v2-p1-exit-bundle 論点 2"),
@@ -619,19 +594,27 @@ mod tests {
     // flip-check: retroactive s2-07l.191
     #[test]
     fn constitution_drift_passes_rows_changed_under_a_new_ruling() {
-        let initial = manifest_fixture(20_000, "RULING-v2-p1-exit-bundle 論点 2");
+        let initial = manifest_fixture(1_500, "RULING-v2-p1-exit-bundle 論点 2");
         assert_eq!(unruled_drift(HTML_FIXTURE, &initial), Vec::<String>::new(), "初期値のまま");
-        let ruled = manifest_fixture(26_000, "user 2026-09-13T07:08Z");
+        let ruled = manifest_fixture(1_600, "user 2026-09-13T07:08Z");
         assert_eq!(unruled_drift(HTML_FIXTURE, &ruled), Vec::<String>::new(), "新しい裁定で改めた行");
+    }
+
+    /// manifest に行 R-C4-1（core の総行数の上限）が無くても、§3 の突合は行 r-c4-1 を拾わず差 0 で通る（panic しない）。
+    #[test]
+    fn constitution_drift_ignores_the_core_total_row() {
+        let text = manifest_fixture(1_500, "RULING-v2-p1-exit-bundle 論点 2");
+        assert_eq!(int_value(&text, "R-C4-1"), None, "fixture に行 R-C4-1 は無い");
+        assert_eq!(unruled_drift(HTML_FIXTURE, &text), Vec::<String>::new());
     }
 
     /// 値を変え ruling を初期の裁定のまま残した行（裁定なしの手編集）は差として返る。
     #[test]
     fn constitution_drift_flags_rows_changed_under_the_initial_ruling() {
-        let unruled = manifest_fixture(26_000, "RULING-v2-p1-exit-bundle 論点 2");
+        let unruled = manifest_fixture(1_600, "RULING-v2-p1-exit-bundle 論点 2");
         assert_eq!(
             unruled_drift(HTML_FIXTURE, &unruled),
-            vec!["R-C4-1: §3 = 20000・manifest = 26000・ruling = RULING-v2-p1-exit-bundle 論点 2".to_owned()]
+            vec!["R-C4-2: §3 = 1500・manifest = 1600・ruling = RULING-v2-p1-exit-bundle 論点 2".to_owned()]
         );
     }
 }

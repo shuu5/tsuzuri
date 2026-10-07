@@ -566,13 +566,13 @@ pub(super) fn repo_with_big_file() -> (PathBuf, PathBuf) {
     (repo, state)
 }
 
-/// 上限の 2 値を振った tmp manifest の path（[`repo_with_big_file`] の置き場に書く・file の上限は 1500）。
-pub(super) fn capped_rules(state: &Path, name: &str, core_lines: u64) -> String {
+/// 上限の 1 値を振った tmp manifest の path（[`repo_with_big_file`] の置き場に書く・file の上限は 1500）。
+pub(super) fn capped_rules(state: &Path, name: &str) -> String {
     let fixture = RulesFixture {
         gate: (1, 1_000_000),
         retries: FOLLOW_RETRIES,
         slots: default_slots(),
-        caps: CapFixture { core_lines, file_lines: 1_500 },
+        caps: CapFixture { file_lines: 1_500 },
     };
     write_rules_capped(state, name, fixture).display().to_string()
 }
@@ -597,10 +597,10 @@ pub(super) fn intake_with_rules(repo: &Path, state: &Path, design: &str, bead: &
     ])
 }
 
-// ── core の余地の母集団 = 本体（`s2-07l.198` 行 a・設計 core-boundary.md §2・接頭辞 `pipe_intake_core_headroom_`） ──
+// ── core の総量は測らず file の余地だけ（`s2-07l.198` 行 a・設計 core-boundary.md §2・接頭辞 `pipe_intake_core_headroom_`） ──
 
 /// [`repo_with_state`] に、本体 1000 行 + in-file の歯 399 行（行頭 `#[cfg(test)]` から file 末尾・全体 1399 行）の
-/// `crates/toy/src/heavy.rs` を 1 本足した repo。file の余地（上限 1500）は 101・core の本体は 1000。
+/// `crates/toy/src/heavy.rs` を 1 本足した repo。file の余地（上限 1500）は 101。
 #[expect(
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
@@ -616,43 +616,35 @@ fn repo_with_heavy_file() -> (PathBuf, PathBuf) {
     (repo, state)
 }
 
-/// core の合計は**本体**だけ（in-file の歯を除く＝xtask check の core-lines と同じ母集団）: 本体 1000 / 全体 1399 の
-/// `.rs` を持つ base で、core の上限 1450 の余地は 450（全体で数えれば 51）＝新規 1 本の S（100）は通り、上限 1099 は
-/// `core` の余地 **99** を名指して断られる（全体で数える実装は前者を断り、後者を 0 行と名指す）。
+/// core の総行数の余地は測らない: 本体 1000 / 全体 1399 の `.rs` を持つ base へ、新規 file 2 本（size M・見積 300 × 2）を
+/// 足す契約は rc 0 で通り、stderr に `core の上限の余地が` の字が無い（core の合計で断る実装は余地が足りない周で断る）。
 #[test]
-fn pipe_intake_core_headroom_counts_the_core_total_without_in_file_tests() {
+fn pipe_intake_core_headroom_refuses_no_core_total() {
     let (repo, state) = repo_with_heavy_file();
-    let fresh = "\"+crates/toy/src/new.rs\"";
-    let roomy = capped_rules(&state, "rules-src.toml", 1_450);
-    let fits = intake_with_rules(&repo, &state, &sized_contract(&repo, "fits", "S", fresh), "s2-cf", &roomy);
-    assert_eq!(fits.status.code(), Some(i32::from(RC_OK)), "本体 1000 → 余地 450 に S の 1 本は入る: {}", stderr_of(&fits));
-    let id = run_id_of(&fits);
+    let fresh = "\"+crates/toy/src/new.rs\", \"+crates/toy/src/next.rs\"";
+    let rules = capped_rules(&state, "rules-src.toml");
+    let out = intake_with_rules(&repo, &state, &sized_contract(&repo, "fits", "M", fresh), "s2-cf", &rules);
+    let err = stderr_of(&out);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "新規 file の M 2 本は file の余地に入って通る: {err}");
+    assert!(!err.contains("core の上限の余地が"), "core の余地では断らない: {err}");
+    let id = run_id_of(&out);
     assert!(state.join("pipe").join(&id).is_dir(), "run dir が作られる: {id}");
-    assert_eq!(event_count(&state), 2, "RunCreated と審査の段（Reviewed）の 2 件");
     stop_run_ok(&state, &id);
-    let before = event_count(&state);
-    let tight = capped_rules(&state, "rules-tight.toml", 1_099);
-    let short = intake_with_rules(&repo, &state, &sized_contract(&repo, "short", "S", fresh), "s2-cs", &tight);
-    let err = stderr_of(&short);
-    assert_eq!(short.status.code(), Some(i32::from(RC_REFUSED)), "本体 1000 → 余地 99 に S の 1 本は入らない: {err}");
-    assert!(err.contains("core の上限の余地が 99 行") && err.contains("size S"), "余地は本体から数える（全体なら 0 行）: {err}");
-    assert!(!err.contains("heavy.rs の上限"), "名指すのは core だけ: {err}");
-    assert_eq!(event_count(&state), before, "断った周は event を書かない");
     clean(&[&repo, &state]);
 }
 
 /// file の余地は**全体**のまま（R-C4-2 の file-lines と同じ）: 同じ base で `heavy.rs` 自身への M（300）は file の余地
-/// 101 で断られ（本体で数える実装は 500 で通す）、S（100）は入る。core は上限 40000 で余裕＝名指すのは file だけ。
+/// 101 で断られ（本体で数える実装は 500 で通す）、S（100）は入る。名指すのは file だけ。
 #[test]
 fn pipe_intake_core_headroom_keeps_the_file_headroom_on_the_whole_file() {
     let (repo, state) = repo_with_heavy_file();
     let heavy = "\"crates/toy/src/heavy.rs\"";
-    let roomy = capped_rules(&state, "rules-roomy.toml", 40_000);
+    let roomy = capped_rules(&state, "rules-roomy.toml");
     let over = intake_with_rules(&repo, &state, &sized_contract(&repo, "m", "M", heavy), "s2-hm", &roomy);
     let err = stderr_of(&over);
     assert_eq!(over.status.code(), Some(i32::from(RC_REFUSED)), "全体 1399 → 余地 101 に M は入らない: {err}");
     assert!(err.contains("crates/toy/src/heavy.rs の上限の余地が 101 行") && err.contains("size M"), "file の余地は全体から: {err}");
-    assert!(!err.contains("core の上限"), "core は余裕: {err}");
+    assert!(!err.contains("core の上限"), "core は名指さない: {err}");
     assert_eq!(event_count(&state), 0, "断った周は event を書かない");
     let fits = intake_with_rules(&repo, &state, &sized_contract(&repo, "s", "S", heavy), "s2-hs", &roomy);
     assert_eq!(fits.status.code(), Some(i32::from(RC_OK)), "S（100）は余地 101 に入る: {}", stderr_of(&fits));
@@ -685,24 +677,22 @@ fn repo_with_nested_heavy_file(declared: bool) -> (PathBuf, PathBuf) {
     (repo, state)
 }
 
-/// 宣言した根の下の file は、`crates/` の直下と同じ値（file の余地 101・core の余地 99）で断られる: M（300）は file の余地で、
-/// 新規 1 本の S（100）は core の上限 1099 の余地で（`pipe_intake_core_headroom_` の 2 本と同じ値）。
+/// 宣言した根の下の file は、`crates/` の直下と同じ値（file の余地 101）で断られる: M（300）は file の余地で断られ、
+/// 新規 1 本の S（100）は通る（`pipe_intake_core_headroom_` の 2 本と同じ値）。
 #[test]
-fn pipe_intake_crate_roots_declared_root_measures_the_file_and_core_room() {
+fn pipe_intake_crate_roots_declared_root_measures_the_file_room() {
     let (repo, state) = repo_with_nested_heavy_file(true);
     let heavy = "\"nest/crates/toy/src/heavy.rs\"";
-    let roomy = capped_rules(&state, "rules-roomy.toml", 40_000);
+    let roomy = capped_rules(&state, "rules-roomy.toml");
     let over = intake_with_rules(&repo, &state, &sized_contract(&repo, "m", "M", heavy), "s2-nm", &roomy);
     let err = stderr_of(&over);
     assert_eq!(over.status.code(), Some(i32::from(RC_REFUSED)), "全体 1399 → 余地 101 に M は入らない: {err}");
     assert!(err.contains("nest/crates/toy/src/heavy.rs の上限の余地が 101 行") && err.contains("size M"), "file の余地: {err}");
-    let tight = capped_rules(&state, "rules-tight.toml", 1_099);
-    let fresh = "\"+nest/crates/toy/src/new.rs\"";
-    let short = intake_with_rules(&repo, &state, &sized_contract(&repo, "s", "S", fresh), "s2-ns", &tight);
-    let err = stderr_of(&short);
-    assert_eq!(short.status.code(), Some(i32::from(RC_REFUSED)), "本体 1000 → 余地 99 に S の 1 本は入らない: {err}");
-    assert!(err.contains("core の上限の余地が 99 行") && err.contains("size S"), "core の余地: {err}");
     assert_eq!(event_count(&state), 0, "断った周は event を書かない");
+    let fresh = "\"+nest/crates/toy/src/new.rs\"";
+    let fits = intake_with_rules(&repo, &state, &sized_contract(&repo, "s", "S", fresh), "s2-ns", &roomy);
+    assert_eq!(fits.status.code(), Some(i32::from(RC_OK)), "新しい file 1 本の S は通る: {}", stderr_of(&fits));
+    stop_run_ok(&state, &run_id_of(&fits));
     clean(&[&repo, &state]);
 }
 
@@ -711,13 +701,12 @@ fn pipe_intake_crate_roots_declared_root_measures_the_file_and_core_room() {
 fn pipe_intake_crate_roots_without_the_key_the_same_contracts_pass() {
     let (repo, state) = repo_with_nested_heavy_file(false);
     let heavy = "\"nest/crates/toy/src/heavy.rs\"";
-    let roomy = capped_rules(&state, "rules-roomy.toml", 40_000);
+    let roomy = capped_rules(&state, "rules-roomy.toml");
     let over = intake_with_rules(&repo, &state, &sized_contract(&repo, "m", "M", heavy), "s2-nm", &roomy);
     assert_eq!(over.status.code(), Some(i32::from(RC_OK)), "M は測る集合の外で通る: {}", stderr_of(&over));
     stop_run_ok(&state, &run_id_of(&over));
-    let tight = capped_rules(&state, "rules-tight.toml", 1_099);
     let fresh = "\"+nest/crates/toy/src/new.rs\"";
-    let fits = intake_with_rules(&repo, &state, &sized_contract(&repo, "s", "S", fresh), "s2-ns", &tight);
+    let fits = intake_with_rules(&repo, &state, &sized_contract(&repo, "s", "S", fresh), "s2-ns", &roomy);
     assert_eq!(fits.status.code(), Some(i32::from(RC_OK)), "S も通る: {}", stderr_of(&fits));
     clean(&[&repo, &state]);
 }
@@ -817,7 +806,7 @@ pub(super) fn grown_contract(repo: &Path, id: &str, size: &str, write_set: &str,
 #[test]
 fn contract_growth_preflight_headroom_estimate_is_per_file() {
     let (repo, state) = repo_with_big_file();
-    let rules = capped_rules(&state, "rules-roomy.toml", 40_000);
+    let rules = capped_rules(&state, "rules-roomy.toml");
     let small = embedded_int("pipe.size_s_lines");
     let write_set = "\"crates/toy/src/big.rs\", \"+crates/toy/src/new.rs\"";
     let rooms = |growth: Option<&str>| {

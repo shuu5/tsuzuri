@@ -1171,25 +1171,21 @@ fn rules_moved_host_guard_git_sequences_leave_runner_denied_commands() {
 
 #[test]
 fn rules_cli_get_returns_value() {
-    let args = ["get".to_owned(), "R-C4-1".to_owned()];
+    let args = ["get".to_owned(), "R-C4-2".to_owned()];
     let outcome = vessel::rules::cli::dispatch(&args);
     assert_eq!(outcome.rc, RC_OK, "rc: {outcome:?}");
-    assert_eq!(outcome.out, vec!["90000".to_owned()], "値の行（裁定 id user 2026-10-03T05:09Z）");
+    assert_eq!(outcome.out, vec!["1500".to_owned()], "値の行（裁定 id RULING-v2-p1-exit-bundle 論点 2）");
 }
 
-/// core の本体の上限の行 `R-C4-1`（設計 rules-manifest.md §23 行 t・user 裁定 2026-10-03T05:09Z・A2）が埋め込み manifest に
-/// 値 90000 / kind `CoreLines` / enabled / 裁定 id / 裁定日で在り、整数の読み手が 90000 を返す（base は値 82000 と前の裁定 ＝ RED）。
+/// core の総行数の上限の行 `R-C4-1` と境界 crate の上限の行 `R-C4-5`（行 v-cap-stop・ADR-80 の決定 (1)）は埋め込み manifest に
+/// 無く、`get` は `None`・整数の読み手は `R-C4-1` を `Err` で断る。
 #[test]
-fn rules_core_lines_90000_raised_by_ruling() {
+fn rules_core_lines_rows_are_gone() {
     let manifest = Manifest::embedded().unwrap_or_else(|errors| panic!("埋め込み manifest が拒まれた: {errors:?}"));
-    let id = "R-C4-1";
-    let row = manifest.get(id).unwrap_or_else(|| panic!("{id} の行が在る"));
-    assert_eq!(row.kind, RuleKind::CoreLines, "{id} の kind");
-    assert_eq!(row.value, RuleValue::Int(90_000), "{id} の値（行）");
-    assert!(row.enabled, "{id} は発効している");
-    assert!(row.ruling.starts_with("user 2026-10-03T05:09Z"), "{id} の裁定 id: {}", row.ruling);
-    assert_eq!(row.ruled_at, "2026-10-03", "{id} の裁定日");
-    assert_eq!(int_row(&manifest, id), Ok(90_000), "{id} を整数の読み手で引ける");
+    for id in ["R-C4-1", "R-C4-5"] {
+        assert!(manifest.get(id).is_none(), "{id} の行は無い");
+    }
+    assert!(int_row(&manifest, "R-C4-1").is_err(), "R-C4-1 を整数の読み手で引くと Err");
 }
 
 #[test]
@@ -1255,6 +1251,14 @@ fn rules_external_form() {
     std::fs::remove_dir_all(&dir).ok();
     // `rules` を引数なしで撃った usage の行（stderr・`s2-07l.250`）。
     let bare = Command::new(bin).arg("rules").output().expect("binary を起動できる");
+    // 行 R-C4-1・R-C4-5 を止めた後の要約（行 116・行を持つ種 101＝CoreLines と BoundaryLines は 0 本）。
+    for out in [&validate.stdout, &hosted.stdout] {
+        assert!(
+            String::from_utf8_lossy(out).contains("rules: ok rows=116 kinds=101"),
+            "validate の要約: {}",
+            String::from_utf8_lossy(out)
+        );
+    }
     let form = format!(
         "{}{}{}{}{}{}{}",
         String::from_utf8_lossy(&usage.stdout),

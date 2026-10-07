@@ -31,7 +31,7 @@ pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFile
 pub use optional_keys::{after_land_at, seat_constitution, SeatConstitution};
 pub use run_cap::RunCap;
 use optional_keys::{after_land_of, build_lanes_of, check_after_land, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
-pub use write_set::{headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
+pub use write_set::{headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem};
 pub(crate) use write_set::is_under;
 
 /// 対象 repo の root に置く宣言 file の名。

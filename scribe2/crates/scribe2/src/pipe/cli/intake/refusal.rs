@@ -22,9 +22,6 @@ use std::path::Path;
 /// 1 file の行数の上限を持つ rules 行（上限の余地の分子・設計 contract-source.md §3・値は読むだけ・C4）。
 pub(super) const ROW_FILE_LINES: &str = "R-C4-2";
 
-/// core の総行数の上限を持つ rules 行（上限の余地・値は読むだけ・C4）。
-const ROW_CORE_LINES: &str = "R-C4-1";
-
 /// 行の数え方の幅を持つ rules 行（上限の余地の行数を xtask check と同じ式で数える・kind `LineWidth`）。
 const ROW_LINE_WIDTH: &str = "R-C4.line-width";
 
@@ -108,7 +105,7 @@ fn headrooms_of(
     Headrooms { rooms, caps, growth }
 }
 
-/// 上限の余地: write-set の各 `.rs` の base の行数と R-C4-2 の差、core の 合計と R-C4-1 の差に、契約の `size` の見積を 当て、入らない file を名指して断る。
+/// 上限の余地: write-set の各 `.rs` の base の行数と R-C4-2 の差に、契約の `size` の見積を 当て、入らない file を名指して断る。
 /// base に無い項目は数えない——ただし **接頭辞付きで解けない項目は 受付で断る**: `-` / `~` の先が base に無い項目を落として測ると「余地を求めない」 宣言が静かに消え。
 /// 出所: contract-source.md §3 core-boundary.md §2 設計 §24 §21 s2-07l.346
 pub(super) fn exclude_cap_shortfall(manifest: &Manifest, contract: &Contract, materials: &Materials) -> Result<Headrooms, Denial> {
@@ -116,7 +113,6 @@ pub(super) fn exclude_cap_shortfall(manifest: &Manifest, contract: &Contract, ma
     let rules = |id: &str| int_row(manifest, id).map_err(|reason| denied(DENIAL_RULES, broken(reason)));
     let caps = declaration::Caps {
         file_lines: rules(ROW_FILE_LINES)?,
-        core_lines: rules(ROW_CORE_LINES)?,
         size_lines: rules(size_row(&contract.size).map_err(|reason| denied(DENIAL_SIZE, refused(reason)))?)?,
     };
     let items = match declaration::read_write_set(&contract.write_set, tracked, NewFilePolicy::MustBeAbsent) {

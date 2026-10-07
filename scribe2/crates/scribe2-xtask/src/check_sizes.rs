@@ -9,7 +9,7 @@
 //! [`SourceFile::split_test_src`] の src 側・in-file の歯は R-C4-3 が数える側で二重計上しない・user 裁定
 //! 2026-09-15・ADR-0033・設計 core-boundary.md §2）。core-spawn は core の `src` の本体で `Command::new` を含む行を
 //! 数え 1 以上を deny、boundary-spawn は境界 crate の `src` の本体で同じ字面を持つ file が 2 本以上を deny、
-//! boundary-lines は境界 crate の `src` の本体を R-C4-5 で縛る（設計 core-boundary.md §9 行 i・ADR-0062）。
+//! boundary-lines は境界 crate の `src` の本体の数だけ出す（設計 core-boundary.md §9 行 i・ADR-0062）。
 
 use crate::check::{Layout, Measured, SourceFile};
 use crate::limits::Limits;
@@ -39,8 +39,7 @@ fn width_of(limits: &Limits) -> usize {
 /// file 末尾〕と名で test の file〔丸ごと〕は数えない＝[`SourceFile::split_test_src`] の src 側の合計・設計
 /// core-boundary.md §2・rules-manifest.md §16）。
 ///
-/// 受付の core の余地（core の `pipe::declaration` の `FileLines`）も同じ切り方で数える（crate は互いに依存
-/// しないので式は 2 か所・同じ fixture の歯が一致を守る）。
+/// 数だけを出し、違反は立てない（総量の上限は止めた・ADR-80 の決定 (1)・core-spawn の前例と同じ検出線）。
 pub(crate) fn measure_core_lines(layout: &Layout, files: &[SourceFile], limits: &Limits) -> Measured {
     let core_src = layout.core_dir.join("src");
     let width = width_of(limits);
@@ -49,16 +48,9 @@ pub(crate) fn measure_core_lines(layout: &Layout, files: &[SourceFile], limits: 
         .filter(|file| file.path.starts_with(&core_src))
         .map(|file| file.split_test_src(width).1)
         .sum();
-    let max = limits.core_lines;
-    let mut violations = Vec::new();
-    if as_u64(total) > max {
-        violations.push(format!(
-            "core-lines: core crate の src の本体が {total} 行で上限 {max} 行を超える"
-        ));
-    }
     Measured {
-        fact: format!("core-lines={total}/{max}"),
-        violations,
+        fact: format!("core-lines={total}"),
+        violations: Vec::new(),
     }
 }
 
@@ -131,28 +123,22 @@ fn boundary_spawn_in(src: &Path, files: &[SourceFile]) -> Measured {
     }
 }
 
-/// 境界 crate の `src` の**本体**の総行数（boundary-lines・core-lines と同じ切り方と幅・上限は R-C4-5・設計
+/// 境界 crate の `src` の**本体**の総行数（boundary-lines・core-lines と同じ切り方と幅・数だけを出し違反は立てない・設計
 /// core-boundary.md §3 / §9）。境界 crate の dir が無い木は measure を出さない。
-pub(crate) fn measure_boundary_lines(layout: &Layout, files: &[SourceFile], limits: &Limits, max: u64) -> Option<Measured> {
-    layout.boundary_dir().map(|dir| boundary_lines_in(&dir.join("src"), files, width_of(limits), max))
+pub(crate) fn measure_boundary_lines(layout: &Layout, files: &[SourceFile], limits: &Limits) -> Option<Measured> {
+    layout.boundary_dir().map(|dir| boundary_lines_in(&dir.join("src"), files, width_of(limits)))
 }
 
-/// boundary-lines の判定（`src` を引数で受ける・[`boundary_spawn_in`] と同じ理由）。
-fn boundary_lines_in(src: &Path, files: &[SourceFile], width: usize, max: u64) -> Measured {
+/// boundary-lines の事実（`src` を引数で受ける・[`boundary_spawn_in`] と同じ理由）。
+fn boundary_lines_in(src: &Path, files: &[SourceFile], width: usize) -> Measured {
     let total: usize = files
         .iter()
         .filter(|file| file.path.starts_with(src))
         .map(|file| file.split_test_src(width).1)
         .sum();
-    let mut violations = Vec::new();
-    if as_u64(total) > max {
-        violations.push(format!(
-            "boundary-lines: 境界 crate の src の本体が {total} 行で上限 {max} 行（R-C4-5）を超える"
-        ));
-    }
     Measured {
-        fact: format!("boundary-lines={total}/{max}"),
-        violations,
+        fact: format!("boundary-lines={total}"),
+        violations: Vec::new(),
     }
 }
 
@@ -270,10 +256,9 @@ mod tests {
         (layout, sources)
     }
 
-    /// core-lines の上限と幅だけを振った閾値（他は測らないので 1）。
-    fn limits(core_lines: u64, line_width: u64) -> Limits {
+    /// 幅だけを振った閾値（他は測らないので 1）。
+    fn limits(line_width: u64) -> Limits {
         Limits {
-            core_lines,
             file_lines: 1,
             test_src_ratio_pct: 1,
             fn_lines: 1,
@@ -287,9 +272,9 @@ mod tests {
         }
     }
 
-    /// core-lines は in-file の歯（行頭 `#[cfg(test)]` から file 末尾）を数えない: fixture 2 本の本体は幅 10 で
-    /// 4 + 3 = 7 行（file 全体なら 10 + 3 = 13）。上限 7 は通り 6 は落ちる（値が 7 であることの両側の歯）。別 member の
-    /// file は母集団外。file 全体を数える実装は 13 で両方落ちる。
+    /// core-lines は in-file の歯（行頭 `#[cfg(test)]` から file 末尾）を数えず、数だけを出して違反を立てない:
+    /// fixture 2 本の本体は幅 10 で 4 + 3 = 7 行（file 全体なら 10 + 3 = 13）。別 member の file は母集団外。
+    /// file 全体を数える実装は 13 になる。
     #[test]
     fn sizes_core_lines_exclude_in_file_tests() {
         let (layout, files) = workspace(&[
@@ -297,19 +282,11 @@ mod tests {
             (CORE, "bare.rs", BARE_FIXTURE),
             ("xtask", "other.rs", SPLIT_FIXTURE),
         ]);
-        let fits = measure_core_lines(&layout, &files, &limits(7, 10));
-        assert_eq!(fits.fact, "core-lines=7/7", "本体の合計 = 4 + 3");
-        assert_eq!(fits.violations, Vec::<String>::new(), "上限ちょうどは通る");
-        let over = measure_core_lines(&layout, &files, &limits(6, 10));
-        assert_eq!(over.fact, "core-lines=7/6");
-        assert_eq!(over.violations.len(), 1, "{:?}", over.violations);
-        assert!(
-            over.violations.first().is_some_and(|line| line.starts_with("core-lines: ") && line.contains(" 7 行")),
-            "本体の行数を名指す: {:?}",
-            over.violations
-        );
+        let got = measure_core_lines(&layout, &files, &limits(10));
+        assert_eq!(got.fact, "core-lines=7", "本体の合計 = 4 + 3");
+        assert_eq!(got.violations, Vec::<String>::new(), "違反は立てない");
         // 幅を広げれば改行の数（本体 2 + 1 = 3・file 全体なら 5 + 1 = 6）。
-        assert_eq!(measure_core_lines(&layout, &files, &limits(3, 120)).fact, "core-lines=3/3");
+        assert_eq!(measure_core_lines(&layout, &files, &limits(120)).fact, "core-lines=3");
     }
 
     /// 名で test の file（`#[path]` で外出しした歯・行頭 `#[cfg(test)]` を持たない）は test 側に載る: 本体 1 本
@@ -318,9 +295,9 @@ mod tests {
     #[test]
     fn sizes_ratio_counts_named_test_files_on_the_test_side() {
         let (layout, files) = workspace(&[(CORE, "select.rs", BARE_FIXTURE), (CORE, "select_tests.rs", BARE_FIXTURE)]);
-        let ratio = measure_test_src_ratio(&files, &limits(100, 10));
+        let ratio = measure_test_src_ratio(&files, &limits(10));
         assert_eq!(ratio.fact, "test-src-ratio=3/3", "分子が名で test の file を数える");
-        assert_eq!(measure_core_lines(&layout, &files, &limits(100, 10)).fact, "core-lines=3/100", "本体だけ");
+        assert_eq!(measure_core_lines(&layout, &files, &limits(10)).fact, "core-lines=3", "本体だけ");
     }
 
     /// 本体で 2 行持つ file（`a.rs`）の fixture 本文。
@@ -394,28 +371,20 @@ mod tests {
     }
 
     /// boundary-lines は境界 crate の `src` の本体（core-lines と同じ切り方・幅 10 で `SPLIT_FIXTURE` 4 + `BARE_FIXTURE` 3 =
-    /// 7 行）を上限と比べる: 上限 7 は通り 6 は落ちる（両側の歯・file 全体を数える実装は 13 で両方落ちる）。core の file は
-    /// 数えない。境界 crate の dir が無い木は measure を出さない。
+    /// 7 行）の数だけを出し、違反を立てない（file 全体を数える実装は 13 になる）。core の file は数えない。
+    /// 境界 crate の dir が無い木は measure を出さない。
     #[test]
-    fn sizes_boundary_lines_over_the_limit_is_denied() {
+    fn sizes_boundary_lines_report_the_count_only() {
         let (layout, files) = workspace(&[
             ("demo-boundary", "main.rs", SPLIT_FIXTURE),
             ("demo-boundary", "lib.rs", BARE_FIXTURE),
             (CORE, "heavy.rs", SPLIT_FIXTURE),
         ]);
         let src = layout.root.join("crates").join("demo-boundary").join("src");
-        let fits = boundary_lines_in(&src, &files, 10, 7);
-        assert_eq!(fits.fact, "boundary-lines=7/7", "本体の合計 = 4 + 3");
-        assert_eq!(fits.violations, Vec::<String>::new(), "上限ちょうどは通る");
-        let over = boundary_lines_in(&src, &files, 10, 6);
-        assert_eq!(over.fact, "boundary-lines=7/6");
-        assert_eq!(over.violations.len(), 1, "{:?}", over.violations);
-        assert!(
-            over.violations.first().is_some_and(|line| line.starts_with("boundary-lines: ") && line.contains(" 7 行") && line.contains("R-C4-5")),
-            "本体の行数と行 id を名指す: {:?}",
-            over.violations
-        );
-        assert!(measure_boundary_lines(&layout, &files, &limits(1, 10), 6).is_none(), "境界 crate の dir が無い木は出さない");
+        let got = boundary_lines_in(&src, &files, 10);
+        assert_eq!(got.fact, "boundary-lines=7", "本体の合計 = 4 + 3");
+        assert_eq!(got.violations, Vec::<String>::new(), "違反は立てない");
+        assert!(measure_boundary_lines(&layout, &files, &limits(10)).is_none(), "境界 crate の dir が無い木は出さない");
     }
 
     /// 境界は manifest の pct の側で動く: pct = 100 で test 101 / src 100 は違反、

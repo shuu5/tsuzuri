@@ -121,11 +121,11 @@ pub(crate) enum Refuse {
         /// 契約が書いた項目の字面。
         item: String,
     },
-    /// 上限の余地（R-C4-2 / R-C4-1 の値と base の行数の差）を file の見込み（行の `growth` に在ればその値・無ければ
-    /// `size` の見積・§46）が超える（設計 contract-source.md §3「上限の余地」・受付だけが撃つ）。core の合計の周は
-    /// `file` = `core`（見込みは core に属する file の見込みの和）。
+    /// 上限の余地（R-C4-2 の値と base の行数の差）を file の見込み（行の `growth` に在ればその値・無ければ
+    /// `size` の見積・§46）が超える（設計 contract-source.md §3「上限の余地」・受付だけが撃つ）。file ごとの
+    /// 余地だけを測り、core の総量は測らない。
     CapHeadroom {
-        /// 余地の足りない file（repo 相対・core の合計は `core`）。
+        /// 余地の足りない file（repo 相対）。
         file: String,
         /// 残っている行数。
         headroom: u64,

@@ -451,7 +451,6 @@ mod tests {
     /// fixture の閾値（**実在しない**値＝判定行の数字が入力と衝突しない）: per-pr 1・budget 4・check 250。
     fn limits() -> Limits {
         Limits {
-            core_lines: 1,
             file_lines: 1,
             test_src_ratio_pct: 1,
             fn_lines: 1,

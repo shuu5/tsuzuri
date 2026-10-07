@@ -725,7 +725,7 @@ pub(super) fn write_rules_with_retries(dir: &Path, name: &str, lens_count: u64, 
 }
 
 /// [`write_rules_with_retries`] に受付の 3 値を足した形（待ちが解ける歯だけが値を振る）。
-/// `gate` は `(gate.lens_count, gate.token_cap)`。上限の 2 行（R-C4-1 / R-C4-2）は埋め込みの値を写す。
+/// `gate` は `(gate.lens_count, gate.token_cap)`。上限の 1 行（R-C4-2）は埋め込みの値を写す。
 pub(super) fn write_rules_full(dir: &Path, name: &str, gate: (u64, u64), retries: u64, slots: SlotFixture) -> PathBuf {
     write_rules_capped(dir, name, RulesFixture { gate, retries, slots, caps: default_caps() })
 }
@@ -739,25 +739,23 @@ pub(super) struct RulesFixture {
     pub(super) retries: u64,
     /// 受付の 3 値。
     pub(super) slots: SlotFixture,
-    /// 上限の 2 値。
+    /// 上限の 1 値。
     pub(super) caps: CapFixture,
 }
 
-/// tmp manifest の上限の 2 値（rules 行 `R-C4-1` / `R-C4-2` の fixture 値・上限の余地の歯だけが振る）。
+/// tmp manifest の上限の 1 値（rules 行 `R-C4-2` の fixture 値・上限の余地の歯だけが振る）。
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CapFixture {
-    /// core の総行数の上限（R-C4-1）。
-    pub(super) core_lines: u64,
     /// 1 file の行数の上限（R-C4-2）。
     pub(super) file_lines: u64,
 }
 
 /// 既定の上限 fixture: 埋め込みの値を写す（余地の歯だけが [`write_rules_capped`] で縮める）。
 pub(super) fn default_caps() -> CapFixture {
-    CapFixture { core_lines: embedded_int("R-C4-1"), file_lines: embedded_int("R-C4-2") }
+    CapFixture { file_lines: embedded_int("R-C4-2") }
 }
 
-/// [`write_rules_full`] に上限の 2 値を足した形。size ↔ 行数の 3 行（`pipe.size_<s|m|l>_lines`）は埋め込みの値を写す。
+/// [`write_rules_full`] に上限の 1 値を足した形。size ↔ 行数の 3 行（`pipe.size_<s|m|l>_lines`）は埋め込みの値を写す。
 #[expect(
     clippy::expect_used,
     reason = "統合 test の helper。clippy の allow-expect-in-tests は #[test] 関数の中だけに効く"
@@ -790,12 +788,12 @@ pub(super) fn write_rules_capped(dir: &Path, name: &str, fixture: RulesFixture) 
     // 受付の 4 行: 並列度の上限は埋め込みの値を写し、残る 3 行は [`SlotFixture`] の値。遮断器の倍率 2 行も
     // [`SlotFixture`] の値（行の無い manifest では gate / land が線を読めず rc 2 で止まる）。
     // 着地の順番の上限は [`LAND_WAIT_S`]（前の便が列に残る歯で 90 分待たない）。
-    // 上限の余地の 6 行（設計 contract-source.md §3）: 上限の 2 行は [`CapFixture`]・size の 3 行と行の数え方の幅は
+    // 上限の余地の 5 行（設計 contract-source.md §3）: 上限の 1 行は [`CapFixture`]・size の 3 行と行の数え方の幅は
     // 埋め込みの値。同型の審査 FAIL の停止の回数（`review.same_kind_stop`・contract-source.md §23）も埋め込みの値
     // ＝行の無い manifest では受付が rc 2 で断る（`pipe_intake_repeat_` の歯だけが行を落として測る）。同時本数の最大値
     // （`pipe.max_live`・gate-cost.md §24）も埋め込みの値（`pipe_intake_max_live_` の歯だけが値を差し替える）。
     let body = format!(
-        "schema = 1\n\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{ceiling}",
+        "schema = 1\n\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{ceiling}",
         row("gate.lens_count", "GateLensCount", lens_count),
         row("gate.token_cap", "GateTokenCap", cap),
         row("fleet.lock_retry_ms", "LockRetryMs", 5000),
@@ -808,7 +806,6 @@ pub(super) fn write_rules_capped(dir: &Path, name: &str, fixture: RulesFixture) 
         row("host.runnable_per_core", "HostRunnablePerCore", slots.runnable_per_core),
         row("host.blocked_per_core", "HostBlockedPerCore", slots.blocked_per_core),
         row("pipe.land_wait_s", "PipeLandWaitS", LAND_WAIT_S),
-        row("R-C4-1", "CoreLines", caps.core_lines),
         row("R-C4-2", "ModuleLines", caps.file_lines),
         row("pipe.size_s_lines", "PipeSizeSLines", embedded_int("pipe.size_s_lines")),
         row("pipe.size_m_lines", "PipeSizeMLines", embedded_int("pipe.size_m_lines")),

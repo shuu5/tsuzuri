@@ -314,8 +314,8 @@ pub fn test_region<'t>(path: &str, text: &'t str) -> &'t str {
 }
 
 /// 本体の区間（[`test_region`] の補・最初の行頭 `#[cfg(test)]` より前・無ければ全体）。path は見ない＝xtask の
-/// core-lines（`split_test_src` の src 側・設計 core-boundary.md §2）と同じく印だけで切る。受付の core の余地
-/// （[`crate::pipe::declaration::FileLines`]）が R-C4-1 の合計をこの区間で数える。
+/// core-lines（`split_test_src` の src 側・設計 core-boundary.md §2）と同じく印だけで切る。受付の行数の 2 面
+/// （[`crate::pipe::declaration::FileLines`]）の本体の側がこの区間を数える。
 pub fn src_region(text: &str) -> &str {
     test_mark_at(text).and_then(|at| text.get(..at)).unwrap_or(text)
 }
