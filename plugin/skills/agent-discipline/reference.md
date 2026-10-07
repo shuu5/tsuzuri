@@ -6,7 +6,7 @@
 
 ## 1. 置き場
 
-- 書くのは自分の dir <置き場>/<名>/ の下だけ。成果（契約の file・本文の file・notes.md）は <名>/w/ の下に置く。写しで commit しない。
+- 書きの道具で書くのは自分の <名>/w/ の下と写しの <置き場>/try-<名>/ の下だけで、外への書きは係の門が断る。成果（契約の file・本文の file・notes.md）は <名>/w/ の下に置く。写しで commit しない。
 - 床と preflight の写しは <置き場> の直下に clone する（git clone -q --local <repo> <置き場>/try-<名>）。写しから push しない。器の掃除は、直下の写しを書きが 6 時間無くなった後に消す。
 - 本物の repo には一時の物も書かない。
 - 動いている board の server を止めない。測るなら loopback の別の port で写しの tz を起こし、自分の pid だけを kill する。
@@ -77,7 +77,7 @@
 
 ## 7. 検証の群（判断の記録 ADR-61）
 
-1. 全文を読む攻めの係（検証役 1 体・頭の予算だけ・群の上限に入らない）が、分からない（U）の主張の一覧 <置き場>/<群 id>/unknowns.tsv を書く（1 行に id・主張・判じられない訳・資料の path をタブで区切る）。
+1. 全文を読む攻めの係（検証役 1 体・頭の予算だけ・群の上限に入らない）が、分からない（U）の主張の一覧を自分の <名>/w/unknowns.tsv に書く（群の起こしの門は計画の欄 attacker が名指す係のこの file を読む）（1 行に id・主張・判じられない訳・資料の path をタブで区切る）。
 2. 一覧が 3 行未満なら群を起こさない。18 行を越えたら、下書きを割って攻め直すか 1 体の道に戻る（割った下書きは同じ対象なので、群は 7 日に 1 つの塊だけ）。下書きの種類は 問いの本文・判断の記録・消す行・緩める問い の 4 つだけ。
 3. 席は群を起こす前に <置き場>/<群 id>/plan.json を置く。欄は type（tsuzuri:verifier）・target（頭の対象と同じ）・draft・attacker・members（name・model・claims・paths）と、在れば ruling。1 体の割りの主張は 6 まで、係どうしで重ねず、和は一覧の全部。
 4. 反証役 3 体までを 1 つの返事で並べて起こす。頭は 4 行に 5 行目 群: <群 id> <i>/<k> を足し、予算は token ちょうど 150000、Agent の呼びの model は計画の値。群の係は続けず、段ごとに新しい係を起こす。
@@ -89,7 +89,7 @@
 
 ## 8. 床と受付の照らし
 
-- 頼みの頭の組みが なし の係は cargo を撃たない。行の床は写しの根で撃つ 2 つで、tz check --dir <写し>/design-intent --prose <本文の file の絶対 path> と、scribe2 pipe preflight --contract <契約の file の絶対 path> --bead <名>-floor --state-dir <空の state dir> --repo <写し> である。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
+- 頼みの頭の組みが なし の係は cargo を撃たない（係の門が断る）。行の床は写しの根で撃つ 2 つで、tz check --dir <写し>/design-intent --prose <本文の file の絶対 path> と、scribe2 pipe preflight --contract <契約の file の絶対 path> --bead <名>-floor --state-dir <空の state dir> --repo <写し> である。合否は終了 code で判じる（0 は合格・1 は不合格・2 はまだ分からない・字で判じない）。
 - 設計文書の dir（design-intent）を書く起草（判断の記録・要件・生きたノートの行の直し）だけが、頼みが名指す席の pin の tz で、写しの根で tz schema --write、(cd design-intent && tz derive --dir . --out ../contracts --write)（--out は --dir からの相対）、tz check、derive --check、tz check --freeze-adrs を撃つ。
 - 契約の行は 1 行ずつ、出す物の dir（<名>/w/）の子 contract の直下に、契約の file <行 id>.toml（字 schema = 1 と空の行と、契約表の導出の形の [[contract]] の 1 行・その末に欄 section の字 draft と欄 goal の本文の 1 行）と本文の file <行 id>.md の 2 つで書く。本文の 1 行は本文の各行の前後の空白を除き、空の行を落として空白 1 つで繋いだ字である。終える前の門は頭の出す物の欄を見ず、その直下の名の末 .toml の file を全部 preflight --contract で、.md の file を全部散文の門で撃ち直し、通らない file を名指して 1 度目の終わりを止める。
 - 席は契約の file から欄 section と goal を除いた字を bead の欄 acceptance に、本文の file を本文にして bead を作り、notes.md の依存の行を bd dep add で張る。

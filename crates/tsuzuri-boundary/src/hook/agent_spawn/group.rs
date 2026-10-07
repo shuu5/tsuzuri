@@ -1,5 +1,6 @@
 //! 起こしの門の群の口（判断の記録 ADR-61 決定 (1)(2)(4)(5)(7)・要件 FR22）。
-//! 席の Agent の呼びの頼みの頭に群の行が在れば、起草の置き場の群の id の dir の計画の file と一覧の file・ほかの群の係の札と群の席の札・
+//! 席の Agent の呼びの頼みの頭に群の行が在れば、起草の置き場の群の id の dir の計画の file と、計画の欄 attacker の名の攻めの係の
+//! 出力の dir（`<attacker>/w/`）の一覧の file・ほかの群の係の札と群の席の札・
 //! 群の係の測りの札（群の合計）・計画の裁定 id の問いの台帳の字を読み、中核の `judge` で判じる。群の行が無ければ、計画の file が
 //! 割りに持つ名の起こしだけを断る（5 行目の欠け）。通す時は、同じ群の係の札を ADR-59 の対象の重なりの判じから外した生きた札を返す。
 //! 台帳は `bd --readonly show <問い> --json`（cwd は repo・5 秒）で読み、起動できない・rc が 0 でない・JSON でない時は読めないと渡す。
@@ -15,7 +16,7 @@ use tsuzuri_core::agent::spec::group::{
     LIST, Line, PLAN, Plan, SEAT, SHARED, Seat, group_line, ledger_of, model, question_of, shared,
     shared_line,
 };
-use tsuzuri_core::agent::spec::{Call, SPEC, Spec, head};
+use tsuzuri_core::agent::spec::{Call, OUT, SPEC, Spec, head};
 
 use super::specs;
 use crate::server::events::now;
@@ -68,6 +69,14 @@ fn totals(drafts: &Path, peers: &[(Spec, Seat)], group: &str) -> Option<(u64, u6
     Some(sum)
 }
 
+/// 攻めの係 `attacker` の出力の dir の一覧の file の字（名が空か、斜線を含むか、字 . か .. なら無いと読む）。
+fn attacker_list(drafts: &Path, attacker: &str) -> Option<String> {
+    if attacker.is_empty() || attacker.contains('/') || matches!(attacker, "." | "..") {
+        return None;
+    }
+    fs::read_to_string(drafts.join(attacker).join(OUT).join(LIST)).ok()
+}
+
 /// 台帳の問い `q` の notes と本文（bd の読み取りの口・起動できないか rc が 0 でなければ読めない）。
 fn ledger(repo: &Path, q: &str) -> Ledger {
     let args = ["--readonly", "show", q, "--json"];
@@ -90,13 +99,11 @@ pub fn gate(drafts: &Path, repo: &Path, call: &Call, payload: &str) -> Result<Ga
     };
     let peers = peers(drafts);
     let group = Line::parse(line).map(|l| l.group);
-    let read = |f: &str| {
-        group
-            .as_ref()
-            .and_then(|g| fs::read_to_string(drafts.join(g).join(f)).ok())
-    };
-    let (plan, list) = (read(PLAN), read(LIST));
+    let plan = group
+        .as_ref()
+        .and_then(|g| fs::read_to_string(drafts.join(g).join(PLAN)).ok());
     let parsed = plan.as_deref().and_then(Plan::parse);
+    let list = parsed.as_ref().and_then(|p| attacker_list(drafts, &p.attacker));
     let ruling = parsed.as_ref().and_then(|p| p.ruling.clone());
     let book = ruling.map(|r| ledger(repo, question_of(&r)));
     let model = model(payload);

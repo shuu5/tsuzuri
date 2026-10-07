@@ -24,6 +24,8 @@ description: tsuzuri の設計の席が起こした係（起草係・検証役�
 ## 置き場
 
 - 写しは起草の置き場の直下にだけ作る（器の門 drafts_guard）
+- 書きの道具（Write・Edit・NotebookEdit）は自分の <名>/w/ と写しの <置き場>/try-<名>/ の下だけに書く（門 agent-guard）
+- 頼みの頭の組みが なし の係は cargo を撃たない（門 agent-guard）
 - repo と台帳は読むだけ。commit・push・台帳の書きは頼みが許す時だけ（天井だけ）
 - reset --hard・branch -D・force push を撃たない。file は消さずに mv で退ける（器の門 host_guard）
 - pkill -f を撃たない。止めるのは自分が起こした pid だけ（天井だけ）

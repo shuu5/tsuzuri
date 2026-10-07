@@ -13,7 +13,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const RULING: &str = "t3-hub.90.1:20261005T0900Z-1";
 
-/// 歯ごとの置き場（前の撃ちの残りを消して作る）と、その下の drafts/ と、群 g1 の dir に g1 の形の計画（`ruling` の裁定 id）と一覧。
+/// 歯ごとの置き場（前の撃ちの残りを消して作る）と、その下の drafts/ と、群 g1 の dir に g1 の形の計画（`ruling` の裁定 id）、
+/// 計画の attacker qv180 の出力の dir に一覧。
 fn place(name: &str, paths2: &str, ruling: &str) -> (PathBuf, PathBuf) {
     let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("aggs")
@@ -21,6 +22,7 @@ fn place(name: &str, paths2: &str, ruling: &str) -> (PathBuf, PathBuf) {
     let _ = fs::remove_dir_all(&root);
     let drafts = root.join("drafts");
     fs::create_dir_all(drafts.join("g1")).unwrap();
+    fs::create_dir_all(drafts.join("qv180/w")).unwrap();
     let ids = |a: u32, b: u32| {
         (a..=b)
             .map(|n| format!("\"U{n}\""))
@@ -43,7 +45,7 @@ fn place(name: &str, paths2: &str, ruling: &str) -> (PathBuf, PathBuf) {
     let list: String = (1..=14)
         .map(|i| format!("U{i}\t主張 {i}\t訳 {i}\t/S/a.md\n"))
         .collect();
-    fs::write(drafts.join("g1/unknowns.tsv"), list).unwrap();
+    fs::write(drafts.join("qv180/w/unknowns.tsv"), list).unwrap();
     (root, drafts)
 }
 
@@ -233,6 +235,34 @@ fn bd(root: &Path, json: &str) -> PathBuf {
     fs::write(&path, script).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     bin
+}
+
+#[test]
+fn aggs_the_gate_reads_the_list_from_the_attacker_out_dir() {
+    let (root, _) = place("attacker", r#""/S/b.rs""#, "");
+    passed(&hook(&root, &spawn("qv181", "g1 1/3"), None));
+    let missing = "群 g1 の unknowns.tsv が無い";
+    let (root, drafts) = place("group-dir", r#""/S/b.rs""#, "");
+    fs::rename(
+        drafts.join("qv180/w/unknowns.tsv"),
+        drafts.join("g1/unknowns.tsv"),
+    )
+    .unwrap();
+    denied(&hook(&root, &spawn("qv181", "g1 1/3"), None), missing);
+    assert!(!drafts.join("qv181").exists());
+    let (root, drafts) = place("escape", r#""/S/b.rs""#, "");
+    let plan = fs::read_to_string(drafts.join("g1/plan.json")).unwrap();
+    let escaped = plan.replace(r#""attacker":"qv180""#, r#""attacker":"../qv180""#);
+    assert_ne!(escaped, plan, "attacker の字");
+    fs::write(drafts.join("g1/plan.json"), escaped).unwrap();
+    fs::create_dir_all(root.join("qv180/w")).unwrap();
+    fs::copy(
+        drafts.join("qv180/w/unknowns.tsv"),
+        root.join("qv180/w/unknowns.tsv"),
+    )
+    .unwrap();
+    denied(&hook(&root, &spawn("qv181", "g1 1/3"), None), missing);
+    assert!(!drafts.join("qv181").exists());
 }
 
 #[test]

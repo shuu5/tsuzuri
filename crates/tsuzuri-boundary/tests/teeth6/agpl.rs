@@ -488,16 +488,22 @@ fn agpl_skill_is_short_and_names_its_reference() {
     assert_eq!(skill_faults(&format!("{edge}字")), ["size"], "2,001 字");
 }
 
-/// (5) 規律の手引きの本文の決まり 15 行は、どれも末が字（天井だけ）か、境界の係の口の名の（門 <名>）か、器の hook の src に
-/// file の在る（器の門 <名>）で、数は天井だけ 7・門 6・器の門 2。
+/// (5) 規律の手引きの本文の決まり 17 行は、どれも末が字（天井だけ）か、境界の係の口の名の（門 <名>）か、器の hook の src に
+/// file の在る（器の門 <名>）で、数は天井だけ 7・門 8・器の門 2。書きの道具の置き場の決まりと組み なし の cargo の決まりは 1 度ずつ在る。
 #[test]
 fn agpl_skill_rules_end_with_a_gate_or_the_ceiling() {
     let text = read(&format!("{SKILL}/SKILL.md"));
     let (_, body) = front(&text).expect("頭と本文");
     let gates = gate_names();
     assert_eq!(rule_faults(body, &gates, vessel_gate), Vec::<String>::new());
-    assert_eq!(body.lines().filter(|l| l.starts_with("- ")).count(), 15);
-    assert_eq!(rule_kinds(body), [7, 6, 2]);
+    assert_eq!(body.lines().filter(|l| l.starts_with("- ")).count(), 17);
+    assert_eq!(rule_kinds(body), [7, 8, 2]);
+    for rule in [
+        "- 書きの道具（Write・Edit・NotebookEdit）は自分の <名>/w/ と写しの <置き場>/try-<名>/ の下だけに書く（門 agent-guard）",
+        "- 頼みの頭の組みが なし の係は cargo を撃たない（門 agent-guard）",
+    ] {
+        assert_eq!(body.matches(rule).count(), 1, "{rule}");
+    }
     let cut = |from: &str, to: &str| rule_faults(&body.replacen(from, to, 1), &gates, vessel_gate);
     let rule = "- 写しは起草の置き場の直下にだけ作る（器の門 drafts_guard）";
     assert!(body.contains(rule), "器の門の決まり");

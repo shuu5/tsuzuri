@@ -5,6 +5,8 @@
 //! 3. 測りと同じ `resolve` で結びの名と札を読む。結びが無ければ通す（記帳は同じ呼びの後の測りが書く）。
 //! 4. 測りの札 `<名>/meter.json` の使った量（札が無いか読めなければ 0）が札の予算より小さければ通す。
 //! 5. 書き終えの段では、中核の `open` が通す呼び（SendMessage と `<名>/w` の下への書き）のほかは deny の答えを標準出力に 1 行で書いて 0。
+//! 6. 全時間の検め（条 N-2）: 札の組みが なし の係の Bash の command の頭の語が cargo なら、書きの道具が `<名>/w` の下と写し
+//!    `try-<名>` の下のどちらでもない所へ書くなら、deny の答えを 1 行で書いて 0。
 //!
 //! 係の dir に群の席の札 `group.json` の在る群の係は、4 の前に、読みの道具（Read）の割りの読む path の外の読みと係を起こす道具（Agent）の
 //! 呼びを断り、読み直し（測りの札の `cache_read`）が上限 `MEMBER_READ` 以上なら 5 と同じ呼びだけを通す（判断の記録 ADR-61 決定 (4)(7)）。
@@ -15,10 +17,13 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use tsuzuri_core::agent::guard::{open, refusal, spent, write_path};
-use tsuzuri_core::agent::meter::group::{fence, read_path, read_refusal};
+use tsuzuri_core::agent::guard::{
+    CLONE, bash_command, build_refusal, cargo_word, fence_refusal, fenced, open, refusal, spent,
+    write_path,
+};
+use tsuzuri_core::agent::meter::group::{fence as read_fence, read_path, read_refusal};
 use tsuzuri_core::agent::meter::{METER, Meter, sub_call};
-use tsuzuri_core::agent::spec::OUT;
+use tsuzuri_core::agent::spec::{BUILDS, OUT, Spec};
 use tsuzuri_core::agent::spec::group::{MEMBER_READ, SEAT, Seat};
 use tsuzuri_core::gate::deny_json;
 
@@ -37,10 +42,22 @@ fn member(
     out: &Path,
 ) -> Option<String> {
     let seat = seat?;
-    fence(tool, read_path(payload).as_deref(), seat).or_else(|| {
+    read_fence(tool, read_path(payload).as_deref(), seat).or_else(|| {
         (spent(meter.cache_read, MEMBER_READ) && !open(tool, write_path(payload).as_deref(), out))
             .then(|| read_refusal(tool, meter.cache_read, out))
     })
+}
+
+/// 全時間の検めの断りの理由（組み なし の係の Bash の cargo・出力の dir と写しの dir の外への書き・どちらでもなければ None）。
+fn fence(spec: &Spec, tool: &str, payload: &str, out: &Path, clone: &Path) -> Option<String> {
+    if spec.build == BUILDS[0]
+        && let Some(word) = bash_command(payload).and_then(|c| cargo_word(&c))
+    {
+        return Some(build_refusal(&word, out));
+    }
+    let path = write_path(payload);
+    fenced(tool, path.as_deref(), out, clone)
+        .then(|| fence_refusal(tool, path.as_deref(), out, clone))
 }
 
 /// tz hook agent-guard の残りの引数を受けて終了 code を返す（0 か 1 だけ）。
@@ -67,11 +84,14 @@ pub fn run(rest: &[&str]) -> u8 {
         .ok()
         .and_then(|t| Seat::parse(&t));
     let out = dir.join(&name).join(OUT);
+    let clone = dir.join(format!("{CLONE}{name}"));
     let used = meter.used;
     if let Some(why) = member(seat.as_ref(), &call.tool, &payload, &meter, &out) {
         emit(&deny_json(why));
     } else if spent(used, spec.budget) && !open(&call.tool, write_path(&payload).as_deref(), &out) {
         emit(&deny_json(refusal(&call.tool, used, spec.budget, &out)));
+    } else if let Some(why) = fence(&spec, &call.tool, &payload, &out, &clone) {
+        emit(&deny_json(why));
     }
     0
 }
