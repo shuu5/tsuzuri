@@ -7,10 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use tsuzuri_core::agent::stop::BODIES;
+
 use crate::server::proc::{self, Failed};
 
-/// 出力の dir の子の名（係が契約の file を置く dir）。
-const DIR: &str = "contract";
 /// 係の dir の子の空の state dir の名。
 const STATE: &str = "pf-state";
 /// 器の道具の名（PATH で解く）。
@@ -20,7 +20,7 @@ const LIMIT: Duration = Duration::from_secs(8);
 
 /// 出力の dir `out` の子 contract の直下の .toml の file（名の順・読めなければ空）。
 fn files(out: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(out.join(DIR)) else {
+    let Ok(entries) = fs::read_dir(out.join(BODIES)) else {
         return Vec::new();
     };
     let mut found: Vec<PathBuf> = entries
@@ -52,7 +52,7 @@ pub fn holes(agent: &Path, out: &Path, repo: &Path, bead: &str) -> Vec<String> {
     let mut lacks = Vec::new();
     for file in found {
         let name = format!(
-            "{DIR}/{}",
+            "{BODIES}/{}",
             file.file_name().unwrap_or_default().to_string_lossy()
         );
         let left = deadline.saturating_duration_since(Instant::now());

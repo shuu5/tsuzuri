@@ -12,7 +12,7 @@ use tsuzuri_boundary::hook::subagent_stop;
 use tsuzuri_core::agent::guard;
 use tsuzuri_core::agent::meter::group;
 use tsuzuri_core::agent::spec::Spec;
-use tsuzuri_core::agent::stop::{HEAD_LINES, MAX_CHARS, MAX_LINES, gist_lacks, lacks};
+use tsuzuri_core::agent::stop::{BODIES, HEAD_LINES, MAX_CHARS, MAX_LINES, gist_lacks, lacks};
 
 /// 係の記録の assistant の行（道具 `tool` の tool_use で、input の宛先 `to`）。
 fn call(tool: &str, to: &str) -> String {
@@ -193,6 +193,46 @@ fn agsg_gist_lacks_need_a_gist_heading_in_the_first_40_lines() {
         gist_lacks(&outs, read),
         vec![hole("late.md"), hole("bare.md"), hole("none.md")]
     );
+}
+
+/// (4b) 子 contract の直下の .md（契約の本文）は見出しを探さず読みもせず、./ 付きも数えず、更に下の子と名の違う dir と別の .md は数える。
+#[test]
+fn agsg_gist_lacks_skip_the_bodies_under_the_contract_dir() {
+    let read = |_: &str| Some("段落の本文".to_string());
+    let outs: Vec<String> = [
+        "contract/x.md",
+        "./contract/y.md",
+        "contract/sub/z.md",
+        "contracts/x.md",
+        "notes.md",
+    ]
+    .iter()
+    .map(|n| n.to_string())
+    .collect();
+    let hole = |n: &str| format!("出す物 {n} の頭 40 行に「要点」を含む見出しが無い");
+    assert_eq!(
+        gist_lacks(&outs, read),
+        vec![
+            hole("contract/sub/z.md"),
+            hole("contracts/x.md"),
+            hole("notes.md")
+        ]
+    );
+}
+
+/// (4c) 中核の BODIES は字 contract で、境界の契約の撃ち直しと散文の門は自分の const DIR を持たず BODIES を使う。
+#[test]
+fn agsg_bodies_dir_is_one_core_name() {
+    assert_eq!(BODIES, "contract");
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for file in [
+        "src/hook/subagent_stop/contract.rs",
+        "src/hook/subagent_stop/prose.rs",
+    ] {
+        let text = fs::read_to_string(base.join(file)).unwrap();
+        assert!(!text.contains("const DIR"), "{file} に const DIR");
+        assert!(text.contains("BODIES"), "{file} に BODIES が無い");
+    }
 }
 
 /// (5) 中核の stop.rs は字 team-lead と LEAD と fn tells を持たず、規則の表の行 R-51 の value は中核の MAX_LINES と MAX_CHARS の字。

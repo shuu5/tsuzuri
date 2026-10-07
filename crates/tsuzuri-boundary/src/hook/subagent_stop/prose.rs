@@ -5,19 +5,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use tsuzuri_core::agent::stop::BODIES;
 use tsuzuri_core::contract_gate::lines_of;
 
 use crate::hook::question_gate::shoot;
-
-/// 出力の dir の子の名（係が契約の file を置く dir）。
-const DIR: &str = "contract";
 
 /// 本文の file の名の末。
 const SUFFIX: &str = ".md";
 
 /// 出力の dir `out` の子 contract の直下の .md の file（名の順・読めなければ空・子の dir は見ない）。
 fn files(out: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(out.join(DIR)) else {
+    let Ok(entries) = fs::read_dir(out.join(BODIES)) else {
         return Vec::new();
     };
     let mut found: Vec<PathBuf> = entries

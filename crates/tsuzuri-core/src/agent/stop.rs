@@ -3,7 +3,7 @@
 //! 欠けは 5 つで、この順に並べる: 札の出す物の file が出力の dir に無い・最後の答えの 1 行目が状態の語でない・
 //! 最後の答えの行の数が上限を越える・最後の答えの字の数が上限を越える・最後の答えの最後の行に出力の dir の path が無い。
 //! 最後の答えは、係の記録に引き渡しの道具（SubagentHandback）の呼びが在ればその message の字、無ければ最後の文である（判断の記録 ADR-78 決定 (1)）。
-//! 出す物の .md の頭の見出しの欠けは `gist_lacks` が持つ。
+//! 出す物の .md の頭の見出しの欠けは `gist_lacks` が持つ（子 contract の直下の .md＝契約の本文は散文の門が撃つので数えない）。
 //! 止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
 //! 群の係の出す物の主張の表の欠けは `claim_lacks` が持つ（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
 
@@ -115,12 +115,24 @@ pub fn lacks(
     lacks
 }
 
+/// 契約の本文の file を置く出力の dir の子の名。
+pub const BODIES: &str = "contract";
+
+/// 出す物の字 `output` が契約の本文（出力の dir の子 BODIES の直下の .md）か（/ で割って空と字 . の段を除いた段がちょうど 2 つ）。
+fn body(output: &str) -> bool {
+    let parts: Vec<&str> = output
+        .split('/')
+        .filter(|p| !p.is_empty() && *p != ".")
+        .collect();
+    matches!(parts[..], [dir, name] if dir == BODIES && name.ends_with(".md"))
+}
+
 /// 出す物 `outputs` のうち名の末が .md で `read` が字を返す file ごとの欠けの字の列（頭 HEAD_LINES 行に、前の空白を除いて字 # で始まり
-/// HEADING を含む行が無い）。.md でない出す物と読めない出す物は数えない。
+/// HEADING を含む行が無い）。.md でない出す物と読めない出す物と契約の本文の出す物は数えない。
 pub fn gist_lacks(outputs: &[String], read: impl Fn(&str) -> Option<String>) -> Vec<String> {
     outputs
         .iter()
-        .filter(|o| o.ends_with(".md"))
+        .filter(|o| o.ends_with(".md") && !body(o))
         .filter_map(|o| read(o).map(|text| (o, text)))
         .filter(|(_, text)| {
             !text.lines().take(HEAD_LINES).any(|l| {
