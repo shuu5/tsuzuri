@@ -80,7 +80,7 @@ pub(super) fn predict(repo: &Path, docs: &[&String], ctx: &Context<'_>) -> Vec<P
             read_table(doc, &text).ok().map(|(rows, _)| (doc.as_str(), rows))
         })
         .collect();
-    let base = Base { sources: ctx.sources, snapshots: ctx.snapshots, tracked: ctx.tracked, core_crate: NAME, roots: ctx.crate_roots };
+    let base = Base { sources: ctx.sources, snapshots: ctx.snapshots, tracked: ctx.tracked, core_crate: NAME, layout: ctx.layout };
     let ground = Ground { base, texts: &texts, whole: &whole, tables: &tables };
     let mut found = Vec::new();
     for (doc, rows) in &tables {
@@ -161,7 +161,7 @@ fn candidates(row: &ContractRow, one: &[String], word: &str, ground: &Ground<'_>
     let body = tooth(word);
     let texts: Vec<(&str, &str)> = placeable.iter().map(|path| (path.as_str(), body.as_str())).collect();
     let scoped = teeth_places(&only(one), &ground.base, &texts).unwrap_or_default();
-    narrow(ground.base.roots, placeable.into_iter().filter(|path| scoped.contains(path)).collect(), word)
+    narrow(&ground.base.layout.roots,placeable.into_iter().filter(|path| scoped.contains(path)).collect(), word)
 }
 
 /// module の path の語で絞る（§54 形 3）: 一致の段数が最も多い file だけを残し、一致が無ければ全部を残す。

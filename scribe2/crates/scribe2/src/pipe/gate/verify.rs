@@ -6,7 +6,7 @@ use super::{UNADMITTED_JOBS, WRITE_SET_CMD};
 use crate::pipe::admission::{self, Grant};
 use crate::pipe::bead::digest_of_design;
 use crate::name::NAME;
-use crate::pipe::closure::{self, selects, tooth_sites, Base, ClosureError, Source};
+use crate::pipe::closure::{self, selects, tooth_sites, Base, ClosureError, CrateLayout, Source};
 use crate::pipe::confine::{self, Confinement, Reason, Released, Usage};
 use crate::pipe::contract::{done_teeth_of, Contract};
 use crate::pipe::declaration::{fixed_roots, with_fixed, RootsAtHead, BASE_HOLE, JOBS_HOLE, TEETH_HOLE, THREADS_HOLE};
@@ -596,7 +596,8 @@ fn done_teeth_sections(file: &Path, at: (&Path, &str), verify: &[String]) -> Res
         RootsAtHead::Fixed => fixed_roots(),
         RootsAtHead::Declared(added) => with_fixed(&added.roots),
     };
-    let head = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: NAME, roots: &roots };
+    let layout = CrateLayout { roots, manifests: table::read_all(worktree, &paths, CrateLayout::MANIFEST_TAIL) };
+    let head = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: NAME, layout: &layout };
     let changed = nul_split(&git(&["diff", "--name-only", "-z", &format!("{base}..HEAD")], "diff の path")?);
     let mut misses: Vec<(&str, String)> = Vec::new();
     for (element, kept, name) in &named {

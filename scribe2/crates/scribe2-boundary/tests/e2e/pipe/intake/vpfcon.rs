@@ -137,3 +137,25 @@ fn vpfcon_goal_less_row_is_refused_like_the_table() {
     assert_eq!(run_dirs(&state), Vec::<String>::new(), "run dir を作らない");
     clean(&[&repo, &state, &dir]);
 }
+
+/// crate b の manifest が `[[test]]` の name tz4 と path（別 crate の dir の `main.rs`）を持つ toy で、検証行 `--test tz4 fsch_` と done-teeth `1:=fsch_one` の
+/// 契約の file の preflight は、歯の区間を manifest の path の `main.rs` の dir の下と読み、`teeth=fsch_:1@…/resolve.rs` を出して ok（rc 0）で終わる。
+#[test]
+fn vpfcon_manifest_test_path_gives_the_region() {
+    let manifest = "[package]\nname = \"b\"\n\n[[test]]\nname = \"tz4\"\npath = \"../../folio2/crates/f/tests/tz4/main.rs\"\n";
+    let files = [
+        ("crates/b/Cargo.toml", manifest),
+        ("folio2/crates/f/tests/tz4/main.rs", "mod resolve;\n"),
+        ("folio2/crates/f/tests/tz4/resolve.rs", "#[test]\nfn fsch_one() {}\n"),
+    ];
+    let (repo, state) = derive_repo_with(&table_doc(&table_region(&[con_row("a", false)])), &files);
+    let verify = "[\"cargo nextest run -p b --test tz4 --no-tests=fail fsch_\"]";
+    let row = derive_row("a", &[("verify", verify), ("goal", GOAL), ("done", "\"(1) 歯が区間に入る\""), ("done-teeth", "[\"1:=fsch_one\"]")]);
+    let (dir, file) = con_file(&state, "a.toml", &[row]);
+    let out = con_preflight(&repo, &state, &file.display().to_string(), &[], None);
+    let text = stdout_of(&out);
+    assert_eq!(out.status.code(), Some(i32::from(RC_OK)), "{text} {}", stderr_of(&out));
+    assert_eq!(fact_lines(&out, "teeth="), ["teeth=fsch_:1@folio2/crates/f/tests/tz4/resolve.rs"], "{text}");
+    assert_eq!(tail_line(&out), "preflight: ok", "{text}");
+    clean(&[&repo, &state, &dir]);
+}

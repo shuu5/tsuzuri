@@ -53,11 +53,14 @@ use std::collections::BTreeSet;
 
 mod derive;
 mod names;
+mod region;
 
 pub use derive::{check_drift, derive_promised, derive_write_set, promised_inputs, weighted_lines, Base, Fields, Promised};
 pub use names::{impl_line, mentioned_names, named_items, section_symbols, symbols_in_base, unresolved_names, Mentioned, Named};
 pub(crate) use derive::{declared_teeth, filter_words, nextest_line, selects, teeth_places, teeth_words, tooth_sites};
 pub(crate) use names::holds_word;
+pub use region::CrateLayout;
+pub(crate) use region::in_line_region;
 use names::declares_fn;
 
 /// nextest の行の書き出し（この後ろの語から crate と filter 語を読む）。

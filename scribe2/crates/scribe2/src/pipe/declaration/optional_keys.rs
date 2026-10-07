@@ -6,6 +6,8 @@
 
 use super::{crate_roots, path_kinds, run_cap};
 use super::{declared_at_head, head_declaration, unfit, Basis, Ceiling, DeclError, Declared, EntranceFlip, Holes, Raw, Sourced, DETECTION_KEY, ENTRANCE_KEY};
+use crate::pipe::closure::CrateLayout;
+use crate::pipe::table;
 use std::path::Path;
 
 /// 宣言が持つ key（この順で報告する）。path の種別の任意 key 3 本（[`path_kinds::KEYS`]・ADR-0047）は
@@ -638,30 +640,36 @@ pub struct TableFacts {
     pub denied: Vec<String>,
     /// 要件面の repo 相対 path（宣言 `requirements`・無ければ [`DEFAULT_REQUIREMENTS`]）。
     pub requirements: String,
-    /// crate の根の列（固定の根 `crates/` に宣言 `crate-roots` を足した列・設計 contract-source.md §62）。
-    pub crate_roots: Vec<String>,
+    /// crate の配置（根の列〔固定の根 `crates/` に宣言 `crate-roots` を足した列・設計 contract-source.md §62〕と、tracked の crate の
+    /// manifest の本文・歯の区間の `--test` の読みが `[[test]]` の path を読む）。
+    pub layout: CrateLayout,
     /// 歯の検査を撃つか（宣言 `teeth-check`・無ければ false・設計 contract-source.md §66 形 3）。
     pub teeth_check: bool,
 }
 
-/// HEAD の宣言を読み、上限と突き合わせて契約表の検査の事実にする（intake と同じ読み口・作業ツリーは読まない）。
-pub fn table_facts(repo: &Path, ceiling: &Ceiling<'_>) -> Result<TableFacts, Vec<DeclError>> {
-    table_facts_named(repo, ceiling).map(|(facts, _)| facts)
+/// HEAD の宣言を読み、上限と突き合わせて契約表の検査の事実にする（intake と同じ読み口・作業ツリーは読まない）。`tracked` は tracked
+/// file の repo 相対 path（crate の manifest を読む・要件面だけを読む呼び手は空の列を渡す）。
+pub fn table_facts(repo: &Path, ceiling: &Ceiling<'_>, tracked: &[String]) -> Result<TableFacts, Vec<DeclError>> {
+    table_facts_named(repo, ceiling, tracked).map(|(facts, _)| facts)
 }
 
 /// [`table_facts`] に宣言の名乗り `entrance-flip` を添えた形（契約表の検査の判定行が名乗りの欄を出す・§54 形 5）。
 pub fn table_facts_named(
     repo: &Path,
     ceiling: &Ceiling<'_>,
+    tracked: &[String],
 ) -> Result<(TableFacts, Option<EntranceFlip>), Vec<DeclError>> {
     let sourced = Sourced::read(repo, ceiling)?;
     let requirements = sourced.declared.requirements.clone().unwrap_or_else(|| DEFAULT_REQUIREMENTS.to_owned());
     let entrance = sourced.declared.entrance_flip;
-    let crate_roots = crate_roots::with_fixed(&sourced.declared.added.roots);
+    let layout = CrateLayout {
+        roots: crate_roots::with_fixed(&sourced.declared.added.roots),
+        manifests: table::read_all(repo, tracked, CrateLayout::MANIFEST_TAIL),
+    };
     let teeth_check = sourced.declared.teeth_check == Some(true);
     let effective = sourced.measure(ceiling, &[])?;
     let denied = ceiling.denied.to_vec();
-    Ok((TableFacts { allowed: effective.allowed, denied, requirements, crate_roots, teeth_check }, entrance))
+    Ok((TableFacts { allowed: effective.allowed, denied, requirements, layout, teeth_check }, entrance))
 }
 
 /// land の終端が読む宣言の事実（設計 contract-source.md §5・push 先と CI の行）。

@@ -298,7 +298,7 @@ fn requirements_of(repo: &Path, manifest: &Manifest) -> Result<String, String> {
     let denied = list_row(manifest, DENIED_ROW)?;
     // 表の検査を撃たない組み立て＝クラスの語列表は読まず空の列（設計 contract-source.md §48 の 5）。
     let ceiling = Ceiling { row: CEILING_ROW, commands: &commands, denied: &denied, classes: &[] };
-    declaration::table_facts(repo, &ceiling)
+    declaration::table_facts(repo, &ceiling, &[])
         .map(|facts| facts.requirements)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / "))
 }

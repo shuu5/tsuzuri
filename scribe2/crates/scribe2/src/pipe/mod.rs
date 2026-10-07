@@ -13,6 +13,7 @@
 pub mod admission;
 pub mod approve;
 pub mod bead;
+mod cargo_toml;
 pub mod cli;
 pub mod closure;
 pub mod commute;

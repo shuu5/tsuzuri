@@ -2,8 +2,8 @@
 //!
 //! 型の閉包（[`super::closure`]）・外形 pin（[`super::surface_closure`]）と同じ **pure** な字面走査で、契約表の行の
 //! 欄（`touches` / `verify` / `surfaces` / `creates` / `tests` / `also`）から write-set を**導出値**として作る
-//! [`derive_write_set`] = 閉包 ∪ 歯の置き場（verify の nextest 行の scope〔[`Scope`]・§28〕の中で base の `#[test]` の
-//! fn 名が filter 語を含む file）∪ 外形 pin ∪ 新規 file とその親の宣言 file（§17 の形 (vi)・[`parents`]）∪ Rust の外の file。手書きの write-set は [`check_drift`] で
+//! [`derive_write_set`] = 閉包 ∪ 歯の置き場（verify の nextest 行の scope〔[`Scope`]・§28・`--test <名>` は crate の manifest の
+//! `[[test]]` の path を読む＝[`super::region`]〕の中で base の `#[test]` の fn 名が filter 語を含む file）∪ 外形 pin ∪ 新規 file とその親の宣言 file（§17 の形 (vi)・[`parents`]）∪ Rust の外の file。手書きの write-set は [`check_drift`] で
 //! 導出値との集合一致だけを認める（接頭辞 `+` は剥がして比べる）。行の数え方 [`weighted_lines`] も上限の余地の式として
 //! ここに置く。
 //!
@@ -17,8 +17,9 @@ use super::super::refuse::{covered, normalize, NEW_FILE};
 use super::super::declaration::crate_of;
 use super::super::table::PromiseRow;
 use super::names::closed_type;
+use super::region::in_region;
 use super::{closure, is_ident, is_ident_char, snapshot_name, surface_closure, test_region};
-use super::{texts_of, ClosureError, Source};
+use super::{texts_of, ClosureError, CrateLayout, Source};
 use super::{CARGO_ARG_FLAGS, CRATE_ROOT_STEMS, LIB_FLAG, MOD_STEM, NEXTEST_HEAD, PACKAGE_FLAGS, RS, SRC_DIR, TESTS_DIR, TEST_ATTR};
 use super::{EXACT_FLAG, LIBTEST_ARG_FLAGS, LIBTEST_BARE_FLAGS, LIBTEST_SEPARATOR, PATH_SEPARATOR};
 use super::{TEST_FLAG, UNREAD_ARG_TARGET_FLAGS, UNREAD_BARE_TARGET_FLAGS};
@@ -78,8 +79,8 @@ pub struct Base<'a> {
     pub tracked: &'a [String],
     /// `-p` の無い nextest 行が指す crate（core の crate の名）。
     pub core_crate: &'a str,
-    /// crate の根の列（固定の根 + 宣言した根・§62 の 1 関数 `crate_of` が path を割る）。
-    pub roots: &'a [String],
+    /// crate の配置（根の列〔固定の根 + 宣言した根・§62 の 1 関数 `crate_of` が path を割る〕と crate の manifest）。
+    pub layout: &'a CrateLayout,
 }
 
 /// write-set の導出値（§3・pure）: (i) `touches` の閉包 ∪ (ii) 歯の置き場 ∪ (iii) `surfaces` の外形 pin ∪ (iv) `creates`
@@ -92,7 +93,7 @@ pub fn derive_write_set(fields: &Fields<'_>, base: &Base<'_>) -> Result<BTreeSet
     found.extend(teeth_places(fields, base, &texts)?);
     found.extend(surface_closure(fields.surfaces, base.sources, base.snapshots)?);
     found.extend(created(fields.creates, base.tracked)?);
-    found.extend(parents(base.roots, fields.creates, base.tracked));
+    found.extend(parents(&base.layout.roots, fields.creates, base.tracked));
     found.extend(also_files(fields.also, base.tracked)?);
     found.extend(listed_files(fields.files, base.tracked)?);
     Ok(found)
@@ -171,9 +172,7 @@ pub(crate) fn teeth_places(fields: &Fields<'_>, base: &Base<'_>, texts: &[(&str,
         };
         let places: Vec<&str> = texts
             .iter()
-            .filter(|(path, text)| {
-                in_crate(base.roots, path, krate) && in_scope(base.roots, path, krate, scope) && test_fns(test_region(path, text)).iter().any(|name| kind.hits(name, filter))
-            })
+            .filter(|(path, text)| in_region(base.layout, path, krate, scope) && test_fns(test_region(path, text)).iter().any(|name| kind.hits(name, filter)))
             .map(|(path, _)| *path)
             .collect();
         if places.is_empty() && fields.tests.is_empty() {
@@ -207,7 +206,7 @@ pub(crate) fn tooth_sites(line: &str, name: &str, base: &Base<'_>) -> Vec<(Strin
         return Vec::new();
     };
     let mut found = Vec::new();
-    for source in base.sources.iter().filter(|source| in_crate(base.roots, &source.path, krate) && in_scope(base.roots, &source.path, krate, scope)) {
+    for source in base.sources.iter().filter(|source| in_region(base.layout, &source.path, krate, scope)) {
         let Ok(text) = source.body.as_deref() else {
             continue;
         };
@@ -220,19 +219,20 @@ pub(crate) fn tooth_sites(line: &str, name: &str, base: &Base<'_>) -> Vec<(Strin
 
 /// nextest 行の scope（§28・閉じた 3 値・宣言順 = 旗なし / `--lib` / `--test <name>`）＝その行が走らせる target。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Scope<'l> {
+pub(super) enum Scope<'l> {
     /// 旗なし＝その crate の全 file。読めない旗（[`UNREAD_ARG_TARGET_FLAGS`] / [`UNREAD_BARE_TARGET_FLAGS`]）と旗が 2 つ以上の
     /// 行もここへ倒す（fail-closed）。
     Crate,
     /// `--lib`＝`crates/<crate>/src/` 配下。
     Lib,
-    /// `--test <name>`＝`crates/<crate>/tests/<name>.rs` とその配下 `tests/<name>/`。
+    /// `--test <name>`＝crate の manifest の `[[test]]` の `path`（名の対が在れば・`main.rs` ならその dir の下の全部・crate の根の外の
+    /// file も入る）、無ければ `crates/<crate>/tests/<name>.rs` とその配下 `tests/<name>/`（区間の読みは [`super::region`]）。
     Test(&'l str),
 }
 
 /// filter 語の一致の型（§43 (2)・閉じた 2 値）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Match {
+pub(super) enum Match {
     /// fn 名が filter 語を含む（nextest の positional filter と同じ・`--exact` の無い行）。
     Substring,
     /// fn 名が filter 語（名の全体の末尾の段）と等しい（`--` の後ろに `--exact` が在る行）。
@@ -269,7 +269,7 @@ fn nextest_filter<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'
 /// libtest の引数で（§43 (2)）、[`LIBTEST_ARG_FLAGS`] は次の 1 語も消費し（行末なら `None`）、[`LIBTEST_BARE_FLAGS`] と
 /// 他の `-` の語は読み飛ばし、裸の語を filter 語にする（後ろが正本）。`--exact` が在れば [`Match::Exact`] で、filter 語は
 /// `::` で割った末尾の段になる。
-fn nextest_read<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'l str, Scope<'l>, Match)> {
+pub(super) fn nextest_read<'l>(line: &'l str, core_crate: &'l str) -> Option<(&'l str, &'l str, Scope<'l>, Match)> {
     let (krate, words, scope, kind) = nextest_words(line, core_crate)?;
     Some((krate, kind.word(words.last()?), scope, kind))
 }
@@ -338,13 +338,13 @@ fn libtest_filter<'l>(words: &mut impl Iterator<Item = &'l str>) -> Option<(Vec<
 }
 
 /// `path` が crate `name` の file か（根のどれかの `<根><name>/` 配下）。
-fn in_crate(roots: &[String], path: &str, name: &str) -> bool {
+pub(super) fn in_crate(roots: &[String], path: &str, name: &str) -> bool {
     crate_relative(roots, path, name).is_some()
 }
 
 /// `path` が行の scope の中か（§28・[`in_crate`] の後段の 1 述語・網羅 match）: 旗なし = crate の全 file / `--lib` =
 /// `src/` 配下 / `--test <name>` = `tests/<name>.rs` とその配下 `tests/<name>/`。
-fn in_scope(roots: &[String], path: &str, krate: &str, scope: Scope<'_>) -> bool {
+pub(super) fn in_scope(roots: &[String], path: &str, krate: &str, scope: Scope<'_>) -> bool {
     crate_relative(roots, path, krate).is_some_and(|rest| match scope {
         Scope::Crate => true,
         Scope::Lib => rest.split('/').next() == Some(SRC_DIR),
@@ -512,7 +512,7 @@ pub fn promised_inputs(promises: &[&PromiseRow], base: &Base<'_>) -> Result<Prom
         for tooth in &promise.teeth {
             let file = tooth_file(tooth, place, &texts)?;
             let name = fn_of(tooth);
-            push_new(&mut out.verify, &nextest_line(base.roots, &file, &[name]));
+            push_new(&mut out.verify, &nextest_line(&base.layout.roots, &file, &[name]));
             for surface in tooth_surfaces(name, &file, &texts, base.snapshots) {
                 push_new(&mut out.surfaces, &surface);
             }
@@ -653,7 +653,7 @@ mod tests {
 
     use super::super::super::declaration::{fixed_roots, with_fixed};
     use super::super::tests::{set, source, PAINT};
-    use super::{check_drift, check_teeth_cover, declared_teeth, derive_write_set, weighted_lines, Base, ClosureError, Fields, Source};
+    use super::{check_drift, check_teeth_cover, declared_teeth, derive_write_set, weighted_lines, Base, ClosureError, CrateLayout, Fields, Source};
     use super::{derive_promised, in_crate, in_scope, nextest_filter, nextest_line, parent_candidates, PromiseRow};
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -699,7 +699,7 @@ mod tests {
             also: &also,
             files: &files,
         };
-        derive_write_set(&fields, &Base { sources, snapshots: &[], tracked, core_crate: "toy", roots: &fixed_roots() })
+        derive_write_set(&fields, &Base { sources, snapshots: &[], tracked, core_crate: "toy", layout: &CrateLayout::fixed() })
     }
 
     /// 導出値 = 閉包 ∪ 歯の置き場（`#[test]` 直下の fn 名が filter 語を含む file・helper と区間の外と別 crate は
@@ -858,7 +858,7 @@ mod tests {
     #[test]
     fn contract_declared_teeth_resolves_each_line_and_reads_a_written_teeth_file_as_the_place() {
         let (sources, tracked) = derive_base();
-        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let gate = |lines: &[&str], written: &[&str]| {
             let verify = strings(lines);
             let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
@@ -895,7 +895,7 @@ mod tests {
     #[test]
     fn contract_teeth_origin_pairs_each_file_with_its_own_line_filter() {
         let (sources, tracked) = derive_base();
-        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let verify = strings(&["cargo nextest run -p toy --no-tests=fail derive_ok", "cargo nextest run -p toy --no-tests=fail derive_in"]);
         let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
         let got = declared_teeth(&fields, &base, &strings(&["crates/toy/src/tint.rs"]));
@@ -916,7 +916,7 @@ mod tests {
     #[test]
     fn contract_teeth_origin_first_line_wins_and_full_write_set_passes() {
         let (sources, tracked) = derive_base();
-        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let gate = |lines: &[&str], written: &[&str]| {
             let verify = strings(lines);
             let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
@@ -945,7 +945,7 @@ mod tests {
     #[test]
     fn contract_declared_place_new_plus_rs_is_read_as_the_place() {
         let (sources, tracked) = derive_base();
-        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let verify = strings(&["cargo nextest run -p toy --no-tests=fail fresh_"]);
         let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
         let gate = |written: &[&str]| declared_teeth(&fields, &base, &strings(written));
@@ -970,7 +970,7 @@ mod tests {
         let teeth = |line: &str| derive(&[("verify", &[line])], &sources, &tracked);
         assert_eq!(teeth(e2e_line), Ok(target.clone()), "--test e2e は target の file とその配下だけ");
         assert_eq!(teeth("cargo nextest run -p toy --test helper other_"), Ok(set(&["crates/toy/tests/helper.rs"])), "--test helper");
-        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let verify = strings(&[e2e_line]);
         let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
         let written: Vec<String> = target.into_iter().collect();
@@ -1055,7 +1055,7 @@ mod tests {
     #[test]
     fn contract_promise_derive_maps_promises_to_the_six_fields_and_the_same_write_set() {
         let (sources, snapshots, tracked) = promise_base();
-        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let first = promise(
             1,
             &["crate::paint::Hue", "+crate::paint::Fresh", "Hue::Red"],
@@ -1102,7 +1102,7 @@ mod tests {
     #[test]
     fn contract_promise_derive_refuses_a_tooth_without_base_or_place() {
         let (sources, snapshots, tracked) = promise_base();
-        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let placed = promise(1, &[], &[], &["fresh_case"], "crates/toy/tests/e2e.rs");
         let bare = promise(2, &[], &[], &["pipe::nope_case"], "");
         assert_eq!(
@@ -1152,7 +1152,7 @@ mod tests {
             let tracked = strings(paths);
             let verify = strings(&["cargo nextest run -p toy --lib --no-tests=fail x_"]);
             let fields = Fields { touches: &[], surfaces: &[], verify: &verify, creates: &[], tests: &[], also: &[], files: &[] };
-            let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", roots };
+            let base = Base { sources: &sources, snapshots: &[], tracked: &tracked, core_crate: "toy", layout: &CrateLayout::bare(roots.to_vec()) };
             let texts = super::texts_of(&sources).unwrap_or_default();
             super::teeth_places(&fields, &base, &texts).map(|found| found.into_iter().collect()).unwrap_or_default()
         };
@@ -1195,7 +1195,7 @@ mod tests {
     #[test]
     fn contract_promise_files_existing_rs_lands_in_the_write_set_as_is() {
         let (sources, snapshots, tracked) = promise_base();
-        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let one = promise(1, &[], &["crates/toy/src/show.rs", "rules/manifest.toml"], &["derive_ok"], "");
         let (found, inputs) = derive_promised(&[&one], &base).unwrap_or_else(|error| panic!("{error:?}"));
         assert_eq!(inputs.files, strings(&["crates/toy/src/show.rs"]), "+ 無しの .rs だけ");
@@ -1210,7 +1210,7 @@ mod tests {
     #[test]
     fn contract_promise_files_missing_rs_is_item_unresolved() {
         let (sources, snapshots, tracked) = promise_base();
-        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", roots: &fixed_roots() };
+        let base = Base { sources: &sources, snapshots: &snapshots, tracked: &tracked, core_crate: "toy", layout: &CrateLayout::fixed() };
         let one = promise(1, &[], &["crates/toy/src/none.rs"], &["derive_ok"], "");
         let want = ClosureError::ItemUnresolved { item: "crates/toy/src/none.rs".to_owned() };
         assert_eq!(derive_promised(&[&one], &base).map(|(found, _)| found), Err(want.clone()), "base に無い .rs");

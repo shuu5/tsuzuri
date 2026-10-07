@@ -24,7 +24,7 @@
 //! 受けるので、約束の行の区間は契約の本文から抜いて値の層〔`scalar` / `list`〕だけを共有する）、`of` の親の行の実在と
 //! `n` の連番は表の検査の段が [`TableError::PromiseOrphan`] / [`TableError::PromiseNumber`] で名指す。
 
-use super::closure::{Base, ClosureError, Source};
+use super::closure::{Base, ClosureError, CrateLayout, Source};
 use super::contract::{Class, CLASS_ROW};
 use super::declaration::{TablePlaces, DECL_FILE};
 use super::refuse::{Evidence, Refuse};
@@ -612,7 +612,7 @@ fn done_teeth_findings(row: &ContractRow) -> Vec<Finding> {
 
 /// 行の欄 `done-teeth` の在りかの照らし（§66 形 2 の (e)・base を渡す口だけが撃つ＝受付と preflight・表の検査の本体は撃たない）。
 pub(crate) fn done_teeth_located_findings(row: &ContractRow, base: &Base<'_>) -> Vec<Finding> {
-    done_teeth_wrapped(row.line, teeth::done_teeth_located(&row.done_teeth, &row.verify, base))
+    done_teeth_wrapped(row.line, teeth::done_teeth_located(&row.done_teeth, &row.verify, &row.write_set, base))
 }
 
 /// 照らしの外れ（teeth の型 `Miss`）を行 `line` の [`TableError::DoneTeeth`] の 1 件ずつに包む。
@@ -725,8 +725,8 @@ pub struct Context<'a> {
     /// 宣言済みの新規 file（repo の全 doc の行の write-set の `+` 項目と `creates`・印は剥がす・名指しの解に足す）。
     /// 区間を読めない doc が在る周は理由（母集団を縮めて通さない・設計 contract-source.md §39）。
     pub declared: &'a Result<Vec<String>, String>,
-    /// crate の根の列（固定の根 + 宣言した根・§62 の 1 関数が歯の置き場と module の段を読む）。
-    pub crate_roots: &'a [String],
+    /// crate の配置（根の列〔固定の根 + 宣言した根・§62 の 1 関数が歯の置き場と module の段を読む〕と crate の manifest）。
+    pub layout: &'a CrateLayout,
 }
 
 /// `<NAME> contracts schema` の全出力（tracked な生成物 `contracts/schema.toml` の本文・1 行ずつ）。
@@ -766,7 +766,7 @@ mod tests {
     use super::changed::{changed, gaps, Gap};
     use super::teeth::{done_teeth_located, done_teeth_misses, Given};
     use super::{
-        check, code_fact, declared_files, design_docs, Claim, read_rows, read_table, render_schema, tracked_files, Base, Class, Need, Shape, Source,
+        check, code_fact, declared_files, design_docs, Claim, read_rows, read_table, render_schema, tracked_files, Base, Class, CrateLayout, Need, Shape, Source,
         TableError, DERIVED_GOAL, FIELDS, PROMISE_FIELDS, WHOLE_HEAD,
     };
     use crate::cli_outcome::{RC_BROKEN, RC_REFUSED};
@@ -1200,17 +1200,16 @@ mod tests {
             source("crates/toy/src/a.rs", "pub fn plain() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn tooth_once() {}\n\n    #[test]\n    fn tooth_twice() {}\n}\n"),
             source("crates/toy/tests/e2e.rs", "#[test]\nfn tooth_twice() {}\n"),
         ];
-        let roots = crate::pipe::declaration::fixed_roots();
-        let base = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: "toy", roots: &roots };
+        let base = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: "toy", layout: &CrateLayout::fixed() };
         let elements = own(&["1:=tooth_once", "2:=tooth_gone", "3:=tooth_twice", "4:tooth_twice", "5:tooth_fresh", "6:tooth_once"]);
-        let found = done_teeth_located(&elements, &own(&[TOOTH_LINE]), &base);
+        let found = done_teeth_located(&elements, &own(&[TOOTH_LINE]), &[], &base);
         let named: Vec<&str> = found.iter().map(|miss| miss.element.as_str()).collect();
         assert_eq!(named, ["2:=tooth_gone", "3:=tooth_twice", "4:tooth_twice"], "0 か所の既存の歯と 2 か所の既存の歯・名の歯: {found:?}");
         assert!(found.first().is_some_and(|miss| miss.reason.contains("無い歯")), "0 か所は無い歯: {found:?}");
         let twice = found.get(1).map(|miss| miss.reason.as_str()).unwrap_or_default();
         assert!(twice.contains("2 か所の名") && twice.contains("crates/toy/src/a.rs") && twice.contains("crates/toy/tests/e2e.rs"), "2 か所の path を名乗る: {twice}");
         let lib = own(&["cargo nextest run -p toy --lib --no-tests=fail tooth_"]);
-        let narrowed: Vec<String> = done_teeth_located(&elements, &lib, &base).into_iter().map(|miss| miss.element).collect();
+        let narrowed: Vec<String> = done_teeth_located(&elements, &lib, &[], &base).into_iter().map(|miss| miss.element).collect();
         assert_eq!(narrowed, ["2:=tooth_gone"], "--lib は src の 1 か所だけを数える");
         let blind = teeth_misses("(1) a (2) b (3) c (4) d (5) e (6) f", &[TOOTH_LINE], &[], &[], &["1:=tooth_once", "2:=tooth_gone", "3:=tooth_twice", "4:tooth_twice", "5:tooth_fresh", "6:tooth_once"]);
         assert!(blind.is_empty(), "base を渡さない口は在りかを名指さない: {blind:?}");

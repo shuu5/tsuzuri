@@ -6,7 +6,7 @@
 //! 照らし [`done_teeth_located`]（(e)）は base の `.rs` を読む口で、受付と preflight だけが撃つ。外れは本 module の型 [`Miss`]
 //! で返し、表の検査の 1 種への包みは表の検査と受付の側が持つ（ほかの行の touches の型を本 module は名指さない）。
 
-use super::super::closure::{selects, tooth_sites, Base};
+use super::super::closure::{in_line_region, selects, tooth_sites, Base};
 use super::super::review::done_items;
 use std::collections::BTreeSet;
 
@@ -220,10 +220,20 @@ fn sites_of(name: &str, lines: &[&String], base: &Base<'_>) -> Vec<String> {
     sites
 }
 
+/// 名の歯を選ぶ検証行 `chosen` の歯の区間が、base の `.rs` も write-set `write_set` の `+` の file も 1 つも持たないか（着地しえない
+/// 歯・選ぶ行が 0 本の周は偽）。区間の判じは [`in_line_region`] の 1 本。
+fn unlandable(chosen: &[&String], write_set: &[String], base: &Base<'_>) -> bool {
+    let planned: Vec<&str> = write_set.iter().filter_map(|item| item.strip_prefix('+')).collect();
+    let held = |line: &String, path: &str| in_line_region(line, path, base);
+    !chosen.is_empty()
+        && chosen.iter().all(|line| !base.sources.iter().any(|source| held(line, &source.path)) && !planned.iter().any(|path| held(line, path)))
+}
+
 /// 在りかの照らし（設計 §66 形 2 の (e)・base の `.rs` を読む）: 既存の歯は、それを選ぶ検証行の crate と scope の base の歯の区間に
 /// ちょうど 1 つ在ること（0 は無い歯・2 か所以上は 2 か所の名）、名の歯は base に在れば 1 か所に定まること（2 か所以上を名指す・
-/// base に無い名は新しい歯で外れでない）。どの検証行にも選ばれない名は (d) が名指すのでここでは数えない。
-pub(crate) fn done_teeth_located(elements: &[String], verify: &[String], base: &Base<'_>) -> Vec<Miss> {
+/// base に無い名は新しい歯で外れでない）。ただし名の歯を選ぶ検証行の全部で歯の区間に base の `.rs` も write-set の `+` の file も
+/// 無い歯は、どう書いても着地しえないので外れ（`@<k>` で書く）。どの検証行にも選ばれない名は (d) が名指すのでここでは数えない。
+pub(crate) fn done_teeth_located(elements: &[String], verify: &[String], write_set: &[String], base: &Base<'_>) -> Vec<Miss> {
     let mut found = Vec::new();
     for element in elements {
         let (name, kept) = match parse_element(element) {
@@ -237,7 +247,49 @@ pub(crate) fn done_teeth_located(elements: &[String], verify: &[String], base: &
             found.push(Miss::of(element, format!("無い歯: 既存の歯 {name} が base の歯の区間に 0 か所")));
         } else if sites.len() > 1 {
             found.push(Miss::of(element, format!("2 か所の名: 歯 {name} が base の {} に在る", sites.join(", "))));
+        } else if !kept && unlandable(&chosen, write_set, base) {
+            let reason = format!("着地しえない歯: 歯 {name} を選ぶ検証行の歯の区間に base の .rs も write-set の + の file も無い（@<k> で書く）");
+            found.push(Miss::of(element, reason));
         }
     }
     found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::done_teeth_located;
+    use crate::pipe::closure::{Base, CrateLayout, Source};
+
+    /// 名の歯 `fresh_one` を選ぶ検証行（`flags` が crate と scope の旗）。
+    fn line(flags: &str) -> Vec<String> {
+        vec![format!("cargo nextest run {flags} --no-tests=fail fresh_")]
+    }
+
+    /// 根 `crates/` の toy（base の `.rs` は `crates/toy/src/lib.rs` だけ）で、要素 `1:fresh_one` を `verify` と `write_set` で照らす。
+    fn located(verify: &[String], write_set: &[&str]) -> Vec<super::Miss> {
+        let sources = vec![Source { path: "crates/toy/src/lib.rs".to_owned(), body: Ok("pub fn plain() {}\n".to_owned()) }];
+        let layout = CrateLayout::bare(vec!["crates/".to_owned()]);
+        let base = Base { sources: &sources, snapshots: &[], tracked: &[], core_crate: "toy", layout: &layout };
+        let write_set: Vec<String> = write_set.iter().map(|item| (*item).to_owned()).collect();
+        done_teeth_located(&["1:fresh_one".to_owned()], verify, &write_set, &base)
+    }
+
+    /// 歯 vtpath_unlandable_named_tooth_is_refused: 区間に base の `.rs` が 0 本で write-set も区間に file を作らない名の歯は、着地しえない歯の外れ 1 件。
+    #[test]
+    fn vtpath_unlandable_named_tooth_is_refused() {
+        let found = located(&line("-p xtask --test teeth1"), &[]);
+        assert_eq!(found.len(), 1, "外れは 1 件: {found:?}");
+        let miss = found.first().cloned().unwrap_or_else(|| super::Miss::of("", ""));
+        assert_eq!(miss.element, "1:fresh_one");
+        assert!(miss.reason.starts_with("着地しえない歯") && miss.reason.contains("@<k> で書く"), "{}", miss.reason);
+    }
+
+    /// 歯 vtpath_landable_named_tooth_is_kept: 区間の中の `+` の file を write-set に置いた周と、区間に base の `.rs` が在る周は外れを返さない。
+    #[test]
+    fn vtpath_landable_named_tooth_is_kept() {
+        let planned = located(&line("-p toy --test teeth1"), &["+crates/toy/tests/teeth1.rs"]);
+        assert_eq!(planned, Vec::new(), "区間の中の + の file を置く周は着地できる");
+        let held = located(&line("-p toy --lib"), &[]);
+        assert_eq!(held, Vec::new(), "区間に base の .rs が在る周は着地できる");
+    }
 }

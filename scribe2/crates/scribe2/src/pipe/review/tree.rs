@@ -58,7 +58,7 @@ pub(in crate::pipe) fn requirements_of(repo: &Path, manifest: &Manifest) -> Resu
     let commands = crate::rules::list_row(manifest, CEILING_ROW)?;
     let denied = crate::rules::list_row(manifest, DENIED_ROW)?;
     let ceiling = Ceiling { row: CEILING_ROW, commands, denied, classes: &[] };
-    table_facts(repo, &ceiling)
+    table_facts(repo, &ceiling, &[])
         .map(|facts| facts.requirements)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<String>>().join(" / "))
 }
