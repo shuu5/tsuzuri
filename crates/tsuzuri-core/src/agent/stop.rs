@@ -1,13 +1,31 @@
 //! 係の終える前の門の判じ（判断の記録 ADR-59 決定 (4)・要件 FR21）。
 //! 係の終わりの門の入力（SubagentStop の入力）の欄を読み、係の記録と出力の dir と最後の文から欠けを数える。
-//! 欠けは 3 つで、この順に並べる: 係の記録に席（team-lead）への SendMessage の呼びが無い・札の出す物の file が出力の dir に無い・
-//! 最後の文に出力の dir の path が無い。止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
+//! 欠けは 5 つで、この順に並べる: 札の出す物の file が出力の dir に無い・最後の答えの 1 行目が状態の語でない・
+//! 最後の答えの行の数が上限を越える・最後の答えの字の数が上限を越える・最後の答えの最後の行に出力の dir の path が無い。
+//! 最後の答えは、係の記録に引き渡しの道具（SubagentHandback）の呼びが在ればその message の字、無ければ最後の文である（判断の記録 ADR-78 決定 (1)）。
+//! 出す物の .md の頭の見出しの欠けは `gist_lacks` が持つ。
+//! 止めるのは 1 度目の終わり（stop_hook_active が真でない終わり）だけで、2 度目は欠けを記帳して通す。
 //! 群の係の出す物の主張の表の欠けは `claim_lacks` が持つ（判断の記録 ADR-61 決定 (4)(8)・要件 FR22）。
 
 use serde_json::Value;
 
-/// 席の名（名で呼び合う形の SendMessage の宛先）。
-pub const LEAD: &str = "team-lead";
+/// 最後の答えの 1 行目に置く状態の語。
+pub const STATES: [&str; 4] = ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"];
+
+/// 最後の答えの行の数の上限（規則の行 R-51）。
+pub const MAX_LINES: usize = 5;
+
+/// 最後の答えの字の数の上限（規則の行 R-51）。
+pub const MAX_CHARS: usize = 600;
+
+/// 出す物の .md の頭に置く見出しの語。
+pub const HEADING: &str = "要点";
+
+/// 見出しを探す出す物の頭の行の数。
+pub const HEAD_LINES: usize = 40;
+
+/// 係の引き渡しの道具の名（係の記録の content の項の名）。
+pub const HANDBACK: &str = "SubagentHandback";
 
 /// 2 度目の終わりを通した時の欠けの記帳の file（出力の dir の下）。
 pub const GATE: &str = "STOP-GATE.txt";
@@ -37,22 +55,26 @@ pub fn end(payload: &str) -> End {
     }
 }
 
-/// 係の記録の 1 行が、席への SendMessage の呼び（message の content の項で、名が SendMessage・input の to が席の名）を持つか。
-fn tells(line: &[u8]) -> bool {
-    let Ok(row) = serde_json::from_slice::<Value>(line) else {
-        return false;
-    };
-    row.pointer("/message/content")
-        .and_then(Value::as_array)
-        .is_some_and(|items| {
-            items.iter().any(|x| {
-                x.get("name").and_then(Value::as_str) == Some("SendMessage")
-                    && x.pointer("/input/to").and_then(Value::as_str) == Some(LEAD)
-            })
+/// 係の記録の最後の引き渡しの呼び（message の content の項で、名が HANDBACK・input の message が字）の message の字（無ければ None）。
+fn handback(record: &[u8]) -> Option<String> {
+    record
+        .split(|b| *b == b'\n')
+        .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
+        .filter_map(|row| {
+            row.pointer("/message/content")?
+                .as_array()?
+                .iter()
+                .rev()
+                .find(|x| x.get("name").and_then(Value::as_str) == Some(HANDBACK))?
+                .pointer("/input/message")?
+                .as_str()
+                .map(str::to_string)
         })
+        .next_back()
 }
 
-/// 欠けの字の列（席への知らせ・出す物の file ごと・最後の文の path の順）。`have` は出力の dir `out` の下に出す物の file が在るか。
+/// 欠けの字の列（出す物の file ごと・最後の答えの状態の語・行の数・字の数・最後の行の path の順）。`have` は出力の dir `out` の下に出す物の file が在るか。
+/// 最後の答えは、係の記録 `record` に引き渡しの呼びが在ればその message の字、無ければ最後の文 `last` で、前後の空白を除いて数える。
 pub fn lacks(
     record: &[u8],
     outputs: &[String],
@@ -60,22 +82,54 @@ pub fn lacks(
     last: &str,
     out: &str,
 ) -> Vec<String> {
-    let mut lacks = Vec::new();
-    if !record.split(|b| *b == b'\n').any(tells) {
+    let mut lacks: Vec<String> = outputs
+        .iter()
+        .filter(|o| !have(o))
+        .map(|o| format!("出す物 {o} が {out}/ に無い"))
+        .collect();
+    let handed = handback(record);
+    let answer = handed.as_deref().unwrap_or(last).trim();
+    if !STATES.contains(&answer.lines().next().unwrap_or_default().trim()) {
         lacks.push(format!(
-            "係の記録に席（{LEAD}）への SendMessage の知らせが無い"
+            "最後の答えの 1 行目が状態の語（{} のどれか）でない",
+            STATES.join("・")
         ));
     }
-    lacks.extend(
-        outputs
-            .iter()
-            .filter(|o| !have(o))
-            .map(|o| format!("出す物 {o} が {out}/ に無い")),
-    );
-    if !last.contains(out) {
-        lacks.push(format!("最後の文に出力の dir の path {out} が無い"));
+    let lines = answer.lines().count();
+    if lines > MAX_LINES {
+        lacks.push(format!(
+            "最後の答えが {lines} 行で上限 {MAX_LINES} 行を越える"
+        ));
+    }
+    let chars = answer.chars().count();
+    if chars > MAX_CHARS {
+        lacks.push(format!(
+            "最後の答えが {chars} 字で上限 {MAX_CHARS} 字を越える"
+        ));
+    }
+    if !answer.lines().next_back().unwrap_or_default().contains(out) {
+        lacks.push(format!(
+            "最後の答えの最後の行に出力の dir の path {out} が無い"
+        ));
     }
     lacks
+}
+
+/// 出す物 `outputs` のうち名の末が .md で `read` が字を返す file ごとの欠けの字の列（頭 HEAD_LINES 行に、前の空白を除いて字 # で始まり
+/// HEADING を含む行が無い）。.md でない出す物と読めない出す物は数えない。
+pub fn gist_lacks(outputs: &[String], read: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    outputs
+        .iter()
+        .filter(|o| o.ends_with(".md"))
+        .filter_map(|o| read(o).map(|text| (o, text)))
+        .filter(|(_, text)| {
+            !text.lines().take(HEAD_LINES).any(|l| {
+                let l = l.trim_start();
+                l.starts_with('#') && l.contains(HEADING)
+            })
+        })
+        .map(|(o, _)| format!("出す物 {o} の頭 {HEAD_LINES} 行に「{HEADING}」を含む見出しが無い"))
+        .collect()
 }
 
 /// 群の係の主張の表の確かさの印（確かめた・記録から・見立て・分からない）。
@@ -124,7 +178,7 @@ pub fn claim_lacks(texts: &[String], claims: &[String]) -> Vec<String> {
 /// 1 度目の終わりを止める理由の字（欠けと次の一手）。
 pub fn hold(lacks: &[String], out: &str) -> String {
     format!(
-        "係の終える前の門は止める（{}） 次の一手 = 欠けを埋め、最後の文に {out} を書いて終える（止めるのは 1 度目の終わりだけ）",
+        "係の終える前の門は止める（{}） 次の一手 = 欠けを埋め、最後の答えを 1 行目が状態の語・{MAX_LINES} 行以内・{MAX_CHARS} 字以内・最後の行が {out} の形にして終える（止めるのは 1 度目の終わりだけ）",
         lacks.join("・")
     )
 }

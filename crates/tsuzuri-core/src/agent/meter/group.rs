@@ -67,7 +67,7 @@ pub fn fence(tool: &str, path: Option<&str>, seat: &Seat) -> Option<String> {
 pub fn read_refusal(tool: &str, read: u64, out: &Path) -> String {
     format!(
         "係の門は止める（群の係の読み直し {read} が上限 {MEMBER_READ} 以上の書き終えの段で、道具 {tool} は通さない・判断の記録 ADR-61 の決定 (7)） \
-         次の一手 = 分かった所を {}/ の下に Write か Edit で書き、SendMessage で席に知らせて終える",
+         次の一手 = 分かった所を {}/ の下に Write か Edit で書き、最後の答えを 5 行の形にして終える",
         out.display()
     )
 }

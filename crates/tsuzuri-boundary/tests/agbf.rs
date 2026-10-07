@@ -211,13 +211,13 @@ fn agbf_spawn_hook_denies_a_budget_below_the_floor() {
     assert_eq!(Spec::parse(&card).map(|s| s.budget), Some(150_000));
 }
 
-/// 席への知らせ（team-lead への SendMessage）を持ち、usage の新しい量が 300000 の係の記録。
+/// SendMessage の呼びを持たず、usage の新しい量が 300000 の係の記録。
 fn record() -> String {
-    let told = r#"{"type":"assistant","message":{"id":"M2","content":[{"type":"tool_use","id":"toolu_1","name":"SendMessage","input":{"to":"team-lead","message":"済み"}}],"usage":{"input_tokens":1000,"cache_creation_input_tokens":49000,"output_tokens":0,"cache_read_input_tokens":9}}}"#;
+    let said = r#"{"type":"assistant","message":{"id":"M2","content":[{"type":"text","text":"済み"}],"usage":{"input_tokens":1000,"cache_creation_input_tokens":49000,"output_tokens":0,"cache_read_input_tokens":9}}}"#;
     [
         r#"{"type":"user","message":{"content":"頼み"}}"#.to_string(),
         turn(&id("M1"), 50_000, 199_000, 1_000, 5),
-        told.to_string(),
+        said.to_string(),
     ]
     .join("\n")
         + "\n"
@@ -229,18 +229,18 @@ fn whole(name: &str) -> PathBuf {
     let dir = root.join("drafts/w238a");
     fs::create_dir_all(dir.join("w")).unwrap();
     fs::write(dir.join("spec.json"), card(None).render()).unwrap();
-    fs::write(dir.join("w/notes.md"), "分かった所\n").unwrap();
+    fs::write(dir.join("w/notes.md"), "# 要点\n分かった所\n").unwrap();
     fs::create_dir_all(root.join("drafts/.agents")).unwrap();
     fs::write(root.join("drafts/.agents/a77"), "w238a\n").unwrap();
     fs::write(root.join("s/subagents/agent-a77.jsonl"), record()).unwrap();
     root
 }
 
-/// tz hook agent-stop に係 a77 の終わりの入力（止めた後の終わりか `again`・最後の文は出力の dir の path を持つ）を渡した結果。
+/// tz hook agent-stop に係 a77 の終わりの入力（止めた後の終わりか `again`・最後の答えは 3 行の形で最後の行が出力の dir の path）を渡した結果。
 fn stop(root: &Path, again: bool) -> Output {
     let w = root.join("drafts/w238a/w");
     let input = format!(
-        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a77","agent_type":"tsuzuri:drafter","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"済み。出す物は {} に在る"}}"#,
+        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a77","agent_type":"tsuzuri:drafter","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"DONE\n要点 1 行\n{}"}}"#,
         root.join("s.jsonl").display(),
         root.join("s/subagents/agent-a77.jsonl").display(),
         w.display()

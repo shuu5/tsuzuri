@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use tsuzuri_boundary::hook::{agent_bind, agent_guard, agent_meter, agent_spawn, subagent_stop};
 use tsuzuri_boundary::stage::json;
 use tsuzuri_core::agent::spec::{HOLES, KEYS, TYPES, group};
+use tsuzuri_core::agent::stop::STATES;
 
 /// 係の口の command の頭（runner の印の除き）と tzw の字。
 const HEAD: &str =
@@ -89,6 +90,21 @@ const OLD_WORDS: [(&str, &str); 8] = [
     ("section-field", "req・section・"),
     ("depends-field", "done-teeth・depends"),
 ];
+
+/// 係の型の本文が字の中にちょうど 1 度ずつ持つ返りの形と道具と git の句の名と字（見出し 2 つと、節の中の 3 つの句）。
+const RETURN: [(&str, &str); 5] = [
+    ("shape-heading", "## 返りの形"),
+    ("tools-heading", "## 道具と git"),
+    ("limits", "最後の答えは 5 行以内・600 字以内にする。"),
+    ("no-relay", "同じ中身を SendMessage で席へ重ねない。"),
+    (
+        "no-destroy",
+        "reset --hard・branch -D・force push・checkout -- は撃たない。",
+    ),
+];
+
+/// 返りの節の見出し。
+const SHAPE_HEAD: &str = "## 返りの形";
 
 type Mouth =(String, Option<String>, String, Option<u64>);
 
@@ -298,6 +314,25 @@ fn designer_faults(text: &str) -> Vec<&'static str> {
     faults
 }
 
+/// 係の型の本文の欠け（字の数がちょうど 1 でない RETURN の句の名を表の順に、続けて返りの節に STATES の語が 1 つでも語として無ければ states）。
+fn return_faults(body: &str) -> Vec<&'static str> {
+    let mut faults: Vec<&'static str> = RETURN
+        .iter()
+        .filter(|(_, words)| body.matches(words).count() != 1)
+        .map(|(name, _)| *name)
+        .collect();
+    let section = body
+        .split_once(SHAPE_HEAD)
+        .map_or("", |(_, rest)| rest.split("\n## ").next().unwrap_or(rest));
+    let words: Vec<&str> = section
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .collect();
+    if !STATES.iter().all(|state| words.contains(state)) {
+        faults.push("states");
+    }
+    faults
+}
+
 /// 本文の決まり（字 - で始まる行）のうち、末が天井だけでも、門の名でも、在る器の門の名でもない行。
 fn rule_faults(body: &str, gates: &[&str], vessel: impl Fn(&str) -> bool) -> Vec<String> {
     let ok = |rule: &str| {
@@ -496,6 +531,43 @@ fn agpl_drafter_is_the_designer() {
     assert_eq!(designer_faults(&text), Vec::<&str>::new());
     let (fields, _) = front(&text).expect("頭と本文");
     assert_eq!(field(&fields, "effort"), ["high"]);
+}
+
+/// (8) 係の型 3 本の本文は、返りの形と道具と git の句をちょうど 1 度ずつ、返りの節に状態の 4 語を持ち、句を 1 つ外すか重ねた見本は
+/// その句の名を、状態の語を 1 つ外した見本は states を名指す。起草係の状態の節の頭は最後の答えの 1 行目を指す。
+#[test]
+fn agpl_types_carry_the_return_shape_and_tools() {
+    for stem in ["drafter", "researcher", "verifier"] {
+        let text = read(&format!("plugin/agents/{stem}.md"));
+        let (_, body) = front(&text).expect("頭と本文");
+        assert_eq!(return_faults(body), Vec::<&str>::new(), "{stem}");
+        for (name, words) in RETURN {
+            let removed = body.replacen(words, "", 1);
+            assert!(
+                return_faults(&removed).contains(&name),
+                "外した {stem} {name}"
+            );
+            let doubled = body.replacen(words, &format!("{words}・{words}"), 1);
+            assert_eq!(return_faults(&doubled), vec![name], "重ねた {stem} {name}");
+        }
+        for state in STATES {
+            let (head, tail) = body.split_once(SHAPE_HEAD).expect("返りの節");
+            let cut = format!("{head}{SHAPE_HEAD}{}", tail.replacen(state, "", 1));
+            assert_eq!(
+                return_faults(&cut),
+                ["states"],
+                "{stem} の返りの節の {state}"
+            );
+        }
+    }
+    let drafter = read("plugin/agents/drafter.md");
+    assert_eq!(
+        drafter
+            .matches("最後の答えの 1 行目に、次の 4 語の 1 つを置く。")
+            .count(),
+        1
+    );
+    assert!(!drafter.contains("席への知らせの頭に"));
 }
 
 /// (7) 設計係の句を 1 つだけ外した見本と 2 度にした見本は、その句の名だけを名指し、古い語を file の末に 1 つ足した見本は、その語の

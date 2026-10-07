@@ -46,18 +46,9 @@ const RULES: &str = r#"thresholds:
         - "ms"
 "#;
 
-/// 係の記録の assistant の行（道具 `tool` の tool_use で、input の宛先 `to`）。
-fn call(tool: &str, to: &str) -> String {
-    format!(
-        r#"{{"type":"assistant","message":{{"id":"A","content":[{{"type":"text","text":"済み"}},{{"type":"tool_use","id":"toolu_1","name":"{tool}","input":{{"to":"{to}","message":"済み"}}}}]}}}}"#
-    ) + "\n"
-}
-
-/// 席への知らせの在る係の記録（頼みの行の後に team-lead への SendMessage）。
-fn told() -> String {
-    r#"{"type":"user","message":{"content":"頼み"}}"#.to_string()
-        + "\n"
-        + &call("SendMessage", "team-lead")
+/// 係の記録（頼みの行だけ・SendMessage の呼びは無い）。
+fn asked() -> String {
+    r#"{"type":"user","message":{"content":"頼み"}}"#.to_string() + "\n"
 }
 
 /// 歯ごとの置き場（前の撃ちの残りを消して作る）。drafts/ と、係の記録を置く親の記録の dir。
@@ -71,7 +62,7 @@ fn place(name: &str) -> PathBuf {
     root
 }
 
-/// 欠けの無い終わりの置き場: 係 w218a の札（出す物 notes.md）と係の id a77 の結び・席への知らせの在る係の記録・w/notes.md。
+/// 欠けの無い終わりの置き場: 係 w218a の札（出す物 notes.md）と係の id a77 の結び・係の記録・w/notes.md（要点の見出し付き）。
 /// 偽の scribe2（置き場の bin）と空の dir empty も置く。
 fn whole(name: &str) -> PathBuf {
     let root = place(name);
@@ -82,10 +73,10 @@ fn whole(name: &str) -> PathBuf {
         r#"{"name":"w218a","type":"tsuzuri:drafter","budget":1000,"build":"なし","target":"t3-hub.87","outputs":["notes.md"],"spawned":1,"agent_id":"a77","ended":null}"#,
     )
     .unwrap();
-    fs::write(dir.join("w/notes.md"), "分かった所\n").unwrap();
+    fs::write(dir.join("w/notes.md"), "# 要点\n分かった所\n").unwrap();
     fs::create_dir_all(root.join("drafts/.agents")).unwrap();
     fs::write(root.join("drafts/.agents/a77"), "w218a\n").unwrap();
-    fs::write(root.join("s/subagents/agent-a77.jsonl"), told()).unwrap();
+    fs::write(root.join("s/subagents/agent-a77.jsonl"), asked()).unwrap();
     fs::create_dir_all(root.join("empty")).unwrap();
     fs::create_dir_all(root.join("bin")).unwrap();
     let fake = root.join("bin/scribe2");
@@ -112,9 +103,9 @@ fn contracts(root: &Path, names: &[&str]) {
     }
 }
 
-/// 最後の文（出力の dir の path を持つ）。
+/// 最後の答え（1 行目 DONE・要点 1 行・最後の行に出力の dir の path・JSON の字のまま改行は \n の 2 字）。
 fn said(root: &Path) -> String {
-    format!("済み。出す物は {} に在る", w(root).display())
+    format!("DONE\\n要点 1 行\\n{}", w(root).display())
 }
 
 /// 偽の scribe2 の在る PATH（置き場の bin と元の PATH）。

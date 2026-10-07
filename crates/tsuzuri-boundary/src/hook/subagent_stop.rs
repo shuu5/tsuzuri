@@ -3,7 +3,8 @@
 //! 1. 標準入力を全部読む。係の id が無ければ何も読まず何も出さずに 0。
 //! 2. 起草の置き場を解く（結びの口と同じ --drafts か repo の git config の鍵）。解けなければ標準エラーに書いて通す。
 //! 3. 測りと同じ `resolve` で結びの名と札を読む。結びが無ければ測りと同じ `unbound` で `.agents/unbound.jsonl` に 1 行足して通す。
-//! 4. 係の記録（入力の agent_transcript_path）と出力の dir `<名>/w` と最後の文（last_assistant_message）から、中核の `lacks` で欠けを数える。
+//! 4. 係の記録（入力の agent_transcript_path）と出力の dir `<名>/w` と最後の文（last_assistant_message）から、中核の `lacks` で欠けを数え、
+//!    続けて出す物の .md の要点の見出しの欠けを中核の `gist_lacks` で数える。
 //! 5. 欠けが在り 1 度目の終わり（stop_hook_active が真でない）なら、理由を標準エラーに書いて 2
 //!    （Claude Code は SubagentStop の rc 2 を係の続けと読み、標準エラーを係に渡す）。
 //! 6. 通す時は、欠けが在れば `<名>/w/STOP-GATE.txt` に欠けを 1 行ずつ書き、札の `ended` に今の時刻を書いて 0（書けなければ標準エラーに書いて通す）。
@@ -28,7 +29,7 @@ use std::path::Path;
 use tsuzuri_core::agent::meter::{TALLY, Tally, sub_call};
 use tsuzuri_core::agent::spec::group::{SEAT, Seat};
 use tsuzuri_core::agent::spec::{OUT, SPEC, Spec};
-use tsuzuri_core::agent::stop::{GATE, claim_lacks, end, hold, lacks};
+use tsuzuri_core::agent::stop::{GATE, claim_lacks, end, gist_lacks, hold, lacks};
 
 use super::agent_args::begin;
 use super::agent_meter::{resolve, unbound};
@@ -100,6 +101,9 @@ pub fn run(rest: &[&str]) -> u8 {
         &stop.last,
         &shown,
     );
+    holes.extend(gist_lacks(&spec.outputs, |o| {
+        fs::read_to_string(out.join(o)).ok()
+    }));
     holes.extend(claim_holes(&dir.join(&name), &spec, &out));
     holes.extend(contract::holes(
         &dir.join(&name),

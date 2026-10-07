@@ -51,7 +51,7 @@ pub fn open(tool: &str, path: Option<&str>, out: &Path) -> bool {
 pub fn refusal(tool: &str, used: u64, budget: u64, out: &Path) -> String {
     format!(
         "係の門は止める（使った量 {used} が予算 {budget} 以上の書き終えの段で、道具 {tool} は通さない） \
-         次の一手 = 分かった所を {}/ の下に Write か Edit で書き、SendMessage で席に知らせて終える",
+         次の一手 = 分かった所を {}/ の下に Write か Edit で書き、最後の答えを 5 行の形にして終える",
         out.display()
     )
 }

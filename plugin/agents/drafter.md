@@ -49,7 +49,7 @@ skills:
 
 ## 状態
 
-席への知らせの頭に、次の 4 語の 1 つを置く。
+最後の答えの 1 行目に、次の 4 語の 1 つを置く。
 
 - DONE: 出す物が揃い、自己検査の 5 項と preflight --contract と散文の門が通った。
 - DONE_WITH_CONCERNS: 出す物は揃ったが懸念が残る。懸念を notes.md に書く。
@@ -61,3 +61,11 @@ skills:
 - 門や hook に断られた時は、その場で止まり、断りの字をそのまま席に知らせる。
 - 要件や条を替えないと行が書けない時は、問いの案を notes.md に書いて BLOCKED で知らせる。
 - 行の数が頼みの上限を越える時は、割り方の案だけを書いて知らせる。
+
+## 返りの形
+
+最後の答えは 5 行以内・600 字以内にする。1 行目は状態の語（DONE・DONE_WITH_CONCERNS・BLOCKED・NEEDS_CONTEXT）の 1 つだけ、続けて要点を 3 行以内、最後の行に出す物の dir の path を書く。同じ中身を SendMessage で席へ重ねない。出す物の .md は頭 40 行の内に「要点」を含む見出しを置く。終える前の門（tz hook agent-stop）がこの形を検める。
+
+## 道具と git
+
+背景の係が使える組み込みの道具は Read・Grep・Glob・LSP・Bash・PowerShell・Edit・Write・NotebookEdit・WebFetch・WebSearch・TodoWrite・Skill・ToolSearch・EnterWorktree・ExitWorktree・Monitor・TaskStop・SendMessage・Artifact と MCP の道具で、ほかは外れる。file の読みと探しと書きは Read・Grep・Glob・Write・Edit を先に使い、互いに依らない呼びは 1 度に並べて撃つ。git は repo を替えない命令（status・log・diff・show・grep と写しの clone）を撃ち、commit と push は頼みが許す時だけにする。reset --hard・branch -D・force push・checkout -- は撃たない。

@@ -60,8 +60,8 @@ fn aggc_claim_lacks_names_each_missing_row_mark_and_evidence() {
     assert!(claim_lacks(&bare, &[]).is_empty());
 }
 
-/// 欠けの無い群の係の終わりの置き場: 係 qv181 の札（出す物 notes.md）と係の id a81 の結び・席への知らせの在る係の記録・
-/// w/notes.md の字 `notes`・`member` なら群 g1 の席の札（割りの主張 U1）。
+/// 欠けの無い群の係の終わりの置き場: 係 qv181 の札（出す物 notes.md）と係の id a81 の結び・係の記録・
+/// w/notes.md の字（頭に要点の見出しの行を足した `notes`）・`member` なら群 g1 の席の札（割りの主張 U1）。
 fn site(name: &str, notes: &str, member: bool) -> PathBuf {
     let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("aggc")
@@ -79,23 +79,23 @@ fn site(name: &str, notes: &str, member: bool) -> PathBuf {
         let seat = r#"{"group":"g1","i":1,"k":3,"claims":["U1"],"paths":["/S/a.md"]}"#;
         fs::write(dir.join("group.json"), seat).unwrap();
     }
-    fs::write(dir.join("w/notes.md"), notes).unwrap();
+    fs::write(dir.join("w/notes.md"), format!("# 要点\n{notes}")).unwrap();
     fs::create_dir_all(root.join("drafts/.agents")).unwrap();
     fs::write(root.join("drafts/.agents/a81"), "qv181\n").unwrap();
-    let told = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"SendMessage","input":{"to":"team-lead","message":"済み"}}]}}"#;
+    let asked = r#"{"type":"user","message":{"content":"頼み"}}"#;
     fs::write(
         root.join("s/subagents/agent-a81.jsonl"),
-        format!("{told}\n"),
+        format!("{asked}\n"),
     )
     .unwrap();
     root
 }
 
-/// tz hook agent-stop に係 a81 の終わりの入力（止めた後の終わりか `again`・最後の文は出力の dir の path を持つ）を渡した結果。
+/// tz hook agent-stop に係 a81 の終わりの入力（止めた後の終わりか `again`・最後の答えは 3 行の形で最後の行が出力の dir の path）を渡した結果。
 fn end_of(root: &Path, again: bool) -> Output {
     let w = root.join("drafts/qv181/w");
     let input = format!(
-        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a81","agent_type":"tsuzuri:verifier","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"済み。出す物は {} に在る"}}"#,
+        r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a81","agent_type":"tsuzuri:verifier","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"DONE\n要点 1 行\n{}"}}"#,
         root.join("s.jsonl").display(),
         root.join("s/subagents/agent-a81.jsonl").display(),
         w.display()

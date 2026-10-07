@@ -541,7 +541,7 @@ fn tprsb_bin_body_only_update() {
     }
 }
 
-/// 係の終える前の門の置き場: 係 w218a の札（出す物 notes.md）と係の id a77 の結び・席への知らせの在る係の記録・w/notes.md と、
+/// 係の終える前の門の置き場: 係 w218a の札（出す物 notes.md）と係の id a77 の結び・係の記録・w/notes.md（要点の見出し付き）と、
 /// toy の repo（design-intent の規則の表）。
 fn whole(name: &str) -> PathBuf {
     let root = fresh(name);
@@ -555,10 +555,10 @@ fn whole(name: &str) -> PathBuf {
         r#"{"name":"w218a","type":"tsuzuri:drafter","budget":1000,"build":"なし","target":"t3-hub.87","outputs":["notes.md"],"spawned":1,"agent_id":"a77","ended":null}"#,
     )
     .unwrap();
-    fs::write(dir.join("w/notes.md"), "分かった所\n").unwrap();
+    fs::write(dir.join("w/notes.md"), "# 要点\n分かった所\n").unwrap();
     fs::write(root.join("drafts/.agents/a77"), "w218a\n").unwrap();
-    let told = r#"{"type":"assistant","message":{"id":"A","content":[{"type":"tool_use","id":"toolu_1","name":"SendMessage","input":{"to":"team-lead","message":"済み"}}]}}"#;
-    fs::write(root.join("s/subagents/agent-a77.jsonl"), format!("{told}\n")).unwrap();
+    let asked = r#"{"type":"user","message":{"content":"頼み"}}"#;
+    fs::write(root.join("s/subagents/agent-a77.jsonl"), format!("{asked}\n")).unwrap();
     root
 }
 
@@ -569,7 +569,7 @@ fn w(root: &Path) -> PathBuf {
 
 /// tz hook agent-stop に係 a77 の終わり（止めた後の終わりか `again`）を toy の repo と共に渡した結果。
 fn stop(root: &Path, again: bool) -> Output {
-    let last = format!("済み。出す物は {} に在る", w(root).display());
+    let last = format!("DONE\\n要点 1 行\\n{}", w(root).display());
     let input = format!(
         r#"{{"session_id":"00000000-0000-4000-8000-000000000000","transcript_path":"{}","cwd":"/W","permission_mode":"bypassPermissions","agent_id":"a77","agent_type":"tsuzuri:drafter","hook_event_name":"SubagentStop","stop_hook_active":{again},"agent_transcript_path":"{}","last_assistant_message":"{last}"}}"#,
         root.join("s.jsonl").display(),

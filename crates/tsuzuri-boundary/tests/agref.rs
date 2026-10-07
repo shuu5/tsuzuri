@@ -54,7 +54,7 @@ const CLAUSES: [(&str, u8, &str); 48] = [
         "働きを通らない照らし（足す物が 0 の時に通る等式・実装が作る物を種で先に置く toy など）は審査で落ちる",
     ),
     ("findings", 5, "出す物の file の名に findings も使わない"),
-    ("reply", 5, "最後の返事（席への知らせ）は 10 行以内"),
+    ("reply", 5, "最後の答えは 5 行以内・600 字以内"),
     (
         "write-tree",
         6,
@@ -199,7 +199,7 @@ const CLAUSES: [(&str, u8, &str); 48] = [
 ];
 
 /// file のどこにも無い字の名と字（写さない案内の幅の値と、直す前の群の頭の予算の字と、外した実装と道具の手順の語）。
-const ABSENT: [(&str, &str); 16] = [
+const ABSENT: [(&str, &str); 17] = [
     ("width-copied", "100 字"),
     ("old-budget", "150000 以下"),
     ("patch-path", "docs/design/patch/"),
@@ -216,6 +216,7 @@ const ABSENT: [(&str, &str); 16] = [
     ("plan-rule", "規則の行 R-33"),
     ("design-pointer", "--design contracts/"),
     ("folio-derive", "folio derive"),
+    ("ten-lines", "10 行以内"),
 ];
 
 /// 器の案内の幅の歯の fn の頭（手引きが名指す接頭辞）。
