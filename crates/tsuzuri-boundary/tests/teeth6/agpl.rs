@@ -151,7 +151,7 @@ fn wanted() -> Vec<Mouth> {
         ("PostToolUse", Some("Agent"), bind, 10),
         ("PostToolUse", None, meter, 10),
         ("PreToolUse", None, guard, 10),
-        ("SubagentStop", None, stop, 10),
+        ("SubagentStop", None, stop, 60),
     ]
     .into_iter()
     .map(|(event, matcher, name, timeout)| {
@@ -441,12 +441,12 @@ fn agpl_hooks_bind_the_five_agent_mouths_once() {
     assert_ne!(bare, now, "印の除きの字");
     assert_ne!(agent_mouths(&bare), wanted(), "印の除きを外した見本");
     let slow = now.replacen(
-        "agent-meter --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 10",
-        "agent-meter --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 11",
+        "agent-stop --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 60",
+        "agent-stop --repo \\\"$CLAUDE_PROJECT_DIR\\\"\",\n            \"timeout\": 10",
         1,
     );
-    assert_ne!(slow, now, "timeout の字");
-    assert_ne!(agent_mouths(&slow), wanted(), "timeout だけ替えた見本");
+    assert_ne!(slow, now, "終える前の門の timeout の字");
+    assert_ne!(agent_mouths(&slow), wanted(), "timeout を 10 に戻した見本");
 }
 
 /// (2) plugin/agents/ の file は中核の TYPES の 3 本（plugin の名と字 : の後の名に .md）だけで、どれも name が file の名、
