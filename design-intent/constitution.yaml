@@ -154,7 +154,7 @@
 
 meta:
   id: tsuzuri-constitution
-  version: v1.7
+  version: v1.8
   status: effective
   binding: true
   baseline: 未記入
@@ -496,17 +496,19 @@ articles:
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 列挙の網羅の検査（compile）。待つ実装が 1 つかは、持ち込みの後は審査が見る（器の待つ実装は 1 つ）。}
   - id: P-22
     title: 大きさの上限は CI が実測して落とす
+    amended_by:
+      - {adr: ADR-80, date: 2026-10-07, approved_by: 持ち主, ruling: "t3-hub.92.10.24（裁定 id = t3-hub.92.10.24:20261007T0842Z-1・notes に逐語）", previous_text: core の総行数・module の行数・歯と source の行数比・関数の粒度の上限（規則の表の行 R-4）を CI が実測する deny の門として持つ。, rationale: P-22.1 の core の総行数の上限を止め、値を持たずに測って示す形に替えた（持ち主の 2026-10-07T07:12:45Z の言葉・作り直しの最中は要る機能が読めないので上限を撤廃し、落ち着いてから整理で減らす）。置き替えは測り・無駄の門・整理の引き金（行 R-52）。}
     tier: always
     binds: tool
     statements:
-      - {id: P-22.1, pattern: ubiquitous, strength: must, text: core の総行数・module の行数・歯と source の行数比・関数の粒度の上限（規則の表の行 R-4）を CI が実測する deny の門として持つ。}
+      - {id: P-22.1, pattern: ubiquitous, strength: must, text: module の行数・歯と source の行数比・関数の粒度の上限（規則の表の行 R-4）を CI が実測する deny の門として持ち、core の本体の行数は値を持たずに測って示す。}
       - {id: P-22.2, pattern: ubiquitous, strength: must-not, text: 粒度の lint を allow の属性で黙らせない。}
       - {id: P-22.3, pattern: ubiquitous, strength: must, text: 上限の変更は A-2 だけを通す。}
-    plain: code の大きさや関数の細かさには上限があり、機械が測って超えたら落とします。警告を黙らせる印は使いません。上限を変えるのは憲法の改訂と同じ手続きです。
+    plain: 1 file の長さや関数の細かさには上限があり、機械が測って超えたら落とします。core 全体の行数は上限を持たず、測って示すだけです。警告を黙らせる印は使いません。上限を変えるのは憲法の改訂と同じ手続きです。
     rationale:
-      - {kind: scribe2-article, ref: scribe2 C4（R-C4-1〜R-C4-4）}
-    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: CI の実測と lint の deny。器の core の上限と器の境界の crate の上限は器の行を名指す（行 R-4 と R-29）。器の行の値を変えるのも P-22.3 の上限の変更に当たる。}
-    relations: {rules: [R-4, R-29]}
+      - {kind: scribe2-article, ref: scribe2 C4（R-C4-2〜R-C4-4・R-C4-1 は判断の記録 ADR-80 で止めた）}
+    mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: CI の実測と lint の deny。core の本体の行数は値を持たない検出線で、器の core は器の xtask の core-lines の事実、tsuzuri の core は xtask の size の事実に出し、日次の撃ちが記録する（判断の記録 ADR-80）。器の 1 module と歯の比と関数の粒度の上限は器の行 R-C4-2〜R-C4-4 を名指す（行 R-4）。器の行の値を変えるのも P-22.3 の上限の変更に当たる。}
+    relations: {rules: [R-4, R-29, R-52]}
   - id: P-23
     title: 予算は実測からしか作れず、起動の口は 1 つ
     tier: always

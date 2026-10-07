@@ -25,3 +25,6 @@
   - "version": "v1.7"
     "previous": "v1.6"
     "digest": "390088e88b979bd31a998a74e5b092ce0d111c68c648e974dd59d1f9a1e49c3c"
+  - "version": "v1.8"
+    "previous": "v1.7"
+    "digest": "e415122f647159632e5ac77cf6604521536d7ce938079a723c49cae402e81ca0"
