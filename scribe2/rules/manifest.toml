@@ -701,10 +701,10 @@ enabled = true
 ruling = "user 2026-10-05T05:13Z 裁定 t3-hub.89.2:20261005T0513Z-1"
 ruled_at = "2026-10-05"
 
-# 同型の審査 FAIL の停止の回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付（pipe intake / preflight）は同じ
-# bead の便を新しい順に読み、同じ理由の型（crates 側の FindingKind）の FAIL が PASS で途切れるまでこの本数続き、
-# 契約 file と節の本文がともに不変の周を same-kind-repeated で断る（焼き直しは書き直す）。行の無い manifest は
-# 受付を 1 byte も動かさない（rc 2・pipe.land_wait_s と同じ極性）。
+# 同型の審査 FAIL の停止の回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付（pipe intake / preflight）は置き場の
+# event の列から同じ bead の落ちを型の語ごとに累計し（便の落ちの型 RunFell と受付の断り IntakeRefused・PASS の便も契約か節の字の
+# 替えも別の型の落ちを挟むことも数えを戻さない・器の容量の断りと受け皿の型は数えない）、同じ型の落ちがこの本数に達した周を
+# same-kind-repeated で断る。行の無い manifest は受付を 1 byte も動かさない（rc 2・pipe.land_wait_s と同じ極性）。
 
 [[rule]]
 id = "review.same_kind_stop"

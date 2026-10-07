@@ -1,17 +1,19 @@
 //! 理由の字を組む関数（親 [`super`] の `Refuse::reason` の腕が呼ぶ）。
 
 use super::Difference;
-use crate::pipe::review::{FindingKind, ROW_SAME_KIND_STOP};
+use crate::pipe::review::ROW_SAME_KIND_STOP;
 
 /// 索引の組み立て中の断りの 1 行（設計 reverse-index.md §7 (b)・名と状態の語 `absent` か `building` を名指す）。
 pub(super) fn index_building_reason(name: &str, state: &str) -> String {
     format!("{name} code の索引が作り中（{state}）＝touches に型を持つ行は索引が ready になるまで受け付けない")
 }
 
-/// 同型の停止の断りの 1 行（設計 contract-source.md §23・型と本数と行の値と便 id の列を名指す）。
-pub(super) fn repeated_reason(kind: FindingKind, runs: &[String], stop: u64) -> String {
-    let (name, count, joined) = (kind.as_str(), runs.len(), runs.join(", "));
-    format!("審査 FAIL の型 {name} が {count} 便続き {ROW_SAME_KIND_STOP} の {stop} に達した（run {joined}）のに契約 file と節の本文がともに不変＝焼き直しは書き直す")
+/// 同型の停止の断りの 1 行（設計 contract-source.md §23・型の語と証の数と行の値と証の列を名指す）。
+pub(super) fn repeated_reason(kind: &str, runs: &[String], stop: u64) -> String {
+    let (count, joined) = (runs.len(), runs.join(", "));
+    format!(
+        "同じ種類の落ち {kind} が {count} 件で {ROW_SAME_KIND_STOP} の {stop} に達した（{joined}）＝契約か節を替えても数えは戻らない・調べ係に型と再発を調べさせ、構造の直しの行を起こすか持ち主に問う"
+    )
 }
 
 /// 欄 `code-facts` を持つ行が索引を測れない断りの 1 行（設計 reverse-index.md §7 (c)・要素と状態の語を名指す）。
@@ -51,16 +53,17 @@ mod tests {
     use crate::pipe::table::TableError;
 
     /// 受付の 2 門（設計 contract-source.md §23・`s2-07l.396`）: 宣言順の 18〜19 番目（約束の行の 2 理由の手前）・rc 1 で、
-    /// 同型の停止は型と本数と行の値と便 id の列（新しい順）を、焼き直しは型と対応の無かった項目を名乗る。
+    /// 同型の停止は型の語と証の数と行の値と証の列（新しい順）を、焼き直しは型と対応の無かった項目を名乗る。
     #[test]
     fn refuse_repeat_reasons_are_last_and_name_kind_runs_and_value() {
         let found = samples();
         let pair: Vec<&str> = found.iter().skip(17).take(2).map(Refuse::as_str).collect();
         assert_eq!(pair, ["same-kind-repeated", "finding-unaddressed"], "宣言順の 18〜19 番目");
         let repeated = found.get(17).map(Refuse::reason).unwrap_or_default();
-        for want in ["literal-mismatch", " 2 便", "review.same_kind_stop の 2", "b-2, b-1"] {
+        for want in ["review-literal-mismatch", " 2 件", "review.same_kind_stop の 2", "b-2, b-1", "契約か節を替えても数えは戻らない"] {
             assert!(repeated.contains(want), "{want}: {repeated}");
         }
+        assert!(!repeated.contains("焼き直しは書き直す"), "材料の比べの字は消えた: {repeated}");
         let unaddressed = found.get(18).map(Refuse::reason).unwrap_or_default();
         assert!(unaddressed.contains("teeth-outside-write-set") && unaddressed.contains("src/a.rs"), "{unaddressed}");
         assert!(found.iter().skip(17).take(2).all(|refuse| refuse.rc() == RC_REFUSED && !refuse.reason().contains('\n')), "rc 1・1 行");

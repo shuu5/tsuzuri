@@ -350,9 +350,10 @@ pub enum RuleKind {
     /// 役割ごとの既定の effort（設計 seat-roles.md §19・`s2-07l.433`）。値は claude CLI の字面（閉じた表は
     /// [`crate::headless::Effort`]・表に無い字面は読み込みで拒む）。id は `seat.effort.<役割名>`。
     RoleEffort,
-    /// 同型の審査 FAIL で run N+1 を止める回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付は同じ bead の
-    /// 便を新しい順に読み、同じ理由の型（`FindingKind`）の FAIL が PASS で途切れるまでこの本数続き、契約 file と
-    /// 節の本文がともに不変の周を `same-kind-repeated` で断る。
+    /// 同型の審査 FAIL で run N+1 を止める回数（本・設計 contract-source.md §23・`s2-07l.396`）。受付は置き場の
+    /// event の列から同じ bead の落ちを型の語ごとに累計し（便の落ちの型 `RunFell` と受付の断り `IntakeRefused`・PASS の便も契約か節の字の
+    /// 替えも別の型の落ちを挟むことも数えを戻さない・器の容量の断りと受け皿の型は数えない）、同じ型の落ちがこの本数に達した周を
+    /// `same-kind-repeated` で断る。
     ReviewSameKindStop,
     /// 着地の列を候補の木 1 つに積む本数の上限（本・先頭を含む・設計 pipeline.md §40・ADR-0039）。値 1 と
     /// 行の不在は先頭だけ（列を積まない＝従来の経路）。

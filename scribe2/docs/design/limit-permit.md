@@ -43,7 +43,7 @@
 |---|---|---|---|---|
 | `gate.token_cap` | 150000 byte | lens に渡す本文の量 | `crates/scribe2/src/pipe/gate.rs` の `Limits` の `of`（呼び手は `crates/scribe2/src/pipe/cli/step.rs` の `gate_run` ほか）→ `decide`。lens 側は `crates/scribe2/src/headless/lens.rs` の `rows_of` → `prompt_of`・`memo` | gate の予算の照合・gate の lens・契約の審査の lens・先撃ちの lens・行の審査の lens・memo の lens |
 | `R-C6-1` | 25000000 token | 便の消費の 4 値の和（検出線） | `crates/scribe2/src/pipe/cli/show.rs` の `ceiling_of` → `ceiling_line` | `pipe show` の表示だけ（受付・spawn・gate・land は読まない） |
-| `review.same_kind_stop` | 2 便 | 同じ型の審査 FAIL の繰り返し | `crates/scribe2/src/pipe/cli/intake.rs` の `exclude_repeats`（断り文は `crates/scribe2/src/pipe/refuse.rs`） | 受付・事前審査 |
+| `review.same_kind_stop` | 2 便 | 同じ型の審査 FAIL の繰り返し | `crates/scribe2/src/pipe/cli/intake/repeats.rs` の `exclude_repeats`（断り文は `crates/scribe2/src/pipe/refuse.rs`） | 受付・事前審査 |
 | `pipe.follow_retries` | 2 回 | 追随の撃ち直し | `crates/scribe2/src/pipe/cli/step.rs` の `land_run` | land の追随 |
 | `pipe.land_wait_s` | 5400 秒 | 着地の順の待ち | 同じ `land_run` | land |
 | `pipe.ci_wait_s` | 900 秒 | 終端の CI の照合の待ち | 同じ file の `terminal_input` | land の終端 |
@@ -176,7 +176,7 @@ effect が operation の問いなので、未反映の裁定（FR84）に数え�
 | `gate.token_cap`（gate の lens） | `crates/scribe2/src/headless/lens.rs` の `rows_of` → `prompt_of` | §6 の写しが在れば読む分岐（`rulings_of` と同じ形）。書き手は gate.rs の `keep_rulings` の隣 | 入れる |
 | `gate.token_cap`（契約の審査・先撃ち・行の審査・memo の lens） | 同じ `rows_of` | 写しが無いので manifest のまま | 入れない |
 | `R-C6-1` | `crates/scribe2/src/pipe/cli/show.rs` の `ceiling_of` | 停止の設計の後に対象の行へ足し、表示の limit を許可の値にする | 入れない |
-| `review.same_kind_stop` | `crates/scribe2/src/pipe/cli/intake.rs` の `exclude_repeats` | 対象の行へ足す裁定の後の行 | 入れない |
+| `review.same_kind_stop` | `crates/scribe2/src/pipe/cli/intake/repeats.rs` の `exclude_repeats` | 対象の行へ足す裁定の後の行 | 入れない |
 | `pipe.follow_retries`・`pipe.land_wait_s`・`pipe.ci_wait_s` | step.rs の `land_run`・`terminal_input` | 同上 | 入れない |
 | `gate.slot_wait_s` | `Limits` の `admission`・`breaker` | 同上（遮断器の読みは host 全体のまま） | 入れない |
 

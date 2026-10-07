@@ -4,13 +4,14 @@ use super::refusal::refuse_of;
 use super::row::{pointed_row, Pointed};
 use super::{broken, denied, int_row, refuse, Denial, Judged, Material, Materials, DENIAL_RULES, DENIAL_STORE};
 use crate::cli_outcome::{Outcome, RC_BROKEN};
-use crate::fleet::store::StoreError;
-use crate::fleet::Stage;
+use crate::fleet::store::{self, StoreError};
+use crate::fleet::{replay, Event, EventKind, Stage, State};
 use crate::pipe::contract::Contract;
+use crate::pipe::fall::{self, Attempt, Fall, Tally};
 use crate::pipe::refuse::Refuse;
-use crate::pipe::review::{self, FindingKind, Judgement, ROW_SAME_KIND_STOP};
+use crate::pipe::review::{self, Judgement, ROW_SAME_KIND_STOP};
 use crate::pipe::table::ContractRow;
-use crate::pipe::{current, CONTRACT_FILE};
+use crate::pipe::contract_path;
 use std::path::Path;
 
 /// 同じ bead の直前までの便 1 つ（新しい順の列の要素・§23）。
@@ -55,11 +56,16 @@ pub(super) fn exclude_repeats(material: &Material<'_>, measured: &Contract, judg
         Ok(None) => return,
         Err(denial) => return judged.denials.push(denial),
     };
-    let past = match history(state_dir, bead) {
+    let events = match store::read_all(state_dir) {
+        Ok(found) => found,
+        Err(errors) => return judged.denials.push(denied(DENIAL_STORE, Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))),
+    };
+    let state = replay(&events);
+    let past = match history(state_dir, &state, bead) {
         Ok(found) => found,
         Err(denial) => return judged.denials.push(denial),
     };
-    if let Err(denial) = exclude_same_kind(state_dir, &past, stop, &today) {
+    if let Err(denial) = exclude_same_kind(state_dir, (&events, &state), bead, stop, &today) {
         judged.denials.push(denial);
     }
     if let Err(denial) = exclude_unaddressed(state_dir, &past, &today, materials) {
@@ -81,10 +87,7 @@ fn today_of(repo: &Path, measured: &Contract, materials: &Materials) -> Result<O
 /// 逆順）。段が Reviewed 以降の便は `review.json` を要り、読めない便は `WriteSetUnreadable`（rc 2・`live` と同じ読み手・
 /// 読めなさを「判定なし」に読み替えない）。段が `Intake` の便と、審査に届く前に終端した便（`review.json` の file が
 /// 無い `Landed` / `Failed` / `Stopped`）は数えない。
-fn history(state_dir: &Path, bead: &str) -> Result<Vec<Past>, Denial> {
-    let state = current(state_dir).map_err(|errors| {
-        denied(DENIAL_STORE, Outcome::failed(RC_BROKEN, errors.iter().map(StoreError::to_string).collect()))
-    })?;
+fn history(state_dir: &Path, state: &State, bead: &str) -> Result<Vec<Past>, Denial> {
     let mut found = Vec::new();
     for (id, run) in state.runs.iter().rev().filter(|(_, run)| run.bead == bead) {
         if !reviewed_stage(state_dir, id, run.stage) {
@@ -114,35 +117,69 @@ fn reviewed_stage(state_dir: &Path, id: &str, stage: Stage) -> bool {
     }
 }
 
-/// 同型の停止（§23 (2)）: 先頭の便の理由の型と同じ型が verdict PASS で途切れるまで連続する本数を数え（`unparsed` の便は
-/// 数えず連鎖も切らない・C10）、本数が行の値に達し、かつ先頭の便の材料（`review/` の契約の写しと `design.txt`）が
-/// 今回の材料と両方とも同じ字面の周は [`Refuse::SameKindRepeated`]。契約か節のどちらかが変わっていれば通す。
-/// 先頭の便の材料を読めない周は `WriteSetUnreadable`（材料は判定より前に置かれるので、無い便は壊れた store）。
-fn exclude_same_kind(state_dir: &Path, past: &[Past], stop: u64, today: &Today) -> Result<(), Denial> {
-    let mut chain = past.iter().filter(|found| found.judgement.kind != Some(FindingKind::Unparsed));
-    let Some(head) = chain.next() else {
-        return Ok(());
+/// 同型の停止（§23 (2)・判断の記録 ADR-77 の決定 (7) の行 77-4・条 P-10.2）: 同じ bead の落ちを型の語ごとに累計し
+/// （[`fall::counted`]・便の落ちの型と受付の断り）、止めて書き直しの便（[`rewritten_runs`]）を型の語 `rewritten` の証に足して、
+/// 証の数が行の値に達した最初の型（型の語の順）を [`Refuse::SameKindRepeated`] で断る。数えは累計で、PASS の便も契約か節の字の
+/// 替えも別の型の落ちを挟むことも戻さない。
+fn exclude_same_kind(
+    state_dir: &Path,
+    (events, state): (&[Event], &State),
+    bead: &str,
+    stop: u64,
+    today: &Today,
+) -> Result<(), Denial> {
+    let mut tallies = fall::counted(events, &[bead], fall::UNCOUNTED_FOR_BEAD);
+    let proofs = rewritten_runs(state_dir, (events, state), bead, today)?;
+    if !proofs.is_empty() {
+        let word = Fall::Rewritten.as_str();
+        match tallies.iter_mut().find(|found| found.kind == word) {
+            Some(found) => {
+                found.proofs.extend(proofs);
+                found.proofs.sort_by(|left, right| right.cmp(left));
+            }
+            None => {
+                // 型の語の順: 落ちの型（`rewritten` は末尾）の後に受付の断りの型。
+                let at = tallies.iter().position(|found| found.kind.starts_with("intake-")).unwrap_or(tallies.len());
+                tallies.insert(at, Tally { kind: word.to_owned(), proofs });
+            }
+        }
+    }
+    let reached = tallies.into_iter().find(|found| found.proofs.len() as u64 >= stop);
+    match reached {
+        Some(Tally { kind, proofs }) => Err(refuse(&Refuse::SameKindRepeated { kind, runs: proofs, stop }, &[])),
+        None => Ok(()),
+    }
+}
+
+/// 止めて書き直しの便（[`fall::rewritten`]）: event の列の最初の `RunFell` の行より後に `RunCreated` の行を持つ同じ bead の便の
+/// 材料（契約 file の写しと `design.txt` の写し）を古い順に読んで渡す。審査の前に止めた便が無い周は材料を読まない。契約 file の写しを
+/// 読めない便は `WriteSetUnreadable`（材料は便を起こす時に置かれるので、無い便は壊れた store）。
+fn rewritten_runs(
+    state_dir: &Path,
+    (events, state): (&[Event], &State),
+    bead: &str,
+    today: &Today,
+) -> Result<Vec<String>, Denial> {
+    let Some(first) = events.iter().position(|event| event.kind == EventKind::RunFell) else {
+        return Ok(Vec::new());
     };
-    let Some(kind) = head.judgement.kind else {
-        return Ok(());
-    };
-    let runs: Vec<String> = std::iter::once(head)
-        .chain(chain.take_while(|found| found.judgement.kind == Some(kind)))
-        .map(|found| found.id.clone())
+    let created = events.iter().skip(first).filter(|event| event.kind == EventKind::RunCreated && event.bead == bead);
+    let runs: Vec<(&str, bool)> = created
+        .filter_map(|event| state.runs.get(&event.run))
+        .map(|run| (run.id.as_str(), run.stage == Stage::Stopped && !review::review_path(state_dir, &run.id).exists()))
         .collect();
-    if (runs.len() as u64) < stop {
-        return Ok(());
+    if !runs.iter().any(|(_, unreviewed)| *unreviewed) {
+        return Ok(Vec::new());
     }
-    let dir = review::review_dir(state_dir, &head.id);
-    let (Ok(contract), Ok(design)) =
-        (std::fs::read_to_string(dir.join(CONTRACT_FILE)), std::fs::read_to_string(dir.join(review::DESIGN_FILE)))
-    else {
-        return Err(refuse(&Refuse::WriteSetUnreadable { run: head.id.clone() }, &[]));
-    };
-    if contract == today.contract && design == today.design {
-        return Err(refuse(&Refuse::SameKindRepeated { kind, runs, stop }, &[]));
+    let mut attempts = Vec::new();
+    for (id, unreviewed) in runs {
+        let Ok(contract) = std::fs::read_to_string(contract_path(state_dir, id)) else {
+            return Err(refuse(&Refuse::WriteSetUnreadable { run: id.to_owned() }, &[]));
+        };
+        let design = std::fs::read_to_string(review::review_dir(state_dir, id).join(review::DESIGN_FILE)).ok();
+        attempts.push(Attempt { run: id.to_owned(), unreviewed, contract, design });
     }
-    Ok(())
+    Ok(fall::rewritten(&attempts, (&today.contract, &today.design)))
 }
 
 /// 焼き直しの門（§23 (3)）: 直前の便（新しい順の先頭）の verdict が PASS でない周、その指摘（`kind` と `at`）に対応する
@@ -150,7 +187,7 @@ fn exclude_same_kind(state_dir: &Path, past: &[Past], stop: u64, today: &Today) 
 /// [`Refuse::FindingUnaddressed`]（項目は辞書順）。測れない型と `at` の空な周は物差しが空を返す＝通す。
 ///
 /// Promised の行（§33 行 ah (iv)）は `at` の物差しを撃たずに通す: 契約 file は約束の行からの生成値で、焼き直しは
-/// 契約 file の字面が変わったかだけで測る（不変の N 回目は [`exclude_same_kind`] が断る）。
+/// 契約 file の字面が変わったかだけで測る（同じ型の落ちの数えは材料の替えで戻らない・[`exclude_same_kind`] が断る）。
 fn exclude_unaddressed(state_dir: &Path, past: &[Past], today: &Today, materials: &Materials) -> Result<(), Denial> {
     if today.promised {
         return Ok(());

@@ -24,10 +24,11 @@
 //! [`exclude_max_live`] / [`exclude_overlap`] / 重複 run）の中身と「先頭の 1 件で返す」形は不変で、Ok 値だけを事実（[`Headrooms`] / [`Crossed`]）へ
 //! 広げる。
 //!
-//! **同型の停止と焼き直しの門**（契約表の行 w・contract-source.md §23・`s2-07l.396`）: 受付は置き場の replay から同じ bead
-//! の便を新しい順に読み（[`history`]）、同じ理由の型（[`FindingKind`]）の審査 FAIL が rules 行 `review.same_kind_stop`
-//! の本数続き契約 file と節の本文がともに不変の周を `same-kind-repeated` で、直前の便の指摘（`at`）に対応する差分の無い
-//! 周を `finding-unaddressed` で断る。どちらも run dir も event も作らず、write-set の弁別の後・余地と交差の前に撃つ。
+//! **同型の停止と焼き直しの門**（契約表の行 w・contract-source.md §23・`s2-07l.396`）: 受付は置き場の event の列から同じ bead
+//! の落ちを型の語ごとに累計し（便の落ちの型 `RunFell` と受付の断り `IntakeRefused`・PASS の便も契約か節の字の替えも別の型の落ちを
+//! 挟むことも数えを戻さない・器の容量の断りと受け皿の型は数えない）、同じ型の落ちが rules 行 `review.same_kind_stop` の本数に
+//! 達した周を `same-kind-repeated` で、置き場の replay から読む直前の便（[`history`]）の指摘（`at`）に対応する差分の無い周を
+//! `finding-unaddressed` で断る。どちらも run dir も event も作らず、write-set の弁別の後・余地と交差の前に撃つ。
 
 use super::base_run::{self, BaseRun, Early};
 use super::{broken, flag, int_row, list_row, need, refused, repo_flag, repo_of, state_dir_of, REPO_FLAG};

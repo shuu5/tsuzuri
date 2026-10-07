@@ -198,13 +198,13 @@ pub(crate) enum Refuse {
         /// 渡された path の字面。
         path: String,
     },
-    /// 同じ bead の直前の便から同じ理由の型（[`FindingKind`]）の審査 FAIL が rules 行 `review.same_kind_stop` の
-    /// 本数続き、契約 file と節の本文がともに不変のまま run N+1 を求めた（設計 contract-source.md §23 (2)・受付だけが
-    /// 撃つ）。**焼き直しは書き直す**＝契約か節のどちらかが変わっていれば通る。
+    /// 同じ bead の同じ型の語の落ち（[`crate::pipe::fall::counted`]）の累計が rules 行 `review.same_kind_stop` の値に達した
+    /// （設計 contract-source.md §23 (2)・受付だけが撃つ）。数えは累計で、PASS の便も契約か節の字の替えも別の型の落ちを挟むことも
+    /// 戻さない。
     SameKindRepeated {
-        /// 続いた理由の型。
-        kind: FindingKind,
-        /// 数えた便 id の列（新しい順）。
+        /// 達した型の語（落ちの型の語か `intake-<断りの名>`）。
+        kind: String,
+        /// 数えた証の列（新しい順・便 id か `<bead>@<ts>`）。
         runs: Vec<String>,
         /// rules 行の値（本）。
         stop: u64,
@@ -425,7 +425,7 @@ impl Refuse {
             Self::HandWrittenContract { ref path } => {
                 format!("手書きの契約 file は受け付けない（{path}）＝契約の正本は設計 doc の行で、--design <doc>#<id> を渡す")
             }
-            Self::SameKindRepeated { kind, ref runs, stop } => repeated_reason(kind, runs, stop),
+            Self::SameKindRepeated { ref kind, ref runs, stop } => repeated_reason(kind, runs, stop),
             Self::FindingUnaddressed { kind, ref at } => {
                 format!("直前の便の審査の指摘（{}）に対応する差分が無い（{}）", kind.as_str(), at.join(", "))
             }
@@ -578,7 +578,7 @@ mod tests {
             },
             Refuse::HandWrittenContract { path: "contract.toml".to_owned() },
             Refuse::SameKindRepeated {
-                kind: FindingKind::LiteralMismatch,
+                kind: "review-literal-mismatch".to_owned(),
                 runs: vec!["b-2".to_owned(), "b-1".to_owned()],
                 stop: 2,
             },
