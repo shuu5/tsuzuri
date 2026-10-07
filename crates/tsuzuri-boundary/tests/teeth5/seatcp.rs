@@ -301,6 +301,49 @@ fn seatcp_no_discipline_rows_no_manners() {
 }
 
 #[test]
+fn seatcp_retired_manners_are_left_out() {
+    for status in ["仮", "凍結", "未定"] {
+        let p = Place::new(&format!("retired-{status}"));
+        p.swap(
+            "rules.yaml",
+            DISCIPLINE,
+            &format!(
+                "discipline:
+  - {{id: D-1, article: P-1, what: 係を  並べる}}
+  - {{id: D-9, article: P-1, what: 退けた作法, status: 廃止}}
+  - {{id: D-2, article: N-1, what: 決めを書く, status: {status}}}"
+            ),
+        );
+        let (rc, out) = p.derive("--write");
+        assert_eq!(rc, 0, "{status}: {out}");
+        assert_eq!(p.seat("brief.txt").as_deref(), Some(BRIEF), "{status}");
+        let (rc, out) = p.derive("--check");
+        assert_eq!(rc, 0, "{status}: {out}");
+    }
+}
+
+#[test]
+fn seatcp_all_retired_manners_drop_the_head() {
+    let p = Place::new("all-retired");
+    p.swap(
+        "rules.yaml",
+        DISCIPLINE,
+        "discipline:
+  - {id: D-1, article: P-1, what: 係を  並べる, status: 廃止}
+  - {id: D-2, article: N-1, what: 決めを書く, status: 廃止}",
+    );
+    let (rc, out) = p.derive("--write");
+    assert_eq!(rc, 0, "{out}");
+    let brief = p.seat("brief.txt").expect("要の写し");
+    assert_eq!(
+        Some(brief.as_str()),
+        BRIEF.strip_suffix("席の作法\nD-1 係を 並べる\nD-2 決めを書く\n"),
+        "末の 3 行を除いた 8 行"
+    );
+    assert!(!brief.contains("席の作法"), "{brief}");
+}
+
+#[test]
 fn seatcp_refuses_manners_without_what() {
     let p = Place::new("no-what");
     p.swap("rules.yaml", "what: 決めを書く", "why: 決めを書く");

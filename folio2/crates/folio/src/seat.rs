@@ -1,5 +1,5 @@
 //! 席の手元の写し（行 t-seatcopy・判断の記録 ADR-38 決定 (3)(4)・条 P-13・P-2）。憲法の正本から、要の写し（順位・段
-//! 「絶対にやらない」と段「確認してから」の規範文の全文・全文の写しの在りか・規則の表の作法の行の id と字）と、全文の写し
+//! 「絶対にやらない」と段「確認してから」の規範文の全文・全文の写しの在りか・規則の表の作法の行の id と字・欄 status が 廃止 の行は写さない）と、全文の写し
 //! （順位と全部の規範文の 1 行 1 文）の 2 つの file の字を導く。`derive.rs` が導出物の置き場の下の dir `seat` に書き・比べる
 //! （置き場の直下に置かないのは、器の契約表の宣言が直下の .md と .toml を契約表と読むため）。
 //! 形は中身を削らない最短の形: 頭の 1 行・順位の行・段の名だけの行・「id 字」の行・在りかの行・作法の段の名の行・作法の「id 字」の行を改行 1 つで
@@ -180,12 +180,19 @@ fn statement(s: &Node) -> Result<String, String> {
 }
 
 /// 規則の表の作法の行（節 discipline）の「id 字」の行（規則の表の順）。節が無ければ空・一覧でなければ Err・行に欄 id か欄 what の字が無ければ Err。
+/// 欄 status が 廃止 の行は写さない（欄 status の値域の照らしは床の持ち分でここでは置かない）。
 fn discipline(rules: &Node) -> Result<Vec<String>, String> {
     let Some(rows) = rules.get("discipline") else {
         return Ok(Vec::new());
     };
     let rows = rows.as_seq().ok_or("discipline が一覧でない")?;
     rows.iter()
+        .filter(|row| {
+            row.get("status")
+                .and_then(Node::as_str)
+                .and_then(rules::RuleStatus::from_name)
+                != Some(rules::RuleStatus::Retired)
+        })
         .map(|row| {
             let id = row
                 .get("id")
