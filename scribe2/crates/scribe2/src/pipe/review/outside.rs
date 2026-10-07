@@ -1,19 +1,7 @@
-//! 審査の材料の 5 本目: 契約が名指す write-set の外の物（設計 docs/design/contract-source.md §51・行 bc・`s2-07l.430`）。
-//!
-//! lens は shell も cargo も撃てないので、write-set の外に在る data file の鍵・crate の依存・親 module の宣言・depends の
-//! 相手の着地を読めず、`section-material-missing` の INCONCLUSIVE が往復する。器が base から名ごとの塊を束ね、材料の dir に
-//! [`super::OUTSIDE_FILE`] として置く（組むのは [`outside_text`] の 1 本・`materials` から 1 回だけ呼ぶ・本文が空なら置かない）。
-//!
-//! 名の照合は名指しの読み手の口 [`mentioned_names`]（`pipe::closure`）で読む（2 本目の読み手を作らない・C2）。write-set の外の
-//! `.rs` の item の本文と `.rs` の要約は束ねない（lens は読みの道具で開け、名の使われ方は index.txt が渡す・§16）。塊は行頭の
-//! `- ` と名で始まり、続きの行は 2 字下げる。並びは (f) depends の相手の行 → (d) crate の依存の表 → (e) 親 module の宣言 →
-//! (c) data file の鍵の行（小さい構造の材料が先）。
-//!
-//! cap は新しい閾値を作らない: lens が [`outside_block`] で既存の `gate.token_cap` の残り（既存 4 材料と base の段の後）に
-//! 名ごとに収め、収まらない名は切り詰めの 1 行、それも収まらない名は最後に落とした本数の 1 行に数える（黙って落とさない）。
-//!
-//! 本文が名指しの 3 形で指す write-set の中の item の本文（§56・行 bi）は子 module `bodies` が既存の塊の後ろに、本文が指す
-//! 別の設計の § の本文（§55・行 bg）は子 module `linked` がその後ろに束ねる。
+//! 審査の材料の 5 本目: 契約が名指す write-set の外の物。
+//! lens は shell も cargo も撃てないので、write-set の外に在る data file の鍵・crate の依存・親 module の宣言・depends の相手の着地を読めず。
+//! cap は新しい閾値を作らない: lens が [`outside_block`] で既存の `gate.token_cap` の残りに名ごとに収め、収まらない名は切り詰めの 1 行。
+//! 出所: contract-source.md §51 s2-07l.430 設計 §16 §56 §55
 
 mod bodies;
 mod linked;

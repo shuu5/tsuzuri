@@ -1,19 +1,5 @@
-//! 着地の列（merge train・設計 docs/design/pipeline.md §40・契約表の行 ah・ADR-0039）。
-//!
-//! 列の先頭（番待ちで `First` / `Waited` を得た便）が着地する周、列の自分の後ろに並ぶ便を rules 行 `land.train_max`
-//! − 1 本まで取り（[`train_now`]）、自分を先頭に並べた列を **1 つの候補の木**に積む。候補の木は main の先端から切った
-//! tmp worktree（主実測の `verify` の隣の `train`・便の worktree と記録の base は触らない）で、便ごとに
-//! `git cherry-pick <base>..<HEAD>` で順に積む。積めなかった後続（衝突）は `cherry-pick --abort` で外し（その便の
-//! event は書かない・後続は詰める）、自分の land で従来どおり追随する。
-//!
-//! 積んだ便ごとにその段の tree を覚える（検出線は撃たない＝着地後の検出の口だけ・設計 gate-cost.md §44 形 (9)）。全部積んだ
-//! 木に対して共通 verify を **1 回**（record は先頭の便の `verify.jsonl`・field `train=<N>`）と各便の契約 verify をその便の分撃つ
-//! ＝lens は撃たない（各便の verdict PASS が入口の条件で、候補の木で測るのは木の緑）。**緑**なら段の tree で列の順に
-//! 着地する（[`land_train`]・主実測は先端の木で 1 回）。**赤**・切れない・積めない・読めない周は候補の木を畳んで
-//! **列を解き**、先頭 1 本は既存の経路（追随 → 撃ち直し）へそのまま入る（どの便が赤かは帰属しない・後続は列に残る）。
-//!
-//! stdout の 1 行に `train=<積んだ本数>`（解いた周は `train=<N> dissolved why=<段>`）。上限 1 と行の不在は現行の経路
-//! そのもの（[`Train::Solo`]）。
+//! 着地の列。
+//! 出所: pipeline.md §40 ADR-0039 gate-cost.md §44
 
 use super::commute::ledger::{self, Followed, Mark};
 use super::contract::Contract;

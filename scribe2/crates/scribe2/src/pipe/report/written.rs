@@ -1,14 +1,4 @@
-//! 便 1 本の装置への正味の書きを段ごとに読む口（`pipe show --write`・行 v-run-write・接頭辞 `vrunw_`）。
-//!
-//! 段は行の語の順に 4 つ: runner（消費の event `RunCost` の source `runner` の detail の語 `write:`・行 xp-io-bytes）・
-//! verify（`verify.jsonl`＝gate の全部の周と列の候補）・end-gate（`end-gate.jsonl`＝終わりの門）・main（`verify-main.jsonl`＝
-//! 着地の確かめと着地後の検出）。record は撃った行（`secs` を持つ行＝gate の record の書きの和と同じ選び）の `write_bytes` だけを
-//! 足し、write-set の照合・撃たなかった段・門の要約の行は数えない。source `lens` の語 `write:` は同じ gate の周の verify の行の
-//! 和の写しなので足さず（2 度数えない）、source `review` は書きを持たない。
-//!
-//! 読むだけで、event log の形（kind・key・source・detail の語）も record の file も替えない。値は 10 進・[`UNMEASURED`]・
-//! [`ABSENT`]（段の記録が無い）の 3 形で、0 と測れないを融合しない（C10）。囲いの外の書き（作業木の作り・着地の git・審査役の
-//! claude の囲い）は数えない物として行の末に名指す（[`UNCOUNTED`]）。
+//! 便 1 本の装置への正味の書きを段ごとに読む口。
 
 use crate::fleet::json_lite::{self, Value};
 use crate::fleet::{CostSource, Event, EventKind};

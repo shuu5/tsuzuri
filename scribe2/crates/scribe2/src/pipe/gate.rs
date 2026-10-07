@@ -1,35 +1,8 @@
-//! gate（設計 docs/design/pipeline.md §5.3・FR8 / FR9 / NFR1）。
-//!
-//! 契約の `verify` 各行の逐条 rc（機械検証）と lens 1 本の判定を合わせて 3 値を出す。
-//! **判定は wildcard 無しの順序で決める**: 測れなかった（段①が読めない・箱の中の死・器の健康の
-//! 遮断器が閉じた＝設計 gate-cost.md §32）→ INCONCLUSIVE ／ verify に rc≠0 → FAIL（検出線の rc 2 は赤にも
-//! INCONCLUSIVE にも数えない＝record の rc 2 のまま・設計 gate-cost.md §44 形 (7)）／ lens に渡す本文の byte が cap 超
-//! → INCONCLUSIVE（lens を呼ばない）／ lens 側の不備 → INCONCLUSIVE（出力の**形が読めなかった**
-//! 周だけ同じ gate の中で 1 回撃ち直し、2 回目の戻りで読む・設計 gate-cost.md §29）／ それ以外は
-//! lens の verdict（PASS を返して契約適合・歯の非空虚・憲法のどれかを数えた周は FAIL・tsuzuri の判断の記録 ADR-63 の
-//! 決定 (6)）。lens に渡す本文は閉じた型 [`LensInput`]（diff か、純移動の要約・
-//! [`super::move_proof`]・`s2-07l.266`）で、判定は純関数・file の読みだけをここが担う。
-//!
-//! **偽の PASS を作らない**（AC3）。判定に届かなかった周はすべて INCONCLUSIVE へ倒す
-//! ——「測れなかった」を「通った」に化けさせないためで、極性は fail-closed（C11.2）。
-//!
-//! **lens の口座も器が選ぶ**（設計 account-autonomy.md §15・`s2-07l.412`）。lens を起こす直前に便用の
-//! 選定（計測 → [`super::ratelimit::select_lens_account`]）を通し、起動行の末尾に runner と同じ 1 関数
-//! （[`super::spawn::with_account`]）で `--account-dir` を足す。**候補なしでも待たない**（gate は段の判定で
-//! 待ちを持たない）——lens を起こさず INCONCLUSIVE へ倒し、`resume` が撃ち直す。宣言 0 の周は継承。
-//!
-//! **同じ便を 2 度以上通ることが在る**（INCONCLUSIVE からの測り直し）。`verdict.json` は
-//! 最後の判定で上書きし、`RunStage stage=Gated detail=verdict:<V>`（器が口座を選んだ周は
-//! `,account:<label>` 付き・末尾に読んだ manifest の出所 `,rules:<出所>`）は追記する。
-//! 残るのは **3 値の履歴だけ**である——「1 度目は測れなかった」は event から読めるが、
-//! **なぜ測れなかったか（evidence）は上書きで消える**（理由まで残すには面を 1 つ増やす
-//! ことになり、MVP では取らない）。**測り直してよい便か**の判定はここではなく段の入口
-//! （[`super::cli`]）が持つ。
-//!
-//! 本 file は判定の入口と終端（[`gate`] → `precheck` → `measure` → `decide` → `settle`）と型・定数を
-//! 持つ。verify 行の実行は [`verify`]、lens の呼び出しと parse は [`lens`]、記録と診断は [`record`]
-//! （`s2-07l.286` の純移動・外から呼ぶ path は本 file の再輸出で不変）。周ごとの検出線の写しも
-//! [`record`] が持つ（書き手 = 記録と同じ 1 本・読み手 = [`detection_copies`]・設計 gate-cost.md §15）。
+//! gate。
+//! **判定は wildcard 無しの順序で決める**: 測れなかった → INCONCLUSIVE ／ verify に rc≠0 → FAIL ／ lens に渡す本文の byte が cap 超 → INCONCLUSIVE。
+//! 判定に届かなかった周はすべて INCONCLUSIVE へ倒す——「測れなかった」を「通った」に化けさせないためで、極性は fail-closed。
+//! 出所: pipeline.md §5.3 gate-cost.md §32 §44 §29 §15 判断の記録 ADR-63 s2-07l.266 account-autonomy.md §15 s2-07l.412
+//! s2-07l.286
 
 mod findings;
 mod lens;

@@ -1,17 +1,7 @@
-//! 器の健康の遮断器（設計 docs/design/gate-cost.md §32・契約表の行 x）。
-//!
-//! verify の行を撃つ前に host の**走行可能**（`/proc/loadavg` の 4 番目の欄の分子）と**待ち**
-//! （`/proc/stat` の `procs_blocked`）を読み、core あたりの倍率（rules 行 `host.runnable_per_core` /
-//! `host.blocked_per_core`）× 実測の core 数を超えた周は空くまで待つ。待ちは完了 enum の
-//! [`Completion::HostCalm`] で唯一の待機実装（[`fleet::wait`]）を通り、上限は受付と同じ
-//! `gate.slot_wait_s` である（3 本目の値の線を足さない・§32 約束 4）。
-//!
-//! 上限を超えた周は**行を撃たない**（[`Passage::Closed`]）——判定は呼び手（gate の `decide`）が
-//! INCONCLUSIVE へ倒す（FAIL で終端させない）。**測れない周は待たずに撃つ**（[`Mark::Unmeasured`] を
-//! record に残す・0 に潰さない・C10）。ゆえにこの境界は in-loop / fail-open の guard である（[`POLARITY`]）。
-//!
-//! 判定（[`judge`]）と行動（[`act`]）は pure で、fixture 文字列で測る（host の面を外から差し替える口は
-//! 作らない・C2.2）。host の面を読む口は [`now`] の 1 本である。
+//! 器の健康の遮断器。
+//! 上限を超えた周は**行を撃たない**——判定は呼び手が INCONCLUSIVE へ倒す。
+//! ゆえにこの境界は in-loop / fail-open の guard である。
+//! 出所: gate-cost.md §32 設計 §32
 
 use crate::fleet::{self, Completion};
 use crate::polarity::{OnFailure, Polarity, Timing};
@@ -199,6 +189,7 @@ pub fn calm_now(per_core: PerCore) -> bool {
 
 #[cfg(test)]
 mod tests {
+// flip-check: moved t3-hub.92.10.20
     use super::{act, cores_of, judge, Action, Health, Mark, PerCore};
 
     /// 倍率（走行可能 4・待ち 1）と core 数 8 の fixture＝閾値は走行可能 32・待ち 8。

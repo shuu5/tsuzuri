@@ -1,14 +1,6 @@
-//! 逆引きの表と審査の材料 index.txt（設計 docs/design/reverse-index.md §6・§7 (a)・契約表の行 c・FR49 / FR108）。
-//!
-//! 外の道具が作った索引（[`crate::pipe::index`] の表）と契約表から、項目ごとに 7 列（refs・callers・literals・patterns・teeth・vis・
-//! rows）の件数と site と write-set の外の印と母集団（`text=`・`indexed=`・`outside-index=`）を数え（[`count`]）、1 つの字に描く
-//! （[`render`]）。口 `pipe index show`（[`show`]）・審査の材料の [`super::INDEX_FILE`]（[`keep`]）・lens の収め（[`index_block`]）が
-//! この 2 本を共用する（2 本目の数えを作らない）。項目は symbol へ a1 の問い（`flat::query`）で解き、解けない（0 件）・複数
-//! （`ambiguous:<n>`）を名指す。行の節の名指しは名指しの読み手の口 [`section_symbols`] の 1 本で読む（読み手を写さない）。
-//!
-//! 行を名指した周は、行の欄 `patch` の差が替える定義も項目にする（[`patch`]・§6 の項目 (iii)）。
-//!
+//! 逆引きの表と審査の材料 index.txt。
 //! 契約表の行・表の検査の断り・審査の材料の型は組まない: 表の行は `read_table` の返りを field で読む。
+//! 出所: reverse-index.md §6・§7 設計 §6
 
 use super::base::ITEM_HEAD;
 use super::{material_file, section_text, Review, INDEX_FILE};

@@ -1,16 +1,5 @@
-//! land の主実測（設計 docs/design/pipeline.md §5.4・§41・FR11・`s2-07l.457`）。
-//!
-//! main を進めた後に**別の worktree** で verify を撃ち、その 3 値を返す群（[`verify_main`] と材料・record）と、
-//! 赤 / 測れなかったの終端（[`main_red`] / [`main_unmeasured`]）である。`pipe/land.rs` からの**純移動**で、
-//! 歯は 1 本も足していない（親に残る in-file の歯と e2e が従来どおり測る）。
-//!
-//! 判定 enum `MainCheck` は**親に残る**——極性一覧（`crate::polarity`・snapshot `polarity_external_form`）が
-//! 境界の型名 `pipe::land::MainCheck` で pin しており、ここへ移すと `pub use` を足しても外形が変わる
-//! （§41「決定的な制約」）。
-//!
-//! 可視性: 親が呼ぶ 4 本（[`verify_main`] / [`main_red`] / [`main_unmeasured`] は `land` から、[`measure_main`]
-//! は `finish` から）だけが `pub(super)` で、残りはこの module に閉じる。逆向き（子 → 親）は `super::` で
-//! そのまま見える（Rust の可視性＝子孫は祖先の私有を見る）ので、**親側の可視性は 1 語も上げていない**。
+//! land の主実測。
+//! 出所: pipeline.md §5.4・§41 s2-07l.457 設計 §41
 
 // flip-check: moved s2-07l.457
 

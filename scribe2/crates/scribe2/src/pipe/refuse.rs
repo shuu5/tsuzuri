@@ -1,17 +1,5 @@
-//! 契約単位の拒否理由と、write-set の交差判定（設計 docs/design/pipeline-conflict.md §2・
-//! ADR-0019 §2.1・FR4 / FR11・NFR4）。
-//!
-//! **主語は「契約 file が読めた後の契約単位の判定」**である。引数の不足（rc 1）と
-//! [`super::contract::Contract::load`] の error（rc 2）は従来の口のまま外に在る——入力の型が
-//! 違うものを 1 つの enum に集めると、極性一覧の 1 行が 2 種の判定を背負う。
-//!
-//! [`Unfit`](super::declaration) は **verify 行 1 本**の理由で境界が違うので触らない。
-//!
-//! 交差の判定は**契約の字面と base の tracked file の一覧**で閉じる: 正規化して項目ごとに突き合わせ、
-//! dir 項目は base の file 一覧に**展開してから**数える（設計 contract-source.md §3・新規 file〔`+`〕と
-//! dir は交差しない＝dir で書いた snapshot の置き場が配下 1 file の別便と偽の交差を起こさない）。symlink は
-//! 解かない。実体が同じ file を別名で持つ 2 契約は入口で見逃す（偽陰性）が、編集時の guard が実体名で塞ぐ
-//! （ADR-0009 §2.1 の既知の穴はそのまま）。
+//! 契約単位の拒否理由と、write-set の交差判定。
+//! 出所: pipeline-conflict.md §2 ADR-0019 §2.1 contract-source.md §3 ADR-0009 §2.1
 
 use super::closure::ClosureError;
 use super::commute::Verdict;

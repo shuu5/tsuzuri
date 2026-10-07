@@ -1,18 +1,8 @@
-//! 審査の材料の 4 本目: 契約の write-set の各項目の base の要約（設計 docs/design/contract-source.md §40・行 ao・
-//! `s2-07l.431`）。
-//!
-//! lens は shell も cargo も撃てないので、既存の file を触る契約の「base の中身がこうだから done が測れる」を読めず、
-//! `section-material-missing` の INCONCLUSIVE が往復する。器が base から項目ごとに path・行数の 2 面（全体 / 本体）・
-//! 本体の区間の宣言の名・歯の区間の歯の名を測り、材料の dir に [`super::BASE_FILE`] として置く（組むのは
-//! [`base_text`] の 1 本・`materials` から 1 回だけ呼ぶ）。区間の読み手は `pipe::closure` の [`src_region`] /
-//! [`test_region`]、行数の 2 面は [`FileLines::of`] で、2 本目の読み手を作らない（C2）。
-//!
-//! 項目の形は 4 つ: `.rs` は行数と宣言の列と歯の列（別の列）・`.rs` でない file は行数だけ・`+` の項目は「新設」の 1 行・
-//! 読めない項目は読めなさの 1 行（黙って落とさない・C10）。`-` / `~` / `=` の項目は接頭辞を剥がした base の file を読み
-//! （剥がすのは `pipe::refuse` の [`normalize`] の 1 本・§44）、`=` の項目は行数の後ろに置き場だけの 1 語を添える。
-//!
-//! cap は新しい閾値を作らない: lens が [`base_block`] で既存の `gate.token_cap` の残りに収まるかを測り、収まらない周は
-//! 段ごと落として落とした項目の本数の 1 行を残す（既存の 4 材料だけで越える周の INCONCLUSIVE は lens の側で不変）。
+//! 審査の材料の 4 本目: 契約の write-set の各項目の base の要約。
+//! lens は shell も cargo も撃てないので、既存の file を触る契約の「base の中身がこうだから done が測れる」を読めず。
+//! 項目の形は 4 つ: `.rs` は行数と宣言の列と歯の列・`.rs` でない file は行数だけ・`+` の項目は「新設」の 1 行・読めない項目は読めなさの 1 行。
+//! `-` / `~` / `=` の項目は接頭辞を剥がした base の file を読み、`=` の項目は行数の後ろに置き場だけの 1 語を添える。
+//! 出所: contract-source.md §40 s2-07l.431 設計 §44
 
 use crate::pipe::closure::{src_region, test_region, TEST_ATTR};
 use crate::pipe::declaration::FileLines;

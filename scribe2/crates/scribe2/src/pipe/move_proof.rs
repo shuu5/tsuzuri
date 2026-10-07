@@ -1,17 +1,5 @@
-//! 純移動の機械証明（設計 docs/design/pipeline.md §5.3・`s2-07l.266`・FR9 / NFR1 / FR5）。
-//!
-//! 便の diff が**純移動**——(名, 本文の hash) の多重集合が base と HEAD で一致し、移動した item が
-//! 1 つ以上在り、残差分が宣言と札とコメントと空行だけ——なら、lens へ diff の代わりに**要約**
-//! （[`MoveSummary`]）を渡す。分割便の diff は本文を 2 度（`-` と `+`）運ぶので予算の cap に当たるが、
-//! 移動の事実は要約の方が小さく正確に運べる（cap を一時的に上げた `s2-07l.265` の恒久解）。
-//!
-//! **判定は純関数**である。file の読み（git）は gate 側が閉じた口 [`Side`] の closure で担い、
-//! ここは I/O を持たない（`lens-input.txt` の書き出しの helper [`keep`] だけが fs に触る）。
-//!
-//! **下界**（C13・構文木を持たない・字面走査）: 列 0 から始まる宣言単位だけを item と数え、macro が
-//! 生む item・1 行に複数の item・入れ子の item（`impl {}` の中の fn・inline `mod tests {}` の歯）は外側の
-//! item 1 本に畳む。読めない形は**純移動でない側**へ倒す——誤判定は lens から diff を奪う側
-//! （FailOpen・PostHoc・[`POLARITY`]）なので、迷った周は従来どおり diff を渡す。
+//! 純移動の機械証明。
+//! 出所: pipeline.md §5.3 s2-07l.266 s2-07l.265
 
 use crate::polarity::{OnFailure, Polarity, Timing};
 use std::collections::BTreeMap;

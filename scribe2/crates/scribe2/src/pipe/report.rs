@@ -1,21 +1,6 @@
-//! `pipe report`（設計 docs/design/pipeline.md §5.8・FR22）。
-//!
-//! 到達点の主張「人由来の event が **approval 以外に 0 件**」を機械が数えて示す面である
-//! （AC1）。人手 0 は「そう見えた」ではなく **log に残った actor** で決める。
-//!
-//! **便の数と land の数は replay から、人由来の event は生の行から数える**。replay は
-//! 便ごとに最後の段しか残さないので、途中に挟まった人の手は replay からは読めない
-//! （承認の後に手で段を動かした周が、replay 上は機械だけで進んだ便に見える）。
-//!
-//! **審査の理由の型も生の行から数える**（設計 contract-source.md §22・`s2-07l.395`）: `RunStage stage=Reviewed`
-//! の detail（`verdict:<V> kind:<k>`）のうち verdict が PASS でないものが母集団で、`kind:` を持たない古い
-//! event は `unparsed` に数える。内訳は [`FINDING_KINDS`] の宣言順に 7 語とも出す（0 も出す）——「潰す」は
-//! kind ごとの内訳が 0 に落ちたことを機械で見ることである。
-//!
-//! **2 行目は消費**（設計 gate-cost.md §26 形 (2) (d)・[`Spent`]）: 消費の event（`RunCost`）の token の和を、それを持つ
-//! 便の数（母集団）と同じ行に出し、gate の record の段の秒の和を添える。
-//!
-//! 便 1 本の装置への書きを段ごとに読む口（`pipe show --write`・[`written_of`]）は子の module `written` に置く（行 v-run-write）。
+//! `pipe report`。
+//! 内訳は [`FINDING_KINDS`] の宣言順に 7 語とも出す——「潰す」は kind ごとの内訳が 0 に落ちたことを機械で見ることである。
+//! 出所: pipeline.md §5.8 contract-source.md §22 s2-07l.395 gate-cost.md §26
 
 use super::review::{read_detail, FindingKind, FINDING_KINDS};
 use crate::cli_outcome::{Outcome, RC_BROKEN};

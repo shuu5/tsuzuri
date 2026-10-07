@@ -518,19 +518,8 @@ fn first_line(path: &Path) -> Option<String> {
         .filter(|found| !found.is_empty())
 }
 
-/// lens へ何を渡したかの 1 行を、段の記録と**同じ log**（[`STDERR_LOG_FILE`]）へ残す（設計 §21 (3)）。
-///
-/// **rc に依らず・要約の周も diff の周も残す**。理由の 1 行は従来 [`LensInput::notice`] が
-/// `Outcome.err` に載せるだけで、rc 0 で終わった gate の周は呼び手が捨てると便の外から二度と
-/// 読めなかった（`.286` の実測: `run.stderr` 0 byte・rc 0 で「なぜ diff を渡したか」が引けない）。
-///
-/// 置き場が `verify.jsonl` ではなく診断 file なのは、record の**通し番号 `n`** を行数から導く読み手が
-/// 在るためである（[`crate::pipe::land`] の追随が引き継ぎの skip record を書く周）——record でない行を
-/// 混ぜると `n` が飛ぶ。診断 file の読み手は人だけで、通知は段の見出しを持たない 1 行に閉じる。
-///
-/// 削除の run を 1 つ以上畳んだ周だけ、[`notice_line`] の末尾（` elided=` の後ろ）に ` pruned=<run 数>/<省いた行数>` を足す
-/// （設計 gate-cost.md §46 形 3・0 の周は従来の字面のまま）。§46 の本文と違う本文を §49 の縮めで作った周は、その後ろに ` tight` を足す
-/// （`tight` は `pruned` と対で渡す・設計 §49 形 5）。
+/// lens へ何を渡したかの 1 行を、段の記録と**同じ log**へ残す。
+/// 出所: 設計 §21 §46 §49 gate-cost.md §46
 pub(super) fn record_notice(
     entry: &Gate<'_>,
     input: &LensInput,
@@ -919,18 +908,8 @@ fn shown_peak(peak_mb: Option<u64>) -> String {
     peak_mb.map_or_else(|| "-".to_owned(), |mb| mb.to_string())
 }
 
-/// 箱の中で殺された段か（殺された理由・設計 gate-cost.md §4.2 / §4.3）。
-///
-/// **rc では見ない**——kernel が殺した process の rc は行の内容次第で何にでもなる。根拠は
-/// 包みが出した `memory.events` の `oom_kill` で、包みごと死んで終端行を出せなかった周は
-/// signal 死をその代理にする。**包めなかった周は当たらない**（素の行が外から kill された
-/// 周を「箱が溢れた」と読まない）。
-///
-/// **検出線の行の `oom_kill` は数えない**（`s2-07l.228`・設計 §4.2）。変異ごとの test process を
-/// 箱の中で起こす道具は、無限 loop の変異 1 つが kernel に殺されてもその死を吸収して完走する
-/// ——測れた周であり、判定は rc と outcomes が持つ。record の `reason=oom-kill` は残る
-/// （[`step_record`] は `step.reason` をそのまま書く）。包みごとの signal 死は終端行が無い＝
-/// 測れていないので、検出線でも従来どおり数える。
+/// 箱の中で殺された段か。
+/// 出所: gate-cost.md §4.2 設計 §4.3 §4.2 s2-07l.228
 fn box_kill(step: &Step) -> Option<Reason> {
     if !step.confined {
         return None;

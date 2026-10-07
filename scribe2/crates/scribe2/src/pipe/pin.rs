@@ -1,17 +1,4 @@
-//! 便ごとの器の binary の留め（器の memo t3-hub.74.50.2 の候補 1・行 v-pin）。
-//!
-//! 便の受付（`pipe run` の受付の後・[`note`]）が、置き場の event log の最後の `InstallRecorded` の path の file を run dir の
-//! `bin/<NAME>`（[`path`]）に hard link で置く（中身は写さない＝SSD の書き 0）。置いた留めを `--version` で撃った 1 行目が
-//! 自分の 1 行目（[`version_line`]）と字で同じ周だけ残し、違う周・読めない周・同じ file system でない周は bin の dir を残さず
-//! 理由の語を返す。照らすのは置いた後の留めなので、照らしの間に PATH の器が入れ替わっても別の版を留めない。器は env も
-//! HOME も `/proc` の自分の実行 file も読まない（C2.2）ので、自分の実行 file は `InstallRecorded` の path と `--version` の
-//! 照らしで知る。
-//!
-//! 留めの読みは 3 つ: 同じ便の実装役と審査役の命令は [`head`] が最初の語を留めに替え、便に結ばれる子（argv に `--run` を持つ
-//! 起こし直しと着地後の検出）は [`program`] が留めを返し、便に結ばれない子（列が起こす新しい便ほか）は [`launcher`] が留めの
-//! 形の呼ばれ方を器の名に戻す（新しい便は PATH の器で起きる）。終わった便の留めは器の掃除が消す（[`drop_bin`]）。
-//!
-//! 器の入れ替えの門 busy は、器の process の行を [`hold`] で 3 値に分け、留めた便の行だけの周は断らない（行 v-pin-swap）。
+//! 便ごとの器の binary の留め。
 
 use super::run_dir;
 use crate::fleet::{store, EventKind, Install};

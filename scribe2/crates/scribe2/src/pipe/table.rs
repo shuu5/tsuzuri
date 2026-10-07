@@ -1,28 +1,8 @@
-//! 契約表（設計 docs/design/contract-source.md §2 / §3 / §8・ADR-0023 §2.1 / §2.3・SRS FR47 / FR48 / FR54 / FR55）。
-//!
-//! 契約の正本は設計 doc の**契約表 1 行**である。本 module が持つのは 3 つ:
-//!
-//! 1. 表を読む**薄い層**: `.md` は `<!-- contracts:begin -->` … `<!-- contracts:end -->` の区間を行走査で抜き
-//!    （区間 0 = 表なし・2 つ以上 = 違反）、`.toml` は全文を渡す。本文を読む parser は rules manifest の 1 本
-//!    だけである（`[[contract]]` の table 種・ADR-0023 §2.1・ADR-0010 §2.1「第 2 の parser を作らない」）。
-//! 2. 行の欄の**正本** [`FIELDS`]（C1）: `<NAME> contracts schema` が tracked な生成物 `contracts/schema.toml` へ
-//!    描き、`xtask check` が生成物と正本の列の一致を測る。
-//! 3. 表の**検査** [`check_table`]: id の一意・`req` の要件面での実在・`section` の節の実在・verify の形・
-//!    `depends` の解決と輪・`touches` の閉包と `surfaces` の外形 pin ⊆ `write-set`（[`super::closure`]）・末尾 `/`
-//!    無しの dir・write-set の項目の実在（[`super::declaration::read_write_set`]）・名指しの実在
-//!    （[`super::closure::unresolved_names`]）。**全件・行番号付き**で返し 1 件目で止めない（FR18 と同じ「黙って
-//!    落とさない」）。intake（契約 (b)）は同じ関数を 1 行に撃つ＝1 実装（C2）。`depends` の解決の母集団（同じ doc の
-//!    全行の id）は引数で渡す＝1 行に撃つ intake でも相手が別の行に在る `depends` が解ける（§30・行 ad）。上限の余地
-//!    （§3）は受付時点の事実なので CI では撃たない（intake の側・[`super::cli`]）。
-//!
-//! 1 と 3 の群は子 module（`table/parse.rs` = 区間の抜き出しと TOML の型付け・`table/check.rs` = 表の検査と要件面と
-//! CLI の駆動）に置き、本 file は 2 と findings の語彙（[`TableError`] / [`Finding`] / [`Context`]）を持つ。呼び手の
-//! `use` は下の再 export を通る（`s2-07l.374`・設計 §15）。
-//!
-//! 約束の行 `[[promise]]`（設計 §33・行 af）は契約の行の子行で、欄の正本は [`PROMISE_FIELDS`]（9 欄）・型は
-//! [`PromiseRow`]。区間の中の約束の行は parse の段で契約の行と分けて読み（rules manifest の面は `[[contract]]` だけを
-//! 受けるので、約束の行の区間は契約の本文から抜いて値の層〔`scalar` / `list`〕だけを共有する）、`of` の親の行の実在と
-//! `n` の連番は表の検査の段が [`TableError::PromiseOrphan`] / [`TableError::PromiseNumber`] で名指す。
+//! 契約表。
+//! **全件・行番号付き**で返し 1 件目で止めない。
+//! 1 と 3 の群は子 module に置き、本 file は 2 と findings の語彙を持つ。
+//! 区間の中の約束の行は parse の段で契約の行と分けて読み。
+//! 出所: contract-source.md §2 設計 §3 §8 §2.3 §30 §15 §33 ADR-0023 §2.1 ADR-0010 §2.1 s2-07l.374
 
 use super::closure::{Base, ClosureError, CrateLayout, Source};
 use super::contract::{Class, CLASS_ROW};

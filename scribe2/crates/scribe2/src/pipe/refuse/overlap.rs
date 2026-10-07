@@ -8,18 +8,8 @@ pub(crate) fn covered(write_set: &[String], path: &str) -> bool {
     write_set.iter().any(|item| covers(&normalize(item), &target))
 }
 
-/// 2 つの write-set が交差した**全組**（`(左の字面, 右の字面)`・先頭が理由の 1 行に載る）。
-///
-/// **照合は正規化した形で、返すのは契約が書いた字面のまま**である（読み手が自分の契約の
-/// どの行を直せばよいかは、器が畳んだ形ではなく書いた字面でしか分からない）。
-///
-/// dir 項目は `tracked`（base の tracked file の repo 相対 path）に**展開してから**数える（設計
-/// contract-source.md §3）: dir × dir は段の境目の prefix、dir × file はその file が base に在って配下の周だけ、
-/// file × file は字面の一致（`+` 接頭辞の新規 file は剥がして比べる）。base に無い file と dir は交差しない
-/// （dir で書いた snapshot の置き場が、配下に新規 file 1 つを持つ別便と偽の交差を起こした `s2-07l.243 × .248` の型）。
-///
-/// `pub(crate)` なのは、回答で write-set を広げる周（`.133`）が**同じ 1 本**を呼ぶためである
-/// （本便は口だけを置き、answer への配線は `.133`）。
+/// 2 つの write-set が交差した**全組**。
+/// 出所: contract-source.md §3 s2-07l.243
 pub(crate) fn overlaps(left: &[String], right: &[String], tracked: &[String]) -> Vec<(String, String)> {
     let base: Vec<String> = tracked.iter().map(|path| normalize(path)).collect();
     let mut found = Vec::new();

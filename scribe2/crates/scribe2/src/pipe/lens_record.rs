@@ -1,16 +1,8 @@
-//! lens の cmd の写し（設計 docs/design/pipeline.md §26・`s2-07l.378`・FR9 / FR10）。
-//!
-//! `pipe review --lens <cmd>`（run の最初に lens を受ける口）が cmd を `<run_dir>/lens.toml` に写し、`gate` /
-//! `land`（と `resume` が通る同じ関数）は `--lens` が無い周にその写しを読む（`--lens` が在れば flag が勝つ）。
-//! 操作役が land を後から手で撃つ周に毎回同じ cmd を渡さないと、main が動いた便の再 gate が「lens が要るのに
-//! --lens が無い」で INCONCLUSIVE に倒れる（admin の実測 2026-09-16）——record の 1 面でその seam を塞ぐ。
-//!
-//! 形は `schema = 1` / `cmd = "<逐語>"` の 2 行（rules manifest と同じ parser の subset・[`scalar`]・run dir の
-//! 一時物で跨版契約ではない）。読み手は先頭と末尾の `"` だけを剥がし中身を素通しで返すので、cmd の中の `"` と
-//! `\` は escape しない（往復する）。改行を含む cmd は 1 行に書けないので、書き手が typed に断る（fail-closed）。
-//!
-//! 読みの結果と口への引数は同じ閉じた型 [`LensSource`] 1 つ: 写しが**無い**は従来どおりの INCONCLUSIVE、写しが
-//! **読めない**は path と理由を持つ別の値（「無い」に潰さない・C10）。3 つの口は [`resolve`] の 1 関数で読む（C2）。
+//! lens の cmd の写し。
+//! 操作役が land を後から手で撃つ周に毎回同じ cmd を渡さないと。
+//! 改行を含む cmd は 1 行に書けないので、書き手が typed に断る。
+//! 読みの結果と口への引数は同じ閉じた型 [`LensSource`] 1 つ: 写しが**無い**は従来どおりの INCONCLUSIVE、写しが**読めない**は path と理由を持つ別の値。
+//! 出所: pipeline.md §26 s2-07l.378
 
 use crate::fleet::SCHEMA;
 use crate::rules::manifest::{scalar, Scalar};

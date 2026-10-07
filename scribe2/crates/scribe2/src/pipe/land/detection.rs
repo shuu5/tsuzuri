@@ -1,18 +1,6 @@
-//! 着地後の検出の口（`pipe land --run <id> --detection-only`・設計 docs/design/gate-cost.md §44 行 ak・ADR-0060・
-//! `s2-07l.465`）。
-//!
-//! `Landed` の便の着地した commit（記録の `sha:`）を主実測と同じ置き場の別名へ detach で出し、凍結した宣言の写しの
-//! 検出線の行**だけ**を gate と同じ受付札・縮退・箱・遮断器の行の手（[`run_detection_admitted`]）で 1 回撃つ。`{base}` は
-//! 着地した commit の親・`{teeth}` は契約の写しから・的と純移動の付け足しと写しの周の番号は gate と同じ 1 本
-//! （[`aimed_lines`] / [`population_lines`] / [`keep_detection`] と周の番号）を置き場と便 id の対で呼ぶ（C2）。
-//!
-//! 残すのは 3 つ: 便自身の `verify-main.jsonl` に `landed` 付きの record（撃った周は行ごとに 1 本・撃たなかった周と
-//! 撃てなかった周は理由を持つ 1 本＝どの周も 1 本以上）、§15 の置き場の写しと理由の file、`RunDone stage=Landed` の
-//! detail の `detection:<語>` 1 件。**台帳 client は呼ばない**（C15・FR50）。gate と land の段は変えない。口は land が
-//! `Landed` の後に子 process で起こし（[`super::finish`]・待たない・設計 §44 形 (11)）、人も同じ口を撃てる。
-//!
-//! 極性: 検出線は止めない線（C12.4）なので、測れなかった周も rc 0 で語が `unmeasured` になる。rc 2 は record・写し・
-//! event を書けない周だけ。宣言に検出線の行が無い便は何も書かずに rc 1 で断る。
+//! 着地後の検出の口。
+//! 宣言に検出線の行が無い便は何も書かずに rc 1 で断る。
+//! 出所: gate-cost.md §44 ADR-0060 s2-07l.465 設計 §15 §44
 
 mod origin;
 

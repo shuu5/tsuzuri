@@ -1,14 +1,6 @@
-//! host の根の走りの札（行 xp-host-runs・判断の記録 ADR-37 の決定 (7) の行 xp-host-live の前半）。
-//!
-//! runner を起こしてから終わりを見届けるまで、器が選んだ口座の label を持つ札 1 枚を host の根の `runs/`
-//! （[`host_runs_dir`]・受付札の置き場と同じ state dir の親から導く）に置き、終わりで外す（[`Hold`] の `Drop`）。
-//! 同じ親の下の置き場（本番と実験）の走りが 1 つの dir に並ぶので、口座の選びが置き場の event の外の走りを
-//! 数えられる（[`elsewhere`]・行 xp-host-live）。札は受付札と同じく一時の印で、口座を選ばない周（親の環境の継承）は置かない。
-//! 置けない周は runner を止めず、理由の 1 行を呼び手へ返す（黙って落とさない・NFR4）。
-//!
-//! 数える側（行 xp-host-live・判断の記録 ADR-41）: 便用の選定（[`crate::fleet::select_for_run`]）は、ほかの置き場の生きた札を
-//! 持つ口座を外さず順の最後に回す。生死は受付札と同じ pid と起動の時刻で判じ（[`crate::fleet::store::started_ms`]）、
-//! 死んだ札と読めない札は数えるたびに消して回収する（受付札と同じく憲法 N1 の対象外）。
+//! host の根の走りの札。
+//! 置けない周は runner を止めず、理由の 1 行を呼び手へ返す。
+//! 出所: 判断の記録 ADR-37 判断の記録 ADR-41
 
 use super::admission::now_ms;
 use crate::fleet::json_lite::{self, Value};

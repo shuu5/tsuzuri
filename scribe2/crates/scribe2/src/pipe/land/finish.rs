@@ -1,16 +1,5 @@
-//! land の squash と finish（設計 docs/design/pipeline.md §5.4・§43・FR50・`s2-07l.498`）。
-//!
-//! PR の seam（[`open_pr`]）、squash commit と message（[`squash`] / [`squash_message`]）、着地の後の
-//! export → `Landed` → 後始末（[`finish`]）と終端（[`terminal`]・push → 台帳の close）の群である。
-//! `pipe/land.rs` からの**純移動**で、歯は 1 本も足していない（親に残る in-file の歯と e2e が従来どおり測る）。
-//!
-//! 判定 enum `Terminal` と `TERMINAL_TOKENS` / `TERMINAL_POLARITY` は**親に残る**——極性一覧（`crate::polarity`・
-//! snapshot `polarity_external_form`）が境界の型名 `pipe::land::Terminal` で pin している（§43「決定的な制約」）。
-//!
-//! 可視性: 親の `land` / `attempt` が呼ぶ 3 本（[`open_pr`] / [`squash`] / [`finish`]）と親の歯が読む item は
-//! `pub(super)`、`pipe` の中で `land::` として引かれる 2 本（[`landed_sha`] / [`terminal`]）は親が再輸出する
-//! ので `pub(in crate::pipe)`（再輸出は可視性を広げられない）。逆向き（子 → 親）は `super::` でそのまま見える
-//! （Rust の可視性＝子孫は祖先の私有を見る）ので、**親側の可視性は 1 語も上げていない**。
+//! land の squash と finish。
+//! 出所: pipeline.md §5.4・§43 s2-07l.498 設計 §43
 
 // flip-check: moved s2-07l.498
 
@@ -45,20 +34,9 @@ pub(super) const SUBJECT_CHARS: usize = 72;
 /// 要旨を切ったことを示す印（件名の末尾に 1 文字だけ足す）。
 const ELLIPSIS: char = '…';
 
-/// PR を作る seam を通す（設計 §5.4 の `--pr-cmd`・**main を動かさない**）。
-///
-/// **承認 event は前提でない**。自 repo へ branch を push して PR を出す行為は main を
-/// 動かさず、branch も PR も閉じられる＝可逆ゆえ、憲法 A4.3（merge・自 repo への
-/// dispatch・依存なしの code 変更は A4.2 の目的において可逆）により Ask-first の「出す」
-/// に当たらない（ADR-0008）。3 クラスの判定は契約の自己申告（`classes`）だけに効き、
-/// seam を使ったことから導出しない。
-///
-/// **stale base は見ない**。CAS の old が要るのは ref を進める周だけで、この形は ref を
-/// 1 本も動かさない——PR が載るかどうかは forge が決める。逆にここで base を縛ると、
-/// main が動いた瞬間に PR を出せなくなる（自己ホストの便が最も踏みやすい）。
-///
-/// **道具の失敗で便を終端させない**（rc 1・event を書かない）。push や PR 作成は network
-/// で落ちうるので、`Failed` を焼くと再試行できない便が残る。
+/// PR を作る seam を通す。
+/// push や PR 作成は network で落ちうるので、`Failed` を焼くと再試行できない便が残る。
+/// 出所: 設計 §5.4 ADR-0008
 pub(super) fn open_pr(entry: &Land<'_>, base: &str, cmd: &str) -> Outcome {
     // **空の seam を通さない**（使い方の誤り・rc 1・何も書かない）。`sh -c ""` は rc 0 で
     // 終わるので、素通しすると「PR を出した」を記帳しながら **1 行も公開していない**便が
@@ -328,20 +306,8 @@ fn note(entry: &Land<'_>, detail: &str) {
     );
 }
 
-/// export → `Landed` → 後始末。ここまで来た周は land が成立している（anchor は呼び手が揃え済み）。
-///
-/// export の前に main を実測し、stdout の `main=` と `Landed` の detail の `main:` に写す
-/// （`sha:` は宣言値のまま・verdicts.jsonl の key 列は触らない）。
-///
-/// `landing` は着地の形と宣言値の sha（設計 §29）: [`Landing::AlreadyLanded`] の周は stdout の末尾に
-/// `already-landed=1`、detail の `main:` の後ろに `already-landed` を後置する。[`Landing::Fresh`] の周の stdout と
-/// detail は不変。verdicts.jsonl の行はどちらも従来の key 列（`sha` = 宣言値・任意 field を足さない）。
-///
-/// `turned` は番待ちの結果（設計 pipeline.md §36）: 札が死んでいて列から外した便が在る周は stdout の `order=` の値の
-/// 直後に `skipped-dead=<n>`、面 5 の行に `skipped_dead` を足す（0 本の周は書かない）。
-/// `anchor` は揃えた結果と印（設計 §57 形 2）: 印を置いた周だけ detail の末尾に ` anchor=skipped:<理由>`（synced と not-main
-/// は空）。印の stderr の行は呼び手が 1 度だけ足す（列の便ごとに重ねない）。[`Landing::Behind`] の周も
-/// [`terminal`] を同じ形で撃つ（設計 contract-source.md §52・行 v-ci-child-cut）。
+/// export → `Landed` → 後始末。
+/// 出所: 設計 §29 §57 pipeline.md §36 contract-source.md §52
 pub(super) fn finish(entry: &Land<'_>, worktree: &Path, landing: &Landing, anchor: &Anchored, turned: &Turned) -> Outcome {
     let new = landing.sha();
     let order = turned.order;

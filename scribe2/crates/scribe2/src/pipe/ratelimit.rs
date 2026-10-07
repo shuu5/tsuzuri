@@ -234,19 +234,10 @@ fn resume_rate_limited(
     outcome
 }
 
-/// 便用の口座の選定（**1 関数**・設計 account-autonomy.md §3 / §4「初回の起動も同じ選定を通す」・FR36）:
-/// (i) FR33 の計測を 1 回撃つ（初回は鮮度つき・[`fleet::usage::run_fresh`]・撃ち直しは全口座）→ (ii) 便用の規則（[`fleet::select_for_run`]・便の `repo` を anchor に持つ席の登録
-/// row の口座は除外・設計 §14）で選ぶ → (iii) 候補なしなら最も早い reset まで唯一の wait で待ち、成立なら (ii)
-/// から・`Timeout` なら (i) から。
-///
-/// `Ok` は選んだ label。`Err` はこの process が止まる周（計測の引数・manifest・store の誤り、待つ reset の
-/// 無い候補なし、待ちの間に段が動いた）で、便の段は動かさない。口座の宣言が 0 の周（[`Pool::declared`] が
-/// `None`）の分岐は呼び手（`follow::spawn_selected`）が持ち、ここへは来ない（再開は宣言 0 でも通す＝候補なし）。
-///
-/// `entry` は起こす turn の材料（読むのは便 id・置き場・便の repo＝`Turn.repo`・`pipe run --repo` の値・起こし直しと
-/// 同じ 1 本 `turn_of` で組む）。`expected` は待ちの間に便が居るはずの段（再開なら `RateLimited`・runner が死んだ便の
-/// 起こし直しなら `Spawned`・初回なら起動前の段・衝突の起こし直しなら `Implemented`）。待ちの観測
-/// （[`Completion::AccountFree`]）も同じ repo と段を運ぶ＝段が動いた周は待ちから抜けて断る。
+/// 便用の口座の選定: (i) FR33 の計測を 1 回撃つ→ (ii) 便用の規則で選ぶ → (iii) 候補なしなら最も早い reset まで唯一の wait で待ち、成立なら (ii) から。
+/// `Err` はこの process が止まる周で、便の段は動かさない。
+/// 待ちの観測も同じ repo と段を運ぶ＝段が動いた周は待ちから抜けて断る。
+/// 出所: account-autonomy.md §3 設計 §4 §14
 pub(super) fn choose_account(
     pool: &Pool,
     entry: &Turn<'_>,

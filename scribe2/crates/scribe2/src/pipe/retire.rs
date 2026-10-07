@@ -78,21 +78,9 @@ pub fn retired_path(repo: &Path, id: &str) -> PathBuf {
     worktrees_dir(repo).join(RETIRED_DIR).join(id)
 }
 
-/// `--pr-cmd` 形で終端した便の worktree を、merge の後に畳む（設計 §5.4）。
-///
-/// **`detail=pr` を前提にしない**。squash 形で move だけが落ちた便（land は rc 0 のまま
-/// stderr 1 行で終わる）を後追いで畳む口にもなるので、見るのは永続面の事実——worktree が
-/// 在るか・clean か——だけである。**台帳へ問うのは PR の便だけ**（段が `Landed` で `RunDone` の detail が `pr`・
-/// [`pr_retire`]）で、他の対象は今のまま畳むだけである（forge にも台帳にも問わない）。
-///
-/// **段を動かさない**（`s2-07l.128`）。畳める便は `Landed`・`Failed detail=rebase-empty`
-/// （変更が既に main に在る）・`Failed detail=rebase-conflict`（起こし直しの上限に達した）・
-/// `Gated` で verdict が FAIL（判定に届いた終端）の 4 通りで、どの周も残す event の段は
-/// [`Retire::stage`] のまま＝`Landed` に決め打ちしない。畳む動作そのものは 1 本で、
-/// 段の弁別は入口（`pipe::cli`）が持つ。
-///
-/// 前提違反は **rc 1 + stderr 1 行で何も書かない**（設計 §4 の一般則）。move の失敗だけは
-/// 「対象そのものが壊れている」ので rc 2 で、どちらの周も event を 1 件も残さない。
+/// `--pr-cmd` 形で終端した便の worktree を、merge の後に畳む。
+/// squash 形で move だけが落ちた便を後追いで畳む口にもなるので、見るのは永続面の事実——worktree が在るか・clean か——だけである。
+/// 出所: 設計 §5.4 §4 s2-07l.128
 pub fn retire(entry: &Retire<'_>) -> Outcome {
     match is_pr_landed(entry) {
         Err(outcome) => outcome,

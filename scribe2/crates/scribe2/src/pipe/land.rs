@@ -1,54 +1,8 @@
-//! land（設計 docs/design/pipeline.md §5.4・FR10 / FR11 / FR12・憲法 N1）。
-//!
-//! **PASS が無ければ 1 byte も動かさない**。前提は Gated ∧ `verdict.json` が PASS ∧
-//! `refs/heads/main` が便の記録した base と同一（CAS の old）で、どれか 1 つでも欠けたら
-//! rc 1 で何もしない。
-//!
-//! main を進めた後の実測が赤でも **auto revert はしない**（MVP 外）。main は進んだまま
-//! `Failed detail=main-red` を残して loud に落ちる——黙って巻き戻すと「何が起きたか」が
-//! 履歴から消え、赤い main が緑に見える瞬間が生まれるためである。
-//!
-//! 後始末は **可逆な move**（N1.2）。worktree は `retired/<run>` へ移すだけで削除せず、
-//! branch も消さない（squash commit は branch の祖先でないので `-d` は通らず、`-D` は
-//! N1 が禁じる形である）。
-//!
-//! main を進めた後は **anchor（`--repo` の checkout）の index と working tree も新 main に揃える**
-//! （`s2-07l.120`・N1）。`update-ref` は ref しか動かさないので、揃えないと anchor の `git status` に
-//! landed 変更が staged の逆向きで残り、次の `commit -a` が landed 変更を打ち消す（`.117` 実測）。
-//! 揃えるのは HEAD が main を指し tracked な未 commit の変更が無く、landed tree が足す path が anchor に
-//! 無い周だけ（[`AnchorPlan`]・fail-closed）。**main の実測が赤 / 測れない周も揃える**（ref は既に
-//! 進んでいる＝揃えないと同じ経路が failure exit で開く・lens-120 H1）。
-//!
-//! **main が動いた便は追随する**（`s2-07l.119`・FR30）。記録した base が main の祖先のまま
-//! 置き去りになった周は、worktree の branch を main へ rebase し（効くのは branch だけ・
-//! main は 1 byte も動かさない・force 系は使わない）、段を `Implemented` へ戻して gate を
-//! **同じ関数で**撃ち直し、PASS なら新しい base で CAS する。衝突は木を戻して**実装役を
-//! 起こし直す**（[`super::follow`]・便は終端にしない・終端するのは上限に達した周だけ）。
-//! base が main の祖先でなくても merge-base が在れば同じ経路で追随する（`s2-07l.449`・設計 §38）:
-//! rebase は `--onto <main> <base>` の 1 形で、便が base の上に積んだ commit だけを運ぶ。merge-base の
-//! 無い周だけ `stale base` で断る。
-//!
-//! **撃ち直しの間に main がさらに動いた周は同じ land の中で追随し直す**（`s2-07l.335`・設計 §5.4 (vi) /
-//! §18・FR30）。`RunStage stage=Gated detail=stale:<old>..<now>` を衝突と同じ記帳の口で記し、回数は衝突と
-//! **1 つの上限**（`pipe.follow_retries`）で合算して、上限に達した周だけ `Failed detail=rebase-conflict` で
-//! 終端する。runner は要らず、撃つ主体が席に残らない（[`Attempt`]・周回は [`land`] の中に閉じる）。
-//!
-//! **着地は gate 済みの便を先に通す**（`s2-07l.147`・設計 gate-cost.md §6）。前提検査の直後・追随の
-//! 前に、同じ置き場の着地待ちの列（event log の replay から導く・別の状態 file を持たない）を見て、
-//! 自分より前の便が居る間は待つ。待ちは完了 enum の variant 1 つ（[`crate::fleet::Completion::LandTurn`]）で唯一の
-//! wait 実装を通り、上限（rules 行 `pipe.land_wait_s`）を超えた周と列を導けない周は**待たずに進む**
-//! （断らない・止めない）。どの周だったかは land の record と stdout の `order=` が残す。
-//!
-//! **検出線（変異検査）は gate・主実測・候補の木のどれも撃たない**（着地後の検出の口 [`detection`] だけ・設計
-//! gate-cost.md §44 形 (9)）。追随は `<base>..<main>` の path を [`DETECTION_SCOPE`] と照らし、1 つも触れない周は
-//! 再 gate を丸ごと省いて前周の PASS を引き継ぐ（[`regate_skippable`]・設計 §33・形 (10)）。読めない周は撃ち直す
-//! （fail-closed）。
-//!
-//! **既に main に自分の squash が在る便は Landed で終端する**（`s2-07l.389`・設計 §29・FR50・C3 / C10）。追随の
-//! rebase で commit が 0 本になった周、`rebase-empty` に倒す前に main の log を便の trailer（`run: <run id>`）で
-//! 1 回だけ探す。在れば前の周が CAS の後・実測の前に死んだ形＝squash と CAS を撃たず、主実測はその sha に対して
-//! 従来どおり撃ち（記録が無いものを緑と読まない）、緑なら `already-landed` の印を持って Landed にする。無ければ
-//! 本当に空の便として従来どおり `rebase-empty`。
+//! land。
+//! main は進んだまま `Failed detail=main-red` を残して loud に落ちる——黙って巻き戻すと「何が起きたか」が履歴から消え、赤い main が緑に見える瞬間が生まれるためである。
+//! 揃えるのは HEAD が main を指し tracked な未 commit の変更が無く、landed tree が足す path が anchor に無い周だけ。
+//! 出所: pipeline.md §5.4 s2-07l.120 s2-07l.119 s2-07l.449 設計 §38 §5.4 §18 §33 §29 s2-07l.335 s2-07l.147 gate-cost.md §6
+//! §44 s2-07l.389
 
 use crate::polarity::{OnFailure, Polarity, Timing};
 use super::commute::ledger::{self, Followed, Mark};
@@ -736,30 +690,11 @@ fn with_lines(mut lines: Vec<String>, mut outcome: Outcome) -> Outcome {
     outcome
 }
 
-/// 便の base が main の祖先か merge-base を持つなら worktree の branch を main へ rebase し、gate を**同じ関数で**
-/// 撃ち直す（設計 §5.4・`s2-07l.119`・§38・`s2-07l.449`）。**main は 1 byte も動かさない**——rebase が効くのは
-/// worktree の branch だけで、force 系は使わない（N1）。
-///
-/// - 祖先検査は閉じた 3 値（[`follow::Ancestry`]・起こし直しの「追随」節と同じ 1 本）。祖先でないが merge-base の
-///   在る周（main が巻き戻った / 分岐した）は便が base の上に積んだ commit だけを `--onto` で main の上へ運び
-///   （[`rebase_onto`]・消えた commit は運ばない）、以後は従来の追随と同じ経路（衝突・記帳・再 gate）に合流する。
-/// - merge-base が無い・読めない周だけ追随の形が無いので `stale base` の rc 1 で何もしない（字面不変・fail-closed）。
-/// - worktree が clean でない周も rc 1 で何もしない（汚れた木では rebase を走らせない）。
-/// - 衝突は `git rebase --abort` で木を戻し `Failed detail=rebase-conflict`（終端・fail-closed）。
-/// - rebase で commit が 0 本になった周（同一変更の便が先に land）は gate を撃ち直さず
-///   `Failed detail=rebase-empty`（便の変更は既に main に在る＝close してよい合図）。
-/// - 追随した事実は `RunStage stage=Implemented detail=rebase:<old>..<new>` で残す（段が
-///   `Gated` から `Implemented` へ戻る 1 件＝撃ち直す便の記帳）。base の読み手
-///   （[`super::base_of_run`]）はこの行から新しい base を読む。
-/// - 撃ち直しが PASS でない周は gate の判定行と rc で止まる（FAIL は `Gated` のまま
-///   land しない・INCONCLUSIVE は測り直せる側）。
-/// - main が動いた差分が [`DETECTION_SCOPE`] に 1 つも触れない周（[`regate_skippable`]・`<base>..<main>` は
-///   rebase で動かない）は**撃ち直しを丸ごと省き**、前周の Gated PASS を新しい base へ引き継ぐ（[`carry_gated_pass`]・
-///   設計 §33 (i)）。面に触れる周と diff を読めない周は従来どおり gate の段（①②④）を撃ち直す（設計
-///   gate-cost.md §44 形 (10)）。
-/// - rebase の直後（上の省略と再 gate の**前**・[`rebase_onto`] の中）に契約表の検査を便の木へ撃ち、findings のすべてが
-///   便の消した path を名指す write-set の項目の未解決なら [`follow::on_stale_rows`] へ委ねる（`Implemented
-///   detail=rebase-stale-rows:`・runner を起こし直す・設計 §34）。他の findings と撃てない周は従来どおり。
+/// 便の base が main の祖先か merge-base を持つなら worktree の branch を main へ rebase し、gate を**同じ関数で**撃ち直す。
+/// merge-base が無い・読めない周だけ追随の形が無いので `stale base` の rc 1 で何もしない。
+/// 衝突は `git rebase --abort` で木を戻し `Failed detail=rebase-conflict`。
+/// 撃ち直しが PASS でない周は gate の判定行と rc で止まる。
+/// 出所: 設計 §5.4 §38 §33 §34 s2-07l.119 s2-07l.449 gate-cost.md §44
 fn follow_main(entry: &Land<'_>, worktree: &Path, base: &str, main: &str) -> Follow {
     if !follow::Ancestry::judge(entry.repo, base, main).can_follow() {
         return Follow::Stopped(refused(format!(
@@ -888,22 +823,9 @@ fn carry_gated_pass(entry: &Land<'_>) -> Option<String> {
     Some(format!("run={} verdict={} {REGATE_SKIPPED}", entry.run, Verdict::Pass.as_str()))
 }
 
-/// worktree の branch を main へ rebase する（追随の (iii)・(iii′)）。**main は動かさない**。
-///
-/// - 撃つのは `git rebase --onto <main> <base>` の 1 形（設計 §38）: 便が記録した base の上に積んだ commit だけを
-///   main の上へ運ぶ。base が main の祖先の周は `git rebase <main>` と同じ結果で、祖先でないが merge-base の在る周は
-///   merge-base から base までの消えた commit を運ばない（経路を 2 本にしない）。
-/// - 衝突は [`super::follow::on_conflict`] へ委ねる（設計 pipeline-conflict.md §3）。器は木を戻し、
-///   衝突を `Implemented detail=rebase-conflict:<base>..<main>` で記帳して**実装役を起こし直す**
-///   ——便を終端にするのは上限に達した周だけである。どの形でも land はここで止まり、続きは
-///   `gate` から撃ち直す（起こし直した turn の後は、次の land の追随で再び rebase が走る）。
-/// - **既着地の便**（設計 §29）: rebase で commit が 0 本になった周、`rebase-empty` に倒す**前に** main の log を
-///   この便の trailer（`run: <run id>`）で 1 回だけ探す（[`landed_squash_of`]）。在れば [`Rebased::AlreadyLanded`]
-///   ——前の周が CAS の後・実測の前に死んだ形で、便の squash は既に main に載っている。
-/// - **同一変更の便**: trailer が無い周は便の変更が別の便で main に在る（先に land した便と同じ patch）ので
-///   gate を撃ち直さず（lens を起動しない）`rebase-empty` で終端する。commit 数を読めない周は 0 に読み替えず、
-///   従来どおり撃ち直しの precheck へ流す（fail-closed の向きを変えない・`s2-07l.125`）。
-/// - commit が残った周は、撃ち直しの前に契約表の行が便の消した path を名指すかを見る（[`stale_rows_stop`]・設計 §34）。
+/// worktree の branch を main へ rebase する。
+/// commit 数を読めない周は 0 に読み替えず、従来どおり撃ち直しの precheck へ流す。
+/// 出所: 設計 §38 §29 §34 pipeline-conflict.md §3 s2-07l.125
 fn rebase_onto(entry: &Land<'_>, worktree: &Path, base: &str, main: &str) -> Result<Rebased, Outcome> {
     let log = super::follow_mtime::Log { state_dir: entry.state_dir, run: entry.run, policy: entry.policy };
     if !super::follow_step::rebase(worktree, base, main, &log) {

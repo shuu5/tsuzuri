@@ -412,18 +412,8 @@ fn tree_of(state_dir: &Path, id: &str) -> Option<PathBuf> {
         .find(|tree| std::fs::symlink_metadata(tree).is_ok_and(|meta| meta.is_dir()))
 }
 
-/// 木を `.git` に降りずに歩き、名が列に在り追跡されている file を持たない dir を消す（[`Swept`]）。
-///
-/// 追跡の判定はその木の `git ls-files` の 1 回で、撃てない木は 1 つも消さずに失敗に数える。消した dir の下へは
-/// 降りない（入れ子の `.git` を持っていても消す）。symlink は dir として辿らない（木の外を消さない）。
-///
-/// `line` を持つ木（席の起草の木・§33 形 3）は、その dir 自身と下の全 entry の mtime の最新が線より前の dir だけを消す。
-/// 線以後の entry が 1 つでも在る dir は残して `kept` に返し（量の線の候補・§39 形 1）、mtime か dir を読めない dir は
-/// 残して失敗に数える。
-///
-/// `line` を持つ木は、名が列に無くても直下に署名の合う印を持ち追跡されている file を持たない dir を、同じ線で
-/// [`Cache::sweep`] に掛ける（§33 形 8）。印を探すのは、入れ子の `.git` を持つ dir と印の dir の下を除く所だけで、
-/// 残した印の dir は `kept` に返さない（量の線の候補にしない）。名の列の掃きは印の dir と入れ子の木の下でも今のまま続ける。
+/// 木を `.git` に降りずに歩き、名が列に在り追跡されている file を持たない dir を消す。
+/// 出所: 設計 §33 §39
 fn swept(tree: &Path, line: Option<SystemTime>) -> Swept {
     let mut found = Swept { removed: 0, broken: false, kept: Vec::new(), cache: Cache::default() };
     let Some(listed) = git_bytes(tree, &["ls-files", "-z"]) else {

@@ -411,18 +411,8 @@ fn is_requirement(text: &str) -> bool {
     !letters.is_empty() && letters.len() < text.len() && letters.chars().all(|found| found.is_ascii_uppercase())
 }
 
-/// `<NAME> contracts check --repo R` の本体（設計 §2「表の検査」・FR55）: tracked な `docs/design/*.md` の区間を
-/// 全行検査し、findings を `contracts: <file>:<line> …` の 1 行ずつ、末尾に判定行を stdout へ出す。
-///
-/// rc = 違反 0 → 0 / 違反 ≥ 1 → 1 / 読めない周 → 2（読めない doc・区間・要件面・閉包の入力も 1 件として名指し、
-/// 判定行も出す）。tracked file の一覧か宣言を読めない周は判定できないので、理由だけを stderr へ出して rc 2。
-/// 未追跡の設計 doc は判定行の前に 1 件 1 行で知らせ、判定行の `untracked=` に本数を出す（findings にも rc にも
-/// 数えない検出線・設計 §43 (3) / 行 at）。Declared 行の歯の置き場は判定行の末尾の `place-out=<行数>/<Declared 行数>`
-/// に出し、当たった行は `verbose` の周だけ判定行の前に 1 行ずつ出す（§45・行 av）。当たった行は findings の
-/// `teeth-outside-write-set` の 1 件ずつでもある（rc 1・欄の行数と findings の件数は一致する・§45 行 aw）。新しい歯の
-/// 接頭辞の衝突の予想（§54・行 bf）も同じ行の 1 件に併せ、`verbose` の行の末尾に予想の出所と直し方を足す。
-/// `base`（`--base <sha>`）を渡した周だけ、base から足された行と done の字が変わった行に宣言 `teeth-check` の要否と欄の在りかを照らす
-/// （§66 形 3・[`changed_findings`]）。base の commit を読めない周は理由だけを stderr へ出して rc 2。
+/// `<NAME> contracts check --repo R` の本体: tracked な `docs/design/*.md` の区間を全行検査し。
+/// 出所: 設計 §2 §43 §45 §54 §66
 pub(crate) fn check_repo(repo: &Path, ceiling: &Ceiling<'_>, verbose: bool, base: Option<&str>) -> Outcome {
     let judged = match judge_repo(repo, ceiling, base) {
         Ok(found) => found,

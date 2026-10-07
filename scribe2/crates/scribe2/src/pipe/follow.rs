@@ -1,34 +1,7 @@
-//! 追随（main が動いた便の rebase）の**衝突を runner が解く**段（設計
-//! docs/design/pipeline-conflict.md §3 / §5・ADR-0019 §2.2 / §2.4 / §2.6・FR34 / FR14・
-//! 憲法 C2 / C3 / C6・NFR4）。
-//!
-//! 衝突しても**便を終端にしない**。木を `git rebase --abort` で戻し、`RunStage
-//! stage=Implemented detail=rebase-conflict:<base>..<main>` を 1 件記帳して、実装役を
-//! もう 1 turn 起こす（「main を取り込んで直してから続けて」）。何回まで起こし直すかは
-//! rules 行 `pipe.follow_retries` が持ち、**回数は replay から導く**（別の状態 file を
-//! 持たない・C3）。
-//!
-//! **撃ち直しの間に main がさらに動いた周も同じ上限を分け合う**（設計 pipeline.md §5.4 (vi) / §18・
-//! `s2-07l.335`）。land は `RunStage stage=Gated detail=stale:<base>..<main>` を同じ記帳の口
-//! （[`on_stale`]）で 1 件記し、同じ land の中で追随し直す（runner は要らない）。回数は
-//! `rebase-conflict:` と `stale:` の行を合算し（[`retried`]）、上限で `Failed detail=rebase-conflict`。
-//!
-//! **追随で入った契約表の行が便の消した path を名指す周も同じ経路で起こし直す**（設計 pipeline.md §34・`s2-07l.400`）。
-//! land は rebase の直後に [`stale_rows_in`] を撃ち、該当の周は [`on_stale_rows`] が `RunStage stage=Implemented
-//! detail=rebase-stale-rows:<base>..<main>` を記帳し、写しの write-set に行の設計 doc を追記して runner を起こす。回数は
-//! 衝突と同じ上限（[`is_conflict`] が両方の接頭辞を数える）で、上限で `Failed detail=rebase-stale-rows`。
-//!
-//! **追随の形が無い便（base が main の祖先でない）も merge-base が在れば追随する**（設計 pipeline.md §38・`s2-07l.449`）。
-//! 祖先検査は閉じた 3 値 [`Ancestry`]（祖先／祖先でないが merge-base が在る／merge-base が無い）で、land の追随
-//! （`follow_main`）と起こし直しの stdin の「追随」節（[`section`]）が**同じ 1 本**を読む。2 つ目の周は
-//! `git rebase --onto <main> <base>` で便が base の上に積んだ commit だけを main の上へ運び、以後は従来の追随の経路
-//! （衝突の起こし直し・`rebase:` の記帳・再 gate）に合流する。merge-base の無い周だけ `stale base` で断る。
-//!
-//! **runner を起こす経路はこの module の [`spawn_turn`] ただ 1 本**である（起動そのものは
-//! [`super::spawn::spawn`]＝C6 の 1 口）。起こし直しと通常の起動で turn の後始末（[`settle`]）が
-//! 分かれると、追随の base 記帳が片方の経路から静かに抜ける——`resume` で起こし直した turn が
-//! 新しい base を記帳できないと、次の gate が**古い base の 2 点 diff**を測り、先着便の file を
-//! write-set の外と誤る。
+//! 追随の**衝突を runner が解く**段。
+//! merge-base の無い周だけ `stale base` で断る。
+//! 出所: pipeline-conflict.md §3 設計 §5 §2.4 §2.6 §18 ADR-0019 §2.2 pipeline.md §5.4 §34 §38 s2-07l.335 s2-07l.400
+//! s2-07l.449
 
 use super::commute::ledger::{self, Followed, Mark};
 use super::contract::{Contract, CLASS_ROW};
@@ -618,18 +591,8 @@ fn missing_runner(entry: &Turn<'_>) -> Outcome {
 }
 
 /// runner を 1 turn 起こし、終わったら追随の後始末まで見る。
-///
-/// **[`super::spawn::spawn`] への呼び手はこの 1 本だけ**である（起動口そのものは spawn で、
-/// ここはその唯一の経路＝C6 の形を崩さない）。`--runner` を持たない周は 1 行も書かずに断る
-/// ——起こし直しの口（`pipe land` / `pipe resume`）は runner を渡す責務を持つ。
-///
-/// `account` は runner を起こす口座（閉じた 3 値・設計 account-autonomy.md §4）: 初回の起動と衝突の起こし直しは
-/// [`spawn_selected`] が選んだ [`Account::Chosen`]（宣言 0 なら [`Account::Inherit`]）、上限で止まった便の
-/// 別口座での起こし直しは [`Account::Resumed`]。
-///
-/// **終わりの門の起こし直しの輪はここが持つ**（設計 pipeline.md §66 形 7）: `spawn` が rc 0 で返り便の最新の `RunStage` が
-/// 門の赤なら、同じ口座で Budget を測り直して門の赤の節つきの `Launch` で `spawn` を呼び直す。輪は回数を数えない（止めるのは
-/// 門の数え）。門の間の印は輪を抜ける時に外し、追随の後始末（[`settle`]）は輪を抜けた後に 1 回だけ撃つ。
+/// `--runner` を持たない周は 1 行も書かずに断る——起こし直しの口は runner を渡す責務を持つ。
+/// 出所: account-autonomy.md §4 pipeline.md §66
 pub(crate) fn spawn_turn(entry: &Turn<'_>, account: Account<'_>) -> Outcome {
     let Some(runner) = entry.runner else {
         return missing_runner(entry);
@@ -934,21 +897,10 @@ fn git_lines(dir: &Path, args: &[&str]) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// **すべての turn** の後始末（設計 §3 の手順 5 / 6）。「追随」節を渡したかは見ない。
-///
-/// 1. 木が rebase の途中（`rebase-merge` / `rebase-apply` 在り）で終わった周は
-///    `Failed detail=rebase-dirty` で終端する（clean 前提を守る・fail-closed）。
-/// 2. **器が base を進める**: worktree の HEAD と main の merge-base を実測し、記録済みの
-///    base より進んでいれば `RunStage stage=Implemented detail=rebase:<old>..<merge-base>` を
-///    記帳する。**書く値は実測した merge-base で、現在の main ではない**——turn の間に main が
-///    さらに進んでいても、2 点 diff に main の新しい commit の逆向きが載る穴を作らない。
-///    節を渡していない turn で runner が頼まれずに `git rebase` を撃った周も**同じ 1 本**で測る
-///    ——節の有無で経路を分けると、記帳の無い便の gate が古い base の 2 点 diff を測り、
-///    main 側の commit を write-set の外と誤る（.203 の実測）。
-///
-/// 2 は **turn が `Implemented` で終わった周だけ**である。`Failed` / `RateLimited` で終わった
-/// turn の後に `Implemented` を記帳すると、段が静かに `Implemented` へ戻る（終端した便が
-/// gate へ進む・止まった便が再開されない）。段を読めない周も記帳しない（fail-closed）。
+/// **すべての turn** の後始末。
+/// 木が rebase の途中で終わった周は `Failed detail=rebase-dirty` で終端する。
+/// 段を読めない周も記帳しない。
+/// 出所: 設計 §3
 fn settle(entry: &Turn<'_>) -> Outcome {
     let worktree = worktree_path(entry.repo, entry.run);
     if mid_rebase(&worktree) {

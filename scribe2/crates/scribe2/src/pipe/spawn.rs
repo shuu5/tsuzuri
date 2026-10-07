@@ -865,19 +865,9 @@ impl std::fmt::Display for LineRefusal {
     }
 }
 
-/// 器が選んだ口座を起動行に足す（`--account-dir <state_dir>/accounts/<label>`・FR5 の口のまま）。
-///
-/// placeholder でなく**末尾に足す**——runner の雛形は口座を知らず（口座は便でなく器が選ぶ）、穴を
-/// 雛形に要ると、穴の無い雛形の便が黙って親の口座で起きる。渡していない周は行を変えない（親の
-/// 環境をそのまま継承させる・C2.2）。label の有無だけを見る（選んだ経路が初回か再開かは見ない）。
-///
-/// **既に在る周は足さずに断る**（`s2-07l.411`）: 2 つ並べて渡すと読み手が最初の値を採り、記帳した口座と
-/// 実際に走る口座がずれる。置換もしない——どちらが正かを器は決められない（C10）。label が `None`
-/// （宣言 0）は従来どおり行を変えない＝器は口座を選んでおらず、launcher の値が唯一の口座。
-///
-/// **引数は label と置き場だけ**（`s2-07l.412`・設計 account-autonomy.md §15 (2)）: 足す口は runner と
-/// lens で**この 1 関数**である。`Launch` 全体を取ると runner の材料を持たない gate から呼べず、
-/// 「起動行に口座を足す」規則が 2 つに割れる。
+/// 器が選んだ口座を起動行に足す。
+/// **既に在る周は足さずに断る**: 2 つ並べて渡すと読み手が最初の値を採り、記帳した口座と実際に走る口座がずれる。
+/// 出所: s2-07l.411 s2-07l.412 account-autonomy.md §15
 pub(super) fn with_account(cmd: String, label: Option<&str>, state_dir: &Path) -> Result<String, LineRefusal> {
     let Some(label) = label else {
         return Ok(cmd);
@@ -1118,17 +1108,9 @@ fn settle_unreachable(launch: &Launch<'_>) -> Outcome {
 /// 停止行を読めない周の status（閉じた 1 つ）。
 const UNKNOWN_STATUS: &str = "unknown";
 
-/// 包みが rc [`RC_QUESTION`] で終わった周: stdout の最終行を質問 record として読み、
-/// `QuestionRaised(detail=逐語)` → `RunStage(Questioned)` の順で記帳して **rc 3 で止まる**
-/// （`Blocked` と同型・設計 pipeline-question.md §3 / §4）。
-///
-/// record が無い・読めない周は `Failed`（`question-record-missing`・fail-closed）。record と
-/// commit が同時に在る周は質問ではなく実装の失敗（runner の rc を写す）。
-///
-/// 数えるのは **turn で増えた commit**（`tip` 基準・ADR-0019 §2.6）である。初回の turn では
-/// tip = base ゆえ `.115` の判定と同値で、起こし直しの turn では「便が base から持つ commit」を
-/// 数えない——数えると、追随を解けずに質問へ倒れた turn が必ず実装の失敗に化ける。数えるのは turn で増えた
-/// 新しい変更で、載せ替えで sha だけが替わった commit は数えない（[`turn_commits`]・設計 pipeline-conflict.md §11）。
+/// 包みが rc [`RC_QUESTION`] で終わった周: stdout の最終行を質問 record として読み。
+/// record が無い・読めない周は `Failed`。
+/// 出所: pipeline-question.md §3 設計 §4 ADR-0019 §2.6 pipeline-conflict.md §11
 fn settle_question(launch: &Launch<'_>, worktree: &Path, tip: &str, stdout: &str) -> Outcome {
     let commits = turn_commits(worktree, tip);
     let (question, about) = match question_record(stdout) {
@@ -1265,23 +1247,8 @@ fn substitute(
         .replace("{plugin_dir}", &plugin.display().to_string())
 }
 
-/// plugin の root を run dir 配下に組み、その path を返す（設計 §5.2 手順 5 / §6）。
-///
-/// root の配下は 1 dir = 1 plugin で、runner が名前順に claude の `--plugin-dir` へ渡す:
-/// - `<NAME>/`: **器の plugin**。binary に埋め込んだ [`EMBEDDED_PLUGIN`] を**必ず**書く＝
-///   plugin を持たない consumer repo の便にも hook の in-loop guard が載る（憲法 C16.2・
-///   `s2-07l.149` 裁定 (A)）。
-/// - `consumer/`: worktree が**別名の** plugin を持つ周だけ（[`consumer_plugin`]）、その
-///   [`PLUGIN_DIRS`] を写し、直下に空の印の file（[`NAME`] + [`RUNNER_MARK_SUFFIX`]）を 1 つ書く。
-///
-/// Claude Code は**読み込んだ plugin dir の配下**を acceptEdits の自動承認から外す
-/// （sensitive）。便の worktree は `<repo>/.worktrees/<NAME>/<run>` ＝ repo を
-/// `--plugin-dir` に渡すと **その内側**なので、便の全 file で Edit / Write が deny される。
-/// 写しを repo の外（run dir 配下）へ置くことで、「repo の plugin を載せる」意図を保った
-/// まま worktree を保護対象から外す。
-///
-/// 写すのは **worktree の生成 dir（[`PLUGIN_DIR`]）の下の** [`PLUGIN_DIRS`]（＝便の base の内容）であって anchor の
-/// 現在値ではない。写し先（`consumer/` の直下）は生成 dir を挟まない。
+/// plugin の root を run dir 配下に組み、その path を返す。
+/// 出所: 設計 §5.2 §6 s2-07l.149
 fn copy_plugin(worktree: &Path, state_dir: &Path, run: &str) -> Result<PathBuf, String> {
     let dest = plugin_path(state_dir, run);
     // 再走で古い写しが残らないよう、先に空にする。
