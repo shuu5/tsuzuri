@@ -269,7 +269,8 @@ fn apply_account(state: &mut State, event: &Event) {
         | EventKind::MemoJudged
         | EventKind::LimitPermitted
         | EventKind::OverlapCommuted
-        | EventKind::OverlapFollowed => {}
+        | EventKind::OverlapFollowed
+        | EventKind::RunFell => {}
     }
 }
 
@@ -366,7 +367,8 @@ fn apply_seat(state: &mut State, event: &Event) {
         | EventKind::MemoJudged
         | EventKind::LimitPermitted
         | EventKind::OverlapCommuted
-        | EventKind::OverlapFollowed => {}
+        | EventKind::OverlapFollowed
+        | EventKind::RunFell => {}
     }
 }
 

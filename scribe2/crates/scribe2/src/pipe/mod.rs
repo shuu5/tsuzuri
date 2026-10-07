@@ -21,6 +21,7 @@ pub mod confine;
 pub mod contract;
 pub mod declaration;
 pub mod dispatch;
+pub mod fall;
 pub mod follow;
 pub mod gate;
 pub mod health;

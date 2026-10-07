@@ -1518,8 +1518,8 @@ fn pipe_regate_returns_gated_fail_to_implemented_on_the_same_worktree() {
     // event の種別は account-lifecycle.md §19 形 3 の群の逼迫の通知で 19 → 20・§20 形 5 / 6 の群の移動の 3 種で 20 → 23・
     // §24 形 4 の登録 row の退役で 23 → 24・fleet-event-log.md §12 の案件の一生の 5 kind で 24 → 29・dispatcher.md §41 の MemoJudged で
     // 29 → 30・limit-permit.md §18 の LimitPermitted で 30 → 31・判断の記録 ADR-60 の OverlapCommuted で 31 → 32・同じ記録の OverlapFollowed で
-    // 32 → 33（regate は種別を足さない）。
-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 33), "段と event の種別は増えない");
+    // 32 → 33・同じ記録の RunFell で 33 → 34（regate は種別を足さない）。
+    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 34), "段と event の種別は増えない");
     clean(&[&repo, &state]);
 }
 
@@ -1554,7 +1554,7 @@ fn pipe_follow_step_moves_gated_tree_onto_main_and_returns_to_implemented() {
     assert_eq!(run.detail.as_deref(), Some(format!("rebase:{base}..{moved}").as_str()), "着地の追随と同じ字面");
     assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]), moved, "main は動かない");
     assert_eq!(git(&worktree, &["merge-base", "HEAD", &moved]), moved, "木の base は main の先端");
-    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 33), "段と event の種別は増えない");
+    assert_eq!((vessel::fleet::STAGES.len(), vessel::fleet::KINDS.len()), (11, 34), "段と event の種別は増えない");
     clean(&[&repo, &state]);
 }
 

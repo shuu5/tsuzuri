@@ -44,6 +44,9 @@ pub(crate) mod bundle;
 /// 起こす側の周が受付の断りを契約ごとに `IntakeRefused` へ記帳する書き手（設計 §32・契約表の行 ag）。
 mod refused;
 
+/// 起こす側の周が便の落ちの型を便ごとに `RunFell` へ記帳する書き手（判断の記録 ADR-77 の決定 (7)・行 77-4）。
+mod fell;
+
 /// 床の検査を sha の木で 1 回撃つ段と、待つ側が読む判定の読み手（設計 §34・契約表の行 ai）。
 pub mod floor;
 
@@ -636,6 +639,7 @@ pub fn fire(input: &Input<'_>) -> Turn {
     }
     // **受付の断りの記帳は上書きの後・事前審査の前**（設計 §32）: 同じ周が読んだ event の列を借りる（2 度読まない）。
     refused::record(input, &turn.candidates, read.as_ref().and_then(|found| found.events.as_deref()));
+    fell::record(input, read.as_ref().and_then(|found| found.events.as_deref()));
     // **事前審査は起こし終えた後**（設計 §27 形 4・起こす便を遅らせない）: 同じ周の台帳と材料を借りる（2 度読まない）。
     if let Some(found) = read.as_ref() {
         precheck::round(input, &turn, &found.issues, found.materials.as_ref().ok());

@@ -29,6 +29,7 @@ pub use event::Event;
 pub use replay::{account_dir, effective_accounts, replay, select_for_run, Run, RunSelect, Seat, State};
 pub use wait::{epoch_ms_of, epoch_of, pid_gone, wait, Completion, Timeout};
 
+use crate::pipe::fall::Fall;
 use crate::polarity::{OnFailure, Polarity, Timing};
 use crate::seat::role::Role;
 use json_lite::Value;
@@ -123,6 +124,9 @@ pub enum EventKind {
     /// 差の当たりで通した組の便の、その後の着地の出来事（判断の記録 ADR-60 の決定 (4)・[`Case::Followed`]・`bead` = 便の契約の id・
     /// `detail` = `run=<便 id> word=<語>` と語ごとの尾）。**便に紐づかない**（段を動かさない）。
     OverlapFollowed,
+    /// 便が落ちた事実の型の記帳（判断の記録 ADR-77 の決定 (7)・条 P-10.2・[`Case::Fell`]・`run` と `bead` は行の field・型の語は
+    /// `fall`）。**便に紐づかない**（段を動かさない）。書き手は器の列の周だけ（`fleet record` は断る）。
+    RunFell,
 }
 
 /// [`EventKind`] の全 variant。
@@ -160,6 +164,7 @@ pub const KINDS: &[EventKind] = &[
     EventKind::LimitPermitted,
     EventKind::OverlapCommuted,
     EventKind::OverlapFollowed,
+    EventKind::RunFell,
 ];
 
 impl EventKind {
@@ -199,6 +204,7 @@ impl EventKind {
             Self::LimitPermitted => "LimitPermitted",
             Self::OverlapCommuted => "OverlapCommuted",
             Self::OverlapFollowed => "OverlapFollowed",
+            Self::RunFell => "RunFell",
         }
     }
 
@@ -240,7 +246,8 @@ impl EventKind {
             | Self::MemoJudged
             | Self::LimitPermitted
             | Self::OverlapCommuted
-            | Self::OverlapFollowed => ACTOR_MACHINE,
+            | Self::OverlapFollowed
+            | Self::RunFell => ACTOR_MACHINE,
         }
     }
 
@@ -279,7 +286,8 @@ impl EventKind {
             | Self::LifecycleCutover
             | Self::MemoJudged
             | Self::OverlapCommuted
-            | Self::OverlapFollowed => Shape::Case,
+            | Self::OverlapFollowed
+            | Self::RunFell => Shape::Case,
             Self::LimitPermitted => Shape::Permit,
         }
     }
@@ -419,6 +427,8 @@ pub enum Case {
     Commuted,
     /// [`EventKind::OverlapFollowed`]: 本体の欄を持たない（便の契約の id は行の `bead`・便と語は `detail`）。
     Followed,
+    /// [`EventKind::RunFell`]: 落ちの型の語（便の id は行の `run`・契約の id は行の `bead`）。
+    Fell { fall: Fall },
     /// [`EventKind::RulingReceived`] の結びの形（設計 §14）: 結んだ裁定 id・発話の ts・経路・問いの起票の時刻と、問いが
     /// metadata に持つ asked（無ければ `None`）。`bead` は問い id（行の field）。
     Ruling { ruling: String, utterance: String, channel: Channel, question_ts: String, asked: Option<String> },
@@ -442,6 +452,7 @@ impl Case {
             Self::Refused { refuse } => [bead, Some(text("refuse", refuse))].into_iter().flatten().collect(),
             Self::Cutover { version, main } => vec![text("version", version), text("main", main)],
             Self::Judged | Self::Commuted | Self::Followed => bead.into_iter().collect(),
+            Self::Fell { fall } => [bead, Some(text("fall", fall.as_str()))].into_iter().flatten().collect(),
             Self::Ruling { ruling, utterance, channel, question_ts, asked } => [
                 Some(text("ruling", ruling)),
                 Some(text("utterance", utterance)),

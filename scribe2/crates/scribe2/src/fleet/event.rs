@@ -9,6 +9,7 @@ use super::{
     Shape, Sorting, Stage, Unmeasured, UnmeasuredReason, Usage, WindowKind, SCHEMA,
 };
 use crate::ledger::question::ASKED;
+use crate::pipe::fall::Fall;
 use crate::pipe::permit::Record;
 use crate::seat::role::Role;
 
@@ -21,7 +22,7 @@ const KNOWN_KEYS: &[&str] = &[
     "account", "window", "model", "endpoint", "used_pct", "resets_at", "reason", "role", "anchor", "target", "sid", "launch",
     "mark", "source", "usage", "turns", "wall_ms", "rule",
     "channel", "session", "utterance", "sorting", "refuse", "version", "main",
-    "ruling", "question_ts", "asked",
+    "ruling", "question_ts", "asked", "fall",
 ];
 
 /// run 無しの裁定の kind（[`Shape::Ruling`]）だけが持てる key（他の kind の行に在れば malformed・設計 §9・§14）。
@@ -35,7 +36,7 @@ const BOUND_SHARED_KEYS: &[&str] = &["utterance", "channel"];
 
 /// 案件の一生の kind（[`Shape::Case`]）だけが持てる key（他の kind の行に在れば malformed・kind ごとの内訳は
 /// [`Body::case`] の `own`・設計 §12）。
-const CASE_KEYS: &[&str] = &["channel", "session", "utterance", "sorting", "refuse", "version", "main"];
+const CASE_KEYS: &[&str] = &["channel", "session", "utterance", "sorting", "refuse", "version", "main", "fall"];
 
 /// 口座残量の kind だけが持てる key（設計 fleet-usage.md §4）。
 ///
@@ -135,7 +136,13 @@ impl Event {
                 pairs.extend(self.rule.iter().map(|rule| ("rule", Value::Str(rule.clone()))));
                 pairs.extend(self.case.iter().flat_map(|case| case.pairs(&self.bead)));
             }
-            Shape::Case => pairs.extend(self.case.iter().flat_map(|case| case.pairs(&self.bead))),
+            Shape::Case => {
+                // 落ちの記帳だけが便の id（`run`）を行の field に持つ（本体の `bead` と `fall` の前）。
+                if self.kind == EventKind::RunFell {
+                    pairs.push(("run", Value::Str(self.run.clone())));
+                }
+                pairs.extend(self.case.iter().flat_map(|case| case.pairs(&self.bead)));
+            }
             Shape::Permit => pairs.push(("bead", Value::Str(self.bead.clone()))),
             Shape::Allowance | Shape::Registration | Shape::Account | Shape::Install | Shape::Pressure | Shape::Group => {}
         }
@@ -283,6 +290,7 @@ impl Body {
             EventKind::MemoJudged => Self::case(pairs, &["bead"], judged_of),
             EventKind::OverlapCommuted => Self::case(pairs, &["bead"], commuted_of),
             EventKind::OverlapFollowed => Self::case(pairs, &["bead"], followed_of),
+            EventKind::RunFell => Self::case(pairs, &["run", "bead", "fall"], fell_of),
             EventKind::LimitPermitted => Self::permit(pairs),
             EventKind::RunCreated
             | EventKind::RunStage
@@ -477,7 +485,9 @@ impl Body {
         let keys = ["run", "bead", "stage", "seat", "pid"].iter().chain(CASE_KEYS).chain(ALLOWANCE_KEYS);
         forbid(pairs, keys.chain(REGISTRATION_KEYS).chain(MARK_KEYS).filter(|key| !own.contains(key)))?;
         let (case, bead) = read(pairs)?;
-        Ok(Self { bead: bead.unwrap_or_default(), case: Some(case), ..Self::default() })
+        // `run` を持てる kind（`own` に `run` が在る）は必須で読む（落ちの記帳だけ）。
+        let run = if own.contains(&"run") { word_of(pairs, "run")? } else { String::new() };
+        Ok(Self { run, bead: bead.unwrap_or_default(), case: Some(case), ..Self::default() })
     }
 }
 
@@ -541,6 +551,14 @@ fn commuted_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), Stri
 /// OverlapFollowed: `bead`（便の契約の id）と空でない `detail`（便と語）が必須（本体の欄は持たない）。
 fn followed_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
     judged_of(pairs).map(|(_, bead)| (Case::Followed, bead))
+}
+
+/// RunFell: `bead`（契約の id）と `fall`（落ちの型の語）が必須（`run` は [`Body::case`] が読む）。
+fn fell_of(pairs: &[(String, Value)]) -> Result<(Case, Option<String>), String> {
+    let bead = word_of(pairs, "bead")?;
+    let text = word_of(pairs, "fall")?;
+    let fall = Fall::parse(&text).ok_or(format!("fall {text} は落ちの型の語でない"))?;
+    Ok((Case::Fell { fall }, Some(bead)))
 }
 
 /// LifecycleCutover: `version` と `main`（小文字の 16 進）が必須。
