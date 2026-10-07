@@ -857,6 +857,10 @@ mod tests {
             code_facts: Vec::new(),
             basis: Vec::new(),
             patch: None,
+            structure: String::new(),
+            fixes: String::new(),
+            source_memo: String::new(),
+            fell_runs: Vec::new(),
             goal: String::new(),
         }
     }

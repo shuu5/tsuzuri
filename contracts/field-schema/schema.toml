@@ -111,6 +111,26 @@ name = "patch"
 need = "optional"
 shape = "text"
 
+[[field]]
+name = "structure"
+need = "optional"
+shape = "text"
+
+[[field]]
+name = "fixes"
+need = "optional"
+shape = "text"
+
+[[field]]
+name = "source-memo"
+need = "optional"
+shape = "text"
+
+[[field]]
+name = "fell-runs"
+need = "optional"
+shape = "list"
+
 # 約束の行 [[promise]] の欄（正本は同じ file の PROMISE_FIELDS）
 
 [[promise-field]]

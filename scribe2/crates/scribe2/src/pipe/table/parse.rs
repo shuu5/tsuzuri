@@ -293,6 +293,10 @@ fn typed(raw: &TableRow, offset: u64, errors: &mut Vec<TableError>) -> Option<Co
         code_facts: list_of(raw, "code-facts", offset, errors),
         basis: list_of(raw, "basis", offset, errors),
         patch: patch_of(raw, offset, errors),
+        structure: text_of(raw, "structure", offset, errors),
+        fixes: text_of(raw, "fixes", offset, errors),
+        source_memo: text_of(raw, "source-memo", offset, errors),
+        fell_runs: list_of(raw, "fell-runs", offset, errors),
         goal: text_of(raw, DERIVED_GOAL, offset, errors),
     };
     (errors.len() == before).then_some(row)
@@ -607,8 +611,63 @@ mod tests {
                 "{value} は patch の行 {at} の 1 件: {errors:?}"
             );
         }
+        let at = super::super::FIELDS.get(21).map(|field| (field.name, field.shape));
+        assert_eq!(at, Some(("patch", super::super::Shape::Text)), "欄の列の 22 番目は文字列の欄 patch（末は行 v-structure-fields の fell-runs）");
+    }
+
+    /// 欄 `structure`・`fixes`・`source-memo`・`fell-runs`（tsuzuri の行 v-structure-fields）: `.toml` の全文の行は 3 つの字と字の配列を書いた
+    /// とおりに読み、4 欄を省いた行は 4 欄とも空。字の欄に配列・fell-runs に字を書いた行は欄の行番号の 1 件で断り、理由は欄の名と形を名乗る。
+    #[test]
+    fn structfld_row_carries_the_four_structure_fields_and_refuses_wrong_shapes() {
+        let fields = [
+            ("structure", "\"t3-x.1\""),
+            ("fixes", "\"review-literal-mismatch\""),
+            ("source-memo", "\"t3-x\""),
+            ("fell-runs", "[\"run-a\", \"run-b\"]"),
+        ];
+        let row = |over: &[(&str, &str)]| {
+            let mut text = format!(
+                "{WHOLE_HEAD}\n\n[[contract]]\nid = \"a\"\ntitle = \"t\"\nreq = [\"FR1\"]\nsection = \"1\"\nverify = [\"git status\"]\nsize = \"S\"\ndone = \"d\"\n"
+            );
+            for (key, value) in over {
+                text.push_str(&format!("{key} = {value}\n"));
+            }
+            text.push_str(&format!("{DERIVED_GOAL} = \"g\"\n"));
+            text
+        };
+        let read = |over: &[(&str, &str)]| {
+            read_rows("docs/design/t.toml", &row(over)).unwrap_or_else(|errors| panic!("形の合う行は読める: {errors:?}"))
+        };
+        let full = read(&fields);
+        let one = full.first().unwrap_or_else(|| panic!("1 行"));
+        assert_eq!(
+            (one.structure.as_str(), one.fixes.as_str(), one.source_memo.as_str(), one.fell_runs.clone()),
+            ("t3-x.1", "review-literal-mismatch", "t3-x", vec!["run-a".to_owned(), "run-b".to_owned()]),
+            "4 欄は書いたとおり"
+        );
+        let bare = read(&[]);
+        let none = bare.first().unwrap_or_else(|| panic!("1 行"));
+        assert!(
+            none.structure.is_empty() && none.fixes.is_empty() && none.source_memo.is_empty() && none.fell_runs.is_empty(),
+            "省いた 4 欄は空: {none:?}"
+        );
+        for (key, value, want) in [
+            ("structure", "[\"t3-x.1\"]", "structure は空でない文字列でなければならない"),
+            ("fixes", "[\"review-literal-mismatch\"]", "fixes は空でない文字列でなければならない"),
+            ("source-memo", "[\"t3-x\"]", "source-memo は空でない文字列でなければならない"),
+            ("fell-runs", "\"run-a\"", "fell-runs は文字列の配列でなければならない"),
+        ] {
+            let over: Vec<(&str, &str)> = fields.iter().map(|(name, good)| (*name, if *name == key { value } else { *good })).collect();
+            let text = row(&over);
+            let at = text.lines().position(|line| line.starts_with(&format!("{key} = "))).map_or(0, |index| index as u64 + 1);
+            let errors = read_rows("docs/design/t.toml", &text).expect_err("形の外れた欄は断る");
+            assert!(
+                matches!(errors.as_slice(), [found] if found.line() == at && found.reason().contains(want)),
+                "{key} は行 {at} の 1 件: {errors:?}"
+            );
+        }
         let last = super::super::FIELDS.last().map(|field| (field.name, field.shape));
-        assert_eq!(last, Some(("patch", super::super::Shape::Text)), "欄の列の末は文字列の欄 patch");
+        assert_eq!(last, Some(("fell-runs", super::super::Shape::List)), "欄の列の末は配列の欄 fell-runs");
     }
 
     /// doc 上で `[[promise]]` の見出しが在る行番号（1 始まり・doc 順）。
