@@ -150,11 +150,6 @@ impl ReviewCheck {
         }
     }
 
-    /// 起こしてよいか。**bool はここ 1 本で enum から導く**（読めない周は偽）。
-    pub fn is_clear(self) -> bool {
-        matches!(self, Self::Passed)
-    }
-
     /// 便が live（終端でない）か。PASS は spawn へ進める側・FAIL / INCONCLUSIVE は終端・読めない周は `None`
     /// （呼び手が断る側へ倒す・`pipe::cli::live` と同じ極性）。
     pub fn live(self) -> Option<bool> {
@@ -857,6 +852,14 @@ fn write_review(path: &Path, text: &str) -> Result<(), String> {
 /// 対象そのものが壊れている（rc 2・判定を書かない）。
 fn broken(reason: String) -> Outcome {
     Outcome::failed_line(RC_BROKEN, format!("pipe: {reason}"))
+}
+
+#[cfg(test)]
+impl ReviewCheck {
+    /// 起こしてよいか。**bool はここ 1 本で enum から導く**（読めない周は偽）。
+    pub fn is_clear(self) -> bool {
+        matches!(self, Self::Passed)
+    }
 }
 
 #[cfg(test)]

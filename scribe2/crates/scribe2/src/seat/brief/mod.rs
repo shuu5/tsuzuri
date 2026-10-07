@@ -141,18 +141,6 @@ pub fn classify_line(line: &str) -> LineKind {
         .map_or(LineKind::Bare, LineKind::Pointed)
 }
 
-/// 雛形の違反行（1 始まりの行番号と分類・空 = 通る）。
-pub fn violations(template: &str) -> Vec<(usize, LineKind)> {
-    template
-        .lines()
-        .enumerate()
-        .filter_map(|(at, line)| match classify_line(line) {
-            LineKind::Blank | LineKind::Holes | LineKind::Pointed(_) => None,
-            found @ (LineKind::UnknownHole(_) | LineKind::Bare | LineKind::Unclassified(_)) => Some((at.saturating_add(1), found)),
-        })
-        .collect()
-}
-
 /// 役割の rules 行 `role.<役割>` が持つ権能（行が無い・不発効・値が列でない周は `None`＝注入しない側）。
 /// guard（`hook/role_guard.rs`）と同じ行を読む（ADR-0022 §2.2「読み手 4 つ・行は 1 つ」）。
 pub fn capabilities_of(manifest: &Manifest, role: Role) -> Option<Vec<Capability>> {
@@ -183,6 +171,19 @@ pub fn render(role: Role, registration: &Registration, capabilities: &[Capabilit
             (Hole::Drafts.as_str(), drafts),
         ],
     )
+}
+
+#[cfg(test)]
+/// 雛形の違反行（1 始まりの行番号と分類・空 = 通る）。
+pub fn violations(template: &str) -> Vec<(usize, LineKind)> {
+    template
+        .lines()
+        .enumerate()
+        .filter_map(|(at, line)| match classify_line(line) {
+            LineKind::Blank | LineKind::Holes | LineKind::Pointed(_) => None,
+            found @ (LineKind::UnknownHole(_) | LineKind::Bare | LineKind::Unclassified(_)) => Some((at.saturating_add(1), found)),
+        })
+        .collect()
 }
 
 #[cfg(test)]

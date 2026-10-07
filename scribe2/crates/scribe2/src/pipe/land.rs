@@ -106,7 +106,7 @@ pub(in crate::pipe) mod after_land;
 mod ruling_hold;
 
 pub(crate) use super::queue::turn_now;
-pub use super::queue::{turn_in, Queued, Turn};
+pub use super::queue::{Queued, Turn};
 pub use super::retire::{retire, retired_path, Retire};
 
 /// 進める ref。設計 §5.4 が名指す 1 本である（追随の相手を読む [`super::follow`] も同じ字面を使う）。

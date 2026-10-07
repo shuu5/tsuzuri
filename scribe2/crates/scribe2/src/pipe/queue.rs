@@ -55,24 +55,7 @@ pub enum Turn {
     Unmeasurable,
 }
 
-/// 列の中の自分の番を判じる（**pure**・判定はこの 1 本）。
-///
-/// 列 = 終端でない ∧ `Gated` を 1 度でも通った ∧ worktree が実在 ∧ 最新の verdict が PASS の便。
-/// **追随して段が `Implemented` へ戻り撃ち直している便も列に残る**（撃ち直しの間に後続が番を得ない・
-/// 撃ち直しが FAIL なら verdict で外れる）。順序は**最初の** `Gated` の ts（同時刻は run id の辞書順）
-/// ＝全順序ゆえ待ちは循環しない。列に入りうる便で verdict を読めない便が 1 本でも在る周は列を導けない
-/// ——PASS かを測れない便を列から外すと、読めないを「列なし」に読み替えることになる。
-///
-/// **番を取った便が列に居れば鍵の順より先に立つ**（設計 pipeline.md §22）: 列の便（自分を含む）のうち
-/// `taken_at` を持つ便が在れば、最新の `taken_at`（同時刻は run id の辞書順）の 1 本だけが先頭＝撃ち直しの間に
-/// 鍵の早い便が戻ってきても、番を取った便を追い抜かない。番を取った便が 1 本も無ければ鍵の順。
-///
-/// **driver の札が死んでいる便は数えない**（設計 pipeline.md §36・[`turn_skipping`]）。
-pub fn turn_in(queue: Option<&[Queued]>, me: &str) -> Turn {
-    turn_skipping(queue, me).0
-}
-
-/// [`turn_in`] の本体（**pure**・選別はこの 1 本）: 番と、札が死んでいて外した便 id の列（鍵の順）を返す。
+/// `turn_in` の本体（**pure**・選別はこの 1 本）: 番と、札が死んでいて外した便 id の列（鍵の順）を返す。
 ///
 /// 外すのは札が [`Ticket::Dead`] の便だけで、`Live` / `Absent` / `Unreadable` / 読んでいない（`None`）は従来どおり
 /// 数える（測れないを「死んだ」に読み替えない）。自分の札は見ない。外した便として名指すのは、外さなければ自分の
@@ -139,7 +122,7 @@ fn skipping_now(state_dir: &Path, run: &str) -> (Turn, Vec<String>) {
 
 /// 列の**自分の後ろ**に並ぶ便を鍵の順に `max − 1` 本まで選ぶ（**pure**・設計 pipeline.md §40・行 ah）。
 ///
-/// 数えるのは [`turn_in`] と同じ面（`Gated` を 1 度でも通った ∧ worktree が実在 ∧ 最新の verdict が PASS）で、段は
+/// 数えるのは `turn_in` と同じ面（`Gated` を 1 度でも通った ∧ worktree が実在 ∧ 最新の verdict が PASS）で、段は
 /// **`Gated` だけ**——終端の便は列に居らず、追随して `Implemented` へ戻り撃ち直している便は自分の land が worktree を
 /// 動かしている最中なので候補の木に積まない。鍵は最初の `Gated` の ts（同時刻は run id の辞書順）で、自分の鍵より
 /// 大きい便だけを取る。自分が列に居ない・鍵が無い周と `max` が 1 以下の周は空（先頭だけ＝従来の経路）。
@@ -164,7 +147,7 @@ pub(super) fn train_now(state_dir: &Path, run: &str, max: u64) -> Vec<String> {
 }
 
 /// 列に入りうる段か（**終端でない ∧ `Gated` を 1 度でも通った**）。verdict と worktree の条件は呼び手が
-/// 重ねる（読めない判定を列から黙って外さないため・[`turn_in`]）。
+/// 重ねる（読めない判定を列から黙って外さないため・`turn_in`）。
 fn may_queue(stage: Stage, gated: bool) -> bool {
     gated && !matches!(stage, Stage::Landed | Stage::Failed | Stage::Stopped)
 }
@@ -354,7 +337,7 @@ impl Window {
 }
 
 /// いまの窓（設計 pipeline.md §19 約束 2・3）。列と追随中の便は log の 1 回の読みから導き、git は
-/// **local main を先に**読む（読めない周は origin を読まずに閉じる）。列の便は [`turn_in`] と同じ面（終端でない ∧
+/// **local main を先に**読む（読めない周は origin を読まずに閉じる）。列の便は `turn_in` と同じ面（終端でない ∧
 /// `Gated` を通った ∧ worktree が実在）で、判定を読めない便も数える（PASS でないと測れていない便を外さない・C10）。
 /// 列の便のうち CAS を過ぎた便（自分の squash が local main に在る便・[`before_cas`]）は数えない。
 pub(crate) fn window_now(state_dir: &Path, repo: &Path) -> Window {
@@ -546,8 +529,27 @@ fn wait_turn(entry: &Land<'_>) -> (Order, Vec<String>) {
 }
 
 #[cfg(test)]
+/// 列の中の自分の番を判じる（**pure**・判定はこの 1 本）。
+///
+/// 列 = 終端でない ∧ `Gated` を 1 度でも通った ∧ worktree が実在 ∧ 最新の verdict が PASS の便。
+/// **追随して段が `Implemented` へ戻り撃ち直している便も列に残る**（撃ち直しの間に後続が番を得ない・
+/// 撃ち直しが FAIL なら verdict で外れる）。順序は**最初の** `Gated` の ts（同時刻は run id の辞書順）
+/// ＝全順序ゆえ待ちは循環しない。列に入りうる便で verdict を読めない便が 1 本でも在る周は列を導けない
+/// ——PASS かを測れない便を列から外すと、読めないを「列なし」に読み替えることになる。
+///
+/// **番を取った便が列に居れば鍵の順より先に立つ**（設計 pipeline.md §22）: 列の便（自分を含む）のうち
+/// `taken_at` を持つ便が在れば、最新の `taken_at`（同時刻は run id の辞書順）の 1 本だけが先頭＝撃ち直しの間に
+/// 鍵の早い便が戻ってきても、番を取った便を追い抜かない。番を取った便が 1 本も無ければ鍵の順。
+///
+/// **driver の札が死んでいる便は数えない**（設計 pipeline.md §36・[`turn_skipping`]）。
+pub fn turn_in(queue: Option<&[Queued]>, me: &str) -> Turn {
+    turn_skipping(queue, me).0
+}
+
+#[cfg(test)]
 mod tests {
     // flip-check: moved s2-07l.253
+    // flip-check: moved t3-hub.92.10.14
     use super::{after_wake, await_turn, first_gated_at, following_of, last_from, last_holds, train_in, turn_in, turn_skipping, Last, Next, Order, Queued, Turn};
     use crate::fleet::store::LockPolicy;
     use crate::fleet::{replay, wait, Completion, Event, EventKind, Stage};

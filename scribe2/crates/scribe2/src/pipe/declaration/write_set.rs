@@ -3,12 +3,12 @@
 //!
 //! 契約の write-set の各項目を base（tracked file の一覧）に対して [`read_write_set`] で読み（実在する file / 末尾 `/`
 //! の dir / `+` の新規 file / `-` の縮む file / `~` の消える file / `=` の置き場だけの file の 6 形）、`.rs` の項目ごとに上限（R-C4-2 / R-C4-1）の余地を
-//! [`headroom_shortfalls`] で測る。宣言（`.vessel.toml`）の読みと上限の突き合わせは親 module `declaration.rs` に
+//! `headroom_shortfalls` で測る。宣言（`.vessel.toml`）の読みと上限の突き合わせは親 module `declaration.rs` に
 //! 置いたまま。呼び手（`pipe::table` / `pipe::cli::intake`）の `use` は親の再 export を通る。行の任意の欄 growth
 //! （file ごとの見込み行数・§46）の読み手 [`WriteSetItem::read_growth`] と file の見込み [`Caps::estimate`] も同じ群に
 //! 置く（親の再 export の型の関連 fn＝呼び手は型の path で引く）。
 
-use super::{crate_of, fixed_roots};
+use super::crate_of;
 use crate::pipe::refuse::{DELETE_FILE, NEW_FILE, PLACE_ONLY_FILE, SHRINK_FILE};
 
 /// write-set の 1 項目を base（tracked file の一覧）に対して読んだもの。
@@ -242,23 +242,7 @@ fn is_named_test_file(path: &str) -> bool {
     name == "tests.rs" || name.ends_with("_tests.rs")
 }
 
-/// 上限の余地を測る（**受付だけが撃つ**・pure・I/O は呼び手）。
-///
-/// `lines` は base の tracked `.rs` の行数（[`FileLines`]・全体と本体の 2 面）。write-set の `.rs`（dir は展開した配下・
-/// 新規 file は 0 行）のうち R-C4-2 の測定範囲（`crates/<c>/src/` 配下＝[`core_of`] が `Some`）のそれぞれについて
-/// `file_lines − 全体の行数` を余地とし、file の見込み（[`Caps::estimate`]: `growth` に在ればその値・無ければ
-/// `size_lines`・§46）が余地を超える file を名指す（範囲外の `tests/` 等は門の対象外で測らない）。core（write-set の
-/// `.rs` が在る `crates/<c>/src/` の**本体**の総行数＝in-file の歯を除く・xtask の core-lines と同じ母集団）は
-/// その core に属する write-set の `.rs` ごとの見込みの**和**を見積として同じ式で 1 回（母集団は file の余地と同じ
-/// [`core_of`] が `Some` の集合＝`tests/` の歯は本数に入れない・C10）。
-/// **縮む面（`-`）と消える file（`~`）は増分が負**なので、file の余地も求めず core の本数にも数えない（満杯の
-/// file を割る便を受付が断って満杯が固定される型を塞ぐ・§3「上限の余地」・§24）。**置き場だけの file（`=`）** は
-/// 増分 0 なので同じ腕（§43 (1)）。
-pub fn headroom_shortfalls(items: &[WriteSetItem], lines: &[FileLines], growth: &[(String, u64)], caps: Caps) -> Vec<Headroom> {
-    headroom_shortfalls_under(&fixed_roots(), items, lines, growth, caps)
-}
-
-/// [`headroom_shortfalls`] の、crate の根の列（固定の根 `crates/` に宣言 `crate-roots` を足した列・設計 §62）を受ける形。
+/// `headroom_shortfalls` の、crate の根の列（固定の根 `crates/` に宣言 `crate-roots` を足した列・設計 §62）を受ける形。
 /// 測る集合は「根のどれかの crate の `src/` の下の file」（[`core_of`]）で、core は `<根><crate>/src` ごと。
 pub fn headroom_shortfalls_under(
     roots: &[String],
@@ -308,6 +292,26 @@ pub fn headroom_shortfalls_under(
 fn core_of<'a>(roots: &[String], path: &'a str) -> Option<&'a str> {
     let found = crate_of(roots, path)?;
     found.rest.starts_with("src/").then(|| path.get(..found.root.len().saturating_add(found.name.len()).saturating_add("/src".len()))).flatten()
+}
+
+#[cfg(test)]
+use super::fixed_roots;
+
+#[cfg(test)]
+/// 上限の余地を測る（**受付だけが撃つ**・pure・I/O は呼び手）。
+///
+/// `lines` は base の tracked `.rs` の行数（[`FileLines`]・全体と本体の 2 面）。write-set の `.rs`（dir は展開した配下・
+/// 新規 file は 0 行）のうち R-C4-2 の測定範囲（`crates/<c>/src/` 配下＝[`core_of`] が `Some`）のそれぞれについて
+/// `file_lines − 全体の行数` を余地とし、file の見込み（[`Caps::estimate`]: `growth` に在ればその値・無ければ
+/// `size_lines`・§46）が余地を超える file を名指す（範囲外の `tests/` 等は門の対象外で測らない）。core（write-set の
+/// `.rs` が在る `crates/<c>/src/` の**本体**の総行数＝in-file の歯を除く・xtask の core-lines と同じ母集団）は
+/// その core に属する write-set の `.rs` ごとの見込みの**和**を見積として同じ式で 1 回（母集団は file の余地と同じ
+/// [`core_of`] が `Some` の集合＝`tests/` の歯は本数に入れない・C10）。
+/// **縮む面（`-`）と消える file（`~`）は増分が負**なので、file の余地も求めず core の本数にも数えない（満杯の
+/// file を割る便を受付が断って満杯が固定される型を塞ぐ・§3「上限の余地」・§24）。**置き場だけの file（`=`）** は
+/// 増分 0 なので同じ腕（§43 (1)）。
+pub fn headroom_shortfalls(items: &[WriteSetItem], lines: &[FileLines], growth: &[(String, u64)], caps: Caps) -> Vec<Headroom> {
+    headroom_shortfalls_under(&fixed_roots(), items, lines, growth, caps)
 }
 
 #[cfg(test)]

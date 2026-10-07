@@ -115,7 +115,7 @@ fn headrooms_of(
 /// （[`declaration::FileLines`]・設計 core-boundary.md §2）で、file の余地は全体の行数から。
 ///
 /// dir 項目は base の配下に展開し、`+` の新規 file は 0 行として数え、`-` の縮む面と `~` の消える file は余地も
-/// 本数も数えない（弁別は [`declaration::headroom_shortfalls`] の中）。base に無い項目は数えない（項目の実在は
+/// 本数も数えない（弁別は [`declaration::headroom_shortfalls_under`] の中）。base に無い項目は数えない（項目の実在は
 /// 契約表の行の検査〔`contracts check` / 設計 pointer の intake〕が名指す）——ただし **接頭辞付きで解けない項目は
 /// 受付で断る**（`write-set-item-unresolved`）: `-` / `~` の先が base に無い項目を落として測ると「余地を求めない」
 /// 宣言が静かに消え、無い file を減らす / 消す便が通る（`~` は §24）。`+` の先が base に在る項目

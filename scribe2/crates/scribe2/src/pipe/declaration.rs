@@ -31,7 +31,7 @@ pub use optional_keys::{index_at, row_review_at, ruling_keys_at,ConstitutionFile
 pub use optional_keys::{after_land_at, seat_constitution, SeatConstitution};
 pub use run_cap::RunCap;
 use optional_keys::{after_land_of, build_lanes_of, check_after_land, close_check_of, constitution_of, contract_tables_of, floor_check_of, index_keys_of, question_route_of, remote_of, requirements_of, row_review_of, ruling_check_of, ruling_fixtures_of, seat_constitution_of, teeth_check_of, IndexKeys, DECLARED_KEYS, OPTIONAL_KEYS, RULING_FIXTURES_KEY};
-pub use write_set::{headroom_shortfalls, headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
+pub use write_set::{headroom_shortfalls_under, line_count, read_write_set, Caps, FileLines, Headroom, NewFilePolicy, WriteSetItem, CORE};
 pub(crate) use write_set::is_under;
 
 /// 対象 repo の root に置く宣言 file の名。
@@ -261,13 +261,7 @@ impl KindGap {
     }
 }
 
-/// `common-verify` の行の列の分類が断る理由（名乗りの無い宣言）。先頭語 `cargo` の行を 1 本も持たない宣言（Rust でない
-/// toy repo）は分類だけで断らない（§7「Rust 固有の検査を内蔵しない」のまま）。
-pub fn kind_gap(lines: &[String]) -> Option<KindGap> {
-    kind_gap_named(lines, None)
-}
-
-/// [`kind_gap`] の、宣言の名乗り `entrance-flip` を受ける形。名乗りの在る宣言は `NoEntranceRed` で断らず、入口の flip の
+/// `kind_gap` の、宣言の名乗り `entrance-flip` を受ける形。名乗りの在る宣言は `NoEntranceRed` で断らず、入口の flip の
 /// 行と同居する周だけ [`KindGap::UnmeasuredWithEntranceFlip`] で断る（§54 形 1 / 4・語は問わない＝§56 形 1）。
 pub fn kind_gap_named(lines: &[String], entrance: Option<EntranceFlip>) -> Option<KindGap> {
     let kinds: Vec<VerifyKind> = lines.iter().map(|line| VerifyKind::of(line)).collect();
@@ -813,6 +807,13 @@ fn list_of(
         }
         None => (Vec::new(), 0),
     }
+}
+
+#[cfg(test)]
+/// `common-verify` の行の列の分類が断る理由（名乗りの無い宣言）。先頭語 `cargo` の行を 1 本も持たない宣言（Rust でない
+/// toy repo）は分類だけで断らない（§7「Rust 固有の検査を内蔵しない」のまま）。
+pub fn kind_gap(lines: &[String]) -> Option<KindGap> {
+    kind_gap_named(lines, None)
 }
 
 #[cfg(test)]

@@ -765,18 +765,7 @@ pub fn emit_cost(
     store::append(state_dir, &event, policy).map(|_| ())
 }
 
-/// 6 値が揃った周だけ消費の 1 件を書き、書けなかった周の理由を stderr の 1 行で返す（**段の判定も rc も変えない**・
-/// 計測は行為を止めない）。揃わない周（`None`）は何も書かない＝欠けを 0 に倒さない（C10）。
-pub fn record_cost(
-    state_dir: &Path,
-    ids: (&str, &str),
-    cost: Option<Cost>,
-    policy: LockPolicy,
-) -> Option<String> {
-    record_cost_with(state_dir, ids, cost, None, policy)
-}
-
-/// [`record_cost`] に消費の行の `detail` を添える口（囲いの書き・行 xp-io-bytes）。揃わない周は detail も書かない。
+/// `record_cost` に消費の行の `detail` を添える口（囲いの書き・行 xp-io-bytes）。揃わない周は detail も書かない。
 pub fn record_cost_with(
     state_dir: &Path,
     ids: (&str, &str),
@@ -793,6 +782,18 @@ pub fn record_cost_with(
 /// 永続面から現在地を読む。**process の記憶を使わない**（GOAL 3）。
 pub fn current(state_dir: &Path) -> Result<State, Vec<StoreError>> {
     store::read_all(state_dir).map(|events| replay(&events))
+}
+
+#[cfg(test)]
+/// 6 値が揃った周だけ消費の 1 件を書き、書けなかった周の理由を stderr の 1 行で返す（**段の判定も rc も変えない**・
+/// 計測は行為を止めない）。揃わない周（`None`）は何も書かない＝欠けを 0 に倒さない（C10）。
+pub fn record_cost(
+    state_dir: &Path,
+    ids: (&str, &str),
+    cost: Option<Cost>,
+    policy: LockPolicy,
+) -> Option<String> {
+    record_cost_with(state_dir, ids, cost, None, policy)
 }
 
 /// in-file の歯が共有する置き場の fixture（event の並びを固定 ts で積む・env を読まない〔C2.2〕）。
