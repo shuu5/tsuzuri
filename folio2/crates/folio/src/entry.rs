@@ -144,11 +144,11 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// 契約表を持つ設計ノートから器の形の導出物（1 文書 1 file の <文書 id>.toml）を置き場へ書く（--write）・置き場の導出物との
-    /// byte 一致を数える（--check）。配信の組み立てから切り離した独立の命令で、面の生成器も様式の file も呼ばない
+    /// 席の手元の写し（規則の表に欄 key が seat-bytes と seat-role-bytes の行が在る置き場だけ）を置き場の下の dir seat に書く（--write）・
+    /// 置き場の写しとの byte 一致を数える（--check）。配信の組み立てから切り離した独立の命令で、面の生成器も様式の file も呼ばない
     #[command(name = floor_note::DERIVED_SUBCOMMAND, group(ArgGroup::new("mode").required(true).args(["write", "check"])))]
     Derive {
-        /// 正本の置き場（design-note/ と、版管理の根〔無ければ置き場の親 dir〕の contracts/field-schema/schema.toml を読む）
+        /// 正本の置き場（constitution.yaml と rules.yaml を読む）
         #[arg(long, default_value = "design-intent")]
         dir: PathBuf,
         /// 導出物の置き場（既定なし・消費側が宣言する・相対なら --dir からの相対〔--from-root なら根からの相対〕・絶対ならそのまま）
@@ -157,10 +157,10 @@ enum Command {
         /// --out の相対を、置き場を含む版管理の根（無ければ置き場の親 dir・器の導出 file を探す根と同じ）からの相対に解く
         #[arg(long)]
         from_root: bool,
-        /// 違う導出物だけを置き場へ書く（全部か無しか・導出元の無い .toml は消さずに名を出す）
+        /// 違う写しだけを置き場へ書く（全部か無しか）
         #[arg(long)]
         write: bool,
-        /// 導出元を持つ導出物と置き場の file の byte 一致を数える（一致 0・違う・置き場に無い 1・導出できない・置き場が無い 2）
+        /// 席の手元の写しと置き場の file の byte 一致を数える（一致 0・違う・置き場に無い 1・導出できない・置き場が無い 2）
         #[arg(long)]
         check: bool,
     },

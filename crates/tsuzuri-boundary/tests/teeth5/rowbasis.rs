@@ -1,6 +1,6 @@
 //! 契約表の行の欄 basis の歯（設計の道具・接頭辞 rowbasis_・設計ノート surface-wave29a 行 f-row-basis・判断の記録 ADR-44 段 2・
 //! ADR-47）。行の欄 basis（行の根拠の条・規範文・規則行・判断の記録の id の列）を、設計の索引が型 basis の辺（行 → id）にし、
-//! 床が参照 id の母集団で解き、導出が契約表の写しに運ぶ。欄 basis は辺の欄なので行の要約値を替えない。
+//! 床が参照 id の母集団で解く。欄 basis は辺の欄なので行の要約値を替えない。
 //! 土台は folio2 の凍結の土台 floor_base の design-intent の写し（git の 1 commit）と、器の欄の写しに basis を足した file。
 //! 否定の見本は正しい見本から 1 句だけ替える。
 #![cfg(test)]
@@ -163,17 +163,4 @@ fn rowbasis_floor_needs_the_field_in_the_vessel_schema() {
             vec!["[note] design-note/example.yaml: §6 の行 a: 契約表の欄「basis」が器の導出 file に無い".to_string()]
         )
     );
-}
-
-#[test]
-fn rowbasis_derive_carries_basis_to_the_table() {
-    let work = Work::new("derive", Some("[ADR-4, P-10]"), true);
-    let out = work.tz(&["derive", "--dir", ".", "--out", "../contracts", "--write"]);
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    let table = fs::read_to_string(work.dir.join("contracts/example.toml")).expect("導出の写し");
-    let lines: Vec<&str> = table
-        .lines()
-        .filter(|l| l.starts_with("basis = "))
-        .collect();
-    assert_eq!(lines, vec!["basis = [\"ADR-4\", \"P-10\"]"]);
 }

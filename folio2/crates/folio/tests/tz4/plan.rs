@@ -162,10 +162,10 @@ fn text(out: &Output) -> String {
 
 const ROW_A: &str = "      - {id: a, title: 図の生成の口 3 つを 1 便で置く,";
 
-/// 歯 1（AC29 の 1 つ目）: 名札の行と計画のノートを持つ写しで床が合格し、契約表に行を 1 つ足すと違反 1（導出と違う）、
-/// folio derive --write の後に合格する。derive --check は書く前に差分 1・書いた後に一致。器の導出 file が無ければ書かない。
+/// 歯 1（AC29 の 1 つ目）: 名札の行と計画のノートを持つ写しで床が合格し、契約表に行を 1 つ足すと違反 1（導出と違う）。
+/// folio derive --write は計画のノートを変えず（終了 0）、床は同じ違反 1 のまま。生成区間に行を手で足すと床の違反が 0。
 #[test]
-fn f183_a_new_contract_row_is_one_violation_until_derive_write() {
+fn f183_a_new_contract_row_is_one_violation_until_the_index_is_edited() {
     let base = Work::new("base", true);
     let (v, p) = base.check();
     assert!(v.is_empty(), "{v:?}");
@@ -175,22 +175,13 @@ fn f183_a_new_contract_row_is_one_violation_until_derive_write() {
     let (v2, p2) = w.check();
     assert_eq!(v2, ["[note] design-note/plan.yaml: 行の索引の生成区間が契約表からの導出と違う（folio derive --write で書き直す）"]);
     assert_eq!(p2, p);
-    let drift = w.derive("--check");
-    assert_eq!(drift.status.code(), Some(1), "{}", text(&drift));
-    assert!(text(&drift).contains("DRIFT: design-note/plan.yaml（行の索引の生成区間が契約表からの導出と違う"), "{}", text(&drift));
-    // 器の導出 file が無い置き場は書けない（まだ分からない・計画のノートは変えない）
-    let schema = w.0.join("contracts/field-schema/schema.toml");
-    let keep = fs::read(&schema).unwrap();
-    fs::remove_file(&schema).unwrap();
     let before = w.read("design-note/plan.yaml");
-    assert_eq!(w.derive("--write").status.code(), Some(2));
-    assert_eq!(w.read("design-note/plan.yaml"), before);
-    fs::write(&schema, keep).unwrap();
     let wrote = w.derive("--write");
     assert_eq!(wrote.status.code(), Some(0), "{}", text(&wrote));
-    assert!(w.read("design-note/plan.yaml").contains("      - {id: a, doc: example}\n      - {id: a2, doc: example}\n      # folio:rows:end\n"));
+    assert_eq!(w.read("design-note/plan.yaml"), before);
+    assert_eq!(w.check().0, v2);
+    w.edit("design-note/plan.yaml", "      - {id: a, doc: example}\n", "      - {id: a, doc: example}\n      - {id: a2, doc: example}\n");
     assert_eq!(w.check().0, Vec::<String>::new());
-    assert_eq!(w.derive("--check").status.code(), Some(0));
 }
 
 /// 歯 2（AC29 の 2 つ目と 3 つ目）: 計画だけの行に索引の id を足すと違反 1、依存にどこにも無い id を書くと違反 1、
@@ -302,7 +293,8 @@ fn f183_size_files_shapes_and_the_decision_ruling_are_read() {
     );
 }
 
-/// 歯 6: 行の索引は file 名の順（文書 id の順ではない・ex-b.yaml が ex.yaml より先）・表の中の順（id の字の順ではない）に並び、folio derive --write が書いた字を 2 度目は変えない。
+/// 歯 6: 行の索引は file 名の順（文書 id の順ではない・ex-b.yaml が ex.yaml より先）・表の中の順（id の字の順ではない）に並ぶ。
+/// その順に手で書いた生成区間は床の違反 0・x1 と x2 を入れ替えると違反 1。
 #[test]
 fn f183_the_index_follows_file_names_then_table_order() {
     let w = Work::new("order", true);
@@ -319,22 +311,25 @@ fn f183_the_index_follows_file_names_then_table_order() {
         let body = body.lines().filter(|l| !l.starts_with("      - {id: y,")).collect::<Vec<_>>().join("\n") + "\n";
         fs::write(w.path(&format!("design-note/{id}.yaml")), body).unwrap();
     }
-    assert_eq!(w.derive("--write").status.code(), Some(0));
-    let plan = w.read("design-note/plan.yaml");
-    let want = format!(
-        "      {BEGIN}\n      - {{id: z, doc: a-wave}}\n      - {{id: y, doc: a-wave}}\n      - {{id: x2, doc: ex-b}}\n      - {{id: x1, doc: ex}}\n      - {{id: a, doc: example}}\n      {END}\n"
-    );
-    assert!(plan.contains(&want), "{plan}");
-    let again = w.derive("--write");
-    assert!(text(&again).contains("書いた 0 file"), "{}", text(&again));
-    assert_eq!(w.read("design-note/plan.yaml"), plan);
-    assert!(w.check().0.is_empty());
+    let region = |rows: &[&str]| {
+        let body: String = rows.iter().map(|r| format!("      - {{id: {r}\n")).collect();
+        format!("      {BEGIN}\n{body}      {END}\n")
+    };
+    let sorted = region(&["z, doc: a-wave}", "y, doc: a-wave}", "x2, doc: ex-b}", "x1, doc: ex}", "a, doc: example}"]);
+    let swapped = region(&["z, doc: a-wave}", "y, doc: a-wave}", "x1, doc: ex}", "x2, doc: ex-b}", "a, doc: example}"]);
+    let file = "design-note/plan.yaml";
+    let old = region(&["a, doc: example}"]);
+    w.edit(file, &old, &sorted);
+    assert!(w.check().0.is_empty(), "{:?}", w.check().0);
+    w.edit(file, &sorted, &swapped);
+    let (v, _) = w.check();
+    assert_eq!(v, [format!("[note] {file}: 行の索引の生成区間が契約表からの導出と違う（folio derive --write で書き直す）")]);
 }
 
-/// 歯 7（改訂 a）: 印を散文の節の body の中に置き（区間の字は導出と合う）、行の索引の節の rows を空にした写しで、床は違反 1、
-/// folio derive --check は 1 と同じ理由の DRIFT の行を出す（床と --check が同じ関数で比べる・判断の記録 ADR-31 決定 (2)(ウ)）。
+/// 歯 7（改訂 a）: 印を散文の節の body の中に置き（区間の字は導出と合う）、行の索引の節の rows を空にした写しで、床は違反 1。
+/// folio derive --check は計画のノートを比べず、終了 0 で DRIFT を出さない（判断の記録 ADR-74 決定 (6)(8)）。
 #[test]
-fn f183_markers_outside_the_section_fail_the_floor_and_derive_check_alike() {
+fn f183_markers_outside_the_section_fail_the_floor() {
     let w = Work::new("outside", true);
     let file = "design-note/plan.yaml";
     let region = format!("    rows:\n      {BEGIN}\n      - {{id: a, doc: example}}\n      {END}\n");
@@ -343,8 +338,8 @@ fn f183_markers_outside_the_section_fail_the_floor_and_derive_check_alike() {
     let why = "行の索引の節の行が生成区間の導出と違う（印が節の rows の外に在る・folio derive --write で書き直す）";
     assert_eq!(w.check().0, [format!("[note] {file}: {why}")]);
     let out = w.derive("--check");
-    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
-    assert!(text(&out).contains(&format!("DRIFT: {file}（{why}）")), "{}", text(&out));
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(!text(&out).contains("DRIFT"), "{}", text(&out));
 }
 
 /// 便 199 (c) 4（ADR-33 決定 (2)）: 計画の床の突き合わせの字（契約表からの導出との違い・索引に在る計画だけの行・宙に浮いた依存）は

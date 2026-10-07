@@ -1,8 +1,8 @@
 //! 計画の設計ノート（便 183・docs/design/delivery-183.md §1・判断の記録 ADR-31 決定 (2)・要件書 FR27・責務の層 1 読む）。
 //! 置き場が規則の表に計画の名札の行（欄 key が plan-note の閾値の行・値は計画のノートの文書 id）を置くと、その設計ノートに
 //! 行の索引（節の型 row-index・生成区間）と計画だけの行（row-plan）を持たせ、食い違いを床で数える。行の索引は置き場の設計ノートの
-//! 契約表の行（`folio derive` と同じ母集団と読み手）から file 名の順・表の中の順に導き、書くのは `derive.rs`（folio derive --write）、
-//! 比べるのは床（`note.rs` の `check_note` から `check_plan`）と folio derive --check で、2 つは同じ関数 `drift` を使う（P-6.3・P-15.2）。
+//! 契約表の行から file 名の順・表の中の順に導き、手で書く。比べるのは床（`note.rs` の `check_note` から `check_plan`）だけで、
+//! 関数 `drift` を使う（P-6.3・P-15.2）。
 //! 行の索引と計画だけの行の節は、名札の行が名指すノートにだけ置ける（名札の行が無くても掛かる・決定 (2)(イ)）。
 //! 判断の表（decision-table）の行の裁定の欄は決定の欄の床（`ruling.rs`）が数える。現在地は器の持ち分（決定 (2)(オ)）。
 
@@ -91,7 +91,7 @@ fn region(text: &str) -> Result<Region, String> {
 /// 印の間の字だけが導出と違う理由（契約表との突き合わせ・床はつながりに数える・ほかの理由は計画のノートの形で止める・便 199）。
 const CONTENT_DRIFT: &str = "行の索引の生成区間が契約表からの導出と違う（folio derive --write で書き直す）";
 
-/// 計画のノート（木と file の字）の行の索引が導出 `rows` と食い違う理由（無ければ None）。床と folio derive --check が使う。
+/// 計画のノート（木と file の字）の行の索引が導出 `rows` と食い違う理由（無ければ None）。床が使う。
 /// 行の索引の節がちょうど 1 つ・印が 1 対・印の間が導出と byte で同じ・節の行が導出と同じ（印が節の外なら割れる）。
 pub(crate) fn drift(root: &Node, text: &str, rows: &[IndexRow]) -> Option<String> {
     const REDO: &str = "folio derive --write で書き直す";
@@ -110,12 +110,6 @@ pub(crate) fn drift(root: &Node, text: &str, rows: &[IndexRow]) -> Option<String
         .map(|row| (text_of(row, "id"), text_of(row, "doc")))
         .collect();
     (have != rows).then(|| format!("行の索引の節の行が生成区間の導出と違う（印が節の rows の外に在る・{REDO}）"))
-}
-
-/// 計画のノートの file の字の生成区間を導出 `rows` に書き換えた字（印が 1 対でなければ Err）。folio derive --write が使う。
-pub(crate) fn rewrite(text: &str, rows: &[IndexRow]) -> Result<String, String> {
-    let r = region(text)?;
-    Ok(format!("{}{}{}", &text[..r.start], render(rows, &r.indent), &text[r.end..]))
 }
 
 /// 床（`note.rs` の `check_note` が読めた設計ノート全部を渡す）。名札の行の読みが割れれば まだ分からない 1 つで止める。
@@ -259,22 +253,19 @@ mod tests {
         format!("sections:\n  - n: 1\n    type: row-index\n    title: 行の索引\n    rows:\n      {B}\n{rows}      {E}\n")
     }
 
-    /// 便 183 (c): 生成区間は begin の頭の空白で行を書き、書き直した字は導出と一致して drift が None。
+    /// 便 183 (c): 手で書いた生成区間（begin の頭の空白で行を書いた字）は導出と一致して drift が None。
     /// 印が 1 対でない・節が 2 つ・区間の字の違い・印が節の外、はそれぞれ理由を返す。
     #[test]
-    fn f183_the_region_is_written_and_read_by_one_function() {
+    fn f183_the_region_is_read_by_one_function() {
         let rows = vec![("a".to_string(), "wave-a".to_string()), ("b".to_string(), "wave-b".to_string())];
         let empty = plan("");
-        let text = rewrite(&empty, &rows).unwrap();
-        assert!(text.contains("      - {id: a, doc: wave-a}\n      - {id: b, doc: wave-b}\n"), "{text}");
+        let text = plan("      - {id: a, doc: wave-a}\n      - {id: b, doc: wave-b}\n");
         assert_eq!(drift(&root(&text), &text, &rows), None);
-        assert_eq!(rewrite(&text, &rows).unwrap(), text);
         assert_eq!(drift(&root(&empty), &empty, &[]), None);
         let stale = drift(&root(&empty), &empty, &rows).unwrap();
         assert!(stale.contains("導出と違う（folio derive --write で書き直す）"), "{stale}");
         let unmarked = text.replace(B, "# x");
         assert!(drift(&root(&unmarked), &unmarked, &rows).unwrap().contains("印が 1 対でない（begin 0・end 1）"));
-        assert!(rewrite(&unmarked, &rows).is_err());
         let two = format!("{text}  - n: 2\n    type: row-index\n    title: x\n    rows: []\n");
         assert!(drift(&root(&two), &two, &rows).unwrap().contains("が 2 個ある"));
         // 印を散文の body の中に置くと、区間の字は合っても節の行が割れる
