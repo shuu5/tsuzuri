@@ -153,12 +153,15 @@ fn agfen_gate_denies_cargo_for_a_no_build_agent_only() {
     let out = guard(&none, &input(SUB, "Bash", &bash("cargo nextest run")));
     denied(&out, why, "なし の cargo");
     for command in [
-        "tz check --dir /T/design-intent",
-        "scribe2 pipe preflight --contract /T/a.toml",
-        "grep -n cargo Cargo.toml",
+        "tz check --dir /T/design-intent".to_string(),
+        format!(
+            "scribe2 pipe preflight --contract /T/a.toml --state-dir {}/pf",
+            none.join("w218a").display()
+        ),
+        "grep -n cargo Cargo.toml".to_string(),
     ] {
-        let out = guard(&none, &input(SUB, "Bash", &bash(command)));
-        passed(&out, command);
+        let out = guard(&none, &input(SUB, "Bash", &bash(&command)));
+        passed(&out, &command);
     }
     let light = place("light");
     bind(&light, "軽");
