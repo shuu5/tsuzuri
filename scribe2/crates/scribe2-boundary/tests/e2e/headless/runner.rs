@@ -1508,9 +1508,6 @@ const IMPLEMENTER_STEPS: [&str; 6] = [
     "6. 自己検査（turn を閉じる前に 4 つを見る）: 網羅（done の全部の項に、その項の字を断言する歯が在る）・質（名と形が周りの code に合い、goal の字と食い違わない）・規律（write-set の中だけを書き、足した物は goal が名指す物だけ）・歯（実装を戻すと落ち、振る舞いを断言する）。直したら 4 と 5 を撃ち直す。",
 ];
 
-/// 差の行（契約に patch の鍵が在る行）の扱いの行。`## 仕事` の節の末に 1 度だけ在る。
-const IMPLEMENTER_PATCH_LINE: &str = "- 契約に patch の鍵が在る行（差の行）は、2 と 3 の代わりに patch の差の file を git apply で当てる。差の外の字を書かず、差の file も書き替えない。当たらなければ手で書かずに質問 record で止まる。";
-
 /// 確かでない物の行。`## できない時` の節に 1 度だけ在る。
 const IMPLEMENTER_UNSURE_LINE: &str = "- 確かでない物を黙って出さない。verify か共通 verify の行を緑にできないまま終える周と、疑いが残る周は、最後の出力に何が赤いか・何が疑わしいかを 1 行で書く。";
 
@@ -1569,16 +1566,14 @@ fn runner_prompt_implementer_carries_the_six_steps() {
         .filter(|line| line.split_once(". ").is_some_and(|(number, _)| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit())))
         .collect();
     assert_eq!(steps, IMPLEMENTER_STEPS, "「## 仕事」の番号の行は 6 段がこの順: {prompt}");
-    assert_eq!(
-        work.iter().filter(|line| **line == IMPLEMENTER_PATCH_LINE).count(),
-        1,
-        "差の行の扱いの行が「## 仕事」に 1 度だけ在る: {prompt}"
-    );
-    assert_eq!(
-        work.iter().filter(|line| line.starts_with("- 契約に patch の鍵が在る行（差の行）は")).count(),
-        1,
-        "差の行の扱いの行は 1 本だけ: {prompt}"
-    );
+}
+
+#[test]
+fn runner_prompt_implementer_drops_the_patch_line() {
+    let prompt = implementer_prompt();
+    for word in ["patch の鍵", "差の行", "git apply"] {
+        assert!(!prompt.contains(word), "差の行の扱いの行は雛形に無い（字「{word}」を含まない）: {prompt}");
+    }
 }
 
 #[test]
