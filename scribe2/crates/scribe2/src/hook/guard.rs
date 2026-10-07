@@ -122,7 +122,7 @@ fn absolute_of(cwd: &Path, target: &str) -> PathBuf {
 /// 絶対 path を repo 相対へ**字句で**畳む。root の外・`..` で外れるものは `None`。
 ///
 /// 実 file の存在に依らないので、まだ無い file への Write も判定できる。
-fn relative_to(root: &Path, absolute: &Path) -> Option<PathBuf> {
+pub(super) fn relative_to(root: &Path, absolute: &Path) -> Option<PathBuf> {
     let rel = absolute.strip_prefix(root).ok()?;
     let mut out = PathBuf::new();
     for part in rel.components() {
@@ -148,7 +148,7 @@ fn relative_to(root: &Path, absolute: &Path) -> Option<PathBuf> {
 /// 実体の名前で当てないと** write-set の外へ書ける。**前から 1 段ずつ**積み、存在する段
 /// では symlink を解く。存在しない段はそのまま字句で積む（まだ無い file への Write も
 /// 判定するため。その段に symlink は在り得ないので、字句の結果を信じてよい）。
-fn resolved_relative(root: &Path, absolute: &Path) -> Option<PathBuf> {
+pub(super) fn resolved_relative(root: &Path, absolute: &Path) -> Option<PathBuf> {
     let real_root = root.canonicalize().ok()?;
     let mut real = PathBuf::new();
     for part in absolute.components() {

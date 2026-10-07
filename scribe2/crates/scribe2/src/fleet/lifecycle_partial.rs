@@ -126,7 +126,7 @@ fn derive(place: &Place<'_>, mut prior: Output, joined: (Option<String>, Tail), 
     for part in parts.iter_mut() {
         pass_due(part, now);
     }
-    link_sources(&mut parts);
+    super::lifecycle::link_utterances(&mut parts);
     let hours = |word: &str| int_row(place.manifest, &format!("lifecycle.age_h.{word}")).ok();
     let owned = count_owned(&mut parts, &hours, now);
     Output {
@@ -273,22 +273,6 @@ fn pass_due(part: &mut Part, now: u64) {
     part.turn = turn_of(Phase::MemoActionable.as_str(), None).unwrap_or(part.turn);
     part.reason = Some(REASON_TRIGGER_MET.to_owned());
     part.since = Some(since);
-}
-
-/// 発話の行き先の memo の各々の部品の `links.source` に発話の ts を足す（発端の正本は仕分けの event・FR88）。
-fn link_sources(parts: &mut [Part]) {
-    let sources: Vec<(String, String)> = parts
-        .iter()
-        .filter(|part| part.part == Kind::Utterance)
-        .flat_map(|part| part.links.destination.iter().filter(|dest| dest.to == Sink::ToMemo).filter_map(|dest| dest.id.clone()).map(|memo| (memo, part.id.clone())))
-        .collect();
-    for (memo, utterance) in sources {
-        if let Some(part) = parts.iter_mut().find(|part| part.part == Kind::Memo && part.id == memo) {
-            if !part.links.source.contains(&utterance) {
-                part.links.source.push(utterance);
-            }
-        }
-    }
 }
 
 #[cfg(test)]

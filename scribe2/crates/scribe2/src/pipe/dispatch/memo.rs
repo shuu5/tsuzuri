@@ -9,7 +9,7 @@ use super::candidates::pointer_of;
 use super::{Input, Read, CLOSED};
 use crate::pipe::bead::{copy_pointer, copy_text, form_of, Form};
 use crate::fleet::json_lite::{self, Value};
-use crate::fleet::epoch_of;
+use crate::ledger::phase::epoch_at;
 use crate::ledger::form::{is_memo, is_question};
 use crate::ledger::promotion::{self, Promotion, Scope};
 use crate::ledger::trigger::{self, Kind, Reason, Reading, Trigger, World};
@@ -279,15 +279,6 @@ fn open_write_set(input: &Input<'_>, read: &Read) -> Vec<String> {
         }
     }
     items
-}
-
-/// 台帳の時刻の字（秒の小数を持つ形も許す）を UNIX 秒へ。
-fn epoch_at(text: &str) -> Option<u64> {
-    epoch_of(text).or_else(|| {
-        let (head, tail) = text.split_once('.')?;
-        let digits = tail.strip_suffix('Z')?;
-        (!digits.is_empty() && digits.bytes().all(|found| found.is_ascii_digit())).then(|| epoch_of(&format!("{head}Z")))?
-    })
 }
 
 #[cfg(test)]

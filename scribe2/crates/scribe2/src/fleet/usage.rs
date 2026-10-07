@@ -18,7 +18,7 @@ use read::{credential_path, fetch, now_ms, read_credential, token_of, unmeasured
 use table::{table, table_row, TableRow};
 use super::cli::{format_utc, host, now_utc, optional};
 use super::json_tree;
-use super::store::{self, LockPolicy};
+use super::store::{self, join_errors, LockPolicy};
 use super::{
     replay, wait, Allowance, AllowanceKey, AllowanceLatest, Completion, Event, EventKind, State, UnmeasuredReason,
     WindowKind, ACTOR_MACHINE, SCHEMA,
@@ -298,7 +298,7 @@ fn tabled(args: &[String], place: &StateDir, read_only: bool, freshness: Freshne
     let dir = place.path.as_path();
     let mut outcome = if read_only { Outcome::ok(Vec::new()) } else { measure(args, dir, freshness)? };
     let (_, labels, _) = accounts(args, dir)?;
-    let events = store::read_all(dir).map_err(|errors| UsageError::Store(joined(&errors)))?;
+    let events = store::read_all(dir).map_err(|errors| UsageError::Store(join_errors(&errors)))?;
     let state = replay(&events);
     let rows: Vec<TableRow> = labels.iter().map(|label| table_row(label, &state)).collect();
     outcome.out = table(place, &rows);
@@ -504,7 +504,7 @@ fn latest_round(label: &str, allowance: &BTreeMap<AllowanceKey, AllowanceLatest>
 /// （[`crate::rules::read`]・設計 account-lifecycle.md §2）。読めない周は [`UsageError::Manifest`]（1 行・FailClosed）。
 /// `fleet select` も同じ口で読む（計測と選定が別の宣言を読まない）。
 pub(super) fn declared(rules: Option<&str>, dir: &Path) -> Result<Manifest, UsageError> {
-    crate::rules::read(rules.map(Path::new), Some(dir)).map_err(|errors| UsageError::Manifest(joined(&errors)))
+    crate::rules::read(rules.map(Path::new), Some(dir)).map_err(|errors| UsageError::Manifest(join_errors(&errors)))
 }
 
 /// manifest を読み、**有効な口座の集合**（宣言 − 退役中・[`super::effective_accounts`]）の label を宣言順で返す
@@ -515,7 +515,7 @@ pub(super) fn declared(rules: Option<&str>, dir: &Path) -> Result<Manifest, Usag
 /// [`UsageError::Args`] で断る（client を 1 回も起こさない・黙って 0 口座に倒さない）。
 fn accounts(args: &[String], dir: &Path) -> Result<(Manifest, Vec<String>, super::State), UsageError> {
     let manifest = declared(optional(args, "--rules").map_err(UsageError::Args)?, dir)?;
-    let events = store::read_all(dir).map_err(|errors| UsageError::Store(joined(&errors)))?;
+    let events = store::read_all(dir).map_err(|errors| UsageError::Store(join_errors(&errors)))?;
     let state = replay(&events);
     let labels = super::effective_accounts(&manifest, &state);
     let labels = match optional(args, ACCOUNT_FLAG).map_err(UsageError::Args)? {
@@ -558,15 +558,6 @@ fn int_row_of(manifest: &Manifest, row_id: &str) -> Result<u64, UsageError> {
         RuleValue::Int(found) => Ok(found),
         _ => Err(UsageError::Manifest(format!("{row_id} が整数でない"))),
     }
-}
-
-/// 誤りの列を 1 本の文字列へ畳む。
-fn joined<E: std::fmt::Display>(errors: &[E]) -> String {
-    errors
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<String>>()
-        .join(" / ")
 }
 
 /// 口座 1 つを読む。口座単位の失敗は窓を持たない Unmeasured 1 行になる。

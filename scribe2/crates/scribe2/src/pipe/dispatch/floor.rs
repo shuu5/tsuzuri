@@ -8,6 +8,7 @@ use super::Input;
 use crate::fleet::json_tree::{parse, Tree};
 use crate::fleet::store::{lock_owner, started_ms, Owner};
 use crate::hook::command::{denied_in, denied_of};
+use crate::hook::host_guard::publish::probe::stop;
 use crate::invocation::Invocation;
 use crate::pipe::confine::{release_scope, unit_name, wrap_command, Caps, Limit, Wrap};
 use crate::pipe::declaration::{floor_check_at, METACHARS};
@@ -17,7 +18,7 @@ use crate::rules::manifest::Manifest;
 use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ExitStatus, Stdio};
+use std::process::{ExitStatus, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -388,14 +389,6 @@ fn tail<R: Read + Send + 'static>(mut pipe: R) -> JoinHandle<Vec<u8>> {
 /// 読み終えた thread の byte（読めなかった周は空）。
 fn bytes_of(reader: Option<JoinHandle<Vec<u8>>>) -> Vec<u8> {
     reader.and_then(|handle| handle.join().ok()).unwrap_or_default()
-}
-
-/// 子の group ごと止めて待つ（`pipe stop` と同じ `kill -KILL -- -<pgid>`・group が失敗した周は子だけでも止める）。
-fn stop(child: &mut Child) {
-    let group = format!("-{}", child.id());
-    let _ = Invocation::new("kill").args(["-KILL", "--"]).arg(group).stdout(Stdio::null()).stderr(Stdio::null()).status();
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
 /// 出力の最後の空でない行から制御文字を除いて 200 字で切る（空なら `None`）。

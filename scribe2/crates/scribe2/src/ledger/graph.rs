@@ -9,6 +9,7 @@
 //! §12 が同じ問いを引く）。上限 N は rules 行 [`ROW`] を id で引いて整数だけを読む。読めない台帳・読めない rules・行の
 //! 無い rules は件数 0 に倒さず測れていない形の行を出す（[`render_unreadable`]・C10 / NFR4）。台帳は読むだけ（C15）。
 
+use super::form::ids;
 use crate::rules::int_row;
 use crate::rules::manifest::Manifest;
 use crate::seat::ledger::{self, Issue, LedgerError};
@@ -236,13 +237,6 @@ fn is_close_eligible(graph: &Graph<'_>, issue: &Issue) -> bool {
             .children
             .get(issue.id.as_str())
             .is_some_and(|found| !found.is_empty() && found.iter().all(|child| child.status == CLOSED))
-}
-
-/// id の列（昇順）。
-fn ids<'i>(issues: impl Iterator<Item = &'i Issue>) -> Vec<String> {
-    let mut found: Vec<String> = issues.map(|issue| issue.id.clone()).collect();
-    found.sort();
-    found
 }
 
 /// id の欄（`<語>=<件数>` と、1 件以上なら `:<id>,<id>…`）。

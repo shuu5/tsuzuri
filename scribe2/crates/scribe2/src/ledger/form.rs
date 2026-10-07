@@ -196,7 +196,7 @@ fn is_settled(memo: &Issue, issues: &[Issue]) -> bool {
 }
 
 /// id の列（昇順）。
-fn ids<'i>(issues: impl Iterator<Item = &'i Issue>) -> Vec<String> {
+pub(super) fn ids<'i>(issues: impl Iterator<Item = &'i Issue>) -> Vec<String> {
     let mut found: Vec<String> = issues.map(|issue| issue.id.clone()).collect();
     found.sort();
     found

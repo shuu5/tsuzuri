@@ -72,7 +72,7 @@ pub fn budget(manifest: &Manifest) -> Result<(u64, u64), &'static str> {
 }
 
 /// 子の group ごと kill して待つ（`pipe stop` と同じ `kill -KILL -- -<pgid>`・group の宛先が失敗した周は子だけでも kill）。
-fn stop(child: &mut Child) {
+pub(crate) fn stop(child: &mut Child) {
     let group = format!("-{}", child.id());
     let _ = Invocation::new("kill").args(["-KILL", "--"]).arg(group).stdout(Stdio::null()).stderr(Stdio::null()).status();
     let _ = child.kill();

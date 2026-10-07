@@ -312,7 +312,7 @@ fn int_row(manifest: &Manifest, id: &str) -> Result<u64, StoreError> {
 }
 
 /// 読み取り error を 1 本の文字列へ畳む。
-fn join_errors<E: std::fmt::Display>(errors: &[E]) -> String {
+pub(super) fn join_errors<E: std::fmt::Display>(errors: &[E]) -> String {
     errors
         .iter()
         .map(ToString::to_string)
@@ -499,9 +499,6 @@ pub enum Reclaim {
     /// `stale_ms` を超えた周に外す（生きた所有者が本文の無い lock を握るのは本文を書く前の μs だけ）。
     DeadOnly,
 }
-
-/// [`Reclaim`] の全 variant（宣言順・`enum-slices` が集合完全性を測る）。
-pub const RECLAIMS: &[Reclaim] = &[Reclaim::Stale, Reclaim::DeadOnly];
 
 /// lock を取る。所有者の死んだ lock と（[`Reclaim::Stale`] の周か本文の読めない lock は）古い lock を外して
 /// 警告に載せる（黙って消さない）。
@@ -716,6 +713,7 @@ pub fn read_joined<R: Read + Seek>(log: &mut R, len: u64, head: &Option<String>)
 
 #[cfg(test)]
 mod tests {
+// flip-check: moved t3-hub.92.10.15
     use super::{
         acquire_in, acquire_with, boot_s, lock_owner, reclaim, reclaim_token, started_ms_in, starttime_ticks, ticks_to_ms,
         LockPolicy, Owner, Probe, Reclaim, StoreError, Warning, USER_HZ,

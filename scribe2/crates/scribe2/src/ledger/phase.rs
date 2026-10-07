@@ -201,7 +201,7 @@ fn points_to(issue: &Issue, kind: &str, target: &str) -> bool {
 }
 
 /// 台帳の時刻の字（秒の小数を持つ形も許す）を UNIX 秒へ。
-fn epoch_at(text: &str) -> Option<u64> {
+pub(crate) fn epoch_at(text: &str) -> Option<u64> {
     epoch_of(text).or_else(|| {
         let (head, tail) = text.split_once('.')?;
         let digits = tail.strip_suffix('Z')?;

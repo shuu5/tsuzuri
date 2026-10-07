@@ -837,7 +837,7 @@ fn inherit_since(parts: &mut [Part], prior: &Reading, generated_at: &str) {
 }
 
 /// 発話の行き先の memo の各々の部品の `links.source` に発話の ts を足す（発端の正本は仕分けの event・FR88）。
-fn link_utterances(parts: &mut [Part]) {
+pub(super) fn link_utterances(parts: &mut [Part]) {
     let sources: Vec<(String, String)> = parts
         .iter()
         .filter(|part| part.part == Kind::Utterance)

@@ -22,7 +22,7 @@
 //!
 //! subcommand は役割を検査しない（引数の identity は偽装できる）。発話は監視しない。
 
-use super::guard::GUARDED;
+use super::guard::{relative_to, resolved_relative, GUARDED};
 use crate::fleet::{replay, store};
 use crate::name::NAME;
 use crate::pipe::contract::Contract;
@@ -106,13 +106,6 @@ impl PathKind {
             Self::Code => Capability::EditCode,
             Self::Outside => Capability::EditOutside,
         }
-    }
-
-    /// repo 相対 path（`..` を畳んだ後の形）から**固定の判定**（本 repo の配置）で種別を引く。root ちょうど（空）は
-    /// repo 内＝`Code`。
-    pub fn of_relative(rel: &Path) -> Self {
-        let parts: Vec<&str> = rel.components().filter_map(|part| part.as_os_str().to_str()).collect();
-        Self::fixed(&parts)
     }
 
     /// 固定の判定の本体（段の並びだけを見る）。
@@ -507,49 +500,6 @@ fn repo_copy_relative<'a>(root: &Path, bead_trees: &Path, rel: &'a Path) -> &'a 
     }
 }
 
-/// 絶対 path を repo 相対へ**字句で**畳む。root の外・`..` で外れるものは `None`（write-set guard と同じ形）。
-fn relative_to(root: &Path, absolute: &Path) -> Option<PathBuf> {
-    let rel = absolute.strip_prefix(root).ok()?;
-    let mut out = PathBuf::new();
-    for part in rel.components() {
-        match part {
-            Component::Normal(name) => out.push(name),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !out.pop() {
-                    return None;
-                }
-            }
-            Component::RootDir | Component::Prefix(_) => return None,
-        }
-    }
-    Some(out)
-}
-
-/// 実体で解いた repo 相対 path（在る段だけ symlink を解く・まだ無い段は字句のまま）。実体が root の外なら `None`。
-fn resolved_relative(root: &Path, absolute: &Path) -> Option<PathBuf> {
-    let real_root = root.canonicalize().ok()?;
-    let mut real = PathBuf::new();
-    for part in absolute.components() {
-        match part {
-            Component::RootDir | Component::Prefix(_) => real.push(part.as_os_str()),
-            Component::CurDir => {}
-            Component::Normal(name) => {
-                real.push(name);
-                if let Ok(found) = real.canonicalize() {
-                    real = found;
-                }
-            }
-            Component::ParentDir => {
-                if !real.pop() {
-                    return None;
-                }
-            }
-        }
-    }
-    real.strip_prefix(&real_root).ok().map(Path::to_path_buf)
-}
-
 /// 便の契約の印が `kind` を開き、かつ worktree 相対 path が便の write-set の内側か（AC16）。
 ///
 /// 便の写し `contract.toml`（run dir）から読む。写しが無い・読めない・印の無い便は開かない（fail-closed）。
@@ -749,6 +699,16 @@ fn refused(subject: &Subject, reason: RefuseReason) -> String {
 /// anchor（repo root・state dir）を解けない周の 1 行（pane は在る＝席なのに仕える repo が無い）。
 pub fn unanchored_line(subject: &Subject) -> String {
     refused(subject, RefuseReason::NoAnchor)
+}
+
+#[cfg(test)]
+impl PathKind {
+    /// repo 相対 path（`..` を畳んだ後の形）から**固定の判定**（本 repo の配置）で種別を引く。root ちょうど（空）は
+    /// repo 内＝`Code`。
+    pub fn of_relative(rel: &Path) -> Self {
+        let parts: Vec<&str> = rel.components().filter_map(|part| part.as_os_str().to_str()).collect();
+        Self::fixed(&parts)
+    }
 }
 
 #[cfg(test)]
