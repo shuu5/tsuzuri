@@ -23,8 +23,6 @@ use crate::catalog::Component;
 use crate::cursor::{self, R, X, esc};
 use crate::face::{self, INDEX_STATUS, hint, hint_q, stop_anchor};
 use crate::face_constitution_read::amendments;
-#[cfg(test)]
-use crate::face_index_read::PARTS;
 use crate::face_index_read::{
     ADR_STATUS, Ctx, Doc, FRAME, INTAKE, NOTE_DIR, Note, Record, SheetBody, SheetHead, Sources,
     context, exact, notes, records, sheet_body, sheet_head,
@@ -741,6 +739,7 @@ fn foot(o: &mut Vec<String>, m: &X<'_>) -> R<()> {
 #[cfg(test)]
 mod face_index_tests {
     use super::*;
+    use crate::face_index_read::PARTS;
     use crate::yaml;
 
     #[test]

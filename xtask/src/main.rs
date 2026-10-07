@@ -4,7 +4,7 @@
 //! accept は受入 12 条を全画面 × 2 幅 × 2 mode で測り report を書く（行 j-runner・入口は accept の module）。
 //! surface-build は dist が揃えば wasm・js・css の file ごとに隣へ gzip の写し（名に .gz）を書く（行 g-gz・gz の module）。
 //! pub-scan は追跡される file の字と基準の commit より後の commit に tailnet の住所・名と一覧の語を探す（行 t-pub-scan・pubscan の module）。
-//! check の size の段は 1 module の行数・中核の本体の総行数・歯と本体の行数比を規則の行 R-4 の上限と比べる（行 k-size-base・size の module）。
+//! check の size の段は 1 module の行数と歯と本体の行数比を規則の行 R-4 の上限と比べ、中核の本体の総行数は上限と比べず数だけ出し、検査の印の後の最初の行が mod でない file を名指して落とす（行 k-size-base・size の module）。
 //! check の最後の段は根の直下の入れ子の workspace を数えて 1 行で出し、各々で build・歯・clippy・その workspace の xtask の check を撃つ（行 v-gate・nested の module）。
 //! 割りの在る check は歯でない段を表の役だけで撃ち、歯だけを分ける（行 v-ci-split・spread の module）。
 //! daily は host の timer が撃つ日に 1 度の全部の撃ちで、写しを origin の main に合わせて check を撃ち、記録と memo を書く（行 v-daily・daily の module）。
@@ -166,7 +166,7 @@ fn step_args(step: &[&str], partition: Option<&str>) -> Vec<String> {
 
 /// 公開の走査を撃ち、段を順に撃ち、最初に落ちた段の rc を返す（全部通れば 0）。
 /// 走査が落ちれば後の build・歯・clippy・面の組み立てを撃たない。
-/// 走査の後、cargo の段の前に大きさの数え（size）を撃ち、上限を越えれば違反を出して rc 1 を返し、後の段を撃たない。
+/// 走査の後、cargo の段の前に大きさの数え（size）を撃ち、1 module か歯の比が上限を越えるか検査の印の後の最初の行が mod でない file が在れば違反を出して rc 1 を返し、後の段を撃たない。
 /// 変数 PARTITION_ENV が在れば nextest の段だけを分け、読めない字なら段を撃たずに rc 2 を返す。
 /// 面の組み立ての後に入れ子の workspace の段（nested の module）を撃ち、その rc を返す（入れ子の歯も同じ partition で分ける）。
 /// partition が在れば、歯でない段（根の clippy 2 つ・面の組み立て・入れ子の build と clippy と xtask の check）は spread の表の役だけが撃つ。

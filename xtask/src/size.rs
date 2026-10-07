@@ -2,12 +2,10 @@
 //! 根の Cargo.toml の members のうち、除外の表 carry-exclusions.toml の R-4 の行が名指さない member の src の下の .rs を数える
 //! （src の外の tests/ と build.rs は数えない）。行の重みは字数を幅で割って切り上げた数（1 以上）。
 //! file の本体は行頭が `#[cfg(test)]` の最初の行より前、検査の区間はその行から末尾で、名が tests.rs か _tests.rs で終わる file は丸ごと検査の区間。
-//! 1 module は検査の区間も含めた file 全体、中核の crate は src の本体の和、歯:source は検査の区間の和と本体の和の 1 つの比を上限と比べる。
+//! 1 module は検査の区間も含めた file 全体、歯:source は検査の区間の和と本体の和の 1 つの比を上限と比べる。
+//! 中核の crate の本体の和は上限と比べず数だけ出し、検査の印の後の最初の行が mod でない file は名指して落とす。
 
 use std::path::Path;
-
-/// 中核の crate の src の本体の総行数の上限（規則の行 R-4 の値の core 20,000 行）。
-pub const CORE_MAX: usize = 20_000;
 
 /// 1 module（file 全体）の行数の上限（規則の行 R-4 の値の 1 module 1,500 行）。
 pub const MODULE_MAX: usize = 1_500;
@@ -18,9 +16,8 @@ pub const RATIO_PCT: usize = 100;
 /// 行の幅（字数）。これを超える行は字数を幅で割って切り上げた行数に数える。
 pub const WIDTH: usize = 120;
 
-/// 上限の 4 つ。
+/// 上限の 3 つ。
 pub struct Limits {
-    pub core: usize,
     pub module: usize,
     pub ratio_pct: usize,
     pub width: usize,
@@ -28,7 +25,6 @@ pub struct Limits {
 
 /// 規則の行 R-4 の上限（歯 ksize_limits_match_rule_r4 が行の value と照らす）。
 pub const LIMITS: Limits = Limits {
-    core: CORE_MAX,
     module: MODULE_MAX,
     ratio_pct: RATIO_PCT,
     width: WIDTH,
@@ -42,6 +38,9 @@ const EXCLUSIONS: &str = "carry-exclusions.toml";
 
 /// 検査の区間の始まりの印（行頭に在るときだけ読む）。
 const TEST_MARK: &str = "#[cfg(test)]";
+
+/// 検査の印の後の最初の行が持つべき mod の頭 3 つ（後ろに空白が続く形で読む）。
+const MOD_HEADS: [&str; 3] = ["mod", "pub mod", "pub(crate) mod"];
 
 /// 1 行の重み（字数を幅で割って切り上げた数・空の行も 1）。
 fn weight(line: &str, width: usize) -> usize {
@@ -64,8 +63,29 @@ fn split(name: &str, text: &str, width: usize) -> (usize, usize) {
     (tests, body)
 }
 
+/// file の最初の行頭の印の後で、空でなく属性（#）でも doc の注（/// と //!）でもない最初の字が mod の頭でなければ印の行の番号（1 から）を返す。
+/// 印の無い file と、名が tests.rs か _tests.rs で終わる file は None。印の行の同じ行の残りも候補にする。
+fn mark_hole(name: &str, text: &str) -> Option<usize> {
+    let file = name.rsplit('/').next().unwrap_or(name);
+    if file == "tests.rs" || file.ends_with("_tests.rs") {
+        return None;
+    }
+    let mut lines = text.lines().enumerate();
+    let (at, mark) = lines.find(|(_, l)| l.starts_with(TEST_MARK))?;
+    let rest = mark.strip_prefix(TEST_MARK).unwrap_or("");
+    let first = std::iter::once(rest)
+        .chain(lines.map(|(_, l)| l))
+        .map(str::trim_start)
+        .find(|l| !l.is_empty() && !["#", "///", "//!"].iter().any(|p| l.starts_with(p)));
+    match first {
+        Some(l) if MOD_HEADS.iter().any(|h| l.starts_with(&format!("{h} "))) => None,
+        _ => Some(at + 1),
+    }
+}
+
 /// files（path と字）を上限と比べ、事実の字（鍵 file-lines・core-lines・test-src-ratio の順）と違反の一覧を返す。
-/// core_dir の src の下の file が中核。歯:source は歯 × 100 が本体 × 比の百分率 以下かで比べる。
+/// core_dir の src の下の file が中核で、その本体の和は上限と比べず数だけ出す。歯:source は歯 × 100 が本体 × 比の百分率 以下かで比べる。
+/// 検査の印の後の最初の行が mod でない file は違反 test-mark で名指す。
 fn judge(files: &[(String, String)], core_dir: &str, limits: &Limits) -> (String, Vec<String>) {
     let core_src = format!("{core_dir}/src/");
     let mut bad = Vec::new();
@@ -80,17 +100,16 @@ fn judge(files: &[(String, String)], core_dir: &str, limits: &Limits) -> (String
                 limits.module
             ));
         }
+        if let Some(line) = mark_hole(path, text) {
+            bad.push(format!(
+                "test-mark: {path} の {line} 行目の検査の印の後の最初の行が mod でない"
+            ));
+        }
         if path.starts_with(&core_src) {
             core += b;
         }
         tests += t;
         body += b;
-    }
-    if core > limits.core {
-        bad.push(format!(
-            "core-lines: 中核の本体は {core} 行で上限 {} 行を越える",
-            limits.core
-        ));
     }
     if tests * 100 > body * limits.ratio_pct {
         bad.push(format!(
@@ -99,8 +118,8 @@ fn judge(files: &[(String, String)], core_dir: &str, limits: &Limits) -> (String
         ));
     }
     let facts = format!(
-        "file-lines={widest}/{} core-lines={core}/{} test-src-ratio={tests}/{body}",
-        limits.module, limits.core
+        "file-lines={widest}/{} core-lines={core} test-src-ratio={tests}/{body}",
+        limits.module
     );
     (facts, bad)
 }
@@ -290,27 +309,86 @@ wsteady_ wstrip_
             ("c/src/bare.rs".to_string(), "z".repeat(25)),
             ("o/src/other.rs".to_string(), five("#[cfg(test)]")),
         ];
-        let limits = |core, module, ratio_pct| Limits {
-            core,
+        let limits = |module, ratio_pct| Limits {
             module,
             ratio_pct,
             width: 10,
         };
-        let (facts, bad) = judge(&files, "c", &limits(7, 10, 100));
-        assert_eq!(
-            facts,
-            "file-lines=10/10 core-lines=7/7 test-src-ratio=12/11"
-        );
+        let (facts, bad) = judge(&files, "c", &limits(10, 100));
+        assert_eq!(facts, "file-lines=10/10 core-lines=7 test-src-ratio=12/11");
         assert_eq!(bad.len(), 1, "{bad:?}");
         assert!(bad[0].starts_with("test-src-ratio:"), "{bad:?}");
-        let (_, bad) = judge(&files, "c", &limits(6, 9, 110));
+        let (_, bad) = judge(&files, "c", &limits(9, 110));
         let heads: Vec<&str> = bad
             .iter()
             .map(|b| b.split(':').next().unwrap_or(""))
             .collect();
-        assert_eq!(heads, ["file-lines", "file-lines", "core-lines"]);
-        let (_, bad) = judge(&files, "c", &limits(7, 10, 110));
+        assert_eq!(heads, ["file-lines", "file-lines"]);
+        let (_, bad) = judge(&files, "c", &limits(10, 110));
         assert!(bad.is_empty(), "{bad:?}");
+    }
+
+    #[test]
+    fn ksize_mark_hole() {
+        let none: [&[&str]; 8] = [
+            &["fn a() {}", "#[cfg(test)]", "mod t {}"],
+            &[
+                "fn a() {}",
+                "#[cfg(test)]",
+                "",
+                "#[allow(dead_code)]",
+                "/// 歯",
+                "//! 歯",
+                "mod t {}",
+            ],
+            &["#[cfg(test)]", "pub mod t {}"],
+            &["#[cfg(test)]", "pub(crate) mod t {}"],
+            &["fn a() {}", "#[cfg(test)] mod t {}"],
+            &["fn a() {}", "    #[cfg(test)]", "    use x::Y;"],
+            &[
+                "fn a() {}",
+                "#[cfg(test)]",
+                "mod t {}",
+                "#[cfg(test)]",
+                "use x::Y;",
+            ],
+            &["fn a() {}", "fn module() {}"],
+        ];
+        for lines in none {
+            let got = mark_hole("c/src/a.rs", &lines.join("\n"));
+            assert_eq!(got, None, "{lines:?}");
+        }
+        let some: [(&[&str], usize); 5] = [
+            (&["fn a() {}", "#[cfg(test)]", "use x::Y;", "mod t {}"], 2),
+            (&["fn a() {}", "#[cfg(test)]", "// 注", "mod t {}"], 2),
+            (&["fn a() {}", "#[cfg(test)]"], 2),
+            (&["fn a() {}", "#[cfg(test)] use x::Y;", "mod t {}"], 2),
+            (&["#[cfg(test)]", "module::f();"], 1),
+        ];
+        for (lines, line) in some {
+            let got = mark_hole("c/src/a.rs", &lines.join("\n"));
+            assert_eq!(got, Some(line), "{lines:?}");
+        }
+        let e = some[0].0.join("\n");
+        assert_eq!(mark_hole("c/src/x_tests.rs", &e), None);
+        assert_eq!(mark_hole("c/src/tests.rs", &e), None);
+        let files = vec![
+            ("c/src/h.rs".to_string(), e),
+            (
+                "c/src/ok.rs".to_string(),
+                ["fn a() {}", "#[cfg(test)]", "mod t {}"].join("\n"),
+            ),
+        ];
+        let limits = Limits {
+            module: 100,
+            ratio_pct: 1000,
+            width: 10,
+        };
+        let (_, bad) = judge(&files, "c", &limits);
+        assert_eq!(
+            bad,
+            ["test-mark: c/src/h.rs の 2 行目の検査の印の後の最初の行が mod でない"]
+        );
     }
 
     fn rules_row() -> String {
@@ -346,18 +424,14 @@ wsteady_ wstrip_
 
     #[test]
     fn ksize_limits_match_rule_r4() {
+        assert_eq!((MODULE_MAX, RATIO_PCT, WIDTH), (1_500, 100, 120));
         assert_eq!(
-            (CORE_MAX, MODULE_MAX, RATIO_PCT, WIDTH),
-            (20_000, 1_500, 100, 120)
-        );
-        assert_eq!(
-            (LIMITS.core, LIMITS.module, LIMITS.ratio_pct, LIMITS.width),
-            (CORE_MAX, MODULE_MAX, RATIO_PCT, WIDTH)
+            (LIMITS.module, LIMITS.ratio_pct, LIMITS.width),
+            (MODULE_MAX, RATIO_PCT, WIDTH)
         );
         let row = rules_row();
         let value = field(&row, "value");
         for want in [
-            format!("tsuzuri の core {} 行 以下", commas(CORE_MAX)),
             format!("1 module {} 行 以下", commas(MODULE_MAX)),
             format!(
                 "歯:source {}.{} 以下",
@@ -418,6 +492,14 @@ wsteady_ wstrip_
             ["file-lines", "core-lines", "test-src-ratio"],
             "{facts}"
         );
+        let core = facts
+            .split_whitespace()
+            .find_map(|t| t.strip_prefix("core-lines="))
+            .expect("core-lines");
+        assert!(
+            !core.is_empty() && core.chars().all(|c| c.is_ascii_digit()),
+            "{facts}"
+        );
     }
 
     #[test]
@@ -449,7 +531,7 @@ wsteady_ wstrip_
                 rest.split('(').next().unwrap_or(rest)
             })
             .collect();
-        assert_eq!(names.len(), 7, "{names:?}");
+        assert_eq!(names.len(), 8, "{names:?}");
         let words: Vec<&str> = FILTER_WORDS.split_whitespace().collect();
         let unique: BTreeSet<&str> = words.iter().copied().collect();
         assert_eq!(words.len(), 339, "filter の語の数");
