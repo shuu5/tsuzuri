@@ -1,0 +1,109 @@
+# 判断の記録 ADR-78 — 案 B（席は 1 つのまま・機械の手は器へ・調べと照らしは既存の係へ）を Claude Code の公式の仕組みで組み込む（第 3 稿）
+# 第 3 稿は係 w401a（2026-10-07）が、第 2 稿に持ち主の teams の答え（問い t3-hub.92.10.2・裁定 id t3-hub.92.10.2:20261007T0251Z-1・案 甲）を写し、写しの床（tz check）の違反を直した。中身（行 B1〜B16 の形・値の推奨・撤退の鍵）は第 2 稿のまま。第 2 稿は係 w396a（2026-10-07）が、係 w395a の設計の第 2 稿（drafts/w395a/w/design.md・検証役 v394 の grill（drafts/v394/w/grill.md）の所見 F1〜F16 を入れた物・所見ごとの直しは drafts/w395a/w/notes.md）から写した。第 1 稿は係 w392a（drafts/w392a/w/ADR-78.yaml）。持ち主の承認の前（status proposed・承認の欄と grill の欄は空）。条文は替えないので amends は無い。
+# 持ち主の裁定 t3-hub.92.10.7 で発効（2026-10-07・推奨の値と作法の行 D-2・D-5・D-12 の言い換え）。反対側からの検証は検証役 v394 の 1 巡（docs/grill/2026-10-07-ADR-78-grill.md）。
+id: ADR-78
+title: 案 B を、係の返りの 1 通化・頼みの形と数の上限と入れ子の門・圧縮の後の終えた係の再注入・引き継ぎの線・plugin の当ての照らし・器への道具の移しで組み込み、チーム機能（agent teams）を持ち主の裁定で切り、席の作法の行 D-2・D-5・D-12 を言い換え、行 R-48〜R-51 を足す
+status: accepted
+date: 2026-10-07
+context: |
+  持ち主は 2026-10-07T01:40Z に席の役割の分け方を案 B に決め、Claude Code の備えの機能（native）を最も活かし、公式を調べた上で tsuzuri に組み込むよう求めた。同じ時に、仲間（teammate）の機能と背景の係（subagent）の機能を十全に使える事も求めた（memo t3-hub.92.10 の notes・逐語はここに写さない）。数えの出所は調べ係 r385（drafts/r385/w/roles.md）、公式の文書は調べ係（r388）、公式の技術記事は r389、公式でない実践は r390、公式の原文の行は drafts/v394/tmp/docs。
+  抜け（印 V は現物か公式の原文で確かめた・D は導いた・I は見立て・U は分からない）。
+  ・（H1） 返りの二重の届き: 窓 2026-10-06T00:00:34Z〜10-07T01:22:46Z に、係から席へ idle の知らせの result 179,262 字（126 通）と席への知らせ（SendMessage）の本文 148,439 字（145 通）が届き、idle を出した係は全部 SendMessage も出した（111 の係のうち 101・drafts/w392a/tmp/returns.py・V）。idle の知らせは最終の答えを含む（公式 agent-teams・V）。係の終わりの門が SendMessage を要る物にしている（crates/tsuzuri-core/src/agent/stop.rs:64-68・V）ので、二重の届きは門が作っている（D）。
+  ・（H2） 係が teammate として起きる: 口座の settings.json の env にチーム機能の印（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1）が在り（V）、名前付きの起こしは teammate になる（公式 sub-agents.md:927・V）。teammate では agent の定義の skills の予載が効かない（公式 agent-teams.md:279・V）。公式は「すぐ済み報告して終える働き手」には subagent を使えと言う（公式 agent-teams.md:46・V）。lead が圧縮で team を見失う不具合 #23620 は公式でない issue だけが出所で（r390 I1）、公式の agent-teams の制限の節（Limitations・agent-teams.md:472-484）に字は無い（v394 F13・V）。
+  ・（H3） 圧縮の後に係が見えない: scribe2 の SessionStart は台帳と git の事実と直前の発言を出すが、生きた係も、終えて採否の済まない係の出す物も出さない（scribe2/docs/design/seat-roles.md §21・§22・V）。自動の圧縮は 25 時間に 12 回で、閾値は口座の env の圧縮の閾値の印（CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50）で 1M の窓の 50%・約 49 万 token（V）。
+  ・（H4） 席の読みと検査と当ての手: 自前の読み 17.4%・検査を手で撃つ 9.6%・当てと commit 14.2%（r385 §0・D）。当てと起票の道具は器の契約の外（~/.cache/tsuzuri-admin・V）。
+  ・（H5） 数と入れ子の上限が無い: 起こしの門は対象の重なりだけを断り、数を数えない（crates/tsuzuri-core/src/agent/spec.rs:244-276・V）。係からの Agent の呼びは群の係だけを断る（crates/tsuzuri-boundary/src/hook/agent_guard.rs:9-10・V）。暴走の報告 #68619・#66023（r390 I3・I4・公式でない）。
+  ・（H6） 頼みの 4 要素（目的・返りの形・道具と出所・範囲）を公式が推す（r389 1-7・V*）が、門が見るのは頭の 4 行（予算・組み・対象・出す物）だけ（V）。
+  ・（H7） 席に plugin の変更が効いていない: 席の process は 2026-10-06T06:32:04Z に起き（V: ps・team の config の createdAt 06:32:05Z）、その後の plugin/agents・係の規律の手引き（plugin/skills/agent-discipline）・plugin/hooks/hooks.json の commit 6 本（bd438189・de769394・7dd7d9c3・9c7336e7・cee221dc・a6e99df1・V: git log）が席に当たっていない。係の system prompt にも bd438189 で消えた字が残る（V）。plugin の agents と hooks の変更は /reload-plugins で当たる（公式 skills.md:303・plugins-cli.md:816・V）が、席は斜線の命令（slash command）を撃てず、当たったかを照らす口も無い（V）。
+  ・（H8） teams の扱いの裁定: 第 2 稿の後、持ち主は問い t3-hub.92.10.2（甲 チーム機能を切る＝推奨・乙 残して呼びごとに作業木の隔て（isolation）で subagent・丙 チームを主に）に 2026-10-07T02:51Z に案 甲で答えた（裁定 id t3-hub.92.10.2:20261007T0251Z-1・逐語は台帳の問い t3-hub.92.10.2 の notes に在り、ここに写さない）。決定 (2) はこの裁定に従い、乙と丙は選ばなかった案（選択肢 庚・丁）に置く。
+decision: |
+  (1) 係の返りは最後の答えの 1 通にする。係の終わりの門は席への知らせ（SendMessage）の検め（stop.rs:64-68 と `tells` と `LEAD`）を消し、最後の文の形（1 行目が状態の語 DONE・DONE_WITH_CONCERNS・BLOCKED・NEEDS_CONTEXT のどれか・5 行以内・行 R-51 の字数以内・最後の行に出力の dir の path）と、出す物の各 .md の頭 40 行に `要点` を含む見出しが在る事を検める。係の記録（agent_transcript_path）に係の引き渡しの道具（SubagentHandback）の呼びが在れば、その `message` の字を最後の文として検める（公式 hooks.md:2432・hook の行は足さない）。3 つの agent の定義に、返りの形の節と、既定の system prompt から要る物（道具の使い方の要・破壊的な git の禁止の要）を足し、`tools` を背景の subagent の組（公式 sub-agents.md:434）と照らし、description を 1 行に縮める。係の規律の手引き（agent-discipline）の SKILL.md の「SendMessage で席に知らせてから終える」を「最後の答えを 5 行の形にして終える」に、その参照の file（reference.md）§5 の「10 行以内」を「5 行以内」に替える（行 B1）。返りが形でない時や "Done" だけの時は、席は w/ の file を正として読み、問い直しは 1 回だけにする。
+  (2) 係は既存の 3 型のまま起こし、Workflow と枝分けの起こし（fork）は今の門のまま席は使わない。チーム機能（agent teams）は持ち主の裁定（t3-hub.92.10.2:20261007T0251Z-1）で teams の案 甲に決める: 口座の settings.json の env のチーム機能の印（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）を 0 にし、係を背景の subagent で起こす（設定は持ち主の手）。teams の案 乙（teams を残し、名付きの起こしの呼びごとに作業木の隔て（isolation）を付けて係を subagent で起こす・選択肢 庚）と teams の案 丙（teams を主にする・選択肢 丁）は選ばなかった。甲の固い前提: 設定は保存の時に走っている session に当たる（公式 agent-teams.md:439・V）ので、0 にするのは B1 の bin の入れ替えと agent-discipline と頼みの雛形の替えが着地し、/reload-plugins で当たり、生きた係が 0 の時に限る。0 の後の最初の係 1 体で、結び（agent-bind の `bound`・tool_response.agentId の道）・測りの file（meter.json）の増え・終わりの門の撃ち・使った量の file（usage.json）の書きを確かめる。走り中の subagent への知らせ（SendMessage）の届きは導ける（公式 sub-agents.md:1113,1115・agent-teams.md:446・D）が、届いた字を係がいつ読むかは字が無い（U）。係を subagent に替える前に、調べ係 1 体で途中に 1 通送り、出す物に入るまでの tool の呼びの数を見る。読みが終わりの後なら、係は NEEDS_CONTEXT で終わり、席が SendMessage で再開する形にする（再開は上限を見ないので B2 で数える）。
+  (3) 起こしの門は、頼みの本文の 4 つの見出し（目的・読む物・範囲の外と止まる時・返りの形）の在る事（`Refusal::Brief`・欠ければ見本を付けて断る）と、生きた札の数（行 R-48）を検める。知らせ（SendMessage）の宛先が終わりの印（`ended`）の在る札の係なら再開とみて生きた札の数に足して R-48 で判じる（matcher に SendMessage を足す）。第 2 稿の「teams の案 乙の時は、名付きの起こしの呼びに作業木の隔て（isolation）が無ければ断る」の分かれは、裁定が甲なので行 B2 に入れない。係の門は、群の係に限らず係からの Agent の呼びを全部断る（行 B3）。持ち主の手で入れ子の深さの印（CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1）と同時の係の数の印（CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=6）を足すことを推す（後者は teammate に効かず、係が subagent で起きる甲の切り替えの後だけ効く・公式 sub-agents.md:1028,1050,1052）。
+  (4) 圧縮の後に、tsuzuri の SessionStart の席の起きの腕（tz hook seat-start）の compact の分かれが、直近 2 時間に終えて採否の済まない係を終えた係の行（`[AGENT-ENDED] <名> <状態の語> <出す物の path>`）の事実の行で出す（0 件は何も出さない・規範の字を持たない）。teams が on の間は、終わりの印が空の札から生きた係の行（`[AGENT-LIVE]`）も出す（背景の subagent は圧縮の後も Claude Code が思い出させる・公式 context-window.md:1607 なので、甲の切り替えで係が subagent で起きる日にこの分かれを消す・K6）。圧縮の後の hook（PostCompact）の腕（tz hook post-compact）が、入力の引き金の欄（trigger）と要約の byte を圧縮の記録（`<置き場>/.seat/compact.jsonl`）に 1 行足し、要約の本文を `<置き場>/.seat/compact/<時刻>.md` に書く（行 B4・B16 の module を使う）。PreCompact で圧縮を止めない。根の CLAUDE.md の Compact instructions を生成する行（第 1 稿の B7）と、agent の定義の `omitClaudeMd` はこの版で足さない（B7 は消す artifact を名指せず条 P-27.2 に当たる・omitClaudeMd は口座と project と local の CLAUDE.md を全部外す・公式 sub-agents.md:315）。圧縮の回数は B1 と B4 で入ってくる量を先に減らしてから見て、撤退 (8) で問い直す。
+  (5) 席の読みを、今の PostToolUse の係の測りの腕（tz hook agent-meter）の行の中の席の呼び（係の id の無い呼び）の分かれで測り、結果の byte を種類ごとに席の測りの記録（`<置き場>/.seat/meter.jsonl`）に書き、1 turn の席の読みが行 R-50 を越えたら additionalContext に事実の 1 文で知らせる（行 B5・止めない・hook の行と tz の腕は足さない）。入力の hook（tz hook deliver）は、入力の transcript_path の最後の応え手の呼び（assistant）の文脈の大きさ（input と cache の読みと cache の書きの和）が行 R-49 以上で、生きた係が 0（札の読みは着地済みの agent_spawn の `specs`）の時、session に 1 度だけ additionalContext に引き継ぎの区切りの事実の 1 文を出す（行 B6・止めない・印は `<置き場>/.seat/handoff/<session_id>`）。停止の門の decision:block は使わない（席を大きな文脈のまま 1 turn 走らせ、いつ動くかを道具が決めるため・公式 hooks.md:2645）。席は notes を書いて seat launch で立て直すか続けるかを決める（決めは席・条 P-19.2）。
+  (6) 器へ移す手（行 B8〜B16・B7 は無い）: 行 B8 設計の当ての口（tz design apply・置き場の lock で 1 本ずつ）・bead の起票の口（行 B9・tz bead from-draft）・notes の頭の時刻（行 B10）（書きの道具 bdw は repo の外の script への symlink で tsuzuri の契約の行にできないので、起草の前に置き場を決める・U）・B11 係の終わりの門での判断の記録の下書きの tz check と索引の読み（行 77-5 の後）・相談の配り（行 B12・見張りを置かせる催促を消す）・起動の同期（行 B13・B16 の後・anchor が clean で遅れている時だけ git pull --ff-only）・失敗の調べの頼みの下書き（行 B14・行 77-6 の後）・配りの script（dispatch.sh）の器への移し（行 B15・行 77-1〜77-3 と 77-7 の後・中身は起草の前に調べ係が読む）・B16 plugin の当ての照らし（SessionStart の起動（startup）と resume の新しい席の起きの腕（tz hook seat-start）が、読み込んだ plugin の dir の HEAD と入力の transcript_path を plugin の印の file（`<置き場>/.seat/plugin-head`）に書き、deliver が plugin/agents・plugin/skills・plugin/hooks の今の HEAD との差の commit の数を見て、差が在れば事実の 1 行を出す。reload の後に SessionStart が撃たれるかは字が無い（U）ので、transcript の最後の /reload-plugins の記録の時刻を新しい印として読む）。ADR-77 の行 77-0〜77-8 と同じ file は順で解く（決定 (9)）。
+  (7) 作法の行を言い換える（新しい id は足さない・どれも裁定 id が要る・条 P-17.1）。D-2「係の返りは file に落とし、最後の答えは状態の語と要点と path の 5 行以内にし、知らせ（SendMessage）で重ねない」（歯は B1）。D-5「席は決める係である。対話・決め・承認・係の採否・便の go と止めを持ち、調べと照らしの読みと起草は係に、実装は便に、検査と形と同期は器に任せる」（歯は B5 の知らせと撤退の測り・B8・B11）。D-12「並べるのは読むだけの調べと照らしを主にし、数は行 R-48 まで、当ては 1 筋にする。cache の切れた係に続きを頼まず新しく起こす。詰まりは気づいた時に知らせる」（歯は B2・B3・B8）。要の写しは今の main の 5,860 byte から 5,965 byte になり、6,000 byte に収まる（写しで 3 行を替えて tz derive で導いた要の写しの byte・V・前の 3 行の和 484 byte・後の和 573 byte。D-2 の「知らせ（SendMessage）」は床の語彙の形に合わせた字で、第 2 稿の 5,951 byte から 14 byte 増えた）。D-1 と D-13 は替えない。
+  (8) 規則の表に行を足す（値は持ち主の裁定・条 P-17）。R-48（条 P-16・deny・in-loop）生きた係の数の上限（再開する係を含む・推奨 全部 5 以下・設計係 2 以下）。R-49（条 P-13・detect・in-loop）引き継ぎの区切りを知らせる席の文脈の大きさ（推奨 350,000 token 以上で生きた係が 0 の時・session に 1 度）。R-50（条 P-13・detect・in-loop）席の 1 turn の読みの byte の知らせの線（推奨 30 KB）。R-51（条 P-7・deny・post）係の最後の答えの形（推奨 5 行以内・600 字以内）。R-51 は返りの形だけを持つ（1 行 1 kind・Compact instructions の字の行は足さない）。発効した ADR-77 が R-46・R-47・D-14 を取ったので番号は R-48 から。
+  (9) 行の順: ライン停止の間は ADR-77 の行（77-0〜77-8）を先にし、B の行は持ち主が 2026-10-07T01:40Z に決めた案 B の行として改善の輪の行に入れ、触る file が ADR-77 の行と交わらない物だけを並べる。1. 今すぐ（行でない）: 持ち主の /reload-plugins（生きた係が 0 の時）。--plugin-dir で読んだ plugin に効くかは字が無い（U）ので、1 回目の後に起こす係の system prompt の字で照らし、効かなければ生きた係が 0 の時に seat launch の立て直しに替える。2. 段 1（77-0〜77-3 と並べてよい）: B1・B3・B5・B6・B12（触る file が ADR-77 のどの行とも、互いにも交わらない・D）。3. 段 1 の後: 持ち主の 2 度目の /reload-plugins。teams は裁定（甲）のとおり決定 (2) の前提が揃った日に 0 にし、その前に配りの U を調べ係 1 体で確かめる。4. 段 2（77-8 の起草で write-set が決まった後）: B16 → B4・B13、B2・B8・B9。どれも src/main.rs か hook/mod.rs か plugin/hooks/hooks.json に触るので、77-8 の write-set がこの 3 つを持たなければ ADR-77 の行と並べてよく、持てば 77-8 の後に置く。5. 段 3: B11（77-5 の後）・B14（77-6 の後）・B15（77-1〜77-3 と 77-7 の後）。B10 は置き場が決まってから。6. 判断の記録の当ては、済んだ ADR-77 の当て（81e1325e と 3317303c）の後の今の字に ADR-78 の当てを重ねる。7. 1 週の後に撤退の測りを同じ命令で取り直す。行 R-43 と R-45 に当たらないよう、段ごとに memo を 1 本に束ねて起こすことを推す（I）。
+  (10) 消す物（条 P-27.2）: （K1） stop.rs:64-68 の SendMessage の検めと `tells` と `LEAD`、agent-discipline の SKILL.md・reference.md §5 の SendMessage と 10 行の字。（K2） 群の係だけを断る agent_guard の分かれ。消す物（K3） 席の道具の置き場（~/.cache/tsuzuri-admin）の当ての script（commit-design.sh・apply-*.py）と起票の script（bead-from-draft.py）と配りの script（dispatch.sh）（各行の着地の後に mv で退ける）。消す物（K4） 停止の門の見張りを置かせる催促（hook/stop.rs の手順 5 の 1 行）。消す物（K5） 席が頼みの別の file（task.md）を書いて頼みから名指す形（brief.md が全文を持つ）。（K6） 席の起きの腕の生きた係の行（`[AGENT-LIVE]`）の分かれ（甲の切り替えで係が subagent で起きる日に消す）。B4 の消す物は K6 と、席の圧縮の後の置き場の手の読みの一部。B6 の消す物は第 1 稿の停止の門の decision:block の案（足さずに消す）と、席が文脈の大きさを手で数える手。B16 の消す物は、席が system prompt の字を git log -S で当てる手と、撤退の命令の transcript の path の手の解き。B7 は足さない。
+options:
+  - id: a
+    name: 甲 — 案 B を公式の仕組みで組み込む（返りの 1 通化・頼みと数と入れ子の門・再注入・引き継ぎの線・plugin の当ての照らし・器への移し）。チーム機能（agent teams）は持ち主の裁定で切る
+    text: 決定 (1)〜(10)。
+    verdict: adopted
+    reason: 公式が main の文脈を守るために推す手（subagent に調べを出す・返りを絞る・SessionStart の compact の hook・PostCompact の記録・hook で前処理・teams より軽い道）を順に使い、型を足さず（条 N-5.1）、決めと採否を席に残す（条 P-19.2）。失う物は、走っている係への途中の配りを読む時（U）、teams を切る時の失う物（L1〜L9・teammate の mailbox の自動の配り・宛先 team-lead と名簿・結びの道の替わり・既定の system prompt・背景で外れる道具・測りの続き・teams の入り口・持ち主の求めの前半ほか・design.md §3.5）、席が code を自分で読んで気づく機会、行 15 本の手間と裁定 4 本。
+  - id: b
+    name: 乙 — 案 A（器へ寄せる機械の行だけ・調べと照らしは席のまま）
+    text: notes の時刻・検査・当て・同期・道具の移しだけを入れ、席の読みと係の返りは替えない。
+    verdict: rejected
+    reason: 席の文脈を最も埋める自前の読み 17.4% と係の出す物の読み 12.0% と返りの二重の届きが残り、圧縮の回数があまり減らない（r385 §3 案 A の失う物・I）。
+  - id: c
+    name: 丙 — 案 C（設計の席と流しの席の 2 つに分ける）
+    text: 便の起動と止め・失敗の調べ・器の入れ替えを新しい流しの席へ。
+    verdict: rejected
+    reason: 役割を 1 つに畳んだ器の判断の記録 ADR-0045 §2 (1) を覆し、席の間の連絡と雛形と行を増やす（増殖）。撤退の (1) と (2) が越えた時の退きの道として残す。
+  - id: d
+    name: 丁 — agent teams を主にする（teams の案 丙・teammate のまま・共有の task list を使う）
+    text: 共有の仕事の一覧の印（CLAUDE_CODE_ENABLE_TODO_TOOLS=1）で Task の道具を入れ、仲間の手空きの hook（TeammateIdle）で返りの形を検め、係の cache の時間の設定（subagentPromptCacheTtl）を 1h にする。
+    verdict: rejected
+    reason: 持ち主の裁定（t3-hub.92.10.2:20261007T0251Z-1・teams の案 甲）で選ばなかった。実験の機能で既定 off・同じ process の中の仲間（in-process teammate）は resume で戻らない（公式 agent-teams.md:476）・skills の予載が効かない（agent-teams.md:279）・token が多い。lead が圧縮でチーム（team）を見失う #23620 は公式でない issue（r390 I1）だが、teams を残す限り面が残る。tsuzuri の係は席とだけ話すので teammate どうしの話しを使わない（D）。
+  - id: e
+    name: 戊 — 並べる調べを Workflow か係の中の fan-out で束ねる
+    text: 席か調べ係が多数の読むだけの agent を 1 回で起こし（扇の起こし・fan-out）、まとめを 1 通で受ける。
+    verdict: rejected
+    reason: Workflow は途中で人の入力を取れず 1 回で 46 の Opus の暴走の報告が在る（#66023・公式でない）。係の中の扇の起こしは子の token が係の測りの外に出て（agent_meter は係の記録だけを読む）、再帰の暴走（#68619）の面を開く。撤退の (2)・(3) が越えた時に、入れ子の測りを足して問い直す。
+  - id: f
+    name: 己 — 自動の圧縮の閾値を上げるか下げる
+    text: 圧縮の閾値の印（CLAUDE_AUTOCOMPACT_PCT_OVERRIDE）を替えて圧縮の回数か質を動かす。
+    verdict: rejected
+    reason: 上げれば長い文脈の劣化（r390 S9）に寄り、下げれば回数が増える。回数は入ってくる量の結果なので、量を減らす手を先にする（D）。区切りは引き継ぎの線（行 B6）で持つ。
+  - id: g
+    name: 庚 — teams を残し、係だけを subagent で起こす（teams の案 乙・起こしの呼びごとに isolation を付ける）
+    text: チーム機能の印（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）は 1 のまま、名付きの Agent の呼びごとに作業木の隔て（isolation）を付けて係を subagent で起こし、付けを門で検める（行 B2）。係の本文の足し（行 B1）は甲と同じく要る。
+    verdict: rejected
+    reason: 持ち主の裁定（t3-hub.92.10.2:20261007T0251Z-1・teams の案 甲）で選ばなかった。持ち主の求めの字（teams を使える形を残す）に沿うが、係ごとに一時の worktree を作って消す手間と disk が掛かり、係の cwd が既定の branch の写しになり席の HEAD と違い得る（公式 sub-agents.md:317）。定義の頭（frontmatter）の隔ての欄では teammate になるのを止めない（sub-agents.md:927）ので、呼びごとに付ける決まりを門で持つ要が在る。teams の自動の配りと名簿は残るが係はそれを使わない（D）。
+  - id: h
+    name: 辛 — 根の CLAUDE.md の Compact instructions の生成（第 1 稿の行 B7）と、係の定義の CLAUDE.md を外す欄（omitClaudeMd）を足す
+    text: tz derive が規則の行の字から根の CLAUDE.md（Compact instructions の節だけ）を生成し、3 つの agent の定義に omitClaudeMd を足す。
+    verdict: rejected
+    reason: B7 は消す artifact を名指せず条 P-27.2 の must に当たる（v394 F16）。omitClaudeMd は根の CLAUDE.md だけでなく口座と project と local の CLAUDE.md を全部外す（公式 sub-agents.md:315）ので持ち主の口座の CLAUDE.md も係に載らなくなり、チーム機能（teams）が on の間は teammate に効かない（v394 F6）。返りと再注入の行（B1 と B4）で入ってくる量を先に減らしてから、撤退 (8) で問い直す。
+basis: [P-4, P-7, P-13, P-15, P-16, P-17, P-19, P-27, N-2, N-5.1, R-1, R-41, R-43, R-45, D-1, D-2, D-5, D-10, D-12, D-13, ADR-59, ADR-61, ADR-73, ADR-77, R-46, R-47, D-14]
+produced: [R-48, R-49, R-50, R-51]
+grill:
+  when: 2026-10-07
+  who: 検証役 v394（AI・起草者と別の独立の文脈・読み取りだけ・公式の頁の原文を逐語で照らした）
+  where: docs/grill/2026-10-07-ADR-78-grill.md
+  summary: 検証役 v394 が係 w392a の第 1 稿を 1 巡攻めた。判じは懸念つきで通す（直す 13・持ち主に問う 3・通る 5）。重い物は、チーム機能を切る設定がその場で効くのに係の終わりの門がチームの宛先への知らせを要る事（切るのは B1 の後に限る）・席の process の起動の日の誤りと効いていない plugin の commit 6 本（/reload-plugins で当て、照らす口を行 B16 にした）・走っている係への途中の知らせの字の誤り・持ち主の求めとの食い違い（持ち主に問い、裁定で甲）。係 w395a・w396a・w401a が直した。
+retreat:
+  kind: measure
+  condition: |
+    数えは ADR-77 の行 77-8（tz の日次の測り）の欄 measure の項へ移す（鍵の名はこの欄のまま・77-8 の起草の材料に名指す）。移すまでは tsuzuri の設計の席が、係の設計の file（drafts/w395a/w/design.md）§6 の path を解いた字の命令で数え、memo（t3-hub.92.10）か後継の memo の notes に撃った命令と数を記帳する。移した後は tz が鍵で数えて越えを出し（条 P-4.3）、手の数えの字を消す。席の transcript の path はチームの設定（team の config の leadSessionId）から解くが jsonl の在りかは分からない（U）ので、plugin の当ての照らし（行 B16）が plugin の印の file（`<置き場>/.seat/plugin-head`）に書く transcript_path を読む。B16 の着地までは、席が自分の hook の入力に載る transcript_path を notes に 1 度写す。数える物は完全な記録から出し、途中の記録を丸めない。窓の長さは 24 時間か、席の transcript の 25.37 時間。問う相手は持ち主。各行は 鍵・向き・閾値・窓 の形で書く（条 P-4.2）。向きは 越える・下回る・前の窓より下がらない のどれか。
+    (1) 鍵（auto_compact_24h）（席の自動の圧縮の回数・基準 12 回 / 25.37 時間）・向き 越える・閾値 5 回（7 日の日ごとの値の中央で判じる）・窓 段 1 の着地と設定の替えから 7 日 → 案 C（選択肢 丙）を含めて分け方を問い直す。
+    (2) 鍵（turn_kinds_ge5_ratio）（tool を持つ turn のうち主の種類が 5 種以上の割合・基準 51%）・向き 越える・閾値 35%・窓 段 1 の着地から 7 日 → 器へ移す行の範囲と知らせの束ね（選択肢 戊）を問い直す。
+    (3) 鍵（agent_return_chars_per_agent）（係 1 体あたりの返りの字・第 1 稿の基準 2,952 字は teammate の知らせの道の値なので、係を subagent に替える前の 1 日に、チーム機能（teams）のまま撃つ道と試しの係 1 体を subagent で起こした道の両方で基準を取り直し、前後で違う式を比べない）・向き 越える・閾値 800 字・窓 B1 の着地から 7 日 → 返りの形の門と R-51 を問い直す。
+    (4) 鍵（seat_self_read_share）（動いた時間のうちの席の自前の読みの割合・基準 17.4%）・向き 越える・閾値 10%・窓 段 1 の着地から 7 日 → 席の読みを知らせでなく止める門を問い直す。
+    (5) 鍵（agent_tokens_per_agent_24h）（1 日の係の使った量の、使った量の file の在る係 1 体あたり・基準 2026-10-06 の 89 体・18,210,945 token・1 体あたり 204,618 token・使った量の file（usage.json）の無い係は数えない）・向き 越える・閾値 基準の 1.5 倍・窓 段 1 の着地から 7 日ごと → 調べを係へ出す費えと R-48 を問い直す。
+    (6) 鍵（spawn_cap_refused_24h）（起こしの門が R-48 で断った数）・向き 越える・閾値 1 日 10 回・窓 数の門（行 B2）の着地から 7 日 → R-48 の値を問い直す。
+    (7) 欠番（第 1 稿の途中の答えの失いの鍵は、機械の出所が無いので落とした）。
+    (8) 鍵（compact_instructions_needed）（自動の圧縮の回数（M-a・基準 12 回 / 25.37 時間）と圧縮の後の立て直しの割合（M-g・基準 12.9%）のどちらも下がらない窓）・向き 前の窓より下がらない・閾値 基準（B1 と B4 の着地の前の同じ長さの窓）・窓 B1 と B4 の着地から 7 日 → 根の CLAUDE.md の Compact instructions の生成と CLAUDE.md を外す欄（omitClaudeMd・選択肢 辛）を問い直す。
+plain: |
+  AI の席（司令塔）が一人で何でもやっていて、頭の中（文脈）がすぐ一杯になり、25 時間に 12 回も「要約して詰め直し（圧縮）」が起きていました。持ち主は「司令塔は話す・決める・承認するだけにし、機械的な手は道具（器）へ、調べと照らしは既存の係へ」という案 B を選びました。この記録は、それを Claude Code の公式の仕組みに沿って入れる形を決めます。
+  1. 係の報告を 1 通にします。今は係が終わる時に同じ中身を 2 回（自分で送る報告と、自動の終わりの知らせ）届けていて、届いた字の半分近くが重なりでした。報告は「状態・要点 3 行・出した file の場所」の 5 行にし、門で形を検めます。
+  2. あなたは teammate（チーム機能の仲間）の機能も十全に使えることを求めましたが、10 月 7 日に「チーム機能を切る」案を選びました。係は標準の「背景の係（subagent）」で起こします。失う物は 9 つあります（自動の途中の配り・チームの名簿・係に乗る既定の指示ほか）。切るのは、門と手引きの替えが入り、あなたの /reload-plugins で当たり、係が誰も動いていない時に限ります。
+  3. 圧縮の後に「終えたが採否の済んでいない係」の一覧を自動で出し、圧縮の回数と要約を記録します。文脈が大きくなり係が誰も動いていない時は、新しい session へ引き継ぐ区切りを、次の入力の時に知らせます（止めはしません）。
+  4. 係の数の上限、係が係を起こすことの禁止、頼みの書き方の型を、門で守らせます。
+  5. 設計の当てと commit、bead の起票、時刻打ち、検査を、司令塔の手から道具へ移します。
+  6. 司令塔は 10 月 6 日に起きた後の道具の直し 6 本を読み込んでいません。あなたの /reload-plugins で当たります。当たったかを道具が知らせる口も足します。
+  決めてほしい値は 4 つです: 動く係の上限（推奨 5・設計係 2）、引き継ぎの区切り（推奨 35 万 token）、司令塔の 1 回の読みの知らせの線（推奨 30 KB）、報告の上限（推奨 5 行・600 字）。
+approval:
+  who: 持ち主
+  date: 2026-10-07
+  ruling: "t3-hub.92.10.7（裁定 id = t3-hub.92.10.7:20261007T0338Z-1・notes に逐語）"
+  verbatim: "承認する"
+  surface: R-8
+note: |
+  第 3 稿の起草は係 w401a（2026-10-07）。第 2 稿（係 w396a）に、持ち主の teams の裁定（t3-hub.92.10.2:20261007T0251Z-1・案 甲）を写し（context の H8・決定 (2)(3)(4)(9)(10) の分かれの字・選択肢 甲・丁・庚・plain の 2）、写しの床の違反を字の直しで消した。決めの中身（行 B1〜B16 の形・値の推奨・撤退の鍵）は替えていない。行の id は B1〜B16 の仮の名（B7 は欠番）で、席が契約の行の id に替える。
+  名の 2 つの列: 選択肢の名（甲〜辛）と teams の案の名（甲・乙・丙）は別の列である。teams の案 甲は選択肢 甲の中身、乙は選択肢 庚、丙は選択肢 丁に当たる。
+  床に合わせた字の直し: 語彙に無い英字の語は「日本語（原語）」の形にした。D-2 の言い換えの「SendMessage で重ねない」は語彙に無い英字の語に当たるので「知らせ（SendMessage）で重ねない」にした（要の写しは 5,965 byte）。当ての時は、規則の表に R-48〜R-51 を足し、条 P-7・P-13・P-16 の relations.rules に R-51・R-49 と R-50・R-48 を足し、D-12 の refs に R-48 を足す（どれも写しで床が求めた）。
+  写しの照らし（撃った命令と rc は drafts/w401a/w/notes.md）: 写しの床は rc 2・違反 0・まだ分からない 4（R-48〜R-51 の裁定の欄の未記入）。D-2・D-5・D-12 を替えた写しでは、まだ分からない が 7（D-2・D-5・D-12 の裁定の欄の未記入を足す）。

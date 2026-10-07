@@ -283,7 +283,7 @@ articles:
       - {kind: folio2-ruling, ref: folio2 P4（枝 1〜2）}
       - {kind: scribe2-article, ref: scribe2 の doctor の名指し（host-init・s2-07l.609 の裁定「黙って 0 byte にしない」）}
     mechanism: {kind: build-check, live: now, stage: post, polarity: fail-closed, note: 床と doctor の出力の形（「まだ分からない」の語と next= の欄）。}
-    relations: {rules: [D-2, D-8, D-13]}
+    relations: {rules: [D-2, D-8, D-13, R-51]}
   - id: P-8
     title: 値の出所を型で弁別する
     amended_by:
@@ -374,7 +374,7 @@ articles:
       - {kind: folio2-ruling, ref: folio2 P14（枝 1〜3）}
       - {kind: scribe2-article, ref: scribe2 の役割の注入（ADR-0022 §2.4・SessionStart の brief）}
     mechanism: {kind: build-check, live: M1, stage: post, polarity: fail-closed, note: 要の写し（tz derive が導く contracts/seat/brief.txt・第 1.5 版から段「いつも守る」の条の id と題に替えて規則の表の作法の行の id と what を持つ・判断の記録 ADR-73。第 1.5 版の着地から行 t-seat-manners の着地までは、tz derive が頭の版だけ v1.5 で条の題を持ち作法の行を持たない要の写しを導き、derive --check は通るが P-13.1 の字を満たさないので、P-13.1 は「まだ分からない」と扱う（範囲と期限は ADR-73 の決定 (7)）と全文の写し（contracts/seat/constitution.txt）とその差の検査（tz derive --check）を行 t-seatcopy が置き、器の SessionStart が要の写しを字のまま出す形を行 v-brief-const が置く（判断の記録 ADR-38）。それまでは tsuzuri の plugin の SessionStart の暫定の 1 本が要の写しを出す。R-1 の内訳は R-41。全文の写しは生成区間の外で R-1 で数えず、差の検査は P-2 の derive --check が持つ。要の写しの byte は頭の 1 行を含む file 全体で数える。}
-    relations: {rules: [R-1, R-41]}
+    relations: {rules: [R-1, R-41, R-49, R-50]}
   - id: P-14
     title: 逸脱は編集の時点で止める（極性一覧）
     tier: always
@@ -417,7 +417,7 @@ articles:
     rationale:
       - {kind: folio2-ruling, ref: folio2 P16（枝 1〜2）}
     mechanism: {kind: human-review, live: now, note: 要件書の制約 CON6 と、席の起動の設定と、相談の窓の所見の model の欄を照らす。行 D-1 の作法。}
-    relations: {rules: [D-1, R-38]}
+    relations: {rules: [D-1, R-38, R-48]}
     retreat: {kind: measure, condition: 判断の記録 ADR-12 の撤退条件（発効の後の最初の 10 本のうち、相談の窓の所見を受けて改められたものが 3 本以上）に当たったら、込み入った設計判断は必ず所見を経る形へ改めるかを持ち主に問う。}
   - id: P-17
     title: 数値の表を変えるときは、裁定 id を行に付ける
