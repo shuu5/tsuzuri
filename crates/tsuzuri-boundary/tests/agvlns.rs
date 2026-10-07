@@ -1,5 +1,5 @@
-//! 検証役の型の本文の観点の歯（接頭辞 agvlns_・ADR-83 の決定 (3) の段 1・行 t-verifier-lens）。
-//! plugin/agents/verifier.md の本文が 6 つの観点を ADR-83 の字のまま（ゴールの結びの決定 (1) だけ記録の id を添える）、はしごの行の後で返りの形の節の前に 1 行ずつ持つことを見る。型の定義は Claude Code が係を起こす時に読む設定の字で、歯から係を起こして所見を測れないので字を照らす。
+//! 検証役の型の本文の観点の歯（接頭辞 agvlns_・ADR-83 の決定 (3) の段 1 と段 3・行 t-verifier-lens と t-verifier-lens-2）。
+//! plugin/agents/verifier.md の本文が 6 つの観点を、この file の定数 LENSES の字のまま、はしごの行の後で返りの形の節の前に 1 行ずつ持つことを見る。型の定義は Claude Code が係を起こす時に読む設定の字で、歯から係を起こして所見を測れないので字を照らす。
 #![cfg(test)]
 
 use std::fs;
@@ -8,13 +8,7 @@ use std::path::{Path, PathBuf};
 /// 検証役の型の file（workspace の根から）。
 const VERIFIER: &str = "plugin/agents/verifier.md";
 
-/// 観点の字の正本（発効して封じた記録）。
-const ADR: &str = "design-intent/adr/ADR-83.yaml";
-
-/// 正本の中の観点の行を見つける印。
-const STEP: &str = "・段 1（行 t-verifier-lens）";
-
-/// 6 つの観点の語（正本の順）。
+/// 6 つの観点の語（ADR-83 の段 1 の順・語と順は替えない）。
 const HEADS: [&str; 6] = [
     "退けた案へ戻る道",
     "役の混ざり",
@@ -22,6 +16,16 @@ const HEADS: [&str; 6] = [
     "承認の字と記録の字の食い違い",
     "前の段の消す物",
     "引いた決まりと前の記録の字が今も効くか",
+];
+
+/// 観点の行の字の正本（HEADS の順）。
+const LENSES: [&str; 6] = [
+    "- 観点 退けた案へ戻る道（撤退と推奨の行き先が退けた案か）。",
+    "- 観点 役の混ざり（設計係か席が実装か契約の字を作る形・契約の字は設計係の出す物だけで実装の字は便だけが書く決まりに照らし、稿の全文の句を 1 つずつ見て、誰の手かが席か設計係と読める句のうち契約か実装の字を書く・直す・起草する物を、決めの本文だけでなく順や手続きや注の中の句も含め、在りかごとに 1 件ずつ拾う）。",
+    "- 観点 ゴールの結び（判断の記録 ADR-83 の決定 (1) のどの G に結ぶか）。",
+    "- 観点 承認の字と記録の字の食い違い（記録と頼みが承認の逐語に引き金・動き・問う句を足すか削るか）。",
+    "- 観点 前の段の消す物（前の段の memo が名指す消す物が code に残るまま、後の記録が残す決めを置いていないか）。",
+    "- 観点 引いた決まりと前の記録の字が今も効くか（status・外した便・宣言の鍵）。",
 ];
 
 /// 観点の行の頭。
@@ -46,33 +50,22 @@ fn current() -> String {
     read(VERIFIER)
 }
 
-/// 正本から組む観点の行 6 つ（ゴールの結びだけ記録の id を添える）。
+/// 正本の観点の行 6 つ。
 fn wanted() -> Vec<String> {
-    let adr = read(ADR);
-    let line = adr
-        .lines()
-        .find(|l| l.contains(STEP))
-        .unwrap_or_else(|| panic!("{ADR} に {STEP} を含む行が無い"));
-    HEADS
-        .iter()
-        .map(|head| {
-            let open = format!("{head}（");
-            assert_eq!(line.matches(&open).count(), 1, "{head} は 1 度だけ在る");
-            let start = line.find(&open).unwrap() + open.len();
-            let tail = &line[start..];
-            let inner = &tail[..tail
-                .find('）')
-                .unwrap_or_else(|| panic!("{head} の括弧が閉じない"))];
-            let inner = if *head == "ゴールの結び" {
-                assert_eq!(inner.matches("決定 (1)").count(), 1);
-                inner.replacen("決定 (1)", "判断の記録 ADR-83 の決定 (1)", 1)
-            } else {
-                assert!(!inner.contains("決定 ("), "{head} の括弧の中に決定 ( が在る");
-                inner.to_string()
-            };
-            format!("{MARK}{head}（{inner}）。")
-        })
-        .collect()
+    LENSES.iter().map(|l| l.to_string()).collect()
+}
+
+/// 行から MARK と語と括弧の開きと末の「）。」を外した括弧の中の字。空か括弧か改行を持てば None。
+fn inner<'a>(head: &str, line: &'a str) -> Option<&'a str> {
+    let rest = line
+        .strip_prefix(MARK)?
+        .strip_prefix(head)?
+        .strip_prefix('（')?
+        .strip_suffix("）。")?;
+    if rest.is_empty() || rest.contains(['（', '）', '\n']) {
+        return None;
+    }
+    Some(rest)
 }
 
 /// 本文の観点の行の並びと、区間の外の観点の行の数。頭か AFTER か SHAPE が無ければ None。
@@ -165,4 +158,19 @@ fn agvlns_lens_removed_doubled_moved_or_altered_is_seen() {
     let mut reverted_seq = want.clone();
     reverted_seq[2] = want[2].replacen(expanded, "決定 (1)", 1);
     assert_eq!(lenses(&reverted), Some((reverted_seq, 0)));
+}
+
+/// (3) LENSES の各行は MARK と HEADS の語と括弧の開きで始まり「）。」で終わり、括弧の中は空でなく括弧と改行を持たない。
+#[test]
+fn agvlns_lens_lines_keep_the_heads_in_order() {
+    for i in 0..6 {
+        assert!(inner(HEADS[i], LENSES[i]).is_some(), "{i} 番目");
+    }
+    assert_eq!(inner(HEADS[0], LENSES[1]), None, "語をずらした組");
+    let nested = format!("{}（字）。", LENSES[1].strip_suffix("）。").unwrap());
+    assert_eq!(inner(HEADS[1], &nested), None, "括弧の中に組を足した字");
+    let no_stop = LENSES[1].strip_suffix('。').unwrap();
+    assert_eq!(inner(HEADS[1], no_stop), None, "末の句点を外した字");
+    let empty = format!("{MARK}{}（）。", HEADS[1]);
+    assert_eq!(inner(HEADS[1], &empty), None, "括弧の中が空");
 }
