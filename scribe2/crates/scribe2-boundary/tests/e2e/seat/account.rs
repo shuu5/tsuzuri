@@ -375,6 +375,7 @@ fn host_guard_doctor_counts_wired_accounts_and_entities_in_one_line() {
 
 /// (6) 種類ごとの欄は行の `enabled` を読む: 6 行とも発効で `on` と `rows=6/6`、`--rules` で host_guard.git を `enabled = false`
 /// にすると `git=off`、行を欠くと `git=no-row`（どちらも rows=5/6）。口座 0 の host は `wired=0/0 entities=0`。
+// flip-check: retroactive t3-hub.92.10.34
 #[test]
 fn host_guard_doctor_names_each_kind_on_off_or_no_row() {
     let place = role_doctor_place();
@@ -387,7 +388,7 @@ fn host_guard_doctor_names_each_kind_on_off_or_no_row() {
         assert_eq!(guard_line(&lines), (format!("host-guard: {want} wired=0/0 entities=0 binary=ok ungrouped=1"), 1), "{git:?}: {lines:?}");
     }
     // 列でない値の行（id は host_guard.git・kind は閾値）は発効でも `no-row`。
-    let not_list = "\n[[rule]]\nid = \"host_guard.git\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
+    let not_list = "\n[[rule]]\nid = \"host_guard.git\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
     let lines = doctor_rows(&place, &format!("{}{not_list}", guard_rules(None, &[])));
     let want = "host-guard: git=no-row tmux=on ledger=on rm=on publish=on self-match=on self=on rows=5/6 wired=0/0 entities=0 binary=ok ungrouped=1";
     assert_eq!(guard_line(&lines), (want.to_owned(), 1), "列でない行: {lines:?}");

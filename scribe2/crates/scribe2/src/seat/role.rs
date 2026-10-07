@@ -540,6 +540,7 @@ mod tests {
     /// 歯 (c): 行なし / 不発効 / 値が文字列でない / 字面が表に無い の 4 周を**それぞれ別の理由**で名指す
     /// （fail-closed・既定へ倒さない）。4 つを 1 つに潰す変異（全部 `Missing`・`enabled` を見ない・形を
     /// 見ない・`parse` の失敗を握り潰す）はどれかの assert で落ちる。model 側と effort 側の両方で測る。
+    // flip-check: retroactive t3-hub.92.10.34
     #[test]
     fn seat_role_defaults_of_names_each_failure_for_both_rows() {
         let role = Role::Orchestrator;
@@ -551,8 +552,8 @@ mod tests {
         let cases = [
             (("RoleModel", "\"fable\"", false), ("RoleEffort", "\"high\"", true), RuleRead::Disabled, "model が不発効"),
             (("RoleModel", "\"fable\"", true), ("RoleEffort", "\"high\"", false), RuleRead::Disabled, "effort が不発効"),
-            (("CoreLines", "7", true), ("RoleEffort", "\"high\"", true), RuleRead::NotStr, "model が文字列でない"),
-            (("RoleModel", "\"fable\"", true), ("CoreLines", "7", true), RuleRead::NotStr, "effort が文字列でない"),
+            (("ModuleLines", "7", true), ("RoleEffort", "\"high\"", true), RuleRead::NotStr, "model が文字列でない"),
+            (("RoleModel", "\"fable\"", true), ("ModuleLines", "7", true), RuleRead::NotStr, "effort が文字列でない"),
             (("DialogueSurface", "\"orchestrator\"", true), ("RoleEffort", "\"high\"", true), RuleRead::NotInTable, "model が表に無い"),
             (("RoleModel", "\"fable\"", true), ("DialogueSurface", "\"orchestrator\"", true), RuleRead::NotInTable, "effort が表に無い"),
         ];

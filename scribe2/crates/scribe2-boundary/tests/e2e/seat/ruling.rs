@@ -630,6 +630,7 @@ fn fleet_ruling_report_counts_rulings_and_keeps_other_human_events_at_zero() {
 /// (4) doctor の 1 行: `--rules` の manifest の `ruling` が `user <分>` の行を母集団にし、同じ分の裁定が在る行を matched・
 /// 無い行を id で名指す（分の曖昧な行は skipped・`user ` で始まらない行は数えない）。裁定も母集団も無い周は行を出さない
 /// （doctor の外形を変えない）。行は登録 row の行の前に並び、rc は 0 のまま（判定しない）。
+// flip-check: retroactive t3-hub.92.10.34
 #[test]
 fn fleet_ruling_doctor_matches_user_ts_rows_by_the_same_minute() {
     let place = dialogue_place();
@@ -641,7 +642,7 @@ fn fleet_ruling_doctor_matches_user_ts_rows_by_the_same_minute() {
     // 裁定の分と必ず違う分。
     let other = "2001-01-01T00:00";
     let row = |id: &str, ruling: &str| {
-        format!("\n[[rule]]\nid = \"{id}\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"{ruling}\"\nruled_at = \"d\"\n")
+        format!("\n[[rule]]\nid = \"{id}\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruling = \"{ruling}\"\nruled_at = \"d\"\n")
     };
     let rules = [
         NO_ACCOUNT_RULES.to_owned(),

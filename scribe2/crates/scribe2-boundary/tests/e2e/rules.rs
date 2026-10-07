@@ -29,7 +29,7 @@ const GOOD: &str = r#"schema = 1
 
 [[rule]]
 id = "R-C4-1"
-kind = "CoreLines"
+kind = "ModuleLines"
 value = 20000
 enabled = true
 ruling = "r"
@@ -49,7 +49,7 @@ const DEFECTIVE: &str = r#"schema = 1
 
 [[rule]]
 id = "a"
-kind = "CoreLines"
+kind = "ModuleLines"
 value = 1
 enabled = true
 ruling = "r"
@@ -179,7 +179,7 @@ fn rules_list_rejects_scalar_for_list_kind() {
 #[test]
 fn rules_list_rejects_array_for_scalar_kind() {
     // 逆向きの負例（配列を受ける口が、配列でない kind まで通していないか）。
-    let errors = rejected(&one_row(RuleKind::CoreLines, r#"["1"]"#))
+    let errors = rejected(&one_row(RuleKind::ModuleLines, r#"["1"]"#))
         .expect("拒まれるはずの fixture が受理された");
     assert_eq!(errors.len(), 1, "件数: {errors:?}");
     let first = errors.first().map(String::as_str).unwrap_or_default();
@@ -357,7 +357,7 @@ fn rules_accounts_reject_each_broken_row_with_line_numbers() {
 #[test]
 fn rules_accounts_do_not_loosen_rule_rows() {
     let text = format!(
-        "{}\n[[rule]]\nid = \"probe\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruled_at = \"d\"\n",
+        "{}\n[[rule]]\nid = \"probe\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruled_at = \"d\"\n",
         accounts_fixture(&["a1"])
     );
     let errors = rejected(&text).expect("拒まれるはずの fixture が受理された");
@@ -408,7 +408,7 @@ value = 3
 
 [[rule]]
 id = "R-C4-1"
-kind = "CoreLines"
+kind = "ModuleLines"
 value = 1
 enabled = true
 ruling = "r"
@@ -1094,6 +1094,24 @@ fn vcrr_ci_rows_and_kinds_are_gone() {
     }
 }
 
+/// 総行数の上限の 2 つの kind（`CoreLines`・`BoundaryLines`）は**もう無い**（行 v-kind-drop・判断の記録 ADR-80 の決定 (1)）:
+/// 行 R-C4-1 と R-C4-5 を止めた後は行を持たない死んだ kind だった。(a) その id と kind の行を 1 本持つ写しは、行の id と kind の字を名指す
+/// 未知の kind の断りで読めず、(b) kind は字面から引けず、(c) `ALL` のどの kind の字面もそれでない。base では kind が引けるので RED。
+#[test]
+fn vkdrop_total_line_kinds_are_gone() {
+    let dropped = [("R-C4-1", "CoreLines", "90000"), ("R-C4-5", "BoundaryLines", "316")];
+    for (id, kind, value) in dropped {
+        let text = format!(
+            "schema = 1\n\n[[rule]]\nid = \"{id}\"\nkind = \"{kind}\"\nvalue = {value}\nenabled = true\nruling = \"r\"\nruled_at = \"2026-09-09\"\n"
+        );
+        let errors = rejected(&text).expect("外した kind の行を持つ写しが受理された");
+        let joined = errors.join("\n");
+        assert!(joined.contains(&format!("{id} の kind {kind} は未知である")), "{id}: 未知の kind の断りが id と kind を名指す: {joined}");
+        assert_eq!(RuleKind::parse(kind), None, "{kind} は字面から引けない");
+        assert!(!ALL.iter().any(|found| found.as_str() == kind), "{kind} は ALL に無い");
+    }
+}
+
 /// 検出線を起こす間隔の下限の行（設計 gate-cost.md §50 形 1・`s2-07l.736.36`）が埋め込み manifest に id / kind / 形 Int /
 /// 値 86400 / enabled / 裁定 id / 裁定日で 1 本在り、行は `pipe.land_wait_s` の直後（`land.train_max` の前）・kind は `ALL` の
 /// `PipeLandWaitS` の直後（`SeatDraftsStaleH` の前）で字面から引け、上限の許可の読み手を持たず、形は Int だけ（裁定の字は
@@ -1251,7 +1269,7 @@ fn rules_external_form() {
     std::fs::remove_dir_all(&dir).ok();
     // `rules` を引数なしで撃った usage の行（stderr・`s2-07l.250`）。
     let bare = Command::new(bin).arg("rules").output().expect("binary を起動できる");
-    // 行 R-C4-1・R-C4-5 を止めた後の要約（行 116・行を持つ種 101＝CoreLines と BoundaryLines は 0 本）。
+    // 行 R-C4-1・R-C4-5 を止めた後の要約（行 116・行を持つ種 101）。
     for out in [&validate.stdout, &hosted.stdout] {
         assert!(
             String::from_utf8_lossy(out).contains("rules: ok rows=116 kinds=101"),
@@ -1637,17 +1655,17 @@ fn rules_token_cap_revert_row_carries_target_value_and_ruling() {
 /// 述語が**真を返すだけ**でないこと（非空虚性）。3 つの壊し方をすべて false で返す。
 #[test]
 fn declaration_order_rejects_broken_slices() {
-    let swapped = [RuleKind::ModuleLines, RuleKind::CoreLines];
+    let swapped = [RuleKind::TestSrcRatioPct, RuleKind::ModuleLines];
     assert!(
         !is_declaration_order(&swapped, |kind| kind as usize),
         "入れ替えた並びは宣言順ではない"
     );
-    let gap = [RuleKind::CoreLines, RuleKind::TestSrcRatioPct];
+    let gap = [RuleKind::ModuleLines, RuleKind::FnLines];
     assert!(
         !is_declaration_order(&gap, |kind| kind as usize),
         "中間を抜いた並びは宣言順ではない"
     );
-    let duplicated = [RuleKind::CoreLines, RuleKind::CoreLines];
+    let duplicated = [RuleKind::ModuleLines, RuleKind::ModuleLines];
     assert!(
         !is_declaration_order(&duplicated, |kind| kind as usize),
         "重複した並びは宣言順ではない"

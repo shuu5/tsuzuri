@@ -332,6 +332,7 @@ mod tests {
     /// (3) 変数と置換の型は解けずに断り（`$` の後が数字か無い型は決めない）、断りの hit は当たった動詞の行の語列で、行に無い
     /// 動詞の呼びと full でない呼びと自分に当たらない型は通し、行が無い・列でない周は no-row で断り、`enabled = false` の周と
     /// full の呼びが無い周（行が無くても）は通す。
+    // flip-check: retroactive t3-hub.92.10.34
     #[test]
     fn vselfm_unresolved_patterns_are_refused() {
         unresolved_verdicts();
@@ -349,7 +350,7 @@ mod tests {
         assert_eq!(judged("pgrep -f merge.sh; pkill -f merge.sh", &pkill_only), Some(refusal("pkill -f", "r")), "行に在る動詞");
         assert_eq!(judged("pgrep -f merge.sh", &self_row("[\"pgrep -f\"]", false)), None, "切った行");
         assert_eq!(judged("pgrep -f merge.sh", ""), Some(refusal("no-row", "-")), "行が無い");
-        let not_list = "\n[[rule]]\nid = \"host_guard.self_match\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
+        let not_list = "\n[[rule]]\nid = \"host_guard.self_match\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
         assert_eq!(judged("pgrep -f merge.sh", not_list), Some(refusal("no-row", "-")), "列でない行");
         assert_eq!(judged("pgrep merge.sh", ""), None, "full の呼びが無い周は行を読まない");
     }

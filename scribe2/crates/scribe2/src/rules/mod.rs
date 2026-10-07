@@ -175,8 +175,6 @@ pub enum ValueShape {
 /// 足すこと。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuleKind {
-    /// core crate の `src` 配下 `.rs` の総行数の上限（行）。
-    CoreLines,
     /// `crates/*/src` 配下 `.rs` 1 file あたりの物理行数の上限（行）。
     ModuleLines,
     /// test 行 / src 行の比の上限（百分率・100 = 比 1.0）。
@@ -189,9 +187,6 @@ pub enum RuleKind {
     FnArgs,
     /// 行の数え方の幅（文字）。これを超える行は ceil(文字数 ÷ 幅) 行に数える（R-C4-1〜3 と上限の余地が同じ式）。
     LineWidth,
-    /// 境界 crate の `src` の本体の総行数の上限（行・R-C4-5・設計 core-boundary.md §3 / §9・ADR-0062）。core の外へ判定を
-    /// 押し出して core-lines から逃げる形を塞ぐ。読み手は xtask 側（core は値を消費しない）。
-    BoundaryLines,
     /// 承認の受理面の identity。
     DialogueSurface,
     /// 成熟条件（停止・履歴として残す）。
@@ -450,14 +445,12 @@ pub enum RuleKind {
 
 /// [`RuleKind`] の全 variant。parity test の母集団である。
 pub const ALL: &[RuleKind] = &[
-    RuleKind::CoreLines,
     RuleKind::ModuleLines,
     RuleKind::TestSrcRatioPct,
     RuleKind::FnLines,
     RuleKind::FnComplexity,
     RuleKind::FnArgs,
     RuleKind::LineWidth,
-    RuleKind::BoundaryLines,
     RuleKind::DialogueSurface,
     RuleKind::MaturityCondition,
     RuleKind::AccountSelection,
@@ -559,11 +552,10 @@ impl RuleKind {
     /// manifest の `kind` に書く字面（variant 名と一致）。
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::CoreLines => "CoreLines",
             Self::ModuleLines => "ModuleLines",
             Self::TestSrcRatioPct => "TestSrcRatioPct",
             Self::FnLines => "FnLines", Self::FnComplexity => "FnComplexity", Self::FnArgs => "FnArgs",
-            Self::LineWidth => "LineWidth", Self::BoundaryLines => "BoundaryLines",
+            Self::LineWidth => "LineWidth",
             Self::DialogueSurface => "DialogueSurface",
             Self::MaturityCondition => "MaturityCondition", Self::AccountSelection => "AccountSelection",
             Self::MutationSurvivalLine => "MutationSurvivalLine",
@@ -625,13 +617,12 @@ impl RuleKind {
     /// 種類が要求する値の形。**対応はこの `match` ただ 1 箇所**が持つ。
     pub fn shape(self) -> ValueShape {
         match self {
-            Self::CoreLines
-            | Self::ModuleLines
+            Self::ModuleLines
             | Self::TestSrcRatioPct
             | Self::FnLines
             | Self::FnComplexity
             | Self::FnArgs
-            | Self::LineWidth | Self::BoundaryLines
+            | Self::LineWidth
             | Self::DepBudget
             | Self::DepPerPr
             | Self::CheckDeltaMs
@@ -688,8 +679,8 @@ impl RuleKind {
     pub fn has_permit_reader(self) -> bool {
         match self {
             Self::GateTokenCap => true,
-            Self::CoreLines | Self::ModuleLines | Self::TestSrcRatioPct | Self::FnLines | Self::FnComplexity | Self::FnArgs
-            | Self::LineWidth | Self::BoundaryLines | Self::DialogueSurface | Self::MaturityCondition | Self::AccountSelection
+            Self::ModuleLines | Self::TestSrcRatioPct | Self::FnLines | Self::FnComplexity | Self::FnArgs
+            | Self::LineWidth | Self::DialogueSurface | Self::MaturityCondition | Self::AccountSelection
             | Self::MutationSurvivalLine | Self::DepBudget | Self::DepPerPr | Self::CheckDeltaMs | Self::CompileShape
             | Self::CompileSeconds | Self::GateLensCount | Self::RunTokenCeiling
             | Self::LensMaxTurns | Self::PipePermitRows | Self::PipePermitMaxH | Self::HookBudgetMs

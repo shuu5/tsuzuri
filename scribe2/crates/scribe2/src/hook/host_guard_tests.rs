@@ -644,11 +644,12 @@ fn host_guard_rm_symbol_missing_from_value_is_not_guarded() {
 
 /// 行が無い・列でない周は rm の segment だけを `no-row` で断り（rm でない command は通る）、`enabled = false` は rm の
 /// 種類だけを切る（git の語列は動く）。
+// flip-check: retroactive t3-hub.92.10.34
 #[test]
 fn host_guard_rm_missing_row_fails_closed_and_disabled_row_passes() {
     let place = Place::new("row");
     let target = format!("rm {}", place.state.join("host.toml").display());
-    let not_list = "\n[[rule]]\nid = \"host_guard.rm\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
+    let not_list = "\n[[rule]]\nid = \"host_guard.rm\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruling = \"r\"\nruled_at = \"d\"\n";
     for fixture in [manifest(true, None), manifest_with(true, None, not_list)] {
         let scene = Scene { cwd: &place.other, state_dir: &place.state, git: Path::new("git"), gh: Path::new("gh"), host: &NO_HOST };
         let HostGuardDecision::Deny { what, line } = judge("Bash", "rm nope", &fixture, &scene) else {

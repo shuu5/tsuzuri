@@ -2551,6 +2551,7 @@ fn pipe_intake_host_guard_rules_without_the_git_row_are_refused() {
 
 /// (7) 語列表の行が無い・不発効・列でない `--rules` では、`contracts check` も受付も行 id `runner.class_commands` を名指して rc 1
 /// で断り、受付は run dir を作らない（導出を空として通さない・NFR4）。行の揃った `--rules` では両方とも通る（対）。
+// flip-check: retroactive t3-hub.92.10.34
 #[test]
 fn class_derive_rules_without_a_usable_class_row_are_refused_by_check_and_intake() {
     let (repo, state) = repo_with_state();
@@ -2558,7 +2559,7 @@ fn class_derive_rules_without_a_usable_class_row_are_refused_by_check_and_intake
     let path = write_rules(&state, "rules-class-base.toml", 1, 1_000_000);
     let text = fs::read_to_string(&path).unwrap_or_default();
     assert!(text.contains(CLASS_ROW_BLOCK), "既定の行が在る（差し替えが空振りしない）: {text}");
-    let scalar = "\n[[rule]]\nid = \"runner.class_commands\"\nkind = \"CoreLines\"\nvalue = 1\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
+    let scalar = "\n[[rule]]\nid = \"runner.class_commands\"\nkind = \"ModuleLines\"\nvalue = 1\nenabled = true\nruling = \"t\"\nruled_at = \"d\"\n";
     let cases = [
         ("無い", String::new(), "runner.class_commands が無い"),
         ("不発効", CLASS_ROW_BLOCK.replace("enabled = true", "enabled = false"), "runner.class_commands は不発効である"),

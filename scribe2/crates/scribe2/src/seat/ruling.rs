@@ -612,13 +612,14 @@ mod tests {
     }
 
     /// 突合（pure）: 同じ分の裁定が在る行は matched・無い行は id で名指し・分の曖昧な行は skipped・同じ分に 2 件在っても 1 行。
+    // flip-check: retroactive t3-hub.92.10.34
     #[test]
     fn fleet_ruling_tally_matches_rows_by_the_same_minute() {
         let rows = [
-            row("a.one", "CoreLines", "1", true, "user 2026-09-17T07:30Z"),
-            row("b.two", "CoreLines", "1", true, "user 2026-09-18T01:02Z"),
-            row("c.vague", "CoreLines", "1", true, "user 2026-09-15T11:2xZ"),
-            row("d.other", "CoreLines", "1", true, "grill U3"),
+            row("a.one", "ModuleLines", "1", true, "user 2026-09-17T07:30Z"),
+            row("b.two", "ModuleLines", "1", true, "user 2026-09-18T01:02Z"),
+            row("c.vague", "ModuleLines", "1", true, "user 2026-09-15T11:2xZ"),
+            row("d.other", "ModuleLines", "1", true, "grill U3"),
         ]
         .concat();
         let events = [ruling("2026-09-17T07:30:59Z"), ruling("2026-09-17T07:30:01Z"), ruling("2026-09-18T01:03:00Z")];
