@@ -99,9 +99,12 @@ const RETURN: [(&str, &str); 5] = [
     ("no-relay", "同じ中身を SendMessage で席へ重ねない。"),
     (
         "no-destroy",
-        "reset --hard・branch -D・force push・checkout -- は撃たない。",
+        "git reset --hard・git branch -D・git push --force は撃たない（器の門 host_guard）。",
     ),
 ];
+
+/// 破壊の git の句の、門の名の前の字。
+const GIT_HEAD: &str = "は撃たない（器の門 ";
 
 /// 返りの節の見出し。
 const SHAPE_HEAD: &str = "## 返りの形";
@@ -369,6 +372,46 @@ fn rule_kinds(body: &str) -> [usize; 3] {
     [ends(CEILING), ends(GATE), ends(VESSEL_GATE)]
 }
 
+/// 器の rules の行 host_guard.git の語列（字 id = と host_guard.git を持つ行の後の最初の字 value = の行の角括弧の中）。
+fn host_guard_words() -> Vec<String> {
+    let text = read("scribe2/rules/manifest.toml");
+    let mut lines = text
+        .lines()
+        .skip_while(|l| !(l.contains("id =") && l.contains("host_guard.git")));
+    lines
+        .find_map(|l| l.strip_prefix("value = "))
+        .and_then(|v| v.trim().strip_prefix('[')?.strip_suffix(']'))
+        .map(|list| {
+            list.split(',')
+                .map(|w| w.trim().trim_matches('"').trim().to_owned())
+                .collect()
+        })
+        .expect("host_guard.git の value")
+}
+
+/// 係の型の本文の破壊の git の句の欠け（字 git reset で始まり GIT_HEAD を含む最初の行の句の語のうち words に無い語を並びのまま、
+/// 続けて門の名が器の門で無ければ gate）。
+fn git_faults(body: &str, words: &[String]) -> Vec<String> {
+    let Some((before, after)) = body
+        .lines()
+        .find(|l| l.contains(GIT_HEAD) && l.contains("git reset"))
+        .and_then(|l| l.split_once(GIT_HEAD))
+    else {
+        return vec!["phrase".to_owned()];
+    };
+    let phrase = before.find("git reset").map_or("", |at| &before[at..]);
+    let mut faults: Vec<String> = phrase
+        .split('・')
+        .map(str::trim)
+        .filter(|w| !words.iter().any(|x| x == w))
+        .map(str::to_owned)
+        .collect();
+    if !vessel_gate(after.split('）').next().unwrap_or("")) {
+        faults.push("gate".to_owned());
+    }
+    faults
+}
+
 /// 器の門の src の file が在るか。
 fn vessel_gate(name: &str) -> bool {
     root()
@@ -547,6 +590,7 @@ fn agpl_types_carry_the_return_shape_and_tools() {
         let text = read(&format!("plugin/agents/{stem}.md"));
         let (_, body) = front(&text).expect("頭と本文");
         assert_eq!(return_faults(body), Vec::<&str>::new(), "{stem}");
+        assert!(!body.contains("checkout --"), "{stem} の checkout --");
         for (name, words) in RETURN {
             let removed = body.replacen(words, "", 1);
             assert!(
@@ -574,6 +618,25 @@ fn agpl_types_carry_the_return_shape_and_tools() {
         1
     );
     assert!(!drafter.contains("席への知らせの頭に"));
+}
+
+/// (9) 係の型 3 本の本文の破壊の git の句の語は器の rules の行 host_guard.git の語列に在り、門の名は器の門で、語列は 3 語を持つ。
+/// 句に字 git checkout -- を足した見本はその語だけを、門の名を host_ward に替えた見本は gate だけを名指す。
+#[test]
+fn agpl_type_git_words_are_the_host_guard_words() {
+    let words = host_guard_words();
+    for want in ["git reset --hard", "git branch -D", "git push --force"] {
+        assert!(words.iter().any(|w| w == want), "語列の {want}");
+    }
+    for stem in ["drafter", "researcher", "verifier"] {
+        let text = read(&format!("plugin/agents/{stem}.md"));
+        let (_, body) = front(&text).expect("頭と本文");
+        assert_eq!(git_faults(body, &words), Vec::<String>::new(), "{stem}");
+        let extra = body.replacen(GIT_HEAD, &format!("・git checkout --{GIT_HEAD}"), 1);
+        assert_eq!(git_faults(&extra, &words), ["git checkout --"], "{stem}");
+        let ward = body.replacen("host_guard）", "host_ward）", 1);
+        assert_eq!(git_faults(&ward, &words), ["gate"], "{stem}");
+    }
 }
 
 /// (7) 設計係の句を 1 つだけ外した見本と 2 度にした見本は、その句の名だけを名指し、古い語を file の末に 1 つ足した見本は、その語の

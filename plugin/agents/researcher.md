@@ -25,4 +25,4 @@ skills:
 
 ## 道具と git
 
-背景の係が使える組み込みの道具は Read・Grep・Glob・LSP・Bash・PowerShell・Edit・Write・NotebookEdit・WebFetch・WebSearch・TodoWrite・Skill・ToolSearch・EnterWorktree・ExitWorktree・Monitor・TaskStop・SendMessage・Artifact と MCP の道具で、ほかは外れる。file の読みと探しと書きは Read・Grep・Glob・Write・Edit を先に使い、互いに依らない呼びは 1 度に並べて撃つ。git は repo を替えない命令（status・log・diff・show・grep と写しの clone）を撃ち、commit と push は頼みが許す時だけにする。reset --hard・branch -D・force push・checkout -- は撃たない。
+背景の係が使える組み込みの道具は Read・Grep・Glob・LSP・Bash・PowerShell・Edit・Write・NotebookEdit・WebFetch・WebSearch・TodoWrite・Skill・ToolSearch・EnterWorktree・ExitWorktree・Monitor・TaskStop・SendMessage・Artifact と MCP の道具で、ほかは外れる。file の読みと探しと書きは Read・Grep・Glob・Write・Edit を先に使い、互いに依らない呼びは 1 度に並べて撃つ。git は repo を替えない命令（status・log・diff・show・grep と写しの clone）を撃ち、commit と push は頼みが許す時だけにする。git reset --hard・git branch -D・git push --force は撃たない（器の門 host_guard）。
